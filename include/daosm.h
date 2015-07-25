@@ -5,16 +5,35 @@
 #include <daos_types.h>
 
 /*
- * Container Create/Open/Close/Query
+ * Epoch State
+ *
+ * es_hce is the highest committed epoch (HCE) of the container.
+ *
+ * es_lre is the lowest referenced epoch (LRE) of the container handle.  Each
+ * container handle references all epochs equal to or higher than its LRE and
+ * thus guarantees these epochs to be readable.  The LRE of a new container
+ * handle is equal to the HCE.  See also daoms_epoch_slip().
+ *
+ * es_lhe is the lowest held epoch (LHE) of the container handle.  Each
+ * container handle with write permission holds all epochs equal to or higher
+ * than its LHE and thus guarantees these epochs to be mutable.  The LHE of a
+ * new container handle with write permission is equal to DAOSM_EPOCH_MAX,
+ * indicating that the container handle does not hold any epochs.  See also
+ * daosm_epoch_hold().
  */
+typedef struct {
+	daos_epoch_t	es_hce;
+	daos_epoch_t	es_lre;
+	daos_epoch_t	es_lhe;
+} daosm_epoch_state_t;
 
 /* Container information */
 typedef struct {
 	/* ... */
-	unsigned int		ci_nshards;
-	unsigned int		ci_ndisabled;
-	unsigned int		ci_nsnapshots;
-	daosm_epoch_info_t	ci_epoch_info;
+	uint32_t		ci_nshards;
+	uint32_t		ci_ndisabled;
+	uint32_t		ci_nsnapshots;
+	daosm_epoch_state_t	ci_epoch_state;
 	/* ... */
 } daosm_co_info_t;
 
@@ -157,87 +176,94 @@ daosm_co_xattr_set(daos_handle_t handle, unsigned int n, char **names,
 		   void **values, size_t *sizes, daos_event_t *event);
 
 /*
- * Epoch
- */
-
-/* Epoch information */
-typedef struct daosm_epoch_info {
-	daos_epoch_t	ei_hce;
-	/* Lowest referenced epoch of current container handle */
-	daos_epoch_t	ei_lre;
-	/* Highest referenced epoch of current container handle */
-	daos_epoch_t	ei_hre;
-	/* ... */
-} daosm_epoch_info_t;
-
-/*
- * Query latest epoch information.
+ * Query latest epoch state.
  *
- *	handle	IN  container handle
- *	info	OUT latest epoch information
- *	event	IN  completion event
+ *	handle [IN]	container handle
+ *	state [OUT]	latest epoch state
+ *	event [IN]	completion event
  */
 int
-daosm_epoch_query(daos_handle_t handle, daosm_epoch_info_t *info,
+daosm_epoch_query(daos_handle_t handle, daosm_epoch_state_t *state,
 		  daos_event_t *event);
 
 /*
- * Change a container handle's current range of referenced epochs [l, h], where
- * l <= HCE <= h.  The resulting range [l', h'] is determined this way:
+ * Set the lowest held epoch (LHE) of a container handle.
  *
- *	l' = min(HCE, max(l, lowest))
- *	h' = max(HCE, highest)
+ *	handle [IN]	container handle
+ *	epoch [IN]	epoch to set LHE to
+ *	state [OUT]	latest epoch state
+ *	event [IN]	completion event
  *
- * The container handle is responsible of committing all uncommitted epochs it
- * has held.
+ * The resulting LHE' is determined like this:
  *
- *	handle	IN  container handle
- *	lowest	IN  new lowest referenced epoch
- *	highest	IN  new highest referenced epoch
- *	info	OUT resulting epoch information
- *	event	IN  completion event
+ *	LHE' = max(HCE + 1, epoch))
+ *
+ * The owner of the container handle is responsible for releasing its held
+ * epochs by either committing/aborting them or setting LHE to DAOSM_EPOCH_MAX.
  */
 int
-daosm_epoch_hold(daos_handle_t handle, daos_epoch_t lowest,
-		 daos_epoch_t highest, daosm_epoch_info_t *info,
-		 daos_event_t *event);
+daosm_epoch_hold(daos_handle_t handle, daos_epoch_t epoch,
+		 daosm_epoch_state_t *state, daos_event_t *event);
 
 /*
- * Commit an epoch.  The epoch must have already been held by handle.
+ * Increase the lowest referenced epoch (LRE) of a container handle.
  *
- *	handle		IN  container handle
- *	epoch		IN  epoch to commit
- *	depends		IN  epochs the committing epoch depends on
- *	ndepends	IN  number of epochs in depends
- *	event		IN  completion event
+ *	handle [IN]	container handle
+ *	epoch [IN]	epoch to increase LRE to
+ *	state [OUT]	latest epoch state
+ *	event [IN]	completion event
+ *
+ * The resulting LRE' is determined like this:
+ *
+ *	LRE' = min(HCE, max(LRE, epoch))
+ */
+int
+daosm_epoch_slip(daos_handle_t handle, daos_epoch_t epoch,
+		 daosm_epoch_state_t *state, daos_event_t *event);
+
+/*
+ * Commit an epoch.
+ *
+ *	handle [IN]	container handle
+ *	epoch [IN]	epoch to commit
+ *	depends [IN]	epochs "epoch" depends on
+ *	ndepends [IN]	number of epochs in "depends"
+ *	state [OUT]	latest epoch state
+ *	event [IN]	completion event
+ *
+ * "depends" is an array of epochs on which "epoch" depends.  A NULL value
+ * indicates that "epoch" is independent.
  */
 int
 daosm_epoch_commit(daos_handle_t handle, daos_epoch_t epoch,
-		   daos_epoch_t *depends, int ndepends, daos_event_t *event);
+		   const daos_epoch_t *depends, int ndepends,
+		   daosm_epoch_state_t *state, daos_event_t *event);
 
 /*
- * Abort an epoch.  The epoch must have already been held by handle.
+ * Abort an epoch.
  *
- *	handle	IN  container handle
- *	epoch	IN  epoch to abort
- *	nepochs	IN  number of epochs in epochs
- *	event	IN  completion event
+ *	handle [IN]	container handle
+ *	epoch [IN]	epoch to abort
+ *	state [OUT]	latest epoch state
+ *	event [IN]	completion event
  */
 int
-daosm_epoch_abort(daos_handle_t handle, daos_epoch_t *epochs, int nepochs,
-		  daos_event_t *event);
+daosm_epoch_abort(daos_handle_t handle, daos_epoch_t epoch,
+		  daosm_epoch_state_t *state, daos_event_t *event);
+
+/* TODO: Batch commit/abort; easy way to specify FF-like dependency */
 
 /*
  * Wait for an epoch to be committed.
  *
- *	handle	IN  container handle
- *	epoch	IN  epoch to wait
- *	info	OUT latest epoch information
- *	event	IN  completion event
+ *	handle [IN]	container handle
+ *	epoch [IN]	epoch to wait for
+ *	state [OUT]	latest epoch state
+ *	event [IN]	completion event
  */
 int
 daosm_epoch_wait(daos_handle_t handle, daos_epoch_t epoch,
-		 daosm_epoch_info_t *info, daos_event_t *event);
+		 daosm_epoch_state_t *state, daos_event_t *event);
 
 /*
  * Snapshot
