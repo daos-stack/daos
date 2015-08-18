@@ -124,28 +124,13 @@ dsr_co_close(daos_handle_t coh, daos_event_t *ev);
 int
 dsr_co_destroy(uuid_t co_uuid, daos_event_t *ev);
 
-/** Container attributes */
-typedef struct {
-	/** container UUID */
-	uuid_t			 ca_uuid;
-	/** HCE */
-	daos_epoch_t		 ca_hce;
-	/** the lowest held epoch */
-	daos_epoch_t		 ca_lhe;
-	/** Number of snapshots */
-	unsigned int		 ca_nsnapshots;
-	/** Epochs of returned snapshots */
-	daos_epoch_t		*ca_snapshots;
-	/* TODO: add more members, e.g., size, # objects, uid, gid... */
-} dsr_co_attr_t;
-
 /**
- * Query attributes of a container. User should provide at least one of
- * \a attr and \a grp as output buffer.
+ * Query container information. User should provide at least one of
+ * \a info and \a grp as output buffer.
  *
  * \param coh	[IN]	Container open handle.
  * \param grp	[IN/OUT]
- * 			Optional, returned storage targets in this container:
+ *			Optional, returned storage targets in this container:
  *			- If \a grp::rg_uuid is set to a known UUID, for
  *			  example, it is set to UUID of server group of current
  *			  process, then returned ranks are corresponding to
@@ -157,13 +142,13 @@ typedef struct {
  *			  return grp::rg_nranks.
  *			- If \a grp::rg_ranks is not NULL, this function will
  *			  fill target ranks that this container residing in.
- * \param attr	[OUT]	Optional, returned container attributes.
- *			If \a attr::ca_snapshots is not NULL, epochs of
+ * \param info	[OUT]	Optional, returned container information.
+ *			If \a info::ci_snapshots is not NULL, epochs of
  *			snapshots will be stored in it.
- *			If \a attr::ca_snapshots is NULL, number of snaphots
- *			will be returned by \a attr::ca_nsnapshots.
+ *			If \a info::ci_snapshots is NULL, number of snaphots
+ *			will be returned by \a info::ci_nsnapshots.
  * \param ev   [IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
  * 			non-blocking mode:
@@ -173,22 +158,17 @@ typedef struct {
  * 			-DER_NO_HDL	Invalid container handle
  */
 int
-dsr_co_query(daos_handle_t coh, daos_rank_group_t *grp, dsr_co_attr_t *attr,
+dsr_co_query(daos_handle_t coh, daos_rank_group_t *grp, daos_co_info_t *info,
 	     daos_event_t *ev);
 
-typedef struct {
-	daos_target_type_t	ta_type;
-	daos_target_state_t	ta_state;
-	daos_target_perf_t	ta_perf;
-} dsr_target_attr_t;
 
 /**
- * Query storage attributes of targets that a container resides on.
+ * Query information  of storage targets that a container resides on.
  *
  * \param coh	[IN]	Container open handle.
  * \param grp	[IN]	A group of targets, all these targets should belong to
  *			current container, otherwise error will be returned.
- * \param attrs	[OUT]	Returned storage attributes of \a grp, it is an array
+ * \param info	[OUT]	Returned storage information of \a grp, it is an array
  *			and array size must equal to grp::rg_nranks.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  * 			Function will run in blocking mode if \a ev is NULL.
@@ -203,7 +183,7 @@ typedef struct {
  */
 int
 dsr_co_target_query(daos_handle_t coh, daos_rank_group_t *grp,
-		    dsr_target_attr_t *attrs, daos_event_t *ev);
+		    daos_target_info_t *info, daos_event_t *ev);
 
 /**
  * Add a group of storage targets to a container. In some environments,
