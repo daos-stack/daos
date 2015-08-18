@@ -1,10 +1,24 @@
-/************************************************************************
+/**
+ * (C) Copyright 2015 Intel Corporation.
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser General Public License
+ * (LGPL) version 2.1 which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/lgpl-2.1.html
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ */
+/**
  * DAOS Sharding & Resilience APIs
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  *
  * Version 0.2
  */
+
 #ifndef __DSR_API_H__
 #define __DSR_API_H__
 
@@ -12,7 +26,7 @@
 #include <daos_errno.h>
 #include <daos_ev.h>
 
-/************************************************************************
+/**
  * DAOS APIs can run either in non-blocking mode or in blocking mode:
  *
  * - Non-blocking mode
@@ -30,7 +44,7 @@
  *   be returned by return value of API.
  */
 
-/************************************************************************
+/**
  * Container APIs
  */
 
@@ -43,16 +57,16 @@
  * \param mode [IN]	Open mode: read-only, read-write.
  * \param coh  [OUT]	Returned open handle.
  * \param ev   [IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_PERM	Permission denied
- * 			-DER_UNREACH	network is unreachable
- * 			-DER_EXIST	Container uuid already existed
- * 			-DER_NONEXIST	Storage target is nonexistent
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_PERM	Permission denied
+ *			-DER_UNREACH	network is unreachable
+ *			-DER_EXIST	Container uuid already existed
+ *			-DER_NONEXIST	Storage target is nonexistent
  */
 int
 dsr_co_create(uuid_t co_uuid, daos_rank_group_t *grp, unsigned int mode,
@@ -71,19 +85,19 @@ dsr_co_create(uuid_t co_uuid, daos_rank_group_t *grp, unsigned int mode,
  *			\a grp::rg_uuid.
  * \param mode	[IN]	Open mode: read-only, read-write.
  * \param grp_failed [OUT]
- * 			A group of servers/targets that failed to open the
- * 			container.
+ *			A group of servers/targets that failed to open the
+ *			container.
  * \param coh	[OUT]	Returned open handle.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_PERM	Permission denied
- * 			-DER_NONEXIST	Container is nonexistent
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_PERM	Permission denied
+ *			-DER_NONEXIST	Container is nonexistent
  */
 int
 dsr_co_open(uuid_t co_uuid, daos_rank_group_t *grp, unsigned int mode,
@@ -95,13 +109,13 @@ dsr_co_open(uuid_t co_uuid, daos_rank_group_t *grp, unsigned int mode,
  *
  * \param coh	[IN]	Container open handle.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_NO_HDL	Invalid container handle
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
  */
 int
 dsr_co_close(daos_handle_t coh, daos_event_t *ev);
@@ -112,14 +126,14 @@ dsr_co_close(daos_handle_t coh, daos_event_t *ev);
  *
  * \param co_uuid [IN]	Container uuid.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_PERM	Permission denied
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_NONEXIST	Container is nonexistent
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NONEXIST	Container is nonexistent
  */
 int
 dsr_co_destroy(uuid_t co_uuid, daos_event_t *ev);
@@ -151,11 +165,11 @@ dsr_co_destroy(uuid_t co_uuid, daos_event_t *ev);
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_NO_HDL	Invalid container handle
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
  */
 int
 dsr_co_query(daos_handle_t coh, daos_rank_group_t *grp, daos_co_info_t *info,
@@ -171,15 +185,15 @@ dsr_co_query(daos_handle_t coh, daos_rank_group_t *grp, daos_co_info_t *info,
  * \param info	[OUT]	Returned storage information of \a grp, it is an array
  *			and array size must equal to grp::rg_nranks.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_NO_HDL	Invalid container handle
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_NONEXIST	No container on specified targets
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NONEXIST	No container on specified targets
  */
 int
 dsr_co_target_query(daos_handle_t coh, daos_rank_group_t *grp,
@@ -195,16 +209,16 @@ dsr_co_target_query(daos_handle_t coh, daos_rank_group_t *grp,
  * \param coh	[IN]	Container open handle.
  * \param grp	[IN]	A group of targets.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid container handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_PERM	Permission denied
- * 			-DER_NONEXIST	Storage target is nonexistent
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_PERM	Permission denied
+ *			-DER_NONEXIST	Storage target is nonexistent
  */
 int
 dsr_co_extend(daos_handle_t coh, daos_rank_group_t *grp, daos_event_t *ev);
@@ -217,16 +231,16 @@ dsr_co_extend(daos_handle_t coh, daos_rank_group_t *grp, daos_event_t *ev);
  * \param coh	[IN]	Container open handle.
  * \param grp	[IN]	A group of targets.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid container handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_PERM	Permission denied
- * 			-DER_NONEXIST	Storage target is nonexistent
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_PERM	Permission denied
+ *			-DER_NONEXIST	Storage target is nonexistent
  */
 int
 dsr_co_exclude(daos_handle_t coh, daos_rank_group_t *grp, daos_event_t *ev);
@@ -248,24 +262,24 @@ dsr_co_exclude(daos_handle_t coh, daos_rank_group_t *grp, daos_event_t *ev);
  * \param grp_new [IN]	Targets to replace the old targets.
  * \param force	[IN]	Force to replace even domain of targets can't match.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		success
- * 			-DER_NO_HDL	Invalid container handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_PERM	Permission denied
- * 			-DER_NONEXIST	Storage target is nonexistent
- * 			-DER_DOMAIN	Domains of new targets cannot match
- * 					domains of original targets
+ *			non-blocking mode:
+ *			0		success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_PERM	Permission denied
+ *			-DER_NONEXIST	Storage target is nonexistent
+ *			-DER_DOMAIN	Domains of new targets cannot match
+ *					domains of original targets
  */
 int
 dsr_co_replace(daos_handle_t coh, daos_rank_group_t *grp_old,
 	       daos_rank_group_t *grp_new, bool force, daos_event_t *ev);
 
-/************************************************************************
+/**
  * Object common data structures and APIs.
  */
 
@@ -342,22 +356,22 @@ typedef struct dsr_obj_pl_attr {
  *
  * \param oh	[OUT]	Returned object open handle.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		success
- * 			-DER_NO_HDL	Invalid container handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_PERM	Permission denied
- * 			-DER_EXIST	Object ID has been used for another
- * 					object.
- * 			-DER_NONEXIST	Cannot find container on specified
- * 					storage target
- * 			-DER_NOTYPE	Unknown object type
- * 			-DER_NOSCHEMA	Unknown object schema
- * 			-DER_EP_RO	Epoch is read-only
+ *			non-blocking mode:
+ *			0		success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_PERM	Permission denied
+ *			-DER_EXIST	Object ID has been used for another
+ *					object.
+ *			-DER_NONEXIST	Cannot find container on specified
+ *					storage target
+ *			-DER_NOTYPE	Unknown object type
+ *			-DER_NOSCHEMA	Unknown object schema
+ *			-DER_EP_RO	Epoch is read-only
  */
 int
 dsr_obj_create(daos_handle_t coh, daos_obj_id_t id, daos_epoch_t epoch,
@@ -374,18 +388,18 @@ dsr_obj_create(daos_handle_t coh, daos_obj_id_t id, daos_epoch_t epoch,
  * \param type	[OUT]	Optional, returned object type.
  * \param oh	[OUT]	Returned object open handle.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid container handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_PERM	Permission denied
- * 			-DER_NONEXIST	Cannot find object
- * 			-DER_EP_OLD	Epoch is too old and has no data for
- * 					this object
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_PERM	Permission denied
+ *			-DER_NONEXIST	Cannot find object
+ *			-DER_EP_OLD	Epoch is too old and has no data for
+ *					this object
  */
 int
 dsr_obj_open(daos_handle_t coh, daos_obj_id_t id, daos_epoch_t epoch,
@@ -397,12 +411,12 @@ dsr_obj_open(daos_handle_t coh, daos_obj_id_t id, daos_epoch_t epoch,
  *
  * \param oh	[IN]	Object open handle.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid object open handle
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
  */
 int
 dsr_obj_close(daos_handle_t oh, daos_event_t *ev);
@@ -415,15 +429,15 @@ dsr_obj_close(daos_handle_t oh, daos_event_t *ev);
  * \param oh	[IN]	Object ID.
  * \param epoch	[IN]	Epoch to destroy object.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid container handle
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_EP_RO	Permission denied
- * 			-DER_NOEXIST	Nonexistent object ID
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_EP_RO	Permission denied
+ *			-DER_NOEXIST	Nonexistent object ID
  */
 int
 dsr_obj_destroy(daos_handle_t coh, daos_obj_id_t id, daos_epoch_t epoch,
@@ -439,17 +453,17 @@ dsr_obj_destroy(daos_handle_t coh, daos_obj_id_t id, daos_epoch_t epoch,
  *			Zeroes will be filled if returned object IDs are
  *			less than array size of output buffer.
  * \param anchor [IN/OUT]
- * 			Hash anchor for the next call, it should be set to
+ *			Hash anchor for the next call, it should be set to
  *			zeroes for the first call, it should not be changed
  *			by caller between calls. Caller should check returned
  *			anchor because -1 indicates the end of enumeration.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid container handle
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_INVAL	Invalid parameter
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_INVAL	Invalid parameter
  */
 int
 dsr_obj_list(daos_handle_t coh, daos_epoch_t epoch, unsigned int nobjs,
@@ -466,22 +480,22 @@ dsr_obj_list(daos_handle_t coh, daos_epoch_t epoch, unsigned int nobjs,
  * \param grp	[OUT]	Optional, returned object distribution.
  * \param pattr	[OUT]	Optional, returned placement attributes of object.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid container open handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_NOEXIST	Nonexistent object ID
- * 			-DER_UNREACH	Network is unreachable
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NOEXIST	Nonexistent object ID
+ *			-DER_UNREACH	Network is unreachable
  */
 int
 dsr_obj_query(daos_handle_t coh, daos_obj_id_t id, daos_epoch_t epoch,
 	      dsr_obj_type_t *type, daos_rank_group_t *grp,
 	      dsr_obj_pl_attr_t *pattr, daos_event_t *ev);
 
-/************************************************************************
+/**
  * Key-Value object APIs.
  */
 
@@ -492,25 +506,25 @@ dsr_obj_query(daos_handle_t coh, daos_obj_id_t id, daos_epoch_t epoch,
  * \param epoch	[IN]	Epoch for update.
  * \param nkvs	[IN]	Number of KV pairs.
  * \param kvs	[IN]	An array of KV pairs.
- * 			For nonexistent keys, it's KV insertion.
- * 			For existent keys, it's KV update or punch:
- * 			- update value if kv::kv_val is not NULL
- * 			- punch KV if kv::kv_val is NULL
+ *			For nonexistent keys, it's KV insertion.
+ *			For existent keys, it's KV update or punch:
+ *			- update value if kv::kv_val is not NULL
+ *			- punch KV if kv::kv_val is NULL
  * \param kvs_p	[OUT]	Optional, it is a pointer array and array size should
  *			also be \a nkvs, updated/punched KVs will be stored in
  *			this array.
  *
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid object open handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_PERM	Permission denied
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_EP_RO	Epoch is read-only
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_EP_RO	Epoch is read-only
  */
 int
 dsr_obj_kv_update(daos_handle_t oh, daos_epoch_t epoch, unsigned int nkvs,
@@ -523,25 +537,25 @@ dsr_obj_kv_update(daos_handle_t oh, daos_epoch_t epoch, unsigned int nkvs,
  * \param epoch	[IN]	Epoch for lookup.
  * \param nkvs	[IN]	Number of KV pairs.
  * \param kvs	[IN/OUT]
- * 			An array of KV pairs, key parts are input parameters,
- * 			if kv_va of \a kvs are NULL, length of value will be
- * 			returned, otherwise they will be filled with values.
+ *			An array of KV pairs, key parts are input parameters,
+ *			if kv_va of \a kvs are NULL, length of value will be
+ *			returned, otherwise they will be filled with values.
  * \param kvs_p	[OUT]	It is a pointer array and array size should also be
  *			\a nkvs, all found KVs will be stored in this array.
  *			NULLs will be filled for those unfound keys.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid object open handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_KV_K2BIG	Key of KV is too large and can't be
- * 					fit into output buffer
- * 			-DER_KV_V2BIG	value of KV is too large and can't be
- * 					fit into output buffer
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_KV_K2BIG	Key of KV is too large and can't be
+ *					fit into output buffer
+ *			-DER_KV_V2BIG	value of KV is too large and can't be
+ *					fit into output buffer
  */
 int
 dsr_obj_kv_lookup(daos_handle_t oh, daos_epoch_t epoch, unsigned int nkvs,
@@ -554,37 +568,37 @@ dsr_obj_kv_lookup(daos_handle_t oh, daos_epoch_t epoch, unsigned int nkvs,
  * \param epoch	[IN]	Epoch for enumerate.
  * \param nkvs	[IN]	Number of KV pairs.
  * \param kvs	[OUT]	An array of KV pairs as sink buffer.
- * 			if key parts or/and value parts of \a kvs are NULL,
- * 			length of key/value will be returned, otherwise
- * 			they will be filled with returned KV pairs.
+ *			if key parts or/and value parts of \a kvs are NULL,
+ *			length of key/value will be returned, otherwise
+ *			they will be filled with returned KV pairs.
  * \param kvs_p	[OUT]	It is a pointer array and array size should also be
  *			\a nkvs, all enumerated KVs will be stored in this
  *			array.
  *			NULLs will be filled for those unfound keys.
  * \param anchor [IN/OUT]
- * 			Hash anchor for the next call, it should be set to
+ *			Hash anchor for the next call, it should be set to
  *			zeroes for the first call, it should not be changed
  *			by caller between calls.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid object open handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_KV_K2BIG	Key of KV is too large and can't be
- * 					fit into output buffer
- * 			-DER_KV_V2BIG	Value of KV is too large and can't be
- * 					fit into output buffer
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_KV_K2BIG	Key of KV is too large and can't be
+ *					fit into output buffer
+ *			-DER_KV_V2BIG	Value of KV is too large and can't be
+ *					fit into output buffer
  */
 int
 dsr_obj_kv_list(daos_handle_t oh, daos_epoch_t epoch, unsigned int nkvs,
 		daos_kv_t *kvs, daos_kv_t **kvs_p, daos_hash_out_t *anchor,
 		daos_event_t *ev);
 
-/************************************************************************
+/**
  * Byte-array object APIs.
  */
 
@@ -620,17 +634,17 @@ dsr_obj_kv_list(daos_handle_t oh, daos_epoch_t epoch, unsigned int nkvs,
  * \param sgl	[OUT]	Optional, sink buffers for read.
  *			If it is NULL, read will only scan holes of object.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid object open handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_IO_INVAL	IO buffers can't match object extents
- * 					or object extents have overlap
- * 			-DER_EP_OLD	Epoch is too old and has no data
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_IO_INVAL	IO buffers can't match object extents
+ *					or object extents have overlap
+ *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
 dsr_obj_read(daos_handle_t oh, daos_epoch_t epoch, daos_ext_list_t *exts,
@@ -643,22 +657,22 @@ dsr_obj_read(daos_handle_t oh, daos_epoch_t epoch, daos_ext_list_t *exts,
  * \param oh	[IN]	Object open handle.
  * \param epoch	[IN]	Epoch for write.
  * \param exts	[IN]	Sink extents of the object for write,
- * 			or extents to punch if \a sgl is NULL.
+ *			or extents to punch if \a sgl is NULL.
  * \param sgl	[IN]	Optional, source buffers of write,
- * 			it should be NULL for punch.
+ *			it should be NULL for punch.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid object open handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_PERM	Permission denied
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_IO_INVAL	IO buffers can't match object extents
- * 					or object extents have overlap
- * 			-DER_EP_RO	Epoch is read-only
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_IO_INVAL	IO buffers can't match object extents
+ *					or object extents have overlap
+ *			-DER_EP_RO	Epoch is read-only
  */
 int
 dsr_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_ext_list_t *exts,
@@ -666,7 +680,7 @@ dsr_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_ext_list_t *exts,
 
 #if 0
 
-/************************************************************************
+/**
  * segmented array object data structure and APIs
  */
 
@@ -682,17 +696,17 @@ dsr_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_ext_list_t *exts,
  * \param holes	[OUT]	Optional, returned object holes.
  * \param sgl	[OUT]	Sink buffers for read.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid object open handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_IO_INVAL	IO buffers can't match object extents
- * 					or object extents have overlap
- * 			-DER_EP_OLD	epoch is too old and has no data
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_IO_INVAL	IO buffers can't match object extents
+ *					or object extents have overlap
+ *			-DER_EP_OLD	epoch is too old and has no data
  */
 int
 dsr_obj_seg_read(daos_handle_t oh, daos_epoch_t epoch, uuid_t uuid,
@@ -710,18 +724,18 @@ dsr_obj_seg_read(daos_handle_t oh, daos_epoch_t epoch, uuid_t uuid,
  * \param exts	[IN]	Sink extents of the object for write.
  * \param sgl	[IN]	Source buffers of write.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid object open handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_PERM	Permission denied
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_IO_INVAL	IO buffers can't match object extents
- * 					or object extents have overlap
- * 			-DER_EP_RO	Epoch is read-only
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_IO_INVAL	IO buffers can't match object extents
+ *					or object extents have overlap
+ *			-DER_EP_RO	Epoch is read-only
  */
 int
 dsr_obj_seg_write(daos_handle_t oh, daos_epoch_t epoch, uuid_t uuid,
@@ -737,17 +751,17 @@ dsr_obj_seg_write(daos_handle_t oh, daos_epoch_t epoch, uuid_t uuid,
  * \param rank	[IN]	Target/server rank to identify a segment of object.
  * \param exts	[IN]	Object extents to punch.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
- * 			non-blocking mode:
- * 			0		Success
- * 			-DER_NO_HDL	Invalid object open handle
- * 			-DER_INVAL	Invalid parameter
- * 			-DER_PERM	Permission denied
- * 			-DER_UNREACH	Network is unreachable
- * 			-DER_IO_INVAL	Object extents have overlap
- * 			-DER_EP_RO	Epoch is read-only
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_IO_INVAL	Object extents have overlap
+ *			-DER_EP_RO	Epoch is read-only
  */
 int
 dsr_obj_seg_punch(daos_handle_t oh, daos_epoch_t epoch, uuid_t uuid,
@@ -759,4 +773,4 @@ dsr_obj_seg_punch(daos_handle_t oh, daos_epoch_t epoch, uuid_t uuid,
  * TODO: Epoch APIs
  */
 
-#endif /* __DAOS_SR_API_H__ */
+#endif /* __DSR_API_H__ */

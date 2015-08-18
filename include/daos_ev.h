@@ -1,4 +1,17 @@
-/************************************************************************
+/**
+ * (C) Copyright 2015 Intel Corporation.
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser General Public License
+ * (LGPL) version 2.1 which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/lgpl-2.1.html
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ */
+/**
  * DAOS Event Queue
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
@@ -64,7 +77,7 @@ daos_eq_create(daos_handle_t *eqh);
  * \param ev [IN]	pointer to completion event
  *
  * \return		zero on success, -DER_EQ_EBUSY if there's any inflight
- * 			event
+ *			event
  */
 int
 daos_eq_destroy(daos_handle_t eqh);
