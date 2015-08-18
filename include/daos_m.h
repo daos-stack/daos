@@ -86,7 +86,7 @@ daosm_co_close(daos_handle_t handle, daos_event_t *event);
  *	event	IN  completion event
  */
 int
-daosm_co_destory(uuid_t uuid, daos_rank_group_t *shards, daos_event_t *event);
+daosm_co_destroy(uuid_t uuid, daos_rank_group_t *shards, daos_event_t *event);
 
 /*
  * Query a container's various information.
