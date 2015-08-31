@@ -20,6 +20,7 @@
  */
 #include <getopt.h>
 #include <signal.h>
+#include <math.h>
 #include <pl_map.h>
 #include <pseudo_cl_buf.h>
 
@@ -32,10 +33,10 @@
  * number of objects in a pseudo targets, buffer size can progressively
  * increase
  */
-#define PSC_TARGET_SIZE		(64 * 1024)
+#define PSC_TARGET_SIZE		(8 * 1024)
 
 typedef struct {
-	daos_obj_id_t		po_id;
+	pl_obj_shard_t		po_os;
 	/** object metadata in shard */
 	pl_obj_attr_t		po_attr;
 } psc_obj_t;
@@ -63,8 +64,10 @@ typedef struct {
 	/** rim placement map */
 	pl_map_t		*pg_map;
 	psc_target_t		*pg_targets;
+	uint64_t		 pg_oid_gen;
+	unsigned long		 pg_nobjs_m;
+	unsigned long		 pg_nobjs_sr;
 	unsigned int		 pg_ntargets;
-	unsigned int		 pg_oid_gen;
 	unsigned int		 pg_ndescs;
 	cl_pseudo_comp_desc_t	 pg_descs[PSC_COMP_DESC_MAX];
 	pl_obj_attr_t		 pg_oa;
@@ -90,6 +93,7 @@ typedef struct {
 			unsigned int		 o_num;
 			unsigned int		 o_rank;
 			bool			 o_print;
+			bool			 o_print_tgs;
 		} obj_create;
 
 		struct pa_target_change {
@@ -99,6 +103,7 @@ typedef struct {
 				cl_comp_state_t	 state;
 				daos_rank_t	 rank;
 			} *t_ops;
+			bool			 t_print;
 		} target_change;
 	} u;
 } psc_argument_t;
@@ -274,6 +279,9 @@ psc_targets_setup(unsigned int ntargets, cl_target_t *targets)
 					     sizeof(*pts[i].pt_objs));
 		if (pts[i].pt_objs == NULL)
 			return -ENOMEM;
+
+		if (i != 0 && i % 10000 == 0)
+			D_PRINT("Created %d targets\n", i);
 	}
 
 	daos_array_sort(pts, ntargets, true, &psc_target_sort_ops);
@@ -360,17 +368,51 @@ psc_targets_print(unsigned int nranks, daos_rank_t *ranks)
 		}
 	} else {
 		pst = pg_data.pg_targets;
+
 		for (i = 0; i < pg_data.pg_ntargets; i++, pst++)
 			psc_target_print(pst, buf, 80, &tmp);
 	}
 	psc_target_print(NULL, buf, 80, &tmp);
 }
 
+static void
+psc_obj_stats_print(void)
+{
+	psc_target_t	*pst;
+	unsigned long	 obj_max = 0;
+	unsigned long	 obj_min = -1;
+	unsigned long	 range;
+	unsigned long	 avg;
+	int		 i;
+
+	pst = pg_data.pg_targets;
+
+	for (i = 0; i < pg_data.pg_ntargets; i++, pst++) {
+		if (pst->pt_target->co_status != CL_COMP_ST_UP)
+			continue;
+
+		obj_max = MAX(pst->pt_nobjs, obj_max);
+		obj_min = MIN(pst->pt_nobjs, obj_min);
+	}
+
+	range	= obj_max - obj_min;
+	avg	= pg_data.pg_nobjs_m / pg_data.pg_ntargets;
+	if (avg == 0 && pg_data.pg_nobjs_m != 0)
+		avg = 1;
+
+	D_PRINT("Total daos-sr objects %lu, daos-m objects %lu\n"
+		"Best %lu, max %lu, min %lu, range %lu, percentage %-6.3f%%\n",
+		pg_data.pg_nobjs_sr, pg_data.pg_nobjs_m, avg,
+		obj_max, obj_min, range, (float)(range * 100) / (float)avg);
+}
+
 static int
 psc_target_append_obj(psc_target_t *pst, psc_obj_t *obj, bool rebuild)
 {
-	int	nobjs = pst->pt_nobjs + pst->pt_nobjs_rb;
+	pl_obj_shard_t	*os = &obj->po_os;
+	int		 nobjs = pst->pt_nobjs + pst->pt_nobjs_rb;
 
+	obj->po_os.os_rank = pst->pt_rank;
 	if (nobjs == pst->pt_nobjs_max) {
 		psc_obj_t *objs;
 
@@ -385,9 +427,19 @@ psc_target_append_obj(psc_target_t *pst, psc_obj_t *obj, bool rebuild)
 
 	nobjs = pst->pt_nobjs + pst->pt_nobjs_rb;
 	if (rebuild) {
+		D_DEBUG(DF_PL, "rebuild obj "DF_U64".%u on target %u\n",
+			os->os_id.body[0], os->os_sid, pst->pt_rank);
+
 		pst->pt_objs[nobjs] = *obj;
 		pst->pt_nobjs_rb++;
 	} else {
+		D_DEBUG(DF_PL, "Create obj "DF_U64".%u on target %u\n",
+			os->os_id.body[0], os->os_sid, pst->pt_rank);
+		if (pst->pt_rank == -1) {
+			D_PRINT( "Create obj "DF_U64".%u on target %u\n",
+			os->os_id.body[0], os->os_sid, pst->pt_rank);
+		}
+
 		if (pst->pt_nobjs_rb != 0)
 			pst->pt_objs[nobjs] = pst->pt_objs[pst->pt_nobjs];
 
@@ -737,11 +789,10 @@ psc_obj_schema_args(char *str, psc_argument_t *args)
 
 	D_DEBUG(DF_PL, "parse parameters for object distribution: %s\n", str);
 
+	oa->oa_start	= -1; /* unsupported */
 	oa->oa_nstripes = 1; /* default */
 	oa->oa_rd_grp	= 3; /* default */
 	oa->oa_nspares  = 1; /* default */
-	oa->oa_cookie	= -1; /* unused */
-	oa->oa_start	= -1; /* unused */
 
 	while (str != NULL) {
 		unsigned num;
@@ -767,6 +818,18 @@ psc_obj_schema_args(char *str, psc_argument_t *args)
 				return -EINVAL;
 			oa->oa_rd_grp = num;
 			break;
+		case 'k':
+			rc = psc_parse_number(str + 1, &num, &str);
+			if (rc == PPARSE_INVAL)
+				return -EINVAL;
+			oa->oa_spare_skip = num;
+			break;
+		case 'p':
+			rc = psc_parse_number(str + 1, &num, &str);
+			if (rc == PPARSE_INVAL)
+				return -EINVAL;
+			oa->oa_nspares = num;
+			break;
 		}
 	}
 
@@ -780,13 +843,11 @@ psc_obj_create_args(char *str, psc_argument_t *args)
 	struct pa_obj_create	*ocr = &args->u.obj_create;
 	int			 rc;
 
-	if (oa->oa_nstripes == 0 || oa->oa_rd_grp == 0 ||
-	    oa->oa_nspares == 0) {
+	if (oa->oa_nstripes == 0 || oa->oa_rd_grp == 0) {
 		D_ERROR("Please specify object distribution\n");
 		return -EINVAL;
 	}
 
-	D_ASSERT(oa->oa_cookie == -1);
 	D_DEBUG(DF_PL, "parse parameters for object: %s\n", str);
 
 	while (str != NULL) {
@@ -808,37 +869,27 @@ psc_obj_create_args(char *str, psc_argument_t *args)
 			ocr->o_print = true;
 			str++;
 			break;
+		case 'P': /* print object distribution */
+			ocr->o_print_tgs = true;
+			str++;
+			break;
 		}
 	}
 	return 0;
 }
 
-static int
-psc_obj_print(daos_obj_id_t id)
+static void
+psc_obj_print(daos_obj_id_t id, int nosas, pl_obj_shard_t *osas)
 {
-	pl_obj_attr_t		*oa = &pg_data.pg_oa;
-	daos_rank_t		*ranks;
-	int			 nranks;
-	int			 i;
-	int			 j;
-	int			 rc;
-
-	nranks = oa->oa_nstripes * oa->oa_rd_grp;
-	ranks = calloc(nranks, sizeof(*ranks));
-	if (ranks == NULL)
-		return -ENOMEM;
-
-	rc = pl_map_obj_select(pg_data.pg_map, id, oa, nranks, ranks);
-	if (rc != 0) {
-		D_ERROR("Failed to select targets\n");
-		goto failed;
-	}
+	pl_obj_attr_t	*oa = &pg_data.pg_oa;
+	int		 i;
+	int		 j;
 
 	D_PRINT("OBJ["DF_U64"] : ", id.body[0]);
 	for (i = 0; i < oa->oa_nstripes; i++) {
 		D_PRINT("[");
 		for (j = 0; j < oa->oa_rd_grp; j++) {
-			D_PRINT("%d", ranks[i * oa->oa_rd_grp + j]);
+			D_PRINT("%d", osas[i * oa->oa_rd_grp + j].os_rank);
 			if (j < oa->oa_rd_grp - 1)
 				D_PRINT(" ");
 		}
@@ -847,9 +898,6 @@ psc_obj_print(daos_obj_id_t id)
 			D_PRINT(" ");
 	}
 	D_PRINT("\n");
- failed:
-	free(ranks);
-	return rc;
 }
 
 static int
@@ -857,8 +905,8 @@ osc_obj_create(psc_argument_t *args)
 {
 	pl_obj_attr_t		*oa = &pg_data.pg_oa;
 	struct pa_obj_create	*ocr = &args->u.obj_create;
-	daos_rank_t		*ranks = NULL;
-	int			 nranks;
+	pl_obj_shard_t		*osas = NULL;
+	int			 nosas;
 	int			 i;
 	int			 j;
 	int			 rc;
@@ -866,36 +914,51 @@ osc_obj_create(psc_argument_t *args)
 	PSC_PROMPT("Create objects %s, rd_grp %d, stripes %d, spare %d\n",
 		   args->str, oa->oa_rd_grp, oa->oa_nstripes, oa->oa_nspares);
 
-	nranks = oa->oa_nstripes * oa->oa_rd_grp;
-	ranks = calloc(oa->oa_nstripes * oa->oa_rd_grp, sizeof(*ranks));
-	if (ranks == NULL)
+	nosas = oa->oa_nstripes * oa->oa_rd_grp;
+	osas = calloc(oa->oa_nstripes * oa->oa_rd_grp, sizeof(*osas));
+	if (osas == NULL)
 		return -ENOMEM;
 
-	for (i = 0; i < ocr->o_num; i++) {
-		daos_obj_id_t id = psc_oid_generate();
+	pg_data.pg_nobjs_sr += ocr->o_num;
+	pg_data.pg_nobjs_m += ocr->o_num * (oa->oa_nstripes * oa->oa_rd_grp);
 
-		rc = pl_map_obj_select(pg_data.pg_map, id, oa, nranks, ranks);
+	for (i = 0; i < ocr->o_num; i++) {
+		psc_obj_t	 obj;
+		pl_obj_shard_t	*os = &obj.po_os;
+
+		os->os_id = psc_oid_generate();
+		os->os_sid = -1;
+		os->os_rank = -1;
+		os->os_stride = 0;
+		rc = pl_map_obj_select(pg_data.pg_map, os, oa, PL_SEL_ALL,
+				       nosas, osas);
 		if (rc < 0)
 			goto failed;
 
-		for (j = 0; j < nranks; j++) {
-			psc_obj_t obj;
-
-			obj.po_id = id;
+		rc = 0;
+		for (j = 0; j < nosas; j++) {
+			os->os_sid = osas[j].os_sid;
+			os->os_rank = osas[j].os_rank;
+			os->os_stride = osas[j].os_stride;
 			obj.po_attr = *oa;
-			obj.po_attr.oa_cookie = j;
-			psc_target_append_obj(psc_target_find(ranks[j]),
+			psc_target_append_obj(psc_target_find(osas[j].os_rank),
 					      &obj, false);
 		}
 
 		if (ocr->o_print)
-			psc_obj_print(id);
+			psc_obj_print(obj.po_os.os_id, nosas, osas);
+		else if (i != 0 && i % 1000000 == 0)
+			D_PRINT("created %d objects\n", i);
 	}
-	psc_targets_print(0, NULL);
+
+	if (ocr->o_print_tgs)
+		psc_targets_print(0, NULL);
+
+	psc_obj_stats_print();
  failed:
 	if (rc != 0)
 		D_ERROR("Failed to create many objects\n");
-	free(ranks);
+	free(osas);
 	return rc;
 }
 
@@ -942,13 +1005,17 @@ psc_target_change_args(char *str, psc_argument_t *args)
 				c == 'd' ? "disable" : "enable", num);
 			i++;
 			break;
+		case 'p': /* print object distribution */
+			tgc->t_print= true;
+			str++;
+			break;
 		}
 	}
 	return 0;
 }
 
 static void
-psc_target_failover_objs(psc_target_t *pt, daos_rank_t failed_rank)
+psc_target_rebuild_objs(psc_target_t *pt, daos_rank_t failed_rank)
 {
 	cl_target_t	*target = pt->pt_target;
 	int		 i;
@@ -961,22 +1028,23 @@ psc_target_failover_objs(psc_target_t *pt, daos_rank_t failed_rank)
 		pt->pt_nobjs, target->co_rank, failed_rank);
 
 	for (i = 0; i < pt->pt_nobjs; i++) {
-		psc_obj_t	*obj = &pt->pt_objs[i];
-		daos_rank_t	 failover;
+		psc_obj_t	 obj = pt->pt_objs[i];
+		pl_obj_shard_t	 os_rbd;
 		bool		 found;
 
-		found = pl_map_obj_failover(pg_data.pg_map, obj->po_id,
-					    &obj->po_attr, target->co_rank,
-					    failed_rank, &failover);
+		found = pl_map_obj_rebuild(pg_data.pg_map, &obj.po_os,
+					   &obj.po_attr, failed_rank,
+					   &os_rbd);
 		if (found) {
-			psc_target_append_obj(psc_target_find(failover),
-					      obj, true);
+			obj.po_os = os_rbd;
+			psc_target_append_obj(psc_target_find(os_rbd.os_rank),
+					      &obj, true);
 		}
 	}
 }
 
 static void
-psc_target_failover(daos_rank_t failed_rank)
+psc_target_rebuild(daos_rank_t failed_rank)
 {
 	psc_target_t	*pts	= pg_data.pg_targets;
 	int		 nobjs	= 0;
@@ -984,7 +1052,7 @@ psc_target_failover(daos_rank_t failed_rank)
 	int		 i;
 
 	for (i = 0; i < pg_data.pg_ntargets; i++)
-		psc_target_failover_objs(&pts[i], failed_rank);
+		psc_target_rebuild_objs(&pts[i], failed_rank);
 
 	/* clean all objects on the failed target */
 	psc_target_find(failed_rank)->pt_nobjs = 0;
@@ -1031,14 +1099,14 @@ psc_target_recov_objs(psc_target_t *pt, daos_rank_t recovered)
 		bool		 recov;
 
 		obj = &pt->pt_objs[i];
-		recov = pl_map_obj_recover(pg_data.pg_map, obj->po_id,
-					   &obj->po_attr, target->co_rank,
-					   recovered);
+		recov = pl_map_obj_recover(pg_data.pg_map, &obj->po_os,
+					   &obj->po_attr, recovered);
 		if (!recov) {
 			i++;
 			continue;
 		}
 
+		obj->po_os.os_rank = recovered;
 		psc_target_append_obj(recov_pt, obj, false);
 		psc_target_del_obj(pt, i);
 		total--;
@@ -1054,10 +1122,13 @@ psc_target_recover(daos_rank_t recovered)
 	int		 nobjs	= 0;
 	int		 ntgs	= 0;
 	int		 i;
+	int		 rc;
 
 	for (i = 0; i < pg_data.pg_ntargets; i++) {
-		int rc = psc_target_recov_objs(&pts[i], recovered);
+		if (pts[i].pt_rank == recovered)
+			continue;
 
+		rc = psc_target_recov_objs(&pts[i], recovered);
 		if (rc == 0)
 			continue;
 
@@ -1093,19 +1164,25 @@ psc_target_change(psc_argument_t *args)
 		}
 
 		if (tgc->t_ops[i].state == CL_COMP_ST_DOWN)
-			psc_target_failover(tgc->t_ops[i].rank);
+			psc_target_rebuild(tgc->t_ops[i].rank);
 		else
 			psc_target_recover(tgc->t_ops[i].rank);
 
-		psc_targets_print(0, NULL);
+		if (tgc->t_print)
+			psc_targets_print(0, NULL);
+
+		psc_obj_stats_print();
 	}
+
+	if (i == 0 && tgc->t_print) /* print only */
+		psc_targets_print(0, NULL);
 
 	free(tgc->t_ops);
 	return rc;
 }
 
 static int
-psc_targets_rebuild(psc_argument_t *args)
+psc_targets_rebalance(psc_argument_t *args)
 {
 	psc_target_t *pst;
 	int	      i;
@@ -1114,7 +1191,7 @@ psc_targets_rebuild(psc_argument_t *args)
 
 	for (i = 0; i < pg_data.pg_ntargets; i++) {
 		psc_obj_t	 obj;
-		daos_rank_t	 rank;
+		daos_rank_t	 rebal;
 		unsigned	 num;
 		unsigned	 total;
 
@@ -1122,22 +1199,26 @@ psc_targets_rebuild(psc_argument_t *args)
 		total = pst->pt_nobjs;
 		for (j = num = 0; j < pst->pt_nobjs; ) {
 			obj = pst->pt_objs[j];
-			rc = pl_map_obj_rebuild(pg_data.pg_map, obj.po_id,
-						&obj.po_attr, &rank);
+
+			rc = pl_map_obj_rebalance(pg_data.pg_map, &obj.po_os,
+						  &obj.po_attr, &rebal);
 			if (rc != 0)
 				return rc;
 
-			if (rank == pst->pt_rank) {
+			if (rebal == pst->pt_rank) {
 				j++;
 				continue;
 			}
 
-			D_DEBUG(DF_PL, "move 0."DF_U64"/%d from %d to %d\n",
-				obj.po_id.body[0], obj.po_attr.oa_cookie,
-				pst->pt_rank, rank);
+			D_DEBUG(DF_PL,
+				"move "DF_U64"."DF_U64".%d from %d to %d\n",
+				obj.po_os.os_id.body[1],
+				obj.po_os.os_id.body[0],
+				obj.po_os.os_sid, pst->pt_rank, rebal);
 
+			obj.po_os.os_rank = rebal;
 			psc_target_del_obj(pst, j);
-			psc_target_append_obj(psc_target_find(rank), &obj,
+			psc_target_append_obj(psc_target_find(rebal), &obj,
 					      true);
 			num++;
 		}
@@ -1153,6 +1234,7 @@ psc_targets_rebuild(psc_argument_t *args)
 		pst->pt_nobjs_rb = 0;
 	}
 	psc_targets_print(0, NULL);
+	psc_obj_stats_print();
 	return 0;
 }
 
@@ -1172,6 +1254,7 @@ static struct option psc_opts[] = {
 };
 
 /*
+ * Usage:
  * -C	cl_update
  *  	create or update cluster map
  *  	r:N	N racks
@@ -1180,6 +1263,7 @@ static struct option psc_opts[] = {
  *  	n:N	N nodes
  *  	t:N	N targets
  *  	p	print cluster map
+ *
  *  	e.g., b:4:t:16, create cluster map with 4 boards and 16 targets
  *
  * -P	create placement map
@@ -1192,6 +1276,8 @@ static struct option psc_opts[] = {
  * -S	Set object schema
  *  	s:N	stripe count
  *  	r:N	redundancy group size
+ *  	s:N	number of spare nodes between two redundancy group
+ *  	k:N	max skip distance for spare nodes
  *
  * -O	Create object
  *  	n:N	number of objects
@@ -1200,14 +1286,15 @@ static struct option psc_opts[] = {
  * -T	chanage status of target
  *  	d:N	disable target N
  *  	e:N	enable target N
+ *  	p	print object stats in all targets
  *
  * Example:
  * DAOS_DEBUG=0
  * pseudo_cluster -C b:16,t:64,p	\
  * 	          -P t:r,d:b,n:1,p	\
- * 		  -S s:4,r:4		\
+ * 		  -S s:4,r:4,k:4	\
  * 		  -O n:40960,i:8	\
- * 		  -T d:60,e:60
+ * 		  -T d:60,e:60,p
  *
  * TODO: rebuild objects for changed cluster map
  */
@@ -1307,7 +1394,7 @@ main(int argc, char **argv)
 				goto failed;
 			break;
 		case 'R':
-			rc = psc_targets_rebuild(NULL);
+			rc = psc_targets_rebalance(NULL);
 			if (rc != 0)
 				goto failed;
 			break;

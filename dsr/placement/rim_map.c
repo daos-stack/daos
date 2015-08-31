@@ -20,10 +20,9 @@
  */
 #include "pl_map_internal.h"
 
-extern daos_sort_ops_t cl_target_sort_ops;
 extern daos_sort_ops_t cl_target_vsort_ops;
 
-/* scratch buffer for reshuffling domains and targets */
+/** scratch buffer for reshuffling domains and targets */
 typedef struct {
 	/** total number of domains in this buffer */
 	unsigned int		  rb_ndoms;
@@ -39,6 +38,18 @@ typedef struct {
 	}			 *rb_doms;
 } rim_buf_t;
 
+/** helper structure for shuffling domains */
+typedef struct rim_dom_shuffler {
+	struct rim_domain	*rs_rdoms;
+	uint64_t		 rs_seed;
+} rim_dom_shuffler_t;
+
+/** helper structure for shuffling targets */
+typedef struct rim_target_shuffler {
+	cl_target_t		**ts_targets;
+	uint64_t		  ts_seed;
+} rim_target_shuffler_t;
+
 static void rim_buf_destroy(rim_buf_t *buf);
 static void rim_map_destroy(pl_map_t *map);
 
@@ -48,6 +59,7 @@ pl_map2rimap(pl_map_t *map)
 	return container_of(map, pl_rim_map_t, rmp_map);
 }
 
+/** compare versoin of two domains */
 static int
 rim_dom_cmp_ver(void *array, int a, int b)
 {
@@ -70,30 +82,14 @@ rim_dom_swap(void *array, int a, int b)
 	rda[b] = tmp;
 }
 
+/** sort domains by version */
 static daos_sort_ops_t rim_dom_vsort_ops = {
 	.so_cmp		= rim_dom_cmp_ver,
 	.so_swap	= rim_dom_swap,
 };
 
-static int
-rim_dom_cmp_rank(void *array, int a, int b)
-{
-	struct rim_domain *rda = array;
-
-	if (rda[a].rd_dom->cd_comp.co_rank > rda[b].rd_dom->cd_comp.co_rank)
-		return 1;
-	if (rda[a].rd_dom->cd_comp.co_rank < rda[b].rd_dom->cd_comp.co_rank)
-		return -1;
-	return 0;
-}
-
-static daos_sort_ops_t rim_dom_sort_ops = {
-	.so_cmp		= rim_dom_cmp_rank,
-	.so_swap	= rim_dom_swap,
-};
-
 /**
- * allocate scratch buffers for reshuffling
+ * allocate scratch buffer for shuffling domains/targets
  */
 static int
 rim_buf_create(pl_rim_map_t *rimap, rim_buf_t **buf_p)
@@ -181,19 +177,72 @@ rim_buf_destroy(rim_buf_t *buf)
 	free(buf);
 }
 
-/** randomly reorg targets in this domain */
+/** compare hashed rank of targets */
+static int
+rim_target_shuffler_cmp(void *array, int a, int b)
+{
+	rim_target_shuffler_t	 *ts = array;
+	cl_target_t		**targets = ts->ts_targets;
+	uint64_t		  buf[2];
+	uint64_t		  ka;
+	uint64_t		  kb;
+
+	buf[0]  = targets[a]->co_rank;
+	buf[1]  = ts->ts_seed;
+	buf[0] ^= buf[0] << 22;
+	buf[1] ^= buf[1] << 28;
+	ka = daos_u64_hash(buf[1] + buf[0], 37);
+
+	buf[0]  = targets[b]->co_rank;
+	buf[1]  = ts->ts_seed;
+	buf[0] ^= buf[0] << 22;
+	buf[1] ^= buf[1] << 28;
+	kb = daos_u64_hash(buf[1] + buf[0], 37);
+
+	if (ka > kb)
+		return 1;
+	if (ka < kb)
+		return -1;
+
+	if (targets[a]->co_rank > targets[b]->co_rank)
+		return 1;
+	if (targets[a]->co_rank < targets[b]->co_rank)
+		return 1;
+
+	D_ASSERT(0);
+	return 0;
+}
+
 static void
-rim_dom_reshuffle_targets(struct rim_domain *rdom, unsigned int seed,
-			  unsigned int ntargets)
+rim_target_shuffler_swap(void *array, int a, int b)
+{
+	cl_target_t **targets = ((rim_target_shuffler_t *)array)->ts_targets;
+	cl_target_t  *tmp = targets[a];
+
+	targets[a] = targets[b];
+	targets[b] = tmp;
+}
+
+/** sort target by hashed rank */
+static daos_sort_ops_t rim_target_shuffler_ops = {
+	.so_cmp		= rim_target_shuffler_cmp,
+	.so_swap	= rim_target_shuffler_swap,
+};
+
+/**
+ * Sort targets by hashed rank version by version.
+ * It can guarantee to generate the same pseudo-random order for all versions.
+ */
+static void
+rim_dom_shuffle_targets(struct rim_domain *rdom, unsigned int seed,
+			unsigned int ntargets)
 {
 	cl_target_t **targets = rdom->rd_targets;;
 	int	      start;
 	int	      ver;
 	int	      num;
 	int	      i;
-	int	      j;
 
-	/* sort by version */
 	D_DEBUG(DF_PL, "Sort %d targets of %s[%d] by version\n",
 		rdom->rd_ntargets, cl_domain_name(rdom->rd_dom),
 		rdom->rd_dom->cd_comp.co_rank);
@@ -201,30 +250,20 @@ rim_dom_reshuffle_targets(struct rim_domain *rdom, unsigned int seed,
 	daos_array_sort(targets, rdom->rd_ntargets, false,
 			&cl_target_vsort_ops);
 
-	srand(seed + rdom->rd_dom->cd_comp.co_rank);
 	ver = rdom->rd_dom->cd_comp.co_ver;
 	for (i = start = 0; i < rdom->rd_ntargets && ntargets > 0; i++) {
+		rim_target_shuffler_t ts;
+
 		if (ver == targets[i]->co_ver &&
 		    i < rdom->rd_ntargets - 1 && ntargets > 1)
 			continue;
 
+		/* find a different version, or it is the last target */
 		num = i - start + (ver == targets[i]->co_ver);
-		/* sort by rank within this version and make sure we always
-		 * generate the same pseudo-random order */
-		daos_array_sort(&targets[start], num, true,
-				&cl_target_sort_ops);
-		for (j = start; num > 0 && ntargets > 0;
-		     j++, num--, ntargets--) {
-			int off = rand() % num;
+		ts.ts_targets = &targets[start];
+		ts.ts_seed    = seed;
 
-			if (off != 0) {
-				cl_target_t  *tmp = targets[j + off];
-
-				targets[j + off] = targets[j];
-				targets[j] = tmp;
-			}
-		}
-
+		daos_array_sort(&ts, num, true, &rim_target_shuffler_ops);
 		if (ver != targets[i]->co_ver) {
 			ver = targets[i]->co_ver;
 			start = i;
@@ -232,12 +271,67 @@ rim_dom_reshuffle_targets(struct rim_domain *rdom, unsigned int seed,
 	}
 }
 
+/** compare hashed rank of domains */
+static int
+rim_dom_shuffler_cmp(void *array, int a, int b)
+{
+	rim_dom_shuffler_t	*rs = array;
+	struct rim_domain	*rdoms = rs->rs_rdoms;
+	uint64_t		 buf[2];
+	uint64_t		 ka;
+	uint64_t		 kb;
+
+	buf[0]  = rdoms[a].rd_dom->cd_comp.co_rank;
+	buf[1]  = rs->rs_seed;
+	buf[0] ^= buf[0] << 26;
+	buf[1] ^= buf[1] << 26;
+	ka = daos_u64_hash(buf[1] + buf[0], 37);
+
+	buf[0]  = rdoms[b].rd_dom->cd_comp.co_rank;
+	buf[1]  = rs->rs_seed;
+	buf[0] ^= buf[0] << 26;
+	buf[1] ^= buf[1] << 26;
+	kb = daos_u64_hash(buf[1] + buf[0], 37);
+
+	if (ka > kb)
+		return 1;
+	if (ka < kb)
+		return -1;
+
+	if (rdoms[a].rd_dom->cd_comp.co_rank >
+	    rdoms[b].rd_dom->cd_comp.co_rank)
+		return 1;
+
+	if (rdoms[a].rd_dom->cd_comp.co_rank <
+	    rdoms[b].rd_dom->cd_comp.co_rank)
+		return 1;
+
+	D_ASSERT(0);
+	return 0;
+}
+
+static void
+rim_dom_shuffler_swap(void *array, int a, int b)
+{
+	struct rim_domain *rdoms = ((rim_dom_shuffler_t *)array)->rs_rdoms;
+	struct rim_domain  tmp = rdoms[a];
+
+	rdoms[a] = rdoms[b];
+	rdoms[b] = tmp;
+}
+
+/** Sort domains by hashed ranks */
+static daos_sort_ops_t rim_dom_shuffler_ops = {
+	.so_cmp		= rim_dom_shuffler_cmp,
+	.so_swap	= rim_dom_shuffler_swap,
+};
+
 /**
- * reshuffle an array of domains and targets in each domain
+ * shuffle an array of domains and targets in each domain
  */
 static int
-rim_buf_reshuffle(pl_rim_map_t *rimap, unsigned int seed,
-		  unsigned int ntargets, rim_buf_t *buf)
+rim_buf_shuffle(pl_rim_map_t *rimap, unsigned int seed,
+		unsigned int ntargets, rim_buf_t *buf)
 {
 	struct rim_domain *scratch = NULL;
 	struct rim_domain *merged;
@@ -258,38 +352,22 @@ rim_buf_reshuffle(pl_rim_map_t *rimap, unsigned int seed,
 	merged = &scratch[buf->rb_ndoms];
 
 	for (i = start = 0; i < buf->rb_ndoms; i++) {
-		cl_domain_t	  *dom = buf->rb_doms[i].rd_dom;
-		struct rim_domain *dst;
-		struct rim_domain *dst2;
-		int		   num;
+		cl_domain_t	   *dom = buf->rb_doms[i].rd_dom;
+		struct rim_domain  *dst;
+		struct rim_domain  *dst2;
+		int		    num;
+		rim_dom_shuffler_t  rs;
 
-		rim_dom_reshuffle_targets(&buf->rb_doms[i], seed, ntargets);
+		rim_dom_shuffle_targets(&buf->rb_doms[i], seed, ntargets);
 		if (ver == dom->cd_comp.co_ver && i < buf->rb_ndoms - 1)
 			continue;
 
-		srand(seed + start);
 		num = i - start + (ver == dom->cd_comp.co_ver);
-		daos_array_sort(&buf->rb_doms[start], num, true,
-				&rim_dom_sort_ops);
+		rs.rs_seed  = seed;
+		rs.rs_rdoms = &buf->rb_doms[start];
+		daos_array_sort(&rs, num, true, &rim_dom_shuffler_ops);
 
-		for (j = start; num > 0; j++, num--) {
-			int off = rand() % num;
-
-			if (off != 0) {
-				struct rim_domain rd = buf->rb_doms[j + off];
-
-				buf->rb_doms[j + off] = buf->rb_doms[j];
-				buf->rb_doms[j] = rd;
-			}
-			/* D_PRINT("%s[%d]\n",
-			 * 	   cl_domain_name(buf->rb_doms[j].rd_dom),
-			 *	   buf->rb_doms[j].rd_dom->cd_comp.co_rank);
-			 */
-		}
-
-		num = i - start + (ver == dom->cd_comp.co_ver);
 		dst = dst2 = merged - num;
-
 		for (j = k = 0; &scratch[buf->rb_ndoms] - merged > 0 || num > 0;
 		     k++) {
 			if (k % 2 == 0) {
@@ -322,7 +400,7 @@ rim_buf_reshuffle(pl_rim_map_t *rimap, unsigned int seed,
 }
 
 /**
- * build a rim with random seed \a seed
+ * build a rim with pseudo-randomly ordered domains and targets
  */
 static int
 rim_generate(pl_rim_map_t *rimap, unsigned int idx, unsigned int ntargets,
@@ -337,7 +415,7 @@ rim_generate(pl_rim_map_t *rimap, unsigned int idx, unsigned int ntargets,
 	D_DEBUG(DF_PL, "Create rim %d [%d targets] for rimap\n",
 		idx, rimap->rmp_ntargets);
 
-	rc = rim_buf_reshuffle(rimap, idx, ntargets, buf);
+	rc = rim_buf_shuffle(rimap, idx, ntargets, buf);
 	if (rc < 0)
 		return rc;
 
@@ -391,6 +469,7 @@ rim_print(pl_rim_map_t *rimap, int rim_idx)
 	}
 }
 
+/** create rims for rimap */
 static int
 rim_map_build(pl_rim_map_t *rimap, unsigned int version, unsigned int ntargets,
 	      cl_comp_type_t domain)
@@ -431,12 +510,21 @@ rim_map_build(pl_rim_map_t *rimap, unsigned int version, unsigned int ntargets,
 	return rc;
 }
 
-/* at least 10 bits per target */
-#define PL_TARGET_BITS		10
-/* 24 bits (16 million) for all domains */
-#define PL_DOM_ALL_BITS		24
-/* max to 1 million rims */
-#define PL_RIM_ALL_BITS		20
+/* each target has at least 10 bits for the key range of consistent hash */
+#define TARGET_BITS		10
+/* one million for domains */
+#define DOMAIN_BITS		20
+/* maximum bits for a rim */
+#define TARGET_HASH_BITS	45
+/* max to 8 million rims */
+#define RIM_HASH_BITS		23
+
+/** for comparision of float/double */
+#define RIM_PRECISION		0.00001
+/** 128K > RIM_PRECISION_FACTOR */
+#define RIM_PRECISION_BITS	17
+/** should be less than 128K */
+#define RIM_PRECISION_FACTOR	100000
 
 /**
  * create consistent hashes for rimap
@@ -462,8 +550,11 @@ rim_map_hash_build(pl_rim_map_t *rimap)
 		return -ENOMEM;
 
 	dom_ntgs = rimap->rmp_ntargets / rimap->rmp_ndomains;
-	rimap->rmp_target_hbits = PL_DOM_ALL_BITS + PL_TARGET_BITS +
+	rimap->rmp_target_hbits = DOMAIN_BITS + TARGET_BITS +
 				  daos_power2_nbits(dom_ntgs);
+	if (rimap->rmp_target_hbits > TARGET_HASH_BITS)
+		rimap->rmp_target_hbits = TARGET_HASH_BITS;
+
 	range = 1ULL << rimap->rmp_target_hbits;
 
 	D_DEBUG(DF_PL, "domanis %d, targets %d, hash range is 0-0x"DF_X64"\n",
@@ -480,7 +571,7 @@ rim_map_hash_build(pl_rim_map_t *rimap)
 	}
 
 	/* create consistent hash for rims */
-	range = 1ULL << PL_RIM_ALL_BITS;
+	range = 1ULL << RIM_HASH_BITS;
 	stride = (double)range / rimap->rmp_nrims;
 	hash = 0;
 
@@ -499,6 +590,8 @@ rim_map_create(cl_map_t *cl_map, pl_map_attr_t *ma, pl_map_t **mapp)
 {
 	pl_rim_map_t	*rimap;
 	int		 rc;
+
+	D_CASSERT(TARGET_HASH_BITS + RIM_PRECISION_BITS < 64);
 
 	D_ASSERT(ma->u.rim.ra_nrims > 0);
 	D_DEBUG(DF_PL, "Create rim map: domain %s, nrim: %d\n",
@@ -567,227 +660,361 @@ rim_map_print(pl_map_t *map)
 		rim_print(rimap, i);
 }
 
+/** hash object ID, find a rim by consistent hash */
 static pl_rim_t *
-rim_hash(pl_rim_map_t *rimap, daos_obj_id_t id)
+rim_oid2rim(pl_rim_map_t *rimap, daos_obj_id_t id)
 {
-	unsigned index;
+	uint64_t key = id.body[0] + id.body[1];
+	uint64_t hash;
 
-	/* select rim */
-	index = daos_u32_hash(id.body[0] + id.body[1], PL_RIM_ALL_BITS);
-	index = daos_chash_srch_u64(rimap->rmp_rim_hashes,
-				    rimap->rmp_nrims, index);
+	/* mix bits */
+	hash  = (key >> 32) << 32;
+	hash |= (key >> 8) & 0xff;
+	hash |= (key & 0xff) << 8;
+	hash |= ((key >> 16) & 0xff) << 24;
+	hash |= ((key >> 24) & 0xff) << 16;
 
-	return &rimap->rmp_rims[index];
+	hash = daos_u32_hash(hash, RIM_HASH_BITS);
+	hash = daos_chash_srch_u64(rimap->rmp_rim_hashes,
+				   rimap->rmp_nrims, hash);
+	return &rimap->rmp_rims[hash];
+}
+
+/** hash object ID, find a target on a rim by consistent hash */
+static unsigned int
+rim_oid2index(pl_rim_map_t *rimap, daos_obj_id_t id)
+{
+	uint64_t hash;
+
+	/* mix bits */
+	hash  = id.body[0];
+	hash ^= hash << 29;
+	hash += hash << 11;
+	hash -= id.body[1];
+	hash  = daos_u64_hash(hash, TARGET_HASH_BITS);
+	hash &= (1ULL << rimap->rmp_target_hbits) - 1;
+
+	return daos_chash_srch_u64(rimap->rmp_target_hashes,
+				   rimap->rmp_ntargets, hash);
 }
 
 static unsigned int
-rim_obj_hash(pl_rim_map_t *rimap, daos_obj_id_t id, pl_obj_attr_t *oa)
+rim_obj_sid2stripe(uint32_t sid, pl_obj_attr_t *oa)
 {
-	uint64_t hash;
-	int	 idx;
-	int	 seq;
+	/* XXX This is for byte array only, sid is daos-m object
+	 * shard index which is sequential.
+	 * For KV object, it could be more complex.
+	 */
+	return sid / oa->oa_rd_grp;
+}
 
-	hash = daos_u64_hash(id.body[0] + id.body[1], rimap->rmp_target_hbits);
-	idx = daos_chash_srch_u64(rimap->rmp_target_hashes,
-				  rimap->rmp_ntargets, hash);
-	if (oa == NULL || oa->oa_cookie == -1)
-		return idx;
+/** another prime for hash */
+#define PL_GOLDEN_PRIME	0x9e37fffffffc0001ULL
 
-	/* XXX This is for byte array only, cookie is sequence number of
-	 * daos-m object. For KV object, it could be more complex */
-	seq = oa->oa_cookie;
-	idx += (seq / oa->oa_nstripes) * (oa->oa_rd_grp + oa->oa_nspares) +
-	       (seq % oa->oa_nstripes);;
-	return idx % rimap->rmp_ntargets;
+/**
+ * select spare node for a redundancy group, \a first is the rim offset of
+ * the first target of the redundancy group
+ */
+static int
+rim_select_spare(daos_obj_id_t id, int first, int dist, int ntargets,
+		 pl_obj_attr_t *oa)
+{
+	uint64_t	hash;
+	unsigned	skip;
+	int		sign;
+	int		i;
+
+	hash = id.body[0] ^ id.body[1];
+	hash *= PL_GOLDEN_PRIME;
+	skip = hash % (oa->oa_spare_skip + 1);
+
+	sign = (hash & 1) == 0 ? -1 : 1;
+	for (i = 0; i < skip; i++)
+		first += sign * dist * (oa->oa_rd_grp + oa->oa_nspares);
+
+	if (sign > 0)
+		first += oa->oa_rd_grp * dist;
+	else
+		first -= oa->oa_nspares * dist;
+
+	if (first > ntargets)
+		return first - ntargets;
+	if (first < 0)
+		return first + ntargets;
+
+	return first;
+}
+
+static int
+rim_next_spare(daos_obj_id_t id, int spare, int dist, int ntargets)
+{
+	spare += dist;
+	return spare >= ntargets ? spare - ntargets : spare;
+}
+
+/** convert double number to u64 which can be stored in target */
+static uint64_t
+rim_stride2u64(double stride)
+{
+	D_ASSERT(stride < (1ULL << (64 - RIM_PRECISION_BITS)));
+
+	return (uint64_t)(stride * RIM_PRECISION_FACTOR);
+}
+
+/** convert u64 to double number */
+static double
+rim_u642stride(uint64_t stride)
+{
+	return (double)stride / RIM_PRECISION_FACTOR;
+}
+
+/** calculate distance between to object shard */
+static int
+rim_obj_shard_dist(pl_rim_map_t *rimap, pl_obj_shard_t *obs)
+{
+	double	stride;
+	int	dist;
+
+	stride = rim_u642stride(obs->os_stride);
+	D_ASSERT(stride > 0);
+	dist = stride / rimap->rmp_stride + RIM_PRECISION;
+	D_ASSERT(dist > 0);
+
+	return dist;
 }
 
 /**
- * generate an array of target ranks for object
+ * (Re)compute distribution for the input object shard.
+ * See *\a pl_map_obj_select() for details.
  */
 static int
-rim_map_obj_select(pl_map_t *map, daos_obj_id_t id, pl_obj_attr_t *oa,
-		   unsigned int nranks, daos_rank_t *ranks)
+rim_map_obj_select(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
+		   pl_select_opc_t select, unsigned int obs_arr_len,
+		   pl_obj_shard_t *obs_arr)
 {
 	pl_rim_map_t	*rimap = pl_map2rimap(map);
 	cl_target_t	*targets;
 	pl_target_t	*pts;
+	double		 stride;
 	unsigned int	 ntargets;
-	unsigned int	 start;
+	unsigned int	 nstripes;
+	unsigned int	 index;
+	uint32_t	 sid;
+	int		 stripe;
+	int		 dist;
+	int		 grp_dist;
+	int		 nobss;
 	int		 i;
 	int		 j;
 
 	targets	 = cl_map_targets(rimap->rmp_clmap);
 	ntargets = cl_map_ntargets(rimap->rmp_clmap);
-	pts	 = rim_hash(rimap, id)->rim_targets;
-	start	 = rim_obj_hash(rimap, id, oa);
+	pts	 = rim_oid2rim(rimap, obs->os_id)->rim_targets;
+	sid	 = obs->os_sid;
+	nstripes = oa->oa_nstripes;
 
-	for (i = 0; i < oa->oa_nstripes && nranks > 0; i++) {
-		int spare = start + oa->oa_rd_grp;
-		int next  = spare + oa->oa_nspares;
-		int pos;
-
-		for (j = 0; j < oa->oa_rd_grp && nranks > 0;
-		     j++, ranks++, nranks--) {
-			pos = pts[(start + j) % ntargets].pt_pos;
-			while (targets[pos].co_status != CL_COMP_ST_UP) {
-				pos = spare++;
-				pos %= ntargets;
-			}
-			*ranks = targets[pos].co_rank;
-		}
-		start = next;
+	if (obs->os_stride == 0) {
+		stride = rimap->rmp_stride;
+		obs->os_stride = rim_stride2u64(stride);
+	} else {
+		stride = rim_u642stride(obs->os_stride);
 	}
-	return 0;
+
+	if (oa->oa_start == -1)
+		index = rim_oid2index(rimap, obs->os_id);
+	else
+		index = oa->oa_start;
+
+	if (sid == -1) {
+		i = j = sid = stripe = 0;
+	} else {
+		stripe = rim_obj_sid2stripe(sid, oa);
+		j = sid % oa->oa_rd_grp;
+
+		switch (select) {
+		default:
+		case PL_SEL_GRP_PREV:	/* TODO */
+		case PL_SEL_GRP_SPLIT:	/* TODO */
+			return -EINVAL;
+		case PL_SEL_ALL:
+			break;
+		case PL_SEL_CUR:
+			obs_arr_len = 1;
+			break;
+		case PL_SEL_GRP_CUR:
+			obs_arr_len = MIN(obs_arr_len, oa->oa_rd_grp);
+			sid -= j;
+			j = 0;
+			break;
+		case PL_SEL_GRP_NEXT:
+			obs_arr_len = MIN(obs_arr_len, oa->oa_rd_grp);
+			sid += oa->oa_rd_grp - j;
+			stripe++;
+			j = 0;
+			break;
+		}
+	}
+
+	dist = rim_obj_shard_dist(rimap, obs);
+	grp_dist = (oa->oa_rd_grp + oa->oa_nspares) * dist;
+	index += stripe * grp_dist;
+
+	for (i = stripe, nobss = 0; i < nstripes && obs_arr_len > 0; i++) {
+		int spare;
+
+		spare = rim_select_spare(obs->os_id, index, dist, ntargets, oa);
+
+		for (; j < oa->oa_rd_grp && obs_arr_len > 0;
+		     j++, obs_arr_len--) {
+			int pos = pts[(index + j * dist) % ntargets].pt_pos;
+
+			while (targets[pos].co_status != CL_COMP_ST_UP) {
+				pos = pts[spare].pt_pos;
+				spare = rim_next_spare(obs->os_id, spare,
+						       dist, ntargets);
+			}
+
+			obs_arr[nobss].os_rank	 = targets[pos].co_rank;
+			obs_arr[nobss].os_stride = rim_stride2u64(stride);
+			obs_arr[nobss].os_sid	 = sid++;
+			nobss++;
+		}
+		index += grp_dist;
+		j = 0;
+	}
+	return nobss;
 }
 
 /**
- * If the object has data chunk on failed target, and current target(current)
- * is leader of redundancy group, this function will return rank of hotspare
- * target.
+ * Check if object rebuilding should be triggered for the failed target
+ * identified by \a failed. See \a pl_map_obj_rebuild for details.
  */
 bool
-rim_map_obj_failover(pl_map_t *map, daos_obj_id_t id, pl_obj_attr_t *oa,
-		     daos_rank_t current, daos_rank_t failed,
-		     daos_rank_t *failover)
+rim_map_obj_rebuild(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
+		    daos_rank_t failed, pl_obj_shard_t *obs_rbd)
 {
 	pl_rim_map_t	*rimap = pl_map2rimap(map);
 	cl_target_t	*targets;
 	pl_target_t	*pts;
-	daos_rank_t	 result;
+	daos_rank_t	 rank;
 	unsigned int	 ntargets;
-	unsigned int	 start;
-	unsigned int	 leader;
-	unsigned int	 found;
+	unsigned int	 stripe;
+	bool		 coordinator;
+	int		 found;
+	int		 dist;
+	int		 spare;
+	int		 sid;
+	int		 index;
 	int		 i;
-	int		 j;
 
 	/* XXX This is going to scan all stripes of an object, it is obviously
 	 * not smart enough.
 	 */
-	D_DEBUG(DF_PL, "Select spare for %u (%d|%d)\n",
-		(unsigned int)id.body[0], oa->oa_nstripes, oa->oa_rd_grp);
+	D_DEBUG(DF_PL, "Select spare for "DF_U64".%u stripe %d, rd %d\n",
+		obs->os_id.body[0], obs->os_sid, oa->oa_nstripes,
+		oa->oa_rd_grp);
 
 	targets	 = cl_map_targets(rimap->rmp_clmap);
 	ntargets = cl_map_ntargets(rimap->rmp_clmap);
-	start	 = rim_obj_hash(rimap, id, NULL); /* find offset of target */
-	pts	 = rim_hash(rimap, id)->rim_targets;
-	leader	 = -1;
-	for (i = found = 0; i < oa->oa_nstripes; i++, found = 0) {
-		int	spare = start + oa->oa_rd_grp;
+	index	 = rim_oid2index(rimap, obs->os_id);
+	pts	 = rim_oid2rim(rimap, obs->os_id)->rim_targets;
 
-		for (j = 0; j < oa->oa_rd_grp && found < 2; j++) {
-			int	pos = pts[(start + j) % ntargets].pt_pos;
-			bool	found_failed = false;
+	dist	 = rim_obj_shard_dist(rimap, obs);
+	stripe	 = rim_obj_sid2stripe(obs->os_sid, oa);
+	index   += stripe * dist * (oa->oa_rd_grp + oa->oa_nspares);
+	spare	 = rim_select_spare(obs->os_id, index, dist, ntargets, oa);
+	sid	 = obs->os_sid - obs->os_sid % oa->oa_rd_grp;
 
+	found	= 0;
+	coordinator = false;
+	for (i = 0; i < oa->oa_rd_grp; i++) {
+		int pos = pts[(index + i * dist) % ntargets].pt_pos;
+
+		/* XXX: For the time being, I assume the first alive object
+		 * shard is the redundancy group leader. It could be changed
+		 * and depend on the object schema.
+		 */
+		if (targets[pos].co_status == CL_COMP_ST_UP) {
+			if (!coordinator) {
+				/* I'm not the group coordinator, just return
+				 * because only the group coordinator is
+				 * responsible for rebuilding.
+				 */
+				if (obs->os_rank != targets[pos].co_rank)
+					return false;
+
+				/* This object shard is the group coordinator */
+				coordinator = true;
+			}
+
+		} else { /* target is down */
 			while (targets[pos].co_status != CL_COMP_ST_UP) {
-				if (targets[pos].co_rank == failed)
-					found_failed = true;
+				if (targets[pos].co_rank == failed) {
+					D_ASSERT(found == 0);
+					found++;
+				}
 
-				pos = pts[spare % ntargets].pt_pos;
-				spare++;
+				pos = pts[spare].pt_pos;
+				spare = rim_next_spare(obs->os_id, spare, dist,
+						       ntargets);
 			}
 
-			D_ASSERT(pos < ntargets);
-			if (found_failed) {
-				result = targets[pos].co_rank;
+			if (found == 1) {
+				rank = targets[pos].co_rank;
+				sid += i;
 				found++;
 			}
-
-			if (targets[pos].co_rank == current)
-				found++;
-
-			/* the first non-spare node is leader
-			 * XXX there can be multiple failures, and objects
-			 * are on spare nodes.
-			 */
-			if (leader == -1 &&
-			    pos == pts[(start + j) % ntargets].pt_pos)
-				leader = pos;
 		}
 
-		/* current target and failed target are not in the same
-		 * redundancy group? */
-		if (found == 1) { /* NO */
-			D_DEBUG(DF_PL, "ignore, not in the same group\n");
-			return false;
-		}
+		if (!found) /* continue to search for the failed shard */
+			continue;
 
-		if (found == 2) /* YES */
-			break;
-		/* continue to search */
-		start += oa->oa_rd_grp + oa->oa_nspares;
-		leader = -1;
+		if (!coordinator)
+			continue;
+
+		/* I'm the coordinator of my redundancy group, and my group
+		 * indeed has an object shard in the failed target */
+		obs_rbd->os_id	   = obs->os_id;
+		obs_rbd->os_stride = obs->os_stride;
+		obs_rbd->os_rank   = rank;
+		obs_rbd->os_sid	   = sid;
+		return true;
 	}
-
-	if (found < 2) {
-		D_DEBUG(DF_PL, "ignore, not match\n");
-		return false;
-	}
-
-	if (leader == -1 || targets[leader].co_rank != current) {
-		D_DEBUG(DF_PL, "ignore, not leader\n");
-		return false; /* only group leader should handle this */
-	}
-
-	D_DEBUG(DF_PL, "spare for "DF_U64" (%d|%d) is %d\n",
-		id.body[0], oa->oa_nstripes, oa->oa_rd_grp, result);
-
-	*failover = result;
-	return true;
+	return false;
 }
 
 /**
- * check if object \a id needs to recover for \a recovered
+ * Check if an object shard \a obs needs to be recovered for (moved back to)
+ * the recovered target identified by \a recovered.
  */
 bool
-rim_map_obj_recover(pl_map_t *map, daos_obj_id_t id, pl_obj_attr_t *oa,
-		    daos_rank_t current, daos_rank_t recovered)
+rim_map_obj_recover(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
+		    daos_rank_t recovered)
 {
 	pl_rim_map_t	*rimap = pl_map2rimap(map);
 	cl_target_t	*targets;
 	pl_target_t	*pts;
 	unsigned int	 ntargets;
-	unsigned int	 start;
-	int		 i;
-	int		 j;
-	bool		 found = false;
+	int		 index;
+	int		 stripe;
+	int		 dist;
 
-	if (current == recovered)
-		return false; /* don't check myself */
+	D_DEBUG(DF_PL, "Check recover "DF_U64".%u stripe %d, rd %d\n",
+		obs->os_id.body[0], obs->os_sid, oa->oa_nstripes,
+		oa->oa_rd_grp);
 
 	targets	 = cl_map_targets(rimap->rmp_clmap);
 	ntargets = cl_map_ntargets(rimap->rmp_clmap);
-	start	 = rim_obj_hash(rimap, id, NULL); /* find offset of target */
-	pts	 = rim_hash(rimap, id)->rim_targets;
+	index	 = rim_oid2index(rimap, obs->os_id);
+	pts	 = rim_oid2rim(rimap, obs->os_id)->rim_targets;
 
-	for (i = 0; i < oa->oa_nstripes; i++) {
-		int spare = start + oa->oa_rd_grp;
+	dist	 = rim_obj_shard_dist(rimap, obs);
+	stripe	 = rim_obj_sid2stripe(obs->os_sid, oa);
+	index	+= (stripe * (oa->oa_rd_grp + oa->oa_nspares) +
+		    obs->os_sid % oa->oa_rd_grp) * dist;
 
-		for (j = 0; j < oa->oa_rd_grp; j++) {
-			int pos	= pts[(start + j) % ntargets].pt_pos;
-			int k;
-
-			if (targets[pos].co_rank == current)
-				return false; /* it is my own object */
-
-			if (targets[pos].co_rank != recovered)
-				continue;
-
-			/* this object is on recovered target */
-			for (k = 0; k < oa->oa_nspares; k++) {
-				spare += k;
-				pos = pts[spare % ntargets].pt_pos;
-				if (targets[pos].co_rank == current) {
-					found = true;
-					break;
-				}
-			}
-		}
-		/* continue to search */
-		start += oa->oa_rd_grp + oa->oa_nspares;
-	}
-
-	return found;
+	index = pts[index % ntargets].pt_pos;
+	return targets[index].co_rank == recovered;
 }
 
 pl_map_ops_t	rim_map_ops = {
@@ -795,6 +1022,6 @@ pl_map_ops_t	rim_map_ops = {
 	.o_destroy	= rim_map_destroy,
 	.o_print	= rim_map_print,
 	.o_obj_select	= rim_map_obj_select,
-	.o_obj_failover	= rim_map_obj_failover,
+	.o_obj_rebuild	= rim_map_obj_rebuild,
 	.o_obj_recover	= rim_map_obj_recover,
 };

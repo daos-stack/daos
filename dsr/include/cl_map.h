@@ -51,6 +51,7 @@ typedef enum {
 	CL_COMP_ST_DOWN,
 } cl_comp_state_t;
 
+/** parent class of all all cluster components: target, domain */
 typedef struct {
 	/** cl_comp_type_t */
 	uint32_t		co_type:8;
@@ -115,9 +116,13 @@ typedef struct cl_domain {
 	struct cl_domain	*cd_children;
 } cl_domain_t;
 
-/** cluster component buffer */
+/**
+ * cluster component buffer, it's a contiguous buffer which includes portion of
+ * or all components of a cluster map.
+ */
 typedef cl_domain_t		 cl_buf_t;
 
+/** counters for cl_buf_t */
 typedef struct {
 	/** # of domains in the top level */
 	unsigned int		 cc_ndoms_top;;

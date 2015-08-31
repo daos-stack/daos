@@ -28,14 +28,16 @@
 /** type of placement map, only support RIM for now */
 typedef enum {
 	PL_TYPE_UNKNOWN,
+	/** only support rim map for the time being */
 	PL_TYPE_RIM,
+	/** reserved */
 	PL_TYPE_PETALS,
 } pl_map_type_t;
 
 /** a target on the rim */
 typedef struct pl_target {
 	/** offset within cluster map */
-	uint32_t		pt_pos;
+	unsigned int		pt_pos;
 } pl_target_t;
 
 typedef struct pl_map_attr {
@@ -51,11 +53,20 @@ typedef struct pl_map_attr {
 
 /** object placement attributes */
 typedef struct pl_obj_attr {
-	uint64_t		oa_start;
+	uint32_t		oa_start;
+	/** number of stripes, it is optional */
 	uint32_t		oa_nstripes;
+	/** size of redundancy group */
 	uint16_t		oa_rd_grp;
-	uint16_t		oa_nspares;
-	uint32_t		oa_cookie;
+	/** number of spare nodes between redundancy groups */
+	uint8_t			oa_nspares;
+	/**
+	 * While choosing a spare target, an object can skip from zero to
+	 * \a oa_spare_skip redundancy groups between the failed target
+	 * and spare target.
+	 * The value is decided by hash result of object ID.
+	 */
+	uint8_t			oa_spare_skip;
 } pl_obj_attr_t;
 
 struct pl_map_ops;
@@ -75,34 +86,67 @@ typedef struct pl_map {
 	 */
 } pl_map_t;
 
+/** metadata for daos-m object */
+typedef struct pl_obj_shard {
+	/** SR object ID */
+	daos_obj_id_t		 os_id;
+	/** object shard index */
+	uint32_t		 os_sid;
+	/** target rank to store this object */
+	daos_rank_t		 os_rank;
+	/** hash stride */
+	uint64_t		 os_stride;
+} pl_obj_shard_t;
+
+typedef enum {
+	PL_SEL_CUR,
+	PL_SEL_GRP_CUR,
+	PL_SEL_GRP_NEXT,
+	PL_SEL_GRP_PREV,
+	/** for KV object only */
+	PL_SEL_GRP_SPLIT,
+	PL_SEL_ALL,
+} pl_select_opc_t;
+
+/**
+ * Function table for placement map.
+ */
 typedef struct pl_map_ops {
+	/** create a placement map */
 	int	(*o_create)(cl_map_t *cl_map, pl_map_attr_t *ma,
 			    pl_map_t **mapp);
+	/** destroy a placement map */
 	void	(*o_destroy)(pl_map_t *map);
+	/** print a placement map */
 	void	(*o_print)(pl_map_t *map);
 
-	int	(*o_obj_select)(pl_map_t *rimap, daos_obj_id_t id,
-				pl_obj_attr_t *oa, unsigned int nranks,
-				daos_rank_t *ranks);
-	bool	(*o_obj_failover)(pl_map_t *map, daos_obj_id_t id,
-				  pl_obj_attr_t *oa, daos_rank_t current,
-				  daos_rank_t failed, daos_rank_t *failover);
-	bool	(*o_obj_recover)(pl_map_t *map, daos_obj_id_t id,
-				 pl_obj_attr_t *oa, daos_rank_t current,
-				 daos_rank_t recovered);
+	/** object methods */
+	/** see \a pl_map_obj_select and \a pl_map_obj_rebalance */
+	int	(*o_obj_select)(pl_map_t *map, pl_obj_shard_t *obs,
+				pl_obj_attr_t *oa, pl_select_opc_t select,
+				unsigned int obs_arr_len,
+				pl_obj_shard_t *obs_arr);
+	/** see \a pl_map_obj_rebuild */
+	bool	(*o_obj_rebuild)(pl_map_t *map, pl_obj_shard_t *obs,
+				 pl_obj_attr_t *oa, daos_rank_t failed,
+				 pl_obj_shard_t *obs_rbd);
+	/** see \a pl_map_obj_recover */
+	bool	(*o_obj_recover)(pl_map_t *map, pl_obj_shard_t *obs,
+				 pl_obj_attr_t *oa, daos_rank_t recovered);
 } pl_map_ops_t;
 
 int  pl_map_create(cl_map_t *cl_map, pl_map_attr_t *ma, pl_map_t **mapp);
 void pl_map_destroy(pl_map_t *map);
 void pl_map_print(pl_map_t *map);
-int  pl_map_obj_select(pl_map_t *map, daos_obj_id_t id, pl_obj_attr_t *oa,
-		       unsigned int nranks, daos_rank_t *ranks);
-int  pl_map_obj_rebuild(pl_map_t *map, daos_obj_id_t id, pl_obj_attr_t *oa,
-			daos_rank_t *target);
-bool pl_map_obj_failover(pl_map_t *map, daos_obj_id_t id, pl_obj_attr_t *oa,
-			 daos_rank_t current, daos_rank_t failed,
-			 daos_rank_t *failover);
-bool pl_map_obj_recover(pl_map_t *map, daos_obj_id_t id, pl_obj_attr_t *oa,
-			daos_rank_t current, daos_rank_t recovered);
+int  pl_map_obj_select(pl_map_t *map, pl_obj_shard_t *obs,
+		       pl_obj_attr_t *oa, pl_select_opc_t select,
+		       unsigned int obs_arr_len, pl_obj_shard_t *obs_arr);
+int  pl_map_obj_rebalance(pl_map_t *map, pl_obj_shard_t *obs,
+			  pl_obj_attr_t *oa, daos_rank_t *rank_rebal);
+bool pl_map_obj_rebuild(pl_map_t *map, pl_obj_shard_t *obs,
+			pl_obj_attr_t *oa, daos_rank_t failed,
+			pl_obj_shard_t *obs_rbd);
+bool pl_map_obj_recover(pl_map_t *map, pl_obj_shard_t *obs,
+			pl_obj_attr_t *oa, daos_rank_t recovered);
 
 #endif /* __PLACEMENT_MAP_H__ */

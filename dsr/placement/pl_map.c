@@ -28,6 +28,7 @@ struct pl_map_table {
 	char			*mt_name;
 };
 
+/** array of defined placement maps */
 static struct pl_map_table pl_maps[] = {
 	{
 		.mt_type	= PL_TYPE_RIM,
@@ -40,6 +41,9 @@ static struct pl_map_table pl_maps[] = {
 	},
 };
 
+/**
+ * Create a placement map based on attributes in \a ma
+ */
 int
 pl_map_create(cl_map_t *cl_map, pl_map_attr_t *ma, pl_map_t **mapp)
 {
@@ -65,6 +69,9 @@ pl_map_create(cl_map_t *cl_map, pl_map_attr_t *ma, pl_map_t **mapp)
 	return 0;
 }
 
+/**
+ * Destroy a placement map
+ */
 void
 pl_map_destroy(pl_map_t *map)
 {
@@ -74,54 +81,104 @@ pl_map_destroy(pl_map_t *map)
 	map->pm_ops->o_destroy(map);
 }
 
+/** Print a placement map, it's optional and for debug only */
 void pl_map_print(pl_map_t *map)
 {
 	D_ASSERT(map->pm_ops != NULL);
-	D_ASSERT(map->pm_ops->o_print != NULL);
 
-	return map->pm_ops->o_print(map);
+	if (map->pm_ops->o_print != NULL)
+		map->pm_ops->o_print(map);
 }
 
+/**
+ * (Re)compute distribution for the input object shard:
+ *
+ * PL_SEL_CUR	it is used when placement map has been changed, this function
+ *		may return a different target rank for the input object shard
+ *
+ * PL_SEL_ALL	returns all object shards belonging to the SR object of the
+ *		input object shard
+ *
+ * PL_SEL_CUR	returns all object shards in the same redundancy group of the
+ *		input object shard
+ *
+ * PL_SEL_NEXT	returns all object shards in the next redundancy group of the
+ *		input object shard
+ *
+ * PL_SEL_PREV	returns all object shards in the next redundancy group of the
+ *		input object shard
+ */
 int
-pl_map_obj_select(pl_map_t *map, daos_obj_id_t id, pl_obj_attr_t *oa,
-		  unsigned int nranks, daos_rank_t *ranks)
+pl_map_obj_select(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
+		  pl_select_opc_t opc, unsigned int obs_arr_len,
+		  pl_obj_shard_t *obs_arr)
 {
 	D_ASSERT(map->pm_ops != NULL);
 	D_ASSERT(map->pm_ops->o_obj_select != NULL);
 
-	memset(ranks, -1, nranks * sizeof(*ranks));
-	return map->pm_ops->o_obj_select(map, id, oa, nranks, ranks);
+	memset(obs_arr, -1, obs_arr_len * sizeof(*obs_arr));
+	return map->pm_ops->o_obj_select(map, obs, oa, opc, obs_arr_len,
+					 obs_arr);
 }
 
+/**
+ * Check if the object shard \a obs needs to be rebalanced.
+ * If returned \a rank_rebal is different with the input \a obs::os_rank,
+ * this object should be moved to target identified by \a rank_rebal
+ */
 int
-pl_map_obj_rebuild(pl_map_t *map, daos_obj_id_t id, pl_obj_attr_t *oa,
-		   daos_rank_t *target)
+pl_map_obj_rebalance(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
+		     daos_rank_t *rank_rebal)
 {
+	pl_obj_shard_t os;
+	int	       rc;
+
 	D_ASSERT(map->pm_ops != NULL);
 	D_ASSERT(map->pm_ops->o_obj_select != NULL);
 
-	*target = -1;
-	return map->pm_ops->o_obj_select(map, id, oa, 1, target);
+	*rank_rebal = -1;
+	D_DEBUG(DF_CL, "Rebalance object "DF_U64"."DF_U64".%u\n",
+		obs->os_id.body[1], obs->os_id.body[0], obs->os_sid);
+
+	rc = map->pm_ops->o_obj_select(map, obs, oa, PL_SEL_CUR, 1, &os);
+	if (rc < 0)
+		return rc;
+
+	D_ASSERT(rc > 0);
+	*rank_rebal = os.os_rank;
+	return 0;
 }
 
+/**
+ * Check if object rebuilding should be triggered for the failed target
+ * identified by \a failed.
+ *
+ * It returns true only if:
+ * - there is an object shard living in the failed target \a failed
+ * - the input object shard \obs is the coordinator of the redundancy group of
+ *   the failed object shard.
+ */
 bool
-pl_map_obj_failover(pl_map_t *map, daos_obj_id_t id, pl_obj_attr_t *oa,
-		    daos_rank_t current, daos_rank_t failed,
-		    daos_rank_t *failover)
+pl_map_obj_rebuild(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
+		   daos_rank_t failed, pl_obj_shard_t *obs_rbd)
 {
 	D_ASSERT(map->pm_ops != NULL);
-	D_ASSERT(map->pm_ops->o_obj_failover != NULL);
+	D_ASSERT(map->pm_ops->o_obj_rebuild != NULL);
 
-	*failover = -1;
-	return map->pm_ops->o_obj_failover(map, id, oa, current,
-					   failed, failover);
+	memset(obs_rbd, -1, sizeof(*obs_rbd));
+	return map->pm_ops->o_obj_rebuild(map, obs, oa, failed, obs_rbd);
 }
 
-bool pl_map_obj_recover(pl_map_t *map, daos_obj_id_t id, pl_obj_attr_t *oa,
-			daos_rank_t current, daos_rank_t recovered)
+/**
+ * Check if an object shard \a obs should be recovered for (moved back to)
+ * the recovered target identified by \a recovered.
+ */
+bool
+pl_map_obj_recover(pl_map_t *map, pl_obj_shard_t *obs,
+		   pl_obj_attr_t *oa, daos_rank_t recovered)
 {
 	D_ASSERT(map->pm_ops != NULL);
 	D_ASSERT(map->pm_ops->o_obj_recover != NULL);
 
-	return map->pm_ops->o_obj_recover(map, id, oa, current, recovered);
+	return map->pm_ops->o_obj_recover(map, obs, oa, recovered);
 }

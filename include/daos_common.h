@@ -92,6 +92,9 @@ do {									\
 	assert(cond);							\
 } while (0)
 
+#define D_CASSERT(cond)							\
+	do {switch (1) {case (cond): case 0: break; } } while (0)
+
 #define DF_U64		"%"PRIu64
 #define DF_X64		"%"PRIx64
 
@@ -114,51 +117,25 @@ do {									\
 # define MIN(a,b) (((a)<(b)) ? (a): (b))
 #endif
 #ifndef MAX
-# define MAX(a,b) (((a)>(b))
+# define MAX(a,b) (((a)>(b)) ? (a): (b))
 #endif
 
-/* 2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
-#define DAOS_GOLDEN_RATIO_PRIME_64	0x9e37fffffffc0001ULL
+#define DAOS_GOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
+#define DAOS_GOLDEN_RATIO_PRIME_32	0x9e370001UL
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
 {
 	uint64_t hash = val;
-#if 1
-	/*  gcc can't optimise this alone like it does for 32 bits. */
-	uint64_t n = hash;
 
-	n <<= 18;
-	hash -= n;
-	n <<= 33;
-	hash -= n;
-	n <<= 3;
-	hash += n;
-	n <<= 3;
-	hash -= n;
-	n <<= 4;
-	hash += n;
-	n <<= 2;
-	hash += n;
-#else
-	/* On some cpus multiply is faster, on others gcc will do shifts */
-	hash *= CFS_GOLDEN_RATIO_PRIME;
-#endif
-	/* High bits are more random, so use them. */
+	hash *= DAOS_GOLDEN_RATIO_PRIME_64;
 	return hash >> (64 - bits);
 }
 
 static inline uint32_t
 daos_u32_hash(uint64_t key, unsigned int bits)
 {
-	key = (~key) + (key << 18);
-	key = key ^ (key >> 31);
-	key = key * 21;
-	key = key ^ (key >> 11);
-	key = key + (key << 6);
-	key = key ^ (key >> 22);
-
-	return (uint32_t)key & ((1UL << bits) - 1);
+	return (DAOS_GOLDEN_RATIO_PRIME_32 * key) >> (64 - bits);
 }
 
 /** consistent hash search */
@@ -190,6 +167,7 @@ daos_power2_nbits(unsigned int val)
 	return val == LOWEST_BIT_SET(val) ? shift - 1 : shift;
 }
 
+/** Function table for combsort and binary search */
 typedef struct {
 	void    (*so_swap)(void *array, int a, int b);
 	/**

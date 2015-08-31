@@ -304,7 +304,7 @@ cl_buf_sane(cl_buf_t *buf)
 	return true;
 }
 
-/* rebuild pointers for component buffer */
+/** rebuild pointers for component buffer */
 void
 cl_buf_rebuild(cl_buf_t *buf, cl_buf_count_t *cntr)
 {
@@ -364,7 +364,11 @@ cl_buf_dup(cl_buf_t *buf)
 	return dst;
 }
 
-/** check if component buffer is compatible with cluster map */
+/**
+ * check if a component buffer is compatible with a cluster map, it returns
+ * true if components in \a buf can be merged into \a map, otherwise returns
+ * false.
+ */
 bool
 cl_buf_compat(cl_buf_t *buf, cl_map_t *map)
 {
@@ -519,6 +523,7 @@ cl_target_cmp_key(void *array, int i, uint64_t key)
 	return 0;
 }
 
+/** rank based sort and search for target */
 daos_sort_ops_t cl_target_sort_ops = {
 	.so_swap	= cl_target_swap,
 	.so_cmp		= cl_target_cmp,
@@ -537,6 +542,7 @@ cl_target_vcmp(void *array, int a, int b)
 	return 0;
 }
 
+/** version based sort */
 daos_sort_ops_t cl_target_vsort_ops = {
 	.so_swap	= cl_target_swap,
 	.so_cmp		= cl_target_vcmp,
@@ -578,6 +584,7 @@ cl_domain_cmp_key(void *array, int i, uint64_t key)
 	return 0;
 }
 
+/** rank based sort and search for domains */
 daos_sort_ops_t cl_domain_sort_ops = {
 	.so_swap	= cl_domain_swap,
 	.so_cmp		= cl_domain_cmp,
@@ -598,6 +605,7 @@ cl_domain_tcmp_key(void *array, int i, uint64_t key)
 	return 0;
 }
 
+/** type based sort and search for domains */
 static daos_sort_ops_t cl_domain_tsort_ops = {
 	.so_cmp_key	= cl_domain_tcmp_key,
 };

@@ -20,7 +20,14 @@
  */
 #include <daos_common.h>
 
-/** combsort for an array */
+/**
+ * Combsort for an array.
+ *
+ * It always returns zero if \a unique is false, which means array can
+ * have multiple elements with the same key.
+ * It returnes error if \a unique is true, and there are more than one
+ * elements have the same key.
+ */
 int
 daos_array_sort(void *array, unsigned int len, bool unique,
 		daos_sort_ops_t *ops)
@@ -55,7 +62,14 @@ daos_array_sort(void *array, unsigned int len, bool unique,
 	return 0;
 }
 
-/** binary search in a sorted array */
+/**
+ * Binary search in a sorted array.
+ *
+ * It returns index of the found element, and -1 if key is nonexistent in the
+ * array.
+ * If there are multiple elements have the same key, it returns the first
+ * appearance.
+ */
 int
 daos_array_find(void *array, unsigned int len, uint64_t key,
 		daos_sort_ops_t *ops)
@@ -84,7 +98,6 @@ daos_array_find(void *array, unsigned int len, uint64_t key,
 		return -1; /* not found */
 
 	for (; cur > 0; cur--) {
-		/* return the first appearance if it is not unique */
 		rc = ops->so_cmp_key(array, cur - 1, key);
 		if (rc != 0)
 			break;
