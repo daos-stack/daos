@@ -1,4 +1,24 @@
-/*! \mainpage
+/**
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser General Public License
+ * (LGPL) version 2.1 which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/lgpl-2.1.html
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the LGPL License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ *
+ * (C) Copyright 2015 Intel Corporation.
+ */
+/**
  * This file describes the API for a versioning object store.
  * These APIs will help build a versioned store with
  * key-value and byte-array object types.
@@ -6,24 +26,19 @@
  * multiversion concurrent key-value and byte-array objects.
  *
  * Author :  Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
- *
- *
- * Copyright (c) 2015, Intel Corporation.
-*/
-
+ */
 
 #ifndef __VOS_API_H
 #define __VOS_API_H
 
-#include "daos_types.h"
-#include "vos_types.h"
+#include <daos_types.h>
 
-/********************************************************************
+/**
  * Versioning Object Storage Pool (VOSP)
  * An OSP creates and manages a versioned object store on a local
  * storage device. The capacity of an OSP is determined
  * by the capacity of the underlying storage device
- *********************************************************************/
+ */
 
 /**
  * initialize a Versioning object storage pool (VOSP)
@@ -39,7 +54,8 @@
  * \return              zero on success, negative value if error
  *
  */
-int vos_pool_init(const char *path, uuid_t uuid, daos_handle_t *pool);
+int
+vos_pool_init(const char *path, uuid_t uuid, daos_handle_t *pool);
 
 /**
  * Close a Versioned Object Storage Pool (VOSP)
@@ -52,12 +68,13 @@ int vos_pool_init(const char *path, uuid_t uuid, daos_handle_t *pool);
  * \return             zero on success, negative value if error
  *
  */
-int vos_pool_finalize(daos_handle_t pool);
+int
+vos_pool_finalize(daos_handle_t pool);
 
 /**
  * Flush changes until epoch(version)
  * This function will wait for pending changes of epochs smaller or
- * equal to ‘epoch’ to be flushed to storage.
+ * equal to \a epoch to be flushed to storage.
  *
  * \param pool  [IN]   pool handle
  * \param epoch [IN]   epoch
@@ -65,7 +82,8 @@ int vos_pool_finalize(daos_handle_t pool);
  * \return             zero on success, negative value if error
  *
  */
-int vos_epoch_flush(daos_handle_t pool, daos_epoch_t epoch);
+int
+vos_epoch_flush(daos_handle_t pool, daos_epoch_t epoch);
 
 /**
  * Aggregates all epochs specified in the range between
@@ -80,8 +98,9 @@ int vos_epoch_flush(daos_handle_t pool, daos_epoch_t epoch);
  * \return                zero on success, negative value if error
  *
  */
-int vos_epoch_aggregate(daos_handle_t pool, daos_epoch_t start_epoch,
-                        daos_epoch_t end_epoch);
+int
+vos_epoch_aggregate(daos_handle_t pool, daos_epoch_t start_epoch,
+		    daos_epoch_t end_epoch);
 
 /**
  * Discards changes in current and all epochs specified in the specified range
@@ -98,6 +117,15 @@ int vos_epoch_aggregate(daos_handle_t pool, daos_epoch_t start_epoch,
 int vos_epoch_discard(daos_handle_t pool, daos_epoch_t start_epoch,
 		      daos_epoch_t end_epoch);
 
+typedef struct {
+	vs_size_t	ba_objects;	/* Number of ba objects in this epoch */
+	vs_size_t	kv_objects;	/* Number of kv objects in this epoch */
+	vs_epoch_t	highest_epoch;	/* Highest epoch in this pool */
+	vs_epoch_t	lowest_epoch;	/* Lowest epoch in this pool */
+	vs_size_t	maxbytes;	/* Total space available */
+	vs_size_t	savail;		/* Current available space */
+} vs_stat_t;
+
 /**
  * Get statistics about the current pool
  *
@@ -107,7 +135,12 @@ int vos_epoch_discard(daos_handle_t pool, daos_epoch_t start_epoch,
  * \return               zero on success, negative value if error
  *
  */
-int vos_pool_stat(daos_handle_t pool, vs_stat_t *stat_obj);
+int
+vos_pool_stat(daos_handle_t pool, vs_stat_t *stat_obj);
+
+/**
+ * Byte Array API
+ */
 
 /**
  * Write to byte arrays for a given object ID and a given epoch
@@ -124,9 +157,10 @@ int vos_pool_stat(daos_handle_t pool, vs_stat_t *stat_obj);
  *
  * \return                 zero on success, negative value if error
  */
-int vos_ba_write_begin(daos_handle_t pool, daos_obj_id_t object_id,
-		       daos_epoch_t epoch, daos_ext_list_t *extents,
-		       daos_sg_list_t **desc);
+int
+vos_ba_write_begin(daos_handle_t pool, daos_obj_id_t object_id,
+		   daos_epoch_t epoch, daos_ext_list_t *extents,
+		   daos_sg_list_t **desc);
 
 /**
  * Write end
@@ -139,9 +173,10 @@ int vos_ba_write_begin(daos_handle_t pool, daos_obj_id_t object_id,
  *
  * \return                   zero on success, negative value if error
  */
-int vos_ba_write_end(daos_handle_t pool, daos_obj_id_t object_id,
-		     daos_epoch_t epoch, daos_sg_list_t *desc,
-                     daos_sg_list_t *write_array, daos_sg_list_t *checksum);
+int
+vos_ba_write_end(daos_handle_t pool, daos_obj_id_t object_id,
+		 daos_epoch_t epoch, daos_sg_list_t *desc,
+		 daos_sg_list_t *write_array, daos_sg_list_t *checksum);
 
 /**
  * Punch will zero specified offsets and mark the object for
@@ -154,8 +189,9 @@ int vos_ba_write_end(daos_handle_t pool, daos_obj_id_t object_id,
  *
  * \return                   zero on success, negative value if error
  */
-int vos_ba_punch(daos_handle_t pool, daos_obj_id_t object_id,
-                 daos_epoch_t epoch, daos_ext_list_t *extents);
+int
+vos_ba_punch(daos_handle_t pool, daos_obj_id_t object_id,
+	     daos_epoch_t epoch, daos_ext_list_t *extents);
 
 /**
  * Read from byte arrays for a given object ID and a given epoch
@@ -180,9 +216,10 @@ int vos_ba_punch(daos_handle_t pool, daos_obj_id_t object_id,
  *                          the number of entries to be allocated
  *                          to obtain remaining)
  */
-int vos_ba_read_begin(daos_handle_t pool, daos_obj_id_t object_id,
-		      daos_epoch_t epoch, daos_ext_list_t *desc,
-		      daos_sg_list_t *read_array, daos_ext_list_t *holes);
+int
+vos_ba_read_begin(daos_handle_t pool, daos_obj_id_t object_id,
+		  daos_epoch_t epoch, daos_ext_list_t *desc,
+		  daos_sg_list_t *read_array, daos_ext_list_t *holes);
 
 /**
  * Read end
@@ -195,9 +232,10 @@ int vos_ba_read_begin(daos_handle_t pool, daos_obj_id_t object_id,
  *
  * \return                  zero on success, negative value if error
  */
-int vos_ba_read_end(daos_handle_t pool, daos_obj_id_t object_id,
-		    daos_epoch_t epoch,  daos_ext_list_t *desc,
-		    daos_sg_list_t *read_array, daos_sg_list_t *checksum)
+int
+vos_ba_read_end(daos_handle_t pool, daos_obj_id_t object_id,
+		daos_epoch_t epoch,  daos_ext_list_t *desc,
+		daos_sg_list_t *read_array, daos_sg_list_t *checksum);
 
 /**
  * Find holes in Byte Array Extents
@@ -219,9 +257,10 @@ int vos_ba_read_end(daos_handle_t pool, daos_obj_id_t object_id,
  *                          to obtain remaining)
 
  */
-int vos_ba_find(daos_handle_t pool, daos_obj_id_t object_id,
-		daos_epoch_t epoch, daos_ext_list_t *rd_desc,
-		daos_ext_list_t *holes);
+int
+vos_ba_find(daos_handle_t pool, daos_obj_id_t object_id,
+	    daos_epoch_t epoch, daos_ext_list_t *rd_desc,
+	    daos_ext_list_t *holes);
 
 
 /**
@@ -241,16 +280,15 @@ int vos_ba_find(daos_handle_t pool, daos_obj_id_t object_id,
  * \param id_cnt      [OUT]    size of the object ID list
  * \param id_list     [OUT]    Object ID list
  */
-int vos_list_ba_objects(daos_handle_t pool, daos_epoch_t epoch,
-			daos_obj_id_t anchor, daos_size_t id_cnt,
-			daos_obj_id_t *id_list );
+int
+vos_list_ba_objects(daos_handle_t pool, daos_epoch_t epoch,
+		    daos_obj_id_t anchor, daos_size_t id_cnt,
+		    daos_obj_id_t *id_list );
 
+/**
+ * KV API
+ */
 
-
-
-/********************************************************************
-***************** KV VOS APIs *************************************
-*********************************************************************/
 /**
  * Key Value Update/insert
  * In KVs keys and values of any length are allowed to be inserted.
@@ -270,8 +308,9 @@ int vos_list_ba_objects(daos_handle_t pool, daos_epoch_t epoch,
  *
  * \return                  zero on success, negative value if error
  */
-int vos_kv_update(daos_handle_t pool, daos_obj_id_t object_id,
-		  daos_epoch_t epoch, daos_kv_t entry, daos_kv_t checksum);
+int
+vos_kv_update(daos_handle_t pool, daos_obj_id_t object_id,
+	      daos_epoch_t epoch, daos_kv_t entry, daos_kv_t checksum);
 
 /**
  * Key value update (large keys and values)
@@ -290,9 +329,9 @@ int vos_kv_update(daos_handle_t pool, daos_obj_id_t object_id,
  *
  * \return                   zero on success, negative value if error
  */
-int vos_kv_update_begin(daos_handle_t pool, daos_obj_id_t object_id,
-			daos_epoch_t epoch, daos_kv_t entry,
-                        daos_sg_list_t **desc);
+int
+vos_kv_update_begin(daos_handle_t pool, daos_obj_id_t object_id,
+		    daos_epoch_t epoch, daos_kv_t entry, daos_sg_list_t **desc);
 
 /**
  * Key Value Update end
@@ -307,9 +346,10 @@ int vos_kv_update_begin(daos_handle_t pool, daos_obj_id_t object_id,
  *
  * \return                   zero on success, negative value if error
  */
-int vos_kv_update_end(daos_handle_t pool, daos_obj_id_t object_id,
-		      daos_epoch_t epoch, daos_kv_t entry, daos_kv_t checksum,
-		      daos_ext_list_t *desc);
+int
+vos_kv_update_end(daos_handle_t pool, daos_obj_id_t object_id,
+		  daos_epoch_t epoch, daos_kv_t entry, daos_kv_t checksum,
+		  daos_ext_list_t *desc);
 
 /**
  * Key Value lookup
@@ -327,9 +367,10 @@ int vos_kv_update_end(daos_handle_t pool, daos_obj_id_t object_id,
  * \return                   zero on success, -1 if key does not exist (hole)
  *
  */
-int vos_kv_lookup(daos_handle_t pool, daos_obj_id_t object_id,
-		  daos_epoch_t epoch, daos_sg_list_t *key,
-                  daos_kv_t *entry, daos_kv_t *checksum);
+int
+vos_kv_lookup(daos_handle_t pool, daos_obj_id_t object_id,
+	      daos_epoch_t epoch, daos_sg_list_t *key,
+	      daos_kv_t *entry, daos_kv_t *checksum);
 
 /**
  * Key Value Delete
@@ -344,9 +385,9 @@ int vos_kv_lookup(daos_handle_t pool, daos_obj_id_t object_id,
  * \return                   zero on success, negative value if error
 
  */
-int vos_kv_delete(daos_handle_t pool, daos_obj_id_t object_id,
-		  daos_epoch_t epoch, daos_sg_list_t *key);
-
+int
+vos_kv_delete(daos_handle_t pool, daos_obj_id_t object_id, daos_epoch_t epoch,
+	      daos_sg_list_t *key);
 
 /**
  * Find holes in Key Value Store
@@ -367,9 +408,9 @@ int vos_kv_delete(daos_handle_t pool, daos_obj_id_t object_id,
  *                          the number of entries to be allocated
  *                          to obtain remaining)
  */
-int vos_kv_find(daos_handle_t pool, daos_obj_id_t object_id,
-		daos_epoch_t epoch, daos_sg_list_t **keys,
-		int *holes);
+int
+vos_kv_find(daos_handle_t pool, daos_obj_id_t object_id, daos_epoch_t epoch,
+	    daos_sg_list_t **keys, int *holes);
 
 /**
  * Enumerating non-empty key value objects in a pool
@@ -390,9 +431,10 @@ int vos_kv_find(daos_handle_t pool, daos_obj_id_t object_id,
  *
  * \return                     zero on success, negative value if error
  */
-int vos_list_kv_objects(daos_handle_t pool, daos_epoch_t epoch,
-                        daos_obj_id_t anchor, daos_size_t id_cnt,
-                        daos_obj_id_t *obj_ids);
+int
+vos_list_kv_objects(daos_handle_t pool, daos_epoch_t epoch,
+		    daos_obj_id_t anchor, daos_size_t id_cnt,
+		    daos_obj_id_t *obj_ids);
 
 /**
  * Parsing a key-value store
@@ -400,6 +442,9 @@ int vos_list_kv_objects(daos_handle_t pool, daos_epoch_t epoch,
  * object at a specific epoch
  *
  **/
+
+struct kv_iter;
+typedef struct kv_iter* kv_iterator_t;
 
 /**
   * Create an iterator to iterate over all the KV pairs in the KV
@@ -413,9 +458,9 @@ int vos_list_kv_objects(daos_handle_t pool, daos_epoch_t epoch,
   *
   * \return                       zero on success, negative value if error
  */
-int vos_kv_iter_create(daos_handle_t pool, daos_obj_id_t obj_id,
-                       daos_epoch_t epoch, daos_sg_list_t *anchor,
-                       kv_iterator_t *kv_iter);
+int
+vos_kv_iter_create(daos_handle_t pool, daos_obj_id_t obj_id, daos_epoch_t epoch,
+		   daos_sg_list_t *anchor, kv_iterator_t *kv_iter);
 
 /**
   * Delete a KV  iterator
@@ -424,7 +469,8 @@ int vos_kv_iter_create(daos_handle_t pool, daos_obj_id_t obj_id,
   *
   * \return                      zero on success, negative value if error
  */
-int vos_kv_iter_destroy(kv_iterator_t *kv_iter);
+int
+vos_kv_iter_destroy(kv_iterator_t *kv_iter);
 
 /**
   * Move to the beginning of the KV store
@@ -435,7 +481,8 @@ int vos_kv_iter_destroy(kv_iterator_t *kv_iter);
   *
   * \return                       zero on success, negative value if error
  */
-int vos_kv_begin(kv_iterator_t *kv_iter);
+int
+vos_kv_begin(kv_iterator_t *kv_iter);
 
 /**
   * Move the iterator to the position pointed by the key
@@ -446,7 +493,8 @@ int vos_kv_begin(kv_iterator_t *kv_iter);
   *
   * \return                       zero on success, negative value if error
  */
-int vos_kv_pos(kv_iterator_t *kv_iter, daos_sg_list_t *key);
+int
+vos_kv_pos(kv_iterator_t *kv_iter, daos_sg_list_t *key);
 
 /**
   * Move to the end of the KV store
@@ -457,7 +505,8 @@ int vos_kv_pos(kv_iterator_t *kv_iter, daos_sg_list_t *key);
   *
   * \return                       zero on success, negative value if error
  */
-int vos_kv_end(kv_iterator_t *kv_iter);
+int
+vos_kv_end(kv_iterator_t *kv_iter);
 
 /**
   * Move to the next element of the KV store
@@ -468,7 +517,8 @@ int vos_kv_end(kv_iterator_t *kv_iter);
   *
   * \return                       zero on success, negative value if error
  */
-int vos_kv_next(kv_iterator_t *kv_iter);
+int
+vos_kv_next(kv_iterator_t *kv_iter);
 
 /**
  * Get value along with the key from the iterator
@@ -479,7 +529,8 @@ int vos_kv_next(kv_iterator_t *kv_iter);
  *
  * \return                        returns 0 on success -1 on failure
  */
-int vos_kv_get_value(kv_iterator_t iterator, daos_kv_t* kv_entry);
+int
+vos_kv_get_value(kv_iterator_t iterator, daos_kv_t* kv_entry);
 
 /**
  * Get key from the iterator
@@ -491,7 +542,7 @@ int vos_kv_get_value(kv_iterator_t iterator, daos_kv_t* kv_entry);
  *
  * \return                        returns 0 on success -1 on failure
  */
-int vos_kv_get_key(kv_iterator_t iterator, void* key, daos_size_t key_size);
+int
+vos_kv_get_key(kv_iterator_t iterator, void* key, daos_size_t key_size);
 
-
-
+#endif /* __VOS_API_H */
