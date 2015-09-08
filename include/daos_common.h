@@ -57,6 +57,7 @@ unsigned int daos_debug_mask(void);
 #define D_PRINT(fmt, ...)						\
 do {									\
 	fprintf(stdout, fmt, ## __VA_ARGS__);				\
+	fflush(stdout);							\
 } while (0)
 
 #define D_DEBUG(mask, fmt, ...)						\

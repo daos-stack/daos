@@ -1192,7 +1192,7 @@ cl_comp_set_state(cl_map_t *map, cl_comp_type_t type, daos_rank_t rank,
 	if (state == CL_COMP_ST_UP)
 		comp->co_fseq = 0;
 	else if (state == CL_COMP_ST_DOWN)
-		comp->co_fseq++;
+		comp->co_fseq = ++map->clm_fseq;
 	return 0;
 }
 

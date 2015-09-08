@@ -53,7 +53,7 @@ typedef struct {
 	daos_rank_t		 pt_rank;
 	/* buffer size of \a pt_objs */
 	unsigned int		 pt_nobjs_max;
-	/** # rebuilt object */
+	/** # rebuilt/rebalanced object */
 	unsigned int		 pt_nobjs_rb;
 	/** # of object in this target */
 	unsigned int		 pt_nobjs;
@@ -64,21 +64,6 @@ typedef struct {
 } psc_target_t;
 
 #define PSC_COMP_DESC_MAX	 8
-
-typedef struct {
-	/** cluster map */
-	cl_map_t		*pg_clmap;
-	/** rim placement map */
-	pl_map_t		*pg_map;
-	psc_target_t		*pg_targets;
-	uint64_t		 pg_oid_gen;
-	unsigned long		 pg_nobjs_m;
-	unsigned long		 pg_nobjs_sr;
-	unsigned int		 pg_ntargets;
-	unsigned int		 pg_ndescs;
-	cl_pseudo_comp_desc_t	 pg_descs[PSC_COMP_DESC_MAX];
-	pl_obj_attr_t		 pg_oa;
-} psc_global_data_t;
 
 typedef struct {
 	char			*str;
@@ -114,6 +99,23 @@ typedef struct {
 		} target_change;
 	} u;
 } psc_argument_t;
+
+typedef struct {
+	/** cluster map */
+	cl_map_t		*pg_clmap;
+	/** rim placement map */
+	pl_map_t		*pg_map;
+	psc_target_t		*pg_targets;
+	/** placement map arguments */
+	struct pa_pl_create	 pg_pcr;
+	uint64_t		 pg_oid_gen;
+	unsigned long		 pg_nobjs_m;
+	unsigned long		 pg_nobjs_sr;
+	unsigned int		 pg_ntargets;
+	unsigned int		 pg_ndescs;
+	cl_pseudo_comp_desc_t	 pg_descs[PSC_COMP_DESC_MAX];
+	pl_obj_attr_t		 pg_oa;
+} psc_global_data_t;
 
 /* global data */
 static psc_global_data_t	pg_data;
@@ -410,11 +412,11 @@ psc_obj_stats_print(void)
 	D_PRINT("Total daos-sr objects %lu, daos-m objects %lu\n"
 		"Best %lu, max %lu, min %lu, range %lu, percentage %-6.3f%%\n",
 		pg_data.pg_nobjs_sr, pg_data.pg_nobjs_m, avg,
-		obj_max, obj_min, range, (float)(range * 100) / (float)avg);
+		obj_max, obj_min, range, (float)(range * 100) / avg);
 }
 
 static int
-psc_target_append_obj(psc_target_t *pst, psc_obj_t *obj, bool rebuild)
+psc_target_append_obj(psc_target_t *pst, psc_obj_t *obj, bool rb)
 {
 	pl_obj_shard_t	*os = &obj->po_os;
 	int		 nobjs = pst->pt_nobjs + pst->pt_nobjs_rb;
@@ -433,8 +435,9 @@ psc_target_append_obj(psc_target_t *pst, psc_obj_t *obj, bool rebuild)
 	}
 
 	nobjs = pst->pt_nobjs + pst->pt_nobjs_rb;
-	if (rebuild) {
-		D_DEBUG(DF_PL, "rebuild obj "DF_U64".%u on target %u\n",
+	if (rb) {
+		D_DEBUG(DF_PL,
+			"rebuild/rebalance obj "DF_U64".%u on target %u\n",
 			os->os_id.body[0], os->os_sid, pst->pt_rank);
 
 		pst->pt_objs[nobjs] = *obj;
@@ -659,15 +662,17 @@ psc_cl_change(psc_argument_t *args)
 
 	/* skip root */
 	rc = cl_map_extend(pg_data.pg_clmap, buf);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to extend cluster map\n");
 		goto out;
+	}
 
 	if (clu->c_print)
 		cl_map_print(pg_data.pg_clmap);
  out:
 	if (buf != NULL)
 		cl_pseudo_buf_free(buf);
-	return 0;
+	return rc;
 }
 
 static int
@@ -753,11 +758,12 @@ psc_pl_create(psc_argument_t *args)
 		return -EINVAL;
 	}
 
-	if (pg_data.pg_map != NULL) {
+	if (pg_data.pg_map == NULL) {
+		PSC_PROMPT("Create placement maps %s\n", args->str);
+	} else {
 		pl_map_destroy(pg_data.pg_map);
 		pg_data.pg_map = NULL;
 	}
-	PSC_PROMPT("Create placement maps %s\n", args->str);
 
 	D_DEBUG(DF_PL, "placement map %d, domain %s, num: %d\n",
 		pcr->p_type, cl_comp_type2name(pcr->p_domain), pcr->p_num);
@@ -780,6 +786,8 @@ psc_pl_create(psc_argument_t *args)
 			pl_map_print(pg_data.pg_map);
 		break;
 	}
+
+	pg_data.pg_pcr = *pcr;
 	return rc;
 }
 
@@ -1189,13 +1197,29 @@ psc_target_change(psc_argument_t *args)
 }
 
 static int
-psc_targets_rebalance(psc_argument_t *args)
+psc_rebalance(psc_argument_t *args)
 {
 	psc_target_t *pst;
+	int	      rebalanced;
 	int	      i;
 	int	      j;
 	int	      rc;
 
+	if (pg_data.pg_pcr.p_type == PL_TYPE_UNKNOWN ||
+	    pg_data.pg_pcr.p_num == 0) {
+		D_ERROR("Can't find valid placement map arguments\n");
+		return -EPERM;
+	}
+
+	PSC_PROMPT("Rebuild placement map and Rebalance objects\n");
+
+	/* recreate placement map */
+	args->u.pl_create = pg_data.pg_pcr;
+	rc = psc_pl_create(args);
+	if (rc != 0)
+		return rc;
+
+	/* rebalance objects */
 	for (i = 0; i < pg_data.pg_ntargets; i++) {
 		psc_obj_t	 obj;
 		daos_rank_t	 rebal;
@@ -1235,13 +1259,17 @@ psc_targets_rebalance(psc_argument_t *args)
 		}
 	}
 
-	for (i = 0; i < pg_data.pg_ntargets; i++) {
+	for (i = rebalanced = 0; i < pg_data.pg_ntargets; i++) {
 		pst = &pg_data.pg_targets[i];
 		pst->pt_nobjs += pst->pt_nobjs_rb;
+		rebalanced += pst->pt_nobjs_rb;
 		pst->pt_nobjs_rb = 0;
 	}
 	psc_targets_print(0, NULL);
 	psc_obj_stats_print();
+	D_PRINT("Rebalanced %-5.2f%% of all objects\n",
+		(float)(rebalanced * 100) / pg_data.pg_nobjs_m);
+
 	return 0;
 }
 
@@ -1295,6 +1323,8 @@ static struct option psc_opts[] = {
  *  	e:N	enable target N
  *  	p	print object stats in all targets
  *
+ * -R	recreate placement map and rebalance objects
+ *
  * Example:
  * DAOS_DEBUG=0
  * pseudo_cluster -C b:16,t:64,p	\
@@ -1319,6 +1349,8 @@ main(int argc, char **argv)
 
 	memset(&pg_data, 0, sizeof(pg_data));
 	pg_data.pg_oid_gen = 1;
+
+	memset(&args, 0, sizeof(args));
 
 	sigemptyset(&sa.sa_mask);
 	sa.sa_handler = psc_sig_handler;
@@ -1401,7 +1433,7 @@ main(int argc, char **argv)
 				goto failed;
 			break;
 		case 'R':
-			rc = psc_targets_rebalance(NULL);
+			rc = psc_rebalance(&args);
 			if (rc != 0)
 				goto failed;
 			break;

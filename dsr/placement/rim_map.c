@@ -867,7 +867,7 @@ rim_map_obj_select(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
 	index += stripe * grp_dist;
 
 	for (i = stripe, nobss = 0; i < nstripes && obs_arr_len > 0; i++) {
-		int spare;
+		int	spare;
 
 		spare = rim_select_spare(obs->os_id, index, dist, ntargets, oa);
 
@@ -875,6 +875,8 @@ rim_map_obj_select(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
 		     j++, obs_arr_len--) {
 			int pos = pts[(index + j * dist) % ntargets].pt_pos;
 
+			/* XXX this can't properly handle multiple failures
+			 * in the same group */
 			while (targets[pos].co_status != CL_COMP_ST_UP) {
 				pos = pts[spare].pt_pos;
 				spare = rim_next_spare(obs->os_id, spare,

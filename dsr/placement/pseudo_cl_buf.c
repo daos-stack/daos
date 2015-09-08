@@ -23,6 +23,13 @@
  *
  * dsr/placement/pseudo_cl_map.c
  *
+ * Build a cl_buf_t for a pseudo cluster, this is for simulator and testing
+ * program only.
+ *
+ * To simplify desription of tree topology, it assumes that all children
+ * under the same level of domains are always evenly distributed to these
+ * domains.
+ *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
 #include <cl_map.h>

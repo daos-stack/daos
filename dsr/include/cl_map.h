@@ -68,7 +68,15 @@ typedef struct {
 	uint32_t		co_ver;
 	/** failure sequence */
 	uint32_t		co_fseq;
-	/** identifier of component */
+	/**
+	 * Unique identifier of component:
+	 *
+	 * For a target, It should be communicating identifier (of mercury),
+	 * otherwise it is just identifier that can be translated to a group
+	 * of targets (or nodes). For example, I expect that user can call API
+	 * to add a group of targets to a container identified by a "rack rank"
+	 * instead of enumerating all targets within this rack.
+	 */
 	uint32_t		co_rank;
 } cl_component_t;
 
@@ -141,15 +149,20 @@ typedef struct {
 	unsigned int		 cc_nlayers;
 } cl_buf_count_t;
 
-/** Cluster map */
+/** In memory data structure for cluster map */
 typedef struct {
 	/** Current version of cluster map */
 	unsigned int		   clm_ver;
-	/** the oldest Version of cluster map */
+	/**
+	 * The oldest version of cluster map, it's just a placeholder for
+	 * the time being, it needs more work.
+	 */
 	unsigned int		   clm_ver_old;
+	/** failure sequence generator for cl_component_t */
+	unsigned int		   clm_fseq;
 	/**
 	 * Tree root of all components.
-	 * NB: All components must be stored in contigunous buffer.
+	 * NB: All components must be stored in contiguous buffer.
 	 */
 	cl_domain_t		  *clm_root;
 	/** # of targets in cluster map */

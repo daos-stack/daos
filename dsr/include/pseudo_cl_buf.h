@@ -23,6 +23,10 @@
  *
  * dsr/include/pseudo_cl_map.h
  *
+ * cl_pseudo_buf APIs provide simple interfaces to build a pseudo cl_buf_t as
+ * cluster description for dsr/tests/pseudo_cluster(a simulator), or any
+ * other testing programs that need to build a pseudo cluster.
+ *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
 #ifndef __PSEUDO_CL_MAP_H__

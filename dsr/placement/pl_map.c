@@ -151,7 +151,7 @@ pl_map_obj_rebalance(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
 	if (rc < 0)
 		return rc;
 
-	D_ASSERT(rc > 0);
+	D_ASSERT(rc == 1);
 	*rank_rebal = os.os_rank;
 	return 0;
 }
