@@ -1,0 +1,6 @@
+#!python
+
+Import('env')
+
+env.Library('libdaos_common', Glob('*.c'))
+env.Append(LIBPATH = ['#/common'])

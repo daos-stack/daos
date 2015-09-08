@@ -1,0 +1,6 @@
+#!python
+
+Import('env')
+
+env.Library('libdaos_pl', Glob('*.c'))
+env.Append(LIBPATH = ['#/dsr/placement'])

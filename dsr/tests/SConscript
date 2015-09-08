@@ -1,0 +1,6 @@
+#!python
+
+Import('env')
+
+env.Program('pseudo_cluster', 'pseudo_cluster.c', LIBS=['libdaos_common', 'libdaos_pl'])
+env.Program('other', 'other.c',  LIBS=['libdaos_common', 'libdaos_pl'])

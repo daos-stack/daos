@@ -1,0 +1,10 @@
+#!python
+
+Import('env')
+
+# Compiler options
+env.Append(CPPPATH = ['#/dsr/include'])
+
+# Builders
+SConscript('placement/SConscript', exports='env')
+SConscript('tests/SConscript', exports='env')
