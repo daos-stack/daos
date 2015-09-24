@@ -926,8 +926,10 @@ osc_obj_create(psc_argument_t *args)
 	int			 j;
 	int			 rc;
 
-	PSC_PROMPT("Create objects %s, rd_grp %d, stripes %d, spare %d\n",
-		   args->str, oa->oa_rd_grp, oa->oa_nstripes, oa->oa_nspares);
+	PSC_PROMPT("Create objects %s, rd_grp %d, stripes %d, "
+		   "spare %d, skip %d\n",
+		   args->str, oa->oa_rd_grp, oa->oa_nstripes,
+		   oa->oa_nspares, oa->oa_spare_skip);
 
 	nosas = oa->oa_nstripes * oa->oa_rd_grp;
 	osas = calloc(oa->oa_nstripes * oa->oa_rd_grp, sizeof(*osas));

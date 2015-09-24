@@ -143,25 +143,15 @@ daos_u64_hash(uint64_t val, unsigned int bits)
 static inline uint32_t
 daos_u32_hash(uint64_t key, unsigned int bits)
 {
-	return (DAOS_GOLDEN_RATIO_PRIME_32 * key) >> (64 - bits);
+	return (DAOS_GOLDEN_RATIO_PRIME_32 * key) >> (32 - bits);
 }
+
+uint64_t daos_hash_mix64(uint64_t key);
+uint32_t daos_hash_mix96(uint32_t a, uint32_t b, uint32_t c);
 
 /** consistent hash search */
-static inline unsigned int
-daos_chash_srch_u64(uint64_t *hashes, unsigned int nhashes, uint64_t value)
-{
-	int	high = nhashes - 1;
-	int	low = 0;
-	int     i;
-
-        for (i = high / 2; high - low > 1; i = (low + high) / 2) {
-                if (value >= hashes[i])
-			low = i;
-		else /* value < hashes[i] */
-			high = i;
-	}
-	return value >= hashes[high] ? high : low;
-}
+unsigned int daos_chash_srch_u64(uint64_t *hashes, unsigned int nhashes,
+				 uint64_t value);
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 

@@ -60,6 +60,15 @@ typedef struct rim_target_shuffler {
 static void rim_buf_destroy(rim_buf_t *buf);
 static void rim_map_destroy(pl_map_t *map);
 
+/** another prime for hash */
+#define PL_GOLDEN_PRIME	0x9e37fffffffc0001ULL
+
+static inline uint64_t
+pl_hash64(uint64_t key, unsigned int nbits)
+{
+	return (key * PL_GOLDEN_PRIME) >> (64 - nbits);
+}
+
 static inline pl_rim_map_t *
 pl_map2rimap(pl_map_t *map)
 {
@@ -190,21 +199,14 @@ rim_target_shuffler_cmp(void *array, int a, int b)
 {
 	rim_target_shuffler_t	 *ts = array;
 	cl_target_t		**targets = ts->ts_targets;
-	uint64_t		  buf[2];
 	uint64_t		  ka;
 	uint64_t		  kb;
 
-	buf[0]  = targets[a]->co_rank;
-	buf[1]  = ts->ts_seed;
-	buf[0] ^= buf[0] << 22;
-	buf[1] ^= buf[1] << 28;
-	ka = daos_u64_hash(buf[1] + buf[0], 37);
+	ka = targets[a]->co_rank;
+	ka = daos_hash_mix96(ts->ts_seed, ka % 13, ka);
 
-	buf[0]  = targets[b]->co_rank;
-	buf[1]  = ts->ts_seed;
-	buf[0] ^= buf[0] << 22;
-	buf[1] ^= buf[1] << 28;
-	kb = daos_u64_hash(buf[1] + buf[0], 37);
+	kb = targets[b]->co_rank;
+	kb = daos_hash_mix96(ts->ts_seed, kb % 13, kb);
 
 	if (ka > kb)
 		return 1;
@@ -284,21 +286,14 @@ rim_dom_shuffler_cmp(void *array, int a, int b)
 {
 	rim_dom_shuffler_t	*rs = array;
 	struct rim_domain	*rdoms = rs->rs_rdoms;
-	uint64_t		 buf[2];
 	uint64_t		 ka;
 	uint64_t		 kb;
 
-	buf[0]  = rdoms[a].rd_dom->cd_comp.co_rank;
-	buf[1]  = rs->rs_seed;
-	buf[0] ^= buf[0] << 26;
-	buf[1] ^= buf[1] << 26;
-	ka = daos_u64_hash(buf[1] + buf[0], 37);
+	ka = rdoms[a].rd_dom->cd_comp.co_rank;
+	ka = daos_hash_mix96(ka % 23, rs->rs_seed, ka);
 
-	buf[0]  = rdoms[b].rd_dom->cd_comp.co_rank;
-	buf[1]  = rs->rs_seed;
-	buf[0] ^= buf[0] << 26;
-	buf[1] ^= buf[1] << 26;
-	kb = daos_u64_hash(buf[1] + buf[0], 37);
+	kb = rdoms[b].rd_dom->cd_comp.co_rank;
+	kb = daos_hash_mix96(kb % 23, rs->rs_seed, kb);
 
 	if (ka > kb)
 		return 1;
@@ -422,7 +417,7 @@ rim_generate(pl_rim_map_t *rimap, unsigned int idx, unsigned int ntargets,
 	D_DEBUG(DF_PL, "Create rim %d [%d targets] for rimap\n",
 		idx, rimap->rmp_ntargets);
 
-	rc = rim_buf_shuffle(rimap, idx, ntargets, buf);
+	rc = rim_buf_shuffle(rimap, idx + 1, ntargets, buf);
 	if (rc < 0)
 		return rc;
 
@@ -671,17 +666,9 @@ rim_map_print(pl_map_t *map)
 static pl_rim_t *
 rim_oid2rim(pl_rim_map_t *rimap, daos_obj_id_t id)
 {
-	uint64_t key = id.body[0] + id.body[1];
 	uint64_t hash;
 
-	/* mix bits */
-	hash  = (key >> 32) << 32;
-	hash |= (key >> 8) & 0xff;
-	hash |= (key & 0xff) << 8;
-	hash |= ((key >> 16) & 0xff) << 24;
-	hash |= ((key >> 24) & 0xff) << 16;
-
-	hash = daos_u32_hash(hash, RIM_HASH_BITS);
+	hash = pl_hash64(id.body[0], RIM_HASH_BITS);
 	hash = daos_chash_srch_u64(rimap->rmp_rim_hashes,
 				   rimap->rmp_nrims, hash);
 	return &rimap->rmp_rims[hash];
@@ -691,13 +678,15 @@ rim_oid2rim(pl_rim_map_t *rimap, daos_obj_id_t id)
 static unsigned int
 rim_oid2index(pl_rim_map_t *rimap, daos_obj_id_t id)
 {
-	uint64_t hash;
+	uint64_t hash = id.body[0] ^ id.body[1];
 
 	/* mix bits */
 	hash  = id.body[0];
-	hash ^= hash << 29;
-	hash += hash << 11;
-	hash -= id.body[1];
+	hash ^= hash << 39;
+	hash += hash << 9;
+	hash -= hash << 17;
+	hash ^= id.body[1];
+
 	hash  = daos_u64_hash(hash, TARGET_HASH_BITS);
 	hash &= (1ULL << rimap->rmp_target_hbits) - 1;
 
@@ -715,9 +704,6 @@ rim_obj_sid2stripe(uint32_t sid, pl_obj_attr_t *oa)
 	return sid / oa->oa_rd_grp;
 }
 
-/** another prime for hash */
-#define PL_GOLDEN_PRIME	0x9e37fffffffc0001ULL
-
 /**
  * select spare node for a redundancy group, \a first is the rim offset of
  * the first target of the redundancy group
@@ -734,8 +720,8 @@ rim_select_spare(daos_obj_id_t id, int first, int dist, int ntargets,
 	hash = id.body[0] ^ id.body[1];
 	hash *= PL_GOLDEN_PRIME;
 	skip = hash % (oa->oa_spare_skip + 1);
-
 	sign = (hash & 1) == 0 ? -1 : 1;
+
 	for (i = 0; i < skip; i++)
 		first += sign * dist * (oa->oa_rd_grp + oa->oa_nspares);
 
@@ -744,7 +730,7 @@ rim_select_spare(daos_obj_id_t id, int first, int dist, int ntargets,
 	else
 		first -= oa->oa_nspares * dist;
 
-	if (first > ntargets)
+	if (first >= ntargets)
 		return first - ntargets;
 	if (first < 0)
 		return first + ntargets;
