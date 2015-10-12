@@ -28,6 +28,7 @@
 
 /** uuid_t */
 #include <uuid/uuid.h>
+#include <dtp_types.h>
 
 /** Size */
 typedef uint64_t	daos_size_t;
@@ -48,9 +49,10 @@ typedef struct {
 /**
  * Server Identification & Addressing
  */
-
-/** Address of a process in a session */
-typedef uint32_t	daos_rank_t;
+typedef struct {
+	/** XXX use dtp group descriptor at here */
+	int		dg_grp;
+} daos_group_t;
 
 /**
  * One way to understand this: An array of "session network addresses", each of
@@ -59,10 +61,12 @@ typedef uint32_t	daos_rank_t;
  * session.
  */
 typedef struct {
-	uuid_t		rg_uuid;
-	uint32_t	rg_nranks;
-	daos_rank_t    *rg_ranks;
-} daos_rank_group_t;
+	/** list length, it is actual buffer size */
+	uint32_t	 rl_llen;
+	/** number of ranks in the list */
+	uint32_t	 rl_rankn;
+	dtp_rank_t	*rl_ranks;
+} daos_rank_list_t;
 
 /**
  * Storage Targets
@@ -99,12 +103,35 @@ typedef struct {
 	/** TODO: storage/network bandwidth, latency etc */
 } daos_target_perf_t;
 
+typedef struct {
+	/** TODO: space usage */
+} daos_space_t;
+
 /** Target information */
 typedef struct {
 	daos_target_type_t	ta_type;
 	daos_target_state_t	ta_state;
 	daos_target_perf_t	ta_perf;
+	daos_space_t		ta_space;
 } daos_target_info_t;
+
+/**
+ * Storage pool
+ */
+typedef struct {
+	/** pool UUID */
+	uuid_t			pi_uuid;
+	/** number of containers */
+	uint32_t		pi_nconns;
+	/** number of targets */
+	uint32_t		pi_ntargets;
+	/** number of deactivated targets */
+	uint32_t		pi_ndisabled;
+	/** number of containers */
+	uint32_t		pi_ncontainers;
+	/** space usage */
+	daos_space_t		pi_space;
+} daos_pool_info_t;
 
 /**
  * Epoch
@@ -151,10 +178,6 @@ typedef struct {
 typedef struct {
 	/** container UUID */
 	uuid_t			ci_uuid;
-	/** number of shards */
-	uint32_t		ci_nshards;
-	/** number of deactivated shards */
-	uint32_t		ci_ndisabled;
 	/** epoch information (e.g. HCE, LRE & LHE) */
 	daos_epoch_state_t	ci_epoch_state;
 	/** number of snapshots */
@@ -172,6 +195,15 @@ typedef struct {
 typedef struct {
 	uint64_t	body[2];
 } daos_obj_id_t;
+
+typedef struct {
+	/** list length, it is the actual buffer size */
+	unsigned int	 ol_llen;
+	/** number of OIDs */
+	unsigned int	 ol_oidn;
+	/** OID buffer */
+	daos_obj_id_t	*ol_oids;
+} daos_oid_list_t;
 
 /**
  * Byte Array Objects
