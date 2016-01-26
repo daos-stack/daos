@@ -19,7 +19,12 @@
  * (C) Copyright 2015 Intel Corporation.
  */
 /**
- * DAOS-M API
+ * DSM API
+ *
+ * A pool handle is required to create, open, and destroy containers (belonging
+ * to the pool). Operations requiring container handles do not ask for pool
+ * handles at the same time, for the pool handles can be inferred from the
+ * container handles.
  */
 
 #ifndef __DSM_API_H__
@@ -30,161 +35,208 @@
 #include <daos_ev.h>
 
 /**
- * Create a container, without opening it.  For cases in which a container only
- * needs to be created but not opened.
+ * Create a pool with "uuid", "mode", and "ntargets".
  *
- *	uuid	IN  container UUID
- *	shards	IN  set of shards to create container on
- *	cshards	IN  consensus subset of shards
- *	event	IN  completion event
+ * "device" identifies target devices. "size" specifies target sizes (i.e.,
+ * maximum amounts of storage space targets can consume) in bytes. Targets are
+ * assumed to share the same "path" and "size".
+ *
+ * "ranks" passes in the rank of each target. The fault domains among the
+ * targets are retrieved automatically from external sources.
+ *
+ * This is a privileged operation.
  */
 int
-dsm_co_create(uuid_t uuid, daos_rank_group_t *shards,
-	      daos_rank_group_t *cshards, daos_event_t *event);
+dsm_pool_create(const uuid_t uuid, unsigned int mode, int ntargets,
+		const daos_rank_t *ranks, const char *device, uint64_t size,
+		daos_event_t *event);
 
 /**
- * Open a container, optionally creating it first.  See also dsm_co_create().
+ * Destroy a pool with "uuid". Upon successful completion, no new connections
+ * can be made to the pool. The pool data will be destroyed once all existing
+ * connections disappear.
  *
- *	uuid	IN  container UUID
- *	shards	IN  hint of shards, or if mode contains create, set of
- *		    shards to create
- *	cshards	IN  unused, or if mode contains create, consensus subset of
- *		    shards
- *	mode	IN  read-only, read-write, and optionally also create
- *	coh	OUT container handle
- *	status	OUT container status
- *	event	IN  completion event
+ * This is a privileged operation.
  */
 int
-dsm_co_open(uuid_t uuid, daos_rank_group_t *shards,
-	    daos_rank_group_t *cshards, unsigned int mode,
-	    daos_handle_t *coh, daos_co_status_t *status,
+dsm_pool_destroy(const uuid_t uuid, daos_event_t *event);
+
+/**
+ * Connect to a pool with "uuid". "ranks" indicates potential ranks of the pool
+ * service replicas. "flags" contains flags such as whether the resulting
+ * connection should be read-only or read-write.
+ */
+int
+dsm_pool_connect(const uuid_t uuid, const daos_rank_group_t *ranks,
+		 unsigned int flags, daos_handle_t *pool,
+		 daos_event_t *event);
+
+/**
+ * Disconnect "pool".
+ */
+int
+dsm_pool_disconnect(daos_handle_t pool, daos_event_t *event);
+
+/**
+ * Add new targets to a pool with "uuid".
+ *
+ * This is a privileged operation.
+ */
+int
+dsm_pool_grow(daos_handle_t pool, daos_rank_group_t *ranks,
+	      daos_event_t *event);
+
+/**
+ * Exclude existing targets in a pool with "uuid".
+ */
+int
+dsm_pool_exclude(daos_handle_t pool, daos_rank_group_t *ranks,
+		 daos_event_t *event);
+
+typedef struct dsm_pool_info {
+	uuid_t		mps_uuid;
+	unsigned int	mps_mode;
+	int		mps_ntargets;
+	uint64_t	mps_size;
+	uint64_t	mps_free;
+	/* ... */
+} dsm_pool_info_t;
+
+/**
+ * Query "pool" info.
+ */
+int
+dsm_pool_query(daos_handle_t pool, dsm_pool_info_t *info, daos_event_t *event);
+
+/**
+ * TODO: Pool Map Operations
+ *
+ * One option: Hide the pool map data structure from upper layers and export
+ * these methods instead:
+ *
+ *   dsm_pool_map_traverse()
+ *   dsm_pool_map_get(rank, &target)
+ *   dsm_pool_map_put(rank, target)
+ *   ...?
+ */
+
+/**
+ * Create a container with "uuid" and optional "name" in "pool".
+ *
+ * "name" is only valid in this pool and may be NULL. When it is NULL, the
+ * container can only be found by its UUID.
+ */
+int
+dsm_co_create(daos_handle_t pool, const uuid_t uuid, const char *name,
+	      daos_event_t *event);
+
+/**
+ * DSM_COO_RO opens the container for reading only. This flag conflicts with
+ * DSM_COO_RW.
+ *
+ * DSM_COO_RW opens the container for reading and writing. This flag conflicts
+ * with DSM_COO_RO.
+ *
+ * DSM_COO_CREATE creates the container before opening it. This flag must be
+ * set together with either DSM_COO_RO or DSM_COO_RW.
+ */
+#define DSM_COO_RO	0x0U
+#define DSM_COO_RW	0x1U
+#define DSM_COO_CREATE	0x2U
+
+/**
+ * Open a container with "uuid", optionally creating it first. See also
+ * dsm_co_create(). "flags" comprises of DSM_COO_ bits.
+ */
+int
+dsm_co_open(daos_handle_t pool, const uuid_t uuid, unsigned int flags,
+	    daos_handle_t *container, daos_co_info_t *info,
 	    daos_event_t *event);
 
 /**
- * Close a container handle.
- *
- *	coh	IN  container handle
- *	event	IN  completion event
+ * Close "container".
  */
 int
-dsm_co_close(daos_handle_t coh, daos_event_t *event);
+dsm_co_close(daos_handle_t container, daos_event_t *event);
 
 /**
- * Destroy a container.
- *
- *	uuid	IN  container UUID
- *	shards	IN  hint of shards
- *	event	IN  completion event
+ * Destroy a container with "uuid" in "pool". Upon successful completion, the
+ * container can no longer be opened and will be destroyed once all existing
+ * container handles disappear.
  */
 int
-dsm_co_destroy(uuid_t uuid, daos_rank_group_t *shards, daos_event_t *event);
+dsm_co_destroy(daos_handle_t pool, const uuid_t uuid, daos_event_t *event);
 
 /**
- * Query a container's various information.
- *
- *	coh		IN  container handle
- *	info		OUT container information
- *	shards		OUT list of all shards
- *	disabled	OUT list of indices of disabled shards
- *	n		OUT number of indices in disabled
- *	event		IN  completion event
+ * Query "container" info.
  */
 int
-dsm_co_query(daos_handle_t coh, daos_co_info_t *info,
-	     daos_rank_group_t *shards, unsigned int *disabled,
-	     unsigned int *n, daos_event_t *event);
-
-/**
- * Container Layout
- */
-
-/**
- * Modify a container's layout.  Existing shards in disable are disabled and
- * new shards in add are appended to the list of shards in the order they
- * appear in add.  Disabling an unexistent shard or adding an existing shard
- * gets an error, with the layout left intact.
- *
- * XXX: Whether shard indices can be reused...
- *
- *	coh	IN  container handle
- *	disable	IN  set of existing shards to disable
- *	add	IN  list of new shards to add
- *	cadd	IN  subset of add that should be consensus shards
- *	event	IN  completion event
- */
-int
-dsm_co_reconfig(daos_handle_t coh, daos_rank_group_t *disable,
-		daos_rank_group_t *add, daos_rank_group_t *cadd,
-		daos_event_t *event);
-
-/*
- * Container extended attribute
- *
- * An attribute is a name-value pair.  A name must be a '\0'-terminated string.
- * These attributes are not versioned.
- */
+dsm_co_query(daos_handle_t container, daos_co_info_t *info,
+	     daos_event_t *event);
 
 /**
  * List all attribute names in a buffer, with each name terminated by a '\0'.
  *
- *	coh	IN  container handle
- *	buffer	OUT buffer
- *	size	IN  buffer size
- *		OUT total size of all names (regardless of actual buffer size)
- *	event	IN  completion event
+ *	container	IN  container handle
+ *	buffer		OUT buffer
+ *	size		IN  buffer size
+ *			OUT total size of all names (regardless of actual buffer
+ *			    size)
+ *	event		IN  completion event
  */
 int
-dsm_co_xattr_list(daos_handle_t coh, char *buffer, size_t *size,
+dsm_co_xattr_list(daos_handle_t container, char *buffer, size_t *size,
 		  daos_event_t *event);
 
 /**
  * Get a set of attributes.
  *
- *	coh	IN  container handle
- *	n	IN  number of attributes
- *	names	IN  array of attribute names
- *	buffers	OUT array of attribute values
- *	sizes	IN  array of buffer sizes
- *		OUT array of value sizes (regardless of actual buffer sizes)
- *	event	IN  completion event
+ *	container	IN  container handle
+ *	n		IN  number of attributes
+ *	names		IN  array of attribute names
+ *	buffers		OUT array of attribute values
+ *	sizes		IN  array of buffer sizes
+ *			OUT array of value sizes (regardless of actual buffer
+ *			    sizes)
+ *	event		IN  completion event
  */
 int
-dsm_co_xattr_get(daos_handle_t coh, unsigned int n, char **names,
-		 void **buffers, size_t **sizes, daos_event_t *event);
+dsm_co_xattr_get(daos_handle_t container, int n, const char *const names[],
+		 void *buffers[], size_t *sizes[], daos_event_t *event);
 
 /**
  * Set a set of attributes.
  *
- *	coh	IN  container handle
- *	n	IN  number of attributes
- *	names	IN  array of attribute names
- *	values	IN  array of attribute values
- *	sizes	IN  array of value sizes
- *	event	IN  completion event
+ *	container	IN  container handle
+ *	n		IN  number of attributes
+ *	names		IN  array of attribute names
+ *	values		IN  array of attribute values
+ *	sizes		IN  array of value sizes
+ *	event		IN  completion event
  */
 int
-dsm_co_xattr_set(daos_handle_t coh, unsigned int n, char **names,
-		 void **values, size_t *sizes, daos_event_t *event);
+dsm_co_xattr_set(daos_handle_t container, int n, const char *const names[],
+		 const void *const values[], const size_t sizes[],
+		 daos_event_t *event);
 
 /**
  * Query latest epoch state.
  *
- *	coh   [IN]	container handle
- *	state [OUT]	latest epoch state
- *	event [IN]	completion event
+ *	container	IN  container handle
+ *	state		OUT latest epoch state
+ *	event		IN  completion event
  */
 int
-dsm_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
+dsm_epoch_query(daos_handle_t container, daos_epoch_state_t *state,
 		daos_event_t *event);
 
 /**
  * Set the lowest held epoch (LHE) of a container handle.
  *
- *	coh   [IN]	container handle
- *	epoch [IN]	epoch to set LHE to
- *	state [OUT]	latest epoch state
- *	event [IN]	completion event
+ *	container	IN  container handle
+ *	epoch		IN  epoch to set LHE to
+ *	state		OUT latest epoch state
+ *	event		IN  completion event
  *
  * The resulting LHE' is determined like this:
  *
@@ -194,111 +246,102 @@ dsm_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
  * epochs by either committing/aborting them or setting LHE to DAOS_EPOCH_MAX.
  */
 int
-dsm_epoch_hold(daos_handle_t coh, daos_epoch_t epoch,
+dsm_epoch_hold(daos_handle_t container, daos_epoch_t epoch,
 	       daos_epoch_state_t *state, daos_event_t *event);
 
 /**
  * Increase the lowest referenced epoch (LRE) of a container handle.
  *
- *	coh   [IN]	container handle
- *	epoch [IN]	epoch to increase LRE to
- *	state [OUT]	latest epoch state
- *	event [IN]	completion event
+ *	container	IN  container handle
+ *	epoch		IN  epoch to increase LRE to
+ *	state		OUT latest epoch state
+ *	event		IN  completion event
  *
  * The resulting LRE' is determined like this:
  *
  *	LRE' = min(HCE, max(LRE, epoch))
  */
 int
-dsm_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
+dsm_epoch_slip(daos_handle_t container, daos_epoch_t epoch,
 	       daos_epoch_state_t *state, daos_event_t *event);
 
 /**
  * Commit an epoch.
  *
- *	coh   [IN]	container handle
- *	epoch [IN]	epoch to commit
- *	depends [IN]	epochs "epoch" depends on
- *	ndepends [IN]	number of epochs in "depends"
- *	state [OUT]	latest epoch state
- *	event [IN]	completion event
+ *	container	IN  container handle
+ *	epoch		IN  epoch to commit
+ *	depends		IN  epochs "epoch" depends on
+ *	ndepends	IN  number of epochs in "depends"
+ *	state		OUT latest epoch state
+ *	event		IN  completion event
  *
  * "depends" is an array of epochs on which "epoch" depends.  A NULL value
  * indicates that "epoch" is independent.
  */
 int
-dsm_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
+dsm_epoch_commit(daos_handle_t container, daos_epoch_t epoch,
 		 const daos_epoch_t *depends, int ndepends,
 		 daos_epoch_state_t *state, daos_event_t *event);
 
 /**
  * Abort an epoch.
  *
- *	coh   [IN]	container handle
- *	epoch [IN]	epoch to abort
- *	state [OUT]	latest epoch state
- *	event [IN]	completion event
+ *	container	IN  container handle
+ *	epoch		IN  epoch to abort
+ *	state		OUT latest epoch state
+ *	event		IN  completion event
  */
 int
-dsm_epoch_abort(daos_handle_t coh, daos_epoch_t epoch,
+dsm_epoch_abort(daos_handle_t container, daos_epoch_t epoch,
 		daos_epoch_state_t *state, daos_event_t *event);
-
-/** TODO: Batch commit/abort; easy way to specify FF-like dependency */
 
 /**
  * Wait for an epoch to be committed.
  *
- *	coh [IN]	container handle
- *	epoch [IN]	epoch to wait for
- *	state [OUT]	latest epoch state
- *	event [IN]	completion event
+ *	container	IN  container handle
+ *	epoch		IN  epoch to wait for
+ *	state		OUT latest epoch state
+ *	event		IN  completion event
  */
 int
-dsm_epoch_wait(daos_handle_t coh, daos_epoch_t epoch,
+dsm_epoch_wait(daos_handle_t container, daos_epoch_t epoch,
 	       daos_epoch_state_t *state, daos_event_t *event);
-
-/**
- * Snapshot
- *
- * Snapshots are assumed to be nameless; they can only be referred to be the
- * epochs they correspond to.
- */
 
 /**
  * List epochs of all snapshot of a container.
  *
- *	coh	IN  container coh
- *	buffer	IN  buffer to epochs
- *		OUT array of epochs of snapshots
- *	n	IN  number of epochs buffer can hold
- *		OUT number of all snapshots (regardless of buffer size)
- *	event	IN  completion event
+ *	container	IN  container coh
+ *	buffer		IN  buffer to epochs
+ *			OUT array of epochs of snapshots
+ *	n		IN  number of epochs buffer can hold
+ *			OUT number of all snapshots (regardless of buffer size)
+ *	event		IN  completion event
  */
 int
-dsm_snap_list(daos_handle_t coh, daos_epoch_t *buffer, unsigned int *n,
+dsm_snap_list(daos_handle_t container, daos_epoch_t *buffer, int *n,
 	      daos_event_t *event);
 
 /**
  * Take a snapshot of an epoch.
  *
- *	coh	IN  container handle
- *	epoch	IN  epoch to snapshot
- *	event	IN  completion event
+ *	container	IN  container handle
+ *	epoch		IN  epoch to snapshot
+ *	event		IN  completion event
  */
 int
-dsm_snap_create(daos_handle_t coh, daos_epoch_t epoch,
+dsm_snap_create(daos_handle_t container, daos_epoch_t epoch,
 		daos_event_t *event);
 
 /**
  * Destroy a snapshot.  The epoch corresponding to the snapshot is not
  * discarded, but may be aggregated.
  *
- *	coh	IN  container handle
- *	epoch	IN  snapshot to destory
- *	event	IN  completion event
+ *	container	IN  container handle
+ *	epoch		IN  snapshot to destory
+ *	event		IN  completion event
  */
 int
-dsm_snap_destroy(daos_handle_t coh, daos_epoch_t epoch,
+dsm_snap_destroy(daos_handle_t container, daos_epoch_t epoch,
 		 daos_event_t *event);
 
 #endif /* __DSM_API_H__ */
