@@ -2,4 +2,4 @@
 
 Import('env')
 
-print 'No vos code yet'
+SConscript('tests/SConscript', exports='env')

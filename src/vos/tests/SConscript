@@ -1,0 +1,5 @@
+#!python
+
+Import('env')
+
+env.Program('hdr_build', 'hdr_build.c')

@@ -16,7 +16,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  *
- * (C) Copyright 2015 Intel Corporation.
+ * (C) Copyright 2015, 2016 Intel Corporation.
  */
 /**
  * This file describes the API for a versioning object store.
@@ -31,518 +31,467 @@
 #ifndef __VOS_API_H
 #define __VOS_API_H
 
+#include <daos_ev.h>
 #include <daos_types.h>
+#include <vos_types.h>
 
 /**
  * Versioning Object Storage Pool (VOSP)
- * An OSP creates and manages a versioned object store on a local
+ * A VOSP creates and manages a versioned object store on a local
  * storage device. The capacity of an OSP is determined
  * by the capacity of the underlying storage device
  */
 
 /**
- * initialize a Versioning object storage pool (VOSP)
- * This API would open and initialize an VOSP. While initializing a
- * root object will be created. If the VOSP has been initialized this call
- * will open the pool. Path to this memory pool is passed to the versioning
- * object store.
+ * Create a Versioning Object Storage Pool (VOSP) and its root object.
  *
- * \param path  [IN]    Path of the memory pool
- * \param uuid  [IN]    parent UUID
- * \param pool [OUT]    OSP handle
+ * \param path	[IN]	Path of the memory pool
+ * \param uuid	[IN]    Pool UUID
+ * \param size	[IN]	Size of the pool
+ * \param poh	[OUT]	Returned pool open handle
+ * \param ev	[IN]    Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return              zero on success, negative value if error
- *
+ * \return              Zero on success, negative value if error
  */
 int
-vos_pool_init(const char *path, uuid_t uuid, daos_handle_t *pool);
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
+		daos_handle_t *poh, daos_event_t *ev);
 
 /**
- * Close a Versioned Object Storage Pool (VOSP)
- * This API deletes any temporary references created
- * and closes the pool
+ * Destroy a Versioned Object Storage Pool (VOSP)
+ * The open handle will be invalidated after the destroy.
  *
- * \param pool [IN]    pool  handle
+ * \param poh	[IN]	Pool open handle
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- *
- * \return             zero on success, negative value if error
- *
+ * \return		Zero on success, negative value if error
  */
 int
-vos_pool_finalize(daos_handle_t pool);
+vos_pool_destroy(daos_handle_t poh, daos_event_t *ev);
 
 /**
- * Flush changes until epoch(version)
- * This function will wait for pending changes of epochs smaller or
- * equal to \a epoch to be flushed to storage.
+ * Open a Versioning Object Storage Pool (VOSP), load its root object
+ * and other internal data structures.
  *
- * \param pool  [IN]   pool handle
- * \param epoch [IN]   epoch
+ * \param path	[IN]	Path of the memory pool
+ * \param uuid	[IN]    Pool UUID
+ * \param poh	[OUT]	Returned pool handle
+ * \param ev	[IN]    Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return             zero on success, negative value if error
- *
+ * \return              Zero on success, negative value if error
  */
 int
-vos_epoch_flush(daos_handle_t pool, daos_epoch_t epoch);
+vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
+	      daos_event_t *ev);
 
 /**
- * Aggregates all epochs specified in the range between
- * start and end epochs. All epochs which get get aggregated
- * will be discarded. All epochs will be aggregated to
- * the end epoch specified
+ * Close a VOSP, all opened containers sharing this pool handle
+ * will be revoked.
  *
- * \param pool     [IN]   pool handle
- * \param epochs   [IN]   List of epoch(s) to be aggregated
- * \param n_epochs [IN]   number of epochs in list
+ * \param poh	[IN]	Pool open handle
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- * \return                zero on success, negative value if error
- *
+ * \return              Zero on success, negative value if error
  */
 int
-vos_epoch_aggregate(daos_handle_t pool, daos_epoch_t start_epoch,
-		    daos_epoch_t end_epoch);
+vos_pool_close(daos_handle_t poh, daos_event_t *ev);
 
 /**
- * Discards changes in current and all epochs specified in the specified range
- * with start and end
+ * Query attributes and statistics of the current pool
  *
+ * \param poh	[IN]	Pool open handle
+ * \param pinfo	[OUT]	Returned pool attributes and stats info
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- * \param pool [IN]      pool handle
- * \param epoch [IN]     epoch(s) to be discarded
- * \param n_epochs [IN]  number of epochs in list
- *
- * \return               zero on success, negative value if error
- *
- */
-int vos_epoch_discard(daos_handle_t pool, daos_epoch_t start_epoch,
-		      daos_epoch_t end_epoch);
-
-typedef struct {
-	vs_size_t	ba_objects;	/* Number of ba objects in this epoch */
-	vs_size_t	kv_objects;	/* Number of kv objects in this epoch */
-	vs_epoch_t	highest_epoch;	/* Highest epoch in this pool */
-	vs_epoch_t	lowest_epoch;	/* Lowest epoch in this pool */
-	vs_size_t	maxbytes;	/* Total space available */
-	vs_size_t	savail;		/* Current available space */
-} vs_stat_t;
-
-/**
- * Get statistics about the current pool
- *
- * \param pool    [IN]   pool handle
- * \param stat_obj [OUT] pool stats object
- *
- * \return               zero on success, negative value if error
- *
+ * \return		Zero on success, negative value if error
  */
 int
-vos_pool_stat(daos_handle_t pool, vs_stat_t *stat_obj);
+vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev);
+
+/**
+ * Create a container within a VOSP
+ *
+ * \param poh	[IN]	Pool open handle
+ * \param co_uuid
+ * 		[IN]	UUID for the new container
+ * \param coh	[OUT]	Returned container handle
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
+	      daos_event_t *ev);
+
+/**
+ * Destroy a container
+ *
+ * \param coh	[IN]	Container open handle
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_co_destroy(daos_handle_t coh, daos_event_t *ev);
+
+/**
+ * Open a container within a VOSP
+ *
+ * \param poh	[IN]	Pool open handle
+ * \param co_uuid
+ * 		[IN]	Container uuid
+ * \param mode	[IN]	open mode: rd-only, rdwr...
+ * \param coh	[OUT]	Returned container handle
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
+	    daos_event_t *ev);
+
+/**
+ * Release container open handle
+ *
+ * \param coh	[IN]	container open handle
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_co_close(daos_handle_t coh, daos_event_t *ev);
+
+/**
+ * Query container information.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param cinfo	[OUT]	Returned container attributes and other information.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_co_query(daos_handle_t coh, vos_co_info_t *cinfo, daos_event_t *ev);
+
+/**
+ * Flush changes in the specified epoch to storage
+ *
+ * \param coh	[IN]	Container open handle
+ * \param epoch	[IN]	Epoch to flush
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
+
+/**
+ * Aggregates all epochs within the epoch range \a epr.
+ * Data in all these epochs will be aggregated to the last epoch
+ * \a epr::epr_hi, aggregated epochs will be discarded except the last one,
+ * which is kept as aggregation result.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param epr	[IN]	The epoch range of aggregation
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_epoch_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
+		    daos_event_t *ev);
+
+/**
+ * Discards changes in all epochs with the epoch range \a epr
+ *
+ * \param coh	[IN]	Container open handle
+ * \param epr	[IN]	The epoch range to discard
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, daos_event_t *ev);
 
 /**
  * Byte Array API
  */
-
 /**
- * Write to byte arrays for a given object ID and a given epoch
- * Writes happen in two parts, in begin, the required descriptors are
- * created for the write operation and in the second part the
- * value is updated directly in persistent memory
+ * Prepare RMA read buffers for byte-array object.
+ * If \a sgl is not sufficient to store all returned buffer descriptors,
+ * then the required size will be returned to sgl::sg_iovn.
+ * If \a exl_layout is not sufficient to store all returned extent layouts,
+ * then the required size will be returned to ext_layout::el_extn.
  *
- *  Write begin
- * \param pool      [IN]  pool handle
- * \param object_id [IN]  object ID
- * \param epoch     [IN]  epoch for write
- * \param extents   [IN]  object extents
- * \param desc      [OUT] descriptor with location to write
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	Object ID.
+ * \param epoch	[IN]	Epoch for the read. It will be ignored if epoch range
+ * 			is provided by \a exl (exl::el_epr).
+ * \param exl	[IN]	Read source extents, it may also carry epoch ranges
+ * 			for each individual extent.
+ * \param exl_layout [OUT]
+ * 			Optional, returned physical extent layouts and
+ * 			their epoch ranges.
+ * \param sgl	[OUT]	Returned scatter/gather list.
+ * \param ioh	[OUT]	Returned I/O handle, it should be released by
+ * 			\a vos_ba_rd_finish().
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- * \return                 zero on success, negative value if error
+ * \return		Zero on success, negative value if error
  */
 int
-vos_ba_write_begin(daos_handle_t pool, daos_obj_id_t object_id,
-		   daos_epoch_t epoch, daos_ext_list_t *extents,
-		   daos_sg_list_t **desc);
+vos_ba_rd_prepare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+		  daos_ext_list_t *exl, daos_ext_layout_t *exl_layout,
+		  daos_sg_list_t *sgl, daos_handle_t *ioh, daos_event_t *ev);
 
 /**
- * Write end
- * \param pool       [IN]   pool handle
- * \param object_id  [IN]   object ID
- * \param epoch      [IN]   epoch to write at
- * \param desc       [IN]   descriptor with location to write
- * \param write_array[IN]   memory buffer with data to be written
- * \param checksum   [IN]   cheksum of the dats to be written
+ * Finish current RMA read operation.
  *
- * \return                   zero on success, negative value if error
+ * \param ioh	[IN]	I/O handle to finalise
+ * \param errno	[IN]	errno of current read, zero if there is no error.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
  */
 int
-vos_ba_write_end(daos_handle_t pool, daos_obj_id_t object_id,
-		 daos_epoch_t epoch, daos_sg_list_t *desc,
-		 daos_sg_list_t *write_array, daos_sg_list_t *checksum);
+vos_ba_rd_finish(daos_handle_t ioh, int errno, daos_event_t *ev);
 
 /**
- * Punch will zero specified offsets and mark the object for
- * deletion.
+ * Prepare RMA write buffers for byte-array object.
+ * If \a sgl is not sufficient to store all returned buffer descriptors,
+ * then the required size will be returned to sgl::sg_iovn.
  *
- * \param pool       [IN]   pool handle
- * \param object_id  [IN]   object ID
- * \param epoch      [IN]   epoch to write at
- * \param extents    [IN]   extents to punch
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	Object ID.
+ * \param epoch	[IN]	Epoch for the write. It will be ignored if epoch range
+ * 			is provided by \a exl (exl::el_epr).
+ * \param exl	[IN]	Write destination extents, it may also carry epoch
+ * 			ranges for each individual extent.
+ * \param sgl	[OUT]	Returned scatter/gather list.
+ * \param ioh	[OUT]	Returned I/O handle, it should be released by
+ * 			\a vos_ba_wr_finish()
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- * \return                   zero on success, negative value if error
+ * \return		Zero on success, negative value if error
  */
 int
-vos_ba_punch(daos_handle_t pool, daos_obj_id_t object_id,
-	     daos_epoch_t epoch, daos_ext_list_t *extents);
+vos_ba_wr_prepare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+		  daos_ext_list_t *exl, daos_sg_list_t *sgl,
+		  daos_handle_t *ioh, daos_event_t *ev);
 
 /**
- * Read from byte arrays for a given object ID and a given epoch
- * Similar to writes reads also happen in two parts, in begin,
- * the required descriptors are created with the location of data
- * and copies the data to user buffer, andin the second
- * it would clean up the internal references that were created for the
- * read operation. [NOTE: Read may change to one operation instead of
- * split depending on the implementation.]
+ * Finish current write operation.
  *
- *  Read begin
- * \param pool       [IN]   pool handle
- * \param object_id  [IN]   object ID
- * \param epoch      [IN]   epoch to read from
- * \param extents    [IN]   object extents to read from
- * \param read_array [IN]   memory buffer for data to be read
- * \param holes      [OUT]  holes for the given extent range.
+ * \param ioh	[IN]	I/O handle to finalise
+ * \param errno	[IN]	errno of current I/O, zero if there is no error.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- * \return                  zero on success, negative value if error
- *                          positive value (when the current buffer
- *                          contains only partial output, returns
- *                          the number of entries to be allocated
- *                          to obtain remaining)
+ * \return		Zero on success, negative value if error
  */
 int
-vos_ba_read_begin(daos_handle_t pool, daos_obj_id_t object_id,
-		  daos_epoch_t epoch, daos_ext_list_t *desc,
-		  daos_sg_list_t *read_array, daos_ext_list_t *holes);
+vos_ba_wr_finish(daos_handle_t ioh, int errno, daos_event_t *ev);
 
 /**
- * Read end
- * \param pool       [IN]   pool handle
- * \param object_id  [IN]   object ID
- * \param epoch      [IN]   epoch to read from
- * \param desc       [IN]   descriptor with addr, off info to read
- * \param read_array [OUT]  memory buffer for data to be read
- * \param checksum   [OUT]  checksum of the value read
+ * Read from a byte-array object.
+ * Object data extents in \a exl will be copied to \a sgl.
+ * If \a exl_layout is not sufficient to store all returned extent layouts,
+ * then the required size will be returned to ext_layout::el_extn.
  *
- * \return                  zero on success, negative value if error
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	Object ID
+ * \param epoch	[IN]	Epoch for the read. It will be ignored if epoch range
+ * 			is provided by \a exl (exl::el_epr).
+ * \param exl	[IN]	Object extents for read
+ * \param exl_layout [IN/OUT]
+ * 			Optional, returned physical extent layouts and
+ * 			their epoch ranges.
+ * \param sgl	[IN/OUT]
+ * 			Buffer list to store returned object data
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
  */
 int
-vos_ba_read_end(daos_handle_t pool, daos_obj_id_t object_id,
-		daos_epoch_t epoch,  daos_ext_list_t *desc,
-		daos_sg_list_t *read_array, daos_sg_list_t *checksum);
+vos_ba_read(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+	    daos_ext_list_t *exl, daos_ext_layout_t *exl_layout,
+	    daos_sg_list_t *sgl, daos_event_t *ev);
 
 /**
- * Find holes in Byte Array Extents
+ * Write to a byte-array object
+ * Data blobs in \a sgl will be written to object extents specified by \a exl.
  *
- * Checks for  byte arrays requested and returns the list of offset,len
- * pairs for those which were holes
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	Object ID
+ * \param epoch	[IN]	Epoch for the write. It will be ignored if epoch range
+ * 			is provided by \a exl (exl::el_epr).
+ * \param exl	[IN]	Object extents for read
+ * \param sgl	[OUT]	Buffer list to store returned object data
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- * \param pool       [IN]   pool handle
- * \param object_id  [IN]   object ID
- * \param epoch      [IN]   epoch
- * \param rd_desc    [IN]   Extents to look for holes
- * \param holes      [IN]   Returns extents which are holes
- *                          found during read of extents
- *
- * \return                  zero on success, negative value if error
- *                          positive value (when the current buffer
- *                          contains only partial output, returns
- *                          the number of entries to be allocated
- *                          to obtain remaining)
-
+ * \return		Zero on success, negative value if error
  */
 int
-vos_ba_find(daos_handle_t pool, daos_obj_id_t object_id,
-	    daos_epoch_t epoch, daos_ext_list_t *rd_desc,
-	    daos_ext_list_t *holes);
-
+vos_ba_write(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+	     daos_ext_list_t *exl, daos_sg_list_t *sgl, daos_event_t *ev);
 
 /**
- * Enumerating non-empty byte-array objects in a pool
+ * Punch will zero specified extent list of a byte-array object
  *
- * Enumerate all objects in a given epoch from a given offset
- * User specifies a required number of objects and is returned
- * a list of objectIDs. If the objectID count does not match the
- * one returned by the user then -1 is returned
+ * \param coh	[IN]	container open handle
+ * \param oid	[IN]	object ID
+ * \param epoch	[IN]	Epoch for the punch. It will be ignored if epoch range
+ * 			is provided by \a exl (exl::el_epr).
+ * \param exl	[IN]	extents to punch
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- * \param pool       [IN]      pool handle
- * \param epoch      [IN]      epoch
- * \param anchor     [IN/OUT]  anchor for the next objectID
-                               it will be -1 there are no more objects
-                               points to the location of ref for listing
-                               objects
- * \param id_cnt      [OUT]    size of the object ID list
- * \param id_list     [OUT]    Object ID list
+ * \return		Zero on success, negative value if error
  */
 int
-vos_list_ba_objects(daos_handle_t pool, daos_epoch_t epoch,
-		    daos_obj_id_t anchor, daos_size_t id_cnt,
-		    daos_obj_id_t *id_list );
+vos_ba_punch(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+	     daos_ext_list_t *exl, daos_event_t *ev);
 
 /**
- * KV API
+ * KV object API
  */
 
 /**
- * Key Value Update/insert
- * In KVs keys and values of any length are allowed to be inserted.
- * To support small keys and values the insert can happen
- * inline. For large keys and values the insert needs to happen in
- * two steps similar to that of byte arrays.
+ * Lookup and return values for given keys in \a kvl.
+ * Value length of unfound key will be set to zero.
  *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	Object ID
+ * \param epoch	[IN]	Epoch for the lookup. It will be ignored if epoch range
+ * 			is provided by \a kvl (kvl::kv_epr).
+ * \param kvl	[IN/OUT]
+ * 			Key list to lookup, if value buffers of \a kvl are NULL,
+ * 			only value lengths will be returned, otherwise found
+ * 			values will be copied into these buffers.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- * Key value update (small keys and values)
- * Used for inline updates
- *
- * \param pool       [IN]   pool handle
- * \param object_id  [IN]   object ID
- * \param epoch      [IN]   epoch where the update happens
- * \param entry      [IN]   key-value entry
- *                          (key size, value size and actual data)
- *
- * \return                  zero on success, negative value if error
+ * \return		Zero on success, negative value if error
  */
 int
-vos_kv_update(daos_handle_t pool, daos_obj_id_t object_id,
-	      daos_epoch_t epoch, daos_kv_t entry, daos_kv_t checksum);
+vos_kv_lookup(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+	      daos_kv_list_t *kvl, daos_event_t *ev);
 
 /**
- * Key value update (large keys and values)
- * Used for large keys, values. Has an additional descriptor where
- * initial set of indexes are storage location for the key and the
- * latter the location for values
+ * Update or insert KV pairs in \a kvl
  *
- * Key Value Update begin
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	KV object ID
+ * \param epoch	[IN]	Epoch for the KV update. It will be ignored if epoch
+ * 			range is provided by \a kvl (kvl::kv_epr).
+ * \param kvl	[IN/OUT]
+ * 			KV list to update
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- * \param pool        [IN]   pool handle
- * \param object_id   [IN]   object ID
- * \Paramx epoch      [IN]   epoch where the update happens
- * \param entry       [IN]   key-value entry
- *                           (key size, value size and actual data)
- * \param desc        [OUT]  location for writing keys and values
- *
- * \return                   zero on success, negative value if error
+ * \return		Zero on success, negative value if error
  */
 int
-vos_kv_update_begin(daos_handle_t pool, daos_obj_id_t object_id,
-		    daos_epoch_t epoch, daos_kv_t entry, daos_sg_list_t **desc);
+vos_kv_update(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+	      daos_kv_list_t *kvl, daos_event_t *ev);
 
 /**
- * Key Value Update end
+ * Locate and punch key-value pairs for specified keys in \a kvl.
  *
- * \param pool       [IN]   pool handle
- * \param object_id  [IN]   object ID
- * \param epoch      [IN]   epoch where the update happens
- * \param entry      [IN]   key-value entry
- *                          (key size, value size and actual data)
- * \param checksum   [IN]   Checksum value of both key and value
- * \param desc       [IN]   location of keys and values in PM
+ * \param coh	[IN]	Container open handle.
+ * \param oid	[IN]	KV object ID.
+ * \param epoch	[IN]	Epoch for the KV punch. It will be ignored if epoch
+ * 			range is provided by \a kvl (kvl::kv_epr).
+ * \param kvl	[IN/OUT]
+ * 			KV list, only keys are required.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- * \return                   zero on success, negative value if error
+ * \return		Zero on success, negative value if error.
  */
 int
-vos_kv_update_end(daos_handle_t pool, daos_obj_id_t object_id,
-		  daos_epoch_t epoch, daos_kv_t entry, daos_kv_t checksum,
-		  daos_ext_list_t *desc);
+vos_kv_punch(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+	     daos_kv_list_t *kvl, daos_event_t *ev);
 
 /**
- * Key Value lookup
+ * VOS iterator APIs
+ */
+/**
+ * Initialise an iterator for VOS
  *
- * Lets to lookup values for a given key. Returns the key-value entry
- * If not found returns NULL in the key-value result and a negative
- * return value
+ * \param cond	[IN]	Conditions for initialising the iterator.
+ *			For different iterator types (param::ic_type):
+ * 			- VOS_ITER_COUUID : param::ic_hdl is pool open handle
+ * 			- VOS_ITER_OBJ	  : param::ic_hdl is container handle
+ * 			- VOS_ITER_KV	  : param::ic_hdl is container handle,
+ * 					    param::ic_oid is ID of KV object.
+ * 			- VOS_ITER_BA	  : param::ic_hdl is container handle,
+ * 					    param::ic_oid is ID of byte array
+ * 					    object.
+ * \param ih	[OUT]	Returned iterator handle
  *
- * \param pool       [IN]   pool handle
- * \param object_id  [IN]   object ID
- * \param key        [IN]   key to lookup
- * \param epoch      [IN]   epoch
- * \param entry      [OUT]  kv_entry value on success, NULL on fail
- * \param checksum   [OUT]  checksum of the key-value on lookup
- * \return                   zero on success, -1 if key does not exist (hole)
- *
+ * \return		Zero on success, negative value if error
  */
 int
-vos_kv_lookup(daos_handle_t pool, daos_obj_id_t object_id,
-	      daos_epoch_t epoch, daos_sg_list_t *key,
-	      daos_kv_t *entry, daos_kv_t *checksum);
+vos_iter_prepare(vos_iter_cond_t *cond, daos_handle_t *ih);
 
 /**
- * Key Value Delete
- * Locates and deletes a particular key-value pair.
+ * Release a iterator
  *
- * \param pool       [IN]   pool handle
- * \param object_id  [IN]   object ID
- * \param key        [IN]   key to lookup
- * \param epoch      [IN]   epoch
+ * \param ih	[IN]	Iterator handle to release
  *
- *
- * \return                   zero on success, negative value if error
-
+ * \return		Zero on success, negative value if error
  */
 int
-vos_kv_delete(daos_handle_t pool, daos_obj_id_t object_id, daos_epoch_t epoch,
-	      daos_sg_list_t *key);
+vos_iter_finish(daos_handle_t ih);
 
 /**
- * Find holes in Key Value Store
+ * Move the iterator cursor to the specified position anchor \a pos if it is
+ * not NULL, otherwise move the cursor to the next entry of current cursor.
  *
- * Does lookup for a list of keys and then returns 0 if the key, value
- * exist, else returns -1 for the same query
+ * \param ih	[IN]	Iterator handle.
+ * \param pos	[IN]	Optional, position cursor to move to.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * 			Function will run in blocking mode if \a ev is NULL.
  *
- * \param pool       [IN]   pool handle
- * \param object_id  [IN]   object ID
- * \param epoch      [IN]   epoch
- * \param keys       [IN]   keys to lookup
- * \param holes      [OUT]  Returns if there are holes found during
- *                          lookup
- *
- * \return                  zero on success, negative value if error
- *                          positive value (when the current buffer
- *                          contains only partial output, returns
- *                          the number of entries to be allocated
- *                          to obtain remaining)
+ * \return		Zero on if no more entry
+ * 			1 if there is an entry
+ * 			negative value if error
  */
 int
-vos_kv_find(daos_handle_t pool, daos_obj_id_t object_id, daos_epoch_t epoch,
-	    daos_sg_list_t **keys, int *holes);
+vos_iter_move(daos_handle_t ih, vos_iter_pos_t *pos, daos_event_t *ev);
 
 /**
- * Enumerating non-empty key value objects in a pool
+ * Return the current data entry of the iterator.
  *
- * Enumerate all KV objects in a given epoch
- * User specifies a required number of objects and is returned
- * a list of objectIDs. If the objectID count does not match the
- * one returned by the user then -1 is returned
+ * \param ih	[IN]	Iterator handle
+ * \param entry [OUT]	Optional, returned data entry fo the current cursor
+ * \param next	[OUT]	Optional, position anchor for the next entry,
+ * 			pos::ip_type will be set to VOS_ITER_NONE if there
+ * 			is no more entries.
  *
- * \param pool       [IN]      pool handle
- * \param epoch      [IN]      epoch
- * \param anchor     [IN/OUT]  anchor for the next objectID
-                               it will be -1 there are no more objects
-                               points to the location of ref for listing
-                               objects
- * \param id_cnt     [OUT]     size of the object ID list
- * \param id_list    [OUT]     Object ID list
- *
- * \return                     zero on success, negative value if error
+ * \return		Zero on success, negative value if error
  */
 int
-vos_list_kv_objects(daos_handle_t pool, daos_epoch_t epoch,
-		    daos_obj_id_t anchor, daos_size_t id_cnt,
-		    daos_obj_id_t *obj_ids);
-
-/**
- * Parsing a key-value store
- * These APIs allows to iterate over all the key-value pairs in an
- * object at a specific epoch
- *
- **/
-
-struct kv_iter;
-typedef struct kv_iter* kv_iterator_t;
-
-/**
-  * Create an iterator to iterate over all the KV pairs in the KV
-  * store of an objectID for a specific epoch
-  *
-  * \param pool        [IN]       pool handle
-  * \param object_id   [IN]       object ID to parse
-  * \param epoch       [IN]       epoch
-  * \param anchro      [IN/OUT]   anchor key
-  * \param kv_iter     [OUT]      Iterator to iterate over all KV pairs
-  *
-  * \return                       zero on success, negative value if error
- */
-int
-vos_kv_iter_create(daos_handle_t pool, daos_obj_id_t obj_id, daos_epoch_t epoch,
-		   daos_sg_list_t *anchor, kv_iterator_t *kv_iter);
-
-/**
-  * Delete a KV  iterator
-  *
-  * \param kv_iter    [IN]       Iterator to iterate over all KV pairs
-  *
-  * \return                      zero on success, negative value if error
- */
-int
-vos_kv_iter_destroy(kv_iterator_t *kv_iter);
-
-/**
-  * Move to the beginning of the KV store
-  * This function moves the reference to parse the KV to the first
-  * element of the KV which the iterator belongs.
-  *
-  * \param kv_iter      [IN/OUT]  Iterator
-  *
-  * \return                       zero on success, negative value if error
- */
-int
-vos_kv_begin(kv_iterator_t *kv_iter);
-
-/**
-  * Move the iterator to the position pointed by the key
-  * This function moves the reference to parse the KV to the
-  * position of the key element of the KV which the iterator belongs.
-  *
-  * \param kv_iter      [IN/OUT]  Iterator
-  *
-  * \return                       zero on success, negative value if error
- */
-int
-vos_kv_pos(kv_iterator_t *kv_iter, daos_sg_list_t *key);
-
-/**
-  * Move to the end of the KV store
-  * This function moves the reference to parse the KV to the last
-  * element of the KV which the iterator belongs.
-  *
-  * \param kv_iter      [IN/OUT]  Iterator
-  *
-  * \return                       zero on success, negative value if error
- */
-int
-vos_kv_end(kv_iterator_t *kv_iter);
-
-/**
-  * Move to the next element of the KV store
-  * This function moves the reference to parse the KV to the next
-  * element of the KV which the iterator belongs.
-  *
-  * \param kv_iter      [IN/OUT]  Iterator
-  *
-  * \return                       zero on success, negative value if error
- */
-int
-vos_kv_next(kv_iterator_t *kv_iter);
-
-/**
- * Get value along with the key from the iterator
- *
- *
- * \param kv_iterator_t [IN]      current key-value entry reference
- * \param entry         [OUT]     current key-value pair
- *
- * \return                        returns 0 on success -1 on failure
- */
-int
-vos_kv_get_value(kv_iterator_t iterator, daos_kv_t* kv_entry);
-
-/**
- * Get key from the iterator
- *
- *
- * \param kv_iterator_t [IN]      current key-value entry reference
- * \param key           [OUT]     current key
- * \param key_size      [OUT]     size of the key
- *
- * \return                        returns 0 on success -1 on failure
- */
-int
-vos_kv_get_key(kv_iterator_t iterator, void* key, daos_size_t key_size);
+vos_iter_current(daos_handle_t ih, vos_iter_entry_t *entry,
+		 vos_iter_pos_t *next);
 
 #endif /* __VOS_API_H */

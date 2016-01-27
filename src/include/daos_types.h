@@ -15,7 +15,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  *
- * (C) Copyright 2015 Intel Corporation.
+ * (C) Copyright 2015, 2016 Intel Corporation.
  */
 /**
  * DAOS Types and Functions Common to Layers/Components
@@ -35,9 +35,9 @@ typedef uint64_t	daos_size_t;
 /** Offset */
 typedef uint64_t	daos_off_t;
 
-/** Generaic hash format */
+/** Generic hash format */
 typedef struct {
-	uint64_t	body[2];
+	char		body[16];
 } daos_hash_out_t;
 
 /** Generic handle for various DAOS components like container, object, etc. */
@@ -84,11 +84,14 @@ typedef enum {
 /** Current state of the storage target */
 typedef enum {
 	DAOS_TS_UNKNOWN,
-	/* up and running */
-	DAOS_TS_UP,
 	/* not available */
+	DAOS_TS_DOWN_OUT,
+	/* not available, may need rebuild */
 	DAOS_TS_DOWN,
-	/** TODO: add more states? */
+	/* up */
+	DAOS_TS_UP,
+	/* up and running */
+	DAOS_TS_UP_IN,
 } daos_target_state_t;
 
 /** Description of target performance */
@@ -108,6 +111,13 @@ typedef struct {
  */
 
 typedef uint64_t	daos_epoch_t;
+
+typedef struct {
+	/** low bound of the epoch range */
+	daos_epoch_t	epr_lo;
+	/** high bound of the epoch range */
+	daos_epoch_t	epr_hi;
+} daos_epoch_range_t;
 
 /** highest possible epoch */
 #define DAOS_EPOCH_MAX	(~0ULL)
@@ -169,27 +179,78 @@ typedef struct {
 
 /** iovec for memory buffer */
 typedef struct {
+	/** buffer address */
+	void	       *iov_buf;
+	/** buffer length */
+	daos_size_t	iov_buf_len;
+	/** data length */
 	daos_size_t	iov_len;
-	void	       *iov_addr;
-} daos_sg_iov_t;
+} daos_iov_t;
+
+/** buffer to store checksum */
+typedef struct {
+	/* TODO: typedef enum for it */
+	unsigned int	 cs_type;
+	unsigned int	 cs_len;
+	void		*cs_csum;
+} daos_csum_buf_t;
 
 /** Scatter/gather list for memory buffers */
 typedef struct {
-	unsigned long	 sg_num;
-	daos_sg_iov_t	*sg_iovs;
+	/** list length, it is actual buffer size */
+	unsigned int	 sg_llen;
+	/** number of iovs */
+	unsigned int	 sg_iovn;
+	daos_iov_t	*sg_iovs;
+	/** checksums, it is optional */
+	daos_csum_buf_t	*el_csums;
 } daos_sg_list_t;
 
-/** extent for bype-array object */
+typedef enum {
+	/* hole extent */
+	VOS_EXT_HOLE	= (1 << 0),
+} vos_ext_flag_t;
+/**
+ * Extent for byte-array object.
+ * NB: this is a wire struct.
+ */
 typedef struct {
+	/** offset within object */
 	daos_off_t	e_offset;
-	daos_size_t	e_nob;
+	/** number of bytes */
+	uint64_t	e_nob;
+	/** see vos_ext_flag_t */
+	uint16_t	e_flags;
+	/** reserved */
+	uint16_t	e_reserv_16;
+	uint32_t	e_reserv_32;
 } daos_ext_t;
 
 /** a list of object extents */
 typedef struct {
-	unsigned long	 el_num;
-	daos_ext_t	*el_exts;
+	/** list length, it is actual buffer size */
+	unsigned int		 el_llen;
+	/** number of extents */
+	unsigned int		 el_extn;
+	daos_ext_t		*el_exts;
+	/** Optional, epoch validity range for the I/O */
+	daos_epoch_range_t	*el_epr;
 } daos_ext_list_t;
+
+typedef daos_ext_list_t		daos_ext_layout_t;
+
+/** 2-dimensional key of KV */
+typedef struct {
+	/** distribution key */
+	daos_iov_t		dk_dkey;
+	/** attribute key */
+	daos_iov_t		dk_akey;
+} daos_key_t;
+
+typedef struct {
+	daos_csum_buf_t		dk_dk_cs;
+	daos_csum_buf_t		dk_ak_cs;
+} daos_key_csum_t;
 
 /**
  * Key-Value Store Objects
@@ -197,11 +258,20 @@ typedef struct {
 
 /** Descriptor of a key-value pair */
 typedef struct {
-	void		*kv_key;
-	void		*kv_val;
-	unsigned int	 kv_delete:1;
-	unsigned int	 kv_key_len:30;
-	unsigned int	 kv_val_len;
-} daos_kv_t;
+	/** list length, it is actual buffer size */
+	unsigned int		 kv_llen;
+	/** nubmer of kvs and epoch ranges */
+	unsigned int		 kv_kvn;
+	/** key array */
+	daos_key_t		*kv_keys;
+	/** value array */
+	daos_iov_t		*kv_vals;
+	/** checksums for \a kv_keys */
+	daos_key_csum_t		*kv_key_csums;
+	/** checksums for \a kv_vals */
+	daos_csum_buf_t		*kv_val_csums;
+	/** Optional, array of epoch ranges for the \a kv_keys */
+	daos_epoch_range_t	*kv_eprs;
+} daos_kv_list_t;
 
 #endif /* DAOS_TYPES_H */
