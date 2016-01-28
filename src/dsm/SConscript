@@ -1,0 +1,5 @@
+#!python
+
+Import('env')
+
+print 'No dsm code yet'

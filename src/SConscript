@@ -1,0 +1,14 @@
+#!python
+
+Import('env')
+
+# Additional includes
+env.Append(CPPPATH = ['#/src/include'])
+
+# Builders
+SConscript('common/SConscript', exports='env')
+SConscript('dtp/SConscript', exports='env')
+SConscript('vos/SConscript', exports='env')
+SConscript('dsm/SConscript',  exports='env')
+SConscript('dsr/SConscript',  exports='env')
+SConscript('server/SConscript',  exports='env')
