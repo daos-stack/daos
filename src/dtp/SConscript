@@ -2,4 +2,4 @@
 
 Import('env')
 
-print 'No transport code yet'
+print 'dtp only with API declarations now'
