@@ -2,4 +2,10 @@
 
 Import('env')
 
+# Compiler options
+env.Append(CPPPATH = ['#/src/vos/'])
+env.Library('libvos', Glob('*.c'))
+env.Append(LIBPATH = ['#/build/vos/'])
+
+# Tests
 SConscript('tests/SConscript', exports='env')

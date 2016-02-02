@@ -3,3 +3,4 @@
 Import('env')
 
 env.Program('hdr_build', 'hdr_build.c')
+env.Program('vos_pool_tests','vos_pool_tests.c', LIBS=['libvos', 'libuuid', 'libpmemobj'])
