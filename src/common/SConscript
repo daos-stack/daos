@@ -1,6 +1,8 @@
 #!python
 
 Import('env')
+libraries = ['pthread']
 
-env.Library('libdaos_common', Glob('*.c'))
+env.Library('libdaos_common', Glob('*.c'),  LIBS = libraries)
+SConscript('tests/SConscript', exports='env')
 env.Append(LIBPATH = ['#/build/common'])

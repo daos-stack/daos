@@ -51,6 +51,10 @@ typedef enum {
 	DER_NOSCHEMA		= (DER_ERR_BASE + 9),
 	/** virtual memory OOM errors */
 	DER_OOM 		= (DER_ERR_BASE + 10),
+	/** already did sth */
+	DER_ALREADY		= (DER_ERR_BASE + 11),
+	/** NO memory */
+	DER_NOMEM		= (DER_ERR_BASE + 12),
 	/** epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** epoch is too old, all data have been recycled */

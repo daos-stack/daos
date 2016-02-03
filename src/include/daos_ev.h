@@ -30,6 +30,8 @@
 
 #include <daos_types.h>
 #include <daos_errno.h>
+#include <daos_list.h>
+#include <daos_hash.h>
 
 typedef enum {
 	DAOS_EV_NONE,
@@ -45,11 +47,11 @@ typedef enum {
 	/** TODO: add event types */
 } daos_ev_type_t;
 
-typedef struct {
+typedef struct daos_event {
 	daos_ev_type_t		ev_type;
 	daos_errno_t		ev_error;
 	struct {
-		uint64_t	space[15];
+		uint64_t	space[20];
 	}			ev_private;
 } daos_event_t;
 
@@ -62,10 +64,47 @@ typedef enum {
 	/** query outstanding completed event */
 	DAOS_EQR_COMPLETED	= (1),
 	/** query # inflight event */
-	DAOS_EQR_INFLIGHT	= (1 << 1),
+	DAOS_EQR_DISPATCH	= (1 << 1),
 	/** query # inflight + completed events in EQ */
-	DAOS_EQR_ALL		= (DAOS_EQR_COMPLETED | DAOS_EQR_INFLIGHT),
+	DAOS_EQR_ALL		= (DAOS_EQR_COMPLETED | DAOS_EQR_DISPATCH),
 } daos_eq_query_t;
+
+typedef enum {
+	DAOS_EVS_INIT,
+	DAOS_EVS_DISPATCH,
+	DAOS_EVS_COMPLETED,
+	DAOS_EVS_ABORT,
+} daos_ev_status_t;
+
+struct daos_event_ops {
+	int (*op_abort)(void *param, int unlinked);
+	int (*op_complete)(void *param, int error, int unlinked);
+};
+
+struct daos_eq {
+	/* After event is completed, it will be moved to the eq_comp list */
+	daos_list_t		eq_comp;
+	int			eq_n_comp;
+
+	/** In flight events will be put to the disp list */
+	daos_list_t		eq_disp;
+	int			eq_n_disp;
+
+	struct {
+		uint64_t	space[20];
+	}			eq_private;
+
+};
+
+/**
+ * Initialize event queue library
+ */
+void daos_eq_lib_fini(void);
+
+/**
+ * Finish event queue library
+ */
+int daos_eq_lib_init(void);
 
 /**
  * create an Event Queue
@@ -74,20 +113,21 @@ typedef enum {
  *
  * \return		zero on success, negative value if error
  */
-int
-daos_eq_create(daos_handle_t *eqh);
+int daos_eq_create(daos_handle_t *eqh);
 
+
+#define DAOS_EQ_DESTROY_FORCE	1
 /**
- * Destroy an Event Queue, it returns -DER_EQ_BUSY if EQ is not empty.
+ * Destroy an Event Queue, it wait -EBUSY if EQ is not empty.
  *
  * \param eqh [IN]	EQ to finalize
  * \param ev [IN]	pointer to completion event
+ * \param flags [IN]	flags to indicate the behavior of the destroy.
  *
- * \return		zero on success, -DER_EQ_EBUSY if there's any inflight
- *			event
+ * \return		zero on success, EBUSY if there's any inflight event
  */
 int
-daos_eq_destroy(daos_handle_t eqh);
+daos_eq_destroy(daos_handle_t eqh, int flags);
 
 /**
  * Retrieve completion events from an EQ

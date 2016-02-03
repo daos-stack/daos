@@ -1,0 +1,6 @@
+#!python
+
+Import('env')
+
+env.Append(CPPPATH = ['#/src/common'])
+env.Program('eq_test', Glob('*.c'), LIBS=['libdaos_common', 'pthread'])

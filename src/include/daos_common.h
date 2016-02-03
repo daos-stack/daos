@@ -184,4 +184,43 @@ int daos_array_sort(void *array, unsigned int len, bool unique,
 int daos_array_find(void *array, unsigned int len, uint64_t key,
 		    daos_sort_ops_t *ops);
 
+#if !defined(container_of)
+/* given a pointer @ptr to the field @member embedded into type (usually
+ *  * struct) @type, return pointer to the embedding instance of @type. */
+# define container_of(ptr, type, member)		\
+	        ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+#endif
+
+#ifndef offsetof
+# define offsetof(typ,memb)	((long)((char *)&(((typ *)0)->memb)))
+#endif
+
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+#endif
+
+#ifndef MIN
+# define MIN(a,b) (((a)<(b)) ? (a): (b))
+#endif
+#ifndef MAX
+# define MAX(a,b) (((a)>(b)) ? (a): (b))
+#endif
+
+#ifndef min
+#define min(x,y) ((x)<(y) ? (x) : (y))
+#endif
+
+#ifndef max
+#define max(x,y) ((x)>(y) ? (x) : (y))
+#endif
+
+#ifndef min_t
+#define min_t(type,x,y) \
+	        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
+#endif
+#ifndef max_t
+#define max_t(type,x,y) \
+	        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
+#endif
+
 #endif /* __DAOS_COMMON_H__ */
