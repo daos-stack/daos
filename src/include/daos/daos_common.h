@@ -60,6 +60,8 @@ enum {
 	DF_VOS3		= (1 << 14),
 	DF_SERVER	= (1 << 15),
 	DF_MGMT		= (1 << 16),
+	DF_MISC		= (1 << 30),
+	DF_MEM		= (1 << 31),
 };
 
 unsigned int daos_debug_mask(void);

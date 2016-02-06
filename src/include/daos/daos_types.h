@@ -35,9 +35,12 @@ typedef uint64_t	daos_size_t;
 /** Offset */
 typedef uint64_t	daos_off_t;
 
+/** size of SHA-256 */
+#define DAOS_HKEY_MAX	32
+
 /** Generic hash format */
 typedef struct {
-	char		body[16];
+	char		body[DAOS_HKEY_MAX];
 } daos_hash_out_t;
 
 /** Generic handle for various DAOS components like container, object, etc. */
@@ -102,10 +105,12 @@ typedef enum {
 /** Description of target performance */
 typedef struct {
 	/** TODO: storage/network bandwidth, latency etc */
+	int			foo;
 } daos_target_perf_t;
 
 typedef struct {
 	/** TODO: space usage */
+	int			foo;
 } daos_space_t;
 
 /** Target information */
