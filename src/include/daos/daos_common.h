@@ -50,6 +50,7 @@ enum {
 	DF_PL		= (1 << 8),
 	DF_PL2		= (1 << 9),
 	DF_PL3		= (1 << 10),
+	DF_TP		= (1 << 11),
 };
 
 unsigned int daos_debug_mask(void);
@@ -173,6 +174,9 @@ uint32_t daos_hash_mix96(uint32_t a, uint32_t b, uint32_t c);
 /** consistent hash search */
 unsigned int daos_chash_srch_u64(uint64_t *hashes, unsigned int nhashes,
 				 uint64_t value);
+
+/** djb2 hash a string to a uint32_t value */
+uint32_t daos_hash_string_u32(const char *string);
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 

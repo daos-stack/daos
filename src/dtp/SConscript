@@ -2,4 +2,10 @@
 
 Import('env')
 
-print 'dtp only with API declarations now'
+env.Append(CPPPATH = ['#/src/dtp'])
+
+env.Library('libdaos_transport', Glob('*.c'))
+env.Append(LIBPATH = ['#/build/dtp'])
+
+# Builders
+SConscript('tests/SConscript', exports='env')

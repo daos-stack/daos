@@ -55,6 +55,10 @@ typedef enum {
 	DER_ALREADY		= (DER_ERR_BASE + 11),
 	/** NO memory */
 	DER_NOMEM		= (DER_ERR_BASE + 12),
+	/** Function not implemented */
+	DER_NOSYS		= (DER_ERR_BASE + 13),
+	/** timed out */
+	DER_TIMEDOUT		= (DER_ERR_BASE + 14),
 	/** epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** epoch is too old, all data have been recycled */
@@ -69,6 +73,10 @@ typedef enum {
 	DER_EQ_BUSY		= (DER_ERR_BASE + 400),
 	/** domain of cluster component can't match */
 	DER_DOMAIN		= (DER_ERR_BASE + 500),
+	/** transport layer mercury error */
+	DER_DTP_HG		= (DER_ERR_BASE + 600),
+	/** DTP RPC (opcode) unregister */
+	DER_DTP_UNREG		= (DER_ERR_BASE + 601),
 	/** TODO: add more error numbers */
 } daos_errno_t;
 

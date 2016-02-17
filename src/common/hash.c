@@ -104,6 +104,21 @@ daos_chash_srch_u64(uint64_t *hashes, unsigned int nhashes, uint64_t value)
 	return value >= hashes[high] ? high : low;
 }
 
+/* The djb2 string hash function, hash a string to a uint32_t value */
+uint32_t
+daos_hash_string_u32(const char *string)
+{
+	uint32_t result = 5381;
+	const unsigned char *p;
+
+	p = (const unsigned char *) string;
+
+	while (*p != '\0') {
+		result = (result << 5) + result + *p;
+		++p;
+	}
+	return result;
+}
 
 static unsigned int
 daos_hhash_key2hash(uint64_t key, int hbits)
@@ -270,7 +285,7 @@ daos_hhash_create(unsigned int bits, struct daos_hhash **hhash)
 	hh->dh_pid = getpid();
 	hh->dh_bits = bits;
 	hh->dh_hash = malloc(sizeof(hh->dh_hash[0]) * (1 << bits));
-	if (hh == NULL) {
+	if (hh->dh_hash == NULL) {
 		rc = -ENOMEM;
 		goto failed;
 	}
