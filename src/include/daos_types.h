@@ -28,7 +28,6 @@
 
 /** uuid_t */
 #include <uuid/uuid.h>
-#include <dtp_types.h>
 
 /** Size */
 typedef uint64_t	daos_size_t;
@@ -45,6 +44,8 @@ typedef struct {
 typedef struct {
 	uint64_t	cookie;
 } daos_handle_t;
+
+typedef uint32_t	daos_rank_t;
 
 /**
  * Server Identification & Addressing
@@ -65,7 +66,7 @@ typedef struct {
 	uint32_t	 rl_llen;
 	/** number of ranks in the list */
 	uint32_t	 rl_rankn;
-	dtp_rank_t	*rl_ranks;
+	daos_rank_t	*rl_ranks;
 } daos_rank_list_t;
 
 /**

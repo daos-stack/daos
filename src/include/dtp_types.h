@@ -39,15 +39,14 @@ typedef void * dtp_context_t;
 typedef char * dtp_phy_addr_t;
 
 typedef uuid_t dtp_group_id_t;
-typedef uint32_t dtp_rank_t;
 
 /* all ranks in the group */
-#define DTP_RANK_ALL      ((dtp_rank_t)-1)
+#define DTP_RANK_ALL      ((daos_rank_t)-1)
 
 /* transport endpoint identifier */
 typedef struct {
 	dtp_group_id_t    dep_grp_id;
-	dtp_rank_t        dep_rank;
+	daos_rank_t       dep_rank;
 	uint32_t          dep_pad; /* pad just to align to 8 bytes */
 } dtp_endpoint_t;
 
