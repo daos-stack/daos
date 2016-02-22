@@ -585,8 +585,6 @@ typedef struct {
 	dtp_rank_t		 oa_rank;
 	/** Optional, class attributes of object with private class */
 	dsr_oclass_attr_t	*oa_oa;
-	/** Optional, explicitly enumerated object layout */
-	daos_rank_list_t	*oa_ranks;
 } dsr_obj_attr_t;
 
 /**
@@ -688,6 +686,7 @@ dsr_obj_destroy(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
  * \param oh	[IN]	Object open handle.
  * \param epoch	[IN]	Epoch to query.
  * \param oa	[OUT]	Returned object attributes.
+ * \param ranks	[OUT]	Ordered list of ranks where the object is stored.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -700,7 +699,7 @@ dsr_obj_destroy(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
  */
 int
 dsr_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
-	      aos_event_t *ev);
+	      daos_rank_list_t *ranks, daos_event_t *ev);
 
 /**
  * Key-Value object APIs.
