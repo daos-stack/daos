@@ -535,8 +535,42 @@ dsr_oclass_register(daos_handle_t coh, dsr_oclass_id_t id,
  */
 int
 dsr_oclass_query(daos_handle_t coh, dsr_oclass_id_t id,
-		 daos_oclass_attr_t *cattr, daos_event_ *ev);
+		 dsr_oclass_attr_t *cattr, daos_event_ *ev);
 
+/** List of object classes, used for class enumeration */
+typedef struct {
+	/** list length, actual buffer size */
+	uint32_t		 cl_llen;
+	/** number of object classes in the list */
+	uint32_t		 cl_cn;
+	/** actual list of class IDs */
+	dsr_oclass_id_t		*cl_cids;
+	/** attributes of each listed class, optional */
+	dsr_oclass_attr_t	*cl_cattrs;
+} dsr_oclass_list_t;
+
+/**
+ * List existing object class.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param clist	[OUT]	Sink buffer for returned class list.
+ * \param anchor [IN/OUT]
+ *			Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be altered
+ *			by caller between calls.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ */
+int
+dsr_oclass_list(daos_handle_t coh, dsr_oclass_list_t *clist,
+		daos_hash_out_t *anchor, daos_event_t *ev);
 
 /**
  * Object attributes (metadata).
