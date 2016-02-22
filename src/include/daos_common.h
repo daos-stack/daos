@@ -106,6 +106,27 @@ do {									\
 #define DF_U64		"%"PRIu64
 #define DF_X64		"%"PRIx64
 
+/* memory allocating macros */
+#define D_ALLOC(ptr, size)                                                \
+	do {                                                              \
+		(ptr) = (typeof(ptr))calloc(1, size);                     \
+		if ((ptr) != NULL)                                        \
+			break;                                            \
+		D_ERROR("out of memory (tried to alloc '" #ptr "' = %d)", \
+			(int)(size));                                     \
+	} while (0)
+
+# define D_FREE(ptr, size)                                                \
+	do {                                                              \
+		free(ptr);                                                \
+		(ptr) = NULL;                                             \
+	} while ((size) - (size))
+
+#define D_ALLOC_PTR(ptr)        D_ALLOC(ptr, sizeof *(ptr))
+#define D_FREE_PTR(ptr)         D_FREE(ptr, sizeof *(ptr))
+
+#define D_GOTO(label, rc)       do { ((void)(rc)); goto label; } while (0)
+
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
  * struct) @type, return pointer to the embedding instance of @type. */
