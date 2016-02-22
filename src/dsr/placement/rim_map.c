@@ -246,7 +246,7 @@ static void
 rim_dom_shuffle_targets(struct rim_domain *rdom, unsigned int seed,
 			unsigned int ntargets)
 {
-	cl_target_t **targets = rdom->rd_targets;;
+	cl_target_t **targets = rdom->rd_targets;
 	int	      start;
 	int	      ver;
 	int	      num;
@@ -453,7 +453,7 @@ static void
 rim_print(pl_rim_map_t *rimap, int rim_idx)
 {
 	pl_rim_t	*rim = &rimap->rmp_rims[rim_idx];
-	cl_target_t	*targets = cl_map_targets(rimap->rmp_clmap);;
+	cl_target_t	*targets = cl_map_targets(rimap->rmp_clmap);
 	int		 i;
 	int		 j;
 	int		 period;

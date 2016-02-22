@@ -451,7 +451,7 @@ typedef enum {
 typedef enum {
 	DSR_RES_EC,		/**< erasure code */
 	DSR_RES_REPL,		/**< replication */
-} dsr_obj_resil_t;;
+} dsr_obj_resil_t;
 
 /** Object class attributes */
 typedef struct dsr_oclass_attr {
@@ -535,7 +535,7 @@ dsr_oclass_register(daos_handle_t coh, dsr_oclass_id_t id,
  */
 int
 dsr_oclass_query(daos_handle_t coh, dsr_oclass_id_t id,
-		 dsr_oclass_attr_t *cattr, daos_event_ *ev);
+		 dsr_oclass_attr_t *cattr, daos_event_t *ev);
 
 /** List of object classes, used for class enumeration */
 typedef struct {

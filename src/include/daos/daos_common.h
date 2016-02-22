@@ -67,10 +67,10 @@ do {									\
 		break;							\
 	if (__mask & DF_VERB_ALL) {					\
 		fprintf(stdout, "%s:%d:%s() " fmt, __FILE__, __LINE__,	\
-			__FUNCTION__, ## __VA_ARGS__);			\
+			__func__, ## __VA_ARGS__);			\
 	} else if (__mask & DF_VERB_FUNC) {				\
 		fprintf(stdout, "%s() " fmt,				\
-			__FUNCTION__, ## __VA_ARGS__);			\
+			__func__, ## __VA_ARGS__);			\
 	} else {							\
 		fprintf(stdout, fmt, ## __VA_ARGS__);			\
 	}								\
@@ -86,7 +86,7 @@ do {									\
 #define D_FATAL(error, fmt, ...)					\
 do {									\
 	fprintf(stderr, "%s:%d:%s() " fmt, __FILE__, __LINE__,		\
-		__FUNCTION__, ## __VA_ARGS__);				\
+		__func__, ## __VA_ARGS__);				\
 	fflush(stderr);							\
 	exit(error);							\
 } while (0)

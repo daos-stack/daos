@@ -55,9 +55,8 @@ typedef struct daos_list_head daos_list_t;
  * This is only for internal list manipulation where we know
  * the prev/next entries already!
  */
-static inline void __daos_list_add(daos_list_t * new,
-                                  daos_list_t * prev,
-                                  daos_list_t * next)
+static inline void
+__daos_list_add(daos_list_t *new, daos_list_t *prev, daos_list_t *next)
 {
 	next->prev = new;
 	new->next = next;
@@ -73,8 +72,8 @@ static inline void __daos_list_add(daos_list_t * new,
  * Insert a new entry after the specified head.
  * This is good for implementing stacks.
  */
-static inline void daos_list_add(daos_list_t *new,
-                                daos_list_t *head)
+static inline void
+daos_list_add(daos_list_t *new, daos_list_t *head)
 {
 	__daos_list_add(new, head, head->next);
 }
@@ -87,8 +86,8 @@ static inline void daos_list_add(daos_list_t *new,
  * Insert a new entry before the specified head.
  * This is useful for implementing queues.
  */
-static inline void daos_list_add_tail(daos_list_t *new,
-                                     daos_list_t *head)
+static inline void
+daos_list_add_tail(daos_list_t *new, daos_list_t *head)
 {
 	__daos_list_add(new, head->prev, head);
 }
@@ -100,8 +99,8 @@ static inline void daos_list_add_tail(daos_list_t *new,
  * This is only for internal list manipulation where we know
  * the prev/next entries already!
  */
-static inline void __daos_list_del(daos_list_t *prev,
-                                  daos_list_t *next)
+static inline void
+__daos_list_del(daos_list_t *prev, daos_list_t *next)
 {
 	next->prev = prev;
 	prev->next = next;
@@ -113,7 +112,8 @@ static inline void __daos_list_del(daos_list_t *prev,
  * Note: list_empty(entry) does not return true after this, the entry is in an
  * undefined state.
  */
-static inline void daos_list_del(daos_list_t *entry)
+static inline void
+daos_list_del(daos_list_t *entry)
 {
 	__daos_list_del(entry->prev, entry->next);
 }
@@ -122,7 +122,8 @@ static inline void daos_list_del(daos_list_t *entry)
  * Remove an entry from the list it is currently in and reinitialize it.
  * \param entry the entry to remove.
  */
-static inline void daos_list_del_init(daos_list_t *entry)
+static inline void
+daos_list_del_init(daos_list_t *entry)
 {
 	__daos_list_del(entry->prev, entry->next);
 	DAOS_INIT_LIST_HEAD(entry);
@@ -134,8 +135,8 @@ static inline void daos_list_del_init(daos_list_t *entry)
  * \param list the entry to move
  * \param head the list to move it to
  */
-static inline void daos_list_move(daos_list_t *list,
-                                 daos_list_t *head)
+static inline void
+daos_list_move(daos_list_t *list, daos_list_t *head)
 {
 	__daos_list_del(list->prev, list->next);
 	daos_list_add(list, head);
@@ -147,8 +148,8 @@ static inline void daos_list_move(daos_list_t *list,
  * \param list the entry to move
  * \param head the list to move it to
  */
-static inline void daos_list_move_tail(daos_list_t *list,
-                                      daos_list_t *head)
+static inline void
+daos_list_move_tail(daos_list_t *list, daos_list_t *head)
 {
 	__daos_list_del(list->prev, list->next);
 	daos_list_add_tail(list, head);
@@ -158,7 +159,8 @@ static inline void daos_list_move_tail(daos_list_t *list,
  * Test whether a list is empty
  * \param head the list to test.
  */
-static inline int daos_list_empty(daos_list_t *head)
+static inline int
+daos_list_empty(daos_list_t *head)
 {
 	return head->next == head;
 }
@@ -175,14 +177,15 @@ static inline int daos_list_empty(daos_list_t *head)
  * to the list entry is daos_list_del_init(). Eg. it cannot be used
  * if another CPU could re-list_add() it.
  */
-static inline int daos_list_empty_careful(const daos_list_t *head)
+static inline int
+daos_list_empty_careful(const daos_list_t *head)
 {
-        daos_list_t *next = head->next;
-        return (next == head) && (next == head->prev);
+	daos_list_t *next = head->next;
+	return (next == head) && (next == head->prev);
 }
 
-static inline void __daos_list_splice(daos_list_t *list,
-                                     daos_list_t *head)
+static inline void
+__daos_list_splice(daos_list_t *list, daos_list_t *head)
 {
 	daos_list_t *first = list->next;
 	daos_list_t *last = list->prev;
@@ -203,8 +206,8 @@ static inline void __daos_list_splice(daos_list_t *list,
  * The contents of \a list are added at the start of \a head.  \a list is in an
  * undefined state on return.
  */
-static inline void daos_list_splice(daos_list_t *list,
-                                   daos_list_t *head)
+static inline void
+daos_list_splice(daos_list_t *list, daos_list_t *head)
 {
 	if (!daos_list_empty(list))
 		__daos_list_splice(list, head);
@@ -218,8 +221,8 @@ static inline void daos_list_splice(daos_list_t *list,
  * The contents of \a list are added at the start of \a head.  \a list is empty
  * on return.
  */
-static inline void daos_list_splice_init(daos_list_t *list,
-                                        daos_list_t *head)
+static inline void
+daos_list_splice_init(daos_list_t *list, daos_list_t *head)
 {
 	if (!daos_list_empty(list)) {
 		__daos_list_splice(list, head);
@@ -268,9 +271,9 @@ static inline void daos_list_splice_init(daos_list_t *list,
  * \param member the name of the list_struct within the struct
  */
 #define daos_list_for_each_entry_continue(pos, head, member)                 \
-        for (pos = daos_list_entry(pos->member.next, typeof(*pos), member);  \
-             prefetch(pos->member.next), &pos->member != (head);            \
-             pos = daos_list_entry(pos->member.next, typeof(*pos), member))
+	for (pos = daos_list_entry(pos->member.next, typeof(*pos), member);  \
+	     prefetch(pos->member.next), &pos->member != (head);             \
+	     pos = daos_list_entry(pos->member.next, typeof(*pos), member))
 
 /**
  * \defgroup hlist Hash List
@@ -309,17 +312,20 @@ typedef struct daos_hlist_head {
 #define DAOS_INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL_P)
 #define DAOS_INIT_HLIST_NODE(ptr) ((ptr)->next = NULL_P, (ptr)->pprev = NULL_P)
 
-static inline int daos_hlist_unhashed(const daos_hlist_node_t *h)
+static inline int
+daos_hlist_unhashed(const daos_hlist_node_t *h)
 {
 	return !h->pprev;
 }
 
-static inline int daos_hlist_empty(const daos_hlist_head_t *h)
+static inline int
+daos_hlist_empty(const daos_hlist_head_t *h)
 {
 	return !h->first;
 }
 
-static inline void __daos_hlist_del(daos_hlist_node_t *n)
+static inline void
+__daos_hlist_del(daos_hlist_node_t *n)
 {
 	daos_hlist_node_t *next = n->next;
 	daos_hlist_node_t **pprev = n->pprev;
@@ -328,12 +334,14 @@ static inline void __daos_hlist_del(daos_hlist_node_t *n)
 		next->pprev = pprev;
 }
 
-static inline void daos_hlist_del(daos_hlist_node_t *n)
+static inline void
+daos_hlist_del(daos_hlist_node_t *n)
 {
 	__daos_hlist_del(n);
 }
 
-static inline void daos_hlist_del_init(daos_hlist_node_t *n)
+static inline void
+daos_hlist_del_init(daos_hlist_node_t *n)
 {
 	if (n->pprev)  {
 		__daos_hlist_del(n);
@@ -341,8 +349,8 @@ static inline void daos_hlist_del_init(daos_hlist_node_t *n)
 	}
 }
 
-static inline void daos_hlist_add_head(daos_hlist_node_t *n,
-                                      daos_hlist_head_t *h)
+static inline void
+daos_hlist_add_head(daos_hlist_node_t *n, daos_hlist_head_t *h)
 {
 	daos_hlist_node_t *first = h->first;
 	n->next = first;
@@ -353,8 +361,8 @@ static inline void daos_hlist_add_head(daos_hlist_node_t *n,
 }
 
 /* next must be != NULL */
-static inline void daos_hlist_add_before(daos_hlist_node_t *n,
-					daos_hlist_node_t *next)
+static inline void
+daos_hlist_add_before(daos_hlist_node_t *n, daos_hlist_node_t *next)
 {
 	n->pprev = next->pprev;
 	n->next = next;
@@ -362,8 +370,8 @@ static inline void daos_hlist_add_before(daos_hlist_node_t *n,
 	*(n->pprev) = n;
 }
 
-static inline void daos_hlist_add_after(daos_hlist_node_t *n,
-                                       daos_hlist_node_t *next)
+static inline void
+daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
 {
 	next->next = n->next;
 	n->next = next;
@@ -455,21 +463,21 @@ static inline void daos_hlist_add_after(daos_hlist_node_t *n,
  * \param member     the name of the list_struct within the struct.
  */
 #define daos_list_for_each_entry(pos, head, member)                          \
-        for (pos = daos_list_entry((head)->next, typeof(*pos), member),      \
-		     prefetch(pos->member.next);                            \
-	     &pos->member != (head);                                        \
+	for (pos = daos_list_entry((head)->next, typeof(*pos), member),      \
+		     prefetch(pos->member.next);                             \
+	     &pos->member != (head);                                         \
 	     pos = daos_list_entry(pos->member.next, typeof(*pos), member),  \
 	     prefetch(pos->member.next))
 #endif /* daos_list_for_each_entry */
 
 #ifndef daos_list_for_each_entry_rcu
 #define daos_list_for_each_entry_rcu(pos, head, member) \
-       list_for_each_entry(pos, head, member)
+	list_for_each_entry(pos, head, member)
 #endif
 
 #ifndef daos_list_for_each_entry_rcu
 #define daos_list_for_each_entry_rcu(pos, head, member) \
-       list_for_each_entry(pos, head, member)
+	list_for_each_entry(pos, head, member)
 #endif
 
 #ifndef daos_list_for_each_entry_reverse
@@ -494,9 +502,9 @@ static inline void daos_hlist_add_after(daos_hlist_node_t *n,
  * \param member     the name of the list_struct within the struct.
  */
 #define daos_list_for_each_entry_safe(pos, n, head, member)                   \
-        for (pos = daos_list_entry((head)->next, typeof(*pos), member),       \
+	for (pos = daos_list_entry((head)->next, typeof(*pos), member),       \
 		n = daos_list_entry(pos->member.next, typeof(*pos), member);  \
-	     &pos->member != (head);                                         \
+	     &pos->member != (head);                                          \
 	     pos = n, n = daos_list_entry(n->member.next, typeof(*n), member))
 
 #endif /* daos_list_for_each_entry_safe */
@@ -513,14 +521,14 @@ static inline void daos_hlist_add_after(daos_hlist_node_t *n,
  * removal of list entry.
  */
 #define daos_list_for_each_entry_safe_from(pos, n, head, member)             \
-        for (n = daos_list_entry(pos->member.next, typeof(*pos), member);    \
-             &pos->member != (head);                                        \
-             pos = n, n = daos_list_entry(n->member.next, typeof(*n), member))
+	for (n = daos_list_entry(pos->member.next, typeof(*pos), member);    \
+	     &pos->member != (head);                                         \
+	     pos = n, n = daos_list_entry(n->member.next, typeof(*n), member))
 #endif /* daos_list_for_each_entry_safe_from */
 
 #define daos_list_for_each_entry_typed(pos, head, type, member)		\
-        for (pos = daos_list_entry((head)->next, type, member),		\
-		     prefetch(pos->member.next);                        \
+	for (pos = daos_list_entry((head)->next, type, member),		\
+	     prefetch(pos->member.next);				\
 	     &pos->member != (head);                                    \
 	     pos = daos_list_entry(pos->member.next, type, member),	\
 	     prefetch(pos->member.next))
@@ -531,25 +539,25 @@ static inline void daos_hlist_add_after(daos_hlist_node_t *n,
 	     pos = daos_list_entry(pos->member.prev, type, member))
 
 #define daos_list_for_each_entry_safe_typed(pos, n, head, type, member)	\
-    for (pos = daos_list_entry((head)->next, type, member),		\
-		n = daos_list_entry(pos->member.next, type, member);	\
+	for (pos = daos_list_entry((head)->next, type, member),		\
+	     n = daos_list_entry(pos->member.next, type, member);	\
 	     &pos->member != (head);                                    \
 	     pos = n, n = daos_list_entry(n->member.next, type, member))
 
 #define daos_list_for_each_entry_safe_from_typed(pos, n, head, type, member)  \
-        for (n = daos_list_entry(pos->member.next, type, member);             \
-             &pos->member != (head);                                         \
-             pos = n, n = daos_list_entry(n->member.next, type, member))
+	for (n = daos_list_entry(pos->member.next, type, member);             \
+	     &pos->member != (head);                                          \
+	     pos = n, n = daos_list_entry(n->member.next, type, member))
 
 #define daos_hlist_for_each_entry_typed(tpos, pos, head, type, member)   \
-	for (pos = (head)->first;                                       \
-	     pos && (prefetch(pos->next), 1) &&                         \
+	for (pos = (head)->first;                                        \
+	     pos && (prefetch(pos->next), 1) &&                          \
 		(tpos = daos_hlist_entry(pos, type, member), 1);         \
 	     pos = pos->next)
 
 #define daos_hlist_for_each_entry_safe_typed(tpos, pos, n, head, type, member) \
-	for (pos = (head)->first;                                             \
-	     pos && (n = pos->next, 1) &&                                     \
+	for (pos = (head)->first;                                              \
+	     pos && (n = pos->next, 1) &&                                      \
 		(tpos = daos_hlist_entry(pos, type, member), 1);               \
 	     pos = n)
 

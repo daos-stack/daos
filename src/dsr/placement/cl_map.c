@@ -212,7 +212,7 @@ cl_buf_sane(cl_buf_t *buf)
 	cl_domain_t	*doms;
 	cl_domain_t	*parent;
 	cl_target_t	*targets;
-	cl_buf_count_t	 cntr;;
+	cl_buf_count_t	 cntr;
 	int		 ndoms;
 	int		 i;
 
@@ -685,7 +685,7 @@ cl_map_cleanup(cl_map_t *map)
 /**
  * Install component buffer to a cluster map
  * \param version	new version of cluster map, -1 means it is a
- * 			scratch cluster map for internal use.
+ *			scratch cluster map for internal use.
  */
 static int
 cl_map_setup(cl_map_t *map, unsigned int version, cl_buf_t *buf)
@@ -1231,7 +1231,7 @@ cl_domain_print(cl_domain_t *domain, int dep)
 
 		cl_print_indent(dep + 1);
 		D_PRINT("%s[%d] %d\n",
-		        cl_comp_type2name(targets[i].co_type),
+			cl_comp_type2name(targets[i].co_type),
 			targets[i].co_rank, targets[i].co_ver);
 	}
 }

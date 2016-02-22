@@ -27,7 +27,7 @@
  * LGPL HEADER END
  */
 /*
- * This file is for testing DAOS event queue (common/daos_eq.c) 
+ * This file is for testing DAOS event queue (common/daos_eq.c)
  *
  * tests/eq_tests.c
  *

@@ -140,7 +140,7 @@ typedef cl_domain_t		 cl_buf_t;
 /** counters for cl_buf_t */
 typedef struct {
 	/** # of domains in the top level */
-	unsigned int		 cc_ndoms_top;;
+	unsigned int		 cc_ndoms_top;
 	/** # of all domains */
 	unsigned int		 cc_ndoms;
 	/** # of targets */

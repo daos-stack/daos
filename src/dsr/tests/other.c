@@ -56,7 +56,7 @@ static daos_sort_ops_t sort_ops = {
 	.so_swap	= sort_swap,
 };
 
-static struct option opts [] = {
+static struct option opts[] = {
 	{ "sort",		required_argument,	NULL,   's'},
 	{  NULL,		0,			NULL,	 0 }
 };

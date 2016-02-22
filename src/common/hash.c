@@ -206,7 +206,7 @@ daos_hhash_hlink_init(struct daos_hlink *hlink, struct daos_hlink_ops *ops)
 {
 	DAOS_INIT_LIST_HEAD(&hlink->hl_link);
 	hlink->hl_initialized = 1;
-	hlink->hl_ref =1; /* for caller */
+	hlink->hl_ref = 1; /* for caller */
 	hlink->hl_ops = ops;
 }
 
@@ -304,7 +304,8 @@ daos_hhash_destroy(struct daos_hhash *hh)
 				struct daos_hlink *hlink;
 
 				hlink = daos_list_entry(hh->dh_hash[i].next,
-						       struct daos_hlink, hl_link);
+							struct daos_hlink,
+							hl_link);
 				daos_list_del_init(&hlink->hl_link);
 				if (hlink->hl_ops != NULL &&
 				    hlink->hl_ops->hop_free != NULL)

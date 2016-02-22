@@ -36,7 +36,7 @@
  */
 #include "daos_eq_internal.h"
 
-struct daos_hhash *daos_eq_hhash = NULL;
+struct daos_hhash *daos_eq_hhash;
 
 int
 daos_eq_lib_init()
@@ -677,8 +677,8 @@ daos_event_fini(struct daos_event *ev)
 		if (tmp->evx_status != DAOS_EVS_INIT &&
 		    tmp->evx_status != DAOS_EVS_COMPLETED &&
 		    tmp->evx_status != DAOS_EVS_ABORT) {
-			D_ERROR("Child event %p inflight: %d\n", daos_evx2ev(tmp),
-			       tmp->evx_status);
+			D_ERROR("Child event %p inflight: %d\n",
+				daos_evx2ev(tmp), tmp->evx_status);
 			rc = -DER_INVAL;
 			goto out;
 		}
@@ -692,7 +692,7 @@ daos_event_fini(struct daos_event *ev)
 	if (!daos_list_empty(&evx->evx_link)) {
 		daos_list_del(&evx->evx_link);
 		if (evx->evx_status == DAOS_EVS_DISPATCH)
-			eq->eq_n_disp --;
+			eq->eq_n_disp--;
 		else if (evx->evx_status == DAOS_EVS_COMPLETED)
 			eq->eq_n_comp--;
 	}

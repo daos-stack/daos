@@ -120,8 +120,8 @@ typedef struct {
 /* global data */
 static psc_global_data_t	pg_data;
 
-static bool			wake_up = false;
-static bool			pause_mode = false;
+static bool			wake_up;
+static bool			pause_mode;
 
 #define PSC_PROMPT(fmt, ...)						\
 do {									\
@@ -446,7 +446,7 @@ psc_target_append_obj(psc_target_t *pst, psc_obj_t *obj, bool rb)
 		D_DEBUG(DF_PL, "Create obj "DF_U64".%u on target %u\n",
 			os->os_id.body[0], os->os_sid, pst->pt_rank);
 		if (pst->pt_rank == -1) {
-			D_PRINT( "Create obj "DF_U64".%u on target %u\n",
+			D_PRINT("Create obj "DF_U64".%u on target %u\n",
 			os->os_id.body[0], os->os_sid, pst->pt_rank);
 		}
 
@@ -988,8 +988,9 @@ psc_target_change_args(char *str, psc_argument_t *args)
 	int			 i;
 
 	D_DEBUG(DF_PL, "parse parameters for target change: %s\n", str);
-	for (tmp = str, num = 0; (tmp = strchr(tmp, P_VAL_SEP)) != NULL;
-	     tmp++, num++);
+	for (tmp = str, num = 0;(tmp = strchr(tmp, P_VAL_SEP)) != NULL;
+	     tmp++, num++)
+		;
 
 	tgc->t_nops = num;
 	tgc->t_ops  = calloc(num, sizeof(*tgc->t_ops));
@@ -1023,7 +1024,7 @@ psc_target_change_args(char *str, psc_argument_t *args)
 			i++;
 			break;
 		case 'p': /* print object distribution */
-			tgc->t_print= true;
+			tgc->t_print = true;
 			str++;
 			break;
 		}

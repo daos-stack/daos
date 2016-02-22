@@ -64,7 +64,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
  *
  * \param poh	[IN]	Pool open handle
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -93,7 +93,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
  *
  * \param poh	[IN]	Pool open handle
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              Zero on success, negative value if error
  */
@@ -106,7 +106,7 @@ vos_pool_close(daos_handle_t poh, daos_event_t *ev);
  * \param poh	[IN]	Pool open handle
  * \param pinfo	[OUT]	Returned pool attributes and stats info
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -118,10 +118,10 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev);
  *
  * \param poh	[IN]	Pool open handle
  * \param co_uuid
- * 		[IN]	UUID for the new container
+ *		[IN]	UUID for the new container
  * \param coh	[OUT]	Returned container handle
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -134,7 +134,7 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
  *
  * \param coh	[IN]	Container open handle
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -146,11 +146,11 @@ vos_co_destroy(daos_handle_t coh, daos_event_t *ev);
  *
  * \param poh	[IN]	Pool open handle
  * \param co_uuid
- * 		[IN]	Container uuid
+ *		[IN]	Container uuid
  * \param mode	[IN]	open mode: rd-only, rdwr...
  * \param coh	[OUT]	Returned container handle
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -163,7 +163,7 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
  *
  * \param coh	[IN]	container open handle
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -176,7 +176,7 @@ vos_co_close(daos_handle_t coh, daos_event_t *ev);
  * \param coh	[IN]	Container open handle.
  * \param cinfo	[OUT]	Returned container attributes and other information.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -189,7 +189,7 @@ vos_co_query(daos_handle_t coh, vos_co_info_t *cinfo, daos_event_t *ev);
  * \param coh	[IN]	Container open handle
  * \param epoch	[IN]	Epoch to flush
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -205,7 +205,7 @@ vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  * \param coh	[IN]	Container open handle
  * \param epr	[IN]	The epoch range of aggregation
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -219,7 +219,7 @@ vos_epoch_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  * \param coh	[IN]	Container open handle
  * \param epr	[IN]	The epoch range to discard
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -239,17 +239,17 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, daos_event_t *ev);
  * \param coh	[IN]	Container open handle.
  * \param oid	[IN]	Object ID.
  * \param epoch	[IN]	Epoch for the read. It will be ignored if epoch range
- * 			is provided by \a exl (exl::el_epr).
+ *			is provided by \a exl (exl::el_epr).
  * \param exl	[IN]	Read source extents, it may also carry epoch ranges
- * 			for each individual extent.
+ *			for each individual extent.
  * \param exl_layout [OUT]
- * 			Optional, returned physical extent layouts and
- * 			their epoch ranges.
+ *			Optional, returned physical extent layouts and
+ *			their epoch ranges.
  * \param sgl	[OUT]	Returned scatter/gather list.
  * \param ioh	[OUT]	Returned I/O handle, it should be released by
- * 			\a vos_ba_rd_finish().
+ *			\a vos_ba_rd_finish().
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -264,7 +264,7 @@ vos_ba_rd_prepare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  * \param ioh	[IN]	I/O handle to finalise
  * \param errno	[IN]	errno of current read, zero if there is no error.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -279,14 +279,14 @@ vos_ba_rd_finish(daos_handle_t ioh, int errno, daos_event_t *ev);
  * \param coh	[IN]	Container open handle.
  * \param oid	[IN]	Object ID.
  * \param epoch	[IN]	Epoch for the write. It will be ignored if epoch range
- * 			is provided by \a exl (exl::el_epr).
+ *			is provided by \a exl (exl::el_epr).
  * \param exl	[IN]	Write destination extents, it may also carry epoch
- * 			ranges for each individual extent.
+ *			ranges for each individual extent.
  * \param sgl	[OUT]	Returned scatter/gather list.
  * \param ioh	[OUT]	Returned I/O handle, it should be released by
- * 			\a vos_ba_wr_finish()
+ *			\a vos_ba_wr_finish()
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -301,7 +301,7 @@ vos_ba_wr_prepare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  * \param ioh	[IN]	I/O handle to finalise
  * \param errno	[IN]	errno of current I/O, zero if there is no error.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -317,15 +317,15 @@ vos_ba_wr_finish(daos_handle_t ioh, int errno, daos_event_t *ev);
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the read. It will be ignored if epoch range
- * 			is provided by \a exl (exl::el_epr).
+ *			is provided by \a exl (exl::el_epr).
  * \param exl	[IN]	Object extents for read
  * \param exl_layout [IN/OUT]
- * 			Optional, returned physical extent layouts and
- * 			their epoch ranges.
+ *			Optional, returned physical extent layouts and
+ *			their epoch ranges.
  * \param sgl	[IN/OUT]
- * 			Buffer list to store returned object data
+ *			Buffer list to store returned object data
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -341,11 +341,11 @@ vos_ba_read(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the write. It will be ignored if epoch range
- * 			is provided by \a exl (exl::el_epr).
+ *			is provided by \a exl (exl::el_epr).
  * \param exl	[IN]	Object extents for read
  * \param sgl	[OUT]	Buffer list to store returned object data
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -359,10 +359,10 @@ vos_ba_write(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  * \param coh	[IN]	container open handle
  * \param oid	[IN]	object ID
  * \param epoch	[IN]	Epoch for the punch. It will be ignored if epoch range
- * 			is provided by \a exl (exl::el_epr).
+ *			is provided by \a exl (exl::el_epr).
  * \param exl	[IN]	extents to punch
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -381,13 +381,13 @@ vos_ba_punch(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the lookup. It will be ignored if epoch range
- * 			is provided by \a kvl (kvl::kv_epr).
+ *			is provided by \a kvl (kvl::kv_epr).
  * \param kvl	[IN/OUT]
- * 			Key list to lookup, if value buffers of \a kvl are NULL,
- * 			only value lengths will be returned, otherwise found
- * 			values will be copied into these buffers.
+ *			Key list to lookup, if value buffers of \a kvl are NULL,
+ *			only value lengths will be returned, otherwise found
+ *			values will be copied into these buffers.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -401,11 +401,11 @@ vos_kv_lookup(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	KV object ID
  * \param epoch	[IN]	Epoch for the KV update. It will be ignored if epoch
- * 			range is provided by \a kvl (kvl::kv_epr).
+ *			range is provided by \a kvl (kvl::kv_epr).
  * \param kvl	[IN/OUT]
- * 			KV list to update
+ *			KV list to update
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -419,11 +419,11 @@ vos_kv_update(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  * \param coh	[IN]	Container open handle.
  * \param oid	[IN]	KV object ID.
  * \param epoch	[IN]	Epoch for the KV punch. It will be ignored if epoch
- * 			range is provided by \a kvl (kvl::kv_epr).
+ *			range is provided by \a kvl (kvl::kv_epr).
  * \param kvl	[IN/OUT]
- * 			KV list, only keys are required.
+ *			KV list, only keys are required.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error.
  */
@@ -439,13 +439,13 @@ vos_kv_punch(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  *
  * \param cond	[IN]	Conditions for initialising the iterator.
  *			For different iterator types (param::ic_type):
- * 			- VOS_ITER_COUUID : param::ic_hdl is pool open handle
- * 			- VOS_ITER_OBJ	  : param::ic_hdl is container handle
- * 			- VOS_ITER_KV	  : param::ic_hdl is container handle,
- * 					    param::ic_oid is ID of KV object.
- * 			- VOS_ITER_BA	  : param::ic_hdl is container handle,
- * 					    param::ic_oid is ID of byte array
- * 					    object.
+ *			- VOS_ITER_COUUID : param::ic_hdl is pool open handle
+ *			- VOS_ITER_OBJ	  : param::ic_hdl is container handle
+ *			- VOS_ITER_KV	  : param::ic_hdl is container handle,
+ *					    param::ic_oid is ID of KV object.
+ *			- VOS_ITER_BA	  : param::ic_hdl is container handle,
+ *					    param::ic_oid is ID of byte array
+ *					    object.
  * \param ih	[OUT]	Returned iterator handle
  *
  * \return		Zero on success, negative value if error
@@ -470,11 +470,11 @@ vos_iter_finish(daos_handle_t ih);
  * \param ih	[IN]	Iterator handle.
  * \param pos	[IN]	Optional, position cursor to move to.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- * 			Function will run in blocking mode if \a ev is NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on if no more entry
- * 			1 if there is an entry
- * 			negative value if error
+ *			1 if there is an entry
+ *			negative value if error
  */
 int
 vos_iter_move(daos_handle_t ih, vos_iter_pos_t *pos, daos_event_t *ev);
@@ -485,8 +485,8 @@ vos_iter_move(daos_handle_t ih, vos_iter_pos_t *pos, daos_event_t *ev);
  * \param ih	[IN]	Iterator handle
  * \param entry [OUT]	Optional, returned data entry fo the current cursor
  * \param next	[OUT]	Optional, position anchor for the next entry,
- * 			pos::ip_type will be set to VOS_ITER_NONE if there
- * 			is no more entries.
+ *			pos::ip_type will be set to VOS_ITER_NONE if there
+ *			is no more entries.
  *
  * \return		Zero on success, negative value if error
  */

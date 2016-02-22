@@ -31,10 +31,10 @@
 #include <daos/daos_errno.h>
 
 /* dtp context handle */
-typedef void * dtp_context_t;
+typedef void *dtp_context_t;
 
 /* Physical address string, e.g., "bmi+tcp://localhost:3344". */
-typedef char * dtp_phy_addr_t;
+typedef char *dtp_phy_addr_t;
 
 typedef uuid_t dtp_group_id_t;
 
@@ -56,8 +56,8 @@ typedef uint32_t dtp_version_t;
 /* return immediately if no operation to progress */
 #define DTP_PROGRESS_NOWAIT          (0)
 
-typedef void * dtp_rpc_input_t;
-typedef void * dtp_rpc_output_t;
+typedef void *dtp_rpc_input_t;
+typedef void *dtp_rpc_output_t;
 
 /* Public RPC request/reply, exports to user */
 typedef struct {
@@ -67,14 +67,14 @@ typedef struct {
 	/* ... */
 } dtp_rpc_t;
 
-typedef void * dtp_bulk_t; /* abstract bulk handle */
+typedef void *dtp_bulk_t; /* abstract bulk handle */
 
 typedef enum {
 	DTP_BULK_PUT = 0x68,
 	DTP_BULK_GET,
 } dtp_bulk_op_t;
 
-typedef void * dtp_bulk_opid_t;
+typedef void *dtp_bulk_opid_t;
 
 typedef enum {
 	/* read/write */
@@ -102,7 +102,7 @@ typedef struct dtp_cb_info {
 	int               dci_rc; /* return code */
 } dtp_cb_info_t;
 
-typedef void * dtp_bulk_cb_info_t;
+typedef void *dtp_bulk_cb_info_t;
 
 /* server-side RPC handler */
 typedef int (*dtp_rpc_cb_t)(dtp_rpc_t *rpc);
