@@ -25,7 +25,7 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
-#include <daos_common.h>
+#include <daos/daos_common.h>
 
 /**
  * Combsort for an array.

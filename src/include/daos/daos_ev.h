@@ -28,10 +28,10 @@
 #ifndef __DAOS_EV_H__
 #define __DAOS_EV_H__
 
-#include <daos_types.h>
-#include <daos_errno.h>
-#include <daos_list.h>
-#include <daos_hash.h>
+#include <daos/daos_types.h>
+#include <daos/daos_errno.h>
+#include <daos/daos_list.h>
+#include <daos/daos_hash.h>
 
 typedef enum {
 	DAOS_EV_NONE,
@@ -99,12 +99,14 @@ struct daos_eq {
 /**
  * Initialize event queue library
  */
-void daos_eq_lib_fini(void);
+void
+daos_eq_lib_fini(void);
 
 /**
  * Finish event queue library
  */
-int daos_eq_lib_init(void);
+int
+daos_eq_lib_init(void);
 
 /**
  * create an Event Queue
@@ -113,8 +115,8 @@ int daos_eq_lib_init(void);
  *
  * \return		zero on success, negative value if error
  */
-int daos_eq_create(daos_handle_t *eqh);
-
+int
+daos_eq_create(daos_handle_t *eqh);
 
 #define DAOS_EQ_DESTROY_FORCE	1
 /**

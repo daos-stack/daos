@@ -37,7 +37,7 @@ typedef enum {
 	DER_NO_HDL		= (DER_ERR_BASE + 2),
 	/** invalid parameters */
 	DER_INVAL		= (DER_ERR_BASE + 3),
-	/** container exisited */
+	/** entity already exists */
 	DER_EXIST		= (DER_ERR_BASE + 4),
 	/** nonexistent container, shard, or target */
 	DER_NONEXIST		= (DER_ERR_BASE + 5),
@@ -49,8 +49,8 @@ typedef enum {
 	DER_NOTYPE		= (DER_ERR_BASE + 8),
 	/** unknown object schema */
 	DER_NOSCHEMA		= (DER_ERR_BASE + 9),
-	/** virtual memory OOM errors */
-	DER_OOM 		= (DER_ERR_BASE + 10),
+	/** object is not local */
+	DER_NOLOCAL		= (DER_ERR_BASE + 10),
 	/** already did sth */
 	DER_ALREADY		= (DER_ERR_BASE + 11),
 	/** NO memory */

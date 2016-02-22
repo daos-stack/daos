@@ -30,9 +30,9 @@
 #ifndef __DSM_API_H__
 #define __DSM_API_H__
 
-#include <daos_types.h>
-#include <daos_errno.h>
-#include <daos_ev.h>
+#include <daos/daos_types.h>
+#include <daos/daos_errno.h>
+#include <daos/daos_ev.h>
 
 /**
  * Create a pool with "uuid", "mode", and "ntargets".

@@ -8,7 +8,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * Lesser General Public License for more details.
- *
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the LGPL License as
@@ -16,36 +15,13 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  *
- * (C) Copyright 2015 Intel Corporation.
+ * (C) Copyright 2016 Intel Corporation.
  */
 /**
- * This file is part of daos
- *
- * common/debug.c
- *
- * Author: Liang Zhen <liang.zhen@intel.com>
+ * Server-side API of the DAOS Sharding & Resilience APIs
  */
-#include <daos/daos_common.h>
 
-static unsigned int	debug_mask	= DF_UNKNOWN;
+#ifndef __DSR_SRV_H__
+#define __DSR_SRV_H__
 
-unsigned int
-daos_debug_mask(void)
-{
-	char	*feats;
-
-	if (debug_mask != DF_UNKNOWN)
-		return debug_mask;
-
-	feats = getenv(DAOS_ENV_DEBUG);
-	if (feats != NULL) {
-		debug_mask = atoi(feats);
-		if (debug_mask > 0) {
-			D_PRINT("set debug to %d/%x\n", debug_mask, debug_mask);
-			return debug_mask;
-		}
-	}
-
-	debug_mask = 0;
-	return debug_mask;
-}
+#endif /* __DSR_SRV_H__ */

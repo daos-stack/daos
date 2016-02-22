@@ -26,7 +26,7 @@
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
 #include <getopt.h>
-#include <daos_common.h>
+#include <daos/daos_common.h>
 
 static int
 sort_cmp(void *array, int a, int b)

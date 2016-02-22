@@ -28,8 +28,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <vos_api.h>
-#include <vos_types.h>
+#include <daos_srv/vos.h>
 #include <inttypes.h>
 
 #define POOL_SIZE 10737418240ULL

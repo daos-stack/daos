@@ -28,8 +28,8 @@
 #ifndef __CLUSTER_MAP_H__
 #define __CLUSTER_MAP_H__
 
-#include <daos_common.h>
-#include <daos_types.h>
+#include <daos/daos_common.h>
+#include <daos/daos_types.h>
 
 /**
  * cluster component types

@@ -28,9 +28,9 @@
 #ifndef __DSR_API_H__
 #define __DSR_API_H__
 
-#include <daos_types.h>
-#include <daos_errno.h>
-#include <daos_ev.h>
+#include <daos/daos_types.h>
+#include <daos/daos_errno.h>
+#include <daos/daos_ev.h>
 
 /**
  * DAOS APIs can run either in non-blocking mode or in blocking mode:
@@ -94,8 +94,8 @@ dsr_pool_create(daos_group_t *grp, uuid_t uuid,
  * \param grp	[IN]	Process group descriptor.
  * \param uuid	[IN]	Pool uuid.
  * \param force	[IN]	Pool destroy will return failure is the pool is
- * 			still busy (still have openers), this parameter will
- * 			force the destroy to proceed even there is opener.
+ *			still busy (still have openers), this parameter will
+ *			force the destroy to proceed even there is opener.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -262,7 +262,7 @@ dsr_pool_query(daos_handle_t poh, daos_rank_list_t *ranks,
  * \param ranks_failed [OUT]
  *			Optional, buffer to store faulty targets on failure.
  * \param info_list [OUT]
- * 			Returned storage information of \a ranks, it is an array
+ *			Returned storage information of \a ranks, it is an array
  *			and array size must equal to ranks::rl_llen.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -359,7 +359,7 @@ dsr_co_close(daos_handle_t coh, daos_event_t *ev);
  * \param uuid [IN]	Container UUID.
  * \param force	[IN]	Container destroy will return failure is the container
  *			is still busy (still have openers), this parameter will
- * 			force the destroy to proceed even there is opener.
+ *			force the destroy to proceed even there is opener.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *

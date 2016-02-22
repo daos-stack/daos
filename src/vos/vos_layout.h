@@ -27,7 +27,7 @@
 #define _VOS_LAYOUT_H
 
 #include <libpmemobj.h>
-#include <vos_types.h>
+#include <daos_srv/vos_types.h>
 
 /**
  * VOS metadata structure declarations

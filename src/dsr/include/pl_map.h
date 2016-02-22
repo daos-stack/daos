@@ -28,8 +28,8 @@
 #ifndef __PLACEMENT_MAP_H__
 #define __PLACEMENT_MAP_H__
 
-#include <daos_common.h>
-#include <daos_types.h>
+#include <daos/daos_common.h>
+#include <daos/daos_types.h>
 #include <cl_map.h>
 
 /** type of placement map, only support RIM for now */

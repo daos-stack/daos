@@ -22,7 +22,7 @@
 #ifndef __VOS_TYPES_H__
 #define __VOS_TYPES_H__
 
-#include <daos_types.h>
+#include <daos/daos_types.h>
 
 /**
  * pool attributes returned to query

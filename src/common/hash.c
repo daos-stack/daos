@@ -34,10 +34,9 @@
  * Author: Liang Zhen  <liang.zhen@intel.com>
  */
 #include <pthread.h>
-#include <daos_common.h>
-#include <daos_list.h>
-#include <daos_hash.h>
-//#include <daos_eq_internal.h>
+#include <daos/daos_common.h>
+#include <daos/daos_list.h>
+#include <daos/daos_hash.h>
 
 uint64_t
 daos_hash_mix64(uint64_t key)

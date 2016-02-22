@@ -48,10 +48,10 @@
 #include <sys/time.h>
 #include <sys/shm.h>
 #include <pthread.h>
-#include <daos_common.h>
-#include <daos_ev.h>
-#include <daos_list.h>
-#include <daos_hash.h>
+#include <daos/daos_common.h>
+#include <daos/daos_ev.h>
+#include <daos/daos_list.h>
+#include <daos/daos_hash.h>
 
 struct daos_event_private {
 	daos_handle_t		evx_eqh;

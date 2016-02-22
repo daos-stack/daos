@@ -31,9 +31,9 @@
 #ifndef __VOS_API_H
 #define __VOS_API_H
 
-#include <daos_ev.h>
-#include <daos_types.h>
-#include <vos_types.h>
+#include <daos/daos_ev.h>
+#include <daos/daos_types.h>
+#include <daos_srv/vos_types.h>
 
 /**
  * Versioning Object Storage Pool (VOSP)

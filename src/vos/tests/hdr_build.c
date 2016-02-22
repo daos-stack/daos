@@ -1,6 +1,5 @@
-#include <daos_common.h>
-#include <vos_types.h>
-#include <vos_api.h>
+#include <daos/daos_common.h>
+#include <daos_srv/vos.h>
 
 int
 main(int argc, char **argv)

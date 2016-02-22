@@ -24,10 +24,10 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
-#include <vos_api.h>
+#include <daos_srv/vos.h>
 #include <vos_layout.h>
-#include <daos_errno.h>
-#include <daos_common.h>
+#include <daos/daos_errno.h>
+#include <daos/daos_common.h>
 
 /**
  * Create a Versioning Object Storage Pool (VOSP) and its root object.
@@ -48,7 +48,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	vpool = (vos_pool_t *)malloc(sizeof(vos_pool_t));
 	if (NULL == vpool) {
 		D_ERROR("Error allocating vpool handle");
-		return DER_OOM;
+		return DER_NOMEM;
 	}
 
 	vpool->path = strdup(path);
@@ -150,7 +150,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 	vpool = (vos_pool_t *)malloc(sizeof(vos_pool_t));
 	if (NULL == vpool) {
 		D_ERROR("Error allocating vpool handle");
-		return DER_OOM;
+		return DER_NOMEM;
 	}
 
 	vpool->path = strdup(path);
