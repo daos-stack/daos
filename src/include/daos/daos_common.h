@@ -51,6 +51,9 @@ enum {
 	DF_PL2		= (1 << 9),
 	DF_PL3		= (1 << 10),
 	DF_TP		= (1 << 11),
+	DF_VOS1		= (1 << 12),
+	DF_VOS2		= (1 << 13),
+	DF_VOS3		= (1 << 14),
 };
 
 unsigned int daos_debug_mask(void);

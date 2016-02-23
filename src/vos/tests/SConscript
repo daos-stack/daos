@@ -2,5 +2,10 @@
 
 Import('env')
 
+
 env.Program('hdr_build', 'hdr_build.c')
-env.Program('vos_pool_tests','vos_pool_tests.c', LIBS=['libvos', 'libuuid', 'libpmemobj'])
+env.Program('vos_pool_tests','vos_pool_tests.c', LIBS=['libvos', 'libuuid',
+                                                       'libpmemobj'])
+env.Program('vos_chash_table_test','vos_chashtable_test.c', CCFLAGS='-fopenmp',
+            LIBS=['libvos', 'libuuid','libpmemobj','libm','libdaos_common',
+                  'libgomp'])

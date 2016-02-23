@@ -4,6 +4,7 @@ Import('env')
 
 # Compiler options
 env.Append(CPPPATH = ['#/src/vos/'])
+env.Append(CFLAGS='-msse4.2')
 env.Library('libvos', Glob('*.c'))
 env.Append(LIBPATH = ['#/build/vos/'])
 

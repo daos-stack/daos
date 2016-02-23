@@ -39,7 +39,7 @@ typedef enum {
 	DER_INVAL		= (DER_ERR_BASE + 3),
 	/** entity already exists */
 	DER_EXIST		= (DER_ERR_BASE + 4),
-	/** nonexistent container, shard, or target */
+	/** nonexistent entity */
 	DER_NONEXIST		= (DER_ERR_BASE + 5),
 	/** unreachable node */
 	DER_UNREACH		= (DER_ERR_BASE + 6),
@@ -59,6 +59,8 @@ typedef enum {
 	DER_NOSYS		= (DER_ERR_BASE + 13),
 	/** timed out */
 	DER_TIMEDOUT		= (DER_ERR_BASE + 14),
+	/** Memory free error */
+	DER_FREE_MEM		= (DER_ERR_BASE + 15),
 	/** epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** epoch is too old, all data have been recycled */
