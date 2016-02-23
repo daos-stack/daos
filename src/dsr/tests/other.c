@@ -96,7 +96,7 @@ int
 main(int argc, char **argv)
 {
 	int	opc;
-	int	rc;
+	int	rc = 0;
 
 	while ((opc = getopt_long(argc, argv, "s:", opts, NULL)) != -1) {
 		int	num;

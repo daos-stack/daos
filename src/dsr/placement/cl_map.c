@@ -249,8 +249,8 @@ cl_buf_sane(cl_buf_t *buf)
 				return false;
 			}
 
-			if (doms[i].cd_children == NULL ^
-			    doms[i].cd_nchildren == 0) {
+			if ((doms[i].cd_children == NULL) ^
+			    (doms[i].cd_nchildren == 0)) {
 				D_DEBUG(DF_CL, "Invalid children\n");
 				return false;
 			}

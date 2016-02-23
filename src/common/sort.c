@@ -83,7 +83,7 @@ daos_array_find(void *array, unsigned int len, uint64_t key,
 {
 	int	start;
 	int	end;
-	int	cur;
+	int	cur = 0;
 	int	rc = 0;
 
 	D_ASSERT(len > 0);

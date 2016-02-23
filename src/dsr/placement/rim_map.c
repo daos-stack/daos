@@ -656,7 +656,7 @@ rim_map_print(pl_map_t *map)
 
 	D_PRINT("rim map: ver %d, nrims %d, hash 0-"DF_X64"\n",
 		rimap->rmp_map.pm_ver, rimap->rmp_nrims,
-		(1ULL << rimap->rmp_target_hbits));
+		(1UL << rimap->rmp_target_hbits));
 
 	for (i = 0; i < rimap->rmp_nrims; i++)
 		rim_print(rimap, i);
@@ -891,7 +891,7 @@ rim_map_obj_rebuild(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
 	pl_rim_map_t	*rimap = pl_map2rimap(map);
 	cl_target_t	*targets;
 	pl_target_t	*pts;
-	daos_rank_t	 rank;
+	daos_rank_t	 rank = 0;
 	unsigned int	 ntargets;
 	unsigned int	 stripe;
 	bool		 coordinator;
