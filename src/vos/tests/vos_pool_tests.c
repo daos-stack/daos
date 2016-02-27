@@ -27,13 +27,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <daos_srv/vos.h>
 #include <inttypes.h>
 
 #define POOL_SIZE 10737418240ULL
 
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
 
 	int		rc = 0;
@@ -47,6 +47,7 @@ int main(int argc, char **argv)
 		fprintf(stdout, "<exec><pmem-file-path>\n");
 		exit(-1);
 	}
+
 	file = argv[1];
 	uuid_generate_time_safe(uuid);
 	rc = vos_pool_create(file, uuid, POOL_SIZE, &vph, NULL);

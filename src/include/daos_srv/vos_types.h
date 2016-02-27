@@ -43,6 +43,7 @@ typedef struct {
  * container attributes returned to query
  */
 typedef struct {
+	/** number of objects */
 	unsigned int		pci_nobjs;
 	/** used space */
 	daos_size_t		pci_used;

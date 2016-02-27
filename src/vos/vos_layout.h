@@ -25,9 +25,9 @@
  */
 #ifndef _VOS_LAYOUT_H
 #define _VOS_LAYOUT_H
-
 #include <libpmemobj.h>
 #include <daos_srv/vos_types.h>
+#include "vos_chash_table.h"
 
 /**
  * VOS metadata structure declarations
@@ -38,10 +38,11 @@
  * EV-Tree for Byte array stores
  */
 struct vos_container_table;
+struct vos_container;
 struct vos_object_table;
+struct vos_epoch_table;
 struct vos_kv_index;
 struct vos_ba_index;
-
 /**
  * Typed Layout named using Macros from libpmemobj
  * Each structure is assigned a type number internally
@@ -56,39 +57,49 @@ struct vos_ba_index;
 POBJ_LAYOUT_BEGIN(vos_pool_layout);
 POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_root);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container_table);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_object_table);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_epoch_table);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_kv_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_ba_index);
 POBJ_LAYOUT_END(vos_pool_layout);
 
 struct vos_pool_root {
 	/* Structs stored in LE or BE representation */
-	uint32_t	vpr_magic;
+	uint32_t				vpr_magic;
 	/* Unique PoolID for each VOS pool assigned on creation */
-	uuid_t		vos_pool_id;
+	uuid_t					vos_pool_id;
 	/* Flags for compatibility features */
-	uint64_t	vpr_compat_flags;
+	uint64_t				vpr_compat_flags;
 	/* Flags for incompatibility features */
-	uint64_t	vpr_incompat_flags;
+	uint64_t				vpr_incompat_flags;
 	/* Typed PMEMoid pointer for the container index table */
-	TOID(struct vos_container_table)	container_index_table;
+	TOID(struct vos_container_table)        ci_table;
 	/*Pool info of objects, containers, space availability */
-	vos_pool_info_t	vos_pool_info;
+	vos_pool_info_t				vos_pool_info;
 };
 
-/**
- * VOS pool handle
- */
-struct vos_pool {
-	PMEMobjpool	*ph;
-	char		*path;
+struct vos_container_table {
+	TOID(struct vos_chash_table) chtable;
+	/* More items to be added*/
 };
 
-/**
- * Convenience typedefs
- */
-typedef struct vos_pool_root vos_pool_root_t;
-typedef struct vos_pool vos_pool_t;
+struct vos_object_table {
+	TOID(struct vos_chash_table) obtable;
+	/* More items to be added*/
+};
+
+struct vos_epoch_table {
+	TOID(struct vos_chash_table) ehtable;
+	/* More items to be added*/
+};
+
+
+struct vos_container {
+	uuid_t				container_id;
+	vos_co_info_t			cinfo;
+	TOID(struct vos_object_table)	obtable;
+	TOID(struct vos_epoch_table)	ehtable;
+};
 
 #endif
-

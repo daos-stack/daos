@@ -30,6 +30,13 @@ extern "C" {
 #define DAOS_HTYPE_BITS		3
 #define DAOS_HTYPE_MASK		((1ULL << DAOS_HTYPE_BITS) - 1)
 
+enum {
+	DAOS_HTYPE_EQ		= 0,
+	DAOS_HTYPE_VOS_POOL	= 1,
+	DAOS_HTYPE_VOS_CO	= 2,
+	/* More to be added */
+};
+
 struct daos_hlink;
 
 struct daos_hlink_ops {

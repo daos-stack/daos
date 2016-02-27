@@ -201,7 +201,7 @@ vos_chash_create(PMEMobjpool *ph, uint32_t buckets,
 	daos_size_t		      buckets_size;
 	struct vos_chash_buckets      *tbuckets;
 
-	num_buckets = (buckets > 0) ? buckets : DEFAULT_BUCKET_SIZE;
+	num_buckets = (buckets > 0) ? buckets : VCH_MIN_BUCKET_SIZE;
 	buckets_size = num_buckets * sizeof(struct vos_chash_buckets);
 
 	TX_BEGIN(ph) {
@@ -409,7 +409,10 @@ vos_chash_remove(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable,
 			D_RW(item_prev)->next = item_next;
 		}
 		buckets[bucket_id].items_in_bucket--;
+		pmemobj_tx_free(D_RW(item_current)->key);
+		pmemobj_tx_free(D_RW(item_current)->value);
 		TX_FREE(item_current);
+
 		/* Determine if we need resize*/
 		if (D_RO(chtable)->resize &&
 		   (D_RO(chtable)->num_buckets < D_RO(chtable)->max_buckets)) {

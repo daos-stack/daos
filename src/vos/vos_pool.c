@@ -25,9 +25,29 @@
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
 #include <daos_srv/vos.h>
-#include <vos_layout.h>
 #include <daos/daos_errno.h>
 #include <daos/daos_common.h>
+#include <daos/daos_hash.h>
+#include <vos_layout.h>
+#include <vos_internal.h>
+
+
+static void
+daos_vpool_hhash_free(struct daos_hlink *hlink)
+{
+	struct vos_pool *vpool;
+	vpool = container_of(hlink, struct vos_pool, vpool_hlink);
+	if (NULL != vpool) {
+		if (NULL != vpool->path)
+			free(vpool->path);
+		free(vpool);
+	}
+}
+
+struct daos_hlink_ops	vpool_hh_ops = {
+	.hop_free	= daos_vpool_hhash_free,
+};
+
 
 /**
  * Create a Versioning Object Storage Pool (VOSP) and its root object.
@@ -37,29 +57,28 @@ int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		daos_handle_t *poh, daos_event_t *ev)
 {
-	int		 rc    = 0;
-	vos_pool_t	*vpool = NULL;
-	vos_pool_root_t	*root  = NULL;
-	size_t		 root_size;
+	int				rc    = 0;
+	struct vos_pool			*vpool = NULL;
+	struct vos_pool_root		*root  = NULL;
+	size_t				root_size;
+	TOID(struct vos_pool_root)	proot;
 
 	if (NULL == path || uuid_is_null(uuid) || size <= 0)
-		return DER_INVAL;
+		return -DER_INVAL;
 
-	vpool = (vos_pool_t *)malloc(sizeof(vos_pool_t));
-	if (NULL == vpool) {
-		D_ERROR("Error allocating vpool handle");
-		return DER_NOMEM;
-	}
+	D_ALLOC_PTR(vpool);
+	if (NULL == vpool)
+		return -DER_NOMEM;
 
 	vpool->path = strdup(path);
 	vpool->ph = pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout),
 							  size, 0666);
 	if (NULL == vpool->ph) {
 		D_ERROR("Failed to create pool\n");
-		return DER_NOSPACE;
+		rc = -DER_NOSPACE;
+		goto exit;
 	}
 
-	TOID(struct vos_pool_root) proot;
 	proot = POBJ_ROOT(vpool->ph, struct vos_pool_root);
 	root = D_RW(proot);
 	root_size = pmemobj_root_size(vpool->ph);
@@ -73,20 +92,40 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		root->vpr_incompat_flags = 0;
 		/* This will eventually call the
 		   constructor of container table */
-		root->container_index_table =
-			TOID_NULL(struct vos_container_table);
+		root->ci_table =
+			TX_NEW(struct vos_container_table);
+		D_RW(root->ci_table)->chtable =
+			TOID_NULL(struct vos_chash_table);
 		root->vos_pool_info.pif_ncos = 0;
 		root->vos_pool_info.pif_nobjs = 0;
 		root->vos_pool_info.pif_size = size;
 		root->vos_pool_info.pif_avail = size - root_size;
-	}
-	TX_END
+	} TX_END
 
-	/* TODO: Clarify where pool handle to be maintained */
-	/* If to be maintained at the VOS need to create a hash to convert
-	   generic handle to cookie */
-	/* Temporarily assigning value of the PMEMobjpool as handle */
-	poh->cookie = (uintptr_t)vpool;
+	/* creating and initializing a handle hash
+	 * to maintain all "DRAM" pool handles
+	 * This hash converts the DRAM pool handle to a uint64_t
+	 * cookie. This cookies is returned with a generic
+	 * daos_handle_t */
+
+	/* Thread safe vos_hhash creation
+	 * and link initialization
+	 * hash-table created once across all handles in VOS*/
+	rc = vos_create_hhash();
+	if (rc) {
+		D_ERROR("Creating hhash failure\n");
+		goto exit;
+	}
+	daos_hhash_hlink_init(&vpool->vpool_hlink, &vpool_hh_ops);
+	daos_hhash_link_insert(daos_vos_hhash, &vpool->vpool_hlink,
+			       DAOS_HTYPE_VOS_POOL);
+	daos_hhash_link_key(&vpool->vpool_hlink, &poh->cookie);
+exit:
+	if (rc && NULL != vpool) {
+		if (NULL != vpool->path)
+			free(vpool->path);
+		D_FREE_PTR(vpool);
+	}
 	return rc;
 }
 
@@ -99,32 +138,24 @@ int
 vos_pool_destroy(daos_handle_t poh, daos_event_t *ev)
 {
 
-	int		 rc    = 0;
-	vos_pool_t	*vpool = NULL;
+	int			 rc    = 0;
+	struct vos_pool		*vpool = NULL;
+	struct daos_hlink	*hlink;
 
-	/*TODO: Change to fetch this handle from a hash-table*/
-	if (!poh.cookie) {
-		D_ERROR("Invalid handle for pool");
-		return DER_INVAL;
+	hlink = daos_hhash_link_lookup(daos_vos_hhash, poh.cookie);
+	if (NULL == hlink) {
+		D_ERROR("VOS pool handle lookup error\n");
+		return -DER_INVAL;
 	}
 
-	vpool = (vos_pool_t *)poh.cookie;
-	if (NULL == vpool) {
-		D_ERROR("Invalid handle for pool");
-		return DER_NO_HDL;
-	}
-
-	pmemobj_close(vpool->ph);
+	vpool = container_of(hlink, struct vos_pool, vpool_hlink);
 	rc = remove(vpool->path);
-	if (rc)
+	if (rc) {
+		D_ERROR("While deleting file from PMEM\n");
 		return rc;
-
-	/*TODO delete handle entry in the hash-table*/
-	if (NULL != vpool->path)
-		free(vpool->path);
-	free(vpool);
-	vpool = NULL;
-
+	}
+	pmemobj_close(vpool->ph);
+	daos_hhash_link_delete(daos_vos_hhash, &vpool->vpool_hlink);
 	return rc;
 }
 
@@ -138,19 +169,22 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 	      daos_event_t *ev)
 {
 
-	int		 rc    = 0;
-	vos_pool_t	*vpool = NULL;
-	vos_pool_root_t *root  = NULL;
-	char		 pool_uuid_str[37], uuid_str[37];
+	int				rc    = 0;
+	char				pool_uuid_str[37], uuid_str[37];
+	struct vos_pool			*vpool = NULL;
+	struct vos_pool_root		*root  = NULL;
+	TOID(struct vos_pool_root)	proot;
 
-	if (NULL == path)
-		return DER_INVAL;
+	if (NULL == path) {
+		D_ERROR("Invalid Pool Path\n");
+		return -DER_INVAL;
+	}
 
 	/* Create a new handle during open */
-	vpool = (vos_pool_t *)malloc(sizeof(vos_pool_t));
+	D_ALLOC_PTR(vpool);
 	if (NULL == vpool) {
 		D_ERROR("Error allocating vpool handle");
-		return DER_NOMEM;
+		return -DER_NOMEM;
 	}
 
 	vpool->path = strdup(path);
@@ -159,10 +193,9 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 		D_ERROR("Error in opening the pool handle");
 		if (NULL != vpool)
 			free(vpool);
-		return  DER_NO_HDL;
+		return	-DER_NO_HDL;
 	}
 
-	TOID(struct vos_pool_root) proot;
 	proot = POBJ_ROOT(vpool->ph, struct vos_pool_root);
 	root = D_RW(proot);
 	if (uuid_compare(uuid, root->vos_pool_id)) {
@@ -172,46 +205,57 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 			uuid_str, pool_uuid_str);
 		if (NULL != vpool)
 			free(vpool);
-		return DER_INVAL;
+		return -DER_INVAL;
 	}
-	/* TODO: Clarify where pool handle to be maintained */
-	/* If to be maintained at the VOS need to create a hash to convert
-	   generic handle to cookie */
-	/* Temporarily assigning value of the PMEMobjpool as handle */
-	poh->cookie = (uintptr_t)vpool;
+	/*
+	 * Pool can be created and opened with different VOS instances
+	 * So during open if the handle hash does not exist
+	 * it must be created and initialized
+	 *
+	 * */
+	rc =  vos_create_hhash();
+	if (rc) {
+		D_ERROR("Creating handle hash failed\n");
+		goto exit;
+	}
+	daos_hhash_hlink_init(&vpool->vpool_hlink, &vpool_hh_ops);
+	daos_hhash_link_insert(daos_vos_hhash, &vpool->vpool_hlink,
+			       DAOS_HTYPE_VOS_POOL);
+	daos_hhash_link_key(&vpool->vpool_hlink, &poh->cookie);
+
+exit:
+	if (rc && NULL != vpool) {
+		if (NULL != vpool->path)
+			free(vpool->path);
+		D_FREE_PTR(vpool);
+	}
+
 	return rc;
 }
 
 /**
- * close a VOSP, all opened containers sharing this pool handle
+ *
+ * Close a VOSP, all opened containers sharing this pool handle
  * will be revoked.
+ *
  */
 int
 vos_pool_close(daos_handle_t poh, daos_event_t *ev)
 {
 
-	int		 rc    = 0;
-	vos_pool_t	*vpool = NULL;
+	int			 rc    = 0;
+	struct vos_pool		*vpool = NULL;
+	struct daos_hlink	*hlink;
 
-	/*TODO: Change to fetch this handle from a hash-table*/
-	if (!poh.cookie) {
-		D_ERROR("Invalid handle for pool");
-		return DER_INVAL;
+	hlink = daos_hhash_link_lookup(daos_vos_hhash, poh.cookie);
+	if (NULL == hlink) {
+		D_ERROR("VOS pool handle lookup error");
+		return -DER_INVAL;
 	}
 
-	vpool = (vos_pool_t *)poh.cookie;
-	if (NULL == vpool) {
-		D_ERROR("No handle available for vpool");
-		return DER_NO_HDL;
-	}
-
+	vpool = container_of(hlink, struct vos_pool, vpool_hlink);
 	pmemobj_close(vpool->ph);
-	/*TODO delete handle entry in the hash-table*/
-	if (NULL != vpool->path)
-		free(vpool->path);
-	free(vpool);
-	vpool = NULL;
-
+	daos_hhash_link_delete(daos_vos_hhash, &vpool->vpool_hlink);
 	return rc;
 }
 
@@ -223,23 +267,17 @@ int
 vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev)
 {
 
-	int		 rc    = 0;
-	vos_pool_t	*vpool = NULL;
-	vos_pool_root_t *root  = NULL;
+	int				rc    = 0;
+	struct vos_pool			*vpool = NULL;
+	struct vos_pool_root		*root  = NULL;
+	struct daos_hlink		*hlink;
+	TOID(struct vos_pool_root)	proot;
 
-	/*TODO: Change to fetch this handle from a hash-table*/
-	if (!poh.cookie) {
-		D_ERROR("Invalid handle for pool");
-		return DER_INVAL;
-	}
+	hlink = daos_hhash_link_lookup(daos_vos_hhash, poh.cookie);
+	if (NULL == hlink)
+		return -DER_INVAL;
 
-	vpool = (vos_pool_t *)poh.cookie;
-	if (NULL == vpool) {
-		D_ERROR("No handle available for vpool");
-		return DER_NO_HDL;
-	}
-
-	TOID(struct vos_pool_root) proot;
+	vpool = container_of(hlink, struct vos_pool, vpool_hlink);
 	proot = POBJ_ROOT(vpool->ph, struct vos_pool_root);
 	root = D_RW(proot);
 	pinfo->pif_ncos = root->vos_pool_info.pif_ncos;

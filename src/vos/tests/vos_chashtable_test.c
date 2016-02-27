@@ -228,7 +228,8 @@ test_single_thread_ops(PMEMobjpool *pop, int bucket_size, int num_keys)
 }
 
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
 	int bucket_size, num_keys;
 	int isthread, num_threads;

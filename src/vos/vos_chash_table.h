@@ -34,7 +34,11 @@
 
 
 /* Can change this based on requirement*/
-#define DEFAULT_BUCKET_SIZE 10000
+#define VCH_MIN_BUCKET_SIZE 1000
+
+/* Can change this based on requirement*/
+#define VCH_MAX_BUCKET_SIZE 10000
+
 
 /* Allowed number of collisions/bucket */
 #define CHASH_RESIZE_COUNT 3
