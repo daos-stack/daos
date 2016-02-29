@@ -1,0 +1,11 @@
+*.pyc
+install/
+_build.external/
+*.log
+.sconsign.dblite
+*.swp
+.sconf_temp/
+*.tar.gz
+foo
+foo2
+foo.o

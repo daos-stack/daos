@@ -1,0 +1,17 @@
+"""Tests that we can build from prebuilt components"""
+import sys, os
+sys.path.insert(0, "..")
+from prereq_tools import PreReqComponent
+
+__ENV__ = DefaultEnvironment()
+
+__OPTS__ = Variables()
+__PREREQS__ = PreReqComponent(__ENV__, __OPTS__)
+__PATH__ = os.path.realpath(os.path.join(Dir('#').abspath, "..",
+                                         "components.py"))
+__PREREQS__.preload(__PATH__)
+
+Help(__OPTS__.GenerateHelpText(__ENV__))
+
+__PREREQS__.require(__ENV__, "pmix", "pthread")
+__ENV__.Program("foo", Glob("*.c"))
