@@ -5,21 +5,35 @@ set -x
 
 option=
 if [ -n "$WORKSPACE" ]; then
-    export option="TARGET_PREFIX=$WORKSPACE/${JOB_NAME}/${BUILD_NUMBER}"
-fi
-
-/bin/rm -rf _build.external
-/bin/rm -f *.conf
-scons $option SRC_PREFIX=../
-
-if [ -n "$WORKSPACE" ]; then
-    ln -sfn ${BUILD_NUMBER} ${WORKSPACE}/${JOB_NAME}/latest
-    export prebuilt="PREBUILT_PREFIX=$WORKSPACE/${JOB_NAME}/latest \
-                    PMIX_PREBUILT=`pwd`/install"
+export JOB_LOC=${WORKSPACE}/${JOB_NAME}/${BUILD_NUMBER}
+export SRC_PREFIX_OPT="SRC_PREFIX=../"
 else
-    export prebuilt="HWLOC_PREBUILT=`pwd`/install PMIX_PREBUILT=`pwd`/install"
+export JOB_LOC=`pwd`/testbuild
+mkdir -p $JOB_LOC
 fi
-scons $prebuilt -C test
+
+test_build()
+{
+if [ -n "$WORKSPACE" ]; then
+export prebuilt="PREBUILT_PREFIX=$JOB_LOC/pmix \
+                PMIX_PREBUILT=$JOB_LOC/pmix"
+else
+export prebuilt="HWLOC_PREBUILT=$JOB_LOC/hwloc PMIX_PREBUILT=$JOB_LOC/pmix"
+fi
+scons $prebuilt -C test --config=force
 
 #This one defines pmix2
-scons $prebuilt -C test -f SConstruct.alt
+scons $prebuilt -C test -f SConstruct.alt --config=force
+
+./test_components.sh
+}
+
+# incremental build
+./build_components.sh
+test_build
+
+# full build
+rm -rf _build.external build install
+./build_components.sh
+test_build
+

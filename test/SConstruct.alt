@@ -4,27 +4,27 @@ sys.path.insert(0, "..")
 from prereq_tools import PreReqComponent
 from prereq_tools import GitRepoRetriever
 
-__ENV__ = DefaultEnvironment()
+ENV = DefaultEnvironment()
 
-__OPTS__ = Variables()
-__REQS__ = PreReqComponent(__ENV__, __OPTS__)
-__PATH__ = os.path.realpath(os.path.join(Dir('#').abspath, "..",
-                                         "components.py"))
-__REQS__.preload(__PATH__)
+OPTS = Variables()
+REQS = PreReqComponent(ENV, OPTS)
+PATH = os.path.realpath(os.path.join(Dir('#').abspath, "..",
+                                     "components.py"))
+REQS.preload(PATH)
 
-__REQS__.define('pmix2',
-                retriever=GitRepoRetriever('https://github.com/pmix/master'),
-                commands=['./autogen.sh',
-                          './configure --with-platform=optimized ' \
-                          '--prefix=$PMIX2_PREFIX ' \
-                          '--with-libevent=/usr --with-hwloc=$HWLOC_PREFIX',
-                          'make', 'make install'],
-                libs=['pmix'],
-                headers=['pmix.h'],
-                requires=['hwloc', 'libevent'],
-               )
+REQS.define('pmix2',
+            retriever=GitRepoRetriever('https://github.com/pmix/master'),
+            commands=['./autogen.sh',
+                      './configure --with-platform=optimized ' \
+                      '--prefix=$PMIX2_PREFIX ' \
+                      '--with-libevent=/usr --with-hwloc=$HWLOC_PREFIX',
+                      'make', 'make install'],
+            libs=['pmix'],
+            headers=['pmix.h'],
+            requires=['hwloc', 'libevent'],
+           )
 
-Help(__OPTS__.GenerateHelpText(__ENV__))
+REQS.require(ENV, "pmix2", "pthread")
+ENV.Program("foo2", Glob("*.c"))
 
-__REQS__.require(__ENV__, "pmix2", "pthread")
-__ENV__.Program("foo2", Glob("*.c"))
+Help(OPTS.GenerateHelpText(ENV))

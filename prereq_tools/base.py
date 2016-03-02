@@ -1,5 +1,12 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+"""Classes for building external prerequisite components"""
+
+# pylint: disable=too-few-public-methods
+# pylint: disable=too-many-instance-attributes
+# pylint: disable=broad-except
+# pylint: disable=bare-except
+# pylint: disable=exec-used
 import os
 import traceback
 import hashlib
@@ -149,7 +156,7 @@ class Runner(object):
             os.chdir(old)
         return retval
 
-__RUNNER__ = Runner()
+RUNNER = Runner()
 
 class GitRepoRetriever(object):
     """Identify a git repository from which to download sources"""
@@ -162,11 +169,11 @@ class GitRepoRetriever(object):
     def get(self, subdir):
         """Downloads sources from a git repository into subdir"""
         commands = ['git clone %s %s' % (self.url, subdir)]
-        if not __RUNNER__.run_commands(commands):
+        if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)
         if self.has_submodules:
             commands = ['git submodule init', 'git submodule update']
-            if not __RUNNER__.run_commands(commands, subdir=subdir):
+            if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
 
@@ -184,7 +191,7 @@ class WebRetriever(object):
         if not os.path.exists(basename):
             commands.append('wget %s' % self.url)
 
-        if not __RUNNER__.run_commands(commands):
+        if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)
 
         if self.url.endswith('.tar.gz') or self.url.endswith('.tgz'):
@@ -192,7 +199,7 @@ class WebRetriever(object):
             members = tfile.getnames()
             prefix = os.path.commonprefix(members)
             tfile.extractall()
-            if not __RUNNER__.run_commands(['mv %s %s' % (prefix, subdir)]):
+            if not RUNNER.run_commands(['mv %s %s' % (prefix, subdir)]):
                 raise ExtractionError(subdir)
         else:
             raise UnsupportedCompression(subdir)
@@ -230,7 +237,7 @@ class PreReqComponent(object):
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
 
-        __RUNNER__.initialize(self.__env)
+        RUNNER.initialize(self.__env)
 
         self.__top_dir = Dir('#').abspath
         self.__build_dir = \
@@ -383,7 +390,7 @@ class PreReqComponent(object):
         """Get the build directory for external components"""
         return self.__build_dir
 
-    def get_prebuilt_path(self, name):
+    def get_prebuilt_path(self, name, prebuilt_default):
         """Get the path for a prebuilt component"""
         if name in self.__prebuilt_path:
             return self.__prebuilt_path[name]
@@ -391,7 +398,7 @@ class PreReqComponent(object):
         opt_name = '%s_PREBUILT' % name.upper()
         self.add_opts(PathVariable(opt_name,
                                    'Alternate installation prefix for %s' % name,
-                                   None, PathVariable.PathIsDir))
+                                   prebuilt_default, PathVariable.PathIsDir))
         self.setup_path_var(opt_name)
         prebuilt = self.__env.get(opt_name)
         if prebuilt and not os.path.exists(prebuilt):
@@ -588,7 +595,11 @@ class _Component(object):
         """Setup paths for a required component"""
         self.prereqs.setup_path_var(self.src_opt)
         self.prereqs.setup_path_var(self.prebuilt_opt)
-        self.prebuilt_path = self.prereqs.get_prebuilt_path(self.name)
+        prebuilt_default = None
+        if not self.retriever:
+            prebuilt_default = "/usr"
+        self.prebuilt_path = self.prereqs.get_prebuilt_path(self.name,
+                                                            prebuilt_default)
 
         (self.component_prefix, self.prefix) = \
             self.prereqs.get_prefixes(self.name, self.prebuilt_path)
@@ -619,6 +630,33 @@ class _Component(object):
         for lib in self.libs:
             env.Append(LIBS=[lib])
 
+    def create_links(self, source):
+        """Create symbolic links to real targets in $PREFIX"""
+        if self.retriever == None:
+            #Don't do this for installed components
+            return
+        if source == self.prefix:
+            return
+        # create links
+        for (root, _, files) in os.walk(source):
+            local_root = root.replace(source,
+                                      self.prefix)
+            if not os.path.exists(local_root):
+                try:
+                    os.makedirs(local_root)
+                except:
+                    pass
+            for fname in files:
+                sfile = os.path.join(root, fname)
+                target = os.path.join(local_root, fname)
+                try:
+                    if os.path.exists(target):
+                        os.unlink(target)
+                    os.symlink(sfile, target)
+                except OSError:
+                    pass
+
+
     def build(self, env, headers_only):
         """Build the component, if necessary"""
         envcopy = env.Clone()
@@ -631,38 +669,22 @@ class _Component(object):
         self.set_environment(envcopy, False)
         self.get()
         if self.prebuilt_path:
+            self.create_links(self.prebuilt_path)
             return False
-        if changes or self.has_changes() \
+        has_changes = self.has_changes()
+        if changes or has_changes \
             or self.has_missing_targets(envcopy):
             changes = True
-            if not __RUNNER__.run_commands(self.build_commands,
-                                           subdir=self.build_path):
+            if has_changes and self.out_of_src_build:
+                os.system("rm -rf %s"%self.build_path)
+                os.mkdir(self.build_path)
+            if not RUNNER.run_commands(self.build_commands,
+                                       subdir=self.build_path):
                 raise BuildFailure(self.name)
 
         if self.has_missing_targets(envcopy):
             raise MissingTargets(self.name)
-        if self.component_prefix != self.prefix:
-
-            # create links
-
-            for (root, _, files) in os.walk(self.component_prefix):
-                local_root = root.replace(self.component_prefix,
-                                          self.prefix)
-                if not os.path.exists(local_root):
-                    try:
-                        os.makedirs(local_root)
-                    except:
-                        pass
-                for fname in files:
-                    source = os.path.join(root, fname)
-                    target = os.path.join(local_root, fname)
-                    try:
-                        if os.path.exists(target):
-                            os.unlink(target)
-                        os.symlink(source, target)
-                    except OSError:
-                        pass
-
+        self.create_links(self.component_prefix)
         new_crc = self.calculate_crc()
         with open(self.crc_file, 'w') as crcfile:
             crcfile.write(new_crc)

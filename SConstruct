@@ -2,12 +2,11 @@
 import sys
 sys.path.insert(0, ".")
 from prereq_tools import PreReqComponent
+ENV = DefaultEnvironment()
 
-__ENV__ = DefaultEnvironment()
+OPTS = Variables()
+REQS = PreReqComponent(ENV, OPTS)
+REQS.preload("components.py", prebuild=["mercury", "ompi"])
 
-__OPTS__ = Variables()
-__REQS__ = PreReqComponent(__ENV__, __OPTS__)
-__REQS__.preload("components.py", prebuild=["mercury", "ompi"])
-
-Help(__OPTS__.GenerateHelpText(__ENV__))
+Help(OPTS.GenerateHelpText(ENV))
 
