@@ -225,6 +225,7 @@ class PreReqComponent(object):
         if self.__env['PLATFORM'] == 'darwin':
             libtoolize = 'glibtoolize'
 
+        real_env["HOME"] = os.environ.get("HOME")
         try:
             socket.gethostbyname('proxy-chain.intel.com')
             real_env['http_proxy'] = 'http://proxy-chain.intel.com:911'
