@@ -13,8 +13,8 @@ int main(int argc, char **argv)
     pthread_mutex_t lock;
 
     pthread_mutex_init(&lock, NULL);
-    PMIx_Init(&proc);
-    PMIx_Finalize();
+    PMIx_Init(&proc, NULL, 0);
+    PMIx_Finalize(NULL, 0);
 
     return 0;
 }

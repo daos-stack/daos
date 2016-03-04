@@ -226,6 +226,9 @@ class PreReqComponent(object):
             libtoolize = 'glibtoolize'
 
         real_env["HOME"] = os.environ.get("HOME")
+        term = os.environ.get("TERM")
+        if term:
+            real_env["TERM"] = term
         try:
             socket.gethostbyname('proxy-chain.intel.com')
             real_env['http_proxy'] = 'http://proxy-chain.intel.com:911'
