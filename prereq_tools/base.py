@@ -302,6 +302,7 @@ class PreReqComponent(object):
             libs -- A list of libraries to add to dependent components
             headers -- A list of expected headers
             requires -- A list of names of required component definitions
+            required_libs -- A list of system libraries to be checked for
             commands -- A list of commands to run to build the component
             retriever -- A retriever object to download component
             extra_lib_path -- Subdirectories to add to dependent component path
@@ -500,6 +501,7 @@ class _Component(object):
         self.prefix = None
         self.component_prefix = None
         self.libs = kw.get("libs", [])
+        self.required_libs = []
         self.headers = kw.get("headers", [])
         self.requires = kw.get("requires", [])
         self.prereqs = prereqs
@@ -592,6 +594,12 @@ class _Component(object):
             if not config.CheckLib(lib):
                 config.Finish()
                 return True
+
+        for lib in self.required_libs:
+            if not config.CheckLib(lib):
+                config.Finish()
+                return True
+
         config.Finish()
         return False
 

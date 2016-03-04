@@ -30,8 +30,6 @@ else:
 
 BMI_BUILD += ['make', 'make install']
 
-REQS.define('libevent', libs=['event'])
-
 REQS.define('pthread', libs=['pthread'])
 
 REQS.define('boost', headers=['boost/preprocessor.hpp'])
@@ -80,12 +78,12 @@ REQS.define('pmix',
             commands=['./autogen.sh',
                       './configure --with-platform=optimized ' \
                       '--prefix=$PMIX_PREFIX ' \
-                      '--with-libevent=$LIBEVENT_PREFIX ' \
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make', 'make install'],
             libs=['pmix'],
+            required_libs=['event'],
             headers=['pmix.h'],
-            requires=['hwloc', 'libevent'])
+            requires=['hwloc'])
 
 RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
 REQS.define('ompi',
@@ -94,8 +92,9 @@ REQS.define('ompi',
                       './configure --prefix=$OMPI_PREFIX ' \
                       '--with-pmix=$PMIX_PREFIX ' \
                       '--disable-mpi-fortran ' \
-                      '--with-libevent=$LIBEVENT_PREFIX ' \
+                      '--with-libevent=external ' \
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make', 'make install'],
             libs=['libopen-rte'],
-            requires=['pmix', 'hwloc', 'libevent'])
+            required_libs=['event'],
+            requires=['pmix', 'hwloc'])

@@ -17,11 +17,11 @@ REQS.define('pmix2',
             commands=['./autogen.sh',
                       './configure --with-platform=optimized ' \
                       '--prefix=$PMIX2_PREFIX ' \
-                      '--with-libevent=/usr --with-hwloc=$HWLOC_PREFIX',
+                      '--with-hwloc=$HWLOC_PREFIX',
                       'make', 'make install'],
             libs=['pmix'],
             headers=['pmix.h'],
-            requires=['hwloc', 'libevent'],
+            requires=['hwloc'],
            )
 
 REQS.require(ENV, "pmix2", "pthread")
