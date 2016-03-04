@@ -7,4 +7,10 @@ class PathVariable(object):
     def __init__(self, *args, **kw):
         pass
 
-__all__ = ['PathVariable']
+class ListVariable(object):
+    """Fake ListVariable"""
+    def __init__(self, *args, **kw):
+        pass
+
+__all__ = ['PathVariable',
+           'ListVariable']

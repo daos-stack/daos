@@ -49,9 +49,21 @@ class DefaultEnvironment(object):
         """Fake subst"""
         return val
 
+    def get(self, var):
+        """Fake get"""
+        return var
+
 class Variables(object):
     """Fake variables"""
     def __init__(self, *args, **kw):
+        pass
+
+    def Add(self, *args, **kw):
+        """Fake Add function"""
+        pass
+
+    def Update(self, *args, **kw):
+        """Fake Update function"""
         pass
 
     def GenerateHelpText(self, *args, **kw):
