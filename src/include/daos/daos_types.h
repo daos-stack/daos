@@ -155,12 +155,15 @@ typedef struct {
 	/** Highest Committed Epoch (HCE) of the container. */
 	daos_epoch_t	es_hce;
 
+	/** Highest Committed Epoch (HCE) of the container handle. */
+	daos_epoch_t	es_h_hce;
+
 	/** Lowest Referenced Epoch (LRE) of the container handle.
 	 * Each container handle references all epochs equal to or higher than
 	 * its LRE and thus guarantees these epochs to be readable. The LRE of a
 	 * new container handle is equal to the HCE.
 	 * See also the epoch slip operation. */
-	daos_epoch_t	es_lre;
+	daos_epoch_t	es_h_lre;
 
 	/** Lowest Held Epoch (LHE) of the container handle.
 	 * Each container handle with write permission holds all epochs equal to
@@ -168,7 +171,7 @@ typedef struct {
 	 * mutable.  The LHE of a new container handle with write permission is
 	 * equal to DAOS_EPOCH_MAX, indicating that the container handle does
 	 * not hold any epochs. See also the epoch hold functionality. */
-	daos_epoch_t	es_lhe;
+	daos_epoch_t	es_h_lhe;
 } daos_epoch_state_t;
 
 /**

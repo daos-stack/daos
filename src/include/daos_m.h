@@ -220,6 +220,56 @@ dsm_co_xattr_set(daos_handle_t container, int n, const char *const names[],
 		 daos_event_t *event);
 
 /**
+ * Flush an epoch of a container handle.
+ *
+ *	container	IN  container handle
+ *	epoch		IN  epoch to flush
+ *	state		OUT latest epoch state
+ *	event		IN  completion event
+ */
+int
+dsm_epoch_flush(daos_handle_t container, daos_epoch_t epoch,
+		daos_epoch_state_t *state, daos_event_t *event);
+
+/**
+ * Flush an epoch of a container handle on a target.
+ *
+ *	container	IN  container handle
+ *	epoch		IN  epoch to flush
+ *	state		OUT latest epoch state
+ *	event		IN  completion event
+ */
+int
+dsm_epoch_flush_target(daos_handle_t container, daos_epoch_t epoch,
+		       daos_rank_t target, daos_epoch_state_t *state,
+		       daos_event_t *event);
+
+/**
+ * Discard an epoch of a container handle.
+ *
+ *	container	IN  container handle
+ *	epoch		IN  epoch to discard
+ *	state		OUT latest epoch state
+ *	event		IN  completion event
+ */
+int
+dsm_epoch_discard(daos_handle_t container, daos_epoch_t epoch,
+		  daos_epoch_state_t *state, daos_event_t *event);
+
+/**
+ * Discard an epoch of a container handle on a target.
+ *
+ *	container	IN  container handle
+ *	epoch		IN  epoch to discard
+ *	state		OUT latest epoch state
+ *	event		IN  completion event
+ */
+int
+dsm_epoch_discard_target(daos_handle_t container, daos_epoch_t epoch,
+			 daos_rank_t target, daos_epoch_state_t *state,
+			 daos_event_t *event);
+
+/**
  * Query latest epoch state.
  *
  *	container	IN  container handle
@@ -238,12 +288,9 @@ dsm_epoch_query(daos_handle_t container, daos_epoch_state_t *state,
  *	state		OUT latest epoch state
  *	event		IN  completion event
  *
- * The resulting LHE' is determined like this:
- *
- *	LHE' = max(HCE + 1, epoch))
- *
- * The owner of the container handle is responsible for releasing its held
- * epochs by either committing/aborting them or setting LHE to DAOS_EPOCH_MAX.
+ * The resulting LHE becomes max(max(handle HCEs) + 1, epoch). The owner of the
+ * container handle is responsible for releasing its held epochs by either
+ * committing them or setting LHE to DAOS_EPOCH_MAX.
  */
 int
 dsm_epoch_hold(daos_handle_t container, daos_epoch_t epoch,
@@ -259,41 +306,27 @@ dsm_epoch_hold(daos_handle_t container, daos_epoch_t epoch,
  *
  * The resulting LRE' is determined like this:
  *
- *	LRE' = min(HCE, max(LRE, epoch))
+ *	LRE' = min(container HCE, max(LRE, epoch))
  */
 int
 dsm_epoch_slip(daos_handle_t container, daos_epoch_t epoch,
 	       daos_epoch_state_t *state, daos_event_t *event);
 
 /**
- * Commit an epoch.
+ * Commit an epoch of a container handle.
  *
  *	container	IN  container handle
  *	epoch		IN  epoch to commit
- *	depends		IN  epochs "epoch" depends on
- *	ndepends	IN  number of epochs in "depends"
  *	state		OUT latest epoch state
  *	event		IN  completion event
  *
- * "depends" is an array of epochs on which "epoch" depends.  A NULL value
- * indicates that "epoch" is independent.
+ * Unless already committed, the epoch must be higher than the LHE. Otherwise,
+ * an error is returned. Once the epoch is committed successfully, the
+ * resulting LHE becomes handle HCE + 1.
  */
 int
 dsm_epoch_commit(daos_handle_t container, daos_epoch_t epoch,
-		 const daos_epoch_t *depends, int ndepends,
 		 daos_epoch_state_t *state, daos_event_t *event);
-
-/**
- * Abort an epoch.
- *
- *	container	IN  container handle
- *	epoch		IN  epoch to abort
- *	state		OUT latest epoch state
- *	event		IN  completion event
- */
-int
-dsm_epoch_abort(daos_handle_t container, daos_epoch_t epoch,
-		daos_epoch_state_t *state, daos_event_t *event);
 
 /**
  * Wait for an epoch to be committed.
