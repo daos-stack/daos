@@ -18,10 +18,13 @@
  * (C) Copyright 2016 Intel Corporation.
  */
 /**
- * Server-side API of the DAOS Sharding & Resilience layer.
+ * Server-side management API offering the following functionalities:
+ * - manage storage allocation (PMEM files, disk partitions, ...)
+ * - initialize pool and target service
+ * - provide fault domains
  */
 
-#ifndef __DSR_SRV_H__
-#define __DSR_SRV_H__
+#ifndef __DMG_SRV_H__
+#define __DMG_SRV_H__
 
-#endif /* __DSR_SRV_H__ */
+#endif /* __DMG_SRV_H__ */

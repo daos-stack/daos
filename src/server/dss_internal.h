@@ -8,6 +8,7 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * Lesser General Public License for more details.
+ *
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the LGPL License as
@@ -17,11 +18,11 @@
  *
  * (C) Copyright 2016 Intel Corporation.
  */
-/**
- * Server-side API of the DAOS Sharding & Resilience layer.
- */
 
-#ifndef __DSR_SRV_H__
-#define __DSR_SRV_H__
+#include <string>
 
-#endif /* __DSR_SRV_H__ */
+/* module.c */
+int dss_module_init(void);
+int dss_module_fini(bool force);
+int dss_module_load(std::string modname);
+int dss_module_unload(std::string modname);

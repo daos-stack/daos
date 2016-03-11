@@ -5,6 +5,10 @@ Import('env')
 # Compiler options
 env.Append(CPPPATH = ['#/src/dsr/include'])
 
-# Builders
-SConscript('placement/SConscript', exports='env')
+# Generate SR client-side library
+client = env.SharedLibrary('daos_sr', Glob('placement/*.c'),
+			   LIBS='libdaos_common')
+env.Install('#/build/lib', client)
+
+# Build tests
 SConscript('tests/SConscript', exports='env')

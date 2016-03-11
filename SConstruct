@@ -19,6 +19,10 @@ else:
         sys.stdout = os.popen('tee ' + bldlog , 'w')
         sys.stderr = sys.stdout
 
+if env['PLATFORM'] == 'darwin':
+	# generate .so on OSX instead of .dylib
+	env['SHLIBSUFFIX'] = '.so'
+
 # Compiler options
 env.Append(CCFLAGS = ['-g', '-Wall', '-D_GNU_SOURCE', '-fpic'])
 env.Append(CCFLAGS = ['-O2'])

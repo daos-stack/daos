@@ -636,7 +636,7 @@ daos_event_fini(struct daos_event *ev)
 	struct daos_event_private *evx = daos_ev2evx(ev);
 	struct daos_eq_private	  *eqx;
 	struct daos_eq		  *eq;
-	int			  rc;
+	int			  rc = 0;
 
 	eqx = daos_eq_lookup(evx->evx_eqh);
 	if (eqx == NULL)

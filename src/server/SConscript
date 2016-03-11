@@ -2,4 +2,6 @@
 
 Import('env')
 
-print 'No agent code yet'
+# Generate server program
+server = env.Program('daos_server', Glob('*.cc'), LIBS=['libdaos_common', 'dl'])
+env.Install('#/build/bin', server)

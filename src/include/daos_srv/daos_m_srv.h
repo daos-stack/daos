@@ -18,10 +18,10 @@
  * (C) Copyright 2016 Intel Corporation.
  */
 /**
- * Server-side API of the DAOS Sharding & Resilience layer.
+ * Server-side API of the DAOS-M layer.
  */
 
-#ifndef __DSR_SRV_H__
-#define __DSR_SRV_H__
+#ifndef __DSM_SRV_H__
+#define __DSM_SRV_H__
 
-#endif /* __DSR_SRV_H__ */
+#endif /* __DSM_SRV_H__ */

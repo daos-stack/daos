@@ -22,6 +22,10 @@
 #ifndef __DAOS_LIST_H__
 #define __DAOS_LIST_H__
 
+#if defined (__cplusplus)
+extern "C" {
+#endif
+
 /*
  * Simple doubly linked list implementation.
  *
@@ -56,40 +60,40 @@ typedef struct daos_list_head daos_list_t;
  * the prev/next entries already!
  */
 static inline void
-__daos_list_add(daos_list_t *new, daos_list_t *prev, daos_list_t *next)
+__daos_list_add(daos_list_t *newe, daos_list_t *prev, daos_list_t *next)
 {
-	next->prev = new;
-	new->next = next;
-	new->prev = prev;
-	prev->next = new;
+	next->prev = newe;
+	newe->next = next;
+	newe->prev = prev;
+	prev->next = newe;
 }
 
 /**
  * Insert an entry at the start of a list.
- * \param new  new entry to be inserted
+ * \param newe  new entry to be inserted
  * \param head list to add it to
  *
  * Insert a new entry after the specified head.
  * This is good for implementing stacks.
  */
 static inline void
-daos_list_add(daos_list_t *new, daos_list_t *head)
+daos_list_add(daos_list_t *newe, daos_list_t *head)
 {
-	__daos_list_add(new, head, head->next);
+	__daos_list_add(newe, head, head->next);
 }
 
 /**
  * Insert an entry at the end of a list.
- * \param new  new entry to be inserted
+ * \param newe  new entry to be inserted
  * \param head list to add it to
  *
  * Insert a new entry before the specified head.
  * This is useful for implementing queues.
  */
 static inline void
-daos_list_add_tail(daos_list_t *new, daos_list_t *head)
+daos_list_add_tail(daos_list_t *newe, daos_list_t *head)
 {
-	__daos_list_add(new, head->prev, head);
+	__daos_list_add(newe, head->prev, head);
 }
 
 /*
@@ -561,4 +565,7 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
 		(tpos = daos_hlist_entry(pos, type, member), 1);               \
 	     pos = n)
 
+#if defined (__cplusplus)
+}
+#endif
 #endif /* __DAOS_LIST_H__ */

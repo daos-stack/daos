@@ -1346,7 +1346,6 @@ main(int argc, char **argv)
 	psc_argument_t	  args;
 	struct sigaction  sa_bak;
 	struct sigaction  sa;
-	int		  dmask = 0;
 	int		  opc;
 	int		  rc;
 
@@ -1376,7 +1375,6 @@ main(int argc, char **argv)
 		args.str = optarg;
 		switch (opc) {
 		case 'C':
-			dmask = DF_CL;
 			rc = psc_cl_parse_args(optarg, &args);
 			if (rc != 0)
 				goto failed;
@@ -1398,7 +1396,6 @@ main(int argc, char **argv)
 			}
 			break;
 		case 'P':
-			dmask = DF_CL;
 			rc = psc_pl_parse_args(optarg, &args);
 			if (rc != 0)
 				goto failed;
@@ -1409,14 +1406,12 @@ main(int argc, char **argv)
 
 			break;
 		case 'S':
-			dmask = DF_PL;
 			rc = psc_obj_schema_args(optarg, &args);
 			if (rc != 0)
 				goto failed;
 			break;
 
 		case 'O':
-			dmask = DF_PL;
 			rc = psc_obj_create_args(optarg, &args);
 			if (rc != 0)
 				goto failed;
@@ -1426,7 +1421,6 @@ main(int argc, char **argv)
 				goto failed;
 			break;
 		case 'T':
-			dmask = DF_PL;
 			rc = psc_target_change_args(optarg, &args);
 			if (rc != 0)
 				goto failed;

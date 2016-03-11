@@ -22,6 +22,10 @@
 #ifndef __DAOS_COMMON_H__
 #define __DAOS_COMMON_H__
 
+#if defined (__cplusplus)
+extern "C" {
+#endif
+
 #include <sys/time.h>
 #include <stdint.h>
 #include <inttypes.h>
@@ -54,6 +58,8 @@ enum {
 	DF_VOS1		= (1 << 12),
 	DF_VOS2		= (1 << 13),
 	DF_VOS3		= (1 << 14),
+	DF_SERVER	= (1 << 15),
+	DF_MGMT		= (1 << 16),
 };
 
 unsigned int daos_debug_mask(void);
@@ -251,4 +257,7 @@ int daos_array_find(void *array, unsigned int len, uint64_t key,
 	        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
 
+#if defined (__cplusplus)
+}
+#endif
 #endif /* __DAOS_COMMON_H__ */

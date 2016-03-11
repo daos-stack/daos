@@ -29,6 +29,10 @@
 #ifndef __DAOS_ERRNO_H__
 #define __DAOS_ERRNO_H__
 
+#if defined (__cplusplus)
+extern "C" {
+#endif
+
 typedef enum {
 	DER_ERR_BASE		= 2000,
 	/** no permission */
@@ -61,6 +65,8 @@ typedef enum {
 	DER_TIMEDOUT		= (DER_ERR_BASE + 14),
 	/** Memory free error */
 	DER_FREE_MEM		= (DER_ERR_BASE + 15),
+	/** Entry not found */
+	DER_ENOENT		= (DER_ERR_BASE + 16),
 	/** epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** epoch is too old, all data have been recycled */
@@ -84,4 +90,7 @@ typedef enum {
 
 const char *daos_errstr(daos_errno_t errno);
 
+#if defined (__cplusplus)
+}
+#endif
 #endif /*  __DAOS_ERRNO_H__ */
