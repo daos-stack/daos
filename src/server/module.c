@@ -29,6 +29,7 @@
 #include <daos/daos_errno.h>
 #include <daos/daos_common.h>
 #include <daos/daos_list.h>
+#include <daos/daos_rpc.h>
 
 #include "dss_internal.h"
 
@@ -135,7 +136,7 @@ dss_module_load(const char *modname)
 	}
 
 	/* register client RPC handlers */
-	rc = dss_rpc_register(smod->sm_cl_hdlrs, smod->sm_mod_id, 0);
+	rc = daos_rpc_register(smod->sm_cl_rpcs, smod->sm_mod_id, true);
 	if (rc) {
 		D_ERROR("failed to register client RPC for %s: %d\n",
 			modname, rc);
@@ -143,7 +144,7 @@ dss_module_load(const char *modname)
 	}
 
 	/* register server RPC handlers */
-	rc = dss_rpc_register(smod->sm_srv_hdlrs, smod->sm_mod_id, 1);
+	rc = daos_rpc_register(smod->sm_srv_rpcs, smod->sm_mod_id, true);
 	if (rc) {
 		D_ERROR("failed to register srv RPC for %s: %d\n",
 			modname, rc);
@@ -155,7 +156,7 @@ dss_module_load(const char *modname)
 	return 0;
 
 err_cl_rpc:
-	dss_rpc_unregister(smod->sm_cl_hdlrs);
+	daos_rpc_unregister(smod->sm_cl_rpcs);
 err_mod_init:
 	smod->sm_fini();
 err_lmod:
@@ -182,7 +183,7 @@ dss_module_unload(const char *modname)
 	smod = lmod->lm_dss_mod;
 
 	/* unregister client RPC handlers */
-	rc = dss_rpc_unregister(smod->sm_cl_hdlrs);
+	rc = daos_rpc_unregister(smod->sm_cl_rpcs);
 	if (rc) {
 		D_ERROR("failed to unregister client RPC for %s: %d\n",
 			modname, rc);
@@ -190,7 +191,7 @@ dss_module_unload(const char *modname)
 	}
 
 	/* unregister server RPC handlers */
-	rc = dss_rpc_unregister(smod->sm_srv_hdlrs);
+	rc = daos_rpc_unregister(smod->sm_srv_rpcs);
 	if (rc) {
 		D_ERROR("failed to register srv RPC for %s: %d\n",
 			modname, rc);

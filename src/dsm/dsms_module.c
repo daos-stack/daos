@@ -44,29 +44,29 @@ fini(void)
 	return 0;
 }
 
-static struct dss_handler client_handlers[] = {
+static struct daos_rpc client_rpcs[] = {
 	{
-		.sh_name	= "DSM_POOL_CONNECT",
-		.sh_opc		= 1,
-		.sh_ver		= 1,
-		.sh_flags	= 0,
-		.sh_in_hdlr	= dsm_proc_pool_connect_in,
-		.sh_in_sz	= 0,
-		.sh_out_hdlr	= dsm_proc_pool_connect_out,
-		.sh_out_sz	= 0,
-		.sh_hdlr	= dsms_hdlr_pool_connect
+		.dr_name	= "DSM_POOL_CONNECT",
+		.dr_opc		= 1,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_in_hdlr	= dsm_proc_pool_connect_in,
+		.dr_in_sz	= 0,
+		.dr_out_hdlr	= dsm_proc_pool_connect_out,
+		.dr_out_sz	= 0,
+		.dr_hdlr	= dsms_hdlr_pool_connect
 	}, {
-		.sh_name	= "DSM_POOL_DISCONNECT",
-		.sh_opc		= 2,
-		.sh_ver		= 1,
-		.sh_flags	= 0,
-		.sh_in_hdlr	= dsm_proc_pool_disconnect_in,
-		.sh_in_sz	= 0,
-		.sh_out_hdlr	= dsm_proc_pool_disconnect_out,
-		.sh_out_sz	= 0,
-		.sh_hdlr	= dsms_hdlr_pool_disconnect
+		.dr_name	= "DSM_POOL_DISCONNECT",
+		.dr_opc		= 2,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_in_hdlr	= dsm_proc_pool_disconnect_in,
+		.dr_in_sz	= 0,
+		.dr_out_hdlr	= dsm_proc_pool_disconnect_out,
+		.dr_out_sz	= 0,
+		.dr_hdlr	= dsms_hdlr_pool_disconnect
 	}, {
-		.sh_opc		= 0
+		.dr_opc		= 0
 	}
 };
 
@@ -76,6 +76,6 @@ struct dss_module daos_m_srv_module =  {
 	.sm_ver		= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,
-	.sm_cl_hdlrs	= client_handlers,
-	.sm_srv_hdlrs	= NULL
+	.sm_cl_rpcs	= client_rpcs,
+	.sm_srv_rpcs	= NULL
 };

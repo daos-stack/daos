@@ -41,30 +41,6 @@
  */
 
 /**
- * Handler for a given type of incoming RPCs.
- */
-struct dss_handler {
-	/* Name of the handler */
-	const char	*sh_name;
-	/* Operation code associated with the handler */
-	dtp_opcode_t	 sh_opc;
-	/* RPC version for this operation code */
-	int		 sh_ver;
-	/* Operation flags, TBD */
-	int		 sh_flags;
-	/* Pack/unpack input parameter, invoked from C code */
-	dtp_proc_cb_t	 sh_in_hdlr;
-	/* Size of input parameter */
-	int		 sh_in_sz;
-	/* Pack/unpack output parameter, invoked from C code */
-	dtp_proc_cb_t	 sh_out_hdlr;
-	/* Size of output parameter */
-	int		 sh_out_sz;
-	/* Request handler, invoked from C code */
-	dtp_rpc_cb_t	 sh_hdlr;
-};
-
-/**
  * Each module should provide a dss_module structure which defines the module
  * interface. The name of the allocated structure must be the library name
  * (without the ".so" extension) suffixed by "module". This symbol will be
@@ -79,19 +55,19 @@ struct dss_module {
 	/* Name of the module */
 	const char		 *sm_name;
 	/* Module id see enum dss_module_id */
-	int			sm_mod_id;
+	int			  sm_mod_id;
 	/* Module version */
 	int			  sm_ver;
 	/* Setup function, invoked just after successful load */
 	int			(*sm_init)(void);
 	/* Teardown function, invoked just before module unload */
 	int			(*sm_fini)(void);
-	/* Array of request handlers for RPC sent by client nodes,
-	 * last entry of the array must be empty */
-	struct dss_handler	 *sm_cl_hdlrs;
-	/* Array of request handlers for RPC sent by other servers,
-	 * last entry of the array must be empty */
-	struct dss_handler	 *sm_srv_hdlrs;
+	/* Array of RPC definition for request sent by client nodes, last entry
+	 * of the array must be empty */
+	struct daos_rpc		 *sm_cl_rpcs;
+	/* Array of RPC definition for request sent by other servers, last entry
+	 * of the array must be empty */
+	struct daos_rpc		 *sm_srv_rpcs;
 };
 
 /*

@@ -67,24 +67,24 @@ echo(dtp_rpc_t *req)
 }
 
 /** Handlers for RPC sent by clients */
-static struct dss_handler dmg_cl_hdlrs[] = {
+static struct daos_rpc dmg_cl_rpcs[] = {
 	{
-		/* .sh_name	= */	"ECHO",
-		/* .sh_opc	= */	0xa1,
-		/* .sh_ver	= */	1,
-		/* .sh_flags	= */	0,
-		/* .sh_in_hdlr	= */	dtp_proc_echo_in_t,
-		/* .sh_in_sz	= */	sizeof(echo_in_t),
-		/* .sh_out_hdlr	= */	dtp_proc_echo_out_t,
-		/* .sh_out_sz	= */	sizeof(echo_out_t),
-		/* .sh_hdlr	= */	echo,
+		/* .dr_name	= */	"ECHO",
+		/* .dr_opc	= */	0xa1,
+		/* .dr_ver	= */	1,
+		/* .dr_flags	= */	0,
+		/* .dr_in_hdlr	= */	dtp_proc_echo_in_t,
+		/* .dr_in_sz	= */	sizeof(echo_in_t),
+		/* .dr_out_hdlr	= */	dtp_proc_echo_out_t,
+		/* .dr_out_sz	= */	sizeof(echo_out_t),
+		/* .dr_hdlr	= */	echo,
 	},
 	{
 	},
 };
 
 /** Handlers for RPC sent by other servers */
-static struct dss_handler dmg_srv_hdlrs[] = {
+static struct daos_rpc dmg_srv_rpcs[] = {
 	{
 	},
 };
@@ -109,6 +109,6 @@ struct dss_module daos_mgmt_srv_module = {
 	.sm_ver		= 1,
 	.sm_init	= dmg_init,
 	.sm_fini	= dmg_fini,
-	.sm_cl_hdlrs	= dmg_cl_hdlrs,
-	.sm_srv_hdlrs	= dmg_srv_hdlrs,
+	.sm_cl_rpcs	= dmg_cl_rpcs,
+	.sm_srv_rpcs	= dmg_srv_rpcs,
 };

@@ -37,21 +37,16 @@ dss_get_module_info(struct dss_thread_local_storage *dtc)
 	return dmi;
 }
 
-/* module.cc */
+/* module.c */
 int dss_module_init(void);
 int dss_module_fini(bool force);
 int dss_module_load(const char *modname);
 int dss_module_unload(const char *modname);
 
-/* rpc.cc */
-int dss_rpc_register(struct dss_handler *hdlrs, int modid,
-		     int server_only);
-int dss_rpc_unregister(struct dss_handler *hdlrs);
-
-/* srv.cc */
+/* srv.c */
 int dss_srv_init(void);
 int dss_srv_fini();
 
-/* tls.cc */
+/* tls.c */
 void dss_tls_fini(void *arg);
 struct dss_thread_local_storage *dss_tls_init(int tag);
