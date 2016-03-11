@@ -24,7 +24,8 @@ REQS.define('pmix2',
             requires=['hwloc'],
            )
 
-REQS.require(ENV, "pmix2", "pthread")
+REQS.require(ENV, "pmix2")
+ENV.Append(LIBS=['pthread'])
 ENV.Program("foo2", Glob("*.c"))
 
 Help(OPTS.GenerateHelpText(ENV))

@@ -11,6 +11,7 @@ PATH = os.path.realpath(os.path.join(Dir('#').abspath, "..",
                                      "components.py"))
 PREREQS.preload(PATH)
 
-PREREQS.require(ENV, "pmix", "pthread")
+PREREQS.require(ENV, "pmix")
+ENV.Append(LIBS=['pthread'])
 ENV.Program("foo", Glob("*.c"))
 Help(OPTS.GenerateHelpText(ENV))

@@ -30,8 +30,6 @@ else:
 
 BMI_BUILD += ['make', 'make install']
 
-REQS.define('pthread', libs=['pthread'])
-
 REQS.define('boost', headers=['boost/preprocessor.hpp'])
 
 REQS.define('bmi',
@@ -63,7 +61,7 @@ REQS.define('mercury',
                       '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC'
                       % BMI_LIB, 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
-            requires=['bmi', 'openpa', 'pthread', 'boost'] + RT,
+            requires=['bmi', 'openpa', 'boost'] + RT,
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
