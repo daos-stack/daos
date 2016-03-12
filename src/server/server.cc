@@ -24,8 +24,10 @@
  */
 
 #include <signal.h>
+#include <stdlib.h>
 
 #include <daos/daos_common.h>
+#include <daos/daos_transport.h>
 
 #include "dss_internal.h"
 
@@ -34,18 +36,39 @@ server_init()
 {
 	int rc;
 
-	/* Initialize the modular interface */
-	rc = dss_module_init();
+	/* use full debug dy default for now */
+	rc = setenv("DAOS_DEBUG", "-1", false);
 	if (rc)
+		D_ERROR("failed to enable full debug, %d\n", rc);
+
+	/* initialize the network layer */
+	rc = dtp_init("bmi+tcp://localhost:8889", true);
+	if (rc) {
+		D_ERROR("failed to initialize network, %d\n", rc);
 		return rc;
+	}
+	D_DEBUG(DF_SERVER, "Network successfully initialized\n");
+
+	/* initialize the modular interface */
+	rc = dss_module_init();
+	if (rc) {
+		D_ERROR("failed to initialize the modular interface, %d\n", rc);
+		goto exit_net;
+	}
+	D_DEBUG(DF_SERVER, "Module interface successfully initialized\n");
 
 	return 0;
+
+exit_net:
+	dtp_finalize();
+	return rc;
 }
 
 static void
 server_fini(bool force)
 {
 	dss_module_fini(force);
+	dtp_finalize();
 }
 
 static void
@@ -65,13 +88,13 @@ test()
 	if (rc)
 		return;
 
-	D_DEBUG(DF_SERVER, "management module successfully loaded");
+	D_DEBUG(DF_SERVER, "management module successfully loaded\n");
 
 	rc = dss_module_unload("daos_mgmt_srv");
 	if (rc)
 		return;
 
-	D_DEBUG(DF_SERVER, "management module successfully unloaded");
+	D_DEBUG(DF_SERVER, "management module successfully unloaded\n");
 }
 
 int

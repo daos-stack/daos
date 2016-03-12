@@ -4,8 +4,10 @@ Import('env')
 
 env.Append(CPPPATH = ['#/src/dtp'])
 
-env.Library('libdaos_transport', Glob('*.c'))
-env.Append(LIBPATH = ['#/build/dtp'])
+libraries = ['daos_common', 'mercury']
+
+dtp = env.SharedLibrary('libdaos_transport', Glob('*.c'), LIBS=libraries)
+env.Install('#/build/lib/', dtp)
 
 # Builders
 SConscript('tests/SConscript', exports='env')
