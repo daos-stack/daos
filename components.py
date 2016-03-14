@@ -89,7 +89,8 @@ RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
 REQS.define('ompi',
             retriever=RETRIEVER,
             commands=['./autogen.pl --no-ompi --no-oshmem',
-                      './configure --prefix=$OMPI_PREFIX ' \
+                      './configure --with-platform=optimized ' \
+                      '--prefix=$OMPI_PREFIX ' \
                       '--with-pmix=$PMIX_PREFIX ' \
                       '--disable-mpi-fortran ' \
                       '--with-libevent=external ' \
