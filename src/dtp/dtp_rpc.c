@@ -153,8 +153,7 @@ out:
 }
 
 int
-dtp_reply_send(dtp_rpc_t *req, unsigned int timeout, dtp_cb_t complete_cb,
-	       void *arg)
+dtp_reply_send(dtp_rpc_t *req)
 {
 	struct dtp_rpc_priv	*rpc_priv = NULL;
 	int			rc = 0;
@@ -165,7 +164,7 @@ dtp_reply_send(dtp_rpc_t *req, unsigned int timeout, dtp_cb_t complete_cb,
 	}
 
 	rpc_priv = container_of(req, struct dtp_rpc_priv, drp_pub);
-	rc = dtp_hg_reply_send(rpc_priv, complete_cb, arg);
+	rc = dtp_hg_reply_send(rpc_priv);
 	if (rc != 0) {
 		D_ERROR("dtp_hg_reply_send failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_priv->drp_pub.dr_opc);

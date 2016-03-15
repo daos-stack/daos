@@ -462,13 +462,11 @@ out:
 	return rc;
 }
 
-/* the common completion callback for sending RPC reply */
+/* just to release the reference taken at dtp_hg_reply_send */
 static hg_return_t
 dtp_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 {
 	struct dtp_hg_send_cbinfo	*req_cbinfo;
-	struct dtp_cb_info		dtp_cbinfo;
-	dtp_rpc_t			*rpc_pub;
 	struct dtp_rpc_priv		*rpc_priv;
 	hg_return_t			hg_ret = HG_SUCCESS;
 	dtp_opcode_t			opc;
@@ -478,48 +476,24 @@ dtp_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 	req_cbinfo = (struct dtp_hg_send_cbinfo *)hg_cbinfo->arg;
 	D_ASSERT(req_cbinfo != NULL && req_cbinfo->rsc_rpc_priv != NULL);
 
-	if (hg_cbinfo->ret != HG_SUCCESS) {
-		D_ERROR("hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
-		rc = -DER_DTP_HG;
-		hg_ret = hg_cbinfo->ret;
-	}
-
-	opc = req_cbinfo->rsc_rpc_priv->drp_pub.dr_opc;
 	rpc_priv = req_cbinfo->rsc_rpc_priv;
-	D_ASSERT(rpc_priv != NULL);
-	rpc_pub = &rpc_priv->drp_pub;
+	opc = rpc_priv->drp_pub.dr_opc;
+	hg_ret = hg_cbinfo->ret;
+	if (hg_ret != HG_SUCCESS)
+		D_ERROR("dtp_hg_reply_send_cb, hg_cbinfo->ret: %d, "
+			"opc: 0x%x.\n", hg_ret, opc);
 
-	if (req_cbinfo->rsc_cb == NULL) {
-		/*
-		D_DEBUG(DF_TP, "no completion callback registered, "
-			"opc: 0x%x.\n", opc);
-		*/
-		D_GOTO(out, hg_ret);
-	}
-
-	dtp_cbinfo.dci_rpc = rpc_pub;
-	dtp_cbinfo.dci_arg = req_cbinfo->rsc_arg;
-	dtp_cbinfo.dci_rc = rc;
-
-	D_ASSERT(req_cbinfo->rsc_cb != NULL);
-	rc = req_cbinfo->rsc_cb(&dtp_cbinfo);
-	if (rc != 0)
-		D_ERROR("req_cbinfo->rsc_cb returned %d.\n", rc);
-
-out:
 	/* corresponding to the dtp_req_addref in dtp_hg_reply_send */
-	rc = dtp_req_decref(rpc_pub);
+	rc = dtp_req_decref(&rpc_priv->drp_pub);
 	if (rc != 0)
 		D_ERROR("dtp_req_decref failed, rc: %d, opc: 0x%x.\n", rc, opc);
 
 	D_FREE_PTR(req_cbinfo);
-
 	return hg_ret;
 }
 
 int
-dtp_hg_reply_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb,
-		  void *arg)
+dtp_hg_reply_send(struct dtp_rpc_priv *rpc_priv)
 {
 	struct dtp_hg_send_cbinfo	*cb_info;
 	hg_return_t			hg_ret = HG_SUCCESS;
@@ -535,8 +509,6 @@ dtp_hg_reply_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb,
 	hg_out_struct = &rpc_priv->drp_pub.dr_output;
 
 	cb_info->rsc_rpc_priv = rpc_priv;
-	cb_info->rsc_cb = complete_cb;
-	cb_info->rsc_arg = arg;
 
 	hg_ret = HG_Respond(rpc_priv->drp_hg_hdl, dtp_hg_reply_send_cb, cb_info,
 			    hg_out_struct);

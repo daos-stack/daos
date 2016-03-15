@@ -86,7 +86,7 @@ int echo_srv_shutdown(dtp_rpc_t *rpc)
 	assert(rpc->dr_input == NULL);
 	assert(rpc->dr_output == NULL);
 
-	rc = dtp_reply_send(rpc, 0, NULL, NULL);
+	rc = dtp_reply_send(rpc);
 	printf("echo_srver done issuing shutdown responses.\n");
 
 	echo_srv.do_shutdown = 1;
@@ -114,7 +114,7 @@ int echo_srv_checkin(dtp_rpc_t *rpc)
 	checkin_output->ret = 0;
 	checkin_output->room_no = 1082;
 
-	rc = dtp_reply_send(rpc, 0, NULL, NULL);
+	rc = dtp_reply_send(rpc);
 
 	printf("echo_srver sent checkin reply, ret: %d, room_no: %d.\n",
 	       checkin_output->ret, checkin_output->room_no);

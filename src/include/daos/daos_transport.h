@@ -310,13 +310,6 @@ dtp_req_send(dtp_rpc_t *req, unsigned int timeout, dtp_cb_t complete_cb,
  * Send a RPC reply.
  *
  * \param req [IN]              pointer to RPC request
- * \param timeout [IN]          the timed out value of the reply (millisecond)
- *                              the dtp_cb_info_t::dci_rc will be set as
- *                              -DER_TIMEDOUT when it is timed out.
- * \param complete_cb [IN]      completion callback, will be triggered when the
- *                              RPC reply is sent out, in the context of user's
- *                              calling of dtp_progress().
- * \param arg [IN]              arguments for the \a complete_cb
  *
  * \return                      zero on success, negative value if error
  *
@@ -325,8 +318,7 @@ dtp_req_send(dtp_rpc_t *req, unsigned int timeout, dtp_cb_t complete_cb,
  *        \see dtp_req_create.
  */
 int
-dtp_reply_send(dtp_rpc_t *req, unsigned int timeout, dtp_cb_t complete_cb,
-	       void *arg);
+dtp_reply_send(dtp_rpc_t *req);
 
 /**
  * Abort a RPC request.
