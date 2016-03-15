@@ -117,19 +117,19 @@ do {									\
 #define DF_X64		"%" PRIx64
 
 /* memory allocating macros */
-#define D_ALLOC(ptr, size)                                                \
-	do {                                                              \
-		(ptr) = (__typeof__(ptr))calloc(1, size);                     \
-		if ((ptr) != NULL)                                        \
-			break;                                            \
-		D_ERROR("out of memory (tried to alloc '" #ptr "' = %d)", \
-			(int)(size));                                     \
+#define D_ALLOC(ptr, size)						 \
+	do {								 \
+		(ptr) = (__typeof__(ptr))calloc(1, size);		 \
+		if ((ptr) != NULL)					 \
+			break;						 \
+		D_ERROR("out of memory (tried to alloc '" #ptr "' = %d)",\
+			(int)(size));					 \
 	} while (0)
 
-# define D_FREE(ptr, size)                                                \
-	do {                                                              \
-		free(ptr);                                                \
-		(ptr) = NULL;                                             \
+# define D_FREE(ptr, size)						\
+	do {								\
+		free(ptr);						\
+		(ptr) = NULL;						\
 	} while ((size) - (size))
 
 #define D_ALLOC_PTR(ptr)        D_ALLOC(ptr, sizeof *(ptr))

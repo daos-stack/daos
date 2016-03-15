@@ -71,30 +71,61 @@ server_fini(bool force)
 	dtp_finalize();
 }
 
-static void
-sig_handler(int signo)
-{
-	if (signo == SIGINT)
-		server_fini(true);
-}
-
 void
 test()
 {
+	dtp_context_t   ctx;
+	int		i = 0;
+	int		rc;
+
+	rc = dtp_context_create(NULL, &ctx);
+	if (rc) {
+		D_ERROR("failed to create context %d\n", rc);
+		return;
+	}
+
+	while (i < 100) {
+		rc = dtp_progress(ctx, 1, NULL, NULL, NULL);
+		if (rc != 0 && rc != -ETIMEDOUT) {
+			D_ERROR("progress failed %d\n", rc);
+			break;
+		}
+		sleep(1);
+		i++;
+	}
+
+	rc = dtp_context_destroy(ctx, 0);
+	if (rc)
+		D_ERROR("failed to destroy context %d\n", rc);
+}
+
+static int
+modules_load()
+{
 	int rc;
 
-	/* load the management module */
 	rc = dss_module_load("daos_mgmt_srv");
 	if (rc)
-		return;
+		return rc;
 
-	D_DEBUG(DF_SERVER, "management module successfully loaded\n");
+	D_DEBUG(DF_SERVER, "daos_mgmt_srv module successfully unloaded\n");
 
-	rc = dss_module_unload("daos_mgmt_srv");
-	if (rc)
-		return;
+	return 0;
+}
 
-	D_DEBUG(DF_SERVER, "management module successfully unloaded\n");
+static void
+modules_unload()
+{
+	dss_module_unload("daos_mgmt_srv");
+}
+
+static void
+sig_handler(int signo)
+{
+	if (signo == SIGINT) {
+		modules_unload();
+		server_fini(true);
+	}
 }
 
 int
@@ -102,19 +133,29 @@ main()
 {
 	int rc;
 
+	/* generic server initialization */
 	rc = server_init();
 	if (rc)
 		return rc;
 
+	/* loaded default modules */
+	modules_load();
+	if (rc)
+		goto out_server;
+
 	if (signal(SIGINT, sig_handler) == SIG_ERR) {
-		D_DEBUG(DF_SERVER, "cannot register signal handler");
-		exit(1);
+		D_ERROR("cannot register signal handler\n");
+		rc = -DER_INVAL;
+		goto out_mod;
 	}
 
 	/* XXX just for testing, to be removed */
 	test();
-	sleep(10);
 
+out_mod:
+	modules_unload();
+out_server:
 	server_fini(true);
-	return 0;
+
+	return rc;
 }

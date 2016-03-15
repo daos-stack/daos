@@ -35,30 +35,30 @@
 #include "dss_internal.h"
 
 /* Loaded module instance */
-struct srv_mod {
+struct loaded_mod {
 	/* library handle grabbed with dlopen(3) */
-	void			*sm_hdl;
+	void			*lm_hdl;
 	/* module interface looked up via dlsym(3) */
-	struct dss_module	*sm_mod;
+	struct dss_module	*lm_dss_mod;
 	/* linked list of loaded module */
-	daos_list_t		 sm_lk;
+	daos_list_t		 lm_lk;
 };
 
 /* Track list of loaded modules */
-DAOS_LIST_HEAD(srv_mod_list);
+DAOS_LIST_HEAD(loaded_mod_list);
 
-static struct srv_mod *
+static struct loaded_mod *
 dss_module_search(std::string modname, bool unlink)
 {
 	daos_list_t	*tmp;
 	daos_list_t	*pos;
 
 	/* search for the module in the loaded module list */
-	daos_list_for_each_safe(pos, tmp, &srv_mod_list) {
-		struct srv_mod	*mod;
+	daos_list_for_each_safe(pos, tmp, &loaded_mod_list) {
+		struct loaded_mod	*mod;
 
-		mod = daos_list_entry(pos, struct srv_mod, sm_lk);
-		if (strcmp(mod->sm_mod->sm_name, modname.c_str()) == 0) {
+		mod = daos_list_entry(pos, struct loaded_mod, lm_lk);
+		if (strcmp(mod->lm_dss_mod->sm_name, modname.c_str()) == 0) {
 			if (unlink)
 				daos_list_del_init(pos);
 			return mod;
@@ -72,11 +72,12 @@ dss_module_search(std::string modname, bool unlink)
 int
 dss_module_load(std::string modname)
 {
-	struct srv_mod	*mod;
-	std::string	 name;
-	void		*handle;
-	char		*err;
-	int		 rc;
+	struct loaded_mod	*lmod;
+	struct dss_module	*smod;
+	std::string		 name;
+	void			*handle;
+	char			*err;
+	int			 rc;
 
 	/* load the dynamic library */
 	name = "lib" + modname + ".so";
@@ -87,51 +88,72 @@ dss_module_load(std::string modname)
 	}
 
 	/* allocate data structure to track this module instance */
-	D_ALLOC_PTR(mod);
-	if (!mod) {
+	D_ALLOC_PTR(lmod);
+	if (!lmod) {
 		rc = -DER_NOMEM;
 		goto err_hdl;
 	}
 
-	mod->sm_hdl = handle;
+	lmod->lm_hdl = handle;
 
 	/* clear existing errors, if any */
 	dlerror();
 
 	/* lookup the dss_module structure defining the module interface */
 	name = modname + "_module";
-	mod->sm_mod = (struct dss_module *)dlsym(handle, name.c_str());
+	smod = (struct dss_module *)dlsym(handle, name.c_str());
 
 	/* check for errors */
 	err = dlerror();
 	if (err != NULL) {
 		D_ERROR("failed to load %s: %s\n", modname.c_str(), err);
 		rc = -DER_INVAL;
-		goto err_mod;
+		goto err_lmod;
 	}
+	lmod->lm_dss_mod = smod;
 
 	/* check module name is consistent */
-	if (strcmp(mod->sm_mod->sm_name, modname.c_str()) != 0) {
+	if (strcmp(smod->sm_name, modname.c_str()) != 0) {
 		D_ERROR("inconsistent module name %s != %s\n", modname.c_str(),
-			mod->sm_mod->sm_name);
+			smod->sm_name);
 		rc = -DER_INVAL;
 		goto err_hdl;
 	}
 
 	/* initialize the module */
-	rc = mod->sm_mod->sm_init();
+	rc = smod->sm_init();
 	if (rc) {
 		D_ERROR("failed to init %s: %d\n", modname.c_str(), rc);
 		rc = -DER_INVAL;
-		goto err_mod;
+		goto err_lmod;
+	}
+
+	/* register client RPC handlers */
+	rc = dss_rpc_register(smod->sm_cl_hdlrs);
+	if (rc) {
+		D_ERROR("failed to register client RPC for %s: %d\n",
+			modname.c_str(), rc);
+		goto err_mod_init;
+	}
+
+	/* register server RPC handlers */
+	rc = dss_rpc_register(smod->sm_srv_hdlrs);
+	if (rc) {
+		D_ERROR("failed to register srv RPC for %s: %d\n",
+			modname.c_str(), rc);
+		goto err_cl_rpc;
 	}
 
 	/* module successfully loaded, add it to the tracking list */
-	daos_list_add_tail(&mod->sm_lk, &srv_mod_list);
+	daos_list_add_tail(&lmod->lm_lk, &loaded_mod_list);
 	return 0;
 
-err_mod:
-	D_FREE_PTR(mod);
+err_cl_rpc:
+	dss_rpc_unregister(smod->sm_cl_hdlrs);
+err_mod_init:
+	smod->sm_fini();
+err_lmod:
+	D_FREE_PTR(lmod);
 err_hdl:
 	dlclose(handle);
 	return rc;
@@ -140,8 +162,8 @@ err_hdl:
 int
 dss_module_unload(std::string modname)
 {
-	struct srv_mod	*mod;
-	int		 rc;
+	struct loaded_mod	*mod;
+	int			 rc;
 
 	/* lookup the module from the loaded module list */
 	mod = dss_module_search(modname, true);
@@ -151,10 +173,10 @@ dss_module_unload(std::string modname)
 		return -DER_ENOENT;
 
 	/* finalize the module */
-	rc = mod->sm_mod->sm_fini();
+	rc = mod->lm_dss_mod->sm_fini();
 
 	/* close the library handle */
-	dlclose(mod->sm_hdl);
+	dlclose(mod->lm_hdl);
 
 	/* free memory used to track this module instance */
 	D_FREE_PTR(mod);

@@ -25,6 +25,8 @@
 #ifndef __DSS_API_H__
 #define __DSS_API_H__
 
+#include <daos/daos_transport.h>
+
 /**
  * Stackable Module API
  * Provides a modular interface to load and register server-side code on
@@ -42,22 +44,35 @@
  */
 struct dss_handler {
 	/* Name of the handler */
-	const char	 *sh_name;
+	const char	*sh_name;
 	/* Operation code associated with the handler */
-	int		  sh_opc;
-	/* Request version for this operation code */
-	int		  sh_ver;
+	dtp_opcode_t	 sh_opc;
+	/* RPC version for this operation code */
+	int		 sh_ver;
 	/* Operation flags, TBD */
-	int		  sh_flags;
-	/* Actual handler function */
-	int		(*sh_func)(void *req);
+	int		 sh_flags;
+	/* Pack/unpack input parameter, invoked from C code */
+	dtp_proc_cb_t	 sh_in_hdlr;
+	/* Size of input parameter */
+	int		 sh_in_sz;
+	/* Pack/unpack output parameter, invoked from C code */
+	dtp_proc_cb_t	 sh_out_hdlr;
+	/* Size of output parameter */
+	int		 sh_out_sz;
+	/* Request handler, invoked from C code */
+	dtp_rpc_cb_t	 sh_hdlr;
 };
 
 /**
  * Each module should provide a dss_module structure which defines the module
  * interface. The name of the allocated structure must be the library name
- * (without the extension) suffixed by "handlers". This symbol will be looked up
- * automatically when the module library is loaded and failed if not found.
+ * (without the ".so" extension) suffixed by "module". This symbol will be
+ * looked up automatically when the module library is loaded and failed if not
+ * found.
+ *
+ * For instance, the dmg module reports a "sm_name" of "daos_mgmt_srv", the
+ * actual library filename is libdaos_mgmt_srv.so and it defines a dss_module
+ * structure called daos_mgmt_srv_module.
  */
 struct dss_module {
 	/* Name of the module */
@@ -68,14 +83,12 @@ struct dss_module {
 	int			(*sm_init)(void);
 	/* Teardown function, invoked just before module unload */
 	int			(*sm_fini)(void);
-	/* Array of request handlers for RPC sent by client nodes */
+	/* Array of request handlers for RPC sent by client nodes,
+	 * last entry of the array must be empty */
 	struct dss_handler	 *sm_cl_hdlrs;
-	/* Array of request handlers for RPC sent by other servers */
+	/* Array of request handlers for RPC sent by other servers,
+	 * last entry of the array must be empty */
 	struct dss_handler	 *sm_srv_hdlrs;
 };
-
-/**
- * Request context
- */
 
 #endif /* __DSS_API_H__ */

@@ -32,31 +32,59 @@
 #include <daos_srv/daos_server.h>
 #include <daos/daos_common.h>
 
+DTP_GEN_PROC(echo_in_t,
+        ((bool)(age)) ((dtp_string_t)(name)) ((uint32_t)(days)))
+DTP_GEN_PROC(echo_out_t,
+        ((int32_t)(ret)) ((uint32_t)(room_no)))
+
 static int
-ping(void *req)
+echo(dtp_rpc_t *req)
 {
-	return 0;
+	echo_in_t	*in = NULL;
+	echo_out_t	*out = NULL;
+	int		 rc = 0;
+
+	/* dtp internally already allocated the input/output buffer */
+	in = (echo_in_t *)req->dr_input;
+	assert(in != NULL);
+	out = (echo_out_t *)req->dr_output;
+	assert(out != NULL);
+
+	D_DEBUG(DF_MGMT, "echo_srv recv'd checkin, opc: 0x%x\n", req->dr_opc);
+	D_DEBUG(DF_MGMT, "checkin input - age: %d, name: %s, days: %d\n",
+		in->age, in->name, in->days);
+
+	out->ret = 0;
+	out->room_no = 1082;
+
+	rc = dtp_reply_send(req);
+
+	D_DEBUG(DF_MGMT, "echo_srv sent checkin reply, ret: %d, room_no: %d\n",
+		out->ret, out->room_no);
+
+	return rc;
 }
 
 /** Handlers for RPC sent by clients */
 static struct dss_handler dmg_cl_hdlrs[] = {
 	{
-		.sh_name	= "PING",
-		.sh_opc		= 0x1,
-		.sh_ver		= 0,
-		.sh_flags	= 0,
-		.sh_func	= ping,
+		/* .sh_name	= */	"ECHO",
+		/* .sh_opc	= */	0xa1,
+		/* .sh_ver	= */	1,
+		/* .sh_flags	= */	0,
+		/* .sh_in_hdlr	= */	dtp_proc_echo_in_t,
+		/* .sh_in_sz	= */	sizeof(echo_in_t),
+		/* .sh_out_hdlr	= */	dtp_proc_echo_out_t,
+		/* .sh_out_sz	= */	sizeof(echo_out_t),
+		/* .sh_hdlr	= */	echo,
+	},
+	{
 	},
 };
 
 /** Handlers for RPC sent by other servers */
 static struct dss_handler dmg_srv_hdlrs[] = {
 	{
-		.sh_name	= "PING",
-		.sh_opc		= 0x2,
-		.sh_ver		= 0,
-		.sh_flags	= 0,
-		.sh_func	= ping,
 	},
 };
 
