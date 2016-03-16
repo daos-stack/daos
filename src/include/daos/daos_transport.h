@@ -103,7 +103,7 @@ typedef enum {
 } dtp_bulk_perm_t;
 
 /* bulk transferring descriptor */
-typedef struct {
+struct dtp_bulk_desc {
 	dtp_endpoint_t	dbd_remote_ep; /* remote endpoint */
 	dtp_bulk_op_t	dbd_bulk_op; /* DTP_BULK_PUT or DTP_BULK_GET */
 	dtp_bulk_t	dbd_remote_hdl; /* remote bulk handle */
@@ -111,24 +111,29 @@ typedef struct {
 	dtp_bulk_t	dbd_local_hdl; /* local bulk handle */
 	daos_off_t	dbd_local_off; /* local offset */
 	daos_size_t	dbd_len; /* length of the bulk transferring */
-} dtp_bulk_desc_t;
+};
 
-typedef struct dtp_cb_info {
+struct dtp_cb_info {
 	void		*dci_arg; /* User passed in arg */
 	dtp_rpc_t	*dci_rpc; /* rpc struct */
 	int		dci_rc; /* return code */
-} dtp_cb_info_t;
+};
 
-typedef void *dtp_bulk_cb_info_t;
+struct dtp_bulk_cb_info {
+	void			*bci_arg; /* User passed in arg */
+	int			bci_rc; /* return code */
+	dtp_context_t		bci_ctx; /* DTP context */
+	struct dtp_bulk_desc	*bci_bulk_desc;
+};
 
 /* server-side RPC handler */
 typedef int (*dtp_rpc_cb_t)(dtp_rpc_t *rpc);
 
-/* completion callback for dtp_req_send/dtp_reply_send */
-typedef int (*dtp_cb_t)(const dtp_cb_info_t *cb_info);
+/* completion callback for dtp_req_send */
+typedef int (*dtp_cb_t)(const struct dtp_cb_info *cb_info);
 
 /* completion callback for bulk transferring, i.e. dtp_bulk_transfer() */
-typedef int (*dtp_bulk_cb_t)(const dtp_bulk_cb_info_t *cb_info);
+typedef int (*dtp_bulk_cb_t)(const struct dtp_bulk_cb_info *cb_info);
 
 /* Abstraction pack/unpack processor */
 typedef void * dtp_proc_t;
@@ -289,7 +294,7 @@ dtp_req_decref(dtp_rpc_t *req);
  *
  * \param req [IN]              pointer to RPC request
  * \param timeout [IN]          the timed out value of the request (millisecond)
- *                              the dtp_cb_info_t::dci_rc will be set as
+ *                              the struct dtp_cb_info::dci_rc will be set as
  *                              -DER_TIMEDOUT when it is timed out.
  * \param complete_cb [IN]      completion callback, will be triggered when the
  *                              RPC request's reply arrives, in the context of
@@ -369,14 +374,14 @@ dtp_rpc_srv_reg(dtp_opcode_t opc, dtp_proc_cb_t in_proc_cb,
  * Create a bulk handle
  *
  * \param dtp_ctx [IN]          DAOS transport context
- * \param mem_sgs [IN]          pointer to buffer segment list
+ * \param sgl [IN]              pointer to buffer segment list
  * \param bulk_perm [IN]        bulk permission, \see dtp_bulk_perm_t
  * \param bulk_hdl [OUT]        created bulk handle
  *
  * \return                      zero on success, negative value if error
  */
 int
-dtp_bulk_create(dtp_context_t dtp_ctx, daos_sg_list_t *mem_sgs,
+dtp_bulk_create(dtp_context_t dtp_ctx, daos_sg_list_t *sgl,
 		dtp_bulk_perm_t bulk_perm, dtp_bulk_t *bulk_hdl);
 
 /**
@@ -393,14 +398,17 @@ int dtp_bulk_free(dtp_bulk_t bulk_hdl);
  *
  * \param dtp_ctx [IN]          DAOS transport context
  * \param bulk_desc [IN]        pointer to bulk transferring descriptor
+ *				it is user's responsibility to allocate and free
+ *				it. After the calling returns, user can free it.
  * \param complete_cb [IN]      completion callback
  * \param arg [IN]              arguments for the \a complete_cb
- * \param opid [OUT]            bulk opid
+ * \param opid [OUT]            returned bulk opid which can be used to abort
+ *				the bulk (not implemented yet).
  *
  * \return                      zero on success, negative value if error
  */
 int
-dtp_bulk_transfer(dtp_context_t dtp_ctx, dtp_bulk_desc_t *bulk_desc,
+dtp_bulk_transfer(dtp_context_t dtp_ctx, struct dtp_bulk_desc *bulk_desc,
 		  dtp_bulk_cb_t complete_cb, void *arg, dtp_bulk_opid_t *opid);
 
 /**
@@ -423,44 +431,7 @@ dtp_bulk_get_len(dtp_bulk_t bulk_hdl, daos_size_t *bulk_len);
  * \return                      zero on success, negative value if error
  */
 int
-dtp_bulk_get_sgnum(dtp_bulk_t bulk_hdl, unsigned long *bulk_sgnum);
-
-/**
- * Get length required to pack the bulk handle.
- *
- * \param bulk_hdl [IN]         bulk handle
- * \param len [OUT]             length of buffer required
- *
- * \return                      zero on success, negative value if error
- */
-int
-dtp_bulk_get_pack_len(dtp_bulk_t bulk_hdl, daos_size_t *len);
-
-/**
- * Pack the bulk handle to a buffer.
- *
- * \param bulk_hdl [IN]         bulk handle
- * \param buf [IN/OUT]          buffer address to pack the bulk handle
- * \param buf_len [IN]          length of the buffer
- *
- * \return                      zero on success, negative value if error
- */
-int
-dtp_bulk_pack(dtp_bulk_t bulk_hdl, void *buf, daos_size_t buf_len);
-
-/**
- * Unpack the bulk handle from buffer.
- *
- * \param dtp_ctx [IN]          DAOS transport context
- * \param buf [IN]              buffer address to pack the bulk handle
- * \param buf_len [IN]          length of the buffer
- * \param bulk_hdl [OUT]        unpacked bulk handle
- *
- * \return                      zero on success, negative value if error
- */
-int
-dtp_bulk_unpack(dtp_context_t dtp_ctx, void *buf, daos_size_t buf_len,
-		dtp_bulk_t *bulk_hdl);
+dtp_bulk_get_sgnum(dtp_bulk_t bulk_hdl, unsigned int *bulk_sgnum);
 
 /*
  * Abort a bulk transferring.
@@ -638,6 +609,7 @@ dtp_proc_dtp_bulk_t(dtp_proc_t proc, dtp_bulk_t *bulk_hdl);
 #define dtp_proc_daos_off_t		dtp_proc_uint64_t
 #define dtp_proc_daos_rank_t		dtp_proc_uint32_t
 #define dtp_proc_dtp_opcode_t		dtp_proc_uint32_t
+#define dtp_proc_int			dtp_proc_int32_t
 
 /**
  * Generic processing routine.

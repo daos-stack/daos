@@ -26,7 +26,8 @@
 #include <dtp_internal.h>
 
 /* only-for-testing basic RPC in same node, before address model available */
-na_addr_t    na_addr_test = NA_ADDR_NULL;
+na_addr_t    na_addr_test_cli = NA_ADDR_NULL;
+na_addr_t    na_addr_test_srv = NA_ADDR_NULL;
 
 /* be called only in dtp_init */
 int
@@ -84,7 +85,7 @@ dtp_hg_init(const char *info_string, bool server)
 	if (dtp_gdata.dg_server == 1)
 		goto out;
 	na_return_t na_ret;
-	na_ret = NA_Addr_lookup_wait(na_class, info_string, &na_addr_test);
+	na_ret = NA_Addr_lookup_wait(na_class, info_string, &na_addr_test_srv);
 	if (na_ret != NA_SUCCESS) {
 		D_ERROR("Could not connect to %s.\n", info_string);
 	} else {
@@ -161,6 +162,11 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx)
 	hg_ctx->dhc_nactx = dtp_gdata.dg_hg->dhg_nactx;
 	hg_ctx->dhc_hgcla = dtp_gdata.dg_hg->dhg_hgcla;
 	hg_ctx->dhc_hgctx = hg_context;
+	/* TODO: need to create separate bulk class and bulk context? */
+	hg_ctx->dhc_bulkcla = HG_Get_bulk_class(hg_ctx->dhc_hgcla);
+	hg_ctx->dhc_bulkctx = HG_Get_bulk_context(hg_context);
+	D_ASSERT(hg_ctx->dhc_bulkcla != NULL);
+	D_ASSERT(hg_ctx->dhc_bulkctx != NULL);
 	DAOS_INIT_LIST_HEAD(&hg_ctx->dhc_link);
 
 out:
@@ -240,6 +246,10 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 		D_GOTO(out, hg_ret = HG_NOMEM_ERROR);
 	}
 
+	/* only-for-testing */
+	/* if (na_addr_test_cli == NA_ADDR_NULL) */
+	na_addr_test_cli = hg_info->addr;
+
 	dtp_rpc_priv_init(rpc_priv, (dtp_context_t)hg_ctx, opc, 1);
 	rpc_priv->drp_na_addr = hg_info->addr;
 	rpc_priv->drp_hg_hdl = hg_hdl;
@@ -295,8 +305,8 @@ dtp_hg_req_create(struct dtp_hg_context *hg_ctx, dtp_endpoint_t tgt_ep,
 		 hg_ctx->dhc_hgctx != NULL);
 	D_ASSERT(rpc_priv != NULL);
 
-	/* only-for-testing now to use the na_addr_test */
-	rpc_priv->drp_na_addr = na_addr_test;
+	/* only-for-testing now to use the na_addr_test_srv */
+	rpc_priv->drp_na_addr = na_addr_test_srv;
 
 	hg_ret = HG_Create(hg_ctx->dhc_hgcla, hg_ctx->dhc_hgctx,
 			   rpc_priv->drp_na_addr, rpc_priv->drp_pub.dr_opc,
@@ -561,6 +571,179 @@ dtp_hg_progress(struct dtp_hg_context *hg_ctx, unsigned int timeout)
 
 	if (hg_ret == HG_TIMEOUT)
 		rc = -ETIMEDOUT;
+
+out:
+	return rc;
+}
+
+
+#define DTP_HG_IOVN_STACK	(8)
+int
+dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, daos_sg_list_t *sgl,
+		   dtp_bulk_perm_t bulk_perm, dtp_bulk_t *bulk_hdl)
+{
+	void		**buf_ptrs = NULL;
+	void		*buf_ptrs_stack[DTP_HG_IOVN_STACK];
+	hg_size_t	*buf_sizes = NULL;
+	hg_size_t	buf_sizes_stack[DTP_HG_IOVN_STACK];
+	hg_uint8_t	flags;
+	hg_bulk_t	hg_bulk_hdl;
+	hg_return_t	hg_ret = HG_SUCCESS;
+	int		rc = 0, i, allocate;
+
+	D_ASSERT(hg_ctx != NULL && hg_ctx->dhc_bulkcla != NULL);
+	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
+	D_ASSERT(bulk_perm == DTP_BULK_RW || bulk_perm == DTP_BULK_RO);
+
+	flags = (bulk_perm == DTP_BULK_RW) ? HG_BULK_READWRITE :
+					     HG_BULK_READ_ONLY;
+
+	if (sgl->sg_iovn <= DTP_HG_IOVN_STACK) {
+		allocate = 0;
+		buf_sizes = buf_sizes_stack;
+	} else {
+		allocate = 1;
+		D_ALLOC(buf_sizes, sgl->sg_iovn * sizeof(hg_size_t));
+		if (buf_sizes == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+	for (i = 0; i < sgl->sg_iovn; i++)
+		buf_sizes[i] = sgl->sg_iovs[i].iov_buf_len;
+
+	if (sgl->sg_iovs == NULL) {
+		buf_ptrs = NULL;
+	} else {
+		if (allocate == 0) {
+			buf_ptrs = buf_ptrs_stack;
+		} else {
+			D_ALLOC(buf_ptrs, sgl->sg_iovn * sizeof(void *));
+			if (buf_ptrs == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+		for (i = 0; i < sgl->sg_iovn; i++)
+			buf_ptrs[i] = sgl->sg_iovs[i].iov_buf;
+	}
+
+	hg_ret = HG_Bulk_create(hg_ctx->dhc_bulkcla, sgl->sg_iovn, buf_ptrs,
+				buf_sizes, flags, &hg_bulk_hdl);
+	if (hg_ret == HG_SUCCESS) {
+		*bulk_hdl = hg_bulk_hdl;
+	} else {
+		D_ERROR("HG_Bulk_create failed, hg_ret: %d.\n", hg_ret);
+		rc = -DER_DTP_HG;
+	}
+
+out:
+	/* HG_Bulk_create copied the parameters, can free here */
+	if (allocate == 1 && buf_ptrs != NULL)
+		D_FREE(buf_ptrs, sgl->sg_iovn * sizeof(void *));
+	if (allocate == 1 && buf_sizes != NULL)
+		D_FREE(buf_sizes, sgl->sg_iovn * sizeof(hg_size_t));
+
+	return rc;
+}
+
+struct dtp_hg_bulk_cbinfo {
+	struct dtp_hg_context	*bci_hg_ctx;
+	struct dtp_bulk_desc	*bci_desc;
+	dtp_bulk_cb_t		bci_cb;
+	void			*bci_arg;
+};
+
+static hg_return_t
+dtp_hg_bulk_transfer_cb(const struct hg_bulk_cb_info *hg_cbinfo)
+{
+	struct dtp_hg_bulk_cbinfo	*bulk_cbinfo;
+	struct dtp_bulk_cb_info		dtp_bulk_cbinfo;
+	struct dtp_hg_context		*hg_ctx;
+	struct dtp_bulk_desc		*bulk_desc;
+	hg_return_t			hg_ret = HG_SUCCESS;
+	int				rc = 0;
+
+	D_ASSERT(hg_cbinfo != NULL && hg_cbinfo->arg != NULL);
+
+	bulk_cbinfo = (struct dtp_hg_bulk_cbinfo *)hg_cbinfo->arg;
+	D_ASSERT(bulk_cbinfo != NULL);
+	hg_ctx = bulk_cbinfo->bci_hg_ctx;
+	bulk_desc = bulk_cbinfo->bci_desc;
+	D_ASSERT(hg_ctx != NULL && bulk_desc != NULL);
+	D_ASSERT(hg_cbinfo->hg_bulk_class == hg_ctx->dhc_bulkcla);
+	D_ASSERT(hg_cbinfo->context == hg_ctx->dhc_bulkctx);
+	D_ASSERT(hg_cbinfo->origin_handle == bulk_desc->dbd_remote_hdl);
+	D_ASSERT(hg_cbinfo->local_handle == bulk_desc->dbd_local_hdl);
+
+	if (hg_cbinfo->ret != HG_SUCCESS) {
+		D_ERROR("dtp_hg_bulk_transfer_cb, hg_cbinfo->ret: %d.\n",
+			hg_cbinfo->ret);
+		hg_ret = hg_cbinfo->ret;
+		rc = -DER_DTP_HG;
+	}
+
+	if (bulk_cbinfo->bci_cb == NULL) {
+		D_DEBUG(DF_TP, "No bulk completion callback registered.\n");
+		D_GOTO(out, hg_ret);
+	}
+	dtp_bulk_cbinfo.bci_arg = bulk_cbinfo->bci_arg;
+	dtp_bulk_cbinfo.bci_rc = rc;
+	dtp_bulk_cbinfo.bci_ctx = (dtp_context_t)hg_ctx;
+	dtp_bulk_cbinfo.bci_bulk_desc = bulk_desc;
+
+	rc = bulk_cbinfo->bci_cb(&dtp_bulk_cbinfo);
+	if (rc != 0)
+		D_ERROR("bulk_cbinfo->bci_cb failed, rc: %d.\n", rc);
+
+out:
+	D_FREE_PTR(bulk_cbinfo);
+	D_FREE_PTR(bulk_desc);
+	return hg_ret;
+}
+
+int
+dtp_hg_bulk_transfer(struct dtp_hg_context *hg_ctx,
+		     struct dtp_bulk_desc *bulk_desc, dtp_bulk_cb_t complete_cb,
+		     void *arg, dtp_bulk_opid_t *opid)
+{
+	struct dtp_hg_bulk_cbinfo	*bulk_cbinfo;
+	hg_bulk_op_t			hg_bulk_op;
+	struct dtp_bulk_desc		*bulk_desc_dup;
+	hg_return_t			hg_ret = HG_SUCCESS;
+	int				rc = 0;
+
+	D_ASSERT(hg_ctx != NULL && hg_ctx->dhc_bulkctx != NULL);
+	D_ASSERT(bulk_desc != NULL && opid != NULL);
+	D_ASSERT(bulk_desc->dbd_bulk_op == DTP_BULK_PUT ||
+		 bulk_desc->dbd_bulk_op == DTP_BULK_GET);
+
+	D_ALLOC_PTR(bulk_cbinfo);
+	if (bulk_cbinfo == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_PTR(bulk_desc_dup);
+	if (bulk_desc_dup == NULL) {
+		D_FREE_PTR(bulk_cbinfo);
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	dtp_bulk_desc_dup(bulk_desc_dup, bulk_desc);
+
+	bulk_cbinfo->bci_hg_ctx = hg_ctx;
+	bulk_cbinfo->bci_desc = bulk_desc_dup;
+	bulk_cbinfo->bci_cb = complete_cb;
+	bulk_cbinfo->bci_arg = arg;
+
+	hg_bulk_op = (bulk_desc->dbd_bulk_op == DTP_BULK_PUT) ?
+		     HG_BULK_PUSH : HG_BULK_PULL;
+	/* TODO: from bulk_desc->dbd_remote_ep to na_addr_t ? */
+	D_ASSERT(na_addr_test_cli != NA_ADDR_NULL); /* only-for-testing */
+	hg_ret = HG_Bulk_transfer(hg_ctx->dhc_bulkctx, dtp_hg_bulk_transfer_cb,
+			bulk_cbinfo, hg_bulk_op, na_addr_test_cli,
+			bulk_desc->dbd_remote_hdl, bulk_desc->dbd_remote_off,
+			bulk_desc->dbd_local_hdl, bulk_desc->dbd_local_off,
+			bulk_desc->dbd_len, opid);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Bulk_transfer failed, hg_ret: %d.\n", hg_ret);
+		D_FREE_PTR(bulk_cbinfo);
+		D_FREE_PTR(bulk_desc_dup);
+		rc = -DER_DTP_HG;
+	}
 
 out:
 	return rc;

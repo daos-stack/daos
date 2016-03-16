@@ -28,6 +28,7 @@
 
 #define DTP_CONTEXT_MAX_NUM      (32)
 #define DTP_CONTEXT_NULL         (NULL)
+#define DTP_BULK_NULL            (NULL)
 
 #include <pthread.h>
 

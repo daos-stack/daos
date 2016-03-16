@@ -175,7 +175,11 @@ dtp_proc_raw(dtp_proc_t proc, void *buf, daos_size_t buf_size)
 int
 dtp_proc_dtp_bulk_t(dtp_proc_t proc, dtp_bulk_t *bulk_hdl)
 {
-	return -DER_NOSYS;
+	hg_return_t	hg_ret;
+
+	hg_ret = hg_proc_hg_bulk_t(proc, bulk_hdl);
+
+	return (hg_ret == HG_SUCCESS) ? 0 : -DER_DTP_HG;
 }
 
 int

@@ -56,6 +56,8 @@ struct dtp_hg_context {
 	na_context_t		*dhc_nactx; /* NA context */
 	hg_class_t		*dhc_hgcla; /* HG class */
 	hg_context_t		*dhc_hgctx; /* HG context */
+	hg_bulk_class_t		*dhc_bulkcla; /* bulk class */
+	hg_bulk_context_t	*dhc_bulkctx; /* bulk context */
 };
 
 struct dtp_hg_gdata {
@@ -347,9 +349,54 @@ dtp_hg_reg(dtp_opcode_t opc, dtp_proc_cb_t in_proc_cb,
 	return rc;
 }
 
+static inline int
+dtp_hg_bulk_free(dtp_bulk_t bulk_hdl)
+{
+	hg_return_t	hg_ret;
+	int		rc = 0;
+
+	hg_ret = HG_Bulk_free(bulk_hdl);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
+		rc = -DER_DTP_HG;
+	}
+
+	return rc;
+}
+
+static inline int
+dtp_hg_bulk_get_len(dtp_bulk_t bulk_hdl, daos_size_t *bulk_len)
+{
+	hg_size_t	hg_size;
+
+	D_ASSERT(bulk_len != NULL);
+	hg_size = HG_Bulk_get_size(bulk_hdl);
+	*bulk_len = hg_size;
+
+	return 0;
+}
+
+static inline int
+dtp_hg_bulk_get_sgnum(dtp_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
+{
+	hg_uint32_t	hg_sgnum;
+
+	D_ASSERT(bulk_sgnum != NULL);
+	hg_sgnum = HG_Bulk_get_segment_count(bulk_hdl);
+	*bulk_sgnum = hg_sgnum;
+
+	return 0;
+}
+
+int dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, daos_sg_list_t *sgl,
+		       dtp_bulk_perm_t bulk_perm, dtp_bulk_t *bulk_hdl);
+int dtp_hg_bulk_transfer(struct dtp_hg_context *hg_ctx,
+			 struct dtp_bulk_desc *bulk_desc,
+			 dtp_bulk_cb_t complete_cb,
+			 void *arg, dtp_bulk_opid_t *opid);
 
 /* only-for-testing */
-extern na_addr_t na_addr_test;
-
+extern na_addr_t na_addr_test_cli;
+extern na_addr_t na_addr_test_srv;
 
 #endif /* __DTP_MERCURY_H__ */

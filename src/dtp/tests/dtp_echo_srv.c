@@ -76,17 +76,17 @@ out:
 	return rc;
 }
 
-int echo_srv_shutdown(dtp_rpc_t *rpc)
+int echo_srv_shutdown(dtp_rpc_t *rpc_req)
 {
 	int rc = 0;
 
 	printf("echo_srver received shutdown request, opc: 0x%x.\n",
-	       rpc->dr_opc);
+	       rpc_req->dr_opc);
 
-	assert(rpc->dr_input == NULL);
-	assert(rpc->dr_output == NULL);
+	assert(rpc_req->dr_input == NULL);
+	assert(rpc_req->dr_output == NULL);
 
-	rc = dtp_reply_send(rpc);
+	rc = dtp_reply_send(rpc_req);
 	printf("echo_srver done issuing shutdown responses.\n");
 
 	echo_srv.do_shutdown = 1;
@@ -95,29 +95,210 @@ int echo_srv_shutdown(dtp_rpc_t *rpc)
 	return rc;
 }
 
-int echo_srv_checkin(dtp_rpc_t *rpc)
+int echo_srv_checkin(dtp_rpc_t *rpc_req)
 {
 	echo_checkin_in_t	*checkin_input = NULL;
 	echo_checkin_out_t	*checkin_output = NULL;
 	int			rc = 0;
 
 	/* dtp internally already allocated the input/output buffer */
-	checkin_input = (echo_checkin_in_t *)rpc->dr_input;
+	checkin_input = (echo_checkin_in_t *)rpc_req->dr_input;
 	assert(checkin_input != NULL);
-	checkin_output = (echo_checkin_out_t *)rpc->dr_output;
+	checkin_output = (echo_checkin_out_t *)rpc_req->dr_output;
 	assert(checkin_output != NULL);
 
-	printf("echo_srver recv'd checkin, opc: 0x%x.\n", rpc->dr_opc);
+	printf("echo_srver recv'd checkin, opc: 0x%x.\n", rpc_req->dr_opc);
 	printf("checkin input - age: %d, name: %s, days: %d.\n",
 		checkin_input->age, checkin_input->name, checkin_input->days);
 
 	checkin_output->ret = 0;
 	checkin_output->room_no = 1082;
 
-	rc = dtp_reply_send(rpc);
+	rc = dtp_reply_send(rpc_req);
 
 	printf("echo_srver sent checkin reply, ret: %d, room_no: %d.\n",
 	       checkin_output->ret, checkin_output->room_no);
+
+	return rc;
+}
+
+struct bulk_test_srv_cbinfo {
+	dtp_rpc_t	*rpc_req;
+	daos_iov_t	*iovs;
+};
+
+int bulk_test_cb(const struct dtp_bulk_cb_info *cb_info)
+{
+	dtp_rpc_t			*rpc_req;
+	struct bulk_test_srv_cbinfo	*bulk_cbinfo;
+	echo_bulk_test_in_t		*bulk_test_input = NULL;
+	echo_bulk_test_out_t		*bulk_test_output = NULL;
+	struct dtp_bulk_desc		*bulk_desc;
+	dtp_bulk_t			local_bulk_hdl;
+	dtp_context_t			dtp_ctx;
+	daos_iov_t			*iovs;
+	int				rc = 0;
+
+	rc = cb_info->bci_rc;
+	dtp_ctx = cb_info->bci_ctx;
+	bulk_desc = cb_info->bci_bulk_desc;
+	printf("in bulk_test_cb, dci_rc: %d.\n", rc);
+
+	bulk_cbinfo = (struct bulk_test_srv_cbinfo *)cb_info->bci_arg;
+	assert(bulk_cbinfo != NULL);
+
+	rpc_req = bulk_cbinfo->rpc_req;
+	iovs = bulk_cbinfo->iovs;
+	assert(rpc_req != NULL && iovs != NULL);
+
+	assert(dtp_ctx == rpc_req->dr_ctx);
+
+	local_bulk_hdl = bulk_desc->dbd_local_hdl;
+	assert(iovs != NULL && local_bulk_hdl != NULL);
+
+	bulk_test_input = (echo_bulk_test_in_t *)rpc_req->dr_input;
+	assert(bulk_test_input != NULL);
+	bulk_test_output = (echo_bulk_test_out_t *)rpc_req->dr_output;
+	assert(bulk_test_output != NULL);
+
+	if (rc != 0) {
+		printf("bulk transferring failed, dci_rc: %d.\n", rc);
+		bulk_test_output->ret = rc;
+		bulk_test_output->bulk_echo_msg =
+			strdup("bulk testing failed.");
+		goto out;
+	}
+
+	/* calculate md5 checksum to verify data */
+	MD5_CTX md5_ctx;
+	unsigned char md5[16];
+	dtp_string_t md5_str = (dtp_string_t)malloc(33);
+	memset(md5_str, 0, 33);
+
+	rc = MD5_Init(&md5_ctx);
+	assert(rc == 1);
+	rc = MD5_Update(&md5_ctx, iovs[0].iov_buf, iovs[0].iov_buf_len);
+	assert(rc == 1);
+	rc = MD5_Final(md5, &md5_ctx);
+	assert(rc == 1);
+	echo_md5_to_string(md5, md5_str);
+
+	rc = strcmp(md5_str, bulk_test_input->bulk_md5_str);
+	if (rc == 0) {
+		printf("data verification success, md5: %s.\n", md5_str);
+		bulk_test_output->bulk_echo_msg =
+			strdup("bulk testing succeed (data verified).");
+	} else {
+		printf("data verification failed, md5: %s, origin_md5: %s.\n",
+		       md5_str, bulk_test_input->bulk_md5_str);
+		bulk_test_output->bulk_echo_msg =
+			strdup("bulk testing failed with data corruption.");
+	}
+
+	free(md5_str);
+
+out:
+	free(iovs[0].iov_buf);
+	free(iovs);
+	free(bulk_cbinfo);
+
+	rc = dtp_bulk_free(local_bulk_hdl);
+	assert(rc == 0);
+
+	/* need to call dtp_reply_send first and then call dtp_req_decref,
+	 * if changing the sequence possibly cause the RPC request be destroyed
+	 * before sending reply. */
+	rc = dtp_reply_send(rpc_req);
+	assert(rc == 0);
+
+	printf("echo_srver sent bulk_test reply, echo_msg: %s.\n",
+	       bulk_test_output->bulk_echo_msg);
+
+	rc = dtp_req_decref(rpc_req);
+	assert(rc == 0);
+
+	return 0;
+}
+
+int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
+{
+	dtp_bulk_t			remote_bulk_hdl;
+	dtp_bulk_t			local_bulk_hdl;
+	daos_sg_list_t			sgl;
+	daos_iov_t			*iovs = NULL;
+	daos_size_t			bulk_len;
+	unsigned long			bulk_sgnum;
+	echo_bulk_test_in_t		*bulk_test_input = NULL;
+	struct bulk_test_srv_cbinfo	*bulk_cbinfo;
+	struct dtp_bulk_desc		bulk_desc;
+	dtp_bulk_opid_t			bulk_opid;
+	int				rc = 0;
+
+	/* dtp internally already allocated the input/output buffer */
+	bulk_test_input = (echo_bulk_test_in_t *)rpc_req->dr_input;
+	assert(bulk_test_input != NULL);
+
+	remote_bulk_hdl = bulk_test_input->bulk_hdl;
+	rc = dtp_bulk_get_len(remote_bulk_hdl, &bulk_len);
+	assert(rc == 0);
+	rc = dtp_bulk_get_sgnum(remote_bulk_hdl, &bulk_sgnum);
+
+	printf("echo_srver recv'd bulk_test, opc: 0x%x, intro_msg: %s, "
+	       "bulk_len: %ld, bulk_sgnum: %ld.\n", rpc_req->dr_opc,
+	       bulk_test_input->bulk_intro_msg, bulk_len, bulk_sgnum);
+
+	iovs = (daos_iov_t *)malloc(sizeof(daos_iov_t));
+	iovs[0].iov_buf = malloc(bulk_len);
+	iovs[0].iov_buf_len = bulk_len;
+	memset(iovs[0].iov_buf, 0, iovs[0].iov_buf_len);
+	sgl.sg_llen = 1;
+	sgl.sg_iovn = 1;
+	sgl.sg_iovs = iovs;
+	sgl.el_csums = NULL;
+
+	rc = dtp_bulk_create(rpc_req->dr_ctx, &sgl, DTP_BULK_RW,
+			     &local_bulk_hdl);
+	assert(rc == 0);
+
+	bulk_cbinfo = (struct bulk_test_srv_cbinfo *)
+			malloc(sizeof(*bulk_cbinfo));
+	assert(bulk_cbinfo != NULL);
+	bulk_cbinfo->rpc_req = rpc_req;
+	bulk_cbinfo->iovs = iovs;
+
+	/* ignore the dbd_remote_ep now */
+	bulk_desc.dbd_bulk_op = DTP_BULK_GET;
+	bulk_desc.dbd_remote_hdl = remote_bulk_hdl;
+	bulk_desc.dbd_remote_off = 0;
+	bulk_desc.dbd_local_hdl = local_bulk_hdl;
+	bulk_desc.dbd_local_off = 0;
+	bulk_desc.dbd_len = bulk_len;
+
+	/* user need to register the complete_cb inside which can do:
+	 * 1) resource reclaim includes freeing the:
+	 *    a) the buffers for bulk, maybe also the malloced daos_iov_t (iovs)
+	 *    b) local bulk handle
+	 *    c) cbinfo,
+	 * 2) reply to original RPC request (if the bulk is derived from a RPC)
+	 * 3) dtp_req_decref (before return in this RPC handler, need to take a
+	 *    reference to avoid the RPC request be destroyed by DTP, then need
+	 *    to release the reference at bulk's complete_cb);
+	 *
+	 * Is above too complicated to use?
+	 *
+	 * DTP possible not very suitable to internally do above things because
+	 * bulk's use case maybe different, for example bulk maybe not direct
+	 * related with a RPC request.
+	 * DTP possibly can internally do the 1.a and 1.b, but if let DTP
+	 * internally free the buffer and bulk handle, it will bring other
+	 * complexity when user want to reuse the buffer and bulk handle.
+	 */
+	rc = dtp_bulk_transfer(rpc_req->dr_ctx, &bulk_desc, bulk_test_cb,
+			       bulk_cbinfo, &bulk_opid);
+	assert(rc == 0);
+
+	rc = dtp_req_addref(rpc_req);
+	assert(rc == 0);
 
 	return rc;
 }

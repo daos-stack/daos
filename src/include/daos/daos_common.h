@@ -140,28 +140,6 @@ do {									\
 
 #define D_GOTO(label, rc)       do { ((void)(rc)); goto label; } while (0)
 
-#if !defined(container_of)
-/* given a pointer @ptr to the field @member embedded into type (usually
- * struct) @type, return pointer to the embedding instance of @type. */
-# define container_of(ptr, type, member)				\
-	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
-#endif
-
-#ifndef offsetof
-# define offsetof(typ,memb)	((long)((char *)&(((typ *)0)->memb)))
-#endif
-
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(arr)		(sizeof(arr) / sizeof((arr)[0]))
-#endif
-
-#ifndef MIN
-# define MIN(a,b) (((a)<(b)) ? (a): (b))
-#endif
-#ifndef MAX
-# define MAX(a,b) (((a)>(b)) ? (a): (b))
-#endif
-
 #define DAOS_GOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
 #define DAOS_GOLDEN_RATIO_PRIME_32	0x9e370001UL
 
