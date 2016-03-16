@@ -11,7 +11,7 @@ check_script ()
     cat tmp.log >> pylint.log
     rm tmp.log
 }
-
+fail=0
 while [ $# != 0 ]; do
     if [ "$1" = "-c" ]; then
         #Check our fake SCons module.  Doesn't have to
@@ -28,19 +28,29 @@ while [ $# != 0 ]; do
     elif [ "$1" = "-s" ]; then
         #Check a SCons file
         shift
+        if [ ! -f $1 ]; then
+        echo skipping non-existent file: $1
+        fail=1
+        else
         $SCRIPT_DIR/wrap_script.py $1
         echo check $1
         check_script "script"
+        fi
     else
+        if [ ! -f $1 ]; then
+        echo skipping non-existent file: $1
+        fail=1
+        else
         echo check $1
         check_script $1
+        fi
     fi
     shift
 done
 
 echo "See pylint.log for detailed report"
 list=`grep rated pylint.log | grep -v "rated at 10"`
-if [ "$list" != "" ]; then
+if [ $fail -eq 1 ] || [ "$list" != "" ]; then
 echo Fail
 exit 1
 fi
