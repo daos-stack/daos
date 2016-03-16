@@ -65,8 +65,10 @@ REQS.define('mercury',
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
+# pylint: disable=line-too-long
 RETRIEVER = \
     WebRetriever('https://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.2.tar.gz')
+# pylint: enable=line-too-long
 REQS.define('hwloc', retriever=RETRIEVER,
             commands=['./configure --prefix=$HWLOC_PREFIX', 'make',
                       'make install'], headers=['hwloc.h'])

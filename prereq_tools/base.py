@@ -260,7 +260,8 @@ class PreReqComponent(object):
                                    'Directory to look for prebuilt components',
                                    None, PathVariable.PathIsDir),
                       PathVariable('SRC_PREFIX',
-                                   'Default directory to look for component sources',
+                                   'Default directory to look for component '
+                                   'sources',
                                    None, PathVariable.PathIsDir),
                       PathVariable('TARGET_PREFIX',
                                    'Installation root for prebuilt components',
@@ -295,19 +296,19 @@ class PreReqComponent(object):
               ):
         """Define an external prerequisite component
 
-        Args:
-            name -- The name of the component definition
+    Args:
+        name -- The name of the component definition
 
-        Keyword arguments:
-            libs -- A list of libraries to add to dependent components
-            headers -- A list of expected headers
-            requires -- A list of names of required component definitions
-            required_libs -- A list of system libraries to be checked for
-            commands -- A list of commands to run to build the component
-            retriever -- A retriever object to download component
-            extra_lib_path -- Subdirectories to add to dependent component path
-            extra_include_path -- Subdirectories to add to dependent component path
-            out_of_src_build -- Build from a different directory if set to True
+    Keyword arguments:
+        libs -- A list of libraries to add to dependent components
+        headers -- A list of expected headers
+        requires -- A list of names of required component definitions
+        required_libs -- A list of system libraries to be checked for
+        commands -- A list of commands to run to build the component
+        retriever -- A retriever object to download component
+        extra_lib_path -- Subdirectories to add to dependent component path
+        extra_include_path -- Subdirectories to add to dependent component path
+        out_of_src_build -- Build from a different directory if set to True
         """
 
         comp = _Component(self,
@@ -402,7 +403,8 @@ class PreReqComponent(object):
 
         opt_name = '%s_PREBUILT' % name.upper()
         self.add_opts(PathVariable(opt_name,
-                                   'Alternate installation prefix for %s' % name,
+                                   'Alternate installation '
+                                   'prefix for %s' % name,
                                    prebuilt_default, PathVariable.PathIsDir))
         self.setup_path_var(opt_name)
         prebuilt = self.__env.get(opt_name)
@@ -422,6 +424,7 @@ class PreReqComponent(object):
         self.__prebuilt_path[name] = prebuilt
         return prebuilt
 
+# pylint: disable=star-args
     def get_prefixes(self, name, prebuilt_path):
         """Get the location of the scons prefix as well as the external
            component prefix."""
@@ -438,6 +441,7 @@ class PreReqComponent(object):
             return (target_prefix, prefix)
         self.replace_env(**{'%s_PREFIX' % name.upper(): prefix})
         return (prefix, prefix)
+# pylint: enable=star-args
 
     def get_src_path(self, name):
         """Get the location of the sources for an external component"""
