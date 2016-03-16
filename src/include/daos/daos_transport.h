@@ -24,10 +24,6 @@
 #ifndef __DAOS_TRANSPORT_H__
 #define __DAOS_TRANSPORT_H__
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 #include <daos/daos_common.h>
 #include <daos/daos_types.h>
 #include <daos/daos_errno.h>
@@ -130,7 +126,6 @@ typedef int (*dtp_cb_t)(const dtp_cb_info_t *cb_info);
 /* completion callback for bulk transferring, i.e. dtp_bulk_transfer() */
 typedef int (*dtp_bulk_cb_t)(const dtp_bulk_cb_info_t *cb_info);
 
-/* Abstraction pack/unpack processor */
 typedef void * dtp_proc_t;
 /* Proc callback for pack/unpack parameters */
 typedef int (*dtp_proc_cb_t)(dtp_proc_t proc, void *data);
@@ -140,6 +135,10 @@ typedef int (*dtp_proc_cb_t)(dtp_proc_t proc, void *data);
  * Returning non-zero means stop the progressing and exit.
  */
 typedef int (*dtp_progress_cond_cb_t)(void *arg);
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * Initialize DAOS transport layer.
@@ -661,6 +660,10 @@ dtp_proc_dtp_string_t(dtp_proc_t proc, dtp_string_t *data);
 int
 dtp_proc_dtp_const_string_t(dtp_proc_t proc, dtp_const_string_t *data);
 
+#ifdef __cplusplus
+}
+#endif
+
 /*****************************************************************************
  * Private macros
  *****************************************************************************/
@@ -690,9 +693,10 @@ typedef struct								\
 		return rc;						\
 	}
 
+#ifdef __cplusplus
 /* Generate proc for struct */
 #define _DTP_GEN_STRUCT_PROC(struct_type_name, fields)			\
-static inline int							\
+extern "C" static  inline int						\
 BOOST_PP_CAT(dtp_proc_, struct_type_name)				\
 	(dtp_proc_t proc, void *data)					\
 {									\
@@ -703,6 +707,20 @@ BOOST_PP_CAT(dtp_proc_, struct_type_name)				\
 									\
 	return rc;							\
 }
+#else
+#define _DTP_GEN_STRUCT_PROC(struct_type_name, fields)			\
+static  inline int							\
+BOOST_PP_CAT(dtp_proc_, struct_type_name)				\
+	(dtp_proc_t proc, void *data)					\
+{									\
+	int rc = 0;							\
+	struct_type_name *struct_data = (struct_type_name *) data;	\
+									\
+	BOOST_PP_SEQ_FOR_EACH(_DTP_GEN_PROC, struct_data, fields)	\
+									\
+	return rc;							\
+}
+#endif /* __cplusplus */
 
 /*****************************************************************************
  * Public macros
@@ -713,7 +731,4 @@ BOOST_PP_CAT(dtp_proc_, struct_type_name)				\
 	_DTP_GEN_STRUCT(struct_type_name, fields)			\
 	_DTP_GEN_STRUCT_PROC(struct_type_name, fields)
 
-#if defined (__cplusplus)
-}
-#endif
 #endif /* __DAOS_TRANSPORT_H__ */
