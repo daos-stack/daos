@@ -38,6 +38,7 @@ extern "C" {
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <daos/daos_types.h>
 
 #define DAOS_ENV_DEBUG	"DAOS_DEBUG"
 
@@ -219,6 +220,14 @@ int daos_array_sort(void *array, unsigned int len, bool unique,
 		    daos_sort_ops_t *ops);
 int daos_array_find(void *array, unsigned int len, uint64_t key,
 		    daos_sort_ops_t *ops);
+
+#define DAOS_HDL_INVAL	((daos_handle_t){0})
+
+static inline bool
+daos_handle_is_inval(daos_handle_t hdl)
+{
+	return hdl.cookie == 0;
+}
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually

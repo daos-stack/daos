@@ -3,4 +3,5 @@
 Import('env')
 
 env.Append(CPPPATH = ['#/src/common'])
-env.Program('eq_test', Glob('*.c'), LIBS=['libdaos_common', 'pthread'])
+env.Program('eq_test', Glob('eq_tests.c'), LIBS=['libdaos_common', 'pthread'])
+env.Program('btree', Glob('btree.c'), LIBS=['libdaos_common'])
