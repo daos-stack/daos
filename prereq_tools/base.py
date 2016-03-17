@@ -26,20 +26,26 @@ class NotInitialized(Exception):
     def __init__(self):
         super(NotInitialized, self).__init__()
 
+    def __str__(self):
+        """ Exception string """
+        return "PreReqComponents was not initialized"
+
 class DownloadFailure(Exception):
     """Exception raised when source can't be downloaded
 
     Attributes:
         repo      -- Specified location
         component -- Component
-        reason    -- Reason for problem
     """
 
     def __init__(self, repo, component):
         super(DownloadFailure, self).__init__()
         self.repo = repo
         self.component = component
-        self.reason = "Failed to get %s from %s" % (component, repo)
+
+    def __str__(self):
+        """ Exception string """
+        return "Failed to get %s from %s" % (self.component, self.repo)
 
 class ExtractionError(Exception):
     """Exception raised when source couldn't be extracted
@@ -52,20 +58,26 @@ class ExtractionError(Exception):
     def __init__(self, component):
         super(ExtractionError, self).__init__()
         self.component = component
-        self.reason = "Failed to extract %s" % (component)
+
+    def __str__(self):
+        """ Exception string """
+
+        return "Failed to extract %s" % (self.component)
 
 class UnsupportedCompression(Exception):
     """Exception raised when library doesn't support extraction method
 
     Attributes:
         component -- Component
-        reason    -- Reason for problem
     """
 
     def __init__(self, component):
         super(UnsupportedCompression, self).__init__()
         self.component = component
-        self.reason = "Don't know how to extract %s" % (component)
+
+    def __str__(self):
+        """ Exception string """
+        return "Don't know how to extract %s"%(self.component)
 
 class BadScript(Exception):
     """Exception raised when a preload script has errors
@@ -73,14 +85,18 @@ class BadScript(Exception):
     Attributes:
         script -- path to script
         trace  -- traceback
-        reason -- Error in script
     """
 
     def __init__(self, script, trace):
         super(BadScript, self).__init__()
         self.script = script
         self.trace = trace
-        self.reason = "Failed to execute %s:\n%s" % (script, trace)
+
+    def __str__(self):
+        """ Exception string """
+        return "Failed to execute %s:\n%s %s\n\nTraceback"%(self.script,
+                                                            self.script,
+                                                            self.trace)
 
 class MissingDefinition(Exception):
     """Exception raised when component has no definition
@@ -93,19 +109,25 @@ class MissingDefinition(Exception):
         super(MissingDefinition, self).__init__()
         self.component = component
 
+    def __str__(self):
+        """ Exception string """
+        return "No definition for %s"%(self.component)
 
 class MissingPath(Exception):
     """Exception raised when user speficies a path that doesn't exist
 
     Attributes:
         variable    -- Variable specified
-        reason    -- Reason for problem
     """
 
     def __init__(self, variable):
         super(MissingPath, self).__init__()
         self.variable = variable
-        self.reason = "%s identifies a path that doesn't exist" % variable
+
+    def __str__(self):
+        """ Exception string """
+        return "%s specifies a path that doesn't exist"%(self.variable)
+
 
 class BuildFailure(Exception):
     """Exception raised when component fails to build
@@ -118,6 +140,10 @@ class BuildFailure(Exception):
         super(BuildFailure, self).__init__()
         self.component = component
 
+    def __str__(self):
+        """ Exception string """
+        return "%s failed to build"%(self.component)
+
 class MissingTargets(Exception):
     """Exception raised when expected targets missing after component build
 
@@ -128,6 +154,10 @@ class MissingTargets(Exception):
     def __init__(self, component):
         super(MissingTargets, self).__init__()
         self.component = component
+
+    def __str__(self):
+        """ Exception string """
+        return "%s has missing targets after build"%(self.component)
 
 class Runner(object):
     """Runs commands in a specified environment"""
@@ -366,7 +396,6 @@ class PreReqComponent(object):
             scomp = compile(sfile.read(), '<string>', 'exec')
             exec (scomp, gvars, lvars)
         except Exception:
-            traceback.print_exc()
             raise BadScript(script, traceback.format_exc())
 
         # Go ahead and prebuild some components
