@@ -113,13 +113,13 @@ do {									\
 #define D_CASSERT(cond)							\
 	do {switch (1) {case (cond): case 0: break; } } while (0)
 
-#define DF_U64		"%"PRIu64
-#define DF_X64		"%"PRIx64
+#define DF_U64		"%" PRIu64
+#define DF_X64		"%" PRIx64
 
 /* memory allocating macros */
 #define D_ALLOC(ptr, size)                                                \
 	do {                                                              \
-		(ptr) = (typeof(ptr))calloc(1, size);                     \
+		(ptr) = (__typeof__(ptr))calloc(1, size);                     \
 		if ((ptr) != NULL)                                        \
 			break;                                            \
 		D_ERROR("out of memory (tried to alloc '" #ptr "' = %d)", \

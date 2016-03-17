@@ -25,6 +25,7 @@ if env['PLATFORM'] == 'darwin':
 
 # Compiler options
 env.Append(CCFLAGS = ['-g', '-Wall', '-D_GNU_SOURCE', '-fpic'])
+env.Append(CXXFLAGS = ['-g', '-Wall', '-D_GNU_SOURCE', '-fpic', '-std=c++11'])
 env.Append(CCFLAGS = ['-O2'])
 
 # All libraries will be installed under build/lib
