@@ -91,14 +91,14 @@ static struct dss_handler dmg_srv_hdlrs[] = {
 int
 dmg_init()
 {
-	D_DEBUG(DF_MGMT, "successfull init call");
+	D_DEBUG(DF_MGMT, "successfull init call\n");
 	return 0;
 }
 
 int
 dmg_fini()
 {
-	D_DEBUG(DF_MGMT, "successfull fini call");
+	D_DEBUG(DF_MGMT, "successfull fini call\n");
 	return 0;
 }
 

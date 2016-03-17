@@ -24,10 +24,13 @@
 /* module.cc */
 int dss_module_init(void);
 int dss_module_fini(bool force);
-int dss_module_load(std::string modname);
-int dss_module_unload(std::string modname);
+int dss_module_load(const char *modname);
+int dss_module_unload(const char *modname);
 
 /* rpc.cc */
 int dss_rpc_register(struct dss_handler *hdlrs);
 int dss_rpc_unregister(struct dss_handler *hdlrs);
-int dss_rpc_handle_deferred();
+
+/* srv.cc */
+int dss_srv_init(void);
+int dss_srv_fini();

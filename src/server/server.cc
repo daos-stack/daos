@@ -20,15 +20,14 @@
  */
 /**
  * This file is part of the DAOS server. It implements the startup/shutdown
- * routine for the daos_server.
+ * routines for the daos_server.
  */
 
 #include <signal.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #include <daos/daos_common.h>
-#include <daos/daos_transport.h>
-
 #include "dss_internal.h"
 
 static int
@@ -41,62 +40,33 @@ server_init()
 	if (rc)
 		D_ERROR("failed to enable full debug, %d\n", rc);
 
-	/* initialize the network layer */
-	rc = dtp_init("bmi+tcp://localhost:8889", true);
-	if (rc) {
-		D_ERROR("failed to initialize network, %d\n", rc);
-		return rc;
-	}
-	D_DEBUG(DF_SERVER, "Network successfully initialized\n");
-
 	/* initialize the modular interface */
 	rc = dss_module_init();
 	if (rc) {
 		D_ERROR("failed to initialize the modular interface, %d\n", rc);
-		goto exit_net;
+		return rc;
 	}
 	D_DEBUG(DF_SERVER, "Module interface successfully initialized\n");
 
+	/* start up service */
+	rc = dss_srv_init();
+	if (rc != 0) {
+		D_ERROR("failed to initialize service: rc = %d\n", rc);
+		goto exit_module;
+	}
+
 	return 0;
 
-exit_net:
-	dtp_finalize();
+exit_module:
+	dss_module_fini(true);
 	return rc;
 }
 
 static void
 server_fini(bool force)
 {
+	dss_srv_fini();
 	dss_module_fini(force);
-	dtp_finalize();
-}
-
-void
-test()
-{
-	dtp_context_t   ctx;
-	int		i = 0;
-	int		rc;
-
-	rc = dtp_context_create(NULL, &ctx);
-	if (rc) {
-		D_ERROR("failed to create context %d\n", rc);
-		return;
-	}
-
-	while (i < 100) {
-		rc = dtp_progress(ctx, 1, NULL, NULL, NULL);
-		if (rc != 0 && rc != -ETIMEDOUT) {
-			D_ERROR("progress failed %d\n", rc);
-			break;
-		}
-		sleep(1);
-		i++;
-	}
-
-	rc = dtp_context_destroy(ctx, 0);
-	if (rc)
-		D_ERROR("failed to destroy context %d\n", rc);
 }
 
 static int
@@ -105,10 +75,12 @@ modules_load()
 	int rc;
 
 	rc = dss_module_load("daos_mgmt_srv");
-	if (rc)
+	if (rc) {
+		D_DEBUG(DF_SERVER, "failed to load daos_mgmt_srv module\n");
 		return rc;
+	}
 
-	D_DEBUG(DF_SERVER, "daos_mgmt_srv module successfully unloaded\n");
+	D_DEBUG(DF_SERVER, "daos_mgmt_srv module successfully loaded\n");
 
 	return 0;
 }
@@ -117,15 +89,15 @@ static void
 modules_unload()
 {
 	dss_module_unload("daos_mgmt_srv");
+	D_DEBUG(DF_SERVER, "daos_mgmt_srv module successfully unloaded\n");
 }
 
 static void
-sig_handler(int signo)
+shutdown(int signo)
 {
-	if (signo == SIGINT) {
-		modules_unload();
-		server_fini(true);
-	}
+	server_fini(true);
+	modules_unload();
+	exit(EXIT_SUCCESS);
 }
 
 int
@@ -136,26 +108,24 @@ main()
 	/* generic server initialization */
 	rc = server_init();
 	if (rc)
-		return rc;
+		exit(EXIT_FAILURE);
 
-	/* loaded default modules */
+	/* load default modules */
 	modules_load();
-	if (rc)
-		goto out_server;
-
-	if (signal(SIGINT, sig_handler) == SIG_ERR) {
-		D_ERROR("cannot register signal handler\n");
-		rc = -DER_INVAL;
-		goto out_mod;
+	if (rc) {
+		server_fini(true);
+		exit(EXIT_FAILURE);
 	}
 
-	/* XXX just for testing, to be removed */
-	test();
+	/* register signal handler for shutdown */
+	signal(SIGINT, shutdown);
+	signal(SIGTERM, shutdown);
+	signal(SIGCHLD, SIG_IGN);
 
-out_mod:
-	modules_unload();
-out_server:
-	server_fini(true);
+	/* sleep indefinitely until we receive a signal */
+	while (true)
+		sleep(3600);
 
-	return rc;
+	shutdown(SIGTERM);
+	exit(EXIT_SUCCESS);
 }

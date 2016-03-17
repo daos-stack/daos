@@ -48,7 +48,7 @@ struct loaded_mod {
 DAOS_LIST_HEAD(loaded_mod_list);
 
 static struct loaded_mod *
-dss_module_search(std::string modname, bool unlink)
+dss_module_search(const char *modname, bool unlink)
 {
 	daos_list_t	*tmp;
 	daos_list_t	*pos;
@@ -58,7 +58,7 @@ dss_module_search(std::string modname, bool unlink)
 		struct loaded_mod	*mod;
 
 		mod = daos_list_entry(pos, struct loaded_mod, lm_lk);
-		if (strcmp(mod->lm_dss_mod->sm_name, modname.c_str()) == 0) {
+		if (strcmp(mod->lm_dss_mod->sm_name, modname) == 0) {
 			if (unlink)
 				daos_list_del_init(pos);
 			return mod;
@@ -69,21 +69,29 @@ dss_module_search(std::string modname, bool unlink)
 	return NULL;
 }
 
+#define DSS_MODNAME_MAX_LEN	32
+
 int
-dss_module_load(std::string modname)
+dss_module_load(const char *modname)
 {
 	struct loaded_mod	*lmod;
 	struct dss_module	*smod;
-	std::string		 name;
+	char			 name[DSS_MODNAME_MAX_LEN + 8];
 	void			*handle;
 	char			*err;
 	int			 rc;
 
+	if (strlen(modname) > DSS_MODNAME_MAX_LEN) {
+		D_ERROR("modname %s is too long > %d\n",
+			modname, DSS_MODNAME_MAX_LEN);
+		return -DER_INVAL;
+	}
+
 	/* load the dynamic library */
-	name = "lib" + modname + ".so";
-	handle = dlopen(name.c_str(), RTLD_LAZY);
+	sprintf(name, "lib%s.so", modname);
+	handle = dlopen(name, RTLD_LAZY);
 	if (handle == NULL) {
-		D_ERROR("cannot load %s\n", modname.c_str());
+		D_ERROR("cannot load %s\n", modname);
 		return -DER_INVAL;
 	}
 
@@ -100,21 +108,21 @@ dss_module_load(std::string modname)
 	dlerror();
 
 	/* lookup the dss_module structure defining the module interface */
-	name = modname + "_module";
-	smod = (struct dss_module *)dlsym(handle, name.c_str());
+	sprintf(name, "%s_module", modname);
+	smod = (struct dss_module *)dlsym(handle, name);
 
 	/* check for errors */
 	err = dlerror();
 	if (err != NULL) {
-		D_ERROR("failed to load %s: %s\n", modname.c_str(), err);
+		D_ERROR("failed to load %s: %s\n", modname, err);
 		rc = -DER_INVAL;
 		goto err_lmod;
 	}
 	lmod->lm_dss_mod = smod;
 
 	/* check module name is consistent */
-	if (strcmp(smod->sm_name, modname.c_str()) != 0) {
-		D_ERROR("inconsistent module name %s != %s\n", modname.c_str(),
+	if (strcmp(smod->sm_name, modname) != 0) {
+		D_ERROR("inconsistent module name %s != %s\n", modname,
 			smod->sm_name);
 		rc = -DER_INVAL;
 		goto err_hdl;
@@ -123,7 +131,7 @@ dss_module_load(std::string modname)
 	/* initialize the module */
 	rc = smod->sm_init();
 	if (rc) {
-		D_ERROR("failed to init %s: %d\n", modname.c_str(), rc);
+		D_ERROR("failed to init %s: %d\n", modname, rc);
 		rc = -DER_INVAL;
 		goto err_lmod;
 	}
@@ -132,7 +140,7 @@ dss_module_load(std::string modname)
 	rc = dss_rpc_register(smod->sm_cl_hdlrs);
 	if (rc) {
 		D_ERROR("failed to register client RPC for %s: %d\n",
-			modname.c_str(), rc);
+			modname, rc);
 		goto err_mod_init;
 	}
 
@@ -140,7 +148,7 @@ dss_module_load(std::string modname)
 	rc = dss_rpc_register(smod->sm_srv_hdlrs);
 	if (rc) {
 		D_ERROR("failed to register srv RPC for %s: %d\n",
-			modname.c_str(), rc);
+			modname, rc);
 		goto err_cl_rpc;
 	}
 
@@ -160,26 +168,51 @@ err_hdl:
 }
 
 int
-dss_module_unload(std::string modname)
+dss_module_unload(const char *modname)
 {
-	struct loaded_mod	*mod;
+	struct loaded_mod	*lmod;
+	struct dss_module	*smod;
 	int			 rc;
 
 	/* lookup the module from the loaded module list */
-	mod = dss_module_search(modname, true);
+	lmod = dss_module_search(modname, true);
 
-	if (mod == NULL)
+	if (lmod == NULL)
 		/* module not found ... */
 		return -DER_ENOENT;
 
+	smod = lmod->lm_dss_mod;
+
+	/* unregister client RPC handlers */
+	rc = dss_rpc_unregister(smod->sm_cl_hdlrs);
+	if (rc) {
+		D_ERROR("failed to unregister client RPC for %s: %d\n",
+			modname, rc);
+		return rc;
+	}
+
+	/* unregister server RPC handlers */
+	rc = dss_rpc_unregister(smod->sm_srv_hdlrs);
+	if (rc) {
+		D_ERROR("failed to register srv RPC for %s: %d\n",
+			modname, rc);
+		return rc;
+	}
+
 	/* finalize the module */
-	rc = mod->lm_dss_mod->sm_fini();
+	rc = smod->sm_fini();
+	if (rc) {
+		D_ERROR("module finalization failed for %s: %d\n",
+			modname, rc);
+		return rc;
+
+	}
 
 	/* close the library handle */
-	dlclose(mod->lm_hdl);
+	dlclose(lmod->lm_hdl);
 
 	/* free memory used to track this module instance */
-	D_FREE_PTR(mod);
+	D_FREE_PTR(lmod);
 
 	return rc;
 }
