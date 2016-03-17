@@ -275,9 +275,9 @@ daos_list_splice_init(daos_list_t *list, daos_list_t *head)
  * \param member the name of the list_struct within the struct
  */
 #define daos_list_for_each_entry_continue(pos, head, member)                 \
-	for (pos = daos_list_entry(pos->member.next, typeof(*pos), member);  \
+	for (pos = daos_list_entry(pos->member.next, __typeof__(*pos), member);\
 	     prefetch(pos->member.next), &pos->member != (head);             \
-	     pos = daos_list_entry(pos->member.next, typeof(*pos), member))
+	     pos = daos_list_entry(pos->member.next, __typeof__(*pos), member))
 
 /**
  * \defgroup hlist Hash List
@@ -402,10 +402,11 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param head	 the head for your list.
  * \param member the name of the hlist_node within the struct.
  */
-#define daos_hlist_for_each_entry(tpos, pos, head, member)                    \
+#define daos_hlist_for_each_entry(tpos, pos, head, member)                   \
 	for (pos = (head)->first;                                            \
 	     pos && ({ prefetch(pos->next); 1;}) &&                          \
-		({ tpos = daos_hlist_entry(pos, typeof(*tpos), member); 1;}); \
+		({ tpos = daos_hlist_entry(pos, __typeof__(*tpos), member);  \
+		   1; });                                                    \
 	     pos = pos->next)
 
 /**
@@ -414,10 +415,11 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param pos	 the &struct hlist_node to use as a loop counter.
  * \param member the name of the hlist_node within the struct.
  */
-#define daos_hlist_for_each_entry_continue(tpos, pos, member)                 \
+#define daos_hlist_for_each_entry_continue(tpos, pos, member)                \
 	for (pos = (pos)->next;                                              \
 	     pos && ({ prefetch(pos->next); 1;}) &&                          \
-		({ tpos = daos_hlist_entry(pos, typeof(*tpos), member); 1;}); \
+		({ tpos = daos_hlist_entry(pos, __typeof__(*tpos), member);  \
+		   1; });                                                    \
 	     pos = pos->next)
 
 /**
@@ -426,9 +428,10 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param pos	 the &struct hlist_node to use as a loop counter.
  * \param member the name of the hlist_node within the struct.
  */
-#define daos_hlist_for_each_entry_from(tpos, pos, member)			 \
+#define daos_hlist_for_each_entry_from(tpos, pos, member)		     \
 	for (; pos && ({ prefetch(pos->next); 1;}) &&                        \
-		({ tpos = daos_hlist_entry(pos, typeof(*tpos), member); 1;}); \
+		({ tpos = daos_hlist_entry(pos, __typeof__(*tpos), member);  \
+		   1; });                                                    \
 	     pos = pos->next)
 
 /**
@@ -439,10 +442,11 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param head	 the head for your list.
  * \param member the name of the hlist_node within the struct.
  */
-#define daos_hlist_for_each_entry_safe(tpos, pos, n, head, member)            \
+#define daos_hlist_for_each_entry_safe(tpos, pos, n, head, member)           \
 	for (pos = (head)->first;                                            \
 	     pos && ({ n = pos->next; 1; }) &&                               \
-		({ tpos = daos_hlist_entry(pos, typeof(*tpos), member); 1;}); \
+		({ tpos = daos_hlist_entry(pos, __typeof__(*tpos), member);  \
+		   1; });                                                    \
 	     pos = n)
 
 /* @} */
@@ -467,10 +471,10 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param member     the name of the list_struct within the struct.
  */
 #define daos_list_for_each_entry(pos, head, member)                          \
-	for (pos = daos_list_entry((head)->next, typeof(*pos), member),      \
+	for (pos = daos_list_entry((head)->next, __typeof__(*pos), member),  \
 		     prefetch(pos->member.next);                             \
 	     &pos->member != (head);                                         \
-	     pos = daos_list_entry(pos->member.next, typeof(*pos), member),  \
+	     pos = daos_list_entry(pos->member.next, __typeof__(*pos), member),\
 	     prefetch(pos->member.next))
 #endif /* daos_list_for_each_entry */
 
@@ -492,9 +496,9 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param member     the name of the list_struct within the struct.
  */
 #define daos_list_for_each_entry_reverse(pos, head, member)                  \
-	for (pos = daos_list_entry((head)->prev, typeof(*pos), member);      \
-	     prefetch(pos->member.prev), &pos->member != (head);            \
-	     pos = daos_list_entry(pos->member.prev, typeof(*pos), member))
+	for (pos = daos_list_entry((head)->prev, __typeof__(*pos), member);  \
+	     prefetch(pos->member.prev), &pos->member != (head);             \
+	     pos = daos_list_entry(pos->member.prev, __typeof__(*pos), member))
 #endif /* daos_list_for_each_entry_reverse */
 
 #ifndef daos_list_for_each_entry_safe
@@ -506,10 +510,12 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param member     the name of the list_struct within the struct.
  */
 #define daos_list_for_each_entry_safe(pos, n, head, member)                   \
-	for (pos = daos_list_entry((head)->next, typeof(*pos), member),       \
-		n = daos_list_entry(pos->member.next, typeof(*pos), member);  \
+	for (pos = daos_list_entry((head)->next, __typeof__(*pos), member),   \
+		n = daos_list_entry(pos->member.next, __typeof__(*pos),       \
+				    member);                                  \
 	     &pos->member != (head);                                          \
-	     pos = n, n = daos_list_entry(n->member.next, typeof(*n), member))
+	     pos = n, n = daos_list_entry(n->member.next, __typeof__(*n),     \
+					  member))
 
 #endif /* daos_list_for_each_entry_safe */
 
@@ -525,9 +531,10 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * removal of list entry.
  */
 #define daos_list_for_each_entry_safe_from(pos, n, head, member)             \
-	for (n = daos_list_entry(pos->member.next, typeof(*pos), member);    \
+	for (n = daos_list_entry(pos->member.next, __typeof__(*pos), member);\
 	     &pos->member != (head);                                         \
-	     pos = n, n = daos_list_entry(n->member.next, typeof(*n), member))
+	     pos = n, n = daos_list_entry(n->member.next, __typeof__(*n),    \
+					  member))
 #endif /* daos_list_for_each_entry_safe_from */
 
 #define daos_list_for_each_entry_typed(pos, head, type, member)		\
