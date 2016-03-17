@@ -17,6 +17,7 @@ from SCons.Variables import PathVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import Configure
+from SCons.Script import AddOption
 
 class NotInitialized(Exception):
     """Exception raised when classes used before initialization
@@ -166,16 +167,26 @@ class GitRepoRetriever(object):
         self.url = url
         self.has_submodules = has_submodules
 
-    def get(self, subdir):
-        """Downloads sources from a git repository into subdir"""
-        commands = ['git clone %s %s' % (self.url, subdir)]
-        if not RUNNER.run_commands(commands):
-            raise DownloadFailure(self.url, subdir)
+    def update_submodules(self, subdir):
+        """ update the git submodules """
         if self.has_submodules:
             commands = ['git submodule init', 'git submodule update']
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
+    def get(self, subdir):
+        """Downloads sources from a git repository into subdir"""
+        commands = ['git clone %s %s' % (self.url, subdir)]
+        if not RUNNER.run_commands(commands):
+            raise DownloadFailure(self.url, subdir)
+        self.update_submodules(subdir)
+
+    def update(self, subdir):
+        """ update a repository """
+        commands = ['git pull origin master']
+        if not RUNNER.run_commands(commands, subdir=subdir):
+            raise DownloadFailure(self.url, subdir)
+        self.update_submodules(subdir)
 
 class WebRetriever(object):
     """Identify a location from where to download a source package"""
@@ -186,6 +197,10 @@ class WebRetriever(object):
     def get(self, subdir):
         """Downloads and extracts sources from a url into subdir"""
         basename = os.path.basename(self.url)
+
+        if os.path.exists(basename) and os.path.exists(subdir):
+            #assume that nothing has changed
+            return
 
         commands = ['rm -rf %s' % subdir]
         if not os.path.exists(basename):
@@ -203,6 +218,11 @@ class WebRetriever(object):
                 raise ExtractionError(subdir)
         else:
             raise UnsupportedCompression(subdir)
+
+    def update(self, subdir):
+        """ update the code if the url has changed """
+        # Will download the file if the name has changed
+        self.get(subdir)
 
 
 class PreReqComponent(object):
@@ -238,6 +258,15 @@ class PreReqComponent(object):
             # Not on Intel network
             pass
 
+        AddOption('--update-prereq',
+                  dest='update_prereq',
+                  type='string',
+                  nargs=1,
+                  action='append',
+                  default=[],
+                  help='Force an update of a prerequisite component.  Use '
+                       '\'all\' to update all components')
+        self.__update = GetOption('update_prereq')
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
 
@@ -310,9 +339,12 @@ class PreReqComponent(object):
         extra_include_path -- Subdirectories to add to dependent component path
         out_of_src_build -- Build from a different directory if set to True
         """
-
+        update = False
+        if 'all' in self.__update or name in self.__update:
+            update = True
         comp = _Component(self,
                           name,
+                          update,
                           **kw
                          )
         self.__defined[name] = comp
@@ -496,9 +528,11 @@ class _Component(object):
     def __init__(self,
                  prereqs,
                  name,
+                 update,
                  **kw
                 ):
 
+        self.update = update
         self.build_path = None
         self.prebuilt_path = None
         self.src_path = None
@@ -537,6 +571,11 @@ class _Component(object):
             self.prereqs.update_src_path(self.name, self.src_path)
             print 'Using existing sources at %s for %s' \
                 % (self.src_path, self.name)
+            if self.update:
+                defpath = os.path.join(self.prereqs.get_build_dir(), self.name)
+                #only do this if the source was checked out by this script
+                if self.src_path == defpath:
+                    self.retriever.update(self.src_path)
             return
         if not self.retriever:
             print 'Using installed version of %s' % self.name
@@ -576,13 +615,18 @@ class _Component(object):
 
     def has_changes(self):
         """Check the sources for changes since the last build"""
+        print 'Checking %s sources for changes' % self.name
+
         old_crc = ''
         try:
             with open(self.crc_file, 'r') as crcfile:
                 old_crc = crcfile.read()
         except IOError:
             pass
-        if old_crc != self.calculate_crc():
+        if old_crc == '':
+            return True
+        #only do CRC check if the sources have been updated
+        if self.update and old_crc != self.calculate_crc():
             return True
         return False
 

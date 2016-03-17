@@ -104,6 +104,10 @@ class Dir(object):
         """Fake abspath"""
         return os.getcwd()
 
+def AddOption(*args, **kw):
+    """Fake AddOption"""
+    return True
+
 def GetOption(*args, **kw):
     """Fake GetOption"""
     return True
