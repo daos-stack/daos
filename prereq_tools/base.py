@@ -294,7 +294,8 @@ class PreReqComponent(object):
                   nargs=1,
                   action='append',
                   default=[],
-                  help='Force an update of a prerequisite component.  Use '
+                  metavar='COMPONENT',
+                  help='Force an update of a prerequisite COMPONENT.  Use '
                        '\'all\' to update all components')
         self.__update = GetOption('update_prereq')
         self.replace_env(LIBTOOLIZE=libtoolize)
@@ -561,6 +562,7 @@ class _Component(object):
                  **kw
                 ):
 
+        self.targets_found = False
         self.update = update
         self.build_path = None
         self.prebuilt_path = None
@@ -662,6 +664,10 @@ class _Component(object):
 
     def has_missing_targets(self, env):
         """Check for expected build targets (e.g. libraries or headers)"""
+
+        if self.targets_found:
+            return False
+
         config = Configure(env)
         for header in self.headers:
             if not config.CheckHeader(header):
@@ -679,6 +685,7 @@ class _Component(object):
                 return True
 
         config.Finish()
+        self.targets_found = True
         return False
 
     def configure(self):
