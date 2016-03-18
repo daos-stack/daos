@@ -644,7 +644,6 @@ class _Component(object):
 
     def has_changes(self):
         """Check the sources for changes since the last build"""
-        print 'Checking %s sources for changes' % self.name
 
         old_crc = ''
         try:
@@ -655,8 +654,10 @@ class _Component(object):
         if old_crc == '':
             return True
         #only do CRC check if the sources have been updated
-        if self.update and old_crc != self.calculate_crc():
-            return True
+        if self.update:
+            print 'Checking %s sources for changes' % self.name
+            if old_crc != self.calculate_crc():
+                return True
         return False
 
     def has_missing_targets(self, env):
