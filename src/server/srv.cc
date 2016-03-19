@@ -83,10 +83,17 @@ dss_cgroup_fini(void)
 		pthread_mutex_lock(&dcgroups->dc_lock);
 
 	for (i = 0; i < dcgroups->dc_count; i++) {
+		int rc;
+
 		if (dcgroups->dc_cgroup[i] == NULL)
 			continue;
-		cgroup_free_controllers(dcgroups->dc_cgroup[i]);
-		cgroup_delete_cgroup(dcgroups->dc_cgroup[i], 1);
+
+		rc = cgroup_delete_cgroup_ext(dcgroups->dc_cgroup[i],
+					      CGFLAG_DELETE_RECURSIVE);
+		if (rc != 0)
+			D_ERROR("Can not delete %dth cgroup: %s\n", i,
+				cgroup_strerror(rc));
+
 		cgroup_free(&dcgroups->dc_cgroup[i]);
 	}
 	if (dcgroups->dc_cgroup != NULL)
