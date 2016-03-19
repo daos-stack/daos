@@ -78,6 +78,8 @@ struct dss_handler {
 struct dss_module {
 	/* Name of the module */
 	const char		 *sm_name;
+	/* Module id see enum dss_module_id */
+	int			sm_mod_id;
 	/* Module version */
 	int			  sm_ver;
 	/* Setup function, invoked just after successful load */

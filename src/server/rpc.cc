@@ -25,10 +25,22 @@
  */
 
 #include <daos_srv/daos_server.h>
+#include <daos/daos_rpc.h>
 #include <daos/daos_transport.h>
-
+/**
+ * register rpc handlers of dss.
+ *
+ * Register RPC handlers of one module to DTP for each module.
+ * \param[in] hdlrs	handlers to be registered.
+ * \param[in] mod_id	module id of the module.
+ * \param[in] server_only 0 means client, 1 means server.
+ *
+ * \retval	0 if registration succeeds
+ * \retval	negative errno if registration fails.
+ */
 int
-dss_rpc_register(struct dss_handler *hdlrs)
+dss_rpc_register(struct dss_handler *hdlrs, int mod_id,
+		 int server_only)
 {
 	struct dss_handler	*dsh;
 	int			 rc;
@@ -38,7 +50,11 @@ dss_rpc_register(struct dss_handler *hdlrs)
 
 	/* walk through the handler list and register each individual RPC */
 	for (dsh = hdlrs; dsh->sh_opc != 0; dsh++) {
-		rc = dtp_rpc_srv_reg(dsh->sh_opc, dsh->sh_in_hdlr,
+		dtp_opcode_t opcode;
+
+		opcode = DSS_RPC_OPCODE(dsh->sh_opc, mod_id,
+					dsh->sh_ver, server_only);
+		rc = dtp_rpc_srv_reg(opcode, dsh->sh_in_hdlr,
 				     dsh->sh_out_hdlr, dsh->sh_in_sz,
 				     dsh->sh_out_sz, dsh->sh_hdlr);
 		if (rc)

@@ -30,6 +30,7 @@
  */
 
 #include <daos_srv/daos_server.h>
+#include <daos/daos_rpc.h>
 #include <daos/daos_common.h>
 
 DTP_GEN_PROC(echo_in_t,
@@ -104,6 +105,7 @@ dmg_fini()
 
 struct dss_module daos_mgmt_srv_module = {
 	.sm_name	= "daos_mgmt_srv",
+	.sm_mod_id	= DAOS_DMG_MODULE,
 	.sm_ver		= 1,
 	.sm_init	= dmg_init,
 	.sm_fini	= dmg_fini,

@@ -135,7 +135,7 @@ dss_module_load(const char *modname)
 	}
 
 	/* register client RPC handlers */
-	rc = dss_rpc_register(smod->sm_cl_hdlrs);
+	rc = dss_rpc_register(smod->sm_cl_hdlrs, smod->sm_mod_id, 0);
 	if (rc) {
 		D_ERROR("failed to register client RPC for %s: %d\n",
 			modname, rc);
@@ -143,7 +143,7 @@ dss_module_load(const char *modname)
 	}
 
 	/* register server RPC handlers */
-	rc = dss_rpc_register(smod->sm_srv_hdlrs);
+	rc = dss_rpc_register(smod->sm_srv_hdlrs, smod->sm_mod_id, 1);
 	if (rc) {
 		D_ERROR("failed to register srv RPC for %s: %d\n",
 			modname, rc);

@@ -8,7 +8,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * Lesser General Public License for more details.
- *
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the LGPL License as
@@ -18,24 +17,36 @@
  *
  * (C) Copyright 2016 Intel Corporation.
  */
+/**
+ * DAOS RPC format definition
+ */
+#ifndef __DRPC_API_H__
+#define __DRPC_API_H__
 
-#include <daos_srv/daos_server.h>
+enum dss_module_id {
+	DAOS_DMG_MODULE = 0,
+};
 
-/* module.cc */
-int dss_module_init(void);
-int dss_module_fini(bool force);
-int dss_module_load(const char *modname);
-int dss_module_unload(const char *modname);
+/* Opcode registered in dtp will be
+ * client/server | mod_id | rpc_version | op_code
+ *    {1 bit}	  {7 bits}    {8 bits}    {16 bits}
+ */
+#define OPCODE_MASK	0xffff
+#define OPCODE_OFFSET	0
 
-/* rpc.cc */
-int dss_rpc_register(struct dss_handler *hdlrs, int modid,
-		     int client_or_server);
-int dss_rpc_unregister(struct dss_handler *hdlrs);
+#define RPC_VERSION_MASK 0xff
+#define RPC_VERSION_OFFSET 16
 
-/* srv.cc */
-int dss_srv_init(void);
-int dss_srv_fini();
+#define MODID_MASK	0x7f
+#define MODID_OFFSET	24
 
-/* tls.cc */
-void dss_tls_fini(void *arg);
-struct dss_tls *dss_tls_init();
+#define CLIENT_SERVER_MASK	0x1
+#define CLIENT_SERVER_OFFSET	31
+
+#define DSS_RPC_OPCODE(opc, mod_id, rpc_ver, client_bit)	\
+	((opc & OPCODE_MASK) << OPCODE_OFFSET |			\
+	 (rpc_ver & RPC_VERSION_MASK) << RPC_VERSION_OFFSET |	\
+	 (mod_id & MODID_MASK) << MODID_OFFSET |		\
+	 (client_bit & CLIENT_SERVER_MASK) << CLIENT_SERVER_OFFSET)
+
+#endif /* __DRPC_API_H__ */
