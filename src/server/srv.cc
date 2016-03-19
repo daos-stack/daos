@@ -162,15 +162,15 @@ dss_cgroup_init(cpu_set_t *set)
 	dcgroups->dc_lock_init = 1;
 
 	/* Allocate enough cgroup for numa node */
-	dcgroups->dc_count = numa_max_node() + 1;
 
 	D_ALLOC(dcgroups->dc_cgroup,
-		sizeof(dcgroups->dc_cgroup[0]) * dcgroups->dc_count);
+		sizeof(dcgroups->dc_cgroup[0]) * (numa_max_node() + 1));
 	if (dcgroups->dc_cgroup == NULL) {
 		D_ERROR("Can not allocate cgroup_array.\n");
 		return -DER_NOMEM;
 	}
-
+	dcgroups->dc_count = numa_max_node() + 1;
+	
 	D_ALLOC(nc_ids, dcgroups->dc_count * sizeof(*nc_ids));
 	if (nc_ids == NULL) {
 		D_ERROR("Can not allocate nc_ids.\n");
@@ -606,17 +606,15 @@ dss_srv_init()
 		return -DER_NOMEM;
 	}
 
-	D_ALLOC_PTR(dthreads);
-	if (dthreads == NULL) {
-		D_ERROR("allocate dss_thread fails\n");
-		D_FREE_PTR(dcgroups);
-		dcgroups = NULL;
-		return -DER_NOMEM;
-	}
-
 	rc = dss_cgroup_init(&mask);
 	if (rc != 0) {
 		D_ERROR("Can not initialize cgroup: rc %d\n", rc);
+		goto out;
+	}
+
+	D_ALLOC_PTR(dthreads);
+	if (dthreads == NULL) {
+		D_ERROR("allocate dss_thread fails\n");
 		goto out;
 	}
 
