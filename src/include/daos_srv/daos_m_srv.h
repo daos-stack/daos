@@ -24,4 +24,15 @@
 #ifndef __DSM_SRV_H__
 #define __DSM_SRV_H__
 
+#include <daos/daos_transport.h>
+
+int
+dsms_pool_create(const uuid_t uuid, unsigned int uid, unsigned int gid,
+		 unsigned int mode, int ntargets, const dtp_phy_addr_t *targets,
+		 int ndomains, const int *domains, const char *path);
+
+/* TODO(liwei): Can dmg simply remove the file without calling into dsms? */
+void
+dsms_pool_destroy(const uuid_t uuid, const char *path);
+
 #endif /* __DSM_SRV_H__ */

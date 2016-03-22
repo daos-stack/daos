@@ -8,6 +8,7 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * Lesser General Public License for more details.
+ *
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the LGPL License as
@@ -17,37 +18,9 @@
  *
  * (C) Copyright 2016 Intel Corporation.
  */
-/**
- * DAOS RPC format definition
+/*
+ * dsmc: Pool Methods
  */
-#ifndef __DRPC_API_H__
-#define __DRPC_API_H__
 
-enum dss_module_id {
-	DAOS_DMG_MODULE		= 0,
-	DAOS_DSMS_MODULE	= 1,
-};
-
-/* Opcode registered in dtp will be
- * client/server | mod_id | rpc_version | op_code
- *    {1 bit}	  {7 bits}    {8 bits}    {16 bits}
- */
-#define OPCODE_MASK	0xffff
-#define OPCODE_OFFSET	0
-
-#define RPC_VERSION_MASK 0xff
-#define RPC_VERSION_OFFSET 16
-
-#define MODID_MASK	0x7f
-#define MODID_OFFSET	24
-
-#define CLIENT_SERVER_MASK	0x1
-#define CLIENT_SERVER_OFFSET	31
-
-#define DSS_RPC_OPCODE(opc, mod_id, rpc_ver, client_bit)	\
-	((opc & OPCODE_MASK) << OPCODE_OFFSET |			\
-	 (rpc_ver & RPC_VERSION_MASK) << RPC_VERSION_OFFSET |	\
-	 (mod_id & MODID_MASK) << MODID_OFFSET |		\
-	 (client_bit & CLIENT_SERVER_MASK) << CLIENT_SERVER_OFFSET)
-
-#endif /* __DRPC_API_H__ */
+#include <daos_m.h>
+#include "dsm_rpc.h"

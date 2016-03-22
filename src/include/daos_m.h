@@ -45,6 +45,8 @@
  * targets are retrieved automatically from external sources.
  *
  * This is a privileged operation.
+ *
+ * TODO(liwei): Move this to the DMG API.
  */
 int
 dsm_pool_create(const uuid_t uuid, unsigned int mode, int ntargets,
@@ -57,6 +59,8 @@ dsm_pool_create(const uuid_t uuid, unsigned int mode, int ntargets,
  * connections disappear.
  *
  * This is a privileged operation.
+ *
+ * TODO(liwei): Move this to the DMG API.
  */
 int
 dsm_pool_destroy(const uuid_t uuid, daos_event_t *event);
@@ -67,7 +71,7 @@ dsm_pool_destroy(const uuid_t uuid, daos_event_t *event);
  * connection should be read-only or read-write.
  */
 int
-dsm_pool_connect(const uuid_t uuid, const daos_rank_group_t *ranks,
+dsm_pool_connect(const uuid_t uuid, const daos_rank_list_t *ranks,
 		 unsigned int flags, daos_handle_t *pool,
 		 daos_event_t *event);
 
@@ -83,14 +87,13 @@ dsm_pool_disconnect(daos_handle_t pool, daos_event_t *event);
  * This is a privileged operation.
  */
 int
-dsm_pool_grow(daos_handle_t pool, daos_rank_group_t *ranks,
-	      daos_event_t *event);
+dsm_pool_grow(daos_handle_t pool, daos_rank_list_t *ranks, daos_event_t *event);
 
 /**
  * Exclude existing targets in a pool with "uuid".
  */
 int
-dsm_pool_exclude(daos_handle_t pool, daos_rank_group_t *ranks,
+dsm_pool_exclude(daos_handle_t pool, daos_rank_list_t *ranks,
 		 daos_event_t *event);
 
 typedef struct dsm_pool_info {
