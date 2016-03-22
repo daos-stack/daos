@@ -102,9 +102,9 @@ dss_cgroup_fini(void)
 
 /* Help to analyse the cpu core id for numa. */
 struct numa_core_id{
-	int nci_current_start;
-	int nci_current_end;
-	char nci_cores[256];
+	int	nci_current_start;
+	int	nci_current_end;
+	char	nci_cores[256];
 };
 
 static void
@@ -136,7 +136,7 @@ append_cores_to_cpuset_str(char *ptr, int start, int end)
 static int
 dss_cgroup_init(cpu_set_t *set)
 {
-	char			 srv_group_name[10];
+	char			 srv_group_name[24];
 	struct numa_core_id	*nc_ids = NULL;
 	int			 numa_id;
 	int			 rc;
@@ -170,7 +170,7 @@ dss_cgroup_init(cpu_set_t *set)
 		return -DER_NOMEM;
 	}
 	dcgroups->dc_count = numa_max_node() + 1;
-	
+
 	D_ALLOC(nc_ids, dcgroups->dc_count * sizeof(*nc_ids));
 	if (nc_ids == NULL) {
 		D_ERROR("Can not allocate nc_ids.\n");
@@ -227,13 +227,13 @@ dss_cgroup_init(cpu_set_t *set)
 
 	/* Create cgroup by these core ids per NUMA node */
 	for (i = 0; i < dcgroups->dc_count; i++) {
-		struct cgroup_controller *cgc;
-		char value[6];
+		struct cgroup_controller	*cgc;
+		char				 value[6];
 
 		if (strlen(nc_ids[i].nci_cores) == 0)
 			continue;
 
-		sprintf(srv_group_name, "srvc_%d", i);
+		sprintf(srv_group_name, "/daos_server/numa_%d", i);
 		dcgroups->dc_cgroup[i] =
 				cgroup_new_cgroup(srv_group_name);
 
@@ -243,8 +243,7 @@ dss_cgroup_init(cpu_set_t *set)
 			break;
 		}
 
-		cgc = cgroup_add_controller(dcgroups->dc_cgroup[i],
-					    "cpuset");
+		cgc = cgroup_add_controller(dcgroups->dc_cgroup[i], "cpuset");
 		if (cgc == NULL) {
 			D_ERROR("Can not add cpuset\n");
 			rc = -DER_INVAL;
@@ -254,8 +253,7 @@ dss_cgroup_init(cpu_set_t *set)
 		sprintf(value, "%d", i);
 		rc = cgroup_add_value_string(cgc, "cpuset.mems", value);
 		if (rc) {
-			D_ERROR("Can not add mems: %s\n",
-				cgroup_strerror(rc));
+			D_ERROR("Can not add mems: %s\n", cgroup_strerror(rc));
 			rc = -DER_INVAL;
 			break;
 		}
@@ -265,15 +263,15 @@ dss_cgroup_init(cpu_set_t *set)
 		rc = cgroup_add_value_string(cgc, "cpuset.cpus",
 					     nc_ids[i].nci_cores);
 		if (rc) {
-		       D_ERROR("Can not add cpus: %s\n",
-				cgroup_strerror(rc));
+		       D_ERROR("Can not add cpus: %s\n", cgroup_strerror(rc));
 		       rc = -DER_INVAL;
 		       break;
 		}
 
 		rc = cgroup_create_cgroup(dcgroups->dc_cgroup[i], 0);
-		if (rc < 0) {
-			D_ERROR("Can not create cgroup: rc = %d\n", errno);
+		if (rc) {
+			D_ERROR("Can not create cgroup: %s\n",
+				cgroup_strerror(rc));
 			rc = -DER_INVAL;
 			break;
 		}
