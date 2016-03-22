@@ -321,13 +321,6 @@ dtp_hg_req_destroy(struct dtp_rpc_priv *rpc_priv)
 	D_DEBUG(DF_TP,"enter dtp_hg_req_destroy, opc: 0x%x.\n",
 		rpc_priv->drp_pub.dr_opc);
 	*/
-	hg_ret = HG_Destroy(rpc_priv->drp_hg_hdl);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Destroy failed, hg_ret: %d, opc: 0x%x.\n",
-			hg_ret, rpc_priv->drp_pub.dr_opc);
-		D_GOTO(out, rc = -DER_DTP_HG);
-	}
-
 	dtp_rpc_inout_buff_fini(&rpc_priv->drp_pub);
 	if (rpc_priv->drp_output_got != 0) {
 		hg_ret = HG_Free_output(rpc_priv->drp_hg_hdl,
@@ -346,10 +339,15 @@ dtp_hg_req_destroy(struct dtp_rpc_priv *rpc_priv)
 				rpc_priv->drp_pub.dr_opc);
 	}
 
+	hg_ret = HG_Destroy(rpc_priv->drp_hg_hdl);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Destroy failed, hg_ret: %d, opc: 0x%x.\n",
+			hg_ret, rpc_priv->drp_pub.dr_opc);
+	}
+
 	pthread_spin_destroy(&rpc_priv->drp_lock);
 	D_FREE_PTR(rpc_priv);
 
-out:
 	return rc;
 }
 
