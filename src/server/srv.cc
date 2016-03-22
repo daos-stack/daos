@@ -23,7 +23,7 @@
  * including:
  * - network setup
  * - start/stop service threads
- * - manage thread local storage (TLS)
+ * - bind service threads to core/NUMA node
  */
 
 #include <pthread.h>
@@ -33,7 +33,7 @@
 
 #include <daos/daos_errno.h>
 #include <daos/daos_list.h>
-#include <daos/daos_transport.h>
+#include "dss_internal.h"
 
 /* The structure maintains Cgroup per NUMA node */
 struct dss_cgroups {
@@ -289,7 +289,12 @@ out:
 void
 dss_srv_handler_cleanup(void *param)
 {
-	dtp_context_destroy((dtp_context_t)param, true);
+	struct dss_tls	*tls = (struct dss_tls  *)param;
+	int		 rc;
+
+	rc = dtp_context_destroy(tls->tl_ctx, true);
+	if (rc)
+		D_ERROR("failed to destroy context: %d\n", rc);
 }
 
 /**
@@ -306,8 +311,8 @@ dss_srv_handler(void *arg)
 {
 	struct dss_thread	*dthread = (struct dss_thread *)arg;
 	struct cgroup		*cgroup = dthread->dt_cgroup;
-	dtp_context_t		 dtc;
 	int			 oldState;
+	struct dss_tls		*tls;
 	int			 rc;
 
 	/* ignore the cancel request until after initialization */
@@ -324,8 +329,16 @@ dss_srv_handler(void *arg)
 		return NULL;
 	}
 
+	/* initialize thread-local storage for this thread */
+	tls = dss_tls_init();
+	if (tls == NULL) {
+		pthread_cond_signal(&dthread->dt_start_cond);
+		pthread_mutex_unlock(&dthread->dt_lock);
+		return NULL;
+	}
+
 	/* create private transport context */
-	rc = dtp_context_create(NULL, &dtc);
+	rc = dtp_context_create(NULL, &tls->tl_ctx);
 	if (rc != 0) {
 		D_ERROR("Can not create dtp ctxt: rc = %d\n", rc);
 		pthread_cond_signal(&dthread->dt_start_cond);
@@ -334,7 +347,7 @@ dss_srv_handler(void *arg)
 	}
 
 	/* register clean-up routine called on cancellation point */
-	pthread_cleanup_push(dss_srv_handler_cleanup, (void *)dtc);
+	pthread_cleanup_push(dss_srv_handler_cleanup, (void *)tls);
 	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &oldState);
 	dthread->dt_id = pthread_self();
 
@@ -344,13 +357,13 @@ dss_srv_handler(void *arg)
 
 	/* main service loop processing incoming request */
 	while (true) {
-		dtp_progress(dtc, 0, NULL, NULL, NULL);
+		dtp_progress(tls->tl_ctx, 0, NULL, NULL, NULL);
 		/* cancellation point */
 		pthread_testcancel();
 	}
 
 	pthread_cleanup_pop(0);
-	dtp_context_destroy(dtc, true);
+	dtp_context_destroy(tls->tl_ctx, true);
 	return NULL;
 }
 
@@ -377,6 +390,7 @@ dss_add_threads(int number)
 		return 0;
 
 	pthread_mutex_lock(&dcgroups->dc_lock);
+
 	/* find first avaible cgroup */
 	for (idx = 0; idx < dcgroups->dc_count; idx++) {
 		cgroup = dcgroups->dc_cgroup[idx];
@@ -486,6 +500,11 @@ dss_threads_fini()
 		D_FREE_PTR(dthread);
 	}
 
+	/* release thread-local storage */
+	rc = pthread_key_delete(dss_tls_key);
+	if (rc)
+		D_ERROR("failed to delete tls: %d\n", rc);
+
 	if (dthreads->dt_lock_init) {
 		pthread_mutex_unlock(&dthreads->dt_lock);
 		pthread_mutex_destroy(&dthreads->dt_lock);
@@ -516,6 +535,13 @@ dss_threads_init(cpu_set_t *mask)
 	D_ASSERT(cores_count > 0);
 	/* init the dthreads */
 	thread_count = cores_count * INIT_THREADS_PER_NUMA;
+
+	/* initialize thread-local storage */
+	rc = pthread_key_create(&dss_tls_key, dss_tls_fini);
+	if (rc) {
+		D_ERROR("failed to create tls: %d\n", rc);
+		return -DER_NOMEM;
+	}
 
 	/* start the threads on dthreads */
 	rc = dss_add_threads(thread_count);

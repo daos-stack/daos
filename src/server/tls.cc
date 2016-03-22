@@ -18,23 +18,49 @@
  *
  * (C) Copyright 2016 Intel Corporation.
  */
+/**
+ * This file is part of the DAOS server. It implements thread-local storage
+ * (TLS) for DAOS service threads.
+ */
 
-#include <daos_srv/daos_server.h>
+#include <pthread.h>
 
-/* module.cc */
-int dss_module_init(void);
-int dss_module_fini(bool force);
-int dss_module_load(const char *modname);
-int dss_module_unload(const char *modname);
+#include "dss_internal.h"
 
-/* rpc.cc */
-int dss_rpc_register(struct dss_handler *hdlrs);
-int dss_rpc_unregister(struct dss_handler *hdlrs);
+pthread_key_t dss_tls_key;
 
-/* srv.cc */
-int dss_srv_init(void);
-int dss_srv_fini();
+/*
+ * Allocate TLS for a particular thread and store the pointer in a
+ * thread-specific value which can be fetched at any time with dss_tls_get().
+ */
+struct dss_tls *
+dss_tls_init()
+{
+	struct dss_tls	*tls;
+	int		 rc;
 
-/* tls.cc */
-void dss_tls_fini(void *arg);
-struct dss_tls *dss_tls_init();
+	D_ALLOC_PTR(tls);
+	if (tls == NULL)
+		return NULL;
+
+	rc = pthread_setspecific(dss_tls_key, tls);
+	if (rc) {
+		D_ERROR("failed to initialize tls: %d\n", rc);
+		D_FREE_PTR(tls);
+		return NULL;
+	}
+
+	return tls;
+}
+
+/*
+ * Free TLS for a particular thread. Called upon thread termination via the
+ * pthread key destructor.
+ */
+void
+dss_tls_fini(void *arg)
+{
+	struct dss_tls  *tls = (struct dss_tls  *)arg;
+
+	D_FREE_PTR(tls);
+}

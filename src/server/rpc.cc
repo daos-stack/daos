@@ -33,6 +33,9 @@ dss_rpc_register(struct dss_handler *hdlrs)
 	struct dss_handler	*dsh;
 	int			 rc;
 
+	if (hdlrs == NULL)
+		return 0;
+
 	/* walk through the handler list and register each individual RPC */
 	for (dsh = hdlrs; dsh->sh_opc != 0; dsh++) {
 		rc = dtp_rpc_srv_reg(dsh->sh_opc, dsh->sh_in_hdlr,
@@ -47,6 +50,9 @@ dss_rpc_register(struct dss_handler *hdlrs)
 int
 dss_rpc_unregister(struct dss_handler *hdlrs)
 {
+	if (hdlrs == NULL)
+		return 0;
+
 	/* no supported for now */
 	return 0;
 }

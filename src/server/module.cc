@@ -30,8 +30,6 @@
 #include <daos/daos_common.h>
 #include <daos/daos_list.h>
 
-#include <daos_srv/daos_server.h>
-
 #include "dss_internal.h"
 
 /* Loaded module instance */

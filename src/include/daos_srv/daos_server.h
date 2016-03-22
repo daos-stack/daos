@@ -26,6 +26,7 @@
 #define __DSS_API_H__
 
 #include <daos/daos_transport.h>
+#include <pthread.h>
 
 /**
  * Stackable Module API
@@ -91,4 +92,18 @@ struct dss_module {
 	struct dss_handler	 *sm_srv_hdlrs;
 };
 
+/*
+ * Thead-local storage
+ */
+struct dss_tls {
+	dtp_context_t	tl_ctx;
+};
+
+extern pthread_key_t dss_tls_key;
+
+static inline struct dss_tls *
+dss_tls_get()
+{
+	return (struct dss_tls *)pthread_getspecific(dss_tls_key);
+}
 #endif /* __DSS_API_H__ */
