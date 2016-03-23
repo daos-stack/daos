@@ -29,7 +29,7 @@ int dss_module_unload(const char *modname);
 
 /* rpc.cc */
 int dss_rpc_register(struct dss_handler *hdlrs, int modid,
-		     int client_or_server);
+		     int server_only);
 int dss_rpc_unregister(struct dss_handler *hdlrs);
 
 /* srv.cc */

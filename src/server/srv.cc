@@ -208,8 +208,8 @@ dss_cgroup_init(cpu_set_t *set)
 					nc_ids[numa_id].nci_current_start,
 					nc_ids[numa_id].nci_current_end);
 
-			nc_ids[numa_id].nci_current_start = -1;
-			nc_ids[numa_id].nci_current_end = -1;
+			nc_ids[numa_id].nci_current_start = i;
+			nc_ids[numa_id].nci_current_end = i;
 		}
 	}
 	if (rc < 0)

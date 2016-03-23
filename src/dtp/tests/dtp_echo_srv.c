@@ -227,7 +227,7 @@ int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 	daos_sg_list_t			sgl;
 	daos_iov_t			*iovs = NULL;
 	daos_size_t			bulk_len;
-	unsigned long			bulk_sgnum;
+	unsigned int			bulk_sgnum;
 	echo_bulk_test_in_t		*bulk_test_input = NULL;
 	struct bulk_test_srv_cbinfo	*bulk_cbinfo;
 	struct dtp_bulk_desc		bulk_desc;
@@ -244,7 +244,7 @@ int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 	rc = dtp_bulk_get_sgnum(remote_bulk_hdl, &bulk_sgnum);
 
 	printf("echo_srver recv'd bulk_test, opc: 0x%x, intro_msg: %s, "
-	       "bulk_len: %ld, bulk_sgnum: %ld.\n", rpc_req->dr_opc,
+	       "bulk_len: %ld, bulk_sgnum: %d.\n", rpc_req->dr_opc,
 	       bulk_test_input->bulk_intro_msg, bulk_len, bulk_sgnum);
 
 	iovs = (daos_iov_t *)malloc(sizeof(daos_iov_t));
