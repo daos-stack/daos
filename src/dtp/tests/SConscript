@@ -5,8 +5,6 @@ Import('env')
 env.Append(CPPPATH = ['#/src/dtp/tests'])
 
 # a simple example to use dtp_xxx APIs
-# to run it: ./dtp_echo_srv bmi+tcp://localhost:3344
-#            ./dtp_echo_cli bmi+tcp://localhost:3344
 env.Program('dtp_echo_cli', 'dtp_echo_cli.c',
 	    LIBS=['libdaos_transport', 'libdaos_common', 'libmercury', 'libna', 'libpthread', 'libcrypto'])
 env.Program('dtp_echo_srv', 'dtp_echo_srv.c',

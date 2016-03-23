@@ -303,20 +303,8 @@ int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 	return rc;
 }
 
-static void usage()
-{
-	fputs("usage: ./hg_test_iv_echo_srver <<uri>\n"
-	      "  uri  - listen  address\n", stderr);
-	exit(1);
-}
-
 int main(int argc, char *argv[])
 {
-	if (argc != 2)
-		usage();
-
-	gecho.uri = argv[1];
-	printf("listening uri: %s.\n", gecho.uri);
 	echo_init(1);
 
 	run_echo_srver();

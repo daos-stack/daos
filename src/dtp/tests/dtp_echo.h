@@ -38,7 +38,6 @@
 #define ECHO_OPC_SHUTDOWN   (0x100)
 
 struct gecho {
-	dtp_phy_addr_t	uri;
 	dtp_context_t	dtp_ctx;
 	int		complete;
 };
@@ -66,7 +65,7 @@ echo_init(int server)
 {
 	int rc = 0;
 
-	rc = dtp_init(gecho.uri, server);
+	rc = dtp_init(server);
 	assert(rc == 0);
 
 	rc = dtp_context_create(NULL, &gecho.dtp_ctx);

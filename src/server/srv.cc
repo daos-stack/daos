@@ -580,7 +580,7 @@ dss_srv_init()
 	cpu_set_t	mask;
 
 	/* initialize the network layer */
-	rc = dtp_init("bmi+tcp://localhost:8889", true);
+	rc = dtp_init(true);
 	if (rc) {
 		D_ERROR("failed to initialize network: %d\n", rc);
 		return rc;

@@ -49,15 +49,21 @@ static void data_init()
 }
 
 int
-dtp_init(const dtp_phy_addr_t addr, bool server)
+dtp_init(bool server)
 {
-	int    rc = 0;
+	char	*addr;
+	int	rc = 0;
 
 	D_DEBUG(DF_TP, "Enter dtp_init.\n");
 
-	if (addr == NULL || strlen(addr) == 0) {
-		D_ERROR("invalid parameter of info_string.\n");
-		D_GOTO(out, rc = -DER_INVAL);
+	addr = getenv(DTP_PHY_ADDR_ENV);
+	if (addr == NULL) {
+		addr = "bmi+tcp://localhost:8889";
+		D_DEBUG(DF_TP, "ENV %s not found, use default addr %s.\n",
+			DTP_PHY_ADDR_ENV, addr);
+	} else {
+		D_DEBUG(DF_TP, "ENV %s found, use addr %s.\n",
+			DTP_PHY_ADDR_ENV, addr);
 	}
 
 	if (gdata_init_flag == 0) {

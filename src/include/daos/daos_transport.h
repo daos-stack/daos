@@ -146,10 +146,11 @@ typedef int (*dtp_proc_cb_t)(dtp_proc_t proc, void *data);
  */
 typedef int (*dtp_progress_cond_cb_t)(void *arg);
 
+#define DTP_PHY_ADDR_ENV	"DTP_PHY_ADDR_STR"
+
 /**
  * Initialize DAOS transport layer.
  *
- * \param addr[IN]              physical host address.
  * \param server [IN]           zero means pure client, otherwise will enable
  *                              the server which listens for incoming connection
  *                              request.
@@ -160,7 +161,7 @@ typedef int (*dtp_progress_cond_cb_t)(void *arg);
  *        bootstrapping mechanism be more clear
  */
 int
-dtp_init(dtp_phy_addr_t addr, bool server);
+dtp_init(bool server);
 
 /**
  * Create DAOS transport context.

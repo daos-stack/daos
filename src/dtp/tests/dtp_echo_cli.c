@@ -250,23 +250,8 @@ static void run_client(void)
 	printf("client shuting down...\n");
 }
 
-static void usage()
-{
-	fputs("usage: /hg_test_iv_client <uri>\n"
-	      "  uri  connect address\n", stderr);
-	exit(1);
-}
-
-
 int main(int argc, char *argv[])
 {
-	if (argc != 2)
-		usage();
-
-	gecho.uri = argv[1];
-
-	printf("connecting to uri: %s.\n", argv[1]);
-
 	echo_init(0);
 
 	run_client();
