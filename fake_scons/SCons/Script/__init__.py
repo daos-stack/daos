@@ -104,6 +104,10 @@ class Dir(object):
         """Fake abspath"""
         return os.getcwd()
 
+def VariantDir(*args, **kw):
+    """Fake VariantDir"""
+    pass
+
 def AddOption(*args, **kw):
     """Fake AddOption"""
     return True
@@ -149,6 +153,10 @@ def Command(*args, **kw):
     """Fake Command"""
     return ["fake"]
 
+def Builder(*args, **kw):
+    """Fake Builder"""
+    return ["fake"]
+
 __all__ = ['DefaultEnvironment',
            'Variables',
            'Configure',
@@ -163,5 +171,8 @@ __all__ = ['DefaultEnvironment',
            'SConscript',
            'Default',
            'AlwaysBuild',
-           'Command']
+           'Command',
+           'Builder',
+           'AddOption',
+           'VariantDir']
 

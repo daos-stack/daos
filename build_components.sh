@@ -12,7 +12,7 @@ elif [ -n "$WORKSPACE" ]; then
 fi
 
 /bin/rm -f *.conf
-scons $option --config=force
+scons $option --config=force --update-prereq=all
 
 if [ -n "$WORKSPACE" ]; then
 if [ -z "$JOB_LOC" ]; then

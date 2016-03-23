@@ -20,7 +20,7 @@ export prebuilt="PREBUILT_PREFIX=$JOB_LOC/pmix \
 else
 export prebuilt="HWLOC_PREBUILT=$JOB_LOC/hwloc PMIX_PREBUILT=$JOB_LOC/pmix"
 fi
-scons $prebuilt -C test --config=force
+scons $prebuilt -C test --config=force --update-prereq=all
 
 #This one defines pmix2
 scons $prebuilt -C test -f SConstruct.alt --config=force
