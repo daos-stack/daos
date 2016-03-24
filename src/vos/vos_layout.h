@@ -43,6 +43,7 @@ struct vos_object_table;
 struct vos_epoch_table;
 struct vos_kv_index;
 struct vos_ba_index;
+struct vos_obj;
 /**
  * Typed Layout named using Macros from libpmemobj
  * Each structure is assigned a type number internally
@@ -62,6 +63,7 @@ POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_object_table);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_epoch_table);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_kv_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_ba_index);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj);
 POBJ_LAYOUT_END(vos_pool_layout);
 
 struct vos_pool_root {

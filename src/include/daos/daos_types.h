@@ -200,9 +200,9 @@ typedef struct {
  * DAOS Objects
  */
 
-/** ID of an object */
+/** ID of an object, 192 bits */
 typedef struct {
-	uint64_t	body[2];
+	uint64_t	body[3];
 } daos_obj_id_t;
 
 typedef struct {
@@ -314,5 +314,18 @@ typedef struct {
 	/** Optional, array of epoch ranges for the \a kv_keys */
 	daos_epoch_range_t	*kv_eprs;
 } daos_kv_list_t;
+
+/**
+ * 256-bit object ID, it can identify a unique bottom level object.
+ * (a shard of upper level object).
+ */
+typedef struct {
+	/** public section, high level object ID */
+	daos_obj_id_t		id_pub;
+	/** private section, object shard index */
+	uint32_t		id_shard;
+	/** padding */
+	uint32_t		id_pad_32;
+} daos_unit_oid_t;
 
 #endif /* DAOS_TYPES_H */
