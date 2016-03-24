@@ -22,10 +22,6 @@
 #ifndef __DAOS_COMMON_H__
 #define __DAOS_COMMON_H__
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 #include <sys/time.h>
 #include <stdint.h>
 #include <inttypes.h>
@@ -38,6 +34,7 @@ extern "C" {
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <pthread.h>
 #include <daos/daos_types.h>
 
 #define DAOS_ENV_DEBUG	"DAOS_DEBUG"
@@ -246,7 +243,4 @@ daos_handle_is_inval(daos_handle_t hdl)
 	        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
 
-#if defined (__cplusplus)
-}
-#endif
 #endif /* __DAOS_COMMON_H__ */

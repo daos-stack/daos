@@ -34,9 +34,9 @@
 #include <daos/daos_common.h>
 
 DTP_GEN_PROC(echo_in_t,
-        ((bool)(age)) ((dtp_string_t)(name)) ((uint32_t)(days)))
+	((bool)(age)) ((dtp_string_t)(name)) ((uint32_t)(days)))
 DTP_GEN_PROC(echo_out_t,
-        ((int32_t)(ret)) ((uint32_t)(room_no)))
+	((int32_t)(ret)) ((uint32_t)(room_no)))
 
 static int
 echo(dtp_rpc_t *req)

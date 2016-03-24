@@ -29,10 +29,6 @@
 #ifndef __DAOS_ERRNO_H__
 #define __DAOS_ERRNO_H__
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 typedef enum {
 	DER_ERR_BASE		= 2000,
 	/** no permission */
@@ -92,7 +88,4 @@ typedef enum {
 
 const char *daos_errstr(daos_errno_t errno);
 
-#if defined (__cplusplus)
-}
-#endif
 #endif /*  __DAOS_ERRNO_H__ */

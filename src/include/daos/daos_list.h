@@ -22,10 +22,6 @@
 #ifndef __DAOS_LIST_H__
 #define __DAOS_LIST_H__
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 /*
  * Simple doubly linked list implementation.
  *
@@ -572,7 +568,4 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
 		(tpos = daos_hlist_entry(pos, type, member), 1);               \
 	     pos = n)
 
-#if defined (__cplusplus)
-}
-#endif
 #endif /* __DAOS_LIST_H__ */

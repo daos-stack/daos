@@ -22,10 +22,6 @@
 #ifndef __DAOS_HASH_H__
 #define __DAOS_HASH_H__
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 #define DAOS_HHASH_BITS		16
 #define DAOS_HTYPE_BITS		3
 #define DAOS_HTYPE_MASK		((1ULL << DAOS_HTYPE_BITS) - 1)
@@ -79,7 +75,4 @@ int daos_hhash_link_delete(struct daos_hhash *hhash,
 int daos_hhash_link_empty(struct daos_hlink *hlink);
 void daos_hhash_link_key(struct daos_hlink *hlink, uint64_t *key);
 
-#if defined (__cplusplus)
-}
-#endif
 #endif /*__DAOS_HASH_H__*/

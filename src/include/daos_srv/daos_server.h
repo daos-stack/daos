@@ -97,15 +97,44 @@ struct dss_module {
 /*
  * Thead-local storage
  */
-struct dss_tls {
-	dtp_context_t	tl_ctx;
+struct dss_thread_local_storage {
+	uint32_t	dtls_tag;
+	void		**dtls_values;
+};
+
+enum dss_module_tag {
+	/* Server tag */
+	DAOS_SERVER_TAG	= 1 << 0,
+};
+
+/* The module key descriptor for each server thread */
+struct dss_module_key {
+	/* Indicate where the keys should be instantiated */
+	enum dss_module_tag dmk_tags;
+
+	/* The position inside the dss_module_keys */
+	int dmk_index;
+	/* init keys for context */
+	void  *(*dmk_init)(const struct dss_thread_local_storage *dtls,
+			   struct dss_module_key *key);
+
+	/* fini keys for context */
+	void  (*dmk_fini)(const struct dss_thread_local_storage *dtls,
+			  struct dss_module_key *key, void *data);
 };
 
 extern pthread_key_t dss_tls_key;
 
-static inline struct dss_tls *
+static inline struct dss_thread_local_storage *
 dss_tls_get()
 {
-	return (struct dss_tls *)pthread_getspecific(dss_tls_key);
+	return (struct dss_thread_local_storage *)
+		pthread_getspecific(dss_tls_key);
 }
+
+void *dss_module_key_get(struct dss_thread_local_storage *dtls,
+			  struct dss_module_key *key);
+void dss_register_key(struct dss_module_key *key);
+void dss_unregister_key(struct dss_module_key *key);
+
 #endif /* __DSS_API_H__ */

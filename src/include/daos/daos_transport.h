@@ -24,10 +24,6 @@
 #ifndef __DAOS_TRANSPORT_H__
 #define __DAOS_TRANSPORT_H__
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 #include <daos/daos_common.h>
 #include <daos/daos_types.h>
 #include <daos/daos_errno.h>
@@ -686,7 +682,4 @@ BOOST_PP_CAT(dtp_proc_, struct_type_name)				\
 	_DTP_GEN_STRUCT(struct_type_name, fields)			\
 	_DTP_GEN_STRUCT_PROC(struct_type_name, fields)
 
-#if defined (__cplusplus)
-}
-#endif
 #endif /* __DAOS_TRANSPORT_H__ */

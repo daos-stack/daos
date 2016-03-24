@@ -28,10 +28,6 @@
 #ifndef __DAOS_EV_H__
 #define __DAOS_EV_H__
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 #include <daos/daos_types.h>
 #include <daos/daos_errno.h>
 #include <daos/daos_list.h>
@@ -235,7 +231,4 @@ daos_event_next(daos_event_t *parent, daos_event_t *child);
 int
 daos_event_abort(daos_event_t *ev);
 
-#if defined (__cplusplus)
-}
-#endif
 #endif /*  __DAOS_EV_H__ */

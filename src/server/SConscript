@@ -5,5 +5,5 @@ Import('env')
 libraries = ['daos_common', 'dl', 'daos_transport', 'pthread', 'cgroup', 'numa']
 
 # Generate server program
-server = env.Program('daos_server', Glob('*.cc'), LIBS=libraries)
+server = env.Program('daos_server', Glob('*.c'), LIBS=libraries)
 env.Install('#/build/bin', server)

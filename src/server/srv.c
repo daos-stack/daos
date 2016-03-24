@@ -108,7 +108,7 @@ dss_cgroup_fini(void)
 }
 
 /* Help to analyse the cpu core id for numa. */
-struct numa_core_id{
+struct numa_core_id {
 	int	nci_current_start;
 	int	nci_current_end;
 	char	nci_cores[256];
@@ -204,7 +204,7 @@ dss_cgroup_init(cpu_set_t *set)
 		D_ASSERTF(numa_id < dcgroups->dc_count, "numa_id %d count %d\n",
 			  numa_id, dcgroups->dc_count);
 
-		if(nc_ids[numa_id].nci_current_start == -1 &&
+		if (nc_ids[numa_id].nci_current_start == -1 &&
 		   nc_ids[numa_id].nci_current_end == -1) {
 			nc_ids[numa_id].nci_current_start = i;
 			nc_ids[numa_id].nci_current_end = i;
@@ -266,13 +266,13 @@ dss_cgroup_init(cpu_set_t *set)
 		}
 
 		D_DEBUG(DF_SERVER, "set numa %d core %s\n", i,
-		        nc_ids[i].nci_cores);
+			nc_ids[i].nci_cores);
 		rc = cgroup_add_value_string(cgc, "cpuset.cpus",
 					     nc_ids[i].nci_cores);
 		if (rc) {
-		       D_ERROR("Can not add cpus: %s\n", cgroup_strerror(rc));
-		       rc = -DER_INVAL;
-		       break;
+			D_ERROR("Can not add cpus: %s\n", cgroup_strerror(rc));
+			rc = -DER_INVAL;
+			break;
 		}
 
 		rc = cgroup_create_cgroup(dcgroups->dc_cgroup[i], 0);
@@ -294,10 +294,14 @@ out:
 void
 dss_srv_handler_cleanup(void *param)
 {
-	struct dss_tls	*tls = (struct dss_tls  *)param;
-	int		 rc;
+	struct dss_thread_local_storage	*dtc;
+	struct dss_module_info		*dmi;
+	int				rc;
 
-	rc = dtp_context_destroy(tls->tl_ctx, true);
+	dtc = (struct dss_thread_local_storage  *)param;
+	dmi = dss_get_module_info(dtc);
+	D_ASSERT(dmi != NULL);
+	rc = dtp_context_destroy(dmi->dmi_ctx, true);
 	if (rc)
 		D_ERROR("failed to destroy context: %d\n", rc);
 }
@@ -317,7 +321,8 @@ dss_srv_handler(void *arg)
 	struct dss_thread	*dthread = (struct dss_thread *)arg;
 	struct cgroup		*cgroup = dthread->dt_cgroup;
 	int			 oldState;
-	struct dss_tls		*tls;
+	struct dss_thread_local_storage *dtc;
+	struct dss_module_info	*dmi;
 	int			 rc;
 
 	/* ignore the cancel request until after initialization */
@@ -335,15 +340,18 @@ dss_srv_handler(void *arg)
 	}
 
 	/* initialize thread-local storage for this thread */
-	tls = dss_tls_init();
-	if (tls == NULL) {
+	dtc = dss_tls_init(DAOS_SERVER_TAG);
+	if (dtc == NULL) {
 		pthread_cond_signal(&dthread->dt_start_cond);
 		pthread_mutex_unlock(&dthread->dt_lock);
 		return NULL;
 	}
 
+	dmi = dss_get_module_info(dtc);
+	D_ASSERT(dmi != NULL);
+
 	/* create private transport context */
-	rc = dtp_context_create(NULL, &tls->tl_ctx);
+	rc = dtp_context_create(NULL, &dmi->dmi_ctx);
 	if (rc != 0) {
 		D_ERROR("Can not create dtp ctxt: rc = %d\n", rc);
 		pthread_cond_signal(&dthread->dt_start_cond);
@@ -352,7 +360,7 @@ dss_srv_handler(void *arg)
 	}
 
 	/* register clean-up routine called on cancellation point */
-	pthread_cleanup_push(dss_srv_handler_cleanup, (void *)tls);
+	pthread_cleanup_push(dss_srv_handler_cleanup, (void *)dtc);
 	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &oldState);
 	dthread->dt_id = pthread_self();
 
@@ -362,13 +370,13 @@ dss_srv_handler(void *arg)
 
 	/* main service loop processing incoming request */
 	while (true) {
-		dtp_progress(tls->tl_ctx, 0, NULL, NULL, NULL);
+		dtp_progress(dmi->dmi_ctx, 0, NULL, NULL, NULL);
 		/* cancellation point */
 		pthread_testcancel();
 	}
 
 	pthread_cleanup_pop(0);
-	dtp_context_destroy(tls->tl_ctx, true);
+	dtp_context_destroy(dmi->dmi_ctx, true);
 	return NULL;
 }
 
@@ -487,7 +495,7 @@ dss_threads_fini()
 			D_DEBUG(DF_SERVER, "stopping %ld\n", dthread->dt_id);
 			rc = pthread_cancel(dthread->dt_id);
 			if (rc) {
-				D_ERROR("Failed to cancel %ld thread: rc = %d\n",
+				D_ERROR("Failed to kill %ld thread: rc = %d\n",
 					dthread->dt_id, rc);
 			} else {
 				/* We need to wait for the thread to exit, then
@@ -508,7 +516,7 @@ dss_threads_fini()
 	/* release thread-local storage */
 	rc = pthread_key_delete(dss_tls_key);
 	if (rc)
-		D_ERROR("failed to delete tls: %d\n", rc);
+		D_ERROR("failed to delete dtc: %d\n", rc);
 
 	if (dthreads->dt_lock_init) {
 		pthread_mutex_unlock(&dthreads->dt_lock);
@@ -544,7 +552,7 @@ dss_threads_init(cpu_set_t *mask)
 	/* initialize thread-local storage */
 	rc = pthread_key_create(&dss_tls_key, dss_tls_fini);
 	if (rc) {
-		D_ERROR("failed to create tls: %d\n", rc);
+		D_ERROR("failed to create dtc: %d\n", rc);
 		return -DER_NOMEM;
 	}
 
@@ -567,6 +575,33 @@ dss_srv_fini()
 	dtp_finalize();
 	return 0;
 }
+
+static void *
+dss_module_info_init(const struct dss_thread_local_storage *dtls,
+		     struct dss_module_key *key)
+{
+	struct dss_module_info *info;
+
+	D_ALLOC_PTR(info);
+
+	return info;
+}
+
+static void
+dss_module_info_fini(const struct dss_thread_local_storage *dtls,
+		     struct dss_module_key *key, void *data)
+{
+	struct dss_module_info *info = (struct dss_module_info *)data;
+
+	D_FREE_PTR(info);
+}
+
+struct dss_module_key dss_module_key = {
+	.dmk_tags = DAOS_SERVER_TAG,
+	.dmk_index = -1,
+	.dmk_init = dss_module_info_init,
+	.dmk_fini = dss_module_info_fini,
+};
 
 static int
 dss_load_cpuset(cpu_set_t *set)
@@ -622,6 +657,8 @@ dss_srv_init()
 		D_ERROR("allocate dss_thread fails\n");
 		goto out;
 	}
+
+	dss_register_key(&dss_module_key);
 
 	/* how many threads should be started here */
 	rc = dss_threads_init(&mask);
