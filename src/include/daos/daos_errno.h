@@ -67,6 +67,8 @@ typedef enum {
 	DER_FREE_MEM		= (DER_ERR_BASE + 15),
 	/** Entry not found */
 	DER_ENOENT		= (DER_ERR_BASE + 16),
+	/** Busy */
+	DER_BUSY		= (DER_ERR_BASE + 17),
 	/** epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** epoch is too old, all data have been recycled */

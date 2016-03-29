@@ -30,49 +30,31 @@
 #ifndef __DSM_API_H__
 #define __DSM_API_H__
 
-#include <daos/daos_types.h>
-#include <daos/daos_errno.h>
+#include <uuid/uuid.h>
 #include <daos/daos_ev.h>
+#include <daos/daos_types.h>
 
 /**
- * Create a pool with "uuid", "mode", and "ntargets".
+ * DSM_PC_RO connects to the pool for reading only. This flag conflicts with
+ * DSM_PC_RW.
  *
- * "device" identifies target devices. "size" specifies target sizes (i.e.,
- * maximum amounts of storage space targets can consume) in bytes. Targets are
- * assumed to share the same "path" and "size".
- *
- * "ranks" passes in the rank of each target. The fault domains among the
- * targets are retrieved automatically from external sources.
- *
- * This is a privileged operation.
- *
- * TODO(liwei): Move this to the DMG API.
+ * DSM_PC_RW connects to the pool for reading and writing. This flag conflicts
+ * with DSM_PC_RO.
  */
-int
-dsm_pool_create(const uuid_t uuid, unsigned int mode, int ntargets,
-		const daos_rank_t *ranks, const char *device, uint64_t size,
-		daos_event_t *event);
+#define DSM_PC_RO	0x0U
+#define DSM_PC_RW	0x1U
 
 /**
- * Destroy a pool with "uuid". Upon successful completion, no new connections
- * can be made to the pool. The pool data will be destroyed once all existing
- * connections disappear.
- *
- * This is a privileged operation.
- *
- * TODO(liwei): Move this to the DMG API.
+ * Connect to a pool with "uuid". "group" and "ranks" indicate potential ranks
+ * of the pool service replicas. "flags" comprises of the DSM_PC_ bits. Upon a
+ * successful completion, "pool" returns the pool handle and "failed", which
+ * shall be allocated by the caller, returns the targets that failed to
+ * establish this connection.
  */
 int
-dsm_pool_destroy(const uuid_t uuid, daos_event_t *event);
-
-/**
- * Connect to a pool with "uuid". "ranks" indicates potential ranks of the pool
- * service replicas. "flags" contains flags such as whether the resulting
- * connection should be read-only or read-write.
- */
-int
-dsm_pool_connect(const uuid_t uuid, const daos_rank_list_t *ranks,
-		 unsigned int flags, daos_handle_t *pool,
+dsm_pool_connect(const uuid_t uuid, const daos_group_t *group,
+		 const daos_rank_list_t *ranks, unsigned int flags,
+		 daos_handle_t *pool, daos_rank_list_t *failed,
 		 daos_event_t *event);
 
 /**
@@ -80,21 +62,6 @@ dsm_pool_connect(const uuid_t uuid, const daos_rank_list_t *ranks,
  */
 int
 dsm_pool_disconnect(daos_handle_t pool, daos_event_t *event);
-
-/**
- * Add new targets to a pool with "uuid".
- *
- * This is a privileged operation.
- */
-int
-dsm_pool_grow(daos_handle_t pool, daos_rank_list_t *ranks, daos_event_t *event);
-
-/**
- * Exclude existing targets in a pool with "uuid".
- */
-int
-dsm_pool_exclude(daos_handle_t pool, daos_rank_list_t *ranks,
-		 daos_event_t *event);
 
 typedef struct dsm_pool_info {
 	uuid_t		mps_uuid;
@@ -124,14 +91,10 @@ dsm_pool_query(daos_handle_t pool, dsm_pool_info_t *info, daos_event_t *event);
  */
 
 /**
- * Create a container with "uuid" and optional "name" in "pool".
- *
- * "name" is only valid in this pool and may be NULL. When it is NULL, the
- * container can only be found by its UUID.
+ * Create a container with "uuid" in "pool".
  */
 int
-dsm_co_create(daos_handle_t pool, const uuid_t uuid, const char *name,
-	      daos_event_t *event);
+dsm_co_create(daos_handle_t pool, const uuid_t uuid, daos_event_t *event);
 
 /**
  * DSM_COO_RO opens the container for reading only. This flag conflicts with
@@ -139,17 +102,15 @@ dsm_co_create(daos_handle_t pool, const uuid_t uuid, const char *name,
  *
  * DSM_COO_RW opens the container for reading and writing. This flag conflicts
  * with DSM_COO_RO.
- *
- * DSM_COO_CREATE creates the container before opening it. This flag must be
- * set together with either DSM_COO_RO or DSM_COO_RW.
  */
 #define DSM_COO_RO	0x0U
 #define DSM_COO_RW	0x1U
-#define DSM_COO_CREATE	0x2U
 
 /**
- * Open a container with "uuid", optionally creating it first. See also
- * dsm_co_create(). "flags" comprises of DSM_COO_ bits.
+ * Open a container with "uuid". See also dsm_co_create(). "flags" comprises of
+ * DSM_COO_ bits. Upon a successful completion, "container" and "info", both of
+ * which shall be allocated by the caller, return the container handle and the
+ * container information respectively.
  */
 int
 dsm_co_open(daos_handle_t pool, const uuid_t uuid, unsigned int flags,
@@ -163,12 +124,14 @@ int
 dsm_co_close(daos_handle_t container, daos_event_t *event);
 
 /**
- * Destroy a container with "uuid" in "pool". Upon successful completion, the
- * container can no longer be opened and will be destroyed once all existing
- * container handles disappear.
+ * Destroy a container with "uuid" in "pool". If there is at least one
+ * container opener, and "force" is zero, then the operation completes with
+ * DER_BUSY. Otherwise, the container is destroyed when the operation
+ * completes.
  */
 int
-dsm_co_destroy(daos_handle_t pool, const uuid_t uuid, daos_event_t *event);
+dsm_co_destroy(daos_handle_t pool, const uuid_t uuid, int force,
+	       daos_event_t *event);
 
 /**
  * Query "container" info.
@@ -188,8 +151,8 @@ dsm_co_query(daos_handle_t container, daos_co_info_t *info,
  *	event		IN  completion event
  */
 int
-dsm_co_xattr_list(daos_handle_t container, char *buffer, size_t *size,
-		  daos_event_t *event);
+dsm_co_attr_list(daos_handle_t container, char *buffer, size_t *size,
+		 daos_event_t *event);
 
 /**
  * Get a set of attributes.
@@ -204,8 +167,8 @@ dsm_co_xattr_list(daos_handle_t container, char *buffer, size_t *size,
  *	event		IN  completion event
  */
 int
-dsm_co_xattr_get(daos_handle_t container, int n, const char *const names[],
-		 void *buffers[], size_t *sizes[], daos_event_t *event);
+dsm_co_attr_get(daos_handle_t container, int n, const char *const names[],
+		void *buffers[], size_t *sizes[], daos_event_t *event);
 
 /**
  * Set a set of attributes.
@@ -218,9 +181,9 @@ dsm_co_xattr_get(daos_handle_t container, int n, const char *const names[],
  *	event		IN  completion event
  */
 int
-dsm_co_xattr_set(daos_handle_t container, int n, const char *const names[],
-		 const void *const values[], const size_t sizes[],
-		 daos_event_t *event);
+dsm_co_attr_set(daos_handle_t container, int n, const char *const names[],
+		const void *const values[], const size_t sizes[],
+		daos_event_t *event);
 
 /**
  * Flush an epoch of a container handle.

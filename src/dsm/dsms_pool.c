@@ -34,8 +34,9 @@
 
 int
 dsms_pool_create(const uuid_t uuid, unsigned int uid, unsigned int gid,
-		 unsigned int mode, int ntargets, const dtp_phy_addr_t *targets,
-		 int ndomains, const int *domains, const char *path)
+		 unsigned int mode, const daos_group_t *group,
+		 const daos_rank_list_t *targets, int ndomains,
+		 const int *domains, const char *path)
 {
 	return 0;
 }
