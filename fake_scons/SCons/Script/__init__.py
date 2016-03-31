@@ -13,8 +13,127 @@ class DefaultEnvironment(object):
     def __init__(self):
         pass
 
+    def CFile(self, *args, **kw):
+        """Fake CFile"""
+        return []
+    def Java(self, *args, **kw):
+        """Fake Java"""
+        return []
+
+    def Jar(self, *args, **kw):
+        """Fake Jar"""
+        return []
+
+    def StaticLibrary(self, *args, **kw):
+        """Fake StaticLibrary"""
+        return []
+
+    def M4(self, *args, **kw):
+        """Fake M4"""
+        return []
+
+    def DVI(self, *args, **kw):
+        """Fake DVI"""
+        return []
+
+    def Zip(self, *args, **kw):
+        """Fake Zip"""
+        return []
+
+    def CXXFile(self, *args, **kw):
+        """Fake CXXFile"""
+        return []
+
+    def InstallAs(self, *args, **kw):
+        """Fake InstallAs"""
+        return []
+
+    def InstallVersionedLib(self, *args, **kw):
+        """Fake InstallVersionedLib"""
+        return []
+
+    def RPCGenHeader(self, *args, **kw):
+        """Fake RPCGenHeader"""
+        return []
+
+    def RPCGenXDR(self, *args, **kw):
+        """Fake RPCGenXDR"""
+        return []
+
+    def JavaClassDir(self, *args, **kw):
+        """Fake JavaClassDir"""
+        return []
+
+    def LoadableModule(self, *args, **kw):
+        """Fake LoadableModule"""
+        return []
+
+    def JavaFile(self, *args, **kw):
+        """Fake JavaFile"""
+        return []
+
+    def CopyAs(self, *args, **kw):
+        """Fake CopyAs"""
+        return []
+
+    def JavaH(self, *args, **kw):
+        """Fake JavaH"""
+        return []
+
+    def CopyTo(self, *args, **kw):
+        """Fake CopyTo"""
+        return []
+
+    def PDF(self, *args, **kw):
+        """Fake PDF"""
+        return []
+
+    def StaticObject(self, *args, **kw):
+        """Fake StaticObject"""
+        return []
+
+    def Gs(self, *args, **kw):
+        """Fake Gs"""
+        return []
+
+    def Tar(self, *args, **kw):
+        """Fake Tar"""
+        return []
+
+    def JavaClassFile(self, *args, **kw):
+        """Fake JavaClassFile"""
+        return []
+
+    def RPCGenService(self, *args, **kw):
+        """Fake RPCGenService"""
+        return []
+
+    def RPCGenClient(self, *args, **kw):
+        """Fake RPCGenClient"""
+        return []
+
+    def Library(self, *args, **kw):
+        """Fake Library"""
+        return []
+
+    def RMIC(self, *args, **kw):
+        """Fake RMIC"""
+        return []
+
+    def PostScript(self, *args, **kw):
+        """Fake PostScript"""
+        return []
+
+    def Rpm(self, *args, **kw):
+        """Fake Rpm"""
+        return []
+
     def Program(self, *args, **kw):
         """Fake Program"""
+        return []
+
+    def Alias(self, *args, **kw):
+        """Fake Alias"""
         return []
 
     def Install(self, *args, **kw):

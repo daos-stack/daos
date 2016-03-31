@@ -18,6 +18,7 @@ while [ $# != 0 ]; do
         #actually work so we turn off some warnings
         echo check SCons
         check_script SCons -d too-few-public-methods \
+                           -d too-many-public-methods \
                            -d invalid-name \
                            -d unused-argument \
                            -d no-self-use
