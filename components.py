@@ -75,7 +75,6 @@ REQS.define('mercury',
                       '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ ' \
                       '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX ' \
                       '-DBUILD_EXAMPLES=ON ' \
-                      '-DMERCURY_BUILD_HL_LIB=ON ' \
                       '-DMERCURY_USE_BOOST_PP=ON ' \
                       '-DNA_USE_BMI=ON -DBUILD_TESTING=ON ' \
                       '-DNA_USE_CCI=ON ' \
