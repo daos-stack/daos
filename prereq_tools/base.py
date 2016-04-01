@@ -724,6 +724,7 @@ class _Component(object):
 
         for path in self.lib_path:
             env.Append(LIBPATH=[os.path.join(self.component_prefix, path)])
+            env.Append(RPATH=[os.path.join(self.component_prefix, path)])
         for lib in self.libs:
             env.Append(LIBS=[lib])
 
