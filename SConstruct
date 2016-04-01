@@ -12,6 +12,15 @@ if term:
         real_env["TERM"] = term
         env.Replace(ENV=real_env)
 
+config = Configure(env)
+if not config.CheckLib('cgroup'):
+        config.Finish()
+        exit(1)
+if not config.CheckHeader('mercury.h'):
+        config.Finish()
+        exit(1)
+config.Finish()
+
 # manage build log
 bldir = 'build'
 bldlog = bldir + '/build.log'
