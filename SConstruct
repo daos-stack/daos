@@ -5,6 +5,13 @@ import os
 
 env = Environment()
 
+# Pass TERM through to the environment to allow colour output from gcc
+term = os.environ.get("TERM")
+if term:
+        real_env = env['ENV']
+        real_env["TERM"] = term
+        env.Replace(ENV=real_env)
+
 # manage build log
 bldir = 'build'
 bldlog = bldir + '/build.log'
