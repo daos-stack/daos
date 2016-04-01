@@ -30,12 +30,13 @@ while [ $# != 0 ]; do
         #Check a SCons file
         shift
         if [ ! -f $1 ]; then
-        echo skipping non-existent file: $1
-        fail=1
+            echo skipping non-existent file: $1
+            fail=1
         else
-        $SCRIPT_DIR/wrap_script.py $1
-        echo check $1
-        check_script "script"
+            $SCRIPT_DIR/wrap_script.py $1
+            echo check $1
+            check_script "script"
+	    /bin/rm -f script
         fi
     else
         if [ ! -f $1 ]; then
