@@ -1,0 +1,65 @@
+Overview of runtime options added by prerequisite components
+
+Option                             Description
+--update-prereq=<component>        Tells the prerequisite builder
+                                   to attempt to update the repository
+                                   for a prerequisite component if
+                                   applicable and to check the source
+                                   directory for changes.   A build is
+                                   only triggered if something has
+                                   changed since the last build.
+
+PREFIX=<path>                      The installation path of the user's
+                                   components.   This should be used
+                                   by ENV.Install as the location to
+                                   install a scons-built component.
+                                   A user can do this via:
+                                   ENV.Alias('install', "$PREFIX")
+                                   ENV.Install("$PREFIX/bin", program).
+                                   By default, prerequisites will
+                                   also be installed here.   If a
+                                   user specifies TARGET_PREFIX,
+                                   only symbolic links for such
+                                   will be installed here.
+
+TARGET_PREFIX=<path>               An alternative location to place
+                                   prerequisite builds.  If set,
+                                   Each individual prerequisite
+                                   component will be installed in
+                                   $TARGET_PREFIX/<component> and
+                                   a symbolic link to the
+                                   installation targets will be
+                                   placed in $PREFIX.
+                                   will be installed here.
+
+PREBUILT_PREFIX=<path>[:<path>...] If set, the directories will be
+                                   searched for component builds.
+                                   Each component will be found
+                                   in $PREBUILT_PREFIX/<component>.
+                                   If a component is missing, it
+                                   will be fetched and built
+                                   using the definition of the
+                                   component.
+
+<COMPONENT>_PREFIX=<path>          If set, the directory will be
+                                   used as the already installed
+                                   location for the component.
+                                   If the location doesn't exist,
+                                   the build will fail with an
+                                   error.
+
+SRC_PREFIX=<path>[:<path>...]      If set, the directories will be
+                                   searched for component sources.
+                                   Each component will be found
+                                   in $SRC_PREFIX/<component>.
+                                   If a component is missing, it
+                                   will be fetched and built
+                                   using the definition of the
+                                   component.
+
+<COMPONENT>_SRC=<path>             If set, the directory will be
+                                   used as the already installed
+                                   location for the component
+                                   source.  If the location
+                                   doesn't exist, the build will
+                                   fail with an error.

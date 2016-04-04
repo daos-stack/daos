@@ -7,6 +7,7 @@
 # pylint: disable=broad-except
 # pylint: disable=bare-except
 # pylint: disable=exec-used
+# pylint: disable=bad-builtin
 import os
 import traceback
 import hashlib
@@ -316,26 +317,32 @@ class PreReqComponent(object):
         tmp = os.path.join(self.__top_dir, 'install')
         self.add_opts(PathVariable('PREFIX', 'Installation path', tmp,
                                    PathVariable.PathIsDirCreate),
-                      PathVariable('PREBUILT_PREFIX',
-                                   'Directory to look for prebuilt components',
-                                   None, PathVariable.PathIsDir),
-                      PathVariable('SRC_PREFIX',
-                                   'Default directory to look for component '
-                                   'sources',
-                                   None, PathVariable.PathIsDir),
+                      ('PREBUILT_PREFIX',
+                       'Colon separated list of paths to look for prebuilt '
+                       'components.',
+                       None),
+                      ('SRC_PREFIX',
+                       'Colon separated list of paths to look for source '
+                       'of prebuilt components.',
+                       None),
                       PathVariable('TARGET_PREFIX',
                                    'Installation root for prebuilt components',
                                    None, PathVariable.PathIsDirCreate))
         self.setup_path_var('PREFIX')
-        self.setup_path_var('PREBUILT_PREFIX')
+        self.setup_path_var('PREBUILT_PREFIX', True)
         self.setup_path_var('TARGET_PREFIX')
-        self.setup_path_var('SRC_PREFIX')
+        self.setup_path_var('SRC_PREFIX', True)
 
-    def setup_path_var(self, var):
+    def setup_path_var(self, var, multiple=False):
         """Create a command line variable for a path"""
         tmp = self.__env.get(var)
         if tmp:
-            value = os.path.realpath(os.path.join(self.__top_dir, tmp))
+            realpath = lambda x: os.path.realpath(os.path.join(self.__top_dir,
+                                                               x))
+            if multiple:
+                value = os.pathsep.join(map(realpath, tmp.split(os.pathsep)))
+            else:
+                value = realpath(tmp)
             self.__env[var] = value
             self.__opts.args[var] = value
 
@@ -474,13 +481,13 @@ class PreReqComponent(object):
             raise MissingPath(opt_name)
 
         if not prebuilt:
-
             # check the global prebuilt area
-
-            prebuilt = self.__env.get('PREBUILT_PREFIX')
-            if prebuilt:
-                prebuilt = os.path.join(prebuilt, name)
-                if not os.path.exists(prebuilt):
+            prebuilt_path = self.__env.get('PREBUILT_PREFIX')
+            if prebuilt_path:
+                for path in prebuilt_path.split(os.pathsep):
+                    prebuilt = os.path.join(path, name)
+                    if os.path.exists(prebuilt):
+                        break
                     prebuilt = None
 
         self.__prebuilt_path[name] = prebuilt
@@ -523,11 +530,12 @@ class PreReqComponent(object):
 
             # check the global source area
 
-            src_path = self.__env.get('SRC_PREFIX')
-            if src_path:
-                src_path = os.path.join(src_path, name)
-                if not os.path.exists(src_path):
-                    print 'No source for %s found in SRC_PREFIX' % name
+            src_path_var = self.__env.get('SRC_PREFIX')
+            if src_path_var:
+                for path in src_path_var.split(os.pathsep):
+                    src_path = os.path.join(path, name)
+                    if os.path.exists(src_path):
+                        break
                     src_path = None
 
         if not src_path:

@@ -88,7 +88,7 @@ REQS.define('pmix',
 RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
 REQS.define('ompi',
             retriever=RETRIEVER,
-            commands=['./autogen.pl --no-ompi --no-oshmem',
+            commands=['./autogen.pl --no-oshmem',
                       './configure --with-platform=optimized ' \
                       '--prefix=$OMPI_PREFIX ' \
                       '--with-pmix=$PMIX_PREFIX ' \
@@ -99,3 +99,10 @@ REQS.define('ompi',
             libs=['libopen-rte'],
             required_libs=['event'],
             requires=['pmix', 'hwloc'])
+
+RETRIEVER = GitRepoRetriever("https://github.com/pmem/nvml")
+REQS.define('nvml',
+            retriever=RETRIEVER,
+            commands=["make",
+                      "make install prefix=$NVML_PREFIX"],
+            libs=["pmemobj"])
