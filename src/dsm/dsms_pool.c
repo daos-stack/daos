@@ -65,22 +65,20 @@ print_meta_path(const char *path, const uuid_t pool_uuid, char *buf,
 }
 
 /*
- * Create the root KVS, add the pool and target UUIDs, and return the KVS
- * pointer.
+ * Create the root KVS in "*kvs" and add the pool and target UUIDs.
  */
 static int
 root_create(PMEMobjpool *mp, const uuid_t pool_uuid,
-	    const uuid_t target_uuid, umem_id_t *root)
+	    const uuid_t target_uuid, struct btr_root *kvs)
 {
 	struct umem_attr	uma;
-	TMMID(struct btr_root)	kvs;
 	daos_handle_t		kvsh;
 	int			rc;
 
 	uma.uma_id = UMEM_CLASS_PMEM;
 	uma.uma_u.pmem_pool = mp;
-	rc = dbtree_create(KVS_NV, 0 /* feats */, 4 /* order */, &uma, &kvs,
-			   &kvsh);
+	rc = dbtree_create_inplace(KVS_NV, 0 /* feats */, 4 /* order */, &uma,
+				   kvs, &kvsh);
 	if (rc != 0) {
 		D_ERROR("failed to create root kvs: %d\n", rc);
 		D_GOTO(err, rc);
@@ -97,33 +95,12 @@ root_create(PMEMobjpool *mp, const uuid_t pool_uuid,
 	rc = dbtree_close(kvsh);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
-	*root = umem_id_t2u(kvs);
 	return 0;
 
 err_kvs:
 	dbtree_destroy(kvsh);
 err:
 	return rc;
-}
-
-static int
-root_destroy(PMEMobjpool *mp, umem_id_t root)
-{
-	TMMID(struct btr_root)	kvs;
-	daos_handle_t		kvsh;
-	struct umem_attr	uma;
-	int			rc;
-
-	kvs = umem_id_u2t(root, struct btr_root);
-	uma.uma_id = UMEM_CLASS_PMEM;
-	uma.uma_u.pmem_pool = mp;
-	rc = dbtree_open(kvs, &uma, &kvsh);
-	if (rc != 0) {
-		D_ERROR("failed to open root kvs: %d\n", rc);
-		return rc;
-	}
-
-	return dbtree_destroy(kvsh);
 }
 
 /*
@@ -136,7 +113,6 @@ mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 	PMEMobjpool	       *mp;
 	PMEMoid			sb_oid;
 	struct superblock      *sb;
-	umem_id_t		root;
 	uuid_t			target_uuid;
 	int			rc;
 
@@ -150,28 +126,25 @@ mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 		D_GOTO(err, rc = -DER_NOSPACE);
 	}
 
-	rc = root_create(mp, pool_uuid, target_uuid, &root);
-	if (rc != 0)
-		D_GOTO(err_mp, rc);
-
 	sb_oid = pmemobj_root(mp, sizeof(*sb));
 	if (OID_IS_NULL(sb_oid)) {
 		D_ERROR("failed to allocate root object in %s\n", path);
-		D_GOTO(err_root, rc = -DER_NOSPACE);
+		D_GOTO(err_mp, rc = -DER_NOSPACE);
 	}
 
 	sb = pmemobj_direct(sb_oid);
 	sb->s_magic = SUPERBLOCK_MAGIC;
 	uuid_copy(sb->s_pool_uuid, pool_uuid);
 	uuid_copy(sb->s_target_uuid, target_uuid);
-	sb->s_root = root;
+
+	rc = root_create(mp, pool_uuid, target_uuid, &sb->s_root);
+	if (rc != 0)
+		D_GOTO(err_mp, rc);
 
 	uuid_copy(target_uuid_p, target_uuid);
 	pmemobj_close(mp);
 	return 0;
 
-err_root:
-	root_destroy(mp, root);
 err_mp:
 	/* dmg will remove the mpool file anyway. */
 	pmemobj_close(mp);
@@ -227,24 +200,22 @@ dsms_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
  * Create the pool handle KVS.
  */
 static int
-pool_handles_create(PMEMobjpool *mp, umem_id_t *pool_handles)
+pool_handles_create(PMEMobjpool *mp, struct btr_root *kvs)
 {
 	struct umem_attr	uma;
-	TMMID(struct btr_root)	kvs;
 	daos_handle_t		kvsh;
 	int			rc;
 
 	uma.uma_id = UMEM_CLASS_PMEM;
 	uma.uma_u.pmem_pool = mp;
-	rc = dbtree_create(KVS_UV, 0 /* feats */, 16 /* order */, &uma, &kvs,
-			   &kvsh);
+	rc = dbtree_create_inplace(KVS_UV, 0 /* feats */, 16 /* order */, &uma,
+				   kvs, &kvsh);
 	if (rc != 0) {
 		D_ERROR("failed to create pool_handles kvs: %d\n", rc);
 		return rc;
 	}
 
 	dbtree_close(kvsh);
-	*pool_handles = umem_id_t2u(kvs);
 	return 0;
 }
 
@@ -257,7 +228,7 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 {
 	struct pool_map_target *targets_p;
 	struct pool_map_domain *domains_p;
-	umem_id_t		pool_handles;
+	struct btr_root		pool_handles;
 	uint64_t		version = 1;
 	uuid_t		       *target_uuid = (uuid_t *)target_uuids;
 	int			rc;
@@ -367,7 +338,7 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 
 	uma.uma_id = UMEM_CLASS_PMEM;
 	uma.uma_u.pmem_pool = mp;
-	rc = dbtree_open(umem_id_u2t(sb->s_root, struct btr_root), &uma, &kvsh);
+	rc = dbtree_open_inplace(&sb->s_root, &uma, &kvsh);
 	if (rc != 0) {
 		D_ERROR("failed to open root kvs in %s: %d\n", filename, rc);
 		D_GOTO(out_mp, rc);

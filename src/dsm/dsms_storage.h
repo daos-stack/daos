@@ -37,27 +37,22 @@
  * With "regular" KVs ignored, the tree of KVSs in an mpool looks like:
  *
  *   Superblock:
- *     * -> Root KVS (KVS_NV):
- *            * -> Pool handle KVS (KVS_UV)
- *            * -> Container index KVS (KVS_UV):
- *                   Container KVS (KVS_NV):
- *                     HCE KVS (KVS_EC)
- *                     LRE KVS (KVS_EC)
- *                     LHE KVS (KVS_EC)
- *                     Snapshot KVS (KVS_EC)
- *                     Container handle KVS (KVS_UV)
- *                   Container KVS (KVS_NV):
- *                     HCE KVS (KVS_EC)
- *                     LRE KVS (KVS_EC)
- *                     LHE KVS (KVS_EC)
- *                     Snapshot KVS (KVS_EC)
- *                     Container handle KVS (KVS_UV)
- *                   ...
- *
- *   ("* ->" means "a value pointing to another KVS".)
- *
- * TODO: Update all "*"s (umem_id_t values pointing to KVSs) to use in-place
- * btr_root objects. See dbtree_create_inplace().
+ *     Root KVS (KVS_NV):
+ *       Pool handle KVS (KVS_UV)
+ *       Container index KVS (KVS_UV):
+ *         Container KVS (KVS_NV):
+ *           HCE KVS (KVS_EC)
+ *           LRE KVS (KVS_EC)
+ *           LHE KVS (KVS_EC)
+ *           Snapshot KVS (KVS_EC)
+ *           Container handle KVS (KVS_UV)
+ *         Container KVS (KVS_NV):
+ *           HCE KVS (KVS_EC)
+ *           LRE KVS (KVS_EC)
+ *           LHE KVS (KVS_EC)
+ *           Snapshot KVS (KVS_EC)
+ *           Container handle KVS (KVS_UV)
+ *           ...
  *
  * The root KVS stores pool, container, and target attributes that do not
  * require a dedicated KVS. The definitions of its attribute names are divided
@@ -69,6 +64,7 @@
 
 #include <stdint.h>
 #include <uuid/uuid.h>
+#include <daos/daos_btree.h>
 #include <daos/daos_mem.h>
 
 /* Bootstrapping **************************************************************/
@@ -91,8 +87,7 @@ struct superblock {
 	uint64_t	s_magic;
 	uuid_t		s_pool_uuid;
 	uuid_t		s_target_uuid;
-	umem_id_t	s_root;
-	uint64_t	s_padding;
+	struct btr_root	s_root;
 };
 
 /* superblock::s_magic */
@@ -125,7 +120,7 @@ struct superblock {
 #define POOL_MAP_NDOMAINS	"pool_map_ndomains"	/* uint32_t */
 #define POOL_MAP_TARGETS	"pool_map_targets"	/* pool_map_target[] */
 #define POOL_MAP_DOMAINS	"pool_map_domains"	/* pool_map_domain[] */
-#define POOL_HANDLES		"pool_handles"		/* umem_id_t (pool */
+#define POOL_HANDLES		"pool_handles"		/* btr_root (pool */
 							/* handle KVS) */
 
 struct pool_map_target {
@@ -151,7 +146,7 @@ struct pool_handle {
 /* Container Metadata *********************************************************/
 
 /* Root KVS (KVS_NV): container attributes */
-#define CONTAINERS	"containers"	/* umem_id_t (container index KVS) */
+#define CONTAINERS	"containers"	/* btr_root (container index KVS) */
 
 /*
  * Container index KVS (KVS_UV)
