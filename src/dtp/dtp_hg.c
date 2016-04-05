@@ -29,6 +29,92 @@
 na_addr_t    na_addr_test_cli = NA_ADDR_NULL;
 na_addr_t    na_addr_test_srv = NA_ADDR_NULL;
 
+static na_return_t
+na_addr_lookup_cb(const struct na_cb_info *callback_info)
+{
+    na_addr_t *addr_ptr = (na_addr_t *) callback_info->arg;
+    na_return_t ret = NA_SUCCESS;
+
+    if (callback_info->ret != NA_SUCCESS) {
+        NA_LOG_ERROR("Return from callback with %s error code",
+                NA_Error_to_string(callback_info->ret));
+        return ret;
+    }
+
+    *addr_ptr = callback_info->info.lookup.addr;
+
+    return ret;
+}
+
+static na_return_t
+dtp_na_addr_lookup_wait(na_class_t *na_class, const char *name, na_addr_t *addr)
+{
+    na_addr_t new_addr = NULL;
+    na_bool_t lookup_completed = NA_FALSE;
+    na_context_t *context = NULL;
+    na_return_t ret = NA_SUCCESS;
+
+    if (!na_class) {
+        NA_LOG_ERROR("NULL NA class");
+        ret = NA_INVALID_PARAM;
+        goto done;
+    }
+    if (!name) {
+        NA_LOG_ERROR("Lookup name is NULL");
+        ret = NA_INVALID_PARAM;
+        goto done;
+    }
+    if (!addr) {
+        NA_LOG_ERROR("NULL pointer to na_addr_t");
+        ret = NA_INVALID_PARAM;
+        goto done;
+    }
+
+    context = NA_Context_create(na_class);
+    if (!context) {
+        NA_LOG_ERROR("Could not create context");
+        goto done;
+    }
+
+    ret = NA_Addr_lookup(na_class, context, &na_addr_lookup_cb, &new_addr, name,
+            NA_OP_ID_IGNORE);
+    if (ret != NA_SUCCESS) {
+        NA_LOG_ERROR("Could not start NA_Addr_lookup");
+        goto done;
+    }
+
+    while (!lookup_completed) {
+        na_return_t trigger_ret;
+        unsigned int actual_count = 0;
+
+        do {
+            trigger_ret = NA_Trigger(context, 0, 1, &actual_count);
+        } while ((trigger_ret == NA_SUCCESS) && actual_count);
+
+        if (new_addr) {
+            lookup_completed = NA_TRUE;
+            *addr = new_addr;
+        }
+
+        if (lookup_completed) break;
+
+        ret = NA_Progress(na_class, context, NA_MAX_IDLE_TIME);
+        if (ret != NA_SUCCESS) {
+            NA_LOG_ERROR("Could not make progress");
+            goto done;
+        }
+    }
+
+    ret = NA_Context_destroy(na_class, context);
+    if (ret != NA_SUCCESS) {
+        NA_LOG_ERROR("Could not destroy context");
+        goto done;
+    }
+
+done:
+    return ret;
+}
+
 /* be called only in dtp_init */
 int
 dtp_hg_init(const char *info_string, bool server)
@@ -59,7 +145,7 @@ dtp_hg_init(const char *info_string, bool server)
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
 
-	hg_class = HG_Init(na_class, na_context, NULL);
+	hg_class = HG_Init_na(na_class, na_context);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
 		NA_Context_destroy(na_class, na_context);
@@ -85,7 +171,8 @@ dtp_hg_init(const char *info_string, bool server)
 	if (dtp_gdata.dg_server == 1)
 		goto out;
 	na_return_t na_ret;
-	na_ret = NA_Addr_lookup_wait(na_class, info_string, &na_addr_test_srv);
+	na_ret = dtp_na_addr_lookup_wait(na_class, info_string,
+					 &na_addr_test_srv);
 	if (na_ret != NA_SUCCESS) {
 		D_ERROR("Could not connect to %s.\n", info_string);
 	} else {
@@ -163,8 +250,8 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx)
 	hg_ctx->dhc_hgcla = dtp_gdata.dg_hg->dhg_hgcla;
 	hg_ctx->dhc_hgctx = hg_context;
 	/* TODO: need to create separate bulk class and bulk context? */
-	hg_ctx->dhc_bulkcla = HG_Get_bulk_class(hg_ctx->dhc_hgcla);
-	hg_ctx->dhc_bulkctx = HG_Get_bulk_context(hg_context);
+	hg_ctx->dhc_bulkcla = hg_ctx->dhc_hgcla;
+	hg_ctx->dhc_bulkctx = hg_ctx->dhc_hgctx;
 	D_ASSERT(hg_ctx->dhc_bulkcla != NULL);
 	D_ASSERT(hg_ctx->dhc_bulkctx != NULL);
 	DAOS_INIT_LIST_HEAD(&hg_ctx->dhc_link);
@@ -308,9 +395,8 @@ dtp_hg_req_create(struct dtp_hg_context *hg_ctx, dtp_endpoint_t tgt_ep,
 	/* only-for-testing now to use the na_addr_test_srv */
 	rpc_priv->drp_na_addr = na_addr_test_srv;
 
-	hg_ret = HG_Create(hg_ctx->dhc_hgcla, hg_ctx->dhc_hgctx,
-			   rpc_priv->drp_na_addr, rpc_priv->drp_pub.dr_opc,
-			   &rpc_priv->drp_hg_hdl);
+	hg_ret = HG_Create(hg_ctx->dhc_hgctx, rpc_priv->drp_na_addr,
+			   rpc_priv->drp_pub.dr_opc, &rpc_priv->drp_hg_hdl);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Create failed, hg_ret: %d, opc: 0x%x.\n",
 			hg_ret, rpc_priv->drp_pub.dr_opc);
@@ -382,6 +468,7 @@ dtp_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	/* D_DEBUG(DF_TP,"enter dtp_hg_req_send_cb.\n"); */
 	req_cbinfo = (struct dtp_hg_send_cbinfo *)hg_cbinfo->arg;
 	D_ASSERT(req_cbinfo != NULL);
+	D_ASSERT(hg_cbinfo->type == HG_CB_FORWARD);
 
 	rpc_priv = req_cbinfo->rsc_rpc_priv;
 	D_ASSERT(rpc_priv != NULL);
@@ -404,7 +491,8 @@ dtp_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 
 	if (rc == 0) {
 		/* HG_Free_output in dtp_hg_req_destroy */
-		hg_ret = HG_Get_output(hg_cbinfo->handle, &rpc_pub->dr_output);
+		hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle,
+				       &rpc_pub->dr_output);
 		if (hg_ret != HG_SUCCESS) {
 			D_ERROR("HG_Get_output failed, hg_ret: %d, opc: "
 				"0x%x.\n", hg_ret, opc);
@@ -548,13 +636,13 @@ dtp_hg_progress(struct dtp_hg_context *hg_ctx, unsigned int timeout)
 	hg_class = hg_ctx->dhc_hgcla;
 	D_ASSERT(hg_context != NULL && hg_class != NULL);
 
-	hg_ret = HG_Trigger(hg_class, hg_context, 0, 1, &num_cb);
+	hg_ret = HG_Trigger(hg_context, 0, 1, &num_cb);
 	if (hg_ret != HG_SUCCESS && hg_ret != HG_TIMEOUT) {
 		D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
 
-	hg_ret = HG_Progress(hg_class, hg_context, timeout);
+	hg_ret = HG_Progress(hg_context, timeout);
 	if (hg_ret != HG_SUCCESS && hg_ret != HG_TIMEOUT) {
 		D_ERROR("HG_Progress failed, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_DTP_HG);
@@ -562,7 +650,7 @@ dtp_hg_progress(struct dtp_hg_context *hg_ctx, unsigned int timeout)
 
 	/* Progress succeed, call HG_Trigger again */
 	if (hg_ret == HG_SUCCESS) {
-		hg_ret = HG_Trigger(hg_class, hg_context, 0, 1, &num_cb);
+		hg_ret = HG_Trigger(hg_context, 0, 1, &num_cb);
 		if (hg_ret != HG_SUCCESS && hg_ret != HG_TIMEOUT) {
 			D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
 			rc = -DER_DTP_HG;
@@ -651,7 +739,7 @@ struct dtp_hg_bulk_cbinfo {
 };
 
 static hg_return_t
-dtp_hg_bulk_transfer_cb(const struct hg_bulk_cb_info *hg_cbinfo)
+dtp_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 {
 	struct dtp_hg_bulk_cbinfo	*bulk_cbinfo;
 	struct dtp_bulk_cb_info		dtp_bulk_cbinfo;
@@ -667,10 +755,11 @@ dtp_hg_bulk_transfer_cb(const struct hg_bulk_cb_info *hg_cbinfo)
 	hg_ctx = bulk_cbinfo->bci_hg_ctx;
 	bulk_desc = bulk_cbinfo->bci_desc;
 	D_ASSERT(hg_ctx != NULL && bulk_desc != NULL);
-	D_ASSERT(hg_cbinfo->hg_bulk_class == hg_ctx->dhc_bulkcla);
-	D_ASSERT(hg_cbinfo->context == hg_ctx->dhc_bulkctx);
-	D_ASSERT(hg_cbinfo->origin_handle == bulk_desc->dbd_remote_hdl);
-	D_ASSERT(hg_cbinfo->local_handle == bulk_desc->dbd_local_hdl);
+	D_ASSERT(hg_cbinfo->type == HG_CB_BULK);
+	D_ASSERT(hg_cbinfo->info.bulk.origin_handle ==
+		 bulk_desc->dbd_remote_hdl);
+	D_ASSERT(hg_cbinfo->info.bulk.local_handle ==
+		 bulk_desc->dbd_local_hdl);
 
 	if (hg_cbinfo->ret != HG_SUCCESS) {
 		D_ERROR("dtp_hg_bulk_transfer_cb, hg_cbinfo->ret: %d.\n",

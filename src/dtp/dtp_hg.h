@@ -33,6 +33,7 @@
 #include <mercury_proc.h>
 #include <mercury_proc_string.h>
 #include <na.h>
+#include <na_error.h>
 
 #include <dtp_internal_types.h>
 
@@ -56,8 +57,8 @@ struct dtp_hg_context {
 	na_context_t		*dhc_nactx; /* NA context */
 	hg_class_t		*dhc_hgcla; /* HG class */
 	hg_context_t		*dhc_hgctx; /* HG context */
-	hg_bulk_class_t		*dhc_bulkcla; /* bulk class */
-	hg_bulk_context_t	*dhc_bulkctx; /* bulk context */
+	hg_class_t		*dhc_bulkcla; /* bulk class */
+	hg_context_t		*dhc_bulkctx; /* bulk context */
 };
 
 struct dtp_hg_gdata {
