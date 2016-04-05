@@ -24,6 +24,13 @@
  * This is naturally shared by both dsmc and dsms. The in and out data
  * structures may safely contain compiler-generated paddings, which will be
  * removed dtp's serialization process.
+ *
+ * Every pool operation shall pass in the UUID of the pool it intends to access
+ * and the UUID of its pool handle. The pool UUID enables server to quickly
+ * locate the right mpool.
+ *
+ * Every container operation shall pass in the UUID of the container and the
+ * UUID of its container handle.
  */
 
 #ifndef __DSM_RPC_H__
@@ -69,8 +76,8 @@ proc_pool_map(dtp_proc_t proc, void *data)
 	return 0;
 }
 
-/* TODO(liwei): Capability bits. */
-/* TODO(liwei): Think about where uid and gid really belong. */
+/* TODO: Capability bits. */
+/* TODO: Think about where uid and gid really belong. */
 struct pool_connect_in {
 	uuid_t		pool;
 	uuid_t		pool_hdl;
@@ -85,7 +92,12 @@ struct pool_connect_out {
 	struct pool_map	pool_map;
 };
 
+/*
+ * "pool" helps the server side to quickly locate the file that should store
+ * "pool_hdl".
+ */
 struct pool_disconnect_in {
+	uuid_t	pool;
 	uuid_t	pool_hdl;
 };
 

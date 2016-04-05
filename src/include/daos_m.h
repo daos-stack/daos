@@ -34,9 +34,9 @@
 #include <daos/daos_ev.h>
 #include <daos/daos_types.h>
 
- /**
-  * Initialize the library.
-  */
+/**
+ * Initialize the library.
+ */
 int
 dsm_init(void);
 
@@ -47,14 +47,19 @@ int
 dsm_fini(void);
 
 /**
- * DSM_PC_RO connects to the pool for reading only. This flag conflicts with
- * DSM_PC_RW.
+ * DSM_PC_RO connects to the pool for reading only.
  *
- * DSM_PC_RW connects to the pool for reading and writing. This flag conflicts
- * with DSM_PC_RO.
+ * DSM_PC_RW connects to the pool for reading and writing.
+ *
+ * DSM_PC_EX connects to the pool for reading and writing exclusively. In the
+ * presence of an exclusive pool handle, no connection with DSM_PC_RW is
+ * permitted.
+ *
+ * The three flags above are mutually exclusive.
  */
 #define DSM_PC_RO	0x0U
 #define DSM_PC_RW	0x1U
+#define DSM_PC_EX	0x2U
 
 /**
  * Connect to a pool with "uuid". "group" and "ranks" indicate potential ranks

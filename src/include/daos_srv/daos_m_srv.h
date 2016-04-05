@@ -27,7 +27,8 @@
 #include <daos/daos_transport.h>
 
 /*
- * Called by dmg on every storage node belonging to this pool. "target_uuid"
+ * Called by dmg on every storage node belonging to this pool. "path" is the
+ * directory under which the VOS and metadata files shall be. "target_uuid"
  * returns the UUID generated for the target on this storage node.
  */
 int

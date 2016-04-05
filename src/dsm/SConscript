@@ -12,3 +12,6 @@ env.Install('#/build/lib/daos_srv', dsms)
 dsmc = env.SharedLibrary('daos_m',
 			 ['dsm_rpc.c', 'dsmc_pool.c', 'dsmc_module.c'])
 env.Install('#/build/lib/', dsmc)
+
+# tests
+SConscript('tests/SConscript', exports = 'env')

@@ -58,6 +58,8 @@ enum {
 	DF_VOS3		= (1 << 14),
 	DF_SERVER	= (1 << 15),
 	DF_MGMT		= (1 << 16),
+	DF_DSMC		= (1 << 17),
+	DF_DSMS		= (1 << 18),
 	DF_MISC		= (1 << 30),
 	DF_MEM		= (1 << 31),
 };
@@ -242,5 +244,7 @@ daos_handle_is_inval(daos_handle_t hdl)
 #define max_t(type,x,y) \
 	        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
+
+#define DAOS_UUID_STR_SIZE 36	/* including '\0' */
 
 #endif /* __DAOS_COMMON_H__ */

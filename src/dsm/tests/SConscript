@@ -1,0 +1,7 @@
+#!python
+
+Import('env')
+
+env.Program('createpool', 'createpool.c',
+	    LIBS = ['libdaos_m_srv', 'libdaos_common', 'libdaos_transport',
+		    'libvos', 'libpmemobj', 'libuuid'])

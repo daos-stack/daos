@@ -32,8 +32,17 @@
 
 #include <daos/daos_transport.h>
 
-extern struct umem_attr dsms_umem_attr;
+/*
+ * dsms_storage.c
+ */
+int dsms_storage_init(void);
+void dsms_storage_fini(void);
+int dsms_kvs_nv_update(daos_handle_t kvsh, const char *name, const void *value,
+		       size_t size);
 
+/*
+ * dsms_pool.c
+ */
 int dsms_hdlr_pool_connect(dtp_rpc_t *rpc);
 int dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
 

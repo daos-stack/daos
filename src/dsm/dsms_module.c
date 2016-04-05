@@ -35,12 +35,13 @@
 static int
 init(void)
 {
-	return 0;
+	return dsms_storage_init();
 }
 
 static int
 fini(void)
 {
+	dsms_storage_fini();
 	return 0;
 }
 
