@@ -33,10 +33,7 @@
 #include "dsms_storage.h"
 
 int
-dsms_pool_create(const uuid_t uuid, unsigned int uid, unsigned int gid,
-		 unsigned int mode, const daos_group_t *group,
-		 const daos_rank_list_t *targets, int ndomains,
-		 const int *domains, const char *path)
+dsms_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 {
 	return 0;
 }

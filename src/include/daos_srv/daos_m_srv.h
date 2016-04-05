@@ -26,14 +26,41 @@
 
 #include <daos/daos_transport.h>
 
+/*
+ * Called by dmg on every storage node belonging to this pool. "target_uuid"
+ * returns the UUID generated for the target on this storage node.
+ */
 int
-dsms_pool_create(const uuid_t uuid, unsigned int uid, unsigned int gid,
-		 unsigned int mode, const daos_group_t *group,
-		 const daos_rank_list_t *targets, int ndomains,
-		 const int *domains, const char *path);
+dsms_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid);
 
-/* TODO(liwei): Can dmg simply remove the file without calling into dsms? */
-void
-dsms_pool_destroy(const uuid_t uuid, const char *path);
+/*
+ * Called by dmg on a single storage node belonging to this pool after the
+ * dsms_pool_create() phase completes. "target_uuids" shall be an array of the
+ * target UUIDs returned by the dsms_pool_create() calls. "svc_addrs" returns
+ * the ranks of the pool services replicas within "group".
+ */
+int
+dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
+		     unsigned int mode, int ntargets, const uuid_t target_uuids,
+		     const daos_group_t *group,
+		     const daos_rank_list_t *target_addrs, int ndomains,
+		     const int *domains, const char *path,
+		     daos_rank_list_t *svc_addrs);
+
+/*
+ * Called by dmg on the pool service leader to list all pool handles of a pool.
+ * Upon successful completion, "buf" returns an array of handle UUIDs if its
+ * large enough, while "size" returns the size of all the handle UUIDs assuming
+ * "buf" is large enough.
+ */
+int
+dsms_pool_hdl_list(const uuid_t pool_uuid, uuid_t buf, size_t *size);
+
+/*
+ * Called by dmg on the pool service leader to evict one or all pool handles of
+ * a pool. If "handle_uuid" is NULL, all pool handles of the pool are evicted.
+ */
+int
+dsms_pool_hdl_evict(const uuid_t pool_uuid, const uuid_t handle_uuid);
 
 #endif /* __DSM_SRV_H__ */

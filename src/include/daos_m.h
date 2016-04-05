@@ -46,10 +46,11 @@
 
 /**
  * Connect to a pool with "uuid". "group" and "ranks" indicate potential ranks
- * of the pool service replicas. "flags" comprises of the DSM_PC_ bits. Upon a
- * successful completion, "pool" returns the pool handle and "failed", which
- * shall be allocated by the caller, returns the targets that failed to
- * establish this connection.
+ * of the pool service replicas. If not aware of the ranks of the pool service
+ * replicas, the caller may pass in a NULL "ranks". "flags" comprises of the
+ * DSM_PC_ bits. Upon a successful completion, "pool" returns the pool handle
+ * and "failed", which shall be allocated by the caller, returns the targets
+ * that failed to establish this connection.
  */
 int
 dsm_pool_connect(const uuid_t uuid, const daos_group_t *group,
@@ -77,18 +78,6 @@ typedef struct dsm_pool_info {
  */
 int
 dsm_pool_query(daos_handle_t pool, dsm_pool_info_t *info, daos_event_t *event);
-
-/**
- * TODO: Pool Map Operations
- *
- * One option: Hide the pool map data structure from upper layers and export
- * these methods instead:
- *
- *   dsm_pool_map_traverse()
- *   dsm_pool_map_get(rank, &target)
- *   dsm_pool_map_put(rank, target)
- *   ...?
- */
 
 /**
  * Create a container with "uuid" in "pool".
