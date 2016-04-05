@@ -122,39 +122,25 @@ int echo_srv_checkin(dtp_rpc_t *rpc_req)
 	return rc;
 }
 
-struct bulk_test_srv_cbinfo {
-	dtp_rpc_t	*rpc_req;
-	daos_iov_t	*iovs;
-};
-
 int bulk_test_cb(const struct dtp_bulk_cb_info *cb_info)
 {
 	dtp_rpc_t			*rpc_req;
-	struct bulk_test_srv_cbinfo	*bulk_cbinfo;
 	echo_bulk_test_in_t		*bulk_test_input = NULL;
 	echo_bulk_test_out_t		*bulk_test_output = NULL;
 	struct dtp_bulk_desc		*bulk_desc;
 	dtp_bulk_t			local_bulk_hdl;
-	dtp_context_t			dtp_ctx;
 	daos_iov_t			*iovs;
 	int				rc = 0;
 
 	rc = cb_info->bci_rc;
-	dtp_ctx = cb_info->bci_ctx;
 	bulk_desc = cb_info->bci_bulk_desc;
-	printf("in bulk_test_cb, dci_rc: %d.\n", rc);
-
-	bulk_cbinfo = (struct bulk_test_srv_cbinfo *)cb_info->bci_arg;
-	assert(bulk_cbinfo != NULL);
-
-	rpc_req = bulk_cbinfo->rpc_req;
-	iovs = bulk_cbinfo->iovs;
+	/* printf("in bulk_test_cb, dci_rc: %d.\n", rc); */
+	rpc_req = bulk_desc->bd_rpc;
+	iovs = (daos_iov_t *)cb_info->bci_arg;
 	assert(rpc_req != NULL && iovs != NULL);
 
-	assert(dtp_ctx == rpc_req->dr_ctx);
-
-	local_bulk_hdl = bulk_desc->dbd_local_hdl;
-	assert(iovs != NULL && local_bulk_hdl != NULL);
+	local_bulk_hdl = bulk_desc->bd_local_hdl;
+	assert(local_bulk_hdl != NULL);
 
 	bulk_test_input = (echo_bulk_test_in_t *)rpc_req->dr_input;
 	assert(bulk_test_input != NULL);
@@ -200,7 +186,6 @@ int bulk_test_cb(const struct dtp_bulk_cb_info *cb_info)
 out:
 	free(iovs[0].iov_buf);
 	free(iovs);
-	free(bulk_cbinfo);
 
 	rc = dtp_bulk_free(local_bulk_hdl);
 	assert(rc == 0);
@@ -229,7 +214,6 @@ int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 	daos_size_t			bulk_len;
 	unsigned int			bulk_sgnum;
 	echo_bulk_test_in_t		*bulk_test_input = NULL;
-	struct bulk_test_srv_cbinfo	*bulk_cbinfo;
 	struct dtp_bulk_desc		bulk_desc;
 	dtp_bulk_opid_t			bulk_opid;
 	int				rc = 0;
@@ -260,44 +244,26 @@ int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 			     &local_bulk_hdl);
 	assert(rc == 0);
 
-	bulk_cbinfo = (struct bulk_test_srv_cbinfo *)
-			malloc(sizeof(*bulk_cbinfo));
-	assert(bulk_cbinfo != NULL);
-	bulk_cbinfo->rpc_req = rpc_req;
-	bulk_cbinfo->iovs = iovs;
+	rc = dtp_req_addref(rpc_req);
+	assert(rc == 0);
+	bulk_desc.bd_rpc = rpc_req;
 
-	/* ignore the dbd_remote_ep now */
-	bulk_desc.dbd_bulk_op = DTP_BULK_GET;
-	bulk_desc.dbd_remote_hdl = remote_bulk_hdl;
-	bulk_desc.dbd_remote_off = 0;
-	bulk_desc.dbd_local_hdl = local_bulk_hdl;
-	bulk_desc.dbd_local_off = 0;
-	bulk_desc.dbd_len = bulk_len;
+	bulk_desc.bd_bulk_op = DTP_BULK_GET;
+	bulk_desc.bd_remote_hdl = remote_bulk_hdl;
+	bulk_desc.bd_local_hdl = local_bulk_hdl;
+	bulk_desc.bd_len = bulk_len;
 
-	/* user need to register the complete_cb inside which can do:
+	/* user needs to register the complete_cb inside which can do:
 	 * 1) resource reclaim includes freeing the:
-	 *    a) the buffers for bulk, maybe also the malloced daos_iov_t (iovs)
+	 *    a) the buffers for bulk, maybe also the daos_iov_t (iovs)
 	 *    b) local bulk handle
-	 *    c) cbinfo,
+	 *    c) cbinfo if needed,
 	 * 2) reply to original RPC request (if the bulk is derived from a RPC)
 	 * 3) dtp_req_decref (before return in this RPC handler, need to take a
 	 *    reference to avoid the RPC request be destroyed by DTP, then need
 	 *    to release the reference at bulk's complete_cb);
-	 *
-	 * Is above too complicated to use?
-	 *
-	 * DTP possible not very suitable to internally do above things because
-	 * bulk's use case maybe different, for example bulk maybe not direct
-	 * related with a RPC request.
-	 * DTP possibly can internally do the 1.a and 1.b, but if let DTP
-	 * internally free the buffer and bulk handle, it will bring other
-	 * complexity when user want to reuse the buffer and bulk handle.
 	 */
-	rc = dtp_bulk_transfer(rpc_req->dr_ctx, &bulk_desc, bulk_test_cb,
-			       bulk_cbinfo, &bulk_opid);
-	assert(rc == 0);
-
-	rc = dtp_req_addref(rpc_req);
+	rc = dtp_bulk_transfer(&bulk_desc, bulk_test_cb, iovs, &bulk_opid);
 	assert(rc == 0);
 
 	return rc;

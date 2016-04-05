@@ -391,13 +391,11 @@ dtp_hg_bulk_get_sgnum(dtp_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
 
 int dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, daos_sg_list_t *sgl,
 		       dtp_bulk_perm_t bulk_perm, dtp_bulk_t *bulk_hdl);
-int dtp_hg_bulk_transfer(struct dtp_hg_context *hg_ctx,
-			 struct dtp_bulk_desc *bulk_desc,
+int dtp_hg_bulk_transfer(struct dtp_bulk_desc *bulk_desc,
 			 dtp_bulk_cb_t complete_cb,
 			 void *arg, dtp_bulk_opid_t *opid);
 
 /* only-for-testing */
-extern na_addr_t na_addr_test_cli;
 extern na_addr_t na_addr_test_srv;
 
 #endif /* __DTP_MERCURY_H__ */

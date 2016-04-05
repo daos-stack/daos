@@ -26,7 +26,6 @@
 #include <dtp_internal.h>
 
 /* only-for-testing basic RPC in same node, before address model available */
-na_addr_t    na_addr_test_cli = NA_ADDR_NULL;
 na_addr_t    na_addr_test_srv = NA_ADDR_NULL;
 
 static na_return_t
@@ -332,10 +331,6 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 		D_FREE_PTR(rpc_priv);
 		D_GOTO(out, hg_ret = HG_NOMEM_ERROR);
 	}
-
-	/* only-for-testing */
-	/* if (na_addr_test_cli == NA_ADDR_NULL) */
-	na_addr_test_cli = hg_info->addr;
 
 	dtp_rpc_priv_init(rpc_priv, (dtp_context_t)hg_ctx, opc, 1);
 	rpc_priv->drp_na_addr = hg_info->addr;
@@ -732,7 +727,6 @@ out:
 }
 
 struct dtp_hg_bulk_cbinfo {
-	struct dtp_hg_context	*bci_hg_ctx;
 	struct dtp_bulk_desc	*bci_desc;
 	dtp_bulk_cb_t		bci_cb;
 	void			*bci_arg;
@@ -748,18 +742,18 @@ dtp_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 	hg_return_t			hg_ret = HG_SUCCESS;
 	int				rc = 0;
 
-	D_ASSERT(hg_cbinfo != NULL && hg_cbinfo->arg != NULL);
-
+	D_ASSERT(hg_cbinfo != NULL);
 	bulk_cbinfo = (struct dtp_hg_bulk_cbinfo *)hg_cbinfo->arg;
 	D_ASSERT(bulk_cbinfo != NULL);
-	hg_ctx = bulk_cbinfo->bci_hg_ctx;
 	bulk_desc = bulk_cbinfo->bci_desc;
-	D_ASSERT(hg_ctx != NULL && bulk_desc != NULL);
+	D_ASSERT(bulk_desc != NULL);
+	hg_ctx = (struct dtp_hg_context *)bulk_desc->bd_rpc->dr_ctx;
+	D_ASSERT(hg_ctx != NULL);
 	D_ASSERT(hg_cbinfo->type == HG_CB_BULK);
 	D_ASSERT(hg_cbinfo->info.bulk.origin_handle ==
-		 bulk_desc->dbd_remote_hdl);
+		 bulk_desc->bd_remote_hdl);
 	D_ASSERT(hg_cbinfo->info.bulk.local_handle ==
-		 bulk_desc->dbd_local_hdl);
+		 bulk_desc->bd_local_hdl);
 
 	if (hg_cbinfo->ret != HG_SUCCESS) {
 		D_ERROR("dtp_hg_bulk_transfer_cb, hg_cbinfo->ret: %d.\n",
@@ -774,7 +768,6 @@ dtp_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 	}
 	dtp_bulk_cbinfo.bci_arg = bulk_cbinfo->bci_arg;
 	dtp_bulk_cbinfo.bci_rc = rc;
-	dtp_bulk_cbinfo.bci_ctx = (dtp_context_t)hg_ctx;
 	dtp_bulk_cbinfo.bci_bulk_desc = bulk_desc;
 
 	rc = bulk_cbinfo->bci_cb(&dtp_bulk_cbinfo);
@@ -788,20 +781,23 @@ out:
 }
 
 int
-dtp_hg_bulk_transfer(struct dtp_hg_context *hg_ctx,
-		     struct dtp_bulk_desc *bulk_desc, dtp_bulk_cb_t complete_cb,
+dtp_hg_bulk_transfer(struct dtp_bulk_desc *bulk_desc, dtp_bulk_cb_t complete_cb,
 		     void *arg, dtp_bulk_opid_t *opid)
 {
+	struct dtp_hg_context		*hg_ctx;
 	struct dtp_hg_bulk_cbinfo	*bulk_cbinfo;
 	hg_bulk_op_t			hg_bulk_op;
 	struct dtp_bulk_desc		*bulk_desc_dup;
+	struct dtp_rpc_priv		*rpc_priv;
 	hg_return_t			hg_ret = HG_SUCCESS;
 	int				rc = 0;
 
-	D_ASSERT(hg_ctx != NULL && hg_ctx->dhc_bulkctx != NULL);
 	D_ASSERT(bulk_desc != NULL && opid != NULL);
-	D_ASSERT(bulk_desc->dbd_bulk_op == DTP_BULK_PUT ||
-		 bulk_desc->dbd_bulk_op == DTP_BULK_GET);
+	D_ASSERT(bulk_desc->bd_bulk_op == DTP_BULK_PUT ||
+		 bulk_desc->bd_bulk_op == DTP_BULK_GET);
+	D_ASSERT(bulk_desc->bd_rpc != NULL);
+	hg_ctx = (struct dtp_hg_context *)bulk_desc->bd_rpc->dr_ctx;
+	D_ASSERT(hg_ctx != NULL && hg_ctx->dhc_bulkctx != NULL);
 
 	D_ALLOC_PTR(bulk_cbinfo);
 	if (bulk_cbinfo == NULL)
@@ -813,20 +809,19 @@ dtp_hg_bulk_transfer(struct dtp_hg_context *hg_ctx,
 	}
 	dtp_bulk_desc_dup(bulk_desc_dup, bulk_desc);
 
-	bulk_cbinfo->bci_hg_ctx = hg_ctx;
 	bulk_cbinfo->bci_desc = bulk_desc_dup;
 	bulk_cbinfo->bci_cb = complete_cb;
 	bulk_cbinfo->bci_arg = arg;
 
-	hg_bulk_op = (bulk_desc->dbd_bulk_op == DTP_BULK_PUT) ?
+	hg_bulk_op = (bulk_desc->bd_bulk_op == DTP_BULK_PUT) ?
 		     HG_BULK_PUSH : HG_BULK_PULL;
-	/* TODO: from bulk_desc->dbd_remote_ep to na_addr_t ? */
-	D_ASSERT(na_addr_test_cli != NA_ADDR_NULL); /* only-for-testing */
+	rpc_priv = container_of(bulk_desc->bd_rpc, struct dtp_rpc_priv,
+				drp_pub);
 	hg_ret = HG_Bulk_transfer(hg_ctx->dhc_bulkctx, dtp_hg_bulk_transfer_cb,
-			bulk_cbinfo, hg_bulk_op, na_addr_test_cli,
-			bulk_desc->dbd_remote_hdl, bulk_desc->dbd_remote_off,
-			bulk_desc->dbd_local_hdl, bulk_desc->dbd_local_off,
-			bulk_desc->dbd_len, opid);
+			bulk_cbinfo, hg_bulk_op, rpc_priv->drp_na_addr,
+			bulk_desc->bd_remote_hdl, 0,
+			bulk_desc->bd_local_hdl, 0,
+			bulk_desc->bd_len, opid);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_transfer failed, hg_ret: %d.\n", hg_ret);
 		D_FREE_PTR(bulk_cbinfo);

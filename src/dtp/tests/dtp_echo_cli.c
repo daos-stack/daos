@@ -150,7 +150,7 @@ static void run_client(void)
 	       checkin_input->name, checkin_input->age, checkin_input->days);
 
 	gecho.complete = 0;
-	rc = dtp_req_send(rpc_req, 0, client_cb_common, &gecho.complete);
+	rc = dtp_req_send(rpc_req, client_cb_common, &gecho.complete);
 	assert(rc == 0);
 	/* wait two minutes (in case of manually starting up clients) */
 	rc = client_wait(120, 1000, &gecho.complete);
@@ -218,7 +218,7 @@ static void run_client(void)
 	bulk_req_cbinfo->bulk_hdl = bulk_hdl;
 	bulk_req_cbinfo->complete_flag = &gecho.complete;
 
-	rc = dtp_req_send(rpc_req, 0, bulk_test_req_cb, bulk_req_cbinfo);
+	rc = dtp_req_send(rpc_req, bulk_test_req_cb, bulk_req_cbinfo);
 	assert(rc == 0);
 
 	rc = client_wait(100, 100, &gecho.complete);
@@ -241,7 +241,7 @@ static void run_client(void)
 	assert(rpc_req->dr_input == NULL);
 	assert(rpc_req->dr_output == NULL);
 
-	rc = dtp_req_send(rpc_req, 0, client_cb_common, &gecho.complete);
+	rc = dtp_req_send(rpc_req, client_cb_common, &gecho.complete);
 	assert(rc == 0);
 
 	rc = client_wait(100, 100, &gecho.complete);

@@ -130,8 +130,7 @@ out:
 }
 
 int
-dtp_req_send(dtp_rpc_t *req, unsigned int timeout, dtp_cb_t complete_cb,
-	     void *arg)
+dtp_req_send(dtp_rpc_t *req, dtp_cb_t complete_cb, void *arg)
 {
 	struct dtp_rpc_priv	*rpc_priv = NULL;
 	int			rc = 0;

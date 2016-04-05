@@ -49,20 +49,31 @@ dtp_sgl_valid(daos_sg_list_t *sgl)
 static inline bool
 dtp_bulk_desc_valid(struct dtp_bulk_desc *bulk_desc)
 {
-	if (bulk_desc == NULL || bulk_desc->dbd_remote_hdl == DTP_BULK_NULL ||
-	    bulk_desc->dbd_local_hdl == DTP_BULK_NULL ||
-	    (bulk_desc->dbd_bulk_op != DTP_BULK_PUT &&
-	     bulk_desc->dbd_bulk_op != DTP_BULK_GET) ||
-	    bulk_desc->dbd_len == 0) {
+	if (bulk_desc == NULL || bulk_desc->bd_rpc == NULL ||
+	    bulk_desc->bd_rpc->dr_ctx == DTP_CONTEXT_NULL ||
+	    bulk_desc->bd_remote_hdl == DTP_BULK_NULL ||
+	    bulk_desc->bd_local_hdl == DTP_BULK_NULL ||
+	    (bulk_desc->bd_bulk_op != DTP_BULK_PUT &&
+	     bulk_desc->bd_bulk_op != DTP_BULK_GET) ||
+	    bulk_desc->bd_len == 0) {
 		if (bulk_desc == NULL) {
 			D_ERROR("invalid parameter of NULL bulk_desc.\n");
-		} else {
-			D_ERROR("invalid parameter of bulk_desc (remote_hdl:%p,"
-				"local_hdl:%p, bulk_op:%d, len: "DF_U64".\n",
-				bulk_desc->dbd_remote_hdl,
-				bulk_desc->dbd_local_hdl,
-				bulk_desc->dbd_bulk_op, bulk_desc->dbd_len);
+			return false;
 		}
+		if (bulk_desc->bd_rpc == NULL) {
+			D_ERROR("invalid parameter(NULL bulk_desc->db_rpc).\n");
+			return false;
+		}
+		if (bulk_desc->bd_rpc->dr_ctx == DTP_CONTEXT_NULL) {
+			D_ERROR("invalid parameter(NULL bulk_desc->db_rpc"
+				"->dr_ctx).\n");
+			return false;
+		}
+		D_ERROR("invalid parameter of bulk_desc (remote_hdl:%p,"
+			"local_hdl:%p, bulk_op:%d, len: "DF_U64".\n",
+			bulk_desc->bd_remote_hdl,
+			bulk_desc->bd_local_hdl,
+			bulk_desc->bd_bulk_op, bulk_desc->bd_len);
 		return false;
 	} else {
 		return true;
@@ -112,20 +123,17 @@ out:
 }
 
 int
-dtp_bulk_transfer(dtp_context_t dtp_ctx, struct dtp_bulk_desc *bulk_desc,
-		  dtp_bulk_cb_t complete_cb, void *arg, dtp_bulk_opid_t *opid)
+dtp_bulk_transfer(struct dtp_bulk_desc *bulk_desc, dtp_bulk_cb_t complete_cb,
+		  void *arg, dtp_bulk_opid_t *opid)
 {
-	struct dtp_hg_context	*hg_ctx;
 	int			rc = 0;
 
-	if (dtp_ctx == DTP_CONTEXT_NULL || !dtp_bulk_desc_valid(bulk_desc) ||
-	    opid == NULL) {
+	if (!dtp_bulk_desc_valid(bulk_desc) || opid == NULL) {
 		D_ERROR("invalid parameter for dtp_bulk_transfer.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	hg_ctx = (struct dtp_hg_context *)dtp_ctx;
-	rc = dtp_hg_bulk_transfer(hg_ctx, bulk_desc, complete_cb, arg, opid);
+	rc = dtp_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid);
 	if (rc != 0)
 		D_ERROR("dtp_hg_bulk_transfer failed, rc: %d.\n", rc);
 

@@ -69,11 +69,20 @@ typedef void *dtp_rpc_output_t;
 #define DTP_MAX_INPUT_SIZE	(0x4000000)
 #define DTP_MAX_OUTPUT_SIZE	(0x4000000)
 
+enum dtp_rpc_flags {
+	DTP_IGNORE_TIMEDOUT = 0x0001,
+};
+
 /* Public RPC request/reply, exports to user */
 typedef struct dtp_rpc {
 	dtp_context_t		dr_ctx; /* DTP context of the RPC */
 	dtp_endpoint_t		dr_ep; /* endpoint ID */
 	dtp_opcode_t		dr_opc; /* opcode of the RPC */
+	/* user passed in flags, such as:
+	 * DTP_IGNORE_TIMEDOUT		ignore timedout. Default behavior
+	 *				(no this flags) is resending request
+	 *				when timedout. */
+	enum dtp_rpc_flags	dr_flags;
 	dtp_rpc_input_t		dr_input; /* input parameter struct */
 	dtp_rpc_output_t	dr_output; /* output parameter struct */
 	daos_size_t		dr_input_size; /* size of input struct */
@@ -100,32 +109,44 @@ typedef enum {
 
 /* bulk transferring descriptor */
 struct dtp_bulk_desc {
-	dtp_endpoint_t	dbd_remote_ep; /* remote endpoint */
-	dtp_bulk_op_t	dbd_bulk_op; /* DTP_BULK_PUT or DTP_BULK_GET */
-	dtp_bulk_t	dbd_remote_hdl; /* remote bulk handle */
-	daos_off_t	dbd_remote_off; /* remote offset */
-	dtp_bulk_t	dbd_local_hdl; /* local bulk handle */
-	daos_off_t	dbd_local_off; /* local offset */
-	daos_size_t	dbd_len; /* length of the bulk transferring */
+	dtp_rpc_t	*bd_rpc; /* original RPC request */
+	dtp_bulk_op_t	bd_bulk_op; /* DTP_BULK_PUT or DTP_BULK_GET */
+	dtp_bulk_t	bd_remote_hdl; /* remote bulk handle */
+	dtp_bulk_t	bd_local_hdl; /* local bulk handle */
+	daos_size_t	bd_len; /* length of the bulk transferring */
 };
 
 struct dtp_cb_info {
-	void		*dci_arg; /* User passed in arg */
-	dtp_rpc_t	*dci_rpc; /* rpc struct */
-	int		dci_rc; /* return code */
+	dtp_rpc_t		*dci_rpc; /* rpc struct */
+	void			*dci_arg; /* User passed in arg */
+	/* return code, will be set as:
+	 * 0                     for succeed RPC request,
+	 * -DER_TIMEDOUT         for timed out request,
+	 * other negative value  for other possible failure. */
+	int		dci_rc;
 };
 
 struct dtp_bulk_cb_info {
+	struct dtp_bulk_desc	*bci_bulk_desc; /* bulk descriptor */
 	void			*bci_arg; /* User passed in arg */
 	int			bci_rc; /* return code */
-	dtp_context_t		bci_ctx; /* DTP context */
-	struct dtp_bulk_desc	*bci_bulk_desc;
 };
 
 /* server-side RPC handler */
 typedef int (*dtp_rpc_cb_t)(dtp_rpc_t *rpc);
 
-/* completion callback for dtp_req_send */
+/**
+ * completion callback for dtp_req_send
+ *
+ * \param cb_info [IN]		pointer to call back info.
+ *
+ * \return			zero means success.
+ *				in the case of RPC request timed out, user
+ *				register complete_cb will be called (with
+ *				cb_info->dci_rc set as -DER_TIMEDOUT).
+ *				complete_cb returns -DER_AGAIN means resending
+ *				the RPC request.
+ */
 typedef int (*dtp_cb_t)(const struct dtp_cb_info *cb_info);
 
 /* completion callback for bulk transferring, i.e. dtp_bulk_transfer() */
@@ -137,10 +158,15 @@ typedef void * dtp_proc_t;
 typedef int (*dtp_proc_cb_t)(dtp_proc_t proc, void *data);
 
 /**
- * Progress condition callback.
- * Returning non-zero means stop the progressing and exit.
+ * Progress condition callback, /see dtp_progress().
+ *
+ * \param arg [IN]              argument to cond_cb.
+ * \param creds [IN]            remaining credits.
+ *
+ * \return			zero means continue progressing, non-zero means
+ *				stopping the progressing.
  */
-typedef int (*dtp_progress_cond_cb_t)(void *arg);
+typedef int (*dtp_progress_cond_cb_t)(void *arg, unsigned int creds);
 
 #define DTP_PHY_ADDR_ENV	"DTP_PHY_ADDR_STR"
 
@@ -207,7 +233,7 @@ dtp_finalize(void);
  *                              progress.
  *                              it can also be DTP_PROGRESS_NOWAIT or
  *                              DTP_PROGRESS_MAXWAIT.
- * \param credits [IN/OUT]      input parameter as the caller specified number
+ * \param creds [IN/OUT]        input parameter as the caller specified number
  *                              of credits it wants to progress;
  *                              output parameter as the number of credits
  *                              remaining.
@@ -215,6 +241,7 @@ dtp_finalize(void);
  *                              calls this function, when it returns non-zero
  *                              then stops the progressing or waiting and
  *                              returns.
+ * \param arg [IN]              argument to cond_cb.
  *
  * Notes: one credit corresponds to one RPC request or one HG internal
  *        operation, currently mercury cannot ensure the precise number of
@@ -227,7 +254,7 @@ dtp_finalize(void);
  */
 int
 dtp_progress(dtp_context_t dtp_ctx, unsigned int timeout,
-	     unsigned int *credits, dtp_progress_cond_cb_t cond_cb, void *arg);
+	     unsigned int *creds, dtp_progress_cond_cb_t cond_cb, void *arg);
 
 /**
  * Create a RPC request.
@@ -290,9 +317,6 @@ dtp_req_decref(dtp_rpc_t *req);
  * Send a RPC request.
  *
  * \param req [IN]              pointer to RPC request
- * \param timeout [IN]          the timed out value of the request (millisecond)
- *                              the struct dtp_cb_info::dci_rc will be set as
- *                              -DER_TIMEDOUT when it is timed out.
  * \param complete_cb [IN]      completion callback, will be triggered when the
  *                              RPC request's reply arrives, in the context of
  *                              user's calling of dtp_progress().
@@ -305,8 +329,7 @@ dtp_req_decref(dtp_rpc_t *req);
  *        \see dtp_req_create.
  */
 int
-dtp_req_send(dtp_rpc_t *req, unsigned int timeout, dtp_cb_t complete_cb,
-	     void *arg);
+dtp_req_send(dtp_rpc_t *req, dtp_cb_t complete_cb, void *arg);
 
 /**
  * Send a RPC reply.
@@ -333,6 +356,18 @@ dtp_reply_send(dtp_rpc_t *req);
  */
 int
 dtp_req_abort(dtp_rpc_t *req);
+
+/**
+ * Abort all in-flight RPC requests targeting to an endpoint.
+ *
+ * \param ep [IN]		endpoint address
+ *
+ * \return			zero on success, negative value if error
+ *
+ * Notes: now HG_Cancel() is not fully implemented.
+ */
+int
+dtp_ep_abort(dtp_endpoint_t ep);
 
 /**
  * Dynamically register a RPC at client-side.
@@ -391,12 +426,11 @@ dtp_bulk_create(dtp_context_t dtp_ctx, daos_sg_list_t *sgl,
 int dtp_bulk_free(dtp_bulk_t bulk_hdl);
 
 /**
- * Start a bulk transferring
+ * Start a bulk transferring (inside a RPC handler).
  *
- * \param dtp_ctx [IN]          DAOS transport context
  * \param bulk_desc [IN]        pointer to bulk transferring descriptor
  *				it is user's responsibility to allocate and free
- *				it. After the calling returns, user can free it.
+ *				it. Can free it after the calling returns.
  * \param complete_cb [IN]      completion callback
  * \param arg [IN]              arguments for the \a complete_cb
  * \param opid [OUT]            returned bulk opid which can be used to abort
@@ -405,8 +439,8 @@ int dtp_bulk_free(dtp_bulk_t bulk_hdl);
  * \return                      zero on success, negative value if error
  */
 int
-dtp_bulk_transfer(dtp_context_t dtp_ctx, struct dtp_bulk_desc *bulk_desc,
-		  dtp_bulk_cb_t complete_cb, void *arg, dtp_bulk_opid_t *opid);
+dtp_bulk_transfer(struct dtp_bulk_desc *bulk_desc, dtp_bulk_cb_t complete_cb,
+		  void *arg, dtp_bulk_opid_t *opid);
 
 /**
  * Get length (number of bytes) of data abstracted by bulk handle.
