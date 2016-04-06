@@ -70,15 +70,15 @@ struct vos_pool_root {
 	/* Structs stored in LE or BE representation */
 	uint32_t				vpr_magic;
 	/* Unique PoolID for each VOS pool assigned on creation */
-	uuid_t					vos_pool_id;
+	uuid_t					vpr_pool_id;
 	/* Flags for compatibility features */
 	uint64_t				vpr_compat_flags;
 	/* Flags for incompatibility features */
 	uint64_t				vpr_incompat_flags;
 	/* Typed PMEMoid pointer for the container index table */
-	TOID(struct vos_container_table)        ci_table;
-	/*Pool info of objects, containers, space availability */
-	vos_pool_info_t				vos_pool_info;
+	TOID(struct vos_container_table)	vpr_ci_table;
+	/* Pool info of objects, containers, space availability */
+	vos_pool_info_t				vpr_pool_info;
 };
 
 struct vos_container_table {
@@ -96,12 +96,12 @@ struct vos_epoch_table {
 	/* More items to be added*/
 };
 
-
+/* VOS Container Value */
 struct vos_container {
-	uuid_t				container_id;
-	vos_co_info_t			cinfo;
-	TOID(struct vos_object_table)	obtable;
-	TOID(struct vos_epoch_table)	ehtable;
+	uuid_t				vc_id;
+	vos_co_info_t			vc_info;
+	TOID(struct vos_object_table)	vc_obtable;
+	TOID(struct vos_epoch_table)	vc_ehtable;
 };
 
 #endif

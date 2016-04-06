@@ -55,7 +55,13 @@ main(int argc, char **argv) {
 	uuid_t pool_uuid, container_uuid;
 	vos_co_info_t cinfo;
 
-	file = strdup("/mnt/pmem_store/test_hash_table");
+	if (argc < 2) {
+		fprintf(stderr,
+			"Missing argument <exec> <pmem-file>\n");
+		exit(-1);
+	}
+
+	file = strdup(argv[1]);
 	if (file_exists(file))
 		remove(file);
 

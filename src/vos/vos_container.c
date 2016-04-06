@@ -32,8 +32,10 @@
 #include <vos_layout.h>
 #include <vos_internal.h>
 
-/* Callback free methods for VOS Container and
- * VOS Pool */
+/**
+ * Callback free methods for VOS Container and
+ * VOS Pool
+ */
 static void
 daos_co_hhash_free(struct daos_hlink *hlink)
 {
@@ -50,7 +52,6 @@ struct daos_hlink_ops	co_hdl_hh_ops = {
 
 /**
  * VOS_CHASH_TABLE Callback routines
- *
  */
 int
 co_compare_key(const void *a, const void *b)
@@ -85,7 +86,6 @@ co_print_value(void *a)
 
 /**
  * Create a container within a VOSP
- *
  */
 int
 vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
@@ -111,7 +111,7 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 	proot = POBJ_ROOT(vpool->ph, struct vos_pool_root);
 	root = D_RW(proot);
 	ci_table = (struct vos_container_table *)
-		D_RW(root->ci_table);
+		D_RW(root->vpr_ci_table);
 	uuid_copy(tmp_uuid, co_uuid);
 
 	/* Allocate a container handle to return to user */
@@ -151,16 +151,16 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 
 	TX_BEGIN(vpool->ph) {
 		cvalue = TX_NEW(struct vos_container);
-		uuid_copy(D_RW(cvalue)->container_id, tmp_uuid);
-		D_RW(cvalue)->obtable = TX_NEW(struct vos_object_table);
-		D_RW(cvalue)->ehtable = TX_NEW(struct vos_epoch_table);
-		D_RW(cvalue)->cinfo.pci_nobjs = 0;
-		D_RW(cvalue)->cinfo.pci_used = 0;
+		uuid_copy(D_RW(cvalue)->vc_id, tmp_uuid);
+		D_RW(cvalue)->vc_obtable = TX_NEW(struct vos_object_table);
+		D_RW(cvalue)->vc_ehtable = TX_NEW(struct vos_epoch_table);
+		D_RW(cvalue)->vc_info.pci_nobjs = 0;
+		D_RW(cvalue)->vc_info.pci_used = 0;
 
-		ret = vos_chash_insert(vpool->ph, ci_table->chtable,
-				(void *)&tmp_uuid, sizeof(uuid_t),
-				&cvalue,
-				sizeof(struct vos_container));
+		ret =
+		vos_chash_insert(vpool->ph, ci_table->chtable,
+				 (void *)&tmp_uuid, sizeof(uuid_t),
+				 &cvalue, sizeof(struct vos_container));
 		if (ret) {
 			D_ERROR("Container table insert failed with error : %d",
 				ret);
@@ -175,12 +175,12 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 
 	/* Update VMEM container handle to return to user */
 	co_hdl->ph = vpool->ph;
-	uuid_copy(co_hdl->container_id,
-		  D_RO(cvalue)->container_id);
+	uuid_copy(co_hdl->vc_co_id,
+		  D_RO(cvalue)->vc_id);
 	co_hdl->obj_table = (struct vos_object_table *)
-		D_RW(D_RW(cvalue)->obtable);
+		D_RW(D_RW(cvalue)->vc_obtable);
 	co_hdl->epoch_table = (struct vos_epoch_table *)
-		D_RW(D_RW(cvalue)->ehtable);
+		D_RW(D_RW(cvalue)->vc_ehtable);
 
 	/* Initialize and create a VMEM hash table
 	 * Similar purpose as to the one used in vos_pool.c
@@ -208,7 +208,6 @@ exit:
 
 /**
  * Open a container within a VOSP
- *
  */
 int
 vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
@@ -234,7 +233,7 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 	proot = POBJ_ROOT(vpool->ph, struct vos_pool_root);
 	root = D_RW(proot);
 	ci_table = (struct vos_container_table *)
-		   D_RW(root->ci_table);
+		   D_RW(root->vpr_ci_table);
 
 	if (TOID_IS_NULL(ci_table->chtable)) {
 		D_ERROR("Empty Container table\n");
@@ -256,11 +255,11 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 	}
 
 	co_hdl->ph = vpool->ph;
-	uuid_copy(co_hdl->container_id, tmp_uuid);
+	uuid_copy(co_hdl->vc_co_id, tmp_uuid);
 	co_hdl->obj_table = (struct vos_object_table *)
-		D_RW(D_RW(*object_address)->obtable);
+		D_RW(D_RW(*object_address)->vc_obtable);
 	co_hdl->epoch_table = (struct vos_epoch_table *)
-		D_RW(D_RW(*object_address)->ehtable);
+		D_RW(D_RW(*object_address)->vc_ehtable);
 	/* Open can too be an entry point
 	 * Let us create a handle hash here too
 	 * vos_create_hhash vos_init_co_link are
@@ -327,12 +326,12 @@ vos_co_destroy(daos_handle_t coh, daos_event_t *ev)
 	proot = POBJ_ROOT(co_hdl->ph, struct vos_pool_root);
 	root = D_RW(proot);
 	ci_table = (struct vos_container_table *)
-		   D_RW(root->ci_table);
+		   D_RW(root->vpr_ci_table);
 	/* vos_chash_remove hash its own transactions
 	 * since chash_table stores key and value in PMEM
 	 * Its just enough to remove the entry */
 	ret = vos_chash_remove(co_hdl->ph, ci_table->chtable,
-			       co_hdl->container_id, sizeof(uuid_t));
+			       co_hdl->vc_co_id, sizeof(uuid_t));
 	if (ret) {
 		D_ERROR("Failed to remove container\n");
 		return -DER_NONEXIST;
@@ -348,7 +347,7 @@ vos_co_destroy(daos_handle_t coh, daos_event_t *ev)
  *
  */
 int
-vos_co_query(daos_handle_t coh, vos_co_info_t *cinfo, daos_event_t *ev)
+vos_co_query(daos_handle_t coh, vos_co_info_t *vc_info, daos_event_t *ev)
 {
 
 	int				ret    = 0;
@@ -370,18 +369,17 @@ vos_co_query(daos_handle_t coh, vos_co_info_t *cinfo, daos_event_t *ev)
 	proot = POBJ_ROOT(co_hdl->ph, struct vos_pool_root);
 	root = D_RW(proot);
 	ci_table = (struct vos_container_table *)
-		   D_RW(root->ci_table);
+		   D_RW(root->vpr_ci_table);
 	ret = vos_chash_lookup(co_hdl->ph, ci_table->chtable,
-			co_hdl->container_id,
-			sizeof(uuid_t),
-			(void **)&container_value);
+			       co_hdl->vc_co_id, sizeof(uuid_t),
+			       (void **)&container_value);
 	if (ret) {
 		D_ERROR("Container does not exist\n");
 		return ret;
 	}
 
-	cinfo->pci_nobjs = D_RW(*container_value)->cinfo.pci_nobjs;
-	cinfo->pci_used	 = D_RW(*container_value)->cinfo.pci_used;
+	vc_info->pci_nobjs = D_RW(*container_value)->vc_info.pci_nobjs;
+	vc_info->pci_used	 = D_RW(*container_value)->vc_info.pci_used;
 
 	return ret;
 }

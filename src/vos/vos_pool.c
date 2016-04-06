@@ -37,6 +37,7 @@ daos_vpool_hhash_free(struct daos_hlink *hlink)
 {
 	struct vos_pool *vpool;
 	vpool = container_of(hlink, struct vos_pool, vpool_hlink);
+
 	if (NULL != vpool) {
 		if (NULL != vpool->path)
 			free(vpool->path);
@@ -85,21 +86,21 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 
 	TX_BEGIN(vpool->ph) {
 		root->vpr_magic = 0;
-		uuid_copy(root->vos_pool_id, uuid);
+		uuid_copy(root->vpr_pool_id, uuid);
 		/* TODO: Yet to identify compatibility and
 		   incompatibility flags */
 		root->vpr_compat_flags = 0;
 		root->vpr_incompat_flags = 0;
 		/* This will eventually call the
 		   constructor of container table */
-		root->ci_table =
+		root->vpr_ci_table =
 			TX_NEW(struct vos_container_table);
-		D_RW(root->ci_table)->chtable =
+		D_RW(root->vpr_ci_table)->chtable =
 			TOID_NULL(struct vos_chash_table);
-		root->vos_pool_info.pif_ncos = 0;
-		root->vos_pool_info.pif_nobjs = 0;
-		root->vos_pool_info.pif_size = size;
-		root->vos_pool_info.pif_avail = size - root_size;
+		root->vpr_pool_info.pif_ncos = 0;
+		root->vpr_pool_info.pif_nobjs = 0;
+		root->vpr_pool_info.pif_size = size;
+		root->vpr_pool_info.pif_avail = size - root_size;
 	} TX_END
 
 	/* creating and initializing a handle hash
@@ -198,7 +199,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 
 	proot = POBJ_ROOT(vpool->ph, struct vos_pool_root);
 	root = D_RW(proot);
-	if (uuid_compare(uuid, root->vos_pool_id)) {
+	if (uuid_compare(uuid, root->vpr_pool_id)) {
 		uuid_unparse(uuid, pool_uuid_str);
 		uuid_unparse(uuid, uuid_str);
 		D_ERROR("UUID mismatch error (uuid: %s, vpool_id: %s",
@@ -280,10 +281,10 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev)
 	vpool = container_of(hlink, struct vos_pool, vpool_hlink);
 	proot = POBJ_ROOT(vpool->ph, struct vos_pool_root);
 	root = D_RW(proot);
-	pinfo->pif_ncos = root->vos_pool_info.pif_ncos;
-	pinfo->pif_nobjs = root->vos_pool_info.pif_nobjs;
-	pinfo->pif_size = root->vos_pool_info.pif_size;
-	pinfo->pif_avail = root->vos_pool_info.pif_avail;
+	pinfo->pif_ncos = root->vpr_pool_info.pif_ncos;
+	pinfo->pif_nobjs = root->vpr_pool_info.pif_nobjs;
+	pinfo->pif_size = root->vpr_pool_info.pif_size;
+	pinfo->pif_avail = root->vpr_pool_info.pif_avail;
 
 	return rc;
 }

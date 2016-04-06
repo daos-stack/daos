@@ -238,16 +238,17 @@ main(int argc, char *argv[])
 
 	if (argc < 4) {
 		fprintf(stderr,
-			"<exec> <bucket_size> <num_keys> <threads> <count>\n");
+			"<exec> <pmem_file> <bucket_size>");
+		fprintf(stderr,
+			" <num_keys> <threads> <count>\n");
 		return -1;
 	}
-
-	bucket_size = atoi(argv[1]);
-	num_keys = atoi(argv[2]);
-	isthread = atoi(argv[3]);
-	if (file_exists("/mnt/pmem_store/test_hash_table"))
-		remove("/mnt/pmem_store/test_hash_table");
-	pop = pmemobj_create("/mnt/pmem_store/test_hash_table",
+	bucket_size = atoi(argv[2]);
+	num_keys = atoi(argv[3]);
+	isthread = atoi(argv[4]);
+	if (file_exists(argv[1]))
+		remove(argv[1]);
+	pop = pmemobj_create(argv[1],
 			     "hashtable test", 10737418240, 0666);
 
 	if (argc == 5)

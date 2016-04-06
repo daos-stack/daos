@@ -118,7 +118,7 @@ struct vos_pool {
 struct vos_co_hdl {
 	struct daos_hlink        co_hdl_hlink;
 	PMEMobjpool		*ph;
-	uuid_t			 container_id;
+	uuid_t			 vc_co_id;
 	struct vos_object_table	*obj_table;
 	struct vos_epoch_table	*epoch_table;
 };
