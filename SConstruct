@@ -1,6 +1,7 @@
 """SConstruct to build all components"""
 import sys
-sys.path.insert(0, ".")
+import os
+sys.path.insert(0, os.path.realpath("."))
 from prereq_tools import PreReqComponent
 ENV = DefaultEnvironment()
 
@@ -15,5 +16,7 @@ OPTS.Update(ENV)
 REQS = PreReqComponent(ENV, OPTS)
 REQS.preload("components.py", prebuild=ENV.get("REQUIRES"))
 
-Help(OPTS.GenerateHelpText(ENV))
-
+try:
+    Help(OPTS.GenerateHelpText(ENV), append=True)
+except TypeError:
+    Help(OPTS.GenerateHelpText(ENV))

@@ -289,6 +289,14 @@ class PreReqComponent(object):
             # Not on Intel network
             pass
 
+        real_env["PYTHONPATH"] = Dir("#").abspath + os.pathsep + \
+                                 os.environ.get("PYTHONPATH", "")
+        AddOption('--no-prereq-links',
+                  dest='no_prereq_links',
+                  action='store_true',
+                  default=False,
+                  help='Set to disable symbolic links for prerequisites')
+
         AddOption('--update-prereq',
                   dest='update_prereq',
                   type='string',
@@ -299,6 +307,7 @@ class PreReqComponent(object):
                   help='Force an update of a prerequisite COMPONENT.  Use '
                        '\'all\' to update all components')
         self.__update = GetOption('update_prereq')
+        self.__link = not GetOption('no_prereq_links')
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
 
@@ -332,6 +341,10 @@ class PreReqComponent(object):
         self.setup_path_var('PREBUILT_PREFIX', True)
         self.setup_path_var('TARGET_PREFIX')
         self.setup_path_var('SRC_PREFIX', True)
+
+    def should_create_links(self):
+        """Return true if links should be created"""
+        return self.__link
 
     def setup_path_var(self, var, multiple=False):
         """Create a command line variable for a path"""
@@ -742,6 +755,8 @@ class _Component(object):
             #Don't do this for installed components
             return
         if source == self.prefix:
+            return
+        if not self.prereqs.should_create_links():
             return
         # create links
         for (root, _, files) in os.walk(source):
