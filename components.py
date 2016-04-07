@@ -130,3 +130,38 @@ REQS.define('nvml',
             commands=["make",
                       "make install prefix=$NVML_PREFIX"],
             libs=["pmemobj"])
+
+RETRIEVER = GitRepoRetriever("ssh://review.whamcloud.com:29418/coral/cppr",
+                             True)
+REQS.define('cppr',
+            retriever=RETRIEVER,
+            commands=["scons --no-prereq-links "
+                      "PMIX_PREBUILT=$PMIX_PREFIX " \
+                      "OMPI_PREBUILT=$OMPI_PREFIX " \
+                      "HWLOC_PREBUILT=$HWLOC_PREFIX " \
+                      "MERCURY_PREBUILT=$MERCURY_PREFIX " \
+                      "BMI_PREBUILT=$BMI_PREFIX " \
+                      "CCI_PREBUILT=$CCI_PREFIX " \
+                      "OPENPA_PREBUILT=$OPENPA_PREFIX " \
+                      "PREFIX=$CPPR_PREFIX install"],
+            headers=["cppr.h"],
+            libs=["cppr"],
+            requires=['ompi', 'mercury'])
+
+RETRIEVER = GitRepoRetriever("ssh://review.whamcloud.com:29418/daos/iof",
+                             True)
+REQS.define('iof',
+            retriever=RETRIEVER,
+            commands=["scons --no-prereq-links "
+                      "PMIX_PREBUILT=$PMIX_PREFIX " \
+                      "OMPI_PREBUILT=$OMPI_PREFIX " \
+                      "HWLOC_PREBUILT=$HWLOC_PREFIX " \
+                      "MERCURY_PREBUILT=$MERCURY_PREFIX " \
+                      "BMI_PREBUILT=$BMI_PREFIX " \
+                      "CCI_PREBUILT=$CCI_PREFIX " \
+                      "OPENPA_PREBUILT=$OPENPA_PREFIX " \
+                      "PREFIX=$IOF_PREFIX install"],
+            headers=["process_set.h"],
+            libs=["pset"],
+            requires=['ompi', 'mercury'])
+
