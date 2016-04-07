@@ -201,3 +201,9 @@ dtp_proc_dtp_const_string_t(dtp_proc_t proc, dtp_const_string_t *data)
 
 	return (hg_ret == HG_SUCCESS) ? 0 : -DER_DTP_HG;
 }
+
+int
+dtp_proc_uuid_t(dtp_proc_t proc, void *data)
+{
+	return dtp_proc_memcpy(proc, data, sizeof(uuid_t));
+}

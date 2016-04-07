@@ -33,7 +33,7 @@ struct echo_serv {
 
 static void *progress_handler(void *arg)
 {
-	int rc;
+	int rc, loop = 0;
 	assert(arg == NULL);
 	/* progress loop */
 	do {
@@ -42,7 +42,13 @@ static void *progress_handler(void *arg)
 			printf("dtp_progress failed rc: %d.\n", rc);
 			break;
 		}
-	} while (!echo_srv.do_shutdown);
+		if (echo_srv.do_shutdown != 0) {
+			/* to ensure the last SHUTDOWN request be handled */
+			loop++;
+			if (loop >= 1000)
+				break;
+		}
+	} while (1);
 
 	printf("progress_handler: rc: %d, echo_srv.do_shutdown: %d.\n",
 	       rc, echo_srv.do_shutdown);
@@ -53,7 +59,16 @@ static void *progress_handler(void *arg)
 
 static int run_echo_srver(void)
 {
-	int rc = 0;
+	dtp_endpoint_t		svr_ep;
+	dtp_rpc_t		*rpc_req = NULL;
+	echo_checkin_in_t	*checkin_input = NULL;
+	echo_checkin_out_t	*checkin_output = NULL;
+	char			*pchar;
+	daos_rank_t		myrank;
+	int			rc, loop = 0;
+
+	rc = dtp_group_rank(0, &myrank);
+	assert(rc == 0);
 
 	echo_srv.do_shutdown = 0;
 
@@ -65,6 +80,56 @@ static int run_echo_srver(void)
 		goto out;
 	}
 
+
+	/* ============= test-1 ============ */
+
+	/* send checkin RPC */
+	svr_ep.ep_rank = 0;
+	rc = dtp_req_create(gecho.dtp_ctx, svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
+	assert(rc == 0 && rpc_req != NULL);
+
+	/*
+	 * The dtp_req_create already allocated the input/output buffer
+	 * based on the input_size/output_size per the opcode
+	 */
+	checkin_input = (echo_checkin_in_t *)rpc_req->dr_input;
+	assert(checkin_input != NULL);
+	checkin_output = (echo_checkin_out_t *)rpc_req->dr_output;
+	assert(checkin_output != NULL);
+
+	/*
+	 * No strdup will cause mercury crash when HG_Free_input
+	 * in dtp_hg_reply_send_cb
+	 */
+	D_ALLOC(pchar, 256); /* DTP will internally free it */
+	assert(pchar != NULL);
+	snprintf(pchar, 256, "Guest_%d@server-side", myrank);
+	checkin_input->name = pchar;
+	checkin_input->age = 32;
+	checkin_input->days = myrank;
+
+	printf("server(rank %d) sending checkin request, name: %s, "
+	       "age: %d, days: %d.\n", myrank, checkin_input->name,
+	       checkin_input->age, checkin_input->days);
+
+	gecho.complete = 0;
+	rc = dtp_req_send(rpc_req, client_cb_common, &gecho.complete);
+	assert(rc == 0);
+	/* wait completion */
+	while (1) {
+		if (!gecho.complete) {
+			printf("server(rank %d) checkin request sent.\n",
+			       myrank);
+			break;
+		}
+		usleep(10*1000);
+		if (++loop > 1000) {
+			printf("wait failed.\n");
+			break;
+		}
+	}
+
+	/* ==================================== */
 	printf("main thread wait progress thread ...\n");
 	/* wait progress thread */
 	rc = pthread_join(echo_srv.progress_thread, NULL);
@@ -95,6 +160,7 @@ int echo_srv_shutdown(dtp_rpc_t *rpc_req)
 	return rc;
 }
 
+int g_roomno = 1082;
 int echo_srv_checkin(dtp_rpc_t *rpc_req)
 {
 	echo_checkin_in_t	*checkin_input = NULL;
@@ -112,7 +178,7 @@ int echo_srv_checkin(dtp_rpc_t *rpc_req)
 		checkin_input->age, checkin_input->name, checkin_input->days);
 
 	checkin_output->ret = 0;
-	checkin_output->room_no = 1082;
+	checkin_output->room_no = g_roomno++;
 
 	rc = dtp_reply_send(rpc_req);
 

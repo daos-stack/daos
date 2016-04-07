@@ -3,6 +3,7 @@
 Import('env')
 
 libraries = ['daos_common', 'dl', 'daos_transport', 'pthread', 'cgroup', 'numa']
+libraries += ['uuid']
 
 # Generate server program
 server = env.Program('daos_server', Glob('*.c'), LIBS=libraries)

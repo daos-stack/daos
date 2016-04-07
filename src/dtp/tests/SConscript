@@ -4,8 +4,10 @@ Import('env')
 
 env.Append(CPPPATH = ['#/src/dtp/tests'])
 
+libraries = ['daos_transport', 'daos_common']
+libraries += ['mercury', 'na', 'pthread', 'crypto', 'uuid']
+libraries += ['mcl']
+
 # a simple example to use dtp_xxx APIs
-env.Program('dtp_echo_cli', 'dtp_echo_cli.c',
-	    LIBS=['libdaos_transport', 'libdaos_common', 'libmercury', 'libna', 'libpthread', 'libcrypto'])
-env.Program('dtp_echo_srv', 'dtp_echo_srv.c',
-	    LIBS=['libdaos_transport', 'libdaos_common', 'libmercury', 'libna', 'libpthread', 'libcrypto'])
+env.Program('dtp_echo_cli', 'dtp_echo_cli.c', LIBS=libraries)
+env.Program('dtp_echo_srv', 'dtp_echo_srv.c', LIBS=libraries)

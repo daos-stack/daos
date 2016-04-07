@@ -19,41 +19,43 @@
  * (C) Copyright 2016 Intel Corporation.
  */
 /**
- * This file is part of daos_transport. It it the common header file which be
- * included by all other .c files of dtp.
+ * This file is part of daos_transport. It implements the main group APIs.
  */
 
-#ifndef __DTP_INTERNAL_H__
-#define __DTP_INTERNAL_H__
+#include <dtp_internal.h>
 
-#include <ctype.h>
-#include <errno.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <stddef.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <uuid/uuid.h>
-/* #include <netinet/in.h> */
-#include <arpa/inet.h>
-#include <ifaddrs.h>
+/* TODO - currently only with one global service group and one client group */
+int
+dtp_group_rank(dtp_group_id_t grp_id, daos_rank_t *rank)
+{
+	if (rank == NULL) {
+		D_ERROR("invalid parameter of NULL rank pointer.\n");
+		return -DER_INVAL;
+	}
 
-#include <daos/daos_transport.h>
+	*rank = (dtp_gdata.dg_server == true) ? dtp_gdata.dg_mcl_srv_set->self :
+						dtp_gdata.dg_mcl_cli_set->self;
 
-#include <dtp_internal_types.h>
-#include <dtp_internal_fns.h>
+	return 0;
+}
 
-#include <dtp_hg.h>
+int
+dtp_group_size(dtp_group_id_t grp_id, uint32_t *size)
+{
+	if (size == NULL) {
+		D_ERROR("invalid parameter of NULL size pointer.\n");
+		return -DER_INVAL;
+	}
 
-#include <process_set.h>
+	*size = (dtp_gdata.dg_server == true) ? dtp_gdata.dg_mcl_srv_set->size :
+						dtp_gdata.dg_mcl_cli_set->size;
 
-#endif /* __DTP_INTERNAL_H__ */
+	return 0;
+}
+
+dtp_group_id_t *
+dtp_global_grp_id(void)
+{
+	return (dtp_gdata.dg_server == true) ? &dtp_gdata.dg_srv_grp_id :
+					       &dtp_gdata.dg_cli_grp_id;
+}

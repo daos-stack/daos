@@ -25,9 +25,6 @@
 
 #include <dtp_internal.h>
 
-/* only-for-testing basic RPC in same node, before address model available */
-na_addr_t    na_addr_test_srv = NA_ADDR_NULL;
-
 static na_return_t
 na_addr_lookup_cb(const struct na_cb_info *callback_info)
 {
@@ -45,7 +42,7 @@ na_addr_lookup_cb(const struct na_cb_info *callback_info)
     return ret;
 }
 
-static na_return_t
+na_return_t
 dtp_na_addr_lookup_wait(na_class_t *na_class, const char *name, na_addr_t *addr)
 {
     na_addr_t new_addr = NULL;
@@ -165,19 +162,6 @@ dtp_hg_init(const char *info_string, bool server)
 	hg_gdata->dhg_hgcla = hg_class;
 
 	dtp_gdata.dg_hg = hg_gdata;
-
-	/* only-for-testing, establish a connection */
-	if (dtp_gdata.dg_server == 1)
-		goto out;
-	na_return_t na_ret;
-	na_ret = dtp_na_addr_lookup_wait(na_class, info_string,
-					 &na_addr_test_srv);
-	if (na_ret != NA_SUCCESS) {
-		D_ERROR("Could not connect to %s.\n", info_string);
-	} else {
-		D_DEBUG(DF_TP, "testing connection to %s succeed.\n",
-			info_string);
-	}
 
 out:
 	return rc;
@@ -349,6 +333,9 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 		hg_ret = HG_Get_input(rpc_priv->drp_hg_hdl, hg_in_struct);
 		if (hg_ret == HG_SUCCESS) {
 			rpc_priv->drp_input_got = 1;
+			uuid_copy(rpc_pub->dr_ep.ep_grp_id,
+				  rpc_priv->drp_req_hdr.dch_grp_id);
+			rpc_pub->dr_ep.ep_rank = rpc_priv->drp_req_hdr.dch_rank;
 		} else {
 			D_ERROR("HG_Get_input failed, hg_ret: %d, opc: 0x%x.\n",
 				hg_ret, rpc_pub->dr_opc);
@@ -387,8 +374,13 @@ dtp_hg_req_create(struct dtp_hg_context *hg_ctx, dtp_endpoint_t tgt_ep,
 		 hg_ctx->dhc_hgctx != NULL);
 	D_ASSERT(rpc_priv != NULL);
 
-	/* only-for-testing now to use the na_addr_test_srv */
-	rpc_priv->drp_na_addr = na_addr_test_srv;
+	rc = mcl_lookup(dtp_gdata.dg_mcl_srv_set, tgt_ep.ep_rank,
+			hg_ctx->dhc_nacla, &rpc_priv->drp_na_addr);
+	if (rc != MCL_SUCCESS) {
+		D_ERROR("mcl_lookup failed, rc: %d, opc: 0x%x.\n",
+			rc, rpc_priv->drp_pub.dr_opc);
+		D_GOTO(out, rc = -DER_DTP_MCL);
+	}
 
 	hg_ret = HG_Create(hg_ctx->dhc_hgctx, rpc_priv->drp_na_addr,
 			   rpc_priv->drp_pub.dr_opc, &rpc_priv->drp_hg_hdl);
@@ -398,6 +390,7 @@ dtp_hg_req_create(struct dtp_hg_context *hg_ctx, dtp_endpoint_t tgt_ep,
 		rc = -DER_DTP_HG;
 	}
 
+out:
 	return rc;
 }
 

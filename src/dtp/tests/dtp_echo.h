@@ -137,4 +137,35 @@ echo_md5_to_string(unsigned char *md5, dtp_string_t md5_str)
 	}
 }
 
+int client_cb_common(const struct dtp_cb_info *cb_info)
+{
+	dtp_rpc_t		*rpc_req;
+	echo_checkin_in_t	*checkin_input;
+	echo_checkin_out_t	*checkin_output;
+
+	rpc_req = cb_info->dci_rpc;
+
+	/* set complete flag */
+	printf("in client_cb_common, opc: 0x%x, dci_rc: %d.\n",
+	       rpc_req->dr_opc, cb_info->dci_rc);
+	*(int *) cb_info->dci_arg = 1;
+
+	switch (cb_info->dci_rpc->dr_opc) {
+	case ECHO_OPC_CHECKIN:
+		checkin_input = rpc_req->dr_input;
+		checkin_output = rpc_req->dr_output;
+		assert(checkin_input != NULL && checkin_output != NULL);
+		printf("%s checkin result - ret: %d, room_no: %d.\n",
+		       checkin_input->name, checkin_output->ret,
+		       checkin_output->room_no);
+		break;
+	case ECHO_OPC_SHUTDOWN:
+		break;
+	default:
+		break;
+	}
+
+	return 0;
+}
+
 #endif /* __DTP_ECHO_H__ */

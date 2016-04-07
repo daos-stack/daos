@@ -30,6 +30,8 @@
 
 bool dtp_initialized();
 
+dtp_group_id_t *dtp_global_grp_id(void);
+
 int dtp_opc_map_create(unsigned int bits, struct dtp_opc_map **opc_map);
 void dtp_opc_map_destroy(struct dtp_opc_map *opc_map);
 struct dtp_opc_info *dtp_opc_lookup(struct dtp_opc_map *map, dtp_opcode_t opc,
@@ -43,6 +45,8 @@ dtp_common_hdr_init(struct dtp_common_hdr *hdr, dtp_opcode_t opc)
 	hdr->dch_opc = opc;
 	hdr->dch_magic = DTP_RPC_MAGIC;
 	hdr->dch_version = DTP_RPC_VERSION;
+	uuid_copy(hdr->dch_grp_id, *dtp_global_grp_id());
+	D_ASSERT(dtp_group_rank(0, &hdr->dch_rank) == 0);
 }
 
 static inline void

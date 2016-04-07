@@ -5,6 +5,7 @@ Import('env')
 env.Append(CPPPATH = ['#/src/dtp'])
 
 libraries = ['daos_common', 'mercury']
+libraries += ['mcl']
 
 dtp = env.SharedLibrary('libdaos_transport', Glob('*.c'), LIBS=libraries)
 env.Install('#/build/lib/', dtp)

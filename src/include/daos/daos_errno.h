@@ -87,6 +87,10 @@ typedef enum {
 	DER_DTP_HG		= (DER_ERR_BASE + 600),
 	/** DTP RPC (opcode) unregister */
 	DER_DTP_UNREG		= (DER_ERR_BASE + 601),
+	/** DTP failed to generate an address string */
+	DER_DTP_ADDRSTR_GEN	= (DER_ERR_BASE + 602),
+	/** DTP MCL layer error */
+	DER_DTP_MCL		= (DER_ERR_BASE + 603),
 	/** TODO: add more error numbers */
 } daos_errno_t;
 

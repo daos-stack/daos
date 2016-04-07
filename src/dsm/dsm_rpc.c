@@ -30,11 +30,11 @@ dsm_proc_pool_connect_in(dtp_proc_t proc, void *data)
 	struct pool_connect_in *p = data;
 	int			rc;
 
-	rc = proc_uuid_t(proc, &p->pool);
+	rc = dtp_proc_uuid_t(proc, &p->pool);
 	if (rc != 0)
 		return rc;
 
-	rc = proc_uuid_t(proc, &p->pool_hdl);
+	rc = dtp_proc_uuid_t(proc, &p->pool_hdl);
 	if (rc != 0)
 		return rc;
 
@@ -79,7 +79,7 @@ dsm_proc_pool_disconnect_in(dtp_proc_t proc, void *data)
 {
 	struct pool_disconnect_in      *p = data;
 
-	return proc_uuid_t(proc, &p->pool_hdl);
+	return dtp_proc_uuid_t(proc, &p->pool_hdl);
 }
 
 int

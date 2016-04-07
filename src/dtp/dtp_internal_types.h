@@ -33,6 +33,7 @@
 #include <pthread.h>
 
 #include <daos/daos_list.h>
+#include <process_set.h>
 
 struct dtp_hg_gdata;
 
@@ -49,6 +50,17 @@ struct dtp_gdata {
 	/* HG level global data */
 	struct dtp_hg_gdata	*dg_hg;
 
+	struct mcl_state	*dg_mcl_state;
+	/* service process set */
+	struct mcl_set		*dg_mcl_srv_set;
+	/* client process set */
+	struct mcl_set		*dg_mcl_cli_set;
+
+	/* the unique global server and client group ID */
+	/* TODO refine grp_id things together with dtp_group_create() */
+	dtp_group_id_t		dg_srv_grp_id;
+	dtp_group_id_t		dg_cli_grp_id;
+
 	/* protects dtp_gdata */
 	pthread_rwlock_t	dg_rwlock;
 	/* refcount to protect dtp_init/dtp_finalize */
@@ -59,18 +71,28 @@ struct dtp_gdata {
 
 extern struct dtp_gdata		dtp_gdata;
 
-#define DTP_RPC_MAGIC		(0xAB0C01EC)
-#define DTP_RPC_VERSION		(0x00000001)
+#define DTP_RPC_MAGIC			(0xAB0C01EC)
+#define DTP_RPC_VERSION			(0x00000001)
 
-/* dtp layer common header, 32 bytes */
+/*
+ * TODO need to consider more later together with dtp_group_create()
+ * Temporarily just use a global server group ID and a global client group ID.
+ */
+#define DTP_GLOBAL_SRV_GRPID_STR	"da03c1e7-1618-8899-6699-aabbccddeeff"
+#define DTP_GLOBAL_CLI_GRPID_STR	"da033e4e-1618-8899-6699-aabbccddeeff"
+
+/* dtp layer common header, 48 bytes */
 struct dtp_common_hdr {
 	uint32_t	dch_magic;
 	uint32_t	dch_version;
 	uint32_t	dch_opc;
 	uint32_t	dch_cksum;
 	uint32_t	dch_flags;
-	uint32_t	dch_padding[3]; /* need to add the endpoint addr? */
-} __packed;
+	/* gid and rank identify the rpc request sender */
+	dtp_group_id_t	dch_grp_id; /* uuid_t 16 bytes */
+	daos_rank_t	dch_rank; /* uint32_t */
+	uint32_t	dch_padding[2]; /* need to add the endpoint addr? */
+};
 
 /* TODO: cannot know the state of RPC_REQ_SENT from mercury */
 typedef enum {
@@ -85,6 +107,12 @@ typedef enum {
 
 #define DTP_UNLOCK		(0)
 #define DTP_LOCKED		(1)
+
+/* TODO export the group name to user? and multiple client groups? */
+#define DTP_GLOBAL_SRV_GROUP_NAME	"dtp_global_srv_group"
+#define DTP_CLI_GROUP_NAME		"dtp_cli_group"
+#define DTP_GROUP_NAME_MAX_LEN		(64)
+#define DTP_ADDR_STR_MAX_LEN		(128)
 
 /* opcode map (hash list) */
 struct dtp_opc_map {

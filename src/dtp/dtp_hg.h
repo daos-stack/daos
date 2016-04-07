@@ -221,14 +221,24 @@ dtp_proc_common_hdr(dtp_proc_t proc, struct dtp_common_hdr *hdr)
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
+	hg_ret = dtp_proc_uuid_t(hg_proc, &hdr->dch_grp_id);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->dch_rank);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
 
 	/*
 	D_DEBUG(DF_TP,"in dtp_proc_common_hdr, opc: 0x%x.\n", hdr->dch_opc);
 	*/
 
-	/* proc the 3 paddings */
+	/* proc the 2 paddings */
 	hg_ret = hg_proc_memcpy(hg_proc, &hdr->dch_padding[0],
-				3 * sizeof(uint32_t));
+				2 * sizeof(uint32_t));
 	if (hg_ret != HG_SUCCESS)
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 
@@ -394,8 +404,5 @@ int dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, daos_sg_list_t *sgl,
 int dtp_hg_bulk_transfer(struct dtp_bulk_desc *bulk_desc,
 			 dtp_bulk_cb_t complete_cb,
 			 void *arg, dtp_bulk_opid_t *opid);
-
-/* only-for-testing */
-extern na_addr_t na_addr_test_srv;
 
 #endif /* __DTP_MERCURY_H__ */

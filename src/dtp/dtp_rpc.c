@@ -38,6 +38,12 @@ dtp_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep, dtp_opcode_t opc,
 		D_ERROR("invalid parameter (NULL dtp_ctx or req).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+	/* TODO: possibly with multiple service group */
+	if (tgt_ep.ep_rank >= dtp_gdata.dg_mcl_srv_set->size) {
+		D_ERROR("invalid parameter, rank %d, group_size: %d.\n",
+			tgt_ep.ep_rank, dtp_gdata.dg_mcl_srv_set->size);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	opc_info = dtp_opc_lookup(dtp_gdata.dg_opc_map, opc, DTP_UNLOCK);
 	if (opc_info == NULL) {

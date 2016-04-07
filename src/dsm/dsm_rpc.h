@@ -32,13 +32,6 @@
 #include <uuid/uuid.h>
 #include <daos/daos_transport.h>
 
-/* TODO(liwei): CASSERT(sizeof(uuid_t) == 16) */
-static inline int
-proc_uuid_t(dtp_proc_t proc, void *data)
-{
-	return dtp_proc_raw(proc, data, sizeof(uuid_t));
-}
-
 struct pool_map {
 	uint64_t	version;
 	uint32_t	ndomains;

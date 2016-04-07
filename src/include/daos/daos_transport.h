@@ -36,6 +36,7 @@ typedef void *dtp_context_t;
 
 /* Physical address string, e.g., "bmi+tcp://localhost:3344". */
 typedef char *dtp_phy_addr_t;
+#define DTP_PHY_ADDR_ENV	"DTP_PHY_ADDR_STR"
 
 typedef char *dtp_string_t;
 typedef const char *dtp_const_string_t;
@@ -47,9 +48,9 @@ typedef uuid_t dtp_group_id_t;
 
 /* transport endpoint identifier */
 typedef struct {
-	dtp_group_id_t		dep_grp_id;
-	daos_rank_t		dep_rank;
-	uint32_t		dep_pad; /* pad just to align to 8 bytes */
+	dtp_group_id_t		ep_grp_id;
+	daos_rank_t		ep_rank;
+	uint32_t		ep_pad; /* pad just to align to 8 bytes */
 } dtp_endpoint_t;
 
 typedef uint32_t dtp_opcode_t;
@@ -255,6 +256,28 @@ dtp_finalize(void);
 int
 dtp_progress(dtp_context_t dtp_ctx, unsigned int timeout,
 	     unsigned int *creds, dtp_progress_cond_cb_t cond_cb, void *arg);
+
+/**
+ * Query the caller's rank number within group.
+ *
+ * \param grp_id [IN]           DAOS group id
+ * \param rank[OUT]             result rank number
+ *
+ * \return                      zero on success, negative value if error
+ */
+int
+dtp_group_rank(dtp_group_id_t grp_id, daos_rank_t *rank);
+
+/**
+ * Query number of group members.
+ *
+ * \param grp_id [IN]           DAOS group id
+ * \param size[OUT]             result size (total number of ranks) of the group
+ *
+ * \return                      zero on success, negative value if error
+ */
+int
+dtp_group_size(dtp_group_id_t grp_id, uint32_t *size);
 
 /**
  * Create a RPC request.
@@ -663,6 +686,17 @@ dtp_proc_dtp_string_t(dtp_proc_t proc, dtp_string_t *data);
  */
 int
 dtp_proc_dtp_const_string_t(dtp_proc_t proc, dtp_const_string_t *data);
+
+/**
+ * Generic processing routine.
+ *
+ * \param proc [IN/OUT]         abstract processor object
+ * \param data [IN/OUT]         pointer to data
+ *
+ * \return                      zero on success, negative value if error
+ */
+int
+dtp_proc_uuid_t(dtp_proc_t proc, void *data);
 
 /*****************************************************************************
  * Private macros

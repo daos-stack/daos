@@ -46,7 +46,7 @@ if env['PLATFORM'] == 'darwin':
 	env['SHLIBSUFFIX'] = '.so'
 
 # Compiler options
-env.Append(CCFLAGS = ['-g', '-Wall', '-D_GNU_SOURCE', '-fpic'])
+env.Append(CCFLAGS = ['-g', '-Wall', '-fpic', '-D_GNU_SOURCE'])
 env.Append(CCFLAGS = ['-O2'])
 
 # All libraries will be installed under build/lib
