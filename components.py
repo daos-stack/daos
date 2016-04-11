@@ -36,6 +36,25 @@ REQS.define('bmi',
             retriever=GitRepoRetriever('http://git.mcs.anl.gov/bmi.git'),
             commands=BMI_BUILD, libs=['bmi'])
 
+CCI_BUILD = ['./autogen.pl']
+CCI_REQUIRED = []
+if REQS.get_env('PLATFORM') == 'darwin':
+    CCI_BUILD.append('./configure --prefix=$CCI_PREFIX')
+else:
+    CCI_BUILD.append('./configure --with-verbs --prefix=$CCI_PREFIX')
+    CCI_REQUIRED += ['librdmacm']
+CCI_LIB = 'libcci$SHLIBSUFFIX'
+
+CCI_BUILD += ['make', 'make install']
+RETRIEVER = GitRepoRetriever('https://github.com/CCI/cci')
+REQS.define('cci',
+            retriever=RETRIEVER,
+            commands=CCI_BUILD,
+            required_libs=CCI_REQUIRED,
+            headers=['cci.h'],
+            libs=["cci"])
+
+
 REQS.define('openpa',
             retriever=GitRepoRetriever( \
             'http://git.mcs.anl.gov/radix/openpa.git'),
@@ -52,16 +71,19 @@ REQS.define('mercury',
                       '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ ' \
                       '-DBMI_LIBRARY=$BMI_PREFIX/lib/%s ' \
                       '-DBMI_INCLUDE_DIR=$BMI_PREFIX/include/ ' \
+                      '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s ' \
+                      '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ ' \
                       '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX ' \
                       '-DBUILD_EXAMPLES=ON ' \
                       '-DMERCURY_BUILD_HL_LIB=ON ' \
                       '-DMERCURY_USE_BOOST_PP=ON ' \
                       '-DNA_USE_BMI=ON -DBUILD_TESTING=ON ' \
+                      '-DNA_USE_CCI=ON ' \
                       '-DBUILD_DOCUMENTATION=OFF ' \
                       '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC'
-                      % BMI_LIB, 'make', 'make install'],
+                      % (BMI_LIB, CCI_LIB), 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
-            requires=['bmi', 'openpa', 'boost'] + RT,
+            requires=['bmi', 'openpa', 'boost', 'cci'] + RT,
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
