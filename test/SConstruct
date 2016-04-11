@@ -1,5 +1,6 @@
 """Tests that we can build from prebuilt components"""
-import sys, os
+import sys
+import os
 sys.path.insert(0, "..")
 from prereq_tools import PreReqComponent
 

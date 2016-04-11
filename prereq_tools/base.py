@@ -506,7 +506,6 @@ class PreReqComponent(object):
         self.__prebuilt_path[name] = prebuilt
         return prebuilt
 
-# pylint: disable=star-args
     def get_prefixes(self, name, prebuilt_path):
         """Get the location of the scons prefix as well as the external
            component prefix."""
@@ -523,7 +522,6 @@ class PreReqComponent(object):
             return (target_prefix, prefix)
         self.replace_env(**{'%s_PREFIX' % name.upper(): prefix})
         return (prefix, prefix)
-# pylint: enable=star-args
 
     def get_src_path(self, name):
         """Get the location of the sources for an external component"""
@@ -751,7 +749,7 @@ class _Component(object):
 
     def create_links(self, source):
         """Create symbolic links to real targets in $PREFIX"""
-        if self.retriever == None:
+        if self.retriever is None:
             #Don't do this for installed components
             return
         if source == self.prefix:

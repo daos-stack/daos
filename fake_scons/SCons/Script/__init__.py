@@ -233,7 +233,7 @@ def AddOption(*args, **kw):
 
 def GetOption(*args, **kw):
     """Fake GetOption"""
-    return True
+    return []
 
 def SetOption(*args, **kw):
     """Fake SetOption"""

@@ -1,5 +1,6 @@
 """Tests that we can define a new component and build from it"""
-import sys, os
+import sys
+import os
 sys.path.insert(0, "..")
 from prereq_tools import PreReqComponent
 from prereq_tools import GitRepoRetriever
