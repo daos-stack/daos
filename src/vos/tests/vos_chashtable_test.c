@@ -260,6 +260,8 @@ main(int argc, char *argv[])
 		ret = test_single_thread_ops(pop, bucket_size, num_keys);
 	else
 		ret = test_multithreaded_ops(pop, bucket_size,
-					       num_keys, num_threads);
+					     num_keys, num_threads);
+
+	remove(argv[1]);
 	return ret;
 }

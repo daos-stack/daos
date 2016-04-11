@@ -19,7 +19,7 @@
  */
 /**
  * Layout definition for VOS root object
- * vos/include/vos_internal.h
+ * vos/vos_internal.h
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
@@ -107,36 +107,79 @@ int  vos_obj_cache_create(struct vos_obj_cache **occ_p);
 void vos_obj_cache_destroy(struct vos_obj_cache *occ);
 
 /**
- * VOS pool handle
+ * VOS pool handle (DRAM)
  */
-struct vos_pool {
-	struct daos_hlink	vpool_hlink;
-	PMEMobjpool		*ph;
-	char			*path;
+struct vp_hdl {
+	/* handle hash link for the vos pool */
+	struct daos_hlink	vp_hlink;
+	/* Pointer to PMEMobjpool */
+	PMEMobjpool		*vp_ph;
+	/* Path to PMEM file */
+	char			*vp_fpath;
 };
 
-struct vos_co_hdl {
-	struct daos_hlink        co_hdl_hlink;
-	PMEMobjpool		*ph;
-	uuid_t			 vc_co_id;
-	struct vos_object_table	*obj_table;
-	struct vos_epoch_table	*epoch_table;
+/**
+ * VOS container handle (DRAM)
+ */
+struct vc_hdl {
+	/* VOS container handle hash link */
+	struct daos_hlink	vc_hlink;
+	/* VOS PMEMobjpool pointer */
+	PMEMobjpool		*vc_ph;
+	/* Unique UID of VOS container */
+	uuid_t			vc_id;
+	/* Direct pointer to VOS object index
+	 * within container
+	 */
+	struct vos_object_index	*vc_obj_table;
+	/* Direct pointer to VOS epoch index
+	 * within container
+	 */
+	struct vos_epoch_index	*vc_epoch_table;
 };
 
-/*
- * Handle hash globals
- **/
+/**
+ * Global Handle Hash
+ * Across all VOS handles
+ */
 struct daos_hhash	*daos_vos_hhash;
 
+/**
+ * Create a handle hash
+ * Created once across all threads all
+ * handles
+ */
 int
 vos_create_hhash(void);
 
-struct vos_pool*
+/**
+ * Lookup VOS pool handle
+ *
+ * \param poh	[IN]	VOS pool handle
+ *
+ * \return		vos_pool handle of type
+ *			struct vp_hdl or NULL
+ *
+ */
+struct vp_hdl*
 vos_pool_lookup_handle(daos_handle_t poh);
 
-/* Not yet implemented */
+/**
+ * Decrement reference count
+ *
+ * \param vpool	[IN]	VOS pool handle
+ */
+void
+vos_pool_putref_handle(struct vp_hdl *vpool);
+
+/**
+ * Lookup VOS container handle
+ *
+ * \param coh	[IN]	VOS container handle
+ *
+ * TODO: Not yet implemented
+ */
 struct vos_pool*
 vos_co_lookup_handle(daos_handle_t poh);
-
 
 #endif

@@ -19,7 +19,7 @@
  */
 /**
  * Layout definition for VOS root object
- * vos/include/vos_layout.h
+ * vos/vos_layout.h
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
@@ -37,10 +37,10 @@
  * B-Tree for Key Value stores
  * EV-Tree for Byte array stores
  */
-struct vos_container_table;
+struct vos_container_index;
 struct vos_container;
-struct vos_object_table;
-struct vos_epoch_table;
+struct vos_object_index;
+struct vos_epoch_index;
 struct vos_kv_index;
 struct vos_ba_index;
 struct vos_obj;
@@ -57,10 +57,10 @@ struct vos_obj;
  */
 POBJ_LAYOUT_BEGIN(vos_pool_layout);
 POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_root);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container_table);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_object_table);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_epoch_table);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_object_index);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_epoch_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_kv_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_ba_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj);
@@ -76,22 +76,22 @@ struct vos_pool_root {
 	/* Flags for incompatibility features */
 	uint64_t				vpr_incompat_flags;
 	/* Typed PMEMoid pointer for the container index table */
-	TOID(struct vos_container_table)	vpr_ci_table;
+	TOID(struct vos_container_index)	vpr_ci_table;
 	/* Pool info of objects, containers, space availability */
 	vos_pool_info_t				vpr_pool_info;
 };
 
-struct vos_container_table {
+struct vos_container_index {
 	TOID(struct vos_chash_table) chtable;
 	/* More items to be added*/
 };
 
-struct vos_object_table {
+struct vos_object_index {
 	TOID(struct vos_chash_table) obtable;
 	/* More items to be added*/
 };
 
-struct vos_epoch_table {
+struct vos_epoch_index {
 	TOID(struct vos_chash_table) ehtable;
 	/* More items to be added*/
 };
@@ -100,8 +100,8 @@ struct vos_epoch_table {
 struct vos_container {
 	uuid_t				vc_id;
 	vos_co_info_t			vc_info;
-	TOID(struct vos_object_table)	vc_obtable;
-	TOID(struct vos_epoch_table)	vc_ehtable;
+	TOID(struct vos_object_index)	vc_obtable;
+	TOID(struct vos_epoch_index)	vc_ehtable;
 };
 
 #endif

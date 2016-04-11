@@ -119,27 +119,27 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev);
  * \param poh	[IN]	Pool open handle
  * \param co_uuid
  *		[IN]	UUID for the new container
- * \param coh	[OUT]	Returned container handle
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
-	      daos_event_t *ev);
+vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev);
 
 /**
  * Destroy a container
  *
- * \param coh	[IN]	Container open handle
+ * \param poh	[IN]	Pool open handle
+ * \param co_uuid
+ *		[IN]	UUID for the container to be destroyed
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_destroy(daos_handle_t coh, daos_event_t *ev);
+vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev);
 
 /**
  * Open a container within a VOSP

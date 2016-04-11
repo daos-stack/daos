@@ -96,6 +96,6 @@ main(int argc, char **argv)
 	}
 
 
-
+	remove(file);
 	return 0;
 }

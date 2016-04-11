@@ -19,7 +19,7 @@
  */
 /**
  * Multithreaded Hash-Table based on jump consistent hashing
- *
+ * vos/vos_chash_table.c
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */

@@ -18,8 +18,8 @@
  * (C) Copyright 2016 Intel Corporation.
  */
 /**
- * Layout definition for VOS root object
- * vos/include/vos_internal.h
+ * Common internal functions for VOS
+ * vos/vos_common.c
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
@@ -51,17 +51,28 @@ vos_create_hhash(void)
 	return ret;
 }
 
-struct vos_pool*
+struct vp_hdl*
 vos_pool_lookup_handle(daos_handle_t poh)
 {
-	struct vos_pool		*vpool = NULL;
+	struct vp_hdl		*vpool = NULL;
 	struct daos_hlink	*hlink = NULL;
 
 	hlink = daos_hhash_link_lookup(daos_vos_hhash, poh.cookie);
-	if (NULL == hlink)
+	if (!hlink)
 		D_ERROR("VOS pool handle lookup error\n");
 	else
-		vpool = container_of(hlink, struct vos_pool,
-				     vpool_hlink);
+		vpool = container_of(hlink, struct vp_hdl,
+				     vp_hlink);
 	return vpool;
+}
+
+void
+vos_pool_putref_handle(struct vp_hdl *vpool)
+{
+	if (!vpool) {
+		D_ERROR("Empty handle error\n");
+		return;
+	}
+	daos_hhash_link_putref(daos_vos_hhash,
+			       &vpool->vp_hlink);
 }

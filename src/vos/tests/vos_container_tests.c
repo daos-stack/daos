@@ -18,8 +18,8 @@
  * (C) Copyright 2016 Intel Corporation.
  */
 /**
- * Test for pool creation and destroy.
- * vos/tests/vos_pool_tests.c
+ * Test for container creation and destroy.
+ * vos/tests/vos_container_tests.c
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
@@ -28,8 +28,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <daos_srv/vos.h>
 #include <inttypes.h>
+#include <daos_srv/vos.h>
+#include <daos/daos_common.h>
 
 #define POOL_SIZE 10737418240ULL
 
@@ -51,8 +52,8 @@ main(int argc, char **argv) {
 
 	int rc = 0;
 	char *file = NULL;
-	daos_handle_t vph, coh, coh_new;
-	uuid_t pool_uuid, container_uuid;
+	daos_handle_t vph, coh;
+	uuid_t pool_uuid, container_uuid1, container_uuid2;
 	vos_co_info_t cinfo;
 
 	if (argc < 2) {
@@ -71,62 +72,62 @@ main(int argc, char **argv) {
 	if (rc) {
 		fprintf(stderr, "vpool create failed with error : %d", rc);
 		return rc;
-	} else {
-		fprintf(stdout, "Success creating pool at %s\n", file);
 	}
+	fprintf(stdout, "Success creating pool at %s\n", file);
 
-	uuid_generate_time_safe(container_uuid);
-	rc = vos_co_create(vph, container_uuid, &coh, NULL);
+	uuid_generate_time_safe(container_uuid1);
+	rc = vos_co_create(vph, container_uuid1, NULL);
 	if (rc) {
-		fprintf(stderr, "vos container creation error\n");
+		fprintf(stderr, "vos container 1 creation error\n");
 		return rc;
-	} else {
-		fprintf(stdout, "Success creating container at %s\n", file);
 	}
+	fprintf(stdout, "Success creating container 1 at %s\n", file);
 
-	uuid_generate_time_safe(container_uuid);
-	rc = vos_co_create(vph, container_uuid, &coh_new, NULL);
+	uuid_generate_time_safe(container_uuid2);
+	rc = vos_co_create(vph, container_uuid2, NULL);
 	if (rc) {
-		fprintf(stderr, "vos container creation error\n");
+		fprintf(stderr, "vos container 2 creation  error\n");
 		return rc;
-	} else {
-		fprintf(stdout, "Success creating container at %s\n", file);
 	}
+	fprintf(stdout, "Success creating container 2 at %s\n", file);
 
-
-	rc = vos_co_close(coh, NULL);
+	rc = vos_co_open(vph, container_uuid1, &coh, NULL);
 	if (rc) {
-		fprintf(stderr, "vos container close error\n");
+		fprintf(stderr, "vos container 1 open error\n");
 		return rc;
-	} else {
-		fprintf(stdout, "Success closing container at %s\n", file);
 	}
-
-	rc = vos_co_open(vph, container_uuid, &coh, NULL);
-	if (rc) {
-		fprintf(stderr, "vos container open error\n");
-		return rc;
-	} else {
-		fprintf(stdout, "Success opening container at %s\n", file);
-	}
+	fprintf(stdout, "Success opening container 2 at %s\n", file);
 
 	rc = vos_co_query(coh, &cinfo, NULL);
 	if (rc) {
 		fprintf(stderr, "vos container query error\n");
 		return rc;
-	} else {
-		fprintf(stdout, "Success destroying query\n");
-		fprintf(stdout, "Num Objects: %u\n", cinfo.pci_nobjs);
-		fprintf(stdout, "Used Space : %"PRIu64"\n", cinfo.pci_used);
 	}
+	fprintf(stdout, "Success querying the container\n");
+	fprintf(stdout, "Num Objects: %u\n", cinfo.pci_nobjs);
+	fprintf(stdout, "Used Space : "DF_U64"\n", cinfo.pci_used);
 
-	rc = vos_co_destroy(coh, NULL);
+	rc = vos_co_close(coh, NULL);
 	if (rc) {
-		fprintf(stderr, "vos container destroy error\n");
+		fprintf(stderr, "vos container 1 close error\n");
 		return rc;
-	} else {
-		fprintf(stdout, "Success destroying container at %s\n", file);
 	}
+	fprintf(stdout, "Success closing container 2 at %s\n", file);
 
+	rc = vos_co_destroy(vph, container_uuid2, NULL);
+	if (rc) {
+		fprintf(stderr, "vos container 2 destroy error\n");
+		return rc;
+	}
+	fprintf(stdout, "Success destroying container 2 at %s\n", file);
+
+	rc = vos_co_destroy(vph, container_uuid1, NULL);
+	if (rc) {
+		fprintf(stderr, "vos container 1 destroy error\n");
+		return rc;
+	}
+	fprintf(stdout, "Success destroying container 1 at %s\n", file);
+
+	remove(file);
 	return rc;
 }

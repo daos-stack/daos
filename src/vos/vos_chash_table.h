@@ -19,7 +19,7 @@
  */
 /**
  * Hash-Table based on jump consistent hashing
- *
+ * vos/vos_chash_table.h
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
