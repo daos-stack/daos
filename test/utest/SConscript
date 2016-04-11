@@ -1,0 +1,17 @@
+"""Test unit test builders"""
+Import('ENV')
+
+TEST = str(GetOption("test_name"))
+
+ENV.Append(CCFLAGS=["-g"])
+if TEST.startswith("no"):
+    TEST = TEST.replace("no", "", 1)
+    ENV.Append(CPPDEFINES=["-DNEGATIVE_TEST"])
+
+if TEST == "race":
+    ENV.Append(LIBS=["pthread"])
+TESTS = ENV.Program("%s.c"%TEST)
+
+RUN_TESTS = ENV.RunTests(TESTS)
+
+AlwaysBuild(RUN_TESTS)

@@ -8,17 +8,20 @@
 # pylint: disable=bare-except
 # pylint: disable=exec-used
 # pylint: disable=bad-builtin
+
 import os
 import traceback
 import hashlib
 import subprocess
 import socket
 import tarfile
+import re
 from SCons.Variables import PathVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import Configure
 from SCons.Script import AddOption
+from SCons.Script import Builder
 
 class NotInitialized(Exception):
     """Exception raised when classes used before initialization
@@ -235,6 +238,94 @@ class Runner(object):
 
 RUNNER = Runner()
 
+def check_test(target, source, env, mode):
+    """Check the results of the test"""
+    error_str = ""
+    with open(target[0].path, "r") as fobj:
+        for line in fobj.readlines():
+            if re.search("FAILED", line):
+                error_str = """
+Please see %s for the errors and fix
+the issues causing the TESTS to fail.
+"""%target[0].path
+                break
+        fobj.close()
+    if mode == "memcheck" or mode == "helgrind":
+        from xml.etree import ElementTree
+        for fname in target:
+            if str(fname).endswith(".xml"):
+                with open(str(fname), "r") as xmlfile:
+                    tree = ElementTree.parse(xmlfile)
+                error_types = {}
+                for node in tree.iter('error'):
+                    kind = node.find('./kind')
+                    if not kind.text in error_types:
+                        error_types[kind.text] = 0
+                    error_types[kind.text] += 1
+                if error_types:
+                    error_str += """
+Valgrind %s check failed.  See %s:"""%(mode, str(fname))
+                    for err in sorted(error_types.keys()):
+                        error_str += "\n%-3d %s errors"%(error_types[err],
+                                                         err)
+    if error_str:
+        return """
+#########################################################
+Libraries built successfully but some unit TESTS failed.
+%s
+#########################################################
+"""%error_str
+    return None
+
+def define_check_test(mode=None):
+    """Define a function to create test checker"""
+    return lambda target, source, env: check_test(target, source, env, mode)
+
+def run_test(source, target, env, for_signature, mode=None):
+    """Create test actions."""
+    count = 1
+    action = ['touch %s'%target[0]]
+    for test in source:
+        valgrind_str = ""
+        if mode == "memcheck":
+            #Memory analysis
+            valgrind_str = "valgrind --leak-check=full " \
+                           "--xml=yes --xml-file=%s "%target[count]
+        elif mode == "helgrind":
+            #Thread analysis
+            valgrind_str = "valgrind --tool=helgrind " \
+                           "--xml=yes --xml-file=%s "%target[count]
+        count += 1
+        action.append("%s%s >> %s"%(valgrind_str,
+                                    str(test),
+                                    target[0]))
+    action.append("cat %s"%target[0])
+    action.append(define_check_test(mode=mode))
+    return action
+
+def modify_targets(target, source, env, mode=None):
+    """Emit the target list for the unit test builder"""
+    target = ["test_output"]
+    if mode == "memcheck" or mode == "helgrind":
+        for src in source:
+            basename = os.path.basename(str(src))
+            xml = "%s-%s.xml"%(mode, basename)
+            target.append(xml)
+    return target, source
+
+def define_run_test(mode=None):
+    """Define a function to create test actions"""
+    return lambda source, target, env, for_signature: run_test(source,
+                                                               target,
+                                                               env,
+                                                               for_signature,
+                                                               mode)
+
+def define_modify_targets(mode=None):
+    """Define a function to create test targets"""
+    return lambda target, source, env: modify_targets(target, source,
+                                                      env, mode)
+
 class GitRepoRetriever(object):
     """Identify a git repository from which to download sources"""
 
@@ -363,6 +454,7 @@ class PreReqComponent(object):
                   default='no',
                   help="Automatically download and build sources")
 
+        self.__setup_unit_test_builders()
         self.__update = GetOption('update_prereq')
         self.__link = not GetOption('no_prereq_links')
         self.download_deps = False
@@ -401,6 +493,22 @@ class PreReqComponent(object):
         self.setup_path_var('PREBUILT_PREFIX', True)
         self.setup_path_var('TARGET_PREFIX')
         self.setup_path_var('SRC_PREFIX', True)
+
+    def __setup_unit_test_builders(self):
+        """Setup unit test builders for general use"""
+        AddOption('--utest-mode',
+                  dest='utest_mode',
+                  type='choice',
+                  choices=['native', 'memcheck', 'helgrind'],
+                  default='native',
+                  help="Specifies mode for running unit tests")
+
+        mode = GetOption("utest_mode")
+        test_run = Builder(generator=define_run_test(mode),
+                           emitter=define_modify_targets(mode))
+
+        self.__env.Append(BUILDERS={"RunTests" : test_run})
+
 
     def __parse_build_deps(self):
         """Parse the build dependances command line flag"""

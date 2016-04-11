@@ -13,6 +13,18 @@ class DefaultEnvironment(object):
     def __init__(self):
         pass
 
+    def RunTests(self, *args, **kw):
+        """Fake tests builder (defined by prereq_tools)"""
+        return []
+
+    def RunMemcheckTests(self, *args, **kw):
+        """Fake tests builder (defined by prereq_tools)"""
+        return []
+
+    def RunHelgrindTests(self, *args, **kw):
+        """Fake tests builder (defined by prereq_tools)"""
+        return []
+
     def CFile(self, *args, **kw):
         """Fake CFile"""
         return []

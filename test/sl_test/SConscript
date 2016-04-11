@@ -14,7 +14,6 @@ def run_test(env, *tests):
     prog = cloned_env.Program(target=target_name,
                               source=Glob('test.c'),
                               OBJPREFIX=target_name)
-    Default(prog)
     return prog
 
 PROGS = []
@@ -28,6 +27,5 @@ PROGS += run_test(ENV, 'hwloc2', 'sl_project3')
 PROGS += run_test(ENV, 'openpa', 'hwloc')
 PROGS += run_test(ENV, 'sl_project4', 'openpa2')
 
-# Once unit tests are available, we can actually test that we can run the tests
-# ENV.RunTests(PROGS)
-# AlwaysBuild(PROGS)
+TESTS = ENV.RunTests(PROGS)
+AlwaysBuild(TESTS)

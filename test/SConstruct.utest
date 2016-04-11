@@ -1,0 +1,25 @@
+"""Tests that we can build from prebuilt components"""
+import sys
+sys.path.insert(0, "../")
+from prereq_tools import PreReqComponent
+
+ENV = DefaultEnvironment()
+OPTS = Variables()
+PREREQS = PreReqComponent(ENV, OPTS)
+
+AddOption('--test-name',
+          dest='test_name',
+          type='string',
+          nargs=1,
+          action='store',
+          default="leak",
+          metavar='TEST',
+          help='TEST to run')
+
+VariantDir('build', '.', duplicate=0)
+
+SConscript('build/utest/SConscript', exports=["ENV"])
+
+Default('utest')
+
+Help(OPTS.GenerateHelpText(ENV))

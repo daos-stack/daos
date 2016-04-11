@@ -1,3 +1,4 @@
+RUNTIME OPTIONS OVERVIEW
 Overview of runtime options added by prerequisite components
 
 Option                             Description
@@ -68,3 +69,27 @@ SRC_PREFIX=<path>[:<path>...]      If set, the directories will be
                                    source.  If the location
                                    doesn't exist, the build will
                                    fail with an error.
+
+UNIT TESTING OVERVIEW
+Overview of unit testing capabilities added by prereq_tools
+When using prereq_tools, 3 new builders get added to your default environment.
+RunTests - Takes a list of scons-built programs and runs them flagging a
+           failure if any of them return a non-zero exit code
+RunMemcheckTests - Takes a list of scons-built programs and runs them with
+                   Valgrind memcheck, flagging a failure if any of them return
+                   a non-zero exit code or if any errors are detected.
+RunHelgrindTests - Takes a list of scons-built programs and runs them with
+                   Valgrind helgrind, flagging a failure if any of them return
+                   a non-zero exit code or if any errors are detected.
+
+Example:
+TESTS = ENV.Program("test1.c") + ENV.Program("test2.c")
+RUN_TESTS = ENV.RunTests(TESTS)
+# If the directory (e.g. utest) is specified on the command line,
+# this will force it to actually run the tests even if the files
+# have not changed.
+AlwaysBuild(RUN_TESTS)
+
+Jenkins:
+If configuring Jenkins to find memcheck results, add **/memcheck-*.xml to your
+Jenkins configuration.

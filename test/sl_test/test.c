@@ -53,4 +53,5 @@ int main(void)
 	call_sl4();
 	call_hwloc();
 	call_openpa();
+	return 0;
 }

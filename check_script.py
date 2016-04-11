@@ -151,7 +151,9 @@ if ARGS.self_check:
                  "-d", "no-self-use")
     print "Checking prereq_tools"
     check_script("prereq_tools",
-                 "-d", "star-args")
+                 "-d", "star-args",
+                 "-d", "too-many-lines",
+                 "-d", "unused-argument")
     print "Checking check_script.py"
     check_script("check_script.py")
 

@@ -68,4 +68,6 @@ PREREQS.define('openpa2',
 VariantDir('build', '.', duplicate=0)
 SConscript('build/sl_test/SConscript', exports=['ENV', 'PREREQS'])
 
+Default('sl_test')
+
 Help(OPTS.GenerateHelpText(ENV))
