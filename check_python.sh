@@ -1,6 +1,6 @@
 #!/bin/sh
 
-SCRIPT_DIR=$(dirname $(readlink -f $0))
+SCRIPT_DIR=$(dirname $0)
 export PYTHONPATH=$SCRIPT_DIR:$SCRIPT_DIR/fake_scons:$PYTHONPATH
 rm -f pylint.log
 
