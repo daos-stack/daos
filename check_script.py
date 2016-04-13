@@ -108,7 +108,7 @@ def parse_report():
         for line in log.readlines():
             if re.search("rated", line):
                 sys.stdout.write(line)
-            if re.search("^[WEC]:", line):
+            if re.search("^[WECR]:", line):
                 sys.stdout.write(line)
             pylint.write(line)
     pylint.close()

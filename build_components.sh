@@ -12,7 +12,7 @@ ${CORAL_ARTIFACTS}/${JOB_NAME}/${BUILD_NUMBER} SRC_PREFIX=../"
 fi
 
 /bin/rm -f *.conf
-scons $option --config=force --update-prereq=all $*
+scons $option --config=force --update-prereq=all --build-deps=yes $*
 
 if [ -n "$WORKSPACE" ]; then
 if [ -z "$JOB_LOC" ]; then

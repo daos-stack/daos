@@ -175,6 +175,36 @@ class MissingSystemLibs(Exception):
         """ Exception string """
         return "%s has unmet dependancies required for build"%(self.component)
 
+class DownloadRequired(Exception):
+    """Exception raised when component is missing but downloads aren't enabled
+
+    Attributes:
+        component    -- component that is missing
+    """
+
+    def __init__(self, component):
+        super(DownloadRequired, self).__init__()
+        self.component = component
+
+    def __str__(self):
+        """ Exception string """
+        return "%s needs to be built, use --build-deps=yes"%(self.component)
+
+class BuildRequired(Exception):
+    """Exception raised when component is missing but builds aren't enabled
+
+    Attributes:
+        component    -- component that is missing
+    """
+
+    def __init__(self, component):
+        super(BuildRequired, self).__init__()
+        self.component = component
+
+    def __str__(self):
+        """ Exception string """
+        return "%s needs to be built, use --build-deps=yes"%(self.component)
+
 class Runner(object):
     """Runs commands in a specified environment"""
     def __init__(self):
@@ -322,8 +352,22 @@ class PreReqComponent(object):
                   metavar='COMPONENT',
                   help='Force an update of a prerequisite COMPONENT.  Use '
                        '\'all\' to update all components')
+
+        # There is another case here which isn't handled, we want Jenkins builds
+        # to download tar packages but not git source code.  For now just have a
+        # single flag and set this for the Jenkins builds which need this.
+        AddOption('--build-deps',
+                  dest='build_deps',
+                  type='choice',
+                  choices=['yes', 'no', 'build-only'],
+                  default='no',
+                  help="Automatically download and build sources")
+
         self.__update = GetOption('update_prereq')
         self.__link = not GetOption('no_prereq_links')
+        self.download_deps = False
+        self.build_deps = False
+        self.__parse_build_deps()
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
 
@@ -357,6 +401,21 @@ class PreReqComponent(object):
         self.setup_path_var('PREBUILT_PREFIX', True)
         self.setup_path_var('TARGET_PREFIX')
         self.setup_path_var('SRC_PREFIX', True)
+
+    def __parse_build_deps(self):
+        """Parse the build dependances command line flag"""
+        build_deps = GetOption('build_deps')
+        if build_deps == 'yes':
+            self.download_deps = True
+            self.build_deps = True
+        elif build_deps == 'build-only':
+            self.build_deps = True
+
+        # If the --update-prereq option is given then it is OK to build
+        # code but not to download it unless --build-deps=yes is also
+        # given.
+        if self.__update:
+            self.build_deps = True
 
     def should_create_links(self):
         """Return true if links should be created"""
@@ -655,6 +714,9 @@ class _Component(object):
 
         # Source code is retrieved using retriever
 
+        if not self.prereqs.download_deps:
+            raise DownloadRequired(self.name)
+
         print 'Downloading source for %s' % self.name
         if os.path.exists(self.crc_file):
             os.unlink(self.crc_file)
@@ -830,6 +892,9 @@ class _Component(object):
         if changes or has_changes \
             or self.has_missing_targets(envcopy):
 
+            if not self.prereqs.build_deps:
+                raise BuildRequired(self.name)
+
             if self.has_missing_system_deps(self.prereqs.system_env):
                 raise MissingSystemLibs(self.name)
 
@@ -857,5 +922,6 @@ __all__ = ["GitRepoRetriever", "WebRetriever",
            "UnsupportedCompression", "BadScript",
            "MissingPath", "BuildFailure",
            "MissingDefinition", "MissingTargets",
-           "MissingSystemLibs"
+           "MissingSystemLibs", "DownloadRequired",
+           "BuildRequired"
           ]
