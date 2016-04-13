@@ -67,6 +67,8 @@ typedef enum {
 	DER_BUSY		= (DER_ERR_BASE + 17),
 	/** Try again */
 	DER_AGAIN		= (DER_ERR_BASE + 18),
+	/** incompatible protocol */
+	DER_PROTO		= (DER_ERR_BASE + 19),
 	/** epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** epoch is too old, all data have been recycled */

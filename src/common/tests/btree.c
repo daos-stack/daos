@@ -171,7 +171,7 @@ ik_rec_string(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 ik_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	       daos_iov_t *val_iov)
+	       daos_iov_t *key, daos_iov_t *val_iov)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct ik_rec		*irec;
@@ -214,6 +214,7 @@ static btr_ops_t ik_ops = {
 static int ik_order = IK_ORDER_DEF;
 
 static TMMID(struct btr_root)	ik_root_mmid;
+static struct btr_root		ik_root;
 static daos_handle_t		ik_toh;
 
 #define IK_SEP		','
@@ -222,6 +223,7 @@ static daos_handle_t		ik_toh;
 static int
 ik_btr_open_create(bool create, char *args)
 {
+	bool	inplace = false;
 	int	rc;
 
 	if (!daos_handle_is_inval(ik_toh)) {
@@ -230,6 +232,15 @@ ik_btr_open_create(bool create, char *args)
 	}
 
 	if (create && args != NULL) {
+		if (args[0] == 'i') { /* inplace create/open */
+			inplace = true;
+			if (args[1] != IK_SEP) {
+				D_ERROR("wrong parameter format %s\n", args);
+				return -1;
+			}
+			args += 2;
+		}
+
 		if (args[0] != 'o' || args[1] != IK_SEP_VAL) {
 			D_ERROR("incorrect format for tree order: %s\n", args);
 			return -1;
@@ -242,19 +253,30 @@ ik_btr_open_create(bool create, char *args)
 		}
 
 	} else if (!create) {
-		if (TMMID_IS_NULL(ik_root_mmid)) {
+		inplace = (ik_root.tr_class != 0);
+		if (TMMID_IS_NULL(ik_root_mmid) && !inplace) {
 			D_ERROR("Please create tree first\n");
 			return -1;
 		}
 	}
 
 	if (create) {
-		D_PRINT("Create btree with order %d\n", ik_order);
-		rc = dbtree_create(IK_TREE_CLASS, 0, ik_order, &ik_uma,
-				   &ik_root_mmid, &ik_toh);
+		D_PRINT("Create btree with order %d%s\n",
+			ik_order, inplace ? " inplace" : "");
+		if (inplace) {
+			rc = dbtree_create_inplace(IK_TREE_CLASS, 0, ik_order,
+						   &ik_uma, &ik_root, &ik_toh);
+		} else {
+			rc = dbtree_create(IK_TREE_CLASS, 0, ik_order, &ik_uma,
+					   &ik_root_mmid, &ik_toh);
+		}
 	} else {
-		D_PRINT("Open btree\n");
-		rc = dbtree_open(ik_root_mmid, &ik_uma, &ik_toh);
+		D_PRINT("Open btree%s\n", inplace ? " inplace" : "");
+		if (inplace) {
+			rc = dbtree_open_inplace(&ik_root, &ik_uma, &ik_toh);
+		} else {
+			rc = dbtree_open(ik_root_mmid, &ik_uma, &ik_toh);
+		}
 	}
 	if (rc != 0) {
 		D_ERROR("Tree %s failed: %d\n", create ? "create" : "open", rc);
@@ -413,6 +435,7 @@ main(int argc, char **argv)
 
 	ik_toh = DAOS_HDL_INVAL;
 	ik_root_mmid = TMMID_NULL(struct btr_root);
+	ik_root.tr_class = 0;
 
 	rc = dbtree_class_register(IK_TREE_CLASS, 0, &ik_ops);
 	D_ASSERT(rc == 0);

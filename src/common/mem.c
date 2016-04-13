@@ -34,7 +34,7 @@
 static void *
 pmem_addr(struct umem_instance *umm, umem_id_t ummid)
 {
-	return pmemobj_direct(ummid.oid);
+	return pmemobj_direct(ummid);
 }
 
 static bool
@@ -69,9 +69,10 @@ pmem_tx_add(struct umem_instance *umm, umem_id_t ummid,
 }
 
 int
-pmem_tx_abort(struct umem_instance *umm, int error)
+pmem_tx_abort(struct umem_instance *umm, int err)
 {
 	pmemobj_tx_abort(err);
+	return 0;
 }
 
 static umem_ops_t	pmem_ops = {
@@ -185,7 +186,7 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	umm->umm_ops	= umc->umc_ops;
 	umm->umm_name	= umc->umc_name;
 #if DAOS_HAS_NVML
-	umm->umm_u.pmem_pool = uma->uma->uma_u.pmem_pool;
+	umm->umm_u.pmem_pool = uma->uma_u.pmem_pool;
 #endif
 	return 0;
 }
@@ -198,6 +199,6 @@ umem_attr_get(struct umem_instance *umm, struct umem_attr *uma)
 {
 	uma->uma_id = umm->umm_id;
 #if DAOS_HAS_NVML
-	uma->uma->uma_u.pmem_pool = umm->umm_u.pmem_pool;
+	uma->uma_u.pmem_pool = umm->umm_u.pmem_pool;
 #endif
 }

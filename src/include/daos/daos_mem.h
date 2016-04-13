@@ -42,14 +42,13 @@
  * tmmid	Typedef ummid.
  */
 
-/* XXX */
-#define DAOS_HAS_NVML		0
-
 /************************** NVML MACROS **************************************/
 #if DAOS_HAS_NVML
 
+#include <libpmemobj.h>
+
 /** memory ID without type */
-typedef PMEMoid			umem_id_t
+typedef PMEMoid			umem_id_t;
 #define UMMID_NULL		OID_NULL
 #define UMMID_IS_NULL(ummid)	OID_IS_NULL(ummid)
 
@@ -59,6 +58,8 @@ typedef PMEMoid			umem_id_t
 
 #define TMMID_NULL(t)		TOID_NULL(t)
 #define TMMID_IS_NULL(tmmid)	UMMID_IS_NULL((tmmid).oid)
+
+#define TMMID_TYPE_NUM(t)	TOID_TYPE_NUM(t)
 
 /************************** NON-NVML MACROS **********************************/
 #else /* !DAOS_HAS_NVML */
@@ -157,7 +158,7 @@ struct umem_attr {
 #if DAOS_HAS_NVML
 		PMEMobjpool	*pmem_pool;
 #endif
-	}			 uma_uu;
+	}			 uma_u;
 };
 
 /** instance of an unified memory class */

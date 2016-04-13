@@ -5,3 +5,8 @@ Import('env')
 common = env.SharedLibrary('libdaos_common', Glob('*.c'))
 SConscript('tests/SConscript', exports='env')
 env.Install('#/build/lib/', common)
+
+config = Configure(env)
+if config.CheckLibWithHeader('pmemobj', 'libpmemobj.h', language='C'):
+	env.Append(LIBS=['pmemobj'])
+config.Finish()

@@ -79,6 +79,8 @@ struct btr_node {
 	uint16_t			tn_keyn;
 	/** padding bytes */
 	uint32_t			tn_pad_32;
+	/** generation, reserved for COW */
+	uint64_t			tn_gen;
 	/** the first child, it is unused on leaf node */
 	TMMID(struct btr_node)		tn_child;
 	/** records in this node */
@@ -108,6 +110,8 @@ struct btr_root {
 	uint32_t			tr_class;
 	/** the actual features of the tree, e.g. hash type, integer key */
 	uint64_t			tr_feats;
+	/** generation, reserved for COW */
+	uint64_t			tr_gen;
 	/** pointer to the root node, it is NULL for an empty tree */
 	TMMID(struct btr_node)		tr_node;
 };
@@ -219,7 +223,7 @@ typedef struct {
 	 */
 	int		(*to_rec_update)(struct btr_instance *tins,
 					 struct btr_record *rec,
-					 daos_iov_t *val);
+					 daos_iov_t *key, daos_iov_t *val);
 	/**
 	 * Convert record into readable string and store it in \a buf.
 	 *
@@ -245,8 +249,8 @@ typedef struct {
 	 * The common code will allocate the root and initialise the empty tree.
 	 *
 	 * \param tins	[IN/OUT]
-	 *			Input  : Tree instance which includes memroy
-	 *				 class and customized tree operations. 
+	 *			Input  : Tree instance which includes memory
+	 *				 class and customized tree operations.
 	 *			output : root mmid
 	 * \param feats	[IN]	Feature bits of this true.
 	 * \param order	[IN]	Order of the tree.
@@ -263,6 +267,14 @@ typedef struct {
 	 * \param tins	[IN]	Tree instance to be destroyed.
 	 */
 	void		(*to_root_free)(struct btr_instance *tins);
+	/**
+	 * Optional:
+	 * Add tree root to current transaction.
+	 *
+	 * \param tins	[IN]	Tree instance which contains the root mmid,
+	 *			root address and memory class etc.
+	 */
+	int		(*to_root_tx_add)(struct btr_instance *tins);
 	/**
 	 * Optional:
 	 * Allocate tree node from internal cache.
@@ -297,16 +309,28 @@ typedef struct {
 	 */
 	void		(*to_node_free)(struct btr_instance *tins,
 					TMMID(struct btr_node) nd_mmid);
+	/**
+	 * Optional: add \a nd_mmid to the current transaction.
+	 *
+	 * \param tins	[IN]	Tree instance which contains the root mmid
+	 *			and memory class etc.
+	 * \param nd_mmid [IN]
+	 *			Node mmid to be added to transaction.
+	 */
+	int		(*to_node_tx_add)(struct btr_instance *tins,
+					  TMMID(struct btr_node) nd_mmid);
 } btr_ops_t;
 
 /**
  * Tree instance, it is instantiated while creating or opening a tree.
  */
 struct btr_instance {
-	/** root mmid */
-	TMMID(struct btr_root)		 ti_root;
 	/** instance of memory class for the tree */
 	struct umem_instance		 ti_umm;
+	/** root mmid */
+	TMMID(struct btr_root)		 ti_root_mmid;
+	/** root pointer */
+	struct btr_root			*ti_root;
 	/** Customized operations for the tree */
 	btr_ops_t			*ti_ops;
 };
@@ -318,8 +342,13 @@ int  dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 		   unsigned int tree_order, struct umem_attr *uma,
 		   TMMID(struct btr_root) *root_tmmid_p,
 		   daos_handle_t *toh);
-int  dbtree_open(TMMID(struct btr_root) root_oid,
-		 struct umem_attr *uma, daos_handle_t *toh);
+int  dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
+			   unsigned int tree_order, struct umem_attr *uma,
+			   struct btr_root *root, daos_handle_t *toh);
+int  dbtree_open(TMMID(struct btr_root) root_oid, struct umem_attr *uma,
+		 daos_handle_t *toh);
+int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
+			 daos_handle_t *toh);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh);
 int  dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val);

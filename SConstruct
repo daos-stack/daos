@@ -19,6 +19,12 @@ if not config.CheckLib('cgroup'):
 if not config.CheckHeader('mercury.h'):
         config.Finish()
         exit(1)
+
+if config.CheckHeader('libpmemobj.h'):
+	env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
+else:
+	env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '0'})
+
 config.Finish()
 
 # manage build log

@@ -25,6 +25,7 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
+#include <daos/daos_errno.h>
 #include <daos/daos_btree.h>
 
 /**
@@ -111,19 +112,27 @@ struct btr_iterator {
 #define BTR_PRINT_BUF			128
 
 static int btr_class_init(TMMID(struct btr_root) root_mmid,
-			  unsigned int tree_class, uint64_t tree_feats,
-			  struct umem_attr *uma, struct btr_instance *tins);
+			  struct btr_root *root, unsigned int tree_class,
+			  uint64_t tree_feats, struct umem_attr *uma,
+			  struct btr_instance *tins);
 static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 					  TMMID(struct btr_node) nd_mmid,
 					  unsigned int at);
 static int btr_node_insert_rec(struct btr_context *tcx,
 			       struct btr_trace *trace,
 			       struct btr_record *rec);
+static int btr_root_tx_add(struct btr_context *tcx);
 
 static struct umem_instance *
 btr_umm(struct btr_context *tcx)
 {
 	return &tcx->tc_tins.ti_umm;
+}
+
+static bool
+btr_has_tx(struct btr_context *tcx)
+{
+	return umem_has_tx(btr_umm(tcx));
 }
 
 #define btr_mmid2ptr(tcx, mmid)			\
@@ -175,7 +184,7 @@ btr_context_destroy(struct btr_context *tcx)
  * \param tcxp		Returned context.
  */
 static int
-btr_context_create(TMMID(struct btr_root) root_mmid,
+btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 		   unsigned int tree_class, uint64_t tree_feats,
 		   unsigned int tree_order, struct umem_attr *uma,
 		   struct btr_context **tcxp)
@@ -185,23 +194,21 @@ btr_context_create(TMMID(struct btr_root) root_mmid,
 
 	D_ALLOC_PTR(tcx);
 	if (tcx == NULL)
-		return -ENOMEM;
+		return -DER_NOMEM;
 
-	rc = btr_class_init(root_mmid, tree_class, tree_feats, uma,
+	rc = btr_class_init(root_mmid, root, tree_class, tree_feats, uma,
 			    &tcx->tc_tins);
 	if (rc != 0)
 		goto failed;
 
-	if (TMMID_IS_NULL(root_mmid)) { /* root is NULL, tree creation */
+	root = tcx->tc_tins.ti_root;
+	if (root == NULL || root->tr_class == 0) { /* tree creation */
 		tcx->tc_class	= tree_class;
 		tcx->tc_feats	= tree_feats;
 		tcx->tc_order	= tree_order;
 		D_DEBUG(DF_MISC, "Create context for a new tree\n");
 
 	} else {
-		struct btr_root	*root;
-
-		root = btr_mmid2ptr(tcx, root_mmid);
 		tcx->tc_class	= root->tr_class;
 		tcx->tc_feats	= root->tr_feats;
 		tcx->tc_order	= root->tr_order;
@@ -342,9 +349,9 @@ btr_rec_fetch(struct btr_context *tcx, struct btr_record *rec,
 
 static int
 btr_rec_update(struct btr_context *tcx, struct btr_record *rec,
-	       daos_iov_t *val)
+		daos_iov_t *key, daos_iov_t *val)
 {
-	return btr_ops(tcx)->to_rec_update(&tcx->tc_tins, rec, val);
+	return btr_ops(tcx)->to_rec_update(&tcx->tc_tins, rec, key, val);
 }
 
 static char *
@@ -397,7 +404,7 @@ btr_node_alloc(struct btr_context *tcx, TMMID(struct btr_node) *nd_mmid_p)
 		nd_mmid = umem_zalloc_typed(btr_umm(tcx), struct btr_node,
 					    btr_node_size(tcx));
 		if (TMMID_IS_NULL(nd_mmid))
-			return -ENOMEM;
+			return -DER_NOMEM;
 	}
 
 	D_DEBUG(DF_MISC, "Allocate new node "TMMID_PF"\n", TMMID_P(nd_mmid));
@@ -411,13 +418,24 @@ btr_node_alloc(struct btr_context *tcx, TMMID(struct btr_node) *nd_mmid_p)
 static void
 btr_node_free(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid)
 {
-	if (TMMID_IS_NULL(tcx->tc_tins.ti_root))
-		return;
-
 	if (btr_ops(tcx)->to_node_free)
 		btr_ops(tcx)->to_node_free(&tcx->tc_tins, nd_mmid);
 	else
 		umem_free_typed(btr_umm(tcx), nd_mmid);
+}
+
+static int
+btr_node_tx_add(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid)
+{
+	int	rc;
+
+	if (btr_ops(tcx)->to_node_tx_add) {
+		rc = btr_ops(tcx)->to_node_tx_add(&tcx->tc_tins, nd_mmid);
+	} else {
+		rc = umem_tx_add_typed(btr_umm(tcx), nd_mmid,
+				       btr_node_size(tcx));
+	}
+	return rc;
 }
 
 /* helper functions */
@@ -509,15 +527,49 @@ btr_root_free(struct btr_context *tcx)
 {
 	struct btr_instance *tins = &tcx->tc_tins;
 
-	if (TMMID_IS_NULL(tins->ti_root))
-		return;
+	if (TMMID_IS_NULL(tins->ti_root_mmid)) {
+		struct btr_root *root = tins->ti_root;
 
-	if (btr_ops(tcx)->to_root_free)
-		btr_ops(tcx)->to_root_free(tins);
-	else
-		umem_free_typed(btr_umm(tcx), tins->ti_root);
+		if (root == NULL)
+			return;
 
-	tins->ti_root = TMMID_NULL(struct btr_root);
+		D_DEBUG(DF_MISC, "Destroy inplace created tree root\n");
+		if (btr_has_tx(tcx))
+			btr_root_tx_add(tcx);
+
+		memset(root, 0, sizeof(*root));
+	} else {
+		D_DEBUG(DF_MISC, "Destroy tree root\n");
+		if (btr_ops(tcx)->to_root_free)
+			btr_ops(tcx)->to_root_free(tins);
+		else
+			umem_free_typed(btr_umm(tcx), tins->ti_root_mmid);
+	}
+
+	tins->ti_root_mmid = TMMID_NULL(struct btr_root);
+	tins->ti_root = NULL;
+}
+
+static int
+btr_root_init(struct btr_context *tcx, struct btr_root *root)
+{
+	struct btr_instance *tins = &tcx->tc_tins;
+	int		     rc;
+
+	tins->ti_root = root;
+	if (TMMID_IS_NULL(tins->ti_root_mmid) && btr_has_tx(tcx)) {
+		/* externally allocated root and has transaction */
+		rc = btr_root_tx_add(tcx);
+		if (rc != 0)
+			return rc;
+	}
+
+	root->tr_class	= tcx->tc_class;
+	root->tr_feats	= tcx->tc_feats;
+	root->tr_order	= tcx->tc_order;
+	root->tr_node	= BTR_NODE_NULL;
+
+	return 0;
 }
 
 static int
@@ -532,19 +584,33 @@ btr_root_alloc(struct btr_context *tcx)
 						 tcx->tc_order);
 		if (rc != 0)
 			return rc;
+
+		D_ASSERT(!TMMID_IS_NULL(tins->ti_root_mmid));
 	} else {
-		tins->ti_root = umem_znew_typed(btr_umm(tcx), struct btr_root);
-		if (TMMID_IS_NULL(tins->ti_root))
-			return  -ENOMEM;
+		tins->ti_root_mmid = umem_znew_typed(btr_umm(tcx),
+						     struct btr_root);
+		if (TMMID_IS_NULL(tins->ti_root_mmid))
+			return -DER_NOMEM;
 	}
 
-	root = btr_mmid2ptr(tcx, tins->ti_root);
-	root->tr_class	= tcx->tc_class;
-	root->tr_feats	= tcx->tc_feats;
-	root->tr_order	= tcx->tc_order;
-	root->tr_node	= BTR_NODE_NULL;
+	root = btr_mmid2ptr(tcx, tins->ti_root_mmid);
+	return btr_root_init(tcx, root);
+}
 
-	return 0;
+static int
+btr_root_tx_add(struct btr_context *tcx)
+{
+	struct btr_instance	*tins = &tcx->tc_tins;
+	int			 rc = 0;
+
+	if (btr_ops(tcx)->to_root_tx_add) {
+		rc = btr_ops(tcx)->to_root_tx_add(tins);
+
+	} else if (!TMMID_IS_NULL(tins->ti_root_mmid)) {
+		rc = umem_tx_add_mmid_typed(btr_umm(tcx),
+					    tcx->tc_tins.ti_root_mmid);
+	}
+	return rc;
 }
 
 /**
@@ -558,7 +624,7 @@ btr_root_start(struct btr_context *tcx, struct btr_record *rec)
 	TMMID(struct btr_node)	 nd_mmid;
 	int			 rc;
 
-	root = btr_mmid2ptr(tcx, tcx->tc_tins.ti_root);
+	root = tcx->tc_tins.ti_root;
 
 	D_ASSERT(TMMID_IS_NULL(root->tr_node));
 	D_ASSERT(root->tr_depth == 0);
@@ -576,7 +642,9 @@ btr_root_start(struct btr_context *tcx, struct btr_record *rec)
 	rec_dst = btr_node_rec_at(tcx, nd_mmid, 0);
 	memcpy(rec_dst, rec, btr_rec_size(tcx));
 
-	umem_tx_add_mmid_typed(btr_umm(tcx), tcx->tc_tins.ti_root);
+	if (btr_has_tx(tcx))
+		btr_root_tx_add(tcx); /* XXX check error */
+
 	root->tr_node = nd_mmid;
 	root->tr_depth = 1;
 
@@ -604,7 +672,7 @@ btr_root_grow(struct btr_context *tcx, TMMID(struct btr_node) mmid_left,
 	int			 at;
 	int			 rc;
 
-	root = btr_mmid2ptr(tcx, tcx->tc_tins.ti_root);
+	root = tcx->tc_tins.ti_root;
 	D_ASSERT(root->tr_depth != 0);
 
 	D_DEBUG(DF_MISC, "Grow the tree depth to %d\n", root->tr_depth + 1);
@@ -628,7 +696,9 @@ btr_root_grow(struct btr_context *tcx, TMMID(struct btr_node) mmid_left,
 	nd->tn_keyn	= 1;
 
 	/* replace the root mmid, increase tree level */
-	umem_tx_add_mmid_typed(btr_umm(tcx), tcx->tc_tins.ti_root);
+	if (btr_has_tx(tcx))
+		btr_root_tx_add(tcx); /* XXX check error */
+
 	root->tr_node = nd_mmid;
 	root->tr_depth++;
 
@@ -843,7 +913,7 @@ btr_probe_key(struct btr_context *tcx, daos_iov_t *key, char *hkey)
 	memset(&tcx->tc_traces[0], 0,
 	       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
 
-	nd_mmid = btr_mmid2ptr(tcx, tcx->tc_tins.ti_root)->tr_node;
+	nd_mmid = tcx->tc_tins.ti_root->tr_node;
 	if (TMMID_IS_NULL(nd_mmid)) { /* empty tree */
 		D_DEBUG(DF_MISC, "Empty tree\n");
 		return false;
@@ -999,12 +1069,12 @@ dbtree_lookup(daos_handle_t toh, daos_iov_t *key, bool copy,
 
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
-		return -EBADF;
+		return -DER_NO_HDL;
 
 	found = btr_probe_key(tcx, key, NULL);
 	if (!found) {
 		D_DEBUG(DF_MISC, "Cannot find key\n");
-		return -ENOENT;
+		return -DER_NONEXIST;
 	}
 
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
@@ -1028,7 +1098,7 @@ btr_update_only(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 	D_DEBUG(DF_MISC, "Update record %s\n",
 		btr_rec_string(tcx, rec, true, sbuf, BTR_PRINT_BUF));
 
-	rc = btr_rec_update(tcx, rec, val);
+	rc = btr_rec_update(tcx, rec, key, val);
 	if (rc != 0) { /* failed */
 		D_DEBUG(DF_MISC, "Failed to update record: %d\n", rc);
 		return rc;
@@ -1064,11 +1134,11 @@ btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 
 		/* trace for the leaf */
 		trace = &tcx->tc_trace[tcx->tc_depth - 1];
-
 		btr_trace_debug(tcx, trace, "try to insert\n");
 
-		umem_tx_add_typed(btr_umm(tcx), trace->tr_node,
-				  btr_node_size(tcx));
+		if (btr_has_tx(tcx))
+			btr_node_tx_add(tcx, trace->tr_node);
+
 		rc = btr_node_insert_rec(tcx, trace, rec);
 		if (rc != 0) {
 			D_DEBUG(DF_MISC,
@@ -1112,7 +1182,7 @@ btr_tx_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 {
 #if DAOS_HAS_NVML
 	struct umem_instance *umm = btr_umm(tcx);
-	int		      rc;
+	int		      rc = 0;
 
 	TX_BEGIN(umm->umm_u.pmem_pool) {
 		rc = btr_update(tcx, key, val);
@@ -1128,7 +1198,7 @@ btr_tx_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 	return rc;
 #else
 	D_ASSERT(0);
-	return -EPERM;
+	return -DER_NO_PERM;
 #endif
 }
 
@@ -1151,9 +1221,9 @@ dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val)
 
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
-		return -EBADF;
+		return -DER_NO_HDL;
 
-	if (umem_has_tx(btr_umm(tcx)))
+	if (btr_has_tx(tcx))
 		rc = btr_tx_update(tcx, key, val);
 	else
 		rc = btr_update(tcx, key, val);
@@ -1166,7 +1236,7 @@ dbtree_delete(daos_handle_t toh, daos_iov_t *key)
 {
 	/* XXX TODO */
 	D_ASSERT(0);
-	return -EPERM;
+	return -DER_NO_PERM;
 }
 
 static int
@@ -1185,7 +1255,7 @@ btr_tx_tree_alloc(struct btr_context *tcx)
 {
 #if DAOS_HAS_NVML
 	struct umem_instance *umm = btr_umm(tcx);
-	int		      rc;
+	int		      rc = 0;
 
 	TX_BEGIN(umm->umm_u.pmem_pool) {
 		rc = btr_tree_alloc(tcx);
@@ -1201,7 +1271,7 @@ btr_tx_tree_alloc(struct btr_context *tcx)
 	return rc;
 #else
 	D_ASSERT(0);
-	return -EPERM;
+	return -DER_NO_PERM;
 #endif
 }
 
@@ -1226,23 +1296,102 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 	if (tree_order < BTR_ORDER_MIN || tree_order > BTR_ORDER_MAX) {
 		D_DEBUG(DF_MISC, "Order (%d) should be between %d and %d\n",
 			tree_order, BTR_ORDER_MIN, BTR_ORDER_MAX);
-		return -EINVAL;
+		return -DER_INVAL;
 	}
 
-	rc = btr_context_create(BTR_ROOT_NULL, tree_class, tree_feats,
+	rc = btr_context_create(BTR_ROOT_NULL, NULL, tree_class, tree_feats,
 				tree_order, uma, &tcx);
 	if (rc != 0)
 		return rc;
 
-	if (umem_has_tx(btr_umm(tcx)))
+	if (btr_has_tx(tcx))
 		rc = btr_tx_tree_alloc(tcx);
 	else
 		rc = btr_tree_alloc(tcx);
 
-	if (rc == 0) {
-		*root_mmidp = tcx->tc_tins.ti_root;
-		*toh = btr_tcx2hdl(tcx);
+	if (rc != 0)
+		goto failed;
+
+	*root_mmidp = tcx->tc_tins.ti_root_mmid;
+	*toh = btr_tcx2hdl(tcx);
+	return 0;
+ failed:
+	btr_context_destroy(tcx);
+	return rc;
+}
+
+static int
+btr_tree_init(struct btr_context *tcx, struct btr_root *root)
+{
+	return btr_root_init(tcx, root);
+}
+
+static int
+btr_tx_tree_init(struct btr_context *tcx, struct btr_root *root)
+{
+#if DAOS_HAS_NVML
+	struct umem_instance *umm = btr_umm(tcx);
+	int		      rc = 0;
+
+	TX_BEGIN(umm->umm_u.pmem_pool) {
+		rc = btr_tree_init(tcx, root);
+		if (rc != 0)
+			umem_tx_abort(btr_umm(tcx), rc);
+	} TX_ONABORT {
+		D_DEBUG(DF_MISC, "Failed to init tree root: %d\n", rc);
+
+	} TX_FINALLY {
+		D_DEBUG(DF_MISC, "dbtree_create_inplace tx exited\n");
+	} TX_END
+
+	return rc;
+#else
+	D_ASSERT(0);
+	return -DER_NO_PERM;
+#endif
+}
+
+int
+dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
+		      unsigned int tree_order, struct umem_attr *uma,
+		      struct btr_root *root, daos_handle_t *toh)
+{
+	struct btr_context *tcx;
+	int		    rc;
+
+	if (tree_order < BTR_ORDER_MIN || tree_order > BTR_ORDER_MAX) {
+		D_DEBUG(DF_MISC, "Order (%d) should be between %d and %d\n",
+			tree_order, BTR_ORDER_MIN, BTR_ORDER_MAX);
+		return -DER_INVAL;
 	}
+
+	if (root->tr_class != 0) {
+		D_DEBUG(DF_MISC,
+			"Tree existed, c=%d, o=%d, d=%d, f="DF_U64"\n",
+			root->tr_class, root->tr_order, root->tr_depth,
+			root->tr_feats);
+		return -DER_NO_PERM;
+	}
+
+	rc = btr_context_create(BTR_ROOT_NULL, root, tree_class, tree_feats,
+				tree_order, uma, &tcx);
+	if (rc != 0)
+		return rc;
+
+	if (btr_has_tx(tcx)) {
+		D_ASSERT(btr_ops(tcx)->to_root_tx_add);
+		rc = btr_tx_tree_init(tcx, root);
+	} else {
+		rc = btr_tree_init(tcx, root);
+	}
+
+	if (rc != 0)
+		goto failed;
+
+	*toh = btr_tcx2hdl(tcx);
+	return 0;
+ failed:
+	btr_context_destroy(tcx);
 	return rc;
 }
 
@@ -1260,9 +1409,38 @@ dbtree_open(TMMID(struct btr_root) root_mmid, struct umem_attr *uma,
 	struct btr_context *tcx;
 	int		    rc;
 
-	rc = btr_context_create(root_mmid, -1, -1, -1, uma, &tcx);
+	rc = btr_context_create(root_mmid, NULL, -1, -1, -1, uma, &tcx);
 	if (rc != 0)
 		return rc;
+
+	*toh = btr_tcx2hdl(tcx);
+	return 0;
+}
+
+/**
+ * Open a btree from the root address.
+ *
+ * \param root		[IN]	Address of the tree root.
+ * \param uma		[IN]	Memory class attributes.
+ * \param toh		[OUT]	Returned tree open handle.
+ */
+int
+dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
+		    daos_handle_t *toh)
+{
+	struct btr_context *tcx;
+	int		    rc;
+
+	if (root->tr_class == 0) {
+		D_DEBUG(DF_MISC, "Tree class is zero\n");
+		return -DER_INVAL;
+	}
+
+	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma, &tcx);
+	if (rc != 0)
+		return rc;
+
+	D_ASSERT(!btr_has_tx(tcx) || btr_ops(tcx)->to_root_tx_add);
 
 	*toh = btr_tcx2hdl(tcx);
 	return 0;
@@ -1280,7 +1458,7 @@ dbtree_close(daos_handle_t toh)
 
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
-		return -EBADF;
+		return -DER_NO_HDL;
 
 	btr_context_destroy(tcx);
 	return 0;
@@ -1327,9 +1505,9 @@ btr_tree_destroy(struct btr_context *tcx)
 	struct btr_root *root;
 
 	D_DEBUG(DF_MISC, "Destroy "TMMID_PF", order %d\n",
-		TMMID_P(tcx->tc_tins.ti_root), tcx->tc_order);
+		TMMID_P(tcx->tc_tins.ti_root_mmid), tcx->tc_order);
 
-	root = btr_mmid2ptr(tcx, tcx->tc_tins.ti_root);
+	root = tcx->tc_tins.ti_root;
 	if (!TMMID_IS_NULL(root->tr_node)) {
 		/* destroy the root and all descendants */
 		btr_node_destroy(tcx, root->tr_node);
@@ -1344,7 +1522,7 @@ btr_tx_tree_destroy(struct btr_context *tcx)
 {
 #if DAOS_HAS_NVML
 	struct umem_instance *umm = btr_umm(tcx);
-	int		      rc;
+	int		      rc = 0;
 
 	TX_BEGIN(umm->umm_u.pmem_pool) {
 		rc = btr_tree_destroy(tcx);
@@ -1360,7 +1538,7 @@ btr_tx_tree_destroy(struct btr_context *tcx)
 	return rc;
 #else
 	D_ASSERT(0);
-	return -EPERM;
+	return -DER_NO_PERM;
 #endif
 }
 
@@ -1378,9 +1556,9 @@ dbtree_destroy(daos_handle_t toh)
 
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
-		return -EBADF;
+		return -DER_NO_HDL;
 
-	if (umem_has_tx(btr_umm(tcx)))
+	if (btr_has_tx(tcx))
 		rc = btr_tx_tree_destroy(tcx);
 	else
 		rc = btr_tree_destroy(tcx);
@@ -1421,15 +1599,15 @@ dbtree_iter_prepare(daos_handle_t toh, daos_handle_t *ih)
 
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
-		return -EBADF;
+		return -DER_NO_HDL;
 
 	D_ALLOC_PTR(itr);
 	if (itr == NULL)
-		return -ENOMEM;
+		return -DER_NOMEM;
 
 	umem_attr_get(&tcx->tc_tins.ti_umm, &uma);
-	rc = btr_context_create(tcx->tc_tins.ti_root, -1, -1, -1, &uma,
-				&itr->it_tcx);
+	rc = btr_context_create(tcx->tc_tins.ti_root_mmid, tcx->tc_tins.ti_root,
+				-1, -1, -1, &uma, &itr->it_tcx);
 	if (rc != 0)
 		goto failed;
 
@@ -1451,7 +1629,7 @@ dbtree_iter_finish(daos_handle_t ih)
 
 	itr = btr_hdl2itr(ih);
 	if (itr == NULL)
-		return -EBADF;
+		return -DER_NO_HDL;
 
 	if (itr->it_tcx != NULL)
 		btr_context_destroy(itr->it_tcx);
@@ -1480,10 +1658,10 @@ dbtree_iter_move(daos_handle_t ih, bool tell, daos_hash_out_t *anchor)
 
 	itr = btr_hdl2itr(ih);
 	if (itr == NULL)
-		return -EBADF;
+		return -DER_NO_HDL;
 
 	if (!itr->it_more)
-		return -ENOENT;
+		return -DER_NONEXIST;
 
 	tcx = itr->it_tcx;
 	if (tell) {
@@ -1527,15 +1705,15 @@ dbtree_iter_current(daos_handle_t ih, bool copy, struct btr_it_record *irec)
 
 	itr = btr_hdl2itr(ih);
 	if (itr == NULL)
-		return -EBADF;
+		return -DER_NO_HDL;
 
 	if (!itr->it_more)
-		return -ENOENT;
+		return -DER_NONEXIST;
 
 	tcx = itr->it_tcx;
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
 	if (rec == NULL)
-		return -EAGAIN; /* invalid cursor */
+		return -DER_AGAIN; /* invalid cursor */
 
 	irec->ir_mmid = rec->rec_mmid;
 	return btr_rec_fetch(tcx, rec, copy, &irec->ir_key, &irec->ir_val);
@@ -1549,7 +1727,7 @@ static struct btr_class btr_class_registered[BTR_TYPE_MAX];
  * Intialise a tree instance from a registerd tree class.
  */
 static int
-btr_class_init(TMMID(struct btr_root) root_mmid,
+btr_class_init(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	       unsigned int tree_class, uint64_t tree_feats,
 	       struct umem_attr *uma, struct btr_instance *tins)
 {
@@ -1562,11 +1740,13 @@ btr_class_init(TMMID(struct btr_root) root_mmid,
 		return rc;
 
 	if (!TMMID_IS_NULL(root_mmid)) {
-		struct btr_root *root;
+		tins->ti_root_mmid = root_mmid;
+		if (root == NULL)
+			root = umem_id2ptr_typed(&tins->ti_umm, root_mmid);
+	}
+	tins->ti_root = root;
 
-		tins->ti_root = root_mmid;
-
-		root = umem_id2ptr_typed(&tins->ti_umm, root_mmid);
+	if (root != NULL && root->tr_class != 0) {
 		tree_class = root->tr_class;
 		tree_feats = root->tr_feats;
 	}
@@ -1574,19 +1754,19 @@ btr_class_init(TMMID(struct btr_root) root_mmid,
 	/* XXX should be multi-thread safe */
 	if (tree_class >= BTR_TYPE_MAX) {
 		D_DEBUG(DF_MISC, "Invalid class id: %d\n", tree_class);
-		return -ENOENT;
+		return -DER_INVAL;
 	}
 
 	tc = &btr_class_registered[tree_class];
 	if (tc->tc_ops == NULL) {
 		D_DEBUG(DF_MISC, "Unregistered class id %d\n", tree_class);
-		return -ENOENT;
+		return -DER_NONEXIST;
 	}
 
 	if ((tree_feats & tc->tc_feats) != tree_feats) {
 		D_ERROR("Unsupported features "DF_U64"/"DF_U64"\n",
 			tree_feats, tc->tc_feats);
-		return -EPROTO;
+		return -DER_PROTO;
 	}
 
 	tins->ti_ops = tc->tc_ops;
@@ -1604,12 +1784,12 @@ int
 dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 		      btr_ops_t *ops)
 {
-	if (tree_class >= BTR_TYPE_MAX)
-		return -EINVAL;
+	if (tree_class >= BTR_TYPE_MAX || tree_class == 0)
+		return -DER_INVAL;
 
 	/* XXX should be multi-thread safe */
 	if (btr_class_registered[tree_class].tc_ops != NULL)
-		return -EBUSY;
+		return -DER_EXIST;
 
 	/* These are mandatory functions */
 	D_ASSERT(ops != NULL);
