@@ -42,7 +42,7 @@ if REQS.get_env('PLATFORM') == 'darwin':
     CCI_BUILD.append('./configure --prefix=$CCI_PREFIX')
 else:
     CCI_BUILD.append('./configure --with-verbs --prefix=$CCI_PREFIX')
-    CCI_REQUIRED += ['librdmacm']
+    CCI_REQUIRED += ['rdmacm']
 CCI_LIB = 'libcci$SHLIBSUFFIX'
 
 CCI_BUILD += ['make', 'make install']

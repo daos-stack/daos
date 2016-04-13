@@ -160,6 +160,21 @@ class MissingTargets(Exception):
         """ Exception string """
         return "%s has missing targets after build"%(self.component)
 
+class MissingSystemLibs(Exception):
+    """Exception raised when libraries required for target build are not met
+
+    Attributes:
+        component    -- component that has missing targets
+    """
+
+    def __init__(self, component):
+        super(MissingSystemLibs, self).__init__()
+        self.component = component
+
+    def __str__(self):
+        """ Exception string """
+        return "%s has unmet dependancies required for build"%(self.component)
+
 class Runner(object):
     """Runs commands in a specified environment"""
     def __init__(self):
@@ -265,6 +280,7 @@ class PreReqComponent(object):
         self.__required = {}
         self.__env = env
         self.__opts = variables
+        self.system_env = env.Clone()
 
         real_env = self.__env['ENV']
 
@@ -589,7 +605,7 @@ class _Component(object):
         self.prefix = None
         self.component_prefix = None
         self.libs = kw.get("libs", [])
-        self.required_libs = []
+        self.required_libs = kw.get("required_libs", [])
         self.headers = kw.get("headers", [])
         self.requires = kw.get("requires", [])
         self.prereqs = prereqs
@@ -612,12 +628,18 @@ class _Component(object):
         self.crc_file = os.path.join(self.prereqs.get_build_dir(),
                                      '_%s.crc' % self.name)
 
+    def src_exists(self):
+        """Check if the source directory exists"""
+        if self.src_path and os.path.exists(self.src_path):
+            return True
+        return False
+
     def get(self):
         """Download the component sources, if necessary"""
         if self.prebuilt_path:
             print 'Using prebuilt binaries for %s' % self.name
             return
-        if self.src_path and os.path.exists(self.src_path):
+        if self.src_exists():
             self.prereqs.update_src_path(self.name, self.src_path)
             print 'Using existing sources at %s for %s' \
                 % (self.src_path, self.name)
@@ -681,6 +703,19 @@ class _Component(object):
                 return True
         return False
 
+    def has_missing_system_deps(self, env):
+        """Check for required system libs"""
+
+        config = Configure(env)
+
+        for lib in self.required_libs:
+            if not config.CheckLib(lib):
+                config.Finish()
+                return True
+
+        config.Finish()
+        return False
+
     def has_missing_targets(self, env):
         """Check for expected build targets (e.g. libraries or headers)"""
 
@@ -694,11 +729,6 @@ class _Component(object):
                 return True
 
         for lib in self.libs:
-            if not config.CheckLib(lib):
-                config.Finish()
-                return True
-
-        for lib in self.required_libs:
             if not config.CheckLib(lib):
                 config.Finish()
                 return True
@@ -786,13 +816,25 @@ class _Component(object):
             return
         self.set_environment(env, headers_only)
         self.set_environment(envcopy, False)
-        self.get()
         if self.prebuilt_path:
             self.create_links(self.prebuilt_path)
             return False
-        has_changes = self.has_changes()
+
+        # Default to has_changes = True which will cause all deps
+        # to be built first time scons is invoked.
+        has_changes = True
+        if self.src_exists():
+            self.get()
+            has_changes = self.has_changes()
+
         if changes or has_changes \
             or self.has_missing_targets(envcopy):
+
+            if self.has_missing_system_deps(self.prereqs.system_env):
+                raise MissingSystemLibs(self.name)
+
+            if not self.src_exists():
+                self.get()
             changes = True
             if has_changes and self.out_of_src_build:
                 os.system("rm -rf %s"%self.build_path)
@@ -814,5 +856,6 @@ __all__ = ["GitRepoRetriever", "WebRetriever",
            "DownloadFailure", "ExtractionError",
            "UnsupportedCompression", "BadScript",
            "MissingPath", "BuildFailure",
-           "MissingDefinition", "MissingTargets"
+           "MissingDefinition", "MissingTargets",
+           "MissingSystemLibs"
           ]
