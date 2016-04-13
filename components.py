@@ -93,7 +93,9 @@ WEB_RETRIEVER = \
 # pylint: enable=line-too-long
 REQS.define('hwloc', retriever=WEB_RETRIEVER,
             commands=['./configure --prefix=$HWLOC_PREFIX', 'make',
-                      'make install'], headers=['hwloc.h'])
+                      'make install'],
+            headers=['hwloc.h'],
+            libs=['hwloc'])
 
 REQS.define('pmix',
             retriever=GitRepoRetriever('https://github.com/pmix/master'),

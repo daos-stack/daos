@@ -28,12 +28,11 @@ scons $prebuilt -C test -f SConstruct.alt --config=force --build-deps=yes
 ./test_components.sh
 }
 
-# incremental build
+# full build
 ./build_components.sh
 test_build
 
-# full build
-rm -rf _build.external build install
+# incremental build
 ./build_components.sh
 test_build
 
