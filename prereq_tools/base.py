@@ -535,6 +535,7 @@ class PreReqComponent(object):
             if self.__defined[comp].build(env, headers_only):
                 self.__required[comp] = False
                 changes = True
+
         return changes
 
     def get_env(self, var):
@@ -828,16 +829,21 @@ class _Component(object):
         """Modify the specified construction environment to build with
            the external component"""
         for path in self.include_path:
-            env.Append(CPPPATH=[os.path.join(self.component_prefix, path)])
+            env.AppendUnique(CPPPATH=[os.path.join(self.component_prefix,
+                                                   path)])
+        # The same rules that apply to headers apply to RPATH.   If a build
+        # uses a component, that build needs the RPATH of the dependencies.
+        for path in self.lib_path:
+            env.AppendUnique(RPATH=[os.path.join(self.component_prefix, path)])
 
         if headers_only:
             return
 
         for path in self.lib_path:
-            env.Append(LIBPATH=[os.path.join(self.component_prefix, path)])
-            env.Append(RPATH=[os.path.join(self.component_prefix, path)])
+            env.AppendUnique(LIBPATH=[os.path.join(self.component_prefix,
+                                                   path)])
         for lib in self.libs:
-            env.Append(LIBS=[lib])
+            env.AppendUnique(LIBS=[lib])
 
     def create_links(self, source):
         """Create symbolic links to real targets in $PREFIX"""
@@ -870,10 +876,13 @@ class _Component(object):
 
     def build(self, env, headers_only):
         """Build the component, if necessary"""
-        envcopy = env.Clone()
         # Ensure requirements are met
+        changes = False
+        if self.requires:
+            changes = self.prereqs.require(env, *self.requires,
+                                           headers_only=True)
+        envcopy = env.Clone()
 
-        changes = self.prereqs.require(envcopy, *self.requires)
         if GetOption('help'):
             return
         self.set_environment(env, headers_only)
