@@ -866,13 +866,22 @@ class _Component(object):
             for fname in files:
                 sfile = os.path.join(root, fname)
                 target = os.path.join(local_root, fname)
+
+                link_correct = False
                 try:
+                    link_dest = os.readlink(target)
+                    if link_dest == sfile:
+                        link_correct = True
+                    else:
+                        os.unlink(target)
+                except OSError:
+                    pass
+                if not link_correct:
+                    # Unlink the target first as it might be a real file rather
+                    # than a link.
                     if os.path.exists(target):
                         os.unlink(target)
                     os.symlink(sfile, target)
-                except OSError:
-                    pass
-
 
     def build(self, env, headers_only):
         """Build the component, if necessary"""
