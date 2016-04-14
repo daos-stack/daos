@@ -25,6 +25,7 @@
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
 #include <daos_srv/vos.h>
+#include <errno.h>
 #include <daos/daos_errno.h>
 #include <daos/daos_common.h>
 #include <daos/daos_hash.h>
@@ -64,7 +65,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	size_t				root_size;
 	TOID(struct vos_pool_root)	proot;
 
-	if (NULL == path || uuid_is_null(uuid) || size <= 0)
+	if (NULL == path || uuid_is_null(uuid) || size < 0)
 		return -DER_INVAL;
 
 	D_ALLOC_PTR(vpool);
@@ -75,7 +76,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	vpool->ph = pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout),
 							  size, 0666);
 	if (NULL == vpool->ph) {
-		D_ERROR("Failed to create pool\n");
+		D_ERROR("Failed to create pool: %d\n", errno);
 		rc = -DER_NOSPACE;
 		goto exit;
 	}
