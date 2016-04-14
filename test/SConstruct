@@ -3,16 +3,69 @@ import sys
 import os
 sys.path.insert(0, "..")
 from prereq_tools import PreReqComponent
+from prereq_tools import GitRepoRetriever
+from prereq_tools import WebRetriever
 
 ENV = DefaultEnvironment()
 
-OPTS = Variables()
+OPTS = Variables('sl.conf')
 PREREQS = PreReqComponent(ENV, OPTS)
 PATH = os.path.realpath(os.path.join(Dir('#').abspath, "..",
                                      "components.py"))
 PREREQS.preload(PATH)
 
-PREREQS.require(ENV, "pmix")
-ENV.Append(LIBS=['pthread'])
-ENV.Program("foo", Glob("*.c"))
+PREREQS.define("sl_project1",
+               retriever="fake",
+               commands=['make install PREFIX=$SL_PROJECT1_PREFIX'],
+               headers=['sl_project1.h'])
+
+PREREQS.define("sl_project2",
+               retriever="fake",
+               commands=['make clean',
+                         'make install PREFIX=$SL_PROJECT2_PREFIX',
+                         'make clean'],
+               headers=['sl_project2.h'],
+               libs=['sl_project2'])
+
+PREREQS.define("sl_project3",
+               retriever="fake",
+               commands=['make clean',
+                         'make install PREFIX=$SL_PROJECT3_PREFIX'
+                         ' SL_PROJECT2=$SL_PROJECT2_PREFIX',
+                         'make clean'],
+               headers=['sl_project3.h'],
+               libs=['sl_project3'],
+               requires=['sl_project2'])
+
+PREREQS.define("sl_project4",
+               retriever="fake",
+               commands=['make clean',
+                         'make install PREFIX=$SL_PROJECT4_PREFIX'
+                         ' SL_PROJECT2=$SL_PROJECT2_PREFIX'
+                         ' SL_PROJECT1=$SL_PROJECT1_PREFIX',
+                         'make clean'],
+               headers=['sl_project4.h'],
+               libs=['sl_project4'],
+               requires=['sl_project2', 'sl_project1'])
+
+# pylint: disable=line-too-long
+WEB_RETRIEVER = \
+    WebRetriever('https://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.2.tar.gz')
+# pylint: enable=line-too-long
+PREREQS.define('hwloc2', retriever=WEB_RETRIEVER,
+               commands=['./configure --prefix=$HWLOC2_PREFIX', 'make',
+                         'make install'],
+               headers=['hwloc.h'],
+               libs=['hwloc'])
+
+PREREQS.define('openpa2',
+               retriever=GitRepoRetriever( \
+               'http://git.mcs.anl.gov/radix/openpa.git'),
+               commands=['$LIBTOOLIZE', './autogen.sh',
+                         './configure --prefix=$OPENPA2_PREFIX', 'make',
+                         'make install'], libs=['opa'])
+
+VariantDir('build', '.', duplicate=0)
+SConscript('build/sl_test/SConscript', exports=['ENV', 'PREREQS'])
+
 Help(OPTS.GenerateHelpText(ENV))

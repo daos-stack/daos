@@ -17,5 +17,8 @@ export PATH=${WORKSPACE}/scons_local/install/bin:$PATH
 
 export OPAL_PREFIX=${WORKSPACE}/scons_local/install
 
+#Allow overcommit of CPUs
+export OMPI_MCA_rmaps_base_oversubscribe=1
+
 echo Trying to run pmix tests.
 orterun -np 2 ${WORKSPACE}/pmix/examples/client

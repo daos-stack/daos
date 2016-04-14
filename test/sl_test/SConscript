@@ -1,0 +1,33 @@
+"""Test various build combinations involving prerequisites"""
+
+Import('PREREQS ENV')
+
+def run_test(env, *tests):
+    """Build a single test involving one or more prerequisites"""
+    cloned_env = env.Clone()
+    my_tests = []
+    for test in tests:
+        my_tests.append(test)
+        cloned_env.Append(CPPDEFINES=[test.upper()])
+    PREREQS.require(cloned_env, *tests)
+    target_name = "_".join(my_tests)
+    prog = cloned_env.Program(target=target_name,
+                              source=Glob('test.c'),
+                              OBJPREFIX=target_name)
+    Default(prog)
+    return prog
+
+PROGS = []
+PROGS += run_test(ENV, 'sl_project1')
+PROGS += run_test(ENV, 'sl_project1', 'sl_project2')
+PROGS += run_test(ENV, 'sl_project3')
+PROGS += run_test(ENV, 'sl_project4')
+PROGS += run_test(ENV, 'sl_project4', 'sl_project3')
+PROGS += run_test(ENV, 'hwloc', 'sl_project3')
+PROGS += run_test(ENV, 'hwloc2', 'sl_project3')
+PROGS += run_test(ENV, 'openpa', 'hwloc')
+PROGS += run_test(ENV, 'sl_project4', 'openpa2')
+
+# Once unit tests are available, we can actually test that we can run the tests
+# ENV.RunTests(PROGS)
+# AlwaysBuild(PROGS)

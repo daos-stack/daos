@@ -524,7 +524,9 @@ class PreReqComponent(object):
                 if GetOption('help'):
                     continue
                 # checkout and build done previously
-                self.__defined[comp].set_environment(env, headers_only)
+                self.set_environment_only(env,
+                                          self.__defined[comp],
+                                          headers_only)
                 if self.__required[comp]:
                     changes = True
                 continue
@@ -537,6 +539,15 @@ class PreReqComponent(object):
                 changes = True
 
         return changes
+
+    def set_environment_only(self, env, comp, headers_only):
+        """Recursively set the environment for a previously built component"""
+        comp.set_environment(env, headers_only)
+        # Now add the headers only for dependencies
+        for name in comp.requires:
+            self.set_environment_only(env,
+                                      self.__defined[name],
+                                      True)
 
     def get_env(self, var):
         """Get a variable from the construction environment"""

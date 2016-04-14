@@ -2,5 +2,5 @@
 ./check_python.sh -c "components.py" \
                   -s "SConstruct" \
                   -s "test/SConstruct" \
-                  -s "test/SConstruct.alt"
+                  -s "test/sl_test/SConscript"
 exit $?
