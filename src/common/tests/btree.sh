@@ -6,10 +6,16 @@ BTR=$DAOS_DIR/build/common/tests/btree
 ORDER=${ORDER:-3}
 DDEBUG=${DDEBUG:-0}
 INPLACE=${INPLACE:-"no"}
+BACKWARD=${BACKWARD:-"no"}
 
 IPL=""
 if [ "x$INPLACE" == "xyes" ]; then
 	IPL="i,"
+fi
+
+IDIR="f"
+if [ "x$BACKWARD" == "xyes" ]; then
+	IDIR="b"
 fi
 
 KEYS=${KEYS:-"3,6,5,7,2,1,4"}
@@ -20,6 +26,6 @@ $BTR	-C ${IPL}o:$ORDER		\
 	-c				\
 	-o				\
 	-u $RECORDS			\
-	-i				\
+	-i $IDIR			\
 	-f $KEYS			\
 	-D

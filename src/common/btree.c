@@ -59,6 +59,32 @@ union btr_rec_buf {
 	}				rb_buf;
 };
 
+/** internal state of iterator */
+enum {
+	BTR_ITR_NONE	= 0,
+	/** initialized */
+	BTR_ITR_INIT,
+	/** ready to iterate */
+	BTR_ITR_READY,
+	/** no record or reach the end of iteration */
+	BTR_ITR_FINI,
+};
+
+/**
+ * btree iterator, it is embedded in btr_context.
+ */
+struct btr_iterator {
+	/** state of the iterator */
+	unsigned short			 it_state;
+	/** private iterator */
+	bool				 it_private;
+	/**
+	 * Reserved for hash collision:
+	 * collisions happened on current hkey.
+	 */
+	unsigned int			 it_collisions;
+};
+
 /**
  * Trace for tree search.
  */
@@ -74,38 +100,25 @@ struct btr_trace {
 
 /**
  * Context for btree operations.
+ * NB: object cache will retain this data structure.
  */
 struct btr_context {
 	/** Tree domain: root pointer, memory pool and memory class etc */
 	struct btr_instance		 tc_tins;
+	/** embedded iterator */
+	struct btr_iterator		 tc_itr;
 	/** cached tree order, avoid loading from slow memory */
 	short				 tc_order;
 	/** cached tree depth, avoid loading from slow memory */
 	short				 tc_depth;
 	/** cached tree class, avoid loading from slow memory */
-	unsigned int			 tc_class;
+	unsigned short			 tc_class;
 	/** cached feature bits, avoid loading from slow memory */
 	uint64_t			 tc_feats;
 	/** trace for the tree root */
 	struct btr_trace		*tc_trace;
 	/** trace buffer */
 	struct btr_trace		 tc_traces[BTR_TRACE_MAX];
-};
-
-/**
- * btree iterator.
- */
-struct btr_iterator {
-	struct btr_context		*it_tcx;
-	/** more tree records */
-	bool				 it_more;
-	/**
-	 * Reserved for hash collision:
-	 * collisions happened on current hkey.
-	 */
-	unsigned int			 it_collisions;
-	/** hkey anchor, mostly for hash collision. */
-	char				 it_anchor[DAOS_HKEY_MAX];
 };
 
 /** size of print buffer */
@@ -122,6 +135,9 @@ static int btr_node_insert_rec(struct btr_context *tcx,
 			       struct btr_trace *trace,
 			       struct btr_record *rec);
 static int btr_root_tx_add(struct btr_context *tcx);
+static bool btr_probe_prev(struct btr_context *tcx);
+static bool btr_probe_next(struct btr_context *tcx);
+static bool btr_probe_is_public(dbtree_probe_opc_t opc);
 
 static struct umem_instance *
 btr_umm(struct btr_context *tcx)
@@ -227,6 +243,18 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	return rc;
 }
 
+static int
+btr_context_clone(struct btr_context *tcx, struct btr_context **tcx_p)
+{
+	struct umem_attr uma;
+	int		 rc;
+
+	umem_attr_get(&tcx->tc_tins.ti_umm, &uma);
+	rc = btr_context_create(tcx->tc_tins.ti_root_mmid,
+				tcx->tc_tins.ti_root, -1, -1, -1, &uma, tcx_p);
+	return rc;
+}
+
 /**
  * Set trace for the specified level, it will increase depth and set trace
  * for the new root if \a level is -1.
@@ -317,13 +345,12 @@ btr_hkey_cmp(struct btr_context *tcx, struct btr_record *rec, void *hkey)
 }
 
 static int
-btr_key_cmp(struct btr_context *tcx, struct btr_record *rec,
-	    daos_iov_t *key, int cmp)
+btr_key_cmp(struct btr_context *tcx, struct btr_record *rec, daos_iov_t *key)
 {
 	if (btr_ops(tcx)->to_key_cmp)
 		return btr_ops(tcx)->to_key_cmp(&tcx->tc_tins, rec, key);
 	else
-		return cmp;
+		return 0;
 }
 
 static int
@@ -342,9 +369,10 @@ btr_rec_free(struct btr_context *tcx, struct btr_record *rec)
 
 static int
 btr_rec_fetch(struct btr_context *tcx, struct btr_record *rec,
-	    bool copy, daos_iov_t *key, daos_iov_t *val)
+	      unsigned int options, daos_iov_t *key, daos_iov_t *val)
 {
-	return btr_ops(tcx)->to_rec_fetch(&tcx->tc_tins, rec, copy, key, val);
+	return btr_ops(tcx)->to_rec_fetch(&tcx->tc_tins, rec, options,
+					  key, val);
 }
 
 static int
@@ -520,6 +548,14 @@ btr_node_is_equal(struct btr_context *tcx, TMMID(struct btr_node) mmid1,
 		  TMMID(struct btr_node) mmid2)
 {
 	return umem_id_equal_typed(btr_umm(tcx), mmid1, mmid2);
+}
+
+static bool
+btr_root_empty(struct btr_context *tcx)
+{
+	struct btr_root *root = tcx->tc_tins.ti_root;
+
+	return root == NULL || TMMID_IS_NULL(root->tr_node);
 }
 
 static void
@@ -898,7 +934,8 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
  *		false	not found.
  */
 static bool
-btr_probe_key(struct btr_context *tcx, daos_iov_t *key, char *hkey)
+btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
+	  daos_hash_out_t *anchor)
 {
 	struct btr_record	*rec;
 	int			 start;
@@ -908,23 +945,32 @@ btr_probe_key(struct btr_context *tcx, daos_iov_t *key, char *hkey)
 	int			 level;
 	bool			 nextl;
 	char			 hkey_buf[DAOS_HKEY_MAX];
+	char			*hkey = &hkey_buf[0];
 	TMMID(struct btr_node)	 nd_mmid;
 
 	memset(&tcx->tc_traces[0], 0,
 	       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
 
-	nd_mmid = tcx->tc_tins.ti_root->tr_node;
-	if (TMMID_IS_NULL(nd_mmid)) { /* empty tree */
+	if (btr_root_empty(tcx)) { /* empty tree */
 		D_DEBUG(DF_MISC, "Empty tree\n");
 		return false;
 	}
 
-	if (hkey == NULL && key != NULL) {
-		btr_hkey_gen(tcx, key, &hkey_buf[0]);
-		hkey = &hkey_buf[0];
+	if (opc & BTR_PROBE_EQ) {
+		if (key != NULL) {
+			btr_hkey_gen(tcx, key, hkey);
+
+		} else {
+			D_ASSERT(anchor != NULL);
+			D_ASSERT(opc != BTR_PROBE_UPDATE);
+
+			memcpy(hkey, &anchor->body[0], btr_hkey_size(tcx));
+		}
 	}
 
+	nd_mmid = tcx->tc_tins.ti_root->tr_node;
 	start = end = 0;
+
 	for (nextl = true, level = 0 ;;) {
 		umem_id_t ummid;
 
@@ -938,18 +984,24 @@ btr_probe_key(struct btr_context *tcx, daos_iov_t *key, char *hkey)
 				level, TMMID_P(nd_mmid), end + 1);
 		}
 
-		/* binary search */
-		at = (start + end) / 2;
-		if (hkey == NULL) {
-			/* NB: if key is NULL, then find the first record,
-			 * which is the leftmost record of the leftmost child
-			 */
-			cmp = 1;
-		} else {
+		if (opc & BTR_PROBE_EQ) {
+			/* binary search */
+			at = (start + end) / 2;
 			rec = btr_node_rec_at(tcx, nd_mmid, at);
 			cmp = btr_hkey_cmp(tcx, rec, hkey);
+
+			D_DEBUG(DF_MISC, "compared record at %d, cmp %d\n",
+				at, cmp);
+
+		} else if (opc == BTR_PROBE_FIRST) {
+			at = start = end = 0;
+			cmp = 1;
+
+		} else {
+			D_ASSERT(opc ==  BTR_PROBE_LAST);
+			at = start = end;
+			cmp = -1;
 		}
-		D_DEBUG(DF_MISC, "compared record at %d, cmp %d\n", at, cmp);
 
 		if (start < end && cmp != 0) {
 			/* continue the binary search in current level */
@@ -976,21 +1028,40 @@ btr_probe_key(struct btr_context *tcx, daos_iov_t *key, char *hkey)
 		nextl = true;
 		level++;
 	}
+	/* leaf node */
 	D_ASSERT(level == tcx->tc_depth - 1);
 	D_ASSERT(!TMMID_IS_NULL(nd_mmid));
 
-	/* leaf node */
-	rec = btr_node_rec_at(tcx, nd_mmid, at);
 	if (cmp == 0 && key != NULL) {
-		/* XXX check hash collision, needs more work */
-		cmp = btr_key_cmp(tcx, rec, key, cmp);
+		rec = btr_node_rec_at(tcx, nd_mmid, at);
+		cmp = btr_key_cmp(tcx, rec, key);
+		if (cmp != 0)
+			D_ERROR("Hash collision is not well handled\n");
 	}
 
-	at += (cmp < 0);
+	if (opc == BTR_PROBE_UPDATE)
+		at += (cmp < 0);
+
 	btr_trace_set(tcx, level, nd_mmid, at);
 	btr_trace_debug(tcx, &tcx->tc_trace[level], "probe finished\n");
 
-	return cmp == 0 || hkey == NULL;
+	switch (opc) {
+	default:
+		D_ASSERT(0);
+	case BTR_PROBE_FIRST:
+	case BTR_PROBE_LAST:
+		return true;
+
+	case BTR_PROBE_UPDATE:
+	case BTR_PROBE_EQ:
+		return cmp == 0;
+
+	case BTR_PROBE_GE:
+		return cmp >= 0 ? true : btr_probe_next(tcx);
+
+	case BTR_PROBE_LE:
+		return cmp <= 0 ? true : btr_probe_prev(tcx);
+	}
 }
 
 static bool
@@ -1000,7 +1071,7 @@ btr_probe_next(struct btr_context *tcx)
 	struct btr_node		*nd;
 	TMMID(struct btr_node)	 nd_mmid;
 
-	if (tcx->tc_depth == 0) /* empty tree */
+	if (btr_root_empty(tcx)) /* empty tree */
 		return false;
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
@@ -1036,14 +1107,67 @@ btr_probe_next(struct btr_context *tcx)
 		umem_id_t ummid;
 
 		ummid = btr_node_mmid_at(tcx, trace->tr_node, trace->tr_at);
-
 		trace++;
 		trace->tr_at = 0;
 		trace->tr_node = umem_id_u2t(ummid, struct btr_node);
 	}
-	nd = btr_mmid2ptr(tcx, trace->tr_node);
 
 	btr_trace_debug(tcx, trace, "is the next\n");
+	return true;
+}
+
+static bool
+btr_probe_prev(struct btr_context *tcx)
+{
+	struct btr_trace	*trace;
+	struct btr_node		*nd;
+	TMMID(struct btr_node)	 nd_mmid;
+
+	if (btr_root_empty(tcx)) /* empty tree */
+		return false;
+
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+
+	btr_trace_debug(tcx, trace, "Probe the prev\n");
+	while (1) {
+		nd_mmid = trace->tr_node;
+
+		nd = btr_mmid2ptr(tcx, nd_mmid);
+
+		if (btr_node_is_root(tcx, nd_mmid) && trace->tr_at == 0) {
+			D_ASSERT(trace == tcx->tc_trace);
+			D_DEBUG(DF_MISC, "End\n");
+			return false; /* done */
+		}
+
+		if (trace->tr_at == 0) {
+			/* finish current level */
+			trace--;
+			continue;
+		}
+
+		trace->tr_at--;
+		btr_trace_debug(tcx, trace, "trace back\n");
+		break;
+	}
+
+	while (trace < &tcx->tc_trace[tcx->tc_depth - 1]) {
+		umem_id_t ummid;
+		bool	  leaf;
+
+		ummid = btr_node_mmid_at(tcx, trace->tr_node, trace->tr_at);
+
+		trace++;
+		trace->tr_node = umem_id_u2t(ummid, struct btr_node);
+		leaf = btr_node_is_leaf(tcx, trace->tr_node);
+
+		nd = btr_mmid2ptr(tcx, trace->tr_node);
+
+		D_ASSERT(nd->tn_keyn != 0);
+		trace->tr_at = nd->tn_keyn - leaf;
+	}
+
+	btr_trace_debug(tcx, trace, "is the prev\n");
 	return true;
 }
 
@@ -1054,35 +1178,33 @@ btr_probe_next(struct btr_context *tcx)
  * \param key		[IN]	Key to search.
  * \param val		[OUT]	Returned value address, or sink buffer to
  *				store returned value.
- * \param mmidp		[OUT]	Optional, returned value pmem mmid.
  *
  * \return		0	found
  *			-ve	error code
  */
 int
-dbtree_lookup(daos_handle_t toh, daos_iov_t *key, bool copy,
-	      daos_iov_t *val, umem_id_t *mmidp)
+dbtree_lookup(daos_handle_t toh, dbtree_probe_opc_t opc, bool copy,
+	      daos_iov_t *key, daos_iov_t *val)
 {
 	struct btr_record  *rec;
 	struct btr_context *tcx;
 	bool		    found;
 
+	if (!btr_probe_is_public(opc))
+		return -DER_INVAL;
+
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	found = btr_probe_key(tcx, key, NULL);
+	found = btr_probe(tcx, opc, key, NULL);
 	if (!found) {
 		D_DEBUG(DF_MISC, "Cannot find key\n");
 		return -DER_NONEXIST;
 	}
 
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
-	btr_rec_fetch(tcx, rec, copy, NULL, val);
-	if (mmidp != NULL)
-		*mmidp = rec->rec_mmid;
-
-	return 0;
+	return btr_rec_fetch(tcx, rec, copy ? 0 : BTR_FETCH_ADDR, NULL, val);
 }
 
 static int
@@ -1091,7 +1213,6 @@ btr_update_only(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 	struct btr_record *rec;
 	int		   rc;
 	char		   sbuf[BTR_PRINT_BUF];
-
 
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
 
@@ -1168,7 +1289,7 @@ btr_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 	bool	found;
 	int	rc;
 
-	found = btr_probe_key(tcx, key, NULL);
+	found = btr_probe(tcx, BTR_PROBE_UPDATE, key, NULL);
 	if (found)
 		rc = btr_update_only(tcx, key, val);
 	else
@@ -1244,7 +1365,7 @@ btr_tree_alloc(struct btr_context *tcx)
 {
 	int	rc;
 
-	rc =  btr_root_alloc(tcx);
+	rc = btr_root_alloc(tcx);
 	D_DEBUG(DF_MISC, "Allocate tree root: %d\n", rc);
 
 	return rc;
@@ -1323,6 +1444,7 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 static int
 btr_tree_init(struct btr_context *tcx, struct btr_root *root)
 {
+	memset(root, 0, sizeof(*root));
 	return btr_root_init(tcx, root);
 }
 
@@ -1569,54 +1691,62 @@ dbtree_destroy(daos_handle_t toh)
 
 /**** Iterator APIs *********************************************************/
 
-static daos_handle_t
-btr_itr2hdl(struct btr_iterator *itr)
+static bool
+btr_probe_is_public(dbtree_probe_opc_t opc)
 {
-	daos_handle_t hdl;
-
-	/* XXX use handle table */
-	hdl.cookie = (uint64_t)itr;
-	return hdl;
-}
-
-static struct btr_iterator *
-btr_hdl2itr(daos_handle_t toh)
-{
-	/* XXX use handle table */
-	return (struct btr_iterator *)toh.cookie;
+	return opc == BTR_PROBE_FIRST ||
+	       opc == BTR_PROBE_LAST ||
+	       opc == BTR_PROBE_EQ ||
+	       opc == BTR_PROBE_GE ||
+	       opc == BTR_PROBE_LE;
 }
 
 /**
  * Initialise iterator.
+ *
+ * \param toh		[IN]	Tree open handle
+ * \param options	[IN]	Options for the iterator.
+ *				BTR_ITER_EMBEDDED:
+ *				if this bit is set, then this function will
+ *				return the iterator embedded in the tree open
+ *				handle. It will reduce memory consumption,
+ *				but state of iterator could be overwritten
+ *				by any other tree operation.
+ *
+ * \param ih		[OUT]	Returned iterator handle.
  */
 int
-dbtree_iter_prepare(daos_handle_t toh, daos_handle_t *ih)
+dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 {
 	struct btr_iterator *itr;
 	struct btr_context  *tcx;
-	struct umem_attr     uma;
 	int		     rc;
 
 	tcx = btr_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	D_ALLOC_PTR(itr);
-	if (itr == NULL)
-		return -DER_NOMEM;
+	if (options & BTR_ITER_EMBEDDED) {
+		/* use the iterator embedded in btr_context */
+		itr = &tcx->tc_itr;
+		/* don't screw up others */
+		if (itr->it_state != BTR_ITR_NONE) {
+			D_DEBUG(DF_MISC, "Iterator is in using\n");
+			return -DER_BUSY;
+		}
 
-	umem_attr_get(&tcx->tc_tins.ti_umm, &uma);
-	rc = btr_context_create(tcx->tc_tins.ti_root_mmid, tcx->tc_tins.ti_root,
-				-1, -1, -1, &uma, &itr->it_tcx);
-	if (rc != 0)
-		goto failed;
+	} else { /* create a private iterator */
+		rc = btr_context_clone(tcx, &tcx);
+		if (rc != 0)
+			return rc;
 
-	itr->it_more = btr_probe_key(itr->it_tcx, NULL, NULL);
-	*ih = btr_itr2hdl(itr);
+		itr = &tcx->tc_itr;
+		itr->it_private = true;
+	}
+
+	itr->it_state = BTR_ITR_INIT;
+	*ih = itr->it_private ? btr_tcx2hdl(tcx) : toh;
 	return 0;
- failed:
-	D_FREE_PTR(itr);
-	return rc;
 }
 
 /**
@@ -1625,98 +1755,172 @@ dbtree_iter_prepare(daos_handle_t toh, daos_handle_t *ih)
 int
 dbtree_iter_finish(daos_handle_t ih)
 {
+	struct btr_context  *tcx;
 	struct btr_iterator *itr;
 
-	itr = btr_hdl2itr(ih);
-	if (itr == NULL)
+	tcx = btr_hdl2tcx(ih);
+	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	if (itr->it_tcx != NULL)
-		btr_context_destroy(itr->it_tcx);
+	itr = &tcx->tc_itr;
+	itr->it_state = BTR_ITR_NONE;
 
-	D_FREE_PTR(itr);
+	if (itr->it_private)
+		btr_context_destroy(tcx);
+
 	return 0;
 }
 
 /**
- * Move iterator cursor to specified anchor, or the next record.
+ * Based on the \a opc, this function can do various things:
+ * - set the cursor of the iterator to the first or the last record.
+ * - find the record for the provided key.
+ * - find the first record whose key is greater than or equal to the key.
+ * - find the first record whose key is less than or equal to the key.
  *
- * \param tell	[IN]	Move the cursor of iterator to \a anchor, otherwise
- *			just move the cursor to the next record.
- * \param anchor [IN/OUT]
- *			True [IN] the anchor point to find.
- *			False [OUT] the anchor point for the next record.
+ * This function must be called after dbtree_iter_prepare, it can be called
+ * for arbitrary times for the same iterator.
+ *
+ * \param opc	[IN]	Probe opcode, see dbtree_probe_opc_t for the details.
+ * \param key	[IN]	The key to probe, it will be ignored if opc is
+ *			BTR_PROBE_FIRST or BTR_PROBE_LAST.
+ * \param anchor [IN]	the anchor point to probe, it will be ignored if
+ *			\a key is provided.
  */
 int
-dbtree_iter_move(daos_handle_t ih, bool tell, daos_hash_out_t *anchor)
+dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
+		  daos_iov_t *key, daos_hash_out_t *anchor)
 {
 	struct btr_iterator *itr;
 	struct btr_context  *tcx;
-	char		    *hkey;
+	bool		     found;
 
-	D_DEBUG(DF_MISC, "Move iterator\n");
+	D_DEBUG(DF_MISC, "probe(%d) key or anchor\n", opc);
 
-	itr = btr_hdl2itr(ih);
-	if (itr == NULL)
+	if (!btr_probe_is_public(opc))
+		return -DER_INVAL;
+
+	tcx = btr_hdl2tcx(ih);
+	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	if (!itr->it_more)
+	itr = &tcx->tc_itr;
+	if (itr->it_state < BTR_ITR_INIT)
+		return -DER_NO_HDL;
+
+	found = btr_probe(tcx, opc, key, anchor);
+	if (!found) {
+		itr->it_state = BTR_ITR_FINI;
 		return -DER_NONEXIST;
-
-	tcx = itr->it_tcx;
-	if (tell) {
-		hkey = &anchor->body[0];
-		itr->it_more = btr_probe_key(tcx, NULL, hkey);
-	} else {
-		itr->it_more = btr_probe_next(itr->it_tcx);
 	}
 
-	if (itr->it_more) {
-		struct btr_record *rec;
-		daos_iov_t	   key;
-
-		rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
-		btr_rec_fetch(tcx, rec, false, &key, NULL);
-
-		hkey = &itr->it_anchor[0];
-		btr_hkey_gen(tcx, &key, hkey);
-		memcpy(&anchor->body[0], hkey, btr_hkey_size(itr->it_tcx));
-	}
+	itr->it_state = BTR_ITR_READY;
 	return 0;
 }
 
+static int
+btr_iter_move(daos_handle_t ih, bool forward)
+{
+	struct btr_context  *tcx;
+	struct btr_iterator *itr;
+	bool		     found;
+
+	tcx = btr_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	itr = &tcx->tc_itr;
+	switch (itr->it_state) {
+	default:
+		D_ASSERT(0);
+	case BTR_ITR_NONE:
+	case BTR_ITR_INIT:
+		return -DER_NO_PERM;
+	case BTR_ITR_READY:
+		break;
+	case BTR_ITR_FINI:
+		return -DER_NONEXIST;
+	}
+
+	found = forward ? btr_probe_next(tcx) : btr_probe_prev(tcx);
+	if (!found) {
+		itr->it_state = BTR_ITR_FINI;
+		return -DER_NONEXIST;
+	}
+
+	itr->it_state = BTR_ITR_READY;
+	return 0;
+}
+
+int
+dbtree_iter_next(daos_handle_t ih)
+{
+	return btr_iter_move(ih, true);
+}
+
+int
+dbtree_iter_prev(daos_handle_t ih)
+{
+	return btr_iter_move(ih, false);
+}
+
 /**
- * Copy key and value of current record into buffer of \a irec if \a copy is
- * true, or just return key and value address if \a copy is false.
+ * Copy key and value of current record into the key and value buffer \a copy
+ * is true, or just return key and value address if \a copy is false.
  *
- * \param copy	[IN]	Copy key and value to \a irec if itr is true, otherwise
- *			only return addresses of key and value to \a irec.
- * \param irec	[OUT]	Sink buffer for returned key and value, or struct to
- *			store addresses of key and value.
+ * \parma ih	[IN]	Iterator open handle.
+ * \param copy	[IN]	Copy the key of current cursor to \a key, and value
+ *			of it to \a val if \a copy is true, otherwise only
+ *			return the addresses of key and value.
+ * \param key	[OUT]	Sink buffer for the returned key, only the key address
+ *			is returned if \a copy is false.
+ * \param val	[OUT]	Sink buffer for the returned value, only the value
+ *			address is returned if \a copy is false.
+ * \param anchor [OUT]	Returned hash anchor.
  */
 int
-dbtree_iter_current(daos_handle_t ih, bool copy, struct btr_it_record *irec)
+dbtree_iter_current(daos_handle_t ih, bool copy, daos_iov_t *key,
+		    daos_iov_t *val, daos_hash_out_t *anchor)
 {
 	struct btr_iterator *itr;
 	struct btr_context  *tcx;
 	struct btr_record   *rec;
+	unsigned int	     options;
+	int		     rc;
 
 	D_DEBUG(DF_MISC, "Current iterator\n");
 
-	itr = btr_hdl2itr(ih);
-	if (itr == NULL)
+	tcx = btr_hdl2tcx(ih);
+	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	if (!itr->it_more)
+	itr = &tcx->tc_itr;
+	switch (itr->it_state) {
+	default:
+		D_ASSERT(0);
+	case BTR_ITR_NONE:
+	case BTR_ITR_INIT:
+		return -DER_NO_PERM;
+	case BTR_ITR_READY:
+		break;
+	case BTR_ITR_FINI:
 		return -DER_NONEXIST;
+	}
 
-	tcx = itr->it_tcx;
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
 	if (rec == NULL)
 		return -DER_AGAIN; /* invalid cursor */
 
-	irec->ir_mmid = rec->rec_mmid;
-	return btr_rec_fetch(tcx, rec, copy, &irec->ir_key, &irec->ir_val);
+	options = BTR_FETCH_KEY;
+	if (!copy)
+		options |= BTR_FETCH_ADDR;
+
+	rc = btr_rec_fetch(tcx, rec, options, key, val);
+	if (rc == 0 && anchor != NULL) {
+		memcpy(&anchor->body[0], &rec->rec_hkey[0],
+		       btr_hkey_size(tcx));
+	}
+	return 0;
 }
 
 #define BTR_TYPE_MAX	1024

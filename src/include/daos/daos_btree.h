@@ -118,6 +118,13 @@ struct btr_root {
 
 struct btr_instance;
 
+enum {
+	/** no data copy (rma), only return addresses */
+	BTR_FETCH_ADDR		= (1 << 0),
+	/** also fetch key, it is used by iterator */
+	BTR_FETCH_KEY		= (1 << 1),
+};
+
 /**
  * Customized tree function table.
  */
@@ -195,22 +202,29 @@ typedef struct {
 	int		(*to_rec_free)(struct btr_instance *tins,
 				       struct btr_record *rec);
 	/**
-	 * If \a copy is true, copy key and value to buffer of \a key and
-	 * \a val, otherwise just return key and value address to them.
+	 * Fetch value or both key & value of a record.
 	 *
 	 * \param tins	[IN]	Tree instance which contains the root mmid
 	 *			and memory class etc.
 	 * \param rec	[IN]	Record to be read from.
-	 * \param copy	[IN]	Copy the key and value to \a key and \a val,
-	 *			or just return their addresses
+	 *
+	 * \param options [IN]	fetch options.
+	 *			BTR_FETCH_KEY: Fetch key (and value) of record.
+	 *			By default, only value is returned.
+	 *
+	 *			BTR_FETCH_ADDR: Only return key and value
+	 *			address, otherwise key and value should be
+	 *			copied into buffers in \a key and \a val.
+	 *
 	 * \param key	[OUT]	Optional, sink buffer for returned key,
 	 *			or key address.
 	 * \param val	[OUT]	Optional, sink buffer for returned value,
 	 *			or value address.
 	 */
 	int		(*to_rec_fetch)(struct btr_instance *tins,
-				      struct btr_record *rec, bool copy,
-				      daos_iov_t *key, daos_iov_t *val);
+					struct btr_record *rec,
+					unsigned int options,
+					daos_iov_t *key, daos_iov_t *val);
 	/**
 	 * Update value of a record.
 	 *
@@ -335,6 +349,27 @@ struct btr_instance {
 	btr_ops_t			*ti_ops;
 };
 
+typedef enum {
+	/**
+	 * Public probe opcodes
+	 */
+	/** the first record in the tree */
+	BTR_PROBE_FIRST		= 1,
+	/** the last record in the tree */
+	BTR_PROBE_LAST		= 2,
+	/** probe the record whose key equals to the provide key */
+	BTR_PROBE_EQ		= 0x100,
+	/** probe the record whose key is great/equal to the provide key */
+	BTR_PROBE_GE		= BTR_PROBE_EQ | 1,
+	/** probe the record whose key is little/equal to the provide key */
+	BTR_PROBE_LE		= BTR_PROBE_EQ | 2,
+	/**
+	 * private probe opcodes, tdon't pass them into APIs
+	 */
+	/** probe the record for update */
+	BTR_PROBE_UPDATE	= BTR_PROBE_EQ | 3,
+} dbtree_probe_opc_t;
+
 int  dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 			   btr_ops_t *ops);
 
@@ -352,27 +387,30 @@ int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh);
 int  dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val);
-int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, bool copy,
-		   daos_iov_t *val, umem_id_t *rec_body);
+int  dbtree_lookup(daos_handle_t toh, dbtree_probe_opc_t opc, bool copy,
+		   daos_iov_t *key, daos_iov_t *val);
 int  dbtree_delete(daos_handle_t toh, daos_iov_t *key);
 int  dbtree_is_empty(daos_handle_t toh);
 
 /******* iterator API ******************************************************/
 
-/** iterator entry to store the returned KV record */
-struct btr_it_record {
-	/** buffer to store returned key */
-	daos_iov_t		ir_key;
-	/** buffer to store returned value */
-	daos_iov_t		ir_val;
-	/** returned mmid of the record body */
-	umem_id_t		ir_mmid;
+enum {
+	/**
+	 * Use the embedded iterator of the open handle.
+	 * It can reduce memory consumption, but state of iterator can be
+	 * overwritten by other tree operation.
+	 */
+	BTR_ITER_EMBEDDED	= (1 << 0),
 };
 
-int dbtree_iter_prepare(daos_handle_t toh, daos_handle_t *ih);
+int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
+			daos_handle_t *ih);
 int dbtree_iter_finish(daos_handle_t ih);
-int dbtree_iter_move(daos_handle_t ih, bool tell, daos_hash_out_t *anchor);
-int dbtree_iter_current(daos_handle_t ih, bool copy,
-			struct btr_it_record *irec);
+int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
+		      daos_iov_t *key, daos_hash_out_t *anchor);
+int dbtree_iter_next(daos_handle_t ih);
+int dbtree_iter_prev(daos_handle_t ih);
+int dbtree_iter_current(daos_handle_t ih, bool copy, daos_iov_t *key,
+			daos_iov_t *val, daos_hash_out_t *anchor);
 
 #endif /* __DAOS_BTREE_H__ */

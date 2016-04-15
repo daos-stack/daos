@@ -96,12 +96,14 @@ ik_rec_free(struct btr_instance *tins, struct btr_record *rec)
 
 static int
 ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	      bool copy, daos_iov_t *key_iov, daos_iov_t *val_iov)
+	     unsigned int flags, daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
 	struct ik_rec	*irec;
 	char		*val;
 	int		 val_size;
 	int		 key_size;
+	bool		 copy = !(flags & BTR_FETCH_ADDR);
+	bool		 fetch_key = (flags & BTR_FETCH_KEY);
 
 	if (key_iov == NULL && val_iov == NULL)
 		return -EINVAL;
@@ -112,7 +114,7 @@ ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 	val = umem_id2ptr(&tins->ti_umm, irec->ir_val_mmid);
 	if (!copy) {
-		if (key_iov != NULL) {
+		if (fetch_key && key_iov != NULL) {
 			key_iov->iov_len = key_size;
 			key_iov->iov_buf = &irec->ir_key;
 		}
@@ -125,7 +127,7 @@ ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	}
 	/* copy mode */
 
-	if (key_iov != NULL) {
+	if (fetch_key && key_iov != NULL) {
 		key_iov->iov_len = key_size;
 		if (key_iov->iov_buf != NULL &&
 		    key_iov->iov_buf_len >= key_size)
@@ -362,8 +364,8 @@ ik_btr_find_or_update(bool update, char *str)
 		} else {
 			D_DEBUG(DF_MISC, "Looking for "DF_U64"\n", key);
 
-			rc = dbtree_lookup(ik_toh, &key_iov, false, &val_iov,
-					   NULL);
+			rc = dbtree_lookup(ik_toh, BTR_PROBE_EQ, false,
+					   &key_iov, &val_iov);
 			if (rc != 0) {
 				D_ERROR("Failed to lookup "DF_U64"\n", key);
 				return -1;
@@ -378,41 +380,52 @@ ik_btr_find_or_update(bool update, char *str)
 }
 
 static int
-ik_btr_iterate(void)
+ik_btr_iterate(char *args)
 {
-	daos_hash_out_t	anchor;
 	daos_handle_t	ih;
 	int		i;
 	int		rc;
+	int		opc;
 
 	if (daos_handle_is_inval(ik_toh)) {
 		D_ERROR("Can't find opened tree\n");
 		return -1;
 	}
 
-	rc = dbtree_iter_prepare(ik_toh, &ih);
+	rc = dbtree_iter_prepare(ik_toh, BTR_ITER_EMBEDDED, &ih);
 	if (rc != 0) {
 		D_ERROR("can't intialise iterator\n");
 		return -1;
 	}
 
-	for (i = 0;; i++) {
-		struct btr_it_record irec;
-		uint64_t	     key;
+	if (args[0] == 'b')
+		opc = BTR_PROBE_LAST;
+	else
+		opc = BTR_PROBE_FIRST;
 
-		rc = dbtree_iter_current(ih, false, &irec);
+	rc = dbtree_iter_probe(ih, opc, NULL, NULL);
+	for (i = 0;; i++) {
+		daos_iov_t	key_iov;
+		daos_iov_t	val_iov;
+		uint64_t	key;
+
+		rc = dbtree_iter_current(ih, false, &key_iov, &val_iov, NULL);
 		if (rc != 0)
 			break;
 
-		D_ASSERT(irec.ir_key.iov_len == sizeof(key));
-		memcpy(&key, irec.ir_key.iov_buf, sizeof(key));
+		D_ASSERT(key_iov.iov_len == sizeof(key));
+		memcpy(&key, key_iov.iov_buf, sizeof(key));
 
-		D_PRINT(DF_U64": %s\n", key, (char *)irec.ir_val.iov_buf);
+		D_PRINT(DF_U64": %s\n", key, (char *)val_iov.iov_buf);
 
-		dbtree_iter_move(ih, false, &anchor);
+		if (opc == BTR_PROBE_LAST)
+			dbtree_iter_prev(ih);
+		else
+			dbtree_iter_next(ih);
 	}
 
-	D_PRINT("Total %d record(s)\n", i);
+	D_PRINT("%s iterator: total %d record(s)\n",
+		opc == BTR_PROBE_FIRST ? "forward" : "backward", i);
 	dbtree_iter_finish(ih);
 	return 0;
 }
@@ -425,7 +438,8 @@ static struct option btr_ops[] = {
 	{ "update",	required_argument,	NULL,	'u'	},
 	{ "find",	required_argument,	NULL,	'f'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
-	{ "iterate",	no_argument,		NULL,	'i'	},
+	{ "iterate",	required_argument,	NULL,	'i'	},
+	{ NULL,		0,			NULL,	0	},
 };
 
 int
@@ -441,7 +455,7 @@ main(int argc, char **argv)
 	D_ASSERT(rc == 0);
 
 	optind = 0;
-	while ((rc = getopt_long(argc, argv, "C:Docu:d:f:i",
+	while ((rc = getopt_long(argc, argv, "C:Docu:d:f:i:",
 				 btr_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'C':
@@ -463,7 +477,7 @@ main(int argc, char **argv)
 			rc = ik_btr_find_or_update(false, optarg);
 			break;
 		case 'i':
-			rc = ik_btr_iterate();
+			rc = ik_btr_iterate(optarg);
 			break;
 		case 'd': /* TODO */
 		default:
