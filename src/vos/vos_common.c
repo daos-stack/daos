@@ -66,7 +66,7 @@ vos_pool_lookup_handle(daos_handle_t poh)
 	return vpool;
 }
 
-void
+inline void
 vos_pool_putref_handle(struct vp_hdl *vpool)
 {
 	if (!vpool) {

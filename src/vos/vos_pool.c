@@ -129,17 +129,18 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		 * to loss of power or no more memory in pool
 		 */
 		rc = -DER_NOMEM;
-		goto exit;
 	} TX_END
 
-	daos_hhash_hlink_init(&vpool->vp_hlink, &vpool_hh_ops);
-	daos_hhash_link_insert(daos_vos_hhash, &vpool->vp_hlink,
-			       DAOS_HTYPE_VOS_POOL);
-	daos_hhash_link_key(&vpool->vp_hlink, &poh->cookie);
-	daos_hhash_link_putref(daos_vos_hhash, &vpool->vp_hlink);
 exit:
-	if (rc)
+	if (!rc) {
+		daos_hhash_hlink_init(&vpool->vp_hlink, &vpool_hh_ops);
+		daos_hhash_link_insert(daos_vos_hhash, &vpool->vp_hlink,
+				       DAOS_HTYPE_VOS_POOL);
+		daos_hhash_link_key(&vpool->vp_hlink, &poh->cookie);
+		daos_hhash_link_putref(daos_vos_hhash, &vpool->vp_hlink);
+	} else {
 		daos_vpool_free(&vpool->vp_hlink);
+	}
 
 	return rc;
 }

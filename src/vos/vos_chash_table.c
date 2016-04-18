@@ -196,7 +196,7 @@ vos_chash_create(PMEMobjpool *ph, uint32_t buckets,
 {
 
 
-	int			      num_buckets, i;
+	int			      num_buckets, i, ret = 0;
 	TOID(struct vos_chash_table)  hash_table;
 	daos_size_t		      buckets_size;
 	struct vos_chash_buckets      *tbuckets;
@@ -224,10 +224,11 @@ vos_chash_create(PMEMobjpool *ph, uint32_t buckets,
 	} TX_ONABORT {
 		D_ERROR("create hashtable transaction aborted: %s\n",
 			pmemobj_errormsg());
-		return -DER_NOMEM;
+		ret = -DER_NOMEM;
 	} TX_END
 
-	return 0;
+
+	return ret;
 }
 
 int

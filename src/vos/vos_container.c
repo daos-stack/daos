@@ -104,8 +104,7 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 	vpool = vos_pool_lookup_handle(poh);
 	if (NULL == vpool) {
 		D_ERROR("Error in looking up VOS pool handle from hhash\n");
-		ret = -DER_INVAL;
-		goto exit;
+		return -DER_INVAL;
 	}
 
 	proot = POBJ_ROOT(vpool->vp_ph, struct vos_pool_root);
