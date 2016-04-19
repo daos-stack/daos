@@ -113,8 +113,9 @@ done:
 
 /* be called only in dtp_init */
 int
-dtp_hg_init(const char *info_string, bool server)
+dtp_hg_init(dtp_phy_addr_t *addr, bool server)
 {
+	const char		*info_string;
 	struct dtp_hg_gdata	*hg_gdata;
 	na_class_t		*na_class = NULL;
 	na_context_t		*na_context = NULL;
@@ -126,7 +127,15 @@ dtp_hg_init(const char *info_string, bool server)
 		D_GOTO(out, rc = -DER_ALREADY);
 	}
 
-	D_ASSERT(info_string != NULL && strlen(info_string) != 0);
+	if (*addr != NULL) {
+		info_string = *addr;
+		D_ASSERT(strncmp(info_string, "bmi+tcp", 7) == 0);
+	} else {
+		if (dtp_gdata.dg_verbs == true)
+			info_string = "cci+verbs://host";
+		else
+			info_string = "cci+tcp://host";
+	}
 
 	na_class = NA_Initialize(info_string, server);
 	if (na_class == NULL) {
@@ -163,6 +172,49 @@ dtp_hg_init(const char *info_string, bool server)
 
 	dtp_gdata.dg_hg = hg_gdata;
 
+	/* register the DTP_HG_RPCID */
+	rc = dtp_hg_reg(dtp_gdata.dg_hg->dhg_hgcla, DTP_HG_RPCID,
+			(dtp_proc_cb_t)dtp_proc_in_common,
+			(dtp_proc_cb_t)dtp_proc_out_common,
+			(dtp_hg_rpc_cb_t)dtp_rpc_handler_common);
+	if (rc != 0) {
+		D_ERROR("dtp_hg_reg(rpcid: 0x%x), failed rc: %d.\n",
+			DTP_HG_RPCID, rc);
+		HG_Finalize(hg_class);
+		NA_Context_destroy(na_class, na_context);
+		NA_Finalize(na_class);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+
+	if (*addr == NULL) {
+		const char *port_name;
+		char addr_str[DTP_ADDR_STR_MAX_LEN] = {'\0'};
+
+		port_name = NA_CCI_Get_port_name(na_class);
+		if (port_name == NULL) {
+			D_ERROR("NA_CCI_Get_port_name failed.\n");
+			HG_Finalize(hg_class);
+			NA_Context_destroy(na_class, na_context);
+			NA_Finalize(na_class);
+			D_GOTO(out, rc = -DER_DTP_HG);
+		}
+
+		rc = snprintf(addr_str, DTP_ADDR_STR_MAX_LEN, "cci+%s",
+			      port_name);
+		*addr = strdup(addr_str);
+		if (rc < 0 || *addr == NULL) {
+			D_ERROR("snprintf or strdup failed, rc: %d.\n", rc);
+			HG_Finalize(hg_class);
+			NA_Context_destroy(na_class, na_context);
+			NA_Finalize(na_class);
+			D_GOTO(out, rc = -DER_DTP_HG);
+		}
+		rc = 0;
+		info_string = *addr;
+	}
+
+	D_DEBUG(DF_TP, "in dtp_hg_init, listen address: %s.\n", *addr);
+
 out:
 	return rc;
 }
@@ -197,10 +249,16 @@ dtp_hg_fini()
 	}
 
 	na_ret = NA_Context_destroy(na_class, na_context);
+	/*
+	 * Ignore the error due to a HG bug:
+	 * https://github.com/mercury-hpc/mercury/issues/88
+	 */
+	/*
 	if (na_ret != NA_SUCCESS) {
 		D_ERROR("Could not destroy NA context, na_ret: %d.\n", na_ret);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
+	*/
 
 	na_ret = NA_Finalize(na_class);
 	if (na_ret != NA_SUCCESS) {
@@ -215,22 +273,96 @@ out:
 }
 
 int
-dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx)
+dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 {
-	hg_context_t		*hg_context = NULL;
-	int			rc = 0;
+	na_class_t	*na_class = NULL;
+	na_context_t	*na_context = NULL;
+	hg_class_t	*hg_class = NULL;
+	hg_context_t	*hg_context = NULL;
+	const char	*info_string;
+	const char	*port_name;
+	int		rc = 0;
 
 	D_ASSERT(hg_ctx != NULL);
 
-	hg_context = HG_Context_create(dtp_gdata.dg_hg->dhg_hgcla);
-	if (hg_context == NULL) {
-		D_ERROR("Could not create HG context.\n");
-		D_GOTO(out, rc = -DER_DTP_HG);
+	if (idx == 0 || dtp_gdata.dg_multi_na == false) {
+		hg_context = HG_Context_create(dtp_gdata.dg_hg->dhg_hgcla);
+		if (hg_context == NULL) {
+			D_ERROR("Could not create HG context.\n");
+			D_GOTO(out, rc = -DER_DTP_HG);
+		}
+
+		hg_ctx->dhc_nacla = dtp_gdata.dg_hg->dhg_nacla;
+		hg_ctx->dhc_nactx = dtp_gdata.dg_hg->dhg_nactx;
+		hg_ctx->dhc_hgcla = dtp_gdata.dg_hg->dhg_hgcla;
+		hg_ctx->dhc_shared_na = true;
+	} else {
+		if (dtp_gdata.dg_verbs == true)
+			info_string = "cci+verbs://host";
+		else
+			info_string = "cci+tcp://host";
+
+		na_class = NA_Initialize(info_string, dtp_gdata.dg_server);
+		if (na_class == NULL) {
+			D_ERROR("Could not initialize NA class.\n");
+			D_GOTO(out, rc = -DER_DTP_HG);
+		}
+
+		port_name = NA_CCI_Get_port_name(na_class);
+		if (port_name == NULL) {
+			D_ERROR("NA_CCI_Get_port_name failed.\n");
+			NA_Finalize(na_class);
+			D_GOTO(out, rc = -DER_DTP_HG);
+		}
+		D_DEBUG(DF_TP, "New context(idx:%d), listen address: cci+%s.\n",
+			idx, port_name);
+
+		na_context = NA_Context_create(na_class);
+		if (na_context == NULL) {
+			D_ERROR("Could not create NA context.\n");
+			NA_Finalize(na_class);
+			D_GOTO(out, rc = -DER_DTP_HG);
+		}
+
+		hg_class = HG_Init_na(na_class, na_context);
+		if (hg_class == NULL) {
+			D_ERROR("Could not initialize HG class.\n");
+			NA_Context_destroy(na_class, na_context);
+			NA_Finalize(na_class);
+			D_GOTO(out, rc = -DER_DTP_HG);
+		}
+
+		hg_context = HG_Context_create(hg_class);
+		if (hg_context == NULL) {
+			D_ERROR("Could not create HG context.\n");
+			HG_Finalize(hg_class);
+			NA_Context_destroy(na_class, na_context);
+			NA_Finalize(na_class);
+			D_GOTO(out, rc = -DER_DTP_HG);
+		}
+
+		/* register the shared RPCID to every hg_class */
+		rc = dtp_hg_reg(hg_class, DTP_HG_RPCID,
+				(dtp_proc_cb_t)dtp_proc_in_common,
+				(dtp_proc_cb_t)dtp_proc_out_common,
+				(dtp_hg_rpc_cb_t)dtp_rpc_handler_common);
+		if (rc != 0) {
+			D_ERROR("dtp_hg_reg(rpcid: 0x%x), failed rc: %d.\n",
+				DTP_HG_RPCID, rc);
+			HG_Context_destroy(hg_context);
+			HG_Finalize(hg_class);
+			NA_Context_destroy(na_class, na_context);
+			NA_Finalize(na_class);
+			D_GOTO(out, rc = -DER_DTP_HG);
+		}
+
+		hg_ctx->dhc_nacla = na_class;
+		hg_ctx->dhc_nactx = na_context;
+		hg_ctx->dhc_hgcla = hg_class;
+		hg_ctx->dhc_shared_na = false;
 	}
 
-	hg_ctx->dhc_nacla = dtp_gdata.dg_hg->dhg_nacla;
-	hg_ctx->dhc_nactx = dtp_gdata.dg_hg->dhg_nactx;
-	hg_ctx->dhc_hgcla = dtp_gdata.dg_hg->dhg_hgcla;
+	hg_ctx->dhc_idx = idx;
 	hg_ctx->dhc_hgctx = hg_context;
 	/* TODO: need to create separate bulk class and bulk context? */
 	hg_ctx->dhc_bulkcla = hg_ctx->dhc_hgcla;
@@ -246,9 +378,10 @@ out:
 int
 dtp_hg_ctx_fini(struct dtp_hg_context *hg_ctx)
 {
-	hg_context_t    *hg_context;
-	hg_return_t     hg_ret = HG_SUCCESS;
-	int             rc = 0;
+	hg_context_t	*hg_context;
+	hg_return_t	hg_ret = HG_SUCCESS;
+	na_return_t	na_ret;
+	int		rc = 0;
 
 	D_ASSERT(hg_ctx != NULL);
 	hg_context = hg_ctx->dhc_hgctx;
@@ -259,9 +392,26 @@ dtp_hg_ctx_fini(struct dtp_hg_context *hg_ctx)
 		hg_ctx->dhc_hgctx = NULL;
 	} else {
 		D_ERROR("Could not destroy HG context, hg_ret: %d.\n", hg_ret);
-		rc = -DER_DTP_HG;
+		D_GOTO(out, rc = -DER_DTP_HG);
 	}
 
+	if (hg_ctx->dhc_shared_na == true)
+		goto out;
+
+	/* the hg_context destroyed, ignore below errors with error logging */
+	hg_ret = HG_Finalize(hg_ctx->dhc_hgcla);
+	if (hg_ret != HG_SUCCESS)
+		D_ERROR("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
+
+	na_ret = NA_Context_destroy(hg_ctx->dhc_nacla, hg_ctx->dhc_nactx);
+	if (na_ret != NA_SUCCESS)
+		D_ERROR("Could not destroy NA context, na_ret: %d.\n", na_ret);
+
+	na_ret = NA_Finalize(hg_ctx->dhc_nacla);
+	if (na_ret != NA_SUCCESS)
+		D_ERROR("Could not finalize NA class, na_ret: %d.\n", na_ret);
+
+out:
 	return rc;
 }
 
@@ -273,6 +423,7 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 	dtp_opcode_t		opc;
 	struct dtp_rpc_priv	*rpc_priv;
 	dtp_rpc_t		*rpc_pub;
+	dtp_proc_t		proc = NULL;
 	struct dtp_opc_info	*opc_info = NULL;
 	hg_return_t		hg_ret = HG_SUCCESS;
 	int			rc = 0, addref = 0;
@@ -290,57 +441,69 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 	D_ASSERT(hg_ctx->dhc_hgcla == hg_info->hg_class);
 
-	opc = hg_info->id;
+	D_ALLOC_PTR(rpc_priv);
+	if (rpc_priv == NULL)
+		D_GOTO(out, hg_ret = HG_NOMEM_ERROR);
 
+	rpc_priv->drp_na_addr = hg_info->addr;
+	rpc_priv->drp_hg_hdl = hg_hdl;
+	rpc_pub = &rpc_priv->drp_pub;
+	rpc_pub->dr_ctx = (dtp_context_t)hg_ctx;
+	D_ASSERT(rpc_pub->dr_input == NULL);
+
+	rc = dtp_hg_unpack_header(rpc_priv, &proc);
+	if (rc != 0) {
+		D_ERROR("dtp_hg_unpack_header failed, rc: %d.\n", rc);
+		D_FREE_PTR(rpc_priv);
+		D_GOTO(out, hg_ret = HG_OTHER_ERROR);
+	}
+
+	opc = rpc_priv->drp_req_hdr.dch_opc;
 	/* D_DEBUG(DF_TP,"in dtp_rpc_handler_common, opc: 0x%x.\n", opc); */
-
 	opc_info = dtp_opc_lookup(dtp_gdata.dg_opc_map, opc, DTP_UNLOCK);
 	if (opc_info == NULL) {
 		D_ERROR("opc: 0x%x, lookup failed.\n", opc);
+		D_FREE_PTR(rpc_priv);
+		dtp_hg_unpack_cleanup(proc);
 		D_GOTO(out, hg_ret = HG_NO_MATCH);
 	}
 	D_ASSERT(opc_info->doi_input_size <= DTP_MAX_INPUT_SIZE &&
 		 opc_info->doi_output_size <= DTP_MAX_OUTPUT_SIZE);
 
-	D_ALLOC_PTR(rpc_priv);
-	if (rpc_priv == NULL)
-		D_GOTO(out, hg_ret = HG_NOMEM_ERROR);
-
-	rpc_pub = &rpc_priv->drp_pub;
 	rc = dtp_rpc_inout_buff_init(rpc_pub, opc_info->doi_input_size,
 				     opc_info->doi_output_size);
 	if (rc != 0) {
 		D_ERROR("dtp_rpc_inout_buff_init faied, rc: %d, opc: 0x%x.\n",
 			rc, opc);
 		D_FREE_PTR(rpc_priv);
+		dtp_hg_unpack_cleanup(proc);
 		D_GOTO(out, hg_ret = HG_NOMEM_ERROR);
 	}
 
 	dtp_rpc_priv_init(rpc_priv, (dtp_context_t)hg_ctx, opc, 1);
-	rpc_priv->drp_na_addr = hg_info->addr;
-	rpc_priv->drp_hg_hdl = hg_hdl;
 	rc = dtp_req_addref(rpc_pub);
 	D_ASSERT(rc == 0);
 	addref = 1;
 
 	D_ASSERT(rpc_priv->drp_srv != 0);
 	if (opc_info->doi_input_size > 0) {
-		void	*hg_in_struct;
-
 		D_ASSERT(rpc_pub->dr_input != NULL);
-		hg_in_struct = &rpc_pub->dr_input;
+		D_ASSERT(opc_info->doi_inproc_cb != NULL);
 		/* corresponding to HG_Free_input in dtp_hg_req_destroy */
-		hg_ret = HG_Get_input(rpc_priv->drp_hg_hdl, hg_in_struct);
-		if (hg_ret == HG_SUCCESS) {
+		rc = dtp_hg_unpack_body(rpc_priv, proc,
+					opc_info->doi_inproc_cb);
+		if (rc == 0) {
 			rpc_priv->drp_input_got = 1;
 			uuid_copy(rpc_pub->dr_ep.ep_grp_id,
 				  rpc_priv->drp_req_hdr.dch_grp_id);
 			rpc_pub->dr_ep.ep_rank = rpc_priv->drp_req_hdr.dch_rank;
 		} else {
-			D_ERROR("HG_Get_input failed, hg_ret: %d, opc: 0x%x.\n",
+			D_ERROR("_unpack_body failed, rc: %d, opc: 0x%x.\n",
 				hg_ret, rpc_pub->dr_opc);
-			D_GOTO(out, hg_ret);
+			D_GOTO(out, hg_ret = HG_OTHER_ERROR);
 		}
+	} else {
+		dtp_hg_unpack_cleanup(proc);
 	}
 
 	if (opc_info->doi_rpc_cb != NULL) {
@@ -363,6 +526,85 @@ out:
 	return hg_ret;
 }
 
+/*
+ * MCL address lookup table, use a big array for simplicity. Also simplify the
+ * lock needed for possible race of lookup (possible cause multiple address
+ * resolution and one time memory leak).
+ * The multiple listening addresses for one server rank is a temporary solution,
+ * it will be replaced by OFI tag matching mechanism and then this should be
+ * removed.
+ */
+struct addr_entry {
+	/* rank's base uri is known by mcl */
+	dtp_phy_addr_t	ae_base_uri;
+	na_addr_t	ae_tag_addrs[DTP_SRV_CONTEX_NUM];
+} addr_lookup_table[MCL_PS_SIZE_MAX];
+
+static int
+dtp_mcl_lookup(struct mcl_set *mclset, daos_rank_t rank, uint32_t tag,
+	       na_class_t *na_class, na_addr_t *na_addr)
+{
+	na_addr_t	tmp_addr;
+	uint32_t	ctx_idx;
+	char		tmp_addrstr[DTP_ADDR_STR_MAX_LEN] = {'\0'};
+	char		*pchar;
+	int		port;
+	na_return_t	na_ret;
+	int		rc = 0;
+
+	D_ASSERT(mclset != NULL && na_class != NULL && na_addr != NULL);
+	D_ASSERT(rank <= MCL_PS_SIZE_MAX);
+	ctx_idx = tag % DTP_SRV_CONTEX_NUM;
+
+	if (addr_lookup_table[rank].ae_tag_addrs[ctx_idx] != NULL) {
+		*na_addr = addr_lookup_table[rank].ae_tag_addrs[ctx_idx];
+		goto out;
+	}
+
+	if (addr_lookup_table[rank].ae_base_uri == NULL) {
+		rc = mcl_lookup(mclset, rank, na_class, &tmp_addr);
+		if (rc != MCL_SUCCESS) {
+			D_ERROR("mcl_lookup failed, rc: %d.\n", rc);
+			D_GOTO(out, rc = -DER_DTP_MCL);
+		}
+		D_ASSERT(mclset->cached[rank].visited != 0);
+		D_ASSERT(tmp_addr != NULL);
+
+		addr_lookup_table[rank].ae_base_uri = mclset->cached[rank].uri;
+		addr_lookup_table[rank].ae_tag_addrs[0] = tmp_addr;
+		if (ctx_idx == 0) {
+			*na_addr = tmp_addr;
+			D_GOTO(out, rc);
+		}
+	}
+
+	/* calculate the ctx_idx's listening address and connect to it */
+	strncpy(tmp_addrstr, addr_lookup_table[rank].ae_base_uri,
+		DTP_ADDR_STR_MAX_LEN);
+	pchar = strrchr(tmp_addrstr, ':');
+	pchar++;
+	port = atoi(pchar);
+	port += ctx_idx;
+	*pchar = '\0';
+	snprintf(pchar, 16, "%d", port);
+	D_DEBUG(DF_TP, "rank(%d), base uri(%s), tag(%d) uri(%s).\n",
+		rank, addr_lookup_table[rank].ae_base_uri, tag, tmp_addrstr);
+
+	na_ret = dtp_na_addr_lookup_wait(na_class, tmp_addrstr, &tmp_addr);
+	if (na_ret == NA_SUCCESS) {
+		D_DEBUG(DF_TP, "Connect to %s succeed.\n", tmp_addrstr);
+		D_ASSERT(tmp_addr != NULL);
+		addr_lookup_table[rank].ae_tag_addrs[ctx_idx] = tmp_addr;
+		*na_addr = tmp_addr;
+	} else {
+		D_ERROR("Could not connect to %s, na_ret: %d.\n",
+			tmp_addrstr, na_ret);
+		D_GOTO(out, rc = -DER_DTP_MCL);
+	}
+out:
+	return rc;
+}
+
 int
 dtp_hg_req_create(struct dtp_hg_context *hg_ctx, dtp_endpoint_t tgt_ep,
 		  struct dtp_rpc_priv *rpc_priv)
@@ -374,16 +616,17 @@ dtp_hg_req_create(struct dtp_hg_context *hg_ctx, dtp_endpoint_t tgt_ep,
 		 hg_ctx->dhc_hgctx != NULL);
 	D_ASSERT(rpc_priv != NULL);
 
-	rc = mcl_lookup(dtp_gdata.dg_mcl_srv_set, tgt_ep.ep_rank,
-			hg_ctx->dhc_nacla, &rpc_priv->drp_na_addr);
-	if (rc != MCL_SUCCESS) {
-		D_ERROR("mcl_lookup failed, rc: %d, opc: 0x%x.\n",
+	rc = dtp_mcl_lookup(dtp_gdata.dg_mcl_srv_set, tgt_ep.ep_rank,
+			    tgt_ep.ep_tag, hg_ctx->dhc_nacla,
+			    &rpc_priv->drp_na_addr);
+	if (rc != 0) {
+		D_ERROR("dtp_mcl_lookup failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_priv->drp_pub.dr_opc);
-		D_GOTO(out, rc = -DER_DTP_MCL);
+		D_GOTO(out, rc);
 	}
 
 	hg_ret = HG_Create(hg_ctx->dhc_hgctx, rpc_priv->drp_na_addr,
-			   rpc_priv->drp_pub.dr_opc, &rpc_priv->drp_hg_hdl);
+			   DTP_HG_RPCID, &rpc_priv->drp_hg_hdl);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Create failed, hg_ret: %d, opc: 0x%x.\n",
 			hg_ret, rpc_priv->drp_pub.dr_opc);

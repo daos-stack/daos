@@ -50,7 +50,7 @@ typedef uuid_t dtp_group_id_t;
 typedef struct {
 	dtp_group_id_t		ep_grp_id;
 	daos_rank_t		ep_rank;
-	uint32_t		ep_pad; /* pad just to align to 8 bytes */
+	uint32_t		ep_tag; /* optional tag */
 } dtp_endpoint_t;
 
 typedef uint32_t dtp_opcode_t;
@@ -168,8 +168,6 @@ typedef int (*dtp_proc_cb_t)(dtp_proc_t proc, void *data);
  *				stopping the progressing.
  */
 typedef int (*dtp_progress_cond_cb_t)(void *arg, unsigned int creds);
-
-#define DTP_PHY_ADDR_ENV	"DTP_PHY_ADDR_STR"
 
 /**
  * Initialize DAOS transport layer.

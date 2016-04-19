@@ -40,14 +40,14 @@ dtp_context_create(void *arg, dtp_context_t *dtp_ctx)
 	if (hg_ctx == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = dtp_hg_ctx_init(hg_ctx);
+	pthread_rwlock_wrlock(&dtp_gdata.dg_rwlock);
+	rc = dtp_hg_ctx_init(hg_ctx, dtp_gdata.dg_ctx_num);
 	if (rc != 0) {
 		D_ERROR("dtp_hg_ctx_init failed rc: %d.\n", rc);
 		D_FREE_PTR(hg_ctx);
+		pthread_rwlock_unlock(&dtp_gdata.dg_rwlock);
 		D_GOTO(out, rc);
 	}
-
-	pthread_rwlock_wrlock(&dtp_gdata.dg_rwlock);
 
 	dtp_gdata.dg_ctx_num++;
 	daos_list_add_tail(&hg_ctx->dhc_link, &dtp_gdata.dg_ctx_list);

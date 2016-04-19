@@ -33,7 +33,7 @@ struct echo_serv {
 
 static void *progress_handler(void *arg)
 {
-	int rc, loop = 0;
+	int rc, loop = 0, i;
 	assert(arg == NULL);
 	/* progress loop */
 	do {
@@ -42,10 +42,23 @@ static void *progress_handler(void *arg)
 			printf("dtp_progress failed rc: %d.\n", rc);
 			break;
 		}
+
+		if (ECHO_EXTRA_CONTEXT_NUM > 0) {
+			for (i = 0; i < ECHO_EXTRA_CONTEXT_NUM; i++) {
+				rc = dtp_progress(gecho.extra_ctx[i], 1, NULL,
+						  NULL, NULL);
+				if (rc != 0 && rc != -ETIMEDOUT) {
+					printf("dtp_progress failed rc: %d.\n",
+					       rc);
+					break;
+				}
+			}
+		}
+
 		if (echo_srv.do_shutdown != 0) {
 			/* to ensure the last SHUTDOWN request be handled */
 			loop++;
-			if (loop >= 1000)
+			if (loop >= 100)
 				break;
 		}
 	} while (1);
@@ -61,8 +74,8 @@ static int run_echo_srver(void)
 {
 	dtp_endpoint_t		svr_ep;
 	dtp_rpc_t		*rpc_req = NULL;
-	echo_checkin_in_t	*checkin_input = NULL;
-	echo_checkin_out_t	*checkin_output = NULL;
+	echo_checkin_in_t	*checkin_input;
+	echo_checkin_out_t	*checkin_output;
 	char			*pchar;
 	daos_rank_t		myrank;
 	int			rc, loop = 0;
@@ -163,8 +176,8 @@ int echo_srv_shutdown(dtp_rpc_t *rpc_req)
 int g_roomno = 1082;
 int echo_srv_checkin(dtp_rpc_t *rpc_req)
 {
-	echo_checkin_in_t	*checkin_input = NULL;
-	echo_checkin_out_t	*checkin_output = NULL;
+	echo_checkin_in_t	*checkin_input;
+	echo_checkin_out_t	*checkin_output;
 	int			rc = 0;
 
 	/* dtp internally already allocated the input/output buffer */
@@ -191,8 +204,8 @@ int echo_srv_checkin(dtp_rpc_t *rpc_req)
 int bulk_test_cb(const struct dtp_bulk_cb_info *cb_info)
 {
 	dtp_rpc_t			*rpc_req;
-	echo_bulk_test_in_t		*bulk_test_input = NULL;
-	echo_bulk_test_out_t		*bulk_test_output = NULL;
+	echo_bulk_test_in_t		*bulk_test_input;
+	echo_bulk_test_out_t		*bulk_test_output;
 	struct dtp_bulk_desc		*bulk_desc;
 	dtp_bulk_t			local_bulk_hdl;
 	daos_iov_t			*iovs;
@@ -279,7 +292,7 @@ int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 	daos_iov_t			*iovs = NULL;
 	daos_size_t			bulk_len;
 	unsigned int			bulk_sgnum;
-	echo_bulk_test_in_t		*bulk_test_input = NULL;
+	echo_bulk_test_in_t		*bulk_test_input;
 	struct dtp_bulk_desc		bulk_desc;
 	dtp_bulk_opid_t			bulk_opid;
 	int				rc = 0;

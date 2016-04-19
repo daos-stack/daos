@@ -37,9 +37,13 @@
 #define ECHO_OPC_BULK_TEST  (0xA2)
 #define ECHO_OPC_SHUTDOWN   (0x100)
 
+#define ECHO_EXTRA_CONTEXT_NUM (3)
+
 struct gecho {
 	dtp_context_t	dtp_ctx;
+	dtp_context_t	*extra_ctx;
 	int		complete;
+	bool		server;
 };
 
 extern struct gecho gecho;
@@ -63,12 +67,25 @@ DTP_GEN_PROC(echo_bulk_test_out_t,
 static inline void
 echo_init(int server)
 {
-	int rc = 0;
+	int rc = 0, i;
 
 	rc = dtp_init(server);
 	assert(rc == 0);
 
+	gecho.server = (server != 0);
+
 	rc = dtp_context_create(NULL, &gecho.dtp_ctx);
+	assert(rc == 0);
+
+	if (server && ECHO_EXTRA_CONTEXT_NUM > 0) {
+		gecho.extra_ctx = calloc(ECHO_EXTRA_CONTEXT_NUM,
+					 sizeof(dtp_context_t));
+		assert(gecho.extra_ctx != NULL);
+		for (i = 0; i < ECHO_EXTRA_CONTEXT_NUM; i++) {
+			rc = dtp_context_create(NULL, &gecho.extra_ctx[i]);
+			assert(rc == 0);
+		}
+	}
 
 	/* Just show the case that the client does not know the rpc handler,
 	 * then client side can use dtp_rpc_reg, and server side can use
@@ -113,10 +130,17 @@ echo_init(int server)
 static inline void
 echo_fini(void)
 {
-	int rc = 0;
+	int rc = 0, i;
 
 	rc = dtp_context_destroy(gecho.dtp_ctx, 0);
 	assert(rc == 0);
+
+	if (gecho.server && ECHO_EXTRA_CONTEXT_NUM > 0) {
+		for (i = 0; i < ECHO_EXTRA_CONTEXT_NUM; i++) {
+			rc = dtp_context_destroy(gecho.extra_ctx[i], 0);
+			assert(rc == 0);
+		}
+	}
 
 	rc = dtp_finalize();
 	assert(rc == 0);

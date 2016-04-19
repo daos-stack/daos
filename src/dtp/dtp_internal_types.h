@@ -39,8 +39,14 @@ struct dtp_hg_gdata;
 
 /* dtp global data */
 struct dtp_gdata {
-	dtp_phy_addr_t		dg_self_addr;
+	dtp_phy_addr_t		dg_addr;
+	uint32_t		dg_addr_len;
+
 	bool			dg_server;
+	bool			dg_verbs; /* CCI verbs transport flag */
+	/* multiple NA addr flag, true for server when using CCI plugin */
+	bool			dg_multi_na;
+
 	/* dtp contexts list */
 	daos_list_t             dg_ctx_list;
 	/* actual number of items in dtp contexts list */
@@ -80,6 +86,11 @@ extern struct dtp_gdata		dtp_gdata;
  */
 #define DTP_GLOBAL_SRV_GRPID_STR	"da03c1e7-1618-8899-6699-aabbccddeeff"
 #define DTP_GLOBAL_CLI_GRPID_STR	"da033e4e-1618-8899-6699-aabbccddeeff"
+
+/* TODO may use a RPC to query server-side context number */
+#ifndef DTP_SRV_CONTEX_NUM
+# define DTP_SRV_CONTEX_NUM	(4)
+#endif
 
 /* dtp layer common header, 48 bytes */
 struct dtp_common_hdr {

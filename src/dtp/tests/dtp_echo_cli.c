@@ -50,8 +50,8 @@ struct bulk_test_cli_cbinfo {
 
 static int bulk_test_req_cb(const struct dtp_cb_info *cb_info)
 {
-	echo_bulk_test_in_t		*bulk_test_input = NULL;
-	echo_bulk_test_out_t		*bulk_test_output = NULL;
+	echo_bulk_test_in_t		*bulk_test_input;
+	echo_bulk_test_out_t		*bulk_test_output;
 	struct bulk_test_cli_cbinfo	*bulk_test_cbinfo;
 	dtp_rpc_t			*rpc_req;
 	int				rc;
@@ -82,10 +82,10 @@ static void run_client(void)
 {
 	dtp_endpoint_t			svr_ep;
 	dtp_rpc_t			*rpc_req = NULL;
-	echo_checkin_in_t		*checkin_input = NULL;
-	echo_checkin_out_t		*checkin_output = NULL;
-	echo_bulk_test_in_t		*bulk_test_input = NULL;
-	echo_bulk_test_out_t		*bulk_test_output = NULL;
+	echo_checkin_in_t		*checkin_input;
+	echo_checkin_out_t		*checkin_output;
+	echo_bulk_test_in_t		*bulk_test_input;
+	echo_bulk_test_out_t		*bulk_test_output;
 	daos_sg_list_t			sgl;
 	daos_iov_t			*iovs = NULL;
 	dtp_bulk_t			bulk_hdl;
@@ -99,48 +99,56 @@ static void run_client(void)
 
 	/* ============= test-1 ============ */
 
-	/* send checkin RPC */
-	svr_ep.ep_rank = 0;
-	rc = dtp_req_create(gecho.dtp_ctx, svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
-	assert(rc == 0 && rpc_req != NULL);
+	/* send checkin RPC to different contexts of server*/
+	for (i = 0; i <= ECHO_EXTRA_CONTEXT_NUM; i++) {
+		svr_ep.ep_rank = 0;
+		svr_ep.ep_tag = i;
+		rc = dtp_req_create(gecho.dtp_ctx, svr_ep, ECHO_OPC_CHECKIN,
+				    &rpc_req);
+		assert(rc == 0 && rpc_req != NULL);
 
-	/*
-	 * The dtp_req_create already allocated the input/output buffer
-	 * based on the input_size/output_size per the opcode
-	 */
-	checkin_input = (echo_checkin_in_t *)rpc_req->dr_input;
-	assert(checkin_input != NULL);
-	checkin_output = (echo_checkin_out_t *)rpc_req->dr_output;
-	assert(checkin_output != NULL);
+		/*
+		 * The dtp_req_create already allocated the input/output buffer
+		 * based on the input_size/output_size per the opcode
+		 */
+		checkin_input = (echo_checkin_in_t *)rpc_req->dr_input;
+		assert(checkin_input != NULL);
+		checkin_output = (echo_checkin_out_t *)rpc_req->dr_output;
+		assert(checkin_output != NULL);
 
-	/*
-	 * No strdup will cause mercury crash when HG_Free_input
-	 * in dtp_hg_reply_send_cb
-	 */
-	D_ALLOC(pchar, 256); /* DTP will internally free it */
-	assert(pchar != NULL);
-	snprintf(pchar, 256, "Guest_%d@client-side", myrank);
-	checkin_input->name = pchar;
-	checkin_input->age = 32;
-	checkin_input->days = myrank;
+		/*
+		 * No strdup will cause mercury crash when HG_Free_input
+		 * in dtp_hg_reply_send_cb
+		 */
+		D_ALLOC(pchar, 256); /* DTP will internally free it */
+		assert(pchar != NULL);
+		snprintf(pchar, 256, "Guest_%d_%d@client-side",
+			 myrank, svr_ep.ep_tag);
+		checkin_input->name = pchar;
+		checkin_input->age = 32 + svr_ep.ep_tag;
+		checkin_input->days = myrank;
 
-	printf("client(rank %d) sending checkin rpc, name:%s,age:%d,days:%d.\n",
-	       myrank, checkin_input->name, checkin_input->age,
-	       checkin_input->days);
+		printf("client(rank %d) sending checkin rpc with tag %d, "
+		       "name: %s, age: %d, days: %d.\n",
+		       myrank, svr_ep.ep_tag, checkin_input->name,
+		       checkin_input->age, checkin_input->days);
 
-	gecho.complete = 0;
-	rc = dtp_req_send(rpc_req, client_cb_common, &gecho.complete);
-	assert(rc == 0);
-	/* wait two minutes (in case of manually starting up clients) */
-	rc = client_wait(120, 1000, &gecho.complete);
-	assert(rc == 0);
+		gecho.complete = 0;
+		rc = dtp_req_send(rpc_req, client_cb_common, &gecho.complete);
+		assert(rc == 0);
+		/* wait two minutes (in case of manually starting up clients) */
+		rc = client_wait(120, 1000, &gecho.complete);
+		assert(rc == 0);
 
-	printf("client(rank %d) checkin request sent.\n", myrank);
+		printf("client(rank %d, tag %d) checkin request sent.\n",
+		       myrank, svr_ep.ep_tag);
+	}
 
 	/* ============= test-2 ============
 	 * simple bulk transferring */
 	rpc_req = NULL;
 	svr_ep.ep_rank = 0;
+	svr_ep.ep_tag = 0;
 	rc = dtp_req_create(gecho.dtp_ctx, svr_ep, ECHO_OPC_BULK_TEST,
 			    &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);

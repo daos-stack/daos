@@ -34,8 +34,15 @@
 #include <mercury_proc_string.h>
 #include <na.h>
 #include <na_error.h>
+#include <na_cci.h>
 
 #include <dtp_internal_types.h>
+
+/* change to 0 to disable the low-level unpack */
+#define DTP_HG_LOWLEVEL_UNPACK	(1)
+
+/* the shared HG RPC ID used for all DAOS opc */
+#define DTP_HG_RPCID	(0xDA036868)
 
 /**
  * Basic approach for core affinity handling:
@@ -53,6 +60,8 @@
  */
 struct dtp_hg_context {
 	daos_list_t		dhc_link; /* link to gdata.dg_ctx_list */
+	int			dhc_idx; /* context index */
+	bool			dhc_shared_na; /* flag for shared na_class */
 	na_class_t		*dhc_nacla; /* NA class */
 	na_context_t		*dhc_nactx; /* NA context */
 	hg_class_t		*dhc_hgcla; /* HG class */
@@ -82,9 +91,9 @@ struct dtp_rpc_priv {
 	pthread_spinlock_t	drp_lock;
 };
 
-int dtp_hg_init(const char *info_string, bool server);
+int dtp_hg_init(dtp_phy_addr_t *addr, bool server);
 int dtp_hg_fini();
-int dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx);
+int dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx);
 int dtp_hg_ctx_fini(struct dtp_hg_context *hg_ctx);
 int dtp_hg_req_create(struct dtp_hg_context *hg_ctx, dtp_endpoint_t tgt_ep,
 		      struct dtp_rpc_priv *rpc_priv);
@@ -246,6 +255,139 @@ out:
 	return rc;
 }
 
+/* For unpacking only the common header to know about the DAOS opc */
+static inline int
+dtp_hg_unpack_header(struct dtp_rpc_priv *rpc_priv, dtp_proc_t *proc)
+{
+	int	rc = 0;
+
+#if DTP_HG_LOWLEVEL_UNPACK
+	/*
+	 * Use some low level HG APIs to unpack header first and then unpack the
+	 * body, avoid unpacking two times (which needs to lookup, create the
+	 * proc multiple times).
+	 * The potential risk is mercury possibly will not export those APIs
+	 * later, and the hard-coded method HG_CRC64 used below which maybe
+	 * different with future's mercury code change.
+	 */
+	void			*in_buf;
+	hg_size_t		in_buf_size;
+	hg_return_t		hg_ret = HG_SUCCESS;
+	hg_handle_t		handle;
+	hg_class_t		*hg_class;
+	struct dtp_hg_context	*hg_ctx;
+	hg_proc_t		hg_proc = HG_PROC_NULL;
+
+	/* Get input buffer */
+	handle = rpc_priv->drp_hg_hdl;
+	hg_ret = HG_Core_get_input(handle, &in_buf, &in_buf_size);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("Could not get input buffer, hg_ret: %d.", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+
+	/* Create a new decoding proc */
+	hg_ctx = (struct dtp_hg_context *)(rpc_priv->drp_pub.dr_ctx);
+	hg_class = hg_ctx->dhc_hgcla;
+	hg_ret = hg_proc_create(hg_class, in_buf, in_buf_size, HG_DECODE,
+				HG_CRC64, &hg_proc);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("Could not create proc, hg_ret: %d.", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+
+	/* Decode header */
+	rc = dtp_proc_common_hdr(hg_proc, &rpc_priv->drp_req_hdr);
+	if (rc != 0)
+		D_ERROR("dtp_proc_common_hdr failed rc: %d.\n", rc);
+
+	*proc = hg_proc;
+out:
+	return rc;
+#else
+	/*
+	 * In the case that if mercury does not export the HG_Core_xxx APIs,
+	 * we can only use the HG_Get_input to unpack the header which indeed
+	 * will cause the unpacking twice as later we still need to unpack the
+	 * body.
+	 *
+	 * Notes: as here we only unpack DAOS common header and not finish
+	 * the HG_Get_input() procedure, so for mercury need to turn off the
+	 * checksum compiling option (-DMERCURY_USE_CHECKSUMS=OFF), or mercury
+	 * will report checksum mismatch in the call of HG_Get_input.
+	 */
+	void		*hg_in_struct;
+	hg_return_t	hg_ret = HG_SUCCESS;
+
+	D_ASSERT(rpc_priv != NULL && proc != NULL);
+	D_ASSERT(rpc_priv->drp_pub.dr_input == NULL);
+
+	hg_in_struct = &rpc_priv->drp_pub.dr_input;
+	hg_ret = HG_Get_input(rpc_priv->drp_hg_hdl, hg_in_struct);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Get_input failed, hg_ret: %d.\n", hg_ret);
+		rc = -DER_DTP_HG;
+	}
+
+	return rc;
+#endif
+}
+
+static inline void
+dtp_hg_unpack_cleanup(dtp_proc_t proc)
+{
+#if DTP_HG_LOWLEVEL_UNPACK
+	if (proc != HG_PROC_NULL)
+		hg_proc_free(proc);
+#endif
+}
+
+static inline int
+dtp_hg_unpack_body(struct dtp_rpc_priv *rpc_priv, dtp_proc_t proc,
+		   dtp_proc_cb_t inproc_cb)
+{
+	int	rc = 0;
+
+#if DTP_HG_LOWLEVEL_UNPACK
+	hg_return_t	hg_ret;
+
+	D_ASSERT(rpc_priv != NULL && proc != HG_PROC_NULL && inproc_cb != NULL);
+
+	/* Decode input parameters */
+	rc = inproc_cb(proc, rpc_priv->drp_pub.dr_input);
+	if (rc != 0) {
+		D_ERROR("dtp_hg_unpack_body failed, rc: %d, opc: 0x%x.\n",
+			rc, rpc_priv->drp_pub.dr_opc);
+		D_GOTO(out, rc);
+	}
+
+	/* Flush proc */
+	hg_ret = hg_proc_flush(proc);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("Error in proc flush, hg_ret: %d, opc: 0x%x.",
+			hg_ret, rpc_priv->drp_pub.dr_opc);
+		D_GOTO(out, rc);
+	}
+out:
+	dtp_hg_unpack_cleanup(proc);
+
+#else
+	void		*hg_in_struct;
+	hg_return_t	hg_ret = HG_SUCCESS;
+
+	D_ASSERT(rpc_priv != NULL);
+	D_ASSERT(rpc_priv->drp_pub.dr_input != NULL);
+
+	hg_in_struct = &rpc_priv->drp_pub.dr_input;
+	hg_ret = HG_Get_input(rpc_priv->drp_hg_hdl, hg_in_struct);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Get_input failed, hg_ret: %d.\n", hg_ret);
+		rc = -DER_DTP_HG;
+	}
+#endif
+	return rc;
+}
+
 /* NB: caller should pass in &rpc_pub->dr_input as the \param data */
 static inline int
 dtp_proc_in_common(dtp_proc_t proc, dtp_rpc_input_t *data)
@@ -343,18 +485,19 @@ int dtp_rpc_handler_common(hg_handle_t hg_hdl);
 typedef hg_rpc_cb_t dtp_hg_rpc_cb_t;
 
 static inline int
-dtp_hg_reg(dtp_opcode_t opc, dtp_proc_cb_t in_proc_cb,
+dtp_hg_reg(hg_class_t *hg_class, hg_id_t rpcid, dtp_proc_cb_t in_proc_cb,
 	   dtp_proc_cb_t out_proc_cb, dtp_hg_rpc_cb_t rpc_cb)
 {
 	hg_return_t hg_ret;
 	int         rc = 0;
 
-	hg_ret = HG_Register(dtp_gdata.dg_hg->dhg_hgcla, opc,
-			     (hg_proc_cb_t)in_proc_cb,
+	D_ASSERT(hg_class != NULL);
+
+	hg_ret = HG_Register(hg_class, rpcid, (hg_proc_cb_t)in_proc_cb,
 			     (hg_proc_cb_t)out_proc_cb, rpc_cb);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Register(opc: 0x%x) failed, hg_ret: %d.\n",
-			opc, hg_ret);
+		D_ERROR("HG_Register(rpcid: 0x%x) failed, hg_ret: %d.\n",
+			rpcid, hg_ret);
 		rc = -DER_DTP_HG;
 	}
 	return rc;

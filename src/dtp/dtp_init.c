@@ -31,7 +31,7 @@ static volatile int   gdata_init_flag;
 
 /* internally generate a physical address string */
 static int
-dtp_gen_phyaddr(dtp_phy_addr_t *phy_addr)
+dtp_gen_bmi_phyaddr(dtp_phy_addr_t *phy_addr)
 {
 	int			socketfd;
 	struct sockaddr_in	tmp_socket;
@@ -176,6 +176,9 @@ static void data_init()
 	dtp_gdata.dg_ctx_num = 0;
 	dtp_gdata.dg_refcount = 0;
 	dtp_gdata.dg_inited = 0;
+	dtp_gdata.dg_addr = NULL;
+	dtp_gdata.dg_verbs = false;
+	dtp_gdata.dg_multi_na = false;
 
 	gdata_init_flag = 1;
 }
@@ -288,8 +291,8 @@ dtp_mcl_fini()
 int
 dtp_init(bool server)
 {
-	dtp_phy_addr_t	addr;
-	int		rc = 0, len;
+	dtp_phy_addr_t	addr = NULL, addr_env;
+	int		rc = 0;
 
 	D_DEBUG(DF_TP, "Enter dtp_init.\n");
 
@@ -305,40 +308,72 @@ dtp_init(bool server)
 
 	pthread_rwlock_wrlock(&dtp_gdata.dg_rwlock);
 	if (dtp_gdata.dg_inited == 0) {
-		addr = (dtp_phy_addr_t)getenv(DTP_PHY_ADDR_ENV);
-		if (addr == NULL || strlen(addr) == 0) {
-			D_DEBUG(DF_TP, "ENV %s invalid, will generated addr.\n",
-				DTP_PHY_ADDR_ENV);
-			rc = dtp_gen_phyaddr(&addr);
-			if (rc != 0) {
-				D_ERROR("dtp_gen_phyaddr failed, rc: %d.\n",
-					rc);
-				D_GOTO(out, rc);
+		dtp_gdata.dg_server = server;
+
+		if (server == true)
+			dtp_gdata.dg_multi_na = true;
+
+		addr_env = (dtp_phy_addr_t)getenv(DTP_PHY_ADDR_ENV);
+		if (addr_env == NULL) {
+			D_DEBUG(DF_TP, "ENV %s not found.\n", DTP_PHY_ADDR_ENV);
+			goto do_init;
+		} else{
+			D_DEBUG(DF_TP, "EVN %s: %s.\n",
+				DTP_PHY_ADDR_ENV, addr_env);
+		}
+		if (strncmp(addr_env, "bmi+tcp", 7) == 0) {
+			if (strcmp(addr_env, "bmi+tcp") == 0) {
+				rc = dtp_gen_bmi_phyaddr(&addr);
+				if (rc == 0) {
+					D_DEBUG(DF_TP, "ENV %s (%s), generated "
+						"a BMI phyaddr: %s.\n",
+						DTP_PHY_ADDR_ENV, addr_env,
+						addr);
+				} else {
+					D_ERROR("dtp_gen_bmi_phyaddr failed, "
+						"rc: %d.\n", rc);
+					D_GOTO(out, rc);
+				}
+			} else {
+				D_DEBUG(DF_TP, "ENV %s found, use addr %s.\n",
+					DTP_PHY_ADDR_ENV, addr_env);
+				addr = strdup(addr_env);
+				if (addr == NULL) {
+					D_ERROR("strdup failed.\n");
+					D_GOTO(out, rc = -DER_NOMEM);
+				}
 			}
-			dtp_gdata.dg_self_addr = addr;
-		} else {
-			D_DEBUG(DF_TP, "ENV %s found, use addr %s.\n",
-				DTP_PHY_ADDR_ENV, addr);
-			dtp_gdata.dg_self_addr = strdup(addr);
+			D_ASSERT(addr != NULL);
+			dtp_gdata.dg_multi_na = false;
+		} else if (strncmp(addr_env, "cci+verbs", 9) == 0) {
+			dtp_gdata.dg_verbs = true;
 		}
 
-		dtp_gdata.dg_server = server;
+do_init:
+		/*
+		 * For client unset the CCI_CONFIG ENV, then client-side process
+		 * will use random port number and will not conflict with server
+		 * side. As when using orterun to load both server and client it
+		 * possibly will lead them share the same ENV.
+		 */
+		if (server == false)
+			unsetenv("CCI_CONFIG");
+
+		rc = dtp_hg_init(&addr, server);
+		if (rc != 0) {
+			D_ERROR("dtp_hg_init failed rc: %d.\n", rc);
+			D_GOTO(unlock, rc);
+		}
+		D_ASSERT(addr != NULL);
+		dtp_gdata.dg_addr = addr;
+		dtp_gdata.dg_addr_len = strlen(addr);
 
 		rc = dtp_mcl_init(&addr);
 		if (rc != 0) {
 			D_ERROR("dtp_mcl_init failed, rc: %d.\n", rc);
-			len = strlen(dtp_gdata.dg_self_addr);
-			D_FREE(dtp_gdata.dg_self_addr, len);
+			dtp_hg_fini();
+			D_FREE(dtp_gdata.dg_addr, dtp_gdata.dg_addr_len);
 			D_GOTO(unlock, rc = -DER_DTP_MCL);
-		}
-
-		rc = dtp_hg_init(addr, server);
-		if (rc != 0) {
-			D_ERROR("dtp_hg_init failed rc: %d.\n", rc);
-			dtp_mcl_fini();
-			len = strlen(dtp_gdata.dg_self_addr);
-			D_FREE(dtp_gdata.dg_self_addr, len);
-			D_GOTO(unlock, rc);
 		}
 
 		rc = dtp_opc_map_create(DTP_OPC_MAP_BITS,
@@ -347,8 +382,7 @@ dtp_init(bool server)
 			D_ERROR("dtp_opc_map_create failed rc: %d.\n", rc);
 			dtp_hg_fini();
 			dtp_mcl_fini();
-			len = strlen(dtp_gdata.dg_self_addr);
-			D_FREE(dtp_gdata.dg_self_addr, len);
+			D_FREE(dtp_gdata.dg_addr, dtp_gdata.dg_addr_len);
 			D_GOTO(unlock, rc);
 		}
 
@@ -379,7 +413,7 @@ dtp_initialized()
 int
 dtp_finalize(void)
 {
-	int rc = 0, len;
+	int rc = 0;
 
 	D_DEBUG(DF_TP, "Enter dtp_finalize.\n");
 
@@ -392,7 +426,7 @@ dtp_finalize(void)
 	}
 	if (dtp_gdata.dg_ctx_num > 0) {
 		D_ASSERT(!dtp_context_empty(DTP_LOCKED));
-		D_ERROR("cannot finalize, current ctx_num(%d.).\n",
+		D_ERROR("cannot finalize, current ctx_num(%d).\n",
 			dtp_gdata.dg_ctx_num);
 		pthread_rwlock_unlock(&dtp_gdata.dg_rwlock);
 		D_GOTO(out, rc = -DER_NO_PERM);
@@ -414,9 +448,8 @@ dtp_finalize(void)
 			D_GOTO(out, rc);
 		}
 
-		D_ASSERT(dtp_gdata.dg_self_addr != NULL);
-		len = strlen(dtp_gdata.dg_self_addr);
-		D_FREE(dtp_gdata.dg_self_addr, len);
+		D_ASSERT(dtp_gdata.dg_addr != NULL);
+		D_FREE(dtp_gdata.dg_addr, dtp_gdata.dg_addr_len);
 		dtp_gdata.dg_server = false;
 
 		dtp_opc_map_destroy(dtp_gdata.dg_opc_map);

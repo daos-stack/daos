@@ -233,14 +233,7 @@ dtp_rpc_reg_internal(dtp_opcode_t opc, dtp_proc_cb_t in_proc_cb,
 			 DTP_UNLOCK);
 	if (rc != 0) {
 		D_ERROR("rpc (opcode: %d) register failed, rc: %d.\n", opc, rc);
-		D_GOTO(out, rc);
 	}
-
-	rc = dtp_hg_reg(opc, (dtp_proc_cb_t)dtp_proc_in_common,
-			(dtp_proc_cb_t)dtp_proc_out_common,
-			(dtp_hg_rpc_cb_t)dtp_rpc_handler_common);
-	if (rc != 0)
-		D_ERROR("dtp_hg_reg(opc: 0x%x), failed rc: %d.\n", opc, rc);
 
 out:
 	return rc;
