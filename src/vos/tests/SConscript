@@ -2,15 +2,14 @@
 
 Import('env')
 
-
 env.Program('hdr_build', 'hdr_build.c')
-env.Program('vos_pool_tests','vos_pool_tests.c', LIBS=['libvos', 'libuuid',
-                                                       'libpmemobj', 'libpthread',
+env.Program('vos_pool_tests','vos_pool_tests.c', LIBS=['$LIBS', 'libvos', 'libuuid',
+                                                       'libpthread',
                                                        'libdaos_common'])
 env.Program('vos_container_tests','vos_container_tests.c',
-            LIBS=['libvos', 'libuuid','libpmemobj','libpthread',
+            LIBS=['$LIBS', 'libvos', 'libuuid','libpthread',
                   'libdaos_common','libgomp'])
 
 env.Program('vos_chash_table_test','vos_chashtable_test.c', CCFLAGS='-fopenmp',
-            LIBS=['libvos', 'libuuid','libpmemobj','libdaos_common','libpthread',
+            LIBS=['$LIBS', 'libvos', 'libuuid','libdaos_common','libpthread',
                   'libgomp'])

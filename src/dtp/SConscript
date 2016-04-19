@@ -1,11 +1,16 @@
 #!python
 
-Import('env')
+Import('env', 'PREREQS')
 
 env.Append(CPPPATH = ['#/src/dtp'])
 
 libraries = ['daos_common', 'mercury']
 libraries += ['mcl']
+
+if PREREQS is None:
+    libraries.append(['mercury','na'])
+else:
+    PREREQS.require(env, 'mercury')
 
 dtp = env.SharedLibrary('libdaos_transport', Glob('*.c'), LIBS=libraries)
 env.Install('#/build/lib/', dtp)

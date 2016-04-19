@@ -1,6 +1,16 @@
 #!python
 
-Import('env')
+Import('env', 'PREREQS')
+
+if PREREQS is None:
+    # This isn't ideal as this is already checked for in / and /common
+    # so should probably be a variable.
+    config = Configure(env)
+    if config.CheckHeader('libpmemobj.h'):
+        env.Append(LIBS='libpmemobj')
+    config.Finish()
+else:
+    PREREQS.require(env, 'nvml')
 
 # Compiler options
 env.Append(CPPPATH = ['#/src/vos/'])

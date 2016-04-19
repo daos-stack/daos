@@ -2,3 +2,7 @@
 .sconf_temp
 /build/
 tags
+daos_m.conf
+/_build.external/
+config.log
+/install/

@@ -5,7 +5,7 @@ Import('env')
 env.Append(CPPPATH = ['#/src/dtp/tests'])
 
 libraries = ['daos_transport', 'daos_common']
-libraries += ['mercury', 'na', 'pthread', 'crypto', 'uuid']
+libraries += ['pthread', 'crypto', 'uuid']
 libraries += ['mcl']
 
 # a simple example to use dtp_xxx APIs

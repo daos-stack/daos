@@ -3,43 +3,59 @@
 import sys
 import os
 
+have_scons_local=False
+if os.path.exists('scons_local'):
+        try:
+                sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
+                from prereq_tools import PreReqComponent
+                have_scons_local=True
+        except ImportError:
+                print ('Unable to import scons_local, falling back to traditional build')
+                pass
+
 env = Environment()
 
-# Pass TERM through to the environment to allow colour output from gcc
-term = os.environ.get("TERM")
-if term:
-        real_env = env['ENV']
-        real_env["TERM"] = term
-        env.Replace(ENV=real_env)
-
 config = Configure(env)
-if not config.CheckLib('cgroup'):
+for required_lib in ['cgroup', 'uuid']:
+        if not config.CheckLib(required_lib):
+                config.Finish()
+                exit(1)
+
+if not config.CheckLib('numa'):
         config.Finish()
-        exit(1)
-if not config.CheckHeader('mercury.h'):
-        config.Finish()
+        print ('for libnuma install numactl-devel package')
         exit(1)
 
-if config.CheckHeader('libpmemobj.h'):
-	env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
+if not config.CheckLib('crypto'):
+        config.Finish()
+        print ('for libcrypto install openssl-devel package')
+        exit(1)
+
+for required_header in ['openssl/md5.h']:
+        if not config.CheckHeader(required_header):
+                config.Finish()
+                exit(1)
+
+if have_scons_local:
+        OPTS_FILE = os.path.join(Dir('#').abspath, 'daos_m.conf')
+        OPTS = Variables(OPTS_FILE)
+
+        PREREQS = PreReqComponent(env, OPTS)
+        PREREQS.preload(os.path.join(Dir('#').abspath,
+                                     'scons_local',
+                             'components.py'))
+        OPTS.Save(OPTS_FILE, env)
+        # Define this now, and then the individual compenents can import this
+        # through PREREQS when they need it.
+        env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
 else:
-	env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '0'})
+        PREREQS = None
+        if config.CheckHeader('libpmemobj.h'):
+                env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
+        else:
+                env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '0'})
 
 config.Finish()
-
-# manage build log
-bldir = 'build'
-bldlog = bldir + '/build.log'
-if env.GetOption('clean'):
-        # cleanup build output file
-        if os.path.exists(bldlog):
-                os.remove(bldlog)
-else:
-        # redirect build output to a file
-        if not os.path.exists(bldir):
-                os.makedirs(bldir)
-        sys.stdout = os.popen('tee ' + bldlog , 'w')
-        sys.stderr = sys.stdout
 
 if env['PLATFORM'] == 'darwin':
 	# generate .so on OSX instead of .dylib
@@ -53,4 +69,4 @@ env.Append(CCFLAGS = ['-O2'])
 env.Append(LIBPATH = ['#/build/lib'])
 
 # generate targets in specific build dir to avoid polluting the source code
-SConscript('src/SConscript', exports='env', variant_dir='build', duplicate=0)
+SConscript('src/SConscript', exports=['env', 'PREREQS'], variant_dir='build', duplicate=0)
