@@ -1,0 +1,11 @@
+#!python
+
+Import('env')
+
+# generate server module
+srv = env.SharedLibrary('daos_ct_srv', Glob('*.c'))
+env.Install('#/build/lib/daos_srv', srv)
+
+# generate client library
+client = env.SharedLibrary('daos_ct', Glob('*.c'))
+env.Install('#/build/lib/', client)

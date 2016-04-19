@@ -923,7 +923,7 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 		rc = btr_node_split_and_insert(tcx, trace, rec);
 	else
 		btr_node_insert_rec_only(tcx, trace, rec);
-	return 0;
+	return rc;
 }
 
 /**
