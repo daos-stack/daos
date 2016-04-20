@@ -12,5 +12,11 @@ class ListVariable(object):
     def __init__(self, *args, **kw):
         pass
 
+class BoolVariable(object):
+    """Fake ListVariable"""
+    def __init__(self, *args, **kw):
+        pass
+
 __all__ = ['PathVariable',
-           'ListVariable']
+           'ListVariable',
+           'BoolVariable',]

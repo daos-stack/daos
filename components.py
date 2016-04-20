@@ -165,3 +165,14 @@ REQS.define('iof',
             libs=["pset"],
             requires=['ompi', 'mercury'])
 
+# fuse.h requires FUSE_USE_VERSION to be set so this needs to be added to env
+# before this component can be imported.
+REQS.define('fuse',
+            retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
+            commands=['./makeconf.sh',
+                      './configure --disable-util --prefix=$FUSE_PREFIX',
+                      'make',
+                      'make install'],
+            libs=['fuse3'],
+            headers=['fuse3/fuse.h'])
+

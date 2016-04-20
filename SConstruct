@@ -12,7 +12,7 @@ OPTS.Add(ListVariable("REQUIRES",
                       ["mercury", "bmi", "openpa",
                        "ompi", "pmix", "hwloc",
                        "nvml", "cci", "cppr",
-                       "iof"]))
+                       "iof", "fuse"]))
 OPTS.Update(ENV)
 REQS = PreReqComponent(ENV, OPTS)
 REQS.preload("components.py", prebuild=ENV.get("REQUIRES"))
