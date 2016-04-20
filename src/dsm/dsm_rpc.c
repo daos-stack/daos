@@ -21,10 +21,10 @@
 /*
  * dsm: RPC Protocol Serialization Functions
  */
-
+#include <daos/daos_rpc.h>
 #include "dsm_rpc.h"
 
-int
+static int
 dsm_proc_pool_connect_in(dtp_proc_t proc, void *data)
 {
 	struct pool_connect_in *p = data;
@@ -57,7 +57,7 @@ dsm_proc_pool_connect_in(dtp_proc_t proc, void *data)
 	return 0;
 }
 
-int
+static int
 dsm_proc_pool_connect_out(dtp_proc_t proc, void *data)
 {
 	struct pool_connect_out	       *p = data;
@@ -74,7 +74,7 @@ dsm_proc_pool_connect_out(dtp_proc_t proc, void *data)
 	return 0;
 }
 
-int
+static int
 dsm_proc_pool_disconnect_in(dtp_proc_t proc, void *data)
 {
 	struct pool_disconnect_in      *p = data;
@@ -82,10 +82,34 @@ dsm_proc_pool_disconnect_in(dtp_proc_t proc, void *data)
 	return dtp_proc_uuid_t(proc, &p->pool_hdl);
 }
 
-int
+static int
 dsm_proc_pool_disconnect_out(dtp_proc_t proc, void *data)
 {
 	struct pool_disconnect_out     *p = data;
 
 	return dtp_proc_int32_t(proc, &p->rc);
 }
+
+struct daos_rpc dsm_client_rpcs[] = {
+	{
+		.dr_name	= "DSM_POOL_CONNECT",
+		.dr_opc		= POOL_CONNECT,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_in_hdlr	= dsm_proc_pool_connect_in,
+		.dr_in_sz	= 0,	/* TODO */
+		.dr_out_hdlr	= dsm_proc_pool_connect_out,
+		.dr_out_sz	= 0,	/* TODO */
+	}, {
+		.dr_name	= "DSM_POOL_DISCONNECT",
+		.dr_opc		= POOL_DISCONNECT,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_in_hdlr	= dsm_proc_pool_disconnect_in,
+		.dr_in_sz	= 0,	/* TODO */
+		.dr_out_hdlr	= dsm_proc_pool_disconnect_out,
+		.dr_out_sz	= 0,	/* TODO */
+	}, {
+		.dr_opc		= 0
+	}
+};

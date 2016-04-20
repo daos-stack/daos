@@ -34,6 +34,18 @@
 #include <daos/daos_ev.h>
 #include <daos/daos_types.h>
 
+ /**
+  * Initialize the library.
+  */
+int
+dsm_init(void);
+
+/**
+ * Finalize the library.
+ */
+int
+dsm_fini(void);
+
 /**
  * DSM_PC_RO connects to the pool for reading only. This flag conflicts with
  * DSM_PC_RW.

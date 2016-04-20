@@ -22,7 +22,9 @@
  * dsms: Internal Declarations
  *
  * This file contains all declarations that are only used by dsms but do not
- * belong to the more specific headers like dsms_storage.h.
+ * belong to the more specific headers like dsms_storage.h. All external
+ * variables and functions must have a "dsms_" prefix, however, even if they
+ * are only used by dsms.
  */
 
 #ifndef __DSMS_INTERNAL_H__

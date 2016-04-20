@@ -31,6 +31,16 @@
 
 #include <uuid/uuid.h>
 #include <daos/daos_transport.h>
+#include <daos/daos_rpc.h>
+
+/*
+ * RPC operation codes
+ *
+ * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
+ * dtp_req_create(..., opc, ...). See daos_rpc.h.
+ */
+#define POOL_CONNECT	1
+#define POOL_DISCONNECT	2
 
 struct pool_map {
 	uint64_t	version;
@@ -70,25 +80,18 @@ struct pool_connect_in {
 	dtp_bulk_t	pool_map_bulk;
 };
 
-int dsm_proc_pool_connect_in(dtp_proc_t proc, void *data);
-
 struct pool_connect_out {
 	int32_t		rc;
 	struct pool_map	pool_map;
 };
 
-int dsm_proc_pool_connect_out(dtp_proc_t proc, void *data);
-
 struct pool_disconnect_in {
 	uuid_t	pool_hdl;
 };
-
-int dsm_proc_pool_disconnect_in(dtp_proc_t proc, void *data);
 
 struct pool_disconnect_out {
 	int32_t	rc;
 };
 
-int dsm_proc_pool_disconnect_out(dtp_proc_t proc, void *data);
-
+extern struct daos_rpc dsm_client_rpcs[];
 #endif /* __DSM_RPC_H__ */

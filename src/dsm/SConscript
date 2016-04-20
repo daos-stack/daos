@@ -9,5 +9,6 @@ dsms = env.SharedLibrary('daos_m_srv',
 env.Install('#/build/lib/daos_srv', dsms)
 
 # dsmc: DSM Client Library
-dsmc = env.SharedLibrary('daos_m', ['dsm_rpc.c', 'dsmc_pool.c'])
+dsmc = env.SharedLibrary('daos_m',
+			 ['dsm_rpc.c', 'dsmc_pool.c', 'dsmc_module.c'])
 env.Install('#/build/lib/', dsmc)
