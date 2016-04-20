@@ -335,7 +335,10 @@ int
 dtp_req_decref(dtp_rpc_t *req);
 
 /**
- * Send a RPC request.
+ * Send a RPC request. In the case of sending failure, DTP internally destroy
+ * the request \a req. In the case of succeed, the \a req will be internally
+ * destroyed when the reply received. User needs not call dtp_req_decref() to
+ * destroy the request in either case.
  *
  * \param req [IN]              pointer to RPC request
  * \param complete_cb [IN]      completion callback, will be triggered when the

@@ -133,7 +133,8 @@ dtp_rpc_priv_init(struct dtp_rpc_priv *rpc_priv, dtp_context_t dtp_ctx,
 	dtp_common_hdr_init(&rpc_priv->drp_reply_hdr, opc);
 	rpc_priv->drp_state = RPC_INITED;
 	rpc_priv->drp_srv = (srv_flag != 0);
-	rpc_priv->drp_refcount = 0;
+	/* initialize as 1, so user can cal dtp_req_decref to destroy new req */
+	rpc_priv->drp_refcount = 1;
 	pthread_spin_init(&rpc_priv->drp_lock, PTHREAD_PROCESS_PRIVATE);
 
 	rpc_priv->drp_pub.dr_opc = opc;

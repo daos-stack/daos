@@ -426,7 +426,7 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 	dtp_proc_t		proc = NULL;
 	struct dtp_opc_info	*opc_info = NULL;
 	hg_return_t		hg_ret = HG_SUCCESS;
-	int			rc = 0, addref = 0;
+	int			rc = 0;
 
 	hg_info = HG_Get_info(hg_hdl);
 	if (hg_info == NULL) {
@@ -470,20 +470,16 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 	D_ASSERT(opc_info->doi_input_size <= DTP_MAX_INPUT_SIZE &&
 		 opc_info->doi_output_size <= DTP_MAX_OUTPUT_SIZE);
 
+	dtp_rpc_priv_init(rpc_priv, (dtp_context_t)hg_ctx, opc, 1);
+
 	rc = dtp_rpc_inout_buff_init(rpc_pub, opc_info->doi_input_size,
 				     opc_info->doi_output_size);
 	if (rc != 0) {
 		D_ERROR("dtp_rpc_inout_buff_init faied, rc: %d, opc: 0x%x.\n",
 			rc, opc);
-		D_FREE_PTR(rpc_priv);
 		dtp_hg_unpack_cleanup(proc);
-		D_GOTO(out, hg_ret = HG_NOMEM_ERROR);
+		D_GOTO(decref, hg_ret = HG_NOMEM_ERROR);
 	}
-
-	dtp_rpc_priv_init(rpc_priv, (dtp_context_t)hg_ctx, opc, 1);
-	rc = dtp_req_addref(rpc_pub);
-	D_ASSERT(rc == 0);
-	addref = 1;
 
 	D_ASSERT(rpc_priv->drp_srv != 0);
 	if (opc_info->doi_input_size > 0) {
@@ -500,7 +496,7 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 		} else {
 			D_ERROR("_unpack_body failed, rc: %d, opc: 0x%x.\n",
 				hg_ret, rpc_pub->dr_opc);
-			D_GOTO(out, hg_ret = HG_OTHER_ERROR);
+			D_GOTO(decref, hg_ret = HG_OTHER_ERROR);
 		}
 	} else {
 		dtp_hg_unpack_cleanup(proc);
@@ -517,12 +513,11 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 		hg_ret = HG_NO_MATCH;
 	}
 
+decref:
+	rc = dtp_req_decref(rpc_pub);
+	if (rc != 0)
+		D_ERROR("dtp_req_decref failed, rc: %d.\n", rc);
 out:
-	if (addref != 0) {
-		rc = dtp_req_decref(rpc_pub);
-		if (rc != 0)
-			D_ERROR("dtp_req_decref failed, rc: %d.\n", rc);
-	}
 	return hg_ret;
 }
 
@@ -745,7 +740,7 @@ dtp_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 out:
 	D_FREE_PTR(req_cbinfo);
 
-	/* corresponding to the dtp_req_addref in dtp_hg_req_send */
+	/* corresponding to the refcount taken in dtp_rpc_priv_init(). */
 	rc = dtp_req_decref(rpc_pub);
 	if (rc != 0)
 		D_ERROR("dtp_req_decref failed, rc: %d, opc: 0x%x.\n", rc, opc);
@@ -779,11 +774,10 @@ dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb, void *arg)
 		D_ERROR("HG_Forward failed, hg_ret: %d, opc: 0x%x.\n",
 			hg_ret, rpc_priv->drp_pub.dr_opc);
 		D_FREE_PTR(cb_info);
+		dtp_req_decref(&rpc_priv->drp_pub);
 		rc = -DER_DTP_HG;
 	}
 
-	rc = dtp_req_addref(&rpc_priv->drp_pub);
-	D_ASSERT(rc == 0);
 
 out:
 	return rc;

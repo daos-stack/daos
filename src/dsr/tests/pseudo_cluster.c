@@ -1166,7 +1166,7 @@ psc_target_change(psc_argument_t *args)
 {
 	struct pa_target_change	*tgc = &args->u.target_change;
 	int			 i;
-	int			 rc;
+	int			 rc = 0;
 
 	for (i = 0; i < tgc->t_nops; i++) {
 		PSC_PROMPT("Set target[%d] to %s\n", tgc->t_ops[i].rank,
