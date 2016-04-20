@@ -18,6 +18,10 @@ rm -rf test/prefix_test/*
 scons -C test -f SConstruct $prebuilt1 --build-deps=yes --config=force
 scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force
 
+#Test clean
+scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force -c
+scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force
+
 check_cmd()
 {
     expected=$1

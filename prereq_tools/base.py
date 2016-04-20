@@ -635,6 +635,8 @@ class PreReqComponent(object):
                 self.set_environment_only(env,
                                           self.__defined[comp],
                                           headers_only)
+                if GetOption('clean'):
+                    continue
                 if self.__required[comp]:
                     changes = True
                 continue
@@ -1014,6 +1016,8 @@ class _Component(object):
         if GetOption('help'):
             return
         self.set_environment(env, headers_only)
+        if GetOption('clean'):
+            return
         self.set_environment(envcopy, False)
         if self.prebuilt_path:
             self.create_links(self.prebuilt_path)
