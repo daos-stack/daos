@@ -10,8 +10,9 @@ set -x
 MERCURY=${CORAL_ARTIFACTS}/mercury-update-scratch/latest
 OMPI=${CORAL_ARTIFACTS}/ompi-update-scratch/latest
 NVML=${CORAL_ARTIFACTS}/nvml-update-scratch/latest
+IOF=${CORAL_ARTIFACTS}/iof-update-scratch/latest
 
 rm -f *.conf
-scons PREBUILT_PREFIX=${MERCURY}:${OMPI}:${NVML} -c
+scons PREBUILT_PREFIX=${MERCURY}:${OMPI}:${NVML}:${IOF} -c
 scons
 scons install

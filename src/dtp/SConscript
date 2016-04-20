@@ -10,7 +10,7 @@ libraries += ['mcl']
 if PREREQS is None:
     libraries.append(['mercury','na'])
 else:
-    PREREQS.require(env, 'mercury')
+    PREREQS.require(env, 'mercury', 'iof')
 
 dtp = env.SharedLibrary('libdaos_transport', Glob('*.c'), LIBS=libraries)
 env.Install('#/build/lib/', dtp)

@@ -197,12 +197,11 @@ dtp_mcl_init(dtp_phy_addr_t *addr)
 		D_GOTO(out, rc = -DER_DTP_MCL);
 	}
 	D_DEBUG(DF_TP, "mcl_init succeed(server %d), nspace: %s, rank: %d, "
-		"univ_size: %d, num_sets: %d.\n",
+		"univ_size: %d.\n",
 		dtp_gdata.dg_server,
 		dtp_gdata.dg_mcl_state->myproc.nspace,
 		dtp_gdata.dg_mcl_state->myproc.rank,
-		dtp_gdata.dg_mcl_state->univ_size,
-		dtp_gdata.dg_mcl_state->num_sets);
+		dtp_gdata.dg_mcl_state->univ_size);
 	if (dtp_gdata.dg_server == true) {
 		rc = mcl_startup(dtp_gdata.dg_mcl_state,
 				 DTP_GLOBAL_SRV_GROUP_NAME, true,
