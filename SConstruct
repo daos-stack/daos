@@ -6,11 +6,13 @@ import os
 have_scons_local=False
 if os.path.exists('scons_local'):
         try:
-                sys.path.insert(0, os.path.join(Dir('#').abspath, 'scons_local'))
+                sys.path.insert(0, os.path.join(Dir('#').abspath,
+				'scons_local'))
                 from prereq_tools import PreReqComponent
                 have_scons_local=True
+                print ('Using scons_local build')
         except ImportError:
-                print ('Unable to import scons_local, falling back to traditional build')
+                print ('Using traditional build')
                 pass
 
 env = Environment()
@@ -65,8 +67,10 @@ if env['PLATFORM'] == 'darwin':
 env.Append(CCFLAGS = ['-g', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
 env.Append(CCFLAGS = ['-O2'])
 
-# All libraries will be installed under build/lib
+# All libraries will be generated under build/lib and binaries under build/bin
 env.Append(LIBPATH = ['#/build/lib', '#/build/lib/daos_srv'])
+env.Append(PATH = ['#/build/bin'])
 
 # generate targets in specific build dir to avoid polluting the source code
-SConscript('src/SConscript', exports=['env', 'PREREQS'], variant_dir='build', duplicate=0)
+SConscript('src/SConscript', exports=['env', 'PREREQS'], variant_dir='build',
+	   duplicate=0)
