@@ -175,3 +175,11 @@ REQS.define('fuse',
             defines=["FUSE_USE_VERSION=30"],
             headers=['fuse3/fuse.h'])
 
+REQS.define('ofi',
+            retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
+            commands=['./autogen.sh',
+                      './configure --prefix=$OFI_PREFIX',
+                      'make',
+                      'make install'],
+            libs=['fabric'],
+            headers=['rmda/fabric.h'])
