@@ -141,14 +141,16 @@ nv_rec_free(struct btr_instance *tins, struct btr_record *rec)
 }
 
 static int
-nv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, bool copy,
-	     daos_iov_t *key, daos_iov_t *val)
+nv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
+	     unsigned int flags, daos_iov_t *key, daos_iov_t *val)
 {
-	struct nv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	struct nv_rec  *r	  = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	bool		copy	  = !(flags & BTR_FETCH_ADDR);
+	bool		fetch_key = (flags & BTR_FETCH_KEY);
 
 	/* TODO: What sanity checks are required for key and val? */
 
-	if (key != NULL) {
+	if (fetch_key && key != NULL) {
 		if (copy) {
 			if (r->nr_name_size <= key->iov_buf_len)
 				memcpy(key->iov_buf, r->nr_name,
@@ -313,12 +315,14 @@ uv_rec_free(struct btr_instance *tins, struct btr_record *rec)
 }
 
 static int
-uv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, bool copy,
-	     daos_iov_t *key, daos_iov_t *val)
+uv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
+	     unsigned int flags, daos_iov_t *key, daos_iov_t *val)
 {
 	/* TODO: What sanity checks are required for key and val? */
+	bool		 copy = !(flags & BTR_FETCH_ADDR);
+	bool		 fetch_key = (flags & BTR_FETCH_KEY);
 
-	if (key != NULL) {
+	if (fetch_key && key != NULL) {
 		if (copy) {
 			if (key->iov_buf_len >= sizeof(uuid_t))
 				memcpy(key->iov_buf, rec->rec_hkey,
