@@ -161,7 +161,8 @@ class MissingTargets(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "%s has missing targets after build"%(self.component)
+        return "%s has missing targets after build.  " \
+               "See config.log for details"%(self.component)
 
 class MissingSystemLibs(Exception):
     """Exception raised when libraries required for target build are not met
@@ -567,6 +568,7 @@ class PreReqComponent(object):
         headers -- A list of expected headers
         requires -- A list of names of required component definitions
         required_libs -- A list of system libraries to be checked for
+        defines -- Defines needed to use the component
         commands -- A list of commands to run to build the component
         retriever -- A retriever object to download component
         extra_lib_path -- Subdirectories to add to dependent component path
@@ -787,6 +789,7 @@ class _Component(object):
         self.component_prefix = None
         self.libs = kw.get("libs", [])
         self.required_libs = kw.get("required_libs", [])
+        self.defines = kw.get("defines", [])
         self.headers = kw.get("headers", [])
         self.requires = kw.get("requires", [])
         self.prereqs = prereqs
@@ -956,6 +959,9 @@ class _Component(object):
         # uses a component, that build needs the RPATH of the dependencies.
         for path in self.lib_path:
             env.AppendUnique(RPATH=[os.path.join(self.component_prefix, path)])
+
+        for define in self.defines:
+            env.AppendUnique(CPPDEFINES=[define])
 
         if headers_only:
             return

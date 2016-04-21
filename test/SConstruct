@@ -17,6 +17,7 @@ PREREQS.preload(PATH)
 PREREQS.define("sl_project1",
                retriever="fake",
                commands=['make install PREFIX=$SL_PROJECT1_PREFIX'],
+               defines=["SL_PROJECT1_REQUIRED_DEFINE"],
                headers=['sl_project1.h'])
 
 PREREQS.define("sl_project2",
