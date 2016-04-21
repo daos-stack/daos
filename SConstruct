@@ -66,7 +66,7 @@ env.Append(CCFLAGS = ['-g', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
 env.Append(CCFLAGS = ['-O2'])
 
 # All libraries will be installed under build/lib
-env.Append(LIBPATH = ['#/build/lib'])
+env.Append(LIBPATH = ['#/build/lib', '#/build/lib/daos_srv'])
 
 # generate targets in specific build dir to avoid polluting the source code
 SConscript('src/SConscript', exports=['env', 'PREREQS'], variant_dir='build', duplicate=0)
