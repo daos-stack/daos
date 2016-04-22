@@ -367,12 +367,15 @@ btr_rec_free(struct btr_context *tcx, struct btr_record *rec)
 		btr_ops(tcx)->to_rec_free(&tcx->tc_tins, rec);
 }
 
+/**
+ * Fetch key and value of the record, key is optional, both key and value
+ * are output parameters
+ */
 static int
 btr_rec_fetch(struct btr_context *tcx, struct btr_record *rec,
-	      unsigned int options, daos_iov_t *key, daos_iov_t *val)
+	      daos_iov_t *key, daos_iov_t *val)
 {
-	return btr_ops(tcx)->to_rec_fetch(&tcx->tc_tins, rec, options,
-					  key, val);
+	return btr_ops(tcx)->to_rec_fetch(&tcx->tc_tins, rec, key, val);
 }
 
 static int
@@ -645,6 +648,9 @@ btr_root_tx_add(struct btr_context *tcx)
 	} else if (!TMMID_IS_NULL(tins->ti_root_mmid)) {
 		rc = umem_tx_add_mmid_typed(btr_umm(tcx),
 					    tcx->tc_tins.ti_root_mmid);
+	} else {
+		rc = umem_tx_add_ptr(btr_umm(tcx), tcx->tc_tins.ti_root,
+				     sizeof(struct btr_root));
 	}
 	return rc;
 }
@@ -926,14 +932,22 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 	return rc;
 }
 
+enum btr_probe_rc {
+	/** not found */
+	PROBE_RC_NONE,
+	/** found the equivalent key */
+	PROBE_RC_EQ,
+	/** found something but not the provided key */
+	PROBE_RC_OK,
+};
+
 /**
  * Try to find \a key within a btree, it will store the searching path in
  * tcx::tc_traces.
  *
- * \return	true	found the key.
- *		false	not found.
+ * \return	see btr_probe_rc
  */
-static bool
+static enum btr_probe_rc
 btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 	  daos_hash_out_t *anchor)
 {
@@ -953,7 +967,7 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 
 	if (btr_root_empty(tcx)) { /* empty tree */
 		D_DEBUG(DF_MISC, "Empty tree\n");
-		return false;
+		return PROBE_RC_NONE;
 	}
 
 	if (opc & BTR_PROBE_EQ) {
@@ -1050,17 +1064,27 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 		D_ASSERT(0);
 	case BTR_PROBE_FIRST:
 	case BTR_PROBE_LAST:
-		return true;
+		return PROBE_RC_OK;
 
 	case BTR_PROBE_UPDATE:
 	case BTR_PROBE_EQ:
-		return cmp == 0;
+		return cmp == 0 ? PROBE_RC_EQ : PROBE_RC_NONE;
 
 	case BTR_PROBE_GE:
-		return cmp >= 0 ? true : btr_probe_next(tcx);
+		if (cmp == 0)
+			return PROBE_RC_EQ;
+		if (cmp > 0)
+			return PROBE_RC_OK;
+
+		return btr_probe_next(tcx) ? PROBE_RC_OK : PROBE_RC_NONE;
 
 	case BTR_PROBE_LE:
-		return cmp <= 0 ? true : btr_probe_prev(tcx);
+		if (cmp == 0)
+			return PROBE_RC_EQ;
+		if (cmp < 0)
+			return PROBE_RC_OK;
+
+		return btr_probe_prev(tcx) ? PROBE_RC_OK : PROBE_RC_NONE;
 	}
 }
 
@@ -1172,23 +1196,34 @@ btr_probe_prev(struct btr_context *tcx)
 }
 
 /**
- * Search the provided \a key and return its value to \a oidp.
+ * Search the provided \a key and fetch its value (and key if the matched key
+ * is different with the input key). This function can support advanced range
+ * search operation based on \a opc.
  *
- * \param tcx		[IN]	Tree operation context.
- * \param key		[IN]	Key to search.
- * \param val		[OUT]	Returned value address, or sink buffer to
+ * If \a key_out and \a val_out provide sink buffers, then key and value will
+ * be copied into them. Otherwise if buffer address in \a key_out or/and
+ * \a val_out is/are NULL, then addresses of key or/and value of the current
+ * record will be returned.
+ *
+ * \param toh	[IN]		Tree open handle.
+ * \param opc	[IN]		Probe opcode, see dbtree_probe_opc_t for the
+ *				details.
+ * \param key	[IN]		Key to search
+ * \param key_out [OUT]		Return the actual matched key if \a opc is
+ *				not BTR_PROBE_EQ.
+ * \param val_out [OUT]		Returned value address, or sink buffer to
  *				store returned value.
  *
  * \return		0	found
  *			-ve	error code
  */
 int
-dbtree_lookup(daos_handle_t toh, dbtree_probe_opc_t opc, bool copy,
-	      daos_iov_t *key, daos_iov_t *val)
+dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
+	     daos_iov_t *key_out, daos_iov_t *val_out)
 {
 	struct btr_record  *rec;
 	struct btr_context *tcx;
-	bool		    found;
+	int		    rc;
 
 	if (!btr_probe_is_public(opc))
 		return -DER_INVAL;
@@ -1197,14 +1232,37 @@ dbtree_lookup(daos_handle_t toh, dbtree_probe_opc_t opc, bool copy,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	found = btr_probe(tcx, opc, key, NULL);
-	if (!found) {
+	rc = btr_probe(tcx, opc, key, NULL);
+	if (rc == PROBE_RC_NONE) {
 		D_DEBUG(DF_MISC, "Cannot find key\n");
 		return -DER_NONEXIST;
 	}
 
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
-	return btr_rec_fetch(tcx, rec, copy ? 0 : BTR_FETCH_ADDR, NULL, val);
+	if (rc == PROBE_RC_EQ)
+		key_out = NULL; /* don't need to return the same key */
+
+	return btr_rec_fetch(tcx, rec, key_out, val_out);
+}
+
+/**
+ * Search the provided \a key and return its value to \a val_out.
+ * If \a val_out provides sink buffer, then this function will copy record
+ * value into the buffer, otherwise it only returns address of value of the
+ * current record.
+ *
+ * \param toh		[IN]	Tree open handle.
+ * \param key		[IN]	Key to search.
+ * \param val		[OUT]	Returned value address, or sink buffer to
+ *				store returned value.
+ *
+ * \return		0	found
+ *			-ve	error code
+ */
+int
+dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out)
+{
+	return dbtree_fetch(toh, BTR_PROBE_EQ, key, NULL, val_out);
 }
 
 static int
@@ -1286,15 +1344,15 @@ btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 static int
 btr_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 {
-	bool	found;
 	int	rc;
 
-	found = btr_probe(tcx, BTR_PROBE_UPDATE, key, NULL);
-	if (found)
+	rc = btr_probe(tcx, BTR_PROBE_UPDATE, key, NULL);
+	if (rc == PROBE_RC_EQ) {
 		rc = btr_update_only(tcx, key, val);
-	else
+	} else {
+		D_ASSERT(rc == PROBE_RC_NONE);
 		rc = btr_insert(tcx, key, val);
-
+	}
 	return rc;
 }
 
@@ -1403,7 +1461,7 @@ btr_tx_tree_alloc(struct btr_context *tcx)
  * \param tree_feats	[IN]	Feature bits of the tree.
  * \param tree_order	[IN]	Btree order, value >= 3.
  * \param uma		[IN]	Memory class attributes.
- * \param root_oidp	[OUT]	Returned root MMID.
+ * \param root_mmidp	[OUT]	Returned root MMID.
  * \param toh		[OUT]	Returned tree open handle.
  */
 int
@@ -1500,12 +1558,10 @@ dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 	if (rc != 0)
 		return rc;
 
-	if (btr_has_tx(tcx)) {
-		D_ASSERT(btr_ops(tcx)->to_root_tx_add);
+	if (btr_has_tx(tcx))
 		rc = btr_tx_tree_init(tcx, root);
-	} else {
+	else
 		rc = btr_tree_init(tcx, root);
-	}
 
 	if (rc != 0)
 		goto failed;
@@ -1561,8 +1617,6 @@ dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 	rc = btr_context_create(BTR_ROOT_NULL, root, -1, -1, -1, uma, &tcx);
 	if (rc != 0)
 		return rc;
-
-	D_ASSERT(!btr_has_tx(tcx) || btr_ops(tcx)->to_root_tx_add);
 
 	*toh = btr_tcx2hdl(tcx);
 	return 0;
@@ -1793,7 +1847,7 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 {
 	struct btr_iterator *itr;
 	struct btr_context  *tcx;
-	bool		     found;
+	int		     rc;
 
 	D_DEBUG(DF_MISC, "probe(%d) key or anchor\n", opc);
 
@@ -1808,8 +1862,8 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 	if (itr->it_state < BTR_ITR_INIT)
 		return -DER_NO_HDL;
 
-	found = btr_probe(tcx, opc, key, anchor);
-	if (!found) {
+	rc = btr_probe(tcx, opc, key, anchor);
+	if (rc == PROBE_RC_NONE) {
 		itr->it_state = BTR_ITR_FINI;
 		return -DER_NONEXIST;
 	}
@@ -1865,27 +1919,25 @@ dbtree_iter_prev(daos_handle_t ih)
 }
 
 /**
- * Copy key and value of current record into the key and value buffer \a copy
- * is true, or just return key and value address if \a copy is false.
+ * Fetch the key and value of current record, if \a key and \a val provide
+ * sink buffers, then key and value will be copied into them. If buffer
+ * address in \a key or/and \a val is/are NULL, then this function only
+ * returns addresses of key or/and value of the current record.
  *
  * \parma ih	[IN]	Iterator open handle.
- * \param copy	[IN]	Copy the key of current cursor to \a key, and value
- *			of it to \a val if \a copy is true, otherwise only
- *			return the addresses of key and value.
- * \param key	[OUT]	Sink buffer for the returned key, only the key address
- *			is returned if \a copy is false.
- * \param val	[OUT]	Sink buffer for the returned value, only the value
- *			address is returned if \a copy is false.
+ * \param key	[OUT]	Sink buffer for the returned key, the key address is
+ *			returned if buffer address is NULL.
+ * \param val	[OUT]	Sink buffer for the returned value, the value address
+ *			is returned if buffer address is NULL.
  * \param anchor [OUT]	Returned hash anchor.
  */
 int
-dbtree_iter_current(daos_handle_t ih, bool copy, daos_iov_t *key,
-		    daos_iov_t *val, daos_hash_out_t *anchor)
+dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
+		  daos_iov_t *val, daos_hash_out_t *anchor)
 {
 	struct btr_iterator *itr;
 	struct btr_context  *tcx;
 	struct btr_record   *rec;
-	unsigned int	     options;
 	int		     rc;
 
 	D_DEBUG(DF_MISC, "Current iterator\n");
@@ -1911,11 +1963,7 @@ dbtree_iter_current(daos_handle_t ih, bool copy, daos_iov_t *key,
 	if (rec == NULL)
 		return -DER_AGAIN; /* invalid cursor */
 
-	options = BTR_FETCH_KEY;
-	if (!copy)
-		options |= BTR_FETCH_ADDR;
-
-	rc = btr_rec_fetch(tcx, rec, options, key, val);
+	rc = btr_rec_fetch(tcx, rec, key, val);
 	if (rc == 0 && anchor != NULL) {
 		memcpy(&anchor->body[0], &rec->rec_hkey[0],
 		       btr_hkey_size(tcx));

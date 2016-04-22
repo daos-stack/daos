@@ -96,14 +96,12 @@ ik_rec_free(struct btr_instance *tins, struct btr_record *rec)
 
 static int
 ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	     unsigned int flags, daos_iov_t *key_iov, daos_iov_t *val_iov)
+	     daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
 	struct ik_rec	*irec;
 	char		*val;
 	int		 val_size;
 	int		 key_size;
-	bool		 copy = !(flags & BTR_FETCH_ADDR);
-	bool		 fetch_key = (flags & BTR_FETCH_KEY);
 
 	if (key_iov == NULL && val_iov == NULL)
 		return -EINVAL;
@@ -113,32 +111,21 @@ ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	key_size = sizeof(irec->ir_key);
 
 	val = umem_id2ptr(&tins->ti_umm, irec->ir_val_mmid);
-	if (!copy) {
-		if (fetch_key && key_iov != NULL) {
-			key_iov->iov_len = key_size;
-			key_iov->iov_buf = &irec->ir_key;
-		}
-
-		if (val_iov != NULL) {
-			val_iov->iov_len = val_size;
-			val_iov->iov_buf = val;
-		}
-		return 0;
-	}
-	/* copy mode */
-
-	if (fetch_key && key_iov != NULL) {
+	if (key_iov != NULL) {
 		key_iov->iov_len = key_size;
-		if (key_iov->iov_buf != NULL &&
-		    key_iov->iov_buf_len >= key_size)
+		if (key_iov->iov_buf == NULL)
+			key_iov->iov_buf = &irec->ir_key;
+		else if (key_iov->iov_buf_len >= key_size)
 			memcpy(key_iov->iov_buf, &irec->ir_key, key_size);
 	}
 
 	if (val_iov != NULL) {
 		val_iov->iov_len = val_size;
-		if (val_iov->iov_buf != NULL &&
-		    val_iov->iov_buf_len >= val_size)
+		if (val_iov->iov_buf == NULL)
+			val_iov->iov_buf = val;
+		else if (val_iov->iov_buf_len >= val_size)
 			memcpy(key_iov->iov_buf, val, val_size);
+
 	}
 	return 0;
 }
@@ -348,13 +335,9 @@ ik_btr_find_or_update(bool update, char *str)
 			str++;
 		}
 
-		key_iov.iov_buf	= &key;
-		key_iov.iov_len	= key_iov.iov_buf_len = sizeof(key);
-
+		daos_iov_set(&key_iov, &key, sizeof(key));
 		if (update) {
-			val_iov.iov_buf = val;
-			val_iov.iov_len = val_iov.iov_buf_len = strlen(val) + 1;
-
+			daos_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(ik_toh, &key_iov, &val_iov);
 			if (rc != 0) {
 				D_ERROR("Failed to update "DF_U64":%s\n",
@@ -364,8 +347,8 @@ ik_btr_find_or_update(bool update, char *str)
 		} else {
 			D_DEBUG(DF_MISC, "Looking for "DF_U64"\n", key);
 
-			rc = dbtree_lookup(ik_toh, BTR_PROBE_EQ, false,
-					   &key_iov, &val_iov);
+			daos_iov_set(&val_iov, NULL, 0); /* get address */
+			rc = dbtree_lookup(ik_toh, &key_iov, &val_iov);
 			if (rc != 0) {
 				D_ERROR("Failed to lookup "DF_U64"\n", key);
 				return -1;
@@ -409,7 +392,9 @@ ik_btr_iterate(char *args)
 		daos_iov_t	val_iov;
 		uint64_t	key;
 
-		rc = dbtree_iter_current(ih, false, &key_iov, &val_iov, NULL);
+		daos_iov_set(&key_iov, NULL, 0);
+		daos_iov_set(&val_iov, NULL, 0);
+		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
 		if (rc != 0)
 			break;
 

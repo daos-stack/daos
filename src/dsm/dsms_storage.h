@@ -100,13 +100,10 @@ struct superblock {
 
 /*
  * KVS dbtree classes
- *
- * TODO: Arbitrary numbers used. What is the official way of assigning these
- * numbers?
  */
-#define KVS_NV	222	/* name-value: hash-ordered keys */
-#define KVS_UV	223	/* uuid_t-value: unordered keys */
-#define KVS_EC	224	/* epoch-count: ordered keys */
+#define KVS_NV	(DBTREE_DSM_BEGIN + 0)	/* name-value: hash-ordered keys */
+#define KVS_UV	(DBTREE_DSM_BEGIN + 1)	/* uuid_t-value: unordered keys */
+#define KVS_EC	(DBTREE_DSM_BEGIN + 2)	/* epoch-count: ordered keys */
 
 /* Pool Metadata **************************************************************/
 

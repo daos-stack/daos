@@ -142,22 +142,17 @@ nv_rec_free(struct btr_instance *tins, struct btr_record *rec)
 
 static int
 nv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	     unsigned int flags, daos_iov_t *key, daos_iov_t *val)
+	     daos_iov_t *key, daos_iov_t *val)
 {
-	struct nv_rec  *r	  = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
-	bool		copy	  = !(flags & BTR_FETCH_ADDR);
-	bool		fetch_key = (flags & BTR_FETCH_KEY);
+	struct nv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
 	/* TODO: What sanity checks are required for key and val? */
 
-	if (fetch_key && key != NULL) {
-		if (copy) {
-			if (r->nr_name_size <= key->iov_buf_len)
-				memcpy(key->iov_buf, r->nr_name,
-				       r->nr_name_size);
-		} else {
+	if (key != NULL) {
+		if (key->iov_buf == NULL)
 			key->iov_buf = r->nr_name;
-		}
+		else if (r->nr_name_size <= key->iov_buf_len)
+			memcpy(key->iov_buf, r->nr_name, r->nr_name_size);
 
 		key->iov_len = r->nr_name_size;
 	}
@@ -165,12 +160,10 @@ nv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	if (val != NULL) {
 		void   *value = umem_id2ptr(&tins->ti_umm, r->nr_value);
 
-		if (copy) {
-			if (r->nr_value_size <= val->iov_buf_len)
-				memcpy(val->iov_buf, value, r->nr_value_size);
-		} else {
+		if (val->iov_buf == NULL)
 			val->iov_buf = value;
-		}
+		else if (r->nr_value_size <= val->iov_buf_len)
+			memcpy(val->iov_buf, value, r->nr_value_size);
 
 		val->iov_len = r->nr_value_size;
 	}
@@ -316,20 +309,14 @@ uv_rec_free(struct btr_instance *tins, struct btr_record *rec)
 
 static int
 uv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	     unsigned int flags, daos_iov_t *key, daos_iov_t *val)
+	     daos_iov_t *key, daos_iov_t *val)
 {
 	/* TODO: What sanity checks are required for key and val? */
-	bool		 copy = !(flags & BTR_FETCH_ADDR);
-	bool		 fetch_key = (flags & BTR_FETCH_KEY);
-
-	if (fetch_key && key != NULL) {
-		if (copy) {
-			if (key->iov_buf_len >= sizeof(uuid_t))
-				memcpy(key->iov_buf, rec->rec_hkey,
-				       sizeof(uuid_t));
-		} else {
+	if (key != NULL) {
+		if (key->iov_buf == NULL)
 			key->iov_buf = rec->rec_hkey;
-		}
+		else if (key->iov_buf_len >= sizeof(uuid_t))
+			memcpy(key->iov_buf, rec->rec_hkey, sizeof(uuid_t));
 
 		key->iov_len = sizeof(uuid_t);
 	}
@@ -338,12 +325,10 @@ uv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		struct uv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 		void	       *value = umem_id2ptr(&tins->ti_umm, r->nr_value);
 
-		if (copy) {
-			if (r->nr_value_size <= val->iov_buf_len)
-				memcpy(val->iov_buf, value, r->nr_value_size);
-		} else {
+		if (val->iov_buf == NULL)
 			val->iov_buf = value;
-		}
+		else if (r->nr_value_size <= val->iov_buf_len)
+			memcpy(val->iov_buf, value, r->nr_value_size);
 
 		val->iov_len = r->nr_value_size;
 	}

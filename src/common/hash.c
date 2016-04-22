@@ -120,6 +120,55 @@ daos_hash_string_u32(const char *string)
 	return result;
 }
 
+/**
+ * Murmur hash
+ * see https://sites.google.com/site/murmurhash
+ */
+#define MUR_PRIME	0xc6a4a7935bd1e995
+#define MUR_ROTATE	47
+
+uint64_t
+daos_hash_murmur64(const unsigned char *key, unsigned int key_len,
+		   unsigned int seed)
+{
+	const uint64_t	*addr	= (const uint64_t *)key;
+	int		 loop	= key_len >> 3; /* divided by sizeof uint64 */
+	int		 rest	= key_len & ((1 << 3) - 1);
+	int		 i;
+	uint64_t	 mur;
+
+	mur = seed ^ (key_len * MUR_PRIME);
+	for (i = 0; i < loop; i++) {
+		uint64_t k = addr[i];
+
+		k *= MUR_PRIME;
+		k ^= k >> MUR_ROTATE;
+		k *= MUR_PRIME;
+
+		mur ^= k;
+		mur *= MUR_PRIME;
+	}
+
+	key = (const unsigned char *)&addr[i];
+
+	switch (rest) {
+	case 7:	mur ^= (uint64_t)key[6] << 48;
+	case 6:	mur ^= (uint64_t)key[5] << 40;
+	case 5:	mur ^= (uint64_t)key[4] << 32;
+	case 4:	mur ^= (uint64_t)key[3] << 24;
+	case 3:	mur ^= (uint64_t)key[2] << 16;
+	case 2:	mur ^= (uint64_t)key[1] << 8;
+	case 1:	mur ^= (uint64_t)key[0];
+		mur *= MUR_PRIME;
+	};
+
+	mur ^= mur >> MUR_ROTATE;
+	mur *= MUR_PRIME;
+	mur ^= mur >> MUR_ROTATE;
+
+	return mur;
+}
+
 static unsigned int
 daos_hhash_key2hash(uint64_t key, int hbits)
 {

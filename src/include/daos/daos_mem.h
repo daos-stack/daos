@@ -143,6 +143,15 @@ typedef struct {
 	int		 (*mo_tx_add)(struct umem_instance *umm,
 				      umem_id_t ummid, uint64_t offset,
 				      size_t size);
+	/**
+	 * Add the directly accessible pointer to current memory transaction.
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param ptr [IN]	Directly accessible memory pointer.
+	 * \param size	[IN]	size to be tracked by the transaction.
+	 */
+	int		 (*mo_tx_add_ptr)(struct umem_instance *umm,
+					  void *ptr, size_t size);
 	/** abort memory transaction */
 	int		 (*mo_tx_abort)(struct umem_instance *umm, int error);
 	/** reserved: start memory transaction */
@@ -190,7 +199,7 @@ umem_has_tx(struct umem_instance *umm)
 static inline umem_id_t
 umem_alloc_verb(struct umem_instance *umm, bool zero, size_t size)
 {
-	return umm->umm_ops->mo_alloc(umm, size, false, UMEM_TYPE_ANY);
+	return umm->umm_ops->mo_alloc(umm, size, zero, UMEM_TYPE_ANY);
 }
 
 #define umem_alloc(umm, size)						\
@@ -205,7 +214,7 @@ umem_alloc_typed_verb(umm, type, zero, size)				\
 	umem_id_t   __ummid;						\
 	TMMID(type) __tmmid;						\
 									\
-	__ummid = (umm)->umm_ops->mo_alloc(umm, size, false,		\
+	__ummid = (umm)->umm_ops->mo_alloc(umm, size, zero,		\
 					   TMMID_TYPE_NUM(type));	\
 	D_DEBUG(DF_MEM, "allocate %s mmid "UMMID_PF"\n",		\
 		(umm)->umm_name, UMMID_P(__ummid));			\
@@ -243,6 +252,15 @@ umem_tx_add_range(struct umem_instance *umm, umem_id_t ummid, uint64_t offset,
 {
 	if (umm->umm_ops->mo_tx_add)
 		return umm->umm_ops->mo_tx_add(umm, ummid, offset, size);
+	else
+		return 0;
+}
+
+static inline int
+umem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
+{
+	if (umm->umm_ops->mo_tx_add_ptr)
+		return umm->umm_ops->mo_tx_add_ptr(umm, ptr, size);
 	else
 		return 0;
 }

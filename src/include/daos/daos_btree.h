@@ -118,13 +118,6 @@ struct btr_root {
 
 struct btr_instance;
 
-enum {
-	/** no data copy (rma), only return addresses */
-	BTR_FETCH_ADDR		= (1 << 0),
-	/** also fetch key, it is used by iterator */
-	BTR_FETCH_KEY		= (1 << 1),
-};
-
 /**
  * Customized tree function table.
  */
@@ -207,23 +200,13 @@ typedef struct {
 	 * \param tins	[IN]	Tree instance which contains the root mmid
 	 *			and memory class etc.
 	 * \param rec	[IN]	Record to be read from.
-	 *
-	 * \param options [IN]	fetch options.
-	 *			BTR_FETCH_KEY: Fetch key (and value) of record.
-	 *			By default, only value is returned.
-	 *
-	 *			BTR_FETCH_ADDR: Only return key and value
-	 *			address, otherwise key and value should be
-	 *			copied into buffers in \a key and \a val.
-	 *
-	 * \param key	[OUT]	Optional, sink buffer for returned key,
+	 * \param key	[OUT]	Optional, sink buffer for the returned key,
 	 *			or key address.
-	 * \param val	[OUT]	Optional, sink buffer for returned value,
-	 *			or value address.
+	 * \param val	[OUT]	Sink buffer for the returned value or the
+	 *			value address.
 	 */
 	int		(*to_rec_fetch)(struct btr_instance *tins,
 					struct btr_record *rec,
-					unsigned int options,
 					daos_iov_t *key, daos_iov_t *val);
 	/**
 	 * Update value of a record.
@@ -387,8 +370,9 @@ int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh);
 int  dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val);
-int  dbtree_lookup(daos_handle_t toh, dbtree_probe_opc_t opc, bool copy,
-		   daos_iov_t *key, daos_iov_t *val);
+int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc,
+		  daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out);
+int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out);
 int  dbtree_delete(daos_handle_t toh, daos_iov_t *key);
 int  dbtree_is_empty(daos_handle_t toh);
 
@@ -410,7 +394,14 @@ int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 		      daos_iov_t *key, daos_hash_out_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
-int dbtree_iter_current(daos_handle_t ih, bool copy, daos_iov_t *key,
-			daos_iov_t *val, daos_hash_out_t *anchor);
+int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
+		      daos_iov_t *val, daos_hash_out_t *anchor);
+
+enum {
+	DBTREE_VOS_BEGIN	= 10,
+	DBTREE_VOS_END		= DBTREE_VOS_BEGIN + 9,
+	DBTREE_DSM_BEGIN	= 20,
+	DBTREE_DSM_END		= DBTREE_DSM_BEGIN + 9,
+};
 
 #endif /* __DAOS_BTREE_H__ */

@@ -68,6 +68,13 @@ pmem_tx_add(struct umem_instance *umm, umem_id_t ummid,
 	return pmemobj_tx_add_range(ummid, offset, size);
 }
 
+
+int
+pmem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
+{
+	return pmemobj_tx_add_range_direct(ptr, size);
+}
+
 int
 pmem_tx_abort(struct umem_instance *umm, int err)
 {
@@ -76,12 +83,13 @@ pmem_tx_abort(struct umem_instance *umm, int err)
 }
 
 static umem_ops_t	pmem_ops = {
-	.mo_addr	= pmem_addr,
-	.mo_equal	= pmem_equal,
-	.mo_free	= pmem_free,
-	.mo_alloc	= pmem_alloc,
-	.mo_tx_add	= pmem_tx_add,
-	.mo_tx_abort	= pmem_tx_abort,
+	.mo_addr		= pmem_addr,
+	.mo_equal		= pmem_equal,
+	.mo_free		= pmem_free,
+	.mo_alloc		= pmem_alloc,
+	.mo_tx_add		= pmem_tx_add,
+	.mo_tx_add_ptr		= pmem_tx_add_ptr,
+	.mo_tx_abort		= pmem_tx_abort,
 };
 
 #endif /* DAOS_HAS_NVML */

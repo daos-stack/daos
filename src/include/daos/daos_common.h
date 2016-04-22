@@ -118,6 +118,12 @@ do {									\
 #define DF_U64		"%" PRIu64
 #define DF_X64		"%" PRIx64
 
+#define DF_OID		DF_U64"."DF_U64"."DF_U64
+#define DP_OID(o)	(o).body[0], (o).body[1], (o).body[2]
+
+#define DF_UOID		DF_OID".%u"
+#define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
+
 /* memory allocating macros */
 #define D_ALLOC(ptr, size)						 \
 	do {								 \
@@ -166,6 +172,9 @@ unsigned int daos_chash_srch_u64(uint64_t *hashes, unsigned int nhashes,
 
 /** djb2 hash a string to a uint32_t value */
 uint32_t daos_hash_string_u32(const char *string);
+/** murmur hash (64 bits) */
+uint64_t daos_hash_murmur64(const unsigned char *key, unsigned int key_len,
+			    unsigned int seed);
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
@@ -204,6 +213,13 @@ static inline bool
 daos_handle_is_inval(daos_handle_t hdl)
 {
 	return hdl.cookie == 0;
+}
+
+static inline void
+daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
+{
+	iov->iov_buf = buf;
+	iov->iov_len = iov->iov_buf_len = size;
 }
 
 #if !defined(container_of)
