@@ -5,8 +5,8 @@ Import('env')
 libraries = ['libvos', 'libuuid', 'libpthread', 'libdaos_common',
 	     'daos_transport', 'libpmemobj']
 
-env.Program('hdr_build', 'hdr_build.c')
 env.Program('vos_pool_tests','vos_pool_tests.c', LIBS=libraries)
 env.Program('vos_container_tests','vos_container_tests.c', LIBS=libraries)
 env.Program('vos_chash_table_test','vos_chashtable_test.c', CCFLAGS='-fopenmp',
 	    LIBS=[libraries, 'libgomp'])
+env.Program('vos_ctl','vos_ctl.c', LIBS=libraries)

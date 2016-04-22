@@ -26,6 +26,7 @@
 #ifndef _VOS_LAYOUT_H
 #define _VOS_LAYOUT_H
 #include <libpmemobj.h>
+#include <daos/btree.h>
 #include <daos_srv/vos_types.h>
 #include "vos_chash_table.h"
 
@@ -44,6 +45,9 @@ struct vos_epoch_index;
 struct vos_kv_index;
 struct vos_ba_index;
 struct vos_obj;
+struct vos_krec;
+struct vos_irec;
+
 /**
  * Typed Layout named using Macros from libpmemobj
  * Each structure is assigned a type number internally
@@ -56,6 +60,7 @@ struct vos_obj;
  * different pointers in the pool.
  */
 POBJ_LAYOUT_BEGIN(vos_pool_layout);
+
 POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_root);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container);
@@ -64,6 +69,9 @@ POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_epoch_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_kv_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_ba_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_irec);
+
 POBJ_LAYOUT_END(vos_pool_layout);
 
 struct vos_pool_root {
@@ -102,6 +110,57 @@ struct vos_container {
 	vos_co_info_t			vc_info;
 	TOID(struct vos_object_index)	vc_obtable;
 	TOID(struct vos_epoch_index)	vc_ehtable;
+};
+
+/**
+ * VOS object is a tree based KV store
+ */
+struct vos_obj {
+	daos_unit_oid_t			vo_oid;
+	/** btree root */
+	struct btr_root			vo_tree;
+	/**
+	 * TODO: link it to the container object table
+	 */
+};
+
+/**
+ * Persisted VOS (d)key record, it is referenced by btr_record::rec_mmid
+ * of btree VOS_BTR_KEY.
+ */
+struct vos_krec {
+	struct btr_root			kr_btr;
+	/** key checksum type */
+	uint8_t				kr_cs_type;
+	/** key checksum size (in bytes) */
+	uint8_t				kr_cs_size;
+	/** padding bytes */
+	uint16_t			kr_pad_16;
+	/** akey length */
+	uint32_t			kr_size;
+	/** placeholder for the real stuff */
+	char				kr_body[0];
+};
+
+/**
+ * Persisted VOS index & epoch record, it is referenced by btr_record::rec_mmid
+ * of btree VOS_BTR_IDX.
+ */
+struct vos_irec {
+	/** reserved for resolving overwrite race */
+	uint64_t			ir_cookie;
+	/** key checksum type */
+	uint8_t				ir_cs_type;
+	/** key checksum size (in bytes) */
+	uint8_t				ir_cs_size;
+	/** padding bytes */
+	uint16_t			ir_pad16;
+	/** padding bytes */
+	uint32_t			ir_pad32;
+	/** length of value */
+	uint64_t			ir_size;
+	/** placeholder for the real stuff */
+	char				ir_body[0];
 };
 
 #endif

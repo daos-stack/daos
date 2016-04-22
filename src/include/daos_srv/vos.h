@@ -369,67 +369,71 @@ vos_ba_write(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 int
 vos_ba_punch(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	     daos_ext_list_t *exl, daos_event_t *ev);
+#endif
 
 /**
- * KV object API
+ * VOS object API
  */
-
 /**
- * Lookup and return values for given keys in \a kvl.
- * Value length of unfound key will be set to zero.
+ * Fetch an array of vectors from the specfied object.
+ */
+/**
+ * Fetch values for the given keys and their indices.
+ * If output buffer is not provided in \a sgl, then this function returns
+ * the directly accessible addresses of record data, upper layer can directly
+ * read from these addresses (rdma mode).
+ *
+ * TODO: add more detail descriptions for punched or missing records.
  *
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the lookup. It will be ignored if epoch range
- *			is provided by \a kvl (kvl::kv_epr).
- * \param kvl	[IN/OUT]
- *			Key list to lookup, if value buffers of \a kvl are NULL,
- *			only value lengths will be returned, otherwise found
- *			values will be copied into these buffers.
+ * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
+ *			is provided by \a vios.
+ * \param dkey	[IN]	Distribution key.
+ * \param nr	[IN]	Number of vector descriptors in \a vios.
+ * \param vios	[IN]	Array of vector IO descriptors.
+ * \param sgls	[OUT]	Scatter/gather list to store the returned record values
+ *			or value addresses.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_kv_lookup(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	      daos_kv_list_t *kvl, daos_event_t *ev);
+vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	      daos_dkey_t *dkey, unsigned int nr, daos_vec_iod_t *vios,
+	      daos_sg_list_t *sgls, daos_event_t *ev);
+
 
 /**
- * Update or insert KV pairs in \a kvl
+ * Update an array of vectors for the specfied object.
+ * If input buffer is not provided in \a sgl, then this function returns
+ * the new allocated addresses to store the records, upper layer can
+ * directly write data into these addresses (rdma mode).
  *
  * \param coh	[IN]	Container open handle
- * \param oid	[IN]	KV object ID
- * \param epoch	[IN]	Epoch for the KV update. It will be ignored if epoch
- *			range is provided by \a kvl (kvl::kv_epr).
- * \param kvl	[IN/OUT]
- *			KV list to update
+ * \param oid	[IN]	object ID
+ * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
+ *			range is provided by \a vios (kvl::kv_epr).
+ * \param dkey	[IN]	Distribution key.
+ * \param nr [IN]	Number of vector IO descriptors in \a vios.
+ * \param vios [IN]	Array of vector IO descriptors.
+ * \param sgls	[IN/OUT]
+ *			Scatter/gather list to pass in record value buffers,
+ *			if caller sets the input buffer size only without
+ *			providing input buffers, then VOS will allocate spaces
+ *			for the records and return addresses of them, so upper
+ *			layer stack can transfer data via rdma.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
-int
-vos_kv_update(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	      daos_kv_list_t *kvl, daos_event_t *ev);
 
-/**
- * Locate and punch key-value pairs for specified keys in \a kvl.
- *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	KV object ID.
- * \param epoch	[IN]	Epoch for the KV punch. It will be ignored if epoch
- *			range is provided by \a kvl (kvl::kv_epr).
- * \param kvl	[IN/OUT]
- *			KV list, only keys are required.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		Zero on success, negative value if error.
- */
 int
-vos_kv_punch(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	     daos_kv_list_t *kvl, daos_event_t *ev);
+vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	       daos_dkey_t *dkey, unsigned int nr, daos_vec_iod_t *vios,
+	       daos_sg_list_t *sgls, daos_event_t *ev);
 
 /**
  * VOS iterator APIs
@@ -493,7 +497,5 @@ vos_iter_move(daos_handle_t ih, vos_iter_pos_t *pos, daos_event_t *ev);
 int
 vos_iter_current(daos_handle_t ih, vos_iter_entry_t *entry,
 		 vos_iter_pos_t *next);
-
-#endif
 
 #endif /* __VOS_API_H */

@@ -23,28 +23,14 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
-#ifndef _VOS_INTERNAL_H
-#define _VOS_INTERNAL_H
+#ifndef __VOS_INTERNAL_H__
+#define __VOS_INTERNAL_H__
 
 #include <daos/list.h>
 #include <daos/hash.h>
 #include <daos/btree.h>
 
 #include "vos_layout.h"
-
-/**
- * VOS object, assume all objects are KV store...
- *
- * NB: PMEM data structure.
- */
-struct vos_obj {
-	daos_unit_oid_t			vo_oid;
-	/** btree root */
-	struct btr_root			vo_kv_btr;
-	/**
-	 * TODO: link it to the container object table
-	 */
-};
 
 /**
  * Reference of a cached object.
@@ -60,6 +46,8 @@ struct vos_obj_ref {
 	daos_unit_oid_t			 or_oid;
 	/** btree open handle of the object */
 	daos_handle_t			 or_toh;
+	/** btree iterator handle */
+	daos_handle_t			 or_ih;
 	/** Persistent memory ID for the object */
 	struct vos_obj			*or_obj;
 };
@@ -105,6 +93,11 @@ int  vos_obj_cache_create(struct vos_obj_cache **occ_p);
  * \param occ	[IN]	Cache to be destroyed.
  */
 void vos_obj_cache_destroy(struct vos_obj_cache *occ);
+
+/**
+ * Return object cache for the current thread.
+ */
+struct vos_obj_cache *vos_obj_cache_current(void);
 
 /**
  * VOS pool handle (DRAM)
@@ -182,4 +175,133 @@ vos_pool_putref_handle(struct vp_hdl *vpool);
 struct vos_pool*
 vos_co_lookup_handle(daos_handle_t poh);
 
-#endif
+PMEMobjpool *vos_coh2pop(daos_handle_t coh);
+
+/**
+ * Data structure which carries the keys, epoch ranges to the multi-nested
+ * btree.
+ */
+struct vos_key_bundle {
+	/** daos key for the I/O operation */
+	daos_dkey_t		*kb_key;
+	/** record index for the I/O operation */
+	daos_recx_t		*kb_rex;
+	/** epoch for the I/O operation */
+	daos_epoch_range_t	*kb_epr;
+};
+
+/**
+ * Data structure which carries the value buffers, checksums and memory IDs
+ * to the multi-nested btree.
+ */
+struct vos_rec_bundle {
+	/** checksum buffer for the daos key */
+	daos_csum_buf_t		*rb_csum;
+	/**
+	 * Input  : value buffer (non-rdma data)
+	 *	    TODO also support scatter/gather list input.
+	 * Output : parameter to return value address.
+	 */
+	daos_iov_t		*rb_iov;
+	/** Optional, externally allocated d-key record mmid (rdma vos_krec) */
+	umem_id_t		 rb_mmid;
+	/** returned subtree root */
+	struct btr_root		*rb_btr;
+};
+
+#define VOS_SIZE_ROUND		8
+
+/* size round up */
+static inline uint64_t
+vos_size_round(uint64_t size)
+{
+	return (size + VOS_SIZE_ROUND - 1) & ~(VOS_SIZE_ROUND - 1);
+}
+
+static inline struct vos_krec *
+vos_rec2krec(struct btr_instance *tins, struct btr_record *rec)
+{
+	return (struct vos_krec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+}
+
+static inline struct vos_irec *
+vos_rec2irec(struct btr_instance *tins, struct btr_record *rec)
+{
+	return (struct vos_irec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+}
+
+static inline uint64_t
+vos_krec_size(struct vos_rec_bundle *rbund)
+{
+	daos_iov_t	*dkey;
+	uint64_t	 size;
+
+	dkey = rbund->rb_iov; /* XXX dkey only */
+	size = vos_size_round(rbund->rb_csum->cs_len);
+
+	return size + dkey->iov_len + sizeof(struct vos_krec);
+}
+
+static inline char *
+vos_krec2csum(struct vos_krec *krec)
+{
+	return krec->kr_cs_size == 0 ? NULL : &krec->kr_body[0];
+}
+
+static inline char *
+vos_krec2dkey(struct vos_krec *krec)
+{
+	return &krec->kr_body[vos_size_round(krec->kr_cs_size)];
+}
+
+static inline uint64_t
+vos_irec_size(struct vos_rec_bundle *rbund)
+{
+	uint64_t size;
+
+	size = vos_size_round(rbund->rb_csum->cs_len);
+	return size + rbund->rb_iov->iov_len + sizeof(struct vos_irec);
+}
+
+static inline char *
+vos_irec2csum(struct vos_irec *irec)
+{
+	return irec->ir_cs_size == 0 ? NULL : &irec->ir_body[0];
+}
+
+static inline char *
+vos_irec2data(struct vos_irec *irec)
+{
+	return &irec->ir_body[vos_size_round(irec->ir_cs_size)];
+}
+
+static inline bool
+vos_obj_is_new(struct vos_obj *obj)
+{
+	return obj->vo_tree.tr_class == 0;
+}
+
+static inline bool vos_obj_is_zombie(struct vos_obj *obj)
+{
+	/* TODO */
+	return false;
+}
+
+enum {
+	/** the first reserved tree class */
+	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
+	/** key tree */
+	VOS_BTR_KEY		= (VOS_BTR_BEGIN + 0),
+	/** index + epoch tree */
+	VOS_BTR_IDX		= (VOS_BTR_BEGIN + 1),
+	/** the last reserved tree class */
+	VOS_BTR_END,
+};
+
+int vos_obj_tree_init(struct vos_obj_ref *oref);
+int vos_obj_tree_fini(struct vos_obj_ref *oref);
+int vos_obj_tree_register(PMEMobjpool *pop);
+
+struct umem_attr vos_uma;
+
+#endif /* __VOS_INTERNAL_H__ */
