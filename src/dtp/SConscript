@@ -5,7 +5,7 @@ Import('env', 'PREREQS')
 env.Append(CPPPATH = ['#/src/dtp'])
 
 libraries = ['daos_common', 'mercury']
-libraries += ['mcl']
+libraries += ['pset']
 
 if PREREQS is None:
     libraries.append(['mercury','na'])

@@ -203,12 +203,12 @@ dtp_mcl_init(dtp_phy_addr_t *addr)
 		dtp_gdata.dg_mcl_state->myproc.rank,
 		dtp_gdata.dg_mcl_state->univ_size);
 	if (dtp_gdata.dg_server == true) {
-		rc = mcl_startup(dtp_gdata.dg_mcl_state,
+		rc = mcl_startup(dtp_gdata.dg_mcl_state, NULL,
 				 DTP_GLOBAL_SRV_GROUP_NAME, true,
 				 &dtp_gdata.dg_mcl_srv_set);
 		tmp_set = dtp_gdata.dg_mcl_srv_set;
 	} else {
-		rc = mcl_startup(dtp_gdata.dg_mcl_state,
+		rc = mcl_startup(dtp_gdata.dg_mcl_state, NULL,
 				 DTP_CLI_GROUP_NAME, false,
 				 &dtp_gdata.dg_mcl_cli_set);
 		tmp_set = dtp_gdata.dg_mcl_cli_set;
