@@ -36,7 +36,8 @@ REQS.define('bmi',
             retriever=GitRepoRetriever('http://git.mcs.anl.gov/bmi.git'),
             commands=BMI_BUILD, libs=['bmi'])
 
-CCI_BUILD = ['./autogen.pl']
+CCI_BUILD = ['patch -p1 < $PATCH_PREFIX/cci_port_number.patch',
+             './autogen.pl']
 CCI_REQUIRED = []
 if REQS.get_env('PLATFORM') == 'darwin':
     CCI_BUILD.append('./configure --prefix=$CCI_PREFIX')

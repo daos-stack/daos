@@ -429,32 +429,8 @@ class PreReqComponent(object):
 
         real_env["PYTHONPATH"] = Dir("#").abspath + os.pathsep + \
                                  os.environ.get("PYTHONPATH", "")
-        AddOption('--no-prereq-links',
-                  dest='no_prereq_links',
-                  action='store_true',
-                  default=False,
-                  help='Set to disable symbolic links for prerequisites')
 
-        AddOption('--update-prereq',
-                  dest='update_prereq',
-                  type='string',
-                  nargs=1,
-                  action='append',
-                  default=[],
-                  metavar='COMPONENT',
-                  help='Force an update of a prerequisite COMPONENT.  Use '
-                       '\'all\' to update all components')
-
-        # There is another case here which isn't handled, we want Jenkins builds
-        # to download tar packages but not git source code.  For now just have a
-        # single flag and set this for the Jenkins builds which need this.
-        AddOption('--build-deps',
-                  dest='build_deps',
-                  type='choice',
-                  choices=['yes', 'no', 'build-only'],
-                  default='no',
-                  help="Automatically download and build sources")
-
+        self.add_options()
         self.__setup_unit_test_builders()
         self.__update = GetOption('update_prereq')
         self.__link = not GetOption('no_prereq_links')
@@ -494,6 +470,49 @@ class PreReqComponent(object):
         self.setup_path_var('PREBUILT_PREFIX', True)
         self.setup_path_var('TARGET_PREFIX')
         self.setup_path_var('SRC_PREFIX', True)
+        self.setup_patch_prefix()
+
+    @staticmethod
+    def add_options():
+        """Add common options to environment"""
+
+        AddOption('--no-prereq-links',
+                  dest='no_prereq_links',
+                  action='store_true',
+                  default=False,
+                  help='Set to disable symbolic links for prerequisites')
+
+        AddOption('--update-prereq',
+                  dest='update_prereq',
+                  type='string',
+                  nargs=1,
+                  action='append',
+                  default=[],
+                  metavar='COMPONENT',
+                  help='Force an update of a prerequisite COMPONENT.  Use '
+                       '\'all\' to update all components')
+
+        # There is another case here which isn't handled, we want Jenkins builds
+        # to download tar packages but not git source code.  For now just have a
+        # single flag and set this for the Jenkins builds which need this.
+        AddOption('--build-deps',
+                  dest='build_deps',
+                  type='choice',
+                  choices=['yes', 'no', 'build-only'],
+                  default='no',
+                  help="Automatically download and build sources")
+
+
+    def setup_patch_prefix(self):
+        """Discovers the location of the patches directory and adds it to
+           the construction environment."""
+        patch_dirs = [os.path.join(self.__top_dir,
+                                   "scons_local", "sl_patches"),
+                      os.path.join(self.__top_dir, "sl_patches")]
+        for patch_dir in patch_dirs:
+            if os.path.exists(patch_dir):
+                self.replace_env(**{'PATCH_PREFIX': patch_dir})
+                break
 
     def __setup_unit_test_builders(self):
         """Setup unit test builders for general use"""
