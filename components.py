@@ -182,4 +182,4 @@ REQS.define('ofi',
                       'make',
                       'make install'],
             libs=['fabric'],
-            headers=['rmda/fabric.h'])
+            headers=['rdma/fabric.h'])
