@@ -34,26 +34,45 @@
  * Author: Liang Zhen  <liang.zhen@intel.com>
  * Author: Di Wang  <di.wang@intel.com>
  */
+#include <daos/daos_transport.h>
 #include "daos_eq_internal.h"
 
 struct daos_hhash *daos_eq_hhash;
 
-int
-daos_eq_lib_init()
-{
-	if (daos_eq_hhash != NULL)
-		return -DER_ALREADY;
+/*
+ * For the moment, we use a global dtp_context_t to create all the RPC requests
+ * this module uses.
+ */
+dtp_context_t daos_eq_ctx;
+static pthread_mutex_t daos_eq_lock = PTHREAD_MUTEX_INITIALIZER;
 
-	return daos_hhash_create(DAOS_HHASH_BITS, &daos_eq_hhash);
+int
+daos_eq_lib_init(dtp_context_t ctx)
+{
+	int rc;
+
+	pthread_mutex_lock(&daos_eq_lock);
+	if (daos_eq_hhash != NULL) {
+		pthread_mutex_unlock(&daos_eq_lock);
+		return -DER_ALREADY;
+	}
+
+	daos_eq_ctx = ctx;
+	rc = daos_hhash_create(DAOS_HHASH_BITS, &daos_eq_hhash);
+	pthread_mutex_unlock(&daos_eq_lock);
+	return rc;
 }
 
 void
 daos_eq_lib_fini()
 {
+	pthread_mutex_lock(&daos_eq_lock);
+	daos_eq_ctx = NULL;
 	if (daos_eq_hhash != NULL) {
 		daos_hhash_destroy(daos_eq_hhash);
 		daos_eq_hhash = NULL;
 	}
+	pthread_mutex_unlock(&daos_eq_lock);
 }
 
 static void
@@ -66,7 +85,8 @@ daos_eq_free(struct daos_hlink *hlink)
 	eq = daos_eqx2eq(eqx);
 	D_ASSERT(daos_list_empty(&eq->eq_disp));
 	D_ASSERT(daos_list_empty(&eq->eq_comp));
-	D_ASSERT(eq->eq_n_comp == 0 && eq->eq_n_disp == 0);
+	D_ASSERTF(eq->eq_n_comp == 0 && eq->eq_n_disp == 0,
+		  "comp %d disp %d\n", eq->eq_n_comp, eq->eq_n_disp);
 	D_ASSERT(daos_hhash_link_empty(&eqx->eqx_hlink));
 
 	if (eqx->eqx_events_hash != NULL) {
@@ -76,9 +96,6 @@ daos_eq_free(struct daos_hlink *hlink)
 
 	if (eqx->eqx_lock_init)
 		pthread_mutex_destroy(&eqx->eqx_lock);
-
-	if (eqx->eqx_cond_init)
-		pthread_cond_destroy(&eqx->eqx_cond);
 
 	free(eq);
 }
@@ -100,6 +117,8 @@ daos_eq_alloc(void)
 
 	DAOS_INIT_LIST_HEAD(&eq->eq_disp);
 	DAOS_INIT_LIST_HEAD(&eq->eq_comp);
+	eq->eq_n_disp = 0;
+	eq->eq_n_comp = 0;
 
 	eqx = daos_eq2eqx(eq);
 
@@ -108,10 +127,6 @@ daos_eq_alloc(void)
 		goto out;
 	eqx->eqx_lock_init = 1;
 
-	rc = pthread_cond_init(&eqx->eqx_cond, NULL);
-	if (rc != 0)
-		goto out;
-	eqx->eqx_cond_init = 1;
 	daos_hhash_hlink_init(&eqx->eqx_hlink, &eq_h_ops);
 
 	rc = daos_hhash_create(DAOS_HHASH_BITS, &eqx->eqx_events_hash);
@@ -271,7 +286,6 @@ daos_event_complete(struct daos_event *ev)
 
 	daos_event_complete_locked(eqx, evx);
 
-	pthread_cond_signal(&eqx->eqx_cond);
 	pthread_mutex_unlock(&eqx->eqx_lock);
 
 	daos_eq_putref(eqx);
@@ -305,77 +319,96 @@ daos_eq_poll(daos_handle_t eqh, int wait_inf, int64_t timeout,
 	struct daos_event_private	*tmp;
 	struct daos_event	*ev;
 	struct daos_eq		*eq;
+	struct timeval		tv;
 	int			count;
 	int			rc = 0;
+	uint64_t		end = 0;
+	uint64_t		now = 0;
 
-	if (n_events == 0 || events == NULL)
+	if (n_events == 0)
+		return -DER_INVAL;
+
+	if (daos_eq_ctx == NULL)
 		return -DER_INVAL;
 
 	eqx = daos_eq_lookup(eqh);
 	if (eqx == NULL)
 		return -DER_NONEXIST;
-	eq = daos_eqx2eq(eqx);
 
-	pthread_mutex_lock(&eqx->eqx_lock);
- again:
-	count = 0;
-	daos_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
-		D_ASSERT(eq->eq_n_comp > 0);
-		eq->eq_n_comp--;
-
-		daos_list_del_init(&evx->evx_link);
-		D_ASSERT(evx->evx_status == DAOS_EVS_COMPLETED ||
-			evx->evx_status == DAOS_EVS_ABORT);
-		evx->evx_status = DAOS_EVS_INIT;
-
-		ev = daos_evx2ev(evx);
-		events[count++] = ev;
-		if (count == n_events)
-			break;
-	}
-
-	if (count > 0) { /* have got completion event */
-		rc = count;
-		goto out;
-	}
-
-	/* no completion event, eq::eq_comp is empty */
-
-	if (eqx->eqx_finalizing) { /* no new event is coming */
-		D_ASSERT(daos_list_empty(&eq->eq_disp));
-		rc = -DER_NONEXIST;
-		goto out;
-	}
-
-	/* wait only if there' inflight event? */
-	if (wait_inf && daos_list_empty(&eq->eq_disp))
-		goto out;
-
-	if (timeout == 0) /* caller doesn't want to wait at all */
-		goto out;
-
-	if (timeout < 0) {
-		pthread_cond_wait(&eqx->eqx_cond, &eqx->eqx_lock);
-	} else {
-		struct timeval	tv;
-		struct timespec ts;
-
+	if (timeout >= 0) {
 		gettimeofday(&tv, NULL);
-		ts.tv_sec = tv.tv_sec + (tv.tv_usec + timeout) / (1000 * 1000);
-		ts.tv_nsec = ((tv.tv_usec + timeout) % (1000 * 1000)) * 1000;
+		now = tv.tv_sec * 1000 * 1000 + tv.tv_usec;
+		end = now + timeout;
+	}
 
-		rc = pthread_cond_timedwait(&eqx->eqx_cond, &eqx->eqx_lock,
-					    &ts);
-		D_ASSERT(rc == 0 || rc == ETIMEDOUT);
-		if (rc == ETIMEDOUT) {
-			rc = -ETIMEDOUT;
-			timeout = 0;
+	eq = daos_eqx2eq(eqx);
+	while (now <= end || timeout < 0) {
+		uint64_t interval = 1000 * 1000; /* Milliseconds */
+
+		count = 0;
+		pthread_mutex_lock(&eqx->eqx_lock);
+		daos_list_for_each_entry_safe(evx, tmp, &eq->eq_comp,
+					      evx_link) {
+			D_ASSERT(eq->eq_n_comp > 0);
+			eq->eq_n_comp--;
+
+			daos_list_del_init(&evx->evx_link);
+			D_ASSERT(evx->evx_status == DAOS_EVS_COMPLETED ||
+				 evx->evx_status == DAOS_EVS_ABORT);
+			evx->evx_status = DAOS_EVS_INIT;
+
+			if (events != NULL) {
+				ev = daos_evx2ev(evx);
+				events[count++] = ev;
+			}
+
+			if (count == n_events)
+				break;
+		}
+
+		/* Exist once there are completion events XXX */
+		if (count > 0) {
+			pthread_mutex_unlock(&eqx->eqx_lock);
+			rc = count;
+			break;
+		}
+
+		/* no completion event, eq::eq_comp is empty */
+		if (eqx->eqx_finalizing) { /* no new event is coming */
+			D_ASSERT(daos_list_empty(&eq->eq_disp));
+			pthread_mutex_unlock(&eqx->eqx_lock);
+			rc = -DER_NONEXIST;
+			break;
+		}
+
+		/* wait only if there' inflight event? */
+		if (wait_inf && daos_list_empty(&eq->eq_disp)) {
+			pthread_mutex_unlock(&eqx->eqx_lock);
+			break;
+		}
+
+		pthread_mutex_unlock(&eqx->eqx_lock);
+
+		rc = dtp_progress(daos_eq_ctx, interval, NULL, NULL,
+				  NULL);
+		if (rc != 0 && rc != -ETIMEDOUT) {
+			D_ERROR("dtp progress fails: rc = %d\n", rc);
+			break;
+		}
+		rc = 0;
+
+		if (timeout > 0) {
+			/* wait until timeout */
+			struct timeval	tv;
+
+			gettimeofday(&tv, NULL);
+			now = tv.tv_sec * 1000 * 1000 + tv.tv_usec;
+		} else if (timeout == 0) {
+			/* Do not wait */
+			break;
 		}
 	}
 
-	goto again; /* recheck */
- out:
-	pthread_mutex_unlock(&eqx->eqx_lock);
 	daos_eq_putref(eqx);
 	return rc;
 }
@@ -551,6 +584,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	/* unlink all completed */
 	daos_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
 		daos_list_del(&evx->evx_link);
+		D_ASSERT(eq->eq_n_comp > 0);
 		eq->eq_n_comp--;
 		daos_event_unlink_locked(eqx, evx, 1);
 	}
@@ -575,53 +609,47 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 	struct daos_eq_private		*eqx;
 	int				rc = 0;
 
+	/* Init the event first */
+	memset(ev, 0, sizeof(*ev));
+	evx->evx_status	= DAOS_EVS_INIT;
+	evx->evx_eqh	= eqh;
+	DAOS_INIT_LIST_HEAD(&evx->evx_child);
+
+	/* Do not add the child event to the event queue
+	 * hash list,only add to the parent list.
+	 */
+	if (parent != NULL) {
+		/* Insert it to the parent event list */
+		parent_evx = daos_ev2evx(parent);
+		if (parent_evx->evx_status != DAOS_EVS_INIT) {
+			D_ERROR("Parent event is not initialized: %d\n",
+				parent_evx->evx_status);
+			return -DER_INVAL;
+		}
+
+		if (parent_evx->evx_parent != NULL) {
+			D_ERROR("Can't nest event\n");
+			return -DER_NO_PERM;
+		}
+
+		/* it's user's responsibility to protect this list */
+		daos_list_add_tail(&evx->evx_link, &parent_evx->evx_child);
+		evx->evx_parent = parent_evx;
+		parent_evx->evx_nchild++;
+		return 0;
+	}
+
 	eqx = daos_eq_lookup(eqh);
 	if (eqx == NULL) {
 		D_ERROR("Invalid EQ handle %"PRIx64"\n", eqh.cookie);
 		return -DER_NONEXIST;
 	}
 
-	memset(ev, 0, sizeof(*ev));
-	evx->evx_status	= DAOS_EVS_INIT;
-	evx->evx_eqh	= eqh;
-	DAOS_INIT_LIST_HEAD(&evx->evx_child);
-
 	/* Insert event to eq hash link */
 	daos_hhash_hlink_init(&evx->evx_eq_hlink, NULL);
 
-	/* XXX Do we need to add the child event to the event queue
-	 * hash list ? */
 	daos_hhash_link_insert(eqx->eqx_events_hash, &evx->evx_eq_hlink, 0);
 	DAOS_INIT_LIST_HEAD(&evx->evx_link);
-	if (parent == NULL) {
-		daos_eq_putref(eqx);
-		return 0;
-	}
-
-	/* Insert it to the parent event list */
-	parent_evx = daos_ev2evx(parent);
-	if (parent_evx->evx_status != DAOS_EVS_INIT) {
-		D_ERROR("Parent event is not initialized: %d\n",
-			parent_evx->evx_status);
-		rc = -DER_INVAL;
-		goto out;
-	}
-
-	if (parent_evx->evx_parent != NULL) {
-		D_ERROR("Can't nest event\n");
-		rc = -DER_NO_PERM;	/* nested */
-		goto out;
-	}
-
-	/* it's user's responsibility to protect this list */
-	daos_list_add_tail(&evx->evx_link, &parent_evx->evx_child);
-	evx->evx_parent = parent_evx;
-	parent_evx->evx_nchild++;
-
-out:
-	if (rc != 0)
-		daos_hhash_link_delete(eqx->eqx_events_hash,
-				       &evx->evx_eq_hlink);
 
 	daos_eq_putref(eqx);
 	return rc;
@@ -648,22 +676,23 @@ daos_event_fini(struct daos_event *ev)
 	if (evx->evx_parent != NULL) {
 		if (daos_list_empty(&evx->evx_link)) {
 			D_ERROR("Event not linked to its parent\n");
-			rc = -DER_INVAL;
-			goto out;
+			return -DER_INVAL;
 		}
 
 		if (evx->evx_parent->evx_status != DAOS_EVS_INIT) {
 			D_ERROR("Parent event is not initialized or inflight: "
 			       "%d\n", evx->evx_parent->evx_status);
-			rc = -DER_INVAL;
-			goto out;
+			return -DER_INVAL;
 		}
 
 		daos_list_del_init(&evx->evx_link);
 		evx->evx_status = DAOS_EVS_INIT;
 		evx->evx_parent = NULL;
+
+		return 0;
 	}
 
+	/* If there are child events */
 	while (!daos_list_empty(&evx->evx_child)) {
 		struct daos_event_private *tmp;
 
@@ -691,10 +720,12 @@ daos_event_fini(struct daos_event *ev)
 	/* Remove from the evx_link */
 	if (!daos_list_empty(&evx->evx_link)) {
 		daos_list_del(&evx->evx_link);
-		if (evx->evx_status == DAOS_EVS_DISPATCH)
+		if (evx->evx_status == DAOS_EVS_DISPATCH) {
 			eq->eq_n_disp--;
-		else if (evx->evx_status == DAOS_EVS_COMPLETED)
+		} else if (evx->evx_status == DAOS_EVS_COMPLETED) {
+			D_ASSERT(eq->eq_n_comp > 0);
 			eq->eq_n_comp--;
+		}
 	}
 
 	daos_hhash_link_delete(eqx->eqx_events_hash, &evx->evx_eq_hlink);

@@ -82,12 +82,20 @@ modules_load()
 
 	D_DEBUG(DF_SERVER, "daos_mgmt_srv module successfully loaded\n");
 
+	/* XXX daos_m_srv should be dynamically loaded, instead of by default */
+	rc = dss_module_load("daos_m_srv");
+	if (rc != 0) {
+		D_DEBUG(DF_SERVER, "failed to load daos_m_srv module\n");
+		return rc;
+	}
+
 	return 0;
 }
 
 static void
 modules_unload()
 {
+	dss_module_unload("daos_m_srv");
 	dss_module_unload("daos_mgmt_srv");
 	D_DEBUG(DF_SERVER, "daos_mgmt_srv module successfully unloaded\n");
 }

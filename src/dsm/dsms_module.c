@@ -51,6 +51,5 @@ struct dss_module daos_m_srv_module =  {
 	.sm_ver		= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,
-	.sm_cl_rpcs	= dsm_client_rpcs,
-	.sm_srv_rpcs	= NULL
+	.sm_cl_rpcs	= dsm_rpcs,
 };

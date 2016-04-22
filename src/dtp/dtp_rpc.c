@@ -184,3 +184,72 @@ dtp_req_abort(dtp_rpc_t *req)
 {
 	return -DER_NOSYS;
 }
+
+#define DTP_DEFAULT_TIMEOUT	(20 * 1000 * 1000) /* Milli-seconds */
+
+static int
+dtp_cb_common(const struct dtp_cb_info *cb_info)
+{
+	*(int *)cb_info->dci_arg = 1;
+	return 0;
+}
+
+/**
+ * Send rpc synchronously
+ *
+ * \param[IN] dtp_ctx	pointer to DTP context.
+ * \param[IN] rpc	point to DTP request.
+ * \param[IN] timeout	timeout (Milliseconds) to wait, if
+ *                      timeout <= 0, it will wait infinitely.
+ * \return		0 if rpc return successfuly.
+ * \return		negative errno if sending fails or timeout.
+ */
+int
+dtp_sync_req(dtp_rpc_t *rpc, uint64_t timeout)
+{
+	struct timeval	tv;
+	uint64_t now;
+	uint64_t end;
+	int rc;
+	int complete = 0;
+
+	/* Send request */
+	rc = dtp_req_send(rpc, dtp_cb_common, &complete);
+	if (rc != 0)
+		return rc;
+
+	/* Check if we are lucky */
+	if (complete)
+		return 0;
+
+	timeout = timeout ? timeout : DTP_DEFAULT_TIMEOUT;
+	/* Wait the request to be completed in timeout milliseconds */
+	gettimeofday(&tv, NULL);
+	now = tv.tv_sec * 1000 * 1000 + tv.tv_usec;
+	end = now + timeout;
+
+	while (1) {
+		uint64_t interval = 1000; /* milliseconds */
+
+		rc = dtp_progress(rpc->dr_ctx, interval, NULL, NULL, NULL);
+		if (rc != 0 && rc != -ETIMEDOUT) {
+			D_ERROR("dtp_progress failed rc: %d.\n", rc);
+			break;
+		}
+
+		if (complete) {
+			rc = 0;
+			break;
+		}
+
+		gettimeofday(&tv, NULL);
+		now = tv.tv_sec * 1000 * 1000 + tv.tv_usec;
+		if (now >= end) {
+			rc = -DER_TIMEDOUT;
+			break;
+		}
+	}
+
+	return rc;
+}
+

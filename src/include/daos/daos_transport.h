@@ -224,6 +224,18 @@ int
 dtp_finalize(void);
 
 /**
+ * Send rpc synchronously
+ *
+ * \param[IN] rpc	point to DTP request.
+ * \param[IN] timeout	timeout (Milliseconds) to wait, if
+ *                      timeout <= 0, it will wait infinitely.
+ * \return		0 if rpc return successfuly.
+ * \return		negative errno if sending fails or timeout.
+ */
+int
+dtp_sync_req(dtp_rpc_t *rpc, uint64_t timeout);
+
+/**
  * Progress DAOS transport layer.
  *
  * \param dtp_ctx [IN]          DAOS transport context

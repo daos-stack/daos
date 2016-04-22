@@ -39,6 +39,7 @@
 #include <uuid/uuid.h>
 #include <daos/daos_transport.h>
 #include <daos/daos_rpc.h>
+#include <daos/daos_ev.h>
 
 /*
  * RPC operation codes
@@ -46,8 +47,11 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * dtp_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define POOL_CONNECT	1
-#define POOL_DISCONNECT	2
+enum dsm_operation {
+	DSM_POOL_CONNECT	= 1,
+	DSM_POOL_DISCONNECT	= 2,
+	DSM_PING		= 3,
+};
 
 struct pool_map {
 	uint64_t	version;
@@ -105,5 +109,28 @@ struct pool_disconnect_out {
 	int32_t	rc;
 };
 
-extern struct daos_rpc dsm_client_rpcs[];
+struct ping_in {
+	int32_t unused;
+};
+
+struct ping_out {
+	int32_t	ret;
+};
+
+int
+dsm_client_async_rpc(dtp_rpc_t *rpc_req, struct daos_event *event);
+int
+dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
+	       dtp_opcode_t opc, dtp_rpc_t **req);
+
+int
+dsms_hdlr_pool_connect(dtp_rpc_t *rpc);
+
+int
+dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
+
+int
+dsms_hdlr_ping(dtp_rpc_t *rpc);
+
+extern struct daos_rpc dsm_rpcs[];
 #endif /* __DSM_RPC_H__ */

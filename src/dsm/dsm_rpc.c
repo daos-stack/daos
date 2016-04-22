@@ -22,6 +22,7 @@
  * dsm: RPC Protocol Serialization Functions
  */
 #include <daos/daos_rpc.h>
+#include <daos/daos_ev.h>
 #include "dsm_rpc.h"
 
 static int
@@ -90,10 +91,26 @@ dsm_proc_pool_disconnect_out(dtp_proc_t proc, void *data)
 	return dtp_proc_int32_t(proc, &p->rc);
 }
 
-struct daos_rpc dsm_client_rpcs[] = {
+static int
+dsm_proc_ping_in(dtp_proc_t proc, void *data)
+{
+	struct ping_in    *p = data;
+
+	return dtp_proc_int32_t(proc, &p->unused);
+}
+
+static int
+dsm_proc_ping_out(dtp_proc_t proc, void *data)
+{
+	struct ping_out     *p = data;
+
+	return dtp_proc_int32_t(proc, &p->ret);
+}
+
+struct daos_rpc dsm_rpcs[] = {
 	{
 		.dr_name	= "DSM_POOL_CONNECT",
-		.dr_opc		= POOL_CONNECT,
+		.dr_opc		= DSM_POOL_CONNECT,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_in_hdlr	= dsm_proc_pool_connect_in,
@@ -102,7 +119,7 @@ struct daos_rpc dsm_client_rpcs[] = {
 		.dr_out_sz	= 0,	/* TODO */
 	}, {
 		.dr_name	= "DSM_POOL_DISCONNECT",
-		.dr_opc		= POOL_DISCONNECT,
+		.dr_opc		= DSM_POOL_DISCONNECT,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_in_hdlr	= dsm_proc_pool_disconnect_in,
@@ -110,6 +127,81 @@ struct daos_rpc dsm_client_rpcs[] = {
 		.dr_out_hdlr	= dsm_proc_pool_disconnect_out,
 		.dr_out_sz	= 0,	/* TODO */
 	}, {
+		.dr_name	= "DSM_PING",
+		.dr_opc		= DSM_PING,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_in_hdlr	= dsm_proc_ping_in,
+		.dr_in_sz	= sizeof(struct ping_in),
+		.dr_out_hdlr	= dsm_proc_ping_out,
+		.dr_out_sz	= sizeof(struct ping_out),
+		.dr_hdlr	= dsms_hdlr_ping,
+	}, {
 		.dr_opc		= 0
 	}
 };
+
+int
+dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
+	       dtp_opcode_t opc, dtp_rpc_t **req)
+{
+	dtp_opcode_t opcode;
+
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_DSMS_MODULE, 1);
+
+	return dtp_req_create(dtp_ctx, tgt_ep, opcode, req);
+}
+
+static int
+dsm_client_async_cb(const struct dtp_cb_info *cb_info)
+{
+	struct daos_event *event;
+
+	event = (struct daos_event *)cb_info->dci_arg;
+
+	event->ev_error = cb_info->dci_rc;
+	daos_event_complete(event);
+	return 0;
+}
+
+int
+dsm_client_async_rpc(dtp_rpc_t *rpc_req, struct daos_event *event)
+{
+	int			rc = 0;
+
+	rc = daos_event_launch(event);
+	if (rc != 0)
+		return rc;
+
+	rc = dtp_req_send(rpc_req, dsm_client_async_cb, event);
+	if (rc != 0) {
+		daos_event_abort(event);
+		return rc;
+	}
+
+	return rc;
+}
+
+/* TODO: this handler should move to another file, because this
+ * file will be shared both client and server module, but then
+ * it will cause dsm_rpcs can not be shared between client
+ * and server, will resolve this in the later patch.
+ */
+int
+dsms_hdlr_ping(dtp_rpc_t *rpc)
+{
+	struct ping_out	*ping_output = NULL;
+	int		rc = 0;
+
+	D_DEBUG(DF_UNKNOWN, "receive, ping %x.\n", rpc->dr_opc);
+
+	ping_output = (struct ping_out *)rpc->dr_output;
+	ping_output->ret = 0;
+
+	rc = dtp_reply_send(rpc);
+
+	D_DEBUG(DF_UNKNOWN, "ping ret: %d\n", ping_output->ret);
+
+	return rc;
+}
+

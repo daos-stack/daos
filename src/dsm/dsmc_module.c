@@ -31,12 +31,6 @@
 #include <daos/daos_transport.h>
 #include "dsm_rpc.h"
 
-/*
- * For the moment, we use a global dtp_context_t to create all the RPC requests
- * this module uses.
- */
-dtp_context_t dsmc_context;
-
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static int		module_initialized;
 
@@ -49,42 +43,19 @@ static int		module_initialized;
 int
 dsm_init(void)
 {
-	bool dtp_initialized = false;
 	int rc;
 
 	pthread_mutex_lock(&module_lock);
 	if (module_initialized)
 		D_GOTO(unlock, rc = 0);
 
-	rc = dtp_init(false);
-	if (rc != 0) {
-		D_ERROR("dtp init failure: rc =%d\n", rc);
-		D_GOTO(unlock, rc);
-	}
-	dtp_initialized = true;
-
-	rc = dtp_context_create(NULL, &dsmc_context);
-	if (rc != 0) {
-		D_ERROR("dtp context create failure: rc = %d\n", rc);
-		D_GOTO(out, rc);
-	}
-
-	rc = daos_client_rpc_register(dsm_client_rpcs, DAOS_DSMS_MODULE);
+	rc = daos_rpc_register(dsm_rpcs, DAOS_DSMS_MODULE, false);
 	if (rc != 0) {
 		D_ERROR("rpc register failure: rc = %d\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(unlock, rc);
 	}
 
 	module_initialized = 1;
-out:
-	if (rc != 0) {
-		if (dsmc_context != NULL) {
-			dtp_context_destroy(dsmc_context, 1);
-			dsmc_context = NULL;
-		}
-		if (dtp_initialized)
-			dtp_finalize();
-	}
 unlock:
 	pthread_mutex_unlock(&module_lock);
 	return rc;
@@ -102,12 +73,7 @@ dsm_fini(void)
 		return 0;
 	}
 
-	if (dsmc_context != NULL)
-		dtp_context_destroy(dsmc_context, 1);
-
-	dtp_finalize();
-
-	daos_rpc_unregister(dsm_client_rpcs);
+	daos_rpc_unregister(dsm_rpcs);
 
 	module_initialized = 0;
 	pthread_mutex_unlock(&module_lock);

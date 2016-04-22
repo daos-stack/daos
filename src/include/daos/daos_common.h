@@ -91,7 +91,8 @@ do {									\
 
 #define D_ERROR(fmt, ...)						\
 do {									\
-	fprintf(stderr, fmt, ## __VA_ARGS__);				\
+	fprintf(stderr, "%s:%d:%s() " fmt, __FILE__, __LINE__,          \
+		__func__, ## __VA_ARGS__);     				\
 	fflush(stderr);							\
 } while (0)
 

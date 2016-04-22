@@ -530,16 +530,16 @@ main(int argc, char **argv)
 {
 	int		rc;
 
-	rc = daos_eq_lib_init();
+	rc = daos_eq_lib_init(NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to initailiz DAOS/event library: %d\n", rc);
-		return -1;
+		return rc;
 	}
 
 	rc = daos_eq_create(&my_eqh);
 	if (rc != 0) {
 		D_ERROR("Failed to create EQ: %d\n", rc);
-		goto failed;
+		goto out_lib;
 	}
 
 	rc = eq_test_1();
@@ -557,8 +557,11 @@ main(int argc, char **argv)
 	rc = eq_test_4();
 	if (rc != 0)
 		goto failed;
- failed:
-	daos_eq_destroy(my_eqh, 0);
+
+failed:
+	daos_eq_destroy(my_eqh, 1);
+out_lib:
 	daos_eq_lib_fini();
+
 	return rc;
 }

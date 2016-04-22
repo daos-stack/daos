@@ -32,6 +32,7 @@
 #include <daos/daos_errno.h>
 #include <daos/daos_list.h>
 #include <daos/daos_hash.h>
+#include <daos/daos_transport.h>
 
 typedef enum {
 	DAOS_EV_NONE,
@@ -97,16 +98,16 @@ struct daos_eq {
 };
 
 /**
- * Initialize event queue library
+ * Finish event queue library
  */
 void
 daos_eq_lib_fini(void);
 
 /**
- * Finish event queue library
+ * Initialize event queue library
  */
 int
-daos_eq_lib_init(void);
+daos_eq_lib_init(dtp_context_t ctx);
 
 /**
  * create an Event Queue
@@ -231,4 +232,20 @@ daos_event_next(daos_event_t *parent, daos_event_t *child);
 int
 daos_event_abort(daos_event_t *ev);
 
+/**
+ * Mark the event completed, i.e. move this event
+ * to completion list.
+ *
+ * \param ev [IN]	event to complete.
+ */
+void
+daos_event_complete(daos_event_t *ev);
+
+/**
+ * Mark the event launched, i.e. move this event to launch list.
+ *
+ * \param ev [IN}	event to launch.
+ */
+int
+daos_event_launch(struct daos_event *ev);
 #endif /*  __DAOS_EV_H__ */

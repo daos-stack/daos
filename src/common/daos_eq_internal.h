@@ -85,9 +85,7 @@ struct daos_eq_private {
 	/* link chain in the global hash list */
 	struct daos_hlink	eqx_hlink;
 	pthread_mutex_t		eqx_lock;
-	pthread_cond_t		eqx_cond;
 	int			eqx_lock_init:1,
-				eqx_cond_init:1,
 				eqx_finalizing:1,
 				eqx_refcount;
 

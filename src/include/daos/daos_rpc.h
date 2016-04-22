@@ -115,12 +115,6 @@ daos_rpc_register(struct daos_rpc *rpcs, int mod_id, bool server)
 }
 
 static inline int
-daos_client_rpc_register(struct daos_rpc *rpcs, int mod_id)
-{
-	return daos_rpc_register(rpcs, mod_id, false);
-}
-
-static inline int
 daos_rpc_unregister(struct daos_rpc *rpcs)
 {
 	if (rpcs == NULL)
