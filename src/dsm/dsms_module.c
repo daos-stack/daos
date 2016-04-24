@@ -35,12 +35,23 @@
 static int
 init(void)
 {
-	return dsms_storage_init();
+	int rc;
+
+	rc = dsms_storage_init();
+	if (rc != 0)
+		return rc;
+
+	rc = dsms_pool_init();
+	if (rc != 0)
+		dsms_storage_fini();
+
+	return rc;
 }
 
 static int
 fini(void)
 {
+	dsms_pool_fini();
 	dsms_storage_fini();
 	return 0;
 }

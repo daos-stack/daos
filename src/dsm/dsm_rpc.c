@@ -21,37 +21,59 @@
 /*
  * dsm: RPC Protocol Serialization Functions
  */
-#include <daos/rpc.h>
+
 #include <daos/event.h>
+#include <daos/rpc.h>
 #include "dsm_rpc.h"
 
 static int
-dsm_proc_pool_connect_in(dtp_proc_t proc, void *data)
+proc_pool_map(dtp_proc_t proc, void *data)
+{
+	struct pool_map	       *p = data;
+	int			rc;
+
+	rc = dtp_proc_uint64_t(proc, &p->pm_version);
+	if (rc != 0)
+		return rc;
+
+	rc = dtp_proc_uint32_t(proc, &p->pm_ndomains);
+	if (rc != 0)
+		return rc;
+
+	rc = dtp_proc_uint32_t(proc, &p->pm_ntargets);
+	if (rc != 0)
+		return rc;
+
+	return 0;
+}
+
+static int
+proc_pool_connect_in(dtp_proc_t proc, void *data)
 {
 	struct pool_connect_in *p = data;
 	int			rc;
 
-	rc = dtp_proc_uuid_t(proc, &p->pool);
+	rc = dtp_proc_uuid_t(proc, &p->pci_pool);
 	if (rc != 0)
 		return rc;
 
-	rc = dtp_proc_uuid_t(proc, &p->pool_hdl);
+	rc = dtp_proc_uuid_t(proc, &p->pci_pool_hdl);
 	if (rc != 0)
 		return rc;
 
-	rc = dtp_proc_uint32_t(proc, &p->uid);
+	rc = dtp_proc_uint32_t(proc, &p->pci_uid);
 	if (rc != 0)
 		return rc;
 
-	rc = dtp_proc_uint32_t(proc, &p->gid);
+	rc = dtp_proc_uint32_t(proc, &p->pci_gid);
 	if (rc != 0)
 		return rc;
 
-	rc = dtp_proc_uint64_t(proc, &p->pool_capas);
+	rc = dtp_proc_uint64_t(proc, &p->pci_capas);
 	if (rc != 0)
 		return rc;
 
-	rc = dtp_proc_dtp_bulk_t(proc, &p->pool_map_bulk);
+	rc = dtp_proc_dtp_bulk_t(proc, &p->pci_pool_map_bulk);
 	if (rc != 0)
 		return rc;
 
@@ -59,16 +81,16 @@ dsm_proc_pool_connect_in(dtp_proc_t proc, void *data)
 }
 
 static int
-dsm_proc_pool_connect_out(dtp_proc_t proc, void *data)
+proc_pool_connect_out(dtp_proc_t proc, void *data)
 {
 	struct pool_connect_out	       *p = data;
 	int				rc;
 
-	rc = dtp_proc_int32_t(proc, &p->rc);
+	rc = dtp_proc_int32_t(proc, &p->pco_rc);
 	if (rc != 0)
 		return rc;
 
-	rc = proc_pool_map(proc, &p->pool_map);
+	rc = proc_pool_map(proc, &p->pco_pool_map);
 	if (rc != 0)
 		return rc;
 
@@ -76,19 +98,28 @@ dsm_proc_pool_connect_out(dtp_proc_t proc, void *data)
 }
 
 static int
-dsm_proc_pool_disconnect_in(dtp_proc_t proc, void *data)
+proc_pool_disconnect_in(dtp_proc_t proc, void *data)
 {
 	struct pool_disconnect_in      *p = data;
+	int				rc;
 
-	return dtp_proc_uuid_t(proc, &p->pool_hdl);
+	rc = dtp_proc_uuid_t(proc, &p->pdi_pool);
+	if (rc != 0)
+		return rc;
+
+	rc = dtp_proc_uuid_t(proc, &p->pdi_pool_hdl);
+	if (rc != 0)
+		return rc;
+
+	return 0;
 }
 
 static int
-dsm_proc_pool_disconnect_out(dtp_proc_t proc, void *data)
+proc_pool_disconnect_out(dtp_proc_t proc, void *data)
 {
 	struct pool_disconnect_out     *p = data;
 
-	return dtp_proc_int32_t(proc, &p->rc);
+	return dtp_proc_int32_t(proc, &p->pdo_rc);
 }
 
 static int
@@ -113,19 +144,19 @@ struct daos_rpc dsm_rpcs[] = {
 		.dr_opc		= DSM_POOL_CONNECT,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
-		.dr_in_hdlr	= dsm_proc_pool_connect_in,
-		.dr_in_sz	= 0,	/* TODO */
-		.dr_out_hdlr	= dsm_proc_pool_connect_out,
-		.dr_out_sz	= 0,	/* TODO */
+		.dr_in_hdlr	= proc_pool_connect_in,
+		.dr_in_sz	= sizeof(struct pool_connect_in),
+		.dr_out_hdlr	= proc_pool_connect_out,
+		.dr_out_sz	= sizeof(struct pool_connect_out)
 	}, {
 		.dr_name	= "DSM_POOL_DISCONNECT",
 		.dr_opc		= DSM_POOL_DISCONNECT,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
-		.dr_in_hdlr	= dsm_proc_pool_disconnect_in,
-		.dr_in_sz	= 0,	/* TODO */
-		.dr_out_hdlr	= dsm_proc_pool_disconnect_out,
-		.dr_out_sz	= 0,	/* TODO */
+		.dr_in_hdlr	= proc_pool_disconnect_in,
+		.dr_in_sz	= sizeof(struct pool_disconnect_in),
+		.dr_out_hdlr	= proc_pool_disconnect_out,
+		.dr_out_sz	= sizeof(struct pool_disconnect_out)
 	}, {
 		.dr_name	= "DSM_PING",
 		.dr_opc		= DSM_PING,

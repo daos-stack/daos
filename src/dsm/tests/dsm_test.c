@@ -122,6 +122,33 @@ out_destroy:
 	return rc;
 }
 
+static int
+test_pool_connect(void)
+{
+	uuid_t		uuid;
+	daos_handle_t	poh;
+	char		buf[4096];
+	int		rc;
+
+	uuid_generate(uuid);
+	uuid_unparse_lower(uuid, buf);
+	printf("connecting to pool %s\n", buf);
+
+	rc = dsm_pool_connect(uuid, NULL /* grp */, NULL /* tgts */,
+			      DAOS_PC_RW, NULL /* failed */, &poh,
+			      NULL /* ev */);
+	if (rc != 0)
+		return rc;
+
+	printf("connected to pool %s: "DF_X64"\n", uuid, poh.cookie);
+
+	rc = dsm_pool_disconnect(poh, NULL /* ev */);
+	if (rc != 0)
+		return rc;
+
+	return 0;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -139,13 +166,16 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	while ((option = getopt_long(argc, argv, "p", opts, NULL)) != -1) {
+	while ((option = getopt_long(argc, argv, "pc", opts, NULL)) != -1) {
 		switch (option) {
 		default:
 			dsm_fini();
 			return -EINVAL;
 		case 'p':
 			rc = test_ping_rpc(dsm_context);
+			break;
+		case 'c':
+			rc = test_pool_connect();
 			break;
 		}
 		if (rc < 0) {

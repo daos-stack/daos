@@ -113,7 +113,7 @@ dsr_fini(void);
  *			0		success
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EXIST	Object class ID already existed
  */
@@ -219,7 +219,7 @@ typedef struct {
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_EXIST	Object ID has been used for another
  *					object.
  *			-DER_NONEXIST	Cannot find container on specified
@@ -249,7 +249,7 @@ dsr_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Cannot find object
  *			-DER_EP_OLD	Epoch is too old and has no data for
  *					this object
@@ -428,7 +428,7 @@ dsr_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
  *			0		Success
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Epoch is read-only
  */

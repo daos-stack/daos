@@ -113,7 +113,7 @@ dsm_global2local(daos_iov_t glob, daos_handle_t *loc);
  *			0		Success
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Pool is nonexistent
  */
 int
@@ -153,7 +153,7 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
  *			-DER_NO_HDL	Invalid pool handle
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Storage target is nonexistent
  */
 int
@@ -223,7 +223,7 @@ dsm_pool_target_query(daos_handle_t poh, daos_rank_list_t *tgts,
  *			non-blocking mode:
  *			0		Success
  *			-DER_INVAL	Invalid parameter
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	network is unreachable
  *			-DER_EXIST	Container uuid already existed
  *			-DER_NONEXIST	Storage target is nonexistent
@@ -252,7 +252,7 @@ dsm_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev);
  *			0		Success
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Container is nonexistent
  */
 int
@@ -294,7 +294,7 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev);
  * \return		These values will be returned by \a ev::ev_error in
  *			non-blocking mode:
  *			0		Success
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NONEXIST	Container is nonexistent
  *			-DER_BUSY	Pool is busy
@@ -565,7 +565,7 @@ dsm_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  *			-DER_NO_HDL	Invalid container handle
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Cannot find object
  *			-DER_EP_OLD	Epoch is too old and has no data for
  *					this object
@@ -722,7 +722,7 @@ dsm_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
  *			0		Success
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	Network is unreachable
  *			-DER_EP_RO	Epoch is read-only
  */

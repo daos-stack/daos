@@ -30,7 +30,7 @@
 #include <daos/transport.h>
 #include "dsm_rpc.h"
 #include "dsms_internal.h"
-#include "dsms_storage.h"
+#include "dsms_layout.h"
 
 /*
  * TODO(liwei): Implement container-related server API methods here. Currently

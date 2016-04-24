@@ -36,11 +36,12 @@
 #ifndef __DSM_RPC_H__
 #define __DSM_RPC_H__
 
+#include <stdint.h>
 #include <uuid/uuid.h>
-#include <daos/transport.h>
-#include <daos/rpc.h>
-#include <daos_event.h>
 #include <daos/event.h>
+#include <daos/rpc.h>
+#include <daos/transport.h>
+#include <daos_event.h>
 
 /*
  * RPC operation codes
@@ -55,46 +56,32 @@ enum dsm_operation {
 };
 
 struct pool_map {
-	uint64_t	version;
-	uint32_t	ndomains;
-	uint32_t	ntargets;
+	uint64_t	pm_version;
+	uint32_t	pm_ndomains;
+	uint32_t	pm_ntargets;
 };
 
-static inline int
-proc_pool_map(dtp_proc_t proc, void *data)
-{
-	struct pool_map	       *p = data;
-	int			rc;
+/*
+ * pool_connect_in::pci_capas
+ *
+ * POOL_CAPA_RO, POOL_CAPA_RW, and POOL_CAPA_EX are mutually exclusive.
+ */
+#define POOL_CAPA_RO	(1ULL << 0)	/* read-only */
+#define POOL_CAPA_RW	(1ULL << 1)	/* read-write */
+#define POOL_CAPA_EX	(1ULL << 2)	/* exclusive read-write */
 
-	rc = dtp_proc_uint64_t(proc, &p->version);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_uint32_t(proc, &p->ndomains);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_uint32_t(proc, &p->ntargets);
-	if (rc != 0)
-		return rc;
-
-	return 0;
-}
-
-/* TODO: Capability bits. */
-/* TODO: Think about where uid and gid really belong. */
 struct pool_connect_in {
-	uuid_t		pool;
-	uuid_t		pool_hdl;
-	uint32_t	uid;
-	uint32_t	gid;
-	uint64_t	pool_capas;
-	dtp_bulk_t	pool_map_bulk;
+	uuid_t		pci_pool;
+	uuid_t		pci_pool_hdl;
+	uint32_t	pci_uid;
+	uint32_t	pci_gid;
+	uint64_t	pci_capas;
+	dtp_bulk_t	pci_pool_map_bulk;
 };
 
 struct pool_connect_out {
-	int32_t		rc;
-	struct pool_map	pool_map;
+	int32_t		pco_rc;
+	struct pool_map	pco_pool_map;
 };
 
 /*
@@ -102,12 +89,12 @@ struct pool_connect_out {
  * "pool_hdl".
  */
 struct pool_disconnect_in {
-	uuid_t	pool;
-	uuid_t	pool_hdl;
+	uuid_t	pdi_pool;
+	uuid_t	pdi_pool_hdl;
 };
 
 struct pool_disconnect_out {
-	int32_t	rc;
+	int32_t	pdo_rc;
 };
 
 struct ping_in {
@@ -134,4 +121,5 @@ int
 dsms_hdlr_ping(dtp_rpc_t *rpc);
 
 extern struct daos_rpc dsm_rpcs[];
+
 #endif /* __DSM_RPC_H__ */

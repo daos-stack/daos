@@ -19,10 +19,10 @@
  * (C) Copyright 2016 Intel Corporation.
  */
 /*
- * dsms: Metadata Storage Format
+ * dsms: Metadata Storage Layout
  *
  * This header assembles (hopefully) everything related to the persistent
- * storage format of pool, container, and target metadata used by dsms.
+ * storage layout of pool, container, and target metadata used by dsms.
  *
  * On one storage node, all metadata belonging to the same DAOS pool are stored
  * in one libpmemobj pool, called an mpool in the code. In an mpool, the
@@ -139,7 +139,7 @@ struct pool_map_domain {
 };
 
 /* Pool handle KVS (KVS_UV) */
-struct pool_handle {
+struct pool_hdl {
 	uint64_t	ph_capas;
 };
 

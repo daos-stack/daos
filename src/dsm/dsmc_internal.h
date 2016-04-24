@@ -19,26 +19,14 @@
  * (C) Copyright 2016 Intel Corporation.
  */
 /*
- * dsms: Target Operations
- *
- * This file contains the server API methods and the RPC handlers that are both
- * related target I/O.
+ * dsmc: Internal Declarations
  */
 
-#include <daos_srv/daos_m_srv.h>
-#include <uuid/uuid.h>
+#ifndef __DSMC_INTERNAL_H__
+#define __DSMC_INTERNAL_H__
+
 #include <daos/transport.h>
-#include "dsm_rpc.h"
-#include "dsms_internal.h"
-#include "dsms_layout.h"
 
-/* TODO(liwei): Implement target-related server API methods here. */
+extern dtp_context_t dsm_context;
 
-/* TODO(liwei): Implement target-related RPC handlers here. */
-#if 0
-int
-dsms_hdlr_target_open(dtp_rpc_t *rpc)
-{
-	return 0;
-}
-#endif
+#endif /* __DSMC_INTERNAL_H__ */

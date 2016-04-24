@@ -102,7 +102,7 @@ dmg_pool_destroy(const uuid_t uuid, const char *grp, int force,
  *			0		Success
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_PERM	Permission denied
+ *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Storage target is nonexistent
  */
 int

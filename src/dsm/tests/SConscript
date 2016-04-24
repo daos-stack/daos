@@ -5,7 +5,7 @@ Import('env')
 env.Append(CPPPATH = ['#/src/dsm', '#/src/server'])
 
 env.Program('createpool', 'createpool.c',
-	    LIBS = ['libdaos_m_srv', 'libdaos_common', 'libdaos_transport',
-		    'libvos', 'libpmemobj', 'libuuid'])
+	    LIBS = ['daos_m_srv', 'daos_common', 'daos_transport', 'vos',
+		    'pmemobj', 'uuid'])
 
-env.Program('dsm_test', Glob('dsm_test.c'), LIBS=['daos_common', 'daos_m', 'pthread', 'daos_transport'])
+env.Program('dsm_test', Glob('dsm_test.c'), LIBS=['daos_common', 'daos_m', 'pthread', 'daos_transport', 'uuid'])

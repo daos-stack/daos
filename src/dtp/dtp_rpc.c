@@ -197,7 +197,6 @@ dtp_cb_common(const struct dtp_cb_info *cb_info)
 /**
  * Send rpc synchronously
  *
- * \param[IN] dtp_ctx	pointer to DTP context.
  * \param[IN] rpc	point to DTP request.
  * \param[IN] timeout	timeout (Milliseconds) to wait, if
  *                      timeout <= 0, it will wait infinitely.

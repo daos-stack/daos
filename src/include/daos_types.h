@@ -180,9 +180,9 @@ typedef struct {
  *
  * The three flags above are mutually exclusive.
  */
-#define DAOS_PC_RO	0x0U
-#define DAOS_PC_RW	0x1U
-#define DAOS_PC_EX	0x2U
+#define DAOS_PC_RO	(1U << 0)
+#define DAOS_PC_RW	(1U << 1)
+#define DAOS_PC_EX	(1U << 2)
 
 /**
  * Epoch
@@ -261,8 +261,8 @@ typedef struct {
  * DAOS_COO_RW opens the container for reading and writing. This flag conflicts
  * with DAOS_COO_RO.
  */
-#define DAOS_COO_RO	0x0U
-#define DAOS_COO_RW	0x1U
+#define DAOS_COO_RO	(1U << 0)
+#define DAOS_COO_RW	(1U << 1)
 
 /** Container information */
 typedef struct {
