@@ -53,4 +53,31 @@ dmg_pool_create(const uuid_t uuid, unsigned int mode, const daos_group_t *group,
 int
 dmg_pool_destroy(const uuid_t uuid, int force, daos_event_t *event);
 
+/**
+ * Extend the pool to more targets. If \a ranks is NULL, this function
+ * will extend the pool to all the targets in the group, otherwise it will
+ * only extend the pool to the included targets.
+ *
+ * NB: Doubling storage targets in the pool can have better performance than
+ * arbitrary targets adding.
+ *
+ * \param poh	[IN]	Pool connection handle.
+ * \param ransk [IN]	Optional, only extend the pool to included targets.
+ * \param ranks_failed [OUT]
+ *			Optional, buffer to store faulty targets on failure.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid pool handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_PERM	Permission denied
+ *			-DER_NONEXIST	Storage target is nonexistent
+ */
+int
+dmg_pool_extend(daos_handle_t poh, daos_rank_list_t *ranks,
+		daos_rank_list_t *ranks_failed, daos_event_t *ev);
 #endif /* __DMG_API_H__ */

@@ -134,16 +134,45 @@ typedef struct {
 	/** pool UUID */
 	uuid_t			pi_uuid;
 	/** number of containers */
-	uint32_t		pi_nconns;
+	uint32_t		pi_ncnts;
 	/** number of targets */
 	uint32_t		pi_ntargets;
 	/** number of deactivated targets */
 	uint32_t		pi_ndisabled;
-	/** number of containers */
-	uint32_t		pi_ncontainers;
+	/** mode */
+	unsigned int		pi_mode;
 	/** space usage */
 	daos_space_t		pi_space;
 } daos_pool_info_t;
+
+/**
+ * DAOS_PC_RO connects to the pool for reading only.
+ *
+ * DAOS_PC_RW connects to the pool for reading and writing.
+ *
+ * DAOS_PC_EX connects to the pool for reading and writing exclusively. In the
+ * presence of an exclusive pool handle, no connection with DSM_PC_RW is
+ * permitted.
+ *
+ * The three flags above are mutually exclusive.
+ */
+#define DAOS_PC_RO	0x0U
+#define DAOS_PC_RW	0x1U
+#define DAOS_PC_EX	0x2U
+
+/**
+ * Container
+ */
+/**
+ * DAOS_COO_RO opens the container for reading only. This flag conflicts with
+ * DAOS_COO_RW.
+ *
+ * DAOS_COO_RW opens the container for reading and writing. This flag conflicts
+ * with DAOS_COO_RO.
+ */
+#define DAOS_COO_RO	0x0U
+#define DAOS_COO_RW	0x1U
+
 
 /**
  * Epoch
@@ -217,6 +246,77 @@ typedef struct {
 	/** OID buffer */
 	daos_obj_id_t	*ol_oids;
 } daos_oid_list_t;
+
+typedef uint16_t daos_oclass_id_t;
+
+enum {
+	/** use private class for the object */
+	DAOS_OCLASS_NONE		= 0,
+};
+
+typedef enum {
+	DAOS_OS_SINGLE,		/**< single stripe object */
+	DAOS_OS_STRIPED,		/**< fix striped object */
+	DAOS_OS_DYN_STRIPED,	/**< dynamically striped object */
+	DAOS_OS_DYN_CHUNKED,	/**< dynamically chunked object */
+} daos_obj_schema_t;
+
+typedef enum {
+	DAOS_RES_EC,		/**< erasure code */
+	DAOS_RES_REPL,		/**< replication */
+} daos_obj_resil_t;
+
+/** Object class attributes */
+typedef struct daos_oclass_attr {
+	/** Object placement schema */
+	daos_obj_schema_t		 ca_schema;
+	/**
+	 * TODO: define HA degrees for object placement
+	 * - performance oriented
+	 * - high availability oriented
+	 * ......
+	 */
+	unsigned int			 ca_resil_degree;
+	/** Resilience method, replication or erasure code */
+	daos_obj_resil_t		 ca_resil;
+	/** Initial # stripe count, unnecessary for some schemas */
+	unsigned int			 ca_nstripes;
+	union {
+		/** replication attributes */
+		struct daos_repl_attr {
+			/** Method of replicating */
+			unsigned int	 r_method;
+			/** Number of replicas */
+			unsigned int	 r_num;
+			/** TODO: add members to describe */
+		} repl;
+
+		/** Erasure coding attributes */
+		struct daos_ec_attr {
+			/** Type of EC */
+			unsigned int	 e_type;
+			/** EC group size */
+			unsigned int	 e_grp_size;
+			/**
+			 * TODO: add members to describe erasure coding
+			 * attributes
+			 */
+		} ec;
+	} u;
+	/** TODO: add more attributes */
+} daos_oclass_attr_t;
+
+/** List of object classes, used for class enumeration */
+typedef struct {
+	/** list length, actual buffer size */
+	uint32_t		 cl_llen;
+	/** number of object classes in the list */
+	uint32_t		 cl_cn;
+	/** actual list of class IDs */
+	daos_oclass_id_t	*cl_cids;
+	/** attributes of each listed class, optional */
+	daos_oclass_attr_t	*cl_cattrs;
+} daos_oclass_list_t;
 
 /** buffer to store checksum */
 typedef struct {
