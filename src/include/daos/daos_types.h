@@ -25,6 +25,7 @@
 #define DAOS_TYPES_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /** uuid_t */
 #include <uuid/uuid.h>
@@ -50,6 +51,13 @@ typedef struct {
 
 typedef uint32_t	daos_rank_t;
 
+typedef struct {
+	/** input number */
+	uint32_t	num;
+	/** output/returned number */
+	uint32_t	num_out;
+} daos_nr_t;
+
 /**
  * Server Identification & Addressing
  */
@@ -65,10 +73,8 @@ typedef struct {
  * session.
  */
 typedef struct {
-	/** list length, it is actual buffer size */
-	uint32_t	 rl_llen;
-	/** number of ranks in the list */
-	uint32_t	 rl_rankn;
+	/** number of ranks */
+	daos_nr_t	 rl_nr;
 	daos_rank_t	*rl_ranks;
 } daos_rank_list_t;
 
@@ -206,17 +212,20 @@ typedef struct {
 } daos_obj_id_t;
 
 typedef struct {
-	/** list length, it is the actual buffer size */
-	unsigned int	 ol_llen;
-	/** number of OIDs */
-	unsigned int	 ol_oidn;
+	/** input/output number of oids */
+	daos_nr_t	 ol_nr;
 	/** OID buffer */
 	daos_obj_id_t	*ol_oids;
 } daos_oid_list_t;
 
-/**
- * Byte Array Objects
- */
+/** buffer to store checksum */
+typedef struct {
+	/* TODO: typedef enum for it */
+	unsigned int	 cs_type;
+	unsigned short	 cs_len;
+	unsigned short	 cs_buf_len;
+	void		*cs_csum;
+} daos_csum_buf_t;
 
 /** iovec for memory buffer */
 typedef struct {
@@ -228,92 +237,97 @@ typedef struct {
 	daos_size_t	iov_len;
 } daos_iov_t;
 
-/** buffer to store checksum */
+/**
+ * The DAOS key uniquely identify a record in a given object.
+ * It is composed of 2 parts:
+ * - the distribution key denotes a set of records co-located on the same
+ *   storage targets
+ * - the attribute key discrimites individual records
+ */
 typedef struct {
-	/* TODO: typedef enum for it */
-	unsigned int	 cs_type;
-	unsigned int	 cs_len;
-	void		*cs_csum;
-} daos_csum_buf_t;
+	/** distribution key */
+	daos_iov_t		dk_dkey;
+	/** opaque attribute key */
+	daos_iov_t		dk_akey;
+} daos_key_t;
+
+/**
+ * Index of a record is from zero to infinity, each record can have an
+ * arbitrary length blob value, which is always fetched/updated atomically.
+ *
+ * Besides specifying an array of record indices for the I/O, user may also
+ * provide a range of indices.
+ */
+typedef struct {
+	/** size of the record */
+	uint64_t		ri_rsize;
+	union {
+		/** index of the record */
+		uint64_t	ri_idx;
+		/** a range of record indices */
+		struct {
+			uint64_t	ri_begin;
+			uint64_t	ri_end;
+		};
+	};
+} daos_rec_index_t;
+
+/** data structure to describe an array of records */
+typedef struct {
+	/** Key of the record */
+	daos_key_t		 ra_key;
+	/** Checksum of key */
+	daos_csum_buf_t		 ra_kcsum;
+	/** size of the index array \a ra_indices */
+	unsigned int		 ra_nr;
+	/** Array of indices of the record */
+	daos_rec_index_t	*ra_indices;
+	/** Checksums for the data units of indices */
+	daos_csum_buf_t		*ra_csums;
+	/** Epoch range for each index range */
+	daos_epoch_range_t	*ra_eprs;
+} daos_rec_array_t;
+
+/** record status */
+enum {
+	/** no data */
+	DAOS_REC_NODATA		= 0,
+	/** record is punched */
+	DAOS_REC_PUNCHED	= -1,
+	/** reserved for cache miss */
+	DAOS_REC_MISSING	= -2,
+};
 
 /** Scatter/gather list for memory buffers */
 typedef struct {
-	/** list length, it is actual buffer size */
-	unsigned int	 sg_llen;
-	/** number of iovs */
-	unsigned int	 sg_iovn;
+	daos_nr_t	 sg_nr;
 	daos_iov_t	*sg_iovs;
-	/** checksums, it is optional */
-	daos_csum_buf_t	*el_csums;
 } daos_sg_list_t;
 
 typedef enum {
 	/* hole extent */
 	VOS_EXT_HOLE	= (1 << 0),
 } vos_ext_flag_t;
-/**
- * Extent for byte-array object.
- * NB: this is a wire struct.
- */
+
+typedef enum {
+	/** list distribution keys only, no record is returned */
+	DAOS_DKEY_ONLY	= (1 << 0),
+	/** restrict enumeration to attribute keys available for a given
+	 * distribution key */
+	DAOS_AKEY_ONLY	= (1 << 1),
+} daos_filter_type_t;
+
+/** DAOS enumeration filter */
 typedef struct {
-	/** offset within object */
-	daos_off_t	e_offset;
-	/** number of bytes */
-	uint64_t	e_nob;
-	/** see vos_ext_flag_t */
-	uint16_t	e_flags;
+	/** used with DAOS_DKEY_ONLY to store the specific dkey to limit
+	 * the iteration over */
+	daos_key_t		lf_key;
+	/* type of enumeration, see daos_filter_type_t */
+	uint16_t		lf_type;
 	/** reserved */
-	uint16_t	e_reserv_16;
-	uint32_t	e_reserv_32;
-} daos_ext_t;
-
-/** a list of object extents */
-typedef struct {
-	/** list length, it is actual buffer size */
-	unsigned int		 el_llen;
-	/** number of extents */
-	unsigned int		 el_extn;
-	daos_ext_t		*el_exts;
-	/** Optional, epoch validity range for the I/O */
-	daos_epoch_range_t	*el_epr;
-} daos_ext_list_t;
-
-typedef daos_ext_list_t		daos_ext_layout_t;
-
-/** 2-dimensional key of KV */
-typedef struct {
-	/** distribution key */
-	daos_iov_t		dk_dkey;
-	/** attribute key */
-	daos_iov_t		dk_akey;
-} daos_key_t;
-
-typedef struct {
-	daos_csum_buf_t		dk_dk_cs;
-	daos_csum_buf_t		dk_ak_cs;
-} daos_key_csum_t;
-
-/**
- * Key-Value Store Objects
- */
-
-/** Descriptor of a key-value pair */
-typedef struct {
-	/** list length, it is actual buffer size */
-	unsigned int		 kv_llen;
-	/** nubmer of kvs and epoch ranges */
-	unsigned int		 kv_kvn;
-	/** key array */
-	daos_key_t		*kv_keys;
-	/** value array */
-	daos_iov_t		*kv_vals;
-	/** checksums for \a kv_keys */
-	daos_key_csum_t		*kv_key_csums;
-	/** checksums for \a kv_vals */
-	daos_csum_buf_t		*kv_val_csums;
-	/** Optional, array of epoch ranges for the \a kv_keys */
-	daos_epoch_range_t	*kv_eprs;
-} daos_kv_list_t;
+	uint16_t		lf_reserv_16;
+	uint32_t		lf_reserv_32;
+} daos_list_filter_t;
 
 /**
  * 256-bit object ID, it can identify a unique bottom level object.

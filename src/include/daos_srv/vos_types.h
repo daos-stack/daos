@@ -109,9 +109,9 @@ typedef struct {
 		struct vos_ip_kv {
 			daos_hash_out_t		hout;
 		} ip_kv;
-		/** data extents enumeration */
+		/** key range enumeration */
 		struct vos_ip_ba {
-			daos_ext_t		ext;
+			daos_rec_index_t	ridx;
 			daos_epoch_range_t	per;
 		} ip_ba;
 	} u;
@@ -143,9 +143,9 @@ typedef struct {
 			daos_key_t		key;
 			daos_iov_t		val;
 		} ie_kv;
-		/** Returned entry for data extents iterator */
-		struct vos_ie_ba {
-			daos_ext_t		ext;
+		/** Returned entry for key range iterator */
+		struct vos_ie_kr {
+			daos_rec_index_t	ridx;
 		} ie_ba;
 	} u;
 } vos_iter_entry_t;

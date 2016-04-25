@@ -911,16 +911,16 @@ dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, daos_sg_list_t *sgl,
 	flags = (bulk_perm == DTP_BULK_RW) ? HG_BULK_READWRITE :
 					     HG_BULK_READ_ONLY;
 
-	if (sgl->sg_iovn <= DTP_HG_IOVN_STACK) {
+	if (sgl->sg_nr.num <= DTP_HG_IOVN_STACK) {
 		allocate = 0;
 		buf_sizes = buf_sizes_stack;
 	} else {
 		allocate = 1;
-		D_ALLOC(buf_sizes, sgl->sg_iovn * sizeof(hg_size_t));
+		D_ALLOC(buf_sizes, sgl->sg_nr.num * sizeof(hg_size_t));
 		if (buf_sizes == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
-	for (i = 0; i < sgl->sg_iovn; i++)
+	for (i = 0; i < sgl->sg_nr.num; i++)
 		buf_sizes[i] = sgl->sg_iovs[i].iov_buf_len;
 
 	if (sgl->sg_iovs == NULL) {
@@ -929,15 +929,15 @@ dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, daos_sg_list_t *sgl,
 		if (allocate == 0) {
 			buf_ptrs = buf_ptrs_stack;
 		} else {
-			D_ALLOC(buf_ptrs, sgl->sg_iovn * sizeof(void *));
+			D_ALLOC(buf_ptrs, sgl->sg_nr.num * sizeof(void *));
 			if (buf_ptrs == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
-		for (i = 0; i < sgl->sg_iovn; i++)
+		for (i = 0; i < sgl->sg_nr.num; i++)
 			buf_ptrs[i] = sgl->sg_iovs[i].iov_buf;
 	}
 
-	hg_ret = HG_Bulk_create(hg_ctx->dhc_bulkcla, sgl->sg_iovn, buf_ptrs,
+	hg_ret = HG_Bulk_create(hg_ctx->dhc_bulkcla, sgl->sg_nr.num, buf_ptrs,
 				buf_sizes, flags, &hg_bulk_hdl);
 	if (hg_ret == HG_SUCCESS) {
 		*bulk_hdl = hg_bulk_hdl;
@@ -949,9 +949,9 @@ dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, daos_sg_list_t *sgl,
 out:
 	/* HG_Bulk_create copied the parameters, can free here */
 	if (allocate == 1 && buf_ptrs != NULL)
-		D_FREE(buf_ptrs, sgl->sg_iovn * sizeof(void *));
+		D_FREE(buf_ptrs, sgl->sg_nr.num * sizeof(void *));
 	if (allocate == 1 && buf_sizes != NULL)
-		D_FREE(buf_sizes, sgl->sg_iovn * sizeof(hg_size_t));
+		D_FREE(buf_sizes, sgl->sg_nr.num * sizeof(hg_size_t));
 
 	return rc;
 }

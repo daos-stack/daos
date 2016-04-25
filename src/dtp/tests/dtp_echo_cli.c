@@ -169,10 +169,8 @@ static void run_client(void)
 	pchar = iovs[1].iov_buf;
 	for (i = 0; i < iovs[1].iov_buf_len; i++)
 		*(pchar++) = random();
-	sgl.sg_llen = 2;
-	sgl.sg_iovn = 2;
+	sgl.sg_nr.num = 2;
 	sgl.sg_iovs = iovs;
-	sgl.el_csums = NULL;
 
 	/* calculate md5 checksum */
 	MD5_CTX md5_ctx;

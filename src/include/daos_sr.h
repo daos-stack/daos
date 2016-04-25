@@ -436,12 +436,6 @@ enum {
 };
 
 typedef enum {
-	DSR_OBJ_KV,		/**< KV store */
-	DSR_OBJ_ARR,		/**< byte array */
-	DSR_OBJ_SEG_ARR,	/**< 2-dimensional array object */
-} dsr_obj_type_t;
-
-typedef enum {
 	DSR_OS_SINGLE,		/**< single stripe object */
 	DSR_OS_STRIPED,		/**< fix striped object */
 	DSR_OS_DYN_STRIPED,	/**< dynamically striped object */
@@ -577,8 +571,6 @@ dsr_oclass_list(daos_handle_t coh, dsr_oclass_list_t *clist,
  * \a oa_class and \a oa_oa are mutually exclusive.
  */
 typedef struct {
-	/** Object type */
-	dsr_obj_type_t		 oa_type;
 	/** Pre-defined class ID */
 	dsr_oclass_id_t		 oa_class;
 	/** Optional, affinity target for the object */
@@ -588,7 +580,7 @@ typedef struct {
 } dsr_obj_attr_t;
 
 /**
- * Create a new object based on attributes \a oa.
+ * Declare a new object based on attributes \a oa.
  *
  * \param coh	[IN]	Container open handle.
  * \param id	[IN/OUT]
@@ -615,11 +607,11 @@ typedef struct {
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-dsr_obj_create(daos_handle_t coh, daos_obj_id_t *id, daos_epoch_t epoch,
-	       dsr_obj_attr_t *oa, daos_handle_t *oh, daos_event_t *ev);
+dsr_obj_declare(daos_handle_t coh, daos_obj_id_t *id, daos_epoch_t epoch,
+		dsr_obj_attr_t *oa, daos_handle_t *oh, daos_event_t *ev);
 
 /**
- * Open an existent object.
+ * Open an declared object.
  *
  * \param coh	[IN]	Container open handle.
  * \param id	[IN]	Object ID.
@@ -660,11 +652,10 @@ int
 dsr_obj_close(daos_handle_t oh, daos_event_t *ev);
 
 /**
- * Destroy an object and invalidate object open handle.
- * All writes to the future epochs of a destroyed object will be discarded.
+ * Punch all records in an object.
  *
  * \param oh	[IN]	Object open handle.
- * \param epoch	[IN]	Epoch to destroy object.
+ * \param epoch	[IN]	Epoch to punch records.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -677,7 +668,7 @@ dsr_obj_close(daos_handle_t oh, daos_event_t *ev);
  *			-DER_NOEXIST	Nonexistent object ID
  */
 int
-dsr_obj_destroy(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
+dsr_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
 
 /**
  * Query attributes of an object.
@@ -702,20 +693,63 @@ dsr_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
 	      daos_rank_list_t *ranks, daos_event_t *ev);
 
 /**
- * Key-Value object APIs.
+ * Record Operations
+ *
+ * A record is identified by daos_key_t, a record can range in index from zero
+ * to infinity, each index can own an atomic "data unit", which is arbitrary
+ * length. The upper layer stack can fetch or update any number of data units
+ * of a record by providing the record key and indices/index ranges of these
+ * data units.
  */
 
 /**
- * Lookup and return values for given keys in \a kvl.
- * Value length of unfound key will be set to zero.
+ * Fetch data units of the records listed in an explicit array.
  *
  * \param oh	[IN]	Object open handle.
- * \param epoch	[IN]	Epoch for lookup. It will be ignored if epoch range
- *			is provided by \a kvl (kvl::kv_epr).
- * \param kvl	[IN/OUT]
- *			Key list to lookup, if value buffers of \a kvl are NULL,
- *			only value lengths will be returned, otherwise found
- *			values will be filled into these buffers.
+ *
+ * \param epoch	[IN]	Epoch for the fetch. It is ignored if epoch range is
+ *			provided by \a rec_descs::rd_eprs.
+ *
+ * \param rec_desc_nr	[IN]
+ *			Array size of \a rec_descs and \a sgls.
+ *
+ * \param rec_descs	[IN/OUT]
+ *			Descriptors for the records to fetch. Checksum of each
+ *			data unit, or each range of units is returned in
+ *			\a rec_descs[i]::rd_rcsums[j]. If the unit size of an
+ *			index or range is unknown, which is set to -1 as input,
+ *			then the actual unit size of it will be returned in
+ *			\a rec_descs[i]::rd_indices[j]::ir_usize. In addition,
+ *			caller can provide individual epoch for each index or
+ *			range in \a rec_descs[i]::rd_eprs[j].
+ *
+ * \param sgls [IN/OUT] Scatter/gather lists (sgl) to store data units of
+ *			records. Each record has a separate sgl in \a sgls.
+ *
+ *			Iovecs in each sgl can be arbitrary as long as their
+ *			total size is sufficient to fill in all returned data.
+ *			For example, data units of different indices or ranges
+ *			of the same record can be adjacently stored in the same
+ *			iovec of the sgl of the record: iovec start offset of
+ *			an index or range is the end offset of the prevous
+ *			index or range.
+ *			For an unfound record, the output length of the
+ *			corresponding sgl is set to zero.
+ *
+ * \param rec_layouts [OUT]
+ *			Optional, this parameter is mostly for the cache and
+ *			tiering layer, other upper layers can simply pass in
+ *			NULL.
+ *
+ *			It is the sink buffer to store the returned actual
+ *			index layouts and their epoch validities. The returned
+ *			layout covers the same set of indices or index ranges
+ *			as \a rec_descs. However, the returned ranges could be
+ *			fragmented if these ranges were partially updated in
+ *			different epochs.
+ *			In additition, the returned ranges should also allow
+ *			to discriminate punched ranges from punched holes.
+ *
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -725,22 +759,44 @@ dsr_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_KV_K2BIG	Key of KV is too large and can't be
+ *			-DER_KEY2BIG	Key is too large and can't be
  *					fit into output buffer
- *			-DER_KV_V2BIG	value of KV is too large and can't be
+ *			-DER_REC2BIG	Record is too large and can't be
  *					fit into output buffer
+ *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-dsr_kv_lookup(daos_handle_t oh, daos_epoch_t epoch, daos_kv_list_t *kvl,
-	      daos_event_t *ev);
+dsr_rec_fetch(daos_handle_t oh, daos_epoch_t epoch, unsigned int rec_desc_nr,
+	      daos_rec_desc_t *rec_descs, daos_sg_list_t *sgls,
+	      daos_rec_desc_t *rec_layouts, daos_event_t *ev);
 
 /**
- * Update or insert KV pairs in \a kvl.
+ * Insert or udpate data units of the records listed in an explicit array.
  *
  * \param oh	[IN]	Object open handle.
- * \param epoch	[IN]	Epoch for the update, it will be ignored if kvl::kv_eprs
- *			is provided.
- * \param kvl	[IN]	KV list to update or insert
+ *
+ * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch range
+ *			is provided by \a rec_descs::rd_eprs.
+ *
+ * \param rec_desc_nr	[IN]
+ *			Array size of \a rec_descs and \a sgls.
+ *
+ * \param rec_descs	[IN]
+ *			Descriptor array for the records to update. Checksum
+ *			of each unit, or each range of units is stored in
+ *			\a rec_descs[i]::rd_rcsums[j]. If the unit size of an
+ *			index or range is zero, then it is effectively a punch
+ *			for the specified index/range. In addition, caller can
+ *			provide individual epoch for each index or range in
+ *			\a rec_descs[i]::rd_eprs[j].
+ *
+ * \param sgls [IN]	Scatter/gather list (sgl) to store the input data
+ *			units. Each record of \a rec_descs owns a separate sgl
+ *			in \a sgls. Different data units of a record can either
+ *			be stored in separate iovec of the sgl, or contiguously
+ *			stored in arbitrary iovecs as long as total buffer size
+ *			can match the total data units size.
+ *
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -754,47 +810,44 @@ dsr_kv_lookup(daos_handle_t oh, daos_epoch_t epoch, daos_kv_list_t *kvl,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-dsr_kv_update(daos_handle_t oh, daos_epoch_t epoch, daos_kv_list_t *kvl,
-	      daos_event_t *ev);
+dsr_rec_update(daos_handle_t oh, daos_epoch_t epoch, unsigned int rec_desc_nr,
+	       daos_rec_desc_t *rec_descs, daos_sg_list_t *rec_sgls,
+	       daos_event_t *ev);
 
 /**
- * Locate and punch KV pairs for given keys in \a kvl.
+ * Enumerate keys or records descriptors.
  *
  * \param oh	[IN]	Object open handle.
- * \param epoch	[IN]	Epoch for the punch. It will be ignored if kvl::kv_eprs
- *			is provided.
- * \param kvl	[IN]	KV list to punch, only keys are required.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_PERM	Permission denied
- *			-DER_UNREACH	Network is unreachable
- *			-DER_EP_RO	Epoch is read-only
- */
-int
-dsr_kv_punch(daos_handle_t oh, daos_epoch_t epoch, daos_kv_list_t *kvl,
-	     daos_event_t *ev);
-
-/**
- * Enumerate KV pairs of a KV object.
- *
- * \param oh	[IN]	Object open handle.
  * \param epr	[IN]	Epoch range for the enumeration.
- * \param kvl	[OUT]	Sink buffer for returned KV list.
- *			If key parts or/and value parts of \a kvs are NULL,
- *			length of key/value will be returned, otherwise they
- *			will be filled with returned KV pairs.
- *			Number of actually returned KVs are stored in
- *			kvl::kv_kvn.
+ *
+ * \param filter [IN]	Specific filter for the iteration. When the enumeration
+ *			is limited to dkeys, no records or checksums are
+ *			returned. \a filter can be set to NULL, in this case,
+ *			all keys will be enumeration (i.e. iterate over all
+ *			distribution keys and enumerate all attribute keys
+ *			available for each distribution key)
+ *
+ * \param rec_desc_nr [IN/OUT]
+ *			Input  : array size of \a rec_descs
+ *			Output : number of returned record descriptors
+ *
+ * \param rec_descs [OUT]
+ *			Sink buffer for returned keys or record descriptors.
+ *			Unless it is dkey enumeration(see \a filter), otherwise
+ *			\a rec_descs::rd_indices and \a rec_descs::rd_eprs
+ *			must be allocated, \a rec_descs::rd_nr should be set
+ *			to the number of entries of these arrays.
+ *
+ *			The same record may be returned into multiple entries
+ *			of \a rec_descs if the indices/ranges of this record
+ *			cannot be filled in one entry.
+ *
  * \param anchor [IN/OUT]
  *			Hash anchor for the next call, it should be set to
  *			zeroes for the first call, it should not be changed
  *			by caller between calls.
+ *
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -804,100 +857,15 @@ dsr_kv_punch(daos_handle_t oh, daos_epoch_t epoch, daos_kv_list_t *kvl,
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
- *			-DER_KV_K2BIG	Key of KV is too large and can't be
+ *			-DER_KEY2BIG	Key is too large and can't be
  *					fit into output buffer
- *			-DER_KV_V2BIG	Value of KV is too large and can't be
+ *			-DER_REC2BIG	Record is too large and can't be
  *					fit into output buffer
  */
 int
-dsr_kv_list(daos_handle_t oh, daos_epoch_range_t *epr, daos_kv_list_t *kvl,
-	    daos_hash_out_t *anchor, daos_event_t *ev);
-
-/**
- * Byte-array object APIs.
- */
-
-/**
- * Read from a byte-array object.
- * Object data extents in \a exl will be copied to buffers in \a sgl.
- * If \a layout is provided by caller, physical extent layout will be stored
- * in it, if \a layout is not sufficient to store all returned extent layouts,
- * then the required size will be returned to \a layout::el_extn.
- *
- * \param oh	[IN]	Object open handle.
- * \param epoch [IN]    Epoch for the read. It will be ignored if epoch range
- *			is provided by \a exl (exl::el_epr).
- * \param exl	[IN]    Object extents for the read.
- * \param layout [OUT]	Optional, returned physical extent layouts and
- *			their epoch ranges.
- * \param sgl	[OUT]	Buffer list to store returned object data.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_IO_INVAL	IO buffers can't match object extents
- *					or object extents have overlap
- *			-DER_EP_OLD	Epoch is too old and has no data
- */
-int
-dsr_ba_read(daos_handle_t oh, daos_epoch_t epoch, daos_ext_list_t *exl,
-	    daos_ext_layout_t *layout, daos_sg_list_t *sgl, daos_event_t *ev);
-
-/**
- * Write to a byte-array object.
- * Data blobs in \a sgl will be written to object extents specified by \a exl.
- *
- * \param oh	[IN]	Object open handle.
- * \param epoch	[IN]	Epoch for the write. It will be ignored if epoch range
- *			is provided by \a exl (exl::el_epr).
- * \param exl	[IN]	Object extents for the write.
- * \param sgl	[OUT]	Write source buffer list.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_PERM	Permission denied
- *			-DER_UNREACH	Network is unreachable
- *			-DER_IO_INVAL	IO buffers can't match object extents
- *					or object extents have overlap
- *			-DER_EP_RO	Epoch is read-only
- */
-int
-dsr_ba_write(daos_handle_t oh, daos_epoch_t epoch, daos_ext_list_t *exl,
-	     daos_sg_list_t *sgl, daos_event_t *ev);
-
-/**
- * Punch a list of extents \a exl of a byte-array object.
- *
- * \param oh	[IN]	Object open handle.
- * \param epoch	[IN]	Epoch for the punch. It will be ignored if epoch range
- *			is provided by \a exl (exl::el_epr).
- * \param exl	[IN]	Extents to punch.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid object open handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_PERM	Permission denied
- *			-DER_UNREACH	Network is unreachable
- *			-DER_IO_INVAL	IO buffers can't match object extents
- *					or object extents have overlap
- *			-DER_EP_RO	Epoch is read-only
- */
-int
-dsr_ba_punch(daos_handle_t oh, daos_epoch_t epoch, daos_ext_list_t *exl,
+dsr_rec_list(daos_handle_t oh, daos_epoch_range_t *epr,
+	     daos_list_filter_t *filter, daos_nr_t *rec_desc_nr,
+	     daos_rec_desc_t *rec_descs, daos_hash_out_t *anchor,
 	     daos_event_t *ev);
 
 /************************************************************************

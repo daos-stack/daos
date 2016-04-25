@@ -226,6 +226,7 @@ vos_epoch_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 int
 vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, daos_event_t *ev);
 
+#if 0
 /**
  * Byte Array API
  */
@@ -493,5 +494,7 @@ vos_iter_move(daos_handle_t ih, vos_iter_pos_t *pos, daos_event_t *ev);
 int
 vos_iter_current(daos_handle_t ih, vos_iter_entry_t *entry,
 		 vos_iter_pos_t *next);
+
+#endif
 
 #endif /* __VOS_API_H */

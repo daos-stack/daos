@@ -74,9 +74,9 @@ typedef enum {
 	/** epoch is too old, all data have been recycled */
 	DER_EP_OLD		= (DER_ERR_BASE + 201),
 	/** key is too large */
-	DER_KV_K2BIG		= (DER_ERR_BASE + 250),
-	/** value is too large */
-	DER_KV_V2BIG		= (DER_ERR_BASE + 251),
+	DER_KEY2BIG		= (DER_ERR_BASE + 250),
+	/** record is too large */
+	DER_REC2BIG		= (DER_ERR_BASE + 251),
 	/** IO buffers can't match object extents */
 	DER_IO_INVAL		= (DER_ERR_BASE + 300),
 	/** event queue is busy */

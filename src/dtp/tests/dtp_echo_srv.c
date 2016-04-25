@@ -314,10 +314,8 @@ int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 	iovs[0].iov_buf = malloc(bulk_len);
 	iovs[0].iov_buf_len = bulk_len;
 	memset(iovs[0].iov_buf, 0, iovs[0].iov_buf_len);
-	sgl.sg_llen = 1;
-	sgl.sg_iovn = 1;
+	sgl.sg_nr.num = 1;
 	sgl.sg_iovs = iovs;
-	sgl.el_csums = NULL;
 
 	rc = dtp_bulk_create(rpc_req->dr_ctx, &sgl, DTP_BULK_RW,
 			     &local_bulk_hdl);
