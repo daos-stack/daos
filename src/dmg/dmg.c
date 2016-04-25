@@ -77,12 +77,20 @@ static struct daos_rpc dmg_cl_rpcs[] = {
 		/* .dr_in_sz	= */	sizeof(echo_in_t),
 		/* .dr_out_hdlr	= */	dtp_proc_echo_out_t,
 		/* .dr_out_sz	= */	sizeof(echo_out_t),
-		/* .dr_hdlr	= */	echo,
 	},
 	{
 	},
 };
 
+static struct daos_rpc_handler dmg_handlers[] = {
+	{
+		.dr_opc	= 0xa1,
+		.dr_hdlr = echo,
+	},
+	{
+		.dr_opc = 0,
+	}
+};
 /** Handlers for RPC sent by other servers */
 static struct daos_rpc dmg_srv_rpcs[] = {
 	{
@@ -111,4 +119,5 @@ struct dss_module daos_mgmt_srv_module = {
 	.sm_fini	= dmg_fini,
 	.sm_cl_rpcs	= dmg_cl_rpcs,
 	.sm_srv_rpcs	= dmg_srv_rpcs,
+	.sm_handlers	= dmg_handlers,
 };

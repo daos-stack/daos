@@ -49,7 +49,7 @@ dsm_init(void)
 	if (module_initialized)
 		D_GOTO(unlock, rc = 0);
 
-	rc = daos_rpc_register(dsm_rpcs, DAOS_DSMS_MODULE, false);
+	rc = daos_rpc_register(dsm_rpcs, NULL, DAOS_DSMS_MODULE);
 	if (rc != 0) {
 		D_ERROR("rpc register failure: rc = %d\n", rc);
 		D_GOTO(unlock, rc);

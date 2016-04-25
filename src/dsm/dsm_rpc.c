@@ -135,7 +135,6 @@ struct daos_rpc dsm_rpcs[] = {
 		.dr_in_sz	= sizeof(struct ping_in),
 		.dr_out_hdlr	= dsm_proc_ping_out,
 		.dr_out_sz	= sizeof(struct ping_out),
-		.dr_hdlr	= dsms_hdlr_ping,
 	}, {
 		.dr_opc		= 0
 	}
@@ -181,27 +180,3 @@ dsm_client_async_rpc(dtp_rpc_t *rpc_req, struct daos_event *event)
 
 	return rc;
 }
-
-/* TODO: this handler should move to another file, because this
- * file will be shared both client and server module, but then
- * it will cause dsm_rpcs can not be shared between client
- * and server, will resolve this in the later patch.
- */
-int
-dsms_hdlr_ping(dtp_rpc_t *rpc)
-{
-	struct ping_out	*ping_output = NULL;
-	int		rc = 0;
-
-	D_DEBUG(DF_UNKNOWN, "receive, ping %x.\n", rpc->dr_opc);
-
-	ping_output = (struct ping_out *)rpc->dr_output;
-	ping_output->ret = 0;
-
-	rc = dtp_reply_send(rpc);
-
-	D_DEBUG(DF_UNKNOWN, "ping ret: %d\n", ping_output->ret);
-
-	return rc;
-}
-

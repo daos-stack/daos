@@ -70,24 +70,43 @@ struct daos_rpc {
 	dtp_proc_cb_t	 dr_out_hdlr;
 	/* Size of output parameter */
 	int		 dr_out_sz;
-	/* Request handler, only relevant on the server side, invoked from C
-	 * code */
-	dtp_rpc_cb_t	 dr_hdlr;
 };
+
+struct daos_rpc_handler {
+	/* Operation code */
+	dtp_opcode_t	dr_opc;
+	/* Request handler, only relevant on the server side */
+	dtp_rpc_cb_t	dr_hdlr;
+};
+
+static inline struct daos_rpc_handler *
+daos_rpc_handler_find(struct daos_rpc_handler *handlers, dtp_opcode_t opc)
+{
+	struct daos_rpc_handler *handler;
+
+	for (handler = handlers; handler->dr_opc != 0; handler++) {
+		if (handler->dr_opc == opc)
+			return handler;
+	}
+	return NULL;
+}
 
 /**
  * Register RPCs for both clients and servers.
  *
  * \param[in] rpcs	RPC list to be registered.
+ * \param[in] handlers	RPC handlers to be registered, if
+ *                      it is NULL, then it is for registering
+ *                      client side RPC, otherwise it is for
+ *                      server.
  * \param[in] mod_id	module id of the module.
- * \param[in] server	True if the node is a DAOS server,
- *			False if client
  *
  * \retval	0 if registration succeeds
  * \retval	negative errno if registration fails.
  */
 static inline int
-daos_rpc_register(struct daos_rpc *rpcs, int mod_id, bool server)
+daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
+		  int mod_id)
 {
 	struct daos_rpc	*rpc;
 	int		 rc;
@@ -100,14 +119,19 @@ daos_rpc_register(struct daos_rpc *rpcs, int mod_id, bool server)
 		dtp_opcode_t opcode;
 
 		opcode = DAOS_RPC_OPCODE(rpc->dr_opc, mod_id, rpc->dr_ver);
-		if (server)
-			rc = dtp_rpc_srv_reg(opcode, rpc->dr_in_hdlr,
+		if (handlers != NULL) {
+			struct daos_rpc_handler *handler;
+
+			handler = daos_rpc_handler_find(handlers, rpc->dr_opc);
+			if (handler != NULL)
+				rc = dtp_rpc_srv_reg(opcode, rpc->dr_in_hdlr,
 					     rpc->dr_out_hdlr, rpc->dr_in_sz,
-					     rpc->dr_out_sz, rpc->dr_hdlr);
-		else
+					     rpc->dr_out_sz, handler->dr_hdlr);
+		} else {
 			rc = dtp_rpc_reg(opcode, rpc->dr_in_hdlr,
 					 rpc->dr_out_hdlr, rpc->dr_in_sz,
 					 rpc->dr_out_sz);
+		}
 		if (rc)
 			return rc;
 	}

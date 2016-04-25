@@ -45,6 +45,34 @@ fini(void)
 	return 0;
 }
 
+int
+dsms_hdlr_ping(dtp_rpc_t *rpc)
+{
+	struct ping_out	*ping_output = NULL;
+	int		rc = 0;
+
+	D_DEBUG(DF_UNKNOWN, "receive, ping %x.\n", rpc->dr_opc);
+
+	ping_output = (struct ping_out *)rpc->dr_output;
+	ping_output->ret = 0;
+
+	rc = dtp_reply_send(rpc);
+
+	D_DEBUG(DF_UNKNOWN, "ping ret: %d\n", ping_output->ret);
+
+	return rc;
+}
+
+/* Note: the rpc input/output parameters is defined in daos_rpc */
+static struct daos_rpc_handler dsms_handlers[] = {
+	{
+		.dr_opc		= DSM_PING,
+		.dr_hdlr	= dsms_hdlr_ping,
+	}, {
+		.dr_opc		= 0
+	}
+};
+
 struct dss_module daos_m_srv_module =  {
 	.sm_name	= "daos_m_srv",
 	.sm_mod_id	= DAOS_DSMS_MODULE,
@@ -52,4 +80,5 @@ struct dss_module daos_m_srv_module =  {
 	.sm_init	= init,
 	.sm_fini	= fini,
 	.sm_cl_rpcs	= dsm_rpcs,
+	.sm_handlers	= dsms_handlers,
 };

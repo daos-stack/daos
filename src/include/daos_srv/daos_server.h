@@ -68,6 +68,9 @@ struct dss_module {
 	/* Array of RPC definition for request sent by other servers, last entry
 	 * of the array must be empty */
 	struct daos_rpc		 *sm_srv_rpcs;
+
+	/* RPC handler of these RPC, last entry of the array must be empty */
+	struct daos_rpc_handler	 *sm_handlers;
 };
 
 /*

@@ -136,7 +136,8 @@ dss_module_load(const char *modname)
 	}
 
 	/* register client RPC handlers */
-	rc = daos_rpc_register(smod->sm_cl_rpcs, smod->sm_mod_id, true);
+	rc = daos_rpc_register(smod->sm_cl_rpcs, smod->sm_handlers,
+			       smod->sm_mod_id);
 	if (rc) {
 		D_ERROR("failed to register client RPC for %s: %d\n",
 			modname, rc);
@@ -144,7 +145,8 @@ dss_module_load(const char *modname)
 	}
 
 	/* register server RPC handlers */
-	rc = daos_rpc_register(smod->sm_srv_rpcs, smod->sm_mod_id, true);
+	rc = daos_rpc_register(smod->sm_srv_rpcs, smod->sm_handlers,
+			       smod->sm_mod_id);
 	if (rc) {
 		D_ERROR("failed to register srv RPC for %s: %d\n",
 			modname, rc);
