@@ -250,8 +250,6 @@ int main(int argc, char *argv[])
 {
 	echo_init(0);
 
-	printf("client sleep 2 second to wait server starting...\n");
-	sleep(2);
 	run_client();
 
 	echo_fini();
