@@ -111,7 +111,7 @@ typedef struct {
 		} ip_kv;
 		/** key range enumeration */
 		struct vos_ip_ba {
-			daos_rec_index_t	ridx;
+			daos_recx_t		rext;
 			daos_epoch_range_t	per;
 		} ip_ba;
 	} u;
@@ -140,12 +140,13 @@ typedef struct {
 		} ie_obj;
 		/** Returned entry for KV iterator */
 		struct vos_ie_kv {
-			daos_key_t		key;
+			daos_dkey_t		dkey;
+			daos_akey_t		akey;
 			daos_iov_t		val;
 		} ie_kv;
 		/** Returned entry for key range iterator */
 		struct vos_ie_kr {
-			daos_rec_index_t	ridx;
+			daos_recx_t		rext;
 		} ie_ba;
 	} u;
 } vos_iter_entry_t;

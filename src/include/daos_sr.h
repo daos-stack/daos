@@ -304,61 +304,56 @@ dsr_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
 
 /**
  * Record API
- *
- * A record is identified by daos_key_t, a record can range in index from zero
- * to infinity, each index can own an atomic "data unit", which is arbitrary
- * length. The upper layer stack can fetch or update any number of data units
- * of a record by providing the record key and indices/index ranges of these
- * data units.
  */
 
 /**
- * Fetch data units of the records listed in an explicit array.
+ * Fetch records.
  *
  * \param oh	[IN]	Object open handle.
  *
  * \param epoch	[IN]	Epoch for the fetch. It is ignored if epoch range is
- *			provided by \a rec_array::rd_eprs.
+ *			provided for each extent through the vector I/O
+ *			descriptor (i.e. through \a iods[]::vd_eprs[]).
  *
- * \param rec_array_nr	[IN]
- *			Array size of \a rec_array and \a sgls.
+ * \param dkey	[IN]	Distribution key associated with the fetch operation.
  *
- * \param rec_array	[IN/OUT]
- *			Descriptors for the records to fetch. Checksum of each
- *			data unit, or each range of units is returned in
- *			\a rec_array[i]::rd_rcsums[j]. If the unit size of an
- *			index or range is unknown, which is set to -1 as input,
- *			then the actual unit size of it will be returned in
- *			\a rec_array[i]::rd_indices[j]::ir_usize. In addition,
- *			caller can provide individual epoch for each index or
- *			range in \a rec_array[i]::rd_eprs[j].
+ * \param nr	[IN]	Number of I/O descriptor and scatter/gather lists in
+ *			respectively \a iods and \a sgls.
  *
- * \param sgls [IN/OUT] Scatter/gather lists (sgl) to store data units of
- *			records. Each record has a separate sgl in \a sgls.
+ * \param iods	[IN]	Array of vector I/O descriptors. Each descriptor is
+ *			associated with	a given akey and describes the list of
+ *			record extents to fetch from the vector.
+ *			A different epoch can be passed for each extent via
+ *			\a iods[]::vd_eprs[] and in this case, \a epoch will be
+ *			ignored.
+ *		[OUT]	Checksum of each extent is returned via
+ *			\a iods[]::vd_csums[]. If the record size of an
+ *			extent is unknown (i.e. set to -1 as input), then the
+ *			actual record size will be returned in
+ *			\a iods[]::vd_recxs[]::rx_rsize.
  *
+ * \param sgls	[IN]	Scatter/gather lists (sgl) to store records. Each vector
+ *			is associated with a separate sgl in \a sgls.
  *			Iovecs in each sgl can be arbitrary as long as their
  *			total size is sufficient to fill in all returned data.
- *			For example, data units of different indices or ranges
- *			of the same record can be adjacently stored in the same
- *			iovec of the sgl of the record: iovec start offset of
- *			an index or range is the end offset of the prevous
- *			index or range.
+ *			For example, extents with records of different sizes can
+ *			be adjacently stored in the same iovec of the sgl of the
+ *			vector: iovec start offset of an extent is the end
+ *			offset of the prevous extent.
  *			For an unfound record, the output length of the
  *			corresponding sgl is set to zero.
  *
- * \param rec_layouts [OUT]
- *			Optional, this parameter is mostly for the cache and
+ * \param map	[OUT]	Optional, this parameter is mostly for the cache and
  *			tiering layer, other upper layers can simply pass in
  *			NULL.
- *
  *			It is the sink buffer to store the returned actual
  *			index layouts and their epoch validities. The returned
- *			layout covers the same set of indices or index ranges
- *			as \a rec_array. However, the returned ranges could be
- *			fragmented if these ranges were partially updated in
- *			different epochs.
- *			In additition, the returned ranges should also allow
- *			to discriminate punched ranges from punched holes.
+ *			layout covers the record extents as \a iods.
+ *			However, the returned extents could be fragmented if
+ *			these extents were partially updated in	different
+ *			epochs.	In additition, the returned extents should also
+ *			allow to discriminate punched extents from punched
+ *			holes.
  *
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -376,36 +371,42 @@ dsr_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-dsr_rec_fetch(daos_handle_t oh, daos_epoch_t epoch, unsigned int rec_array_nr,
-	      daos_rec_array_t *rec_array, daos_sg_list_t *sgls,
-	      daos_rec_array_t *rec_layouts, daos_event_t *ev);
+dsr_rec_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t dkey,
+	      unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+	      daos_vec_map_t *map, daos_event_t *ev);
 
 /**
- * Insert or udpate data units of the records listed in an explicit array.
+ * Insert or udpate records.
  *
  * \param oh	[IN]	Object open handle.
  *
- * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch range
- *			is provided by \a rec_array::rd_eprs.
+ * \param epoch	[IN]	Epoch for the update. It is ignored if epoch range is
+ *			provided for each extent through the vector I/O
+ *			descriptor (i.e. \a iods[]::vd_eprs[]).
  *
- * \param rec_array_nr	[IN]
- *			Array size of \a rec_array and \a sgls.
+ * \param dkey	[IN]	Distribution key associated with the update operation.
  *
- * \param rec_array	[IN]
- *			Array for the records to update. Checksum of each unit,
- *			or each range of units is stored in
- *			\a rec_array[i]::rd_rcsums[j]. If the unit size of an
- *			index or range is zero, then it is effectively a punch
- *			for the specified index/range. In addition, caller can
- *			provide individual epoch for each index or range in
- *			\a rec_array[i]::rd_eprs[j].
+ * \param nr	[IN]	Number of descriptors and scatter/gather lists in
+ *			respectively \a iods and \a sgls.
+ *
+ * \param vecs	[IN]	Array of vector I/O descriptor. Each descriptor is
+ *			associated with a vector identified by its akey and
+ *			describes the list of record extent to update.
+ *			A different epoch can be passed for each extent via
+ *			\a iods[]::vd_eprs[] and in this case, \a epoch will be
+ *			ignored.
+ *			Checksum of each record extent is stored in
+ *			\a iods[]::vd_csums[]. If the record size of an extent
+ *			is zero, then it is effectively a punch	for the
+ *			specified index range.
  *
  * \param sgls	[IN]	Scatter/gather list (sgl) to store the input data
- *			units. Each record of \a rec_array owns a separate sgl
- *			in \a sgls. Different data units of a record can either
- *			be stored in separate iovec of the sgl, or contiguously
+ *			records. Each vector I/O descriptor owns a separate sgl
+ *			in \a sgls.
+ *			Different records of the same extent can either be
+ *			stored in separate iovec of the sgl, or contiguously
  *			stored in arbitrary iovecs as long as total buffer size
- *			can match the total data units size.
+ *			can match the total extent size.
  *
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -420,12 +421,12 @@ dsr_rec_fetch(daos_handle_t oh, daos_epoch_t epoch, unsigned int rec_array_nr,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-dsr_rec_update(daos_handle_t oh, daos_epoch_t epoch, unsigned int rec_array_nr,
-	       daos_rec_array_t *rec_array, daos_sg_list_t *rec_sgls,
+dsr_rec_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t dkey,
+	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_event_t *ev);
 
 /**
- * Enumerate keys or records descriptors.
+ * Enumerate keys and records.
  *
  * \param oh	[IN]	Object open handle.
  *
@@ -434,24 +435,21 @@ dsr_rec_update(daos_handle_t oh, daos_epoch_t epoch, unsigned int rec_array_nr,
  * \param filter [IN]	Specific filter for the iteration. When the enumeration
  *			is limited to dkeys, no records or checksums are
  *			returned. \a filter can be set to NULL, in this case,
- *			all keys will be enumeration (i.e. iterate over all
+ *			all keys will be enumerated (i.e. iterate over all
  *			distribution keys and enumerate all attribute keys
  *			available for each distribution key)
  *
- * \param rec_array_nr [IN/OUT]
- *			Input  : array size of \a rec_array
- *			Output : number of returned record descriptors
+ * \param nr	[IN]	number of vector I/O descriptors in \a iods
+ *		[OUT]	number of returned record vector I/O descriptors.
  *
- * \param rec_array [OUT]
- *			Sink buffer for returned keys or record array.
+ * \param iods	[OUT]	Sink buffer for returned keys or records.
  *			Unless it is dkey enumeration(see \a filter), otherwise
- *			\a rec_array::rd_indices and \a rec_array::rd_eprs
- *			must be allocated, \a rec_array::rd_nr should be set
- *			to the number of entries of these arrays.
- *
+ *			\a iods::vd_recxs and \a iods::vd_eprs must be
+ *			allocated, \a iods::vd_nr should be set to the number
+ *			of entries of this descriptor.
  *			The same record may be returned into multiple entries
- *			of \a rec_array if the indices/ranges of this record
- *			cannot be filled in one entry.
+ *			of \a iods if the extents of this record cannot be
+ *			filled in one entry.
  *
  * \param anchor [IN/OUT]
  *			Hash anchor for the next call, it should be set to
@@ -474,7 +472,7 @@ dsr_rec_update(daos_handle_t oh, daos_epoch_t epoch, unsigned int rec_array_nr,
  */
 int
 dsr_rec_list(daos_handle_t oh, daos_epoch_range_t *epr,
-	     daos_list_filter_t *filter, daos_nr_t *rec_array_nr,
-	     daos_rec_array_t *rec_array, daos_hash_out_t *anchor,
+	     daos_list_filter_t *filter, daos_nr_t *nr,
+	     daos_vec_iod_t *iods, daos_hash_out_t *anchor,
 	     daos_event_t *ev);
 #endif /* __DSR_API_H__ */
