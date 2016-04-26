@@ -164,7 +164,7 @@ REQS.define('iof',
                       "PREFIX=$IOF_PREFIX install"],
             headers=["process_set.h"],
             libs=["pset"],
-            requires=['ompi', 'mercury'])
+            requires=['ompi', 'mercury', 'mcl'])
 
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
@@ -184,3 +184,19 @@ REQS.define('ofi',
                       'make install'],
             libs=['fabric'],
             headers=['rdma/fabric.h'])
+
+RETRIEVER = GitRepoRetriever("ssh://review.whamcloud.com:29418/daos/mcl", True)
+REQS.define('mcl',
+            retriever=RETRIEVER,
+            commands=["scons --no-prereq-links "
+                      "PMIX_PREBUILT=$PMIX_PREFIX " \
+                      "OMPI_PREBUILT=$OMPI_PREFIX " \
+                      "HWLOC_PREBUILT=$HWLOC_PREFIX " \
+                      "MERCURY_PREBUILT=$MERCURY_PREFIX " \
+                      "BMI_PREBUILT=$BMI_PREFIX " \
+                      "CCI_PREBUILT=$CCI_PREFIX " \
+                      "OPENPA_PREBUILT=$OPENPA_PREFIX " \
+                      "PREFIX=$MCL_PREFIX install"],
+            headers=["process_set.h"],
+            libs=["mcl"],
+            requires=['ompi', 'mercury'])
