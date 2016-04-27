@@ -1,0 +1,1480 @@
+/**
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the GNU Lesser General Public License
+ * (LGPL) version 2.1 which accompanies this distribution, and is available at
+ * http://www.gnu.org/licenses/lgpl-2.1.html
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the LGPL License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ *
+ * (C) Copyright 2016 Intel Corporation.
+ */
+/**
+ * This file is part of daos
+ *
+ * src/common/pool_map.c
+ */
+#include <daos/pool_map.h>
+
+/** counters for component (sub)tree */
+struct pool_comp_cntr {
+	/** # of domains in the top level */
+	unsigned int		 cc_top_doms;
+	/** # of all domains */
+	unsigned int		 cc_domains;
+	/** # of targets */
+	unsigned int		 cc_targets;
+	/** # of buffer layers */
+	unsigned int		 cc_layers;
+};
+
+/** component state dictionary */
+struct pool_comp_state_dict {
+	/** component state */
+	pool_comp_state_t	 sd_state;
+	/** string name for the state */
+	char			*sd_name;
+};
+
+/** component type dictionary */
+struct pool_comp_type_dict {
+	/** type of component */
+	pool_comp_type_t	 td_type;
+	/** abbreviation for the type */
+	char			 td_abbr;
+	/** string name for the type */
+	char			*td_name;
+};
+
+/** data structure to help binary search of components */
+struct pool_comp_sorter {
+	/** type of component */
+	pool_comp_type_t	  cs_type;
+	/** number of components */
+	unsigned int		  cs_nr;
+	/** pointer array for binary search */
+	struct pool_component	**cs_comps;
+};
+
+/** In memory data structure for pool map */
+struct pool_map {
+	/** Current version of pool map */
+	uint32_t		 po_version;
+	/** # domain layers */
+	unsigned int		 po_domain_layers;
+	/**
+	 * Sorters for the binary search of different domain types.
+	 * These sorters are in ascending order for binary search of sorters.
+	 */
+	struct pool_comp_sorter	*po_domain_sorters;
+	/** sorter for binary search of target */
+	struct pool_comp_sorter	 po_target_sorter;
+	/**
+	 * Tree root of all components.
+	 * NB: All components must be stored in contiguous buffer.
+	 */
+	struct pool_domain	*po_tree;
+
+};
+
+static struct pool_comp_state_dict comp_state_dict[] = {
+	{
+		.sd_state	= PO_COMP_ST_UP,
+		.sd_name	= "UP",
+	},
+	{
+		.sd_state	= PO_COMP_ST_UPIN,
+		.sd_name	= "UP_IN",
+	},
+	{
+		.sd_state	= PO_COMP_ST_DOWN,
+		.sd_name	= "DOWN",
+	},
+	{
+		.sd_state	= PO_COMP_ST_DOWNOUT,
+		.sd_name	= "DOWN_OUT",
+	},
+	{
+		.sd_state	= PO_COMP_ST_NEW,
+		.sd_name	= "NEW",
+	},
+	{
+		.sd_state	= PO_COMP_ST_UNKNOWN,
+		.sd_name	= "UNKNOWN",
+	},
+};
+
+#define comp_state_for_each(d)		\
+	for (d = &comp_state_dict[0]; d->sd_state != PO_COMP_ST_UNKNOWN; d++)
+
+static struct pool_comp_type_dict comp_type_dict[] = {
+	{
+		.td_type	= PO_COMP_TP_TARGET,
+		.td_abbr	= 't',
+		.td_name	= "target",
+	},
+	{
+		.td_type	= PO_COMP_TP_NODE,
+		.td_abbr	= 'n',
+		.td_name	= "node",
+	},
+	{
+		.td_type	= PO_COMP_TP_BOARD,
+		.td_abbr	= 'b',
+		.td_name	= "board",
+	},
+	{
+		.td_type	= PO_COMP_TP_BLADE,
+		.td_abbr	= 'l',
+		.td_name	= "blade",
+	},
+	{
+		.td_type	= PO_COMP_TP_RACK,
+		.td_abbr	= 'r',
+		.td_name	= "rack",
+	},
+	{
+		.td_type	= PO_COMP_TP_ROOT,
+		.td_abbr	= 'o',
+		.td_name	= "root",
+	},
+	{
+		.td_type	= PO_COMP_TP_UNKNOWN,
+		.td_abbr	= 'u',
+		.td_name	= "unknown",
+	},
+};
+
+#define comp_type_for_each(d)		\
+	for (d = &comp_type_dict[0]; d->td_type != PO_COMP_TP_UNKNOWN; d++)
+
+static bool pool_map_empty(struct pool_map *map);
+
+const char *
+pool_comp_state2str(pool_comp_state_t state)
+{
+	struct pool_comp_state_dict *dict;
+
+	comp_state_for_each(dict) {
+		if (dict->sd_state == state)
+			break;
+	}
+	return dict->sd_name;
+}
+
+pool_comp_state_t
+pool_comp_str2state(const char *name)
+{
+	struct pool_comp_state_dict *dict;
+
+	comp_state_for_each(dict) {
+		if (strcasecmp(name, dict->sd_name) == 0)
+			break;
+	}
+	return dict->sd_state;
+}
+
+const char *
+pool_comp_type2str(pool_comp_type_t type)
+{
+	struct pool_comp_type_dict *dict;
+
+	comp_type_for_each(dict) {
+		if (dict->td_type == type)
+			break;
+	}
+	return dict->td_name;
+}
+
+pool_comp_type_t
+pool_comp_str2type(const char *name)
+{
+	struct pool_comp_type_dict *dict;
+
+	comp_type_for_each(dict) {
+		if (strcasecmp(name, dict->td_name) == 0)
+			break;
+	}
+	return dict->td_type;
+}
+
+pool_comp_type_t
+pool_comp_abbr2type(char abbr)
+{
+	struct pool_comp_type_dict *dict;
+
+	abbr = tolower(abbr);
+	comp_type_for_each(dict) {
+		if (abbr == dict->td_abbr)
+			break;
+	}
+	return dict->td_type;
+}
+
+static bool
+target_exist(struct pool_map *map, uint32_t id)
+{
+	return pool_map_find_target(map, id, NULL) != 0;
+}
+
+static bool
+domain_exist(struct pool_map *map, pool_comp_type_t type, uint32_t id)
+{
+	return pool_map_find_domain(map, type, id, NULL) != 0;
+}
+
+static void
+comp_sort_op_swap(void *array, int a, int b)
+{
+	struct pool_component **comps = (struct pool_component **)array;
+	struct pool_component  *tmp;
+
+	tmp = comps[a];
+	comps[a] = comps[b];
+	comps[b] = tmp;
+}
+
+static int
+comp_sort_op_cmp(void *array, int a, int b)
+{
+	struct pool_component **comps = (struct pool_component **)array;
+
+	if (comps[a]->co_id > comps[b]->co_id)
+		return 1;
+	if (comps[a]->co_id < comps[b]->co_id)
+		return -1;
+	return 0;
+}
+
+static int
+comp_sort_op_cmp_key(void *array, int i, uint64_t key)
+{
+	struct pool_component **comps = (struct pool_component **)array;
+	uint32_t		id	= (uint32_t)key;
+
+	if (comps[i]->co_id > id)
+		return 1;
+	if (comps[i]->co_id < id)
+		return -1;
+	return 0;
+}
+
+/** ID based sort and lookup for components */
+static daos_sort_ops_t comp_sort_ops = {
+	.so_swap	= comp_sort_op_swap,
+	.so_cmp		= comp_sort_op_cmp,
+	.so_cmp_key	= comp_sort_op_cmp_key,
+};
+
+static int
+comp_sorter_init(struct pool_comp_sorter *sorter, int nr,
+		 pool_comp_type_t type)
+{
+	D_DEBUG(DF_CL, "Initialise sorter for %s, nr %d\n",
+		pool_comp_type2str(type), nr);
+
+	D_ALLOC(sorter->cs_comps, nr * sizeof(*sorter->cs_comps));
+	if (sorter->cs_comps == NULL)
+		return -DER_NOMEM;
+
+	sorter->cs_type	= type;
+	sorter->cs_nr	= nr;
+	return 0;
+}
+
+static void
+comp_sorter_fini(struct pool_comp_sorter *sorter)
+{
+	if (sorter->cs_comps != NULL) {
+		D_DEBUG(DF_CL, "Finalise sorter for %s\n",
+			pool_comp_type2str(sorter->cs_type));
+
+		D_FREE(sorter->cs_comps,
+		       sorter->cs_nr * sizeof(*sorter->cs_comps));
+		sorter->cs_nr = 0;
+	}
+}
+
+static struct pool_domain *
+comp_sorter_find_domain(struct pool_comp_sorter *sorter, unsigned int id)
+{
+	int	at;
+
+	D_ASSERT(sorter->cs_type < PO_COMP_TP_TARGET);
+	at = daos_array_find(sorter->cs_comps, sorter->cs_nr, id,
+			     &comp_sort_ops);
+	return at < 0 ? NULL :
+	       container_of(sorter->cs_comps[at], struct pool_domain, do_comp);
+}
+
+static struct pool_target *
+comp_sorter_find_target(struct pool_comp_sorter *sorter, unsigned int id)
+{
+	int	at;
+
+	D_ASSERT(sorter->cs_type == PO_COMP_TP_TARGET);
+	at = daos_array_find(sorter->cs_comps, sorter->cs_nr, id,
+			     &comp_sort_ops);
+	return at < 0 ? NULL :
+	       container_of(sorter->cs_comps[at], struct pool_target, ta_comp);
+}
+
+static int
+comp_sorter_sort(struct pool_comp_sorter *sorter)
+{
+	return daos_array_sort(sorter->cs_comps, sorter->cs_nr, true,
+			       &comp_sort_ops);
+}
+
+/** create a new pool buffer which can store \a nr components */
+struct pool_buf *
+pool_buf_alloc(unsigned int nr)
+{
+	struct pool_buf *buf;
+
+	D_ALLOC(buf, offsetof(struct pool_buf, pb_comps[nr]));
+	if (buf != NULL)
+		buf->pb_nr = nr;
+
+	return buf;
+}
+
+/** free the pool buffer */
+void
+pool_buf_free(struct pool_buf *buf)
+{
+	D_FREE(buf, offsetof(struct pool_buf, pb_comps[buf->pb_nr]));
+}
+
+/**
+ * Add an array of components to the pool buffer.
+ * The caller should always attach domains before targets, and attach high
+ * level domains before low level domains.
+ *
+ * TODO: add more description about pool map format.
+ */
+int
+pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
+		unsigned int comp_nr)
+{
+	unsigned int	nr = buf->pb_domain_nr + buf->pb_target_nr;
+
+	if (buf->pb_nr < nr + comp_nr)
+		return -DER_NOSPACE;
+
+	D_DEBUG(DF_CL, "Attaching %d components\n", comp_nr);
+	for (; comp_nr > 0; comp_nr--, comps++, nr++) {
+		struct pool_component *prev;
+
+		prev = nr == 0 ? NULL : &buf->pb_comps[nr - 1];
+		if (prev != NULL && prev->co_type > comps[0].co_type)
+			return -DER_INVAL;
+
+		if (comps[0].co_type == PO_COMP_TP_TARGET)
+			buf->pb_target_nr++;
+		else
+			buf->pb_domain_nr++;
+
+		buf->pb_comps[nr] = comps[0];
+	}
+	return 0;
+}
+
+int
+pool_buf_pack(struct pool_buf *buf)
+{
+	if (buf->pb_nr != buf->pb_target_nr + buf->pb_domain_nr)
+		return -DER_INVAL;
+
+	/* TODO: checksum, swab... */
+	return 0;
+}
+
+int
+pool_buf_unpack(struct pool_buf *buf)
+{
+	/* TODO: swab, verify checksum */
+	return 0;
+}
+
+/**
+ * Parse pool buffer and construct domain+target array (tree) based on
+ * the information in pool buffer.
+ *
+ * \param buf		[IN]	pool buffer to be parsed
+ * \param tree_pp	[OUT]	the returned domain+target tree.
+ */
+static int
+pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
+{
+	struct pool_domain *tree;
+	struct pool_domain *domain;
+	struct pool_domain *parent;
+	struct pool_target *targets;
+	pool_comp_type_t    type;
+	int		    size;
+	int		    i;
+	int		    rc;
+
+	if (buf->pb_target_nr == 0 ||
+	    buf->pb_domain_nr + buf->pb_target_nr != buf->pb_nr) {
+		D_DEBUG(DF_CL, "Invalid number of components: %d/%d/%d\n",
+			buf->pb_nr, buf->pb_domain_nr, buf->pb_target_nr);
+		return -DER_INVAL;
+	}
+
+	size = sizeof(struct pool_target) * (buf->pb_target_nr) +
+	       sizeof(struct pool_domain) * (buf->pb_domain_nr + 1); /* root */
+
+	D_ALLOC(tree, size);
+	if (tree == NULL)
+		return -DER_NOMEM;
+
+	targets	= (struct pool_target *)&tree[buf->pb_domain_nr + 1];
+	for (i = 0; i < buf->pb_target_nr; i++)
+		targets[i].ta_comp = buf->pb_comps[buf->pb_domain_nr + i];
+
+	parent = &tree[0]; /* root */
+	parent->do_comp.co_type   = PO_COMP_TP_ROOT;
+	parent->do_comp.co_status = PO_COMP_ST_UP;
+
+	if (buf->pb_domain_nr == 0) {
+		/* targets are directly attached under the root */
+		parent->do_target_nr = buf->pb_target_nr;
+		parent->do_targets = targets;
+		goto out;
+	}
+	parent->do_children = &tree[1];
+
+	type = buf->pb_comps[0].co_type;
+	for (i = 1;; i++) {
+		struct pool_component *comp = &tree[i].do_comp;
+		int		       nr = 0;
+
+		*comp = buf->pb_comps[i - 1];
+		if (comp->co_type > PO_COMP_TP_TARGET) {
+			D_DEBUG(DF_CL, "Invalid type %d/%d\n",
+				type, comp->co_type);
+			rc = -DER_INVAL;
+			goto failed;
+		}
+
+		D_DEBUG(DF_CL, "Parse %s[%d]\n",
+			pool_comp_type2str(comp->co_type), comp->co_id);
+
+		if (comp->co_type == type)
+			continue;
+
+		type = comp->co_type;
+
+		if (parent == &tree[0]) {
+			parent->do_child_nr = i - 1;
+			parent++;
+		}
+
+		for (; parent < &tree[i]; parent++) {
+			if (type != PO_COMP_TP_TARGET) {
+				D_DEBUG(DF_CL, "Setup children for %s[%d]\n",
+					pool_domain_name(parent),
+					parent->do_comp.co_id);
+
+				parent->do_children = &tree[i + nr];
+				nr += parent->do_child_nr;
+			} else {
+				/* parent is the last level domain */
+				D_DEBUG(DF_CL, "Setup targets for %s[%d]\n",
+					pool_domain_name(parent),
+					parent->do_comp.co_id);
+
+				parent->do_target_nr  = parent->do_comp.co_nr;
+				parent->do_comp.co_nr = 0;
+				parent->do_targets    = targets;
+				targets += parent->do_target_nr;
+
+				D_DEBUG(DF_CL, "%s[%d] has %d targets\n",
+					pool_domain_name(parent),
+					parent->do_comp.co_id,
+					parent->do_target_nr);
+			}
+		}
+
+		if (type == PO_COMP_TP_TARGET)
+			break;
+	}
+
+	D_DEBUG(DF_CL, "Build children and targets pointers\n");
+
+	for (domain = &tree[0]; domain->do_targets == NULL;
+	     domain = &tree[0]) {
+		while (domain->do_targets == NULL) {
+			parent = domain;
+			D_ASSERTF(domain->do_children != NULL,
+				  "%s[%d]: %d/%d\n",
+				  pool_domain_name(domain),
+				  domain->do_comp.co_id,
+				  domain->do_child_nr, domain->do_target_nr);
+			domain = &domain->do_children[0];
+		}
+
+		type = parent->do_comp.co_type;
+		for (; parent->do_comp.co_type == type; parent++) {
+			parent->do_targets = domain->do_targets;
+			for (i = 0; i < parent->do_child_nr; i++, domain++)
+				parent->do_target_nr += domain->do_target_nr;
+
+			D_DEBUG(DF_CL, "Set %d target for %s[%d]\n",
+				parent->do_target_nr,
+				pool_comp_type2str(parent->do_comp.co_type),
+				parent->do_comp.co_id);
+		}
+	}
+ out:
+	*tree_pp = &tree[0];
+	return 0;
+ failed:
+	D_FREE(tree, size);
+	return rc;
+}
+
+/**
+ * Count number of domains, targets, and layers of domains etc in the
+ * component tree.
+ */
+static void
+pool_tree_count(struct pool_domain *tree, struct pool_comp_cntr *cntr)
+{
+	unsigned int	dom_nr;
+
+	memset(cntr, 0, sizeof(*cntr));
+	if (tree[0].do_children != NULL) {
+		dom_nr = tree[0].do_children - tree;
+	} else {
+		D_ASSERT(tree[0].do_targets != NULL);
+		dom_nr = (struct pool_domain *)tree[0].do_targets - tree;
+	}
+
+	cntr->cc_top_doms = dom_nr;
+	cntr->cc_domains  = dom_nr;
+
+	for (; tree != NULL; tree = tree[0].do_children, cntr->cc_layers++) {
+		int      child_nr;
+		int      i;
+
+		D_DEBUG(0, "%s, nr = %d\n", pool_domain_name(&tree[0]), dom_nr);
+		for (i = child_nr = 0; i < dom_nr; i++) {
+			if (tree[i].do_children != NULL) {
+				cntr->cc_domains += tree[i].do_child_nr;
+				child_nr += tree[i].do_child_nr;
+			} else {
+				cntr->cc_targets += tree[i].do_target_nr;
+			}
+		}
+		dom_nr = child_nr;
+	}
+}
+
+/**
+ * Calculate memory size of the component tree.
+ */
+static unsigned int
+pool_tree_size(struct pool_domain *tree)
+{
+	struct pool_comp_cntr cntr;
+
+	pool_tree_count(tree, &cntr);
+	return sizeof(struct pool_target) * cntr.cc_targets +
+	       sizeof(struct pool_domain) * cntr.cc_domains;
+}
+
+/**
+ * Rebuild pointers for the component tree
+ */
+static void
+pool_tree_build_ptrs(struct pool_domain *tree, struct pool_comp_cntr *cntr)
+{
+	struct pool_target *targets;
+	int		    dom_nr;
+
+	D_DEBUG(DF_CL, "Layers %d, top domains %d, domains %d, targets %d\n",
+		cntr->cc_layers, cntr->cc_top_doms, cntr->cc_domains,
+		cntr->cc_targets);
+
+	targets = (struct pool_target *)&tree[cntr->cc_domains];
+
+	for (dom_nr = cntr->cc_top_doms; tree != NULL;
+	     tree = tree[0].do_children) {
+		struct pool_domain *children = &tree[dom_nr];
+		struct pool_target *tgs	     = targets;
+		int		    child_nr = 0;
+		int		    i;
+
+		for (i = 0; i < dom_nr; i++) {
+			if (tree[i].do_children != NULL) {
+				tree[i].do_children = children;
+				child_nr += tree[i].do_child_nr;
+				children += tree[i].do_child_nr;
+			}
+			tree[i].do_targets = tgs;
+			tgs += tree[i].do_target_nr;
+		}
+		dom_nr = child_nr;
+	}
+}
+
+/** Free the component tree */
+static void
+pool_tree_free(struct pool_domain *tree)
+{
+	unsigned int size = pool_tree_size(tree);
+
+	D_FREE(tree, size);
+}
+
+/** Check if component buffer is sane */
+static bool
+pool_tree_sane(struct pool_domain *tree, uint32_t version)
+{
+	struct pool_domain	*parent = NULL;
+	struct pool_target	*targets = tree[0].do_targets;
+	struct pool_comp_cntr	 cntr;
+	int			 dom_nr;
+	int			 i;
+
+	D_DEBUG(DF_CL, "Sanity check of component buffer\n");
+	pool_tree_count(tree, &cntr);
+	if (cntr.cc_targets == 0) {
+		D_DEBUG(DF_CL, "Buffer has no target\n");
+		return false;
+	}
+
+	for (dom_nr = cntr.cc_top_doms; tree != NULL;
+	     tree = tree[0].do_children) {
+		struct pool_domain *prev = &tree[0];
+		int		    child_nr = 0;
+		int		    i;
+
+		if (parent != NULL &&
+		    parent->do_comp.co_type >= tree[0].do_comp.co_type) {
+			D_DEBUG(DF_CL,
+				"Type of parent domain %d(%s) should be "
+				"smaller than child domain %d(%s)\n",
+				parent->do_comp.co_type,
+				pool_domain_name(parent),
+				tree[0].do_comp.co_type,
+				pool_domain_name(&tree[0]));
+			return false;
+		}
+
+		for (i = 0; i < dom_nr; i++) {
+			if (tree[i].do_comp.co_ver > version) {
+				D_DEBUG(DF_CL, "Invalid version %u/%u\n",
+					tree[i].do_comp.co_ver, version);
+				return false;
+			}
+
+			if (prev->do_comp.co_type != tree[i].do_comp.co_type) {
+				D_DEBUG(DF_CL, "Unmatched domain type %d/%d\n",
+					tree[i].do_comp.co_type,
+					prev->do_comp.co_type);
+				return false;
+			}
+
+			if (tree[i].do_targets == NULL ||
+			    tree[i].do_target_nr == 0) {
+				D_DEBUG(DF_CL, "No target found\n");
+				return false; /* always has targets */
+			}
+
+			if ((prev->do_children == NULL) ^
+			    (tree[i].do_children == NULL)) {
+				D_DEBUG(DF_CL, "Invalid child tree\n");
+				return false;
+			}
+
+			if ((prev->do_targets == NULL) ^
+			    (tree[i].do_targets == NULL)) {
+				D_DEBUG(DF_CL, "Invalid target tree\n");
+				return false;
+			}
+
+			if (prev != &tree[i] &&
+			    prev->do_children != NULL &&
+			    prev->do_children + prev->do_child_nr !=
+			    tree[i].do_children) {
+				D_DEBUG(DF_CL, "Invalid children pointer\n");
+				return false;
+			}
+
+			if (prev != &tree[i] &&
+			    prev->do_targets != NULL &&
+			    prev->do_targets + prev->do_target_nr !=
+			    tree[i].do_targets) {
+				D_DEBUG(DF_CL, "Invalid children pointer\n");
+				return false;
+			}
+
+			if (tree[i].do_child_nr != 0)
+				child_nr += tree[i].do_child_nr;
+
+			prev = &tree[i];
+		}
+		parent = &tree[0];
+		dom_nr = child_nr;
+	}
+
+	for (i = 0; i < cntr.cc_targets; i++) {
+		if (targets[i].ta_comp.co_type != PO_COMP_TP_TARGET) {
+			D_DEBUG(DF_CL, "Invalid leaf type %d(%s)\n",
+				targets[i].ta_comp.co_type,
+				pool_comp_name(&targets[i].ta_comp));
+			return false;
+		}
+
+		if (targets[i].ta_comp.co_ver > version) {
+			D_DEBUG(DF_CL, "Invalid version %u/%u\n",
+				targets[i].ta_comp.co_ver, version);
+			return false;
+		}
+	}
+	D_DEBUG(DF_CL, "Component buffer is sane\n");
+	return true;
+}
+
+/** copy a components tree */
+static void
+pool_tree_copy(struct pool_domain *dst, struct pool_domain *src)
+{
+	struct pool_comp_cntr	cntr;
+
+	memcpy(dst, src, pool_tree_size(src));
+	pool_tree_count(src, &cntr);
+	pool_tree_build_ptrs(dst, &cntr);
+}
+
+/** free data members of a pool map */
+static void
+pool_map_finalise(struct pool_map *map)
+{
+	int	i;
+
+	D_DEBUG(DF_CL, "Release buffers for pool map\n");
+
+	comp_sorter_fini(&map->po_target_sorter);
+
+	if (map->po_domain_sorters != NULL) {
+		D_ASSERT(map->po_domain_layers != 0);
+		for (i = 0; i < map->po_domain_layers; i++)
+			comp_sorter_fini(&map->po_domain_sorters[i]);
+
+		D_FREE(map->po_domain_sorters,
+		       map->po_domain_layers *
+		       sizeof(*map->po_domain_sorters));
+
+		map->po_domain_sorters = NULL;
+		map->po_domain_layers = 0;
+	}
+
+	if (map->po_tree != NULL) {
+		pool_tree_free(map->po_tree);
+		map->po_tree = NULL;
+	}
+}
+
+/**
+ * Install a component tree to a pool map.
+ *
+ * \param map		[IN]	The pool map to be initialised.
+ * \param activate	[IN]	Activate pool components.
+ * \param tree		[IN]	Componenent tree for the pool map.
+ */
+static int
+pool_map_initialise(struct pool_map *map, bool activate,
+		    struct pool_domain *tree)
+{
+	struct pool_comp_cntr	 cntr;
+	int			 i;
+	int			 rc = 0;
+
+	D_ASSERT(pool_map_empty(map));
+
+	if (tree[0].do_comp.co_type != PO_COMP_TP_ROOT) {
+		D_DEBUG(DF_CL, "Invalid tree format: %s/%d\n",
+			pool_domain_name(&tree[0]), tree[0].do_comp.co_type);
+		return -DER_INVAL;
+	}
+
+	map->po_tree = tree;
+	pool_tree_count(tree, &cntr);
+
+	/* po_map_print(map); */
+	D_DEBUG(DF_CL, "Setup nlayers %d, ndomains %d, ntargets %d\n",
+		cntr.cc_layers, cntr.cc_domains, cntr.cc_targets);
+
+	map->po_domain_layers = cntr.cc_layers;
+	D_ALLOC(map->po_domain_sorters,
+		map->po_domain_layers * sizeof(*map->po_domain_sorters));
+	if (map->po_domain_sorters == NULL) {
+		rc = -DER_NOMEM;
+		goto failed;
+	}
+
+	/* pointer arrays for binary search of domains */
+	for (i = 0; i < map->po_domain_layers; i++) {
+		struct pool_comp_sorter	*sorter = &map->po_domain_sorters[i];
+		unsigned int		 j;
+
+		D_ASSERT(tree[0].do_comp.co_type != PO_COMP_TP_TARGET);
+		pool_tree_count(tree, &cntr);
+		rc = comp_sorter_init(sorter, cntr.cc_top_doms,
+				      tree[0].do_comp.co_type);
+		if (rc != 0)
+			goto failed;
+
+		D_DEBUG(DF_CL, "domain %s, ndomains %d\n",
+			pool_domain_name(&tree[0]), sorter->cs_nr);
+
+		for (j = 0; j < sorter->cs_nr; j++) {
+			if (activate &&
+			    tree[j].do_comp.co_status == PO_COMP_ST_NEW)
+				tree[j].do_comp.co_status = PO_COMP_ST_UP;
+
+			sorter->cs_comps[j] = &tree[j].do_comp;
+		}
+
+		rc = comp_sorter_sort(sorter);
+		if (rc != 0)
+			goto failed;
+
+		tree = &tree[sorter->cs_nr];
+	}
+
+	rc = comp_sorter_init(&map->po_target_sorter, cntr.cc_targets,
+			      PO_COMP_TP_TARGET);
+	if (rc != 0)
+		goto failed;
+
+	for (i = 0; i < cntr.cc_targets; i++) {
+		struct pool_target *ta;
+
+		ta = &map->po_tree->do_targets[i];
+		map->po_target_sorter.cs_comps[i] = &ta->ta_comp;
+
+		if (activate && ta->ta_comp.co_status == PO_COMP_ST_NEW)
+			ta->ta_comp.co_status = PO_COMP_ST_UP;
+	}
+
+	rc = comp_sorter_sort(&map->po_target_sorter);
+	if (rc != 0)
+		goto failed;
+
+	return 0;
+ failed:
+	D_DEBUG(DF_CL, "Failed to setup pool map %d\n", rc);
+	pool_map_finalise(map);
+	return rc;
+}
+
+/**
+ * Check if a component tree is compatible with a pool map, it returns 0
+ * if components in \a tree can be merged into \a map, otherwise returns
+ * error code.
+ */
+static int
+pool_map_compat(struct pool_map *map, uint32_t version,
+		struct pool_domain *tree)
+{
+	struct pool_domain	*parent;
+	struct pool_domain	*doms;
+	int			 dom_nr;
+	int			 rc;
+
+	if (pool_map_empty(map)) {
+		D_DEBUG(DF_CL, "empty map, type of buffer root is %s\n",
+			pool_domain_name(&tree[0]));
+		return 0;
+	}
+
+	if (map->po_version >= version)
+		return -DER_NO_PERM;
+
+	/* pool_buf_parse should always generate root */
+	if (tree[0].do_comp.co_type != PO_COMP_TP_ROOT)
+		return -DER_INVAL;
+
+	rc = pool_map_find_domain(map, tree[1].do_comp.co_type,
+				  PO_COMP_ID_ALL, &doms);
+	if (rc == 0)
+		return -DER_INVAL;
+
+	if (doms - map->po_tree == 1) {
+		/* the first component is indeed under the root */
+		parent = &tree[0];
+	} else {
+		/* root of the new tree is dummy */
+		parent = NULL;
+	}
+
+	D_DEBUG(DF_CL, "Check if buffer is compatible with pool map\n");
+
+	dom_nr = tree[0].do_child_nr;
+	for (tree++; tree != NULL; parent = &tree[0],
+				   tree = tree[0].do_children,
+				   doms = doms[0].do_children) {
+		int     child_nr = 0;
+		int	nr = 0;
+		int     i;
+		int	j;
+
+		if (doms == NULL) {
+			D_DEBUG(DF_CL, "tree has more layers than the map\n");
+			return -DER_INVAL;
+		}
+
+		D_DEBUG(DF_CL, "checking %s/%s\n",
+			pool_domain_name(&tree[0]),
+			pool_domain_name(&doms[0]));
+
+		for (i = 0; i < dom_nr; i++) {
+			struct pool_component *dc = &tree[i].do_comp;
+			bool		       existed;
+
+			if (dc->co_type != doms[0].do_comp.co_type) {
+				D_DEBUG(DF_CL,
+					"domain type not match %s(%u) %s(%u)\n",
+					pool_comp_name(dc), dc->co_type,
+					pool_domain_name(&doms[0]),
+					doms[0].do_comp.co_type);
+				return -DER_INVAL;
+			}
+
+			existed = domain_exist(map, dc->co_type, dc->co_id);
+			if (dc->co_status == PO_COMP_ST_NEW) {
+				if (parent == NULL)
+					return -DER_INVAL;
+				if (existed)
+					return -DER_NO_PERM;
+
+			} else if (dc->co_status == PO_COMP_ST_UP) {
+				if (!existed)
+					return -DER_INVAL;
+
+				if (parent->do_comp.co_status == PO_COMP_ST_NEW)
+					return -DER_INVAL;
+
+			} else {
+				return -DER_INVAL;
+			}
+
+			if (tree[i].do_children != NULL) {
+				child_nr += tree[i].do_child_nr;
+			} else {
+				/* the last layer domain */
+				if (doms[0].do_children != NULL) {
+					D_DEBUG(DF_CL, "unmatched tree\n");
+					return -DER_INVAL;
+				}
+
+				for (j = 0; j < tree[i].do_target_nr; j++) {
+					struct pool_component *tc;
+
+					tc = &tree[i].do_targets[j].ta_comp;
+					if (tc->co_status != PO_COMP_ST_NEW ||
+					    target_exist(map, tc->co_id))
+						return -DER_INVAL;
+				}
+			}
+
+			nr++;
+			if (parent != NULL && parent->do_child_nr == nr) {
+				parent++;
+				nr = 0;
+			}
+		}
+		dom_nr = child_nr;
+	}
+	return 0;
+}
+
+/**
+ * Merge all new components from \a tree into \a map.
+ * Already existent components will be ignored.
+ */
+static int
+pool_map_merge(struct pool_map *map, uint32_t version,
+	       struct pool_domain *tree)
+{
+	struct pool_map		*src_map;
+	struct pool_domain	*dst_tree;
+	struct pool_domain	*dst_doms;
+	struct pool_domain	*cur_doms;
+	void			*addr;
+	struct pool_comp_cntr    cntr;
+	unsigned int		 dom_nr;
+	unsigned int		 size;
+	int			 i;
+	int			 rc;
+
+	/* create scratch map for merging */
+	D_ALLOC_PTR(src_map);
+	if (src_map == NULL)
+		return -DER_NOMEM;
+
+	rc = pool_map_initialise(src_map, false, tree);
+	if (rc != 0) {
+		D_DEBUG(DF_CL, "Failed to create scratch map for buffer\n");
+		goto failed;
+	}
+
+	/* destination buffer could has larger than the actually needed space,
+	 * but it is not big deal.
+	 */
+	size = pool_tree_size(map->po_tree) + pool_tree_size(tree);
+	D_ALLOC(dst_tree, size);
+	if (dst_tree == NULL) {
+		rc = -DER_NOMEM;
+		goto failed;
+	}
+
+	/* copy current pool map to destination buffer */
+	pool_tree_copy(dst_tree, map->po_tree);
+
+	if (src_map->po_domain_layers != map->po_domain_layers) {
+		/* source map may have less levels because it could be in
+		 * a subtree, skip the fake root in this case.
+		 */
+		D_ASSERT(src_map->po_domain_layers < map->po_domain_layers);
+		rc = pool_map_find_domain(map, tree[1].do_comp.co_type,
+					  PO_COMP_ID_ALL, &cur_doms);
+	} else {
+		rc = pool_map_find_domain(map, tree[0].do_comp.co_type,
+					  PO_COMP_ID_ALL, &cur_doms);
+	}
+	if (rc != 0)
+		goto failed;
+
+	dst_doms = dst_tree;
+	dst_doms += cur_doms - map->po_tree;
+	pool_tree_count(dst_doms, &cntr);
+	dom_nr = cntr.cc_top_doms;
+
+	/* overwrite the components after the top layer domains */
+	addr = (void *)&dst_doms[dom_nr];
+	pool_tree_count(dst_tree, &cntr);
+
+	/* complex buffer manipulating... */
+	for (; dst_doms != NULL;
+	       dst_doms = dst_doms[0].do_children,
+	       cur_doms = cur_doms[0].do_children) {
+		struct pool_domain *cdom = &cur_doms[0];
+		int		    child_nr = 0;
+
+		for (i = 0; i < dom_nr; i++) {
+			struct pool_domain *ddom = &dst_doms[i];
+			struct pool_domain *sdom;
+			int		    nb;
+			int		    j;
+
+			if (ddom->do_comp.co_ver == version) {
+				ddom->do_children  = NULL;
+				ddom->do_targets   = NULL;
+				ddom->do_child_nr  = 0;
+				ddom->do_target_nr = 0;
+				D_DEBUG(DF_CL, "Add new domain %s %d\n",
+					pool_domain_name(cdom), dom_nr);
+			} else {
+				/* Domain existed, copy its children/targets
+				 * from current pool map.
+				 */
+				D_ASSERT(ddom->do_comp.co_ver < version);
+				D_ASSERT(ddom->do_comp.co_id ==
+					 cdom->do_comp.co_id);
+
+				if (cdom->do_children != NULL) {
+					ddom->do_children = addr;
+					ddom->do_child_nr = cdom->do_child_nr;
+					nb = cdom->do_child_nr *
+					     sizeof(struct pool_domain);
+					memcpy(addr, cdom->do_children, nb);
+				} else {
+					ddom->do_targets = addr;
+					ddom->do_target_nr = cdom->do_target_nr;
+					nb = cdom->do_target_nr *
+					     sizeof(struct pool_target);
+					memcpy(addr, cdom->do_targets, nb);
+				}
+				addr += nb;
+				cdom++;
+			}
+
+			D_DEBUG(DF_CL, "Check changes for %s[%d]\n",
+				pool_domain_name(ddom), ddom->do_comp.co_id);
+
+			rc = pool_map_find_domain(src_map,
+						  ddom->do_comp.co_type,
+						  ddom->do_comp.co_id, &sdom);
+			if (rc == 0) {
+				child_nr += ddom->do_child_nr;
+				continue; /* no change for this domain */
+			}
+
+			/* new buffer may have changes for this domain */
+			if (sdom->do_children != NULL) {
+				struct pool_domain *child = addr;
+
+				D_DEBUG(DF_CL, "Scan children of %s[%d]\n",
+					pool_domain_name(ddom),
+					ddom->do_comp.co_id);
+
+				if (ddom->do_children == NULL)
+					ddom->do_children = child;
+
+				/* copy new child domains to dest buffer */
+				for (j = 0; j < sdom->do_child_nr; j++) {
+					struct pool_component *dc;
+
+					dc = &sdom->do_children[j].do_comp;
+					/* ignore existent children */
+					if (dc->co_status != PO_COMP_ST_NEW)
+						continue;
+
+					D_DEBUG(DF_CL2, "New %s[%d]\n",
+						pool_comp_type2str(dc->co_type),
+						dc->co_id);
+
+					dc->co_status = PO_COMP_ST_UP;
+
+					*child = sdom->do_children[j];
+					child++;
+
+					ddom->do_child_nr++;
+					cntr.cc_domains++;
+				}
+				addr = child;
+			} else {
+				struct pool_target *target = addr;
+
+				D_DEBUG(DF_CL, "Scan targets of %s[%d]\n",
+					pool_domain_name(ddom),
+					ddom->do_comp.co_id);
+
+				if (ddom->do_targets == NULL)
+					ddom->do_targets = target;
+
+				/* copy new targets to destination buffer */
+				for (j = 0; j < sdom->do_target_nr; j++) {
+					struct pool_component *tc;
+
+					tc = &sdom->do_targets[j].ta_comp;
+
+					if (tc->co_status != PO_COMP_ST_NEW)
+						continue;
+
+					D_DEBUG(DF_CL2, "New target[%d]\n",
+						tc->co_id);
+
+					tc->co_status = PO_COMP_ST_UP;
+
+					*target = sdom->do_targets[j];
+					target++;
+
+					ddom->do_target_nr++;
+					cntr.cc_targets++;
+				}
+				addr = target;
+			}
+			child_nr += ddom->do_child_nr;
+		}
+		dom_nr = child_nr;
+	}
+	D_ASSERT(addr - (void *)dst_tree <= size);
+	D_DEBUG(DF_CL, "Merged all components\n");
+	/* At this point, I only have valid children pointers for the last
+	 * layer domains, and need to build target pointers for all layers.
+	 */
+	pool_tree_build_ptrs(dst_tree, &cntr);
+
+	/* release old buffers of pool map */
+	pool_map_finalise(map);
+
+	/* install new buffer for pool map */
+	rc = pool_map_initialise(map, true, dst_tree);
+	D_ASSERT(rc == 0 || rc == -DER_NOMEM);
+
+	map->po_version = version;
+ failed:
+	pool_map_destroy(src_map);
+	return rc;
+}
+
+int
+pool_map_extend(struct pool_map *map, uint32_t version, struct pool_buf *buf)
+{
+	struct pool_domain *tree; /* root of the new component tree */
+	int		    rc;
+
+	rc = pool_buf_parse(buf, &tree);
+	if (rc != 0)
+		return rc;
+
+	if (!pool_tree_sane(tree, version)) {
+		D_DEBUG(DF_CL, "Insane buffer format\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rc = pool_map_compat(map, version, tree);
+	if (rc != 0) {
+		D_DEBUG(DF_CL, "Buffer is incompatible with pool map\n");
+		goto out;
+	}
+
+	D_DEBUG(DF_CL, "Merge buffer with already existent pool map\n");
+	rc = pool_map_merge(map, version, tree);
+ out:
+	pool_tree_free(tree);
+	return rc;
+}
+
+/**
+ * Create a pool map from components stored in \a buf.
+ *
+ * \param buf		[IN]	The buffer to input pool components.
+ * \param version	[IN]	Version for the new created pool map.
+ * \param mapp		[OUT]	The returned pool map.
+ */
+int
+pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
+{
+	struct pool_domain *tree = NULL;
+	struct pool_map	   *map = NULL;
+	int		    rc;
+
+	rc = pool_buf_parse(buf, &tree);
+	if (rc != 0)
+		return rc;
+
+	if (!pool_tree_sane(tree, version)) {
+		rc = -DER_INVAL;
+		goto failed;
+	}
+
+	D_ALLOC_PTR(map);
+	if (map == NULL) {
+		rc = -DER_NOMEM;
+		goto failed;
+	}
+
+	rc = pool_map_initialise(map, true, tree);
+	if (rc != 0)
+		goto failed;
+
+	map->po_version = version;
+	*mapp = map;
+	return 0;
+ failed:
+	if (tree != NULL)
+		pool_tree_free(tree);
+	if (map != NULL)
+		D_FREE_PTR(map);
+	return rc;
+}
+
+/**
+ * Destroy a pool map.
+ */
+void
+pool_map_destroy(struct pool_map *map)
+{
+	pool_map_finalise(map);
+	D_FREE_PTR(map);
+}
+
+/**
+ * Find a domain whose type equals to \a type and id equals to \a id.
+ * If id is PO_COMP_ID_ALL, it returns the first element of the contiguously
+ * stored domain array to \a domain_pp.
+ *
+ * The return value of this function is the number of domains, so it is zero
+ * on failure, and it is always one if a particular id is found.
+ */
+int
+pool_map_find_domain(struct pool_map *map, pool_comp_type_t type, uint32_t id,
+		     struct pool_domain **domain_pp)
+{
+	struct pool_comp_sorter *sorter;
+	struct pool_domain	*tmp;
+	int			 i;
+
+	if (pool_map_empty(map)) {
+		D_ERROR("Uninitialized pool map\n");
+		return 0;
+	}
+
+	D_ASSERT(map->po_domain_layers > 0);
+	/* all other domains under root are stored in contiguous buffer */
+	for (tmp = map->po_tree, i = 0; tmp != NULL;
+	     tmp = tmp->do_children, i++) {
+		if (tmp[0].do_comp.co_type == type)
+			break;
+	}
+
+	D_ASSERT(i <= map->po_domain_layers);
+	if (i == map->po_domain_layers) {
+		D_DEBUG(DF_CL, "Can't find domain type %s(%d)\n",
+			pool_comp_type2str(type), type);
+		return 0;
+	}
+
+	sorter = &map->po_domain_sorters[i];
+	D_ASSERT(sorter->cs_type == type);
+
+	if (id == PO_COMP_ID_ALL) {
+		*domain_pp = tmp;
+		return sorter->cs_nr;
+	}
+
+	tmp = comp_sorter_find_domain(sorter, id);
+	if (tmp == NULL)
+		return 0;
+
+	if (domain_pp != NULL)
+		*domain_pp = tmp;
+	return 1;
+}
+
+/**
+ * Find a target whose id equals to \a id by the binary search.
+ * If id is PO_COMP_ID_ALL, it returns the contiguously stored target array
+ * to \a target_pp.
+ *
+ * The return value of this function is the number of targets, so it is zero
+ * on failure, and it is always one if a particular id is found.
+ *
+ * \param map	[IN]		The pool map to search
+ * \param id	[IN]		Target ID to search
+ * \param target_pp [OUT]	Returned target address
+ */
+int
+pool_map_find_target(struct pool_map *map, uint32_t id,
+		     struct pool_target **target_pp)
+{
+	struct pool_comp_sorter *sorter = &map->po_target_sorter;
+	struct pool_target	*target;
+
+	if (pool_map_empty(map)) {
+		D_ERROR("Uninitialized pool map\n");
+		return 0;
+	}
+
+	if (id == PO_COMP_ID_ALL) {
+		*target_pp = map->po_tree[0].do_targets;
+		return map->po_tree[0].do_target_nr;
+	}
+
+	target = comp_sorter_find_target(sorter, id);
+	if (target == NULL)
+		return 0;
+
+	if (target_pp != NULL)
+		*target_pp = target;
+	return 1;
+}
+
+static void
+pool_indent_print(int dep)
+{
+	int	i;
+
+	for (i = 0; i < dep * 8; i++)
+		D_PRINT(" ");
+}
+
+static void
+pool_domain_print(struct pool_domain *domain, int dep)
+{
+	int		i;
+
+	pool_indent_print(dep);
+	D_PRINT("%s[%d] %d\n", pool_domain_name(domain),
+		domain->do_comp.co_id, domain->do_comp.co_ver);
+
+	D_ASSERT(domain->do_targets != NULL);
+
+	if (domain->do_children != NULL) {
+		for (i = 0; i < domain->do_child_nr; i++)
+			pool_domain_print(&domain->do_children[i], dep + 1);
+		return;
+	}
+
+	for (i = 0; i < domain->do_target_nr; i++) {
+		struct pool_component *comp = &domain->do_targets[i].ta_comp;
+
+		D_ASSERTF(comp->co_type == PO_COMP_TP_TARGET,
+			  "%s\n", pool_comp_type2str(comp->co_type));
+
+		pool_indent_print(dep + 1);
+		D_PRINT("%s[%d] %d\n", pool_comp_type2str(comp->co_type),
+				       comp->co_id, comp->co_ver);
+	}
+}
+
+/**
+ * Print all componenets of the pool map, this is a debug function.
+ */
+void
+pool_map_print(struct pool_map *map)
+{
+	D_PRINT("Cluster map version %d\n", map->po_version);
+	if (map->po_tree != NULL)
+		pool_domain_print(map->po_tree, 0);
+}
+
+/**
+ * Return the version of the pool map.
+ */
+unsigned int
+pool_map_get_version(struct pool_map *map)
+{
+	D_DEBUG(DF_CL, "Fetch pool map version %u\n", map->po_version);
+	return map->po_version;
+}
+
+/**
+ * Update the version of the pool map.
+ */
+int
+pool_map_set_version(struct pool_map *map, uint32_t version)
+{
+	if (map->po_version > version) {
+		D_ERROR("Cannot decrease pool map version %u/%u\n",
+			map->po_version, version);
+		return -DER_NO_PERM;
+	}
+
+	if (map->po_version == version)
+		return 0;
+
+	D_DEBUG(DF_CL, "Update pool map version %u->%u\n",
+		map->po_version, version);
+
+	map->po_version = version;
+	return 0;
+}
+
+/**
+ * check if the pool map is empty
+ */
+static bool
+pool_map_empty(struct pool_map *map)
+{
+	return map->po_tree == NULL;
+}

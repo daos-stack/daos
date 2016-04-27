@@ -107,10 +107,10 @@ do {									\
 
 #define D_ASSERT(e)	assert(e)
 
-#define D_ASSERTF(cond, ...)						\
+#define D_ASSERTF(cond, fmt, ...)					\
 do {									\
 	if (!(cond))							\
-		D_ERROR(__VA_ARGS__);					\
+		D_ERROR(fmt, ## __VA_ARGS__);				\
 	assert(cond);							\
 } while (0)
 
