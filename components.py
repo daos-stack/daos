@@ -164,7 +164,7 @@ REQS.define('iof',
                       "PREFIX=$IOF_PREFIX install"],
             headers=["process_set.h"],
             libs=["pset"],
-            requires=['ompi', 'mercury', 'mcl'])
+            requires=['ompi', 'mercury'])
 
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
