@@ -25,7 +25,7 @@
 #ifndef __DRPC_API_H__
 #define __DRPC_API_H__
 
-#include <daos/daos_transport.h>
+#include <daos/transport.h>
 
 enum daos_module_id {
 	DAOS_DMG_MODULE		= 0,

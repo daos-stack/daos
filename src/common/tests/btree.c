@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-#include <daos/daos_btree.h>
+#include <daos/btree.h>
 
 /**
  * An example for integer key btree.

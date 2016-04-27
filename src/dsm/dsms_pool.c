@@ -31,9 +31,9 @@
 #include <stdio.h>
 #include <libpmemobj.h>
 #include <uuid/uuid.h>
-#include <daos/daos_btree.h>
-#include <daos/daos_mem.h>
-#include <daos/daos_transport.h>
+#include <daos/btree.h>
+#include <daos/mem.h>
+#include <daos/transport.h>
 #include <daos_srv/vos.h>
 #include "dsm_rpc.h"
 #include "dsms_internal.h"

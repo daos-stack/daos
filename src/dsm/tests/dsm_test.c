@@ -28,8 +28,9 @@
 #include <getopt.h>
 #include <dsm_rpc.h>
 #include <daos_m.h>
-#include <daos/daos_ev.h>
-#include <daos/daos_transport.h>
+#include <daos_event.h>
+#include <daos/event.h>
+#include <daos/transport.h>
 
 static struct option opts[] = {
 	{ "ping",	0,	NULL,   'p'},

@@ -48,10 +48,26 @@
 #include <sys/time.h>
 #include <sys/shm.h>
 #include <pthread.h>
-#include <daos/daos_common.h>
-#include <daos/daos_ev.h>
-#include <daos/daos_list.h>
-#include <daos/daos_hash.h>
+#include <daos/common.h>
+#include <daos_event.h>
+#include <daos/event.h>
+#include <daos/list.h>
+#include <daos/hash.h>
+
+struct daos_eq {
+	/* After event is completed, it will be moved to the eq_comp list */
+	daos_list_t		eq_comp;
+	int			eq_n_comp;
+
+	/** In flight events will be put to the disp list */
+	daos_list_t		eq_disp;
+	int			eq_n_disp;
+
+	struct {
+		uint64_t	space[20];
+	}			eq_private;
+
+};
 
 struct daos_event_private {
 	daos_handle_t		evx_eqh;

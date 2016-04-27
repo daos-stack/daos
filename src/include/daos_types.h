@@ -30,6 +30,8 @@
 /** uuid_t */
 #include <uuid/uuid.h>
 
+#include <daos_errno.h>
+
 /**
  * Generic data type definition
  */
@@ -467,4 +469,40 @@ typedef struct {
 	uint32_t		id_pad_32;
 } daos_unit_oid_t;
 
+/**
+ * Event and event queue
+ */
+
+typedef struct daos_event {
+	daos_errno_t		ev_error;
+	/** internal use, please do not modify */
+	struct {
+		uint64_t	space[20];
+	}			ev_private;
+	/** used for debugging */
+	uint64_t		ev_debug;
+} daos_event_t;
+
+/** wait for completion event forever */
+#define DAOS_EQ_WAIT            -1
+/** always return immediately */
+#define DAOS_EQ_NOWAIT          0
+
+typedef enum {
+	/** query outstanding completed event */
+	DAOS_EQR_COMPLETED	= (1),
+	/** query # inflight event */
+	DAOS_EQR_DISPATCH	= (1 << 1),
+	/** query # inflight + completed events in EQ */
+	DAOS_EQR_ALL		= (DAOS_EQR_COMPLETED | DAOS_EQR_DISPATCH),
+} daos_eq_query_t;
+
+typedef enum {
+	DAOS_EVS_INIT,
+	DAOS_EVS_DISPATCH,
+	DAOS_EVS_COMPLETED,
+	DAOS_EVS_ABORT,
+} daos_ev_status_t;
+
+struct daos_eq;
 #endif /* DAOS_TYPES_H */

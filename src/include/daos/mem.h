@@ -28,8 +28,8 @@
 #ifndef __DAOS_MEM_H__
 #define __DAOS_MEM_H__
 
-#include <daos/daos_types.h>
-#include <daos/daos_common.h>
+#include <daos_types.h>
+#include <daos/common.h>
 
 /**
  * Terminologies:

@@ -25,7 +25,7 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
-#include <daos/daos_common.h>
+#include <daos/common.h>
 
 static unsigned int	debug_mask	= DF_UNKNOWN;
 

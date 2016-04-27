@@ -30,7 +30,7 @@
 #include <stdbool.h>
 #include <inttypes.h>
 #include <daos_srv/vos.h>
-#include <daos/daos_common.h>
+#include <daos/common.h>
 
 #define POOL_SIZE 10737418240ULL
 

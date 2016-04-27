@@ -25,7 +25,7 @@
 #ifndef __DSS_API_H__
 #define __DSS_API_H__
 
-#include <daos/daos_transport.h>
+#include <daos/transport.h>
 #include <pthread.h>
 
 /**

@@ -18,96 +18,35 @@
  *
  * (C) Copyright 2015 Intel Corporation.
  */
+
 /**
- * DAOS Event Queue
+ * DAOS Event Queue (EQ) and Event
+ *
+ * DAOS APIs can run either in non-blocking mode or in blocking mode:
+ *
+ * - Non-blocking mode
+ *   If input event(daos_event_t) of API is not NULL, it will run in
+ *   non-blocking mode and return immediately after submitting API request
+ *   to underlying stack.
+ *   Returned value of API is zero on success, or negative error code only if
+ *   there is an invalid parameter or other failure which can be detected
+ *   without calling into server stack.
+ *   Error codes for all other failures will be returned by event::ev_error.
+ *
+ * - Blocking mode
+ *   If input event of API is NULL, it will run in blocking mode and return
+ *   after completing of operation. Error codes for all failure cases should
+ *   be returned by return value of API.
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  *
  * Version 0.1
  */
-#ifndef __DAOS_EV_H__
-#define __DAOS_EV_H__
+#ifndef __DAOS_EVENT_H__
+#define __DAOS_EVENT_H__
 
-#include <daos/daos_types.h>
-#include <daos/daos_errno.h>
-#include <daos/daos_list.h>
-#include <daos/daos_hash.h>
-#include <daos/daos_transport.h>
-
-typedef enum {
-	DAOS_EV_NONE,
-	/**
-	 * a parent event, it has child events which can be accessed by
-	 * calling daos_event_next()
-	 */
-	DAOS_EV_COMPOUND,
-	DAOS_EV_CO_CREATE,		/**< container created */
-	DAOS_EV_CO_OPEN,		/**< container opened */
-	DAOS_EV_CO_CLOSE,		/**< container closed */
-	DAOS_EV_CO_DESTROY,		/**< container destroyed */
-	/** TODO: add event types */
-} daos_ev_type_t;
-
-typedef struct daos_event {
-	daos_ev_type_t		ev_type;
-	daos_errno_t		ev_error;
-	struct {
-		uint64_t	space[20];
-	}			ev_private;
-} daos_event_t;
-
-/** wait for completion event forever */
-#define DAOS_EQ_WAIT            -1
-/** always return immediately */
-#define DAOS_EQ_NOWAIT          0
-
-typedef enum {
-	/** query outstanding completed event */
-	DAOS_EQR_COMPLETED	= (1),
-	/** query # inflight event */
-	DAOS_EQR_DISPATCH	= (1 << 1),
-	/** query # inflight + completed events in EQ */
-	DAOS_EQR_ALL		= (DAOS_EQR_COMPLETED | DAOS_EQR_DISPATCH),
-} daos_eq_query_t;
-
-typedef enum {
-	DAOS_EVS_INIT,
-	DAOS_EVS_DISPATCH,
-	DAOS_EVS_COMPLETED,
-	DAOS_EVS_ABORT,
-} daos_ev_status_t;
-
-struct daos_event_ops {
-	int (*op_abort)(void *param, int unlinked);
-	int (*op_complete)(void *param, int error, int unlinked);
-};
-
-struct daos_eq {
-	/* After event is completed, it will be moved to the eq_comp list */
-	daos_list_t		eq_comp;
-	int			eq_n_comp;
-
-	/** In flight events will be put to the disp list */
-	daos_list_t		eq_disp;
-	int			eq_n_disp;
-
-	struct {
-		uint64_t	space[20];
-	}			eq_private;
-
-};
-
-/**
- * Finish event queue library
- */
-void
-daos_eq_lib_fini(void);
-
-/**
- * Initialize event queue library
- */
-int
-daos_eq_lib_init(dtp_context_t ctx);
+#include <daos_types.h>
+#include <daos_errno.h>
 
 /**
  * create an Event Queue
@@ -231,21 +170,4 @@ daos_event_next(daos_event_t *parent, daos_event_t *child);
  */
 int
 daos_event_abort(daos_event_t *ev);
-
-/**
- * Mark the event completed, i.e. move this event
- * to completion list.
- *
- * \param ev [IN]	event to complete.
- */
-void
-daos_event_complete(daos_event_t *ev);
-
-/**
- * Mark the event launched, i.e. move this event to launch list.
- *
- * \param ev [IN}	event to launch.
- */
-int
-daos_event_launch(struct daos_event *ev);
-#endif /*  __DAOS_EV_H__ */
+#endif /*  __DAOS_EVENT_H__ */

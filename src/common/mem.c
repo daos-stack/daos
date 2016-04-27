@@ -25,8 +25,8 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
-#include <daos/daos_common.h>
-#include <daos/daos_mem.h>
+#include <daos/common.h>
+#include <daos/mem.h>
 
 #if DAOS_HAS_NVML
 /** persistent memory operations (depends on nvml) */

@@ -21,8 +21,8 @@
 /*
  * dsm: RPC Protocol Serialization Functions
  */
-#include <daos/daos_rpc.h>
-#include <daos/daos_ev.h>
+#include <daos/rpc.h>
+#include <daos/event.h>
 #include "dsm_rpc.h"
 
 static int

@@ -30,8 +30,8 @@
  */
 
 #include <daos_srv/daos_server.h>
-#include <daos/daos_rpc.h>
-#include <daos/daos_common.h>
+#include <daos/rpc.h>
+#include <daos/common.h>
 
 DTP_GEN_PROC(echo_in_t,
 	((bool)(age)) ((dtp_string_t)(name)) ((uint32_t)(days)))

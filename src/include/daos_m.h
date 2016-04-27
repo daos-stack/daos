@@ -31,9 +31,9 @@
 #define __DSM_API_H__
 
 #include <uuid/uuid.h>
-#include <daos/daos_ev.h>
-#include <daos/daos_types.h>
-#include <daos/daos_errno.h>
+#include <daos_event.h>
+#include <daos_types.h>
+#include <daos_errno.h>
 
 /**
  * Initialize the DAOS-M library.

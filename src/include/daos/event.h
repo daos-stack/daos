@@ -16,44 +16,55 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  *
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2015 Intel Corporation.
  */
 /**
- * This file is part of daos_transport. It it the common header file which be
- * included by all other .c files of dtp.
+ * Internal event API.
+ *
+ * Author: Liang Zhen <liang.zhen@intel.com>
+ *
+ * Version 0.1
  */
+#ifndef __DAOS_EVENTX_H__
+#define __DAOS_EVENTX_H__
 
-#ifndef __DTP_INTERNAL_H__
-#define __DTP_INTERNAL_H__
-
-#include <ctype.h>
-#include <errno.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <stddef.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <uuid/uuid.h>
-/* #include <netinet/in.h> */
-#include <arpa/inet.h>
-#include <ifaddrs.h>
-
+#include <daos_types.h>
+#include <daos_errno.h>
+#include <daos/list.h>
+#include <daos/hash.h>
 #include <daos/transport.h>
 
-#include <dtp_internal_types.h>
-#include <dtp_internal_fns.h>
+struct daos_event_ops {
+	int (*op_abort)(void *param, int unlinked);
+	int (*op_complete)(void *param, int error, int unlinked);
+};
 
-#include <dtp_hg.h>
+/**
+ * Finish event queue library
+ */
+void
+daos_eq_lib_fini(void);
 
-#include <process_set.h>
+/**
+ * Initialize event queue library
+ */
+int
+daos_eq_lib_init(dtp_context_t ctx);
 
-#endif /* __DTP_INTERNAL_H__ */
+/**
+ * Mark the event completed, i.e. move this event
+ * to completion list.
+ *
+ * \param ev [IN]	event to complete.
+ */
+void
+daos_event_complete(daos_event_t *ev);
+
+/**
+ * Mark the event launched, i.e. move this event to launch list.
+ *
+ * \param ev [IN}	event to launch.
+ */
+int
+daos_event_launch(struct daos_event *ev);
+#endif /*  __DAOS_EV_INTERNAL_H__ */

@@ -25,9 +25,9 @@
  */
 
 #include <string.h>
-#include <daos/daos_btree.h>
-#include <daos/daos_errno.h>
-#include <daos/daos_mem.h>
+#include <daos/btree.h>
+#include <daos_errno.h>
+#include <daos/mem.h>
 #include "dsms_internal.h"
 #include "dsms_storage.h"
 

@@ -22,6 +22,8 @@
 #ifndef __DAOS_HASH_H__
 #define __DAOS_HASH_H__
 
+#include <daos/list.h>
+
 #define DAOS_HHASH_BITS		16
 #define DAOS_HTYPE_BITS		3
 #define DAOS_HTYPE_MASK		((1ULL << DAOS_HTYPE_BITS) - 1)

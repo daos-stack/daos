@@ -29,7 +29,7 @@
 
 #include <stdint.h>
 #include <inttypes.h>
-#include <daos/daos_types.h>
+#include <daos_types.h>
 #include <libpmemobj.h>
 
 

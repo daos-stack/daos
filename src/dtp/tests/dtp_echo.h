@@ -25,7 +25,7 @@
 #ifndef __DTP_ECHO_H__
 #define __DTP_ECHO_H__
 
-#include <daos/daos_transport.h>
+#include <daos/transport.h>
 
 #include <stdio.h>
 #include <assert.h>

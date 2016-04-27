@@ -35,7 +35,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
-#include <daos/daos_types.h>
+#include <daos_types.h>
 
 #define DAOS_ENV_DEBUG	"DAOS_DEBUG"
 

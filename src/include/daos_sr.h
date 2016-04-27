@@ -31,24 +31,6 @@
 #include <daos_m.h>
 
 /**
- * DAOS APIs can run either in non-blocking mode or in blocking mode:
- *
- * - Non-blocking mode
- *   If input event(daos_event_t) of API is not NULL, it will run in
- *   non-blocking mode and return immediately after submitting API request
- *   to underlying stack.
- *   Returned value of API is zero on success, or negative error code only if
- *   there is an invalid parameter or other failure which can be detected
- *   without calling into server stack.
- *   Error codes for all other failures will be returned by event::ev_error.
- *
- * - Blocking mode
- *   If input event of API is NULL, it will run in blocking mode and return
- *   after completing of operation. Error codes for all failure cases should
- *   be returned by return value of API.
- */
-
-/**
  * Initialize the DAOS-SR library.
  */
 int

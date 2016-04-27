@@ -27,7 +27,7 @@
 
 #include <daos_srv/daos_m_srv.h>
 #include <uuid/uuid.h>
-#include <daos/daos_transport.h>
+#include <daos/transport.h>
 #include "dsm_rpc.h"
 #include "dsms_internal.h"
 #include "dsms_storage.h"

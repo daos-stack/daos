@@ -1,4 +1,4 @@
-#include <daos/daos_common.h>
+#include <daos/common.h>
 #include <daos_srv/vos.h>
 
 int

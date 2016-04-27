@@ -27,8 +27,8 @@
 
 #include <daos_m.h>
 #include <pthread.h>
-#include <daos/daos_rpc.h>
-#include <daos/daos_transport.h>
+#include <daos/rpc.h>
+#include <daos/transport.h>
 #include "dsm_rpc.h"
 
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;

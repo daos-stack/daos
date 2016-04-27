@@ -27,7 +27,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include <daos/daos_common.h>
+#include <daos/common.h>
 #include "dss_internal.h"
 
 static int

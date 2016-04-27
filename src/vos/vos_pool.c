@@ -25,9 +25,9 @@
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
 #include <daos_srv/vos.h>
-#include <daos/daos_errno.h>
-#include <daos/daos_common.h>
-#include <daos/daos_hash.h>
+#include <daos_errno.h>
+#include <daos/common.h>
+#include <daos/hash.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
 #include <errno.h>

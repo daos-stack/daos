@@ -64,8 +64,8 @@
 
 #include <stdint.h>
 #include <uuid/uuid.h>
-#include <daos/daos_btree.h>
-#include <daos/daos_mem.h>
+#include <daos/btree.h>
+#include <daos/mem.h>
 
 /* Bootstrapping **************************************************************/
 

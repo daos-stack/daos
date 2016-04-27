@@ -26,9 +26,9 @@
 #ifndef _VOS_INTERNAL_H
 #define _VOS_INTERNAL_H
 
-#include <daos/daos_list.h>
-#include <daos/daos_hash.h>
-#include <daos/daos_btree.h>
+#include <daos/list.h>
+#include <daos/hash.h>
+#include <daos/btree.h>
 
 #include "vos_layout.h"
 

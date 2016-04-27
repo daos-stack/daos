@@ -31,8 +31,8 @@
 #include <libcgroup.h>
 #include <numa.h>
 
-#include <daos/daos_errno.h>
-#include <daos/daos_list.h>
+#include <daos_errno.h>
+#include <daos/list.h>
 #include "dss_internal.h"
 
 /* The structure maintains Cgroup per NUMA node */

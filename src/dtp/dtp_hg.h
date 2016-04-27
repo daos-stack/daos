@@ -25,7 +25,7 @@
 #ifndef __DTP_MERCURY_H__
 #define __DTP_MERCURY_H__
 
-#include <daos/daos_list.h>
+#include <daos/list.h>
 
 #include <mercury.h>
 #include <mercury_types.h>

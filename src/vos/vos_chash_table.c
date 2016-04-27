@@ -26,8 +26,8 @@
 
 #include <math.h>
 #include <smmintrin.h>
-#include <daos/daos_errno.h>
-#include <daos/daos_common.h>
+#include <daos_errno.h>
+#include <daos/common.h>
 #include "vos_chash_table.h"
 
 /*

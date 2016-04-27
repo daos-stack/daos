@@ -24,7 +24,7 @@
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
 
-#include <daos/daos_common.h>
+#include <daos/common.h>
 #include "vos_internal.h"
 
 int

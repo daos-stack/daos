@@ -25,8 +25,8 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
-#include <daos/daos_errno.h>
-#include <daos/daos_btree.h>
+#include <daos_errno.h>
+#include <daos/btree.h>
 
 /**
  * Tree node types.

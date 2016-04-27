@@ -34,7 +34,7 @@
  * Author: Liang Zhen  <liang.zhen@intel.com>
  * Author: Di Wang  <di.wang@intel.com>
  */
-#include <daos/daos_transport.h>
+#include <daos/transport.h>
 #include "daos_eq_internal.h"
 
 struct daos_hhash *daos_eq_hhash;

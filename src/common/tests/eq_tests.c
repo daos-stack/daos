@@ -34,10 +34,11 @@
  * Author: Liang Zhen  <liang.zhen@intel.com>
  */
 #include <pthread.h>
-#include <daos/daos_common.h>
-#include <daos/daos_ev.h>
-#include <daos/daos_list.h>
-#include <daos/daos_hash.h>
+#include <daos/common.h>
+#include <daos_event.h>
+#include <daos/event.h>
+#include <daos/list.h>
+#include <daos/hash.h>
 
 /* XXX For the testing purpose, this test case will use
  * some internal api of event queue, and for real use

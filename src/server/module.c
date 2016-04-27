@@ -26,10 +26,10 @@
 
 #include <dlfcn.h>
 
-#include <daos/daos_errno.h>
-#include <daos/daos_common.h>
-#include <daos/daos_list.h>
-#include <daos/daos_rpc.h>
+#include <daos_errno.h>
+#include <daos/common.h>
+#include <daos/list.h>
+#include <daos/rpc.h>
 
 #include "dss_internal.h"
 

@@ -24,9 +24,9 @@
 #ifndef __DAOS_TRANSPORT_H__
 #define __DAOS_TRANSPORT_H__
 
-#include <daos/daos_common.h>
-#include <daos/daos_types.h>
-#include <daos/daos_errno.h>
+#include <daos/common.h>
+#include <daos_types.h>
+#include <daos_errno.h>
 
 /* for proc macros */
 #include <boost/preprocessor.hpp>

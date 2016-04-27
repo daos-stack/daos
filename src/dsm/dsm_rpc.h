@@ -37,9 +37,10 @@
 #define __DSM_RPC_H__
 
 #include <uuid/uuid.h>
-#include <daos/daos_transport.h>
-#include <daos/daos_rpc.h>
-#include <daos/daos_ev.h>
+#include <daos/transport.h>
+#include <daos/rpc.h>
+#include <daos_event.h>
+#include <daos/event.h>
 
 /*
  * RPC operation codes

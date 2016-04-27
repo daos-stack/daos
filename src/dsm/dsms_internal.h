@@ -30,7 +30,7 @@
 #ifndef __DSMS_INTERNAL_H__
 #define __DSMS_INTERNAL_H__
 
-#include <daos/daos_transport.h>
+#include <daos/transport.h>
 
 /*
  * dsms_storage.c

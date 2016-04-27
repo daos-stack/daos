@@ -32,7 +32,7 @@
 
 #include <pthread.h>
 
-#include <daos/daos_list.h>
+#include <daos/list.h>
 #include <process_set.h>
 
 struct dtp_hg_gdata;
