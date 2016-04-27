@@ -303,11 +303,11 @@ dsr_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
 	      daos_rank_list_t *ranks, daos_event_t *ev);
 
 /**
- * Record API
+ * Object I/O API
  */
 
 /**
- * Fetch records.
+ * Fetch object records from co-located vectors.
  *
  * \param oh	[IN]	Object open handle.
  *
@@ -371,12 +371,12 @@ dsr_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-dsr_rec_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t dkey,
+dsr_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	      unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-	      daos_vec_map_t *map, daos_event_t *ev);
+	      daos_vec_map_t *maps, daos_event_t *ev);
 
 /**
- * Insert or udpate records.
+ * Insert or udpate object records stored in co-located vectors.
  *
  * \param oh	[IN]	Object open handle.
  *
@@ -389,7 +389,7 @@ dsr_rec_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t dkey,
  * \param nr	[IN]	Number of descriptors and scatter/gather lists in
  *			respectively \a iods and \a sgls.
  *
- * \param vecs	[IN]	Array of vector I/O descriptor. Each descriptor is
+ * \param iods	[IN]	Array of vector I/O descriptor. Each descriptor is
  *			associated with a vector identified by its akey and
  *			describes the list of record extent to update.
  *			A different epoch can be passed for each extent via
@@ -421,35 +421,27 @@ dsr_rec_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t dkey,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-dsr_rec_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t dkey,
+dsr_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_event_t *ev);
 
 /**
- * Enumerate keys and records.
+ * Distribution key enumeration.
  *
  * \param oh	[IN]	Object open handle.
  *
- * \param epr	[IN]	Epoch range for the enumeration.
+ * \param epoch	[IN]	Epoch for the enumeration.
  *
- * \param filter [IN]	Specific filter for the iteration. When the enumeration
- *			is limited to dkeys, no records or checksums are
- *			returned. \a filter can be set to NULL, in this case,
- *			all keys will be enumerated (i.e. iterate over all
- *			distribution keys and enumerate all attribute keys
- *			available for each distribution key)
+ * \param nr	[IN]    number of key descriptors in \a kds
+ *		[OUT]   number of returned key descriptors.
  *
- * \param nr	[IN]	number of vector I/O descriptors in \a iods
- *		[OUT]	number of returned record vector I/O descriptors.
+ * \param kds	[IN]	preallocated array of \nr key descriptors.
+ *		[OUT]	size of each individual key along with checksum type
+ *			and size stored just after the key in \a sgl.
  *
- * \param iods	[OUT]	Sink buffer for returned keys or records.
- *			Unless it is dkey enumeration(see \a filter), otherwise
- *			\a iods::vd_recxs and \a iods::vd_eprs must be
- *			allocated, \a iods::vd_nr should be set to the number
- *			of entries of this descriptor.
- *			The same record may be returned into multiple entries
- *			of \a iods if the extents of this record cannot be
- *			filled in one entry.
+ * \param sgl	[IN]	Scatter/gather list to store the dkey list.
+ *			All dkeys are written contiguously with their checksum,
+ *			actual boundaries can be calculated thanks to \a kds.
  *
  * \param anchor [IN/OUT]
  *			Hash anchor for the next call, it should be set to
@@ -466,13 +458,55 @@ dsr_rec_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t dkey,
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  *			-DER_KEY2BIG	Key is too large and can't be
- *					fit into output buffer
- *			-DER_REC2BIG	Record is too large and can't be
- *					fit into output buffer
+ *					fit into the \a sgl
  */
 int
-dsr_rec_list(daos_handle_t oh, daos_epoch_range_t *epr,
-	     daos_list_filter_t *filter, daos_nr_t *nr,
-	     daos_vec_iod_t *iods, daos_hash_out_t *anchor,
-	     daos_event_t *ev);
+dsr_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, daos_nr_t *nr,
+		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		  daos_hash_out_t *anchor, daos_event_t *ev);
+
+/**
+ * Attribute key enumeration.
+ *
+ * \param oh	[IN]	Object open handle.
+ *
+ * \param epoch	[IN]	Epoch for the enumeration.
+ *
+ * \param dkey	[IN]	distribution key for the akey enumeration
+ *
+ * \param nr	[IN]    number of key descriptors in \a kds
+ *		[OUT]   number of returned key descriptors.
+ *
+ * \param sgl	[IN]	Scatter/gather list to store the dkey list.
+ *			All dkeys are written continuously, actual limits can be
+ *			found in \a kds.
+  * \param kds	[IN]	preallocated array of \nr key descriptors.
+ *		[OUT]	size of each individual key along with checksum type
+ *			and size stored just after the key in \a sgl.
+ *
+ * \param sgl	[IN]	Scatter/gather list to store the dkey list.
+ *			All dkeys are written contiguously with their checksum,
+ *			actual boundaries can be calculated thanks to \a kds.
+ *
+ * \param anchor [IN/OUT]
+ *			Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ *
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_KEY2BIG	Key is too large and can't be
+ *					fit into the \a sgl
+ */
+int
+dsr_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+		  daos_nr_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		  daos_hash_out_t *anchor, daos_event_t *ev);
 #endif /* __DSR_API_H__ */

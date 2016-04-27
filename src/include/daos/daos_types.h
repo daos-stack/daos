@@ -382,9 +382,9 @@ typedef struct {
  * vector identified by its akey.
  */
 typedef struct {
-	/** name associated with the vector, effectively a akey */
+	/** name associated with the vector, effectively akey */
 	daos_akey_t		 vd_name;
-	/** key checksum covering the parent dkey plus akey specified above */
+	/** name/akey checksum */
 	daos_csum_buf_t		 vd_kcsum;
 	/** number of extents in the \a vd_recxs array */
 	unsigned int		 vd_nr;
@@ -401,9 +401,9 @@ typedef struct {
  * given range of indices.
  */
 typedef struct {
-	/** name associated with the vector, effectively a akey */
+	/** name associated with the vector, effectively akey */
 	daos_akey_t		 vm_name;
-	/** key checksum covering the parent dkey plus akey specified above */
+	/** name/akey checksum */
 	daos_csum_buf_t		 vm_kcsum;
 	/** first indice of this mapping */
 	uint64_t		 vm_start;
@@ -415,7 +415,7 @@ typedef struct {
 	/** array of extents */
 	daos_recx_t		*vm_recxs;
 	/** checksum associated with each extent */
-	daos_csum_buf_t		*vm_csums;
+	daos_csum_buf_t		*vm_xcsums;
 	/** epoch range associated with each extent */
 	daos_epoch_range_t	*vm_eprs;
 } daos_vec_map_t;
@@ -441,25 +441,18 @@ typedef enum {
 	VOS_EXT_HOLE	= (1 << 0),
 } vos_ext_flag_t;
 
-typedef enum {
-	/** list distribution keys only, no record is returned */
-	DAOS_DKEY_ONLY	= (1 << 0),
-	/** restrict enumeration to attribute keys available for a given
-	 * distribution key */
-	DAOS_AKEY_ONLY	= (1 << 1),
-} daos_filter_type_t;
-
-/** DAOS enumeration filter */
+/**
+ * Key descritpor used for key enumeration. The actual key and checksum are
+ * stored in a separate buffer (i.e. sgl)
+ */
 typedef struct {
-	/** used with DAOS_DKEY_ONLY to store the specific dkey to limit
-	 * the iteration over */
-	daos_dkey_t		lf_dkey;
-	/* type of enumeration, see daos_filter_type_t */
-	uint16_t		lf_type;
-	/** reserved */
-	uint16_t		lf_reserv_16;
-	uint32_t		lf_reserv_32;
-} daos_list_filter_t;
+	/** key length */
+	daos_size_t	 kd_key_len;
+	/** checksum type */
+	unsigned int	 kd_csum_type;
+	/** checksum length */
+	unsigned short	 kd_csum_len;
+} daos_key_desc_t;
 
 /**
  * 256-bit object ID, it can identify a unique bottom level object.
