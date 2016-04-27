@@ -123,9 +123,12 @@ def check_script(fname, *args, **kw):
         wrapper = WrapScript(fname)
         tmp_fname = "script"
 
-    os.system("pylint %s -d wrong-import-order " \
-              "-d unused-wildcard-import %s > tmp.log 2>&1"% \
-              (" ".join(args), tmp_fname))
+    cmd = "pylint %s -d wrong-import-order " \
+          "-d unused-wildcard-import %s > tmp.log 2>&1"% \
+          (" ".join(args), tmp_fname)
+    if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
+        print cmd
+    os.system(cmd)
     if wrap:
         wrapper.fix_log(fname)
     parse_report()
@@ -154,6 +157,11 @@ if ARGS.self_check:
                  "-d", "star-args",
                  "-d", "too-many-lines",
                  "-d", "unused-argument")
+    print "Checking build_info"
+    check_script("build_info")
+    print "Checking test/build_info validation.py"
+    check_script("test/validate_build_info.py",
+                 "-d", "wrong-import-position")
     print "Checking check_script.py"
     check_script("check_script.py")
 

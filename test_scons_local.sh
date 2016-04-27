@@ -15,12 +15,17 @@ fi
 
 mkdir -p test/prefix_test
 rm -rf test/prefix_test/*
+rm -f test/sl_test.info
 scons -C test -f SConstruct $prebuilt1 --build-deps=yes --config=force
+python test/validate_build_info.py
 scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force
+python test/validate_build_info.py
 
 #Test clean
 scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force -c
+python test/validate_build_info.py
 scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force
+python test/validate_build_info.py
 
 check_cmd()
 {

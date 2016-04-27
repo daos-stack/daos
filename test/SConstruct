@@ -71,4 +71,6 @@ SConscript('build/sl_test/SConscript', exports=['ENV', 'PREREQS'])
 
 Default('sl_test')
 
+PREREQS.get_build_info().save("sl_test.info")
+
 Help(OPTS.GenerateHelpText(ENV))

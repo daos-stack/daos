@@ -8,6 +8,7 @@
 # pylint: disable=bare-except
 # pylint: disable=exec-used
 # pylint: disable=bad-builtin
+# pylint: disable=too-many-statements
 
 import os
 import traceback
@@ -22,6 +23,7 @@ from SCons.Script import GetOption
 from SCons.Script import Configure
 from SCons.Script import AddOption
 from SCons.Script import Builder
+from build_info import BuildInfo
 
 class NotInitialized(Exception):
     """Exception raised when classes used before initialization
@@ -392,7 +394,6 @@ class WebRetriever(object):
         # Will download the file if the name has changed
         self.get(subdir)
 
-
 class PreReqComponent(object):
     """A class for defining and managing external components required
        by a project."""
@@ -471,6 +472,12 @@ class PreReqComponent(object):
         self.setup_path_var('TARGET_PREFIX')
         self.setup_path_var('SRC_PREFIX', True)
         self.setup_patch_prefix()
+        self.__build_info = BuildInfo()
+        self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
+
+    def get_build_info(self):
+        """Retrieve the BuildInfo"""
+        return self.__build_info
 
     @staticmethod
     def add_options():
@@ -724,21 +731,26 @@ class PreReqComponent(object):
         self.__prebuilt_path[name] = prebuilt
         return prebuilt
 
+    def save_component_prefix(self, var, value):
+        """Save the component prefix in the environment and
+           in build info"""
+        self.replace_env(**{var:value})
+        self.__build_info.update(var, value)
+
     def get_prefixes(self, name, prebuilt_path):
         """Get the location of the scons prefix as well as the external
            component prefix."""
         prefix = self.__env.get('PREFIX')
+        comp_prefix = '%s_PREFIX' % name.upper()
         if prebuilt_path:
-            self.replace_env(**{'%s_PREFIX' \
-                             % name.upper(): prebuilt_path})
+            self.save_component_prefix(comp_prefix, prebuilt_path)
             return (prebuilt_path, prefix)
         target_prefix = self.__env.get('TARGET_PREFIX')
         if target_prefix:
             target_prefix = os.path.join(target_prefix, name)
-            self.replace_env(**{'%s_PREFIX' \
-                             % name.upper(): target_prefix})
+            self.save_component_prefix(comp_prefix, target_prefix)
             return (target_prefix, prefix)
-        self.replace_env(**{'%s_PREFIX' % name.upper(): prefix})
+        self.save_component_prefix(comp_prefix, prefix)
         return (prefix, prefix)
 
     def get_src_path(self, name):
