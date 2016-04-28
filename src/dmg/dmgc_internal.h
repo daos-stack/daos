@@ -19,49 +19,23 @@
  * (C) Copyright 2016 Intel Corporation.
  */
 /*
- * dmg: RPC Protocol Definitions
- *
- * This is naturally shared by both dmgc and dmgss.
+ * dmgc: Internal Declarations
  */
 
-#ifndef __DMG_RPC_H__
-#define __DMG_RPC_H__
+#ifndef __DMGC_INTERNAL_H__
+#define __DMGC_INTERNAL_H__
+
+#include <pthread.h>
+#include <uuid/uuid.h>
 
 #include <daos/transport.h>
 #include <daos/rpc.h>
-
-/*
- * RPC operation codes
- *
- * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
- * dtp_req_create(..., opc, ...). See daos_rpc.h.
- */
-enum dmg_operation {
-	DMG_POOL_CREATE		= 1,
-	DSM_POOL_DESTROY	= 2,
-	DSM_POOL_EXTEND		= 3,
-};
-
-struct dmg_pool_create_in {
-	uuid_t			pc_uuid;
-	unsigned int		pc_mode;
-	dtp_group_id_t		pc_grp_id;
-	daos_rank_list_t	*pc_tgts;
-	const char		*pc_tgt_dev;
-	daos_size_t		pc_tgt_size;
-	daos_rank_list_t	*pc_svc;
-};
-
-struct dmg_pool_create_out {
-	int			pc_rc;
-	daos_rank_list_t	*pc_svc;
-};
+#include <daos/common.h>
+#include <daos/event.h>
+#include "dmg_rpc.h"
 
 
+bool
+dmg_initialized();
 
-
-
-extern struct daos_rpc dmg_rpcs[];
-extern dtp_context_t dmgc_ctx;
-
-#endif /* __DMG_RPC_H__ */
+#endif /* __DMGC_INTERNAL_H__ */

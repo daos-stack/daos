@@ -23,20 +23,13 @@
  *       in daos_mgmt.h
  */
 
-#include <pthread.h>
-#include <daos/rpc.h>
-#include <daos/transport.h>
-
-#include "dmg_rpc.h"
+#include "dmgc_internal.h"
 
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static int		module_initialized;
 
-/**
- *   Initialize dmgc client library.
- *
- *   This function will register the RPCs.
- */
+dtp_context_t	dmgc_ctx;
+
 int
 dmg_init()
 {
@@ -48,7 +41,14 @@ dmg_init()
 
 	rc = daos_rpc_register(dmg_rpcs, NULL, DAOS_DMG_MODULE);
 	if (rc != 0) {
-		D_ERROR("rpc register failure: rc = %d\n", rc);
+		D_ERROR("rpc register failed: rc = %d.\n", rc);
+		D_GOTO(unlock, rc);
+	}
+
+	/* TODO: may use the shared client-side context later */
+	rc = dtp_context_create(NULL, &dmgc_ctx);
+	if (rc != 0) {
+		D_ERROR("dtp_context_create failed: rc = %d.\n", rc);
 		D_GOTO(unlock, rc);
 	}
 
@@ -58,22 +58,34 @@ unlock:
 	return rc;
 }
 
-/**
- * Finalize dmgc client.
- */
 int
 dmg_fini()
 {
+	int rc;
+
 	pthread_mutex_lock(&module_lock);
 	if (!module_initialized) {
 		pthread_mutex_unlock(&module_lock);
 		return 0;
 	}
 
+	rc = dtp_context_destroy(dmgc_ctx, 1);
+	if (rc != 0) {
+		D_ERROR("dtp_context_destroy failed: rc = %d.\n", rc);
+		D_GOTO(unlock, rc);
+	}
+	dmgc_ctx = NULL;
+
 	daos_rpc_unregister(dmg_rpcs);
 
 	module_initialized = 0;
+unlock:
 	pthread_mutex_unlock(&module_lock);
+	return rc;
+}
 
-	return 0;
+bool
+dmg_initialized()
+{
+	return (module_initialized != 0);
 }

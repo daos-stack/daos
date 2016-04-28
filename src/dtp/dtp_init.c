@@ -423,7 +423,7 @@ dtp_finalize(void)
 	if (!dtp_initialized()) {
 		D_ERROR("cannot finalize before initializing.\n");
 		pthread_rwlock_unlock(&dtp_gdata.dg_rwlock);
-		D_GOTO(out, rc = -DER_NO_PERM);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	if (dtp_gdata.dg_ctx_num > 0) {
 		D_ASSERT(!dtp_context_empty(DTP_LOCKED));

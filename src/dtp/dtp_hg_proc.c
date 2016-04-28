@@ -203,7 +203,98 @@ dtp_proc_dtp_const_string_t(dtp_proc_t proc, dtp_const_string_t *data)
 }
 
 int
-dtp_proc_uuid_t(dtp_proc_t proc, void *data)
+dtp_proc_uuid_t(dtp_proc_t proc, uuid_t *data)
 {
 	return dtp_proc_memcpy(proc, data, sizeof(uuid_t));
+}
+
+int
+dtp_proc_daos_rank_list_t(dtp_proc_t proc, daos_rank_list_t **data)
+{
+	daos_rank_list_t	*rank_list;
+	hg_proc_op_t		proc_op;
+	uint32_t		rank_num;
+	int			i, rc = 0;
+
+	if (proc == NULL || data == NULL) {
+		D_ERROR("Invalid parameter, proc: %p, data: %p.\n", proc, data);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	proc_op = hg_proc_get_op(proc);
+	switch (proc_op) {
+	case HG_ENCODE:
+		rank_list = *data;
+		if (rank_list == NULL) {
+			rc = dtp_proc_uint32_t(proc, 0);
+			if (rc != 0)
+				D_ERROR("dtp_proc_uint32_t failed, rc: %d.\n",
+					rc);
+			D_GOTO(out, rc);
+		}
+
+		D_ASSERT(rank_list != NULL);
+		rank_num = rank_list->rl_nr.num;
+		rc = dtp_proc_uint32_t(proc, &rank_num);
+		if (rc != 0) {
+			D_ERROR("dtp_proc_uint32_t failed, rc: %d.\n",
+				rc);
+			D_GOTO(out, rc = -DER_DTP_HG);
+		}
+		for (i = 0; i < rank_num; i++) {
+			rc = dtp_proc_daos_rank_t(proc,
+						  &rank_list->rl_ranks[i]);
+			if (rc != 0) {
+				D_ERROR("dtp_proc_daso_rank_t failed,rc: %d.\n",
+					rc);
+				D_GOTO(out, rc = -DER_DTP_HG);
+			}
+		}
+		break;
+	case HG_DECODE:
+		rc = dtp_proc_uint32_t(proc, &rank_num);
+		if (rc != 0) {
+			D_ERROR("dtp_proc_uint32_t failed, rc: %d.\n",
+				rc);
+			D_GOTO(out, rc = -DER_DTP_HG);
+		}
+		if (rank_num == 0) {
+			*data = NULL;
+			D_GOTO(out, rc);
+		}
+		D_ALLOC_PTR(rank_list);
+		if (rank_list == NULL) {
+			D_ERROR("Cannot allocate memory for rank list.\n");
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		rank_list->rl_nr.num = rank_num;
+		D_ALLOC(rank_list->rl_ranks, rank_num * sizeof(daos_rank_t));
+		if (rank_list->rl_ranks == NULL) {
+			D_ERROR("Cannot allocate memory for rl_ranks.\n");
+			D_FREE_PTR(rank_list);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		for (i = 0; i < rank_num; i++) {
+			rc = dtp_proc_daos_rank_t(proc,
+						  &rank_list->rl_ranks[i]);
+			if (rc != 0) {
+				D_ERROR("dtp_proc_daso_rank_t failed,rc: %d.\n",
+					rc);
+				D_GOTO(out, rc = -DER_DTP_HG);
+			}
+		}
+		*data = rank_list;
+		break;
+	case HG_FREE:
+		rank_list = *data;
+		daos_rank_list_free(rank_list);
+		*data = NULL;
+		break;
+	default:
+		D_ERROR("Bad proc op: %d.\n", proc_op);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+
+out:
+	return rc;
 }

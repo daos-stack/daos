@@ -29,27 +29,26 @@
  * library) and can be unloaded/reloaded.
  */
 
-#include <daos_srv/daos_server.h>
-#include <daos/rpc.h>
-#include <daos/common.h>
+#include "dmgs_internal.h"
 
-#include "dmg_rpc.h"
-
-static struct daos_rpc_handler dmg_handlers[] = {
+static struct daos_rpc_handler dmgs_handlers[] = {
 	{
+		.dr_opc		= DMG_POOL_CREATE,
+		.dr_hdlr	= dmgs_hdlr_pool_create,
+	}, {
 		.dr_opc = 0,
 	}
 };
 
-int
-dmg_init()
+static int
+dmgs_init()
 {
 	D_DEBUG(DF_MGMT, "successfull init call\n");
 	return 0;
 }
 
-int
-dmg_fini()
+static int
+dmgs_fini()
 {
 	D_DEBUG(DF_MGMT, "successfull fini call\n");
 	return 0;
@@ -59,8 +58,8 @@ struct dss_module daos_mgmt_srv_module = {
 	.sm_name	= "daos_mgmt_srv",
 	.sm_mod_id	= DAOS_DMG_MODULE,
 	.sm_ver		= 1,
-	.sm_init	= dmg_init,
-	.sm_fini	= dmg_fini,
+	.sm_init	= dmgs_init,
+	.sm_fini	= dmgs_fini,
 	.sm_cl_rpcs	= dmg_rpcs,
-	.sm_handlers	= dmg_handlers,
+	.sm_handlers	= dmgs_handlers,
 };

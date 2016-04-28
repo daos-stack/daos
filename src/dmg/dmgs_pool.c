@@ -22,5 +22,20 @@
  * dmgs: Pool Methods
  */
 
-#include "dmg_rpc.h"
+#include "dmgs_internal.h"
+
+int
+dmgs_hdlr_pool_create(dtp_rpc_t *rpc_req)
+{
+	struct dmg_pool_create_in	*pc_in;
+	struct dmg_pool_create_out	*pc_out;
+	int				rc = 0;
+
+	pc_in = rpc_req->dr_input;
+	pc_out = rpc_req->dr_output;
+	D_ASSERT(pc_in != NULL && pc_out != NULL);
+
+	return rc;
+}
+
 

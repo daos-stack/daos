@@ -25,6 +25,20 @@
 #define __DMG_API_H__
 
 /**
+ *   Initialize dmgc client library.
+ *
+ *   This function will register the RPCs.
+ */
+int
+dmg_init();
+
+/**
+ * Finalize dmgc client library.
+ */
+int
+dmg_fini();
+
+/**
  * Create a pool with \a uuid and \a mode.
  *
  * \a grp and \a tgts pass in the address of each target and the total

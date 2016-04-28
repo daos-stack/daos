@@ -699,6 +699,7 @@ dtp_proc_dtp_bulk_t(dtp_proc_t proc, dtp_bulk_t *bulk_hdl);
 #define dtp_proc_daos_rank_t		dtp_proc_uint32_t
 #define dtp_proc_dtp_opcode_t		dtp_proc_uint32_t
 #define dtp_proc_int			dtp_proc_int32_t
+#define dtp_proc_dtp_group_id_t		dtp_proc_uuid_t
 
 /**
  * Generic processing routine.
@@ -731,7 +732,25 @@ dtp_proc_dtp_const_string_t(dtp_proc_t proc, dtp_const_string_t *data);
  * \return                      zero on success, negative value if error
  */
 int
-dtp_proc_uuid_t(dtp_proc_t proc, void *data);
+dtp_proc_uuid_t(dtp_proc_t proc, uuid_t *data);
+
+/**
+ * Generic processing routine.
+ *
+ * \param proc [IN/OUT]         abstract processor object
+ * \param data [IN/OUT]         second level pointer to data
+ *
+ * \return                      zero on success, negative value if error
+ *
+ * Notes:
+ * 1) here pass in the 2nd level pointer of daos_rank_list_t, to make it
+ *    possible to set it to NULL when decoding.
+ * 2) if the rank_list is non-NULL, caller should firstly duplicate it and pass
+ *    the duplicated rank list's 2nd level pointer as parameter, because this
+ *    function will internally free the memory when freeing the input or output.
+ */
+int
+dtp_proc_daos_rank_list_t(dtp_proc_t proc, daos_rank_list_t **data);
 
 /*****************************************************************************
  * Private macros

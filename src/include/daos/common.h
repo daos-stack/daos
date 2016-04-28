@@ -223,6 +223,14 @@ daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
 	iov->iov_len = iov->iov_buf_len = size;
 }
 
+int
+daos_rank_list_dup(daos_rank_list_t **dst, const daos_rank_list_t *src,
+		   bool input);
+void
+daos_rank_list_free(daos_rank_list_t *rank_list);
+void
+daos_rank_list_copy(daos_rank_list_t *dst, daos_rank_list_t *src, bool input);
+
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
  *  * struct) @type, return pointer to the embedding instance of @type. */
