@@ -33,68 +33,12 @@
 #include <daos/rpc.h>
 #include <daos/common.h>
 
-DTP_GEN_PROC(echo_in_t,
-	((bool)(age)) ((dtp_string_t)(name)) ((uint32_t)(days)))
-DTP_GEN_PROC(echo_out_t,
-	((int32_t)(ret)) ((uint32_t)(room_no)))
-
-static int
-echo(dtp_rpc_t *req)
-{
-	echo_in_t	*in = NULL;
-	echo_out_t	*out = NULL;
-	int		 rc = 0;
-
-	/* dtp internally already allocated the input/output buffer */
-	in = (echo_in_t *)req->dr_input;
-	assert(in != NULL);
-	out = (echo_out_t *)req->dr_output;
-	assert(out != NULL);
-
-	D_DEBUG(DF_MGMT, "echo_srv recv'd checkin, opc: 0x%x\n", req->dr_opc);
-	D_DEBUG(DF_MGMT, "checkin input - age: %d, name: %s, days: %d\n",
-		in->age, in->name, in->days);
-
-	out->ret = 0;
-	out->room_no = 1082;
-
-	rc = dtp_reply_send(req);
-
-	D_DEBUG(DF_MGMT, "echo_srv sent checkin reply, ret: %d, room_no: %d\n",
-		out->ret, out->room_no);
-
-	return rc;
-}
-
-/** Handlers for RPC sent by clients */
-static struct daos_rpc dmg_cl_rpcs[] = {
-	{
-		/* .dr_name	= */	"ECHO",
-		/* .dr_opc	= */	0xa1,
-		/* .dr_ver	= */	1,
-		/* .dr_flags	= */	0,
-		/* .dr_in_hdlr	= */	dtp_proc_echo_in_t,
-		/* .dr_in_sz	= */	sizeof(echo_in_t),
-		/* .dr_out_hdlr	= */	dtp_proc_echo_out_t,
-		/* .dr_out_sz	= */	sizeof(echo_out_t),
-	},
-	{
-	},
-};
+#include "dmg_rpc.h"
 
 static struct daos_rpc_handler dmg_handlers[] = {
 	{
-		.dr_opc	= 0xa1,
-		.dr_hdlr = echo,
-	},
-	{
 		.dr_opc = 0,
 	}
-};
-/** Handlers for RPC sent by other servers */
-static struct daos_rpc dmg_srv_rpcs[] = {
-	{
-	},
 };
 
 int
@@ -117,7 +61,6 @@ struct dss_module daos_mgmt_srv_module = {
 	.sm_ver		= 1,
 	.sm_init	= dmg_init,
 	.sm_fini	= dmg_fini,
-	.sm_cl_rpcs	= dmg_cl_rpcs,
-	.sm_srv_rpcs	= dmg_srv_rpcs,
+	.sm_cl_rpcs	= dmg_rpcs,
 	.sm_handlers	= dmg_handlers,
 };
