@@ -34,11 +34,14 @@
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static int		module_initialized;
 
+/* This is made external just so that src/dsm/tests/dsm_test.c can steal it. */
+dtp_context_t dsm_context;
+
 /**
- *   Initialize dsmc client library.
+ * Initialize dsmc client library.
  *
- *   This function will initialize dtp interface, create
- *   dtp context for daosm client.
+ * This function will initialize dtp interface, create
+ * dtp context for daosm client.
  */
 int
 dsm_init(void)
@@ -49,16 +52,42 @@ dsm_init(void)
 	if (module_initialized)
 		D_GOTO(unlock, rc = 0);
 
+	rc = dtp_init(false /* client-only */);
+	if (rc != 0) {
+		D_ERROR("failed to initialize dtp: %d\n", rc);
+		D_GOTO(unlock, rc);
+	}
+
+	rc = dtp_context_create(NULL /* arg */, &dsm_context);
+	if (rc != 0) {
+		D_ERROR("failed to create context: %d\n", rc);
+		D_GOTO(err_dtp, rc);
+	}
+
 	rc = daos_rpc_register(dsm_rpcs, NULL, DAOS_DSMS_MODULE);
 	if (rc != 0) {
 		D_ERROR("rpc register failure: rc = %d\n", rc);
-		D_GOTO(unlock, rc);
+		D_GOTO(err_context, rc);
+	}
+
+	rc = daos_eq_lib_init(dsm_context);
+	if (rc != 0) {
+		D_ERROR("failed to init eq: %d\n", rc);
+		D_GOTO(err_rpcs, rc);
 	}
 
 	module_initialized = 1;
 unlock:
 	pthread_mutex_unlock(&module_lock);
 	return rc;
+
+err_rpcs:
+	daos_rpc_unregister(dsm_rpcs);
+err_context:
+	dtp_context_destroy(dsm_context, 1 /* force */);
+err_dtp:
+	dtp_finalize();
+	D_GOTO(unlock, rc);
 }
 
 /**
@@ -67,16 +96,22 @@ unlock:
 int
 dsm_fini(void)
 {
+	int	rc;
+
 	pthread_mutex_lock(&module_lock);
 	if (!module_initialized) {
 		pthread_mutex_unlock(&module_lock);
 		return 0;
 	}
 
+	daos_eq_lib_fini();
+
 	daos_rpc_unregister(dsm_rpcs);
+
+	rc = dtp_finalize();
 
 	module_initialized = 0;
 	pthread_mutex_unlock(&module_lock);
 
-	return 0;
+	return rc;
 }

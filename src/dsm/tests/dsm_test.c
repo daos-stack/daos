@@ -32,6 +32,9 @@
 #include <daos/event.h>
 #include <daos/transport.h>
 
+/* Steal from dsmc_module.c. */
+extern dtp_context_t dsm_context;
+
 static struct option opts[] = {
 	{ "ping",	0,	NULL,   'p'},
 	{  NULL,	0,	NULL,	 0 }
@@ -122,45 +125,27 @@ out_destroy:
 int
 main(int argc, char **argv)
 {
-	dtp_context_t	ctx;
-	int		rc = 0;
-	int		option;
+	int	rc = 0;
+	int	option;
 
 	/* use full debug dy default for now */
 	rc = setenv("DAOS_DEBUG", "-1", false);
 	if (rc)
 		D_ERROR("failed to enable full debug, %d\n", rc);
 
-	rc = dtp_init(false);
-	if (rc != 0) {
-		D_ERROR("dtp init failure: rc =%d\n", rc);
-		return rc;
-	}
-
-	rc = dtp_context_create(NULL, &ctx);
-	if (rc != 0) {
-		D_ERROR("dtp context create failure: rc = %d\n", rc);
-		goto out_dtp;
-	}
-
-	rc = daos_eq_lib_init(ctx);
-	if (rc != 0) {
-		D_ERROR("Failed to initailiz DAOS/event library: %d\n", rc);
-		goto out_ctx;
-	}
-
 	rc = dsm_init();
 	if (rc != 0) {
 		D_ERROR("dsm init fails: rc = %d\n", rc);
-		goto out_eq;
+		return rc;
 	}
 
 	while ((option = getopt_long(argc, argv, "p", opts, NULL)) != -1) {
 		switch (option) {
 		default:
+			dsm_fini();
 			return -EINVAL;
 		case 'p':
-			rc = test_ping_rpc(ctx);
+			rc = test_ping_rpc(dsm_context);
 			break;
 		}
 		if (rc < 0) {
@@ -170,11 +155,5 @@ main(int argc, char **argv)
 	}
 
 	dsm_fini();
-out_eq:
-	daos_eq_lib_fini();
-out_ctx:
-	dtp_context_destroy(ctx, 1);
-out_dtp:
-	dtp_finalize();
 	return rc;
 }

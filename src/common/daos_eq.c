@@ -37,13 +37,13 @@
 #include <daos/transport.h>
 #include "daos_eq_internal.h"
 
-struct daos_hhash *daos_eq_hhash;
+static struct daos_hhash *daos_eq_hhash;
 
 /*
  * For the moment, we use a global dtp_context_t to create all the RPC requests
  * this module uses.
  */
-dtp_context_t daos_eq_ctx;
+static dtp_context_t daos_eq_ctx;
 static pthread_mutex_t daos_eq_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int
