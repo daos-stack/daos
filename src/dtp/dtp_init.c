@@ -197,11 +197,12 @@ dtp_mcl_init(dtp_phy_addr_t *addr)
 		D_GOTO(out, rc = -DER_DTP_MCL);
 	}
 	D_DEBUG(DF_TP, "mcl_init succeed(server %d), nspace: %s, rank: %d, "
-		"univ_size: %d.\n",
+		"univ_size: %d, self_uri: %s.\n",
 		dtp_gdata.dg_server,
 		dtp_gdata.dg_mcl_state->myproc.nspace,
 		dtp_gdata.dg_mcl_state->myproc.rank,
-		dtp_gdata.dg_mcl_state->univ_size);
+		dtp_gdata.dg_mcl_state->univ_size,
+		dtp_gdata.dg_mcl_state->self_uri);
 	if (dtp_gdata.dg_server == true) {
 		rc = mcl_startup(dtp_gdata.dg_mcl_state,
 				 dtp_gdata.dg_hg->dhg_nacla,
@@ -222,9 +223,10 @@ dtp_mcl_init(dtp_phy_addr_t *addr)
 		D_GOTO(out, rc = -DER_DTP_MCL);
 	}
 	D_DEBUG(DF_TP, "mcl_startup succeed(server: %d), grp_name: %s, "
-		"size %d, rank %d, is_local %d, is_service %d\n",
+		"size %d, rank %d, is_local %d, is_service %d, self_uri: %s.\n",
 		dtp_gdata.dg_server, tmp_set->name, tmp_set->size,
-		tmp_set->self, tmp_set->is_local, tmp_set->is_service);
+		tmp_set->self, tmp_set->is_local, tmp_set->is_service,
+		tmp_set->state->self_uri);
 	if (dtp_gdata.dg_server == true) {
 		D_ASSERT(dtp_gdata.dg_mcl_srv_set != NULL);
 	} else {

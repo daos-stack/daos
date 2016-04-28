@@ -34,7 +34,6 @@
 #include <mercury_proc_string.h>
 #include <na.h>
 #include <na_error.h>
-#include <na_cci.h>
 
 #include <dtp_internal_types.h>
 

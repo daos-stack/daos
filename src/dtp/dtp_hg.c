@@ -111,6 +111,35 @@ done:
     return ret;
 }
 
+static int
+na_class_get_addr(na_class_t *na_class, char *addr_str, daos_size_t *str_size)
+{
+	na_addr_t	self_addr;
+	na_return_t	na_ret;
+	int		rc = 0;
+
+	D_ASSERT(na_class != NULL);
+	D_ASSERT(addr_str != NULL && str_size != NULL);
+
+	na_ret = NA_Addr_self(na_class, &self_addr);
+	if (na_ret != NA_SUCCESS) {
+		D_ERROR("NA_Addr_self failed, na_ret: %d.\n", na_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+
+	na_ret = NA_Addr_to_string(na_class, addr_str, str_size, self_addr);
+	if (na_ret != NA_SUCCESS) {
+		D_ERROR("NA_Addr_to_string failed, na_ret: %d.\n",
+			na_ret);
+		NA_Addr_free(na_class, self_addr);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+	NA_Addr_free(na_class, self_addr);
+
+out:
+	return rc;
+}
+
 /* be called only in dtp_init */
 int
 dtp_hg_init(dtp_phy_addr_t *addr, bool server)
@@ -187,30 +216,26 @@ dtp_hg_init(dtp_phy_addr_t *addr, bool server)
 	}
 
 	if (*addr == NULL) {
-		const char *port_name;
-		char addr_str[DTP_ADDR_STR_MAX_LEN] = {'\0'};
+		char		addr_str[DTP_ADDR_STR_MAX_LEN] = {'\0'};
+		daos_size_t	str_size = DTP_ADDR_STR_MAX_LEN;
 
-		port_name = NA_CCI_Get_port_name(na_class);
-		if (port_name == NULL) {
-			D_ERROR("NA_CCI_Get_port_name failed.\n");
+		rc = na_class_get_addr(na_class, addr_str, &str_size);
+		if (rc != 0) {
+			D_ERROR("na_class_get_addr failed, rc: %d.\n", rc);
 			HG_Finalize(hg_class);
 			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_DTP_HG);
 		}
 
-		rc = snprintf(addr_str, DTP_ADDR_STR_MAX_LEN, "cci+%s",
-			      port_name);
 		*addr = strdup(addr_str);
-		if (rc < 0 || *addr == NULL) {
-			D_ERROR("snprintf or strdup failed, rc: %d.\n", rc);
+		if (*addr == NULL) {
+			D_ERROR("strdup failed, rc: %d.\n", rc);
 			HG_Finalize(hg_class);
 			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_DTP_HG);
 		}
-		rc = 0;
-		info_string = *addr;
 	}
 
 	D_DEBUG(DF_TP, "in dtp_hg_init, listen address: %s.\n", *addr);
@@ -280,7 +305,6 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 	hg_class_t	*hg_class = NULL;
 	hg_context_t	*hg_context = NULL;
 	const char	*info_string;
-	const char	*port_name;
 	int		rc = 0;
 
 	D_ASSERT(hg_ctx != NULL);
@@ -297,6 +321,9 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 		hg_ctx->dhc_hgcla = dtp_gdata.dg_hg->dhg_hgcla;
 		hg_ctx->dhc_shared_na = true;
 	} else {
+		char		addr_str[DTP_ADDR_STR_MAX_LEN] = {'\0'};
+		daos_size_t	str_size = DTP_ADDR_STR_MAX_LEN;
+
 		if (dtp_gdata.dg_verbs == true)
 			info_string = "cci+verbs://host";
 		else
@@ -308,14 +335,14 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 			D_GOTO(out, rc = -DER_DTP_HG);
 		}
 
-		port_name = NA_CCI_Get_port_name(na_class);
-		if (port_name == NULL) {
-			D_ERROR("NA_CCI_Get_port_name failed.\n");
+		rc = na_class_get_addr(na_class, addr_str, &str_size);
+		if (rc != 0) {
+			D_ERROR("na_class_get_addr failed, rc: %d.\n", rc);
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_DTP_HG);
 		}
 		D_DEBUG(DF_TP, "New context(idx:%d), listen address: cci+%s.\n",
-			idx, port_name);
+			idx, addr_str);
 
 		na_context = NA_Context_create(na_class);
 		if (na_context == NULL) {
