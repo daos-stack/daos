@@ -17,6 +17,7 @@ import subprocess
 import socket
 import tarfile
 import re
+import copy
 from SCons.Variables import PathVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
@@ -730,6 +731,10 @@ class PreReqComponent(object):
 
         self.__prebuilt_path[name] = prebuilt
         return prebuilt
+
+    def get_defined_components(self):
+        """Get a list of all defined components"""
+        return copy.copy(self.__defined.keys())
 
     def save_component_prefix(self, var, value):
         """Save the component prefix in the environment and

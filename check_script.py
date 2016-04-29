@@ -123,7 +123,7 @@ def check_script(fname, *args, **kw):
         wrapper = WrapScript(fname)
         tmp_fname = "script"
 
-    cmd = "pylint %s -d wrong-import-order " \
+    cmd = "pylint %s -d star-args -d wrong-import-order " \
           "-d unused-wildcard-import %s > tmp.log 2>&1"% \
           (" ".join(args), tmp_fname)
     if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
@@ -154,7 +154,6 @@ if ARGS.self_check:
                  "-d", "no-self-use")
     print "Checking prereq_tools"
     check_script("prereq_tools",
-                 "-d", "star-args",
                  "-d", "too-many-lines",
                  "-d", "unused-argument")
     print "Checking build_info"

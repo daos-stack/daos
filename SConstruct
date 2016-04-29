@@ -6,17 +6,17 @@ from prereq_tools import PreReqComponent
 ENV = DefaultEnvironment()
 
 OPTS = Variables()
+REQS = PreReqComponent(ENV, OPTS)
+REQS.preload("components.py")
+
+print REQS.get_defined_components()
 OPTS.Add(ListVariable("REQUIRES",
                       "List of libraries to build",
                       'mercury,ompi',
-                      ["mercury", "bmi", "openpa",
-                       "ompi", "pmix", "hwloc",
-                       "nvml", "cci", "cppr",
-                       "iof", "fuse", "ofi"]))
+                      REQS.get_defined_components()))
 OPTS.Update(ENV)
-REQS = PreReqComponent(ENV, OPTS)
-REQS.preload("components.py", prebuild=ENV.get("REQUIRES"))
 
+REQS.require(ENV, *ENV.get("REQUIRES"))
 try:
     Help(OPTS.GenerateHelpText(ENV), append=True)
 except TypeError:

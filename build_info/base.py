@@ -43,7 +43,7 @@ class BuildInfo(object):
             components = []
 
             for var in self.info.keys():
-                if not type(self.info[var]) is str:
+                if not isinstance(self.info[var], str):
                     continue
                 if not "PREFIX" in var:
                     continue
@@ -52,11 +52,11 @@ class BuildInfo(object):
                 path = os.path.join(self.info[var], "bin")
                 lib = os.path.join(self.info[var], "lib")
                 lib64 = os.path.join(self.info[var], "lib64")
-                if os.path.exists(path) and not path in paths:
+                if os.path.exists(path) and path not in paths:
                     paths.insert(0, path)
-                if os.path.exists(lib) and not lib in lib_paths:
+                if os.path.exists(lib) and lib not in lib_paths:
                     lib_paths.insert(0, lib)
-                if os.path.exists(lib64) and not lib64 in lib_paths:
+                if os.path.exists(lib64) and lib64 not in lib_paths:
                     lib_paths.insert(0, lib64)
             script.write("SL_LD_LIBRARY_PATH=%s\n" % \
                      os.pathsep.join(lib_paths))
