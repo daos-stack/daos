@@ -25,10 +25,58 @@
 
 #include <signal.h>
 #include <stdlib.h>
+#include <getopt.h>
 #include <errno.h>
 
 #include <daos/common.h>
 #include "dss_internal.h"
+
+#define MAX_MODULE_OPTIONS	64
+#define MODULE_LIST		"vos,dmg,dsm,dsr"
+
+char	modules[MAX_MODULE_OPTIONS + 1];
+
+static int
+modules_load()
+{
+	char	*mod;
+	char	*sep;
+	char	*run;
+	int	 rc = 0;
+
+	sep = strdup(modules);
+	if (sep == NULL)
+		return -DER_NOMEM;
+	run = sep;
+
+	mod = strsep(&run, ",");
+	while (mod != NULL) {
+		if (strcmp(mod, "daos_sr") == 0 ||
+		    strcmp(mod, "dsr") == 0)
+			rc = dss_module_load("daos_sr_srv");
+		else if (strcmp(mod, "daos_m") == 0 ||
+			 strcmp(mod, "dsm") == 0)
+			rc = dss_module_load("daos_m_srv");
+		else if (strcmp(mod, "daos_mgmt") == 0 ||
+			 strcmp(mod, "dmg") == 0)
+			rc = dss_module_load("daos_mgmt_srv");
+		else if (strcmp(mod, "vos") == 0)
+			rc = dss_module_load("vos");
+		else
+			rc = dss_module_load(mod);
+
+		if (rc != 0) {
+			D_DEBUG(DF_SERVER, "Failed to load module %s: %d\n",
+				mod, rc);
+			break;
+		}
+
+		mod = strsep(&run, ",");
+	}
+
+	free(sep);
+	return rc;
+}
 
 static int
 server_init()
@@ -42,22 +90,34 @@ server_init()
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
-	if (rc) {
-		D_ERROR("failed to initialize the modular interface, %d\n", rc);
+	if (rc)
 		return rc;
-	}
 	D_DEBUG(DF_SERVER, "Module interface successfully initialized\n");
+
+	/* initialize the network layer */
+	rc = dtp_init(true);
+	if (rc)
+		D_GOTO(exit_mod_init, rc);
+	D_DEBUG(DF_SERVER, "Network successfully initialized\n");
+
+	/* load modules */
+	rc = modules_load();
+	if (rc)
+		D_GOTO(exit_mod_loaded, rc);
+	D_DEBUG(DF_SERVER, "Module %s successfully loaded\n", modules);
 
 	/* start up service */
 	rc = dss_srv_init();
-	if (rc != 0) {
-		D_ERROR("failed to initialize service: rc = %d\n", rc);
-		goto exit_module;
-	}
+	if (rc)
+		D_GOTO(exit_mod_loaded, rc);
+	D_DEBUG(DF_SERVER, "Service is now running\n");
 
 	return 0;
 
-exit_module:
+exit_mod_loaded:
+	dss_module_unload_all();
+	dtp_finalize();
+exit_mod_init:
 	dss_module_fini(true);
 	return rc;
 }
@@ -67,63 +127,70 @@ server_fini(bool force)
 {
 	dss_srv_fini();
 	dss_module_fini(force);
-}
-
-static int
-modules_load()
-{
-	int rc;
-
-	rc = dss_module_load("daos_mgmt_srv");
-	if (rc) {
-		D_DEBUG(DF_SERVER, "failed to load daos_mgmt_srv module\n");
-		return rc;
-	}
-
-	D_DEBUG(DF_SERVER, "daos_mgmt_srv module successfully loaded\n");
-
-	/* XXX daos_m_srv should be dynamically loaded, instead of by default */
-	rc = dss_module_load("daos_m_srv");
-	if (rc != 0) {
-		D_DEBUG(DF_SERVER, "failed to load daos_m_srv module\n");
-		return rc;
-	}
-
-	return 0;
-}
-
-static void
-modules_unload()
-{
-	dss_module_unload("daos_m_srv");
-	dss_module_unload("daos_mgmt_srv");
-	D_DEBUG(DF_SERVER, "daos_mgmt_srv module successfully unloaded\n");
+	dtp_finalize();
 }
 
 static void
 shutdown(int signo)
 {
 	server_fini(true);
-	modules_unload();
+	dss_module_unload_all();
 	exit(EXIT_SUCCESS);
 }
 
+static void
+usage(char *prog, FILE *out)
+{
+	fprintf(out, "Usage: %s [ -m vos,dmg,dsm,dsr ]\n", prog);
+}
+
+static int
+parse(int argc, char **argv)
+{
+	struct	option opts[] = {
+		{ "modules", required_argument, NULL, 'm' },
+		{ NULL },
+	};
+	int	rc = 0;
+	int	c;
+
+	/* load all of modules by default */
+	sprintf(modules, "%s", MODULE_LIST);
+	while ((c = getopt_long(argc, argv, "m:", opts, NULL)) != -1) {
+		switch (c) {
+		case 'm':
+			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
+				rc = -DER_INVAL;
+				usage(argv[0], stderr);
+				break;
+			}
+			sprintf(modules, "%s", optarg);
+			break;
+		default:
+			usage(argv[0], stderr);
+			rc = -DER_INVAL;
+		}
+		if (rc < 0)
+			return rc;
+	}
+
+	return 0;
+}
+
 int
-main()
+main(int argc, char **argv)
 {
 	int rc;
 
-	/* generic server initialization */
-	rc = server_init();
+	/* parse command line arguments */
+	rc = parse(argc, argv);
 	if (rc)
 		exit(EXIT_FAILURE);
 
-	/* load default modules */
-	modules_load();
-	if (rc) {
-		server_fini(true);
+	/* server initialization */
+	rc = server_init();
+	if (rc)
 		exit(EXIT_FAILURE);
-	}
 
 	/* register signal handler for shutdown */
 	signal(SIGINT, shutdown);

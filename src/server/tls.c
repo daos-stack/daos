@@ -28,8 +28,7 @@
 #include "dss_internal.h"
 
 /* The array remember all of registered module keys on one node. */
-#define DAOS_MODULE_KEYS_NR 10
-static struct dss_module_key *dss_module_keys[DAOS_MODULE_KEYS_NR] = { NULL };
+struct dss_module_key *dss_module_keys[DAOS_MODULE_KEYS_NR] = { NULL };
 
 pthread_mutex_t dss_module_keys_lock = PTHREAD_MUTEX_INITIALIZER;
 
@@ -122,28 +121,6 @@ dss_thread_local_storage_fini(struct dss_thread_local_storage *dtls)
 
 	D_FREE(dtls->dtls_values,
 	       ARRAY_SIZE(dss_module_keys) * sizeof(dtls->dtls_values[0]));
-}
-
-/**
- * Get value from context by the key
- *
- * Get value inside dtls by key. So each module will use this API to
- * retrieve their own value in the thread context.
- *
- * \param[in] dtls	the thread context.
- * \param[in] key	key used to retrieve the dtls_value.
- *
- * \retval		the dtls_value retrieved by key.
- */
-void *
-dss_module_key_get(struct dss_thread_local_storage *dtls,
-		   struct dss_module_key *key)
-{
-	D_ASSERT(key->dmk_index >= 0);
-	D_ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
-	D_ASSERT(dss_module_keys[key->dmk_index] == key);
-
-	return dtls->dtls_values[key->dmk_index];
 }
 
 pthread_key_t dss_tls_key;

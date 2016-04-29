@@ -28,10 +28,12 @@ struct dss_module_info {
 extern struct dss_module_key	dss_module_key;
 
 static inline struct dss_module_info *
-dss_get_module_info(struct dss_thread_local_storage *dtc)
+dss_get_module_info()
 {
 	struct dss_module_info *dmi;
+	struct dss_thread_local_storage *dtc;
 
+	dtc = dss_tls_get();
 	dmi = (struct dss_module_info *)
 	      dss_module_key_get(dtc, &dss_module_key);
 	return dmi;
@@ -42,6 +44,7 @@ int dss_module_init(void);
 int dss_module_fini(bool force);
 int dss_module_load(const char *modname);
 int dss_module_unload(const char *modname);
+void dss_module_unload_all(void);
 
 /* srv.c */
 int dss_srv_init(void);

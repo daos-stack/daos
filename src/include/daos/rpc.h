@@ -30,6 +30,7 @@
 enum daos_module_id {
 	DAOS_DMG_MODULE		= 0,
 	DAOS_DSMS_MODULE	= 1,
+	DAOS_VOS_MODULE		= 2,
 };
 
 /* Opcode registered in dtp will be

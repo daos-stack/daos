@@ -298,8 +298,9 @@ dss_srv_handler_cleanup(void *param)
 	struct dss_module_info		*dmi;
 	int				rc;
 
-	dtc = (struct dss_thread_local_storage  *)param;
-	dmi = dss_get_module_info(dtc);
+	dtc = param;
+	dmi = (struct dss_module_info *)
+	      dss_module_key_get(dtc, &dss_module_key);
 	D_ASSERT(dmi != NULL);
 	rc = dtp_context_destroy(dmi->dmi_ctx, true);
 	if (rc)
@@ -347,7 +348,7 @@ dss_srv_handler(void *arg)
 		return NULL;
 	}
 
-	dmi = dss_get_module_info(dtc);
+	dmi = dss_get_module_info();
 	D_ASSERT(dmi != NULL);
 
 	/* create private transport context */
@@ -572,7 +573,6 @@ dss_srv_fini()
 	if (dcgroups != NULL)
 		D_FREE_PTR(dcgroups);
 
-	dtp_finalize();
 	return 0;
 }
 
@@ -620,13 +620,6 @@ dss_srv_init()
 {
 	int		rc;
 	cpu_set_t	mask;
-
-	/* initialize the network layer */
-	rc = dtp_init(true);
-	if (rc) {
-		D_ERROR("failed to initialize network: %d\n", rc);
-		return rc;
-	}
 
 	rc = dss_load_cpuset(&mask);
 	if (rc != 0) {

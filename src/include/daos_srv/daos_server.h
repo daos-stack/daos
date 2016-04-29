@@ -26,6 +26,7 @@
 #define __DSS_API_H__
 
 #include <daos/transport.h>
+#include <daos/common.h>
 #include <pthread.h>
 
 /**
@@ -39,40 +40,6 @@
  * For now, all loaded modules are assumed to be trustful, but sandboxes can be
  * implemented in the future.
  */
-
-/**
- * Each module should provide a dss_module structure which defines the module
- * interface. The name of the allocated structure must be the library name
- * (without the ".so" extension) suffixed by "module". This symbol will be
- * looked up automatically when the module library is loaded and failed if not
- * found.
- *
- * For instance, the dmg module reports a "sm_name" of "daos_mgmt_srv", the
- * actual library filename is libdaos_mgmt_srv.so and it defines a dss_module
- * structure called daos_mgmt_srv_module.
- */
-struct dss_module {
-	/* Name of the module */
-	const char		 *sm_name;
-	/* Module id see enum dss_module_id */
-	int			  sm_mod_id;
-	/* Module version */
-	int			  sm_ver;
-	/* Setup function, invoked just after successful load */
-	int			(*sm_init)(void);
-	/* Teardown function, invoked just before module unload */
-	int			(*sm_fini)(void);
-	/* Array of RPC definition for request sent by client nodes, last entry
-	 * of the array must be empty */
-	struct daos_rpc		 *sm_cl_rpcs;
-	/* Array of RPC definition for request sent by other servers, last entry
-	 * of the array must be empty */
-	struct daos_rpc		 *sm_srv_rpcs;
-
-	/* RPC handler of these RPC, last entry of the array must be empty */
-	struct daos_rpc_handler	 *sm_handlers;
-};
-
 /*
  * Thead-local storage
  */
@@ -103,6 +70,8 @@ struct dss_module_key {
 };
 
 extern pthread_key_t dss_tls_key;
+extern struct dss_module_key *dss_module_keys[];
+#define DAOS_MODULE_KEYS_NR 10
 
 static inline struct dss_thread_local_storage *
 dss_tls_get()
@@ -111,9 +80,66 @@ dss_tls_get()
 		pthread_getspecific(dss_tls_key);
 }
 
-void *dss_module_key_get(struct dss_thread_local_storage *dtls,
-			  struct dss_module_key *key);
+/**
+ * Get value from context by the key
+ *
+ * Get value inside dtls by key. So each module will use this API to
+ * retrieve their own value in the thread context.
+ *
+ * \param[in] dtls	the thread context.
+ * \param[in] key	key used to retrieve the dtls_value.
+ *
+ * \retval		the dtls_value retrieved by key.
+ */
+static inline void *
+dss_module_key_get(struct dss_thread_local_storage *dtls,
+		   struct dss_module_key *key)
+{
+	D_ASSERT(key->dmk_index >= 0);
+	D_ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
+	D_ASSERT(dss_module_keys[key->dmk_index] == key);
+
+	return dtls->dtls_values[key->dmk_index];
+}
+
 void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
+
+/**
+ * Each module should provide a dss_module structure which defines the module
+ * interface. The name of the allocated structure must be the library name
+ * (without the ".so" extension) suffixed by "module". This symbol will be
+ * looked up automatically when the module library is loaded and failed if not
+ * found.
+ *
+ * For instance, the dmg module reports a "sm_name" of "daos_mgmt_srv", the
+ * actual library filename is libdaos_mgmt_srv.so and it defines a dss_module
+ * structure called daos_mgmt_srv_module.
+ */
+struct dss_module {
+	/* Name of the module */
+	const char		 *sm_name;
+	/* Module id see enum dss_module_id */
+	int			  sm_mod_id;
+	/* Module version */
+	int			  sm_ver;
+	/* key of local thread storage */
+	struct dss_module_key	*sm_key;
+	/* Setup function, invoked just after successful load */
+	int			(*sm_init)(void);
+	/* Teardown function, invoked just before module unload */
+	int			(*sm_fini)(void);
+	/* Array of RPC definition for request sent by client nodes, last entry
+	 * of the array must be empty */
+	struct daos_rpc		 *sm_cl_rpcs;
+	/* Array of RPC definition for request sent by other servers, last entry
+	 * of the array must be empty */
+	struct daos_rpc		 *sm_srv_rpcs;
+
+	/* RPC handler of these RPC, last entry of the array must be empty */
+	struct daos_rpc_handler	 *sm_handlers;
+};
+
+
 
 #endif /* __DSS_API_H__ */

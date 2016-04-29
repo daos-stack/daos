@@ -18,5 +18,8 @@ env.Append(CFLAGS='-msse4.2')
 voslib = env.Library('libvos', Glob('*.c'))
 env.Install('#/build/lib/', voslib)
 
+vos_sharelib = env.SharedLibrary('vos', Glob('*.c'));
+env.Install('#/build/lib/daos_srv/', vos_sharelib)
+
 # Tests
 SConscript('tests/SConscript', exports='env')

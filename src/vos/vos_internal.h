@@ -29,8 +29,26 @@
 #include <daos/list.h>
 #include <daos/hash.h>
 #include <daos/btree.h>
+#include <daos_srv/daos_server.h>
 
 #include "vos_layout.h"
+
+struct vos_tls {
+	daos_handle_t	vmi_poh;
+};
+
+extern struct dss_module_key vos_module_key;
+
+static inline struct vos_tls *
+vos_tls_get()
+{
+	struct vos_tls			*tls;
+	struct dss_thread_local_storage	*dtc;
+
+	dtc = dss_tls_get();
+	tls = (struct vos_tls *)dss_module_key_get(dtc, &vos_module_key);
+	return tls;
+}
 
 /**
  * Reference of a cached object.

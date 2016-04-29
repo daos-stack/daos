@@ -45,23 +45,17 @@ struct loaded_mod {
 
 /* Track list of loaded modules */
 DAOS_LIST_HEAD(loaded_mod_list);
+pthread_mutex_t loaded_mod_list_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static struct loaded_mod *
-dss_module_search(const char *modname, bool unlink)
+dss_module_search(const char *modname)
 {
-	daos_list_t	*tmp;
-	daos_list_t	*pos;
+	struct loaded_mod *mod;
 
 	/* search for the module in the loaded module list */
-	daos_list_for_each_safe(pos, tmp, &loaded_mod_list) {
-		struct loaded_mod	*mod;
-
-		mod = daos_list_entry(pos, struct loaded_mod, lm_lk);
-		if (strcmp(mod->lm_dss_mod->sm_name, modname) == 0) {
-			if (unlink)
-				daos_list_del_init(pos);
+	daos_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
+		if (strcmp(mod->lm_dss_mod->sm_name, modname) == 0)
 			return mod;
-		}
 	}
 
 	/* not found */
@@ -90,16 +84,14 @@ dss_module_load(const char *modname)
 	sprintf(name, "lib%s.so", modname);
 	handle = dlopen(name, RTLD_LAZY);
 	if (handle == NULL) {
-		D_ERROR("cannot load %s\n", modname);
+		D_ERROR("cannot load %s\n", name);
 		return -DER_INVAL;
 	}
 
 	/* allocate data structure to track this module instance */
 	D_ALLOC_PTR(lmod);
-	if (!lmod) {
-		rc = -DER_NOMEM;
-		goto err_hdl;
-	}
+	if (!lmod)
+		D_GOTO(err_hdl, rc = -DER_NOMEM);
 
 	lmod->lm_hdl = handle;
 
@@ -114,8 +106,7 @@ dss_module_load(const char *modname)
 	err = dlerror();
 	if (err != NULL) {
 		D_ERROR("failed to load %s: %s\n", modname, err);
-		rc = -DER_INVAL;
-		goto err_lmod;
+		D_GOTO(err_lmod, rc = -DER_INVAL);
 	}
 	lmod->lm_dss_mod = smod;
 
@@ -123,25 +114,25 @@ dss_module_load(const char *modname)
 	if (strcmp(smod->sm_name, modname) != 0) {
 		D_ERROR("inconsistent module name %s != %s\n", modname,
 			smod->sm_name);
-		rc = -DER_INVAL;
-		goto err_hdl;
+		D_GOTO(err_hdl, rc = -DER_INVAL);
 	}
 
 	/* initialize the module */
 	rc = smod->sm_init();
 	if (rc) {
 		D_ERROR("failed to init %s: %d\n", modname, rc);
-		rc = -DER_INVAL;
-		goto err_lmod;
+		D_GOTO(err_hdl, rc = -DER_INVAL);
 	}
 
+	if (smod->sm_key != NULL)
+		dss_register_key(smod->sm_key);
 	/* register client RPC handlers */
 	rc = daos_rpc_register(smod->sm_cl_rpcs, smod->sm_handlers,
 			       smod->sm_mod_id);
 	if (rc) {
 		D_ERROR("failed to register client RPC for %s: %d\n",
 			modname, rc);
-		goto err_mod_init;
+		D_GOTO(err_mod_init, rc);
 	}
 
 	/* register server RPC handlers */
@@ -150,16 +141,19 @@ dss_module_load(const char *modname)
 	if (rc) {
 		D_ERROR("failed to register srv RPC for %s: %d\n",
 			modname, rc);
-		goto err_cl_rpc;
+		D_GOTO(err_cl_rpc, rc);
 	}
 
 	/* module successfully loaded, add it to the tracking list */
+	pthread_mutex_lock(&loaded_mod_list_lock);
 	daos_list_add_tail(&lmod->lm_lk, &loaded_mod_list);
+	pthread_mutex_unlock(&loaded_mod_list_lock);
 	return 0;
 
 err_cl_rpc:
 	daos_rpc_unregister(smod->sm_cl_rpcs);
 err_mod_init:
+	dss_unregister_key(smod->sm_key);
 	smod->sm_fini();
 err_lmod:
 	D_FREE_PTR(lmod);
@@ -168,43 +162,30 @@ err_hdl:
 	return rc;
 }
 
-int
-dss_module_unload(const char *modname)
+static int
+dss_module_unload_internal(struct loaded_mod *lmod)
 {
-	struct loaded_mod	*lmod;
-	struct dss_module	*smod;
+	struct dss_module	*smod = lmod->lm_dss_mod;
 	int			 rc;
-
-	/* lookup the module from the loaded module list */
-	lmod = dss_module_search(modname, true);
-
-	if (lmod == NULL)
-		/* module not found ... */
-		return -DER_ENOENT;
-
-	smod = lmod->lm_dss_mod;
 
 	/* unregister client RPC handlers */
 	rc = daos_rpc_unregister(smod->sm_cl_rpcs);
 	if (rc) {
-		D_ERROR("failed to unregister client RPC for %s: %d\n",
-			modname, rc);
+		D_ERROR("failed to unregister client RPC %d\n", rc);
 		return rc;
 	}
 
 	/* unregister server RPC handlers */
 	rc = daos_rpc_unregister(smod->sm_srv_rpcs);
 	if (rc) {
-		D_ERROR("failed to register srv RPC for %s: %d\n",
-			modname, rc);
+		D_ERROR("failed to unregister srv RPC: %d\n", rc);
 		return rc;
 	}
 
 	/* finalize the module */
 	rc = smod->sm_fini();
 	if (rc) {
-		D_ERROR("module finalization failed for %s: %d\n",
-			modname, rc);
+		D_ERROR("module finalization failed for: %d\n", rc);
 		return rc;
 
 	}
@@ -212,10 +193,31 @@ dss_module_unload(const char *modname)
 	/* close the library handle */
 	dlclose(lmod->lm_hdl);
 
+	return rc;
+}
+
+int
+dss_module_unload(const char *modname)
+{
+	struct loaded_mod	*lmod;
+
+	/* lookup the module from the loaded module list */
+	pthread_mutex_lock(&loaded_mod_list_lock);
+	lmod = dss_module_search(modname);
+	if (lmod == NULL) {
+		pthread_mutex_unlock(&loaded_mod_list_lock);
+		/* module not found ... */
+		return -DER_ENOENT;
+	}
+	daos_list_del_init(&lmod->lm_lk);
+	pthread_mutex_unlock(&loaded_mod_list_lock);
+
+	dss_module_unload_internal(lmod);
+
 	/* free memory used to track this module instance */
 	D_FREE_PTR(lmod);
 
-	return rc;
+	return 0;
 }
 
 int
@@ -228,4 +230,26 @@ int
 dss_module_fini(bool force)
 {
 	return 0;
+}
+
+void
+dss_module_unload_all(void)
+{
+	struct loaded_mod	*mod;
+	struct loaded_mod	*tmp;
+	struct daos_list_head	destroy_list;
+
+	DAOS_INIT_LIST_HEAD(&destroy_list);
+	pthread_mutex_lock(&loaded_mod_list_lock);
+	daos_list_for_each_entry_safe(mod, tmp, &loaded_mod_list, lm_lk) {
+		daos_list_del_init(&mod->lm_lk);
+		daos_list_add(&mod->lm_lk, &destroy_list);
+	}
+	pthread_mutex_unlock(&loaded_mod_list_lock);
+
+	daos_list_for_each_entry_safe(mod, tmp, &destroy_list, lm_lk) {
+		daos_list_del_init(&mod->lm_lk);
+		dss_module_unload_internal(mod);
+		D_FREE_PTR(mod);
+	}
 }

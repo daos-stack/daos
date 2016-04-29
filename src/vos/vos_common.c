@@ -25,6 +25,8 @@
  */
 
 #include <daos/common.h>
+#include <daos/rpc.h>
+#include <daos_srv/daos_server.h>
 #include "vos_internal.h"
 
 int
@@ -76,3 +78,51 @@ vos_pool_putref_handle(struct vp_hdl *vpool)
 	daos_hhash_link_putref(daos_vos_hhash,
 			       &vpool->vp_hlink);
 }
+
+static void *
+vos_tls_init(const struct dss_thread_local_storage *dtls,
+	     struct dss_module_key *key)
+{
+	struct vos_tls *tls;
+
+	D_ALLOC_PTR(tls);
+
+	return tls;
+}
+
+static void
+vos_tls_fini(const struct dss_thread_local_storage *dtls,
+	     struct dss_module_key *key, void *data)
+{
+	struct vos_tls *tls = data;
+
+	D_FREE_PTR(tls);
+}
+
+struct dss_module_key vos_module_key = {
+	.dmk_tags = DAOS_SERVER_TAG,
+	.dmk_index = -1,
+	.dmk_init = vos_tls_init,
+	.dmk_fini = vos_tls_fini,
+};
+
+static int
+vos_mod_init(void)
+{
+	return 0;
+}
+
+static int
+vos_mod_fini(void)
+{
+	return 0;
+}
+
+struct dss_module vos_module =  {
+	.sm_name	= "vos",
+	.sm_mod_id	= DAOS_VOS_MODULE,
+	.sm_ver		= 1,
+	.sm_init	= vos_mod_init,
+	.sm_fini	= vos_mod_fini,
+	.sm_key		= &vos_module_key,
+};
