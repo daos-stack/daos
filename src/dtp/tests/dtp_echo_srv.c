@@ -38,8 +38,8 @@ static void *progress_handler(void *arg)
 	/* progress loop */
 	do {
 		rc = dtp_progress(gecho.dtp_ctx, 1, NULL, NULL, NULL);
-		if (rc != 0 && rc != -ETIMEDOUT) {
-			printf("dtp_progress failed rc: %d.\n", rc);
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
+			D_ERROR("dtp_progress failed rc: %d.\n", rc);
 			break;
 		}
 
@@ -47,8 +47,8 @@ static void *progress_handler(void *arg)
 			for (i = 0; i < ECHO_EXTRA_CONTEXT_NUM; i++) {
 				rc = dtp_progress(gecho.extra_ctx[i], 1, NULL,
 						  NULL, NULL);
-				if (rc != 0 && rc != -ETIMEDOUT) {
-					printf("dtp_progress failed rc: %d.\n",
+				if (rc != 0 && rc != -DER_TIMEDOUT) {
+					D_ERROR("dtp_progress failed rc: %d.\n",
 					       rc);
 					break;
 				}

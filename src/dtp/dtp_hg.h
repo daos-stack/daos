@@ -101,7 +101,8 @@ int dtp_hg_req_destroy(struct dtp_rpc_priv *rpc_priv);
 int dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb,
 		    void *arg);
 int dtp_hg_reply_send(struct dtp_rpc_priv *rpc_priv);
-int dtp_hg_progress(struct dtp_hg_context *hg_ctx, unsigned int timeout);
+int dtp_hg_progress(struct dtp_hg_context *hg_ctx, unsigned int *credits,
+		    unsigned int timeout);
 
 static inline struct dtp_hg_context *
 dtp_hg_context_lookup(hg_context_t *ctx)

@@ -58,11 +58,6 @@ typedef struct {
 typedef uint32_t dtp_opcode_t;
 typedef uint32_t dtp_version_t;
 
-/* MAX wait time set to one hour */
-#define DTP_PROGRESS_MAXWAIT	(3600 * 1000)
-/* return immediately if no operation to progress */
-#define DTP_PROGRESS_NOWAIT	(0)
-
 typedef void *dtp_rpc_input_t;
 typedef void *dtp_rpc_output_t;
 /**
@@ -265,17 +260,20 @@ dtp_sync_req(dtp_rpc_t *rpc, uint64_t timeout);
  * \param dtp_ctx [IN]          DAOS transport context
  * \param timeout [IN]          how long is caller going to wait (millisecond)
  *                              if \a timeout > 0 when there is no operation to
- *                              progress.
- *                              it can also be DTP_PROGRESS_NOWAIT or
- *                              DTP_PROGRESS_MAXWAIT.
- * \param creds [IN/OUT]        input parameter as the caller specified number
- *                              of credits it wants to progress;
+ *                              progress. Can return when one or more operation
+ *                              progressed.
+ *                              zero means no waiting.
+ * \param creds [IN/OUT]        input parameter as the caller specified maximum
+ *                              number of credits it wants to progress;
  *                              output parameter as the number of credits
  *                              remaining.
- * \param cond_cb [IN]          progress condition callback. DTP internally
- *                              calls this function, when it returns non-zero
- *                              then stops the progressing or waiting and
- *                              returns.
+ *                              pass in NULL means to progress all available
+ *                              events and remaining credits number need not to
+ *                              be returned.
+ * \param cond_cb [IN]          optional progress condition callback.
+ *                              DTP internally calls this function, when it
+ *                              returns non-zero then stops the progressing or
+ *                              waiting and returns.
  * \param arg [IN]              argument to cond_cb.
  *
  * Notes: one credit corresponds to one RPC request or one HG internal

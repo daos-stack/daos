@@ -848,44 +848,57 @@ out:
 }
 
 int
-dtp_hg_progress(struct dtp_hg_context *hg_ctx, unsigned int timeout)
+dtp_hg_progress(struct dtp_hg_context *hg_ctx, unsigned int *credits,
+		unsigned int timeout)
 {
 	hg_context_t    *hg_context;
 	hg_class_t      *hg_class;
 	hg_return_t     hg_ret = HG_SUCCESS;
-	unsigned int    num_cb = 0;
+	unsigned int    max_count, actual_count, actual_total = 0;
 	int             rc = 0;
 
-	D_ASSERT(hg_ctx != NULL);
+	D_ASSERT(hg_ctx != NULL && credits != NULL && *credits > 0);
 	hg_context = hg_ctx->dhc_hgctx;
 	hg_class = hg_ctx->dhc_hgcla;
 	D_ASSERT(hg_context != NULL && hg_class != NULL);
 
-	hg_ret = HG_Trigger(hg_context, 0, 1, &num_cb);
-	if (hg_ret != HG_SUCCESS && hg_ret != HG_TIMEOUT) {
+	max_count = *credits;
+	hg_ret = HG_Trigger(hg_context, 0, max_count, &actual_count);
+	if (hg_ret == HG_SUCCESS) {
+		actual_total = actual_count;
+	} else if (hg_ret != HG_TIMEOUT) {
 		D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
 
+	if (actual_total == max_count)
+		D_GOTO(out, rc);
+	D_ASSERT(actual_total < max_count);
+
+	if (actual_total > 0)
+		timeout = 0;
 	hg_ret = HG_Progress(hg_context, timeout);
-	if (hg_ret != HG_SUCCESS && hg_ret != HG_TIMEOUT) {
+	if (hg_ret == HG_SUCCESS) {
+		/* Progress succeed, call HG_Trigger again */
+		max_count -= actual_count;
+		hg_ret = HG_Trigger(hg_context, 0, max_count, &actual_count);
+		if (hg_ret == HG_SUCCESS) {
+			actual_total += actual_count;
+		} else if (hg_ret != HG_TIMEOUT) {
+			D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
+			rc = -DER_DTP_HG;
+		}
+	} else if (hg_ret == HG_TIMEOUT) {
+		if (actual_total == 0)
+			rc = -DER_TIMEDOUT;
+	} else {
 		D_ERROR("HG_Progress failed, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
 
-	/* Progress succeed, call HG_Trigger again */
-	if (hg_ret == HG_SUCCESS) {
-		hg_ret = HG_Trigger(hg_context, 0, 1, &num_cb);
-		if (hg_ret != HG_SUCCESS && hg_ret != HG_TIMEOUT) {
-			D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
-			rc = -DER_DTP_HG;
-		}
-	}
-
-	if (hg_ret == HG_TIMEOUT)
-		rc = -ETIMEDOUT;
-
 out:
+	if (rc == 0)
+		*credits = actual_total;
 	return rc;
 }
 

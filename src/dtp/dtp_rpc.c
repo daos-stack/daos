@@ -232,7 +232,7 @@ dtp_sync_req(dtp_rpc_t *rpc, uint64_t timeout)
 		uint64_t interval = 1000; /* milliseconds */
 
 		rc = dtp_progress(rpc->dr_ctx, interval, NULL, NULL, NULL);
-		if (rc != 0 && rc != -ETIMEDOUT) {
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("dtp_progress failed rc: %d.\n", rc);
 			break;
 		}

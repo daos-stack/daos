@@ -137,21 +137,65 @@ dtp_context_empty(int locked)
 
 int
 dtp_progress(dtp_context_t dtp_ctx, unsigned int timeout,
-	     unsigned int *credits, dtp_progress_cond_cb_t cond_cb, void *arg)
+	     unsigned int *creds, dtp_progress_cond_cb_t cond_cb, void *arg)
 {
 	struct dtp_hg_context	*hg_ctx;
+	unsigned int		credits, actual;
+	struct timeval		tv;
+	uint64_t		now, end;
 	int			rc = 0;
 
 	if (dtp_ctx == DTP_CONTEXT_NULL) {
 		D_ERROR("invalid parameter (NULL dtp_ctx).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+	if (creds != NULL && *creds <= 0) {
+		D_ERROR("invalid parameter, creds: %d.\n", *creds);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
-	/* TODO ... */
+	credits = (creds == NULL) ? UINT32_MAX : *creds;
+	actual = credits;
 	hg_ctx = (struct dtp_hg_context *)dtp_ctx;
-	rc = dtp_hg_progress(hg_ctx, timeout);
-	if (rc != 0 && rc != -ETIMEDOUT)
-		D_ERROR("dtp_hg_progress failed, rc: %d.\n", rc);
+	if (timeout == 0 || cond_cb == NULL) {
+		rc = dtp_hg_progress(hg_ctx, &actual, timeout);
+		if (rc != 0 && rc != -DER_TIMEDOUT)
+			D_ERROR("dtp_hg_progress failed, rc: %d.\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = gettimeofday(&tv, NULL);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	now = tv.tv_sec * 1000 * 1000 + tv.tv_usec;
+	end = now + timeout * 1000 * 1000;
+	while (1) {
+		rc = dtp_hg_progress(hg_ctx, &actual, 1);
+		if (rc == 0) {
+			D_ASSERT(actual <= credits);
+			if (actual > 0)
+				break;
+		} else if (rc != -DER_TIMEDOUT) {
+			D_ERROR("dtp_hg_progress failed, rc: %d.\n", rc);
+			break;
+		}
+
+		/*
+		 * now cannot get the number of remaining credits from mercury,
+		 * so pass credits to cond_cb.
+		 */
+		if (cond_cb(arg, credits) != 0)
+			break;
+
+		rc = gettimeofday(&tv, NULL);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		now = tv.tv_sec * 1000 * 1000 + tv.tv_usec;
+		if (now >= end) {
+			rc = -DER_TIMEDOUT;
+			break;
+		}
+	};
 
 out:
 	return rc;

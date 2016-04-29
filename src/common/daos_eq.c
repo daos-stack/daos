@@ -391,7 +391,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_inf, int64_t timeout,
 
 		rc = dtp_progress(daos_eq_ctx, interval, NULL, NULL,
 				  NULL);
-		if (rc != 0 && rc != -ETIMEDOUT) {
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("dtp progress fails: rc = %d\n", rc);
 			break;
 		}
