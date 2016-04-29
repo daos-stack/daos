@@ -216,6 +216,28 @@ int
 dtp_context_destroy(dtp_context_t dtp_ctx, int force);
 
 /**
+ * Query the index of the transport context, the index value ranges in
+ * [0, ctx_num - 1].
+ *
+ * \param dtp_ctx [IN]          DAOS transport context
+ * \param ctx_idx [OUT]         pointer to the returned index
+ *
+ * \return                      zero on success, negative value if error
+ */
+int
+dtp_context_idx(dtp_context_t dtp_ctx, int *ctx_idx);
+
+/**
+ * Query the total number of the transport contexts.
+ *
+ * \param ctx_num [OUT]         pointer to the returned number
+ *
+ * \return                      zero on success, negative value if error
+ */
+int
+dtp_context_num(int *ctx_num);
+
+/**
  * Finalize DAOS transport layer.
  *
  * \return                      zero on success, negative value if error

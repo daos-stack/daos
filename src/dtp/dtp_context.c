@@ -88,6 +88,37 @@ out:
 	return rc;
 }
 
+int
+dtp_context_idx(dtp_context_t dtp_ctx, int *ctx_idx)
+{
+	struct dtp_hg_context	*hg_ctx;
+	int			rc = 0;
+
+	if (dtp_ctx == DTP_CONTEXT_NULL || ctx_idx == NULL) {
+		D_ERROR("invalid parameter, dtp_ctx: %p, ctx_idx: %p.\n",
+			dtp_ctx, ctx_idx);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	hg_ctx = (struct dtp_hg_context *)dtp_ctx;
+	*ctx_idx = hg_ctx->dhc_idx;
+
+out:
+	return rc;
+}
+
+int
+dtp_context_num(int *ctx_num)
+{
+	if (ctx_num == NULL) {
+		D_ERROR("invalid parameter of NULL ctx_num.\n");
+		return -DER_INVAL;
+	}
+
+	*ctx_num = dtp_gdata.dg_ctx_num;
+	return 0;
+}
+
 bool
 dtp_context_empty(int locked)
 {
