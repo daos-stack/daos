@@ -25,33 +25,89 @@
  */
 
 #include <daos/common.h>
+#include <smmintrin.h>
 #include <daos/rpc.h>
 #include <daos_srv/daos_server.h>
 #include "vos_internal.h"
 
-int
-vos_create_hhash(void)
-{
-	static pthread_mutex_t	create_mutex = PTHREAD_MUTEX_INITIALIZER;
-	static int		hhash_is_create = 0;
-	int			ret = 0;
+static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 
-	if (!hhash_is_create) {
-		pthread_mutex_lock(&create_mutex);
-		if (!hhash_is_create) {
-			ret = daos_hhash_create(DAOS_HHASH_BITS,
-						&daos_vos_hhash);
-			if (ret != 0) {
+int
+vos_init(void)
+{
+	int				rc = 0;
+	static int			is_init = 0;
+
+	if (!is_init) {
+
+		pthread_mutex_lock(&mutex);
+		/**
+		 * creating and initializing a handle hash
+		 * to maintain all "DRAM" pool handles
+		 * This hash converts the DRAM pool handle to a uint64_t
+		 * cookie. This cookies is returned with a generic
+		 * daos_handle_t
+		 * Thread safe vos_hhash creation
+		 * and link initialization
+		 * hash-table created once across all handles in VOS
+		 */
+		if (!is_init && !daos_vos_hhash) {
+			rc = daos_hhash_create(DAOS_HHASH_BITS,
+					       &daos_vos_hhash);
+			if (rc) {
 				D_ERROR("VOS hhash creation error\n");
-				pthread_mutex_unlock(&create_mutex);
-				return ret;
+				goto exit;
 			}
-			hhash_is_create = 1;
+			/**
+			 * Registering the class for OI btree
+			 */
+			rc = vos_oi_init();
+			if (rc)
+				D_ERROR("VOS OI btree initialization error\n");
+			else
+				is_init = 1;
 		}
-		pthread_mutex_unlock(&create_mutex);
-	}
-	return ret;
+exit:
+		pthread_mutex_unlock(&mutex);
+
+	} else
+		D_ERROR("Already initialized a VOS instance\n");
+
+	return rc;
 }
+
+void
+vos_fini(void)
+{
+	pthread_mutex_lock(&mutex);
+
+	if (daos_vos_hhash) {
+		daos_hhash_destroy(daos_vos_hhash);
+		daos_vos_hhash = NULL;
+	} else
+		D_ERROR("Nothing to destroy!\n");
+
+	pthread_mutex_unlock(&mutex);
+}
+
+
+struct vc_hdl*
+vos_co_lookup_handle(daos_handle_t coh)
+{
+	struct vc_hdl		*co_hdl = NULL;
+	struct daos_hlink	*hlink = NULL;
+
+	hlink = daos_hhash_link_lookup(daos_vos_hhash,
+				       coh.cookie);
+	if (!hlink)
+		D_ERROR("vos container handle lookup error\n");
+	else
+		co_hdl = container_of(hlink, struct vc_hdl,
+				      vc_hlink);
+	return co_hdl;
+}
+
+
 
 struct vp_hdl*
 vos_pool_lookup_handle(daos_handle_t poh)
@@ -68,16 +124,31 @@ vos_pool_lookup_handle(daos_handle_t poh)
 	return vpool;
 }
 
+
 inline void
 vos_pool_putref_handle(struct vp_hdl *vpool)
 {
 	if (!vpool) {
-		D_ERROR("Empty handle error\n");
+		D_ERROR("Empty Pool handle\n");
 		return;
 	}
 	daos_hhash_link_putref(daos_vos_hhash,
 			       &vpool->vp_hlink);
+
 }
+
+inline void
+vos_co_putref_handle(struct vc_hdl *co_hdl)
+{
+	if (!co_hdl) {
+		D_ERROR("Empty container handle\n");
+		return;
+	}
+	daos_hhash_link_putref(daos_vos_hhash,
+			       &co_hdl->vc_hlink);
+}
+
+
 
 static void *
 vos_tls_init(const struct dss_thread_local_storage *dtls,
@@ -126,3 +197,38 @@ struct dss_module vos_module =  {
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,
 };
+
+/*
+ * Simple CRC64 hash with intrinsics
+ * Should be eventually replaced with hash_function from ISA-L
+*/
+uint64_t
+vos_generate_crc64(void *key, uint64_t size)
+{
+	uint64_t	*data = NULL, *new_key = NULL;
+	uint64_t	 hash = 0xffffffffffffffff;
+	int		 i, counter;
+
+	if (size < 64) {
+		new_key = (uint64_t *)malloc(64);
+		/*Pad the rest of 64-bytes to 0*/
+		memset(new_key, 0, 64);
+		counter = 1;
+	} else {
+		new_key = (uint64_t *)malloc(size);
+		memset(new_key, 0, size);
+		counter = (int)(size/8);
+	}
+	memcpy(new_key, key, size);
+	data = new_key;
+	for (i = 0; i < counter ; i++) {
+		hash = _mm_crc32_u64(hash, *data);
+		data++;
+	}
+
+	D_DEBUG(DF_VOS3, "%"PRIu64"%"PRIu64" %"PRIu64"\n",
+			*(uint64_t *)new_key, size, hash);
+	free(new_key);
+
+	return hash;
+}

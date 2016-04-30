@@ -30,6 +30,7 @@ DAOS_DIR=${DAOS_DIR:-$(cd $(dirname $0)/../../..; echo $PWD)}
 CHASH_TABLE=$DAOS_DIR/build/vos/tests/vos_chash_table_test
 POOL_TEST=$DAOS_DIR/build/vos/tests/vos_pool_tests
 CONTAINER_TEST=$DAOS_DIR/build/vos/tests/vos_container_tests
+OI_TEST=$DAOS_DIR/build/vos/tests/vos_oi_tests
 POOL_FILE=$1
 TEST_CNT=0;
 TEST_SUCCESS=0;
@@ -131,4 +132,5 @@ vtest $POOL_TEST "" $POOL_FILE ""
 vtest $CONTAINER_TEST "" $POOL_FILE ""
 vtest $CHASH_TABLE "SINGLE-THREADED" $POOL_FILE "10 100 0"
 vtest $CHASH_TABLE "MULTI-THREADED" $POOL_FILE "10 100 1 4"
+vtest $OI_TEST "" $POOL_FILE ""
 vtests_summary

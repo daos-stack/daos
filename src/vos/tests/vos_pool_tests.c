@@ -50,6 +50,13 @@ main(int argc, char **argv)
 
 	file = argv[1];
 	uuid_generate_time_safe(uuid);
+
+	rc = vos_init();
+	if (rc) {
+		fprintf(stderr, "VOS init error: %d\n", rc);
+		return rc;
+	}
+
 	rc = vos_pool_create(file, uuid, POOL_SIZE, &vph, NULL);
 	if (rc) {
 		fprintf(stderr, "vpool create failed with error : %d", rc);
@@ -95,7 +102,7 @@ main(int argc, char **argv)
 		fprintf(stdout, "Success Destroying pool %s\n", file);
 	}
 
-
+	vos_fini();
 	remove(file);
 	return 0;
 }

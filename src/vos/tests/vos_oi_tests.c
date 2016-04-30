@@ -32,12 +32,15 @@
 #include <daos_srv/vos.h>
 #include <daos/common.h>
 
+#include "vos_obj.h"
+
 #define POOL_SIZE 10737418240ULL
 
 bool
 file_exists(const char *filename)
 {
 	FILE *fp;
+
 	fp = fopen(filename, "r");
 	if (fp) {
 		fclose(fp);
@@ -47,31 +50,39 @@ file_exists(const char *filename)
 }
 
 int
-main(int argc, char **argv) {
+main(int argc, char *argv[]) {
 
-
-	int rc = 0;
-	char *file = NULL;
-	daos_handle_t vph, coh;
-	uuid_t pool_uuid, container_uuid1, container_uuid2;
-	vos_co_info_t cinfo;
+	int			rc	= 0;
+	char			*file	= NULL;
+	uuid_t			pool_uuid, container_uuid;
+	daos_handle_t		vph;
+	daos_handle_t		coh;
+	daos_unit_oid_t		oid;
+	struct vos_obj		*obj = NULL;
 
 	if (argc < 2) {
 		fprintf(stderr,
-			"Missing argument <exec> <pmem-file>\n");
+			"Missing arguments <exec> <pmem-file>\n");
 		exit(-1);
 	}
+
+	oid.id_shard = 1;
+	oid.id_pad_32 = 0;
+	oid.id_pub.lo = 1;
+	oid.id_pub.mid = 2;
+	oid.id_pub.hi = 3;
 
 	file = strdup(argv[1]);
 	if (file_exists(file))
 		remove(file);
+	uuid_generate_time_safe(pool_uuid);
 
 	rc = vos_init();
 	if (rc) {
 		fprintf(stderr, "VOS init error: %d\n", rc);
 		return rc;
 	}
-	uuid_generate_time_safe(pool_uuid);
+
 	rc = vos_pool_create(file,
 			     pool_uuid, POOL_SIZE, &vph, NULL);
 	if (rc) {
@@ -80,58 +91,53 @@ main(int argc, char **argv) {
 	}
 	fprintf(stdout, "Success creating pool at %s\n", file);
 
-	uuid_generate_time_safe(container_uuid1);
-	rc = vos_co_create(vph, container_uuid1, NULL);
+	uuid_generate_time_safe(container_uuid);
+	rc = vos_co_create(vph, container_uuid, NULL);
 	if (rc) {
-		fprintf(stderr, "vos container 1 creation error\n");
+		fprintf(stderr, "vos container creation error\n");
 		return rc;
 	}
-	fprintf(stdout, "Success creating container 1 at %s\n", file);
+	fprintf(stdout, "Success creating container at %s\n", file);
 
-	uuid_generate_time_safe(container_uuid2);
-	rc = vos_co_create(vph, container_uuid2, NULL);
+	rc = vos_co_open(vph, container_uuid, &coh, NULL);
 	if (rc) {
-		fprintf(stderr, "vos container 2 creation  error\n");
+		fprintf(stderr, "VOS container open error\n");
 		return rc;
 	}
-	fprintf(stdout, "Success creating container 2 at %s\n", file);
+	fprintf(stdout, "Success opening container at %s\n", file);
 
-	rc = vos_co_open(vph, container_uuid1, &coh, NULL);
-	if (rc) {
-		fprintf(stderr, "vos container 1 open error\n");
+	rc = vos_oi_lookup(coh, oid, &obj);
+	if (rc || obj == NULL) {
+		fprintf(stderr,
+			"Error in lookup object in object index table\n");
 		return rc;
 	}
-	fprintf(stdout, "Success opening container 2 at %s\n", file);
+	fprintf(stdout, "Success adding an object to object index\n");
 
-	rc = vos_co_query(coh, &cinfo, NULL);
-	if (rc) {
-		fprintf(stderr, "vos container query error\n");
+	rc = vos_oi_lookup(coh, oid, &obj);
+	if (rc || obj == NULL) {
+		fprintf(stderr,
+			"Error in lookup object in object index table\n");
 		return rc;
 	}
-	fprintf(stdout, "Success querying the container\n");
-	fprintf(stdout, "Num Objects: %u\n", cinfo.pci_nobjs);
-	fprintf(stdout, "Used Space : "DF_U64"\n", cinfo.pci_used);
+	fprintf(stdout, "Success looking up an object in object index\n");
+
 
 	rc = vos_co_close(coh, NULL);
 	if (rc) {
-		fprintf(stderr, "vos container 1 close error\n");
+		fprintf(stderr, "Error in closing container\n");
 		return rc;
 	}
-	fprintf(stdout, "Success closing container 2 at %s\n", file);
+	fprintf(stdout, "Success closing a container\n");
 
-	rc = vos_co_destroy(vph, container_uuid2, NULL);
-	if (rc) {
-		fprintf(stderr, "vos container 2 destroy error\n");
-		return rc;
-	}
-	fprintf(stdout, "Success destroying container 2 at %s\n", file);
 
-	rc = vos_co_destroy(vph, container_uuid1, NULL);
+	rc = vos_co_destroy(vph, container_uuid, NULL);
 	if (rc) {
-		fprintf(stderr, "vos container 1 destroy error\n");
+		fprintf(stderr, "vos container destroy error\n");
 		return rc;
 	}
-	fprintf(stdout, "Success destroying container 1 at %s\n", file);
+	fprintf(stdout, "Success destroying container at %s\n", file);
+
 
 	vos_fini();
 	remove(file);

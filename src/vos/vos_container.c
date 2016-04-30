@@ -31,7 +31,7 @@
 #include <daos/hash.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
-
+#include <vos_obj.h>
 /**
  * Callback free methods for VOS Container and
  * VOS Pool
@@ -41,10 +41,13 @@ daos_co_hhash_free(struct daos_hlink *hlink)
 {
 	struct vc_hdl *co_hdl;
 
+	if (!hlink)
+		return;
 	co_hdl = container_of(hlink, struct vc_hdl,
 			      vc_hlink);
-	if (NULL != co_hdl)
-		D_FREE_PTR(co_hdl);
+
+
+	D_FREE_PTR(co_hdl);
 }
 
 struct daos_hlink_ops	co_hdl_hh_ops = {
@@ -97,6 +100,7 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 	struct vp_hdl			*vpool = NULL;
 	struct vos_pool_root		*root  = NULL;
 	struct vos_container_index	*ci_table = NULL;
+	struct vos_object_index		*obj_index = NULL;
 	TOID(struct vos_container)	cvalue;
 	TOID(struct vos_pool_root)	proot;
 	PMEMoid				*object_address;
@@ -113,11 +117,16 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 		   D_RW(root->vpr_ci_table);
 	uuid_copy(tmp_uuid, co_uuid);
 
-	/* Create a new container entry */
-	/* Create a PMEM hashtable if one does not exist */
-	/* If one exists then container exists */
+	/**
+	 * Create a new container entry *
+	 * Create a PMEM hashtable if one does not exist
+	 * If one exists then container exists
+	 */
 
 	if (TOID_IS_NULL(ci_table->chtable)) {
+
+		D_DEBUG(DF_VOS3, "Creating a new container index\n");
+
 		/* Container table is empty create one */
 		ret = vos_chash_create(vpool->vp_ph, VCH_MIN_BUCKET_SIZE,
 				       VCH_MAX_BUCKET_SIZE, CRC64, true,
@@ -129,19 +138,23 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 			goto exit;
 		}
 	} else {
+
+		D_DEBUG(DF_VOS3, "looking up co_id in  container index\n");
 		ret = vos_chash_lookup(vpool->vp_ph, ci_table->chtable,
 				       (void *)&tmp_uuid,
 				       sizeof(uuid_t),
-				       (void *)&object_address);
+				       (void **)&object_address);
 		if (!ret)
 			goto exit;
 	}
 
-	/* PMEM Transaction to allocate and add new container entry to
+	/**
+	 * PMEM Transaction to allocate and add new container entry to
 	 * PMEM-hash table
 	 * PMEM Allocations would be released on transaction failure
 	 * inserting into PMEM-hashtable is nested which is eventually
-	 * flattened */
+	 * flattened
+	 */
 
 	TX_BEGIN(vpool->vp_ph) {
 		cvalue = TX_NEW(struct vos_container);
@@ -150,7 +163,9 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 		D_RW(cvalue)->vc_ehtable = TX_NEW(struct vos_epoch_index);
 		D_RW(cvalue)->vc_info.pci_nobjs = 0;
 		D_RW(cvalue)->vc_info.pci_used = 0;
+		obj_index = D_RW(D_RW(cvalue)->vc_obtable);
 
+		D_DEBUG(DF_VOS3, "Inserting into container index\n");
 		ret =
 		vos_chash_insert(vpool->vp_ph, ci_table->chtable,
 				 (void *)&tmp_uuid, sizeof(uuid_t),
@@ -158,7 +173,13 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 		if (ret) {
 			D_ERROR("Container table insert failed with error : %d",
 				ret);
-			pmemobj_tx_abort(0);
+			pmemobj_tx_abort(ENOMEM);
+		}
+
+		ret = vos_oi_create(vpool, obj_index);
+		if (ret) {
+			D_ERROR("VOS object index create failure\n");
+			pmemobj_tx_abort(ENOMEM);
 		}
 	} TX_ONABORT {
 		D_ERROR("Creating a container entry: %s\n",
@@ -223,23 +244,40 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 		goto exit;
 	}
 
-	co_hdl->vc_ph = vpool->vp_ph;
+	co_hdl->vc_phdl = vpool;
 	uuid_copy(co_hdl->vc_id, tmp_uuid);
-	co_hdl->vc_obj_table = (struct vos_object_index *)
-				D_RW(D_RW(*object_address)->vc_obtable);
-	co_hdl->vc_epoch_table = (struct vos_epoch_index *)
-				  D_RW(D_RW(*object_address)->vc_ehtable);
+	co_hdl->vc_obj_table = D_RW(D_RW(*object_address)->vc_obtable);
+	co_hdl->vc_epoch_table = D_RW(D_RW(*object_address)->vc_ehtable);
+
+
+	/* Cache this btr object ID in container handle */
+	ret = dbtree_open_inplace(&co_hdl->vc_obj_table->obtable,
+				 &co_hdl->vc_phdl->vp_uma,
+				 &co_hdl->vc_btr_oid);
+	if (ret) {
+		D_ERROR("No Object handle, Tree open failed\n");
+		ret = -DER_NONEXIST;
+		goto exit;
+	}
+
 
 	daos_hhash_hlink_init(&co_hdl->vc_hlink, &co_hdl_hh_ops);
 	daos_hhash_link_insert(daos_vos_hhash, &co_hdl->vc_hlink,
 			       DAOS_HTYPE_VOS_CO);
 	daos_hhash_link_key(&co_hdl->vc_hlink, &coh->cookie);
-	daos_hhash_link_putref(daos_vos_hhash, &co_hdl->vc_hlink);
-
+	vos_co_putref_handle(co_hdl);
 exit:
-	vos_pool_putref_handle(vpool);
-	if (ret && co_hdl)
-		daos_co_hhash_free(&co_hdl->vc_hlink);
+	/* if success ref-count released during close/delete */
+	if (ret) {
+		/**
+		 * TODO: move vos_pool_putref_handle to
+		 * daos_co_hhash_free once deadlock on
+		 * daos handle hash is removed.
+		 */
+		vos_pool_putref_handle(vpool);
+		if (co_hdl)
+			daos_co_hhash_free(&co_hdl->vc_hlink);
+	}
 	return ret;
 }
 
@@ -250,16 +288,19 @@ int
 vos_co_close(daos_handle_t coh, daos_event_t *ev)
 {
 
-	struct daos_hlink	*hlink;
+	struct vc_hdl		*co_hdl = NULL;
 
-	/* Lookup container handle of hash link */
-	hlink  = daos_hhash_link_lookup(daos_vos_hhash, coh.cookie);
-	if (NULL == hlink) {
-		D_ERROR("Invalid handle for container");
+	co_hdl = vos_co_lookup_handle(coh);
+	if (!co_hdl) {
+		D_ERROR("Invalid handle for container\n");
 		return -DER_INVAL;
 	}
-	daos_hhash_link_delete(daos_vos_hhash, hlink);
-	daos_hhash_link_putref(daos_vos_hhash, hlink);
+
+	dbtree_close(co_hdl->vc_btr_oid);
+	vos_pool_putref_handle(co_hdl->vc_phdl);
+	daos_hhash_link_delete(daos_vos_hhash,
+			       &co_hdl->vc_hlink);
+	vos_co_putref_handle(co_hdl);
 
 	return 0;
 }
@@ -276,6 +317,9 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 	struct vp_hdl			*vpool = NULL;
 	struct vos_pool_root		*root  = NULL;
 	struct vos_container_index	*ci_table = NULL;
+	struct vos_object_index		*obj_index = NULL;
+	uuid_t				tmp_uuid;
+	TOID(struct vos_container)	*object_address;
 	TOID(struct vos_pool_root)	proot;
 
 	vpool = vos_pool_lookup_handle(poh);
@@ -289,16 +333,59 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 	root = D_RW(proot);
 	ci_table = (struct vos_container_index *)
 			D_RW(root->vpr_ci_table);
+
+	uuid_copy(tmp_uuid, co_uuid);
+
+	if (TOID_IS_NULL(ci_table->chtable)) {
+		D_ERROR("Empty Container table\n");
+		ret = -DER_NONEXIST;
+		goto exit;
+	}
+
+	ret = vos_chash_lookup(vpool->vp_ph, ci_table->chtable,
+			       (void *)&tmp_uuid, sizeof(uuid_t),
+			       (void **)&object_address);
+	if (ret) {
+		D_ERROR("Container does not exist\n");
+		goto exit;
+	}
+
 	/**
-	 * vos_chash_remove hash its own transactions
-	 * since chash_table stores key and value in PMEM
-	 * Its just enough to remove the entry
-	 *
+	 * Need to destroy object index before removing
+	 * container entry
+	 * Outer transaction for all destroy operations
+	 * both oi_destroy and chash_remove have internal
+	 * transaction which will be nested.
 	 */
-	ret = vos_chash_remove(vpool->vp_ph, ci_table->chtable,
-			       co_uuid, sizeof(uuid_t));
-	if (ret)
-		D_ERROR("Failed to remove container\n");
+	TX_BEGIN(vpool->vp_ph) {
+
+		obj_index  = (struct vos_object_index *)
+			      D_RW(D_RW(*object_address)->vc_obtable);
+
+		ret = vos_oi_destroy(vpool, obj_index);
+		if (ret) {
+			D_ERROR("OI destroy failed with error : %d",
+				ret);
+			pmemobj_tx_abort(EFAULT);
+		}
+		/**
+		 * vos_chash_remove hash its own transactions
+		 * since chash_table stores key and value in PMEM
+		 * Its just enough to remove the entry
+		 *
+		*/
+		ret = vos_chash_remove(vpool->vp_ph, ci_table->chtable,
+				       tmp_uuid, sizeof(uuid_t));
+		if (ret) {
+			D_ERROR("Chash remove failed with error : %d",
+				ret);
+			pmemobj_tx_abort(EFAULT);
+		}
+	}  TX_ONABORT {
+		D_ERROR("Destroying container transaction failed %s\n",
+			pmemobj_errormsg());
+	} TX_END;
+
 exit:
 	vos_pool_putref_handle(vpool);
 	return ret;
@@ -318,23 +405,20 @@ vos_co_query(daos_handle_t coh, vos_co_info_t *vc_info, daos_event_t *ev)
 	struct vos_container_index	*ci_table = NULL;
 	TOID(struct vos_container)	*container_value;
 	TOID(struct vos_pool_root)	proot;
-	struct daos_hlink		*hlink = NULL;
 
-	hlink = daos_hhash_link_lookup(daos_vos_hhash, coh.cookie);
-	if (NULL == hlink) {
+	co_hdl = vos_co_lookup_handle(coh);
+	if (!co_hdl) {
 		D_ERROR("Invalid handle for container\n");
-		ret = -DER_INVAL;
-		goto exit;
+		return -DER_INVAL;
 	}
 
-	co_hdl = container_of(hlink, struct vc_hdl, vc_hlink);
-	proot = POBJ_ROOT(co_hdl->vc_ph, struct vos_pool_root);
+	proot = POBJ_ROOT(co_hdl->vc_phdl->vp_ph, struct vos_pool_root);
 	root = D_RW(proot);
 
 	ci_table = (struct vos_container_index *)
 		   D_RW(root->vpr_ci_table);
 
-	ret = vos_chash_lookup(co_hdl->vc_ph, ci_table->chtable,
+	ret = vos_chash_lookup(co_hdl->vc_phdl->vp_ph, ci_table->chtable,
 			       co_hdl->vc_id, sizeof(uuid_t),
 			       (void **)&container_value);
 	if (ret) {
@@ -344,7 +428,8 @@ vos_co_query(daos_handle_t coh, vos_co_info_t *vc_info, daos_event_t *ev)
 
 	vc_info->pci_nobjs = D_RW(*container_value)->vc_info.pci_nobjs;
 	vc_info->pci_used  = D_RW(*container_value)->vc_info.pci_used;
+
 exit:
-	daos_hhash_link_putref(daos_vos_hhash, hlink);
+	vos_co_putref_handle(co_hdl);
 	return ret;
 }

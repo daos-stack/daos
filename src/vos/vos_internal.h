@@ -32,6 +32,7 @@
 #include <daos_srv/daos_server.h>
 
 #include "vos_layout.h"
+#include "vos_obj.h"
 
 struct vos_tls {
 	daos_handle_t	vmi_poh;
@@ -51,73 +52,6 @@ vos_tls_get()
 }
 
 /**
- * Reference of a cached object.
- *
- * NB: DRAM data structure.
- */
-struct vos_obj_ref {
-	/** TODO: link it to object cache lru and hash table */
-
-	/** Key for searching, container uuid */
-	uuid_t				 or_co_uuid;
-	/** Key for searching, object ID within a container */
-	daos_unit_oid_t			 or_oid;
-	/** btree open handle of the object */
-	daos_handle_t			 or_toh;
-	/** btree iterator handle */
-	daos_handle_t			 or_ih;
-	/** Persistent memory ID for the object */
-	struct vos_obj			*or_obj;
-};
-
-/**
- * percpu object cache. It can include a hash table and a LRU for
- * cached objects.
- *
- * This structure is not exported (move to TLS).
- */
-struct vos_obj_cache;
-
-/**
- * Find an object in the cache \a occ and take its reference. If the object is
- * not in cache, this function will load it from PMEM pool or create it, then
- * add it to the cache.
- *
- * \param occ	[IN]	Object cache, it could be a percpu data structure.
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	VOS object ID.
- * \param oref_p [OUT]	Returned object cache reference.
- */
-int  vos_obj_ref_hold(struct vos_obj_cache *occ, daos_handle_t coh,
-		      daos_unit_oid_t oid, struct vos_obj_ref **oref_p);
-
-/**
- * Release the object cache reference.
- *
- * \param oref	[IN]	Reference to be released.
- */
-void vos_obj_ref_release(struct vos_obj_cache *occ, struct vos_obj_ref *oref);
-
-/**
- * Create an object cache.
- *
- * \param occ_p	[OUT]	Newly created cache.
- */
-int  vos_obj_cache_create(struct vos_obj_cache **occ_p);
-
-/**
- * Destroy an object cache, and release all cached object references.
- *
- * \param occ	[IN]	Cache to be destroyed.
- */
-void vos_obj_cache_destroy(struct vos_obj_cache *occ);
-
-/**
- * Return object cache for the current thread.
- */
-struct vos_obj_cache *vos_obj_cache_current(void);
-
-/**
  * VOS pool handle (DRAM)
  */
 struct vp_hdl {
@@ -127,6 +61,10 @@ struct vp_hdl {
 	PMEMobjpool		*vp_ph;
 	/* Path to PMEM file */
 	char			*vp_fpath;
+	/* Btree attribute this instance of
+	 * pool
+	 */
+	struct umem_attr	vp_uma;
 };
 
 /**
@@ -136,9 +74,11 @@ struct vc_hdl {
 	/* VOS container handle hash link */
 	struct daos_hlink	vc_hlink;
 	/* VOS PMEMobjpool pointer */
-	PMEMobjpool		*vc_ph;
+	struct vp_hdl		*vc_phdl;
 	/* Unique UID of VOS container */
 	uuid_t			vc_id;
+	/* DAOS handle for object index btree */
+	daos_handle_t		vc_btr_oid;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
@@ -178,10 +118,10 @@ vos_pool_lookup_handle(daos_handle_t poh);
 /**
  * Decrement reference count
  *
- * \param vpool	[IN]	VOS pool handle
+ * \param co_hdl	[IN] VOS container handle
  */
 void
-vos_pool_putref_handle(struct vp_hdl *vpool);
+vos_pool_putref_handle(struct vp_hdl *vp_hdl);
 
 /**
  * Lookup VOS container handle
@@ -190,10 +130,74 @@ vos_pool_putref_handle(struct vp_hdl *vpool);
  *
  * TODO: Not yet implemented
  */
-struct vos_pool*
-vos_co_lookup_handle(daos_handle_t poh);
+struct vc_hdl*
+vos_co_lookup_handle(daos_handle_t coh);
+
+/**
+ * Decrement container handle reference
+ * count
+ *
+ * \param co_hdl [IN]	VOS container handle
+ */
+void
+vos_co_putref_handle(struct vc_hdl *co_hdl);
+
+/**
+ * Generate CRC64 hash for any key
+ *
+ * \param key	[IN]	Key for generating hash
+ * \param size	[IN]	Size of the key
+ *
+ * \return		64-bit Hash value for the
+ *			key
+*/
+uint64_t
+vos_generate_crc64(void *key, uint64_t size);
 
 PMEMobjpool *vos_coh2pop(daos_handle_t coh);
+
+/**
+ * VOS object index class register for btree
+ * Called with vos_init()
+ *
+ * \return		0 on success and negative on
+ *			failure
+ */
+int
+vos_oi_init();
+
+/**
+ * VOS object index create
+ * Create a new B-tree if empty object index and adds the first
+ * oid
+ * Called from vos_container_create.
+ *
+ * \param po_hdl	[IN]	Pool Handle
+ * \param obj_index	[IN]	vos object index
+ *				(pmem direct pointer)
+ *
+ * \return		0 on success and negative on
+ *			failure
+ */
+int
+vos_oi_create(struct vp_hdl *po_hdl,
+	      struct vos_object_index *obj_index);
+
+/**
+ * VOS object index destroy
+ * Destroy the object index and all its objects
+ * Called from vos_container_destroy
+ *
+ * \param po_hdl	[IN]	Pool Handle
+ * \param obj_index	[IN]	vos object index
+ *				(pmem direct pointer)
+ *
+ * \return		0 on success and negative on
+ *			failure
+ */
+int
+vos_oi_destroy(struct vp_hdl *po_hdl,
+	       struct vos_object_index *obj_index);
 
 /**
  * Data structure which carries the keys, epoch ranges to the multi-nested

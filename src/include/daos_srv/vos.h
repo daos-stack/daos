@@ -28,11 +28,33 @@
  * Author :  Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
 
-#ifndef __VOS_API_H
-#define __VOS_API_H
+#ifndef __VOS_API_H__
+#define __VOS_API_H__
 
 #include <daos_types.h>
 #include <daos_srv/vos_types.h>
+
+
+/**
+ *  Initialize and Finalize Routines
+ */
+/**
+ * Initialize the environment for a VOS instance
+ * Must be called once before starting a VOS instance
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_init(void);
+
+/**
+ * Finalize the environment for a VOS instance
+ * Must be called for clean up at the end of using a vos instance
+ *
+ */
+void
+vos_fini(void);
+
 
 /**
  * Versioning Object Storage Pool (VOSP)

@@ -94,11 +94,6 @@ struct vos_container_index {
 	/* More items to be added*/
 };
 
-struct vos_object_index {
-	TOID(struct vos_chash_table) obtable;
-	/* More items to be added*/
-};
-
 struct vos_epoch_index {
 	TOID(struct vos_chash_table) ehtable;
 	/* More items to be added*/
@@ -110,18 +105,6 @@ struct vos_container {
 	vos_co_info_t			vc_info;
 	TOID(struct vos_object_index)	vc_obtable;
 	TOID(struct vos_epoch_index)	vc_ehtable;
-};
-
-/**
- * VOS object is a tree based KV store
- */
-struct vos_obj {
-	daos_unit_oid_t			vo_oid;
-	/** btree root */
-	struct btr_root			vo_tree;
-	/**
-	 * TODO: link it to the container object table
-	 */
 };
 
 /**
@@ -162,5 +145,17 @@ struct vos_irec {
 	/** placeholder for the real stuff */
 	char				ir_body[0];
 };
+
+/**
+ * VOS object, assume all objects are KV store...
+ * NB: PMEM data structure.
+ */
+struct vos_obj {
+	daos_unit_oid_t			vo_oid;
+	/** VOS object btree root */
+	struct btr_root			vo_tree;
+};
+
+
 
 #endif

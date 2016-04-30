@@ -80,22 +80,6 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		return -DER_NONEXIST;
 	}
 
-	/* creating and initializing a handle hash
-	 * to maintain all "DRAM" pool handles
-	 * This hash converts the DRAM pool handle to a uint64_t
-	 * cookie. This cookies is returned with a generic
-	 * daos_handle_t */
-
-	/* Thread safe vos_hhash creation
-	 * and link initialization
-	 * hash-table created once across all handles in VOS
-	 */
-	rc = vos_create_hhash();
-	if (rc) {
-		D_ERROR("Creating hhash failure\n");
-		return rc;
-	}
-
 	D_ALLOC_PTR(vpool);
 	if (vpool == NULL)
 		return -DER_NOMEM;
@@ -108,7 +92,13 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		rc = -DER_NOSPACE;
 		goto exit;
 	}
-
+	/* Just for testing. Keeping object in VMEM */
+	vpool->vp_uma.uma_id = UMEM_CLASS_VMEM;
+	/**
+	 * TODO: Change to PMEM using
+	 * vpool->vp_uma.uma_id = UMEM_CLASS_PMEM;
+	 * vpool->vp_uma.uma_u.pmem_pool = vpool->vp_ph;
+	 */
 	proot = POBJ_ROOT(vpool->vp_ph, struct vos_pool_root);
 	root = D_RW(proot);
 	root_size = pmemobj_root_size(vpool->vp_ph);
@@ -137,7 +127,7 @@ exit:
 		daos_hhash_link_insert(daos_vos_hhash, &vpool->vp_hlink,
 				       DAOS_HTYPE_VOS_POOL);
 		daos_hhash_link_key(&vpool->vp_hlink, &poh->cookie);
-		daos_hhash_link_putref(daos_vos_hhash, &vpool->vp_hlink);
+		vos_pool_putref_handle(vpool);
 	} else {
 		daos_vpool_free(&vpool->vp_hlink);
 	}
@@ -173,7 +163,7 @@ vos_pool_destroy(daos_handle_t poh, daos_event_t *ev)
 
 	daos_hhash_link_delete(daos_vos_hhash, &vpool->vp_hlink);
 exit:
-	daos_hhash_link_putref(daos_vos_hhash, &vpool->vp_hlink);
+	vos_pool_putref_handle(vpool);
 
 	return rc;
 }
@@ -197,17 +187,6 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 	if (path == NULL) {
 		D_ERROR("Invalid Pool Path\n");
 		return -DER_INVAL;
-	}
-
-	/*
-	 * Pool can be created and opened with different VOS instances
-	 * So during open if the handle hash does not exist
-	 * it must be created and initialized.
-	 */
-	rc = vos_create_hhash();
-	if (rc) {
-		D_ERROR("Creating handle hash failed\n");
-		return rc;
 	}
 
 	/* Create a new handle during open */
@@ -240,7 +219,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 	daos_hhash_link_insert(daos_vos_hhash, &vpool->vp_hlink,
 			       DAOS_HTYPE_VOS_POOL);
 	daos_hhash_link_key(&vpool->vp_hlink, &poh->cookie);
-	daos_hhash_link_putref(daos_vos_hhash, &vpool->vp_hlink);
+	vos_pool_putref_handle(vpool);
 exit:
 	if (rc)
 		daos_vpool_free(&vpool->vp_hlink);
@@ -274,7 +253,7 @@ vos_pool_close(daos_handle_t poh, daos_event_t *ev)
 	 * daos_vpool_free which also closes the pmemobj pool
 	 */
 	daos_hhash_link_delete(daos_vos_hhash, &vpool->vp_hlink);
-	daos_hhash_link_putref(daos_vos_hhash, &vpool->vp_hlink);
+	vos_pool_putref_handle(vpool);
 
 	return rc;
 }
