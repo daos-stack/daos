@@ -443,11 +443,47 @@ out:
 }
 
 int
+dtp_iobuf_init_by_opc_info(dtp_rpc_t *rpc_pub, struct dtp_opc_info *opc_info)
+{
+	int rc;
+
+	D_ASSERT(rpc_pub->dr_input == NULL);
+	D_ASSERT(rpc_pub->dr_output == NULL);
+
+	if (opc_info->doi_input_size > 0) {
+		/* fast path to alloc fixed size request */
+		rc = dtp_rpc_inbuf_alloc(rpc_pub,
+					 opc_info->doi_input_size);
+		if (rc != 0) {
+			D_ERROR("inbuf_init 0x%x faied, rc: %d.\n",
+				opc_info->doi_opc, rc);
+			D_GOTO(out, rc);
+		}
+	}
+	if (opc_info->doi_output_size > 0) {
+		/* fast path to alloc fixed size reply */
+		rc = dtp_rpc_outbuf_alloc(rpc_pub,
+					  opc_info->doi_output_size);
+		if (rc != 0) {
+			D_ERROR("outbuf_init 0x%x rc: %d.\n",
+				opc_info->doi_opc, rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+out:
+	if (rc < 0)
+		dtp_rpc_inout_buff_fini(rpc_pub);
+
+	return rc;
+}
+
+
+int
 dtp_rpc_handler_common(hg_handle_t hg_hdl)
 {
 	struct dtp_hg_context	*hg_ctx;
 	struct hg_info		*hg_info;
-	dtp_opcode_t		opc;
 	struct dtp_rpc_priv	*rpc_priv;
 	dtp_rpc_t		*rpc_pub;
 	dtp_proc_t		proc = NULL;
@@ -485,41 +521,39 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 		D_GOTO(out, hg_ret = HG_OTHER_ERROR);
 	}
 
-	opc = rpc_priv->drp_req_hdr.dch_opc;
 	/* D_DEBUG(DF_TP,"in dtp_rpc_handler_common, opc: 0x%x.\n", opc); */
-	opc_info = dtp_opc_lookup(dtp_gdata.dg_opc_map, opc, DTP_UNLOCK);
+	opc_info = dtp_opc_lookup(dtp_gdata.dg_opc_map,
+				  rpc_priv->drp_req_hdr.dch_opc, DTP_UNLOCK);
+
 	if (opc_info == NULL) {
-		D_ERROR("opc: 0x%x, lookup failed.\n", opc);
-		D_FREE_PTR(rpc_priv);
-		dtp_hg_unpack_cleanup(proc);
-		D_GOTO(out, hg_ret = HG_NO_MATCH);
+		D_ERROR("Can not find opc info: %d\n", -DER_DTP_HG);
+		D_GOTO(out, rc = -DER_DTP_HG);
 	}
+	rpc_priv->drp_opc_info = opc_info;
+
+	rc = dtp_iobuf_init_by_opc_info(&rpc_priv->drp_pub, opc_info);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* D_DEBUG(DF_TP,"in dtp_rpc_handler_common, opc: 0x%x.\n", opc); */
 	D_ASSERT(opc_info->doi_input_size <= DTP_MAX_INPUT_SIZE &&
 		 opc_info->doi_output_size <= DTP_MAX_OUTPUT_SIZE);
 
-	dtp_rpc_priv_init(rpc_priv, (dtp_context_t)hg_ctx, opc, 1);
-
-	rc = dtp_rpc_inout_buff_init(rpc_pub, opc_info->doi_input_size,
-				     opc_info->doi_output_size);
-	if (rc != 0) {
-		D_ERROR("dtp_rpc_inout_buff_init faied, rc: %d, opc: 0x%x.\n",
-			rc, opc);
-		dtp_hg_unpack_cleanup(proc);
-		D_GOTO(decref, hg_ret = HG_NOMEM_ERROR);
-	}
+	dtp_rpc_priv_init(rpc_priv, (dtp_context_t)hg_ctx,
+			  opc_info->doi_opc, 1);
 
 	D_ASSERT(rpc_priv->drp_srv != 0);
-	if (opc_info->doi_input_size > 0) {
+	if (rpc_pub->dr_input_size > 0) {
 		D_ASSERT(rpc_pub->dr_input != NULL);
-		D_ASSERT(opc_info->doi_inproc_cb != NULL);
+		D_ASSERT(opc_info->doi_rpc_cb != NULL);
 		/* corresponding to HG_Free_input in dtp_hg_req_destroy */
-		rc = dtp_hg_unpack_body(rpc_priv, proc,
-					opc_info->doi_inproc_cb);
+		rc = dtp_hg_unpack_body(rpc_priv, proc);
 		if (rc == 0) {
 			rpc_priv->drp_input_got = 1;
 			uuid_copy(rpc_pub->dr_ep.ep_grp_id,
 				  rpc_priv->drp_req_hdr.dch_grp_id);
-			rpc_pub->dr_ep.ep_rank = rpc_priv->drp_req_hdr.dch_rank;
+			rpc_pub->dr_ep.ep_rank =
+					rpc_priv->drp_req_hdr.dch_rank;
 		} else {
 			D_ERROR("_unpack_body failed, rc: %d, opc: 0x%x.\n",
 				hg_ret, rpc_pub->dr_opc);
@@ -533,10 +567,10 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 		rc = opc_info->doi_rpc_cb(rpc_pub);
 		if (rc != 0) {
 			D_ERROR("doi_rpc_cb failed, rc: %d, opc: 0x%x.\n",
-				rc, opc);
+				rc, opc_info->doi_opc);
 		}
 	} else {
-		D_ERROR("NULL drp_hg_hdl, opc: 0x%x.\n", opc);
+		D_ERROR("NULL drp_hg_hdl, opc: 0x%x.\n", opc_info->doi_opc);
 		hg_ret = HG_NO_MATCH;
 	}
 

@@ -26,6 +26,7 @@
 #define __DTP_MERCURY_H__
 
 #include <daos/list.h>
+#include <daos/transport.h>
 
 #include <mercury.h>
 #include <mercury_types.h>
@@ -88,7 +89,11 @@ struct dtp_rpc_priv {
 				drp_input_got:1;
 	uint32_t		drp_refcount;
 	pthread_spinlock_t	drp_lock;
+	struct dtp_opc_info	*drp_opc_info;
 };
+
+#define dtp_common_hdr_size(count)	\
+(sizeof(struct dtp_common_hdr) + (count) * sizeof(uint32_t))
 
 int dtp_hg_init(dtp_phy_addr_t *addr, bool server);
 int dtp_hg_fini();
@@ -101,6 +106,8 @@ int dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb,
 		    void *arg);
 int dtp_hg_reply_send(struct dtp_rpc_priv *rpc_priv);
 int dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout);
+int
+dtp_iobuf_init_by_opc_info(dtp_rpc_t *rpc_pub, struct dtp_opc_info *opc_info);
 
 static inline struct dtp_hg_context *
 dtp_hg_context_lookup(hg_context_t *ctx)
@@ -141,38 +148,39 @@ dtp_rpc_priv_init(struct dtp_rpc_priv *rpc_priv, dtp_context_t dtp_ctx,
 }
 
 static inline int
-dtp_rpc_inout_buff_init(dtp_rpc_t *rpc_pub, daos_size_t input_size,
-			daos_size_t output_size)
+dtp_rpc_inbuf_alloc(dtp_rpc_t *rpc_pub, daos_size_t size)
 {
-	int	rc = 0;
+	if (rpc_pub->dr_input != NULL)
+		return 0;
 
-	D_ASSERT(rpc_pub != NULL);
-	D_ASSERT(input_size <= DTP_MAX_INPUT_SIZE &&
-		 output_size <= DTP_MAX_OUTPUT_SIZE);
-
-	if (input_size > 0) {
-		D_ALLOC(rpc_pub->dr_input, input_size);
-		if (rpc_pub->dr_input == NULL) {
-			D_ERROR("cannot allocate memory(size "DF_U64") for "
-				"dr_input.\n", input_size);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-		rpc_pub->dr_input_size = input_size;
+	D_ASSERT(size > 0);
+	D_ALLOC(rpc_pub->dr_input, size);
+	if (rpc_pub->dr_input == NULL) {
+		D_ERROR("cannot allocate memory(size "DF_U64") for "
+			"dr_input.\n", size);
+		return -DER_NOMEM;
 	}
 
-	if (output_size > 0) {
-		D_ALLOC(rpc_pub->dr_output, output_size);
-		if (rpc_pub->dr_output == NULL) {
-			D_ERROR("cannot allocate memory(size "DF_U64") for "
-				"dr_output.\n", output_size);
-			D_FREE(rpc_pub->dr_input, rpc_pub->dr_input_size);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-		rpc_pub->dr_output_size = output_size;
+	rpc_pub->dr_input_size = size;
+	return 0;
+}
+
+static inline int
+dtp_rpc_outbuf_alloc(dtp_rpc_t *rpc_pub, daos_size_t size)
+{
+	if (rpc_pub->dr_output != NULL)
+		return 0;
+
+	D_ASSERT(size > 0);
+	D_ALLOC(rpc_pub->dr_output, size);
+	if (rpc_pub->dr_output == NULL) {
+		D_ERROR("cannot allocate memory(size "DF_U64") for "
+			"dr_output.\n", size);
+		return -DER_NOMEM;
 	}
 
-out:
-	return rc;
+	rpc_pub->dr_output_size = size;
+	return 0;
 }
 
 static inline void
@@ -185,6 +193,7 @@ dtp_rpc_inout_buff_fini(dtp_rpc_t *rpc_pub)
 		D_FREE(rpc_pub->dr_input, rpc_pub->dr_input_size);
 		rpc_pub->dr_input_size = 0;
 	}
+
 	if (rpc_pub->dr_output != NULL) {
 		D_ASSERT(rpc_pub->dr_output_size != 0);
 		D_FREE(rpc_pub->dr_output, rpc_pub->dr_output_size);
@@ -248,9 +257,10 @@ dtp_proc_common_hdr(dtp_proc_t proc, struct dtp_common_hdr *hdr)
 	/* proc the 2 paddings */
 	hg_ret = hg_proc_memcpy(hg_proc, &hdr->dch_padding[0],
 				2 * sizeof(uint32_t));
-	if (hg_ret != HG_SUCCESS)
+	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
 out:
 	return rc;
 }
@@ -343,18 +353,58 @@ dtp_hg_unpack_cleanup(dtp_proc_t proc)
 }
 
 static inline int
-dtp_hg_unpack_body(struct dtp_rpc_priv *rpc_priv, dtp_proc_t proc,
-		   dtp_proc_cb_t inproc_cb)
+dtp_proc_internal(struct drf_field *drf,
+			 dtp_proc_t proc, void *data)
+{
+	int rc = 0;
+	int i;
+	void *ptr = data;
+
+	for (i = 0; i < drf->drf_count; i++) {
+		rc = drf->drf_msg[i]->dmf_proc(proc, ptr);
+		if (rc < 0)
+			break;
+
+		ptr = (char *)ptr + drf->drf_msg[i]->dmf_size;
+	}
+
+	return rc;
+}
+
+static inline int
+dtp_proc_input(struct dtp_rpc_priv *rpc_priv,
+		      dtp_proc_t proc)
+{
+	struct dtp_req_format *drf = rpc_priv->drp_opc_info->doi_drf;
+
+	D_ASSERT(drf != NULL);
+	return dtp_proc_internal(&drf->drf_fields[DTP_IN],
+				 proc, rpc_priv->drp_pub.dr_input);
+}
+
+static inline int
+dtp_proc_output(struct dtp_rpc_priv *rpc_priv,
+		       dtp_proc_t proc)
+{
+	struct dtp_req_format *drf = rpc_priv->drp_opc_info->doi_drf;
+
+	D_ASSERT(drf != NULL);
+	return dtp_proc_internal(&drf->drf_fields[DTP_OUT],
+				 proc, rpc_priv->drp_pub.dr_output);
+}
+
+static inline int
+dtp_hg_unpack_body(struct dtp_rpc_priv *rpc_priv, dtp_proc_t proc)
 {
 	int	rc = 0;
 
 #if DTP_HG_LOWLEVEL_UNPACK
 	hg_return_t	hg_ret;
 
-	D_ASSERT(rpc_priv != NULL && proc != HG_PROC_NULL && inproc_cb != NULL);
+	D_ASSERT(rpc_priv != NULL && proc != HG_PROC_NULL);
 
 	/* Decode input parameters */
-	rc = inproc_cb(proc, rpc_priv->drp_pub.dr_input);
+	rc = dtp_proc_input(rpc_priv, proc);
 	if (rc != 0) {
 		D_ERROR("dtp_hg_unpack_body failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_priv->drp_pub.dr_opc);
@@ -393,7 +443,6 @@ static inline int
 dtp_proc_in_common(dtp_proc_t proc, dtp_rpc_input_t *data)
 {
 	struct dtp_rpc_priv	*rpc_priv;
-	struct dtp_opc_info	*opc_info = NULL;
 	int			rc = 0;
 
 	if (proc == DTP_PROC_NULL)
@@ -419,17 +468,12 @@ dtp_proc_in_common(dtp_proc_t proc, dtp_rpc_input_t *data)
 		D_GOTO(out, rc);
 	}
 
-	opc_info = dtp_opc_lookup(dtp_gdata.dg_opc_map,
-				  rpc_priv->drp_req_hdr.dch_opc, DTP_UNLOCK);
-	if (opc_info == NULL) {
-		D_ERROR("opc: 0x%x, lookup failed.\n",
-			rpc_priv->drp_req_hdr.dch_opc);
-		D_GOTO(out, rc = -DER_DTP_UNREG);
+	rc = dtp_proc_input(rpc_priv, proc);
+	if (rc != 0) {
+		D_ERROR("unpack input fails for opc: %s\n",
+			rpc_priv->drp_opc_info->doi_drf->drf_name);
+		D_GOTO(out, rc);
 	}
-
-	if (opc_info->doi_inproc_cb != NULL)
-		rc = opc_info->doi_inproc_cb(proc, *data);
-
 out:
 	return rc;
 }
@@ -439,7 +483,6 @@ static inline int
 dtp_proc_out_common(dtp_proc_t proc, dtp_rpc_output_t *data)
 {
 	struct dtp_rpc_priv	*rpc_priv;
-	struct dtp_opc_info	*opc_info = NULL;
 	int			rc = 0;
 
 	if (proc == DTP_PROC_NULL)
@@ -465,17 +508,7 @@ dtp_proc_out_common(dtp_proc_t proc, dtp_rpc_output_t *data)
 		D_GOTO(out, rc);
 	}
 
-	opc_info = dtp_opc_lookup(dtp_gdata.dg_opc_map,
-				  rpc_priv->drp_reply_hdr.dch_opc, DTP_UNLOCK);
-	if (opc_info == NULL) {
-		D_ERROR("opc: 0x%x, lookup failed.\n",
-			rpc_priv->drp_reply_hdr.dch_opc);
-		D_GOTO(out, rc = -DER_DTP_UNREG);
-	}
-
-	if (opc_info->doi_outproc_cb != NULL)
-		rc = opc_info->doi_outproc_cb(proc, *data);
-
+	rc = dtp_proc_output(rpc_priv, proc);
 out:
 	return rc;
 }
@@ -547,5 +580,4 @@ int dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, daos_sg_list_t *sgl,
 int dtp_hg_bulk_transfer(struct dtp_bulk_desc *bulk_desc,
 			 dtp_bulk_cb_t complete_cb,
 			 void *arg, dtp_bulk_opid_t *opid);
-
 #endif /* __DTP_MERCURY_H__ */

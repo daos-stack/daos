@@ -23,6 +23,7 @@
 #define __DAOS_COMMON_H__
 
 #include <sys/time.h>
+#include <sys/types.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <unistd.h>
@@ -78,8 +79,8 @@ do {									\
 	if (!((__mask & (mask)) & ~(DF_VERB_FUNC | DF_VERB_ALL)))	\
 		break;							\
 	if (__mask & DF_VERB_ALL) {					\
-		fprintf(stdout, "%s:%d:%s() " fmt, __FILE__, __LINE__,	\
-			__func__, ## __VA_ARGS__);			\
+		fprintf(stdout, "%s:%d:%d:%s() " fmt, __FILE__,		\
+			getpid(), __LINE__, __func__, ## __VA_ARGS__);  \
 	} else if (__mask & DF_VERB_FUNC) {				\
 		fprintf(stdout, "%s() " fmt,				\
 			__func__, ## __VA_ARGS__);			\
@@ -91,8 +92,8 @@ do {									\
 
 #define D_ERROR(fmt, ...)						\
 do {									\
-	fprintf(stderr, "%s:%d:%s() " fmt, __FILE__, __LINE__,          \
-		__func__, ## __VA_ARGS__);     				\
+	fprintf(stderr, "%s:%d:%d:%s() " fmt, __FILE__, getpid(),	\
+		__LINE__, __func__, ## __VA_ARGS__);			\
 	fflush(stderr);							\
 } while (0)
 

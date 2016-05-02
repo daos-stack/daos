@@ -540,16 +540,19 @@ permitted(const struct pool_attr *attr, uint32_t uid, uint32_t gid,
 int
 dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 {
-	struct pool_connect_in	       *in = rpc->dr_input;
-	struct pool_connect_out	       *out = rpc->dr_output;
-	struct pool		       *pool;
-	struct pool_attr		attr;
-	struct pool_hdl			hdl;
-	int				rc;
+	struct pool	       *pool;
+	struct pool_attr	attr;
+	struct pool_hdl		hdl;
+	struct pool_connect_in	*pci;
+	struct pool_connect_out	*pco;
+	int			rc;
 
 	D_DEBUG(DF_DSMS, "processing rpc %p\n", rpc);
 
-	rc = pool_lookup(in->pci_pool, &pool);
+	pci = dtp_req_get(rpc);
+	D_ASSERT(pci != NULL);
+
+	rc = pool_lookup(pci->pci_pool, &pool);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -559,16 +562,17 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	if (!permitted(&attr, in->pci_uid, in->pci_gid, in->pci_capas)) {
+	if (!permitted(&attr, pci->pci_uid, pci->pci_gid,
+		       pci->pci_capas)) {
 		D_ERROR("refusing connect attempt for uid %u gid %u "DF_X64"\n",
-			in->pci_uid, in->pci_gid, in->pci_capas);
+			pci->pci_uid, pci->pci_gid, pci->pci_capas);
 		D_GOTO(out_lock, rc = -DER_NO_PERM);
 	}
 
-	rc = dsms_kvs_uv_lookup(pool->p_handles, in->pci_pool_hdl, &hdl,
+	rc = dsms_kvs_uv_lookup(pool->p_handles, pci->pci_pool_hdl, &hdl,
 				sizeof(hdl));
 	if (rc == 0) {
-		if (hdl.ph_capas != in->pci_capas) {
+		if (hdl.ph_capas != pci->pci_capas) {
 			/* The existing one does not match the new one. */
 			D_ERROR("found conflicting pool handle\n");
 			rc = -DER_EXIST;
@@ -576,11 +580,11 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 		D_GOTO(out_lock, rc);
 	}
 
-	hdl.ph_capas = in->pci_capas;
+	hdl.ph_capas = pci->pci_capas;
 
 	/* TX BEGIN */
 
-	rc = dsms_kvs_uv_update(pool->p_handles, in->pci_pool_hdl, &hdl,
+	rc = dsms_kvs_uv_update(pool->p_handles, pci->pci_pool_hdl, &hdl,
 				sizeof(hdl));
 
 	/* TX END */
@@ -590,21 +594,26 @@ out_lock:
 	pool_put(pool);
 out:
 	D_DEBUG(DF_DSMS, "replying rpc %p with %d\n", rpc, rc);
-	out->pco_rc = rc;
+	pco = dtp_reply_get(rpc);
+	pco->pco_ret = rc;
 	return dtp_reply_send(rpc);
 }
 
 int
 dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 {
-	struct pool_disconnect_in      *in = rpc->dr_input;
-	struct pool_disconnect_out     *out = rpc->dr_output;
-	struct pool		       *pool;
-	int				rc;
+	struct pool_disconnect_in *pdi;
+	struct pool_disconnect_out *pdo;
+	struct pool	*pool;
+	int		rc;
 
 	D_DEBUG(DF_DSMS, "processing rpc %p\n", rpc);
+	pdi = dtp_req_get(rpc);
+	D_ASSERT(pdi != NULL);
+	if (pdi->pdi_pool == NULL || pdi->pdi_pool_hdl)
+		D_GOTO(out, rc = -DER_INVAL);
 
-	rc = pool_lookup(in->pdi_pool, &pool);
+	rc = pool_lookup(pdi->pdi_pool, &pool);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -612,7 +621,7 @@ dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 
 	/* TX BEGIN */
 
-	rc = dsms_kvs_uv_delete(pool->p_handles, in->pdi_pool_hdl);
+	rc = dsms_kvs_uv_delete(pool->p_handles, pdi->pdi_pool_hdl);
 	if (rc == -DER_NONEXIST)
 		rc = 0;
 
@@ -622,7 +631,9 @@ dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 	pool_put(pool);
 out:
 	D_DEBUG(DF_DSMS, "replying rpc %p with %d\n", rpc, rc);
-	out->pdo_rc = rc;
+	pdo = dtp_reply_get(rpc);
+	D_ASSERT(pdo != NULL);
+	pdo->pdo_ret = rc;
 	return dtp_reply_send(rpc);
 }
 

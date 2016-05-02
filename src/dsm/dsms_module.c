@@ -59,17 +59,17 @@ fini(void)
 int
 dsms_hdlr_ping(dtp_rpc_t *rpc)
 {
-	struct ping_out	*ping_output = NULL;
-	int		rc = 0;
+	int rc = 0;
+	int *ret;
 
 	D_DEBUG(DF_UNKNOWN, "receive, ping %x.\n", rpc->dr_opc);
 
-	ping_output = (struct ping_out *)rpc->dr_output;
-	ping_output->ret = 0;
+	ret = dtp_reply_get(rpc);
+	*ret = 0;
 
 	rc = dtp_reply_send(rpc);
 
-	D_DEBUG(DF_UNKNOWN, "ping ret: %d\n", ping_output->ret);
+	D_DEBUG(DF_UNKNOWN, "ping ret: %d\n", *ret);
 
 	return rc;
 }

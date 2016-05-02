@@ -31,7 +31,7 @@ dtp_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep, dtp_opcode_t opc,
 	struct dtp_hg_context	*hg_ctx;
 	struct dtp_rpc_priv	*rpc_priv = NULL;
 	struct dtp_opc_info	*opc_info = NULL;
-	dtp_rpc_t		*rpc_pub;
+	dtp_rpc_t		*rpc_pub = NULL;
 	int			rc = 0;
 
 	if (dtp_ctx == DTP_CONTEXT_NULL || req == NULL) {
@@ -59,15 +59,12 @@ dtp_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep, dtp_opcode_t opc,
 
 	rpc_pub = &rpc_priv->drp_pub;
 	rpc_pub->dr_ep = tgt_ep;
+	rpc_priv->drp_opc_info = opc_info;
 
-	rc = dtp_rpc_inout_buff_init(rpc_pub, opc_info->doi_input_size,
-				     opc_info->doi_output_size);
-	if (rc != 0) {
-		D_ERROR("dtp_rpc_inout_buff_init faied, rc: %d, opc: 0x%x.\n",
-			rc, opc);
-		D_FREE_PTR(rpc_priv);
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
+	rc = dtp_iobuf_init_by_opc_info(rpc_pub, opc_info);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	dtp_rpc_priv_init(rpc_priv, dtp_ctx, opc, 0);
 
 	hg_ctx = (struct dtp_hg_context *)dtp_ctx;
@@ -75,14 +72,18 @@ dtp_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep, dtp_opcode_t opc,
 	if (rc != 0) {
 		D_ERROR("dtp_hg_req_create failed, rc: %d, opc: 0x%x.\n",
 			rc, opc);
-		D_FREE_PTR(rpc_priv);
-		dtp_rpc_inout_buff_fini(rpc_pub);
 		D_GOTO(out, rc);
 	}
 
 	*req = rpc_pub;
 
 out:
+	if (rc < 0) {
+		if (rpc_pub != NULL)
+			dtp_rpc_inout_buff_fini(rpc_pub);
+		if (rpc_priv != NULL)
+			D_FREE_PTR(rpc_priv);
+	}
 	return rc;
 }
 

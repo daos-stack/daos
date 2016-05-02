@@ -298,3 +298,43 @@ dtp_proc_daos_rank_list_t(dtp_proc_t proc, daos_rank_list_t **data)
 out:
 	return rc;
 }
+
+struct dtp_msg_field DMF_UUID =
+	DEFINE_DTP_MSG("dtp_uuid", 0, sizeof(uuid_t),
+		       dtp_proc_uuid_t);
+
+struct dtp_msg_field DMF_INT =
+	DEFINE_DTP_MSG("dtp_int", 0, sizeof(int32_t),
+		       dtp_proc_int);
+
+struct dtp_msg_field DMF_UINT32 =
+	DEFINE_DTP_MSG("dtp_uint32", 0, sizeof(uint32_t),
+		       dtp_proc_uint32_t);
+
+struct dtp_msg_field DMF_UINT64 =
+	DEFINE_DTP_MSG("dtp_uint64", 0, sizeof(uint64_t),
+			dtp_proc_uint64_t);
+
+struct dtp_msg_field DMF_BULK =
+	DEFINE_DTP_MSG("dtp_bulk", 0, sizeof(dtp_bulk_t),
+		       dtp_proc_dtp_bulk_t);
+
+struct dtp_msg_field DMF_BOOL =
+	DEFINE_DTP_MSG("dtp_bool", 0, sizeof(bool),
+		       dtp_proc_bool);
+
+struct dtp_msg_field DMF_STRING =
+	DEFINE_DTP_MSG("dtp_string", 0,
+		       sizeof(dtp_string_t), dtp_proc_dtp_string_t);
+
+void *
+dtp_req_get(dtp_rpc_t *rpc)
+{
+	return rpc->dr_input;
+}
+
+void *
+dtp_reply_get(dtp_rpc_t *rpc)
+{
+	return rpc->dr_output;
+}

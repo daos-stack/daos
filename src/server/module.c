@@ -182,6 +182,8 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 		return rc;
 	}
 
+	dss_unregister_key(smod->sm_key);
+
 	/* finalize the module */
 	rc = smod->sm_fini();
 	if (rc) {

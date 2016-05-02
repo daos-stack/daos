@@ -60,6 +60,8 @@ typedef uint32_t dtp_version_t;
 
 typedef void *dtp_rpc_input_t;
 typedef void *dtp_rpc_output_t;
+typedef void *dtp_proc_t;
+
 /**
  * max size of input/output parameters defined as 64M bytes, for larger length
  * the user should transfer by bulk.
@@ -71,6 +73,7 @@ enum dtp_rpc_flags {
 	DTP_IGNORE_TIMEDOUT = 0x0001,
 };
 
+#define DTP_RPC_MAX_FIELDS_NR	9
 /* Public RPC request/reply, exports to user */
 typedef struct dtp_rpc {
 	dtp_context_t		dr_ctx; /* DTP context of the RPC */
@@ -86,6 +89,66 @@ typedef struct dtp_rpc {
 	daos_size_t		dr_input_size; /* size of input struct */
 	daos_size_t		dr_output_size; /* size of output struct */
 } dtp_rpc_t;
+
+/* Proc callback for pack/unpack parameters */
+typedef int (*dtp_proc_cb_t)(dtp_proc_t proc, void *data);
+
+struct dtp_msg_field {
+	const char	*dmf_name;
+	const uint32_t	dmf_flags;
+	const uint32_t	dmf_size;
+	dtp_proc_cb_t	dmf_proc;
+};
+
+enum {
+	DRF_VAR_SIZE = 1,
+};
+
+struct drf_field {
+	uint32_t drf_count;
+	struct dtp_msg_field **drf_msg;
+};
+
+enum {
+	DTP_IN = 0,
+	DTP_OUT = 1,
+};
+
+struct dtp_req_format {
+	const char	*drf_name;
+	uint32_t	drf_idx;
+	struct drf_field drf_fields[2];
+};
+
+#define DEFINE_DTP_REQ_FMT(name, dtp_in, dtp_out) {	\
+	.drf_name	= name,				\
+	.drf_fields	= {				\
+		[DTP_IN] = {				\
+			.drf_count = ARRAY_SIZE(dtp_in),\
+			.drf_msg = dtp_in,		\
+		},					\
+		[DTP_OUT] = {				\
+			.drf_count = ARRAY_SIZE(dtp_out), \
+			.drf_msg = dtp_out		  \
+		}					\
+	}						\
+}
+
+#define DEFINE_DTP_MSG(name, flags, size, proc) {	\
+	.dmf_name = (name),				\
+	.dmf_flags = (flags),				\
+	.dmf_size = (size),				\
+	.dmf_proc = (dtp_proc_cb_t)proc			\
+}
+
+/* Common request format type */
+extern struct dtp_msg_field DMF_UUID;
+extern struct dtp_msg_field DMF_INT;
+extern struct dtp_msg_field DMF_UINT32;
+extern struct dtp_msg_field DMF_UINT64;
+extern struct dtp_msg_field DMF_BULK;
+extern struct dtp_msg_field DMF_BOOL;
+extern struct dtp_msg_field DMF_STRING;
 
 typedef void *dtp_bulk_t; /* abstract bulk handle */
 
@@ -149,11 +212,6 @@ typedef int (*dtp_cb_t)(const struct dtp_cb_info *cb_info);
 
 /* completion callback for bulk transferring, i.e. dtp_bulk_transfer() */
 typedef int (*dtp_bulk_cb_t)(const struct dtp_bulk_cb_info *cb_info);
-
-/* Abstraction pack/unpack processor */
-typedef void * dtp_proc_t;
-/* Proc callback for pack/unpack parameters */
-typedef int (*dtp_proc_cb_t)(dtp_proc_t proc, void *data);
 
 /**
  * Progress condition callback, /see dtp_progress().
@@ -417,24 +475,24 @@ dtp_ep_abort(dtp_endpoint_t ep);
  * Dynamically register a RPC at client-side.
  *
  * \param opc [IN]              unique opcode for the RPC
- * \param in_proc_cb [IN]       pointer to input proc function
- *                              the pack/unpack function of input parameters
- * \param out_proc_cb [IN]      pointer to output proc function
- *                              the pack/unpack function of output parameters
- * \param input_size [IN]       the size of input parameters
- * \param output_size [IN]      the size of output parameters
- *
+ * \param drf [IN]		pointer to the request format, which
+ *                              describe the request format and provide
+ *                              callback to pack/unpack each items in the
+ *                              request.
  * \return                      zero on success, negative value if error
  */
 int
-dtp_rpc_reg(dtp_opcode_t opc, dtp_proc_cb_t in_proc_cb,
-	    dtp_proc_cb_t out_proc_cb, daos_size_t input_size,
-	    daos_size_t output_size);
+dtp_rpc_reg(dtp_opcode_t opc, struct dtp_req_format *drf);
 
 /**
  * Dynamically register a RPC at server-side.
  *
  * Compared to dtp_rpc_register, one more input argument needed at server-side:
+ * \param opc [IN]              unique opcode for the RPC
+ * \param drf [IN]		pointer to the request format, which
+ *                              describe the request format and provide
+ *                              callback to pack/unpack each items in the
+ *                              request.
  * \param rpc_handler [IN]      pointer to RPC handler which will be triggered
  *                              when RPC request opcode associated with rpc_name
  *                              is received.
@@ -442,9 +500,8 @@ dtp_rpc_reg(dtp_opcode_t opc, dtp_proc_cb_t in_proc_cb,
  * \return                      zero on success, negative value if error
  */
 int
-dtp_rpc_srv_reg(dtp_opcode_t opc, dtp_proc_cb_t in_proc_cb,
-		dtp_proc_cb_t out_proc_cb, daos_size_t input_size,
-		daos_size_t output_size, dtp_rpc_cb_t rpc_handler);
+dtp_rpc_srv_reg(dtp_opcode_t opc, struct dtp_req_format *drf,
+		dtp_rpc_cb_t rpc_handler);
 
 /**
  * Create a bulk handle
@@ -738,56 +795,5 @@ dtp_proc_uuid_t(dtp_proc_t proc, uuid_t *data);
 int
 dtp_proc_daos_rank_list_t(dtp_proc_t proc, daos_rank_list_t **data);
 
-/*****************************************************************************
- * Private macros
- *****************************************************************************/
-
-/* Get type / name */
-#define _DTP_GEN_GET_TYPE(field) BOOST_PP_SEQ_HEAD(field)
-#define _DTP_GEN_GET_NAME(field) BOOST_PP_SEQ_CAT(BOOST_PP_SEQ_TAIL(field))
-
-/* Get struct field */
-#define _DTP_GEN_STRUCT_FIELD(r, data, param)				\
-	_DTP_GEN_GET_TYPE(param) _DTP_GEN_GET_NAME(param);
-
-/* Generate structure */
-#define _DTP_GEN_STRUCT(struct_type_name, fields)			\
-typedef struct								\
-{									\
-	BOOST_PP_SEQ_FOR_EACH(_DTP_GEN_STRUCT_FIELD, , fields)		\
-									\
-} struct_type_name;
-
-/* Generate proc for struct field */
-#define _DTP_GEN_PROC(r, struct_name, field)				\
-	rc = BOOST_PP_CAT(dtp_proc_, _DTP_GEN_GET_TYPE(field)		\
-		(proc, &struct_name->_DTP_GEN_GET_NAME(field)));	\
-	if (rc != 0) {							\
-		D_ERROR("Proc error.\n");				\
-		return rc;						\
-	}
-
-/* Generate proc for struct */
-#define _DTP_GEN_STRUCT_PROC(struct_type_name, fields)			\
-static inline int							\
-BOOST_PP_CAT(dtp_proc_, struct_type_name)				\
-	(dtp_proc_t proc, void *data)					\
-{									\
-	int rc = 0;							\
-	struct_type_name *struct_data = (struct_type_name *) data;	\
-									\
-	BOOST_PP_SEQ_FOR_EACH(_DTP_GEN_PROC, struct_data, fields)	\
-									\
-	return rc;							\
-}
-
-/*****************************************************************************
- * Public macros
- *****************************************************************************/
-
-/* Generate struct and corresponding struct proc */
-#define DTP_GEN_PROC(struct_type_name, fields)				\
-	_DTP_GEN_STRUCT(struct_type_name, fields)			\
-	_DTP_GEN_STRUCT_PROC(struct_type_name, fields)
 
 #endif /* __DAOS_TRANSPORT_H__ */

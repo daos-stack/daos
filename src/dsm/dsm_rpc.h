@@ -55,20 +55,12 @@ enum dsm_operation {
 	DSM_PING		= 3,
 };
 
+/* DSM RPC request structure */
 struct pool_map {
 	uint64_t	pm_version;
 	uint32_t	pm_ndomains;
 	uint32_t	pm_ntargets;
 };
-
-/*
- * pool_connect_in::pci_capas
- *
- * POOL_CAPA_RO, POOL_CAPA_RW, and POOL_CAPA_EX are mutually exclusive.
- */
-#define POOL_CAPA_RO	(1ULL << 0)	/* read-only */
-#define POOL_CAPA_RW	(1ULL << 1)	/* read-write */
-#define POOL_CAPA_EX	(1ULL << 2)	/* exclusive read-write */
 
 struct pool_connect_in {
 	uuid_t		pci_pool;
@@ -80,30 +72,48 @@ struct pool_connect_in {
 };
 
 struct pool_connect_out {
-	int32_t		pco_rc;
-	struct pool_map	pco_pool_map;
+	uint32_t pco_ret;
+	struct pool_map pco_map;
 };
 
-/*
- * "pool" helps the server side to quickly locate the file that should store
- * "pool_hdl".
- */
 struct pool_disconnect_in {
 	uuid_t	pdi_pool;
 	uuid_t	pdi_pool_hdl;
 };
 
 struct pool_disconnect_out {
-	int32_t	pdo_rc;
+	int pdo_ret;
 };
 
-struct ping_in {
-	int32_t unused;
-};
+/*
+ * pool_connect_in::pci_capas
+ *
+ * POOL_CAPA_RO, POOL_CAPA_RW, and POOL_CAPA_EX are mutually exclusive.
+ */
+#define POOL_CAPA_RO	(1ULL << 0)	/* read-only */
+#define POOL_CAPA_RW	(1ULL << 1)	/* read-write */
+#define POOL_CAPA_EX	(1ULL << 2)	/* exclusive read-write */
 
-struct ping_out {
-	int32_t	ret;
-};
+static inline int
+proc_pool_map(dtp_proc_t proc, void *data)
+{
+	struct pool_map        *p = data;
+	int                     rc;
+
+	rc = dtp_proc_uint64_t(proc, &p->pm_version);
+	if (rc != 0)
+		return rc;
+
+	rc = dtp_proc_uint32_t(proc, &p->pm_ndomains);
+	if (rc != 0)
+		return rc;
+
+	rc = dtp_proc_uint32_t(proc, &p->pm_ntargets);
+	if (rc != 0)
+		return rc;
+
+	return 0;
+}
 
 int
 dsm_client_async_rpc(dtp_rpc_t *rpc_req, struct daos_event *event);

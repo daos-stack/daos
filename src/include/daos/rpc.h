@@ -27,12 +27,6 @@
 
 #include <daos/transport.h>
 
-enum daos_module_id {
-	DAOS_DMG_MODULE		= 0,
-	DAOS_DSMS_MODULE	= 1,
-	DAOS_VOS_MODULE		= 2,
-};
-
 /* Opcode registered in dtp will be
  * client/server | mod_id | rpc_version | op_code
  *    {1 bit}	  {7 bits}    {8 bits}    {16 bits}
@@ -45,11 +39,20 @@ enum daos_module_id {
 
 #define MODID_MASK	0xff
 #define MODID_OFFSET	24
+#define MOD_ID_BITS	8
+#define opc_get_mod_id(opcode)	((opcode >> 24) & MODID_MASK)
 
 #define DAOS_RPC_OPCODE(opc, mod_id, rpc_ver)			\
 	((opc & OPCODE_MASK) << OPCODE_OFFSET |			\
 	 (rpc_ver & RPC_VERSION_MASK) << RPC_VERSION_OFFSET |	\
 	 (mod_id & MODID_MASK) << MODID_OFFSET)
+
+enum daos_module_id {
+	DAOS_DMG_MODULE		= 0,
+	DAOS_DSMS_MODULE	= 1,
+	DAOS_VOS_MODULE		= 2,
+	DAOS_MAX_MODULE		= (1 << MOD_ID_BITS) - 1,
+};
 
 /**
  * common RPC format definition for both client and server
@@ -71,6 +74,7 @@ struct daos_rpc {
 	dtp_proc_cb_t	 dr_out_hdlr;
 	/* Size of output parameter */
 	int		 dr_out_sz;
+	struct dtp_req_format *dr_req_fmt;
 };
 
 struct daos_rpc_handler {
@@ -129,13 +133,11 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 					rpc->dr_opc);
 				return rc;
 			}
-			rc = dtp_rpc_srv_reg(opcode, rpc->dr_in_hdlr,
-					     rpc->dr_out_hdlr, rpc->dr_in_sz,
-					     rpc->dr_out_sz, handler->dr_hdlr);
+			rc = dtp_rpc_srv_reg(opcode, rpc->dr_req_fmt,
+					     handler->dr_hdlr);
+
 		} else {
-			rc = dtp_rpc_reg(opcode, rpc->dr_in_hdlr,
-					 rpc->dr_out_hdlr, rpc->dr_in_sz,
-					 rpc->dr_out_sz);
+			rc = dtp_rpc_reg(opcode, rpc->dr_req_fmt);
 		}
 		if (rc)
 			return rc;
@@ -152,4 +154,17 @@ daos_rpc_unregister(struct daos_rpc *rpcs)
 	/* no supported for now */
 	return 0;
 }
+
+int
+dtp_req_layout_init(struct dtp_req_format **req_formats,
+		    int count, int module_id);
+void
+dtp_req_layout_fini(struct dtp_req_format **req_formats,
+		    int count, int module_id);
+
+void *
+dtp_req_get(dtp_rpc_t *rpc);
+
+void *
+dtp_reply_get(dtp_rpc_t *rpc);
 #endif /* __DRPC_API_H__ */

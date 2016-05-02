@@ -26,6 +26,7 @@
 #define __DTP_ECHO_H__
 
 #include <daos/transport.h>
+#include <daos/rpc.h>
 
 #include <stdio.h>
 #include <assert.h>
@@ -52,17 +53,53 @@ int echo_srv_checkin(dtp_rpc_t *rpc);
 int echo_srv_bulk_test(dtp_rpc_t *rpc);
 int echo_srv_shutdown(dtp_rpc_t *rpc);
 
-DTP_GEN_PROC(echo_checkin_in_t,
-	((bool)(age)) ((dtp_string_t)(name)) ((uint32_t)(days)))
-DTP_GEN_PROC(echo_checkin_out_t,
-	((int32_t)(ret)) ((uint32_t)(room_no)))
+struct dtp_msg_field *echo_ping_checkin[] = {
+	&DMF_UINT32,
+	&DMF_UINT32,
+	&DMF_STRING,
+};
+struct dtp_echo_checkin_req {
+	int age;
+	int days;
+	dtp_string_t name;
+};
 
-DTP_GEN_PROC(echo_bulk_test_in_t,
-	((dtp_string_t)(bulk_intro_msg)) ((dtp_bulk_t)(bulk_hdl))
-	((dtp_string_t)(bulk_md5_str)))
-DTP_GEN_PROC(echo_bulk_test_out_t,
-	((int32_t)(ret)) ((dtp_string_t)(bulk_echo_msg)))
+struct dtp_msg_field *echo_ping_checkout[] = {
+	&DMF_INT,
+	&DMF_UINT32,
+};
+struct dtp_echo_checkin_reply {
+	int ret;
+	uint32_t room_no;
+};
 
+struct dtp_msg_field *echo_bulk_test_in[] = {
+	&DMF_STRING,
+	&DMF_STRING,
+	&DMF_BULK,
+};
+struct dtp_echo_bulk_in_req {
+	dtp_string_t bulk_intro_msg;
+	dtp_string_t bulk_md5_ptr;
+	dtp_bulk_t remote_bulk_hdl;
+};
+
+struct dtp_msg_field *echo_bulk_test_out[] = {
+	&DMF_STRING,
+	&DMF_INT,
+};
+struct dtp_echo_bulk_out_reply {
+	char *echo_msg;
+	int ret;
+};
+
+struct dtp_req_format DQF_ECHO_PING_CHECK =
+	DEFINE_DTP_REQ_FMT("ECHO_PING_CHECK", echo_ping_checkin,
+			   echo_ping_checkout);
+
+struct dtp_req_format DQF_ECHO_BULK_TEST =
+	DEFINE_DTP_REQ_FMT("ECHO_BULK_TEST", echo_bulk_test_in,
+			   echo_bulk_test_out);
 
 static inline void
 echo_init(int server)
@@ -93,35 +130,20 @@ echo_init(int server)
 	 * If both client and server side know the rpc handler, they can call
 	 * the same dtp_rpc_srv_reg. */
 	if (server == 0) {
-		rc = dtp_rpc_reg(ECHO_OPC_CHECKIN, dtp_proc_echo_checkin_in_t,
-				 dtp_proc_echo_checkin_out_t,
-				 sizeof(echo_checkin_in_t),
-				 sizeof(echo_checkin_out_t));
+		rc = dtp_rpc_reg(ECHO_OPC_CHECKIN, &DQF_ECHO_PING_CHECK);
 		assert(rc == 0);
-		rc = dtp_rpc_reg(ECHO_OPC_BULK_TEST,
-				 dtp_proc_echo_bulk_test_in_t,
-				 dtp_proc_echo_bulk_test_out_t,
-				 sizeof(echo_bulk_test_in_t),
-				 sizeof(echo_bulk_test_out_t));
+		rc = dtp_rpc_reg(ECHO_OPC_BULK_TEST, &DQF_ECHO_BULK_TEST);
 		assert(rc == 0);
-		rc = dtp_rpc_reg(ECHO_OPC_SHUTDOWN, NULL, NULL, 0, 0);
+		rc = dtp_rpc_reg(ECHO_OPC_SHUTDOWN, NULL);
 		assert(rc == 0);
 	} else {
-		rc = dtp_rpc_srv_reg(ECHO_OPC_CHECKIN,
-				     dtp_proc_echo_checkin_in_t,
-				     dtp_proc_echo_checkin_out_t,
-				     sizeof(echo_checkin_in_t),
-				     sizeof(echo_checkin_out_t),
+		rc = dtp_rpc_srv_reg(ECHO_OPC_CHECKIN, &DQF_ECHO_PING_CHECK,
 				     echo_srv_checkin);
 		assert(rc == 0);
-		rc = dtp_rpc_srv_reg(ECHO_OPC_BULK_TEST,
-				     dtp_proc_echo_bulk_test_in_t,
-				     dtp_proc_echo_bulk_test_out_t,
-				     sizeof(echo_bulk_test_in_t),
-				     sizeof(echo_bulk_test_out_t),
+		rc = dtp_rpc_srv_reg(ECHO_OPC_BULK_TEST, &DQF_ECHO_BULK_TEST,
 				     echo_srv_bulk_test);
 		assert(rc == 0);
-		rc = dtp_rpc_srv_reg(ECHO_OPC_SHUTDOWN, NULL, NULL, 0, 0,
+		rc = dtp_rpc_srv_reg(ECHO_OPC_SHUTDOWN, NULL,
 				     echo_srv_shutdown);
 		assert(rc == 0);
 	}
@@ -164,8 +186,8 @@ echo_md5_to_string(unsigned char *md5, dtp_string_t md5_str)
 int client_cb_common(const struct dtp_cb_info *cb_info)
 {
 	dtp_rpc_t		*rpc_req;
-	echo_checkin_in_t	*checkin_input;
-	echo_checkin_out_t	*checkin_output;
+	struct dtp_echo_checkin_req *e_req;
+	struct dtp_echo_checkin_reply *e_reply;
 
 	rpc_req = cb_info->dci_rpc;
 
@@ -176,12 +198,16 @@ int client_cb_common(const struct dtp_cb_info *cb_info)
 
 	switch (cb_info->dci_rpc->dr_opc) {
 	case ECHO_OPC_CHECKIN:
-		checkin_input = rpc_req->dr_input;
-		checkin_output = rpc_req->dr_output;
-		assert(checkin_input != NULL && checkin_output != NULL);
+		e_req = dtp_req_get(rpc_req);
+		if (e_req == NULL)
+			return -DER_INVAL;
+
+		e_reply = dtp_reply_get(rpc_req);
+		if (e_reply == NULL)
+			return -DER_INVAL;
+
 		printf("%s checkin result - ret: %d, room_no: %d.\n",
-		       checkin_input->name, checkin_output->ret,
-		       checkin_output->room_no);
+		       e_req->name, e_reply->ret, e_reply->room_no);
 		break;
 	case ECHO_OPC_SHUTDOWN:
 		break;

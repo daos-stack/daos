@@ -53,12 +53,12 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 		 const daos_rank_list_t *tgts, unsigned int flags,
 		 daos_rank_list_t *failed, daos_handle_t *poh, daos_event_t *ev)
 {
-	dtp_endpoint_t			ep;
-	dtp_rpc_t		       *rpc;
-	struct pool_connect_in	       *in;
-	struct pool_connect_out	       *out;
-	struct pool_conn	       *conn;
-	int				rc;
+	dtp_endpoint_t	ep;
+	dtp_rpc_t       *rpc;
+	struct pool_connect_in *pci;
+	struct pool_connect_out *pco;
+	struct pool_conn *conn;
+	int		rc;
 
 	/* TODO: Implement these. */
 	D_ASSERT(grp == NULL);
@@ -85,13 +85,14 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 		return rc;
 	}
 
-	in = rpc->dr_input;
-	uuid_copy(in->pci_pool, uuid);
-	uuid_generate(in->pci_pool_hdl);
-	in->pci_uid = geteuid();
-	in->pci_gid = getegid();
-	in->pci_capas = flags;
-	in->pci_pool_map_bulk = NULL;	/* TODO */
+	pci = dtp_req_get(rpc);
+
+	uuid_copy(pci->pci_pool, uuid);
+	uuid_generate(pci->pci_pool_hdl);
+	pci->pci_uid = geteuid();
+	pci->pci_gid = getegid();
+	pci->pci_capas = flags;
+	/* in->pci_pool_map_bulk = NULL;  TODO */
 
 	dtp_req_addref(rpc);
 
@@ -99,10 +100,10 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 	if (rc != 0)
 		D_GOTO(out_req, rc);
 
-	out = rpc->dr_output;
-	if (out->pco_rc != 0) {
-		D_ERROR("failed to connect to pool: %d\n", out->pco_rc);
-		D_GOTO(out_req, rc = out->pco_rc);
+	pco = dtp_reply_get(rpc);
+	if (pco->pco_ret != 0) {
+		D_ERROR("failed to connect to pool: %d\n", pco->pco_ret);
+		D_GOTO(out_req, rc = pco->pco_ret);
 	}
 
 	D_ALLOC_PTR(conn);
@@ -111,9 +112,9 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 		D_GOTO(out_req, rc = -DER_NOMEM);
 	}
 
-	uuid_copy(conn->pc_pool, in->pci_pool);
-	uuid_copy(conn->pc_pool_hdl, in->pci_pool_hdl);
-	conn->pc_capas = in->pci_capas;
+	uuid_copy(conn->pc_pool, pci->pci_pool);
+	uuid_copy(conn->pc_pool_hdl, pci->pci_pool_hdl);
+	conn->pc_capas = pci->pci_capas;
 
 	poh->cookie = (uint64_t)conn;
 	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n", DP_UUID(uuid),
@@ -126,12 +127,12 @@ out_req:
 int
 dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
-	struct pool_conn	       *conn = (struct pool_conn *)poh.cookie;
-	dtp_endpoint_t			ep;
-	dtp_rpc_t		       *rpc;
-	struct pool_disconnect_in      *in;
-	struct pool_disconnect_out     *out;
-	int				rc;
+	struct pool_conn	*conn = (struct pool_conn *)poh.cookie;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t		*rpc;
+	struct pool_disconnect_in *pdi;
+	struct pool_disconnect_out *pdo;
+	int			rc;
 
 	D_ASSERT(ev == NULL);
 
@@ -151,9 +152,10 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 		return rc;
 	}
 
-	in = rpc->dr_input;
-	uuid_copy(in->pdi_pool, conn->pc_pool);
-	uuid_copy(in->pdi_pool_hdl, conn->pc_pool_hdl);
+	pdi = dtp_req_get(rpc);
+	D_ASSERT(pdi != NULL);
+	uuid_copy(pdi->pdi_pool, conn->pc_pool);
+	uuid_copy(pdi->pdi_pool_hdl, conn->pc_pool_hdl);
 
 	dtp_req_addref(rpc);
 
@@ -161,10 +163,10 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	if (rc != 0)
 		D_GOTO(out_req, rc);
 
-	out = rpc->dr_output;
-	if (out->pdo_rc != 0) {
-		D_ERROR("failed to disconnect to pool: %d\n", out->pdo_rc);
-		D_GOTO(out_req, rc = out->pdo_rc);
+	pdo = dtp_reply_get(rpc);
+	if (pdo->pdo_ret != 0) {
+		D_ERROR("failed to disconnect to pool: %d\n", pdo->pdo_ret);
+		D_GOTO(out_req, rc = pdo->pdo_ret);
 	}
 
 	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n",

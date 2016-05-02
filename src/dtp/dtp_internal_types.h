@@ -92,7 +92,7 @@ extern struct dtp_gdata		dtp_gdata;
 # define DTP_SRV_CONTEX_NUM	(4)
 #endif
 
-/* dtp layer common header, 48 bytes */
+/* dtp layer common header */
 struct dtp_common_hdr {
 	uint32_t	dch_magic;
 	uint32_t	dch_version;
@@ -102,7 +102,7 @@ struct dtp_common_hdr {
 	/* gid and rank identify the rpc request sender */
 	dtp_group_id_t	dch_grp_id; /* uuid_t 16 bytes */
 	daos_rank_t	dch_rank; /* uint32_t */
-	uint32_t	dch_padding[2]; /* need to add the endpoint addr? */
+	uint32_t	dch_padding[2];
 };
 
 /* TODO: cannot know the state of RPC_REQ_SENT from mercury */
@@ -139,11 +139,11 @@ struct dtp_opc_info {
 	dtp_opcode_t		doi_opc;
 	unsigned int		doi_proc_init:1,
 				doi_rpc_init:1;
-	dtp_proc_cb_t		doi_inproc_cb;
-	dtp_proc_cb_t		doi_outproc_cb;
-	daos_size_t		doi_input_size;
-	daos_size_t		doi_output_size;
+
 	dtp_rpc_cb_t		doi_rpc_cb;
+	daos_size_t             doi_input_size;
+	daos_size_t             doi_output_size;
+	struct dtp_req_format	*doi_drf;
 };
 
 #endif /* __DTP_INTERNAL_TYPES_H__ */

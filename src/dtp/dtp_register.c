@@ -145,9 +145,9 @@ dtp_opc_lookup(struct dtp_opc_map *map, dtp_opcode_t opc, int locked)
 
 static int
 dtp_opc_reg(struct dtp_opc_map *map, dtp_opcode_t opc,
-	    dtp_proc_cb_t in_proc_cb, dtp_proc_cb_t out_proc_cb,
-	    daos_size_t input_size, daos_size_t output_size,
-	    dtp_rpc_cb_t rpc_cb, int ignore_rpccb, int locked)
+	    struct dtp_req_format *drf, daos_size_t input_size,
+	    daos_size_t output_size, dtp_rpc_cb_t rpc_cb,
+	    int ignore_rpccb, int locked)
 {
 	struct dtp_opc_info *info = NULL, *new_info;
 	unsigned int         hash;
@@ -163,8 +163,6 @@ dtp_opc_reg(struct dtp_opc_map *map, dtp_opcode_t opc,
 			/*
 			D_DEBUG(DF_TP, "re-reg, opc 0x%x.\n", opc);
 			*/
-			info->doi_inproc_cb = in_proc_cb;
-			info->doi_outproc_cb = out_proc_cb;
 			if (info->doi_input_size != input_size) {
 				D_DEBUG(DF_TP, "opc 0x%x, update input_size "
 					"from "DF_U64" to "DF_U64".\n", opc,
@@ -177,6 +175,7 @@ dtp_opc_reg(struct dtp_opc_map *map, dtp_opcode_t opc,
 					info->doi_output_size, output_size);
 				info->doi_output_size = output_size;
 			}
+			info->doi_drf = drf;
 			if (ignore_rpccb == 0) {
 				/*
 				D_DEBUG(DF_TP, "re-reg_srv, opc 0x%x.\n", opc);
@@ -196,8 +195,7 @@ dtp_opc_reg(struct dtp_opc_map *map, dtp_opcode_t opc,
 
 	dtp_opc_info_init(new_info);
 	new_info->doi_opc = opc;
-	new_info->doi_inproc_cb = in_proc_cb;
-	new_info->doi_outproc_cb = out_proc_cb;
+	new_info->doi_drf = drf;
 	new_info->doi_input_size = input_size;
 	new_info->doi_output_size = output_size;
 	new_info->doi_proc_init = 1;
@@ -214,23 +212,53 @@ out:
 }
 
 static int
-dtp_rpc_reg_internal(dtp_opcode_t opc, dtp_proc_cb_t in_proc_cb,
-		     dtp_proc_cb_t out_proc_cb, daos_size_t input_size,
-		     daos_size_t output_size, dtp_rpc_cb_t rpc_handler,
-		     int ignore_rpccb)
+dtp_rpc_reg_internal(dtp_opcode_t opc, struct dtp_req_format *drf,
+		     dtp_rpc_cb_t rpc_handler, int ignore_rpccb)
 {
-	int	rc = 0;
+	daos_size_t input_size = 0;
+	daos_size_t output_size = 0;
+	int rc = 0;
+	int i;
 
-	if (input_size > DTP_MAX_INPUT_SIZE ||
-	    output_size > DTP_MAX_OUTPUT_SIZE) {
-		D_ERROR("input_size "DF_U64" or output_size "DF_U64" "
-			"too large.\n", input_size, output_size);
-		D_GOTO(out, rc = -DER_INVAL);
+	if (drf != NULL) {
+		for (i = 0; i < drf->drf_fields[DTP_IN].drf_count; i++) {
+			struct dtp_msg_field *dmf;
+
+			dmf = drf->drf_fields[DTP_IN].drf_msg[i];
+			if (dmf->dmf_size > 0) {
+				input_size += dmf->dmf_size;
+			} else {
+				/* <= 0 means variable size, let's allocate
+				 * it later. */
+				input_size = 0;
+				break;
+			}
+		}
+
+		for (i = 0; i < drf->drf_fields[DTP_OUT].drf_count; i++) {
+			struct dtp_msg_field *dmf;
+
+			dmf = drf->drf_fields[DTP_OUT].drf_msg[i];
+			if (dmf->dmf_size > 0) {
+				output_size += dmf->dmf_size;
+			} else {
+				/* <= 0 means variable size, let's allocate
+				 * it later. */
+				output_size = 0;
+				break;
+			}
+		}
+
+		if (input_size > DTP_MAX_INPUT_SIZE ||
+		    output_size > DTP_MAX_OUTPUT_SIZE) {
+			D_ERROR("input_size "DF_U64" or output_size "DF_U64" "
+				"too large.\n", input_size, output_size);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
 	}
 
-	rc = dtp_opc_reg(dtp_gdata.dg_opc_map, opc, in_proc_cb, out_proc_cb,
-			 input_size, output_size, rpc_handler, ignore_rpccb,
-			 DTP_UNLOCK);
+	rc = dtp_opc_reg(dtp_gdata.dg_opc_map, opc, drf, input_size,
+			 output_size, rpc_handler, ignore_rpccb, DTP_UNLOCK);
 	if (rc != 0) {
 		D_ERROR("rpc (opcode: %d) register failed, rc: %d.\n", opc, rc);
 	}
@@ -240,20 +268,14 @@ out:
 }
 
 int
-dtp_rpc_reg(dtp_opcode_t opc, dtp_proc_cb_t in_proc_cb,
-	    dtp_proc_cb_t out_proc_cb, daos_size_t input_size,
-	    daos_size_t output_size)
+dtp_rpc_reg(dtp_opcode_t opc, struct dtp_req_format *drf)
 {
-	return dtp_rpc_reg_internal(opc, in_proc_cb, out_proc_cb, input_size,
-				    output_size, NULL, 1);
+	return dtp_rpc_reg_internal(opc, drf, NULL, 1);
 }
 
 int
-dtp_rpc_srv_reg(dtp_opcode_t opc, dtp_proc_cb_t in_proc_cb,
-		dtp_proc_cb_t out_proc_cb, daos_size_t input_size,
-		daos_size_t output_size, dtp_rpc_cb_t rpc_handler)
+dtp_rpc_srv_reg(dtp_opcode_t opc, struct dtp_req_format *drf,
+		dtp_rpc_cb_t rpc_handler)
 {
-	return dtp_rpc_reg_internal(opc, in_proc_cb, out_proc_cb, input_size,
-				    output_size, rpc_handler, 0);
+	return dtp_rpc_reg_internal(opc, drf, rpc_handler, 0);
 }
-

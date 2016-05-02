@@ -26,150 +26,55 @@
 #include <daos/rpc.h>
 #include "dsm_rpc.h"
 
-static int
-proc_pool_map(dtp_proc_t proc, void *data)
-{
-	struct pool_map	       *p = data;
-	int			rc;
+struct dtp_msg_field DMF_POOL_MAP =
+	DEFINE_DTP_MSG("dtp_pool", 0, sizeof(struct pool_map),
+			proc_pool_map);
 
-	rc = dtp_proc_uint64_t(proc, &p->pm_version);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_uint32_t(proc, &p->pm_ndomains);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_uint32_t(proc, &p->pm_ntargets);
-	if (rc != 0)
-		return rc;
-
-	return 0;
-}
-
-static int
-proc_pool_connect_in(dtp_proc_t proc, void *data)
-{
-	struct pool_connect_in *p = data;
-	int			rc;
-
-	rc = dtp_proc_uuid_t(proc, &p->pci_pool);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_uuid_t(proc, &p->pci_pool_hdl);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_uint32_t(proc, &p->pci_uid);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_uint32_t(proc, &p->pci_gid);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_uint64_t(proc, &p->pci_capas);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_dtp_bulk_t(proc, &p->pci_pool_map_bulk);
-	if (rc != 0)
-		return rc;
-
-	return 0;
-}
-
-static int
-proc_pool_connect_out(dtp_proc_t proc, void *data)
-{
-	struct pool_connect_out	       *p = data;
-	int				rc;
-
-	rc = dtp_proc_int32_t(proc, &p->pco_rc);
-	if (rc != 0)
-		return rc;
-
-	rc = proc_pool_map(proc, &p->pco_pool_map);
-	if (rc != 0)
-		return rc;
-
-	return 0;
-}
-
-static int
-proc_pool_disconnect_in(dtp_proc_t proc, void *data)
-{
-	struct pool_disconnect_in      *p = data;
-	int				rc;
-
-	rc = dtp_proc_uuid_t(proc, &p->pdi_pool);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_uuid_t(proc, &p->pdi_pool_hdl);
-	if (rc != 0)
-		return rc;
-
-	return 0;
-}
-
-static int
-proc_pool_disconnect_out(dtp_proc_t proc, void *data)
-{
-	struct pool_disconnect_out     *p = data;
-
-	return dtp_proc_int32_t(proc, &p->pdo_rc);
-}
-
-static int
-dsm_proc_ping_in(dtp_proc_t proc, void *data)
-{
-	struct ping_in    *p = data;
-
-	return dtp_proc_int32_t(proc, &p->unused);
-}
-
-static int
-dsm_proc_ping_out(dtp_proc_t proc, void *data)
-{
-	struct ping_out     *p = data;
-
-	return dtp_proc_int32_t(proc, &p->ret);
-}
-
-struct daos_rpc dsm_rpcs[] = {
-	{
-		.dr_name	= "DSM_POOL_CONNECT",
-		.dr_opc		= DSM_POOL_CONNECT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_in_hdlr	= proc_pool_connect_in,
-		.dr_in_sz	= sizeof(struct pool_connect_in),
-		.dr_out_hdlr	= proc_pool_connect_out,
-		.dr_out_sz	= sizeof(struct pool_connect_out)
-	}, {
-		.dr_name	= "DSM_POOL_DISCONNECT",
-		.dr_opc		= DSM_POOL_DISCONNECT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_in_hdlr	= proc_pool_disconnect_in,
-		.dr_in_sz	= sizeof(struct pool_disconnect_in),
-		.dr_out_hdlr	= proc_pool_disconnect_out,
-		.dr_out_sz	= sizeof(struct pool_disconnect_out)
-	}, {
-		.dr_name	= "DSM_PING",
-		.dr_opc		= DSM_PING,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_in_hdlr	= dsm_proc_ping_in,
-		.dr_in_sz	= sizeof(struct ping_in),
-		.dr_out_hdlr	= dsm_proc_ping_out,
-		.dr_out_sz	= sizeof(struct ping_out),
-	}, {
-		.dr_opc		= 0
-	}
+struct dtp_msg_field *pool_connect_in_fields[] = {
+	&DMF_UUID,	/* pool */
+	&DMF_UUID,	/* pool hdl */
+	&DMF_UINT32,  /* uid */
+	&DMF_UINT32,  /* gid */
+	&DMF_UINT64,	/* capas */
+	&DMF_BULK	/* pool map */
 };
+
+struct dtp_msg_field *pool_connect_out_fields[] = {
+	&DMF_UINT32,	/* ret */
+	&DMF_POOL_MAP	/* pool map */
+};
+
+/*
+ * "pool" helps the server side to quickly locate the file that should store
+ * "pool_hdl".
+ */
+struct dtp_msg_field *pool_disconnect_in_fields[] = {
+	&DMF_UUID,	/* pool */
+	&DMF_UUID,	/* pool hdl */
+};
+
+struct dtp_msg_field *pool_disconnect_out_fields[] = {
+	&DMF_INT
+};
+
+struct dtp_msg_field *dsm_ping_in_fields[] = {
+	&DMF_INT
+};
+
+struct dtp_msg_field *dsm_ping_out_fields[] = {
+	&DMF_INT
+};
+
+struct dtp_req_format DQF_POOL_CONNECT =
+	DEFINE_DTP_REQ_FMT("DSM_POOL_CONNECT", pool_connect_in_fields,
+			   pool_connect_out_fields);
+
+struct dtp_req_format DQF_POOL_DISCONNECT =
+	DEFINE_DTP_REQ_FMT("DSM_POOL_DISCONNECT", pool_disconnect_in_fields,
+			    pool_disconnect_out_fields);
+
+struct dtp_req_format DQF_PING =
+	DEFINE_DTP_REQ_FMT("DSM_PING", dsm_ping_in_fields, dsm_ping_out_fields);
 
 int
 dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
@@ -211,3 +116,28 @@ dsm_client_async_rpc(dtp_rpc_t *rpc_req, struct daos_event *event)
 
 	return rc;
 }
+
+struct daos_rpc dsm_rpcs[] = {
+	{
+		.dr_name	= "DSM_POOL_CONNECT",
+		.dr_opc		= DSM_POOL_CONNECT,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_CONNECT,
+	}, {
+		.dr_name	= "DSM_POOL_DISCONNECT",
+		.dr_opc		= DSM_POOL_DISCONNECT,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_DISCONNECT,
+	}, {
+		.dr_name	= "DSM_PING",
+		.dr_opc		= DSM_PING,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_PING,
+	}, {
+		.dr_opc		= 0
+	}
+};
+
