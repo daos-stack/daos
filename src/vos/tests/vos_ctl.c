@@ -41,7 +41,7 @@
 #define VC_SEP_VAL      ':'
 
 static daos_unit_oid_t	vc_oid = {
-	{{0, 1, 2}},
+	{ .lo = 0, .mid = 1, .hi = 2},
 	3,
 };
 

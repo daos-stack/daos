@@ -222,7 +222,7 @@ pool_handles_create(PMEMobjpool *mp, struct btr_root *kvs)
 static int
 pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 		   uint32_t gid, uint32_t mode, uint32_t ntargets,
-		   const uuid_t target_uuids, const daos_group_t *group,
+		   const uuid_t target_uuids, const char *group,
 		   const daos_rank_list_t *target_addrs, uint32_t ndomains,
 		   const int *domains)
 {
@@ -308,9 +308,8 @@ out:
 int
 dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 		     unsigned int mode, int ntargets, const uuid_t target_uuids,
-		     const daos_group_t *group,
-		     const daos_rank_list_t *target_addrs, int ndomains,
-		     const int *domains, const char *path,
+		     const char *group, const daos_rank_list_t *target_addrs,
+		     int ndomains, const int *domains, const char *path,
 		     daos_rank_list_t *svc_addrs)
 {
 	PMEMobjpool	       *mp;

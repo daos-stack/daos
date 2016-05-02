@@ -668,7 +668,7 @@ rim_oid2rim(pl_rim_map_t *rimap, daos_obj_id_t id)
 {
 	uint64_t hash;
 
-	hash = pl_hash64(id.body[0], RIM_HASH_BITS);
+	hash = pl_hash64(id.lo, RIM_HASH_BITS);
 	hash = daos_chash_srch_u64(rimap->rmp_rim_hashes,
 				   rimap->rmp_nrims, hash);
 	return &rimap->rmp_rims[hash];
@@ -678,14 +678,14 @@ rim_oid2rim(pl_rim_map_t *rimap, daos_obj_id_t id)
 static unsigned int
 rim_oid2index(pl_rim_map_t *rimap, daos_obj_id_t id)
 {
-	uint64_t hash = id.body[0] ^ id.body[1];
+	uint64_t hash = id.lo ^ id.mid;
 
 	/* mix bits */
-	hash  = id.body[0];
+	hash  = id.lo;
 	hash ^= hash << 39;
 	hash += hash << 9;
 	hash -= hash << 17;
-	hash ^= id.body[1];
+	hash ^= id.mid;
 
 	hash  = daos_u64_hash(hash, TARGET_HASH_BITS);
 	hash &= (1ULL << rimap->rmp_target_hbits) - 1;
@@ -717,7 +717,7 @@ rim_select_spare(daos_obj_id_t id, int first, int dist, int ntargets,
 	int		sign;
 	int		i;
 
-	hash = id.body[0] ^ id.body[1];
+	hash = id.lo ^ id.mid;
 	hash *= PL_GOLDEN_PRIME;
 	skip = hash % (oa->oa_spare_skip + 1);
 	sign = (hash & 1) == 0 ? -1 : 1;
@@ -906,7 +906,7 @@ rim_map_obj_rebuild(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
 	 * not smart enough.
 	 */
 	D_DEBUG(DF_PL, "Select spare for "DF_U64".%u stripe %d, rd %d\n",
-		obs->os_id.body[0], obs->os_sid, oa->oa_nstripes,
+		obs->os_id.lo, obs->os_sid, oa->oa_nstripes,
 		oa->oa_rd_grp);
 
 	targets	 = cl_map_targets(rimap->rmp_clmap);
@@ -995,7 +995,7 @@ rim_map_obj_recover(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
 	int		 dist;
 
 	D_DEBUG(DF_PL, "Check recover "DF_U64".%u stripe %d, rd %d\n",
-		obs->os_id.body[0], obs->os_sid, oa->oa_nstripes,
+		obs->os_id.lo, obs->os_sid, oa->oa_nstripes,
 		oa->oa_rd_grp);
 
 	targets	 = cl_map_targets(rimap->rmp_clmap);

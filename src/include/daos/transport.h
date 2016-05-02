@@ -48,9 +48,11 @@ typedef uuid_t dtp_group_id_t;
 
 /* transport endpoint identifier */
 typedef struct {
-	dtp_group_id_t		ep_grp_id;
-	daos_rank_t		ep_rank;
-	uint32_t		ep_tag; /* optional tag */
+	/* to be moved to:
+	char		*ep_set; */
+	dtp_group_id_t	 ep_grp_id;
+	daos_rank_t	 ep_rank;
+	uint32_t	 ep_tag; /* optional tag */
 } dtp_endpoint_t;
 
 typedef uint32_t dtp_opcode_t;

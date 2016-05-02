@@ -26,7 +26,7 @@
 #include "dsm_rpc.h"
 
 int
-dsm_pool_connect(const uuid_t uuid, const daos_group_t *grp,
+dsm_pool_connect(const uuid_t uuid, const char *grp,
 		 const daos_rank_list_t *tgts, unsigned int flags,
 		 daos_rank_list_t *failed, daos_handle_t *poh, daos_event_t *ev)
 {

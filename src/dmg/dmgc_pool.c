@@ -59,7 +59,7 @@ out:
 }
 
 int
-dmg_pool_create(const uuid_t uuid, unsigned int mode, const daos_group_t *grp,
+dmg_pool_create(const uuid_t uuid, unsigned int mode, const char *grp,
 		const daos_rank_list_t *tgts, const char *dev, daos_size_t size,
 		daos_rank_list_t *svc, daos_event_t *ev)
 {

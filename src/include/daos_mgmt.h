@@ -48,7 +48,7 @@ dmg_fini();
  *
  * \param uuid	[IN]	UUID of the pool to create
  * \param mode	[IN]	credentials associated with the pool
- * \param grp	[IN]	service group owning the pool
+ * \param grp	[IN]	process set name of the DAOS servers managing the pool
  * \param tgts	[IN]	Optional, allocate targets on this list of ranks
  *			If set to NULL, create the pool over all the ranks
  *			available in the service group.
@@ -62,7 +62,7 @@ dmg_fini();
  *			Function will run in blocking mode if \a ev is NULL.
  */
 int
-dmg_pool_create(const uuid_t uuid, unsigned int mode, const daos_group_t *grp,
+dmg_pool_create(const uuid_t uuid, unsigned int mode, const char *grp,
 		const daos_rank_list_t *tgts, const char *dev, daos_size_t size,
 		daos_rank_list_t *svc, daos_event_t *ev);
 
@@ -72,12 +72,14 @@ dmg_pool_create(const uuid_t uuid, unsigned int mode, const daos_group_t *grp,
  * Otherwise, the pool is destroyed when the operation completes.
  *
  * \param uuid	[IN]	UUID of the pool to destroy
+ * \param grp	[IN]	process set name of the DAOS servers managing the pool
  * \param force	[IN]	force destruction even if there are active connections
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  */
 int
-dmg_pool_destroy(const uuid_t uuid, int force, daos_event_t *ev);
+dmg_pool_destroy(const uuid_t uuid, const char *grp, int force,
+		 daos_event_t *ev);
 
 /**
  * Extend the pool to more targets. If \a tgts is NULL, this function
@@ -88,7 +90,7 @@ dmg_pool_destroy(const uuid_t uuid, int force, daos_event_t *ev);
  * arbitrary targets adding.
  *
  * \param uuid	[IN]	UUID of the pool to extend
- * \param grp	[IN]	service group owning the pool
+ * \param grp	[IN]	process set name of the DAOS servers managing the pool
  * \param tgts	[IN]	Optional, only extend the pool to included targets.
  * \param failed
  *		[OUT]	Optional, buffer to store faulty targets on failure.
@@ -104,7 +106,6 @@ dmg_pool_destroy(const uuid_t uuid, int force, daos_event_t *ev);
  *			-DER_NONEXIST	Storage target is nonexistent
  */
 int
-dmg_pool_extend(const uuid_t uuid, const daos_group_t *grp,
-		daos_rank_list_t *tgts, daos_rank_list_t *failed,
-		daos_event_t *ev);
+dmg_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
+		daos_rank_list_t *failed, daos_event_t *ev);
 #endif /* __DMG_API_H__ */

@@ -147,8 +147,8 @@ psc_oid_generate(void)
 {
 	daos_obj_id_t	id;
 
-	id.body[0] = pg_data.pg_oid_gen++;
-	id.body[1] = 0;
+	id.lo = pg_data.pg_oid_gen++;
+	id.mid = 0;
 	return id;
 }
 
@@ -438,16 +438,16 @@ psc_target_append_obj(psc_target_t *pst, psc_obj_t *obj, bool rb)
 	if (rb) {
 		D_DEBUG(DF_PL,
 			"rebuild/rebalance obj "DF_U64".%u on target %u\n",
-			os->os_id.body[0], os->os_sid, pst->pt_rank);
+			os->os_id.lo, os->os_sid, pst->pt_rank);
 
 		pst->pt_objs[nobjs] = *obj;
 		pst->pt_nobjs_rb++;
 	} else {
 		D_DEBUG(DF_PL, "Create obj "DF_U64".%u on target %u\n",
-			os->os_id.body[0], os->os_sid, pst->pt_rank);
+			os->os_id.mid, os->os_sid, pst->pt_rank);
 		if (pst->pt_rank == -1) {
 			D_PRINT("Create obj "DF_U64".%u on target %u\n",
-			os->os_id.body[0], os->os_sid, pst->pt_rank);
+			os->os_id.lo, os->os_sid, pst->pt_rank);
 		}
 
 		if (pst->pt_nobjs_rb != 0)
@@ -900,7 +900,7 @@ psc_obj_print(daos_obj_id_t id, int nosas, pl_obj_shard_t *osas)
 	int		 i;
 	int		 j;
 
-	D_PRINT("OBJ["DF_U64"] : ", id.body[0]);
+	D_PRINT("OBJ["DF_U64"] : ", id.lo);
 	for (i = 0; i < oa->oa_nstripes; i++) {
 		D_PRINT("[");
 		for (j = 0; j < oa->oa_rd_grp; j++) {
@@ -1246,8 +1246,8 @@ psc_rebalance(psc_argument_t *args)
 
 			D_DEBUG(DF_PL,
 				"move "DF_U64"."DF_U64".%d from %d to %d\n",
-				obj.po_os.os_id.body[1],
-				obj.po_os.os_id.body[0],
+				obj.po_os.os_id.mid,
+				obj.po_os.os_id.lo,
 				obj.po_os.os_sid, pst->pt_rank, rebal);
 
 			obj.po_os.os_rank = rebal;

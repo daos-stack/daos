@@ -48,6 +48,45 @@ int
 dsm_fini(void);
 
 /**
+ * Handle API
+ */
+
+/**
+ * Convert a local pool or container handle to global representation data which
+ * can be shared with peer processes. This function can only be called by the
+ * process did collective open.
+ * If glob->iov_buf is set to NULL, the actual size of the global handle is
+ * returned through global->iov_buf_len.
+ * This function does not involve any comunicaation and does not block.
+ *
+ * \param loc	[IN]	valid local pool or container handle to be shared
+ * \param glob	[OUT]	buffer to store handle information
+ *
+ * \return		These values will be returned:
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NONEXIST	Pool/Container handle is nonexistent
+ */
+int
+dsm_local2global(daos_handle_t loc, daos_iov_t glob);
+
+/**
+ * Create a local container handle for global representation data.
+ *
+ * \param glob	[IN]	lobal (shared) representation of a collective handle
+ *			to be extracted
+ * \param loc	[OUT]	returned local pool or container handle
+ *
+ * \return		These values will be returned:
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+dsm_global2local(daos_iov_t glob, daos_handle_t *loc);
+
+/**
  * Pool API
  */
 
@@ -58,8 +97,8 @@ dsm_fini(void);
  * establish this connection.
  *
  * \param uuid	[IN]	UUID to identify a pool.
- * \param grp	[IN]	Process group descriptor.
- * \param tgts	[IN]	Optional, indicate potential targets of the pool service
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
+ * \param svc	[IN]	Optional, indicate potential targets of the pool service
  *			replicas. If not aware of the ranks of the pool service
  *			replicas, the caller may pass in NULL.
  * \param flags	[IN]	Connect mode represented by the DAOS_PC_ bits.
@@ -78,8 +117,8 @@ dsm_fini(void);
  *			-DER_NONEXIST	Pool is nonexistent
  */
 int
-dsm_pool_connect(const uuid_t uuid, const daos_group_t *grp,
-		 const daos_rank_list_t *tgts, unsigned int flags,
+dsm_pool_connect(const uuid_t uuid, const char *grp,
+		 const daos_rank_list_t *svc, unsigned int flags,
 		 daos_rank_list_t *failed, daos_handle_t *poh,
 		 daos_event_t *ev);
 
@@ -173,7 +212,7 @@ dsm_pool_target_query(daos_handle_t poh, daos_rank_list_t *tgts,
 
 /**
  * Create a new container with uuid \a uuid on the storage pool connected
- * by \a grp.
+ * by \a poh.
  *
  * \param poh	[IN]	Pool connection handle.
  * \param uuid	[IN]	UUID of the new Container.
@@ -410,14 +449,15 @@ dsm_epoch_query(daos_handle_t coh, daos_epoch_state_t *state, daos_event_t *ev);
  * committing them or setting LHE to DAOS_EPOCH_MAX.
  *
  * \param coh	[IN]	container handle
- * \param epoch	[IN]	epoch to set LHE to
+ * \param epoch	[IN]	minimum requested LHE, set to 0 if no requirement
+ *		[OUT]	returned LHE of the container handle
  * \param state	[OUT]	Optional, latest epoch state
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  */
 int
-dsm_epoch_hold(daos_handle_t coh, daos_epoch_t epoch, daos_epoch_state_t *state,
-	       daos_event_t *ev);
+dsm_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
+	       daos_epoch_state_t *state, daos_event_t *ev);
 
 /**
  * Increase the lowest referenced epoch (LRE) of a container handle.
@@ -514,7 +554,6 @@ dsm_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  *
  * \param coh	[IN]	Container open handle.
  * \param id	[IN]	Object ID.
- * \param epoch	[IN]	Epoch to open object.
  * \param mode	[IN]	Open mode: read-only, read-write.
  * \param oh	[OUT]	Returned object open handle.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
@@ -532,8 +571,8 @@ dsm_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  *					this object
  */
 int
-dsm_obj_open(daos_handle_t coh, daos_unit_oid_t id, daos_epoch_t epoch,
-	     unsigned int mode, daos_handle_t *oh, daos_event_t *ev);
+dsm_obj_open(daos_handle_t coh, daos_unit_oid_t id, unsigned int mode,
+	     daos_handle_t *oh, daos_event_t *ev);
 
 /**
  * Close an opened object.

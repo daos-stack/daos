@@ -48,6 +48,15 @@
 #include <daos_types.h>
 #include <daos_errno.h>
 
+#if !defined(container_of)
+/**
+ * Given a pointer @ptr to the field @member embedded into type (usually
+ * struct) @type, return pointer to the embedding instance of @type.
+ */
+# define container_of(ptr, type, member)                \
+		((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+#endif
+
 /**
  * create an Event Queue
  *

@@ -85,11 +85,10 @@ typedef struct {
 
 /**
  * Server Identification & Addressing
+ *
+ * A server is identified by a process set and a rank. A name (i.e. a string)
+ * is associated with a process set.
  */
-typedef struct {
-	/** XXX use dtp group descriptor at here */
-	int		dg_grp;
-} daos_group_t;
 
 /**
  * One way to understand this: An array of "session network addresses", each of
@@ -203,26 +202,52 @@ typedef struct {
 
 /** Epoch State */
 typedef struct {
-	/** Highest Committed Epoch (HCE) of the container. */
+	/**
+	 * Epoch state specific to the container handle.
+	 */
+
+	/**
+	 * Highest Committed Epoch (HCE).
+	 * Any changes submitted by this container handle with an epoch <= HCE
+	 * are guaranteed to be durable. On the other hand, any updates
+	 * submitted with an epoch > HCE are automatically rolled back on
+	 * failure of the container handle.
+	 * The HCE is increased on successful commit.
+	 */
 	daos_epoch_t	es_hce;
 
-	/** Highest Committed Epoch (HCE) of the container handle. */
-	daos_epoch_t	es_h_hce;
-
-	/** Lowest Referenced Epoch (LRE) of the container handle.
+	/**
+	 * Lowest Referenced Epoch (LRE).
 	 * Each container handle references all epochs equal to or higher than
-	 * its LRE and thus guarantees these epochs to be readable. The LRE of a
-	 * new container handle is equal to the HCE.
-	 * See also the epoch slip operation. */
-	daos_epoch_t	es_h_lre;
+	 * its LRE and thus guarantees these epochs to be readable.
+	 * The LRE is moved forward with the slip operation.
+	 */
+	daos_epoch_t	es_lre;
 
-	/** Lowest Held Epoch (LHE) of the container handle.
+	/**
+	 * Lowest Held Epoch (LHE).
 	 * Each container handle with write permission holds all epochs equal to
 	 * or higher than its LHE and thus guarantees these epochs to be
 	 * mutable.  The LHE of a new container handle with write permission is
 	 * equal to DAOS_EPOCH_MAX, indicating that the container handle does
-	 * not hold any epochs. See also the epoch hold functionality. */
-	daos_epoch_t	es_h_lhe;
+	 * not hold any epochs.
+	 * The LHE can be movidied with the epoch hold operation and is
+	 * increased on successful commit.
+	 */
+	daos_epoch_t	es_lhe;
+
+	/**
+	 * Global epoch state for the container.
+	 */
+
+	/** Global Highest Committed Epoch (gHCE). */
+	daos_epoch_t	es_glb_hce;
+
+	/** Global Lowest Referenced Epoch (gLRE). */
+	daos_epoch_t	es_glb_lre;
+
+	/** Global Highest Partially Committed Epoch (gHPCE) */
+	daos_epoch_t	es_glb_hpce;
 } daos_epoch_state_t;
 
 /**
@@ -256,10 +281,29 @@ typedef struct {
  * Object
  */
 
-/** ID of an object, 192 bits */
+/**
+ * ID of an object, 192 bits
+ * The high 32-bit of daos_obj_id_t::hi are reserved for DAOS, the rest is
+ * provided by the user and assumed to be unique inside a container.
+ */
 typedef struct {
-	uint64_t	body[3];
+	uint64_t	lo;
+	uint64_t	mid;
+	uint64_t	hi;
 } daos_obj_id_t;
+
+enum {
+	/** shared read */
+	DAOS_OO_RO             = (1 << 1),
+	/** shared read & write, no cache for write */
+	DAOS_OO_RW             = (1 << 2),
+	/** exclusive write, data can be cached */
+	DAOS_OO_EXCL           = (1 << 3),
+	/** random I/O */
+	DAOS_OO_IO_RAND        = (1 << 4),
+	/** sequential I/O */
+	DAOS_OO_IO_SEQ         = (1 << 5),
+};
 
 typedef struct {
 	/** input/output number of oids */

@@ -145,7 +145,7 @@ pl_map_obj_rebalance(pl_map_t *map, pl_obj_shard_t *obs, pl_obj_attr_t *oa,
 
 	*rank_rebal = -1;
 	D_DEBUG(DF_CL, "Rebalance object "DF_U64"."DF_U64".%u\n",
-		obs->os_id.body[1], obs->os_id.body[0], obs->os_sid);
+		obs->os_id.mid, obs->os_id.lo, obs->os_sid);
 
 	rc = map->pm_ops->o_obj_select(map, obs, oa, PL_SEL_CUR, 1, &os);
 	if (rc < 0)
