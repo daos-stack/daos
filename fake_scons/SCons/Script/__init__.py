@@ -292,6 +292,10 @@ def Builder(*args, **kw):
     """Fake Builder"""
     return ["fake"]
 
+def Platform():
+    """Fake Platform"""
+    return ''
+
 __all__ = ['DefaultEnvironment',
            'Variables',
            'Configure',

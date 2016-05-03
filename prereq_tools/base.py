@@ -397,9 +397,13 @@ class WebRetriever(object):
 
 class PreReqComponent(object):
     """A class for defining and managing external components required
-       by a project."""
+       by a project.
 
-    def __init__(self, env, variables):
+    If provided arch is a string to embed in any generated directories
+    to allow compilation from from multiple systems in one source tree
+    """
+
+    def __init__(self, env, variables, arch=None):
         self.__defined = {}
         self.__required = {}
         self.__env = env
@@ -445,8 +449,15 @@ class PreReqComponent(object):
         RUNNER.initialize(self.__env)
 
         self.__top_dir = Dir('#').abspath
-        self.__build_dir = \
-            os.path.realpath(os.path.join(self.__top_dir, '_build.external'))
+
+        build_dir_name = '_build.external'
+        install_dir = os.path.join(self.__top_dir, 'install')
+        if arch:
+            build_dir_name = '_build.external-%s'%arch
+            install_dir = os.path.join('install', str(arch))
+
+        self.__build_dir = os.path.realpath(os.path.join(self.__top_dir,
+                                                         build_dir_name))
         try:
             os.makedirs(self.__build_dir)
         except Exception:
@@ -454,8 +465,7 @@ class PreReqComponent(object):
         self.__prebuilt_path = {}
         self.__src_path = {}
 
-        tmp = os.path.join(self.__top_dir, 'install')
-        self.add_opts(PathVariable('PREFIX', 'Installation path', tmp,
+        self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       ('PREBUILT_PREFIX',
                        'Colon separated list of paths to look for prebuilt '
