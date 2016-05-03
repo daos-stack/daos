@@ -162,9 +162,7 @@ REQS.define('iof',
                       "CCI_PREBUILT=$CCI_PREFIX " \
                       "OPENPA_PREBUILT=$OPENPA_PREFIX " \
                       "PREFIX=$IOF_PREFIX install"],
-            headers=["process_set.h"],
-            libs=["pset"],
-            requires=['ompi', 'mercury'])
+            requires=['ompi', 'mercury', 'mcl'])
 
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
