@@ -475,7 +475,7 @@ dsms_kvs_uv_update(daos_handle_t kvsh, const uuid_t uuid, const void *value,
 	int		rc;
 
 	key.iov_buf = (void *)uuid;
-	key.iov_buf_len = sizeof(uuid);
+	key.iov_buf_len = sizeof(uuid_t);
 	key.iov_len = key.iov_buf_len;
 
 	val.iov_buf = (void *)value;
@@ -498,7 +498,7 @@ dsms_kvs_uv_lookup(daos_handle_t kvsh, const uuid_t uuid, void *value,
 	int		rc;
 
 	key.iov_buf = (void *)uuid;
-	key.iov_buf_len = sizeof(uuid);
+	key.iov_buf_len = sizeof(uuid_t);
 	key.iov_len = key.iov_buf_len;
 
 	val.iov_buf = value;
@@ -524,7 +524,7 @@ dsms_kvs_uv_delete(daos_handle_t kvsh, const uuid_t uuid)
 	int		rc;
 
 	key.iov_buf = (void *)uuid;
-	key.iov_buf_len = sizeof(uuid);
+	key.iov_buf_len = sizeof(uuid_t);
 	key.iov_len = key.iov_buf_len;
 
 #if HAS_DBTREE_DELETE
