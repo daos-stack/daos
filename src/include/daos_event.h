@@ -98,7 +98,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags);
  */
 int
 daos_eq_poll(daos_handle_t eqh, int wait_inflight,
-	     int64_t timeout, int nevents, daos_event_t **events);
+	     int64_t timeout, unsigned int nevents, daos_event_t **events);
 
 /**
  * Query how many outstanding events in EQ, if \a events is not NULL,

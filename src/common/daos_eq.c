@@ -310,107 +310,106 @@ daos_eq_create(daos_handle_t *eqh)
 	return rc;
 }
 
-int
-daos_eq_poll(daos_handle_t eqh, int wait_inf, int64_t timeout,
-	     int n_events, struct daos_event **events)
+struct eq_progress_arg {
+	struct daos_eq_private	 *eqx;
+	unsigned int		  n_events;
+	struct daos_event	**events;
+	int			  wait_inf;
+	int			  count;
+};
+
+static int
+eq_progress_cb(void *arg)
 {
-	struct daos_eq_private		*eqx;
+	struct eq_progress_arg		*epa = (struct eq_progress_arg  *)arg;
+	struct daos_event		*ev;
+	struct daos_eq			*eq;
 	struct daos_event_private	*evx;
 	struct daos_event_private	*tmp;
-	struct daos_event	*ev;
-	struct daos_eq		*eq;
-	struct timeval		tv;
-	int			count;
-	int			rc = 0;
-	uint64_t		end = 0;
-	uint64_t		now = 0;
+
+	eq = daos_eqx2eq(epa->eqx);
+
+	pthread_mutex_lock(&epa->eqx->eqx_lock);
+	daos_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
+		D_ASSERT(eq->eq_n_comp > 0);
+		eq->eq_n_comp--;
+
+		daos_list_del_init(&evx->evx_link);
+		D_ASSERT(evx->evx_status == DAOS_EVS_COMPLETED ||
+			 evx->evx_status == DAOS_EVS_ABORT);
+		evx->evx_status = DAOS_EVS_INIT;
+
+		if (epa->events != NULL) {
+			ev = daos_evx2ev(evx);
+			epa->events[epa->count++] = ev;
+		}
+
+		D_ASSERT(epa->count <= epa->n_events);
+		if (epa->count == epa->n_events)
+			break;
+	}
+
+	/* exit once there are completion events */
+	if (epa->count > 0) {
+		pthread_mutex_unlock(&epa->eqx->eqx_lock);
+		return 1;
+	}
+
+	/* no completion event, eq::eq_comp is empty */
+	if (epa->eqx->eqx_finalizing) { /* no new event is coming */
+		D_ASSERT(daos_list_empty(&eq->eq_disp));
+		pthread_mutex_unlock(&epa->eqx->eqx_lock);
+		return -DER_NONEXIST;
+	}
+
+	/* wait only if there's inflight event? */
+	if (epa->wait_inf && daos_list_empty(&eq->eq_disp)) {
+		pthread_mutex_unlock(&epa->eqx->eqx_lock);
+		return 1;
+	}
+
+	pthread_mutex_unlock(&epa->eqx->eqx_lock);
+
+	/** continue waiting */
+	return 0;
+}
+
+int
+daos_eq_poll(daos_handle_t eqh, int wait_inf, int64_t timeout,
+	     unsigned int n_events, struct daos_event **events)
+{
+	struct eq_progress_arg	 epa;
+	int			 rc;
+
+	/** no dtp context setup */
+	if (daos_eq_ctx == NULL)
+		return -DER_INVAL;
 
 	if (n_events == 0)
 		return -DER_INVAL;
 
-	if (daos_eq_ctx == NULL)
-		return -DER_INVAL;
-
-	eqx = daos_eq_lookup(eqh);
-	if (eqx == NULL)
+	/** look up private eq */
+	epa.eqx = daos_eq_lookup(eqh);
+	if (epa.eqx == NULL)
 		return -DER_NONEXIST;
 
-	if (timeout >= 0) {
-		gettimeofday(&tv, NULL);
-		now = tv.tv_sec * 1000 * 1000 + tv.tv_usec;
-		end = now + timeout;
+	epa.n_events	= n_events;
+	epa.events	= events;
+	epa.wait_inf	= wait_inf;
+	epa.count	= 0;
+
+	/** pass the timeout to dtp_progress() with a conditional callback */
+	rc = dtp_progress(daos_eq_ctx, timeout, eq_progress_cb, &epa);
+
+	/** drop ref grabbed in daos_eq_lookup() */
+	daos_eq_putref(epa.eqx);
+
+	if (rc != 0 && rc != -DER_TIMEDOUT) {
+		D_ERROR("dtp progress failed with %d\n", rc);
+		return rc;
 	}
 
-	eq = daos_eqx2eq(eqx);
-	while (now <= end || timeout < 0) {
-		uint64_t interval = 1000 * 1000; /* Milliseconds */
-
-		count = 0;
-		pthread_mutex_lock(&eqx->eqx_lock);
-		daos_list_for_each_entry_safe(evx, tmp, &eq->eq_comp,
-					      evx_link) {
-			D_ASSERT(eq->eq_n_comp > 0);
-			eq->eq_n_comp--;
-
-			daos_list_del_init(&evx->evx_link);
-			D_ASSERT(evx->evx_status == DAOS_EVS_COMPLETED ||
-				 evx->evx_status == DAOS_EVS_ABORT);
-			evx->evx_status = DAOS_EVS_INIT;
-
-			if (events != NULL) {
-				ev = daos_evx2ev(evx);
-				events[count++] = ev;
-			}
-
-			if (count == n_events)
-				break;
-		}
-
-		/* Exist once there are completion events XXX */
-		if (count > 0) {
-			pthread_mutex_unlock(&eqx->eqx_lock);
-			rc = count;
-			break;
-		}
-
-		/* no completion event, eq::eq_comp is empty */
-		if (eqx->eqx_finalizing) { /* no new event is coming */
-			D_ASSERT(daos_list_empty(&eq->eq_disp));
-			pthread_mutex_unlock(&eqx->eqx_lock);
-			rc = -DER_NONEXIST;
-			break;
-		}
-
-		/* wait only if there' inflight event? */
-		if (wait_inf && daos_list_empty(&eq->eq_disp)) {
-			pthread_mutex_unlock(&eqx->eqx_lock);
-			break;
-		}
-
-		pthread_mutex_unlock(&eqx->eqx_lock);
-
-		rc = dtp_progress(daos_eq_ctx, interval, NULL, NULL,
-				  NULL);
-		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("dtp progress fails: rc = %d\n", rc);
-			break;
-		}
-		rc = 0;
-
-		if (timeout > 0) {
-			/* wait until timeout */
-			struct timeval	tv;
-
-			gettimeofday(&tv, NULL);
-			now = tv.tv_sec * 1000 * 1000 + tv.tv_usec;
-		} else if (timeout == 0) {
-			/* Do not wait */
-			break;
-		}
-	}
-
-	daos_eq_putref(eqx);
-	return rc;
+	return epa.count;
 }
 
 int

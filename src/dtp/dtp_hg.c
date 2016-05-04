@@ -848,60 +848,62 @@ out:
 }
 
 int
-dtp_hg_progress(struct dtp_hg_context *hg_ctx, unsigned int *credits,
-		unsigned int timeout)
+dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout)
 {
 	hg_context_t    *hg_context;
 	hg_class_t      *hg_class;
 	hg_return_t     hg_ret = HG_SUCCESS;
-	unsigned int    max_count, actual_count, actual_total = 0;
-	int             rc = 0;
+	unsigned int    count = 0;
+	unsigned int	hg_timeout;
+	int             rc;
 
-	D_ASSERT(hg_ctx != NULL && credits != NULL && *credits > 0);
+	D_ASSERT(hg_ctx != NULL);
 	hg_context = hg_ctx->dhc_hgctx;
 	hg_class = hg_ctx->dhc_hgcla;
 	D_ASSERT(hg_context != NULL && hg_class != NULL);
 
-	max_count = *credits;
-	hg_ret = HG_Trigger(hg_context, 0, max_count, &actual_count);
+	/**
+	 * Mercury only supports milli-second timeout and uses an unsigned int
+	 */
+	if (timeout < 0) {
+		hg_timeout = UINT32_MAX;
+	} else {
+		hg_timeout = timeout / 1000;
+		if (hg_timeout == 0)
+			hg_timeout = 1;
+
+	}
+
+	/** execute pending callbacks, if any */
+	hg_ret = HG_Trigger(hg_context, 0, UINT32_MAX, &count);
 	if (hg_ret == HG_SUCCESS) {
-		actual_total = actual_count;
+		if (count > 0)
+			/** some callbacks got executed, inform the caller */
+			D_GOTO(out, rc = 0);
 	} else if (hg_ret != HG_TIMEOUT) {
 		D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
 
-	if (actual_total == max_count)
-		D_GOTO(out, rc);
-	D_ASSERT(actual_total < max_count);
-
-	if (actual_total > 0)
-		timeout = 0;
+	/** progress RPC execution */
 	hg_ret = HG_Progress(hg_context, timeout);
-	if (hg_ret == HG_SUCCESS) {
-		/* Progress succeed, call HG_Trigger again */
-		max_count -= actual_count;
-		hg_ret = HG_Trigger(hg_context, 0, max_count, &actual_count);
-		if (hg_ret == HG_SUCCESS) {
-			actual_total += actual_count;
-		} else if (hg_ret != HG_TIMEOUT) {
-			D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
-			rc = -DER_DTP_HG;
-		}
-	} else if (hg_ret == HG_TIMEOUT) {
-		if (actual_total == 0)
-			rc = -DER_TIMEDOUT;
-	} else {
+	if (hg_ret == HG_TIMEOUT)
+		D_GOTO(out, rc = -DER_TIMEDOUT);
+	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Progress failed, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
 
+	/* some RPCs have progressed, call HG_Trigger again */
+	hg_ret = HG_Trigger(hg_context, 0, UINT32_MAX, &count);
+	if (hg_ret != HG_TIMEOUT && hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+	D_GOTO(out, rc = 0);
 out:
-	if (rc == 0)
-		*credits = actual_total;
 	return rc;
 }
-
 
 #define DTP_HG_IOVN_STACK	(8)
 int

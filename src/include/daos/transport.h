@@ -159,12 +159,12 @@ typedef int (*dtp_proc_cb_t)(dtp_proc_t proc, void *data);
  * Progress condition callback, /see dtp_progress().
  *
  * \param arg [IN]              argument to cond_cb.
- * \param creds [IN]            remaining credits.
  *
- * \return			zero means continue progressing, non-zero means
- *				stopping the progressing.
+ * \return			zero means continue progressing
+ *				>0 means stopping progress and return success
+ *				<0 means failure
  */
-typedef int (*dtp_progress_cond_cb_t)(void *arg, unsigned int creds);
+typedef int (*dtp_progress_cond_cb_t)(void *args);
 
 /**
  * Initialize DAOS transport layer.
@@ -257,37 +257,23 @@ dtp_sync_req(dtp_rpc_t *rpc, uint64_t timeout);
 /**
  * Progress DAOS transport layer.
  *
- * \param dtp_ctx [IN]          DAOS transport context
- * \param timeout [IN]          how long is caller going to wait (millisecond)
- *                              if \a timeout > 0 when there is no operation to
- *                              progress. Can return when one or more operation
- *                              progressed.
- *                              zero means no waiting.
- * \param creds [IN/OUT]        input parameter as the caller specified maximum
- *                              number of credits it wants to progress;
- *                              output parameter as the number of credits
- *                              remaining.
- *                              pass in NULL means to progress all available
- *                              events and remaining credits number need not to
- *                              be returned.
- * \param cond_cb [IN]          optional progress condition callback.
- *                              DTP internally calls this function, when it
- *                              returns non-zero then stops the progressing or
- *                              waiting and returns.
- * \param arg [IN]              argument to cond_cb.
+ * \param dtp_ctx	[IN]	DAOS transport context
+ * \param timeout	[IN]	how long is caller going to wait (micro-second)
+ *				if \a timeout > 0 when there is no operation to
+ *				progress. Can return when one or more operation
+ *				progressed.
+ *				zero means no waiting and -1 waits indefinitely.
+ * \param cond_cb	[IN]	optional progress condition callback.
+ *				DTP internally calls this function, when it
+ *				returns non-zero then stops the progressing or
+ *				waiting and returns.
+ * \param arg		[IN]              argument to cond_cb.
  *
- * Notes: one credit corresponds to one RPC request or one HG internal
- *        operation, currently mercury cannot ensure the precise number of
- *        requests progressed and does not know the number of credits remaining.
- *        And when HG_Progress blocks it possibly can-only be waked up by low
- *        level BMI/OFI etc, i.e. might cannot return when user change cond_cb's
- *        behavior.
- *
- * \return                      zero on success, negative value if error
+ * \return			zero on success, negative value if error
  */
 int
-dtp_progress(dtp_context_t dtp_ctx, unsigned int timeout,
-	     unsigned int *creds, dtp_progress_cond_cb_t cond_cb, void *arg);
+dtp_progress(dtp_context_t dtp_ctx, int64_t timeout,
+	     dtp_progress_cond_cb_t cond_cb, void *arg);
 
 /**
  * Query the caller's rank number within group.

@@ -307,6 +307,16 @@ dss_srv_handler_cleanup(void *param)
 		D_ERROR("failed to destroy context: %d\n", rc);
 }
 
+int
+dss_progress_cb(void *arg)
+{
+	/** cancellation point */
+	pthread_testcancel();
+
+	/** no cancel happened, continue running */
+	return 0;
+}
+
 /**
  *
  The handling process would like
@@ -370,11 +380,8 @@ dss_srv_handler(void *arg)
 	pthread_mutex_unlock(&dthread->dt_lock);
 
 	/* main service loop processing incoming request */
-	while (true) {
-		dtp_progress(dmi->dmi_ctx, 0, NULL, NULL, NULL);
-		/* cancellation point */
-		pthread_testcancel();
-	}
+	rc = dtp_progress(dmi->dmi_ctx, -1, dss_progress_cb, NULL);
+	D_ERROR("service thread exited from progress with %d\n", rc);
 
 	pthread_cleanup_pop(0);
 	dtp_context_destroy(dmi->dmi_ctx, true);
