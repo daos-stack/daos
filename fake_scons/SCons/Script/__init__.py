@@ -226,6 +226,10 @@ class Configure(object):
         """Fake CheckLib"""
         return True
 
+    def CheckProg(self, *args, **kw):
+        """Fake CheckProg"""
+        return True
+
     def Finish(self):
         """Fake finish"""
         pass

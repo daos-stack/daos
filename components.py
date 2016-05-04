@@ -174,6 +174,7 @@ REQS.define('fuse',
                       'make install'],
             libs=['fuse3'],
             defines=["FUSE_USE_VERSION=30"],
+            required_progs=['libtoolize'],
             headers=['fuse3/fuse.h'])
 
 REQS.define('ofi',

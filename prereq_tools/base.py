@@ -835,6 +835,7 @@ class _Component(object):
         self.component_prefix = None
         self.libs = kw.get("libs", [])
         self.required_libs = kw.get("required_libs", [])
+        self.required_progs = kw.get("required_progs", [])
         self.defines = kw.get("defines", [])
         self.headers = kw.get("headers", [])
         self.requires = kw.get("requires", [])
@@ -943,6 +944,11 @@ class _Component(object):
 
         for lib in self.required_libs:
             if not config.CheckLib(lib):
+                config.Finish()
+                return True
+
+        for prog in self.required_progs:
+            if not config.CheckProg(prog):
                 config.Finish()
                 return True
 
