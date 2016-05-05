@@ -77,6 +77,12 @@ dsms_hdlr_ping(dtp_rpc_t *rpc)
 /* Note: the rpc input/output parameters is defined in daos_rpc */
 static struct daos_rpc_handler dsms_handlers[] = {
 	{
+		.dr_opc		= DSM_POOL_CONNECT,
+		.dr_hdlr	= dsms_hdlr_pool_connect
+	}, {
+		.dr_opc		= DSM_POOL_DISCONNECT,
+		.dr_hdlr	= dsms_hdlr_pool_disconnect
+	}, {
 		.dr_opc		= DSM_PING,
 		.dr_hdlr	= dsms_hdlr_ping,
 	}, {

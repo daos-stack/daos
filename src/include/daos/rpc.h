@@ -124,8 +124,12 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 			struct daos_rpc_handler *handler;
 
 			handler = daos_rpc_handler_find(handlers, rpc->dr_opc);
-			if (handler != NULL)
-				rc = dtp_rpc_srv_reg(opcode, rpc->dr_in_hdlr,
+			if (handler == NULL) {
+				D_ERROR("failed to find handler for opc %x\n",
+					rpc->dr_opc);
+				return rc;
+			}
+			rc = dtp_rpc_srv_reg(opcode, rpc->dr_in_hdlr,
 					     rpc->dr_out_hdlr, rpc->dr_in_sz,
 					     rpc->dr_out_sz, handler->dr_hdlr);
 		} else {

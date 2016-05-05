@@ -82,9 +82,9 @@ dss_module_load(const char *modname)
 
 	/* load the dynamic library */
 	sprintf(name, "lib%s.so", modname);
-	handle = dlopen(name, RTLD_LAZY);
+	handle = dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
 	if (handle == NULL) {
-		D_ERROR("cannot load %s\n", name);
+		D_ERROR("cannot load %s: %s\n", name, dlerror());
 		return -DER_INVAL;
 	}
 
