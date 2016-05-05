@@ -376,7 +376,8 @@ static int
 pool_init(const uuid_t uuid, struct pool *pool)
 {
 	struct mpool	       *mpool;
-	struct btr_root		kvs;
+	struct btr_root	       *kvs;
+	size_t			size;
 	struct umem_attr	uma;
 	int			rc;
 
@@ -402,14 +403,14 @@ pool_init(const uuid_t uuid, struct pool *pool)
 		D_GOTO(err_rwlock, rc = -DER_NOMEM);
 	}
 
-	rc = dsms_kvs_nv_lookup(mpool->mp_root, POOL_HANDLES, &kvs,
-				sizeof(struct btr_root));
+	rc = dsms_kvs_nv_lookup_ptr(mpool->mp_root, POOL_HANDLES, (void **)&kvs,
+				    &size);
 	if (rc != 0)
 		D_GOTO(err_rwlock, rc);
 
 	uma.uma_id = UMEM_CLASS_PMEM;
 	uma.uma_u.pmem_pool = mpool->mp_pmem;
-	rc = dbtree_open_inplace(&kvs, &uma, &pool->p_handles);
+	rc = dbtree_open_inplace(kvs, &uma, &pool->p_handles);
 	if (rc != 0) {
 		D_ERROR("failed to open pool handle kvs: %d\n", rc);
 		D_GOTO(err_rwlock, rc);

@@ -44,8 +44,8 @@ flags_are_valid(unsigned int flags)
 {
 	unsigned int mode = flags & (DAOS_PC_RO | DAOS_PC_RW | DAOS_PC_EX);
 
-	return (mode != DAOS_PC_RO) && (mode != DAOS_PC_RW) &&
-	       (mode != DAOS_PC_EX);
+	return (mode = DAOS_PC_RO) || (mode = DAOS_PC_RW) ||
+	       (mode = DAOS_PC_EX);
 }
 
 int
@@ -68,6 +68,8 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 
 	if (uuid_is_null(uuid) || !flags_are_valid(flags) || poh == NULL)
 		return -DER_INVAL;
+
+	D_DEBUG(DF_DSMC, DF_UUID": enter: flags %x\n", DP_UUID(uuid), flags);
 
 	/*
 	 * Currently, rank 0 runs the pool and the (only) container service.
@@ -114,6 +116,8 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 	conn->pc_capas = in->pci_capas;
 
 	poh->cookie = (uint64_t)conn;
+	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n", DP_UUID(uuid),
+		poh->cookie);
 out_req:
 	dtp_req_decref(rpc);
 	return rc;
@@ -133,6 +137,9 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 
 	if (conn == NULL)
 		return -DER_NO_HDL;
+
+	D_DEBUG(DF_DSMC, DF_UUID": enter: hdl "DF_X64"\n",
+		DP_UUID(conn->pc_pool), poh.cookie);
 
 	uuid_clear(ep.ep_grp_id);
 	ep.ep_rank = 0;
@@ -160,6 +167,8 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 		D_GOTO(out_req, rc = out->pdo_rc);
 	}
 
+	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n",
+		DP_UUID(conn->pc_pool), poh.cookie);
 	D_FREE_PTR(conn);
 out_req:
 	dtp_req_decref(rpc);

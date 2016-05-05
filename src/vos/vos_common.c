@@ -180,12 +180,13 @@ struct dss_module_key vos_module_key = {
 static int
 vos_mod_init(void)
 {
-	return 0;
+	return vos_init();	/* TODO: Only a temporary fix. */
 }
 
 static int
 vos_mod_fini(void)
 {
+	vos_fini();		/* TODO: Only a temporary fix. */
 	return 0;
 }
 

@@ -36,8 +36,9 @@
 extern dtp_context_t dsm_context;
 
 static struct option opts[] = {
-	{ "ping",	0,	NULL,   'p'},
-	{  NULL,	0,	NULL,	 0 }
+	{ "ping",		0,	NULL,   'p'},
+	{ "pool-connect",	0,	NULL,   'c'},
+	{  NULL,		0,	NULL,	 0 }
 };
 
 #define DEFAULT_TIMEOUT	20
@@ -123,16 +124,20 @@ out_destroy:
 }
 
 static int
-test_pool_connect(void)
+test_pool_connect(int argc, char *argv[])
 {
+	char	       *uuid_str = argv[argc - 1];
 	uuid_t		uuid;
 	daos_handle_t	poh;
-	char		buf[4096];
 	int		rc;
 
-	uuid_generate(uuid);
-	uuid_unparse_lower(uuid, buf);
-	printf("connecting to pool %s\n", buf);
+	D_DEBUG(DF_DSMC, "connecting to pool %s\n", argv[argc - 1]);
+
+	rc = uuid_parse(uuid_str, uuid);
+	if (rc != 0) {
+		D_ERROR("invalid pool uuid: %s\n", uuid_str);
+		return rc;
+	}
 
 	rc = dsm_pool_connect(uuid, NULL /* grp */, NULL /* tgts */,
 			      DAOS_PC_RW, NULL /* failed */, &poh,
@@ -140,7 +145,8 @@ test_pool_connect(void)
 	if (rc != 0)
 		return rc;
 
-	printf("connected to pool %s: "DF_X64"\n", uuid, poh.cookie);
+	D_DEBUG(DF_DSMC, "connected to pool %s: "DF_X64"\n", uuid_str,
+		poh.cookie);
 
 	rc = dsm_pool_disconnect(poh, NULL /* ev */);
 	if (rc != 0)
@@ -175,7 +181,7 @@ main(int argc, char **argv)
 			rc = test_ping_rpc(dsm_context);
 			break;
 		case 'c':
-			rc = test_pool_connect();
+			rc = test_pool_connect(argc, argv);
 			break;
 		}
 		if (rc < 0) {

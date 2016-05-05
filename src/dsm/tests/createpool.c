@@ -28,21 +28,29 @@
 #include <fcntl.h>
 #include <libgen.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <daos_srv/daos_m_srv.h>
+#include <daos_srv/daos_server.h>
 
-/* Super hacky. This is actually an internal function of libdaos_m_srv. */
-int dsms_storage_init(void);
+/* Super hacky. */
+extern struct dss_module daos_m_srv_module;
+extern struct dss_module vos_module;
 
 int
 main(int argc, char *argv[])
 {
-	uuid_t	pool_uuid;
-	uuid_t	target_uuid;
-	char	uuid_str[36];
-	char	buf[256];
-	char   *dir;
-	int	fd;
-	int	rc;
+	uuid_t			pool_uuid;
+	uuid_t			target_uuid;
+	char			uuid_str[36];
+	char			uuid_str2[36];
+	char			buf[256];
+	char		       *dir;
+	daos_rank_list_t	targets;
+	daos_rank_list_t	svc;
+	daos_rank_t		rank = 0;
+	int			domain = 1;
+	int			fd;
+	int			rc;
 
 	if (argc != 2) {
 		printf("usage: %s <dir>\n", basename(argv[0]));
@@ -69,14 +77,29 @@ main(int argc, char *argv[])
 	rc = close(fd);
 	assert(rc == 0);
 
-	rc = dsms_storage_init();
+	rc = vos_module.sm_init();
+	assert(rc == 0);
+
+	rc = daos_m_srv_module.sm_init();
 	assert(rc == 0);
 
 	rc = dsms_pool_create(pool_uuid, dir, target_uuid);
+	assert(rc == 0);
 
-	uuid_unparse_lower(target_uuid, uuid_str);
+	targets.rl_nr.num = 1;
+	targets.rl_ranks = &rank;
 
-	printf("dsms_pool_create: %d %s\n", rc, uuid_str);
+	rc = dsms_pool_svc_create(pool_uuid, geteuid(), getegid(),
+				  0666 /* mode */, 1 /* ntargets */,
+				  target_uuid, NULL /* group */, &targets,
+				  1 /* ndomains */, &domain, ".", &svc);
+	assert(rc == 0);
+
+	uuid_unparse_lower(pool_uuid, uuid_str);
+	uuid_unparse_lower(target_uuid, uuid_str2);
+
+	printf("dsms_pool_create: %d pool=%s target=%s\n", rc, uuid_str,
+	       uuid_str2);
 
 	return 0;
 }

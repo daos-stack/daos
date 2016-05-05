@@ -125,6 +125,10 @@ do {									\
 #define DF_UOID		DF_OID".%u"
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
 
+/* Only print the first eight bytes. */
+#define DF_UUID		DF_X64
+#define DP_UUID(uuid)	(uint64_t)(uuid)
+
 /* memory allocating macros */
 #define D_ALLOC(ptr, size)						 \
 	do {								 \

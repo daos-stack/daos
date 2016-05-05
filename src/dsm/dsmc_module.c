@@ -108,6 +108,8 @@ dsm_fini(void)
 
 	daos_rpc_unregister(dsm_rpcs);
 
+	dtp_context_destroy(dsm_context, 1 /* force */);
+
 	rc = dtp_finalize();
 
 	module_initialized = 0;
