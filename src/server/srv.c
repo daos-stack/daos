@@ -300,7 +300,7 @@ dss_srv_handler_cleanup(void *param)
 
 	dtc = param;
 	dmi = (struct dss_module_info *)
-	      dss_module_key_get(dtc, &dss_module_key);
+	      dss_module_key_get(dtc, &daos_srv_modkey);
 	D_ASSERT(dmi != NULL);
 	rc = dtp_context_destroy(dmi->dmi_ctx, true);
 	if (rc)
@@ -603,7 +603,7 @@ dss_module_info_fini(const struct dss_thread_local_storage *dtls,
 	D_FREE_PTR(info);
 }
 
-struct dss_module_key dss_module_key = {
+struct dss_module_key daos_srv_modkey = {
 	.dmk_tags = DAOS_SERVER_TAG,
 	.dmk_index = -1,
 	.dmk_init = dss_module_info_init,
@@ -658,7 +658,7 @@ dss_srv_init()
 		goto out;
 	}
 
-	dss_register_key(&dss_module_key);
+	dss_register_key(&daos_srv_modkey);
 
 	/* how many threads should be started here */
 	rc = dss_threads_init(&mask);

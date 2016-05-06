@@ -34,6 +34,7 @@
 #include <daos/event.h>
 #include "dmg_rpc.h"
 
+extern dtp_context_t dsm_context;
 
 bool
 dmg_initialized();

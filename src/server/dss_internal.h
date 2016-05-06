@@ -21,24 +21,6 @@
 
 #include <daos_srv/daos_server.h>
 
-struct dss_module_info {
-	dtp_context_t	dmi_ctx;
-};
-
-extern struct dss_module_key	dss_module_key;
-
-static inline struct dss_module_info *
-dss_get_module_info()
-{
-	struct dss_module_info *dmi;
-	struct dss_thread_local_storage *dtc;
-
-	dtc = dss_tls_get();
-	dmi = (struct dss_module_info *)
-	      dss_module_key_get(dtc, &dss_module_key);
-	return dmi;
-}
-
 /* module.c */
 int dss_module_init(void);
 int dss_module_fini(bool force);

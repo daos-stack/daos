@@ -178,9 +178,6 @@ pool_create(void)
 	rc = dmg_init();
 	ASSERT(rc == 0, "dmg_init failed with %d", rc);
 
-	/** generate uuid for the pool */
-	uuid_generate(pool_uuid);
-
 	/**
 	 * allocate list of service nodes, returned as output parameter of
 	 * dmg_pool_create() and used to connect
@@ -189,13 +186,13 @@ pool_create(void)
 	/** create pool over all the storage targets */
 	svcl.rl_nr.num	= 1;
 	svcl.rl_ranks	= &svc;
-	rc = dmg_pool_create(pool_uuid,
-			     0 /* mode */,
+	rc = dmg_pool_create(0 /* mode */,
 			     DSS_PSETID /* daos server process set ID */,
 			     NULL /* list of targets, NULL = all */,
 			     NULL /* storage type to use, use default */,
 			     10 * 1024 * 1024 * 1024UL /* target size, 10G */,
 			     &svcl /* pool service nodes, used for connect */,
+			     pool_uuid, /* the uuid of the pool created */
 			     NULL /* event, use blocking call for now */);
 	ASSERT(rc == 0, "pool create failed with %d", rc);
 }

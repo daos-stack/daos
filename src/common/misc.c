@@ -89,7 +89,12 @@ daos_rank_list_free(daos_rank_list_t *rank_list)
 void
 daos_rank_list_copy(daos_rank_list_t *dst, daos_rank_list_t *src, bool input)
 {
-	D_ASSERT(dst != NULL && src != NULL);
+	if (dst == NULL || src == NULL) {
+		D_DEBUG(DF_MISC, "daos_rank_list_copy do nothing, dst: %p, "
+			"src: %p.\n", dst, src);
+		return;
+	}
+
 	if (input == true) {
 		dst->rl_nr.num = src->rl_nr.num;
 		memcpy(dst->rl_ranks, src->rl_ranks,
@@ -99,4 +104,56 @@ daos_rank_list_copy(daos_rank_list_t *dst, daos_rank_list_t *src, bool input)
 		memcpy(dst->rl_ranks, src->rl_ranks,
 		       dst->rl_nr.num_out * sizeof(daos_rank_t));
 	}
+}
+
+static inline int
+rank_compare(const void *rank1, const void *rank2)
+{
+	const daos_rank_t	*r1 = rank1;
+	const daos_rank_t	*r2 = rank2;
+
+	D_ASSERT(r1 != NULL && r2 != NULL);
+	if (*r1 < *r2)
+		return -1;
+	else if (*r1 == *r2)
+		return 0;
+	else /* *r1 > *r2 */
+		return 1;
+}
+
+/*
+ * Compare whether or not the two rank lists are identical.
+ * This function possibly will change the order of the passed in rank list, it
+ * will sort the rank list in order.
+ */
+bool
+daos_rank_list_identical(daos_rank_list_t *rank_list1,
+			 daos_rank_list_t *rank_list2, bool input)
+{
+	int i;
+
+	if (rank_list1 == rank_list2)
+		return true;
+	if (rank_list1 == NULL || rank_list2 == NULL)
+		return false;
+	if (input == true) {
+		if (rank_list1->rl_nr.num != rank_list2->rl_nr.num)
+			return false;
+		qsort(rank_list1->rl_ranks, rank_list1->rl_nr.num,
+		      sizeof(daos_rank_t), rank_compare);
+		for (i = 0; i < rank_list1->rl_nr.num; i++) {
+			if (rank_list1->rl_ranks[i] != rank_list2->rl_ranks[i])
+				return false;
+		}
+	} else {
+		if (rank_list1->rl_nr.num_out != rank_list2->rl_nr.num_out)
+			return false;
+		qsort(rank_list1->rl_ranks, rank_list1->rl_nr.num_out,
+		      sizeof(daos_rank_t), rank_compare);
+		for (i = 0; i < rank_list1->rl_nr.num_out; i++) {
+			if (rank_list1->rl_ranks[i] != rank_list2->rl_ranks[i])
+				return false;
+		}
+	}
+	return true;
 }

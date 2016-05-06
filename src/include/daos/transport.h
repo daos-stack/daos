@@ -145,10 +145,12 @@ struct dtp_req_format {
 extern struct dtp_msg_field DMF_UUID;
 extern struct dtp_msg_field DMF_INT;
 extern struct dtp_msg_field DMF_UINT32;
+extern struct dtp_msg_field DMF_DAOS_SIZE;
 extern struct dtp_msg_field DMF_UINT64;
 extern struct dtp_msg_field DMF_BULK;
 extern struct dtp_msg_field DMF_BOOL;
 extern struct dtp_msg_field DMF_STRING;
+extern struct dtp_msg_field DMF_RANK_LIST;
 
 typedef void *dtp_bulk_t; /* abstract bulk handle */
 
@@ -454,8 +456,11 @@ dtp_reply_send(dtp_rpc_t *req);
  *
  * \return                      pointer to request buffer
  */
-void *
-dtp_req_get(dtp_rpc_t *req);
+static inline void *
+dtp_req_get(dtp_rpc_t *rpc)
+{
+	return rpc->dr_input;
+};
 
 /**
  * Return reply buffer
@@ -464,8 +469,11 @@ dtp_req_get(dtp_rpc_t *req);
  *
  * \return                      pointer to reply buffer
  */
-void *
-dtp_reply_get(dtp_rpc_t *req);
+static inline void *
+dtp_reply_get(dtp_rpc_t *rpc)
+{
+	return rpc->dr_output;
+}
 
 /**
  * Abort a RPC request.

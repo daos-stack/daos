@@ -105,6 +105,24 @@ dss_module_key_get(struct dss_thread_local_storage *dtls,
 void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
+struct dss_module_info {
+	dtp_context_t	dmi_ctx;
+};
+
+extern struct dss_module_key	daos_srv_modkey;
+
+static inline struct dss_module_info *
+dss_get_module_info()
+{
+	struct dss_module_info *dmi;
+	struct dss_thread_local_storage *dtc;
+
+	dtc = dss_tls_get();
+	dmi = (struct dss_module_info *)
+	      dss_module_key_get(dtc, &daos_srv_modkey);
+	return dmi;
+}
+
 /**
  * Each module should provide a dss_module structure which defines the module
  * interface. The name of the allocated structure must be the library name

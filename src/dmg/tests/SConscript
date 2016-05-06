@@ -1,0 +1,8 @@
+#!python
+
+Import('env')
+
+env.Append(CPPPATH = ['#/src/dmg', '#/src/server'])
+
+env.Program('dmg_test', Glob('dmg_test.c'),
+	    LIBS=['daos_common', 'daos_m', 'daos_mgmt', 'pthread', 'daos_transport', 'uuid'])

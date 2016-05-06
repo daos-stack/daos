@@ -28,8 +28,6 @@
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static int		module_initialized;
 
-dtp_context_t	dmgc_ctx;
-
 int
 dmg_init()
 {
@@ -45,13 +43,6 @@ dmg_init()
 		D_GOTO(unlock, rc);
 	}
 
-	/* TODO: may use the shared client-side context later */
-	rc = dtp_context_create(NULL, &dmgc_ctx);
-	if (rc != 0) {
-		D_ERROR("dtp_context_create failed: rc = %d.\n", rc);
-		D_GOTO(unlock, rc);
-	}
-
 	module_initialized = 1;
 unlock:
 	pthread_mutex_unlock(&module_lock);
@@ -61,24 +52,17 @@ unlock:
 int
 dmg_fini()
 {
-	int rc;
+	int rc = 0;
 
 	pthread_mutex_lock(&module_lock);
 	if (!module_initialized) {
-		pthread_mutex_unlock(&module_lock);
-		return 0;
-	}
-
-	rc = dtp_context_destroy(dmgc_ctx, 1);
-	if (rc != 0) {
-		D_ERROR("dtp_context_destroy failed: rc = %d.\n", rc);
 		D_GOTO(unlock, rc);
 	}
-	dmgc_ctx = NULL;
 
 	daos_rpc_unregister(dmg_rpcs);
 
 	module_initialized = 0;
+
 unlock:
 	pthread_mutex_unlock(&module_lock);
 	return rc;

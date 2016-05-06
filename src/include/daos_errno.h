@@ -71,6 +71,8 @@ typedef enum {
 	DER_PROTO		= (DER_ERR_BASE + 19),
 	/** un-initialized */
 	DER_UNINIT		= (DER_ERR_BASE + 20),
+	/** target create error */
+	DER_TGT_CREATE		= (DER_ERR_BASE + 21),
 	/** epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** epoch is too old, all data have been recycled */

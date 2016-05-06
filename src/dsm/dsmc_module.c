@@ -60,7 +60,7 @@ dsm_init(void)
 
 	rc = dtp_context_create(NULL /* arg */, &dsm_context);
 	if (rc != 0) {
-		D_ERROR("failed to create context: %d\n", rc);
+		D_ERROR("failed to create dtp context: %d\n", rc);
 		D_GOTO(err_dtp, rc);
 	}
 
@@ -108,7 +108,9 @@ dsm_fini(void)
 
 	daos_rpc_unregister(dsm_rpcs);
 
-	dtp_context_destroy(dsm_context, 1 /* force */);
+	rc = dtp_context_destroy(dsm_context, 1 /* force */);
+	if (rc != 0)
+		D_ERROR("failed to destroy dtp context: %d\n", rc);
 
 	rc = dtp_finalize();
 

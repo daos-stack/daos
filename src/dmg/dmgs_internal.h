@@ -28,6 +28,7 @@
 #ifndef __DMGS_INTERNAL_H__
 #define __DMGS_INTERNAL_H__
 
+#include <daos/list.h>
 #include <daos/transport.h>
 #include <daos/rpc.h>
 #include <daos/common.h>
@@ -37,5 +38,9 @@
 
 int
 dmgs_hdlr_pool_create(dtp_rpc_t *rpc_req);
+int
+dmgs_hdlr_tgt_create(dtp_rpc_t *rpc_req);
+int
+dmgs_hdlr_tgt_destroy(dtp_rpc_t *rpc_req);
 
 #endif /* __DMGS_INTERNAL_H__ */

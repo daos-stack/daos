@@ -38,16 +38,19 @@
  */
 enum dmg_operation {
 	DMG_POOL_CREATE		= 1,
-	DSM_POOL_DESTROY	= 2,
-	DSM_POOL_EXTEND		= 3,
+	DMG_POOL_DESTROY	= 2,
+	DMG_POOL_EXTEND		= 3,
+	DMG_TGT_CREATE		= 4,
+	DMG_TGT_DESTROY		= 5,
+	DMG_TGT_EXTEND		= 6,
 };
 
 struct dmg_pool_create_in {
 	uuid_t			pc_uuid;
+	dtp_string_t		pc_grp;
+	dtp_string_t		pc_tgt_dev;
 	unsigned int		pc_mode;
-	dtp_group_id_t		pc_grp_id;
 	daos_rank_list_t	*pc_tgts;
-	const char		*pc_tgt_dev;
 	daos_size_t		pc_tgt_size;
 	daos_rank_list_t	*pc_svc;
 };
@@ -57,11 +60,26 @@ struct dmg_pool_create_out {
 	daos_rank_list_t	*pc_svc;
 };
 
+struct dmg_tgt_create_in {
+	uuid_t			tc_pool_uuid;
+	dtp_string_t		tc_tgt_dev;
+	daos_size_t		tc_tgt_size;
+};
 
+struct dmg_tgt_create_out {
+	int			tc_rc;
+};
+
+struct dmg_tgt_destroy_in {
+	uuid_t			td_pool_uuid;
+};
+
+struct dmg_tgt_destroy_out {
+	int			td_rc;
+};
 
 
 
 extern struct daos_rpc dmg_rpcs[];
-extern dtp_context_t dmgc_ctx;
 
 #endif /* __DMG_RPC_H__ */

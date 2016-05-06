@@ -26,7 +26,6 @@
 #define __DTP_ECHO_H__
 
 #include <daos/transport.h>
-#include <daos/rpc.h>
 
 #include <stdio.h>
 #include <assert.h>

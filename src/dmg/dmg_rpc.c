@@ -24,69 +24,50 @@
 #include <daos/rpc.h>
 #include "dmg_rpc.h"
 
-static int
-dmg_proc_pool_create_in(dtp_proc_t proc, void *data)
-{
-	struct dmg_pool_create_in	*pc_in;
-	int				rc = 0;
+struct dtp_msg_field *dmg_pool_create_in_fields[] = {
+	&DMF_UUID,		/* pc_uuid */
+	&DMF_STRING,		/* pc_grp */
+	&DMF_STRING,		/* pc_tgt_dev */
+	&DMF_UINT32,		/* pc_mode */
+	&DMF_RANK_LIST,		/* pc_tgts */
+	&DMF_DAOS_SIZE,		/* pc_tgt_size */
+	&DMF_RANK_LIST		/* pc_svc */
+};
 
-	pc_in = (struct dmg_pool_create_in *)data;
-	D_ASSERT(pc_in != NULL);
+struct dtp_msg_field *dmg_pool_create_out_fields[] = {
+	&DMF_INT,		/* pc_rc */
+	&DMF_RANK_LIST		/* pc_svc */
+};
 
-	rc = dtp_proc_uuid_t(proc, &pc_in->pc_uuid);
-	if (rc != 0)
-		goto out;
+struct dtp_msg_field *dmg_tgt_create_in_fields[] = {
+	&DMF_UUID,		/* tc_pool_uuid */
+	&DMF_STRING,		/* tc_tgt_dev */
+	&DMF_DAOS_SIZE		/* tc_tgt_size */
+};
 
-	rc = dtp_proc_uint32_t(proc, &pc_in->pc_mode);
-	if (rc != 0)
-		goto out;
+struct dtp_msg_field *dmg_tgt_create_out_fields[] = {
+	&DMF_INT		/* tc_rc */
+};
 
-	rc = dtp_proc_dtp_group_id_t(proc, &pc_in->pc_grp_id);
-	if (rc != 0)
-		goto out;
+struct dtp_msg_field *dmg_tgt_destroy_in_fields[] = {
+	&DMF_UUID		/* td_pool_uuid */
+};
 
-	rc = dtp_proc_daos_rank_list_t(proc, &pc_in->pc_tgts);
-	if (rc != 0)
-		goto out;
+struct dtp_msg_field *dmg_tgt_destroy_out_fields[] = {
+	&DMF_INT		/* td_rc */
+};
 
-	rc = dtp_proc_dtp_const_string_t(proc, &pc_in->pc_tgt_dev);
-	if (rc != 0)
-		goto out;
+struct dtp_req_format DQF_DMG_POOL_CREATE =
+	DEFINE_DTP_REQ_FMT("DMG_POOL_CREATE", dmg_pool_create_in_fields,
+			   dmg_pool_create_out_fields);
 
-	rc = dtp_proc_daos_size_t(proc, &pc_in->pc_tgt_size);
-	if (rc != 0)
-		goto out;
+struct dtp_req_format DQF_DMG_TGT_CREATE =
+	DEFINE_DTP_REQ_FMT("DMG_TGT_CREATE", dmg_tgt_create_in_fields,
+			   dmg_tgt_create_out_fields);
 
-	rc = dtp_proc_daos_rank_list_t(proc, &pc_in->pc_svc);
-
-out:
-	if (rc != 0)
-		D_ERROR("dmg_proc_pool_create_in failed rc: %d.\n", rc);
-	return rc;
-}
-
-static int
-dmg_proc_pool_create_out(dtp_proc_t proc, void *data)
-{
-	struct dmg_pool_create_out	*pc_out;
-	int				rc = 0;
-
-	pc_out = (struct dmg_pool_create_out *)data;
-	D_ASSERT(pc_out != NULL);
-
-	rc = dtp_proc_int(proc, &pc_out->pc_rc);
-	if (rc != 0)
-		goto out;
-
-	rc = dtp_proc_daos_rank_list_t(proc, &pc_out->pc_svc);
-
-out:
-	if (rc != 0)
-		D_ERROR("dmg_proc_pool_create_out failed rc: %d.\n", rc);
-	return rc;
-}
-
-
+struct dtp_req_format DQF_DMG_TGT_DESTROY =
+	DEFINE_DTP_REQ_FMT("DMG_TGT_DESTROY", dmg_tgt_destroy_in_fields,
+			   dmg_tgt_destroy_out_fields);
 
 struct daos_rpc dmg_rpcs[] = {
 	{
@@ -94,12 +75,20 @@ struct daos_rpc dmg_rpcs[] = {
 		.dr_opc		= DMG_POOL_CREATE,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
-		.dr_in_hdlr	= dmg_proc_pool_create_in,
-		.dr_in_sz	= sizeof(struct dmg_pool_create_in),
-		.dr_out_hdlr	= dmg_proc_pool_create_out,
-		.dr_out_sz	= sizeof(struct dmg_pool_create_out),
+		.dr_req_fmt	= &DQF_DMG_POOL_CREATE,
+	}, {
+		.dr_name	= "DMG_TGT_CREATE",
+		.dr_opc		= DMG_TGT_CREATE,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_DMG_TGT_CREATE,
+	}, {
+		.dr_name	= "DMG_TGT_DESTROY",
+		.dr_opc		= DMG_TGT_DESTROY,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_DMG_TGT_DESTROY,
 	}, {
 		.dr_opc		= 0
 	}
 };
-

@@ -46,7 +46,6 @@ dmg_fini();
  * automatically from external sources.
  * Targets are assumed to share the same \a dev and \a size.
  *
- * \param uuid	[IN]	UUID of the pool to create
  * \param mode	[IN]	credentials associated with the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
  * \param tgts	[IN]	Optional, allocate targets on this list of ranks
@@ -58,13 +57,14 @@ dmg_fini();
  * \param svc	[IN]	Must be pre-allocated by the caller
  *		[OUT]	Return a list of ranks where the pool service was
  *			initialized
+ * \param uuid	[OUT]	UUID of the pool created
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  */
 int
-dmg_pool_create(const uuid_t uuid, unsigned int mode, const char *grp,
+dmg_pool_create(unsigned int mode, const char *grp,
 		const daos_rank_list_t *tgts, const char *dev, daos_size_t size,
-		daos_rank_list_t *svc, daos_event_t *ev);
+		daos_rank_list_t *svc, uuid_t uuid, daos_event_t *ev);
 
 /**
  * Destroy a pool with \a uuid. If there is at least one connection to this

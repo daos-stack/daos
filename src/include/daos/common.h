@@ -235,6 +235,9 @@ void
 daos_rank_list_free(daos_rank_list_t *rank_list);
 void
 daos_rank_list_copy(daos_rank_list_t *dst, daos_rank_list_t *src, bool input);
+bool
+daos_rank_list_identical(daos_rank_list_t *rank_list1,
+			 daos_rank_list_t *rank_list2, bool input);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually

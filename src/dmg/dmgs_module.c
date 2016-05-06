@@ -36,6 +36,12 @@ static struct daos_rpc_handler dmgs_handlers[] = {
 		.dr_opc		= DMG_POOL_CREATE,
 		.dr_hdlr	= dmgs_hdlr_pool_create,
 	}, {
+		.dr_opc		= DMG_TGT_CREATE,
+		.dr_hdlr	= dmgs_hdlr_tgt_create,
+	}, {
+		.dr_opc		= DMG_TGT_DESTROY,
+		.dr_hdlr	= dmgs_hdlr_tgt_destroy,
+	}, {
 		.dr_opc = 0,
 	}
 };

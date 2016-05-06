@@ -15,4 +15,4 @@ mgmt = env.SharedLibrary('daos_mgmt',
 env.Install('#/build/lib/', mgmt)
 
 # tests
-# SConscript('tests/SConscript', exports = 'env')
+SConscript('tests/SConscript', exports = 'env')

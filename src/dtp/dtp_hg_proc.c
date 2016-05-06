@@ -226,7 +226,8 @@ dtp_proc_daos_rank_list_t(dtp_proc_t proc, daos_rank_list_t **data)
 	case HG_ENCODE:
 		rank_list = *data;
 		if (rank_list == NULL) {
-			rc = dtp_proc_uint32_t(proc, 0);
+			rank_num = 0;
+			rc = dtp_proc_uint32_t(proc, &rank_num);
 			if (rc != 0)
 				D_ERROR("dtp_proc_uint32_t failed, rc: %d.\n",
 					rc);
@@ -315,6 +316,10 @@ struct dtp_msg_field DMF_UINT64 =
 	DEFINE_DTP_MSG("dtp_uint64", 0, sizeof(uint64_t),
 			dtp_proc_uint64_t);
 
+struct dtp_msg_field DMF_DAOS_SIZE =
+	DEFINE_DTP_MSG("dtp_daos_size", 0, sizeof(daos_size_t),
+			dtp_proc_daos_size_t);
+
 struct dtp_msg_field DMF_BULK =
 	DEFINE_DTP_MSG("dtp_bulk", 0, sizeof(dtp_bulk_t),
 		       dtp_proc_dtp_bulk_t);
@@ -327,14 +332,6 @@ struct dtp_msg_field DMF_STRING =
 	DEFINE_DTP_MSG("dtp_string", 0,
 		       sizeof(dtp_string_t), dtp_proc_dtp_string_t);
 
-void *
-dtp_req_get(dtp_rpc_t *rpc)
-{
-	return rpc->dr_input;
-}
-
-void *
-dtp_reply_get(dtp_rpc_t *rpc)
-{
-	return rpc->dr_output;
-}
+struct dtp_msg_field DMF_RANK_LIST =
+	DEFINE_DTP_MSG("daos_rank_list", 0,
+		       sizeof(daos_rank_list_t), dtp_proc_daos_rank_list_t);
