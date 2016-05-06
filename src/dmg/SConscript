@@ -7,12 +7,13 @@ Import('env')
 # dmgs: DMG Server Module
 mgmt_srv = env.SharedLibrary('daos_mgmt_srv',
 			     ['dmgs_module.c', 'dmg_rpc.c', 'dmgs_pool.c'])
-env.Install('#/build/lib/daos_srv', mgmt_srv)
+env.Install('$PREFIX/lib/daos_srv', mgmt_srv)
 
 # dmgc: DMG Client Library
 mgmt = env.SharedLibrary('daos_mgmt',
 			 ['dmgc_module.c', 'dmg_rpc.c', 'dmgc_pool.c'])
-env.Install('#/build/lib/', mgmt)
+env.Install('$PREFIX/lib/', mgmt)
 
+env.AppendUnique(LIBPATH=[Dir('.')])
 # tests
 SConscript('tests/SConscript', exports = 'env')

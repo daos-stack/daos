@@ -15,11 +15,12 @@ else:
 # Compiler options
 env.Append(CPPPATH = ['#/src/vos/'])
 env.Append(CFLAGS='-msse4.2')
+env.AppendUnique(LIBPATH=[Dir('.')])
 voslib = env.Library('libvos', Glob('*.c'))
-env.Install('#/build/lib/', voslib)
+env.Install('$PREFIX/lib/', voslib)
 
 vos_sharelib = env.SharedLibrary('vos', Glob('*.c'));
-env.Install('#/build/lib/daos_srv/', vos_sharelib)
+env.Install('$PREFIX/lib/daos_srv/', vos_sharelib)
 
 # Tests
 SConscript('tests/SConscript', exports='env')

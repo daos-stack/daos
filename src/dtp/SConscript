@@ -3,6 +3,7 @@
 Import('env', 'PREREQS')
 
 env.Append(CPPPATH = ['#/src/dtp'])
+env.AppendUnique(LIBPATH=[Dir('.')])
 
 libraries = ['daos_common', 'mercury']
 
@@ -12,7 +13,7 @@ else:
     PREREQS.require(env, 'mercury', 'mcl')
 
 dtp = env.SharedLibrary('libdaos_transport', Glob('*.c'), LIBS=libraries)
-env.Install('#/build/lib/', dtp)
+env.Install('$PREFIX/lib/', dtp)
 
 # Builders
 SConscript('tests/SConscript', exports='env')

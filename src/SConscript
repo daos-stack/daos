@@ -5,9 +5,6 @@ Import('env', 'PREREQS')
 # Additional includes
 env.Append(CPPPATH = ['#/src/include'])
 
-# Generated libraries will be installed under build/lib
-env.Append(LIBPATH = ['#/build/lib'])
-
 # Builders
 SConscript('common/SConscript', exports=['env', 'PREREQS'])
 SConscript('dtp/SConscript', exports=['env', 'PREREQS'])

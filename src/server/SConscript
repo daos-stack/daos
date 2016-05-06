@@ -11,4 +11,4 @@ env.Append(LINKFLAGS = ['-rdynamic'])
 
 # Generate server program
 server = env.Program('daos_server', Glob('*.c'), LIBS=libraries)
-env.Install('#/build/bin', server)
+env.Install('$PREFIX/bin', server)

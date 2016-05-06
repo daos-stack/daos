@@ -3,8 +3,9 @@
 Import('env', 'PREREQS')
 
 common = env.SharedLibrary('libdaos_common', Glob('*.c'))
+env.AppendUnique(LIBPATH=[Dir('.')])
 SConscript('tests/SConscript', exports='env')
-env.Install('#/build/lib/', common)
+env.Install('$PREFIX/lib/', common)
 
 if PREREQS is None:
         config = Configure(env)

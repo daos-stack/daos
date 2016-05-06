@@ -9,6 +9,7 @@ if os.path.exists('scons_local'):
                 sys.path.insert(0, os.path.join(Dir('#').abspath,
 				'scons_local'))
                 from prereq_tools import PreReqComponent
+                from build_info import BuildInfo
                 have_scons_local=True
                 print ('Using scons_local build')
         except ImportError:
@@ -52,11 +53,14 @@ if have_scons_local:
         env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
 else:
         PREREQS = None
+        env.Replace(PREFIX=Dir('#build').abspath)
+
         if config.CheckHeader('libpmemobj.h'):
                 env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
         else:
                 env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '0'})
 
+env.Alias('install', '$PREFIX')
 config.Finish()
 
 if env['PLATFORM'] == 'darwin':
@@ -67,10 +71,14 @@ if env['PLATFORM'] == 'darwin':
 env.Append(CCFLAGS = ['-g', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
 env.Append(CCFLAGS = ['-O2'])
 
-# All libraries will be generated under build/lib and binaries under build/bin
-env.Append(LIBPATH = ['#/build/lib', '#/build/lib/daos_srv'])
-env.Append(PATH = ['#/build/bin'])
-
 # generate targets in specific build dir to avoid polluting the source code
-SConscript('src/SConscript', exports=['env', 'PREREQS'], variant_dir='build',
-	   duplicate=0)
+VariantDir('build', '.', duplicate=0)
+SConscript('build/src/SConscript', exports=['env', 'PREREQS'])
+
+if have_scons_local:
+    BUILDINFO = PREREQS.get_build_info()
+    BUILDINFO.gen_script('.build_vars.sh')
+    BUILDINFO.save('.build_vars.py')
+
+Default('build')
+Depends('install', 'build')
