@@ -954,10 +954,14 @@ class _Component(object):
                 config.Finish()
                 return True
 
-        for prog in self.required_progs:
-            if not config.CheckProg(prog):
-                config.Finish()
-                return True
+        try:
+            for prog in self.required_progs:
+                if not config.CheckProg(prog):
+                    config.Finish()
+                    return True
+        except AttributeError:
+            # This feature is new in scons 2.4
+            pass
 
         config.Finish()
         return False

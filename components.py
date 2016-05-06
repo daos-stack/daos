@@ -38,7 +38,7 @@ REQS.define('bmi',
 
 CCI_BUILD = ['patch -p1 < $PATCH_PREFIX/cci_port_number.patch',
              './autogen.pl']
-CCI_REQUIRED = []
+CCI_REQUIRED = ['ltdl']
 if REQS.get_env('PLATFORM') == 'darwin':
     CCI_BUILD.append('./configure --prefix=$CCI_PREFIX')
 else:
@@ -52,6 +52,7 @@ REQS.define('cci',
             retriever=RETRIEVER,
             commands=CCI_BUILD,
             required_libs=CCI_REQUIRED,
+            required_progs=['cmake'],
             headers=['cci.h'],
             libs=["cci"])
 
@@ -107,6 +108,7 @@ REQS.define('pmix',
                       'make', 'make install'],
             libs=['pmix'],
             required_libs=['event'],
+            required_progs=['autoreconf', 'aclocal', 'libtool'],
             headers=['pmix.h'],
             requires=['hwloc'])
 
@@ -123,6 +125,7 @@ REQS.define('ompi',
                       'make', 'make install'],
             libs=['libopen-rte'],
             required_libs=['event'],
+            required_progs=['g++', 'flex'],
             requires=['pmix', 'hwloc'])
 
 RETRIEVER = GitRepoRetriever("https://github.com/pmem/nvml")
