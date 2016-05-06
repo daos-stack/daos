@@ -456,6 +456,12 @@ class PreReqComponent(object):
             build_dir_name = '_build.external-%s'%arch
             install_dir = os.path.join('install', str(arch))
 
+            # Overwrite default file locations to allow multiple builds in the
+            # same tree.
+            env.SConsignFile('.sconsign-%s' % arch)
+            env.Replace(CONFIGUREDIR='#/.scons-temp-%s' % arch,
+                        CONFIGURELOG='#/config-%s.log' % arch)
+
         self.__build_dir = os.path.realpath(os.path.join(self.__top_dir,
                                                          build_dir_name))
         try:
