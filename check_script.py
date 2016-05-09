@@ -47,29 +47,36 @@ class WrapScript(object):
         newlines = 2
         outfile.write("# pylint: disable=invalid-name\n")
 
-        if "PREREQS" in variables:
-            newlines += 4
-            outfile.write("%sfrom prereq_tools import PreReqComponent\n"
-                          % prefix)
-            outfile.write("%sscons_temp_env = DefaultEnvironment()\n" % prefix)
-            outfile.write("%sscons_temp_opts = Variables()\n" % prefix)
-            outfile.write("%sPREREQS = PreReqComponent(scons_temp_env, " \
-                          "scons_temp_opts)\n" % prefix)
-            variables.remove("PREREQS")
         for variable in variables:
-            if "ENV" in variable:
+
+            if variable.upper() == 'PREREQS':
+                newlines += 4
+                outfile.write("%sfrom prereq_tools import PreReqComponent\n"
+                              % prefix)
+                outfile.write("%sscons_temp_env = DefaultEnvironment()\n"
+                              % prefix)
+                outfile.write("%sscons_temp_opts = Variables()\n" % prefix)
+                outfile.write("%s%s = PreReqComponent(scons_temp_env, " \
+                              "scons_temp_opts)\n" % (prefix, variable))
+                variables.remove(variable)
+        for variable in variables:
+            if "ENV" in variable.upper():
                 newlines += 1
                 outfile.write("%s%s = DefaultEnvironment()\n" % (prefix,
                                                                  variable))
-            if "OPTS" in variable:
+            elif "OPTS" in variable.upper():
                 newlines += 1
                 outfile.write("%s%s = Variables()\n" % (prefix, variable))
-            if "PREFIX" in variable:
+            elif "PREFIX" in variable.upper():
                 newlines += 1
                 outfile.write("%s%s = ''\n" % (prefix, variable))
-            if "TARGETS" in variable:
+            elif "TARGETS" in variable.upper():
                 newlines += 1
-                outfile.write("%s%s = ['fake']\n" % (prefix % variable))
+                outfile.write("%s%s = ['fake']\n" % (prefix, variable))
+            else:
+                newlines += 1
+                outfile.write("%s%s = None\n" % (prefix, variable))
+
         outfile.write("# pylint: enable=invalid-name\n")
         return newlines
 

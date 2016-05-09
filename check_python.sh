@@ -28,7 +28,7 @@ while [ $# != 0 ]; do
             echo skipping non-existent file: $1
             fail=1
         else
-            echo check $1
+            echo Check $1
             $SCRIPT_DIR/check_script.py $1
 	    [ $? -ne 0 ] && fail=1
         fi
