@@ -11,6 +11,7 @@ while [ $# != 0 ]; do
         #helper scripts
         echo Run self check
         $SCRIPT_DIR/check_script.py -s
+	[ $? -ne 0 ] && fail=1
     elif [ "$1" = "-s" ]; then
         #Check a SCons file
         shift
@@ -20,6 +21,7 @@ while [ $# != 0 ]; do
         else
             echo Check $1
             $SCRIPT_DIR/check_script.py -w $1
+	    [ $? -ne 0 ] && fail=1
         fi
     else
         if [ ! -f $1 ]; then
@@ -28,6 +30,7 @@ while [ $# != 0 ]; do
         else
             echo check $1
             $SCRIPT_DIR/check_script.py $1
+	    [ $? -ne 0 ] && fail=1
         fi
     fi
     shift

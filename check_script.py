@@ -106,6 +106,7 @@ from SCons.Variables import *
 
 def parse_report():
     """Create the report"""
+    error_count = 0
     pylint = open("pylint.log", "a")
     with open("tmp.log", "r") as log:
         for line in log.readlines():
@@ -114,10 +115,12 @@ def parse_report():
             if re.search("^[WECR]:", line):
                 sys.stdout.write(line[3:])
                 pylint.write(line[3:])
+                error_count += 1
             else:
                 pylint.write(line)
     pylint.close()
     os.unlink("tmp.log")
+    return error_count
 
 def check_script(fname, *args, **kw):
     """Check a python script for errors"""
@@ -134,7 +137,7 @@ def check_script(fname, *args, **kw):
     rc_dir = os.path.dirname(os.path.realpath(__file__))
 
     cmd = "pylint %s --rcfile=%s/pylint.rc --reports=n " \
-          "--msg-template '{C}: %s:{line}: pylint-{symbol}: {msg}' --reports=n " \
+          "--msg-template '{C}: %s:{line}: pylint-{symbol}: {msg}' " \
           "-d star-args  -d wrong-import-order " \
           "-d unused-wildcard-import %s > tmp.log 2>&1"% \
           (" ".join(args), rc_dir, pylint_path, tmp_fname)
@@ -144,38 +147,49 @@ def check_script(fname, *args, **kw):
     os.system(cmd)
     if wrap:
         wrapper.fix_log(fname)
-    parse_report()
+    error_count = parse_report()
     print ""
+    return error_count
 
-PARSER = argparse.ArgumentParser("Check a Python script for errors")
-PARSER.add_argument("fname", metavar='FILENAME', type=str, nargs='?',
-                    default=None, help="Filename of script to check")
-PARSER.add_argument("-w", dest='wrap', action='store_true',
-                    help='Wrap the SCons script before checking')
-PARSER.add_argument("-s", dest='self_check', action='store_true',
-                    help='Perform a self check')
+def main():
+    """Run the actual code in a function"""
+    parser = argparse.ArgumentParser("Check a Python script for errors")
+    parser.add_argument("fname", metavar='FILENAME', type=str, nargs='?',
+                        default=None, help="Filename of script to check")
+    parser.add_argument("-w", dest='wrap', action='store_true',
+                        help='Wrap the SCons script before checking')
+    parser.add_argument("-s", dest='self_check', action='store_true',
+                        help='Perform a self check')
 
-ARGS = PARSER.parse_args()
+    args = parser.parse_args()
 
-if ARGS.self_check:
-    print "Checking SCons"
-    check_script("SCons",
-                 "-d", "too-few-public-methods",
-                 "-d", "too-many-public-methods",
-                 "-d", "invalid-name",
-                 "-d", "unused-argument",
-                 "-d", "no-self-use")
-    print "Checking prereq_tools"
-    check_script("prereq_tools",
-                 "-d", "too-many-lines",
-                 "-d", "unused-argument")
-    print "Checking build_info"
-    check_script("build_info")
-    print "Checking test/build_info validation.py"
-    check_script("test/validate_build_info.py",
-                 "-d", "wrong-import-position")
-    print "Checking check_script.py"
-    check_script("check_script.py")
+    error_count = 0
 
-if ARGS.fname:
-    check_script(ARGS.fname, wrap=ARGS.wrap)
+    if args.self_check:
+        print "Checking SCons"
+        error_count += check_script("SCons",
+                                    "-d", "too-few-public-methods",
+                                    "-d", "too-many-public-methods",
+                                    "-d", "invalid-name",
+                                    "-d", "unused-argument",
+                                    "-d", "no-self-use")
+        print "Checking prereq_tools"
+        error_count += check_script("prereq_tools",
+                                    "-d", "too-many-lines",
+                                    "-d", "unused-argument")
+        print "Checking build_info"
+        error_count += check_script("build_info")
+        print "Checking test/build_info validation.py"
+        error_count += check_script("test/validate_build_info.py",
+                                    "-d", "wrong-import-position")
+        print "Checking check_script.py"
+        error_count += check_script("check_script.py")
+
+    if args.fname:
+        error_count += check_script(args.fname, wrap=args.wrap)
+
+    if error_count:
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
