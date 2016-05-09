@@ -85,7 +85,7 @@ from SCons.Variables import *
         output = open("tmp2.log", "w")
         with open("tmp.log", "r") as log:
             for line in log.readlines():
-                match = re.search(r"^\w+: *(\d+),", line)
+                match = re.search(r":(\d+):", line)
                 if match:
                     lineno = int(match.group(1))
                     if int(lineno) in self.line_map.keys():
@@ -109,8 +109,10 @@ def parse_report():
             if re.search("rated", line):
                 sys.stdout.write(line)
             if re.search("^[WECR]:", line):
-                sys.stdout.write(line)
-            pylint.write(line)
+                sys.stdout.write(line[3:])
+                pylint.write(line[3:])
+            else:
+                pylint.write(line)
     pylint.close()
     os.unlink("tmp.log")
 
@@ -122,10 +124,18 @@ def check_script(fname, *args, **kw):
     if wrap:
         wrapper = WrapScript(fname)
         tmp_fname = "script"
+        pylint_path = fname
+    else:
+        pylint_path = "{path}"
 
-    cmd = "pylint %s -d star-args -d wrong-import-order " \
+    rc_dir = os.path.dirname(os.path.realpath(__file__))
+
+    cmd = "pylint %s --rcfile=%s/pylint.rc --reports=n " \
+          "--msg-template '{C}: %s:{line}: pylint-{symbol}: {msg}' --reports=n " \
+          "-d star-args  -d wrong-import-order " \
           "-d unused-wildcard-import %s > tmp.log 2>&1"% \
-          (" ".join(args), tmp_fname)
+          (" ".join(args), rc_dir, pylint_path, tmp_fname)
+
     if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
         print cmd
     os.system(cmd)

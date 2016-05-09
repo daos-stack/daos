@@ -18,7 +18,7 @@ while [ $# != 0 ]; do
             echo skipping non-existent file: $1
             fail=1
         else
-            echo check $1
+            echo Check $1
             $SCRIPT_DIR/check_script.py -w $1
         fi
     else
@@ -33,7 +33,7 @@ while [ $# != 0 ]; do
     shift
 done
 
-echo "See pylint.log for detailed report"
+echo "See pylint.log report"
 list=`grep rated pylint.log | grep -v "rated at 10"`
 if [ $fail -eq 1 ] || [ "$list" != "" ]; then
 echo Fail
