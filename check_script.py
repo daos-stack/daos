@@ -24,13 +24,14 @@ class WrapScript(object):
             old_lineno += 1
             new_lineno += 1
 
-            match = re.search(r'Import\(.(.*).\)', line)
+            match = re.search(r'^(\s*)Import\(.(.*).\)', line)
             if match:
                 if not scons_header:
                     scons_header = True
                     self.write_header(outfile)
-                variables = match.group(1).split()
-                new_lineno += self.write_variables(outfile, variables)
+                variables = match.group(2).split()
+                new_lineno += self.write_variables(outfile, match.group(1),
+                                                   variables)
 
             if not scons_header:
                 if re.search(r"^\"\"\"", line):
@@ -41,33 +42,35 @@ class WrapScript(object):
                     new_lineno += self.write_header(outfile)
 
     @staticmethod
-    def write_variables(outfile, variables):
+    def write_variables(outfile, prefix, variables):
         """Add code to define fake variables for pylint"""
-        newlines = 0
+        newlines = 2
+        outfile.write("# pylint: disable=invalid-name\n")
+
         if "PREREQS" in variables:
             newlines += 4
-            outfile.write("""from prereq_tools import PreReqComponent
-ENV = DefaultEnvironment()
-OPTS = Variables()
-PREREQS = PreReqComponent(ENV, OPTS)\n""")
+            outfile.write("%sfrom prereq_tools import PreReqComponent\n"
+                          % prefix)
+            outfile.write("%sscons_temp_env = DefaultEnvironment()\n" % prefix)
+            outfile.write("%sscons_temp_opts = Variables()\n" % prefix)
+            outfile.write("%sPREREQS = PreReqComponent(scons_temp_env, " \
+                          "scons_temp_opts)\n" % prefix)
             variables.remove("PREREQS")
-            if "ENV" in variables:
-                variables.remove("ENV")
-            if "OPTS" in variables:
-                variables.remove("OPTS")
         for variable in variables:
             if "ENV" in variable:
                 newlines += 1
-                outfile.write("%s = DefaultEnvironment()\n"%variable)
+                outfile.write("%s%s = DefaultEnvironment()\n" % (prefix,
+                                                                 variable))
             if "OPTS" in variable:
                 newlines += 1
-                outfile.write("""%s = Variables()\n"""%variable)
+                outfile.write("%s%s = Variables()\n" % (prefix, variable))
             if "PREFIX" in variable:
                 newlines += 1
-                outfile.write("""%s = ''\n"""%variable)
+                outfile.write("%s%s = ''\n" % (prefix, variable))
             if "TARGETS" in variable:
                 newlines += 1
-                outfile.write("""%s = ['fake']\n"""%variable)
+                outfile.write("%s%s = ['fake']\n" % (prefix % variable))
+        outfile.write("# pylint: enable=invalid-name\n")
         return newlines
 
     @staticmethod
