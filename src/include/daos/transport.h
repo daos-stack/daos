@@ -448,6 +448,26 @@ int
 dtp_reply_send(dtp_rpc_t *req);
 
 /**
+ * Return request buffer
+ *
+ * \param req [IN]              pointer to RPC request
+ *
+ * \return                      pointer to request buffer
+ */
+void *
+dtp_req_get(dtp_rpc_t *req);
+
+/**
+ * Return reply buffer
+ *
+ * \param req [IN]              pointer to RPC request
+ *
+ * \return                      pointer to reply buffer
+ */
+void *
+dtp_reply_get(dtp_rpc_t *req);
+
+/**
  * Abort a RPC request.
  *
  * \param req [IN]              pointer to RPC request

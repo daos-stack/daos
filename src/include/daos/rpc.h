@@ -155,16 +155,4 @@ daos_rpc_unregister(struct daos_rpc *rpcs)
 	return 0;
 }
 
-int
-dtp_req_layout_init(struct dtp_req_format **req_formats,
-		    int count, int module_id);
-void
-dtp_req_layout_fini(struct dtp_req_format **req_formats,
-		    int count, int module_id);
-
-void *
-dtp_req_get(dtp_rpc_t *rpc);
-
-void *
-dtp_reply_get(dtp_rpc_t *rpc);
 #endif /* __DRPC_API_H__ */
