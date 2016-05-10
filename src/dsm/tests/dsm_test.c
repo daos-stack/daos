@@ -61,6 +61,18 @@ test_pool_connect(int argc, char *argv[])
 	D_DEBUG(DF_DSMC, "connected to pool %s: "DF_X64"\n", uuid_str,
 		poh.cookie);
 
+	/* container uuid */
+	uuid_generate(uuid);
+
+	rc = dsm_co_create(poh, uuid, NULL /* ev */);
+	if (rc != 0)
+		D_GOTO(disconnect, rc);
+
+	rc = dsm_co_destroy(poh, uuid, 1 /* force */, NULL /* ev */);
+	if (rc != 0)
+		D_GOTO(disconnect, rc);
+
+disconnect:
 	rc = dsm_pool_disconnect(poh, NULL /* ev */);
 	if (rc != 0)
 		return rc;

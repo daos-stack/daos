@@ -53,6 +53,8 @@ enum dsm_operation {
 	DSM_POOL_CONNECT	= 1,
 	DSM_POOL_DISCONNECT	= 2,
 	DSM_PING		= 3,
+	DSM_CONT_CREATE		= 4,
+	DSM_CONT_DESTROY	= 5
 };
 
 /* DSM RPC request structure */
@@ -93,6 +95,27 @@ struct pool_disconnect_out {
 #define POOL_CAPA_RO	(1ULL << 0)	/* read-only */
 #define POOL_CAPA_RW	(1ULL << 1)	/* read-write */
 #define POOL_CAPA_EX	(1ULL << 2)	/* exclusive read-write */
+
+struct cont_create_in {
+	uuid_t	cci_pool;
+	uuid_t	cci_pool_hdl;
+	uuid_t	cci_cont;
+};
+
+struct cont_create_out {
+	int32_t	cco_ret;
+};
+
+struct cont_destroy_in {
+	uuid_t		cdi_pool;
+	uuid_t		cdi_pool_hdl;
+	uuid_t		cdi_cont;
+	uint32_t	cdi_force;
+};
+
+struct cont_destroy_out {
+	int32_t	cdo_ret;
+};
 
 static inline int
 proc_pool_map(dtp_proc_t proc, void *data)

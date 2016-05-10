@@ -65,6 +65,27 @@ struct dtp_msg_field *dsm_ping_out_fields[] = {
 	&DMF_INT
 };
 
+struct dtp_msg_field *cont_create_in_fields[] = {
+	&DMF_UUID,	/* pool */
+	&DMF_UUID,	/* pool_hdl */
+	&DMF_UUID	/* cont */
+};
+
+struct dtp_msg_field *cont_create_out_fields[] = {
+	&DMF_INT	/* rc */
+};
+
+struct dtp_msg_field *cont_destroy_in_fields[] = {
+	&DMF_UUID,	/* pool */
+	&DMF_UUID,	/* pool_hdl */
+	&DMF_UUID,	/* cont */
+	&DMF_UINT32	/* force */
+};
+
+struct dtp_msg_field *cont_destroy_out_fields[] = {
+	&DMF_INT	/* rc */
+};
+
 struct dtp_req_format DQF_POOL_CONNECT =
 	DEFINE_DTP_REQ_FMT("DSM_POOL_CONNECT", pool_connect_in_fields,
 			   pool_connect_out_fields);
@@ -75,6 +96,14 @@ struct dtp_req_format DQF_POOL_DISCONNECT =
 
 struct dtp_req_format DQF_PING =
 	DEFINE_DTP_REQ_FMT("DSM_PING", dsm_ping_in_fields, dsm_ping_out_fields);
+
+struct dtp_req_format DQF_CONT_CREATE =
+	DEFINE_DTP_REQ_FMT("DSM_CONT_CREATE", cont_create_in_fields,
+			   cont_create_out_fields);
+
+struct dtp_req_format DQF_CONT_DESTROY =
+	DEFINE_DTP_REQ_FMT("DSM_CONT_DESTROY", cont_destroy_in_fields,
+			   cont_destroy_out_fields);
 
 int
 dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
@@ -106,6 +135,18 @@ struct daos_rpc dsm_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_PING,
+	}, {
+		.dr_name	= "DSM_CONT_CREATE",
+		.dr_opc		= DSM_CONT_CREATE,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_CREATE
+	}, {
+		.dr_name	= "DSM_CONT_DESTROY",
+		.dr_opc		= DSM_CONT_DESTROY,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_DESTROY
 	}, {
 		.dr_opc		= 0
 	}

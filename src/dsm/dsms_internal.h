@@ -40,7 +40,7 @@
 /*
  * Metadata pmem pool descriptor
  *
- * Referenced by pool metadata and container metadata descriptors.
+ * Referenced by pool and container index descriptors.
  */
 struct mpool {
 	daos_list_t	mp_entry;
@@ -67,6 +67,11 @@ int dsms_kvs_nv_create_kvs(daos_handle_t kvsh, const char *name,
 			   unsigned int class, uint64_t feats,
 			   unsigned int order, PMEMobjpool *mp,
 			   daos_handle_t *kvsh_new);
+int dsms_kvs_nv_open_kvs(daos_handle_t kvsh, const char *name, PMEMobjpool *mp,
+			 daos_handle_t *kvsh_child);
+int dsms_kvs_nv_destroy_kvs(daos_handle_t kvsh, const char *name,
+			    PMEMobjpool *mp);
+int dsms_kvs_nv_destroy(daos_handle_t kvsh, const char *name, PMEMobjpool *mp);
 int dsms_kvs_uv_update(daos_handle_t kvsh, const uuid_t uuid,
 		       const void *value, size_t size);
 int dsms_kvs_uv_lookup(daos_handle_t kvsh, const uuid_t uuid, void *value,
@@ -76,6 +81,11 @@ int dsms_kvs_uv_create_kvs(daos_handle_t kvsh, const uuid_t uuid,
 			   unsigned int class, uint64_t feats,
 			   unsigned int order, PMEMobjpool *mp,
 			   daos_handle_t *kvsh_new);
+int dsms_kvs_uv_open_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp,
+			 daos_handle_t *kvsh_child);
+int dsms_kvs_uv_destroy_kvs(daos_handle_t kvsh, const uuid_t uuid,
+			    PMEMobjpool *mp);
+int dsms_kvs_uv_destroy(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp);
 int dsms_mpool_lookup(const uuid_t pool_uuid, struct mpool **mpool);
 void dsms_mpool_get(struct mpool *mpool);
 void dsms_mpool_put(struct mpool *mpool);
@@ -87,6 +97,12 @@ int dsms_pool_init(void);
 void dsms_pool_fini(void);
 int dsms_hdlr_pool_connect(dtp_rpc_t *rpc);
 int dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
+
+/*
+ * dsms_container.c
+ */
+int dsms_hdlr_cont_create(dtp_rpc_t *rpc);
+int dsms_hdlr_cont_destroy(dtp_rpc_t *rpc);
 
 /* TODO: Move these two path generators to daos_mgmt_srv.h. */
 

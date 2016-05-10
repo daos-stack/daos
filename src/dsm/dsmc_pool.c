@@ -27,18 +27,6 @@
 #include "dsm_rpc.h"
 #include "dsmc_internal.h"
 
-/*
- * Client pool handle
- *
- * This is called a connection to avoid potential confusion with the server
- * pool_hdl.
- */
-struct pool_conn {
-	uuid_t		pc_pool;
-	uuid_t		pc_pool_hdl;
-	uint64_t	pc_capas;
-};
-
 static inline int
 flags_are_valid(unsigned int flags)
 {

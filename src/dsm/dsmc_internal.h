@@ -27,4 +27,16 @@
 
 #include <daos/transport.h>
 
+/*
+ * Client pool handle
+ *
+ * This is called a connection to avoid potential confusion with the server
+ * pool_hdl.
+ */
+struct pool_conn {
+	uuid_t		pc_pool;
+	uuid_t		pc_pool_hdl;
+	uint64_t	pc_capas;
+};
+
 #endif /* __DSMC_INTERNAL_H__ */

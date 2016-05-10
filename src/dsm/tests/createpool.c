@@ -30,7 +30,11 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <daos_srv/daos_m_srv.h>
+#include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
+
+/* Super hacky. */
+extern struct dss_module daos_m_srv_module;
 
 int
 main(int argc, char *argv[])
@@ -74,6 +78,9 @@ main(int argc, char *argv[])
 	assert(rc == 0);
 
 	rc = vos_init();
+	assert(rc == 0);
+
+	rc = daos_m_srv_module.sm_init();
 	assert(rc == 0);
 
 	rc = dsms_pool_create(pool_uuid, dir, target_uuid);

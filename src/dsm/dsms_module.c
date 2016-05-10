@@ -86,6 +86,12 @@ static struct daos_rpc_handler dsms_handlers[] = {
 		.dr_opc		= DSM_PING,
 		.dr_hdlr	= dsms_hdlr_ping,
 	}, {
+		.dr_opc		= DSM_CONT_CREATE,
+		.dr_hdlr	= dsms_hdlr_cont_create
+	}, {
+		.dr_opc		= DSM_CONT_DESTROY,
+		.dr_hdlr	= dsms_hdlr_cont_destroy
+	}, {
 		.dr_opc		= 0
 	}
 };

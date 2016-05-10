@@ -339,7 +339,7 @@ out:
 /*
  * Pool metadata descriptor
  *
- * References the mpool descriptor.
+ * References the mpool descriptor. Might also be named pool_svc.
  *
  * TODO: p_rwlock currently protects all pool metadata, both volatile and
  * persistent.  When moving to the event-driven model, we shall replace it with
@@ -384,7 +384,7 @@ pool_init(const uuid_t uuid, struct pool *pool)
 	rc = pthread_rwlock_init(&pool->p_rwlock, NULL /* attr */);
 	if (rc != 0) {
 		D_ERROR("failed to initialize p_rwlock: %d\n", rc);
-		D_GOTO(err, rc = -DER_NOMEM);
+		D_GOTO(err_mp, rc = -DER_NOMEM);
 	}
 
 	rc = pthread_mutex_init(&pool->p_lock, NULL /* attr */);
@@ -396,20 +396,24 @@ pool_init(const uuid_t uuid, struct pool *pool)
 	rc = dsms_kvs_nv_lookup_ptr(mpool->mp_root, POOL_HANDLES, (void **)&kvs,
 				    &size);
 	if (rc != 0)
-		D_GOTO(err_rwlock, rc);
+		D_GOTO(err_lock, rc);
 
 	uma.uma_id = UMEM_CLASS_PMEM;
 	uma.uma_u.pmem_pool = mpool->mp_pmem;
 	rc = dbtree_open_inplace(kvs, &uma, &pool->p_handles);
 	if (rc != 0) {
 		D_ERROR("failed to open pool handle kvs: %d\n", rc);
-		D_GOTO(err_rwlock, rc);
+		D_GOTO(err_lock, rc);
 	}
 
 	return 0;
 
+err_lock:
+	pthread_mutex_destroy(&pool->p_lock);
 err_rwlock:
 	pthread_rwlock_destroy(&pool->p_rwlock);
+err_mp:
+	dsms_mpool_put(mpool);
 err:
 	return rc;
 }

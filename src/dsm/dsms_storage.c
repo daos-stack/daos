@@ -31,7 +31,55 @@
 #include "dsms_internal.h"
 #include "dsms_layout.h"
 
-#define HAS_DBTREE_DELETE 0
+#if 1	/* dbtree_delete() not yet implemented */
+
+static int
+lookup(daos_handle_t kvsh, daos_iov_t *key, daos_iov_t *val)
+{
+	int rc;
+
+	rc = dbtree_lookup(kvsh, key, val);
+	if (rc != 0)
+		return rc;
+
+	if (val->iov_len == 0)
+		return -DER_NONEXIST;
+
+	return 0;
+}
+
+static int
+delete(daos_handle_t kvsh, daos_iov_t *key)
+{
+	daos_iov_t val;
+
+	val.iov_buf = NULL;
+	val.iov_buf_len = 0;
+	val.iov_len = val.iov_buf_len;
+
+	return dbtree_update(kvsh, key, &val);
+}
+
+#define dbtree_lookup lookup
+#define dbtree_delete delete
+
+#endif
+
+static int
+lookup_ptr(daos_handle_t kvsh, daos_iov_t *key, daos_iov_t *val)
+{
+	int rc;
+
+	val->iov_buf = NULL;
+	val->iov_buf_len = 0;
+	val->iov_len = val->iov_buf_len;
+
+	rc = dbtree_lookup(kvsh, key, val);
+	if (rc != 0)
+		return rc;
+
+	return 0;
+}
 
 static int
 create_kvs(daos_handle_t kvsh, daos_iov_t *key, unsigned int class,
@@ -55,12 +103,7 @@ create_kvs(daos_handle_t kvsh, daos_iov_t *key, unsigned int class,
 	if (rc != 0)
 		return rc;
 
-	/* Look up the address of the value. */
-	val.iov_buf = NULL;
-	val.iov_buf_len = 0;
-	val.iov_len = val.iov_buf_len;
-
-	rc = dbtree_lookup(kvsh, key, &val);
+	rc = lookup_ptr(kvsh, key, &val);
 	if (rc != 0)
 		return rc;
 
@@ -68,10 +111,8 @@ create_kvs(daos_handle_t kvsh, daos_iov_t *key, unsigned int class,
 	uma.uma_u.pmem_pool = mp;
 
 	rc = dbtree_create_inplace(class, feats, order, &uma, val.iov_buf, &h);
-	if (rc != 0) {
-		D_ERROR("failed to create kvs: %d\n", rc);
+	if (rc != 0)
 		return rc;
-	}
 
 	if (kvsh_new == NULL)
 		dbtree_close(h);
@@ -79,6 +120,59 @@ create_kvs(daos_handle_t kvsh, daos_iov_t *key, unsigned int class,
 		*kvsh_new = h;
 
 	return 0;
+}
+
+static int
+open_kvs(daos_handle_t kvsh, daos_iov_t *key, PMEMobjpool *mp,
+	 daos_handle_t *kvsh_child)
+{
+	daos_iov_t		val;
+	struct umem_attr	uma;
+	int			rc;
+
+	rc = lookup_ptr(kvsh, key, &val);
+	if (rc != 0)
+		return rc;
+
+	uma.uma_id = UMEM_CLASS_PMEM;
+	uma.uma_u.pmem_pool = mp;
+
+	rc = dbtree_open_inplace(val.iov_buf, &uma, kvsh_child);
+	if (rc != 0)
+		return rc;
+
+	return 0;
+}
+
+static int
+destroy_kvs(daos_handle_t kvsh, daos_iov_t *key, PMEMobjpool *mp)
+{
+	volatile daos_handle_t	h;
+	daos_handle_t		tmp;
+	volatile int		rc;
+
+	rc = open_kvs(kvsh, key, mp, &tmp);
+	if (rc != 0)
+		return rc;
+
+	h = tmp;
+
+	TX_BEGIN(mp) {
+		rc = dbtree_destroy(h);
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+
+		h = DAOS_HDL_INVAL;
+
+		rc = dbtree_delete(kvsh, key);
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+	} TX_ONABORT {
+		if (!daos_handle_is_inval(h))
+			dbtree_close(h);
+	} TX_END
+
+	return rc;
 }
 
 /*
@@ -323,13 +417,6 @@ dsms_kvs_nv_lookup(daos_handle_t kvsh, const char *name, void *value,
 		return rc;
 	}
 
-#if !HAS_DBTREE_DELETE
-	if (val.iov_len == 0) {
-		D_DEBUG(DF_DSMS, "\"%s\" treated as nonexistent\n", name);
-		return -DER_NONEXIST;
-	}
-#endif
-
 	return 0;
 }
 
@@ -351,22 +438,11 @@ dsms_kvs_nv_lookup_ptr(daos_handle_t kvsh, const char *name, void **value,
 	key.iov_buf_len = strlen(name) + 1;
 	key.iov_len = key.iov_buf_len;
 
-	val.iov_buf = NULL;
-	val.iov_buf_len = 0;
-	val.iov_len = val.iov_buf_len;
-
-	rc = dbtree_lookup(kvsh, &key, &val);
+	rc = lookup_ptr(kvsh, &key, &val);
 	if (rc != 0) {
 		D_ERROR("failed to look up \"%s\": %d\n", name, rc);
 		return rc;
 	}
-
-#if !HAS_DBTREE_DELETE
-	if (val.iov_len == 0) {
-		D_DEBUG(DF_DSMS, "\"%s\" treated as nonexistent\n", name);
-		return -DER_NONEXIST;
-	}
-#endif
 
 	*value = val.iov_buf;
 	*size = val.iov_len;
@@ -385,21 +461,9 @@ dsms_kvs_nv_delete(daos_handle_t kvsh, const char *name)
 	key.iov_buf_len = strlen(name) + 1;
 	key.iov_len = key.iov_buf_len;
 
-#if HAS_DBTREE_DELETE
 	rc = dbtree_delete(kvsh, &key);
 	if (rc != 0)
 		D_ERROR("failed to delete \"%s\": %d\n", name, rc);
-#else
-	daos_iov_t	val;
-
-	val.iov_buf = NULL;
-	val.iov_buf_len = 0;
-	val.iov_len = val.iov_buf_len;
-
-	rc = dbtree_update(kvsh, &key, &val);
-	if (rc != 0)
-		D_ERROR("failed to update \"%s\": %d\n", name, rc);
-#endif
 
 	return rc;
 }
@@ -415,13 +479,54 @@ dsms_kvs_nv_create_kvs(daos_handle_t kvsh, const char *name, unsigned int class,
 		       uint64_t feats, unsigned int order, PMEMobjpool *mp,
 		       daos_handle_t *kvsh_new)
 {
-	daos_iov_t key;
+	daos_iov_t	key;
+	int		rc;
 
 	key.iov_buf = (void *)name;
 	key.iov_buf_len = strlen(name) + 1;
 	key.iov_len = key.iov_buf_len;
 
-	return create_kvs(kvsh, &key, class, feats, order, mp, kvsh_new);
+	rc = create_kvs(kvsh, &key, class, feats, order, mp, kvsh_new);
+	if (rc != 0)
+		D_ERROR("failed to create \"%s\": %d\n", name, rc);
+
+	return rc;
+}
+
+int
+dsms_kvs_nv_open_kvs(daos_handle_t kvsh, const char *name, PMEMobjpool *mp,
+		     daos_handle_t *kvsh_child)
+{
+	daos_iov_t	key;
+	int		rc;
+
+	key.iov_buf = (void *)name;
+	key.iov_buf_len = strlen(name) + 1;
+	key.iov_len = key.iov_buf_len;
+
+	rc = open_kvs(kvsh, &key, mp, kvsh_child);
+	if (rc != 0)
+		D_ERROR("failed to open \"%s\": %d\n", name, rc);
+
+	return rc;
+}
+
+/* Destroy a KVS in place as the value for "name". */
+int
+dsms_kvs_nv_destroy_kvs(daos_handle_t kvsh, const char *name, PMEMobjpool *mp)
+{
+	daos_iov_t	key;
+	int		rc;
+
+	key.iov_buf = (void *)name;
+	key.iov_buf_len = strlen(name) + 1;
+	key.iov_len = key.iov_buf_len;
+
+	rc = destroy_kvs(kvsh, &key, mp);
+	if (rc != 0)
+		D_ERROR("failed to destroy \"%s\": %d\n", name, rc);
+
+	return rc;
 }
 
 /*
@@ -628,14 +733,6 @@ dsms_kvs_uv_lookup(daos_handle_t kvsh, const uuid_t uuid, void *value,
 		return rc;
 	}
 
-#if !HAS_DBTREE_DELETE
-	if (val.iov_len == 0) {
-		D_DEBUG(DF_DSMS, DF_UUID" treated as nonexistent\n",
-			DP_UUID(uuid));
-		return -DER_NONEXIST;
-	}
-#endif
-
 	return 0;
 }
 
@@ -649,21 +746,9 @@ dsms_kvs_uv_delete(daos_handle_t kvsh, const uuid_t uuid)
 	key.iov_buf_len = sizeof(uuid_t);
 	key.iov_len = key.iov_buf_len;
 
-#if HAS_DBTREE_DELETE
 	rc = dbtree_delete(kvsh, &key);
 	if (rc != 0)
 		D_ERROR("failed to delete: %d\n", rc);
-#else
-	daos_iov_t	val;
-
-	val.iov_buf = NULL;
-	val.iov_buf_len = 0;
-	val.iov_len = val.iov_buf_len;
-
-	rc = dbtree_update(kvsh, &key, &val);
-	if (rc != 0)
-		D_ERROR("failed to update: %d\n", rc);
-#endif
 
 	return rc;
 }
@@ -679,13 +764,54 @@ dsms_kvs_uv_create_kvs(daos_handle_t kvsh, const uuid_t uuid,
 		       unsigned int class, uint64_t feats, unsigned int order,
 		       PMEMobjpool *mp, daos_handle_t *kvsh_new)
 {
-	daos_iov_t key;
+	daos_iov_t	key;
+	int		rc;
 
 	key.iov_buf = (void *)uuid;
 	key.iov_buf_len = sizeof(uuid_t);
 	key.iov_len = key.iov_buf_len;
 
-	return create_kvs(kvsh, &key, class, feats, order, mp, kvsh_new);
+	rc = create_kvs(kvsh, &key, class, feats, order, mp, kvsh_new);
+	if (rc != 0)
+		D_ERROR("failed to create "DF_UUID": %d\n", DP_UUID(uuid), rc);
+
+	return rc;
+}
+
+int
+dsms_kvs_uv_open_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp,
+		     daos_handle_t *kvsh_child)
+{
+	daos_iov_t	key;
+	int		rc;
+
+	key.iov_buf = (void *)uuid;
+	key.iov_buf_len = sizeof(uuid_t);
+	key.iov_len = key.iov_buf_len;
+
+	rc = open_kvs(kvsh, &key, mp, kvsh_child);
+	if (rc != 0)
+		D_ERROR("failed to open "DF_UUID": %d\n", DP_UUID(uuid), rc);
+
+	return rc;
+}
+
+/* Destroy a KVS in place as the value for "uuid". */
+int
+dsms_kvs_uv_destroy_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp)
+{
+	daos_iov_t	key;
+	int		rc;
+
+	key.iov_buf = (void *)uuid;
+	key.iov_buf_len = sizeof(uuid_t);
+	key.iov_len = key.iov_buf_len;
+
+	rc = destroy_kvs(kvsh, &key, mp);
+	if (rc != 0)
+		D_ERROR("failed to destroy "DF_UUID": %d\n", DP_UUID(uuid), rc);
+
+	return rc;
 }
 
 /*
