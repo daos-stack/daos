@@ -33,6 +33,52 @@
 
 #define HAS_DBTREE_DELETE 0
 
+static int
+create_kvs(daos_handle_t kvsh, daos_iov_t *key, unsigned int class,
+	   uint64_t feats, unsigned int order, PMEMobjpool *mp,
+	   daos_handle_t *kvsh_new)
+{
+	struct btr_root		buf;
+	daos_iov_t		val;
+	struct umem_attr	uma;
+	daos_handle_t		h;
+	int			rc;
+
+	memset(&buf, 0, sizeof(buf));
+	val.iov_buf = (void *)&buf;
+	val.iov_buf_len = sizeof(buf);
+	val.iov_len = val.iov_buf_len;
+
+	rc = dbtree_update(kvsh, key, &val);
+	if (rc != 0)
+		return rc;
+
+	/* Look up the address of the value. */
+	val.iov_buf = NULL;
+	val.iov_buf_len = 0;
+	val.iov_len = val.iov_buf_len;
+
+	rc = dbtree_lookup(kvsh, key, &val);
+	if (rc != 0)
+		return rc;
+
+	uma.uma_id = UMEM_CLASS_PMEM;
+	uma.uma_u.pmem_pool = mp;
+
+	rc = dbtree_create_inplace(class, feats, order, &uma, val.iov_buf, &h);
+	if (rc != 0) {
+		D_ERROR("failed to create kvs: %d\n", rc);
+		return rc;
+	}
+
+	if (kvsh_new == NULL)
+		dbtree_close(h);
+	else
+		*kvsh_new = h;
+
+	return 0;
+}
+
 /*
  * KVS_NV: name-value pairs
  *
@@ -51,33 +97,31 @@ struct nv_rec {
 static void
 nv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
 {
-	uint64_t       *hash = hkey;
-	char	       *name = key->iov_buf;
-	int		i;
+	const char     *name = key->iov_buf;
+	uint32_t       *hash = hkey;
 
 	/*
 	 * TODO: This function should be allowed to return an error
 	 * code.
 	 */
-	assert(key->iov_len <= key->iov_buf_len);
+	D_ASSERT(key->iov_len <= key->iov_buf_len);
+	D_ASSERT(memchr(key->iov_buf, '\0', key->iov_len) != NULL);
 
-	/* djb2 */
-	*hash = 5381;
-	for (i = 0; i < key->iov_len; i++) {
-		if (name[i] == '\0')
-			break;
-
-		*hash = ((*hash << 5) + *hash) + name[i];
-	}
-
-	/* The key may not be terminated by '\0'. See the TODO above. */
-	assert(i < key->iov_len);
+	*hash = daos_hash_string_u32(name);
 }
 
 static int
 nv_hkey_size(struct btr_instance *tins)
 {
-	return sizeof(uint64_t);
+	return sizeof(uint32_t);
+}
+
+static int
+nv_key_cmp(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key)
+{
+	struct nv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+
+	return strcmp(r->nr_name, (const char *)key->iov_buf);
 }
 
 static int
@@ -89,8 +133,6 @@ nv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 	void	       *value;
 	size_t		name_len;
 	int		rc = -DER_INVAL;
-
-	/* TODO: Add transactional considerations. */
 
 	if (key->iov_len == 0 || key->iov_buf_len < key->iov_len ||
 	    val->iov_len == 0 || val->iov_buf_len < val->iov_len)
@@ -135,8 +177,6 @@ nv_rec_free(struct btr_instance *tins, struct btr_record *rec)
 {
 	struct nv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
-	/* TODO: Add transactional considerations. */
-
 	umem_free(&tins->ti_umm, r->nr_value);
 	umem_free(&tins->ti_umm, rec->rec_mmid);
 	return 0;
@@ -178,24 +218,27 @@ nv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      daos_iov_t *key, daos_iov_t *val)
 {
 	struct nv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
-	void	       *value = umem_id2ptr(&tins->ti_umm, r->nr_value);
+	void	       *v;
 
-	/* TODO: Add transactional considerations. */
+	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
 
 	if (r->nr_value_buf_size < val->iov_len) {
-		umem_free(&tins->ti_umm, r->nr_value);
+		umem_id_t vid;
 
-		r->nr_value_size = 0;
-		r->nr_value_buf_size = 0;
-
-		r->nr_value = umem_alloc(&tins->ti_umm, val->iov_len);
-		if (UMMID_IS_NULL(r->nr_value))
+		vid = umem_alloc(&tins->ti_umm, val->iov_len);
+		if (UMMID_IS_NULL(vid))
 			return -DER_NOMEM;
 
+		umem_free(&tins->ti_umm, r->nr_value);
+
+		r->nr_value = vid;
 		r->nr_value_buf_size = val->iov_len;
+	} else {
+		umem_tx_add(&tins->ti_umm, r->nr_value, val->iov_len);
 	}
 
-	memcpy(value, val->iov_buf, val->iov_len);
+	v = umem_id2ptr(&tins->ti_umm, r->nr_value);
+	memcpy(v, val->iov_buf, val->iov_len);
 	r->nr_value_size = val->iov_len;
 	return 0;
 }
@@ -206,13 +249,14 @@ nv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 {
 	struct nv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 	void	       *value = umem_id2ptr(&tins->ti_umm, r->nr_value);
+	uint32_t       *hkey = (uint32_t *)rec->rec_hkey;
 
 	if (leaf)
 		snprintf(buf, buf_len, "\"%s\":%p+"DF_U64"("DF_U64")",
 			 r->nr_name, value, r->nr_value_size,
 			 r->nr_value_buf_size);
 	else
-		snprintf(buf, buf_len, DF_U64, (uint64_t)rec->rec_hkey);
+		snprintf(buf, buf_len, "%u", *hkey);
 
 	return buf;
 }
@@ -220,6 +264,7 @@ nv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 static btr_ops_t nv_ops = {
 	.to_hkey_gen	= nv_hkey_gen,
 	.to_hkey_size	= nv_hkey_size,
+	.to_key_cmp	= nv_key_cmp,
 	.to_rec_alloc	= nv_rec_alloc,
 	.to_rec_free	= nv_rec_free,
 	.to_rec_fetch	= nv_rec_fetch,
@@ -271,15 +316,19 @@ dsms_kvs_nv_lookup(daos_handle_t kvsh, const char *name, void *value,
 	val.iov_len = val.iov_buf_len;
 
 	rc = dbtree_lookup(kvsh, &key, &val);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("failed to look up \"%s\": %d\n", name, rc);
+		return rc;
+	}
 
 #if !HAS_DBTREE_DELETE
-	if (val.iov_len == 0)
+	if (val.iov_len == 0) {
+		D_DEBUG(DF_DSMS, "\"%s\" treated as nonexistent\n", name);
 		return -DER_NONEXIST;
+	}
 #endif
 
-	return rc;
+	return 0;
 }
 
 /*
@@ -305,8 +354,10 @@ dsms_kvs_nv_lookup_ptr(daos_handle_t kvsh, const char *name, void **value,
 	val.iov_len = val.iov_buf_len;
 
 	rc = dbtree_lookup(kvsh, &key, &val);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("failed to look up \"%s\": %d\n", name, rc);
+		return rc;
+	}
 
 #if !HAS_DBTREE_DELETE
 	if (val.iov_len == 0) {
@@ -317,7 +368,7 @@ dsms_kvs_nv_lookup_ptr(daos_handle_t kvsh, const char *name, void **value,
 
 	*value = val.iov_buf;
 	*size = val.iov_len;
-	return rc;
+	return 0;
 }
 
 int
@@ -352,6 +403,26 @@ dsms_kvs_nv_delete(daos_handle_t kvsh, const char *name)
 }
 
 /*
+ * Create a KVS in place as the value for "name". If "kvsh_new" is not NULL,
+ * then leave the new KVS open and return the handle in "*kvsh_new"; otherwise,
+ * close the new KVS. "class", "feats", and "order" are passed to
+ * dbtree_create_inplace() unchanged.
+ */
+int
+dsms_kvs_nv_create_kvs(daos_handle_t kvsh, const char *name, unsigned int class,
+		       uint64_t feats, unsigned int order, PMEMobjpool *mp,
+		       daos_handle_t *kvsh_new)
+{
+	daos_iov_t key;
+
+	key.iov_buf = (void *)name;
+	key.iov_buf_len = strlen(name) + 1;
+	key.iov_len = key.iov_buf_len;
+
+	return create_kvs(kvsh, &key, class, feats, order, mp, kvsh_new);
+}
+
+/*
  * KVS_UV: UUID-value pairs
  *
  * A UUID is of the uuid_t type. A value is a variable-size blob. UUIDs are
@@ -359,9 +430,9 @@ dsms_kvs_nv_delete(daos_handle_t kvsh, const char *name)
  */
 
 struct uv_rec {
-	umem_id_t	nr_value;
-	uint64_t	nr_value_size;
-	uint64_t	nr_value_buf_size;
+	umem_id_t	ur_value;
+	uint64_t	ur_value_size;
+	uint64_t	ur_value_buf_size;
 };
 
 static void
@@ -385,8 +456,6 @@ uv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 	void	       *value;
 	int		rc = -DER_INVAL;
 
-	/* TODO: Add transactional considerations. */
-
 	if (key->iov_len != sizeof(uuid_t) || key->iov_buf_len < key->iov_len ||
 	    val->iov_len == 0 || val->iov_buf_len < val->iov_len)
 		D_GOTO(err, rc);
@@ -396,15 +465,15 @@ uv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 		D_GOTO(err, rc);
 
 	r = umem_id2ptr(&tins->ti_umm, rid);
-	r->nr_value_size = val->iov_len;
-	r->nr_value_buf_size = r->nr_value_size;
+	r->ur_value_size = val->iov_len;
+	r->ur_value_buf_size = r->ur_value_size;
 
-	r->nr_value = umem_alloc(&tins->ti_umm, r->nr_value_buf_size);
-	if (UMMID_IS_NULL(r->nr_value))
+	r->ur_value = umem_alloc(&tins->ti_umm, r->ur_value_buf_size);
+	if (UMMID_IS_NULL(r->ur_value))
 		D_GOTO(err_r, rc);
 
-	value = umem_id2ptr(&tins->ti_umm, r->nr_value);
-	memcpy(value, val->iov_buf, r->nr_value_size);
+	value = umem_id2ptr(&tins->ti_umm, r->ur_value);
+	memcpy(value, val->iov_buf, r->ur_value_size);
 
 	rec->rec_mmid = rid;
 	return 0;
@@ -420,9 +489,7 @@ uv_rec_free(struct btr_instance *tins, struct btr_record *rec)
 {
 	struct uv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
-	/* TODO: Add transactional considerations. */
-
-	umem_free(&tins->ti_umm, r->nr_value);
+	umem_free(&tins->ti_umm, r->ur_value);
 	umem_free(&tins->ti_umm, rec->rec_mmid);
 	return 0;
 }
@@ -432,6 +499,7 @@ uv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	     daos_iov_t *key, daos_iov_t *val)
 {
 	/* TODO: What sanity checks are required for key and val? */
+
 	if (key != NULL) {
 		if (key->iov_buf == NULL)
 			key->iov_buf = rec->rec_hkey;
@@ -443,14 +511,14 @@ uv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 	if (val != NULL) {
 		struct uv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
-		void	       *value = umem_id2ptr(&tins->ti_umm, r->nr_value);
+		void	       *value = umem_id2ptr(&tins->ti_umm, r->ur_value);
 
 		if (val->iov_buf == NULL)
 			val->iov_buf = value;
-		else if (r->nr_value_size <= val->iov_buf_len)
-			memcpy(val->iov_buf, value, r->nr_value_size);
+		else if (r->ur_value_size <= val->iov_buf_len)
+			memcpy(val->iov_buf, value, r->ur_value_size);
 
-		val->iov_len = r->nr_value_size;
+		val->iov_len = r->ur_value_size;
 	}
 
 	return 0;
@@ -461,27 +529,46 @@ uv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	      daos_iov_t *key, daos_iov_t *val)
 {
 	struct uv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
-	void	       *value;
+	void	       *v;
 
-	/* TODO: Add transactional considerations. */
+	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
 
-	if (r->nr_value_buf_size < val->iov_len) {
-		umem_free(&tins->ti_umm, r->nr_value);
+	if (r->ur_value_buf_size < val->iov_len) {
+		umem_id_t vid;
 
-		r->nr_value_size = 0;
-		r->nr_value_buf_size = 0;
-
-		r->nr_value = umem_alloc(&tins->ti_umm, val->iov_len);
-		if (UMMID_IS_NULL(r->nr_value))
+		vid = umem_alloc(&tins->ti_umm, val->iov_len);
+		if (UMMID_IS_NULL(vid))
 			return -DER_NOMEM;
 
-		r->nr_value_buf_size = val->iov_len;
+		umem_free(&tins->ti_umm, r->ur_value);
+
+		r->ur_value = vid;
+		r->ur_value_buf_size = val->iov_len;
+	} else {
+		umem_tx_add(&tins->ti_umm, r->ur_value, val->iov_len);
 	}
 
-	value = umem_id2ptr(&tins->ti_umm, r->nr_value);
-	memcpy(value, val->iov_buf, val->iov_len);
-	r->nr_value_size = val->iov_len;
+	v = umem_id2ptr(&tins->ti_umm, r->ur_value);
+	memcpy(v, val->iov_buf, val->iov_len);
+	r->ur_value_size = val->iov_len;
 	return 0;
+}
+
+static char *
+uv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
+	      char *buf, int buf_len)
+{
+	struct uv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	void	       *value = umem_id2ptr(&tins->ti_umm, r->ur_value);
+
+	if (leaf)
+		snprintf(buf, buf_len, DF_UUID":%p+"DF_U64"("DF_U64")",
+			 DP_UUID(rec->rec_hkey), value, r->ur_value_size,
+			 r->ur_value_buf_size);
+	else
+		snprintf(buf, buf_len, DF_UUID, DP_UUID(rec->rec_hkey));
+
+	return buf;
 }
 
 static btr_ops_t uv_ops = {
@@ -490,7 +577,8 @@ static btr_ops_t uv_ops = {
 	.to_rec_alloc	= uv_rec_alloc,
 	.to_rec_free	= uv_rec_free,
 	.to_rec_fetch	= uv_rec_fetch,
-	.to_rec_update	= uv_rec_update
+	.to_rec_update	= uv_rec_update,
+	.to_rec_string	= uv_rec_string
 };
 
 int
@@ -533,8 +621,10 @@ dsms_kvs_uv_lookup(daos_handle_t kvsh, const uuid_t uuid, void *value,
 	val.iov_len = val.iov_buf_len;
 
 	rc = dbtree_lookup(kvsh, &key, &val);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("failed to look up: %d\n", rc);
+		return rc;
+	}
 
 #if !HAS_DBTREE_DELETE
 	if (val.iov_len == 0) {
@@ -544,7 +634,7 @@ dsms_kvs_uv_lookup(daos_handle_t kvsh, const uuid_t uuid, void *value,
 	}
 #endif
 
-	return rc;
+	return 0;
 }
 
 int
@@ -576,7 +666,149 @@ dsms_kvs_uv_delete(daos_handle_t kvsh, const uuid_t uuid)
 	return rc;
 }
 
-/* TODO: Implement KVS_EC. */
+/*
+ * Create a KVS in place as the value for "uuid". If "kvsh_new" is not NULL,
+ * then leave the new KVS open and return the handle in "*kvsh_new"; otherwise,
+ * close the new KVS. "class", "feats", and "order" are passed to
+ * dbtree_create_inplace() unchanged.
+ */
+int
+dsms_kvs_uv_create_kvs(daos_handle_t kvsh, const uuid_t uuid,
+		       unsigned int class, uint64_t feats, unsigned int order,
+		       PMEMobjpool *mp, daos_handle_t *kvsh_new)
+{
+	daos_iov_t key;
+
+	key.iov_buf = (void *)uuid;
+	key.iov_buf_len = sizeof(uuid_t);
+	key.iov_len = key.iov_buf_len;
+
+	return create_kvs(kvsh, &key, class, feats, order, mp, kvsh_new);
+}
+
+/*
+ * KVS_EC: epoch-counter pairs
+ *
+ * An epoch is a uint64_t integer. A counter is a uint64_t integer too. Epochs
+ * are numerically ordered.
+ */
+
+struct ec_rec {
+	uint64_t	er_counter;
+};
+
+static void
+ec_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
+{
+	*(uint64_t *)hkey = *(uint64_t *)key->iov_buf;
+}
+
+static int
+ec_hkey_size(struct btr_instance *tins)
+{
+	return sizeof(uint64_t);
+}
+
+static int
+ec_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
+	       struct btr_record *rec)
+{
+	struct ec_rec  *r;
+	umem_id_t	rid;
+	int		rc = -DER_INVAL;
+
+	if (key->iov_len != sizeof(uint64_t) ||
+	    key->iov_buf_len < key->iov_len || val->iov_len == 0 ||
+	    val->iov_buf_len < val->iov_len)
+		return rc;
+
+	rid = umem_zalloc(&tins->ti_umm, sizeof(*r));
+	if (UMMID_IS_NULL(rid))
+		return rc;
+
+	r = umem_id2ptr(&tins->ti_umm, rid);
+	r->er_counter = *(uint64_t *)val->iov_buf;
+
+	rec->rec_mmid = rid;
+	return 0;
+}
+
+static int
+ec_rec_free(struct btr_instance *tins, struct btr_record *rec)
+{
+	umem_free(&tins->ti_umm, rec->rec_mmid);
+	return 0;
+}
+
+static int
+ec_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
+	     daos_iov_t *key, daos_iov_t *val)
+{
+	/* TODO: What sanity checks are required for key and val? */
+
+	if (key != NULL) {
+		if (key->iov_buf == NULL)
+			key->iov_buf = rec->rec_hkey;
+		else if (key->iov_buf_len >= sizeof(uint64_t))
+			memcpy(key->iov_buf, rec->rec_hkey, sizeof(uint64_t));
+
+		key->iov_len = sizeof(uint64_t);
+	}
+
+	if (val != NULL) {
+		struct ec_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+
+		if (val->iov_buf == NULL)
+			val->iov_buf = &r->er_counter;
+		else if (val->iov_buf_len >= sizeof(r->er_counter))
+			*(uint64_t *)val->iov_buf = r->er_counter;
+
+		val->iov_len = sizeof(r->er_counter);
+	}
+
+	return 0;
+}
+
+static int
+ec_rec_update(struct btr_instance *tins, struct btr_record *rec,
+	      daos_iov_t *key, daos_iov_t *val)
+{
+	struct ec_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+
+	if (val->iov_len != sizeof(r->er_counter))
+		return -DER_INVAL;
+
+	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	r->er_counter = *(uint64_t *)val->iov_buf;
+	return 0;
+}
+
+static char *
+ec_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
+	      char *buf, int buf_len)
+{
+	struct ec_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	uint64_t	e;
+
+	memcpy(&e, rec->rec_hkey, sizeof(e));
+
+	if (leaf)
+		snprintf(buf, buf_len, DF_U64":"DF_U64, e, r->er_counter);
+	else
+		snprintf(buf, buf_len, DF_U64, e);
+
+	return buf;
+}
+
+static btr_ops_t ec_ops = {
+	.to_hkey_gen	= ec_hkey_gen,
+	.to_hkey_size	= ec_hkey_size,
+	.to_rec_alloc	= ec_rec_alloc,
+	.to_rec_free	= ec_rec_free,
+	.to_rec_fetch	= ec_rec_fetch,
+	.to_rec_update	= ec_rec_update,
+	.to_rec_string	= ec_rec_string
+};
 
 static DAOS_LIST_HEAD(mpool_cache);
 static pthread_mutex_t mpool_cache_lock;
@@ -729,6 +961,12 @@ dsms_storage_init(void)
 	rc = dbtree_class_register(KVS_UV, 0 /* feats */, &uv_ops);
 	if (rc != 0) {
 		D_ERROR("failed to register KVS_UV: %d\n", rc);
+		return rc;
+	}
+
+	rc = dbtree_class_register(KVS_EC, 0 /* feats */, &ec_ops);
+	if (rc != 0) {
+		D_ERROR("failed to register KVS_EC: %d\n", rc);
 		return rc;
 	}
 

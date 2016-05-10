@@ -128,7 +128,14 @@ do {									\
 
 /* Only print the first eight bytes. */
 #define DF_UUID		DF_X64
-#define DP_UUID(uuid)	(uint64_t)(uuid)
+
+static inline uint64_t
+DP_UUID(const void *uuid)
+{
+	const uint64_t *p = (const uint64_t *)uuid;
+
+	return *p;
+}
 
 /* memory allocating macros */
 #define D_ALLOC(ptr, size)						 \

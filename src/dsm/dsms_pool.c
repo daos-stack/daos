@@ -175,48 +175,6 @@ dsms_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 	return mpool_create(filename, pool_uuid, target_uuid);
 }
 
-/*
- * Create the pool handle KVS.
- */
-static int
-pool_handles_create(PMEMobjpool *mp, daos_handle_t rooth)
-{
-	struct btr_root		dummy;
-	struct btr_root	       *kvs;
-	struct umem_attr	uma;
-	daos_handle_t		kvsh;
-	size_t			size;
-	int			rc;
-
-	memset(&dummy, 0, sizeof(dummy));
-
-	rc = dsms_kvs_nv_update(rooth, POOL_HANDLES, &dummy, sizeof(dummy));
-	if (rc != 0)
-		D_GOTO(err, rc);
-
-	rc = dsms_kvs_nv_lookup_ptr(rooth, POOL_HANDLES, (void **)&kvs, &size);
-	if (rc != 0)
-		D_GOTO(err_nv, rc);
-
-	uma.uma_id = UMEM_CLASS_PMEM;
-	uma.uma_u.pmem_pool = mp;
-
-	rc = dbtree_create_inplace(KVS_UV, 0 /* feats */, 16 /* order */, &uma,
-				   kvs, &kvsh);
-	if (rc != 0) {
-		D_ERROR("failed to create pool_handles kvs: %d\n", rc);
-		D_GOTO(err_nv, rc);
-	}
-
-	dbtree_close(kvsh);
-	return 0;
-
-err_nv:
-	dsms_kvs_nv_delete(rooth, POOL_HANDLES);
-err:
-	return rc;
-}
-
 static int
 pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 		   uint32_t gid, uint32_t mode, uint32_t ntargets,
@@ -285,7 +243,8 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 	if (rc != 0)
 		D_GOTO(out_domains_p, rc);
 
-	rc = pool_handles_create(mp, kvsh);
+	rc = dsms_kvs_nv_create_kvs(kvsh, POOL_HANDLES, KVS_UV, 0 /* feats */,
+				    16 /* order */, mp, NULL /* kvsh_new */);
 	if (rc != 0)
 		D_GOTO(out_domains_p, rc);
 
@@ -295,6 +254,13 @@ out_targets_p:
 	D_FREE(targets_p, sizeof(*targets_p) * ntargets);
 out:
 	return rc;
+}
+
+static int
+cont_metadata_init(PMEMobjpool *mp, daos_handle_t rooth)
+{
+	return dsms_kvs_nv_create_kvs(rooth, CONTAINERS, KVS_UV, 0 /* feats */,
+				      16 /* order */, mp, NULL /* kvsh_new */);
 }
 
 int
@@ -338,6 +304,10 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	rc = pool_metadata_init(mp, kvsh, uid, gid, mode, ntargets,
 				target_uuids, group, target_addrs, ndomains,
 				domains);
+	if (rc != 0)
+		D_GOTO(out_mp, rc);
+
+	rc = cont_metadata_init(mp, kvsh);
 
 	dbtree_close(kvsh);
 out_mp:

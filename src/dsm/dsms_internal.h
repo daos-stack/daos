@@ -63,11 +63,19 @@ int dsms_kvs_nv_lookup(daos_handle_t kvsh, const char *name, void *value,
 int dsms_kvs_nv_lookup_ptr(daos_handle_t kvsh, const char *name, void **value,
 			   size_t *size);
 int dsms_kvs_nv_delete(daos_handle_t kvsh, const char *name);
+int dsms_kvs_nv_create_kvs(daos_handle_t kvsh, const char *name,
+			   unsigned int class, uint64_t feats,
+			   unsigned int order, PMEMobjpool *mp,
+			   daos_handle_t *kvsh_new);
 int dsms_kvs_uv_update(daos_handle_t kvsh, const uuid_t uuid,
 		       const void *value, size_t size);
 int dsms_kvs_uv_lookup(daos_handle_t kvsh, const uuid_t uuid, void *value,
 		       size_t size);
 int dsms_kvs_uv_delete(daos_handle_t kvsh, const uuid_t uuid);
+int dsms_kvs_uv_create_kvs(daos_handle_t kvsh, const uuid_t uuid,
+			   unsigned int class, uint64_t feats,
+			   unsigned int order, PMEMobjpool *mp,
+			   daos_handle_t *kvsh_new);
 int dsms_mpool_lookup(const uuid_t pool_uuid, struct mpool **mpool);
 void dsms_mpool_get(struct mpool *mpool);
 void dsms_mpool_put(struct mpool *mpool);
