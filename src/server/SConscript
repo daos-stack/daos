@@ -5,6 +5,10 @@ Import('env')
 libraries = ['daos_common', 'dl', 'daos_transport', 'pthread', 'cgroup', 'numa']
 libraries += ['uuid']
 
+# the "-rdynamic" is to allow other dll to refer symbol defined in daos_server
+# such as dss_tls_key etc.
+env.Append(LINKFLAGS = ['-rdynamic'])
+
 # Generate server program
 server = env.Program('daos_server', Glob('*.c'), LIBS=libraries)
 env.Install('#/build/bin', server)
