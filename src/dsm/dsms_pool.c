@@ -44,45 +44,6 @@
 #include "dsms_layout.h"
 
 /*
- * Create the root KVS in "*kvs" and add the pool and target UUIDs.
- */
-static int
-root_create(PMEMobjpool *mp, const uuid_t pool_uuid,
-	    const uuid_t target_uuid, struct btr_root *kvs)
-{
-	struct umem_attr	uma;
-	daos_handle_t		kvsh;
-	int			rc;
-
-	uma.uma_id = UMEM_CLASS_PMEM;
-	uma.uma_u.pmem_pool = mp;
-	rc = dbtree_create_inplace(KVS_NV, 0 /* feats */, 4 /* order */, &uma,
-				   kvs, &kvsh);
-	if (rc != 0) {
-		D_ERROR("failed to create root kvs: %d\n", rc);
-		D_GOTO(err, rc);
-	}
-
-	rc = dsms_kvs_nv_update(kvsh, POOL_UUID, pool_uuid, sizeof(uuid_t));
-	if (rc != 0)
-		D_GOTO(err_kvs, rc);
-
-	rc = dsms_kvs_nv_update(kvsh, TARGET_UUID, target_uuid, sizeof(uuid_t));
-	if (rc != 0)
-		D_GOTO(err_kvs, rc);
-
-	rc = dbtree_close(kvsh);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-
-	return 0;
-
-err_kvs:
-	dbtree_destroy(kvsh);
-err:
-	return rc;
-}
-
-/*
  * Create the mpool, create the root kvs, create the superblock, and return the
  * target UUID.
  */
@@ -92,8 +53,11 @@ mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 	PMEMobjpool	       *mp;
 	PMEMoid			sb_oid;
 	struct superblock      *sb;
+	volatile daos_handle_t	kvsh = DAOS_HDL_INVAL;
 	uuid_t			target_uuid;
 	int			rc;
+
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
 	D_DEBUG(DF_DSMS, "creating mpool %s\n", path);
 
@@ -112,21 +76,58 @@ mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 	}
 
 	sb = pmemobj_direct(sb_oid);
-	sb->s_magic = SUPERBLOCK_MAGIC;
-	uuid_copy(sb->s_pool_uuid, pool_uuid);
-	uuid_copy(sb->s_target_uuid, target_uuid);
 
-	rc = root_create(mp, pool_uuid, target_uuid, &sb->s_root);
-	if (rc != 0)
+	TX_BEGIN(mp) {
+		struct umem_attr	uma;
+		daos_handle_t		h;
+
+		pmemobj_tx_add_range_direct(sb, sizeof(*sb));
+
+		sb->s_magic = SUPERBLOCK_MAGIC;
+		uuid_copy(sb->s_pool_uuid, pool_uuid);
+		uuid_copy(sb->s_target_uuid, target_uuid);
+
+		/* sb->s_root */
+		uma.uma_id = UMEM_CLASS_PMEM;
+		uma.uma_u.pmem_pool = mp;
+		rc = dbtree_create_inplace(KVS_NV, 0 /* feats */, 4 /* order */,
+					   &uma, &sb->s_root, &h);
+		if (rc != 0) {
+			D_ERROR("failed to create root kvs: %d\n", rc);
+			pmemobj_tx_abort(rc);
+		}
+		kvsh = h;
+
+		rc = dsms_kvs_nv_update(kvsh, POOL_UUID, pool_uuid,
+					sizeof(uuid_t));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+
+		rc = dsms_kvs_nv_update(kvsh, TARGET_UUID, target_uuid,
+					sizeof(uuid_t));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+	} TX_END
+
+	if (!daos_handle_is_inval(kvsh))
+		dbtree_close(kvsh);
+
+	rc = pmemobj_tx_errno();
+	if (rc != 0) {
+		/* May be a system error number from libpmemobj. */
+		if (rc < DER_ERR_BASE)
+			rc = -DER_NOSPACE;
 		D_GOTO(err_mp, rc);
+	}
 
 	uuid_copy(target_uuid_p, target_uuid);
 	pmemobj_close(mp);
 	return 0;
 
 err_mp:
-	/* dmg will remove the mpool file anyway. */
 	pmemobj_close(mp);
+	if (remove(path) != 0)
+		D_ERROR("failed to remove %s: %d\n", path, errno);
 err:
 	return rc;
 }
@@ -156,10 +157,6 @@ vpool_create(const char *path, const uuid_t pool_uuid)
 	return 0;
 }
 
-/*
- * This code path does not need libpmemobj transactions or persistent resource
- * cleanups.
- */
 int
 dsms_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 {
@@ -189,15 +186,7 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 	int			rc;
 	int			i;
 
-	rc = dsms_kvs_nv_update(kvsh, POOL_UID, &uid, sizeof(uid));
-	if (rc != 0)
-		D_GOTO(out, rc);
-	rc = dsms_kvs_nv_update(kvsh, POOL_GID, &gid, sizeof(gid));
-	if (rc != 0)
-		D_GOTO(out, rc);
-	rc = dsms_kvs_nv_update(kvsh, POOL_MODE, &mode, sizeof(mode));
-	if (rc != 0)
-		D_GOTO(out, rc);
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
 
 	/*
 	 * TODO: Verify the number of leaves indicated by "domains" matches
@@ -206,7 +195,7 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 
 	D_ALLOC(targets_p, sizeof(*targets_p) * ntargets);
 	if (targets_p == NULL)
-		D_GOTO(out, rc);
+		return -DER_NOMEM;
 	for (i = 0; i < ntargets; i++) {
 		uuid_copy(targets_p[i].mt_uuid, target_uuid[i]);
 		targets_p[i].mt_version = 1;
@@ -215,45 +204,58 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 	}
 
 	D_ALLOC(domains_p, sizeof(*domains_p) * ndomains);
-	if (domains_p == NULL)
-		D_GOTO(out_targets_p, rc);
+	if (domains_p == NULL) {
+		D_FREE(targets_p, sizeof(*targets_p) * ntargets);
+		return -DER_NOMEM;
+	}
 	for (i = 0; i < ndomains; i++) {
 		domains_p[i].md_version = 1;
 		domains_p[i].md_nchildren = domains[i];
 	}
 
-	rc = dsms_kvs_nv_update(kvsh, POOL_MAP_VERSION, &version,
-				sizeof(version));
-	if (rc != 0)
-		D_GOTO(out_domains_p, rc);
-	rc = dsms_kvs_nv_update(kvsh, POOL_MAP_NTARGETS, &ntargets,
-				sizeof(ntargets));
-	if (rc != 0)
-		D_GOTO(out_domains_p, rc);
-	rc = dsms_kvs_nv_update(kvsh, POOL_MAP_NDOMAINS, &ndomains,
-				sizeof(ndomains));
-	if (rc != 0)
-		D_GOTO(out_domains_p, rc);
-	rc = dsms_kvs_nv_update(kvsh, POOL_MAP_TARGETS, targets_p,
-				sizeof(*targets_p) * ntargets);
-	if (rc != 0)
-		D_GOTO(out_domains_p, rc);
-	rc = dsms_kvs_nv_update(kvsh, POOL_MAP_DOMAINS, domains_p,
-				sizeof(*domains_p) * ndomains);
-	if (rc != 0)
-		D_GOTO(out_domains_p, rc);
+	TX_BEGIN(mp) {
+		rc = dsms_kvs_nv_update(kvsh, POOL_UID, &uid, sizeof(uid));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+		rc = dsms_kvs_nv_update(kvsh, POOL_GID, &gid, sizeof(gid));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+		rc = dsms_kvs_nv_update(kvsh, POOL_MODE, &mode, sizeof(mode));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
 
-	rc = dsms_kvs_nv_create_kvs(kvsh, POOL_HANDLES, KVS_UV, 0 /* feats */,
-				    16 /* order */, mp, NULL /* kvsh_new */);
-	if (rc != 0)
-		D_GOTO(out_domains_p, rc);
+		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_VERSION, &version,
+					sizeof(version));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_NTARGETS, &ntargets,
+					sizeof(ntargets));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_NDOMAINS, &ndomains,
+					sizeof(ndomains));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_TARGETS, targets_p,
+					sizeof(*targets_p) * ntargets);
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_DOMAINS, domains_p,
+					sizeof(*domains_p) * ndomains);
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
 
-out_domains_p:
-	D_FREE(domains_p, sizeof(*domains_p) * ndomains);
-out_targets_p:
-	D_FREE(targets_p, sizeof(*targets_p) * ntargets);
-out:
-	return rc;
+		rc = dsms_kvs_nv_create_kvs(kvsh, POOL_HANDLES, KVS_UV,
+					    0 /* feats */, 16 /* order */, mp,
+					    NULL /* kvsh_new */);
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+	} TX_FINALLY {
+		D_FREE(domains_p, sizeof(*domains_p) * ndomains);
+		D_FREE(targets_p, sizeof(*targets_p) * ntargets);
+	} TX_END
+
+	return 0;
 }
 
 static int
@@ -278,6 +280,8 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	char			filename[4096];
 	int			rc;
 
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+
 	print_meta_path(path, pool_uuid, filename, sizeof(filename));
 
 	mp = pmemobj_open(filename, MPOOL_LAYOUT);
@@ -291,6 +295,7 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 		D_ERROR("failed to retrieve root object in %s\n", filename);
 		D_GOTO(out_mp, rc = -DER_INVAL);
 	}
+
 	sb = pmemobj_direct(sb_oid);
 
 	uma.uma_id = UMEM_CLASS_PMEM;
@@ -301,13 +306,28 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 		D_GOTO(out_mp, rc);
 	}
 
-	rc = pool_metadata_init(mp, kvsh, uid, gid, mode, ntargets,
-				target_uuids, group, target_addrs, ndomains,
-				domains);
-	if (rc != 0)
-		D_GOTO(out_mp, rc);
+	TX_BEGIN(mp) {
+		rc = pool_metadata_init(mp, kvsh, uid, gid, mode, ntargets,
+					target_uuids, group, target_addrs,
+					ndomains, domains);
+		if (rc != 0) {
+			D_ERROR("failed to init pool metadata: %d\n", rc);
+			pmemobj_tx_abort(rc);
+		}
 
-	rc = cont_metadata_init(mp, kvsh);
+		rc = cont_metadata_init(mp, kvsh);
+		if (rc != 0) {
+			D_ERROR("failed to init container metadata: %d\n", rc);
+			pmemobj_tx_abort(rc);
+		}
+	} TX_END
+
+	rc = pmemobj_tx_errno();
+	if (rc != 0) {
+		/* May be a system error number from libpmemobj. */
+		if (rc < DER_ERR_BASE)
+			rc = -DER_NOSPACE;
+	}
 
 	dbtree_close(kvsh);
 out_mp:

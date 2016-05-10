@@ -44,6 +44,8 @@ create_kvs(daos_handle_t kvsh, daos_iov_t *key, unsigned int class,
 	daos_handle_t		h;
 	int			rc;
 
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
+
 	memset(&buf, 0, sizeof(buf));
 	val.iov_buf = (void *)&buf;
 	val.iov_buf_len = sizeof(buf);
