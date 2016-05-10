@@ -291,14 +291,15 @@ def run_test(source, target, env, for_signature, mode=None):
     action = ['touch %s'%target[0]]
     for test in source:
         valgrind_str = ""
-        if mode == "memcheck":
-            #Memory analysis
-            valgrind_str = "valgrind --leak-check=full " \
-                           "--xml=yes --xml-file=%s "%target[count]
-        elif mode == "helgrind":
-            #Thread analysis
-            valgrind_str = "valgrind --tool=helgrind " \
-                           "--xml=yes --xml-file=%s "%target[count]
+        if mode in ["memcheck", "helgrind"]:
+            valgrind_str = "valgrind --xml=yes --xml-file=%s " \
+                           "--child-silent-after-fork=yes " % target[count]
+            if mode == "memcheck":
+                #Memory analysis
+                valgrind_str += "--leak-check=full "
+            elif mode == "helgrind":
+                #Thread analysis
+                valgrind_str += "--tool=helgrind "
         count += 1
         action.append("%s%s >> %s"%(valgrind_str,
                                     str(test),
