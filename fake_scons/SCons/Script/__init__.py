@@ -237,11 +237,12 @@ class Configure(object):
 class Dir(object):
     """Fake Dir"""
     def __init__(self, *args, **kw):
-        pass
+        self.abspath = os.getcwd()
+        self.path = os.getcwd()
 
-    def abspath(self):
-        """Fake abspath"""
-        return os.getcwd()
+    def srcnode(self):
+        """Fake srcnode"""
+        return self
 
 def VariantDir(*args, **kw):
     """Fake VariantDir"""
@@ -300,6 +301,10 @@ def Platform():
     """Fake Platform"""
     return ''
 
+COMMAND_LINE_TARGETS = []
+BUILD_TARGETS = []
+DEFAULT_TARGETS = []
+
 __all__ = ['DefaultEnvironment',
            'Variables',
            'Configure',
@@ -317,5 +322,9 @@ __all__ = ['DefaultEnvironment',
            'Command',
            'Builder',
            'AddOption',
-           'VariantDir']
+           'VariantDir',
+           'COMMAND_LINE_TARGETS',
+           'BUILD_TARGETS',
+           'DEFAULT_TARGETS',
+          ]
 
