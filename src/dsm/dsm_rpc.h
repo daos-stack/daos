@@ -72,7 +72,7 @@ struct pool_connect_in {
 };
 
 struct pool_connect_out {
-	uint32_t pco_ret;
+	int32_t pco_ret;
 	struct pool_map pco_map;
 };
 
@@ -82,7 +82,7 @@ struct pool_disconnect_in {
 };
 
 struct pool_disconnect_out {
-	int pdo_ret;
+	int32_t pdo_ret;
 };
 
 /*

@@ -40,7 +40,7 @@ struct dtp_msg_field *pool_connect_in_fields[] = {
 };
 
 struct dtp_msg_field *pool_connect_out_fields[] = {
-	&DMF_UINT32,	/* ret */
+	&DMF_INT,	/* ret */
 	&DMF_POOL_MAP	/* pool map */
 };
 

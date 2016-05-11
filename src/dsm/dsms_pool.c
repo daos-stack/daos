@@ -610,8 +610,6 @@ dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, "processing rpc %p\n", rpc);
 	pdi = dtp_req_get(rpc);
 	D_ASSERT(pdi != NULL);
-	if (pdi->pdi_pool == NULL || pdi->pdi_pool_hdl)
-		D_GOTO(out, rc = -DER_INVAL);
 
 	rc = pool_lookup(pdi->pdi_pool, &pool);
 	if (rc != 0)
