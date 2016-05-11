@@ -141,8 +141,8 @@ struct dtp_opc_info {
 				doi_rpc_init:1;
 
 	dtp_rpc_cb_t		doi_rpc_cb;
-	daos_size_t             doi_input_size;
-	daos_size_t             doi_output_size;
+	daos_size_t		doi_input_size;
+	daos_size_t		doi_output_size;
 	struct dtp_req_format	*doi_drf;
 };
 

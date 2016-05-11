@@ -60,7 +60,6 @@ typedef uint32_t dtp_version_t;
 
 typedef void *dtp_rpc_input_t;
 typedef void *dtp_rpc_output_t;
-typedef void *dtp_proc_t;
 
 /**
  * max size of input/output parameters defined as 64M bytes, for larger length
@@ -73,7 +72,6 @@ enum dtp_rpc_flags {
 	DTP_IGNORE_TIMEDOUT = 0x0001,
 };
 
-#define DTP_RPC_MAX_FIELDS_NR	9
 /* Public RPC request/reply, exports to user */
 typedef struct dtp_rpc {
 	dtp_context_t		dr_ctx; /* DTP context of the RPC */
@@ -90,23 +88,22 @@ typedef struct dtp_rpc {
 	daos_size_t		dr_output_size; /* size of output struct */
 } dtp_rpc_t;
 
+/* Abstraction pack/unpack processor */
+typedef void *dtp_proc_t;
 /* Proc callback for pack/unpack parameters */
 typedef int (*dtp_proc_cb_t)(dtp_proc_t proc, void *data);
 
+/* RPC message layout definitions */
 struct dtp_msg_field {
-	const char	*dmf_name;
-	const uint32_t	dmf_flags;
-	const uint32_t	dmf_size;
-	dtp_proc_cb_t	dmf_proc;
-};
-
-enum {
-	DRF_VAR_SIZE = 1,
+	const char		*dmf_name;
+	const uint32_t		dmf_flags;
+	const uint32_t		dmf_size;
+	dtp_proc_cb_t		dmf_proc;
 };
 
 struct drf_field {
-	uint32_t drf_count;
-	struct dtp_msg_field **drf_msg;
+	uint32_t		drf_count;
+	struct dtp_msg_field	**drf_msg;
 };
 
 enum {
@@ -115,30 +112,30 @@ enum {
 };
 
 struct dtp_req_format {
-	const char	*drf_name;
-	uint32_t	drf_idx;
-	struct drf_field drf_fields[2];
+	const char		*drf_name;
+	uint32_t		drf_idx;
+	struct drf_field	drf_fields[2];
 };
 
-#define DEFINE_DTP_REQ_FMT(name, dtp_in, dtp_out) {	\
-	.drf_name	= name,				\
-	.drf_fields	= {				\
-		[DTP_IN] = {				\
-			.drf_count = ARRAY_SIZE(dtp_in),\
-			.drf_msg = dtp_in,		\
-		},					\
-		[DTP_OUT] = {				\
-			.drf_count = ARRAY_SIZE(dtp_out), \
-			.drf_msg = dtp_out		  \
-		}					\
-	}						\
+#define DEFINE_DTP_REQ_FMT(name, dtp_in, dtp_out) {		\
+	.drf_name	= name,					\
+	.drf_fields	= {					\
+		[DTP_IN] = {					\
+			.drf_count = ARRAY_SIZE(dtp_in),	\
+			.drf_msg = dtp_in,			\
+		},						\
+		[DTP_OUT] = {					\
+			.drf_count = ARRAY_SIZE(dtp_out),	\
+			.drf_msg = dtp_out			\
+		}						\
+	}							\
 }
 
-#define DEFINE_DTP_MSG(name, flags, size, proc) {	\
-	.dmf_name = (name),				\
-	.dmf_flags = (flags),				\
-	.dmf_size = (size),				\
-	.dmf_proc = (dtp_proc_cb_t)proc			\
+#define DEFINE_DTP_MSG(name, flags, size, proc) {		\
+	.dmf_name = (name),					\
+	.dmf_flags = (flags),					\
+	.dmf_size = (size),					\
+	.dmf_proc = (dtp_proc_cb_t)proc				\
 }
 
 /* Common request format type */

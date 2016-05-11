@@ -83,6 +83,7 @@ static void run_client(void)
 	struct bulk_test_cli_cbinfo	*bulk_req_cbinfo;
 	char				*pchar;
 	daos_rank_t			myrank;
+	struct dtp_echo_checkin_req	*e_req;
 	struct dtp_echo_bulk_in_req	*e_bulk_req;
 	int				rc = 0, i;
 
@@ -93,13 +94,14 @@ static void run_client(void)
 
 	/* send checkin RPC to different contexts of server*/
 	for (i = 0; i <= ECHO_EXTRA_CONTEXT_NUM; i++) {
-		struct dtp_echo_checkin_req *e_req;
-
 		svr_ep.ep_rank = 0;
 		svr_ep.ep_tag = i;
 		rc = dtp_req_create(gecho.dtp_ctx, svr_ep, ECHO_OPC_CHECKIN,
 				    &rpc_req);
 		assert(rc == 0 && rpc_req != NULL);
+
+		e_req = dtp_req_get(rpc_req);
+		assert(e_req != NULL);
 
 		/*
 		 * No strdup will cause mercury crash when HG_Free_input
@@ -109,7 +111,6 @@ static void run_client(void)
 		assert(pchar != NULL);
 		snprintf(pchar, 256, "Guest_%d_%d@client-side",
 			 myrank, svr_ep.ep_tag);
-		e_req = dtp_req_get(rpc_req);
 
 		e_req->name = pchar;
 		e_req->age = 32 + svr_ep.ep_tag;

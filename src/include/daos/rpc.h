@@ -66,14 +66,7 @@ struct daos_rpc {
 	int		 dr_ver;
 	/* Operation flags, TBD */
 	int		 dr_flags;
-	/* Pack/unpack input parameter, invoked from C code */
-	dtp_proc_cb_t	 dr_in_hdlr;
-	/* Size of input parameter */
-	int		 dr_in_sz;
-	/* Pack/unpack output parameter, invoked from C code */
-	dtp_proc_cb_t	 dr_out_hdlr;
-	/* Size of output parameter */
-	int		 dr_out_sz;
+	/* RPC request format */
 	struct dtp_req_format *dr_req_fmt;
 };
 

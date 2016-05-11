@@ -26,7 +26,6 @@
 #define __DTP_MERCURY_H__
 
 #include <daos/list.h>
-#include <daos/transport.h>
 
 #include <mercury.h>
 #include <mercury_types.h>
@@ -92,9 +91,6 @@ struct dtp_rpc_priv {
 	struct dtp_opc_info	*drp_opc_info;
 };
 
-#define dtp_common_hdr_size(count)	\
-(sizeof(struct dtp_common_hdr) + (count) * sizeof(uint32_t))
-
 int dtp_hg_init(dtp_phy_addr_t *addr, bool server);
 int dtp_hg_fini();
 int dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx);
@@ -106,8 +102,6 @@ int dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb,
 		    void *arg);
 int dtp_hg_reply_send(struct dtp_rpc_priv *rpc_priv);
 int dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout);
-int
-dtp_iobuf_init_by_opc_info(dtp_rpc_t *rpc_pub, struct dtp_opc_info *opc_info);
 
 static inline struct dtp_hg_context *
 dtp_hg_context_lookup(hg_context_t *ctx)
@@ -147,42 +141,6 @@ dtp_rpc_priv_init(struct dtp_rpc_priv *rpc_priv, dtp_context_t dtp_ctx,
 	rpc_priv->drp_pub.dr_ctx = dtp_ctx;
 }
 
-static inline int
-dtp_rpc_inbuf_alloc(dtp_rpc_t *rpc_pub, daos_size_t size)
-{
-	if (rpc_pub->dr_input != NULL)
-		return 0;
-
-	D_ASSERT(size > 0);
-	D_ALLOC(rpc_pub->dr_input, size);
-	if (rpc_pub->dr_input == NULL) {
-		D_ERROR("cannot allocate memory(size "DF_U64") for "
-			"dr_input.\n", size);
-		return -DER_NOMEM;
-	}
-
-	rpc_pub->dr_input_size = size;
-	return 0;
-}
-
-static inline int
-dtp_rpc_outbuf_alloc(dtp_rpc_t *rpc_pub, daos_size_t size)
-{
-	if (rpc_pub->dr_output != NULL)
-		return 0;
-
-	D_ASSERT(size > 0);
-	D_ALLOC(rpc_pub->dr_output, size);
-	if (rpc_pub->dr_output == NULL) {
-		D_ERROR("cannot allocate memory(size "DF_U64") for "
-			"dr_output.\n", size);
-		return -DER_NOMEM;
-	}
-
-	rpc_pub->dr_output_size = size;
-	return 0;
-}
-
 static inline void
 dtp_rpc_inout_buff_fini(dtp_rpc_t *rpc_pub)
 {
@@ -199,6 +157,45 @@ dtp_rpc_inout_buff_fini(dtp_rpc_t *rpc_pub)
 		D_FREE(rpc_pub->dr_output, rpc_pub->dr_output_size);
 		rpc_pub->dr_output_size = 0;
 	}
+}
+
+static inline int
+dtp_rpc_inout_buff_init(dtp_rpc_t *rpc_pub)
+{
+	struct dtp_rpc_priv	*rpc_priv;
+	struct dtp_opc_info	*opc_info;
+	int			rc = 0;
+
+	D_ASSERT(rpc_pub != NULL);
+	D_ASSERT(rpc_pub->dr_input == NULL);
+	D_ASSERT(rpc_pub->dr_output == NULL);
+	rpc_priv = container_of(rpc_pub, struct dtp_rpc_priv, drp_pub);
+	opc_info = rpc_priv->drp_opc_info;
+	D_ASSERT(opc_info != NULL);
+
+	if (opc_info->doi_input_size > 0) {
+		D_ALLOC(rpc_pub->dr_input, opc_info->doi_input_size);
+		if (rpc_pub->dr_input == NULL) {
+			D_ERROR("cannot allocate memory(size "DF_U64") for "
+				"dr_input.\n", opc_info->doi_input_size);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		rpc_pub->dr_input_size = opc_info->doi_input_size;
+	}
+	if (opc_info->doi_output_size > 0) {
+		D_ALLOC(rpc_pub->dr_output, opc_info->doi_output_size);
+		if (rpc_pub->dr_output == NULL) {
+			D_ERROR("cannot allocate memory(size "DF_U64") for "
+				"dr_putput.\n", opc_info->doi_input_size);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		rpc_pub->dr_output_size = opc_info->doi_output_size;
+	}
+
+out:
+	if (rc < 0)
+		dtp_rpc_inout_buff_fini(rpc_pub);
+	return rc;
 }
 
 #define DTP_PROC_NULL (NULL)
@@ -257,10 +254,9 @@ dtp_proc_common_hdr(dtp_proc_t proc, struct dtp_common_hdr *hdr)
 	/* proc the 2 paddings */
 	hg_ret = hg_proc_memcpy(hg_proc, &hdr->dch_padding[0],
 				2 * sizeof(uint32_t));
-	if (hg_ret != HG_SUCCESS) {
+	if (hg_ret != HG_SUCCESS)
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_DTP_HG);
-	}
+
 out:
 	return rc;
 }

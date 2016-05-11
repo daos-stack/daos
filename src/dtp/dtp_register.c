@@ -108,11 +108,9 @@ dtp_opc_info_init(struct dtp_opc_info *info)
 	info->doi_opc = 0;
 	info->doi_proc_init = 0;
 	info->doi_rpc_init = 0;
-	info->doi_inproc_cb = NULL;
-	info->doi_outproc_cb = NULL;
 	info->doi_input_size = 0;
 	info->doi_output_size = 0;
-	info->doi_rpc_cb = NULL;
+	info->doi_drf = NULL;
 	*/
 }
 
@@ -215,53 +213,40 @@ static int
 dtp_rpc_reg_internal(dtp_opcode_t opc, struct dtp_req_format *drf,
 		     dtp_rpc_cb_t rpc_handler, int ignore_rpccb)
 {
-	daos_size_t input_size = 0;
-	daos_size_t output_size = 0;
-	int rc = 0;
-	int i;
+	daos_size_t		input_size = 0;
+	daos_size_t		output_size = 0;
+	struct dtp_msg_field	*dmf;
+	int			rc = 0;
+	int			i;
 
-	if (drf != NULL) {
-		for (i = 0; i < drf->drf_fields[DTP_IN].drf_count; i++) {
-			struct dtp_msg_field *dmf;
+	/* when no input/output parameter needed, the drf can be NULL */
+	if (drf == NULL)
+		D_GOTO(reg_opc, rc);
 
-			dmf = drf->drf_fields[DTP_IN].drf_msg[i];
-			if (dmf->dmf_size > 0) {
-				input_size += dmf->dmf_size;
-			} else {
-				/* <= 0 means variable size, let's allocate
-				 * it later. */
-				input_size = 0;
-				break;
-			}
-		}
-
-		for (i = 0; i < drf->drf_fields[DTP_OUT].drf_count; i++) {
-			struct dtp_msg_field *dmf;
-
-			dmf = drf->drf_fields[DTP_OUT].drf_msg[i];
-			if (dmf->dmf_size > 0) {
-				output_size += dmf->dmf_size;
-			} else {
-				/* <= 0 means variable size, let's allocate
-				 * it later. */
-				output_size = 0;
-				break;
-			}
-		}
-
-		if (input_size > DTP_MAX_INPUT_SIZE ||
-		    output_size > DTP_MAX_OUTPUT_SIZE) {
-			D_ERROR("input_size "DF_U64" or output_size "DF_U64" "
-				"too large.\n", input_size, output_size);
-			D_GOTO(out, rc = -DER_INVAL);
-		}
+	/* calculate the total input size and output size */
+	for (i = 0; i < drf->drf_fields[DTP_IN].drf_count; i++) {
+		dmf = drf->drf_fields[DTP_IN].drf_msg[i];
+		D_ASSERT(dmf->dmf_size > 0);
+		input_size += dmf->dmf_size;
+	}
+	for (i = 0; i < drf->drf_fields[DTP_OUT].drf_count; i++) {
+		dmf = drf->drf_fields[DTP_OUT].drf_msg[i];
+		D_ASSERT(dmf->dmf_size > 0);
+		output_size += dmf->dmf_size;
 	}
 
+	if (input_size > DTP_MAX_INPUT_SIZE ||
+	    output_size > DTP_MAX_OUTPUT_SIZE) {
+		D_ERROR("input_size "DF_U64" or output_size "DF_U64" "
+			"too large.\n", input_size, output_size);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+reg_opc:
 	rc = dtp_opc_reg(dtp_gdata.dg_opc_map, opc, drf, input_size,
 			 output_size, rpc_handler, ignore_rpccb, DTP_UNLOCK);
-	if (rc != 0) {
-		D_ERROR("rpc (opcode: %d) register failed, rc: %d.\n", opc, rc);
-	}
+	if (rc != 0)
+		D_ERROR("rpc (opc: 0x%x) register failed, rc: %d.\n", opc, rc);
 
 out:
 	return rc;
