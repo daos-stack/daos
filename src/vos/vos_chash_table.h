@@ -73,6 +73,14 @@ struct vos_chash_buckets {
 	PMEMrwlock		    rw_lock;
 };
 
+/** customized hash table functions */
+typedef struct {
+	int32_t				(*hop_key_cmp)(const void *key1,
+						       const void *key2);
+	void				(*hop_key_print)(const void *key);
+	void				(*hop_val_print)(const void *value);
+} vos_chash_ops_t;
+
 struct vos_chash_table {
 	daos_size_t			num_buckets;
 	daos_size_t			max_buckets;
@@ -80,10 +88,7 @@ struct vos_chash_table {
 	bool				resize;
 	TOID(struct vos_chash_buckets)	buckets;
 	PMEMrwlock			b_rw_lock;
-	int32_t				(*compare_keys)(const void *key1,
-							const void *key2);
-	void				(*print_key)(const void *key);
-	void				(*print_value)(void *value);
+	vos_chash_ops_t			*vh_ops;
 };
 
 int
@@ -92,9 +97,7 @@ vos_chash_create(PMEMobjpool *pool, uint32_t buckets,
 		 vos_chashing_method_t hashing_method,
 		 bool resize,
 		 TOID(struct vos_chash_table) *chtable,
-		 int (*compare_func)(const void *key1, const void *key2),
-		 void (*print_key)(const void *key),
-		 void (*print_value)(void *value));
+		 vos_chash_ops_t *hops);
 int
 vos_chash_destroy(PMEMobjpool *pool, TOID(struct vos_chash_table) chtable);
 

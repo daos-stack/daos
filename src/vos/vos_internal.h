@@ -87,6 +87,8 @@ struct vc_hdl {
 	 * within container
 	 */
 	struct vos_epoch_index	*vc_epoch_table;
+	/** Diret pointer to the VOS container */
+	struct vos_container	*vc_co;
 };
 
 /**
@@ -122,6 +124,26 @@ vos_pool_lookup_handle(daos_handle_t poh);
  */
 void
 vos_pool_putref_handle(struct vp_hdl *vp_hdl);
+
+static inline struct vos_pool_root *
+vos_pool2root(struct vp_hdl *vp)
+{
+	TOID(struct vos_pool_root)  proot;
+
+	proot = POBJ_ROOT(vp->vp_ph, struct vos_pool_root);
+	return D_RW(proot);
+}
+
+static inline TOID(struct vos_chash_table)
+vos_pool2coi_table(struct vp_hdl *vp)
+{
+	struct vos_container_index *coi;
+
+	coi =  D_RW(vos_pool2root(vp)->vpr_ci_table);
+
+	D_ASSERT(!TOID_IS_NULL(coi->chtable));
+	return coi->chtable;
+}
 
 /**
  * Lookup VOS container handle

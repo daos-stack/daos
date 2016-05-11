@@ -153,43 +153,42 @@ vos_chash_create(PMEMobjpool *ph, uint32_t buckets,
 		 vos_chashing_method_t hashing_method,
 		 bool resize,
 		 TOID(struct vos_chash_table) *chtable,
-		 int (*compare_func)(const void *key1, const void *key2),
-		 void (*print_key)(const void *key),
-		 void (*print_value)(void *value))
+		 vos_chash_ops_t *hops)
 {
 
 
 	int			      num_buckets, i, ret = 0;
-	TOID(struct vos_chash_table)  hash_table;
 	daos_size_t		      buckets_size;
-	struct vos_chash_buckets      *tbuckets;
 
 	num_buckets = (buckets > 0) ? buckets : VCH_MIN_BUCKET_SIZE;
 	buckets_size = num_buckets * sizeof(struct vos_chash_buckets);
 
 	TX_BEGIN(ph) {
-		hash_table = TX_ZALLOC(struct vos_chash_table,
-				sizeof(struct vos_chash_table));
-		D_RW(hash_table)->buckets =
-			TX_ZALLOC(struct vos_chash_buckets,
-				buckets_size);
-		tbuckets = D_RW(D_RW(hash_table)->buckets);
+		struct vos_chash_table	     *htab;
+		struct vos_chash_buckets     *tbuckets;
+		TOID(struct vos_chash_table)  htab_oid;
+
+		htab_oid = TX_NEW(struct vos_chash_table);
+		htab = D_RW(htab_oid);
+		htab->buckets = TX_ZALLOC(struct vos_chash_buckets,
+					  buckets_size);
+
+		tbuckets = D_RW(htab->buckets);
 		for (i = 0; i < num_buckets; i++)
 			pmemobj_rwlock_zero(ph, &(tbuckets[i].rw_lock));
-		D_RW(hash_table)->num_buckets = num_buckets;
-		D_RW(hash_table)->max_buckets = max_buckets;
-		pmemobj_rwlock_zero(ph, &(D_RW(hash_table)->b_rw_lock));
-		D_RW(hash_table)->resize = resize;
-		D_RW(hash_table)->compare_keys = compare_func;
-		D_RW(hash_table)->print_key = print_key;
-		D_RW(hash_table)->print_value = print_value;
-		*chtable = hash_table;
+
+		htab->num_buckets = num_buckets;
+		htab->max_buckets = max_buckets;
+		htab->resize	  = resize;
+		htab->vh_ops	  = hops;
+		pmemobj_rwlock_zero(ph, &(htab->b_rw_lock));
+
+		*chtable = htab_oid;
 	} TX_ONABORT {
 		D_ERROR("create hashtable transaction aborted: %s\n",
 			pmemobj_errormsg());
 		ret = -DER_NOMEM;
 	} TX_END
-
 
 	return ret;
 }
@@ -227,7 +226,7 @@ vos_chash_insert(PMEMobjpool *ph,
 
 	while (!TOID_IS_NULL(iter)) {
 		ckey = pmemobj_direct(D_RO(iter)->key);
-		if (!(D_RO(chtable)->compare_keys(ckey, key)))
+		if (!(D_RO(chtable)->vh_ops->hop_key_cmp(ckey, key)))
 			return DER_EXIST;
 		iter = D_RO(iter)->next;
 	}
@@ -307,7 +306,7 @@ vos_chash_lookup(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable,
 	iter = buckets[bucket_id].item;
 	while (!TOID_IS_NULL(iter)) {
 		ckey = pmemobj_direct(D_RO(iter)->key);
-		if (!(D_RO(chtable)->compare_keys(ckey, key))) {
+		if (!(D_RO(chtable)->vh_ops->hop_key_cmp(ckey, key))) {
 			*value = pmemobj_direct(D_RO(iter)->value);
 			ret = 0;
 			goto exit;
@@ -352,7 +351,7 @@ vos_chash_remove(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable,
 	item_current = buckets[bucket_id].item;
 	while (!TOID_IS_NULL(item_current)) {
 		ckey = pmemobj_direct(D_RO(item_current)->key);
-		if (!(D_RO(chtable)->compare_keys(ckey, key)))
+		if (!(D_RO(chtable)->vh_ops->hop_key_cmp(ckey, key)))
 			break;
 		item_prev = item_current;
 		item_current = D_RO(item_current)->next;
@@ -434,8 +433,8 @@ vos_chash_print(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable)
 					 D_RO(item_current);
 				pkey = pmemobj_direct(l_iter->key);
 				pvalue = pmemobj_direct(l_iter->value);
-				D_RO(chtable)->print_key(pkey);
-				D_RO(chtable)->print_value(pvalue);
+				D_RO(chtable)->vh_ops->hop_key_print(pkey);
+				D_RO(chtable)->vh_ops->hop_val_print(pvalue);
 				item_current = D_RO(item_current)->next;
 			}
 			printf("\n");

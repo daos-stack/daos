@@ -32,6 +32,12 @@
 #include <vos_layout.h>
 #include <vos_internal.h>
 #include <vos_obj.h>
+
+/* NB: hide the dark secret that uuid_t is an array not a structure */
+struct uuid_key {
+	uuid_t			uuid;
+};
+
 /**
  * Callback free methods for VOS Container and
  * VOS Pool
@@ -41,12 +47,8 @@ daos_co_hhash_free(struct daos_hlink *hlink)
 {
 	struct vc_hdl *co_hdl;
 
-	if (!hlink)
-		return;
-	co_hdl = container_of(hlink, struct vc_hdl,
-			      vc_hlink);
-
-
+	D_ASSERT(hlink);
+	co_hdl = container_of(hlink, struct vc_hdl, vc_hlink);
 	D_FREE_PTR(co_hdl);
 }
 
@@ -57,36 +59,37 @@ struct daos_hlink_ops	co_hdl_hh_ops = {
 /**
  * VOS_CHASH_TABLE Callback routines
  */
-int
+static int
 co_compare_key(const void *a, const void *b)
 {
-	int  rc = 0;
-
-	rc = uuid_compare(*(uuid_t *)a, *(uuid_t *)b);
-	if (!rc)
-		return 0;
-	else
-		return -1;
+	return uuid_compare(((const struct uuid_key *)a)->uuid,
+			    ((const struct uuid_key *)b)->uuid);
 }
 
-void
+static void
 co_print_key(const void *a)
 {
 	char uuid_str[37];
 
-	uuid_unparse(*(uuid_t *)a, uuid_str);
+	uuid_unparse(((const struct uuid_key *)a)->uuid, uuid_str);
 	D_DEBUG(DF_VOS3, "Key: %s\n", uuid_str);
 }
-void
-co_print_value(void *a)
+
+static void
+co_print_value(const void *a)
 {
 	PMEMoid obj;
 
+	D_ASSERT(a != NULL);
 	obj = *(PMEMoid *)a;
-	if (NULL != a)
-		D_DEBUG(DF_VOS3, "Obj-table address: %p\n",
-			pmemobj_direct(obj));
+	D_DEBUG(DF_VOS3, "Obj-table address: %p\n", pmemobj_direct(obj));
 }
+
+vos_chash_ops_t	vos_co_idx_hop = {
+	.hop_key_cmp	= co_compare_key,
+	.hop_key_print	= co_print_key,
+	.hop_val_print	= co_print_value,
+};
 
 /**
  * Create a container within a VOSP
@@ -95,15 +98,11 @@ int
 vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 {
 
-	int				ret    = 0;
-	uuid_t				tmp_uuid;
+	int				ret;
 	struct vp_hdl			*vpool = NULL;
-	struct vos_pool_root		*root  = NULL;
-	struct vos_container_index	*ci_table = NULL;
-	struct vos_object_index		*obj_index = NULL;
-	TOID(struct vos_container)	cvalue;
-	TOID(struct vos_pool_root)	proot;
 	PMEMoid				*object_address;
+	struct uuid_key			 ukey;
+	TOID(struct vos_chash_table)	 coi_table;
 
 	vpool = vos_pool_lookup_handle(poh);
 	if (NULL == vpool) {
@@ -111,41 +110,16 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 		return -DER_INVAL;
 	}
 
-	proot = POBJ_ROOT(vpool->vp_ph, struct vos_pool_root);
-	root = D_RW(proot);
-	ci_table = (struct vos_container_index *)
-		   D_RW(root->vpr_ci_table);
-	uuid_copy(tmp_uuid, co_uuid);
-
-	/**
-	 * Create a new container entry *
-	 * Create a PMEM hashtable if one does not exist
-	 * If one exists then container exists
-	 */
-
-	if (TOID_IS_NULL(ci_table->chtable)) {
-
-		D_DEBUG(DF_VOS3, "Creating a new container index\n");
-
-		/* Container table is empty create one */
-		ret = vos_chash_create(vpool->vp_ph, VCH_MIN_BUCKET_SIZE,
-				       VCH_MAX_BUCKET_SIZE, CRC64, true,
-				       &ci_table->chtable,
-				       co_compare_key,
-				       co_print_key, co_print_value);
-		if (ret) {
-			D_ERROR("creating container table :%d\n", ret);
-			goto exit;
-		}
-	} else {
-
-		D_DEBUG(DF_VOS3, "looking up co_id in  container index\n");
-		ret = vos_chash_lookup(vpool->vp_ph, ci_table->chtable,
-				       (void *)&tmp_uuid,
-				       sizeof(uuid_t),
-				       (void **)&object_address);
-		if (!ret)
-			goto exit;
+	D_DEBUG(DF_VOS3, "looking up co_id in container index\n");
+	coi_table = vos_pool2coi_table(vpool);
+	uuid_copy(ukey.uuid, co_uuid);
+	ret = vos_chash_lookup(vpool->vp_ph, coi_table,
+			       (void *)&ukey, sizeof(ukey),
+			       (void **)&object_address);
+	if (!ret) {
+		D_DEBUG(DF_VOS3, "Container existed\n");
+		ret = -DER_EXIST;
+		goto exit;
 	}
 
 	/**
@@ -157,26 +131,27 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 	 */
 
 	TX_BEGIN(vpool->vp_ph) {
-		cvalue = TX_NEW(struct vos_container);
-		uuid_copy(D_RW(cvalue)->vc_id, tmp_uuid);
-		D_RW(cvalue)->vc_obtable = TX_NEW(struct vos_object_index);
-		D_RW(cvalue)->vc_ehtable = TX_NEW(struct vos_epoch_index);
-		D_RW(cvalue)->vc_info.pci_nobjs = 0;
-		D_RW(cvalue)->vc_info.pci_used = 0;
-		obj_index = D_RW(D_RW(cvalue)->vc_obtable);
+		TOID(struct vos_container)  vc_oid;
+		struct vos_container	   *vc;
+
+		vc_oid = TX_ZNEW(struct vos_container);
+		vc = D_RW(vc_oid);
+
+		uuid_copy(vc->vc_id, co_uuid);
+		vc->vc_obtable	= TX_NEW(struct vos_object_index);
+		vc->vc_ehtable	= TX_NEW(struct vos_epoch_index);
 
 		D_DEBUG(DF_VOS3, "Inserting into container index\n");
-		ret =
-		vos_chash_insert(vpool->vp_ph, ci_table->chtable,
-				 (void *)&tmp_uuid, sizeof(uuid_t),
-				 &cvalue, sizeof(struct vos_container));
+		ret = vos_chash_insert(vpool->vp_ph, coi_table,
+				       (void *)&ukey, sizeof(ukey),
+				       &vc_oid, sizeof(struct vos_container));
 		if (ret) {
 			D_ERROR("Container table insert failed with error : %d",
 				ret);
 			pmemobj_tx_abort(ENOMEM);
 		}
 
-		ret = vos_oi_create(vpool, obj_index);
+		ret = vos_oi_create(vpool, D_RW(vc->vc_obtable));
 		if (ret) {
 			D_ERROR("VOS object index create failure\n");
 			pmemobj_tx_abort(ENOMEM);
@@ -202,12 +177,9 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 
 	int				ret    = 0;
 	struct vp_hdl			*vpool = NULL;
-	struct vos_pool_root		*root  = NULL;
-	struct vos_container_index	*ci_table = NULL;
-	TOID(struct vos_pool_root)	proot;
 	TOID(struct vos_container)	*object_address;
 	struct vc_hdl			*co_hdl = NULL;
-	uuid_t				tmp_uuid;
+	struct uuid_key			 ukey;
 
 	/* Lookup container handle of hash link */
 	vpool = vos_pool_lookup_handle(poh);
@@ -217,20 +189,9 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 		goto exit;
 	}
 
-	proot = POBJ_ROOT(vpool->vp_ph, struct vos_pool_root);
-	root = D_RW(proot);
-	ci_table = (struct vos_container_index *)
-		   D_RW(root->vpr_ci_table);
-
-	if (TOID_IS_NULL(ci_table->chtable)) {
-		D_ERROR("Empty Container table\n");
-		ret = -DER_NONEXIST;
-		goto exit;
-	}
-
-	uuid_copy(tmp_uuid, co_uuid);
-	ret = vos_chash_lookup(vpool->vp_ph, ci_table->chtable,
-			       (void *)&tmp_uuid, sizeof(uuid_t),
+	uuid_copy(ukey.uuid, co_uuid);
+	ret = vos_chash_lookup(vpool->vp_ph, vos_pool2coi_table(vpool),
+			       (void *)&ukey, sizeof(ukey),
 			       (void **)&object_address);
 	if (ret) {
 		D_ERROR("Container does not exist\n");
@@ -244,11 +205,11 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 		goto exit;
 	}
 
-	co_hdl->vc_phdl = vpool;
-	uuid_copy(co_hdl->vc_id, tmp_uuid);
-	co_hdl->vc_obj_table = D_RW(D_RW(*object_address)->vc_obtable);
-	co_hdl->vc_epoch_table = D_RW(D_RW(*object_address)->vc_ehtable);
-
+	uuid_copy(co_hdl->vc_id, co_uuid);
+	co_hdl->vc_phdl		= vpool;
+	co_hdl->vc_co		= D_RW(*object_address);
+	co_hdl->vc_obj_table	= D_RW(co_hdl->vc_co->vc_obtable);
+	co_hdl->vc_epoch_table	= D_RW(co_hdl->vc_co->vc_ehtable);
 
 	/* Cache this btr object ID in container handle */
 	ret = dbtree_open_inplace(&co_hdl->vc_obj_table->obtable,
@@ -259,7 +220,6 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 		ret = -DER_NONEXIST;
 		goto exit;
 	}
-
 
 	daos_hhash_hlink_init(&co_hdl->vc_hlink, &co_hdl_hh_ops);
 	daos_hhash_link_insert(daos_vos_hhash, &co_hdl->vc_hlink,
@@ -307,7 +267,6 @@ vos_co_close(daos_handle_t coh, daos_event_t *ev)
 
 /**
  * Destroy a container
- *
  */
 int
 vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
@@ -315,12 +274,9 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 
 	int				ret    = 0;
 	struct vp_hdl			*vpool = NULL;
-	struct vos_pool_root		*root  = NULL;
-	struct vos_container_index	*ci_table = NULL;
-	struct vos_object_index		*obj_index = NULL;
-	uuid_t				tmp_uuid;
 	TOID(struct vos_container)	*object_address;
-	TOID(struct vos_pool_root)	proot;
+	struct uuid_key			 ukey;
+	TOID(struct vos_chash_table)	 coi_table;
 
 	vpool = vos_pool_lookup_handle(poh);
 	if (!vpool) {
@@ -329,21 +285,10 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 		goto exit;
 	}
 
-	proot = POBJ_ROOT(vpool->vp_ph, struct vos_pool_root);
-	root = D_RW(proot);
-	ci_table = (struct vos_container_index *)
-			D_RW(root->vpr_ci_table);
-
-	uuid_copy(tmp_uuid, co_uuid);
-
-	if (TOID_IS_NULL(ci_table->chtable)) {
-		D_ERROR("Empty Container table\n");
-		ret = -DER_NONEXIST;
-		goto exit;
-	}
-
-	ret = vos_chash_lookup(vpool->vp_ph, ci_table->chtable,
-			       (void *)&tmp_uuid, sizeof(uuid_t),
+	coi_table = vos_pool2coi_table(vpool);
+	uuid_copy(ukey.uuid, co_uuid);
+	ret = vos_chash_lookup(vpool->vp_ph, coi_table,
+			       (void *)&ukey, sizeof(ukey),
 			       (void **)&object_address);
 	if (ret) {
 		D_ERROR("Container does not exist\n");
@@ -358,10 +303,9 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 	 * transaction which will be nested.
 	 */
 	TX_BEGIN(vpool->vp_ph) {
+		struct vos_object_index	*obj_index;
 
-		obj_index  = (struct vos_object_index *)
-			      D_RW(D_RW(*object_address)->vc_obtable);
-
+		obj_index = D_RW(D_RW(*object_address)->vc_obtable);
 		ret = vos_oi_destroy(vpool, obj_index);
 		if (ret) {
 			D_ERROR("OI destroy failed with error : %d",
@@ -374,13 +318,13 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 		 * Its just enough to remove the entry
 		 *
 		*/
-		ret = vos_chash_remove(vpool->vp_ph, ci_table->chtable,
-				       tmp_uuid, sizeof(uuid_t));
+		ret = vos_chash_remove(vpool->vp_ph, coi_table,
+				       (void *)&ukey, sizeof(ukey));
 		if (ret) {
-			D_ERROR("Chash remove failed with error : %d",
-				ret);
+			D_ERROR("Chash remove failed with error : %d", ret);
 			pmemobj_tx_abort(EFAULT);
 		}
+
 	}  TX_ONABORT {
 		D_ERROR("Destroying container transaction failed %s\n",
 			pmemobj_errormsg());
@@ -393,18 +337,13 @@ exit:
 
 /**
  * Query container information.
- *
  */
 int
 vos_co_query(daos_handle_t coh, vos_co_info_t *vc_info, daos_event_t *ev)
 {
 
 	int				ret    = 0;
-	struct vos_pool_root		*root  = NULL;
 	struct vc_hdl			*co_hdl = NULL;
-	struct vos_container_index	*ci_table = NULL;
-	TOID(struct vos_container)	*container_value;
-	TOID(struct vos_pool_root)	proot;
 
 	co_hdl = vos_co_lookup_handle(coh);
 	if (!co_hdl) {
@@ -412,24 +351,7 @@ vos_co_query(daos_handle_t coh, vos_co_info_t *vc_info, daos_event_t *ev)
 		return -DER_INVAL;
 	}
 
-	proot = POBJ_ROOT(co_hdl->vc_phdl->vp_ph, struct vos_pool_root);
-	root = D_RW(proot);
-
-	ci_table = (struct vos_container_index *)
-		   D_RW(root->vpr_ci_table);
-
-	ret = vos_chash_lookup(co_hdl->vc_phdl->vp_ph, ci_table->chtable,
-			       co_hdl->vc_id, sizeof(uuid_t),
-			       (void **)&container_value);
-	if (ret) {
-		D_ERROR("Container does not exist\n");
-		goto exit;
-	}
-
-	vc_info->pci_nobjs = D_RW(*container_value)->vc_info.pci_nobjs;
-	vc_info->pci_used  = D_RW(*container_value)->vc_info.pci_used;
-
-exit:
+	memcpy(vc_info, &co_hdl->vc_co->vc_info, sizeof(*vc_info));
 	vos_co_putref_handle(co_hdl);
 	return ret;
 }

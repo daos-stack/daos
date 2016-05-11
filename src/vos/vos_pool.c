@@ -39,35 +39,32 @@ daos_vpool_free(struct daos_hlink *hlink)
 {
 	struct vp_hdl *vpool;
 
+	D_ASSERT(hlink != NULL);
 	vpool = container_of(hlink, struct vp_hdl, vp_hlink);
 
-	if (vpool != NULL) {
-		if (vpool->vp_ph)
-			pmemobj_close(vpool->vp_ph);
-		if (vpool->vp_fpath != NULL)
-			free(vpool->vp_fpath);
-		D_FREE_PTR(vpool);
-	}
+	if (vpool->vp_ph)
+		pmemobj_close(vpool->vp_ph);
+	if (vpool->vp_fpath != NULL)
+		free(vpool->vp_fpath);
+
+	D_FREE_PTR(vpool);
 }
 
 struct daos_hlink_ops	vpool_hh_ops = {
 	.hop_free	= daos_vpool_free,
 };
 
+extern vos_chash_ops_t vos_co_idx_hop;
 
 /**
  * Create a Versioning Object Storage Pool (VOSP) and its root object.
- *
  */
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		daos_handle_t *poh, daos_event_t *ev)
 {
-	int				rc    = 0;
-	struct vp_hdl			*vpool = NULL;
-	struct vos_pool_root		*root  = NULL;
-	size_t				root_size;
-	TOID(struct vos_pool_root)	proot;
+	int		 rc    = 0;
+	struct vp_hdl	*vpool = NULL;
 
 	if (NULL == path || uuid_is_null(uuid) || size < 0)
 		return -DER_INVAL;
@@ -84,6 +81,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	if (vpool == NULL)
 		return -DER_NOMEM;
 
+	daos_hhash_hlink_init(&vpool->vp_hlink, &vpool_hh_ops);
 	vpool->vp_fpath = strdup(path);
 	vpool->vp_ph = pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout),
 				      size, 0666);
@@ -93,24 +91,37 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		goto exit;
 	}
 	/* Just for testing. Keeping object in VMEM */
-	vpool->vp_uma.uma_id = UMEM_CLASS_VMEM;
-	/**
-	 * TODO: Change to PMEM using
-	 * vpool->vp_uma.uma_id = UMEM_CLASS_PMEM;
-	 * vpool->vp_uma.uma_u.pmem_pool = vpool->vp_ph;
-	 */
-	proot = POBJ_ROOT(vpool->vp_ph, struct vos_pool_root);
-	root = D_RW(proot);
-	root_size = pmemobj_root_size(vpool->vp_ph);
+	vpool->vp_uma.uma_id = UMEM_CLASS_PMEM;
+	vpool->vp_uma.uma_u.pmem_pool = vpool->vp_ph;
 
 	TX_BEGIN(vpool->vp_ph) {
-		TX_ADD(proot);
+		struct vos_container_index *co_idx;
+		struct vos_pool_root	   *root;
+		vos_pool_info_t		   *pinfo;
+
+		root = vos_pool2root(vpool);
+		pmemobj_tx_add_range_direct(root, sizeof(*root));
+
 		memset(root, 0, sizeof(*root));
-		root->vpr_ci_table =
-			TX_ZNEW(struct vos_container_index);
+		root->vpr_ci_table = TX_ZNEW(struct vos_container_index);
+		co_idx = D_RW(root->vpr_ci_table);
+
+		/* Container table is empty create one */
+		rc = vos_chash_create(vpool->vp_ph, VCH_MIN_BUCKET_SIZE,
+				      VCH_MAX_BUCKET_SIZE, CRC64, true,
+				      &co_idx->chtable, &vos_co_idx_hop);
+		if (rc != 0) {
+			D_ERROR("Failed to create container index table: %d\n",
+				rc);
+			pmemobj_tx_abort(EFAULT);
+		}
+
 		uuid_copy(root->vpr_pool_id, uuid);
-		root->vpr_pool_info.pif_size = size;
-		root->vpr_pool_info.pif_avail = size - root_size;
+		pinfo = &root->vpr_pool_info;
+
+		pinfo->pif_size	 = size;
+		pinfo->pif_avail = size - pmemobj_root_size(vpool->vp_ph);
+
 	} TX_ONABORT {
 		D_ERROR("Initialize pool root error: %s\n",
 			pmemobj_errormsg());
@@ -121,24 +132,20 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		rc = -DER_NOMEM;
 	} TX_END
 
-exit:
-	if (!rc) {
-		daos_hhash_hlink_init(&vpool->vp_hlink, &vpool_hh_ops);
-		daos_hhash_link_insert(daos_vos_hhash, &vpool->vp_hlink,
-				       DAOS_HTYPE_VOS_POOL);
-		daos_hhash_link_key(&vpool->vp_hlink, &poh->cookie);
-		vos_pool_putref_handle(vpool);
-	} else {
-		daos_vpool_free(&vpool->vp_hlink);
-	}
+	if (rc != 0)
+		goto exit;
 
+	daos_hhash_link_insert(daos_vos_hhash, &vpool->vp_hlink,
+			       DAOS_HTYPE_VOS_POOL);
+	daos_hhash_link_key(&vpool->vp_hlink, &poh->cookie);
+exit:
+	vos_pool_putref_handle(vpool);
 	return rc;
 }
 
 /**
  * Destroy a Versioning Object Storage Pool (VOSP)
  * and revoke all its handles
- *
  */
 int
 vos_pool_destroy(daos_handle_t poh, daos_event_t *ev)
@@ -155,6 +162,9 @@ vos_pool_destroy(daos_handle_t poh, daos_event_t *ev)
 	}
 
 	vpool = container_of(hlink, struct vp_hdl, vp_hlink);
+	/* NB: no need to explicitly destroy container index table because
+	 * pool file removal will do this for free.
+	 */
 	rc = remove(vpool->vp_fpath);
 	if (rc) {
 		D_ERROR("While deleting file from PMEM\n");
@@ -164,14 +174,12 @@ vos_pool_destroy(daos_handle_t poh, daos_event_t *ev)
 	daos_hhash_link_delete(daos_vos_hhash, &vpool->vp_hlink);
 exit:
 	vos_pool_putref_handle(vpool);
-
 	return rc;
 }
 
 /**
  * Open a Versioning Object Storage Pool (VOSP), load its root object
  * and other internal data structures.
- *
  */
 int
 vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
@@ -182,7 +190,6 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 	char				pool_uuid_str[37], uuid_str[37];
 	struct vp_hdl			*vpool = NULL;
 	struct vos_pool_root		*root  = NULL;
-	TOID(struct vos_pool_root)	proot;
 
 	if (path == NULL) {
 		D_ERROR("Invalid Pool Path\n");
@@ -196,6 +203,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 		return -DER_NOMEM;
 	}
 
+	daos_hhash_hlink_init(&vpool->vp_hlink, &vpool_hh_ops);
 	vpool->vp_fpath = strdup(path);
 	vpool->vp_ph = pmemobj_open(path, POBJ_LAYOUT_NAME(vos_pool_layout));
 	if (vpool->vp_ph == NULL) {
@@ -204,8 +212,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 		goto exit;
 	}
 
-	proot = POBJ_ROOT(vpool->vp_ph, struct vos_pool_root);
-	root = D_RW(proot);
+	root = vos_pool2root(vpool);
 	if (uuid_compare(uuid, root->vpr_pool_id)) {
 		uuid_unparse(uuid, pool_uuid_str);
 		uuid_unparse(uuid, uuid_str);
@@ -215,23 +222,17 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 		goto exit;
 	}
 
-	daos_hhash_hlink_init(&vpool->vp_hlink, &vpool_hh_ops);
 	daos_hhash_link_insert(daos_vos_hhash, &vpool->vp_hlink,
 			       DAOS_HTYPE_VOS_POOL);
 	daos_hhash_link_key(&vpool->vp_hlink, &poh->cookie);
-	vos_pool_putref_handle(vpool);
 exit:
-	if (rc)
-		daos_vpool_free(&vpool->vp_hlink);
-
+	vos_pool_putref_handle(vpool);
 	return rc;
 }
 
 /**
- *
  * Close a VOSP, all opened containers sharing this pool handle
  * will be revoked.
- *
  */
 int
 vos_pool_close(daos_handle_t poh, daos_event_t *ev)
@@ -260,7 +261,6 @@ vos_pool_close(daos_handle_t poh, daos_event_t *ev)
 
 /**
  * Query attributes and statistics of the current pool
- *
  */
 int
 vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev)
@@ -270,18 +270,15 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev)
 	struct vp_hdl			*vpool = NULL;
 	struct vos_pool_root		*root  = NULL;
 	struct daos_hlink		*hlink;
-	TOID(struct vos_pool_root)	proot;
 
 	hlink = daos_hhash_link_lookup(daos_vos_hhash, poh.cookie);
 	if (hlink == NULL)
 		return -DER_INVAL;
 
 	vpool = container_of(hlink, struct vp_hdl, vp_hlink);
-	proot = POBJ_ROOT(vpool->vp_ph, struct vos_pool_root);
-	root = D_RW(proot);
+	root = vos_pool2root(vpool);
 
-	memcpy(pinfo, &root->vpr_pool_info,
-	       sizeof(root->vpr_pool_info));
+	memcpy(pinfo, &root->vpr_pool_info, sizeof(root->vpr_pool_info));
 
 	daos_hhash_link_putref(daos_vos_hhash, &vpool->vp_hlink);
 	return rc;

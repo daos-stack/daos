@@ -23,10 +23,16 @@ print_integer_keys(const void *a)
 }
 
 void
-print_integer_values(void *a)
+print_integer_values(const void *a)
 {
 	printf("Value: %"PRIu64"\n", *(uint64_t *)a);
 }
+
+static vos_chash_ops_t my_hops = {
+	.hop_key_cmp	= compare_integers,
+	.hop_key_print	= print_integer_keys,
+	.hop_val_print	= print_integer_values,
+};
 
 bool
 file_exists(const char *filename)
@@ -65,8 +71,7 @@ test_multithreaded_ops(PMEMobjpool *pop, int bucket_size, int num_keys,
 	memset(values, 0, num_keys * sizeof(uint64_t));
 
 	vos_chash_create(pop, bucket_size, 100, true, CRC64, &hashtable,
-			 compare_integers, print_integer_keys,
-			 print_integer_values);
+			 &my_hops);
 
 	#pragma omp parallel num_threads(num_threads)
 	{
@@ -168,8 +173,7 @@ test_single_thread_ops(PMEMobjpool *pop, int bucket_size, int num_keys)
 	memset(values, 0, num_keys * sizeof(uint64_t));
 
 	vos_chash_create(pop, bucket_size, 100, true, CRC64, &hashtable,
-			 compare_integers, print_integer_keys,
-			 print_integer_values);
+			 &my_hops);
 
 	for (i = 0; i < num_keys; i++) {
 		keys[i] = rand() % 100000 + 1;
