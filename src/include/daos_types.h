@@ -518,10 +518,10 @@ typedef struct {
  */
 
 typedef struct daos_event {
-	daos_errno_t		ev_error;
+	int			ev_error;
 	/** internal use, please do not modify */
 	struct {
-		uint64_t	space[20];
+		uint64_t	space[24];
 	}			ev_private;
 	/** used for debugging */
 	uint64_t		ev_debug;

@@ -86,15 +86,15 @@ eq_test_1()
 	rc = daos_event_init(&ev, eqh, NULL);
 	D_ASSERT(rc == 0);
 
-	rc = daos_event_launch(&ev);
+	rc = daos_event_launch(&ev, NULL, NULL);
 	D_ASSERT(rc == 0);
 
-	daos_event_complete(&ev);
+	daos_event_complete(&ev, 0);
 
 	rc = daos_event_init(&abort_ev, eqh, NULL);
 	D_ASSERT(rc == 0);
 
-	rc = daos_event_launch(&abort_ev);
+	rc = daos_event_launch(&abort_ev, NULL, NULL);
 	D_ASSERT(rc == 0);
 
 	daos_event_abort(&abort_ev);
@@ -156,7 +156,7 @@ eq_test_2()
 
 	D_ERROR("Query EQ with inflight events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
-		rc = daos_event_launch(events[i]);
+		rc = daos_event_launch(events[i], NULL, NULL);
 		if (rc != 0) {
 			D_ERROR("Failed to launch event %d: %d\n", i, rc);
 			goto out;
@@ -180,7 +180,7 @@ eq_test_2()
 
 	D_ERROR("Query EQ with completion events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
-		daos_event_complete(events[i]);
+		daos_event_complete(events[i], 0);
 		rc = daos_eq_query(my_eqh, DAOS_EQR_COMPLETED,
 				   EQT_EV_COUNT, eps);
 		if (rc != i + 1) {
@@ -245,19 +245,19 @@ eq_test_3()
 
 	D_ERROR("launch parent events");
 	/* try to launch parent event, should always fail */
-	rc = daos_event_launch(&event);
+	rc = daos_event_launch(&event, NULL, NULL);
 	if (rc != DER_NO_PERM)
 		goto out_free;
 
 	D_ERROR("launch child events");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
-		rc = daos_event_launch(child_events[i]);
+		rc = daos_event_launch(child_events[i], NULL, NULL);
 		if (rc != 0)
 			goto out_free;
 	}
 
 	for (i = 0; i < EQT_EV_COUNT; i++)
-		daos_event_complete(child_events[i]);
+		daos_event_complete(child_events[i], 0);
 
 	D_ERROR("Poll parent event\n");
 	rc = daos_eq_poll(my_eqh, 0, 0, 2, eps);
@@ -459,13 +459,13 @@ eq_test_4()
 	sleep(EQT_SLEEP_INV);
 
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++) {
-		rc = daos_event_launch(events[i]);
+		rc = daos_event_launch(events[i], NULL, NULL);
 		if (rc != 0)
 			goto out;
 	}
 
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++)
-		daos_event_complete(events[i]);
+		daos_event_complete(events[i], 0);
 
 	EQ_TEST_BARRIER("\tProducer is waiting for consumer draning EQ\n", out);
 	EQ_TEST_CHECK_EMPTY(my_eqh, rc, out);
@@ -475,7 +475,7 @@ eq_test_4()
 		"complete these events\n", EQT_EV_COUNT, EQT_SLEEP_INV);
 	D_ERROR("\tProducer launch %d events\n", EQT_EV_COUNT);
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++) {
-		rc = daos_event_launch(events[i]);
+		rc = daos_event_launch(events[i], NULL, NULL);
 		if (rc != 0)
 			goto out;
 	}
@@ -487,7 +487,7 @@ eq_test_4()
 		EQT_EV_COUNT, EQT_SLEEP_INV);
 
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++)
-		daos_event_complete(events[i]);
+		daos_event_complete(events[i], 0);
 
 	EQ_TEST_BARRIER("\tProducer is waiting for EQ draining\n", out);
 	EQ_TEST_CHECK_EMPTY(my_eqh, rc, out);
@@ -498,13 +498,13 @@ eq_test_4()
 
 	EQ_TEST_BARRIER("\tProducer launch and complete all events\n", out);
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++) {
-		rc = daos_event_launch(events[i]);
+		rc = daos_event_launch(events[i], NULL, NULL);
 		if (rc != 0)
 			goto out;
 	}
 
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++)
-		daos_event_complete(events[i]);
+		daos_event_complete(events[i], 0);
 
 	EQ_TEST_BARRIER("\tProducer is waiting for EQ draining\n", out);
 	EQ_TEST_CHECK_EMPTY(my_eqh, rc, out);

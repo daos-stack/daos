@@ -19,7 +19,7 @@
  * (C) Copyright 2016 Intel Corporation.
  */
 /*
- * dmgc: the DMG client module/library. It exports the DSM API defined
+ * dmgc: the DMG client module/library. It exports the DMG API defined
  *       in daos_mgmt.h
  */
 
@@ -35,11 +35,15 @@ dmg_init()
 
 	pthread_mutex_lock(&module_lock);
 	if (module_initialized)
-		D_GOTO(unlock, rc = 0);
+		D_GOTO(unlock, rc = -DER_ALREADY);
+
+	rc = daos_eq_lib_init();
+	if (rc != 0)
+		D_GOTO(unlock, rc);
 
 	rc = daos_rpc_register(dmg_rpcs, NULL, DAOS_DMG_MODULE);
 	if (rc != 0) {
-		D_ERROR("rpc register failed: rc = %d.\n", rc);
+		daos_eq_lib_fini();
 		D_GOTO(unlock, rc);
 	}
 
@@ -49,27 +53,32 @@ unlock:
 	return rc;
 }
 
+bool
+dmg_initialized()
+{
+	return (module_initialized != 0);
+}
+
 int
 dmg_fini()
 {
-	int rc = 0;
+	int	rc;
 
 	pthread_mutex_lock(&module_lock);
-	if (!module_initialized) {
-		D_GOTO(unlock, rc);
-	}
+	if (!dmg_initialized())
+		D_GOTO(unlock, rc = -DER_UNINIT);
 
 	daos_rpc_unregister(dmg_rpcs);
+
+	rc = daos_eq_lib_fini();
+	if (rc != 0) {
+		D_ERROR("failed to finalize eq: %d\n", rc);
+		D_GOTO(unlock, rc);
+	}
 
 	module_initialized = 0;
 
 unlock:
 	pthread_mutex_unlock(&module_lock);
 	return rc;
-}
-
-bool
-dmg_initialized()
-{
-	return (module_initialized != 0);
 }

@@ -24,6 +24,12 @@
 #ifndef __DMG_API_H__
 #define __DMG_API_H__
 
+#include <uuid/uuid.h>
+
+#include <daos_event.h>
+#include <daos_types.h>
+#include <daos_errno.h>
+
 /**
  *   Initialize dmgc client library.
  *

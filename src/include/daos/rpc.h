@@ -26,6 +26,7 @@
 #define __DRPC_API_H__
 
 #include <daos/transport.h>
+#include <daos/event.h>
 
 /* Opcode registered in dtp will be
  * client/server | mod_id | rpc_version | op_code
@@ -148,4 +149,27 @@ daos_rpc_unregister(struct daos_rpc *rpcs)
 	return 0;
 }
 
+int
+daos_rpc_cb(const struct dtp_cb_info *cb_info);
+
+static inline int
+daos_rpc_send(dtp_rpc_t *rpc, daos_event_t *ev)
+{
+	int	rc;
+
+	/* Send request */
+	rc = dtp_req_send(rpc, daos_rpc_cb, ev);
+	if (rc != 0)
+		/**
+		 * event was started already, let's report the error
+		 * asynchronously
+		 */
+		daos_event_complete(ev, rc);
+
+	/** wait for completion if blocking mode */
+	if (daos_event_is_priv(ev))
+		rc = daos_event_priv_wait(ev);
+
+	return rc;
+}
 #endif /* __DRPC_API_H__ */

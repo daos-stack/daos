@@ -39,40 +39,97 @@
 
 static struct daos_hhash *daos_eq_hhash;
 
+/** thread-private event */
+static __thread daos_event_t	ev_thpriv;
+static __thread bool		ev_thpriv_is_init;
+
+/** thread-private event queue handle */
+static __thread daos_handle_t	eq_thpriv;
+
 /*
  * For the moment, we use a global dtp_context_t to create all the RPC requests
  * this module uses.
  */
 static dtp_context_t daos_eq_ctx;
 static pthread_mutex_t daos_eq_lock = PTHREAD_MUTEX_INITIALIZER;
+static unsigned int refcount;
 
 int
-daos_eq_lib_init(dtp_context_t ctx)
+daos_eq_lib_init()
 {
 	int rc;
 
 	pthread_mutex_lock(&daos_eq_lock);
-	if (daos_eq_hhash != NULL) {
-		pthread_mutex_unlock(&daos_eq_lock);
-		return -DER_ALREADY;
+	if (refcount > 0) {
+		refcount++;
+		D_GOTO(unlock, rc = 0);
 	}
 
-	daos_eq_ctx = ctx;
 	rc = daos_hhash_create(DAOS_HHASH_BITS, &daos_eq_hhash);
+	if (rc != 0) {
+		D_ERROR("failed to create hash for eq: %d\n", rc);
+		D_GOTO(unlock, rc);
+	}
+
+	rc = dtp_init(false /* client-only */);
+	if (rc != 0) {
+		D_ERROR("failed to initialize dtp: %d\n", rc);
+		D_GOTO(hash, rc);
+	}
+
+	/* use a global shared context for all eq for now */
+	rc = dtp_context_create(NULL /* arg */, &daos_eq_ctx);
+	if (rc != 0) {
+		D_ERROR("failed to create client context: %d\n", rc);
+		D_GOTO(dtp, rc);
+	}
+
+	refcount = 1;
+unlock:
 	pthread_mutex_unlock(&daos_eq_lock);
 	return rc;
+hash:
+	daos_hhash_destroy(daos_eq_hhash);
+dtp:
+	dtp_finalize();
+	D_GOTO(unlock, rc);
 }
 
-void
+int
 daos_eq_lib_fini()
 {
+	int rc;
+
 	pthread_mutex_lock(&daos_eq_lock);
-	daos_eq_ctx = NULL;
-	if (daos_eq_hhash != NULL) {
-		daos_hhash_destroy(daos_eq_hhash);
-		daos_eq_hhash = NULL;
+	if (refcount == 0)
+		D_GOTO(unlock, rc = -DER_UNINIT);
+	if (refcount > 1) {
+		refcount--;
+		D_GOTO(unlock, rc = 0);
 	}
+
+	if (daos_eq_ctx != NULL) {
+		rc = dtp_context_destroy(daos_eq_ctx, 1 /* force */);
+		if (rc != 0) {
+			D_ERROR("failed to destroy client context: %d\n", rc);
+			D_GOTO(unlock, rc);
+		}
+		daos_eq_ctx = NULL;
+	}
+
+	rc = dtp_finalize();
+	if (rc != 0) {
+		D_ERROR("failed to shutdown dtp: %d\n", rc);
+		D_GOTO(unlock, rc);
+	}
+
+	D_ASSERT(daos_eq_hhash != NULL);
+	daos_hhash_destroy(daos_eq_hhash);
+
+	refcount = 0;
+unlock:
 	pthread_mutex_unlock(&daos_eq_lock);
+	return rc;
 }
 
 static void
@@ -201,8 +258,21 @@ daos_event_launch_locked(struct daos_eq_private *eqx,
 	eq->eq_n_disp++;
 }
 
+dtp_context_t
+daos_ev2ctx(struct daos_event *ev)
+{
+	return daos_ev2evx(ev)->evx_ctx;
+}
+
+struct daos_op_sp *
+daos_ev2sp(struct daos_event *ev)
+{
+	return &daos_ev2evx(ev)->evx_sp;
+}
+
 int
-daos_event_launch(struct daos_event *ev)
+daos_event_launch(struct daos_event *ev, daos_event_abort_cb_t abort_cb,
+		  daos_event_comp_cb_t comp_cb)
 {
 	struct daos_event_private *evx = daos_ev2evx(ev);
 	struct daos_eq_private	  *eqx;
@@ -212,29 +282,32 @@ daos_event_launch(struct daos_event *ev)
 	    !daos_list_empty(&evx->evx_child)) {
 		D_ERROR("Event status %d is wrong, or it's a parent event\n",
 			evx->evx_status);
-		return DER_NO_PERM;
+		return -DER_NO_PERM;
 	}
 
 	if (evx->evx_eqh.cookie == 0) {
 		D_ERROR("Invalid EQ handle\n");
-		return DER_INVAL;
+		return -DER_INVAL;
 	}
 
 	eqx = daos_eq_lookup(evx->evx_eqh);
 	if (eqx == NULL) {
 		D_ERROR("Can't find event queue from handle %"PRIu64"\n",
 			evx->evx_eqh.cookie);
-		return DER_NONEXIST;
+		return -DER_NONEXIST;
 	}
 
 	pthread_mutex_lock(&eqx->eqx_lock);
 	if (eqx->eqx_finalizing) {
 		D_ERROR("Event queue is in progress of finalizing\n");
-		rc = DER_NONEXIST;
+		rc = -DER_NONEXIST;
 		goto out;
 	}
 
 	daos_event_launch_locked(eqx, evx);
+
+	evx->evx_ops.op_abort = abort_cb;
+	evx->evx_ops.op_comp = comp_cb;
  out:
 	pthread_mutex_unlock(&eqx->eqx_lock);
 	daos_eq_putref(eqx);
@@ -272,7 +345,7 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 }
 
 void
-daos_event_complete(struct daos_event *ev)
+daos_event_complete(struct daos_event *ev, int rc)
 {
 	struct daos_event_private *evx = daos_ev2evx(ev);
 	struct daos_eq_private	  *eqx;
@@ -283,6 +356,10 @@ daos_event_complete(struct daos_event *ev)
 	pthread_mutex_lock(&eqx->eqx_lock);
 	D_ASSERT(!daos_list_empty(&daos_eqx2eq(eqx)->eq_disp));
 	D_ASSERT(evx->evx_status == DAOS_EVS_DISPATCH);
+
+	if (evx->evx_ops.op_comp != NULL)
+		rc = evx->evx_ops.op_comp(&evx->evx_sp, ev, rc);
+	ev->ev_error = rc;
 
 	daos_event_complete_locked(eqx, evx);
 
@@ -298,12 +375,17 @@ daos_eq_create(daos_handle_t *eqh)
 	struct daos_eq		*eq;
 	int			rc = 0;
 
+	/** not thread-safe, but best effort */
+	if (refcount == 0)
+		return -DER_UNINIT;
+
 	eq = daos_eq_alloc();
 	if (eq == NULL)
 		return -DER_NOMEM;
 
 	eqx = daos_eq2eqx(eq);
 	daos_eq_insert(eqx);
+	eqx->eqx_ctx = daos_eq_ctx;
 	daos_eq_handle(eqx, eqh);
 
 	daos_eq_putref(eqx);
@@ -381,10 +463,6 @@ daos_eq_poll(daos_handle_t eqh, int wait_inf, int64_t timeout,
 	struct eq_progress_arg	 epa;
 	int			 rc;
 
-	/** no dtp context setup */
-	if (daos_eq_ctx == NULL)
-		return -DER_INVAL;
-
 	if (n_events == 0)
 		return -DER_INVAL;
 
@@ -399,7 +477,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_inf, int64_t timeout,
 	epa.count	= 0;
 
 	/** pass the timeout to dtp_progress() with a conditional callback */
-	rc = dtp_progress(daos_eq_ctx, timeout, eq_progress_cb, &epa);
+	rc = dtp_progress(epa.eqx->eqx_ctx, timeout, eq_progress_cb, &epa);
 
 	/** drop ref grabbed in daos_eq_lookup() */
 	daos_eq_putref(epa.eqx);
@@ -503,6 +581,7 @@ daos_event_abort_one(struct daos_event_private *evx, int unlinked)
 	 * completion all dispatched events other than completion of all
 	 * children. See daos_parent_event_can_complete for details. */
 	evx->evx_status = DAOS_EVS_ABORT;
+	/** TODO: call abort callback */
 }
 
 static void
@@ -587,6 +666,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 		eq->eq_n_comp--;
 		daos_event_unlink_locked(eqx, evx, 1);
 	}
+	eqx->eqx_ctx = NULL;
 out:
 	pthread_mutex_unlock(&eqx->eqx_lock);
 	if (rc == 0)
@@ -607,6 +687,8 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 	struct daos_event_private	*parent_evx;
 	struct daos_eq_private		*eqx;
 	int				rc = 0;
+
+	D_CASSERT(sizeof(ev->ev_private) >= sizeof(*evx));
 
 	/* Init the event first */
 	memset(ev, 0, sizeof(*ev));
@@ -650,6 +732,9 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 	daos_hhash_link_insert(eqx->eqx_events_hash, &evx->evx_eq_hlink, 0);
 	DAOS_INIT_LIST_HEAD(&evx->evx_link);
 
+	/* inherit transport context from event queue */
+	evx->evx_ctx = eqx->eqx_ctx;
+
 	daos_eq_putref(eqx);
 	return rc;
 }
@@ -687,6 +772,7 @@ daos_event_fini(struct daos_event *ev)
 		daos_list_del_init(&evx->evx_link);
 		evx->evx_status = DAOS_EVS_INIT;
 		evx->evx_parent = NULL;
+		evx->evx_ctx = NULL;
 
 		return 0;
 	}
@@ -727,6 +813,7 @@ daos_event_fini(struct daos_event *ev)
 		}
 	}
 
+	evx->evx_ctx = NULL;
 	daos_hhash_link_delete(eqx->eqx_events_hash, &evx->evx_eq_hlink);
 out:
 	daos_eq_putref(eqx);
@@ -776,4 +863,46 @@ daos_event_abort(struct daos_event *ev)
 
 	daos_eq_putref(eqx);
 	return 0;
+}
+
+int
+daos_event_priv_get(daos_event_t **ev)
+{
+	int rc;
+
+	D_ASSERT(*ev == NULL);
+
+	if (daos_handle_is_inval(eq_thpriv)) {
+		rc = daos_eq_create(&eq_thpriv);
+		if (rc)
+			return rc;
+	}
+
+	if (!ev_thpriv_is_init) {
+		rc = daos_event_init(&ev_thpriv, eq_thpriv, NULL);
+		if (rc)
+			return rc;
+		ev_thpriv_is_init = true;
+	}
+
+	*ev = &ev_thpriv;
+	return 0;
+}
+
+bool
+daos_event_is_priv(daos_event_t *ev)
+{
+	return (ev == &ev_thpriv);
+}
+
+int
+daos_event_priv_wait()
+{
+	int rc;
+
+	rc = daos_eq_poll(eq_thpriv, 1, -1, 1, NULL);
+	if (rc)
+		return rc;
+
+	return ev_thpriv.ev_error;
 }

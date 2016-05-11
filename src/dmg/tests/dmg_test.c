@@ -26,8 +26,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <daos_m.h>
 #include <daos_mgmt.h>
+#include <daos_event.h>
+
 #include <daos/common.h>
 
 static struct option opts[] = {
@@ -88,12 +89,6 @@ main(int argc, char **argv)
 	if (rc)
 		D_ERROR("failed to enable full debug, %d\n", rc);
 
-	rc = dsm_init();
-	if (rc != 0) {
-		D_ERROR("dsm init fails: rc = %d\n", rc);
-		return rc;
-	}
-
 	rc = dmg_init();
 	if (rc != 0) {
 		D_ERROR("dmg init fails: rc = %d\n", rc);
@@ -104,7 +99,6 @@ main(int argc, char **argv)
 		switch (option) {
 		default:
 			dmg_fini();
-			dsm_fini();
 			return -EINVAL;
 		case 'c':
 			rc = test_pool_create();
@@ -117,7 +111,6 @@ main(int argc, char **argv)
 	}
 
 	dmg_fini();
-	dsm_fini();
 
 	return rc;
 }

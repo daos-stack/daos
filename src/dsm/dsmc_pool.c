@@ -48,28 +48,73 @@ flags_are_valid(unsigned int flags)
 	       (mode = DAOS_PC_EX);
 }
 
+static int
+pool_connect_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+{
+	struct pool_conn	*conn = (struct pool_conn *)sp->sp_arg;
+	struct pool_connect_out	*pco;
+
+	if (rc) {
+		D_ERROR("RPC error while connecting to pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	pco = dtp_reply_get(sp->sp_rpc);
+	rc = pco->pco_ret;
+	if (rc) {
+		D_ERROR("failed to connect to pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	sp->sp_hdlp->cookie = (uint64_t)conn;
+	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n",
+		DP_UUID(conn->pc_pool), sp->sp_hdlp->cookie);
+
+out:
+	if (rc)
+		D_FREE_PTR(conn);
+	dtp_req_decref(sp->sp_rpc);
+	return rc;
+}
+
 int
 dsm_pool_connect(const uuid_t uuid, const char *grp,
 		 const daos_rank_list_t *tgts, unsigned int flags,
 		 daos_rank_list_t *failed, daos_handle_t *poh, daos_event_t *ev)
 {
-	dtp_endpoint_t	ep;
-	dtp_rpc_t       *rpc;
-	struct pool_connect_in *pci;
-	struct pool_connect_out *pco;
-	struct pool_conn *conn;
-	int		rc;
+	dtp_endpoint_t		 ep;
+	dtp_rpc_t		*rpc;
+	struct pool_connect_in	*pci;
+	struct pool_conn	*conn;
+	struct daos_op_sp	*sp;
+	int			 rc;
 
 	/* TODO: Implement these. */
 	D_ASSERT(grp == NULL);
 	D_ASSERT(tgts == NULL);
 	D_ASSERT(failed == NULL);
-	D_ASSERT(ev == NULL);
 
 	if (uuid_is_null(uuid) || !flags_are_valid(flags) || poh == NULL)
 		return -DER_INVAL;
 
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc)
+			return rc;
+	}
+
 	D_DEBUG(DF_DSMC, DF_UUID": enter: flags %x\n", DP_UUID(uuid), flags);
+
+	/** allocate and fill in pool connection */
+	D_ALLOC_PTR(conn);
+	if (conn == NULL) {
+		D_ERROR("failed to allocate pool connection\n");
+		return -DER_NOMEM;
+	}
+
+	uuid_copy(conn->pc_pool, uuid);
+	uuid_generate(conn->pc_pool_hdl);
+	conn->pc_capas = flags;
 
 	/*
 	 * Currently, rank 0 runs the pool and the (only) container service.
@@ -79,65 +124,93 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
-	rc = dsm_req_create(dsm_context, ep, DSM_POOL_CONNECT, &rpc);
+	rc = dsm_req_create(daos_ev2ctx(ev), ep, DSM_POOL_CONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
-		return rc;
+		D_GOTO(out_conn, rc);
 	}
 
+	/** fill in request buffer */
 	pci = dtp_req_get(rpc);
-
 	uuid_copy(pci->pci_pool, uuid);
-	uuid_generate(pci->pci_pool_hdl);
+	uuid_copy(pci->pci_pool_hdl, conn->pc_pool_hdl);
 	pci->pci_uid = geteuid();
 	pci->pci_gid = getegid();
 	pci->pci_capas = flags;
-	/* in->pci_pool_map_bulk = NULL;  TODO */
+	/* pci->pci_pool_map_bulk = NULL;  TODO */
 
-	dtp_req_addref(rpc);
+	/** fill in scratchpad associated with the event */
+	sp = daos_ev2sp(ev);
+	dtp_req_addref(rpc); /** for scratchpad */
+	sp->sp_rpc = rpc;
+	sp->sp_hdlp = poh;
+	sp->sp_arg = conn;
 
-	rc = dtp_sync_req(rpc, 0 /* infinite timeout */);
-	if (rc != 0)
+	/**
+	 * mark event as in-flight, must be called before sending the request
+	 * since it can race with the request callback execution
+	 */
+	rc = daos_event_launch(ev, NULL, pool_connect_cp);
+	if (rc)
 		D_GOTO(out_req, rc);
 
-	pco = dtp_reply_get(rpc);
-	if (pco->pco_ret != 0) {
-		D_ERROR("failed to connect to pool: %d\n", pco->pco_ret);
-		D_GOTO(out_req, rc = pco->pco_ret);
-	}
+	/** send the request */
+	rc = daos_rpc_send(rpc, ev);
+	return rc;
 
-	D_ALLOC_PTR(conn);
-	if (conn == NULL) {
-		D_ERROR("failed to allocate pool connection\n");
-		D_GOTO(out_req, rc = -DER_NOMEM);
-	}
-
-	uuid_copy(conn->pc_pool, pci->pci_pool);
-	uuid_copy(conn->pc_pool_hdl, pci->pci_pool_hdl);
-	conn->pc_capas = pci->pci_capas;
-
-	poh->cookie = (uint64_t)conn;
-	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n", DP_UUID(uuid),
-		poh->cookie);
 out_req:
-	dtp_req_decref(rpc);
+	dtp_req_decref(rpc); /* scratchpad */
+	dtp_req_decref(rpc); /* free req */
+out_conn:
+	D_FREE_PTR(conn);
+	return rc;
+}
+
+static int
+pool_disconnect_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+{
+	struct pool_conn		*conn = (struct pool_conn *)sp->sp_arg;
+	struct pool_disconnect_out	*pdo;
+
+	if (rc) {
+		D_ERROR("RPC error while disconnecting from pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	pdo = dtp_reply_get(sp->sp_rpc);
+	rc = pdo->pdo_ret;
+	if (rc) {
+		D_ERROR("failed to disconnect from pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n",
+		DP_UUID(conn->pc_pool), sp->sp_hdl.cookie);
+	D_FREE_PTR(conn);
+	sp->sp_hdl.cookie = 0;
+out:
+	dtp_req_decref(sp->sp_rpc);
 	return rc;
 }
 
 int
 dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
-	struct pool_conn	*conn = (struct pool_conn *)poh.cookie;
-	dtp_endpoint_t		ep;
-	dtp_rpc_t		*rpc;
-	struct pool_disconnect_in *pdi;
-	struct pool_disconnect_out *pdo;
-	int			rc;
-
-	D_ASSERT(ev == NULL);
+	struct pool_conn		*conn = (struct pool_conn *)poh.cookie;
+	dtp_endpoint_t			 ep;
+	dtp_rpc_t			*rpc;
+	struct pool_disconnect_in	*pdi;
+	struct daos_op_sp		*sp;
+	int				 rc;
 
 	if (conn == NULL)
 		return -DER_NO_HDL;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc)
+			return rc;
+	}
 
 	D_DEBUG(DF_DSMC, DF_UUID": enter: hdl "DF_X64"\n",
 		DP_UUID(conn->pc_pool), poh.cookie);
@@ -146,33 +219,34 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
-	rc = dsm_req_create(dsm_context, ep, DSM_POOL_DISCONNECT, &rpc);
+	rc = dsm_req_create(daos_ev2ctx(ev), ep, DSM_POOL_DISCONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		return rc;
 	}
 
+	/** fill in request buffer */
 	pdi = dtp_req_get(rpc);
 	D_ASSERT(pdi != NULL);
 	uuid_copy(pdi->pdi_pool, conn->pc_pool);
 	uuid_copy(pdi->pdi_pool_hdl, conn->pc_pool_hdl);
 
-	dtp_req_addref(rpc);
+	/** fill in scratchpad associated with the event */
+	sp = daos_ev2sp(ev);
+	dtp_req_addref(rpc); /** for scratchpad */
+	sp->sp_rpc = rpc;
+	sp->sp_hdl = poh;
+	sp->sp_arg = conn;
 
-	rc = dtp_sync_req(rpc, 0 /* infinite timeout */);
-	if (rc != 0)
-		D_GOTO(out_req, rc);
-
-	pdo = dtp_reply_get(rpc);
-	if (pdo->pdo_ret != 0) {
-		D_ERROR("failed to disconnect to pool: %d\n", pdo->pdo_ret);
-		D_GOTO(out_req, rc = pdo->pdo_ret);
+	/** mark event as in-flight */
+	rc = daos_event_launch(ev, NULL, pool_disconnect_cp);
+	if (rc) {
+		dtp_req_decref(rpc); /* scratchpad */
+		dtp_req_decref(rpc); /* free req */
+		return rc;
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n",
-		DP_UUID(conn->pc_pool), poh.cookie);
-	D_FREE_PTR(conn);
-out_req:
-	dtp_req_decref(rpc);
+	/** send the request */
+	rc = daos_rpc_send(rpc, ev);
 	return rc;
 }

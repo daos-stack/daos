@@ -8,7 +8,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * Lesser General Public License for more details.
- *
  * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
  * The Government's rights to use, modify, reproduce, release, perform, display,
  * or disclose this software are subject to the terms of the LGPL License as
@@ -18,13 +17,19 @@
  *
  * (C) Copyright 2016 Intel Corporation.
  */
-/*
- * dsmc: Internal Declarations
- */
 
-#ifndef __DSMC_INTERNAL_H__
-#define __DSMC_INTERNAL_H__
+#include <daos/rpc.h>
 
-#include <daos/transport.h>
+int
+daos_rpc_cb(const struct dtp_cb_info *cb_info)
+{
+	daos_event_t    *ev = (daos_event_t *)cb_info->dci_arg;
 
-#endif /* __DSMC_INTERNAL_H__ */
+	if (cb_info->dci_rc == -DER_TIMEDOUT)
+		/** TODO */
+		;
+
+	daos_event_complete(ev, cb_info->dci_rc);
+
+	return 0;
+}

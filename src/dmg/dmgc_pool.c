@@ -25,37 +25,29 @@
 #include "dmgc_internal.h"
 
 static int
-pool_create_cb(const struct dtp_cb_info *cb_info)
+pool_create_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 {
-	dtp_rpc_t			*rpc_req;
-	struct dmg_pool_create_in	*pc_in;
+
+	daos_rank_list_t		*svc = (daos_rank_list_t *)sp->sp_arg;
 	struct dmg_pool_create_out	*pc_out;
-	daos_event_t			*ev;
-	int				rc = 0;
 
-	rpc_req = cb_info->dci_rpc;
-	pc_in = rpc_req->dr_input;
-	pc_out = rpc_req->dr_output;
-	rc = cb_info->dci_rc;
-	ev = (daos_event_t *)cb_info->dci_arg;
-	D_ASSERT(ev != NULL && pc_in != NULL && pc_out != NULL);
-
-	if (rc != 0) {
-		D_ERROR("RPC failed, rc: %d.\n", rc);
-		goto out;
-	}
-	rc = pc_out->pc_rc;
-	if (rc != 0) {
-		D_ERROR("DMG_POOL_CREATE replied failed, rc: %d.\n", rc);
+	if (rc) {
+		D_ERROR("RPC error while disconnecting from pool: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	daos_rank_list_copy(pc_in->pc_svc, pc_out->pc_svc, false);
+	pc_out = dtp_reply_get(sp->sp_rpc);
+	rc = pc_out->pc_rc;
+	if (rc) {
+		D_ERROR("DMG_POOL_CREATE replied failed, rc: %d\n", rc);
+		D_GOTO(out, rc);
+	}
 
+	/** report list of targets running the metadata service */
+	daos_rank_list_copy(svc, pc_out->pc_svc, false);
 out:
-	ev->ev_error = rc;
-	daos_event_complete(ev);
-	return 0;
+	dtp_req_decref(sp->sp_rpc);
+	return rc;
 }
 
 int
@@ -63,13 +55,12 @@ dmg_pool_create(unsigned int mode, const char *grp,
 		const daos_rank_list_t *tgts, const char *dev, daos_size_t size,
 		daos_rank_list_t *svc, uuid_t uuid, daos_event_t *ev)
 {
-	dtp_endpoint_t			svr_ep;
+	dtp_endpoint_t			 svr_ep;
 	dtp_rpc_t			*rpc_req = NULL;
-	dtp_opcode_t			opc;
+	dtp_opcode_t			 opc;
 	struct dmg_pool_create_in	*pc_in;
-	struct dmg_pool_create_out	*pc_out;
-	bool				req_sent = false;
-	int				rc = 0;
+	struct daos_op_sp		*sp;
+	int				 rc = 0;
 
 	if (grp == NULL || strlen(grp) == 0) {
 		D_ERROR("Invalid parameter of grp (NULL or empty string).\n");
@@ -89,12 +80,18 @@ dmg_pool_create(unsigned int mode, const char *grp,
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc)
+			return rc;
+	}
+
 	uuid_generate(uuid);
 
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(DMG_POOL_CREATE, DAOS_DMG_MODULE, 1);
-	rc = dtp_req_create(dsm_context, svr_ep, opc, &rpc_req);
+	rc = dtp_req_create(daos_ev2ctx(ev), svr_ep, opc, &rpc_req);
 	if (rc != 0) {
 		D_ERROR("dtp_req_create(DMG_POOL_CREATE) failed, rc: %d.\n",
 			rc);
@@ -103,9 +100,9 @@ dmg_pool_create(unsigned int mode, const char *grp,
 
 	D_ASSERT(rpc_req != NULL);
 	pc_in = dtp_req_get(rpc_req);
-	pc_out = dtp_reply_get(rpc_req);
-	D_ASSERT(pc_in != NULL && pc_out != NULL);
+	D_ASSERT(pc_in != NULL);
 
+	/** fill in request buffer */
 	uuid_copy(pc_in->pc_uuid, uuid);
 	pc_in->pc_mode = mode;
 	pc_in->pc_grp = strdup(grp);
@@ -130,48 +127,22 @@ dmg_pool_create(unsigned int mode, const char *grp,
 		D_GOTO(out_err_tgts_dupped, rc);
 	}
 
-	if (ev == NULL) {
-		dtp_req_addref(rpc_req);
+	/** fill in scratchpad associated with the event */
+	sp = daos_ev2sp(ev);
+	dtp_req_addref(rpc_req); /** for scratchpad */
+	sp->sp_rpc = rpc_req;
+	sp->sp_arg = svc;
 
-		rc = dtp_sync_req(rpc_req, 0);
-		req_sent = true;
-		if (rc != 0) {
-			D_ERROR("dtp_sync_req failed, rc: %d.\n", rc);
-			D_GOTO(out_err_svc_dupped, rc);
-		}
+	rc = daos_event_launch(ev, NULL, pool_create_cp);
+	if (rc)
+		D_GOTO(out_err_svc_dupped, rc);
 
-		rc = pc_out->pc_rc;
-		if (rc == 0) {
-			daos_rank_list_copy(svc, pc_out->pc_svc, false);
-			dtp_req_decref(rpc_req);
-		} else {
-			D_ERROR("DMG_POOL_CREATE replied failed, rc: %d.\n",
-				rc);
-		}
-		/* the dtp_sync_req succeed, no need to do error handling */
-		D_GOTO(out, rc);
-	} else {
-		rc = daos_event_launch(ev);
-		if (rc != 0) {
-			D_ERROR("daos_event_launch failed, rc: %d.\n", rc);
-			D_GOTO(out_err_svc_dupped, rc);
-		}
-
-		rc = dtp_req_send(rpc_req, pool_create_cb, ev);
-		req_sent = true;
-		if (rc != 0) {
-			D_ERROR("dtp_req_send failed, rc: %d.\n", rc);
-			ev->ev_error = rc;
-			daos_event_complete(ev);
-			D_GOTO(out_err_svc_dupped, rc = 0);
-		} else {
-			/* the dtp_req_send succeed, no need to do
-			 * error handling */
-			D_GOTO(out, rc);
-		}
-	}
+	/** send the request */
+	rc = daos_rpc_send(rpc_req, ev);
+	D_GOTO(out, rc);
 
 out_err_svc_dupped:
+	dtp_req_decref(rpc_req);
 	daos_rank_list_free(pc_in->pc_svc);
 out_err_tgts_dupped:
 	daos_rank_list_free(pc_in->pc_tgts);
@@ -180,8 +151,7 @@ out_err_tgt_dev_dupped:
 out_err_grp_dupped:
 	D_FREE(pc_in->pc_grp, strlen(grp));
 out_err_req_created:
-	if (!req_sent)
-		dtp_req_decref(rpc_req);
+	dtp_req_decref(rpc_req);
 out:
 	return rc;
 }

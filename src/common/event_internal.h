@@ -54,7 +54,7 @@
 #include <daos/list.h>
 #include <daos/hash.h>
 
-struct daos_eq {
+typedef struct daos_eq {
 	/* After event is completed, it will be moved to the eq_comp list */
 	daos_list_t		eq_comp;
 	int			eq_n_comp;
@@ -67,6 +67,11 @@ struct daos_eq {
 		uint64_t	space[20];
 	}			eq_private;
 
+} daos_eq_t;
+
+struct daos_event_ops {
+	daos_event_abort_cb_t	op_abort;
+	daos_event_comp_cb_t	op_comp;
 };
 
 struct daos_event_private {
@@ -79,10 +84,12 @@ struct daos_event_private {
 	unsigned int		evx_nchild_if;
 	unsigned int		evx_nchild_comp;
 
-	struct daos_event_ops	evx_ops;
 	daos_ev_status_t	evx_status;
 	struct daos_event_private *evx_parent;
-	void			*evx_arg;
+
+	dtp_context_t		*evx_ctx;
+	struct daos_event_ops	 evx_ops;
+	struct daos_op_sp	 evx_sp;
 };
 
 static inline struct daos_event_private *
@@ -107,6 +114,9 @@ struct daos_eq_private {
 
 	/* All of its events are linked here */
 	struct daos_hhash	*eqx_events_hash;
+
+	/* DTP context associated with this eq */
+	dtp_context_t		 eqx_ctx;
 };
 
 static inline struct daos_eq_private *
@@ -120,19 +130,4 @@ daos_eqx2eq(struct daos_eq_private *eqx)
 {
 	return container_of(eqx, struct daos_eq, eq_private);
 }
-
-int daos_event_launch(struct daos_event *ev);
-void daos_event_complete(struct daos_event *ev);
-
-struct daos_data {
-	struct daos_hhash	*daos_hhash;
-	int			daos_info_fd;
-	int			daos_pid;
-	int			daos_info_init:1;
-	int			daos_lock_init:1;
-	pthread_mutex_t		daos_lock;
-	daos_list_t		*daos_fd_hash;
-};
-
-extern struct daos_data		daos_data;
 #endif /* __EVENT_INTERNAL_H__ */

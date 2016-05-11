@@ -116,8 +116,6 @@ proc_pool_map(dtp_proc_t proc, void *data)
 }
 
 int
-dsm_client_async_rpc(dtp_rpc_t *rpc_req, struct daos_event *event);
-int
 dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
 	       dtp_opcode_t opc, dtp_rpc_t **req);
 

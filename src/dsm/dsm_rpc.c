@@ -87,36 +87,6 @@ dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
 	return dtp_req_create(dtp_ctx, tgt_ep, opcode, req);
 }
 
-static int
-dsm_client_async_cb(const struct dtp_cb_info *cb_info)
-{
-	struct daos_event *event;
-
-	event = (struct daos_event *)cb_info->dci_arg;
-
-	event->ev_error = cb_info->dci_rc;
-	daos_event_complete(event);
-	return 0;
-}
-
-int
-dsm_client_async_rpc(dtp_rpc_t *rpc_req, struct daos_event *event)
-{
-	int			rc = 0;
-
-	rc = daos_event_launch(event);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_req_send(rpc_req, dsm_client_async_cb, event);
-	if (rc != 0) {
-		daos_event_abort(event);
-		return rc;
-	}
-
-	return rc;
-}
-
 struct daos_rpc dsm_rpcs[] = {
 	{
 		.dr_name	= "DSM_POOL_CONNECT",
@@ -140,4 +110,3 @@ struct daos_rpc dsm_rpcs[] = {
 		.dr_opc		= 0
 	}
 };
-
