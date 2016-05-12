@@ -27,30 +27,8 @@
 #include <math.h>
 #include <daos_errno.h>
 #include <daos/common.h>
-#include "vos_chash_table.h"
 #include "vos_internal.h"
-
-/*
- * Jump Consistent Hash from
- * A Fast, Minimal Memory, Consistent Hash Algorithm
- * http://arxiv.org/abs/1406.2294
- * takes as input a 64-bit unsigned int key and returns a
- * bucket number
-*/
-static int32_t
-vos_chash_generate_jch(uint64_t key, uint32_t num_buckets)
-{
-	int64_t j = 0;
-	int64_t b = 1;
-
-	while (j < num_buckets) {
-		b  = j;
-		key = key * 2862933555777941757ULL + 1;
-		j = (b + 1) * ((double)(1LL << 31)/(double)((key >> 33) + 1));
-	}
-
-	return b;
-}
+#include "vos_chash_table.h"
 
 /*
  *
@@ -117,7 +95,7 @@ vos_chash_resize_locked(PMEMobjpool *ph,
 					D_RW(item_current);
 				hash = vos_generate_crc64(ckey,
 							  c_iter->key_size);
-				new_bucket_id = vos_chash_generate_jch(hash,
+				new_bucket_id = vos_generate_jch(hash,
 							resize_buckets);
 				item_current = D_RW(item_current)->next;
 				D_RW(item_entry)->next =
@@ -216,7 +194,7 @@ vos_chash_insert(PMEMobjpool *ph,
 
 	pmemobj_rwlock_rdlock(ph, &D_RW(chtable)->b_rw_lock);
 	hash_value  = vos_generate_crc64(key, key_size);
-	bucket_id = vos_chash_generate_jch(hash_value,
+	bucket_id = vos_generate_jch(hash_value,
 					D_RO(chtable)->num_buckets);
 	buckets = (struct vos_chash_buckets *)D_RW(D_RW(chtable)->buckets);
 	bucket_range = sizeof(struct vos_chash_buckets) +
@@ -248,6 +226,7 @@ vos_chash_insert(PMEMobjpool *ph,
 		D_RW(newpair)->next = buckets[bucket_id].item;
 		buckets[bucket_id].item = newpair;
 		buckets[bucket_id].items_in_bucket++;
+
 		/* Determine if Resize Needed */
 		if (D_RO(chtable)->resize &&
 		   (D_RO(chtable)->num_buckets < D_RO(chtable)->max_buckets)) {
@@ -298,8 +277,8 @@ vos_chash_lookup(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable,
 	hash_value = vos_generate_crc64(key, key_size);
 	D_DEBUG(DF_VOS3, "%"PRIu64"%"PRIu64" %"PRIu64"\n",
 			*(uint64_t *)key, key_size, hash_value);
-	bucket_id = vos_chash_generate_jch(hash_value,
-					   D_RO(chtable)->num_buckets);
+	bucket_id = vos_generate_jch(hash_value,
+					D_RO(chtable)->num_buckets);
 	buckets = (struct vos_chash_buckets *)D_RW(D_RW(chtable)->buckets);
 	pmemobj_rwlock_rdlock(ph, &D_RW(chtable)->b_rw_lock);
 	pmemobj_rwlock_rdlock(ph, &buckets[bucket_id].rw_lock);
@@ -339,7 +318,7 @@ vos_chash_remove(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable,
 
 	hash_value = vos_generate_crc64(key, key_size);
 	pmemobj_rwlock_rdlock(ph, &D_RW(chtable)->b_rw_lock);
-	bucket_id = vos_chash_generate_jch(hash_value,
+	bucket_id = vos_generate_jch(hash_value,
 					   D_RO(chtable)->num_buckets);
 	buckets = (struct vos_chash_buckets *)D_RO(D_RO(chtable)->buckets);
 	bucket_range = sizeof(struct vos_chash_buckets) +

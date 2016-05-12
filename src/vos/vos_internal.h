@@ -30,9 +30,8 @@
 #include <daos/hash.h>
 #include <daos/btree.h>
 #include <daos_srv/daos_server.h>
-
-#include "vos_layout.h"
-#include "vos_obj.h"
+#include <vos_layout.h>
+#include <vos_obj.h>
 
 struct vos_tls {
 	daos_handle_t	vmi_poh;
@@ -78,7 +77,7 @@ struct vc_hdl {
 	/* Unique UID of VOS container */
 	uuid_t			vc_id;
 	/* DAOS handle for object index btree */
-	daos_handle_t		vc_btr_oid;
+	daos_handle_t		vc_btr_hdl;
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
@@ -91,6 +90,7 @@ struct vc_hdl {
 	struct vos_container	*vc_co;
 };
 
+
 /**
  * Global Handle Hash
  * Across all VOS handles
@@ -98,12 +98,70 @@ struct vc_hdl {
 struct daos_hhash	*daos_vos_hhash;
 
 /**
- * Create a handle hash
- * Created once across all threads all
- * handles
+ * Temporary FIX object cache
+ * This global object cache is only for
+ * testing.
+ * TODO: make this/ thread once there is
  */
-int
-vos_create_hhash(void);
+struct vos_obj_cache   *object_cache;
+
+
+/**
+ * Doubly linked list constituting the queue
+ */
+struct vlru_list {
+	/* Provided cache size */
+	uint32_t		vll_cache_size;
+	/* Entries filled in cache */
+	uint32_t		vll_cache_filled;
+	/* Unique items held (no refcnts) */
+	uint32_t		vll_refs_held;
+	/* Head of LRU list */
+	daos_list_t		vll_list_head;
+};
+
+/*
+ * LRU Hash table
+ */
+struct vlru_htable {
+	/* Number of Buckets */
+	uint64_t		vlh_nbuckets;
+	/* Buckets array */
+	daos_list_t		*vlh_buckets;
+};
+
+/**
+ * VOS object cache
+ */
+struct vos_obj_cache {
+	/* Object cache list */
+	struct vlru_list	voc_llist_ref;
+	/* Object cache table */
+	struct vlru_htable	voc_lhtable_ref;
+};
+
+/**
+ * Reference of a cached object.
+ * NB: DRAM data structure.
+ */
+struct vos_obj_ref {
+	/** Key for searching, container uuid */
+	uuid_t				 or_co_uuid;
+	/** Key for searching, object ID within a container */
+	daos_unit_oid_t			 or_oid;
+	/** btree open handle of the object */
+	daos_handle_t			 or_toh;
+	/** btree iterator handle */
+	daos_handle_t			 or_ih;
+	/** lru link for object reference **/
+	daos_list_t			 or_llink;
+	/** hash link for object reference **/
+	daos_list_t			 or_hlink;
+	/** ref count for the LRU link **/
+	int32_t				 or_lrefcnt;
+	/** Persistent memory ID for the object */
+	struct vos_obj			*or_obj;
+};
 
 /**
  * Lookup VOS pool handle
@@ -175,6 +233,18 @@ vos_co_putref_handle(struct vc_hdl *co_hdl);
 */
 uint64_t
 vos_generate_crc64(void *key, uint64_t size);
+
+/**
+ * Generate Jump Consistent Hash for a key
+ *
+ * \param key		[IN]	64-bit hash of a key
+ * \param num_buckets	[IN]	number of buckets
+ *
+ * \return			Bucket id
+ */
+int32_t
+vos_generate_jch(uint64_t key, uint32_t num_buckets);
+
 
 PMEMobjpool *vos_coh2pop(daos_handle_t coh);
 

@@ -34,6 +34,10 @@
 
 #define OT_BTREE_ORDER 20
 #define OT_BTREE_CLASS 1008
+#define LRU_HASH_MAX_BUCKETS 1000
+#define LRU_CACHE_MAX_SIZE 10000
+
+
 
 /**
  * VOS object index
@@ -50,19 +54,7 @@ struct vos_object_index {
  * Reference of a cached object.
  * NB: DRAM data structure.
  */
-struct vos_obj_ref {
-	/** TODO: link it to object cache lru and hash table */
-	/** Key for searching, container uuid */
-	uuid_t				 or_co_uuid;
-	/** Key for searching, object ID within a container */
-	daos_unit_oid_t			 or_oid;
-	/** btree open handle of the object */
-	daos_handle_t			 or_toh;
-	/** btree iterator handle */
-	daos_handle_t			 or_ih;
-	/** Persistent memory ID for the object */
-	struct vos_obj			*or_obj;
-};
+struct vos_obj_ref;
 
 /**
  * percpu object cache. It can include a hash table and a LRU for
@@ -98,10 +90,12 @@ vos_obj_ref_release(struct vos_obj_cache *occ,
 /**
  * Create an object cache.
  *
- * \param occ_p	[OUT]	Newly created cache.
+ * \param cache_size	[IN]	Cache size
+ * \param occ_p		[OUT]	Newly created cache.
  */
 int
-vos_obj_cache_create(struct vos_obj_cache **occ_p);
+vos_obj_cache_create(int32_t cache_size,
+		     struct vos_obj_cache **occ_p);
 
 /**
  * Destroy an object cache, and release all cached object references.

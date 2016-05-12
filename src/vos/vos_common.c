@@ -67,6 +67,17 @@ vos_init(void)
 			else
 				is_init = 1;
 		}
+		/**
+		 * Temporary
+		 * TODO: Create object cache from
+		 * TLS from pool_create
+		 */
+		if (!object_cache) {
+			rc = vos_obj_cache_create(LRU_CACHE_MAX_SIZE,
+						  &object_cache);
+			if (rc)
+				D_ERROR("Error in createing object cache\n");
+		}
 exit:
 		pthread_mutex_unlock(&mutex);
 
@@ -85,7 +96,15 @@ vos_fini(void)
 		daos_hhash_destroy(daos_vos_hhash);
 		daos_vos_hhash = NULL;
 	} else
-		D_ERROR("Nothing to destroy!\n");
+		D_ERROR("No HHASH to destroy!\n");
+	/**
+	 * Temporary FIX
+	 * TODO: Destroy object cache from pool_destroy
+	 * for object cachec from TLS
+	 */
+	if (object_cache)
+		vos_obj_cache_destroy(object_cache);
+
 
 	pthread_mutex_unlock(&mutex);
 }
@@ -198,6 +217,30 @@ struct dss_module vos_module =  {
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,
 };
+
+/**
+ * Jump Consistent Hash from
+ * A Fast, Minimal Memory, Consistent Hash Algorithm
+ * http://arxiv.org/abs/1406.2294
+ * takes as input a 64-bit unsigned int key and returns a
+ * bucket number
+*/
+int32_t
+vos_generate_jch(uint64_t key, uint32_t num_buckets)
+{
+	int64_t j = 0;
+	int64_t b = 1;
+
+	while (j < num_buckets) {
+		b  = j;
+		key = key * 2862933555777941757ULL + 1;
+		j = (b + 1) * ((double)(1LL << 31)/(double)((key >> 33) + 1));
+	}
+
+	return b;
+}
+
+
 
 /*
  * Simple CRC64 hash with intrinsics

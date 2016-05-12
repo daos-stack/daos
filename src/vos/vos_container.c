@@ -214,7 +214,7 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 	/* Cache this btr object ID in container handle */
 	ret = dbtree_open_inplace(&co_hdl->vc_obj_table->obtable,
 				 &co_hdl->vc_phdl->vp_uma,
-				 &co_hdl->vc_btr_oid);
+				 &co_hdl->vc_btr_hdl);
 	if (ret) {
 		D_ERROR("No Object handle, Tree open failed\n");
 		ret = -DER_NONEXIST;
@@ -256,7 +256,7 @@ vos_co_close(daos_handle_t coh, daos_event_t *ev)
 		return -DER_INVAL;
 	}
 
-	dbtree_close(co_hdl->vc_btr_oid);
+	dbtree_close(co_hdl->vc_btr_hdl);
 	vos_pool_putref_handle(co_hdl->vc_phdl);
 	daos_hhash_link_delete(daos_vos_hhash,
 			       &co_hdl->vc_hlink);

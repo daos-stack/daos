@@ -163,7 +163,7 @@ vos_oi_lookup(daos_handle_t coh, daos_unit_oid_t oid,
 	val_iov.iov_buf = &s_buf;
 	val_iov.iov_len = sizeof(s_buf);
 
-	rc = dbtree_lookup(co_hdl->vc_btr_oid, &key_iov, &val_iov);
+	rc = dbtree_lookup(co_hdl->vc_btr_hdl, &key_iov, &val_iov);
 	if (!rc) {
 		D_DEBUG(DF_VOS1, "Object found in obj_index");
 		*obj = s_buf.ptr;
@@ -174,7 +174,7 @@ vos_oi_lookup(daos_handle_t coh, daos_unit_oid_t oid,
 		 * Currently we wrap the vos_obj*  in a struct to obtain
 		 * PMEM address
 		 */
-		rc = dbtree_update(co_hdl->vc_btr_oid, &key_iov, &val_iov);
+		rc = dbtree_update(co_hdl->vc_btr_hdl, &key_iov, &val_iov);
 		if (rc)
 			D_ERROR("Failed to update Key for Object index\n");
 		*obj = s_buf.ptr;

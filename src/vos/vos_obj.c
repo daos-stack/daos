@@ -390,48 +390,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	return rc;
 }
 
-#define VOS_OBJ_DUMMY	1
-#if VOS_OBJ_DUMMY /* XXX: remove this chunk when we have object cache */
-
-static struct vos_obj	  obj_dummy;
-
-static struct vos_obj_ref obj_ref_dummy = {
-	.or_toh		= DAOS_HDL_INVAL,
-	.or_obj		= &obj_dummy,
-};
-
-struct vos_obj_cache *
-vos_obj_cache_current(void)
-{
-	return NULL;
-}
-
-int
-vos_obj_ref_hold(struct vos_obj_cache *occ, daos_handle_t coh,
-		 daos_unit_oid_t oid, struct vos_obj_ref **oref_p)
-{
-	obj_ref_dummy.or_oid = oid;
-	obj_ref_dummy.or_toh = DAOS_HDL_INVAL;
-
-	*oref_p = &obj_ref_dummy;
-	return 0;
-}
-
-void
-vos_obj_ref_release(struct vos_obj_cache *occ, struct vos_obj_ref *oref)
-{
-	D_ASSERT(oref == &obj_ref_dummy);
-
-	if (!daos_handle_is_inval(oref->or_toh)) {
-		/* NB: should not close tree in real implementation */
-		dbtree_close(oref->or_toh);
-		oref->or_toh = DAOS_HDL_INVAL;
-	}
-}
-
 PMEMobjpool *vos_coh2pop(daos_handle_t coh)
 {
 	return NULL;
 }
 
-#endif	/* XXX: remove this when we have object cache */
