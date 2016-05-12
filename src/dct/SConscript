@@ -2,12 +2,13 @@
 
 Import('env')
 
+env.AppendUnique(LIBPATH=[Dir('.')])
+denv = env.Clone()
+
 # generate server module
-srv = env.SharedLibrary('daos_ct_srv', Glob('*.c'))
-env.Install('$PREFIX/lib/daos_srv', srv)
+srv = denv.SharedLibrary('daos_ct_srv', Glob('*.c'))
+denv.Install('$PREFIX/lib/daos_srv', srv)
 
 # generate client library
-client = env.SharedLibrary('daos_ct', Glob('*.c'))
-env.Install('$PREFIX/lib/', client)
-
-env.AppendUnique(LIBPATH=[Dir('.')])
+client = denv.SharedLibrary('daos_ct', Glob('*.c'))
+denv.Install('$PREFIX/lib/', client)

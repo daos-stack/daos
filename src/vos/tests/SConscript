@@ -1,13 +1,13 @@
 #!python
 
-Import('env')
+Import('denv')
 
 libraries = ['libvos', 'libuuid', 'libpthread', 'libdaos_common',
 	     'daos_transport', 'libpmemobj']
 
-env.Program('vos_pool_tests','vos_pool_tests.c', LIBS=libraries)
-env.Program('vos_container_tests','vos_container_tests.c', LIBS=libraries)
-env.Program('vos_chash_table_test','vos_chashtable_test.c', CCFLAGS='-fopenmp',
-	    LIBS=[libraries, 'libgomp'])
-env.Program('vos_ctl','vos_ctl.c', LIBS=libraries)
-env.Program('vos_oi_tests','vos_oi_tests.c', LIBS=libraries)
+denv.Program('vos_pool_tests','vos_pool_tests.c', LIBS=libraries)
+denv.Program('vos_container_tests','vos_container_tests.c', LIBS=libraries)
+denv.Program('vos_chash_table_test','vos_chashtable_test.c', CCFLAGS='-fopenmp',
+	     LIBS =[libraries, 'libgomp'])
+denv.Program('vos_ctl','vos_ctl.c', LIBS=libraries)
+denv.Program('vos_oi_tests','vos_oi_tests.c', LIBS=libraries)

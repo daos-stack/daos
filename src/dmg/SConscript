@@ -2,18 +2,19 @@
 
 Import('env')
 
-# Generate storage management module
+env.AppendUnique(LIBPATH=[Dir('.')])
+
+denv = env.Clone()
 
 # dmgs: DMG Server Module
-mgmt_srv = env.SharedLibrary('daos_mgmt_srv',
-			     ['dmgs_module.c', 'dmg_rpc.c', 'dmgs_pool.c'])
-env.Install('$PREFIX/lib/daos_srv', mgmt_srv)
+mgmt_srv = denv.SharedLibrary('daos_mgmt_srv',
+			      ['dmg_rpc.c', 'dmgs_module.c', 'dmgs_pool.c'])
+denv.Install('$PREFIX/lib/daos_srv', mgmt_srv)
 
 # dmgc: DMG Client Library
-mgmt = env.SharedLibrary('daos_mgmt',
-			 ['dmgc_module.c', 'dmg_rpc.c', 'dmgc_pool.c'])
-env.Install('$PREFIX/lib/', mgmt)
+mgmt = denv.SharedLibrary('daos_mgmt',
+			  ['dmg_rpc.c', 'dmgc_module.c', 'dmgc_pool.c'])
+denv.Install('$PREFIX/lib/', mgmt)
 
-env.AppendUnique(LIBPATH=[Dir('.')])
 # tests
-SConscript('tests/SConscript', exports = 'env')
+SConscript('tests/SConscript', exports = 'denv')

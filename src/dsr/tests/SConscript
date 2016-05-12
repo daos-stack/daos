@@ -1,6 +1,8 @@
 #!python
 
-Import('env')
+Import('denv')
 
-env.Program('pseudo_cluster', 'pseudo_cluster.c', LIBS=['libdaos_sr', 'libdaos_common', 'daos_transport'])
-env.Program('other', 'other.c',  LIBS=['libdaos_sr', 'libdaos_common', 'daos_transport'])
+libraries = ['libdaos_sr', 'libdaos_common', 'daos_transport']
+
+denv.Program('pseudo_cluster', 'pseudo_cluster.c', LIBS = libraries)
+denv.Program('other', 'other.c',  LIBS = libraries)

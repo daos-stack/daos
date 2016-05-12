@@ -2,10 +2,7 @@
 
 Import('env', 'PREREQS')
 
-common = env.SharedLibrary('libdaos_common', Glob('*.c'))
 env.AppendUnique(LIBPATH=[Dir('.')])
-SConscript('tests/SConscript', exports='env')
-env.Install('$PREFIX/lib/', common)
 
 if PREREQS is None:
         config = Configure(env)
@@ -13,4 +10,13 @@ if PREREQS is None:
                 env.Append(LIBS=['pmemobj'])
         config.Finish()
 else:
-        PREREQS.require('nvml')
+        PREREQS.require(env, 'nvml')
+
+denv = env.Clone()
+
+src = ['btree.c', 'debug.c', 'hash.c', 'mem.c', 'misc.c', 'sort.c']
+common = denv.SharedLibrary('libdaos_common', src)
+denv.Install('$PREFIX/lib/', common)
+
+denv.Append(CPPPATH = ['#/src/common'])
+SConscript('tests/SConscript', exports='denv')

@@ -2,14 +2,16 @@
 
 Import('env')
 
-# Compiler options
-env.Append(CPPPATH = ['#/src/dsr/include'])
 env.AppendUnique(LIBPATH=[Dir('.')])
 
+denv = env.Clone()
+
+# Compiler options
+denv.Append(CPPPATH = ['#/src/dsr/include'])
+
 # Generate SR client-side library
-client = env.SharedLibrary('daos_sr', Glob('placement/*.c'),
-			   LIBS='libdaos_common')
-env.Install('$PREFIX/lib', client)
+client = denv.SharedLibrary('daos_sr', Glob('placement/*.c'))
+denv.Install('$PREFIX/lib', client)
 
 # Build tests
-SConscript('tests/SConscript', exports='env')
+SConscript('tests/SConscript', exports='denv')

@@ -1,7 +1,5 @@
 #!python
 
-Import('env')
+Import('denv')
 
-env.Append(CPPPATH = ['#/src/common'])
-env.Program('eq_test', Glob('eq_tests.c'), LIBS=['libdaos_common', 'pthread', 'daos_transport'])
-env.Program('btree', Glob('btree.c'), LIBS=['libdaos_common', 'daos_transport'])
+denv.Program('btree', Glob('btree.c'), LIBS=['daos_common'])

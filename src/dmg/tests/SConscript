@@ -1,8 +1,11 @@
 #!python
 
-Import('env')
+Import('denv')
 
-env.Append(CPPPATH = ['#/src/dmg', '#/src/server'])
+denv.Append(CPPPATH = ['#/src/dmg', '#/src/server'])
 
-env.Program('dmg_test', Glob('dmg_test.c'),
-	    LIBS=['daos_common', 'daos_m', 'daos_mgmt', 'pthread', 'daos_transport', 'uuid'])
+libraries = ['daos_common', 'daos_mgmt', 'daos_transport', 'daos_event']
+libraries += ['pthread', 'uuid']
+libraries += ['daos_m']
+
+denv.Program('dmg_test', 'dmg_test.c', LIBS = libraries)

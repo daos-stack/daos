@@ -35,7 +35,7 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 #include <daos/transport.h>
-#include "daos_eq_internal.h"
+#include "event_internal.h"
 
 static struct daos_hhash *daos_eq_hhash;
 

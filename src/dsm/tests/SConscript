@@ -1,11 +1,14 @@
 #!python
 
-Import('env')
+Import('denv')
 
-env.Append(CPPPATH = ['#/src/dsm', '#/src/server'])
+denv.Append(CPPPATH = ['#/src/dsm', '#/src/server'])
 
-env.Program('createpool', 'createpool.c',
-	    LIBS = ['daos_m_srv', 'daos_common', 'daos_transport', 'vos',
-		    'pmemobj', 'uuid'])
+libraries = ['daos_common', 'daos_transport', 'daos_event']
+libraries += ['uuid']
 
-env.Program('dsm_test', Glob('dsm_test.c'), LIBS=['daos_common', 'daos_m', 'pthread', 'daos_transport', 'uuid'])
+denv.Program('createpool', 'createpool.c',
+	     LIBS = [libraries, 'daos_m_srv', 'vos', 'pmemobj'])
+
+denv.Program('dsm_test', 'dsm_test.c',
+	     LIBS = [libraries, 'daos_m', 'pthread'])

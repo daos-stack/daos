@@ -1,0 +1,12 @@
+#!python
+
+Import('env')
+
+env.AppendUnique(LIBPATH=[Dir('.')])
+denv = env.Clone()
+
+event = denv.SharedLibrary('libdaos_event', 'event.c')
+denv.Install('$PREFIX/lib/', event)
+
+denv.Append(CPPPATH = ['#/src/common'])
+SConscript('tests/SConscript.event', exports='denv')

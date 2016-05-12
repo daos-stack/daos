@@ -2,18 +2,19 @@
 
 Import('env')
 
+env.AppendUnique(LIBPATH=[Dir('.')])
+denv = env.Clone()
+
 # dsms: DSM Server Module
-dsms = env.SharedLibrary('daos_m_srv',
-			 ['dsms_module.c', 'dsm_rpc.c', 'dsms_storage.c',
-			  'dsms_pool.c', 'dsms_container.c', 'dsms_target.c'])
-env.Install('$PREFIX/lib/daos_srv', dsms)
+dsms = denv.SharedLibrary('daos_m_srv',
+			  ['dsm_rpc.c', 'dsms_module.c', 'dsms_storage.c',
+			   'dsms_pool.c', 'dsms_container.c', 'dsms_target.c'])
+denv.Install('$PREFIX/lib/daos_srv', dsms)
 
 # dsmc: DSM Client Library
-dsmc = env.SharedLibrary('daos_m',
-			 ['dsm_rpc.c', 'dsmc_pool.c', 'dsmc_module.c'])
-env.Install('$PREFIX/lib/', dsmc)
-
-env.AppendUnique(LIBPATH=[Dir('.')])
+dsmc = denv.SharedLibrary('daos_m',
+			  ['dsm_rpc.c', 'dsmc_pool.c', 'dsmc_module.c'])
+denv.Install('$PREFIX/lib/', dsmc)
 
 # tests
-SConscript('tests/SConscript', exports = 'env')
+SConscript('tests/SConscript', exports = 'denv')

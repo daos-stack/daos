@@ -8,6 +8,7 @@ env.Append(CPPPATH = ['#/src/include'])
 # Builders
 SConscript('common/SConscript', exports=['env', 'PREREQS'])
 SConscript('dtp/SConscript', exports=['env', 'PREREQS'])
+SConscript('common/SConscript.event', exports='env')
 SConscript('server/SConscript', exports='env')
 SConscript('vos/SConscript', exports=['env', 'PREREQS'])
 SConscript('dsm/SConscript', exports='env')

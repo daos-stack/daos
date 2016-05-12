@@ -2,13 +2,15 @@
 
 Import('env')
 
-libraries = ['daos_common', 'dl', 'daos_transport', 'pthread', 'cgroup', 'numa']
-libraries += ['uuid']
+denv = env.Clone()
+
+libraries = ['daos_common', 'daos_transport']
+libraries += ['dl', 'uuid', 'pthread', 'cgroup', 'numa', 'mcl']
 
 # the "-rdynamic" is to allow other dll to refer symbol defined in daos_server
 # such as dss_tls_key etc.
-env.Append(LINKFLAGS = ['-rdynamic'])
+denv.Append(LINKFLAGS = ['-rdynamic'])
 
 # Generate server program
-server = env.Program('daos_server', Glob('*.c'), LIBS=libraries)
-env.Install('$PREFIX/bin', server)
+server = denv.Program('daos_server', Glob('*.c'), LIBS=libraries)
+denv.Install('$PREFIX/bin', server)

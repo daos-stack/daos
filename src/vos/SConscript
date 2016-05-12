@@ -2,6 +2,8 @@
 
 Import('env', 'PREREQS')
 
+env.AppendUnique(LIBPATH=[Dir('.')])
+
 if PREREQS is None:
     # This isn't ideal as this is already checked for in / and /common
     # so should probably be a variable.
@@ -12,15 +14,17 @@ if PREREQS is None:
 else:
     PREREQS.require(env, 'nvml')
 
-# Compiler options
-env.Append(CPPPATH = ['#/src/vos/'])
-env.Append(CFLAGS='-msse4.2')
-env.AppendUnique(LIBPATH=[Dir('.')])
-voslib = env.Library('libvos', Glob('*.c'))
-env.Install('$PREFIX/lib/', voslib)
+denv = env.Clone()
 
-vos_sharelib = env.SharedLibrary('vos', Glob('*.c'));
-env.Install('$PREFIX/lib/daos_srv/', vos_sharelib)
+# Compiler options
+denv.Append(CPPPATH = ['#/src/vos/'])
+denv.Append(CFLAGS='-msse4.2')
+
+voslib = denv.Library('libvos', Glob('*.c'))
+denv.Install('$PREFIX/lib/', voslib)
+
+vos_sharelib = denv.SharedLibrary('vos', Glob('*.c'));
+denv.Install('$PREFIX/lib/daos_srv/', vos_sharelib)
 
 # Tests
-SConscript('tests/SConscript', exports='env')
+SConscript('tests/SConscript', exports='denv')
