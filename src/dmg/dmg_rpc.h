@@ -49,10 +49,10 @@ struct dmg_pool_create_in {
 	uuid_t			pc_uuid;
 	dtp_string_t		pc_grp;
 	dtp_string_t		pc_tgt_dev;
-	unsigned int		pc_mode;
 	daos_rank_list_t	*pc_tgts;
-	daos_size_t		pc_tgt_size;
 	daos_rank_list_t	*pc_svc;
+	daos_size_t		pc_tgt_size;
+	unsigned int		pc_mode;
 };
 
 struct dmg_pool_create_out {

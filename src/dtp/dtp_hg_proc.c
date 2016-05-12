@@ -334,4 +334,4 @@ struct dtp_msg_field DMF_STRING =
 
 struct dtp_msg_field DMF_RANK_LIST =
 	DEFINE_DTP_MSG("daos_rank_list", 0,
-		       sizeof(daos_rank_list_t), dtp_proc_daos_rank_list_t);
+		       sizeof(daos_rank_list_t *), dtp_proc_daos_rank_list_t);

@@ -156,8 +156,8 @@ dss_cgroup_init(cpu_set_t *set)
 
 	rc = cgroup_init();
 	if (rc != 0) {
-		D_ERROR("Can not initialize cgroup, check your kernel: rc %d\n",
-			rc);
+		D_ERROR("Can not initialize cgroup, check your kernel: %s.\n",
+			cgroup_strerror(rc));
 		return -DER_INVAL;
 	}
 

@@ -28,10 +28,10 @@ struct dtp_msg_field *dmg_pool_create_in_fields[] = {
 	&DMF_UUID,		/* pc_uuid */
 	&DMF_STRING,		/* pc_grp */
 	&DMF_STRING,		/* pc_tgt_dev */
-	&DMF_UINT32,		/* pc_mode */
 	&DMF_RANK_LIST,		/* pc_tgts */
+	&DMF_RANK_LIST,		/* pc_svc */
 	&DMF_DAOS_SIZE,		/* pc_tgt_size */
-	&DMF_RANK_LIST		/* pc_svc */
+	&DMF_UINT32		/* pc_mode */
 };
 
 struct dtp_msg_field *dmg_pool_create_out_fields[] = {

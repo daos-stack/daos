@@ -52,6 +52,8 @@ dss_register_key(struct dss_module_key *key)
 void
 dss_unregister_key(struct dss_module_key *key)
 {
+	if (key == NULL)
+		return;
 	D_ASSERT(key->dmk_index >= 0);
 	D_ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
 	pthread_mutex_lock(&dss_module_keys_lock);

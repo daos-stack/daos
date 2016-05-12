@@ -563,6 +563,7 @@ dmgs_hdlr_tgt_create(dtp_rpc_t *tc_req)
 {
 	struct dmg_tgt_create_in	*tc_in;
 	struct dmg_tgt_create_out	*tc_out;
+	daos_rank_t			myrank = 0;
 	int				rc = 0;
 
 	tc_in = tc_req->dr_input;
@@ -571,7 +572,16 @@ dmgs_hdlr_tgt_create(dtp_rpc_t *tc_req)
 
 	/* TODO: create the tgt */
 
-	tc_out->tc_rc = 0;
+	rc = dtp_group_rank(NULL, &myrank);
+	D_ASSERT(rc == 0);
+	D_DEBUG(DF_MGMT, "tgt_create, srv rank %d.\n", myrank);
+
+	if (myrank == 7) {
+		tc_out->tc_rc = -DER_NOMEM;
+		D_ERROR("srv rank %d, failed rc: %d.\n", myrank, tc_out->tc_rc);
+	} else {
+		tc_out->tc_rc = 0;
+	}
 	rc = dtp_reply_send(tc_req);
 	if (rc != 0)
 		D_ERROR("dtp_reply_send(DMG_TGT_CREATE, tgt_dev: %s) failed, "
@@ -586,6 +596,7 @@ dmgs_hdlr_tgt_destroy(dtp_rpc_t *td_req)
 	struct dmg_tgt_destroy_in	*td_in;
 	struct dmg_tgt_destroy_out	*td_out;
 	char				uuid_str[64] = {'\0'};
+	daos_rank_t			myrank = 0;
 	int				rc = 0;
 
 	td_in = td_req->dr_input;
@@ -593,6 +604,10 @@ dmgs_hdlr_tgt_destroy(dtp_rpc_t *td_req)
 	D_ASSERT(td_in != NULL && td_out != NULL);
 
 	/* TODO: destroy the tgt */
+
+	rc = dtp_group_rank(NULL, &myrank);
+	D_ASSERT(rc == 0);
+	D_DEBUG(DF_MGMT, "tgt_destroy, srv rank %d.\n", myrank);
 
 	uuid_unparse_lower(td_in->td_pool_uuid, uuid_str);
 	td_out->td_rc = 0;
