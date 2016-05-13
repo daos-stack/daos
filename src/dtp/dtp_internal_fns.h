@@ -54,16 +54,7 @@ dtp_bulk_desc_dup(struct dtp_bulk_desc *bulk_desc_new,
 		  struct dtp_bulk_desc *bulk_desc)
 {
 	D_ASSERT(bulk_desc_new != NULL && bulk_desc != NULL);
-	*(bulk_desc_new) = *(bulk_desc);
-	/*
-	bulk_desc_new->dbd_remote_ep = bulk_desc->dbd_remote_ep;
-	bulk_desc_new->dbd_bulk_op = bulk_desc->dbd_bulk_op;
-	bulk_desc_new->dbd_remote_hdl = bulk_desc->dbd_remote_hdl;
-	bulk_desc_new->dbd_remote_off = bulk_desc->dbd_remote_off;
-	bulk_desc_new->dbd_local_hdl = bulk_desc->dbd_local_hdl;
-	bulk_desc_new->dbd_local_off = bulk_desc->dbd_local_off;
-	bulk_desc_new->dbd_len = bulk_desc->dbd_len;
-	*/
+	*bulk_desc_new = *bulk_desc;
 }
 
 #endif /* __DTP_INTERNAL_FNS_H__ */

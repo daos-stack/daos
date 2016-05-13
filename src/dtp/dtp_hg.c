@@ -1096,8 +1096,8 @@ dtp_hg_bulk_transfer(struct dtp_bulk_desc *bulk_desc, dtp_bulk_cb_t complete_cb,
 				drp_pub);
 	hg_ret = HG_Bulk_transfer(hg_ctx->dhc_bulkctx, dtp_hg_bulk_transfer_cb,
 			bulk_cbinfo, hg_bulk_op, rpc_priv->drp_na_addr,
-			bulk_desc->bd_remote_hdl, 0,
-			bulk_desc->bd_local_hdl, 0,
+			bulk_desc->bd_remote_hdl, bulk_desc->bd_remote_off,
+			bulk_desc->bd_local_hdl, bulk_desc->bd_remote_off,
 			bulk_desc->bd_len, opid);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_transfer failed, hg_ret: %d.\n", hg_ret);

@@ -172,7 +172,9 @@ struct dtp_bulk_desc {
 	dtp_rpc_t	*bd_rpc; /* original RPC request */
 	dtp_bulk_op_t	bd_bulk_op; /* DTP_BULK_PUT or DTP_BULK_GET */
 	dtp_bulk_t	bd_remote_hdl; /* remote bulk handle */
+	daos_off_t	bd_remote_off; /* offset within remote bulk buffer */
 	dtp_bulk_t	bd_local_hdl; /* local bulk handle */
+	daos_off_t	bd_local_off; /* offset within local bulk buffer */
 	daos_size_t	bd_len; /* length of the bulk transferring */
 };
 

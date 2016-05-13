@@ -316,7 +316,9 @@ int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 
 	bulk_desc.bd_bulk_op = DTP_BULK_GET;
 	bulk_desc.bd_remote_hdl = e_req->remote_bulk_hdl;
+	bulk_desc.bd_remote_off = 0;
 	bulk_desc.bd_local_hdl = local_bulk_hdl;
+	bulk_desc.bd_local_off = 0;
 	bulk_desc.bd_len = bulk_len;
 
 	/* user needs to register the complete_cb inside which can do:
