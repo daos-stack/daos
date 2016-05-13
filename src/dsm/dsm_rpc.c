@@ -82,7 +82,7 @@ dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
 {
 	dtp_opcode_t opcode;
 
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_DSMS_MODULE, 1);
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_DSM_MODULE, 1);
 
 	return dtp_req_create(dtp_ctx, tgt_ep, opcode, req);
 }

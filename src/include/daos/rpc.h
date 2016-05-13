@@ -49,10 +49,14 @@
 	 (mod_id & MODID_MASK) << MODID_OFFSET)
 
 enum daos_module_id {
-	DAOS_DMG_MODULE		= 0,
-	DAOS_DSMS_MODULE	= 1,
-	DAOS_VOS_MODULE		= 2,
-	DAOS_MAX_MODULE		= (1 << MOD_ID_BITS) - 1,
+	DAOS_VOS_MODULE	= 0, /** version object store */
+	DAOS_DMG_MODULE	= 1, /** storage management */
+	DAOS_DSM_MODULE	= 2, /** memory-class DAOS */
+	DAOS_DSR_MODULE	= 3, /** sharding & resilience */
+	DAOS_DCT_MODULE	= 4, /** caching & tiering */
+	DAOS_DSP_MODULE	= 5, /** posix emulation */
+	DAOS_DSH_MODULE	= 6, /** hadoop interface */
+	DAOS_MAX_MODULE	= (1 << MOD_ID_BITS) - 1,
 };
 
 /**

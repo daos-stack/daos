@@ -92,7 +92,7 @@ static struct daos_rpc_handler dsms_handlers[] = {
 
 struct dss_module daos_m_srv_module =  {
 	.sm_name	= "daos_m_srv",
-	.sm_mod_id	= DAOS_DSMS_MODULE,
+	.sm_mod_id	= DAOS_DSM_MODULE,
 	.sm_ver		= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,

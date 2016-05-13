@@ -50,7 +50,7 @@ dsm_init(void)
 	if (rc != 0)
 		D_GOTO(unlock, rc);
 
-	rc = daos_rpc_register(dsm_rpcs, NULL, DAOS_DSMS_MODULE);
+	rc = daos_rpc_register(dsm_rpcs, NULL, DAOS_DSM_MODULE);
 	if (rc != 0) {
 		daos_eq_lib_fini();
 		D_GOTO(unlock, rc);
