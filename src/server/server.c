@@ -61,7 +61,7 @@ modules_load()
 			 strcmp(mod, "dmg") == 0)
 			rc = dss_module_load("daos_mgmt_srv");
 		else if (strcmp(mod, "vos") == 0)
-			rc = dss_module_load("vos");
+			rc = dss_module_load("vos_srv");
 		else
 			rc = dss_module_load(mod);
 

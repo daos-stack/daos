@@ -1,6 +1,6 @@
 #!python
 
-Import('env', 'PREREQS')
+Import('env', 'PREREQS', 'srv')
 
 env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -20,11 +20,20 @@ denv = env.Clone()
 denv.Append(CPPPATH = ['#/src/vos/'])
 denv.Append(CFLAGS='-msse4.2')
 
-voslib = denv.Library('libvos', Glob('*.c'))
-denv.Install('$PREFIX/lib/', voslib)
+if srv == False:
+	# generate standalone library
+	denv.Append(CPPDEFINE = {'VOS_STANDALONE' : '1'})
+	lib = 'vos'
+	install = 'lib'
+else:
+	# generate DAOS server module
+	lib = 'vos_srv'
+	install = 'lib/daos_srv'
 
-vos_sharelib = denv.SharedLibrary('vos', Glob('*.c'));
-denv.Install('$PREFIX/lib/daos_srv/', vos_sharelib)
+vos = denv.SharedLibrary(lib, Glob('*.c'))
+
+denv.Install('$PREFIX/' + install, vos)
 
 # Tests
-SConscript('tests/SConscript', exports='denv')
+if srv == False:
+	SConscript('tests/SConscript', exports='denv')
