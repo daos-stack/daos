@@ -748,219 +748,178 @@ dhash_table_debug(struct dhash_table *htable)
 #endif
 }
 
-static unsigned int
-daos_hhash_key2hash(uint64_t key, int hbits)
+/**
+ * daos handle hash table: the first user of dhash_table
+ */
+
+struct daos_hhash {
+	uint64_t                dh_cookie;
+	struct dhash_table	dh_htable;
+};
+
+static struct daos_hlink *
+hh_link2ptr(daos_list_t *rlink)
 {
-	return (unsigned int)((key >> DAOS_HTYPE_BITS) & ((1U << hbits) - 1));
+	return container_of(rlink, struct daos_hlink, hl_link);
 }
 
-struct daos_hlink *
-daos_hhash_link_lookup_locked(struct daos_hhash *hhash, uint64_t key)
+static void
+hh_op_key_init(struct dhash_table *hhtab, daos_list_t *rlink, void *args)
 {
-	struct daos_hlink	*hlink;
-	unsigned int	hash;
+	struct daos_hhash *dht;
+	struct daos_hlink *hlink = hh_link2ptr(rlink);
+	int		   type = *(int *)args;
 
-	hash = daos_hhash_key2hash(key, hhash->dh_bits);
-
-	daos_list_for_each_entry(hlink, &hhash->dh_hash[hash], hl_link) {
-		if (hlink->hl_key == key) {
-			hlink->hl_ref++;
-			return hlink;
-		}
-	}
-	return NULL;
+	dht = container_of(hhtab, struct daos_hhash, dh_htable);
+	hlink->hl_key = ((dht->dh_cookie++) << DAOS_HTYPE_BITS) | type;
 }
 
-struct daos_hlink *
-daos_hhash_link_lookup(struct daos_hhash *hhash, uint64_t key)
+static int
+hh_op_key_get(struct dhash_table *hhtab, daos_list_t *rlink, void **key_pp)
 {
-	struct daos_hlink *hlink;
+	struct daos_hlink *hlink = hh_link2ptr(rlink);
 
-	pthread_mutex_lock(&hhash->dh_lock);
-	hlink = daos_hhash_link_lookup_locked(hhash, key);
-	pthread_mutex_unlock(&hhash->dh_lock);
-
-	return hlink;
+	*key_pp = (void *)&hlink->hl_key;
+	return sizeof(hlink->hl_key);
 }
 
-int
-daos_hhash_link_delete(struct daos_hhash *hhash, struct daos_hlink *hlink)
+static uint32_t
+hh_op_key_hash(struct dhash_table *hhtab, const void *key, unsigned int ksize)
 {
-	pthread_mutex_lock(&hhash->dh_lock);
+	D_ASSERT(ksize == sizeof(uint64_t));
 
-	if (daos_list_empty(&hlink->hl_link)) {
-		pthread_mutex_unlock(&hhash->dh_lock);
-		return 0;
-	}
+	return (unsigned int)(*(const uint64_t *)key >> DAOS_HTYPE_BITS);
+}
 
-	daos_list_del_init(&hlink->hl_link);
+static bool
+hh_op_key_cmp(struct dhash_table *hhtab, daos_list_t *rlink,
+	  const void *key, unsigned int ksize)
+{
+	struct daos_hlink *hlink = hh_link2ptr(rlink);
 
-	D_ASSERT(hlink->hl_ref > 0);
+	D_ASSERT(ksize == sizeof(uint64_t));
+	return hlink->hl_key == *(uint64_t *)key;
+}
+
+static void
+hh_op_rec_addref(struct dhash_table *hhtab, daos_list_t *rlink)
+{
+	hh_link2ptr(rlink)->hl_ref++;
+}
+
+static bool
+hh_op_rec_decref(struct dhash_table *hhtab, daos_list_t *rlink)
+{
+	struct  daos_hlink *hlink = hh_link2ptr(rlink);
+
 	hlink->hl_ref--;
-	if (hlink->hl_ref == 0 && hlink->hl_ops != NULL &&
-				  hlink->hl_ops->hop_free != NULL)
+	return hlink->hl_ref == 0;
+}
+
+
+static void
+hh_op_rec_free(struct dhash_table *hhtab, daos_list_t *rlink)
+{
+	struct daos_hlink *hlink = hh_link2ptr(rlink);
+
+	if (hlink->hl_ops != NULL &&
+	    hlink->hl_ops->hop_free != NULL)
 		hlink->hl_ops->hop_free(hlink);
-
-	pthread_mutex_unlock(&hhash->dh_lock);
-
-	return 1;
 }
 
-void
-daos_hhash_link_putref_locked(struct daos_hlink *hlink)
-{
-	D_ASSERT(hlink->hl_ref > 0);
-	hlink->hl_ref--;
-	if (hlink->hl_ref == 0) {
-		D_ASSERT(daos_list_empty(&hlink->hl_link));
-		if (hlink->hl_ops != NULL &&
-		    hlink->hl_ops->hop_free != NULL)
-			hlink->hl_ops->hop_free(hlink);
-	}
-}
-
-
-void
-daos_hhash_link_putref(struct daos_hhash *hhash, struct daos_hlink *hlink)
-{
-	pthread_mutex_lock(&hhash->dh_lock);
-	daos_hhash_link_putref_locked(hlink);
-	pthread_mutex_unlock(&hhash->dh_lock);
-}
-
-void
-daos_hhash_link_key(struct daos_hlink *hlink, uint64_t *key)
-{
-	*key = hlink->hl_key;
-}
+static dhash_table_ops_t hh_ops = {
+	.hop_key_init		= hh_op_key_init,
+	.hop_key_get		= hh_op_key_get,
+	.hop_key_hash		= hh_op_key_hash,
+	.hop_key_cmp		= hh_op_key_cmp,
+	.hop_rec_addref		= hh_op_rec_addref,
+	.hop_rec_decref		= hh_op_rec_decref,
+	.hop_rec_free		= hh_op_rec_free,
+};
 
 int
-daos_hhash_link_empty(struct daos_hlink *hlink)
+daos_hhash_create(unsigned int bits, struct daos_hhash **htable_pp)
 {
-	if (!hlink->hl_initialized)
-		return 1;
+	struct daos_hhash *hhtab;
+	int		   rc;
 
-	D_ASSERT(hlink->hl_ref != 0 || daos_list_empty(&hlink->hl_link));
-	return daos_list_empty(&hlink->hl_link);
+	D_ALLOC_PTR(hhtab);
+	if (hhtab == NULL)
+		return -DER_NOMEM;
+
+	rc = dhash_table_create_inplace(0, bits, NULL, &hh_ops,
+					&hhtab->dh_htable);
+	if (rc != 0)
+		goto failed;
+
+	hhtab->dh_cookie = 1;
+	*htable_pp = hhtab;
+	return 0;
+ failed:
+	D_FREE_PTR(hhtab);
+	return -DER_NOMEM;
+}
+
+void
+daos_hhash_destroy(struct daos_hhash *hhtab)
+{
+	dhash_table_debug(&hhtab->dh_htable);
+	dhash_table_destroy_inplace(&hhtab->dh_htable, true);
+	D_FREE_PTR(hhtab);
 }
 
 void
 daos_hhash_hlink_init(struct daos_hlink *hlink, struct daos_hlink_ops *ops)
 {
 	DAOS_INIT_LIST_HEAD(&hlink->hl_link);
-	hlink->hl_initialized = 1;
-	hlink->hl_ref = 1; /* for caller */
-	hlink->hl_ops = ops;
+	hlink->hl_initialized	= 1;
+	hlink->hl_ref		= 1; /* for caller */
+	hlink->hl_ops		= ops;
 }
 
 void
-daos_hhash_link_insert(struct daos_hhash *hhash, struct daos_hlink *hlink,
+daos_hhash_link_insert(struct daos_hhash *hhtab, struct daos_hlink *hlink,
 		       int type)
 {
-	unsigned int	hash;
-
-	pthread_mutex_lock(&hhash->dh_lock);
-
-	hlink->hl_key = ((hhash->dh_cookie++) << DAOS_HTYPE_BITS) | type;
-
-	hash = daos_hhash_key2hash(hlink->hl_key, hhash->dh_bits);
-
-	hlink->hl_ref += 1;
-	daos_list_add_tail(&hlink->hl_link, &hhash->dh_hash[hash]);
-
-	pthread_mutex_unlock(&hhash->dh_lock);
+	D_ASSERT(hlink->hl_initialized);
+	dhash_rec_insert_anonym(&hhtab->dh_htable, &hlink->hl_link,
+				(void *)&type);
 }
 
-int
-daos_hhash_link_insert_key(struct daos_hhash *hhash, uint64_t key,
-			   struct daos_hlink *hlink)
+struct daos_hlink *
+daos_hhash_link_lookup(struct daos_hhash *hhtab, uint64_t key)
 {
-	struct daos_hlink	*tmp;
-	unsigned int	hash;
+	daos_list_t	*rlink;
 
-	hlink->hl_key = key;
-	pthread_mutex_lock(&hhash->dh_lock);
-
-	tmp = daos_hhash_link_lookup_locked(hhash, hlink->hl_key);
-	if (tmp != NULL) {
-		D_ERROR("Failed to insert hlink with key %"PRIu64"\n",
-		       hlink->hl_key);
-		daos_hhash_link_putref_locked(tmp);
-		pthread_mutex_unlock(&hhash->dh_lock);
-		return 0;
-	}
-
-	hash = daos_hhash_key2hash(hlink->hl_key, hhash->dh_bits);
-
-	hlink->hl_ref += 1;
-	daos_list_add_tail(&hlink->hl_link, &hhash->dh_hash[hash]);
-
-	pthread_mutex_unlock(&hhash->dh_lock);
-	return 1;
+	rlink = dhash_rec_find(&hhtab->dh_htable, (void *)&key, sizeof(key));
+	return rlink == NULL ? NULL :
+	       daos_list_entry(rlink, struct daos_hlink, hl_link);
 }
 
-int
-daos_hhash_create(unsigned int bits, struct daos_hhash **hhash)
+bool
+daos_hhash_link_delete(struct daos_hhash *hhtab, struct daos_hlink *hlink)
 {
-	struct daos_hhash	*hh;
-	int		rc;
-	int		i;
-
-	hh = malloc(sizeof(*hh));
-	if (hh == NULL)
-		return -ENOMEM;
-
-	hh->dh_pid = getpid();
-	hh->dh_bits = bits;
-	hh->dh_hash = malloc(sizeof(hh->dh_hash[0]) * (1 << bits));
-	if (hh->dh_hash == NULL) {
-		rc = -ENOMEM;
-		goto failed;
-	}
-
-	for (i = 0; i < (1 << bits); i++)
-		DAOS_INIT_LIST_HEAD(&hh->dh_hash[i]);
-
-	rc = pthread_mutex_init(&hh->dh_lock, NULL);
-	if (rc != 0) {
-		D_ERROR("Failed to create mutex for handle hash\n");
-		goto failed;
-	}
-
-	hh->dh_lock_init = 1;
-	hh->dh_cookie = 1;
-	*hhash = hh;
-	return 0;
- failed:
-	daos_hhash_destroy(hh);
-	return rc;
+	return dhash_rec_delete_at(&hhtab->dh_htable, &hlink->hl_link);
 }
 
 void
-daos_hhash_destroy(struct daos_hhash *hh)
+daos_hhash_link_putref(struct daos_hhash *hhtab, struct daos_hlink *hlink)
 {
-	int	i;
+	dhash_rec_decref(&hhtab->dh_htable, &hlink->hl_link);
+}
 
-	if (hh->dh_hash != NULL) {
-		for (i = 0; i < (1 << hh->dh_bits); i++) {
-			while (!daos_list_empty(&hh->dh_hash[i])) {
-				struct daos_hlink *hlink;
+bool
+daos_hhash_link_empty(struct daos_hlink *hlink)
+{
+	if (!hlink->hl_initialized)
+		return 1;
 
-				hlink = daos_list_entry(hh->dh_hash[i].next,
-							struct daos_hlink,
-							hl_link);
-				daos_list_del_init(&hlink->hl_link);
-				if (hlink->hl_ops != NULL &&
-				    hlink->hl_ops->hop_free != NULL)
-				hlink->hl_ops->hop_free(hlink);
-			}
-		}
+	D_ASSERT(hlink->hl_ref != 0 || dhash_rec_unlinked(&hlink->hl_link));
+	return dhash_rec_unlinked(&hlink->hl_link);
+}
 
-		free(hh->dh_hash);
-	}
-
-	if (hh->dh_lock_init && hh->dh_pid == getpid())
-		pthread_mutex_destroy(&hh->dh_lock);
-
-	free(hh);
+void
+daos_hhash_link_key(struct daos_hlink *hlink, uint64_t *key)
+{
+	*key = hlink->hl_key;
 }

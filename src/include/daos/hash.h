@@ -168,21 +168,14 @@ struct daos_hlink_ops {
 };
 
 struct daos_hlink {
-	daos_list_t		hl_link;
-	uint64_t		hl_key;
-	unsigned int		hl_ref;
-	unsigned int		hl_initialized:1;
+	daos_list_t		 hl_link;
+	uint64_t		 hl_key;
+	unsigned int		 hl_ref;
+	unsigned int		 hl_initialized:1;
 	struct daos_hlink_ops	*hl_ops;
 };
 
-struct daos_hhash {
-	pthread_mutex_t         dh_lock;
-	unsigned int		dh_lock_init:1;
-	unsigned int            dh_bits;
-	unsigned int		dh_pid;
-	uint64_t                dh_cookie;
-	daos_list_t              *dh_hash;
-};
+struct daos_hhash;
 
 int daos_hhash_create(unsigned int bits, struct daos_hhash **hhash);
 void daos_hhash_destroy(struct daos_hhash *hh);
@@ -190,16 +183,13 @@ void daos_hhash_hlink_init(struct daos_hlink *hlink,
 			   struct daos_hlink_ops *ops);
 void daos_hhash_link_insert(struct daos_hhash *hhash,
 			    struct daos_hlink *hlink, int type);
-int daos_hhash_link_insert_key(struct daos_hhash *hhash,
-			       uint64_t key, struct daos_hlink *hlink);
 struct daos_hlink *daos_hhash_link_lookup(struct daos_hhash *hhash,
 					  uint64_t key);
-void daos_hhash_link_putref_locked(struct daos_hlink *hlink);
 void daos_hhash_link_putref(struct daos_hhash *hhash,
 			    struct daos_hlink *hlink);
-int daos_hhash_link_delete(struct daos_hhash *hhash,
-			   struct daos_hlink *hlink);
-int daos_hhash_link_empty(struct daos_hlink *hlink);
+bool daos_hhash_link_delete(struct daos_hhash *hhash,
+			    struct daos_hlink *hlink);
+bool daos_hhash_link_empty(struct daos_hlink *hlink);
 void daos_hhash_link_key(struct daos_hlink *hlink, uint64_t *key);
 
 #endif /*__DAOS_HASH_H__*/
