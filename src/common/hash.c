@@ -106,14 +106,14 @@ daos_chash_srch_u64(uint64_t *hashes, unsigned int nhashes, uint64_t value)
 
 /* The djb2 string hash function, hash a string to a uint32_t value */
 uint32_t
-daos_hash_string_u32(const char *string)
+daos_hash_string_u32(const char *string, unsigned int len)
 {
 	uint32_t result = 5381;
 	const unsigned char *p;
 
 	p = (const unsigned char *) string;
 
-	while (*p != '\0') {
+	for (; len > 0; len--) {
 		result = (result << 5) + result + *p;
 		++p;
 	}
@@ -167,6 +167,585 @@ daos_hash_murmur64(const unsigned char *key, unsigned int key_len,
 	mur ^= mur >> MUR_ROTATE;
 
 	return mur;
+}
+
+/**
+ * Hash tables.
+ */
+
+/** a hash bucket */
+struct dhash_bucket {
+	daos_list_t		hb_head;
+#if DHASH_DEBUG
+	unsigned int		hb_dep;
+#endif
+};
+
+struct dhash_table {
+	/** different type of locks based on ht_feats */
+	union {
+		pthread_mutex_t		ht_lock;
+		pthread_rwlock_t	ht_rwlock;
+	};
+	/** bits to generate number of buckets */
+	unsigned int		 ht_bits;
+	/** feature bits */
+	unsigned int		 ht_feats;
+#if DHASH_DEBUG
+	/** maximum search depth ever */
+	unsigned int		 ht_dep_max;
+	/** maximum number of hash records */
+	unsigned int		 ht_nr_max;
+	/** total number of hash records */
+	unsigned int		 ht_nr;
+#endif
+	/** private data to pass into customized functions */
+	void			*ht_priv;
+	/** customized member functions */
+	dhash_table_ops_t	*ht_ops;
+	/** array of buckets */
+	struct dhash_bucket	*ht_buckets;
+};
+
+static void
+dh_lock_init(struct dhash_table *htable)
+{
+	if (htable->ht_feats & DHASH_FT_NOLOCK)
+		return;
+
+	if (htable->ht_feats & DHASH_FT_RWLOCK)
+		pthread_rwlock_init(&htable->ht_rwlock, NULL);
+	else
+		pthread_mutex_init(&htable->ht_lock, NULL);
+}
+
+static void
+dh_lock_fini(struct dhash_table *htable)
+{
+	if (htable->ht_feats & DHASH_FT_NOLOCK)
+		return;
+
+	if (htable->ht_feats & DHASH_FT_RWLOCK)
+		pthread_rwlock_destroy(&htable->ht_rwlock);
+	else
+		pthread_mutex_destroy(&htable->ht_lock);
+}
+
+/** lock the hash table */
+static void
+dh_lock(struct dhash_table *htable, bool read_only)
+{
+	/* NB: if hash table is using rwlock, it only takes read lock for
+	 * reference-only operations and caller should protect refcount.
+	 * see DHASH_FT_RWLOCK for the details.
+	 */
+
+	if (htable->ht_feats & DHASH_FT_NOLOCK)
+		return;
+
+	if (htable->ht_feats & DHASH_FT_RWLOCK) {
+		if (read_only)
+			pthread_rwlock_rdlock(&htable->ht_rwlock);
+		else
+			pthread_rwlock_wrlock(&htable->ht_rwlock);
+
+	} else {
+		pthread_mutex_lock(&htable->ht_lock);
+	}
+}
+
+/** unlock the hash table */
+static void
+dh_unlock(struct dhash_table *htable, bool read_only)
+{
+	if (htable->ht_feats & DHASH_FT_NOLOCK)
+		return;
+
+	if (htable->ht_feats & DHASH_FT_RWLOCK)
+		pthread_rwlock_unlock(&htable->ht_rwlock);
+	else
+		pthread_mutex_unlock(&htable->ht_lock);
+}
+
+/**
+ * wrappers for member functions.
+ */
+
+/**
+ * Convert key to hash bucket id.
+ *
+ * It calls DJB2 hash if no customized hash function is provided.
+ */
+static unsigned int
+dh_key_hash(struct dhash_table *htable, const void *key, unsigned int ksize)
+{
+	unsigned int idx;
+
+	if (htable->ht_ops->hop_key_hash)
+		idx = htable->ht_ops->hop_key_hash(htable, key, ksize);
+	else
+		idx = daos_hash_string_u32((const char *)key, ksize);
+
+	return idx & ((1U << htable->ht_bits) - 1);
+}
+
+static void
+dh_key_init(struct dhash_table *htable, daos_list_t *rlink, void *args)
+{
+	D_ASSERT(htable->ht_ops->hop_key_init);
+	htable->ht_ops->hop_key_init(htable, rlink, args);
+}
+
+static bool
+dh_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
+	   const void *key, unsigned int ksize)
+{
+	D_ASSERT(htable->ht_ops->hop_key_cmp);
+	return htable->ht_ops->hop_key_cmp(htable, rlink, key, ksize);
+}
+
+static unsigned int
+dh_key_get(struct dhash_table *htable, daos_list_t *rlink, void **key_pp)
+{
+	D_ASSERT(htable->ht_ops->hop_key_get);
+	return htable->ht_ops->hop_key_get(htable, rlink, key_pp);
+}
+
+static void
+dh_rec_insert(struct dhash_table *htable, unsigned idx, daos_list_t *rlink)
+{
+	struct dhash_bucket *bucket = &htable->ht_buckets[idx];
+
+	daos_list_add(rlink, &bucket->hb_head);
+#if DHASH_DEBUG
+	htable->ht_nr++;
+	if (htable->ht_nr > htable->ht_nr_max)
+		htable->ht_nr_max = htable->ht_nr;
+
+	if (htable->ht_ops->hop_key_get) {
+		bucket->hb_dep++;
+		if (bucket->hb_dep > htable->ht_dep_max) {
+			htable->ht_dep_max = bucket->hb_dep;
+			D_DEBUG(DF_MISC, "Max depth %d/%d/%d\n",
+				htable->ht_dep_max, htable->ht_nr,
+				htable->ht_nr_max);
+		}
+	}
+#endif
+}
+
+static void
+dh_rec_delete(struct dhash_table *htable, daos_list_t *rlink)
+{
+	daos_list_del_init(rlink);
+#if DHASH_DEBUG
+	htable->ht_nr--;
+	if (htable->ht_ops->hop_key_get) {
+		struct dhash_bucket *bucket;
+		void		    *key;
+		unsigned int	     size;
+
+		size = htable->ht_ops->hop_key_get(htable, rlink, &key);
+		bucket = &htable->ht_buckets[dh_key_hash(htable, key, size)];
+		bucket->hb_dep--;
+	}
+#endif
+}
+
+static daos_list_t *
+dh_rec_find(struct dhash_table *htable, unsigned idx, const void *key,
+	     unsigned int ksize)
+{
+	struct dhash_bucket *bucket = &htable->ht_buckets[idx];
+	daos_list_t	    *rlink;
+
+	daos_list_for_each(rlink, &bucket->hb_head) {
+		if (dh_key_cmp(htable, rlink, key, ksize))
+			return rlink;
+	}
+	return NULL;
+}
+
+static void
+dh_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+{
+	if (htable->ht_ops->hop_rec_addref)
+		htable->ht_ops->hop_rec_addref(htable, rlink);
+}
+
+static bool
+dh_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+{
+	return htable->ht_ops->hop_rec_decref ?
+	       htable->ht_ops->hop_rec_decref(htable, rlink) : false;
+}
+
+static void
+dh_rec_free(struct dhash_table *htable, daos_list_t *rlink)
+{
+	if (htable->ht_ops->hop_rec_free)
+		htable->ht_ops->hop_rec_free(htable, rlink);
+}
+
+/**
+ * lookup @key in the hash table, the found chain rlink is returned on
+ * success.
+ *
+ * \param htable	[IN]	Pointer to the hash table
+ * \param key		[IN]	The key to search
+ * \param ksize		[IN]	Size of the key
+ */
+daos_list_t *
+dhash_rec_find(struct dhash_table *htable, const void *key, unsigned int ksize)
+{
+	daos_list_t	*rlink;
+	int		 idx;
+
+	D_ASSERT(key != NULL);
+
+	idx = dh_key_hash(htable, key, ksize);
+	dh_lock(htable, true);
+
+	rlink = dh_rec_find(htable, idx, key, ksize);
+	if (rlink != NULL)
+		dh_rec_addref(htable, rlink);
+
+	dh_unlock(htable, true);
+	return rlink;
+}
+
+/**
+ * Insert a new key and its record chain @rlink into the hash table. The hash
+ * table holds a refcount on the successfully inserted record, it releases the
+ * refcount while deleting the record.
+ *
+ * If @exclusive is true, it can succeed only if the key is unique, otherwise
+ * this function returns error.
+ *
+ * \param htable	[IN]	Pointer to the hash table
+ * \param key		[IN]	The key to be inserted
+ * \param ksize		[IN]	Size of the key
+ * \param rlink		[IN]	The link chain of the record being inserted
+ * \param exclusive	[IN]	The key has to be unique if it is true.
+ */
+int
+dhash_rec_insert(struct dhash_table *htable, const void *key,
+		 unsigned int ksize, daos_list_t *rlink, bool exclusive)
+{
+	int	idx;
+	int	rc = 0;
+
+	D_ASSERT(key != NULL && ksize != 0);
+
+	idx = dh_key_hash(htable, key, ksize);
+	dh_lock(htable, false);
+
+	if (exclusive && dh_rec_find(htable, idx, key, ksize))
+		D_GOTO(out, rc = -DER_EXIST);
+
+	dh_rec_addref(htable, rlink);
+	dh_rec_insert(htable, idx, rlink);
+ out:
+	dh_unlock(htable, false);
+	return 0;
+}
+
+/**
+ * Insert an anonymous record (w/o key) into the hash table.
+ * This function calls hop_key_init() to generate a key for the new rlink
+ * under the protection of the hash table lock.
+ *
+ * \param htable	[IN]	Pointer to the hash table
+ * \param rlink		[IN]	The link chain of the hash record
+ * \param args		[IN]	Arguments for key generating
+ */
+int
+dhash_rec_insert_anonym(struct dhash_table *htable, daos_list_t *rlink,
+			void *args)
+{
+	void	*key;
+	int	 idx;
+	int	 ksize;
+
+	if (htable->ht_ops->hop_key_init == NULL ||
+	    htable->ht_ops->hop_key_get == NULL)
+		return -DER_NO_PERM;
+
+	dh_lock(htable, false);
+	/* has no key, hash table should have provided key generator */
+	dh_key_init(htable, rlink, args);
+
+	ksize = dh_key_get(htable, rlink, &key);
+	idx = dh_key_hash(htable, key, ksize);
+
+	dh_rec_addref(htable, rlink);
+	dh_rec_insert(htable, idx, rlink);
+
+	dh_unlock(htable, false);
+	return 0;
+}
+
+/**
+ * Delete the record identified by @key from the hash table.
+ *
+ * \param htable	[IN]	Pointer to the hash table
+ * \param key		[IN]	The key of the record being deleted
+ * \param ksize		[IN]	Size of the key
+ *
+ * return		True	Item with @key has been deleted
+ *			False	Can't find the record by @key
+ */
+bool
+dhash_rec_delete(struct dhash_table *htable, const void *key,
+		 unsigned int ksize)
+{
+	daos_list_t	*rlink;
+	int		 idx;
+	bool		 deleted = false;
+	bool		 zombie  = false;
+
+	D_ASSERT(key != NULL);
+
+	idx = dh_key_hash(htable, key, ksize);
+	dh_lock(htable, false);
+
+	rlink = dh_rec_find(htable, idx, key, ksize);
+	if (rlink != NULL) {
+		dh_rec_delete(htable, rlink);
+		zombie = dh_rec_decref(htable, rlink);
+		deleted = true;
+	}
+
+	dh_unlock(htable, false);
+	if (zombie)
+		dh_rec_free(htable, rlink);
+
+	return deleted;
+}
+
+/**
+ * Delete the record linked by the chain @rlink.
+ * This record will be freed if hop_rec_free() is defined and the hash table
+ * holds the last refcount.
+ *
+ * \param htable	[IN]	Pointer to the hash table
+ * \param rlink		[IN]	The link chain of the record
+ *
+ * return		True	Successfully deleted the record
+ *			False	The record has already been unlinked from the
+ *				hash table
+ */
+bool
+dhash_rec_delete_at(struct dhash_table *htable, daos_list_t *rlink)
+{
+	bool	deleted = false;
+	bool	zombie  = false;
+
+	dh_lock(htable, false);
+
+	if (!daos_list_empty(rlink)) {
+		dh_rec_delete(htable, rlink);
+		zombie = dh_rec_decref(htable, rlink);
+		deleted = true;
+	}
+	dh_unlock(htable, false);
+
+	if (zombie)
+		dh_rec_free(htable, rlink);
+
+	return deleted;
+}
+
+/**
+ * Increase the refcount of the record.
+ *
+ * \param htable	[IN]	Pointer to the hash table
+ * \param rlink		[IN]	The link chain of the record
+ */
+void
+dhash_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+{
+	dh_lock(htable, true);
+	dh_rec_addref(htable, rlink);
+	dh_unlock(htable, true);
+}
+
+/**
+ * Decrease the refcount of the record.
+ * The record will be freed if hop_decref() returns true.
+ *
+ * \param htable	[IN]	Pointer to the hash table
+ * \param rlink		[IN]	Chain rlink of the hash record
+ */
+void
+dhash_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+{
+	bool zombie;
+
+	dh_lock(htable, true);
+
+	zombie = dh_rec_decref(htable, rlink);
+	D_ASSERT(!zombie || daos_list_empty(rlink));
+
+	dh_unlock(htable, true);
+	if (zombie)
+		dh_rec_free(htable, rlink);
+}
+
+/**
+ * The link chain has already been unlinked from the hash table or not.
+ *
+ * \return	True	Yes
+ *		False	No
+ */
+bool
+dhash_rec_unlinked(daos_list_t *rlink)
+{
+	return daos_list_empty(rlink);
+}
+
+/**
+ * Initialise an inplace hash table.
+ *
+ * NB: Please be careful while using rwlock and refcount at the same time,
+ * see dhash_feats for the details.
+ *
+ * \param feats		[IN]	Feature bits, see DHASH_FT_*
+ * \param bits		[IN]	power2(bits) is the size of hash table
+ * \param priv		[IN]	Private data for the hash table
+ * \param hops		[IN]	Customized member functions
+ * \param htable	[IN]	Hash table to be initialised
+ */
+int
+dhash_table_create_inplace(uint32_t feats, unsigned int bits, void *priv,
+			   dhash_table_ops_t *hops, struct dhash_table *htable)
+{
+	struct dhash_bucket *buckets;
+	int		     nr = (1 << bits);
+	int		     i;
+
+	D_ASSERT(hops != NULL);
+	D_ASSERT(hops->hop_key_cmp != NULL);
+
+	htable->ht_feats = feats;
+	htable->ht_bits	 = bits;
+	htable->ht_ops	 = hops;
+	htable->ht_priv	 = priv;
+
+	D_ALLOC(buckets, sizeof(*buckets) * nr);
+	if (buckets == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < nr; i++)
+		DAOS_INIT_LIST_HEAD(&buckets[i].hb_head);
+
+	htable->ht_buckets = buckets;
+	dh_lock_init(htable);
+
+	return 0;
+}
+
+/**
+ * Create a new hash table.
+ *
+ * NB: Please be careful while using rwlock and refcount at the same time,
+ * see dhash_feats for the details.
+ *
+ * \param feats		[IN]	Feature bits, see DHASH_FT_*
+ * \param bits		[IN]	power2(bits) is the size of hash table
+ * \param priv		[IN]	Private data for the hash table
+ * \param hops		[IN]	Customized member functions
+ * \param htable_pp	[OUT]	The newly created hash table
+ */
+int
+dhash_table_create(uint32_t feats, unsigned int bits, void *priv,
+		   dhash_table_ops_t *hops, struct dhash_table **htable_pp)
+{
+	struct dhash_table *htable;
+	int		    rc;
+
+	D_ALLOC_PTR(htable);
+	if (htable == NULL)
+		return -DER_NOMEM;
+
+	rc = dhash_table_create_inplace(feats, bits, priv, hops, htable);
+	if (rc != 0)
+		goto failed;
+
+	*htable_pp = htable;
+	return 0;
+ failed:
+	D_FREE_PTR(htable);
+	return rc;
+}
+
+/**
+ * Finalise a hash table, reset all struct members.
+ *
+ * \param htable	[IN]	The hash table to be finalised.
+ * \param force		[IN]	True:
+ *				Finalise the hash table even it is not empty,
+ *				all pending items will be deleted.
+ *				False:
+ *				Finalise the hash table only if it is empty,
+ *				otherwise returns error
+ */
+int
+dhash_table_destroy_inplace(struct dhash_table *htable, bool force)
+{
+	struct dhash_bucket *buckets = htable->ht_buckets;
+	int		     nr;
+	int		     i;
+
+	if (buckets == NULL)
+		goto out;
+
+	nr = 1U << htable->ht_bits;
+	for (i = 0; i < nr; i++) {
+		while (!daos_list_empty(&buckets[i].hb_head)) {
+			if (!force) {
+				D_DEBUG(DF_MISC, "Warning, non-empty hash\n");
+				return -DER_BUSY;
+			}
+			dhash_rec_delete_at(htable, buckets[i].hb_head.next);
+		}
+	}
+	D_FREE(buckets, sizeof(*buckets) * nr);
+	dh_lock_fini(htable);
+ out:
+	memset(htable, 0, sizeof(*htable));
+	return 0;
+}
+
+/**
+ * Destroy a hash table.
+ *
+ * \param htable	[IN]	The hash table to be destroyed.
+ * \param force		[IN]	True:
+ *				Destroy the hash table even it is not empty,
+ *				all pending items will be deleted.
+ *				False:
+ *				Destroy the hash table only if it is empty,
+ *				otherwise returns error
+ */
+int
+dhash_table_destroy(struct dhash_table *htable, bool force)
+{
+	dhash_table_destroy_inplace(htable, force);
+	D_FREE_PTR(htable);
+	return 0;
+}
+
+/**
+ * Print stats of the hash table.
+ */
+void
+dhash_table_debug(struct dhash_table *htable)
+{
+#if DHASH_DEBUG
+	D_DEBUG(DF_MISC, "max nr: %d, cur nr: %d, max_dep: %d\n",
+		htable->ht_nr_max, htable->ht_nr, htable->ht_dep_max);
+#endif
 }
 
 static unsigned int

@@ -109,7 +109,7 @@ nv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
 	D_ASSERT(key->iov_len <= key->iov_buf_len);
 	D_ASSERT(memchr(key->iov_buf, '\0', key->iov_len) != NULL);
 
-	*hash = daos_hash_string_u32(name);
+	*hash = daos_hash_string_u32(name, strlen(name));
 }
 
 static int

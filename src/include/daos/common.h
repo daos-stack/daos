@@ -184,7 +184,7 @@ unsigned int daos_chash_srch_u64(uint64_t *hashes, unsigned int nhashes,
 				 uint64_t value);
 
 /** djb2 hash a string to a uint32_t value */
-uint32_t daos_hash_string_u32(const char *string);
+uint32_t daos_hash_string_u32(const char *string, unsigned int len);
 /** murmur hash (64 bits) */
 uint64_t daos_hash_murmur64(const unsigned char *key, unsigned int key_len,
 			    unsigned int seed);
