@@ -209,8 +209,8 @@ vos_mod_fini(void)
 	return 0;
 }
 
-struct dss_module vos_module =  {
-	.sm_name	= "vos",
+struct dss_module vos_srv_module =  {
+	.sm_name	= "vos_srv",
 	.sm_mod_id	= DAOS_VOS_MODULE,
 	.sm_ver		= 1,
 	.sm_init	= vos_mod_init,
