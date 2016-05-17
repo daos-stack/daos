@@ -51,9 +51,10 @@ out:
 }
 
 int
-dmg_pool_create(unsigned int mode, const char *grp,
-		const daos_rank_list_t *tgts, const char *dev, daos_size_t size,
-		daos_rank_list_t *svc, uuid_t uuid, daos_event_t *ev)
+dmg_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
+		const char *grp, const daos_rank_list_t *tgts, const char *dev,
+		daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
+		daos_event_t *ev)
 {
 	dtp_endpoint_t			 svr_ep;
 	dtp_rpc_t			*rpc_req = NULL;
@@ -105,11 +106,13 @@ dmg_pool_create(unsigned int mode, const char *grp,
 	/** fill in request buffer */
 	uuid_copy(pc_in->pc_uuid, uuid);
 	pc_in->pc_mode = mode;
+	pc_in->pc_uid = uid;
+	pc_in->pc_gid = gid;
 	pc_in->pc_grp = (dtp_string_t)grp;
 	pc_in->pc_tgt_dev = (dtp_string_t)dev;
 	pc_in->pc_tgts = (daos_rank_list_t *)tgts;
 	pc_in->pc_tgt_size = size;
-	pc_in->pc_svc = svc;
+	pc_in->pc_svc_nr = svc->rl_nr.num;
 
 	/** fill in scratchpad associated with the event */
 	sp = daos_ev2sp(ev);
@@ -126,9 +129,10 @@ dmg_pool_create(unsigned int mode, const char *grp,
 		D_GOTO(out, rc);
 	}
 
+	D_DEBUG(DF_MGMT, DF_UUID": creating\n", DP_UUID(uuid));
+
 	/** send the request */
 	rc = daos_rpc_send(rpc_req, ev);
-
 out:
 	return rc;
 }

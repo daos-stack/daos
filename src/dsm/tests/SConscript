@@ -7,8 +7,5 @@ denv.Append(CPPPATH = ['#/src/dsm', '#/src/server'])
 libraries = ['daos_common', 'daos_transport', 'daos_event']
 libraries += ['uuid']
 
-denv.Program('createpool', 'createpool.c',
-	     LIBS = [libraries, 'daos_m_srv', 'vos', 'pmemobj'])
-
 denv.Program('dsm_test', 'dsm_test.c',
 	     LIBS = [libraries, 'daos_m', 'pthread'])

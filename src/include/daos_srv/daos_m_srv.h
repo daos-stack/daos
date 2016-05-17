@@ -42,9 +42,9 @@ dsms_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid);
  */
 int
 dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
-		     unsigned int mode, int ntargets, const uuid_t target_uuids,
+		     unsigned int mode, int ntargets, uuid_t target_uuids[],
 		     const char *group, const daos_rank_list_t *target_addrs,
-		     int ndomains, const int *domains, const char *path,
+		     int ndomains, const int *domains,
 		     daos_rank_list_t *svc_addrs);
 
 /*

@@ -944,10 +944,10 @@ static pthread_mutex_t mpool_cache_lock;
 static int
 mpool_init(const uuid_t pool_uuid, struct mpool *mp)
 {
-	char			path[4096];
 	PMEMoid			sb_oid;
 	struct superblock      *sb;
 	struct umem_attr	uma;
+	char		       *path;
 	int			rc;
 
 	DAOS_INIT_LIST_HEAD(&mp->mp_entry);
@@ -960,12 +960,16 @@ mpool_init(const uuid_t pool_uuid, struct mpool *mp)
 		D_GOTO(err, rc = -DER_NOMEM);
 	}
 
-	print_meta_path("." /* TODO: dmg */, pool_uuid, path, sizeof(path));
+	rc = dmgs_tgt_file(pool_uuid, DSM_META_FILE, NULL, &path);
+	if (rc != 0) {
+		D_ERROR("failed to lookup path: %d\n", rc);
+		D_GOTO(err_lock, rc);
+	}
 
 	mp->mp_pmem = pmemobj_open(path, MPOOL_LAYOUT);
 	if (mp->mp_pmem == NULL) {
 		D_ERROR("failed to open %s: %d\n", path, errno);
-		D_GOTO(err_lock, rc = -DER_NONEXIST);
+		D_GOTO(err_path, rc = -DER_NONEXIST);
 	}
 
 	sb_oid = pmemobj_root(mp->mp_pmem, sizeof(*sb));
@@ -991,6 +995,8 @@ mpool_init(const uuid_t pool_uuid, struct mpool *mp)
 
 err_pmem:
 	pmemobj_close(mp->mp_pmem);
+err_path:
+	free(path);
 err_lock:
 	pthread_mutex_destroy(&mp->mp_lock);
 err:

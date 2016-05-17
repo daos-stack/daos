@@ -27,4 +27,17 @@
 #ifndef __DMG_SRV_H__
 #define __DMG_SRV_H__
 
+/**
+ * Common file names used by each layer to store persistent data
+ */
+#define	VOS_FILE	"vos-" /* suffixed by thread id */
+#define	DSM_META_FILE	"meta"
+
+/**
+ * Generate path to a target file for pool \a pool_uuid with a filename set to
+ * \a fname and suffixed by \a idx. \a idx can be NULL.
+ */
+int
+dmgs_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
+	      char **fpath);
 #endif /* __DMG_SRV_H__ */

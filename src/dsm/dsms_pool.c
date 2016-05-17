@@ -43,6 +43,9 @@
 #include "dsms_internal.h"
 #include "dsms_layout.h"
 
+/* XXX for get_nprocs(), to be removed */
+#include <sys/sysinfo.h>
+
 /*
  * Create the mpool, create the root kvs, create the superblock, and return the
  * target UUID.
@@ -132,57 +135,31 @@ err:
 	return rc;
 }
 
-/*
- * Create the vos pool.
- */
-static int
-vpool_create(const char *path, const uuid_t pool_uuid)
-{
-	daos_handle_t	vph;
-	int		rc;
-
-	D_DEBUG(DF_DSMS, "creating vos pool %s\n", path);
-
-	/* A zero size accommodates the existing file created by dmg. */
-	rc = vos_pool_create(path, (unsigned char *)pool_uuid, 0 /* size */,
-			     &vph, NULL /* event */);
-	if (rc != 0) {
-		D_ERROR("failed to create vos pool in %s: %d\n", path, rc);
-		return rc;
-	}
-
-	rc = vos_pool_close(vph, NULL /* event */);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-
-	return 0;
-}
-
 int
 dsms_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 {
-	char	filename[4096];
-	int	rc;
+	char	*fpath;
+	int	 rc;
 
-	print_vos_path(path, pool_uuid, filename, sizeof(filename));
-	rc = vpool_create(filename, pool_uuid);
-	if (rc != 0)
-		return rc;
+	rc = asprintf(&fpath, "%s%s", path, DSM_META_FILE);
+	if (rc < 0)
+		return -DER_NOMEM;
 
-	print_meta_path(path, pool_uuid, filename, sizeof(filename));
-	return mpool_create(filename, pool_uuid, target_uuid);
+	rc = mpool_create(fpath, pool_uuid, target_uuid);
+	free(fpath);
+	return rc;
 }
 
 static int
 pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 		   uint32_t gid, uint32_t mode, uint32_t ntargets,
-		   const uuid_t target_uuids, const char *group,
+		   uuid_t target_uuids[], const char *group,
 		   const daos_rank_list_t *target_addrs, uint32_t ndomains,
 		   const int *domains)
 {
 	struct pool_map_target *targets_p;
 	struct pool_map_domain *domains_p;
 	uint64_t		version = 1;
-	uuid_t		       *target_uuid = (uuid_t *)target_uuids;
 	int			rc;
 	int			i;
 
@@ -197,8 +174,9 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 	if (targets_p == NULL)
 		return -DER_NOMEM;
 	for (i = 0; i < ntargets; i++) {
-		uuid_copy(targets_p[i].mt_uuid, target_uuid[i]);
+		uuid_copy(targets_p[i].mt_uuid, target_uuids[i]);
 		targets_p[i].mt_version = 1;
+		targets_p[i].mt_ncpus = get_nprocs(); /* TODO */
 		targets_p[i].mt_fseq = 1;
 		targets_p[i].mt_status = 0;	/* TODO */
 	}
@@ -267,32 +245,34 @@ cont_metadata_init(PMEMobjpool *mp, daos_handle_t rooth)
 
 int
 dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
-		     unsigned int mode, int ntargets, const uuid_t target_uuids,
-		     const char *group, const daos_rank_list_t *target_addrs,
-		     int ndomains, const int *domains, const char *path,
-		     daos_rank_list_t *svc_addrs)
+		     unsigned int mode, int ntargets,
+		     uuid_t target_uuids[], const char *group,
+		     const daos_rank_list_t *target_addrs, int ndomains,
+		     const int *domains, daos_rank_list_t *svc_addrs)
 {
 	PMEMobjpool	       *mp;
 	PMEMoid			sb_oid;
 	struct superblock      *sb;
 	struct umem_attr	uma;
 	daos_handle_t		kvsh;
-	char			filename[4096];
+	char		       *path;
 	int			rc;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
-	print_meta_path(path, pool_uuid, filename, sizeof(filename));
+	rc = dmgs_tgt_file(pool_uuid, DSM_META_FILE, NULL, &path);
+	if (rc)
+		D_GOTO(out, rc);
 
-	mp = pmemobj_open(filename, MPOOL_LAYOUT);
+	mp = pmemobj_open(path, MPOOL_LAYOUT);
 	if (mp == NULL) {
-		D_ERROR("failed to open meta pool %s: %d\n", filename, errno);
-		D_GOTO(out, rc = -DER_INVAL);
+		D_ERROR("failed to open meta pool %s: %d\n", path, errno);
+		D_GOTO(out_path, rc = -DER_INVAL);
 	}
 
 	sb_oid = pmemobj_root(mp, sizeof(*sb));
 	if (OID_IS_NULL(sb_oid)) {
-		D_ERROR("failed to retrieve root object in %s\n", filename);
+		D_ERROR("failed to retrieve root object in %s\n", path);
 		D_GOTO(out_mp, rc = -DER_INVAL);
 	}
 
@@ -302,7 +282,7 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	uma.uma_u.pmem_pool = mp;
 	rc = dbtree_open_inplace(&sb->s_root, &uma, &kvsh);
 	if (rc != 0) {
-		D_ERROR("failed to open root kvs in %s: %d\n", filename, rc);
+		D_ERROR("failed to open root kvs in %s: %d\n", path, rc);
 		D_GOTO(out_mp, rc);
 	}
 
@@ -332,6 +312,8 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	dbtree_close(kvsh);
 out_mp:
 	pmemobj_close(mp);
+out_path:
+	free(path);
 out:
 	return rc;
 }

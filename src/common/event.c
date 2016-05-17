@@ -88,10 +88,10 @@ daos_eq_lib_init()
 unlock:
 	pthread_mutex_unlock(&daos_eq_lock);
 	return rc;
-hash:
-	daos_hhash_destroy(daos_eq_hhash);
 dtp:
 	dtp_finalize();
+hash:
+	daos_hhash_destroy(daos_eq_hhash);
 	D_GOTO(unlock, rc);
 }
 

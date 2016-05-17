@@ -919,7 +919,7 @@ dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout)
 	}
 
 	/** progress RPC execution */
-	hg_ret = HG_Progress(hg_context, timeout);
+	hg_ret = HG_Progress(hg_context, hg_timeout);
 	if (hg_ret == HG_TIMEOUT)
 		D_GOTO(out, rc = -DER_TIMEDOUT);
 	if (hg_ret != HG_SUCCESS) {

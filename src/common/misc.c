@@ -121,6 +121,34 @@ rank_compare(const void *rank1, const void *rank2)
 		return 1;
 }
 
+void
+daos_rank_list_sort(daos_rank_list_t *rank_list)
+{
+	qsort(rank_list->rl_ranks, rank_list->rl_nr.num,
+	      sizeof(daos_rank_t), rank_compare);
+}
+
+/**
+ * Must be previously sorted or not modified at all in order to guarantee
+ * consistent indexes.
+ **/
+bool
+daos_rank_list_find(daos_rank_list_t *rank_list, daos_rank_t rank, int *idx)
+{
+	int i;
+
+	if (rank_list == NULL)
+		return false;
+	for (i = 0; i < rank_list->rl_nr.num; i++) {
+		if (rank_list->rl_ranks[i] == rank) {
+			if (idx)
+				*idx = i;
+			return true;
+		}
+	}
+	return false;
+}
+
 /*
  * Compare whether or not the two rank lists are identical.
  * This function possibly will change the order of the passed in rank list, it
@@ -139,8 +167,7 @@ daos_rank_list_identical(daos_rank_list_t *rank_list1,
 	if (input == true) {
 		if (rank_list1->rl_nr.num != rank_list2->rl_nr.num)
 			return false;
-		qsort(rank_list1->rl_ranks, rank_list1->rl_nr.num,
-		      sizeof(daos_rank_t), rank_compare);
+		daos_rank_list_sort(rank_list1);
 		for (i = 0; i < rank_list1->rl_nr.num; i++) {
 			if (rank_list1->rl_ranks[i] != rank_list2->rl_ranks[i])
 				return false;
@@ -148,8 +175,7 @@ daos_rank_list_identical(daos_rank_list_t *rank_list1,
 	} else {
 		if (rank_list1->rl_nr.num_out != rank_list2->rl_nr.num_out)
 			return false;
-		qsort(rank_list1->rl_ranks, rank_list1->rl_nr.num_out,
-		      sizeof(daos_rank_t), rank_compare);
+		daos_rank_list_sort(rank_list1);
 		for (i = 0; i < rank_list1->rl_nr.num_out; i++) {
 			if (rank_list1->rl_ranks[i] != rank_list2->rl_ranks[i])
 				return false;

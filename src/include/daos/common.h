@@ -36,6 +36,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
+
 #include <daos_types.h>
 
 #define DAOS_ENV_DEBUG	"DAOS_DEBUG"
@@ -242,6 +243,10 @@ void
 daos_rank_list_free(daos_rank_list_t *rank_list);
 void
 daos_rank_list_copy(daos_rank_list_t *dst, daos_rank_list_t *src, bool input);
+void
+daos_rank_list_sort(daos_rank_list_t *rank_list);
+bool
+daos_rank_list_find(daos_rank_list_t *rank_list, daos_rank_t rank, int *idx);
 bool
 daos_rank_list_identical(daos_rank_list_t *rank_list1,
 			 daos_rank_list_t *rank_list2, bool input);
@@ -285,6 +290,22 @@ daos_rank_list_identical(daos_rank_list_t *rank_list1,
 	        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
 
-#define DAOS_UUID_STR_SIZE 36	/* including '\0' */
+#define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
 
+static inline int
+daos_errno2der()
+{
+	switch (errno) {
+	case 0:		return 0;
+	case EPERM:
+	case EACCES:	return -DER_NO_PERM;
+	case ENOMEM:	return -DER_NOMEM;
+	case EDQUOT:
+	case ENOSPC:	return -DER_NOSPACE;
+	case EEXIST:	return -DER_EXIST;
+	case ENOENT:	return -DER_NONEXIST;
+	default:	return -DER_INVAL;
+	}
+	return 0;
+}
 #endif /* __DAOS_COMMON_H__ */

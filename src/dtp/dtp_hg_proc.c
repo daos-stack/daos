@@ -234,7 +234,6 @@ dtp_proc_daos_rank_list_t(dtp_proc_t proc, daos_rank_list_t **data)
 			D_GOTO(out, rc);
 		}
 
-		D_ASSERT(rank_list != NULL);
 		rank_num = rank_list->rl_nr.num;
 		rc = dtp_proc_uint32_t(proc, &rank_num);
 		if (rc != 0) {
@@ -246,7 +245,7 @@ dtp_proc_daos_rank_list_t(dtp_proc_t proc, daos_rank_list_t **data)
 			rc = dtp_proc_daos_rank_t(proc,
 						  &rank_list->rl_ranks[i]);
 			if (rc != 0) {
-				D_ERROR("dtp_proc_daso_rank_t failed,rc: %d.\n",
+				D_ERROR("dtp_proc_daos_rank_t failed,rc: %d.\n",
 					rc);
 				D_GOTO(out, rc = -DER_DTP_HG);
 			}

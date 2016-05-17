@@ -29,14 +29,16 @@ struct dtp_msg_field *dmg_pool_create_in_fields[] = {
 	&DMF_STRING,		/* pc_grp */
 	&DMF_STRING,		/* pc_tgt_dev */
 	&DMF_RANK_LIST,		/* pc_tgts */
-	&DMF_RANK_LIST,		/* pc_svc */
 	&DMF_DAOS_SIZE,		/* pc_tgt_size */
-	&DMF_UINT32		/* pc_mode */
+	&DMF_UINT32,		/* pc_svc_nr */
+	&DMF_UINT32,		/* pc_mode */
+	&DMF_UINT32,		/* pc_uid */
+	&DMF_UINT32,		/* pc_gid */
 };
 
 struct dtp_msg_field *dmg_pool_create_out_fields[] = {
+	&DMF_RANK_LIST,		/* pc_svc */
 	&DMF_INT,		/* pc_rc */
-	&DMF_RANK_LIST		/* pc_svc */
 };
 
 struct dtp_msg_field *dmg_tgt_create_in_fields[] = {
@@ -46,7 +48,8 @@ struct dtp_msg_field *dmg_tgt_create_in_fields[] = {
 };
 
 struct dtp_msg_field *dmg_tgt_create_out_fields[] = {
-	&DMF_INT		/* tc_rc */
+	&DMF_INT,		/* tc_rc */
+	&DMF_UUID,		/* tc_tgt_uuid */
 };
 
 struct dtp_msg_field *dmg_tgt_destroy_in_fields[] = {

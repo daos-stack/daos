@@ -41,31 +41,19 @@ test_pool_create(void)
 {
 	uuid_t		uuid;
 	char		uuid_str[64] = {'\0'};
-	daos_rank_list_t	tgts;
 	daos_rank_list_t	svc;
-	daos_rank_t		ranks[8];
 	int		rc;
+	daos_rank_t	ranks[8];
 
 	printf("Creating pool ...\n");
-
-	tgts.rl_nr.num = 1;
-	tgts.rl_nr.num_out = 8;
-	tgts.rl_ranks = ranks;
-	ranks[0] = 0;
-	ranks[1] = 2;
-	ranks[2] = 5;
-	ranks[3] = 7;
-	ranks[4] = 1;
-	ranks[5] = 3;
-	ranks[6] = 6;
 
 	svc.rl_nr.num = 1;
 	svc.rl_nr.num_out = 8;
 	svc.rl_ranks = ranks;
 
-	rc = dmg_pool_create(0 /* mode */, "srv_grp" /* grp */,
-			     &tgts /* tgts */, "pool_dev" /* dev */,
-			     1024 * 1024 * 1024 /* size */,
+	rc = dmg_pool_create(0 /* mode */, 0 /* uid */, 0 /* gid */,
+			     "srv_grp" /* grp */, NULL /* tgts */,
+			     "pmem" /* dev */, 1024 * 1024 * 1024 /* size */,
 			     &svc /* svc */, uuid, NULL /* ev */);
 	if (rc == 0) {
 		uuid_unparse_lower(uuid, uuid_str);
@@ -73,7 +61,6 @@ test_pool_create(void)
 	} else {
 		D_ERROR("dmg_pool_create failed, rc: %d.\n", rc);
 	}
-
 
 	return 0;
 }

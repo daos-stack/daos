@@ -30,6 +30,7 @@
 #include <sched.h>
 #include <libcgroup.h>
 #include <numa.h>
+#include <sys/sysinfo.h>
 
 #include <daos_errno.h>
 #include <daos/list.h>
@@ -298,6 +299,7 @@ dss_srv_handler_cleanup(void *param)
 	struct dss_module_info		*dmi;
 	int				rc;
 
+	D_ERROR("cleanup in progress\n");
 	dtc = param;
 	dmi = (struct dss_module_info *)
 	      dss_module_key_get(dtc, &daos_srv_modkey);
@@ -493,7 +495,7 @@ dss_threads_fini()
 	if (dthreads->dt_lock_init)
 		pthread_mutex_lock(&dthreads->dt_lock);
 
-	/* issue cancel and wait for to each thread to complete */
+	/* issue cancel and wait for each thread to complete */
 	daos_list_for_each_entry_safe(dthread, tmp, &dthreads->dt_threads_list,
 				      dt_list) {
 		pthread_mutex_lock(&dthread->dt_lock);
@@ -502,6 +504,7 @@ dss_threads_fini()
 		if (dthread->dt_id != 0) {
 			D_DEBUG(DF_SERVER, "stopping %ld\n", dthread->dt_id);
 			rc = pthread_cancel(dthread->dt_id);
+			D_DEBUG(DF_SERVER, "canceled %ld\n", dthread->dt_id);
 			if (rc) {
 				D_ERROR("Failed to kill %ld thread: rc = %d\n",
 					dthread->dt_id, rc);
@@ -536,9 +539,8 @@ dss_threads_fini()
 
 #define INIT_THREADS_PER_NUMA	1
 static int
-dss_threads_init(cpu_set_t *mask)
+dss_threads_init()
 {
-	int	cores_count = 0;
 	int	thread_count;
 	int	rc = 0;
 
@@ -551,11 +553,8 @@ dss_threads_init(cpu_set_t *mask)
 	dthreads->dt_lock_init = 1;
 
 	DAOS_INIT_LIST_HEAD(&dthreads->dt_threads_list);
-	/* start threads by cores */
-	cores_count = CPU_COUNT(mask);
-	D_ASSERT(cores_count > 0);
-	/* init the dthreads */
-	thread_count = cores_count * INIT_THREADS_PER_NUMA;
+	/* start one thread by core */
+	thread_count = get_nprocs() * INIT_THREADS_PER_NUMA;
 
 	/* initialize thread-local storage */
 	rc = pthread_key_create(&dss_tls_key, dss_tls_fini);
@@ -661,7 +660,7 @@ dss_srv_init()
 	dss_register_key(&daos_srv_modkey);
 
 	/* how many threads should be started here */
-	rc = dss_threads_init(&mask);
+	rc = dss_threads_init();
 	if (rc != 0) {
 		D_ERROR("Can not start threads: rc = %d\n", rc);
 		goto out;

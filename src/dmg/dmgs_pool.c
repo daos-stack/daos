@@ -24,6 +24,8 @@
 
 #include "dmgs_internal.h"
 
+#include <daos_srv/daos_m_srv.h>
+
 /* in-progress pool-creating list */
 static daos_list_t	pc_list = DAOS_LIST_HEAD_INIT(pc_list);
 /* mutex to protect pool-creating list */
@@ -54,6 +56,8 @@ struct pc_inprogress {
 	unsigned int		pc_td_fail_num;
 	/* mutex to protect pc_tc_list, pc_td_list */
 	pthread_mutex_t		pc_req_mutex;
+	/* array of target UUID, actual size is pc_tc_num */
+	uuid_t			*pc_uuids;
 };
 
 struct pc_tgt_create {
@@ -163,6 +167,13 @@ pc_inprog_create(struct pc_inprogress **pc_inprog, dtp_rpc_t *rpc_req)
 	} else {
 		pc_inp_item->pc_tc_num = pc_in->pc_tgts->rl_nr.num;
 	}
+
+	D_ALLOC(pc_inp_item->pc_uuids, sizeof(uuid_t) * pc_inp_item->pc_tc_num);
+	if (pc_inp_item->pc_uuids == NULL) {
+		D_FREE_PTR(pc_inp_item);
+		D_GOTO(out, rc);
+	}
+
 	pc_inp_item->pc_tc_ack_num = 0;
 	pc_inp_item->pc_tc_fail_num = 0;
 	DAOS_INIT_LIST_HEAD(&pc_inp_item->pc_td_list);
@@ -174,6 +185,8 @@ pc_inprog_create(struct pc_inprogress **pc_inprog, dtp_rpc_t *rpc_req)
 	rc = pc_add_req_to_inprog(pc_inp_item, rpc_req);
 	if (rc != 0) {
 		D_ERROR("pc_add_req_to_inprog failed, rc: %d.\n", rc);
+		D_FREE(pc_inp_item->pc_uuids,
+		       sizeof(uuid_t) * pc_inp_item->pc_tc_num);
 		D_FREE_PTR(pc_inp_item);
 		D_GOTO(out, rc);
 	}
@@ -227,6 +240,7 @@ pc_inprog_destroy(struct pc_inprogress *pc_inprog)
 
 	pthread_mutex_destroy(&pc_inprog->pc_req_mutex);
 
+	D_FREE(pc_inprog->pc_uuids, sizeof(uuid_t) * pc_inprog->pc_tc_num);
 	D_FREE_PTR(pc_inprog);
 }
 
@@ -251,8 +265,6 @@ pc_input_identical(struct dmg_pool_create_in *pc_in1,
 	if (strcmp(pc_in1->pc_tgt_dev, pc_in2->pc_tgt_dev) != 0)
 		return false;
 	if (pc_in1->pc_tgt_size != pc_in2->pc_tgt_size)
-		return false;
-	if (!daos_rank_list_identical(pc_in1->pc_svc, pc_in2->pc_svc, true))
 		return false;
 
 	return true;
@@ -315,7 +327,6 @@ tgt_destroy_cb(const struct dtp_cb_info *cb_info)
 	pc_in = pc_req->dr_input;
 	pc_out = pc_req->dr_output;
 	pc_out->pc_rc = -DER_TGT_CREATE;
-	pc_out->pc_svc = NULL; /* TODO */
 
 	rc = dtp_reply_send(pc_req);
 	if (rc != 0)
@@ -354,20 +365,30 @@ tgt_create_cb(const struct dtp_cb_info *cb_info)
 	pc_inprog = (struct pc_inprogress *)cb_info->dci_arg;
 	D_ASSERT(pc_inprog != NULL && tc_in != NULL && tc_out != NULL);
 
+	pc_req = pc_inprog->pc_rpc_req;
+	pc_in = pc_req->dr_input;
+	pc_out = pc_req->dr_output;
+
 	pthread_mutex_lock(&pc_inprog->pc_req_mutex);
 	pc_inprog->pc_tc_ack_num++;
+
+	if (rc)
+		D_ERROR(DF_UUID": RPC error while creating tgt on rank %d: "
+			"%d\n", DP_UUID(pc_inprog->pc_uuid),
+			tc_req->dr_ep.ep_rank, rc);
+	if (tc_out->tc_rc)
+		D_ERROR(DF_UUID": failed to create tgt on rank %d: %d\n",
+			DP_UUID(pc_inprog->pc_uuid),
+			tc_req->dr_ep.ep_rank, tc_out->tc_rc);
+
 	if (rc != 0 || tc_out->tc_rc != 0) {
 		pc_inprog->pc_tc_fail_num++;
-		D_ERROR("DMG_TGT_CREATE(tc_tgt_dev: %s, to rank: %d) failed, "
-			"cb_info->dci_rc: %d, tc_out->tc_rc: %d. "
-			"total failed num: %d.\n", tc_in->tc_tgt_dev,
-			tc_req->dr_ep.ep_rank, rc, tc_out->tc_rc,
-			pc_inprog->pc_tc_fail_num);
 		/* Remove failed tgt-create req from tgt-create req list,
 		 * the succeed req remains there as if some other req failed
 		 * need to do the tgt-destroy for error handling. */
 		daos_list_for_each_entry_safe(tc, tc_next,
-			&pc_inprog->pc_tc_list, ptc_link) {
+					      &pc_inprog->pc_tc_list,
+					      ptc_link) {
 			if (tc->ptc_rpc_req == tc_req) {
 				daos_list_del_init(&tc->ptc_link);
 				/* decref corresponds to the addref in
@@ -378,7 +399,27 @@ tgt_create_cb(const struct dtp_cb_info *cb_info)
 				break;
 			}
 		}
+	} else {
+		int idx;
+
+		D_DEBUG(DF_MGMT, DF_UUID": tgt "DF_UUID" created on rank %d\n",
+			DP_UUID(pc_inprog->pc_uuid),
+			DP_UUID(tc_out->tc_tgt_uuid), tc_req->dr_ep.ep_rank);
+
+		if (pc_in->pc_tgts == NULL) {
+			idx = tc_req->dr_ep.ep_rank;
+		} else {
+			bool found;
+
+			found = daos_rank_list_find(pc_in->pc_tgts,
+						    tc_req->dr_ep.ep_rank,
+						    &idx);
+			D_ASSERT(found);
+		}
+		/** copy returned target UUID */
+		uuid_copy(pc_inprog->pc_uuids[idx], tc_out->tc_tgt_uuid);
 	}
+
 	D_ASSERT(pc_inprog->pc_tc_ack_num <= pc_inprog->pc_tc_num);
 	D_ASSERT(pc_inprog->pc_tc_fail_num <= pc_inprog->pc_tc_num);
 	if (pc_inprog->pc_tc_ack_num == pc_inprog->pc_tc_num)
@@ -389,8 +430,33 @@ tgt_create_cb(const struct dtp_cb_info *cb_info)
 		D_GOTO(out, rc);
 
 	/* all tgt_create finished */
-	if (pc_inprog->pc_tc_fail_num == 0)
-		D_GOTO(tc_finish, rc = 0);
+	if (pc_inprog->pc_tc_fail_num == 0) {
+		int	doms[pc_inprog->pc_tc_num + 1];
+		int	i;
+
+		D_DEBUG(DF_MGMT, DF_UUID": all tgts created, setting up pool "
+			"svc\n", DP_UUID(pc_inprog->pc_uuid));
+
+		doms[0] = pc_inprog->pc_tc_num;
+		for (i = 1; i <= pc_inprog->pc_tc_num; i++)
+			doms[i] = 1;
+
+		/**
+		 * TODO: fetch domain list from external source
+		 * Report 1 domain per target for now
+		 */
+		rc = dsms_pool_svc_create(pc_inprog->pc_uuid, pc_in->pc_uid,
+					  pc_in->pc_gid, pc_in->pc_mode,
+					  pc_inprog->pc_tc_num,
+					  pc_inprog->pc_uuids, pc_in->pc_grp,
+					  pc_in->pc_tgts, 3, doms,
+					  pc_out->pc_svc);
+		if (rc == 0)
+			D_GOTO(tc_finish, rc = 0);
+
+		D_ERROR(DF_UUID": pool svc setup failed with %d\n",
+			DP_UUID(pc_inprog->pc_uuid), rc);
+	}
 
 	/* do error handling, send tgt_destroy for succeed tgt_create */
 	daos_list_for_each_entry_safe(tc, tc_next, &pc_inprog->pc_tc_list,
@@ -449,11 +515,7 @@ tgt_create_cb(const struct dtp_cb_info *cb_info)
 
 tc_finish:
 	/* send reply to all the pool_create reqs */
-	pc_req = pc_inprog->pc_rpc_req;
-	pc_in = pc_req->dr_input;
-	pc_out = pc_req->dr_output;
 	pc_out->pc_rc = rc;
-	pc_out->pc_svc = NULL; /* TODO */
 
 	rc = dtp_reply_send(pc_req);
 	if (rc != 0)
@@ -484,6 +546,9 @@ dmgs_hdlr_pool_create(dtp_rpc_t *rpc_req)
 	pc_in = rpc_req->dr_input;
 	pc_out = rpc_req->dr_output;
 	D_ASSERT(pc_in != NULL && pc_out != NULL);
+	pc_out->pc_svc = NULL;
+	if (pc_in->pc_tgts)
+		daos_rank_list_sort(pc_in->pc_tgts);
 
 	/* TODO check metadata about the pool's existence? */
 
@@ -499,15 +564,28 @@ dmgs_hdlr_pool_create(dtp_rpc_t *rpc_req)
 	}
 	pthread_mutex_unlock(&pc_mutex);
 
-	/* new request handling, send DMG_TGT_CREATE RPC to tgts. */
+	/** new request handling */
+
+	/** allocate service rank list */
+	D_ALLOC_PTR(pc_out->pc_svc);
+	if (pc_out->pc_svc == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	D_ERROR("svc set to %p\n", pc_out->pc_svc);
+	D_ALLOC(pc_out->pc_svc->rl_ranks,
+		pc_in->pc_svc_nr * sizeof(daos_rank_t));
+	if (pc_out->pc_svc->rl_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	pc_out->pc_svc->rl_nr.num = pc_in->pc_svc_nr;
+
+	/** send DMG_TGT_CREATE RPC to tgts */
 	svr_ep.ep_tag = 0;
+	opc = DAOS_RPC_OPCODE(DMG_TGT_CREATE, DAOS_DMG_MODULE, 1);
 	for (i = 0; i < pc_inprog->pc_tc_num; i++) {
 		if (pc_in->pc_tgts == NULL)
 			svr_ep.ep_rank = i;
 		else
 			svr_ep.ep_rank = pc_in->pc_tgts->rl_ranks[i];
 
-		opc = DAOS_RPC_OPCODE(DMG_TGT_CREATE, DAOS_DMG_MODULE, 1);
 		rc = dtp_req_create(dss_get_module_info()->dmi_ctx, svr_ep,
 				    opc, &tc_req);
 		if (rc != 0) {
@@ -544,74 +622,12 @@ out:
 	if (pc_req_queued == false && tc_req_sent == false) {
 		D_ASSERT(rc != 0);
 		pc_out->pc_rc = rc;
-		pc_out->pc_svc = NULL;
 		rc = dtp_reply_send(rpc_req);
 		if (rc != 0)
 			D_ERROR("dtp_reply_send failed, rc: %d.\n", rc);
 		if (pc_inprog_alloc == true)
 			pc_inprog_destroy(pc_inprog);
 	}
-
-	return rc;
-}
-
-int
-dmgs_hdlr_tgt_create(dtp_rpc_t *tc_req)
-{
-	struct dmg_tgt_create_in	*tc_in;
-	struct dmg_tgt_create_out	*tc_out;
-	daos_rank_t			myrank = 0;
-	int				rc = 0;
-
-	tc_in = tc_req->dr_input;
-	tc_out = tc_req->dr_output;
-	D_ASSERT(tc_in != NULL && tc_out != NULL);
-
-	/* TODO: create the tgt */
-
-	rc = dtp_group_rank(NULL, &myrank);
-	D_ASSERT(rc == 0);
-	D_DEBUG(DF_MGMT, "tgt_create, srv rank %d.\n", myrank);
-
-	if (myrank == 7) {
-		tc_out->tc_rc = -DER_NOMEM;
-		D_ERROR("srv rank %d, failed rc: %d.\n", myrank, tc_out->tc_rc);
-	} else {
-		tc_out->tc_rc = 0;
-	}
-	rc = dtp_reply_send(tc_req);
-	if (rc != 0)
-		D_ERROR("dtp_reply_send(DMG_TGT_CREATE, tgt_dev: %s) failed, "
-			"rc: %d.\n", tc_in->tc_tgt_dev, rc);
-
-	return rc;
-}
-
-int
-dmgs_hdlr_tgt_destroy(dtp_rpc_t *td_req)
-{
-	struct dmg_tgt_destroy_in	*td_in;
-	struct dmg_tgt_destroy_out	*td_out;
-	char				uuid_str[64] = {'\0'};
-	daos_rank_t			myrank = 0;
-	int				rc = 0;
-
-	td_in = td_req->dr_input;
-	td_out = td_req->dr_output;
-	D_ASSERT(td_in != NULL && td_out != NULL);
-
-	/* TODO: destroy the tgt */
-
-	rc = dtp_group_rank(NULL, &myrank);
-	D_ASSERT(rc == 0);
-	D_DEBUG(DF_MGMT, "tgt_destroy, srv rank %d.\n", myrank);
-
-	uuid_unparse_lower(td_in->td_pool_uuid, uuid_str);
-	td_out->td_rc = 0;
-	rc = dtp_reply_send(td_req);
-	if (rc != 0)
-		D_ERROR("dtp_reply_send(DMG_TGT_DESTROY, uuid: %s) failed, "
-			"rc: %d.\n", uuid_str, rc);
 
 	return rc;
 }

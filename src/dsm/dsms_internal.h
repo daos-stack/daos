@@ -37,6 +37,8 @@
 #include <daos/list.h>
 #include <daos/transport.h>
 
+#include <daos_srv/daos_mgmt_srv.h>
+
 /*
  * Metadata pmem pool descriptor
  *
@@ -103,30 +105,4 @@ int dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
  */
 int dsms_hdlr_cont_create(dtp_rpc_t *rpc);
 int dsms_hdlr_cont_destroy(dtp_rpc_t *rpc);
-
-/* TODO: Move these two path generators to daos_mgmt_srv.h. */
-
-static inline void
-print_vos_path(const char *path, const uuid_t pool_uuid, char *buf, size_t size)
-{
-	char	uuid_str[DAOS_UUID_STR_SIZE];
-	int	rc;
-
-	uuid_unparse_lower(pool_uuid, uuid_str);
-	rc = snprintf(buf, size, "%s/%s-vos", path, uuid_str);
-	D_ASSERT(rc < size);
-}
-
-static inline void
-print_meta_path(const char *path, const uuid_t pool_uuid, char *buf,
-		size_t size)
-{
-	char	uuid_str[DAOS_UUID_STR_SIZE];
-	int	rc;
-
-	uuid_unparse_lower(pool_uuid, uuid_str);
-	rc = snprintf(buf, size, "%s/%s-meta", path, uuid_str);
-	D_ASSERT(rc < size);
-}
-
 #endif /* __DSMS_INTERNAL_H__ */

@@ -187,6 +187,8 @@ pool_create(void)
 	svcl.rl_nr.num	= 1;
 	svcl.rl_ranks	= &svc;
 	rc = dmg_pool_create(0 /* mode */,
+			     geteuid() /* user owner */,
+			     getegid() /* group owner */,
 			     DSS_PSETID /* daos server process set ID */,
 			     NULL /* list of targets, NULL = all */,
 			     NULL /* storage type to use, use default */,

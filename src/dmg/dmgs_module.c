@@ -49,6 +49,12 @@ static struct daos_rpc_handler dmgs_handlers[] = {
 static int
 dmgs_init()
 {
+	int rc;
+
+	rc = dmgs_tgt_init();
+	if (rc)
+		return rc;
+
 	D_DEBUG(DF_MGMT, "successfull init call\n");
 	return 0;
 }

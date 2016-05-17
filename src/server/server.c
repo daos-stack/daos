@@ -128,14 +128,7 @@ server_fini(bool force)
 	dss_srv_fini();
 	dss_module_fini(force);
 	dtp_finalize();
-}
-
-static void
-shutdown(int signo)
-{
-	server_fini(true);
 	dss_module_unload_all();
-	exit(EXIT_SUCCESS);
 }
 
 static void
@@ -180,27 +173,40 @@ parse(int argc, char **argv)
 int
 main(int argc, char **argv)
 {
-	int rc;
+	sigset_t	set;
+	int		sig;
+	int		rc;
 
-	/* parse command line arguments */
+	/** parse command line arguments */
 	rc = parse(argc, argv);
 	if (rc)
 		exit(EXIT_FAILURE);
 
-	/* server initialization */
+	/** block all possible signals */
+	sigfillset(&set);
+	rc = pthread_sigmask(SIG_BLOCK, &set, NULL);
+	if (rc) {
+		perror("failed to mask signals");
+		exit(EXIT_FAILURE);
+	}
+
+	/** server initialization */
 	rc = server_init();
 	if (rc)
 		exit(EXIT_FAILURE);
 
-	/* register signal handler for shutdown */
-	signal(SIGINT, shutdown);
-	signal(SIGTERM, shutdown);
-	signal(SIGCHLD, SIG_IGN);
+	/** wait for shutdown signal */
+	sigemptyset(&set);
+	sigaddset(&set, SIGINT);
+	sigaddset(&set, SIGTERM);
+	sigaddset(&set, SIGUSR1);
+	sigaddset(&set, SIGUSR2);
+	rc = sigwait(&set, &sig);
+	if (rc)
+		D_ERROR("failed to wait for signals: %d\n", rc);
 
-	/* sleep indefinitely until we receive a signal */
-	while (true)
-		sleep(3600);
+	/** shutdown */
+	server_fini(true);
 
-	shutdown(SIGTERM);
 	exit(EXIT_SUCCESS);
 }

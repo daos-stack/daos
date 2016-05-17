@@ -35,12 +35,11 @@
 #include <daos_srv/daos_server.h>
 #include "dmg_rpc.h"
 
+/** dmgs_pool.c */
+int dmgs_hdlr_pool_create(dtp_rpc_t *rpc_req);
 
-int
-dmgs_hdlr_pool_create(dtp_rpc_t *rpc_req);
-int
-dmgs_hdlr_tgt_create(dtp_rpc_t *rpc_req);
-int
-dmgs_hdlr_tgt_destroy(dtp_rpc_t *rpc_req);
-
+/** dmgs_target.c */
+int dmgs_tgt_init(void);
+int dmgs_hdlr_tgt_create(dtp_rpc_t *rpc_req);
+int dmgs_hdlr_tgt_destroy(dtp_rpc_t *rpc_req);
 #endif /* __DMGS_INTERNAL_H__ */

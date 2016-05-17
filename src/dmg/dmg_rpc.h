@@ -46,18 +46,20 @@ enum dmg_operation {
 };
 
 struct dmg_pool_create_in {
-	uuid_t			pc_uuid;
-	dtp_string_t		pc_grp;
-	dtp_string_t		pc_tgt_dev;
+	uuid_t			 pc_uuid;
+	dtp_string_t		 pc_grp;
+	dtp_string_t		 pc_tgt_dev;
 	daos_rank_list_t	*pc_tgts;
-	daos_rank_list_t	*pc_svc;
-	daos_size_t		pc_tgt_size;
-	unsigned int		pc_mode;
+	daos_size_t		 pc_tgt_size;
+	uint32_t		 pc_svc_nr;
+	uint32_t		 pc_mode;
+	uint32_t		 pc_uid;
+	uint32_t		 pc_gid;
 };
 
 struct dmg_pool_create_out {
-	int			pc_rc;
 	daos_rank_list_t	*pc_svc;
+	int			 pc_rc;
 };
 
 struct dmg_tgt_create_in {
@@ -68,6 +70,7 @@ struct dmg_tgt_create_in {
 
 struct dmg_tgt_create_out {
 	int			tc_rc;
+	uuid_t			tc_tgt_uuid;
 };
 
 struct dmg_tgt_destroy_in {

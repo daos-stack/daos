@@ -8,7 +8,8 @@ denv = env.Clone()
 
 # dmgs: DMG Server Module
 mgmt_srv = denv.SharedLibrary('daos_mgmt_srv',
-			      ['dmg_rpc.c', 'dmgs_module.c', 'dmgs_pool.c'])
+			      ['dmg_rpc.c', 'dmgs_module.c', 'dmgs_pool.c',
+			       'dmgs_target.c'])
 denv.Install('$PREFIX/lib/daos_srv', mgmt_srv)
 
 # dmgc: DMG Client Library

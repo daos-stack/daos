@@ -22,8 +22,8 @@ VariantDir('vos_srv', 'vos', duplicate=0)
 SConscript('vos_srv/SConscript', exports=['env', 'PREREQS', 'srv'])
 
 # Build each DAOS layers
-SConscript('dsm/SConscript', exports='env')
 SConscript('dmg/SConscript', exports='env')
+SConscript('dsm/SConscript', exports='env')
 SConscript('dsr/SConscript', exports='env')
 SConscript('dct/SConscript', exports='env')
 
