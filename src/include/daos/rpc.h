@@ -163,12 +163,14 @@ daos_rpc_send(dtp_rpc_t *rpc, daos_event_t *ev)
 
 	/* Send request */
 	rc = dtp_req_send(rpc, daos_rpc_cb, ev);
-	if (rc != 0)
+	if (rc != 0) {
 		/**
 		 * event was started already, let's report the error
 		 * asynchronously
 		 */
 		daos_event_complete(ev, rc);
+		rc = 0;
+	}
 
 	/** wait for completion if blocking mode */
 	if (daos_event_is_priv(ev))
