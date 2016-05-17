@@ -27,8 +27,9 @@
 #include <daos/mem.h>
 #include <daos/btree.h>
 #include <daos_types.h>
-#include "vos_internal.h"
-#include "vos_obj.h"
+#include <vos_internal.h>
+#include <vos_obj.h>
+#include <vos_hhash.h>
 
 
 /**

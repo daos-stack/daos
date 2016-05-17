@@ -38,6 +38,7 @@
 #include <inttypes.h>
 #include <vos_obj.h>
 #include <vos_internal.h>
+#include <vos_hhash.h>
 #include <daos_errno.h>
 
 /**
@@ -348,13 +349,7 @@ vos_obj_cache_destroy(struct vos_obj_cache *occ)
  */
 struct vos_obj_cache *vos_obj_cache_current(void)
 {
-	/**
-	 * TODO: Fetch from TLS and return
-	 * This would be done once VOS functions
-	 * have been added to TLS structure.
-	 */
-
-	return object_cache;
+	return vos_get_obj_cache();
 }
 
 void

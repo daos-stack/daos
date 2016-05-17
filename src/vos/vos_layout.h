@@ -156,6 +156,4 @@ struct vos_obj {
 	struct btr_root			vo_tree;
 };
 
-
-
 #endif

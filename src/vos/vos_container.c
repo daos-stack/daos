@@ -31,29 +31,12 @@
 #include <daos/hash.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
+#include <vos_hhash.h>
 #include <vos_obj.h>
 
 /* NB: hide the dark secret that uuid_t is an array not a structure */
 struct uuid_key {
 	uuid_t			uuid;
-};
-
-/**
- * Callback free methods for VOS Container and
- * VOS Pool
- */
-static void
-daos_co_hhash_free(struct daos_hlink *hlink)
-{
-	struct vc_hdl *co_hdl;
-
-	D_ASSERT(hlink);
-	co_hdl = container_of(hlink, struct vc_hdl, vc_hlink);
-	D_FREE_PTR(co_hdl);
-}
-
-struct daos_hlink_ops	co_hdl_hh_ops = {
-	.hop_free	= daos_co_hhash_free,
 };
 
 /**
@@ -221,22 +204,15 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 		goto exit;
 	}
 
-	daos_hhash_hlink_init(&co_hdl->vc_hlink, &co_hdl_hh_ops);
-	daos_hhash_link_insert(daos_vos_hhash, &co_hdl->vc_hlink,
-			       DAOS_HTYPE_VOS_CO);
-	daos_hhash_link_key(&co_hdl->vc_hlink, &coh->cookie);
+	vos_co_hhash_init(co_hdl);
+	vos_co_insert_handle(co_hdl, coh);
 	vos_co_putref_handle(co_hdl);
 exit:
 	/* if success ref-count released during close/delete */
 	if (ret) {
-		/**
-		 * TODO: move vos_pool_putref_handle to
-		 * daos_co_hhash_free once deadlock on
-		 * daos handle hash is removed.
-		 */
 		vos_pool_putref_handle(vpool);
 		if (co_hdl)
-			daos_co_hhash_free(&co_hdl->vc_hlink);
+			vos_co_hhash_free(&co_hdl->vc_hlink);
 	}
 	return ret;
 }
@@ -258,8 +234,7 @@ vos_co_close(daos_handle_t coh, daos_event_t *ev)
 
 	dbtree_close(co_hdl->vc_btr_hdl);
 	vos_pool_putref_handle(co_hdl->vc_phdl);
-	daos_hhash_link_delete(daos_vos_hhash,
-			       &co_hdl->vc_hlink);
+	vos_co_delete_handle(co_hdl);
 	vos_co_putref_handle(co_hdl);
 
 	return 0;

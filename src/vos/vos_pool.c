@@ -31,29 +31,10 @@
 #include <sys/stat.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
+#include <vos_hhash.h>
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>
-
-static void
-daos_vpool_free(struct daos_hlink *hlink)
-{
-	struct vp_hdl *vpool;
-
-	D_ASSERT(hlink != NULL);
-	vpool = container_of(hlink, struct vp_hdl, vp_hlink);
-
-	if (vpool->vp_ph)
-		pmemobj_close(vpool->vp_ph);
-	if (vpool->vp_fpath != NULL)
-		free(vpool->vp_fpath);
-
-	D_FREE_PTR(vpool);
-}
-
-struct daos_hlink_ops	vpool_hh_ops = {
-	.hop_free	= daos_vpool_free,
-};
 
 extern vos_chash_ops_t vos_co_idx_hop;
 
@@ -82,7 +63,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	if (vpool == NULL)
 		return -DER_NOMEM;
 
-	daos_hhash_hlink_init(&vpool->vp_hlink, &vpool_hh_ops);
+	vos_pool_hhash_init(vpool);
 	vpool->vp_fpath = strdup(path);
 	vpool->vp_ph = pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout),
 				      size, 0666);
@@ -148,9 +129,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	if (rc != 0)
 		goto exit;
 
-	daos_hhash_link_insert(daos_vos_hhash, &vpool->vp_hlink,
-			       DAOS_HTYPE_VOS_POOL);
-	daos_hhash_link_key(&vpool->vp_hlink, &poh->cookie);
+	vos_pool_insert_handle(vpool, poh);
 exit:
 	vos_pool_putref_handle(vpool);
 	return rc;
@@ -164,17 +143,14 @@ int
 vos_pool_destroy(daos_handle_t poh, daos_event_t *ev)
 {
 
-	int			 rc    = 0;
+	int			rc    = 0;
 	struct vp_hdl		*vpool = NULL;
-	struct daos_hlink	*hlink;
 
-	hlink = daos_hhash_link_lookup(daos_vos_hhash, poh.cookie);
-	if (hlink == NULL) {
+	vpool = vos_pool_lookup_handle(poh);
+	if (vpool == NULL) {
 		D_ERROR("VOS pool handle lookup error\n");
 		return -DER_INVAL;
 	}
-
-	vpool = container_of(hlink, struct vp_hdl, vp_hlink);
 	/* NB: no need to explicitly destroy container index table because
 	 * pool file removal will do this for free.
 	 */
@@ -184,7 +160,7 @@ vos_pool_destroy(daos_handle_t poh, daos_event_t *ev)
 		goto exit;
 	}
 
-	daos_hhash_link_delete(daos_vos_hhash, &vpool->vp_hlink);
+	vos_pool_delete_handle(vpool);
 exit:
 	vos_pool_putref_handle(vpool);
 	return rc;
@@ -216,7 +192,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 		return -DER_NOMEM;
 	}
 
-	daos_hhash_hlink_init(&vpool->vp_hlink, &vpool_hh_ops);
+	vos_pool_hhash_init(vpool);
 	vpool->vp_fpath = strdup(path);
 	vpool->vp_ph = pmemobj_open(path, POBJ_LAYOUT_NAME(vos_pool_layout));
 	if (vpool->vp_ph == NULL) {
@@ -235,9 +211,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 		goto exit;
 	}
 
-	daos_hhash_link_insert(daos_vos_hhash, &vpool->vp_hlink,
-			       DAOS_HTYPE_VOS_POOL);
-	daos_hhash_link_key(&vpool->vp_hlink, &poh->cookie);
+	vos_pool_insert_handle(vpool, poh);
 exit:
 	vos_pool_putref_handle(vpool);
 	return rc;
@@ -253,20 +227,18 @@ vos_pool_close(daos_handle_t poh, daos_event_t *ev)
 
 	int			 rc    = 0;
 	struct vp_hdl		*vpool = NULL;
-	struct daos_hlink	*hlink;
 
-	hlink = daos_hhash_link_lookup(daos_vos_hhash, poh.cookie);
-	if (hlink == NULL) {
+	vpool = vos_pool_lookup_handle(poh);
+	if (vpool == NULL) {
 		D_ERROR("VOS pool handle lookup error");
 		return -DER_INVAL;
 	}
 
-	vpool = container_of(hlink, struct vp_hdl, vp_hlink);
-
-	/* daos_hhash_link_delete eventually calls the call-back
+	/**
+	 * daos_hhash_link_delete eventually calls the call-back
 	 * daos_vpool_free which also closes the pmemobj pool
 	 */
-	daos_hhash_link_delete(daos_vos_hhash, &vpool->vp_hlink);
+	vos_pool_delete_handle(vpool);
 	vos_pool_putref_handle(vpool);
 
 	return rc;
@@ -282,17 +254,15 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev)
 	int				rc    = 0;
 	struct vp_hdl			*vpool = NULL;
 	struct vos_pool_root		*root  = NULL;
-	struct daos_hlink		*hlink;
 
-	hlink = daos_hhash_link_lookup(daos_vos_hhash, poh.cookie);
-	if (hlink == NULL)
+	vpool = vos_pool_lookup_handle(poh);
+	if (vpool == NULL)
 		return -DER_INVAL;
 
-	vpool = container_of(hlink, struct vp_hdl, vp_hlink);
 	root = vos_pool2root(vpool);
 
 	memcpy(pinfo, &root->vpr_pool_info, sizeof(root->vpr_pool_info));
+	vos_pool_putref_handle(vpool);
 
-	daos_hhash_link_putref(daos_vos_hhash, &vpool->vp_hlink);
 	return rc;
 }

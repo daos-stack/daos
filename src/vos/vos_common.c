@@ -28,146 +28,70 @@
 #include <smmintrin.h>
 #include <daos/rpc.h>
 #include <daos_srv/daos_server.h>
-#include "vos_internal.h"
+#include <vos_internal.h>
+#include <vos_hhash.h>
 
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int
-vos_init(void)
+/**
+ * Object cache based on mode of instantiation
+ */
+struct vos_obj_cache*
+vos_get_obj_cache(void)
 {
-	int				rc = 0;
-	static int			is_init = 0;
+#ifdef VOS_STANDALONE
+	return vsa_imems_inst->vis_ocache;
+#else
+	return vos_tls_get()->vtl_imems_inst.vis_ocache;
+#endif
+}
 
-	if (!is_init) {
+/**
+ * VOS in-memory structure creation.
+ * Handle-hash:
+ * -----------
+ * This hash converts the DRAM handle to a uint64_t
+ * cookie which is returned with a generic daos_handle_t.
+ * Must be Done thread safe once across all handles for
+ * stand-alone mode. TLS mode creates one of these structures
+ * for each thread local storage.
+ *
+ * Object-cache:
+ * ------------
+ * In-memory object cache for object index in PMEM
+ * Created once for standalone mode and once for every
+ * TLS instance.
+ */
+static inline int
+vos_imem_strts_create(struct vos_imem_strts *imem_inst)
+{
+	int rc = 0;
 
-		pthread_mutex_lock(&mutex);
-		/**
-		 * creating and initializing a handle hash
-		 * to maintain all "DRAM" pool handles
-		 * This hash converts the DRAM pool handle to a uint64_t
-		 * cookie. This cookies is returned with a generic
-		 * daos_handle_t
-		 * Thread safe vos_hhash creation
-		 * and link initialization
-		 * hash-table created once across all handles in VOS
-		 */
-		if (!is_init && !daos_vos_hhash) {
-			rc = daos_hhash_create(DAOS_HHASH_BITS,
-					       &daos_vos_hhash);
-			if (rc) {
-				D_ERROR("VOS hhash creation error\n");
-				goto exit;
-			}
-			/**
-			 * Registering the class for OI btree
-			 */
-			rc = vos_oi_init();
-			if (rc)
-				D_ERROR("VOS OI btree initialization error\n");
-			else
-				is_init = 1;
-		}
-		/**
-		 * Temporary
-		 * TODO: Create object cache from
-		 * TLS from pool_create
-		 */
-		if (!object_cache) {
-			rc = vos_obj_cache_create(LRU_CACHE_MAX_SIZE,
-						  &object_cache);
-			if (rc)
-				D_ERROR("Error in createing object cache\n");
-		}
-exit:
-		pthread_mutex_unlock(&mutex);
+	rc = daos_hhash_create(DAOS_HHASH_BITS,
+			       &imem_inst->vis_hhash);
+	if (rc) {
+		D_ERROR("VOS hhash creation error\n");
+		return rc;
+	}
 
-	} else
-		D_ERROR("Already initialized a VOS instance\n");
+	rc = vos_obj_cache_create(LRU_CACHE_MAX_SIZE,
+				  &imem_inst->vis_ocache);
+	if (rc) {
+		D_ERROR("Error in createing object cache\n");
+		return rc;
+	}
 
 	return rc;
 }
 
-void
-vos_fini(void)
+static inline void
+vos_imem_strts_destroy(struct vos_imem_strts *imem_inst)
 {
-	pthread_mutex_lock(&mutex);
-
-	if (daos_vos_hhash) {
-		daos_hhash_destroy(daos_vos_hhash);
-		daos_vos_hhash = NULL;
-	} else
-		D_ERROR("No HHASH to destroy!\n");
-	/**
-	 * Temporary FIX
-	 * TODO: Destroy object cache from pool_destroy
-	 * for object cachec from TLS
-	 */
-	if (object_cache)
-		vos_obj_cache_destroy(object_cache);
-
-
-	pthread_mutex_unlock(&mutex);
+	if (imem_inst->vis_hhash)
+		daos_hhash_destroy(imem_inst->vis_hhash);
+	if (imem_inst->vis_ocache)
+		vos_obj_cache_destroy(imem_inst->vis_ocache);
 }
-
-
-struct vc_hdl*
-vos_co_lookup_handle(daos_handle_t coh)
-{
-	struct vc_hdl		*co_hdl = NULL;
-	struct daos_hlink	*hlink = NULL;
-
-	hlink = daos_hhash_link_lookup(daos_vos_hhash,
-				       coh.cookie);
-	if (!hlink)
-		D_ERROR("vos container handle lookup error\n");
-	else
-		co_hdl = container_of(hlink, struct vc_hdl,
-				      vc_hlink);
-	return co_hdl;
-}
-
-
-
-struct vp_hdl*
-vos_pool_lookup_handle(daos_handle_t poh)
-{
-	struct vp_hdl		*vpool = NULL;
-	struct daos_hlink	*hlink = NULL;
-
-	hlink = daos_hhash_link_lookup(daos_vos_hhash, poh.cookie);
-	if (!hlink)
-		D_ERROR("VOS pool handle lookup error\n");
-	else
-		vpool = container_of(hlink, struct vp_hdl,
-				     vp_hlink);
-	return vpool;
-}
-
-
-inline void
-vos_pool_putref_handle(struct vp_hdl *vpool)
-{
-	if (!vpool) {
-		D_ERROR("Empty Pool handle\n");
-		return;
-	}
-	daos_hhash_link_putref(daos_vos_hhash,
-			       &vpool->vp_hlink);
-
-}
-
-inline void
-vos_co_putref_handle(struct vc_hdl *co_hdl)
-{
-	if (!co_hdl) {
-		D_ERROR("Empty container handle\n");
-		return;
-	}
-	daos_hhash_link_putref(daos_vos_hhash,
-			       &co_hdl->vc_hlink);
-}
-
-
 
 static void *
 vos_tls_init(const struct dss_thread_local_storage *dtls,
@@ -176,6 +100,13 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 	struct vos_tls *tls;
 
 	D_ALLOC_PTR(tls);
+	if (tls == NULL)
+		return NULL;
+
+	if (vos_imem_strts_create(&tls->vtl_imems_inst)) {
+		D_FREE_PTR(tls);
+		return NULL;
+	}
 
 	return tls;
 }
@@ -186,6 +117,7 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct vos_tls *tls = data;
 
+	vos_imem_strts_destroy(&tls->vtl_imems_inst);
 	D_FREE_PTR(tls);
 }
 
@@ -199,13 +131,20 @@ struct dss_module_key vos_module_key = {
 static int
 vos_mod_init(void)
 {
-	return vos_init();	/* TODO: Only a temporary fix. */
+	int rc = 0;
+
+	/**
+	 * Registering the class for OI btree
+	 */
+	rc = vos_oi_init();
+	if (rc)
+		D_ERROR("VOS OI btree initialization error\n");
+	return rc;
 }
 
 static int
 vos_mod_fini(void)
 {
-	vos_fini();		/* TODO: Only a temporary fix. */
 	return 0;
 }
 
@@ -217,6 +156,51 @@ struct dss_module vos_srv_module =  {
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,
 };
+
+int
+vos_init(void)
+{
+	int		rc = 0;
+	static int	is_init = 0;
+
+	if (is_init) {
+		D_ERROR("Already initialized a VOS instance\n");
+		return rc;
+	}
+
+	pthread_mutex_lock(&mutex);
+
+	if (is_init && vsa_imems_inst)
+		D_GOTO(exit, rc);
+
+	D_ALLOC_PTR(vsa_imems_inst);
+	if (vsa_imems_inst == NULL)
+		D_GOTO(exit, rc);
+
+	rc = vos_imem_strts_create(vsa_imems_inst);
+	if (rc)
+		D_GOTO(exit, rc);
+
+	rc = vos_mod_init();
+	if (!rc)
+		is_init = 1;
+exit:
+	pthread_mutex_unlock(&mutex);
+	if (rc && vsa_imems_inst)
+		D_FREE_PTR(vsa_imems_inst);
+	return rc;
+}
+
+void
+vos_fini(void)
+{
+	pthread_mutex_lock(&mutex);
+	if (vsa_imems_inst) {
+		vos_imem_strts_destroy(vsa_imems_inst);
+		D_FREE_PTR(vsa_imems_inst);
+	}
+	pthread_mutex_unlock(&mutex);
+}
 
 /**
  * Jump Consistent Hash from
@@ -239,8 +223,6 @@ vos_generate_jch(uint64_t key, uint32_t num_buckets)
 
 	return b;
 }
-
-
 
 /*
  * Simple CRC64 hash with intrinsics

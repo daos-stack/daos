@@ -33,22 +33,7 @@
 #include <vos_layout.h>
 #include <vos_obj.h>
 
-struct vos_tls {
-	daos_handle_t	vmi_poh;
-};
-
 extern struct dss_module_key vos_module_key;
-
-static inline struct vos_tls *
-vos_tls_get()
-{
-	struct vos_tls			*tls;
-	struct dss_thread_local_storage	*dtc;
-
-	dtc = dss_tls_get();
-	tls = (struct vos_tls *)dss_module_key_get(dtc, &vos_module_key);
-	return tls;
-}
 
 /**
  * VOS pool handle (DRAM)
@@ -91,20 +76,29 @@ struct vc_hdl {
 };
 
 
-/**
- * Global Handle Hash
- * Across all VOS handles
- */
-struct daos_hhash	*daos_vos_hhash;
+struct vos_imem_strts {
+	/**
+	 * Handle hash for holding VOS handles
+	 * (container/pool, etc.,)
+	 */
+	struct daos_hhash	*vis_hhash;
+	/**
+	 * In-memory object cache for the PMEM
+	 * object table
+	 */
+	struct vos_obj_cache	*vis_ocache;
+};
+
+/* in-memory structures standalone instance */
+struct vos_imem_strts	*vsa_imems_inst;
 
 /**
- * Temporary FIX object cache
- * This global object cache is only for
- * testing.
- * TODO: make this/ thread once there is
+ * VOS thread local storage structure
  */
-struct vos_obj_cache   *object_cache;
-
+struct vos_tls {
+	/* in-memory structures TLS instance */
+	struct vos_imem_strts	vtl_imems_inst;
+};
 
 /**
  * Doubly linked list constituting the queue
@@ -163,25 +157,16 @@ struct vos_obj_ref {
 	struct vos_obj			*or_obj;
 };
 
-/**
- * Lookup VOS pool handle
- *
- * \param poh	[IN]	VOS pool handle
- *
- * \return		vos_pool handle of type
- *			struct vp_hdl or NULL
- *
- */
-struct vp_hdl*
-vos_pool_lookup_handle(daos_handle_t poh);
+static inline struct vos_tls *
+vos_tls_get()
+{
+	struct vos_tls			*tls;
+	struct dss_thread_local_storage	*dtc;
 
-/**
- * Decrement reference count
- *
- * \param co_hdl	[IN] VOS container handle
- */
-void
-vos_pool_putref_handle(struct vp_hdl *vp_hdl);
+	dtc = dss_tls_get();
+	tls = (struct vos_tls *)dss_module_key_get(dtc, &vos_module_key);
+	return tls;
+}
 
 static inline struct vos_pool_root *
 vos_pool2root(struct vp_hdl *vp)
@@ -202,25 +187,6 @@ vos_pool2coi_table(struct vp_hdl *vp)
 	D_ASSERT(!TOID_IS_NULL(coi->chtable));
 	return coi->chtable;
 }
-
-/**
- * Lookup VOS container handle
- *
- * \param coh	[IN]	VOS container handle
- *
- * TODO: Not yet implemented
- */
-struct vc_hdl*
-vos_co_lookup_handle(daos_handle_t coh);
-
-/**
- * Decrement container handle reference
- * count
- *
- * \param co_hdl [IN]	VOS container handle
- */
-void
-vos_co_putref_handle(struct vc_hdl *co_hdl);
 
 /**
  * Generate CRC64 hash for any key
@@ -247,6 +213,12 @@ vos_generate_jch(uint64_t key, uint32_t num_buckets);
 
 
 PMEMobjpool *vos_coh2pop(daos_handle_t coh);
+
+/**
+ * Getting object cache
+ * Wrapper for TLS and standalone mode
+ */
+struct vos_obj_cache *vos_get_obj_cache(void);
 
 /**
  * VOS object index class register for btree
