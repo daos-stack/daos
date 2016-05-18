@@ -189,7 +189,6 @@ vlru_create_ref_hdl(daos_handle_t coh, daos_unit_oid_t oid,
 
 	uuid_copy(oref->or_co_uuid, co_hdl->vc_id);
 	oref->or_oid = oid;
-	oref->or_toh = co_hdl->vc_btr_hdl;
 	oref->or_lrefcnt = 0;
 	/**
 	 * TODO: Add Btree iterator handle
