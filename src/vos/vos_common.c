@@ -135,10 +135,18 @@ vos_mod_init(void)
 
 	/**
 	 * Registering the class for OI btree
+	 * and KV btree
 	 */
 	rc = vos_oi_init();
-	if (rc)
+	if (rc) {
 		D_ERROR("VOS OI btree initialization error\n");
+		return rc;
+	}
+
+	rc = vos_obj_tree_register();
+	if (rc)
+		D_ERROR("Failed to register vos trees\n");
+
 	return rc;
 }
 

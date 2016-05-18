@@ -25,11 +25,8 @@
  */
 #include <daos/btree.h>
 #include <daos_srv/vos.h>
-#include "vos_internal.h"
-
-struct umem_attr vos_uma = {
-	.uma_id = UMEM_CLASS_VMEM,
-};
+#include <vos_internal.h>
+#include <vos_hhash.h>
 
 static void
 vos_key_bundle2iov(struct vos_key_bundle *kbund, daos_iov_t *iov)
@@ -138,7 +135,7 @@ vos_vec_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_dkey_t *dkey,
 	D_ASSERT(rbund.rb_btr != NULL);
 	D_DEBUG(DF_VOS2, "Open subtree\n");
 
-	rc = dbtree_open_inplace(rbund.rb_btr, &vos_uma, &toh);
+	rc = dbtree_open_inplace(rbund.rb_btr, oref->or_vpuma, &toh);
 	if (rc != 0) {
 		D_DEBUG(DF_VOS1, "Failed to open subtree %d: %d\n",
 			rbund.rb_btr->tr_class, rc);
@@ -305,7 +302,7 @@ vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_dkey_t *dkey,
 	D_ASSERT(rbund.rb_btr != NULL);
 	D_DEBUG(DF_VOS2, "Open subtree\n");
 
-	rc = dbtree_open_inplace(rbund.rb_btr, &vos_uma, &toh);
+	rc = dbtree_open_inplace(rbund.rb_btr, oref->or_vpuma, &toh);
 	if (rc != 0)
 		return rc;
 
@@ -362,7 +359,6 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       daos_sg_list_t *sgls, daos_event_t *ev)
 {
 	struct vos_obj_ref	*oref;
-	PMEMobjpool		*pop;
 	int			 rc;
 
 	D_DEBUG(DF_VOS2, "Update "DF_UOID", desc_nr %d\n", DP_UOID(oid), nr);
@@ -371,27 +367,12 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		return rc;
 
-	pop = vos_coh2pop(coh);
-	if (pop == NULL) {
-		/* XXX it should be a failure, but before we integrate
-		 * everything, it is the actual code path.
-		 */
-		rc = vos_obj_update_vecs(oref, epoch, dkey, nr, vios, sgls);
-		goto out;
-	}
-
-	TX_BEGIN(pop) {
+	TX_BEGIN(oref->or_vphdl) {
 		rc = vos_obj_update_vecs(oref, epoch, dkey, nr, vios, sgls);
 	} TX_ONABORT {
 		D_DEBUG(DF_MISC, "Failed to update object\n");
 	} TX_END
- out:
+
 	vos_obj_ref_release(vos_obj_cache_current(), oref);
 	return rc;
 }
-
-PMEMobjpool *vos_coh2pop(daos_handle_t coh)
-{
-	return NULL;
-}
-

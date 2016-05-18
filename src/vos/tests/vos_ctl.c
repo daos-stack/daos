@@ -18,7 +18,7 @@
  * (C) Copyright 2016 Intel Corporation.
  */
 /**
- * Test for container creation and destroy.
+ * Test for KV object creation and destroy.
  * vos/tests/vos_ctl.c
  */
 
@@ -35,7 +35,9 @@
 #include <getopt.h>
 #include <daos_srv/vos.h>
 #include <daos/common.h>
-#include "vos_internal.h"
+#include <errno.h>
+#include <vos_internal.h>
+#include <vos_hhash.h>
 
 #define VC_SEP          ','
 #define VC_SEP_VAL      ':'
@@ -46,12 +48,24 @@ static daos_unit_oid_t	vc_oid = {
 };
 
 static daos_epoch_t	vc_epoch = 1;
-static daos_handle_t	vc_coh;
 
 #define VC_STR_SIZE	1024
 
+bool
+file_exists(const char *filename)
+{
+	FILE *fp;
+
+	fp = fopen(filename, "r");
+	if (fp) {
+		fclose(fp);
+		return true;
+	}
+	return false;
+}
+
 static int
-vc_obj_operator(bool update, char *str)
+vc_obj_operator(bool update, char *str, daos_handle_t vc_coh)
 {
 	daos_iov_t	  val_iov;
 	char		  key_buf[VC_STR_SIZE];
@@ -121,48 +135,127 @@ vc_obj_operator(bool update, char *str)
 
 		if (rc != 0) {
 			D_ERROR("Failed to %s record %s\n",
-				update ? "update" : "fetch", key_buf);
+				update ? "update" : "lookup", key_buf);
 			break;
 		}
 		D_PRINT("%s : %s\n", key_buf, val_buf);
 		count++;
 	}
 	D_PRINT("Totally %s %d records\n",
-		update ? "updated" : "fetched", count);
+	       update ? "updated" : "lookedup", count);
 	return rc;
 }
 
 static struct option vos_ops[] = {
 	{ "update",	required_argument,	NULL,	'u'	},
-	{ "find",	required_argument,	NULL,	'f'	},
-	{ NULL,		0,			NULL,	0	},
+	{ "lookup",	required_argument,	NULL,	'l'	},
+	{ "filename",	required_argument,	NULL,	'f'	},
+	{ NULL,		0,			NULL,	 0	},
 };
 
 int
 main(int argc, char **argv)
 {
-	int	rc;
-
-	rc = vos_obj_tree_register(NULL);
-	if (rc != 0) {
-		D_ERROR("Failed to register vos trees\n");
-		return rc;
-	}
+	int			rc = 0;
+	char			*ustr = NULL, *lstr = NULL;
+	char			*fname = NULL;
+	uuid_t			pool_uuid, co_uuid;
+	static daos_handle_t	vc_coh, vp_poh;
 
 	optind = 0;
-	while ((rc = getopt_long(argc, argv, "u:f:",
+	while ((rc = getopt_long(argc, argv, "u:l:f:",
 				 vos_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'u':
-			rc = vc_obj_operator(true, optarg);
+			ustr = strdup(optarg);
+			break;
+		case 'l':
+			lstr = strdup(optarg);
 			break;
 		case 'f':
-			rc = vc_obj_operator(false, optarg);
+			fname = strdup(optarg);
 			break;
 		default:
 			D_PRINT("Unsupported command %c\n", rc);
 			break;
 		}
 	}
-	return 0;
+	if (!fname) {
+		D_ERROR("Require PMEM File name\n");
+		rc = EINVAL;
+		goto out;
+	}
+	if (file_exists(fname))
+		remove(fname);
+
+	rc = vos_init();
+	if (rc) {
+		fprintf(stderr, "VOS init error: %d\n", rc);
+		goto out;
+	}
+	uuid_generate_time_safe(pool_uuid);
+	uuid_generate_time_safe(co_uuid);
+
+	rc = vos_pool_create(fname, pool_uuid, PMEMOBJ_MIN_POOL, &vp_poh, NULL);
+	if (rc) {
+		fprintf(stderr, "vpool create failed with error : %d", rc);
+		goto fini;
+	}
+	fprintf(stdout, "Success creating pool at %s\n", fname);
+
+	rc = vos_co_create(vp_poh, co_uuid, NULL);
+	if (rc) {
+		fprintf(stderr, "vos container creation error\n");
+		goto fini;
+	}
+	fprintf(stdout, "Success creating container at %s\n", fname);
+
+	rc = vos_co_open(vp_poh, co_uuid, &vc_coh, NULL);
+	if (rc) {
+		fprintf(stderr, "vos container open error\n");
+		goto fini;
+	}
+	fprintf(stdout, "Success opening container at %s\n", fname);
+
+	if (ustr) {
+		rc = vc_obj_operator(true, ustr, vc_coh);
+		if (rc) {
+			fprintf(stderr, "vos object update error\n");
+			goto fini;
+		}
+		fprintf(stdout, "Success object update at %s\n", fname);
+	}
+
+	if (lstr) {
+		rc = vc_obj_operator(false, lstr, vc_coh);
+		if (rc) {
+			fprintf(stderr, "vos object lookup error\n");
+			goto fini;
+		}
+		fprintf(stdout, "Success object lookup at %s\n", fname);
+	}
+
+	rc = vos_co_close(vc_coh, NULL);
+	if (rc) {
+		fprintf(stderr, "vos container close error\n");
+		goto fini;
+	}
+	fprintf(stdout, "Success closing container at %s\n", fname);
+
+	rc = vos_pool_destroy(vp_poh, NULL);
+	if (rc)
+		fprintf(stderr, "vos pool destroy error\n");
+	fprintf(stdout, "Success destroying pool at %s\n", fname);
+fini:
+	vos_fini();
+out:
+	if (ustr)
+		free(ustr);
+	if (lstr)
+		free(lstr);
+	if (fname) {
+		remove(fname);
+		free(fname);
+	}
+	return rc;
 }

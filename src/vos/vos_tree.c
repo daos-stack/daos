@@ -587,11 +587,11 @@ vos_obj_tree_init(struct vos_obj_ref *oref)
 	if (vos_obj_is_new(obj)) {
 		D_DEBUG(DF_VOS2, "Create btree for object\n");
 		rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats,
-					   ta->ta_order, &vos_uma,
+					   ta->ta_order, oref->or_vpuma,
 					   &obj->vo_tree, &oref->or_toh);
 	} else {
 		D_DEBUG(DF_VOS2, "Open btree for object\n");
-		rc = dbtree_open_inplace(&obj->vo_tree, &vos_uma,
+		rc = dbtree_open_inplace(&obj->vo_tree, oref->or_vpuma,
 					 &oref->or_toh);
 	}
 	return rc;
@@ -615,14 +615,10 @@ vos_obj_tree_fini(struct vos_obj_ref *oref)
 
 /** register all tree classes for VOS. */
 int
-vos_obj_tree_register(PMEMobjpool *pool)
+vos_obj_tree_register(void)
 {
 	struct vos_btr_attr *ta;
 	int		     rc = 0;
-
-	D_ASSERT(vos_uma.uma_u.pmem_pool == NULL);
-
-	vos_uma.uma_u.pmem_pool = pool;
 
 	for (ta = &vos_btr_attrs[0]; ta->ta_class != VOS_BTR_END; ta++) {
 		rc = dbtree_class_register(ta->ta_class, ta->ta_feats,

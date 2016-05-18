@@ -151,6 +151,10 @@ struct vos_obj_ref {
 	daos_list_t			 or_llink;
 	/** hash link for object reference **/
 	daos_list_t			 or_hlink;
+	/** reference to btree umem attributes **/
+	struct umem_attr		*or_vpuma;
+	/** Pointer to PMEM pool of this object **/
+	PMEMobjpool			*or_vphdl;
 	/** ref count for the LRU link **/
 	int32_t				 or_lrefcnt;
 	/** Persistent memory ID for the object */
@@ -386,8 +390,6 @@ enum {
 
 int vos_obj_tree_init(struct vos_obj_ref *oref);
 int vos_obj_tree_fini(struct vos_obj_ref *oref);
-int vos_obj_tree_register(PMEMobjpool *pop);
-
-struct umem_attr vos_uma;
+int vos_obj_tree_register(void);
 
 #endif /* __VOS_INTERNAL_H__ */
