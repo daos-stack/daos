@@ -175,6 +175,7 @@ extern struct dtp_msg_field DMF_OID;
 extern struct dtp_msg_field DMF_IOVEC;
 extern struct dtp_msg_field DMF_VEC_IOD_ARRAY;
 extern struct dtp_msg_field DMF_BULK_ARRAY;
+extern struct dtp_msg_field DMF_EPOCH_STATE;
 
 extern struct dtp_msg_field *dtp_single_out_fields[];
 struct dtp_single_out {

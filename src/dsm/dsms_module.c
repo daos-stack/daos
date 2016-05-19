@@ -71,6 +71,12 @@ static struct daos_rpc_handler dsms_handlers[] = {
 		.dr_opc		= DSM_CONT_DESTROY,
 		.dr_hdlr	= dsms_hdlr_cont_destroy
 	}, {
+		.dr_opc		= DSM_CONT_OPEN,
+		.dr_hdlr	= dsms_hdlr_cont_open
+	}, {
+		.dr_opc		= DSM_CONT_CLOSE,
+		.dr_hdlr	= dsms_hdlr_cont_close
+	}, {
 		.dr_opc		= DSM_TGT_OBJ_UPDATE,
 		.dr_hdlr	= dsms_hdlr_object_rw,
 	}, {

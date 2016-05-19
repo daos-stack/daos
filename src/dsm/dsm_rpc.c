@@ -78,6 +78,29 @@ struct dtp_msg_field *cont_destroy_out_fields[] = {
 	&DMF_INT	/* rc */
 };
 
+struct dtp_msg_field *cont_open_in_fields[] = {
+	&DMF_UUID,	/* pool */
+	&DMF_UUID,	/* pool_hdl */
+	&DMF_UUID,	/* cont */
+	&DMF_UUID,	/* cont_hdl */
+	&DMF_UINT64	/* capas */
+};
+
+struct dtp_msg_field *cont_open_out_fields[] = {
+	&DMF_INT,		/* ret */
+	&DMF_EPOCH_STATE	/* epoch_state */
+};
+
+struct dtp_msg_field *cont_close_in_fields[] = {
+	&DMF_UUID,	/* pool */
+	&DMF_UUID,	/* cont */
+	&DMF_UUID	/* cont_hdl */
+};
+
+struct dtp_msg_field *cont_close_out_fields[] = {
+	&DMF_INT	/* ret */
+};
+
 struct dtp_req_format DQF_POOL_CONNECT =
 	DEFINE_DTP_REQ_FMT("DSM_POOL_CONNECT", pool_connect_in_fields,
 			   pool_connect_out_fields);
@@ -93,6 +116,14 @@ struct dtp_req_format DQF_CONT_CREATE =
 struct dtp_req_format DQF_CONT_DESTROY =
 	DEFINE_DTP_REQ_FMT("DSM_CONT_DESTROY", cont_destroy_in_fields,
 			   cont_destroy_out_fields);
+
+struct dtp_req_format DQF_CONT_OPEN =
+	DEFINE_DTP_REQ_FMT("DSM_CONT_OPEN", cont_open_in_fields,
+			   cont_open_out_fields);
+
+struct dtp_req_format DQF_CONT_CLOSE =
+	DEFINE_DTP_REQ_FMT("DSM_CONT_CLOSE", cont_close_in_fields,
+			   cont_close_out_fields);
 
 struct dtp_msg_field *dsm_obj_update_in_fields[] = {
 	&DMF_OID,	/* object ID */
@@ -147,6 +178,18 @@ struct daos_rpc dsm_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_CONT_DESTROY
+	}, {
+		.dr_name	= "DSM_CONT_OPEN",
+		.dr_opc		= DSM_CONT_OPEN,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_OPEN
+	}, {
+		.dr_name	= "DSM_CONT_CLOSE",
+		.dr_opc		= DSM_CONT_CLOSE,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_CLOSE
 	}, {
 		.dr_name	= "DSM_OBJ_UPDATE",
 		.dr_opc		= DSM_TGT_OBJ_UPDATE,

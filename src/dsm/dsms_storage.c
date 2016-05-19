@@ -938,6 +938,87 @@ static btr_ops_t ec_ops = {
 	.to_rec_string	= ec_rec_string
 };
 
+int
+dsms_kvs_ec_update(daos_handle_t kvsh, uint64_t epoch, const uint64_t *count)
+{
+	daos_iov_t	key;
+	daos_iov_t	val;
+	int		rc;
+
+	D_DEBUG(DF_DSMS, "updating "DF_U64":"DF_U64"\n", epoch, *count);
+
+	key.iov_buf = &epoch;
+	key.iov_buf_len = sizeof(epoch);
+	key.iov_len = key.iov_buf_len;
+
+	val.iov_buf = (void *)count;
+	val.iov_buf_len = sizeof(*count);
+	val.iov_len = val.iov_buf_len;
+
+	rc = dbtree_update(kvsh, &key, &val);
+	if (rc != 0)
+		D_ERROR("failed to update "DF_U64": %d\n", epoch, rc);
+
+	return rc;
+}
+
+int
+dsms_kvs_ec_lookup(daos_handle_t kvsh, uint64_t epoch, uint64_t *count)
+{
+	daos_iov_t	key;
+	daos_iov_t	val;
+	int		rc;
+
+	key.iov_buf = &epoch;
+	key.iov_buf_len = sizeof(epoch);
+	key.iov_len = key.iov_buf_len;
+
+	val.iov_buf = count;
+	val.iov_buf_len = sizeof(*count);
+	val.iov_len = val.iov_buf_len;
+
+	rc = dbtree_lookup(kvsh, &key, &val);
+	if (rc != 0) {
+		D_ERROR("failed to look up "DF_U64": %d\n", epoch, rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+int
+dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
+		  const uint64_t *epoch_in, uint64_t *epoch_out,
+		  uint64_t *count)
+{
+	daos_iov_t	key_in;
+	daos_iov_t	key_out;
+	daos_iov_t	val;
+	int		rc;
+
+	key_in.iov_buf = (void *)epoch_in;
+	key_in.iov_buf_len = sizeof(*epoch_in);
+	key_in.iov_len = key_in.iov_buf_len;
+
+	key_out.iov_buf = epoch_out;
+	key_out.iov_buf_len = sizeof(*epoch_out);
+	key_out.iov_len = key_out.iov_buf_len;
+
+	val.iov_buf = count;
+	val.iov_buf_len = sizeof(*count);
+	val.iov_len = val.iov_buf_len;
+
+	rc = dbtree_fetch(kvsh, opc, epoch_in == NULL ? NULL : &key_in,
+			  &key_out, &val);
+	if (rc != 0) {
+		D_ERROR("failed to fetch opc=%d in="DF_U64": %d\n", opc,
+			epoch_in == NULL ? -1 : *epoch_in, rc);
+		return rc;
+	}
+
+	return 0;
+}
+
 static DAOS_LIST_HEAD(mpool_cache);
 static pthread_mutex_t mpool_cache_lock;
 

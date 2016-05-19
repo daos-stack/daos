@@ -590,6 +590,38 @@ dtp_proc_daos_vec_iod(dtp_proc_t proc, daos_vec_iod_t *dvi)
 	return rc;
 }
 
+static int
+dtp_proc_daos_epoch_state_t(dtp_proc_t proc, daos_epoch_state_t *es)
+{
+	hg_return_t hg_ret;
+
+	hg_ret = hg_proc_uint64_t(proc, &es->es_hce);
+	if (hg_ret != HG_SUCCESS)
+		return -DER_DTP_HG;
+
+	hg_ret = hg_proc_uint64_t(proc, &es->es_lre);
+	if (hg_ret != HG_SUCCESS)
+		return -DER_DTP_HG;
+
+	hg_ret = hg_proc_uint64_t(proc, &es->es_lhe);
+	if (hg_ret != HG_SUCCESS)
+		return -DER_DTP_HG;
+
+	hg_ret = hg_proc_uint64_t(proc, &es->es_glb_hce);
+	if (hg_ret != HG_SUCCESS)
+		return -DER_DTP_HG;
+
+	hg_ret = hg_proc_uint64_t(proc, &es->es_glb_lre);
+	if (hg_ret != HG_SUCCESS)
+		return -DER_DTP_HG;
+
+	hg_ret = hg_proc_uint64_t(proc, &es->es_glb_hpce);
+	if (hg_ret != HG_SUCCESS)
+		return -DER_DTP_HG;
+
+	return 0;
+}
+
 struct dtp_msg_field DMF_UUID =
 	DEFINE_DTP_MSG("dtp_uuid", 0, sizeof(uuid_t),
 		       dtp_proc_uuid_t);
@@ -642,6 +674,10 @@ struct dtp_msg_field DMF_BULK_ARRAY =
 	DEFINE_DTP_MSG("daos_bulks", DMF_ARRAY_FLAG,
 			sizeof(dtp_bulk_t),
 			dtp_proc_dtp_bulk_t);
+
+struct dtp_msg_field DMF_EPOCH_STATE =
+	DEFINE_DTP_MSG("daos_epoch_state_t", 0, sizeof(daos_epoch_state_t),
+		       dtp_proc_daos_epoch_state_t);
 
 struct dtp_msg_field *dtp_single_out_fields[] = {
 	&DMF_INT,	/* status */

@@ -232,6 +232,8 @@ test_pool_connect(int argc, char *argv[])
 	char	       *uuid_str = argv[argc - 1];
 	uuid_t		uuid;
 	daos_handle_t	poh;
+	daos_handle_t	coh;
+	daos_co_info_t	info;
 	int		rc;
 
 	D_DEBUG(DF_DSMC, "connecting to pool %s\n", argv[argc - 1]);
@@ -256,13 +258,29 @@ test_pool_connect(int argc, char *argv[])
 
 	rc = dsm_co_create(poh, uuid, NULL /* ev */);
 	if (rc != 0)
-		D_GOTO(disconnect, rc);
+		return rc;
+
+	rc = dsm_co_open(poh, uuid, DAOS_COO_RW, NULL /* failed */, &coh, &info,
+			 NULL /* ev */);
+	if (rc != 0)
+		return rc;
+
+	printf("container info:\n");
+	printf("  hce: "DF_U64"\n", info.ci_epoch_state.es_hce);
+	printf("  lre: "DF_U64"\n", info.ci_epoch_state.es_lre);
+	printf("  lhe: "DF_U64"\n", info.ci_epoch_state.es_lhe);
+	printf("  ghce: "DF_U64"\n", info.ci_epoch_state.es_glb_hce);
+	printf("  glre: "DF_U64"\n", info.ci_epoch_state.es_glb_lre);
+	printf("  ghpce: "DF_U64"\n", info.ci_epoch_state.es_glb_hpce);
+
+	rc = dsm_co_close(coh, NULL /* ev */);
+	if (rc != 0)
+		return rc;
 
 	rc = dsm_co_destroy(poh, uuid, 1 /* force */, NULL /* ev */);
 	if (rc != 0)
-		D_GOTO(disconnect, rc);
+		return rc;
 
-disconnect:
 	rc = dsm_pool_disconnect(poh, NULL /* ev */);
 	if (rc != 0)
 		return rc;

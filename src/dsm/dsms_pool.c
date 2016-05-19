@@ -545,8 +545,8 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 
 	rc = dsms_kvs_uv_lookup(pool->p_handles, pci->pci_pool_hdl, &hdl,
 				sizeof(hdl));
-	if (rc == 0) {
-		if (hdl.ph_capas != pci->pci_capas) {
+	if (rc != -DER_NONEXIST) {
+		if (rc == 0 && hdl.ph_capas != pci->pci_capas) {
 			/* The existing one does not match the new one. */
 			D_ERROR("found conflicting pool handle\n");
 			rc = -DER_EXIST;

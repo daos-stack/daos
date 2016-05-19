@@ -62,17 +62,24 @@ dsm_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	struct daos_op_sp      *sp;
 	int			rc;
 
-	conn = dsmc_handle2pool(poh);
-	if (conn == NULL || uuid_is_null(uuid))
+	if (uuid_is_null(uuid))
 		return -DER_INVAL;
 
-	if (!(conn->pc_capas & DAOS_PC_RW) && !(conn->pc_capas & DAOS_PC_EX))
+	conn = dsmc_handle2pool(poh);
+	if (conn == NULL)
+		return -DER_NO_HDL;
+
+	if (!(conn->pc_capas & DAOS_PC_RW) && !(conn->pc_capas & DAOS_PC_EX)) {
+		pool_conn_put(conn);
 		return -DER_NO_PERM;
+	}
 
 	if (ev == NULL) {
 		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
+		if (rc != 0) {
+			pool_conn_put(conn);
 			return rc;
+		}
 	}
 
 	D_DEBUG(DF_DSMC, DF_UUID"\n", DP_UUID(uuid));
@@ -85,6 +92,7 @@ dsm_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	rc = dsm_req_create(daos_ev2ctx(ev), ep, DSM_CONT_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
+		pool_conn_put(conn);
 		return rc;
 	}
 
@@ -92,6 +100,8 @@ dsm_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	uuid_copy(in->cci_pool, conn->pc_pool);
 	uuid_copy(in->cci_pool_hdl, conn->pc_pool_hdl);
 	uuid_copy(in->cci_cont, uuid);
+
+	pool_conn_put(conn);
 
 	sp = daos_ev2sp(ev);
 	dtp_req_addref(rpc);
@@ -153,13 +163,17 @@ dsm_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	if (conn == NULL)
 		return -DER_NO_HDL;
 
-	if (!(conn->pc_capas & DAOS_PC_RW) && !(conn->pc_capas & DAOS_PC_EX))
+	if (!(conn->pc_capas & DAOS_PC_RW) && !(conn->pc_capas & DAOS_PC_EX)) {
+		pool_conn_put(conn);
 		return -DER_NO_PERM;
+	}
 
 	if (ev == NULL) {
 		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
+		if (rc != 0) {
+			pool_conn_put(conn);
 			return rc;
+		}
 	}
 
 	D_DEBUG(DF_DSMC, DF_UUID" force=%d\n", DP_UUID(uuid), force);
@@ -172,6 +186,7 @@ dsm_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	rc = dsm_req_create(daos_ev2ctx(ev), ep, DSM_CONT_DESTROY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
+		pool_conn_put(conn);
 		return rc;
 	}
 
@@ -180,6 +195,8 @@ dsm_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	uuid_copy(in->cdi_pool_hdl, conn->pc_pool_hdl);
 	uuid_copy(in->cdi_cont, uuid);
 	in->cdi_force = force;
+
+	pool_conn_put(conn);
 
 	sp = daos_ev2sp(ev);
 	dtp_req_addref(rpc);
@@ -208,7 +225,7 @@ dsmc_container_free(struct daos_hlink *dlink)
 }
 
 
-struct daos_hlink_ops dc_h_ops = {
+static struct daos_hlink_ops dc_h_ops = {
 	.hop_free = dsmc_container_free,
 };
 
@@ -230,82 +247,293 @@ dsmc_container_alloc(const uuid_t uuid)
 	return dc;
 }
 
-/**
- * XXX Only open the container on the client side for now
- **/
+struct cont_open_arg {
+	struct pool_conn       *coa_conn;
+	struct dsmc_container  *coa_cont;
+	daos_co_info_t	       *coa_info;
+};
+
+static int
+cont_open_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+{
+	struct cont_open_out   *out;
+	struct cont_open_arg   *arg = sp->sp_arg;
+	struct pool_conn       *conn = arg->coa_conn;
+	struct dsmc_container  *cont = arg->coa_cont;
+
+	if (rc != 0) {
+		D_ERROR("RPC error while opening container: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	out = dtp_reply_get(sp->sp_rpc);
+
+	rc = out->coo_ret;
+	if (rc != 0) {
+		D_ERROR("failed to open container: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, "completed opening container\n");
+
+	pthread_rwlock_wrlock(&conn->pc_co_list_lock);
+	if (conn->pc_disconnecting) {
+		pthread_rwlock_unlock(&conn->pc_co_list_lock);
+		D_ERROR("pool connection being invalidated\n");
+		/*
+		 * Instead of sending a DSM_CONT_CLOSE RPC, we leave this new
+		 * container handle on the server side to the
+		 * DSM_POOL_DISCONNECT effort we are racing with.
+		 */
+		D_GOTO(out, rc = -DER_NO_HDL);
+	}
+	daos_list_add(&cont->dc_po_list, &conn->pc_co_list);
+	cont->dc_pool_hdl = sp->sp_hdl;
+	pthread_rwlock_unlock(&conn->pc_co_list_lock);
+
+	dsmc_container_add_cache(cont, sp->sp_hdlp);
+
+	if (arg->coa_info == NULL)
+		D_GOTO(out, rc = 0);
+
+	uuid_copy(arg->coa_info->ci_uuid, arg->coa_cont->dc_uuid);
+	arg->coa_info->ci_epoch_state = out->coo_epoch_state;
+	/* TODO */
+	arg->coa_info->ci_nsnapshots = 0;
+	arg->coa_info->ci_snapshots = NULL;
+
+out:
+	dtp_req_decref(sp->sp_rpc);
+	D_FREE_PTR(arg);
+	if (rc != 0)
+		dsmc_container_put(arg->coa_cont);
+	pool_conn_put(conn);
+	return rc;
+}
+
 int
 dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	    daos_rank_list_t *failed, daos_handle_t *coh, daos_co_info_t *info,
 	    daos_event_t *ev)
 {
-	struct dsmc_container	*dc;
-	struct pool_conn	*conn;
+	struct cont_open_in    *in;
+	struct pool_conn       *conn;
+	struct dsmc_container  *cont;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t	       *rpc;
+	struct daos_op_sp      *sp;
+	struct cont_open_arg   *arg;
+	int			rc;
+
+	D_ASSERT(failed == NULL);	/* TODO */
+
+	if (uuid_is_null(uuid) || coh == NULL)
+		D_GOTO(err, rc = -DER_INVAL);
 
 	conn = dsmc_handle2pool(poh);
 	if (conn == NULL)
-		return -DER_NO_HDL;
+		D_GOTO(err, rc = -DER_NO_HDL);
 
-	dc = dsmc_container_alloc(uuid);
-	if (dc == NULL) {
-		pool_conn_put(conn);
-		return -DER_NOMEM;
+	if ((flags & DAOS_COO_RW) && (conn->pc_capas & DAOS_PC_RO))
+		D_GOTO(err_conn, rc = -DER_NO_PERM);
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			D_GOTO(err_conn, rc);
 	}
 
-	/* Add container to the pool list */
+	D_DEBUG(DF_DSMC, DF_UUID"\n", DP_UUID(uuid));
+
+	cont = dsmc_container_alloc(uuid);
+	if (cont == NULL)
+		D_GOTO(err_conn, rc = -DER_NOMEM);
+
+	uuid_generate(cont->dc_cont_hdl);
+	cont->dc_capas = flags;
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL) {
+		D_ERROR("failed to allocate container open arg");
+		D_GOTO(err_cont, rc = -DER_NOMEM);
+	}
+
+	arg->coa_conn = conn;
+	arg->coa_cont = cont;
+	arg->coa_info = info;
+
+	/* To the only container service. */
+	uuid_clear(ep.ep_grp_id);
+	ep.ep_rank = 0;
+	ep.ep_tag = 0;
+
+	rc = dsm_req_create(daos_ev2ctx(ev), ep, DSM_CONT_OPEN, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: %d\n", rc);
+		D_GOTO(err_arg, rc);
+	}
+
+	in = dtp_req_get(rpc);
+	uuid_copy(in->coi_pool, conn->pc_pool);
+	uuid_copy(in->coi_pool_hdl, conn->pc_pool_hdl);
+	uuid_copy(in->coi_cont, uuid);
+	in->coi_capas = flags;
+
+	sp = daos_ev2sp(ev);
+	dtp_req_addref(rpc);
+	sp->sp_rpc = rpc;
+	sp->sp_hdl = poh;
+	sp->sp_hdlp = coh;
+	sp->sp_arg = arg;
+
+	rc = daos_event_launch(ev, NULL /* abort_cb */, cont_open_complete);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	return daos_rpc_send(rpc, ev);
+
+err_rpc:
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
+err_arg:
+	D_FREE_PTR(arg);
+err_cont:
+	dsmc_container_put(cont);
+err_conn:
+	pool_conn_put(conn);
+err:
+	D_DEBUG(DF_DSMC, "failed to open container: %d\n", rc);
+	return rc;
+}
+
+struct cont_close_arg {
+	struct pool_conn       *cca_conn;
+	struct dsmc_container  *cca_cont;
+};
+
+static int
+cont_close_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+{
+	struct cont_close_out  *out;
+	struct cont_close_arg  *arg = sp->sp_arg;
+	struct pool_conn       *conn = arg->cca_conn;
+	struct dsmc_container  *cont = arg->cca_cont;
+
+	if (rc != 0) {
+		D_ERROR("RPC error while closing container: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	out = dtp_reply_get(sp->sp_rpc);
+
+	rc = out->cco_ret;
+	if (rc != 0) {
+		D_ERROR("failed to close container: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, "completed closing container\n");
+
+	dsmc_container_del_cache(cont);
+
+	/* Remove the container from pool container list */
 	pthread_rwlock_wrlock(&conn->pc_co_list_lock);
-	if (conn->pc_disconnecting) {
-		pthread_rwlock_unlock(&conn->pc_co_list_lock);
-		pool_conn_put(conn);
-		dsmc_container_put(dc);
-		return -DER_INVAL;
-	}
-	daos_list_add(&dc->dc_po_list, &conn->pc_co_list);
-	dc->dc_pool_hdl = poh;
+	daos_list_del_init(&cont->dc_po_list);
 	pthread_rwlock_unlock(&conn->pc_co_list_lock);
 
-	dsmc_container_add_cache(dc, coh);
-
+out:
+	dtp_req_decref(sp->sp_rpc);
 	pool_conn_put(conn);
-
-	return 0;
+	dsmc_container_put(cont);
+	return rc;
 }
 
 int
 dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 {
-	struct pool_conn	*conn;
-	struct dsmc_container	*dc;
+	struct cont_close_in   *in;
+	struct pool_conn       *conn;
+	struct dsmc_container  *cont;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t	       *rpc;
+	struct daos_op_sp      *sp;
+	struct cont_close_arg  *arg;
+	int			rc;
 
-	dc = dsmc_handle2container(coh);
-	if (dc == NULL)
-		return -DER_NO_HDL;
-
-	D_ASSERT(!daos_handle_is_inval(dc->dc_pool_hdl));
-	conn = dsmc_handle2pool(dc->dc_pool_hdl);
-	if (conn == NULL) {
-		dsmc_container_put(dc);
-		return -DER_NO_HDL;
-	}
+	cont = dsmc_handle2container(coh);
+	if (cont == NULL)
+		D_GOTO(err, rc = -DER_NO_HDL);
 
 	/* Check if there are not objects opened for this container */
-	pthread_rwlock_rdlock(&dc->dc_obj_list_lock);
-	if (!daos_list_empty(&dc->dc_obj_list)) {
-		pthread_rwlock_unlock(&dc->dc_obj_list_lock);
-		dsmc_container_put(dc);
-		pool_conn_put(conn);
-		return -DER_BUSY;
+	pthread_rwlock_rdlock(&cont->dc_obj_list_lock);
+	if (!daos_list_empty(&cont->dc_obj_list)) {
+		pthread_rwlock_unlock(&cont->dc_obj_list_lock);
+		D_GOTO(err_cont, rc = -DER_BUSY);
 	}
-	dc->dc_closing = 1;
-	pthread_rwlock_unlock(&dc->dc_obj_list_lock);
+	cont->dc_closing = 1;
+	pthread_rwlock_unlock(&cont->dc_obj_list_lock);
 
-	/* Remove the container from pool container list */
-	pthread_rwlock_wrlock(&conn->pc_co_list_lock);
-	daos_list_del_init(&dc->dc_po_list);
-	pthread_rwlock_unlock(&conn->pc_co_list_lock);
+	D_ASSERT(!daos_handle_is_inval(cont->dc_pool_hdl));
+	conn = dsmc_handle2pool(cont->dc_pool_hdl);
+	D_ASSERT(conn != NULL);
 
-	dsmc_container_put(dc);
-	dsmc_container_del_cache(dc);
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			D_GOTO(err_conn, rc = 0);
+	}
+
+	D_DEBUG(DF_DSMC, DF_UUID"/"DF_UUID": "DF_UUID"\n",
+		DP_UUID(conn->pc_pool), DP_UUID(cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl));
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL) {
+		D_ERROR("failed to allocate container close arg");
+		D_GOTO(err_conn, rc = -DER_NOMEM);
+	}
+
+	arg->cca_conn = conn;
+	arg->cca_cont = cont;
+
+	/* To the only container service. */
+	uuid_clear(ep.ep_grp_id);
+	ep.ep_rank = 0;
+	ep.ep_tag = 0;
+
+	rc = dsm_req_create(daos_ev2ctx(ev), ep, DSM_CONT_CLOSE, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: %d\n", rc);
+		D_GOTO(err_arg, rc);
+	}
+
+	in = dtp_req_get(rpc);
+	uuid_copy(in->cci_pool, conn->pc_pool);
+	uuid_copy(in->cci_cont, cont->dc_uuid);
+	uuid_copy(in->cci_cont_hdl, cont->dc_cont_hdl);
+
+	sp = daos_ev2sp(ev);
+	dtp_req_addref(rpc);
+	sp->sp_rpc = rpc;
+	sp->sp_arg = arg;
+
+	rc = daos_event_launch(ev, NULL /* abort_cb */, cont_close_complete);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	return daos_rpc_send(rpc, ev);
+
+err_rpc:
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
+err_arg:
+	D_FREE_PTR(arg);
+err_conn:
 	pool_conn_put(conn);
-
-	return 0;
+err_cont:
+	dsmc_container_put(cont);
+err:
+	D_DEBUG(DF_DSMC, "failed to close container handle "DF_X64": %d\n",
+		coh.cookie, rc);
+	return rc;
 }

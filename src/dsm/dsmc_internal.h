@@ -62,6 +62,8 @@ struct dsmc_container {
 	pthread_rwlock_t  dc_obj_list_lock;
 	/* uuid for this container */
 	uuid_t		  dc_uuid;
+	uuid_t		  dc_cont_hdl;
+	uint64_t	  dc_capas;
 	/* pool handler of the container */
 	daos_handle_t	  dc_pool_hdl;
 	uint32_t	  dc_closing:1;

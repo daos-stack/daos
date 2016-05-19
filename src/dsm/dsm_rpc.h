@@ -163,6 +163,29 @@ struct cont_destroy_out {
 	int32_t	cdo_ret;
 };
 
+struct cont_open_in {
+	uuid_t		coi_pool;
+	uuid_t		coi_pool_hdl;
+	uuid_t		coi_cont;
+	uuid_t		coi_cont_hdl;
+	uint64_t	coi_capas;
+};
+
+struct cont_open_out {
+	int32_t			coo_ret;
+	daos_epoch_state_t	coo_epoch_state;
+};
+
+struct cont_close_in {
+	uuid_t	cci_pool;
+	uuid_t	cci_cont;
+	uuid_t	cci_cont_hdl;
+};
+
+struct cont_close_out {
+	int32_t	cco_ret;
+};
+
 static inline int
 proc_pool_map(dtp_proc_t proc, void *data)
 {
@@ -187,15 +210,6 @@ proc_pool_map(dtp_proc_t proc, void *data)
 int
 dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
 	       dtp_opcode_t opc, dtp_rpc_t **req);
-
-int
-dsms_hdlr_pool_connect(dtp_rpc_t *rpc);
-
-int
-dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
-
-int
-dsms_hdlr_object_rw(dtp_rpc_t *rpc);
 
 extern struct daos_rpc dsm_rpcs[];
 

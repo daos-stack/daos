@@ -34,9 +34,9 @@
 #include <pthread.h>
 #include <uuid/uuid.h>
 
+#include <daos/btree.h>
 #include <daos/list.h>
 #include <daos/transport.h>
-
 #include <daos_srv/daos_mgmt_srv.h>
 
 /*
@@ -88,6 +88,12 @@ int dsms_kvs_uv_open_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp,
 int dsms_kvs_uv_destroy_kvs(daos_handle_t kvsh, const uuid_t uuid,
 			    PMEMobjpool *mp);
 int dsms_kvs_uv_destroy(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp);
+int dsms_kvs_ec_update(daos_handle_t kvsh, uint64_t epoch,
+		       const uint64_t *count);
+int dsms_kvs_ec_lookup(daos_handle_t kvsh, uint64_t epoch, uint64_t *count);
+int dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
+		      const uint64_t *epoch_in, uint64_t *epoch_out,
+		      uint64_t *count);
 int dsms_mpool_lookup(const uuid_t pool_uuid, struct mpool **mpool);
 void dsms_mpool_get(struct mpool *mpool);
 void dsms_mpool_put(struct mpool *mpool);
@@ -105,20 +111,12 @@ int dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
  */
 int dsms_hdlr_cont_create(dtp_rpc_t *rpc);
 int dsms_hdlr_cont_destroy(dtp_rpc_t *rpc);
-
-/*
- * dsms_pool.c
- **/
-int
-dsms_hdlr_pool_connect(dtp_rpc_t *rpc);
-
-int
-dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
+int dsms_hdlr_cont_open(dtp_rpc_t *rpc);
+int dsms_hdlr_cont_close(dtp_rpc_t *rpc);
 
 /*
  * dsms_object.c
- **/
-int
-dsms_hdlr_object_rw(dtp_rpc_t *rpc);
+ */
+int dsms_hdlr_object_rw(dtp_rpc_t *rpc);
 
 #endif /* __DSMS_INTERNAL_H__ */

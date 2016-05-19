@@ -159,11 +159,12 @@ struct pool_hdl {
  *
  * This also stores container attributes of upper layers.
  */
-#define CONT_HCES	"container_hces"	/* btr_root (HCE KVS) */
-#define CONT_LRES	"container_lres"	/* btr_root (LRE KVS) */
-#define CONT_LHES	"container_lhes"	/* btr_root (LHE KVS) */
-#define CONT_SNAPSHOTS	"container_snapshots"	/* btr_root (snapshot KVS) */
-#define CONT_HANDLES	"container_handles"	/* btr_root (container handle */
+#define CONT_GHCE	"ghce"		/* uint64_t */
+#define CONT_HCES	"hces"		/* btr_root (HCE KVS) */
+#define CONT_LRES	"lres"		/* btr_root (LRE KVS) */
+#define CONT_LHES	"lhes"		/* btr_root (LHE KVS) */
+#define CONT_SNAPSHOTS	"snapshots"	/* btr_root (snapshot KVS) */
+#define CONT_HANDLES	"handles"	/* btr_root (container handle */
 						/* KVS) */
 
 /*
@@ -172,11 +173,6 @@ struct pool_hdl {
  * A key is an epoch number. A value is an epoch_count. These epoch-sorted KVSs
  * enable us to quickly retrieve the minimum and maximum HCEs, LREs, and LHEs.
  */
-struct epoch_count {
-	uint64_t	ec_epoch;
-	uint32_t	ec_count;
-	uint32_t	ec_padding;
-};
 
 /*
  * Snapshot KVS (KVS_EC)
@@ -190,8 +186,7 @@ struct container_hdl {
 	uint64_t	ch_hce;
 	uint64_t	ch_lre;
 	uint64_t	ch_lhe;
-	uint32_t	ch_flags;
-	uint32_t	ch_padding;
+	uint64_t	ch_capas;
 };
 
 /* container_hdl::ch_flags */
