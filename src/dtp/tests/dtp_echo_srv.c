@@ -100,10 +100,6 @@ static int run_echo_srver(void)
 	rc = dtp_req_create(gecho.dtp_ctx, svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 
-	/*
-	 * No strdup will cause mercury crash when HG_Free_input
-	 * in dtp_hg_reply_send_cb
-	 */
 	D_ALLOC(pchar, 256); /* DTP will internally free it */
 	assert(pchar != NULL);
 	snprintf(pchar, 256, "Guest_%d@server-side", myrank);
@@ -218,8 +214,7 @@ int bulk_test_cb(const struct dtp_bulk_cb_info *cb_info)
 	if (rc != 0) {
 		printf("bulk transferring failed, dci_rc: %d.\n", rc);
 		e_reply->ret = rc;
-		e_reply->echo_msg =
-			strdup("bulk failed with data corruption.");
+		e_reply->echo_msg = "bulk failed with data corruption.";
 		goto out;
 	}
 	/* calculate md5 checksum to verify data */
@@ -242,14 +237,12 @@ int bulk_test_cb(const struct dtp_bulk_cb_info *cb_info)
 	if (rc == 0) {
 		printf("data verification success, md5: %s.\n", md5_str);
 		e_reply->ret = 0;
-		e_reply->echo_msg =
-			strdup("bulk succeed (data verified).");
+		e_reply->echo_msg = "bulk succeed (data verified).";
 	} else {
 		printf("data verification failed, md5: %s, origin_md5: %s.\n",
 		       md5_str, e_req->bulk_md5_ptr);
 		e_reply->ret = rc;
-		e_reply->echo_msg =
-			strdup("bulk failed with data corruption.");
+		e_reply->echo_msg = "bulk failed with data corruption.";
 	}
 
 	free(md5_str);

@@ -105,27 +105,11 @@ dmg_pool_create(unsigned int mode, const char *grp,
 	/** fill in request buffer */
 	uuid_copy(pc_in->pc_uuid, uuid);
 	pc_in->pc_mode = mode;
-	pc_in->pc_grp = strdup(grp);
-	if (pc_in->pc_grp == NULL) {
-		D_ERROR("strdup(grp) failed.\n");
-		D_GOTO(out_err_req_created, rc = -DER_NOMEM);
-	}
-	pc_in->pc_tgt_dev = strdup(dev);
-	if (pc_in->pc_tgt_dev == NULL) {
-		D_ERROR("strdup(dev) failed.\n");
-		D_GOTO(out_err_grp_dupped, rc = -DER_NOMEM);
-	}
-	rc = daos_rank_list_dup(&pc_in->pc_tgts, tgts, true);
-	if (rc != 0) {
-		D_ERROR("daos_rank_list_dup failed, rc: %d.\n", rc);
-		D_GOTO(out_err_tgt_dev_dupped, rc);
-	}
+	pc_in->pc_grp = (dtp_string_t)grp;
+	pc_in->pc_tgt_dev = (dtp_string_t)dev;
+	pc_in->pc_tgts = (daos_rank_list_t *)tgts;
 	pc_in->pc_tgt_size = size;
-	rc = daos_rank_list_dup(&pc_in->pc_svc, svc, true);
-	if (rc != 0) {
-		D_ERROR("daos_rank_list_dup failed, rc: %d.\n", rc);
-		D_GOTO(out_err_tgts_dupped, rc);
-	}
+	pc_in->pc_svc = svc;
 
 	/** fill in scratchpad associated with the event */
 	sp = daos_ev2sp(ev);
@@ -134,24 +118,17 @@ dmg_pool_create(unsigned int mode, const char *grp,
 	sp->sp_arg = svc;
 
 	rc = daos_event_launch(ev, NULL, pool_create_cp);
-	if (rc)
-		D_GOTO(out_err_svc_dupped, rc);
+	if (rc) {
+		/** dec ref taken for scratchpad */
+		dtp_req_decref(rpc_req);
+		/** dec ref taken for dtp_req_create */
+		dtp_req_decref(rpc_req);
+		D_GOTO(out, rc);
+	}
 
 	/** send the request */
 	rc = daos_rpc_send(rpc_req, ev);
-	D_GOTO(out, rc);
 
-out_err_svc_dupped:
-	dtp_req_decref(rpc_req);
-	daos_rank_list_free(pc_in->pc_svc);
-out_err_tgts_dupped:
-	daos_rank_list_free(pc_in->pc_tgts);
-out_err_tgt_dev_dupped:
-	D_FREE(pc_in->pc_tgt_dev, strlen(dev));
-out_err_grp_dupped:
-	D_FREE(pc_in->pc_grp, strlen(grp));
-out_err_req_created:
-	dtp_req_decref(rpc_req);
 out:
 	return rc;
 }

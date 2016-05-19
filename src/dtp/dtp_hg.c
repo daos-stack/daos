@@ -755,8 +755,9 @@ dtp_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 			D_ERROR("HG_Get_output failed, hg_ret: %d, opc: "
 				"0x%x.\n", hg_ret, opc);
 			rc = -DER_DTP_HG;
+		} else {
+			rpc_priv->drp_output_got = 1;
 		}
-		rpc_priv->drp_output_got = 1;
 	}
 
 	dtp_cbinfo.dci_rpc = rpc_pub;

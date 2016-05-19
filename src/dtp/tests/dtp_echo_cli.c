@@ -103,10 +103,6 @@ static void run_client(void)
 		e_req = dtp_req_get(rpc_req);
 		assert(e_req != NULL);
 
-		/*
-		 * No strdup will cause mercury crash when HG_Free_input
-		 * in dtp_hg_reply_send_cb
-		 */
 		D_ALLOC(pchar, 256); /* DTP will internally free it */
 		assert(pchar != NULL);
 		snprintf(pchar, 256, "Guest_%d_%d@client-side",

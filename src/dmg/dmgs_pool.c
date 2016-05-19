@@ -520,13 +520,10 @@ dmgs_hdlr_pool_create(dtp_rpc_t *rpc_req)
 		tc_in = (struct dmg_tgt_create_in *)tc_req->dr_input;
 		D_ASSERT(tc_in != NULL);
 		uuid_copy(tc_in->tc_pool_uuid, pc_in->pc_uuid);
-		tc_in->tc_tgt_dev = strdup(pc_in->pc_tgt_dev);
-		if (tc_in->tc_tgt_dev == NULL) {
-			D_ERROR("strdup(tc_tgt_dev) failed.\n");
-			/* decref to destroy the created tc_req above */
-			dtp_req_decref(tc_req);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
+		/* the pc_in->pc_tgt_dev will be freed when the DMG_POOL_CREATE
+		 * finishes, it is after TGT_CREATE RPC handling so it is safe
+		 * to directly use it here. */
+		tc_in->tc_tgt_dev = pc_in->pc_tgt_dev;
 		tc_in->tc_tgt_size = pc_in->pc_tgt_size;
 
 		rc = dtp_req_send(tc_req, tgt_create_cb, pc_inprog);
