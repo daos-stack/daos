@@ -32,9 +32,7 @@ POOL_TEST=$DAOS_DIR/build/src/vos/tests/vos_pool_tests
 CONTAINER_TEST=$DAOS_DIR/build/src/vos/tests/vos_container_tests
 OI_TEST=$DAOS_DIR/build/src/vos/tests/vos_oi_tests
 OBJ_CACHE_TEST=$DAOS_DIR/build/src/vos/tests/vos_obj_cache_tests
-KV_TEST=$DAOS_DIR/build/src/vos/tests/vos_ctl
 POOL_FILE=$1
-POOL_FILE_OPT='-f '$POOL_FILE
 TEST_CNT=0;
 TEST_SUCCESS=0;
 TEST_FAILED=0;
@@ -99,9 +97,9 @@ function vtest {
 			else
 				test_start_header $1
 			fi
-			if [ ! -z "$3" -a "$3" != " " ]; then
+			if [ ! -z $3 -a "$3" != " " ]; then
 			    if [ "$4" != 0 ] && [ "$4" != " " ]; then
-				      $1 $3 $4
+				       $1 $3 $4
 				else
 				       $1 $3
 				fi
@@ -130,8 +128,6 @@ fi
 # clean up before previous tests
 # force remove pool file
 rm -f $POOL_FILE
-KV_TEST_ARGS="-u Monday:1,Tuesday:2,Wednesday:3 -l Tuesday"
-
 # invoke tests
 vtest $POOL_TEST "" $POOL_FILE ""
 vtest $CONTAINER_TEST "" $POOL_FILE ""
@@ -139,6 +135,5 @@ vtest $CHASH_TABLE "SINGLE-THREADED" $POOL_FILE "10 100 0"
 vtest $CHASH_TABLE "MULTI-THREADED" $POOL_FILE "10 100 1 4"
 vtest $OI_TEST "" $POOL_FILE ""
 vtest $OBJ_CACHE_TEST "" $POOL_FILE ""
-vtest $KV_TEST "KV-OBJECT-TEST" "${POOL_FILE_OPT}" "$KV_TEST_ARGS"
 vtests_summary
 

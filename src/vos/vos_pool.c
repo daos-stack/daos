@@ -69,7 +69,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 				      size, 0666);
 	if (!vpool->vp_ph) {
 		D_ERROR("Failed to create pool: %d\n", errno);
-		D_GOTO(exit, rc = -DER_NOSPACE);
+		rc = -DER_NOSPACE;
+		goto exit;
 	}
 	/* Just for testing. Keeping object in VMEM */
 	vpool->vp_uma.uma_id = UMEM_CLASS_PMEM;
@@ -85,12 +86,6 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 
 		stat(path, &lstat);
 		size = lstat.st_size;
-	}
-
-	rc = vos_obj_tree_register(vpool->vp_ph);
-	if (rc != 0) {
-		D_ERROR("Failed to register vos trees\n");
-		D_GOTO(exit, rc);
 	}
 
 	TX_BEGIN(vpool->vp_ph) {
@@ -132,7 +127,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	} TX_END
 
 	if (rc != 0)
-		D_GOTO(exit, rc);
+		goto exit;
 
 	vos_pool_insert_handle(vpool, poh);
 exit:
@@ -162,7 +157,7 @@ vos_pool_destroy(daos_handle_t poh, daos_event_t *ev)
 	rc = remove(vpool->vp_fpath);
 	if (rc) {
 		D_ERROR("While deleting file from PMEM\n");
-		D_GOTO(exit, rc);
+		goto exit;
 	}
 
 	vos_pool_delete_handle(vpool);
@@ -202,7 +197,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 	vpool->vp_ph = pmemobj_open(path, POBJ_LAYOUT_NAME(vos_pool_layout));
 	if (vpool->vp_ph == NULL) {
 		D_ERROR("Error in opening the pool handle");
-		D_GOTO(exit, rc = -DER_NO_HDL);
+		rc = -DER_NO_HDL;
+		goto exit;
 	}
 
 	root = vos_pool2root(vpool);
@@ -211,7 +207,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 		uuid_unparse(uuid, uuid_str);
 		D_ERROR("UUID mismatch error (uuid: %s, vpool_id: %s",
 			uuid_str, pool_uuid_str);
-		D_GOTO(exit, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		goto exit;
 	}
 
 	vos_pool_insert_handle(vpool, poh);

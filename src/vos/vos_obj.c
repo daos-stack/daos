@@ -25,11 +25,10 @@
  */
 #include <daos/btree.h>
 #include <daos_srv/vos.h>
-#include <vos_internal.h>
-#include <vos_hhash.h>
+#include "vos_internal.h"
 
 struct umem_attr vos_uma = {
-	.uma_id = UMEM_CLASS_PMEM,
+	.uma_id = UMEM_CLASS_VMEM,
 };
 
 static void
@@ -374,8 +373,11 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	pop = vos_coh2pop(coh);
 	if (pop == NULL) {
-		D_ERROR("Empty pool!\n Invalid container handle?");
-		D_GOTO(out, rc = -DER_INVAL);
+		/* XXX it should be a failure, but before we integrate
+		 * everything, it is the actual code path.
+		 */
+		rc = vos_obj_update_vecs(oref, epoch, dkey, nr, vios, sgls);
+		goto out;
 	}
 
 	TX_BEGIN(pop) {
@@ -390,13 +392,6 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 PMEMobjpool *vos_coh2pop(daos_handle_t coh)
 {
-	struct vc_hdl	*co_hdl;
-	PMEMobjpool	*ph = NULL;
-
-	co_hdl = vos_co_lookup_handle(coh);
-	if (co_hdl)
-		ph = co_hdl->vc_phdl->vp_ph;
-	vos_co_putref_handle(co_hdl);
-
-	return ph;
+	return NULL;
 }
+
