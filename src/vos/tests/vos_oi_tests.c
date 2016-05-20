@@ -34,7 +34,7 @@
 
 #include "vos_obj.h"
 
-#define POOL_SIZE 10737418240ULL
+#define POOL_SIZE 16777216ULL
 
 bool
 file_exists(const char *filename)

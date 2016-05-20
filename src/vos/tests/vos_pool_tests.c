@@ -30,7 +30,7 @@
 #include <daos_srv/vos.h>
 #include <inttypes.h>
 
-#define POOL_SIZE 10737418240ULL
+#define POOL_SIZE 16777216ULL
 
 int
 main(int argc, char **argv)

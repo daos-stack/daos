@@ -253,7 +253,7 @@ main(int argc, char *argv[])
 	if (file_exists(argv[1]))
 		remove(argv[1]);
 	pop = pmemobj_create(argv[1],
-			     "hashtable test", 10737418240, 0666);
+			     "hashtable test", 16777216, 0666);
 
 	if (argc == 5)
 		num_threads = atoi(argv[4]);

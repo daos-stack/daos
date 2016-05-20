@@ -28,6 +28,7 @@
 #include <daos_errno.h>
 #include <daos/common.h>
 #include <daos/hash.h>
+#include <sys/stat.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
 #include <errno.h>
@@ -93,6 +94,18 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	/* Just for testing. Keeping object in VMEM */
 	vpool->vp_uma.uma_id = UMEM_CLASS_PMEM;
 	vpool->vp_uma.uma_u.pmem_pool = vpool->vp_ph;
+
+	/**
+	 * If the file is fallocated seperately
+	 * we need the fallocated
+	 * size for setting in the root object.
+	 */
+	if (!size) {
+		struct stat lstat;
+
+		stat(path, &lstat);
+		size = lstat.st_size;
+	}
 
 	TX_BEGIN(vpool->vp_ph) {
 		struct vos_container_index *co_idx;

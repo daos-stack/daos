@@ -135,7 +135,7 @@ vos_chash_create(PMEMobjpool *ph, uint32_t buckets,
 {
 
 
-	int			      num_buckets, i, ret = 0;
+	int			      num_buckets, ret = 0;
 	daos_size_t		      buckets_size;
 
 	num_buckets = (buckets > 0) ? buckets : VCH_MIN_BUCKET_SIZE;
@@ -143,23 +143,16 @@ vos_chash_create(PMEMobjpool *ph, uint32_t buckets,
 
 	TX_BEGIN(ph) {
 		struct vos_chash_table	     *htab;
-		struct vos_chash_buckets     *tbuckets;
 		TOID(struct vos_chash_table)  htab_oid;
 
-		htab_oid = TX_NEW(struct vos_chash_table);
+		htab_oid = TX_ZNEW(struct vos_chash_table);
 		htab = D_RW(htab_oid);
 		htab->buckets = TX_ZALLOC(struct vos_chash_buckets,
 					  buckets_size);
-
-		tbuckets = D_RW(htab->buckets);
-		for (i = 0; i < num_buckets; i++)
-			pmemobj_rwlock_zero(ph, &(tbuckets[i].rw_lock));
-
 		htab->num_buckets = num_buckets;
 		htab->max_buckets = max_buckets;
 		htab->resize	  = resize;
 		htab->vh_ops	  = hops;
-		pmemobj_rwlock_zero(ph, &(htab->b_rw_lock));
 
 		*chtable = htab_oid;
 	} TX_ONABORT {
