@@ -26,7 +26,6 @@
  */
 
 #include <daos_srv/daos_m_srv.h>
-
 #include <uuid/uuid.h>
 #include <daos/transport.h>
 #include "dsm_rpc.h"
@@ -316,3 +315,4 @@ out:
 	out->cdo_ret = rc;
 	return dtp_reply_send(rpc);
 }
+

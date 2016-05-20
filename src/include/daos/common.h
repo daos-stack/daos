@@ -142,14 +142,19 @@ DP_UUID(const void *uuid)
 #define D_ALLOC(ptr, size)						 \
 	do {								 \
 		(ptr) = (__typeof__(ptr))calloc(1, size);		 \
-		if ((ptr) != NULL)					 \
-			break;						 \
+		if ((ptr) != NULL) {					 \
+			D_DEBUG(DF_MEM, "alloc #ptr : %d at %p.\n",	\
+				(int)(size), ptr);			\
+			break;						\
+		}						 \
 		D_ERROR("out of memory (tried to alloc '" #ptr "' = %d)",\
 			(int)(size));					 \
 	} while (0)
 
 # define D_FREE(ptr, size)						\
 	do {								\
+		D_DEBUG(DF_MEM, "free #ptr : %d at %p.\n",		\
+			(int)(size), ptr);				\
 		free(ptr);						\
 		(ptr) = NULL;						\
 	} while ((size) - (size))
@@ -236,6 +241,13 @@ daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
 	iov->iov_len = iov->iov_buf_len = size;
 }
 
+static inline void
+daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
+{
+	csum->cs_csum = buf;
+	csum->cs_len = csum->cs_buf_len = size;
+}
+
 int
 daos_rank_list_dup(daos_rank_list_t **dst, const daos_rank_list_t *src,
 		   bool input);
@@ -250,6 +262,30 @@ daos_rank_list_find(daos_rank_list_t *rank_list, daos_rank_t rank, int *idx);
 bool
 daos_rank_list_identical(daos_rank_list_t *rank_list1,
 			 daos_rank_list_t *rank_list2, bool input);
+
+struct daos_ref {
+	pthread_mutex_t dr_lock;
+	int dr_ref;
+};
+
+static inline void
+daos_ref_init(struct daos_ref *dr, int init)
+{
+	pthread_mutex_init(&dr->dr_lock, NULL);
+	dr->dr_ref = init;
+}
+
+static inline int
+daos_ref_dec_and_test(struct daos_ref *dr)
+{
+	pthread_mutex_lock(&dr->dr_lock);
+	if (--dr->dr_ref == 0) {
+		pthread_mutex_unlock(&dr->dr_lock);
+		return 1;
+	}
+	pthread_mutex_unlock(&dr->dr_lock);
+	return 0;
+}
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually

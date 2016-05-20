@@ -105,4 +105,20 @@ int dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
  */
 int dsms_hdlr_cont_create(dtp_rpc_t *rpc);
 int dsms_hdlr_cont_destroy(dtp_rpc_t *rpc);
+
+/*
+ * dsms_pool.c
+ **/
+int
+dsms_hdlr_pool_connect(dtp_rpc_t *rpc);
+
+int
+dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
+
+/*
+ * dsms_object.c
+ **/
+int
+dsms_hdlr_object_rw(dtp_rpc_t *rpc);
+
 #endif /* __DSMS_INTERNAL_H__ */

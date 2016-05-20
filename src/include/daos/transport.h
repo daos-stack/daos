@@ -72,6 +72,10 @@ enum dtp_rpc_flags {
 	DTP_IGNORE_TIMEDOUT = 0x0001,
 };
 
+struct dtp_rpc;
+
+typedef int (*dtp_req_callback_t)(struct dtp_rpc *rpc);
+
 /* Public RPC request/reply, exports to user */
 typedef struct dtp_rpc {
 	dtp_context_t		dr_ctx; /* DTP context of the RPC */
@@ -86,6 +90,9 @@ typedef struct dtp_rpc {
 	dtp_rpc_output_t	dr_output; /* output parameter struct */
 	daos_size_t		dr_input_size; /* size of input struct */
 	daos_size_t		dr_output_size; /* size of output struct */
+	void			*dr_data;	/* async arg */
+	dtp_req_callback_t	dr_final_cb;	/* callback will be called when
+						 * req is destoryed */
 } dtp_rpc_t;
 
 /* Abstraction pack/unpack processor */
@@ -94,6 +101,11 @@ typedef void *dtp_proc_t;
 typedef int (*dtp_proc_cb_t)(dtp_proc_t proc, void *data);
 
 /* RPC message layout definitions */
+
+enum dmf_flags {
+	DMF_ARRAY_FLAG	= 1 << 0,
+};
+
 struct dtp_msg_field {
 	const char		*dmf_name;
 	const uint32_t		dmf_flags;
@@ -117,19 +129,29 @@ struct dtp_req_format {
 	struct drf_field	drf_fields[2];
 };
 
-#define DEFINE_DTP_REQ_FMT(name, dtp_in, dtp_out) {		\
+struct dtp_array {
+	daos_size_t count;
+	void	*arrays;
+};
+
+#define DEFINE_DTP_REQ_FMT_ARRAY(name, dtp_in, in_size,		\
+				 dtp_out, out_size) {		\
 	.drf_name	= name,					\
 	.drf_fields	= {					\
 		[DTP_IN] = {					\
-			.drf_count = ARRAY_SIZE(dtp_in),	\
+			.drf_count = in_size,			\
 			.drf_msg = dtp_in,			\
 		},						\
 		[DTP_OUT] = {					\
-			.drf_count = ARRAY_SIZE(dtp_out),	\
+			.drf_count = out_size,			\
 			.drf_msg = dtp_out			\
 		}						\
 	}							\
 }
+
+#define DEFINE_DTP_REQ_FMT(name, dtp_in, dtp_out)		\
+DEFINE_DTP_REQ_FMT_ARRAY(name, dtp_in, ARRAY_SIZE(dtp_in),	\
+			 dtp_out, ARRAY_SIZE(dtp_out))
 
 #define DEFINE_DTP_MSG(name, flags, size, proc) {		\
 	.dmf_name = (name),					\
@@ -137,6 +159,7 @@ struct dtp_req_format {
 	.dmf_size = (size),					\
 	.dmf_proc = (dtp_proc_cb_t)proc				\
 }
+
 
 /* Common request format type */
 extern struct dtp_msg_field DMF_UUID;
@@ -148,6 +171,15 @@ extern struct dtp_msg_field DMF_BULK;
 extern struct dtp_msg_field DMF_BOOL;
 extern struct dtp_msg_field DMF_STRING;
 extern struct dtp_msg_field DMF_RANK_LIST;
+extern struct dtp_msg_field DMF_OID;
+extern struct dtp_msg_field DMF_IOVEC;
+extern struct dtp_msg_field DMF_VEC_IOD_ARRAY;
+extern struct dtp_msg_field DMF_BULK_ARRAY;
+
+extern struct dtp_msg_field *dtp_single_out_fields[];
+struct dtp_single_out {
+	int	dso_ret;
+};
 
 typedef void *dtp_bulk_t; /* abstract bulk handle */
 
@@ -821,6 +853,5 @@ dtp_proc_uuid_t(dtp_proc_t proc, uuid_t *data);
  */
 int
 dtp_proc_daos_rank_list_t(dtp_proc_t proc, daos_rank_list_t **data);
-
 
 #endif /* __DAOS_TRANSPORT_H__ */

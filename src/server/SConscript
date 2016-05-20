@@ -4,7 +4,7 @@ Import('env', 'PREREQS')
 
 denv = env.Clone()
 
-libraries = ['daos_common', 'daos_transport']
+libraries = ['daos_common', 'daos_transport', 'vos_srv']
 libraries += ['dl', 'uuid', 'pthread']
 libraries += ['hwloc', 'mcl']
 

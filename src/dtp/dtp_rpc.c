@@ -124,6 +124,8 @@ dtp_req_decref(dtp_rpc_t *req)
 	pthread_spin_unlock(&rpc_priv->drp_lock);
 
 	if (destroy == 1) {
+		if (req->dr_final_cb != NULL)
+			req->dr_final_cb(req);
 		rc = dtp_hg_req_destroy(rpc_priv);
 		if (rc != 0)
 			D_ERROR("dtp_hg_req_destroy failed, rc: %d, "

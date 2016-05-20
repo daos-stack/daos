@@ -10,9 +10,6 @@ SConscript('common/SConscript', exports=['env', 'PREREQS'])
 SConscript('dtp/SConscript', exports=['env', 'PREREQS'])
 SConscript('common/SConscript.event', exports='env')
 
-# Then the DAOS server executable
-SConscript('server/SConscript', exports=['env', 'PREREQS'])
-
 # VOS comes with two flavors
 # A standalone library mostly used for testing
 srv = False
@@ -20,6 +17,9 @@ SConscript('vos/SConscript', exports=['env', 'PREREQS', 'srv'])
 srv = True
 VariantDir('vos_srv', 'vos', duplicate=0)
 SConscript('vos_srv/SConscript', exports=['env', 'PREREQS', 'srv'])
+
+# Then the DAOS server executable
+SConscript('server/SConscript', exports=['env', 'PREREQS'])
 
 # Build each DAOS layers
 SConscript('dmg/SConscript', exports='env')

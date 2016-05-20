@@ -189,3 +189,116 @@ dsm_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 
 	return daos_rpc_send(rpc, ev);
 }
+
+static void
+dsmc_container_free(struct daos_hlink *dlink)
+{
+	struct dsmc_container *dc;
+
+	dc = container_of(dlink, struct dsmc_container, dc_hlink);
+	pthread_rwlock_destroy(&dc->dc_obj_list_lock);
+	D_ASSERT(daos_list_empty(&dc->dc_po_list));
+	D_ASSERT(daos_list_empty(&dc->dc_obj_list));
+	D_FREE_PTR(dc);
+}
+
+
+struct daos_hlink_ops dc_h_ops = {
+	.hop_free = dsmc_container_free,
+};
+
+static struct dsmc_container *
+dsmc_container_alloc(const uuid_t uuid)
+{
+	struct dsmc_container *dc;
+
+	D_ALLOC_PTR(dc);
+	if (dc == NULL)
+		return NULL;
+
+	uuid_copy(dc->dc_uuid, uuid);
+	DAOS_INIT_LIST_HEAD(&dc->dc_obj_list);
+	DAOS_INIT_LIST_HEAD(&dc->dc_po_list);
+	pthread_rwlock_init(&dc->dc_obj_list_lock, NULL);
+
+	daos_hhash_hlink_init(&dc->dc_hlink, &dc_h_ops);
+	return dc;
+}
+
+/**
+ * XXX Only open the container on the client side for now
+ **/
+int
+dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
+	    daos_rank_list_t *failed, daos_handle_t *coh, daos_co_info_t *info,
+	    daos_event_t *ev)
+{
+	struct dsmc_container	*dc;
+	struct pool_conn	*pc;
+
+	pc = dsmc_handle2pool(poh);
+	if (pc == NULL)
+		return -DER_INVAL;
+
+	dc = dsmc_container_alloc(uuid);
+	if (dc == NULL) {
+		pool_conn_put(pc);
+		return -DER_NOMEM;
+	}
+
+	/* Add container to the pool list */
+	pthread_rwlock_wrlock(&pc->pc_co_list_lock);
+	if (pc->pc_disconnecting) {
+		pthread_rwlock_unlock(&pc->pc_co_list_lock);
+		pool_conn_put(pc);
+		dsmc_container_put(dc);
+		return -DER_INVAL;
+	}
+	daos_list_add(&dc->dc_po_list, &pc->pc_co_list);
+	dc->dc_pool_hdl = poh;
+	pthread_rwlock_unlock(&pc->pc_co_list_lock);
+
+	pool_conn_put(pc);
+
+	return 0;
+}
+
+int
+dsm_co_close(daos_handle_t coh, daos_event_t *ev)
+{
+	struct pool_conn	*pc;
+	struct dsmc_container	*dc;
+
+	dc = dsmc_handle2container(coh);
+	if (dc == NULL)
+		return -DER_ENOENT;
+
+	D_ASSERT(!daos_handle_is_inval(dc->dc_pool_hdl));
+	pc = dsmc_handle2pool(dc->dc_pool_hdl);
+	if (pc == NULL) {
+		dsmc_container_put(dc);
+		return -DER_INVAL;
+	}
+
+	/* Check if there are not objects opened for this container */
+	pthread_rwlock_rdlock(&dc->dc_obj_list_lock);
+	if (!daos_list_empty(&dc->dc_obj_list)) {
+		pthread_rwlock_unlock(&dc->dc_obj_list_lock);
+		dsmc_container_put(dc);
+		pool_conn_put(pc);
+		return -DER_BUSY;
+	}
+	dc->dc_closing = 1;
+	pthread_rwlock_unlock(&dc->dc_obj_list_lock);
+
+	/* Remove the container from pool container list */
+	pthread_rwlock_wrlock(&pc->pc_co_list_lock);
+	daos_list_del_init(&dc->dc_po_list);
+	pthread_rwlock_unlock(&pc->pc_co_list_lock);
+
+	dsmc_container_put(dc);
+	dsmc_container_del_cache(dc);
+	pool_conn_put(pc);
+
+	return 0;
+}

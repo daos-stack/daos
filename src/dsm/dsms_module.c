@@ -56,24 +56,6 @@ fini(void)
 	return 0;
 }
 
-int
-dsms_hdlr_ping(dtp_rpc_t *rpc)
-{
-	int rc = 0;
-	int *ret;
-
-	D_DEBUG(DF_UNKNOWN, "receive, ping %x.\n", rpc->dr_opc);
-
-	ret = dtp_reply_get(rpc);
-	*ret = 0;
-
-	rc = dtp_reply_send(rpc);
-
-	D_DEBUG(DF_UNKNOWN, "ping ret: %d\n", *ret);
-
-	return rc;
-}
-
 /* Note: the rpc input/output parameters is defined in daos_rpc */
 static struct daos_rpc_handler dsms_handlers[] = {
 	{
@@ -83,14 +65,17 @@ static struct daos_rpc_handler dsms_handlers[] = {
 		.dr_opc		= DSM_POOL_DISCONNECT,
 		.dr_hdlr	= dsms_hdlr_pool_disconnect
 	}, {
-		.dr_opc		= DSM_PING,
-		.dr_hdlr	= dsms_hdlr_ping,
-	}, {
 		.dr_opc		= DSM_CONT_CREATE,
 		.dr_hdlr	= dsms_hdlr_cont_create
 	}, {
 		.dr_opc		= DSM_CONT_DESTROY,
 		.dr_hdlr	= dsms_hdlr_cont_destroy
+	}, {
+		.dr_opc		= DSM_TGT_OBJ_UPDATE,
+		.dr_hdlr	= dsms_hdlr_object_rw,
+	}, {
+		.dr_opc		= DSM_TGT_OBJ_FETCH,
+		.dr_hdlr	= dsms_hdlr_object_rw,
 	}, {
 		.dr_opc		= 0
 	}

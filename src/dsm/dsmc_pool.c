@@ -36,6 +36,40 @@ flags_are_valid(unsigned int flags)
 	       (mode = DAOS_PC_EX);
 }
 
+static void
+pool_conn_free(struct daos_hlink *hlink)
+{
+	struct pool_conn *pc;
+
+	pc = container_of(hlink, struct pool_conn, pc_hlink);
+	pthread_rwlock_destroy(&pc->pc_co_list_lock);
+	D_ASSERT(daos_list_empty(&pc->pc_co_list));
+	D_FREE_PTR(pc);
+}
+
+struct daos_hlink_ops pc_h_ops = {
+	.hop_free = pool_conn_free,
+};
+
+static struct pool_conn*
+pool_conn_alloc(void)
+{
+	struct pool_conn *pc;
+
+	/** allocate and fill in pool connection */
+	D_ALLOC_PTR(pc);
+	if (pc == NULL) {
+		D_ERROR("failed to allocate pool connection\n");
+		return NULL;
+	}
+
+	DAOS_INIT_LIST_HEAD(&pc->pc_co_list);
+	pthread_rwlock_init(&pc->pc_co_list_lock, NULL);
+	daos_hhash_hlink_init(&pc->pc_hlink, &pc_h_ops);
+
+	return pc;
+}
+
 static int
 pool_connect_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 {
@@ -54,13 +88,14 @@ pool_connect_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	sp->sp_hdlp->cookie = (uint64_t)conn;
+	/* add pool_conn to hash */
+	pool_conn_add_cache(conn, sp->sp_hdlp);
 	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n",
 		DP_UUID(conn->pc_pool), sp->sp_hdlp->cookie);
 
 out:
 	if (rc)
-		D_FREE_PTR(conn);
+		pool_conn_put(conn);
 	dtp_req_decref(sp->sp_rpc);
 	return rc;
 }
@@ -94,11 +129,9 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 	D_DEBUG(DF_DSMC, DF_UUID": enter: flags %x\n", DP_UUID(uuid), flags);
 
 	/** allocate and fill in pool connection */
-	D_ALLOC_PTR(conn);
-	if (conn == NULL) {
-		D_ERROR("failed to allocate pool connection\n");
+	conn = pool_conn_alloc();
+	if (conn == NULL)
 		return -DER_NOMEM;
-	}
 
 	uuid_copy(conn->pc_pool, uuid);
 	uuid_generate(conn->pc_pool_hdl);
@@ -144,13 +177,14 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, ev);
+
 	return rc;
 
 out_req:
 	dtp_req_decref(rpc); /* scratchpad */
 	dtp_req_decref(rpc); /* free req */
 out_conn:
-	D_FREE_PTR(conn);
+	pool_conn_put(conn);
 	return rc;
 }
 
@@ -174,7 +208,7 @@ pool_disconnect_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 
 	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n",
 		DP_UUID(conn->pc_pool), sp->sp_hdl.cookie);
-	D_FREE_PTR(conn);
+	pool_conn_del_cache(conn);
 	sp->sp_hdl.cookie = 0;
 out:
 	dtp_req_decref(sp->sp_rpc);
@@ -184,21 +218,22 @@ out:
 int
 dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
-	struct pool_conn		*conn = (struct pool_conn *)poh.cookie;
+	struct pool_conn		*conn;
 	dtp_endpoint_t			 ep;
 	dtp_rpc_t			*rpc;
 	struct pool_disconnect_in	*pdi;
 	struct daos_op_sp		*sp;
 	int				 rc;
 
-	if (conn == NULL)
-		return -DER_NO_HDL;
-
 	if (ev == NULL) {
 		rc = daos_event_priv_get(&ev);
 		if (rc)
 			return rc;
 	}
+
+	conn = dsmc_handle2pool(poh);
+	if (conn == NULL)
+		return -DER_NO_HDL;
 
 	D_DEBUG(DF_DSMC, DF_UUID": enter: hdl "DF_X64"\n",
 		DP_UUID(conn->pc_pool), poh.cookie);
@@ -207,9 +242,22 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
+	/* Let's remove it from the cache no matter if disconnect
+	 * succeeds to avoid others accessing the pool from the
+	 * cache at the same time. */
+	pthread_rwlock_rdlock(&conn->pc_co_list_lock);
+	if (!daos_list_empty(&conn->pc_co_list)) {
+		pthread_rwlock_unlock(&conn->pc_co_list_lock);
+		pool_conn_put(conn);
+		return -DER_BUSY;
+	}
+	conn->pc_disconnecting = 1;
+	pthread_rwlock_unlock(&conn->pc_co_list_lock);
+
 	rc = dsm_req_create(daos_ev2ctx(ev), ep, DSM_POOL_DISCONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
+		pool_conn_put(conn);
 		return rc;
 	}
 
@@ -231,6 +279,7 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	if (rc) {
 		dtp_req_decref(rpc); /* scratchpad */
 		dtp_req_decref(rpc); /* free req */
+		pool_conn_put(conn);
 		return rc;
 	}
 

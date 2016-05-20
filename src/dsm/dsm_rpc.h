@@ -50,14 +50,11 @@
  * dtp_req_create(..., opc, ...). See daos_rpc.h.
  */
 enum dsm_operation {
-	DSM_PING		= 0,
-
 	DSM_POOL_CONNECT	= 1,
 	DSM_POOL_DISCONNECT	= 2,
+
 	DSM_POOL_QUERY		= 3,
 	DSM_POOL_EXCLUDE	= 4,
-
-	DSM_OBJECT_UPDATE	= 6,	/* should be named DSM_TGT_OBJ_UPDATE */
 
 	DSM_CONT_CREATE		= 10,
 	DSM_CONT_DESTROY	= 11,
@@ -90,8 +87,8 @@ enum dsm_operation {
 	DSM_TGT_EPOCH_FLUSH	= 60,
 	DSM_TGT_EPOCH_DISCARD	= 61,
 
-	/* DSM_TGT_OBJ_UPDATE	= 70, */
-	/* Other "DSM_TGT_" I/O opcodes... */
+	DSM_TGT_OBJ_UPDATE	= 70,
+	DSM_TGT_OBJ_FETCH	= 71,
 };
 
 /* DSM RPC request structure */
@@ -122,6 +119,18 @@ struct pool_disconnect_in {
 
 struct pool_disconnect_out {
 	int32_t pdo_ret;
+};
+
+struct object_update_in {
+	daos_unit_oid_t oui_oid;
+	uuid_t		oui_co_uuid;
+	uuid_t		oui_pool_uuid;
+	uint64_t	oui_epoch;
+	uint32_t	oui_nr;
+	uint32_t	oui_pad;
+	daos_dkey_t	oui_dkey;
+	struct dtp_array oui_iods;
+	struct dtp_array oui_bulks;
 };
 
 /*
@@ -186,7 +195,7 @@ int
 dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
 
 int
-dsms_hdlr_ping(dtp_rpc_t *rpc);
+dsms_hdlr_object_rw(dtp_rpc_t *rpc);
 
 extern struct daos_rpc dsm_rpcs[];
 

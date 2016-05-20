@@ -353,15 +353,58 @@ dtp_proc_internal(struct drf_field *drf,
 			 dtp_proc_t proc, void *data)
 {
 	int rc = 0;
-	int i;
 	void *ptr = data;
+	int i;
+	int j;
 
 	for (i = 0; i < drf->drf_count; i++) {
-		rc = drf->drf_msg[i]->dmf_proc(proc, ptr);
+		if (drf->drf_msg[i]->dmf_flags & DMF_ARRAY_FLAG) {
+			struct dtp_array *array = ptr;
+			hg_proc_op_t	 proc_op;
+			hg_return_t	 hg_ret;
+			void		*array_ptr;
+
+			/* retrieve the count of array first */
+			hg_ret = hg_proc_hg_uint64_t(proc, &array->count);
+			if (hg_ret != HG_SUCCESS) {
+				rc = -DER_DTP_HG;
+				break;
+			}
+
+			/* Let's assume array is not zero size now */
+			D_ASSERT(array->count > 0);
+			proc_op = hg_proc_get_op(proc);
+			if (proc_op == HG_DECODE) {
+				D_ALLOC(array->arrays,
+				     array->count * drf->drf_msg[i]->dmf_size);
+				if (array->arrays == NULL) {
+					rc = -DER_NOMEM;
+					break;
+				}
+			}
+			array_ptr = array->arrays;
+			for (j = 0; j < array->count; j++) {
+				rc = drf->drf_msg[i]->dmf_proc(proc, array_ptr);
+				if (rc != 0)
+					break;
+
+				array_ptr = (char *)array_ptr +
+					    drf->drf_msg[j]->dmf_size;
+			}
+
+			if (proc_op == HG_FREE) {
+				D_FREE(array->arrays,
+				     array->count * drf->drf_msg[i]->dmf_size);
+			}
+			ptr = (char *)ptr + sizeof(struct dtp_array);
+		} else {
+			rc = drf->drf_msg[i]->dmf_proc(proc, ptr);
+
+			ptr = (char *)ptr + drf->drf_msg[i]->dmf_size;
+		}
+
 		if (rc < 0)
 			break;
-
-		ptr = (char *)ptr + drf->drf_msg[i]->dmf_size;
 	}
 
 	return rc;

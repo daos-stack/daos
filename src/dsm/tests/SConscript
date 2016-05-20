@@ -4,7 +4,7 @@ Import('denv')
 
 denv.Append(CPPPATH = ['#/src/dsm', '#/src/server'])
 
-libraries = ['daos_common', 'daos_transport', 'daos_event']
+libraries = ['daos_common', 'daos_transport', 'daos_event', 'daos_mgmt']
 libraries += ['uuid']
 
 denv.Program('dsm_test', 'dsm_test.c',
