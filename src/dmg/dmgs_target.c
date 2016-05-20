@@ -193,16 +193,22 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		rc = path_gen(uuid, NEWBORNS, VOS_FILE, &i, &path);
 		if (rc)
 			break;
-		D_ERROR("creating vos: %s\n", path);
+
+		D_DEBUG(DF_MGMT, DF_UUID": creating vos file %s\n",
+			DP_UUID(uuid), path);
 
 		fd = open(path, O_CREAT|O_RDWR, 0600);
 		if (fd < 0) {
+			D_ERROR(DF_UUID": failed to create vos file %s: %d\n",
+				DP_UUID(uuid), path, rc);
 			rc = daos_errno2der();
 			break;
 		}
 
 		rc = posix_fallocate(fd, 0, size);
 		if (rc) {
+			D_ERROR(DF_UUID": failed to allocate vos file %s: %d\n",
+				DP_UUID(uuid), path, rc);
 			rc = daos_errno2der();
 			break;
 		}
@@ -211,19 +217,24 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		rc = vos_pool_create(path, (unsigned char *)uuid, 0 /* size */,
 				     &vph, NULL /* event */);
 		if (rc) {
-			D_ERROR("failed to create vos pool in %s: %d\n", path,
-				rc);
+			D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
+				DP_UUID(uuid), path, rc);
 			break;
 		}
 
 		rc = vos_pool_close(vph, NULL /* event */);
-		if (rc)
+		if (rc) {
+			D_ERROR(DF_UUID": failed to close vos pool %s: %d\n",
+				DP_UUID(uuid), path, rc);
 			break;
+		}
 
 		rc = fsync(fd);
 		(void)close(fd);
 		fd = -1;
 		if (rc) {
+			D_ERROR(DF_UUID": failed to sync vos pool %s: %d\n",
+				DP_UUID(uuid), path, rc);
 			rc = daos_errno2der();
 			break;
 		}
@@ -231,7 +242,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 	if (path)
 		free(path);
 	if (fd >= 0)
-		close(fd);
+		(void)close(fd);
 
 	/** brute force cleanup to be done by the caller */
 	return rc;
