@@ -25,7 +25,7 @@
 #include "dmg_rpc.h"
 
 struct dtp_msg_field *dmg_pool_create_in_fields[] = {
-	&DMF_UUID,		/* pc_uuid */
+	&DMF_UUID,		/* pc_pool_uuid */
 	&DMF_STRING,		/* pc_grp */
 	&DMF_STRING,		/* pc_tgt_dev */
 	&DMF_RANK_LIST,		/* pc_tgts */
@@ -39,6 +39,16 @@ struct dtp_msg_field *dmg_pool_create_in_fields[] = {
 struct dtp_msg_field *dmg_pool_create_out_fields[] = {
 	&DMF_RANK_LIST,		/* pc_svc */
 	&DMF_INT,		/* pc_rc */
+};
+
+struct dtp_msg_field *dmg_pool_destroy_in_fields[] = {
+	&DMF_UUID,		/* pd_pool_uuid */
+	&DMF_STRING,		/* pd_grp */
+	&DMF_INT		/* pd_force */
+};
+
+struct dtp_msg_field *dmg_pool_destroy_out_fields[] = {
+	&DMF_INT		/* pd_rc */
 };
 
 struct dtp_msg_field *dmg_tgt_create_in_fields[] = {
@@ -64,6 +74,10 @@ struct dtp_req_format DQF_DMG_POOL_CREATE =
 	DEFINE_DTP_REQ_FMT("DMG_POOL_CREATE", dmg_pool_create_in_fields,
 			   dmg_pool_create_out_fields);
 
+struct dtp_req_format DQF_DMG_POOL_DESTROY =
+	DEFINE_DTP_REQ_FMT("DMG_POOL_DESTROY", dmg_pool_destroy_in_fields,
+			   dmg_pool_destroy_out_fields);
+
 struct dtp_req_format DQF_DMG_TGT_CREATE =
 	DEFINE_DTP_REQ_FMT("DMG_TGT_CREATE", dmg_tgt_create_in_fields,
 			   dmg_tgt_create_out_fields);
@@ -79,6 +93,12 @@ struct daos_rpc dmg_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_DMG_POOL_CREATE,
+	}, {
+		.dr_name	= "DMG_POOL_DESTROY",
+		.dr_opc		= DMG_POOL_DESTROY,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_DMG_POOL_DESTROY,
 	}, {
 		.dr_name	= "DMG_TGT_CREATE",
 		.dr_opc		= DMG_TGT_CREATE,

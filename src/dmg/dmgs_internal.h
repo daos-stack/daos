@@ -37,6 +37,7 @@
 
 /** dmgs_pool.c */
 int dmgs_hdlr_pool_create(dtp_rpc_t *rpc_req);
+int dmgs_hdlr_pool_destroy(dtp_rpc_t *rpc_req);
 
 /** dmgs_target.c */
 int dmgs_tgt_init(void);

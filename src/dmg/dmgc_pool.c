@@ -104,7 +104,7 @@ dmg_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	D_ASSERT(pc_in != NULL);
 
 	/** fill in request buffer */
-	uuid_copy(pc_in->pc_uuid, uuid);
+	uuid_copy(pc_in->pc_pool_uuid, uuid);
 	pc_in->pc_mode = mode;
 	pc_in->pc_uid = uid;
 	pc_in->pc_gid = gid;
@@ -129,7 +129,100 @@ dmg_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DF_MGMT, DF_UUID": creating\n", DP_UUID(uuid));
+	D_DEBUG(DF_MGMT, DF_UUID": creating pool\n", DP_UUID(uuid));
+
+	/** send the request */
+	rc = daos_rpc_send(rpc_req, ev);
+out:
+	return rc;
+}
+
+static int
+pool_destroy_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+{
+	struct dmg_pool_destroy_out	*pd_out;
+
+	if (rc) {
+		D_ERROR("RPC error while destroying pool: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	pd_out = dtp_reply_get(sp->sp_rpc);
+	rc = pd_out->pd_rc;
+	if (rc) {
+		D_ERROR("DMG_POOL_DESTROY replied failed, rc: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	dtp_req_decref(sp->sp_rpc);
+	return rc;
+}
+
+int
+dmg_pool_destroy(const uuid_t uuid, const char *grp, int force,
+		 daos_event_t *ev)
+{
+	dtp_endpoint_t			 svr_ep;
+	dtp_rpc_t			*rpc_req = NULL;
+	dtp_opcode_t			 opc;
+	struct dmg_pool_destroy_in	*pd_in;
+	struct daos_op_sp		*sp;
+	int				 rc = 0;
+
+	if (uuid == NULL) {
+		D_ERROR("Invalid parameter of uuid (NULL).\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (grp == NULL || strlen(grp) == 0) {
+		D_ERROR("Invalid parameter of grp (NULL or empty string).\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (dmg_initialized() == false) {
+		D_ERROR("dmg client library un-initialized.\n");
+		D_GOTO(out, rc = -DER_UNINIT);
+	}
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc)
+			return rc;
+	}
+
+	svr_ep.ep_rank = 0;
+	svr_ep.ep_tag = 0;
+	opc = DAOS_RPC_OPCODE(DMG_POOL_DESTROY, DAOS_DMG_MODULE, 1);
+	rc = dtp_req_create(daos_ev2ctx(ev), svr_ep, opc, &rpc_req);
+	if (rc != 0) {
+		D_ERROR("dtp_req_create(DMG_POOL_DESTROY) failed, rc: %d.\n",
+			rc);
+		D_GOTO(out, rc);
+	}
+
+	D_ASSERT(rpc_req != NULL);
+	pd_in = dtp_req_get(rpc_req);
+	D_ASSERT(pd_in != NULL);
+
+	/** fill in request buffer */
+	uuid_copy(pd_in->pd_pool_uuid, uuid);
+	pd_in->pd_grp = (dtp_string_t)grp;
+	pd_in->pd_force = (force == 0) ? false : true;
+
+	/** fill in scratchpad associated with the event */
+	sp = daos_ev2sp(ev);
+	dtp_req_addref(rpc_req); /** for scratchpad */
+	sp->sp_rpc = rpc_req;
+
+	rc = daos_event_launch(ev, NULL, pool_destroy_cp);
+	if (rc) {
+		/** dec ref taken for scratchpad */
+		dtp_req_decref(rpc_req);
+		/** dec ref taken for dtp_req_create */
+		dtp_req_decref(rpc_req);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_MGMT, DF_UUID": destroying pool\n", DP_UUID(uuid));
 
 	/** send the request */
 	rc = daos_rpc_send(rpc_req, ev);

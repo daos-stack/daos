@@ -421,7 +421,7 @@ dmgs_hdlr_tgt_destroy(dtp_rpc_t *td_req)
 		if (rc)
 			D_GOTO(out, rc);
 		rc = dir_fsync(path);
-		if (rc == -DER_ENOENT)
+		if (rc == -DER_NONEXIST)
 			rc = 0;
 		free(zombie);
 	} else {

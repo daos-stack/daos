@@ -39,11 +39,11 @@ static struct option opts[] = {
 static int
 test_pool_create(void)
 {
-	uuid_t		uuid;
-	char		uuid_str[64] = {'\0'};
+	uuid_t			pool_uuid;
+	char			uuid_str[64] = {'\0'};
 	daos_rank_list_t	svc;
-	int		rc;
-	daos_rank_t	ranks[8];
+	int			rc;
+	daos_rank_t		ranks[8];
 
 	printf("Creating pool ...\n");
 
@@ -54,15 +54,40 @@ test_pool_create(void)
 	rc = dmg_pool_create(0 /* mode */, 0 /* uid */, 0 /* gid */,
 			     "srv_grp" /* grp */, NULL /* tgts */,
 			     "pmem" /* dev */, 1024 * 1024 * 1024 /* size */,
-			     &svc /* svc */, uuid, NULL /* ev */);
+			     &svc /* svc */, pool_uuid, NULL /* ev */);
 	if (rc == 0) {
-		uuid_unparse_lower(uuid, uuid_str);
+		uuid_unparse_lower(pool_uuid, uuid_str);
 		printf("Created pool %s.\n", uuid_str);
 	} else {
 		D_ERROR("dmg_pool_create failed, rc: %d.\n", rc);
 	}
 
 	return 0;
+}
+
+static int
+test_pool_destroy(char *uuid_str)
+{
+	uuid_t	pool_uuid;
+	int	rc;
+
+	printf("Destroying pool %s ...\n", uuid_str);
+	rc = uuid_parse(uuid_str, pool_uuid);
+	if (rc != 0) {
+		printf("cannot parse uuid_str %s, errno %d(%s).\n",
+			uuid_str, errno, strerror(errno));
+		goto out;
+	}
+
+	rc = dmg_pool_destroy(pool_uuid, "srv_grp" /* grp */, 1 /* force */,
+			      NULL /* ev */);
+	if (rc == 0)
+		printf("Destroyed pool %s.\n", uuid_str);
+	else
+		D_ERROR("Pool (%s) destroy failed, rc: %d.\n", uuid_str, rc);
+
+out:
+	return rc;
 }
 
 int
@@ -82,13 +107,16 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	while ((option = getopt_long(argc, argv, "c", opts, NULL)) != -1) {
+	while ((option = getopt_long(argc, argv, "cd:", opts, NULL)) != -1) {
 		switch (option) {
 		default:
 			dmg_fini();
 			return -EINVAL;
 		case 'c':
 			rc = test_pool_create();
+			break;
+		case 'd':
+			rc = test_pool_destroy(optarg);
 			break;
 		}
 		if (rc < 0) {
@@ -99,5 +127,5 @@ main(int argc, char **argv)
 
 	dmg_fini();
 
-	return rc;
+	return 0;
 }
