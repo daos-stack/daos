@@ -1,11 +1,15 @@
 #!python
 
-Import('env')
+Import('env', 'PREREQS')
 
 denv = env.Clone()
 
 libraries = ['daos_common', 'daos_transport']
-libraries += ['dl', 'uuid', 'pthread', 'cgroup', 'numa', 'mcl']
+libraries += ['dl', 'uuid', 'pthread']
+libraries += ['hwloc', 'mcl']
+
+if PREREQS is not None:
+	PREREQS.require(denv, 'hwloc', 'mcl')
 
 # the "-rdynamic" is to allow other dll to refer symbol defined in daos_server
 # such as dss_tls_key etc.

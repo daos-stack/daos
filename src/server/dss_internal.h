@@ -29,7 +29,7 @@ int dss_module_unload(const char *modname);
 void dss_module_unload_all(void);
 
 /* srv.c */
-int dss_srv_init(void);
+int dss_srv_init(int);
 int dss_srv_fini();
 
 /* tls.c */

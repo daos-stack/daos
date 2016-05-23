@@ -107,7 +107,7 @@ server_init()
 	D_DEBUG(DF_SERVER, "Module %s successfully loaded\n", modules);
 
 	/* start up service */
-	rc = dss_srv_init();
+	rc = dss_srv_init(0);
 	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
 	D_DEBUG(DF_SERVER, "Service is now running\n");

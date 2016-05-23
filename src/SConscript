@@ -11,7 +11,7 @@ SConscript('dtp/SConscript', exports=['env', 'PREREQS'])
 SConscript('common/SConscript.event', exports='env')
 
 # Then the DAOS server executable
-SConscript('server/SConscript', exports='env')
+SConscript('server/SConscript', exports=['env', 'PREREQS'])
 
 # VOS comes with two flavors
 # A standalone library mostly used for testing
