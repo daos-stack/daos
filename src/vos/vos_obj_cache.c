@@ -41,6 +41,30 @@
 #include <vos_hhash.h>
 #include <daos_errno.h>
 
+static struct vos_obj_ref *
+vos_oref_create(struct vc_hdl *vco, daos_unit_oid_t oid)
+{
+	struct vos_obj_ref *oref;
+
+	D_ALLOC_PTR(oref);
+	if (!oref)
+		return NULL;
+
+	oref->or_co  = vco;
+	oref->or_oid = oid;
+	oref->or_lrefcnt = 0;
+	return oref;
+}
+
+static void
+vos_oref_free(struct vos_obj_ref *oref)
+{
+	if (oref->or_co)
+		vos_co_putref_handle(oref->or_co);
+
+	D_FREE_PTR(oref);
+}
+
 /**
  * Compare daos_unit_oid_t keys
  */
@@ -105,7 +129,7 @@ vlru_ref_evict(struct vlru_list *lru_list, struct vos_obj_ref *obj_ref)
 	daos_list_del(&obj_ref->or_llink);
 	lru_list->vll_cache_filled--;
 
-	D_FREE_PTR(obj_ref);
+	vos_oref_free(obj_ref);
 }
 
 /**
@@ -176,6 +200,7 @@ vlru_create_ref_hdl(daos_handle_t coh, daos_unit_oid_t oid,
 {
 	struct vos_obj_ref	*oref = NULL;
 	struct vc_hdl		*co_hdl = NULL;
+	int			 rc;
 
 	co_hdl = vos_co_lookup_handle(coh);
 	if (!co_hdl) {
@@ -183,21 +208,18 @@ vlru_create_ref_hdl(daos_handle_t coh, daos_unit_oid_t oid,
 		return -DER_INVAL;
 	}
 
-	D_ALLOC_PTR(oref);
+	oref = vos_oref_create(co_hdl, oid);
 	if (!oref)
-		return -DER_NOMEM;
+		D_GOTO(failed, rc = -DER_NOMEM);
 
-	uuid_copy(oref->or_co_uuid, co_hdl->vc_id);
-	oref->or_oid = oid;
-	oref->or_lrefcnt = 0;
-	oref->or_vpuma = &(co_hdl->vc_phdl->vp_uma);
-	oref->or_vphdl = co_hdl->vc_phdl->vp_ph;
 	/**
 	 * TODO: Add Btree iterator handle
 	 */
-	*ref  = oref;
-	vos_co_putref_handle(co_hdl);
+	*ref = oref;
 	return 0;
+ failed:
+	vos_co_putref_handle(co_hdl);
+	return rc;
 }
 
 /**
@@ -279,7 +301,7 @@ ulink:
 
 exit:
 	if (ret && l_oref)
-		D_FREE_PTR(l_oref);
+		vos_oref_free(l_oref);
 
 	return ret;
 }
@@ -334,7 +356,7 @@ vos_obj_cache_destroy(struct vos_obj_cache *occ)
 				      struct vos_obj_ref,
 				      or_llink);
 		daos_list_del(&ref->or_llink);
-		D_FREE_PTR(ref);
+		vos_oref_free(ref);
 	}
 
 	if (occ->voc_lhtable_ref.vlh_buckets)

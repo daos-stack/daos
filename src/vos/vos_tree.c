@@ -380,14 +380,20 @@ ibtr_rec_fetch_in(struct btr_instance *tins, struct btr_record *rec,
 		return -DER_INVAL;
 
 	irec->ir_size = iov->iov_len;
+	if (iov->iov_buf == vos_irec2data(irec)) /* zero copied */
+		return 0;
+
 	if (iov->iov_buf != NULL) {
+		/* no zero copy, need to copy data */
 		memcpy(vos_irec2data(irec), iov->iov_buf, iov->iov_len);
+
 	} else {
 		/* Return the address for rdma? But it is too hard to handle
 		 * rdma failure.
 		 */
 		iov->iov_buf = vos_irec2data(irec);
 	}
+
 	return 0;
 }
 
@@ -491,14 +497,11 @@ ibtr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 					   vos_irec_size(rbund));
 		if (UMMID_IS_NULL(rec->rec_mmid))
 			return -DER_NOMEM;
-
-		rc = ibtr_rec_fetch_in(tins, rec, kbund, rbund);
 	} else {
-		/* Huh, can't assume upper layer is using valid record format,
-		 * need to do sanity check.
-		 */
 		rec->rec_mmid = rbund->rb_mmid;
 	}
+
+	rc = ibtr_rec_fetch_in(tins, rec, kbund, rbund);
 	return rc;
 }
 
@@ -587,11 +590,11 @@ vos_obj_tree_init(struct vos_obj_ref *oref)
 	if (vos_obj_is_new(obj)) {
 		D_DEBUG(DF_VOS2, "Create btree for object\n");
 		rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats,
-					   ta->ta_order, oref->or_vpuma,
+					   ta->ta_order, vos_oref2uma(oref),
 					   &obj->vo_tree, &oref->or_toh);
 	} else {
 		D_DEBUG(DF_VOS2, "Open btree for object\n");
-		rc = dbtree_open_inplace(&obj->vo_tree, oref->or_vpuma,
+		rc = dbtree_open_inplace(&obj->vo_tree, vos_oref2uma(oref),
 					 &oref->or_toh);
 	}
 	return rc;

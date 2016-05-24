@@ -248,6 +248,9 @@ daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
 	csum->cs_len = csum->cs_buf_len = size;
 }
 
+int  daos_sgl_init(daos_sg_list_t *sgl, unsigned int nr);
+void daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs);
+
 int
 daos_rank_list_dup(daos_rank_list_t **dst, const daos_rank_list_t *src,
 		   bool input);

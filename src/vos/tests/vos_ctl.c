@@ -48,6 +48,9 @@ static daos_unit_oid_t	vc_oid = {
 };
 
 static daos_epoch_t	vc_epoch = 1;
+static daos_handle_t	vc_coh;
+static daos_handle_t	vc_poh;
+static bool		vc_zc_mode;
 
 #define VC_STR_SIZE	1024
 
@@ -65,7 +68,88 @@ file_exists(const char *filename)
 }
 
 static int
-vc_obj_operator(bool update, char *str, daos_handle_t vc_coh)
+vc_obj_update(daos_dkey_t *dkey, daos_vec_iod_t *vio, daos_sg_list_t *sgl)
+{
+	daos_sg_list_t	*vec_sgl;
+	daos_iov_t	*vec_iov;
+	daos_iov_t	*srv_iov;
+	daos_handle_t	 ioh;
+	int		 rc;
+
+	if (!vc_zc_mode) {
+		rc = vos_obj_update(vc_coh, vc_oid, vc_epoch, dkey, 1, vio,
+				    sgl, NULL);
+		if (rc != 0)
+			D_ERROR("Failed to update: %d\n", rc);
+
+		return rc;
+	}
+
+	rc = vos_obj_zc_update_prep(vc_coh, vc_oid, vc_epoch, dkey, 1, vio,
+				    &ioh, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to prepare ZC update: %d\n", rc);
+		return -1;
+	}
+
+	srv_iov = &sgl->sg_iovs[0];
+
+	vos_obj_zc_vec2sgl(ioh, 0, &vec_sgl);
+	D_ASSERT(vec_sgl->sg_nr.num == 1);
+	vec_iov = &vec_sgl->sg_iovs[0];
+
+	D_ASSERT(srv_iov->iov_len == vec_iov->iov_len);
+	memcpy(vec_iov->iov_buf, srv_iov->iov_buf, srv_iov->iov_len);
+
+	rc = vos_obj_zc_submit(ioh, dkey, 1, vio, 0, NULL);
+	if (rc != 0)
+		D_ERROR("Failed to submit ZC update: %d\n", rc);
+
+	return rc;
+}
+
+static int
+vc_obj_fetch(daos_dkey_t *dkey, daos_vec_iod_t *vio, daos_sg_list_t *sgl)
+{
+	daos_sg_list_t	*vec_sgl;
+	daos_iov_t	*vec_iov;
+	daos_iov_t	*dst_iov;
+	daos_handle_t	 ioh;
+	int		 rc;
+
+	if (!vc_zc_mode) {
+		rc = vos_obj_fetch(vc_coh, vc_oid, vc_epoch, dkey, 1, vio,
+				   sgl, NULL);
+		if (rc != 0)
+			D_ERROR("Failed to fetch: %d\n", rc);
+
+		return rc;
+	}
+
+	rc = vos_obj_zc_fetch_prep(vc_coh, vc_oid, vc_epoch, dkey, 1, vio,
+				   &ioh, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to prepare ZC update: %d\n", rc);
+		return -1;
+	}
+
+	dst_iov = &sgl->sg_iovs[0];
+
+	vos_obj_zc_vec2sgl(ioh, 0, &vec_sgl);
+	D_ASSERT(vec_sgl->sg_nr.num == 1);
+	vec_iov = &vec_sgl->sg_iovs[0];
+
+	D_ASSERT(dst_iov->iov_len >= vec_iov->iov_len);
+	memcpy(dst_iov->iov_buf, vec_iov->iov_buf, vec_iov->iov_len);
+
+	rc = vos_obj_zc_submit(ioh, dkey, 1, vio, 0, NULL);
+	if (rc != 0)
+		D_ERROR("Failed to submit ZC update: %d\n", rc);
+
+	return rc;
+}
+static int
+vc_obj_operator(bool update, char *str)
 {
 	daos_iov_t	  val_iov;
 	char		  key_buf[VC_STR_SIZE];
@@ -123,14 +207,14 @@ vc_obj_operator(bool update, char *str, daos_handle_t vc_coh)
 
 		if (update) {
 			D_DEBUG(DF_MISC, "Update %s : %s\n", key_buf, val_buf);
+
 			rex.rx_rsize = val_iov.iov_len;
-			rc = vos_obj_update(vc_coh, vc_oid, vc_epoch, &dkey,
-					    1, &vio, &sgl, NULL);
+			rc = vc_obj_update(&dkey, &vio, &sgl);
 		} else {
 			D_DEBUG(DF_MISC, "Fetch %s\n", key_buf);
+
 			memset(val_buf, 0, sizeof(val_buf));
-			rc = vos_obj_fetch(vc_coh, vc_oid, vc_epoch, &dkey,
-					   1, &vio, &sgl, NULL);
+			rc = vc_obj_fetch(&dkey, &vio, &sgl);
 		}
 
 		if (rc != 0) {
@@ -150,6 +234,7 @@ static struct option vos_ops[] = {
 	{ "update",	required_argument,	NULL,	'u'	},
 	{ "lookup",	required_argument,	NULL,	'l'	},
 	{ "filename",	required_argument,	NULL,	'f'	},
+	{ "zc",		no_argument,		NULL,	'z'	},
 	{ NULL,		0,			NULL,	 0	},
 };
 
@@ -160,10 +245,11 @@ main(int argc, char **argv)
 	char			*ustr = NULL, *lstr = NULL;
 	char			*fname = NULL;
 	uuid_t			pool_uuid, co_uuid;
-	static daos_handle_t	vc_coh, vp_poh;
 
 	optind = 0;
-	while ((rc = getopt_long(argc, argv, "u:l:f:",
+	vc_zc_mode = false;
+
+	while ((rc = getopt_long(argc, argv, "u:l:f:z",
 				 vos_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'u':
@@ -174,6 +260,9 @@ main(int argc, char **argv)
 			break;
 		case 'f':
 			fname = strdup(optarg);
+			break;
+		case 'z':
+			vc_zc_mode = true;
 			break;
 		default:
 			D_PRINT("Unsupported command %c\n", rc);
@@ -196,21 +285,21 @@ main(int argc, char **argv)
 	uuid_generate_time_safe(pool_uuid);
 	uuid_generate_time_safe(co_uuid);
 
-	rc = vos_pool_create(fname, pool_uuid, PMEMOBJ_MIN_POOL, &vp_poh, NULL);
+	rc = vos_pool_create(fname, pool_uuid, PMEMOBJ_MIN_POOL, &vc_poh, NULL);
 	if (rc) {
 		fprintf(stderr, "vpool create failed with error : %d", rc);
 		goto fini;
 	}
 	fprintf(stdout, "Success creating pool at %s\n", fname);
 
-	rc = vos_co_create(vp_poh, co_uuid, NULL);
+	rc = vos_co_create(vc_poh, co_uuid, NULL);
 	if (rc) {
 		fprintf(stderr, "vos container creation error\n");
 		goto fini;
 	}
 	fprintf(stdout, "Success creating container at %s\n", fname);
 
-	rc = vos_co_open(vp_poh, co_uuid, &vc_coh, NULL);
+	rc = vos_co_open(vc_poh, co_uuid, &vc_coh, NULL);
 	if (rc) {
 		fprintf(stderr, "vos container open error\n");
 		goto fini;
@@ -218,7 +307,7 @@ main(int argc, char **argv)
 	fprintf(stdout, "Success opening container at %s\n", fname);
 
 	if (ustr) {
-		rc = vc_obj_operator(true, ustr, vc_coh);
+		rc = vc_obj_operator(true, ustr);
 		if (rc) {
 			fprintf(stderr, "vos object update error\n");
 			goto fini;
@@ -227,7 +316,7 @@ main(int argc, char **argv)
 	}
 
 	if (lstr) {
-		rc = vc_obj_operator(false, lstr, vc_coh);
+		rc = vc_obj_operator(false, lstr);
 		if (rc) {
 			fprintf(stderr, "vos object lookup error\n");
 			goto fini;
@@ -242,7 +331,7 @@ main(int argc, char **argv)
 	}
 	fprintf(stdout, "Success closing container at %s\n", fname);
 
-	rc = vos_pool_destroy(vp_poh, NULL);
+	rc = vos_pool_destroy(vc_poh, NULL);
 	if (rc)
 		fprintf(stderr, "vos pool destroy error\n");
 	fprintf(stdout, "Success destroying pool at %s\n", fname);

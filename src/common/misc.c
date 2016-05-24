@@ -183,3 +183,40 @@ daos_rank_list_identical(daos_rank_list_t *rank_list1,
 	}
 	return true;
 }
+
+/**
+ * Initialise a scatter/gather list, create an array to store @nr iovecs.
+ */
+int
+daos_sgl_init(daos_sg_list_t *sgl, unsigned int nr)
+{
+	memset(sgl, 0, sizeof(*sgl));
+
+	sgl->sg_nr.num = sgl->sg_nr.num_out = nr;
+	D_ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
+
+	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
+}
+
+/**
+ * Finalise a scatter/gather list, it can also free iovecs if @free_iovs
+ * is true.
+ */
+void
+daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs)
+{
+	int	i;
+
+	if (sgl->sg_iovs == NULL)
+		return;
+
+	for (i = 0; free_iovs && i < sgl->sg_nr.num; i++) {
+		if (sgl->sg_iovs[i].iov_buf != NULL) {
+			D_FREE(sgl->sg_iovs[i].iov_buf,
+			       sgl->sg_iovs[i].iov_buf_len);
+		}
+	}
+
+	D_FREE(sgl->sg_iovs, sgl->sg_nr.num * sizeof(*sgl->sg_iovs));
+	memset(sgl, 0, sizeof(*sgl));
+}

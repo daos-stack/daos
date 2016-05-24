@@ -78,6 +78,9 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	vpool->vp_uma.uma_id = UMEM_CLASS_PMEM;
 	vpool->vp_uma.uma_u.pmem_pool = vpool->vp_ph;
 
+	rc = umem_class_init(&vpool->vp_uma, &vpool->vp_umm);
+	D_ASSERT(rc == 0);
+
 	/**
 	 * If the file is fallocated seperately
 	 * we need the fallocated

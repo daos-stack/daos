@@ -49,6 +49,8 @@ struct vp_hdl {
 	 * pool
 	 */
 	struct umem_attr	vp_uma;
+	/** for pmem allocation outside btree */
+	struct umem_instance	vp_umm;
 };
 
 /**
@@ -139,8 +141,6 @@ struct vos_obj_cache {
  * NB: DRAM data structure.
  */
 struct vos_obj_ref {
-	/** Key for searching, container uuid */
-	uuid_t				 or_co_uuid;
 	/** Key for searching, object ID within a container */
 	daos_unit_oid_t			 or_oid;
 	/** btree open handle of the object */
@@ -151,14 +151,12 @@ struct vos_obj_ref {
 	daos_list_t			 or_llink;
 	/** hash link for object reference **/
 	daos_list_t			 or_hlink;
-	/** reference to btree umem attributes **/
-	struct umem_attr		*or_vpuma;
-	/** Pointer to PMEM pool of this object **/
-	PMEMobjpool			*or_vphdl;
 	/** ref count for the LRU link **/
 	int32_t				 or_lrefcnt;
 	/** Persistent memory ID for the object */
 	struct vos_obj			*or_obj;
+	/** container pointer */
+	struct vc_hdl			*or_co;
 };
 
 static inline struct vos_tls *
@@ -391,5 +389,23 @@ enum {
 int vos_obj_tree_init(struct vos_obj_ref *oref);
 int vos_obj_tree_fini(struct vos_obj_ref *oref);
 int vos_obj_tree_register(void);
+
+static inline PMEMobjpool *
+vos_oref2pop(struct vos_obj_ref *oref)
+{
+	return oref->or_co->vc_phdl->vp_ph;
+}
+
+static inline struct umem_attr *
+vos_oref2uma(struct vos_obj_ref *oref)
+{
+	return &oref->or_co->vc_phdl->vp_uma;
+}
+
+static inline struct umem_instance *
+vos_oref2umm(struct vos_obj_ref *oref)
+{
+	return &oref->or_co->vc_phdl->vp_umm;
+}
 
 #endif /* __VOS_INTERNAL_H__ */

@@ -87,10 +87,12 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 static inline void
 vos_imem_strts_destroy(struct vos_imem_strts *imem_inst)
 {
-	if (imem_inst->vis_hhash)
-		daos_hhash_destroy(imem_inst->vis_hhash);
 	if (imem_inst->vis_ocache)
 		vos_obj_cache_destroy(imem_inst->vis_ocache);
+
+	if (imem_inst->vis_hhash)
+		daos_hhash_destroy(imem_inst->vis_hhash);
+
 }
 
 static void *

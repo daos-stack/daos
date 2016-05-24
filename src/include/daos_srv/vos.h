@@ -247,152 +247,6 @@ vos_epoch_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 int
 vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, daos_event_t *ev);
 
-#if 0
-/**
- * Byte Array API
- */
-/**
- * Prepare RMA read buffers for byte-array object.
- * If \a sgl is not sufficient to store all returned buffer descriptors,
- * then the required size will be returned to sgl::sg_iovn.
- * If \a exl_layout is not sufficient to store all returned extent layouts,
- * then the required size will be returned to ext_layout::el_extn.
- *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	Object ID.
- * \param epoch	[IN]	Epoch for the read. It will be ignored if epoch range
- *			is provided by \a exl (exl::el_epr).
- * \param exl	[IN]	Read source extents, it may also carry epoch ranges
- *			for each individual extent.
- * \param exl_layout [OUT]
- *			Optional, returned physical extent layouts and
- *			their epoch ranges.
- * \param sgl	[OUT]	Returned scatter/gather list.
- * \param ioh	[OUT]	Returned I/O handle, it should be released by
- *			\a vos_ba_rd_finish().
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		Zero on success, negative value if error
- */
-int
-vos_ba_rd_prepare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-		  daos_ext_list_t *exl, daos_ext_layout_t *exl_layout,
-		  daos_sg_list_t *sgl, daos_handle_t *ioh, daos_event_t *ev);
-
-/**
- * Finish current RMA read operation.
- *
- * \param ioh	[IN]	I/O handle to finalise
- * \param errno	[IN]	errno of current read, zero if there is no error.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		Zero on success, negative value if error
- */
-int
-vos_ba_rd_finish(daos_handle_t ioh, int errno, daos_event_t *ev);
-
-/**
- * Prepare RMA write buffers for byte-array object.
- * If \a sgl is not sufficient to store all returned buffer descriptors,
- * then the required size will be returned to sgl::sg_iovn.
- *
- * \param coh	[IN]	Container open handle.
- * \param oid	[IN]	Object ID.
- * \param epoch	[IN]	Epoch for the write. It will be ignored if epoch range
- *			is provided by \a exl (exl::el_epr).
- * \param exl	[IN]	Write destination extents, it may also carry epoch
- *			ranges for each individual extent.
- * \param sgl	[OUT]	Returned scatter/gather list.
- * \param ioh	[OUT]	Returned I/O handle, it should be released by
- *			\a vos_ba_wr_finish()
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		Zero on success, negative value if error
- */
-int
-vos_ba_wr_prepare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-		  daos_ext_list_t *exl, daos_sg_list_t *sgl,
-		  daos_handle_t *ioh, daos_event_t *ev);
-
-/**
- * Finish current write operation.
- *
- * \param ioh	[IN]	I/O handle to finalise
- * \param errno	[IN]	errno of current I/O, zero if there is no error.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		Zero on success, negative value if error
- */
-int
-vos_ba_wr_finish(daos_handle_t ioh, int errno, daos_event_t *ev);
-
-/**
- * Read from a byte-array object.
- * Object data extents in \a exl will be copied to \a sgl.
- * If \a exl_layout is not sufficient to store all returned extent layouts,
- * then the required size will be returned to ext_layout::el_extn.
- *
- * \param coh	[IN]	Container open handle
- * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the read. It will be ignored if epoch range
- *			is provided by \a exl (exl::el_epr).
- * \param exl	[IN]	Object extents for read
- * \param exl_layout [IN/OUT]
- *			Optional, returned physical extent layouts and
- *			their epoch ranges.
- * \param sgl	[IN/OUT]
- *			Buffer list to store returned object data
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		Zero on success, negative value if error
- */
-int
-vos_ba_read(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	    daos_ext_list_t *exl, daos_ext_layout_t *exl_layout,
-	    daos_sg_list_t *sgl, daos_event_t *ev);
-
-/**
- * Write to a byte-array object
- * Data blobs in \a sgl will be written to object extents specified by \a exl.
- *
- * \param coh	[IN]	Container open handle
- * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the write. It will be ignored if epoch range
- *			is provided by \a exl (exl::el_epr).
- * \param exl	[IN]	Object extents for read
- * \param sgl	[OUT]	Buffer list to store returned object data
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		Zero on success, negative value if error
- */
-int
-vos_ba_write(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	     daos_ext_list_t *exl, daos_sg_list_t *sgl, daos_event_t *ev);
-
-/**
- * Punch will zero specified extent list of a byte-array object
- *
- * \param coh	[IN]	container open handle
- * \param oid	[IN]	object ID
- * \param epoch	[IN]	Epoch for the punch. It will be ignored if epoch range
- *			is provided by \a exl (exl::el_epr).
- * \param exl	[IN]	extents to punch
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		Zero on success, negative value if error
- */
-int
-vos_ba_punch(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	     daos_ext_list_t *exl, daos_event_t *ev);
-#endif
-
 /**
  * VOS object API
  */
@@ -451,11 +305,102 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *
  * \return		Zero on success, negative value if error
  */
-
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       daos_dkey_t *dkey, unsigned int nr, daos_vec_iod_t *vios,
 	       daos_sg_list_t *sgls, daos_event_t *ev);
+
+/**
+ * Zero-Copy I/O APIs
+ */
+/**
+ *
+ * Find and return zero-copy source buffers for the data of the specified
+ * vectors of the given object. The caller can directly use these buffers
+ * for RMA read.
+ *
+ * The upper layer must explicitly call \a vos_obj_zc_submit to finalise the
+ * ZC I/O and release resources.
+ *
+ * TODO: add more detail descriptions for punched or missing records.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	Object ID
+ * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
+ *			is provided by \a vios.
+ * \param dkey	[IN]	Distribution key.
+ * \param nr	[IN]	Number of vector descriptors in \a vios.
+ * \param vios	[IN]	Array of vector IO descriptors.
+ * \param ioh	[OUT]	The returned handle for the ZC I/O.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_zc_fetch_prep(daos_handle_t coh, daos_unit_oid_t oid,
+		      daos_epoch_t epoch, daos_dkey_t *dkey,
+		      unsigned int nr, daos_vec_iod_t *vios,
+		      daos_handle_t *ioh, daos_event_t *ev);
+
+/**
+ * Prepare zero-copy sink buffers for the specified vectors of the given
+ * object. The caller can directly use thse buffers for RMA write.
+ *
+ * The upper layer must explicitly call \a vos_obj_zc_submit to finalise the
+ * ZC I/O and release resources.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	object ID
+ * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
+ *			range is provided by \a vios (kvl::kv_epr).
+ * \param dkey	[IN]	Distribution key.
+ * \param nr	[IN]	Number of vector IO descriptors in \a vios.
+ * \param vios	[IN]	Array of vector IO descriptors.
+ * \param ioh	[OUT]	The returned handle for the ZC I/O.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_zc_update_prep(daos_handle_t coh, daos_unit_oid_t oid,
+		       daos_epoch_t epoch, daos_dkey_t *dkey,
+		       unsigned int nr, daos_vec_iod_t *vios,
+		       daos_handle_t *ioh, daos_event_t *ev);
+
+/**
+ * Submit the current zero-copy I/O operation to VOS and release responding
+ * resources.
+ *
+ * \param ioh	[IN]	The ZC I/O handle, it is created by \a vos_obj_zc_fetch
+ *			or \a vos_obj_zc_update.
+ * \param dkey	[IN]	Distribution key.
+ * \param nr	[IN]	Number of vector IO descriptors in \a vios.
+ * \param vios	[IN]	Array of vector IO descriptors.
+ * \param err	[IN]	Errno of current I/O, zero if there is no error.
+ *			All updates will be dropped if this function is called
+ *			for \a vos_obj_zc_update with a non-zero error code.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_zc_submit(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int nr,
+		  daos_vec_iod_t *vios, int err, daos_event_t *ev);
+
+/**
+ * Get the zero-copy scatter/gather list for the specified vector.
+ *
+ * \param ioh	[IN]	The ZC I/O handle.
+ * \param vec_at [IN]	Index of the vector within @vios while creating the
+ *			ZC I/O handle \a ioh.
+ * \param sgl_pp [OUT]	The returned scatter/gather list.
+ */
+int
+vos_obj_zc_vec2sgl(daos_handle_t ioh, unsigned int vec_at,
+		   daos_sg_list_t **sgl_pp);
 
 /**
  * VOS iterator APIs
