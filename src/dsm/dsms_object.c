@@ -43,11 +43,23 @@ struct dsms_update_async_args {
 };
 
 static int
-dsms_co_open(daos_handle_t pool_hdl, uuid_t co_uuid,
-	     daos_handle_t *co_hdl)
+dsms_co_open_create(daos_handle_t pool_hdl, uuid_t co_uuid,
+		    daos_handle_t *co_hdl)
 {
+	int rc;
+
 	/* TODO put it to container cache */
-	return vos_co_open(pool_hdl, co_uuid, co_hdl, NULL);
+	rc = vos_co_open(pool_hdl, co_uuid, co_hdl, NULL);
+	if (rc == -DER_NONEXIST) {
+		/** create container on-the-fly */
+		rc = vos_co_create(pool_hdl, co_uuid, NULL);
+		if (rc)
+			return rc;
+		/** attempt to open again now that it is created ... */
+		rc = vos_co_open(pool_hdl, co_uuid, co_hdl, NULL);
+	}
+
+	return rc;
 }
 
 static int
@@ -199,7 +211,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = dsms_co_open(dph, oui->oui_co_uuid, &dch);
+	rc = dsms_co_open_create(dph, oui->oui_co_uuid, &dch);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
