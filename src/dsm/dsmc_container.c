@@ -56,12 +56,13 @@ int
 dsm_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 {
 	struct cont_create_in  *in;
-	struct pool_conn       *conn = (struct pool_conn *)poh.cookie;
+	struct pool_conn       *conn;
 	dtp_endpoint_t		ep;
 	dtp_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
 	int			rc;
 
+	conn = dsmc_handle2pool(poh);
 	if (conn == NULL || uuid_is_null(uuid))
 		return -DER_INVAL;
 
@@ -136,7 +137,7 @@ dsm_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	       daos_event_t *ev)
 {
 	struct cont_destroy_in *in;
-	struct pool_conn       *conn = (struct pool_conn *)poh.cookie;
+	struct pool_conn       *conn;
 	dtp_endpoint_t		ep;
 	dtp_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
@@ -145,6 +146,7 @@ dsm_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	/* TODO: Implement "force". */
 	D_ASSERT(force != 0);
 
+	conn = dsmc_handle2pool(poh);
 	if (conn == NULL || uuid_is_null(uuid))
 		return -DER_INVAL;
 
@@ -234,31 +236,33 @@ dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	    daos_event_t *ev)
 {
 	struct dsmc_container	*dc;
-	struct pool_conn	*pc;
+	struct pool_conn	*conn;
 
-	pc = dsmc_handle2pool(poh);
-	if (pc == NULL)
+	conn = dsmc_handle2pool(poh);
+	if (conn == NULL)
 		return -DER_INVAL;
 
 	dc = dsmc_container_alloc(uuid);
 	if (dc == NULL) {
-		pool_conn_put(pc);
+		pool_conn_put(conn);
 		return -DER_NOMEM;
 	}
 
 	/* Add container to the pool list */
-	pthread_rwlock_wrlock(&pc->pc_co_list_lock);
-	if (pc->pc_disconnecting) {
-		pthread_rwlock_unlock(&pc->pc_co_list_lock);
-		pool_conn_put(pc);
+	pthread_rwlock_wrlock(&conn->pc_co_list_lock);
+	if (conn->pc_disconnecting) {
+		pthread_rwlock_unlock(&conn->pc_co_list_lock);
+		pool_conn_put(conn);
 		dsmc_container_put(dc);
 		return -DER_INVAL;
 	}
-	daos_list_add(&dc->dc_po_list, &pc->pc_co_list);
+	daos_list_add(&dc->dc_po_list, &conn->pc_co_list);
 	dc->dc_pool_hdl = poh;
-	pthread_rwlock_unlock(&pc->pc_co_list_lock);
+	pthread_rwlock_unlock(&conn->pc_co_list_lock);
 
-	pool_conn_put(pc);
+	dsmc_container_add_cache(dc, coh);
+
+	pool_conn_put(conn);
 
 	return 0;
 }
@@ -266,7 +270,7 @@ dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 int
 dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 {
-	struct pool_conn	*pc;
+	struct pool_conn	*conn;
 	struct dsmc_container	*dc;
 
 	dc = dsmc_handle2container(coh);
@@ -274,8 +278,8 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 		return -DER_ENOENT;
 
 	D_ASSERT(!daos_handle_is_inval(dc->dc_pool_hdl));
-	pc = dsmc_handle2pool(dc->dc_pool_hdl);
-	if (pc == NULL) {
+	conn = dsmc_handle2pool(dc->dc_pool_hdl);
+	if (conn == NULL) {
 		dsmc_container_put(dc);
 		return -DER_INVAL;
 	}
@@ -285,20 +289,20 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 	if (!daos_list_empty(&dc->dc_obj_list)) {
 		pthread_rwlock_unlock(&dc->dc_obj_list_lock);
 		dsmc_container_put(dc);
-		pool_conn_put(pc);
+		pool_conn_put(conn);
 		return -DER_BUSY;
 	}
 	dc->dc_closing = 1;
 	pthread_rwlock_unlock(&dc->dc_obj_list_lock);
 
 	/* Remove the container from pool container list */
-	pthread_rwlock_wrlock(&pc->pc_co_list_lock);
+	pthread_rwlock_wrlock(&conn->pc_co_list_lock);
 	daos_list_del_init(&dc->dc_po_list);
-	pthread_rwlock_unlock(&pc->pc_co_list_lock);
+	pthread_rwlock_unlock(&conn->pc_co_list_lock);
 
 	dsmc_container_put(dc);
 	dsmc_container_del_cache(dc);
-	pool_conn_put(pc);
+	pool_conn_put(conn);
 
 	return 0;
 }

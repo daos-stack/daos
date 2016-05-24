@@ -39,9 +39,8 @@ static struct option opts[] = {
 };
 
 static int
-pool_create(uuid_t pool_uuid)
+pool_create(uuid_t uuid)
 {
-	uuid_t		uuid;
 	char		uuid_str[64] = {'\0'};
 	daos_rank_list_t	svc;
 	int		rc;
@@ -148,28 +147,28 @@ test_update(int argc, char *argv[])
 	char	        uuid_str[64];
 	uuid_t		pool_uuid;
 	uuid_t		co_uuid;
-	daos_handle_t	poh;
-	daos_handle_t	coh;
-	daos_handle_t	do_oh;
+	daos_handle_t	poh = DAOS_HDL_INVAL;
+	daos_handle_t	coh = DAOS_HDL_INVAL;
+	daos_handle_t	do_oh = DAOS_HDL_INVAL;
 	daos_unit_oid_t	do_oid = {{ .lo = 0, .mid = 1, .hi = 2}, 3};
 	int		rc;
 
 	rc = pool_create(pool_uuid);
-	if (rc != 0)
-		return rc;
-
-	uuid_parse(uuid_str, pool_uuid);
-	D_DEBUG(DF_DSMC, "connecting to pool %s\n", uuid_str);
 	if (rc != 0) {
-		D_ERROR("invalid pool uuid: %s\n", uuid_str);
+		D_ERROR("failed to create pool %d\n", rc);
 		return rc;
 	}
+
+	uuid_unparse_lower(pool_uuid, uuid_str);
+	D_DEBUG(DF_DSMC, "connecting to pool %s\n", uuid_str);
 
 	rc = dsm_pool_connect(pool_uuid, NULL /* grp */, NULL /* tgts */,
 			      DAOS_PC_RW, NULL /* failed */, &poh,
 			      NULL /* ev */);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to connect to pool %d\n", rc);
 		return rc;
+	}
 
 	D_DEBUG(DF_DSMC, "connected to pool %s: "DF_X64"\n", uuid_str,
 		poh.cookie);
@@ -178,16 +177,22 @@ test_update(int argc, char *argv[])
 	uuid_generate(co_uuid);
 
 	rc = dsm_co_create(poh, co_uuid, NULL /* ev */);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to create container %d\n", rc);
 		D_GOTO(disconnect, rc);
+	}
 
 	rc = dsm_co_open(poh, co_uuid, 0, NULL, &coh, NULL, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to open container %d\n", rc);
 		D_GOTO(co_destroy, rc);
+	}
 
 	rc = dsm_obj_open(coh, do_oid, 0, &do_oh, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to open object %d\n", rc);
 		D_GOTO(co_close, rc);
+	}
 
 	rc = do_update(do_oh);
 	if (rc != 0) {
@@ -197,21 +202,29 @@ test_update(int argc, char *argv[])
 
 obj_close:
 	rc = dsm_obj_close(do_oh, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to close object %d\n", rc);
 		D_GOTO(co_close, rc);
+	}
 co_close:
 	rc = dsm_co_close(coh, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to close container %d\n", rc);
 		D_GOTO(co_destroy, rc);
+	}
 co_destroy:
 	rc = dsm_co_destroy(poh, co_uuid, 1 /* force */, NULL /* ev */);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to destroy container %d\n", rc);
 		D_GOTO(disconnect, rc);
+	}
 
 disconnect:
 	rc = dsm_pool_disconnect(poh, NULL /* ev */);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to disconnect pool %d\n", rc);
 		return rc;
+	}
 
 	return 0;
 }
