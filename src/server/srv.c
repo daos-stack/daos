@@ -125,6 +125,9 @@ dss_srv_handler(void *arg)
 		return NULL;
 	}
 
+	/** report thread index */
+	dmi->dmi_tid = dthread->dt_idx;
+
 	/* register clean-up routine called on cancellation point */
 	pthread_cleanup_push(dss_srv_handler_cleanup, (void *)dtc);
 	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);

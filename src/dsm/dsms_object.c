@@ -25,10 +25,13 @@
  * related to object.
  */
 
+#include <uuid/uuid.h>
+
+#include <daos/transport.h>
 #include <daos_srv/daos_m_srv.h>
 #include <daos_srv/vos.h>
-#include <uuid/uuid.h>
-#include <daos/transport.h>
+#include <daos_srv/daos_server.h>
+
 #include "dsm_rpc.h"
 #include "dsms_internal.h"
 #include "dsms_layout.h"
@@ -56,10 +59,12 @@ dsms_co_close(daos_handle_t dh)
 static int
 dsms_pool_open(const uuid_t pool_uuid, daos_handle_t *vph)
 {
-	char *path;
-	int rc;
+	struct dss_module_info	*dmi;
+	char			*path;
+	int			 rc;
 
-	rc = dmgs_tgt_file(pool_uuid, NULL, NULL, &path);
+	dmi = dss_get_module_info();
+	rc = dmgs_tgt_file(pool_uuid, VOS_FILE, &dmi->dmi_tid, &path);
 	if (rc != 0)
 		return rc;
 

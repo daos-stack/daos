@@ -115,6 +115,7 @@ void dss_unregister_key(struct dss_module_key *key);
 
 struct dss_module_info {
 	dtp_context_t	dmi_ctx;
+	int		dmi_tid;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
