@@ -51,13 +51,13 @@ dsmc_obj_pool_container_uuid_get(daos_handle_t oh, uuid_t puuid,
 
 	dobj = dsmc_handle2obj(oh);
 	if (dobj == NULL)
-		return -DER_ENOENT;
+		return -DER_NO_HDL;
 
 	D_ASSERT(!daos_handle_is_inval(dobj->do_co_hdl));
 	dc = dsmc_handle2container(dobj->do_co_hdl);
 	if (dc == NULL) {
 		dsmc_object_put(dobj);
-		return -DER_ENOENT;
+		return -DER_NO_HDL;
 	}
 
 	D_ASSERT(!daos_handle_is_inval(dc->dc_pool_hdl));
@@ -65,7 +65,7 @@ dsmc_obj_pool_container_uuid_get(daos_handle_t oh, uuid_t puuid,
 	if (pc == NULL) {
 		dsmc_object_put(dobj);
 		dsmc_container_put(dc);
-		return -DER_ENOENT;
+		return -DER_NO_HDL;
 	}
 
 	uuid_copy(puuid, pc->pc_pool);
@@ -252,7 +252,7 @@ dsm_obj_open(daos_handle_t coh, daos_unit_oid_t id, unsigned int mode,
 
 	dc = dsmc_handle2container(coh);
 	if (dc == NULL)
-		return -DER_INVAL;
+		return -DER_NO_HDL;
 
 	dobj = dsm_obj_alloc(id);
 	if (dobj == NULL) {
@@ -285,12 +285,12 @@ dsm_obj_close(daos_handle_t oh, daos_event_t *ev)
 
 	dobj = dsmc_handle2obj(oh);
 	if (dobj == NULL)
-		return -DER_EXIST;
+		return -DER_NO_HDL;
 
 	dc = dsmc_handle2container(dobj->do_co_hdl);
 	if (dc == NULL) {
 		dsmc_object_put(dobj);
-		return -DER_INVAL;
+		return -DER_NO_HDL;
 	}
 
 	/* remove from container list */

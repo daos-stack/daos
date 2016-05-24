@@ -131,9 +131,6 @@ do_update(daos_handle_t dh)
 	D_DEBUG(DF_MISC, "Update %s : %s\n", dkey_buf, val_buf);
 	rex.rx_rsize = val_iov.iov_len;
 
-	/* TODO needs to open the handle later */
-	dh.cookie = 0;
-
 	rc = dsm_obj_update(dh, UPDATE_EPOCH, &dkey, 1, &vio, &sgl, NULL);
 	if (rc != 0)
 		D_ERROR("Failed to record %s:%s\n", akey_buf, val_buf);

@@ -32,6 +32,7 @@
 #include "dsm_rpc.h"
 #include "dsms_internal.h"
 #include "dsms_layout.h"
+
 struct dsms_update_async_args {
 	daos_sg_list_t	*sgls;
 	daos_iov_t	*iovs;

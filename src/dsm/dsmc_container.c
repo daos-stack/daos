@@ -146,9 +146,12 @@ dsm_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	/* TODO: Implement "force". */
 	D_ASSERT(force != 0);
 
-	conn = dsmc_handle2pool(poh);
-	if (conn == NULL || uuid_is_null(uuid))
+	if (uuid_is_null(uuid))
 		return -DER_INVAL;
+
+	conn = dsmc_handle2pool(poh);
+	if (conn == NULL)
+		return -DER_NO_HDL;
 
 	if (!(conn->pc_capas & DAOS_PC_RW) && !(conn->pc_capas & DAOS_PC_EX))
 		return -DER_NO_PERM;
@@ -240,7 +243,7 @@ dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 
 	conn = dsmc_handle2pool(poh);
 	if (conn == NULL)
-		return -DER_INVAL;
+		return -DER_NO_HDL;
 
 	dc = dsmc_container_alloc(uuid);
 	if (dc == NULL) {
@@ -275,13 +278,13 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 
 	dc = dsmc_handle2container(coh);
 	if (dc == NULL)
-		return -DER_ENOENT;
+		return -DER_NO_HDL;
 
 	D_ASSERT(!daos_handle_is_inval(dc->dc_pool_hdl));
 	conn = dsmc_handle2pool(dc->dc_pool_hdl);
 	if (conn == NULL) {
 		dsmc_container_put(dc);
-		return -DER_INVAL;
+		return -DER_NO_HDL;
 	}
 
 	/* Check if there are not objects opened for this container */
