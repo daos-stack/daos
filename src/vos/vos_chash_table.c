@@ -285,7 +285,7 @@ vos_chash_lookup(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable,
 		}
 		iter = D_RO(iter)->next;
 	}
-	ret = -1; /*Key not found*/
+	ret = -DER_NONEXIST; /*Key not found*/
 	*value = NULL;
 exit:
 	pmemobj_rwlock_unlock(ph, &buckets[bucket_id].rw_lock);
