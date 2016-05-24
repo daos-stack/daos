@@ -168,40 +168,6 @@ daos_hash_murmur64(const unsigned char *key, unsigned int key_len,
  * Hash tables.
  */
 
-/** a hash bucket */
-struct dhash_bucket {
-	daos_list_t		hb_head;
-#if DHASH_DEBUG
-	unsigned int		hb_dep;
-#endif
-};
-
-struct dhash_table {
-	/** different type of locks based on ht_feats */
-	union {
-		pthread_mutex_t		ht_lock;
-		pthread_rwlock_t	ht_rwlock;
-	};
-	/** bits to generate number of buckets */
-	unsigned int		 ht_bits;
-	/** feature bits */
-	unsigned int		 ht_feats;
-#if DHASH_DEBUG
-	/** maximum search depth ever */
-	unsigned int		 ht_dep_max;
-	/** maximum number of hash records */
-	unsigned int		 ht_nr_max;
-	/** total number of hash records */
-	unsigned int		 ht_nr;
-#endif
-	/** private data to pass into customized functions */
-	void			*ht_priv;
-	/** customized member functions */
-	dhash_table_ops_t	*ht_ops;
-	/** array of buckets */
-	struct dhash_bucket	*ht_buckets;
-};
-
 static void
 dh_lock_init(struct dhash_table *htable)
 {

@@ -43,398 +43,176 @@
 #include <vos_hhash.h>
 #include <daos_errno.h>
 
-static struct vos_obj_ref *
-vos_oref_create(struct vc_hdl *vco, daos_unit_oid_t oid)
+int
+vos_oref_lru_alloc(void *key, unsigned int ksize,
+		   void *args,
+		   struct daos_llink **link)
 {
-	struct vos_obj_ref *oref;
+	int			rc = 0;
+	struct vos_obj_ref	*oref;
+	struct vos_obj		*lobj;
+	struct vos_lru_key	*lkey;
+	struct vc_hdl		*co_hdl = NULL;
+
+	D_DEBUG(DF_VOS2, "lru alloc callback for vos_obj_cache\n");
+
+	co_hdl = (struct vc_hdl *)args;
+	D_ASSERT(co_hdl != NULL);
+
+	lkey = (struct vos_lru_key *) key;
+	D_ASSERT(lkey != NULL);
+
+	/**
+	 * Call back called by LRU cache as the reference
+	 * was not found in DRAM cache
+	 * Looking it up in PMEM Object Index
+	 */
+	rc = vos_oi_lookup(co_hdl, lkey->vlk_obj_id,
+			   &lobj);
+	if (rc) {
+		D_ERROR("Error looking up container handle\n");
+		return rc;
+	}
 
 	D_ALLOC_PTR(oref);
 	if (!oref)
-		return NULL;
+		return -DER_NOMEM;
 
-	oref->or_co  = vco;
-	oref->or_oid = oid;
-	oref->or_lrefcnt = 0;
-	return oref;
+	oref->or_obj = lobj;
+	D_DEBUG(DF_VOS2, "oref create_cb co uuid:"DF_UUID"\n",
+		DP_UUID(co_hdl->vc_id));
+	D_DEBUG(DF_VOS2, "Object Hold of obj_id: "DF_UOID"\n",
+		DP_UOID(lkey->vlk_obj_id));
+
+	oref->or_key.vlk_obj_id = lkey->vlk_obj_id;
+	uuid_copy(oref->or_key.vlk_co_uuid, co_hdl->vc_id);
+	oref->or_ksize	= ksize;
+	oref->or_co	= co_hdl;
+	daos_lru_llink_init(&oref->or_llink, &oref->or_key,
+			    oref->or_ksize);
+	*link		= &oref->or_llink;
+
+	return 0;
 }
 
-static void
-vos_oref_free(struct vos_obj_ref *oref)
+void
+vos_oref_lru_free(struct daos_llink *llink)
 {
+	struct vos_obj_ref	*oref;
+
+	D_DEBUG(DF_VOS2, "lru free callback for vos_obj_cache\n");
+	D_ASSERT(llink);
+
+	oref = container_of(llink, struct vos_obj_ref, or_llink);
 	if (oref->or_co)
 		vos_co_putref_handle(oref->or_co);
 
 	D_FREE_PTR(oref);
 }
 
-/**
- * Compare daos_unit_oid_t keys
- */
-static inline bool
-vlru_compare_keys(daos_unit_oid_t *oid_1,
-		  daos_unit_oid_t *oid_2)
+void
+vos_oref_lru_printkey(void *key, unsigned int ksize)
 {
-	return !memcmp(oid_1, oid_2,
-		       sizeof(daos_unit_oid_t));
+	struct vos_lru_key	*lkey;
+
+	lkey = (struct vos_lru_key *) key;
+	D_ASSERT(lkey != NULL);
+	D_DEBUG(DF_VOS2, "Container uuid:"DF_UUID"\n",
+		DP_UUID(lkey->vlk_co_uuid));
+	D_DEBUG(DF_VOS2, "Object id: "DF_UOID"\n",
+		DP_UOID(lkey->vlk_obj_id));
 }
 
-static inline int32_t
-oid2bucket(daos_unit_oid_t *oid, uint64_t nbuckets)
-{
-	uint64_t hash_value;
-
-	hash_value = vos_generate_crc64((void *)oid,
-					sizeof(daos_unit_oid_t));
-	return vos_generate_jch(hash_value, nbuckets);
-}
-
-static inline struct vos_obj_ref*
-vlru_tail_of(daos_list_t *head)
-{
-	return daos_list_entry(head->prev,
-			       struct vos_obj_ref,
-			       or_llink);
-}
-
-static inline void
-vlru_add_idle_list(struct vos_obj_ref *oref, daos_list_t *head,
-		   uint32_t *refs_held, uint32_t *cache_filled)
-{
-	daos_list_add(&oref->or_llink, head);
-	/* Decrement busy counter  and increase idle counter */
-	(*refs_held)--;
-	(*cache_filled)++;
-}
-
-/**
- * unlink from idle list (refcount == 0)
- * and reduce cache occupancy
- */
-static inline void
-vlru_idle_ref_unlink(struct vos_obj_ref *ref,
-		     struct vlru_list *lru_list)
-{
-	if (!ref->or_lrefcnt) {
-		daos_list_del(&ref->or_llink);
-		lru_list->vll_refs_held++;
-		lru_list->vll_cache_filled--;
-	}
-}
-
-static void
-vlru_ref_evict(struct vlru_list *lru_list, struct vos_obj_ref *obj_ref)
-{
-	D_DEBUG(DF_VOS3, "Woh! Cache is full evicting!\n");
-	D_ASSERT(!obj_ref->or_lrefcnt);
-
-	daos_list_del(&obj_ref->or_hlink);
-	daos_list_del(&obj_ref->or_llink);
-	lru_list->vll_cache_filled--;
-
-	vos_oref_free(obj_ref);
-}
-
-/**
- * LRU create creates the hashtable and the
- * list (together act as a cache) for maintaining
- * and locating object reference
- * entries
- */
-static int
-vlru_create(int num_buckets, int cache_size, struct vlru_htable *htable,
-	    struct vlru_list *list)
-{
-	int	i;
-
-	if (num_buckets > LRU_HASH_MAX_BUCKETS) {
-		D_ERROR("Buckets count shall not be more than: %d\n",
-			LRU_HASH_MAX_BUCKETS);
-		return -DER_INVAL;
-	}
-
-	if (cache_size > LRU_CACHE_MAX_SIZE) {
-		D_ERROR("Cache size shall not be more than: %d\n",
-			LRU_CACHE_MAX_SIZE);
-		return -DER_INVAL;
-	}
-
-	D_ALLOC(htable->vlh_buckets,
-		num_buckets * sizeof(htable->vlh_buckets[0]));
-
-	if (!htable->vlh_buckets) {
-		D_ERROR("Error in Allocating buckets\n");
-		return -DER_NOMEM;
-	}
-
-	htable->vlh_nbuckets = num_buckets;
-	for (i = 0; i < num_buckets; i++)
-		DAOS_INIT_LIST_HEAD(&htable->vlh_buckets[i]);
-
-	DAOS_INIT_LIST_HEAD(&list->vll_list_head);
-	list->vll_cache_size = cache_size;
-	list->vll_cache_filled = 0;
-	list->vll_refs_held = 0;
-
-	return 0;
-}
-
-static struct vos_obj_ref*
-vlru_find_item(struct vlru_htable *lru_table, daos_unit_oid_t oid)
-{
-
-	struct vos_obj_ref	*litem;
-	int32_t			bucket_id;
-
-	bucket_id = oid2bucket(&oid, lru_table->vlh_nbuckets);
-	daos_list_for_each_entry(litem,
-				 &lru_table->vlh_buckets[bucket_id],
-				 or_hlink) {
-		if (vlru_compare_keys(&oid, &litem->or_oid))
-			return litem;
-	}
-
-	return NULL;
-}
-
-int
-vlru_create_ref_hdl(daos_handle_t coh, daos_unit_oid_t oid,
-		    struct vos_obj_ref **ref)
-{
-	struct vos_obj_ref	*oref = NULL;
-	struct vc_hdl		*co_hdl = NULL;
-	int			 rc;
-
-	co_hdl = vos_co_lookup_handle(coh);
-	if (!co_hdl) {
-		D_ERROR("Invalid handle for container\n");
-		return -DER_INVAL;
-	}
-
-	oref = vos_oref_create(co_hdl, oid);
-	if (!oref)
-		D_GOTO(failed, rc = -DER_NOMEM);
-
-	/**
-	 * TODO: Add Btree iterator handle
-	 */
-	*ref = oref;
-	return 0;
- failed:
-	vos_co_putref_handle(co_hdl);
-	return rc;
-}
-
-/**
- * Implementation function for vos_obj_ref_hold
- */
-static int
-vlru_ref_hold(struct vlru_htable *lru_table, struct vlru_list *lru_list,
-	      daos_handle_t coh, daos_unit_oid_t oid, struct vos_obj_ref **oref)
-{
-
-	int			ret  = 0;
-	int32_t			bucket_id;
-	struct vos_obj_ref	*l_oref = NULL;
-	daos_list_t		*head = NULL;
-
-	/**
-	 *
-	 * General algorithm:
-	 * If oid is not in cache, bring it from PMEM.
-	 * -- If oi not in PMEM (throw an error)
-	 * -- PMEM oi lookup
-	 * ---- Bring reference to cache (in hash-alone)
-	 * -- Add reference in hash
-	*/
-
-	/**
-	 * Lets check the head of the cache (idle list).
-	 * if this oid has been accessed in the past.
-	 */
-	if (lru_list->vll_cache_filled) {
-		head = &(lru_list->vll_list_head);
-		l_oref = daos_list_entry(head->next,
-					 struct vos_obj_ref,
-					 or_llink);
-		if (vlru_compare_keys(&oid, &l_oref->or_oid))
-			goto ulink;
-	}
-
-	/**
-	 * Not the head?
-	 * its faster to search with hash table than the list
-	 * Finding if reference in hash-table
-	 */
-	l_oref = vlru_find_item(lru_table, oid);
-	if (l_oref) {
-ulink:
-		/**
-		 * This reference is about to get busy again.
-		 * Lets unlink from idle list and make it busy
-		 * again by incrementing held count.
-		 * (if it exists, i.e refcount == 0)
-		 * Its still accessible from hash-table
-		 * (hash-table acts as a busy-list also).
-		 */
-		vlru_idle_ref_unlink(l_oref, lru_list);
-	} else {
-		/* Not found */
-		ret  = vlru_create_ref_hdl(coh, oid, &l_oref);
-		if (ret) {
-			D_ERROR("Error allocing ref handle\n");
-			return ret;
-		}
-
-		ret = vos_oi_lookup(coh, oid, &l_oref->or_obj);
-		if (ret) {
-			D_ERROR("Error looking up container handle\n");
-			goto exit;
-		}
-
-		bucket_id = oid2bucket(&l_oref->or_oid,
-				       lru_table->vlh_nbuckets);
-		daos_list_add(&l_oref->or_hlink,
-			      &lru_table->vlh_buckets[bucket_id]);
-		/* Busy oref count */
-		lru_list->vll_refs_held++;
-	}
-	l_oref->or_lrefcnt++;
-	*oref = l_oref;
-
-exit:
-	if (ret && l_oref)
-		vos_oref_free(l_oref);
-
-	return ret;
-}
-
+struct daos_llink_ops vos_oref_llink_ops = {
+	.lop_free_ref	=  vos_oref_lru_free,
+	.lop_alloc_ref	=  vos_oref_lru_alloc,
+	.lop_print_key	=  vos_oref_lru_printkey,
+};
 
 int
 vos_obj_cache_create(int32_t cache_size,
-		     struct vos_obj_cache **occ)
+		     struct daos_lru_cache **occ)
 {
 
-	int			ret = 0;
-	struct vos_obj_cache	*l_occ = NULL;
+	int			rc = 0;
 
-	D_ALLOC_PTR(l_occ);
-	if (l_occ == NULL) {
-		D_ERROR("Allocating object cache pointer\n");
-		return -DER_NOMEM;
-	}
-	ret = vlru_create(LRU_HASH_MAX_BUCKETS, cache_size,
-			  &l_occ->voc_lhtable_ref,
-			  &l_occ->voc_llist_ref);
-	if (ret) {
-		D_ERROR("Creating an Object cache failed\n");
-		if (l_occ != NULL)
-			D_FREE_PTR(l_occ);
-		goto exit;
-	}
-	*occ = l_occ;
-exit:
-	return ret;
+	D_DEBUG(DF_VOS2, "Creating an object cache %d\n",
+		(1 << cache_size));
+
+	rc = daos_lru_cache_create(cache_size, &vos_oref_llink_ops,
+				   occ);
+	if (rc)
+		D_ERROR("Error in creating lru cache\n");
+
+	D_DEBUG(DF_VOS2, "Succesful in creating object cache\n");
+	return rc;
 }
 
 void
-vos_obj_cache_destroy(struct vos_obj_cache *occ)
+vos_obj_cache_destroy(struct daos_lru_cache *occ)
 {
-
-	struct vos_obj_ref *ref = NULL;
-
-	if (occ == NULL) {
-		D_ERROR("Empty cache. Nothing to destroy\n");
-		return;
-	}
-
-	/* Cannot destroy if there are busy references */
-	D_ASSERT(occ->voc_llist_ref.vll_refs_held == 0);
-
-	/**
-	 * Deleting all the link and object references in cache
-	 */
-	while (!daos_list_empty(&(occ->voc_llist_ref.vll_list_head))) {
-		ref = daos_list_entry(occ->voc_llist_ref.vll_list_head.next,
-				      struct vos_obj_ref,
-				      or_llink);
-		daos_list_del(&ref->or_llink);
-		vos_oref_free(ref);
-	}
-
-	if (occ->voc_lhtable_ref.vlh_buckets)
-		D_FREE(occ->voc_lhtable_ref.vlh_buckets,
-		       occ->voc_lhtable_ref.vlh_nbuckets *
-		       sizeof(occ->voc_lhtable_ref.vlh_buckets[0]));
-
-	D_FREE_PTR(occ);
+	D_ASSERT(occ != NULL);
+	daos_lru_cache_destroy(occ);
 }
 
 /**
  * Return object cache for the current thread.
  */
-struct vos_obj_cache *vos_obj_cache_current(void)
+struct daos_lru_cache *vos_obj_cache_current(void)
 {
 	return vos_get_obj_cache();
 }
 
 void
-vos_obj_ref_release(struct vos_obj_cache *occ, struct vos_obj_ref *oref)
+vos_obj_ref_release(struct daos_lru_cache *occ,
+		    struct vos_obj_ref *oref)
 {
 
-	daos_list_t		*head = NULL;
-	uint32_t		avail_size = 0;
-	struct vlru_list	*llist = NULL;
-
-
 	D_ASSERT((occ != NULL) && (oref != NULL));
-
-	/* Convenience Definition */
-	llist = &occ->voc_llist_ref;
-
-	/* Number of available positions in the list */
-	avail_size = llist->vll_cache_size - llist->vll_cache_filled;
-
-	D_ASSERT(oref->or_lrefcnt > 0);
-	oref->or_lrefcnt--;
-	/**
-	 * Move it to LRU cache list
-	 * If refcount==0
-	 */
-	if (!oref->or_lrefcnt) {
-		head = &llist->vll_list_head;
-		vlru_add_idle_list(oref, head,
-				   &llist->vll_refs_held,
-				   &llist->vll_cache_filled);
-		avail_size--;
-	}
-	/**
-	 * If the cache is full let us remove
-	 * Remove from the last item in cache
-	 * Check also if number of busy references is
-	 * greater than the available space in
-	 * list. If so, free up space in the cache.
-	 * to fit all busy references.
-	 */
-	if (llist->vll_cache_filled &&
-	   (!avail_size || llist->vll_refs_held > avail_size)) {
-		while (llist->vll_refs_held + llist->vll_cache_filled >=
-		       llist->vll_cache_size) {
-			head = &llist->vll_list_head;
-			vlru_ref_evict(llist, vlru_tail_of(head));
-		}
-	}
+	daos_lru_ref_release(occ, &oref->or_llink);
 }
 
 int
-vos_obj_ref_hold(struct vos_obj_cache *occ, daos_handle_t coh,
+vos_obj_ref_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		 daos_unit_oid_t oid, struct vos_obj_ref **oref_p)
 {
 
-	int	ret = 0;
+	int			rc = 0;
+	struct vos_obj_ref	*lref = NULL;
+	struct vos_lru_key	lkey;
+	struct daos_llink	*lret = NULL;
+	struct vc_hdl		*co_hdl = NULL;
 
 	D_ASSERT(occ != NULL);
-	ret = vlru_ref_hold(&occ->voc_lhtable_ref,
-			    &occ->voc_llist_ref,
-			    coh, oid, oref_p);
-	return ret;
+	D_DEBUG(DF_VOS2, "Object Hold of obj_id: "DF_UOID"\n",
+		DP_UOID(oid));
+	D_DEBUG(DF_VOS2, "Hold for container cookied:"DF_U64"\n",
+		coh.cookie);
+
+	co_hdl = vos_co_lookup_handle(coh);
+	if (!co_hdl) {
+		D_ERROR("invalid handle for container\n");
+		return -DER_INVAL;
+	}
+	/* Create the key for obj cache */
+	uuid_copy(lkey.vlk_co_uuid, co_hdl->vc_id);
+	lkey.vlk_obj_id = oid;
+
+	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey),
+			       co_hdl, &lret);
+	if (rc) {
+		D_ERROR("Error in Holding reference for obj"DF_UOID"\n",
+			DP_UOID(oid));
+		vos_co_putref_handle(co_hdl);
+		return	rc;
+	}
+
+	lref = container_of(lret, struct vos_obj_ref, or_llink);
+	D_DEBUG(DF_VOS2, "Object "DF_UOID" ref hold successful\n",
+		DP_UOID(oid));
+	D_DEBUG(DF_VOS2, "Container UUID:"DF_UUID"\n",
+		DP_UUID(lref->or_co->vc_id));
+	*oref_p = lref;
+
+	return	rc;
 }

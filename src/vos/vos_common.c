@@ -33,13 +33,14 @@
 #include <daos_srv/daos_server.h>
 #include <vos_internal.h>
 #include <vos_hhash.h>
+#include <daos/lru.h>
 
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * Object cache based on mode of instantiation
  */
-struct vos_obj_cache*
+struct daos_lru_cache*
 vos_get_obj_cache(void)
 {
 #ifdef VOS_STANDALONE
@@ -77,7 +78,7 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 		return rc;
 	}
 
-	rc = vos_obj_cache_create(LRU_CACHE_MAX_SIZE,
+	rc = vos_obj_cache_create(LRU_CACHE_BITS,
 				  &imem_inst->vis_ocache);
 	if (rc) {
 		D_ERROR("Error in createing object cache\n");

@@ -55,7 +55,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	if (NULL == path || uuid_is_null(uuid) || size < 0)
 		return -DER_INVAL;
 
-	/* Path must be a file with a certain size when size
+	/**
+	 * Path must be a file with a certain size when size
 	 * argument is 0
 	 */
 	if (!size && (access(path, F_OK) == -1)) {
@@ -128,7 +129,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_ERROR("Initialize pool root error: %d\n", rc);
-		/* The transaction can in reality be aborted
+		/**
+		 * The transaction can in reality be aborted
 		 * only when there is no memory, either due
 		 * to loss of power or no more memory in pool
 		 */
@@ -184,7 +186,6 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 {
 
 	int				rc    = 0;
-	char				pool_uuid_str[37], uuid_str[37];
 	struct vp_hdl			*vpool = NULL;
 	struct vos_pool_root		*root  = NULL;
 	struct vos_container_index	*co_idx;
@@ -225,10 +226,10 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 
 	root = vos_pool2root(vpool);
 	if (uuid_compare(uuid, root->vpr_pool_id)) {
-		uuid_unparse(uuid, pool_uuid_str);
-		uuid_unparse(uuid, uuid_str);
-		D_ERROR("UUID mismatch error (uuid: %s, vpool_id: %s",
-			uuid_str, pool_uuid_str);
+		D_ERROR("UUID mismatch error");
+		D_DEBUG(DF_VOS2, "User UUID:"DF_UUID"\n", DP_UUID(uuid));
+		D_DEBUG(DF_VOS2, "Root Pool UUID:"DF_UUID"\n",
+			DP_UUID(root->vpr_pool_id));
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
 

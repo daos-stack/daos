@@ -34,11 +34,12 @@
 #define __VOS_OBJ_H__
 
 #include <daos/btree.h>
+#include <daos/lru.h>
 #include "vos_layout.h"
 
+
 #define OT_BTREE_ORDER 20
-#define LRU_HASH_MAX_BUCKETS 1000
-#define LRU_CACHE_MAX_SIZE 10000
+#define LRU_CACHE_BITS 16
 
 
 
@@ -59,13 +60,10 @@ struct vos_object_index {
  */
 struct vos_obj_ref;
 
-/**
- * percpu object cache. It can include a hash table and a LRU for
- * cached objects.
- *
- * This structure is not exported (move to TLS).
- */
-struct vos_obj_cache;
+/* Internal container handle structure */
+struct vc_hdl;
+
+
 
 /**
  * Find an object in the cache \a occ and take its reference. If the object is
@@ -78,7 +76,7 @@ struct vos_obj_cache;
  * \param oref_p [OUT]	Returned object cache reference.
  */
 int
-vos_obj_ref_hold(struct vos_obj_cache *occ, daos_handle_t coh,
+vos_obj_ref_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		 daos_unit_oid_t oid, struct vos_obj_ref **oref_p);
 
 /**
@@ -87,7 +85,7 @@ vos_obj_ref_hold(struct vos_obj_cache *occ, daos_handle_t coh,
  * \param oref	[IN]	Reference to be released.
  */
 void
-vos_obj_ref_release(struct vos_obj_cache *occ,
+vos_obj_ref_release(struct daos_lru_cache *occ,
 		    struct vos_obj_ref *oref);
 
 /**
@@ -98,7 +96,7 @@ vos_obj_ref_release(struct vos_obj_cache *occ,
  */
 int
 vos_obj_cache_create(int32_t cache_size,
-		     struct vos_obj_cache **occ_p);
+		     struct daos_lru_cache **occ_p);
 
 /**
  * Destroy an object cache, and release all cached object references.
@@ -106,12 +104,12 @@ vos_obj_cache_create(int32_t cache_size,
  * \param occ	[IN]	Cache to be destroyed.
  */
 void
-vos_obj_cache_destroy(struct vos_obj_cache *occ);
+vos_obj_cache_destroy(struct daos_lru_cache *occ);
 
 /**
  * Return object cache for the current thread.
  */
-struct vos_obj_cache *vos_obj_cache_current(void);
+struct daos_lru_cache *vos_obj_cache_current(void);
 
 /**
  * Object Index API and handles
@@ -149,7 +147,7 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  *			failure
  */
 int
-vos_oi_lookup(daos_handle_t coh, daos_unit_oid_t oid,
+vos_oi_lookup(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 	      struct vos_obj **obj);
 /**
  * VOS object index remove
@@ -162,6 +160,6 @@ vos_oi_lookup(daos_handle_t coh, daos_unit_oid_t oid,
  *			failure
  */
 int
-vos_oi_remove(daos_handle_t coh, daos_unit_oid_t oid);
+vos_oi_remove(struct vc_hdl *co_hdl, daos_unit_oid_t oid);
 
 #endif

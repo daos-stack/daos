@@ -137,30 +137,22 @@ static btr_ops_t vot_ops = {
  * Object index API
  */
 int
-vos_oi_lookup(daos_handle_t coh, daos_unit_oid_t oid,
+vos_oi_lookup(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 	      struct vos_obj **obj)
 {
 
 	int				rc = 0;
 	daos_iov_t			key_iov, val_iov;
-	struct vc_hdl			*co_hdl = NULL;
 	struct vos_object_index		*obj_index = NULL;
 	struct oi_val_buf		s_buf;
 
 	D_DEBUG(DF_VOS2, "Lookup obj "DF_UOID" in the OI table.\n",
 		DP_UOID(oid));
 
-	co_hdl = vos_co_lookup_handle(coh);
-	if (!co_hdl) {
-		D_ERROR("Empty DRAM container handle\n");
-		return -DER_INVAL;
-	}
-
 	obj_index = co_hdl->vc_obj_table;
 	if (!obj_index) {
 		D_ERROR("Object index cannot be empty\n");
-		rc = -DER_NONEXIST;
-		goto exit;
+		return -DER_NONEXIST;
 	}
 
 	key_iov.iov_buf = &oid;
@@ -173,7 +165,7 @@ vos_oi_lookup(daos_handle_t coh, daos_unit_oid_t oid,
 
 	rc = dbtree_lookup(co_hdl->vc_btr_hdl, &key_iov, &val_iov);
 	if (!rc) {
-		D_DEBUG(DF_VOS1, "Object found in obj_index");
+		D_DEBUG(DF_VOS1, "Object found in obj_index\n");
 		*obj = s_buf.ptr;
 	} else {
 		/* Object ID not found insert it to the OI tree */
@@ -187,8 +179,6 @@ vos_oi_lookup(daos_handle_t coh, daos_unit_oid_t oid,
 			D_ERROR("Failed to update Key for Object index\n");
 		*obj = s_buf.ptr;
 	}
-exit:
-	vos_co_putref_handle(co_hdl);
 	return rc;
 }
 

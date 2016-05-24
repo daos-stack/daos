@@ -40,6 +40,8 @@
 #include <daos/common.h>
 #include <daos_srv/vos.h>
 #include <vos_obj.h>
+#include <vos_internal.h>
+#include <vos_hhash.h>
 
 #define UPDATE_DKEY_SIZE	32
 #define UPDATE_DKEY		"test_update_dkey"
@@ -476,7 +478,7 @@ exit:
 
 static inline int
 hold_object_refs(struct vos_obj_ref **refs,
-		 struct vos_obj_cache *occ,
+		 struct daos_lru_cache *occ,
 		 daos_handle_t *coh,
 		 daos_unit_oid_t *oid,
 		 int start, int end)
@@ -496,22 +498,29 @@ io_oi_test(void **state)
 {
 	struct io_test_args	*arg = *state;
 	struct vos_obj		*obj[2];
+	struct vc_hdl		*co_hdl;
 	daos_unit_oid_t		oid;
 	int			rc = 0;
 
 	vts_io_set_oid(&oid);
-	rc = vos_oi_lookup(arg->ctx.tc_co_hdl, oid, &obj[0]);
+
+	co_hdl = vos_co_lookup_handle(arg->ctx.tc_co_hdl);
+	assert_ptr_not_equal(co_hdl, NULL);
+
+	rc = vos_oi_lookup(co_hdl, oid, &obj[0]);
 	assert_int_equal(rc, 0);
 
-	rc = vos_oi_lookup(arg->ctx.tc_co_hdl, oid, &obj[1]);
+	rc = vos_oi_lookup(co_hdl, oid, &obj[1]);
 	assert_int_equal(rc, 0);
+
+	vos_co_putref_handle(co_hdl);
 }
 
 static void
 io_obj_cache_test(void **state)
 {
 	struct io_test_args	*arg = *state;
-	struct vos_obj_cache	*occ = NULL;
+	struct daos_lru_cache	*occ = NULL;
 	daos_unit_oid_t		oid[2];
 	struct vos_obj_ref	*refs[20];
 	struct vos_test_ctx	*ctx = &arg->ctx;

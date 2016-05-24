@@ -47,6 +47,7 @@ struct daos_hhash *vos_get_hhash(void);
  */
 void
 vos_pool_hhash_init(struct vp_hdl *vp_hdl);
+
 void
 vos_pool_insert_handle(struct vp_hdl *vp_hdl, daos_handle_t *poh);
 
@@ -64,6 +65,7 @@ vos_pool_delete_handle(struct vp_hdl *vp_hdl);
  */
 void
 vos_co_hhash_init(struct vc_hdl *co_hdl);
+
 void
 vos_co_insert_handle(struct vc_hdl *co_hdl, daos_handle_t *coh);
 

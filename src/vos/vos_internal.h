@@ -33,6 +33,8 @@
 #include <daos/list.h>
 #include <daos/hash.h>
 #include <daos/btree.h>
+#include <daos/common.h>
+#include <daos/lru.h>
 #include <daos_srv/daos_server.h>
 #include <vos_layout.h>
 #include <vos_obj.h>
@@ -81,7 +83,6 @@ struct vc_hdl {
 	struct vos_container	*vc_co;
 };
 
-
 struct vos_imem_strts {
 	/**
 	 * Handle hash for holding VOS handles
@@ -92,7 +93,7 @@ struct vos_imem_strts {
 	 * In-memory object cache for the PMEM
 	 * object table
 	 */
-	struct vos_obj_cache	*vis_ocache;
+	struct daos_lru_cache	*vis_ocache;
 };
 
 /* in-memory structures standalone instance */
@@ -107,37 +108,14 @@ struct vos_tls {
 };
 
 /**
- * Doubly linked list constituting the queue
+ * VOS LRU key must consist of
+ * Object ID and container UUID
  */
-struct vlru_list {
-	/* Provided cache size */
-	uint32_t		vll_cache_size;
-	/* Entries filled in cache */
-	uint32_t		vll_cache_filled;
-	/* Unique items held (no refcnts) */
-	uint32_t		vll_refs_held;
-	/* Head of LRU list */
-	daos_list_t		vll_list_head;
-};
-
-/*
- * LRU Hash table
- */
-struct vlru_htable {
-	/* Number of Buckets */
-	uint64_t		vlh_nbuckets;
-	/* Buckets array */
-	daos_list_t		*vlh_buckets;
-};
-
-/**
- * VOS object cache
- */
-struct vos_obj_cache {
-	/* Object cache list */
-	struct vlru_list	voc_llist_ref;
-	/* Object cache table */
-	struct vlru_htable	voc_lhtable_ref;
+struct vos_lru_key {
+	/* Container UUID */
+	uuid_t		vlk_co_uuid;
+	/* Object ID */
+	daos_unit_oid_t	vlk_obj_id;
 };
 
 /**
@@ -145,21 +123,19 @@ struct vos_obj_cache {
  * NB: DRAM data structure.
  */
 struct vos_obj_ref {
+	/** llink for daos lru cache */
+	struct daos_llink		or_llink;
 	/** Key for searching, object ID within a container */
-	daos_unit_oid_t			 or_oid;
+	struct vos_lru_key		or_key;
+	/** VOS object reference Key size */
+	unsigned int			or_ksize;
 	/** dkey tree open handle of the object */
-	daos_handle_t			 or_toh;
+	daos_handle_t			or_toh;
 	/** btree iterator handle */
-	daos_handle_t			 or_ih;
-	/** lru link for object reference **/
-	daos_list_t			 or_llink;
-	/** hash link for object reference **/
-	daos_list_t			 or_hlink;
-	/** ref count for the LRU link **/
-	int32_t				 or_lrefcnt;
+	daos_handle_t			or_ih;
 	/** Persistent memory ID for the object */
 	struct vos_obj			*or_obj;
-	/** container pointer */
+	/** Container Handle - Convenience */
 	struct vc_hdl			*or_co;
 };
 
@@ -224,7 +200,7 @@ PMEMobjpool *vos_coh2pop(daos_handle_t coh);
  * Getting object cache
  * Wrapper for TLS and standalone mode
  */
-struct vos_obj_cache *vos_get_obj_cache(void);
+struct daos_lru_cache *vos_get_obj_cache(void);
 
 /**
  * VOS object index class register for btree
