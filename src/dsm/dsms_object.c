@@ -153,7 +153,7 @@ int
 dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 {
 	struct object_update_in	*oui;
-	struct dtp_single_out *dso;
+	struct dtp_single_out	*dso;
 	struct daos_ref		*dr = NULL;
 	daos_handle_t		dph = DAOS_HDL_INVAL;
 	daos_handle_t		dch = DAOS_HDL_INVAL;
@@ -215,7 +215,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	if (rpc->dr_opc == DSM_TGT_OBJ_UPDATE) {
+	if (opc_get(rpc->dr_opc) == DSM_TGT_OBJ_UPDATE) {
 		/* allocate the buffer in iovs to do rdma */
 		rc = vos_obj_update(dch, oui->oui_oid, oui->oui_epoch,
 				    &oui->oui_dkey, oui->oui_nr,
