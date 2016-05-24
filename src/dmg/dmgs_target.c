@@ -182,7 +182,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 	int		 rc = 0;
 
 	/** create one VOS file per core */
-	nr = get_nprocs();
+	nr = dss_ncores;
 	/** 8MB minimum per file */
 	size = max(tgt_size / nr, 1 << 8);
 	/** tc_in->tc_tgt_dev is assumed to point at PMEM for now */

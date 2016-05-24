@@ -38,13 +38,11 @@
 #include <daos/mem.h>
 #include <daos/transport.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/daos_server.h>
 
 #include "dsm_rpc.h"
 #include "dsms_internal.h"
 #include "dsms_layout.h"
-
-/* XXX for get_nprocs(), to be removed */
-#include <sys/sysinfo.h>
 
 /*
  * Create the mpool, create the root kvs, create the superblock, and return the
@@ -176,7 +174,7 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 	for (i = 0; i < ntargets; i++) {
 		uuid_copy(targets_p[i].mt_uuid, target_uuids[i]);
 		targets_p[i].mt_version = 1;
-		targets_p[i].mt_ncpus = get_nprocs(); /* TODO */
+		targets_p[i].mt_ncpus = dss_ncores; /* TODO */
 		targets_p[i].mt_fseq = 1;
 		targets_p[i].mt_status = 0;	/* TODO */
 	}

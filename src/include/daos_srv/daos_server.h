@@ -27,7 +27,15 @@
 
 #include <daos/transport.h>
 #include <daos/common.h>
+
 #include <pthread.h>
+#include <hwloc.h>
+
+/** Server node topoloby */
+extern hwloc_topology_t	dss_topo;
+
+/** Number of physical cores available on the server */
+int			dss_ncores;
 
 /**
  * Stackable Module API

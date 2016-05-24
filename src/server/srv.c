@@ -28,8 +28,6 @@
 
 #include <pthread.h>
 #include <sched.h>
-#include <sys/sysinfo.h>
-#include <hwloc.h>
 
 #include <daos_errno.h>
 #include <daos/list.h>
@@ -48,9 +46,6 @@ struct dss_thread {
 
 /** List of running service threads */
 static daos_list_t dss_thread_list;
-
-/** HW topology */
-static hwloc_topology_t	topo;
 
 void
 dss_srv_handler_cleanup(void *param)
@@ -98,7 +93,8 @@ dss_srv_handler(void *arg)
 	pthread_mutex_lock(&dthread->dt_lock);
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 
-	rc = hwloc_set_cpubind(topo, dthread->dt_cpuset, HWLOC_CPUBIND_THREAD);
+	rc = hwloc_set_cpubind(dss_topo, dthread->dt_cpuset,
+			       HWLOC_CPUBIND_THREAD);
 	if (rc) {
 		D_ERROR("failed to set affinity: %d\n", errno);
 		dthread->dt_rc = daos_errno2der();
@@ -319,19 +315,15 @@ dss_threads_fini()
 static int
 dss_threads_init(int nr)
 {
-	int			rc;
-	int			i;
-	int			depth;
-	int			ncores;
+	int	rc;
+	int	i;
+	int	depth;
 
-	hwloc_topology_init(&topo);
-	hwloc_topology_load(topo);
-	ncores = hwloc_get_nbobjs_by_type(topo, HWLOC_OBJ_CORE);
-	depth = hwloc_get_type_depth(topo, HWLOC_OBJ_CORE);
+	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_CORE);
 
 	if (nr == 0)
 		/* start one thread per core by default */
-		nr = ncores;
+		nr = dss_ncores;
 
 	/* initialize thread-local storage */
 	rc = pthread_key_create(&dss_tls_key, dss_tls_fini);
@@ -342,11 +334,11 @@ dss_threads_init(int nr)
 
 	/* start the service threads */
 	D_DEBUG(DF_SERVER, "%d cores detected, starting %d service threads\n",
-		ncores, nr);
+		dss_ncores, nr);
 	for (i = 0; i < nr; i++) {
 		hwloc_obj_t	obj;
 
-		obj = hwloc_get_obj_by_depth(topo, depth, nr % ncores);
+		obj = hwloc_get_obj_by_depth(dss_topo, depth, nr % dss_ncores);
 		if (obj == NULL) {
 			D_ERROR("Null core returned by hwloc\n");
 			return -DER_INVAL;

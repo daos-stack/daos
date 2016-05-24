@@ -36,6 +36,12 @@
 
 char	modules[MAX_MODULE_OPTIONS + 1];
 
+/** HW topology */
+hwloc_topology_t	dss_topo;
+
+/** Number of physical cores available on the server */
+int			dss_ncores;
+
 static int
 modules_load()
 {
@@ -87,6 +93,12 @@ server_init()
 	rc = setenv("DAOS_DEBUG", "-1", false);
 	if (rc)
 		D_ERROR("failed to enable full debug, %d\n", rc);
+
+
+	/** initialize server topology data */
+	hwloc_topology_init(&dss_topo);
+	hwloc_topology_load(dss_topo);
+	dss_ncores = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
