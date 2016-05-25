@@ -276,6 +276,7 @@ vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_dkey_t *dkey,
 	daos_handle_t		 toh;
 	int			 i;
 	int			 rc;
+	int			 rc1;
 
 	eprange.epr_lo = epoch;
 	eprange.epr_hi = DAOS_EPOCH_MAX;
@@ -326,7 +327,10 @@ vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_dkey_t *dkey,
 			goto failed;
 	}
  failed:
-	rc = dbtree_close(toh);
+	rc1 = dbtree_close(toh);
+	if (rc == 0)
+		rc = rc1;
+
 	return rc;
 }
 

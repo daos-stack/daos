@@ -115,7 +115,7 @@ do_update(daos_handle_t dh)
 	strncpy(val_buf, UPDATE_BUF, strlen(UPDATE_BUF));
 
 	erange.epr_lo = 0;
-	erange.epr_hi = 0;
+	erange.epr_hi = DAOS_EPOCH_MAX;
 
 	vio.vd_name	= akey;
 	vio.vd_recxs	= &rex;

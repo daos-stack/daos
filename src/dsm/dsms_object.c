@@ -40,6 +40,8 @@ struct dsms_update_async_args {
 	daos_sg_list_t	*sgls;
 	daos_iov_t	*iovs;
 	struct daos_ref	*dref;
+	daos_handle_t	pool_hdl;
+	daos_handle_t   cont_hdl;
 };
 
 static int
@@ -114,6 +116,12 @@ update_write_bulk_complete_cb(const struct dtp_bulk_cb_info *cb_info)
 		struct object_update_in	*oui;
 		struct dtp_single_out *dso;
 		daos_sg_list_t  *sgls;
+
+		if (!daos_handle_is_inval(args->cont_hdl))
+			dsms_co_close(args->cont_hdl);
+
+		if (!daos_handle_is_inval(args->pool_hdl))
+			dsms_pool_close(args->pool_hdl);
 
 		oui = dtp_req_get(rpc_req);
 		/* After the bulk is done, send reply */
@@ -192,7 +200,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 	for (i = 0; i < oui->oui_nr; i++) {
 		daos_size_t bulk_len;
 
-		rc = dtp_bulk_get_len(&remote_bulks[i], &bulk_len);
+		rc = dtp_bulk_get_len(remote_bulks[i], &bulk_len);
 		if (rc != 0) {
 			D_ERROR("i %d get bulk len error.: rc = %d\n", i, rc);
 			D_GOTO(out, rc);
@@ -240,6 +248,8 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		arg->dref = dr;
 		arg->sgls = sgls;
 		arg->iovs = iovs;
+		arg->pool_hdl = dph;
+		arg->cont_hdl = dch;
 
 		rc = dtp_bulk_create(rpc->dr_ctx, &sgls[i], DTP_BULK_RW,
 				     &local_bulk_hdl);
@@ -285,7 +295,7 @@ out:
 	if (!daos_handle_is_inval(dch))
 		dsms_co_close(dch);
 
-	if (!daos_handle_is_inval(dch))
+	if (!daos_handle_is_inval(dph))
 		dsms_pool_close(dph);
 
 	if (iovs != NULL)
@@ -293,5 +303,6 @@ out:
 	if (sgls != NULL)
 		D_FREE(sgls, oui->oui_nr * sizeof(*sgls));
 
+	D_DEBUG(DF_MISC, "rw result %d\n", rc);
 	return rc;
 }

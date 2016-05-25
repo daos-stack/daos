@@ -109,6 +109,7 @@ out:
 	D_FREE(oui->oui_bulks.arrays,
 	       oui->oui_nr * sizeof(dtp_bulk_t));
 	dtp_req_decref(sp->sp_rpc);
+	D_DEBUG(DF_MISC, "update finish %d\n", rc);
 	return rc;
 }
 
