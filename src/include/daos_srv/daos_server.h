@@ -35,7 +35,7 @@
 extern hwloc_topology_t	dss_topo;
 
 /** Number of physical cores available on the server */
-int			dss_ncores;
+extern int		dss_ncores;
 
 /**
  * Stackable Module API
