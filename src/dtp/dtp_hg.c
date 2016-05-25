@@ -389,14 +389,12 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 		hg_ctx->dhc_shared_na = false;
 	}
 
-	hg_ctx->dhc_idx = idx;
 	hg_ctx->dhc_hgctx = hg_context;
 	/* TODO: need to create separate bulk class and bulk context? */
 	hg_ctx->dhc_bulkcla = hg_ctx->dhc_hgcla;
 	hg_ctx->dhc_bulkctx = hg_ctx->dhc_hgctx;
 	D_ASSERT(hg_ctx->dhc_bulkcla != NULL);
 	D_ASSERT(hg_ctx->dhc_bulkctx != NULL);
-	DAOS_INIT_LIST_HEAD(&hg_ctx->dhc_link);
 
 out:
 	return rc;
@@ -442,9 +440,30 @@ out:
 	return rc;
 }
 
+struct dtp_context *
+dtp_hg_context_lookup(hg_context_t *hg_ctx)
+{
+	struct dtp_context	*dtp_ctx;
+	int			found = 0;
+
+	pthread_rwlock_rdlock(&dtp_gdata.dg_rwlock);
+
+	daos_list_for_each_entry(dtp_ctx, &dtp_gdata.dg_ctx_list, dc_link) {
+		if (dtp_ctx->dc_hg_ctx.dhc_hgctx == hg_ctx) {
+			found = 1;
+			break;
+		}
+	}
+
+	pthread_rwlock_unlock(&dtp_gdata.dg_rwlock);
+
+	return (found == 1) ? dtp_ctx : NULL;
+}
+
 int
 dtp_rpc_handler_common(hg_handle_t hg_hdl)
 {
+	struct dtp_context	*dtp_ctx;
 	struct dtp_hg_context	*hg_ctx;
 	struct hg_info		*hg_info;
 	struct dtp_rpc_priv	*rpc_priv;
@@ -461,11 +480,12 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
 
-	hg_ctx = dtp_hg_context_lookup(hg_info->context);
-	if (hg_ctx == NULL) {
+	dtp_ctx = dtp_hg_context_lookup(hg_info->context);
+	if (dtp_ctx == NULL) {
 		D_ERROR("dtp_hg_context_lookup failed.\n");
 		D_GOTO(out, hg_ret = HG_PROTOCOL_ERROR);
 	}
+	hg_ctx = &dtp_ctx->dc_hg_ctx;
 	D_ASSERT(hg_ctx->dhc_hgcla == hg_info->hg_class);
 
 	D_ALLOC_PTR(rpc_priv);
@@ -475,7 +495,7 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 	rpc_priv->drp_na_addr = hg_info->addr;
 	rpc_priv->drp_hg_hdl = hg_hdl;
 	rpc_pub = &rpc_priv->drp_pub;
-	rpc_pub->dr_ctx = (dtp_context_t)hg_ctx;
+	rpc_pub->dr_ctx = dtp_ctx;
 	D_ASSERT(rpc_pub->dr_input == NULL);
 
 	rc = dtp_hg_unpack_header(rpc_priv, &proc);
@@ -502,7 +522,7 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 	D_ASSERT(opc_info->doi_input_size <= DTP_MAX_INPUT_SIZE &&
 		 opc_info->doi_output_size <= DTP_MAX_OUTPUT_SIZE);
 
-	dtp_rpc_priv_init(rpc_priv, (dtp_context_t)hg_ctx, opc, 1);
+	dtp_rpc_priv_init(rpc_priv, dtp_ctx, opc, 1);
 
 	rc = dtp_rpc_inout_buff_init(rpc_pub);
 	if (rc != 0) {
@@ -1015,6 +1035,7 @@ dtp_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 {
 	struct dtp_hg_bulk_cbinfo	*bulk_cbinfo;
 	struct dtp_bulk_cb_info		dtp_bulk_cbinfo;
+	struct dtp_context		*ctx;
 	struct dtp_hg_context		*hg_ctx;
 	struct dtp_bulk_desc		*bulk_desc;
 	hg_return_t			hg_ret = HG_SUCCESS;
@@ -1025,7 +1046,8 @@ dtp_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 	D_ASSERT(bulk_cbinfo != NULL);
 	bulk_desc = bulk_cbinfo->bci_desc;
 	D_ASSERT(bulk_desc != NULL);
-	hg_ctx = (struct dtp_hg_context *)bulk_desc->bd_rpc->dr_ctx;
+	ctx = (struct dtp_context *)bulk_desc->bd_rpc->dr_ctx;
+	hg_ctx = &ctx->dc_hg_ctx;
 	D_ASSERT(hg_ctx != NULL);
 	D_ASSERT(hg_cbinfo->type == HG_CB_BULK);
 	D_ASSERT(hg_cbinfo->info.bulk.origin_handle ==
@@ -1062,6 +1084,7 @@ int
 dtp_hg_bulk_transfer(struct dtp_bulk_desc *bulk_desc, dtp_bulk_cb_t complete_cb,
 		     void *arg, dtp_bulk_opid_t *opid)
 {
+	struct dtp_context		*ctx;
 	struct dtp_hg_context		*hg_ctx;
 	struct dtp_hg_bulk_cbinfo	*bulk_cbinfo;
 	hg_bulk_op_t			hg_bulk_op;
@@ -1074,7 +1097,8 @@ dtp_hg_bulk_transfer(struct dtp_bulk_desc *bulk_desc, dtp_bulk_cb_t complete_cb,
 	D_ASSERT(bulk_desc->bd_bulk_op == DTP_BULK_PUT ||
 		 bulk_desc->bd_bulk_op == DTP_BULK_GET);
 	D_ASSERT(bulk_desc->bd_rpc != NULL);
-	hg_ctx = (struct dtp_hg_context *)bulk_desc->bd_rpc->dr_ctx;
+	ctx = (struct dtp_context *)bulk_desc->bd_rpc->dr_ctx;
+	hg_ctx = &ctx->dc_hg_ctx;
 	D_ASSERT(hg_ctx != NULL && hg_ctx->dhc_bulkctx != NULL);
 
 	D_ALLOC_PTR(bulk_cbinfo);

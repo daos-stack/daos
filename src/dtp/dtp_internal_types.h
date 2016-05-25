@@ -35,6 +35,8 @@
 #include <daos/list.h>
 #include <process_set.h>
 
+#include <dtp_hg.h>
+
 struct dtp_hg_gdata;
 
 /* dtp global data */
@@ -92,6 +94,14 @@ extern struct dtp_gdata		dtp_gdata;
 # define DTP_SRV_CONTEX_NUM	(4)
 #endif
 
+/* dtp_context */
+struct dtp_context {
+	daos_list_t		dc_link; /* link to gdata.dg_ctx_list */
+	int			dc_idx; /* context index */
+	struct dtp_hg_context	dc_hg_ctx; /* HG context */
+
+};
+
 /* dtp layer common header */
 struct dtp_common_hdr {
 	uint32_t	dch_magic;
@@ -113,6 +123,22 @@ typedef enum {
 	RPC_COMPLETED,
 	RPC_CANCELING,
 } dtp_rpc_state_t;
+
+struct dtp_rpc_priv {
+	daos_list_t		drp_link; /* link to sent_list */
+	dtp_rpc_t		drp_pub; /* public part */
+	struct dtp_common_hdr	drp_req_hdr; /* common header for request */
+	struct dtp_common_hdr	drp_reply_hdr; /* common header for reply */
+	dtp_rpc_state_t		drp_state; /* RPC state */
+	hg_handle_t		drp_hg_hdl;
+	na_addr_t		drp_na_addr;
+	uint32_t		drp_srv:1, /* flag of server received request */
+				drp_output_got:1,
+				drp_input_got:1;
+	uint32_t		drp_refcount;
+	pthread_spinlock_t	drp_lock;
+	struct dtp_opc_info	*drp_opc_info;
+};
 
 #define DTP_OPC_MAP_BITS	(12)
 

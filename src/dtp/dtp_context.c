@@ -28,7 +28,7 @@
 int
 dtp_context_create(void *arg, dtp_context_t *dtp_ctx)
 {
-	struct dtp_hg_context	*hg_ctx = NULL;
+	struct dtp_context	*ctx = NULL;
 	int			rc = 0;
 
 	if (dtp_ctx == NULL) {
@@ -36,24 +36,28 @@ dtp_context_create(void *arg, dtp_context_t *dtp_ctx)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_ALLOC_PTR(hg_ctx);
-	if (hg_ctx == NULL)
+	D_ALLOC_PTR(ctx);
+	if (ctx == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	pthread_rwlock_wrlock(&dtp_gdata.dg_rwlock);
-	rc = dtp_hg_ctx_init(hg_ctx, dtp_gdata.dg_ctx_num);
+
+	rc = dtp_hg_ctx_init(&ctx->dc_hg_ctx, dtp_gdata.dg_ctx_num);
 	if (rc != 0) {
 		D_ERROR("dtp_hg_ctx_init failed rc: %d.\n", rc);
-		D_FREE_PTR(hg_ctx);
+		D_FREE_PTR(ctx);
 		pthread_rwlock_unlock(&dtp_gdata.dg_rwlock);
 		D_GOTO(out, rc);
 	}
 
+	DAOS_INIT_LIST_HEAD(&ctx->dc_link);
+	ctx->dc_idx = dtp_gdata.dg_ctx_num;
+	daos_list_add_tail(&ctx->dc_link, &dtp_gdata.dg_ctx_list);
 	dtp_gdata.dg_ctx_num++;
-	daos_list_add_tail(&hg_ctx->dhc_link, &dtp_gdata.dg_ctx_list);
+
 	pthread_rwlock_unlock(&dtp_gdata.dg_rwlock);
 
-	*dtp_ctx = (dtp_context_t)hg_ctx;
+	*dtp_ctx = (dtp_context_t)ctx;
 
 out:
 	return rc;
@@ -62,7 +66,7 @@ out:
 int
 dtp_context_destroy(dtp_context_t dtp_ctx, int force)
 {
-	struct dtp_hg_context	*hg_ctx;
+	struct dtp_context	*ctx;
 	int			rc = 0;
 
 	if (dtp_ctx == DTP_CONTEXT_NULL) {
@@ -72,14 +76,14 @@ dtp_context_destroy(dtp_context_t dtp_ctx, int force)
 
 	/* TODO: check force */
 
-	hg_ctx = (struct dtp_hg_context *)dtp_ctx;
-	rc = dtp_hg_ctx_fini(hg_ctx);
+	ctx = (struct dtp_context *)dtp_ctx;
+	rc = dtp_hg_ctx_fini(&ctx->dc_hg_ctx);
 	if (rc == 0) {
 		pthread_rwlock_wrlock(&dtp_gdata.dg_rwlock);
 		dtp_gdata.dg_ctx_num--;
-		daos_list_del_init(&hg_ctx->dhc_link);
+		daos_list_del_init(&ctx->dc_link);
 		pthread_rwlock_unlock(&dtp_gdata.dg_rwlock);
-		D_FREE_PTR(hg_ctx);
+		D_FREE_PTR(ctx);
 	} else {
 		D_ERROR("dtp_hg_ctx_fini failed rc: %d.\n", rc);
 	}
@@ -91,7 +95,7 @@ out:
 int
 dtp_context_idx(dtp_context_t dtp_ctx, int *ctx_idx)
 {
-	struct dtp_hg_context	*hg_ctx;
+	struct dtp_context	*ctx;
 	int			rc = 0;
 
 	if (dtp_ctx == DTP_CONTEXT_NULL || ctx_idx == NULL) {
@@ -100,8 +104,8 @@ dtp_context_idx(dtp_context_t dtp_ctx, int *ctx_idx)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	hg_ctx = (struct dtp_hg_context *)dtp_ctx;
-	*ctx_idx = hg_ctx->dhc_idx;
+	ctx = (struct dtp_context *)dtp_ctx;
+	*ctx_idx = ctx->dc_idx;
 
 out:
 	return rc;
@@ -139,7 +143,7 @@ int
 dtp_progress(dtp_context_t dtp_ctx, int64_t timeout,
 	     dtp_progress_cond_cb_t cond_cb, void *arg)
 {
-	struct dtp_hg_context	*hg_ctx;
+	struct dtp_context	*ctx;
 	struct timeval		 tv;
 	int64_t			 hg_timeout;
 	uint64_t		 now;
@@ -170,10 +174,10 @@ dtp_progress(dtp_context_t dtp_ctx, int64_t timeout,
 			D_GOTO(out, rc);
 	}
 
-	hg_ctx = (struct dtp_hg_context *)dtp_ctx;
+	ctx = (struct dtp_context *)dtp_ctx;
 	if (timeout == 0 || cond_cb == NULL) {
 		/** fast path */
-		rc = dtp_hg_progress(hg_ctx, timeout);
+		rc = dtp_hg_progress(&ctx->dc_hg_ctx, timeout);
 		if (rc && rc != -DER_TIMEDOUT) {
 			D_ERROR("dtp_hg_progress failed, rc: %d.\n", rc);
 			D_GOTO(out, rc);
@@ -220,7 +224,7 @@ dtp_progress(dtp_context_t dtp_ctx, int64_t timeout,
 	}
 
 	while (true) {
-		rc = dtp_hg_progress(hg_ctx, hg_timeout);
+		rc = dtp_hg_progress(&ctx->dc_hg_ctx, hg_timeout);
 		if (rc && rc != -DER_TIMEDOUT) {
 			D_ERROR("dtp_hg_progress failed with %d\n", rc);
 			D_GOTO(out, rc = 0);

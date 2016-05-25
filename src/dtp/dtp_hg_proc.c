@@ -25,6 +25,8 @@
 
 #include <dtp_internal.h>
 
+#define DTP_PROC_NULL (NULL)
+
 int
 dtp_proc_get_op(dtp_proc_t proc, dtp_proc_op_t *proc_op)
 {
@@ -683,3 +685,354 @@ struct dtp_msg_field *dtp_single_out_fields[] = {
 	&DMF_INT,	/* status */
 };
 
+int
+dtp_proc_common_hdr(dtp_proc_t proc, struct dtp_common_hdr *hdr)
+{
+	hg_proc_t     hg_proc;
+	hg_return_t   hg_ret = HG_SUCCESS;
+	int           rc = 0;
+
+	if (proc == DTP_PROC_NULL || hdr == NULL)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	hg_proc = proc;
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->dch_magic);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->dch_version);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->dch_opc);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->dch_cksum);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->dch_flags);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+	hg_ret = dtp_proc_uuid_t(hg_proc, &hdr->dch_grp_id);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->dch_rank);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+
+	/*
+	D_DEBUG(DF_TP,"in dtp_proc_common_hdr, opc: 0x%x.\n", hdr->dch_opc);
+	*/
+
+	/* proc the 2 paddings */
+	hg_ret = hg_proc_memcpy(hg_proc, &hdr->dch_padding[0],
+				2 * sizeof(uint32_t));
+	if (hg_ret != HG_SUCCESS)
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+
+out:
+	return rc;
+}
+
+/* For unpacking only the common header to know about the DAOS opc */
+int
+dtp_hg_unpack_header(struct dtp_rpc_priv *rpc_priv, dtp_proc_t *proc)
+{
+	int	rc = 0;
+
+#if DTP_HG_LOWLEVEL_UNPACK
+	/*
+	 * Use some low level HG APIs to unpack header first and then unpack the
+	 * body, avoid unpacking two times (which needs to lookup, create the
+	 * proc multiple times).
+	 * The potential risk is mercury possibly will not export those APIs
+	 * later, and the hard-coded method HG_CRC64 used below which maybe
+	 * different with future's mercury code change.
+	 */
+	void			*in_buf;
+	hg_size_t		in_buf_size;
+	hg_return_t		hg_ret = HG_SUCCESS;
+	hg_handle_t		handle;
+	hg_class_t		*hg_class;
+	struct dtp_context	*ctx;
+	struct dtp_hg_context	*hg_ctx;
+	hg_proc_t		hg_proc = HG_PROC_NULL;
+
+	/* Get input buffer */
+	handle = rpc_priv->drp_hg_hdl;
+	hg_ret = HG_Core_get_input(handle, &in_buf, &in_buf_size);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("Could not get input buffer, hg_ret: %d.", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+
+	/* Create a new decoding proc */
+	ctx = (struct dtp_context *)(rpc_priv->drp_pub.dr_ctx);
+	hg_ctx = &ctx->dc_hg_ctx;
+	hg_class = hg_ctx->dhc_hgcla;
+	hg_ret = hg_proc_create(hg_class, in_buf, in_buf_size, HG_DECODE,
+				HG_CRC64, &hg_proc);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("Could not create proc, hg_ret: %d.", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+
+	/* Decode header */
+	rc = dtp_proc_common_hdr(hg_proc, &rpc_priv->drp_req_hdr);
+	if (rc != 0)
+		D_ERROR("dtp_proc_common_hdr failed rc: %d.\n", rc);
+
+	*proc = hg_proc;
+out:
+	return rc;
+#else
+	/*
+	 * In the case that if mercury does not export the HG_Core_xxx APIs,
+	 * we can only use the HG_Get_input to unpack the header which indeed
+	 * will cause the unpacking twice as later we still need to unpack the
+	 * body.
+	 *
+	 * Notes: as here we only unpack DAOS common header and not finish
+	 * the HG_Get_input() procedure, so for mercury need to turn off the
+	 * checksum compiling option (-DMERCURY_USE_CHECKSUMS=OFF), or mercury
+	 * will report checksum mismatch in the call of HG_Get_input.
+	 */
+	void		*hg_in_struct;
+	hg_return_t	hg_ret = HG_SUCCESS;
+
+	D_ASSERT(rpc_priv != NULL && proc != NULL);
+	D_ASSERT(rpc_priv->drp_pub.dr_input == NULL);
+
+	hg_in_struct = &rpc_priv->drp_pub.dr_input;
+	hg_ret = HG_Get_input(rpc_priv->drp_hg_hdl, hg_in_struct);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Get_input failed, hg_ret: %d.\n", hg_ret);
+		rc = -DER_DTP_HG;
+	}
+
+	return rc;
+#endif
+}
+
+void
+dtp_hg_unpack_cleanup(dtp_proc_t proc)
+{
+#if DTP_HG_LOWLEVEL_UNPACK
+	if (proc != HG_PROC_NULL)
+		hg_proc_free(proc);
+#endif
+}
+
+int
+dtp_proc_internal(struct drf_field *drf,
+			 dtp_proc_t proc, void *data)
+{
+	int rc = 0;
+	void *ptr = data;
+	int i;
+	int j;
+
+	for (i = 0; i < drf->drf_count; i++) {
+		if (drf->drf_msg[i]->dmf_flags & DMF_ARRAY_FLAG) {
+			struct dtp_array *array = ptr;
+			hg_proc_op_t	 proc_op;
+			hg_return_t	 hg_ret;
+			void		*array_ptr;
+
+			/* retrieve the count of array first */
+			hg_ret = hg_proc_hg_uint64_t(proc, &array->count);
+			if (hg_ret != HG_SUCCESS) {
+				rc = -DER_DTP_HG;
+				break;
+			}
+
+			/* Let's assume array is not zero size now */
+			D_ASSERT(array->count > 0);
+			proc_op = hg_proc_get_op(proc);
+			if (proc_op == HG_DECODE) {
+				D_ALLOC(array->arrays,
+				     array->count * drf->drf_msg[i]->dmf_size);
+				if (array->arrays == NULL) {
+					rc = -DER_NOMEM;
+					break;
+				}
+			}
+			array_ptr = array->arrays;
+			for (j = 0; j < array->count; j++) {
+				rc = drf->drf_msg[i]->dmf_proc(proc, array_ptr);
+				if (rc != 0)
+					break;
+
+				array_ptr = (char *)array_ptr +
+					    drf->drf_msg[j]->dmf_size;
+			}
+
+			if (proc_op == HG_FREE) {
+				D_FREE(array->arrays,
+				     array->count * drf->drf_msg[i]->dmf_size);
+			}
+			ptr = (char *)ptr + sizeof(struct dtp_array);
+		} else {
+			rc = drf->drf_msg[i]->dmf_proc(proc, ptr);
+
+			ptr = (char *)ptr + drf->drf_msg[i]->dmf_size;
+		}
+
+		if (rc < 0)
+			break;
+	}
+
+	return rc;
+}
+
+int
+dtp_proc_input(struct dtp_rpc_priv *rpc_priv, dtp_proc_t proc)
+{
+	struct dtp_req_format *drf = rpc_priv->drp_opc_info->doi_drf;
+
+	D_ASSERT(drf != NULL);
+	return dtp_proc_internal(&drf->drf_fields[DTP_IN],
+				 proc, rpc_priv->drp_pub.dr_input);
+}
+
+int
+dtp_proc_output(struct dtp_rpc_priv *rpc_priv, dtp_proc_t proc)
+{
+	struct dtp_req_format *drf = rpc_priv->drp_opc_info->doi_drf;
+
+	D_ASSERT(drf != NULL);
+	return dtp_proc_internal(&drf->drf_fields[DTP_OUT],
+				 proc, rpc_priv->drp_pub.dr_output);
+}
+
+int
+dtp_hg_unpack_body(struct dtp_rpc_priv *rpc_priv, dtp_proc_t proc)
+{
+	int	rc = 0;
+
+#if DTP_HG_LOWLEVEL_UNPACK
+	hg_return_t	hg_ret;
+
+	D_ASSERT(rpc_priv != NULL && proc != HG_PROC_NULL);
+
+	/* Decode input parameters */
+	rc = dtp_proc_input(rpc_priv, proc);
+	if (rc != 0) {
+		D_ERROR("dtp_hg_unpack_body failed, rc: %d, opc: 0x%x.\n",
+			rc, rpc_priv->drp_pub.dr_opc);
+		D_GOTO(out, rc);
+	}
+
+	/* Flush proc */
+	hg_ret = hg_proc_flush(proc);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("Error in proc flush, hg_ret: %d, opc: 0x%x.",
+			hg_ret, rpc_priv->drp_pub.dr_opc);
+		D_GOTO(out, rc);
+	}
+out:
+	dtp_hg_unpack_cleanup(proc);
+
+#else
+	void		*hg_in_struct;
+	hg_return_t	hg_ret = HG_SUCCESS;
+
+	D_ASSERT(rpc_priv != NULL);
+	D_ASSERT(rpc_priv->drp_pub.dr_input != NULL);
+
+	hg_in_struct = &rpc_priv->drp_pub.dr_input;
+	hg_ret = HG_Get_input(rpc_priv->drp_hg_hdl, hg_in_struct);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Get_input failed, hg_ret: %d.\n", hg_ret);
+		rc = -DER_DTP_HG;
+	}
+#endif
+	return rc;
+}
+
+/* NB: caller should pass in &rpc_pub->dr_input as the \param data */
+int
+dtp_proc_in_common(dtp_proc_t proc, dtp_rpc_input_t *data)
+{
+	struct dtp_rpc_priv	*rpc_priv;
+	int			rc = 0;
+
+	if (proc == DTP_PROC_NULL)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	D_ASSERT(data != NULL);
+	rpc_priv = container_of(data, struct dtp_rpc_priv, drp_pub.dr_input);
+	D_ASSERT(rpc_priv != NULL);
+
+	/* D_DEBUG(DF_TP,"in dtp_proc_in_common, data: %p\n", *data); */
+
+	rc = dtp_proc_common_hdr(proc, &rpc_priv->drp_req_hdr);
+	if (rc != 0) {
+		D_ERROR("dtp_proc_common_hdr failed rc: %d.\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	if (*data == NULL) {
+		/*
+		D_DEBUG(DF_TP,"dtp_proc_in_common, opc: 0x%x, NULL input.\n",
+			rpc_priv->drp_req_hdr.dch_opc);
+		*/
+		D_GOTO(out, rc);
+	}
+
+	rc = dtp_proc_input(rpc_priv, proc);
+	if (rc != 0) {
+		D_ERROR("unpack input fails for opc: %s\n",
+			rpc_priv->drp_opc_info->doi_drf->drf_name);
+		D_GOTO(out, rc);
+	}
+out:
+	return rc;
+}
+
+/* NB: caller should pass in &rpc_pub->dr_output as the \param data */
+int
+dtp_proc_out_common(dtp_proc_t proc, dtp_rpc_output_t *data)
+{
+	struct dtp_rpc_priv	*rpc_priv;
+	int			rc = 0;
+
+	if (proc == DTP_PROC_NULL)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	D_ASSERT(data != NULL);
+	rpc_priv = container_of(data, struct dtp_rpc_priv, drp_pub.dr_output);
+	D_ASSERT(rpc_priv != NULL);
+
+	/* D_DEBUG(DF_TP,"in dtp_proc_out_common, data: %p\n", *data); */
+
+	rc = dtp_proc_common_hdr(proc, &rpc_priv->drp_reply_hdr);
+	if (rc != 0) {
+		D_ERROR("dtp_proc_common_hdr failed rc: %d.\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	if (*data == NULL) {
+		/*
+		D_DEBUG(DF_TP,"dtp_proc_out_common, opc: 0x%x, NULL output.\n",
+			rpc_priv->drp_req_hdr.dch_opc);
+		*/
+		D_GOTO(out, rc);
+	}
+
+	rc = dtp_proc_output(rpc_priv, proc);
+out:
+	return rc;
+}

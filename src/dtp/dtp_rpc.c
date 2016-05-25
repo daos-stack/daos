@@ -28,7 +28,7 @@ int
 dtp_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep, dtp_opcode_t opc,
 	       dtp_rpc_t **req)
 {
-	struct dtp_hg_context	*hg_ctx;
+	struct dtp_context	*ctx;
 	struct dtp_rpc_priv	*rpc_priv = NULL;
 	struct dtp_opc_info	*opc_info = NULL;
 	dtp_rpc_t		*rpc_pub;
@@ -67,8 +67,8 @@ dtp_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep, dtp_opcode_t opc,
 
 	dtp_rpc_priv_init(rpc_priv, dtp_ctx, opc, 0);
 
-	hg_ctx = (struct dtp_hg_context *)dtp_ctx;
-	rc = dtp_hg_req_create(hg_ctx, tgt_ep, rpc_priv);
+	ctx = (struct dtp_context *)dtp_ctx;
+	rc = dtp_hg_req_create(&ctx->dc_hg_ctx, tgt_ep, rpc_priv);
 	if (rc != 0) {
 		D_ERROR("dtp_hg_req_create failed, rc: %d, opc: 0x%x.\n",
 			rc, opc);
@@ -253,3 +253,77 @@ dtp_sync_req(dtp_rpc_t *rpc, uint64_t timeout)
 	return rc;
 }
 
+void
+dtp_rpc_priv_init(struct dtp_rpc_priv *rpc_priv, dtp_context_t dtp_ctx,
+		  dtp_opcode_t opc, int srv_flag)
+{
+	D_ASSERT(rpc_priv != NULL);
+	DAOS_INIT_LIST_HEAD(&rpc_priv->drp_link);
+	dtp_common_hdr_init(&rpc_priv->drp_req_hdr, opc);
+	dtp_common_hdr_init(&rpc_priv->drp_reply_hdr, opc);
+	rpc_priv->drp_state = RPC_INITED;
+	rpc_priv->drp_srv = (srv_flag != 0);
+	/* initialize as 1, so user can cal dtp_req_decref to destroy new req */
+	rpc_priv->drp_refcount = 1;
+	pthread_spin_init(&rpc_priv->drp_lock, PTHREAD_PROCESS_PRIVATE);
+
+	rpc_priv->drp_pub.dr_opc = opc;
+	rpc_priv->drp_pub.dr_ctx = dtp_ctx;
+}
+
+void
+dtp_rpc_inout_buff_fini(dtp_rpc_t *rpc_pub)
+{
+	D_ASSERT(rpc_pub != NULL);
+
+	if (rpc_pub->dr_input != NULL) {
+		D_ASSERT(rpc_pub->dr_input_size != 0);
+		D_FREE(rpc_pub->dr_input, rpc_pub->dr_input_size);
+		rpc_pub->dr_input_size = 0;
+	}
+
+	if (rpc_pub->dr_output != NULL) {
+		D_ASSERT(rpc_pub->dr_output_size != 0);
+		D_FREE(rpc_pub->dr_output, rpc_pub->dr_output_size);
+		rpc_pub->dr_output_size = 0;
+	}
+}
+
+int
+dtp_rpc_inout_buff_init(dtp_rpc_t *rpc_pub)
+{
+	struct dtp_rpc_priv	*rpc_priv;
+	struct dtp_opc_info	*opc_info;
+	int			rc = 0;
+
+	D_ASSERT(rpc_pub != NULL);
+	D_ASSERT(rpc_pub->dr_input == NULL);
+	D_ASSERT(rpc_pub->dr_output == NULL);
+	rpc_priv = container_of(rpc_pub, struct dtp_rpc_priv, drp_pub);
+	opc_info = rpc_priv->drp_opc_info;
+	D_ASSERT(opc_info != NULL);
+
+	if (opc_info->doi_input_size > 0) {
+		D_ALLOC(rpc_pub->dr_input, opc_info->doi_input_size);
+		if (rpc_pub->dr_input == NULL) {
+			D_ERROR("cannot allocate memory(size "DF_U64") for "
+				"dr_input.\n", opc_info->doi_input_size);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		rpc_pub->dr_input_size = opc_info->doi_input_size;
+	}
+	if (opc_info->doi_output_size > 0) {
+		D_ALLOC(rpc_pub->dr_output, opc_info->doi_output_size);
+		if (rpc_pub->dr_output == NULL) {
+			D_ERROR("cannot allocate memory(size "DF_U64") for "
+				"dr_putput.\n", opc_info->doi_input_size);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		rpc_pub->dr_output_size = opc_info->doi_output_size;
+	}
+
+out:
+	if (rc < 0)
+		dtp_rpc_inout_buff_fini(rpc_pub);
+	return rc;
+}

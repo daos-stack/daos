@@ -28,16 +28,27 @@
 
 #include <dtp_internal_types.h>
 
+/** dtp_init.c */
 bool dtp_initialized();
 
+/** dtp_group.c */
 dtp_group_id_t *dtp_global_grp_id(void);
 
+/** dtp_register.c */
 int dtp_opc_map_create(unsigned int bits, struct dtp_opc_map **opc_map);
 void dtp_opc_map_destroy(struct dtp_opc_map *opc_map);
 struct dtp_opc_info *dtp_opc_lookup(struct dtp_opc_map *map, dtp_opcode_t opc,
 				    int locked);
+/** dtp_context.c */
 bool dtp_context_empty(int locked);
 
+/** dtp_rpc.c */
+void dtp_rpc_priv_init(struct dtp_rpc_priv *rpc_priv, dtp_context_t dtp_ctx,
+		       dtp_opcode_t opc, int srv_flag);
+void dtp_rpc_inout_buff_fini(dtp_rpc_t *rpc_pub);
+int dtp_rpc_inout_buff_init(dtp_rpc_t *rpc_pub);
+
+/** some simple helper functions */
 static inline void
 dtp_common_hdr_init(struct dtp_common_hdr *hdr, dtp_opcode_t opc)
 {

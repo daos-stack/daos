@@ -85,7 +85,7 @@ int
 dtp_bulk_create(dtp_context_t dtp_ctx, daos_sg_list_t *sgl,
 		dtp_bulk_perm_t bulk_perm, dtp_bulk_t *bulk_hdl)
 {
-	struct dtp_hg_context	*hg_ctx;
+	struct dtp_context	*ctx;
 	int			rc = 0;
 
 	if (dtp_ctx == DTP_CONTEXT_NULL || !dtp_sgl_valid(sgl) ||
@@ -96,8 +96,8 @@ dtp_bulk_create(dtp_context_t dtp_ctx, daos_sg_list_t *sgl,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	hg_ctx = (struct dtp_hg_context *)dtp_ctx;
-	rc = dtp_hg_bulk_create(hg_ctx, sgl, bulk_perm, bulk_hdl);
+	ctx = (struct dtp_context *)dtp_ctx;
+	rc = dtp_hg_bulk_create(&ctx->dc_hg_ctx, sgl, bulk_perm, bulk_hdl);
 	if (rc != 0)
 		D_ERROR("dtp_hg_bulk_create failed, rc: %d.\n", rc);
 
