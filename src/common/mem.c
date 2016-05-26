@@ -56,8 +56,8 @@ pmem_alloc(struct umem_instance *umm, size_t size, bool zero,
 {
 	umem_id_t ummid;
 
-	ummid = zero ? pmemobj_tx_alloc(size, type_num) :
-		       pmemobj_tx_zalloc(size, type_num);
+	ummid = zero ? pmemobj_tx_zalloc(size, type_num) :
+		       pmemobj_tx_alloc(size, type_num);
 	return ummid;
 }
 
