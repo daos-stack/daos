@@ -210,17 +210,14 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 					    NULL /* kvsh_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
+	} TX_ONABORT {
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
+			rc = -DER_NOSPACE;
 	} TX_FINALLY {
 		if (!daos_handle_is_inval(ch))
 			dbtree_close(ch);
 	} TX_END
-
-	rc = pmemobj_tx_errno();
-	if (rc != 0) {
-		/* May be a system error number from libpmemobj. */
-		if (rc < DER_ERR_BASE)
-			rc = -DER_NOSPACE;
-	}
 
 	pthread_rwlock_unlock(&svc->cs_rwlock);
 	cont_svc_put(svc);
@@ -308,14 +305,11 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 	} TX_ONABORT {
 		if (!daos_handle_is_inval(ch))
 			dbtree_close(ch);
-	} TX_END
 
-	rc = pmemobj_tx_errno();
-	if (rc != 0) {
-		/* May be a system error number from libpmemobj. */
-		if (rc < DER_ERR_BASE)
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
 			rc = -DER_NOSPACE;
-	}
+	} TX_END
 
 out_rwlock:
 	pthread_rwlock_unlock(&svc->cs_rwlock);
@@ -505,14 +499,14 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 			D_ERROR("failed to update lhe kvs: %d\n", rc);
 			pmemobj_tx_abort(rc);
 		}
+	} TX_ONABORT {
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
+			rc = -DER_NOSPACE;
 	} TX_END
 
-	rc = pmemobj_tx_errno();
-	if (rc != 0) {
-		if (rc < DER_ERR_BASE)
-			rc = -DER_NOSPACE;
+	if (rc != 0)
 		D_GOTO(out_cont, rc);
-	}
 
 	/* Calculate GLRE. */
 	rc = dsms_kvs_ec_fetch(cont->c_lres, BTR_PROBE_FIRST,
@@ -605,14 +599,14 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 		}
 
 		/* TODO: Update GHCE. */
+	} TX_ONABORT {
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
+			rc = -DER_NOSPACE;
 	} TX_END
 
-	rc = pmemobj_tx_errno();
-	if (rc != 0) {
-		if (rc < DER_ERR_BASE)
-			rc = -DER_NOSPACE;
+	if (rc != 0)
 		D_GOTO(out_cont, rc);
-	}
 
 out_cont:
 	cont_put(cont);

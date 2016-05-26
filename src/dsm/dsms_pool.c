@@ -56,7 +56,7 @@ mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 	struct superblock      *sb;
 	volatile daos_handle_t	kvsh = DAOS_HDL_INVAL;
 	uuid_t			target_uuid;
-	int			rc;
+	int			rc = 0;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
@@ -108,18 +108,17 @@ mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 					sizeof(uuid_t));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
+	} TX_ONABORT {
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
+			rc = -DER_NOSPACE;
+	} TX_FINALLY {
+		if (!daos_handle_is_inval(kvsh))
+			dbtree_close(kvsh);
 	} TX_END
 
-	if (!daos_handle_is_inval(kvsh))
-		dbtree_close(kvsh);
-
-	rc = pmemobj_tx_errno();
-	if (rc != 0) {
-		/* May be a system error number from libpmemobj. */
-		if (rc < DER_ERR_BASE)
-			rc = -DER_NOSPACE;
+	if (rc != 0)
 		D_GOTO(err_mp, rc);
-	}
 
 	uuid_copy(target_uuid_p, target_uuid);
 	pmemobj_close(mp);
@@ -298,14 +297,11 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 			D_ERROR("failed to init container metadata: %d\n", rc);
 			pmemobj_tx_abort(rc);
 		}
-	} TX_END
-
-	rc = pmemobj_tx_errno();
-	if (rc != 0) {
-		/* May be a system error number from libpmemobj. */
-		if (rc < DER_ERR_BASE)
+	} TX_ONABORT {
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
 			rc = -DER_NOSPACE;
-	}
+	} TX_END
 
 	dbtree_close(kvsh);
 out_mp:
