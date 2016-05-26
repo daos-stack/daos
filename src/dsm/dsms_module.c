@@ -45,12 +45,19 @@ init(void)
 	if (rc != 0)
 		dsms_storage_fini();
 
+	rc = dsms_object_init();
+	if (rc != 0) {
+		dsms_storage_fini();
+		dsms_pool_fini();
+	}
+
 	return rc;
 }
 
 static int
 fini(void)
 {
+	dsms_object_fini();
 	dsms_pool_fini();
 	dsms_storage_fini();
 	return 0;

@@ -119,4 +119,9 @@ int dsms_hdlr_cont_close(dtp_rpc_t *rpc);
  */
 int dsms_hdlr_object_rw(dtp_rpc_t *rpc);
 
+int
+dsms_object_init();
+void
+dsms_object_fini();
+
 #endif /* __DSMS_INTERNAL_H__ */

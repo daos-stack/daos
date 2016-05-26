@@ -205,6 +205,15 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 		D_GOTO(exit, rc = -DER_NO_HDL);
 	}
 
+	/**
+	 * Setting Btree attributes for btree's used
+	 * within this pool (both oi and kv object)
+	 */
+	vpool->vp_uma.uma_id = UMEM_CLASS_PMEM;
+	vpool->vp_uma.uma_u.pmem_pool = vpool->vp_ph;
+
+	D_DEBUG(DF_MISC, "vpool open %p\n", vpool);
+
 	root = vos_pool2root(vpool);
 	if (uuid_compare(uuid, root->vpr_pool_id)) {
 		uuid_unparse(uuid, pool_uuid_str);

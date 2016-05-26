@@ -135,6 +135,14 @@ do_update(daos_handle_t dh)
 	if (rc != 0)
 		D_ERROR("Failed to record %s:%s\n", akey_buf, val_buf);
 
+	D_DEBUG(DF_MISC, "Fetch %s\n", dkey_buf);
+	memset(val_buf, 0, sizeof(val_buf));
+	rc = dsm_obj_fetch(dh, UPDATE_EPOCH, &dkey, 1, &vio, &sgl, NULL, NULL);
+	if (rc != 0)
+		D_ERROR("get record %s:%d\n", dkey_buf, rc);
+
+	D_DEBUG(DF_MISC, "read %s\n", val_buf);
+
 	return rc;
 }
 

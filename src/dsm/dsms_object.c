@@ -36,13 +36,52 @@
 #include "dsms_internal.h"
 #include "dsms_layout.h"
 
-struct dsms_update_async_args {
-	daos_sg_list_t	*sgls;
-	daos_iov_t	*iovs;
-	struct daos_ref	*dref;
-	daos_handle_t	pool_hdl;
-	daos_handle_t   cont_hdl;
+struct dsms_vpool {
+	daos_handle_t dvp_hdl; /* vos pool handle */
+	uuid_t	      dvp_uuid;
+	daos_list_t   dvp_list;
 };
+
+static struct daos_list_head dvp_list_head;
+static pthread_mutex_t	     dvp_list_mutex;
+
+int
+dsms_object_init()
+{
+	DAOS_INIT_LIST_HEAD(&dvp_list_head);
+	pthread_mutex_init(&dvp_list_mutex, NULL);
+	return 0;
+}
+
+void
+dsms_object_fini()
+{
+	struct dsms_vpool *dvp;
+	struct dsms_vpool *tmp;
+
+	pthread_mutex_lock(&dvp_list_mutex);
+	daos_list_for_each_entry_safe(dvp, tmp, &dvp_list_head, dvp_list) {
+		daos_list_del(&dvp->dvp_list);
+		vos_pool_close(dvp->dvp_hdl, NULL);
+		D_FREE_PTR(dvp);
+	}
+	pthread_mutex_unlock(&dvp_list_mutex);
+	pthread_mutex_destroy(&dvp_list_mutex);
+}
+
+static struct dsms_vpool *
+dsms_vpool_lookup(const uuid_t vp_uuid)
+{
+	struct dsms_vpool *dvp;
+
+	daos_list_for_each_entry(dvp, &dvp_list_head, dvp_list) {
+		if (uuid_compare(vp_uuid, dvp->dvp_uuid) == 0) {
+			pthread_mutex_unlock(&dvp_list_mutex);
+			return dvp;
+		}
+	}
+	return NULL;
+}
 
 static int
 dsms_co_open_create(daos_handle_t pool_hdl, uuid_t co_uuid,
@@ -74,8 +113,22 @@ static int
 dsms_pool_open(const uuid_t pool_uuid, daos_handle_t *vph)
 {
 	struct dss_module_info	*dmi;
+	struct dsms_vpool	*vpool;
+	struct dsms_vpool	*new;
 	char			*path;
 	int			 rc;
+
+	D_DEBUG(DF_MISC, "lookup pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+	pthread_mutex_lock(&dvp_list_mutex);
+	vpool = dsms_vpool_lookup(pool_uuid);
+	pthread_mutex_unlock(&dvp_list_mutex);
+	if (vpool != NULL) {
+		*vph = vpool->dvp_hdl;
+		D_DEBUG(DF_MISC, "get pool "DF_UUID" from cache.\n",
+			DP_UUID(pool_uuid));
+		return 0;
+	}
 
 	dmi = dss_get_module_info();
 	rc = dmgs_tgt_file(pool_uuid, VOS_FILE, &dmi->dmi_tid, &path);
@@ -83,16 +136,46 @@ dsms_pool_open(const uuid_t pool_uuid, daos_handle_t *vph)
 		return rc;
 
 	rc = vos_pool_open(path, (unsigned char *)pool_uuid, vph, NULL);
+	if (rc != 0)
+		D_GOTO(out_free, rc);
 
+	D_ALLOC_PTR(new);
+	if (new == NULL)
+		D_GOTO(out_close, rc = -DER_NOMEM);
+
+	uuid_copy(new->dvp_uuid, pool_uuid);
+	new->dvp_hdl = *vph;
+	DAOS_INIT_LIST_HEAD(&new->dvp_list);
+	pthread_mutex_lock(&dvp_list_mutex);
+	vpool = dsms_vpool_lookup(pool_uuid);
+	if (vpool == NULL) {
+		D_DEBUG(DF_MISC, "add pool "DF_UUID"\n",
+			DP_UUID(pool_uuid));
+		daos_list_add(&new->dvp_list, &dvp_list_head);
+	} else {
+		D_FREE_PTR(new);
+		*vph = vpool->dvp_hdl;
+	}
+
+	pthread_mutex_unlock(&dvp_list_mutex);
+
+	D_DEBUG(DF_MISC, "open pool "DF_X64"\n", vph->cookie);
+
+out_close:
+	if (rc != 0)
+		vos_pool_close(*vph, NULL);
+out_free:
 	free(path);
 	return rc;
 }
 
-static int
-dsms_pool_close(daos_handle_t vph)
-{
-	return vos_pool_close(vph, NULL);
-}
+struct dsms_update_async_args {
+	daos_sg_list_t	*sgls;
+	daos_iov_t	*iovs;
+	struct daos_ref	*dref;
+	daos_handle_t	pool_hdl;
+	daos_handle_t   cont_hdl;
+};
 
 static int
 update_write_bulk_complete_cb(const struct dtp_bulk_cb_info *cb_info)
@@ -119,9 +202,6 @@ update_write_bulk_complete_cb(const struct dtp_bulk_cb_info *cb_info)
 
 		if (!daos_handle_is_inval(args->cont_hdl))
 			dsms_co_close(args->cont_hdl);
-
-		if (!daos_handle_is_inval(args->pool_hdl))
-			dsms_pool_close(args->pool_hdl);
 
 		oui = dtp_req_get(rpc_req);
 		/* After the bulk is done, send reply */
@@ -169,8 +249,10 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 	daos_sg_list_t		*sgls = NULL;
 	dtp_bulk_opid_t		bulk_opid;
 	dtp_bulk_t		*remote_bulks;
+	dtp_bulk_op_t		bulk_op;
 	int			i = 0;
 	int			rc = 0;
+	int			rc1;
 
 	oui = dtp_req_get(rpc);
 	if (oui == NULL)
@@ -228,10 +310,12 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		rc = vos_obj_update(dch, oui->oui_oid, oui->oui_epoch,
 				    &oui->oui_dkey, oui->oui_nr,
 				    oui->oui_iods.arrays, sgls, NULL);
+		bulk_op = DTP_BULK_GET;
 	} else {
 		rc = vos_obj_fetch(dch, oui->oui_oid, oui->oui_epoch,
 				    &oui->oui_dkey, oui->oui_nr,
 				    oui->oui_iods.arrays, sgls, NULL);
+		bulk_op = DTP_BULK_PUT;
 	}
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -261,7 +345,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		dtp_req_addref(rpc);
 
 		bulk_desc.bd_rpc = rpc;
-		bulk_desc.bd_bulk_op = DTP_BULK_GET;
+		bulk_desc.bd_bulk_op = bulk_op;
 		bulk_desc.bd_remote_hdl = remote_bulks[i];
 		bulk_desc.bd_local_hdl = local_bulk_hdl;
 		bulk_desc.bd_len = sgls[i].sg_iovs->iov_len;
@@ -283,9 +367,9 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 out:
 	dso = dtp_reply_get(rpc);
 	dso->dso_ret = rc;
-	rc = dtp_reply_send(rpc);
-	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
+	rc1 = dtp_reply_send(rpc);
+	if (rc1 != 0)
+		D_ERROR("send reply failed: %d\n", rc1);
 
 	for (i = 0; i < oui->oui_nr; i++) {
 		if (iovs[i].iov_buf != NULL)
@@ -294,9 +378,6 @@ out:
 
 	if (!daos_handle_is_inval(dch))
 		dsms_co_close(dch);
-
-	if (!daos_handle_is_inval(dph))
-		dsms_pool_close(dph);
 
 	if (iovs != NULL)
 		D_FREE(iovs, oui->oui_nr * sizeof(*iovs));
