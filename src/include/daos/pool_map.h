@@ -130,6 +130,11 @@ struct pool_buf {
 	struct pool_component	pb_comps[0];
 };
 
+static inline long pool_buf_size(unsigned int nr)
+{
+	return offsetof(struct pool_buf, pb_comps[nr]);
+}
+
 struct pool_buf *pool_buf_alloc(unsigned int nr);
 void pool_buf_free(struct pool_buf *buf);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,

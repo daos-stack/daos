@@ -344,7 +344,7 @@ pool_buf_alloc(unsigned int nr)
 {
 	struct pool_buf *buf;
 
-	D_ALLOC(buf, offsetof(struct pool_buf, pb_comps[nr]));
+	D_ALLOC(buf, pool_buf_size(nr));
 	if (buf != NULL)
 		buf->pb_nr = nr;
 
@@ -355,7 +355,7 @@ pool_buf_alloc(unsigned int nr)
 void
 pool_buf_free(struct pool_buf *buf)
 {
-	D_FREE(buf, offsetof(struct pool_buf, pb_comps[buf->pb_nr]));
+	D_FREE(buf, pool_buf_size(buf->pb_nr));
 }
 
 /**

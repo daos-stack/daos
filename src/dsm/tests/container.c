@@ -191,7 +191,7 @@ setup(void **state)
 	/** connect to pool */
 	rc = dsm_pool_connect(arg->uuid, NULL /* grp */, &arg->svc,
 			      DAOS_PC_RW, NULL /* failed */, &arg->poh,
-			      NULL /* ev */);
+			      NULL /* info */, NULL /* ev */);
 	if (rc)
 		return rc;
 

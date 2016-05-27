@@ -182,8 +182,6 @@ typedef struct {
 typedef struct {
 	/** pool UUID */
 	uuid_t			pi_uuid;
-	/** number of containers */
-	uint32_t		pi_ncnts;
 	/** number of targets */
 	uint32_t		pi_ntargets;
 	/** number of deactivated targets */

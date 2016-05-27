@@ -71,6 +71,10 @@ typedef enum {
 	DER_UNINIT		= (DER_ERR_BASE + 20),
 	/** target create error */
 	DER_TGT_CREATE		= (DER_ERR_BASE + 21),
+	/** destination bulk buffer for a PUT is too small */
+	DER_TRUNC		= (DER_ERR_BASE + 22),
+	/** generic I/O error */
+	DER_IO			= (DER_ERR_BASE + 23),
 	/** epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** epoch is too old, all data have been recycled */

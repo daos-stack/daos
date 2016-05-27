@@ -28,10 +28,6 @@
 #include <daos/rpc.h>
 #include "dsm_rpc.h"
 
-struct dtp_msg_field DMF_POOL_MAP =
-	DEFINE_DTP_MSG("dtp_pool", 0, sizeof(struct pool_map),
-			proc_pool_map);
-
 struct dtp_msg_field *pool_connect_in_fields[] = {
 	&DMF_UUID,	/* pool */
 	&DMF_UUID,	/* pool hdl */
@@ -43,7 +39,9 @@ struct dtp_msg_field *pool_connect_in_fields[] = {
 
 struct dtp_msg_field *pool_connect_out_fields[] = {
 	&DMF_INT,	/* ret */
-	&DMF_POOL_MAP	/* pool map */
+	&DMF_UINT32,	/* mode */
+	&DMF_UINT32,	/* pool_map_version */
+	&DMF_UINT32	/* pool_map_buf_size */
 };
 
 /*

@@ -93,13 +93,6 @@ enum dsm_operation {
 	DSM_TGT_OBJ_FETCH	= 71,
 };
 
-/* DSM RPC request structure */
-struct pool_map {
-	uint64_t	pm_version;
-	uint32_t	pm_ndomains;
-	uint32_t	pm_ntargets;
-};
-
 struct pool_connect_in {
 	uuid_t		pci_pool;
 	uuid_t		pci_pool_hdl;
@@ -110,8 +103,10 @@ struct pool_connect_in {
 };
 
 struct pool_connect_out {
-	int32_t pco_ret;
-	struct pool_map pco_map;
+	int32_t		pco_ret;
+	uint32_t	pco_mode;
+	uint32_t	pco_pool_map_version;
+	uint32_t	pco_pool_map_buf_size;	/* only set on -DER_TRUNC */
 };
 
 struct pool_disconnect_in {
@@ -187,27 +182,6 @@ struct cont_close_in {
 struct cont_close_out {
 	int32_t	cco_ret;
 };
-
-static inline int
-proc_pool_map(dtp_proc_t proc, void *data)
-{
-	struct pool_map        *p = data;
-	int                     rc;
-
-	rc = dtp_proc_uint64_t(proc, &p->pm_version);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_uint32_t(proc, &p->pm_ndomains);
-	if (rc != 0)
-		return rc;
-
-	rc = dtp_proc_uint32_t(proc, &p->pm_ntargets);
-	if (rc != 0)
-		return rc;
-
-	return 0;
-}
 
 int
 dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,

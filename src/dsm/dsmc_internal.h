@@ -46,6 +46,8 @@ struct dsmc_pool {
 	uuid_t			dp_pool_hdl;
 	uint64_t		dp_capas;
 	uint32_t		dp_disconnecting:1;
+	struct pool_map	       *dp_map;
+	struct pool_buf	       *dp_map_buf;	/* TODO: pool_map => pool_buf */
 };
 
 /* container in dsm client cache */
@@ -68,13 +70,15 @@ struct dsmc_container {
 
 /* dsmc object in dsm client cache */
 struct dsmc_object {
-	struct daos_hlink do_hlink;
+	struct daos_hlink	do_hlink;
+	/* rank of the target this object belongs to */
+	daos_rank_t		do_rank;
 	/* object id */
-	daos_unit_oid_t	  do_id;
+	daos_unit_oid_t		do_id;
 	/* container handler of the object */
-	daos_handle_t	  do_co_hdl;
+	daos_handle_t		do_co_hdl;
 	/* list to the container */
-	daos_list_t	  do_co_list;
+	daos_list_t		do_co_list;
 };
 
 static inline struct dsmc_container*

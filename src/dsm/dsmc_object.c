@@ -25,6 +25,8 @@
  *
  * dsmc is the DSM client to do object operation.
  */
+
+#include <daos/pool_map.h>
 #include <daos/transport.h>
 #include "dsm_rpc.h"
 #include "dsmc_internal.h"
@@ -44,28 +46,20 @@ dsmc_handle2obj(daos_handle_t hdl)
 }
 
 static int
-dsmc_obj_pool_container_uuid_get(daos_handle_t oh, uuid_t puuid,
+dsmc_obj_pool_container_uuid_get(struct dsmc_object *dobj, uuid_t puuid,
 				 uuid_t cuuid, daos_unit_oid_t *do_id)
 {
 	struct dsmc_pool	*pool;
 	struct dsmc_container	*dc;
-	struct dsmc_object	*dobj;
-
-	dobj = dsmc_handle2obj(oh);
-	if (dobj == NULL)
-		return -DER_NO_HDL;
 
 	D_ASSERT(!daos_handle_is_inval(dobj->do_co_hdl));
 	dc = dsmc_handle2container(dobj->do_co_hdl);
-	if (dc == NULL) {
-		dsmc_object_put(dobj);
+	if (dc == NULL)
 		return -DER_NO_HDL;
-	}
 
 	D_ASSERT(!daos_handle_is_inval(dc->dc_pool_hdl));
 	pool = dsmc_handle2pool(dc->dc_pool_hdl);
 	if (pool == NULL) {
-		dsmc_object_put(dobj);
 		dsmc_container_put(dc);
 		return -DER_NO_HDL;
 	}
@@ -74,7 +68,6 @@ dsmc_obj_pool_container_uuid_get(daos_handle_t oh, uuid_t puuid,
 	uuid_copy(cuuid, dc->dc_uuid);
 
 	*do_id = dobj->do_id;
-	dsmc_object_put(dobj);
 	dsmc_container_put(dc);
 	dsmc_pool_put(pool);
 
@@ -143,6 +136,7 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	   unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	   daos_event_t *ev, enum dsm_operation op)
 {
+	struct dsmc_object	*dobj;
 	dtp_endpoint_t		 tgt_ep;
 	dtp_rpc_t		*req;
 	struct object_update_in *oui;
@@ -156,25 +150,33 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	    !dsm_io_check(nr, iods, sgls))
 		return -DER_INVAL;
 
+	dobj = dsmc_handle2obj(oh);
+	if (dobj == NULL)
+		return -DER_NO_HDL;
+
 	if (ev == NULL) {
 		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
+		if (rc != 0) {
+			dsmc_object_put(dobj);
 			return rc;
+		}
 	}
 
-	/* TODO we need to pass the target rank to server as well */
-	tgt_ep.ep_rank = 0;
+	tgt_ep.ep_rank = dobj->do_rank;
 	tgt_ep.ep_tag = 0;
 	rc = dsm_req_create(daos_ev2ctx(ev), tgt_ep, op, &req);
-	if (rc != 0)
+	if (rc != 0) {
+		dsmc_object_put(dobj);
 		return rc;
+	}
 
 	oui = dtp_req_get(req);
 	D_ASSERT(oui != NULL);
 
-	rc = dsmc_obj_pool_container_uuid_get(oh,
+	rc = dsmc_obj_pool_container_uuid_get(dobj,
 			oui->oui_pool_uuid, oui->oui_co_uuid,
 			&oui->oui_oid);
+	dsmc_object_put(dobj);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -262,7 +264,7 @@ struct daos_hlink_ops dobj_h_ops = {
 };
 
 static struct dsmc_object *
-dsm_obj_alloc(daos_unit_oid_t id)
+dsm_obj_alloc(daos_rank_t rank, daos_unit_oid_t id)
 {
 	struct dsmc_object *dobj;
 
@@ -270,6 +272,7 @@ dsm_obj_alloc(daos_unit_oid_t id)
 	if (dobj == NULL)
 		return NULL;
 
+	dobj->do_rank = rank;
 	dobj->do_id = id;
 	DAOS_INIT_LIST_HEAD(&dobj->do_co_list);
 	daos_hhash_hlink_init(&dobj->do_hlink, &dobj_h_ops);
@@ -277,17 +280,31 @@ dsm_obj_alloc(daos_unit_oid_t id)
 }
 
 int
-dsm_obj_open(daos_handle_t coh, daos_unit_oid_t id, unsigned int mode,
-	     daos_handle_t *oh, daos_event_t *ev)
+dsm_obj_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
+	     unsigned int mode, daos_handle_t *oh, daos_event_t *ev)
 {
 	struct dsmc_object	*dobj;
 	struct dsmc_container	*dc;
+	struct dsmc_pool	*pool;
+	struct pool_target	*map_tgt;
+	int			n;
 
 	dc = dsmc_handle2container(coh);
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
-	dobj = dsm_obj_alloc(id);
+	/* Get map_tgt so that we can have the rank of the target. */
+	pool = dsmc_handle2pool(dc->dc_pool_hdl);
+	D_ASSERT(pool != NULL);
+	n = pool_map_find_target(pool->dp_map, tgt, &map_tgt);
+	dsmc_pool_put(pool);
+	if (n != 1) {
+		D_ERROR("failed to find target %u\n", tgt);
+		dsmc_container_put(dc);
+		return -DER_INVAL;
+	}
+
+	dobj = dsm_obj_alloc(map_tgt->ta_comp.co_rank, id);
 	if (dobj == NULL) {
 		dsmc_container_put(dc);
 		return -DER_NOMEM;

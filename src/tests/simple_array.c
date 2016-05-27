@@ -549,6 +549,7 @@ main(int argc, char **argv)
 				      DAOS_PC_EX /* exclusive access */,
 				      NULL /* list of failed targets */,
 				      &poh /* returned pool handle */,
+				      NULL /* returned pool info */,
 				      NULL /* event */);
 		ASSERT(rc == 0, "pool connect failed with %d", rc);
 	}

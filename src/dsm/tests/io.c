@@ -49,6 +49,7 @@ typedef struct {
 	daos_handle_t		poh;
 	daos_handle_t		coh;
 	bool			async;
+	daos_pool_info_t	pinfo;
 } test_arg_t;
 
 struct ioreq {
@@ -73,7 +74,8 @@ struct ioreq {
 };
 
 static void
-ioreq_init(struct ioreq *req, daos_unit_oid_t oid, test_arg_t *arg)
+ioreq_init(struct ioreq *req, uint32_t tgt, daos_unit_oid_t oid,
+	   test_arg_t *arg)
 {
 	int rc;
 
@@ -106,8 +108,11 @@ ioreq_init(struct ioreq *req, daos_unit_oid_t oid, test_arg_t *arg)
 	req->vio.vd_nr		= 1;
 	req->vio.vd_eprs	= &req->erange;
 
+	print_message("open tgt=%u oid=%lu.%lu.%lu.%u\n", tgt, oid.id_pub.hi,
+		      oid.id_pub.mid, oid.id_pub.lo, oid.id_shard);
+
 	/** open the object */
-	rc = dsm_obj_open(arg->coh, oid, 0, &req->oh, NULL);
+	rc = dsm_obj_open(arg->coh, tgt, oid, 0, &req->oh, NULL);
 	assert_int_equal(rc, 0);
 }
 
@@ -202,28 +207,30 @@ lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
 }
 
 static inline void
-obj_random(daos_unit_oid_t *oid)
+obj_random(test_arg_t *arg, uint32_t *tgt, daos_unit_oid_t *oid)
 {
 	/** choose random object */
+	*tgt = rand() % arg->pinfo.pi_ntargets;
 	oid->id_pub.lo = rand();
 	oid->id_pub.mid = rand();
 	oid->id_pub.hi = rand();
 	oid->id_shard = 0;
-	oid->id_pad_32 = rand() % 16; /** must be nr target in the future */
 }
 
 /** i/o to variable idx offset */
 static void
 io_var_idx_offset(void **state)
 {
+	test_arg_t	*arg = *state;
+	uint32_t	 tgt;
 	daos_unit_oid_t	 oid;
 	struct ioreq	 req;
 	daos_off_t	 offset;
 
 	/** choose random object */
-	obj_random(&oid);
+	obj_random(arg, &tgt, &oid);
 
-	ioreq_init(&req, oid, (test_arg_t *)*state);
+	ioreq_init(&req, tgt, oid, arg);
 
 	for (offset = UINT64_MAX; offset > 0; offset >>= 8) {
 		char buf[10];
@@ -252,6 +259,8 @@ io_var_idx_offset(void **state)
 static void
 io_var_akey_size(void **state)
 {
+	test_arg_t	*arg = *state;
+	uint32_t	 tgt;
 	daos_unit_oid_t	 oid;
 	struct ioreq	 req;
 	daos_size_t	 size;
@@ -262,9 +271,9 @@ io_var_akey_size(void **state)
 	skip();
 
 	/** choose random object */
-	obj_random(&oid);
+	obj_random(arg, &tgt, &oid);
 
-	ioreq_init(&req, oid, (test_arg_t *)*state);
+	ioreq_init(&req, tgt, oid, arg);
 
 	key = malloc(max_size);
 	assert_non_null(key);
@@ -299,6 +308,8 @@ io_var_akey_size(void **state)
 static void
 io_var_dkey_size(void **state)
 {
+	test_arg_t	*arg = *state;
+	uint32_t	 tgt;
 	daos_unit_oid_t	 oid;
 	struct ioreq	 req;
 	daos_size_t	 size;
@@ -306,9 +317,9 @@ io_var_dkey_size(void **state)
 	char		*key;
 
 	/** choose random object */
-	obj_random(&oid);
+	obj_random(arg, &tgt, &oid);
 
-	ioreq_init(&req, oid, (test_arg_t *)*state);
+	ioreq_init(&req, tgt, oid, arg);
 
 	key = malloc(max_size);
 	assert_non_null(key);
@@ -343,6 +354,8 @@ io_var_dkey_size(void **state)
 static void
 io_var_rec_size(void **state)
 {
+	test_arg_t	*arg = *state;
+	uint32_t	 tgt;
 	daos_unit_oid_t	 oid;
 	daos_epoch_t	 epoch;
 	struct ioreq	 req;
@@ -352,12 +365,12 @@ io_var_rec_size(void **state)
 	char		*update_buf;
 
 	/** choose random object */
-	obj_random(&oid);
+	obj_random(arg, &tgt, &oid);
 
 	/** random epoch as well */
 	epoch = rand();
 
-	ioreq_init(&req, oid, (test_arg_t *)*state);
+	ioreq_init(&req, tgt, oid, arg);
 
 	fetch_buf = malloc(max_size);
 	assert_non_null(fetch_buf);
@@ -394,6 +407,8 @@ io_var_rec_size(void **state)
 static void
 io_simple(void **state)
 {
+	test_arg_t	*arg = *state;
+	uint32_t	 tgt;
 	daos_unit_oid_t	 oid;
 	struct ioreq	 req;
 	const char	 dkey[] = "test_update dkey";
@@ -401,9 +416,9 @@ io_simple(void **state)
 	const char	 rec[]  = "test_update record";
 	char		*buf;
 
-	obj_random(&oid);
+	obj_random(arg, &tgt, &oid);
 
-	ioreq_init(&req, oid, (test_arg_t *)*state);
+	ioreq_init(&req, tgt, oid, arg);
 
 	/** Insert */
 	print_message("Insert(e=0)/lookup(e=0)/verify simple kv record\n");
@@ -486,7 +501,7 @@ setup(void **state)
 	/** connect to pool */
 	rc = dsm_pool_connect(arg->uuid, NULL /* grp */, &arg->svc,
 			      DAOS_PC_RW, NULL /* failed */, &arg->poh,
-			      NULL /* ev */);
+			      &arg->pinfo, NULL /* ev */);
 	if (rc)
 		return rc;
 

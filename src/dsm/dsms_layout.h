@@ -117,7 +117,7 @@ struct superblock {
 #define POOL_UID		"pool_uid"		/* uint32_t */
 #define POOL_GID		"pool_gid"		/* uint32_t */
 #define POOL_MODE		"pool_mode"		/* uint32_t */
-#define POOL_MAP_VERSION	"pool_map_version"	/* uint64_t */
+#define POOL_MAP_VERSION	"pool_map_version"	/* uint32_t */
 #define POOL_MAP_NTARGETS	"pool_map_ntargets"	/* uint32_t */
 #define POOL_MAP_NDOMAINS	"pool_map_ndomains"	/* uint32_t */
 #define POOL_MAP_TARGETS	"pool_map_targets"	/* pool_map_target[] */
@@ -127,17 +127,21 @@ struct superblock {
 
 struct pool_map_target {
 	uuid_t		mt_uuid;
-	uint64_t	mt_version;
+	uint32_t	mt_version_in;	/* at which this was added in */
+	uint32_t	mt_version_out;	/* at which this was excluded out */
 	uint64_t	mt_fseq;
+	uint32_t	mt_id;
 	uint16_t	mt_ncpus;
-	uint8_t		mt_status;
+	uint8_t		mt_status;	/* pool_comp_state */
 	uint8_t		mt_padding[5];
+	uint32_t	mt_rank;	/* TODO: Remove once we have bcast. */
 };
 
 struct pool_map_domain {
-	uint64_t	md_version;
+	uint32_t	md_version_in;	/* at which this was added in */
+	uint32_t	md_version_out;	/* at which this was excluded out */
+	uint32_t	md_type;	/* pool_comp_type */
 	uint32_t	md_nchildren;
-	uint32_t	md_padding;
 };
 
 /* Pool handle KVS (KVS_UV) */

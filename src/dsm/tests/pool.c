@@ -41,6 +41,9 @@ typedef struct {
 	daos_rank_t		ranks[8];
 	daos_rank_list_t	svc;
 	uuid_t			uuid;
+	unsigned int		mode;
+	unsigned int		uid;
+	unsigned int		gid;
 	daos_handle_t		eq;
 	bool			async;
 } test_arg_t;
@@ -57,7 +60,7 @@ pool_connect_nonexist(void **state)
 	uuid_generate(uuid);
 	rc = dsm_pool_connect(uuid, NULL /* grp */, &arg->svc,
 			      DAOS_PC_RW, NULL /* failed */, &poh,
-			      NULL /* ev */);
+			      NULL /* info */, NULL /* ev */);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
 
@@ -69,6 +72,7 @@ pool_connect(void **state)
 	daos_handle_t	 poh;
 	daos_event_t	 ev;
 	daos_event_t	*evp;
+	daos_pool_info_t info;
 	int		 rc;
 
 	if (arg->async) {
@@ -80,7 +84,7 @@ pool_connect(void **state)
 	print_message("connecting to pool %ssynchronously ... ",
 		      arg->async ? "a" : "");
 	rc = dsm_pool_connect(arg->uuid, NULL /* grp */, &arg->svc,
-			      DAOS_PC_RW, NULL /* failed */, &poh,
+			      DAOS_PC_RW, NULL /* failed */, &poh, &info,
 			      arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 
@@ -91,6 +95,10 @@ pool_connect(void **state)
 		assert_ptr_equal(evp, &ev);
 		assert_int_equal(ev.ev_error, 0);
 	}
+	assert_memory_equal(info.pi_uuid, arg->uuid, sizeof(info.pi_uuid));
+	/** TODO: assert_int_equal(info.pi_ntargets, arg->...); */
+	assert_int_equal(info.pi_ndisabled, 0);
+	assert_int_equal(info.pi_mode, arg->mode);
 	print_message("success\n");
 
 	/** disconnect from pool */
@@ -156,10 +164,13 @@ setup(void **state)
 	arg->svc.rl_nr.num = 8;
 	arg->svc.rl_nr.num_out = 0;
 	arg->svc.rl_ranks = arg->ranks;
+	arg->mode = 0;
+	arg->uid = geteuid();
+	arg->gid = getegid();
 
 	/** create pool with minimal size */
-	rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL, "pmem",
-			     0, &arg->svc, arg->uuid, NULL);
+	rc = dmg_pool_create(arg->mode, arg->uid, arg->gid, "srv_grp", NULL,
+			     "pmem", 0, &arg->svc, arg->uuid, NULL);
 	if (rc)
 		return rc;
 

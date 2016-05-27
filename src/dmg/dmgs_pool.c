@@ -419,15 +419,25 @@ tgt_create_cb(const struct dtp_cb_info *cb_info)
 
 	/* all tgt_create finished */
 	if (pc_inprog->pc_tc_fail_num == 0) {
-		int	doms[pc_inprog->pc_tc_num + 1];
-		int	i;
+		daos_rank_list_t	ranks;
+		int			doms[pc_inprog->pc_tc_num];
+		int			i;
 
 		D_DEBUG(DF_MGMT, DF_UUID": all tgts created, setting up pool "
 			"svc\n", DP_UUID(pc_inprog->pc_pool_uuid));
 
-		doms[0] = pc_inprog->pc_tc_num;
-		for (i = 1; i <= pc_inprog->pc_tc_num; i++)
+		for (i = 0; i < pc_inprog->pc_tc_num; i++)
 			doms[i] = 1;
+
+		if (pc_in->pc_tgts == NULL) {
+			ranks.rl_nr.num = pc_inprog->pc_tc_num;
+			D_ALLOC(ranks.rl_ranks,
+				sizeof(*ranks.rl_ranks) * ranks.rl_nr.num);
+			if (ranks.rl_ranks == NULL)
+				D_GOTO(svc_create_fail, rc = -DER_NOMEM);
+			for (i = 0; i < ranks.rl_nr.num; i++)
+				ranks.rl_ranks[i] = i;
+		}
 
 		/**
 		 * TODO: fetch domain list from external source
@@ -437,11 +447,19 @@ tgt_create_cb(const struct dtp_cb_info *cb_info)
 					  pc_in->pc_uid, pc_in->pc_gid,
 					  pc_in->pc_mode, pc_inprog->pc_tc_num,
 					  pc_inprog->pc_tgt_uuids,
-					  pc_in->pc_grp, pc_in->pc_tgts, 3,
-					  doms, pc_out->pc_svc);
+					  pc_in->pc_grp,
+					  pc_in->pc_tgts ?: &ranks,
+					  ARRAY_SIZE(doms), doms,
+					  pc_out->pc_svc);
+
+		if (pc_in->pc_tgts == NULL)
+			D_FREE(ranks.rl_ranks,
+			       sizeof(*ranks.rl_ranks) * ranks.rl_nr.num);
+
 		if (rc == 0)
 			D_GOTO(tc_finish, rc = 0);
 
+svc_create_fail:
 		D_ERROR(DF_UUID": pool svc setup failed with %d\n",
 			DP_UUID(pc_inprog->pc_pool_uuid), rc);
 	}

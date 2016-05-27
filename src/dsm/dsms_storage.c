@@ -416,7 +416,10 @@ dsms_kvs_nv_lookup(daos_handle_t kvsh, const char *name, void *value,
 
 	rc = dbtree_lookup(kvsh, &key, &val);
 	if (rc != 0) {
-		D_ERROR("failed to look up \"%s\": %d\n", name, rc);
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
+		else
+			D_ERROR("failed to look up \"%s\": %d\n", name, rc);
 		return rc;
 	}
 
@@ -443,7 +446,10 @@ dsms_kvs_nv_lookup_ptr(daos_handle_t kvsh, const char *name, void **value,
 
 	rc = lookup_ptr(kvsh, &key, &val);
 	if (rc != 0) {
-		D_ERROR("failed to look up \"%s\": %d\n", name, rc);
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
+		else
+			D_ERROR("failed to look up \"%s\": %d\n", name, rc);
 		return rc;
 	}
 
@@ -465,8 +471,12 @@ dsms_kvs_nv_delete(daos_handle_t kvsh, const char *name)
 	key.iov_len = key.iov_buf_len;
 
 	rc = dbtree_delete(kvsh, &key);
-	if (rc != 0)
-		D_ERROR("failed to delete \"%s\": %d\n", name, rc);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
+		else
+			D_ERROR("failed to delete \"%s\": %d\n", name, rc);
+	}
 
 	return rc;
 }
@@ -709,7 +719,7 @@ dsms_kvs_uv_update(daos_handle_t kvsh, const uuid_t uuid, const void *value,
 
 	rc = dbtree_update(kvsh, &key, &val);
 	if (rc != 0)
-		D_ERROR("failed to update: %d\n", rc);
+		D_ERROR("failed to update "DF_UUID": %d\n", DP_UUID(uuid), rc);
 
 	return rc;
 }
@@ -732,7 +742,12 @@ dsms_kvs_uv_lookup(daos_handle_t kvsh, const uuid_t uuid, void *value,
 
 	rc = dbtree_lookup(kvsh, &key, &val);
 	if (rc != 0) {
-		D_ERROR("failed to look up: %d\n", rc);
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
+				DP_UUID(uuid));
+		else
+			D_ERROR("failed to look up "DF_UUID": %d\n",
+				DP_UUID(uuid), rc);
 		return rc;
 	}
 
@@ -750,8 +765,14 @@ dsms_kvs_uv_delete(daos_handle_t kvsh, const uuid_t uuid)
 	key.iov_len = key.iov_buf_len;
 
 	rc = dbtree_delete(kvsh, &key);
-	if (rc != 0)
-		D_ERROR("failed to delete: %d\n", rc);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
+				DP_UUID(uuid));
+		else
+			D_ERROR("failed to delete "DF_UUID": %d\n",
+				DP_UUID(uuid), rc);
+	}
 
 	return rc;
 }
@@ -982,11 +1003,13 @@ dsms_kvs_ec_lookup(daos_handle_t kvsh, uint64_t epoch, uint64_t *count)
 
 	rc = dbtree_lookup(kvsh, &key, &val);
 	if (rc != 0) {
-		D_ERROR("failed to look up "DF_U64": %d\n", epoch, rc);
-		return rc;
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find "DF_U64"\n", epoch);
+		else
+			D_ERROR("failed to look up "DF_U64": %d\n", epoch, rc);
 	}
 
-	return 0;
+	return rc;
 }
 
 int
@@ -1014,12 +1037,15 @@ dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
 	rc = dbtree_fetch(kvsh, opc, epoch_in == NULL ? NULL : &key_in,
 			  &key_out, &val);
 	if (rc != 0) {
-		D_ERROR("failed to fetch opc=%d in="DF_U64": %d\n", opc,
-			epoch_in == NULL ? -1 : *epoch_in, rc);
-		return rc;
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find opc=%d in="DF_U64"\n",
+				opc, epoch_in == NULL ? -1 : *epoch_in);
+		else
+			D_ERROR("failed to fetch opc=%d in="DF_U64": %d\n", opc,
+				epoch_in == NULL ? -1 : *epoch_in, rc);
 	}
 
-	return 0;
+	return rc;
 }
 
 static DAOS_LIST_HEAD(mpool_cache);
@@ -1052,7 +1078,10 @@ mpool_init(const uuid_t pool_uuid, struct mpool *mp)
 
 	mp->mp_pmem = pmemobj_open(path, MPOOL_LAYOUT);
 	if (mp->mp_pmem == NULL) {
-		D_ERROR("failed to open %s: %d\n", path, errno);
+		if (errno == ENOENT)
+			D_DEBUG(DF_DSMS, "cannot find %s: %d\n", path, errno);
+		else
+			D_ERROR("failed to open %s: %d\n", path, errno);
 		D_GOTO(err_path, rc = -DER_NONEXIST);
 	}
 

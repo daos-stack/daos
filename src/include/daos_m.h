@@ -107,6 +107,7 @@ dsm_global2local(daos_iov_t glob, daos_handle_t *loc);
  * \param failed
  *		[OUT]	Optional, buffer to store faulty targets on failure.
  * \param poh	[OUT]	Returned open handle.
+ * \param info	[OUT]	Returned pool info.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -122,7 +123,7 @@ int
 dsm_pool_connect(const uuid_t uuid, const char *grp,
 		 const daos_rank_list_t *svc, unsigned int flags,
 		 daos_rank_list_t *failed, daos_handle_t *poh,
-		 daos_event_t *ev);
+		 daos_pool_info_t *info, daos_event_t *ev);
 
 /**
  * Disconnect from the DAOS pool. It should revoke all the container open
@@ -555,6 +556,7 @@ dsm_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  * Open an DAOS-M object.
  *
  * \param coh	[IN]	Container open handle.
+ * \param tgt	[IN]	Target ID.
  * \param id	[IN]	Object ID.
  * \param mode	[IN]	Open mode: read-only, read-write.
  * \param oh	[OUT]	Returned object open handle.
@@ -573,8 +575,8 @@ dsm_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  *					this object
  */
 int
-dsm_obj_open(daos_handle_t coh, daos_unit_oid_t id, unsigned int mode,
-	     daos_handle_t *oh, daos_event_t *ev);
+dsm_obj_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
+	     unsigned int mode, daos_handle_t *oh, daos_event_t *ev);
 
 /**
  * Close an opened object.
