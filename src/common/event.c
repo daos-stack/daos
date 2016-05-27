@@ -168,7 +168,7 @@ daos_eq_alloc(void)
 	struct daos_eq_private	*eqx;
 	int			rc;
 
-	eq = malloc(sizeof(*eq));
+	D_ALLOC_PTR(eq);
 	if (eq == NULL)
 		return NULL;
 

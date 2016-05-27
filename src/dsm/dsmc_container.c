@@ -377,6 +377,7 @@ dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	uuid_copy(in->coi_pool, pool->dp_pool);
 	uuid_copy(in->coi_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->coi_cont, uuid);
+	uuid_copy(in->coi_cont_hdl, cont->dc_cont_hdl);
 	in->coi_capas = flags;
 
 	sp = daos_ev2sp(ev);
@@ -480,7 +481,7 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 	if (ev == NULL) {
 		rc = daos_event_priv_get(&ev);
 		if (rc != 0)
-			D_GOTO(err_pool, rc = 0);
+			D_GOTO(err_pool, rc);
 	}
 
 	D_DEBUG(DF_DSMC, DF_UUID"/"DF_UUID": "DF_UUID"\n",
