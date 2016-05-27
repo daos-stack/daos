@@ -114,7 +114,7 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 
 	/* TODO: Implement these. */
 	D_ASSERT(grp == NULL);
-	D_ASSERT(tgts == NULL);
+	/* D_ASSERT(tgts == NULL); */
 	D_ASSERT(failed == NULL);
 
 	if (uuid_is_null(uuid) || !flags_are_valid(flags) || poh == NULL)

@@ -31,11 +31,11 @@
 #include <pthread.h>
 #include <hwloc.h>
 
+/** Number of started threads or cores used */
+extern unsigned int	dss_nthreads;
+
 /** Server node topoloby */
 extern hwloc_topology_t	dss_topo;
-
-/** Number of physical cores available on the server */
-extern int		dss_ncores;
 
 /**
  * Stackable Module API

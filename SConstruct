@@ -19,15 +19,10 @@ if os.path.exists('scons_local'):
 env = Environment()
 
 config = Configure(env)
-for required_lib in ['cgroup', 'uuid']:
+for required_lib in ['uuid', 'cmocka']:
         if not config.CheckLib(required_lib):
                 config.Finish()
                 exit(1)
-
-if not config.CheckLib('numa'):
-        config.Finish()
-        print ('for libnuma install numactl-devel package')
-        exit(1)
 
 if not config.CheckLib('crypto'):
         config.Finish()

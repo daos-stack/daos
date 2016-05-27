@@ -226,28 +226,6 @@ int daos_array_sort(void *array, unsigned int len, bool unique,
 int daos_array_find(void *array, unsigned int len, uint64_t key,
 		    daos_sort_ops_t *ops);
 
-#define DAOS_HDL_INVAL	((daos_handle_t){0})
-
-static inline bool
-daos_handle_is_inval(daos_handle_t hdl)
-{
-	return hdl.cookie == 0;
-}
-
-static inline void
-daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
-{
-	iov->iov_buf = buf;
-	iov->iov_len = iov->iov_buf_len = size;
-}
-
-static inline void
-daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
-{
-	csum->cs_csum = buf;
-	csum->cs_len = csum->cs_buf_len = size;
-}
-
 int  daos_sgl_init(daos_sg_list_t *sgl, unsigned int nr);
 void daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs);
 

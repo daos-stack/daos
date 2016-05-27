@@ -468,6 +468,7 @@ dtp_finalize(void)
 		/* allow the same program to re-initialize */
 		dtp_gdata.dg_refcount = 0;
 		dtp_gdata.dg_inited = 0;
+		gdata_init_once = PTHREAD_ONCE_INIT;
 		gdata_init_flag = 0;
 	} else {
 		pthread_rwlock_unlock(&dtp_gdata.dg_rwlock);

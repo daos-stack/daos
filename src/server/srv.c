@@ -33,6 +33,9 @@
 #include <daos/list.h>
 #include "dss_internal.h"
 
+/** Number of started threads or cores used */
+unsigned int	dss_nthreads;
+
 /** Per-thread configuration data */
 struct dss_thread {
 	pthread_t	dt_id;
@@ -321,12 +324,17 @@ dss_threads_init(int nr)
 	int	rc;
 	int	i;
 	int	depth;
+	int	ncores;
 
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_CORE);
+	/** number of physical core, w/o hyperthreading */
+	ncores = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 
 	if (nr == 0)
 		/* start one thread per core by default */
-		nr = dss_ncores;
+		dss_nthreads = ncores;
+	else
+		dss_nthreads = nr;
 
 	/* initialize thread-local storage */
 	rc = pthread_key_create(&dss_tls_key, dss_tls_fini);
@@ -337,11 +345,11 @@ dss_threads_init(int nr)
 
 	/* start the service threads */
 	D_DEBUG(DF_SERVER, "%d cores detected, starting %d service threads\n",
-		dss_ncores, nr);
-	for (i = 0; i < nr; i++) {
+		ncores, dss_nthreads);
+	for (i = 0; i < dss_nthreads; i++) {
 		hwloc_obj_t	obj;
 
-		obj = hwloc_get_obj_by_depth(dss_topo, depth, nr % dss_ncores);
+		obj = hwloc_get_obj_by_depth(dss_topo, depth, i % ncores);
 		if (obj == NULL) {
 			D_ERROR("Null core returned by hwloc\n");
 			return -DER_INVAL;
@@ -351,7 +359,8 @@ dss_threads_init(int nr)
 		if (rc)
 			return rc;
 	}
-	D_DEBUG(DF_SERVER, "%d service threads successfully started\n", nr);
+	D_DEBUG(DF_SERVER, "%d service threads successfully started\n",
+		dss_nthreads);
 
 	return 0;
 }

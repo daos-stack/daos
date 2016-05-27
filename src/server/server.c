@@ -34,13 +34,17 @@
 #define MAX_MODULE_OPTIONS	64
 #define MODULE_LIST		"vos,dmg,dsm,dsr"
 
-char	modules[MAX_MODULE_OPTIONS + 1];
+/** List of modules to load */
+static char		modules[MAX_MODULE_OPTIONS + 1];
+
+/**
+ * Number of threads the user would like to start
+ * 0 means default value, which is one thread per core
+ */
+static unsigned int	nr_threads;
 
 /** HW topology */
 hwloc_topology_t	dss_topo;
-
-/** Number of physical cores available on the server */
-int			dss_ncores;
 
 static int
 modules_load()
@@ -94,11 +98,9 @@ server_init()
 	if (rc)
 		D_ERROR("failed to enable full debug, %d\n", rc);
 
-
 	/** initialize server topology data */
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
-	dss_ncores = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 
 	/* initialize the modular interface */
 	rc = dss_module_init();
@@ -119,7 +121,7 @@ server_init()
 	D_DEBUG(DF_SERVER, "Module %s successfully loaded\n", modules);
 
 	/* start up service */
-	rc = dss_srv_init(0);
+	rc = dss_srv_init(nr_threads);
 	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
 	D_DEBUG(DF_SERVER, "Service is now running\n");
@@ -154,6 +156,7 @@ parse(int argc, char **argv)
 {
 	struct	option opts[] = {
 		{ "modules", required_argument, NULL, 'm' },
+		{ "number of cores to use", required_argument, NULL, 'c' },
 		{ NULL },
 	};
 	int	rc = 0;
@@ -161,7 +164,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "m:", opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "c:m:", opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
@@ -171,6 +174,18 @@ parse(int argc, char **argv)
 			}
 			sprintf(modules, "%s", optarg);
 			break;
+		case 'c': {
+			unsigned int	 nr;
+			char		*end;
+
+			nr = strtoul(optarg, &end, 10);
+			if (end == optarg || nr == ULONG_MAX) {
+				rc = -DER_INVAL;
+				break;
+			}
+			nr_threads = nr;
+			break;
+		}
 		default:
 			usage(argv[0], stderr);
 			rc = -DER_INVAL;

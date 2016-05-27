@@ -567,6 +567,7 @@ dtp_proc_daos_vec_iod(dtp_proc_t proc, daos_vec_iod_t *dvi)
 			return rc;
 	}
 
+	/** XXX as per the API, vd_csums & vd_eprs can be NULL!!! */
 	for (i = 0; i < dvi->vd_nr; i++) {
 		rc = dtp_proc_daos_csum_buf(proc, &dvi->vd_csums[i]);
 		if (rc != 0)

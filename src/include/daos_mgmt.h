@@ -61,7 +61,8 @@ dmg_fini();
  *			available in the service group.
  * \param dev	[IN]	string identifying the target devices to use
  * \param size	[IN]	target sizes (i.e., maximum amounts of storage space
- *			targets can consume) in bytes.
+ *			targets can consume) in bytes. Passing 0 will use the
+ *			minimal supported target size.
  * \param svc	[IN]	Must be pre-allocated by the caller
  *		[OUT]	Return a list of ranks where the pool service was
  *			initialized

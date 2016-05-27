@@ -154,7 +154,7 @@ daos_eq_free(struct daos_hlink *hlink)
 	if (eqx->eqx_lock_init)
 		pthread_mutex_destroy(&eqx->eqx_lock);
 
-	free(eq);
+	D_FREE_PTR(eq);
 }
 
 struct daos_hlink_ops	eq_h_ops = {
@@ -643,7 +643,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	if (flags & DAOS_EQ_DESTROY_FORCE &&
 	    (!daos_list_empty(&eq->eq_disp) ||
 	     !daos_list_empty(&eq->eq_comp))) {
-		rc = -EBUSY;
+		rc = -DER_BUSY;
 		goto out;
 	}
 

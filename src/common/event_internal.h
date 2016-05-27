@@ -108,9 +108,8 @@ struct daos_eq_private {
 	/* link chain in the global hash list */
 	struct daos_hlink	eqx_hlink;
 	pthread_mutex_t		eqx_lock;
-	int			eqx_lock_init:1,
-				eqx_finalizing:1,
-				eqx_refcount;
+	unsigned int		eqx_lock_init:1,
+				eqx_finalizing:1;
 
 	/* All of its events are linked here */
 	struct daos_hhash	*eqx_events_hash;

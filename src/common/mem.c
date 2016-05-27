@@ -184,7 +184,7 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 	}
 	if (!found) {
 		D_DEBUG(DF_MEM, "Cannot find memory class %d\n", uma->uma_id);
-		return -ENOENT;
+		return -DER_ENOENT;
 	}
 
 	D_DEBUG(DF_MEM, "Instantiate memory class %s\n", umc->umc_name);

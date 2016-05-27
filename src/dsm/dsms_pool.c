@@ -173,7 +173,7 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 	for (i = 0; i < ntargets; i++) {
 		uuid_copy(targets_p[i].mt_uuid, target_uuids[i]);
 		targets_p[i].mt_version = 1;
-		targets_p[i].mt_ncpus = dss_ncores; /* TODO */
+		targets_p[i].mt_ncpus = dss_nthreads; /* TODO */
 		targets_p[i].mt_fseq = 1;
 		targets_p[i].mt_status = 0;	/* TODO */
 	}

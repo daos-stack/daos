@@ -71,10 +71,6 @@ dmg_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 		D_ERROR("Invalid parameter of dev (NULL or empty string).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	if (size == 0) {
-		D_ERROR("Invalid parameter of size (0).\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	if (dmg_initialized() == false) {
 		D_ERROR("dmg client library un-initialized.\n");

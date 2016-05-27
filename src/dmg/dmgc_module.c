@@ -38,11 +38,14 @@ dmg_init()
 		D_GOTO(unlock, rc = -DER_ALREADY);
 
 	rc = daos_eq_lib_init();
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("failed to initialize eq_lib: %d\n", rc);
 		D_GOTO(unlock, rc);
+	}
 
 	rc = daos_rpc_register(dmg_rpcs, NULL, DAOS_DMG_MODULE);
 	if (rc != 0) {
+		D_ERROR("failed to register rpcs: %d\n", rc);
 		daos_eq_lib_fini();
 		D_GOTO(unlock, rc);
 	}

@@ -64,6 +64,20 @@ typedef struct {
 	void		*cs_csum;
 } daos_csum_buf_t;
 
+static inline void
+daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
+{
+	iov->iov_buf = buf;
+	iov->iov_len = iov->iov_buf_len = size;
+}
+
+static inline void
+daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
+{
+	csum->cs_csum = buf;
+	csum->cs_len = csum->cs_buf_len = size;
+}
+
 /** Generic hash format */
 typedef struct {
 	char		body[DAOS_HKEY_MAX];
@@ -73,6 +87,14 @@ typedef struct {
 typedef struct {
 	uint64_t	cookie;
 } daos_handle_t;
+
+#define DAOS_HDL_INVAL	((daos_handle_t){0})
+
+static inline bool
+daos_handle_is_inval(daos_handle_t hdl)
+{
+	return hdl.cookie == 0;
+}
 
 typedef uint32_t	daos_rank_t;
 

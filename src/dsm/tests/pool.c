@@ -19,9 +19,12 @@
  * (C) Copyright 2016 Intel Corporation.
  */
 /**
- * This file is part of dmg, a simple test case of dmg.
+ * This file is part of dsm
+ *
+ * dsm/tests/pool.c
  */
 
+#include <unistd.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -29,22 +32,39 @@
 #include <cmocka.h>
 
 #include <daos_mgmt.h>
+#include <daos_m.h>
 #include <daos_event.h>
 
 typedef struct {
 	daos_rank_t		ranks[8];
 	daos_rank_list_t	svc;
+	uuid_t			uuid;
 	daos_handle_t		eq;
 	bool			async;
 } test_arg_t;
 
-/** create/destroy pool on all tgts */
+/** connect to non-existing pool */
 static void
-pool_create_all(void **state)
+pool_connect_nonexist(void **state)
 {
 	test_arg_t	*arg = *state;
 	uuid_t		 uuid;
-	char		 uuid_str[64];
+	daos_handle_t	 poh;
+	int		 rc;
+
+	uuid_generate(uuid);
+	rc = dsm_pool_connect(uuid, NULL /* grp */, &arg->svc,
+			      DAOS_PC_RW, NULL /* failed */, &poh,
+			      NULL /* ev */);
+	assert_int_equal(rc, -DER_NONEXIST);
+}
+
+/** connect/disconnect to/from a valid pool */
+static void
+pool_connect(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_handle_t	 poh;
 	daos_event_t	 ev;
 	daos_event_t	*evp;
 	int		 rc;
@@ -54,37 +74,31 @@ pool_create_all(void **state)
 		assert_int_equal(rc, 0);
 	}
 
-	arg->svc.rl_nr.num_out = 0;
-
-	/** create container */
-	print_message("creating pool %ssynchronously ... ",
+	/** connect to pool */
+	print_message("connecting to pool %ssynchronously ... ",
 		      arg->async ? "a" : "");
-	rc = dmg_pool_create(0 /* mode */, 0 /* uid */, 0 /* gid */,
-			     "srv_grp" /* grp */, NULL /* tgts */,
-			     "pmem" /* dev */, 0 /* minimal size */,
-			     &arg->svc /* svc */, uuid,
-			     arg->async ? &ev : NULL);
+	rc = dsm_pool_connect(arg->uuid, NULL /* grp */, &arg->svc,
+			      DAOS_PC_RW, NULL /* failed */, &poh,
+			      arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {
-		/** wait for container creation */
+		/** wait for pool connection */
 		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
 		assert_int_equal(rc, 1);
 		assert_ptr_equal(evp, &ev);
 		assert_int_equal(ev.ev_error, 0);
 	}
+	print_message("success\n");
 
-	uuid_unparse_lower(uuid, uuid_str);
-	print_message("success uuid = %s\n", uuid_str);
-
-	/** destroy container */
-	print_message("destroying pool %ssynchronously ... ",
+	/** disconnect from pool */
+	print_message("disconnecting from pool %ssynchronously ... ",
 		      arg->async ? "a" : "");
-	rc = dmg_pool_destroy(uuid, "srv_grp", 1, arg->async ? &ev : NULL);
+	rc = dsm_pool_disconnect(poh, arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {
-		/** for container destroy */
+		/** wait for pool disconnection */
 		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
 		assert_int_equal(rc, 1);
 		assert_ptr_equal(evp, &ev);
@@ -97,7 +111,8 @@ pool_create_all(void **state)
 }
 
 static int
-async_enable(void **state) {
+async_enable(void **state)
+{
 	test_arg_t	*arg = *state;
 
 	arg->async = true;
@@ -105,32 +120,32 @@ async_enable(void **state) {
 }
 
 static int
-async_disable(void **state) {
+async_disable(void **state)
+{
 	test_arg_t	*arg = *state;
 
 	arg->async = false;
 	return 0;
 }
 
-static const struct CMUnitTest tests[] = {
-	{ "DMG1: create/destroy pool on all tgts",
-	  pool_create_all, async_disable, NULL},
-	{ "DMG2: create/destroy pool on all tgts (async)",
-	  pool_create_all, async_enable, NULL},
+static const struct CMUnitTest pool_tests[] = {
+	{ "DSM1: connect to non-existing pool",
+	  pool_connect_nonexist, NULL, NULL},
+	{ "DSM2: connect/disconnect to pool",
+	  pool_connect, async_disable, NULL},
+	{ "DSM3: connect/disconnect to pool (async)",
+	  pool_connect, async_enable, NULL},
 };
 
 static int
-setup(void **state) {
+setup(void **state)
+{
 	test_arg_t	*arg;
 	int		 rc;
 
 	arg = malloc(sizeof(test_arg_t));
 	if (arg == NULL)
 		return -1;
-
-	rc = dmg_init();
-	if (rc)
-		return rc;
 
 	rc = daos_eq_create(&arg->eq);
 	if (rc)
@@ -140,21 +155,26 @@ setup(void **state) {
 	arg->svc.rl_nr.num_out = 0;
 	arg->svc.rl_ranks = arg->ranks;
 
+	/** create pool with minimal size */
+	rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL, "pmem",
+			     0, &arg->svc, arg->uuid, NULL);
+	if (rc)
+		return rc;
+
 	*state = arg;
 	return 0;
 }
 
 static int
-teardown(void **state)
-{
+teardown(void **state) {
 	test_arg_t	*arg = *state;
 	int		 rc;
 
-	rc = daos_eq_destroy(arg->eq, 0);
+	rc = dmg_pool_destroy(arg->uuid, "srv_grp", 1, NULL);
 	if (rc)
 		return rc;
 
-	rc = dmg_fini();
+	rc = daos_eq_destroy(arg->eq, 0);
 	if (rc)
 		return rc;
 
@@ -163,19 +183,8 @@ teardown(void **state)
 }
 
 int
-main(int argc, char **argv)
+run_pool_test(void)
 {
-	int rc;
-
-	rc = cmocka_run_group_tests_name("DMG pool tests", tests,
-					 setup, teardown);
-
-	if (rc > 0)
-		/** some test failed, report failure */
-		return -1;
-
-	if (rc < 0)
-		return rc;
-
-	return 0;
+	return cmocka_run_group_tests_name("DSM pool tests", pool_tests,
+					   setup, teardown);
 }

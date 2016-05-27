@@ -4,8 +4,9 @@ Import('denv')
 
 denv.Append(CPPPATH = ['#/src/dsm', '#/src/server'])
 
-libraries = ['daos_common', 'daos_transport', 'daos_event', 'daos_mgmt']
-libraries += ['uuid']
+libraries = ['daos_common', 'daos_transport', 'daos_event']
+libraries += ['daos_mgmt', 'daos_m']
+libraries += ['uuid', 'pthread']
+libraries += ['cmocka']
 
-denv.Program('dsm_test', 'dsm_test.c',
-	     LIBS = [libraries, 'daos_m', 'pthread'])
+denv.Program('dsm_test', Glob('*.c'), LIBS = libraries)
