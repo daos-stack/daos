@@ -45,7 +45,7 @@ static int
 dsmc_obj_pool_container_uuid_get(daos_handle_t oh, uuid_t puuid,
 				 uuid_t cuuid, daos_unit_oid_t *do_id)
 {
-	struct pool_conn	*conn;
+	struct dsmc_pool	*pool;
 	struct dsmc_container	*dc;
 	struct dsmc_object	*dobj;
 
@@ -61,20 +61,20 @@ dsmc_obj_pool_container_uuid_get(daos_handle_t oh, uuid_t puuid,
 	}
 
 	D_ASSERT(!daos_handle_is_inval(dc->dc_pool_hdl));
-	conn = dsmc_handle2pool(dc->dc_pool_hdl);
-	if (conn == NULL) {
+	pool = dsmc_handle2pool(dc->dc_pool_hdl);
+	if (pool == NULL) {
 		dsmc_object_put(dobj);
 		dsmc_container_put(dc);
 		return -DER_NO_HDL;
 	}
 
-	uuid_copy(puuid, conn->pc_pool);
+	uuid_copy(puuid, pool->dp_pool);
 	uuid_copy(cuuid, dc->dc_uuid);
 
 	*do_id = dobj->do_id;
 	dsmc_object_put(dobj);
 	dsmc_container_put(dc);
-	pool_conn_put(conn);
+	dsmc_pool_put(pool);
 
 	return 0;
 }

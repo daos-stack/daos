@@ -32,23 +32,18 @@
  * pool, container, object etc */
 extern struct daos_hhash *dsmc_hhash;
 
-/*
- * Client pool handle
- *
- * This is called a connection to avoid potential confusion with the server
- * pool_hdl.
- */
-struct pool_conn {
-	struct daos_hlink pc_hlink;
+/* Client pool handle */
+struct dsmc_pool {
+	struct daos_hlink	dp_hlink;
 	/* container list of the pool */
-	daos_list_t	pc_co_list;
+	daos_list_t		dp_co_list;
 	/* lock for the container list */
-	pthread_rwlock_t pc_co_list_lock;
+	pthread_rwlock_t	dp_co_list_lock;
 	/* pool uuid */
-	uuid_t		pc_pool;
-	uuid_t		pc_pool_hdl;
-	uint64_t	pc_capas;
-	uint32_t	pc_disconnecting:1;
+	uuid_t			dp_pool;
+	uuid_t			dp_pool_hdl;
+	uint64_t		dp_capas;
+	uint32_t		dp_disconnecting:1;
 };
 
 /* container in dsm client cache */
@@ -95,7 +90,7 @@ dsmc_handle2container(daos_handle_t hdl)
 static inline void
 dsmc_container_add_cache(struct dsmc_container *dc, daos_handle_t *hdl)
 {
-	/* add pool_conn to hash and assign the cookie to hdl */
+	/* add pool to hash and assign the cookie to hdl */
 	daos_hhash_link_insert(dsmc_hhash, &dc->dc_hlink, 0);
 	daos_hhash_link_key(&dc->dc_hlink, &hdl->cookie);
 }
@@ -112,42 +107,42 @@ dsmc_container_put(struct dsmc_container *dc)
 	daos_hhash_link_putref(dsmc_hhash, &dc->dc_hlink);
 }
 
-static inline struct pool_conn*
-dsmc_handle2pool(daos_handle_t pch)
+static inline struct dsmc_pool *
+dsmc_handle2pool(daos_handle_t poh)
 {
 	struct daos_hlink *dlink;
 
-	dlink = daos_hhash_link_lookup(dsmc_hhash, pch.cookie);
+	dlink = daos_hhash_link_lookup(dsmc_hhash, poh.cookie);
 	if (dlink == NULL)
 		return NULL;
 
-	return container_of(dlink, struct pool_conn, pc_hlink);
+	return container_of(dlink, struct dsmc_pool, dp_hlink);
 }
 
 static inline void
-pool_conn_add_cache(struct pool_conn *pc, daos_handle_t *hdl)
+dsmc_pool_add_cache(struct dsmc_pool *pool, daos_handle_t *hdl)
 {
-	/* add pool_conn to hash and assign the cookie to hdl */
-	daos_hhash_link_insert(dsmc_hhash, &pc->pc_hlink, 0);
-	daos_hhash_link_key(&pc->pc_hlink, &hdl->cookie);
+	/* add pool to hash and assign the cookie to hdl */
+	daos_hhash_link_insert(dsmc_hhash, &pool->dp_hlink, 0);
+	daos_hhash_link_key(&pool->dp_hlink, &hdl->cookie);
 }
 
 static inline void
-pool_conn_del_cache(struct pool_conn *pc)
+dsmc_pool_del_cache(struct dsmc_pool *pool)
 {
-	daos_hhash_link_delete(dsmc_hhash, &pc->pc_hlink);
+	daos_hhash_link_delete(dsmc_hhash, &pool->dp_hlink);
 }
 
 static inline void
-pool_conn_put(struct pool_conn *pc)
+dsmc_pool_put(struct dsmc_pool *pool)
 {
-	daos_hhash_link_putref(dsmc_hhash, &pc->pc_hlink);
+	daos_hhash_link_putref(dsmc_hhash, &pool->dp_hlink);
 }
 
 static inline void
 dsmc_object_add_cache(struct dsmc_object *dobj, daos_handle_t *hdl)
 {
-	/* add pool_conn to hash and assign the cookie to hdl */
+	/* add obj to hash and assign the cookie to hdl */
 	daos_hhash_link_insert(dsmc_hhash, &dobj->do_hlink, 0);
 	daos_hhash_link_key(&dobj->do_hlink, &hdl->cookie);
 }
