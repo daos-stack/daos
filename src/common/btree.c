@@ -111,6 +111,8 @@ struct btr_context {
 	short				 tc_order;
 	/** cached tree depth, avoid loading from slow memory */
 	short				 tc_depth;
+	/** refcount, used by iterator */
+	unsigned short			 tc_ref;
 	/** cached tree class, avoid loading from slow memory */
 	unsigned short			 tc_class;
 	/** cached feature bits, avoid loading from slow memory */
@@ -180,11 +182,19 @@ btr_hdl2tcx(daos_handle_t toh)
 	return (struct btr_context *)toh.cookie;
 }
 
-/** destroy btree context (in volatile memory) */
-static void
-btr_context_destroy(struct btr_context *tcx)
+void
+btr_context_addref(struct btr_context *tcx)
 {
-	if (tcx != NULL)
+	tcx->tc_ref++;
+}
+
+/** release refcount on btree context (in volatile memory) */
+static void
+btr_context_decref(struct btr_context *tcx)
+{
+	D_ASSERT(tcx->tc_ref > 0);
+	tcx->tc_ref--;
+	if (tcx->tc_ref == 0)
 		D_FREE_PTR(tcx);
 }
 
@@ -234,12 +244,13 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	}
 
 	tcx->tc_trace = &tcx->tc_traces[BTR_TRACE_MAX - tcx->tc_depth];
+	tcx->tc_ref = 1;
 	*tcxp = tcx;
 	return 0;
 
  failed:
 	D_DEBUG(DF_MISC, "Failed to create tree context: %d\n", rc);
-	btr_context_destroy(tcx);
+	btr_context_decref(tcx);
 	return rc;
 }
 
@@ -1495,7 +1506,7 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 	*toh = btr_tcx2hdl(tcx);
 	return 0;
  failed:
-	btr_context_destroy(tcx);
+	btr_context_decref(tcx);
 	return rc;
 }
 
@@ -1569,7 +1580,7 @@ dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 	*toh = btr_tcx2hdl(tcx);
 	return 0;
  failed:
-	btr_context_destroy(tcx);
+	btr_context_decref(tcx);
 	return rc;
 }
 
@@ -1636,7 +1647,7 @@ dbtree_close(daos_handle_t toh)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	btr_context_destroy(tcx);
+	btr_context_decref(tcx);
 	return 0;
 }
 
@@ -1739,7 +1750,7 @@ dbtree_destroy(daos_handle_t toh)
 	else
 		rc = btr_tree_destroy(tcx);
 
-	btr_context_destroy(tcx);
+	btr_context_decref(tcx);
 	return rc;
 }
 
@@ -1782,12 +1793,17 @@ dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 
 	if (options & BTR_ITER_EMBEDDED) {
 		/* use the iterator embedded in btr_context */
-		itr = &tcx->tc_itr;
-		/* don't screw up others */
-		if (itr->it_state != BTR_ITR_NONE) {
-			D_DEBUG(DF_MISC, "Iterator is in using\n");
+		if (tcx->tc_ref != 1) { /* don't screw up others */
+			D_DEBUG(DF_MISC,
+				"The embedded iterator is in using\n");
 			return -DER_BUSY;
 		}
+
+		itr = &tcx->tc_itr;
+		D_ASSERT(itr->it_state == BTR_ITR_NONE);
+
+		btr_context_addref(tcx);
+		*ih = toh;
 
 	} else { /* create a private iterator */
 		rc = btr_context_clone(tcx, &tcx);
@@ -1795,11 +1811,10 @@ dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 			return rc;
 
 		itr = &tcx->tc_itr;
-		itr->it_private = true;
+		*ih = btr_tcx2hdl(tcx);
 	}
 
 	itr->it_state = BTR_ITR_INIT;
-	*ih = itr->it_private ? btr_tcx2hdl(tcx) : toh;
 	return 0;
 }
 
@@ -1819,9 +1834,7 @@ dbtree_iter_finish(daos_handle_t ih)
 	itr = &tcx->tc_itr;
 	itr->it_state = BTR_ITR_NONE;
 
-	if (itr->it_private)
-		btr_context_destroy(tcx);
-
+	btr_context_decref(tcx);
 	return 0;
 }
 
@@ -1965,6 +1978,7 @@ dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 
 	rc = btr_rec_fetch(tcx, rec, key, val);
 	if (rc == 0 && anchor != NULL) {
+		memset(anchor, 0, sizeof(*anchor));
 		memcpy(&anchor->body[0], &rec->rec_hkey[0],
 		       btr_hkey_size(tcx));
 	}

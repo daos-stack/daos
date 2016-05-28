@@ -67,62 +67,34 @@ typedef enum {
 	VOS_ITER_COUUID,
 	/** iterate objects within a container */
 	VOS_ITER_OBJ,
-	/** iterate extents and epoch validities of these extents */
-	VOS_ITER_BA,
-	/** iterate KVs and their epoch validities */
-	VOS_ITER_KV,
+	/** iterate all d-keys */
+	VOS_ITER_DKEY,
+	/** iterate all a-keys */
+	VOS_ITER_AKEY,
+	/** iterate record extents and epoch validities of these extents */
+	VOS_ITER_RECX,
 } vos_iter_type_t;
 
 /**
  * Parameters for initialising VOS iterator
  */
 typedef struct {
-	/** type of iterator */
-	vos_iter_type_t		ic_type;
 	/** pool connection handle or container open handle */
-	daos_handle_t		ic_hdl;
-	/**
-	 * Optional, object ID for iterator, it is required only for
-	 * VOS_ITER_BA and VOS_ITER_KV
-	 */
-	daos_obj_id_t		ic_oid;
+	daos_handle_t		ip_hdl;
+	/** Optional, object ID for VOS_ITER_DKEY */
+	daos_unit_oid_t		ip_oid;
+	/** distribution key for VOS_ITER_AKEY */
+	daos_dkey_t		ip_dkey;
+	/** attribute key for VOS_ITER_RECX */
+	daos_akey_t		ip_akey;
 	/** epoch validity range for the iterator */
-	daos_epoch_range_t	ic_epr;
-} vos_iter_cond_t;
-
-/**
- * Position anchor of a VOS iterator
- */
-typedef struct {
-	/** type of iterator */
-	vos_iter_type_t        ip_type;
-	union {
-		/** container UUID enumeration */
-		struct vos_ip_uuid{
-			uuid_t			uuid;
-		} ip_couuid;
-		/** object ID enumeration */
-		struct vos_ip_obj {
-			daos_obj_id_t		oid;
-		} ip_obj;
-		/** KV enumeration */
-		struct vos_ip_kv {
-			daos_hash_out_t		hout;
-		} ip_kv;
-		/** key range enumeration */
-		struct vos_ip_ba {
-			daos_recx_t		rext;
-			daos_epoch_range_t	per;
-		} ip_ba;
-	} u;
-} vos_iter_pos_t;
+	daos_epoch_range_t	ip_epr;
+} vos_iter_param_t;
 
 /**
  * Returned entry of a VOS iterator
  */
 typedef struct {
-	/** type of iterator */
-	vos_iter_type_t		ie_type;
 	/**
 	 * Returned epoch range. It is ignored for container iteration for the
 	 * time being.
@@ -130,25 +102,16 @@ typedef struct {
 	daos_epoch_range_t	ie_epr;
 	union {
 		/** Returned entry for container UUID iterator */
-		struct vos_ie_uuid {
-			uuid_t			uuid;
-		} ie_couuid;
-		/** Returned entry for object ID iterator */
-		struct vos_ie_obj {
-			daos_obj_id_t		oid;
-			vos_obj_md_t		osmd;
-		} ie_obj;
-		/** Returned entry for KV iterator */
-		struct vos_ie_kv {
-			daos_dkey_t		dkey;
-			daos_akey_t		akey;
-			daos_iov_t		val;
-		} ie_kv;
-		/** Returned entry for key range iterator */
-		struct vos_ie_kr {
-			daos_recx_t		rext;
-		} ie_ba;
-	} u;
+		uuid_t				ie_couuid;
+		daos_dkey_t			ie_dkey;
+		/** unused for now */
+		daos_akey_t			ie_akey;
+		struct {
+			daos_recx_t		ie_recx;
+			/** iovec to return data or ZC address */
+			daos_iov_t		ie_iov;
+		};
+	};
 } vos_iter_entry_t;
 
 #endif /* __VOS_TYPES_H__ */

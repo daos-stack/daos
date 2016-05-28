@@ -474,7 +474,7 @@ ibtr_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	if (ihkey1->ih_epoch < ihkey2->ih_epoch)
 		return -1;
 
-	if (ihkey1->ih_epoch < ihkey2->ih_epoch)
+	if (ihkey1->ih_epoch > ihkey2->ih_epoch)
 		return 1;
 
 	return 0;
@@ -532,8 +532,16 @@ static int
 ibtr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
+	struct idx_btr_key *ihkey = (struct idx_btr_key *)&rec->rec_hkey[0];
+	struct vos_key_bundle	*kbund;
+
 	/* TODO */
-	D_ERROR("No overwrite for the time being\n");
+	kbund = vos_iov2key_bundle(key_iov);
+	D_ERROR("No overwrite for now, idx "DF_U64", epoch "DF_U64
+		", irec "DF_U64", irec ep "DF_U64"\n",
+		kbund->kb_rex->rx_idx, kbund->kb_epr->epr_lo,
+		ihkey->ih_index, ihkey->ih_epoch);
+
 	return -DER_NO_PERM;
 }
 

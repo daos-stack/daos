@@ -408,4 +408,43 @@ vos_oref2umm(struct vos_obj_ref *oref)
 	return &oref->or_co->vc_phdl->vp_umm;
 }
 
+/**
+ * iterators
+ */
+enum vos_iter_state {
+	/** iterator has no valid cursor */
+	VOS_ITS_NONE,
+	/** iterator has valide cursor (user can call next/probe) */
+	VOS_ITS_OK,
+	/** end of iteration, no more entries */
+	VOS_ITS_END,
+};
+
+struct vos_iter_ops;
+
+/** the common part of vos iterators */
+struct vos_iterator {
+	vos_iter_type_t		 it_type;
+	enum vos_iter_state	 it_state;
+	struct vos_iter_ops	*it_ops;
+};
+
+/** function table for vos iterator */
+struct vos_iter_ops {
+	/** prepare a new iterator with the specified type and parameters */
+	int	(*iop_prepare)(vos_iter_type_t type, vos_iter_param_t *param,
+			       struct vos_iterator **iter_pp);
+	/** finalise a iterator */
+	int	(*iop_finish)(struct vos_iterator *iter);
+	/** Set the iterating cursor to the provided @anchor */
+	int	(*iop_probe)(struct vos_iterator *iter,
+			     daos_hash_out_t *anchor);
+	/** move forward the iterating cursor */
+	int	(*iop_next)(struct vos_iterator *iter);
+	/** fetch the record that the cursor points to */
+	int	(*iop_fetch)(struct vos_iterator *iter,
+			     vos_iter_entry_t *it_entry,
+			     daos_hash_out_t *anchor);
+};
+
 #endif /* __VOS_INTERNAL_H__ */

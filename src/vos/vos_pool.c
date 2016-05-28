@@ -212,6 +212,12 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 	vpool->vp_uma.uma_id = UMEM_CLASS_PMEM;
 	vpool->vp_uma.uma_u.pmem_pool = vpool->vp_ph;
 
+	rc = umem_class_init(&vpool->vp_uma, &vpool->vp_umm);
+	if (rc != 0) {
+		D_ERROR("Failed to instantiate umem: %d\n", rc);
+		goto exit;
+	}
+
 	D_DEBUG(DF_MISC, "vpool open %p\n", vpool);
 
 	root = vos_pool2root(vpool);

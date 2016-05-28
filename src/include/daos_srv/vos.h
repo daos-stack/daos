@@ -408,21 +408,34 @@ vos_obj_zc_vec2sgl(daos_handle_t ioh, unsigned int vec_at,
 /**
  * Initialise an iterator for VOS
  *
- * \param cond	[IN]	Conditions for initialising the iterator.
- *			For different iterator types (param::ic_type):
- *			- VOS_ITER_COUUID : param::ic_hdl is pool open handle
- *			- VOS_ITER_OBJ	  : param::ic_hdl is container handle
- *			- VOS_ITER_KV	  : param::ic_hdl is container handle,
- *					    param::ic_oid is ID of KV object.
- *			- VOS_ITER_BA	  : param::ic_hdl is container handle,
- *					    param::ic_oid is ID of byte array
- *					    object.
+ * \param param	[IN]	Parameters for the iterator.
+ *			For different iterator types:
+ *			- VOS_ITER_COUUID : param::ip_hdl is pool open handle
+ *
+ *			- VOS_ITER_OBJ	  : param::ip_hdl is container handle
+ *
+ *			- VOS_ITER_DKEY	  : param::ip_hdl is container handle,
+ *					    param::ip_oid is ID of KV object.
+ *
+ *			- VOS_ITER_AKEY	  : param::ip_hdl is container handle,
+ *					    param::ip_oid is ID of KV object.
+ *					    param::ip_dkey is the distribution
+ *					    key of the akeys to be iterated.
+ *					    (NB: a-key is unsupported for now)
+ *
+ *			- VOS_ITER_RECX	  : param::ip_hdl is container handle,
+ *					    param::ip_oid is ID of byte array
+ *					    param::ip_dkey is the distribution
+ *					    key of the akeys to be iterated.
+ *					    param::ip_akey is the attribute key
+ *					    key of the records to be iterated.
  * \param ih	[OUT]	Returned iterator handle
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_iter_prepare(vos_iter_cond_t *cond, daos_handle_t *ih);
+vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
+		 daos_handle_t *ih);
 
 /**
  * Release a iterator
@@ -435,34 +448,45 @@ int
 vos_iter_finish(daos_handle_t ih);
 
 /**
- * Move the iterator cursor to the specified position anchor \a pos if it is
- * not NULL, otherwise move the cursor to the next entry of current cursor.
+ * Set the iterator cursor to the specified position \a anchor if it is
+ * not NULL, otherwise move the cursor to the begin of the iterator.
+ * This function must be called before using vos_iter_next or vos_iter_fetch.
  *
  * \param ih	[IN]	Iterator handle.
  * \param pos	[IN]	Optional, position cursor to move to.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
- * \return		Zero on if no more entry
- *			1 if there is an entry
+ * \return		zero if there is an entry at/after @anchor
+ *			-DER_NONEXIST if no more entry
  *			negative value if error
  */
 int
-vos_iter_move(daos_handle_t ih, vos_iter_pos_t *pos, daos_event_t *ev);
+vos_iter_probe(daos_handle_t ih, daos_hash_out_t *anchor);
+
+/**
+ * Move forward the iterator cursor.
+ *
+ * \param ih	[IN]	Iterator handle.
+ *
+ * \return		Zero if there is an available entry
+ *			-DER_NONEXIST if no more entry
+ *			negative value if error
+ */
+int
+vos_iter_next(daos_handle_t ih);
 
 /**
  * Return the current data entry of the iterator.
  *
  * \param ih	[IN]	Iterator handle
  * \param entry [OUT]	Optional, returned data entry fo the current cursor
- * \param next	[OUT]	Optional, position anchor for the next entry,
- *			pos::ip_type will be set to VOS_ITER_NONE if there
- *			is no more entries.
+ * \param anchor [OUT]	Optional, position anchor for this entry
  *
- * \return		Zero on success, negative value if error
+ * \return		Zero on success
+ *			-DER_NONEXIST if no more entry
+ *			negative value if error
  */
 int
-vos_iter_current(daos_handle_t ih, vos_iter_entry_t *entry,
-		 vos_iter_pos_t *next);
+vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *entry,
+	       daos_hash_out_t *anchor);
 
 #endif /* __VOS_API_H */
