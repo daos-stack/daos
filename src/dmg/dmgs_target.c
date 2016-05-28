@@ -182,9 +182,9 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 
 	/**
 	 * Create one VOS file per thread
-	 * 8MB minimum per file
+	 * 16MB minimum per file
 	 */
-	size = max(tgt_size / dss_nthreads, 1 << 23);
+	size = max(tgt_size / dss_nthreads, 1 << 24);
 	/** tc_in->tc_tgt_dev is assumed to point at PMEM for now */
 
 	for (i = 0; i < dss_nthreads; i++) {

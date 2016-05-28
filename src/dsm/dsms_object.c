@@ -243,16 +243,16 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 	struct object_update_in	*oui;
 	struct dtp_single_out	*dso;
 	struct daos_ref		*dr = NULL;
-	daos_handle_t		dph = DAOS_HDL_INVAL;
-	daos_handle_t		dch = DAOS_HDL_INVAL;
+	daos_handle_t		 dph = DAOS_HDL_INVAL;
+	daos_handle_t		 dch = DAOS_HDL_INVAL;
 	daos_iov_t		*iovs = NULL;
 	daos_sg_list_t		*sgls = NULL;
-	dtp_bulk_opid_t		bulk_opid;
+	dtp_bulk_opid_t		 bulk_opid;
 	dtp_bulk_t		*remote_bulks;
-	dtp_bulk_op_t		bulk_op;
-	int			i = 0;
-	int			rc = 0;
-	int			rc1;
+	dtp_bulk_op_t		 bulk_op;
+	int			 i = 0;
+	int			 rc = 0;
+	int			 rc1;
 
 	oui = dtp_req_get(rpc);
 	if (oui == NULL)
@@ -292,6 +292,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		iovs[i].iov_len = bulk_len;
 		iovs[i].iov_buf_len = bulk_len;
 
+		/** FIXME must support more than one iov per sg */
 		sgls[i].sg_nr.num = 1;
 		sgls[i].sg_iovs = &iovs[i];
 	}
@@ -312,6 +313,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 				    oui->oui_iods.arrays, sgls, NULL);
 		bulk_op = DTP_BULK_GET;
 	} else {
+		D_ERROR("idx = %lu\n", ((daos_vec_iod_t *) oui->oui_iods.arrays)[0].vd_recxs[0].rx_idx);
 		rc = vos_obj_fetch(dch, oui->oui_oid, oui->oui_epoch,
 				    &oui->oui_dkey, oui->oui_nr,
 				    oui->oui_iods.arrays, sgls, NULL);

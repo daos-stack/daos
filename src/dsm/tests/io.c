@@ -142,6 +142,9 @@ insert(const char *dkey, const char *akey, uint64_t idx, void *val,
 	req->rex.rx_rsize = size;
 	req->rex.rx_idx = idx;
 
+	/** XXX: to be fixed */
+	req->erange.epr_lo = epoch;
+
 	/** execute update operation */
 	rc = dsm_obj_update(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
 			    req->arg->async ? &req->ev : NULL);
@@ -177,6 +180,9 @@ lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
 	req->rex.rx_rsize = size;
 	req->rex.rx_idx = idx;
 
+	/** XXX: to be fixed */
+	req->erange.epr_lo = epoch;
+
 	/** execute fetch operation */
 	rc = dsm_obj_fetch(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
 			   NULL, req->arg->async ? &req->ev : NULL);
@@ -204,10 +210,40 @@ obj_random(daos_unit_oid_t *oid)
 	oid->id_pad_32 = rand() % 16; /** must be nr target in the future */
 }
 
-/** i/o to variable akey size */
+/** i/o to variable idx offset */
 static void
 io_var_idx_offset(void **state)
 {
+	daos_unit_oid_t	 oid;
+	struct ioreq	 req;
+	daos_off_t	 offset;
+
+	/** choose random object */
+	obj_random(&oid);
+
+	ioreq_init(&req, oid, (test_arg_t *)*state);
+
+	for (offset = UINT64_MAX; offset > 0; offset >>= 8) {
+		char buf[10];
+
+		print_message("idx offset: %lu\n", offset);
+
+		/** Insert */
+		insert("var_idx_off_d", "var_idx_off_a", offset, "data",
+		       strlen("data") + 1, 0, &req);
+
+		/** Lookup */
+		memset(buf, 0, 10);
+		lookup("var_idx_off_d", "var_idx_off_a", offset, buf, 10, 0, &req);
+		/** XXX assert disabled until DAOS-95 is fixed  */
+		/* assert_int_equal(req.rex.rx_rsize, strlen(data) + 1); */
+
+		/** Verify data consistency */
+		assert_string_equal(buf, "data");
+	}
+
+	ioreq_fini(&req);
+
 }
 
 /** i/o to variable akey size */
@@ -417,8 +453,8 @@ static const struct CMUnitTest io_tests[] = {
 	  io_var_dkey_size, async_enable, NULL},
 	{ "DSM205: i/o with variable akey size",
 	  io_var_akey_size, async_disable, NULL},
-	{ "DSM205: i/o with variable index",
-	  io_var_idx_offset, async_disable, NULL},
+	{ "DSM206: i/o with variable index",
+	  io_var_idx_offset, async_enable, NULL},
 };
 
 static int

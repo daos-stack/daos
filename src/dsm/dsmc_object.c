@@ -113,18 +113,46 @@ out:
 	return rc;
 }
 
+static inline bool
+dsm_io_check(unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls)
+{
+	int i;
+
+	for (i = 0; i < nr; i++) {
+		int j;
+
+		if (iods[i].vd_name.iov_buf == NULL ||
+		    iods[i].vd_recxs == NULL || iods[i].vd_csums == NULL ||
+		    iods[i].vd_eprs == NULL)
+			/* XXX checksum & eprs should not be mandatory */
+			return false;
+
+		for (j = 0; j < iods[i].vd_nr; j++) {
+			if (iods[i].vd_csums[j].cs_csum == NULL)
+				return false;
+		}
+	}
+
+	return true;
+}
+
 static int
 dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	   unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	   daos_event_t *ev, enum dsm_operation op)
 {
-	dtp_endpoint_t		tgt_ep;
+	dtp_endpoint_t		 tgt_ep;
 	dtp_rpc_t		*req;
 	struct object_update_in *oui;
 	dtp_bulk_t		*bulks;
 	struct daos_op_sp	*sp;
-	int			i;
-	int			rc;
+	int			 i;
+	int			 rc;
+
+	/** sanity check input parameters */
+	if (dkey == NULL || dkey->iov_buf == NULL || nr == 0 ||
+	    !dsm_io_check(nr, iods, sgls))
+		return -DER_INVAL;
 
 	if (ev == NULL) {
 		rc = daos_event_priv_get(&ev);
@@ -150,6 +178,7 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 
 	oui->oui_epoch = epoch;
 	oui->oui_nr = nr;
+	/** FIXME: large dkey should be transferred via bulk */
 	oui->oui_dkey = *dkey;
 	/* FIXME: if iods is too long, then we needs to do bulk transfer
 	 * as well, but then we also needs to serialize the iods
