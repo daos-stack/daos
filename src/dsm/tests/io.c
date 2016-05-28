@@ -40,7 +40,7 @@
 #define UPDATE_DKEY "test_update dkey"
 #define UPDATE_AKEY_SIZE	32
 #define UPDATE_AKEY "test_update akey"
-#define UPDATE_BUF_SIZE 64
+#define UPDATE_BUF_SIZE		64
 #define UPDATE_CSUM_SIZE	32
 
 typedef struct {
@@ -99,7 +99,7 @@ io_simple(void **state)
 	sgl.sg_nr.num = 1;
 	sgl.sg_iovs = &val_iov;
 
-	daos_csum_set(&csum, &csum_buf[0], UPDATE_BUF_SIZE);
+	daos_csum_set(&csum, &csum_buf[0], UPDATE_CSUM_SIZE);
 
 	daos_iov_set(&dkey, &dkey_buf[0], UPDATE_DKEY_SIZE);
 	dkey.iov_len = strlen(UPDATE_DKEY);
