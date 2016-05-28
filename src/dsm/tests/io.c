@@ -36,11 +36,6 @@
 #include <daos_m.h>
 #include <daos_event.h>
 
-#define UPDATE_DKEY_SIZE	32
-#define UPDATE_DKEY "test_update dkey"
-#define UPDATE_AKEY_SIZE	32
-#define UPDATE_AKEY "test_update akey"
-#define UPDATE_BUF_SIZE		64
 #define UPDATE_CSUM_SIZE	32
 
 typedef struct {
@@ -54,121 +49,341 @@ typedef struct {
 	bool			async;
 } test_arg_t;
 
+struct ioreq {
+	daos_handle_t	 oh;
+
+	test_arg_t	*arg;
+
+	daos_event_t	 ev;
+
+	daos_dkey_t	 dkey;
+
+	daos_iov_t	 val_iov;
+
+	daos_csum_buf_t	 csum;
+	char		 csum_buf[UPDATE_CSUM_SIZE];
+
+	daos_vec_iod_t	 vio;
+	daos_recx_t	 rex;
+	daos_epoch_range_t erange;
+
+	daos_sg_list_t	 sgl;
+};
+
+static void
+ioreq_init(struct ioreq *req, daos_unit_oid_t oid, test_arg_t *arg)
+{
+	int rc;
+
+	memset(req, 0, sizeof(*req));
+
+	req->arg = arg;
+	if (arg->async) {
+		rc = daos_event_init(&req->ev, arg->eq, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	/** sgl */
+	req->sgl.sg_nr.num = 1;
+	req->sgl.sg_iovs = &req->val_iov;
+
+	/** csum */
+	daos_csum_set(&req->csum, &req->csum_buf[0], UPDATE_CSUM_SIZE);
+
+	/** record extent */
+	req->rex.rx_nr		= 1;
+	req->rex.rx_idx		= 0;
+
+	/** epoch range: required by the wire format */
+	req->erange.epr_lo = 0;
+	req->erange.epr_hi = DAOS_EPOCH_MAX;
+
+	/** vector I/O descriptor */
+	req->vio.vd_recxs	= &req->rex;
+	req->vio.vd_csums	= &req->csum;
+	req->vio.vd_nr		= 1;
+	req->vio.vd_eprs	= &req->erange;
+
+	/** open the object */
+	rc = dsm_obj_open(arg->coh, oid, 0, &req->oh, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
+ioreq_fini(struct ioreq *req)
+{
+	int rc;
+
+	rc = dsm_obj_close(req->oh, NULL);
+	assert_int_equal(rc, 0);
+
+	if (req->arg->async) {
+		rc = daos_event_fini(&req->ev);
+		assert_int_equal(rc, 0);
+	}
+}
+
+static void
+insert(const char *dkey, const char *akey, uint64_t idx, void *val,
+       daos_size_t size, daos_epoch_t epoch, struct ioreq *req)
+{
+	int		 rc;
+
+	/** dkey */
+	daos_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
+
+	/** akey */
+	daos_iov_set(&req->vio.vd_name, (void *)akey, strlen(akey));
+
+	/** val */
+	daos_iov_set(&req->val_iov, val, size);
+
+	/** record extent */
+	req->rex.rx_rsize = size;
+	req->rex.rx_idx = idx;
+
+	/** execute update operation */
+	rc = dsm_obj_update(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
+			    req->arg->async ? &req->ev : NULL);
+	assert_int_equal(rc, 0);
+
+	if (req->arg->async) {
+		daos_event_t	*evp;
+
+		/** wait for update completion */
+		rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		assert_int_equal(rc, 1);
+		assert_ptr_equal(evp, &req->ev);
+		assert_int_equal(evp->ev_error, 0);
+	}
+}
+
+static void
+lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
+       daos_size_t size, daos_epoch_t epoch, struct ioreq *req)
+{
+	int rc;
+
+	/** dkey */
+	daos_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
+
+	/** akey */
+	daos_iov_set(&req->vio.vd_name, (void *)akey, strlen(akey));
+
+	/** val */
+	daos_iov_set(&req->val_iov, val, size);
+
+	/** record extent */
+	req->rex.rx_rsize = size;
+	req->rex.rx_idx = idx;
+
+	/** execute fetch operation */
+	rc = dsm_obj_fetch(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
+			   NULL, req->arg->async ? &req->ev : NULL);
+	assert_int_equal(rc, 0);
+
+	if (req->arg->async) {
+		daos_event_t	*evp;
+
+		/** wait for fetch completion */
+		rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		assert_int_equal(rc, 1);
+		assert_ptr_equal(evp, &req->ev);
+		assert_int_equal(evp->ev_error, 0);
+	}
+}
+
+static inline void
+obj_random(daos_unit_oid_t *oid)
+{
+	/** choose random object */
+	oid->id_pub.lo = rand();
+	oid->id_pub.mid = rand();
+	oid->id_pub.hi = rand();
+	oid->id_shard = 0;
+	oid->id_pad_32 = rand() % 16; /** must be nr target in the future */
+}
+
+/** i/o to variable akey size */
+static void
+io_var_idx_offset(void **state)
+{
+}
+
+/** i/o to variable akey size */
+static void
+io_var_akey_size(void **state)
+{
+	daos_unit_oid_t	 oid;
+	struct ioreq	 req;
+	daos_size_t	 size;
+	const int	 max_size = 1 << 10;
+	char		*key;
+
+	/** akey not supported yet */
+	skip();
+
+	/** choose random object */
+	obj_random(&oid);
+
+	ioreq_init(&req, oid, (test_arg_t *)*state);
+
+	key = malloc(max_size);
+	assert_non_null(key);
+	memset(key, 'a', max_size);
+
+	for (size = 1; size <= max_size; size <<= 1) {
+		char buf[10];
+
+		print_message("akey size: %lu\n", size);
+
+		/** Insert */
+		key[size] = '\0';
+		insert("var_akey_size_d", key, 0, "data", strlen("data") + 1, 0,
+		       &req);
+
+		/** Lookup */
+		memset(buf, 0, 10);
+		lookup("var_dkey_size_d", key, 0, buf, 10, 0, &req);
+		/** XXX assert disabled until DAOS-95 is fixed  */
+		/* assert_int_equal(req.rex.rx_rsize, strlen(data) + 1); */
+
+		/** Verify data consistency */
+		assert_string_equal(buf, "data");
+		key[size] = 'b';
+	}
+
+	free(key);
+	ioreq_fini(&req);
+}
+
+/** i/o to variable dkey size */
+static void
+io_var_dkey_size(void **state)
+{
+	daos_unit_oid_t	 oid;
+	struct ioreq	 req;
+	daos_size_t	 size;
+	const int	 max_size = 1 << 10;
+	char		*key;
+
+	/** choose random object */
+	obj_random(&oid);
+
+	ioreq_init(&req, oid, (test_arg_t *)*state);
+
+	key = malloc(max_size);
+	assert_non_null(key);
+	memset(key, 'a', max_size);
+
+	for (size = 1; size <= max_size; size <<= 1) {
+		char buf[10];
+
+		print_message("dkey size: %lu\n", size);
+
+		/** Insert */
+		key[size] = '\0';
+		insert(key, "var_dkey_size_a", 0, "data", strlen("data") + 1, 0,
+		       &req);
+
+		/** Lookup */
+		memset(buf, 0, 10);
+		lookup(key, "var_dkey_size_a", 0, buf, 10, 0, &req);
+		/** XXX assert disabled until DAOS-95 is fixed  */
+		/* assert_int_equal(req.rex.rx_rsize, strlen(data) + 1); */
+
+		/** Verify data consistency */
+		assert_string_equal(buf, "data");
+		key[size] = 'b';
+	}
+
+	free(key);
+	ioreq_fini(&req);
+}
+
+/** i/o to variable aligned record size */
+static void
+io_var_rec_size(void **state)
+{
+	daos_unit_oid_t	 oid;
+	daos_epoch_t	 epoch;
+	struct ioreq	 req;
+	daos_size_t	 size;
+	const int	 max_size = 1 << 20;
+	char		*fetch_buf;
+	char		*update_buf;
+
+	/** choose random object */
+	obj_random(&oid);
+
+	/** random epoch as well */
+	epoch = rand();
+
+	ioreq_init(&req, oid, (test_arg_t *)*state);
+
+	fetch_buf = malloc(max_size);
+	assert_non_null(fetch_buf);
+
+	update_buf = malloc(max_size);
+	assert_non_null(update_buf);
+	memset(update_buf, (rand() % 94) + 33, max_size);
+
+	for (size = 1; size <= max_size; size <<= 1, epoch++) {
+		print_message("Record size: %lu val: \'%c\' epoch: %lu\n",
+			      size, update_buf[0], epoch);
+
+		/** Insert */
+		insert("var_rec_size_d", "var_rec_size_a", 0, update_buf,
+		       size, epoch, &req);
+
+		/** Lookup */
+		memset(fetch_buf, 0, max_size);
+		lookup("var_rec_size_d", "var_rec_size_a", 0, fetch_buf,
+		       max_size, epoch, &req);
+		/** XXX assert disabled until DAOS-95 is fixed  */
+		/* assert_int_equal(req.rex.rx_rsize, size); */
+
+		/** Verify data consistency */
+		assert_memory_equal(update_buf, fetch_buf, size);
+	}
+
+	free(update_buf);
+	free(fetch_buf);
+	ioreq_fini(&req);
+}
+
 /** very basic update/fetch with data verification */
 static void
 io_simple(void **state)
 {
-	test_arg_t	*arg = *state;
-	daos_handle_t	 oh;
-	daos_unit_oid_t	 oid = {{ .lo = 0, .mid = 1, .hi = 2}, 3};
-	daos_event_t	 ev;
-	daos_event_t	*evp;
-	daos_iov_t	 val_iov;
-	char		 dkey_buf[UPDATE_DKEY_SIZE];
-	char		 akey_buf[UPDATE_AKEY_SIZE];
-	char		 update_buf[UPDATE_BUF_SIZE];
-	char		 fetch_buf[UPDATE_BUF_SIZE];
-	char		 csum_buf[UPDATE_CSUM_SIZE];
-	daos_dkey_t	 dkey;
-	daos_akey_t	 akey;
-	daos_recx_t	 rex;
-	daos_epoch_t	 epoch;
-	daos_epoch_range_t erange;
-	daos_csum_buf_t	 csum;
-	daos_vec_iod_t	 vio;
-	daos_sg_list_t	 sgl;
-	int		 rc;
+	daos_unit_oid_t	 oid;
+	struct ioreq	 req;
+	const char	 dkey[] = "test_update dkey";
+	const char	 akey[] = "test_update akey";
+	const char	 rec[]  = "test_update record";
+	char		*buf;
 
-	/** choose random object */
-	oid.id_pub.lo = rand();
-	oid.id_pub.mid = rand();
-	oid.id_pub.hi = rand();
-	oid.id_shard = 0;
-	oid.id_pad_32 = rand() % 16; /** must be nr target in the future */
+	obj_random(&oid);
 
-	rc = dsm_obj_open(arg->coh, oid, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
+	ioreq_init(&req, oid, (test_arg_t *)*state);
 
-	memset(&vio, 0, sizeof(vio));
-	memset(&rex, 0, sizeof(rex));
-	memset(&sgl, 0, sizeof(sgl));
-	memset(&dkey, 0, sizeof(dkey));
-	memset(&akey, 0, sizeof(akey));
+	/** Insert */
+	print_message("Insert(e=0)/lookup(e=0)/verify simple kv record\n");
 
-	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
-	sgl.sg_nr.num = 1;
-	sgl.sg_iovs = &val_iov;
+	insert(dkey, akey, 0, (void *)rec, strlen(rec), 0, &req);
 
-	daos_csum_set(&csum, &csum_buf[0], UPDATE_CSUM_SIZE);
+	/** Lookup */
+	buf = calloc(64, 1);
+	assert_non_null(buf);
+	lookup(dkey, akey, 0, buf, 64, 0, &req);
 
-	daos_iov_set(&dkey, &dkey_buf[0], UPDATE_DKEY_SIZE);
-	dkey.iov_len = strlen(UPDATE_DKEY);
-	strncpy(dkey_buf, UPDATE_DKEY, strlen(UPDATE_DKEY));
-
-	daos_iov_set(&akey, &akey_buf[0], UPDATE_AKEY_SIZE);
-	akey.iov_len = strlen(UPDATE_AKEY);
-	strncpy(akey_buf, UPDATE_AKEY, strlen(UPDATE_AKEY));
-
-	memset(update_buf, (rand() % 94) + 33, UPDATE_BUF_SIZE);
-
-	rex.rx_nr	= 1;
-	rex.rx_rsize	= UPDATE_BUF_SIZE;
-	rex.rx_idx	= 0;
-
-	erange.epr_lo = 0;
-	erange.epr_hi = DAOS_EPOCH_MAX;
-
-	vio.vd_name	= akey;
-	vio.vd_recxs	= &rex;
-	vio.vd_csums	= &csum;
-	vio.vd_nr	= 1;
-	/** required for now since the wire format needs it */
-	vio.vd_eprs	= &erange;
-
-	epoch = rand();
-
-	if (arg->async) {
-		rc = daos_event_init(&ev, arg->eq, NULL);
-		assert_int_equal(rc, 0);
-	}
-
-	print_message("Update %s: %c\n", dkey_buf, update_buf[0]);
-
-	rc = dsm_obj_update(oh, epoch, &dkey, 1, &vio, &sgl,
-			    arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
-
-	if (arg->async) {
-		/** wait for update completion */
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
-	}
-
-	print_message("Fetch %s\n", dkey_buf);
-	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
-	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
-	rc = dsm_obj_fetch(oh, epoch, &dkey, 1, &vio, &sgl, NULL,
-			   arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
-
-	if (arg->async) {
-		/** wait for fetch completion */
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
-
-		rc = daos_event_fini(&ev);
-		assert_int_equal(rc, 0);
-	}
-
-	/** sanity check the data */
-	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
-
-	rc = dsm_obj_close(oh, NULL);
-	assert_int_equal(rc, 0);
+	/** Verify data consistency */
+	print_message("size = %lu\n", req.rex.rx_rsize);
+	/** XXX assert disabled until DAOS-95 is fixed  */
+	/* assert_int_equal(req.rex.rx_rsize, strlen(rec)); */
+	assert_memory_equal(buf, rec, strlen(rec));
+	free(buf);
+	ioreq_fini(&req);
 }
 
 static int
@@ -194,6 +409,16 @@ static const struct CMUnitTest io_tests[] = {
 	  io_simple, async_disable, NULL},
 	{ "DSM201: simple update/fetch/verify (async)",
 	  io_simple, async_enable, NULL},
+	{ "DSM202: i/o with variable rec size",
+	  io_var_rec_size, async_disable, NULL},
+	{ "DSM203: i/o with variable rec size(async)",
+	  io_var_rec_size, async_enable, NULL},
+	{ "DSM204: i/o with variable dkey size",
+	  io_var_dkey_size, async_enable, NULL},
+	{ "DSM205: i/o with variable akey size",
+	  io_var_akey_size, async_disable, NULL},
+	{ "DSM205: i/o with variable index",
+	  io_var_idx_offset, async_disable, NULL},
 };
 
 static int
