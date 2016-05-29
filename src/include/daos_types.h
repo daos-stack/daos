@@ -490,12 +490,8 @@ typedef struct {
 
 /** record status */
 enum {
-	/** no data */
-	DAOS_REC_NODATA		= 0,
-	/** record is punched */
-	DAOS_REC_PUNCHED	= -1,
 	/** reserved for cache miss */
-	DAOS_REC_MISSING	= -2,
+	DAOS_REC_MISSING	= -1,
 };
 
 /** Scatter/gather list for memory buffers */

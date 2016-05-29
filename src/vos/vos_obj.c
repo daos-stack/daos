@@ -262,7 +262,7 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_dkey_t *dkey,
 	if (rex_bak.rx_idx != rex->rx_idx) {
 		D_DEBUG(DF_VOS2, "Mismatched idx "DF_U64"/"DF_U64", no data\n",
 			rex_bak.rx_idx, rex->rx_idx);
-		iov->iov_len = DAOS_REC_NODATA;
+		iov->iov_len = 0;
 	}
 	return 0;
 }
@@ -288,7 +288,7 @@ vos_vec_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_dkey_t *dkey,
 		D_DEBUG(DF_VOS2,
 			"Cannot find dkey, set nodata for all records\n");
 		for (i = 0; i < vio->vd_nr; i++)
-			sgl->sg_iovs[i].iov_len = DAOS_REC_NODATA;
+			sgl->sg_iovs[i].iov_len = 0;
 		return 0;
 	}
 

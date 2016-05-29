@@ -126,8 +126,9 @@ vc_obj_fetch(daos_dkey_t *dkey, daos_vec_iod_t *vio, daos_sg_list_t *sgl)
 	D_ASSERT(vec_sgl->sg_nr.num == 1);
 	vec_iov = &vec_sgl->sg_iovs[0];
 
-	D_ASSERT(dst_iov->iov_len >= vec_iov->iov_len);
+	D_ASSERT(dst_iov->iov_buf_len >= vec_iov->iov_len);
 	memcpy(dst_iov->iov_buf, vec_iov->iov_buf, vec_iov->iov_len);
+	dst_iov->iov_len = vec_iov->iov_len;
 
 	rc = vos_obj_zc_submit(ioh, dkey, 1, vio, 0, NULL);
 	if (rc != 0)
@@ -194,7 +195,11 @@ vc_obj_rw_oper(bool update, char *str)
 		rex.rx_idx	= daos_hash_string_u32(key_str, dkey.iov_len);
 		rex.rx_idx	%= 100; /* more readable index */
 		if (update) {
-			D_DEBUG(DF_MISC, "Update %s : %s\n", key_buf, val_buf);
+			if (val_iov.iov_len == 0)
+				D_DEBUG(DF_MISC, "Punch %s\n", key_buf);
+			else
+				D_DEBUG(DF_MISC, "Update %s : %s\n",
+					key_buf, val_buf);
 
 			rex.rx_rsize = val_iov.iov_len;
 			rc = vc_obj_update(&dkey, &vio, &sgl);
@@ -207,14 +212,18 @@ vc_obj_rw_oper(bool update, char *str)
 
 		if (rc != 0) {
 			D_ERROR("Failed to %s record %s\n",
-				update ? "update" : "lookup", key_buf);
+				update ? "update" : "fetch", key_buf);
 			break;
 		}
-		D_PRINT("%s : %s\n", key_buf, val_buf);
+
+		if (val_iov.iov_len == 0)
+			D_PRINT("%s : [NULL]\n", key_buf);
+		else
+			D_PRINT("%s : %s\n", key_buf, val_buf);
 		count++;
 	}
 	D_PRINT("Totally %s %d records\n",
-	       update ? "updated" : "lookedup", count);
+	       update ? "updated" : "fetched", count);
 	return rc;
 }
 
@@ -297,6 +306,7 @@ vc_obj_iter_oper(bool test_anchor)
 
 			D_PRINT("\trecx %u : %s\n",
 				(unsigned int)recx_ent.ie_recx.rx_idx,
+				recx_ent.ie_iov.iov_len == 0 ? "[NULL]" :
 				(char *)recx_ent.ie_iov.iov_buf);
 
 			rc = vos_iter_next(recx_ih);
