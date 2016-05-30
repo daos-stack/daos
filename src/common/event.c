@@ -226,7 +226,7 @@ static void
 daos_eq_insert(struct daos_eq_private *eqx)
 {
 	D_ASSERT(daos_eq_hhash != NULL);
-	daos_hhash_link_insert(daos_eq_hhash, &eqx->eqx_hlink, 0);
+	daos_hhash_link_insert(daos_eq_hhash, &eqx->eqx_hlink, DAOS_HTYPE_EQ);
 }
 
 static void
@@ -729,7 +729,8 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 	/* Insert event to eq hash link */
 	daos_hhash_hlink_init(&evx->evx_eq_hlink, NULL);
 
-	daos_hhash_link_insert(eqx->eqx_events_hash, &evx->evx_eq_hlink, 0);
+	daos_hhash_link_insert(eqx->eqx_events_hash, &evx->evx_eq_hlink,
+			       DAOS_HTYPE_EQ);
 	DAOS_INIT_LIST_HEAD(&evx->evx_link);
 
 	/* inherit transport context from event queue */

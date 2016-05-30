@@ -91,7 +91,7 @@ static inline void
 dsmc_container_add_cache(struct dsmc_container *dc, daos_handle_t *hdl)
 {
 	/* add pool to hash and assign the cookie to hdl */
-	daos_hhash_link_insert(dsmc_hhash, &dc->dc_hlink, 0);
+	daos_hhash_link_insert(dsmc_hhash, &dc->dc_hlink, DAOS_HTYPE_CO);
 	daos_hhash_link_key(&dc->dc_hlink, &hdl->cookie);
 }
 
@@ -105,6 +105,12 @@ static inline void
 dsmc_container_put(struct dsmc_container *dc)
 {
 	daos_hhash_link_putref(dsmc_hhash, &dc->dc_hlink);
+}
+
+static inline int
+dsmc_handle_type(daos_handle_t hdl)
+{
+	return daos_hhash_key_type(hdl.cookie);
 }
 
 static inline struct dsmc_pool *
@@ -123,7 +129,7 @@ static inline void
 dsmc_pool_add_cache(struct dsmc_pool *pool, daos_handle_t *hdl)
 {
 	/* add pool to hash and assign the cookie to hdl */
-	daos_hhash_link_insert(dsmc_hhash, &pool->dp_hlink, 0);
+	daos_hhash_link_insert(dsmc_hhash, &pool->dp_hlink, DAOS_HTYPE_POOL);
 	daos_hhash_link_key(&pool->dp_hlink, &hdl->cookie);
 }
 
@@ -143,7 +149,7 @@ static inline void
 dsmc_object_add_cache(struct dsmc_object *dobj, daos_handle_t *hdl)
 {
 	/* add obj to hash and assign the cookie to hdl */
-	daos_hhash_link_insert(dsmc_hhash, &dobj->do_hlink, 0);
+	daos_hhash_link_insert(dsmc_hhash, &dobj->do_hlink, DAOS_HTYPE_OBJ);
 	daos_hhash_link_key(&dobj->do_hlink, &hdl->cookie);
 }
 

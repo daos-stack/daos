@@ -149,9 +149,10 @@ bool dhash_rec_unlinked(daos_list_t *rlink);
 #define DAOS_HTYPE_MASK		((1ULL << DAOS_HTYPE_BITS) - 1)
 
 enum {
-	DAOS_HTYPE_EQ		= 0,
-	DAOS_HTYPE_VOS_POOL	= 1,
-	DAOS_HTYPE_VOS_CO	= 2,
+	DAOS_HTYPE_EQ		= 0, /* event queue */
+	DAOS_HTYPE_POOL		= 1,
+	DAOS_HTYPE_CO		= 2, /* container */
+	DAOS_HTYPE_OBJ		= 3, /* object */
 	/* More to be added */
 };
 
@@ -186,5 +187,6 @@ bool daos_hhash_link_delete(struct daos_hhash *hhash,
 			    struct daos_hlink *hlink);
 bool daos_hhash_link_empty(struct daos_hlink *hlink);
 void daos_hhash_link_key(struct daos_hlink *hlink, uint64_t *key);
+int daos_hhash_key_type(uint64_t key);
 
 #endif /*__DAOS_HASH_H__*/

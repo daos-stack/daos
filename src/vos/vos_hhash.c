@@ -100,7 +100,7 @@ vos_pool_insert_handle(struct vp_hdl *vp_hdl,
 	D_ASSERT(poh != NULL);
 	daos_hhash_link_insert(vos_get_hhash(),
 			       &vp_hdl->vp_hlink,
-			       DAOS_HTYPE_VOS_POOL);
+			       DAOS_HTYPE_POOL);
 	daos_hhash_link_key(&vp_hdl->vp_hlink,
 			    &poh->cookie);
 }
@@ -154,7 +154,7 @@ vos_co_insert_handle(struct vc_hdl *co_hdl,
 	D_ASSERT(coh != NULL);
 	daos_hhash_link_insert(vos_get_hhash(),
 			       &co_hdl->vc_hlink,
-			       DAOS_HTYPE_VOS_CO);
+			       DAOS_HTYPE_CO);
 	daos_hhash_link_key(&co_hdl->vc_hlink,
 			    &coh->cookie);
 }

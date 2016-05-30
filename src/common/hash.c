@@ -775,6 +775,17 @@ hh_op_key_init(struct dhash_table *hhtab, daos_list_t *rlink, void *args)
 }
 
 static int
+hh_key_type(const void *key)
+{
+	uint64_t	cookie;
+
+	D_ASSERT(key != NULL);
+	cookie = *(uint64_t *)key;
+
+	return cookie & DAOS_HTYPE_MASK;
+}
+
+static int
 hh_op_key_get(struct dhash_table *hhtab, daos_list_t *rlink, void **key_pp)
 {
 	struct daos_hlink *hlink = hh_link2ptr(rlink);
@@ -922,4 +933,9 @@ void
 daos_hhash_link_key(struct daos_hlink *hlink, uint64_t *key)
 {
 	*key = hlink->hl_key;
+}
+
+int daos_hhash_key_type(uint64_t key)
+{
+	return hh_key_type(&key);
 }
