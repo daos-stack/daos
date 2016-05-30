@@ -54,39 +54,82 @@ dsm_fini(void);
  */
 
 /**
- * Convert a local pool or container handle to global representation data which
- * can be shared with peer processes. This function can only be called by the
- * process did collective open.
+ * Convert a local pool connection to global representation data which can be
+ * shared with peer processes.
  * If glob->iov_buf is set to NULL, the actual size of the global handle is
- * returned through global->iov_buf_len.
- * This function does not involve any comunicaation and does not block.
+ * returned through glob->iov_buf_len.
+ * This function does not involve any communication and does not block.
  *
- * \param loc	[IN]	valid local pool or container handle to be shared
- * \param glob	[OUT]	buffer to store handle information
+ * \param poh	[IN]	valid local pool connection handle to be shared
+ * \param glob	[OUT]	pointer to iov of the buffer to store handle information
  *
  * \return		These values will be returned:
  *			non-blocking mode:
  *			0		Success
  *			-DER_INVAL	Invalid parameter
- *			-DER_NONEXIST	Pool/Container handle is nonexistent
+ *			-DER_NO_HDL	Pool  handle is nonexistent
+ *			-DER_TRUNC	Buffer in \a glob is too short, larger
+ *					buffer required. In this case the
+ *					required buffer size is returned through
+ *					glob->iov_buf_len.
  */
 int
-dsm_local2global(daos_handle_t loc, daos_iov_t glob);
+dsm_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
+
+/**
+ * Create a local pool connection for global representation data.
+ *
+ * \param glob	[IN]	global (shared) representation of a collective handle
+ *			to be extracted
+ * \param poh	[OUT]	returned local pool connection handle
+ *
+ * \return		These values will be returned:
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+dsm_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
+
+/**
+ * Convert a local container handle to global representation data which can be
+ * shared with peer processes.
+ * If glob->iov_buf is set to NULL, the actual size of the global handle is
+ * returned through glob->iov_buf_len.
+ * This function does not involve any communication and does not block.
+ *
+ * \param coh	[IN]	valid local container handle to be shared
+ * \param glob	[OUT]	pointer to iov of the buffer to store handle information
+ *
+ * \return		These values will be returned:
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_HDL	Container handle is nonexistent
+ *			-DER_TRUNC	Buffer in \a glob is too short, larger
+ *					buffer required. In this case the
+ *					required buffer size is returned through
+ *					glob->iov_buf_len.
+ */
+int
+dsm_co_local2global(daos_handle_t coh, daos_iov_t *glob);
 
 /**
  * Create a local container handle for global representation data.
  *
- * \param glob	[IN]	lobal (shared) representation of a collective handle
+ * \param poh	[IN]	Pool connection handle the container belong to
+ * \param glob	[IN]	global (shared) representation of a collective handle
  *			to be extracted
- * \param loc	[OUT]	returned local pool or container handle
+ * \param coh	[OUT]	returned local container handle
  *
  * \return		These values will be returned:
  *			non-blocking mode:
  *			0		Success
  *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_HDL	Pool handle is nonexistent
  */
 int
-dsm_global2local(daos_iov_t glob, daos_handle_t *loc);
+dsm_co_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
 
 /**
  * Pool API

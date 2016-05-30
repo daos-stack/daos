@@ -29,6 +29,19 @@
 
 #define DTP_PROC_NULL (NULL)
 
+static inline hg_proc_op_t
+dtp_proc_op2hg(dtp_proc_op_t proc_op)
+{
+	if (proc_op == DTP_ENCODE)
+		return HG_ENCODE;
+	else if (proc_op == DTP_DECODE)
+		return HG_DECODE;
+	else if (proc_op == DTP_FREE)
+		return HG_FREE;
+	else
+		return -DER_INVAL;
+}
+
 int
 dtp_proc_get_op(dtp_proc_t proc, dtp_proc_op_t *proc_op)
 {

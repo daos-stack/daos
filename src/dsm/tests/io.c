@@ -26,33 +26,9 @@
  * dsm/tests/io.c
  */
 
-#include <string.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <stddef.h>
-#include <setjmp.h>
-#include <cmocka.h>
-
-#include <mpi.h>
-
-#include <daos_mgmt.h>
-#include <daos_m.h>
-#include <daos_event.h>
+#include "dsm_test.h"
 
 #define UPDATE_CSUM_SIZE	32
-
-typedef struct {
-	daos_rank_t		ranks[8];
-	daos_rank_list_t	svc;
-	uuid_t			uuid;
-	uuid_t			co_uuid;
-	daos_handle_t		eq;
-	daos_handle_t		poh;
-	daos_handle_t		coh;
-	bool			async;
-	daos_pool_info_t	pinfo;
-} test_arg_t;
 
 struct ioreq {
 	daos_handle_t	 oh;
@@ -212,7 +188,7 @@ static inline void
 obj_random(test_arg_t *arg, uint32_t *tgt, daos_unit_oid_t *oid)
 {
 	/** choose random object */
-	*tgt = rand() % arg->pinfo.pi_ntargets;
+	*tgt = rand() % arg->pool_info.pi_ntargets;
 	oid->id_pub.lo = rand();
 	oid->id_pub.mid = rand();
 	oid->id_pub.hi = rand();
@@ -486,24 +462,6 @@ io_simple(void **state)
 	ioreq_fini(&req);
 }
 
-static int
-async_enable(void **state)
-{
-	test_arg_t	*arg = *state;
-
-	arg->async = true;
-	return 0;
-}
-
-static int
-async_disable(void **state)
-{
-	test_arg_t	*arg = *state;
-
-	arg->async = false;
-	return 0;
-}
-
 static const struct CMUnitTest io_tests[] = {
 	{ "DSM200: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
@@ -543,14 +501,14 @@ setup(void **state)
 
 	/** create pool with minimal size */
 	rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL, "pmem",
-			     0, &arg->svc, arg->uuid, NULL);
+			     0, &arg->svc, arg->pool_uuid, NULL);
 	if (rc)
 		return rc;
 
 	/** connect to pool */
-	rc = dsm_pool_connect(arg->uuid, NULL /* grp */, &arg->svc,
+	rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
 			      DAOS_PC_RW, NULL /* failed */, &arg->poh,
-			      &arg->pinfo, NULL /* ev */);
+			      &arg->pool_info, NULL /* ev */);
 	if (rc)
 		return rc;
 
@@ -587,7 +545,7 @@ teardown(void **state) {
 	if (rc)
 		return rc;
 
-	rc = dmg_pool_destroy(arg->uuid, "srv_grp", 1, NULL);
+	rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
 	if (rc)
 		return rc;
 

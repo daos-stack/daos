@@ -540,3 +540,22 @@ err:
 		coh.cookie, rc);
 	return rc;
 }
+
+int
+dsmc_co_l2g(daos_handle_t loc, daos_iov_t *glob)
+{
+	struct dsmc_container	*cont;
+	int			rc = 0;
+
+	cont = dsmc_handle2container(loc);
+	if (cont == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+	/* TODO implement it in other patch */
+
+
+	dsmc_container_put(cont);
+out:
+	if (rc)
+		D_ERROR("dsm_co_l2g failed, rc: %d\n", rc);
+	return rc;
+}

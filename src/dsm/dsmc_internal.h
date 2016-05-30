@@ -29,13 +29,22 @@
 
 #include <daos/transport.h>
 #include <daos/hash.h>
+#include <daos/pool_map.h>
 
 /* hhash table for all of objects on daos client,
  * pool, container, object etc */
 extern struct daos_hhash *dsmc_hhash;
 
+enum {
+	DSMC_GLOB_POOL = 1234,
+	DSMC_GLOB_CO,
+};
+
+#define DSM_GLOB_HDL_MAGIC	(0x16da0386)
+
 /* Client pool handle */
 struct dsmc_pool {
+	/* link to dsmc_hhash */
 	struct daos_hlink	dp_hlink;
 	/* container list of the pool */
 	daos_list_t		dp_co_list;
@@ -45,9 +54,10 @@ struct dsmc_pool {
 	uuid_t			dp_pool;
 	uuid_t			dp_pool_hdl;
 	uint64_t		dp_capas;
-	uint32_t		dp_disconnecting:1;
 	struct pool_map	       *dp_map;
 	struct pool_buf	       *dp_map_buf;	/* TODO: pool_map => pool_buf */
+	uint32_t		dp_disconnecting:1,
+				dp_slave:1; /* generated via g2l */
 };
 
 /* container in dsm client cache */
@@ -65,7 +75,31 @@ struct dsmc_container {
 	uint64_t	  dc_capas;
 	/* pool handler of the container */
 	daos_handle_t	  dc_pool_hdl;
-	uint32_t	  dc_closing:1;
+	uint32_t	  dc_closing:1,
+			  dc_slave:1; /* generated via g2l */
+};
+
+/* Structure of global buffer for dmsc_pool */
+struct dsmc_pool_glob {
+	/* pool uuid and capas */
+	uuid_t			dpg_pool;
+	uuid_t			dpg_pool_hdl;
+	uint64_t		dpg_capas;
+	/* poolmap version */
+	uint32_t		dpg_map_version;
+	/* number of component of poolbuf, same as pool_buf::pb_nr */
+	uint32_t		dpg_map_pb_nr;
+	struct pool_buf	        dpg_map_buf[0];
+};
+
+struct dsmc_hdl_glob {
+	/* magic number, DSM_GLOB_HDL_MAGIC */
+	uint32_t			dhg_magic;
+	/* glob hdl type, must be DSMC_GLOB_POOL or DSMC_GLOB_CO */
+	uint32_t			dhg_type;
+	union {
+		struct dsmc_pool_glob	dhg_pool;
+	} u;
 };
 
 /* dsmc object in dsm client cache */
@@ -80,6 +114,13 @@ struct dsmc_object {
 	/* list to the container */
 	daos_list_t		do_co_list;
 };
+
+static inline daos_size_t
+dsmc_pool_glob_buf_size(unsigned int pb_nr)
+{
+	return offsetof(struct dsmc_hdl_glob, u.dhg_pool.dpg_map_buf) +
+	       pool_buf_size(pb_nr);
+}
 
 static inline struct dsmc_container*
 dsmc_handle2container(daos_handle_t hdl)
@@ -170,5 +211,7 @@ dsmc_object_put(struct dsmc_object *dobj)
 {
 	daos_hhash_link_putref(dsmc_hhash, &dobj->do_hlink);
 }
+
+int dsmc_co_l2g(daos_handle_t loc, daos_iov_t *glob);
 
 #endif /* __DSMC_INTERNAL_H__ */

@@ -33,7 +33,8 @@ static int client_wait(int num_retries, unsigned int wait_len_ms,
 {
 	int retry, rc;
 	for (retry = 0; retry < num_retries; retry++) {
-		rc = dtp_progress(gecho.dtp_ctx, wait_len_ms, NULL, NULL);
+		rc = dtp_progress(gecho.dtp_ctx, wait_len_ms * 1000, NULL,
+				  NULL);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("dtp_progress failed rc: %d.\n", rc);
 			break;

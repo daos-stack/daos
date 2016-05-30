@@ -351,6 +351,23 @@ pool_buf_alloc(unsigned int nr)
 	return buf;
 }
 
+/** duplicate a new pool buffer, will internally allocate memory */
+struct pool_buf *
+pool_buf_dup(struct pool_buf *buf)
+{
+	struct pool_buf *buf_alloc;
+
+	D_ASSERT(buf != NULL);
+
+	buf_alloc = pool_buf_alloc(buf->pb_nr);
+	if (buf_alloc == NULL)
+		return NULL;
+
+	memcpy(buf_alloc, buf, pool_buf_size(buf->pb_nr));
+
+	return buf_alloc;
+}
+
 /** free the pool buffer */
 void
 pool_buf_free(struct pool_buf *buf)

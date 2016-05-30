@@ -168,7 +168,7 @@ dmg_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	struct daos_op_sp		*sp;
 	int				 rc = 0;
 
-	if (uuid == NULL) {
+	if (uuid_is_null(uuid)) {
 		D_ERROR("Invalid parameter of uuid (NULL).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}

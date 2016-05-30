@@ -3,5 +3,5 @@
 Import('env')
 
 libs = ['daos_sr', 'daos_m', 'daos_mgmt', 'daos_common', 'daos_transport',
-	'mpi', 'uuid']
+	'daos_event', 'mpi', 'uuid']
 #env.Program('simple_array', 'simple_array.c', LIBS=libs)

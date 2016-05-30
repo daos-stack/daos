@@ -26,21 +26,7 @@
  * dsm/tests/dsm_test
  */
 
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <stddef.h>
-#include <setjmp.h>
-#include <cmocka.h>
-
-#include <mpi.h>
-
-#include <daos_mgmt.h>
-#include <daos_m.h>
-
-int run_pool_test(int rank, int size);
-int run_co_test(int rank, int size);
-int run_io_test(int rank, int size);
+#include "dsm_test.h"
 
 int
 main(int argc, char **argv)

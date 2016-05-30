@@ -45,8 +45,10 @@ dsr_fini(void);
  * Handle API
  */
 
-#define dsr_local2global	dsm_local2global
-#define dsr_global2local	dsm_global2local
+#define dsr_pool_local2global	dsm_pool_local2global
+#define dsr_pool_global2local	dsm_pool_global2local
+#define dsr_co_local2global	dsm_co_local2global
+#define dsr_co_global2local	dsm_co_global2local
 
 /**
  * Pool API is shared with DAOS-M

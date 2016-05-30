@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <byteswap.h>
 
 #include <daos_types.h>
 
@@ -310,6 +311,14 @@ daos_ref_dec_and_test(struct daos_ref *dr)
 #endif
 
 #define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
+
+/* byte swapper */
+#define D_SWAP16(x)	bswap_16(x)
+#define D_SWAP32(x)	bswap_32(x)
+#define D_SWAP64(x)	bswap_64(x)
+#define D_SWAP16S(x)	do { *(x) = D_SWAP16(*(x)); } while (0)
+#define D_SWAP32S(x)	do { *(x) = D_SWAP32(*(x)); } while (0)
+#define D_SWAP64S(x)	do { *(x) = D_SWAP64(*(x)); } while (0)
 
 static inline int
 daos_errno2der()

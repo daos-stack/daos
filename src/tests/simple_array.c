@@ -130,15 +130,26 @@ do {								\
 		FAIL(__VA_ARGS__);				\
 } while (0)
 
+enum {
+	HANDLE_POOL,
+	HANDLE_CO
+};
+
 void
-handle_share(daos_handle_t *hdl)
+handle_share(daos_handle_t *hdl, int type, daos_handle_t poh)
 {
 	daos_iov_t	ghdl = { NULL, 0, 0 };
 	int		rc;
 
-	if (rank == 0)
+	ASSERT(type == HANDLE_POOL || type == HANDLE_CO);
+
+	if (rank == 0) {
 		/** fetch size of global handle */
-		dsr_local2global(*hdl, ghdl);
+		if (type == HANDLE_POOL)
+			dsr_pool_local2global(*hdl, &ghdl);
+		else
+			dsr_co_local2global(*hdl, &ghdl);
+	}
 
 	/** broadcast size of global handle to all peers */
 	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
@@ -150,7 +161,10 @@ handle_share(daos_handle_t *hdl)
 
 	if (rank == 0) {
 		/** generate actual global handle to share with peer tasks */
-		dsr_local2global(*hdl, ghdl);
+		if (type == HANDLE_POOL)
+			rc = dsr_pool_local2global(*hdl, &ghdl);
+		else
+			rc = dsr_co_local2global(*hdl, &ghdl);
 		ASSERT(rc == 0, "local2global failed with %d", rc);
 	}
 
@@ -161,7 +175,11 @@ handle_share(daos_handle_t *hdl)
 
 	if (rank != 0) {
 		/** unpack global handle */
-		dsr_global2local(ghdl, hdl);
+		if (type == HANDLE_POOL)
+			rc = dsr_pool_global2local(ghdl, hdl);
+		else
+			rc = dsr_co_global2local(poh, ghdl, hdl);
+
 		ASSERT(rc == 0, "global2local failed with %d", rc);
 	}
 
@@ -555,7 +573,7 @@ main(int argc, char **argv)
 	}
 
 	/** share pool handle with peer tasks */
-	handle_share(&poh);
+	handle_share(&poh, HANDLE_POOL, poh /* useless */);
 
 	if (rank == 0) {
 		/** generate uuid for container */
@@ -572,7 +590,7 @@ main(int argc, char **argv)
 	}
 
 	/** share container handle with peer tasks */
-	handle_share(&coh);
+	handle_share(&coh, HANDLE_CO, poh);
 
 	/** generate objid */
 	dsr_objid_generate(&oid, cid);

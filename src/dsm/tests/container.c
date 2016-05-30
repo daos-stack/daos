@@ -26,28 +26,7 @@
  * dsm/tests/container.c
  */
 
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <stddef.h>
-#include <setjmp.h>
-#include <cmocka.h>
-
-#include <mpi.h>
-
-#include <daos_mgmt.h>
-#include <daos_m.h>
-#include <daos_event.h>
-#include <daos/common.h>
-
-typedef struct {
-	daos_rank_t		ranks[8];
-	daos_rank_list_t	svc;
-	uuid_t			uuid;
-	daos_handle_t		eq;
-	daos_handle_t		poh;
-	bool			async;
-} test_arg_t;
+#include "dsm_test.h"
 
 /** create/destroy container */
 static void
@@ -141,24 +120,6 @@ co_create(void **state)
 	print_message("container destroyed\n");
 }
 
-static int
-async_enable(void **state)
-{
-	test_arg_t	*arg = *state;
-
-	arg->async = true;
-	return 0;
-}
-
-static int
-async_disable(void **state)
-{
-	test_arg_t	*arg = *state;
-
-	arg->async = false;
-	return 0;
-}
-
 static const struct CMUnitTest co_tests[] = {
 	{ "DSM100: create/open/close/destroy container",
 	  co_create, async_disable, NULL},
@@ -186,12 +147,12 @@ setup(void **state)
 
 	/** create pool with minimal size */
 	rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL, "pmem",
-			     0, &arg->svc, arg->uuid, NULL);
+			     0, &arg->svc, arg->pool_uuid, NULL);
 	if (rc)
 		return rc;
 
 	/** connect to pool */
-	rc = dsm_pool_connect(arg->uuid, NULL /* grp */, &arg->svc,
+	rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
 			      DAOS_PC_RW, NULL /* failed */, &arg->poh,
 			      NULL /* info */, NULL /* ev */);
 	if (rc)
@@ -210,7 +171,7 @@ teardown(void **state) {
 	if (rc)
 		return rc;
 
-	rc = dmg_pool_destroy(arg->uuid, "srv_grp", 1, NULL);
+	rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
 	if (rc)
 		return rc;
 

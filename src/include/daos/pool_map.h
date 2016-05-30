@@ -136,11 +136,10 @@ static inline long pool_buf_size(unsigned int nr)
 }
 
 struct pool_buf *pool_buf_alloc(unsigned int nr);
+struct pool_buf *pool_buf_dup(struct pool_buf *buf);
 void pool_buf_free(struct pool_buf *buf);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
-int  pool_buf_pack(struct pool_buf *buf);
-int  pool_buf_unpack(struct pool_buf *buf);
 
 struct pool_map;
 int  pool_map_create(struct pool_buf *buf, uint32_t version,

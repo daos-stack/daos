@@ -26,7 +26,6 @@
 
 #include <daos_m.h>
 #include <unistd.h>
-#include <daos/pool_map.h>
 #include "dsm_rpc.h"
 #include "dsmc_internal.h"
 
@@ -287,7 +286,7 @@ pool_disconnect_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n",
+	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64" (on master).\n",
 		DP_UUID(pool->dp_pool), sp->sp_hdl.cookie);
 	dsmc_pool_del_cache(pool);
 	sp->sp_hdl.cookie = 0;
@@ -305,13 +304,7 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	dtp_rpc_t			*rpc;
 	struct pool_disconnect_in	*pdi;
 	struct daos_op_sp		*sp;
-	int				 rc;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
+	int				 rc = 0;
 
 	pool = dsmc_handle2pool(poh);
 	if (pool == NULL)
@@ -320,13 +313,6 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	D_DEBUG(DF_DSMC, DF_UUID": enter: hdl "DF_X64"\n",
 		DP_UUID(pool->dp_pool), poh.cookie);
 
-	uuid_clear(ep.ep_grp_id);
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
-
-	/* Let's remove it from the cache no matter if disconnect
-	 * succeeds to avoid others accessing the pool from the
-	 * cache at the same time. */
 	pthread_rwlock_rdlock(&pool->dp_co_list_lock);
 	if (!daos_list_empty(&pool->dp_co_list)) {
 		pthread_rwlock_unlock(&pool->dp_co_list_lock);
@@ -336,6 +322,27 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	pool->dp_disconnecting = 1;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
+	if (pool->dp_slave) {
+		D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64" (on slave).\n",
+			DP_UUID(pool->dp_pool), poh.cookie);
+		dsmc_pool_del_cache(pool);
+		poh.cookie = 0;
+		dsmc_pool_put(pool);
+		if (ev != NULL) {
+			daos_event_launch(ev, NULL, NULL);
+			daos_event_complete(ev, rc);
+		}
+		return rc;
+	}
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc)
+			return rc;
+	}
+	uuid_clear(ep.ep_grp_id);
+	ep.ep_rank = 0;
+	ep.ep_tag = 0;
 	rc = dsm_req_create(daos_ev2ctx(ev), ep, DSM_POOL_DISCONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
@@ -367,5 +374,221 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, ev);
+	return rc;
+}
+
+static inline void
+dsmc_swap_pool_buf(struct pool_buf *pb)
+{
+	struct pool_component	*pool_comp;
+	int			 i;
+
+	D_ASSERT(pb != NULL);
+
+	D_SWAP32S(&pb->pb_csum);
+	D_SWAP32S(&pb->pb_nr);
+	D_SWAP32S(&pb->pb_domain_nr);
+	D_SWAP32S(&pb->pb_target_nr);
+
+	for (i = 0; i < pb->pb_nr; i++) {
+		pool_comp = &pb->pb_comps[i];
+		D_SWAP16S(&pool_comp->co_type);
+		/* skip pool_comp->co_status (uint8_t) */
+		/* skip pool_comp->co_padding (uint8_t) */
+		D_SWAP32S(&pool_comp->co_id);
+		D_SWAP32S(&pool_comp->co_rank);
+		D_SWAP32S(&pool_comp->co_ver);
+		D_SWAP32S(&pool_comp->co_fseq);
+		D_SWAP32S(&pool_comp->co_nr);
+	}
+}
+
+static inline void
+dsmc_swap_pool_glob(struct dsmc_pool_glob *pool_glob)
+{
+	D_ASSERT(pool_glob != NULL);
+
+	/* skip pool_glob->dpg_pool (uuid_t) */
+	/* skip pool_glob->dpg_pool_hdl (uuid_t) */
+	D_SWAP64S(&pool_glob->dpg_capas);
+	D_SWAP32S(&pool_glob->dpg_map_version);
+	D_SWAP32S(&pool_glob->dpg_map_pb_nr);
+	dsmc_swap_pool_buf(pool_glob->dpg_map_buf);
+}
+
+static int
+dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
+{
+	struct dsmc_pool	*pool;
+	struct dsmc_hdl_glob	*hdl_glob;
+	struct dsmc_pool_glob	 *pool_glob;
+	daos_size_t		 glob_buf_size;
+	uint32_t		 pb_nr;
+	int			 rc = 0;
+
+	D_ASSERT(glob != NULL);
+
+	pool = dsmc_handle2pool(poh);
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+
+	pb_nr = pool->dp_map_buf->pb_nr;
+	glob_buf_size = dsmc_pool_glob_buf_size(pb_nr);
+	if (glob->iov_buf == NULL) {
+		glob->iov_buf_len = glob_buf_size;
+		D_GOTO(out_pool, rc = 0);
+	}
+	if (glob->iov_buf_len < glob_buf_size) {
+		D_ERROR("Larger glob buffer needed ("DF_U64" bytes provided, "
+			""DF_U64" required).\n", glob->iov_buf_len,
+			glob_buf_size);
+		glob->iov_buf_len = glob_buf_size;
+		D_GOTO(out_pool, rc = -DER_TRUNC);
+	}
+	glob->iov_len = glob_buf_size;
+
+	/* TODO: possible pool map changing during the l2g? */
+
+	/* init global handle */
+	hdl_glob = (struct dsmc_hdl_glob *)glob->iov_buf;
+	hdl_glob->dhg_magic = DSM_GLOB_HDL_MAGIC;
+	hdl_glob->dhg_type = DSMC_GLOB_POOL;
+	pool_glob = &hdl_glob->u.dhg_pool;
+	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
+	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
+	pool_glob->dpg_capas = pool->dp_capas;
+	pool_glob->dpg_map_version = pool_map_get_version(pool->dp_map);
+	pool_glob->dpg_map_pb_nr = pb_nr;
+	memcpy(pool_glob->dpg_map_buf, pool->dp_map_buf, pool_buf_size(pb_nr));
+
+out_pool:
+	dsmc_pool_put(pool);
+out:
+	if (rc != 0)
+		D_ERROR("dsmc_pool_l2g failed, rc: %d\n", rc);
+	return rc;
+}
+
+int
+dsm_pool_local2global(daos_handle_t poh, daos_iov_t *glob)
+{
+	int	rc = 0;
+
+	if (glob == NULL) {
+		D_DEBUG(DF_DSMC, "Invalid parameter, NULL glob pointer.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
+	    glob->iov_buf_len < glob->iov_len)) {
+		D_DEBUG(DF_DSMC, "Invalid parameter of glob, iov_buf %p, "
+			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
+			glob->iov_buf, glob->iov_buf_len, glob->iov_len);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (dsmc_handle_type(poh) != DAOS_HTYPE_POOL) {
+		D_DEBUG(DF_DSMC, "Bad type (%d) of poh handle.\n",
+			dsmc_handle_type(poh));
+		rc = -DER_INVAL;
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = dsmc_pool_l2g(poh, glob);
+
+out:
+	return rc;
+}
+
+static int
+dsmc_pool_g2l(struct dsmc_pool_glob *pool_glob, daos_handle_t *poh)
+{
+	struct dsmc_pool	*pool;
+	struct pool_buf		*map_buf;
+	int			rc = 0;
+
+	D_ASSERT(pool_glob != NULL);
+	D_ASSERT(poh != NULL);
+	map_buf = pool_glob->dpg_map_buf;
+	D_ASSERT(map_buf != NULL);
+
+	/** allocate and fill in pool connection */
+	pool = pool_alloc();
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	uuid_copy(pool->dp_pool, pool_glob->dpg_pool);
+	uuid_copy(pool->dp_pool_hdl, pool_glob->dpg_pool_hdl);
+	pool->dp_capas = pool_glob->dpg_capas;
+	/* set slave flag to avoid export it again */
+	pool->dp_slave = 1;
+
+	rc = pool_map_create(map_buf, pool_glob->dpg_map_version,
+			     &pool->dp_map);
+	if (rc != 0) {
+		D_ERROR("failed to create local pool map: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	pool->dp_map_buf = pool_buf_dup(map_buf);
+	if (pool->dp_map_buf == NULL) {
+		D_ERROR("pool_buf_dup failed.\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	/* add pool to hash */
+	dsmc_pool_add_cache(pool, poh);
+
+out:
+	if (rc != 0) {
+		D_ERROR("dsmc_pool_g2l failed, rc: %d.\n", rc);
+		/* in error case have not set pool->dp_map_buf */
+		pool_buf_free(map_buf);
+	}
+	if (pool != NULL)
+		dsmc_pool_put(pool);
+	return rc;
+}
+
+int
+dsm_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
+{
+	struct dsmc_hdl_glob	 *hdl_glob;
+	struct dsmc_pool_glob	 *pool_glob;
+	bool			  swap = false;
+	int			  rc = 0;
+
+	if (glob.iov_buf == NULL || glob.iov_buf_len == 0 ||
+	    glob.iov_len == 0 || glob.iov_buf_len < glob.iov_len) {
+		D_DEBUG(DF_DSMC, "Invalid parameter of glob, iov_buf %p, "
+			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
+			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (poh == NULL) {
+		D_DEBUG(DF_DSMC, "Invalid parameter, NULL poh.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	hdl_glob = (struct dsmc_hdl_glob *)glob.iov_buf;
+	if (hdl_glob->dhg_magic == D_SWAP32(DSM_GLOB_HDL_MAGIC)) {
+		swap = true;
+		D_SWAP32S(&hdl_glob->dhg_type);
+	} else if (hdl_glob->dhg_magic != DSM_GLOB_HDL_MAGIC) {
+		D_ERROR("Bad dhg_magic: 0x%x.\n", hdl_glob->dhg_magic);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (hdl_glob->dhg_type != DSMC_GLOB_POOL) {
+		D_ERROR("Bad dhg_type: %d.\n", hdl_glob->dhg_type);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	pool_glob = &hdl_glob->u.dhg_pool;
+	if (swap)
+		dsmc_swap_pool_glob(pool_glob);
+
+	rc = dsmc_pool_g2l(pool_glob, poh);
+	if (rc != 0)
+		D_ERROR("dsmc_pool_g2l failed, rc: %d.\n", rc);
+
+out:
 	return rc;
 }
