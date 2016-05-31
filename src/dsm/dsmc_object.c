@@ -354,3 +354,135 @@ dsm_obj_close(daos_handle_t oh, daos_event_t *ev)
 	dsmc_container_put(dc);
 	return 0;
 }
+
+struct enumerate_async_arg {
+	uint32_t	*eaa_nr;
+	daos_key_desc_t *eaa_kds;
+	daos_hash_out_t *eaa_anchor;
+};
+
+static int
+enumerate_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+{
+	struct object_enumerate_in *oei;
+	struct object_enumerate_out *oeo;
+	struct enumerate_async_arg *eaa;
+
+	oei = dtp_req_get(sp->sp_rpc);
+	D_ASSERT(oei != NULL);
+	eaa = sp->sp_arg;
+	D_ASSERT(eaa != NULL);
+	if (rc) {
+		D_ERROR("RPC error: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	oeo = dtp_reply_get(sp->sp_rpc);
+	if (oeo->oeo_ret < 0) {
+		D_ERROR("DSM_OBJ_ENUMERATE replied failed, rc: %d\n",
+			oeo->oeo_ret);
+		D_GOTO(out, rc = oeo->oeo_ret);
+	}
+
+	if (*eaa->eaa_nr < oeo->oeo_kds.count) {
+		D_ERROR("DSM_OBJ_ENUMERATE return more kds, rc: %d\n",
+			-DER_PROTO);
+		D_GOTO(out, rc = -DER_PROTO);
+	}
+
+	*(eaa->eaa_nr) = oeo->oeo_kds.count;
+	memcpy(eaa->eaa_kds, oeo->oeo_kds.arrays,
+	       sizeof(*eaa->eaa_kds) * oeo->oeo_kds.count);
+
+	memcpy(eaa->eaa_anchor->body, oeo->oeo_anchor.body,
+	       sizeof(oeo->oeo_anchor.body));
+out:
+	D_FREE_PTR(eaa);
+	dtp_bulk_free(oei->oei_bulk);
+
+	dtp_req_decref(sp->sp_rpc);
+	D_DEBUG(DF_MISC, "list key finish %d\n", rc);
+	return rc;
+}
+
+int
+dsm_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
+		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		  daos_hash_out_t *anchor, daos_event_t *ev)
+{
+	dtp_endpoint_t		tgt_ep;
+	dtp_rpc_t		*req;
+	struct dsmc_object	*dobj;
+	struct object_enumerate_in *oei;
+	struct enumerate_async_arg *eaa;
+	dtp_bulk_t		bulk;
+	struct daos_op_sp	*sp;
+	int			rc;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			return rc;
+	}
+
+	dobj = dsmc_handle2obj(oh);
+	if (dobj == NULL)
+		return -DER_NO_HDL;
+
+	tgt_ep.ep_rank = dobj->do_rank;
+	tgt_ep.ep_tag = 0;
+	rc = dsm_req_create(daos_ev2ctx(ev), tgt_ep, DSM_TGT_OBJ_ENUMERATE,
+			    &req);
+	if (rc != 0) {
+		dsmc_object_put(dobj);
+		return rc;
+	}
+
+	oei = dtp_req_get(req);
+	D_ASSERT(oei != NULL);
+
+	rc = dsmc_obj_pool_container_uuid_get(dobj,
+			oei->oei_pool_uuid, oei->oei_co_uuid,
+			&oei->oei_oid);
+	dsmc_object_put(dobj);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	oei->oei_epoch = epoch;
+	oei->oei_nr = *nr;
+	oei->oei_anchor = *anchor;
+
+	/* Create bulk */
+	rc = dtp_bulk_create(daos_ev2ctx(ev), sgl, DTP_BULK_RO, &bulk);
+	if (rc < 0)
+		D_GOTO(out, rc);
+
+	oei->oei_bulk = bulk;
+
+	sp = daos_ev2sp(ev);
+	dtp_req_addref(req);
+	sp->sp_rpc = req;
+	D_ALLOC_PTR(eaa);
+	if (eaa == NULL)
+		D_GOTO(out_bulk, rc = -DER_NOMEM);
+	eaa->eaa_nr = nr;
+	eaa->eaa_kds = kds;
+	eaa->eaa_anchor = anchor;
+	sp->sp_arg = eaa;
+
+	rc = daos_event_launch(ev, NULL, enumerate_cp);
+	if (rc != 0) {
+		dtp_req_decref(req);
+		D_GOTO(out_eaa, rc);
+	}
+
+	/** send the request */
+	return daos_rpc_send(req, ev);
+out_eaa:
+	D_FREE_PTR(eaa);
+out_bulk:
+	dtp_bulk_free(&bulk);
+out:
+	dtp_req_decref(req);
+	return rc;
+}

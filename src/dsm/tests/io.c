@@ -481,6 +481,90 @@ io_simple(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
+	  daos_hash_out_t *anchor, char *buf, int len, struct ioreq *req)
+{
+	int rc;
+
+	daos_iov_set(&req->val_iov, buf, len);
+	/** execute fetch operation */
+	rc = dsm_obj_list_dkey(req->oh, epoch, number, kds,
+			       &req->sgl, anchor,
+			       req->arg->async ? &req->ev : NULL);
+	assert_int_equal(rc, 0);
+
+	if (req->arg->async) {
+		daos_event_t	*evp;
+
+		/** wait for fetch completion */
+		rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		assert_int_equal(rc, 1);
+		assert_ptr_equal(evp, &req->ev);
+		assert_int_equal(evp->ev_error, 0);
+	}
+}
+
+/** very basic enumerate */
+static void
+enumerate_simple(void **state)
+{
+	test_arg_t	*arg = *state;
+	uint32_t	 tgt;
+	daos_unit_oid_t	 oid;
+	struct ioreq	 req;
+	uint32_t	number = 5;
+	daos_key_desc_t kds[5];
+	daos_hash_out_t hash_out;
+	char *buf;
+	char *ptr;
+	int total_keys = 0;
+	int i;
+
+	obj_random(arg, &tgt, &oid);
+
+	ioreq_init(&req, tgt, oid, (test_arg_t *)*state);
+
+	/** Insert record*/
+	print_message("Insert a few kv record\n");
+	insert("enumerate 1", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("enumerate 2", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("enumerate 3", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("enumerate 4", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("enumerate 5", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+
+	insert("enumerate 6", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("enumerate 7", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("enumerate 8", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("enumerate 9", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("enumerate 10", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+
+	memset(&hash_out, 0, sizeof(hash_out));
+	buf = calloc(512, 1);
+	/** enumerate records */
+	while (number > 0) {
+		enumerate(0, &number, kds, &hash_out, buf, 512, &req);
+		print_message("get key %s\n", buf);
+		ptr = buf;
+		total_keys += number;
+		for (i = 0; i < number; i++) {
+			char key[32];
+
+			snprintf(key, kds[i].kd_key_len + 1, ptr);
+			print_message("i %d key %s len %d\n", i, key,
+				     (int)kds[i].kd_key_len);
+			ptr += kds[i].kd_key_len;
+		}
+		if (daos_hash_is_eof(&hash_out))
+			break;
+	}
+
+	free(buf);
+	/** XXX Verify kds */
+	ioreq_fini(&req);
+	assert_int_equal(total_keys, 10);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "DSM200: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
@@ -498,6 +582,8 @@ static const struct CMUnitTest io_tests[] = {
 	  io_var_idx_offset, async_enable, NULL},
 	{ "DSM207: overwrite in different epoch",
 	  io_epoch_overwrite, async_enable, NULL},
+	{ "DSM208: simple enumerate", enumerate_simple,
+	  async_disable, NULL},
 };
 
 static int

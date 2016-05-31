@@ -120,6 +120,7 @@ int dsms_hdlr_cont_close(dtp_rpc_t *rpc);
  * dsms_object.c
  */
 int dsms_hdlr_object_rw(dtp_rpc_t *rpc);
+int dsms_hdlr_object_enumerate(dtp_rpc_t *rpc);
 
 int
 dsms_object_init();

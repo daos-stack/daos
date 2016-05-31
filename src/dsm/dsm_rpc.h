@@ -91,6 +91,7 @@ enum dsm_operation {
 
 	DSM_TGT_OBJ_UPDATE	= 70,
 	DSM_TGT_OBJ_FETCH	= 71,
+	DSM_TGT_OBJ_ENUMERATE	= 72,
 };
 
 struct pool_connect_in {
@@ -181,6 +182,25 @@ struct cont_close_in {
 
 struct cont_close_out {
 	int32_t	cco_ret;
+};
+
+/* object Enumerate in/out */
+struct object_enumerate_in {
+	daos_unit_oid_t oei_oid;
+	uuid_t		oei_co_uuid;
+	uuid_t		oei_pool_uuid;
+	uint64_t	oei_epoch;
+	uint32_t	oei_nr;
+	uint32_t	oei_pad;
+	daos_hash_out_t oei_anchor;
+	dtp_bulk_t	oei_bulk;
+};
+
+struct object_enumerate_out {
+	int	 oeo_ret;
+	int	 oeo_pad;
+	daos_hash_out_t oeo_anchor;
+	struct dtp_array oeo_kds;
 };
 
 int

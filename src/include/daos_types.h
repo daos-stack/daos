@@ -28,6 +28,7 @@
 #define DAOS_TYPES_H
 
 #include <stdint.h>
+#include <string.h>
 #include <stdbool.h>
 
 /** uuid_t */
@@ -85,6 +86,21 @@ daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
 typedef struct {
 	char		body[DAOS_HKEY_MAX];
 } daos_hash_out_t;
+
+#define DAOS_HASH_END "ffffffffffffffffffffffffffffffff"
+
+static inline void
+daos_hash_set_eof(daos_hash_out_t *hash_out)
+{
+	memset(hash_out->body, 'f', DAOS_HKEY_MAX);
+}
+
+static inline int
+daos_hash_is_eof(daos_hash_out_t *hash_out)
+{
+	return memcmp(hash_out->body, DAOS_HASH_END, DAOS_HKEY_MAX) == 0 ?
+	       true : false;
+}
 
 /** Generic handle for various DAOS components like container, object, etc. */
 typedef struct {

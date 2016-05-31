@@ -640,6 +640,36 @@ dtp_proc_daos_epoch_state_t(dtp_proc_t proc, daos_epoch_state_t *es)
 	return 0;
 }
 
+int
+dtp_proc_daos_hash_out_t(dtp_proc_t proc, daos_hash_out_t *hash)
+{
+	hg_return_t	hg_ret;
+
+	hg_ret = hg_proc_raw(proc, hash->body, sizeof(hash->body));
+
+	return (hg_ret == HG_SUCCESS) ? 0 : -DER_DTP_HG;
+}
+
+int
+dtp_proc_daos_key_desc_t(dtp_proc_t proc, daos_key_desc_t *key)
+{
+	hg_return_t	hg_ret;
+
+	hg_ret = hg_proc_uint64_t(proc, &key->kd_key_len);
+	if (hg_ret != HG_SUCCESS)
+		return -DER_DTP_HG;
+
+	hg_ret = hg_proc_uint32_t(proc, &key->kd_csum_type);
+	if (hg_ret != HG_SUCCESS)
+		return -DER_DTP_HG;
+
+	hg_ret = dtp_proc_uint16_t(proc, &key->kd_csum_len);
+	if (hg_ret != HG_SUCCESS)
+		return -DER_DTP_HG;
+
+	return 0;
+}
+
 struct dtp_msg_field DMF_UUID =
 	DEFINE_DTP_MSG("dtp_uuid", 0, sizeof(uuid_t),
 		       dtp_proc_uuid_t);
@@ -693,6 +723,11 @@ struct dtp_msg_field DMF_BULK_ARRAY =
 			sizeof(dtp_bulk_t),
 			dtp_proc_dtp_bulk_t);
 
+struct dtp_msg_field DMF_KEY_DESC_ARRAY =
+	DEFINE_DTP_MSG("dtp_key_desc", DMF_ARRAY_FLAG,
+			sizeof(daos_key_desc_t),
+			dtp_proc_daos_key_desc_t);
+
 struct dtp_msg_field DMF_EPOCH_STATE =
 	DEFINE_DTP_MSG("daos_epoch_state_t", 0, sizeof(daos_epoch_state_t),
 		       dtp_proc_daos_epoch_state_t);
@@ -700,6 +735,11 @@ struct dtp_msg_field DMF_EPOCH_STATE =
 struct dtp_msg_field *dtp_single_out_fields[] = {
 	&DMF_INT,	/* status */
 };
+
+struct dtp_msg_field DMF_DAOS_HASH_OUT =
+	DEFINE_DTP_MSG("daos_hash_out_t", 0,
+			sizeof(daos_hash_out_t),
+			dtp_proc_daos_hash_out_t);
 
 int
 dtp_proc_common_hdr(dtp_proc_t proc, struct dtp_common_hdr *hdr)
@@ -892,7 +932,7 @@ dtp_proc_internal(struct drf_field *drf,
 					break;
 
 				array_ptr = (char *)array_ptr +
-					    drf->drf_msg[j]->dmf_size;
+					    drf->drf_msg[i]->dmf_size;
 			}
 
 			if (proc_op == HG_FREE) {
