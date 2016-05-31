@@ -10,4 +10,4 @@ This revolution requires a radical rethink of the complete storage stack. To unl
 
 ## License
 
-DAOS is open-sourced software licensed under the GNU Lesser General Public License (LGPL). Please see the LICENSE file for more information.
+DAOS is open-sourced software licensed under the Apache License Version 2.0. Please see the LICENSE & NOTICE files for more information.
