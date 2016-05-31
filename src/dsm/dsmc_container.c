@@ -757,3 +757,167 @@ dsm_co_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 out:
 	return rc;
 }
+
+struct epoch_op_arg {
+	struct dsmc_pool       *eoa_pool;
+	struct dsmc_container  *eoa_cont;
+	daos_epoch_t	       *eoa_epoch;
+	daos_epoch_state_t     *eoa_state;
+};
+
+static int
+epoch_op_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+{
+	dtp_rpc_t	       *rpc = sp->sp_rpc;
+	dtp_opcode_t		opc = opc_get(rpc->dr_opc);
+	struct epoch_op_out    *out = dtp_reply_get(rpc);
+	struct epoch_op_arg    *arg = sp->sp_arg;
+
+	if (rc != 0) {
+		D_ERROR("RPC error during epoch operation %u: %d\n", opc, rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = out->eoo_cont_op_out.cpo_ret;
+	if (rc != 0) {
+		D_ERROR("epoch operation %u failed: %d\n", opc, rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, "completed epoch operation %u\n", opc);
+
+	if (opc == DSM_CONT_EPOCH_HOLD)
+		*arg->eoa_epoch = out->eoo_epoch_state.es_lhe;
+
+	if (arg->eoa_state != NULL)
+		*arg->eoa_state = out->eoo_epoch_state;
+
+out:
+	dtp_req_decref(rpc);
+	dsmc_pool_put(arg->eoa_pool);
+	dsmc_container_put(arg->eoa_cont);
+	D_FREE_PTR(arg);
+	return rc;
+}
+
+static int
+epoch_op(daos_handle_t coh, dtp_opcode_t opc, daos_epoch_t *epoch,
+	 daos_epoch_state_t *state, daos_event_t *ev)
+{
+	struct epoch_op_in     *in;
+	struct dsmc_pool       *pool;
+	struct dsmc_container  *cont;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t	       *rpc;
+	struct daos_op_sp      *sp;
+	struct epoch_op_arg    *arg;
+	int			rc;
+
+	/* Check incoming arguments. */
+	switch (opc) {
+	case DSM_CONT_EPOCH_QUERY:
+		D_ASSERT(epoch == NULL);
+		break;
+	case DSM_CONT_EPOCH_HOLD:
+		if (epoch == NULL)
+			D_GOTO(err, rc = -DER_INVAL);
+		if (*epoch == 0)
+			D_GOTO(err, rc = -DER_EP_RO);
+		break;
+	case DSM_CONT_EPOCH_COMMIT:
+		D_ASSERT(epoch != NULL);
+		if (*epoch == 0 || *epoch == DAOS_EPOCH_MAX)
+			D_GOTO(err, rc = -DER_INVAL);
+		break;
+	}
+
+	cont = dsmc_handle2container(coh);
+	if (cont == NULL)
+		D_GOTO(err, rc = -DER_NO_HDL);
+
+	pool = dsmc_handle2pool(cont->dc_pool_hdl);
+	D_ASSERT(pool != NULL);
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			D_GOTO(err_pool, rc);
+	}
+
+	D_DEBUG(DF_DSMC, DF_UUID"/"DF_UUID": "DF_UUID" epoch="DF_U64"\n",
+		DP_UUID(pool->dp_pool), DP_UUID(cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl), epoch == NULL ? 0 : *epoch);
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL) {
+		D_ERROR("failed to allocate epoch op arg");
+		D_GOTO(err_pool, rc = -DER_NOMEM);
+	}
+
+	arg->eoa_pool = pool;
+	arg->eoa_cont = cont;
+	arg->eoa_epoch = epoch;
+	arg->eoa_state = state;
+
+	/* To the only container service. */
+	uuid_clear(ep.ep_grp_id);
+	ep.ep_rank = 0;
+	ep.ep_tag = 0;
+
+	rc = dsm_req_create(daos_ev2ctx(ev), ep, opc, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: %d\n", rc);
+		D_GOTO(err_arg, rc);
+	}
+
+	in = dtp_req_get(rpc);
+	uuid_copy(in->eoi_cont_op_in.cpi_pool, pool->dp_pool);
+	uuid_copy(in->eoi_cont_op_in.cpi_cont, cont->dc_uuid);
+	uuid_copy(in->eoi_cont_op_in.cpi_cont_hdl, cont->dc_cont_hdl);
+	if (opc != DSM_CONT_EPOCH_QUERY)
+		in->eoi_epoch = *epoch;
+
+	sp = daos_ev2sp(ev);
+	dtp_req_addref(rpc);
+	sp->sp_rpc = rpc;
+	sp->sp_arg = arg;
+
+	rc = daos_event_launch(ev, NULL /* abort_cb */, epoch_op_complete);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	return daos_rpc_send(rpc, ev);
+
+err_rpc:
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
+err_arg:
+	D_FREE_PTR(arg);
+err_pool:
+	dsmc_pool_put(pool);
+	dsmc_container_put(cont);
+err:
+	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc,
+		epoch == NULL ? 0 : *epoch, rc);
+	return rc;
+}
+
+int
+dsm_epoch_query(daos_handle_t coh, daos_epoch_state_t *state, daos_event_t *ev)
+{
+	return epoch_op(coh, DSM_CONT_EPOCH_QUERY, NULL /* epoch */, state, ev);
+}
+
+int
+dsm_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
+	       daos_epoch_state_t *state, daos_event_t *ev)
+{
+	return epoch_op(coh, DSM_CONT_EPOCH_HOLD, epoch, state, ev);
+}
+
+int
+dsm_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
+		 daos_epoch_state_t *state, daos_event_t *ev)
+{
+	return epoch_op(coh, DSM_CONT_EPOCH_COMMIT, &epoch, state, ev);
+}

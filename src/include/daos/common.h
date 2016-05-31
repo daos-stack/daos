@@ -141,6 +141,10 @@ DP_UUID(const void *uuid)
 	return *p;
 }
 
+/* For prefixes of error messages about a container */
+#define DF_CONT			DF_UUID"/"DF_UUID": "
+#define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
+
 /* memory allocating macros */
 #define D_ALLOC(ptr, size)						 \
 	do {								 \

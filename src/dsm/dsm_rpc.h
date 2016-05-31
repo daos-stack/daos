@@ -189,6 +189,26 @@ struct cont_close_out {
 	int32_t	cco_ret;
 };
 
+struct cont_op_in {
+	uuid_t	cpi_pool;
+	uuid_t	cpi_cont;
+	uuid_t	cpi_cont_hdl;
+};
+
+struct cont_op_out {
+	int32_t	cpo_ret;
+};
+
+struct epoch_op_in {
+	struct cont_op_in	eoi_cont_op_in;
+	daos_epoch_t		eoi_epoch;
+};
+
+struct epoch_op_out {
+	struct cont_op_out	eoo_cont_op_out;
+	daos_epoch_state_t	eoo_epoch_state;
+};
+
 /* object Enumerate in/out */
 struct object_enumerate_in {
 	daos_unit_oid_t oei_oid;

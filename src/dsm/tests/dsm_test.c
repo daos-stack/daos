@@ -56,6 +56,7 @@ main(int argc, char **argv)
 	nr_failed = run_pool_test(rank, size);
 	nr_failed += run_co_test(rank, size);
 	nr_failed += run_io_test(rank, size);
+	nr_failed += run_epoch_test(rank, size);
 
 	rc = dsm_fini();
 	if (rc)

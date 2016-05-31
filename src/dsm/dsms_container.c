@@ -43,6 +43,7 @@
  * TODO: Store and look up this in a hash table.
  */
 struct cont_svc {
+	uuid_t			cs_pool;
 	uint64_t		cs_id;
 	struct mpool	       *cs_mpool;
 	pthread_rwlock_t	cs_rwlock;
@@ -56,6 +57,7 @@ cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 {
 	int rc;
 
+	uuid_copy(svc->cs_pool, pool_uuid);
 	svc->cs_id = id;
 	svc->cs_ref = 1;
 
@@ -343,11 +345,13 @@ ec_update(daos_handle_t kvsh, uint64_t epoch, int64_t delta)
 
 /* Container descriptor */
 struct cont {
-	daos_handle_t	c_cont;		/* container KVS */
-	daos_handle_t	c_hces;		/* HCE KVS */
-	daos_handle_t	c_lres;		/* LRE KVS */
-	daos_handle_t	c_lhes;		/* LHE KVS */
-	daos_handle_t	c_handles;	/* container handle KVS */
+	uuid_t			c_uuid;
+	struct cont_svc	       *c_svc;
+	daos_handle_t		c_cont;		/* container KVS */
+	daos_handle_t		c_hces;		/* HCE KVS */
+	daos_handle_t		c_lres;		/* LRE KVS */
+	daos_handle_t		c_lhes;		/* LHE KVS */
+	daos_handle_t		c_handles;	/* container handle KVS */
 };
 
 static int
@@ -361,6 +365,9 @@ cont_lookup(const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 		D_ERROR("failed to allocate container descriptor\n");
 		D_GOTO(err, rc = -DER_NOMEM);
 	}
+
+	uuid_copy(p->c_uuid, uuid);
+	p->c_svc = (struct cont_svc *)svc;
 
 	rc = dsms_kvs_uv_open_kvs(svc->cs_containers, uuid,
 				  svc->cs_mpool->mp_pmem, &p->c_cont);
@@ -452,7 +459,8 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 				sizeof(chdl));
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0 && chdl.ch_capas != in->coi_capas) {
-			D_ERROR("found conflicting container handle\n");
+			D_ERROR(DF_CONT"found conflicting container handle\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid));
 			rc = -DER_EXIST;
 		}
 		D_GOTO(out_cont, rc);
@@ -486,19 +494,25 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 
 		rc = ec_update(cont->c_hces, chdl.ch_hce, 1 /* delta */);
 		if (rc != 0) {
-			D_ERROR("failed to update hce kvs: %d\n", rc);
+			D_ERROR(DF_CONT"failed to update hce kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_update(cont->c_lres, chdl.ch_lre, 1 /* delta */);
 		if (rc != 0) {
-			D_ERROR("failed to update lre kvs: %d\n", rc);
+			D_ERROR(DF_CONT"failed to update lre kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_update(cont->c_lhes, chdl.ch_lhe, 1 /* delta */);
 		if (rc != 0) {
-			D_ERROR("failed to update lhe kvs: %d\n", rc);
+			D_ERROR(DF_CONT"failed to update lhe kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
 			pmemobj_tx_abort(rc);
 		}
 	} TX_ONABORT {
@@ -584,19 +598,25 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 
 		rc = ec_update(cont->c_hces, chdl.ch_hce, -1 /* delta */);
 		if (rc != 0) {
-			D_ERROR("failed to update hce kvs: %d\n", rc);
+			D_ERROR(DF_CONT"failed to update hce kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_update(cont->c_lres, chdl.ch_lre, -1 /* delta */);
 		if (rc != 0) {
-			D_ERROR("failed to update lre kvs: %d\n", rc);
+			D_ERROR(DF_CONT"failed to update lre kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_update(cont->c_lhes, chdl.ch_lhe, -1 /* delta */);
 		if (rc != 0) {
-			D_ERROR("failed to update lhe kvs: %d\n", rc);
+			D_ERROR(DF_CONT"failed to update lhe kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
 			pmemobj_tx_abort(rc);
 		}
 
@@ -619,4 +639,248 @@ out:
 	D_DEBUG(DF_DSMS, "leave: rc=%d\n", rc);
 	out->cco_ret = rc;
 	return dtp_reply_send(rpc);
+}
+
+typedef int (*cont_op_hdlr_t)(struct cont_svc *svc, struct cont *cont,
+			      struct container_hdl *hdl, void *input,
+			      void *output);
+
+/*
+ * TODO: Support more than one container handles. E.g., update GHCE if the
+ * client is releasing the previous hold.
+ */
+
+static void
+epoch_state_set(struct container_hdl *hdl, daos_epoch_state_t *state)
+{
+	state->es_hce = hdl->ch_hce;
+	state->es_lre = hdl->ch_lre;
+	state->es_lhe = hdl->ch_lhe;
+	state->es_glb_hce = hdl->ch_hce;
+	state->es_glb_lre = hdl->ch_lre;
+	state->es_glb_hpce = hdl->ch_hce;
+}
+
+static int
+cont_epoch_query(struct cont_svc *svc, struct cont *cont,
+		 struct container_hdl *hdl, void *input, void *output)
+{
+	struct epoch_op_out    *out = output;
+
+	epoch_state_set(hdl, &out->eoo_epoch_state);
+	return 0;
+}
+
+static int
+cont_epoch_hold(struct cont_svc *svc, struct cont *cont,
+		struct container_hdl *hdl, void *input, void *output)
+{
+	struct epoch_op_in     *in = input;
+	struct epoch_op_out    *out = output;
+	daos_epoch_t		lhe = hdl->ch_lhe;
+	daos_epoch_t		ghpce = hdl->ch_hce;
+	int			rc = 0;
+
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+
+	if (in->eoi_epoch == hdl->ch_lhe)
+		return 0;
+
+	if (in->eoi_epoch <= ghpce)
+		hdl->ch_lhe = ghpce + 1;
+	else
+		hdl->ch_lhe = in->eoi_epoch;
+
+	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
+
+	TX_BEGIN(svc->cs_mpool->mp_pmem) {
+		rc = dsms_kvs_uv_update(cont->c_handles,
+					in->eoi_cont_op_in.cpi_cont_hdl, hdl,
+					sizeof(*hdl));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+
+		rc = ec_update(cont->c_lhes, lhe, -1 /* delta */);
+		if (rc != 0) {
+			D_ERROR(DF_CONT"failed to remove original lhe: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
+			pmemobj_tx_abort(rc);
+		}
+
+		rc = ec_update(cont->c_lhes, hdl->ch_lhe, 1 /* delta */);
+		if (rc != 0) {
+			D_ERROR(DF_CONT"failed to add new lhe: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
+			pmemobj_tx_abort(rc);
+		}
+	} TX_ONABORT {
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
+			rc = -DER_NOSPACE;
+	} TX_END
+
+	if (rc != 0)
+		hdl->ch_lhe = lhe;
+
+	epoch_state_set(hdl, &out->eoo_epoch_state);
+	return rc;
+}
+
+static int
+cont_epoch_commit(struct cont_svc *svc, struct cont *cont,
+		  struct container_hdl *hdl, void *input, void *output)
+{
+	struct epoch_op_in     *in = input;
+	struct epoch_op_out    *out = output;
+	daos_epoch_t		hce = hdl->ch_hce;
+	daos_epoch_t		lhe = hdl->ch_lhe;
+	int			rc = 0;
+
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+
+	if (in->eoi_epoch <= hdl->ch_hce)
+		return 0;
+
+	if (in->eoi_epoch < hdl->ch_lhe)
+		return -DER_EP_RO;
+
+	hdl->ch_hce = in->eoi_epoch;
+	hdl->ch_lhe = hdl->ch_hce + 1;
+
+	D_DEBUG(DF_DSMS, "hce="DF_U64" hce'="DF_U64"\n", hce, hdl->ch_hce);
+
+	TX_BEGIN(svc->cs_mpool->mp_pmem) {
+		rc = dsms_kvs_uv_update(cont->c_handles,
+					in->eoi_cont_op_in.cpi_cont_hdl, hdl,
+					sizeof(*hdl));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+
+		rc = ec_update(cont->c_hces, hce, -1 /* delta */);
+		if (rc != 0) {
+			D_ERROR(DF_CONT"failed to remove original hce: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
+			pmemobj_tx_abort(rc);
+		}
+
+		rc = ec_update(cont->c_hces, hdl->ch_hce, 1 /* delta */);
+		if (rc != 0) {
+			D_ERROR(DF_CONT"failed to add new hce: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
+			pmemobj_tx_abort(rc);
+		}
+
+		rc = ec_update(cont->c_lhes, lhe, -1 /* delta */);
+		if (rc != 0) {
+			D_ERROR(DF_CONT"failed to remove original lhe: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
+			pmemobj_tx_abort(rc);
+		}
+
+		rc = ec_update(cont->c_lhes, hdl->ch_lhe, 1 /* delta */);
+		if (rc != 0) {
+			D_ERROR(DF_CONT"failed to add new lhe: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
+			pmemobj_tx_abort(rc);
+		}
+
+		rc = dsms_kvs_nv_update(cont->c_cont, CONT_GHCE, &hdl->ch_hce,
+					sizeof(hdl->ch_hce));
+		if (rc != 0) {
+			D_ERROR(DF_CONT"failed to update ghce: %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				rc);
+			pmemobj_tx_abort(rc);
+		}
+	} TX_ONABORT {
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
+			rc = -DER_NOSPACE;
+	} TX_END
+
+	if (rc != 0) {
+		hdl->ch_lhe = lhe;
+		hdl->ch_hce = hce;
+	}
+
+	epoch_state_set(hdl, &out->eoo_epoch_state);
+	return rc;
+}
+
+int
+dsms_hdlr_cont_op(dtp_rpc_t *rpc)
+{
+	struct cont_op_in      *in = dtp_req_get(rpc);
+	struct cont_op_out     *out = dtp_reply_get(rpc);
+	struct cont_svc	       *svc;
+	struct cont	       *cont;
+	struct container_hdl	hdl;
+	cont_op_hdlr_t		hdlr;
+	int			rc;
+
+	D_DEBUG(DF_DSMS, "pool="DF_UUID" cont="DF_UUID" cont_hdl="DF_UUID"\n",
+		DP_UUID(in->cpi_pool), DP_UUID(in->cpi_cont),
+		DP_UUID(in->cpi_cont_hdl));
+
+	rc = cont_svc_lookup(in->cpi_pool, 0 /* id */, &svc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	pthread_rwlock_wrlock(&svc->cs_rwlock);
+
+	rc = cont_lookup(svc, in->cpi_cont, &cont);
+	if (rc != 0)
+		D_GOTO(out_rwlock, rc);
+
+	/* Verify the container handle. */
+	rc = dsms_kvs_uv_lookup(cont->c_handles, in->cpi_cont_hdl, &hdl,
+				sizeof(hdl));
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST) {
+			D_ERROR(DF_CONT"rejecting unauthorized operation: "
+				DF_UUID"\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				DP_UUID(in->cpi_cont_hdl));
+			rc = -DER_NO_PERM;
+		} else {
+			D_ERROR(DF_CONT"failed to look up container handle "
+				DF_UUID": %d\n",
+				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				DP_UUID(in->cpi_cont_hdl), rc);
+		}
+		D_GOTO(out_cont, rc);
+	}
+
+	switch (opc_get(rpc->dr_opc)) {
+	case DSM_CONT_EPOCH_QUERY:
+		hdlr = cont_epoch_query;
+		break;
+	case DSM_CONT_EPOCH_HOLD:
+		hdlr = cont_epoch_hold;
+		break;
+	case DSM_CONT_EPOCH_COMMIT:
+		hdlr = cont_epoch_commit;
+		break;
+	default:
+		D_ASSERT(0);
+	}
+
+	rc = hdlr(svc, cont, &hdl, in, out);
+
+out_cont:
+	cont_put(cont);
+out_rwlock:
+	pthread_rwlock_unlock(&svc->cs_rwlock);
+	cont_svc_put(svc);
+out:
+	D_DEBUG(DF_DSMS, "leave: rc=%d\n", rc);
+	out->cpo_ret = rc;
+	rc = dtp_reply_send(rpc);
+	return rc;
 }

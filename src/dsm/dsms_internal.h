@@ -115,6 +115,7 @@ int dsms_hdlr_cont_create(dtp_rpc_t *rpc);
 int dsms_hdlr_cont_destroy(dtp_rpc_t *rpc);
 int dsms_hdlr_cont_open(dtp_rpc_t *rpc);
 int dsms_hdlr_cont_close(dtp_rpc_t *rpc);
+int dsms_hdlr_cont_op(dtp_rpc_t *rpc);
 
 /*
  * dsms_object.c

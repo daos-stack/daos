@@ -55,6 +55,7 @@ typedef struct {
 	daos_handle_t		poh;
 	daos_handle_t		coh;
 	daos_pool_info_t	pool_info;
+	daos_co_info_t		co_info;
 	bool			async;
 	bool			hdl_share;
 } test_arg_t;
@@ -89,6 +90,7 @@ hdl_share_enable(void **state)
 int run_pool_test(int rank, int size);
 int run_co_test(int rank, int size);
 int run_io_test(int rank, int size);
+int run_epoch_test(int rank, int size);
 
 enum {
 	HANDLE_POOL,

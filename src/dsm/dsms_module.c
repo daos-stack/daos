@@ -86,6 +86,15 @@ static struct daos_rpc_handler dsms_handlers[] = {
 		.dr_opc		= DSM_CONT_CLOSE,
 		.dr_hdlr	= dsms_hdlr_cont_close
 	}, {
+		.dr_opc		= DSM_CONT_EPOCH_QUERY,
+		.dr_hdlr	= dsms_hdlr_cont_op
+	}, {
+		.dr_opc		= DSM_CONT_EPOCH_HOLD,
+		.dr_hdlr	= dsms_hdlr_cont_op
+	}, {
+		.dr_opc		= DSM_CONT_EPOCH_COMMIT,
+		.dr_hdlr	= dsms_hdlr_cont_op
+	}, {
 		.dr_opc		= DSM_TGT_OBJ_UPDATE,
 		.dr_hdlr	= dsms_hdlr_object_rw,
 	}, {
