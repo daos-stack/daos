@@ -330,10 +330,29 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_zc_fetch_prep(daos_handle_t coh, daos_unit_oid_t oid,
-		      daos_epoch_t epoch, daos_dkey_t *dkey,
-		      unsigned int nr, daos_vec_iod_t *vios,
-		      daos_handle_t *ioh, daos_event_t *ev);
+vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
+		       daos_epoch_t epoch, daos_dkey_t *dkey,
+		       unsigned int nr, daos_vec_iod_t *vios,
+		       daos_handle_t *ioh, daos_event_t *ev);
+
+/**
+ * Finish the zero-copy fetch operation and release the responding resources.
+ *
+ * \param ioh	[IN]	The ZC I/O handle created by \a vos_obj_zc_fetch_begin
+ * \param dkey	[IN]	Distribution key.
+ * \param nr	[IN]	Number of vector IO descriptors in \a vios.
+ * \param vios	[IN]	Array of vector IO descriptors.
+ * \param err	[IN]	Errno of the current fetch, zero if there is no error.
+ *			All updates will be dropped if this function is called
+ *			for \a vos_obj_zc_update with a non-zero error code.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_obj_zc_fetch_end(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int nr,
+		     daos_vec_iod_t *vios, int err, daos_event_t *ev);
 
 /**
  * Prepare zero-copy sink buffers for the specified vectors of the given
@@ -356,21 +375,19 @@ vos_obj_zc_fetch_prep(daos_handle_t coh, daos_unit_oid_t oid,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_zc_update_prep(daos_handle_t coh, daos_unit_oid_t oid,
-		       daos_epoch_t epoch, daos_dkey_t *dkey,
-		       unsigned int nr, daos_vec_iod_t *vios,
-		       daos_handle_t *ioh, daos_event_t *ev);
+vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
+			daos_epoch_t epoch, daos_dkey_t *dkey,
+			unsigned int nr, daos_vec_iod_t *vios,
+			daos_handle_t *ioh, daos_event_t *ev);
 
 /**
- * Submit the current zero-copy I/O operation to VOS and release responding
- * resources.
+ * Finish the current zero-copy update and release the responding resources.
  *
- * \param ioh	[IN]	The ZC I/O handle, it is created by \a vos_obj_zc_fetch
- *			or \a vos_obj_zc_update.
+ * \param ioh	[IN]	The ZC I/O handle created by \a vos_obj_zc_update_begin
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of vector IO descriptors in \a vios.
  * \param vios	[IN]	Array of vector IO descriptors.
- * \param err	[IN]	Errno of current I/O, zero if there is no error.
+ * \param err	[IN]	Errno of the current update, zero if there is no error.
  *			All updates will be dropped if this function is called
  *			for \a vos_obj_zc_update with a non-zero error code.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
@@ -379,8 +396,8 @@ vos_obj_zc_update_prep(daos_handle_t coh, daos_unit_oid_t oid,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_zc_submit(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int nr,
-		  daos_vec_iod_t *vios, int err, daos_event_t *ev);
+vos_obj_zc_update_end(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int nr,
+		      daos_vec_iod_t *vios, int err, daos_event_t *ev);
 
 /**
  * Get the zero-copy scatter/gather list for the specified vector.

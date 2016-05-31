@@ -647,14 +647,14 @@ vos_zcc_destroy(struct vos_zc_context *zcc, int err)
 }
 
 static int
-vos_oref_zc_fetch_prep(struct vos_obj_ref *oref, daos_epoch_t epoch,
-		       daos_dkey_t *dkey, unsigned int vio_nr,
-		       daos_vec_iod_t *vios, struct vos_zc_context *zcc)
+vos_oref_zc_fetch_begin(struct vos_obj_ref *oref, daos_epoch_t epoch,
+			daos_dkey_t *dkey, unsigned int vio_nr,
+			daos_vec_iod_t *vios, struct vos_zc_context *zcc)
 {
 	int	i;
 	int	rc;
 
-	/* NB: no cleanup in this function, vos_obj_zc_submit will release
+	/* NB: no cleanup in this function, vos_obj_zc_fetch_end will release
 	 * all the resources.
 	 */
 	rc = vos_obj_tree_init(oref);
@@ -687,7 +687,7 @@ vos_oref_zc_fetch_prep(struct vos_obj_ref *oref, daos_epoch_t epoch,
  * vector data stored in pmem.
  */
 int
-vos_obj_zc_fetch_prep(daos_handle_t coh, daos_unit_oid_t oid,
+vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
 		      daos_epoch_t epoch, daos_dkey_t *dkey,
 		      unsigned int vio_nr, daos_vec_iod_t *vios,
 		      daos_handle_t *ioh, daos_event_t *ev)
@@ -699,8 +699,8 @@ vos_obj_zc_fetch_prep(daos_handle_t coh, daos_unit_oid_t oid,
 	if (rc != 0)
 		return rc;
 
-	rc = vos_oref_zc_fetch_prep(zcc->zc_oref, epoch, dkey, vio_nr,
-				    vios, zcc);
+	rc = vos_oref_zc_fetch_begin(zcc->zc_oref, epoch, dkey, vio_nr,
+				     vios, zcc);
 	if (rc != 0)
 		goto failed;
 
@@ -708,8 +708,23 @@ vos_obj_zc_fetch_prep(daos_handle_t coh, daos_unit_oid_t oid,
 	*ioh = vos_zcc2ioh(zcc);
 	return 0;
  failed:
-	vos_obj_zc_submit(vos_zcc2ioh(zcc), dkey, vio_nr, vios, rc, NULL);
+	vos_obj_zc_fetch_end(vos_zcc2ioh(zcc), dkey, vio_nr, vios, rc, NULL);
 	return rc;
+}
+
+/**
+ * Finish the current zero-copy fetch operation and release responding
+ * resources.
+ */
+int
+vos_obj_zc_fetch_end(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int vio_nr,
+		     daos_vec_iod_t *vios, int err, daos_event_t *ev)
+{
+	struct vos_zc_context	*zcc = vos_ioh2zcc(ioh);
+
+	D_ASSERT(!zcc->zc_is_update);
+	vos_zcc_destroy(zcc, err);
+	return err;
 }
 
 static daos_size_t
@@ -730,12 +745,12 @@ vos_recx2irec_size(daos_recx_t *recx)
 /**
  * Prepare pmem buffers for the zero-copy update.
  *
- * NB: no cleanup in this function, vos_obj_zc_submit will release all the
+ * NB: no cleanup in this function, vos_obj_zc_update_end will release all the
  * resources.
  */
 static int
-vos_vec_zc_update_prep(struct vos_obj_ref *oref, daos_vec_iod_t *vio,
-		       struct vos_vec_zbuf *zbuf)
+vos_vec_zc_update_begin(struct vos_obj_ref *oref, daos_vec_iod_t *vio,
+			struct vos_vec_zbuf *zbuf)
 {
 	int	i;
 	int	rc;
@@ -771,7 +786,7 @@ vos_vec_zc_update_prep(struct vos_obj_ref *oref, daos_vec_iod_t *vio,
 }
 
 static int
-vos_oref_zc_update_prep(struct vos_obj_ref *oref, unsigned int vio_nr,
+vos_oref_zc_update_begin(struct vos_obj_ref *oref, unsigned int vio_nr,
 			daos_vec_iod_t *vios, struct vos_zc_context *zcc)
 {
 	int	i;
@@ -779,8 +794,8 @@ vos_oref_zc_update_prep(struct vos_obj_ref *oref, unsigned int vio_nr,
 
 	D_ASSERT(oref == zcc->zc_oref);
 	for (i = 0; i < vio_nr; i++) {
-		rc = vos_vec_zc_update_prep(oref, &vios[i],
-					   &zcc->zc_vec_zbufs[i]);
+		rc = vos_vec_zc_update_begin(oref, &vios[i],
+					     &zcc->zc_vec_zbufs[i]);
 		if (rc != 0)
 			return rc;
 	}
@@ -789,14 +804,14 @@ vos_oref_zc_update_prep(struct vos_obj_ref *oref, unsigned int vio_nr,
 
 /**
  * Create zero-copy buffers for the vectors to be updated. After storing data
- * in the returned ZC buffer, user should call vos_obj_zc_submit() to create
- * indices for these data buffers.
+ * in the returned ZC buffer, user should call vos_obj_zc_update_end() to
+ * create indices for these data buffers.
  */
 int
-vos_obj_zc_update_prep(daos_handle_t coh, daos_unit_oid_t oid,
-		       daos_epoch_t epoch, daos_dkey_t *dkey,
-		       unsigned int vio_nr, daos_vec_iod_t *vios,
-		       daos_handle_t *ioh, daos_event_t *ev)
+vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
+			daos_epoch_t epoch, daos_dkey_t *dkey,
+			unsigned int vio_nr, daos_vec_iod_t *vios,
+			daos_handle_t *ioh, daos_event_t *ev)
 {
 	struct vos_zc_context	*zcc;
 	PMEMobjpool		*pop;
@@ -810,7 +825,7 @@ vos_obj_zc_update_prep(daos_handle_t coh, daos_unit_oid_t oid,
 	pop = vos_oref2pop(zcc->zc_oref);
 
 	TX_BEGIN(pop) {
-		rc = vos_oref_zc_update_prep(zcc->zc_oref, vio_nr, vios, zcc);
+		rc = vos_oref_zc_update_begin(zcc->zc_oref, vio_nr, vios, zcc);
 	} TX_ONABORT {
 		D_DEBUG(DF_VOS1, "Failed to update object\n");
 	} TX_END
@@ -822,7 +837,7 @@ vos_obj_zc_update_prep(daos_handle_t coh, daos_unit_oid_t oid,
 	*ioh = vos_zcc2ioh(zcc);
 	return 0;
  failed:
-	vos_obj_zc_submit(vos_zcc2ioh(zcc), dkey, vio_nr, vios, rc, NULL);
+	vos_obj_zc_update_end(vos_zcc2ioh(zcc), dkey, vio_nr, vios, rc, NULL);
 	return rc;
 }
 
@@ -831,13 +846,14 @@ vos_obj_zc_update_prep(daos_handle_t coh, daos_unit_oid_t oid,
  * resources.
  */
 int
-vos_obj_zc_submit(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int vio_nr,
-		  daos_vec_iod_t *vios, int err, daos_event_t *ev)
+vos_obj_zc_update_end(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int vio_nr,
+		      daos_vec_iod_t *vios, int err, daos_event_t *ev)
 {
 	struct vos_zc_context	*zcc = vos_ioh2zcc(ioh);
 	PMEMobjpool		*pop;
 
-	if (err != 0 || !zcc->zc_is_update)
+	D_ASSERT(zcc->zc_is_update);
+	if (err != 0)
 		goto out;
 
 	D_ASSERT(zcc->zc_oref != NULL);

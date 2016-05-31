@@ -72,8 +72,8 @@ vc_obj_update(daos_dkey_t *dkey, daos_vec_iod_t *vio, daos_sg_list_t *sgl)
 		return rc;
 	}
 
-	rc = vos_obj_zc_update_prep(vc_coh, vc_oid, vc_epoch, dkey, 1, vio,
-				    &ioh, NULL);
+	rc = vos_obj_zc_update_begin(vc_coh, vc_oid, vc_epoch, dkey, 1, vio,
+				     &ioh, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to prepare ZC update: %d\n", rc);
 		return -1;
@@ -88,7 +88,7 @@ vc_obj_update(daos_dkey_t *dkey, daos_vec_iod_t *vio, daos_sg_list_t *sgl)
 	D_ASSERT(srv_iov->iov_len == vec_iov->iov_len);
 	memcpy(vec_iov->iov_buf, srv_iov->iov_buf, srv_iov->iov_len);
 
-	rc = vos_obj_zc_submit(ioh, dkey, 1, vio, 0, NULL);
+	rc = vos_obj_zc_update_end(ioh, dkey, 1, vio, 0, NULL);
 	if (rc != 0)
 		D_ERROR("Failed to submit ZC update: %d\n", rc);
 
@@ -113,8 +113,8 @@ vc_obj_fetch(daos_dkey_t *dkey, daos_vec_iod_t *vio, daos_sg_list_t *sgl)
 		return rc;
 	}
 
-	rc = vos_obj_zc_fetch_prep(vc_coh, vc_oid, vc_epoch, dkey, 1, vio,
-				   &ioh, NULL);
+	rc = vos_obj_zc_fetch_begin(vc_coh, vc_oid, vc_epoch, dkey, 1, vio,
+				    &ioh, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to prepare ZC update: %d\n", rc);
 		return -1;
@@ -130,7 +130,7 @@ vc_obj_fetch(daos_dkey_t *dkey, daos_vec_iod_t *vio, daos_sg_list_t *sgl)
 	memcpy(dst_iov->iov_buf, vec_iov->iov_buf, vec_iov->iov_len);
 	dst_iov->iov_len = vec_iov->iov_len;
 
-	rc = vos_obj_zc_submit(ioh, dkey, 1, vio, 0, NULL);
+	rc = vos_obj_zc_fetch_end(ioh, dkey, 1, vio, 0, NULL);
 	if (rc != 0)
 		D_ERROR("Failed to submit ZC update: %d\n", rc);
 
