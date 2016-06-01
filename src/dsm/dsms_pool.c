@@ -166,10 +166,10 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 		   const daos_rank_list_t *target_addrs, uint32_t ndomains,
 		   const int *domains)
 {
-	struct pool_map_target *targets_p;
-	struct pool_map_domain *domains_p;
+	struct pool_buf	       *map_buf;
+	struct pool_component	map_comp;
+	uint32_t		map_version = 1;
 	uuid_t		       *uuids;
-	uint32_t		version = 1;
 	int			rc;
 	int			i;
 
@@ -177,48 +177,59 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 	D_ASSERTF(ntargets == target_addrs->rl_nr.num, "ntargets=%u num=%u\n",
 		  ntargets, target_addrs->rl_nr.num);
 
+	map_buf = pool_buf_alloc(ntargets + ndomains);
+	if (map_buf == NULL)
+		return -DER_NOMEM;
+
 	/*
 	 * Make a sorted target UUID array to determine target IDs. See the
 	 * bsearch() call below.
 	 */
 	D_ALLOC(uuids, sizeof(uuid_t) * ntargets);
-	if (uuids == NULL)
+	if (uuids == NULL) {
+		pool_buf_free(map_buf);
 		return -DER_NOMEM;
+	}
 	memcpy(uuids, target_uuids, sizeof(uuid_t) * ntargets);
 	qsort(uuids, ntargets, sizeof(uuid_t), uuid_compare_cb);
 
-	/* Prepare the target array. */
-	D_ALLOC(targets_p, sizeof(*targets_p) * ntargets);
-	if (targets_p == NULL) {
-		D_FREE(uuids, sizeof(uuid_t) * ntargets);
-		return -DER_NOMEM;
+	/* Fill the pool_buf out. */
+	for (i = 0; i < ndomains; i++) {
+		map_comp.co_type = PO_COMP_TP_RACK;	/* TODO */
+		map_comp.co_status = PO_COMP_ST_UP;
+		map_comp.co_padding = 0;
+		map_comp.co_id = i;
+		map_comp.co_rank = 0;
+		map_comp.co_ver = map_version;
+		map_comp.co_fseq = 1;
+		map_comp.co_nr = domains[i];
+
+		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		if (rc != 0) {
+			D_FREE(uuids, sizeof(uuid_t) * ntargets);
+			pool_buf_free(map_buf);
+			return rc;
+		}
 	}
 	for (i = 0; i < ntargets; i++) {
 		uuid_t *p = bsearch(target_uuids[i], uuids, ntargets,
 				    sizeof(uuid_t), uuid_compare_cb);
 
-		D_ASSERTF(p != NULL && p >= uuids, "uuids=%p p=%p\n", uuids, p);
-		uuid_copy(targets_p[i].mt_uuid, target_uuids[i]);
-		targets_p[i].mt_version_in = 1;
-		targets_p[i].mt_version_out = -1;
-		targets_p[i].mt_ncpus = dss_nthreads;
-		targets_p[i].mt_fseq = 1;
-		targets_p[i].mt_id = p - uuids;
-		targets_p[i].mt_status = PO_COMP_ST_UPIN;
-		targets_p[i].mt_rank = target_addrs->rl_ranks[i];
-	}
+		map_comp.co_type = PO_COMP_TP_TARGET;
+		map_comp.co_status = PO_COMP_ST_UP;
+		map_comp.co_padding = 0;
+		map_comp.co_id = p - uuids;
+		map_comp.co_rank = target_addrs->rl_ranks[i];
+		map_comp.co_ver = map_version;
+		map_comp.co_fseq = 1;
+		map_comp.co_nr = dss_nthreads;
 
-	D_ALLOC(domains_p, sizeof(*domains_p) * ndomains);
-	if (domains_p == NULL) {
-		D_FREE(targets_p, sizeof(*targets_p) * ntargets);
-		D_FREE(uuids, sizeof(uuid_t) * ntargets);
-		return -DER_NOMEM;
-	}
-	for (i = 0; i < ndomains; i++) {
-		domains_p[i].md_version_in = 1;
-		domains_p[i].md_version_out = -1;
-		domains_p[i].md_type = PO_COMP_TP_RACK;	/* TODO */
-		domains_p[i].md_nchildren = domains[i];
+		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
+		if (rc != 0) {
+			D_FREE(uuids, sizeof(uuid_t) * ntargets);
+			pool_buf_free(map_buf);
+			return rc;
+		}
 	}
 
 	TX_BEGIN(mp) {
@@ -232,24 +243,16 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_VERSION, &version,
-					sizeof(version));
+		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_VERSION, &map_version,
+					sizeof(map_version));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
-		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_NTARGETS, &ntargets,
-					sizeof(ntargets));
+		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_BUFFER, map_buf,
+					pool_buf_size(map_buf->pb_nr));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
-		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_NDOMAINS, &ndomains,
-					sizeof(ndomains));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_TARGETS, targets_p,
-					sizeof(*targets_p) * ntargets);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_DOMAINS, domains_p,
-					sizeof(*domains_p) * ndomains);
+		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_TARGET_UUIDS, uuids,
+					sizeof(uuid_t) * ntargets);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -259,9 +262,8 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 	} TX_FINALLY {
-		D_FREE(domains_p, sizeof(*domains_p) * ndomains);
-		D_FREE(targets_p, sizeof(*targets_p) * ntargets);
 		D_FREE(uuids, sizeof(uuid_t) * ntargets);
+		pool_buf_free(map_buf);
 	} TX_END
 
 	return 0;
@@ -542,121 +544,39 @@ permitted(const struct pool_attr *attr, uint32_t uid, uint32_t gid,
 }
 
 /*
- * Allocate "map_buf" and fill it (as well as "version") out by reading from
- * the persistent pool map.  Callers are responsible for freeing the buffer
- * with pool_buf_free().
- *
- * "client_bulk" is used to check if the client bulk buffer is large enough. If
- * it is too small, then the minimal required size is returned.
+ * Retrieve the address of the persistent pool map buffer and the pool map
+ * version into "map_buf" and "map_version", respectively.
  */
 static int
-map_buf_read(const struct pool *pool, dtp_bulk_t *client_bulk,
-	     struct pool_buf **map_buf, uint32_t *version)
+map_retrieve(const struct pool *pool, struct pool_buf **map_buf,
+	     uint32_t *map_version)
 {
 	struct pool_buf	       *buf;
-	uint32_t		ver;
-	uint32_t		ntargets;
-	uint32_t		ndomains;
-	size_t			targets_size;
-	size_t			domains_size;
-	struct pool_map_target *targets;
-	struct pool_map_domain *domains;
-	struct pool_component	component;
-	daos_size_t		client_bulk_size;
-	int			i;
+	size_t			buf_size;
+	uint32_t		version;
 	int			rc;
 
-	/* Read the pool map "header" attributes. */
 	rc = dsms_kvs_nv_lookup(pool->p_mpool->mp_root, POOL_MAP_VERSION,
-				&ver, sizeof(ver));
-	if (rc != 0)
-		return rc;
-	rc = dsms_kvs_nv_lookup(pool->p_mpool->mp_root, POOL_MAP_NTARGETS,
-				&ntargets, sizeof(ntargets));
-	if (rc != 0)
-		return rc;
-	rc = dsms_kvs_nv_lookup(pool->p_mpool->mp_root, POOL_MAP_NDOMAINS,
-				&ndomains, sizeof(ndomains));
+				&version, sizeof(version));
 	if (rc != 0)
 		return rc;
 
-	D_DEBUG(DF_DSMS, "version=%u ntargets=%u ndomains=%u\n", ver,
-		ntargets, ndomains);
-
-	rc = dtp_bulk_get_len(client_bulk, &client_bulk_size);
+	/* Look up the address of the persistent pool map buffer. */
+	rc = dsms_kvs_nv_lookup_ptr(pool->p_mpool->mp_root, POOL_MAP_BUFFER,
+				    (void **)&buf, &buf_size);
 	if (rc != 0)
 		return rc;
 
-	/* TODO: This assignment might theoretically overflow. */
-	rc = pool_buf_size(ntargets + ndomains);
-	if (client_bulk_size < rc) {
-		D_ERROR("client pool map buffer ("DF_U64") < required (%d)\n",
-			client_bulk_size, rc);
-		return rc;
-	}
-
-	buf = pool_buf_alloc(ntargets + ndomains);
-	if (buf == NULL)
-		return -DER_NOMEM;
-
-	/* Get the addresses of the persistent domain and target arrays. */
-	rc = dsms_kvs_nv_lookup_ptr(pool->p_mpool->mp_root, POOL_MAP_DOMAINS,
-				    (void **)&domains, &domains_size);
-	if (rc != 0)
-		D_GOTO(err_buf, rc);
-	if ((domains_size / sizeof(*domains)) != ndomains) {
-		D_ERROR("found pool map domain inconsistency: %lu != %u\n",
-			domains_size, ndomains);
-		D_GOTO(err_buf, rc = -DER_IO);
-	}
-	rc = dsms_kvs_nv_lookup_ptr(pool->p_mpool->mp_root, POOL_MAP_TARGETS,
-				    (void **)&targets, &targets_size);
-	if (rc != 0)
-		D_GOTO(err_buf, rc);
-	if ((targets_size / sizeof(*targets)) != ntargets) {
-		D_ERROR("found pool map target inconsistency: %lu != %u\n",
-			targets_size, ntargets);
-		D_GOTO(err_buf, rc = -DER_IO);
-	}
-
-	/* Fill the pool_buf out. */
-	for (i = 0; i < ndomains; i++) {
-		memset(&component, 0, sizeof(component));
-		component.co_type = domains[i].md_type;
-		component.co_ver = domains[i].md_version_in;
-		component.co_nr = domains[i].md_nchildren;
-
-		rc = pool_buf_attach(buf, &component, 1 /* comp_nr */);
-		if (rc != 0)
-			D_GOTO(err_buf, rc);
-	}
-	for (i = 0; i < ntargets; i++) {
-		component.co_type = PO_COMP_TP_TARGET;
-		component.co_status = targets[i].mt_status;
-		component.co_padding = 0;
-		component.co_id = targets[i].mt_id;
-		component.co_rank = targets[i].mt_rank;
-		component.co_ver = targets[i].mt_version_in;
-		component.co_fseq = targets[i].mt_fseq;
-		component.co_nr = targets[i].mt_ncpus;
-
-		rc = pool_buf_attach(buf, &component, 1 /* comp_nr */);
-		if (rc != 0)
-			D_GOTO(err_buf, rc);
-	}
+	D_DEBUG(DF_DSMS, "version=%u ntargets=%u ndomains=%u\n", version,
+		buf->pb_target_nr, buf->pb_domain_nr);
 
 	*map_buf = buf;
-	*version = ver;
+	*map_version = version;
 	return 0;
-
-err_buf:
-	pool_buf_free(buf);
-	return rc;
 }
 
 struct pool_connect_cb_arg {
 	struct pool	       *pcc_pool;
-	struct pool_buf	       *pcc_map_buf;
 	int			pcc_skip_update;
 };
 
@@ -688,7 +608,6 @@ pool_connect_cb(const struct dtp_bulk_cb_info *cb_info)
 
 out:
 	dtp_bulk_free(desc->bd_local_hdl);
-	pool_buf_free(arg->pcc_map_buf);
 	D_DEBUG(DF_DSMS, "replying rpc %p with %d\n", desc->bd_rpc, rc);
 	out->pco_ret = rc;
 	rc = dtp_reply_send(desc->bd_rpc);
@@ -707,12 +626,15 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 	struct pool		       *pool;
 	struct pool_attr		attr;
 	struct pool_hdl			hdl;
+	struct pool_buf		       *map_buf;
+	size_t				map_buf_size;
 	daos_iov_t			map_iov;
 	daos_sg_list_t			map_sgl;
 	dtp_bulk_t			map_bulk;
 	struct dtp_bulk_desc		map_desc;
 	dtp_bulk_opid_t			map_opid;
 	struct pool_connect_cb_arg     *arg;
+	daos_size_t			client_bulk_size;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, "processing rpc %p\n", rpc);
@@ -774,23 +696,30 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 	}
 
 	/*
-	 * Create the pool map buffer and prepare "map_sgl" for
-	 * dtp_bulk_create().
+	 * If successful, this stores the address of the persistent pool map
+	 * buffer into "map_buf".
 	 */
-	rc = map_buf_read(pool, pci->pci_pool_map_bulk, &arg->pcc_map_buf,
-			  &pco->pco_pool_map_version);
+	rc = map_retrieve(pool, &map_buf, &pco->pco_pool_map_version);
 	if (rc != 0) {
-		if (rc > 0) {
-			pco->pco_pool_map_buf_size = rc;
-			rc = -DER_TRUNC;
-		} else {
-			D_ERROR("failed to read pool map: %d\n", rc);
-		}
+		D_ERROR("failed to read pool map: %d\n", rc);
 		D_GOTO(err_arg, rc);
 	}
 
-	map_iov.iov_buf = arg->pcc_map_buf;
-	map_iov.iov_buf_len = pool_buf_size(arg->pcc_map_buf->pb_nr);
+	map_buf_size = pool_buf_size(map_buf->pb_nr);
+
+	/* Check if the client bulk buffer is large enough. */
+	rc = dtp_bulk_get_len(pci->pci_pool_map_bulk, &client_bulk_size);
+	if (rc != 0)
+		D_GOTO(err_arg, rc);
+	if (client_bulk_size < map_buf_size) {
+		D_ERROR("client pool map buffer ("DF_U64") < required (%ld)\n",
+			client_bulk_size, map_buf_size);
+		pco->pco_pool_map_buf_size = map_buf_size;
+		D_GOTO(err_arg, rc = -DER_TRUNC);
+	}
+
+	map_iov.iov_buf = map_buf;
+	map_iov.iov_buf_len = map_buf_size;
 	map_iov.iov_len = map_iov.iov_buf_len;
 	map_sgl.sg_nr.num = 1;
 	map_sgl.sg_nr.num_out = 0;
@@ -798,7 +727,7 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 
 	rc = dtp_bulk_create(rpc->dr_ctx, &map_sgl, DTP_BULK_RO, &map_bulk);
 	if (rc != 0)
-		D_GOTO(err_map_buf, rc);
+		D_GOTO(err_arg, rc);
 
 	/* Prepare "map_desc" for dtp_bulk_transfer(). */
 	dtp_req_addref(rpc);
@@ -827,8 +756,6 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 err_rpc:
 	dtp_req_decref(map_desc.bd_rpc);
 	dtp_bulk_free(map_bulk);
-err_map_buf:
-	pool_buf_free(arg->pcc_map_buf);
 err_arg:
 	D_FREE_PTR(arg);
 err_lock:

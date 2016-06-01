@@ -107,42 +107,19 @@ struct superblock {
 /*
  * Root KVS (KVS_NV): pool attributes
  *
- * The pool map, which is a tree of domains (internal nodes) and targets (leave
- * nodes), is serialized by a breadth-first traversal. For each node
- * encountered during the traversal, if it is a domain, the node, including the
- * number of its children, shall be appended to the POOL_MAP_DOMAINS array, and
- * if it is a target, the node shall be appended to the POOL_MAP_TARGETS array.
+ * The pool map is stored in pool_buf format. Because version and target UUID
+ * are absent from pool_buf, they have to be stored separately. The target
+ * UUIDs are stored in target ID order.
  */
 #define POOL_UUID		"pool_uuid"		/* uuid_t */
 #define POOL_UID		"pool_uid"		/* uint32_t */
 #define POOL_GID		"pool_gid"		/* uint32_t */
 #define POOL_MODE		"pool_mode"		/* uint32_t */
 #define POOL_MAP_VERSION	"pool_map_version"	/* uint32_t */
-#define POOL_MAP_NTARGETS	"pool_map_ntargets"	/* uint32_t */
-#define POOL_MAP_NDOMAINS	"pool_map_ndomains"	/* uint32_t */
-#define POOL_MAP_TARGETS	"pool_map_targets"	/* pool_map_target[] */
-#define POOL_MAP_DOMAINS	"pool_map_domains"	/* pool_map_domain[] */
+#define POOL_MAP_BUFFER		"pool_map_buffer"	/* pool_buf */
+#define POOL_MAP_TARGET_UUIDS	"pool_map_target_uuids"	/* uuid_t[] */
 #define POOL_HANDLES		"pool_handles"		/* btr_root (pool */
 							/* handle KVS) */
-
-struct pool_map_target {
-	uuid_t		mt_uuid;
-	uint32_t	mt_version_in;	/* at which this was added in */
-	uint32_t	mt_version_out;	/* at which this was excluded out */
-	uint64_t	mt_fseq;
-	uint32_t	mt_id;
-	uint16_t	mt_ncpus;
-	uint8_t		mt_status;	/* pool_comp_state */
-	uint8_t		mt_padding[5];
-	uint32_t	mt_rank;	/* TODO: Remove once we have bcast. */
-};
-
-struct pool_map_domain {
-	uint32_t	md_version_in;	/* at which this was added in */
-	uint32_t	md_version_out;	/* at which this was excluded out */
-	uint32_t	md_type;	/* pool_comp_type */
-	uint32_t	md_nchildren;
-};
 
 /* Pool handle KVS (KVS_UV) */
 struct pool_hdl {
