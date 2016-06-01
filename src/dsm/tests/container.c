@@ -33,6 +33,8 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <mpi.h>
+
 #include <daos_mgmt.h>
 #include <daos_m.h>
 #include <daos_event.h>
@@ -221,8 +223,13 @@ teardown(void **state) {
 }
 
 int
-run_co_test(void)
+run_co_test(int rank, int size)
 {
-	return cmocka_run_group_tests_name("DSM container tests", co_tests,
-					   setup, teardown);
+	int rc = 0;
+
+	if (rank == 0)
+		rc = cmocka_run_group_tests_name("DSM container tests",
+						 co_tests, setup, teardown);
+	MPI_Barrier(MPI_COMM_WORLD);
+	return rc;
 }

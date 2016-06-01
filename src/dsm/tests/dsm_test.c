@@ -33,18 +33,27 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <mpi.h>
+
 #include <daos_mgmt.h>
 #include <daos_m.h>
 
-int run_pool_test(void);
-int run_co_test(void);
-int run_io_test(void);
+int run_pool_test(int rank, int size);
+int run_co_test(int rank, int size);
+int run_io_test(int rank, int size);
 
 int
 main(int argc, char **argv)
 {
 	int	nr_failed = 0;
+	int	rank;
+	int	size;
 	int	rc;
+
+	MPI_Init(&argc, &argv);
+
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
 	rc = dmg_init();
 	if (rc) {
@@ -58,9 +67,9 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	nr_failed = run_pool_test();
-	nr_failed += run_co_test();
-	nr_failed += run_io_test();
+	nr_failed = run_pool_test(rank, size);
+	nr_failed += run_co_test(rank, size);
+	nr_failed += run_io_test(rank, size);
 
 	rc = dsm_fini();
 	if (rc)
@@ -75,6 +84,12 @@ main(int argc, char **argv)
 		print_message("OK - NO TEST FAILURES\n");
 	else
 		print_message("ERROR, %i TEST(S) FAILED\n", nr_failed);
+
+	/**
+	 * XXX: don't call MPI_Finalize() for now since dtp already calls
+	 * pmix_finalize() through mcl_finalize()
+	 * MPI_Finalize();
+	 */
 
 	return nr_failed;
 }

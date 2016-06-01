@@ -23,7 +23,7 @@ SConscript('server/SConscript', exports=['env', 'PREREQS'])
 
 # Build each DAOS layers
 SConscript('dmg/SConscript', exports='env')
-SConscript('dsm/SConscript', exports='env')
+SConscript('dsm/SConscript', exports=['env', 'PREREQS'])
 SConscript('dsr/SConscript', exports='env')
 SConscript('dct/SConscript', exports='env')
 

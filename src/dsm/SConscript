@@ -1,6 +1,6 @@
 #!python
 
-Import('env')
+Import('env', 'PREREQS')
 
 env.AppendUnique(LIBPATH=[Dir('.')])
 denv = env.Clone()
@@ -19,4 +19,4 @@ dsmc = denv.SharedLibrary('daos_m',
 denv.Install('$PREFIX/lib/', dsmc)
 
 # tests
-SConscript('tests/SConscript', exports = 'denv')
+SConscript('tests/SConscript', exports = ['denv', 'PREREQS'])
