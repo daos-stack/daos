@@ -217,6 +217,50 @@ obj_random(test_arg_t *arg, uint32_t *tgt, daos_unit_oid_t *oid)
 	oid->id_shard = 0;
 }
 
+/** test overwrite in different epoch */
+static void
+io_epoch_overwrite(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_unit_oid_t	 oid;
+	uint32_t	 tgt;
+	struct ioreq	 req;
+	daos_size_t	 size;
+	char		 ubuf[] = "DAOS";
+	char		 fbuf[] = "DAOS";
+	int		 i;
+	daos_epoch_t	 e = 0;
+
+	/** choose random object */
+	obj_random(arg, &tgt, &oid);
+
+	ioreq_init(&req, tgt, oid, (test_arg_t *)*state);
+	size = strlen(ubuf);
+
+	for (i = 0; i < size; i++)
+		insert("d", "a", i, &ubuf[i], 1, e, &req);
+
+	for (i = 0; i < size; i++) {
+		e++;
+		ubuf[i] += 32;
+		insert("d", "a", i, &ubuf[i], 1, e, &req);
+	}
+
+	memset(fbuf, 0, sizeof(fbuf));
+	for (;;) {
+		for (i = 0; i < size; i++)
+			lookup("d", "a", i, &fbuf[i], 1, e, &req);
+		print_message("e = %lu, fbuf = %s\n", e, fbuf);
+		assert_string_equal(fbuf, ubuf);
+		if (e == 0)
+			break;
+		e--;
+		ubuf[e] -= 32;
+	}
+
+	ioreq_fini(&req);
+}
+
 /** i/o to variable idx offset */
 static void
 io_var_idx_offset(void **state)
@@ -243,7 +287,8 @@ io_var_idx_offset(void **state)
 
 		/** Lookup */
 		memset(buf, 0, 10);
-		lookup("var_idx_off_d", "var_idx_off_a", offset, buf, 10, 0, &req);
+		lookup("var_idx_off_d", "var_idx_off_a", offset, buf, 10, 0,
+		       &req);
 		/** XXX assert disabled until DAOS-95 is fixed  */
 		/* assert_int_equal(req.rex.rx_rsize, strlen(data) + 1); */
 
@@ -472,6 +517,8 @@ static const struct CMUnitTest io_tests[] = {
 	  io_var_akey_size, async_disable, NULL},
 	{ "DSM206: i/o with variable index",
 	  io_var_idx_offset, async_enable, NULL},
+	{ "DSM207: overwrite in different epoch",
+	  io_epoch_overwrite, async_enable, NULL},
 };
 
 static int
