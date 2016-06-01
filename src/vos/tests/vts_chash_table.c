@@ -20,15 +20,29 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-
+/**
+ * This file is part of vos
+ * src/vos/tests/vts_chash_table.c
+ * Launcher for all tests
+ */
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <omp.h>
 #include <inttypes.h>
-#include "vos_chash_table.h"
+#include <daos/common.h>
+#include <vos_chash_table.h>
+#include <cmocka.h>
 
+#define CHTABLE_BSIZE 10
+#define CHTABLE_NKEYS 100
+#define NUM_THREADS 8
+
+struct chtable_args {
+	char		*fname;
+	PMEMobjpool	*pop;
+};
 
 int
 compare_integers(const void *a, const void *b)
@@ -42,13 +56,13 @@ compare_integers(const void *a, const void *b)
 void
 print_integer_keys(const void *a)
 {
-	printf("Key: %"PRIu64"\t", *(uint64_t *)a);
+	print_message("Key: "DF_U64"\t", *(uint64_t *)a);
 }
 
 void
 print_integer_values(const void *a)
 {
-	printf("Value: %"PRIu64"\n", *(uint64_t *)a);
+	print_message("Value: "DF_U64"\n", *(uint64_t *)a);
 }
 
 static vos_chash_ops_t my_hops = {
@@ -57,22 +71,9 @@ static vos_chash_ops_t my_hops = {
 	.hop_val_print	= print_integer_values,
 };
 
-bool
-file_exists(const char *filename)
-{
-	FILE *fp;
-	fp = fopen(filename, "r");
-	if (fp) {
-		fclose(fp);
-		return true;
-	}
-	return false;
-}
-
-
 static int
 test_multithreaded_ops(PMEMobjpool *pop, int bucket_size, int num_keys,
-			 int num_threads)
+		       int num_threads)
 {
 
 	uint64_t i, *keys = NULL, *values = NULL;
@@ -80,19 +81,14 @@ test_multithreaded_ops(PMEMobjpool *pop, int bucket_size, int num_keys,
 	TOID(struct vos_chash_table) hashtable;
 
 	keys = (uint64_t *) malloc(num_keys * sizeof(uint64_t));
-	if (NULL == keys) {
-		fprintf(stderr, "Error in allocating keys array\n");
-		return -1;
-	}
+	assert_ptr_not_equal(keys, NULL);
 	memset(keys, 0, num_keys * sizeof(uint64_t));
 
 	values = (uint64_t *) malloc(num_keys * sizeof(uint64_t));
-	if (NULL == values) {
-		fprintf(stderr, "Error in allocating values array\n");
-		return -1;
-	}
+	assert_ptr_not_equal(values, NULL);
 	memset(values, 0, num_keys * sizeof(uint64_t));
 
+	print_message("Multithreaded test with %d threads\n", NUM_THREADS);
 	vos_chash_create(pop, bucket_size, 100, true, CRC64, &hashtable,
 			 &my_hops);
 
@@ -108,18 +104,13 @@ test_multithreaded_ops(PMEMobjpool *pop, int bucket_size, int num_keys,
 					       (void *)(values + i),
 					       sizeof(values + i));
 			if (ret)
-				printf("Insert failed\n");
+				print_error("Insert failed\n");
+
 		}
 	}
 
-	printf("Success: Compeleted Inserts\n");
-	vos_chash_print(pop, hashtable);
-	printf("Success: Compeleted Printing the hash table\n");
-	printf("************************************************\n");
-
 	#pragma omp parallel num_threads(num_threads)
 	{
-
 		void *value_ret = NULL;
 		#pragma omp for
 		for (i = 0; i < num_keys; i++) {
@@ -127,45 +118,27 @@ test_multithreaded_ops(PMEMobjpool *pop, int bucket_size, int num_keys,
 					(void *)(keys + i),
 					sizeof(keys + i),
 					&value_ret);
-			if (!ret &&  (value_ret != NULL)) {
-				if (values[i] != *(uint64_t *)value_ret) {
-					fprintf(stderr,
-						"%"PRIu64"->%"PRIu64"\n",
-						values[i],
-						*(uint64_t *)value_ret);
-				}
-			} else
-				fprintf(stderr, "NULL value with ret: %d\n",
-					ret);
+			assert_int_equal(ret, 0);
+			if (!ret &&  (value_ret != NULL))
+				assert_false(values[i] !=
+					     *(uint64_t *)value_ret);
 		}
-
-		if (omp_get_thread_num() == 0)
-			printf("Success: Compeleted Lookups\n");
 
 		if (omp_get_thread_num() == 1) {
 			ret = vos_chash_remove(pop, hashtable,
 					(void *)(keys + 1),
 					sizeof(keys + 1));
-			if (ret)
-				fprintf(stderr, "Error in Remove %d\n",
-					omp_get_thread_num());
+			assert_int_equal(ret, 0);
 		}
 		if (omp_get_thread_num() == 4) {
 			ret = vos_chash_remove(pop,
 					hashtable,
 					(void *)(keys + 3),
 					sizeof(keys + 3));
-			if (ret)
-				fprintf(stderr, "Error in Remove %d\n",
-					omp_get_thread_num());
+			assert_int_equal(ret, 0);
 		}
 	}
-	printf("Success: Compeleted Removes\n");
-	vos_chash_print(pop, hashtable);
-	printf("************************************************\n");
-
 	vos_chash_destroy(pop, hashtable);
-	printf("Success: Compeleted detroy\n");
 	free(keys);
 	free(values);
 
@@ -183,16 +156,10 @@ test_single_thread_ops(PMEMobjpool *pop, int bucket_size, int num_keys)
 
 
 	keys = (uint64_t *) malloc(num_keys * sizeof(uint64_t));
-	if (NULL == keys) {
-		fprintf(stderr, "Error in allocating keys array\n");
-		return -1;
-	}
+	assert_ptr_not_equal(keys, NULL);
 	memset(keys, 0, num_keys * sizeof(uint64_t));
 	values = (uint64_t *) malloc(num_keys * sizeof(uint64_t));
-	if (NULL == values) {
-		fprintf(stderr, "Error in allocating values array\n");
-		return -1;
-	}
+	assert_ptr_not_equal(values, NULL);
 	memset(values, 0, num_keys * sizeof(uint64_t));
 
 	vos_chash_create(pop, bucket_size, 100, true, CRC64, &hashtable,
@@ -206,89 +173,95 @@ test_single_thread_ops(PMEMobjpool *pop, int bucket_size, int num_keys)
 				       sizeof(keys + i),
 				       (void *)(values + i),
 				       sizeof(values + i));
-		if (ret)
-			return ret;
+		assert_int_equal(ret, 0);
 	}
-	printf("Success: Compeleted Inserts\n");
-	vos_chash_print(pop, hashtable);
-	printf("Success: Compeleted Printing the hash table\n");
-	printf("************************************************\n");
 
 	for (i = 0; i < num_keys; i++) {
 		ret = vos_chash_lookup(pop, hashtable,
 				       (void *)(keys + i),
 				       sizeof(keys + i),
 				       &value_ret);
-		if (!ret &&  (value_ret != NULL)) {
-			if (values[i] != *(uint64_t *)value_ret) {
-				fprintf(stderr,
-					"Expected %"PRIu64" got %"PRIu64"\n",
-					values[i], *(uint64_t *)value_ret);
-			}
-		} else{
-			fprintf(stderr, "NULL value\n");
-			return ret;
-		}
+		assert_int_equal(ret, 0);
+		if (!ret &&  (value_ret != NULL))
+			assert_false(values[i] != *(uint64_t *)value_ret);
 	}
-	printf("Success: Compeleted Lookups\n");
-	fflush(stdout);
 
 	ret = vos_chash_remove(pop, hashtable, (void *)(keys + 1),
 			       sizeof(keys + 1));
-	if (ret)
-		return ret;
+	assert_int_equal(ret, 0);
 	ret = vos_chash_remove(pop, hashtable, (void *)(keys + 3),
 			       sizeof(keys + 3));
-	if (ret)
-		return ret;
-	printf("Success: Compeleted Removes\n");
-	vos_chash_print(pop, hashtable);
-	printf("************************************************\n");
-
-
+	assert_int_equal(ret, 0);
 	vos_chash_destroy(pop, hashtable);
-	printf("Success: Compeleted detroy\n");
 	free(keys);
 	free(values);
 
 	return ret;
 }
 
-
-int
-main(int argc, char *argv[])
+static int
+setup(void **state)
 {
-	int bucket_size, num_keys;
-	int isthread, num_threads;
-	PMEMobjpool *pop;
-	int ret = 0;
+	struct chtable_args	*arg = NULL;
+	int			ret = 0;
 
-	if (argc < 4) {
-		fprintf(stderr,
-			"<exec> <pmem_file> <bucket_size>");
-		fprintf(stderr,
-			" <num_keys> <threads> <count>\n");
-		return -1;
-	}
-	bucket_size = atoi(argv[2]);
-	num_keys = atoi(argv[3]);
-	isthread = atoi(argv[4]);
-	if (file_exists(argv[1]))
-		remove(argv[1]);
-	pop = pmemobj_create(argv[1],
-			     "hashtable test", 67108864, 0666);
+	arg = malloc(sizeof(struct chtable_args));
+	assert_ptr_not_equal(arg, NULL);
 
-	if (argc == 5)
-		num_threads = atoi(argv[4]);
-	else
-		num_threads = 8;
+	ret = alloc_gen_fname(&arg->fname);
+	assert_int_equal(ret, 0);
 
-	if (!atoi(argv[3]))
-		ret = test_single_thread_ops(pop, bucket_size, num_keys);
-	else
-		ret = test_multithreaded_ops(pop, bucket_size,
-					     num_keys, num_threads);
-
-	remove(argv[1]);
+	if (file_exists(arg->fname))
+		remove(arg->fname);
+	arg->pop = pmemobj_create(arg->fname,
+				  "Hashtable test", 67108864, 0666);
+	assert_ptr_not_equal(arg->pop, NULL);
+	*state = arg;
 	return ret;
+}
+
+static int
+teardown(void **state)
+{
+	struct chtable_args	*arg = *state;
+	int			ret = 0;
+
+	ret = remove(arg->fname);
+	assert_int_equal(ret, 0);
+
+	return ret;
+}
+
+static void
+ch_single_threaded(void **state)
+{
+	struct chtable_args	*arg = *state;
+	int			ret = 0;
+
+	ret = test_single_thread_ops(arg->pop, CHTABLE_BSIZE, CHTABLE_NKEYS);
+	assert_int_equal(ret, 0);
+}
+
+static void
+ch_multi_threaded(void **state)
+{
+	struct chtable_args	*arg = *state;
+	int			ret = 0;
+
+	ret = test_multithreaded_ops(arg->pop, CHTABLE_BSIZE, CHTABLE_NKEYS,
+				     NUM_THREADS);
+	assert_int_equal(ret, 0);
+}
+
+static const struct CMUnitTest chtable_tests[] = {
+	{ "VOS300: CHTABLE single threaded ops test",
+	  ch_single_threaded, NULL, NULL},
+	{ "VOS301: CHTABLE multi threaded ops test",
+	  ch_multi_threaded, NULL, NULL},
+};
+
+int run_chtable_test(void)
+{
+	return cmocka_run_group_tests_name("VOS chtable tests", chtable_tests,
+					   setup, teardown);
 }

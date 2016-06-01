@@ -139,6 +139,7 @@ vc_obj_fetch(daos_dkey_t *dkey, daos_vec_iod_t *vio, daos_sg_list_t *sgl)
 
 	return rc;
 }
+
 static int
 vc_obj_rw_oper(bool update, char *str)
 {
