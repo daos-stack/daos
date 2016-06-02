@@ -207,7 +207,7 @@ vos_chash_insert(PMEMobjpool *ph,
 
 	TX_BEGIN(ph) {
 		pmemobj_rwlock_wrlock(ph, &buckets[bucket_id].rw_lock);
-		newpair = TX_NEW(struct vos_chash_item);
+		newpair = TX_ZNEW(struct vos_chash_item);
 		D_RW(newpair)->key =  pmemobj_tx_zalloc(key_size, 0);
 		D_RW(newpair)->value = pmemobj_tx_zalloc(value_size, 0);
 		D_RW(newpair)->key_size = key_size;

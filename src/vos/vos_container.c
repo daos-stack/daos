@@ -124,8 +124,8 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 		vc = D_RW(vc_oid);
 
 		uuid_copy(vc->vc_id, co_uuid);
-		vc->vc_obtable	= TX_NEW(struct vos_object_index);
-		vc->vc_ehtable	= TX_NEW(struct vos_epoch_index);
+		vc->vc_obtable	= TX_ZNEW(struct vos_object_index);
+		vc->vc_ehtable	= TX_ZNEW(struct vos_epoch_index);
 
 		D_DEBUG(DF_VOS3, "Inserting into container index\n");
 		ret = vos_chash_insert(vpool->vp_ph, coi_table,
