@@ -21,14 +21,61 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * Server-side API of the DAOS Caching and Tiering layer
+ * This file is part of dct
+ *
+ * dct/tests/dct_test
  */
-
-#ifndef __DCT_SRV_H__
-#define __DCT_SRV_H__
-
+#include <getopt.h>
+#include <dct_rpc.h>
+#include <daos_ct.h>
+#include <daos_event.h>
+#include <daos/event.h>
 #include <daos/transport.h>
 
-int dcts_hdlr_ping(dtp_rpc_t *rpc);
 
-#endif /* __DCT_SRV_H__ */
+static struct option opts[] = {
+	{ "ping",		0,	NULL,   'p'},
+	{  NULL,		0,	NULL,	 0 }
+};
+
+#define DEFAULT_TIMEOUT	20
+
+int
+ping_test()
+{
+	dct_ping(10, NULL);
+	return 0;
+}
+
+int
+main(int argc, char **argv)
+{
+	int	rc = 0;
+	int	option;
+
+	/* use full debug dy default for now */
+	rc = setenv("DAOS_DEBUG", "-1", false);
+	if (rc)
+		D_ERROR("failed to enable full debug, %d\n", rc);
+
+	rc = dct_init();
+	if (rc != 0) {
+		D_ERROR("dct init fails: rc = %d\n", rc);
+		return rc;
+	}
+
+
+	while ((option = getopt_long(argc, argv, "p", opts, NULL)) != -1) {
+		switch (option) {
+		case 'p':
+			rc = ping_test();
+			break;
+
+		default:
+			rc = -EINVAL;
+		}
+	}
+
+	dct_fini();
+	return rc;
+}

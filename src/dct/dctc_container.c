@@ -20,15 +20,45 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * Server-side API of the DAOS Caching and Tiering layer
+/*
+ * dctc: Client container operations
+ *
+ * dctc is the DCT client module/library. It exports the DCT API defined in
+ * daos_ct.h.
  */
 
-#ifndef __DCT_SRV_H__
-#define __DCT_SRV_H__
-
+#include <daos_ct.h>
+#include <pthread.h>
+#include <daos/rpc.h>
 #include <daos/transport.h>
+#include "dct_rpc.h"
 
-int dcts_hdlr_ping(dtp_rpc_t *rpc);
 
-#endif /* __DCT_SRV_H__ */
+int
+dct_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
+{
+	return 0;
+}
+
+
+int
+dct_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
+	    daos_rank_list_t *failed, daos_handle_t *coh, daos_co_info_t *info,
+	    daos_event_t *ev)
+{
+	return 0;
+}
+
+int
+dct_co_close(daos_handle_t coh, daos_event_t *ev)
+{
+	return 0;
+}
+
+
+int
+dct_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
+	       daos_event_t *ev)
+{
+	return 0;
+}

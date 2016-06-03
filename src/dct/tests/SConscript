@@ -1,0 +1,11 @@
+#!python
+
+Import('denv')
+
+denv.Append(CPPPATH = ['#/src/dct', '#/src/server'])
+
+libraries = ['pthread', 'uuid']
+libraries += ['daos_common', 'daos_transport', 'daos_event']
+
+denv.Program('dct_test', 'dct_test.c',
+            LIBS=[libraries, 'daos_ct'])

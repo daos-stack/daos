@@ -20,15 +20,22 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * Server-side API of the DAOS Caching and Tiering layer
- */
+/*
+ * dsms: Internal Declarations
+ *
+ * This file contains all declarations that are only used by dcts but do not
+ * belong to the more specific headers.  All external
+ * variables and functions must have a "dcts_" prefix, however, even if they
+ * are only used by dsms.
+ **/
 
-#ifndef __DCT_SRV_H__
-#define __DCT_SRV_H__
+#ifndef __DCTS_INTERNAL_H__
+#define __DCTS_INTERNAL_H__
 
-#include <daos/transport.h>
+/* dcts_ping.c */
 
+/* ping test handler, more of a self-teaching widget */
 int dcts_hdlr_ping(dtp_rpc_t *rpc);
 
-#endif /* __DCT_SRV_H__ */
+
+#endif /*__DCTS_INTERNAL_H__*/

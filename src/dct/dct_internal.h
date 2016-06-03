@@ -21,14 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * Server-side API of the DAOS Caching and Tiering layer
+ * DCT Internal use functions
  */
 
-#ifndef __DCT_SRV_H__
-#define __DCT_SRV_H__
 
-#include <daos/transport.h>
+#ifndef __DCT_ITERNAL_H__
+#define __DCT_INTERNAL_H__
 
-int dcts_hdlr_ping(dtp_rpc_t *rpc);
-
-#endif /* __DCT_SRV_H__ */
+#endif /* __DCT_INTERNAL_H__ */

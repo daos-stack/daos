@@ -20,15 +20,46 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * Server-side API of the DAOS Caching and Tiering layer
+/*
+ * dct: RPC Protocol Serialization Functions
  */
+#include <daos/rpc.h>
+#include <daos/event.h>
+#include "dct_rpc.h"
 
-#ifndef __DCT_SRV_H__
-#define __DCT_SRV_H__
 
-#include <daos/transport.h>
 
-int dcts_hdlr_ping(dtp_rpc_t *rpc);
+struct dtp_msg_field *dct_ping_in_fields[] = {
+	&DMF_INT
+};
 
-#endif /* __DCT_SRV_H__ */
+struct dtp_msg_field *dct_ping_out_fields[] = {
+	&DMF_INT
+};
+
+struct dtp_req_format DCT_RF_PING =
+	DEFINE_DTP_REQ_FMT("DCT_PING", dct_ping_in_fields, dct_ping_out_fields);
+
+int
+dct_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
+	       dtp_opcode_t opc, dtp_rpc_t **req)
+{
+	dtp_opcode_t opcode;
+
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_DCT_MODULE, 1);
+
+	return dtp_req_create(dtp_ctx, tgt_ep, opcode, req);
+}
+
+struct daos_rpc dct_rpcs[] = {
+	{
+		.dr_name	= "DCT_PING",
+		.dr_opc		= DCT_PING,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DCT_RF_PING,
+	}, {
+		.dr_opc		= 0
+	}
+};
+

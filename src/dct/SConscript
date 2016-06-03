@@ -6,9 +6,15 @@ env.AppendUnique(LIBPATH=[Dir('.')])
 denv = env.Clone()
 
 # generate server module
-srv = denv.SharedLibrary('daos_ct_srv', Glob('*.c'))
-denv.Install('$PREFIX/lib/daos_srv', srv)
+ct_srv = denv.SharedLibrary('daos_ct_srv',
+			    ['dct_rpc.c', 'dcts_module.c','dcts_ping.c'])
+
+denv.Install('$PREFIX/lib/daos_srv', ct_srv)
 
 # generate client library
-client = denv.SharedLibrary('daos_ct', Glob('*.c'))
-denv.Install('$PREFIX/lib/', client)
+ct_client = denv.SharedLibrary('daos_ct',
+			       ['dct_rpc.c', 'dctc_module.c', 'dctc_ping.c'])
+denv.Install('$PREFIX/lib/', ct_client)
+
+# tests
+SConscript('tests/SConscript', exports = 'denv')

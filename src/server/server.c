@@ -34,7 +34,7 @@
 #include "dss_internal.h"
 
 #define MAX_MODULE_OPTIONS	64
-#define MODULE_LIST		"vos,dmg,dsm,dsr"
+#define MODULE_LIST		"vos,dmg,dsm,dsr,dct"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -74,6 +74,8 @@ modules_load()
 			rc = dss_module_load("daos_mgmt_srv");
 		else if (strcmp(mod, "vos") == 0)
 			rc = dss_module_load("vos_srv");
+		else if (strcmp(mod, "dct") == 0)
+			rc = dss_module_load("daos_ct_srv");
 		else
 			rc = dss_module_load(mod);
 
@@ -150,7 +152,7 @@ server_fini(bool force)
 static void
 usage(char *prog, FILE *out)
 {
-	fprintf(out, "Usage: %s [ -m vos,dmg,dsm,dsr ]\n", prog);
+	fprintf(out, "Usage: %s [ -m vos,dmg,dsm,dsr,dct ]\n", prog);
 }
 
 static int

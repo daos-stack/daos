@@ -20,15 +20,34 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * Server-side API of the DAOS Caching and Tiering layer
- */
+/*
+ * dcts_ping
+ * Implements the ping function of dcts_internal.h.
+ **/
 
-#ifndef __DCT_SRV_H__
-#define __DCT_SRV_H__
-
+#include <daos_srv/daos_ct_srv.h>
 #include <daos/transport.h>
+#include "dct_rpc.h"
 
-int dcts_hdlr_ping(dtp_rpc_t *rpc);
 
-#endif /* __DCT_SRV_H__ */
+int
+dcts_hdlr_ping(dtp_rpc_t *rpc)
+{
+
+	struct dct_ping_in *in = dtp_req_get(rpc);
+	struct dct_ping_out *out = dtp_reply_get(rpc);
+	int  rc = 0;
+
+	D_DEBUG(DF_UNKNOWN, "receive, ping %d.\n", rpc->dr_opc);
+
+	out->ping_out = in->ping_in + 1;
+
+	rc = dtp_reply_send(rpc);
+
+	D_DEBUG(DF_UNKNOWN, "ping ret val, 1 higher than input: %d\n",
+		out->ping_out);
+
+	return rc;
+}
+
+

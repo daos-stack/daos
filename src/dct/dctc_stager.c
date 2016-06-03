@@ -20,15 +20,21 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * Server-side API of the DAOS Caching and Tiering layer
+/*
+ * client portion of the fetch operation
+ *
+ * dctc is the DCT part of client module/library. It exports part of the DCT
+ * API defined in daos_ct.h.
  */
 
-#ifndef __DCT_SRV_H__
-#define __DCT_SRV_H__
+#include <daos_ct.h>
 
-#include <daos/transport.h>
+/* TODO, currently stub */
+int
+dct_fetch_container(daos_handle_t poh, const uuid_t cont_id,
+		    daos_epoch_t fetch_ep, daos_oid_list_t obj_list,
+		    daos_event_t *ev)
+{
+	return 0;
+}
 
-int dcts_hdlr_ping(dtp_rpc_t *rpc);
-
-#endif /* __DCT_SRV_H__ */
