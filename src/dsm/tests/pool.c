@@ -53,7 +53,6 @@ pool_connect(void **state)
 	daos_event_t	 ev;
 	daos_event_t	*evp;
 	daos_pool_info_t info;
-	daos_iov_t	 ghdl = { NULL, 0, 0 };
 	int		 rc;
 
 	if (!arg->hdl_share && arg->myrank != 0)
@@ -110,7 +109,6 @@ pool_connect(void **state)
 		arg->async = false;
 	}
 	print_message("rank %d success\n", arg->myrank);
-	free(ghdl.iov_buf);
 }
 
 static const struct CMUnitTest pool_tests[] = {

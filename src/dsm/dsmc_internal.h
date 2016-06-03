@@ -92,15 +92,39 @@ struct dsmc_pool_glob {
 	struct pool_buf	        dpg_map_buf[0];
 };
 
+/* Structure of global buffer for dmsc_container */
+struct dsmc_container_glob {
+	/* pool connection handle */
+	uuid_t			dcg_pool_hdl;
+	/* container uuid and capas */
+	uuid_t			dcg_uuid;
+	uuid_t			dcg_cont_hdl;
+	uint64_t		dcg_capas;
+};
+
 struct dsmc_hdl_glob {
 	/* magic number, DSM_GLOB_HDL_MAGIC */
-	uint32_t			dhg_magic;
+	uint32_t				dhg_magic;
 	/* glob hdl type, must be DSMC_GLOB_POOL or DSMC_GLOB_CO */
-	uint32_t			dhg_type;
+	uint32_t				dhg_type;
 	union {
-		struct dsmc_pool_glob	dhg_pool;
+		struct dsmc_pool_glob		dhg_pool;
+		struct dsmc_container_glob	dhg_cont;
 	} u;
 };
+
+static inline daos_size_t
+dsmc_pool_glob_buf_size(unsigned int pb_nr)
+{
+	return offsetof(struct dsmc_hdl_glob, u.dhg_pool.dpg_map_buf) +
+	       pool_buf_size(pb_nr);
+}
+
+static inline daos_size_t
+dsmc_container_glob_buf_size()
+{
+	return sizeof(struct dsmc_hdl_glob);
+}
 
 /* dsmc object in dsm client cache */
 struct dsmc_object {
@@ -115,17 +139,19 @@ struct dsmc_object {
 	daos_list_t		do_co_list;
 };
 
-static inline daos_size_t
-dsmc_pool_glob_buf_size(unsigned int pb_nr)
+static inline int
+dsmc_handle_type(daos_handle_t hdl)
 {
-	return offsetof(struct dsmc_hdl_glob, u.dhg_pool.dpg_map_buf) +
-	       pool_buf_size(pb_nr);
+	return daos_hhash_key_type(hdl.cookie);
 }
 
 static inline struct dsmc_container*
 dsmc_handle2container(daos_handle_t hdl)
 {
 	struct daos_hlink *dlink;
+
+	if (dsmc_handle_type(hdl) != DAOS_HTYPE_CO)
+		return NULL;
 
 	dlink = daos_hhash_link_lookup(dsmc_hhash, hdl.cookie);
 	if (dlink == NULL)
@@ -154,16 +180,13 @@ dsmc_container_put(struct dsmc_container *dc)
 	daos_hhash_link_putref(dsmc_hhash, &dc->dc_hlink);
 }
 
-static inline int
-dsmc_handle_type(daos_handle_t hdl)
-{
-	return daos_hhash_key_type(hdl.cookie);
-}
-
 static inline struct dsmc_pool *
 dsmc_handle2pool(daos_handle_t poh)
 {
 	struct daos_hlink *dlink;
+
+	if (dsmc_handle_type(poh) != DAOS_HTYPE_POOL)
+		return NULL;
 
 	dlink = daos_hhash_link_lookup(dsmc_hhash, poh.cookie);
 	if (dlink == NULL)

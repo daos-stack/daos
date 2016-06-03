@@ -40,6 +40,9 @@ co_create(void **state)
 	daos_event_t	*evp;
 	int		 rc;
 
+	if (!arg->hdl_share && arg->myrank != 0)
+		return;
+
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
@@ -49,42 +52,50 @@ co_create(void **state)
 	uuid_generate(uuid);
 
 	/** create container */
-	print_message("creating container %ssynchronously ...\n",
-		      arg->async ? "a" : "");
-	rc = dsm_co_create(arg->poh, uuid, arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
+	if (arg->myrank == 0) {
+		print_message("creating container %ssynchronously ...\n",
+			      arg->async ? "a" : "");
+		rc = dsm_co_create(arg->poh, uuid, arg->async ? &ev : NULL);
+		assert_int_equal(rc, 0);
 
-	if (arg->async) {
-		/** wait for container creation */
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
+		if (arg->async) {
+			/** wait for container creation */
+			rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+			assert_int_equal(rc, 1);
+			assert_ptr_equal(evp, &ev);
+			assert_int_equal(ev.ev_error, 0);
+		}
+		print_message("container created\n");
+
+		print_message("opening container %ssynchronously\n",
+			      arg->async ? "a" : "");
+		rc = dsm_co_open(arg->poh, uuid, DAOS_COO_RW, NULL /* failed */,
+				 &coh, &info, arg->async ? &ev : NULL);
+		assert_int_equal(rc, 0);
+
+		if (arg->async) {
+			/** wait for container open */
+			rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+			assert_int_equal(rc, 1);
+			assert_ptr_equal(evp, &ev);
+			assert_int_equal(ev.ev_error, 0);
+		}
+		print_message("contained opened\n");
+
+		print_message("container info:\n");
+		print_message("  hce: "DF_U64"\n", info.ci_epoch_state.es_hce);
+		print_message("  lre: "DF_U64"\n", info.ci_epoch_state.es_lre);
+		print_message("  lhe: "DF_U64"\n", info.ci_epoch_state.es_lhe);
+		print_message("  ghce: "DF_U64"\n",
+			      info.ci_epoch_state.es_glb_hce);
+		print_message("  glre: "DF_U64"\n",
+			      info.ci_epoch_state.es_glb_lre);
+		print_message("  ghpce: "DF_U64"\n",
+			      info.ci_epoch_state.es_glb_hpce);
 	}
-	print_message("container created\n");
 
-	print_message("opening container %ssynchronously\n",
-		      arg->async ? "a" : "");
-	rc = dsm_co_open(arg->poh, uuid, DAOS_COO_RW, NULL /* failed */, &coh,
-			 &info, arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
-
-	if (arg->async) {
-		/** wait for container open */
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
-	}
-	print_message("contained opened\n");
-
-	print_message("container info:\n");
-	print_message("  hce: "DF_U64"\n", info.ci_epoch_state.es_hce);
-	print_message("  lre: "DF_U64"\n", info.ci_epoch_state.es_lre);
-	print_message("  lhe: "DF_U64"\n", info.ci_epoch_state.es_lhe);
-	print_message("  ghce: "DF_U64"\n", info.ci_epoch_state.es_glb_hce);
-	print_message("  glre: "DF_U64"\n", info.ci_epoch_state.es_glb_lre);
-	print_message("  ghpce: "DF_U64"\n", info.ci_epoch_state.es_glb_hpce);
+	if (arg->hdl_share)
+		handle_share(&coh, HANDLE_CO, arg->myrank, arg->poh);
 
 	print_message("closing container %ssynchronously ...\n",
 		      arg->async ? "a" : "");
@@ -100,24 +111,29 @@ co_create(void **state)
 	}
 	print_message("container closed\n");
 
+	if (arg->hdl_share)
+		MPI_Barrier(MPI_COMM_WORLD);
+
 	/** destroy container */
-	print_message("destroying container %ssynchronously ...\n",
-		      arg->async ? "a" : "");
-	rc = dsm_co_destroy(arg->poh, uuid, 1 /* force */,
-			    arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
-
-	if (arg->async) {
-		/** wait for container destroy */
-		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
-
-		rc = daos_event_fini(&ev);
+	if (arg->myrank == 0) {
+		print_message("destroying container %ssynchronously ...\n",
+			      arg->async ? "a" : "");
+		rc = dsm_co_destroy(arg->poh, uuid, 1 /* force */,
+				    arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
+
+		if (arg->async) {
+			/** wait for container destroy */
+			rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+			assert_int_equal(rc, 1);
+			assert_ptr_equal(evp, &ev);
+			assert_int_equal(ev.ev_error, 0);
+
+			rc = daos_event_fini(&ev);
+			assert_int_equal(rc, 0);
+		}
+		print_message("container destroyed\n");
 	}
-	print_message("container destroyed\n");
 }
 
 static const struct CMUnitTest co_tests[] = {
@@ -125,6 +141,8 @@ static const struct CMUnitTest co_tests[] = {
 	  co_create, async_disable, NULL},
 	{ "DSM101: create/open/close/destroy container (async)",
 	  co_create, async_enable, NULL},
+	{ "DSM102: container handle local2glocal and global2local",
+	  co_create, hdl_share_enable, NULL},
 };
 
 static int
@@ -145,18 +163,34 @@ setup(void **state)
 	arg->svc.rl_nr.num_out = 0;
 	arg->svc.rl_ranks = arg->ranks;
 
-	/** create pool with minimal size */
-	rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL, "pmem",
-			     0, &arg->svc, arg->pool_uuid, NULL);
+	arg->hdl_share = false;
+	uuid_clear(arg->pool_uuid);
+	MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
+	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
+
+	if (arg->myrank == 0) {
+		/** create pool with minimal size */
+		rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL,
+				     "pmem", 0, &arg->svc, arg->pool_uuid,
+				     NULL);
+	}
+
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
 
 	/** connect to pool */
-	rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-			      DAOS_PC_RW, NULL /* failed */, &arg->poh,
-			      NULL /* info */, NULL /* ev */);
+	if (arg->myrank == 0) {
+		rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+				      DAOS_PC_RW, NULL /* failed */, &arg->poh,
+				      NULL /* info */, NULL /* ev */);
+	}
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
+
+	/** l2g and g2l the pool handle */
+	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh);
 
 	*state = arg;
 	return 0;
@@ -171,7 +205,10 @@ teardown(void **state) {
 	if (rc)
 		return rc;
 
-	rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
+	if (arg->myrank == 0)
+		rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
+
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
 
@@ -188,9 +225,8 @@ run_co_test(int rank, int size)
 {
 	int rc = 0;
 
-	if (rank == 0)
-		rc = cmocka_run_group_tests_name("DSM container tests",
-						 co_tests, setup, teardown);
+	rc = cmocka_run_group_tests_name("DSM container tests",
+					 co_tests, setup, teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

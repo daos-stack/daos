@@ -499,30 +499,56 @@ setup(void **state)
 	arg->svc.rl_nr.num_out = 0;
 	arg->svc.rl_ranks = arg->ranks;
 
-	/** create pool with minimal size */
-	rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL, "pmem",
-			     0, &arg->svc, arg->pool_uuid, NULL);
+	arg->hdl_share = false;
+	uuid_clear(arg->pool_uuid);
+	MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
+	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
+
+	if (arg->myrank == 0) {
+		/** create pool with minimal size */
+		rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL,
+				     "pmem", 256*1024*1024, &arg->svc,
+				     arg->pool_uuid, NULL);
+	}
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
 
-	/** connect to pool */
-	rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-			      DAOS_PC_RW, NULL /* failed */, &arg->poh,
-			      &arg->pool_info, NULL /* ev */);
+	if (arg->myrank == 0) {
+		/** connect to pool */
+		rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+				      DAOS_PC_RW, NULL /* failed */, &arg->poh,
+				      &arg->pool_info, NULL /* ev */);
+	}
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		return rc;
+	MPI_Bcast(&arg->pool_info, sizeof(arg->pool_info), MPI_CHAR, 0,
+		  MPI_COMM_WORLD);
+
+	/** l2g and g2l the pool handle */
+	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh);
+
+	if (arg->myrank == 0) {
+		/** create container */
+		uuid_generate(arg->co_uuid);
+		rc = dsm_co_create(arg->poh, arg->co_uuid, NULL);
+	}
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
 
-	/** create container */
-	uuid_generate(arg->co_uuid);
-	rc = dsm_co_create(arg->poh, arg->co_uuid, NULL);
+	if (arg->myrank == 0) {
+		/** open container */
+		rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, NULL,
+				 &arg->coh, NULL, NULL);
+	}
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
 
-	/** open container */
-	rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, NULL, &arg->coh,
-			 NULL, NULL);
-	if (rc)
-		return rc;
+	/** l2g and g2l the container handle */
+	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh);
 
 	*state = arg;
 	return 0;
@@ -537,7 +563,9 @@ teardown(void **state) {
 	if (rc)
 		return rc;
 
-	rc = dsm_co_destroy(arg->poh, arg->co_uuid, 1, NULL);
+	if (arg->myrank == 0)
+		rc = dsm_co_destroy(arg->poh, arg->co_uuid, 1, NULL);
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
 
@@ -545,7 +573,9 @@ teardown(void **state) {
 	if (rc)
 		return rc;
 
-	rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
+	if (arg->myrank == 0)
+		rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
 
@@ -562,9 +592,8 @@ run_io_test(int rank, int size)
 {
 	int rc = 0;
 
-	if (rank == 0)
-		rc = cmocka_run_group_tests_name("DSM io tests", io_tests,
-						 setup, teardown);
+	rc = cmocka_run_group_tests_name("DSM io tests", io_tests,
+					 setup, teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

@@ -33,17 +33,31 @@ dtp_sgl_valid(daos_sg_list_t *sgl)
 	daos_iov_t	*iov;
 	int		i;
 
-	if (sgl == NULL || sgl->sg_nr.num == 0)
+	if (sgl == NULL || sgl->sg_nr.num == 0) {
+		if (sgl == NULL)
+			D_ERROR("invalid parameter, NULL sgl.\n");
+		else
+			D_ERROR("invalid parameter, zero sgl->sg_nr.num.\n");
 		return false;
+	}
 
 	/* HG_Bulk_create allows to pass in a NULL but_ptrs in which case HG
 	 * will internally allocate memory, temporarily not use this feature. */
-	if (sgl->sg_iovs == NULL)
+	if (sgl->sg_iovs == NULL) {
+		D_ERROR("invalid parameter, NULL sgl->sg_iovs.\n");
 		return false;
+	}
 	for (i = 0; i < sgl->sg_nr.num; i++) {
 		iov = &sgl->sg_iovs[i];
-		if (iov->iov_buf == NULL || iov->iov_buf_len == 0)
+		if (iov->iov_buf == NULL || iov->iov_buf_len == 0) {
+			if (iov->iov_buf == NULL)
+				D_ERROR("invalid parameter, sg_iovs[%d]."
+					"iov_buf is NULL.\n", i);
+			else
+				D_ERROR("invalid parameter, sg_iovs[%d]."
+					"iov_buf_len is 0.\n", i);
 			return false;
+		}
 	}
 	return true;
 }
@@ -94,7 +108,9 @@ dtp_bulk_create(dtp_context_t dtp_ctx, daos_sg_list_t *sgl,
 	    /* Now HG treats WO as invalid parameter */
 	    (bulk_perm != DTP_BULK_RW && bulk_perm != DTP_BULK_RO /* &&
 	     bulk_perm != DTP_BULK_WO */) || bulk_hdl == NULL) {
-		D_ERROR("invalid parameter for dtp_bulk_create.\n");
+		D_ERROR("invalid parameter for dtp_bulk_create, dtp_ctx: %p, "
+			"dtp_sgl_valid: %d, bulk_perm: %d, bulk_hdl: %p.\n",
+			dtp_ctx, dtp_sgl_valid(sgl), bulk_perm, bulk_hdl);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

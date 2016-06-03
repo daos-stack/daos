@@ -421,7 +421,7 @@ dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 {
 	struct dsmc_pool	*pool;
 	struct dsmc_hdl_glob	*hdl_glob;
-	struct dsmc_pool_glob	 *pool_glob;
+	struct dsmc_pool_glob	*pool_glob;
 	daos_size_t		 glob_buf_size;
 	uint32_t		 pb_nr;
 	int			 rc = 0;
@@ -488,7 +488,6 @@ dsm_pool_local2global(daos_handle_t poh, daos_iov_t *glob)
 	if (dsmc_handle_type(poh) != DAOS_HTYPE_POOL) {
 		D_DEBUG(DF_DSMC, "Bad type (%d) of poh handle.\n",
 			dsmc_handle_type(poh));
-		rc = -DER_INVAL;
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

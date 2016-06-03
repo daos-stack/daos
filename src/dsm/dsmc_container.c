@@ -298,7 +298,7 @@ cont_open_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 	if (arg->coa_info == NULL)
 		D_GOTO(out, rc = 0);
 
-	uuid_copy(arg->coa_info->ci_uuid, arg->coa_cont->dc_uuid);
+	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
 	arg->coa_info->ci_epoch_state = out->coo_epoch_state;
 	/* TODO */
 	arg->coa_info->ci_nsnapshots = 0;
@@ -307,8 +307,7 @@ cont_open_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 out:
 	dtp_req_decref(sp->sp_rpc);
 	D_FREE_PTR(arg);
-	if (rc != 0)
-		dsmc_container_put(arg->coa_cont);
+	dsmc_container_put(cont);
 	dsmc_pool_put(pool);
 	return rc;
 }
@@ -435,7 +434,7 @@ cont_close_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DF_DSMC, "completed closing container\n");
+	D_DEBUG(DF_DSMC, "completed closing container (on master)\n");
 
 	dsmc_container_del_cache(cont);
 
@@ -470,25 +469,44 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 	/* Check if there are not objects opened for this container */
 	pthread_rwlock_rdlock(&cont->dc_obj_list_lock);
 	if (!daos_list_empty(&cont->dc_obj_list)) {
+		D_ERROR("cannot close container, object not closed.\n");
 		pthread_rwlock_unlock(&cont->dc_obj_list_lock);
 		D_GOTO(err_cont, rc = -DER_BUSY);
 	}
 	cont->dc_closing = 1;
 	pthread_rwlock_unlock(&cont->dc_obj_list_lock);
 
-	D_ASSERT(!daos_handle_is_inval(cont->dc_pool_hdl));
 	pool = dsmc_handle2pool(cont->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
+
+	D_DEBUG(DF_DSMC, DF_UUID"/"DF_UUID": "DF_UUID"\n",
+		DP_UUID(pool->dp_pool), DP_UUID(cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl));
+
+	if (cont->dc_slave) {
+		dsmc_container_del_cache(cont);
+
+		/* Remove the container from pool container list */
+		pthread_rwlock_wrlock(&pool->dp_co_list_lock);
+		daos_list_del_init(&cont->dc_po_list);
+		pthread_rwlock_unlock(&pool->dp_co_list_lock);
+
+		dsmc_pool_put(pool);
+		dsmc_container_put(cont);
+
+		if (ev != NULL) {
+			daos_event_launch(ev, NULL, NULL);
+			daos_event_complete(ev, 0);
+		}
+		D_DEBUG(DF_DSMC, "completed closing container (on slave)\n");
+		return 0;
+	}
 
 	if (ev == NULL) {
 		rc = daos_event_priv_get(&ev);
 		if (rc != 0)
 			D_GOTO(err_pool, rc);
 	}
-
-	D_DEBUG(DF_DSMC, DF_UUID"/"DF_UUID": "DF_UUID"\n",
-		DP_UUID(pool->dp_pool), DP_UUID(cont->dc_uuid),
-		DP_UUID(cont->dc_cont_hdl));
 
 	D_ALLOC_PTR(arg);
 	if (arg == NULL) {
@@ -541,21 +559,206 @@ err:
 	return rc;
 }
 
-int
-dsmc_co_l2g(daos_handle_t loc, daos_iov_t *glob)
+static inline void
+dsmc_swap_co_glob(struct dsmc_container_glob *cont_glob)
 {
-	struct dsmc_container	*cont;
-	int			rc = 0;
+	D_ASSERT(cont_glob != NULL);
 
-	cont = dsmc_handle2container(loc);
+	/* skip cont_glob->dcg_pool_hdl (uuid_t) */
+	/* skip cont_glob->dcg_uuid (uuid_t) */
+	/* skip cont_glob->dcg_cont_hdl (uuid_t) */
+	D_SWAP64S(&cont_glob->dcg_capas);
+}
+
+int
+dsmc_co_l2g(daos_handle_t coh, daos_iov_t *glob)
+{
+	struct dsmc_pool		*pool;
+	struct dsmc_container		*cont;
+	struct dsmc_hdl_glob		*hdl_glob;
+	struct dsmc_container_glob	*cont_glob;
+	daos_size_t			 glob_buf_size;
+	int				 rc = 0;
+
+	D_ASSERT(glob != NULL);
+
+	cont = dsmc_handle2container(coh);
 	if (cont == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
-	/* TODO implement it in other patch */
 
+	glob_buf_size = dsmc_container_glob_buf_size();
+	if (glob->iov_buf == NULL) {
+		glob->iov_buf_len = glob_buf_size;
+		D_GOTO(out_cont, rc = 0);
+	}
+	if (glob->iov_buf_len < glob_buf_size) {
+		D_DEBUG(DF_DSMC, "Larger glob buffer needed ("DF_U64" bytes "
+			"provided, "DF_U64" required).\n", glob->iov_buf_len,
+			glob_buf_size);
+		glob->iov_buf_len = glob_buf_size;
+		D_GOTO(out_cont, rc = -DER_TRUNC);
+	}
+	glob->iov_len = glob_buf_size;
 
+	pool = dsmc_handle2pool(cont->dc_pool_hdl);
+	if (pool == NULL)
+		D_GOTO(out_cont, rc = -DER_NO_HDL);
+
+	/* init global handle */
+	hdl_glob = (struct dsmc_hdl_glob *)glob->iov_buf;
+	hdl_glob->dhg_magic = DSM_GLOB_HDL_MAGIC;
+	hdl_glob->dhg_type = DSMC_GLOB_CO;
+	cont_glob = &hdl_glob->u.dhg_cont;
+	uuid_copy(cont_glob->dcg_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(cont_glob->dcg_uuid, cont->dc_uuid);
+	uuid_copy(cont_glob->dcg_cont_hdl, cont->dc_cont_hdl);
+	cont_glob->dcg_capas = cont->dc_capas;
+
+	dsmc_pool_put(pool);
+
+out_cont:
 	dsmc_container_put(cont);
 out:
 	if (rc)
 		D_ERROR("dsm_co_l2g failed, rc: %d\n", rc);
+	return rc;
+}
+
+int
+dsm_co_local2global(daos_handle_t coh, daos_iov_t *glob)
+{
+	int	rc = 0;
+
+	if (glob == NULL) {
+		D_ERROR("Invalid parameter, NULL glob pointer.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
+	    glob->iov_len == 0 || glob->iov_buf_len < glob->iov_len)) {
+		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len "
+			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
+			glob->iov_buf_len, glob->iov_len);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (dsmc_handle_type(coh) != DAOS_HTYPE_CO) {
+		D_ERROR("Bad type (%d) of coh handle.\n",
+			dsmc_handle_type(coh));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = dsmc_co_l2g(coh, glob);
+
+out:
+	return rc;
+}
+
+static int
+dsmc_co_g2l(daos_handle_t poh, struct dsmc_container_glob *cont_glob,
+	    daos_handle_t *coh)
+{
+	struct dsmc_pool	*pool;
+	struct dsmc_container	*cont;
+	int			rc = 0;
+
+	D_ASSERT(cont_glob != NULL);
+	D_ASSERT(coh != NULL);
+
+	pool = dsmc_handle2pool(poh);
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+
+	if (uuid_compare(pool->dp_pool_hdl, cont_glob->dcg_pool_hdl) != 0) {
+		D_ERROR("pool_hdl mismatch, in pool: "DF_UUID", in cont_glob: "
+			DF_UUID"\n", DP_UUID(pool->dp_pool_hdl),
+			DP_UUID(cont_glob->dcg_pool_hdl));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if ((cont_glob->dcg_capas & DAOS_COO_RW) &&
+	    (pool->dp_capas & DAOS_PC_RO))
+		D_GOTO(out_pool, rc = -DER_NO_PERM);
+
+	cont = dsmc_container_alloc(cont_glob->dcg_uuid);
+	if (cont == NULL)
+		D_GOTO(out_pool, rc = -DER_NOMEM);
+
+	uuid_copy(cont->dc_cont_hdl, cont_glob->dcg_cont_hdl);
+	cont->dc_capas = cont_glob->dcg_capas;
+	cont->dc_slave = 1;
+
+	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
+	if (pool->dp_disconnecting) {
+		pthread_rwlock_unlock(&pool->dp_co_list_lock);
+		D_ERROR("pool connection being invalidated\n");
+		D_GOTO(out_cont, rc = -DER_NO_HDL);
+	}
+	daos_list_add(&cont->dc_po_list, &pool->dp_co_list);
+	cont->dc_pool_hdl = poh;
+	pthread_rwlock_unlock(&pool->dp_co_list_lock);
+
+	dsmc_container_add_cache(cont, coh);
+
+out_cont:
+	dsmc_container_put(cont);
+out_pool:
+	dsmc_pool_put(pool);
+out:
+	return rc;
+}
+
+int
+dsm_co_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
+{
+	struct dsmc_hdl_glob		 *hdl_glob;
+	struct dsmc_container_glob	 *cont_glob;
+	bool				  swap = false;
+	int				  rc = 0;
+
+	if (dsmc_handle_type(poh) != DAOS_HTYPE_POOL) {
+		D_ERROR("Bad type (%d) of poh handle.\n",
+			dsmc_handle_type(poh));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len ||
+	    glob.iov_len != dsmc_container_glob_buf_size()) {
+		D_DEBUG(DF_DSMC, "Invalid parameter of glob, iov_buf %p, "
+			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
+			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (coh == NULL) {
+		D_DEBUG(DF_DSMC, "Invalid parameter, NULL coh.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	hdl_glob = (struct dsmc_hdl_glob *)glob.iov_buf;
+	if (hdl_glob->dhg_magic == D_SWAP32(DSM_GLOB_HDL_MAGIC)) {
+		swap = true;
+		D_SWAP32S(&hdl_glob->dhg_type);
+	} else if (hdl_glob->dhg_magic != DSM_GLOB_HDL_MAGIC) {
+		D_ERROR("Bad dhg_magic: 0x%x.\n", hdl_glob->dhg_magic);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (hdl_glob->dhg_type != DSMC_GLOB_CO) {
+		D_ERROR("Bad dhg_type: %d.\n", hdl_glob->dhg_type);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	cont_glob = &hdl_glob->u.dhg_cont;
+	if (swap)
+		dsmc_swap_co_glob(cont_glob);
+
+	if (uuid_is_null(cont_glob->dcg_pool_hdl) ||
+	    uuid_is_null(cont_glob->dcg_uuid) ||
+	    uuid_is_null(cont_glob->dcg_cont_hdl)) {
+		D_ERROR("Invalid parameter, pool_hdl/uuid/cont_hdl is null.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = dsmc_co_g2l(poh, cont_glob, coh);
+	if (rc != 0)
+		D_ERROR("dsmc_co_g2l failed, rc: %d.\n", rc);
+
+out:
 	return rc;
 }
