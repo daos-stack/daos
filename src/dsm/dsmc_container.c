@@ -564,6 +564,8 @@ dsmc_swap_co_glob(struct dsmc_container_glob *cont_glob)
 {
 	D_ASSERT(cont_glob != NULL);
 
+	D_SWAP32S(&cont_glob->dcg_header.hgh_magic);
+	D_SWAP32S(&cont_glob->dcg_header.hgh_type);
 	/* skip cont_glob->dcg_pool_hdl (uuid_t) */
 	/* skip cont_glob->dcg_uuid (uuid_t) */
 	/* skip cont_glob->dcg_cont_hdl (uuid_t) */
@@ -575,7 +577,6 @@ dsmc_co_l2g(daos_handle_t coh, daos_iov_t *glob)
 {
 	struct dsmc_pool		*pool;
 	struct dsmc_container		*cont;
-	struct dsmc_hdl_glob		*hdl_glob;
 	struct dsmc_container_glob	*cont_glob;
 	daos_size_t			 glob_buf_size;
 	int				 rc = 0;
@@ -605,10 +606,8 @@ dsmc_co_l2g(daos_handle_t coh, daos_iov_t *glob)
 		D_GOTO(out_cont, rc = -DER_NO_HDL);
 
 	/* init global handle */
-	hdl_glob = (struct dsmc_hdl_glob *)glob->iov_buf;
-	hdl_glob->dhg_magic = DSM_GLOB_HDL_MAGIC;
-	hdl_glob->dhg_type = DSMC_GLOB_CO;
-	cont_glob = &hdl_glob->u.dhg_cont;
+	cont_glob = (struct dsmc_container_glob *)glob->iov_buf;
+	dsmc_hdl_glob_hdr_init(&cont_glob->dcg_header, DSMC_GLOB_CO);
 	uuid_copy(cont_glob->dcg_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(cont_glob->dcg_uuid, cont->dc_uuid);
 	uuid_copy(cont_glob->dcg_cont_hdl, cont->dc_cont_hdl);
@@ -709,9 +708,7 @@ out:
 int
 dsm_co_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 {
-	struct dsmc_hdl_glob		 *hdl_glob;
 	struct dsmc_container_glob	 *cont_glob;
-	bool				  swap = false;
 	int				  rc = 0;
 
 	if (dsmc_handle_type(poh) != DAOS_HTYPE_POOL) {
@@ -731,22 +728,20 @@ dsm_co_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	hdl_glob = (struct dsmc_hdl_glob *)glob.iov_buf;
-	if (hdl_glob->dhg_magic == D_SWAP32(DSM_GLOB_HDL_MAGIC)) {
-		swap = true;
-		D_SWAP32S(&hdl_glob->dhg_type);
-	} else if (hdl_glob->dhg_magic != DSM_GLOB_HDL_MAGIC) {
-		D_ERROR("Bad dhg_magic: 0x%x.\n", hdl_glob->dhg_magic);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-	if (hdl_glob->dhg_type != DSMC_GLOB_CO) {
-		D_ERROR("Bad dhg_type: %d.\n", hdl_glob->dhg_type);
+	cont_glob = (struct dsmc_container_glob *)glob.iov_buf;
+	if (cont_glob->dcg_header.hgh_magic == D_SWAP32(DSM_GLOB_HDL_MAGIC)) {
+		dsmc_swap_co_glob(cont_glob);
+		D_ASSERT(cont_glob->dcg_header.hgh_magic == DSM_GLOB_HDL_MAGIC);
+	} else if (cont_glob->dcg_header.hgh_magic != DSM_GLOB_HDL_MAGIC) {
+		D_ERROR("Bad hgh_magic: 0x%x.\n",
+			cont_glob->dcg_header.hgh_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	cont_glob = &hdl_glob->u.dhg_cont;
-	if (swap)
-		dsmc_swap_co_glob(cont_glob);
+	if (cont_glob->dcg_header.hgh_type != DSMC_GLOB_CO) {
+		D_ERROR("Bad hgh_type: %d.\n", cont_glob->dcg_header.hgh_type);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	if (uuid_is_null(cont_glob->dcg_pool_hdl) ||
 	    uuid_is_null(cont_glob->dcg_uuid) ||

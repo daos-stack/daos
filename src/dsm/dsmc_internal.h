@@ -79,51 +79,59 @@ struct dsmc_container {
 			  dc_slave:1; /* generated via g2l */
 };
 
+struct	dsmc_hdl_glob_hdr {
+	/* magic number, DSM_GLOB_HDL_MAGIC */
+	uint32_t		hgh_magic;
+	/* glob hdl type, must be DSMC_GLOB_POOL or DSMC_GLOB_CO */
+	uint32_t		hgh_type;
+};
+
 /* Structure of global buffer for dmsc_pool */
 struct dsmc_pool_glob {
+	struct dsmc_hdl_glob_hdr	dpg_header;
 	/* pool uuid and capas */
-	uuid_t			dpg_pool;
-	uuid_t			dpg_pool_hdl;
-	uint64_t		dpg_capas;
+	uuid_t				dpg_pool;
+	uuid_t				dpg_pool_hdl;
+	uint64_t			dpg_capas;
 	/* poolmap version */
-	uint32_t		dpg_map_version;
+	uint32_t			dpg_map_version;
 	/* number of component of poolbuf, same as pool_buf::pb_nr */
-	uint32_t		dpg_map_pb_nr;
-	struct pool_buf	        dpg_map_buf[0];
+	uint32_t			dpg_map_pb_nr;
+	struct pool_buf		        dpg_map_buf[0];
 };
 
 /* Structure of global buffer for dmsc_container */
 struct dsmc_container_glob {
+	struct dsmc_hdl_glob_hdr	dcg_header;
 	/* pool connection handle */
-	uuid_t			dcg_pool_hdl;
+	uuid_t				dcg_pool_hdl;
 	/* container uuid and capas */
-	uuid_t			dcg_uuid;
-	uuid_t			dcg_cont_hdl;
-	uint64_t		dcg_capas;
+	uuid_t				dcg_uuid;
+	uuid_t				dcg_cont_hdl;
+	uint64_t			dcg_capas;
 };
 
-struct dsmc_hdl_glob {
-	/* magic number, DSM_GLOB_HDL_MAGIC */
-	uint32_t				dhg_magic;
-	/* glob hdl type, must be DSMC_GLOB_POOL or DSMC_GLOB_CO */
-	uint32_t				dhg_type;
-	union {
-		struct dsmc_pool_glob		dhg_pool;
-		struct dsmc_container_glob	dhg_cont;
-	} u;
-};
+static inline void dsmc_hdl_glob_hdr_init(struct dsmc_hdl_glob_hdr *hdr,
+					  uint32_t type)
+{
+	D_ASSERT(hdr != NULL);
+	D_ASSERT(type == DSMC_GLOB_POOL || type == DSMC_GLOB_CO);
+
+	hdr->hgh_magic = DSM_GLOB_HDL_MAGIC;
+	hdr->hgh_type = type;
+}
 
 static inline daos_size_t
 dsmc_pool_glob_buf_size(unsigned int pb_nr)
 {
-	return offsetof(struct dsmc_hdl_glob, u.dhg_pool.dpg_map_buf) +
+	return offsetof(struct dsmc_pool_glob, dpg_map_buf) +
 	       pool_buf_size(pb_nr);
 }
 
 static inline daos_size_t
 dsmc_container_glob_buf_size()
 {
-	return sizeof(struct dsmc_hdl_glob);
+	return sizeof(struct dsmc_container_glob);
 }
 
 /* dsmc object in dsm client cache */

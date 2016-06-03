@@ -301,12 +301,16 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 
 	/* Open the pool and container */
 	rc = dsms_pool_open(oui->oui_pool_uuid, &dph);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("dsms_pool_open failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
+	}
 
 	rc = dsms_co_open_create(dph, oui->oui_co_uuid, &dch);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("dsms_co_open_create failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
+	}
 
 	if (opc_get(rpc->dr_opc) == DSM_TGT_OBJ_UPDATE) {
 		/* allocate the buffer in iovs to do rdma */
@@ -314,12 +318,16 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 				    &oui->oui_dkey, oui->oui_nr,
 				    oui->oui_iods.arrays, sgls, NULL);
 		bulk_op = DTP_BULK_GET;
+		if (rc)
+			D_ERROR("vos_obj_update failed, rc: %d.\n", rc);
 	} else {
 		D_ERROR("idx = %lu\n", ((daos_vec_iod_t *) oui->oui_iods.arrays)[0].vd_recxs[0].rx_idx);
 		rc = vos_obj_fetch(dch, oui->oui_oid, oui->oui_epoch,
 				    &oui->oui_dkey, oui->oui_nr,
 				    oui->oui_iods.arrays, sgls, NULL);
 		bulk_op = DTP_BULK_PUT;
+		if (rc)
+			D_ERROR("vos_obj_fetch failed, rc: %d.\n", rc);
 	}
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -331,7 +339,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 
 		D_ALLOC_PTR(arg);
 		if (arg == NULL)
-			D_GOTO(out, rc);
+			D_GOTO(out, rc = -DER_NOMEM);
 
 		arg->dref = dr;
 		arg->sgls = sgls;
@@ -342,6 +350,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		rc = dtp_bulk_create(rpc->dr_ctx, &sgls[i], DTP_BULK_RW,
 				     &local_bulk_hdl);
 		if (rc != 0) {
+			D_ERROR("dtp_bulk_create failed, rc: %d.\n", rc);
 			D_FREE_PTR(arg);
 			D_GOTO(out, rc);
 		}
@@ -360,6 +369,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 				       update_write_bulk_complete_cb,
 				       arg, &bulk_opid);
 		if (rc < 0) {
+			D_ERROR("dtp_bulk_transfer failed, rc: %d.\n", rc);
 			dtp_bulk_free(local_bulk_hdl);
 			dtp_req_decref(rpc);
 			D_FREE_PTR(arg);
@@ -388,6 +398,7 @@ out:
 	if (sgls != NULL)
 		D_FREE(sgls, oui->oui_nr * sizeof(*sgls));
 
-	D_DEBUG(DF_MISC, "rw result %d\n", rc);
+	D_ASSERT(rc != 0);
+	D_ERROR("rw result %d\n", rc);
 	return rc;
 }

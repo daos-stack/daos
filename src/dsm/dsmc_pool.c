@@ -408,6 +408,8 @@ dsmc_swap_pool_glob(struct dsmc_pool_glob *pool_glob)
 {
 	D_ASSERT(pool_glob != NULL);
 
+	D_SWAP32S(&pool_glob->dpg_header.hgh_magic);
+	D_SWAP32S(&pool_glob->dpg_header.hgh_type);
 	/* skip pool_glob->dpg_pool (uuid_t) */
 	/* skip pool_glob->dpg_pool_hdl (uuid_t) */
 	D_SWAP64S(&pool_glob->dpg_capas);
@@ -420,7 +422,6 @@ static int
 dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 {
 	struct dsmc_pool	*pool;
-	struct dsmc_hdl_glob	*hdl_glob;
 	struct dsmc_pool_glob	*pool_glob;
 	daos_size_t		 glob_buf_size;
 	uint32_t		 pb_nr;
@@ -449,11 +450,9 @@ dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 
 	/* TODO: possible pool map changing during the l2g? */
 
-	/* init global handle */
-	hdl_glob = (struct dsmc_hdl_glob *)glob->iov_buf;
-	hdl_glob->dhg_magic = DSM_GLOB_HDL_MAGIC;
-	hdl_glob->dhg_type = DSMC_GLOB_POOL;
-	pool_glob = &hdl_glob->u.dhg_pool;
+	/* init pool global handle */
+	pool_glob = (struct dsmc_pool_glob *)glob->iov_buf;
+	dsmc_hdl_glob_hdr_init(&pool_glob->dpg_header, DSMC_GLOB_POOL);
 	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
 	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
 	pool_glob->dpg_capas = pool->dp_capas;
@@ -549,9 +548,7 @@ out:
 int
 dsm_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 {
-	struct dsmc_hdl_glob	 *hdl_glob;
 	struct dsmc_pool_glob	 *pool_glob;
-	bool			  swap = false;
 	int			  rc = 0;
 
 	if (glob.iov_buf == NULL || glob.iov_buf_len == 0 ||
@@ -566,23 +563,20 @@ dsm_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	hdl_glob = (struct dsmc_hdl_glob *)glob.iov_buf;
-	if (hdl_glob->dhg_magic == D_SWAP32(DSM_GLOB_HDL_MAGIC)) {
-		swap = true;
-		D_SWAP32S(&hdl_glob->dhg_type);
-	} else if (hdl_glob->dhg_magic != DSM_GLOB_HDL_MAGIC) {
-		D_ERROR("Bad dhg_magic: 0x%x.\n", hdl_glob->dhg_magic);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	if (hdl_glob->dhg_type != DSMC_GLOB_POOL) {
-		D_ERROR("Bad dhg_type: %d.\n", hdl_glob->dhg_type);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	pool_glob = &hdl_glob->u.dhg_pool;
-	if (swap)
+	pool_glob = (struct dsmc_pool_glob *)glob.iov_buf;
+	if (pool_glob->dpg_header.hgh_magic == D_SWAP32(DSM_GLOB_HDL_MAGIC)) {
 		dsmc_swap_pool_glob(pool_glob);
+		D_ASSERT(pool_glob->dpg_header.hgh_magic == DSM_GLOB_HDL_MAGIC);
+	} else if (pool_glob->dpg_header.hgh_magic != DSM_GLOB_HDL_MAGIC) {
+		D_ERROR("Bad hgh_magic: 0x%x.\n",
+			pool_glob->dpg_header.hgh_magic);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (pool_glob->dpg_header.hgh_type != DSMC_GLOB_POOL) {
+		D_ERROR("Bad hgh_type: %d.\n", pool_glob->dpg_header.hgh_type);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	rc = dsmc_pool_g2l(pool_glob, poh);
 	if (rc != 0)
