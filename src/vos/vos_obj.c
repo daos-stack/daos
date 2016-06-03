@@ -517,6 +517,7 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		rc = vos_oref_update(oref, epoch, dkey, nr, vios, sgls, NULL);
 	} TX_ONABORT {
 		D_DEBUG(DF_VOS1, "Failed to update object\n");
+		rc = rc ?: -DER_NOSPACE;
 	} TX_END
 
 	vos_obj_ref_release(vos_obj_cache_current(), oref);
@@ -831,6 +832,7 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 		rc = vos_oref_zc_update_begin(zcc->zc_oref, vio_nr, vios, zcc);
 	} TX_ONABORT {
 		D_DEBUG(DF_VOS1, "Failed to update object\n");
+		rc = rc ?: -DER_NOSPACE;
 	} TX_END
 
 	if (rc != 0)
@@ -869,6 +871,7 @@ vos_obj_zc_update_end(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int vio_nr,
 
 	} TX_ONABORT {
 		D_DEBUG(DF_VOS1, "Failed to submit ZC update\n");
+		err = err ?: -DER_NOSPACE;
 	} TX_END
  out:
 	vos_zcc_destroy(zcc, err);

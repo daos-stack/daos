@@ -306,6 +306,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 	}  TX_ONABORT {
 		D_ERROR("Destroying container transaction failed %s\n",
 			pmemobj_errormsg());
+		ret = ret ?: -DER_IO;
 	} TX_END;
 
 exit:
