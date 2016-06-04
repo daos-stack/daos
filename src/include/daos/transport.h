@@ -181,6 +181,7 @@ extern struct dtp_msg_field DMF_BULK_ARRAY;
 extern struct dtp_msg_field DMF_EPOCH_STATE;
 extern struct dtp_msg_field DMF_DAOS_HASH_OUT;
 extern struct dtp_msg_field DMF_KEY_DESC_ARRAY;
+extern struct dtp_msg_field DMF_REC_SIZE_ARRAY;
 
 extern struct dtp_msg_field *dtp_single_out_fields[];
 struct dtp_single_out {

@@ -718,6 +718,11 @@ struct dtp_msg_field DMF_VEC_IOD_ARRAY =
 			sizeof(daos_vec_iod_t),
 			dtp_proc_daos_vec_iod);
 
+struct dtp_msg_field DMF_REC_SIZE_ARRAY =
+	DEFINE_DTP_MSG("daos_rec_size", DMF_ARRAY_FLAG,
+			sizeof(uint64_t),
+			dtp_proc_uint64_t);
+
 struct dtp_msg_field DMF_BULK_ARRAY =
 	DEFINE_DTP_MSG("daos_bulks", DMF_ARRAY_FLAG,
 			sizeof(dtp_bulk_t),

@@ -171,19 +171,6 @@ out_free:
 	return rc;
 }
 
-static void
-dsms_set_reply_status(dtp_rpc_t *rpc, int status)
-{
-	int *ret;
-
-	/* FIXME; The right way to do it might be find the
-	 * status offset and set it, but let's put status
-	 * in front of the bulk reply for now
-	 **/
-	ret = dtp_reply_get(rpc);
-	*ret = status;
-}
-
 struct dsms_bulk_async_args {
 	int		nr;
 	daos_sg_list_t	*sgls;
@@ -229,7 +216,7 @@ dsms_bulks_async_complete(dtp_rpc_t *rpc, daos_sg_list_t *sgls,
 	if (!daos_handle_is_inval(cont_hdl))
 		dsms_co_close(cont_hdl);
 
-	dsms_set_reply_status(rpc, status);
+	dsm_set_reply_status(rpc, status);
 	rc = dtp_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: %d\n", rc);
@@ -243,6 +230,14 @@ dsms_bulks_async_complete(dtp_rpc_t *rpc, daos_sg_list_t *sgls,
 		D_ASSERT(oeo != NULL);
 		D_FREE(oeo->oeo_kds.arrays,
 		       oeo->oeo_kds.count * sizeof(daos_key_desc_t));
+	} else if (opc_get(rpc->dr_opc) == DSM_TGT_OBJ_FETCH) {
+		struct object_fetch_out *ofo;
+
+		ofo = dtp_reply_get(rpc);
+
+		D_ASSERT(ofo != NULL);
+		D_FREE(ofo->ofo_sizes.arrays,
+		       ofo->ofo_sizes.count * sizeof(uint64_t));
 	}
 
 	return rc;
@@ -447,15 +442,45 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		rc = vos_obj_update(dch, oui->oui_oid, oui->oui_epoch,
 				    &oui->oui_dkey, oui->oui_nr,
 				    oui->oui_iods.arrays, sgls, NULL);
+		if (rc != 0)
+			D_GOTO(out, rc);
 		bulk_op = DTP_BULK_GET;
 	} else {
+		struct object_fetch_out *ofo;
+		daos_vec_iod_t	*vecs;
+		uint64_t	*sizes;
+		int		size_count = 0;
+		int		i;
+		int		j;
+		int		idx = 0;
+
 		rc = vos_obj_fetch(dch, oui->oui_oid, oui->oui_epoch,
 				    &oui->oui_dkey, oui->oui_nr,
 				    oui->oui_iods.arrays, sgls, NULL);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
 		bulk_op = DTP_BULK_PUT;
+
+		vecs = oui->oui_iods.arrays;
+		for (i = 0; i < oui->oui_iods.count; i++)
+			size_count += vecs[i].vd_nr;
+
+		ofo = dtp_reply_get(rpc);
+		ofo->ofo_sizes.count = size_count;
+		D_ALLOC(ofo->ofo_sizes.arrays,
+			size_count * sizeof(uint64_t));
+		if (ofo->ofo_sizes.arrays == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		sizes = ofo->ofo_sizes.arrays;
+		for (i = 0; i < oui->oui_iods.count; i++) {
+			for (j = 0; j < vecs[i].vd_nr; j++) {
+				sizes[idx] = vecs[i].vd_recxs[j].rx_rsize;
+				idx++;
+			}
+		}
 	}
-	if (rc != 0)
-		D_GOTO(out, rc);
 
 	rc = dsms_bulk_transfer(rpc, dph, dch, oui->oui_bulks.arrays, sgls,
 				iovs, oui->oui_nr, bulk_op);

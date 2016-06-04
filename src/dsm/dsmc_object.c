@@ -75,12 +75,12 @@ dsmc_obj_pool_container_uuid_get(struct dsmc_object *dobj, uuid_t puuid,
 }
 
 static int
-update_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+obj_rw_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 {
 	struct object_update_in *oui;
-	struct dtp_single_out *dso;
-	dtp_bulk_t *bulks;
-	int i;
+	dtp_bulk_t		*bulks;
+	int			i;
+	int			ret;
 
 	oui = dtp_req_get(sp->sp_rpc);
 	D_ASSERT(oui != NULL);
@@ -91,11 +91,37 @@ update_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	dso = dtp_reply_get(sp->sp_rpc);
-	if (dso->dso_ret != 0) {
-		D_ERROR("DSM_OBJ_UPDATE replied failed, rc: %d\n",
-			dso->dso_ret);
-		D_GOTO(out, rc = dso->dso_ret);
+	ret = dsm_get_reply_status(sp->sp_rpc);
+	if (ret != 0) {
+		D_ERROR("DSM_OBJ_UPDATE/FETCH replied failed, rc: %d\n",
+			ret);
+		D_GOTO(out, rc = ret);
+	}
+
+	if (opc_get(sp->sp_rpc->dr_opc) == DSM_TGT_OBJ_FETCH) {
+		struct object_fetch_out *ofo;
+		daos_vec_iod_t	*iods;
+		uint64_t	*sizes;
+		int		j;
+		int		k;
+		int		idx = 0;
+
+		ofo = dtp_reply_get(sp->sp_rpc);
+		iods = oui->oui_iods.arrays;
+		sizes = ofo->ofo_sizes.arrays;
+
+		/* update the sizes in iods */
+		for (j = 0; j < oui->oui_nr; j++) {
+			for (k = 0; k < iods[j].vd_nr; k++) {
+				if (idx == ofo->ofo_sizes.count) {
+					D_ERROR("Invalid return size %d\n",
+						idx);
+					D_GOTO(out, rc = -DER_PROTO);
+				}
+				iods[j].vd_recxs[k].rx_rsize = sizes[idx];
+				idx++;
+			}
+		}
 	}
 out:
 	for (i = 0; i < oui->oui_nr; i++)
@@ -212,7 +238,8 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	sp = daos_ev2sp(ev);
 	dtp_req_addref(req);
 	sp->sp_rpc = req;
-	rc = daos_event_launch(ev, NULL, update_cp);
+
+	rc = daos_event_launch(ev, NULL, obj_rw_cp);
 	if (rc != 0) {
 		dtp_req_decref(req);
 		D_GOTO(out_bulk, rc);

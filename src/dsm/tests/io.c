@@ -274,7 +274,7 @@ io_var_idx_offset(void **state)
 		lookup("var_idx_off_d", "var_idx_off_a", offset, buf, 10, 0,
 		       &req);
 		/** XXX assert disabled until DAOS-95 is fixed  */
-		/* assert_int_equal(req.rex.rx_rsize, strlen(data) + 1); */
+		assert_int_equal(req.rex.rx_rsize, strlen(buf) + 1);
 
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");

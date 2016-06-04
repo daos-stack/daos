@@ -131,6 +131,11 @@ struct object_update_in {
 	struct dtp_array oui_bulks;
 };
 
+struct object_fetch_out {
+	int		 ofo_ret;
+	int		 ofo_pad;
+	struct dtp_array ofo_sizes;
+};
 /*
  * pool_connect_in::pci_capas
  *
@@ -208,5 +213,30 @@ dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
 	       dtp_opcode_t opc, dtp_rpc_t **req);
 
 extern struct daos_rpc dsm_rpcs[];
+
+static inline void
+dsm_set_reply_status(dtp_rpc_t *rpc, int status)
+{
+	int *ret;
+
+	/* FIXME; The right way to do it might be find the
+	 * status offset and set it, but let's put status
+	 * in front of the bulk reply for now
+	 **/
+	ret = dtp_reply_get(rpc);
+	*ret = status;
+}
+
+static inline int
+dsm_get_reply_status(dtp_rpc_t *rpc)
+{
+	int *ret;
+	/* FIXME; The right way to do it might be find the
+	 * status offset and set it, but let's put status
+	 * in front of the bulk reply for now
+	 **/
+	ret = dtp_reply_get(rpc);
+	return *ret;
+}
 
 #endif /* __DSM_RPC_H__ */
