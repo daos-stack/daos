@@ -190,12 +190,13 @@ recx_tree_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *rex,
 	daos_iov_t		 riov;
 
 	vos_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_rex	= rex;
+	kbund.kb_idx	= rex->rx_idx;
 	kbund.kb_epr	= epr;
 
 	vos_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_iov	= iov;
 	rbund.rb_csum	= csum;
+	rbund.rb_recx	= rex;
 
 	return dbtree_fetch(toh, BTR_PROBE_LE, &kiov, &kiov, &riov);
 }
@@ -206,7 +207,7 @@ recx_tree_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *rex,
  */
 static int
 recx_tree_update(daos_handle_t toh, daos_epoch_range_t *epr,
-		     daos_recx_t *rex, daos_iov_t *iov,
+		     daos_recx_t *recx, daos_iov_t *iov,
 		     daos_csum_buf_t *csum, umem_id_t mmid)
 {
 	struct vos_key_bundle	kbund;
@@ -215,12 +216,13 @@ recx_tree_update(daos_handle_t toh, daos_epoch_range_t *epr,
 	daos_iov_t		riov;
 
 	vos_key_bundle2iov(&kbund, &kiov);
+	kbund.kb_idx	= recx->rx_idx;
 	kbund.kb_epr	= epr;
-	kbund.kb_rex	= rex;
 
 	vos_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_csum	= csum;
 	rbund.rb_iov	= iov;
+	rbund.rb_recx	= recx;
 	rbund.rb_mmid	= mmid;
 
 	return dbtree_update(toh, &kiov, &riov);
@@ -736,13 +738,11 @@ vos_recx2irec_size(daos_recx_t *recx)
 {
 	struct vos_rec_bundle	rbund;
 	daos_csum_buf_t		csum;
-	daos_iov_t		iov;
 
-	daos_iov_set(&iov, NULL, recx->rx_rsize * recx->rx_nr);
 	memset(&csum, 0, sizeof(csum)); /* XXX */
 
-	rbund.rb_iov	= &iov;
 	rbund.rb_csum	= &csum;
+	rbund.rb_recx	= recx;
 	return vos_irec_size(&rbund);
 }
 
@@ -995,8 +995,8 @@ recx_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 	int			rc;
 
 	vos_key_bundle2iov(&kbund, &kiov);
+	kbund.kb_idx	= entry->ie_recx.rx_idx;
 	kbund.kb_epr	= &entry->ie_epr;
-	kbund.kb_rex	= &entry->ie_recx;
 
 	rc = dbtree_iter_probe(oiter->it_hdl, opc, &kiov, NULL);
 	if (rc != 0)
@@ -1058,8 +1058,7 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 		return rc;
 
 	vos_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_rex	= &entry.ie_recx;
-	kbund.kb_epr	= &entry.ie_epr;
+	kbund.kb_epr = &entry.ie_epr;
 
 	memset(&entry, 0, sizeof(entry));
 	rc = recx_iter_fetch(oiter, &entry, &tmp);
@@ -1093,10 +1092,10 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	int			rc;
 
 	vos_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_rex	= &it_entry->ie_recx;
 	kbund.kb_epr	= &it_entry->ie_epr;
 
 	vos_rec_bundle2iov(&rbund, &riov);
+	rbund.rb_recx	= &it_entry->ie_recx;
 	rbund.rb_iov	= &it_entry->ie_iov;
 	rbund.rb_csum	= &csum;
 

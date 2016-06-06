@@ -276,10 +276,10 @@ vos_oi_destroy(struct vp_hdl *po_hdl,
 struct vos_key_bundle {
 	/** daos key for the I/O operation */
 	daos_dkey_t		*kb_key;
-	/** record index for the I/O operation */
-	daos_recx_t		*kb_rex;
 	/** epoch for the I/O operation */
 	daos_epoch_range_t	*kb_epr;
+	/** index of recx */
+	uint64_t		 kb_idx;
 };
 
 /**
@@ -299,6 +299,8 @@ struct vos_rec_bundle {
 	umem_id_t		 rb_mmid;
 	/** returned subtree root */
 	struct btr_root		*rb_btr;
+	/** returned size and nr of recx */
+	daos_recx_t		*rb_recx;
 };
 
 #define VOS_SIZE_ROUND		8
@@ -352,7 +354,8 @@ vos_irec_size(struct vos_rec_bundle *rbund)
 	uint64_t size;
 
 	size = vos_size_round(rbund->rb_csum->cs_len);
-	return size + rbund->rb_iov->iov_len + sizeof(struct vos_irec);
+	return size + sizeof(struct vos_irec) +
+	       rbund->rb_recx->rx_rsize * rbund->rb_recx->rx_nr;
 }
 
 static inline char *

@@ -266,7 +266,9 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, daos_event_t *ev);
  *			is provided by \a vios.
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of vector descriptors in \a vios.
- * \param vios	[IN]	Array of vector IO descriptors.
+ * \param vios	[IN/OUT]
+ *			Array of vector IO descriptors. The returned record
+ *			sizes are also stored in this parameter.
  * \param sgls	[OUT]	Scatter/gather list to store the returned record values
  *			or value addresses.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
@@ -329,7 +331,9 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *			is provided by \a vios.
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of vector descriptors in \a vios.
- * \param vios	[IN]	Array of vector IO descriptors.
+ * \param vios	[IN/OUT]
+ *			Array of vector IO descriptors. The returned record
+ *			sizes are also restored in this parameter.
  * \param ioh	[OUT]	The returned handle for the ZC I/O.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.

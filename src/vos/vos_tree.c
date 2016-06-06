@@ -379,7 +379,7 @@ ibtr_rec_fetch_in(struct btr_instance *tins, struct btr_record *rec,
 		}
 	}
 
-	if (iov->iov_len != kbund->kb_rex->rx_rsize)
+	if (iov->iov_len != rbund->rb_recx->rx_rsize)
 		return -DER_INVAL;
 
 	irec->ir_size = iov->iov_len;
@@ -414,17 +414,22 @@ ibtr_rec_fetch_out(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_irec	   *irec  = vos_rec2irec(tins, rec);
 	daos_csum_buf_t	   *csum  = rbund->rb_csum;
 	daos_iov_t	   *iov   = rbund->rb_iov;
+	daos_recx_t	   *recx  = rbund->rb_recx;
 
 	if (kbund != NULL) { /* called from iterator */
-		kbund->kb_rex->rx_rsize	 = irec->ir_size;
-		kbund->kb_rex->rx_idx	 = ihkey->ih_index;
-		kbund->kb_epr->epr_lo	 = ihkey->ih_epoch;
-		kbund->kb_epr->epr_hi	 = DAOS_EPOCH_MAX;
+		kbund->kb_epr->epr_lo	= ihkey->ih_epoch;
+		kbund->kb_epr->epr_hi	= DAOS_EPOCH_MAX;
 	}
 
 	iov->iov_len	= irec->ir_size;
 	csum->cs_len	= irec->ir_cs_size;
 	csum->cs_type	= irec->ir_cs_type;
+
+	if (recx != NULL) {
+		recx->rx_idx	= ihkey->ih_index;
+		recx->rx_rsize	= irec->ir_size;
+		recx->rx_nr	= 1;
+	}
 
 	if (irec->ir_size == 0)
 		return 0; /* punched record */
@@ -461,7 +466,7 @@ ibtr_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 	struct vos_key_bundle	*kbund;
 
 	kbund = vos_iov2key_bundle(key_iov);
-	ihkey->ih_index = kbund->kb_rex->rx_idx;
+	ihkey->ih_index = kbund->kb_idx;
 	ihkey->ih_epoch = kbund->kb_epr->epr_lo;
 }
 
@@ -545,8 +550,8 @@ ibtr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	/* TODO */
 	kbund = vos_iov2key_bundle(key_iov);
 	D_ERROR("No overwrite for now, idx "DF_U64", epoch "DF_U64
-		", irec "DF_U64", irec ep "DF_U64"\n",
-		kbund->kb_rex->rx_idx, kbund->kb_epr->epr_lo,
+		", irec idx "DF_U64", irec epoch "DF_U64"\n",
+		kbund->kb_idx, kbund->kb_epr->epr_lo,
 		ihkey->ih_index, ihkey->ih_epoch);
 
 	return -DER_NO_PERM;

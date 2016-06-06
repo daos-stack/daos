@@ -210,6 +210,7 @@ vc_obj_rw_oper(bool update, char *str)
 		} else {
 			D_DEBUG(DF_MISC, "Fetch %s\n", key_buf);
 
+			rex.rx_rsize = 0;
 			memset(val_buf, 0, sizeof(val_buf));
 			rc = vc_obj_fetch(&dkey, &vio, &sgl);
 		}
@@ -220,7 +221,7 @@ vc_obj_rw_oper(bool update, char *str)
 			break;
 		}
 
-		if (val_iov.iov_len == 0)
+		if (rex.rx_rsize == 0)
 			D_PRINT("%s : [NULL]\n", key_buf);
 		else
 			D_PRINT("%s : %s\n", key_buf, val_buf);
