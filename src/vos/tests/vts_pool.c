@@ -39,21 +39,21 @@
 #include <daos_srv/vos.h>
 
 struct vp_test_args {
-	char		**fname;
-	int		nfiles;
-	int		*seq_cnt;
-	enum ops_type	**ops_seq;
-	bool		*fcreate;
-	daos_handle_t	*poh;
-	uuid_t		*uuid;
+	char			**fname;
+	int			nfiles;
+	int			*seq_cnt;
+	enum vts_ops_type	**ops_seq;
+	bool			*fcreate;
+	daos_handle_t		*poh;
+	uuid_t			*uuid;
 };
 
 static inline void
-pool_set_param(enum ops_type seq[], int cnt, bool flag, bool *cflag,
-	       int *seq_cnt, enum ops_type **ops)
+pool_set_param(enum vts_ops_type seq[], int cnt, bool flag, bool *cflag,
+	       int *seq_cnt, enum vts_ops_type **ops)
 {
 	*seq_cnt = cnt;
-	memcpy(*ops, seq, cnt * sizeof(enum ops_type));
+	memcpy(*ops, seq, cnt * sizeof(enum vts_ops_type));
 	*cflag = flag;
 }
 
@@ -71,18 +71,20 @@ pool_ops_run(void **state)
 			case CREAT:
 				uuid_generate(arg->uuid[j]);
 				if (arg->fcreate[j]) {
-					ret = pool_fallocate(&arg->fname[j]);
+					ret =
+					vts_pool_fallocate(&arg->fname[j]);
 					assert_int_equal(ret, 0);
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
 							      0, &arg->poh[j],
 							      NULL);
 				} else {
-					ret = alloc_gen_fname(&arg->fname[j]);
+					ret =
+					vts_alloc_gen_fname(&arg->fname[j]);
 					assert_int_equal(ret, 0);
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
-							      VPOOL_SIZE,
+							      VPOOL_16M,
 							      &arg->poh[j],
 							      NULL);
 				}
@@ -105,9 +107,9 @@ pool_ops_run(void **state)
 				assert_int_equal(ret, 0);
 				assert_int_equal(pinfo.pif_ncos, 0);
 				assert_int_equal(pinfo.pif_nobjs, 0);
-				assert_false(pinfo.pif_size != VPOOL_SIZE);
+				assert_false(pinfo.pif_size != VPOOL_16M);
 				assert_false(pinfo.pif_avail !=
-					     (VPOOL_SIZE - 80));
+					     (VPOOL_16M - 80));
 				break;
 			default:
 				fail_msg("Shoudln't be here Unkown ops?\n");
@@ -129,12 +131,12 @@ static int pool_allocate_params(int nfiles, int ops,
 	assert_ptr_not_equal(test_args->fname, NULL);
 	test_args->seq_cnt = (int *)malloc(nfiles * sizeof(int));
 	assert_ptr_not_equal(test_args->seq_cnt, NULL);
-	test_args->ops_seq = (enum ops_type **)malloc
-		(nfiles * sizeof(enum ops_type *));
+	test_args->ops_seq = (enum vts_ops_type **)malloc
+		(nfiles * sizeof(enum vts_ops_type *));
 	assert_ptr_not_equal(test_args->ops_seq, NULL);
 	for (i = 0; i < nfiles; i++) {
-		test_args->ops_seq[i] = (enum ops_type *)malloc
-			(ops * sizeof(enum ops_type));
+		test_args->ops_seq[i] = (enum vts_ops_type *)malloc
+			(ops * sizeof(enum vts_ops_type));
 		assert_ptr_not_equal(test_args->ops_seq[i], NULL);
 	}
 	test_args->fcreate = (bool *)malloc(nfiles * sizeof(bool));
@@ -178,7 +180,7 @@ pool_unit_teardown(void **state)
 	int			i;
 
 	for (i = 0; i < arg->nfiles; i++) {
-		if (file_exists(arg->fname[i]))
+		if (vts_file_exists(arg->fname[i]))
 			remove(arg->fname[i]);
 		if (arg->fname[i])
 			free(arg->fname[i]);
@@ -210,7 +212,7 @@ create_pools_test_construct(struct vp_test_args **arr,
 			    bool create_type)
 {
 	struct vp_test_args	*arg   = *arr;
-	enum ops_type		tmp[]  = {CREAT};
+	enum vts_ops_type	tmp[]  = {CREAT};
 	int			i, nfiles;
 
 	/** Create number of files as CPUs */
@@ -248,8 +250,8 @@ pool_create_exists(void **state)
 static int
 pool_open(void **state)
 {
-	struct vp_test_args *arg = *state;
-	enum ops_type tmp[] = {CREAT, CLOSE, OPEN};
+	struct vp_test_args	*arg = *state;
+	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN};
 
 	pool_allocate_params(1, 1, arg);
 	pool_set_param(tmp, 3, true, &arg->fcreate[0],
@@ -260,8 +262,8 @@ pool_open(void **state)
 static int
 pool_close(void **state)
 {
-	struct vp_test_args *arg = *state;
-	enum ops_type tmp[] = {CREAT, CLOSE};
+	struct vp_test_args	*arg = *state;
+	enum vts_ops_type	tmp[] = {CREAT, CLOSE};
 
 	pool_allocate_params(1, 2, arg);
 	pool_set_param(tmp, 2, true, &arg->fcreate[0],
@@ -273,8 +275,8 @@ pool_close(void **state)
 static int
 pool_open_close(void **state)
 {
-	struct vp_test_args *arg = *state;
-	enum ops_type tmp[] = {CREAT, CLOSE, OPEN, CLOSE};
+	struct vp_test_args	*arg = *state;
+	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN, CLOSE};
 
 	pool_allocate_params(1, 4, arg);
 	pool_set_param(tmp, 4, true, &arg->fcreate[0],
@@ -286,8 +288,8 @@ pool_open_close(void **state)
 static int
 pool_destroy(void **state)
 {
-	struct vp_test_args *arg = *state;
-	enum ops_type tmp[] = {CREAT, DESTROY};
+	struct vp_test_args	*arg = *state;
+	enum vts_ops_type	tmp[] = {CREAT, DESTROY};
 
 	pool_allocate_params(1, 2, arg);
 	pool_set_param(tmp, 2, true, &arg->fcreate[0],
@@ -298,8 +300,8 @@ pool_destroy(void **state)
 static int
 pool_destroy_after_open(void **state)
 {
-	struct vp_test_args *arg = *state;
-	enum ops_type tmp[] = {CREAT, CLOSE, OPEN, DESTROY};
+	struct vp_test_args	*arg = *state;
+	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN, DESTROY};
 
 	pool_allocate_params(1, 4, arg);
 	pool_set_param(tmp, 4, true, &arg->fcreate[0],
@@ -310,8 +312,8 @@ pool_destroy_after_open(void **state)
 static int
 pool_query(void **state)
 {
-	struct vp_test_args *arg = *state;
-	enum ops_type tmp[] = {CREAT, QUERY};
+	struct vp_test_args	*arg = *state;
+	enum vts_ops_type	tmp[] = {CREAT, QUERY};
 
 	pool_allocate_params(1, 2, arg);
 	pool_set_param(tmp, 2, true, &arg->fcreate[0],
@@ -322,8 +324,8 @@ pool_query(void **state)
 static int
 pool_query_after_open(void **state)
 {
-	struct vp_test_args *arg = *state;
-	enum ops_type tmp[] = {CREAT, CLOSE, OPEN, QUERY};
+	struct vp_test_args	*arg = *state;
+	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN, QUERY};
 
 	pool_allocate_params(1, 4, arg);
 	pool_set_param(tmp, 4, true, &arg->fcreate[0],
@@ -334,8 +336,9 @@ pool_query_after_open(void **state)
 static int
 pool_all_empty_file(void **state)
 {
-	struct vp_test_args *arg = *state;
-	enum ops_type tmp[] = {CREAT, CLOSE, OPEN, QUERY, DESTROY};
+	struct vp_test_args	*arg = *state;
+	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN, QUERY,
+					 DESTROY};
 
 	pool_allocate_params(1, 5, arg);
 	pool_set_param(tmp, 5, false, &arg->fcreate[0],
@@ -347,8 +350,9 @@ pool_all_empty_file(void **state)
 static int
 pool_all(void **state)
 {
-	struct vp_test_args *arg = *state;
-	enum ops_type tmp[] = {CREAT, CLOSE, OPEN, QUERY, DESTROY};
+	struct vp_test_args	*arg = *state;
+	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN, QUERY,
+					 DESTROY};
 
 	pool_allocate_params(1, 5, arg);
 	pool_set_param(tmp, 5, true, &arg->fcreate[0],

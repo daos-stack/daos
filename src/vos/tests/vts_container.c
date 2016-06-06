@@ -41,13 +41,13 @@
 #define VCT_CONTAINERS 10
 
 struct vc_test_args {
-	char		*fname;
-	int		*seq_cnt;
-	enum ops_type	*ops_seq[VCT_CONTAINERS];
-	uuid_t		pool_uuid;
-	daos_handle_t	poh;
-	daos_handle_t	coh[VCT_CONTAINERS];
-	uuid_t		uuid[VCT_CONTAINERS];
+	char			*fname;
+	int			*seq_cnt;
+	enum vts_ops_type	*ops_seq[VCT_CONTAINERS];
+	uuid_t			pool_uuid;
+	daos_handle_t		poh;
+	daos_handle_t		coh[VCT_CONTAINERS];
+	uuid_t			uuid[VCT_CONTAINERS];
 };
 
 static void
@@ -100,18 +100,18 @@ static int
 co_allocate_params(int ncontainers, int ops,
 		   struct vc_test_args *test_args)
 {
-	int		i;
-	enum ops_type	*tmp_seq = NULL;
+	int			i;
+	enum vts_ops_type	*tmp_seq = NULL;
 
 	test_args->seq_cnt = (int *)malloc(ncontainers * sizeof(int));
 	assert_ptr_not_equal(test_args->seq_cnt, NULL);
 
 	for (i = 0; i < ncontainers; i++) {
-		tmp_seq = (enum ops_type *)malloc(ops *
-						  sizeof(enum ops_type));
+		tmp_seq = (enum vts_ops_type *)malloc(ops *
+						  sizeof(enum vts_ops_type));
 		assert_ptr_not_equal(tmp_seq, NULL);
 		memset(tmp_seq, 0,
-		       sizeof(ops * sizeof(enum ops_type)));
+		       sizeof(ops * sizeof(enum vts_ops_type)));
 		test_args->ops_seq[i] = tmp_seq;
 		tmp_seq = NULL;
 	}
@@ -159,7 +159,7 @@ setup(void **state)
 	assert_ptr_not_equal(test_arg, NULL);
 
 	uuid_generate_time_safe(test_arg->pool_uuid);
-	pool_fallocate(&test_arg->fname);
+	vts_pool_fallocate(&test_arg->fname);
 	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid,
 			      0, &test_arg->poh, NULL);
 	assert_int_equal(ret, 0);
@@ -176,7 +176,7 @@ teardown(void **state)
 	ret = vos_pool_destroy(test_arg->poh, NULL);
 	assert_int_equal(ret, 0);
 
-	if (file_exists(test_arg->fname))
+	if (vts_file_exists(test_arg->fname))
 		remove(test_arg->fname);
 	if (test_arg->fname)
 		free(test_arg->fname);
@@ -186,18 +186,18 @@ teardown(void **state)
 }
 
 static inline void
-co_set_param(enum ops_type seq[], int cnt,
-	     int *seq_cnt, enum ops_type **ops)
+co_set_param(enum vts_ops_type seq[], int cnt,
+	     int *seq_cnt, enum vts_ops_type **ops)
 {
 	*seq_cnt = cnt;
-	memcpy(*ops, seq, cnt * sizeof(enum ops_type));
+	memcpy(*ops, seq, cnt * sizeof(enum vts_ops_type));
 }
 
 static int
 co_create_tests(void **state)
 {
 	struct vc_test_args	*arg = *state;
-	enum ops_type		tmp[] = {CREAT};
+	enum vts_ops_type	tmp[] = {CREAT};
 	int			i;
 
 	co_allocate_params(VCT_CONTAINERS, 1, arg);
@@ -211,7 +211,7 @@ static int
 co_open_tests(void **state)
 {
 	struct vc_test_args	*arg = *state;
-	enum ops_type		tmp[] = {OPEN};
+	enum vts_ops_type	tmp[] = {OPEN};
 	uuid_t			tmp_uuid;
 	int			i, ret = 0;
 
@@ -233,7 +233,7 @@ static int
 co_tests(void **state)
 {
 	struct vc_test_args	*arg = *state;
-	enum ops_type		tmp[] = {CREAT, OPEN, QUERY, CLOSE, DESTROY};
+	enum vts_ops_type	tmp[] = {CREAT, OPEN, QUERY, CLOSE, DESTROY};
 	int			i;
 
 	co_allocate_params(VCT_CONTAINERS, 5, arg);

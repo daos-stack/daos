@@ -25,14 +25,37 @@
  *
  * vos/tests/vts_common.c
  */
+#include <stdio.h>
 #include <fcntl.h>
+#include <string.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <sys/ioctl.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <getopt.h>
+#include <daos_srv/vos.h>
+#include <daos/common.h>
+#include <errno.h>
+#include <vos_internal.h>
 #include <vts_common.h>
+#include <cmocka.h>
+
+enum {
+	TCX_NONE,
+	TCX_PO_CREATE,
+	TCX_PO_OPEN,
+	TCX_CO_CREATE,
+	TCX_CO_OPEN,
+	TCX_READY,
+};
 
 int gc;
 
 bool
-file_exists(const char *filename)
+vts_file_exists(const char *filename)
 {
 	if (access(filename, F_OK) != -1)
 		return true;
@@ -41,7 +64,7 @@ file_exists(const char *filename)
 }
 
 int
-alloc_gen_fname(char **fname)
+vts_alloc_gen_fname(char **fname)
 {
 	char *file_name = NULL;
 	int n;
@@ -57,11 +80,11 @@ alloc_gen_fname(char **fname)
 }
 
 int
-pool_fallocate(char **fname)
+vts_pool_fallocate(char **fname)
 {
 	int ret = 0, fd;
 
-	ret = alloc_gen_fname(fname);
+	ret = vts_alloc_gen_fname(fname);
 	if (ret)
 		return ret;
 
@@ -71,17 +94,105 @@ pool_fallocate(char **fname)
 		goto exit;
 	}
 
-	ret = posix_fallocate(fd, 0, VPOOL_SIZE);
+	ret = posix_fallocate(fd, 0, VPOOL_16M);
 exit:
 	return ret;
 }
 
 inline void
-io_set_oid(daos_unit_oid_t *oid)
+vts_io_set_oid(daos_unit_oid_t *oid)
 {
 	oid->id_pub.lo = rand();
 	oid->id_pub.mid = rand();
 	oid->id_pub.hi = rand();
 	oid->id_shard = 0;
 	oid->id_pad_32 = rand() % 16;
+}
+
+int
+vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
+{
+	int	 rc;
+
+	memset(tcx, 0, sizeof(*tcx));
+
+	rc = vts_alloc_gen_fname(&tcx->tc_po_name);
+	assert_int_equal(rc, 0);
+
+	if (vts_file_exists(tcx->tc_po_name)) {
+		rc = remove(tcx->tc_po_name);
+		assert_int_equal(rc, 0);
+	}
+
+	uuid_generate_time_safe(tcx->tc_po_uuid);
+	uuid_generate_time_safe(tcx->tc_co_uuid);
+
+	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid,
+			     psize, &tcx->tc_po_hdl, NULL);
+	if (rc) {
+		print_error("vpool create failed with error : %d", rc);
+		goto failed;
+	}
+	tcx->tc_step = TCX_PO_CREATE;
+
+	rc = vos_pool_close(tcx->tc_po_hdl, NULL);
+	assert_int_equal(rc, 0);
+	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, &tcx->tc_po_hdl,
+			   NULL);
+	if (rc) {
+		print_error("vos pool open error: %d\n", rc);
+		goto failed;
+	}
+	tcx->tc_step = TCX_PO_OPEN;
+
+	rc = vos_co_create(tcx->tc_po_hdl, tcx->tc_co_uuid, NULL);
+	if (rc) {
+		print_error("vos container creation error: %d\n", rc);
+		goto failed;
+	}
+	tcx->tc_step = TCX_CO_CREATE;
+
+	rc = vos_co_open(tcx->tc_po_hdl, tcx->tc_co_uuid,
+			 &tcx->tc_co_hdl, NULL);
+	if (rc) {
+		print_error("vos container open error: %d\n", rc);
+		goto failed;
+	}
+	tcx->tc_step = TCX_CO_OPEN;
+	tcx->tc_step = TCX_READY;
+	return 0;
+
+ failed:
+	vts_ctx_fini(tcx);
+	return rc;
+}
+
+void
+vts_ctx_fini(struct vos_test_ctx *tcx)
+{
+	int	rc;
+
+	switch (tcx->tc_step) {
+	default:
+	case TCX_NONE:
+		break;
+
+	case TCX_READY:
+	case TCX_CO_OPEN:
+		rc = vos_co_close(tcx->tc_co_hdl, NULL);
+		assert_int_equal(rc, 0);
+
+		/* fallthrough */
+	case TCX_CO_CREATE:
+		rc = vos_co_destroy(tcx->tc_po_hdl, tcx->tc_co_uuid, NULL);
+		assert_int_equal(rc, 0);
+
+		/* fallthrough */
+	case TCX_PO_OPEN:
+	case TCX_PO_CREATE:
+		rc = vos_pool_destroy(tcx->tc_po_hdl, NULL);
+		assert_int_equal(rc, 0);
+		/* fallthrough */
+	}
+	memset(tcx, 0, sizeof(*tcx));
 }

@@ -5,8 +5,6 @@ Import('denv')
 libraries = ['vos', 'uuid', 'pthread', 'daos_common', 'daos_transport',
 			 'pmemobj', 'cmocka', "gomp"]
 denv.Append(CPPPATH = ['#/src/vos/tests/'])
-vos_ctl_src=['common.c', 'vos_ctl.c']
-denv.Program('vos_ctl', vos_ctl_src, LIBS=libraries)
-vos_test_src=['vos_tests.c', 'vts_common.c', 'vts_io.c', 'vts_pool.c',
-			  'vts_container.c', 'vts_chash_table.c']
+vos_test_src=['vos_tests.c', 'vts_io.c', 'vts_pool.c',
+			  'vts_container.c', 'vts_chash_table.c', 'vts_common.c']
 denv.Program('vos_tests', vos_test_src, CCFLAGS='-fopenmp', LIBS = libraries)

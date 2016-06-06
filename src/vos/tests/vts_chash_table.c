@@ -208,10 +208,10 @@ setup(void **state)
 	arg = malloc(sizeof(struct chtable_args));
 	assert_ptr_not_equal(arg, NULL);
 
-	ret = alloc_gen_fname(&arg->fname);
+	ret = vts_alloc_gen_fname(&arg->fname);
 	assert_int_equal(ret, 0);
 
-	if (file_exists(arg->fname))
+	if (vts_file_exists(arg->fname))
 		remove(arg->fname);
 	arg->pop = pmemobj_create(arg->fname,
 				  "Hashtable test", 67108864, 0666);

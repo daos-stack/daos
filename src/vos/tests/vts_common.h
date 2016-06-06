@@ -32,13 +32,15 @@
 #include <inttypes.h>
 #include <daos/common.h>
 
-#define VPOOL_SIZE 16777216ULL
+#define VPOOL_16M 16777216ULL
+#define VPOOL_1G  1073741824ULL
+#define VPOOL_10G 10737418240ULL
 #define VPOOL_NAME "/mnt/daos/vpool"
 #define	VP_OPS 10
 
 extern int gc;
 
-enum ops_type {
+enum vts_ops_type {
 	CREAT,
 	OPEN,
 	CLOSE,
@@ -46,20 +48,42 @@ enum ops_type {
 	QUERY
 };
 
+struct vos_test_ctx {
+	char		*tc_po_name;
+	uuid_t		 tc_po_uuid;
+	uuid_t		 tc_co_uuid;
+	daos_handle_t	 tc_po_hdl;
+	daos_handle_t	 tc_co_hdl;
+	int		 tc_step;
+};
+
+
 /**
  * Internal test  functions
  */
 bool
-file_exists(const char *filename);
+vts_file_exists(const char *filename);
 
 int
-alloc_gen_fname(char **fname);
+vts_alloc_gen_fname(char **fname);
 
 int
-pool_fallocate(char **fname);
+vts_pool_fallocate(char **fname);
 
 void
-io_set_oid(daos_unit_oid_t *oid);
+vts_io_set_oid(daos_unit_oid_t *oid);
+
+/**
+ * Init and Fini context, Sets up
+ * test context for I/O tests
+ */
+int
+vts_ctx_init(struct vos_test_ctx *tcx,
+	     size_t pool_size);
+
+void
+vts_ctx_fini(struct vos_test_ctx *tcx);
+
 
 /**
  * VOS test suite run tests

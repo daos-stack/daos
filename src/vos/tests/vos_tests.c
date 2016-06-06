@@ -34,31 +34,96 @@
 #include <cmocka.h>
 #include <vts_common.h>
 #include <cmocka.h>
-
+#include <getopt.h>
 #include <daos_srv/vos.h>
+
+static void
+print_usage()
+{
+	print_message("Use one of these opt(s) for specific test\n");
+	print_message("vos_tests -p|--pool_tests\n");
+	print_message("vos_tests -c|--container_tests\n");
+	print_message("vos_tests -t|--chash_tests\n");
+	print_message("vos_tests -i|--io_tests\n");
+	print_message("vos_tests -a|--all_tests\n");
+	print_message("vos_tests -h|--help\n");
+	print_message("Default <vos_tests> runs all tests\n");
+}
+
+static inline int
+run_all_tests()
+{
+	int failed = 0;
+
+	failed += run_chtable_test();
+	failed += run_pool_test();
+	failed += run_co_test();
+	failed += run_io_test();
+
+	return failed;
+}
 
 int
 main(int argc, char **argv)
 {
-	int	rc = 0;
-	int	nr_failed = 0;
+	int		rc = 0;
+	int		nr_failed = 0;
+	int		opt = 0, index = 0;
+
+	static struct option long_options[] = {
+		{"all_tests",	no_argument, 0, 'a'},
+		{"pool_tests",	no_argument, 0, 'p'},
+		{"container_tests", no_argument, 0, 'c'},
+		{"chash_tests", no_argument, 0, 't'},
+		{"io_tests", no_argument, 0, 'i'},
+		{"help", no_argument, 0, 'h'},
+	};
 
 	rc = vos_init();
 	if (rc) {
-		print_message("Error initializing VOS instance\n");
+		print_error("Error initializing VOS instance\n");
 		return rc;
 	}
 
 	gc = 0;
-	nr_failed = run_pool_test();
-	nr_failed += run_co_test();
-	nr_failed += run_io_test();
-	nr_failed += run_chtable_test();
+	if (argc < 2) {
+		nr_failed = run_all_tests();
+	} else {
+		while ((opt = getopt_long(argc, argv, "apctih",
+				  long_options, &index)) != -1) {
+			switch (opt) {
+			case 'p':
+				nr_failed += run_pool_test();
+				break;
+			case 'c':
+				nr_failed += run_co_test();
+				break;
+			case 't':
+				nr_failed += run_chtable_test();
+				break;
+			case 'i':
+				nr_failed += run_io_test();
+				break;
+			case 'h':
+				print_usage();
+				goto exit;
+			case 'a':
+				nr_failed = run_all_tests();
+				break;
+			default:
+				print_error("Unkown option\n");
+				print_usage();
+				goto exit;
+			}
+		}
+	}
 
 	if (nr_failed)
-		print_message("ERROR, %i TEST(S) FAILED\n", nr_failed);
+		print_error("ERROR, %i TEST(S) FAILED\n", nr_failed);
 	else
 		print_message("\nSUCCESS! NO TEST FAILURES\n");
+
+exit:
 	vos_fini();
 	return rc;
 }
