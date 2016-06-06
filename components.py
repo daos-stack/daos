@@ -79,6 +79,7 @@ REQS.define('mercury',
                       '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX ' \
                       '-DBUILD_EXAMPLES=ON ' \
                       '-DMERCURY_USE_BOOST_PP=ON ' \
+                      '-DMERCURY_ENABLE_VERBOSE_ERROR=OFF ' \
                       '-DNA_USE_BMI=ON -DBUILD_TESTING=ON ' \
                       '-DNA_USE_CCI=ON ' \
                       '-DBUILD_DOCUMENTATION=OFF ' \
