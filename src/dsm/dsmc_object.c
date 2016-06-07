@@ -85,7 +85,6 @@ obj_rw_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 	oui = dtp_req_get(sp->sp_rpc);
 	D_ASSERT(oui != NULL);
 	bulks = oui->oui_bulks.arrays;
-	D_ASSERT(bulks != NULL);
 	if (rc) {
 		D_ERROR("RPC error: %d\n", rc);
 		D_GOTO(out, rc);
@@ -124,11 +123,13 @@ obj_rw_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 		}
 	}
 out:
-	for (i = 0; i < oui->oui_nr; i++)
-		dtp_bulk_free(bulks[i]);
+	if (bulks != NULL) {
+		for (i = 0; i < oui->oui_nr; i++)
+			dtp_bulk_free(bulks[i]);
 
-	D_FREE(oui->oui_bulks.arrays,
-	       oui->oui_nr * sizeof(dtp_bulk_t));
+		D_FREE(oui->oui_bulks.arrays,
+		       oui->oui_nr * sizeof(dtp_bulk_t));
+	}
 	dtp_req_decref(sp->sp_rpc);
 	D_DEBUG(DF_MISC, "update finish %d\n", rc);
 	return rc;
@@ -210,30 +211,35 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	oui->oui_nr = nr;
 	/** FIXME: large dkey should be transferred via bulk */
 	oui->oui_dkey = *dkey;
+
 	/* FIXME: if iods is too long, then we needs to do bulk transfer
 	 * as well, but then we also needs to serialize the iods
 	 **/
+	oui->oui_iods.count = nr;
+	oui->oui_iods.arrays = iods;
+
 	D_ALLOC(bulks, nr * sizeof(*bulks));
 	if (bulks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	oui->oui_iods.count = nr;
-	oui->oui_iods.arrays = iods;
-	oui->oui_bulks.count = nr;
-	oui->oui_bulks.arrays = bulks;
 	/* create bulk transfer for daos_sg_list */
 	for (i = 0; i < nr; i++) {
-		rc = dtp_bulk_create(daos_ev2ctx(ev), &sgls[i], DTP_BULK_RW,
-				     &bulks[i]);
-		if (rc < 0) {
-			int j;
+		if (sgls != NULL && sgls[i].sg_iovs != NULL &&
+		    sgls[i].sg_iovs[0].iov_buf != NULL) {
+			rc = dtp_bulk_create(daos_ev2ctx(ev), &sgls[i],
+					     DTP_BULK_RW, &bulks[i]);
+			if (rc < 0) {
+				int j;
 
-			for (j = 0; j < i; j++)
-				rc = dtp_bulk_free(bulks[j]);
+				for (j = 0; j < i; j++)
+					dtp_bulk_free(bulks[j]);
 
-			D_GOTO(out_free, rc);
+				D_GOTO(out_free, rc);
+			}
 		}
 	}
+	oui->oui_bulks.count = nr;
+	oui->oui_bulks.arrays = bulks;
 
 	sp = daos_ev2sp(ev);
 	dtp_req_addref(req);
@@ -247,10 +253,10 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 
 	/** send the request */
 	return daos_rpc_send(req, ev);
+
 out_bulk:
 	for (i = 0; i < nr; i++)
 		rc = dtp_bulk_free(bulks[i]);
-
 out_free:
 	if (bulks != NULL)
 		D_FREE(bulks, nr * sizeof(*bulks));

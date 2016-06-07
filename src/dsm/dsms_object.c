@@ -221,7 +221,8 @@ dsms_bulks_async_complete(dtp_rpc_t *rpc, daos_sg_list_t *sgls,
 	if (rc != 0)
 		D_ERROR("send reply failed: %d\n", rc);
 
-	dsms_free_iovs_sgls(rpc->dr_opc, iovs, sgls, nr);
+	if (sgls != NULL)
+		dsms_free_iovs_sgls(rpc->dr_opc, iovs, sgls, nr);
 
 	if (opc_get(rpc->dr_opc) == DSM_TGT_OBJ_ENUMERATE) {
 		struct object_enumerate_out *oeo;
@@ -317,14 +318,16 @@ dsms_bulks_prep(dtp_rpc_t *rpc, int nr, daos_iov_t **piovs,
 	rpc->dr_data = dref;
 	daos_ref_init(dref, nr);
 	for (i = 0; i < nr; i++) {
-		daos_size_t bulk_len;
+		daos_size_t bulk_len = 0;
 
-		rc = dtp_bulk_get_len(remote_bulks[i], &bulk_len);
-		if (rc != 0) {
-			D_ERROR("i %d get bulk len error.: rc = %d\n", i, rc);
-			D_GOTO(out, rc);
+		if (remote_bulks[i] != NULL) {
+			rc = dtp_bulk_get_len(remote_bulks[i], &bulk_len);
+			if (rc != 0) {
+				D_ERROR("i %d get bulk len error.: rc = %d\n",
+					 i, rc);
+				D_GOTO(out, rc);
+			}
 		}
-
 		iovs[i].iov_buf_len = bulk_len;
 		if (opc_get(rpc->dr_opc) == DSM_TGT_OBJ_ENUMERATE) {
 			D_ALLOC(iovs[i].iov_buf, bulk_len);
@@ -355,13 +358,17 @@ out:
 static int
 dsms_bulk_transfer(dtp_rpc_t *rpc, daos_handle_t dph, daos_handle_t dch,
 		   dtp_bulk_t *remote_bulks, daos_sg_list_t *sgls,
-		   daos_iov_t *iovs, int nr, dtp_bulk_op_t bulk_op)
+		   daos_iov_t *iovs, int nr, dtp_bulk_op_t bulk_op,
+		   bool *bulk_sent)
 {
 	dtp_bulk_opid_t	bulk_opid;
 	int		i;
 	int		rc = 0;
 
-	for (i = 0; i < nr; i++) {
+	if (bulk_sent != NULL)
+		*bulk_sent = false;
+
+	for (i = 0; i < nr && remote_bulks[i] != NULL; i++) {
 		struct dtp_bulk_desc		bulk_desc;
 		struct dsms_bulk_async_args	*arg;
 		dtp_bulk_t			local_bulk_hdl;
@@ -404,6 +411,8 @@ dsms_bulk_transfer(dtp_rpc_t *rpc, daos_handle_t dph, daos_handle_t dch,
 			D_FREE_PTR(arg);
 			D_GOTO(out, rc);
 		}
+		if (bulk_sent != NULL)
+			*bulk_sent = true;
 	}
 out:
 	return rc;
@@ -418,6 +427,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 	daos_iov_t		*iovs = NULL;
 	daos_sg_list_t		*sgls = NULL;
 	dtp_bulk_op_t		 bulk_op;
+	bool			bulk_sent = false;
 	int			 rc;
 
 	oui = dtp_req_get(rpc);
@@ -482,8 +492,12 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		}
 	}
 
-	rc = dsms_bulk_transfer(rpc, dph, dch, oui->oui_bulks.arrays, sgls,
-				iovs, oui->oui_nr, bulk_op);
+	if (sgls != NULL)
+		rc = dsms_bulk_transfer(rpc, dph, dch, oui->oui_bulks.arrays,
+					sgls, iovs, oui->oui_nr, bulk_op,
+					&bulk_sent);
+	if (!bulk_sent)
+		D_GOTO(out, rc);
 
 	return rc;
 out:
@@ -506,6 +520,7 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 	daos_handle_t			ih;
 	int				rc = 0;
 	int				dkey_nr = 0;
+	bool				bulk_sent = false;
 
 	oei = dtp_req_get(rpc);
 	if (oei == NULL)
@@ -611,7 +626,9 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 	oeo->oeo_kds.count = dkey_nr;
 
 	rc = dsms_bulk_transfer(rpc, dph, dch, &oei->oei_bulk,
-				sgls, iovs, 1, DTP_BULK_PUT);
+				sgls, iovs, 1, DTP_BULK_PUT, &bulk_sent);
+	if (!bulk_sent)
+		D_GOTO(out, rc);
 
 	return rc;
 out:

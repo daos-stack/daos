@@ -147,6 +147,13 @@ insert(const char *dkey, const char *akey, uint64_t idx, void *val,
 }
 
 static void
+punch(const char *dkey, const char *akey, uint64_t idx,
+      daos_epoch_t epoch, struct ioreq *req)
+{
+	insert(dkey, akey, idx, NULL, 0, epoch, req);
+}
+
+static void
 lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
        daos_size_t size, daos_epoch_t epoch, struct ioreq *req)
 {
@@ -560,6 +567,62 @@ enumerate_simple(void **state)
 	assert_int_equal(total_keys, 10);
 }
 
+/** very basic enumerate */
+static void
+punch_simple(void **state)
+{
+	test_arg_t	*arg = *state;
+	uint32_t	 tgt;
+	daos_unit_oid_t	 oid;
+	struct ioreq	 req;
+	uint32_t	number = 2;
+	daos_key_desc_t kds[2];
+	daos_hash_out_t hash_out;
+	char		*buf;
+	int		total_keys = 0;
+
+	obj_random(arg, &tgt, &oid);
+	ioreq_init(&req, tgt, oid, (test_arg_t *)*state);
+
+	/** Insert record*/
+	print_message("Insert a few kv record\n");
+	insert("punch_test0", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("punch_test1", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("punch_test2", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("punch_test3", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert("punch_test4", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+
+	memset(&hash_out, 0, sizeof(hash_out));
+	buf = calloc(512, 1);
+	/** enumerate records */
+	while (number > 0) {
+		enumerate(0, &number, kds, &hash_out, buf, 512, &req);
+		total_keys += number;
+		if (daos_hash_is_eof(&hash_out))
+			break;
+	}
+	assert_int_equal(total_keys, 5);
+
+	punch("punch_test0", "a_key", 0, 1, &req);
+	punch("punch_test1", "a_key", 0, 1, &req);
+	punch("punch_test2", "a_key", 0, 1, &req);
+	punch("punch_test3", "a_key", 0, 1, &req);
+	punch("punch_test4", "a_key", 0, 1, &req);
+
+	/** XXX Verify punch */
+	memset(&hash_out, 0, sizeof(hash_out));
+	/** enumerate records */
+	while (number > 0) {
+		enumerate(0, &number, kds, &hash_out, buf, 512, &req);
+		total_keys += number;
+		if (daos_hash_is_eof(&hash_out))
+			break;
+	}
+	print_message("get keys %d\n", total_keys);
+	free(buf);
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "DSM200: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
@@ -578,6 +641,8 @@ static const struct CMUnitTest io_tests[] = {
 	{ "DSM207: overwrite in different epoch",
 	  io_epoch_overwrite, async_enable, NULL},
 	{ "DSM208: simple enumerate", enumerate_simple,
+	  async_disable, NULL},
+	{ "DSM209: simple punch", punch_simple,
 	  async_disable, NULL},
 };
 
