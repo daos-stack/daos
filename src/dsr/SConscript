@@ -9,8 +9,14 @@ denv = env.Clone()
 # Compiler options
 denv.Append(CPPPATH = ['#/src/dsr/include'])
 
-# Generate SR client-side library
-client = denv.SharedLibrary('daos_sr', Glob('placement/*.c'))
+# generate server module
+srv = denv.SharedLibrary('daos_sr_srv', ['dsrs_module.c'])
+denv.Install('$PREFIX/lib/daos_srv', srv)
+
+# generate client library
+client = denv.SharedLibrary('daos_sr',
+			    ['dsrc_api.c', 'dsrc_module.c',
+			     Glob('placement/*.c')])
 denv.Install('$PREFIX/lib', client)
 
 # Build tests

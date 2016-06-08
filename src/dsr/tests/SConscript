@@ -2,7 +2,8 @@
 
 Import('denv')
 
-libraries = ['libdaos_sr', 'libdaos_common', 'daos_transport']
+libraries = ['libdaos_sr', 'libdaos_m', 'libdaos_common', 'libdaos_event',
+	     'daos_transport']
 
 denv.Program('pseudo_cluster', 'pseudo_cluster.c', LIBS = libraries)
 denv.Program('other', 'other.c',  LIBS = libraries)

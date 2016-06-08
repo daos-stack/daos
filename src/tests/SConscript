@@ -1,7 +1,13 @@
 #!python
 
-Import('env')
+Import('env', 'PREREQS')
 
 libs = ['daos_sr', 'daos_m', 'daos_mgmt', 'daos_common', 'daos_transport',
 	'daos_event', 'mpi', 'uuid']
-#env.Program('simple_array', 'simple_array.c', LIBS=libs)
+
+denv = env.Clone()
+
+if PREREQS is not None:
+    PREREQS.require(denv, 'ompi')
+
+denv.Program('simple_array', 'simple_array.c', LIBS=libs)

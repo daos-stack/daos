@@ -28,4 +28,4 @@ SConscript('dsr/SConscript', exports='env')
 SConscript('dct/SConscript', exports='env')
 
 # And finally build test
-SConscript('tests/SConscript', exports='env', )
+SConscript('tests/SConscript', exports=['env', 'PREREQS'])

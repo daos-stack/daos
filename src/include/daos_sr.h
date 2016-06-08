@@ -474,7 +474,7 @@ dsr_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
  *					fit into the \a sgl
  */
 int
-dsr_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, daos_nr_t *nr,
+dsr_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_hash_out_t *anchor, daos_event_t *ev);
 
@@ -520,6 +520,6 @@ dsr_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, daos_nr_t *nr,
  */
 int
 dsr_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-		  daos_nr_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		  uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_hash_out_t *anchor, daos_event_t *ev);
 #endif /* __DSR_API_H__ */

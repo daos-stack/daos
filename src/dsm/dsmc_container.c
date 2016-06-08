@@ -921,3 +921,10 @@ dsm_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
 {
 	return epoch_op(coh, DSM_CONT_EPOCH_COMMIT, &epoch, state, ev);
 }
+
+int
+dsm_epoch_flush(daos_handle_t coh, daos_epoch_t epoch,
+		daos_epoch_state_t *state, daos_event_t *ev)
+{
+	return 0;
+}
