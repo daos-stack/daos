@@ -273,7 +273,6 @@ io_var_idx_offset(void **state)
 		memset(buf, 0, 10);
 		lookup("var_idx_off_d", "var_idx_off_a", offset, buf, 10, 0,
 		       &req);
-		/** XXX assert disabled until DAOS-95 is fixed  */
 		assert_int_equal(req.rex.rx_rsize, strlen(buf) + 1);
 
 		/** Verify data consistency */
@@ -327,8 +326,7 @@ io_var_akey_size(void **state)
 		/** Lookup */
 		memset(buf, 0, 10);
 		lookup("var_dkey_size_d", key, 0, buf, 10, 0, &req);
-		/** XXX assert disabled until DAOS-95 is fixed  */
-		/* assert_int_equal(req.rex.rx_rsize, strlen(data) + 1); */
+		assert_int_equal(req.rex.rx_rsize, val_size);
 
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
@@ -379,8 +377,7 @@ io_var_dkey_size(void **state)
 		/** Lookup */
 		memset(buf, 0, 10);
 		lookup(key, "var_dkey_size_a", 0, buf, 10, 0, &req);
-		/** XXX assert disabled until DAOS-95 is fixed  */
-		/* assert_int_equal(req.rex.rx_rsize, strlen(data) + 1); */
+		assert_int_equal(req.rex.rx_rsize, val_size);
 
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
@@ -433,8 +430,7 @@ io_var_rec_size(void **state)
 		memset(fetch_buf, 0, max_size);
 		lookup("var_rec_size_d", "var_rec_size_a", 0, fetch_buf,
 		       max_size, epoch, &req);
-		/** XXX assert disabled until DAOS-95 is fixed  */
-		/* assert_int_equal(req.rex.rx_rsize, size); */
+		assert_int_equal(req.rex.rx_rsize, size);
 
 		/** Verify data consistency */
 		assert_memory_equal(update_buf, fetch_buf, size);
@@ -474,8 +470,7 @@ io_simple(void **state)
 
 	/** Verify data consistency */
 	print_message("size = %lu\n", req.rex.rx_rsize);
-	/** XXX assert disabled until DAOS-95 is fixed  */
-	/* assert_int_equal(req.rex.rx_rsize, strlen(rec)); */
+	assert_int_equal(req.rex.rx_rsize, strlen(rec));
 	assert_memory_equal(buf, rec, strlen(rec));
 	free(buf);
 	ioreq_fini(&req);
