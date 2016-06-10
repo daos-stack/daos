@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,36 +21,29 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of dct
+ * This file is a part of dct
  *
- * dct/tests/dct_test
+ * dct/tests/
  */
-#include <dct_rpc.h>
+
+#include <stdlib.h>
+#include <stdio.h>
+
+#include <stdarg.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include <cmocka.h>
+
+#include <cmocka.h>
 #include <daos_ct.h>
 #include <daos_event.h>
-#include <daos/event.h>
-#include <daos/transport.h>
-
-#include "dct_test.h"
+#include <daos/common.h>
 
 
-#define DEFAULT_TIMEOUT	20
+typedef struct{
+	daos_rank_t	tgt_rank;
+	uint32_t	tgt_ping_val;
+} dct_test_arg_t;
 
 
-int
-main(int argc, char **argv)
-{
-	int	rc = 0;
-
-	rc = dct_init();
-	if (rc != 0) {
-		D_ERROR("dct init fails: rc = %d\n", rc);
-		return rc;
-	}
-
-	/*Actually run the tests*/
-	run_dct_ping_test();
-
-	dct_fini();
-	return rc;
-}
+int run_dct_ping_test(void);
