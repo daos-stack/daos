@@ -1,0 +1,12 @@
+#!python
+
+Import('env', 'PREREQS')
+
+libs = ['daos_mgmt', 'daos_event', 'daos_transport', 'daos_common', 'uuid']
+
+denv = env.Clone()
+
+if PREREQS is not None:
+    PREREQS.require(denv, 'ompi')
+
+denv.Program('dmg', 'dmg.c', LIBS=libs)

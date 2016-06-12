@@ -27,5 +27,8 @@ SConscript('dsm/SConscript', exports=['env', 'PREREQS'])
 SConscript('dsr/SConscript', exports='env')
 SConscript('dct/SConscript', exports='env')
 
+# Build utilities
+SConscript('utils/SConscript', exports=['env', 'PREREQS'])
+
 # And finally build test
 SConscript('tests/SConscript', exports=['env', 'PREREQS'])
