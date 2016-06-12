@@ -87,19 +87,28 @@ typedef struct {
 	char		body[DAOS_HKEY_MAX];
 } daos_hash_out_t;
 
-#define DAOS_HASH_END "ffffffffffffffffffffffffffffffff"
+#define DAOS_HASH_HKEY_START 0
+#define DAOS_HASH_HKEY_LENGTH 16
+#define DAOS_HASH_EOF "ffffffffffffffff"
 
 static inline void
 daos_hash_set_eof(daos_hash_out_t *hash_out)
 {
-	memset(hash_out->body, 'f', DAOS_HKEY_MAX);
+	memset(&hash_out->body[DAOS_HASH_HKEY_START], -1,
+	       DAOS_HASH_HKEY_LENGTH);
 }
 
-static inline int
+static inline bool
 daos_hash_is_eof(daos_hash_out_t *hash_out)
 {
-	return memcmp(hash_out->body, DAOS_HASH_END, DAOS_HKEY_MAX) == 0 ?
-	       true : false;
+	int i;
+
+	for (i = DAOS_HASH_HKEY_START; i < DAOS_HASH_HKEY_LENGTH; i++) {
+		if (hash_out->body[DAOS_HASH_HKEY_START] != -1)
+			return false;
+	}
+
+	return true;
 }
 
 /** Generic handle for various DAOS components like container, object, etc. */

@@ -40,6 +40,7 @@
 #include <daos/list.h>
 #include <daos/transport.h>
 #include <daos_srv/daos_mgmt_srv.h>
+#include <daos_srv/daos_server.h>
 
 /*
  * Metadata pmem pool descriptor
@@ -54,6 +55,26 @@ struct mpool {
 	PMEMobjpool    *mp_pmem;
 	daos_handle_t	mp_root;	/* root KVS */
 };
+
+extern struct dss_module_key dsm_module_key;
+/**
+ * DSM server thread local storage structure
+ */
+struct dsm_tls {
+	/* in-memory structures TLS instance */
+	struct daos_list_head dt_pool_list;
+};
+
+static inline struct dsm_tls *
+dsm_tls_get()
+{
+	struct dsm_tls			*tls;
+	struct dss_thread_local_storage	*dtc;
+
+	dtc = dss_tls_get();
+	tls = (struct dsm_tls *)dss_module_key_get(dtc, &dsm_module_key);
+	return tls;
+}
 
 /*
  * dsms_storage.c
@@ -124,9 +145,7 @@ int dsms_hdlr_cont_op(dtp_rpc_t *rpc);
 int dsms_hdlr_object_rw(dtp_rpc_t *rpc);
 int dsms_hdlr_object_enumerate(dtp_rpc_t *rpc);
 
-int
-dsms_object_init();
 void
-dsms_object_fini();
+dsms_pools_close();
 
 #endif /* __DSMS_INTERNAL_H__ */

@@ -139,6 +139,8 @@ struct dsmc_object {
 	struct daos_hlink	do_hlink;
 	/* rank of the target this object belongs to */
 	daos_rank_t		do_rank;
+	/* number of service threads running on the target */
+	int			do_nr_srv;
 	/* object id */
 	daos_unit_oid_t		do_id;
 	/* container handler of the object */
@@ -244,5 +246,46 @@ dsmc_object_put(struct dsmc_object *dobj)
 }
 
 int dsmc_co_l2g(daos_handle_t loc, daos_iov_t *glob);
+
+/**
+ * Temporary solution for packing the tag into the hash out,
+ * which will stay at 25-28 bytes of daos_hash_out_t->body
+ */
+#define DAOS_HASH_DSM_TAG_OFFSET 24
+#define DAOS_HASH_DSM_TAG_LENGTH 4
+
+static inline void
+dsmc_hash_hkey_copy(daos_hash_out_t *dst, daos_hash_out_t *src)
+{
+	memcpy(&dst->body[DAOS_HASH_HKEY_START],
+	       &src->body[DAOS_HASH_HKEY_START],
+	       DAOS_HASH_HKEY_LENGTH);
+}
+
+static inline void
+dsmc_hash_set_start(daos_hash_out_t *hash_out)
+{
+	memset(&hash_out->body[DAOS_HASH_HKEY_START], 0,
+	       DAOS_HASH_HKEY_LENGTH);
+}
+
+static inline uint32_t
+dsmc_hash_get_tag(daos_hash_out_t *anchor)
+{
+	uint32_t tag;
+
+	D_CASSERT(DAOS_HASH_HKEY_START + DAOS_HASH_HKEY_LENGTH <
+		  DAOS_HASH_DSM_TAG_OFFSET);
+	memcpy(&tag, &anchor->body[DAOS_HASH_DSM_TAG_OFFSET],
+		     DAOS_HASH_DSM_TAG_LENGTH);
+	return tag;
+}
+
+static inline void
+dsmc_hash_set_tag(daos_hash_out_t *anchor, uint32_t tag)
+{
+	memcpy(&anchor->body[DAOS_HASH_DSM_TAG_OFFSET], &tag,
+	       DAOS_HASH_DSM_TAG_LENGTH);
+}
 
 #endif /* __DSMC_INTERNAL_H__ */

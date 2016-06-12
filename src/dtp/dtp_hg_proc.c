@@ -920,7 +920,9 @@ dtp_proc_internal(struct drf_field *drf,
 			}
 
 			/* Let's assume array is not zero size now */
-			D_ASSERT(array->count > 0);
+			if (array->count == 0)
+				break;
+
 			proc_op = hg_proc_get_op(proc);
 			if (proc_op == HG_DECODE) {
 				D_ALLOC(array->arrays,

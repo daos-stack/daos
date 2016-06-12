@@ -45,31 +45,46 @@ dsmc_handle2obj(daos_handle_t hdl)
 	return container_of(dlink, struct dsmc_object, do_hlink);
 }
 
+/**
+ * XXX Getting dsmc object, pool and container by object handle, which
+ * only retrieve from client cache for now.
+ */
 static int
-dsmc_obj_pool_container_uuid_get(struct dsmc_object *dobj, uuid_t puuid,
-				 uuid_t cuuid, daos_unit_oid_t *do_id)
+dsm_open_pool_container(daos_handle_t hdl, struct dsmc_object **dobjp,
+			struct dsmc_pool **dpoolp,
+			struct dsmc_container **dcontp)
 {
-	struct dsmc_pool	*pool;
-	struct dsmc_container	*dc;
+	struct dsmc_pool	*dp = NULL;
+	struct dsmc_container	*dc = NULL;
+	struct dsmc_object	*dobj = NULL;
+	int			 rc = 0;
+
+	dobj = dsmc_handle2obj(hdl);
+	if (dobj == NULL)
+		return -DER_NO_HDL;
+	*dobjp = dobj;
 
 	D_ASSERT(!daos_handle_is_inval(dobj->do_co_hdl));
 	dc = dsmc_handle2container(dobj->do_co_hdl);
 	if (dc == NULL)
-		return -DER_NO_HDL;
+		D_GOTO(out_put, rc = -DER_NO_HDL);
+	*dcontp = dc;
 
 	D_ASSERT(!daos_handle_is_inval(dc->dc_pool_hdl));
-	pool = dsmc_handle2pool(dc->dc_pool_hdl);
-	if (pool == NULL) {
-		dsmc_container_put(dc);
-		return -DER_NO_HDL;
+	dp = dsmc_handle2pool(dc->dc_pool_hdl);
+	if (dp == NULL)
+		D_GOTO(out_put, rc = -DER_NO_HDL);
+	*dpoolp = dp;
+
+out_put:
+	if (rc != 0) {
+		if (dobj != NULL)
+			dsmc_object_put(dobj);
+		if (dc != NULL)
+			dsmc_container_put(dc);
+		if (dp != NULL)
+			dsmc_pool_put(dp);
 	}
-
-	uuid_copy(puuid, pool->dp_pool);
-	uuid_copy(cuuid, dc->dc_uuid);
-
-	*do_id = dobj->do_id;
-	dsmc_container_put(dc);
-	dsmc_pool_put(pool);
 
 	return 0;
 }
@@ -158,6 +173,25 @@ dsm_io_check(unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls)
 	return true;
 }
 
+/**
+ * XXX: Only use dkey to distribute the data among targets for
+ * now, and eventually, it should use dkey + akey, but then
+ * it means the I/O vector might needs to be split into
+ * mulitple requests in dsm_obj_rw()
+ */
+static uint32_t
+dsm_get_tag(struct dsmc_object *dobj, daos_dkey_t *dkey)
+{
+	uint64_t hash;
+
+	/** XXX hash is calculated twice (see cli_obj_dkey2shard) */
+	hash = daos_hash_murmur64((unsigned char *)dkey->iov_buf,
+				  dkey->iov_len, 5731);
+	hash %= dobj->do_nr_srv;
+
+	return hash;
+}
+
 static int
 dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	   unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
@@ -170,6 +204,8 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	dtp_bulk_t		*bulks;
 	dtp_bulk_perm_t		 bulk_perm;
 	struct daos_op_sp	*sp;
+	struct dsmc_pool	*dpool = NULL;
+	struct dsmc_container	*dcont = NULL;
 	int			 i;
 	int			 rc;
 
@@ -181,35 +217,39 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	    !dsm_io_check(nr, iods, sgls))
 		return -DER_INVAL;
 
-	dobj = dsmc_handle2obj(oh);
-	if (dobj == NULL)
-		return -DER_NO_HDL;
-
 	if (ev == NULL) {
 		rc = daos_event_priv_get(&ev);
-		if (rc != 0) {
-			dsmc_object_put(dobj);
+		if (rc != 0)
 			return rc;
-		}
 	}
 
+	rc = dsm_open_pool_container(oh, &dobj, &dpool, &dcont);
+	if (rc != 0)
+		return rc;
+
 	tgt_ep.ep_rank = dobj->do_rank;
-	tgt_ep.ep_tag = 0;
+	tgt_ep.ep_tag = dsm_get_tag(dobj, dkey);
 	rc = dsm_req_create(daos_ev2ctx(ev), tgt_ep, op, &req);
 	if (rc != 0) {
 		dsmc_object_put(dobj);
+		dsmc_container_put(dcont);
+		dsmc_pool_put(dpool);
 		return rc;
 	}
 
 	oui = dtp_req_get(req);
 	D_ASSERT(oui != NULL);
 
-	rc = dsmc_obj_pool_container_uuid_get(dobj,
-			oui->oui_pool_uuid, oui->oui_co_uuid,
-			&oui->oui_oid);
+	oui->oui_oid = dobj->do_id;
+	uuid_copy(oui->oui_pool_uuid, dpool->dp_pool);
+	uuid_copy(oui->oui_co_uuid, dcont->dc_uuid);
+
 	dsmc_object_put(dobj);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	dsmc_container_put(dcont);
+	dsmc_pool_put(dpool);
+	dobj = NULL;
+	dcont = NULL;
+	dpool = NULL;
 
 	oui->oui_epoch = epoch;
 	oui->oui_nr = nr;
@@ -301,7 +341,7 @@ struct daos_hlink_ops dobj_h_ops = {
 };
 
 static struct dsmc_object *
-dsm_obj_alloc(daos_rank_t rank, daos_unit_oid_t id)
+dsm_obj_alloc(daos_rank_t rank, daos_unit_oid_t id, uint32_t nr_srv)
 {
 	struct dsmc_object *dobj;
 
@@ -309,10 +349,12 @@ dsm_obj_alloc(daos_rank_t rank, daos_unit_oid_t id)
 	if (dobj == NULL)
 		return NULL;
 
-	dobj->do_rank = rank;
-	dobj->do_id = id;
+	dobj->do_rank	= rank;
+	dobj->do_nr_srv	= nr_srv;
+	dobj->do_id	= id;
 	DAOS_INIT_LIST_HEAD(&dobj->do_co_list);
 	daos_hhash_hlink_init(&dobj->do_hlink, &dobj_h_ops);
+
 	return dobj;
 }
 
@@ -341,7 +383,8 @@ dsm_obj_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
 		return -DER_INVAL;
 	}
 
-	dobj = dsm_obj_alloc(map_tgt->ta_comp.co_rank, id);
+	dobj = dsm_obj_alloc(map_tgt->ta_comp.co_rank, id,
+			     map_tgt->ta_comp.co_nr);
 	if (dobj == NULL) {
 		dsmc_container_put(dc);
 		return -DER_NOMEM;
@@ -396,14 +439,18 @@ struct enumerate_async_arg {
 	uint32_t	*eaa_nr;
 	daos_key_desc_t *eaa_kds;
 	daos_hash_out_t *eaa_anchor;
+	struct dsmc_object *eaa_obj;
+	struct dsmc_container *eaa_cont;
+	struct dsmc_pool      *eaa_pool;
 };
 
 static int
 enumerate_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 {
-	struct object_enumerate_in *oei;
-	struct object_enumerate_out *oeo;
-	struct enumerate_async_arg *eaa;
+	struct object_enumerate_in	*oei;
+	struct object_enumerate_out	*oeo;
+	struct enumerate_async_arg	*eaa;
+	int				 tgt_tag;
 
 	oei = dtp_req_get(sp->sp_rpc);
 	D_ASSERT(oei != NULL);
@@ -431,9 +478,24 @@ enumerate_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 	memcpy(eaa->eaa_kds, oeo->oeo_kds.arrays,
 	       sizeof(*eaa->eaa_kds) * oeo->oeo_kds.count);
 
-	memcpy(eaa->eaa_anchor->body, oeo->oeo_anchor.body,
-	       sizeof(oeo->oeo_anchor.body));
+	dsmc_hash_hkey_copy(eaa->eaa_anchor,
+			    &oeo->oeo_anchor);
+	if (daos_hash_is_eof(&oeo->oeo_anchor)) {
+		tgt_tag = dsmc_hash_get_tag(eaa->eaa_anchor);
+		if (tgt_tag < eaa->eaa_obj->do_nr_srv - 1) {
+			dsmc_hash_set_tag(eaa->eaa_anchor, ++tgt_tag);
+			dsmc_hash_set_start(eaa->eaa_anchor);
+		}
+	}
+
 out:
+	if (eaa->eaa_obj != NULL)
+		dsmc_object_put(eaa->eaa_obj);
+	if (eaa->eaa_cont != NULL)
+		dsmc_container_put(eaa->eaa_cont);
+	if (eaa->eaa_pool != NULL)
+		dsmc_pool_put(eaa->eaa_pool);
+
 	D_FREE_PTR(eaa);
 	dtp_bulk_free(oei->oei_bulk);
 
@@ -450,6 +512,8 @@ dsm_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	dtp_endpoint_t		tgt_ep;
 	dtp_rpc_t		*req;
 	struct dsmc_object	*dobj;
+	struct dsmc_container	*dcont;
+	struct dsmc_pool	*dpool;
 	struct object_enumerate_in *oei;
 	struct enumerate_async_arg *eaa;
 	dtp_bulk_t		bulk;
@@ -462,37 +526,32 @@ dsm_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 			return rc;
 	}
 
-	dobj = dsmc_handle2obj(oh);
-	if (dobj == NULL)
-		return -DER_NO_HDL;
+	rc = dsm_open_pool_container(oh, &dobj, &dpool, &dcont);
+	if (rc != 0)
+		return rc;
 
 	tgt_ep.ep_rank = dobj->do_rank;
-	tgt_ep.ep_tag = 0;
+	tgt_ep.ep_tag = dsmc_hash_get_tag(anchor);
 	rc = dsm_req_create(daos_ev2ctx(ev), tgt_ep, DSM_TGT_OBJ_ENUMERATE,
 			    &req);
-	if (rc != 0) {
-		dsmc_object_put(dobj);
-		return rc;
-	}
+	if (rc != 0)
+		D_GOTO(out_put, rc);
 
 	oei = dtp_req_get(req);
 	D_ASSERT(oei != NULL);
 
-	rc = dsmc_obj_pool_container_uuid_get(dobj,
-			oei->oei_pool_uuid, oei->oei_co_uuid,
-			&oei->oei_oid);
-	dsmc_object_put(dobj);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	oei->oei_oid = dobj->do_id;
+	uuid_copy(oei->oei_co_uuid, dcont->dc_uuid);
+	uuid_copy(oei->oei_pool_uuid, dpool->dp_pool);
 
 	oei->oei_epoch = epoch;
 	oei->oei_nr = *nr;
-	oei->oei_anchor = *anchor;
 
+	dsmc_hash_hkey_copy(&oei->oei_anchor, anchor);
 	/* Create bulk */
 	rc = dtp_bulk_create(daos_ev2ctx(ev), sgl, DTP_BULK_RW, &bulk);
 	if (rc < 0)
-		D_GOTO(out, rc);
+		D_GOTO(out_req, rc);
 
 	oei->oei_bulk = bulk;
 
@@ -502,9 +561,13 @@ dsm_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	D_ALLOC_PTR(eaa);
 	if (eaa == NULL)
 		D_GOTO(out_bulk, rc = -DER_NOMEM);
+
 	eaa->eaa_nr = nr;
 	eaa->eaa_kds = kds;
 	eaa->eaa_anchor = anchor;
+	eaa->eaa_pool = dpool;
+	eaa->eaa_obj = dobj;
+	eaa->eaa_cont = dcont;
 	sp->sp_arg = eaa;
 
 	rc = daos_event_launch(ev, NULL, enumerate_cp);
@@ -519,7 +582,11 @@ out_eaa:
 	D_FREE_PTR(eaa);
 out_bulk:
 	dtp_bulk_free(&bulk);
-out:
+out_req:
 	dtp_req_decref(req);
+out_put:
+	dsmc_object_put(dobj);
+	dsmc_container_put(dcont);
+	dsmc_pool_put(dpool);
 	return rc;
 }

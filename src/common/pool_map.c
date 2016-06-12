@@ -654,9 +654,7 @@ pool_tree_build_ptrs(struct pool_domain *tree, struct pool_comp_cntr *cntr)
 static void
 pool_tree_free(struct pool_domain *tree)
 {
-	unsigned int size = pool_tree_size(tree);
-
-	D_FREE(tree, size);
+	D_FREE(tree, pool_tree_size(tree));
 }
 
 /** Check if component buffer is sane */

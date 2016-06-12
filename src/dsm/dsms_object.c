@@ -44,41 +44,29 @@ struct dsms_vpool {
 	daos_list_t   dvp_list;
 };
 
-static struct daos_list_head dvp_list_head;
-static pthread_mutex_t	     dvp_list_mutex;
-
-int
-dsms_object_init()
-{
-	DAOS_INIT_LIST_HEAD(&dvp_list_head);
-	pthread_mutex_init(&dvp_list_mutex, NULL);
-	return 0;
-}
-
+/* XXX let's keep the pool open until module fini */
 void
-dsms_object_fini()
+dsms_pools_close()
 {
+	struct dsm_tls *tls = dsm_tls_get();
 	struct dsms_vpool *dvp;
 	struct dsms_vpool *tmp;
 
-	pthread_mutex_lock(&dvp_list_mutex);
-	daos_list_for_each_entry_safe(dvp, tmp, &dvp_list_head, dvp_list) {
+	daos_list_for_each_entry_safe(dvp, tmp, &tls->dt_pool_list, dvp_list) {
 		daos_list_del(&dvp->dvp_list);
 		vos_pool_close(dvp->dvp_hdl, NULL);
 		D_FREE_PTR(dvp);
 	}
-	pthread_mutex_unlock(&dvp_list_mutex);
-	pthread_mutex_destroy(&dvp_list_mutex);
 }
 
 static struct dsms_vpool *
 dsms_vpool_lookup(const uuid_t vp_uuid)
 {
+	struct dsm_tls *tls = dsm_tls_get();
 	struct dsms_vpool *dvp;
 
-	daos_list_for_each_entry(dvp, &dvp_list_head, dvp_list) {
+	daos_list_for_each_entry(dvp, &tls->dt_pool_list, dvp_list) {
 		if (uuid_compare(vp_uuid, dvp->dvp_uuid) == 0) {
-			pthread_mutex_unlock(&dvp_list_mutex);
 			return dvp;
 		}
 	}
@@ -122,14 +110,11 @@ dsms_pool_open(const uuid_t pool_uuid, daos_handle_t *vph)
 	struct dss_module_info	*dmi;
 	struct dsms_vpool	*vpool;
 	struct dsms_vpool	*new;
+	struct dsm_tls		*tls = dsm_tls_get();
 	char			*path;
 	int			 rc;
 
-	D_DEBUG(DF_MISC, "lookup pool "DF_UUID"\n",
-		DP_UUID(pool_uuid));
-	pthread_mutex_lock(&dvp_list_mutex);
 	vpool = dsms_vpool_lookup(pool_uuid);
-	pthread_mutex_unlock(&dvp_list_mutex);
 	if (vpool != NULL) {
 		*vph = vpool->dvp_hdl;
 		D_DEBUG(DF_MISC, "get pool "DF_UUID" from cache.\n",
@@ -153,18 +138,10 @@ dsms_pool_open(const uuid_t pool_uuid, daos_handle_t *vph)
 	uuid_copy(new->dvp_uuid, pool_uuid);
 	new->dvp_hdl = *vph;
 	DAOS_INIT_LIST_HEAD(&new->dvp_list);
-	pthread_mutex_lock(&dvp_list_mutex);
-	vpool = dsms_vpool_lookup(pool_uuid);
-	if (vpool == NULL) {
-		D_DEBUG(DF_MISC, "add pool "DF_UUID"\n",
-			DP_UUID(pool_uuid));
-		daos_list_add(&new->dvp_list, &dvp_list_head);
-	} else {
-		D_FREE_PTR(new);
-		*vph = vpool->dvp_hdl;
-	}
 
-	pthread_mutex_unlock(&dvp_list_mutex);
+	D_DEBUG(DF_MISC, "add pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+	daos_list_add(&new->dvp_list, &tls->dt_pool_list);
 
 	D_DEBUG(DF_MISC, "open pool "DF_X64"\n", vph->cookie);
 
@@ -550,20 +527,19 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 	oeo = dtp_reply_get(rpc);
 	if (oei == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
-
-	oeo->oeo_kds.count = oei->oei_nr;
-	D_ALLOC(oeo->oeo_kds.arrays,
-		oei->oei_nr * sizeof(daos_key_desc_t));
-	if (oeo->oeo_kds.arrays == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl	= dch;
 	param.ip_oid	= oei->oei_oid;
 	param.ip_epr.epr_lo = oei->oei_epoch;
 	rc = vos_iter_prepare(VOS_ITER_DKEY, &param, &ih);
 	if (rc != 0) {
-		D_ERROR("Failed to prepare d-key iterator: %d\n", rc);
+		if (rc == -DER_NONEXIST) {
+			daos_hash_set_eof(&oeo->oeo_anchor);
+			oeo->oeo_kds.count = 0;
+			rc = 0;
+		} else {
+			D_ERROR("Failed to prepare d-key iterator: %d\n", rc);
+		}
 		D_GOTO(out, rc);
 	}
 
@@ -571,11 +547,19 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
 			daos_hash_set_eof(&oeo->oeo_anchor);
+			oeo->oeo_kds.count = 0;
 			rc = 0;
 		}
 		vos_iter_finish(ih);
 		D_GOTO(out, rc);
 	}
+
+	/* Prepare key desciptor buffer */
+	oeo->oeo_kds.count = oei->oei_nr;
+	D_ALLOC(oeo->oeo_kds.arrays,
+		oei->oei_nr * sizeof(daos_key_desc_t));
+	if (oeo->oeo_kds.arrays == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	dkey_nr = 0;
 	kds = oeo->oeo_kds.arrays;

@@ -171,7 +171,7 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 	vpool = vos_pool_lookup_handle(poh);
 	if (vpool == NULL) {
 		D_ERROR("Error in looking up VOS pool handle from hhash\n");
-		D_GOTO(exit, ret = -DER_INVAL);
+		return -DER_INVAL;
 	}
 
 	uuid_copy(ukey.uuid, co_uuid);

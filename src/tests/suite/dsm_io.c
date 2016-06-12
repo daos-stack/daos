@@ -530,11 +530,14 @@ enumerate_simple(void **state)
 	insert("enumerate 9", "a_key", 0, "data", strlen("data") + 1, 0, &req);
 	insert("enumerate 10", "a_key", 0, "data", strlen("data") + 1, 0, &req);
 
+	print_message("Enumerate records\n");
 	memset(&hash_out, 0, sizeof(hash_out));
 	buf = calloc(512, 1);
 	/** enumerate records */
-	while (number > 0) {
+	while (!daos_hash_is_eof(&hash_out)) {
 		enumerate(0, &number, kds, &hash_out, buf, 512, &req);
+		if (number == 0)
+			goto next;
 		print_message("get key %s\n", buf);
 		ptr = buf;
 		total_keys += number;
@@ -546,8 +549,11 @@ enumerate_simple(void **state)
 				     (int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 		}
+next:
 		if (daos_hash_is_eof(&hash_out))
 			break;
+		memset(buf, 0, 512);
+		number = 5;
 	}
 
 	free(buf);
@@ -584,28 +590,33 @@ punch_simple(void **state)
 	memset(&hash_out, 0, sizeof(hash_out));
 	buf = calloc(512, 1);
 	/** enumerate records */
+	print_message("Enumerate records\n");
 	while (number > 0) {
 		enumerate(0, &number, kds, &hash_out, buf, 512, &req);
 		total_keys += number;
 		if (daos_hash_is_eof(&hash_out))
 			break;
+		number = 2;
 	}
 	assert_int_equal(total_keys, 5);
 
+	/** punch records */
+	print_message("Punch records\n");
 	punch("punch_test0", "a_key", 0, 1, &req);
 	punch("punch_test1", "a_key", 0, 1, &req);
 	punch("punch_test2", "a_key", 0, 1, &req);
 	punch("punch_test3", "a_key", 0, 1, &req);
 	punch("punch_test4", "a_key", 0, 1, &req);
 
-	/** XXX Verify punch */
 	memset(&hash_out, 0, sizeof(hash_out));
 	/** enumerate records */
+	print_message("Enumerate records again\n");
 	while (number > 0) {
 		enumerate(0, &number, kds, &hash_out, buf, 512, &req);
 		total_keys += number;
 		if (daos_hash_is_eof(&hash_out))
 			break;
+		number = 2;
 	}
 	print_message("get keys %d\n", total_keys);
 	free(buf);

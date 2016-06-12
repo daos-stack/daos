@@ -47,19 +47,13 @@ init(void)
 	if (rc != 0)
 		dsms_storage_fini();
 
-	rc = dsms_object_init();
-	if (rc != 0) {
-		dsms_storage_fini();
-		dsms_pool_fini();
-	}
-
 	return rc;
 }
 
 static int
 fini(void)
 {
-	dsms_object_fini();
+	dsms_pools_close();
 	dsms_pool_fini();
 	dsms_storage_fini();
 	return 0;
@@ -108,6 +102,37 @@ static struct daos_rpc_handler dsms_handlers[] = {
 	}
 };
 
+static void *
+dsm_tls_init(const struct dss_thread_local_storage *dtls,
+	     struct dss_module_key *key)
+{
+	struct dsm_tls *tls;
+
+	D_ALLOC_PTR(tls);
+	if (tls == NULL)
+		return NULL;
+
+	DAOS_INIT_LIST_HEAD(&tls->dt_pool_list);
+	return tls;
+}
+
+static void
+dsm_tls_fini(const struct dss_thread_local_storage *dtls,
+	     struct dss_module_key *key, void *data)
+{
+	struct dsm_tls *tls = data;
+
+	D_ASSERT(daos_list_empty(&tls->dt_pool_list));
+	D_FREE_PTR(tls);
+}
+
+struct dss_module_key dsm_module_key = {
+	.dmk_tags = DAOS_SERVER_TAG,
+	.dmk_index = -1,
+	.dmk_init = dsm_tls_init,
+	.dmk_fini = dsm_tls_fini,
+};
+
 struct dss_module daos_m_srv_module =  {
 	.sm_name	= "daos_m_srv",
 	.sm_mod_id	= DAOS_DSM_MODULE,
@@ -116,4 +141,5 @@ struct dss_module daos_m_srv_module =  {
 	.sm_fini	= fini,
 	.sm_cl_rpcs	= dsm_rpcs,
 	.sm_handlers	= dsms_handlers,
+	.sm_key		= &dsm_module_key,
 };
