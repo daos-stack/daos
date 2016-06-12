@@ -360,7 +360,7 @@ enum {
 
 typedef enum {
 	DAOS_OS_SINGLE,		/**< single stripe object */
-	DAOS_OS_STRIPED,		/**< fix striped object */
+	DAOS_OS_STRIPED,	/**< fix striped object */
 	DAOS_OS_DYN_STRIPED,	/**< dynamically striped object */
 	DAOS_OS_DYN_CHUNKED,	/**< dynamically chunked object */
 } daos_obj_schema_t;

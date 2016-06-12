@@ -42,6 +42,56 @@ int
 dsr_fini(void);
 
 /**
+ * Connect to the DAOS pool identified by UUID \a uuid.
+ * Upon a successful completion, \a poh returns the pool handle and \a failed,
+ * which shall be allocated by the caller, returns the targets that failed to
+ * establish this connection.
+ *
+ * \param uuid	[IN]	UUID to identify a pool.
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
+ * \param svc	[IN]	Optional, indicate potential targets of the pool service
+ *			replicas. If not aware of the ranks of the pool service
+ *			replicas, the caller may pass in NULL.
+ * \param flags	[IN]	Connect mode represented by the DAOS_PC_ bits.
+ * \param failed
+ *		[OUT]	Optional, buffer to store faulty targets on failure.
+ * \param poh	[OUT]	Returned open handle.
+ * \param info	[OUT]	Returned pool info.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Pool is nonexistent
+ */
+int
+dsr_pool_connect(const uuid_t uuid, const char *grp,
+		 const daos_rank_list_t *svc, unsigned int flags,
+		 daos_rank_list_t *failed, daos_handle_t *poh,
+		 daos_pool_info_t *info, daos_event_t *ev);
+
+/**
+ * Disconnect from the DAOS pool. It should revoke all the container open
+ * handles of this pool.
+ *
+ * \param poh	[IN]	Pool connection handle
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid pool handle
+ */
+int
+dsr_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
+
+/**
  * Handle API
  */
 
@@ -54,8 +104,6 @@ dsr_fini(void);
  * Pool API is shared with DAOS-M
  */
 
-#define dsr_pool_connect	dsm_pool_connect
-#define dsr_pool_disconnect	dsm_pool_disconnect
 #define dsr_pool_exclude	dsm_pool_exclude
 #define dsr_pool_query		dsm_pool_query
 #define dsr_pool_target_query	dsm_pool_target_query

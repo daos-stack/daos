@@ -17,7 +17,7 @@ denv.Install('$PREFIX/lib/daos_srv', srv)
 
 # generate client library
 client = denv.SharedLibrary('daos_sr',
-			    ['dsrc_api.c', 'dsrc_module.c', src])
+			    ['dsrc_module.c', 'cli_obj.c', 'cli_pool.c', src])
 denv.Install('$PREFIX/lib', client)
 
 # Build tests
