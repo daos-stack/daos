@@ -633,7 +633,7 @@ dsm_co_local2global(daos_handle_t coh, daos_iov_t *glob)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
-	    glob->iov_len == 0 || glob->iov_buf_len < glob->iov_len)) {
+	    glob->iov_buf_len < glob->iov_len)) {
 		D_ERROR("Invalid parameter of glob, iov_buf %p, iov_buf_len "
 			""DF_U64", iov_len "DF_U64".\n", glob->iov_buf,
 			glob->iov_buf_len, glob->iov_len);
@@ -844,8 +844,8 @@ epoch_op(daos_handle_t coh, dtp_opcode_t opc, daos_epoch_t *epoch,
 			D_GOTO(err_pool, rc);
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID"/"DF_UUID": "DF_UUID" epoch="DF_U64"\n",
-		DP_UUID(pool->dp_pool), DP_UUID(cont->dc_uuid),
+	D_DEBUG(DF_DSMC, DF_UUID"/"DF_UUID": op=%u hdl="DF_UUID" epoch="DF_U64
+		"\n", DP_UUID(pool->dp_pool), DP_UUID(cont->dc_uuid), opc,
 		DP_UUID(cont->dc_cont_hdl), epoch == NULL ? 0 : *epoch);
 
 	D_ALLOC_PTR(arg);
