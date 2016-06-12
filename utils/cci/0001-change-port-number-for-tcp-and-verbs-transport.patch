@@ -1,7 +1,7 @@
 From 97875a9c82becb72a35c0c5b33bb1992814eb871 Mon Sep 17 00:00:00 2001
 From: Xuezhao Liu <xuezhao.liu@intel.com>
 Date: Tue, 12 Apr 2016 23:56:22 +0800
-Subject: [PATCH] change port number for tcp and verbs transport
+Subject: [PATCH 1/2] change port number for tcp and verbs transport
 
 When user calls cci_create_endpoint it will increase the port number
 in the CCI_CONFIG file by one, then user can get the continue listening

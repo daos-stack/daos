@@ -255,17 +255,11 @@ io_var_idx_offset(void **state)
 	daos_unit_oid_t	 oid;
 	struct ioreq	 req;
 	daos_off_t	 offset;
-	void		*val_data;
-	daos_size_t	 val_size;
 
 	/** choose random object */
 	obj_random(arg, &tgt, &oid);
 
 	ioreq_init(&req, tgt, oid, arg);
-
-	val_data = strdup("data");
-	assert_non_null(val_data);
-	val_size = strlen("data") + 1;
 
 	for (offset = UINT64_MAX; offset > 0; offset >>= 8) {
 		char buf[10];
@@ -273,8 +267,8 @@ io_var_idx_offset(void **state)
 		print_message("idx offset: %lu\n", offset);
 
 		/** Insert */
-		insert("var_idx_off_d", "var_idx_off_a", offset, val_data,
-		       val_size, 0, &req);
+		insert("var_idx_off_d", "var_idx_off_a", offset, "data",
+		       strlen("data") + 1, 0, &req);
 
 		/** Lookup */
 		memset(buf, 0, 10);
@@ -285,7 +279,6 @@ io_var_idx_offset(void **state)
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
 	}
-	free(val_data);
 
 	ioreq_fini(&req);
 
@@ -302,8 +295,6 @@ io_var_akey_size(void **state)
 	daos_size_t	 size;
 	const int	 max_size = 1 << 10;
 	char		*key;
-	void		*val_data;
-	daos_size_t	 val_size;
 
 	/** akey not supported yet */
 	skip();
@@ -317,10 +308,6 @@ io_var_akey_size(void **state)
 	assert_non_null(key);
 	memset(key, 'a', max_size);
 
-	val_data = strdup("data");
-	assert_non_null(val_data);
-	val_size = strlen("data") + 1;
-
 	for (size = 1; size <= max_size; size <<= 1) {
 		char buf[10];
 
@@ -328,19 +315,19 @@ io_var_akey_size(void **state)
 
 		/** Insert */
 		key[size] = '\0';
-		insert("var_akey_size_d", key, 0, val_data, val_size, 0, &req);
+		insert("var_akey_size_d", key, 0, "data", strlen("data") + 1, 0,
+		       &req);
 
 		/** Lookup */
 		memset(buf, 0, 10);
 		lookup("var_dkey_size_d", key, 0, buf, 10, 0, &req);
-		assert_int_equal(req.rex.rx_rsize, val_size);
+		assert_int_equal(req.rex.rx_rsize, strlen("data") + 1);
 
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
 		key[size] = 'b';
 	}
 
-	free(val_data);
 	free(key);
 	ioreq_fini(&req);
 }
@@ -356,8 +343,6 @@ io_var_dkey_size(void **state)
 	daos_size_t	 size;
 	const int	 max_size = 1 << 10;
 	char		*key;
-	void		*val_data;
-	daos_size_t	 val_size;
 
 	/** choose random object */
 	obj_random(arg, &tgt, &oid);
@@ -368,10 +353,6 @@ io_var_dkey_size(void **state)
 	assert_non_null(key);
 	memset(key, 'a', max_size);
 
-	val_data = strdup("data");
-	assert_non_null(val_data);
-	val_size = strlen("data") + 1;
-
 	for (size = 1; size <= max_size; size <<= 1) {
 		char buf[10];
 
@@ -379,19 +360,19 @@ io_var_dkey_size(void **state)
 
 		/** Insert */
 		key[size] = '\0';
-		insert(key, "var_dkey_size_a", 0, val_data, val_size, 0, &req);
+		insert(key, "var_dkey_size_a", 0, "data", strlen("data") + 1, 0,
+		       &req);
 
 		/** Lookup */
 		memset(buf, 0, 10);
 		lookup(key, "var_dkey_size_a", 0, buf, 10, 0, &req);
-		assert_int_equal(req.rex.rx_rsize, val_size);
+		assert_int_equal(req.rex.rx_rsize, strlen("data") + 1);
 
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
 		key[size] = 'b';
 	}
 
-	free(val_data);
 	free(key);
 	ioreq_fini(&req);
 }
@@ -672,7 +653,7 @@ setup(void **state)
 	if (arg->myrank == 0) {
 		/** create pool with minimal size */
 		rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL,
-				     "pmem", 256*1024*1024, &arg->svc,
+				     "pmem", 256 << 20, &arg->svc,
 				     arg->pool_uuid, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -722,11 +703,12 @@ setup(void **state)
 static int
 teardown(void **state) {
 	test_arg_t	*arg = *state;
-	int		 rc;
+	int		 rc, rc_reduce = 0;
 
 	rc = dsm_co_close(arg->coh, NULL);
-	if (rc)
-		return rc;
+	MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+	if (rc_reduce)
+		return rc_reduce;
 
 	if (arg->myrank == 0)
 		rc = dsm_co_destroy(arg->poh, arg->co_uuid, 1, NULL);
@@ -735,8 +717,9 @@ teardown(void **state) {
 		return rc;
 
 	rc = dsm_pool_disconnect(arg->poh, NULL /* ev */);
-	if (rc)
-		return rc;
+	MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+	if (rc_reduce)
+		return rc_reduce;
 
 	if (arg->myrank == 0)
 		rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);

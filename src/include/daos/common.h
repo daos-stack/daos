@@ -164,7 +164,7 @@ DP_UUID(const void *uuid)
 			(int)(size), ptr);				\
 		free(ptr);						\
 		(ptr) = NULL;						\
-	} while ((size) - (size))
+	} while (0)
 
 #define D_ALLOC_PTR(ptr)        D_ALLOC(ptr, sizeof *(ptr))
 #define D_FREE_PTR(ptr)         D_FREE(ptr, sizeof *(ptr))

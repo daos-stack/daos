@@ -72,11 +72,7 @@ main(int argc, char **argv)
 	else
 		print_message("ERROR, %i TEST(S) FAILED\n", nr_failed);
 
-	/**
-	 * XXX: don't call MPI_Finalize() for now since dtp already calls
-	 * pmix_finalize() through mcl_finalize()
-	 * MPI_Finalize();
-	 */
+	MPI_Finalize();
 
 	return nr_failed;
 }

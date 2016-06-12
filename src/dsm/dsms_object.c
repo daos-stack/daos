@@ -361,9 +361,12 @@ dsms_bulk_transfer(dtp_rpc_t *rpc, daos_handle_t dph, daos_handle_t dch,
 		   daos_iov_t *iovs, int nr, dtp_bulk_op_t bulk_op,
 		   bool *bulk_sent)
 {
-	dtp_bulk_opid_t	bulk_opid;
-	int		i;
-	int		rc = 0;
+	dtp_bulk_opid_t		bulk_opid;
+	dtp_bulk_perm_t		bulk_perm;
+	int			i;
+	int			rc = 0;
+
+	bulk_perm = bulk_op == DTP_BULK_PUT ? DTP_BULK_RO : DTP_BULK_RW;
 
 	if (bulk_sent != NULL)
 		*bulk_sent = false;
@@ -383,7 +386,7 @@ dsms_bulk_transfer(dtp_rpc_t *rpc, daos_handle_t dph, daos_handle_t dch,
 		arg->pool_hdl = dph;
 		arg->cont_hdl = dch;
 
-		rc = dtp_bulk_create(rpc->dr_ctx, &sgls[i], DTP_BULK_RW,
+		rc = dtp_bulk_create(rpc->dr_ctx, &sgls[i], bulk_perm,
 				     &local_bulk_hdl);
 		if (rc != 0) {
 			D_ERROR("dtp_bulk_create failed, rc: %d.\n", rc);

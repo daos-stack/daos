@@ -168,9 +168,13 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	dtp_rpc_t		*req;
 	struct object_update_in *oui;
 	dtp_bulk_t		*bulks;
+	dtp_bulk_perm_t		 bulk_perm;
 	struct daos_op_sp	*sp;
 	int			 i;
 	int			 rc;
+
+	D_ASSERT(op == DSM_TGT_OBJ_UPDATE || op == DSM_TGT_OBJ_FETCH);
+	bulk_perm = (op == DSM_TGT_OBJ_UPDATE) ? DTP_BULK_RO : DTP_BULK_RW;
 
 	/** sanity check input parameters */
 	if (dkey == NULL || dkey->iov_buf == NULL || nr == 0 ||
@@ -227,7 +231,7 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 		if (sgls != NULL && sgls[i].sg_iovs != NULL &&
 		    sgls[i].sg_iovs[0].iov_buf != NULL) {
 			rc = dtp_bulk_create(daos_ev2ctx(ev), &sgls[i],
-					     DTP_BULK_RW, &bulks[i]);
+					     bulk_perm, &bulks[i]);
 			if (rc < 0) {
 				int j;
 
@@ -486,7 +490,7 @@ dsm_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	oei->oei_anchor = *anchor;
 
 	/* Create bulk */
-	rc = dtp_bulk_create(daos_ev2ctx(ev), sgl, DTP_BULK_RO, &bulk);
+	rc = dtp_bulk_create(daos_ev2ctx(ev), sgl, DTP_BULK_RW, &bulk);
 	if (rc < 0)
 		D_GOTO(out, rc);
 

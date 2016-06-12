@@ -1,0 +1,47 @@
+From 857f159e583e0c030269afe7ee28a716cd706754 Mon Sep 17 00:00:00 2001
+From: Xuezhao Liu <xuezhao.liu@intel.com>
+Date: Thu, 9 Jun 2016 02:03:07 +0800
+Subject: [PATCH 2/2] handle the passed in permission flags in
+ ctp_verbs_rma_register
+
+Signed-off-by: Xuezhao Liu <xuezhao.liu@intel.com>
+---
+ src/plugins/ctp/verbs/ctp_verbs_api.c | 13 ++++++++-----
+ 1 file changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/src/plugins/ctp/verbs/ctp_verbs_api.c b/src/plugins/ctp/verbs/ctp_verbs_api.c
+index 80811e5..65ae2f8 100644
+--- a/src/plugins/ctp/verbs/ctp_verbs_api.c
++++ b/src/plugins/ctp/verbs/ctp_verbs_api.c
+@@ -4199,8 +4199,9 @@ ctp_verbs_rma_register(cci_endpoint_t * endpoint,
+ 		   void *start, uint64_t length,
+ 		   int flags, cci_rma_handle_t ** rma_handle)
+ {
+-	/* FIXME use read/write flags? */
+ 	int ret = CCI_SUCCESS;
++        int ibv_access = IBV_ACCESS_REMOTE_READ;
++
+ 	cci__ep_t *ep = container_of(endpoint, cci__ep_t, endpoint);
+ 	verbs_ep_t *vep = ep->priv;
+ 	verbs_rma_handle_t *handle = NULL;
+@@ -4221,11 +4222,13 @@ ctp_verbs_rma_register(cci_endpoint_t * endpoint,
+ 
+ 	handle->ep = ep;
+ 
+-	handle->mr = ibv_reg_mr(vep->pd, start, (size_t) length,
+-				IBV_ACCESS_LOCAL_WRITE |
+-				IBV_ACCESS_REMOTE_WRITE |
+-				IBV_ACCESS_REMOTE_READ);
++	if (flags & CCI_FLAG_WRITE)
++	    ibv_access |= (IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
++	handle->mr = ibv_reg_mr(vep->pd, start, (size_t) length, ibv_access);
+ 	if (!handle->mr) {
++		debug(CCI_DB_INFO, "ibv_reg_mr failed, start: %p, "
++		      "ibv_access: %d, errno: %d (%s).\n",
++		      start, ibv_access, errno, strerror(errno));
+ 		free(handle);
+ 		CCI_EXIT;
+ 		return CCI_ERROR;
+-- 
+1.8.3.1
+

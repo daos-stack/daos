@@ -170,7 +170,7 @@ static void run_client(void)
 	assert(rc == 1);
 	echo_md5_to_string(md5, md5_str);
 
-	rc = dtp_bulk_create(gecho.dtp_ctx, &sgl, DTP_BULK_RW, &bulk_hdl);
+	rc = dtp_bulk_create(gecho.dtp_ctx, &sgl, DTP_BULK_RO, &bulk_hdl);
 	assert(rc == 0);
 
 	D_ALLOC(pchar, 256); /* DTP will internally free it */
