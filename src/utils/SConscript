@@ -9,4 +9,5 @@ denv = env.Clone()
 if PREREQS is not None:
     PREREQS.require(denv, 'ompi')
 
-denv.Program('dmg', 'dmg.c', LIBS=libs)
+dmg = denv.Program('dmg', 'dmg.c', LIBS=libs)
+denv.Install('$PREFIX/bin/', dmg)

@@ -59,7 +59,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	 * argument is 0
 	 */
 	if (!size && (access(path, F_OK) == -1)) {
-		D_ERROR("File not present when size is 0");
+		D_ERROR("File not accessible (%d) when size is 0\n", errno);
 		return -DER_NONEXIST;
 	}
 
