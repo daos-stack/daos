@@ -33,6 +33,23 @@
 #include <daos/hash.h>
 #include <daos/transport.h>
 
+enum daos_ev_flags {
+	/**
+	 * An event will be queued in EQ on completion and wait for polling
+	 * by default. With this flag, the completed event will not be queued
+	 * in the EQ anymore, upper level stack is supposed to be notified by
+	 * callback.
+	 */
+	DAOS_EVF_NO_POLL	= (1 << 0),
+	/**
+	 * Only useful for parent event:
+	 * without this flag, a parent event will be automatially launched
+	 * if any child event is launched. With this flag, a parent event
+	 * always needs to be explicitly launched.
+	 */
+	DAOS_EVF_NEED_LAUNCH	= (1 << 1),
+};
+
 /** Common scratchpad for the operation in flight */
 struct daos_op_sp {
 	dtp_rpc_t	*sp_rpc;
@@ -55,6 +72,24 @@ daos_eq_lib_fini(void);
  */
 int
 daos_eq_lib_init();
+
+/**
+ * Initialize a new event for \a eqh
+ *
+ * \param ev [IN]	event to initialize
+ * \param flags [IN]	see daos_ev_flags
+ * \param eqh [IN]	where the event to be queued on, it's ignored if
+ *			\a parent is specified
+ * \param parent [IN]	"parent" event, it can be NULL if no parent event.
+ *			If it's not NULL, caller will never see completion
+ *			of this event, instead he will only see completion
+ *			of \a parent when all children of \a parent are
+ *			completed.
+ *
+ * \return		zero on success, negative value if error
+ */
+int daos_event_init_adv(struct daos_event *ev, enum daos_ev_flags flags,
+			daos_handle_t eqh, struct daos_event *parent);
 
 /**
  * Mark the event completed, i.e. move this event
@@ -114,4 +149,13 @@ daos_ev2ctx(struct daos_event *ev);
  */
 struct daos_op_sp *
 daos_ev2sp(struct daos_event *ev);
+
+/**
+ * Return the EQ handle of the specified event.
+ *
+ * \param ev [IN]	event to retrive handle.
+ */
+daos_handle_t
+daos_ev2eqh(struct daos_event *ev);
+
 #endif /*  __DAOS_EV_INTERNAL_H__ */

@@ -237,11 +237,13 @@ eq_test_3()
 			goto out;
 	}
 
-	D_ERROR("launch parent events");
+	D_ERROR("launch parent events\n");
 	/* try to launch parent event, should always fail */
 	rc = daos_event_launch(&event, NULL, NULL);
-	if (rc != DER_NO_PERM)
+	if (rc != -DER_NO_PERM) {
+		D_ERROR("Launch parent event returned %d\n", rc);
 		goto out_free;
+	}
 
 	D_ERROR("launch child events");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
@@ -520,6 +522,60 @@ out:
 	return epc_data.epc_error;
 }
 
+static int
+grp_comp(void *args, int rc)
+{
+	D_PRINT("group completed\n");
+	return 0;
+}
+
+#define GRP_SIZE	1000
+
+static int
+eq_test_5(void)
+{
+	struct daos_event	*evps[GRP_SIZE];
+	struct daos_oper_grp	*grp;
+	daos_event_t		 ev;
+	int			 rc;
+	int			 i;
+
+	DAOS_TEST_ENTRY("5", "operation group");
+
+	rc = daos_event_init(&ev, my_eqh, NULL);
+	if (rc != 0) {
+		D_ERROR("failed 1\n");
+		return rc;
+	}
+
+	rc = daos_oper_grp_create(&ev, grp_comp, NULL, &grp);
+	D_ASSERTF(rc == 0, "rc = %d\n", rc);
+
+	for (i = 0; i < GRP_SIZE; i++) {
+		rc = daos_oper_grp_new_ev(grp, &evps[i]);
+		D_ASSERTF(rc == 0, "rc = %d\n", rc);
+
+		rc = daos_event_launch(evps[i], NULL, NULL);
+		D_ASSERTF(rc == 0, "rc = %d\n", rc);
+	}
+
+	D_PRINT("Launch oper group now\n");
+	rc = daos_oper_grp_launch(grp);
+	D_ASSERTF(rc == 0, "rc = %d\n", rc);
+
+	for (i = 0; i < GRP_SIZE; i++)
+		daos_event_complete(evps[i], 0);
+
+	D_PRINT("Poll empty EQ with timeout\n");
+	rc = daos_eq_poll(my_eqh, 1, 1, GRP_SIZE, evps);
+	D_ASSERTF(rc == 1, "rc = %d\n", rc);
+
+	rc = daos_event_fini(&ev);
+	DAOS_TEST_EXIT(rc);
+	return rc;
+}
+
+
 int
 main(int argc, char **argv)
 {
@@ -553,6 +609,9 @@ main(int argc, char **argv)
 	if (rc != 0)
 		goto failed;
 
+	rc = eq_test_5();
+	if (rc != 0)
+		goto failed;
 failed:
 	daos_eq_destroy(my_eqh, 1);
 out_lib:

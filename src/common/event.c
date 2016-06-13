@@ -41,6 +41,32 @@ static __thread bool		ev_thpriv_is_init;
 /** thread-private event queue handle */
 static __thread daos_handle_t	eq_thpriv;
 
+#define EQ_WITH_DTP
+
+#if !defined(EQ_WITH_DTP)
+
+#define dtp_init(a)			({0;})
+#define dtp_finalize()			({0;})
+#define dtp_context_create(a, b)	({0;})
+#define dtp_context_destroy(a, b)	({0;})
+#define dtp_progress(ctx, timeout, cb, args)	\
+({						\
+	int __rc = cb(args);			\
+						\
+	while ((timeout) != 0 && __rc == 0) {	\
+		sleep(1);			\
+		__rc = cb(args);		\
+		if ((timeout) < 0)		\
+			continue;		\
+		if ((timeout) < 1000000)	\
+			break;			\
+		(timeout) -= 1000000;		\
+	}					\
+	0;					\
+})
+
+#endif
+
 /*
  * For the moment, we use a global dtp_context_t to create all the RPC requests
  * this module uses.
@@ -49,6 +75,9 @@ static dtp_context_t daos_eq_ctx;
 static pthread_mutex_t daos_eq_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int refcount;
 
+static int daos_event_complete_locked(struct daos_eq_private *eqx,
+				      struct daos_event_private *evx, int rc,
+				      struct daos_event_private **evxs_cb);
 int
 daos_eq_lib_init()
 {
@@ -141,11 +170,6 @@ daos_eq_free(struct daos_hlink *hlink)
 		  "comp %d disp %d\n", eq->eq_n_comp, eq->eq_n_disp);
 	D_ASSERT(daos_hhash_link_empty(&eqx->eqx_hlink));
 
-	if (eqx->eqx_events_hash != NULL) {
-		daos_hhash_destroy(eqx->eqx_events_hash);
-		eqx->eqx_events_hash = NULL;
-	}
-
 	if (eqx->eqx_lock_init)
 		pthread_mutex_destroy(&eqx->eqx_lock);
 
@@ -180,11 +204,6 @@ daos_eq_alloc(void)
 	eqx->eqx_lock_init = 1;
 
 	daos_hhash_hlink_init(&eqx->eqx_hlink, &eq_h_ops);
-
-	rc = daos_hhash_create(DAOS_HHASH_BITS, &eqx->eqx_events_hash);
-	if (rc != 0)
-		goto out;
-
 	return eq;
 out:
 	daos_eq_free(&eqx->eqx_hlink);
@@ -241,7 +260,12 @@ daos_event_launch_locked(struct daos_eq_private *eqx,
 
 	if (parent != NULL) {
 		parent->evx_nchild_if++;
+		/* already launched? */
 		if (!daos_list_empty(&parent->evx_link))
+			return;
+
+		/* should the parent event be launched automatically? */
+		if (parent->evx_flags & DAOS_EVF_NEED_LAUNCH)
 			return;
 
 		D_ASSERT(parent->evx_nchild_if == 1);
@@ -265,18 +289,35 @@ daos_ev2sp(struct daos_event *ev)
 	return &daos_ev2evx(ev)->evx_sp;
 }
 
+daos_handle_t
+daos_ev2eqh(struct daos_event *ev)
+{
+	struct daos_event_private *evx = daos_ev2evx(ev);
+
+	return evx->evx_eqh;
+}
+
 int
 daos_event_launch(struct daos_event *ev, daos_event_abort_cb_t abort_cb,
 		  daos_event_comp_cb_t comp_cb)
 {
 	struct daos_event_private *evx = daos_ev2evx(ev);
+	struct daos_event_private *evxs_cb[2];
 	struct daos_eq_private	  *eqx;
-	int			  rc = 0;
+	int			   i;
+	int			   cb_nr = 0;
+	int			   rc = 0;
 
-	if (evx->evx_status != DAOS_EVS_INIT ||
+	memset(evxs_cb, 0, sizeof(evxs_cb));
+	if (evx->evx_status != DAOS_EVS_INIT) {
+		D_ERROR("Event status should be INIT: %d\n", evx->evx_status);
+		return -DER_NO_PERM;
+	}
+
+	if (!(evx->evx_flags & DAOS_EVF_NEED_LAUNCH) &&
 	    !daos_list_empty(&evx->evx_child)) {
-		D_ERROR("Event status %d is wrong, or it's a parent event\n",
-			evx->evx_status);
+		D_ERROR("Can't explicitly launch event without setting "
+			"DAOS_EVF_NEED_LAUNCH.\n");
 		return -DER_NO_PERM;
 	}
 
@@ -299,67 +340,146 @@ daos_event_launch(struct daos_event *ev, daos_event_abort_cb_t abort_cb,
 		goto out;
 	}
 
-	daos_event_launch_locked(eqx, evx);
+	if (evx->evx_nchild > evx->evx_nchild_if + evx->evx_nchild_comp) {
+		D_ERROR("Launch all children before launch the parent.\n");
+		rc = -DER_NO_PERM;
+		goto out;
+	}
 
 	evx->evx_ops.op_abort = abort_cb;
 	evx->evx_ops.op_comp = comp_cb;
+	daos_event_launch_locked(eqx, evx);
+
+	if (evx->evx_nchild > 1) { /* have real children */
+		struct daos_event_private *dum_evx;
+		struct daos_event	  *dum_ev;
+
+		D_DEBUG(DF_MISC, "nchild %d, child_if %d, child_comp %d\n",
+			evx->evx_nchild, evx->evx_nchild_if,
+			evx->evx_nchild_comp);
+
+		/* XXX: gcc will report "strict aliasing" error if the dum_ev
+		 * is in stack, not sure why gcc is ok when I explicitly
+		 * allocate it.
+		 */
+		D_ASSERT(evx->evx_flags & DAOS_EVF_NEED_LAUNCH);
+		D_ALLOC_PTR(dum_ev);
+		if (dum_ev == NULL)
+			goto out;
+
+		dum_evx = daos_ev2evx(dum_ev);
+		dum_evx->evx_parent = evx;
+		dum_evx->evx_flags = DAOS_EVF_NO_POLL;
+		/* complete the dummy child event, see comment in
+		 * daos_event_init_adv().
+		 */
+		cb_nr = daos_event_complete_locked(eqx, dum_evx, 0, evxs_cb);
+		D_FREE_PTR(dum_ev);
+	}
  out:
 	pthread_mutex_unlock(&eqx->eqx_lock);
+
+	for (i = 0; i < cb_nr; i++) {
+		ev = daos_evx2ev(evxs_cb[i]);
+		evxs_cb[i]->evx_ops.op_comp(&evxs_cb[i]->evx_sp, ev,
+					    ev->ev_error);
+	}
 	daos_eq_putref(eqx);
 	return rc;
 }
 
-static void
+static int
 daos_event_complete_locked(struct daos_eq_private *eqx,
-			   struct daos_event_private *evx)
+			   struct daos_event_private *evx, int rc,
+			   struct daos_event_private **evxs_cb)
 {
 	struct daos_event_private *parent = evx->evx_parent;
-	struct daos_eq		  *eq = daos_eqx2eq(eqx);
+	struct daos_eq		  *eq	  = daos_eqx2eq(eqx);
+	daos_event_t		  *ev	  = daos_evx2ev(evx);
+	int			   cb_nr  = 0;
+	bool			   no_poll;
 
-	evx->evx_status = DAOS_EVS_COMPLETED;
+	no_poll = (evx->evx_flags & DAOS_EVF_NO_POLL);
+	evx->evx_status = no_poll ? DAOS_EVS_INIT : DAOS_EVS_COMPLETED;
+	if (evx->evx_ops.op_comp != NULL) {
+		/* XXX: delay the execution of comp_cb for no_poll event,
+		 * this is a temporary workaround because I need the comp_cb
+		 * of no_poll event to be called without eq_lock.
+		 */
+		if (no_poll)
+			evxs_cb[cb_nr++] = evx;
+		else
+			rc = evx->evx_ops.op_comp(&evx->evx_sp, ev, rc);
+	}
+	ev->ev_error = rc;
+
 	if (parent != NULL) {
-		D_ASSERT(parent->evx_nchild_if > 0);
-		parent->evx_nchild_if--;
-
-		D_ASSERT(parent->evx_nchild_comp < parent->evx_nchild);
-		parent->evx_nchild_comp++;
-
-		if (parent->evx_nchild_comp < parent->evx_nchild)
-			return;
-
-		parent->evx_status = DAOS_EVS_COMPLETED;
 		evx = parent;
+		ev = daos_evx2ev(evx);
+
+		D_ASSERT(evx->evx_nchild_if > 0);
+		evx->evx_nchild_if--;
+
+		D_ASSERT(evx->evx_nchild_comp < evx->evx_nchild);
+		evx->evx_nchild_comp++;
+		if (evx->evx_nchild_comp < evx->evx_nchild) {
+			ev->ev_error = ev->ev_error ?: rc;
+			return cb_nr;
+		}
+
+		no_poll = (evx->evx_flags & DAOS_EVF_NO_POLL);
+		evx->evx_status = no_poll ? DAOS_EVS_INIT : DAOS_EVS_COMPLETED;
+
+		if (evx->evx_ops.op_comp != NULL) {
+			/* XXX: delay the execution of comp_cb for no_poll
+			 * event, this is a temporary workaround because
+			 * I need the comp_cb of no_poll event to be called
+			 * without eq_lock.
+			 */
+			if (no_poll)
+				evxs_cb[cb_nr++] = evx;
+			else
+				rc = evx->evx_ops.op_comp(&evx->evx_sp, ev, rc);
+		}
+		ev->ev_error = ev->ev_error ?: rc;
 	}
 
-	D_ASSERT(!daos_list_empty(&evx->evx_link));
-	daos_list_move_tail(&evx->evx_link, &eq->eq_comp);
-
+	if (!no_poll) {
+		D_ASSERT(!daos_list_empty(&evx->evx_link));
+		daos_list_move_tail(&evx->evx_link, &eq->eq_comp);
+		eq->eq_n_comp++;
+	}
 	D_ASSERT(eq->eq_n_disp > 0);
 	eq->eq_n_disp--;
-	eq->eq_n_comp++;
+
+	return cb_nr;
 }
 
 void
 daos_event_complete(struct daos_event *ev, int rc)
 {
 	struct daos_event_private *evx = daos_ev2evx(ev);
+	struct daos_event_private *evxs_cb[2];
 	struct daos_eq_private	  *eqx;
+	int			   i;
+	int			   cb_nr;
 
 	eqx = daos_eq_lookup(evx->evx_eqh);
 	D_ASSERT(eqx != NULL);
 
 	pthread_mutex_lock(&eqx->eqx_lock);
-	D_ASSERT(!daos_list_empty(&daos_eqx2eq(eqx)->eq_disp));
-	D_ASSERT(evx->evx_status == DAOS_EVS_DISPATCH);
+	D_ASSERT(evx->evx_status == DAOS_EVS_DISPATCH ||
+		 evx->evx_status == DAOS_EVS_ABORT);
 
-	if (evx->evx_ops.op_comp != NULL)
-		rc = evx->evx_ops.op_comp(&evx->evx_sp, ev, rc);
-	ev->ev_error = rc;
-
-	daos_event_complete_locked(eqx, evx);
+	cb_nr = daos_event_complete_locked(eqx, evx, rc, evxs_cb);
 
 	pthread_mutex_unlock(&eqx->eqx_lock);
 
+	for (i = 0; i < cb_nr; i++) {
+		ev = daos_evx2ev(evxs_cb[i]);
+		evxs_cb[i]->evx_ops.op_comp(&evxs_cb[i]->evx_sp,
+					    ev, ev->ev_error);
+	}
 	daos_eq_putref(eqx);
 }
 
@@ -536,34 +656,8 @@ out:
 	return count;
 }
 
-/**
- * remove an event from hash of EQ so nobody can find it via ID,
- * user can also indicate to unlink all his children.
- * A unlinked event is still attached on EQ if it's inflight, it will
- * be detached from EQ after completion.
- */
 static void
-daos_event_unlink_locked(struct daos_eq_private *eqx,
-			 struct daos_event_private *evx,
-			 int unlink_children)
-{
-	struct daos_event_private *tmp;
-
-	if (daos_hhash_link_empty(&evx->evx_eq_hlink))
-		return;
-
-	daos_hhash_link_delete(eqx->eqx_events_hash, &evx->evx_eq_hlink);
-	if (!unlink_children)
-		return;
-
-	daos_list_for_each_entry(tmp, &evx->evx_child, evx_link) {
-		daos_hhash_link_delete(eqx->eqx_events_hash,
-				       &tmp->evx_eq_hlink);
-	}
-}
-
-static void
-daos_event_abort_one(struct daos_event_private *evx, int unlinked)
+daos_event_abort_one(struct daos_event_private *evx)
 {
 	if (evx->evx_status != DAOS_EVS_DISPATCH)
 		return;
@@ -573,35 +667,28 @@ daos_event_abort_one(struct daos_event_private *evx, int unlinked)
 	 * finished while trying to abort */
 	/* NB: always set ev_status to DAOS_EVS_ABORT even w/o callback,
 	 * so aborted parent event can be marked as COMPLETE right after
-	 * completion all dispatched events other than completion of all
+	 * completion all launched events other than completion of all
 	 * children. See daos_parent_event_can_complete for details. */
 	evx->evx_status = DAOS_EVS_ABORT;
-	/** TODO: call abort callback */
+	if (evx->evx_ops.op_abort)
+		evx->evx_ops.op_abort(&evx->evx_sp, daos_evx2ev(evx));
 }
 
 static void
 daos_event_abort_locked(struct daos_eq_private *eqx,
-			struct daos_event_private *evx,
-			int unlink)
+			struct daos_event_private *evx)
 {
 	struct daos_event_private *child;
 
 	D_ASSERT(evx->evx_status == DAOS_EVS_DISPATCH);
 
-	if (unlink)
-		daos_event_unlink_locked(eqx, evx, 0);
-
-	daos_event_abort_one(evx, unlink);
-
+	daos_event_abort_one(evx);
 	/* abort all children if he has */
-	daos_list_for_each_entry(child, &evx->evx_child, evx_link) {
-		if (unlink)
-			daos_event_unlink_locked(eqx, evx, 0);
-		daos_event_abort_one(child, unlink);
-	}
+	daos_list_for_each_entry(child, &evx->evx_child, evx_link)
+		daos_event_abort_one(child);
 
 	/* if aborted event is not a child event, move it to the
-	 * head of dispatched list */
+	 * head of launched list */
 	if (evx->evx_parent == NULL) {
 		struct daos_eq *eq = daos_eqx2eq(eqx);
 
@@ -648,18 +735,15 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	/* abort all inflight events */
 	daos_list_for_each_entry_safe(evx, tmp, &eq->eq_disp, evx_link) {
 		D_ASSERT(evx->evx_parent == NULL);
-		/* abort and unlink */
-		daos_event_abort_locked(eqx, evx, 1);
+		daos_event_abort_locked(eqx, evx);
 	}
 
 	D_ASSERT(daos_list_empty(&eq->eq_disp));
 
-	/* unlink all completed */
 	daos_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
 		daos_list_del(&evx->evx_link);
 		D_ASSERT(eq->eq_n_comp > 0);
 		eq->eq_n_comp--;
-		daos_event_unlink_locked(eqx, evx, 1);
 	}
 	eqx->eqx_ctx = NULL;
 out:
@@ -673,10 +757,13 @@ out:
 /**
  * Add the event to the event queue, and if there is parent, add
  * it to its child list as well.
- **/
+ *
+ * This is the advanced version, @flags is only used by internal
+ * DAOS modules.
+ */
 int
-daos_event_init(struct daos_event *ev, daos_handle_t eqh,
-		struct daos_event *parent)
+daos_event_init_adv(struct daos_event *ev, unsigned int flags,
+		    daos_handle_t eqh, struct daos_event *parent)
 {
 	struct daos_event_private	*evx = daos_ev2evx(ev);
 	struct daos_event_private	*parent_evx;
@@ -687,8 +774,17 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 
 	/* Init the event first */
 	memset(ev, 0, sizeof(*ev));
+
 	evx->evx_status	= DAOS_EVS_INIT;
-	evx->evx_eqh	= eqh;
+	evx->evx_flags	= flags;
+	if (flags & DAOS_EVF_NEED_LAUNCH) {
+		/* Fake a dummy child event to prevent this event from being
+		 * completed (by other children) before launching it.
+		 * This reference will be released while launching this event.
+		 */
+		evx->evx_nchild = evx->evx_nchild_if = 1;
+	}
+
 	DAOS_INIT_LIST_HEAD(&evx->evx_child);
 
 	/* Do not add the child event to the event queue
@@ -710,22 +806,19 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 
 		/* it's user's responsibility to protect this list */
 		daos_list_add_tail(&evx->evx_link, &parent_evx->evx_child);
-		evx->evx_parent = parent_evx;
+		evx->evx_eqh	= parent_evx->evx_eqh;
+		evx->evx_parent	= parent_evx;
 		parent_evx->evx_nchild++;
 		return 0;
 	}
 
+	evx->evx_eqh = eqh;
 	eqx = daos_eq_lookup(eqh);
 	if (eqx == NULL) {
 		D_ERROR("Invalid EQ handle %"PRIx64"\n", eqh.cookie);
 		return -DER_NONEXIST;
 	}
 
-	/* Insert event to eq hash link */
-	daos_hhash_hlink_init(&evx->evx_eq_hlink, NULL);
-
-	daos_hhash_link_insert(eqx->eqx_events_hash, &evx->evx_eq_hlink,
-			       DAOS_HTYPE_EQ);
 	DAOS_INIT_LIST_HEAD(&evx->evx_link);
 
 	/* inherit transport context from event queue */
@@ -733,6 +826,14 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 
 	daos_eq_putref(eqx);
 	return rc;
+}
+
+/** The exported version of event initializer */
+int
+daos_event_init(struct daos_event *ev, daos_handle_t eqh,
+		struct daos_event *parent)
+{
+	return daos_event_init_adv(ev, 0, eqh, parent);
 }
 
 /**
@@ -810,7 +911,6 @@ daos_event_fini(struct daos_event *ev)
 	}
 
 	evx->evx_ctx = NULL;
-	daos_hhash_link_delete(eqx->eqx_events_hash, &evx->evx_eq_hlink);
 out:
 	daos_eq_putref(eqx);
 	return rc;
@@ -854,7 +954,7 @@ daos_event_abort(struct daos_event *ev)
 	}
 
 	pthread_mutex_lock(&eqx->eqx_lock);
-	daos_event_abort_locked(eqx, evx, 0);
+	daos_event_abort_locked(eqx, evx);
 	pthread_mutex_unlock(&eqx->eqx_lock);
 
 	daos_eq_putref(eqx);

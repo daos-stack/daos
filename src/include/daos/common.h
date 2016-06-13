@@ -276,6 +276,16 @@ daos_ref_dec_and_test(struct daos_ref *dr)
 	return 0;
 }
 
+struct daos_oper_grp;
+typedef int (*daos_oper_grp_comp_t)(void *args, int rc);
+
+int  daos_oper_grp_create(daos_event_t *ev_up, daos_oper_grp_comp_t comp,
+			  void *args, struct daos_oper_grp **grpp);
+void daos_oper_grp_destroy(struct daos_oper_grp *grp, int rc);
+int  daos_oper_grp_launch(struct daos_oper_grp *grp);
+int  daos_oper_grp_new_ev(struct daos_oper_grp *grp,
+			  struct daos_event **evpp);
+
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
  *  * struct) @type, return pointer to the embedding instance of @type. */

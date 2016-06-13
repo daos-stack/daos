@@ -71,14 +71,15 @@ struct daos_event_ops {
 struct daos_event_private {
 	daos_handle_t		evx_eqh;
 	daos_list_t		evx_link;
-	struct daos_hlink	evx_eq_hlink;
 	/** children list */
 	daos_list_t		evx_child;
 	unsigned int		evx_nchild;
 	unsigned int		evx_nchild_if;
 	unsigned int		evx_nchild_comp;
 
+	unsigned int		evx_flags;
 	daos_ev_status_t	evx_status;
+
 	struct daos_event_private *evx_parent;
 
 	dtp_context_t		*evx_ctx;
