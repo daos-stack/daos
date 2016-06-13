@@ -38,7 +38,7 @@
 
 #include <daos_srv/vos.h>
 
-#define VCT_CONTAINERS 10
+#define VCT_CONTAINERS 100
 
 struct vc_test_args {
 	char			*fname;
@@ -125,6 +125,26 @@ co_allocate_params(int ncontainers, int ops,
 }
 
 static int
+co_open_teardown(void **state)
+{
+	struct vc_test_args	*arg = *state;
+	int			i, ret = 0;
+
+	for (i = 0; i < VCT_CONTAINERS; i++) {
+		if (arg->ops_seq[i]) {
+			free(arg->ops_seq[i]);
+			arg->ops_seq[i] = NULL;
+		}
+	}
+	if (arg->seq_cnt) {
+		free(arg->seq_cnt);
+		arg->seq_cnt = NULL;
+	}
+	return ret;
+}
+
+
+static int
 co_unit_teardown(void **state)
 {
 	struct vc_test_args	*arg = *state;
@@ -208,6 +228,21 @@ co_create_tests(void **state)
 }
 
 static int
+co_create_lookup(void **state)
+{
+	struct vc_test_args	*arg = *state;
+	enum vts_ops_type	tmp[] = {CREAT, OPEN, QUERY};
+	int			i;
+
+	co_allocate_params(VCT_CONTAINERS, 3, arg);
+	for (i = 0; i < VCT_CONTAINERS; i++)
+		co_set_param(tmp, 3, &arg->seq_cnt[i],
+			     &arg->ops_seq[i]);
+	return 0;
+}
+
+
+static int
 co_open_tests(void **state)
 {
 	struct vc_test_args	*arg = *state;
@@ -248,8 +283,10 @@ static const struct CMUnitTest vos_co_tests[] = {
 	{ "VOS100: container create test", co_ops_run, co_create_tests,
 		co_unit_teardown},
 	{ "VOS101: multiple container open handles for same container",
-		co_ops_run, co_tests, co_unit_teardown},
+		co_ops_run, co_open_tests, co_open_teardown},
 	{ "VOS102: container all APIs", co_ops_run, co_tests,
+		co_unit_teardown},
+	{ "VOS103: container create/open/query", co_ops_run, co_create_lookup,
 		co_unit_teardown},
 };
 

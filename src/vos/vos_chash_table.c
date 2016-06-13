@@ -269,10 +269,9 @@ vos_chash_lookup(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable,
 	int32_t			      bucket_id, ret;
 	void			      *ckey;
 
-
 	hash_value = vos_generate_crc64(key, key_size);
-	D_DEBUG(DF_VOS3, "%"PRIu64"%"PRIu64" %"PRIu64"\n",
-			*(uint64_t *)key, key_size, hash_value);
+	D_DEBUG(DF_VOS3, " %"PRIu64" %"PRIu64" %"PRIu64"\n",
+		*(uint64_t *)key, key_size, hash_value);
 	bucket_id = vos_generate_jch(hash_value,
 					D_RO(chtable)->num_buckets);
 	buckets = (struct vos_chash_buckets *)D_RW(D_RW(chtable)->buckets);
@@ -402,7 +401,7 @@ vos_chash_print(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable)
 	for (i = 0; i < D_RO(chtable)->num_buckets; i++) {
 		if (!TOID_IS_NULL(buckets[i].item)) {
 			item_current = buckets[i].item;
-			fprintf(stdout, "Bucket: %d\n", i);
+			D_PRINT("Bucket: %d\n", i);
 			while (!TOID_IS_NULL(item_current)) {
 				l_iter = (struct vos_chash_item *)
 					 D_RO(item_current);
@@ -412,7 +411,7 @@ vos_chash_print(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable)
 				D_RO(chtable)->vh_ops->hop_val_print(pvalue);
 				item_current = D_RO(item_current)->next;
 			}
-			printf("\n");
+			D_PRINT("\n");
 		}
 	}
 	return 0;
@@ -455,4 +454,26 @@ vos_chash_destroy(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable)
 		rc = -DER_FREE_MEM;
 	} TX_END;
 	return rc;
+}
+
+int vos_chash_set_ops(PMEMobjpool *ph,
+		      TOID(struct vos_chash_table) chtable,
+		      vos_chash_ops_t *hops)
+{
+	struct vos_chash_table	*htab = D_RW(chtable);
+	int			ret   = 0;
+
+	if (htab->vh_ops == hops)
+		return ret;
+
+	TX_BEGIN(ph) {
+		TX_ADD_FIELD_DIRECT(htab, vh_ops);
+		htab->vh_ops = hops;
+	} TX_ONABORT {
+		D_ERROR("Error while updating the hash ops: %s\n",
+			pmemobj_errormsg());
+		ret = -DER_NONEXIST;
+	} TX_END
+
+	return ret;
 }

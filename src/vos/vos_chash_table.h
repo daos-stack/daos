@@ -101,6 +101,11 @@ vos_chash_create(PMEMobjpool *pool, uint32_t buckets,
 		 bool resize,
 		 TOID(struct vos_chash_table) *chtable,
 		 vos_chash_ops_t *hops);
+
+int vos_chash_set_ops(PMEMobjpool *ph,
+		      TOID(struct vos_chash_table) chtable,
+		      vos_chash_ops_t *hops);
+
 int
 vos_chash_destroy(PMEMobjpool *pool, TOID(struct vos_chash_table) chtable);
 

@@ -265,7 +265,7 @@ vos_generate_crc64(void *key, uint64_t size)
 		data++;
 	}
 
-	D_DEBUG(DF_VOS3, "%"PRIu64"%"PRIu64" %"PRIu64"\n",
+	D_DEBUG(DF_VOS3, "%"PRIu64" %"PRIu64" %"PRIu64"\n",
 			*(uint64_t *)new_key, size, hash);
 	free(new_key);
 

@@ -188,7 +188,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 	char				pool_uuid_str[37], uuid_str[37];
 	struct vp_hdl			*vpool = NULL;
 	struct vos_pool_root		*root  = NULL;
-
+	struct vos_container_index	*co_idx;
 	if (path == NULL) {
 		D_ERROR("Invalid Pool Path\n");
 		return -DER_INVAL;
@@ -233,7 +233,16 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
 
+	co_idx = D_RW(root->vpr_ci_table);
+	rc = vos_chash_set_ops(vpool->vp_ph, co_idx->chtable,
+			       &vos_co_idx_hop);
+	if (rc) {
+		D_ERROR("Setting container table hash-value failed: %d",
+			rc);
+		D_GOTO(exit, rc = -DER_NONEXIST);
+	}
 	vos_pool_insert_handle(vpool, poh);
+
 exit:
 	vos_pool_putref_handle(vpool);
 	return rc;
