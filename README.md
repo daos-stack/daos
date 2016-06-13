@@ -15,3 +15,19 @@ DAOS is a complete I/O architecture that aggregates persistent memory distribute
 ## License
 
 DAOS is open-sourced software licensed under the Apache License Version 2.0. Please see the [LICENSE](./LICENSE) & [NOTICE](./NOTICE) files for more information.
+
+## Build
+
+DAOS requires a C99-capable compiler and the scons build tool to build.
+
+DAOS depends on some third-party libraries:
+- Mercury (https://github.com/mercury-hpc/mercury) and CCI (wget http://cci-forum.com/wp-content/uploads/2015/12/cci-0.3.0.tar.gz) for RPC and underneath communication
+  The CCI needs to be patched ("patch -p1 < xxx" to apply all patches in utils/cci), can set the CCI_CONFIG environment variable as your cci config file (an example can be found in "utils/cci/cci.ini")
+  The mercury uses openpa (http://git.mcs.anl.gov/radix/openpa.git) for atomic operation.
+- MCL and PMIx (https://github.com/pmix/master) for collective communication
+  The PMIx uses hwloc library (wget https://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.2.tar.gz).
+- Openmpi runtime environment
+  The ompi needs to be compiled with the external PMIx/hwloc used by MCL and PMIx (an example configuration is "./configure --with-pmix=/your_pmix_install_path / --with-hwloc=/your_hwloc_install_path --with-libevent=external").
+- NVML library (https://github.com/pmem/nvml.git) for thread-local persistent memory transaction
+
+Can execute "scons" in top DAOS source directory to build it when all the dependent modules installed.
