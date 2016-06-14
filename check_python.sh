@@ -23,6 +23,17 @@ while [ $# != 0 ]; do
             $SCRIPT_DIR/check_script.py -w $1
 	    [ $? -ne 0 ] && fail=1
         fi
+    elif [ "$1" = "-P3" ]; then
+        #Check a test file
+        shift
+        if [ ! -f $1 ]; then
+            echo skipping non-existent file: $1
+            fail=1
+        else
+            echo Check $1
+            $SCRIPT_DIR/check_script.py -p3 $1
+	    [ $? -ne 0 ] && fail=1
+        fi
     else
         if [ ! -f $1 ]; then
             echo skipping non-existent file: $1

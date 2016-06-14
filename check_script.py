@@ -141,13 +141,20 @@ def check_script(fname, *args, **kw):
     else:
         pylint_path = "{path}"
 
+    if not kw.get("P3", False):
+        version = "python"
+        rc_file = "pylint.rc"
+    else:
+        print "use python3"
+        version = "python3.4"
+        rc_file = "pylint3.rc"
+
     rc_dir = os.path.dirname(os.path.realpath(__file__))
 
-    cmd = "pylint %s --rcfile=%s/pylint.rc --reports=n " \
+    cmd = "%s /usr/bin/pylint %s --rcfile=%s/%s " \
           "--msg-template '{C}: %s:{line}: pylint-{symbol}: {msg}' " \
-          "-d star-args  -d wrong-import-order " \
-          "-d unused-wildcard-import %s > tmp.log 2>&1"% \
-          (" ".join(args), rc_dir, pylint_path, tmp_fname)
+          "%s > tmp.log 2>&1"% \
+          (version, " ".join(args), rc_dir, rc_file, pylint_path, tmp_fname)
 
     if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
         print cmd
@@ -167,6 +174,8 @@ def main():
                         help='Wrap the SCons script before checking')
     parser.add_argument("-s", dest='self_check', action='store_true',
                         help='Perform a self check')
+    parser.add_argument("-p3", dest='P3', action='store_true',
+                        help='Perform check using python3.4')
 
     args = parser.parse_args()
 
@@ -193,7 +202,8 @@ def main():
         error_count += check_script("check_script.py")
 
     if args.fname:
-        error_count += check_script(args.fname, wrap=args.wrap)
+        error_count += check_script(args.fname, wrap=args.wrap,
+                                    P3=args.P3)
 
     if error_count:
         sys.exit(1)
