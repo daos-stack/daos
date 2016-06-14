@@ -21,12 +21,12 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of dsm
+ * This file is part of daos
  *
- * dsm/tests/io.c
+ * tests/suite/io.c
  */
 
-#include "dsm_test.h"
+#include "daos_test.h"
 
 #define UPDATE_CSUM_SIZE	32
 
@@ -736,11 +736,11 @@ teardown(void **state) {
 }
 
 int
-run_io_test(int rank, int size)
+run_dsm_io_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DSM io tests", io_tests,
+	rc = cmocka_run_group_tests_name("DAOS io tests", io_tests,
 					 setup, teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

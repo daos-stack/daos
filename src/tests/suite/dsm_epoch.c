@@ -24,7 +24,7 @@
  * Epoch Tests
  */
 
-#include "dsm_test.h"
+#include "daos_test.h"
 
 static void
 assert_epoch_state_equal(daos_epoch_state_t *a, daos_epoch_state_t *b)
@@ -317,7 +317,7 @@ teardown(void **state) {
 }
 
 int
-run_epoch_test(int rank, int size)
+run_dsm_epoch_test(int rank, int size)
 {
 	int rc = 0;
 

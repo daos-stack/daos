@@ -23,10 +23,10 @@
 /**
  * This file is part of dsm
  *
- * dsm/tests/container.c
+ * tests/suite/container.c
  */
 
-#include "dsm_test.h"
+#include "daos_test.h"
 
 /** create/destroy container */
 static void
@@ -221,7 +221,7 @@ teardown(void **state) {
 }
 
 int
-run_co_test(int rank, int size)
+run_dsm_co_test(int rank, int size)
 {
 	int rc = 0;
 

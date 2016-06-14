@@ -7,4 +7,4 @@ denv.Append(CPPPATH = ['#/src/dmg', '#/src/server'])
 libraries = ['daos_common', 'daos_mgmt', 'daos_transport', 'daos_event']
 libraries += ['uuid', 'cmocka']
 
-denv.Program('dmg_test', 'dmg_test.c', LIBS = libraries)
+#denv.Program('dmg_test', 'dmg_test.c', LIBS = libraries)

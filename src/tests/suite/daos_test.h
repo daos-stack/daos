@@ -21,9 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of dsm
- *
- * dsm/tests/dsm_test
+ * This file is part of DAOS
  */
 
 #include <unistd.h>
@@ -38,6 +36,7 @@
 
 #include <daos_mgmt.h>
 #include <daos_m.h>
+#include <daos_sr.h>
 #include <daos_event.h>
 #include <daos/common.h>
 
@@ -87,10 +86,11 @@ hdl_share_enable(void **state)
 	return 0;
 }
 
-int run_pool_test(int rank, int size);
-int run_co_test(int rank, int size);
-int run_io_test(int rank, int size);
-int run_epoch_test(int rank, int size);
+int run_dmg_pool_test(int rank, int size);
+int run_dsm_pool_test(int rank, int size);
+int run_dsm_co_test(int rank, int size);
+int run_dsm_io_test(int rank, int size);
+int run_dsm_epoch_test(int rank, int size);
 
 enum {
 	HANDLE_POOL,

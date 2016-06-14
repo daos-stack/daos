@@ -24,6 +24,8 @@
  * This file is part of dmg, a simple test case of dmg.
  */
 
+#include "daos_test.h"
+
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -32,13 +34,6 @@
 
 #include <daos_mgmt.h>
 #include <daos_event.h>
-
-typedef struct {
-	daos_rank_t		ranks[8];
-	daos_rank_list_t	svc;
-	daos_handle_t		eq;
-	bool			async;
-} test_arg_t;
 
 /** create/destroy pool on all tgts */
 static void
@@ -98,22 +93,6 @@ pool_create_all(void **state)
 	print_message("success\n");
 }
 
-static int
-async_enable(void **state) {
-	test_arg_t	*arg = *state;
-
-	arg->async = true;
-	return 0;
-}
-
-static int
-async_disable(void **state) {
-	test_arg_t	*arg = *state;
-
-	arg->async = false;
-	return 0;
-}
-
 static const struct CMUnitTest tests[] = {
 	{ "DMG1: create/destroy pool on all tgts",
 	  pool_create_all, async_disable, NULL},
@@ -129,10 +108,6 @@ setup(void **state) {
 	arg = malloc(sizeof(test_arg_t));
 	if (arg == NULL)
 		return -1;
-
-	rc = dmg_init();
-	if (rc)
-		return rc;
 
 	rc = daos_eq_create(&arg->eq);
 	if (rc)
@@ -156,28 +131,18 @@ teardown(void **state)
 	if (rc)
 		return rc;
 
-	rc = dmg_fini();
-	if (rc)
-		return rc;
-
 	free(arg);
 	return 0;
 }
 
 int
-main(int argc, char **argv)
+run_dmg_pool_test(int rank, int size)
 {
-	int rc;
+	int rc = 0;
 
 	rc = cmocka_run_group_tests_name("DMG pool tests", tests,
 					 setup, teardown);
 
-	if (rc > 0)
-		/** some test failed, report failure */
-		return -1;
-
-	if (rc < 0)
-		return rc;
-
-	return 0;
+	MPI_Barrier(MPI_COMM_WORLD);
+	return rc;
 }

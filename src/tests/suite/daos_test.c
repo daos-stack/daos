@@ -21,12 +21,12 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of dsm
+ * This file is part of daos
  *
- * dsm/tests/dsm_test
+ * tests/suite/daos_test
  */
 
-#include "dsm_test.h"
+#include "daos_test.h"
 
 int
 main(int argc, char **argv)
@@ -47,20 +47,21 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	rc = dsm_init();
+	rc = dsr_init();
 	if (rc) {
-		print_message("dmg_init() failed with %d\n", rc);
+		print_message("dsr_init() failed with %d\n", rc);
 		return -1;
 	}
 
-	nr_failed = run_pool_test(rank, size);
-	nr_failed += run_co_test(rank, size);
-	nr_failed += run_io_test(rank, size);
-	nr_failed += run_epoch_test(rank, size);
+	nr_failed = run_dmg_pool_test(rank, size);
+	nr_failed += run_dsm_pool_test(rank, size);
+	nr_failed += run_dsm_co_test(rank, size);
+	nr_failed += run_dsm_io_test(rank, size);
+	nr_failed += run_dsm_epoch_test(rank, size);
 
-	rc = dsm_fini();
+	rc = dsr_fini();
 	if (rc)
-		print_message("dsm_fini() failed with %d\n", rc);
+		print_message("dsr_fini() failed with %d\n", rc);
 
 	rc = dmg_fini();
 	if (rc)

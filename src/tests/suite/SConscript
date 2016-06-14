@@ -1,0 +1,13 @@
+#!python
+
+Import('denv')
+
+denv.Append(CPPPATH = ['#/src/dmg', '#/src/dsm', '#/src/dsr', '#/src/server'])
+
+libraries = ['daos_common', 'daos_transport', 'daos_event']
+libraries += ['daos_mgmt', 'daos_m', 'daos_sr']
+libraries += ['uuid', 'mpi']
+libraries += ['cmocka']
+
+test = denv.Program('daos_test', Glob('*.c'), LIBS = libraries)
+denv.Install('$PREFIX/bin/', test)

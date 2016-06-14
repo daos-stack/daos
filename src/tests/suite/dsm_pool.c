@@ -21,12 +21,12 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of dsm
+ * This file is part of daos
  *
- * dsm/tests/pool.c
+ * tests/suite/pool.c
  */
 
-#include "dsm_test.h"
+#include "daos_test.h"
 
 /** connect to non-existing pool */
 static void
@@ -189,7 +189,7 @@ teardown(void **state) {
 }
 
 int
-run_pool_test(int rank, int size)
+run_dsm_pool_test(int rank, int size)
 {
 	int rc = 0;
 

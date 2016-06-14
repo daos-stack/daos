@@ -11,3 +11,6 @@ if PREREQS is not None:
     PREREQS.require(denv, 'ompi')
 
 denv.Program('simple_array', 'simple_array.c', LIBS=libs)
+
+# tests
+SConscript('suite/SConscript', exports = ['denv'])
