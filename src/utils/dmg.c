@@ -1,3 +1,29 @@
+/**
+ * (C) Copyright 2016 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+/**
+ * dmg(8): DAOS Management Utility
+ */
+
 #include <getopt.h>
 #include <stdio.h>
 #include <daos_mgmt.h>
@@ -66,13 +92,55 @@ create_hdlr(int argc, char *argv[])
 }
 
 static int
+destroy_hdlr(int argc, char *argv[])
+{
+	struct option		options[] = {
+		{"force",	0,	NULL,	'f'},
+		{"group",	1,	NULL,	'G'},
+		{"uuid",	1,	NULL,	'U'}
+	};
+	char		       *group = "daos_server_group";
+	uuid_t			uuid;
+	int			force = 0;
+	int			rc;
+
+	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+		switch (rc) {
+		case 'f':
+			force = 1;
+			break;
+		case 'G':
+			group = optarg;
+			break;
+		case 'U':
+			if (uuid_parse(optarg, uuid) != 0) {
+				D_ERROR("failed to parse pool UUID: %s\n",
+					optarg);
+				return 2;
+			}
+			break;
+		default:
+			return 2;
+		}
+	}
+
+	rc = dmg_pool_destroy(uuid, group, force, NULL /* ev */);
+	if (rc != 0) {
+		D_ERROR("failed to destroy pool: %d\n", rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+static int
 help_hdlr(int argc, char *argv[])
 {
 	printf("\
 usage: dmg COMMAND [OPTIONS]\n\
 commands:\n\
   create	create a pool\n\
-  destroy	destroy a pool [NOT IMPLEMENTED YET]\n\
+  destroy	destroy a pool\n\
   help		print this message and exit\n\
 create options:\n\
   --gid=GID	pool GID\n\
@@ -82,6 +150,8 @@ create options:\n\
   --uid=UID	pool UID\n\
   --uuid=UUID	pool UUID\n\
 destroy options:\n\
+  --force	destroy the pool even if there are connections\n\
+  --group=STR	pool server process group\n\
   --uuid=UUID	pool UUID\n\
   \n");
 	return 0;
@@ -97,10 +167,8 @@ main(int argc, char *argv[])
 		hdlr = help_hdlr;
 	else if (strcmp(argv[1], "create") == 0)
 		hdlr = create_hdlr;
-#if 0
 	else if (strcmp(argv[1], "destroy") == 0)
 		hdlr = destroy_hdlr;
-#endif
 
 	if (hdlr == NULL || hdlr == help_hdlr) {
 		help_hdlr(argc, argv);
