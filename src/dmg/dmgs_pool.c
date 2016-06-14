@@ -572,7 +572,7 @@ dmgs_hdlr_pool_create(dtp_rpc_t *rpc_req)
 	D_ALLOC_PTR(pc_out->pc_svc);
 	if (pc_out->pc_svc == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	D_ERROR("svc set to %p\n", pc_out->pc_svc);
+
 	D_ALLOC(pc_out->pc_svc->rl_ranks,
 		pc_in->pc_svc_nr * sizeof(daos_rank_t));
 	if (pc_out->pc_svc->rl_ranks == NULL)

@@ -52,3 +52,10 @@ daos_debug_mask(void)
 	debug_mask = 0;
 	return debug_mask;
 }
+
+void
+daos_debug_set(unsigned int mask)
+{
+	(void) daos_debug_mask();
+	debug_mask |= mask;
+}

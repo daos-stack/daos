@@ -91,9 +91,14 @@ dsms_co_open_create(daos_handle_t pool_hdl, uuid_t co_uuid,
 {
 	int rc;
 
+	D_DEBUG(DF_MISC, "opening container "DF_UUID"\n",
+		DP_UUID(co_uuid));
+
 	/* TODO put it to container cache */
 	rc = vos_co_open(pool_hdl, co_uuid, co_hdl, NULL);
 	if (rc == -DER_NONEXIST) {
+		D_DEBUG(DF_MISC, "creating container "DF_UUID"\n",
+			DP_UUID(co_uuid));
 		/** create container on-the-fly */
 		rc = vos_co_create(pool_hdl, co_uuid, NULL);
 		if (rc)

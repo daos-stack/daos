@@ -171,8 +171,7 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 	vpool = vos_pool_lookup_handle(poh);
 	if (vpool == NULL) {
 		D_ERROR("Error in looking up VOS pool handle from hhash\n");
-		ret = -DER_INVAL;
-		goto exit;
+		D_GOTO(exit, ret = -DER_INVAL);
 	}
 
 	uuid_copy(ukey.uuid, co_uuid);
@@ -180,15 +179,15 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 			       (void *)&ukey, sizeof(ukey),
 			       (void **)&object_address);
 	if (ret) {
-		D_ERROR("Container does not exist\n");
-		goto exit;
+		D_DEBUG(DF_VOS3, DF_UUID" container does not exist\n",
+			DP_UUID(co_uuid));
+		D_GOTO(exit, ret);
 	}
 
 	D_ALLOC_PTR(co_hdl);
 	if (NULL == co_hdl) {
 		D_ERROR("Error in allocating container handle\n");
-		ret = -DER_NOSPACE;
-		goto exit;
+		D_GOTO(exit, ret = -DER_NOSPACE);
 	}
 
 	uuid_copy(co_hdl->vc_id, co_uuid);
@@ -203,8 +202,7 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 				 &co_hdl->vc_btr_hdl);
 	if (ret) {
 		D_ERROR("No Object handle, Tree open failed\n");
-		ret = -DER_NONEXIST;
-		goto exit;
+		D_GOTO(exit, ret = -DER_NONEXIST);
 	}
 
 	vos_co_hhash_init(co_hdl);

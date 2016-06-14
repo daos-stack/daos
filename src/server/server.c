@@ -95,12 +95,10 @@ modules_load()
 static int
 server_init()
 {
-	int rc;
+	int	 rc;
 
-	/* use full debug dy default for now */
-	rc = setenv("DAOS_DEBUG", "-1", false);
-	if (rc)
-		D_ERROR("failed to enable full debug, %d\n", rc);
+	/** enable DF_SERVER */
+	daos_debug_set(DF_SERVER);
 
 	/** initialize server topology data */
 	hwloc_topology_init(&dss_topo);
@@ -143,6 +141,7 @@ exit_mod_init:
 static void
 server_fini(bool force)
 {
+	D_DEBUG(DF_SERVER, "Service is shutting down\n");
 	dss_srv_fini();
 	dss_module_fini(force);
 	dtp_finalize();
@@ -152,7 +151,8 @@ server_fini(bool force)
 static void
 usage(char *prog, FILE *out)
 {
-	fprintf(out, "Usage: %s [ -m vos,dmg,dsm,dsr,dct ]\n", prog);
+	fprintf(out, "Usage: %s [ -m vos,dmg,dsm,dsr,dct ] [-c #cores]\n",
+		prog);
 }
 
 static int

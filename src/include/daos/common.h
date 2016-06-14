@@ -70,6 +70,7 @@ enum {
 };
 
 unsigned int daos_debug_mask(void);
+void daos_debug_set(unsigned int mask);
 
 #define D_PRINT(fmt, ...)						\
 do {									\
