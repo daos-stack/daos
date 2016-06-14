@@ -164,9 +164,11 @@ REQS.define('iof',
                       "HWLOC_PREBUILT=$HWLOC_PREFIX " \
                       "MERCURY_PREBUILT=$MERCURY_PREFIX " \
                       "BMI_PREBUILT=$BMI_PREFIX " \
+                      "MCL_PREBUILT=$MCL_PREFIX " \
                       "CCI_PREBUILT=$CCI_PREFIX " \
                       "OPENPA_PREBUILT=$OPENPA_PREFIX " \
                       "PREFIX=$IOF_PREFIX install"],
+            headers=['iof_plugin.h'],
             requires=['ompi', 'mercury', 'mcl'])
 
 REQS.define('fuse',
@@ -201,6 +203,6 @@ REQS.define('mcl',
                       "CCI_PREBUILT=$CCI_PREFIX " \
                       "OPENPA_PREBUILT=$OPENPA_PREFIX " \
                       "PREFIX=$MCL_PREFIX install"],
-            headers=["process_set.h"],
+            headers=["process_set.h", "mcl_log.h", "mcl_event.h"],
             libs=["mcl"],
             requires=['ompi', 'mercury'])
