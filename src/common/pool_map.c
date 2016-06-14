@@ -1396,7 +1396,8 @@ pool_map_find_target(struct pool_map *map, uint32_t id,
 	}
 
 	if (id == PO_COMP_ID_ALL) {
-		*target_pp = map->po_tree[0].do_targets;
+		if (target_pp != NULL)
+			*target_pp = map->po_tree[0].do_targets;
 		return map->po_tree[0].do_target_nr;
 	}
 

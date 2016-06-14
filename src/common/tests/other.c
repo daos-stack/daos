@@ -23,9 +23,7 @@
 /**
  * This file is part of daos_sr
  *
- * dsr/tests/other.c
- *
- * Author: Liang Zhen <liang.zhen@intel.com>
+ * src/common/tests/other.c
  */
 
 #include <getopt.h>

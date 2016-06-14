@@ -383,8 +383,8 @@ typedef struct daos_oclass_attr {
 	unsigned int			 ca_resil_degree;
 	/** Resilience method, replication or erasure code */
 	daos_obj_resil_t		 ca_resil;
-	/** Initial # stripe count, unnecessary for some schemas */
-	unsigned int			 ca_nstripes;
+	/** Initial # redundancy group, unnecessary for some schemas */
+	unsigned int			 ca_grp_nr;
 	union {
 		/** replication attributes */
 		struct daos_repl_attr {

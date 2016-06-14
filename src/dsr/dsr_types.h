@@ -20,18 +20,28 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * This file is part of daos_sr
- *
- * dsr/include/pl_oi.h
- *
- * Author: Liang Zhen <liang.zhen@intel.com>
- */
+#ifndef __DSR_TYPES_H__
+#define __DSR_TYPES_H__
 
-#ifndef __PL_OI_TABLE_H__
-#define __PL_OI_TABLE_H__
+#include <daos_types.h>
 
-#include <pl_map.h>
+/** object metadata stored in the global OI table of container */
+struct dsr_obj_md {
+	daos_obj_id_t		omd_id;
+	uint32_t		omd_ver;
+	uint32_t		omd_padding;
+	union {
+		uint32_t	omd_split;
+		uint64_t	omd_loff;
+	};
+};
 
-/* TODO */
-#endif /* __PL_OI_TABLE_H__ */
+/** object shard metadata stored in each contianer shard */
+struct dsr_obj_shard_md {
+	/** ID of the object shard */
+	daos_unit_oid_t		smd_id;
+	uint32_t		smd_po_ver;
+	uint32_t		smd_padding;
+};
+
+#endif /* __DSR_TYPES_H__ */

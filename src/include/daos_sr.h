@@ -178,7 +178,7 @@ dsr_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
  * \param cid	[IN]	Class Identifier
  */
 static inline void
-dsr_objid_generate(daos_obj_id_t *oid, daos_oclass_id_t cid)
+dsr_obj_id_generate(daos_obj_id_t *oid, daos_oclass_id_t cid)
 {
 	uint64_t hdr = cid;
 
@@ -191,6 +191,15 @@ dsr_objid_generate(daos_obj_id_t *oid, daos_oclass_id_t cid)
 	hdr <<= 32;
 	hdr |= 0x1ULL << 56;
 	oid->hi |= hdr;
+}
+
+static inline daos_oclass_id_t
+dsr_obj_id2class(daos_obj_id_t oid)
+{
+	daos_oclass_id_t ocid;
+
+	ocid = (oid.hi << 16) >> (16 + 32);
+	return ocid;
 }
 
 /**
@@ -522,4 +531,12 @@ int
 dsr_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 		  uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_hash_out_t *anchor, daos_event_t *ev);
+
+enum {
+	DSR_OC_UNKNOWN,
+	DSR_OC_TINY_RW,
+	DSR_OC_SMALL_RW,
+	DSR_OC_LARGE_RW,
+};
+
 #endif /* __DSR_API_H__ */

@@ -65,6 +65,9 @@ enum {
 	DF_MGMT		= (1 << 16),
 	DF_DSMC		= (1 << 17),
 	DF_DSMS		= (1 << 18),
+	DF_SR		= (1 << 19),
+	DF_SRC		= (1 << 20),
+	DF_SRS		= (1 << 21),
 	DF_MISC		= (1 << 30),
 	DF_MEM		= (1 << 31),
 };

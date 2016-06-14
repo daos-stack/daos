@@ -23,33 +23,26 @@
 /**
  * This file is part of daos_sr
  *
- * dsr/include/pseudo_cl_map.h
- *
- * cl_pseudo_buf APIs provide simple interfaces to build a pseudo cl_buf_t as
- * cluster description for dsr/tests/pseudo_cluster(a simulator), or any
- * other testing programs that need to build a pseudo cluster.
- *
- * Author: Liang Zhen <liang.zhen@intel.com>
+ * src/dsr/dsr_internal.h
  */
+#ifndef __DSR_INTENRAL_H__
+#define __DSR_INTENRAL_H__
 
-#ifndef __PSEUDO_CL_MAP_H__
-#define __PSEUDO_CL_MAP_H__
+#include <daos/common.h>
+#include <daos/event.h>
+#include <daos_sr.h>
+#include "dsr_types.h"
+#include "placement.h"
 
-#include <pl_map.h>
-/**
- * descriptor for pseudo cluster map
+struct daos_oclass_attr *dsr_oclass_attr_find(daos_obj_id_t oid);
+int dsr_oclass_grp_size(struct daos_oclass_attr *oc_attr);
+int dsr_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct dsr_obj_md *md);
+
+/* XXX These functions should be changed to support per-pool
+ * placement map.
  */
-typedef struct {
-	/** type of components */
-	cl_comp_type_t          cd_type;
-	/** number of components */
-	unsigned int            cd_number;
-	/** the start rank of component */
-	unsigned int		cd_rank;
-} cl_pseudo_comp_desc_t;
+void dsr_pl_map_fini(void);
+int  dsr_pl_map_init(struct pool_map *po_map);
+struct pl_map *dsr_pl_map_find(daos_handle_t coh, daos_obj_id_t oid);
 
-void cl_pseudo_buf_free(cl_buf_t *buf);
-int cl_pseudo_buf_build(unsigned int ndesc, cl_pseudo_comp_desc_t *desc,
-			bool create, cl_buf_t **buf_pp);
-
-#endif /* __PSEUDO_CL_MAP_H__ */
+#endif /* __DSR_INTENRAL_H__ */

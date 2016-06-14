@@ -7,16 +7,17 @@ env.AppendUnique(LIBPATH=[Dir('.')])
 denv = env.Clone()
 
 # Compiler options
-denv.Append(CPPPATH = ['#/src/dsr/include'])
+# denv.Append(CPPPATH = ['#/src/dsr/include'])
+
+src = ['obj_class.c', 'pl_map.c', 'ring_map.c']
 
 # generate server module
-srv = denv.SharedLibrary('daos_sr_srv', ['dsrs_module.c'])
+srv = denv.SharedLibrary('daos_sr_srv', ['dsrs_module.c', src])
 denv.Install('$PREFIX/lib/daos_srv', srv)
 
 # generate client library
 client = denv.SharedLibrary('daos_sr',
-			    ['dsrc_api.c', 'dsrc_module.c',
-			     Glob('placement/*.c')])
+			    ['dsrc_api.c', 'dsrc_module.c', src])
 denv.Install('$PREFIX/lib', client)
 
 # Build tests

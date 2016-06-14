@@ -593,14 +593,14 @@ main(int argc, char **argv)
 	handle_share(&coh, HANDLE_CO, poh);
 
 	/** generate objid */
-	dsr_objid_generate(&oid, cid);
+	dsr_obj_id_generate(&oid, cid);
 
 	if (rank == 0) {
 		daos_oclass_attr_t	cattr = {
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil_degree	= 0 /* TBD */,
 			.ca_resil		= DAOS_RES_REPL,
-			.ca_nstripes		= 4,
+			.ca_grp_nr		= 4,
 			.u.repl			= {
 				.r_method	= 0 /* TBD */,
 				.r_num		= 2 /* TBD */,

@@ -159,6 +159,23 @@ int pool_map_find_target(struct pool_map *map, uint32_t id,
 int pool_map_find_domain(struct pool_map *map, pool_comp_type_t type,
 			 uint32_t id, struct pool_domain **domain_pp);
 
+static inline struct pool_target *
+pool_map_targets(struct pool_map *map)
+{
+	struct pool_target *targets;
+	int		    rc;
+
+	rc = pool_map_find_target(map, PO_COMP_ID_ALL, &targets);
+	D_ASSERT(rc >= 0);
+	return rc == 0 ? NULL : targets;
+}
+
+static inline unsigned int
+pool_map_target_nr(struct pool_map *map)
+{
+	return pool_map_find_target(map, PO_COMP_ID_ALL, NULL);
+}
+
 pool_comp_state_t pool_comp_str2state(const char *name);
 const char *pool_comp_state2str(pool_comp_state_t state);
 
@@ -166,7 +183,8 @@ pool_comp_type_t pool_comp_abbr2type(char abbr);
 pool_comp_type_t pool_comp_str2type(const char *name);
 const char *pool_comp_type2str(pool_comp_type_t type);
 
-static inline const char *pool_comp_name(struct pool_component *comp)
+static inline const char *
+pool_comp_name(struct pool_component *comp)
 {
 	return pool_comp_type2str(comp->co_type);
 }

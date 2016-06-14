@@ -3,3 +3,4 @@
 Import('denv')
 
 denv.Program('btree', Glob('btree.c'), LIBS=['daos_common'])
+denv.Program('other', Glob('other.c'), LIBS=['daos_common'])

@@ -25,27 +25,6 @@
 #include <daos_m.h>
 
 int
-dsr_oclass_register(daos_handle_t coh, daos_oclass_id_t cid,
-		    daos_oclass_attr_t *cattr, daos_event_t *ev)
-{
-	return -DER_NOSYS;
-}
-
-int
-dsr_oclass_query(daos_handle_t coh, daos_oclass_id_t cid,
-		 daos_oclass_attr_t *cattr, daos_event_t *ev)
-{
-	return -DER_NOSYS;
-}
-
-int
-dsr_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
-		daos_hash_out_t *anchor, daos_event_t *ev)
-{
-	return -DER_NOSYS;
-}
-
-int
 dsr_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		dsr_obj_attr_t *oa, daos_event_t *ev)
 {
