@@ -34,7 +34,9 @@
 #include "dsms_internal.h"
 #include "dsms_layout.h"
 
-#if 1	/* dbtree_delete() not yet implemented */
+#define HAVE_DBTREE_DELETE 0	/* dbtree_delete() not yet implemented */
+
+#if !HAVE_DBTREE_DELETE
 
 static int
 lookup(daos_handle_t kvsh, daos_iov_t *key, daos_iov_t *val)
@@ -63,8 +65,8 @@ delete(daos_handle_t kvsh, daos_iov_t *key)
 	return dbtree_update(kvsh, key, &val);
 }
 
-#define dbtree_lookup lookup
-#define dbtree_delete delete
+#define dbtree_lookup	lookup
+#define dbtree_delete	delete
 
 #endif
 
@@ -847,6 +849,9 @@ dsms_kvs_uv_destroy_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp)
 
 struct ec_rec {
 	uint64_t	er_counter;
+#if !HAVE_DBTREE_DELETE
+	uint64_t	er_deleted;
+#endif
 };
 
 static void
@@ -910,6 +915,13 @@ ec_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	if (val != NULL) {
 		struct ec_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
+#if !HAVE_DBTREE_DELETE
+		if (r->er_deleted) {
+			val->iov_len = 0;
+			return 0;
+		}
+#endif
+
 		if (val->iov_buf == NULL)
 			val->iov_buf = &r->er_counter;
 		else if (val->iov_buf_len >= sizeof(r->er_counter))
@@ -927,11 +939,25 @@ ec_rec_update(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct ec_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
+#if HAVE_DBTREE_DELETE
 	if (val->iov_len != sizeof(r->er_counter))
+#else
+	if (val->iov_len != sizeof(r->er_counter) && val->iov_len != 0)
+#endif
 		return -DER_INVAL;
 
 	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+#if HAVE_DBTREE_DELETE
 	r->er_counter = *(uint64_t *)val->iov_buf;
+#else
+	if (val->iov_len == 0) {
+		r->er_counter = 0;
+		r->er_deleted = 1;
+	} else {
+		r->er_counter = *(uint64_t *)val->iov_buf;
+		r->er_deleted = 0;
+	}
+#endif
 	return 0;
 }
 
@@ -1012,6 +1038,7 @@ dsms_kvs_ec_lookup(daos_handle_t kvsh, uint64_t epoch, uint64_t *count)
 	return rc;
 }
 
+#if HAVE_DBTREE_DELETE
 int
 dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
 		  const uint64_t *epoch_in, uint64_t *epoch_out,
@@ -1034,8 +1061,7 @@ dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
 	val.iov_buf_len = sizeof(*count);
 	val.iov_len = val.iov_buf_len;
 
-	rc = dbtree_fetch(kvsh, opc, epoch_in == NULL ? NULL : &key_in,
-			  &key_out, &val);
+	rc = dbtree_fetch(kvsh, opc, &key_in, &key_out, &val);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find opc=%d in="DF_U64"\n",
@@ -1043,6 +1069,140 @@ dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
 		else
 			D_ERROR("failed to fetch opc=%d in="DF_U64": %d\n", opc,
 				epoch_in == NULL ? -1 : *epoch_in, rc);
+	}
+
+	return rc;
+}
+#else
+int
+dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
+		  const uint64_t *epoch_in, uint64_t *epoch_out,
+		  uint64_t *count)
+{
+	daos_iov_t	key_in;
+	daos_iov_t	key_out;
+	daos_iov_t	val;
+	uint64_t	e;
+	uint64_t	c;
+	daos_handle_t	iter;
+	int		rc;
+
+	D_ASSERT(opc == BTR_PROBE_FIRST || opc == BTR_PROBE_LAST ||
+		 opc == BTR_PROBE_EQ || opc == BTR_PROBE_GE ||
+		 opc == BTR_PROBE_LE);
+	D_ASSERT(opc == BTR_PROBE_FIRST || opc == BTR_PROBE_LAST ||
+		 epoch_in != NULL);
+
+	rc = dbtree_iter_prepare(kvsh, 0 /* options */, &iter);
+	if (rc != 0) {
+		D_ERROR("failed to prepare iterator for opc=%d in="DF_U64
+			": %d\n", opc, epoch_in == NULL ? -1 : *epoch_in, rc);
+		D_GOTO(out, rc);
+	}
+
+	key_in.iov_buf = (void *)epoch_in;
+	key_in.iov_buf_len = sizeof(*epoch_in);
+	key_in.iov_len = key_in.iov_buf_len;
+
+	rc = dbtree_iter_probe(iter, opc, &key_in, NULL /* anchor */);
+	if (rc != 0) {
+		if (rc != -DER_NONEXIST)
+			D_ERROR("failed to probe opc=%d in="DF_U64": %d\n", opc,
+				epoch_in == NULL ? -1 : *epoch_in, rc);
+		D_GOTO(out_iter, rc);
+	}
+
+	key_out.iov_buf = &e;
+	key_out.iov_buf_len = sizeof(e);
+	key_out.iov_len = key_out.iov_buf_len;
+
+	val.iov_buf = &c;
+	val.iov_buf_len = sizeof(c);
+	val.iov_len = val.iov_buf_len;
+
+	rc = dbtree_iter_fetch(iter, &key_out, &val, NULL /* anchor */);
+	if (rc != 0) {
+		D_ERROR("failed to fetch opc=%d in="DF_U64": %d\n", opc,
+			epoch_in == NULL ? -1 : *epoch_in, rc);
+		D_GOTO(out_iter, rc);
+	}
+
+	/* Done if the record is not deleted. */
+	if (val.iov_len != 0)
+		D_GOTO(out_fill, rc = 0);
+
+	D_DEBUG(DF_DSMS, "found deleted opc=%d in="DF_U64"\n", opc,
+		epoch_in == NULL ? -1 : *epoch_in);
+
+	if (opc == BTR_PROBE_EQ)
+		D_GOTO(out_iter, rc = -DER_NONEXIST);
+
+	for (;;) {
+		D_DEBUG(DF_DSMS, "moving to next/prev\n");
+
+		if (opc == BTR_PROBE_FIRST || opc == BTR_PROBE_GE)
+			rc = dbtree_iter_next(iter);
+		else
+			rc = dbtree_iter_prev(iter);
+		if (rc != 0) {
+			if (rc != -DER_NONEXIST)
+				D_ERROR("failed to move iterator for opc=%d in="
+					DF_U64": %d\n", opc,
+					epoch_in == NULL ?
+					-1 : *epoch_in, rc);
+			D_GOTO(out_iter, rc);
+		}
+
+		rc = dbtree_iter_fetch(iter, &key_out, &val,
+				       NULL /* anchor */);
+		if (rc != 0) {
+			D_ERROR("failed to fetch opc=%d in="DF_U64
+				": %d\n", opc,
+				epoch_in == NULL ? -1 : *epoch_in, rc);
+			D_GOTO(out_iter, rc);
+		}
+
+		/* Done if the record is not deleted. */
+		if (val.iov_len != 0)
+			break;
+	}
+
+out_fill:
+	if (epoch_out != NULL)
+		*epoch_out = e;
+	if (count != NULL)
+		*count = c;
+out_iter:
+	dbtree_iter_finish(iter);
+out:
+	if (rc == -DER_NONEXIST)
+		D_DEBUG(DF_DSMS, "cannot find opc=%d in="DF_U64"\n", opc,
+			epoch_in == NULL ? -1 : *epoch_in);
+	else if (rc == 0)
+		D_DEBUG(DF_DSMS, "found opc=%d in="DF_U64": "DF_U64":"DF_U64
+			"\n", opc, epoch_in == NULL ? -1 : *epoch_in, e, c);
+	return rc;
+}
+#endif
+
+int
+dsms_kvs_ec_delete(daos_handle_t kvsh, uint64_t epoch)
+{
+	daos_iov_t	key;
+	int		rc;
+
+	D_DEBUG(DF_DSMS, "deleting "DF_U64"\n", epoch);
+
+	key.iov_buf = &epoch;
+	key.iov_buf_len = sizeof(epoch);
+	key.iov_len = key.iov_buf_len;
+
+	rc = dbtree_delete(kvsh, &key);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find "DF_U64"\n", epoch);
+		else
+			D_ERROR("failed to delete "DF_U64": %d\n", epoch, rc);
 	}
 
 	return rc;

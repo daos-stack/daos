@@ -96,6 +96,7 @@ int dsms_kvs_ec_lookup(daos_handle_t kvsh, uint64_t epoch, uint64_t *count);
 int dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
 		      const uint64_t *epoch_in, uint64_t *epoch_out,
 		      uint64_t *count);
+int dsms_kvs_ec_delete(daos_handle_t kvsh, uint64_t epoch);
 int dsms_mpool_lookup(const uuid_t pool_uuid, struct mpool **mpool);
 void dsms_mpool_get(struct mpool *mpool);
 void dsms_mpool_put(struct mpool *mpool);

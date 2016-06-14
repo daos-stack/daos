@@ -46,9 +46,6 @@ epoch_query(void **state)
 	daos_event_t		*evp;
 	int			 rc;
 
-	if (arg->myrank != 0)
-		return;
-
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
@@ -146,17 +143,15 @@ epoch_hold_commit(void **state)
 	daos_epoch_t		 epoch_expected;
 	int			 rc;
 
-	if (arg->myrank != 0)
-		return;
-
 	assert_int_equal(arg->co_info.ci_epoch_state.es_lhe, DAOS_EPOCH_MAX);
 
-	/* Commit to an unheld epoch. */
+	print_message("SUBTEST 1: commit to an unheld epoch: shall get %d\n",
+		      -DER_EP_RO);
 	epoch = arg->co_info.ci_epoch_state.es_hce + 22;
 	rc = do_epoch_commit(arg, epoch, &epoch_state);
 	assert_int_equal(rc, -DER_EP_RO);
 
-	/* Hold that epoch. */
+	print_message("SUBTEST 2: hold that epoch: shall succeed.\n");
 	epoch_expected = epoch;
 	rc = do_epoch_hold(arg, &epoch, &epoch_state);
 	assert_int_equal(rc, 0);
@@ -165,7 +160,8 @@ epoch_hold_commit(void **state)
 	arg->co_info.ci_epoch_state.es_lhe = epoch;
 	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
 
-	/* Retry the commit to a higher epoch, which is held already. */
+	print_message("SUBTEST 3: retry committing to a higher epoch, which is "
+		      "held already by subtest 2: shall succeed.\n");
 	epoch += 22;
 	rc = do_epoch_commit(arg, epoch, &epoch_state);
 	assert_int_equal(rc, 0);
@@ -179,7 +175,8 @@ epoch_hold_commit(void **state)
 	arg->co_info.ci_epoch_state.es_glb_hpce = epoch;
 	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
 
-	/* Hold an epoch <= GHPCE. */
+	print_message("SUBTEST 4: hold an epoch <= GHPCE: shall succeed and "
+		      "end up holding GHPCE + 1.\n");
 	epoch = arg->co_info.ci_epoch_state.es_hce;
 	epoch_expected = arg->co_info.ci_epoch_state.es_glb_hpce + 1;
 	rc = do_epoch_hold(arg, &epoch, &epoch_state);
@@ -189,7 +186,7 @@ epoch_hold_commit(void **state)
 	arg->co_info.ci_epoch_state.es_lhe = epoch;
 	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
 
-	/* Release the hold. */
+	print_message("SUBTEST 5: release the hold: shall succeed.\n");
 	epoch = DAOS_EPOCH_MAX;
 	rc = do_epoch_hold(arg, &epoch, &epoch_state);
 	assert_int_equal(rc, 0);
@@ -197,6 +194,25 @@ epoch_hold_commit(void **state)
 	assert_int_equal(epoch, DAOS_EPOCH_MAX);
 	arg->co_info.ci_epoch_state.es_lhe = epoch;
 	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
+
+	print_message("SUBTEST 6: close and open the container again: shall "
+		      "succeed and report correct GLRE.\n");
+	rc = dsm_co_close(arg->coh, NULL);
+	assert_int_equal(rc, 0);
+	rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, NULL,
+			 &arg->coh, &arg->co_info, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(arg->co_info.ci_epoch_state.es_hce,
+			 epoch_state.es_hce);
+	assert_int_equal(arg->co_info.ci_epoch_state.es_lre,
+			 epoch_state.es_hce);
+	assert_int_equal(arg->co_info.ci_epoch_state.es_lhe, DAOS_EPOCH_MAX);
+	assert_int_equal(arg->co_info.ci_epoch_state.es_glb_hce,
+			 epoch_state.es_glb_hce);
+	assert_int_equal(arg->co_info.ci_epoch_state.es_glb_lre,
+			 arg->co_info.ci_epoch_state.es_lre);
+	assert_int_equal(arg->co_info.ci_epoch_state.es_glb_hpce,
+			 arg->co_info.ci_epoch_state.es_hce);
 }
 
 static const struct CMUnitTest epoch_tests[] = {
@@ -230,54 +246,32 @@ setup(void **state)
 
 	arg->hdl_share = false;
 	uuid_clear(arg->pool_uuid);
-	MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
-	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
 
-	if (arg->myrank == 0) {
-		/** create pool with minimal size */
-		rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL,
-				     "pmem", 256*1024*1024, &arg->svc,
-				     arg->pool_uuid, NULL);
-	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	/** create pool with minimal size */
+	rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL,
+			     "pmem", 256*1024*1024, &arg->svc,
+			     arg->pool_uuid, NULL);
 	if (rc)
 		return rc;
 
-	if (arg->myrank == 0) {
-		/** connect to pool */
-		rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-				      DAOS_PC_RW, NULL /* failed */, &arg->poh,
-				      &arg->pool_info, NULL /* ev */);
-	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-	MPI_Bcast(&arg->pool_info, sizeof(arg->pool_info), MPI_CHAR, 0,
-		  MPI_COMM_WORLD);
-
-	/** l2g and g2l the pool handle */
-	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh);
-
-	if (arg->myrank == 0) {
-		/** create container */
-		uuid_generate(arg->co_uuid);
-		rc = dsm_co_create(arg->poh, arg->co_uuid, NULL);
-	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	/** connect to pool */
+	rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+			      DAOS_PC_RW, NULL /* failed */, &arg->poh,
+			      &arg->pool_info, NULL /* ev */);
 	if (rc)
 		return rc;
 
-	if (arg->myrank == 0) {
-		/** open container */
-		rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, NULL,
-				 &arg->coh, &arg->co_info, NULL);
-	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	/** create container */
+	uuid_generate(arg->co_uuid);
+	rc = dsm_co_create(arg->poh, arg->co_uuid, NULL);
 	if (rc)
 		return rc;
 
-	/** l2g and g2l the container handle */
-	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh);
+	/** open container */
+	rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, NULL,
+			 &arg->coh, &arg->co_info, NULL);
+	if (rc)
+		return rc;
 
 	*state = arg;
 	return 0;
@@ -292,9 +286,7 @@ teardown(void **state) {
 	if (rc)
 		return rc;
 
-	if (arg->myrank == 0)
-		rc = dsm_co_destroy(arg->poh, arg->co_uuid, 1, NULL);
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	rc = dsm_co_destroy(arg->poh, arg->co_uuid, 1, NULL);
 	if (rc)
 		return rc;
 
@@ -302,9 +294,7 @@ teardown(void **state) {
 	if (rc)
 		return rc;
 
-	if (arg->myrank == 0)
-		rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
 	if (rc)
 		return rc;
 
@@ -319,10 +309,11 @@ teardown(void **state) {
 int
 run_dsm_epoch_test(int rank, int size)
 {
-	int rc = 0;
+	int	rc;
 
-	rc = cmocka_run_group_tests_name("DSM epoch tests", epoch_tests, setup,
-					 teardown);
-	MPI_Barrier(MPI_COMM_WORLD);
+	if (rank == 0)
+		rc = cmocka_run_group_tests_name("DSM epoch tests", epoch_tests,
+						 setup, teardown);
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	return rc;
 }

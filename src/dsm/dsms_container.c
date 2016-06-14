@@ -325,22 +325,44 @@ out:
 }
 
 static int
-ec_update(daos_handle_t kvsh, uint64_t epoch, int64_t delta)
+ec_increment(daos_handle_t kvsh, uint64_t epoch)
 {
-	uint64_t	c;
+	uint64_t	c = 0;
+	uint64_t	c_new;
 	int		rc;
 
 	rc = dsms_kvs_ec_lookup(kvsh, epoch, &c);
-	if (rc == -DER_NONEXIST)
-		c = 0;
-	else if (rc != 0)
+	if (rc != 0 && rc != -DER_NONEXIST)
 		return rc;
 
-	D_ASSERTF(c >= 0, DF_U64"\n", c);
-	c += delta;
-	D_ASSERTF(c >= 0, DF_U64"\n", c);
+	c_new = c + 1;
+	if (c_new < c)
+		return -DER_OVERFLOW;
 
-	return dsms_kvs_ec_update(kvsh, epoch, &c);
+	return dsms_kvs_ec_update(kvsh, epoch, &c_new);
+}
+
+static int
+ec_decrement(daos_handle_t kvsh, uint64_t epoch)
+{
+	uint64_t	c = 0;
+	uint64_t	c_new;
+	int		rc;
+
+	rc = dsms_kvs_ec_lookup(kvsh, epoch, &c);
+	if (rc != 0 && rc != -DER_NONEXIST)
+		return rc;
+
+	c_new = c - 1;
+	if (c_new > c)
+		return -DER_OVERFLOW;
+
+	if (c_new == 0)
+		rc = dsms_kvs_ec_delete(kvsh, epoch);
+	else
+		rc = dsms_kvs_ec_update(kvsh, epoch, &c_new);
+
+	return rc;
 }
 
 /* Container descriptor */
@@ -492,7 +514,7 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = ec_update(cont->c_hces, chdl.ch_hce, 1 /* delta */);
+		rc = ec_increment(cont->c_hces, chdl.ch_hce);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to update hce kvs: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -500,7 +522,7 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 			pmemobj_tx_abort(rc);
 		}
 
-		rc = ec_update(cont->c_lres, chdl.ch_lre, 1 /* delta */);
+		rc = ec_increment(cont->c_lres, chdl.ch_lre);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to update lre kvs: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -508,7 +530,7 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 			pmemobj_tx_abort(rc);
 		}
 
-		rc = ec_update(cont->c_lhes, chdl.ch_lhe, 1 /* delta */);
+		rc = ec_increment(cont->c_lhes, chdl.ch_lhe);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to update lhe kvs: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -596,7 +618,7 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = ec_update(cont->c_hces, chdl.ch_hce, -1 /* delta */);
+		rc = ec_decrement(cont->c_hces, chdl.ch_hce);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to update hce kvs: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -604,7 +626,7 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 			pmemobj_tx_abort(rc);
 		}
 
-		rc = ec_update(cont->c_lres, chdl.ch_lre, -1 /* delta */);
+		rc = ec_decrement(cont->c_lres, chdl.ch_lre);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to update lre kvs: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -612,7 +634,7 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 			pmemobj_tx_abort(rc);
 		}
 
-		rc = ec_update(cont->c_lhes, chdl.ch_lhe, -1 /* delta */);
+		rc = ec_decrement(cont->c_lhes, chdl.ch_lhe);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to update lhe kvs: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -700,7 +722,7 @@ cont_epoch_hold(struct cont_svc *svc, struct cont *cont,
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = ec_update(cont->c_lhes, lhe, -1 /* delta */);
+		rc = ec_decrement(cont->c_lhes, lhe);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to remove original lhe: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -708,7 +730,7 @@ cont_epoch_hold(struct cont_svc *svc, struct cont *cont,
 			pmemobj_tx_abort(rc);
 		}
 
-		rc = ec_update(cont->c_lhes, hdl->ch_lhe, 1 /* delta */);
+		rc = ec_increment(cont->c_lhes, hdl->ch_lhe);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to add new lhe: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -758,7 +780,7 @@ cont_epoch_commit(struct cont_svc *svc, struct cont *cont,
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = ec_update(cont->c_hces, hce, -1 /* delta */);
+		rc = ec_decrement(cont->c_hces, hce);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to remove original hce: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -766,7 +788,7 @@ cont_epoch_commit(struct cont_svc *svc, struct cont *cont,
 			pmemobj_tx_abort(rc);
 		}
 
-		rc = ec_update(cont->c_hces, hdl->ch_hce, 1 /* delta */);
+		rc = ec_increment(cont->c_hces, hdl->ch_hce);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to add new hce: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -774,7 +796,7 @@ cont_epoch_commit(struct cont_svc *svc, struct cont *cont,
 			pmemobj_tx_abort(rc);
 		}
 
-		rc = ec_update(cont->c_lhes, lhe, -1 /* delta */);
+		rc = ec_decrement(cont->c_lhes, lhe);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to remove original lhe: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -782,7 +804,7 @@ cont_epoch_commit(struct cont_svc *svc, struct cont *cont,
 			pmemobj_tx_abort(rc);
 		}
 
-		rc = ec_update(cont->c_lhes, hdl->ch_lhe, 1 /* delta */);
+		rc = ec_increment(cont->c_lhes, hdl->ch_lhe);
 		if (rc != 0) {
 			D_ERROR(DF_CONT"failed to add new lhe: %d\n",
 				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
@@ -824,9 +846,9 @@ dsms_hdlr_cont_op(dtp_rpc_t *rpc)
 	cont_op_hdlr_t		hdlr;
 	int			rc;
 
-	D_DEBUG(DF_DSMS, "pool="DF_UUID" cont="DF_UUID" cont_hdl="DF_UUID"\n",
-		DP_UUID(in->cpi_pool), DP_UUID(in->cpi_cont),
-		DP_UUID(in->cpi_cont_hdl));
+	D_DEBUG(DF_DSMS, "pool="DF_UUID" cont="DF_UUID" cont_hdl="DF_UUID
+		" opc=%u\n", DP_UUID(in->cpi_pool), DP_UUID(in->cpi_cont),
+		DP_UUID(in->cpi_cont_hdl), opc_get(rpc->dr_opc));
 
 	rc = cont_svc_lookup(in->cpi_pool, 0 /* id */, &svc);
 	if (rc != 0)

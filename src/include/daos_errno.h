@@ -75,6 +75,8 @@ typedef enum {
 	DER_TRUNC		= (DER_ERR_BASE + 22),
 	/** generic I/O error */
 	DER_IO			= (DER_ERR_BASE + 23),
+	/** value too large for defined data type */
+	DER_OVERFLOW		= (DER_ERR_BASE + 24),
 	/** epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** epoch is too old, all data have been recycled */
