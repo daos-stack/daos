@@ -601,9 +601,15 @@ dtp_mcl_lookup(struct mcl_set *mclset, daos_rank_t rank, uint32_t tag,
 	na_return_t	na_ret;
 	int		rc = 0;
 
+	if (tag >= DTP_SRV_CONTEX_NUM) {
+		D_ERROR("invalid tag %d (DTP_SRV_CONTEX_NUM %d).\n",
+			tag, DTP_SRV_CONTEX_NUM);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
 	D_ASSERT(mclset != NULL && na_class != NULL && na_addr != NULL);
 	D_ASSERT(rank <= MCL_PS_SIZE_MAX);
-	ctx_idx = tag % DTP_SRV_CONTEX_NUM;
+	ctx_idx = tag;
 
 	if (addr_lookup_table[rank].ae_tag_addrs[ctx_idx] != NULL) {
 		*na_addr = addr_lookup_table[rank].ae_tag_addrs[ctx_idx];

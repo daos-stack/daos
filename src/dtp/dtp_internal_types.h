@@ -93,7 +93,7 @@ extern struct dtp_gdata		dtp_gdata;
 
 /* TODO may use a RPC to query server-side context number */
 #ifndef DTP_SRV_CONTEX_NUM
-# define DTP_SRV_CONTEX_NUM	(4)
+# define DTP_SRV_CONTEX_NUM	(256)
 #endif
 
 /* dtp_context */
