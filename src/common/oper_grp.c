@@ -101,7 +101,7 @@ daos_oper_grp_destroy(struct daos_oper_grp *grp, int rc)
  * Complete a operation group.
  */
 int
-daos_oper_grp_complete(struct daos_oper_grp *grp, int rc)
+daos_oper_grp_complete(struct daos_oper_grp *grp, int err)
 {
 	struct daos_oper *oper;
 
@@ -114,20 +114,24 @@ daos_oper_grp_complete(struct daos_oper_grp *grp, int rc)
 		D_FREE_PTR(oper);
 	}
 
-	if (grp->gp_comp)
-		grp->gp_comp(grp->gp_args, rc);
+	if (grp->gp_comp) {
+		int rc = grp->gp_comp(grp->gp_args, err);
+
+		if (err == 0)
+			err = rc;
+	}
 
 	if (grp->gp_ev_up != NULL) {
 		daos_event_fini(&grp->gp_ev);
 
 		D_DEBUG(DF_MISC, "Completing upper level event\n");
 		daos_event_launch(grp->gp_ev_up, NULL, NULL);
-		daos_event_complete(grp->gp_ev_up, rc);
+		daos_event_complete(grp->gp_ev_up, err);
 	}
 
 	pthread_mutex_destroy(&grp->gp_lock);
 	D_FREE_PTR(grp);
-	return rc;
+	return err;
 }
 
 static int
@@ -135,9 +139,9 @@ daos_oper_grp_comp_cb(struct daos_op_sp *esp, daos_event_t *ev, int rc)
 {
 	struct daos_oper_grp *grp = (struct daos_oper_grp *)esp->sp_arg;
 
-	D_DEBUG(DF_MISC, "Completing operation group %p\n", grp);
-	daos_oper_grp_complete(grp, rc);
-	return 0;
+	rc = daos_oper_grp_complete(grp, rc);
+	D_DEBUG(DF_MISC, "Completed operation group %p: %d\n", grp, rc);
+	return rc;
 }
 
 /**

@@ -462,6 +462,7 @@ daos_event_complete(struct daos_event *ev, int rc)
 	struct daos_event_private *evxs_cb[2];
 	struct daos_eq_private	  *eqx;
 	int			   i;
+	int			   err;
 	int			   cb_nr;
 
 	eqx = daos_eq_lookup(evx->evx_eqh);
@@ -475,10 +476,18 @@ daos_event_complete(struct daos_event *ev, int rc)
 
 	pthread_mutex_unlock(&eqx->eqx_lock);
 
-	for (i = 0; i < cb_nr; i++) {
+	/* run completion callbacks for non-poll event */
+	for (i = 0, err = 0; i < cb_nr; i++) {
+		int	rc;
+
 		ev = daos_evx2ev(evxs_cb[i]);
-		evxs_cb[i]->evx_ops.op_comp(&evxs_cb[i]->evx_sp,
-					    ev, ev->ev_error);
+		/* NB: completion callback of child event is executed before
+		 * its parent, we should pass the error of child to the parent.
+		 */
+		err = ev->ev_error != 0 ? ev->ev_error : err;
+		rc = evxs_cb[i]->evx_ops.op_comp(&evxs_cb[i]->evx_sp, ev, err);
+		if (err == 0)
+			err = rc;
 	}
 	daos_eq_putref(eqx);
 }
