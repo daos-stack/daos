@@ -64,7 +64,7 @@ static struct dsr_obj_class dsr_obj_classes[] = {
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
-			.ca_grp_nr		= 8,
+			.ca_grp_nr		= DAOS_OC_GRP_MAX,
 			.u.repl			= {
 				.r_num		= 1,
 			},

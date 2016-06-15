@@ -828,10 +828,18 @@ ring_obj_place(struct pl_map *map, struct dsr_obj_md *md,
 	dist	 = ring_obj_place_dist(rimap, oid);
 
 	grp_size = dsr_oclass_grp_size(oc_attr);
+	D_ASSERT(grp_size != 0);
+	D_ASSERTF(grp_size <= rimap->rmp_target_nr, "grp_size=%u tgt_nr=%d\n",
+		  grp_size, rimap->rmp_target_nr);
+
 	grp_dist = grp_size * dist;
 
 	if (shard_md == NULL) {
+		unsigned int grp_max = rimap->rmp_target_nr / grp_size;
+
 		grp_nr	= dsr_oclass_grp_nr(oc_attr, md);
+		if (grp_nr > grp_max)
+			grp_nr = grp_max;
 		shard	= 0;
 	} else {
 		grp_nr	= 1;

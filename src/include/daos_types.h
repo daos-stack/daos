@@ -370,6 +370,8 @@ typedef enum {
 	DAOS_RES_REPL,		/**< replication */
 } daos_obj_resil_t;
 
+#define DAOS_OC_GRP_MAX		(-1)
+
 /** Object class attributes */
 typedef struct daos_oclass_attr {
 	/** Object placement schema */

@@ -95,8 +95,22 @@ dsr_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
  * Handle API
  */
 
+/**
+ * Create a local pool connection for global representation data.
+ *
+ * \param glob	[IN]	global (shared) representation of a collective handle
+ *			to be extracted
+ * \param poh	[OUT]	returned local pool connection handle
+ *
+ * \return		These values will be returned:
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+dsr_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
+
 #define dsr_pool_local2global	dsm_pool_local2global
-#define dsr_pool_global2local	dsm_pool_global2local
 #define dsr_co_local2global	dsm_co_local2global
 #define dsr_co_global2local	dsm_co_global2local
 

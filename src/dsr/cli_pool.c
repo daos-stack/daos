@@ -40,12 +40,17 @@ dsr_pool_connect_comp(void *args, int rc)
 		goto failed;
 
 	pool = dsmc_handle2pool(*poh);
-	if (pool == NULL)
+	if (pool == NULL) {
+		D_DEBUG(DF_SRC, "Cannot find pool from the handle\n");
 		D_GOTO(failed, rc = -DER_NO_HDL);
+	}
 
 	D_DEBUG(DF_SR, "Create placement map for the pool.\n");
 	rc = dsr_pl_map_init(pool->dp_map);
+
 	dsmc_pool_put(pool);
+	if (rc != 0)
+		D_GOTO(failed, rc);
 
 	return 0;
  failed:
@@ -92,4 +97,16 @@ dsr_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
 	dsr_pl_map_fini();
 	return dsm_pool_disconnect(poh, ev);
+}
+
+int
+dsr_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
+{
+	int	rc;
+
+	rc = dsm_pool_global2local(glob, poh);
+	if (rc != 0)
+		return rc;
+
+	return dsr_pool_connect_comp(poh, 0);
 }
