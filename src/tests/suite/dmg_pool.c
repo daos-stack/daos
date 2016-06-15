@@ -138,11 +138,12 @@ teardown(void **state)
 int
 run_dmg_pool_test(int rank, int size)
 {
-	int rc = 0;
+	int	rc;
 
-	rc = cmocka_run_group_tests_name("DMG pool tests", tests,
-					 setup, teardown);
+	if (rank == 0)
+		rc = cmocka_run_group_tests_name("DMG pool tests", tests,
+						 setup, teardown);
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	return rc;
 }
