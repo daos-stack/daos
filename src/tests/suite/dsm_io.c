@@ -86,9 +86,7 @@ ioreq_init(struct ioreq *req, uint32_t tgt, daos_unit_oid_t oid,
 
 	/** vector I/O descriptor */
 	req->vio.vd_recxs	= &req->rex;
-	req->vio.vd_csums	= &req->csum;
 	req->vio.vd_nr		= 1;
-	req->vio.vd_eprs	= &req->erange;
 
 	print_message("open tgt=%u oid=%lu.%lu.%lu.%u\n", tgt, oid.id_pub.hi,
 		      oid.id_pub.mid, oid.id_pub.lo, oid.id_shard);

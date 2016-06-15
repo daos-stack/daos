@@ -155,18 +155,10 @@ dsm_io_check(unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls)
 	int i;
 
 	for (i = 0; i < nr; i++) {
-		int j;
-
 		if (iods[i].vd_name.iov_buf == NULL ||
-		    iods[i].vd_recxs == NULL || iods[i].vd_csums == NULL ||
-		    iods[i].vd_eprs == NULL)
+		    iods[i].vd_recxs == NULL)
 			/* XXX checksum & eprs should not be mandatory */
 			return false;
-
-		for (j = 0; j < iods[i].vd_nr; j++) {
-			if (iods[i].vd_csums[j].cs_csum == NULL)
-				return false;
-		}
 	}
 
 	return true;

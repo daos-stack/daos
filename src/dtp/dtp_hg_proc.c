@@ -530,6 +530,9 @@ dtp_proc_epoch_range_t(dtp_proc_t proc,
  *	daos_epoch_range_t	*vd_eprs;
  * } daos_vec_iod_t;
  **/
+#define VD_REC_EXIST	(1 << 0)
+#define VD_CSUM_EXIST	(1 << 1)
+#define VD_EPRS_EXIST	(1 << 2)
 int
 dtp_proc_daos_vec_iod(dtp_proc_t proc, daos_vec_iod_t *dvi)
 {
@@ -537,6 +540,7 @@ dtp_proc_daos_vec_iod(dtp_proc_t proc, daos_vec_iod_t *dvi)
 	hg_return_t hg_ret;
 	int rc;
 	int i;
+	uint32_t existing_flags = 0;
 
 	if (proc == NULL ||  dvi == NULL) {
 		D_ERROR("Invalid parameter, proc: %p, data: %p.\n",
@@ -562,47 +566,86 @@ dtp_proc_daos_vec_iod(dtp_proc_t proc, daos_vec_iod_t *dvi)
 	}
 
 	proc_op = hg_proc_get_op(proc);
+	if (proc_op == HG_ENCODE) {
+		if (dvi->vd_recxs != NULL)
+			existing_flags |= VD_REC_EXIST;
+		if (dvi->vd_csums != NULL)
+			existing_flags |= VD_CSUM_EXIST;
+		if (dvi->vd_eprs != NULL)
+			existing_flags |= VD_EPRS_EXIST;
+	}
+
+	hg_ret = hg_proc_uint32_t(proc, &existing_flags);
+	if (hg_ret != HG_SUCCESS)
+		return -DER_DTP_HG;
+
 	if (proc_op == HG_DECODE) {
-		D_ALLOC(dvi->vd_recxs,
-			dvi->vd_nr * sizeof(*dvi->vd_recxs));
+		if (existing_flags & VD_REC_EXIST) {
+			D_ALLOC(dvi->vd_recxs,
+				dvi->vd_nr * sizeof(*dvi->vd_recxs));
+			if (dvi->vd_recxs == NULL)
+				D_GOTO(free, rc = -DER_NOMEM);
+		}
 
-		D_ALLOC(dvi->vd_csums,
-			dvi->vd_nr * sizeof(*dvi->vd_csums));
+		if (existing_flags & VD_CSUM_EXIST) {
+			D_ALLOC(dvi->vd_csums,
+				dvi->vd_nr * sizeof(*dvi->vd_csums));
+			if (dvi->vd_csums == NULL)
+				D_GOTO(free, rc = -DER_NOMEM);
+		}
 
-		D_ALLOC(dvi->vd_eprs,
-			dvi->vd_nr * sizeof(*dvi->vd_eprs));
-
-		if (dvi->vd_recxs == NULL || dvi->vd_csums == NULL ||
-		    dvi->vd_eprs == NULL)
-			return -DER_NOMEM;
-	}
-	for (i = 0; i < dvi->vd_nr; i++) {
-		rc = dtp_proc_daos_recx_t(proc, &dvi->vd_recxs[i]);
-		if (rc != 0)
-			return rc;
-	}
-
-	/** XXX as per the API, vd_csums & vd_eprs can be NULL!!! */
-	for (i = 0; i < dvi->vd_nr; i++) {
-		rc = dtp_proc_daos_csum_buf(proc, &dvi->vd_csums[i]);
-		if (rc != 0)
-			return rc;
+		if (existing_flags & VD_EPRS_EXIST) {
+			D_ALLOC(dvi->vd_eprs,
+				dvi->vd_nr * sizeof(*dvi->vd_eprs));
+			if (dvi->vd_eprs == NULL)
+				D_GOTO(free, rc = -DER_NOMEM);
+		}
 	}
 
-	for (i = 0; i < dvi->vd_nr; i++) {
-		rc = dtp_proc_epoch_range_t(proc, &dvi->vd_eprs[i]);
-		if (rc != 0)
-			return rc;
+	if (existing_flags & VD_REC_EXIST) {
+		for (i = 0; i < dvi->vd_nr; i++) {
+			rc = dtp_proc_daos_recx_t(proc, &dvi->vd_recxs[i]);
+			if (rc != 0) {
+				if (proc_op == HG_DECODE)
+					D_GOTO(free, rc);
+				return rc;
+			}
+		}
+	}
+
+	if (existing_flags & VD_CSUM_EXIST) {
+		for (i = 0; i < dvi->vd_nr; i++) {
+			rc = dtp_proc_daos_csum_buf(proc, &dvi->vd_csums[i]);
+			if (rc != 0) {
+				if (proc_op == HG_DECODE)
+					D_GOTO(free, rc);
+				return rc;
+			}
+		}
+	}
+
+	if (existing_flags & VD_EPRS_EXIST) {
+		for (i = 0; i < dvi->vd_nr; i++) {
+			rc = dtp_proc_epoch_range_t(proc, &dvi->vd_eprs[i]);
+			if (rc != 0) {
+				if (proc_op == HG_DECODE)
+					D_GOTO(free, rc);
+				return rc;
+			}
+		}
 	}
 
 	if (proc_op == HG_FREE) {
-		D_FREE(dvi->vd_eprs,
-		       dvi->vd_nr * sizeof(*dvi->vd_eprs));
-		D_FREE(dvi->vd_recxs,
-		       dvi->vd_nr * sizeof(*dvi->vd_recxs));
-
-		D_FREE(dvi->vd_csums,
-		       dvi->vd_nr * sizeof(*dvi->vd_csums));
+free:
+		if (dvi->vd_recxs != NULL)
+			D_FREE(dvi->vd_recxs,
+			       dvi->vd_nr * sizeof(*dvi->vd_recxs));
+		if (dvi->vd_csums != NULL)
+			D_FREE(dvi->vd_csums,
+			       dvi->vd_nr * sizeof(*dvi->vd_csums));
+		if (dvi->vd_eprs != NULL)
+			D_FREE(dvi->vd_eprs,
+			       dvi->vd_nr * sizeof(*dvi->vd_eprs));
 	}
 
 	return rc;
