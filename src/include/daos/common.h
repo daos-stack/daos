@@ -339,9 +339,9 @@ int  daos_oper_grp_new_ev(struct daos_oper_grp *grp,
 #define D_SWAP64S(x)	do { *(x) = D_SWAP64(*(x)); } while (0)
 
 static inline int
-daos_errno2der()
+daos_errno2der(int err)
 {
-	switch (errno) {
+	switch (err) {
 	case 0:		return 0;
 	case EPERM:
 	case EACCES:	return -DER_NO_PERM;
@@ -350,6 +350,7 @@ daos_errno2der()
 	case ENOSPC:	return -DER_NOSPACE;
 	case EEXIST:	return -DER_EXIST;
 	case ENOENT:	return -DER_NONEXIST;
+	case ECANCELED:	return -DER_CANCELED;
 	default:	return -DER_INVAL;
 	}
 	return 0;

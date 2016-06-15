@@ -95,6 +95,30 @@ static umem_ops_t	pmem_ops = {
 	.mo_tx_abort		= pmem_tx_abort,
 };
 
+int
+umem_tx_errno(int err)
+{
+	if (err == 0) {
+		err = pmemobj_tx_errno();
+		if (err == ENOMEM) /* nvml returns ENOMEM for out of space */
+			err = ENOSPC;
+	}
+
+	if (err == 0) {
+		D_ERROR("Transaction aborted for unknown reason\n");
+		return -DER_UNKNOWN;
+	}
+
+	if (err < 0) {
+		if (err < -DER_ERR_BASE)
+			return err; /* aborted by DAOS */
+
+		D_ERROR("nvml returned negative errno %d\n", err);
+		err = -err;
+	}
+	return daos_errno2der(err);
+}
+
 #endif /* DAOS_HAS_NVML */
 
 /* volatile memroy operations */

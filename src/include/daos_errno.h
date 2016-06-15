@@ -77,6 +77,8 @@ typedef enum {
 	DER_IO			= (DER_ERR_BASE + 23),
 	/** value too large for defined data type */
 	DER_OVERFLOW		= (DER_ERR_BASE + 24),
+	/** operation canceled */
+	DER_CANCELED		= (DER_ERR_BASE + 25),
 	/** epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** epoch is too old, all data have been recycled */
@@ -99,6 +101,8 @@ typedef enum {
 	DER_DTP_ADDRSTR_GEN	= (DER_ERR_BASE + 602),
 	/** DTP MCL layer error */
 	DER_DTP_MCL		= (DER_ERR_BASE + 603),
+	/** unknown error */
+	DER_UNKNOWN		= (DER_ERR_BASE + 1000),
 	/** TODO: add more error numbers */
 } daos_errno_t;
 

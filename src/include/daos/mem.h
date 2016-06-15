@@ -62,6 +62,8 @@ typedef PMEMoid			umem_id_t;
 
 #define TMMID_TYPE_NUM(t)	TOID_TYPE_NUM(t)
 
+int umem_tx_errno(int err);
+
 /************************** NON-NVML MACROS **********************************/
 #else /* !DAOS_HAS_NVML */
 

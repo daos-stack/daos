@@ -126,13 +126,12 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		pinfo->pif_avail = size - pmemobj_root_size(vpool->vp_ph);
 
 	} TX_ONABORT {
-		D_ERROR("Initialize pool root error: %s\n",
-			pmemobj_errormsg());
+		rc = umem_tx_errno(rc);
+		D_ERROR("Initialize pool root error: %d\n", rc);
 		/* The transaction can in reality be aborted
 		 * only when there is no memory, either due
 		 * to loss of power or no more memory in pool
 		 */
-		rc = -DER_NOMEM;
 	} TX_END
 
 	if (rc != 0)

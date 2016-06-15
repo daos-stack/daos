@@ -120,9 +120,8 @@ vos_chash_resize_locked(PMEMobjpool *ph,
 		D_RW(chtable)->num_buckets = resize_buckets;
 		TX_FREE(orig_buckets);
 	} TX_ONABORT {
-		D_ERROR("resize ht transaction aborted: %s\n",
-			pmemobj_errormsg());
-		rc = -DER_NOMEM;
+		rc = umem_tx_errno(rc);
+		D_ERROR("resize ht transaction aborted: %d\n", rc);
 	} TX_END;
 
 	return rc;
@@ -159,9 +158,8 @@ vos_chash_create(PMEMobjpool *ph, uint32_t buckets,
 
 		*chtable = htab_oid;
 	} TX_ONABORT {
-		D_ERROR("create hashtable transaction aborted: %s\n",
-			pmemobj_errormsg());
-		ret = -DER_NOMEM;
+		ret = umem_tx_errno(ret);
+		D_ERROR("create hashtable transaction aborted: %d\n", ret);
 	} TX_END
 
 	return ret;
@@ -234,10 +232,8 @@ vos_chash_insert(PMEMobjpool *ph,
 		}
 		pmemobj_rwlock_unlock(ph, &buckets[bucket_id].rw_lock);
 	} TX_ONABORT{
-		D_ERROR("insert hashtable transaction aborted: %s\n",
-			pmemobj_errormsg());
-		rc = -DER_NOMEM;
-
+		rc = umem_tx_errno(rc);
+		D_ERROR("insert hashtable transaction aborted: %d\n", rc);
 	} TX_END;
 
 	pmemobj_rwlock_unlock(ph, &D_RW(chtable)->b_rw_lock);
@@ -361,9 +357,8 @@ vos_chash_remove(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable,
 		}
 		pmemobj_rwlock_unlock(ph, &buckets[bucket_id].rw_lock);
 	} TX_ONABORT{
-		D_ERROR("remove transaction aborted: %s\n",
-			pmemobj_errormsg());
-		rc = -DER_FREE_MEM;
+		rc = umem_tx_errno(rc);
+		D_ERROR("remove transaction aborted: %d\n", rc);
 	} TX_END;
 	pmemobj_rwlock_unlock(ph, &D_RW(chtable)->b_rw_lock);
 
@@ -449,9 +444,8 @@ vos_chash_destroy(PMEMobjpool *ph, TOID(struct vos_chash_table) chtable)
 		TX_FREE(D_RO(chtable)->buckets);
 		TX_FREE(chtable);
 	} TX_ONABORT{
-		D_ERROR("insert hashtable transaction aborted: %s\n",
-			pmemobj_errormsg());
-		rc = -DER_FREE_MEM;
+		rc = umem_tx_errno(rc);
+		D_ERROR("insert hashtable transaction aborted: %d\n", rc);
 	} TX_END;
 	return rc;
 }
@@ -470,9 +464,8 @@ int vos_chash_set_ops(PMEMobjpool *ph,
 		TX_ADD_FIELD_DIRECT(htab, vh_ops);
 		htab->vh_ops = hops;
 	} TX_ONABORT {
-		D_ERROR("Error while updating the hash ops: %s\n",
-			pmemobj_errormsg());
-		ret = -DER_NONEXIST;
+		ret = umem_tx_errno(ret);
+		D_ERROR("Error while updating the hash ops: %d\n", ret);
 	} TX_END
 
 	return ret;

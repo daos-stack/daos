@@ -215,9 +215,7 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
-		rc = pmemobj_tx_errno();
-		if (rc > 0)
-			rc = -DER_NOSPACE;
+		rc = umem_tx_errno(rc);
 	} TX_FINALLY {
 		if (!daos_handle_is_inval(ch))
 			dbtree_close(ch);
@@ -310,9 +308,7 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 		if (!daos_handle_is_inval(ch))
 			dbtree_close(ch);
 
-		rc = pmemobj_tx_errno();
-		if (rc > 0)
-			rc = -DER_NOSPACE;
+		rc = umem_tx_errno(rc);
 	} TX_END
 
 out_rwlock:
@@ -538,9 +534,7 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 			pmemobj_tx_abort(rc);
 		}
 	} TX_ONABORT {
-		rc = pmemobj_tx_errno();
-		if (rc > 0)
-			rc = -DER_NOSPACE;
+		rc = umem_tx_errno(rc);
 	} TX_END
 
 	if (rc != 0)
@@ -644,9 +638,7 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 
 		/* TODO: Update GHCE. */
 	} TX_ONABORT {
-		rc = pmemobj_tx_errno();
-		if (rc > 0)
-			rc = -DER_NOSPACE;
+		rc = umem_tx_errno(rc);
 	} TX_END
 
 	if (rc != 0)
@@ -738,9 +730,7 @@ cont_epoch_hold(struct cont_svc *svc, struct cont *cont,
 			pmemobj_tx_abort(rc);
 		}
 	} TX_ONABORT {
-		rc = pmemobj_tx_errno();
-		if (rc > 0)
-			rc = -DER_NOSPACE;
+		rc = umem_tx_errno(rc);
 	} TX_END
 
 	if (rc != 0)
@@ -821,9 +811,7 @@ cont_epoch_commit(struct cont_svc *svc, struct cont *cont,
 			pmemobj_tx_abort(rc);
 		}
 	} TX_ONABORT {
-		rc = pmemobj_tx_errno();
-		if (rc > 0)
-			rc = -DER_NOSPACE;
+		rc = umem_tx_errno(rc);
 	} TX_END
 
 	if (rc != 0) {

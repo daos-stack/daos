@@ -1382,7 +1382,7 @@ btr_tx_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 		if (rc != 0)
 			umem_tx_abort(btr_umm(tcx), rc);
 	} TX_ONABORT {
-		rc = rc ?: -DER_NOSPACE;
+		rc = umem_tx_errno(rc);
 		D_DEBUG(DF_MISC, "dbtree_update tx aborted: %d\n", rc);
 
 	} TX_FINALLY {
@@ -1456,7 +1456,7 @@ btr_tx_tree_alloc(struct btr_context *tcx)
 		if (rc != 0)
 			umem_tx_abort(btr_umm(tcx), rc);
 	} TX_ONABORT {
-		rc = rc ?: -DER_NOSPACE;
+		rc = umem_tx_errno(rc);
 		D_DEBUG(DF_MISC, "Failed to create tree root: %d\n", rc);
 
 	} TX_FINALLY {
@@ -1534,7 +1534,7 @@ btr_tx_tree_init(struct btr_context *tcx, struct btr_root *root)
 		if (rc != 0)
 			umem_tx_abort(btr_umm(tcx), rc);
 	} TX_ONABORT {
-		rc = rc ?: -DER_NOSPACE;
+		rc = umem_tx_errno(rc);
 		D_DEBUG(DF_MISC, "Failed to init tree root: %d\n", rc);
 
 	} TX_FINALLY {
@@ -1722,7 +1722,7 @@ btr_tx_tree_destroy(struct btr_context *tcx)
 		if (rc != 0)
 			umem_tx_abort(btr_umm(tcx), rc);
 	} TX_ONABORT {
-		rc = rc ?: -DER_NOSPACE;
+		rc = umem_tx_errno(rc);
 		D_DEBUG(DF_MISC, "Failed to destroy the tree: %d\n", rc);
 
 	} TX_FINALLY {

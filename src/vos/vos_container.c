@@ -143,9 +143,8 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 			pmemobj_tx_abort(ENOMEM);
 		}
 	} TX_ONABORT {
-		D_ERROR("Creating a container entry: %s\n",
-			pmemobj_errormsg());
-		ret = -DER_NOMEM;
+		ret = umem_tx_errno(ret);
+		D_ERROR("Creating a container entry: %d\n", ret);
 	} TX_END;
 
 exit:
@@ -302,9 +301,8 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 		}
 
 	}  TX_ONABORT {
-		D_ERROR("Destroying container transaction failed %s\n",
-			pmemobj_errormsg());
-		ret = ret ?: -DER_IO;
+		ret = umem_tx_errno(ret);
+		D_ERROR("Destroying container transaction failed %d\n", ret);
 	} TX_END;
 
 exit:

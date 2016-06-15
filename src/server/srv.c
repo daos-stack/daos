@@ -102,7 +102,7 @@ dss_srv_handler(void *arg)
 			       HWLOC_CPUBIND_THREAD);
 	if (rc) {
 		D_ERROR("failed to set affinity: %d\n", errno);
-		dthread->dt_rc = daos_errno2der();
+		dthread->dt_rc = daos_errno2der(errno);
 		pthread_cond_signal(&dthread->dt_start_cond);
 		pthread_mutex_unlock(&dthread->dt_lock);
 		return NULL;
@@ -166,13 +166,13 @@ dss_thread_alloc(int idx, hwloc_cpuset_t cpus)
 	errno = pthread_cond_init(&dthread->dt_start_cond, NULL);
 	if (errno) {
 		D_ERROR("failed to init pthread cond: %d\n", rc);
-		D_GOTO(err_free, rc = daos_errno2der());
+		D_GOTO(err_free, rc = daos_errno2der(errno));
 	}
 
 	rc = pthread_mutex_init(&dthread->dt_lock, NULL);
 	if (rc) {
 		D_ERROR("failed to init pthread mutex: %d\n", rc);
-		D_GOTO(err_cond, rc = daos_errno2der());
+		D_GOTO(err_cond, rc = daos_errno2der(errno));
 	}
 
 	dthread->dt_cpuset = hwloc_bitmap_dup(cpus);
@@ -230,13 +230,13 @@ dss_start_one_thread(hwloc_cpuset_t cpus, int idx)
 	errno = pthread_attr_init(&attr);
 	if (errno) {
 		D_ERROR("failed to init pthread attr: %d\n", errno);
-		D_GOTO(out, rc = daos_errno2der());
+		D_GOTO(out, rc = daos_errno2der(errno));
 	}
 
 	errno = pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
 	if (errno) {
 		D_ERROR("failed to set sched policy: %d\n", errno);
-		D_GOTO(out_attr, rc = daos_errno2der());
+		D_GOTO(out_attr, rc = daos_errno2der(errno));
 	}
 
 	/** start the service thread */
@@ -244,14 +244,14 @@ dss_start_one_thread(hwloc_cpuset_t cpus, int idx)
 	errno = pthread_create(&pid, &attr, dss_srv_handler, dthread);
 	if (errno != 0) {
 		D_ERROR("Can not create thread%d: %d\n", idx, errno);
-		D_GOTO(out_lock, rc = daos_errno2der());
+		D_GOTO(out_lock, rc = daos_errno2der(errno));
 	}
 
 	/** wait for thread to be effectively set up */
 	errno = pthread_cond_wait(&dthread->dt_start_cond, &dthread->dt_lock);
 	if (errno != 0) {
 		D_ERROR("failed to wait for thread%d: %d\n", idx, errno);
-		D_GOTO(out_lock, rc = daos_errno2der());
+		D_GOTO(out_lock, rc = daos_errno2der(errno));
 	}
 
 	if (dthread->dt_id == 0) {

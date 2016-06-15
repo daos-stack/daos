@@ -51,13 +51,13 @@ dir_fsync(const char *path)
 	fd = open(path, O_RDONLY|O_DIRECTORY);
 	if (fd < 0) {
 		D_ERROR("failed to open %s for sync: %d\n", path, errno);
-		return daos_errno2der();
+		return daos_errno2der(errno);
 	}
 
 	rc = fsync(fd);
 	if (rc < 0) {
 		D_ERROR("failed to fync %s: %d\n", path, errno);
-		rc = daos_errno2der();
+		rc = daos_errno2der(errno);
 	}
 
 	(void)close(fd);
@@ -90,7 +90,7 @@ subtree_destroy(const char *path)
 
 	rc = nftw(path, destroy_cb, 32, FTW_DEPTH | FTW_PHYS | FTW_MOUNT);
 	if (rc)
-		rc = daos_errno2der();
+		rc = daos_errno2der(errno);
 
 	return rc;
 }
@@ -104,14 +104,14 @@ dmgs_tgt_init(void)
 	rc = mkdir(NEWBORNS, 0700);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
-		return daos_errno2der();
+		return daos_errno2der(errno);
 	}
 
 	/** create ZOMBIES directory if it does not exist already */
 	rc = mkdir(ZOMBIES, 0700);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
-		return daos_errno2der();
+		return daos_errno2der(errno);
 	}
 
 	/** remove leftover from previous runs */
@@ -203,7 +203,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		if (fd < 0) {
 			D_ERROR(DF_UUID": failed to create vos file %s: %d\n",
 				DP_UUID(uuid), path, rc);
-			rc = daos_errno2der();
+			rc = daos_errno2der(errno);
 			break;
 		}
 
@@ -211,7 +211,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		if (rc) {
 			D_ERROR(DF_UUID": failed to allocate vos file %s: %d\n",
 				DP_UUID(uuid), path, rc);
-			rc = daos_errno2der();
+			rc = daos_errno2der(errno);
 			break;
 		}
 
@@ -237,7 +237,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		if (rc) {
 			D_ERROR(DF_UUID": failed to sync vos pool %s: %d\n",
 				DP_UUID(uuid), path, rc);
-			rc = daos_errno2der();
+			rc = daos_errno2der(errno);
 			break;
 		}
 	}
@@ -266,7 +266,7 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t size, char *path)
 	rc = mkdir(newborn, 0700);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to created pool directory: %d\n", rc);
-		D_GOTO(out, rc = daos_errno2der());
+		D_GOTO(out, rc = daos_errno2der(errno));
 	}
 
 	/** create VOS files */
@@ -283,7 +283,7 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t size, char *path)
 	rc = rename(newborn, path);
 	if (rc < 0) {
 		D_ERROR("failed to rename pool directory: %d\n", rc);
-		D_GOTO(out_tree, rc = daos_errno2der());
+		D_GOTO(out_tree, rc = daos_errno2der(errno));
 	}
 
 	/** make sure the rename is persistent */
@@ -339,7 +339,7 @@ dmgs_hdlr_tgt_create(dtp_rpc_t *tc_req)
 		rc = tgt_create(tc_in->tc_pool_uuid, tc_out->tc_tgt_uuid,
 				tc_in->tc_tgt_size, path);
 	} else {
-		rc = daos_errno2der();
+		rc = daos_errno2der(errno);
 	}
 
 	free(path);
@@ -364,7 +364,7 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 
 	rc = rename(path, zombie);
 	if (rc < 0)
-		D_GOTO(out, rc = daos_errno2der());
+		D_GOTO(out, rc = daos_errno2der(errno));
 
 	/** make sure the rename is persistent */
 	rc = dir_fsync(zombie);
@@ -427,7 +427,7 @@ dmgs_hdlr_tgt_destroy(dtp_rpc_t *td_req)
 			rc = 0;
 		free(zombie);
 	} else {
-		rc = daos_errno2der();
+		rc = daos_errno2der(errno);
 	}
 
 	free(path);
