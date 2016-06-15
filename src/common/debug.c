@@ -42,7 +42,7 @@ daos_debug_mask(void)
 
 	feats = getenv(DAOS_ENV_DEBUG);
 	if (feats != NULL) {
-		debug_mask = atoi(feats);
+		debug_mask = strtol(feats, NULL, 0);
 		if (debug_mask > 0) {
 			D_PRINT("set debug to %d/%x\n", debug_mask, debug_mask);
 			return debug_mask;

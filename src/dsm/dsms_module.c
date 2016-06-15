@@ -53,6 +53,7 @@ init(void)
 static int
 fini(void)
 {
+	dsms_conts_close();
 	dsms_pools_close();
 	dsms_pool_fini();
 	dsms_storage_fini();
@@ -113,6 +114,7 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 		return NULL;
 
 	DAOS_INIT_LIST_HEAD(&tls->dt_pool_list);
+	DAOS_INIT_LIST_HEAD(&tls->dt_cont_list);
 	return tls;
 }
 

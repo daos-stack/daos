@@ -38,12 +38,6 @@
 #include "dsms_internal.h"
 #include "dsms_layout.h"
 
-struct dsms_vpool {
-	daos_handle_t dvp_hdl; /* vos pool handle */
-	uuid_t	      dvp_uuid;
-	daos_list_t   dvp_list;
-};
-
 /* XXX let's keep the pool open until module fini */
 void
 dsms_pools_close()
@@ -73,35 +67,79 @@ dsms_vpool_lookup(const uuid_t vp_uuid)
 	return NULL;
 }
 
+void
+dsms_conts_close()
+{
+	struct dsm_tls *tls = dsm_tls_get();
+	struct dsms_vcont *dcont;
+	struct dsms_vcont *tmp;
+
+	daos_list_for_each_entry_safe(dcont, tmp, &tls->dt_cont_list,
+				      dvc_list) {
+		daos_list_del(&dcont->dvc_list);
+		vos_co_close(dcont->dvc_hdl, NULL);
+		D_FREE_PTR(dcont);
+	}
+}
+
+static struct dsms_vcont *
+dsms_vcont_lookup(const uuid_t dc_uuid)
+{
+	struct dsm_tls *tls = dsm_tls_get();
+	struct dsms_vcont *dcont;
+
+	daos_list_for_each_entry(dcont, &tls->dt_cont_list, dvc_list) {
+		if (uuid_compare(dc_uuid, dcont->dvc_uuid) == 0)
+			return dcont;
+	}
+
+	return NULL;
+}
+
 static int
 dsms_co_open_create(daos_handle_t pool_hdl, uuid_t co_uuid,
 		    daos_handle_t *co_hdl)
 {
+	struct dsms_vcont *dcont;
+	struct dsm_tls *tls = dsm_tls_get();
 	int rc;
 
 	D_DEBUG(DF_MISC, "opening container "DF_UUID"\n",
 		DP_UUID(co_uuid));
 
-	/* TODO put it to container cache */
+	dcont = dsms_vcont_lookup(co_uuid);
+	if (dcont != NULL) {
+		*co_hdl = dcont->dvc_hdl;
+		D_DEBUG(DF_MISC, "get container "DF_UUID" from cache.\n",
+			DP_UUID(co_uuid));
+		return 0;
+	}
+
 	rc = vos_co_open(pool_hdl, co_uuid, co_hdl, NULL);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DF_MISC, "creating container "DF_UUID"\n",
 			DP_UUID(co_uuid));
 		/** create container on-the-fly */
 		rc = vos_co_create(pool_hdl, co_uuid, NULL);
-		if (rc)
+		if (rc != 0)
 			return rc;
 		/** attempt to open again now that it is created ... */
 		rc = vos_co_open(pool_hdl, co_uuid, co_hdl, NULL);
+		if (rc != 0)
+			return rc;
 	}
 
-	return rc;
-}
+	/* Add container to cache */
+	D_ALLOC_PTR(dcont);
+	if (dcont == NULL) {
+		vos_co_close(*co_hdl, NULL);
+		return -DER_NOMEM;
+	}
 
-static int
-dsms_co_close(daos_handle_t dh)
-{
-	return vos_co_close(dh, NULL);
+	uuid_copy(dcont->dvc_uuid, co_uuid);
+	dcont->dvc_hdl = *co_hdl;
+	daos_list_add(&dcont->dvc_list, &tls->dt_cont_list);
+	return rc;
 }
 
 static int
@@ -194,9 +232,6 @@ dsms_bulks_async_complete(dtp_rpc_t *rpc, daos_sg_list_t *sgls,
 		    daos_handle_t cont_hdl)
 {
 	int rc;
-
-	if (!daos_handle_is_inval(cont_hdl))
-		dsms_co_close(cont_hdl);
 
 	dsm_set_reply_status(rpc, status);
 	rc = dtp_reply_send(rpc);

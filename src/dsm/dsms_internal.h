@@ -56,6 +56,20 @@ struct mpool {
 	daos_handle_t	mp_root;	/* root KVS */
 };
 
+/* Cache for vos pool */
+struct dsms_vpool {
+	daos_handle_t dvp_hdl;
+	uuid_t	      dvp_uuid;
+	daos_list_t   dvp_list;
+};
+
+/* Cache for vos container */
+struct dsms_vcont {
+	daos_handle_t dvc_hdl;
+	uuid_t	      dvc_uuid;
+	daos_list_t   dvc_list;
+};
+
 extern struct dss_module_key dsm_module_key;
 /**
  * DSM server thread local storage structure
@@ -63,6 +77,7 @@ extern struct dss_module_key dsm_module_key;
 struct dsm_tls {
 	/* in-memory structures TLS instance */
 	struct daos_list_head dt_pool_list;
+	struct daos_list_head dt_cont_list;
 };
 
 static inline struct dsm_tls *
@@ -145,7 +160,7 @@ int dsms_hdlr_cont_op(dtp_rpc_t *rpc);
 int dsms_hdlr_object_rw(dtp_rpc_t *rpc);
 int dsms_hdlr_object_enumerate(dtp_rpc_t *rpc);
 
-void
-dsms_pools_close();
+void dsms_pools_close(void);
+void dsms_conts_close(void);
 
 #endif /* __DSMS_INTERNAL_H__ */
