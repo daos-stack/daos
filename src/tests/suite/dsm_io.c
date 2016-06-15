@@ -133,6 +133,8 @@ insert(const char *dkey, const char *akey, uint64_t idx, void *val,
 	/** execute update operation */
 	rc = dsm_obj_update(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
 			    req->arg->async ? &req->ev : NULL);
+	if (!req->arg->async && rc != 0)
+		ioreq_fini(req);
 	assert_int_equal(rc, 0);
 
 	if (req->arg->async) {
@@ -142,6 +144,8 @@ insert(const char *dkey, const char *akey, uint64_t idx, void *val,
 		rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
 		assert_int_equal(rc, 1);
 		assert_ptr_equal(evp, &req->ev);
+		if (evp->ev_error != 0)
+			ioreq_fini(req);
 		assert_int_equal(evp->ev_error, 0);
 	}
 }
@@ -178,6 +182,8 @@ lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
 	/** execute fetch operation */
 	rc = dsm_obj_fetch(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
 			   NULL, req->arg->async ? &req->ev : NULL);
+	if (!req->arg->async && rc != 0)
+		ioreq_fini(req);
 	assert_int_equal(rc, 0);
 
 	if (req->arg->async) {
@@ -187,6 +193,8 @@ lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
 		rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
 		assert_int_equal(rc, 1);
 		assert_ptr_equal(evp, &req->ev);
+		if (evp->ev_error != 0)
+			ioreq_fini(req);
 		assert_int_equal(evp->ev_error, 0);
 	}
 }

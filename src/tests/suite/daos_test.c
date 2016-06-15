@@ -32,6 +32,7 @@ int
 main(int argc, char **argv)
 {
 	int	nr_failed = 0;
+	int	nr_total_failed = 0;
 	int	rank;
 	int	size;
 	int	rc;
@@ -59,6 +60,9 @@ main(int argc, char **argv)
 	nr_failed += run_dsm_io_test(rank, size);
 	nr_failed += run_dsm_epoch_test(rank, size);
 
+	MPI_Allreduce(&nr_failed, &nr_total_failed, 1, MPI_INT, MPI_SUM,
+		      MPI_COMM_WORLD);
+
 	rc = dsr_fini();
 	if (rc)
 		print_message("dsr_fini() failed with %d\n", rc);
@@ -68,10 +72,10 @@ main(int argc, char **argv)
 		print_message("dmg_fini() failed with %d\n", rc);
 
 	print_message("\n============ Summary %s\n", __FILE__);
-	if (nr_failed == 0)
+	if (nr_total_failed == 0)
 		print_message("OK - NO TEST FAILURES\n");
 	else
-		print_message("ERROR, %i TEST(S) FAILED\n", nr_failed);
+		print_message("ERROR, %i TEST(S) FAILED\n", nr_total_failed);
 
 	MPI_Finalize();
 
