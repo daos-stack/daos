@@ -162,6 +162,16 @@ dsr_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
  */
 
 /**
+ * List of default object class
+ */
+enum {
+	DSR_OC_UNKNOWN,
+	DSR_OC_TINY_RW,
+	DSR_OC_SMALL_RW,
+	DSR_OC_LARGE_RW,
+};
+
+/**
  * Register a new object class.
  * A object class cannot be unregistered for the time being.
  *
@@ -593,12 +603,4 @@ int
 dsr_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 		  uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_hash_out_t *anchor, daos_event_t *ev);
-
-enum {
-	DSR_OC_UNKNOWN,
-	DSR_OC_TINY_RW,
-	DSR_OC_SMALL_RW,
-	DSR_OC_LARGE_RW,
-};
-
 #endif /* __DSR_API_H__ */

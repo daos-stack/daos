@@ -91,6 +91,7 @@ int run_dsm_pool_test(int rank, int size);
 int run_dsm_co_test(int rank, int size);
 int run_dsm_io_test(int rank, int size);
 int run_dsm_epoch_test(int rank, int size);
+int run_dsr_io_test(int rank, int size);
 
 enum {
 	HANDLE_POOL,

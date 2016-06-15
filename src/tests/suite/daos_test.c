@@ -59,6 +59,7 @@ main(int argc, char **argv)
 	nr_failed += run_dsm_co_test(rank, size);
 	nr_failed += run_dsm_io_test(rank, size);
 	nr_failed += run_dsm_epoch_test(rank, size);
+	nr_failed += run_dsr_io_test(rank, size);
 
 	MPI_Allreduce(&nr_failed, &nr_total_failed, 1, MPI_INT, MPI_SUM,
 		      MPI_COMM_WORLD);

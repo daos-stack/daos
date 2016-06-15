@@ -52,8 +52,7 @@ struct ioreq {
 };
 
 static void
-ioreq_init(struct ioreq *req, uint32_t tgt, daos_unit_oid_t oid,
-	   test_arg_t *arg)
+ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
 {
 	int rc;
 
@@ -86,11 +85,10 @@ ioreq_init(struct ioreq *req, uint32_t tgt, daos_unit_oid_t oid,
 	req->vio.vd_nr		= 1;
 	req->vio.vd_eprs	= &req->erange;
 
-	print_message("open tgt=%u oid=%lu.%lu.%lu.%u\n", tgt, oid.id_pub.hi,
-		      oid.id_pub.mid, oid.id_pub.lo, oid.id_shard);
+	print_message("open oid=%lu.%lu.%lu\n", oid.lo, oid.mid, oid.hi);
 
 	/** open the object */
-	rc = dsm_obj_open(arg->coh, tgt, oid, 0, &req->oh, NULL);
+	rc = dsr_obj_open(arg->coh, oid, 0, 0, &req->oh, NULL);
 	assert_int_equal(rc, 0);
 }
 
@@ -99,7 +97,7 @@ ioreq_fini(struct ioreq *req)
 {
 	int rc;
 
-	rc = dsm_obj_close(req->oh, NULL);
+	rc = dsr_obj_close(req->oh, NULL);
 	assert_int_equal(rc, 0);
 
 	if (req->arg->async) {
@@ -131,7 +129,7 @@ insert(const char *dkey, const char *akey, uint64_t idx, void *val,
 	req->erange.epr_lo = epoch;
 
 	/** execute update operation */
-	rc = dsm_obj_update(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
+	rc = dsr_obj_update(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
 			    req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async && rc != 0)
 		ioreq_fini(req);
@@ -180,7 +178,7 @@ lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
 	req->erange.epr_lo = epoch;
 
 	/** execute fetch operation */
-	rc = dsm_obj_fetch(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
+	rc = dsr_obj_fetch(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
 			   NULL, req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async && rc != 0)
 		ioreq_fini(req);
@@ -200,14 +198,13 @@ lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
 }
 
 static inline void
-obj_random(test_arg_t *arg, uint32_t *tgt, daos_unit_oid_t *oid)
+obj_random(test_arg_t *arg, daos_obj_id_t *oid)
 {
 	/** choose random object */
-	*tgt = rand() % arg->pool_info.pi_ntargets;
-	oid->id_pub.lo = rand();
-	oid->id_pub.mid = rand();
-	oid->id_pub.hi = rand();
-	oid->id_shard = 0;
+	oid->lo	= rand();
+	oid->mid = rand();
+	oid->hi	= rand();
+	dsr_obj_id_generate(oid, DSR_OC_LARGE_RW);
 }
 
 /** test overwrite in different epoch */
@@ -215,8 +212,7 @@ static void
 io_epoch_overwrite(void **state)
 {
 	test_arg_t	*arg = *state;
-	daos_unit_oid_t	 oid;
-	uint32_t	 tgt;
+	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	daos_size_t	 size;
 	char		 ubuf[] = "DAOS";
@@ -225,9 +221,9 @@ io_epoch_overwrite(void **state)
 	daos_epoch_t	 e = 0;
 
 	/** choose random object */
-	obj_random(arg, &tgt, &oid);
+	obj_random(arg, &oid);
 
-	ioreq_init(&req, tgt, oid, (test_arg_t *)*state);
+	ioreq_init(&req, oid, (test_arg_t *)*state);
 	size = strlen(ubuf);
 
 	for (i = 0; i < size; i++)
@@ -259,15 +255,14 @@ static void
 io_var_idx_offset(void **state)
 {
 	test_arg_t	*arg = *state;
-	uint32_t	 tgt;
-	daos_unit_oid_t	 oid;
+	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	daos_off_t	 offset;
 
 	/** choose random object */
-	obj_random(arg, &tgt, &oid);
+	obj_random(arg, &oid);
 
-	ioreq_init(&req, tgt, oid, arg);
+	ioreq_init(&req, oid, arg);
 
 	for (offset = UINT64_MAX; offset > 0; offset >>= 8) {
 		char buf[10];
@@ -297,8 +292,7 @@ static void
 io_var_akey_size(void **state)
 {
 	test_arg_t	*arg = *state;
-	uint32_t	 tgt;
-	daos_unit_oid_t	 oid;
+	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	daos_size_t	 size;
 	const int	 max_size = 1 << 10;
@@ -308,9 +302,9 @@ io_var_akey_size(void **state)
 	skip();
 
 	/** choose random object */
-	obj_random(arg, &tgt, &oid);
+	obj_random(arg, &oid);
 
-	ioreq_init(&req, tgt, oid, arg);
+	ioreq_init(&req, oid, arg);
 
 	key = malloc(max_size);
 	assert_non_null(key);
@@ -345,17 +339,16 @@ static void
 io_var_dkey_size(void **state)
 {
 	test_arg_t	*arg = *state;
-	uint32_t	 tgt;
-	daos_unit_oid_t	 oid;
+	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	daos_size_t	 size;
 	const int	 max_size = 1 << 10;
 	char		*key;
 
 	/** choose random object */
-	obj_random(arg, &tgt, &oid);
+	obj_random(arg, &oid);
 
-	ioreq_init(&req, tgt, oid, arg);
+	ioreq_init(&req, oid, arg);
 
 	key = malloc(max_size);
 	assert_non_null(key);
@@ -390,8 +383,7 @@ static void
 io_var_rec_size(void **state)
 {
 	test_arg_t	*arg = *state;
-	uint32_t	 tgt;
-	daos_unit_oid_t	 oid;
+	daos_obj_id_t	 oid;
 	daos_epoch_t	 epoch;
 	struct ioreq	 req;
 	daos_size_t	 size;
@@ -400,12 +392,12 @@ io_var_rec_size(void **state)
 	char		*update_buf;
 
 	/** choose random object */
-	obj_random(arg, &tgt, &oid);
+	obj_random(arg, &oid);
 
 	/** random epoch as well */
 	epoch = rand();
 
-	ioreq_init(&req, tgt, oid, arg);
+	ioreq_init(&req, oid, arg);
 
 	fetch_buf = malloc(max_size);
 	assert_non_null(fetch_buf);
@@ -442,17 +434,16 @@ static void
 io_simple(void **state)
 {
 	test_arg_t	*arg = *state;
-	uint32_t	 tgt;
-	daos_unit_oid_t	 oid;
+	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	const char	 dkey[] = "test_update dkey";
 	const char	 akey[] = "test_update akey";
 	const char	 rec[]  = "test_update record";
 	char		*buf;
 
-	obj_random(arg, &tgt, &oid);
+	obj_random(arg, &oid);
 
-	ioreq_init(&req, tgt, oid, arg);
+	ioreq_init(&req, oid, arg);
 
 	/** Insert */
 	print_message("Insert(e=0)/lookup(e=0)/verify simple kv record\n");
@@ -480,7 +471,7 @@ enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 
 	daos_iov_set(&req->val_iov, buf, len);
 	/** execute fetch operation */
-	rc = dsm_obj_list_dkey(req->oh, epoch, number, kds,
+	rc = dsr_obj_list_dkey(req->oh, epoch, number, kds,
 			       &req->sgl, anchor,
 			       req->arg->async ? &req->ev : NULL);
 	assert_int_equal(rc, 0);
@@ -501,8 +492,7 @@ static void
 enumerate_simple(void **state)
 {
 	test_arg_t	*arg = *state;
-	uint32_t	 tgt;
-	daos_unit_oid_t	 oid;
+	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	uint32_t	number = 5;
 	daos_key_desc_t kds[5];
@@ -512,9 +502,9 @@ enumerate_simple(void **state)
 	int total_keys = 0;
 	int i;
 
-	obj_random(arg, &tgt, &oid);
+	obj_random(arg, &oid);
 
-	ioreq_init(&req, tgt, oid, (test_arg_t *)*state);
+	ioreq_init(&req, oid, (test_arg_t *)*state);
 
 	/** Insert record*/
 	print_message("Insert a few kv record\n");
@@ -562,13 +552,12 @@ next:
 	assert_int_equal(total_keys, 10);
 }
 
-/** very basic enumerate */
+/** basic punch test */
 static void
 punch_simple(void **state)
 {
 	test_arg_t	*arg = *state;
-	uint32_t	 tgt;
-	daos_unit_oid_t	 oid;
+	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	uint32_t	number = 2;
 	daos_key_desc_t kds[2];
@@ -576,8 +565,8 @@ punch_simple(void **state)
 	char		*buf;
 	int		total_keys = 0;
 
-	obj_random(arg, &tgt, &oid);
-	ioreq_init(&req, tgt, oid, (test_arg_t *)*state);
+	obj_random(arg, &oid);
+	ioreq_init(&req, oid, (test_arg_t *)*state);
 
 	/** Insert record*/
 	print_message("Insert a few kv record\n");
@@ -624,25 +613,25 @@ punch_simple(void **state)
 }
 
 static const struct CMUnitTest io_tests[] = {
-	{ "DSM200: simple update/fetch/verify",
+	{ "DSR200: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
-	{ "DSM201: simple update/fetch/verify (async)",
+	{ "DSR201: simple update/fetch/verify (async)",
 	  io_simple, async_enable, NULL},
-	{ "DSM202: i/o with variable rec size",
+	{ "DSR202: i/o with variable rec size",
 	  io_var_rec_size, async_disable, NULL},
-	{ "DSM203: i/o with variable rec size(async)",
+	{ "DSR203: i/o with variable rec size(async)",
 	  io_var_rec_size, async_enable, NULL},
-	{ "DSM204: i/o with variable dkey size",
+	{ "DSR204: i/o with variable dkey size",
 	  io_var_dkey_size, async_enable, NULL},
-	{ "DSM205: i/o with variable akey size",
+	{ "DSR205: i/o with variable akey size",
 	  io_var_akey_size, async_disable, NULL},
-	{ "DSM206: i/o with variable index",
+	{ "DSR206: i/o with variable index",
 	  io_var_idx_offset, async_enable, NULL},
-	{ "DSM207: overwrite in different epoch",
+	{ "DSR207: overwrite in different epoch",
 	  io_epoch_overwrite, async_enable, NULL},
-	{ "DSM208: simple enumerate", enumerate_simple,
+	{ "DSR208: simple enumerate", enumerate_simple,
 	  async_disable, NULL},
-	{ "DSM209: simple punch", punch_simple,
+	{ "DSR209: simple punch", punch_simple,
 	  async_disable, NULL},
 };
 
@@ -681,7 +670,7 @@ setup(void **state)
 
 	if (arg->myrank == 0) {
 		/** connect to pool */
-		rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+		rc = dsr_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
 				      DAOS_PC_RW, NULL /* failed */, &arg->poh,
 				      &arg->pool_info, NULL /* ev */);
 	}
@@ -697,7 +686,7 @@ setup(void **state)
 	if (arg->myrank == 0) {
 		/** create container */
 		uuid_generate(arg->co_uuid);
-		rc = dsm_co_create(arg->poh, arg->co_uuid, NULL);
+		rc = dsr_co_create(arg->poh, arg->co_uuid, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
@@ -705,7 +694,7 @@ setup(void **state)
 
 	if (arg->myrank == 0) {
 		/** open container */
-		rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, NULL,
+		rc = dsr_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, NULL,
 				 &arg->coh, NULL, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -724,18 +713,18 @@ teardown(void **state) {
 	test_arg_t	*arg = *state;
 	int		 rc, rc_reduce = 0;
 
-	rc = dsm_co_close(arg->coh, NULL);
+	rc = dsr_co_close(arg->coh, NULL);
 	MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 	if (rc_reduce)
 		return rc_reduce;
 
 	if (arg->myrank == 0)
-		rc = dsm_co_destroy(arg->poh, arg->co_uuid, 1, NULL);
+		rc = dsr_co_destroy(arg->poh, arg->co_uuid, 1, NULL);
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
 
-	rc = dsm_pool_disconnect(arg->poh, NULL /* ev */);
+	rc = dsr_pool_disconnect(arg->poh, NULL /* ev */);
 	MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 	if (rc_reduce)
 		return rc_reduce;
@@ -755,11 +744,11 @@ teardown(void **state) {
 }
 
 int
-run_dsm_io_test(int rank, int size)
+run_dsr_io_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DSM io tests", io_tests,
+	rc = cmocka_run_group_tests_name("DSR io tests", io_tests,
 					 setup, teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
