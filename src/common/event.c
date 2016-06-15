@@ -787,9 +787,6 @@ daos_event_init_adv(struct daos_event *ev, unsigned int flags,
 
 	DAOS_INIT_LIST_HEAD(&evx->evx_child);
 
-	/* Do not add the child event to the event queue
-	 * hash list,only add to the parent list.
-	 */
 	if (parent != NULL) {
 		/* Insert it to the parent event list */
 		parent_evx = daos_ev2evx(parent);
@@ -807,6 +804,7 @@ daos_event_init_adv(struct daos_event *ev, unsigned int flags,
 		/* it's user's responsibility to protect this list */
 		daos_list_add_tail(&evx->evx_link, &parent_evx->evx_child);
 		evx->evx_eqh	= parent_evx->evx_eqh;
+		evx->evx_ctx	= parent_evx->evx_ctx;
 		evx->evx_parent	= parent_evx;
 		parent_evx->evx_nchild++;
 		return 0;
