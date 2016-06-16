@@ -173,6 +173,8 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 		return -DER_INVAL;
 	}
 
+	D_DEBUG(DF_VOS2, "Open container "DF_UUID"\n", DP_UUID(co_uuid));
+
 	uuid_copy(ukey.uuid, co_uuid);
 	ret = vos_chash_lookup(vpool->vp_ph, vos_pool2coi_table(vpool),
 			       (void *)&ukey, sizeof(ukey),

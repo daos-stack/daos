@@ -150,6 +150,7 @@ cli_obj_open_shard(struct dsr_cli_obj *obj, unsigned int shard,
 	if (daos_handle_is_inval(obj->cob_mohs[shard])) {
 		daos_unit_oid_t	 oid;
 
+		memset(&oid, 0, sizeof(oid));
 		oid.id_shard = shard;
 		oid.id_pub   = obj->cob_md.omd_id;
 		/* NB: dsm open is a local operation, so it is ok to call

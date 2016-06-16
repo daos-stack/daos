@@ -56,8 +56,8 @@ vo_hkey_size(struct btr_instance *tins)
 static void
 vo_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 {
-	*(uint64_t *)hkey = vos_generate_crc64(key_iov->iov_buf,
-					       key_iov->iov_len);
+	D_ASSERT(key_iov->iov_len == sizeof(daos_unit_oid_t));
+	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
 }
 
 static int
@@ -146,6 +146,9 @@ vos_oi_lookup(daos_handle_t coh, daos_unit_oid_t oid,
 	struct vc_hdl			*co_hdl = NULL;
 	struct vos_object_index		*obj_index = NULL;
 	struct oi_val_buf		s_buf;
+
+	D_DEBUG(DF_VOS2, "Lookup obj "DF_UOID" in the OI table.\n",
+		DP_UOID(oid));
 
 	co_hdl = vos_co_lookup_handle(coh);
 	if (!co_hdl) {
