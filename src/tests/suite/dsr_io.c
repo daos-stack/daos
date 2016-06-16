@@ -507,18 +507,13 @@ enumerate_simple(void **state)
 	ioreq_init(&req, oid, (test_arg_t *)*state);
 
 	/** Insert record*/
-	print_message("Insert a few kv record\n");
-	insert("enumerate 1", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("enumerate 2", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("enumerate 3", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("enumerate 4", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("enumerate 5", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	print_message("Insert 1000 kv record\n");
+	for (i = 0; i < 1000; i++) {
+		char dkey[10];
 
-	insert("enumerate 6", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("enumerate 7", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("enumerate 8", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("enumerate 9", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("enumerate 10", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+		sprintf(dkey, "%d", i);
+		insert(dkey, "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	}
 
 	print_message("Enumerate records\n");
 	memset(&hash_out, 0, sizeof(hash_out));
@@ -528,7 +523,6 @@ enumerate_simple(void **state)
 		enumerate(0, &number, kds, &hash_out, buf, 512, &req);
 		if (number == 0)
 			goto next;
-		print_message("get key %s\n", buf);
 		ptr = buf;
 		total_keys += number;
 		for (i = 0; i < number; i++) {
@@ -549,7 +543,7 @@ next:
 	free(buf);
 	/** XXX Verify kds */
 	ioreq_fini(&req);
-	assert_int_equal(total_keys, 10);
+	assert_int_equal(total_keys, 1000);
 }
 
 /** basic punch test */

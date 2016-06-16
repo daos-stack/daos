@@ -89,7 +89,6 @@ typedef struct {
 
 #define DAOS_HASH_HKEY_START 0
 #define DAOS_HASH_HKEY_LENGTH 16
-#define DAOS_HASH_EOF "ffffffffffffffff"
 
 static inline void
 daos_hash_set_eof(daos_hash_out_t *hash_out)
@@ -104,7 +103,7 @@ daos_hash_is_eof(daos_hash_out_t *hash_out)
 	int i;
 
 	for (i = DAOS_HASH_HKEY_START; i < DAOS_HASH_HKEY_LENGTH; i++) {
-		if (hash_out->body[DAOS_HASH_HKEY_START] != -1)
+		if (hash_out->body[i] != -1)
 			return false;
 	}
 
