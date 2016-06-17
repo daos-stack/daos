@@ -49,7 +49,7 @@ struct vos_btr_attr {
 	btr_ops_t	*ta_ops;
 };
 
-static struct vos_btr_attr *vos_obj_tree_attr_find(unsigned tree_class);
+static struct vos_btr_attr *vos_obj_sub_tree_attr(unsigned tree_class);
 
 static struct vos_key_bundle *
 vos_iov2key_bundle(daos_iov_t *key_iov)
@@ -248,8 +248,8 @@ kbtr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	krec = vos_rec2krec(tins, rec);
 	memset(&krec->kr_btr, 0, sizeof(krec->kr_btr));
 
-	/* find the next level tree attributes */
-	ta = vos_obj_tree_attr_find(tins->ti_root->tr_class + 1);
+	/* find the sub-tree attributes */
+	ta = vos_obj_sub_tree_attr(tins->ti_root->tr_class);
 	D_ASSERT(ta != NULL);
 
 	D_DEBUG(DF_VOS2, "Create subtree %s\n", ta->ta_name);
@@ -655,13 +655,29 @@ vos_obj_tree_register(void)
 	return rc;
 }
 
+/** find the attributes of the subtree of @tree_class */
 static struct vos_btr_attr *
-vos_obj_tree_attr_find(unsigned tree_class)
+vos_obj_sub_tree_attr(unsigned tree_class)
 {
 	int	i;
 
+	switch (tree_class) {
+	default:
+	case VOS_BTR_AKEY: /* tree_class = VOS_BTR_IDX; */
+	case VOS_BTR_IDX:
+		return NULL;
+
+	case VOS_BTR_DKEY:
+		/* TODO: change it to VOS_BTR_AKEY while adding akey support */
+		tree_class = VOS_BTR_IDX;
+		break;
+	}
+
 	for (i = 0;; i++) {
 		struct vos_btr_attr *ta = &vos_btr_attrs[i];
+
+		D_DEBUG(DF_VOS2, "ta->ta_class: %d, tree_class: %d\n",
+			ta->ta_class, tree_class);
 
 		if (ta->ta_class == tree_class)
 			return ta;

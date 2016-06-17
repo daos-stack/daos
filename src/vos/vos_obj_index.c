@@ -206,6 +206,9 @@ vos_oi_init()
 {
 	int	rc;
 
+	D_DEBUG(DF_VOS2, "Registering class for OI table Class: %d\n",
+		VOS_BTR_OIT);
+
 	rc = dbtree_class_register(VOS_BTR_OIT, 0, &vot_ops);
 	if (rc)
 		D_ERROR("dbtree create failed\n");
@@ -232,7 +235,10 @@ vos_oi_create(struct vp_hdl *po_hdl,
 	oi_root = (struct btr_root *) &(obj_index->obtable);
 
 	if (!oi_root->tr_class) {
-		rc = dbtree_create_inplace(OT_BTREE_CLASS, 0, OT_BTREE_ORDER,
+		D_DEBUG(DF_VOS2, "create OI Tree in-place: %d\n",
+			VOS_BTR_OIT);
+
+		rc = dbtree_create_inplace(VOS_BTR_OIT, 0, OT_BTREE_ORDER,
 					  &po_hdl->vp_uma,
 					  &obj_index->obtable,
 					  &btr_hdl);

@@ -37,7 +37,6 @@
 #include "vos_layout.h"
 
 #define OT_BTREE_ORDER 20
-#define OT_BTREE_CLASS 1008
 #define LRU_HASH_MAX_BUCKETS 1000
 #define LRU_CACHE_MAX_SIZE 10000
 
