@@ -206,7 +206,7 @@ vos_oi_init()
 {
 	int	rc;
 
-	rc = dbtree_class_register(OT_BTREE_CLASS, 0, &vot_ops);
+	rc = dbtree_class_register(VOS_BTR_OIT, 0, &vot_ops);
 	if (rc)
 		D_ERROR("dbtree create failed\n");
 	return rc;

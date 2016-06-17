@@ -327,7 +327,7 @@ kbtr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
-static btr_ops_t vos_key_btr_ops = {
+static btr_ops_t vos_dkey_btr_ops = {
 	.to_hkey_size		= kbtr_hkey_size,
 	.to_hkey_gen		= kbtr_hkey_gen,
 	.to_hkey_cmp		= kbtr_hkey_cmp,
@@ -572,11 +572,11 @@ static btr_ops_t vos_idx_btr_ops = {
  */
 static struct vos_btr_attr vos_btr_attrs[] = {
 	{
-		.ta_class	= VOS_BTR_KEY,
+		.ta_class	= VOS_BTR_DKEY,
 		.ta_order	= 16,
 		.ta_feats	= 0,
-		.ta_name	= "vos_key",
-		.ta_ops		= &vos_key_btr_ops,
+		.ta_name	= "vos_dkey",
+		.ta_ops		= &vos_dkey_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_IDX,

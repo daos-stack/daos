@@ -385,10 +385,14 @@ static inline bool vos_obj_is_zombie(struct vos_obj *obj)
 enum {
 	/** the first reserved tree class */
 	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
-	/** key tree */
-	VOS_BTR_KEY		= (VOS_BTR_BEGIN + 0),
+	/** distribution key tree */
+	VOS_BTR_DKEY		= (VOS_BTR_BEGIN + 0),
+	/** attribute key tree */
+	VOS_BTR_AKEY		= (VOS_BTR_BEGIN + 1),
 	/** index + epoch tree */
-	VOS_BTR_IDX		= (VOS_BTR_BEGIN + 1),
+	VOS_BTR_IDX		= (VOS_BTR_BEGIN + 2),
+	/** object index table */
+	VOS_BTR_OIT		= (VOS_BTR_BEGIN + 3),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
