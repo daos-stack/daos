@@ -47,6 +47,7 @@
 
 #include <daos_sr.h>
 #include <daos_mgmt.h>
+#include "suite/daos_test.h"
 #include <mpi.h>
 
 /** local task information */
@@ -90,7 +91,7 @@ daos_oclass_id_t	 cid = 0x1;/* class identifier */
  * of an request in flight before sending a new one.
  * The actual data written in the array is the epoch number.
  */
-#define ARRAY_SIZE	1000000000 /* 1B entries * 8-byte entry bits =  8GB */
+#define TEST_ARRAY_SIZE	1000000000 /* 1B entries * 8-byte entry bits =  8GB */
 #define SLICE_SIZE	10000	   /* size of an array slice, 10K entries */
 #define SHARD_NR	1000	   /* static number of array shards, 1K */
 #define ITER_NR		10	   /* number of global iteration */
@@ -129,62 +130,6 @@ do {								\
 	if (!(cond))						\
 		FAIL(__VA_ARGS__);				\
 } while (0)
-
-enum {
-	HANDLE_POOL,
-	HANDLE_CO
-};
-
-void
-handle_share(daos_handle_t *hdl, int type, daos_handle_t poh)
-{
-	daos_iov_t	ghdl = { NULL, 0, 0 };
-	int		rc;
-
-	ASSERT(type == HANDLE_POOL || type == HANDLE_CO);
-
-	if (rank == 0) {
-		/** fetch size of global handle */
-		if (type == HANDLE_POOL)
-			dsr_pool_local2global(*hdl, &ghdl);
-		else
-			dsr_co_local2global(*hdl, &ghdl);
-	}
-
-	/** broadcast size of global handle to all peers */
-	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	ASSERT(rc == MPI_SUCCESS, "Global hdl sz broadcast failed with %d", rc);
-
-	/** allocate buffer for global pool handle */
-	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
-	ghdl.iov_len = ghdl.iov_buf_len;
-
-	if (rank == 0) {
-		/** generate actual global handle to share with peer tasks */
-		if (type == HANDLE_POOL)
-			rc = dsr_pool_local2global(*hdl, &ghdl);
-		else
-			rc = dsr_co_local2global(*hdl, &ghdl);
-		ASSERT(rc == 0, "local2global failed with %d", rc);
-	}
-
-	/** broadcast global handle to all peers */
-	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0,
-		       MPI_COMM_WORLD);
-	ASSERT(rc == MPI_SUCCESS, "Global hdl broadcast failed with %d", rc);
-
-	if (rank != 0) {
-		/** unpack global handle */
-		if (type == HANDLE_POOL)
-			rc = dsr_pool_global2local(ghdl, hdl);
-		else
-			rc = dsr_co_global2local(poh, ghdl, hdl);
-
-		ASSERT(rc == 0, "global2local failed with %d", rc);
-	}
-
-	free(ghdl.iov_buf);
-}
 
 void
 pool_create(void)
@@ -315,7 +260,7 @@ array(void)
 		 * perform any I/O operations).
 		 */
 		for  (sid = (rank - 1 + epoch) % (rankn - 1);
-		      sid < ARRAY_SIZE / SLICE_SIZE;
+		      sid < TEST_ARRAY_SIZE / SLICE_SIZE;
 		      sid += rankn - 1) {
 
 			/**
@@ -573,7 +518,8 @@ main(int argc, char **argv)
 	}
 
 	/** share pool handle with peer tasks */
-	handle_share(&poh, HANDLE_POOL, poh /* useless */);
+	handle_share(&poh, HANDLE_POOL, rank, poh,/* useless */
+		     HANDLE_SHARE_DSR);
 
 	if (rank == 0) {
 		/** generate uuid for container */
@@ -590,7 +536,7 @@ main(int argc, char **argv)
 	}
 
 	/** share container handle with peer tasks */
-	handle_share(&coh, HANDLE_CO, poh);
+	handle_share(&coh, HANDLE_CO, rank, poh, HANDLE_SHARE_DSR);
 
 	/** generate objid */
 	dsr_obj_id_generate(&oid, cid);

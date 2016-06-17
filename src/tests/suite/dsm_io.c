@@ -80,6 +80,10 @@ ioreq_init(struct ioreq *req, uint32_t tgt, daos_unit_oid_t oid,
 	req->erange.epr_lo = 0;
 	req->erange.epr_hi = DAOS_EPOCH_MAX;
 
+	req->vio.vd_kcsum.cs_csum = NULL;
+	req->vio.vd_kcsum.cs_buf_len = 0;
+	req->vio.vd_kcsum.cs_len = 0;
+
 	/** vector I/O descriptor */
 	req->vio.vd_recxs	= &req->rex;
 	req->vio.vd_csums	= &req->csum;
@@ -415,16 +419,19 @@ io_var_rec_size(void **state)
 	memset(update_buf, (rand() % 94) + 33, max_size);
 
 	for (size = 1; size <= max_size; size <<= 1, epoch++) {
+		char dkey[30];
+
 		print_message("Record size: %lu val: \'%c\' epoch: %lu\n",
 			      size, update_buf[0], epoch);
 
+		sprintf(dkey, DF_U64, epoch);
 		/** Insert */
-		insert("var_rec_size_d", "var_rec_size_a", 0, update_buf,
+		insert(dkey, "var_rec_size_a", 0, update_buf,
 		       size, epoch, &req);
 
 		/** Lookup */
 		memset(fetch_buf, 0, max_size);
-		lookup("var_rec_size_d", "var_rec_size_a", 0, fetch_buf,
+		lookup(dkey, "var_rec_size_a", 0, fetch_buf,
 		       max_size, epoch, &req);
 		assert_int_equal(req.rex.rx_rsize, size);
 
@@ -686,7 +693,8 @@ setup(void **state)
 		  MPI_COMM_WORLD);
 
 	/** l2g and g2l the pool handle */
-	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh);
+	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh,
+		     HANDLE_SHARE_DSM);
 
 	if (arg->myrank == 0) {
 		/** create container */
@@ -707,7 +715,8 @@ setup(void **state)
 		return rc;
 
 	/** l2g and g2l the container handle */
-	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh);
+	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh,
+		     HANDLE_SHARE_DSM);
 
 	*state = arg;
 	return 0;

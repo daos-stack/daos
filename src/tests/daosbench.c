@@ -40,6 +40,7 @@
 #include <daos/list.h>
 #include <daos_sr.h>
 #include <errno.h>
+#include "suite/daos_test.h"
 
 #define UPDATE_CSUM_SIZE	32
 #define DKEY_SIZE		64
@@ -168,11 +169,6 @@ static int		verbose;
 		MPI_Abort(MPI_COMM_WORLD, -1);				\
 	}								\
 } while (0)
-
-enum {
-	HANDLE_POOL,
-	HANDLE_CO
-};
 
 static void
 alloc_buffers(struct test *test, int nios)
@@ -359,60 +355,6 @@ aio_req_wait(struct test *test, int fetch_flag)
 	}
 	DBENCH_INFO("Found %d completed AIOs (%d free %d busy)",
 		    rc, naios, test->t_naios - naios);
-}
-
-void
-handle_share(daos_handle_t *hdl, int rank,
-	     int type, daos_handle_t handle)
-{
-	daos_iov_t	ghdl = { NULL, 0, 0 };
-	int		rc = 0;
-
-	if (type != HANDLE_POOL || type != HANDLE_CO)
-		rc = EINVAL;
-	DBENCH_CHECK(rc, "Unkown handle type\n");
-
-	if (rank == 0) {
-		if (type == HANDLE_POOL)
-			dsr_pool_local2global(*hdl, &ghdl);
-		else
-			dsr_co_local2global(*hdl, &ghdl);
-	}
-
-	/** broadcast size of global handle to all peers */
-	rc = MPI_Bcast(&ghdl.iov_buf_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	DBENCH_CHECK(rc,
-		     "Global hdl sz broadcast failed with %d", rc);
-
-	/** allocate buffer for global pool handle */
-	ghdl.iov_buf = malloc(ghdl.iov_buf_len);
-	ghdl.iov_len = ghdl.iov_buf_len;
-
-	if (rank == 0) {
-		/** generate actual global handle to share with peer tasks */
-		if (type == HANDLE_POOL)
-			rc = dsr_pool_local2global(*hdl, &ghdl);
-		else
-			rc = dsr_co_local2global(*hdl, &ghdl);
-		DBENCH_CHECK(rc, "local2global failed with %d", rc);
-	}
-
-	/** broadcast global handle to all peers */
-	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0,
-		       MPI_COMM_WORLD);
-	DBENCH_CHECK(rc,
-		     "Global hdl broadcast failed with %d", rc);
-
-	if (rank != 0) { /** unpack global handle */
-		if (type == HANDLE_POOL)
-			rc = dsr_pool_global2local(ghdl, hdl);
-		else
-			rc = dsr_co_global2local(poh, ghdl, hdl);
-
-		DBENCH_CHECK(rc, "global2local failed with %d", rc);
-	}
-
-	free(ghdl.iov_buf);
 }
 
 static void
@@ -1250,13 +1192,15 @@ int main(int argc, char *argv[])
 			     arg.t_pname);
 	}
 
-	handle_share(&poh, comm_world_rank, HANDLE_POOL, poh);
+	handle_share(&poh, comm_world_rank, HANDLE_POOL, poh,
+		     HANDLE_SHARE_DSR);
 	rc = MPI_Bcast(&pool_info, sizeof(pool_info), MPI_BYTE, 0,
 		       MPI_COMM_WORLD);
 	DBENCH_CHECK(rc, "broadcast pool_info error\n");
 
 	container_create(comm_world_rank);
-	handle_share(&coh, comm_world_rank, HANDLE_CO, poh);
+	handle_share(&coh, comm_world_rank, HANDLE_CO, poh,
+		     HANDLE_SHARE_DSR);
 
 	/** Invoke test **/
 	arg.t_type->tt_run(&arg);

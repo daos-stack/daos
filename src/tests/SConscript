@@ -3,7 +3,7 @@
 Import('env', 'PREREQS')
 
 libs = ['daos_sr', 'daos_m', 'daos_common', 'daos_transport',
-	'daos_event', 'mpi', 'uuid']
+	'daos_event', 'mpi', 'uuid', 'cmocka']
 
 denv = env.Clone()
 

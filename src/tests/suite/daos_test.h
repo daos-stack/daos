@@ -98,8 +98,14 @@ enum {
 	HANDLE_CO
 };
 
+enum {
+	HANDLE_SHARE_DSM,
+	HANDLE_SHARE_DSR
+};
+
 static inline void
-handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh)
+handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
+	     int share_type)
 {
 	daos_iov_t	ghdl = { NULL, 0, 0 };
 	int		rc;
@@ -147,10 +153,16 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh)
 		/** unpack global handle */
 		print_message("rank %d call global2local on %s handle ...",
 			      rank, type == HANDLE_POOL ? "pool" : "container");
-		if (type == HANDLE_POOL)
-			rc = dsm_pool_global2local(ghdl, hdl);
-		else
+		if (type == HANDLE_POOL) {
+			/* NB: Only pool_global2local are different for
+			 * DSM and DSR */
+			if (share_type == HANDLE_SHARE_DSR)
+				rc = dsr_pool_global2local(ghdl, hdl);
+			else
+				rc = dsm_pool_global2local(ghdl, hdl);
+		} else {
 			rc = dsm_co_global2local(poh, ghdl, hdl);
+		}
 
 		assert_int_equal(rc, 0);
 		print_message("rank %d global2local success\n", rank);

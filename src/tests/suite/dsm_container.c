@@ -95,7 +95,8 @@ co_create(void **state)
 	}
 
 	if (arg->hdl_share)
-		handle_share(&coh, HANDLE_CO, arg->myrank, arg->poh);
+		handle_share(&coh, HANDLE_CO, arg->myrank, arg->poh,
+			     HANDLE_SHARE_DSM);
 
 	print_message("closing container %ssynchronously ...\n",
 		      arg->async ? "a" : "");
@@ -190,7 +191,8 @@ setup(void **state)
 		return rc;
 
 	/** l2g and g2l the pool handle */
-	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh);
+	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh,
+		     HANDLE_SHARE_DSM);
 
 	*state = arg;
 	return 0;
