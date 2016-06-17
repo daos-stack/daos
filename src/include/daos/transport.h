@@ -584,13 +584,32 @@ dtp_bulk_create(dtp_context_t dtp_ctx, daos_sg_list_t *sgl,
 		dtp_bulk_perm_t bulk_perm, dtp_bulk_t *bulk_hdl);
 
 /**
+ * Access local bulk handle to retrieve the sgl (segment list) associated
+ * with it.
+ *
+ * \param bulk_hdl [IN]         bulk handle
+ * \param sgl[IN/OUT]           pointer to buffer segment list
+ *                              Caller should provide a valid sgl pointer, if
+ *                              sgl->sg_nr.num is too small, -DER_TRUNC will be
+ *                              returned and the needed number of iovs be set at
+ *                              sgl->sg_nr.num_out.
+ *                              On success, sgl->sg_nr.num_out will be set as
+ *                              the actual number of iovs.
+ *
+ * \return                      zero on success, negative value if error
+ */
+int
+dtp_bulk_access(dtp_bulk_t bulk_hdl, daos_sg_list_t *sgl);
+
+/**
  * Free a bulk handle
  *
  * \param bulk_hdl [IN]         bulk handle to be freed
  *
  * \return                      zero on success, negative value if error
  */
-int dtp_bulk_free(dtp_bulk_t bulk_hdl);
+int
+dtp_bulk_free(dtp_bulk_t bulk_hdl);
 
 /**
  * Start a bulk transferring (inside a RPC handler).

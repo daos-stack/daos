@@ -152,6 +152,7 @@ dtp_hg_bulk_get_sgnum(dtp_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
 
 int dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, daos_sg_list_t *sgl,
 		       dtp_bulk_perm_t bulk_perm, dtp_bulk_t *bulk_hdl);
+int dtp_hg_bulk_access(dtp_bulk_t bulk_hdl, daos_sg_list_t *sgl);
 int dtp_hg_bulk_transfer(struct dtp_bulk_desc *bulk_desc,
 			 dtp_bulk_cb_t complete_cb,
 			 void *arg, dtp_bulk_opid_t *opid);

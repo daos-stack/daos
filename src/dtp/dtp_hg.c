@@ -1032,6 +1032,81 @@ out:
 	return rc;
 }
 
+int
+dtp_hg_bulk_access(dtp_bulk_t bulk_hdl, daos_sg_list_t *sgl)
+{
+	unsigned int	bulk_sgnum;
+	unsigned int	actual_sgnum;
+	daos_size_t	bulk_len;
+	void		**buf_ptrs = NULL;
+	void		*buf_ptrs_stack[DTP_HG_IOVN_STACK];
+	hg_size_t	*buf_sizes = NULL;
+	hg_size_t	buf_sizes_stack[DTP_HG_IOVN_STACK];
+	hg_bulk_t	hg_bulk_hdl;
+	hg_return_t	hg_ret = HG_SUCCESS;
+	int		rc = 0, i, allocate = 0;
+
+	D_ASSERT(bulk_hdl != DTP_BULK_NULL && sgl != NULL);
+
+	rc = dtp_bulk_get_sgnum(bulk_hdl, &bulk_sgnum);
+	if (rc != 0) {
+		D_ERROR("dtp_bulk_get_sgnum failed, rc: %d.\n", rc);
+		D_GOTO(out, rc);
+	}
+	rc = dtp_bulk_get_len(bulk_hdl, &bulk_len);
+	if (rc != 0) {
+		D_ERROR("dtp_bulk_get_len failed, rc: %d.\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	if (sgl->sg_nr.num < bulk_sgnum) {
+		D_DEBUG(DF_TP, "sgl->sg_nr.num (%d) too small, %d required.\n",
+			sgl->sg_nr.num, bulk_sgnum);
+		sgl->sg_nr.num_out = bulk_sgnum;
+		D_GOTO(out, rc = -DER_TRUNC);
+	}
+
+	if (bulk_sgnum <= DTP_HG_IOVN_STACK) {
+		allocate = 0;
+		buf_sizes = buf_sizes_stack;
+		buf_ptrs = buf_ptrs_stack;
+	} else {
+		allocate = 1;
+		D_ALLOC(buf_sizes, bulk_sgnum * sizeof(hg_size_t));
+		if (buf_sizes == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		D_ALLOC(buf_ptrs, bulk_sgnum * sizeof(void *));
+		if (buf_sizes == NULL) {
+			D_FREE(buf_sizes, bulk_sgnum * sizeof(hg_size_t));
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+	}
+
+	hg_bulk_hdl = bulk_hdl;
+	hg_ret = HG_Bulk_access(hg_bulk_hdl, 0, bulk_len, HG_BULK_READWRITE,
+				bulk_sgnum, buf_ptrs, buf_sizes, &actual_sgnum);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Bulk_access failed, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
+	D_ASSERT(actual_sgnum == bulk_sgnum);
+
+	for (i = 0; i < bulk_sgnum; i++) {
+		sgl->sg_iovs[i].iov_buf = buf_ptrs[i];
+		sgl->sg_iovs[i].iov_buf_len = buf_sizes[i];
+		sgl->sg_iovs[i].iov_len = buf_sizes[i];
+	}
+	sgl->sg_nr.num_out = bulk_sgnum;
+
+out:
+	if (allocate) {
+		D_FREE(buf_sizes, bulk_sgnum * sizeof(hg_size_t));
+		D_FREE(buf_ptrs, bulk_sgnum * sizeof(void *));
+	}
+	return rc;
+}
+
 struct dtp_hg_bulk_cbinfo {
 	struct dtp_bulk_desc	*bci_desc;
 	dtp_bulk_cb_t		bci_cb;

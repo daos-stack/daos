@@ -197,6 +197,26 @@ out:
 }
 
 int
+dtp_bulk_access(dtp_bulk_t bulk_hdl, daos_sg_list_t *sgl)
+{
+	int		rc = 0;
+
+	if (bulk_hdl == DTP_BULK_NULL) {
+		D_ERROR("invalid parameter, NULL bulk_hdl.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (sgl == NULL) {
+		D_ERROR("invalid parameter, NULL sgl pointer.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = dtp_hg_bulk_access(bulk_hdl, sgl);
+
+out:
+	return rc;
+}
+
+int
 dtp_bulk_abort(dtp_context_t dtp_ctx, dtp_bulk_opid_t opid)
 {
 	/* HG_Bulk_cancel is not implemented now. */

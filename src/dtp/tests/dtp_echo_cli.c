@@ -80,8 +80,8 @@ static void run_client(void)
 {
 	dtp_endpoint_t			svr_ep;
 	dtp_rpc_t			*rpc_req = NULL;
-	daos_sg_list_t			sgl;
-	daos_iov_t			*iovs = NULL;
+	daos_sg_list_t			sgl, sgl_query;
+	daos_iov_t			*iovs = NULL, iovs_query[2];
 	dtp_bulk_t			bulk_hdl;
 	struct bulk_test_cli_cbinfo	*bulk_req_cbinfo;
 	char				*pchar;
@@ -142,11 +142,13 @@ static void run_client(void)
 
 	iovs = (daos_iov_t *)malloc(2 * sizeof(daos_iov_t));
 	iovs[0].iov_buf_len = 4097;
+	iovs[0].iov_len = 4097;
 	iovs[0].iov_buf = malloc(iovs[0].iov_buf_len);
 	pchar = iovs[0].iov_buf;
 	for (i = 0; i < iovs[0].iov_buf_len; i++)
 		*(pchar++) = i + myrank;
 	iovs[1].iov_buf_len = 1*1024*1024 + 11;
+	iovs[1].iov_len = 1*1024*1024 + 11;
 	iovs[1].iov_buf = malloc(iovs[1].iov_buf_len);
 	pchar = iovs[1].iov_buf;
 	for (i = 0; i < iovs[1].iov_buf_len; i++)
@@ -171,6 +173,19 @@ static void run_client(void)
 	echo_md5_to_string(md5, md5_str);
 
 	rc = dtp_bulk_create(gecho.dtp_ctx, &sgl, DTP_BULK_RO, &bulk_hdl);
+	assert(rc == 0);
+
+	/* verify result from dtp_bulk_access */
+	sgl_query.sg_iovs = iovs_query;
+	sgl_query.sg_nr.num = 1;
+	rc = dtp_bulk_access(bulk_hdl, &sgl_query);
+	assert(rc == -DER_TRUNC && sgl_query.sg_nr.num_out == 2);
+
+	sgl_query.sg_nr.num = 2;
+	rc = dtp_bulk_access(bulk_hdl, &sgl_query);
+	assert(rc == 0);
+	assert(sgl_query.sg_nr.num_out == 2);
+	rc = memcmp(iovs, iovs_query, 2 * sizeof(daos_iov_t));
 	assert(rc == 0);
 
 	D_ALLOC(pchar, 256); /* DTP will internally free it */
