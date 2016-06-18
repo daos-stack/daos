@@ -105,9 +105,8 @@ typedef struct {
 	union {
 		/** Returned entry for container UUID iterator */
 		uuid_t				ie_couuid;
-		daos_dkey_t			ie_dkey;
-		/** unused for now */
-		daos_akey_t			ie_akey;
+		/** dkey or akey */
+		daos_key_t			ie_key;
 		struct {
 			daos_recx_t		ie_recx;
 			/** iovec to return data or ZC address */

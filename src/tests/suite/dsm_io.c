@@ -306,8 +306,6 @@ io_var_akey_size(void **state)
 	const int	 max_size = 1 << 10;
 	char		*key;
 
-	/** akey not supported yet */
-	skip();
 
 	/** choose random object */
 	obj_random(arg, &tgt, &oid);
@@ -330,7 +328,7 @@ io_var_akey_size(void **state)
 
 		/** Lookup */
 		memset(buf, 0, 10);
-		lookup("var_dkey_size_d", key, 0, buf, 10, 0, &req);
+		lookup("var_akey_size_d", key, 0, buf, 10, 0, &req);
 		assert_int_equal(req.rex.rx_rsize, strlen("data") + 1);
 
 		/** Verify data consistency */

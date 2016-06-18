@@ -74,10 +74,10 @@ vos_iov2rec_bundle(daos_iov_t *val_iov)
  * hashed key for the key-btree, it is stored in btr_record::rec_hkey
  */
 struct key_btr_hkey {
-	/** distribution key */
-	uint64_t	hk_dkey;
-	/** hashed attribute key */
-	uint64_t	hk_akey;
+	/** murmur64 hash */
+	uint64_t	hk_hash1;
+	/** reserved: the second hash to avoid hash collison of murmur64 */
+	uint64_t	hk_hash2;
 };
 
 /**
@@ -108,12 +108,12 @@ kbtr_rec_fetch_in(struct btr_instance *tins, struct btr_record *rec,
 	/* XXX only dkey for the time being */
 	D_ASSERT(iov->iov_buf == kbund->kb_key->iov_buf);
 	if (iov->iov_buf != NULL) {
-		memcpy(vos_krec2dkey(krec), iov->iov_buf, iov->iov_len);
+		memcpy(vos_krec2key(krec), iov->iov_buf, iov->iov_len);
 	} else {
 		/* Return the address for rdma? But it is too hard to handle
 		 * rdma failure.
 		 */
-		iov->iov_buf = vos_krec2dkey(krec);
+		iov->iov_buf = vos_krec2key(krec);
 	}
 	krec->kr_size = iov->iov_len;
 	return 0;
@@ -132,16 +132,16 @@ kbtr_rec_fetch_out(struct btr_instance *tins, struct btr_record *rec,
 	daos_iov_t	*iov	= rbund->rb_iov;
 	daos_csum_buf_t	*csum	= rbund->rb_csum;
 
-	/* XXX only dkey for the time being */
 	iov->iov_len  = krec->kr_size;
 	csum->cs_len  = krec->kr_cs_size;
 	csum->cs_type = krec->kr_cs_type;
 
 	if (iov->iov_buf == NULL) {
-		iov->iov_buf = vos_krec2dkey(krec);
+		iov->iov_buf = vos_krec2key(krec);
 		iov->iov_buf_len = krec->kr_size;
+
 	} else if (iov->iov_buf_len >= iov->iov_len) {
-		memcpy(iov->iov_buf, vos_krec2dkey(krec), iov->iov_len);
+		memcpy(iov->iov_buf, vos_krec2key(krec), iov->iov_len);
 	}
 
 	if (csum->cs_csum == NULL)
@@ -168,13 +168,13 @@ static void
 kbtr_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 {
 	struct key_btr_hkey	*khkey = (struct key_btr_hkey *)hkey;
-	daos_dkey_t		*dkey;
+	daos_key_t		*key;
 
-	dkey = vos_iov2key_bundle(key_iov)->kb_key;
+	key = vos_iov2key_bundle(key_iov)->kb_key;
 
-	khkey->hk_akey = 0; /* XXX only dkey for the time being */
-	khkey->hk_dkey = daos_hash_murmur64(dkey->iov_buf, dkey->iov_len,
-					    VOS_BTR_MUR_SEED);
+	khkey->hk_hash2 = 0; /* XXX add the second hash function */
+	khkey->hk_hash1 = daos_hash_murmur64(key->iov_buf, key->iov_len,
+						VOS_BTR_MUR_SEED);
 }
 
 /** compare the hashed key */
@@ -184,12 +184,12 @@ kbtr_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	struct key_btr_hkey *khkey1 = (struct key_btr_hkey *)&rec->rec_hkey[0];
 	struct key_btr_hkey *khkey2 = (struct key_btr_hkey *)hkey;
 
-	D_ASSERT(khkey1->hk_akey == 0 && khkey2->hk_akey == 0);
+	D_ASSERT(khkey1->hk_hash2 == 0 && khkey2->hk_hash2 == 0);
 
-	if (khkey1->hk_dkey < khkey2->hk_dkey)
+	if (khkey1->hk_hash1 < khkey2->hk_hash1)
 		return -1;
 
-	if (khkey1->hk_dkey > khkey2->hk_dkey)
+	if (khkey1->hk_hash1 > khkey2->hk_hash1)
 		return 1;
 
 	return 0;
@@ -200,21 +200,21 @@ static int
 kbtr_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 	     daos_iov_t *key_iov)
 {
-	daos_iov_t		*dkey;
+	daos_iov_t		*key;
 	struct vos_krec		*krec;
 	struct vos_key_bundle	*kbund;
 
 	kbund = vos_iov2key_bundle(key_iov);
-	dkey  = kbund->kb_key;
+	key   = kbund->kb_key;
 
 	krec = vos_rec2krec(tins, rec);
-	if (krec->kr_size > dkey->iov_len)
+	if (krec->kr_size > key->iov_len)
 		return 1;
 
-	if (krec->kr_size < dkey->iov_len)
+	if (krec->kr_size < key->iov_len)
 		return -1;
 
-	return memcmp(vos_krec2dkey(krec), dkey->iov_buf, dkey->iov_len);
+	return memcmp(vos_krec2key(krec), key->iov_buf, key->iov_len);
 }
 
 /** create a new key-record, or install an externally allocated key-record */
@@ -329,7 +329,7 @@ kbtr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
-static btr_ops_t vos_dkey_btr_ops = {
+static btr_ops_t vos_key_btr_ops = {
 	.to_hkey_size		= kbtr_hkey_size,
 	.to_hkey_gen		= kbtr_hkey_gen,
 	.to_hkey_cmp		= kbtr_hkey_cmp,
@@ -580,7 +580,14 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 		.ta_order	= 16,
 		.ta_feats	= 0,
 		.ta_name	= "vos_dkey",
-		.ta_ops		= &vos_dkey_btr_ops,
+		.ta_ops		= &vos_key_btr_ops,
+	},
+	{
+		.ta_class	= VOS_BTR_AKEY,
+		.ta_order	= 16,
+		.ta_feats	= 0,
+		.ta_name	= "vos_akey",
+		.ta_ops		= &vos_key_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_IDX,
@@ -667,13 +674,16 @@ vos_obj_sub_tree_attr(unsigned tree_class)
 
 	switch (tree_class) {
 	default:
-	case VOS_BTR_AKEY: /* tree_class = VOS_BTR_IDX; */
 	case VOS_BTR_IDX:
 		return NULL;
 
+	case VOS_BTR_AKEY:
+		tree_class = VOS_BTR_IDX;
+		break;
+
 	case VOS_BTR_DKEY:
 		/* TODO: change it to VOS_BTR_AKEY while adding akey support */
-		tree_class = VOS_BTR_IDX;
+		tree_class = VOS_BTR_AKEY;
 		break;
 	}
 

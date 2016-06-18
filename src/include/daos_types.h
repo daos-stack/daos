@@ -449,11 +449,14 @@ typedef struct {
  *   extent must have the same size.
  */
 
-/** distribution key */
-typedef daos_iov_t daos_dkey_t;
+/** opaque key type */
+typedef daos_iov_t daos_key_t;
 
+/* XXX remove daos_dkey_t and daos_akey_t */
+/** distribution key */
+typedef daos_key_t daos_dkey_t;
 /** attribute key */
-typedef daos_iov_t daos_akey_t;
+typedef daos_key_t daos_akey_t;
 
 /**
  * A record extent is a range of contiguous records of the same size inside an

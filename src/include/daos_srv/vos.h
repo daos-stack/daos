@@ -265,8 +265,8 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, daos_event_t *ev);
  * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
  *			is provided by \a vios.
  * \param dkey	[IN]	Distribution key.
- * \param nr	[IN]	Number of vector descriptors in \a vios.
- * \param vios	[IN/OUT]
+ * \param viod_nr [IN]	Number of vector descriptors in \a viods.
+ * \param viods	[IN/OUT]
  *			Array of vector IO descriptors. The returned record
  *			sizes are also stored in this parameter.
  * \param sgls	[OUT]	Scatter/gather list to store the returned record values
@@ -278,7 +278,7 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, daos_event_t *ev);
  */
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      daos_dkey_t *dkey, unsigned int nr, daos_vec_iod_t *vios,
+	      daos_dkey_t *dkey, unsigned int viod_nr, daos_vec_iod_t *viods,
 	      daos_sg_list_t *sgls, daos_event_t *ev);
 
 
@@ -293,8 +293,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
  *			range is provided by \a vios (kvl::kv_epr).
  * \param dkey	[IN]	Distribution key.
- * \param nr [IN]	Number of vector IO descriptors in \a vios.
- * \param vios [IN]	Array of vector IO descriptors.
+ * \param viod_nr [IN]	Number of vector IO descriptors in \a viods.
+ * \param viods [IN]	Array of vector IO descriptors.
  * \param sgls	[IN/OUT]
  *			Scatter/gather list to pass in record value buffers,
  *			if caller sets the input buffer size only without
@@ -308,7 +308,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       daos_dkey_t *dkey, unsigned int nr, daos_vec_iod_t *vios,
+	       daos_dkey_t *dkey, unsigned int viod_nr, daos_vec_iod_t *viods,
 	       daos_sg_list_t *sgls, daos_event_t *ev);
 
 /**

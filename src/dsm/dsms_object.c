@@ -650,23 +650,23 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 
 		D_DEBUG(DF_MISC, "get key %s len "DF_U64
 			"iov_len "DF_U64" buflen "DF_U64"\n",
-			(char *)dkey_ent.ie_dkey.iov_buf,
-			dkey_ent.ie_dkey.iov_len,
+			(char *)dkey_ent.ie_key.iov_buf,
+			dkey_ent.ie_key.iov_len,
 			iovs->iov_len, iovs->iov_buf_len);
 
 		/* fill the key to iovs if there are enough space */
-		if (iovs->iov_len + dkey_ent.ie_dkey.iov_len <
+		if (iovs->iov_len + dkey_ent.ie_key.iov_len <
 		    iovs->iov_buf_len) {
 			/* Fill key descriptor */
-			kds[dkey_nr].kd_key_len = dkey_ent.ie_dkey.iov_len;
+			kds[dkey_nr].kd_key_len = dkey_ent.ie_key.iov_len;
 			/* FIXME no checksum now */
 			kds[dkey_nr].kd_csum_len = 0;
 			dkey_nr++;
 
 			memcpy(iovs->iov_buf + iovs->iov_len,
-			       dkey_ent.ie_dkey.iov_buf,
-			       dkey_ent.ie_dkey.iov_len);
-			iovs->iov_len += dkey_ent.ie_dkey.iov_len;
+			       dkey_ent.ie_key.iov_buf,
+			       dkey_ent.ie_key.iov_len);
+			iovs->iov_len += dkey_ent.ie_key.iov_len;
 			rc = vos_iter_next(ih);
 			if (rc != 0) {
 				if (rc == -DER_NONEXIST)

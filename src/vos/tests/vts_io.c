@@ -42,9 +42,9 @@
 #include <vos_obj.h>
 
 #define UPDATE_DKEY_SIZE	32
-#define UPDATE_DKEY "test_update_dkey"
+#define UPDATE_DKEY		"test_update_dkey"
 #define UPDATE_AKEY_SIZE	32
-#define UPDATE_AKEY "test_update akey"
+#define UPDATE_AKEY		"test_update akey"
 #define	UPDATE_BUF_SIZE		64
 #define UPDATE_CSUM_SIZE	32
 #define VTS_IO_KEYS		100000
@@ -65,7 +65,8 @@ daos_epoch_t	max_epoch;
  * Stores the last key and can be used for
  * punching
  */
-char		punch_key[UPDATE_DKEY_SIZE];
+char		punch_dkey[UPDATE_DKEY_SIZE];
+char		punch_akey[UPDATE_AKEY_SIZE];
 
 void
 gen_rand_key(char *rkey, char *key, int ksize)
@@ -112,12 +113,117 @@ teardown(void **state)
 }
 
 static int
+io_recx_iterate(vos_iter_param_t *param, daos_akey_t *akey, int akey_id,
+		bool print_ent)
+{
+	daos_handle_t	ih;
+	int		nr = 0;
+	int		rc;
+
+	param->ip_akey = *akey;
+	rc = vos_iter_prepare(VOS_ITER_RECX, param, &ih);
+	if (rc != 0) {
+		print_error("Failed to create recx iterator: %d\n", rc);
+		goto out;
+	}
+
+	rc = vos_iter_probe(ih, NULL);
+	if (rc != 0 && rc != -DER_NONEXIST) {
+		print_error("Failed to set iterator cursor: %d\n", rc);
+		goto out;
+	}
+
+	while (rc == 0) {
+		vos_iter_entry_t  ent;
+
+		rc = vos_iter_fetch(ih, &ent, NULL);
+		if (rc != 0) {
+			print_error("Failed to fetch recx: %d\n", rc);
+			goto out;
+		}
+
+		nr++;
+		if (print_ent) {
+			if (nr == 1) {
+				D_PRINT("akey[%d]: %s\n", akey_id,
+					(char *)param->ip_akey.iov_buf);
+			}
+
+			D_PRINT("\trecx %u : %s\n",
+				(unsigned int)ent.ie_recx.rx_idx,
+				ent.ie_iov.iov_len == 0 ?
+				"[NULL]" : (char *)ent.ie_iov.iov_buf);
+		}
+
+		rc = vos_iter_next(ih);
+		if (rc != 0 && rc != -DER_NONEXIST) {
+			print_error("Failed to move cursor: %d\n", rc);
+			goto out;
+		}
+	}
+	rc = 0;
+out:
+	vos_iter_finish(ih);
+	return rc;
+}
+
+static int
+io_akey_iterate(vos_iter_param_t *param, daos_dkey_t *dkey, int dkey_id,
+		bool print_ent)
+{
+	daos_handle_t	ih;
+	int		nr = 0;
+	int		rc;
+
+	param->ip_dkey = *dkey;
+	rc = vos_iter_prepare(VOS_ITER_AKEY, param, &ih);
+	if (rc != 0) {
+		print_error("Failed to create akey iterator: %d\n", rc);
+		goto out;
+	}
+
+	rc = vos_iter_probe(ih, NULL);
+	if (rc != 0 && rc != -DER_NONEXIST) {
+		print_error("Failed to set iterator cursor: %d\n", rc);
+		goto out;
+	}
+
+	while (rc == 0) {
+		vos_iter_entry_t  ent;
+
+		rc = vos_iter_fetch(ih, &ent, NULL);
+		if (rc != 0) {
+			print_error("Failed to fetch akey: %d\n", rc);
+			goto out;
+		}
+
+		if (print_ent && nr == 0) {
+			D_PRINT("dkey[%d]: %s\n", dkey_id,
+				(char *)param->ip_dkey.iov_buf);
+		}
+
+		rc = io_recx_iterate(param, &ent.ie_key, nr, print_ent);
+
+		nr++;
+		rc = vos_iter_next(ih);
+		if (rc != 0 && rc != -DER_NONEXIST) {
+			print_error("Failed to move cursor: %d\n", rc);
+			goto out;
+		}
+	}
+	rc = 0;
+out:
+	vos_iter_finish(ih);
+	return rc;
+}
+
+static int
 io_obj_iter_test(struct io_test_args *arg)
 {
-	int			rc;
-	int			dkey_nr = 0;
 	vos_iter_param_t	param;
 	daos_handle_t		ih;
+	int			nr = 0;
+	int			rc;
 
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl	= arg->ctx.tc_co_hdl;
@@ -137,15 +243,11 @@ io_obj_iter_test(struct io_test_args *arg)
 		goto out;
 	}
 
-	dkey_nr = 0;
 	while (1) {
-		vos_iter_entry_t  dkey_ent;
-		vos_iter_entry_t  recx_ent;
-		daos_handle_t	  recx_ih;
+		vos_iter_entry_t  ent;
 		daos_hash_out_t	  anchor;
-		int		  recx_nr = 0;
 
-		rc = vos_iter_fetch(ih, &dkey_ent, NULL);
+		rc = vos_iter_fetch(ih, &ent, NULL);
 		if (rc == -DER_NONEXIST) {
 			print_message("Finishing d-key iteration\n");
 			break;
@@ -156,53 +258,12 @@ io_obj_iter_test(struct io_test_args *arg)
 			goto out;
 		}
 
-		param.ip_dkey = dkey_ent.ie_dkey;
-		rc = vos_iter_prepare(VOS_ITER_RECX, &param, &recx_ih);
-		if (rc != 0) {
-			print_error("Failed to create recx iterator: %d\n",
-				    rc);
+		rc = io_akey_iterate(&param, &ent.ie_key, nr,
+				     VTS_IO_KEYS <= 10);
+		if (rc != 0)
 			goto out;
-		}
 
-		rc = vos_iter_probe(recx_ih, NULL);
-		if (rc != 0 && rc != -DER_NONEXIST) {
-			print_error("Failed to set iterator cursor: %d\n",
-				    rc);
-			goto out;
-		}
-
-		while (rc == 0) {
-			rc = vos_iter_fetch(recx_ih, &recx_ent, NULL);
-			if (rc != 0) {
-				print_error("Failed to fetch recx: %d\n",
-					    rc);
-				goto out;
-			}
-
-			recx_nr++;
-			if (recx_nr == 1 && VTS_IO_KEYS <= 10) {
-				/* output dkey only if it has matched recx */
-				D_DEBUG(DF_VOS3, "dkey[%d]: %s\n", dkey_nr,
-					(char *)dkey_ent.ie_dkey.iov_buf);
-			}
-
-			dkey_nr++;
-			if (VTS_IO_KEYS <= 10)
-				D_DEBUG(DF_VOS3, "\trecx %u : %s\n",
-					(unsigned int)recx_ent.ie_recx.rx_idx,
-					recx_ent.ie_iov.iov_len == 0 ?
-					"[NULL]" :
-					(char *)recx_ent.ie_iov.iov_buf);
-
-			rc = vos_iter_next(recx_ih);
-			if (rc != 0 && rc != -DER_NONEXIST) {
-				print_error("Failed to move cursor: %d\n",
-					    rc);
-				goto out;
-			}
-		}
-		vos_iter_finish(recx_ih);
-
+		nr++;
 		rc = vos_iter_next(ih);
 		if (rc == -DER_NONEXIST)
 			break;
@@ -215,7 +276,7 @@ io_obj_iter_test(struct io_test_args *arg)
 		if (!arg->anchor_flag)
 			continue;
 
-		rc = vos_iter_fetch(ih, &dkey_ent, &anchor);
+		rc = vos_iter_fetch(ih, &ent, &anchor);
 		if (rc != 0) {
 			assert_true(rc != -DER_NONEXIST);
 			print_error("Failed to fetch anchor: %d\n",
@@ -236,17 +297,15 @@ io_obj_iter_test(struct io_test_args *arg)
 	 * Check if enumerated keys is equal to the number of
 	 * keys updated
 	 */
-	print_message("Enumerated: %d, total_keys: %d\n",
-		      dkey_nr, total_keys);
-	assert_int_equal(dkey_nr, total_keys);
+	print_message("Enumerated: %d, total_keys: %d\n", nr, total_keys);
+	assert_int_equal(nr, total_keys);
 	vos_iter_finish(ih);
 	return rc;
 }
 
 static int
-io_test_obj_update(struct io_test_args *arg, int epoch,
-		   daos_dkey_t *dkey, daos_vec_iod_t *vio,
-		   daos_sg_list_t *sgl)
+io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
+		   daos_vec_iod_t *vio, daos_sg_list_t *sgl)
 {
 	daos_sg_list_t	*vec_sgl;
 	daos_iov_t	*vec_iov;
@@ -288,8 +347,8 @@ io_test_obj_update(struct io_test_args *arg, int epoch,
 }
 
 static int
-io_test_obj_fetch(struct io_test_args *arg, int epoch,
-		  daos_dkey_t *dkey, daos_vec_iod_t *vio, daos_sg_list_t *sgl)
+io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
+		  daos_vec_iod_t *vio, daos_sg_list_t *sgl)
 {
 	daos_sg_list_t	*vec_sgl;
 	daos_iov_t	*vec_iov;
@@ -339,49 +398,50 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 
 	int			rc = 0;
 	daos_iov_t		val_iov;
-	daos_akey_t		akey;
+	daos_key_t		dkey;
+	daos_key_t		akey;
 	daos_recx_t		rex;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_DKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_vec_iod_t		vio;
 	daos_sg_list_t		sgl;
 	daos_csum_buf_t		csum;
-	daos_dkey_t		dkey;
 
 	memset(&vio, 0, sizeof(vio));
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
 
-	memset(dkey_buf, 0, UPDATE_DKEY_SIZE);
-	memset(update_buf, 0, UPDATE_BUF_SIZE);
-
-	if (!punch)
-		daos_iov_set(&dkey, &dkey_buf[0], UPDATE_DKEY_SIZE);
-	else
-		daos_iov_set(&dkey, &punch_key[0], UPDATE_DKEY_SIZE);
-
-	gen_rand_key(&dkey_buf[0], UPDATE_DKEY, UPDATE_DKEY_SIZE);
-	dkey.iov_len = strlen(dkey_buf);
-	memset(punch_key, 0, UPDATE_DKEY_SIZE);
-
-	sgl.sg_nr.num = 1;
-	sgl.sg_iovs = &val_iov;
-
 	if (!punch) {
-		memcpy(punch_key, dkey_buf, UPDATE_DKEY_SIZE);
+		gen_rand_key(&dkey_buf[0], UPDATE_DKEY, UPDATE_DKEY_SIZE);
+		daos_iov_set(&dkey, &dkey_buf[0], strlen(dkey_buf));
+		memcpy(punch_dkey, dkey_buf, UPDATE_DKEY_SIZE);
+
+		gen_rand_key(&akey_buf[0], UPDATE_AKEY, UPDATE_DKEY_SIZE);
+		daos_iov_set(&akey, &akey_buf[0], strlen(akey_buf));
+		memcpy(punch_akey, akey_buf, UPDATE_AKEY_SIZE);
+
 		memset(update_buf, (rand() % 94) + 33, UPDATE_BUF_SIZE);
 		daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 		rex.rx_rsize	= val_iov.iov_len;
 	} else {
+		daos_iov_set(&dkey, &punch_dkey[0], UPDATE_DKEY_SIZE);
+		daos_iov_set(&akey, &punch_akey[0], UPDATE_AKEY_SIZE);
+
+		memset(update_buf, 0, UPDATE_BUF_SIZE);
 		daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 		rex.rx_rsize	= 0;
 	}
+
+	sgl.sg_nr.num = 1;
+	sgl.sg_iovs = &val_iov;
 
 	rex.rx_nr	= 1;
 	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
 	rex.rx_idx	%= 1000000;
 
+	vio.vd_name	= akey;
 	vio.vd_recxs	= &rex;
 	vio.vd_nr	= 1;
 

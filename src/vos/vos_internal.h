@@ -147,7 +147,7 @@ struct vos_obj_cache {
 struct vos_obj_ref {
 	/** Key for searching, object ID within a container */
 	daos_unit_oid_t			 or_oid;
-	/** btree open handle of the object */
+	/** dkey tree open handle of the object */
 	daos_handle_t			 or_toh;
 	/** btree iterator handle */
 	daos_handle_t			 or_ih;
@@ -275,7 +275,10 @@ vos_oi_destroy(struct vp_hdl *po_hdl,
  */
 struct vos_key_bundle {
 	/** daos key for the I/O operation */
-	daos_dkey_t		*kb_key;
+	daos_key_t		*kb_dkey;
+	daos_key_t		*kb_akey;
+	/** key for the current tree, could be @kb_dkey or @kb_akey */
+	daos_key_t		*kb_key;
 	/** epoch for the I/O operation */
 	daos_epoch_range_t	*kb_epr;
 	/** index of recx */
@@ -327,13 +330,13 @@ vos_rec2irec(struct btr_instance *tins, struct btr_record *rec)
 static inline uint64_t
 vos_krec_size(struct vos_rec_bundle *rbund)
 {
-	daos_iov_t	*dkey;
+	daos_iov_t	*key;
 	uint64_t	 size;
 
-	dkey = rbund->rb_iov; /* XXX dkey only */
+	key = rbund->rb_iov;
 	size = vos_size_round(rbund->rb_csum->cs_len);
 
-	return size + dkey->iov_len + sizeof(struct vos_krec);
+	return size + key->iov_len + sizeof(struct vos_krec);
 }
 
 static inline char *
@@ -343,7 +346,7 @@ vos_krec2csum(struct vos_krec *krec)
 }
 
 static inline char *
-vos_krec2dkey(struct vos_krec *krec)
+vos_krec2key(struct vos_krec *krec)
 {
 	return &krec->kr_body[vos_size_round(krec->kr_cs_size)];
 }
