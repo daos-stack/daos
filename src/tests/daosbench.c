@@ -43,6 +43,7 @@
 
 #define UPDATE_CSUM_SIZE	32
 #define DKEY_SIZE		64
+#define AKEY_SIZE		64
 #define	VAL_BUF_SIZE		64
 #define DBENCH_TEST_NKEYS	100
 
@@ -80,7 +81,8 @@ static daos_handle_t		eq;
 unsigned int			naios;
 static daos_event_t		**events;
 static daos_oclass_id_t		obj_class = DSR_OC_LARGE_RW;
-
+bool				t_validate;
+bool				t_pretty_print;
 
 struct test {
 	/* Test type */
@@ -113,7 +115,9 @@ struct a_ioreq {
 	daos_csum_buf_t		csum;
 	char			csum_buf[UPDATE_CSUM_SIZE];
 	char			dkey_buf[DKEY_SIZE];
-
+	char			akey_buf[AKEY_SIZE];
+	/* daosbench specific (aio-retrieval) */
+	int			r_index;
 };
 
 static	DAOS_LIST_HEAD(aios);
@@ -130,6 +134,15 @@ static int		verbose;
 /**
  * TODO: Move these to DAOS DEBUG macros
  */
+
+#define DBENCH_PRINT(format, ...) do {					\
+	if (!comm_world_rank && t_pretty_print) {			\
+		printf(""format"", ##__VA_ARGS__);			\
+		fflush(stdout);						\
+	}								\
+} while (0)
+
+
 
 #define DBENCH_INFO(format, ...) do {					\
 	if (verbose)							\
@@ -162,19 +175,34 @@ enum {
 };
 
 static void
-ioreq_init(struct a_ioreq *ioreq, struct test *test, int counter,
-	   int l_naios)
+alloc_buffers(struct test *test, int nios)
 {
 	int rc;
 
-	if (l_naios > 0) {
-		rc = posix_memalign((void **) &buffers, sysconf(_SC_PAGESIZE),
-				    test->t_val_bufsize * l_naios);
-		DBENCH_CHECK(rc, "Failed to allocate buffer array");
-	}
+	rc = posix_memalign((void **) &buffers, sysconf(_SC_PAGESIZE),
+			    test->t_val_bufsize * nios);
+	DBENCH_CHECK(rc, "Failed to allocate buffer array");
 
-	ioreq->dkey.iov_buf = ioreq->dkey_buf;
-	ioreq->dkey.iov_buf_len = DKEY_SIZE;
+}
+
+
+static void
+ioreq_init(struct a_ioreq *ioreq, struct test *test, int counter)
+{
+	int rc;
+
+	/** dkey */
+	daos_iov_set(&ioreq->dkey, ioreq->dkey_buf,
+		     test->t_dkey_size);
+	/**
+	 * a-key
+	 * Setting it to the same a-key as this version
+	 * of daos doesn't support yet
+	 */
+	strncpy(ioreq->akey_buf, "var_key_a", 10);
+	daos_iov_set(&ioreq->vio.vd_name, ioreq->akey_buf,
+		     strlen(ioreq->akey_buf));
+
 
 	ioreq->csum.cs_csum = &ioreq->csum_buf;
 	ioreq->csum.cs_buf_len = UPDATE_CSUM_SIZE;
@@ -185,10 +213,6 @@ ioreq_init(struct a_ioreq *ioreq, struct test *test, int counter,
 
 	ioreq->erange.epr_lo = 0;
 	ioreq->erange.epr_hi = DAOS_EPOCH_MAX;
-
-	ioreq->vio.vd_name.iov_buf = "data";
-	ioreq->vio.vd_name.iov_buf_len =
-	strlen(ioreq->vio.vd_name.iov_buf) + 1;
 
 	ioreq->vio.vd_kcsum.cs_csum = NULL;
 	ioreq->vio.vd_kcsum.cs_buf_len = 0;
@@ -207,14 +231,40 @@ ioreq_init(struct a_ioreq *ioreq, struct test *test, int counter,
 
 	rc = daos_event_init(&ioreq->ev, eq, NULL);
 	DBENCH_CHECK(rc, "Failed to initialize event for aio[%d]", counter);
-
 }
 
 static void
-ioreq_fini()
+free_buffers()
 {
 	free(buffers);
 }
+
+static inline void
+kv_set_dkey(struct test *test, struct a_ioreq *ioreq, int idx_flag,
+	    int index)
+{
+	memset(ioreq->dkey_buf, 0, test->t_dkey_size);
+	if (!idx_flag) {
+		snprintf(ioreq->dkey_buf,
+			 test->t_dkey_size, "%d",
+			(comm_world_rank*test->t_nkeys) + index);
+	} else {
+		strncpy(ioreq->dkey_buf, "var_key_d", 10);
+	}
+	DBENCH_INFO("%d: Key : %s, len: %"PRIu64"\n",
+		    comm_world_rank, ioreq->dkey_buf,
+		    ioreq->dkey.iov_len);
+}
+
+static inline void
+kv_set_value(struct test *test, void *buf, int counter, int index)
+{
+	memset(buf, (((comm_world_rank*counter) + index) % 94) + 33,
+	       test->t_val_bufsize);
+}
+
+
+
 
 static void
 aio_req_init(struct test *test)
@@ -222,6 +272,7 @@ aio_req_init(struct test *test)
 	struct a_ioreq	*ioreq;
 	int		i;
 
+	alloc_buffers(test, test->t_naios);
 	for (i = 0; i < test->t_naios; i++) {
 		ioreq = malloc(sizeof(*ioreq));
 		if (ioreq == NULL)
@@ -229,7 +280,7 @@ aio_req_init(struct test *test)
 				   "Failed to allocate ioreq array");
 
 		memset(ioreq, 0, sizeof(*ioreq));
-		ioreq_init(ioreq, test, i, test->t_naios);
+		ioreq_init(ioreq, test, i);
 		daos_list_add(&ioreq->list, &aios);
 
 		DBENCH_INFO("Allocated AIO %p: buffer %p", ioreq,
@@ -257,20 +308,29 @@ aio_req_fini(struct test *test)
 		daos_event_fini(&ioreq->ev);
 		free(ioreq);
 	}
-	ioreq_fini();
+	free_buffers();
 }
 
 static void
-aio_req_wait(struct test *test)
+aio_req_wait(struct test *test, int fetch_flag)
 {
 	struct a_ioreq		*ioreq;
 	int			i;
 	int			rc;
+	char			*valbuf = NULL;
+
 
 	rc = daos_eq_poll(eq, 0, DAOS_EQ_WAIT, test->t_naios,
 			  events);
 	DBENCH_CHECK(rc, "Failed to poll event queue");
 	assert(rc <= test->t_naios - naios);
+
+	if (fetch_flag && t_validate) {
+		valbuf = malloc(test->t_val_bufsize);
+		if (valbuf == NULL)
+			DBENCH_ERR(ENOMEM,
+				   "Valbuf allocation error\n");
+	}
 
 	for (i = 0; i < rc; i++) {
 		ioreq = (struct a_ioreq *)
@@ -286,8 +346,17 @@ aio_req_wait(struct test *test)
 		naios++;
 		DBENCH_INFO("Completed AIO %p: buffer %p",
 			    ioreq, ioreq->val_iov.iov_buf);
-	}
 
+		if (fetch_flag && t_validate) {
+			kv_set_value(test, valbuf, test->t_nkeys,
+				     ioreq->r_index);
+			if (memcmp(ioreq->val_iov.iov_buf, valbuf,
+				   test->t_val_bufsize))
+				DBENCH_ERR(EIO,
+					   "lookup verification failed for key: %s index :%d",
+					   ioreq->dkey_buf, ioreq->r_index);
+		}
+	}
 	DBENCH_INFO("Found %d completed AIOs (%d free %d busy)",
 		    rc, naios, test->t_naios - naios);
 }
@@ -411,27 +480,15 @@ object_close(daos_handle_t object)
 }
 
 static void
-insert(const char *dkey, const char *akey, uint64_t idx,
-	void *val, daos_size_t size, daos_epoch_t epoch,
-	struct a_ioreq *req)
+insert(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req)
 {
 
 	int rc;
 
-	/** dkey */
-	daos_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
-
-	/** akey */
-	daos_iov_set(&req->vio.vd_name, (void *)akey, strlen(akey));
-
-	/** val */
-	daos_iov_set(&req->val_iov, val, size);
-
 	/** record extent */
-	req->rex.rx_rsize = size;
+	req->rex.rx_rsize = req->val_iov.iov_len;
 	req->rex.rx_idx = idx;
 
-	/** XXX: to be fixed */
 	req->erange.epr_lo = epoch;
 
 	/** execute update operation */
@@ -460,23 +517,13 @@ enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 }
 
 static void
-lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
-	daos_size_t size, daos_epoch_t epoch, struct a_ioreq *req,
-	struct test *test, int verify)
+lookup(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req,
+       struct test *test, int verify)
 {
 	int rc;
 
-	/** dkey */
-	daos_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
-
-	/** akey */
-	daos_iov_set(&req->vio.vd_name, (void *)akey, strlen(akey));
-
-	/** val */
-	daos_iov_set(&req->val_iov, val, size);
-
 	/** record extent */
-	req->rex.rx_rsize = size;
+	req->rex.rx_rsize = req->val_iov.iov_len;
 	req->rex.rx_idx = idx;
 
 	/** XXX: to be fixed */
@@ -634,7 +681,7 @@ get_next_ioreq(struct test *test)
 	struct a_ioreq	*ioreq;
 
 	while (naios == 0)
-		aio_req_wait(test);
+		aio_req_wait(test, 0);
 	ioreq = daos_list_entry(aios.next, struct a_ioreq, list);
 	daos_list_move_tail(&ioreq->list, &aios);
 	naios--;
@@ -648,23 +695,8 @@ kv_update_async(struct test *test, int idx_flag)
 	int		rc = 0, i;
 	struct a_ioreq	*ioreq;
 	int		counter;
-	char		**key = NULL;
 
 	counter = idx_flag ? test->t_nindexes : test->t_nkeys;
-
-	if (!idx_flag) {
-		key = (char **)malloc(counter * sizeof(char *));
-		if (key == NULL)
-			DBENCH_ERR(ENOMEM, "Error in allocating Key\n");
-		for (i = 0; i < counter; i++) {
-			key[i] = malloc(DKEY_SIZE);
-			if (key[i] == NULL)
-				DBENCH_ERR(ENOMEM,
-					   "Error in allocating key[%d]\n",
-					   i);
-		}
-	}
-
 	ghce = co_info.ci_epoch_state.es_glb_hce;
 	DBENCH_INFO("ghce: %"PRIu64, ghce);
 
@@ -677,50 +709,29 @@ kv_update_async(struct test *test, int idx_flag)
 	}
 
 	object_open(comm_world_rank, test->t_epoch, &oh);
-	aio_req_init(test);
 
+	aio_req_init(test);
 	for (i = 0; i < counter; i++) {
 		ioreq = get_next_ioreq(test);
-		if (!idx_flag) {
-			memset(key[i], 0, DKEY_SIZE);
-			snprintf(key[i], DKEY_SIZE, "%d",
-				(comm_world_rank*test->t_nkeys) + i);
-
-			DBENCH_INFO("%d: Key for insert: %s",
-				    comm_world_rank, key[i]);
-		}
-
-		/* FIXME: memset() can only take one byte. */
-		memset(ioreq->val_iov.iov_buf,
-		       ((comm_world_rank*counter) + i),
-		       test->t_val_bufsize);
-
-		insert(idx_flag ? "var_dkey_d" : key[i],
-		       "var_dkey_a",
-		       idx_flag ?
+		kv_set_dkey(test, ioreq, idx_flag, i);
+		kv_set_value(test, ioreq->val_iov.iov_buf,
+			     counter, i);
+		insert(idx_flag ?
 		       ((comm_world_rank * test->t_nindexes) + i) : 0,
-		       ioreq->val_iov.iov_buf,
-		       test->t_val_bufsize, test->t_epoch, ioreq);
+		       test->t_epoch, ioreq);
 	}
 
 	while (test->t_naios - naios > 0)
-		aio_req_wait(test);
+		aio_req_wait(test, 0);
 	aio_req_fini(test);
-
-	if (!idx_flag) {
-		for (i = 0; i < counter; i++)
-			free(key[i]);
-		free(key);
-	}
 }
 
 static void
 kv_update_verify(struct test *test, int idx_flag)
 {
-	char		*valbuf = NULL;
-	char		*lookup_buf = NULL;
-	struct a_ioreq	ioreq;
 	int		counter, i;
+	char		*valbuf = NULL;
+	struct a_ioreq	ioreq;
 
 	/**
 	 * Verification can happen synchronously!
@@ -729,52 +740,32 @@ kv_update_verify(struct test *test, int idx_flag)
 	counter = idx_flag ? test->t_nindexes : test->t_nkeys;
 	test->t_naios = 1;
 
-	lookup_buf = malloc(test->t_val_bufsize);
-	if (lookup_buf == NULL)
-		DBENCH_ERR(ENOMEM,
-			   "Error in allocating lookup buf\n");
-
 	valbuf = malloc(test->t_val_bufsize);
 	if (valbuf == NULL)
 		DBENCH_ERR(ENOMEM,
 			   "Error in allocating lookup buf\n");
 
+	alloc_buffers(test, 1);
+	ioreq_init(&ioreq, test, 0);
+
 	for (i = 0; i < counter; i++) {
-		char	key[DKEY_SIZE];
+		kv_set_dkey(test, &ioreq, idx_flag, i);
+		kv_set_value(test, valbuf, counter, i);
 
-		ioreq_init(&ioreq, test, i, 0);
-		if (!idx_flag) {
-			memset(key, 0, DKEY_SIZE);
-			snprintf(key, DKEY_SIZE, "%d",
-				(comm_world_rank * counter) + i);
-
-			DBENCH_INFO("%d: Key for insert: %s",
-				    comm_world_rank, key);
-		}
-
-		memset(lookup_buf, 0, test->t_val_bufsize);
-		memset(valbuf, ((comm_world_rank * counter) + i),
-		       test->t_val_bufsize);
-
-		lookup(idx_flag ? "var_dkey_d" : key,
-		       "var_dkey_a",
-		       idx_flag ?
+		lookup(idx_flag ?
 		       ((comm_world_rank * test->t_nindexes) + i) : 0,
-		       lookup_buf,
-		       test->t_val_bufsize, test->t_epoch,
-		       &ioreq, test, 1);
+		       test->t_epoch, &ioreq, test, 1);
 		DBENCH_INFO("lookup_buf: %s\n valbuf: %s",
-			    (char *)(lookup_buf), (char *)valbuf);
+			    (char *)(ioreq.val_iov.iov_buf),
+			    (char *)valbuf);
 
-		if (memcmp(lookup_buf, valbuf, test->t_val_bufsize))
+		if (memcmp(ioreq.val_iov.iov_buf, valbuf, test->t_val_bufsize))
 			DBENCH_ERR(EIO, "Lookup buffers differ for key :%d",
 				   i);
 	}
 	DBENCH_INFO("Verification complete!\n");
-
-	free(lookup_buf);
+	free_buffers();
 	free(valbuf);
-
 }
 
 static void
@@ -802,20 +793,28 @@ kv_multikey_update_run(struct test *test)
 	kv_test_describe(test, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 
+	DBENCH_PRINT("%s: Inserting %d keys....",
+	       test->t_type->tt_name,
+	       comm_world_size * test->t_nkeys);
 	chrono_record("begin");
 
 	kv_update_async(test, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
-
 	DBENCH_INFO("completed %d inserts\n", test->t_nkeys);
 	kv_flush_and_commit(test);
 	chrono_record("end");
+	DBENCH_PRINT("Done!\n");
 
 	/**
 	 * Done with benchmarking
 	 * Lets verify the test
 	 */
-	kv_update_verify(test, 0);
+	if (t_validate) {
+		DBENCH_PRINT("%s: Validating....",
+		       test->t_type->tt_name);
+		kv_update_verify(test, 0);
+		DBENCH_PRINT("Done!\n");
+	}
 	object_close(oh);
 
 	kv_test_report(test, 0);
@@ -824,89 +823,47 @@ kv_multikey_update_run(struct test *test)
 static void
 kv_multikey_fetch_run(struct test *test)
 {
-	char		*valbuf = NULL;
-	char		**lookup_buf = NULL;
 	int		i;
 	struct a_ioreq	*ioreq;
-	char		**key = NULL;
 
 	kv_test_describe(test, 0);
 
+	DBENCH_PRINT("%s: Setup by inserting %d keys....",
+	       test->t_type->tt_name,
+	       comm_world_size * test->t_nkeys);
 	MPI_Barrier(MPI_COMM_WORLD);
 	kv_update_async(test, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 	kv_flush_and_commit(test);
+	DBENCH_PRINT("Done!\n");
 
 	/**
 	 * We need this buffer to collect all async
 	 * lookup results for verification
 	 */
-	lookup_buf = (char **)malloc(test->t_nkeys * sizeof(char *));
-	if (lookup_buf  == NULL)
-		DBENCH_ERR(ENOMEM, "Error in allocating lookup_buf");
-
-	key = (char **)malloc(test->t_nkeys * sizeof(char *));
-	if (key == NULL)
-		DBENCH_ERR(ENOMEM, "Error in allocating key array");
-
-	for (i = 0; i < test->t_nkeys; i++) {
-		lookup_buf[i] = malloc(test->t_val_bufsize);
-		if (lookup_buf[i] == NULL)
-			DBENCH_ERR(ENOMEM, "Error in allocating lookup_buf[%d]",
-				   i);
-		key[i] = malloc(test->t_val_bufsize);
-		if (key[i] == NULL)
-			DBENCH_ERR(ENOMEM, "Error in allocating key[%d]",
-				   i);
-	}
-
 	MPI_Barrier(MPI_COMM_WORLD);
+	DBENCH_PRINT("%s: Begin by fetching %d keys....",
+	       test->t_type->tt_name,
+	       comm_world_size * test->t_nkeys);
 
 	chrono_record("begin");
 	aio_req_init(test);
-
 	for (i = 0; i < test->t_nkeys; i++) {
 		ioreq = get_next_ioreq(test);
-		memset(key[i], 0, DKEY_SIZE);
-		snprintf(key[i], DKEY_SIZE, "%d",
-			(comm_world_rank * test->t_nkeys) + i);
-		memset(lookup_buf[i], 0, test->t_val_bufsize);
-		lookup(key[i], "var_dkey_a", 0, lookup_buf[i],
-		       test->t_val_bufsize, test->t_epoch, ioreq, test, 0);
+		ioreq->r_index = i;
+		kv_set_dkey(test, ioreq, 0, i);
+		lookup(/* idx */ 0, test->t_epoch, ioreq, test, 0);
 	}
 
 	while (test->t_naios - naios > 0)
-		aio_req_wait(test);
+		aio_req_wait(test, 1);
 	aio_req_fini(test);
 
 	chrono_record("end");
+	DBENCH_PRINT("Done!\n");
 	MPI_Barrier(MPI_COMM_WORLD);
-	/**
-	 * Done with benchmarking
-	 * Lets verify the test
-	 */
-
-	valbuf = malloc(test->t_val_bufsize);
-	if (valbuf == NULL)
-		DBENCH_ERR(ENOMEM,
-			   "Error in allocating lookup buf\n");
-
-	for (i = 0; i < test->t_nkeys; i++) {
-		memset(valbuf, ((comm_world_rank*test->t_nkeys) + i),
-		       test->t_val_bufsize);
-		if (memcmp(lookup_buf[i], valbuf, test->t_val_bufsize))
-			DBENCH_ERR(EIO, "Lookup buffers differ for key :%d",
-				   i);
-		free(lookup_buf[i]);
-		free(key[i]);
-	}
-
-	DBENCH_INFO("Verification complete!\n");
 
 	object_close(oh);
-	free(lookup_buf);
-	free(key);
-	free(valbuf);
 
 	kv_test_report(test, 0);
 }
@@ -927,6 +884,9 @@ kv_enumerate_test(struct test *test)
 
 	kv_test_describe(test, 0);
 
+	DBENCH_PRINT("%s: Setup by inserting %d keys....",
+		     test->t_type->tt_name,
+		     test->t_nkeys * comm_world_size);
 	key_start = (comm_world_rank * test->t_nkeys);
 	key_end = (comm_world_rank * test->t_nkeys) + test->t_nkeys;
 	DBENCH_INFO("Key Range %d -> %d", key_start, key_end);
@@ -936,20 +896,25 @@ kv_enumerate_test(struct test *test)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	kv_flush_and_commit(test);
+	DBENCH_PRINT("Done!\n");
+
 	MPI_Barrier(MPI_COMM_WORLD);
 
+	DBENCH_PRINT("%s: Beginning enumerating %d keys....",
+		     test->t_type->tt_name,
+		     comm_world_size * test->t_nkeys);
 	chrono_record("begin");
 
 	/* All updates completed. Starting to enumerate */
 	memset(&hash_out, 0, sizeof(hash_out));
-	buf = calloc(5 * DKEY_SIZE, 1);
-	ioreq_init(&e_ioreq, test, 1, 1);
+	buf = calloc(5 * test->t_dkey_size, 1);
+	ioreq_init(&e_ioreq, test, 1);
 
 	/** enumerate records */
 	while (!daos_hash_is_eof(&hash_out)) {
 
 		enumerate(test->t_epoch,
-			  &number, kds, &hash_out, buf, 5*DKEY_SIZE,
+			  &number, kds, &hash_out, buf, 5*test->t_dkey_size,
 			  &e_ioreq);
 		if (number == 0)
 			goto next;
@@ -960,35 +925,44 @@ kv_enumerate_test(struct test *test)
 			char key[DKEY_SIZE];
 
 			snprintf(key, kds[i].kd_key_len + 1, ptr);
-			DBENCH_INFO("i %d key %s len %d", i, key,
-				    (int)kds[i].kd_key_len);
-			if (atoi(key) >= key_start &&
-			    atoi(key) < key_end)
-				done++;
-			else
-				DBENCH_INFO("out of range? Test will fail!");
-			ptr += kds[i].kd_key_len;
+
+			if (t_validate) {
+				DBENCH_INFO("i %d key %s len %d", i, key,
+					    (int)kds[i].kd_key_len);
+				if (atoi(key) >= key_start &&
+				    atoi(key) < key_end)
+					done++;
+				else
+					DBENCH_INFO("out of range? failed!");
+				ptr += kds[i].kd_key_len;
+			}
 		}
 next:
 		if (daos_hash_is_eof(&hash_out))
 			break;
-		memset(buf, 0, 5 * DKEY_SIZE);
+		memset(buf, 0, 5 * test->t_dkey_size);
 		number = 5;
 	}
-	ioreq_fini();
+	free_buffers();
 	object_close(oh);
 
 	chrono_record("end");
-	DBENCH_INFO("Verifying the test");
-	DBENCH_INFO("total_keys: %d, Done : %d, nkeys: %d", total_keys,
-		    done, test->t_nkeys);
-	assert(done == test->t_nkeys);
-	DBENCH_INFO("Test Complete");
+	DBENCH_PRINT("Done\n");
 
+	if (t_validate) {
+		DBENCH_PRINT("%s: Validating ...",
+			     test->t_type->tt_name);
+
+		DBENCH_INFO("Verifying the test");
+		DBENCH_INFO("total_keys: %d, Done : %d, nkeys: %d", total_keys,
+			    done, test->t_nkeys);
+		assert(done == test->t_nkeys);
+		DBENCH_INFO("Test Complete");
+		DBENCH_PRINT("Done!\n");
+	}
 
 	/* Cleanup */
 	free(buf);
-
 	kv_test_report(test, 0);
 }
 
@@ -999,18 +973,27 @@ kv_multi_idx_update_run(struct test *test)
 	kv_test_describe(test, 1);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	chrono_record("begin");
+	DBENCH_PRINT("%s: Inserting %d indexes....",
+		      test->t_type->tt_name,
+		      comm_world_size * test->t_nkeys);
 
+	chrono_record("begin");
 	kv_update_async(test, 1);
 	DBENCH_INFO("completed %d inserts\n", test->t_nindexes);
 
 	kv_flush_and_commit(test);
 	chrono_record("end");
+	DBENCH_PRINT("Done!\n");
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	kv_update_verify(test, 1);
-	object_close(oh);
 
+	if (t_validate) {
+		DBENCH_PRINT("%s: Validating....",
+			      test->t_type->tt_name);
+		kv_update_verify(test, 1);
+		DBENCH_PRINT("Done!\n");
+	}
+	object_close(oh);
 	kv_test_report(test, 1);
 }
 
@@ -1060,17 +1043,19 @@ usage(void)
 	printf("\
 Usage: daosbench --test=TEST [OPTIONS]\n\
 	Options:\n\
-	--test=TEST		Run TEST.\n\
-	--aios=N		Submit N in-flight I/O requests.\n\
-	--dpool=pool		DAOS pool through dmg tool.\n\
-	--keys=N		Number of keys to be created in the test. \n\
-	--nidxs=N		Number of key indexes.\n\
-	--value_buf_size=N	value buffere size for this test\n\
-	--verbose		verbose flag. \n\
-	--help			Print this message and exit.\n\
-	Tests:\n\
+	--test=TEST | -t	Run TEST.\n\
+	--aios=N | -a		Submit N in-flight I/O requests.\n\
+	--dpool=pool | -p	DAOS pool through dmg tool.\n\
+	--keys=N | -k		Number of keys to be created in the test. \n\
+	--nidxs=N | -i		Number of key indexes.\n\
+	--value_buf_size=N | -b	value buffer size for this test\n\
+	--pretty-print | -d	pretty-print-flag. \n\
+	--verbose | -v		verbose flag. \n\
+	--help | -h		Print this message and exit.\n\
+	Tests Available:\n\
 		kv-multi-idx	Each mpi rank makes 'n' idx updates\n\
 		kv-multi-key	Each mpi rank makes 'n' key updates\n\
+		kv-fetch-test	Each mpi rank makes 'n' key fetches\n\
 		kv-enum-test    Each mpi rank enumerates 'n' keys\n");
 }
 
@@ -1082,10 +1067,13 @@ test_init(struct test *test, int argc, char *argv[])
 		{"help",		0,	NULL,	'h'},
 		{"keys",		1,	NULL,	'k'},
 		{"indexes",		1,	NULL,	'i'},
-		{"value_buf_size",	1,	NULL,	'b'},
+		{"value-buf-size",	1,	NULL,	'b'},
 		{"verbose",		0,	NULL,	'v'},
 		{"test",		1,	NULL,	't'},
+		{"check-tests",		0,	NULL,	'c'},
+		{"test",		1,	NULL,	't'},
 		{"dpool",		1,	NULL,	'p'},
+		{"pretty-print",	0,	NULL,	'd'},
 		{NULL,			0,	NULL,	0}
 	};
 	int	rc;
@@ -1102,11 +1090,14 @@ test_init(struct test *test, int argc, char *argv[])
 	test->t_naios = 16;
 	test->t_nindexes = 1;
 	test->t_pname = NULL;
+	t_validate = false;
+	t_pretty_print = false;
+
 
 	if (comm_world_rank != 0)
 		opterr = 0;
 
-	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:p:hv",
+	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:p:hvcd",
 				 options, NULL)) != -1) {
 		switch (rc) {
 		case 'a':
@@ -1123,6 +1114,12 @@ test_init(struct test *test, int argc, char *argv[])
 			break;
 		case 'p':
 			test->t_pname = strdup(optarg);
+			break;
+		case 'c':
+			t_validate = true;
+			break;
+		case 'd':
+			t_pretty_print = true;
 			break;
 		case 'h':
 			if (comm_world_rank == 0)
