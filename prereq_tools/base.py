@@ -1054,13 +1054,18 @@ class _Component(object):
                 except:
                     pass
             for fname in files:
+                # sfile is the destination of the symlink
                 sfile = os.path.join(root, fname)
+                # dest_file is the final destination of the symlink
+                dest_file = os.path.realpath(sfile)
+
+                # This is the target file we're creating.
                 target = os.path.join(local_root, fname)
 
                 link_correct = False
                 try:
                     link_dest = os.readlink(target)
-                    if link_dest == sfile:
+                    if link_dest == sfile or link_dest == dest_file:
                         link_correct = True
                     else:
                         os.unlink(target)
@@ -1071,7 +1076,7 @@ class _Component(object):
                     # than a link.
                     if os.path.exists(target):
                         os.unlink(target)
-                    os.symlink(sfile, target)
+                    os.symlink(dest_file, target)
 
     def build(self, env, headers_only):
         """Build the component, if necessary"""
