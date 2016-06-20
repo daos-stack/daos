@@ -885,7 +885,6 @@ next:
 		memset(buf, 0, 5 * test->t_dkey_size);
 		number = 5;
 	}
-	free_buffers();
 	object_close(oh);
 
 	chrono_record("end");
@@ -989,9 +988,10 @@ Usage: daosbench --test=TEST [OPTIONS]\n\
 	--aios=N | -a		Submit N in-flight I/O requests.\n\
 	--dpool=pool | -p	DAOS pool through dmg tool.\n\
 	--keys=N | -k		Number of keys to be created in the test. \n\
-	--nidxs=N | -i		Number of key indexes.\n\
-	--value_buf_size=N | -b	value buffer size for this test\n\
+	--indexes=N | -i	Number of key indexes.\n\
+	--value-buf-size=N | -b	value buffer size for this test\n\
 	--pretty-print | -d	pretty-print-flag. \n\
+	--check-tests | -c	do data verifications. \n\
 	--verbose | -v		verbose flag. \n\
 	--help | -h		Print this message and exit.\n\
 	Tests Available:\n\
@@ -1192,15 +1192,13 @@ int main(int argc, char *argv[])
 			     arg.t_pname);
 	}
 
-	handle_share(&poh, comm_world_rank, HANDLE_POOL, poh,
-		     HANDLE_SHARE_DSR);
+	handle_share(&poh, HANDLE_POOL, comm_world_rank, poh, HANDLE_SHARE_DSR);
 	rc = MPI_Bcast(&pool_info, sizeof(pool_info), MPI_BYTE, 0,
 		       MPI_COMM_WORLD);
 	DBENCH_CHECK(rc, "broadcast pool_info error\n");
 
 	container_create(comm_world_rank);
-	handle_share(&coh, comm_world_rank, HANDLE_CO, poh,
-		     HANDLE_SHARE_DSR);
+	handle_share(&coh, HANDLE_CO, comm_world_rank, poh, HANDLE_SHARE_DSR);
 
 	/** Invoke test **/
 	arg.t_type->tt_run(&arg);
