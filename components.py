@@ -141,7 +141,7 @@ RETRIEVER = GitRepoRetriever("ssh://review.whamcloud.com:29418/coral/cppr",
                              True)
 REQS.define('cppr',
             retriever=RETRIEVER,
-            commands=["scons --no-prereq-links "
+            commands=["scons "
                       "PMIX_PREBUILT=$PMIX_PREFIX " \
                       "OMPI_PREBUILT=$OMPI_PREFIX " \
                       "HWLOC_PREBUILT=$HWLOC_PREFIX " \
@@ -158,7 +158,7 @@ RETRIEVER = GitRepoRetriever("ssh://review.whamcloud.com:29418/daos/iof",
                              True)
 REQS.define('iof',
             retriever=RETRIEVER,
-            commands=["scons --no-prereq-links "
+            commands=["scons "
                       "PMIX_PREBUILT=$PMIX_PREFIX " \
                       "OMPI_PREBUILT=$OMPI_PREFIX " \
                       "HWLOC_PREBUILT=$HWLOC_PREFIX " \
@@ -194,7 +194,7 @@ REQS.define('ofi',
 RETRIEVER = GitRepoRetriever("ssh://review.whamcloud.com:29418/daos/mcl", True)
 REQS.define('mcl',
             retriever=RETRIEVER,
-            commands=["scons --no-prereq-links "
+            commands=["scons "
                       "PMIX_PREBUILT=$PMIX_PREFIX " \
                       "OMPI_PREBUILT=$OMPI_PREFIX " \
                       "HWLOC_PREBUILT=$HWLOC_PREFIX " \

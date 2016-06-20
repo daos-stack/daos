@@ -440,7 +440,6 @@ class PreReqComponent(object):
         self.add_options()
         self.__setup_unit_test_builders()
         self.__update = GetOption('update_prereq')
-        self.__link = not GetOption('no_prereq_links')
         self.download_deps = False
         self.build_deps = False
         self.__parse_build_deps()
@@ -500,12 +499,6 @@ class PreReqComponent(object):
     @staticmethod
     def add_options():
         """Add common options to environment"""
-
-        AddOption('--no-prereq-links',
-                  dest='no_prereq_links',
-                  action='store_true',
-                  default=False,
-                  help='Set to disable symbolic links for prerequisites')
 
         AddOption('--update-prereq',
                   dest='update_prereq',
@@ -569,10 +562,6 @@ class PreReqComponent(object):
         # given.
         if self.__update:
             self.build_deps = True
-
-    def should_create_links(self):
-        """Return true if links should be created"""
-        return self.__link
 
     def setup_path_var(self, var, multiple=False):
         """Create a command line variable for a path"""
@@ -1035,49 +1024,6 @@ class _Component(object):
         for lib in self.libs:
             env.AppendUnique(LIBS=[lib])
 
-    def create_links(self, source):
-        """Create symbolic links to real targets in $PREFIX"""
-        if self.retriever is None:
-            #Don't do this for installed components
-            return
-        if source == self.prefix:
-            return
-        if not self.prereqs.should_create_links():
-            return
-        # create links
-        for (root, _, files) in os.walk(source):
-            local_root = root.replace(source,
-                                      self.prefix)
-            if not os.path.exists(local_root):
-                try:
-                    os.makedirs(local_root)
-                except:
-                    pass
-            for fname in files:
-                # sfile is the destination of the symlink
-                sfile = os.path.join(root, fname)
-                # dest_file is the final destination of the symlink
-                dest_file = os.path.realpath(sfile)
-
-                # This is the target file we're creating.
-                target = os.path.join(local_root, fname)
-
-                link_correct = False
-                try:
-                    link_dest = os.readlink(target)
-                    if link_dest == sfile or link_dest == dest_file:
-                        link_correct = True
-                    else:
-                        os.unlink(target)
-                except OSError:
-                    pass
-                if not link_correct:
-                    # Unlink the target first as it might be a real file rather
-                    # than a link.
-                    if os.path.exists(target):
-                        os.unlink(target)
-                    os.symlink(dest_file, target)
-
     def build(self, env, headers_only):
         """Build the component, if necessary"""
         # Ensure requirements are met
@@ -1094,7 +1040,6 @@ class _Component(object):
             return
         self.set_environment(envcopy, False)
         if self.prebuilt_path:
-            self.create_links(self.prebuilt_path)
             return False
 
         # Default to has_changes = True which will cause all deps
@@ -1125,7 +1070,6 @@ class _Component(object):
 
         if self.has_missing_targets(envcopy):
             raise MissingTargets(self.name)
-        self.create_links(self.component_prefix)
         new_crc = self.calculate_crc()
         with open(self.crc_file, 'w') as crcfile:
             crcfile.write(new_crc)

@@ -10,11 +10,6 @@ Option                             Description
                                    only triggered if something has
                                    changed since the last build.
 
---no-prereq-links                  Tells the prerequisite builder
-                                   not to add links to installed
-                                   prerequisite components into the
-                                   PREFIX directory
-
 PREFIX=<path>                      The installation path of the user's
                                    components.   This should be used
                                    by ENV.Install as the location to
