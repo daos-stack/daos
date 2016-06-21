@@ -89,7 +89,7 @@ pool_connect(void **state)
 
 	if (arg->hdl_share)
 		handle_share(&poh, HANDLE_POOL, arg->myrank, poh,
-			     HANDLE_SHARE_DSM);
+			     HANDLE_SHARE_DSM, 1);
 
 	/** disconnect from pool */
 	print_message("rank %d disconnecting from pool %ssynchronously ... ",

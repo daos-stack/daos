@@ -519,7 +519,7 @@ main(int argc, char **argv)
 
 	/** share pool handle with peer tasks */
 	handle_share(&poh, HANDLE_POOL, rank, poh,/* useless */
-		     HANDLE_SHARE_DSR);
+		     HANDLE_SHARE_DSR, 1);
 
 	if (rank == 0) {
 		/** generate uuid for container */
@@ -536,7 +536,7 @@ main(int argc, char **argv)
 	}
 
 	/** share container handle with peer tasks */
-	handle_share(&coh, HANDLE_CO, rank, poh, HANDLE_SHARE_DSR);
+	handle_share(&coh, HANDLE_CO, rank, poh, HANDLE_SHARE_DSR, 1);
 
 	/** generate objid */
 	dsr_obj_id_generate(&oid, cid);

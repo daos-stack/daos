@@ -78,6 +78,7 @@ daos_epoch_t			ghce;
 daos_rank_t			svc;
 daos_rank_list_t		svcl;
 void				*buffers;
+void				*dkbuf;
 static daos_handle_t		eq;
 unsigned int			naios;
 static daos_event_t		**events;
@@ -115,7 +116,7 @@ struct a_ioreq {
 	daos_sg_list_t		sgl;
 	daos_csum_buf_t		csum;
 	char			csum_buf[UPDATE_CSUM_SIZE];
-	char			dkey_buf[DKEY_SIZE];
+	char			*dkey_buf;
 	char			akey_buf[AKEY_SIZE];
 	/* daosbench specific (aio-retrieval) */
 	int			r_index;
@@ -179,6 +180,9 @@ alloc_buffers(struct test *test, int nios)
 			    test->t_val_bufsize * nios);
 	DBENCH_CHECK(rc, "Failed to allocate buffer array");
 
+	rc = posix_memalign((void **) &dkbuf, sysconf(_SC_PAGESIZE),
+			    test->t_dkey_size * nios);
+	DBENCH_CHECK(rc, "Failed to allocate dkey_buf array");
 }
 
 
@@ -188,12 +192,15 @@ ioreq_init(struct a_ioreq *ioreq, struct test *test, int counter)
 	int rc;
 
 	/** dkey */
+	ioreq->dkey_buf = dkbuf + test->t_dkey_size * counter;
 	daos_iov_set(&ioreq->dkey, ioreq->dkey_buf,
 		     test->t_dkey_size);
 	/**
 	 * a-key
 	 * Setting it to the same a-key as this version
 	 * of daos doesn't support yet
+	 * Currently akey is static, change it when
+	 * a-key argument is introduced.
 	 */
 	strncpy(ioreq->akey_buf, "var_key_a", 10);
 	daos_iov_set(&ioreq->vio.vd_name, ioreq->akey_buf,
@@ -233,6 +240,7 @@ static void
 free_buffers()
 {
 	free(buffers);
+	free(dkbuf);
 }
 
 static inline void
@@ -245,7 +253,9 @@ kv_set_dkey(struct test *test, struct a_ioreq *ioreq, int idx_flag,
 			 test->t_dkey_size, "%d",
 			(comm_world_rank*test->t_nkeys) + index);
 	} else {
-		strncpy(ioreq->dkey_buf, "var_key_d", 10);
+		memset(ioreq->dkey_buf, 0, test->t_dkey_size);
+		snprintf(ioreq->dkey_buf, test->t_dkey_size,
+			 "var_key_d%d", comm_world_rank);
 	}
 	DBENCH_INFO("%d: Key : %s, len: %"PRIu64"\n",
 		    comm_world_rank, ioreq->dkey_buf,
@@ -382,7 +392,8 @@ chrono_read(char *key)
 
 
 static void
-object_open(int rank, daos_epoch_t epoch, daos_handle_t *object)
+object_open(int rank, daos_epoch_t epoch, int enum_flag,
+	    daos_handle_t *object)
 {
 	unsigned int	flags;
 	int		rc;
@@ -394,15 +405,27 @@ object_open(int rank, daos_epoch_t epoch, daos_handle_t *object)
 	rc = MPI_Bcast(&rand_obj_id, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	DBENCH_CHECK(rc, "Error in broadcasting random object id");
 
-	oid.hi = rand_obj_id + 2;
-	oid.mid = rand_obj_id + 1;
-	oid.lo = rand_obj_id;
+	if (enum_flag) {
+		oid.hi = rand_obj_id + comm_world_rank + 2;
+		oid.mid = rand_obj_id + comm_world_rank + 1;
+		oid.lo = rand_obj_id + comm_world_rank;
+	} else {
+		oid.hi = rand_obj_id + 2;
+		oid.mid = rand_obj_id + 1;
+		oid.lo = rand_obj_id;
+	}
 	dsr_obj_id_generate(&oid, obj_class);
 
-	if (rank == 0) {
+	if (enum_flag) {
 		rc = dsr_obj_declare(coh, oid, epoch, NULL,
 				     NULL);
 		DBENCH_CHECK(rc, "Failed to declare object");
+	} else {
+		if (rank == 0) {
+			rc = dsr_obj_declare(coh, oid, epoch, NULL,
+					     NULL);
+			DBENCH_CHECK(rc, "Failed to declare object");
+		}
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -632,7 +655,8 @@ get_next_ioreq(struct test *test)
 }
 
 static void
-kv_update_async(struct test *test, int idx_flag)
+kv_update_async(struct test *test, int idx_flag,
+		int enum_flag)
 {
 	int		rc = 0, i;
 	struct a_ioreq	*ioreq;
@@ -650,7 +674,7 @@ kv_update_async(struct test *test, int idx_flag)
 		DBENCH_CHECK(rc, "Failed to hold epoch\n");
 	}
 
-	object_open(comm_world_rank, test->t_epoch, &oh);
+	object_open(comm_world_rank, test->t_epoch, enum_flag, &oh);
 
 	aio_req_init(test);
 	for (i = 0; i < counter; i++) {
@@ -740,7 +764,7 @@ kv_multikey_update_run(struct test *test)
 	       comm_world_size * test->t_nkeys);
 	chrono_record("begin");
 
-	kv_update_async(test, 0);
+	kv_update_async(test, 0, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 	DBENCH_INFO("completed %d inserts\n", test->t_nkeys);
 	kv_flush_and_commit(test);
@@ -774,7 +798,7 @@ kv_multikey_fetch_run(struct test *test)
 	       test->t_type->tt_name,
 	       comm_world_size * test->t_nkeys);
 	MPI_Barrier(MPI_COMM_WORLD);
-	kv_update_async(test, 0);
+	kv_update_async(test, 0, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 	kv_flush_and_commit(test);
 	DBENCH_PRINT("Done!\n");
@@ -834,7 +858,7 @@ kv_enumerate_test(struct test *test)
 	DBENCH_INFO("Key Range %d -> %d", key_start, key_end);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	kv_update_async(test, 0);
+	kv_update_async(test, 0, 1);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	kv_flush_and_commit(test);
@@ -845,12 +869,15 @@ kv_enumerate_test(struct test *test)
 	DBENCH_PRINT("%s: Beginning enumerating %d keys....",
 		     test->t_type->tt_name,
 		     comm_world_size * test->t_nkeys);
-	chrono_record("begin");
+
+	alloc_buffers(test, 1);
 
 	/* All updates completed. Starting to enumerate */
 	memset(&hash_out, 0, sizeof(hash_out));
 	buf = calloc(5 * test->t_dkey_size, 1);
-	ioreq_init(&e_ioreq, test, 1);
+	ioreq_init(&e_ioreq, test, 0);
+
+	chrono_record("begin");
 
 	/** enumerate records */
 	while (!daos_hash_is_eof(&hash_out)) {
@@ -860,23 +887,22 @@ kv_enumerate_test(struct test *test)
 			  &e_ioreq);
 		if (number == 0)
 			goto next;
-
-		ptr = buf;
 		total_keys += number;
-		for (i = 0; i < number; i++) {
-			char key[DKEY_SIZE];
 
-			snprintf(key, kds[i].kd_key_len + 1, ptr);
+		if (t_validate) {
+			ptr = buf;
+			for (i = 0; i < number; i++) {
+				char key[DKEY_SIZE];
 
-			if (t_validate) {
+				snprintf(key, kds[i].kd_key_len + 1, ptr);
 				DBENCH_INFO("i %d key %s len %d", i, key,
-					    (int)kds[i].kd_key_len);
-				if (atoi(key) >= key_start &&
-				    atoi(key) < key_end)
-					done++;
-				else
-					DBENCH_INFO("out of range? failed!");
-				ptr += kds[i].kd_key_len;
+						    (int)kds[i].kd_key_len);
+					if (atoi(key) >= key_start &&
+					    atoi(key) < key_end)
+						done++;
+					else
+						DBENCH_INFO("out of range!!");
+					ptr += kds[i].kd_key_len;
 			}
 		}
 next:
@@ -885,11 +911,10 @@ next:
 		memset(buf, 0, 5 * test->t_dkey_size);
 		number = 5;
 	}
-	object_close(oh);
-
 	chrono_record("end");
 	DBENCH_PRINT("Done\n");
-
+	object_close(oh);
+	free_buffers();
 	if (t_validate) {
 		DBENCH_PRINT("%s: Validating ...",
 			     test->t_type->tt_name);
@@ -919,7 +944,7 @@ kv_multi_idx_update_run(struct test *test)
 		      comm_world_size * test->t_nkeys);
 
 	chrono_record("begin");
-	kv_update_async(test, 1);
+	kv_update_async(test, 1, 0);
 	DBENCH_INFO("completed %d inserts\n", test->t_nindexes);
 
 	kv_flush_and_commit(test);
@@ -982,7 +1007,7 @@ static void
 usage(void)
 {
 	printf("\
-Usage: daosbench --test=TEST [OPTIONS]\n\
+Usage: daosbench -t TEST -p $UUID [OPTIONS]\n\
 	Options:\n\
 	--test=TEST | -t	Run TEST.\n\
 	--aios=N | -a		Submit N in-flight I/O requests.\n\
@@ -990,6 +1015,7 @@ Usage: daosbench --test=TEST [OPTIONS]\n\
 	--keys=N | -k		Number of keys to be created in the test. \n\
 	--indexes=N | -i	Number of key indexes.\n\
 	--value-buf-size=N | -b	value buffer size for this test\n\
+	--dkey-size=N | -s	buffer size of dkey for this test\n\
 	--pretty-print | -d	pretty-print-flag. \n\
 	--check-tests | -c	do data verifications. \n\
 	--verbose | -v		verbose flag. \n\
@@ -1010,6 +1036,7 @@ test_init(struct test *test, int argc, char *argv[])
 		{"keys",		1,	NULL,	'k'},
 		{"indexes",		1,	NULL,	'i'},
 		{"value-buf-size",	1,	NULL,	'b'},
+		{"dkey-size",		1,	NULL,	's'},
 		{"verbose",		0,	NULL,	'v'},
 		{"test",		1,	NULL,	't'},
 		{"check-tests",		0,	NULL,	'c'},
@@ -1039,7 +1066,7 @@ test_init(struct test *test, int argc, char *argv[])
 	if (comm_world_rank != 0)
 		opterr = 0;
 
-	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:p:hvcd",
+	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:p:s:hvcd",
 				 options, NULL)) != -1) {
 		switch (rc) {
 		case 'a':
@@ -1047,6 +1074,9 @@ test_init(struct test *test, int argc, char *argv[])
 			break;
 		case 'k':
 			test->t_nkeys = atoi(optarg);
+			break;
+		case 's':
+			test->t_dkey_size = atoi(optarg);
 			break;
 		case 'i':
 			test->t_nindexes = atoi(optarg);
@@ -1192,13 +1222,15 @@ int main(int argc, char *argv[])
 			     arg.t_pname);
 	}
 
-	handle_share(&poh, HANDLE_POOL, comm_world_rank, poh, HANDLE_SHARE_DSR);
+	handle_share(&poh, HANDLE_POOL, comm_world_rank, poh, HANDLE_SHARE_DSR,
+		     verbose ? 1 : 0);
 	rc = MPI_Bcast(&pool_info, sizeof(pool_info), MPI_BYTE, 0,
 		       MPI_COMM_WORLD);
 	DBENCH_CHECK(rc, "broadcast pool_info error\n");
 
 	container_create(comm_world_rank);
-	handle_share(&coh, HANDLE_CO, comm_world_rank, poh, HANDLE_SHARE_DSR);
+	handle_share(&coh, HANDLE_CO, comm_world_rank, poh, HANDLE_SHARE_DSR,
+		     verbose ? 1 : 0);
 
 	/** Invoke test **/
 	arg.t_type->tt_run(&arg);
@@ -1213,10 +1245,7 @@ int main(int argc, char *argv[])
 	daos_fini();
 
 exit:
-	/**
-	 * TODO: Enable this once PMIx segfault is fixed
-	 * Currently its just ugly otherwise.
-	 * MPI_Finalize();
-	 */
+	MPI_Finalize();
+
 	return rc;
 }

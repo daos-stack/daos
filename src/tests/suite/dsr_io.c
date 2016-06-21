@@ -683,7 +683,7 @@ setup(void **state)
 
 	/** l2g and g2l the pool handle */
 	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh,
-		     HANDLE_SHARE_DSR);
+		     HANDLE_SHARE_DSR, 1);
 
 	if (arg->myrank == 0) {
 		/** create container */
@@ -705,7 +705,7 @@ setup(void **state)
 
 	/** l2g and g2l the container handle */
 	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh,
-		     HANDLE_SHARE_DSR);
+		     HANDLE_SHARE_DSR, 1);
 
 	*state = arg;
 	return 0;

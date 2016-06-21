@@ -105,7 +105,7 @@ enum {
 
 static inline void
 handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
-	     int share_type)
+	     int share_type, int verbose)
 {
 	daos_iov_t	ghdl = { NULL, 0, 0 };
 	int		rc;
@@ -129,30 +129,35 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 
 	if (rank == 0) {
 		/** generate actual global handle to share with peer tasks */
-		print_message("rank 0 call local2global on %s handle ...",
-			      (type == HANDLE_POOL) ? "pool" : "container");
+		if (verbose)
+			print_message("rank 0 call local2global on %s handle",
+				      (type == HANDLE_POOL) ?
+				      "pool" : "container");
 		if (type == HANDLE_POOL)
 			rc = dsm_pool_local2global(*hdl, &ghdl);
 		else
 			rc = dsm_co_local2global(*hdl, &ghdl);
 		assert_int_equal(rc, 0);
-		print_message("success\n");
+		if (verbose)
+			print_message("success\n");
 	}
 
 	/** broadcast global handle to all peers */
-	if (rank == 0)
+	if (rank == 0 && verbose == 1)
 		print_message("rank 0 broadcast global %s handle ...",
 			      (type == HANDLE_POOL) ? "pool" : "container");
 	rc = MPI_Bcast(ghdl.iov_buf, ghdl.iov_len, MPI_BYTE, 0,
 		       MPI_COMM_WORLD);
 	assert_int_equal(rc, MPI_SUCCESS);
-	if (rank == 0)
+	if (rank == 0 && verbose == 1)
 		print_message("success\n");
 
 	if (rank != 0) {
 		/** unpack global handle */
-		print_message("rank %d call global2local on %s handle ...",
-			      rank, type == HANDLE_POOL ? "pool" : "container");
+		if (verbose)
+			print_message("rank %d call global2local on %s handle",
+				      rank, type == HANDLE_POOL ?
+				      "pool" : "container");
 		if (type == HANDLE_POOL) {
 			/* NB: Only pool_global2local are different for
 			 * DSM and DSR */
@@ -165,7 +170,8 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 		}
 
 		assert_int_equal(rc, 0);
-		print_message("rank %d global2local success\n", rank);
+		if (verbose)
+			print_message("rank %d global2local success\n", rank);
 	}
 
 	free(ghdl.iov_buf);
