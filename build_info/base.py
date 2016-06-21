@@ -5,6 +5,7 @@
 import os
 import sys
 import datetime
+import json
 
 class BuildInfo(object):
     """A utility class to read build information"""
@@ -13,9 +14,13 @@ class BuildInfo(object):
         self.info = {}
         if filename is None:
             return
-        with open(filename, "r") as info_file:
-            for line in info_file.readlines():
-                exec(line.strip(), self.info)
+        try:
+            with open(filename, "r") as info_file:
+                self.info = json.load(info_file)
+        except ValueError:
+            with open(filename, "r") as info_file:
+                for line in info_file.readlines():
+                    exec(line.strip(), self.info)
 
     def update(self, var, value):
         """save a variable in the build info"""
@@ -28,8 +33,7 @@ class BuildInfo(object):
     def save(self, filename):
         """Create a file to store path information for a build"""
         with open(filename, "w") as build_info:
-            for var in self.info.keys():
-                build_info.write("%s = \"%s\"\n"%(var, self.info[var]))
+            json.dump(self.info, build_info, skipkeys=True)
 
     def gen_script(self, script_name):
         """Generate a shell script to set PATH, LD_LIBRARY_PATH,
@@ -42,13 +46,15 @@ class BuildInfo(object):
             paths = []
             components = []
 
-            for var in self.info.keys():
+            for var in sorted(self.info.keys()):
                 if not isinstance(self.info[var], str):
                     continue
                 if not "PREFIX" in var:
                     continue
                 script.write("SL_%s=%s\n"%(var, self.info[var]))
                 components.append(var)
+                if self.info[var] == "/usr":
+                    continue
                 path = os.path.join(self.info[var], "bin")
                 lib = os.path.join(self.info[var], "lib")
                 lib64 = os.path.join(self.info[var], "lib64")

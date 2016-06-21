@@ -42,4 +42,7 @@ INFO.gen_script(SH_SCRIPT)
 os.system("source %s"%SH_SCRIPT)
 os.unlink(SH_SCRIPT)
 
+SH_JSON = os.path.join(SCRIPT_DIR, "sl_test.json")
+INFO.save(SH_JSON)
+
 os.unlink(FILENAME)
