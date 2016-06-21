@@ -12,6 +12,7 @@ MERCURY=${CORAL_ARTIFACTS}/mercury-update-scratch/latest
 OMPI=${CORAL_ARTIFACTS}/ompi-update-scratch/latest
 NVML=${CORAL_ARTIFACTS}/nvml-update-scratch/latest
 MCL=$(readlink -f ${CORAL_ARTIFACTS}/mcl-update-scratch/latest)
+ABT=${CORAL_ARTIFACTS}/argobots-update-scratch/latest
 if [ "${JOB_NAME}" != "daos-update-scratch" ]; then
   # Review jobs should pull from latest stable scratch job
   DAOS=$(readlink -f ${CORAL_ARTIFACTS}/daos-update-scratch/latest)
@@ -22,6 +23,7 @@ if [ "${JOB_NAME}" != "daos-update-scratch" ]; then
     MERCURY=${SL_MERCURY_PREFIX}/..
     NVML=${SL_NVML_PREFIX}/..
     MCL=${SL_MCL_PREFIX}/..
+    ABT=${SL_ARGOBOTS_PREFIX}/..
   fi
 else
   # Use latest stable mcl job to get stable ompi and mercury
@@ -34,7 +36,7 @@ else
 fi
 
 rm -f *.conf
-scons PREBUILT_PREFIX=${MERCURY}:${OMPI}:${NVML}:${MCL} -c \
+scons PREBUILT_PREFIX=${MERCURY}:${OMPI}:${NVML}:${MCL}:${ABT} -c \
       PREFIX=${DAOS_INSTALL}
 scons
 scons install

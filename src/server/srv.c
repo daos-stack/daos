@@ -31,6 +31,7 @@
 #include <pthread.h>
 #include <sched.h>
 
+#include <abt.h>
 #include <daos_errno.h>
 #include <daos/list.h>
 #include "dss_internal.h"
@@ -42,10 +43,12 @@ unsigned int	dss_nthreads;
 struct dss_thread {
 	pthread_t	dt_id;
 	int		dt_idx;
-	pthread_cond_t	dt_start_cond;
 	pthread_mutex_t	dt_lock;
 	daos_list_t	dt_list;
 	hwloc_cpuset_t	dt_cpuset;
+	ABT_xstream	dt_xstream;
+	ABT_pool	dt_pool;
+	ABT_sched	dt_sched;
 	int		dt_rc;
 };
 
@@ -78,6 +81,115 @@ dss_progress_cb(void *arg)
 	return 0;
 }
 
+struct sched_data {
+    uint32_t event_freq;
+};
+
+static int
+dss_sched_init(ABT_sched sched, ABT_sched_config config)
+{
+	struct sched_data *p_data;
+	int ret;
+
+	D_ALLOC_PTR(p_data);
+	if (p_data == NULL)
+		return ABT_ERR_MEM;
+
+	/* Set the variables from the config */
+	ret = ABT_sched_config_read(config, 1, &p_data->event_freq);
+	if (ret != ABT_SUCCESS)
+		return ret;
+
+	ret = ABT_sched_set_data(sched, (void *)p_data);
+
+	return ret;
+}
+
+static void
+dss_sched_run(ABT_sched sched)
+{
+	uint32_t work_count = 0;
+	struct sched_data *p_data;
+	ABT_pool pool;
+	ABT_unit unit;
+	int ret;
+
+	ABT_sched_get_data(sched, (void **)&p_data);
+
+	/* Only one pool for now */
+	ret = ABT_sched_get_pools(sched, 1, 0, &pool);
+	if (ret != ABT_SUCCESS) {
+		D_ERROR("ABT_sched_get_pools");
+		return;
+	}
+	while (1) {
+		/* Execute one work unit from the scheduler's pool */
+		ABT_pool_pop(pool, &unit);
+		if (unit != ABT_UNIT_NULL)
+			ABT_xstream_run_unit(unit, pool);
+
+		if (++work_count >= p_data->event_freq) {
+			ABT_bool stop;
+
+			ret = ABT_sched_has_to_stop(sched, &stop);
+			if (ret != ABT_SUCCESS) {
+				D_ERROR("ABT_sched_has_to_stop fails %d\n",
+					ret);
+				break;
+			}
+			if (stop == ABT_TRUE)
+				break;
+			work_count = 0;
+			ABT_xstream_check_events(sched);
+		}
+	}
+}
+
+static int
+dss_sched_free(ABT_sched sched)
+{
+	struct sched_data *p_data;
+
+	ABT_sched_get_data(sched, (void **)&p_data);
+	D_FREE_PTR(p_data);
+
+	return ABT_SUCCESS;
+}
+
+/**
+ * Create scheduler
+ */
+static int
+dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
+{
+	ABT_sched_config config;
+	ABT_sched_config_var cv_event_freq = {
+		.idx = 0,
+		.type = ABT_SCHED_CONFIG_INT
+	};
+
+	ABT_sched_def sched_def = {
+		.type = ABT_SCHED_TYPE_ULT,
+		.init = dss_sched_init,
+		.run = dss_sched_run,
+		.free = dss_sched_free,
+		.get_migr_pool = NULL
+	};
+	int ret;
+
+	/* Create a scheduler config */
+	ret = ABT_sched_config_create(&config, cv_event_freq, 10,
+				      ABT_sched_config_var_end);
+	if (ret != ABT_SUCCESS)
+		return ret;
+
+	ret = ABT_sched_create(&sched_def, pool_num, pools, config,
+			       new_sched);
+	ABT_sched_config_free(&config);
+
+	return 0;
+}
+
 /**
  *
  The handling process would like
@@ -86,7 +198,7 @@ dss_progress_cb(void *arg)
  *
  * 2. Then polls the request from DTP context
  **/
-static void *
+static void
 dss_srv_handler(void *arg)
 {
 	struct dss_thread	*dthread = (struct dss_thread *)arg;
@@ -102,32 +214,22 @@ dss_srv_handler(void *arg)
 			       HWLOC_CPUBIND_THREAD);
 	if (rc) {
 		D_ERROR("failed to set affinity: %d\n", errno);
-		dthread->dt_rc = daos_errno2der(errno);
-		pthread_cond_signal(&dthread->dt_start_cond);
-		pthread_mutex_unlock(&dthread->dt_lock);
-		return NULL;
+		D_GOTO(err_out, rc = daos_errno2der(errno));
 	}
 
 	/* initialize thread-local storage for this thread */
 	dtc = dss_tls_init(DAOS_SERVER_TAG);
-	if (dtc == NULL) {
-		dthread->dt_rc = -DER_NOMEM;
-		pthread_cond_signal(&dthread->dt_start_cond);
-		pthread_mutex_unlock(&dthread->dt_lock);
-		return NULL;
-	}
+	if (dtc == NULL)
+		D_GOTO(err_out, rc = -DER_NOMEM);
 
 	dmi = dss_get_module_info();
 	D_ASSERT(dmi != NULL);
 
 	/* create private transport context */
-	rc = dtp_context_create(NULL, &dmi->dmi_ctx);
+	rc = dtp_context_create(&dthread->dt_pool, &dmi->dmi_ctx);
 	if (rc != 0) {
 		D_ERROR("Can not create dtp ctxt: rc = %d\n", rc);
-		dthread->dt_rc = rc;
-		pthread_cond_signal(&dthread->dt_start_cond);
-		pthread_mutex_unlock(&dthread->dt_lock);
-		return NULL;
+		D_GOTO(err_out, rc);
 	}
 
 	/** report thread index */
@@ -139,7 +241,6 @@ dss_srv_handler(void *arg)
 	dthread->dt_id = pthread_self();
 
 	/* wake up caller */
-	pthread_cond_signal(&dthread->dt_start_cond);
 	pthread_mutex_unlock(&dthread->dt_lock);
 
 	/* main service loop processing incoming request */
@@ -148,7 +249,14 @@ dss_srv_handler(void *arg)
 
 	pthread_cleanup_pop(0);
 	dtp_context_destroy(dmi->dmi_ctx, true);
-	return NULL;
+	return;
+
+err_out:
+	dthread->dt_rc = rc;
+	pthread_mutex_unlock(&dthread->dt_lock);
+	return;
+
+
 }
 
 static inline struct dss_thread *
@@ -163,16 +271,10 @@ dss_thread_alloc(int idx, hwloc_cpuset_t cpus)
 		return NULL;
 	}
 
-	errno = pthread_cond_init(&dthread->dt_start_cond, NULL);
-	if (errno) {
-		D_ERROR("failed to init pthread cond: %d\n", rc);
-		D_GOTO(err_free, rc = daos_errno2der(errno));
-	}
-
 	rc = pthread_mutex_init(&dthread->dt_lock, NULL);
 	if (rc) {
 		D_ERROR("failed to init pthread mutex: %d\n", rc);
-		D_GOTO(err_cond, rc = daos_errno2der(errno));
+		D_GOTO(err_free, rc = daos_errno2der(errno));
 	}
 
 	dthread->dt_cpuset = hwloc_bitmap_dup(cpus);
@@ -188,8 +290,6 @@ dss_thread_alloc(int idx, hwloc_cpuset_t cpus)
 
 err_mutex:
 	pthread_mutex_destroy(&dthread->dt_lock);
-err_cond:
-	pthread_cond_destroy(&dthread->dt_start_cond);
 err_free:
 	D_FREE_PTR(dthread);
 	return NULL;
@@ -200,7 +300,6 @@ dss_thread_free(struct dss_thread *dthread)
 {
 	hwloc_bitmap_free(dthread->dt_cpuset);
 	pthread_mutex_destroy(&dthread->dt_lock);
-	pthread_cond_destroy(&dthread->dt_start_cond);
 	D_FREE_PTR(dthread);
 }
 
@@ -217,8 +316,6 @@ static int
 dss_start_one_thread(hwloc_cpuset_t cpus, int idx)
 {
 	struct dss_thread	*dthread;
-	pthread_attr_t		 attr;
-	pthread_t		 pid;
 	int			 rc = 0;
 
 	/** allocate & init thread configuration data */
@@ -226,49 +323,45 @@ dss_start_one_thread(hwloc_cpuset_t cpus, int idx)
 	if (dthread == NULL)
 		return -DER_NOMEM;
 
-	/** configure per-thread attributes */
-	errno = pthread_attr_init(&attr);
-	if (errno) {
-		D_ERROR("failed to init pthread attr: %d\n", errno);
-		D_GOTO(out, rc = daos_errno2der(errno));
+	rc = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPSC,
+				   ABT_TRUE, &dthread->dt_pool);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_dthread, rc);
+
+	rc = dss_sched_create(&dthread->dt_pool, 1, &dthread->dt_sched);
+	if (rc != 0) {
+		D_ERROR("create scheduler fails: %d\n", rc);
+		D_GOTO(out_pool, rc);
 	}
 
-	errno = pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
-	if (errno) {
-		D_ERROR("failed to set sched policy: %d\n", errno);
-		D_GOTO(out_attr, rc = daos_errno2der(errno));
+	rc = ABT_xstream_create(dthread->dt_sched, &dthread->dt_xstream);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("create xstream fails %d\n", rc);
+		D_GOTO(out_sched, rc = -DER_INVAL);
 	}
 
-	/** start the service thread */
-	pthread_mutex_lock(&dthread->dt_lock);
-	errno = pthread_create(&pid, &attr, dss_srv_handler, dthread);
-	if (errno != 0) {
-		D_ERROR("Can not create thread%d: %d\n", idx, errno);
-		D_GOTO(out_lock, rc = daos_errno2der(errno));
-	}
-
-	/** wait for thread to be effectively set up */
-	errno = pthread_cond_wait(&dthread->dt_start_cond, &dthread->dt_lock);
-	if (errno != 0) {
-		D_ERROR("failed to wait for thread%d: %d\n", idx, errno);
-		D_GOTO(out_lock, rc = daos_errno2der(errno));
-	}
-
-	if (dthread->dt_id == 0) {
-		D_ERROR("can not start thread%d: %d\n", idx, dthread->dt_rc);
-		D_GOTO(out_lock, rc = dthread->dt_rc);
+	rc = ABT_thread_create(dthread->dt_pool, dss_srv_handler,
+			       dthread, ABT_THREAD_ATTR_NULL, NULL);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("create thread failed: %d\n", rc);
+		D_GOTO(out_xthream, rc = -DER_INVAL);
 	}
 
 	/** add to the list of started thread */
 	daos_list_add_tail(&dthread->dt_list, &dss_thread_list);
 
-out_lock:
-	pthread_mutex_unlock(&dthread->dt_lock);
-out_attr:
-	pthread_attr_destroy(&attr);
-out:
-	if (rc)
-		dss_thread_free(dthread);
+	return 0;
+out_xthream:
+	ABT_xstream_join(dthread->dt_xstream);
+	ABT_xstream_free(&dthread->dt_xstream);
+	dss_thread_free(dthread);
+	return rc;
+out_sched:
+	ABT_sched_free(&dthread->dt_sched);
+out_pool:
+	ABT_pool_free(&dthread->dt_pool);
+out_dthread:
+	dss_thread_free(dthread);
 	return rc;
 }
 
@@ -281,33 +374,11 @@ dss_threads_fini()
 
 	D_DEBUG(DF_SERVER, "stopping service threads\n");
 
-	/** issue cancel to all threads */
-	daos_list_for_each_entry_safe(dthread, tmp, &dss_thread_list, dt_list) {
-		pthread_mutex_lock(&dthread->dt_lock);
-		if (dthread->dt_id != 0) {
-			rc = pthread_cancel(dthread->dt_id);
-			if (rc) {
-				D_ERROR("Failed to kill %ld thread: rc = %d\n",
-					dthread->dt_id, rc);
-				dthread->dt_id = 0;
-			}
-		}
-		pthread_mutex_unlock(&dthread->dt_lock);
-	}
-
 	/* wait for each thread to complete */
 	daos_list_for_each_entry_safe(dthread, tmp, &dss_thread_list, dt_list) {
-		pthread_mutex_lock(&dthread->dt_lock);
 		daos_list_del(&dthread->dt_list);
-
-		if (dthread->dt_id != 0) {
-			/* We need to wait for the thread to exit */
-			pthread_join(dthread->dt_id, NULL);
-			dthread->dt_id = 0;
-		}
-
-		pthread_mutex_unlock(&dthread->dt_lock);
-
+		ABT_xstream_join(&dthread->dt_xstream);
+		ABT_xstream_free(&dthread->dt_xstream);
 		/* housekeeping ... */
 		dss_thread_free(dthread);
 	}

@@ -4,12 +4,12 @@ Import('env', 'PREREQS')
 
 env.AppendUnique(LIBPATH=[Dir('.')])
 
-libraries = ['daos_common', 'mercury']
+libraries = ['daos_common', 'mercury', 'abt']
 
 if PREREQS is None:
-    libraries += ['mercury','na','mcl']
+    libraries += ['na','mcl']
 else:
-    PREREQS.require(env, 'mercury', 'mcl')
+    PREREQS.require(env, 'mercury', 'mcl', 'argobots')
 
 denv = env.Clone()
 denv.Append(CPPPATH = ['#/src/dtp'])

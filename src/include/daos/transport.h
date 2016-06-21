@@ -34,6 +34,7 @@
 /* for proc macros */
 #include <boost/preprocessor.hpp>
 
+#include <abt.h>
 /* dtp context handle */
 typedef void *dtp_context_t;
 
@@ -97,9 +98,6 @@ typedef struct dtp_rpc {
 	daos_size_t		dr_output_size; /* size of output struct */
 	/* optional bulk handle for collective RPC */
 	dtp_bulk_t		dr_co_bulk_hdl;
-	void			*dr_data;	/* async arg */
-	dtp_req_callback_t	dr_final_cb;	/* callback will be called when
-						 * req is destoryed */
 } dtp_rpc_t;
 
 /* Abstraction pack/unpack processor */

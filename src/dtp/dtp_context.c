@@ -24,7 +24,7 @@
  * This file is part of daos_transport. It implements the dtp context related
  * APIs.
  */
-
+#include <abt.h>
 #include <dtp_internal.h>
 
 int
@@ -57,6 +57,7 @@ dtp_context_create(void *arg, dtp_context_t *dtp_ctx)
 	daos_list_add_tail(&ctx->dc_link, &dtp_gdata.dg_ctx_list);
 	dtp_gdata.dg_ctx_num++;
 
+	ctx->dc_pool = arg;
 	pthread_rwlock_unlock(&dtp_gdata.dg_rwlock);
 
 	*dtp_ctx = (dtp_context_t)ctx;
@@ -211,7 +212,7 @@ dtp_progress(dtp_context_t dtp_ctx, int64_t timeout,
 		 * being blocked indefinitely if another thread has called
 		 * dtp_hg_progress() behind our back
 		 */
-		hg_timeout = 1000 * 1000;
+		hg_timeout = 0;
 	} else  {
 		rc = gettimeofday(&tv, NULL);
 		if (rc != 0)

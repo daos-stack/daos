@@ -98,10 +98,10 @@ extern struct dtp_gdata		dtp_gdata;
 
 /* dtp_context */
 struct dtp_context {
-	daos_list_t		dc_link; /* link to gdata.dg_ctx_list */
-	int			dc_idx; /* context index */
-	struct dtp_hg_context	dc_hg_ctx; /* HG context */
-
+	daos_list_t		 dc_link; /* link to gdata.dg_ctx_list */
+	int			 dc_idx; /* context index */
+	struct dtp_hg_context	 dc_hg_ctx; /* HG context */
+	void			*dc_pool; /* pool for ES on server stack */
 };
 
 /* dtp layer common header */

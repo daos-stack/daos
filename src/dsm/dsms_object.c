@@ -29,6 +29,7 @@
 
 #include <uuid/uuid.h>
 
+#include <abt.h>
 #include <daos/transport.h>
 #include <daos_srv/daos_m_srv.h>
 #include <daos_srv/vos.h>
@@ -191,13 +192,6 @@ out_free:
 	return rc;
 }
 
-struct dsms_bulk_async_args {
-	int		nr;
-	daos_sg_list_t	**sgls;
-	daos_iov_t	*iovs;
-	daos_handle_t	iohdl;
-};
-
 static void
 dsms_eu_free_iovs_sgls(daos_iov_t *iovs, daos_sg_list_t **sgls, int nr)
 {
@@ -286,14 +280,18 @@ dsms_eu_complete(dtp_rpc_t *rpc, daos_sg_list_t **sgls,
 	       oeo->oeo_kds.count * sizeof(daos_key_desc_t));
 }
 
+struct dsms_bulk_async_args {
+	ABT_future	future;
+	int		result;
+};
+
 static int
 bulk_complete_cb(const struct dtp_bulk_cb_info *cb_info)
 {
-	struct dsms_bulk_async_args	*args;
+	struct dsms_bulk_async_args	*arg;
 	struct dtp_bulk_desc		*bulk_desc;
 	dtp_rpc_t			*rpc;
 	dtp_bulk_t			local_bulk_hdl;
-	struct daos_ref			*dref;
 	int				rc = 0;
 
 	rc = cb_info->bci_rc;
@@ -303,76 +301,57 @@ bulk_complete_cb(const struct dtp_bulk_cb_info *cb_info)
 	bulk_desc = cb_info->bci_bulk_desc;
 	local_bulk_hdl = bulk_desc->bd_local_hdl;
 	rpc = bulk_desc->bd_rpc;
-	dref = rpc->dr_data;
-	args = (struct dsms_bulk_async_args *)cb_info->bci_arg;
-
-	/* NB: this will only be called if all of bulks
-	 * complete successfully inside the handler, other
-	 * wise async_complete will be called in the error
-	 * handler path
+	arg = (struct dsms_bulk_async_args *)cb_info->bci_arg;
+	/**
+	 * Note: only one thread will access arg.result, so
+	 * it should be safe here.
 	 **/
-	if (daos_ref_dec_and_test(dref)) {
-		if (opc_get(rpc->dr_opc) == DSM_TGT_OBJ_ENUMERATE)
-			dsms_eu_complete(rpc, args->sgls, args->iovs, rc);
-		else
-			dsms_rw_complete(rpc, args->iohdl, rc);
-	}
+	if (arg->result == 0)
+		arg->result = rc;
+	ABT_future_set(arg->future, &rc);
+
 	dtp_bulk_free(local_bulk_hdl);
 	dtp_req_decref(rpc);
-	D_FREE_PTR(args);
 	return rc;
-}
-
-static int
-obj_rpc_final_cb(dtp_rpc_t *rpc)
-{
-	struct daos_ref *dr = rpc->dr_data;
-
-	if (dr != NULL) {
-		pthread_mutex_destroy(&dr->dr_lock);
-		D_FREE_PTR(dr);
-	}
-
-	return 0;
 }
 
 static int
 dsms_bulk_transfer(dtp_rpc_t *rpc, daos_handle_t dph, daos_handle_t dch,
 		   dtp_bulk_t *remote_bulks, daos_sg_list_t **sgls,
 		   daos_iov_t *iovs, daos_handle_t ioh, int nr,
-		   dtp_bulk_op_t bulk_op, bool *bulk_sent)
+		   dtp_bulk_op_t bulk_op)
 {
 	dtp_bulk_opid_t		bulk_opid;
 	dtp_bulk_perm_t		bulk_perm;
+	ABT_future		future;
+	struct dsms_bulk_async_args arg;
 	int			i;
-	int			rc = 0;
+	int			rc;
 
 	bulk_perm = bulk_op == DTP_BULK_PUT ? DTP_BULK_RO : DTP_BULK_RW;
+	rc = ABT_future_create(nr, NULL, &future);
+	if (rc != 0)
+		return -DER_NOMEM;
 
-	if (bulk_sent != NULL)
-		*bulk_sent = false;
-
+	arg.future = future;
 	for (i = 0; i < nr && remote_bulks[i] != NULL; i++) {
-		struct dtp_bulk_desc		bulk_desc;
-		struct dsms_bulk_async_args	*arg;
-		dtp_bulk_t			local_bulk_hdl;
+		struct dtp_bulk_desc	bulk_desc;
+		dtp_bulk_t		local_bulk_hdl;
+		int			ret;
 
-		D_ALLOC_PTR(arg);
-		if (arg == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-
-		arg->nr = nr;
-		arg->sgls = sgls;
-		arg->iovs = iovs;
-		arg->iohdl = ioh;
-
-		rc = dtp_bulk_create(rpc->dr_ctx, sgls[i], bulk_perm,
+		ret = dtp_bulk_create(rpc->dr_ctx, sgls[i], bulk_perm,
 				     &local_bulk_hdl);
-		if (rc != 0) {
+		if (ret != 0) {
 			D_ERROR("dtp_bulk_create i %d failed, rc: %d.\n",
-				i, rc);
-			D_FREE_PTR(arg);
-			D_GOTO(out, rc);
+				i, ret);
+			/**
+			 * Sigh, future can not be abort now, let's
+			 * continue until of all of future compartments
+			 * have been set.
+			 **/
+			ABT_future_set(future, &ret);
+			if (rc == 0)
+				rc = ret;
 		}
 
 		dtp_req_addref(rpc);
@@ -385,20 +364,23 @@ dsms_bulk_transfer(dtp_rpc_t *rpc, daos_handle_t dph, daos_handle_t dch,
 		bulk_desc.bd_remote_off = 0;
 		bulk_desc.bd_local_off = 0;
 
-		rc = dtp_bulk_transfer(&bulk_desc,
-				       bulk_complete_cb,
-				       arg, &bulk_opid);
-		if (rc < 0) {
-			D_ERROR("dtp_bulk_transfer failed, rc: %d.\n", rc);
+		ret = dtp_bulk_transfer(&bulk_desc, bulk_complete_cb,
+					&arg, &bulk_opid);
+		if (ret < 0) {
+			D_ERROR("dtp_bulk_transfer failed, rc: %d.\n", ret);
 			dtp_bulk_free(local_bulk_hdl);
 			dtp_req_decref(rpc);
-			D_FREE_PTR(arg);
-			D_GOTO(out, rc);
+			ABT_future_set(future, &ret);
+			if (rc == 0)
+				rc = ret;
 		}
-		if (bulk_sent != NULL)
-			*bulk_sent = true;
 	}
-out:
+
+	ABT_future_wait(future);
+	if (rc == 0)
+		rc = arg.result;
+
+	ABT_future_free(&future);
 	return rc;
 }
 
@@ -411,8 +393,6 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
 	daos_sg_list_t		**sgls = NULL;
 	dtp_bulk_op_t		bulk_op;
-	struct daos_ref		*dref;
-	bool			bulk_sent = false;
 	int			i;
 	int			rc;
 
@@ -429,13 +409,6 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	D_ALLOC_PTR(dref);
-	if (dref == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rpc->dr_final_cb = obj_rpc_final_cb;
-	rpc->dr_data = dref;
-	daos_ref_init(dref, oui->oui_nr);
 	if (opc_get(rpc->dr_opc) == DSM_TGT_OBJ_UPDATE) {
 		rc = vos_obj_zc_update_begin(dch, oui->oui_oid, oui->oui_epoch,
 					     &oui->oui_dkey, oui->oui_nr,
@@ -496,14 +469,10 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		vos_obj_zc_vec2sgl(ioh, i, &sgls[i]);
 
 	rc = dsms_bulk_transfer(rpc, dph, dch, oui->oui_bulks.arrays,
-				sgls, NULL, ioh, oui->oui_nr, bulk_op,
-				&bulk_sent);
-	if (!bulk_sent)
-		D_GOTO(out, rc);
-
-	return rc;
+				sgls, NULL, ioh, oui->oui_nr, bulk_op);
 out:
 	dsms_rw_complete(rpc, ioh, rc);
+
 	return rc;
 }
 
@@ -513,7 +482,6 @@ dsms_eu_bulks_prep(dtp_rpc_t *rpc, int nr, daos_iov_t **piovs,
 {
 	daos_iov_t	*iovs = NULL;
 	daos_sg_list_t	**sgls = NULL;
-	struct daos_ref	*dref;
 	int		i;
 	int		rc;
 
@@ -525,13 +493,6 @@ dsms_eu_bulks_prep(dtp_rpc_t *rpc, int nr, daos_iov_t **piovs,
 	if (sgls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_ALLOC_PTR(dref);
-	if (dref == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rpc->dr_final_cb = obj_rpc_final_cb;
-	rpc->dr_data = dref;
-	daos_ref_init(dref, nr);
 	for (i = 0; i < nr; i++) {
 		daos_size_t bulk_len = 0;
 
@@ -582,7 +543,6 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 	daos_handle_t			ih;
 	int				rc = 0;
 	int				dkey_nr = 0;
-	bool				bulk_sent = false;
 
 	oei = dtp_req_get(rpc);
 	if (oei == NULL)
@@ -696,11 +656,8 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 
 	rc = dsms_bulk_transfer(rpc, dph, dch, &oei->oei_bulk,
 				sgls, iovs, DAOS_HDL_INVAL, 1,
-				DTP_BULK_PUT, &bulk_sent);
-	if (!bulk_sent)
-		D_GOTO(out, rc);
+				DTP_BULK_PUT);
 
-	return rc;
 out:
 	dsms_eu_complete(rpc, sgls, iovs, rc);
 	return rc;

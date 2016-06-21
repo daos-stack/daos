@@ -243,7 +243,9 @@ dsm_set_reply_status(dtp_rpc_t *rpc, int status)
 	 * status offset and set it, but let's put status
 	 * in front of the bulk reply for now
 	 **/
+	D_ASSERT(rpc != NULL);
 	ret = dtp_reply_get(rpc);
+	D_ASSERT(ret != NULL);
 	*ret = status;
 }
 

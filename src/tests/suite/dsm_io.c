@@ -520,8 +520,8 @@ enumerate_simple(void **state)
 	ioreq_init(&req, tgt, oid, (test_arg_t *)*state);
 
 	/** Insert record*/
-	print_message("Insert 1000 kv records\n");
-	for (i = 0; i < 1000; i++) {
+	print_message("Insert 10000 kv records\n");
+	for (i = 0; i < 10000; i++) {
 		char dkey[10];
 
 		sprintf(dkey, "%d", i);
@@ -556,7 +556,7 @@ next:
 	free(buf);
 	/** XXX Verify kds */
 	ioreq_fini(&req);
-	assert_int_equal(total_keys, 1000);
+	assert_int_equal(total_keys, 10000);
 }
 
 /** very basic enumerate */

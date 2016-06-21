@@ -257,30 +257,6 @@ bool
 daos_rank_list_identical(daos_rank_list_t *rank_list1,
 			 daos_rank_list_t *rank_list2, bool input);
 
-struct daos_ref {
-	pthread_mutex_t dr_lock;
-	int dr_ref;
-};
-
-static inline void
-daos_ref_init(struct daos_ref *dr, int init)
-{
-	pthread_mutex_init(&dr->dr_lock, NULL);
-	dr->dr_ref = init;
-}
-
-static inline int
-daos_ref_dec_and_test(struct daos_ref *dr)
-{
-	pthread_mutex_lock(&dr->dr_lock);
-	if (--dr->dr_ref == 0) {
-		pthread_mutex_unlock(&dr->dr_lock);
-		return 1;
-	}
-	pthread_mutex_unlock(&dr->dr_lock);
-	return 0;
-}
-
 struct daos_oper_grp;
 typedef int (*daos_oper_grp_comp_t)(void *args, int rc);
 

@@ -26,6 +26,7 @@
  */
 
 #include <signal.h>
+#include <abt.h>
 #include <stdlib.h>
 #include <getopt.h>
 #include <errno.h>
@@ -221,6 +222,11 @@ main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	rc = ABT_init(argc, argv);
+	if (rc != 0) {
+		D_ERROR("failed to init ABT: %d\n", rc);
+		exit(EXIT_FAILURE);
+	}
 	/** server initialization */
 	rc = server_init();
 	if (rc)
@@ -239,5 +245,6 @@ main(int argc, char **argv)
 	/** shutdown */
 	server_fini(true);
 
+	ABT_finalize();
 	exit(EXIT_SUCCESS);
 }

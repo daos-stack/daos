@@ -26,6 +26,7 @@
  */
 
 #include <dtp_internal.h>
+#include <abt.h>
 
 static na_return_t
 na_addr_lookup_cb(const struct na_cb_info *callback_info)
@@ -485,6 +486,20 @@ dtp_hg_context_lookup(hg_context_t *hg_ctx)
 	return (found == 1) ? dtp_ctx : NULL;
 }
 
+static void
+dtp_handle_rpc(void *arg)
+{
+	struct dtp_rpc_priv	*rpc_priv = arg;
+	dtp_rpc_t		*rpc_pub;
+
+	D_ASSERT(rpc_priv != NULL);
+	D_ASSERT(rpc_priv->drp_opc_info != NULL);
+	D_ASSERT(rpc_priv->drp_opc_info->doi_rpc_cb != NULL);
+	rpc_pub = &rpc_priv->drp_pub;
+	rpc_priv->drp_opc_info->doi_rpc_cb(rpc_pub);
+	dtp_req_decref(rpc_pub);
+}
+
 int
 dtp_rpc_handler_common(hg_handle_t hg_hdl)
 {
@@ -580,20 +595,22 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 
 	if (opc_info->doi_rpc_cb != NULL) {
-		rc = opc_info->doi_rpc_cb(rpc_pub);
-		if (rc != 0) {
-			D_ERROR("doi_rpc_cb failed, rc: %d, opc: 0x%x.\n",
-				rc, opc);
-		}
+		rc = ABT_thread_create(*(ABT_pool *)dtp_ctx->dc_pool,
+				       dtp_handle_rpc, rpc_priv,
+				       ABT_THREAD_ATTR_NULL, NULL);
 	} else {
 		D_ERROR("NULL drp_hg_hdl, opc: 0x%x.\n", opc);
 		hg_ret = HG_NO_MATCH;
 	}
 
 decref:
-	rc = dtp_req_decref(rpc_pub);
-	if (rc != 0)
-		D_ERROR("dtp_req_decref failed, rc: %d.\n", rc);
+	if (rc != 0) {
+		int rc1;
+
+		rc1 = dtp_req_decref(rpc_pub);
+		if (rc1 != 0)
+			D_ERROR("dtp_req_decref failed, rc: %d.\n", rc1);
+	}
 out:
 	return hg_ret;
 }
@@ -931,13 +948,35 @@ out:
 	return rc;
 }
 
+static int
+dtp_hg_trigger(hg_context_t *hg_context)
+{
+	hg_return_t hg_ret = HG_SUCCESS;
+	unsigned int    count = 0;
+
+	do {
+		hg_ret = HG_Trigger(hg_context, 0, UINT32_MAX, &count);
+	} while (hg_ret == HG_SUCCESS && count > 0);
+
+	if (hg_ret != HG_TIMEOUT) {
+		D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
+		return -DER_DTP_HG;
+	}
+
+	/**
+	 * XXX Let's yield to other process anyway, but there
+	 * maybe better strategy when there are more use cases
+	 */
+	ABT_thread_yield();
+	return 0;
+}
+
 int
 dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout)
 {
 	hg_context_t    *hg_context;
 	hg_class_t      *hg_class;
 	hg_return_t     hg_ret = HG_SUCCESS;
-	unsigned int    count = 0;
 	unsigned int	hg_timeout;
 	int             rc;
 
@@ -958,16 +997,9 @@ dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout)
 
 	}
 
-	/** execute pending callbacks, if any */
-	hg_ret = HG_Trigger(hg_context, 0, UINT32_MAX, &count);
-	if (hg_ret == HG_SUCCESS) {
-		if (count > 0)
-			/** some callbacks got executed, inform the caller */
-			D_GOTO(out, rc = 0);
-	} else if (hg_ret != HG_TIMEOUT) {
-		D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_DTP_HG);
-	}
+	rc = dtp_hg_trigger(hg_context);
+	if (rc != 0)
+		return rc;
 
 	/** progress RPC execution */
 	hg_ret = HG_Progress(hg_context, hg_timeout);
@@ -978,13 +1010,9 @@ dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout)
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
 
-	/* some RPCs have progressed, call HG_Trigger again */
-	hg_ret = HG_Trigger(hg_context, 0, UINT32_MAX, &count);
-	if (hg_ret != HG_TIMEOUT && hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Trigger failed, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_DTP_HG);
-	}
-	D_GOTO(out, rc = 0);
+	/* some RPCs have progressed, call Trigger again */
+	rc = dtp_hg_trigger(hg_context);
+
 out:
 	return rc;
 }
