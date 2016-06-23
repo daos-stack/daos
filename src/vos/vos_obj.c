@@ -736,14 +736,11 @@ vos_obj_zc_fetch_end(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int vio_nr,
 }
 
 static daos_size_t
-vos_recx2irec_size(daos_recx_t *recx)
+vos_recx2irec_size(daos_recx_t *recx, daos_csum_buf_t *csum)
 {
 	struct vos_rec_bundle	rbund;
-	daos_csum_buf_t		csum;
 
-	memset(&csum, 0, sizeof(csum)); /* XXX */
-
-	rbund.rb_csum	= &csum;
+	rbund.rb_csum	= csum;
 	rbund.rb_recx	= recx;
 	return vos_irec_size(&rbund);
 }
@@ -772,10 +769,13 @@ vos_vec_zc_update_begin(struct vos_obj_ref *oref, daos_vec_iod_t *vio,
 
 	for (i = 0; i < vio->vd_nr; i++) {
 		daos_recx_t	*recx = &vio->vd_recxs[i];
+		daos_csum_buf_t *csum;
 		struct vos_irec	*irec;
 		umem_id_t	 mmid;
 
-		mmid = umem_alloc(vos_oref2umm(oref), vos_recx2irec_size(recx));
+		csum = vio->vd_csums == NULL ? NULL : &vio->vd_csums[i];
+		mmid = umem_alloc(vos_oref2umm(oref),
+				  vos_recx2irec_size(recx, csum));
 		if (UMMID_IS_NULL(mmid))
 			return -DER_NOMEM;
 
@@ -785,6 +785,8 @@ vos_vec_zc_update_begin(struct vos_obj_ref *oref, daos_vec_iod_t *vio,
 		 * update for the record.
 		 */
 		irec = (struct vos_irec *)umem_id2ptr(vos_oref2umm(oref), mmid);
+		irec->ir_cs_size = csum == NULL ? 0 : csum->cs_len;
+		irec->ir_cs_type = csum == NULL ? 0 : csum->cs_type;
 		daos_iov_set(&zbuf->zb_sgl.sg_iovs[i],
 			     vos_irec2data(irec), recx->rx_rsize * recx->rx_nr);
 	}

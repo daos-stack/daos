@@ -351,9 +351,10 @@ vos_krec2dkey(struct vos_krec *krec)
 static inline uint64_t
 vos_irec_size(struct vos_rec_bundle *rbund)
 {
-	uint64_t size;
+	uint64_t size = 0;
 
-	size = vos_size_round(rbund->rb_csum->cs_len);
+	if (rbund->rb_csum != NULL)
+		size = vos_size_round(rbund->rb_csum->cs_len);
 	return size + sizeof(struct vos_irec) +
 	       rbund->rb_recx->rx_rsize * rbund->rb_recx->rx_nr;
 }

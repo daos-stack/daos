@@ -137,10 +137,12 @@ kbtr_rec_fetch_out(struct btr_instance *tins, struct btr_record *rec,
 	csum->cs_len  = krec->kr_cs_size;
 	csum->cs_type = krec->kr_cs_type;
 
-	if (iov->iov_buf == NULL)
+	if (iov->iov_buf == NULL) {
 		iov->iov_buf = vos_krec2dkey(krec);
-	else if (iov->iov_buf_len >= iov->iov_len)
+		iov->iov_buf_len = krec->kr_size;
+	} else if (iov->iov_buf_len >= iov->iov_len) {
 		memcpy(iov->iov_buf, vos_krec2dkey(krec), iov->iov_len);
+	}
 
 	if (csum->cs_csum == NULL)
 		csum->cs_csum = vos_krec2csum(krec);
@@ -434,10 +436,12 @@ ibtr_rec_fetch_out(struct btr_instance *tins, struct btr_record *rec,
 	if (irec->ir_size == 0)
 		return 0; /* punched record */
 
-	if (iov->iov_buf == NULL)
+	if (iov->iov_buf == NULL) {
 		iov->iov_buf = vos_irec2data(irec);
-	else if (iov->iov_buf_len >= iov->iov_len)
+		iov->iov_buf_len = irec->ir_size;
+	} else if (iov->iov_buf_len >= iov->iov_len) {
 		memcpy(iov->iov_buf, vos_irec2data(irec), iov->iov_len);
+	}
 
 	if (csum->cs_csum == NULL)
 		csum->cs_csum = vos_irec2csum(irec);
