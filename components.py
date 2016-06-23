@@ -83,7 +83,9 @@ REQS.define('mercury',
                       '-DNA_USE_BMI=ON -DBUILD_TESTING=ON ' \
                       '-DNA_USE_CCI=ON ' \
                       '-DBUILD_DOCUMENTATION=OFF ' \
-                      '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC'
+                      '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC ' \
+                      '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib ' \
+                      '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE'
                       % (BMI_LIB, CCI_LIB), 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
             requires=['bmi', 'openpa', 'boost', 'cci'] + RT,
