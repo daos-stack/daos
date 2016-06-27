@@ -123,6 +123,10 @@ pool_connect_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 	/* add pool to hash */
 	dsmc_pool_add_cache(pool, sp->sp_hdlp);
 
+	D_DEBUG(DF_DSMC, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID
+		" master\n", DP_UUID(pool->dp_pool), sp->sp_hdlp->cookie,
+		DP_UUID(pool->dp_pool_hdl));
+
 	if (info == NULL)
 		D_GOTO(out, rc = 0);
 
@@ -133,8 +137,6 @@ pool_connect_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 	info->pi_space.foo = 0;
 
 out:
-	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64"\n",
-		DP_UUID(pool->dp_pool), rc == 0 ? sp->sp_hdlp->cookie : 0);
 	dtp_bulk_free(pci->pci_pool_map_bulk);
 	dtp_req_decref(sp->sp_rpc);
 	D_FREE_PTR(arg);
@@ -175,8 +177,6 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 			return rc;
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID": enter: flags %x\n", DP_UUID(uuid), flags);
-
 	/** allocate and fill in pool connection */
 	pool = pool_alloc();
 	if (pool == NULL)
@@ -185,6 +185,9 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 	uuid_copy(pool->dp_pool, uuid);
 	uuid_generate(pool->dp_pool_hdl);
 	pool->dp_capas = flags;
+
+	D_DEBUG(DF_DSMC, DF_UUID": connecting: hdl="DF_UUIDF" flags=%x\n",
+		DP_UUID(uuid), DP_UUID(pool->dp_pool_hdl), flags);
 
 	/* Prepare "map_sgl" for dtp_bulk_create(). */
 	map_buf = pool_buf_alloc(128);
@@ -286,8 +289,10 @@ pool_disconnect_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64" (on master).\n",
-		DP_UUID(pool->dp_pool), sp->sp_hdl.cookie);
+	D_DEBUG(DF_DSMC, DF_UUID": disconnected: cookie="DF_X64" hdl="DF_UUID
+		" master\n", DP_UUID(pool->dp_pool), sp->sp_hdl.cookie,
+		DP_UUID(pool->dp_pool_hdl));
+
 	dsmc_pool_del_cache(pool);
 	sp->sp_hdl.cookie = 0;
 out:
@@ -310,8 +315,9 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	if (pool == NULL)
 		return -DER_NO_HDL;
 
-	D_DEBUG(DF_DSMC, DF_UUID": enter: hdl "DF_X64"\n",
-		DP_UUID(pool->dp_pool), poh.cookie);
+	D_DEBUG(DF_DSMC, DF_UUID": disconnecting: hdl="DF_UUID" cookie="DF_X64
+		"\n", DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl),
+		poh.cookie);
 
 	pthread_rwlock_rdlock(&pool->dp_co_list_lock);
 	if (!daos_list_empty(&pool->dp_co_list)) {
@@ -323,8 +329,9 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
 	if (pool->dp_slave) {
-		D_DEBUG(DF_DSMC, DF_UUID": leave: hdl "DF_X64" (on slave).\n",
-			DP_UUID(pool->dp_pool), poh.cookie);
+		D_DEBUG(DF_DSMC, DF_UUID": disconnecting: cookie="DF_X64" hdl="
+			DF_UUID" slave\n", DP_UUID(pool->dp_pool), poh.cookie,
+			DP_UUID(pool->dp_pool_hdl));
 		dsmc_pool_del_cache(pool);
 		poh.cookie = 0;
 		dsmc_pool_put(pool);
@@ -533,6 +540,10 @@ dsmc_pool_g2l(struct dsmc_pool_glob *pool_glob, daos_handle_t *poh)
 
 	/* add pool to hash */
 	dsmc_pool_add_cache(pool, poh);
+
+	D_DEBUG(DF_DSMC, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID
+		" slave\n", DP_UUID(pool->dp_pool), poh->cookie,
+		DP_UUID(pool->dp_pool_hdl));
 
 out:
 	if (rc != 0) {

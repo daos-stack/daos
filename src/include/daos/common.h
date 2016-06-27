@@ -134,16 +134,18 @@ do {									\
 #define DF_UOID		DF_OID".%u"
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
 
-/* Only print the first eight bytes. */
-#define DF_UUID		DF_X64
-
-static inline uint64_t
-DP_UUID(const void *uuid)
-{
-	const uint64_t *p = (const uint64_t *)uuid;
-
-	return *p;
-}
+/*
+ * Each thread has DF_UUID_MAX number of thread-local buffers for UUID strings.
+ * Each debug message can have at most this many DP_UUIDs.
+ *
+ * DF_UUID prints the first eight characters of the string representation,
+ * while DF_UUIDF prints the full 36-character string representation. DP_UUID()
+ * matches both DF_UUID and DF_UUIDF.
+ */
+#define DF_UUID_MAX	8
+#define DF_UUID		"%.8s"
+#define DF_UUIDF	"%s"
+char *DP_UUID(const void *uuid);
 
 /* For prefixes of error messages about a container */
 #define DF_CONT			DF_UUID"/"DF_UUID": "

@@ -84,7 +84,8 @@ dsm_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 		}
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID"\n", DP_UUID(uuid));
+	D_DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
+		DP_UUID(pool->dp_pool), DP_UUID(uuid));
 
 	/* To the only container service. */
 	uuid_clear(ep.ep_grp_id);
@@ -178,7 +179,8 @@ dsm_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 		}
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID" force=%d\n", DP_UUID(uuid), force);
+	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
+		DP_UUID(pool->dp_pool), DP_UUID(uuid), force);
 
 	/* To the only container service. */
 	uuid_clear(ep.ep_grp_id);
@@ -276,8 +278,6 @@ cont_open_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DF_DSMC, "completed opening container\n");
-
 	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
 	if (pool->dp_disconnecting) {
 		pthread_rwlock_unlock(&pool->dp_co_list_lock);
@@ -294,6 +294,10 @@ cont_open_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
 	dsmc_container_add_cache(cont, sp->sp_hdlp);
+
+	D_DEBUG(DF_DSMC, DF_CONT": opened: cookie="DF_X64" hdl="DF_UUID
+		" master\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
+		sp->sp_hdlp->cookie, DP_UUID(cont->dc_cont_hdl));
 
 	if (arg->coa_info == NULL)
 		D_GOTO(out, rc = 0);
@@ -344,14 +348,16 @@ dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 			D_GOTO(err_pool, rc);
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID"\n", DP_UUID(uuid));
-
 	cont = dsmc_container_alloc(uuid);
 	if (cont == NULL)
 		D_GOTO(err_pool, rc = -DER_NOMEM);
 
 	uuid_generate(cont->dc_cont_hdl);
 	cont->dc_capas = flags;
+
+	D_DEBUG(DF_DSMC, DF_CONT": opening: hdl="DF_UUIDF" flags=%x\n",
+		DP_CONT(pool->dp_pool, uuid), DP_UUID(cont->dc_cont_hdl),
+		flags);
 
 	D_ALLOC_PTR(arg);
 	if (arg == NULL) {
@@ -434,7 +440,9 @@ cont_close_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DF_DSMC, "completed closing container (on master)\n");
+	D_DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
+		" master\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
+		sp->sp_hdl.cookie, DP_UUID(cont->dc_cont_hdl));
 
 	dsmc_container_del_cache(cont);
 
@@ -479,8 +487,8 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 	pool = dsmc_handle2pool(cont->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
 
-	D_DEBUG(DF_DSMC, DF_UUID"/"DF_UUID": "DF_UUID"\n",
-		DP_UUID(pool->dp_pool), DP_UUID(cont->dc_uuid),
+	D_DEBUG(DF_DSMC, DF_CONT": closing: cookie="DF_X64" hdl="DF_UUID"\n",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), coh.cookie,
 		DP_UUID(cont->dc_cont_hdl));
 
 	if (cont->dc_slave) {
@@ -498,7 +506,9 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 			daos_event_launch(ev, NULL, NULL);
 			daos_event_complete(ev, 0);
 		}
-		D_DEBUG(DF_DSMC, "completed closing container (on slave)\n");
+		D_DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
+			"\n", DP_CONT(pool->dp_pool, cont->dc_uuid), coh.cookie,
+			DP_UUID(cont->dc_cont_hdl));
 		return 0;
 	}
 
@@ -536,6 +546,7 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 	sp = daos_ev2sp(ev);
 	dtp_req_addref(rpc);
 	sp->sp_rpc = rpc;
+	sp->sp_hdl = coh;
 	sp->sp_arg = arg;
 
 	rc = daos_event_launch(ev, NULL /* abort_cb */, cont_close_complete);
@@ -697,6 +708,11 @@ dsmc_co_g2l(daos_handle_t poh, struct dsmc_container_glob *cont_glob,
 
 	dsmc_container_add_cache(cont, coh);
 
+	D_DEBUG(DF_DSMC, DF_UUID": opened "DF_UUID": cookie="DF_X64" hdl="
+		DF_UUID" slave\n", DP_UUID(pool->dp_pool),
+		DP_UUID(cont->dc_uuid), coh->cookie,
+		DP_UUID(cont->dc_cont_hdl));
+
 out_cont:
 	dsmc_container_put(cont);
 out_pool:
@@ -844,8 +860,8 @@ epoch_op(daos_handle_t coh, dtp_opcode_t opc, daos_epoch_t *epoch,
 			D_GOTO(err_pool, rc);
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID"/"DF_UUID": op=%u hdl="DF_UUID" epoch="DF_U64
-		"\n", DP_UUID(pool->dp_pool), DP_UUID(cont->dc_uuid), opc,
+	D_DEBUG(DF_DSMC, DF_CONT": op=%u hdl="DF_UUID" epoch="DF_U64"\n",
+		DP_CONT(pool->dp_pool, cont->dc_uuid), opc,
 		DP_UUID(cont->dc_cont_hdl), epoch == NULL ? 0 : *epoch);
 
 	D_ALLOC_PTR(arg);
