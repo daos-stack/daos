@@ -520,8 +520,12 @@ dsms_kvs_nv_open_kvs(daos_handle_t kvsh, const char *name, PMEMobjpool *mp,
 	key.iov_len = key.iov_buf_len;
 
 	rc = open_kvs(kvsh, &key, mp, kvsh_child);
-	if (rc != 0)
-		D_ERROR("failed to open \"%s\": %d\n", name, rc);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
+		else
+			D_ERROR("failed to open \"%s\": %d\n", name, rc);
+	}
 
 	return rc;
 }
@@ -538,8 +542,12 @@ dsms_kvs_nv_destroy_kvs(daos_handle_t kvsh, const char *name, PMEMobjpool *mp)
 	key.iov_len = key.iov_buf_len;
 
 	rc = destroy_kvs(kvsh, &key, mp);
-	if (rc != 0)
-		D_ERROR("failed to destroy \"%s\": %d\n", name, rc);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
+		else
+			D_ERROR("failed to destroy \"%s\": %d\n", name, rc);
+	}
 
 	return rc;
 }
@@ -816,8 +824,14 @@ dsms_kvs_uv_open_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp,
 	key.iov_len = key.iov_buf_len;
 
 	rc = open_kvs(kvsh, &key, mp, kvsh_child);
-	if (rc != 0)
-		D_ERROR("failed to open "DF_UUID": %d\n", DP_UUID(uuid), rc);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
+				DP_UUID(uuid));
+		else
+			D_ERROR("failed to open "DF_UUID": %d\n", DP_UUID(uuid),
+				rc);
+	}
 
 	return rc;
 }
@@ -834,8 +848,14 @@ dsms_kvs_uv_destroy_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp)
 	key.iov_len = key.iov_buf_len;
 
 	rc = destroy_kvs(kvsh, &key, mp);
-	if (rc != 0)
-		D_ERROR("failed to destroy "DF_UUID": %d\n", DP_UUID(uuid), rc);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
+				DP_UUID(uuid));
+		else
+			D_ERROR("failed to destroy "DF_UUID": %d\n",
+				DP_UUID(uuid), rc);
+	}
 
 	return rc;
 }
