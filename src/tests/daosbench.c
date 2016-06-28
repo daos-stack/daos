@@ -101,6 +101,8 @@ struct test {
 	int			t_nindexes;
 	/* Number of concurrent IO Reqs */
 	int			t_naios;
+	/* Test ID */
+	int			t_id;
 	/* Current epoch */
 	daos_epoch_t		t_epoch;
 };
@@ -269,9 +271,6 @@ kv_set_value(struct test *test, void *buf, int counter, int index)
 	       test->t_val_bufsize);
 }
 
-
-
-
 static void
 aio_req_init(struct test *test)
 {
@@ -392,27 +391,20 @@ chrono_read(char *key)
 
 
 static void
-object_open(int rank, daos_epoch_t epoch, int enum_flag,
-	    daos_handle_t *object)
+object_open(int t_id, daos_epoch_t epoch,
+	    int enum_flag, daos_handle_t *object)
 {
 	unsigned int	flags;
 	int		rc;
-	int		rand_obj_id;
-
-	if (rank == 0)
-		rand_obj_id = rand();
-
-	rc = MPI_Bcast(&rand_obj_id, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	DBENCH_CHECK(rc, "Error in broadcasting random object id");
 
 	if (enum_flag) {
-		oid.hi = rand_obj_id + comm_world_rank + 2;
-		oid.mid = rand_obj_id + comm_world_rank + 1;
-		oid.lo = rand_obj_id + comm_world_rank;
+		oid.hi = t_id + comm_world_rank + 2;
+		oid.mid = t_id + comm_world_rank + 1;
+		oid.lo = t_id + comm_world_rank;
 	} else {
-		oid.hi = rand_obj_id + 2;
-		oid.mid = rand_obj_id + 1;
-		oid.lo = rand_obj_id;
+		oid.hi = t_id + 2;
+		oid.mid = t_id + 1;
+		oid.lo = t_id;
 	}
 	dsr_obj_id_generate(&oid, obj_class);
 
@@ -421,7 +413,7 @@ object_open(int rank, daos_epoch_t epoch, int enum_flag,
 				     NULL);
 		DBENCH_CHECK(rc, "Failed to declare object");
 	} else {
-		if (rank == 0) {
+		if (comm_world_rank == 0) {
 			rc = dsr_obj_declare(coh, oid, epoch, NULL,
 					     NULL);
 			DBENCH_CHECK(rc, "Failed to declare object");
@@ -466,19 +458,16 @@ static void
 enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	  daos_hash_out_t *anchor, char *buf, int len, struct a_ioreq *req)
 {
-	int		rc;
-	daos_event_t	*evp;
+	int	rc;
 
 	daos_iov_set(&req->val_iov, buf, len);
 
 	/** execute fetch operation */
 	rc = dsr_obj_list_dkey(oh, epoch, number, kds,
 			       &req->sgl, anchor,
-			       &req->ev);
-	DBENCH_CHECK(rc, "Failed to list dkey\n");
-	rc = daos_eq_poll(eq, 1, DAOS_EQ_WAIT, 1, &evp);
-	DBENCH_CHECK(rc, "Failed to poll event queue");
-	assert(rc == 1);
+			       NULL);
+
+	DBENCH_CHECK(rc, "dsr_obj_list_dkey failed\n");
 }
 
 static void
@@ -674,7 +663,7 @@ kv_update_async(struct test *test, int idx_flag,
 		DBENCH_CHECK(rc, "Failed to hold epoch\n");
 	}
 
-	object_open(comm_world_rank, test->t_epoch, enum_flag, &oh);
+	object_open(test->t_id, test->t_epoch, enum_flag, &oh);
 
 	aio_req_init(test);
 	for (i = 0; i < counter; i++) {
@@ -1010,6 +999,7 @@ usage(void)
 Usage: daosbench -t TEST -p $UUID [OPTIONS]\n\
 	Options:\n\
 	--test=TEST | -t	Run TEST.\n\
+	--testid=id | -o	Test ID(unique for objectID) \n\
 	--aios=N | -a		Submit N in-flight I/O requests.\n\
 	--dpool=pool | -p	DAOS pool through dmg tool.\n\
 	--keys=N | -k		Number of keys to be created in the test. \n\
@@ -1039,6 +1029,7 @@ test_init(struct test *test, int argc, char *argv[])
 		{"dkey-size",		1,	NULL,	's'},
 		{"verbose",		0,	NULL,	'v'},
 		{"test",		1,	NULL,	't'},
+		{"testid",		1,	NULL,	'o'},
 		{"check-tests",		0,	NULL,	'c'},
 		{"test",		1,	NULL,	't'},
 		{"dpool",		1,	NULL,	'p'},
@@ -1059,6 +1050,7 @@ test_init(struct test *test, int argc, char *argv[])
 	test->t_naios = 16;
 	test->t_nindexes = 1;
 	test->t_pname = NULL;
+	test->t_id = -1;
 	t_validate = false;
 	t_pretty_print = false;
 
@@ -1066,7 +1058,7 @@ test_init(struct test *test, int argc, char *argv[])
 	if (comm_world_rank != 0)
 		opterr = 0;
 
-	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:p:s:hvcd",
+	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:o:p:s:hvcd",
 				 options, NULL)) != -1) {
 		switch (rc) {
 		case 'a':
@@ -1086,6 +1078,9 @@ test_init(struct test *test, int argc, char *argv[])
 			break;
 		case 'p':
 			test->t_pname = strdup(optarg);
+			break;
+		case 'o':
+			test->t_id = atoi(optarg);
 			break;
 		case 'c':
 			t_validate = true;
@@ -1134,6 +1129,14 @@ test_init(struct test *test, int argc, char *argv[])
 			fprintf(stderr,
 				"daosbench: '--test' must be specified\n");
 		return 2;
+	}
+
+	if (test->t_id < 0) {
+		if (comm_world_rank == 0)
+			fprintf(stderr,
+				"daosbench: '--testid' must be specified\n");
+		return 2;
+
 	}
 
 	if (!test->t_pname) {
