@@ -70,4 +70,13 @@ dtp_bulk_desc_dup(struct dtp_bulk_desc *bulk_desc_new,
 	*bulk_desc_new = *bulk_desc;
 }
 
+static inline uint64_t
+dtp_time_usec(unsigned sec_diff)
+{
+	struct timeval	tv;
+
+	gettimeofday(&tv, NULL);
+	return (tv.tv_sec + sec_diff) * 1000 * 1000 + tv.tv_usec;
+}
+
 #endif /* __DTP_INTERNAL_FNS_H__ */

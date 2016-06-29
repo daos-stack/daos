@@ -30,87 +30,110 @@
 static na_return_t
 na_addr_lookup_cb(const struct na_cb_info *callback_info)
 {
-    na_addr_t *addr_ptr = (na_addr_t *) callback_info->arg;
-    na_return_t ret = NA_SUCCESS;
+	na_addr_t	*addr_ptr = (na_addr_t *) callback_info->arg;
+	na_return_t	ret = NA_SUCCESS;
 
-    if (callback_info->ret != NA_SUCCESS) {
-        NA_LOG_ERROR("Return from callback with %s error code",
-                NA_Error_to_string(callback_info->ret));
-        return ret;
-    }
+	if (callback_info->ret != NA_SUCCESS) {
+		NA_LOG_ERROR("Return from callback with %s error code",
+		NA_Error_to_string(callback_info->ret));
+		return ret;
+	}
 
-    *addr_ptr = callback_info->info.lookup.addr;
+	*addr_ptr = callback_info->info.lookup.addr;
 
-    return ret;
+	return ret;
 }
+
+/* connection timeout 10 second */
+#define DTP_CONNECT_TIMEOUT_SEC		(10)
 
 na_return_t
 dtp_na_addr_lookup_wait(na_class_t *na_class, const char *name, na_addr_t *addr)
 {
-    na_addr_t new_addr = NULL;
-    na_bool_t lookup_completed = NA_FALSE;
-    na_context_t *context = NULL;
-    na_return_t ret = NA_SUCCESS;
+	na_addr_t		new_addr = NULL;
+	na_context_t		*context = NULL;
+	uint64_t		now;
+	uint64_t		end;
+	unsigned int		prog_msec;
+	na_return_t		ret = NA_SUCCESS;
 
-    if (!na_class) {
-        NA_LOG_ERROR("NULL NA class");
-        ret = NA_INVALID_PARAM;
-        goto done;
-    }
-    if (!name) {
-        NA_LOG_ERROR("Lookup name is NULL");
-        ret = NA_INVALID_PARAM;
-        goto done;
-    }
-    if (!addr) {
-        NA_LOG_ERROR("NULL pointer to na_addr_t");
-        ret = NA_INVALID_PARAM;
-        goto done;
-    }
+	if (!na_class) {
+		NA_LOG_ERROR("NULL NA class");
+		ret = NA_INVALID_PARAM;
+		goto done;
+	}
+	if (!name) {
+		NA_LOG_ERROR("Lookup name is NULL");
+		ret = NA_INVALID_PARAM;
+		goto done;
+	}
+	if (!addr) {
+		NA_LOG_ERROR("NULL pointer to na_addr_t");
+		ret = NA_INVALID_PARAM;
+		goto done;
+	}
 
-    context = NA_Context_create(na_class);
-    if (!context) {
-        NA_LOG_ERROR("Could not create context");
-        goto done;
-    }
+	context = NA_Context_create(na_class);
+	if (!context) {
+		NA_LOG_ERROR("Could not create context");
+		ret = NA_PROTOCOL_ERROR;
+		goto done;
+	}
 
-    ret = NA_Addr_lookup(na_class, context, &na_addr_lookup_cb, &new_addr, name,
-            NA_OP_ID_IGNORE);
-    if (ret != NA_SUCCESS) {
-        NA_LOG_ERROR("Could not start NA_Addr_lookup");
-        goto done;
-    }
-
-    while (!lookup_completed) {
-        na_return_t trigger_ret;
-        unsigned int actual_count = 0;
-
-        do {
-            trigger_ret = NA_Trigger(context, 0, 1, &actual_count);
-        } while ((trigger_ret == NA_SUCCESS) && actual_count);
-
-        if (new_addr) {
-            lookup_completed = NA_TRUE;
-            *addr = new_addr;
-        }
-
-        if (lookup_completed) break;
-
-        ret = NA_Progress(na_class, context, NA_MAX_IDLE_TIME);
+	ret = NA_Addr_lookup(na_class, context, &na_addr_lookup_cb, &new_addr,
+			     name, NA_OP_ID_IGNORE);
         if (ret != NA_SUCCESS) {
-            NA_LOG_ERROR("Could not make progress");
-            goto done;
-        }
-    }
+		NA_LOG_ERROR("Could not start NA_Addr_lookup");
+		goto done;
+	}
 
-    ret = NA_Context_destroy(na_class, context);
-    if (ret != NA_SUCCESS) {
-        NA_LOG_ERROR("Could not destroy context");
-        goto done;
-    }
+	end = dtp_time_usec(DTP_CONNECT_TIMEOUT_SEC);
+	prog_msec = 1;
+
+	while (1) {
+		na_return_t	trigger_ret;
+		unsigned int	actual_count = 0;
+
+		do {
+			trigger_ret = NA_Trigger(context, 0, 1, &actual_count);
+		} while ((trigger_ret == NA_SUCCESS) && actual_count);
+
+		if (new_addr != NULL) {
+			*addr = new_addr;
+			break;
+		}
+
+		ret = NA_Progress(na_class, context, prog_msec);
+		if (ret != NA_SUCCESS && ret != NA_TIMEOUT) {
+			NA_LOG_ERROR("Could not make progress");
+			break;
+		}
+
+		now = dtp_time_usec(0);
+		if (now >= end) {
+			char		my_host[DTP_ADDR_STR_MAX_LEN] = {'\0'};
+			daos_rank_t	my_rank;
+
+			dtp_group_rank(0, &my_rank);
+			gethostname(my_host, DTP_ADDR_STR_MAX_LEN);
+
+			D_ERROR("Could not connect to %s within %d second "
+				"(rank %d, host %s).\n", name,
+				DTP_CONNECT_TIMEOUT_SEC, my_rank, my_host);
+			ret = NA_TIMEOUT;
+			break;
+		}
+
+		if (prog_msec <= 512)
+			prog_msec = prog_msec << 1;
+	}
+
+	NA_Context_destroy(na_class, context);
 
 done:
-    return ret;
+	if (new_addr == NULL)
+		D_ASSERT(ret != NA_SUCCESS);
+	return ret;
 }
 
 static int
@@ -163,9 +186,9 @@ dtp_hg_init(dtp_phy_addr_t *addr, bool server)
 		D_ASSERT(strncmp(info_string, "bmi+tcp", 7) == 0);
 	} else {
 		if (dtp_gdata.dg_verbs == true)
-			info_string = "cci+verbs://host";
+			info_string = "cci+verbs://";
 		else
-			info_string = "cci+tcp://host";
+			info_string = "cci+tcp://";
 	}
 
 	na_class = NA_Initialize(info_string, server);
@@ -327,9 +350,9 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 		daos_size_t	str_size = DTP_ADDR_STR_MAX_LEN;
 
 		if (dtp_gdata.dg_verbs == true)
-			info_string = "cci+verbs://host";
+			info_string = "cci+verbs://";
 		else
-			info_string = "cci+tcp://host";
+			info_string = "cci+tcp://";
 
 		na_class = NA_Initialize(info_string, dtp_gdata.dg_server);
 		if (na_class == NULL) {
