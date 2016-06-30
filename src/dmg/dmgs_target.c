@@ -98,21 +98,27 @@ subtree_destroy(const char *path)
 int
 dmgs_tgt_init(void)
 {
-	int rc;
+	mode_t	stored_mode, mode;
+	int	rc;
 
+	stored_mode = umask(0);
+	mode = S_IRWXU | S_IRWXG | S_IRWXO;
 	/** create NEWBORNS directory if it does not exist already */
-	rc = mkdir(NEWBORNS, 0700);
+	rc = mkdir(NEWBORNS, mode);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
+		umask(stored_mode);
 		return daos_errno2der(errno);
 	}
 
 	/** create ZOMBIES directory if it does not exist already */
-	rc = mkdir(ZOMBIES, 0700);
+	rc = mkdir(ZOMBIES, mode);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
+		umask(stored_mode);
 		return daos_errno2der(errno);
 	}
+	umask(stored_mode);
 
 	/** remove leftover from previous runs */
 	rc = subtree_destroy(NEWBORNS);
@@ -277,8 +283,10 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t size, char *path)
 
 	/** initialize DAOS-M target and fetch uuid */
 	rc = dsms_pool_create(pool_uuid, newborn, tgt_uuid);
-	if (rc)
+	if (rc) {
+		D_ERROR("dsms_pool_create failed, rc: %d.\n", rc);
 		D_GOTO(out_tree, rc);
+	}
 
 	/** ready for prime time, move away from NEWBORNS dir */
 	rc = rename(newborn, path);
