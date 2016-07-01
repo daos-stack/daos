@@ -141,20 +141,28 @@ def check_script(fname, *args, **kw):
     else:
         pylint_path = "{path}"
 
-    if not kw.get("P3", False):
-        version = "python"
-        rc_file = "pylint.rc"
+    if os.path.exists('/usr/bin/pylint'):
+        if not kw.get("P3", False):
+            pylint = "python2 /usr/bin/pylint"
+            rc_file = "pylint.rc"
+        else:
+            print "use python3"
+            pylint = "python3 /usr/bin/pylint"
+            rc_file = "pylint3.rc"
     else:
-        print "use python3"
-        version = "python3.4"
-        rc_file = "pylint3.rc"
+        if not kw.get("P3", False):
+            pylint = "pylint"
+            rc_file = "pylint.rc"
+        else:
+            print "Unable to check python 3 code under pylint on this machine"
+            return 0
 
     rc_dir = os.path.dirname(os.path.realpath(__file__))
 
-    cmd = "%s /usr/bin/pylint %s --rcfile=%s/%s " \
+    cmd = "%s %s --rcfile=%s/%s " \
           "--msg-template '{C}: %s:{line}: pylint-{symbol}: {msg}' " \
           "%s > tmp.log 2>&1"% \
-          (version, " ".join(args), rc_dir, rc_file, pylint_path, tmp_fname)
+          (pylint, " ".join(args), rc_dir, rc_file, pylint_path, tmp_fname)
 
     if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
         print cmd
