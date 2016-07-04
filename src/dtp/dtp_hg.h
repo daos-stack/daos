@@ -75,6 +75,7 @@ int dtp_hg_req_destroy(struct dtp_rpc_priv *rpc_priv);
 int dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb,
 		    void *arg);
 int dtp_hg_reply_send(struct dtp_rpc_priv *rpc_priv);
+int dtp_hg_req_cancel(struct dtp_rpc_priv *rpc_priv);
 int dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout);
 
 int dtp_rpc_handler_common(hg_handle_t hg_hdl);
@@ -156,4 +157,10 @@ int dtp_hg_bulk_access(dtp_bulk_t bulk_hdl, daos_sg_list_t *sgl);
 int dtp_hg_bulk_transfer(struct dtp_bulk_desc *bulk_desc,
 			 dtp_bulk_cb_t complete_cb,
 			 void *arg, dtp_bulk_opid_t *opid);
+static inline int
+dtp_hg_bulk_cancel(dtp_bulk_opid_t opid)
+{
+	return HG_Bulk_cancel(opid);
+}
+
 #endif /* __DTP_MERCURY_H__ */

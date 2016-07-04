@@ -183,7 +183,23 @@ out:
 int
 dtp_req_abort(dtp_rpc_t *req)
 {
-	return -DER_NOSYS;
+	struct dtp_rpc_priv	*rpc_priv = NULL;
+	int			rc = 0;
+
+	if (req == NULL) {
+		D_ERROR("invalid parameter (NULL req).\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rpc_priv = container_of(req, struct dtp_rpc_priv, drp_pub);
+	rc = dtp_hg_req_cancel(rpc_priv);
+	if (rc != 0) {
+		D_ERROR("dtp_hg_req_cancel failed, rc: %d, opc: 0x%x.\n",
+			rc, rpc_priv->drp_pub.dr_opc);
+	}
+
+out:
+	return rc;
 }
 
 #define DTP_DEFAULT_TIMEOUT	(20 * 1000 * 1000) /* Milli-seconds */

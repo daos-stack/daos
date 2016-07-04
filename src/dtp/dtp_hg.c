@@ -812,9 +812,15 @@ dtp_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	opc = rpc_pub->dr_opc;
 
 	if (hg_cbinfo->ret != HG_SUCCESS) {
-		D_ERROR("hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
-		rc = -DER_DTP_HG;
-		hg_ret = hg_cbinfo->ret;
+		if (hg_cbinfo->ret == HG_CANCELED) {
+			D_DEBUG(DF_TP, "request being canceled, opx: 0x%x.\n",
+				opc);
+			rc = -DER_CANCELED;
+		} else {
+			D_ERROR("hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
+			rc = -DER_DTP_HG;
+			hg_ret = hg_cbinfo->ret;
+		}
 	}
 
 	if (req_cbinfo->rsc_cb == NULL) {
@@ -889,6 +895,27 @@ dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb, void *arg)
 		rc = -DER_DTP_HG;
 	}
 
+
+out:
+	return rc;
+}
+
+int
+dtp_hg_req_cancel(struct dtp_rpc_priv *rpc_priv)
+{
+	hg_return_t	hg_ret;
+	int		rc = 0;
+
+	D_ASSERT(rpc_priv != NULL);
+	if (!rpc_priv->drp_hg_hdl)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	hg_ret = HG_Cancel(rpc_priv->drp_hg_hdl);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("dtp_hg_req_cancel failed, hg_ret: %d, opc: 0x%x.\n",
+			hg_ret, rpc_priv->drp_pub.dr_opc);
+		rc = -DER_DTP_HG;
+	}
 
 out:
 	return rc;
@@ -1208,10 +1235,15 @@ dtp_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 		 bulk_desc->bd_local_hdl);
 
 	if (hg_cbinfo->ret != HG_SUCCESS) {
-		D_ERROR("dtp_hg_bulk_transfer_cb, hg_cbinfo->ret: %d.\n",
-			hg_cbinfo->ret);
-		hg_ret = hg_cbinfo->ret;
-		rc = -DER_DTP_HG;
+		if (hg_cbinfo->ret == HG_CANCELED) {
+			D_DEBUG(DF_TP, "bulk transferring canceled.\n");
+			rc = -DER_CANCELED;
+		} else {
+			D_ERROR("dtp_hg_bulk_transfer_cb,hg_cbinfo->ret: %d.\n",
+				hg_cbinfo->ret);
+			hg_ret = hg_cbinfo->ret;
+			rc = -DER_DTP_HG;
+		}
 	}
 
 	if (bulk_cbinfo->bci_cb == NULL) {

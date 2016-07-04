@@ -219,6 +219,5 @@ out:
 int
 dtp_bulk_abort(dtp_context_t dtp_ctx, dtp_bulk_opid_t opid)
 {
-	/* HG_Bulk_cancel is not implemented now. */
-	return -DER_NOSYS;
+	return dtp_hg_bulk_cancel(opid);
 }

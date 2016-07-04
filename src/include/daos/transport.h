@@ -497,8 +497,10 @@ dtp_reply_get(dtp_rpc_t *rpc)
  * \param req [IN]              pointer to RPC request
  *
  * \return                      zero on success, negative value if error
- *
- * Notes: now HG_Cancel() is not fully implemented.
+ *                              If the RPC has been sent out by dtp_req_send,
+ *                              the completion callback will be called with
+ *                              DER_CANCELED set to dtp_cb_info::dci_rc for a
+ *                              successful aborting.
  */
 int
 dtp_req_abort(dtp_rpc_t *req);
@@ -638,8 +640,9 @@ dtp_bulk_get_sgnum(dtp_bulk_t bulk_hdl, unsigned int *bulk_sgnum);
  * \param opid [IN]             bulk opid
  *
  * \return                      zero on success, negative value if error
- *
- * Notes: now HG_Bulk_cancel() is not implemented by mercury.
+ *                              If abort succeed, the bulk transfer's completion
+ *                              callback will be called with DER_CANCELED set to
+ *                              dtp_bulk_cb_info::bci_rc.
  */
 int
 dtp_bulk_abort(dtp_context_t dtp_ctx, dtp_bulk_opid_t opid);
