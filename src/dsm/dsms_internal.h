@@ -233,6 +233,9 @@ int dsms_hdlr_tgt_pool_connect_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
 int dsms_hdlr_tgt_pool_disconnect(dtp_rpc_t *rpc);
 int dsms_hdlr_tgt_pool_disconnect_aggregate(dtp_rpc_t *source,
 					    dtp_rpc_t *result, void *priv);
+int dsms_hdlr_tgt_cont_destroy(dtp_rpc_t *rpc);
+int dsms_hdlr_tgt_cont_destroy_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+					 void *priv);
 int dsms_hdlr_tgt_cont_open(dtp_rpc_t *rpc);
 int dsms_hdlr_tgt_cont_open_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
 				      void *priv);

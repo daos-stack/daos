@@ -83,6 +83,7 @@ enum dsm_operation {
 	DSM_TGT_POOL_CONNECT	= 50,
 	DSM_TGT_POOL_DISCONNECT	= 51,
 
+	DSM_TGT_CONT_DESTROY	= 54,
 	DSM_TGT_CONT_OPEN	= 55,
 	DSM_TGT_CONT_CLOSE	= 56,
 
@@ -220,6 +221,15 @@ struct tgt_pool_disconnect_in {
 
 struct tgt_pool_disconnect_out {
 	int32_t	tpdo_ret;	/* number of errors */
+};
+
+struct tgt_cont_destroy_in {
+	uuid_t	tcdi_pool;
+	uuid_t	tcdi_cont;
+};
+
+struct tgt_cont_destroy_out {
+	int32_t tcdo_ret;	/* number of errors */
 };
 
 struct tgt_cont_open_in {

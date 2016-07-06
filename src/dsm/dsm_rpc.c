@@ -141,6 +141,15 @@ struct dtp_msg_field *tgt_pool_disconnect_out_fields[] = {
 	&DMF_INT	/* ret */
 };
 
+struct dtp_msg_field *tgt_cont_destroy_in_fields[] = {
+	&DMF_UUID,	/* pool */
+	&DMF_UUID	/* cont */
+};
+
+struct dtp_msg_field *tgt_cont_destroy_out_fields[] = {
+	&DMF_INT	/* ret */
+};
+
 struct dtp_msg_field *tgt_cont_open_in_fields[] = {
 	&DMF_UUID,	/* pool */
 	&DMF_UUID,	/* pool_hdl */
@@ -201,6 +210,10 @@ struct dtp_req_format DQF_TGT_POOL_DISCONNECT =
 	DEFINE_DTP_REQ_FMT("DSM_TGT_POOL_DISCONNECT",
 			   tgt_pool_disconnect_in_fields,
 			   tgt_pool_disconnect_out_fields);
+
+struct dtp_req_format DQF_TGT_CONT_DESTROY =
+	DEFINE_DTP_REQ_FMT("DSM_TGT_CONT_DESTROY", tgt_cont_destroy_in_fields,
+			   tgt_cont_destroy_out_fields);
 
 struct dtp_req_format DQF_TGT_CONT_OPEN =
 	DEFINE_DTP_REQ_FMT("DSM_TGT_CONT_OPEN", tgt_cont_open_in_fields,
@@ -326,6 +339,12 @@ struct daos_rpc dsm_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_EPOCH_OP
+	}, {
+		.dr_name	= "DSM_TGT_CONT_DESTROY",
+		.dr_opc		= DSM_TGT_CONT_DESTROY,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_TGT_CONT_DESTROY
 	}, {
 		.dr_name	= "DSM_OBJ_UPDATE",
 		.dr_opc		= DSM_TGT_OBJ_UPDATE,

@@ -607,7 +607,11 @@ static struct daos_llink_ops vcont_cache_ops = {
 int
 dsms_vcont_cache_create(struct daos_lru_cache **cache)
 {
-	return daos_lru_cache_create(4 /* bits */, DHASH_FT_NOLOCK /* feats */,
+	/*
+	 * Since there's currently no way to evict an idle object, we don't
+	 * really cache any idle objects.
+	 */
+	return daos_lru_cache_create(0 /* bits */, DHASH_FT_NOLOCK /* feats */,
 				     &vcont_cache_ops, cache);
 }
 
@@ -874,6 +878,74 @@ dsms_hdlr_tgt_pool_disconnect_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
 	struct tgt_pool_disconnect_out *out_result = dtp_reply_get(result);
 
 	out_result->tpdo_ret += out_source->tpdo_ret;
+	return 0;
+}
+
+/*
+ * Called via dss_collective() to destroy the per-thread container (i.e.,
+ * dsms_vcont) as well as the vos container.
+ */
+static int
+es_cont_destroy(void *vin)
+{
+	struct tgt_cont_destroy_in     *in = vin;
+	struct dsm_tls		       *tls = dsm_tls_get();
+	struct dsms_vpool	       *pool;
+	struct dsms_vcont	       *cont;
+	int				rc;
+
+	pool = vpool_lookup(&tls->dt_pool_list, in->tcdi_pool);
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NO_PERM);
+
+	rc = vcont_lookup(tls->dt_cont_cache, in->tcdi_cont, NULL /* arg */,
+			  &cont);
+	if (rc == 0) {
+		/* Should evict if idle, but no such interface at the moment. */
+		vcont_put(tls->dt_cont_cache, cont);
+		D_GOTO(out_pool, rc = -DER_BUSY);
+	} else if (rc != -DER_NONEXIST) {
+		D_GOTO(out_pool, rc);
+	}
+
+	D_DEBUG(DF_DSMS, DF_CONT": destroying vos container\n",
+		DP_CONT(pool->dvp_uuid, in->tcdi_cont));
+
+	rc = vos_co_destroy(pool->dvp_hdl, in->tcdi_cont, NULL /* ev */);
+
+out_pool:
+	vpool_put(pool);
+out:
+	return rc;
+}
+
+int
+dsms_hdlr_tgt_cont_destroy(dtp_rpc_t *rpc)
+{
+	struct tgt_cont_destroy_in     *in = dtp_req_get(rpc);
+	struct tgt_cont_destroy_out    *out = dtp_reply_get(rpc);
+	int				rc = 0;
+
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
+		DP_CONT(in->tcdi_pool, in->tcdi_cont), rpc);
+
+	rc = dss_collective(es_cont_destroy, in);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+
+	out->tcdo_ret = (rc == 0 ? 0 : 1);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
+		DP_CONT(in->tcdi_pool, in->tcdi_cont), rpc, out->tcdo_ret, rc);
+	return dtp_reply_send(rpc);
+}
+
+int
+dsms_hdlr_tgt_cont_destroy_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+				     void *priv)
+{
+	struct tgt_cont_destroy_out    *out_source = dtp_reply_get(source);
+	struct tgt_cont_destroy_out    *out_result = dtp_reply_get(result);
+
+	out_result->tcdo_ret += out_source->tcdo_ret;
 	return 0;
 }
 

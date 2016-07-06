@@ -160,9 +160,9 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 	D_ASSERT(in != NULL);
 	D_ASSERT(out != NULL);
 
-	D_DEBUG(DF_DSMS, "enter: pool="DF_UUID" pool_hdl="DF_UUID" cont="DF_UUID
-		"\n", DP_UUID(in->cci_pool), DP_UUID(in->cci_pool_hdl),
-		DP_UUID(in->cci_cont));
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: pool_hdl="DF_UUID"\n",
+		DP_CONT(in->cci_pool, in->cci_cont), rpc,
+		DP_UUID(in->cci_pool_hdl));
 
 	/* Verify the pool handle. */
 	pool_hdl = dsms_tgt_pool_hdl_lookup(in->cci_pool_hdl);
@@ -182,6 +182,11 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 		D_GOTO(out_pool_hdl, rc);
 
 	pthread_rwlock_wrlock(&svc->cs_rwlock);
+
+	/*
+	 * Target-side creations (i.e., vos_co_create() calls) are deferred to
+	 * the time when the container is first successfully opened.
+	 */
 
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
 		daos_handle_t	h;
@@ -249,9 +254,49 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 out_pool_hdl:
 	dsms_tgt_pool_hdl_put(pool_hdl);
 out:
-	D_DEBUG(DF_DSMS, "leave: rc=%d\n", rc);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+		DP_CONT(in->cci_pool, in->cci_cont), rpc, rc);
 	out->cco_ret = rc;
 	return dtp_reply_send(rpc);
+}
+
+static int
+cont_destroy_bcast(dtp_context_t ctx, struct cont_svc *svc,
+		   const uuid_t cont_uuid)
+{
+	struct tgt_cont_destroy_in     *in;
+	struct tgt_cont_destroy_out    *out;
+	dtp_rpc_t		       *rpc;
+	int				rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": bcasting\n",
+		DP_CONT(svc->cs_pool_uuid, cont_uuid));
+
+	rc = dsms_corpc_create(ctx, svc->cs_pool->tp_group,
+			       DSM_TGT_CONT_DESTROY, &rpc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	in = dtp_req_get(rpc);
+	uuid_copy(in->tcdi_pool, svc->cs_pool_uuid);
+	uuid_copy(in->tcdi_cont, cont_uuid);
+
+	rc = dsms_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = dtp_reply_get(rpc);
+	rc = out->tcdo_ret;
+	if (rc != 0)
+		D_ERROR(DF_CONT": failed to destroy some targets: %d\n",
+			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+
+out_rpc:
+	dtp_req_decref(rpc);
+out:
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
+		DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+	return rc;
 }
 
 int
@@ -269,9 +314,9 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 	D_ASSERT(in != NULL);
 	D_ASSERT(out != NULL);
 
-	D_DEBUG(DF_DSMS, "enter: pool="DF_UUID" pool_hdl="DF_UUID" cont="DF_UUID
-		" force=%u\n", DP_UUID(in->cdi_pool), DP_UUID(in->cdi_pool_hdl),
-		DP_UUID(in->cdi_cont), in->cdi_force);
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: pool_hdl="DF_UUID
+		" force=%u\n", DP_CONT(in->cdi_pool, in->cdi_cont), rpc,
+		DP_UUID(in->cdi_pool_hdl), in->cdi_force);
 
 	/* Verify the pool handle. */
 	pool_hdl = dsms_tgt_pool_hdl_lookup(in->cdi_pool_hdl);
@@ -294,10 +339,12 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 			rc = 0;
 		D_GOTO(out_rwlock, rc);
 	}
-
 	ch = h;
 
-	/* TODO: Send DSM_TGT_CONT_DESTROY to targets. */
+	rc = cont_destroy_bcast(rpc->dr_ctx, svc, in->cdi_cont);
+	if (rc != 0)
+		D_GOTO(out_rwlock, rc);
+
 
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
 		rc = dsms_kvs_nv_destroy_kvs(ch, CONT_HANDLES,
@@ -349,7 +396,8 @@ out_rwlock:
 out_pool_hdl:
 	dsms_tgt_pool_hdl_put(pool_hdl);
 out:
-	D_DEBUG(DF_DSMS, "leave: rc=%d\n", rc);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+		DP_CONT(in->cdi_pool, in->cdi_cont), rpc, rc);
 	out->cdo_ret = rc;
 	return dtp_reply_send(rpc);
 }
@@ -514,7 +562,7 @@ out_rpc:
 	dtp_req_decref(rpc);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": bcasted: pool_hdl="DF_UUID" cont_hdl="DF_UUID
-		" capas="DF_X64":%d\n",
+		" capas="DF_X64": %d\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas, rc);
 	return rc;
@@ -705,7 +753,7 @@ cont_close_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t cont_hdl)
 out_rpc:
 	dtp_req_decref(rpc);
 out:
-	D_DEBUG(DF_DSMS, DF_CONT": bcasted: cont_hdl="DF_UUID":%d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: cont_hdl="DF_UUID": %d\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(cont_hdl), rc);
 	return rc;

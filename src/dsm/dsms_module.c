@@ -165,6 +165,12 @@ static struct daos_rpc_handler dsms_handlers[] = {
 			.co_aggregate  = dsms_hdlr_tgt_pool_disconnect_aggregate
 		}
 	}, {
+		.dr_opc		= DSM_TGT_CONT_DESTROY,
+		.dr_hdlr	= dsms_hdlr_tgt_cont_destroy,
+		.dr_corpc_ops	= {
+			.co_aggregate  = dsms_hdlr_tgt_cont_destroy_aggregate
+		}
+	}, {
 		.dr_opc		= DSM_TGT_CONT_OPEN,
 		.dr_hdlr	= dsms_hdlr_tgt_cont_open,
 		.dr_corpc_ops	= {
