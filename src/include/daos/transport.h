@@ -64,6 +64,8 @@ typedef uint32_t dtp_version_t;
 typedef void *dtp_rpc_input_t;
 typedef void *dtp_rpc_output_t;
 
+typedef void *dtp_bulk_t; /* abstract bulk handle */
+
 /**
  * max size of input/output parameters defined as 64M bytes, for larger length
  * the user should transfer by bulk.
@@ -93,6 +95,8 @@ typedef struct dtp_rpc {
 	dtp_rpc_output_t	dr_output; /* output parameter struct */
 	daos_size_t		dr_input_size; /* size of input struct */
 	daos_size_t		dr_output_size; /* size of output struct */
+	/* optional bulk handle for collective RPC */
+	dtp_bulk_t		dr_co_bulk_hdl;
 	void			*dr_data;	/* async arg */
 	dtp_req_callback_t	dr_final_cb;	/* callback will be called when
 						 * req is destoryed */
@@ -187,8 +191,6 @@ extern struct dtp_msg_field *dtp_single_out_fields[];
 struct dtp_single_out {
 	int	dso_ret;
 };
-
-typedef void *dtp_bulk_t; /* abstract bulk handle */
 
 typedef enum {
 	DTP_BULK_PUT = 0x68,
@@ -374,28 +376,6 @@ dtp_progress(dtp_context_t dtp_ctx, int64_t timeout,
 	     dtp_progress_cond_cb_t cond_cb, void *arg);
 
 /**
- * Query the caller's rank number within group.
- *
- * \param grp_id [IN]           DAOS group id
- * \param rank[OUT]             result rank number
- *
- * \return                      zero on success, negative value if error
- */
-int
-dtp_group_rank(dtp_group_id_t grp_id, daos_rank_t *rank);
-
-/**
- * Query number of group members.
- *
- * \param grp_id [IN]           DAOS group id
- * \param size[OUT]             result size (total number of ranks) of the group
- *
- * \return                      zero on success, negative value if error
- */
-int
-dtp_group_size(dtp_group_id_t grp_id, uint32_t *size);
-
-/**
  * Create a RPC request.
  *
  * \param dtp_ctx [IN]          DAOS transport context
@@ -553,7 +533,6 @@ dtp_rpc_reg(dtp_opcode_t opc, struct dtp_req_format *drf);
 /**
  * Dynamically register a RPC at server-side.
  *
- * Compared to dtp_rpc_register, one more input argument needed at server-side:
  * \param opc [IN]              unique opcode for the RPC
  * \param drf [IN]		pointer to the request format, which
  *                              describe the request format and provide
@@ -568,6 +547,10 @@ dtp_rpc_reg(dtp_opcode_t opc, struct dtp_req_format *drf);
 int
 dtp_rpc_srv_reg(dtp_opcode_t opc, struct dtp_req_format *drf,
 		dtp_rpc_cb_t rpc_handler);
+
+/******************************************************************************
+ * DTP bulk APIs.
+ ******************************************************************************/
 
 /**
  * Create a bulk handle
@@ -663,6 +646,142 @@ dtp_bulk_get_sgnum(dtp_bulk_t bulk_hdl, unsigned int *bulk_sgnum);
 int
 dtp_bulk_abort(dtp_context_t dtp_ctx, dtp_bulk_opid_t opid);
 
+/******************************************************************************
+ * DTP group definition and collective APIs.
+ ******************************************************************************/
+
+/* Types for tree topology */
+enum dtp_tree_type {
+	DTP_TREE_INVALID	= 0,
+	DTP_TREE_MIN		= 1,
+	DTP_TREE_FLAT		= 1,
+	DTP_TREE_BINOMIAL	= 2,
+	DTP_TREE_QUADNOMIAL	= 3,
+	DTP_TREE_MAX		= 3,
+};
+
+/* collective RPC optional flags */
+enum dtp_corpc_flag {
+	DTP_CORPC_FLAG_GRP_DESTROY = (1U << 0),
+};
+
+typedef struct dtp_group {
+	/* the group ID of this group */
+	dtp_group_id_t		dg_grpid;
+	/* the member ranks in the global group */
+	daos_rank_list_t	*dg_membs;
+	/* ... */
+} dtp_group_t;
+
+struct dtp_corpc_ops {
+	/*
+	 * collective RPC reply aggregating callback.
+	 *
+	 * \param source [IN]		the rpc structure of aggregating source
+	 * \param result[IN]		the rpc structure of aggregating result
+	 * \param priv [IN]		the private pointer, valid only on
+	 *				collective RPC initiator (same as the
+	 *				priv pointer passed in for
+	 *				dtp_corpc_req_create).
+	 *
+	 * \return			zero on success, negative value if error
+	 */
+	int (*co_aggregate)(dtp_rpc_t *source, dtp_rpc_t *result, void *priv);
+};
+
+/* Group create completion callback */
+typedef int (*dtp_grp_create_cb_t)(dtp_group_t *grp, int status);
+
+/*
+ * Create DTP group.
+ *
+ * \param grp_id [IN]		unique group ID.
+ * \param member_ranks [IN]	rank list of members for the group.
+ * \param populate_now [IN]	True if the group should be populated now;
+ *				otherwise, group population will be later
+ *				piggybacked on the first broadcast over the
+ *				group.
+ * \param grp_create_cb [IN]	Callback function to notify completion of the
+ *				group creation process,
+ *				\see dtp_grp_create_cb_t.
+ * \param priv [IN]		A private pointer associated with the group.
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+dtp_group_create(dtp_group_id_t grp_id, daos_rank_list_t *member_ranks,
+		 bool populate_now, dtp_grp_create_cb_t grp_create_cb,
+		 void *priv);
+
+/*
+ * Create collective RPC request. Can reuse the dtp_req_send to broadcast it.
+ *
+ * \param dtp_ctx [IN]		DAOS transport context
+ * \param grp [IN]		DTP group for the collective RPC
+ * \param opc [IN]		unique opcode for the RPC
+ * \param co_bulk_hdl [IN]	collective bulk handle
+ * \param priv [IN]		A private pointer associated with the request
+ *				will be passed to dtp_corpc_ops::co_aggregate as
+ *				2nd parameter.
+ * \param flags [IN]		collective RPC flags, /see enum dtp_corpc_flag
+ * \param tree [IN]		tree type for the collective propagation
+ *				/see enum dtp_tree_type
+ * \param req [out]		created collective RPC request
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+dtp_corpc_req_create(dtp_context_t dtp_ctx, dtp_group_t *grp, dtp_opcode_t opc,
+		     dtp_bulk_t co_bulk_hdl, void *priv,  uint32_t flags,
+		     enum dtp_tree_type tree, dtp_rpc_t **req);
+
+/**
+ * Dynamically register a collective RPC.
+ *
+ * \param opc [IN]		unique opcode for the RPC
+ * \param drf [IN]		pointer to the request format, which
+ *				describe the request format and provide
+ *				callback to pack/unpack each items in the
+ *				request.
+ * \param rpc_handler [IN]	pointer to RPC handler which will be triggered
+ *				when RPC request opcode associated with rpc_name
+ *				is received.
+ * \param co_ops [IN]		pointer to corpc ops table.
+ *
+ * Notes:
+ * 1) User can use dtp_rpc_srv_reg to register collective RPC if no reply
+ *    aggregation needed.
+ * 2) Can pass in a NULL drf or rpc_handler if it was registered already, this
+ *    routine only overwrite if they are non-NULL.
+ * 3) A NULL reply_aggregator will be treated as invalid argument.
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+dtp_corpc_reg(dtp_opcode_t opc, struct dtp_req_format *drf,
+	      dtp_rpc_cb_t rpc_handler, struct dtp_corpc_ops *co_ops);
+
+/**
+ * Query the caller's rank number within group.
+ *
+ * \param grp_id [IN]		DAOS group id
+ * \param rank[OUT]		result rank number
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+dtp_group_rank(dtp_group_id_t grp_id, daos_rank_t *rank);
+
+/**
+ * Query number of group members.
+ *
+ * \param grp_id [IN]		DAOS group id
+ * \param size[OUT]		result size (total number of ranks) of the group
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+dtp_group_size(dtp_group_id_t grp_id, uint32_t *size);
 
 /******************************************************************************
  * Proc data types, APIs and macros.
