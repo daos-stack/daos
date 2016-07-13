@@ -54,6 +54,11 @@
 struct io_test_args {
 	struct vos_test_ctx	ctx;
 	daos_unit_oid_t		oid;
+	/* Optional addn container create params */
+	uuid_t			addn_co_uuid;
+	daos_handle_t		addn_co;
+	int			co_create_step;
+	/****************************************/
 	bool			anchor_flag;
 	bool			zero_copy;
 	bool			overwrite;
@@ -682,6 +687,106 @@ io_simple_one_key(void **state)
 }
 
 static void
+io_simple_one_key_cross_container(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc;
+	daos_iov_t		val_iov;
+	daos_akey_t		akey;
+	daos_recx_t		rex;
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			update_buf[UPDATE_BUF_SIZE];
+	char			fetch_buf[UPDATE_BUF_SIZE];
+	daos_vec_iod_t		vio;
+	daos_sg_list_t		sgl;
+	daos_csum_buf_t		csum;
+	daos_dkey_t		dkey;
+	daos_epoch_t		epoch = rand();
+	daos_unit_oid_t		l_oid;
+
+	/* Creating an additional container */
+	uuid_generate_time_safe(arg->addn_co_uuid);
+	rc = vos_co_create(arg->ctx.tc_po_hdl, arg->addn_co_uuid, NULL);
+	if (rc) {
+		print_error("vos container creation error: %d\n", rc);
+		return;
+	}
+
+	rc = vos_co_open(arg->ctx.tc_po_hdl, arg->addn_co_uuid, &arg->addn_co,
+			 NULL);
+	if (rc) {
+		print_error("vos container open error: %d\n", rc);
+		goto failed;
+	}
+
+	memset(&vio, 0, sizeof(vio));
+	memset(&rex, 0, sizeof(rex));
+	memset(&sgl, 0, sizeof(sgl));
+	memset(dkey_buf, 0, UPDATE_DKEY_SIZE);
+	memset(update_buf, 0, UPDATE_BUF_SIZE);
+	daos_iov_set(&dkey, &dkey_buf[0], UPDATE_DKEY_SIZE);
+
+	sgl.sg_nr.num = 1;
+	sgl.sg_iovs = &val_iov;
+
+	memset(update_buf, (rand() % 94) + 33, UPDATE_BUF_SIZE);
+	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
+	rex.rx_rsize	= val_iov.iov_len;
+
+	rex.rx_nr	= 1;
+	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
+	rex.rx_idx	%= 1000000;
+
+	vio.vd_recxs	= &rex;
+	vio.vd_nr	= 1;
+
+	vts_io_set_oid(&l_oid);
+	rc  = vos_obj_update(arg->ctx.tc_co_hdl,
+			     arg->oid, epoch, &dkey, 1,
+			     &vio, &sgl, NULL);
+	if (rc) {
+		print_error("Failed to update %d\n", rc);
+		goto failed;
+	}
+
+	rc = vos_obj_update(arg->addn_co, l_oid, epoch,
+			    &dkey, 1, &vio, &sgl, NULL);
+	if (rc) {
+		print_error("Failed to update %d\n", rc);
+		goto failed;
+	}
+
+	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
+	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
+	rex.rx_rsize = 0;
+
+	/**
+	 * Fetch from second container with local obj id
+	 * This should succeed.
+	 */
+	rc = vos_obj_fetch(arg->addn_co, l_oid, epoch,
+			   &dkey, 1, &vio, &sgl, NULL);
+	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+
+	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
+	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
+	rex.rx_rsize = 0;
+
+	/**
+	 * Fetch the objiD used in first container
+	 * from second container should throw an error
+	 */
+	rc = vos_obj_fetch(arg->addn_co, arg->oid, epoch,
+			   &dkey, 1, &vio, &sgl, NULL);
+	/* This fetch should fail */
+	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+
+failed:
+	rc = vos_co_destroy(arg->ctx.tc_po_hdl, arg->addn_co_uuid, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
 io_simple_punch(void **state)
 {
 	struct io_test_args	*arg = *state;
@@ -807,17 +912,18 @@ static const struct CMUnitTest io_tests[] = {
 		io_multiple_dkey, NULL, NULL},
 	{ "VOS209: 100k update/fetch/verify test (for dkey) with zero-copy",
 		io_multiple_dkey_zc, NULL, NULL},
-	{ "VOS212: overwrite test",
+	{ "VOS210: overwrite test",
 		io_idx_overwrite, NULL, NULL},
-	{ "VOS213: overwrite test with zero-copy",
+	{ "VOS211: overwrite test with zero-copy",
 		io_idx_overwrite_zc, NULL, NULL},
-	{ "VOS230: KV Iter tests (for dkey)",
+	{ "VOS212: KV Iter tests (for dkey)",
 		io_iter_test, NULL, NULL},
-	{ "VOS231: KV Iter tests with anchor (for dkey)",
+	{ "VOS213: KV Iter tests with anchor (for dkey)",
 		io_iter_test_with_anchor, NULL, NULL},
-	{ "VOS290: Space overflow negative error test",
+	{ "VOS214: Same Obj ID on two containers (obj_cache test)",
+		io_simple_one_key_cross_container, NULL, NULL},
+	{ "VOS215: Space overflow negative error test",
 		io_pool_overflow_test, NULL, io_pool_overflow_teardown},
-
 };
 
 int
