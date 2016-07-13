@@ -7,7 +7,6 @@
 # pylint: disable=broad-except
 # pylint: disable=bare-except
 # pylint: disable=exec-used
-# pylint: disable=bad-builtin
 # pylint: disable=too-many-statements
 
 import os
@@ -269,8 +268,8 @@ the issues causing the TESTS to fail.
                 if error_types:
                     error_str += """
 Valgrind %s check failed.  See %s:"""%(mode, str(fname))
-                    for err in sorted(error_types.keys()):
-                        error_str += "\n%-3d %s errors"%(error_types[err],
+                    for err, err_type in sorted(error_types):
+                        error_str += "\n%-3d %s errors"%(err_type,
                                                          err)
     if error_str:
         return """
@@ -314,7 +313,7 @@ def modify_targets(target, source, env, mode=None):
     if mode == "memcheck" or mode == "helgrind":
         for src in source:
             basename = os.path.basename(str(src))
-            xml = "%s-%s.xml"%(mode, basename)
+            xml = "valgrind-%s-%s.xml"%(mode, basename)
             target.append(xml)
     return target, source
 
