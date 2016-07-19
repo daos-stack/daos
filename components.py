@@ -72,23 +72,21 @@ REQS.define('mercury',
             retriever=RETRIEVER,
             commands=['cmake -DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a ' \
                       '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ ' \
-                      '-DBMI_LIBRARY=$BMI_PREFIX/lib/%s ' \
-                      '-DBMI_INCLUDE_DIR=$BMI_PREFIX/include/ ' \
                       '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s ' \
                       '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ ' \
                       '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX ' \
                       '-DBUILD_EXAMPLES=ON ' \
                       '-DMERCURY_USE_BOOST_PP=ON ' \
                       '-DMERCURY_ENABLE_VERBOSE_ERROR=OFF ' \
-                      '-DNA_USE_BMI=ON -DBUILD_TESTING=ON ' \
+                      '-DBUILD_TESTING=ON ' \
                       '-DNA_USE_CCI=ON ' \
                       '-DBUILD_DOCUMENTATION=OFF ' \
                       '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC ' \
                       '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib ' \
                       '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE'
-                      % (BMI_LIB, CCI_LIB), 'make', 'make install'],
+                      % (CCI_LIB), 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
-            requires=['bmi', 'openpa', 'boost', 'cci'] + RT,
+            requires=['openpa', 'boost', 'cci'] + RT,
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
