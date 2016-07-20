@@ -94,12 +94,12 @@ struct vos_pool_root {
 };
 
 struct vos_container_index {
-	TOID(struct vos_chash_table) chtable;
+	struct btr_root		ci_btree;
 	/* More items to be added*/
 };
 
 struct vos_epoch_index {
-	TOID(struct vos_chash_table) ehtable;
+	struct btr_root		ehtable;
 	/* More items to be added*/
 };
 
@@ -107,8 +107,8 @@ struct vos_epoch_index {
 struct vos_container {
 	uuid_t				vc_id;
 	vos_co_info_t			vc_info;
-	TOID(struct vos_object_index)	vc_obtable;
-	TOID(struct vos_epoch_index)	vc_ehtable;
+	TMMID(struct vos_object_index)	vc_obtable;
+	TMMID(struct vos_epoch_index)	vc_ehtable;
 };
 
 /**

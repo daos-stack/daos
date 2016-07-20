@@ -99,9 +99,9 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 	}
 
 	TX_BEGIN(vpool->vp_ph) {
-		struct vos_container_index *co_idx;
-		struct vos_pool_root	   *root;
-		vos_pool_info_t		   *pinfo;
+		struct vos_container_index	*co_idx;
+		struct vos_pool_root		*root;
+		vos_pool_info_t			*pinfo;
 
 		root = vos_pool2root(vpool);
 		pmemobj_tx_add_range_direct(root, sizeof(*root));
@@ -110,19 +110,20 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		root->vpr_ci_table = TX_ZNEW(struct vos_container_index);
 		co_idx = D_RW(root->vpr_ci_table);
 
-		/* Container table is empty create one */
-		rc = vos_chash_create(vpool->vp_ph, VCH_MIN_BUCKET_SIZE,
-				      VCH_MAX_BUCKET_SIZE, CRC64, true,
-				      &co_idx->chtable, &vos_co_idx_hop);
+		/**
+		 * Container table is empty create one
+		 * Also caches the container index
+		 * btr_handle
+		 */
+
+		rc = vos_ci_create(vpool, co_idx);
 		if (rc != 0) {
 			D_ERROR("Failed to create container index table: %d\n",
 				rc);
 			pmemobj_tx_abort(EFAULT);
 		}
-
 		uuid_copy(root->vpr_pool_id, uuid);
 		pinfo = &root->vpr_pool_info;
-
 		pinfo->pif_size	 = size;
 		pinfo->pif_avail = size - pmemobj_root_size(vpool->vp_ph);
 
@@ -170,6 +171,7 @@ vos_pool_destroy(daos_handle_t poh, daos_event_t *ev)
 		D_GOTO(exit, rc);
 	}
 
+	dbtree_close(vpool->vp_ct_hdl);
 	vos_pool_delete_handle(vpool);
 exit:
 	vos_pool_putref_handle(vpool);
@@ -232,15 +234,17 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 			DP_UUID(root->vpr_pool_id));
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
-
 	co_idx = D_RW(root->vpr_ci_table);
-	rc = vos_chash_set_ops(vpool->vp_ph, co_idx->chtable,
-			       &vos_co_idx_hop);
+	/* Cache co-tree btree hdl */
+	rc = dbtree_open_inplace(&co_idx->ci_btree, &vpool->vp_uma,
+				 &vpool->vp_ct_hdl);
+
 	if (rc) {
-		D_ERROR("Setting container table hash-value failed: %d",
-			rc);
+		D_ERROR("Container Tree open failed\n");
 		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
+
+
 	vos_pool_insert_handle(vpool, poh);
 
 exit:
@@ -269,6 +273,7 @@ vos_pool_close(daos_handle_t poh, daos_event_t *ev)
 	 * daos_hhash_link_delete eventually calls the call-back
 	 * daos_vpool_free which also closes the pmemobj pool
 	 */
+	dbtree_close(vpool->vp_ct_hdl);
 	vos_pool_delete_handle(vpool);
 	vos_pool_putref_handle(vpool);
 

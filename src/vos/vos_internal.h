@@ -45,18 +45,18 @@ extern struct dss_module_key vos_module_key;
  * VOS pool handle (DRAM)
  */
 struct vp_hdl {
-	/* handle hash link for the vos pool */
+	/** handle hash link for the vos pool **/
 	struct daos_hlink	vp_hlink;
-	/* Pointer to PMEMobjpool */
+	/** Pointer to PMEMobjpool **/
 	PMEMobjpool		*vp_ph;
-	/* Path to PMEM file */
+	/** Path to PMEM file **/
 	char			*vp_fpath;
-	/* Btree attribute this instance of
-	 * pool
-	 */
+	/** Btree attribute for pool instance **/
 	struct umem_attr	vp_uma;
-	/** for pmem allocation outside btree */
+	/** pmem allocation outside btree **/
 	struct umem_instance	vp_umm;
+	/** btr handle for container tree */
+	daos_handle_t		vp_ct_hdl;
 };
 
 /**
@@ -159,15 +159,15 @@ vos_pool2root(struct vp_hdl *vp)
 	return D_RW(proot);
 }
 
-static inline TOID(struct vos_chash_table)
+static inline struct vos_container_index*
 vos_pool2coi_table(struct vp_hdl *vp)
 {
 	struct vos_container_index *coi;
 
 	coi =  D_RW(vos_pool2root(vp)->vpr_ci_table);
 
-	D_ASSERT(!TOID_IS_NULL(coi->chtable));
-	return coi->chtable;
+	D_ASSERT(coi != NULL);
+	return coi;
 }
 
 /**
@@ -193,7 +193,6 @@ vos_generate_crc64(void *key, uint64_t size);
 int32_t
 vos_generate_jch(uint64_t key, uint32_t num_buckets);
 
-
 PMEMobjpool *vos_coh2pop(daos_handle_t coh);
 
 /**
@@ -201,6 +200,32 @@ PMEMobjpool *vos_coh2pop(daos_handle_t coh);
  * Wrapper for TLS and standalone mode
  */
 struct daos_lru_cache *vos_get_obj_cache(void);
+
+/**
+ * VOS container index class register for btree
+ * to be called withing vos_init()
+ *
+ * \return		0 on success and negative on
+ *			failure
+ */
+int
+vos_ci_init();
+
+/**
+ * VOS Container index create
+ * Create a new B-tree for empty container index
+ * Called from vos_pool_create.
+ *
+ * \param po_hdl	[IN]	Pool Handle
+ * \param co_index	[IN]	vos container index
+ *				(pmem direct pointer)
+ *
+ * \return		0 on success and negative on
+ *			failure
+ */
+int
+vos_ci_create(struct vp_hdl *po_hdl,
+	      struct vos_container_index *co_index);
 
 /**
  * VOS object index class register for btree
@@ -385,6 +410,8 @@ enum {
 	VOS_BTR_IDX		= (VOS_BTR_BEGIN + 2),
 	/** object index table */
 	VOS_BTR_OIT		= (VOS_BTR_BEGIN + 3),
+	/** container index table */
+	VOS_BTR_CIT		= (VOS_BTR_BEGIN + 4),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };

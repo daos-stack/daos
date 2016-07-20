@@ -139,6 +139,12 @@ vos_mod_init(void)
 {
 	int rc = 0;
 
+	rc = vos_ci_init();
+	if (rc) {
+		D_ERROR("VOS CI btree initialization error\n");
+		return rc;
+	}
+
 	/**
 	 * Registering the class for OI btree
 	 * and KV btree

@@ -86,9 +86,6 @@ static int
 vo_rec_free(struct btr_instance *tins, struct btr_record *rec)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
-	/* TMMID can be in both persistent
-	 * and virtual memory
-	 */
 	TMMID(struct vos_obj)	vo_rec_mmid;
 
 	vo_rec_mmid = umem_id_u2t(rec->rec_mmid, struct vos_obj);
@@ -259,8 +256,7 @@ vos_oi_destroy(struct vp_hdl *po_hdl,
 				 &btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
-		rc = -DER_NONEXIST;
-		goto exit;
+		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 
 	/* TODO: Check for KVobject oih->or_obj
@@ -269,7 +265,6 @@ vos_oi_destroy(struct vp_hdl *po_hdl,
 	rc = dbtree_destroy(btr_hdl);
 	if (rc)
 		D_ERROR("OI BTREE destroy failed\n");
-
 exit:
 	return rc;
 }
