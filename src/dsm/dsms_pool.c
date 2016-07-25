@@ -349,33 +349,35 @@ out:
 }
 
 /*
- * Pool metadata descriptor
+ * Pool service
  *
- * References the mpool descriptor. Might also be named pool_svc.
+ * References the mpool descriptor.
  *
  * TODO: p_rwlock currently protects all pool metadata, both volatile and
  * persistent.  When moving to the event-driven model, we shall replace it with
  * a non-blocking implementation.
  */
-struct pool {
-	daos_list_t		p_entry;
-	uuid_t			p_uuid;
-	struct mpool	       *p_mpool;
-	pthread_rwlock_t	p_rwlock;	/* see TODO in struct comment */
-	pthread_mutex_t		p_lock;
-	int			p_ref;
-	daos_handle_t		p_handles;	/* pool handle KVS */
+struct pool_svc {
+	daos_list_t		ps_entry;
+	uuid_t			ps_uuid;
+	struct mpool	       *ps_mpool;
+	pthread_rwlock_t	ps_rwlock;	/* see TODO in struct comment */
+	pthread_mutex_t		ps_lock;
+	int			ps_ref;
+	daos_handle_t		ps_handles;	/* pool handle KVS */
+	dtp_group_t	       *ps_group;
+	struct pool_map	       *ps_map;
 };
 
 /*
- * TODO: pool_cache is very similar to mpool_cache. Around the end of 2016,
+ * TODO: pool_svc_cache is very similar to mpool_cache. Around the end of 2016,
  * consider if the two could share the same template.
  */
-static DAOS_LIST_HEAD(pool_cache);
-static pthread_mutex_t pool_cache_lock;
+static DAOS_LIST_HEAD(pool_svc_cache);
+static pthread_mutex_t pool_svc_cache_lock;
 
 static int
-pool_init(const uuid_t uuid, struct pool *pool)
+pool_svc_init(const uuid_t uuid, struct pool_svc *svc)
 {
 	struct mpool	       *mpool;
 	struct btr_root	       *kvs;
@@ -383,25 +385,25 @@ pool_init(const uuid_t uuid, struct pool *pool)
 	struct umem_attr	uma;
 	int			rc;
 
-	DAOS_INIT_LIST_HEAD(&pool->p_entry);
-	uuid_copy(pool->p_uuid, uuid);
-	pool->p_ref = 1;
+	DAOS_INIT_LIST_HEAD(&svc->ps_entry);
+	uuid_copy(svc->ps_uuid, uuid);
+	svc->ps_ref = 1;
 
 	rc = dsms_mpool_lookup(uuid, &mpool);
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	pool->p_mpool = mpool;
+	svc->ps_mpool = mpool;
 
-	rc = pthread_rwlock_init(&pool->p_rwlock, NULL /* attr */);
+	rc = pthread_rwlock_init(&svc->ps_rwlock, NULL /* attr */);
 	if (rc != 0) {
-		D_ERROR("failed to initialize p_rwlock: %d\n", rc);
+		D_ERROR("failed to initialize ps_rwlock: %d\n", rc);
 		D_GOTO(err_mp, rc = -DER_NOMEM);
 	}
 
-	rc = pthread_mutex_init(&pool->p_lock, NULL /* attr */);
+	rc = pthread_mutex_init(&svc->ps_lock, NULL /* attr */);
 	if (rc != 0) {
-		D_ERROR("failed to initialize p_lock: %d\n", rc);
+		D_ERROR("failed to initialize ps_lock: %d\n", rc);
 		D_GOTO(err_rwlock, rc = -DER_NOMEM);
 	}
 
@@ -412,7 +414,7 @@ pool_init(const uuid_t uuid, struct pool *pool)
 
 	uma.uma_id = UMEM_CLASS_PMEM;
 	uma.uma_u.pmem_pool = mpool->mp_pmem;
-	rc = dbtree_open_inplace(kvs, &uma, &pool->p_handles);
+	rc = dbtree_open_inplace(kvs, &uma, &svc->ps_handles);
 	if (rc != 0) {
 		D_ERROR("failed to open pool handle kvs: %d\n", rc);
 		D_GOTO(err_lock, rc);
@@ -421,9 +423,9 @@ pool_init(const uuid_t uuid, struct pool *pool)
 	return 0;
 
 err_lock:
-	pthread_mutex_destroy(&pool->p_lock);
+	pthread_mutex_destroy(&svc->ps_lock);
 err_rwlock:
-	pthread_rwlock_destroy(&pool->p_rwlock);
+	pthread_rwlock_destroy(&svc->ps_rwlock);
 err_mp:
 	dsms_mpool_put(mpool);
 err:
@@ -431,78 +433,78 @@ err:
 }
 
 static void
-pool_get(struct pool *pool)
+pool_svc_get(struct pool_svc *svc)
 {
-	pthread_mutex_lock(&pool->p_lock);
-	pool->p_ref++;
-	pthread_mutex_unlock(&pool->p_lock);
+	pthread_mutex_lock(&svc->ps_lock);
+	svc->ps_ref++;
+	pthread_mutex_unlock(&svc->ps_lock);
 }
 
 static int
-pool_lookup(const uuid_t uuid, struct pool **pool)
+pool_svc_lookup(const uuid_t uuid, struct pool_svc **svc)
 {
-	struct pool    *p;
-	int		rc;
+	struct pool_svc	       *p;
+	int			rc;
 
-	pthread_mutex_lock(&pool_cache_lock);
+	pthread_mutex_lock(&pool_svc_cache_lock);
 
-	daos_list_for_each_entry(p, &pool_cache, p_entry) {
-		if (uuid_compare(p->p_uuid, uuid) == 0) {
-			pool_get(p);
-			*pool = p;
+	daos_list_for_each_entry(p, &pool_svc_cache, ps_entry) {
+		if (uuid_compare(p->ps_uuid, uuid) == 0) {
+			pool_svc_get(p);
+			*svc = p;
 			D_GOTO(out, rc = 0);
 		}
 	}
 
 	D_ALLOC_PTR(p);
 	if (p == NULL) {
-		D_ERROR("failed to allocate pool descriptor\n");
+		D_ERROR("failed to allocate pool_svc descriptor\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	rc = pool_init(uuid, p);
+	rc = pool_svc_init(uuid, p);
 	if (rc != 0) {
 		D_FREE_PTR(p);
 		D_GOTO(out, rc);
 	}
 
-	daos_list_add(&p->p_entry, &pool_cache);
-	D_DEBUG(DF_DSMS, "created new pool descriptor %p\n", pool);
+	daos_list_add(&p->ps_entry, &pool_svc_cache);
+	D_DEBUG(DF_DSMS, "created new pool_svc descriptor %p\n", p);
 
-	*pool = p;
+	*svc = p;
 out:
-	pthread_mutex_unlock(&pool_cache_lock);
+	pthread_mutex_unlock(&pool_svc_cache_lock);
 	return rc;
 }
 
 static void
-pool_put(struct pool *pool)
+pool_svc_put(struct pool_svc *svc)
 {
 	int is_last_ref = 0;
 
-	pthread_mutex_lock(&pool->p_lock);
-	if (pool->p_ref == 1)
+	pthread_mutex_lock(&svc->ps_lock);
+	if (svc->ps_ref == 1)
 		is_last_ref = 1;
 	else
-		pool->p_ref--;
-	pthread_mutex_unlock(&pool->p_lock);
+		svc->ps_ref--;
+	pthread_mutex_unlock(&svc->ps_lock);
 
 	if (is_last_ref) {
-		pthread_mutex_lock(&pool_cache_lock);
-		pthread_mutex_lock(&pool->p_lock);
-		pool->p_ref--;
-		if (pool->p_ref == 0) {
-			D_DEBUG(DF_DSMS, "freeing pool descriptor %p\n", pool);
-			dbtree_close(pool->p_handles);
-			pthread_mutex_destroy(&pool->p_lock);
-			pthread_rwlock_destroy(&pool->p_rwlock);
-			dsms_mpool_put(pool->p_mpool);
-			daos_list_del(&pool->p_entry);
-			D_FREE_PTR(pool);
+		pthread_mutex_lock(&pool_svc_cache_lock);
+		pthread_mutex_lock(&svc->ps_lock);
+		svc->ps_ref--;
+		if (svc->ps_ref == 0) {
+			D_DEBUG(DF_DSMS, "freeing pool_svc %p\n", svc);
+			dbtree_close(svc->ps_handles);
+			pthread_mutex_destroy(&svc->ps_lock);
+			pthread_rwlock_destroy(&svc->ps_rwlock);
+			dsms_mpool_put(svc->ps_mpool);
+			daos_list_del(&svc->ps_entry);
+			D_FREE_PTR(svc);
 		} else {
-			pthread_mutex_unlock(&pool->p_lock);
+			pthread_mutex_unlock(&svc->ps_lock);
 		}
-		pthread_mutex_unlock(&pool_cache_lock);
+		pthread_mutex_unlock(&pool_svc_cache_lock);
 	}
 }
 
@@ -513,21 +515,21 @@ struct pool_attr {
 };
 
 static int
-pool_attr_read(const struct pool *pool, struct pool_attr *attr)
+pool_attr_read(const struct pool_svc *svc, struct pool_attr *attr)
 {
 	int rc;
 
-	rc = dsms_kvs_nv_lookup(pool->p_mpool->mp_root, POOL_UID, &attr->pa_uid,
+	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_UID, &attr->pa_uid,
 				sizeof(uint32_t));
 	if (rc != 0)
 		return rc;
 
-	rc = dsms_kvs_nv_lookup(pool->p_mpool->mp_root, POOL_GID, &attr->pa_gid,
+	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_GID, &attr->pa_gid,
 				sizeof(uint32_t));
 	if (rc != 0)
 		return rc;
 
-	rc = dsms_kvs_nv_lookup(pool->p_mpool->mp_root, POOL_MODE,
+	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_MODE,
 				&attr->pa_mode, sizeof(uint32_t));
 	if (rc != 0)
 		return rc;
@@ -548,7 +550,7 @@ permitted(const struct pool_attr *attr, uint32_t uid, uint32_t gid,
  * version into "map_buf" and "map_version", respectively.
  */
 static int
-map_retrieve(const struct pool *pool, struct pool_buf **map_buf,
+map_retrieve(const struct pool_svc *svc, struct pool_buf **map_buf,
 	     uint32_t *map_version)
 {
 	struct pool_buf	       *buf;
@@ -556,13 +558,13 @@ map_retrieve(const struct pool *pool, struct pool_buf **map_buf,
 	uint32_t		version;
 	int			rc;
 
-	rc = dsms_kvs_nv_lookup(pool->p_mpool->mp_root, POOL_MAP_VERSION,
+	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_MAP_VERSION,
 				&version, sizeof(version));
 	if (rc != 0)
 		return rc;
 
 	/* Look up the address of the persistent pool map buffer. */
-	rc = dsms_kvs_nv_lookup_ptr(pool->p_mpool->mp_root, POOL_MAP_BUFFER,
+	rc = dsms_kvs_nv_lookup_ptr(svc->ps_mpool->mp_root, POOL_MAP_BUFFER,
 				    (void **)&buf, &buf_size);
 	if (rc != 0)
 		return rc;
@@ -576,7 +578,7 @@ map_retrieve(const struct pool *pool, struct pool_buf **map_buf,
 }
 
 struct pool_connect_cb_arg {
-	struct pool	       *pcc_pool;
+	struct pool_svc	       *pcc_svc;
 	int			pcc_skip_update;
 };
 
@@ -588,7 +590,7 @@ pool_connect_cb(const struct dtp_bulk_cb_info *cb_info)
 	struct pool_connect_in	       *in = dtp_req_get(desc->bd_rpc);
 	struct pool_connect_out	       *out = dtp_reply_get(desc->bd_rpc);
 	struct pool_hdl			hdl;
-	struct pool		       *pool = arg->pcc_pool;
+	struct pool_svc		       *svc = arg->pcc_svc;
 	int				rc = cb_info->bci_rc;
 
 	if (rc != 0) {
@@ -602,7 +604,7 @@ pool_connect_cb(const struct dtp_bulk_cb_info *cb_info)
 	hdl.ph_capas = in->pci_capas;
 
 	/* TX_BEGIN */
-	rc = dsms_kvs_uv_update(pool->p_handles, in->pci_pool_hdl, &hdl,
+	rc = dsms_kvs_uv_update(svc->ps_handles, in->pci_pool_hdl, &hdl,
 				sizeof(hdl));
 	/* TX_END */
 
@@ -613,8 +615,8 @@ out:
 	rc = dtp_reply_send(desc->bd_rpc);
 	dtp_req_decref(desc->bd_rpc);
 	D_FREE_PTR(arg);
-	pthread_rwlock_unlock(&pool->p_rwlock);
-	pool_put(pool);
+	pthread_rwlock_unlock(&svc->ps_rwlock);
+	pool_svc_put(svc);
 	return rc;
 }
 
@@ -623,7 +625,7 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 {
 	struct pool_connect_in	       *pci;
 	struct pool_connect_out	       *pco;
-	struct pool		       *pool;
+	struct pool_svc		       *svc;
 	struct pool_attr		attr;
 	struct pool_hdl			hdl;
 	struct pool_buf		       *map_buf;
@@ -643,13 +645,13 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 	D_ASSERT(pci != NULL);
 	pco = dtp_reply_get(rpc);
 
-	rc = pool_lookup(pci->pci_pool, &pool);
+	rc = pool_svc_lookup(pci->pci_pool, &svc);
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	pthread_rwlock_wrlock(&pool->p_rwlock);
+	pthread_rwlock_wrlock(&svc->ps_rwlock);
 
-	rc = pool_attr_read(pool, &attr);
+	rc = pool_attr_read(svc, &attr);
 	if (rc != 0)
 		D_GOTO(err_lock, rc);
 
@@ -673,11 +675,11 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 		D_GOTO(err_lock, rc = -DER_NOMEM);
 	}
 
-	arg->pcc_pool = pool;
+	arg->pcc_svc = svc;
 	arg->pcc_skip_update = 0;
 
 	/* Check existing pool handles. */
-	rc = dsms_kvs_uv_lookup(pool->p_handles, pci->pci_pool_hdl, &hdl,
+	rc = dsms_kvs_uv_lookup(svc->ps_handles, pci->pci_pool_hdl, &hdl,
 				sizeof(hdl));
 	if (rc == 0) {
 		if (hdl.ph_capas == pci->pci_capas) {
@@ -699,7 +701,7 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 	 * If successful, this stores the address of the persistent pool map
 	 * buffer into "map_buf".
 	 */
-	rc = map_retrieve(pool, &map_buf, &pco->pco_pool_map_version);
+	rc = map_retrieve(svc, &map_buf, &pco->pco_pool_map_version);
 	if (rc != 0) {
 		D_ERROR("failed to read pool map: %d\n", rc);
 		D_GOTO(err_arg, rc);
@@ -759,8 +761,8 @@ err_rpc:
 err_arg:
 	D_FREE_PTR(arg);
 err_lock:
-	pthread_rwlock_unlock(&pool->p_rwlock);
-	pool_put(pool);
+	pthread_rwlock_unlock(&svc->ps_rwlock);
+	pool_svc_put(svc);
 err:
 	D_DEBUG(DF_DSMS, "replying rpc %p with %d\n", rpc, rc);
 	pco->pco_ret = rc;
@@ -770,31 +772,31 @@ err:
 int
 dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 {
-	struct pool_disconnect_in *pdi;
-	struct pool_disconnect_out *pdo;
-	struct pool	*pool;
-	int		rc;
+	struct pool_disconnect_in      *pdi;
+	struct pool_disconnect_out     *pdo;
+	struct pool_svc		       *svc;
+	int				rc;
 
 	D_DEBUG(DF_DSMS, "processing rpc %p\n", rpc);
 	pdi = dtp_req_get(rpc);
 	D_ASSERT(pdi != NULL);
 
-	rc = pool_lookup(pdi->pdi_pool, &pool);
+	rc = pool_svc_lookup(pdi->pdi_pool, &svc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	pthread_rwlock_wrlock(&pool->p_rwlock);
+	pthread_rwlock_wrlock(&svc->ps_rwlock);
 
 	/* TX BEGIN */
 
-	rc = dsms_kvs_uv_delete(pool->p_handles, pdi->pdi_pool_hdl);
+	rc = dsms_kvs_uv_delete(svc->ps_handles, pdi->pdi_pool_hdl);
 	if (rc == -DER_NONEXIST)
 		rc = 0;
 
 	/* TX END */
 
-	pthread_rwlock_unlock(&pool->p_rwlock);
-	pool_put(pool);
+	pthread_rwlock_unlock(&svc->ps_rwlock);
+	pool_svc_put(svc);
 out:
 	D_DEBUG(DF_DSMS, "replying rpc %p with %d\n", rpc, rc);
 	pdo = dtp_reply_get(rpc);
@@ -804,13 +806,13 @@ out:
 }
 
 int
-dsms_pool_init(void)
+dsms_module_pool_init(void)
 {
 	int rc;
 
-	rc = pthread_mutex_init(&pool_cache_lock, NULL /* attr */);
+	rc = pthread_mutex_init(&pool_svc_cache_lock, NULL /* attr */);
 	if (rc != 0) {
-		D_ERROR("failed to initialize pool cache lock: %d\n", rc);
+		D_ERROR("failed to initialize pool_svc cache lock: %d\n", rc);
 		rc = -DER_NOMEM;
 	}
 
@@ -818,7 +820,7 @@ dsms_pool_init(void)
 }
 
 void
-dsms_pool_fini(void)
+dsms_module_pool_fini(void)
 {
-	pthread_mutex_destroy(&pool_cache_lock);
+	pthread_mutex_destroy(&pool_svc_cache_lock);
 }

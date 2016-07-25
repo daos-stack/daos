@@ -140,8 +140,8 @@ void dsms_mpool_put(struct mpool *mpool);
 /*
  * dsms_pool.c
  */
-int dsms_pool_init(void);
-void dsms_pool_fini(void);
+int dsms_module_pool_init(void);
+void dsms_module_pool_fini(void);
 int dsms_hdlr_pool_connect(dtp_rpc_t *rpc);
 int dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
 

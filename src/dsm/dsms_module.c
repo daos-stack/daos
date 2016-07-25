@@ -43,7 +43,7 @@ init(void)
 	if (rc != 0)
 		return rc;
 
-	rc = dsms_pool_init();
+	rc = dsms_module_pool_init();
 	if (rc != 0)
 		dsms_storage_fini();
 
@@ -55,7 +55,7 @@ fini(void)
 {
 	dsms_conts_close();
 	dsms_pools_close();
-	dsms_pool_fini();
+	dsms_module_pool_fini();
 	dsms_storage_fini();
 	return 0;
 }
