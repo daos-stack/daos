@@ -90,8 +90,9 @@ out_put:
 }
 
 static int
-obj_rw_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+obj_rw_cp(void *arg, daos_event_t *ev, int rc)
 {
+	struct daos_op_sp *sp = arg;
 	struct object_update_in *oui;
 	dtp_bulk_t		*bulks;
 	int			i;
@@ -280,11 +281,13 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	dtp_req_addref(req);
 	sp->sp_rpc = req;
 
-	rc = daos_event_launch(ev, NULL, obj_rw_cp);
-	if (rc != 0) {
-		dtp_req_decref(req);
+	rc = daos_event_register_comp_cb(ev, obj_rw_cp, sp);
+	if (rc != 0)
 		D_GOTO(out_bulk, rc);
-	}
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out_bulk, rc);
 
 	/** send the request */
 	return daos_rpc_send(req, ev);
@@ -436,8 +439,9 @@ struct enumerate_async_arg {
 };
 
 static int
-enumerate_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+enumerate_cp(void *arg, daos_event_t *ev, int rc)
 {
+	struct daos_op_sp		*sp = arg;
 	struct object_enumerate_in	*oei;
 	struct object_enumerate_out	*oeo;
 	struct enumerate_async_arg	*eaa;
@@ -560,11 +564,13 @@ dsm_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	eaa->eaa_cont = dcont;
 	sp->sp_arg = eaa;
 
-	rc = daos_event_launch(ev, NULL, enumerate_cp);
-	if (rc != 0) {
-		dtp_req_decref(req);
+	rc = daos_event_register_comp_cb(ev, enumerate_cp, sp);
+	if (rc != 0)
 		D_GOTO(out_eaa, rc);
-	}
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out_eaa, rc);
 
 	/** send the request */
 	return daos_rpc_send(req, ev);

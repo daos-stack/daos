@@ -30,8 +30,9 @@
 #include "dsmc_internal.h"
 
 static int
-cont_create_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+cont_create_complete(void *arg, daos_event_t *ev, int rc)
 {
+	struct daos_op_sp *sp = arg;
 	struct cont_create_out *out;
 
 	if (rc != 0) {
@@ -110,19 +111,26 @@ dsm_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	dtp_req_addref(rpc);
 	sp->sp_rpc = rpc;
 
-	rc = daos_event_launch(ev, NULL /* abort_cb */, cont_create_complete);
-	if (rc != 0) {
-		dtp_req_decref(rpc);
-		dtp_req_decref(rpc);
-		return rc;
-	}
+	rc = daos_event_register_comp_cb(ev, cont_create_complete, sp);
+	if (rc != 0)
+		D_GOTO(out_req_put, rc);
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out_req_put, rc);
 
 	return daos_rpc_send(rpc, ev);
+
+out_req_put:
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
+	return rc;
 }
 
 static int
-cont_destroy_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+cont_destroy_complete(void *arg, daos_event_t *ev, int rc)
 {
+	struct daos_op_sp *sp = arg;
 	struct cont_destroy_out *out;
 
 	if (rc != 0) {
@@ -206,14 +214,20 @@ dsm_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	dtp_req_addref(rpc);
 	sp->sp_rpc = rpc;
 
-	rc = daos_event_launch(ev, NULL /* abort_cb */, cont_destroy_complete);
-	if (rc != 0) {
-		dtp_req_decref(rpc);
-		dtp_req_decref(rpc);
-		return rc;
-	}
+	rc = daos_event_register_comp_cb(ev, cont_destroy_complete, sp);
+	if (rc != 0)
+		D_GOTO(out_req_put, rc);
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out_req_put, rc);
 
 	return daos_rpc_send(rpc, ev);
+
+out_req_put:
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
+	return rc;
 }
 
 static void
@@ -258,8 +272,9 @@ struct cont_open_arg {
 };
 
 static int
-cont_open_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+cont_open_complete(void *data, daos_event_t *ev, int rc)
 {
+	struct daos_op_sp      *sp = data;
 	struct cont_open_out   *out;
 	struct cont_open_arg   *arg = sp->sp_arg;
 	struct dsmc_pool       *pool = arg->coa_pool;
@@ -394,7 +409,11 @@ dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	sp->sp_hdlp = coh;
 	sp->sp_arg = arg;
 
-	rc = daos_event_launch(ev, NULL /* abort_cb */, cont_open_complete);
+	rc = daos_event_register_comp_cb(ev, cont_open_complete, sp);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	rc = daos_event_launch(ev);
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -420,8 +439,9 @@ struct cont_close_arg {
 };
 
 static int
-cont_close_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+cont_close_complete(void *data, daos_event_t *ev, int rc)
 {
+	struct daos_op_sp      *sp = data;
 	struct cont_close_out  *out;
 	struct cont_close_arg  *arg = sp->sp_arg;
 	struct dsmc_pool       *pool = arg->cca_pool;
@@ -503,7 +523,7 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 		dsmc_container_put(cont);
 
 		if (ev != NULL) {
-			daos_event_launch(ev, NULL, NULL);
+			daos_event_launch(ev);
 			daos_event_complete(ev, 0);
 		}
 		D_DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
@@ -549,7 +569,11 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 	sp->sp_hdl = coh;
 	sp->sp_arg = arg;
 
-	rc = daos_event_launch(ev, NULL /* abort_cb */, cont_close_complete);
+	rc = daos_event_register_comp_cb(ev, cont_close_complete, sp);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	rc = daos_event_launch(ev);
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -782,8 +806,9 @@ struct epoch_op_arg {
 };
 
 static int
-epoch_op_complete(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+epoch_op_complete(void *data, daos_event_t *ev, int rc)
 {
+	struct daos_op_sp      *sp = data;
 	dtp_rpc_t	       *rpc = sp->sp_rpc;
 	dtp_opcode_t		opc = opc_get(rpc->dr_opc);
 	struct epoch_op_out    *out = dtp_reply_get(rpc);
@@ -898,7 +923,11 @@ epoch_op(daos_handle_t coh, dtp_opcode_t opc, daos_epoch_t *epoch,
 	sp->sp_rpc = rpc;
 	sp->sp_arg = arg;
 
-	rc = daos_event_launch(ev, NULL /* abort_cb */, epoch_op_complete);
+	rc = daos_event_register_comp_cb(ev, epoch_op_complete, sp);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	rc = daos_event_launch(ev);
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 

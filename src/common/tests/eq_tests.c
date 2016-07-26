@@ -80,7 +80,7 @@ eq_test_1()
 	rc = daos_event_init(&ev, eqh, NULL);
 	D_ASSERT(rc == 0);
 
-	rc = daos_event_launch(&ev, NULL, NULL);
+	rc = daos_event_launch(&ev);
 	D_ASSERT(rc == 0);
 
 	daos_event_complete(&ev, 0);
@@ -88,7 +88,7 @@ eq_test_1()
 	rc = daos_event_init(&abort_ev, eqh, NULL);
 	D_ASSERT(rc == 0);
 
-	rc = daos_event_launch(&abort_ev, NULL, NULL);
+	rc = daos_event_launch(&abort_ev);
 	D_ASSERT(rc == 0);
 
 	daos_event_abort(&abort_ev);
@@ -150,7 +150,7 @@ eq_test_2()
 
 	D_ERROR("Query EQ with inflight events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
-		rc = daos_event_launch(events[i], NULL, NULL);
+		rc = daos_event_launch(events[i]);
 		if (rc != 0) {
 			D_ERROR("Failed to launch event %d: %d\n", i, rc);
 			goto out;
@@ -239,7 +239,7 @@ eq_test_3()
 
 	D_ERROR("launch parent events\n");
 	/* try to launch parent event, should always fail */
-	rc = daos_event_launch(&event, NULL, NULL);
+	rc = daos_event_launch(&event);
 	if (rc != -DER_NO_PERM) {
 		D_ERROR("Launch parent event returned %d\n", rc);
 		goto out_free;
@@ -247,9 +247,15 @@ eq_test_3()
 
 	D_ERROR("launch child events");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
-		rc = daos_event_launch(child_events[i], NULL, NULL);
+		rc = daos_event_launch(child_events[i]);
 		if (rc != 0)
 			goto out_free;
+	}
+
+	rc = daos_event_launch(&event);
+	if (rc != 0) {
+		D_ERROR("Launch parent event returned %d\n", rc);
+		goto out_free;
 	}
 
 	for (i = 0; i < EQT_EV_COUNT; i++)
@@ -455,7 +461,7 @@ eq_test_4()
 	sleep(EQT_SLEEP_INV);
 
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++) {
-		rc = daos_event_launch(events[i], NULL, NULL);
+		rc = daos_event_launch(events[i]);
 		if (rc != 0)
 			goto out;
 	}
@@ -471,7 +477,7 @@ eq_test_4()
 		"complete these events\n", EQT_EV_COUNT, EQT_SLEEP_INV);
 	D_ERROR("\tProducer launch %d events\n", EQT_EV_COUNT);
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++) {
-		rc = daos_event_launch(events[i], NULL, NULL);
+		rc = daos_event_launch(events[i]);
 		if (rc != 0)
 			goto out;
 	}
@@ -494,7 +500,7 @@ eq_test_4()
 
 	EQ_TEST_BARRIER("\tProducer launch and complete all events\n", out);
 	for (i = EQT_EV_COUNT * step; i < EQT_EV_COUNT * (step + 1); i++) {
-		rc = daos_event_launch(events[i], NULL, NULL);
+		rc = daos_event_launch(events[i]);
 		if (rc != 0)
 			goto out;
 	}
@@ -521,60 +527,6 @@ out:
 
 	return epc_data.epc_error;
 }
-
-static int
-grp_comp(void *args, int rc)
-{
-	D_PRINT("group completed\n");
-	return 0;
-}
-
-#define GRP_SIZE	1000
-
-static int
-eq_test_5(void)
-{
-	struct daos_event	*evps[GRP_SIZE];
-	struct daos_oper_grp	*grp;
-	daos_event_t		 ev;
-	int			 rc;
-	int			 i;
-
-	DAOS_TEST_ENTRY("5", "operation group");
-
-	rc = daos_event_init(&ev, my_eqh, NULL);
-	if (rc != 0) {
-		D_ERROR("failed 1\n");
-		return rc;
-	}
-
-	rc = daos_oper_grp_create(&ev, grp_comp, NULL, &grp);
-	D_ASSERTF(rc == 0, "rc = %d\n", rc);
-
-	for (i = 0; i < GRP_SIZE; i++) {
-		rc = daos_oper_grp_new_ev(grp, &evps[i]);
-		D_ASSERTF(rc == 0, "rc = %d\n", rc);
-
-		rc = daos_event_launch(evps[i], NULL, NULL);
-		D_ASSERTF(rc == 0, "rc = %d\n", rc);
-	}
-
-	D_PRINT("Launch oper group now\n");
-	rc = daos_oper_grp_launch(grp);
-	D_ASSERTF(rc == 0, "rc = %d\n", rc);
-
-	for (i = 0; i < GRP_SIZE; i++)
-		daos_event_complete(evps[i], 0);
-
-	D_PRINT("Poll empty EQ with timeout\n");
-	rc = daos_eq_poll(my_eqh, 1, 1, GRP_SIZE, evps);
-	D_ASSERTF(rc == 1, "rc = %d\n", rc);
-
-	rc = daos_event_fini(&ev);
-	DAOS_TEST_EXIT(rc);
-	return rc;
-}
-
 
 int
 main(int argc, char **argv)
@@ -609,9 +561,6 @@ main(int argc, char **argv)
 	if (rc != 0)
 		goto failed;
 
-	rc = eq_test_5();
-	if (rc != 0)
-		goto failed;
 failed:
 	daos_eq_destroy(my_eqh, 1);
 out_lib:

@@ -63,9 +63,16 @@ typedef struct daos_eq {
 
 } daos_eq_t;
 
-struct daos_event_ops {
-	daos_event_abort_cb_t	op_abort;
-	daos_event_comp_cb_t	op_comp;
+struct daos_event_comp_list {
+	daos_list_t	op_comp_list;
+	daos_event_comp_cb_t op_comp_cb;
+	void *op_comp_arg;
+};
+
+struct daos_event_callback {
+	daos_event_comp_cb_t	evx_inline_cb;
+	struct daos_op_sp	evx_inline_cb_sp;
+	daos_list_t		evx_comp_list;
 };
 
 struct daos_event_private {
@@ -82,9 +89,8 @@ struct daos_event_private {
 
 	struct daos_event_private *evx_parent;
 
-	dtp_context_t		*evx_ctx;
-	struct daos_event_ops	 evx_ops;
-	struct daos_op_sp	 evx_sp;
+	dtp_context_t		evx_ctx;
+	struct daos_event_callback evx_callback;
 };
 
 static inline struct daos_event_private *

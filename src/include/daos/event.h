@@ -59,7 +59,8 @@ struct daos_op_sp {
 };
 
 typedef int (*daos_event_abort_cb_t)(struct daos_op_sp *, daos_event_t *);
-typedef int (*daos_event_comp_cb_t)(struct daos_op_sp *, daos_event_t *, int);
+typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
+
 
 /**
  * Finish event queue library
@@ -105,12 +106,9 @@ daos_event_complete(daos_event_t *ev, int rc);
  * Mark the event launched, i.e. move this event to launch list.
  *
  * \param ev		[IN]	event to launch.
- * \param abort_cb	[IN]	abort callback
- * \param comp_cb	[IN]	completion callback
  */
 int
-daos_event_launch(struct daos_event *ev, daos_event_abort_cb_t abort_cb,
-		  daos_event_comp_cb_t comp_cb);
+daos_event_launch(struct daos_event *ev);
 
 /**
  * Retrieve the private per-thread event
@@ -157,5 +155,18 @@ daos_ev2sp(struct daos_event *ev);
  */
 daos_handle_t
 daos_ev2eqh(struct daos_event *ev);
+
+int
+daos_event_destroy(struct daos_event *ev, bool force);
+
+int
+daos_event_destroy_children(struct daos_event *ev, bool force);
+
+int
+daos_event_test(struct daos_event *ev, int64_t timeout);
+
+int
+daos_event_register_comp_cb(struct daos_event *ev,
+			    daos_event_comp_cb_t cb, void *arg);
 
 #endif /*  __DAOS_EV_INTERNAL_H__ */

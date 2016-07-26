@@ -27,9 +27,9 @@
 #include "dmgc_internal.h"
 
 static int
-pool_create_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+pool_create_cp(void *arg, daos_event_t *ev, int rc)
 {
-
+	struct daos_op_sp		*sp = arg;
 	daos_rank_list_t		*svc = (daos_rank_list_t *)sp->sp_arg;
 	struct dmg_pool_create_out	*pc_out;
 
@@ -118,14 +118,13 @@ dmg_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	sp->sp_rpc = rpc_req;
 	sp->sp_arg = svc;
 
-	rc = daos_event_launch(ev, NULL, pool_create_cp);
-	if (rc) {
-		/** dec ref taken for scratchpad */
-		dtp_req_decref(rpc_req);
-		/** dec ref taken for dtp_req_create */
-		dtp_req_decref(rpc_req);
-		D_GOTO(out, rc);
-	}
+	rc = daos_event_register_comp_cb(ev, pool_create_cp, sp);
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
 
 	D_DEBUG(DF_MGMT, DF_UUID": creating pool\n", DP_UUID(uuid));
 
@@ -133,11 +132,19 @@ dmg_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	rc = daos_rpc_send(rpc_req, ev);
 out:
 	return rc;
+
+out_put_req:
+	/** dec ref taken for scratchpad */
+	dtp_req_decref(rpc_req);
+	/** dec ref taken for dtp_req_create */
+	dtp_req_decref(rpc_req);
+	D_GOTO(out, rc);
 }
 
 static int
-pool_destroy_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+pool_destroy_cp(void *arg, daos_event_t *ev, int rc)
 {
+	struct daos_op_sp *sp = arg;
 	struct dmg_pool_destroy_out	*pd_out;
 
 	if (rc) {
@@ -211,14 +218,14 @@ dmg_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	dtp_req_addref(rpc_req); /** for scratchpad */
 	sp->sp_rpc = rpc_req;
 
-	rc = daos_event_launch(ev, NULL, pool_destroy_cp);
-	if (rc) {
-		/** dec ref taken for scratchpad */
-		dtp_req_decref(rpc_req);
-		/** dec ref taken for dtp_req_create */
-		dtp_req_decref(rpc_req);
-		D_GOTO(out, rc);
-	}
+	rc = daos_event_register_comp_cb(ev, pool_destroy_cp,
+					 sp);
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
 
 	D_DEBUG(DF_MGMT, DF_UUID": destroying pool\n", DP_UUID(uuid));
 
@@ -226,4 +233,11 @@ dmg_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	rc = daos_rpc_send(rpc_req, ev);
 out:
 	return rc;
+
+out_put_req:
+	/** dec ref taken for scratchpad */
+	dtp_req_decref(rpc_req);
+	/** dec ref taken for dtp_req_create */
+	dtp_req_decref(rpc_req);
+	D_GOTO(out, rc);
 }

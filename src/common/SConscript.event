@@ -5,7 +5,7 @@ Import('env')
 env.AppendUnique(LIBPATH=[Dir('.')])
 denv = env.Clone()
 
-event = denv.SharedLibrary('libdaos_event', ['event.c', 'rpc.c', 'oper_grp.c'])
+event = denv.SharedLibrary('libdaos_event', ['event.c', 'rpc.c'])
 denv.Install('$PREFIX/lib/', event)
 
 denv.Append(CPPPATH = ['#/src/common'])

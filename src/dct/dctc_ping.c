@@ -28,9 +28,9 @@
 #include "dct_rpc.h"
 
 static int
-dct_ping_cb(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+dct_ping_cb(void *arg, daos_event_t *ev, int rc)
 {
-
+	struct daos_op_sp *sp = arg;
 	struct dct_ping_out *out;
 
 	D_DEBUG(DF_MISC, "Entering dct_ping_cb\n");
@@ -92,22 +92,28 @@ dct_ping(uint32_t ping_val, daos_event_t *ev)
 	dtp_req_addref(rpc);
 	sp->sp_rpc = rpc;
 
+	rc = daos_event_register_comp_cb(ev, dct_ping_cb, sp);
+	if (rc != 0)
+		D_GOTO(out_req_put, rc);
+
 	/* Mark the event as inflight and register our various callbacks */
-	rc = daos_event_launch(ev, NULL /*No abort CB*/, dct_ping_cb);
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out_req_put, rc);
 
 	/*
 	 * If we fail, decrement the ref count....twice? Mimicking pattern seen
 	 * elsewhere
 	 */
-	if (rc != 0) {
-		dtp_req_decref(rpc);
-		dtp_req_decref(rpc);
-		return rc;
-	}
 
 	/* And now actually issue the darn RPC */
 	rc = daos_rpc_send(rpc, ev);
 	D_DEBUG(DF_MISC, "leaving dct_ping()\n");
 
+	return rc;
+
+out_req_put:
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
 	return rc;
 }

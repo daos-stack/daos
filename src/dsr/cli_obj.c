@@ -37,11 +37,13 @@ struct cli_obj_io_ctx {
 	/** reference of the object */
 	struct dsr_cli_obj	*cx_obj;
 	/** operation group */
-	struct daos_oper_grp	*cx_opg;
+	struct daos_event	*cx_event;
 	/** pointer to list anchor */
 	void			*cx_args[CLI_OBJ_IO_PARMS];
 	/** completion callback */
 	cli_obj_io_comp_t	 cx_comp;
+
+	int			cx_sync:1;
 };
 
 struct cli_obj_io_oper {
@@ -168,7 +170,7 @@ cli_obj_open_shard(struct dsr_cli_obj *obj, unsigned int shard,
 }
 
 static int
-cli_obj_iocx_comp(void *args, int rc)
+cli_obj_iocx_comp(void *args, struct daos_event *ev, int rc)
 {
 	struct cli_obj_io_ctx	*iocx = args;
 
@@ -178,6 +180,9 @@ cli_obj_iocx_comp(void *args, int rc)
 
 	if (iocx->cx_obj != NULL)
 		cli_obj_decref(iocx->cx_obj);
+
+	/* Let's destroy all os children created by cli_obj */
+	daos_event_destroy_children(iocx->cx_event, 1);
 
 	D_FREE_PTR(iocx);
 	return rc;
@@ -198,30 +203,56 @@ cli_obj_iocx_create(daos_handle_t oh, daos_event_t *ev,
 	iocx->cx_obj = cli_hdl2obj(oh);
 	if (iocx->cx_obj == NULL)
 		D_GOTO(failed, rc = -DER_NO_HDL);
-
-	rc = daos_oper_grp_create(ev, cli_obj_iocx_comp, iocx, &iocx->cx_opg);
-	if (rc != 0)
-		D_GOTO(failed, rc);
+	iocx->cx_event = ev;
+	if (ev != NULL) {
+		rc = daos_event_register_comp_cb(ev, cli_obj_iocx_comp,
+						 iocx);
+		if (rc != 0)
+			D_GOTO(failed, rc);
+	}
 
 	*iocx_pp = iocx;
 	return 0;
  failed:
-	cli_obj_iocx_comp((void *)iocx, rc);
+	cli_obj_iocx_comp((void *)iocx, NULL, rc);
 	return rc;
 }
 
 static void
 cli_obj_iocx_destroy(struct cli_obj_io_ctx *iocx, int rc)
 {
-	D_ASSERT(iocx->cx_opg != NULL);
-	daos_oper_grp_destroy(iocx->cx_opg, rc);
+	if (iocx->cx_sync) {
+		if (iocx->cx_event != NULL) {
+			daos_event_abort(iocx->cx_event);
+			daos_event_destroy(iocx->cx_event, 1);
+			iocx->cx_event = NULL;
+		}
+	}
 }
 
 static int
 cli_obj_iocx_launch(struct cli_obj_io_ctx *iocx)
 {
-	D_ASSERT(iocx->cx_opg != NULL);
-	return daos_oper_grp_launch(iocx->cx_opg);
+	int rc;
+
+	if (iocx->cx_event == NULL)
+		return 0;
+
+	rc = daos_event_launch(iocx->cx_event);
+	if (rc != 0)
+		return rc;
+
+	if (iocx->cx_sync) {
+		/* Wait the event to complete */
+		struct daos_event *event = iocx->cx_event;
+
+		D_ASSERT(event != NULL);
+		rc = daos_event_test(event, DAOS_EQ_WAIT);
+		daos_event_fini(event);
+		D_FREE_PTR(event);
+	}
+
+	return rc;
 }
 
 static int
@@ -236,11 +267,36 @@ cli_obj_iocx_new_oper(struct cli_obj_io_ctx *iocx, unsigned int shard,
 	if (rc != 0)
 		return rc;
 
-	rc = daos_oper_grp_new_ev(iocx->cx_opg, &oper->oo_ev);
+	if (iocx->cx_event == NULL) {
+		iocx->cx_sync = 1;
+
+		D_ALLOC_PTR(iocx->cx_event);
+		if (iocx->cx_event == NULL)
+			return -DER_NOMEM;
+
+		rc = daos_event_init(iocx->cx_event, DAOS_HDL_INVAL, NULL);
+		if (rc != 0) {
+			D_FREE_PTR(iocx->cx_event);
+			return rc;
+		}
+
+		rc = daos_event_register_comp_cb(iocx->cx_event,
+						 cli_obj_iocx_comp,
+						 iocx);
+		if (rc != 0)
+			return rc;
+	}
+
+	D_ALLOC_PTR(oper->oo_ev);
+	if (oper->oo_ev == NULL)
+		return -DER_NOMEM;
+
+	rc = daos_event_init(oper->oo_ev, DAOS_HDL_INVAL, iocx->cx_event);
 	if (rc != 0) {
 		/* In the failed case, we don't need to close the opened shard
 		 * because we want to cache the open handle anyway.
 		 */
+		D_FREE_PTR(oper->oo_ev);
 		return rc;
 	}
 	oper->oo_oh = oh;
@@ -259,7 +315,7 @@ dsr_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	rc = oc_attr != NULL ? 0 : -DER_INVAL;
 
 	if (rc == 0 && ev != NULL) {
-		daos_event_launch(ev, NULL, NULL);
+		daos_event_launch(ev);
 		daos_event_complete(ev, 0);
 	}
 	return rc;
@@ -327,7 +383,7 @@ dsr_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
  out:
 	cli_obj_decref(obj);
 	if (rc == 0 && ev != NULL) {
-		daos_event_launch(ev, NULL, NULL);
+		daos_event_launch(ev);
 		daos_event_complete(ev, 0);
 	}
 	return rc;
@@ -346,7 +402,7 @@ dsr_obj_close(daos_handle_t oh, daos_event_t *ev)
 	cli_obj_decref(obj);
 
 	if (ev != NULL) {
-		daos_event_launch(ev, NULL, NULL);
+		daos_event_launch(ev);
 		daos_event_complete(ev, 0);
 	}
 	return 0;

@@ -31,7 +31,7 @@
 #include "../dsm/dsmc_internal.h"
 
 static int
-dsr_pool_connect_comp(void *args, int rc)
+dsr_pool_connect_comp(void *args, struct daos_event *ev, int rc)
 {
 	struct dsmc_pool *pool;
 	daos_handle_t	 *poh = (daos_handle_t *)args;
@@ -65,30 +65,47 @@ dsr_pool_connect(const uuid_t uuid, const char *grp,
 		 daos_rank_list_t *failed, daos_handle_t *poh,
 		 daos_pool_info_t *info, daos_event_t *ev)
 {
-	struct daos_oper_grp	*opg;
-	int			 rc;
-
-	rc = daos_oper_grp_create(ev, dsr_pool_connect_comp, poh, &opg);
-	if (rc != 0)
-		return rc;
+	struct daos_event *pool_event = ev;
+	int		  rc;
 
 	*poh = DAOS_HDL_INVAL;
-	rc = daos_oper_grp_new_ev(opg, &ev);
+	if (ev == NULL) {
+		D_ALLOC_PTR(pool_event);
+		if (pool_event == NULL)
+			return -DER_NOMEM;
+
+		rc = daos_event_init(pool_event, DAOS_HDL_INVAL, NULL);
+		if (rc != 0) {
+			D_FREE_PTR(pool_event);
+			return rc;
+		}
+	}
+
+	rc = daos_event_register_comp_cb(pool_event, dsr_pool_connect_comp,
+					 poh);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
 	/* Call it in sync mode to simplify things for now... */
-	rc = dsm_pool_connect(uuid, grp, tgts, flags, failed, poh, info, ev);
+	rc = dsm_pool_connect(uuid, grp, tgts, flags, failed, poh, info,
+			      pool_event);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	rc = daos_oper_grp_launch(opg);
-	if (rc != 0)
-		D_GOTO(failed, rc);
+	if (pool_event != ev) {
+		rc = daos_event_test(pool_event, DAOS_EQ_WAIT);
+		daos_event_fini(pool_event);
+		D_FREE_PTR(pool_event);
+	}
 
 	return 0;
- failed:
-	daos_oper_grp_destroy(opg, rc);
+
+failed:
+	if (pool_event != ev) {
+		daos_event_fini(pool_event);
+		D_FREE_PTR(pool_event);
+	}
+
 	return rc;
 }
 
@@ -108,5 +125,5 @@ dsr_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 	if (rc != 0)
 		return rc;
 
-	return dsr_pool_connect_comp(poh, 0);
+	return dsr_pool_connect_comp(poh, NULL, 0);
 }

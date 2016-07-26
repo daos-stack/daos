@@ -83,8 +83,9 @@ struct pool_connect_arg {
 };
 
 static int
-pool_connect_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+pool_connect_cp(void *data, daos_event_t *ev, int rc)
 {
+	struct daos_op_sp *sp = data;
 	struct pool_connect_arg	*arg = sp->sp_arg;
 	struct dsmc_pool	*pool = arg->pca_pool;
 	daos_pool_info_t	*info = arg->pca_info;
@@ -244,11 +245,14 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 	sp->sp_hdlp = poh;
 	sp->sp_arg = arg;
 
+	rc = daos_event_register_comp_cb(ev, pool_connect_cp, sp);
+	if (rc != 0)
+		D_GOTO(out_bulk, rc);
 	/**
 	 * mark event as in-flight, must be called before sending the request
 	 * since it can race with the request callback execution
 	 */
-	rc = daos_event_launch(ev, NULL, pool_connect_cp);
+	rc = daos_event_launch(ev);
 	if (rc)
 		D_GOTO(out_bulk, rc);
 
@@ -272,8 +276,9 @@ out_pool:
 }
 
 static int
-pool_disconnect_cp(struct daos_op_sp *sp, daos_event_t *ev, int rc)
+pool_disconnect_cp(void *arg, daos_event_t *ev, int rc)
 {
+	struct daos_op_sp		*sp = arg;
 	struct dsmc_pool		*pool = (struct dsmc_pool *)sp->sp_arg;
 	struct pool_disconnect_out	*pdo;
 
@@ -336,7 +341,7 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 		poh.cookie = 0;
 		dsmc_pool_put(pool);
 		if (ev != NULL) {
-			daos_event_launch(ev, NULL, NULL);
+			daos_event_launch(ev);
 			daos_event_complete(ev, rc);
 		}
 		return rc;
@@ -370,18 +375,24 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	sp->sp_hdl = poh;
 	sp->sp_arg = pool;
 
+	rc = daos_event_register_comp_cb(ev, pool_disconnect_cp, sp);
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
+
 	/** mark event as in-flight */
-	rc = daos_event_launch(ev, NULL, pool_disconnect_cp);
-	if (rc) {
-		dtp_req_decref(rpc); /* scratchpad */
-		dtp_req_decref(rpc); /* free req */
-		dsmc_pool_put(pool);
-		return rc;
-	}
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, ev);
 	return rc;
+out_put_req:
+	dtp_req_decref(rpc); /* scratchpad */
+	dtp_req_decref(rpc); /* free req */
+	dsmc_pool_put(pool);
+	return rc;
+
 }
 
 static inline void
