@@ -394,8 +394,11 @@ btr_rec_fetch(struct btr_context *tcx, struct btr_record *rec,
 
 static int
 btr_rec_update(struct btr_context *tcx, struct btr_record *rec,
-		daos_iov_t *key, daos_iov_t *val)
+	       daos_iov_t *key, daos_iov_t *val)
 {
+	if (!btr_ops(tcx)->to_rec_update)
+		return -DER_NO_PERM;
+
 	return btr_ops(tcx)->to_rec_update(&tcx->tc_tins, rec, key, val);
 }
 
@@ -1292,6 +1295,17 @@ btr_update_only(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 		btr_rec_string(tcx, rec, true, sbuf, BTR_PRINT_BUF));
 
 	rc = btr_rec_update(tcx, rec, key, val);
+	if (rc == -DER_NO_PERM) { /* cannot make inplace change */
+		struct btr_trace *trace = &tcx->tc_trace[tcx->tc_depth - 1];
+
+		if (btr_has_tx(tcx))
+			btr_node_tx_add(tcx, trace->tr_node);
+
+		D_DEBUG(DF_MISC, "Replace the original record\n");
+		btr_rec_free(tcx, rec);
+		rc = btr_rec_alloc(tcx, key, val, rec);
+	}
+
 	if (rc != 0) { /* failed */
 		D_DEBUG(DF_MISC, "Failed to update record: %d\n", rc);
 		return rc;
@@ -2069,7 +2083,6 @@ dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 	D_ASSERT(ops->to_hkey_gen != NULL);
 	D_ASSERT(ops->to_hkey_size != NULL);
 	D_ASSERT(ops->to_rec_fetch != NULL);
-	D_ASSERT(ops->to_rec_update != NULL);
 	D_ASSERT(ops->to_rec_alloc != NULL);
 	D_ASSERT(ops->to_rec_free != NULL);
 

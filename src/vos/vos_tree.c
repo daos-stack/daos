@@ -548,17 +548,32 @@ static int
 ibtr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
-	struct idx_btr_key *ihkey = (struct idx_btr_key *)&rec->rec_hkey[0];
+	struct idx_btr_key	*ihkey;
 	struct vos_key_bundle	*kbund;
+	struct vos_rec_bundle	*rbund;
 
-	/* TODO */
 	kbund = vos_iov2key_bundle(key_iov);
-	D_ERROR("No overwrite for now, idx "DF_U64", epoch "DF_U64
-		", irec idx "DF_U64", irec epoch "DF_U64"\n",
-		kbund->kb_idx, kbund->kb_epr->epr_lo,
+	rbund = vos_iov2rec_bundle(val_iov);
+
+	if (!UMMID_IS_NULL(rbund->rb_mmid) ||
+	    !vos_irec_size_equal(vos_rec2irec(tins, rec), rbund)) {
+		/* This function should return -DER_NO_PERM to dbtree if:
+		 * - it is a rdma, the original record should be replaced.
+		 * - the new record size cannot match the original one, so we
+		 *   need to realloc and copyin data to the new space.
+		 *
+		 * So dbtree can release the original record and install the
+		 * rdma-ed record, or just allocate a new one.
+		 */
+		return -DER_NO_PERM;
+	}
+
+	ihkey = (struct idx_btr_key *)&rec->rec_hkey[0];
+	D_DEBUG(DF_VOS2, "Overwrite idx "DF_U64", epoch "DF_U64"\n",
 		ihkey->ih_index, ihkey->ih_epoch);
 
-	return -DER_NO_PERM;
+	umem_tx_add(&tins->ti_umm, rec->rec_mmid, vos_irec_size(rbund));
+	return ibtr_rec_fetch_in(tins, rec, kbund, rbund);
 }
 
 static btr_ops_t vos_idx_btr_ops = {

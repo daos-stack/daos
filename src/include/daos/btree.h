@@ -210,13 +210,18 @@ typedef struct {
 					struct btr_record *rec,
 					daos_iov_t *key, daos_iov_t *val);
 	/**
-	 * Update value of a record.
+	 * Update value of a record, the new value should be stored in the
+	 * current rec::rec_mmid.
 	 *
 	 * \param tins	[IN]	Tree instance which contains the root mmid
 	 *			and memory class etc.
 	 * \param rec	[IN]	Record to be read update.
 	 * \param val	[IN]	New value to be stored for the record.
 	 * \a return	0	success.
+	 *		-DER_NO_PERM
+	 *			cannot make inplace change, should call
+	 *			rec_free() to release the original record
+	 *			and rec_alloc() to create a new record.
 	 *		-ve	error code
 	 */
 	int		(*to_rec_update)(struct btr_instance *tins,

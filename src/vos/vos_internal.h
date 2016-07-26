@@ -362,6 +362,18 @@ vos_irec_size(struct vos_rec_bundle *rbund)
 	       rbund->rb_recx->rx_rsize * rbund->rb_recx->rx_nr;
 }
 
+static inline bool
+vos_irec_size_equal(struct vos_irec *irec, struct vos_rec_bundle *rbund)
+{
+	if (irec->ir_size != rbund->rb_recx->rx_rsize * rbund->rb_recx->rx_nr)
+		return false;
+
+	if (irec->ir_cs_size != rbund->rb_csum->cs_len)
+		return false;
+
+	return true;
+}
+
 static inline char *
 vos_irec2csum(struct vos_irec *irec)
 {
