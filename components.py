@@ -141,13 +141,14 @@ REQS.define('nvml',
 
 RETRIEVER = GitRepoRetriever("http://git.mcs.anl.gov/argo/argobots.git", True)
 REQS.define('argobots',
-            retreiver=RETRIEVER,
-            commands=['find . -name configure - print | xargs rm ',
+            retriever=RETRIEVER,
+            commands=['git clean -dxf ',
                       './autogen.sh',
-                      './configure --with-platform=optimized '
-                      '--prefix=$ARGOBOTS_PREFIX',
+                      './configure --prefix=$ARGOBOTS_PREFIX',
                       'make -j4',
-                      'make -j4 install'])
+                      'make -j4 install'],
+            libs=['abt'],
+            headers=['abt.h'])
 
 RETRIEVER = GitRepoRetriever("ssh://review.whamcloud.com:29418/coral/cppr",
                              True)
