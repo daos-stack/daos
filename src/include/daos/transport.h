@@ -511,8 +511,6 @@ dtp_req_abort(dtp_rpc_t *req);
  * \param ep [IN]		endpoint address
  *
  * \return			zero on success, negative value if error
- *
- * Notes: now HG_Cancel() is not fully implemented.
  */
 int
 dtp_ep_abort(dtp_endpoint_t ep);
