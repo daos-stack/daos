@@ -169,6 +169,7 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 	struct pool_buf	       *map_buf;
 	struct pool_component	map_comp;
 	uint32_t		map_version = 1;
+	uint32_t		nhandles = 0;
 	uuid_t		       *uuids;
 	int			rc;
 	int			i;
@@ -256,6 +257,10 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
+		rc = dsms_kvs_nv_update(kvsh, POOL_NHANDLES, &nhandles,
+					sizeof(nhandles));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
 		rc = dsms_kvs_nv_create_kvs(kvsh, POOL_HANDLES, KVS_UV,
 					    0 /* feats */, 16 /* order */, mp,
 					    NULL /* kvsh_new */);
@@ -380,6 +385,7 @@ static int
 pool_svc_init(const uuid_t uuid, struct pool_svc *svc)
 {
 	struct mpool	       *mpool;
+	uint32_t		nhandles;
 	struct btr_root	       *kvs;
 	size_t			size;
 	struct umem_attr	uma;
@@ -406,6 +412,13 @@ pool_svc_init(const uuid_t uuid, struct pool_svc *svc)
 		D_ERROR("failed to initialize ps_lock: %d\n", rc);
 		D_GOTO(err_rwlock, rc = -DER_NOMEM);
 	}
+
+	rc = dsms_kvs_nv_lookup(mpool->mp_root, POOL_NHANDLES, &nhandles,
+				sizeof(nhandles));
+	if (rc != 0)
+		D_GOTO(err_lock, rc);
+
+	svc->ps_ref += nhandles;
 
 	rc = dsms_kvs_nv_lookup_ptr(mpool->mp_root, POOL_HANDLES, (void **)&kvs,
 				    &size);
@@ -591,7 +604,10 @@ pool_connect_cb(const struct dtp_bulk_cb_info *cb_info)
 	struct pool_connect_out	       *out = dtp_reply_get(desc->bd_rpc);
 	struct pool_hdl			hdl;
 	struct pool_svc		       *svc = arg->pcc_svc;
+	uint32_t			nhandles;
 	int				rc = cb_info->bci_rc;
+
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
 	if (rc != 0) {
 		D_ERROR("failed to transfer pool map to client: %d\n", rc);
@@ -603,10 +619,34 @@ pool_connect_cb(const struct dtp_bulk_cb_info *cb_info)
 
 	hdl.ph_capas = in->pci_capas;
 
-	/* TX_BEGIN */
-	rc = dsms_kvs_uv_update(svc->ps_handles, in->pci_pool_hdl, &hdl,
-				sizeof(hdl));
-	/* TX_END */
+	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_NHANDLES,
+				&nhandles, sizeof(nhandles));
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	nhandles++;
+
+	TX_BEGIN(svc->ps_mpool->mp_pmem) {
+		rc = dsms_kvs_nv_update(svc->ps_mpool->mp_root, POOL_NHANDLES,
+					&nhandles, sizeof(nhandles));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+
+		rc = dsms_kvs_uv_update(svc->ps_handles, in->pci_pool_hdl, &hdl,
+					sizeof(hdl));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+	} TX_ONABORT {
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
+			rc = -DER_NOSPACE;
+	} TX_END
+
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* For this pool handle. */
+	pool_svc_get(svc);
 
 out:
 	dtp_bulk_free(desc->bd_local_hdl);
@@ -775,7 +815,10 @@ dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 	struct pool_disconnect_in      *pdi;
 	struct pool_disconnect_out     *pdo;
 	struct pool_svc		       *svc;
+	uint32_t			nhandles;
 	int				rc;
+
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
 	D_DEBUG(DF_DSMS, "processing rpc %p\n", rpc);
 	pdi = dtp_req_get(rpc);
@@ -787,14 +830,38 @@ dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 
 	pthread_rwlock_wrlock(&svc->ps_rwlock);
 
-	/* TX BEGIN */
+	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_NHANDLES,
+				&nhandles, sizeof(nhandles));
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
 
-	rc = dsms_kvs_uv_delete(svc->ps_handles, pdi->pdi_pool_hdl);
-	if (rc == -DER_NONEXIST)
-		rc = 0;
+	nhandles--;
 
-	/* TX END */
+	TX_BEGIN(svc->ps_mpool->mp_pmem) {
+		rc = dsms_kvs_uv_delete(svc->ps_handles, pdi->pdi_pool_hdl);
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
 
+		rc = dsms_kvs_nv_update(svc->ps_mpool->mp_root, POOL_NHANDLES,
+					&nhandles, sizeof(nhandles));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+	} TX_ONABORT {
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
+			rc = -DER_NOSPACE;
+	} TX_END
+
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		D_GOTO(out_lock, rc);
+	}
+
+	/* For this pool handle. See pool_connect_cb(). */
+	pool_svc_put(svc);
+
+out_lock:
 	pthread_rwlock_unlock(&svc->ps_rwlock);
 	pool_svc_put(svc);
 out:

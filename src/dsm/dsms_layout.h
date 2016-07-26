@@ -118,6 +118,7 @@ struct superblock {
 #define POOL_MAP_VERSION	"pool_map_version"	/* uint32_t */
 #define POOL_MAP_BUFFER		"pool_map_buffer"	/* pool_buf */
 #define POOL_MAP_TARGET_UUIDS	"pool_map_target_uuids"	/* uuid_t[] */
+#define POOL_NHANDLES		"pool_nhandles"		/* uint32_t */
 #define POOL_HANDLES		"pool_handles"		/* btr_root (pool */
 							/* handle KVS) */
 
@@ -148,7 +149,7 @@ struct pool_hdl {
 #define CONT_LHES	"lhes"		/* btr_root (LHE KVS) */
 #define CONT_SNAPSHOTS	"snapshots"	/* btr_root (snapshot KVS) */
 #define CONT_HANDLES	"handles"	/* btr_root (container handle */
-						/* KVS) */
+					/* KVS) */
 
 /*
  * HCE, LRE, and LHE KVSs (KVS_EC)
