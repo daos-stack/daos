@@ -268,8 +268,8 @@ the issues causing the TESTS to fail.
                 if error_types:
                     error_str += """
 Valgrind %s check failed.  See %s:"""%(mode, str(fname))
-                    for err, err_type in sorted(error_types):
-                        error_str += "\n%-3d %s errors"%(err_type,
+                    for err in error_types:
+                        error_str += "\n%-3d %s errors"%(error_types[err],
                                                          err)
     if error_str:
         return """
