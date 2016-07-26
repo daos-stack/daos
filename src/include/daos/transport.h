@@ -655,9 +655,30 @@ enum dtp_tree_type {
 	DTP_TREE_INVALID	= 0,
 	DTP_TREE_MIN		= 1,
 	DTP_TREE_FLAT		= 1,
-	DTP_TREE_BINOMIAL	= 2,
-	DTP_TREE_QUADNOMIAL	= 3,
+	DTP_TREE_KARY		= 2,
+	DTP_TREE_KNOMIAL	= 3,
 	DTP_TREE_MAX		= 3,
+};
+
+#define DTP_TREE_TYPE_SHIFT	(16U)
+
+/*
+ * Calculate the tree topology.
+ *
+ * \param tree_type [IN]	tree type
+ * \param branch_ratio [IN]	branch ratio, be ignored for DTP_TREE_FLAT.
+ *
+ * \return			tree topology value on success,
+ *				negative value if error.
+ */
+static inline int
+dtp_tree_topo(enum dtp_tree_type tree_type, unsigned branch_ratio)
+{
+	if (tree_type < DTP_TREE_MIN || tree_type > DTP_TREE_MAX)
+		return -DER_INVAL;
+
+	return (tree_type << DTP_TREE_TYPE_SHIFT) |
+	       (branch_ratio & ((1U << DTP_TREE_TYPE_SHIFT) - 1));
 };
 
 /* collective RPC optional flags */
@@ -689,8 +710,28 @@ struct dtp_corpc_ops {
 	int (*co_aggregate)(dtp_rpc_t *source, dtp_rpc_t *result, void *priv);
 };
 
-/* Group create completion callback */
+/*
+ * Group create completion callback
+ *
+ * \param grp [IN]		group handle, valid only when the group has been
+ *				created successfully.
+ * \param status [IN]		status code that indicates whether the group has
+ *				been created successfully or not.
+ *				zero for success, negative value otherwise.
+ */
 typedef int (*dtp_grp_create_cb_t)(dtp_group_t *grp, int status);
+
+/*
+ * Group destroy completion callback
+ *
+ * \param args [IN]		arguments pointer passed in for
+ *				dtp_group_destroy.
+ * \param status [IN]		status code that indicates whether the group
+ *				has been destroyed successfully or not.
+ *				zero for success, negative value otherwise.
+ *
+ */
+typedef int (*dtp_grp_destroy_cb_t)(void *args, int status);
 
 /*
  * Create DTP group.
@@ -714,6 +755,31 @@ dtp_group_create(dtp_group_id_t grp_id, daos_rank_list_t *member_ranks,
 		 void *priv);
 
 /*
+ * Find dtp_group_t of one group ID. The group creation is initiated by one
+ * node, after the group populated user query the dtp_group_t on other nodes.
+ *
+ * \param grp_id [IN]		unique group ID.
+ *
+ * \return			group handle on success, NULL if not found.
+ */
+dtp_group_t *
+dtp_group_find(dtp_group_id_t grp_id);
+
+/*
+ * Destroy a DTP group. Can either call this API or pass a special flag -
+ * DTP_CORPC_FLAG_GRP_DESTROY to a broadcast RPC to destroy the group.
+ *
+ * \param grp [IN]		group handle to be destroyed.
+ * \param grp_destroy_cb [IN]	optional completion callback.
+ * \param args [IN]		optional args for \a grp_destroy_cb.
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+dtp_group_destroy(dtp_group_t *grp, dtp_grp_destroy_cb_t grp_destroy_cb,
+		  void *args);
+
+/*
  * Create collective RPC request. Can reuse the dtp_req_send to broadcast it.
  *
  * \param dtp_ctx [IN]		DAOS transport context
@@ -724,8 +790,10 @@ dtp_group_create(dtp_group_id_t grp_id, daos_rank_list_t *member_ranks,
  *				will be passed to dtp_corpc_ops::co_aggregate as
  *				2nd parameter.
  * \param flags [IN]		collective RPC flags, /see enum dtp_corpc_flag
- * \param tree [IN]		tree type for the collective propagation
- *				/see enum dtp_tree_type
+ * \param tree_topo[IN]		tree topology for the collective propagation,
+ *				can be calculated by dtp_tree_topo().
+ *				/see enum dtp_tree_type,
+ *				/see dtp_tree_topo().
  * \param req [out]		created collective RPC request
  *
  * \return			zero on success, negative value if error
@@ -733,7 +801,7 @@ dtp_group_create(dtp_group_id_t grp_id, daos_rank_list_t *member_ranks,
 int
 dtp_corpc_req_create(dtp_context_t dtp_ctx, dtp_group_t *grp, dtp_opcode_t opc,
 		     dtp_bulk_t co_bulk_hdl, void *priv,  uint32_t flags,
-		     enum dtp_tree_type tree, dtp_rpc_t **req);
+		     int tree_topo, dtp_rpc_t **req);
 
 /**
  * Dynamically register a collective RPC.
