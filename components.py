@@ -139,6 +139,16 @@ REQS.define('nvml',
                       "make install prefix=$NVML_PREFIX"],
             libs=["pmemobj"])
 
+RETRIEVER = GitRepoRetriever("http://git.mcs.anl.gov/argo/argobots.git", True)
+REQS.define('argobots',
+            retreiver=RETRIEVER,
+            commands=['find . -name configure - print | xargs rm ',
+                      './autogen.sh',
+                      './configure --with-platform=optimized '
+                      '--prefix=$ARGOBOTS_PREFIX',
+                      'make -j4',
+                      'make -j4 install'])
+
 RETRIEVER = GitRepoRetriever("ssh://review.whamcloud.com:29418/coral/cppr",
                              True)
 REQS.define('cppr',
