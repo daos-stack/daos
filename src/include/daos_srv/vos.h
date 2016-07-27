@@ -36,6 +36,7 @@
 
 /**
  *  Initialize and Finalize Routines
+ *  (required for VOS standalone mode)
  */
 /**
  * Initialize the environment for a VOS instance
@@ -76,7 +77,7 @@ vos_fini(void);
  */
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
-		daos_handle_t *poh, daos_event_t *ev);
+		daos_event_t *ev);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
@@ -89,7 +90,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
  * \return		Zero on success, negative value if error
  */
 int
-vos_pool_destroy(daos_handle_t poh, daos_event_t *ev);
+vos_pool_destroy(const char *path, uuid_t uuid, daos_event_t *ev);
 
 /**
  * Open a Versioning Object Storage Pool (VOSP), load its root object
@@ -244,7 +245,8 @@ vos_epoch_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  * \return		Zero on success, negative value if error
  */
 int
-vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, daos_event_t *ev);
+vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+		  daos_event_t *ev);
 
 /**
  * VOS object API

@@ -59,6 +59,14 @@ typedef struct {
 	daos_size_t	iov_len;
 } daos_iov_t;
 
+/**
+ * NB: hide the dark secret that
+ * uuid_t is an array not a structure
+ */
+struct daos_uuid {
+	uuid_t	uuid;
+};
+
 /** buffer to store checksum */
 typedef struct {
 	/* TODO: typedef enum for it */

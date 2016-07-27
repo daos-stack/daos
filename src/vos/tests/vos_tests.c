@@ -43,7 +43,6 @@ print_usage()
 	print_message("Use one of these opt(s) for specific test\n");
 	print_message("vos_tests -p|--pool_tests\n");
 	print_message("vos_tests -c|--container_tests\n");
-	print_message("vos_tests -t|--chash_tests\n");
 	print_message("vos_tests -i|--io_tests\n");
 	print_message("vos_tests -a|--all_tests\n");
 	print_message("vos_tests -h|--help\n");
@@ -55,7 +54,6 @@ run_all_tests()
 {
 	int failed = 0;
 
-	failed += run_chtable_test();
 	failed += run_pool_test();
 	failed += run_co_test();
 	failed += run_io_test();
@@ -74,7 +72,6 @@ main(int argc, char **argv)
 		{"all_tests",	no_argument, 0, 'a'},
 		{"pool_tests",	no_argument, 0, 'p'},
 		{"container_tests", no_argument, 0, 'c'},
-		{"chash_tests", no_argument, 0, 't'},
 		{"io_tests", no_argument, 0, 'i'},
 		{"help", no_argument, 0, 'h'},
 	};
@@ -97,9 +94,6 @@ main(int argc, char **argv)
 				break;
 			case 'c':
 				nr_failed += run_co_test();
-				break;
-			case 't':
-				nr_failed += run_chtable_test();
 				break;
 			case 'i':
 				nr_failed += run_io_test();

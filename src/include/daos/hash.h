@@ -202,23 +202,39 @@ enum {
 };
 
 struct daos_hlink;
-
+struct daos_ulink;
 struct daos_hlink_ops {
 	/** free callback */
-	void	(*hop_free)(struct daos_hlink *hlink);
+	void	(*hop_free)(struct daos_hlink *rlink);
+};
+
+struct daos_ulink_ops {
+	/** free callback */
+	void	(*uop_free)(struct daos_ulink *ulink);
+};
+
+struct daos_rlink {
+	daos_list_t		rl_link;
+	unsigned int		rl_ref;
+	unsigned int		rl_initialized:1;
 };
 
 struct daos_hlink {
-	daos_list_t		 hl_link;
-	uint64_t		 hl_key;
-	unsigned int		 hl_ref;
-	unsigned int		 hl_initialized:1;
+	struct daos_rlink	hl_link;
+	uint64_t		hl_key;
 	struct daos_hlink_ops	*hl_ops;
+};
+
+struct daos_ulink {
+	struct daos_rlink	ul_link;
+	struct daos_uuid	ul_uuid;
+	struct daos_ulink_ops	*ul_ops;
+
 };
 
 struct daos_hhash;
 
-int daos_hhash_create(unsigned int bits, struct daos_hhash **hhash);
+int  daos_hhash_create(unsigned int bits, struct daos_hhash **hhash);
 void daos_hhash_destroy(struct daos_hhash *hh);
 void daos_hhash_hlink_init(struct daos_hlink *hlink,
 			   struct daos_hlink_ops *ops);
@@ -226,12 +242,26 @@ void daos_hhash_link_insert(struct daos_hhash *hhash,
 			    struct daos_hlink *hlink, int type);
 struct daos_hlink *daos_hhash_link_lookup(struct daos_hhash *hhash,
 					  uint64_t key);
-void daos_hhash_link_putref(struct daos_hhash *hhash,
-			    struct daos_hlink *hlink);
-bool daos_hhash_link_delete(struct daos_hhash *hhash,
-			    struct daos_hlink *hlink);
+void daos_hhash_link_putref(struct daos_hhash *hhash, struct daos_hlink *hlink);
+bool daos_hhash_link_delete(struct daos_hhash *hhash, struct daos_hlink *hlink);
 bool daos_hhash_link_empty(struct daos_hlink *hlink);
 void daos_hhash_link_key(struct daos_hlink *hlink, uint64_t *key);
-int daos_hhash_key_type(uint64_t key);
+int  daos_hhash_key_type(uint64_t key);
 
+int daos_uhash_create(int feats, unsigned int bits, struct dhash_table **uhtab);
+void daos_uhash_destroy(struct dhash_table *uhtab);
+void daos_uhash_ulink_init(struct daos_ulink *ulink,
+			   struct daos_ulink_ops *rl_ops);
+bool daos_uhash_link_empty(struct daos_ulink *ulink);
+bool daos_uhash_link_last_ref(struct daos_ulink *ulink);
+void daos_uhash_link_addref(struct dhash_table *uhtab,
+			    struct daos_ulink *hlink);
+void daos_uhash_link_putref(struct dhash_table *uhtab,
+			    struct daos_ulink *hlink);
+void daos_uhash_link_delete(struct dhash_table *uhtab,
+			    struct daos_ulink *hlink);
+int  daos_uhash_link_insert(struct dhash_table *uhtab, struct daos_uuid *key,
+			    struct daos_ulink *hlink);
+struct daos_ulink *daos_uhash_link_lookup(struct dhash_table *uhtab,
+					  struct daos_uuid *key);
 #endif /*__DAOS_HASH_H__*/

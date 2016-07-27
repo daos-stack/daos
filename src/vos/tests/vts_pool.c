@@ -57,6 +57,64 @@ pool_set_param(enum vts_ops_type seq[], int cnt, bool flag, bool *cflag,
 	*cflag = flag;
 }
 
+static int
+pool_ref_count_setup(void **state)
+{
+	struct vp_test_args	*arg = *state;
+	int			ret = 0;
+
+	arg->fname = (char **) malloc(sizeof(char *));
+	assert_ptr_not_equal(arg->fname, NULL);
+
+	arg->poh = (daos_handle_t *)malloc(10 * sizeof(daos_handle_t));
+	assert_ptr_not_equal(arg->poh, NULL);
+
+	ret = vts_alloc_gen_fname(&arg->fname[0]);
+	assert_int_equal(ret, 0);
+	return 0;
+}
+
+static void
+pool_ref_count_test(void **state)
+{
+	int			ret = 0, i;
+	uuid_t			uuid;
+	struct vp_test_args	*arg = *state;
+	int			num = 10;
+
+	uuid_generate(uuid);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, NULL);
+	for (i = 0; i < num; i++) {
+		ret = vos_pool_open(arg->fname[0], uuid,
+				    &arg->poh[i], NULL);
+		assert_int_equal(ret, 0);
+	}
+	for (i = 0; i < num - 1; i++) {
+		ret = vos_pool_close(arg->poh[i], NULL);
+		assert_int_equal(ret, 0);
+	}
+	ret = vos_pool_destroy(arg->fname[0], uuid, NULL);
+	assert_int_equal(ret, -DER_BUSY);
+	ret = vos_pool_close(arg->poh[num - 1], NULL);
+	assert_int_equal(ret, 0);
+	ret = vos_pool_destroy(arg->fname[0], uuid, NULL);
+	assert_int_equal(ret, 0);
+}
+
+static int
+pool_ref_count_destroy(void **state)
+{
+	struct vp_test_args	*arg = *state;
+
+	if (arg->fname[0]) {
+		remove(arg->fname[0]);
+		free(arg->fname[0]);
+	}
+	free(arg->fname);
+	return 0;
+}
+
+
 static void
 pool_ops_run(void **state)
 {
@@ -76,8 +134,7 @@ pool_ops_run(void **state)
 					assert_int_equal(ret, 0);
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
-							      0, &arg->poh[j],
-							      NULL);
+							      0, NULL);
 				} else {
 					ret =
 					vts_alloc_gen_fname(&arg->fname[j]);
@@ -85,7 +142,6 @@ pool_ops_run(void **state)
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
 							      VPOOL_16M,
-							      &arg->poh[j],
 							      NULL);
 				}
 				break;
@@ -99,7 +155,9 @@ pool_ops_run(void **state)
 				ret = vos_pool_close(arg->poh[j], NULL);
 			break;
 			case DESTROY:
-				ret = vos_pool_destroy(arg->poh[j], NULL);
+				ret = vos_pool_destroy(arg->fname[j],
+						       arg->uuid[j],
+						       NULL);
 				break;
 			case QUERY:
 				ret = vos_pool_query(arg->poh[j], &pinfo,
@@ -129,23 +187,31 @@ static int pool_allocate_params(int nfiles, int ops,
 	test_args->nfiles = nfiles;
 	test_args->fname = (char **)malloc(nfiles * sizeof(char *));
 	assert_ptr_not_equal(test_args->fname, NULL);
+
 	test_args->seq_cnt = (int *)malloc(nfiles * sizeof(int));
 	assert_ptr_not_equal(test_args->seq_cnt, NULL);
+
 	test_args->ops_seq = (enum vts_ops_type **)malloc
 		(nfiles * sizeof(enum vts_ops_type *));
 	assert_ptr_not_equal(test_args->ops_seq, NULL);
+
 	for (i = 0; i < nfiles; i++) {
 		test_args->ops_seq[i] = (enum vts_ops_type *)malloc
 			(ops * sizeof(enum vts_ops_type));
 		assert_ptr_not_equal(test_args->ops_seq[i], NULL);
 	}
+
 	test_args->fcreate = (bool *)malloc(nfiles * sizeof(bool));
 	assert_ptr_not_equal(test_args->fcreate, NULL);
+
 	test_args->poh = (daos_handle_t *)malloc(nfiles *
 						 sizeof(daos_handle_t));
 	assert_ptr_not_equal(test_args->poh, NULL);
+
+
 	test_args->uuid = (uuid_t *)malloc(nfiles * sizeof(uuid_t));
 	assert_ptr_not_equal(test_args->uuid, NULL);
+
 	return 0;
 }
 
@@ -248,38 +314,13 @@ pool_create_exists(void **state)
 
 
 static int
-pool_open(void **state)
-{
-	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN};
-
-	pool_allocate_params(1, 1, arg);
-	pool_set_param(tmp, 3, true, &arg->fcreate[0],
-		  &arg->seq_cnt[0], &arg->ops_seq[0]);
-	return 0;
-}
-
-static int
-pool_close(void **state)
-{
-	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, CLOSE};
-
-	pool_allocate_params(1, 2, arg);
-	pool_set_param(tmp, 2, true, &arg->fcreate[0],
-		  &arg->seq_cnt[0], &arg->ops_seq[0]);
-
-	return 0;
-}
-
-static int
 pool_open_close(void **state)
 {
 	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN, CLOSE};
+	enum vts_ops_type	tmp[] = {CREAT, OPEN, CLOSE};
 
-	pool_allocate_params(1, 4, arg);
-	pool_set_param(tmp, 4, true, &arg->fcreate[0],
+	pool_allocate_params(1, 3, arg);
+	pool_set_param(tmp, 3, true, &arg->fcreate[0],
 		  &arg->seq_cnt[0], &arg->ops_seq[0]);
 
 	return 0;
@@ -298,34 +339,10 @@ pool_destroy(void **state)
 }
 
 static int
-pool_destroy_after_open(void **state)
-{
-	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN, DESTROY};
-
-	pool_allocate_params(1, 4, arg);
-	pool_set_param(tmp, 4, true, &arg->fcreate[0],
-		  &arg->seq_cnt[0], &arg->ops_seq[0]);
-	return 0;
-}
-
-static int
-pool_query(void **state)
-{
-	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, QUERY};
-
-	pool_allocate_params(1, 2, arg);
-	pool_set_param(tmp, 2, true, &arg->fcreate[0],
-		  &arg->seq_cnt[0], &arg->ops_seq[0]);
-	return 0;
-}
-
-static int
 pool_query_after_open(void **state)
 {
 	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN, QUERY};
+	enum vts_ops_type	tmp[] = {CREAT, OPEN, QUERY, CLOSE};
 
 	pool_allocate_params(1, 4, arg);
 	pool_set_param(tmp, 4, true, &arg->fcreate[0],
@@ -337,8 +354,8 @@ static int
 pool_all_empty_file(void **state)
 {
 	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN, QUERY,
-					 DESTROY};
+	enum vts_ops_type	tmp[] = {CREAT, OPEN, QUERY,
+					 CLOSE, DESTROY};
 
 	pool_allocate_params(1, 5, arg);
 	pool_set_param(tmp, 5, false, &arg->fcreate[0],
@@ -351,8 +368,8 @@ static int
 pool_all(void **state)
 {
 	struct vp_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, CLOSE, OPEN, QUERY,
-					 DESTROY};
+	enum vts_ops_type	tmp[] = {CREAT, OPEN, QUERY,
+					 CLOSE, DESTROY};
 
 	pool_allocate_params(1, 5, arg);
 	pool_set_param(tmp, 5, true, &arg->fcreate[0],
@@ -365,23 +382,17 @@ static const struct CMUnitTest pool_tests[] = {
 		pool_ops_run, pool_create_exists, pool_unit_teardown},
 	{ "VOS2: Create Pool with empty files (File Count no:of cpus)",
 		pool_ops_run, pool_create_empty, pool_unit_teardown},
-	{ "VOS3: Pool Open", pool_ops_run,
-		pool_open, pool_unit_teardown},
-	{ "VOS4: Pool Close", pool_ops_run,
-		pool_close, pool_unit_teardown},
-	{ "VOS5: Pool Destroy", pool_ops_run,
+	{ "VOS3: Pool Destroy", pool_ops_run,
 		pool_destroy, pool_unit_teardown},
-	{ "VOS6: Pool Query", pool_ops_run,
-		pool_query, pool_unit_teardown},
-	{ "VOS7: Pool Close after open", pool_ops_run,
+	{ "VOS5: Pool Close after open", pool_ops_run,
 		pool_open_close, pool_unit_teardown},
-	{ "VOS8: Pool Destroy after open", pool_ops_run,
-		pool_destroy_after_open, pool_unit_teardown},
-	{ "VOS9: Pool Query after open", pool_ops_run,
+	{ "VOS6: Pool handle refcount", pool_ref_count_test,
+		 pool_ref_count_setup, pool_ref_count_destroy},
+	{ "VOS7: Pool Query after open", pool_ops_run,
 		pool_query_after_open, pool_unit_teardown},
-	{ "VOS10: Pool all APIs empty file handle", pool_ops_run,
+	{ "VOS8: Pool all APIs empty file handle", pool_ops_run,
 		pool_all_empty_file, pool_unit_teardown},
-	{ "VOS11: Pool all APIs with existing file", pool_ops_run,
+	{ "VOS9: Pool all APIs with existing file", pool_ops_run,
 		pool_all, pool_unit_teardown},
 };
 

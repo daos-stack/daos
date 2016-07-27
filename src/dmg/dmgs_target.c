@@ -196,7 +196,6 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 	/** tc_in->tc_tgt_dev is assumed to point at PMEM for now */
 
 	for (i = 0; i < dss_nthreads; i++) {
-		daos_handle_t	 vph;
 
 		rc = path_gen(uuid, NEWBORNS, VOS_FILE, &i, &path);
 		if (rc)
@@ -224,16 +223,9 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 
 		/* A zero size accommodates the existing file */
 		rc = vos_pool_create(path, (unsigned char *)uuid, 0 /* size */,
-				     &vph, NULL /* event */);
+				     NULL /* event */);
 		if (rc) {
 			D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
-				DP_UUID(uuid), path, rc);
-			break;
-		}
-
-		rc = vos_pool_close(vph, NULL /* event */);
-		if (rc) {
-			D_ERROR(DF_UUID": failed to close vos pool %s: %d\n",
 				DP_UUID(uuid), path, rc);
 			break;
 		}

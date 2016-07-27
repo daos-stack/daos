@@ -63,8 +63,6 @@ struct vos_obj_ref;
 /* Internal container handle structure */
 struct vc_hdl;
 
-
-
 /**
  * Find an object in the cache \a occ and take its reference. If the object is
  * not in cache, this function will load it from PMEM pool or create it, then

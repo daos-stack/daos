@@ -28,7 +28,6 @@
  */
 
 #include <daos/common.h>
-#include <smmintrin.h>
 #include <daos/rpc.h>
 #include <daos_srv/daos_server.h>
 #include <vos_internal.h>
@@ -36,7 +35,6 @@
 #include <daos/lru.h>
 
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;
-
 /**
  * Object cache based on mode of instantiation
  */
@@ -54,11 +52,10 @@ vos_get_obj_cache(void)
  * VOS in-memory structure creation.
  * Handle-hash:
  * -----------
- * This hash converts the DRAM handle to a uint64_t
- * cookie which is returned with a generic daos_handle_t.
- * Must be Done thread safe once across all handles for
- * stand-alone mode. TLS mode creates one of these structures
- * for each thread local storage.
+ * Uses in-memory daos_uuid hash to maintain one
+ * reference per thread in heap for each pool/container.
+ * Calls to pool/container open/close track references
+ * through internal refcounting.
  *
  * Object-cache:
  * ------------
@@ -71,13 +68,6 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 {
 	int rc = 0;
 
-	rc = daos_hhash_create(DAOS_HHASH_BITS,
-			       &imem_inst->vis_hhash);
-	if (rc) {
-		D_ERROR("VOS hhash creation error\n");
-		return rc;
-	}
-
 	rc = vos_obj_cache_create(LRU_CACHE_BITS,
 				  &imem_inst->vis_ocache);
 	if (rc) {
@@ -85,6 +75,12 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 		return rc;
 	}
 
+	rc = daos_uhash_create(0, DAOS_HHASH_BITS,
+			       &imem_inst->vis_hr_hash);
+	if (rc) {
+		D_ERROR("Error in creating ref hash: %d\n", rc);
+		return rc;
+	}
 	return rc;
 }
 
@@ -94,8 +90,8 @@ vos_imem_strts_destroy(struct vos_imem_strts *imem_inst)
 	if (imem_inst->vis_ocache)
 		vos_obj_cache_destroy(imem_inst->vis_ocache);
 
-	if (imem_inst->vis_hhash)
-		daos_hhash_destroy(imem_inst->vis_hhash);
+	if (imem_inst->vis_hr_hash)
+		daos_uhash_destroy(imem_inst->vis_hr_hash);
 
 }
 
@@ -220,61 +216,4 @@ vos_fini(void)
 		D_FREE_PTR(vsa_imems_inst);
 	}
 	pthread_mutex_unlock(&mutex);
-}
-
-/**
- * Jump Consistent Hash from
- * A Fast, Minimal Memory, Consistent Hash Algorithm
- * http://arxiv.org/abs/1406.2294
- * takes as input a 64-bit unsigned int key and returns a
- * bucket number
-*/
-int32_t
-vos_generate_jch(uint64_t key, uint32_t num_buckets)
-{
-	int64_t j = 0;
-	int64_t b = 1;
-
-	while (j < num_buckets) {
-		b  = j;
-		key = key * 2862933555777941757ULL + 1;
-		j = (b + 1) * ((double)(1LL << 31)/(double)((key >> 33) + 1));
-	}
-
-	return b;
-}
-
-/*
- * Simple CRC64 hash with intrinsics
- * Should be eventually replaced with hash_function from ISA-L
-*/
-uint64_t
-vos_generate_crc64(void *key, uint64_t size)
-{
-	uint64_t	*data = NULL, *new_key = NULL;
-	uint64_t	 hash = 0xffffffffffffffff;
-	int		 i, counter;
-
-	if (size < 64) {
-		new_key = (uint64_t *)malloc(64);
-		/*Pad the rest of 64-bytes to 0*/
-		memset(new_key, 0, 64);
-		counter = 1;
-	} else {
-		new_key = (uint64_t *)malloc(size);
-		memset(new_key, 0, size);
-		counter = (int)(size/8);
-	}
-	memcpy(new_key, key, size);
-	data = new_key;
-	for (i = 0; i < counter ; i++) {
-		hash = _mm_crc32_u64(hash, *data);
-		data++;
-	}
-
-	D_DEBUG(DF_VOS3, "%"PRIu64" %"PRIu64" %"PRIu64"\n",
-			*(uint64_t *)new_key, size, hash);
-	free(new_key);
-
-	return hash;
 }

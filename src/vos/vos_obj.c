@@ -916,9 +916,9 @@ vos_vec_zc_fetch_begin(struct vos_obj_ref *oref, daos_epoch_t epoch,
  */
 int
 vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
-		      daos_epoch_t epoch, daos_key_t *dkey,
-		      unsigned int viod_nr, daos_vec_iod_t *viods,
-		      daos_handle_t *ioh, daos_event_t *ev)
+		       daos_epoch_t epoch, daos_key_t *dkey,
+		       unsigned int viod_nr, daos_vec_iod_t *viods,
+		       daos_handle_t *ioh, daos_event_t *ev)
 {
 	struct vos_zc_context *zcc;
 	int		       rc;

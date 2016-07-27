@@ -768,10 +768,53 @@ struct daos_hhash {
 	struct dhash_table	dh_htable;
 };
 
-static struct daos_hlink *
-hh_link2ptr(daos_list_t *rlink)
+static struct daos_rlink*
+link2rlink(daos_list_t *link)
 {
-	return container_of(rlink, struct daos_hlink, hl_link);
+	D_ASSERT(link != NULL);
+	return container_of(link, struct daos_rlink, rl_link);
+}
+
+static void
+rlink_op_addref(struct daos_rlink *rlink)
+{
+	rlink->rl_ref++;
+}
+
+static bool
+rlink_op_decref(struct daos_rlink *rlink)
+{
+	D_ASSERT(rlink->rl_ref > 0);
+	rlink->rl_ref--;
+
+	return rlink->rl_ref == 0;
+}
+
+static void
+rlink_op_init(struct daos_rlink *rlink)
+{
+	DAOS_INIT_LIST_HEAD(&rlink->rl_link);
+	rlink->rl_initialized	= 1;
+	rlink->rl_ref		= 1; /* for caller */
+}
+
+
+static bool
+rlink_op_empty(struct daos_rlink *rlink)
+{
+	if (!rlink->rl_initialized)
+		return 1;
+	D_ASSERT(rlink->rl_ref != 0 || dhash_rec_unlinked(&rlink->rl_link));
+	return dhash_rec_unlinked(&rlink->rl_link);
+}
+
+static struct daos_hlink *
+hh_link2ptr(daos_list_t *link)
+{
+	struct daos_rlink	*rlink;
+
+	rlink = link2rlink(link);
+	return	container_of(rlink, struct daos_hlink, hl_link);
 }
 
 static void
@@ -814,35 +857,31 @@ hh_op_key_hash(struct dhash_table *hhtab, const void *key, unsigned int ksize)
 }
 
 static bool
-hh_op_key_cmp(struct dhash_table *hhtab, daos_list_t *rlink,
+hh_op_key_cmp(struct dhash_table *hhtab, daos_list_t *link,
 	  const void *key, unsigned int ksize)
 {
-	struct daos_hlink *hlink = hh_link2ptr(rlink);
+	struct daos_hlink *hlink = hh_link2ptr(link);
 
 	D_ASSERT(ksize == sizeof(uint64_t));
 	return hlink->hl_key == *(uint64_t *)key;
 }
 
 static void
-hh_op_rec_addref(struct dhash_table *hhtab, daos_list_t *rlink)
+hh_op_rec_addref(struct dhash_table *hhtab, daos_list_t *link)
 {
-	hh_link2ptr(rlink)->hl_ref++;
+	rlink_op_addref(link2rlink(link));
 }
 
 static bool
-hh_op_rec_decref(struct dhash_table *hhtab, daos_list_t *rlink)
+hh_op_rec_decref(struct dhash_table *hhtab, daos_list_t *link)
 {
-	struct  daos_hlink *hlink = hh_link2ptr(rlink);
-
-	hlink->hl_ref--;
-	return hlink->hl_ref == 0;
+	return rlink_op_decref(link2rlink(link));
 }
 
-
 static void
-hh_op_rec_free(struct dhash_table *hhtab, daos_list_t *rlink)
+hh_op_rec_free(struct dhash_table *hhtab, daos_list_t *link)
 {
-	struct daos_hlink *hlink = hh_link2ptr(rlink);
+	struct daos_hlink *hlink = hh_link2ptr(link);
 
 	if (hlink->hl_ops != NULL &&
 	    hlink->hl_ops->hop_free != NULL)
@@ -893,51 +932,56 @@ daos_hhash_destroy(struct daos_hhash *hhtab)
 void
 daos_hhash_hlink_init(struct daos_hlink *hlink, struct daos_hlink_ops *ops)
 {
-	DAOS_INIT_LIST_HEAD(&hlink->hl_link);
-	hlink->hl_initialized	= 1;
-	hlink->hl_ref		= 1; /* for caller */
-	hlink->hl_ops		= ops;
+	hlink->hl_ops = ops;
+	rlink_op_init(&hlink->hl_link);
+}
+
+bool
+daos_uhash_link_empty(struct daos_ulink *ulink)
+{
+	return rlink_op_empty(&ulink->ul_link);
 }
 
 void
 daos_hhash_link_insert(struct daos_hhash *hhtab, struct daos_hlink *hlink,
 		       int type)
 {
-	D_ASSERT(hlink->hl_initialized);
-	dhash_rec_insert_anonym(&hhtab->dh_htable, &hlink->hl_link,
+	D_ASSERT(hlink->hl_link.rl_initialized);
+	dhash_rec_insert_anonym(&hhtab->dh_htable, &hlink->hl_link.rl_link,
 				(void *)&type);
+}
+
+static inline struct daos_hlink*
+daos_hlink_find(struct dhash_table *htable, void *key, size_t size)
+{
+	daos_list_t		*link;
+
+	link = dhash_rec_find(htable, key, size);
+	return link == NULL ? NULL : hh_link2ptr(link);
 }
 
 struct daos_hlink *
 daos_hhash_link_lookup(struct daos_hhash *hhtab, uint64_t key)
 {
-	daos_list_t	*rlink;
-
-	rlink = dhash_rec_find(&hhtab->dh_htable, (void *)&key, sizeof(key));
-	return rlink == NULL ? NULL :
-	       daos_list_entry(rlink, struct daos_hlink, hl_link);
+	return daos_hlink_find(&hhtab->dh_htable, (void *)&key, sizeof(key));
 }
 
 bool
 daos_hhash_link_delete(struct daos_hhash *hhtab, struct daos_hlink *hlink)
 {
-	return dhash_rec_delete_at(&hhtab->dh_htable, &hlink->hl_link);
+	return dhash_rec_delete_at(&hhtab->dh_htable, &hlink->hl_link.rl_link);
 }
 
 void
 daos_hhash_link_putref(struct daos_hhash *hhtab, struct daos_hlink *hlink)
 {
-	dhash_rec_decref(&hhtab->dh_htable, &hlink->hl_link);
+	dhash_rec_decref(&hhtab->dh_htable, &hlink->hl_link.rl_link);
 }
 
 bool
 daos_hhash_link_empty(struct daos_hlink *hlink)
 {
-	if (!hlink->hl_initialized)
-		return 1;
-
-	D_ASSERT(hlink->hl_ref != 0 || dhash_rec_unlinked(&hlink->hl_link));
-	return dhash_rec_unlinked(&hlink->hl_link);
+	return rlink_op_empty(&hlink->hl_link);
 }
 
 void
@@ -949,4 +993,153 @@ daos_hhash_link_key(struct daos_hlink *hlink, uint64_t *key)
 int daos_hhash_key_type(uint64_t key)
 {
 	return hh_key_type(&key);
+}
+
+/**
+ * daos uuid hash table
+ * Key UUID, val: generic ptr
+ */
+
+static struct daos_ulink *
+uh_link2ptr(daos_list_t *link)
+{
+	struct daos_rlink	*rlink;
+
+	rlink = link2rlink(link);
+	return container_of(rlink, struct daos_ulink, ul_link);
+}
+
+static unsigned int
+uh_op_key_hash(struct dhash_table *uhtab, const void *key, unsigned int ksize)
+{
+	struct daos_uuid *lkey = (struct daos_uuid *)key;
+
+	D_ASSERT(ksize == sizeof(struct daos_uuid));
+	D_DEBUG(DF_MISC, "uuid_key: "DF_UUID"\n", DP_UUID(lkey->uuid));
+
+	return (unsigned int)(daos_hash_string_u32((const char *)lkey->uuid,
+						   sizeof(uuid_t)));
+}
+
+static bool
+uh_op_key_cmp(struct dhash_table *uhtab, daos_list_t *link, const void *key,
+	      unsigned int ksize)
+{
+	struct daos_ulink *ulink = uh_link2ptr(link);
+	struct daos_uuid  *lkey = (struct daos_uuid *)key;
+
+	D_ASSERT(ksize == sizeof(struct daos_uuid));
+	D_DEBUG(DF_MISC, "Link key, Key:"DF_UUID","DF_UUID"\n",
+		DP_UUID(lkey->uuid),
+		DP_UUID(ulink->ul_uuid.uuid));
+
+	return !uuid_compare(ulink->ul_uuid.uuid, lkey->uuid);
+}
+
+static void
+uh_op_rec_free(struct dhash_table *hhtab, daos_list_t *link)
+{
+	struct daos_ulink *ulink = uh_link2ptr(link);
+
+	if (ulink->ul_ops != NULL &&
+	    ulink->ul_ops->uop_free != NULL)
+		ulink->ul_ops->uop_free(ulink);
+}
+
+
+
+static dhash_table_ops_t uh_ops = {
+	.hop_key_hash	= uh_op_key_hash,
+	.hop_key_cmp	= uh_op_key_cmp,
+	.hop_rec_addref	= hh_op_rec_addref, /* Reuse hh_op_add/decref */
+	.hop_rec_decref = hh_op_rec_decref,
+	.hop_rec_free	= uh_op_rec_free,
+};
+
+int
+daos_uhash_create(int feats, unsigned int bits, struct dhash_table **htable_pp)
+{
+	struct dhash_table	*uhtab;
+	int			rc;
+
+	rc = dhash_table_create(feats, bits, NULL, &uh_ops, &uhtab);
+	if (rc != 0)
+		goto failed;
+
+	*htable_pp = uhtab;
+	return 0;
+
+failed:
+	return -DER_NOMEM;
+}
+
+void
+daos_uhash_destroy(struct dhash_table *uhtab)
+{
+	dhash_table_debug(uhtab);
+	dhash_table_destroy(uhtab, true);
+}
+
+void
+daos_uhash_ulink_init(struct daos_ulink *ulink, struct daos_ulink_ops *ops)
+{
+	ulink->ul_ops = ops;
+	rlink_op_init(&ulink->ul_link);
+}
+
+static inline struct daos_ulink*
+daos_ulink_find(struct dhash_table *htable, void *key, size_t size)
+{
+	daos_list_t		*link;
+
+	link = dhash_rec_find(htable, key, size);
+	return link == NULL ? NULL : uh_link2ptr(link);
+}
+
+struct daos_ulink*
+daos_uhash_link_lookup(struct dhash_table *uhtab, struct daos_uuid *key)
+{
+	return daos_ulink_find(uhtab, (void *)key, sizeof(struct daos_uuid));
+}
+
+void
+daos_uhash_link_addref(struct dhash_table *uhtab, struct daos_ulink *ulink)
+{
+	dhash_rec_addref(uhtab, &ulink->ul_link.rl_link);
+}
+
+void
+daos_uhash_link_putref(struct dhash_table *uhtab, struct daos_ulink *ulink)
+{
+	dhash_rec_decref(uhtab, &ulink->ul_link.rl_link);
+}
+
+int
+daos_uhash_link_insert(struct dhash_table *uhtab, struct daos_uuid *key,
+		       struct daos_ulink *ulink)
+{
+	int	rc = 0;
+
+	D_ASSERT(ulink->ul_link.rl_initialized);
+
+	uuid_copy(ulink->ul_uuid.uuid, key->uuid);
+	rc = dhash_rec_insert(uhtab, (void *)key, sizeof(struct daos_uuid),
+			      &ulink->ul_link.rl_link, true);
+
+	if (rc)
+		D_ERROR("Error Inserting handle in UUID in-memory hash\n");
+
+	return rc;
+}
+
+bool
+daos_uhash_link_last_ref(struct daos_ulink *ulink)
+{
+	return ulink->ul_link.rl_ref == 1;
+}
+
+void
+daos_uhash_link_delete(struct dhash_table *uhtab, struct daos_ulink *ulink)
+{
+	dhash_rec_delete_at(uhtab, &ulink->ul_link.rl_link);
 }

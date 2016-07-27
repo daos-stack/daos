@@ -430,7 +430,6 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_vec_iod_t		vio;
 	daos_sg_list_t		sgl;
-	daos_csum_buf_t		csum;
 
 	memset(&vio, 0, sizeof(vio));
 	memset(&rex, 0, sizeof(rex));
@@ -524,7 +523,7 @@ io_oi_test(void **state)
 
 	vts_io_set_oid(&oid);
 
-	co_hdl = vos_co_lookup_handle(arg->ctx.tc_co_hdl);
+	co_hdl = vos_hdl2co(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(co_hdl, NULL);
 
 	rc = vos_oi_lookup(co_hdl, oid, &obj[0]);
@@ -532,8 +531,6 @@ io_oi_test(void **state)
 
 	rc = vos_oi_lookup(co_hdl, oid, &obj[1]);
 	assert_int_equal(rc, 0);
-
-	vos_co_putref_handle(co_hdl);
 }
 
 static void
@@ -677,7 +674,6 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_vec_iod_t		vio;
 	daos_sg_list_t		sgl;
-	daos_csum_buf_t		csum;
 
 	memset(&vio, 0, sizeof(vio));
 	memset(&rex, 0, sizeof(rex));
@@ -729,8 +725,12 @@ exit:
 	return rc;
 }
 
-
-
+/**
+ * NB: this test assumes arg->oid is already created and
+ * used to insert in previous tests..
+ * If run independently this will be treated as a new object
+ * and return success
+ */
 static void
 io_fetch_wo_object(void **state)
 {
@@ -745,14 +745,14 @@ io_fetch_wo_object(void **state)
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_vec_iod_t		vio;
 	daos_sg_list_t		sgl;
-	daos_csum_buf_t		csum;
 
 	memset(&vio, 0, sizeof(vio));
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
 	gen_rand_key(&dkey_buf[0], UPDATE_DKEY, UPDATE_DKEY_SIZE);
 	gen_rand_key(&akey_buf[0], UPDATE_AKEY, UPDATE_AKEY_SIZE);
-
+	daos_iov_set(&dkey, &dkey_buf[0], strlen(dkey_buf));
+	daos_iov_set(&akey, &akey_buf[0], strlen(akey_buf));
 
 	sgl.sg_nr.num = 1;
 	sgl.sg_iovs = &val_iov;
@@ -803,7 +803,6 @@ io_fetch_no_exist_object(void **state)
 {
 
 	struct io_test_args	*arg = *state;
-	int			rc;
 
 	arg->ta_flags = 0;
 
@@ -815,7 +814,6 @@ io_fetch_no_exist_object_zc(void **state)
 {
 
 	struct io_test_args	*arg = *state;
-	int			rc;
 
 	arg->ta_flags = TF_ZERO_COPY;
 
@@ -851,16 +849,13 @@ io_simple_one_key_cross_container(void **state)
 {
 	struct io_test_args	*arg = *state;
 	int			rc;
-	int			nr;
 	daos_iov_t		val_iov;
-	daos_akey_t		akey;
 	daos_recx_t		rex;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_vec_iod_t		vio;
 	daos_sg_list_t		sgl;
-	daos_csum_buf_t		csum;
 	daos_dkey_t		dkey;
 	daos_epoch_t		epoch = gen_rand_epoch();
 	daos_unit_oid_t		l_oid;
@@ -948,6 +943,9 @@ io_simple_one_key_cross_container(void **state)
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 failed:
+	rc = vos_co_close(arg->addn_co, NULL);
+	assert_int_equal(rc, 0);
+
 	rc = vos_co_destroy(arg->ctx.tc_po_hdl, arg->addn_co_uuid, NULL);
 	assert_int_equal(rc, 0);
 }

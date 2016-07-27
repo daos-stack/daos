@@ -35,53 +35,71 @@
 #include <daos/hash.h>
 #include <daos/list.h>
 #include <vos_layout.h>
+#include <vos_internal.h>
+
+static inline struct vc_hdl*
+vos_ulink2coh(struct daos_ulink *ulink)
+{
+	D_ASSERT(ulink != NULL);
+	return container_of(ulink, struct vc_hdl, vc_uhlink);
+}
+
+static inline struct vp_hdl*
+vos_ulink2poh(struct daos_ulink *ulink)
+{
+	D_ASSERT(ulink != NULL);
+	return	container_of(ulink, struct vp_hdl, vp_uhlink);
+}
+
+void
+vos_co_uhash_free(struct daos_ulink *ulink);
+
+void
+vos_pool_uhash_free(struct daos_ulink *ulink);
 
 /**
- * Getting handle hash
- * Wrapper for TLS and standalone mode
+ * Getting handle has
+ * wrapper for TLS and standalone mode
  */
-struct daos_hhash *vos_get_hhash(void);
+struct dhash_table *vos_get_hr_hash();
 
 /**
- * Pool hash manipulation
+ * Pool UUID hash manipulation
  */
 void
-vos_pool_hhash_init(struct vp_hdl *vp_hdl);
+vos_pool_handle_init(struct vp_hdl *vp_hdl);
 
-void
-vos_pool_insert_handle(struct vp_hdl *vp_hdl, daos_handle_t *poh);
+int
+vos_pool_insert_handle(struct vp_hdl *vp_hdl, struct daos_uuid *key,
+		       daos_handle_t *poh);
 
-struct vp_hdl*
-vos_pool_lookup_handle(daos_handle_t poh);
+int
+vos_pool_lookup_handle(struct daos_uuid *key, struct vp_hdl **vpool);
 
 void
 vos_pool_putref_handle(struct vp_hdl *vpool);
 
-void
-vos_pool_delete_handle(struct vp_hdl *vp_hdl);
+int
+vos_pool_release_handle(struct vp_hdl *vp_hdl);
 
 /**
- * Container hash manipulation
+ * Container UUID hash manipulation
  */
 void
-vos_co_hhash_init(struct vc_hdl *co_hdl);
+vos_co_handle_init(struct vc_hdl *co_hdl);
 
-void
-vos_co_insert_handle(struct vc_hdl *co_hdl, daos_handle_t *coh);
+int
+vos_co_insert_handle(struct vc_hdl *vc_hdl, struct daos_uuid *key,
+		     daos_handle_t *coh);
+
+int
+vos_co_lookup_handle(struct daos_uuid *key, struct vc_hdl **co_hdl);
 
 void
 vos_co_putref_handle(struct vc_hdl *co_hdl);
 
-struct vc_hdl*
-vos_co_lookup_handle(daos_handle_t coh);
-
-void
-vos_co_delete_handle(struct vc_hdl *vc_hdl);
-
-void
-vos_co_hhash_free(struct daos_hlink *hlink);
-
-void
-vos_pool_hhash_free(struct daos_hlink *hlink);
+int
+vos_co_release_handle(struct vc_hdl *co_hdl);
+/*====================================================*/
 
 #endif

@@ -32,7 +32,6 @@
 #include <libpmemobj.h>
 #include <daos/btree.h>
 #include <daos_srv/vos_types.h>
-#include "vos_chash_table.h"
 
 /**
  * VOS metadata structure declarations

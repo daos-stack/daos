@@ -39,14 +39,6 @@
 #include <vos_hhash.h>
 
 /**
- * NB: hide the dark secret that
- * uuid_t is an array not a structure
- */
-struct uuid_key {
-	uuid_t			uuid;
-};
-
-/**
  * Wrapper buffer to fetch
  * direct pointers
  */
@@ -58,13 +50,13 @@ struct vc_val_buf {
 static int
 vc_hkey_size(struct btr_instance *tins)
 {
-	return sizeof(struct uuid_key);
+	return sizeof(struct daos_uuid);
 }
 
 static void
 vc_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 {
-	D_ASSERT(key_iov->iov_len == sizeof(struct uuid_key));
+	D_ASSERT(key_iov->iov_len == sizeof(struct daos_uuid));
 	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
 }
 
@@ -100,11 +92,11 @@ vc_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	struct vos_container		*vc_rec = NULL;
 	struct vos_object_index		*vc_oi = NULL;
 	struct vc_val_buf		*vc_val_buf = NULL;
-	struct uuid_key			*u_key = NULL;
+	struct daos_uuid		*u_key = NULL;
 	int				rc = 0;
 
 	D_DEBUG(DF_VOS3, "Allocating entry for container table\n");
-	u_key = (struct uuid_key *)key_iov->iov_buf;
+	u_key = (struct daos_uuid *)key_iov->iov_buf;
 	D_DEBUG(DF_VOS3, DF_UUID" Allocating record for container\n",
 		DP_UUID(u_key->uuid));
 
@@ -176,15 +168,15 @@ static btr_ops_t vct_ops = {
 };
 
 static inline void
-vos_co_set_kv(daos_iov_t *key, daos_iov_t *val, void *kbuf,
-	      size_t ksize, void *vbuf, size_t vsize)
+vos_co_set_iovs(daos_iov_t *key, daos_iov_t *val, void *kbuf,
+		void *vbuf)
 {
-	daos_iov_set(key, kbuf, ksize);
-	daos_iov_set(val, vbuf, vsize);
+	daos_iov_set(key, kbuf, sizeof(struct daos_uuid));
+	daos_iov_set(val, vbuf, sizeof(struct vc_val_buf));
 }
 
 static inline int
-vos_co_tree_lookup(struct vp_hdl *vpool, struct uuid_key *ukey,
+vos_co_tree_lookup(struct vp_hdl *vpool, struct daos_uuid *ukey,
 		   struct vc_val_buf *sbuf)
 {
 	struct vos_container_index	*coi;
@@ -196,9 +188,7 @@ vos_co_tree_lookup(struct vp_hdl *vpool, struct uuid_key *ukey,
 	rc = dbtree_open_inplace(&coi->ci_btree, &vpool->vp_uma,
 				 &btr_hdl);
 	D_ASSERT(rc == 0);
-	vos_co_set_kv(&key, &value, ukey,
-		      sizeof(struct uuid_key), sbuf,
-		      sizeof(struct vc_val_buf));
+	vos_co_set_iovs(&key, &value, ukey, sbuf);
 
 	return dbtree_lookup(btr_hdl, &key, &value);
 }
@@ -213,12 +203,12 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 
 	int				rc = 0;
 	struct vp_hdl			*vpool = NULL;
-	struct uuid_key			ukey;
+	struct daos_uuid		ukey;
 	struct vc_val_buf		s_buf;
 
-	vpool = vos_pool_lookup_handle(poh);
-	if (NULL == vpool) {
-		D_ERROR("Error in looking up VOS pool handle from hhash\n");
+	vpool = vos_hdl2pool(poh);
+	if (vpool == NULL) {
+		D_ERROR("Empty pool handle?\n");
 		return -DER_INVAL;
 	}
 
@@ -236,9 +226,7 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 	TX_BEGIN(vpool->vp_ph) {
 		daos_iov_t key, value;
 
-		vos_co_set_kv(&key, &value,
-			      &ukey, sizeof(struct uuid_key),
-			      &s_buf, sizeof(struct vc_val_buf));
+		vos_co_set_iovs(&key, &value, &ukey, &s_buf);
 
 		rc = dbtree_update(vpool->vp_ct_hdl, &key, &value);
 		if (rc) {
@@ -251,7 +239,6 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 	} TX_END;
 
 exit:
-	vos_pool_putref_handle(vpool);
 	return rc;
 }
 
@@ -265,21 +252,33 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 
 	int				rc = 0;
 	struct vp_hdl			*vpool = NULL;
-	struct uuid_key			ukey;
+	struct daos_uuid		ukey;
 	struct vc_val_buf		s_buf;
 	struct vc_hdl			*co_hdl = NULL;
 
-	/* Lookup container handle of hash link */
-	vpool = vos_pool_lookup_handle(poh);
-	if (vpool == NULL) {
-		D_ERROR("Error in looking up VOS pool handle from hhash\n");
-		return -DER_INVAL;
-	}
-
 	D_DEBUG(DF_VOS2, "Open container "DF_UUID"\n", DP_UUID(co_uuid));
+	D_DEBUG(DF_VOS2, "Checking if container handle exists for "DF_UUID"\n",
+		DP_UUID(co_uuid));
 	D_DEBUG(DF_VOS3, "looking up co_id in container index\n");
 
+	vpool = vos_hdl2pool(poh);
+	if (vpool == NULL) {
+		D_ERROR("Empty pool handle?\n");
+		return -DER_INVAL;
+	}
 	uuid_copy(ukey.uuid, co_uuid);
+
+	/**
+	 * Check if handle exists
+	 * then return the handle immediately
+	 */
+	rc = vos_co_lookup_handle(&ukey, &co_hdl);
+	if (rc == 0) {
+		D_DEBUG(DF_VOS2, "Found handle in DRAM UUID hash\n");
+		*coh = vos_co2hdl(co_hdl);
+		D_GOTO(exit, rc);
+	}
+
 	rc = vos_co_tree_lookup(vpool, &ukey, &s_buf);
 	if (rc) {
 		D_DEBUG(DF_VOS3, DF_UUID" container does not exist\n",
@@ -310,16 +309,16 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
 		D_GOTO(exit, rc);
 	}
 
-	vos_co_hhash_init(co_hdl);
-	vos_co_insert_handle(co_hdl, coh);
-	vos_co_putref_handle(co_hdl);
-exit:
-	/* if success ref-count released during close/delete */
+	rc = vos_co_insert_handle(co_hdl, &ukey, coh);
 	if (rc) {
-		vos_pool_putref_handle(vpool);
-		if (co_hdl)
-			vos_co_hhash_free(&co_hdl->vc_hlink);
+		D_ERROR("Error inserting vos container handle to uuid hash\n");
+		D_GOTO(exit, rc);
 	}
+
+exit:
+	if (rc != 0 && co_hdl)
+		vos_co_uhash_free(&co_hdl->vc_uhlink);
+
 	return rc;
 }
 
@@ -330,41 +329,40 @@ int
 vos_co_close(daos_handle_t coh, daos_event_t *ev)
 {
 
-	struct vc_hdl		*co_hdl = NULL;
+	struct vc_hdl			*co_hdl = NULL;
+	int				rc  = 0;
 
-	co_hdl = vos_co_lookup_handle(coh);
-	if (!co_hdl) {
-		D_ERROR("Invalid handle for container\n");
+	co_hdl = vos_hdl2co(coh);
+	if (co_hdl == NULL) {
+		D_ERROR("Cannot close a NULL handle\n");
 		return -DER_INVAL;
 	}
-
-	dbtree_close(co_hdl->vc_btr_hdl);
-	vos_pool_putref_handle(co_hdl->vc_phdl);
-	vos_co_delete_handle(co_hdl);
-	vos_co_putref_handle(co_hdl);
+	rc = vos_co_release_handle(co_hdl);
+	if (rc) {
+		D_ERROR("Error in deleting container handle\n");
+		return rc;
+	}
 
 	return 0;
 }
 
 /**
- * Query container information.
+ * Query container information
  */
 int
 vos_co_query(daos_handle_t coh, vos_co_info_t *vc_info, daos_event_t *ev)
 {
 
-	int				ret    = 0;
-	struct vc_hdl			*co_hdl = NULL;
+	struct vc_hdl			*co_hdl;
 
-	co_hdl = vos_co_lookup_handle(coh);
-	if (!co_hdl) {
-		D_ERROR("Invalid handle for container\n");
+	co_hdl = vos_hdl2co(coh);
+	if (co_hdl == NULL) {
+		D_ERROR("Empty container handle for querying?\n");
 		return -DER_INVAL;
 	}
 
 	memcpy(vc_info, &co_hdl->vc_co->vc_info, sizeof(*vc_info));
-	vos_co_putref_handle(co_hdl);
-	return ret;
+	return 0;
 }
 
 
@@ -376,19 +374,28 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 {
 
 	int				rc = 0;
-	struct vp_hdl			*vpool = NULL;
-	struct uuid_key			ukey;
+	struct vp_hdl			*vpool;
+	struct daos_uuid		ukey;
 	struct vc_val_buf		s_buf;
 	struct vos_object_index		*vc_oi = NULL;
+	struct vc_hdl			*co_hdl = NULL;
 
-	vpool = vos_pool_lookup_handle(poh);
+	uuid_copy(ukey.uuid, co_uuid);
+	D_DEBUG(DF_VOS3, "Destroying CO ID in container index"DF_UUID"\n",
+		DP_UUID(ukey.uuid));
+
+	vpool = vos_hdl2pool(poh);
 	if (vpool == NULL) {
-		D_ERROR("Error in looking up VOS pool handle from hhash\n");
-		D_GOTO(exit, rc = -DER_INVAL);
+		D_ERROR("Empty pool handle for destroying container?\n");
+		return -DER_INVAL;
 	}
 
-	D_DEBUG(DF_VOS3, "Destroying CO ID in container index\n");
-	uuid_copy(ukey.uuid, co_uuid);
+	rc = vos_co_lookup_handle(&ukey, &co_hdl);
+	if (rc != -DER_NONEXIST) {
+		D_ERROR("Open reference exists, cannot destroy\n");
+		vos_co_putref_handle(co_hdl);
+		D_GOTO(exit, rc = -DER_NO_PERM);
+	}
 
 	rc = vos_co_tree_lookup(vpool, &ukey, &s_buf);
 	if (rc) {
@@ -409,7 +416,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 					  s_buf.vc_co->vc_obtable);
 		rc = vos_oi_destroy(vpool, vc_oi);
 		if (rc) {
-			D_ERROR("OI destroy failed with error : %d",
+			D_ERROR("OI destroy failed with error : %d\n",
 				rc);
 			pmemobj_tx_abort(EFAULT);
 		}
@@ -431,7 +438,6 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
 	} TX_END;
 
 exit:
-	vos_pool_putref_handle(vpool);
 	return rc;
 }
 
@@ -455,15 +461,16 @@ vos_ci_init()
 }
 
 int
-vos_ci_create(struct vp_hdl *po_hdl,
+vos_ci_create(struct umem_attr *p_umem_attr,
 	      struct vos_container_index *co_index)
 {
 
 	int			rc = 0;
 	struct btr_root		*ci_root = NULL;
+	daos_handle_t		btr_hdl;
 
-	if (!po_hdl || !co_index) {
-		D_ERROR("Invalid handle\nContainer_index create failed\n");
+	if (!co_index) {
+		D_ERROR("Container_index create failed\n");
 		return -DER_INVAL;
 	}
 
@@ -473,11 +480,18 @@ vos_ci_create(struct vp_hdl *po_hdl,
 	D_DEBUG(DF_VOS2, "Create CI Tree in-place: %d\n",
 		VOS_BTR_CIT);
 	rc = dbtree_create_inplace(VOS_BTR_CIT, 0, OT_BTREE_ORDER,
-				   &po_hdl->vp_uma,
+				   p_umem_attr,
 				   &co_index->ci_btree,
-				   &po_hdl->vp_ct_hdl);
-	if (rc)
+				   &btr_hdl);
+	if (rc) {
 		D_ERROR("DBtree create failed\n");
+		D_GOTO(exit, rc);
+	}
 
+	rc = dbtree_close(btr_hdl);
+	if (rc)
+		D_ERROR("Error in closing btree handle\n");
+
+exit:
 	return rc;
 }

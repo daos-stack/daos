@@ -40,20 +40,31 @@
 #include <unistd.h>
 #include <string.h>
 
-extern vos_chash_ops_t vos_co_idx_hop;
+static inline struct vos_pool_root *
+pmem_pool2root(PMEMobjpool *ph)
+{
+	TOID(struct vos_pool_root)  proot;
+
+	proot = POBJ_ROOT(ph, struct vos_pool_root);
+	return D_RW(proot);
+}
 
 /**
  * Create a Versioning Object Storage Pool (VOSP) and its root object.
  */
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
-		daos_handle_t *poh, daos_event_t *ev)
+		daos_event_t *ev)
 {
-	int		 rc    = 0;
-	struct vp_hdl	*vpool = NULL;
+	int			rc    = 0;
+	PMEMobjpool		*ph;
+	struct umem_attr	u_attr;
 
 	if (NULL == path || uuid_is_null(uuid) || size < 0)
 		return -DER_INVAL;
+
+	D_DEBUG(DF_VOS2, "Pool Path: %s, size: "DF_U64",UUID: "DF_UUID"\n",
+		path, size, uuid);
 
 	/**
 	 * Path must be a file with a certain size when size
@@ -64,28 +75,15 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		return -DER_NONEXIST;
 	}
 
-	D_ALLOC_PTR(vpool);
-	if (vpool == NULL)
-		return -DER_NOMEM;
-
-	vos_pool_hhash_init(vpool);
-	vpool->vp_fpath = strdup(path);
-	vpool->vp_ph = pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout),
-				      size, 0666);
-	if (!vpool->vp_ph) {
+	ph = pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout),
+			    size, 0666);
+	if (!ph) {
 		D_ERROR("Failed to create pool: %d\n", errno);
-		D_GOTO(exit, rc = -DER_NOSPACE);
+		return  -DER_NOSPACE;
 	}
-	/**
-	 * Setting Btree attributes for btree's used
-	 * within this pool (both oi and kv object)
-	 */
-	vpool->vp_uma.uma_id = UMEM_CLASS_PMEM;
-	vpool->vp_uma.uma_u.pmem_pool = vpool->vp_ph;
 
-	rc = umem_class_init(&vpool->vp_uma, &vpool->vp_umm);
-	D_ASSERT(rc == 0);
-
+	u_attr.uma_id = UMEM_CLASS_PMEM;
+	u_attr.uma_u.pmem_pool = ph;
 	/**
 	 * If the file is fallocated seperately
 	 * we need the fallocated
@@ -98,12 +96,13 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		size = lstat.st_size;
 	}
 
-	TX_BEGIN(vpool->vp_ph) {
+	TX_BEGIN(ph) {
+
 		struct vos_container_index	*co_idx;
 		struct vos_pool_root		*root;
 		vos_pool_info_t			*pinfo;
 
-		root = vos_pool2root(vpool);
+		root = pmem_pool2root(ph);
 		pmemobj_tx_add_range_direct(root, sizeof(*root));
 
 		memset(root, 0, sizeof(*root));
@@ -116,16 +115,17 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		 * btr_handle
 		 */
 
-		rc = vos_ci_create(vpool, co_idx);
+		rc = vos_ci_create(&u_attr, co_idx);
 		if (rc != 0) {
 			D_ERROR("Failed to create container index table: %d\n",
 				rc);
 			pmemobj_tx_abort(EFAULT);
 		}
+
 		uuid_copy(root->vpr_pool_id, uuid);
 		pinfo = &root->vpr_pool_info;
 		pinfo->pif_size	 = size;
-		pinfo->pif_avail = size - pmemobj_root_size(vpool->vp_ph);
+		pinfo->pif_avail = size - pmemobj_root_size(ph);
 
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
@@ -139,10 +139,9 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 
 	if (rc != 0)
 		D_GOTO(exit, rc);
-
-	vos_pool_insert_handle(vpool, poh);
 exit:
-	vos_pool_putref_handle(vpool);
+	/* Close this local handle, opened using pool_open*/
+	pmemobj_close(ph);
 	return rc;
 }
 
@@ -151,30 +150,34 @@ exit:
  * and revoke all its handles
  */
 int
-vos_pool_destroy(daos_handle_t poh, daos_event_t *ev)
+vos_pool_destroy(const char *path, uuid_t uuid, daos_event_t *ev)
 {
 
 	int			rc    = 0;
-	struct vp_hdl		*vpool = NULL;
+	struct vp_hdl		*vpool;
+	struct daos_uuid	ukey;
 
-	vpool = vos_pool_lookup_handle(poh);
-	if (vpool == NULL) {
-		D_ERROR("VOS pool handle lookup error\n");
-		return -DER_INVAL;
+	uuid_copy(ukey.uuid, uuid);
+	D_DEBUG(DF_VOS2, "Destroy path: %s UUID: "DF_UUID"\n",
+		path, DP_UUID(uuid));
+
+	rc = vos_pool_lookup_handle(&ukey, &vpool);
+	if (rc == 0 && vpool != NULL) {
+		D_ERROR("Open reference exists, cannot destroy pool\n");
+		vos_pool_putref_handle(vpool);
+		D_GOTO(exit, rc = -DER_BUSY);
 	}
-	/* NB: no need to explicitly destroy container index table because
+
+	D_DEBUG(DF_VOS2, "No open handles. OK to destroy\n");
+	/**
+	 * NB: no need to explicitly destroy container index table because
 	 * pool file removal will do this for free.
 	 */
-	rc = remove(vpool->vp_fpath);
-	if (rc) {
+	rc = remove(path);
+	if (rc)
 		D_ERROR("While deleting file from PMEM\n");
-		D_GOTO(exit, rc);
-	}
 
-	dbtree_close(vpool->vp_ct_hdl);
-	vos_pool_delete_handle(vpool);
 exit:
-	vos_pool_putref_handle(vpool);
 	return rc;
 }
 
@@ -190,24 +193,39 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 	int				rc    = 0;
 	struct vp_hdl			*vpool = NULL;
 	struct vos_pool_root		*root  = NULL;
-	struct vos_container_index	*co_idx;
+	struct vos_container_index	*co_idx = NULL;
+	struct daos_uuid		ukey;
+
 	if (path == NULL) {
 		D_ERROR("Invalid Pool Path\n");
 		return -DER_INVAL;
 	}
 
+	uuid_copy(ukey.uuid, uuid);
+	D_DEBUG(DF_VOS2, "pool %p, path: %s,Open/Copy:"DF_UUID"/"DF_UUID"\n",
+		vpool, path, DP_UUID(uuid), DP_UUID(ukey.uuid));
+
+	rc = vos_pool_lookup_handle(&ukey, &vpool);
+	/* If found increments ref-count */
+	if (rc == 0) {
+		D_DEBUG(DF_VOS2, "Found open handle: %p\n", vpool);
+		*poh = vos_pool2hdl(vpool);
+		D_GOTO(exit, rc);
+	}
+
 	/* Create a new handle during open */
 	D_ALLOC_PTR(vpool);
 	if (vpool == NULL) {
-		D_ERROR("Error allocating vpool handle");
+		D_ERROR("Error allocating vpool handle\n");
 		return -DER_NOMEM;
 	}
+	D_DEBUG(DF_VOS2, "Allocated vos pool :%p\n", vpool);
 
-	vos_pool_hhash_init(vpool);
 	vpool->vp_fpath = strdup(path);
 	vpool->vp_ph = pmemobj_open(path, POBJ_LAYOUT_NAME(vos_pool_layout));
 	if (vpool->vp_ph == NULL) {
-		D_ERROR("Error in opening the pool handle");
+		D_ERROR("Error in opening the pool handle: %s\n",
+			pmemobj_errormsg());
 		D_GOTO(exit, rc = -DER_NO_HDL);
 	}
 
@@ -217,14 +235,11 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 	 */
 	vpool->vp_uma.uma_id = UMEM_CLASS_PMEM;
 	vpool->vp_uma.uma_u.pmem_pool = vpool->vp_ph;
-
 	rc = umem_class_init(&vpool->vp_uma, &vpool->vp_umm);
 	if (rc != 0) {
 		D_ERROR("Failed to instantiate umem: %d\n", rc);
-		goto exit;
+		D_GOTO(exit, rc);
 	}
-
-	D_DEBUG(DF_MISC, "vpool open %p\n", vpool);
 
 	root = vos_pool2root(vpool);
 	if (uuid_compare(uuid, root->vpr_pool_id)) {
@@ -234,7 +249,17 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 			DP_UUID(root->vpr_pool_id));
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
+
+	uuid_copy(vpool->vp_id, root->vpr_pool_id);
 	co_idx = D_RW(root->vpr_ci_table);
+
+	/* Insert and init pool handle */
+	rc = vos_pool_insert_handle(vpool, &ukey, poh);
+	if (rc) {
+		D_ERROR("Error inserting into vos DRAM hash\n");
+		D_GOTO(exit, rc);
+	}
+
 	/* Cache co-tree btree hdl */
 	rc = dbtree_open_inplace(&co_idx->ci_btree, &vpool->vp_uma,
 				 &vpool->vp_ct_hdl);
@@ -244,11 +269,10 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
 
-
-	vos_pool_insert_handle(vpool, poh);
-
 exit:
-	vos_pool_putref_handle(vpool);
+	if (rc != 0 && vpool != NULL)
+		vos_pool_uhash_free(&vpool->vp_uhlink);
+
 	return rc;
 }
 
@@ -263,20 +287,21 @@ vos_pool_close(daos_handle_t poh, daos_event_t *ev)
 	int			 rc    = 0;
 	struct vp_hdl		*vpool = NULL;
 
-	vpool = vos_pool_lookup_handle(poh);
-	if (vpool == NULL) {
-		D_ERROR("VOS pool handle lookup error");
-		return -DER_INVAL;
-	}
 
 	/**
 	 * daos_hhash_link_delete eventually calls the call-back
 	 * daos_vpool_free which also closes the pmemobj pool
 	 */
-	dbtree_close(vpool->vp_ct_hdl);
-	vos_pool_delete_handle(vpool);
-	vos_pool_putref_handle(vpool);
+	vpool = vos_hdl2pool(poh);
+	if (vpool == NULL) {
+		D_ERROR("Cannot close a NULL handle\n");
+		return -DER_INVAL;
+	}
 
+	D_DEBUG(DF_VOS2, "Close handle :%p\n", vpool);
+	rc = vos_pool_release_handle(vpool);
+	if (rc)
+		D_ERROR("Error in Deleting pool handle\n");
 	return rc;
 }
 
@@ -287,18 +312,12 @@ int
 vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev)
 {
 
-	int				rc    = 0;
 	struct vp_hdl			*vpool = NULL;
 	struct vos_pool_root		*root  = NULL;
 
-	vpool = vos_pool_lookup_handle(poh);
-	if (vpool == NULL)
-		return -DER_INVAL;
-
+	vpool = vos_hdl2pool(poh);
 	root = vos_pool2root(vpool);
-
 	memcpy(pinfo, &root->vpr_pool_info, sizeof(root->vpr_pool_info));
-	vos_pool_putref_handle(vpool);
 
-	return rc;
+	return 0;
 }

@@ -127,15 +127,13 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	uuid_generate_time_safe(tcx->tc_co_uuid);
 
 	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid,
-			     psize, &tcx->tc_po_hdl, NULL);
+			     psize, NULL);
 	if (rc) {
 		print_error("vpool create failed with error : %d", rc);
 		goto failed;
 	}
 	tcx->tc_step = TCX_PO_CREATE;
 
-	rc = vos_pool_close(tcx->tc_po_hdl, NULL);
-	assert_int_equal(rc, 0);
 	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, &tcx->tc_po_hdl,
 			   NULL);
 	if (rc) {
@@ -180,16 +178,16 @@ vts_ctx_fini(struct vos_test_ctx *tcx)
 	case TCX_CO_OPEN:
 		rc = vos_co_close(tcx->tc_co_hdl, NULL);
 		assert_int_equal(rc, 0);
-
 		/* fallthrough */
 	case TCX_CO_CREATE:
 		rc = vos_co_destroy(tcx->tc_po_hdl, tcx->tc_co_uuid, NULL);
 		assert_int_equal(rc, 0);
-
 		/* fallthrough */
 	case TCX_PO_OPEN:
+		rc = vos_pool_close(tcx->tc_po_hdl, NULL);
+		assert_int_equal(rc, 0);
 	case TCX_PO_CREATE:
-		rc = vos_pool_destroy(tcx->tc_po_hdl, NULL);
+		rc = vos_pool_destroy(tcx->tc_po_name, tcx->tc_po_uuid, NULL);
 		assert_int_equal(rc, 0);
 		/* fallthrough */
 	}

@@ -124,25 +124,6 @@ co_allocate_params(int ncontainers, int ops,
 	return 0;
 }
 
-static int
-co_open_teardown(void **state)
-{
-	struct vc_test_args	*arg = *state;
-	int			i, ret = 0;
-
-	for (i = 0; i < VCT_CONTAINERS; i++) {
-		if (arg->ops_seq[i]) {
-			free(arg->ops_seq[i]);
-			arg->ops_seq[i] = NULL;
-		}
-	}
-	if (arg->seq_cnt) {
-		free(arg->seq_cnt);
-		arg->seq_cnt = NULL;
-	}
-	return ret;
-}
-
 
 static int
 co_unit_teardown(void **state)
@@ -170,6 +151,43 @@ co_unit_teardown(void **state)
 }
 
 static int
+co_ref_count_setup(void **state)
+{
+	struct vc_test_args	*arg = *state;
+	int			i, ret = 0;
+
+	ret = vos_co_create(arg->poh, arg->uuid[0], NULL);
+	assert_int_equal(ret, 0);
+
+	for (i = 0; i < VCT_CONTAINERS; i++) {
+		ret = vos_co_open(arg->poh, arg->uuid[0], &arg->coh[i],
+				  NULL);
+		assert_int_equal(ret, 0);
+	}
+
+	return 0;
+}
+
+
+static void
+co_ref_count_test(void **state)
+{
+	struct vc_test_args	*arg = *state;
+	int			i, ret;
+
+	ret = vos_co_destroy(arg->poh, arg->uuid[0], NULL);
+	assert_int_equal(ret, -DER_NO_PERM);
+
+	for (i = 0; i < VCT_CONTAINERS; i++) {
+		ret = vos_co_close(arg->coh[i], NULL);
+		assert_int_equal(ret, 0);
+	}
+
+	ret = vos_co_destroy(arg->poh, arg->uuid[0], NULL);
+	assert_int_equal(ret, 0);
+}
+
+static int
 setup(void **state)
 {
 	struct vc_test_args	*test_arg = NULL;
@@ -181,7 +199,10 @@ setup(void **state)
 	uuid_generate_time_safe(test_arg->pool_uuid);
 	vts_pool_fallocate(&test_arg->fname);
 	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid,
-			      0, &test_arg->poh, NULL);
+			      0, NULL);
+	assert_int_equal(ret, 0);
+	ret = vos_pool_open(test_arg->fname, test_arg->pool_uuid,
+			    &test_arg->poh, NULL);
 	assert_int_equal(ret, 0);
 	*state = test_arg;
 	return 0;
@@ -193,7 +214,10 @@ teardown(void **state)
 	int			ret = 0;
 	struct vc_test_args	*test_arg = *state;
 
-	ret = vos_pool_destroy(test_arg->poh, NULL);
+	ret = vos_pool_close(test_arg->poh, NULL);
+	assert_int_equal(ret, 0);
+
+	ret = vos_pool_destroy(test_arg->fname, test_arg->pool_uuid, NULL);
 	assert_int_equal(ret, 0);
 
 	if (vts_file_exists(test_arg->fname))
@@ -228,43 +252,6 @@ co_create_tests(void **state)
 }
 
 static int
-co_create_lookup(void **state)
-{
-	struct vc_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, OPEN, QUERY};
-	int			i;
-
-	co_allocate_params(VCT_CONTAINERS, 3, arg);
-	for (i = 0; i < VCT_CONTAINERS; i++)
-		co_set_param(tmp, 3, &arg->seq_cnt[i],
-			     &arg->ops_seq[i]);
-	return 0;
-}
-
-
-static int
-co_open_tests(void **state)
-{
-	struct vc_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {OPEN};
-	uuid_t			tmp_uuid;
-	int			i, ret = 0;
-
-	uuid_generate(tmp_uuid);
-	ret = vos_co_create(arg->poh, tmp_uuid,
-			    NULL);
-	assert_int_equal(ret, 0);
-
-	co_allocate_params(VCT_CONTAINERS, 1, arg);
-	for (i = 0; i < VCT_CONTAINERS; i++) {
-		uuid_copy(arg->uuid[i], tmp_uuid);
-		co_set_param(tmp, 1, &arg->seq_cnt[i],
-			     &arg->ops_seq[i]);
-	}
-	return 0;
-}
-
-static int
 co_tests(void **state)
 {
 	struct vc_test_args	*arg = *state;
@@ -282,12 +269,10 @@ co_tests(void **state)
 static const struct CMUnitTest vos_co_tests[] = {
 	{ "VOS100: container create test", co_ops_run, co_create_tests,
 		co_unit_teardown},
-	{ "VOS101: multiple container open handles for same container",
-		co_ops_run, co_open_tests, co_open_teardown},
-	{ "VOS102: container all APIs", co_ops_run, co_tests,
+	{ "VOS101: container all APIs", co_ops_run, co_tests,
 		co_unit_teardown},
-	{ "VOS103: container create/open/query", co_ops_run, co_create_lookup,
-		co_unit_teardown},
+	{ "VOS102: container handle ref count tests", co_ref_count_test,
+		co_ref_count_setup, NULL},
 };
 
 int

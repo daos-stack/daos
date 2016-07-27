@@ -134,9 +134,6 @@ vos_oref_lru_free(struct daos_llink *llink)
 	D_ASSERT(llink);
 
 	oref = container_of(llink, struct vos_obj_ref, or_llink);
-	if (oref->or_co)
-		vos_co_putref_handle(oref->or_co);
-
 	D_FREE_PTR(oref);
 }
 
@@ -213,19 +210,13 @@ vos_obj_ref_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	struct vos_obj_ref	*lref = NULL;
 	struct vos_lru_key	lkey;
 	struct daos_llink	*lret = NULL;
-	struct vc_hdl		*co_hdl = NULL;
+	struct vc_hdl		*co_hdl;
 
 	D_ASSERT(occ != NULL);
 	D_DEBUG(DF_VOS2, "Object Hold of obj_id: "DF_UOID"\n",
 		DP_UOID(oid));
-	D_DEBUG(DF_VOS2, "Hold for container cookied:"DF_U64"\n",
-		coh.cookie);
-
-	co_hdl = vos_co_lookup_handle(coh);
-	if (!co_hdl) {
-		D_ERROR("invalid handle for container\n");
-		return -DER_INVAL;
-	}
+	co_hdl = vos_hdl2co(coh);
+	D_ASSERT(co_hdl != NULL);
 
 	/* Create the key for obj cache */
 	uuid_copy(lkey.vlk_co_uuid, co_hdl->vc_id);
@@ -236,7 +227,6 @@ vos_obj_ref_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	if (rc) {
 		D_ERROR("Error in Holding reference for obj"DF_UOID"\n",
 			DP_UOID(oid));
-		vos_co_putref_handle(co_hdl);
 		return	rc;
 	}
 

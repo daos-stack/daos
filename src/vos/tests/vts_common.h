@@ -33,6 +33,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <daos/common.h>
+#include <daos_srv/vos.h>
 
 #define VPOOL_16M 16777216ULL
 #define VPOOL_1G  1073741824ULL
@@ -51,12 +52,12 @@ enum vts_ops_type {
 };
 
 struct vos_test_ctx {
-	char		*tc_po_name;
-	uuid_t		 tc_po_uuid;
-	uuid_t		 tc_co_uuid;
-	daos_handle_t	 tc_po_hdl;
-	daos_handle_t	 tc_co_hdl;
-	int		 tc_step;
+	char			*tc_po_name;
+	uuid_t			tc_po_uuid;
+	uuid_t			tc_co_uuid;
+	daos_handle_t		tc_po_hdl;
+	daos_handle_t		tc_co_hdl;
+	int			tc_step;
 };
 
 

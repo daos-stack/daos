@@ -45,8 +45,10 @@ extern struct dss_module_key vos_module_key;
  * VOS pool handle (DRAM)
  */
 struct vp_hdl {
-	/** handle hash link for the vos pool **/
-	struct daos_hlink	vp_hlink;
+	/** VOS uuid hash-link with refcnt */
+	struct daos_ulink	vp_uhlink;
+	/** UUID of vos pool */
+	uuid_t			vp_id;
 	/** Pointer to PMEMobjpool **/
 	PMEMobjpool		*vp_ph;
 	/** Path to PMEM file **/
@@ -63,8 +65,8 @@ struct vp_hdl {
  * VOS container handle (DRAM)
  */
 struct vc_hdl {
-	/* VOS container handle hash link */
-	struct daos_hlink	vc_hlink;
+	/* VOS uuid hash with refcnt */
+	struct daos_ulink	vc_uhlink;
 	/* VOS PMEMobjpool pointer */
 	struct vp_hdl		*vc_phdl;
 	/* Unique UID of VOS container */
@@ -85,15 +87,15 @@ struct vc_hdl {
 
 struct vos_imem_strts {
 	/**
-	 * Handle hash for holding VOS handles
-	 * (container/pool, etc.,)
-	 */
-	struct daos_hhash	*vis_hhash;
-	/**
 	 * In-memory object cache for the PMEM
 	 * object table
 	 */
 	struct daos_lru_cache	*vis_ocache;
+	/**
+	 * Hash table to refcount VOS handles
+	 * (container/pool, etc.,)
+	 */
+	struct dhash_table	*vis_hr_hash;
 };
 
 /* in-memory structures standalone instance */
@@ -205,7 +207,7 @@ vos_ci_init();
  * Create a new B-tree for empty container index
  * Called from vos_pool_create.
  *
- * \param po_hdl	[IN]	Pool Handle
+ * \param p_umem_attr	[IN]	Pool umem attributes
  * \param co_index	[IN]	vos container index
  *				(pmem direct pointer)
  *
@@ -213,7 +215,7 @@ vos_ci_init();
  *			failure
  */
 int
-vos_ci_create(struct vp_hdl *po_hdl,
+vos_ci_create(struct umem_attr *p_umem_attr,
 	      struct vos_container_index *co_index);
 
 /**
@@ -425,6 +427,36 @@ static inline struct umem_instance *
 vos_oref2umm(struct vos_obj_ref *oref)
 {
 	return &oref->or_co->vc_phdl->vp_umm;
+}
+
+static inline daos_handle_t
+vos_pool2hdl(struct vp_hdl *pool)
+{
+	daos_handle_t poh;
+
+	poh.cookie = (uint64_t)pool;
+	return poh;
+}
+
+static inline struct vp_hdl*
+vos_hdl2pool(daos_handle_t poh)
+{
+	return (struct vp_hdl *)(poh.cookie);
+}
+
+static inline daos_handle_t
+vos_co2hdl(struct vc_hdl *co)
+{
+	daos_handle_t coh;
+
+	coh.cookie = (uint64_t)co;
+	return coh;
+}
+
+static inline struct vc_hdl*
+vos_hdl2co(daos_handle_t coh)
+{
+	return (struct vc_hdl *)(coh.cookie);
 }
 
 /**
