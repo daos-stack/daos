@@ -641,6 +641,56 @@ dhash_table_create(uint32_t feats, unsigned int bits, void *priv,
 }
 
 /**
+ * Traverse a hash table, call the traverse callback function on every item.
+ * Break once the callback returns non-zero.
+ *
+ * \param htable	[IN]	The hash table to be finalised.
+ * \param cb		[IN]	Traverse callback, will be called on every item
+ *				in the hash table.
+ *				\see dhash_traverse_cb_t.
+ * \param args		[IN]	Arguments for the callback.
+ *
+ * \return			zero on success, negative value if error.
+ */
+int
+dhash_table_traverse(struct dhash_table *htable, dhash_traverse_cb_t cb,
+		     void *args)
+{
+	struct dhash_bucket *buckets = htable->ht_buckets;
+	daos_list_t	    *rlink;
+
+	int		     nr;
+	int		     i;
+	int		     rc = 0;
+
+	if (buckets == NULL) {
+		D_ERROR("dhash_table %p un-initialized (NULL buckets).\n",
+			htable);
+		D_GOTO(out, rc = -DER_UNINIT);
+	}
+	if (cb == NULL) {
+		D_ERROR("invalid parameter, NULL cb.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	dh_lock(htable, true);
+
+	nr = 1U << htable->ht_bits;
+	for (i = 0; i < nr; i++) {
+		daos_list_for_each(rlink, &buckets[i].hb_head) {
+			rc = cb(rlink, args);
+			if (rc != 0)
+				D_GOTO(unlock, rc);
+		}
+	}
+
+unlock:
+	dh_unlock(htable, true);
+out:
+	return rc;
+}
+
+/**
  * Finalise a hash table, reset all struct members.
  *
  * \param htable	[IN]	The hash table to be finalised.

@@ -43,6 +43,12 @@ struct dtp_opc_info *dtp_opc_lookup(struct dtp_opc_map *map, dtp_opcode_t opc,
 				    int locked);
 /** dtp_context.c */
 bool dtp_context_empty(int locked);
+enum {
+	DTP_REQ_TRACK_IN_INFLIGHQ = 0,
+	DTP_REQ_TRACK_IN_WAITQ,
+};
+int dtp_context_req_track(dtp_rpc_t *req);
+void dtp_context_req_untrack(dtp_rpc_t *req);
 
 /** dtp_rpc.c */
 void dtp_rpc_priv_init(struct dtp_rpc_priv *rpc_priv, dtp_context_t dtp_ctx,
@@ -77,6 +83,28 @@ dtp_time_usec(unsigned sec_diff)
 
 	gettimeofday(&tv, NULL);
 	return (tv.tv_sec + sec_diff) * 1000 * 1000 + tv.tv_usec;
+}
+
+static inline bool
+dtp_ep_identical(dtp_endpoint_t *ep1, dtp_endpoint_t *ep2)
+{
+	D_ASSERT(ep1 != NULL);
+	D_ASSERT(ep2 != NULL);
+	/* TODO: check group */
+	if (ep1->ep_rank == ep2->ep_rank)
+		return true;
+	else
+		return false;
+}
+
+static inline void
+dtp_ep_copy(dtp_endpoint_t *dst_ep, dtp_endpoint_t *src_ep)
+{
+	D_ASSERT(dst_ep != NULL);
+	D_ASSERT(src_ep != NULL);
+	/* TODO: copy grp id */
+	dst_ep->ep_rank = src_ep->ep_rank;
+	dst_ep->ep_tag = src_ep->ep_tag;
 }
 
 #endif /* __DTP_INTERNAL_FNS_H__ */

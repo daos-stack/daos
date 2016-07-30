@@ -824,23 +824,22 @@ dtp_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	}
 
 	if (req_cbinfo->rsc_cb == NULL) {
-		/*
-		D_DEBUG(DF_TP, "no completion callback registered, "
-			"opc: 0x%x.\n", opc);
-		*/
+		rpc_priv->drp_state = (hg_cbinfo->ret == HG_CANCELED) ?
+				      RPC_CANCELED : RPC_COMPLETED;
 		D_GOTO(out, hg_ret);
 	}
 
 	if (rc == 0) {
+		rpc_priv->drp_state = RPC_REPLY_RECVED;
 		/* HG_Free_output in dtp_hg_req_destroy */
 		hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle,
 				       &rpc_pub->dr_output);
-		if (hg_ret != HG_SUCCESS) {
+		if (hg_ret == HG_SUCCESS) {
+			rpc_priv->drp_output_got = 1;
+		} else {
 			D_ERROR("HG_Get_output failed, hg_ret: %d, opc: "
 				"0x%x.\n", hg_ret, opc);
 			rc = -DER_DTP_HG;
-		} else {
-			rpc_priv->drp_output_got = 1;
 		}
 	}
 
@@ -854,9 +853,13 @@ dtp_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	if (rc != 0)
 		D_ERROR("req_cbinfo->rsc_cb returned %d.\n", rc);
 
+	rpc_priv->drp_state = (hg_cbinfo->ret == HG_CANCELED) ?
+			      RPC_CANCELED : RPC_COMPLETED;
+
 out:
 	D_FREE_PTR(req_cbinfo);
 
+	dtp_context_req_untrack(rpc_pub);
 	/* corresponding to the refcount taken in dtp_rpc_priv_init(). */
 	rc = dtp_req_decref(rpc_pub);
 	if (rc != 0)
@@ -866,7 +869,7 @@ out:
 }
 
 int
-dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb, void *arg)
+dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv)
 {
 	struct dtp_hg_send_cbinfo	*cb_info;
 	hg_return_t			hg_ret = HG_SUCCESS;
@@ -882,8 +885,8 @@ dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb, void *arg)
 	hg_in_struct = &rpc_priv->drp_pub.dr_input;
 
 	cb_info->rsc_rpc_priv = rpc_priv;
-	cb_info->rsc_cb = complete_cb;
-	cb_info->rsc_arg = arg;
+	cb_info->rsc_cb = rpc_priv->drp_complete_cb;
+	cb_info->rsc_arg = rpc_priv->drp_arg;
 
 	hg_ret = HG_Forward(rpc_priv->drp_hg_hdl, dtp_hg_req_send_cb, cb_info,
 			    hg_in_struct);
@@ -891,7 +894,6 @@ dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb, void *arg)
 		D_ERROR("HG_Forward failed, hg_ret: %d, opc: 0x%x.\n",
 			hg_ret, rpc_priv->drp_pub.dr_opc);
 		D_FREE_PTR(cb_info);
-		dtp_req_decref(&rpc_priv->drp_pub);
 		rc = -DER_DTP_HG;
 	}
 
@@ -1306,8 +1308,8 @@ dtp_hg_bulk_transfer(struct dtp_bulk_desc *bulk_desc, dtp_bulk_cb_t complete_cb,
 	hg_ret = HG_Bulk_transfer(hg_ctx->dhc_bulkctx, dtp_hg_bulk_transfer_cb,
 			bulk_cbinfo, hg_bulk_op, rpc_priv->drp_na_addr,
 			bulk_desc->bd_remote_hdl, bulk_desc->bd_remote_off,
-			bulk_desc->bd_local_hdl, bulk_desc->bd_remote_off,
-			bulk_desc->bd_len, opid);
+			bulk_desc->bd_local_hdl, bulk_desc->bd_local_off,
+			bulk_desc->bd_len, (hg_op_id_t *)opid);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_transfer failed, hg_ret: %d.\n", hg_ret);
 		D_FREE_PTR(bulk_cbinfo);

@@ -194,7 +194,7 @@ dtp_proc_dtp_bulk_t(dtp_proc_t proc, dtp_bulk_t *bulk_hdl)
 {
 	hg_return_t	hg_ret;
 
-	hg_ret = hg_proc_hg_bulk_t(proc, bulk_hdl);
+	hg_ret = hg_proc_hg_bulk_t(proc, (hg_bulk_t *)bulk_hdl);
 
 	return (hg_ret == HG_SUCCESS) ? 0 : -DER_DTP_HG;
 }

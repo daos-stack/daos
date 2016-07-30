@@ -102,7 +102,7 @@ static int run_echo_srver(void)
 	rc = dtp_req_create(gecho.dtp_ctx, svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 
-	D_ALLOC(pchar, 256); /* DTP will internally free it */
+	D_ALLOC(pchar, 256);
 	assert(pchar != NULL);
 	snprintf(pchar, 256, "Guest_%d@server-side", myrank);
 
@@ -120,7 +120,7 @@ static int run_echo_srver(void)
 	assert(rc == 0);
 	/* wait completion */
 	while (1) {
-		if (!gecho.complete) {
+		if (gecho.complete) {
 			printf("server(rank %d) checkin request sent.\n",
 			       myrank);
 			break;
@@ -131,6 +131,7 @@ static int run_echo_srver(void)
 			break;
 		}
 	}
+	D_FREE(pchar, 256);
 
 	/* ==================================== */
 	printf("main thread wait progress thread ...\n");

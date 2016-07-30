@@ -168,6 +168,9 @@ int  dhash_table_create(uint32_t feats, unsigned int bits,
 int  dhash_table_create_inplace(uint32_t feats, unsigned int bits,
 				void *priv, dhash_table_ops_t *hops,
 				struct dhash_table *htable);
+typedef int (*dhash_traverse_cb_t)(daos_list_t *rlink, void *args);
+int dhash_table_traverse(struct dhash_table *htable, dhash_traverse_cb_t cb,
+			 void *args);
 int  dhash_table_destroy(struct dhash_table *htable, bool force);
 int  dhash_table_destroy_inplace(struct dhash_table *htable, bool force);
 void dhash_table_debug(struct dhash_table *htable);

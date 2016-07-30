@@ -146,15 +146,39 @@ dtp_req_send(dtp_rpc_t *req, dtp_cb_t complete_cb, void *arg)
 		D_ERROR("invalid parameter (NULL req).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+	if (req->dr_ctx == NULL) {
+		D_ERROR("invalid parameter (NULL req->dr_ctx).\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	rpc_priv = container_of(req, struct dtp_rpc_priv, drp_pub);
-	rc = dtp_hg_req_send(rpc_priv, complete_cb, arg);
-	if (rc != 0) {
-		D_ERROR("dtp_hg_req_send failed, rc: %d, opc: 0x%x.\n",
+	rpc_priv->drp_complete_cb = complete_cb;
+	rpc_priv->drp_arg = arg;
+
+	rc = dtp_context_req_track(req);
+	if (rc == DTP_REQ_TRACK_IN_INFLIGHQ) {
+		/* tracked in dtp_ep_inflight::epi_req_q */
+		/* set state before sending to avoid race with complete_cb */
+		rpc_priv->drp_state = RPC_REQ_SENT;
+		rc = dtp_hg_req_send(rpc_priv);
+		if (rc != 0) {
+			D_ERROR("dtp_hg_req_send failed, rc: %d, opc: 0x%x.\n",
+				rc, rpc_priv->drp_pub.dr_opc);
+			rpc_priv->drp_state = RPC_INITED;
+			dtp_context_req_untrack(req);
+		}
+	} else if (rc == DTP_REQ_TRACK_IN_WAITQ) {
+		/* queued in dtp_hg_context::dhc_req_q */
+		rc = 0;
+	} else {
+		D_ERROR("dtp_req_track failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_priv->drp_pub.dr_opc);
 	}
 
 out:
+	/* internally destroy the req when failed */
+	if (rc != 0 && req != NULL)
+		dtp_req_decref(req);
 	return rc;
 }
 
@@ -215,7 +239,7 @@ dtp_cb_common(const struct dtp_cb_info *cb_info)
  * Send rpc synchronously
  *
  * \param[IN] rpc	point to DTP request.
- * \param[IN] timeout	timeout (Milliseconds) to wait, if
+ * \param[IN] timeout	timeout (Micro-seconds) to wait, if
  *                      timeout <= 0, it will wait infinitely.
  * \return		0 if rpc return successfuly.
  * \return		negative errno if sending fails or timeout.
@@ -223,7 +247,6 @@ dtp_cb_common(const struct dtp_cb_info *cb_info)
 int
 dtp_sync_req(dtp_rpc_t *rpc, uint64_t timeout)
 {
-	struct timeval	tv;
 	uint64_t now;
 	uint64_t end;
 	int rc;
@@ -240,9 +263,7 @@ dtp_sync_req(dtp_rpc_t *rpc, uint64_t timeout)
 
 	timeout = timeout ? timeout : DTP_DEFAULT_TIMEOUT;
 	/* Wait the request to be completed in timeout milliseconds */
-	gettimeofday(&tv, NULL);
-	now = tv.tv_sec * 1000 * 1000 + tv.tv_usec;
-	end = now + timeout;
+	end = dtp_time_usec(0) + timeout;
 
 	while (1) {
 		uint64_t interval = 1000; /* milliseconds */
@@ -258,8 +279,7 @@ dtp_sync_req(dtp_rpc_t *rpc, uint64_t timeout)
 			break;
 		}
 
-		gettimeofday(&tv, NULL);
-		now = tv.tv_sec * 1000 * 1000 + tv.tv_usec;
+		now = dtp_time_usec(0);
 		if (now >= end) {
 			rc = -DER_TIMEDOUT;
 			break;
@@ -274,7 +294,10 @@ dtp_rpc_priv_init(struct dtp_rpc_priv *rpc_priv, dtp_context_t dtp_ctx,
 		  dtp_opcode_t opc, int srv_flag)
 {
 	D_ASSERT(rpc_priv != NULL);
-	DAOS_INIT_LIST_HEAD(&rpc_priv->drp_link);
+	DAOS_INIT_LIST_HEAD(&rpc_priv->drp_epi_link);
+	DAOS_INIT_LIST_HEAD(&rpc_priv->drp_tmp_link);
+	rpc_priv->drp_complete_cb = NULL;
+	rpc_priv->drp_arg = NULL;
 	dtp_common_hdr_init(&rpc_priv->drp_req_hdr, opc);
 	dtp_common_hdr_init(&rpc_priv->drp_reply_hdr, opc);
 	rpc_priv->drp_state = RPC_INITED;

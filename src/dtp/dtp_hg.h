@@ -72,8 +72,7 @@ int dtp_hg_ctx_fini(struct dtp_hg_context *hg_ctx);
 int dtp_hg_req_create(struct dtp_hg_context *hg_ctx, dtp_endpoint_t tgt_ep,
 		      struct dtp_rpc_priv *rpc_priv);
 int dtp_hg_req_destroy(struct dtp_rpc_priv *rpc_priv);
-int dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv, dtp_cb_t complete_cb,
-		    void *arg);
+int dtp_hg_req_send(struct dtp_rpc_priv *rpc_priv);
 int dtp_hg_reply_send(struct dtp_rpc_priv *rpc_priv);
 int dtp_hg_req_cancel(struct dtp_rpc_priv *rpc_priv);
 int dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout);

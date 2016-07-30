@@ -28,13 +28,13 @@
 #ifndef __DTP_INTERNAL_TYPES_H__
 #define __DTP_INTERNAL_TYPES_H__
 
-#define DTP_CONTEXT_MAX_NUM      (32)
 #define DTP_CONTEXT_NULL         (NULL)
 #define DTP_BULK_NULL            (NULL)
 
 #include <pthread.h>
 
 #include <daos/list.h>
+#include <daos/hash.h>
 #include <process_set.h>
 
 #include <dtp_hg.h>
@@ -93,8 +93,12 @@ extern struct dtp_gdata		dtp_gdata;
 
 /* TODO may use a RPC to query server-side context number */
 #ifndef DTP_SRV_CONTEX_NUM
-# define DTP_SRV_CONTEX_NUM	(256)
+# define DTP_SRV_CONTEX_NUM		(256)
 #endif
+
+/* (1 << DTP_EPI_TABLE_BITS) is the number of buckets of epi hash table */
+#define DTP_EPI_TABLE_BITS		(3)
+#define DTP_MAX_INFLIGHT_PER_EP_CTX	(32)
 
 /* dtp_context */
 struct dtp_context {
@@ -102,6 +106,34 @@ struct dtp_context {
 	int			 dc_idx; /* context index */
 	struct dtp_hg_context	 dc_hg_ctx; /* HG context */
 	void			*dc_pool; /* pool for ES on server stack */
+	/* in-flight endpoint tracking hash table */
+	struct dhash_table	 dc_epi_table;
+	/* mutex to protect dc_epi_table */
+	pthread_mutex_t		 dc_mutex;
+};
+
+/* in-flight RPC req list, be tracked per endpoint for every dtp_context */
+struct dtp_ep_inflight {
+	/* link to dtp_context::dc_epi_table */
+	daos_list_t		epi_link;
+	/* endpoint address */
+	dtp_endpoint_t		epi_ep;
+	struct dtp_context	*epi_ctx;
+
+	/* in-flight RPC req queue */
+	daos_list_t		epi_req_q;
+	/* (ei_req_num - ei_reply_num) is the number of inflight req */
+	int64_t			epi_req_num; /* total number of req send */
+	int64_t			epi_reply_num; /* total number of reply recv */
+	/* RPC req wait queue */
+	daos_list_t		epi_req_waitq;
+	int64_t			epi_req_wait_num;
+
+	unsigned int		epi_ref;
+	unsigned int		epi_initialized:1;
+
+	/* mutex to protect ei_req_q and some counters */
+	pthread_mutex_t		epi_mutex;
 };
 
 /* dtp layer common header */
@@ -117,17 +149,25 @@ struct dtp_common_hdr {
 	uint32_t	dch_padding[2];
 };
 
-/* TODO: cannot know the state of RPC_REQ_SENT from mercury */
 typedef enum {
 	RPC_INITED = 0x36,
+	RPC_QUEUED, /* queued for flow controlling */
 	RPC_REQ_SENT,
 	RPC_REPLY_RECVED,
 	RPC_COMPLETED,
-	RPC_CANCELING,
+	RPC_CANCELED,
 } dtp_rpc_state_t;
 
 struct dtp_rpc_priv {
-	daos_list_t		drp_link; /* link to sent_list */
+	/* link to dtp_ep_inflight::epi_req_q/::epi_req_waitq */
+	daos_list_t		drp_epi_link;
+	/* tmp_link used in dtp_context_req_untrack */
+	daos_list_t		drp_tmp_link;
+	uint64_t		drp_ts; /* time stamp */
+	dtp_cb_t		drp_complete_cb;
+	void			*drp_arg; /* argument for drp_complete_cb */
+	struct dtp_ep_inflight	*drp_epi; /* point back to inflight ep */
+
 	dtp_rpc_t		drp_pub; /* public part */
 	struct dtp_common_hdr	drp_req_hdr; /* common header for request */
 	struct dtp_common_hdr	drp_reply_hdr; /* common header for reply */

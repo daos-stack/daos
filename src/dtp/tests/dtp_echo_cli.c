@@ -106,7 +106,7 @@ static void run_client(void)
 		e_req = dtp_req_get(rpc_req);
 		assert(e_req != NULL);
 
-		D_ALLOC(pchar, 256); /* DTP will internally free it */
+		D_ALLOC(pchar, 256);
 		assert(pchar != NULL);
 		snprintf(pchar, 256, "Guest_%d_%d@client-side",
 			 myrank, svr_ep.ep_tag);
@@ -126,6 +126,7 @@ static void run_client(void)
 		/* wait two minutes (in case of manually starting up clients) */
 		rc = client_wait(120, 1000, &gecho.complete);
 		assert(rc == 0);
+		D_FREE(pchar, 256);
 
 		printf("client(rank %d, tag %d) checkin request sent.\n",
 		       myrank, svr_ep.ep_tag);
@@ -188,7 +189,7 @@ static void run_client(void)
 	rc = memcmp(iovs, iovs_query, 2 * sizeof(daos_iov_t));
 	assert(rc == 0);
 
-	D_ALLOC(pchar, 256); /* DTP will internally free it */
+	D_ALLOC(pchar, 256);
 	assert(pchar != NULL);
 	snprintf(pchar, 256, "simple bulk testing from client(rank %d)...\n",
 		 myrank);
@@ -217,6 +218,7 @@ static void run_client(void)
 	free(iovs[0].iov_buf);
 	free(iovs[1].iov_buf);
 	free(iovs);
+	D_FREE(pchar, 256);
 
 	/* ====================== */
 	/* send an RPC to kill the server */
