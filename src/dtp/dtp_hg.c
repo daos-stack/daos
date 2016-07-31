@@ -595,16 +595,26 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 
 	if (opc_info->doi_rpc_cb != NULL) {
-		rc = ABT_thread_create(*(ABT_pool *)dtp_ctx->dc_pool,
-				       dtp_handle_rpc, rpc_priv,
-				       ABT_THREAD_ATTR_NULL, NULL);
+		if (dtp_ctx->dc_pool != NULL) {
+			rc = ABT_thread_create(*(ABT_pool *)dtp_ctx->dc_pool,
+					       dtp_handle_rpc, rpc_priv,
+					       ABT_THREAD_ATTR_NULL, NULL);
+		} else {
+			rc = opc_info->doi_rpc_cb(rpc_pub);
+			if (rc != 0)
+				D_ERROR("doi_rpc_cb failed, rc: %d, "
+					"opc: 0x%x.\n", rc, opc);
+		}
 	} else {
 		D_ERROR("NULL drp_hg_hdl, opc: 0x%x.\n", opc);
 		hg_ret = HG_NO_MATCH;
+		rc = -DER_DTP_UNREG;
 	}
 
 decref:
-	if (rc != 0) {
+	/* if ABT enabled and the ULT created successfully, the dtp_handle_rpc
+	 * will decref it. */
+	if (rc != 0 || dtp_ctx->dc_pool == NULL) {
 		int rc1;
 
 		rc1 = dtp_req_decref(rpc_pub);
@@ -949,10 +959,16 @@ out:
 }
 
 static int
-dtp_hg_trigger(hg_context_t *hg_context)
+dtp_hg_trigger(struct dtp_hg_context *hg_ctx)
 {
-	hg_return_t hg_ret = HG_SUCCESS;
-	unsigned int    count = 0;
+	struct dtp_context	*dtp_ctx;
+	hg_context_t		*hg_context;
+	hg_return_t		hg_ret = HG_SUCCESS;
+	unsigned int		count = 0;
+
+	D_ASSERT(hg_ctx != NULL);
+	hg_context = hg_ctx->dhc_hgctx;
+	dtp_ctx = container_of(hg_ctx, struct dtp_context, dc_hg_ctx);
 
 	do {
 		hg_ret = HG_Trigger(hg_context, 0, UINT32_MAX, &count);
@@ -967,18 +983,20 @@ dtp_hg_trigger(hg_context_t *hg_context)
 	 * XXX Let's yield to other process anyway, but there
 	 * maybe better strategy when there are more use cases
 	 */
-	ABT_thread_yield();
+	if (dtp_ctx->dc_pool != NULL)
+		ABT_thread_yield();
+
 	return 0;
 }
 
 int
 dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout)
 {
-	hg_context_t    *hg_context;
-	hg_class_t      *hg_class;
-	hg_return_t     hg_ret = HG_SUCCESS;
-	unsigned int	hg_timeout;
-	int             rc;
+	hg_context_t		*hg_context;
+	hg_class_t		*hg_class;
+	hg_return_t		hg_ret = HG_SUCCESS;
+	unsigned int		hg_timeout;
+	int			rc;
 
 	D_ASSERT(hg_ctx != NULL);
 	hg_context = hg_ctx->dhc_hgctx;
@@ -997,7 +1015,7 @@ dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout)
 
 	}
 
-	rc = dtp_hg_trigger(hg_context);
+	rc = dtp_hg_trigger(hg_ctx);
 	if (rc != 0)
 		return rc;
 
@@ -1011,7 +1029,7 @@ dtp_hg_progress(struct dtp_hg_context *hg_ctx, int64_t timeout)
 	}
 
 	/* some RPCs have progressed, call Trigger again */
-	rc = dtp_hg_trigger(hg_context);
+	rc = dtp_hg_trigger(hg_ctx);
 
 out:
 	return rc;

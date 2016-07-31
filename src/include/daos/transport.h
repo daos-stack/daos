@@ -282,12 +282,12 @@ dtp_init(bool server);
 /**
  * Create DAOS transport context.
  *
- * \param arg [IN]              input argument
- * \param dtp_ctx [OUT]         created DAOS transport context
+ * \param arg [IN]		input argument, now the only usage is passing
+ *				argobots pool pointer. If user does not use
+ *				argobots it should pass in NULL.
+ * \param dtp_ctx [OUT]		created DAOS transport context
  *
- * Notes: related with core affinity, currently define the argument as a void *.
- *
- * \return                      zero on success, negative value if error
+ * \return			zero on success, negative value if error
  */
 int
 dtp_context_create(void *arg, dtp_context_t *dtp_ctx);
