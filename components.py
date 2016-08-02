@@ -16,25 +16,13 @@ else:
     REQS = globals()["prereqs"]
 
 RT = ['rt']
-BMI_BUILD = ['./prepare']
 
 if REQS.get_env('PLATFORM') == 'darwin':
     RT = []
-    BMI_BUILD.append('./configure --enable-bmi-only --prefix=$BMI_PREFIX')
-    BMI_LIB = 'libbmi.a'
 else:
-    BMI_BUILD.append('./configure --enable-shared --enable-bmi-only '\
-                     '--prefix=$BMI_PREFIX')
-    BMI_LIB = 'libbmi$SHLIBSUFFIX'
     REQS.define('rt', libs=['rt'])
 
-BMI_BUILD += ['make', 'make install']
-
 REQS.define('boost', headers=['boost/preprocessor.hpp'])
-
-REQS.define('bmi',
-            retriever=GitRepoRetriever('http://git.mcs.anl.gov/bmi.git'),
-            commands=BMI_BUILD, libs=['bmi'])
 
 CCI_BUILD = ['patch -N -p1 < $PATCH_PREFIX/cci_port_number.patch; ' \
              'if [ $? -gt 1 ]; then false; else true; fi;',
@@ -157,7 +145,6 @@ REQS.define('cppr',
                       "OMPI_PREBUILT=$OMPI_PREFIX " \
                       "HWLOC_PREBUILT=$HWLOC_PREFIX " \
                       "MERCURY_PREBUILT=$MERCURY_PREFIX " \
-                      "BMI_PREBUILT=$BMI_PREFIX " \
                       "CCI_PREBUILT=$CCI_PREFIX " \
                       "OPENPA_PREBUILT=$OPENPA_PREFIX " \
                       "PREFIX=$CPPR_PREFIX install"],
@@ -174,7 +161,6 @@ REQS.define('iof',
                       "OMPI_PREBUILT=$OMPI_PREFIX " \
                       "HWLOC_PREBUILT=$HWLOC_PREFIX " \
                       "MERCURY_PREBUILT=$MERCURY_PREFIX " \
-                      "BMI_PREBUILT=$BMI_PREFIX " \
                       "MCL_PREBUILT=$MCL_PREFIX " \
                       "CCI_PREBUILT=$CCI_PREFIX " \
                       "OPENPA_PREBUILT=$OPENPA_PREFIX " \
@@ -210,7 +196,6 @@ REQS.define('mcl',
                       "OMPI_PREBUILT=$OMPI_PREFIX " \
                       "HWLOC_PREBUILT=$HWLOC_PREFIX " \
                       "MERCURY_PREBUILT=$MERCURY_PREFIX " \
-                      "BMI_PREBUILT=$BMI_PREFIX " \
                       "CCI_PREBUILT=$CCI_PREFIX " \
                       "OPENPA_PREBUILT=$OPENPA_PREFIX " \
                       "PREFIX=$MCL_PREFIX install"],
