@@ -409,7 +409,8 @@ vos_dkey_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_key_t *dkey,
 			goto out;
 	}
  out:
-	tree_release(toh);
+	if (!empty)
+		tree_release(toh);
 	return rc;
 }
 

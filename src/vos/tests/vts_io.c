@@ -335,7 +335,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 				     &ioh, NULL);
 	if (rc != 0) {
 		print_error("Failed to prepare ZC update: %d\n", rc);
-		return -1;
+		return rc;
 	}
 
 	srv_iov = &sgl->sg_iovs[0];
@@ -379,7 +379,7 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 				    &ioh, NULL);
 	if (rc != 0) {
 		print_error("Failed to prepare ZC update: %d\n", rc);
-		return -1;
+		return rc;
 	}
 
 	dst_iov = &sgl->sg_iovs[0];
@@ -659,6 +659,172 @@ io_iter_test_with_anchor(void **state)
 	assert_true(rc == 0 || rc == -DER_NONEXIST);
 }
 
+static int
+io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
+				   daos_epoch_t update_epoch,
+				   daos_epoch_t fetch_epoch)
+{
+
+	int			rc = 0;
+	daos_iov_t		val_iov;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rex;
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_DKEY_SIZE];
+	char			update_buf[UPDATE_BUF_SIZE];
+	char			fetch_buf[UPDATE_BUF_SIZE];
+	daos_vec_iod_t		vio;
+	daos_sg_list_t		sgl;
+	daos_csum_buf_t		csum;
+
+	memset(&vio, 0, sizeof(vio));
+	memset(&rex, 0, sizeof(rex));
+	memset(&sgl, 0, sizeof(sgl));
+
+	gen_rand_key(&dkey_buf[0], UPDATE_DKEY,  UPDATE_DKEY_SIZE);
+	gen_rand_key(&akey_buf[0], UPDATE_AKEY,  UPDATE_DKEY_SIZE);
+	memcpy(last_akey, akey_buf, UPDATE_AKEY_SIZE);
+
+	daos_iov_set(&dkey, &dkey_buf[0], strlen(dkey_buf));
+	daos_iov_set(&akey, &akey_buf[0], strlen(akey_buf));
+
+	memset(update_buf, (rand() % 94) + 33, UPDATE_BUF_SIZE);
+	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
+	rex.rx_rsize	= val_iov.iov_len;
+
+	sgl.sg_nr.num = 1;
+	sgl.sg_iovs = &val_iov;
+
+	rex.rx_nr	= 1;
+	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
+	rex.rx_idx	%= 1000000;
+
+	vio.vd_name	= akey;
+	vio.vd_recxs	= &rex;
+	vio.vd_nr	= 1;
+
+	rc = io_test_obj_update(arg, update_epoch, &dkey, &vio, &sgl);
+	if (rc)
+		goto exit;
+
+	if (!arg->overwrite)
+		total_keys++;
+
+	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
+	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
+
+	rex.rx_rsize = 0;
+
+	/* Injecting an incorrect dkey for fetch! */
+	memset(dkey_buf, 0, UPDATE_DKEY_SIZE);
+	gen_rand_key(&dkey_buf[0], UPDATE_DKEY,  UPDATE_DKEY_SIZE);
+
+	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &vio, &sgl);
+	if (rc)
+		goto exit;
+	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+exit:
+	return rc;
+}
+
+
+
+static void
+io_fetch_wo_object(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+	daos_iov_t		val_iov;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rex;
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_AKEY_SIZE];
+	char			fetch_buf[UPDATE_BUF_SIZE];
+	daos_vec_iod_t		vio;
+	daos_sg_list_t		sgl;
+	daos_csum_buf_t		csum;
+
+	memset(&vio, 0, sizeof(vio));
+	memset(&rex, 0, sizeof(rex));
+	memset(&sgl, 0, sizeof(sgl));
+	gen_rand_key(&dkey_buf[0], UPDATE_DKEY, UPDATE_DKEY_SIZE);
+	gen_rand_key(&akey_buf[0], UPDATE_AKEY, UPDATE_AKEY_SIZE);
+
+
+	sgl.sg_nr.num = 1;
+	sgl.sg_iovs = &val_iov;
+
+	rex.rx_nr	= 1;
+	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
+	rex.rx_idx	%= 1000000;
+
+	vio.vd_name	= akey;
+	vio.vd_recxs	= &rex;
+	vio.vd_nr	= 1;
+
+	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
+	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
+
+	rex.rx_rsize = 0;
+	rc = io_test_obj_fetch(arg, 1, &dkey, &vio, &sgl);
+	assert_int_equal(rc, -2005);
+
+}
+
+static void
+io_fetch_no_exist_dkey(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc;
+
+	arg->anchor_flag = false;
+	arg->zero_copy = false;
+
+	rc = io_update_and_fetch_incorrect_dkey(arg, 1, 1);
+	assert_int_equal(rc, -2005);
+}
+
+static void
+io_fetch_no_exist_dkey_zc(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc;
+
+	arg->anchor_flag = false;
+	arg->zero_copy = true;
+
+	rc = io_update_and_fetch_incorrect_dkey(arg, 1, 1);
+	assert_int_equal(rc, -2005);
+}
+
+
+static void
+io_fetch_no_exist_object(void **state)
+{
+
+	struct io_test_args	*arg = *state;
+	int			rc;
+
+	arg->anchor_flag = false;
+	arg->zero_copy = false;
+
+	io_fetch_wo_object(state);
+}
+
+static void
+io_fetch_no_exist_object_zc(void **state)
+{
+
+	struct io_test_args	*arg = *state;
+	int			rc;
+
+	arg->anchor_flag = false;
+	arg->zero_copy = true;
+
+	io_fetch_wo_object(state);
+}
 
 static void
 io_simple_one_key_zc(void **state)
@@ -892,7 +1058,6 @@ io_pool_overflow_teardown(void **state)
 	return rc;
 }
 
-
 static const struct CMUnitTest io_tests[] = {
 	{ "VOS201: VOS object IO index",
 		io_oi_test, NULL, NULL},
@@ -922,7 +1087,15 @@ static const struct CMUnitTest io_tests[] = {
 		io_iter_test_with_anchor, NULL, NULL},
 	{ "VOS214: Same Obj ID on two containers (obj_cache test)",
 		io_simple_one_key_cross_container, NULL, NULL},
-	{ "VOS215: Space overflow negative error test",
+	{ "VOS215: Fetch from non existent object",
+		io_fetch_no_exist_object, NULL, NULL},
+	{ "VOS216: Fetch from non existent object with zero-copy",
+		io_fetch_no_exist_object_zc, NULL, NULL},
+	{ "VOS217: Fetch from non existent dkey",
+		io_fetch_no_exist_dkey, NULL, NULL},
+	{ "VOS218: Fetch from non existent dkey with zero-copy",
+		io_fetch_no_exist_dkey_zc, NULL, NULL},
+	{ "VOS219: Space overflow negative error test",
 		io_pool_overflow_test, NULL, io_pool_overflow_teardown},
 };
 

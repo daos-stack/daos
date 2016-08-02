@@ -894,7 +894,7 @@ int
 daos_event_fini(struct daos_event *ev)
 {
 	struct daos_event_private *evx = daos_ev2evx(ev);
-	struct daos_eq_private	  *eqx;
+	struct daos_eq_private	  *eqx = NULL;
 	struct daos_eq		  *eq = NULL;
 	int			  rc = 0;
 
