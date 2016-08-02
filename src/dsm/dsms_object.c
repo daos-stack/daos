@@ -333,11 +333,17 @@ dsms_bulk_transfer(dtp_rpc_t *rpc, daos_handle_t dph, daos_handle_t dch,
 	if (rc != 0)
 		return -DER_NOMEM;
 
+	memset(&arg, 0, sizeof(arg));
 	arg.future = future;
-	for (i = 0; i < nr && remote_bulks[i] != NULL; i++) {
+	for (i = 0; i < nr; i++) {
 		struct dtp_bulk_desc	bulk_desc;
 		dtp_bulk_t		local_bulk_hdl;
-		int			ret;
+		int			ret = 0;
+
+		if (remote_bulks[i] == NULL) {
+			ABT_future_set(future, &ret);
+			continue;
+		}
 
 		ret = dtp_bulk_create(rpc->dr_ctx, sgls[i], bulk_perm,
 				     &local_bulk_hdl);
