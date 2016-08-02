@@ -754,7 +754,7 @@ dtp_group_create(dtp_group_id_t grp_id, daos_rank_list_t *member_ranks,
 		 void *priv);
 
 /*
- * Find dtp_group_t of one group ID. The group creation is initiated by one
+ * Lookup dtp_group_t of one group ID. The group creation is initiated by one
  * node, after the group populated user query the dtp_group_t on other nodes.
  *
  * \param grp_id [IN]		unique group ID.
@@ -762,7 +762,7 @@ dtp_group_create(dtp_group_id_t grp_id, daos_rank_list_t *member_ranks,
  * \return			group handle on success, NULL if not found.
  */
 dtp_group_t *
-dtp_group_find(dtp_group_id_t grp_id);
+dtp_group_lookup(dtp_group_id_t grp_id);
 
 /*
  * Destroy a DTP group. Can either call this API or pass a special flag -
@@ -783,6 +783,9 @@ dtp_group_destroy(dtp_group_t *grp, dtp_grp_destroy_cb_t grp_destroy_cb,
  *
  * \param dtp_ctx [IN]		DAOS transport context
  * \param grp [IN]		DTP group for the collective RPC
+ * \param excluded_ranks [IN]	optional excluded ranks, the RPC will be
+ *				delivered to all members in the group except
+ *				those in excluded_ranks.
  * \param opc [IN]		unique opcode for the RPC
  * \param co_bulk_hdl [IN]	collective bulk handle
  * \param priv [IN]		A private pointer associated with the request
@@ -798,7 +801,8 @@ dtp_group_destroy(dtp_group_t *grp, dtp_grp_destroy_cb_t grp_destroy_cb,
  * \return			zero on success, negative value if error
  */
 int
-dtp_corpc_req_create(dtp_context_t dtp_ctx, dtp_group_t *grp, dtp_opcode_t opc,
+dtp_corpc_req_create(dtp_context_t dtp_ctx, dtp_group_t *grp,
+		     daos_rank_list_t *excluded_ranks, dtp_opcode_t opc,
 		     dtp_bulk_t co_bulk_hdl, void *priv,  uint32_t flags,
 		     int tree_topo, dtp_rpc_t **req);
 

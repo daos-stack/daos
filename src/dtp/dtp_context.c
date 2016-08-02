@@ -350,6 +350,7 @@ dtp_ep_abort(dtp_endpoint_t ep)
 	pthread_rwlock_rdlock(&dtp_gdata.dg_rwlock);
 
 	daos_list_for_each_entry(ctx, &dtp_gdata.dg_ctx_list, dc_link) {
+		rc = 0;
 		pthread_mutex_lock(&ctx->dc_mutex);
 		rlink = dhash_rec_find(&ctx->dc_epi_table, (void *)&ep.ep_rank,
 				       sizeof(ep.ep_rank));
@@ -357,17 +358,14 @@ dtp_ep_abort(dtp_endpoint_t ep)
 			force = true;
 			rc = dtp_ctx_epi_abort(rlink, &force);
 			dhash_rec_decref(&ctx->dc_epi_table, rlink);
-			if (rc != 0) {
-				D_ERROR("context (idx %d), ep_abort (rank %d), "
-					"failed rc: %d.\n",
-					ctx->dc_idx, ep.ep_rank, rc);
-				pthread_mutex_unlock(&ctx->dc_mutex);
-				break;
-			}
 		}
 		pthread_mutex_unlock(&ctx->dc_mutex);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("context (idx %d), ep_abort (rank %d), "
+				"failed rc: %d.\n",
+				ctx->dc_idx, ep.ep_rank, rc);
 			break;
+		}
 	}
 
 	pthread_rwlock_unlock(&dtp_gdata.dg_rwlock);
