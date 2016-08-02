@@ -239,6 +239,9 @@ typedef struct {
 #define DAOS_PC_RW	(1U << 1)
 #define DAOS_PC_EX	(1U << 2)
 
+#define DAOS_PC_NBITS	3
+#define DAOS_PC_MASK	((1U << DAOS_PC_NBITS) - 1)
+
 /**
  * Epoch
  */

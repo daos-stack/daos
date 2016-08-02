@@ -248,7 +248,7 @@ setup(void **state)
 	uuid_clear(arg->pool_uuid);
 
 	/** create pool with minimal size */
-	rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL,
+	rc = dmg_pool_create(0731, geteuid(), getegid(), "srv_grp", NULL,
 			     "pmem", 256*1024*1024, &arg->svc,
 			     arg->pool_uuid, NULL);
 	if (rc)

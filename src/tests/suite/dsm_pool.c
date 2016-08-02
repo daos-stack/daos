@@ -140,7 +140,7 @@ setup(void **state)
 	arg->svc.rl_nr.num = 8;
 	arg->svc.rl_nr.num_out = 0;
 	arg->svc.rl_ranks = arg->ranks;
-	arg->mode = 0;
+	arg->mode = 0731;
 	arg->uid = geteuid();
 	arg->gid = getegid();
 	arg->hdl_share = false;

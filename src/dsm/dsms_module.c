@@ -34,6 +34,58 @@
 #include "dsm_rpc.h"
 #include "dsms_internal.h"
 
+int
+dsms_corpc_create(dtp_context_t ctx, dtp_group_t *group, dtp_opcode_t opcode,
+		  dtp_rpc_t **rpc)
+{
+	dtp_opcode_t opc;
+
+	opc = DAOS_RPC_OPCODE(opcode, DAOS_DSM_MODULE, 1);
+	return dtp_corpc_req_create(ctx, group, NULL /* excluded_ranks */, opc,
+				    NULL /* co_bulk_hdl */, NULL /* priv */,
+				    0 /* flags */, 0 /* tree_topo */, rpc);
+}
+
+static int
+rpc_cb(const struct dtp_cb_info *cb_info)
+{
+	ABT_eventual *eventual = cb_info->dci_arg;
+
+	ABT_eventual_set(*eventual, (void *)&cb_info->dci_rc,
+			 sizeof(cb_info->dci_rc));
+	return 0;
+}
+
+/* Send the request and wait for the reply. Does not consume rpc references. */
+int
+dsms_rpc_send(dtp_rpc_t *rpc)
+{
+	ABT_eventual	eventual;
+	int	       *status;
+	int		rc;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out, rc = dss_abterr2der(rc));
+
+	dtp_req_addref(rpc);
+
+	rc = dtp_req_send(rpc, rpc_cb, &eventual);
+	if (rc != 0)
+		D_GOTO(out_eventual, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+
+	rc = *status;
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+out:
+	return rc;
+}
+
 static int
 init(void)
 {
@@ -41,12 +93,23 @@ init(void)
 
 	rc = dsms_storage_init();
 	if (rc != 0)
-		return rc;
+		D_GOTO(err, rc);
 
 	rc = dsms_module_pool_init();
 	if (rc != 0)
-		dsms_storage_fini();
+		D_GOTO(err_storage, rc);
 
+	rc = dsms_module_target_init();
+	if (rc != 0)
+		D_GOTO(err_pool, rc);
+
+	return 0;
+
+err_pool:
+	dsms_module_pool_fini();
+err_storage:
+	dsms_storage_fini();
+err:
 	return rc;
 }
 
@@ -54,7 +117,7 @@ static int
 fini(void)
 {
 	dsms_conts_close();
-	dsms_pools_close();
+	dsms_module_target_fini();
 	dsms_module_pool_fini();
 	dsms_storage_fini();
 	return 0;
@@ -89,6 +152,18 @@ static struct daos_rpc_handler dsms_handlers[] = {
 	}, {
 		.dr_opc		= DSM_CONT_EPOCH_COMMIT,
 		.dr_hdlr	= dsms_hdlr_cont_op
+	}, {
+		.dr_opc		= DSM_TGT_POOL_CONNECT,
+		.dr_hdlr	= dsms_hdlr_tgt_pool_connect,
+		.dr_corpc_ops	= {
+			.co_aggregate	= dsms_hdlr_tgt_pool_connect_aggregate
+		}
+	}, {
+		.dr_opc		= DSM_TGT_POOL_DISCONNECT,
+		.dr_hdlr	= dsms_hdlr_tgt_pool_disconnect,
+		.dr_corpc_ops	= {
+			.co_aggregate  = dsms_hdlr_tgt_pool_disconnect_aggregate
+		}
 	}, {
 		.dr_opc		= DSM_TGT_OBJ_UPDATE,
 		.dr_hdlr	= dsms_hdlr_object_rw,
@@ -142,6 +217,7 @@ struct dss_module daos_m_srv_module =  {
 	.sm_init	= init,
 	.sm_fini	= fini,
 	.sm_cl_rpcs	= dsm_rpcs,
+	.sm_srv_rpcs	= dsm_srv_rpcs,
 	.sm_handlers	= dsms_handlers,
 	.sm_key		= &dsm_module_key,
 };

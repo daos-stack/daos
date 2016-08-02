@@ -333,7 +333,6 @@ daos_errno2der(int err)
 	case ECANCELED:	return -DER_CANCELED;
 	default:	return -DER_INVAL;
 	}
-	return 0;
 }
 
 #endif /* __DAOS_COMMON_H__ */

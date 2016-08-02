@@ -82,9 +82,11 @@ struct daos_rpc {
 
 struct daos_rpc_handler {
 	/* Operation code */
-	dtp_opcode_t	dr_opc;
+	dtp_opcode_t		dr_opc;
 	/* Request handler, only relevant on the server side */
-	dtp_rpc_cb_t	dr_hdlr;
+	dtp_rpc_cb_t		dr_hdlr;
+	/* CORPC operations (co_aggregate == NULL for point-to-point RPCs) */
+	struct dtp_corpc_ops	dr_corpc_ops;
 };
 
 static inline struct daos_rpc_handler *
@@ -136,9 +138,13 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 					rpc->dr_opc);
 				return rc;
 			}
-			rc = dtp_rpc_srv_reg(opcode, rpc->dr_req_fmt,
-					     handler->dr_hdlr);
-
+			if (handler->dr_corpc_ops.co_aggregate == NULL)
+				rc = dtp_rpc_srv_reg(opcode, rpc->dr_req_fmt,
+						     handler->dr_hdlr);
+			else
+				rc = dtp_corpc_reg(opcode, rpc->dr_req_fmt,
+						   handler->dr_hdlr,
+						   &handler->dr_corpc_ops);
 		} else {
 			rc = dtp_rpc_reg(opcode, rpc->dr_req_fmt);
 		}

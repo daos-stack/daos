@@ -48,7 +48,17 @@ dmg_fini();
  * automatically from external sources.
  * Targets are assumed to share the same \a dev and \a size.
  *
- * \param mode	[IN]	credentials associated with the pool
+ * \param mode	[IN]	Capabilities permitted for the pool. May contain these
+ * 			bits:
+ * 			  0400	 user DAOS_PC_EX
+ * 			  0200	 user DAOS_PC_RW
+ * 			  0100	 user DAOS_PC_RO
+ * 			  0040	group DAOS_PC_EX
+ * 			  0020	group DAOS_PC_RW
+ * 			  0010	group DAOS_PC_RO
+ * 			  0004	other DAOS_PC_EX
+ * 			  0002	other DAOS_PC_RW
+ * 			  0001	other DAOS_PC_RO
  * \param uid	[IN]	user owning the pool
  * \param gid	[IN]	group owning the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool

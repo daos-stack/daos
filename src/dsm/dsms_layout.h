@@ -110,6 +110,14 @@ struct superblock {
  * The pool map is stored in pool_buf format. Because version and target UUID
  * are absent from pool_buf, they have to be stored separately. The target
  * UUIDs are stored in target ID order.
+ *
+ * POOL_MODE stores three sets of the capability bits: user, group, and other.
+ * Each set consists of DAOS_PC_NBITS bits, for DAOS_PC_*. Let N be
+ * DAOS_PC_NBITS:
+ *
+ *        Bit: 31      3N    2N      N      0
+ *              v       v     v      v      v
+ *  POOL_MODE:  [padding][user][group][other]
  */
 #define POOL_UUID		"pool_uuid"		/* uuid_t */
 #define POOL_UID		"pool_uid"		/* uint32_t */

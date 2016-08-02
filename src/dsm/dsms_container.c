@@ -49,7 +49,7 @@ struct cont_svc {
 	pthread_rwlock_t	cs_rwlock;
 	pthread_mutex_t		cs_lock;
 	int			cs_ref;
-	daos_handle_t		cs_containers;	/* of container index KVS */
+	daos_handle_t		cs_containers;	/* container index KVS */
 };
 
 static int
@@ -136,6 +136,7 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 	struct cont_create_in  *in = dtp_req_get(rpc);
 	struct cont_create_out *out = dtp_reply_get(rpc);
 	struct cont_svc	       *svc;
+	struct tgt_pool_hdl    *pool_hdl;
 	volatile daos_handle_t	ch = DAOS_HDL_INVAL;
 	int			rc;
 
@@ -147,7 +148,13 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 		"\n", DP_UUID(in->cci_pool), DP_UUID(in->cci_pool_hdl),
 		DP_UUID(in->cci_cont));
 
-	/* TODO: Pool handle verification. */
+	/* Verify the pool handle. */
+	pool_hdl = dsms_tgt_pool_hdl_lookup(in->cci_pool_hdl);
+	if (pool_hdl == NULL)
+		D_GOTO(out, rc = -DER_NO_PERM);
+	else if (!(pool_hdl->tph_capas & DAOS_PC_RW) &&
+		 !(pool_hdl->tph_capas & DAOS_PC_EX))
+		D_GOTO(out_pool_hdl, rc = -DER_NO_PERM);
 
 	/*
 	 * TODO: How to map to the correct container service among those
@@ -156,7 +163,7 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 	 */
 	rc = cont_svc_lookup(in->cci_pool, 0 /* id */, &svc);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out_pool_hdl, rc);
 
 	pthread_rwlock_wrlock(&svc->cs_rwlock);
 
@@ -223,6 +230,8 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 
 	pthread_rwlock_unlock(&svc->cs_rwlock);
 	cont_svc_put(svc);
+out_pool_hdl:
+	dsms_tgt_pool_hdl_put(pool_hdl);
 out:
 	D_DEBUG(DF_DSMS, "leave: rc=%d\n", rc);
 	out->cco_ret = rc;
@@ -235,6 +244,7 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 	struct cont_destroy_in	       *in = dtp_req_get(rpc);
 	struct cont_destroy_out	       *out = dtp_reply_get(rpc);
 	struct cont_svc		       *svc;
+	struct tgt_pool_hdl	       *pool_hdl;
 	volatile daos_handle_t		ch;
 	daos_handle_t			h;
 	int				rc;
@@ -247,11 +257,17 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 		" force=%u\n", DP_UUID(in->cdi_pool), DP_UUID(in->cdi_pool_hdl),
 		DP_UUID(in->cdi_cont), in->cdi_force);
 
-	/* TODO: Pool handle verification. */
+	/* Verify the pool handle. */
+	pool_hdl = dsms_tgt_pool_hdl_lookup(in->cdi_pool_hdl);
+	if (pool_hdl == NULL)
+		D_GOTO(out, rc = -DER_NO_PERM);
+	else if (!(pool_hdl->tph_capas & DAOS_PC_RW) &&
+		 !(pool_hdl->tph_capas & DAOS_PC_EX))
+		D_GOTO(out_pool_hdl, rc = -DER_NO_PERM);
 
 	rc = cont_svc_lookup(in->cdi_pool, 0 /* id */, &svc);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out_pool_hdl, rc);
 
 	pthread_rwlock_wrlock(&svc->cs_rwlock);
 
@@ -314,6 +330,8 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 out_rwlock:
 	pthread_rwlock_unlock(&svc->cs_rwlock);
 	cont_svc_put(svc);
+out_pool_hdl:
+	dsms_tgt_pool_hdl_put(pool_hdl);
 out:
 	D_DEBUG(DF_DSMS, "leave: rc=%d\n", rc);
 	out->cdo_ret = rc;
@@ -446,6 +464,7 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 	struct cont_open_in    *in = dtp_req_get(rpc);
 	struct cont_open_out   *out = dtp_reply_get(rpc);
 	struct cont_svc	       *svc;
+	struct tgt_pool_hdl    *pool_hdl;
 	struct cont	       *cont;
 	struct container_hdl	chdl;
 	daos_epoch_t		ghce;
@@ -462,9 +481,21 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 		DP_UUID(in->coi_pool_hdl), DP_UUID(in->coi_cont),
 		DP_UUID(in->coi_cont_hdl));
 
+	/* Verify the pool handle. */
+	pool_hdl = dsms_tgt_pool_hdl_lookup(in->coi_pool_hdl);
+	if (pool_hdl == NULL)
+		D_GOTO(out, rc = -DER_NO_PERM);
+	else if ((!(pool_hdl->tph_capas & DAOS_PC_RO) &&
+		  !(pool_hdl->tph_capas & DAOS_PC_RW) &&
+		  !(pool_hdl->tph_capas & DAOS_PC_EX)) ||
+		 (!(pool_hdl->tph_capas & DAOS_PC_RW) &&
+		  !(pool_hdl->tph_capas & DAOS_PC_EX) &&
+		  (in->coi_capas & DAOS_COO_RW)))
+		D_GOTO(out_pool_hdl, rc = -DER_NO_PERM);
+
 	rc = cont_svc_lookup(in->coi_pool, 0 /* id */, &svc);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out_pool_hdl, rc);
 
 	pthread_rwlock_wrlock(&svc->cs_rwlock);
 
@@ -496,7 +527,7 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 		D_GOTO(out_cont, rc);
 
 	/*
-	 * Check the coo_epoch_state assignements below if any of these rules
+	 * Check the coo_epoch_state assignments below if any of these rules
 	 * changes.
 	 */
 	chdl.ch_hce = ghpce == DAOS_EPOCH_MAX ? ghce : ghpce;
@@ -561,6 +592,8 @@ out_cont:
 out_rwlock:
 	pthread_rwlock_unlock(&svc->cs_rwlock);
 	cont_svc_put(svc);
+out_pool_hdl:
+	dsms_tgt_pool_hdl_put(pool_hdl);
 out:
 	D_DEBUG(DF_DSMS, "leave: rc=%d\n", rc);
 	out->coo_ret = rc;

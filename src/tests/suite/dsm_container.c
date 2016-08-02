@@ -171,8 +171,8 @@ setup(void **state)
 
 	if (arg->myrank == 0) {
 		/** create pool with minimal size */
-		rc = dmg_pool_create(0, geteuid(), getegid(), "srv_grp", NULL,
-				     "pmem", 0, &arg->svc, arg->pool_uuid,
+		rc = dmg_pool_create(0731, geteuid(), getegid(), "srv_grp",
+				     NULL, "pmem", 0, &arg->svc, arg->pool_uuid,
 				     NULL);
 	}
 

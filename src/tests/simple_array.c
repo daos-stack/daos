@@ -152,7 +152,7 @@ pool_create(void)
 	/** create pool over all the storage targets */
 	svcl.rl_nr.num	= 1;
 	svcl.rl_ranks	= &svc;
-	rc = dmg_pool_create(0 /* mode */,
+	rc = dmg_pool_create(0731 /* mode */,
 			     geteuid() /* user owner */,
 			     getegid() /* group owner */,
 			     DSS_PSETID /* daos server process set ID */,

@@ -41,7 +41,7 @@ create_hdlr(int argc, char *argv[])
 		{"size",	1,	NULL,	's'},
 		{"uid",		1,	NULL,	'u'}
 	};
-	unsigned int		mode = 0644;
+	unsigned int		mode = 0731;
 	unsigned int		uid = geteuid();
 	unsigned int		gid = getegid();
 	daos_size_t		size = 256 << 20;

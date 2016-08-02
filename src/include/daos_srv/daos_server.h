@@ -181,7 +181,6 @@ dss_abterr2der(int abt_errno)
 	case ABT_ERR_MEM:	return -DER_NOMEM;
 	default:		return -DER_INVAL;
 	}
-	return 0;
 }
 
 #endif /* __DSS_API_H__ */

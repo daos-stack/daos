@@ -136,14 +136,6 @@ struct object_fetch_out {
 	int		 ofo_pad;
 	struct dtp_array ofo_sizes;
 };
-/*
- * pool_connect_in::pci_capas
- *
- * POOL_CAPA_RO, POOL_CAPA_RW, and POOL_CAPA_EX are mutually exclusive.
- */
-#define POOL_CAPA_RO	(1ULL << 0)	/* read-only */
-#define POOL_CAPA_RW	(1ULL << 1)	/* read-write */
-#define POOL_CAPA_EX	(1ULL << 2)	/* exclusive read-write */
 
 struct cont_create_in {
 	uuid_t	cci_pool;
@@ -209,6 +201,26 @@ struct epoch_op_out {
 	daos_epoch_state_t	eoo_epoch_state;
 };
 
+struct tgt_pool_connect_in {
+	uuid_t		tpci_pool;
+	uuid_t		tpci_pool_hdl;
+	uint64_t	tpci_capas;
+	uint32_t	tpci_pool_map_version;
+};
+
+struct tgt_pool_connect_out {
+	int32_t	tpco_ret;	/* number of errors */
+};
+
+struct tgt_pool_disconnect_in {
+	uuid_t		tpdi_pool;
+	uuid_t		tpdi_pool_hdl;
+};
+
+struct tgt_pool_disconnect_out {
+	int32_t	tpdo_ret;	/* number of errors */
+};
+
 /* object Enumerate in/out */
 struct object_enumerate_in {
 	daos_unit_oid_t oei_oid;
@@ -233,6 +245,7 @@ dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
 	       dtp_opcode_t opc, dtp_rpc_t **req);
 
 extern struct daos_rpc dsm_rpcs[];
+extern struct daos_rpc dsm_srv_rpcs[];
 
 static inline void
 dsm_set_reply_status(dtp_rpc_t *rpc, int status)

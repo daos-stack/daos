@@ -38,6 +38,7 @@
 
 #include <daos/btree.h>
 #include <daos/list.h>
+#include <daos/lru.h>
 #include <daos/transport.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_server.h>
@@ -56,11 +57,48 @@ struct mpool {
 	daos_handle_t	mp_root;	/* root KVS */
 };
 
-/* Cache for vos pool */
+/*
+ * Target service pool object
+ *
+ * Caches per-pool information, such as the pool map. Used by pool, container,
+ * and target services. Referenced by pool_svc, cont_svc, and tgt_pool_hdl
+ * objects.
+ */
+struct tgt_pool {
+	struct daos_llink	tp_entry;
+	uuid_t			tp_uuid;
+	struct pool_map	       *tp_map;
+	uint32_t		tp_map_version;	/* until map is everywhere */
+	dtp_group_t	       *tp_group;
+};
+
+/*
+ * Target service pool handle object
+ *
+ * Stores per-handle information, such as the capabilities. Used by container
+ * and target services. References the pool object.
+ */
+struct tgt_pool_hdl {
+	daos_list_t		tph_entry;
+	uuid_t			tph_uuid;	/* of the pool handle */
+	uint64_t		tph_capas;
+	struct tgt_pool	       *tph_pool;
+	int			tph_ref;
+};
+
+/*
+ * Target service per-thread pool object
+ *
+ * Stores per-thread, per-pool information, such as the vos pool handle. And,
+ * caches per-pool information, such as the pool map version, so that DAOS
+ * object I/Os do not need to access global tgt_pool objects.
+ */
 struct dsms_vpool {
-	daos_handle_t dvp_hdl;
-	uuid_t	      dvp_uuid;
-	daos_list_t   dvp_list;
+	daos_list_t	dvp_list;
+	daos_handle_t	dvp_hdl;
+	uuid_t		dvp_uuid;
+	uint32_t	dvp_map_version;
+	int		dvp_ref;
 };
 
 /* Cache for vos container */
@@ -90,6 +128,13 @@ dsm_tls_get()
 	tls = (struct dsm_tls *)dss_module_key_get(dtc, &dsm_module_key);
 	return tls;
 }
+
+/*
+ * dsms_module.c
+ */
+int dsms_corpc_create(dtp_context_t ctx, dtp_group_t *group,
+		      dtp_opcode_t opcode, dtp_rpc_t **rpc);
+int dsms_rpc_send(dtp_rpc_t *rpc);
 
 /*
  * dsms_storage.c
@@ -155,12 +200,35 @@ int dsms_hdlr_cont_close(dtp_rpc_t *rpc);
 int dsms_hdlr_cont_op(dtp_rpc_t *rpc);
 
 /*
+ * dsms_target.c
+ */
+int dsms_module_target_init(void);
+void dsms_module_target_fini(void);
+int dsms_hdlr_tgt_pool_connect(dtp_rpc_t *rpc);
+int dsms_hdlr_tgt_pool_connect_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+					 void *priv);
+int dsms_hdlr_tgt_pool_disconnect(dtp_rpc_t *rpc);
+int dsms_hdlr_tgt_pool_disconnect_aggregate(dtp_rpc_t *source,
+					    dtp_rpc_t *result, void *priv);
+struct dsms_vpool *dsms_vpool_lookup(const uuid_t vp_uuid);
+void dsms_vpool_put(struct dsms_vpool *vpool);
+struct tgt_pool_create_arg {
+	struct pool_buf	       *pca_map_buf;
+	uint32_t		pca_map_version;
+	int			pca_create_group;
+};
+int dsms_tgt_pool_lookup(const uuid_t uuid, struct tgt_pool_create_arg *arg,
+			 struct tgt_pool **pool);
+void dsms_tgt_pool_put(struct tgt_pool *pool);
+struct tgt_pool_hdl *dsms_tgt_pool_hdl_lookup(const uuid_t uuid);
+void dsms_tgt_pool_hdl_put(struct tgt_pool_hdl *hdl);
+
+/*
  * dsms_object.c
  */
 int dsms_hdlr_object_rw(dtp_rpc_t *rpc);
 int dsms_hdlr_object_enumerate(dtp_rpc_t *rpc);
 
-void dsms_pools_close(void);
 void dsms_conts_close(void);
 
 #endif /* __DSMS_INTERNAL_H__ */

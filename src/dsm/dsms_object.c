@@ -39,35 +39,6 @@
 #include "dsms_internal.h"
 #include "dsms_layout.h"
 
-/* XXX let's keep the pool open until module fini */
-void
-dsms_pools_close()
-{
-	struct dsm_tls *tls = dsm_tls_get();
-	struct dsms_vpool *dvp;
-	struct dsms_vpool *tmp;
-
-	daos_list_for_each_entry_safe(dvp, tmp, &tls->dt_pool_list, dvp_list) {
-		daos_list_del(&dvp->dvp_list);
-		vos_pool_close(dvp->dvp_hdl, NULL);
-		D_FREE_PTR(dvp);
-	}
-}
-
-static struct dsms_vpool *
-dsms_vpool_lookup(const uuid_t vp_uuid)
-{
-	struct dsm_tls *tls = dsm_tls_get();
-	struct dsms_vpool *dvp;
-
-	daos_list_for_each_entry(dvp, &tls->dt_pool_list, dvp_list) {
-		if (uuid_compare(vp_uuid, dvp->dvp_uuid) == 0) {
-			return dvp;
-		}
-	}
-	return NULL;
-}
-
 void
 dsms_conts_close()
 {
@@ -140,55 +111,6 @@ dsms_co_open_create(daos_handle_t pool_hdl, uuid_t co_uuid,
 	uuid_copy(dcont->dvc_uuid, co_uuid);
 	dcont->dvc_hdl = *co_hdl;
 	daos_list_add(&dcont->dvc_list, &tls->dt_cont_list);
-	return rc;
-}
-
-static int
-dsms_pool_open(const uuid_t pool_uuid, daos_handle_t *vph)
-{
-	struct dss_module_info	*dmi;
-	struct dsms_vpool	*vpool;
-	struct dsms_vpool	*new;
-	struct dsm_tls		*tls = dsm_tls_get();
-	char			*path;
-	int			 rc;
-
-	vpool = dsms_vpool_lookup(pool_uuid);
-	if (vpool != NULL) {
-		*vph = vpool->dvp_hdl;
-		D_DEBUG(DF_MISC, "get pool "DF_UUID" from cache.\n",
-			DP_UUID(pool_uuid));
-		return 0;
-	}
-
-	dmi = dss_get_module_info();
-	rc = dmgs_tgt_file(pool_uuid, VOS_FILE, &dmi->dmi_tid, &path);
-	if (rc != 0)
-		return rc;
-
-	rc = vos_pool_open(path, (unsigned char *)pool_uuid, vph, NULL);
-	if (rc != 0)
-		D_GOTO(out_free, rc);
-
-	D_ALLOC_PTR(new);
-	if (new == NULL)
-		D_GOTO(out_close, rc = -DER_NOMEM);
-
-	uuid_copy(new->dvp_uuid, pool_uuid);
-	new->dvp_hdl = *vph;
-	DAOS_INIT_LIST_HEAD(&new->dvp_list);
-
-	D_DEBUG(DF_MISC, "add pool "DF_UUID"\n",
-		DP_UUID(pool_uuid));
-	daos_list_add(&new->dvp_list, &tls->dt_pool_list);
-
-	D_DEBUG(DF_MISC, "open pool "DF_X64"\n", vph->cookie);
-
-out_close:
-	if (rc != 0)
-		vos_pool_close(*vph, NULL);
-out_free:
-	free(path);
 	return rc;
 }
 
@@ -394,7 +316,7 @@ int
 dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 {
 	struct object_update_in	*oui;
-	daos_handle_t		dph = DAOS_HDL_INVAL;
+	struct dsms_vpool	*vpool;
 	daos_handle_t		dch = DAOS_HDL_INVAL;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
 	daos_sg_list_t		**sgls = NULL;
@@ -406,14 +328,13 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 	if (oui == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	/* Open the pool and container */
-	rc = dsms_pool_open(oui->oui_pool_uuid, &dph);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	vpool = dsms_vpool_lookup(oui->oui_pool_uuid);
+	if (vpool == NULL)
+		D_GOTO(out, rc = -DER_NO_PERM);
 
-	rc = dsms_co_open_create(dph, oui->oui_co_uuid, &dch);
+	rc = dsms_co_open_create(vpool->dvp_hdl, oui->oui_co_uuid, &dch);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out_vpool, rc);
 
 	if (opc_get(rpc->dr_opc) == DSM_TGT_OBJ_UPDATE) {
 		rc = vos_obj_zc_update_begin(dch, oui->oui_oid, oui->oui_epoch,
@@ -422,7 +343,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		if (rc != 0) {
 			D_ERROR(DF_UOID"preparing update fails: %d\n",
 				DP_UOID(oui->oui_oid), rc);
-			D_GOTO(out, rc);
+			D_GOTO(out_vpool, rc);
 		}
 
 		bulk_op = DTP_BULK_GET;
@@ -441,7 +362,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		if (rc != 0) {
 			D_ERROR(DF_UOID"preparing fetch fails: %d\n",
 				DP_UOID(oui->oui_oid), rc);
-			D_GOTO(out, rc);
+			D_GOTO(out_vpool, rc);
 		}
 
 		bulk_op = DTP_BULK_PUT;
@@ -456,7 +377,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		D_ALLOC(ofo->ofo_sizes.arrays,
 			size_count * sizeof(uint64_t));
 		if (ofo->ofo_sizes.arrays == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(out_vpool, rc = -DER_NOMEM);
 
 		sizes = ofo->ofo_sizes.arrays;
 		for (i = 0; i < oui->oui_iods.count; i++) {
@@ -469,13 +390,15 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 
 	D_ALLOC(sgls, oui->oui_nr * sizeof(*sgls));
 	if (sgls == NULL)
-		D_GOTO(out, rc);
+		D_GOTO(out_vpool, rc);
 
 	for (i = 0; i < oui->oui_nr; i++)
 		vos_obj_zc_vec2sgl(ioh, i, &sgls[i]);
 
-	rc = dsms_bulk_transfer(rpc, dph, dch, oui->oui_bulks.arrays,
+	rc = dsms_bulk_transfer(rpc, vpool->dvp_hdl, dch, oui->oui_bulks.arrays,
 				sgls, NULL, ioh, oui->oui_nr, bulk_op);
+out_vpool:
+	dsms_vpool_put(vpool);
 out:
 	dsms_rw_complete(rpc, ioh, rc);
 
@@ -540,7 +463,7 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 {
 	struct object_enumerate_in	*oei;
 	struct object_enumerate_out	*oeo;
-	daos_handle_t			dph = DAOS_HDL_INVAL;
+	struct dsms_vpool		*vpool;
 	daos_handle_t			dch = DAOS_HDL_INVAL;
 	daos_iov_t			*iovs = NULL;
 	daos_sg_list_t			**sgls = NULL;
@@ -558,18 +481,17 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/* Open the pool and container */
-	rc = dsms_pool_open(oei->oei_pool_uuid, &dph);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	vpool = dsms_vpool_lookup(oei->oei_pool_uuid);
+	if (vpool == NULL)
+		D_GOTO(out, rc = -DER_NO_PERM);
 
-	rc = dsms_co_open_create(dph, oei->oei_co_uuid, &dch);
+	rc = dsms_co_open_create(vpool->dvp_hdl, oei->oei_co_uuid, &dch);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out_vpool, rc);
 
 	oeo = dtp_reply_get(rpc);
 	if (oei == NULL)
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out_vpool, rc = -DER_INVAL);
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl	= dch;
 	param.ip_oid	= oei->oei_oid;
@@ -583,7 +505,7 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 		} else {
 			D_ERROR("Failed to prepare d-key iterator: %d\n", rc);
 		}
-		D_GOTO(out, rc);
+		D_GOTO(out_vpool, rc);
 	}
 
 	rc = vos_iter_probe(ih, &oei->oei_anchor);
@@ -594,7 +516,7 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 			rc = 0;
 		}
 		vos_iter_finish(ih);
-		D_GOTO(out, rc);
+		D_GOTO(out_vpool, rc);
 	}
 
 	/* Prepare key desciptor buffer */
@@ -602,7 +524,7 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 	D_ALLOC(oeo->oeo_kds.arrays,
 		oei->oei_nr * sizeof(daos_key_desc_t));
 	if (oeo->oeo_kds.arrays == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_vpool, rc = -DER_NOMEM);
 
 	dkey_nr = 0;
 	kds = oeo->oeo_kds.arrays;
@@ -655,15 +577,17 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 		rc = 0;
 	} else if (rc < 0) {
 		D_ERROR("Failed to fetch dkey: %d\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out_vpool, rc);
 	}
 
 	oeo->oeo_kds.count = dkey_nr;
 
-	rc = dsms_bulk_transfer(rpc, dph, dch, &oei->oei_bulk,
+	rc = dsms_bulk_transfer(rpc, vpool->dvp_hdl, dch, &oei->oei_bulk,
 				sgls, iovs, DAOS_HDL_INVAL, 1,
 				DTP_BULK_PUT);
 
+out_vpool:
+	dsms_vpool_put(vpool);
 out:
 	dsms_eu_complete(rpc, sgls, iovs, rc);
 	return rc;
