@@ -170,6 +170,6 @@ struct dss_module {
 	struct daos_rpc_handler	 *sm_handlers;
 };
 
-
+int dss_collective(int (*func)(void *), void *arg);
 
 #endif /* __DSS_API_H__ */

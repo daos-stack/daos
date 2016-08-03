@@ -470,6 +470,89 @@ struct dss_module_key daos_srv_modkey = {
 };
 
 /**
+ * Collective operations among all server threads
+ */
+
+struct collective_arg {
+	ABT_future	ca_future;
+	int	      (*ca_func)(void *);
+	void	       *ca_arg;
+};
+
+static void
+collective_func(void *varg)
+{
+	struct collective_arg  *carg = varg;
+	int			rc;
+
+	rc = carg->ca_func(carg->ca_arg);
+
+	rc = ABT_future_set(carg->ca_future, (void *)(intptr_t)rc);
+	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+}
+
+/* Reduce the return codes into the first element. */
+static void
+collective_reduce(void **arg)
+{
+	int    *nfailed = arg[0];
+	int	i;
+
+	for (i = 1; i < dss_nthreads + 1; i++)
+		if ((int)(intptr_t)arg[i] != 0)
+			(*nfailed)++;
+}
+
+/**
+ * Execute \a func(\a arg) collectively on all server threads. Can only be
+ * called by ULTs. Can only execute tasklet-compatible functions.
+ *
+ * \param[in] func	function to be executed
+ * \param[in] arg	argument to be passed to \a func
+ * \return		number of failed threads or error code
+ */
+int
+dss_collective(int (*func)(void *), void *arg)
+{
+	ABT_future		future;
+	struct collective_arg	carg;
+	struct dss_thread      *dthread;
+	int			nfailed = 0;
+	int			rc;
+
+	/*
+	 * Use the first, extra element of the value array to store the number
+	 * of failed tasks.
+	 */
+	rc = ABT_future_create(dss_nthreads + 1, collective_reduce, &future);
+	if (rc != ABT_SUCCESS)
+		return -DER_NOMEM;
+	rc = ABT_future_set(future, &nfailed);
+	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+
+	carg.ca_future = future;
+	carg.ca_func = func;
+	carg.ca_arg = arg;
+
+	/*
+	 * Create tasklets and store return codes in the value array as
+	 * "void *" pointers.
+	 */
+	daos_list_for_each_entry(dthread, &dss_thread_list, dt_list) {
+		rc = ABT_task_create(dthread->dt_pool, collective_func, &carg,
+				     NULL /* task */);
+		if (rc != ABT_SUCCESS) {
+			rc = ABT_future_set(future, (void *)-DER_NOMEM);
+			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+		}
+	}
+
+	ABT_future_wait(future);
+	ABT_future_free(&future);
+	return nfailed;
+}
+
+/**
  * Entry point to start up and shutdown the service
  */
 
