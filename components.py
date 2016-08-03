@@ -105,7 +105,9 @@ REQS.define('pmix',
 RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
 REQS.define('ompi',
             retriever=RETRIEVER,
-            commands=['./autogen.pl --no-oshmem',
+            commands=['patch -N -p1 < $PATCH_PREFIX/ompi_version.patch; ' \
+                      'if [ $? -gt 1 ]; then false; else true; fi;',
+                      './autogen.pl --no-oshmem',
                       './configure --with-platform=optimized ' \
                       '--prefix=$OMPI_PREFIX ' \
                       '--with-pmix=$PMIX_PREFIX ' \
