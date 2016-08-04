@@ -109,6 +109,7 @@ REQS.define('ompi',
                       'if [ $? -gt 1 ]; then false; else true; fi;',
                       './autogen.pl --no-oshmem',
                       './configure --with-platform=optimized ' \
+                      '--enable-orterun-prefix-by-default ' \
                       '--prefix=$OMPI_PREFIX ' \
                       '--with-pmix=$PMIX_PREFIX ' \
                       '--disable-mpi-fortran ' \
