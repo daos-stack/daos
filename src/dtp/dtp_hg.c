@@ -115,7 +115,7 @@ dtp_na_addr_lookup_wait(na_class_t *na_class, const char *name, na_addr_t *addr)
 			char		my_host[DTP_ADDR_STR_MAX_LEN] = {'\0'};
 			daos_rank_t	my_rank;
 
-			dtp_group_rank(0, &my_rank);
+			dtp_group_rank(NULL, &my_rank);
 			gethostname(my_host, DTP_ADDR_STR_MAX_LEN);
 
 			D_ERROR("Could not connect to %s within %d second "
@@ -581,10 +581,10 @@ dtp_rpc_handler_common(hg_handle_t hg_hdl)
 		rc = dtp_hg_unpack_body(rpc_priv, proc);
 		if (rc == 0) {
 			rpc_priv->drp_input_got = 1;
-			uuid_copy(rpc_pub->dr_ep.ep_grp_id,
-				  rpc_priv->drp_req_hdr.dch_grp_id);
 			rpc_pub->dr_ep.ep_rank =
 					rpc_priv->drp_req_hdr.dch_rank;
+			rpc_pub->dr_ep.ep_grp = NULL;
+			/* TODO lookup by rpc_priv->drp_req_hdr.dch_grp_id */
 		} else {
 			D_ERROR("_unpack_body failed, rc: %d, opc: 0x%x.\n",
 				hg_ret, rpc_pub->dr_opc);
@@ -753,7 +753,6 @@ dtp_hg_req_destroy(struct dtp_rpc_priv *rpc_priv)
 	D_DEBUG(DF_TP,"enter dtp_hg_req_destroy, opc: 0x%x.\n",
 		rpc_priv->drp_pub.dr_opc);
 	*/
-	dtp_rpc_inout_buff_fini(&rpc_priv->drp_pub);
 	if (rpc_priv->drp_output_got != 0) {
 		hg_ret = HG_Free_output(rpc_priv->drp_hg_hdl,
 					&rpc_priv->drp_pub.dr_output);
@@ -770,15 +769,17 @@ dtp_hg_req_destroy(struct dtp_rpc_priv *rpc_priv)
 				"opc: 0x%x.\n", hg_ret,
 				rpc_priv->drp_pub.dr_opc);
 	}
+	dtp_rpc_inout_buff_fini(&rpc_priv->drp_pub);
 
-	hg_ret = HG_Destroy(rpc_priv->drp_hg_hdl);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Destroy failed, hg_ret: %d, opc: 0x%x.\n",
-			hg_ret, rpc_priv->drp_pub.dr_opc);
+	if (!rpc_priv->drp_coll) {
+		hg_ret = HG_Destroy(rpc_priv->drp_hg_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			D_ERROR("HG_Destroy failed, hg_ret: %d, opc: 0x%x.\n",
+				hg_ret, rpc_priv->drp_pub.dr_opc);
+		}
 	}
 
-	pthread_spin_destroy(&rpc_priv->drp_lock);
-	D_FREE_PTR(rpc_priv);
+	dtp_rpc_priv_free(rpc_priv);
 
 	return rc;
 }

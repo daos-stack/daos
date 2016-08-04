@@ -22,7 +22,7 @@
  */
 /**
  * This file is part of daos_transport. It gives out the main dtp internal
- * function declarations.
+ * function declarations which are not included by other specific header files.
  */
 
 #ifndef __DTP_INTERNAL_FNS_H__
@@ -34,39 +34,32 @@
 bool dtp_initialized();
 
 /** dtp_group.c */
-dtp_group_id_t *dtp_global_grp_id(void);
+dtp_group_id_t dtp_global_grp_id(void);
+int dtp_hdlr_grp_create(dtp_rpc_t *rpc_req);
+int dtp_hdlr_grp_destroy(dtp_rpc_t *rpc_req);
 
 /** dtp_register.c */
-int dtp_opc_map_create(unsigned int bits, struct dtp_opc_map **opc_map);
-void dtp_opc_map_destroy(struct dtp_opc_map *opc_map);
+int dtp_opc_map_create(unsigned int bits);
+void dtp_opc_map_destroy(struct dtp_opc_map *map);
 struct dtp_opc_info *dtp_opc_lookup(struct dtp_opc_map *map, dtp_opcode_t opc,
 				    int locked);
+int dtp_rpc_reg_internal(dtp_opcode_t opc, struct dtp_req_format *drf,
+			 dtp_rpc_cb_t rpc_handler,
+			 struct dtp_corpc_ops *co_ops);
+
 /** dtp_context.c */
 bool dtp_context_empty(int locked);
+int dtp_context_req_track(dtp_rpc_t *req);
+void dtp_context_req_untrack(dtp_rpc_t *req);
+dtp_context_t dtp_context_lookup(int ctx_idx);
+void dtp_rpc_complete(struct dtp_rpc_priv *rpc_priv, int rc);
+
 enum {
 	DTP_REQ_TRACK_IN_INFLIGHQ = 0,
 	DTP_REQ_TRACK_IN_WAITQ,
 };
-int dtp_context_req_track(dtp_rpc_t *req);
-void dtp_context_req_untrack(dtp_rpc_t *req);
-
-/** dtp_rpc.c */
-void dtp_rpc_priv_init(struct dtp_rpc_priv *rpc_priv, dtp_context_t dtp_ctx,
-		       dtp_opcode_t opc, int srv_flag);
-void dtp_rpc_inout_buff_fini(dtp_rpc_t *rpc_pub);
-int dtp_rpc_inout_buff_init(dtp_rpc_t *rpc_pub);
 
 /** some simple helper functions */
-static inline void
-dtp_common_hdr_init(struct dtp_common_hdr *hdr, dtp_opcode_t opc)
-{
-	D_ASSERT(hdr != NULL);
-	hdr->dch_opc = opc;
-	hdr->dch_magic = DTP_RPC_MAGIC;
-	hdr->dch_version = DTP_RPC_VERSION;
-	uuid_copy(hdr->dch_grp_id, *dtp_global_grp_id());
-	D_ASSERT(dtp_group_rank(0, &hdr->dch_rank) == 0);
-}
 
 static inline void
 dtp_bulk_desc_dup(struct dtp_bulk_desc *bulk_desc_new,

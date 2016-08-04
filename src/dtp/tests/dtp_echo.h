@@ -38,6 +38,7 @@
 #define ECHO_OPC_CHECKIN    (0xA1)
 #define ECHO_OPC_BULK_TEST  (0xA2)
 #define ECHO_OPC_SHUTDOWN   (0x100)
+#define ECHO_CORPC_EXAMPLE  (0x886)
 
 #define ECHO_EXTRA_CONTEXT_NUM (3)
 
@@ -50,9 +51,12 @@ struct gecho {
 
 extern struct gecho gecho;
 
+extern struct dtp_corpc_ops echo_co_ops;
+
 int echo_srv_checkin(dtp_rpc_t *rpc);
 int echo_srv_bulk_test(dtp_rpc_t *rpc);
 int echo_srv_shutdown(dtp_rpc_t *rpc);
+int echo_srv_corpc_example(dtp_rpc_t *rpc);
 
 struct dtp_msg_field *echo_ping_checkin[] = {
 	&DMF_UINT32,
@@ -72,6 +76,20 @@ struct dtp_msg_field *echo_ping_checkout[] = {
 struct dtp_echo_checkin_reply {
 	int ret;
 	uint32_t room_no;
+};
+
+struct dtp_msg_field *echo_corpc_example_in[] = {
+	&DMF_STRING,
+};
+struct dtp_echo_corpc_example_req {
+	dtp_string_t	co_msg;
+};
+
+struct dtp_msg_field *echo_corpc_example_out[] = {
+	&DMF_UINT32,
+};
+struct dtp_echo_corpc_example_reply {
+	uint32_t	co_result;
 };
 
 struct dtp_msg_field *echo_bulk_test_in[] = {
@@ -97,6 +115,10 @@ struct dtp_echo_bulk_out_reply {
 struct dtp_req_format DQF_ECHO_PING_CHECK =
 	DEFINE_DTP_REQ_FMT("ECHO_PING_CHECK", echo_ping_checkin,
 			   echo_ping_checkout);
+
+struct dtp_req_format DQF_ECHO_CORPC_EXAMPLE =
+	DEFINE_DTP_REQ_FMT("ECHO_CORPC_EXAMPLE", echo_corpc_example_in,
+			   echo_corpc_example_out);
 
 struct dtp_req_format DQF_ECHO_BULK_TEST =
 	DEFINE_DTP_REQ_FMT("ECHO_BULK_TEST", echo_bulk_test_in,
@@ -147,6 +169,8 @@ echo_init(int server)
 		rc = dtp_rpc_srv_reg(ECHO_OPC_SHUTDOWN, NULL,
 				     echo_srv_shutdown);
 		assert(rc == 0);
+		rc = dtp_corpc_reg(ECHO_CORPC_EXAMPLE, &DQF_ECHO_CORPC_EXAMPLE,
+				   echo_srv_corpc_example, &echo_co_ops);
 	}
 }
 
@@ -189,6 +213,7 @@ int client_cb_common(const struct dtp_cb_info *cb_info)
 	dtp_rpc_t		*rpc_req;
 	struct dtp_echo_checkin_req *e_req;
 	struct dtp_echo_checkin_reply *e_reply;
+	struct dtp_echo_corpc_example_reply *corpc_reply;
 
 	rpc_req = cb_info->dci_rpc;
 
@@ -211,6 +236,11 @@ int client_cb_common(const struct dtp_cb_info *cb_info)
 		       e_req->name, e_reply->ret, e_reply->room_no);
 		break;
 	case ECHO_OPC_SHUTDOWN:
+		break;
+	case ECHO_CORPC_EXAMPLE:
+		corpc_reply = dtp_reply_get(rpc_req);
+		printf("ECHO_CORPC_EXAMPLE finished, co_result: %d.\n",
+		       corpc_reply->co_result);
 		break;
 	default:
 		break;

@@ -89,7 +89,7 @@ dsm_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 		DP_UUID(pool->dp_pool), DP_UUID(uuid));
 
 	/* To the only container service. */
-	uuid_clear(ep.ep_grp_id);
+	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
@@ -191,7 +191,7 @@ dsm_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 		DP_UUID(pool->dp_pool), DP_UUID(uuid), force);
 
 	/* To the only container service. */
-	uuid_clear(ep.ep_grp_id);
+	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
@@ -385,7 +385,7 @@ dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	arg->coa_info = info;
 
 	/* To the only container service. */
-	uuid_clear(ep.ep_grp_id);
+	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
@@ -548,7 +548,7 @@ dsm_co_close(daos_handle_t coh, daos_event_t *ev)
 	arg->cca_cont = cont;
 
 	/* To the only container service. */
-	uuid_clear(ep.ep_grp_id);
+	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
@@ -901,7 +901,7 @@ epoch_op(daos_handle_t coh, dtp_opcode_t opc, daos_epoch_t *epoch,
 	arg->eoa_state = state;
 
 	/* To the only container service. */
-	uuid_clear(ep.ep_grp_id);
+	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 

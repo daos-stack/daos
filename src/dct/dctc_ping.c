@@ -61,7 +61,7 @@ dct_ping(uint32_t ping_val, daos_event_t *ev)
 	D_DEBUG(DF_MISC, "Ping Val to Issue: %d\n", ping_val);
 
 	/* Harded coded enpoint stuff */
-	uuid_clear(ep.ep_grp_id);
+	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 

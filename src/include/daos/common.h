@@ -256,6 +256,8 @@ daos_rank_list_find(daos_rank_list_t *rank_list, daos_rank_t rank, int *idx);
 bool
 daos_rank_list_identical(daos_rank_list_t *rank_list1,
 			 daos_rank_list_t *rank_list2, bool input);
+bool
+daos_rank_in_rank_list(daos_rank_list_t *rank_list, daos_rank_t rank);
 
 struct daos_oper_grp;
 typedef int (*daos_oper_grp_comp_t)(void *args, int rc);

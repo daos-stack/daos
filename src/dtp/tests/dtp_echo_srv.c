@@ -72,16 +72,34 @@ static void *progress_handler(void *arg)
 	pthread_exit(NULL);
 }
 
+dtp_group_t *example_grp;
+int grp_create_cb(dtp_group_t *grp, void *priv, int status)
+{
+	printf("in grp_create_cb, grp %p, priv %p, status %d.\n",
+		grp, priv, status);
+	example_grp = grp;
+	return 0;
+}
+
+int grp_destroy_cb(void *arg, int status)
+{
+	printf("in grp_destroy_cb, arg %p, status %d.\n", arg, status);
+	return 0;
+}
+
 static int run_echo_srver(void)
 {
 	dtp_endpoint_t		svr_ep;
 	dtp_rpc_t		*rpc_req = NULL;
 	char			*pchar;
 	daos_rank_t		myrank;
+	uint32_t		mysize;
 	int			rc, loop = 0;
 	struct dtp_echo_checkin_req *e_req;
 
-	rc = dtp_group_rank(0, &myrank);
+	rc = dtp_group_rank(NULL, &myrank);
+	assert(rc == 0);
+	rc = dtp_group_size(NULL, &mysize);
 	assert(rc == 0);
 
 	echo_srv.do_shutdown = 0;
@@ -94,11 +112,11 @@ static int run_echo_srver(void)
 		goto out;
 	}
 
-
 	/* ============= test-1 ============ */
 
 	/* send checkin RPC */
 	svr_ep.ep_rank = 0;
+	svr_ep.ep_tag = 0;
 	rc = dtp_req_create(gecho.dtp_ctx, svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 
@@ -134,6 +152,47 @@ static int run_echo_srver(void)
 	D_FREE(pchar, 256);
 
 	/* ==================================== */
+	/* test group API and bcast RPC */
+	dtp_group_id_t		grp_id = "example_grp";
+	daos_rank_t		grp_ranks[4] = {5, 4, 1, 2};
+	daos_rank_list_t	grp_membs;
+	daos_rank_t		excluded_ranks[2] = {1, 2};
+	daos_rank_list_t	excluded_membs;
+
+	grp_membs.rl_nr.num = 4;
+	grp_membs.rl_ranks = grp_ranks;
+	excluded_membs.rl_nr.num = 2;
+	excluded_membs.rl_ranks = excluded_ranks;
+
+	if (mysize >= 6 && myrank == 4) {
+		dtp_rpc_t				*corpc_req;
+		struct dtp_echo_corpc_example_req	*corpc_in;
+
+		rc = dtp_group_create(grp_id, &grp_membs, 0, grp_create_cb,
+				      &myrank);
+		printf("dtp_group_create rc: %d, priv %p.\n", rc, &myrank);
+		sleep(1); /* just to ensure grp populated */
+
+		rc = dtp_corpc_req_create(gecho.dtp_ctx, example_grp,
+					  &excluded_membs, ECHO_CORPC_EXAMPLE,
+					  NULL, NULL, 0, 0, &corpc_req);
+		D_ASSERT(rc == 0 && corpc_req != NULL);
+		corpc_in = dtp_req_get(corpc_req);
+		D_ASSERT(corpc_in != NULL);
+		corpc_in->co_msg = "testing corpc example from rank 4";
+
+		gecho.complete = 0;
+		rc = dtp_req_send(corpc_req, client_cb_common,
+				  &gecho.complete);
+		D_ASSERT(rc == 0);
+		sleep(1); /* just to ensure corpc handled */
+		D_ASSERT(gecho.complete == 1);
+
+		rc = dtp_group_destroy(example_grp, grp_destroy_cb, &myrank);
+		printf("dtp_group_destroy rc: %d, arg %p.\n", rc, &myrank);
+	}
+
+	/* ==================================== */
 	printf("main thread wait progress thread ...\n");
 	/* wait progress thread */
 	rc = pthread_join(echo_srv.progress_thread, NULL);
@@ -163,6 +222,50 @@ int echo_srv_shutdown(dtp_rpc_t *rpc_req)
 
 	return rc;
 }
+
+int echo_srv_corpc_example(dtp_rpc_t *rpc_req)
+{
+	struct dtp_echo_corpc_example_req *req;
+	struct dtp_echo_corpc_example_reply *reply;
+	daos_rank_t my_rank;
+	int rc = 0;
+
+	req = dtp_req_get(rpc_req);
+	reply = dtp_reply_get(rpc_req);
+	D_ASSERT(req != NULL && reply != NULL);
+
+	dtp_group_rank(NULL, &my_rank);
+	reply->co_result = my_rank;
+
+	rc = dtp_reply_send(rpc_req);
+
+	printf("echo_srv_corpc_example, rank %d got msg %s, reply %d, rc %d.\n",
+	       my_rank, req->co_msg, reply->co_result, rc);
+
+	return rc;
+}
+
+int corpc_example_aggregate(dtp_rpc_t *source, dtp_rpc_t *result, void *priv)
+{
+	struct dtp_echo_corpc_example_reply *reply_source, *reply_result;
+	daos_rank_t my_rank;
+
+	D_ASSERT(source != NULL && result != NULL);
+	reply_source = dtp_reply_get(source);
+	reply_result = dtp_reply_get(result);
+	reply_result->co_result += reply_source->co_result;
+
+	dtp_group_rank(NULL, &my_rank);
+	printf("corpc_example_aggregate, rank %d, co_result %d, aggregate "
+	       "result %d.\n", my_rank, reply_source->co_result,
+	       reply_result->co_result);
+
+	return 0;
+}
+
+struct dtp_corpc_ops echo_co_ops = {
+	.co_aggregate = corpc_example_aggregate,
+};
 
 int g_roomno = 1082;
 int echo_srv_checkin(dtp_rpc_t *rpc_req)

@@ -28,12 +28,10 @@
 #include <dtp_internal.h>
 
 int
-dtp_opc_map_create(unsigned int bits, struct dtp_opc_map **opc_map)
+dtp_opc_map_create(unsigned int bits)
 {
 	struct dtp_opc_map    *map = NULL;
 	int                   rc = 0, i;
-
-	D_ASSERT(opc_map != NULL);
 
 	D_ALLOC_PTR(map);
 	if (map == NULL)
@@ -53,9 +51,14 @@ dtp_opc_map_create(unsigned int bits, struct dtp_opc_map **opc_map)
 		D_ERROR("Failed to create mutex for dtp opc map.\n");
 		D_GOTO(out, rc = -rc);
 	}
-	map->dom_lock_init = 1;
 
-	*opc_map = map;
+	map->dom_lock_init = 1;
+	dtp_gdata.dg_opc_map = map;
+
+	rc = dtp_internal_rpc_register();
+	if (rc != 0)
+		D_ERROR("dtp_internal_rpc_register failed, rc: %d.\n", rc);
+
 out:
 	if (rc != 0)
 		dtp_opc_map_destroy(map);
@@ -65,9 +68,10 @@ out:
 void
 dtp_opc_map_destroy(struct dtp_opc_map *map)
 {
-	struct dtp_opc_info *info;
-	int                  i;
+	struct dtp_opc_info	*info;
+	int			i;
 
+	/* map = dtp_gdata.dg_opc_map; */
 	D_ASSERT(map != NULL);
 	if (map->dom_hash == NULL)
 		goto skip;
@@ -90,6 +94,7 @@ skip:
 	if (map->dom_lock_init && map->dom_pid == getpid())
 		pthread_rwlock_destroy(&map->dom_rwlock);
 
+	dtp_gdata.dg_opc_map = NULL;
 	D_FREE_PTR(map);
 }
 
@@ -109,7 +114,7 @@ dtp_opc_info_init(struct dtp_opc_info *info)
 	/*
 	info->doi_opc = 0;
 	info->doi_proc_init = 0;
-	info->doi_rpc_init = 0;
+	info->doi_rpccb_init = 0;
 	info->doi_input_size = 0;
 	info->doi_output_size = 0;
 	info->doi_drf = NULL;
@@ -147,7 +152,7 @@ static int
 dtp_opc_reg(struct dtp_opc_map *map, dtp_opcode_t opc,
 	    struct dtp_req_format *drf, daos_size_t input_size,
 	    daos_size_t output_size, dtp_rpc_cb_t rpc_cb,
-	    int ignore_rpccb, int locked)
+	    struct dtp_corpc_ops *co_ops, int locked)
 {
 	struct dtp_opc_info *info = NULL, *new_info;
 	unsigned int         hash;
@@ -176,12 +181,21 @@ dtp_opc_reg(struct dtp_opc_map *map, dtp_opcode_t opc,
 				info->doi_output_size = output_size;
 			}
 			info->doi_drf = drf;
-			if (ignore_rpccb == 0) {
-				/*
-				D_DEBUG(DF_TP, "re-reg_srv, opc 0x%x.\n", opc);
-				*/
+			if (rpc_cb != NULL) {
+				if (info->doi_rpc_cb != NULL)
+					D_DEBUG(DF_TP, "re-reg rpc callback, "
+						"opc 0x%x.\n", opc);
+				else
+					info->doi_rpccb_init = 1;
 				info->doi_rpc_cb = rpc_cb;
-				info->doi_rpc_init = 1;
+			}
+			if (co_ops != NULL) {
+				if (info->doi_co_ops != NULL)
+					D_DEBUG(DF_TP, "re-reg co_ops, "
+						"opc 0x%x.\n", opc);
+				else
+					info->doi_coops_init = 1;
+				info->doi_co_ops = co_ops;
 			}
 			D_GOTO(out, rc = 0);
 		}
@@ -199,9 +213,13 @@ dtp_opc_reg(struct dtp_opc_map *map, dtp_opcode_t opc,
 	new_info->doi_input_size = input_size;
 	new_info->doi_output_size = output_size;
 	new_info->doi_proc_init = 1;
-	if (ignore_rpccb == 0) {
+	if (rpc_cb != NULL) {
 		new_info->doi_rpc_cb = rpc_cb;
-		new_info->doi_rpc_init = 1;
+		new_info->doi_rpccb_init = 1;
+	}
+	if (co_ops != NULL) {
+		new_info->doi_co_ops = co_ops;
+		new_info->doi_coops_init = 1;
 	}
 	daos_list_add_tail(&new_info->doi_link, &info->doi_link);
 
@@ -211,9 +229,9 @@ out:
 	return rc;
 }
 
-static int
+int
 dtp_rpc_reg_internal(dtp_opcode_t opc, struct dtp_req_format *drf,
-		     dtp_rpc_cb_t rpc_handler, int ignore_rpccb)
+		     dtp_rpc_cb_t rpc_handler, struct dtp_corpc_ops *co_ops)
 {
 	daos_size_t		input_size = 0;
 	daos_size_t		output_size = 0;
@@ -246,7 +264,7 @@ dtp_rpc_reg_internal(dtp_opcode_t opc, struct dtp_req_format *drf,
 
 reg_opc:
 	rc = dtp_opc_reg(dtp_gdata.dg_opc_map, opc, drf, input_size,
-			 output_size, rpc_handler, ignore_rpccb, DTP_UNLOCK);
+			 output_size, rpc_handler, co_ops, DTP_UNLOCK);
 	if (rc != 0)
 		D_ERROR("rpc (opc: 0x%x) register failed, rc: %d.\n", opc, rc);
 
@@ -257,12 +275,41 @@ out:
 int
 dtp_rpc_reg(dtp_opcode_t opc, struct dtp_req_format *drf)
 {
-	return dtp_rpc_reg_internal(opc, drf, NULL, 1);
+	if (dtp_opcode_reserved(opc)) {
+		D_ERROR("opc 0x%x reserved.\n", opc);
+		return -DER_INVAL;
+	}
+	return dtp_rpc_reg_internal(opc, drf, NULL, NULL);
 }
 
 int
 dtp_rpc_srv_reg(dtp_opcode_t opc, struct dtp_req_format *drf,
 		dtp_rpc_cb_t rpc_handler)
 {
-	return dtp_rpc_reg_internal(opc, drf, rpc_handler, 0);
+	if (dtp_opcode_reserved(opc)) {
+		D_ERROR("opc 0x%x reserved.\n", opc);
+		return -DER_INVAL;
+	}
+	if (rpc_handler == NULL) {
+		D_ERROR("invalid parameter NULL rpc_handler.\n");
+		return -DER_INVAL;
+	}
+
+	return dtp_rpc_reg_internal(opc, drf, rpc_handler, NULL);
+}
+
+int
+dtp_corpc_reg(dtp_opcode_t opc, struct dtp_req_format *drf,
+	      dtp_rpc_cb_t rpc_handler, struct dtp_corpc_ops *co_ops)
+{
+	if (dtp_opcode_reserved(opc)) {
+		D_ERROR("opc 0x%x reserved.\n", opc);
+		return -DER_INVAL;
+	}
+	if (co_ops == NULL) {
+		D_ERROR("invalid parameter NULL co_ops.\n");
+		return -DER_INVAL;
+	}
+
+	return dtp_rpc_reg_internal(opc, drf, rpc_handler, co_ops);
 }

@@ -717,6 +717,10 @@ struct dtp_msg_field DMF_UUID =
 	DEFINE_DTP_MSG("dtp_uuid", 0, sizeof(uuid_t),
 		       dtp_proc_uuid_t);
 
+struct dtp_msg_field DMF_GRP_ID =
+	DEFINE_DTP_MSG("dtp_group_id", 0, sizeof(dtp_group_id_t),
+		       dtp_proc_dtp_group_id_t);
+
 struct dtp_msg_field DMF_INT =
 	DEFINE_DTP_MSG("dtp_int", 0, sizeof(int32_t),
 		       dtp_proc_int);
@@ -744,6 +748,10 @@ struct dtp_msg_field DMF_BOOL =
 struct dtp_msg_field DMF_STRING =
 	DEFINE_DTP_MSG("dtp_string", 0,
 		       sizeof(dtp_string_t), dtp_proc_dtp_string_t);
+
+struct dtp_msg_field DMF_RANK =
+	DEFINE_DTP_MSG("daos_rank", 0, sizeof(daos_rank_t),
+		       dtp_proc_uint32_t);
 
 struct dtp_msg_field DMF_RANK_LIST =
 	DEFINE_DTP_MSG("daos_rank_list", 0,
@@ -796,6 +804,10 @@ dtp_proc_common_hdr(dtp_proc_t proc, struct dtp_common_hdr *hdr)
 	hg_return_t   hg_ret = HG_SUCCESS;
 	int           rc = 0;
 
+	/*
+	 * D_DEBUG(DF_TP,"in dtp_proc_common_hdr, opc: 0x%x.\n", hdr->dch_opc);
+	 */
+
 	if (proc == DTP_PROC_NULL || hdr == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
@@ -825,24 +837,19 @@ dtp_proc_common_hdr(dtp_proc_t proc, struct dtp_common_hdr *hdr)
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
-	hg_ret = dtp_proc_uuid_t(hg_proc, &hdr->dch_grp_id);
-	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		D_GOTO(out, rc = -DER_DTP_HG);
-	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->dch_rank);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->dch_grp_id);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_DTP_HG);
+	}
 
-	/*
-	D_DEBUG(DF_TP,"in dtp_proc_common_hdr, opc: 0x%x.\n", hdr->dch_opc);
-	*/
-
-	/* proc the 2 paddings */
-	hg_ret = hg_proc_memcpy(hg_proc, &hdr->dch_padding[0],
-				2 * sizeof(uint32_t));
+	/* proc the paddings */
+	hg_ret = hg_proc_memcpy(hg_proc, hdr->dch_padding, sizeof(uint32_t));
 	if (hg_ret != HG_SUCCESS)
 		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 

@@ -127,6 +127,8 @@ rank_compare(const void *rank1, const void *rank2)
 void
 daos_rank_list_sort(daos_rank_list_t *rank_list)
 {
+	if (rank_list == NULL)
+		return;
 	qsort(rank_list->rl_ranks, rank_list->rl_nr.num,
 	      sizeof(daos_rank_t), rank_compare);
 }
@@ -185,6 +187,22 @@ daos_rank_list_identical(daos_rank_list_t *rank_list1,
 		}
 	}
 	return true;
+}
+
+/* check whether one rank included in the rank list, all are global ranks. */
+bool
+daos_rank_in_rank_list(daos_rank_list_t *rank_list, daos_rank_t rank)
+{
+	int i;
+
+	if (rank_list == NULL)
+		return false;
+
+	for (i = 0; i < rank_list->rl_nr.num; i++) {
+		if (rank_list->rl_ranks[i] == rank)
+			return true;
+	}
+	return false;
 }
 
 /**

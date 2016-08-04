@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_transport. It gives out the main data type
- * definitions of dtp.
+ * This file is part of daos_transport. It gives out the data types internally
+ * used by dtp and not in other specific header files.
  */
 
 #ifndef __DTP_INTERNAL_TYPES_H__
@@ -67,7 +67,6 @@ struct dtp_gdata {
 	struct mcl_set		*dg_mcl_cli_set;
 
 	/* the unique global server and client group ID */
-	/* TODO refine grp_id things together with dtp_group_create() */
 	dtp_group_id_t		dg_srv_grp_id;
 	dtp_group_id_t		dg_cli_grp_id;
 
@@ -81,15 +80,40 @@ struct dtp_gdata {
 
 extern struct dtp_gdata		dtp_gdata;
 
-#define DTP_RPC_MAGIC			(0xAB0C01EC)
-#define DTP_RPC_VERSION			(0x00000001)
+enum {
+	DTP_GRP_CREATING = 0x66,
+	DTP_GRP_NORMAL,
+	DTP_GRP_DESTROYING,
+};
 
-/*
- * TODO need to consider more later together with dtp_group_create()
- * Temporarily just use a global server group ID and a global client group ID.
- */
-#define DTP_GLOBAL_SRV_GRPID_STR	"da03c1e7-1618-8899-6699-aabbccddeeff"
-#define DTP_GLOBAL_CLI_GRPID_STR	"da033e4e-1618-8899-6699-aabbccddeeff"
+struct dtp_grp_priv {
+	daos_list_t		 gp_link; /* link to dtp_grp_list */
+	dtp_group_t		 gp_pub; /* public grp handle */
+	daos_rank_list_t	*gp_membs; /* member ranks in global group */
+	/* the priv pointer user passed in for dtp_group_create */
+	void			*gp_priv;
+	/* dtp context only for sending grp create/destroy RPCs */
+	dtp_context_t		 gp_ctx;
+	int			 gp_status; /* group status */
+
+	/* TODO: reuse dtp_corpc_info here */
+	/*
+	 * Some temporary info used for group creating/destroying, valid when
+	 * gp_status is DTP_GRP_CREATING or DTP_GRP_DESTROYING.
+	 */
+	struct dtp_rpc_priv	*gp_parent_rpc; /* parent RPC, NULL on root */
+	daos_list_t		 gp_child_rpcs; /* child RPCs list */
+	uint32_t		 gp_child_num;
+	uint32_t		 gp_child_ack_num;
+	int			 gp_rc; /* temporary recoded return code */
+	daos_rank_list_t	*gp_failed_ranks; /* failed ranks */
+
+	dtp_grp_create_cb_t	 gp_create_cb; /* grp create completion cb */
+	dtp_grp_destroy_cb_t	 gp_destroy_cb; /* grp destroy completion cb */
+	void			*gp_destroy_cb_arg;
+
+	pthread_mutex_t		 gp_mutex; /* protect all fields above */
+};
 
 /* TODO may use a RPC to query server-side context number */
 #ifndef DTP_SRV_CONTEX_NUM
@@ -136,62 +160,15 @@ struct dtp_ep_inflight {
 	pthread_mutex_t		epi_mutex;
 };
 
-/* dtp layer common header */
-struct dtp_common_hdr {
-	uint32_t	dch_magic;
-	uint32_t	dch_version;
-	uint32_t	dch_opc;
-	uint32_t	dch_cksum;
-	uint32_t	dch_flags;
-	/* gid and rank identify the rpc request sender */
-	dtp_group_id_t	dch_grp_id; /* uuid_t 16 bytes */
-	daos_rank_t	dch_rank; /* uint32_t */
-	uint32_t	dch_padding[2];
-};
-
-typedef enum {
-	RPC_INITED = 0x36,
-	RPC_QUEUED, /* queued for flow controlling */
-	RPC_REQ_SENT,
-	RPC_REPLY_RECVED,
-	RPC_COMPLETED,
-	RPC_CANCELED,
-} dtp_rpc_state_t;
-
-struct dtp_rpc_priv {
-	/* link to dtp_ep_inflight::epi_req_q/::epi_req_waitq */
-	daos_list_t		drp_epi_link;
-	/* tmp_link used in dtp_context_req_untrack */
-	daos_list_t		drp_tmp_link;
-	uint64_t		drp_ts; /* time stamp */
-	dtp_cb_t		drp_complete_cb;
-	void			*drp_arg; /* argument for drp_complete_cb */
-	struct dtp_ep_inflight	*drp_epi; /* point back to inflight ep */
-
-	dtp_rpc_t		drp_pub; /* public part */
-	struct dtp_common_hdr	drp_req_hdr; /* common header for request */
-	struct dtp_common_hdr	drp_reply_hdr; /* common header for reply */
-	dtp_rpc_state_t		drp_state; /* RPC state */
-	hg_handle_t		drp_hg_hdl;
-	na_addr_t		drp_na_addr;
-	uint32_t		drp_srv:1, /* flag of server received request */
-				drp_output_got:1,
-				drp_input_got:1;
-	uint32_t		drp_refcount;
-	pthread_spinlock_t	drp_lock;
-	struct dtp_opc_info	*drp_opc_info;
-};
-
-#define DTP_OPC_MAP_BITS	(12)
-
 #define DTP_UNLOCK		(0)
 #define DTP_LOCKED		(1)
 
 /* TODO export the group name to user? and multiple client groups? */
 #define DTP_GLOBAL_SRV_GROUP_NAME	"dtp_global_srv_group"
 #define DTP_CLI_GROUP_NAME		"dtp_cli_group"
-#define DTP_GROUP_NAME_MAX_LEN		(64)
 #define DTP_ADDR_STR_MAX_LEN		(128)
+
+#define DTP_OPC_MAP_BITS	(12)
 
 /* opcode map (hash list) */
 struct dtp_opc_map {
@@ -206,9 +183,11 @@ struct dtp_opc_info {
 	daos_list_t		doi_link;
 	dtp_opcode_t		doi_opc;
 	unsigned int		doi_proc_init:1,
-				doi_rpc_init:1;
+				doi_rpccb_init:1,
+				doi_coops_init:1;
 
 	dtp_rpc_cb_t		doi_rpc_cb;
+	struct dtp_corpc_ops	*doi_co_ops;
 	daos_size_t		doi_input_size;
 	daos_size_t		doi_output_size;
 	struct dtp_req_format	*doi_drf;

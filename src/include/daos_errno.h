@@ -79,6 +79,8 @@ typedef enum {
 	DER_OVERFLOW		= (DER_ERR_BASE + 24),
 	/** operation canceled */
 	DER_CANCELED		= (DER_ERR_BASE + 25),
+	/** Out-Of-Group or member list */
+	DER_OOG			= (DER_ERR_BASE + 26),
 	/** epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** epoch is too old, all data have been recycled */

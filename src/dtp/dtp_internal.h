@@ -53,6 +53,7 @@
 
 #include <dtp_internal_types.h>
 #include <dtp_internal_fns.h>
+#include <dtp_rpc.h>
 
 #include <dtp_hg.h>
 

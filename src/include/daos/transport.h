@@ -45,22 +45,48 @@ typedef char *dtp_phy_addr_t;
 typedef char *dtp_string_t;
 typedef const char *dtp_const_string_t;
 
-typedef uuid_t dtp_group_id_t;
+/* DTP uses a string as the group ID */
+typedef dtp_string_t dtp_group_id_t;
+/* max length of the group ID string including the trailing '\0' */
+#define DTP_GROUP_ID_MAX_LEN	(56)
 
-/* all ranks in the group */
-#define DTP_RANK_ALL		((daos_rank_t)-1)
+typedef struct dtp_group {
+	/* the group ID of this group */
+	dtp_group_id_t		dg_grpid;
+} dtp_group_t;
 
 /* transport endpoint identifier */
 typedef struct {
-	/* to be moved to:
-	char		*ep_set; */
-	dtp_group_id_t	 ep_grp_id;
+	/* group handle, NULL means the primary group */
+	dtp_group_t	 *ep_grp;
+	/* rank number within the group */
 	daos_rank_t	 ep_rank;
-	uint32_t	 ep_tag; /* optional tag */
+	/* tag, now used as the context ID of the target rank */
+	uint32_t	 ep_tag;
 } dtp_endpoint_t;
 
+/*
+ * RPC is identified by opcode. All the opcodes with the highest 16 bits as 1
+ * are reserved for internal usage, such as group maintenance etc. If user
+ * defines its RPC using those reserved opcode, then undefined result is
+ * expected.
+ */
 typedef uint32_t dtp_opcode_t;
-typedef uint32_t dtp_version_t;
+#define DTP_OPC_RESERVED_BITS	(0xFFFFU << 16)
+
+/*
+ * Check if the opcode is reserved by DTP internally.
+ *
+ * \param opc [IN]		opcode to be checked.
+ *
+ * \return			zero means legal opcode for user, non-zero means
+ *				DTP internally reserved opcode.
+ */
+static inline int
+dtp_opcode_reserved(dtp_opcode_t opc)
+{
+	return (opc & DTP_OPC_RESERVED_BITS) == DTP_OPC_RESERVED_BITS;
+}
 
 typedef void *dtp_rpc_input_t;
 typedef void *dtp_rpc_output_t;
@@ -75,7 +101,13 @@ typedef void *dtp_bulk_t; /* abstract bulk handle */
 #define DTP_MAX_OUTPUT_SIZE	(0x4000000)
 
 enum dtp_rpc_flags {
-	DTP_IGNORE_TIMEDOUT = 0x0001,
+	/*
+	 * ignore timedout. Default behavior (no this flags) is resending
+	 * request when timedout.
+	 */
+	DTP_RPC_FLAG_IGNORE_TIMEDOUT	= (1U << 0),
+	/* destroy group when the bcast RPC finishes, only valid for corpc */
+	DTP_CORPC_FLAG_GRP_DESTROY	= (1U << 31),
 };
 
 struct dtp_rpc;
@@ -87,10 +119,7 @@ typedef struct dtp_rpc {
 	dtp_context_t		dr_ctx; /* DTP context of the RPC */
 	dtp_endpoint_t		dr_ep; /* endpoint ID */
 	dtp_opcode_t		dr_opc; /* opcode of the RPC */
-	/* user passed in flags, such as:
-	 * DTP_IGNORE_TIMEDOUT		ignore timedout. Default behavior
-	 *				(no this flags) is resending request
-	 *				when timedout. */
+	/* user passed in flags, \see enum dtp_rpc_flags */
 	enum dtp_rpc_flags	dr_flags;
 	dtp_rpc_input_t		dr_input; /* input parameter struct */
 	dtp_rpc_output_t	dr_output; /* output parameter struct */
@@ -168,6 +197,7 @@ DEFINE_DTP_REQ_FMT_ARRAY(name, dtp_in, ARRAY_SIZE(dtp_in),	\
 
 /* Common request format type */
 extern struct dtp_msg_field DMF_UUID;
+extern struct dtp_msg_field DMF_GRP_ID;
 extern struct dtp_msg_field DMF_INT;
 extern struct dtp_msg_field DMF_UINT32;
 extern struct dtp_msg_field DMF_DAOS_SIZE;
@@ -175,6 +205,7 @@ extern struct dtp_msg_field DMF_UINT64;
 extern struct dtp_msg_field DMF_BULK;
 extern struct dtp_msg_field DMF_BOOL;
 extern struct dtp_msg_field DMF_STRING;
+extern struct dtp_msg_field DMF_RANK;
 extern struct dtp_msg_field DMF_RANK_LIST;
 extern struct dtp_msg_field DMF_OID;
 extern struct dtp_msg_field DMF_IOVEC;
@@ -224,7 +255,7 @@ struct dtp_cb_info {
 	 * 0                     for succeed RPC request,
 	 * -DER_TIMEDOUT         for timed out request,
 	 * other negative value  for other possible failure. */
-	int		dci_rc;
+	int			dci_rc;
 };
 
 struct dtp_bulk_cb_info {
@@ -538,7 +569,8 @@ dtp_rpc_reg(dtp_opcode_t opc, struct dtp_req_format *drf);
  *                              request.
  * \param rpc_handler [IN]      pointer to RPC handler which will be triggered
  *                              when RPC request opcode associated with rpc_name
- *                              is received.
+ *                              is received. Will return -DER_INVAL if pass in
+ *                              NULL rpc_handler.
  *
  * \return                      zero on success, negative value if error
  */
@@ -680,19 +712,6 @@ dtp_tree_topo(enum dtp_tree_type tree_type, unsigned branch_ratio)
 	       (branch_ratio & ((1U << DTP_TREE_TYPE_SHIFT) - 1));
 };
 
-/* collective RPC optional flags */
-enum dtp_corpc_flag {
-	DTP_CORPC_FLAG_GRP_DESTROY = (1U << 0),
-};
-
-typedef struct dtp_group {
-	/* the group ID of this group */
-	dtp_group_id_t		dg_grpid;
-	/* the member ranks in the global group */
-	daos_rank_list_t	*dg_membs;
-	/* ... */
-} dtp_group_t;
-
 struct dtp_corpc_ops {
 	/*
 	 * collective RPC reply aggregating callback.
@@ -714,11 +733,13 @@ struct dtp_corpc_ops {
  *
  * \param grp [IN]		group handle, valid only when the group has been
  *				created successfully.
+ * \param priv [IN]		A private pointer associated with the group
+ *				(passed in for dtp_group_create).
  * \param status [IN]		status code that indicates whether the group has
  *				been created successfully or not.
  *				zero for success, negative value otherwise.
  */
-typedef int (*dtp_grp_create_cb_t)(dtp_group_t *grp, int status);
+typedef int (*dtp_grp_create_cb_t)(dtp_group_t *grp, void *priv, int status);
 
 /*
  * Group destroy completion callback
@@ -737,6 +758,9 @@ typedef int (*dtp_grp_destroy_cb_t)(void *args, int status);
  *
  * \param grp_id [IN]		unique group ID.
  * \param member_ranks [IN]	rank list of members for the group.
+ *				Can-only create the group on the node which is
+ *				one member of the group, otherwise -DER_OOG will
+ *				be returned.
  * \param populate_now [IN]	True if the group should be populated now;
  *				otherwise, group population will be later
  *				piggybacked on the first broadcast over the
@@ -755,7 +779,8 @@ dtp_group_create(dtp_group_id_t grp_id, daos_rank_list_t *member_ranks,
 
 /*
  * Lookup dtp_group_t of one group ID. The group creation is initiated by one
- * node, after the group populated user query the dtp_group_t on other nodes.
+ * node, after the group being populated user can query the dtp_group_t on
+ * other nodes.
  *
  * \param grp_id [IN]		unique group ID.
  *
@@ -781,7 +806,7 @@ dtp_group_destroy(dtp_group_t *grp, dtp_grp_destroy_cb_t grp_destroy_cb,
 /*
  * Create collective RPC request. Can reuse the dtp_req_send to broadcast it.
  *
- * \param dtp_ctx [IN]		DAOS transport context
+ * \param dtp_ctx [IN]		DTP context
  * \param grp [IN]		DTP group for the collective RPC
  * \param excluded_ranks [IN]	optional excluded ranks, the RPC will be
  *				delivered to all members in the group except
@@ -791,7 +816,9 @@ dtp_group_destroy(dtp_group_t *grp, dtp_grp_destroy_cb_t grp_destroy_cb,
  * \param priv [IN]		A private pointer associated with the request
  *				will be passed to dtp_corpc_ops::co_aggregate as
  *				2nd parameter.
- * \param flags [IN]		collective RPC flags, /see enum dtp_corpc_flag
+ * \param flags [IN]		collective RPC flags for example taking
+ *				DTP_CORPC_FLAG_GRP_DESTROY to destroy the group
+ *				when this bcast RPC finished.
  * \param tree_topo[IN]		tree topology for the collective propagation,
  *				can be calculated by dtp_tree_topo().
  *				/see enum dtp_tree_type,
@@ -824,7 +851,7 @@ dtp_corpc_req_create(dtp_context_t dtp_ctx, dtp_group_t *grp,
  *    aggregation needed.
  * 2) Can pass in a NULL drf or rpc_handler if it was registered already, this
  *    routine only overwrite if they are non-NULL.
- * 3) A NULL reply_aggregator will be treated as invalid argument.
+ * 3) A NULL co_ops will be treated as invalid argument.
  *
  * \return			zero on success, negative value if error
  */
@@ -835,24 +862,26 @@ dtp_corpc_reg(dtp_opcode_t opc, struct dtp_req_format *drf,
 /**
  * Query the caller's rank number within group.
  *
- * \param grp_id [IN]		DAOS group id
+ * \param grp [IN]		DTP group handle, NULL mean the primary/global
+ *				group
  * \param rank[OUT]		result rank number
  *
  * \return			zero on success, negative value if error
  */
 int
-dtp_group_rank(dtp_group_id_t grp_id, daos_rank_t *rank);
+dtp_group_rank(dtp_group_t *grp, daos_rank_t *rank);
 
 /**
  * Query number of group members.
  *
- * \param grp_id [IN]		DAOS group id
+ * \param grp [IN]		DTP group handle, NULL mean the primary/global
+ *				group
  * \param size[OUT]		result size (total number of ranks) of the group
  *
  * \return			zero on success, negative value if error
  */
 int
-dtp_group_size(dtp_group_id_t grp_id, uint32_t *size);
+dtp_group_size(dtp_group_t *grp, uint32_t *size);
 
 /******************************************************************************
  * Proc data types, APIs and macros.
@@ -1011,14 +1040,6 @@ dtp_proc_raw(dtp_proc_t proc, void *buf, daos_size_t buf_size);
 int
 dtp_proc_dtp_bulk_t(dtp_proc_t proc, dtp_bulk_t *bulk_hdl);
 
-#define dtp_proc__Bool			dtp_proc_bool
-#define dtp_proc_daos_size_t		dtp_proc_uint64_t
-#define dtp_proc_daos_off_t		dtp_proc_uint64_t
-#define dtp_proc_daos_rank_t		dtp_proc_uint32_t
-#define dtp_proc_dtp_opcode_t		dtp_proc_uint32_t
-#define dtp_proc_int			dtp_proc_int32_t
-#define dtp_proc_dtp_group_id_t		dtp_proc_uuid_t
-
 /**
  * Generic processing routine.
  *
@@ -1069,5 +1090,13 @@ dtp_proc_uuid_t(dtp_proc_t proc, uuid_t *data);
  */
 int
 dtp_proc_daos_rank_list_t(dtp_proc_t proc, daos_rank_list_t **data);
+
+#define dtp_proc__Bool			dtp_proc_bool
+#define dtp_proc_daos_size_t		dtp_proc_uint64_t
+#define dtp_proc_daos_off_t		dtp_proc_uint64_t
+#define dtp_proc_daos_rank_t		dtp_proc_uint32_t
+#define dtp_proc_dtp_opcode_t		dtp_proc_uint32_t
+#define dtp_proc_int			dtp_proc_int32_t
+#define dtp_proc_dtp_group_id_t		dtp_proc_dtp_string_t
 
 #endif /* __DAOS_TRANSPORT_H__ */

@@ -185,7 +185,7 @@ out:
 	return rc;
 }
 
-static inline void
+void
 dtp_rpc_complete(struct dtp_rpc_priv *rpc_priv, int rc)
 {
 	D_ASSERT(rpc_priv != NULL);
@@ -536,6 +536,24 @@ dtp_context_req_untrack(dtp_rpc_t *req)
 		dtp_rpc_complete(rpc_priv, rc);
 		dtp_req_decref(&rpc_priv->drp_pub);
 	}
+}
+
+dtp_context_t
+dtp_context_lookup(int ctx_idx)
+{
+	struct dtp_context	*ctx;
+	bool			found = false;
+
+	pthread_rwlock_rdlock(&dtp_gdata.dg_rwlock);
+	daos_list_for_each_entry(ctx, &dtp_gdata.dg_ctx_list, dc_link) {
+		if (ctx->dc_idx == ctx_idx) {
+			found = true;
+			break;
+		}
+	}
+	pthread_rwlock_unlock(&dtp_gdata.dg_rwlock);
+
+	return (found == true) ? ctx : NULL;
 }
 
 int

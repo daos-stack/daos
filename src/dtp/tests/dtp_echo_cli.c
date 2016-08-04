@@ -90,7 +90,7 @@ static void run_client(void)
 	struct dtp_echo_bulk_in_req	*e_bulk_req;
 	int				rc = 0, i;
 
-	rc = dtp_group_rank(0, &myrank);
+	rc = dtp_group_rank(NULL, &myrank);
 	assert(rc == 0);
 
 	/* ============= test-1 ============ */

@@ -189,7 +189,7 @@ static int
 dtp_mcl_init(dtp_phy_addr_t *addr)
 {
 	struct mcl_set	*tmp_set;
-	int		rc, rc2;
+	int		rc;
 
 	D_ASSERT(addr != NULL && strlen(*addr) > 0);
 
@@ -253,16 +253,8 @@ dtp_mcl_init(dtp_phy_addr_t *addr)
 			D_GOTO(out, rc = -DER_DTP_MCL);
 		}
 	}
-	rc = uuid_parse(DTP_GLOBAL_SRV_GRPID_STR,
-			dtp_gdata.dg_srv_grp_id);
-	rc2 = uuid_parse(DTP_GLOBAL_CLI_GRPID_STR,
-			 dtp_gdata.dg_cli_grp_id);
-	if (rc != 0 || rc2 != 0) {
-		D_ERROR("uuid_parse failed rc: %d, rc2: %d.\n", rc, rc2);
-		mcl_set_free(NULL, dtp_gdata.dg_mcl_cli_set);
-		mcl_finalize(dtp_gdata.dg_mcl_state);
-		rc = -DER_DTP_MCL;
-	}
+	dtp_gdata.dg_srv_grp_id = DTP_GLOBAL_SRV_GROUP_NAME;
+	dtp_gdata.dg_cli_grp_id = DTP_CLI_GROUP_NAME;
 
 out:
 	return rc;
@@ -381,8 +373,7 @@ do_init:
 			D_GOTO(unlock, rc = -DER_DTP_MCL);
 		}
 
-		rc = dtp_opc_map_create(DTP_OPC_MAP_BITS,
-					&dtp_gdata.dg_opc_map);
+		rc = dtp_opc_map_create(DTP_OPC_MAP_BITS);
 		if (rc != 0) {
 			D_ERROR("dtp_opc_map_create failed rc: %d.\n", rc);
 			dtp_hg_fini();
@@ -390,6 +381,7 @@ do_init:
 			D_FREE(dtp_gdata.dg_addr, dtp_gdata.dg_addr_len);
 			D_GOTO(unlock, rc);
 		}
+		D_ASSERT(dtp_gdata.dg_opc_map != NULL);
 
 		dtp_gdata.dg_inited = 1;
 	} else {

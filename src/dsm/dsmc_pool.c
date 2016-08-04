@@ -215,7 +215,7 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 	 * Currently, rank 0 runs the pool and the (only) container service.
 	 * ep.ep_grp_id and ep.ep_tag are not used at the moment.
 	 */
-	uuid_clear(ep.ep_grp_id);
+	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
@@ -352,7 +352,7 @@ dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 		if (rc)
 			return rc;
 	}
-	uuid_clear(ep.ep_grp_id);
+	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 	rc = dsm_req_create(daos_ev2ctx(ev), ep, DSM_POOL_DISCONNECT, &rpc);
