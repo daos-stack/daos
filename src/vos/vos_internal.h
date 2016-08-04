@@ -108,17 +108,6 @@ struct vos_tls {
 };
 
 /**
- * VOS LRU key must consist of
- * Object ID and container UUID
- */
-struct vos_lru_key {
-	/* Container UUID */
-	uuid_t		vlk_co_uuid;
-	/* Object ID */
-	daos_unit_oid_t	vlk_obj_id;
-};
-
-/**
  * Reference of a cached object.
  * NB: DRAM data structure.
  */
@@ -126,7 +115,7 @@ struct vos_obj_ref {
 	/** llink for daos lru cache */
 	struct daos_llink		or_llink;
 	/** Key for searching, object ID within a container */
-	struct vos_lru_key		or_key;
+	daos_unit_oid_t			or_oid;
 	/** VOS object reference Key size */
 	unsigned int			or_ksize;
 	/** dkey tree open handle of the object */

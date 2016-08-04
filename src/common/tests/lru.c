@@ -13,7 +13,6 @@
 struct uint_ref {
 	struct daos_llink	ur_llink;
 	uint64_t		ur_key;
-	unsigned int		ur_size;
 };
 
 void
@@ -22,6 +21,7 @@ uint_ref_lru_free(struct daos_llink *llink)
 	struct uint_ref	*ref;
 
 	D_ASSERT(llink);
+	D_PRINT("Freeing LRU ref from uint_ref cb\n");
 	ref = container_of(llink, struct uint_ref, ur_llink);
 	D_FREE_PTR(ref);
 }
@@ -38,17 +38,25 @@ uint_ref_lru_alloc(void *key, unsigned int ksize,
 		return -DER_NOMEM;
 	}
 	ref->ur_key = *(uint64_t *)key;
-	ref->ur_size = ksize;
-	daos_lru_llink_init(&ref->ur_llink, &ref->ur_key,
-			    ref->ur_size);
 	*link = &ref->ur_llink;
 
 	return 0;
 }
 
+bool
+uint_ref_lru_cmp(const void *key, unsigned int ksize,
+		 struct daos_llink *llink)
+{
+	struct uint_ref	*ref = NULL;
+
+	ref = container_of(llink, struct uint_ref, ur_llink);
+	return (ref->ur_key == *(uint64_t *)key);
+}
+
 struct daos_llink_ops uint_ref_llink_ops = {
 	.lop_free_ref	= uint_ref_lru_free,
 	.lop_alloc_ref	= uint_ref_lru_alloc,
+	.lop_cmp_keys	= uint_ref_lru_cmp,
 };
 
 static inline int
@@ -88,7 +96,8 @@ main(int argc, char **argv)
 		exit(-1);
 	}
 
-	rc = daos_lru_cache_create(atoi(argv[1]), &uint_ref_llink_ops,
+	rc = daos_lru_cache_create(DHASH_FT_RWLOCK,
+				   atoi(argv[1]), &uint_ref_llink_ops,
 				   &tcache);
 	if (rc)
 		D_FATAL(rc = EINVAL, "Error in creating lru cache\n");

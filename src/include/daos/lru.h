@@ -35,8 +35,10 @@ struct daos_llink_ops {
 	void	(*lop_free_ref)(struct daos_llink *llink);
 	/** Mandatory: If ref not found, allocate and return ref */
 	int	(*lop_alloc_ref)(void *key, unsigned int ksize,
-				 void *args,
-				 struct daos_llink **link);
+				 void *args, struct daos_llink **link);
+	/** Mandatory: Compare keys callback for LRU */
+	bool	(*lop_cmp_keys)(const void *key, unsigned int ksize,
+				struct daos_llink *link);
 	/** Optional print_key function for debugging */
 	void	(*lop_print_key)(void *key, unsigned int ksize);
 };
@@ -46,11 +48,6 @@ struct daos_llink {
 	daos_list_t		ll_hlink;
 	/* LRU queue link */
 	daos_list_t		ll_qlink;
-	/**
-	 * iovec for key buffer
-	 * Key to be used in LRU Hash
-	 */
-	daos_iov_t		ll_key;
 	/* Ref count for this reference */
 	unsigned int		ll_ref;
 	/**
@@ -85,6 +82,7 @@ struct daos_lru_cache {
  *
  * \param bits		[IN]	power2(bits) is the size
  *				of the LRU cache
+ * \feats feats		[IN]	Feature bits for DHASH, see DHASH_FT_*
  * \param ops		[IN]	DAOS LRU callbacks
  * \param lcache	[OUT]	Newly created LRU cache
  *
@@ -92,7 +90,8 @@ struct daos_lru_cache {
  *				on failure.
  */
 int
-daos_lru_cache_create(int bits, struct daos_llink_ops *ops,
+daos_lru_cache_create(int bits, uint32_t feats,
+		      struct daos_llink_ops *ops,
 		      struct daos_lru_cache **lcache);
 
 /**
@@ -104,19 +103,6 @@ daos_lru_cache_create(int bits, struct daos_llink_ops *ops,
 void
 daos_lru_cache_destroy(struct daos_lru_cache *lcache);
 
-/**
- * Initialize lru link
- * Sets the llink key iov_buf with key ptr
- * allocated through alloc_ref callback
- *
- * \param llink		[IN]	DAOS LRU Link
- * \param key_buf_ptr	[IN]	Key buf ptr allocated through
- *				lop_alloc_ref callback
- * \param ksize		[IN]	Key size
- */
-void
-daos_lru_llink_init(struct daos_llink *llink,
-		    void *key_buf_ptr, unsigned int ksize);
 /**
  * Find a ref in the cache \a lcache and take its reference.
  * if reference is not found add it.

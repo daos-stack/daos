@@ -43,16 +43,28 @@
 #include <vos_hhash.h>
 #include <daos_errno.h>
 
+/**
+ * Local type for VOS LRU key
+ * VOS LRU key must consist of
+ * Object ID and container UUID
+ */
+struct vos_lru_key {
+	/* Container UUID */
+	uuid_t		vlk_co_uuid;
+	/* Object ID */
+	daos_unit_oid_t	vlk_obj_id;
+};
+
+
 int
 vos_oref_lru_alloc(void *key, unsigned int ksize,
-		   void *args,
-		   struct daos_llink **link)
+		   void *args, struct daos_llink **link)
 {
 	int			rc = 0;
 	struct vos_obj_ref	*oref;
 	struct vos_obj		*lobj;
 	struct vos_lru_key	*lkey;
-	struct vc_hdl		*co_hdl = NULL;
+	struct vc_hdl		*co_hdl;
 
 	D_DEBUG(DF_VOS2, "lru alloc callback for vos_obj_cache\n");
 
@@ -77,22 +89,40 @@ vos_oref_lru_alloc(void *key, unsigned int ksize,
 	D_ALLOC_PTR(oref);
 	if (!oref)
 		return -DER_NOMEM;
+	/**
+	 *  Saving a copy of oid to avoid looking up in
+	 *  vos_obj is a direct pointer to pmem data structure
+	 */
+	oref->or_obj	= lobj;
+	oref->or_oid	= lkey->vlk_obj_id;
+	oref->or_co	= co_hdl;
 
-	oref->or_obj = lobj;
 	D_DEBUG(DF_VOS2, "oref create_cb co uuid:"DF_UUID"\n",
 		DP_UUID(co_hdl->vc_id));
 	D_DEBUG(DF_VOS2, "Object Hold of obj_id: "DF_UOID"\n",
 		DP_UOID(lkey->vlk_obj_id));
 
-	oref->or_key.vlk_obj_id = lkey->vlk_obj_id;
-	uuid_copy(oref->or_key.vlk_co_uuid, co_hdl->vc_id);
-	oref->or_ksize	= ksize;
-	oref->or_co	= co_hdl;
-	daos_lru_llink_init(&oref->or_llink, &oref->or_key,
-			    oref->or_ksize);
 	*link		= &oref->or_llink;
 
 	return 0;
+}
+
+bool
+vos_oref_cmp_keys(const void *key, unsigned int ksize,
+		  struct daos_llink *llink)
+{
+	struct vos_obj_ref	*oref;
+	struct vos_lru_key	*hkey = (struct vos_lru_key *) key;
+
+	D_DEBUG(DF_VOS3, "LRU compare keys\n");
+	D_ASSERT(llink);
+	D_ASSERT(ksize == sizeof(struct vos_lru_key));
+
+	oref = container_of(llink, struct vos_obj_ref, or_llink);
+
+	return !(memcmp(&hkey->vlk_obj_id, &oref->or_oid,
+			sizeof(daos_unit_oid_t)) ||
+		 uuid_compare(hkey->vlk_co_uuid, oref->or_co->vc_id));
 }
 
 void
@@ -100,7 +130,7 @@ vos_oref_lru_free(struct daos_llink *llink)
 {
 	struct vos_obj_ref	*oref;
 
-	D_DEBUG(DF_VOS2, "lru free callback for vos_obj_cache\n");
+	D_DEBUG(DF_VOS3, "lru free callback for vos_obj_cache\n");
 	D_ASSERT(llink);
 
 	oref = container_of(llink, struct vos_obj_ref, or_llink);
@@ -126,6 +156,7 @@ vos_oref_lru_printkey(void *key, unsigned int ksize)
 struct daos_llink_ops vos_oref_llink_ops = {
 	.lop_free_ref	=  vos_oref_lru_free,
 	.lop_alloc_ref	=  vos_oref_lru_alloc,
+	.lop_cmp_keys	=  vos_oref_cmp_keys,
 	.lop_print_key	=  vos_oref_lru_printkey,
 };
 
@@ -139,7 +170,8 @@ vos_obj_cache_create(int32_t cache_size,
 	D_DEBUG(DF_VOS2, "Creating an object cache %d\n",
 		(1 << cache_size));
 
-	rc = daos_lru_cache_create(cache_size, &vos_oref_llink_ops,
+	rc = daos_lru_cache_create(DHASH_FT_NOLOCK,
+				   cache_size, &vos_oref_llink_ops,
 				   occ);
 	if (rc)
 		D_ERROR("Error in creating lru cache\n");
@@ -194,6 +226,7 @@ vos_obj_ref_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		D_ERROR("invalid handle for container\n");
 		return -DER_INVAL;
 	}
+
 	/* Create the key for obj cache */
 	uuid_copy(lkey.vlk_co_uuid, co_hdl->vc_id);
 	lkey.vlk_obj_id = oid;
