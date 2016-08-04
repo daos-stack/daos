@@ -284,39 +284,105 @@ tree_iter_next(struct vos_obj_iter *oiter)
  * @{
  */
 
-/** fetch a record extent */
+/**
+ * Fetch a record extent.
+ *
+ * In non-zc mode, This function will consume @iovs. while entering this
+ * function, @off_p is buffer offset of iovs[0]; while returning from this
+ * function, @off_p should be set to the consumed buffer offset within the
+ * last used iov.
+ * This parameter is useful only for non-zc mode.
+ */
 static int
 vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
-	       daos_iov_t *iov, daos_csum_buf_t *csum)
+	       daos_iov_t *iovs, unsigned int iov_nr, daos_off_t *off_p)
 {
-	daos_recx_t	recx_bak;
-	int		rc;
+	daos_iov_t	*iov;
+	daos_csum_buf_t	 csum;
+	daos_recx_t	 recx_tmp;
+	daos_iov_t	 iov_tmp;
+	int		 iov_cur;
+	int		 i;
+	int		 rc;
+	bool		 is_zc = iovs[0].iov_buf == NULL;
 
-	/* XXX lazy assumption... */
-	D_ASSERT(recx->rx_nr == 1);
+	daos_csum_set(&csum, NULL, 0); /* no checksum for now */
+	recx_tmp = *recx;
+	recx_tmp.rx_nr = 1;
 
-	recx_bak = *recx;
-	rc = tree_recx_fetch(toh, epr, recx, iov, csum);
-	if (rc == -DER_NONEXIST) {
-		recx_bak.rx_idx = recx->rx_idx + 1; /* fake a mismatch */
-		rc = 0;
+	for (i = iov_cur = 0;; i++) {
+		if (i == recx->rx_nr)
+			break;
+
+		if (iov_cur >= iov_nr) {
+			D_DEBUG(DF_VOS1, "Invalid I/O parameters: %d/%d\n",
+				iov_cur, iov_nr);
+			return -DER_IO_INVAL;
+		}
+
+		if (is_zc) {
+			D_ASSERT(*off_p == 0);
+			iov = &iovs[iov_cur];
+
+		} else {
+			D_ASSERT(iovs[iov_cur].iov_buf_len >= *off_p);
+
+			iov_tmp = iovs[iov_cur];
+			iov = &iov_tmp;
+			iov->iov_buf += *off_p;
+			iov->iov_buf_len -= *off_p;
+			iov->iov_len = recx->rx_rsize;
+
+			if (iov->iov_buf_len < recx->rx_rsize) {
+				D_DEBUG(DF_VOS1,
+					"Invalid buf size "DF_U64"/"DF_U64"\n",
+					iovs[iov_cur].iov_buf_len,
+					recx->rx_rsize);
+				return -DER_INVAL;
+			}
+		}
+
+		rc = tree_recx_fetch(toh, epr, &recx_tmp, iov, &csum);
+		if (rc == -DER_NONEXIST) {
+			recx_tmp.rx_idx++; /* fake a mismatch */
+			rc = 0;
+		}
+
+		if (rc != 0) {
+			D_DEBUG(DF_VOS1, "Failed to fetch index "DF_U64": %d\n",
+				recx->rx_idx, rc);
+			return rc;
+		}
+
+		/* If we store index and epoch in the same btree, then
+		 * BTR_PROBE_LE is not enough, we also need to check if it
+		 * is the same index.
+		 */
+		if (recx_tmp.rx_idx != recx->rx_idx + i) {
+			D_DEBUG(DF_VOS2,
+				"Mismatched idx "DF_U64"/"DF_U64", no data\n",
+				recx_tmp.rx_idx, recx->rx_idx + i);
+			if (is_zc)
+				iov->iov_len = 0;
+			else /* XXX this is not good enough */
+				memset(iov->iov_buf, 0, iov->iov_len);
+		}
+
+		/* move to the next index */
+		recx_tmp.rx_idx = recx->rx_idx + i + 1;
+		if (is_zc) {
+			iov_cur++;
+
+		} else {
+			if (iov->iov_buf_len > recx->rx_rsize) {
+				*off_p += recx->rx_rsize;
+			} else {
+				*off_p = 0;
+				iov_cur++;
+			}
+		}
 	}
-
-	if (rc != 0) {
-		D_DEBUG(DF_VOS1, "Failed to fetch index "DF_U64": %d\n",
-			recx->rx_idx, rc);
-		return rc;
-	}
-
-	/* If we store index and epoch in the same btree, then BTR_PROBE_LE is
-	 * not enough, we also need to check if it is the same index.
-	 */
-	if (recx_bak.rx_idx != recx->rx_idx) {
-		D_DEBUG(DF_VOS2, "Mismatched idx "DF_U64"/"DF_U64", no data\n",
-			recx_bak.rx_idx, recx->rx_idx);
-		iov->iov_len = 0;
-	}
-	return 0;
+	return iov_cur;
 }
 
 /** fetch a set of record extents from the specified vector. */
@@ -324,11 +390,12 @@ static int
 vos_vec_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch,
 	      daos_handle_t vec_toh, daos_vec_iod_t *viod, daos_sg_list_t *sgl)
 {
-	daos_epoch_range_t	 eprange;
-	daos_csum_buf_t		 checksum;
-	daos_handle_t		 toh;
-	int			 i;
-	int			 rc;
+	daos_epoch_range_t	eprange;
+	daos_handle_t		toh;
+	daos_off_t		off;
+	int			i;
+	int			nr;
+	int			rc;
 
 	rc = tree_prepare(oref, vec_toh, &viod->vd_name, true, &toh);
 	if (rc == -DER_NONEXIST) {
@@ -343,30 +410,33 @@ vos_vec_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch,
 
 	eprange.epr_lo = epoch;
 	eprange.epr_hi = DAOS_EPOCH_MAX;
-	daos_csum_set(&checksum, NULL, 0);
 
-	/* XXX lazy assumption:
-	 * value of each recx is stored in an individual iov.
-	 */
-	D_ASSERT(viod->vd_nr == sgl->sg_nr.num);
-
-	for (i = 0; i < viod->vd_nr; i++) {
+	for (i = nr = off = 0; i < viod->vd_nr; i++) {
 		daos_epoch_range_t *epr	 = &eprange;
-		daos_csum_buf_t	   *csum = &checksum;
 
 		if (viod->vd_eprs != NULL)
 			epr = &viod->vd_eprs[i];
 
-		if (viod->vd_csums != NULL)
-			csum = &viod->vd_csums[i];
+		if (nr >= sgl->sg_nr.num) {
+			/* XXX lazy assumption:
+			 * value of each recx is stored in an individual iov.
+			 */
+			D_DEBUG(DF_VOS1,
+				"Scatter/gather list can't match viod: %d/%d\n",
+				sgl->sg_nr.num, viod->vd_nr);
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
 
 		rc = vos_recx_fetch(toh, epr, &viod->vd_recxs[i],
-				    &sgl->sg_iovs[i], csum);
-		if (rc != 0) {
+				    &sgl->sg_iovs[nr],
+				    sgl->sg_nr.num - nr, &off);
+		if (rc < 0) {
 			D_DEBUG(DF_VOS1,
 				"Failed to fetch index %d: %d\n", i, rc);
-			goto failed;
+			D_GOTO(failed, rc);
 		}
+		nr += rc;
+		rc = 0;
 	}
  failed:
 	tree_release(toh);
@@ -443,44 +513,108 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	return rc;
 }
 
-/** update a record extent (recx) */
+/**
+ * Update a record extent.
+ * See comment of vos_recx_fetch for explanation of @off_p.
+ */
 static int
 vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
-		daos_iov_t *iov, daos_csum_buf_t *csum, umem_id_t recx_mmid)
+		daos_iov_t *iovs, unsigned iov_nr, daos_off_t *off_p,
+		umem_id_t *recx_mmids)
 {
-	daos_epoch_range_t epr_tmp;
-	int		   rc;
+	daos_iov_t	   *iov;
+	daos_csum_buf_t	    csum;
+	daos_recx_t	    recx_tmp;
+	daos_epoch_range_t  epr_tmp;
+	daos_iov_t	    iov_tmp;
+	int		    iov_cur;
+	int		    i;
+	int		    rc;
+	bool		    is_zc = recx_mmids != NULL;
 
-	/* XXX lazy assumption... */
-	D_ASSERT(recx->rx_nr == 1);
-	recx->rx_rsize = iov->iov_len;
+	daos_csum_set(&csum, NULL, 0); /* no checksum for now */
+	recx_tmp = *recx;
+	recx_tmp.rx_nr = 1;
 
-	epr_tmp = *epr; /* save it */
-	epr->epr_hi = DAOS_EPOCH_MAX;
+	for (i = iov_cur = 0;; i++) {
+		umem_id_t mmid = UMMID_NULL;
 
-	rc = tree_recx_update(toh, epr, recx, iov, csum, recx_mmid);
-	if (rc != 0)
-		goto out;
+		if (i == recx->rx_nr)
+			break;
 
-	if (epr_tmp.epr_hi == DAOS_EPOCH_MAX)
-		goto out; /* done */
+		epr_tmp = *epr;
+		epr_tmp.epr_hi = DAOS_EPOCH_MAX;
 
-	/* XXX reserved for cache missing, for the time being, the upper level
-	 * stack should prevent this from happening.
-	 */
-	D_ASSERTF(0, "Not ready for cache tiering...\n");
-	recx->rx_rsize = DAOS_REC_MISSING;
+		if (iov_cur >= iov_nr) {
+			D_DEBUG(DF_VOS1, "invalid I/O parameters: %d/%d\n",
+				iov_cur, iov_nr);
+			return -DER_IO_INVAL;
+		}
 
-	epr->epr_lo = epr_tmp.epr_hi + 1;
-	epr->epr_hi = DAOS_EPOCH_MAX;
+		if (is_zc) {
+			D_ASSERT(i == iov_cur);
+			mmid = recx_mmids[i];
+			iov = &iovs[i];
 
-	rc = tree_recx_update(toh, epr, recx, iov, csum, UMMID_NULL);
- out:
-	*epr = epr_tmp; /* restore */
-	if (rc != 0)
-		D_DEBUG(DF_VOS1, "Failed to update subtree: %d\n", rc);
+		} else {
+			D_ASSERT(iovs[iov_cur].iov_buf_len >= *off_p);
 
-	return rc;
+			iov_tmp = iovs[iov_cur];
+			iov = &iov_tmp;
+			iov->iov_buf += *off_p;
+			iov->iov_buf_len -= *off_p;
+			iov->iov_len = recx->rx_rsize;
+
+			if (iov->iov_buf_len < recx->rx_rsize) {
+				D_DEBUG(DF_VOS1,
+					"Invalid buf size "DF_U64"/"DF_U64"\n",
+					iovs[iov_cur].iov_buf_len,
+					recx->rx_rsize);
+				return -DER_INVAL;
+			}
+		}
+
+		rc = tree_recx_update(toh, &epr_tmp, &recx_tmp, iov,
+				      &csum, mmid);
+		if (rc != 0) {
+			D_DEBUG(DF_VOS1, "Failed to update subtree: %d\n", rc);
+			return rc;
+		}
+
+		if (epr->epr_hi != DAOS_EPOCH_MAX) {
+			/* XXX reserved for cache missing, for the time being,
+			 * the upper level stack should prevent this from
+			 * happening.
+			 */
+			D_ASSERTF(0, "Not ready for cache tiering...\n");
+			recx_tmp.rx_rsize = DAOS_REC_MISSING;
+
+			epr_tmp.epr_lo = epr->epr_hi + 1;
+			epr_tmp.epr_hi = DAOS_EPOCH_MAX;
+
+			rc = tree_recx_update(toh, &epr_tmp, &recx_tmp, iov,
+					      NULL, UMMID_NULL);
+			if (rc != 0)
+				return rc;
+		}
+
+		/* move to the next index */
+		recx_tmp.rx_idx = recx->rx_idx + i + 1;
+		if (is_zc) {
+			D_ASSERT(iov->iov_buf_len == recx->rx_rsize);
+			D_ASSERT(*off_p == 0);
+			iov_cur++;
+
+		} else {
+			if (iov->iov_buf_len > recx->rx_rsize) {
+				*off_p += recx->rx_rsize;
+			} else {
+				*off_p = 0;
+				iov_cur++;
+			}
+		}
+	}
+	return iov_cur;
 }
 
 /** update a set of record extents (recx) under the same akey */
@@ -489,10 +623,12 @@ vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
 	       daos_handle_t vec_toh, daos_vec_iod_t *viod,
 	       daos_sg_list_t *sgl, struct vos_vec_zbuf *zbuf)
 {
+	umem_id_t		*mmids = NULL;
 	daos_epoch_range_t	 eprange;
-	daos_csum_buf_t		 checksum;
+	daos_off_t		 off;
 	daos_handle_t		 toh;
 	int			 i;
+	int			 nr;
 	int			 rc;
 
 	rc = tree_prepare(oref, vec_toh, &viod->vd_name, false, &toh);
@@ -501,29 +637,32 @@ vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
 
 	eprange.epr_lo = epoch;
 	eprange.epr_hi = DAOS_EPOCH_MAX;
-	daos_csum_set(&checksum, NULL, 0);
+	if (zbuf != NULL)
+		mmids = zbuf->zb_mmids;
 
-	/* XXX lazy assumption: value of each recx is stored in one iov */
-	D_ASSERT(sgl->sg_nr.num == viod->vd_nr);
-
-	for (i = 0; i < viod->vd_nr; i++) {
+	for (i = nr = off = 0; i < viod->vd_nr; i++) {
 		daos_epoch_range_t *epr	 = &eprange;
-		daos_csum_buf_t	   *csum = &checksum;
-		umem_id_t	    mmid = UMMID_NULL;
 
 		if (viod->vd_eprs != NULL)
 			epr = &viod->vd_eprs[i];
 
-		if (viod->vd_csums != NULL)
-			csum = &viod->vd_csums[i];
-
-		if (zbuf != NULL)
-			mmid = zbuf->zb_mmids[i];
+		if (nr >= sgl->sg_nr.num) {
+			D_DEBUG(DF_VOS1,
+				"mismatched scatter/gather list: %d/%d\n",
+				nr, sgl->sg_nr.num);
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
 
 		rc = vos_recx_update(toh, epr, &viod->vd_recxs[i],
-				     &sgl->sg_iovs[i], csum, mmid);
-		if (rc != 0)
-			goto failed;
+				     &sgl->sg_iovs[nr], sgl->sg_nr.num - nr,
+				     &off, mmids);
+		if (rc < 0)
+			D_GOTO(failed, rc);
+
+		nr += rc;
+		if (mmids != NULL)
+			mmids += rc;
+		rc = 0;
 	}
  failed:
 	tree_release(toh);
@@ -746,8 +885,13 @@ vos_vec_zc_fetch_begin(struct vos_obj_ref *oref, daos_epoch_t epoch,
 
 	for (i = 0; i < viod_nr; i++) {
 		struct vos_vec_zbuf *zbuf = &zcc->zc_vec_zbufs[i];
+		int		     j;
+		int		     nr;
 
-		rc = daos_sgl_init(&zbuf->zb_sgl, viods[i].vd_nr);
+		for (j = nr = 0; j < viods[i].vd_nr; j++)
+			nr += viods[i].vd_recxs[j].rx_nr;
+
+		rc = daos_sgl_init(&zbuf->zb_sgl, nr);
 		if (rc != 0) {
 			D_DEBUG(DF_VOS1,
 				"Failed to create sgl for vector %d\n", i);
@@ -832,39 +976,49 @@ vos_rec_zc_update_begin(struct vos_obj_ref *oref, daos_vec_iod_t *viod,
 			struct vos_vec_zbuf *zbuf)
 {
 	int	i;
+	int	nr;
 	int	rc;
 
-	zbuf->zb_mmid_nr = viod->vd_nr;
-	D_ALLOC(zbuf->zb_mmids, zbuf->zb_mmid_nr * sizeof(*zbuf->zb_mmids));
+	for (i = nr = 0; i < viod->vd_nr; i++)
+		nr += viod->vd_recxs[i].rx_nr;
+
+	zbuf->zb_mmid_nr = nr;
+	D_ALLOC(zbuf->zb_mmids, nr * sizeof(*zbuf->zb_mmids));
 	if (zbuf->zb_mmids == NULL)
 		return -DER_NOMEM;
 
-	rc = daos_sgl_init(&zbuf->zb_sgl, viod->vd_nr);
+	rc = daos_sgl_init(&zbuf->zb_sgl, nr);
 	if (rc != 0)
 		return -DER_NOMEM;
 
-	for (i = 0; i < viod->vd_nr; i++) {
-		daos_recx_t	*recx = &viod->vd_recxs[i];
-		daos_csum_buf_t *csum;
-		struct vos_irec	*irec;
-		umem_id_t	 mmid;
+	for (i = nr = 0; i < viod->vd_nr; i++) {
+		daos_recx_t	recx = viod->vd_recxs[i];
+		uint64_t	irec_size;
+		int		j;
 
-		csum = viod->vd_csums == NULL ? NULL : &viod->vd_csums[i];
-		mmid = umem_alloc(vos_oref2umm(oref),
-				  vos_recx2irec_size(recx, csum));
-		if (UMMID_IS_NULL(mmid))
-			return -DER_NOMEM;
+		recx.rx_nr = 1;
+		irec_size = vos_recx2irec_size(&recx, NULL);
 
-		zbuf->zb_mmids[i] = mmid;
+		for (j = 0; j < viod->vd_recxs[i].rx_nr; j++, nr++) {
+			struct vos_irec	*irec;
+			umem_id_t	 mmid;
 
-		/* return the pmem address, so upper layer stack can do RMA
-		 * update for the record.
-		 */
-		irec = (struct vos_irec *)umem_id2ptr(vos_oref2umm(oref), mmid);
-		irec->ir_cs_size = csum == NULL ? 0 : csum->cs_len;
-		irec->ir_cs_type = csum == NULL ? 0 : csum->cs_type;
-		daos_iov_set(&zbuf->zb_sgl.sg_iovs[i],
-			     vos_irec2data(irec), recx->rx_rsize * recx->rx_nr);
+			mmid = umem_alloc(vos_oref2umm(oref), irec_size);
+			if (UMMID_IS_NULL(mmid))
+				return -DER_NOMEM;
+
+			zbuf->zb_mmids[nr] = mmid;
+			/* return the pmem address, so upper layer stack can do
+			 * RMA update for the record.
+			 */
+			irec = (struct vos_irec *)
+				umem_id2ptr(vos_oref2umm(oref), mmid);
+
+			irec->ir_cs_size = 0;
+			irec->ir_cs_type = 0;
+			daos_iov_set(&zbuf->zb_sgl.sg_iovs[nr],
+				     vos_irec2data(irec), recx.rx_rsize);
+		}
 	}
 	return 0;
 }
