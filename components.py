@@ -58,7 +58,8 @@ RETRIEVER = \
                      True)
 REQS.define('mercury',
             retriever=RETRIEVER,
-            commands=['cmake -DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a ' \
+            commands=['cmake -DMCHECKSUM_USE_ZLIB=1 ' \
+                      '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a ' \
                       '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ ' \
                       '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s ' \
                       '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ ' \
