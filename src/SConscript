@@ -1,0 +1,10 @@
+#!python
+
+Import('env', 'PREREQS')
+
+# Generic DAOS includes
+env.Append(CPPPATH = ['#/src/include'])
+
+# Generate the common libraries used by everyone
+SConscript('common/SConscript', exports=['env', 'PREREQS'])
+SConscript('crt/SConscript', exports=['env', 'PREREQS'])

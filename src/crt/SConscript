@@ -1,0 +1,21 @@
+#!python
+
+Import('env', 'PREREQS')
+
+env.AppendUnique(LIBPATH=[Dir('.')])
+
+libraries = ['crt_common', 'mercury', 'abt']
+
+if PREREQS is None:
+    libraries += ['na', 'mcl']
+else:
+    PREREQS.require(env, 'mercury', 'mcl', 'argobots')
+
+denv = env.Clone()
+denv.Append(CPPPATH = ['#/src/crt'])
+
+crt = denv.SharedLibrary('libcrt', Glob('*.c'), LIBS=libraries)
+denv.Install('$PREFIX/lib/', crt)
+
+# Builders
+SConscript('tests/SConscript', exports='denv')

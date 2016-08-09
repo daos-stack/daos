@@ -1,0 +1,17 @@
+#!python
+
+Import('env', 'PREREQS')
+
+env.AppendUnique(LIBPATH=[Dir('.')])
+
+if PREREQS is not None:
+        PREREQS.require(env, 'nvml', 'argobots')
+
+denv = env.Clone()
+
+src = ['debug.c', 'hash.c', 'misc.c']
+common = denv.SharedLibrary('libcrt_common', src)
+denv.Install('$PREFIX/lib/', common)
+
+denv.Append(CPPPATH = ['#/src/common'])
+#SConscript('tests/SConscript', exports='denv')
