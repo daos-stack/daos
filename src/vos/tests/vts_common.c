@@ -52,7 +52,7 @@ enum {
 	TCX_READY,
 };
 
-int gc;
+int gc, oid_cnt;
 
 bool
 vts_file_exists(const char *filename)
@@ -101,11 +101,12 @@ exit:
 inline void
 vts_io_set_oid(daos_unit_oid_t *oid)
 {
-	oid->id_pub.lo = rand();
-	oid->id_pub.mid = rand();
-	oid->id_pub.hi = rand();
+	oid->id_pub.lo = oid_cnt;
+	oid->id_pub.mid = oid_cnt + 1;
+	oid->id_pub.hi = oid_cnt + 2;
 	oid->id_shard = 0;
-	oid->id_pad_32 = rand() % 16;
+	oid->id_pad_32 = 4;
+	oid_cnt++;
 }
 
 int
@@ -114,7 +115,7 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	int	 rc;
 
 	memset(tcx, 0, sizeof(*tcx));
-
+	oid_cnt = 0;
 	rc = vts_alloc_gen_fname(&tcx->tc_po_name);
 	assert_int_equal(rc, 0);
 

@@ -130,6 +130,11 @@ struct vos_obj_ref {
 	struct vc_hdl			*or_co;
 };
 
+/** Iterator ops for objects and OIDs */
+extern struct vos_iter_ops vos_obj_iter_ops;
+extern struct vos_iter_ops vos_oid_iter_ops;
+
+
 static inline struct vos_tls *
 vos_tls_get()
 {

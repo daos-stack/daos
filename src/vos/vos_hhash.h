@@ -98,6 +98,9 @@ vos_co_lookup_handle(struct daos_uuid *key, struct vc_hdl **co_hdl);
 void
 vos_co_putref_handle(struct vc_hdl *co_hdl);
 
+void
+vos_co_addref_handle(struct vc_hdl *co_hdl);
+
 int
 vos_co_release_handle(struct vc_hdl *co_hdl);
 /*====================================================*/

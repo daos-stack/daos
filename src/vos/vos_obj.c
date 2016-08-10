@@ -1451,10 +1451,16 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 static int
 vos_obj_iter_fini(struct vos_iterator *iter)
 {
-	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+	int			rc =  0;
+	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
 
-	if (!daos_handle_is_inval(oiter->it_hdl))
-		dbtree_iter_finish(oiter->it_hdl);
+	if (!daos_handle_is_inval(oiter->it_hdl)) {
+		rc = dbtree_iter_finish(oiter->it_hdl);
+		if (rc) {
+			D_ERROR("obj_iter_fini failed:%d\n", rc);
+			return rc;
+		}
+	}
 
 	if (oiter->it_oref != NULL)
 		vos_obj_ref_release(vos_obj_cache_current(), oiter->it_oref);

@@ -50,6 +50,7 @@
 #define	UPDATE_BUF_SIZE		64
 #define UPDATE_REC_SIZE		16
 #define UPDATE_CSUM_SIZE	32
+#define VTS_IO_OIDS		1
 #define VTS_IO_KEYS		100000
 
 enum {
@@ -75,6 +76,7 @@ int		kc;
 unsigned int	g_epoch;
 /* To verify during enumeration */
 unsigned int	total_keys;
+unsigned int	total_oids;
 daos_epoch_t	max_epoch = 1;
 
 /**
@@ -113,12 +115,14 @@ setup(void **state)
 	kc	= 0;
 	g_epoch = 0;
 	total_keys = 0;
+	total_oids = 0;
 	srand(10);
 
 	rc = vts_ctx_init(&arg->ctx, VPOOL_1G);
 	assert_int_equal(rc, 0);
 
 	vts_io_set_oid(&arg->oid);
+	total_oids++;
 	*state = arg;
 
 	return 0;
@@ -522,6 +526,7 @@ io_oi_test(void **state)
 	int			rc = 0;
 
 	vts_io_set_oid(&oid);
+	total_oids++;
 
 	co_hdl = vos_hdl2co(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(co_hdl, NULL);
@@ -545,6 +550,13 @@ io_obj_cache_test(void **state)
 
 	rc = vos_obj_cache_create(10, &occ);
 	assert_int_equal(rc, 0);
+
+	vts_io_set_oid(&oid[0]);
+	total_oids++;
+
+	vts_io_set_oid(&oid[1]);
+	total_oids++;
+
 
 	rc = hold_object_refs(refs, occ, &ctx->tc_co_hdl, &oid[0], 0, 10);
 	assert_int_equal(rc, 0);
@@ -774,6 +786,84 @@ io_fetch_wo_object(void **state)
 
 }
 
+
+static int
+io_oid_iter_test(struct io_test_args *arg)
+{
+	vos_iter_param_t	param;
+	daos_handle_t		ih;
+	int			nr = 0;
+	int			rc = 0;
+
+	memset(&param, 0, sizeof(param));
+	param.ip_hdl	= arg->ctx.tc_co_hdl;
+
+	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &ih);
+	if (rc != 0) {
+		print_error("Failed to prepare obj iterator\n");
+		return rc;
+	}
+
+	rc = vos_iter_probe(ih, NULL);
+	if (rc != 0) {
+		print_error("Failed to set iterator cursor: %d\n", rc);
+		goto out;
+	}
+
+	while (1) {
+		vos_iter_entry_t	ent;
+		daos_hash_out_t		anchor;
+
+		rc = vos_iter_fetch(ih, &ent, NULL);
+		if (rc == -DER_NONEXIST) {
+			print_message("Finishing obj iteration\n");
+			break;
+		}
+
+		if (rc != 0) {
+			print_error("Failed to fetch objid: %d\n", rc);
+			goto out;
+		}
+
+		D_DEBUG(DF_VOS3, "Object ID: "DF_UOID"\n", DP_UOID(ent.ie_oid));
+		nr++;
+
+		rc = vos_iter_next(ih);
+		if (rc == -DER_NONEXIST)
+			break;
+
+		if (rc != 0) {
+			print_error("Failed to move cursor: %d\n", rc);
+			goto out;
+		}
+
+		if (!(arg->ta_flags & TF_IT_ANCHOR))
+			continue;
+
+		rc = vos_iter_fetch(ih, &ent, &anchor);
+		if (rc != 0) {
+			assert_true(rc != -DER_NONEXIST);
+			print_error("Failed to fetch anchor: %d\n", rc);
+			goto out;
+		}
+
+		rc = vos_iter_probe(ih, &anchor);
+		if (rc != 0) {
+			assert_true(rc != -DER_NONEXIST);
+			print_error("Failed to probe anchor: %d\n", rc);
+			goto out;
+		}
+	}
+out:
+	print_message("Enumerated %d, total_oids: %d\n", nr, total_oids);
+	assert_int_equal(nr, total_oids);
+	vos_iter_finish(ih);
+	return rc;
+
+}
+
+
+
 static void
 io_fetch_no_exist_dkey(void **state)
 {
@@ -902,6 +992,7 @@ io_simple_one_key_cross_container(void **state)
 	vio.vd_nr	= 1;
 
 	vts_io_set_oid(&l_oid);
+	total_oids++;
 	rc  = vos_obj_update(arg->ctx.tc_co_hdl,
 			     arg->oid, epoch, &dkey, 1,
 			     &vio, &sgl, NULL);
@@ -1025,10 +1116,60 @@ io_pool_overflow_teardown(void **state)
 
 	rc = vts_ctx_init(&arg->ctx, VPOOL_1G);
 	assert_int_equal(rc, 0);
-	vts_io_set_oid(&arg->oid);
 
+	vts_io_set_oid(&arg->oid);
+	total_oids = 1;
+
+	*state = arg;
 	return rc;
 }
+
+static int
+oid_iter_test_setup(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct vos_obj		*lobj;
+	struct vc_hdl		*co_hdl;
+	int			i, rc = 0;
+	daos_unit_oid_t		oid[VTS_IO_OIDS];
+
+	co_hdl = vos_hdl2co(arg->ctx.tc_co_hdl);
+	assert_ptr_not_equal(co_hdl, NULL);
+
+	for (i = 0; i < VTS_IO_OIDS; i++) {
+		vts_io_set_oid(&oid[i]);
+		total_oids++;
+		rc = vos_oi_lookup(co_hdl, oid[i], &lobj);
+		assert_int_equal(rc, 0);
+	}
+
+	return 0;
+}
+
+static void
+oid_iter_test(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+
+	arg->ta_flags = 0;
+	rc = io_oid_iter_test(arg);
+	assert_true(rc == 0 || rc == -DER_NONEXIST);
+}
+
+static void
+oid_iter_test_with_anchor(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			rc = 0;
+
+	arg->ta_flags = TF_IT_ANCHOR;
+	rc = io_oid_iter_test(arg);
+	assert_true(rc == 0 || rc == -DER_NONEXIST);
+}
+
+
+
 
 static const struct CMUnitTest io_tests[] = {
 	{ "VOS201: VOS object IO index",
@@ -1061,17 +1202,21 @@ static const struct CMUnitTest io_tests[] = {
 		io_iter_test, NULL, NULL},
 	{ "VOS213: KV Iter tests with anchor (for dkey)",
 		io_iter_test_with_anchor, NULL, NULL},
-	{ "VOS214: Same Obj ID on two containers (obj_cache test)",
+	{ "VOS214: Object iter test (for oid)",
+		oid_iter_test, oid_iter_test_setup, NULL},
+	{ "VOS215: Object iter test with anchor (for oid)",
+		oid_iter_test_with_anchor, oid_iter_test_setup, NULL},
+	{ "VOS216: Same Obj ID on two containers (obj_cache test)",
 		io_simple_one_key_cross_container, NULL, NULL},
-	{ "VOS215: Fetch from non existent object",
+	{ "VOS217: Fetch from non existent object",
 		io_fetch_no_exist_object, NULL, NULL},
-	{ "VOS216: Fetch from non existent object with zero-copy",
+	{ "VOS218: Fetch from non existent object with zero-copy",
 		io_fetch_no_exist_object_zc, NULL, NULL},
-	{ "VOS217: Fetch from non existent dkey",
+	{ "VOS219: Fetch from non existent dkey",
 		io_fetch_no_exist_dkey, NULL, NULL},
-	{ "VOS218: Fetch from non existent dkey with zero-copy",
+	{ "VOS220: Fetch from non existent dkey with zero-copy",
 		io_fetch_no_exist_dkey_zc, NULL, NULL},
-	{ "VOS219: Space overflow negative error test",
+	{ "VOS221: Space overflow negative error test",
 		io_pool_overflow_test, NULL, io_pool_overflow_teardown},
 };
 

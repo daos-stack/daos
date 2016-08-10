@@ -98,8 +98,8 @@ typedef struct {
  */
 typedef struct {
 	/**
-	 * Returned epoch range. It is ignored for container iteration for the
-	 * time being.
+	 * Returned epoch range. It is ignored for container & obj
+	 * iteration for the time being.
 	 */
 	daos_epoch_range_t	ie_epr;
 	union {
@@ -107,6 +107,8 @@ typedef struct {
 		uuid_t				ie_couuid;
 		/** dkey or akey */
 		daos_key_t			ie_key;
+		/** oid */
+		daos_unit_oid_t			ie_oid;
 		struct {
 			daos_recx_t		ie_recx;
 			/** iovec to return data or ZC address */

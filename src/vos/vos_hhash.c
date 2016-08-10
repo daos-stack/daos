@@ -195,6 +195,12 @@ vos_co_putref_handle(struct vc_hdl *co_hdl)
 	daos_uhash_link_putref(vos_get_hr_hash(), &co_hdl->vc_uhlink);
 }
 
+void
+vos_co_addref_handle(struct vc_hdl *co_hdl)
+{
+	daos_uhash_link_addref(vos_get_hr_hash(), &co_hdl->vc_uhlink);
+}
+
 int
 vos_co_release_handle(struct vc_hdl *co_hdl)
 {

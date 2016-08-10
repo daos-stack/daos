@@ -287,11 +287,6 @@ vos_pool_close(daos_handle_t poh, daos_event_t *ev)
 	int			 rc    = 0;
 	struct vp_hdl		*vpool = NULL;
 
-
-	/**
-	 * daos_hhash_link_delete eventually calls the call-back
-	 * daos_vpool_free which also closes the pmemobj pool
-	 */
 	vpool = vos_hdl2pool(poh);
 	if (vpool == NULL) {
 		D_ERROR("Cannot close a NULL handle\n");
