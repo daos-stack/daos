@@ -4,5 +4,7 @@
                   -s "test/SConstruct.utest" \
                   -s "test/SConstruct" \
                   -s "test/sl_test/SConscript" \
-                  -s "test/utest/SConscript"
+                  -s "test/utest/SConscript" \
+                  -P3 "test_runner/__main__.py" \
+                  -P3 "test_runner/TestRunner.py"
 exit $?

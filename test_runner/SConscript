@@ -1,0 +1,15 @@
+"""install test runner"""
+
+TESTRUNNER = ["__init__.py", "__main__.py", "TestRunner.py"]
+
+def scons():
+    """Run scons"""
+
+    Import('env')
+
+    for script in TESTRUNNER:
+        env.Install("$PREFIX/TESTING/test_runner", script)
+
+if __name__ == 'SCons.Script':
+    scons()
+
