@@ -21,56 +21,56 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_transport. It gives out the main dtp internal
- * function declarations which are not included by other specific header files.
+ * This file is part of CaRT. It gives out the main CaRT internal function
+ * declarations which are not included by other specific header files.
  */
 
-#ifndef __DTP_INTERNAL_FNS_H__
-#define __DTP_INTERNAL_FNS_H__
+#ifndef __CRT_INTERNAL_FNS_H__
+#define __CRT_INTERNAL_FNS_H__
 
-#include <dtp_internal_types.h>
+#include <crt_internal_types.h>
 
-/** dtp_init.c */
-bool dtp_initialized();
+/** crt_init.c */
+bool crt_initialized();
 
-/** dtp_group.c */
-dtp_group_id_t dtp_global_grp_id(void);
-int dtp_hdlr_grp_create(dtp_rpc_t *rpc_req);
-int dtp_hdlr_grp_destroy(dtp_rpc_t *rpc_req);
+/** crt_group.c */
+crt_group_id_t crt_global_grp_id(void);
+int crt_hdlr_grp_create(crt_rpc_t *rpc_req);
+int crt_hdlr_grp_destroy(crt_rpc_t *rpc_req);
 
-/** dtp_register.c */
-int dtp_opc_map_create(unsigned int bits);
-void dtp_opc_map_destroy(struct dtp_opc_map *map);
-struct dtp_opc_info *dtp_opc_lookup(struct dtp_opc_map *map, dtp_opcode_t opc,
+/** crt_register.c */
+int crt_opc_map_create(unsigned int bits);
+void crt_opc_map_destroy(struct crt_opc_map *map);
+struct crt_opc_info *crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc,
 				    int locked);
-int dtp_rpc_reg_internal(dtp_opcode_t opc, struct dtp_req_format *drf,
-			 dtp_rpc_cb_t rpc_handler,
-			 struct dtp_corpc_ops *co_ops);
+int crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *drf,
+			 crt_rpc_cb_t rpc_handler,
+			 struct crt_corpc_ops *co_ops);
 
-/** dtp_context.c */
-bool dtp_context_empty(int locked);
-int dtp_context_req_track(dtp_rpc_t *req);
-void dtp_context_req_untrack(dtp_rpc_t *req);
-dtp_context_t dtp_context_lookup(int ctx_idx);
-void dtp_rpc_complete(struct dtp_rpc_priv *rpc_priv, int rc);
+/** crt_context.c */
+bool crt_context_empty(int locked);
+int crt_context_req_track(crt_rpc_t *req);
+void crt_context_req_untrack(crt_rpc_t *req);
+crt_context_t crt_context_lookup(int ctx_idx);
+void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
 
 enum {
-	DTP_REQ_TRACK_IN_INFLIGHQ = 0,
-	DTP_REQ_TRACK_IN_WAITQ,
+	CRT_REQ_TRACK_IN_INFLIGHQ = 0,
+	CRT_REQ_TRACK_IN_WAITQ,
 };
 
 /** some simple helper functions */
 
 static inline void
-dtp_bulk_desc_dup(struct dtp_bulk_desc *bulk_desc_new,
-		  struct dtp_bulk_desc *bulk_desc)
+crt_bulk_desc_dup(struct crt_bulk_desc *bulk_desc_new,
+		  struct crt_bulk_desc *bulk_desc)
 {
-	D_ASSERT(bulk_desc_new != NULL && bulk_desc != NULL);
+	C_ASSERT(bulk_desc_new != NULL && bulk_desc != NULL);
 	*bulk_desc_new = *bulk_desc;
 }
 
 static inline uint64_t
-dtp_time_usec(unsigned sec_diff)
+crt_time_usec(unsigned sec_diff)
 {
 	struct timeval	tv;
 
@@ -79,10 +79,10 @@ dtp_time_usec(unsigned sec_diff)
 }
 
 static inline bool
-dtp_ep_identical(dtp_endpoint_t *ep1, dtp_endpoint_t *ep2)
+crt_ep_identical(crt_endpoint_t *ep1, crt_endpoint_t *ep2)
 {
-	D_ASSERT(ep1 != NULL);
-	D_ASSERT(ep2 != NULL);
+	C_ASSERT(ep1 != NULL);
+	C_ASSERT(ep2 != NULL);
 	/* TODO: check group */
 	if (ep1->ep_rank == ep2->ep_rank)
 		return true;
@@ -91,13 +91,13 @@ dtp_ep_identical(dtp_endpoint_t *ep1, dtp_endpoint_t *ep2)
 }
 
 static inline void
-dtp_ep_copy(dtp_endpoint_t *dst_ep, dtp_endpoint_t *src_ep)
+crt_ep_copy(crt_endpoint_t *dst_ep, crt_endpoint_t *src_ep)
 {
-	D_ASSERT(dst_ep != NULL);
-	D_ASSERT(src_ep != NULL);
+	C_ASSERT(dst_ep != NULL);
+	C_ASSERT(src_ep != NULL);
 	/* TODO: copy grp id */
 	dst_ep->ep_rank = src_ep->ep_rank;
 	dst_ep->ep_tag = src_ep->ep_tag;
 }
 
-#endif /* __DTP_INTERNAL_FNS_H__ */
+#endif /* __CRT_INTERNAL_FNS_H__ */

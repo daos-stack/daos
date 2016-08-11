@@ -21,12 +21,12 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_transport. It it the common header file which be
- * included by all other .c files of dtp.
+ * This file is part of CaRT. It it the common header file which be included by
+ * all other .c files of CaRT.
  */
 
-#ifndef __DTP_INTERNAL_H__
-#define __DTP_INTERNAL_H__
+#ifndef __CRT_INTERNAL_H__
+#define __CRT_INTERNAL_H__
 
 #include <ctype.h>
 #include <errno.h>
@@ -49,15 +49,15 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 
-#include <daos/common.h>
-#include <daos/transport.h>
+#include <crt_util/common.h>
+#include <crt_api.h>
 
-#include <dtp_internal_types.h>
-#include <dtp_internal_fns.h>
-#include <dtp_rpc.h>
+#include <crt_internal_types.h>
+#include <crt_internal_fns.h>
+#include <crt_rpc.h>
 
-#include <dtp_hg.h>
+#include <crt_hg.h>
 
 #include <process_set.h>
 
-#endif /* __DTP_INTERNAL_H__ */
+#endif /* __CRT_INTERNAL_H__ */

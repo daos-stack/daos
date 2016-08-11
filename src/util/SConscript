@@ -10,8 +10,7 @@ if PREREQS is not None:
 denv = env.Clone()
 
 src = ['debug.c', 'hash.c', 'misc.c']
-common = denv.SharedLibrary('libcrt_common', src)
+common = denv.SharedLibrary('libcrt_util', src)
 denv.Install('$PREFIX/lib/', common)
 
-denv.Append(CPPPATH = ['#/src/common'])
-#SConscript('tests/SConscript', exports='denv')
+denv.Append(CPPPATH = ['#/src/util'])

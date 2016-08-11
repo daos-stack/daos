@@ -21,14 +21,14 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of the dtp echo example which is based on dtp APIs.
+ * This file is part of the CaRT echo example which is based on CaRT APIs.
  */
 
-#ifndef __DTP_ECHO_H__
-#define __DTP_ECHO_H__
+#ifndef __CRT_ECHO_H__
+#define __CRT_ECHO_H__
 
-#include <daos/common.h>
-#include <daos/transport.h>
+#include <crt_util/common.h>
+#include <crt_api.h>
 
 #include <stdio.h>
 #include <assert.h>
@@ -44,85 +44,85 @@
 #define ECHO_EXTRA_CONTEXT_NUM (3)
 
 struct gecho {
-	dtp_context_t	dtp_ctx;
-	dtp_context_t	*extra_ctx;
+	crt_context_t	crt_ctx;
+	crt_context_t	*extra_ctx;
 	int		complete;
 	bool		server;
 };
 
 extern struct gecho gecho;
 
-extern struct dtp_corpc_ops echo_co_ops;
+extern struct crt_corpc_ops echo_co_ops;
 
-int echo_srv_checkin(dtp_rpc_t *rpc);
-int echo_srv_bulk_test(dtp_rpc_t *rpc);
-int echo_srv_shutdown(dtp_rpc_t *rpc);
-int echo_srv_corpc_example(dtp_rpc_t *rpc);
+int echo_srv_checkin(crt_rpc_t *rpc);
+int echo_srv_bulk_test(crt_rpc_t *rpc);
+int echo_srv_shutdown(crt_rpc_t *rpc);
+int echo_srv_corpc_example(crt_rpc_t *rpc);
 
-struct dtp_msg_field *echo_ping_checkin[] = {
+struct crt_msg_field *echo_ping_checkin[] = {
 	&DMF_UINT32,
 	&DMF_UINT32,
 	&DMF_STRING,
 };
-struct dtp_echo_checkin_req {
+struct crt_echo_checkin_req {
 	int age;
 	int days;
-	dtp_string_t name;
+	crt_string_t name;
 };
 
-struct dtp_msg_field *echo_ping_checkout[] = {
+struct crt_msg_field *echo_ping_checkout[] = {
 	&DMF_INT,
 	&DMF_UINT32,
 };
-struct dtp_echo_checkin_reply {
+struct crt_echo_checkin_reply {
 	int ret;
 	uint32_t room_no;
 };
 
-struct dtp_msg_field *echo_corpc_example_in[] = {
+struct crt_msg_field *echo_corpc_example_in[] = {
 	&DMF_STRING,
 };
-struct dtp_echo_corpc_example_req {
-	dtp_string_t	co_msg;
+struct crt_echo_corpc_example_req {
+	crt_string_t	co_msg;
 };
 
-struct dtp_msg_field *echo_corpc_example_out[] = {
+struct crt_msg_field *echo_corpc_example_out[] = {
 	&DMF_UINT32,
 };
-struct dtp_echo_corpc_example_reply {
+struct crt_echo_corpc_example_reply {
 	uint32_t	co_result;
 };
 
-struct dtp_msg_field *echo_bulk_test_in[] = {
+struct crt_msg_field *echo_bulk_test_in[] = {
 	&DMF_STRING,
 	&DMF_STRING,
 	&DMF_BULK,
 };
-struct dtp_echo_bulk_in_req {
-	dtp_string_t bulk_intro_msg;
-	dtp_string_t bulk_md5_ptr;
-	dtp_bulk_t remote_bulk_hdl;
+struct crt_echo_bulk_in_req {
+	crt_string_t bulk_intro_msg;
+	crt_string_t bulk_md5_ptr;
+	crt_bulk_t remote_bulk_hdl;
 };
 
-struct dtp_msg_field *echo_bulk_test_out[] = {
+struct crt_msg_field *echo_bulk_test_out[] = {
 	&DMF_STRING,
 	&DMF_INT,
 };
-struct dtp_echo_bulk_out_reply {
+struct crt_echo_bulk_out_reply {
 	char *echo_msg;
 	int ret;
 };
 
-struct dtp_req_format DQF_ECHO_PING_CHECK =
-	DEFINE_DTP_REQ_FMT("ECHO_PING_CHECK", echo_ping_checkin,
+struct crt_req_format DQF_ECHO_PING_CHECK =
+	DEFINE_CRT_REQ_FMT("ECHO_PING_CHECK", echo_ping_checkin,
 			   echo_ping_checkout);
 
-struct dtp_req_format DQF_ECHO_CORPC_EXAMPLE =
-	DEFINE_DTP_REQ_FMT("ECHO_CORPC_EXAMPLE", echo_corpc_example_in,
+struct crt_req_format DQF_ECHO_CORPC_EXAMPLE =
+	DEFINE_CRT_REQ_FMT("ECHO_CORPC_EXAMPLE", echo_corpc_example_in,
 			   echo_corpc_example_out);
 
-struct dtp_req_format DQF_ECHO_BULK_TEST =
-	DEFINE_DTP_REQ_FMT("ECHO_BULK_TEST", echo_bulk_test_in,
+struct crt_req_format DQF_ECHO_BULK_TEST =
+	DEFINE_CRT_REQ_FMT("ECHO_BULK_TEST", echo_bulk_test_in,
 			   echo_bulk_test_out);
 
 static inline void
@@ -130,47 +130,47 @@ echo_init(int server)
 {
 	int rc = 0, i;
 
-	rc = dtp_init(server);
+	rc = crt_init(server);
 	assert(rc == 0);
 
 	gecho.server = (server != 0);
 
-	rc = dtp_context_create(NULL, &gecho.dtp_ctx);
+	rc = crt_context_create(NULL, &gecho.crt_ctx);
 	assert(rc == 0);
 
 	if (server && ECHO_EXTRA_CONTEXT_NUM > 0) {
 		gecho.extra_ctx = calloc(ECHO_EXTRA_CONTEXT_NUM,
-					 sizeof(dtp_context_t));
+					 sizeof(crt_context_t));
 		assert(gecho.extra_ctx != NULL);
 		for (i = 0; i < ECHO_EXTRA_CONTEXT_NUM; i++) {
-			rc = dtp_context_create(NULL, &gecho.extra_ctx[i]);
+			rc = crt_context_create(NULL, &gecho.extra_ctx[i]);
 			assert(rc == 0);
 		}
 	}
 
 	/* Just show the case that the client does not know the rpc handler,
-	 * then client side can use dtp_rpc_reg, and server side can use
-	 * dtp_rpc_srv_reg.
+	 * then client side can use crt_rpc_reg, and server side can use
+	 * crt_rpc_srv_reg.
 	 * If both client and server side know the rpc handler, they can call
-	 * the same dtp_rpc_srv_reg. */
+	 * the same crt_rpc_srv_reg. */
 	if (server == 0) {
-		rc = dtp_rpc_reg(ECHO_OPC_CHECKIN, &DQF_ECHO_PING_CHECK);
+		rc = crt_rpc_reg(ECHO_OPC_CHECKIN, &DQF_ECHO_PING_CHECK);
 		assert(rc == 0);
-		rc = dtp_rpc_reg(ECHO_OPC_BULK_TEST, &DQF_ECHO_BULK_TEST);
+		rc = crt_rpc_reg(ECHO_OPC_BULK_TEST, &DQF_ECHO_BULK_TEST);
 		assert(rc == 0);
-		rc = dtp_rpc_reg(ECHO_OPC_SHUTDOWN, NULL);
+		rc = crt_rpc_reg(ECHO_OPC_SHUTDOWN, NULL);
 		assert(rc == 0);
 	} else {
-		rc = dtp_rpc_srv_reg(ECHO_OPC_CHECKIN, &DQF_ECHO_PING_CHECK,
+		rc = crt_rpc_srv_reg(ECHO_OPC_CHECKIN, &DQF_ECHO_PING_CHECK,
 				     echo_srv_checkin);
 		assert(rc == 0);
-		rc = dtp_rpc_srv_reg(ECHO_OPC_BULK_TEST, &DQF_ECHO_BULK_TEST,
+		rc = crt_rpc_srv_reg(ECHO_OPC_BULK_TEST, &DQF_ECHO_BULK_TEST,
 				     echo_srv_bulk_test);
 		assert(rc == 0);
-		rc = dtp_rpc_srv_reg(ECHO_OPC_SHUTDOWN, NULL,
+		rc = crt_rpc_srv_reg(ECHO_OPC_SHUTDOWN, NULL,
 				     echo_srv_shutdown);
 		assert(rc == 0);
-		rc = dtp_corpc_reg(ECHO_CORPC_EXAMPLE, &DQF_ECHO_CORPC_EXAMPLE,
+		rc = crt_corpc_reg(ECHO_CORPC_EXAMPLE, &DQF_ECHO_CORPC_EXAMPLE,
 				   echo_srv_corpc_example, &echo_co_ops);
 	}
 }
@@ -180,23 +180,23 @@ echo_fini(void)
 {
 	int rc = 0, i;
 
-	rc = dtp_context_destroy(gecho.dtp_ctx, 0);
+	rc = crt_context_destroy(gecho.crt_ctx, 0);
 	assert(rc == 0);
 
 	if (gecho.server && ECHO_EXTRA_CONTEXT_NUM > 0) {
 		for (i = 0; i < ECHO_EXTRA_CONTEXT_NUM; i++) {
-			rc = dtp_context_destroy(gecho.extra_ctx[i], 0);
+			rc = crt_context_destroy(gecho.extra_ctx[i], 0);
 			assert(rc == 0);
 		}
 	}
 
-	rc = dtp_finalize();
+	rc = crt_finalize();
 	assert(rc == 0);
 }
 
 /* convert to string just to facilitate the pack/unpack */
 static inline void
-echo_md5_to_string(unsigned char *md5, dtp_string_t md5_str)
+echo_md5_to_string(unsigned char *md5, crt_string_t md5_str)
 {
 	char tmp[3] = {'\0'};
 	int i;
@@ -209,12 +209,12 @@ echo_md5_to_string(unsigned char *md5, dtp_string_t md5_str)
 	}
 }
 
-int client_cb_common(const struct dtp_cb_info *cb_info)
+int client_cb_common(const struct crt_cb_info *cb_info)
 {
-	dtp_rpc_t		*rpc_req;
-	struct dtp_echo_checkin_req *e_req;
-	struct dtp_echo_checkin_reply *e_reply;
-	struct dtp_echo_corpc_example_reply *corpc_reply;
+	crt_rpc_t		*rpc_req;
+	struct crt_echo_checkin_req *e_req;
+	struct crt_echo_checkin_reply *e_reply;
+	struct crt_echo_corpc_example_reply *corpc_reply;
 
 	rpc_req = cb_info->dci_rpc;
 
@@ -225,13 +225,13 @@ int client_cb_common(const struct dtp_cb_info *cb_info)
 
 	switch (cb_info->dci_rpc->dr_opc) {
 	case ECHO_OPC_CHECKIN:
-		e_req = dtp_req_get(rpc_req);
+		e_req = crt_req_get(rpc_req);
 		if (e_req == NULL)
-			return -DER_INVAL;
+			return -CER_INVAL;
 
-		e_reply = dtp_reply_get(rpc_req);
+		e_reply = crt_reply_get(rpc_req);
 		if (e_reply == NULL)
-			return -DER_INVAL;
+			return -CER_INVAL;
 
 		printf("%s checkin result - ret: %d, room_no: %d.\n",
 		       e_req->name, e_reply->ret, e_reply->room_no);
@@ -239,7 +239,7 @@ int client_cb_common(const struct dtp_cb_info *cb_info)
 	case ECHO_OPC_SHUTDOWN:
 		break;
 	case ECHO_CORPC_EXAMPLE:
-		corpc_reply = dtp_reply_get(rpc_req);
+		corpc_reply = crt_reply_get(rpc_req);
 		printf("ECHO_CORPC_EXAMPLE finished, co_result: %d.\n",
 		       corpc_reply->co_result);
 		break;
@@ -250,4 +250,4 @@ int client_cb_common(const struct dtp_cb_info *cb_info)
 	return 0;
 }
 
-#endif /* __DTP_ECHO_H__ */
+#endif /* __CRT_ECHO_H__ */

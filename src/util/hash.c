@@ -21,20 +21,20 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * This file is part of DAOSM
+ * This file is part of CRTM
  *
- * daos_event/hash.c
+ * crt_event/hash.c
  *
  * Author: Liang Zhen  <liang.zhen@intel.com>
  */
 
 #include <pthread.h>
-#include <daos/common.h>
-#include <daos/list.h>
-#include <daos/hash.h>
+#include <crt_util/common.h>
+#include <crt_util/list.h>
+#include <crt_util/hash.h>
 
 uint64_t
-daos_hash_mix64(uint64_t key)
+crt_hash_mix64(uint64_t key)
 {
 	key = (~key) + (key << 21);
 	key = key ^ (key >> 24);
@@ -49,7 +49,7 @@ daos_hash_mix64(uint64_t key)
 
 /** Robert Jenkins' 96 bit Mix Function */
 uint32_t
-daos_hash_mix96(uint32_t a, uint32_t b, uint32_t c)
+crt_hash_mix96(uint32_t a, uint32_t b, uint32_t c)
 {
 	a = a - b;
 	a = a - c;
@@ -84,7 +84,7 @@ daos_hash_mix96(uint32_t a, uint32_t b, uint32_t c)
 
 /** consistent hash search */
 unsigned int
-daos_chash_srch_u64(uint64_t *hashes, unsigned int nhashes, uint64_t value)
+crt_chash_srch_u64(uint64_t *hashes, unsigned int nhashes, uint64_t value)
 {
 	int	high = nhashes - 1;
 	int	low = 0;
@@ -101,7 +101,7 @@ daos_chash_srch_u64(uint64_t *hashes, unsigned int nhashes, uint64_t value)
 
 /* The djb2 string hash function, hash a string to a uint32_t value */
 uint32_t
-daos_hash_string_u32(const char *string, unsigned int len)
+crt_hash_string_u32(const char *string, unsigned int len)
 {
 	uint32_t result = 5381;
 	const unsigned char *p;
@@ -123,7 +123,7 @@ daos_hash_string_u32(const char *string, unsigned int len)
 #define MUR_ROTATE	47
 
 uint64_t
-daos_hash_murmur64(const unsigned char *key, unsigned int key_len,
+crt_hash_murmur64(const unsigned char *key, unsigned int key_len,
 		   unsigned int seed)
 {
 	const uint64_t	*addr	= (const uint64_t *)key;
@@ -245,39 +245,39 @@ dh_key_hash(struct dhash_table *htable, const void *key, unsigned int ksize)
 	if (htable->ht_ops->hop_key_hash)
 		idx = htable->ht_ops->hop_key_hash(htable, key, ksize);
 	else
-		idx = daos_hash_string_u32((const char *)key, ksize);
+		idx = crt_hash_string_u32((const char *)key, ksize);
 
 	return idx & ((1U << htable->ht_bits) - 1);
 }
 
 static void
-dh_key_init(struct dhash_table *htable, daos_list_t *rlink, void *args)
+dh_key_init(struct dhash_table *htable, crt_list_t *rlink, void *args)
 {
-	D_ASSERT(htable->ht_ops->hop_key_init);
+	C_ASSERT(htable->ht_ops->hop_key_init);
 	htable->ht_ops->hop_key_init(htable, rlink, args);
 }
 
 static bool
-dh_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
+dh_key_cmp(struct dhash_table *htable, crt_list_t *rlink,
 	   const void *key, unsigned int ksize)
 {
-	D_ASSERT(htable->ht_ops->hop_key_cmp);
+	C_ASSERT(htable->ht_ops->hop_key_cmp);
 	return htable->ht_ops->hop_key_cmp(htable, rlink, key, ksize);
 }
 
 static unsigned int
-dh_key_get(struct dhash_table *htable, daos_list_t *rlink, void **key_pp)
+dh_key_get(struct dhash_table *htable, crt_list_t *rlink, void **key_pp)
 {
-	D_ASSERT(htable->ht_ops->hop_key_get);
+	C_ASSERT(htable->ht_ops->hop_key_get);
 	return htable->ht_ops->hop_key_get(htable, rlink, key_pp);
 }
 
 static void
-dh_rec_insert(struct dhash_table *htable, unsigned idx, daos_list_t *rlink)
+dh_rec_insert(struct dhash_table *htable, unsigned idx, crt_list_t *rlink)
 {
 	struct dhash_bucket *bucket = &htable->ht_buckets[idx];
 
-	daos_list_add(rlink, &bucket->hb_head);
+	crt_list_add(rlink, &bucket->hb_head);
 #if DHASH_DEBUG
 	htable->ht_nr++;
 	if (htable->ht_nr > htable->ht_nr_max)
@@ -287,7 +287,7 @@ dh_rec_insert(struct dhash_table *htable, unsigned idx, daos_list_t *rlink)
 		bucket->hb_dep++;
 		if (bucket->hb_dep > htable->ht_dep_max) {
 			htable->ht_dep_max = bucket->hb_dep;
-			D_DEBUG(DF_MISC, "Max depth %d/%d/%d\n",
+			C_DEBUG(CF_MISC, "Max depth %d/%d/%d\n",
 				htable->ht_dep_max, htable->ht_nr,
 				htable->ht_nr_max);
 		}
@@ -296,9 +296,9 @@ dh_rec_insert(struct dhash_table *htable, unsigned idx, daos_list_t *rlink)
 }
 
 static void
-dh_rec_delete(struct dhash_table *htable, daos_list_t *rlink)
+dh_rec_delete(struct dhash_table *htable, crt_list_t *rlink)
 {
-	daos_list_del_init(rlink);
+	crt_list_del_init(rlink);
 #if DHASH_DEBUG
 	htable->ht_nr--;
 	if (htable->ht_ops->hop_key_get) {
@@ -313,14 +313,14 @@ dh_rec_delete(struct dhash_table *htable, daos_list_t *rlink)
 #endif
 }
 
-static daos_list_t *
+static crt_list_t *
 dh_rec_find(struct dhash_table *htable, unsigned idx, const void *key,
 	     unsigned int ksize)
 {
 	struct dhash_bucket *bucket = &htable->ht_buckets[idx];
-	daos_list_t	    *rlink;
+	crt_list_t	    *rlink;
 
-	daos_list_for_each(rlink, &bucket->hb_head) {
+	crt_list_for_each(rlink, &bucket->hb_head) {
 		if (dh_key_cmp(htable, rlink, key, ksize))
 			return rlink;
 	}
@@ -328,21 +328,21 @@ dh_rec_find(struct dhash_table *htable, unsigned idx, const void *key,
 }
 
 static void
-dh_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+dh_rec_addref(struct dhash_table *htable, crt_list_t *rlink)
 {
 	if (htable->ht_ops->hop_rec_addref)
 		htable->ht_ops->hop_rec_addref(htable, rlink);
 }
 
 static bool
-dh_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+dh_rec_decref(struct dhash_table *htable, crt_list_t *rlink)
 {
 	return htable->ht_ops->hop_rec_decref ?
 	       htable->ht_ops->hop_rec_decref(htable, rlink) : false;
 }
 
 static void
-dh_rec_free(struct dhash_table *htable, daos_list_t *rlink)
+dh_rec_free(struct dhash_table *htable, crt_list_t *rlink)
 {
 	if (htable->ht_ops->hop_rec_free)
 		htable->ht_ops->hop_rec_free(htable, rlink);
@@ -356,13 +356,13 @@ dh_rec_free(struct dhash_table *htable, daos_list_t *rlink)
  * \param key		[IN]	The key to search
  * \param ksize		[IN]	Size of the key
  */
-daos_list_t *
+crt_list_t *
 dhash_rec_find(struct dhash_table *htable, const void *key, unsigned int ksize)
 {
-	daos_list_t	*rlink;
+	crt_list_t	*rlink;
 	int		 idx;
 
-	D_ASSERT(key != NULL);
+	C_ASSERT(key != NULL);
 
 	idx = dh_key_hash(htable, key, ksize);
 	dh_lock(htable, true);
@@ -391,18 +391,18 @@ dhash_rec_find(struct dhash_table *htable, const void *key, unsigned int ksize)
  */
 int
 dhash_rec_insert(struct dhash_table *htable, const void *key,
-		 unsigned int ksize, daos_list_t *rlink, bool exclusive)
+		 unsigned int ksize, crt_list_t *rlink, bool exclusive)
 {
 	int	idx;
 	int	rc = 0;
 
-	D_ASSERT(key != NULL && ksize != 0);
+	C_ASSERT(key != NULL && ksize != 0);
 
 	idx = dh_key_hash(htable, key, ksize);
 	dh_lock(htable, false);
 
 	if (exclusive && dh_rec_find(htable, idx, key, ksize))
-		D_GOTO(out, rc = -DER_EXIST);
+		C_GOTO(out, rc = -CER_EXIST);
 
 	dh_rec_addref(htable, rlink);
 	dh_rec_insert(htable, idx, rlink);
@@ -421,7 +421,7 @@ dhash_rec_insert(struct dhash_table *htable, const void *key,
  * \param args		[IN]	Arguments for key generating
  */
 int
-dhash_rec_insert_anonym(struct dhash_table *htable, daos_list_t *rlink,
+dhash_rec_insert_anonym(struct dhash_table *htable, crt_list_t *rlink,
 			void *args)
 {
 	void	*key;
@@ -430,7 +430,7 @@ dhash_rec_insert_anonym(struct dhash_table *htable, daos_list_t *rlink,
 
 	if (htable->ht_ops->hop_key_init == NULL ||
 	    htable->ht_ops->hop_key_get == NULL)
-		return -DER_NO_PERM;
+		return -CER_NO_PERM;
 
 	dh_lock(htable, false);
 	/* has no key, hash table should have provided key generator */
@@ -460,12 +460,12 @@ bool
 dhash_rec_delete(struct dhash_table *htable, const void *key,
 		 unsigned int ksize)
 {
-	daos_list_t	*rlink;
+	crt_list_t	*rlink;
 	int		 idx;
 	bool		 deleted = false;
 	bool		 zombie  = false;
 
-	D_ASSERT(key != NULL);
+	C_ASSERT(key != NULL);
 
 	idx = dh_key_hash(htable, key, ksize);
 	dh_lock(htable, false);
@@ -497,14 +497,14 @@ dhash_rec_delete(struct dhash_table *htable, const void *key,
  *				hash table
  */
 bool
-dhash_rec_delete_at(struct dhash_table *htable, daos_list_t *rlink)
+dhash_rec_delete_at(struct dhash_table *htable, crt_list_t *rlink)
 {
 	bool	deleted = false;
 	bool	zombie  = false;
 
 	dh_lock(htable, false);
 
-	if (!daos_list_empty(rlink)) {
+	if (!crt_list_empty(rlink)) {
 		dh_rec_delete(htable, rlink);
 		zombie = dh_rec_decref(htable, rlink);
 		deleted = true;
@@ -524,7 +524,7 @@ dhash_rec_delete_at(struct dhash_table *htable, daos_list_t *rlink)
  * \param rlink		[IN]	The link chain of the record
  */
 void
-dhash_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+dhash_rec_addref(struct dhash_table *htable, crt_list_t *rlink)
 {
 	dh_lock(htable, true);
 	dh_rec_addref(htable, rlink);
@@ -539,14 +539,14 @@ dhash_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
  * \param rlink		[IN]	Chain rlink of the hash record
  */
 void
-dhash_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+dhash_rec_decref(struct dhash_table *htable, crt_list_t *rlink)
 {
 	bool zombie;
 
 	dh_lock(htable, true);
 
 	zombie = dh_rec_decref(htable, rlink);
-	D_ASSERT(!zombie || daos_list_empty(rlink));
+	C_ASSERT(!zombie || crt_list_empty(rlink));
 
 	dh_unlock(htable, true);
 	if (zombie)
@@ -560,9 +560,9 @@ dhash_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
  *		False	No
  */
 bool
-dhash_rec_unlinked(daos_list_t *rlink)
+dhash_rec_unlinked(crt_list_t *rlink)
 {
-	return daos_list_empty(rlink);
+	return crt_list_empty(rlink);
 }
 
 /**
@@ -585,20 +585,20 @@ dhash_table_create_inplace(uint32_t feats, unsigned int bits, void *priv,
 	int		     nr = (1 << bits);
 	int		     i;
 
-	D_ASSERT(hops != NULL);
-	D_ASSERT(hops->hop_key_cmp != NULL);
+	C_ASSERT(hops != NULL);
+	C_ASSERT(hops->hop_key_cmp != NULL);
 
 	htable->ht_feats = feats;
 	htable->ht_bits	 = bits;
 	htable->ht_ops	 = hops;
 	htable->ht_priv	 = priv;
 
-	D_ALLOC(buckets, sizeof(*buckets) * nr);
+	C_ALLOC(buckets, sizeof(*buckets) * nr);
 	if (buckets == NULL)
-		return -DER_NOMEM;
+		return -CER_NOMEM;
 
 	for (i = 0; i < nr; i++)
-		DAOS_INIT_LIST_HEAD(&buckets[i].hb_head);
+		CRT_INIT_LIST_HEAD(&buckets[i].hb_head);
 
 	htable->ht_buckets = buckets;
 	dh_lock_init(htable);
@@ -625,9 +625,9 @@ dhash_table_create(uint32_t feats, unsigned int bits, void *priv,
 	struct dhash_table *htable;
 	int		    rc;
 
-	D_ALLOC_PTR(htable);
+	C_ALLOC_PTR(htable);
 	if (htable == NULL)
-		return -DER_NOMEM;
+		return -CER_NOMEM;
 
 	rc = dhash_table_create_inplace(feats, bits, priv, hops, htable);
 	if (rc != 0)
@@ -636,7 +636,7 @@ dhash_table_create(uint32_t feats, unsigned int bits, void *priv,
 	*htable_pp = htable;
 	return 0;
  failed:
-	D_FREE_PTR(htable);
+	C_FREE_PTR(htable);
 	return rc;
 }
 
@@ -657,30 +657,30 @@ dhash_table_traverse(struct dhash_table *htable, dhash_traverse_cb_t cb,
 		     void *args)
 {
 	struct dhash_bucket *buckets = htable->ht_buckets;
-	daos_list_t	    *rlink;
+	crt_list_t	    *rlink;
 
 	int		     nr;
 	int		     i;
 	int		     rc = 0;
 
 	if (buckets == NULL) {
-		D_ERROR("dhash_table %p un-initialized (NULL buckets).\n",
+		C_ERROR("dhash_table %p un-initialized (NULL buckets).\n",
 			htable);
-		D_GOTO(out, rc = -DER_UNINIT);
+		C_GOTO(out, rc = -CER_UNINIT);
 	}
 	if (cb == NULL) {
-		D_ERROR("invalid parameter, NULL cb.\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		C_ERROR("invalid parameter, NULL cb.\n");
+		C_GOTO(out, rc = -CER_INVAL);
 	}
 
 	dh_lock(htable, true);
 
 	nr = 1U << htable->ht_bits;
 	for (i = 0; i < nr; i++) {
-		daos_list_for_each(rlink, &buckets[i].hb_head) {
+		crt_list_for_each(rlink, &buckets[i].hb_head) {
 			rc = cb(rlink, args);
 			if (rc != 0)
-				D_GOTO(unlock, rc);
+				C_GOTO(unlock, rc);
 		}
 	}
 
@@ -713,15 +713,15 @@ dhash_table_destroy_inplace(struct dhash_table *htable, bool force)
 
 	nr = 1U << htable->ht_bits;
 	for (i = 0; i < nr; i++) {
-		while (!daos_list_empty(&buckets[i].hb_head)) {
+		while (!crt_list_empty(&buckets[i].hb_head)) {
 			if (!force) {
-				D_DEBUG(DF_MISC, "Warning, non-empty hash\n");
-				return -DER_BUSY;
+				C_DEBUG(CF_MISC, "Warning, non-empty hash\n");
+				return -CER_BUSY;
 			}
 			dhash_rec_delete_at(htable, buckets[i].hb_head.next);
 		}
 	}
-	D_FREE(buckets, sizeof(*buckets) * nr);
+	C_FREE(buckets, sizeof(*buckets) * nr);
 	dh_lock_fini(htable);
  out:
 	memset(htable, 0, sizeof(*htable));
@@ -743,7 +743,7 @@ int
 dhash_table_destroy(struct dhash_table *htable, bool force)
 {
 	dhash_table_destroy_inplace(htable, force);
-	D_FREE_PTR(htable);
+	C_FREE_PTR(htable);
 	return 0;
 }
 
@@ -754,35 +754,35 @@ void
 dhash_table_debug(struct dhash_table *htable)
 {
 #if DHASH_DEBUG
-	D_DEBUG(DF_MISC, "max nr: %d, cur nr: %d, max_dep: %d\n",
+	C_DEBUG(CF_MISC, "max nr: %d, cur nr: %d, max_dep: %d\n",
 		htable->ht_nr_max, htable->ht_nr, htable->ht_dep_max);
 #endif
 }
 
 /**
- * daos handle hash table: the first user of dhash_table
+ * handle hash table: the first user of dhash_table
  */
 
-struct daos_hhash {
+struct crt_hhash {
 	uint64_t                dh_cookie;
 	struct dhash_table	dh_htable;
 };
 
-static struct daos_hlink *
-hh_link2ptr(daos_list_t *rlink)
+static struct crt_hlink *
+hh_link2ptr(crt_list_t *rlink)
 {
-	return container_of(rlink, struct daos_hlink, hl_link);
+	return container_of(rlink, struct crt_hlink, hl_link);
 }
 
 static void
-hh_op_key_init(struct dhash_table *hhtab, daos_list_t *rlink, void *args)
+hh_op_key_init(struct dhash_table *hhtab, crt_list_t *rlink, void *args)
 {
-	struct daos_hhash *dht;
-	struct daos_hlink *hlink = hh_link2ptr(rlink);
+	struct crt_hhash *dht;
+	struct crt_hlink *hlink = hh_link2ptr(rlink);
 	int		   type = *(int *)args;
 
-	dht = container_of(hhtab, struct daos_hhash, dh_htable);
-	hlink->hl_key = ((dht->dh_cookie++) << DAOS_HTYPE_BITS) | type;
+	dht = container_of(hhtab, struct crt_hhash, dh_htable);
+	hlink->hl_key = ((dht->dh_cookie++) << CRT_HTYPE_BITS) | type;
 }
 
 static int
@@ -790,16 +790,16 @@ hh_key_type(const void *key)
 {
 	uint64_t	cookie;
 
-	D_ASSERT(key != NULL);
+	C_ASSERT(key != NULL);
 	cookie = *(uint64_t *)key;
 
-	return cookie & DAOS_HTYPE_MASK;
+	return cookie & CRT_HTYPE_MASK;
 }
 
 static int
-hh_op_key_get(struct dhash_table *hhtab, daos_list_t *rlink, void **key_pp)
+hh_op_key_get(struct dhash_table *hhtab, crt_list_t *rlink, void **key_pp)
 {
-	struct daos_hlink *hlink = hh_link2ptr(rlink);
+	struct crt_hlink *hlink = hh_link2ptr(rlink);
 
 	*key_pp = (void *)&hlink->hl_key;
 	return sizeof(hlink->hl_key);
@@ -808,31 +808,31 @@ hh_op_key_get(struct dhash_table *hhtab, daos_list_t *rlink, void **key_pp)
 static uint32_t
 hh_op_key_hash(struct dhash_table *hhtab, const void *key, unsigned int ksize)
 {
-	D_ASSERT(ksize == sizeof(uint64_t));
+	C_ASSERT(ksize == sizeof(uint64_t));
 
-	return (unsigned int)(*(const uint64_t *)key >> DAOS_HTYPE_BITS);
+	return (unsigned int)(*(const uint64_t *)key >> CRT_HTYPE_BITS);
 }
 
 static bool
-hh_op_key_cmp(struct dhash_table *hhtab, daos_list_t *rlink,
+hh_op_key_cmp(struct dhash_table *hhtab, crt_list_t *rlink,
 	  const void *key, unsigned int ksize)
 {
-	struct daos_hlink *hlink = hh_link2ptr(rlink);
+	struct crt_hlink *hlink = hh_link2ptr(rlink);
 
-	D_ASSERT(ksize == sizeof(uint64_t));
+	C_ASSERT(ksize == sizeof(uint64_t));
 	return hlink->hl_key == *(uint64_t *)key;
 }
 
 static void
-hh_op_rec_addref(struct dhash_table *hhtab, daos_list_t *rlink)
+hh_op_rec_addref(struct dhash_table *hhtab, crt_list_t *rlink)
 {
 	hh_link2ptr(rlink)->hl_ref++;
 }
 
 static bool
-hh_op_rec_decref(struct dhash_table *hhtab, daos_list_t *rlink)
+hh_op_rec_decref(struct dhash_table *hhtab, crt_list_t *rlink)
 {
-	struct  daos_hlink *hlink = hh_link2ptr(rlink);
+	struct  crt_hlink *hlink = hh_link2ptr(rlink);
 
 	hlink->hl_ref--;
 	return hlink->hl_ref == 0;
@@ -840,9 +840,9 @@ hh_op_rec_decref(struct dhash_table *hhtab, daos_list_t *rlink)
 
 
 static void
-hh_op_rec_free(struct dhash_table *hhtab, daos_list_t *rlink)
+hh_op_rec_free(struct dhash_table *hhtab, crt_list_t *rlink)
 {
-	struct daos_hlink *hlink = hh_link2ptr(rlink);
+	struct crt_hlink *hlink = hh_link2ptr(rlink);
 
 	if (hlink->hl_ops != NULL &&
 	    hlink->hl_ops->hop_free != NULL)
@@ -860,14 +860,14 @@ static dhash_table_ops_t hh_ops = {
 };
 
 int
-daos_hhash_create(unsigned int bits, struct daos_hhash **htable_pp)
+crt_hhash_create(unsigned int bits, struct crt_hhash **htable_pp)
 {
-	struct daos_hhash *hhtab;
+	struct crt_hhash *hhtab;
 	int		   rc;
 
-	D_ALLOC_PTR(hhtab);
+	C_ALLOC_PTR(hhtab);
 	if (hhtab == NULL)
-		return -DER_NOMEM;
+		return -CER_NOMEM;
 
 	rc = dhash_table_create_inplace(0, bits, NULL, &hh_ops,
 					&hhtab->dh_htable);
@@ -878,75 +878,75 @@ daos_hhash_create(unsigned int bits, struct daos_hhash **htable_pp)
 	*htable_pp = hhtab;
 	return 0;
  failed:
-	D_FREE_PTR(hhtab);
-	return -DER_NOMEM;
+	C_FREE_PTR(hhtab);
+	return -CER_NOMEM;
 }
 
 void
-daos_hhash_destroy(struct daos_hhash *hhtab)
+crt_hhash_destroy(struct crt_hhash *hhtab)
 {
 	dhash_table_debug(&hhtab->dh_htable);
 	dhash_table_destroy_inplace(&hhtab->dh_htable, true);
-	D_FREE_PTR(hhtab);
+	C_FREE_PTR(hhtab);
 }
 
 void
-daos_hhash_hlink_init(struct daos_hlink *hlink, struct daos_hlink_ops *ops)
+crt_hhash_hlink_init(struct crt_hlink *hlink, struct crt_hlink_ops *ops)
 {
-	DAOS_INIT_LIST_HEAD(&hlink->hl_link);
+	CRT_INIT_LIST_HEAD(&hlink->hl_link);
 	hlink->hl_initialized	= 1;
 	hlink->hl_ref		= 1; /* for caller */
 	hlink->hl_ops		= ops;
 }
 
 void
-daos_hhash_link_insert(struct daos_hhash *hhtab, struct daos_hlink *hlink,
+crt_hhash_link_insert(struct crt_hhash *hhtab, struct crt_hlink *hlink,
 		       int type)
 {
-	D_ASSERT(hlink->hl_initialized);
+	C_ASSERT(hlink->hl_initialized);
 	dhash_rec_insert_anonym(&hhtab->dh_htable, &hlink->hl_link,
 				(void *)&type);
 }
 
-struct daos_hlink *
-daos_hhash_link_lookup(struct daos_hhash *hhtab, uint64_t key)
+struct crt_hlink *
+crt_hhash_link_lookup(struct crt_hhash *hhtab, uint64_t key)
 {
-	daos_list_t	*rlink;
+	crt_list_t	*rlink;
 
 	rlink = dhash_rec_find(&hhtab->dh_htable, (void *)&key, sizeof(key));
 	return rlink == NULL ? NULL :
-	       daos_list_entry(rlink, struct daos_hlink, hl_link);
+	       crt_list_entry(rlink, struct crt_hlink, hl_link);
 }
 
 bool
-daos_hhash_link_delete(struct daos_hhash *hhtab, struct daos_hlink *hlink)
+crt_hhash_link_delete(struct crt_hhash *hhtab, struct crt_hlink *hlink)
 {
 	return dhash_rec_delete_at(&hhtab->dh_htable, &hlink->hl_link);
 }
 
 void
-daos_hhash_link_putref(struct daos_hhash *hhtab, struct daos_hlink *hlink)
+crt_hhash_link_putref(struct crt_hhash *hhtab, struct crt_hlink *hlink)
 {
 	dhash_rec_decref(&hhtab->dh_htable, &hlink->hl_link);
 }
 
 bool
-daos_hhash_link_empty(struct daos_hlink *hlink)
+crt_hhash_link_empty(struct crt_hlink *hlink)
 {
 	if (!hlink->hl_initialized)
 		return 1;
 
-	D_ASSERT(hlink->hl_ref != 0 || dhash_rec_unlinked(&hlink->hl_link));
+	C_ASSERT(hlink->hl_ref != 0 || dhash_rec_unlinked(&hlink->hl_link));
 	return dhash_rec_unlinked(&hlink->hl_link);
 }
 
 void
-daos_hhash_link_key(struct daos_hlink *hlink, uint64_t *key)
+crt_hhash_link_key(struct crt_hlink *hlink, uint64_t *key)
 {
 	*key = hlink->hl_key;
 }
 
-int daos_hhash_key_type(uint64_t key)
+int crt_hhash_key_type(uint64_t key)
 {
 	return hh_key_type(&key);
 }

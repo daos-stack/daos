@@ -4,9 +4,9 @@ Import('denv')
 
 denv.Append(CPPPATH = ['#/src/crt/tests'])
 
-libraries = ['crt_common', 'crt']
+libraries = ['crt_util', 'crt']
 libraries += ['pthread', 'crypto', 'uuid', 'mcl']
 
-# a simple example to use dtp_xxx APIs
-denv.Program('dtp_echo_cli', 'dtp_echo_cli.c', LIBS=libraries)
-denv.Program('dtp_echo_srv', 'dtp_echo_srv.c', LIBS=libraries)
+# a simple example to use crt_xxx APIs
+denv.Program('crt_echo_cli', 'crt_echo_cli.c', LIBS=libraries)
+denv.Program('crt_echo_srv', 'crt_echo_srv.c', LIBS=libraries)

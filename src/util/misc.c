@@ -21,35 +21,35 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos. It implements some miscellaneous functions which
+ * This file is part of CaRT. It implements some miscellaneous functions which
  * not belong to other parts.
  */
 
-#include <daos/common.h>
+#include <crt_util/common.h>
 
 int
-daos_rank_list_dup(dtp_rank_list_t **dst, const dtp_rank_list_t *src,
+crt_rank_list_dup(crt_rank_list_t **dst, const crt_rank_list_t *src,
 		   bool input)
 {
-	dtp_rank_list_t	*rank_list;
+	crt_rank_list_t	*rank_list;
 	uint32_t		rank_num;
-	dtp_size_t		size;
+	crt_size_t		size;
 	int			rc = 0;
 
 	if (dst == NULL) {
-		D_ERROR("Invalid parameter, dst: %p, src: %p.\n", dst, src);
-		D_GOTO(out, rc = -DER_INVAL);
+		C_ERROR("Invalid parameter, dst: %p, src: %p.\n", dst, src);
+		C_GOTO(out, rc = -CER_INVAL);
 	}
 
 	if (src == NULL) {
 		*dst = NULL;
-		D_GOTO(out, rc);
+		C_GOTO(out, rc);
 	}
 
-	D_ALLOC_PTR(rank_list);
+	C_ALLOC_PTR(rank_list);
 	if (rank_list == NULL) {
-		D_ERROR("Cannot allocate memory for rank list.\n");
-		D_GOTO(out, rc = -DER_NOMEM);
+		C_ERROR("Cannot allocate memory for rank list.\n");
+		C_GOTO(out, rc = -CER_NOMEM);
 	}
 	if (input == true) {
 		rank_num = src->rl_nr.num;
@@ -61,15 +61,15 @@ daos_rank_list_dup(dtp_rank_list_t **dst, const dtp_rank_list_t *src,
 	if (rank_num == 0) {
 		rank_list->rl_ranks = NULL;
 		*dst = rank_list;
-		D_GOTO(out, rc);
+		C_GOTO(out, rc);
 	}
 
-	size = rank_num * sizeof(dtp_rank_t);
-	D_ALLOC(rank_list->rl_ranks, size);
+	size = rank_num * sizeof(crt_rank_t);
+	C_ALLOC(rank_list->rl_ranks, size);
 	if (rank_list->rl_ranks == NULL) {
-		D_ERROR("Cannot allocate memory for rl_ranks.\n");
-		D_FREE_PTR(rank_list);
-		D_GOTO(out, rc = -DER_NOMEM);
+		C_ERROR("Cannot allocate memory for rl_ranks.\n");
+		C_FREE_PTR(rank_list);
+		C_GOTO(out, rc = -CER_NOMEM);
 	}
 
 	memcpy(rank_list->rl_ranks, src->rl_ranks, size);
@@ -79,21 +79,21 @@ out:
 }
 
 void
-daos_rank_list_free(dtp_rank_list_t *rank_list)
+crt_rank_list_free(crt_rank_list_t *rank_list)
 {
 	if (rank_list == NULL)
 		return;
 	if (rank_list->rl_ranks != NULL)
-		D_FREE(rank_list->rl_ranks,
-		       rank_list->rl_nr.num * sizeof(dtp_rank_t));
-	D_FREE_PTR(rank_list);
+		C_FREE(rank_list->rl_ranks,
+		       rank_list->rl_nr.num * sizeof(crt_rank_t));
+	C_FREE_PTR(rank_list);
 }
 
 void
-daos_rank_list_copy(dtp_rank_list_t *dst, dtp_rank_list_t *src, bool input)
+crt_rank_list_copy(crt_rank_list_t *dst, crt_rank_list_t *src, bool input)
 {
 	if (dst == NULL || src == NULL) {
-		D_DEBUG(DF_MISC, "daos_rank_list_copy do nothing, dst: %p, "
+		C_DEBUG(CF_MISC, "crt_rank_list_copy do nothing, dst: %p, "
 			"src: %p.\n", dst, src);
 		return;
 	}
@@ -101,21 +101,21 @@ daos_rank_list_copy(dtp_rank_list_t *dst, dtp_rank_list_t *src, bool input)
 	if (input == true) {
 		dst->rl_nr.num = src->rl_nr.num;
 		memcpy(dst->rl_ranks, src->rl_ranks,
-		       dst->rl_nr.num * sizeof(dtp_rank_t));
+		       dst->rl_nr.num * sizeof(crt_rank_t));
 	} else {
 		dst->rl_nr.num_out = src->rl_nr.num_out;
 		memcpy(dst->rl_ranks, src->rl_ranks,
-		       dst->rl_nr.num_out * sizeof(dtp_rank_t));
+		       dst->rl_nr.num_out * sizeof(crt_rank_t));
 	}
 }
 
 static inline int
 rank_compare(const void *rank1, const void *rank2)
 {
-	const dtp_rank_t	*r1 = rank1;
-	const dtp_rank_t	*r2 = rank2;
+	const crt_rank_t	*r1 = rank1;
+	const crt_rank_t	*r2 = rank2;
 
-	D_ASSERT(r1 != NULL && r2 != NULL);
+	C_ASSERT(r1 != NULL && r2 != NULL);
 	if (*r1 < *r2)
 		return -1;
 	else if (*r1 == *r2)
@@ -125,12 +125,12 @@ rank_compare(const void *rank1, const void *rank2)
 }
 
 void
-daos_rank_list_sort(dtp_rank_list_t *rank_list)
+crt_rank_list_sort(crt_rank_list_t *rank_list)
 {
 	if (rank_list == NULL)
 		return;
 	qsort(rank_list->rl_ranks, rank_list->rl_nr.num,
-	      sizeof(dtp_rank_t), rank_compare);
+	      sizeof(crt_rank_t), rank_compare);
 }
 
 /**
@@ -138,7 +138,7 @@ daos_rank_list_sort(dtp_rank_list_t *rank_list)
  * consistent indexes.
  **/
 bool
-daos_rank_list_find(dtp_rank_list_t *rank_list, dtp_rank_t rank, int *idx)
+crt_rank_list_find(crt_rank_list_t *rank_list, crt_rank_t rank, int *idx)
 {
 	int i;
 
@@ -160,8 +160,8 @@ daos_rank_list_find(dtp_rank_list_t *rank_list, dtp_rank_t rank, int *idx)
  * will sort the rank list in order.
  */
 bool
-daos_rank_list_identical(dtp_rank_list_t *rank_list1,
-			 dtp_rank_list_t *rank_list2, bool input)
+crt_rank_list_identical(crt_rank_list_t *rank_list1,
+			 crt_rank_list_t *rank_list2, bool input)
 {
 	int i;
 
@@ -172,7 +172,7 @@ daos_rank_list_identical(dtp_rank_list_t *rank_list1,
 	if (input == true) {
 		if (rank_list1->rl_nr.num != rank_list2->rl_nr.num)
 			return false;
-		daos_rank_list_sort(rank_list1);
+		crt_rank_list_sort(rank_list1);
 		for (i = 0; i < rank_list1->rl_nr.num; i++) {
 			if (rank_list1->rl_ranks[i] != rank_list2->rl_ranks[i])
 				return false;
@@ -180,7 +180,7 @@ daos_rank_list_identical(dtp_rank_list_t *rank_list1,
 	} else {
 		if (rank_list1->rl_nr.num_out != rank_list2->rl_nr.num_out)
 			return false;
-		daos_rank_list_sort(rank_list1);
+		crt_rank_list_sort(rank_list1);
 		for (i = 0; i < rank_list1->rl_nr.num_out; i++) {
 			if (rank_list1->rl_ranks[i] != rank_list2->rl_ranks[i])
 				return false;
@@ -191,7 +191,7 @@ daos_rank_list_identical(dtp_rank_list_t *rank_list1,
 
 /* check whether one rank included in the rank list, all are global ranks. */
 bool
-daos_rank_in_rank_list(dtp_rank_list_t *rank_list, dtp_rank_t rank)
+crt_rank_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank)
 {
 	int i;
 
@@ -209,14 +209,14 @@ daos_rank_in_rank_list(dtp_rank_list_t *rank_list, dtp_rank_t rank)
  * Initialise a scatter/gather list, create an array to store @nr iovecs.
  */
 int
-daos_sgl_init(dtp_sg_list_t *sgl, unsigned int nr)
+crt_sgl_init(crt_sg_list_t *sgl, unsigned int nr)
 {
 	memset(sgl, 0, sizeof(*sgl));
 
 	sgl->sg_nr.num = sgl->sg_nr.num_out = nr;
-	D_ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
+	C_ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
 
-	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
+	return sgl->sg_iovs == NULL ? -CER_NOMEM : 0;
 }
 
 /**
@@ -224,7 +224,7 @@ daos_sgl_init(dtp_sg_list_t *sgl, unsigned int nr)
  * is true.
  */
 void
-daos_sgl_fini(dtp_sg_list_t *sgl, bool free_iovs)
+crt_sgl_fini(crt_sg_list_t *sgl, bool free_iovs)
 {
 	int	i;
 
@@ -233,11 +233,11 @@ daos_sgl_fini(dtp_sg_list_t *sgl, bool free_iovs)
 
 	for (i = 0; free_iovs && i < sgl->sg_nr.num; i++) {
 		if (sgl->sg_iovs[i].iov_buf != NULL) {
-			D_FREE(sgl->sg_iovs[i].iov_buf,
+			C_FREE(sgl->sg_iovs[i].iov_buf,
 			       sgl->sg_iovs[i].iov_buf_len);
 		}
 	}
 
-	D_FREE(sgl->sg_iovs, sgl->sg_nr.num * sizeof(*sgl->sg_iovs));
+	C_FREE(sgl->sg_iovs, sgl->sg_nr.num * sizeof(*sgl->sg_iovs));
 	memset(sgl, 0, sizeof(*sgl));
 }

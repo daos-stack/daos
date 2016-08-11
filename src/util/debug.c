@@ -21,30 +21,30 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos
+ * This file is part of cart
  *
  * common/debug.c
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
 
-#include <daos/common.h>
+#include <crt_util/common.h>
 
-static unsigned int	debug_mask	= DF_UNKNOWN;
+static unsigned int	debug_mask	= CF_UNKNOWN;
 
 unsigned int
-daos_debug_mask(void)
+crt_debug_mask(void)
 {
 	char	*feats;
 
-	if (debug_mask != DF_UNKNOWN)
+	if (debug_mask != CF_UNKNOWN)
 		return debug_mask;
 
-	feats = getenv(DAOS_ENV_DEBUG);
+	feats = getenv(CRT_ENV_DEBUG);
 	if (feats != NULL) {
 		debug_mask = strtol(feats, NULL, 0);
 		if (debug_mask > 0) {
-			D_PRINT("set debug to %d/%x\n", debug_mask, debug_mask);
+			C_PRINT("set debug to %d/%x\n", debug_mask, debug_mask);
 			return debug_mask;
 		}
 	}
@@ -54,21 +54,21 @@ daos_debug_mask(void)
 }
 
 void
-daos_debug_set(unsigned int mask)
+crt_debug_set(unsigned int mask)
 {
-	(void) daos_debug_mask();
+	(void) crt_debug_mask();
 	debug_mask |= mask;
 }
 
-static __thread char thread_uuid_str_buf[DF_UUID_MAX][DAOS_UUID_STR_SIZE];
+static __thread char thread_uuid_str_buf[CF_UUID_MAX][CRT_UUID_STR_SIZE];
 static __thread int thread_uuid_str_buf_idx;
 
 char *
-DP_UUID(const void *uuid)
+CP_UUID(const void *uuid)
 {
 	char *buf = thread_uuid_str_buf[thread_uuid_str_buf_idx];
 
 	uuid_unparse_lower(uuid, buf);
-	thread_uuid_str_buf_idx = (thread_uuid_str_buf_idx + 1) % DF_UUID_MAX;
+	thread_uuid_str_buf_idx = (thread_uuid_str_buf_idx + 1) % CF_UUID_MAX;
 	return buf;
 }

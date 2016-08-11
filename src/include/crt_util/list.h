@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DAOS_LIST_H__
-#define __DAOS_LIST_H__
+#ifndef __CRT_LIST_H__
+#define __CRT_LIST_H__
 
 /*
  * Simple doubly linked list implementation.
@@ -36,18 +36,18 @@
 
 #define prefetch(a) ((void)a)
 
-struct daos_list_head {
-	struct daos_list_head *next, *prev;
+struct crt_list_head {
+	struct crt_list_head *next, *prev;
 };
 
-typedef struct daos_list_head daos_list_t;
+typedef struct crt_list_head crt_list_t;
 
-#define DAOS_LIST_HEAD_INIT(name) { &(name), &(name) }
+#define CRT_LIST_HEAD_INIT(name) { &(name), &(name) }
 
-#define DAOS_LIST_HEAD(name) \
-	daos_list_t name = DAOS_LIST_HEAD_INIT(name)
+#define CRT_LIST_HEAD(name) \
+	crt_list_t name = CRT_LIST_HEAD_INIT(name)
 
-#define DAOS_INIT_LIST_HEAD(ptr) do { \
+#define CRT_INIT_LIST_HEAD(ptr) do { \
 	(ptr)->next = (ptr); (ptr)->prev = (ptr); \
 } while (0)
 
@@ -58,7 +58,7 @@ typedef struct daos_list_head daos_list_t;
  * the prev/next entries already!
  */
 static inline void
-__daos_list_add(daos_list_t *newe, daos_list_t *prev, daos_list_t *next)
+__crt_list_add(crt_list_t *newe, crt_list_t *prev, crt_list_t *next)
 {
 	next->prev = newe;
 	newe->next = next;
@@ -75,9 +75,9 @@ __daos_list_add(daos_list_t *newe, daos_list_t *prev, daos_list_t *next)
  * This is good for implementing stacks.
  */
 static inline void
-daos_list_add(daos_list_t *newe, daos_list_t *head)
+crt_list_add(crt_list_t *newe, crt_list_t *head)
 {
-	__daos_list_add(newe, head, head->next);
+	__crt_list_add(newe, head, head->next);
 }
 
 /**
@@ -89,9 +89,9 @@ daos_list_add(daos_list_t *newe, daos_list_t *head)
  * This is useful for implementing queues.
  */
 static inline void
-daos_list_add_tail(daos_list_t *newe, daos_list_t *head)
+crt_list_add_tail(crt_list_t *newe, crt_list_t *head)
 {
-	__daos_list_add(newe, head->prev, head);
+	__crt_list_add(newe, head->prev, head);
 }
 
 /*
@@ -102,7 +102,7 @@ daos_list_add_tail(daos_list_t *newe, daos_list_t *head)
  * the prev/next entries already!
  */
 static inline void
-__daos_list_del(daos_list_t *prev, daos_list_t *next)
+__crt_list_del(crt_list_t *prev, crt_list_t *next)
 {
 	next->prev = prev;
 	prev->next = next;
@@ -115,9 +115,9 @@ __daos_list_del(daos_list_t *prev, daos_list_t *next)
  * undefined state.
  */
 static inline void
-daos_list_del(daos_list_t *entry)
+crt_list_del(crt_list_t *entry)
 {
-	__daos_list_del(entry->prev, entry->next);
+	__crt_list_del(entry->prev, entry->next);
 }
 
 /**
@@ -125,10 +125,10 @@ daos_list_del(daos_list_t *entry)
  * \param entry the entry to remove.
  */
 static inline void
-daos_list_del_init(daos_list_t *entry)
+crt_list_del_init(crt_list_t *entry)
 {
-	__daos_list_del(entry->prev, entry->next);
-	DAOS_INIT_LIST_HEAD(entry);
+	__crt_list_del(entry->prev, entry->next);
+	CRT_INIT_LIST_HEAD(entry);
 }
 
 /**
@@ -138,10 +138,10 @@ daos_list_del_init(daos_list_t *entry)
  * \param head the list to move it to
  */
 static inline void
-daos_list_move(daos_list_t *list, daos_list_t *head)
+crt_list_move(crt_list_t *list, crt_list_t *head)
 {
-	__daos_list_del(list->prev, list->next);
-	daos_list_add(list, head);
+	__crt_list_del(list->prev, list->next);
+	crt_list_add(list, head);
 }
 
 /**
@@ -151,10 +151,10 @@ daos_list_move(daos_list_t *list, daos_list_t *head)
  * \param head the list to move it to
  */
 static inline void
-daos_list_move_tail(daos_list_t *list, daos_list_t *head)
+crt_list_move_tail(crt_list_t *list, crt_list_t *head)
 {
-	__daos_list_del(list->prev, list->next);
-	daos_list_add_tail(list, head);
+	__crt_list_del(list->prev, list->next);
+	crt_list_add_tail(list, head);
 }
 
 /**
@@ -162,7 +162,7 @@ daos_list_move_tail(daos_list_t *list, daos_list_t *head)
  * \param head the list to test.
  */
 static inline int
-daos_list_empty(daos_list_t *head)
+crt_list_empty(crt_list_t *head)
 {
 	return head->next == head;
 }
@@ -174,24 +174,24 @@ daos_list_empty(daos_list_t *head)
  * Tests whether a list is empty _and_ checks that no other CPU might be
  * in the process of modifying either member (next or prev)
  *
- * NOTE: using daos_list_empty_careful() without synchronization
+ * NOTE: using crt_list_empty_careful() without synchronization
  * can only be safe if the only activity that can happen
- * to the list entry is daos_list_del_init(). Eg. it cannot be used
+ * to the list entry is crt_list_del_init(). Eg. it cannot be used
  * if another CPU could re-list_add() it.
  */
 static inline int
-daos_list_empty_careful(const daos_list_t *head)
+crt_list_empty_careful(const crt_list_t *head)
 {
-	daos_list_t *next = head->next;
+	crt_list_t *next = head->next;
 	return (next == head) && (next == head->prev);
 }
 
 static inline void
-__daos_list_splice(daos_list_t *list, daos_list_t *head)
+__crt_list_splice(crt_list_t *list, crt_list_t *head)
 {
-	daos_list_t *first = list->next;
-	daos_list_t *last = list->prev;
-	daos_list_t *at = head->next;
+	crt_list_t *first = list->next;
+	crt_list_t *last = list->prev;
+	crt_list_t *at = head->next;
 
 	first->prev = head;
 	head->next = first;
@@ -209,10 +209,10 @@ __daos_list_splice(daos_list_t *list, daos_list_t *head)
  * undefined state on return.
  */
 static inline void
-daos_list_splice(daos_list_t *list, daos_list_t *head)
+crt_list_splice(crt_list_t *list, crt_list_t *head)
 {
-	if (!daos_list_empty(list))
-		__daos_list_splice(list, head);
+	if (!crt_list_empty(list))
+		__crt_list_splice(list, head);
 }
 
 /**
@@ -224,11 +224,11 @@ daos_list_splice(daos_list_t *list, daos_list_t *head)
  * on return.
  */
 static inline void
-daos_list_splice_init(daos_list_t *list, daos_list_t *head)
+crt_list_splice_init(crt_list_t *list, crt_list_t *head)
 {
-	if (!daos_list_empty(list)) {
-		__daos_list_splice(list, head);
-		DAOS_INIT_LIST_HEAD(list);
+	if (!crt_list_empty(list)) {
+		__crt_list_splice(list, head);
+		CRT_INIT_LIST_HEAD(list);
 	}
 }
 
@@ -238,7 +238,7 @@ daos_list_splice_init(daos_list_t *list, daos_list_t *head)
  * \param type	 the type of the struct this is embedded in.
  * \param member the member name of the list within the struct.
  */
-#define daos_list_entry(ptr, type, member) \
+#define crt_list_entry(ptr, type, member) \
 	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
 /**
@@ -249,7 +249,7 @@ daos_list_splice_init(daos_list_t *list, daos_list_t *head)
  * Behaviour is undefined if \a pos is removed from the list in the body of the
  * loop.
  */
-#define daos_list_for_each(pos, head) \
+#define crt_list_for_each(pos, head) \
 	for (pos = (head)->next, prefetch(pos->next); pos != (head); \
 		pos = pos->next, prefetch(pos->next))
 
@@ -262,7 +262,7 @@ daos_list_splice_init(daos_list_t *list, daos_list_t *head)
  * This is safe to use if \a pos could be removed from the list in the body of
  * the loop.
  */
-#define daos_list_for_each_safe(pos, n, head) \
+#define crt_list_for_each_safe(pos, n, head) \
 	for (pos = (head)->next, n = pos->next; pos != (head); \
 		pos = n, n = pos->next)
 
@@ -272,10 +272,10 @@ daos_list_splice_init(daos_list_t *list, daos_list_t *head)
  * \param head   the list head
  * \param member the name of the list_struct within the struct
  */
-#define daos_list_for_each_entry_continue(pos, head, member)                 \
-	for (pos = daos_list_entry(pos->member.next, __typeof__(*pos), member);\
+#define crt_list_for_each_entry_continue(pos, head, member)                 \
+	for (pos = crt_list_entry(pos->member.next, __typeof__(*pos), member);\
 	     prefetch(pos->member.next), &pos->member != (head);             \
-	     pos = daos_list_entry(pos->member.next, __typeof__(*pos), member))
+	     pos = crt_list_entry(pos->member.next, __typeof__(*pos), member))
 
 /**
  * \defgroup hlist Hash List
@@ -285,13 +285,13 @@ daos_list_splice_init(daos_list_t *list, daos_list_t *head)
  * @{
  */
 
-typedef struct daos_hlist_node {
-	struct daos_hlist_node *next, **pprev;
-} daos_hlist_node_t;
+typedef struct crt_hlist_node {
+	struct crt_hlist_node *next, **pprev;
+} crt_hlist_node_t;
 
-typedef struct daos_hlist_head {
-	daos_hlist_node_t *first;
-} daos_hlist_head_t;
+typedef struct crt_hlist_head {
+	crt_hlist_node_t *first;
+} crt_hlist_head_t;
 
 /* @} */
 
@@ -309,52 +309,52 @@ typedef struct daos_hlist_head {
  * @{
  */
 
-#define DAOS_HLIST_HEAD_INIT { NULL_P }
-#define DAOS_HLIST_HEAD(name) daos_hlist_head_t name = { NULL_P }
-#define DAOS_INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL_P)
-#define DAOS_INIT_HLIST_NODE(ptr) ((ptr)->next = NULL_P, (ptr)->pprev = NULL_P)
+#define CRT_HLIST_HEAD_INIT { NULL_P }
+#define CRT_HLIST_HEAD(name) crt_hlist_head_t name = { NULL_P }
+#define CRT_INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL_P)
+#define CRT_INIT_HLIST_NODE(ptr) ((ptr)->next = NULL_P, (ptr)->pprev = NULL_P)
 
 static inline int
-daos_hlist_unhashed(const daos_hlist_node_t *h)
+crt_hlist_unhashed(const crt_hlist_node_t *h)
 {
 	return !h->pprev;
 }
 
 static inline int
-daos_hlist_empty(const daos_hlist_head_t *h)
+crt_hlist_empty(const crt_hlist_head_t *h)
 {
 	return !h->first;
 }
 
 static inline void
-__daos_hlist_del(daos_hlist_node_t *n)
+__crt_hlist_del(crt_hlist_node_t *n)
 {
-	daos_hlist_node_t *next = n->next;
-	daos_hlist_node_t **pprev = n->pprev;
+	crt_hlist_node_t *next = n->next;
+	crt_hlist_node_t **pprev = n->pprev;
 	*pprev = next;
 	if (next)
 		next->pprev = pprev;
 }
 
 static inline void
-daos_hlist_del(daos_hlist_node_t *n)
+crt_hlist_del(crt_hlist_node_t *n)
 {
-	__daos_hlist_del(n);
+	__crt_hlist_del(n);
 }
 
 static inline void
-daos_hlist_del_init(daos_hlist_node_t *n)
+crt_hlist_del_init(crt_hlist_node_t *n)
 {
 	if (n->pprev)  {
-		__daos_hlist_del(n);
-		DAOS_INIT_HLIST_NODE(n);
+		__crt_hlist_del(n);
+		CRT_INIT_HLIST_NODE(n);
 	}
 }
 
 static inline void
-daos_hlist_add_head(daos_hlist_node_t *n, daos_hlist_head_t *h)
+crt_hlist_add_head(crt_hlist_node_t *n, crt_hlist_head_t *h)
 {
-	daos_hlist_node_t *first = h->first;
+	crt_hlist_node_t *first = h->first;
 	n->next = first;
 	if (first)
 		first->pprev = &n->next;
@@ -364,7 +364,7 @@ daos_hlist_add_head(daos_hlist_node_t *n, daos_hlist_head_t *h)
 
 /* next must be != NULL */
 static inline void
-daos_hlist_add_before(daos_hlist_node_t *n, daos_hlist_node_t *next)
+crt_hlist_add_before(crt_hlist_node_t *n, crt_hlist_node_t *next)
 {
 	n->pprev = next->pprev;
 	n->next = next;
@@ -373,7 +373,7 @@ daos_hlist_add_before(daos_hlist_node_t *n, daos_hlist_node_t *next)
 }
 
 static inline void
-daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
+crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *next)
 {
 	next->next = n->next;
 	n->next = next;
@@ -383,13 +383,13 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
 		next->next->pprev  = &next->next;
 }
 
-#define daos_hlist_entry(ptr, type, member) container_of(ptr,type,member)
+#define crt_hlist_entry(ptr, type, member) container_of(ptr, type, member)
 
-#define daos_hlist_for_each(pos, head) \
+#define crt_hlist_for_each(pos, head) \
 	for (pos = (head)->first; pos && (prefetch(pos->next), 1); \
 	     pos = pos->next)
 
-#define daos_hlist_for_each_safe(pos, n, head) \
+#define crt_hlist_for_each_safe(pos, n, head) \
 	for (pos = (head)->first; pos && (n = pos->next, 1); \
 	     pos = n)
 
@@ -400,10 +400,10 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param head	 the head for your list.
  * \param member the name of the hlist_node within the struct.
  */
-#define daos_hlist_for_each_entry(tpos, pos, head, member)                   \
+#define crt_hlist_for_each_entry(tpos, pos, head, member)                   \
 	for (pos = (head)->first;                                            \
 	     pos && ({ prefetch(pos->next); 1;}) &&                          \
-		({ tpos = daos_hlist_entry(pos, __typeof__(*tpos), member);  \
+		({ tpos = crt_hlist_entry(pos, __typeof__(*tpos), member);  \
 		   1; });                                                    \
 	     pos = pos->next)
 
@@ -413,10 +413,10 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param pos	 the &struct hlist_node to use as a loop counter.
  * \param member the name of the hlist_node within the struct.
  */
-#define daos_hlist_for_each_entry_continue(tpos, pos, member)                \
+#define crt_hlist_for_each_entry_continue(tpos, pos, member)                \
 	for (pos = (pos)->next;                                              \
 	     pos && ({ prefetch(pos->next); 1;}) &&                          \
-		({ tpos = daos_hlist_entry(pos, __typeof__(*tpos), member);  \
+		({ tpos = crt_hlist_entry(pos, __typeof__(*tpos), member);  \
 		   1; });                                                    \
 	     pos = pos->next)
 
@@ -426,9 +426,9 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param pos	 the &struct hlist_node to use as a loop counter.
  * \param member the name of the hlist_node within the struct.
  */
-#define daos_hlist_for_each_entry_from(tpos, pos, member)		     \
+#define crt_hlist_for_each_entry_from(tpos, pos, member)		     \
 	for (; pos && ({ prefetch(pos->next); 1;}) &&                        \
-		({ tpos = daos_hlist_entry(pos, __typeof__(*tpos), member);  \
+		({ tpos = crt_hlist_entry(pos, __typeof__(*tpos), member);  \
 		   1; });                                                    \
 	     pos = pos->next)
 
@@ -440,66 +440,66 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param head	 the head for your list.
  * \param member the name of the hlist_node within the struct.
  */
-#define daos_hlist_for_each_entry_safe(tpos, pos, n, head, member)           \
+#define crt_hlist_for_each_entry_safe(tpos, pos, n, head, member)           \
 	for (pos = (head)->first;                                            \
 	     pos && ({ n = pos->next; 1; }) &&                               \
-		({ tpos = daos_hlist_entry(pos, __typeof__(*tpos), member);  \
+		({ tpos = crt_hlist_entry(pos, __typeof__(*tpos), member);  \
 		   1; });                                                    \
 	     pos = n)
 
 /* @} */
 
-#ifndef daos_list_for_each_prev
+#ifndef crt_list_for_each_prev
 /**
  * Iterate over a list in reverse order
  * \param pos	the &struct list_head to use as a loop counter.
  * \param head	the head for your list.
  */
-#define daos_list_for_each_prev(pos, head) \
+#define crt_list_for_each_prev(pos, head) \
 	for (pos = (head)->prev, prefetch(pos->prev); pos != (head);     \
 		pos = pos->prev, prefetch(pos->prev))
 
-#endif /* daos_list_for_each_prev */
+#endif /* crt_list_for_each_prev */
 
-#ifndef daos_list_for_each_entry
+#ifndef crt_list_for_each_entry
 /**
  * Iterate over a list of given type
  * \param pos        the type * to use as a loop counter.
  * \param head       the head for your list.
  * \param member     the name of the list_struct within the struct.
  */
-#define daos_list_for_each_entry(pos, head, member)                          \
-	for (pos = daos_list_entry((head)->next, __typeof__(*pos), member),  \
+#define crt_list_for_each_entry(pos, head, member)                          \
+	for (pos = crt_list_entry((head)->next, __typeof__(*pos), member),  \
 		     prefetch(pos->member.next);                             \
 	     &pos->member != (head);                                         \
-	     pos = daos_list_entry(pos->member.next, __typeof__(*pos), member),\
+	     pos = crt_list_entry(pos->member.next, __typeof__(*pos), member),\
 	     prefetch(pos->member.next))
-#endif /* daos_list_for_each_entry */
+#endif /* crt_list_for_each_entry */
 
-#ifndef daos_list_for_each_entry_rcu
-#define daos_list_for_each_entry_rcu(pos, head, member) \
+#ifndef crt_list_for_each_entry_rcu
+#define crt_list_for_each_entry_rcu(pos, head, member) \
 	list_for_each_entry(pos, head, member)
 #endif
 
-#ifndef daos_list_for_each_entry_rcu
-#define daos_list_for_each_entry_rcu(pos, head, member) \
+#ifndef crt_list_for_each_entry_rcu
+#define crt_list_for_each_entry_rcu(pos, head, member) \
 	list_for_each_entry(pos, head, member)
 #endif
 
-#ifndef daos_list_for_each_entry_reverse
+#ifndef crt_list_for_each_entry_reverse
 /**
  * Iterate backwards over a list of given type.
  * \param pos        the type * to use as a loop counter.
  * \param head       the head for your list.
  * \param member     the name of the list_struct within the struct.
  */
-#define daos_list_for_each_entry_reverse(pos, head, member)                  \
-	for (pos = daos_list_entry((head)->prev, __typeof__(*pos), member);  \
+#define crt_list_for_each_entry_reverse(pos, head, member)                  \
+	for (pos = crt_list_entry((head)->prev, __typeof__(*pos), member);  \
 	     prefetch(pos->member.prev), &pos->member != (head);             \
-	     pos = daos_list_entry(pos->member.prev, __typeof__(*pos), member))
-#endif /* daos_list_for_each_entry_reverse */
+	     pos = crt_list_entry(pos->member.prev, __typeof__(*pos), member))
+#endif /* crt_list_for_each_entry_reverse */
 
-#ifndef daos_list_for_each_entry_safe
+#ifndef crt_list_for_each_entry_safe
 /**
  * Iterate over a list of given type safe against removal of list entry
  * \param pos        the type * to use as a loop counter.
@@ -507,17 +507,17 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * \param head       the head for your list.
  * \param member     the name of the list_struct within the struct.
  */
-#define daos_list_for_each_entry_safe(pos, n, head, member)                   \
-	for (pos = daos_list_entry((head)->next, __typeof__(*pos), member),   \
-		n = daos_list_entry(pos->member.next, __typeof__(*pos),       \
+#define crt_list_for_each_entry_safe(pos, n, head, member)                   \
+	for (pos = crt_list_entry((head)->next, __typeof__(*pos), member),   \
+		n = crt_list_entry(pos->member.next, __typeof__(*pos),       \
 				    member);                                  \
 	     &pos->member != (head);                                          \
-	     pos = n, n = daos_list_entry(n->member.next, __typeof__(*n),     \
+	     pos = n, n = crt_list_entry(n->member.next, __typeof__(*n),     \
 					  member))
 
-#endif /* daos_list_for_each_entry_safe */
+#endif /* crt_list_for_each_entry_safe */
 
-#ifndef daos_list_for_each_entry_safe_from
+#ifndef crt_list_for_each_entry_safe_from
 /**
  * Iterate over a list continuing from an existing point
  * \param pos        the type * to use as a loop cursor.
@@ -528,46 +528,46 @@ daos_hlist_add_after(daos_hlist_node_t *n, daos_hlist_node_t *next)
  * Iterate over list of given type from current point, safe against
  * removal of list entry.
  */
-#define daos_list_for_each_entry_safe_from(pos, n, head, member)             \
-	for (n = daos_list_entry(pos->member.next, __typeof__(*pos), member);\
+#define crt_list_for_each_entry_safe_from(pos, n, head, member)             \
+	for (n = crt_list_entry(pos->member.next, __typeof__(*pos), member);\
 	     &pos->member != (head);                                         \
-	     pos = n, n = daos_list_entry(n->member.next, __typeof__(*n),    \
+	     pos = n, n = crt_list_entry(n->member.next, __typeof__(*n),    \
 					  member))
-#endif /* daos_list_for_each_entry_safe_from */
+#endif /* crt_list_for_each_entry_safe_from */
 
-#define daos_list_for_each_entry_typed(pos, head, type, member)		\
-	for (pos = daos_list_entry((head)->next, type, member),		\
+#define crt_list_for_each_entry_typed(pos, head, type, member)		\
+	for (pos = crt_list_entry((head)->next, type, member),		\
 	     prefetch(pos->member.next);				\
 	     &pos->member != (head);                                    \
-	     pos = daos_list_entry(pos->member.next, type, member),	\
+	     pos = crt_list_entry(pos->member.next, type, member),	\
 	     prefetch(pos->member.next))
 
-#define daos_list_for_each_entry_reverse_typed(pos, head, type, member)	\
-	for (pos = daos_list_entry((head)->prev, type, member);		\
+#define crt_list_for_each_entry_reverse_typed(pos, head, type, member)	\
+	for (pos = crt_list_entry((head)->prev, type, member);		\
 	     prefetch(pos->member.prev), &pos->member != (head);	\
-	     pos = daos_list_entry(pos->member.prev, type, member))
+	     pos = crt_list_entry(pos->member.prev, type, member))
 
-#define daos_list_for_each_entry_safe_typed(pos, n, head, type, member)	\
-	for (pos = daos_list_entry((head)->next, type, member),		\
-	     n = daos_list_entry(pos->member.next, type, member);	\
+#define crt_list_for_each_entry_safe_typed(pos, n, head, type, member)	\
+	for (pos = crt_list_entry((head)->next, type, member),		\
+	     n = crt_list_entry(pos->member.next, type, member);	\
 	     &pos->member != (head);                                    \
-	     pos = n, n = daos_list_entry(n->member.next, type, member))
+	     pos = n, n = crt_list_entry(n->member.next, type, member))
 
-#define daos_list_for_each_entry_safe_from_typed(pos, n, head, type, member)  \
-	for (n = daos_list_entry(pos->member.next, type, member);             \
+#define crt_list_for_each_entry_safe_from_typed(pos, n, head, type, member)  \
+	for (n = crt_list_entry(pos->member.next, type, member);             \
 	     &pos->member != (head);                                          \
-	     pos = n, n = daos_list_entry(n->member.next, type, member))
+	     pos = n, n = crt_list_entry(n->member.next, type, member))
 
-#define daos_hlist_for_each_entry_typed(tpos, pos, head, type, member)   \
+#define crt_hlist_for_each_entry_typed(tpos, pos, head, type, member)   \
 	for (pos = (head)->first;                                        \
 	     pos && (prefetch(pos->next), 1) &&                          \
-		(tpos = daos_hlist_entry(pos, type, member), 1);         \
+		(tpos = crt_hlist_entry(pos, type, member), 1);         \
 	     pos = pos->next)
 
-#define daos_hlist_for_each_entry_safe_typed(tpos, pos, n, head, type, member) \
+#define crt_hlist_for_each_entry_safe_typed(tpos, pos, n, head, type, member) \
 	for (pos = (head)->first;                                              \
 	     pos && (n = pos->next, 1) &&                                      \
-		(tpos = daos_hlist_entry(pos, type, member), 1);               \
+		(tpos = crt_hlist_entry(pos, type, member), 1);               \
 	     pos = n)
 
-#endif /* __DAOS_LIST_H__ */
+#endif /* __CRT_LIST_H__ */

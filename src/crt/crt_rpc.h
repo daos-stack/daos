@@ -21,25 +21,25 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_transport. It gives out the data types internally
- * used by dtp and not in other specific header files.
+ * This file is part of CaRT. It gives out the data types internally used by
+ * CaRT and not in other specific header files.
  */
 
-#ifndef __DTP_RPC_H__
-#define __DTP_RPC_H__
+#ifndef __CRT_RPC_H__
+#define __CRT_RPC_H__
 
-#define DTP_RPC_MAGIC			(0xAB0C01EC)
-#define DTP_RPC_VERSION			(0x00000001)
+#define CRT_RPC_MAGIC			(0xAB0C01EC)
+#define CRT_RPC_VERSION			(0x00000001)
 
-/* dtp layer common header */
-struct dtp_common_hdr {
+/* CaRT layer common header */
+struct crt_common_hdr {
 	uint32_t	dch_magic;
 	uint32_t	dch_version;
 	uint32_t	dch_opc;
 	uint32_t	dch_cksum;
 	uint32_t	dch_flags;
 	/* gid and rank identify the rpc request sender */
-	dtp_rank_t	dch_rank; /* uint32_t */
+	crt_rank_t	dch_rank; /* uint32_t */
 	uint32_t	dch_grp_id; /* internal grp_id within the rank */
 	uint32_t	dch_padding[1];
 };
@@ -51,40 +51,40 @@ typedef enum {
 	RPC_REPLY_RECVED,
 	RPC_COMPLETED,
 	RPC_CANCELED,
-} dtp_rpc_state_t;
+} crt_rpc_state_t;
 
-struct dtp_rpc_priv;
+struct crt_rpc_priv;
 
-struct dtp_corpc_info {
-	struct dtp_grp_priv	*co_grp_priv;
-	dtp_rank_list_t	*co_excluded_ranks;
-	/* dtp_bulk_t		 co_bulk_hdl; */ /* collective bulk handle */
-	/* the priv passed in dtp_corpc_req_create */
+struct crt_corpc_info {
+	struct crt_grp_priv	*co_grp_priv;
+	crt_rank_list_t	*co_excluded_ranks;
+	/* crt_bulk_t		 co_bulk_hdl; */ /* collective bulk handle */
+	/* the priv passed in crt_corpc_req_create */
 	void			*co_priv;
 	int			 co_tree_topo;
 	uint32_t		 co_grp_destroy:1; /* grp destroy flag */
 
-	struct dtp_rpc_priv	*co_parent_rpc; /* parent RPC, NULL on root */
-	daos_list_t		 co_child_rpcs; /* child RPCs list */
+	struct crt_rpc_priv	*co_parent_rpc; /* parent RPC, NULL on root */
+	crt_list_t		 co_child_rpcs; /* child RPCs list */
 	uint32_t		 co_child_num;
 	uint32_t		 co_child_ack_num;
 	int			 co_rc;
 };
 
-struct dtp_rpc_priv {
-	/* link to dtp_ep_inflight::epi_req_q/::epi_req_waitq */
-	daos_list_t		drp_epi_link;
-	/* tmp_link used in dtp_context_req_untrack */
-	daos_list_t		drp_tmp_link;
+struct crt_rpc_priv {
+	/* link to crt_ep_inflight::epi_req_q/::epi_req_waitq */
+	crt_list_t		drp_epi_link;
+	/* tmp_link used in crt_context_req_untrack */
+	crt_list_t		drp_tmp_link;
 	uint64_t		drp_ts; /* time stamp */
-	dtp_cb_t		drp_complete_cb;
+	crt_cb_t		drp_complete_cb;
 	void			*drp_arg; /* argument for drp_complete_cb */
-	struct dtp_ep_inflight	*drp_epi; /* point back to inflight ep */
+	struct crt_ep_inflight	*drp_epi; /* point back to inflight ep */
 
-	dtp_rpc_t		drp_pub; /* public part */
-	struct dtp_common_hdr	drp_req_hdr; /* common header for request */
-	struct dtp_common_hdr	drp_reply_hdr; /* common header for reply */
-	dtp_rpc_state_t		drp_state; /* RPC state */
+	crt_rpc_t		drp_pub; /* public part */
+	struct crt_common_hdr	drp_req_hdr; /* common header for request */
+	struct crt_common_hdr	drp_reply_hdr; /* common header for reply */
+	crt_rpc_state_t		drp_state; /* RPC state */
 	hg_handle_t		drp_hg_hdl;
 	na_addr_t		drp_na_addr;
 	uint32_t		drp_srv:1, /* flag of server received request */
@@ -93,85 +93,85 @@ struct dtp_rpc_priv {
 				drp_coll:1; /* flag of collective RPC */
 	uint32_t		drp_refcount;
 	pthread_spinlock_t	drp_lock;
-	struct dtp_opc_info	*drp_opc_info;
+	struct crt_opc_info	*drp_opc_info;
 	/* corpc info, only valid when (drp_coll == 1) */
-	struct dtp_corpc_info	*drp_corpc_info;
+	struct crt_corpc_info	*drp_corpc_info;
 };
 
 static inline void
-dtp_common_hdr_init(struct dtp_common_hdr *hdr, dtp_opcode_t opc)
+crt_common_hdr_init(struct crt_common_hdr *hdr, crt_opcode_t opc)
 {
-	D_ASSERT(hdr != NULL);
+	C_ASSERT(hdr != NULL);
 	hdr->dch_opc = opc;
-	hdr->dch_magic = DTP_RPC_MAGIC;
-	hdr->dch_version = DTP_RPC_VERSION;
+	hdr->dch_magic = CRT_RPC_MAGIC;
+	hdr->dch_version = CRT_RPC_VERSION;
 	hdr->dch_grp_id = 0; /* TODO primary group with internal grp_id as 0 */
-	D_ASSERT(dtp_group_rank(0, &hdr->dch_rank) == 0);
+	C_ASSERT(crt_group_rank(0, &hdr->dch_rank) == 0);
 }
 
-void dtp_rpc_priv_init(struct dtp_rpc_priv *rpc_priv, dtp_context_t dtp_ctx,
-		       dtp_opcode_t opc, int srv_flag);
-void dtp_rpc_inout_buff_fini(dtp_rpc_t *rpc_pub);
-int dtp_rpc_inout_buff_init(dtp_rpc_t *rpc_pub);
-void dtp_rpc_priv_free(struct dtp_rpc_priv *rpc_priv);
+void crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
+		       crt_opcode_t opc, int srv_flag);
+void crt_rpc_inout_buff_fini(crt_rpc_t *rpc_pub);
+int crt_rpc_inout_buff_init(crt_rpc_t *rpc_pub);
+void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
 
-/* DTP internal opcode definitions, must be 0xFFFFxxxx.*/
+/* CRT internal opcode definitions, must be 0xFFFFxxxx.*/
 enum {
-	DTP_OPC_INTERNAL_BASE	= 0xFFFF0000,
-	DTP_OPC_GRP_CREATE	= DTP_OPC_INTERNAL_BASE + 0x1,
-	DTP_OPC_GRP_DESTROY	= DTP_OPC_INTERNAL_BASE + 0x2,
+	CRT_OPC_INTERNAL_BASE	= 0xFFFF0000,
+	CRT_OPC_GRP_CREATE	= CRT_OPC_INTERNAL_BASE + 0x1,
+	CRT_OPC_GRP_DESTROY	= CRT_OPC_INTERNAL_BASE + 0x2,
 };
 
-/* DTP internal RPC definitions */
-struct dtp_grp_create_in {
-	dtp_group_id_t		 gc_grp_id;
-	dtp_rank_list_t	*gc_membs;
+/* CRT internal RPC definitions */
+struct crt_grp_create_in {
+	crt_group_id_t		 gc_grp_id;
+	crt_rank_list_t	*gc_membs;
 	/* the rank initiated the group create */
-	dtp_rank_t		 gc_initiate_rank;
+	crt_rank_t		 gc_initiate_rank;
 };
 
-struct dtp_grp_create_out {
+struct crt_grp_create_out {
 	/* failed rank list, can be used to aggregate the reply from child */
-	dtp_rank_list_t	*gc_failed_ranks;
+	crt_rank_list_t	*gc_failed_ranks;
 	/* the rank sent out the reply */
-	dtp_rank_t		 gc_rank;
+	crt_rank_t		 gc_rank;
 	/* return code, if failed the gc_rank should be in gc_failed_ranks */
 	int			 gc_rc;
 };
 
-struct dtp_grp_destroy_in {
-	dtp_group_id_t		gd_grp_id;
+struct crt_grp_destroy_in {
+	crt_group_id_t		gd_grp_id;
 	/* the rank initiated the group destroy */
-	dtp_rank_t		gd_initiate_rank;
+	crt_rank_t		gd_initiate_rank;
 };
 
-struct dtp_grp_destroy_out {
+struct crt_grp_destroy_out {
 	/* failed rank list, can be used to aggregate the reply from child */
-	dtp_rank_list_t	*gd_failed_ranks;
+	crt_rank_list_t	*gd_failed_ranks;
 	/* the rank sent out the reply */
-	dtp_rank_t		 gd_rank;
+	crt_rank_t		 gd_rank;
 	/* return code, if failed the gc_rank should be in gc_failed_ranks */
 	int			 gd_rc;
 };
 
-/* DTP internal RPC format definitions */
-struct dtp_internal_rpc {
+/* CRT internal RPC format definitions */
+struct crt_internal_rpc {
 	/* Name of the RPC */
 	const char		*ir_name;
 	/* Operation code associated with the RPC */
-	dtp_opcode_t		 ir_opc;
+	crt_opcode_t		 ir_opc;
 	/* RPC version */
 	int			 ir_ver;
 	/* Operation flags, TBD */
 	int			 ir_flags;
 	/* RPC request format */
-	struct dtp_req_format	*ir_req_fmt;
+	struct crt_req_format	*ir_req_fmt;
 	/* RPC handler */
-	dtp_rpc_cb_t		 ir_hdlr;
+	crt_rpc_cb_t		 ir_hdlr;
 	/* collective ops */
-	struct dtp_corpc_ops	*ir_co_ops;
+	struct crt_corpc_ops	*ir_co_ops;
 };
 
-int dtp_internal_rpc_register(void);
+int crt_internal_rpc_register(void);
 
-#endif /* __DTP_RPC_H__ */
+#endif /* __CRT_RPC_H__ */

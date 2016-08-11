@@ -21,10 +21,10 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DAOS_HASH_H__
-#define __DAOS_HASH_H__
+#ifndef __CRT_HASH_H__
+#define __CRT_HASH_H__
 
-#include <daos/list.h>
+#include <crt_util/list.h>
 
 #define DHASH_DEBUG	0
 
@@ -41,7 +41,7 @@ typedef struct {
 	 * \param args	[IN]	Input arguments for the key generating.
 	 */
 	void	 (*hop_key_init)(struct dhash_table *htable,
-				 daos_list_t *rlink, void *args);
+				 crt_list_t *rlink, void *args);
 	/**
 	 * Optional, return the key of record @rlink to @key_pp, and size of
 	 * the key as the returned value.
@@ -51,7 +51,7 @@ typedef struct {
 	 *
 	 * \return		size of the key.
 	 */
-	int	 (*hop_key_get)(struct dhash_table *htable, daos_list_t *rlink,
+	int	 (*hop_key_get)(struct dhash_table *htable, crt_list_t *rlink,
 				void **key_pp);
 	/**
 	 * Optional, hash @key to a 32-bit value.
@@ -66,7 +66,7 @@ typedef struct {
 	 * \return	true	The key of the record equals to @key.
 	 *		false	Not match
 	 */
-	bool	 (*hop_key_cmp)(struct dhash_table *htable, daos_list_t *rlink,
+	bool	 (*hop_key_cmp)(struct dhash_table *htable, crt_list_t *rlink,
 				const void *key, unsigned int ksize);
 	/**
 	 * Optional, increase refcount on the record @rlink
@@ -76,7 +76,7 @@ typedef struct {
 	 * \param rlink	[IN]	The record being referenced.
 	 */
 	void	 (*hop_rec_addref)(struct dhash_table *htable,
-				    daos_list_t *rlink);
+				    crt_list_t *rlink);
 	/**
 	 * Optional, release refcount on the record @rlink
 	 *
@@ -96,7 +96,7 @@ typedef struct {
 	 *			true, then hop_rec_free() should be defined.
 	 */
 	bool	 (*hop_rec_decref)(struct dhash_table *htable,
-				    daos_list_t *rlink);
+				    crt_list_t *rlink);
 	/**
 	 * Optional, free the record @rlink
 	 * It is called if hop_decref() returns zero.
@@ -104,7 +104,7 @@ typedef struct {
 	 * \param rlink	[IN]	The record being freed.
 	 */
 	void	 (*hop_rec_free)(struct dhash_table *htable,
-				  daos_list_t *rlink);
+				  crt_list_t *rlink);
 } dhash_table_ops_t;
 
 enum dhash_feats {
@@ -129,7 +129,7 @@ enum dhash_feats {
 
 /** a hash bucket */
 struct dhash_bucket {
-	daos_list_t		hb_head;
+	crt_list_t		hb_head;
 #if DHASH_DEBUG
 	unsigned int		hb_dep;
 #endif
@@ -168,70 +168,70 @@ int  dhash_table_create(uint32_t feats, unsigned int bits,
 int  dhash_table_create_inplace(uint32_t feats, unsigned int bits,
 				void *priv, dhash_table_ops_t *hops,
 				struct dhash_table *htable);
-typedef int (*dhash_traverse_cb_t)(daos_list_t *rlink, void *args);
+typedef int (*dhash_traverse_cb_t)(crt_list_t *rlink, void *args);
 int dhash_table_traverse(struct dhash_table *htable, dhash_traverse_cb_t cb,
 			 void *args);
 int  dhash_table_destroy(struct dhash_table *htable, bool force);
 int  dhash_table_destroy_inplace(struct dhash_table *htable, bool force);
 void dhash_table_debug(struct dhash_table *htable);
 
-daos_list_t *dhash_rec_find(struct dhash_table *htable, const void *key,
+crt_list_t *dhash_rec_find(struct dhash_table *htable, const void *key,
 			    unsigned int ksize);
 int  dhash_rec_insert(struct dhash_table *htable, const void *key,
-		     unsigned int ksize, daos_list_t *rlink,
+		     unsigned int ksize, crt_list_t *rlink,
 		     bool exclusive);
-int  dhash_rec_insert_anonym(struct dhash_table *htable, daos_list_t *rlink,
+int  dhash_rec_insert_anonym(struct dhash_table *htable, crt_list_t *rlink,
 			      void *args);
 bool dhash_rec_delete(struct dhash_table *htable, const void *key,
 		      unsigned int ksize);
-bool dhash_rec_delete_at(struct dhash_table *htable, daos_list_t *rlink);
-void dhash_rec_addref(struct dhash_table *htable, daos_list_t *rlink);
-void dhash_rec_decref(struct dhash_table *htable, daos_list_t *rlink);
-bool dhash_rec_unlinked(daos_list_t *rlink);
+bool dhash_rec_delete_at(struct dhash_table *htable, crt_list_t *rlink);
+void dhash_rec_addref(struct dhash_table *htable, crt_list_t *rlink);
+void dhash_rec_decref(struct dhash_table *htable, crt_list_t *rlink);
+bool dhash_rec_unlinked(crt_list_t *rlink);
 
-#define DAOS_HHASH_BITS		16
-#define DAOS_HTYPE_BITS		3
-#define DAOS_HTYPE_MASK		((1ULL << DAOS_HTYPE_BITS) - 1)
+#define CRT_HHASH_BITS		16
+#define CRT_HTYPE_BITS		3
+#define CRT_HTYPE_MASK		((1ULL << CRT_HTYPE_BITS) - 1)
 
 enum {
-	DAOS_HTYPE_EQ		= 0, /* event queue */
-	DAOS_HTYPE_POOL		= 1,
-	DAOS_HTYPE_CO		= 2, /* container */
-	DAOS_HTYPE_OBJ		= 3, /* object */
+	CRT_HTYPE_EQ		= 0, /* event queue */
+	CRT_HTYPE_POOL		= 1,
+	CRT_HTYPE_CO		= 2, /* container */
+	CRT_HTYPE_OBJ		= 3, /* object */
 	/* More to be added */
 };
 
-struct daos_hlink;
+struct crt_hlink;
 
-struct daos_hlink_ops {
+struct crt_hlink_ops {
 	/** free callback */
-	void	(*hop_free)(struct daos_hlink *hlink);
+	void	(*hop_free)(struct crt_hlink *hlink);
 };
 
-struct daos_hlink {
-	daos_list_t		 hl_link;
+struct crt_hlink {
+	crt_list_t		 hl_link;
 	uint64_t		 hl_key;
 	unsigned int		 hl_ref;
 	unsigned int		 hl_initialized:1;
-	struct daos_hlink_ops	*hl_ops;
+	struct crt_hlink_ops	*hl_ops;
 };
 
-struct daos_hhash;
+struct crt_hhash;
 
-int daos_hhash_create(unsigned int bits, struct daos_hhash **hhash);
-void daos_hhash_destroy(struct daos_hhash *hh);
-void daos_hhash_hlink_init(struct daos_hlink *hlink,
-			   struct daos_hlink_ops *ops);
-void daos_hhash_link_insert(struct daos_hhash *hhash,
-			    struct daos_hlink *hlink, int type);
-struct daos_hlink *daos_hhash_link_lookup(struct daos_hhash *hhash,
+int crt_hhash_create(unsigned int bits, struct crt_hhash **hhash);
+void crt_hhash_destroy(struct crt_hhash *hh);
+void crt_hhash_hlink_init(struct crt_hlink *hlink,
+			   struct crt_hlink_ops *ops);
+void crt_hhash_link_insert(struct crt_hhash *hhash,
+			    struct crt_hlink *hlink, int type);
+struct crt_hlink *crt_hhash_link_lookup(struct crt_hhash *hhash,
 					  uint64_t key);
-void daos_hhash_link_putref(struct daos_hhash *hhash,
-			    struct daos_hlink *hlink);
-bool daos_hhash_link_delete(struct daos_hhash *hhash,
-			    struct daos_hlink *hlink);
-bool daos_hhash_link_empty(struct daos_hlink *hlink);
-void daos_hhash_link_key(struct daos_hlink *hlink, uint64_t *key);
-int daos_hhash_key_type(uint64_t key);
+void crt_hhash_link_putref(struct crt_hhash *hhash,
+			    struct crt_hlink *hlink);
+bool crt_hhash_link_delete(struct crt_hhash *hhash,
+			    struct crt_hlink *hlink);
+bool crt_hhash_link_empty(struct crt_hlink *hlink);
+void crt_hhash_link_key(struct crt_hlink *hlink, uint64_t *key);
+int crt_hhash_key_type(uint64_t key);
 
-#endif /*__DAOS_HASH_H__*/
+#endif /*__CRT_HASH_H__*/

@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#ifndef __DAOS_COMMON_H__
-#define __DAOS_COMMON_H__
+#ifndef __CRT_COMMON_H__
+#define __CRT_COMMON_H__
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -40,56 +40,56 @@
 #include <pthread.h>
 #include <byteswap.h>
 
-#include <daos/transport.h>
+#include <crt_api.h>
 
-#define DAOS_ENV_DEBUG	"DAOS_DEBUG"
+#define CRT_ENV_DEBUG	"CRT_DEBUG"
 
 /**
  * Debugging flags (32 bits, non-overlapping)
  */
 enum {
-	DF_UNKNOWN	= (1 << 0),
-	DF_VERB_FUNC	= (1 << 1),
-	DF_VERB_ALL	= (1 << 2),
-	DF_CL		= (1 << 5),
-	DF_CL2		= (1 << 6),
-	DF_CL3		= (1 << 7),
-	DF_PL		= (1 << 8),
-	DF_PL2		= (1 << 9),
-	DF_PL3		= (1 << 10),
-	DF_TP		= (1 << 11),
-	DF_VOS1		= (1 << 12),
-	DF_VOS2		= (1 << 13),
-	DF_VOS3		= (1 << 14),
-	DF_SERVER	= (1 << 15),
-	DF_MGMT		= (1 << 16),
-	DF_DSMC		= (1 << 17),
-	DF_DSMS		= (1 << 18),
-	DF_SR		= (1 << 19),
-	DF_SRC		= (1 << 20),
-	DF_SRS		= (1 << 21),
-	DF_MISC		= (1 << 30),
-	DF_MEM		= (1 << 31),
+	CF_UNKNOWN	= (1 << 0),
+	CF_VERB_FUNC	= (1 << 1),
+	CF_VERB_ALL	= (1 << 2),
+	CF_CL		= (1 << 5),
+	CF_CL2		= (1 << 6),
+	CF_CL3		= (1 << 7),
+	CF_PL		= (1 << 8),
+	CF_PL2		= (1 << 9),
+	CF_PL3		= (1 << 10),
+	CF_TP		= (1 << 11),
+	CF_VOS1		= (1 << 12),
+	CF_VOS2		= (1 << 13),
+	CF_VOS3		= (1 << 14),
+	CF_SERVER	= (1 << 15),
+	CF_MGMT		= (1 << 16),
+	CF_DSMC		= (1 << 17),
+	CF_DSMS		= (1 << 18),
+	CF_SR		= (1 << 19),
+	CF_SRC		= (1 << 20),
+	CF_SRS		= (1 << 21),
+	CF_MISC		= (1 << 30),
+	CF_MEM		= (1 << 31),
 };
 
-unsigned int daos_debug_mask(void);
-void daos_debug_set(unsigned int mask);
+unsigned int crt_debug_mask(void);
+void crt_debug_set(unsigned int mask);
 
-#define D_PRINT(fmt, ...)						\
+#define C_PRINT(fmt, ...)						\
 do {									\
 	fprintf(stdout, fmt, ## __VA_ARGS__);				\
 	fflush(stdout);							\
 } while (0)
 
-#define D_DEBUG(mask, fmt, ...)						\
+#define C_DEBUG(mask, fmt, ...)						\
 do {									\
-	unsigned int __mask = daos_debug_mask();			\
-	if (!((__mask & (mask)) & ~(DF_VERB_FUNC | DF_VERB_ALL)))	\
+	unsigned int __mask = crt_debug_mask();			\
+	if (!((__mask & (mask)) & ~(CF_VERB_FUNC | CF_VERB_ALL)))	\
 		break;							\
-	if (__mask & DF_VERB_ALL) {					\
+	if (__mask & CF_VERB_ALL) {					\
 		fprintf(stdout, "%s:%d:%d:%s() " fmt, __FILE__,		\
 			getpid(), __LINE__, __func__, ## __VA_ARGS__);  \
-	} else if (__mask & DF_VERB_FUNC) {				\
+	} else if (__mask & CF_VERB_FUNC) {				\
 		fprintf(stdout, "%s() " fmt,				\
 			__func__, ## __VA_ARGS__);			\
 	} else {							\
@@ -98,14 +98,14 @@ do {									\
 	fflush(stdout);							\
 } while (0)
 
-#define D_ERROR(fmt, ...)						\
+#define C_ERROR(fmt, ...)						\
 do {									\
 	fprintf(stderr, "%s:%d:%d:%s() " fmt, __FILE__, getpid(),	\
 		__LINE__, __func__, ## __VA_ARGS__);			\
 	fflush(stderr);							\
 } while (0)
 
-#define D_FATAL(error, fmt, ...)					\
+#define C_FATAL(error, fmt, ...)					\
 do {									\
 	fprintf(stderr, "%s:%d:%s() " fmt, __FILE__, __LINE__,		\
 		__func__, ## __VA_ARGS__);				\
@@ -113,105 +113,105 @@ do {									\
 	exit(error);							\
 } while (0)
 
-#define D_ASSERT(e)	assert(e)
+#define C_ASSERT(e)	assert(e)
 
-#define D_ASSERTF(cond, fmt, ...)					\
+#define C_ASSERTF(cond, fmt, ...)					\
 do {									\
 	if (!(cond))							\
-		D_ERROR(fmt, ## __VA_ARGS__);				\
+		C_ERROR(fmt, ## __VA_ARGS__);				\
 	assert(cond);							\
 } while (0)
 
-#define D_CASSERT(cond)							\
+#define C_CASSERT(cond)							\
 	do {switch (1) {case (cond): case 0: break; } } while (0)
 
-#define DF_U64		"%" PRIu64
-#define DF_X64		"%" PRIx64
+#define CF_U64		"%" PRIu64
+#define CF_X64		"%" PRIx64
 
-#define DF_OID		DF_U64"."DF_U64"."DF_U64
-#define DP_OID(o)	(o).hi, (o).mid, (o).lo
+#define CF_OID		CF_U64"."CF_U64"."CF_U64
+#define CP_OID(o)	(o).hi, (o).mid, (o).lo
 
-#define DF_UOID		DF_OID".%u"
-#define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
+#define CF_UOID		CF_OID".%u"
+#define CP_UOID(uo)	CP_OID((uo).id_pub), (uo).id_shard
 
 /*
- * Each thread has DF_UUID_MAX number of thread-local buffers for UUID strings.
- * Each debug message can have at most this many DP_UUIDs.
+ * Each thread has CF_UUID_MAX number of thread-local buffers for UUID strings.
+ * Each debug message can have at most this many CP_UUIDs.
  *
- * DF_UUID prints the first eight characters of the string representation,
- * while DF_UUIDF prints the full 36-character string representation. DP_UUID()
- * matches both DF_UUID and DF_UUIDF.
+ * CF_UUID prints the first eight characters of the string representation,
+ * while CF_UUIDF prints the full 36-character string representation. CP_UUID()
+ * matches both CF_UUID and CF_UUIDF.
  */
-#define DF_UUID_MAX	8
-#define DF_UUID		"%.8s"
-#define DF_UUIDF	"%s"
-char *DP_UUID(const void *uuid);
+#define CF_UUID_MAX	8
+#define CF_UUID		"%.8s"
+#define CF_UUIDF	"%s"
+char *CP_UUID(const void *uuid);
 
 /* For prefixes of error messages about a container */
-#define DF_CONT			DF_UUID"/"DF_UUID": "
-#define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
+#define CF_CONT			CF_UUID"/"CF_UUID": "
+#define CP_CONT(puuid, cuuid)	CP_UUID(puuid), CP_UUID(cuuid)
 
 /* memory allocating macros */
-#define D_ALLOC(ptr, size)						 \
+#define C_ALLOC(ptr, size)						 \
 	do {								 \
 		(ptr) = (__typeof__(ptr))calloc(1, size);		 \
 		if ((ptr) != NULL) {					 \
-			D_DEBUG(DF_MEM, "alloc #ptr : %d at %p.\n",	\
+			C_DEBUG(CF_MEM, "alloc #ptr : %d at %p.\n",	\
 				(int)(size), ptr);			\
 			break;						\
 		}						 \
-		D_ERROR("out of memory (tried to alloc '" #ptr "' = %d)",\
+		C_ERROR("out of memory (tried to alloc '" #ptr "' = %d)",\
 			(int)(size));					 \
 	} while (0)
 
-# define D_FREE(ptr, size)						\
+# define C_FREE(ptr, size)						\
 	do {								\
-		D_DEBUG(DF_MEM, "free #ptr : %d at %p.\n",		\
+		C_DEBUG(CF_MEM, "free #ptr : %d at %p.\n",		\
 			(int)(size), ptr);				\
 		free(ptr);						\
 		(ptr) = NULL;						\
 	} while (0)
 
-#define D_ALLOC_PTR(ptr)        D_ALLOC(ptr, sizeof *(ptr))
-#define D_FREE_PTR(ptr)         D_FREE(ptr, sizeof *(ptr))
+#define C_ALLOC_PTR(ptr)        C_ALLOC(ptr, sizeof *(ptr))
+#define C_FREE_PTR(ptr)         C_FREE(ptr, sizeof *(ptr))
 
-#define D_GOTO(label, rc)       do { ((void)(rc)); goto label; } while (0)
+#define C_GOTO(label, rc)       do { ((void)(rc)); goto label; } while (0)
 
-#define DAOS_GOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
-#define DAOS_GOLDEN_RATIO_PRIME_32	0x9e370001UL
+#define CRT_GOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
+#define CRT_GOLDEN_RATIO_PRIME_32	0x9e370001UL
 
 static inline uint64_t
-daos_u64_hash(uint64_t val, unsigned int bits)
+crt_u64_hash(uint64_t val, unsigned int bits)
 {
 	uint64_t hash = val;
 
-	hash *= DAOS_GOLDEN_RATIO_PRIME_64;
+	hash *= CRT_GOLDEN_RATIO_PRIME_64;
 	return hash >> (64 - bits);
 }
 
 static inline uint32_t
-daos_u32_hash(uint64_t key, unsigned int bits)
+crt_u32_hash(uint64_t key, unsigned int bits)
 {
-	return (DAOS_GOLDEN_RATIO_PRIME_32 * key) >> (32 - bits);
+	return (CRT_GOLDEN_RATIO_PRIME_32 * key) >> (32 - bits);
 }
 
-uint64_t daos_hash_mix64(uint64_t key);
-uint32_t daos_hash_mix96(uint32_t a, uint32_t b, uint32_t c);
+uint64_t crt_hash_mix64(uint64_t key);
+uint32_t crt_hash_mix96(uint32_t a, uint32_t b, uint32_t c);
 
 /** consistent hash search */
-unsigned int daos_chash_srch_u64(uint64_t *hashes, unsigned int nhashes,
+unsigned int crt_chash_srch_u64(uint64_t *hashes, unsigned int nhashes,
 				 uint64_t value);
 
 /** djb2 hash a string to a uint32_t value */
-uint32_t daos_hash_string_u32(const char *string, unsigned int len);
+uint32_t crt_hash_string_u32(const char *string, unsigned int len);
 /** murmur hash (64 bits) */
-uint64_t daos_hash_murmur64(const unsigned char *key, unsigned int key_len,
+uint64_t crt_hash_murmur64(const unsigned char *key, unsigned int key_len,
 			    unsigned int seed);
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
 static inline unsigned int
-daos_power2_nbits(unsigned int val)
+crt_power2_nbits(unsigned int val)
 {
 	unsigned int shift;
 
@@ -221,21 +221,21 @@ daos_power2_nbits(unsigned int val)
 }
 
 int
-daos_rank_list_dup(dtp_rank_list_t **dst, const dtp_rank_list_t *src,
+crt_rank_list_dup(crt_rank_list_t **dst, const crt_rank_list_t *src,
 		   bool input);
 void
-daos_rank_list_free(dtp_rank_list_t *rank_list);
+crt_rank_list_free(crt_rank_list_t *rank_list);
 void
-daos_rank_list_copy(dtp_rank_list_t *dst, dtp_rank_list_t *src, bool input);
+crt_rank_list_copy(crt_rank_list_t *dst, crt_rank_list_t *src, bool input);
 void
-daos_rank_list_sort(dtp_rank_list_t *rank_list);
+crt_rank_list_sort(crt_rank_list_t *rank_list);
 bool
-daos_rank_list_find(dtp_rank_list_t *rank_list, dtp_rank_t rank, int *idx);
+crt_rank_list_find(crt_rank_list_t *rank_list, crt_rank_t rank, int *idx);
 bool
-daos_rank_list_identical(dtp_rank_list_t *rank_list1,
-			 dtp_rank_list_t *rank_list2, bool input);
+crt_rank_list_identical(crt_rank_list_t *rank_list1,
+			 crt_rank_list_t *rank_list2, bool input);
 bool
-daos_rank_in_rank_list(dtp_rank_list_t *rank_list, dtp_rank_t rank);
+crt_rank_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank);
 
 
 #if !defined(container_of)
@@ -277,32 +277,32 @@ daos_rank_in_rank_list(dtp_rank_list_t *rank_list, dtp_rank_t rank);
 	        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
 
-#define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
+#define CRT_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
 
 /* byte swapper */
-#define D_SWAP16(x)	bswap_16(x)
-#define D_SWAP32(x)	bswap_32(x)
-#define D_SWAP64(x)	bswap_64(x)
-#define D_SWAP16S(x)	do { *(x) = D_SWAP16(*(x)); } while (0)
-#define D_SWAP32S(x)	do { *(x) = D_SWAP32(*(x)); } while (0)
-#define D_SWAP64S(x)	do { *(x) = D_SWAP64(*(x)); } while (0)
+#define C_SWAP16(x)	bswap_16(x)
+#define C_SWAP32(x)	bswap_32(x)
+#define C_SWAP64(x)	bswap_64(x)
+#define C_SWAP16S(x)	do { *(x) = C_SWAP16(*(x)); } while (0)
+#define C_SWAP32S(x)	do { *(x) = C_SWAP32(*(x)); } while (0)
+#define C_SWAP64S(x)	do { *(x) = C_SWAP64(*(x)); } while (0)
 
 static inline int
-daos_errno2der(int err)
+crt_errno2der(int err)
 {
 	switch (err) {
 	case 0:		return 0;
 	case EPERM:
-	case EACCES:	return -DER_NO_PERM;
-	case ENOMEM:	return -DER_NOMEM;
+	case EACCES:	return -CER_NO_PERM;
+	case ENOMEM:	return -CER_NOMEM;
 	case EDQUOT:
-	case ENOSPC:	return -DER_NOSPACE;
-	case EEXIST:	return -DER_EXIST;
-	case ENOENT:	return -DER_NONEXIST;
-	case ECANCELED:	return -DER_CANCELED;
-	default:	return -DER_INVAL;
+	case ENOSPC:	return -CER_NOSPACE;
+	case EEXIST:	return -CER_EXIST;
+	case ENOENT:	return -CER_NONEXIST;
+	case ECANCELED:	return -CER_CANCELED;
+	default:	return -CER_INVAL;
 	}
 	return 0;
 }
 
-#endif /* __DAOS_COMMON_H__ */
+#endif /* __CRT_COMMON_H__ */

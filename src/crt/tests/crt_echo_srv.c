@@ -21,10 +21,10 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This is a simple example of dtp_echo rpc server based on dtp APIs.
+ * This is a simple example of crt_echo rpc server based on crt APIs.
  */
 
-#include <dtp_echo.h>
+#include <crt_echo.h>
 
 struct gecho gecho;
 
@@ -39,18 +39,18 @@ static void *progress_handler(void *arg)
 	assert(arg == NULL);
 	/* progress loop */
 	do {
-		rc = dtp_progress(gecho.dtp_ctx, 1, NULL, NULL);
-		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("dtp_progress failed rc: %d.\n", rc);
+		rc = crt_progress(gecho.crt_ctx, 1, NULL, NULL);
+		if (rc != 0 && rc != -CER_TIMEDOUT) {
+			C_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
 
 		if (ECHO_EXTRA_CONTEXT_NUM > 0) {
 			for (i = 0; i < ECHO_EXTRA_CONTEXT_NUM; i++) {
-				rc = dtp_progress(gecho.extra_ctx[i], 1, NULL,
+				rc = crt_progress(gecho.extra_ctx[i], 1, NULL,
 						  NULL);
-				if (rc != 0 && rc != -DER_TIMEDOUT) {
-					D_ERROR("dtp_progress failed rc: %d.\n",
+				if (rc != 0 && rc != -CER_TIMEDOUT) {
+					C_ERROR("crt_progress failed rc: %d.\n",
 					       rc);
 					break;
 				}
@@ -72,8 +72,8 @@ static void *progress_handler(void *arg)
 	pthread_exit(NULL);
 }
 
-dtp_group_t *example_grp;
-int grp_create_cb(dtp_group_t *grp, void *priv, int status)
+crt_group_t *example_grp;
+int grp_create_cb(crt_group_t *grp, void *priv, int status)
 {
 	printf("in grp_create_cb, grp %p, priv %p, status %d.\n",
 		grp, priv, status);
@@ -89,17 +89,17 @@ int grp_destroy_cb(void *arg, int status)
 
 static int run_echo_srver(void)
 {
-	dtp_endpoint_t		svr_ep;
-	dtp_rpc_t		*rpc_req = NULL;
+	crt_endpoint_t		svr_ep;
+	crt_rpc_t		*rpc_req = NULL;
 	char			*pchar;
-	dtp_rank_t		myrank;
+	crt_rank_t		myrank;
 	uint32_t		mysize;
 	int			rc, loop = 0;
-	struct dtp_echo_checkin_req *e_req;
+	struct crt_echo_checkin_req *e_req;
 
-	rc = dtp_group_rank(NULL, &myrank);
+	rc = crt_group_rank(NULL, &myrank);
 	assert(rc == 0);
-	rc = dtp_group_size(NULL, &mysize);
+	rc = crt_group_size(NULL, &mysize);
 	assert(rc == 0);
 
 	echo_srv.do_shutdown = 0;
@@ -117,24 +117,24 @@ static int run_echo_srver(void)
 	/* send checkin RPC */
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
-	rc = dtp_req_create(gecho.dtp_ctx, svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
+	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 
-	D_ALLOC(pchar, 256);
+	C_ALLOC(pchar, 256);
 	assert(pchar != NULL);
 	snprintf(pchar, 256, "Guest_%d@server-side", myrank);
 
-	e_req = dtp_req_get(rpc_req);
+	e_req = crt_req_get(rpc_req);
 	e_req->name = pchar;
 	e_req->age = 32;
 	e_req->days = myrank;
 
-	D_DEBUG(DF_UNKNOWN, "server(rank %d) sending checkin request, name: %s,"
+	C_DEBUG(CF_UNKNOWN, "server(rank %d) sending checkin request, name: %s,"
 	       " age: %d, days: %d.\n", myrank,
 		e_req->name, e_req->age, e_req->days);
 
 	gecho.complete = 0;
-	rc = dtp_req_send(rpc_req, client_cb_common, &gecho.complete);
+	rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
 	assert(rc == 0);
 	/* wait completion */
 	while (1) {
@@ -149,15 +149,15 @@ static int run_echo_srver(void)
 			break;
 		}
 	}
-	D_FREE(pchar, 256);
+	C_FREE(pchar, 256);
 
 	/* ==================================== */
 	/* test group API and bcast RPC */
-	dtp_group_id_t		grp_id = "example_grp";
-	dtp_rank_t		grp_ranks[4] = {5, 4, 1, 2};
-	dtp_rank_list_t	grp_membs;
-	dtp_rank_t		excluded_ranks[2] = {1, 2};
-	dtp_rank_list_t	excluded_membs;
+	crt_group_id_t		grp_id = "example_grp";
+	crt_rank_t		grp_ranks[4] = {5, 4, 1, 2};
+	crt_rank_list_t	grp_membs;
+	crt_rank_t		excluded_ranks[2] = {1, 2};
+	crt_rank_list_t	excluded_membs;
 
 	grp_membs.rl_nr.num = 4;
 	grp_membs.rl_ranks = grp_ranks;
@@ -165,31 +165,31 @@ static int run_echo_srver(void)
 	excluded_membs.rl_ranks = excluded_ranks;
 
 	if (mysize >= 6 && myrank == 4) {
-		dtp_rpc_t				*corpc_req;
-		struct dtp_echo_corpc_example_req	*corpc_in;
+		crt_rpc_t				*corpc_req;
+		struct crt_echo_corpc_example_req	*corpc_in;
 
-		rc = dtp_group_create(grp_id, &grp_membs, 0, grp_create_cb,
+		rc = crt_group_create(grp_id, &grp_membs, 0, grp_create_cb,
 				      &myrank);
-		printf("dtp_group_create rc: %d, priv %p.\n", rc, &myrank);
+		printf("crt_group_create rc: %d, priv %p.\n", rc, &myrank);
 		sleep(1); /* just to ensure grp populated */
 
-		rc = dtp_corpc_req_create(gecho.dtp_ctx, example_grp,
+		rc = crt_corpc_req_create(gecho.crt_ctx, example_grp,
 					  &excluded_membs, ECHO_CORPC_EXAMPLE,
 					  NULL, NULL, 0, 0, &corpc_req);
-		D_ASSERT(rc == 0 && corpc_req != NULL);
-		corpc_in = dtp_req_get(corpc_req);
-		D_ASSERT(corpc_in != NULL);
+		C_ASSERT(rc == 0 && corpc_req != NULL);
+		corpc_in = crt_req_get(corpc_req);
+		C_ASSERT(corpc_in != NULL);
 		corpc_in->co_msg = "testing corpc example from rank 4";
 
 		gecho.complete = 0;
-		rc = dtp_req_send(corpc_req, client_cb_common,
+		rc = crt_req_send(corpc_req, client_cb_common,
 				  &gecho.complete);
-		D_ASSERT(rc == 0);
+		C_ASSERT(rc == 0);
 		sleep(1); /* just to ensure corpc handled */
-		D_ASSERT(gecho.complete == 1);
+		C_ASSERT(gecho.complete == 1);
 
-		rc = dtp_group_destroy(example_grp, grp_destroy_cb, &myrank);
-		printf("dtp_group_destroy rc: %d, arg %p.\n", rc, &myrank);
+		rc = crt_group_destroy(example_grp, grp_destroy_cb, &myrank);
+		printf("crt_group_destroy rc: %d, arg %p.\n", rc, &myrank);
 	}
 
 	/* ==================================== */
@@ -204,7 +204,7 @@ out:
 	return rc;
 }
 
-int echo_srv_shutdown(dtp_rpc_t *rpc_req)
+int echo_srv_shutdown(crt_rpc_t *rpc_req)
 {
 	int rc = 0;
 
@@ -214,7 +214,7 @@ int echo_srv_shutdown(dtp_rpc_t *rpc_req)
 	assert(rpc_req->dr_input == NULL);
 	assert(rpc_req->dr_output == NULL);
 
-	rc = dtp_reply_send(rpc_req);
+	rc = crt_reply_send(rpc_req);
 	printf("echo_srver done issuing shutdown responses.\n");
 
 	echo_srv.do_shutdown = 1;
@@ -223,21 +223,21 @@ int echo_srv_shutdown(dtp_rpc_t *rpc_req)
 	return rc;
 }
 
-int echo_srv_corpc_example(dtp_rpc_t *rpc_req)
+int echo_srv_corpc_example(crt_rpc_t *rpc_req)
 {
-	struct dtp_echo_corpc_example_req *req;
-	struct dtp_echo_corpc_example_reply *reply;
-	dtp_rank_t my_rank;
+	struct crt_echo_corpc_example_req *req;
+	struct crt_echo_corpc_example_reply *reply;
+	crt_rank_t my_rank;
 	int rc = 0;
 
-	req = dtp_req_get(rpc_req);
-	reply = dtp_reply_get(rpc_req);
-	D_ASSERT(req != NULL && reply != NULL);
+	req = crt_req_get(rpc_req);
+	reply = crt_reply_get(rpc_req);
+	C_ASSERT(req != NULL && reply != NULL);
 
-	dtp_group_rank(NULL, &my_rank);
+	crt_group_rank(NULL, &my_rank);
 	reply->co_result = my_rank;
 
-	rc = dtp_reply_send(rpc_req);
+	rc = crt_reply_send(rpc_req);
 
 	printf("echo_srv_corpc_example, rank %d got msg %s, reply %d, rc %d.\n",
 	       my_rank, req->co_msg, reply->co_result, rc);
@@ -245,17 +245,17 @@ int echo_srv_corpc_example(dtp_rpc_t *rpc_req)
 	return rc;
 }
 
-int corpc_example_aggregate(dtp_rpc_t *source, dtp_rpc_t *result, void *priv)
+int corpc_example_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct dtp_echo_corpc_example_reply *reply_source, *reply_result;
-	dtp_rank_t my_rank;
+	struct crt_echo_corpc_example_reply *reply_source, *reply_result;
+	crt_rank_t my_rank;
 
-	D_ASSERT(source != NULL && result != NULL);
-	reply_source = dtp_reply_get(source);
-	reply_result = dtp_reply_get(result);
+	C_ASSERT(source != NULL && result != NULL);
+	reply_source = crt_reply_get(source);
+	reply_result = crt_reply_get(result);
 	reply_result->co_result += reply_source->co_result;
 
-	dtp_group_rank(NULL, &my_rank);
+	crt_group_rank(NULL, &my_rank);
 	printf("corpc_example_aggregate, rank %d, co_result %d, aggregate "
 	       "result %d.\n", my_rank, reply_source->co_result,
 	       reply_result->co_result);
@@ -263,31 +263,31 @@ int corpc_example_aggregate(dtp_rpc_t *source, dtp_rpc_t *result, void *priv)
 	return 0;
 }
 
-struct dtp_corpc_ops echo_co_ops = {
+struct crt_corpc_ops echo_co_ops = {
 	.co_aggregate = corpc_example_aggregate,
 };
 
 int g_roomno = 1082;
-int echo_srv_checkin(dtp_rpc_t *rpc_req)
+int echo_srv_checkin(crt_rpc_t *rpc_req)
 {
-	struct dtp_echo_checkin_req *e_req;
-	struct dtp_echo_checkin_reply *e_reply;
+	struct crt_echo_checkin_req *e_req;
+	struct crt_echo_checkin_reply *e_reply;
 	int rc = 0;
 
-	/* dtp internally already allocated the input/output buffer */
-	e_req = dtp_req_get(rpc_req);
-	D_ASSERT(e_req != NULL);
+	/* CaRT internally already allocated the input/output buffer */
+	e_req = crt_req_get(rpc_req);
+	C_ASSERT(e_req != NULL);
 
 	printf("echo_srver recv'd checkin, opc: 0x%x.\n", rpc_req->dr_opc);
 	printf("checkin input - age: %d, name: %s, days: %d.\n",
 		e_req->age, e_req->name, e_req->days);
 
-	e_reply = dtp_reply_get(rpc_req);
-	D_ASSERT(e_reply != NULL);
+	e_reply = crt_reply_get(rpc_req);
+	C_ASSERT(e_reply != NULL);
 	e_reply->ret = 0;
 	e_reply->room_no = g_roomno++;
 
-	rc = dtp_reply_send(rpc_req);
+	rc = crt_reply_send(rpc_req);
 
 	printf("echo_srver sent checkin reply, ret: %d, room_no: %d.\n",
 	       e_reply->ret, e_reply->room_no);
@@ -295,28 +295,28 @@ int echo_srv_checkin(dtp_rpc_t *rpc_req)
 	return rc;
 }
 
-int bulk_test_cb(const struct dtp_bulk_cb_info *cb_info)
+int bulk_test_cb(const struct crt_bulk_cb_info *cb_info)
 {
-	dtp_rpc_t			*rpc_req;
-	struct dtp_bulk_desc		*bulk_desc;
-	dtp_bulk_t			local_bulk_hdl;
-	dtp_iov_t			*iovs;
-	struct dtp_echo_bulk_out_reply	*e_reply;
-	struct dtp_echo_bulk_in_req	*e_req;
+	crt_rpc_t			*rpc_req;
+	struct crt_bulk_desc		*bulk_desc;
+	crt_bulk_t			local_bulk_hdl;
+	crt_iov_t			*iovs;
+	struct crt_echo_bulk_out_reply	*e_reply;
+	struct crt_echo_bulk_in_req	*e_req;
 	int				rc = 0;
 
 	rc = cb_info->bci_rc;
 	bulk_desc = cb_info->bci_bulk_desc;
 	/* printf("in bulk_test_cb, dci_rc: %d.\n", rc); */
 	rpc_req = bulk_desc->bd_rpc;
-	iovs = (dtp_iov_t *)cb_info->bci_arg;
+	iovs = (crt_iov_t *)cb_info->bci_arg;
 	assert(rpc_req != NULL && iovs != NULL);
 
 	local_bulk_hdl = bulk_desc->bd_local_hdl;
 	assert(local_bulk_hdl != NULL);
 
-	e_reply = dtp_reply_get(rpc_req);
-	D_ASSERT(e_reply != NULL);
+	e_reply = crt_reply_get(rpc_req);
+	C_ASSERT(e_reply != NULL);
 	if (rc != 0) {
 		printf("bulk transferring failed, dci_rc: %d.\n", rc);
 		e_reply->ret = rc;
@@ -326,7 +326,7 @@ int bulk_test_cb(const struct dtp_bulk_cb_info *cb_info)
 	/* calculate md5 checksum to verify data */
 	MD5_CTX md5_ctx;
 	unsigned char md5[16];
-	dtp_string_t md5_str = (dtp_string_t)malloc(33);
+	crt_string_t md5_str = (crt_string_t)malloc(33);
 	memset(md5_str, 0, 33);
 
 	rc = MD5_Init(&md5_ctx);
@@ -337,8 +337,8 @@ int bulk_test_cb(const struct dtp_bulk_cb_info *cb_info)
 	assert(rc == 1);
 	echo_md5_to_string(md5, md5_str);
 
-	e_req = dtp_req_get(rpc_req);
-	D_ASSERT(e_req != NULL);
+	e_req = crt_req_get(rpc_req);
+	C_ASSERT(e_req != NULL);
 	rc = strcmp(md5_str, e_req->bulk_md5_ptr);
 	if (rc == 0) {
 		printf("data verification success, md5: %s.\n", md5_str);
@@ -357,63 +357,63 @@ out:
 	free(iovs[0].iov_buf);
 	free(iovs);
 
-	rc = dtp_bulk_free(local_bulk_hdl);
+	rc = crt_bulk_free(local_bulk_hdl);
 	assert(rc == 0);
 
-	/* need to call dtp_reply_send first and then call dtp_req_decref,
+	/* need to call crt_reply_send first and then call crt_req_decref,
 	 * if changing the sequence possibly cause the RPC request be destroyed
 	 * before sending reply. */
-	rc = dtp_reply_send(rpc_req);
+	rc = crt_reply_send(rpc_req);
 	assert(rc == 0);
 
 	printf("echo_srver sent bulk_test reply, echo_msg: %s.\n",
 	       e_reply->echo_msg);
 
-	rc = dtp_req_decref(rpc_req);
+	rc = crt_req_decref(rpc_req);
 	assert(rc == 0);
 
 	return 0;
 }
 
-int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
+int echo_srv_bulk_test(crt_rpc_t *rpc_req)
 {
-	dtp_bulk_t			local_bulk_hdl;
-	dtp_sg_list_t			sgl;
-	dtp_iov_t			*iovs = NULL;
-	dtp_size_t			bulk_len;
+	crt_bulk_t			local_bulk_hdl;
+	crt_sg_list_t			sgl;
+	crt_iov_t			*iovs = NULL;
+	crt_size_t			bulk_len;
 	unsigned int			bulk_sgnum;
-	struct dtp_bulk_desc		bulk_desc;
-	dtp_bulk_opid_t			bulk_opid;
-	struct dtp_echo_bulk_in_req	*e_req;
+	struct crt_bulk_desc		bulk_desc;
+	crt_bulk_opid_t			bulk_opid;
+	struct crt_echo_bulk_in_req	*e_req;
 	int				rc = 0;
 
-	e_req = dtp_req_get(rpc_req);
-	D_ASSERT(e_req != NULL);
-	rc = dtp_bulk_get_len(e_req->remote_bulk_hdl, &bulk_len);
+	e_req = crt_req_get(rpc_req);
+	C_ASSERT(e_req != NULL);
+	rc = crt_bulk_get_len(e_req->remote_bulk_hdl, &bulk_len);
 	assert(rc == 0);
-	rc = dtp_bulk_get_sgnum(e_req->remote_bulk_hdl, &bulk_sgnum);
+	rc = crt_bulk_get_sgnum(e_req->remote_bulk_hdl, &bulk_sgnum);
 
 	printf("echo_srver recv'd bulk_test, opc: 0x%x, intro_msg: %s, "
 	       "bulk_len: %ld, bulk_sgnum: %d.\n", rpc_req->dr_opc,
 		e_req->bulk_intro_msg, bulk_len, bulk_sgnum);
 
-	iovs = (dtp_iov_t *)malloc(sizeof(dtp_iov_t));
+	iovs = (crt_iov_t *)malloc(sizeof(crt_iov_t));
 	iovs[0].iov_buf = malloc(bulk_len);
 	iovs[0].iov_buf_len = bulk_len;
 	memset(iovs[0].iov_buf, 0, iovs[0].iov_buf_len);
 	sgl.sg_nr.num = 1;
 	sgl.sg_iovs = iovs;
 
-	rc = dtp_bulk_create(rpc_req->dr_ctx, &sgl, DTP_BULK_RW,
+	rc = crt_bulk_create(rpc_req->dr_ctx, &sgl, CRT_BULK_RW,
 			     &local_bulk_hdl);
 	assert(rc == 0);
 
-	rc = dtp_req_addref(rpc_req);
+	rc = crt_req_addref(rpc_req);
 	assert(rc == 0);
 
 	bulk_desc.bd_rpc = rpc_req;
 
-	bulk_desc.bd_bulk_op = DTP_BULK_GET;
+	bulk_desc.bd_bulk_op = CRT_BULK_GET;
 	bulk_desc.bd_remote_hdl = e_req->remote_bulk_hdl;
 	bulk_desc.bd_remote_off = 0;
 	bulk_desc.bd_local_hdl = local_bulk_hdl;
@@ -422,15 +422,15 @@ int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 
 	/* user needs to register the complete_cb inside which can do:
 	 * 1) resource reclaim includes freeing the:
-	 *    a) the buffers for bulk, maybe also the dtp_iov_t (iovs)
+	 *    a) the buffers for bulk, maybe also the crt_iov_t (iovs)
 	 *    b) local bulk handle
 	 *    c) cbinfo if needed,
 	 * 2) reply to original RPC request (if the bulk is derived from a RPC)
-	 * 3) dtp_req_decref (before return in this RPC handler, need to take a
-	 *    reference to avoid the RPC request be destroyed by DTP, then need
+	 * 3) crt_req_decref (before return in this RPC handler, need to take a
+	 *    reference to avoid the RPC request be destroyed by CRT, then need
 	 *    to release the reference at bulk's complete_cb);
 	 */
-	rc = dtp_bulk_transfer(&bulk_desc, bulk_test_cb, iovs, &bulk_opid);
+	rc = crt_bulk_transfer(&bulk_desc, bulk_test_cb, iovs, &bulk_opid);
 	assert(rc == 0);
 
 	return rc;

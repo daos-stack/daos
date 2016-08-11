@@ -2,9 +2,9 @@
 
 Import('env', 'PREREQS')
 
-# Generic DAOS includes
+# Generic CaRT includes
 env.Append(CPPPATH = ['#/src/include'])
 
 # Generate the common libraries used by everyone
-SConscript('common/SConscript', exports=['env', 'PREREQS'])
+SConscript('util/SConscript', exports=['env', 'PREREQS'])
 SConscript('crt/SConscript', exports=['env', 'PREREQS'])

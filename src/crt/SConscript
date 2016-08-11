@@ -4,7 +4,7 @@ Import('env', 'PREREQS')
 
 env.AppendUnique(LIBPATH=[Dir('.')])
 
-libraries = ['crt_common', 'mercury', 'abt']
+libraries = ['crt_util', 'mercury', 'abt']
 
 if PREREQS is None:
     libraries += ['na', 'mcl']
