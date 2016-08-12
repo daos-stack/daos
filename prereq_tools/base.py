@@ -13,7 +13,6 @@ import os
 import traceback
 import hashlib
 import subprocess
-import socket
 import tarfile
 import re
 import copy
@@ -424,17 +423,6 @@ class PreReqComponent(object):
         term = os.environ.get("TERM")
         if term:
             real_env["TERM"] = term
-        try:
-            socket.gethostbyname('proxy-chain.intel.com')
-            real_env['http_proxy'] = 'http://proxy-chain.intel.com:911'
-            real_env['https_proxy'] = \
-                'https://proxy-chain.intel.com:912'
-        except Exception:
-            # Not on Intel network
-            pass
-
-        real_env["PYTHONPATH"] = Dir("#").abspath + os.pathsep + \
-                                 os.environ.get("PYTHONPATH", "")
 
         self.add_options()
         self.__setup_unit_test_builders()
