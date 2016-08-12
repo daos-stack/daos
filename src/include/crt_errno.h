@@ -75,6 +75,8 @@ typedef enum {
 	CER_ADDRSTR_GEN		= (CER_ERR_BASE + 22),
 	/** CRT MCL layer error */
 	CER_MCL			= (CER_ERR_BASE + 33),
+	/** CRT PMIx layer error */
+	CER_PMIX		= (CER_ERR_BASE + 34),
 	/** unknown error */
 	CER_UNKNOWN		= (CER_ERR_BASE + 500),
 	/** TODO: add more error numbers */

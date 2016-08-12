@@ -53,7 +53,7 @@ crt_opc_map_create(unsigned int bits)
 	}
 
 	map->dom_lock_init = 1;
-	crt_gdata.dg_opc_map = map;
+	crt_gdata.cg_opc_map = map;
 
 	rc = crt_internal_rpc_register();
 	if (rc != 0)
@@ -71,7 +71,7 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 	struct crt_opc_info	*info;
 	int			i;
 
-	/* map = crt_gdata.dg_opc_map; */
+	/* map = crt_gdata.cg_opc_map; */
 	C_ASSERT(map != NULL);
 	if (map->dom_hash == NULL)
 		goto skip;
@@ -94,7 +94,7 @@ skip:
 	if (map->dom_lock_init && map->dom_pid == getpid())
 		pthread_rwlock_destroy(&map->dom_rwlock);
 
-	crt_gdata.dg_opc_map = NULL;
+	crt_gdata.cg_opc_map = NULL;
 	C_FREE_PTR(map);
 }
 
@@ -263,7 +263,7 @@ crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *drf,
 	}
 
 reg_opc:
-	rc = crt_opc_reg(crt_gdata.dg_opc_map, opc, drf, input_size,
+	rc = crt_opc_reg(crt_gdata.cg_opc_map, opc, drf, input_size,
 			 output_size, rpc_handler, co_ops, CRT_UNLOCK);
 	if (rc != 0)
 		C_ERROR("rpc (opc: 0x%x) register failed, rc: %d.\n", opc, rc);

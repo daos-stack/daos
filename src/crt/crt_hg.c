@@ -185,7 +185,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		info_string = *addr;
 		C_ASSERT(strncmp(info_string, "bmi+tcp", 7) == 0);
 	} else {
-		if (crt_gdata.dg_verbs == true)
+		if (crt_gdata.cg_verbs == true)
 			info_string = "cci+verbs://";
 		else
 			info_string = "cci+tcp://";
@@ -224,10 +224,10 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	hg_gdata->dhg_nactx = na_context;
 	hg_gdata->dhg_hgcla = hg_class;
 
-	crt_gdata.dg_hg = hg_gdata;
+	crt_gdata.cg_hg = hg_gdata;
 
 	/* register the CRT_HG_RPCID */
-	rc = crt_hg_reg(crt_gdata.dg_hg->dhg_hgcla, CRT_HG_RPCID,
+	rc = crt_hg_reg(crt_gdata.cg_hg->dhg_hgcla, CRT_HG_RPCID,
 			(crt_proc_cb_t)crt_proc_in_common,
 			(crt_proc_cb_t)crt_proc_out_common,
 			(crt_hg_rpc_cb_t)crt_rpc_handler_common);
@@ -285,9 +285,9 @@ crt_hg_fini()
 		C_GOTO(out, rc = -CER_NO_PERM);
 	}
 
-	na_class = crt_gdata.dg_hg->dhg_nacla;
-	na_context = crt_gdata.dg_hg->dhg_nactx;
-	hg_class = crt_gdata.dg_hg->dhg_hgcla;
+	na_class = crt_gdata.cg_hg->dhg_nacla;
+	na_context = crt_gdata.cg_hg->dhg_nactx;
+	hg_class = crt_gdata.cg_hg->dhg_hgcla;
 	C_ASSERT(na_class != NULL);
 	C_ASSERT(na_context != NULL);
 	C_ASSERT(hg_class != NULL);
@@ -316,7 +316,7 @@ crt_hg_fini()
 		C_GOTO(out, rc = -CER_HG);
 	}
 
-	C_FREE_PTR(crt_gdata.dg_hg);
+	C_FREE_PTR(crt_gdata.cg_hg);
 
 out:
 	return rc;
@@ -334,27 +334,27 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 
 	C_ASSERT(hg_ctx != NULL);
 
-	if (idx == 0 || crt_gdata.dg_multi_na == false) {
-		hg_context = HG_Context_create(crt_gdata.dg_hg->dhg_hgcla);
+	if (idx == 0 || crt_gdata.cg_multi_na == false) {
+		hg_context = HG_Context_create(crt_gdata.cg_hg->dhg_hgcla);
 		if (hg_context == NULL) {
 			C_ERROR("Could not create HG context.\n");
 			C_GOTO(out, rc = -CER_HG);
 		}
 
-		hg_ctx->dhc_nacla = crt_gdata.dg_hg->dhg_nacla;
-		hg_ctx->dhc_nactx = crt_gdata.dg_hg->dhg_nactx;
-		hg_ctx->dhc_hgcla = crt_gdata.dg_hg->dhg_hgcla;
+		hg_ctx->dhc_nacla = crt_gdata.cg_hg->dhg_nacla;
+		hg_ctx->dhc_nactx = crt_gdata.cg_hg->dhg_nactx;
+		hg_ctx->dhc_hgcla = crt_gdata.cg_hg->dhg_hgcla;
 		hg_ctx->dhc_shared_na = true;
 	} else {
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 		crt_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
 
-		if (crt_gdata.dg_verbs == true)
+		if (crt_gdata.cg_verbs == true)
 			info_string = "cci+verbs://";
 		else
 			info_string = "cci+tcp://";
 
-		na_class = NA_Initialize(info_string, crt_gdata.dg_server);
+		na_class = NA_Initialize(info_string, crt_gdata.cg_server);
 		if (na_class == NULL) {
 			C_ERROR("Could not initialize NA class.\n");
 			C_GOTO(out, rc = -CER_HG);
@@ -471,16 +471,16 @@ crt_hg_context_lookup(hg_context_t *hg_ctx)
 	struct crt_context	*crt_ctx;
 	int			found = 0;
 
-	pthread_rwlock_rdlock(&crt_gdata.dg_rwlock);
+	pthread_rwlock_rdlock(&crt_gdata.cg_rwlock);
 
-	crt_list_for_each_entry(crt_ctx, &crt_gdata.dg_ctx_list, dc_link) {
+	crt_list_for_each_entry(crt_ctx, &crt_gdata.cg_ctx_list, dc_link) {
 		if (crt_ctx->dc_hg_ctx.dhc_hgctx == hg_ctx) {
 			found = 1;
 			break;
 		}
 	}
 
-	pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 
 	return (found == 1) ? crt_ctx : NULL;
 }
@@ -547,7 +547,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	opc = rpc_priv->drp_req_hdr.dch_opc;
 
 	/* C_DEBUG(CF_TP,"in crt_rpc_handler_common, opc: 0x%x.\n", opc); */
-	opc_info = crt_opc_lookup(crt_gdata.dg_opc_map, opc, CRT_UNLOCK);
+	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
 	if (opc_info == NULL) {
 		C_ERROR("opc: 0x%x, lookup failed.\n", opc);
 		C_FREE_PTR(rpc_priv);
@@ -633,19 +633,19 @@ out:
  * removed.
  */
 struct addr_entry {
-	/* rank's base uri is known by mcl */
+	/* rank's base uri is known by pmix */
 	crt_phy_addr_t	ae_base_uri;
 	na_addr_t	ae_tag_addrs[CRT_SRV_CONTEX_NUM];
 } addr_lookup_table[MCL_PS_SIZE_MAX];
 
 static int
-crt_mcl_lookup(struct mcl_set *mclset, crt_rank_t rank, uint32_t tag,
+crt_addr_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank, uint32_t tag,
 	       na_class_t *na_class, na_addr_t *na_addr)
 {
 	na_addr_t	tmp_addr;
 	uint32_t	ctx_idx;
 	char		tmp_addrstr[CRT_ADDR_STR_MAX_LEN] = {'\0'};
-	char		*pchar;
+	char		*pchar, *uri;
 	int		port;
 	na_return_t	na_ret;
 	int		rc = 0;
@@ -656,7 +656,7 @@ crt_mcl_lookup(struct mcl_set *mclset, crt_rank_t rank, uint32_t tag,
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
-	C_ASSERT(mclset != NULL && na_class != NULL && na_addr != NULL);
+	C_ASSERT(grp_priv != NULL && na_class != NULL && na_addr != NULL);
 	C_ASSERT(rank <= MCL_PS_SIZE_MAX);
 	ctx_idx = tag;
 
@@ -666,15 +666,24 @@ crt_mcl_lookup(struct mcl_set *mclset, crt_rank_t rank, uint32_t tag,
 	}
 
 	if (addr_lookup_table[rank].ae_base_uri == NULL) {
-		rc = mcl_lookup(mclset, rank, na_class, &tmp_addr);
-		if (rc != MCL_SUCCESS) {
-			C_ERROR("mcl_lookup failed, rc: %d.\n", rc);
-			C_GOTO(out, rc = -CER_MCL);
+		rc = crt_grp_lookup(grp_priv, rank, &uri);
+		if (rc != 0) {
+			C_ERROR("crt_grp_lookup failed, rc: %d.\n", rc);
+			C_GOTO(out, rc);
 		}
-		C_ASSERT(mclset->cached[rank].visited != 0);
+		C_ASSERT(uri != 0 && strlen(uri) != 0);
+
+		na_ret = crt_na_addr_lookup_wait(na_class, uri, &tmp_addr);
+		if (na_ret != NA_SUCCESS) {
+			C_ERROR("Could not connect to %s, na_ret: %d.\n",
+				uri, na_ret);
+			C_GOTO(out, rc = -CER_HG);
+		}
+
+		C_DEBUG(CF_TP, "Connect to %s succeed.\n", uri);
 		C_ASSERT(tmp_addr != NULL);
 
-		addr_lookup_table[rank].ae_base_uri = mclset->cached[rank].uri;
+		addr_lookup_table[rank].ae_base_uri = uri;
 		addr_lookup_table[rank].ae_tag_addrs[0] = tmp_addr;
 		if (ctx_idx == 0) {
 			*na_addr = tmp_addr;
@@ -703,7 +712,7 @@ crt_mcl_lookup(struct mcl_set *mclset, crt_rank_t rank, uint32_t tag,
 	} else {
 		C_ERROR("Could not connect to %s, na_ret: %d.\n",
 			tmp_addrstr, na_ret);
-		C_GOTO(out, rc = -CER_MCL);
+		C_GOTO(out, rc = -CER_HG);
 	}
 out:
 	return rc;
@@ -720,11 +729,11 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, crt_endpoint_t tgt_ep,
 		 hg_ctx->dhc_hgctx != NULL);
 	C_ASSERT(rpc_priv != NULL);
 
-	rc = crt_mcl_lookup(crt_gdata.dg_mcl_srv_set, tgt_ep.ep_rank,
+	rc = crt_addr_lookup(crt_gdata.cg_grp->gg_srv_pri_grp, tgt_ep.ep_rank,
 			    tgt_ep.ep_tag, hg_ctx->dhc_nacla,
 			    &rpc_priv->drp_na_addr);
 	if (rc != 0) {
-		C_ERROR("crt_mcl_lookup failed, rc: %d, opc: 0x%x.\n",
+		C_ERROR("crt_addr_lookup failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_priv->drp_pub.dr_opc);
 		C_GOTO(out, rc);
 	}

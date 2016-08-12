@@ -7,9 +7,9 @@ env.AppendUnique(LIBPATH=[Dir('.')])
 libraries = ['crt_util', 'mercury', 'abt']
 
 if PREREQS is None:
-    libraries += ['na', 'mcl']
+    libraries += ['na', 'pmix']
 else:
-    PREREQS.require(env, 'mercury', 'mcl', 'argobots')
+    PREREQS.require(env, 'mercury', 'pmix', 'argobots')
 
 denv = env.Clone()
 denv.Append(CPPPATH = ['#/src/crt'])

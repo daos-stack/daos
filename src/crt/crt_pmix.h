@@ -21,43 +21,32 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of CaRT. It it the common header file which be included by
- * all other .c files of CaRT.
+ * This file is part of CaRT. It gives out the data types and function
+ * declarations related with PMIx.
  */
 
-#ifndef __CRT_INTERNAL_H__
-#define __CRT_INTERNAL_H__
+#ifndef __CRT_PMIX_H__
+#define __CRT_PMIX_H__
 
-#include <ctype.h>
-#include <errno.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <stddef.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <uuid/uuid.h>
-/* #include <netinet/in.h> */
-#include <arpa/inet.h>
-#include <ifaddrs.h>
+#include "pmix.h"
 
-#include <crt_util/common.h>
-#include <crt_api.h>
+/* pmix layer global data, be included in struct crt_grp_gdata */
+struct crt_pmix_gdata {
+	/* PMIx proc object */
+	pmix_proc_t		pg_proc;
+	/* universe size */
+	uint32_t		pg_univ_size;
+	/* #apps in this job */
+	uint32_t		pg_num_apps;
+};
 
-#include <crt_internal_types.h>
-#include <crt_internal_fns.h>
-#include <crt_rpc.h>
-#include <crt_group.h>
 
-#include <crt_hg.h>
-#include <crt_pmix.h>
+int crt_pmix_init(void);
+int crt_pmix_fini(void);
+int crt_pmix_fence(void);
+int crt_pmix_assign_rank(struct crt_grp_priv *grp_priv);
+int crt_pmix_publish_self(struct crt_grp_priv *grp_priv);
+int crt_pmix_uri_lookup(crt_group_id_t srv_grpid, crt_rank_t rank, char **uri);
+int crt_pmix_attach(struct crt_grp_priv *grp_priv);
 
-#endif /* __CRT_INTERNAL_H__ */
+#endif /* __CRT_PMIX_H__ */

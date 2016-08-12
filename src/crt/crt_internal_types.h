@@ -35,85 +35,49 @@
 
 #include <crt_util/list.h>
 #include <crt_util/hash.h>
-#include <process_set.h>
 
 #include <crt_hg.h>
 
+#define MCL_PS_SIZE_MAX		1024
+
 struct crt_hg_gdata;
+struct crt_grp_gdata;
 
 /* CaRT global data */
 struct crt_gdata {
-	crt_phy_addr_t		dg_addr;
-	uint32_t		dg_addr_len;
+	crt_phy_addr_t		cg_addr;
+	uint32_t		cg_addr_len;
 
-	bool			dg_server;
-	bool			dg_verbs; /* CCI verbs transport flag */
+	bool			cg_server;
+	bool			cg_verbs; /* CCI verbs transport flag */
 	/* multiple NA addr flag, true for server when using CCI plugin */
-	bool			dg_multi_na;
+	bool			cg_multi_na;
 
 	/* CaRT contexts list */
-	crt_list_t             dg_ctx_list;
+	crt_list_t             cg_ctx_list;
 	/* actual number of items in CaRT contexts list */
-	int			dg_ctx_num;
+	int			cg_ctx_num;
 	/* the global opcode map */
-	struct crt_opc_map	*dg_opc_map;
+	struct crt_opc_map	*cg_opc_map;
 	/* HG level global data */
-	struct crt_hg_gdata	*dg_hg;
+	struct crt_hg_gdata	*cg_hg;
 
-	struct mcl_state	*dg_mcl_state;
-	/* service process set */
-	struct mcl_set		*dg_mcl_srv_set;
-	/* client process set */
-	struct mcl_set		*dg_mcl_cli_set;
+	struct crt_grp_gdata	*cg_grp;
 
 	/* the unique global server and client group ID */
-	crt_group_id_t		dg_srv_grp_id;
-	crt_group_id_t		dg_cli_grp_id;
+	crt_group_id_t		cg_srv_grp_id;
+	crt_group_id_t		cg_cli_grp_id;
 
 	/* protects crt_gdata */
-	pthread_rwlock_t	dg_rwlock;
+	pthread_rwlock_t	cg_rwlock;
 	/* refcount to protect crt_init/crt_finalize */
-	volatile unsigned int	dg_refcount;
-	volatile unsigned int	dg_inited;
+	volatile unsigned int	cg_refcount;
+	volatile unsigned int	cg_inited:1,
+				cg_grp_inited:1; /* group initialized */
 	/* ... */
 };
 
 extern struct crt_gdata		crt_gdata;
-
-enum {
-	CRT_GRP_CREATING = 0x66,
-	CRT_GRP_NORMAL,
-	CRT_GRP_DESTROYING,
-};
-
-struct crt_grp_priv {
-	crt_list_t		 gp_link; /* link to crt_grp_list */
-	crt_group_t		 gp_pub; /* public grp handle */
-	crt_rank_list_t	*gp_membs; /* member ranks in global group */
-	/* the priv pointer user passed in for crt_group_create */
-	void			*gp_priv;
-	/* CaRT context only for sending grp create/destroy RPCs */
-	crt_context_t		 gp_ctx;
-	int			 gp_status; /* group status */
-
-	/* TODO: reuse crt_corpc_info here */
-	/*
-	 * Some temporary info used for group creating/destroying, valid when
-	 * gp_status is CRT_GRP_CREATING or CRT_GRP_DESTROYING.
-	 */
-	struct crt_rpc_priv	*gp_parent_rpc; /* parent RPC, NULL on root */
-	crt_list_t		 gp_child_rpcs; /* child RPCs list */
-	uint32_t		 gp_child_num;
-	uint32_t		 gp_child_ack_num;
-	int			 gp_rc; /* temporary recoded return code */
-	crt_rank_list_t	*gp_failed_ranks; /* failed ranks */
-
-	crt_grp_create_cb_t	 gp_create_cb; /* grp create completion cb */
-	crt_grp_destroy_cb_t	 gp_destroy_cb; /* grp destroy completion cb */
-	void			*gp_destroy_cb_arg;
-
-	pthread_mutex_t		 gp_mutex; /* protect all fields above */
-};
 
 /* TODO may use a RPC to query server-side context number */
 #ifndef CRT_SRV_CONTEX_NUM
@@ -126,7 +90,7 @@ struct crt_grp_priv {
 
 /* crt_context */
 struct crt_context {
-	crt_list_t		 dc_link; /* link to gdata.dg_ctx_list */
+	crt_list_t		 dc_link; /* link to gdata.cg_ctx_list */
 	int			 dc_idx; /* context index */
 	struct crt_hg_context	 dc_hg_ctx; /* HG context */
 	void			*dc_pool; /* pool for ES on server stack */
@@ -160,12 +124,8 @@ struct crt_ep_inflight {
 	pthread_mutex_t		epi_mutex;
 };
 
-#define CRT_UNLOCK		(0)
-#define CRT_LOCKED		(1)
-
-/* TODO export the group name to user? and multiple client groups? */
-#define CRT_GLOBAL_SRV_GROUP_NAME	"crt_global_srv_group"
-#define CRT_CLI_GROUP_NAME		"crt_cli_group"
+#define CRT_UNLOCK			(0)
+#define CRT_LOCKED			(1)
 #define CRT_ADDR_STR_MAX_LEN		(128)
 
 #define CRT_OPC_MAP_BITS	(12)

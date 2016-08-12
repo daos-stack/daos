@@ -31,7 +31,7 @@ int
 crt_rank_list_dup(crt_rank_list_t **dst, const crt_rank_list_t *src,
 		   bool input)
 {
-	crt_rank_list_t	*rank_list;
+	crt_rank_list_t		*rank_list;
 	uint32_t		rank_num;
 	crt_size_t		size;
 	int			rc = 0;

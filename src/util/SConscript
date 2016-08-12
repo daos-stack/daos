@@ -5,7 +5,7 @@ Import('env', 'PREREQS')
 env.AppendUnique(LIBPATH=[Dir('.')])
 
 if PREREQS is not None:
-        PREREQS.require(env, 'nvml', 'argobots')
+        PREREQS.require(env, 'argobots')
 
 denv = env.Clone()
 

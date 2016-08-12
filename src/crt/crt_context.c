@@ -161,22 +161,22 @@ crt_context_create(void *arg, crt_context_t *crt_ctx)
 		C_GOTO(out, rc);
 	}
 
-	pthread_rwlock_wrlock(&crt_gdata.dg_rwlock);
+	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
 
-	rc = crt_hg_ctx_init(&ctx->dc_hg_ctx, crt_gdata.dg_ctx_num);
+	rc = crt_hg_ctx_init(&ctx->dc_hg_ctx, crt_gdata.cg_ctx_num);
 	if (rc != 0) {
 		C_ERROR("crt_hg_ctx_init failed rc: %d.\n", rc);
 		C_FREE_PTR(ctx);
-		pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 		C_GOTO(out, rc);
 	}
 
-	ctx->dc_idx = crt_gdata.dg_ctx_num;
-	crt_list_add_tail(&ctx->dc_link, &crt_gdata.dg_ctx_list);
-	crt_gdata.dg_ctx_num++;
+	ctx->dc_idx = crt_gdata.cg_ctx_num;
+	crt_list_add_tail(&ctx->dc_link, &crt_gdata.cg_ctx_list);
+	crt_gdata.cg_ctx_num++;
 
 	ctx->dc_pool = arg;
-	pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 
 	*crt_ctx = (crt_context_t)ctx;
 
@@ -325,10 +325,10 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	rc = crt_hg_ctx_fini(&ctx->dc_hg_ctx);
 	if (rc == 0) {
-		pthread_rwlock_wrlock(&crt_gdata.dg_rwlock);
-		crt_gdata.dg_ctx_num--;
+		pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
+		crt_gdata.cg_ctx_num--;
 		crt_list_del_init(&ctx->dc_link);
-		pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 		C_FREE_PTR(ctx);
 	} else {
 		C_ERROR("crt_hg_ctx_fini failed rc: %d.\n", rc);
@@ -346,9 +346,9 @@ crt_ep_abort(crt_endpoint_t ep)
 	int			force;
 	int			rc = 0;
 
-	pthread_rwlock_rdlock(&crt_gdata.dg_rwlock);
+	pthread_rwlock_rdlock(&crt_gdata.cg_rwlock);
 
-	crt_list_for_each_entry(ctx, &crt_gdata.dg_ctx_list, dc_link) {
+	crt_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, dc_link) {
 		rc = 0;
 		pthread_mutex_lock(&ctx->dc_mutex);
 		rlink = dhash_rec_find(&ctx->dc_epi_table, (void *)&ep.ep_rank,
@@ -367,7 +367,7 @@ crt_ep_abort(crt_endpoint_t ep)
 		}
 	}
 
-	pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 
 	return rc;
 }
@@ -543,14 +543,14 @@ crt_context_lookup(int ctx_idx)
 	struct crt_context	*ctx;
 	bool			found = false;
 
-	pthread_rwlock_rdlock(&crt_gdata.dg_rwlock);
-	crt_list_for_each_entry(ctx, &crt_gdata.dg_ctx_list, dc_link) {
+	pthread_rwlock_rdlock(&crt_gdata.cg_rwlock);
+	crt_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, dc_link) {
 		if (ctx->dc_idx == ctx_idx) {
 			found = true;
 			break;
 		}
 	}
-	pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 
 	return (found == true) ? ctx : NULL;
 }
@@ -582,7 +582,7 @@ crt_context_num(int *ctx_num)
 		return -CER_INVAL;
 	}
 
-	*ctx_num = crt_gdata.dg_ctx_num;
+	*ctx_num = crt_gdata.cg_ctx_num;
 	return 0;
 }
 
@@ -592,12 +592,12 @@ crt_context_empty(int locked)
 	bool rc = false;
 
 	if (locked == 0)
-		pthread_rwlock_rdlock(&crt_gdata.dg_rwlock);
+		pthread_rwlock_rdlock(&crt_gdata.cg_rwlock);
 
-	rc = crt_list_empty(&crt_gdata.dg_ctx_list);
+	rc = crt_list_empty(&crt_gdata.cg_ctx_list);
 
 	if (locked == 0)
-		pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 
 	return rc;
 }

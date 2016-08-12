@@ -48,7 +48,7 @@ crt_grp_lookup_locked(crt_group_id_t grp_id)
 	bool			found = false;
 
 	crt_list_for_each_entry(grp_priv, &crt_grp_list, gp_link) {
-		if (crt_grp_id_identical(grp_priv->gp_pub.dg_grpid,
+		if (crt_grp_id_identical(grp_priv->gp_pub.cg_grpid,
 					 grp_id)) {
 			found = true;
 			break;
@@ -66,13 +66,14 @@ crt_grp_insert_locked(struct crt_grp_priv *grp_priv)
 
 static inline int
 crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
-		    crt_group_id_t grp_id, crt_rank_list_t *membs,
-		    crt_grp_create_cb_t grp_create_cb, void *priv)
+		    crt_group_id_t grp_id, bool primary_grp,
+		    crt_rank_list_t *membs, crt_grp_create_cb_t grp_create_cb,
+		    void *priv)
 {
 	struct crt_grp_priv *grp_priv;
 	int	rc = 0;
 
-	C_ASSERT(grp_priv_created != NULL && membs != NULL);
+	C_ASSERT(grp_priv_created != NULL);
 	C_ASSERT(grp_id != NULL && strlen(grp_id) > 0 &&
 		 strlen(grp_id) < CRT_GROUP_ID_MAX_LEN);
 
@@ -81,8 +82,9 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 		C_GOTO(out, rc = -CER_NOMEM);
 
 	CRT_INIT_LIST_HEAD(&grp_priv->gp_link);
-	grp_priv->gp_pub.dg_grpid = strdup(grp_id);
-	if (grp_priv->gp_pub.dg_grpid == NULL) {
+	grp_priv->gp_primary = primary_grp;
+	grp_priv->gp_pub.cg_grpid = strdup(grp_id);
+	if (grp_priv->gp_pub.cg_grpid == NULL) {
 		C_ERROR("strdup grp_id (%s) failed.\n", grp_id);
 		C_FREE_PTR(grp_priv);
 		C_GOTO(out, rc = -CER_NOMEM);
@@ -90,19 +92,25 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 	rc = crt_rank_list_dup(&grp_priv->gp_membs, membs, true /* input */);
 	if (rc != 0) {
 		C_ERROR("crt_rank_list_dup failed, rc: %d.\n", rc);
-		C_FREE(grp_priv->gp_pub.dg_grpid, strlen(grp_id));
+		C_FREE(grp_priv->gp_pub.cg_grpid, strlen(grp_id));
 		C_FREE_PTR(grp_priv);
 		C_GOTO(out, rc);
 	}
-	crt_rank_list_sort(grp_priv->gp_membs);
-	grp_priv->gp_priv = priv;
+
 	grp_priv->gp_status = CRT_GRP_CREATING;
-	grp_priv->gp_parent_rpc = NULL;
 	CRT_INIT_LIST_HEAD(&grp_priv->gp_child_rpcs);
-	grp_priv->gp_child_num = membs->rl_nr.num; /* TODO tree children num */
-	grp_priv->gp_child_ack_num = 0;
-	grp_priv->gp_failed_ranks = NULL;
-	grp_priv->gp_create_cb = grp_create_cb;
+	grp_priv->gp_priv = priv;
+
+	if (!primary_grp) {
+		crt_rank_list_sort(grp_priv->gp_membs);
+		grp_priv->gp_parent_rpc = NULL;
+		/* TODO tree children num */
+		grp_priv->gp_child_num = membs->rl_nr.num;
+		grp_priv->gp_child_ack_num = 0;
+		grp_priv->gp_failed_ranks = NULL;
+		grp_priv->gp_create_cb = grp_create_cb;
+	}
+
 	pthread_mutex_init(&grp_priv->gp_mutex, NULL);
 
 	*grp_priv_created = grp_priv;
@@ -131,8 +139,8 @@ crt_grp_lookup_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 		C_GOTO(out, rc = -CER_EXIST);
 	}
 
-	rc = crt_grp_priv_create(&grp_priv, grp_id, member_ranks,
-				 grp_create_cb, priv);
+	rc = crt_grp_priv_create(&grp_priv, grp_id, false /* primary group */,
+				 member_ranks, grp_create_cb, priv);
 	if (rc != 0) {
 		C_ERROR("crt_grp_priv_create failed, rc: %d.\n", rc);
 		pthread_rwlock_unlock(&crt_grp_list_rwlock);
@@ -157,7 +165,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 	crt_rank_list_free(grp_priv->gp_membs);
 	crt_rank_list_free(grp_priv->gp_failed_ranks);
 	pthread_mutex_destroy(&grp_priv->gp_mutex);
-	C_FREE(grp_priv->gp_pub.dg_grpid, strlen(grp_priv->gp_pub.dg_grpid));
+	C_FREE(grp_priv->gp_pub.cg_grpid, strlen(grp_priv->gp_pub.cg_grpid));
 
 	C_FREE_PTR(grp_priv);
 }
@@ -588,7 +596,7 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 
 		gd_in = crt_req_get(gd_rpc);
 		C_ASSERT(gd_in != NULL);
-		gd_in->gd_grp_id = grp->dg_grpid;
+		gd_in->gd_grp_id = grp->cg_grpid;
 		crt_group_rank(NULL, &gd_in->gd_initiate_rank);
 
 		rc = crt_req_send(gd_rpc, gd_rpc_cb, grp_priv);
@@ -619,6 +627,13 @@ out:
 int
 crt_group_rank(crt_group_t *grp, crt_rank_t *rank)
 {
+	struct crt_grp_gdata	*grp_gdata;
+
+	grp_gdata = crt_gdata.cg_grp;
+	if (grp_gdata == NULL) {
+		C_ERROR("crt group un-initialized.\n");
+		return -CER_UNINIT;
+	}
 	if (rank == NULL) {
 		C_ERROR("invalid parameter of NULL rank pointer.\n");
 		return -CER_INVAL;
@@ -626,9 +641,9 @@ crt_group_rank(crt_group_t *grp, crt_rank_t *rank)
 
 	/* now only support query the global group */
 	if (grp == NULL)
-		*rank = (crt_gdata.dg_server == true) ?
-		crt_gdata.dg_mcl_srv_set->self :
-		crt_gdata.dg_mcl_cli_set->self;
+		*rank = (crt_gdata.cg_server == true) ?
+			grp_gdata->gg_srv_pri_grp->gp_self :
+			grp_gdata->gg_cli_pri_grp->gp_self;
 	else
 		return -CER_NOSYS;
 
@@ -638,6 +653,13 @@ crt_group_rank(crt_group_t *grp, crt_rank_t *rank)
 int
 crt_group_size(crt_group_t *grp, uint32_t *size)
 {
+	struct crt_grp_gdata	*grp_gdata;
+
+	grp_gdata = crt_gdata.cg_grp;
+	if (grp_gdata == NULL) {
+		C_ERROR("crt group un-initialized.\n");
+		return -CER_UNINIT;
+	}
 	if (size == NULL) {
 		C_ERROR("invalid parameter of NULL size pointer.\n");
 		return -CER_INVAL;
@@ -645,9 +667,9 @@ crt_group_size(crt_group_t *grp, uint32_t *size)
 
 	/* now only support query the global group */
 	if (grp == NULL)
-		*size = (crt_gdata.dg_server == true) ?
-		crt_gdata.dg_mcl_srv_set->size :
-		crt_gdata.dg_mcl_cli_set->size;
+		*size = (crt_gdata.cg_server == true) ?
+			grp_gdata->gg_srv_pri_grp->gp_size :
+			grp_gdata->gg_cli_pri_grp->gp_size;
 	else
 		return -CER_NOSYS;
 
@@ -657,6 +679,238 @@ crt_group_size(crt_group_t *grp, uint32_t *size)
 crt_group_id_t
 crt_global_grp_id(void)
 {
-	return (crt_gdata.dg_server == true) ? crt_gdata.dg_srv_grp_id :
-					       crt_gdata.dg_cli_grp_id;
+	return (crt_gdata.cg_server == true) ? crt_gdata.cg_srv_grp_id :
+					       crt_gdata.cg_cli_grp_id;
+}
+
+static int
+crt_primary_grp_init(void)
+{
+	struct crt_grp_gdata	*grp_gdata;
+	struct crt_pmix_gdata	*pmix_gdata;
+	struct crt_grp_priv	*grp_priv = NULL;
+	crt_group_id_t		 grp_id;
+	crt_group_t		*srv_grp = NULL;
+	bool			 is_service;
+	int			 rc = 0;
+
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+	pmix_gdata = grp_gdata->gg_pmix;
+	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
+	C_ASSERT(pmix_gdata != NULL);
+
+	is_service = crt_gdata.cg_server;
+	grp_id = is_service ? CRT_GLOBAL_SRV_GROUP_NAME : CRT_CLI_GROUP_NAME;
+	rc = crt_grp_priv_create(&grp_priv, grp_id, true /* primary group */,
+				 NULL /* member_ranks */,
+				 NULL /* grp_create_cb */, NULL /* priv */);
+	if (rc != 0) {
+		C_ERROR("crt_grp_priv_create failed, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+	C_ASSERT(grp_priv != NULL);
+	grp_priv->gp_status = CRT_GRP_NORMAL;
+	grp_priv->gp_local = 1;
+	grp_priv->gp_service = is_service;
+
+	rc = crt_pmix_assign_rank(grp_priv);
+	if (rc != 0)
+		C_GOTO(out, rc);
+
+	rc = crt_pmix_publish_self(grp_priv);
+	if (rc != 0)
+		C_GOTO(out, rc);
+
+	rc = crt_pmix_fence();
+	if (rc != 0)
+		C_GOTO(out, rc);
+
+	if (is_service) {
+		grp_gdata->gg_srv_pri_grp = grp_priv;
+	} else {
+		grp_gdata->gg_cli_pri_grp = grp_priv;
+		rc = crt_group_attach(CRT_GLOBAL_SRV_GROUP_NAME, &srv_grp);
+		if (rc != 0) {
+			C_ERROR("failed to attach to %s, rc: %d.\n",
+				CRT_GLOBAL_SRV_GROUP_NAME, rc);
+			C_GOTO(out, rc);
+		}
+		C_ASSERT(srv_grp != NULL);
+		grp_gdata->gg_srv_pri_grp =
+			container_of(srv_grp, struct crt_grp_priv, gp_pub);
+	}
+
+out:
+	if (rc != 0) {
+		C_ERROR("crt_primary_grp_init failed, rc: %d.\n", rc);
+		if (grp_priv == NULL)
+			crt_grp_priv_destroy(grp_priv);
+	}
+
+	return rc;
+}
+
+/* TODO might use PSR to lookup it */
+int
+crt_grp_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank, char **uri)
+{
+	struct crt_grp_gdata	*grp_gdata;
+	struct crt_pmix_gdata	*pmix_gdata;
+	crt_group_id_t		 grp_id;
+	int			 rc = 0;
+
+	C_ASSERT(uri != NULL);
+
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+	pmix_gdata = grp_gdata->gg_pmix;
+	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
+	C_ASSERT(pmix_gdata != NULL);
+
+	if (grp_priv == NULL)
+		grp_id = CRT_GLOBAL_SRV_GROUP_NAME;
+	else
+		grp_id = grp_priv->gp_pub.cg_grpid;
+
+	rc = crt_pmix_uri_lookup(grp_id, rank, uri);
+
+	if (rc != 0)
+		C_ERROR("crt_grp_lookup(grp_id %s, rank %d) failed, rc: %d.\n",
+			grp_id, rank, rc);
+	return rc;
+}
+
+int
+crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
+{
+	struct crt_grp_gdata	*grp_gdata;
+	struct crt_grp_priv	*grp_priv = NULL;
+	size_t			 len;
+	int			 rc = 0;
+
+	if (srv_grpid == NULL) {
+		C_ERROR("invalid parameter, NULL srv_grpid.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+	len = strlen(srv_grpid);
+	if (len == 0 || len > CRT_GROUP_ID_MAX_LEN) {
+		C_ERROR("invalid srv_grpid %s (len %zu).\n", srv_grpid, len);
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+	if (attached_grp == NULL) {
+		C_ERROR("invalid parameter, NULL attached_grp.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+
+	grp_gdata = crt_gdata.cg_grp;
+	if (grp_gdata == NULL) {
+		C_ERROR("crt group un-initialized.\n");
+		C_GOTO(out, rc = -CER_UNINIT);
+	}
+
+	rc = crt_grp_priv_create(&grp_priv, srv_grpid, true /* primary group */,
+				 NULL /* member_ranks */,
+				 NULL /* grp_create_cb */, NULL /* priv */);
+	if (rc != 0) {
+		C_ERROR("crt_grp_priv_create failed, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+	C_ASSERT(grp_priv != NULL);
+	grp_priv->gp_status = CRT_GRP_NORMAL;
+	grp_priv->gp_local = 0;
+	grp_priv->gp_service = 1;
+
+	rc = crt_pmix_attach(grp_priv);
+	if (rc != 0) {
+		C_ERROR("crt_pmix_attach GROUP %s failed, rc: %d.\n",
+			srv_grpid, rc);
+		C_GOTO(out, rc);
+	}
+
+	*attached_grp = &grp_priv->gp_pub;
+
+out:
+	if (rc != 0) {
+		C_ERROR("crt_primary_grp_init failed, rc: %d.\n", rc);
+		if (grp_priv == NULL)
+			crt_grp_priv_destroy(grp_priv);
+	}
+
+	return rc;
+}
+
+int
+crt_grp_init(void)
+{
+	struct crt_grp_gdata	*grp_gdata;
+	struct crt_pmix_gdata	*pmix_gdata;
+	int			 rc = 0;
+
+	C_ASSERT(crt_gdata.cg_grp_inited == 0);
+	C_ASSERT(crt_gdata.cg_grp == NULL);
+
+	C_ALLOC_PTR(grp_gdata);
+	if (grp_gdata == NULL)
+		C_GOTO(out, rc = -CER_NOMEM);
+
+	CRT_INIT_LIST_HEAD(&grp_gdata->gg_cli_grps_attached);
+	CRT_INIT_LIST_HEAD(&grp_gdata->gg_srv_grps_attached);
+	CRT_INIT_LIST_HEAD(&grp_gdata->gg_sub_grps);
+	pthread_rwlock_init(&grp_gdata->gg_rwlock, NULL);
+
+	crt_gdata.cg_grp = grp_gdata;
+
+	rc = crt_pmix_init();
+	if (rc != 0)
+		C_GOTO(out, rc);
+	pmix_gdata = grp_gdata->gg_pmix;
+	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
+	C_ASSERT(pmix_gdata != NULL);
+
+	rc = crt_primary_grp_init();
+	if (rc != 0) {
+		crt_pmix_fini();
+		C_GOTO(out, rc);
+	}
+
+	grp_gdata->gg_inited = 1;
+	crt_gdata.cg_grp_inited = 1;
+
+out:
+	if (rc != 0) {
+		C_ERROR("crt_grp_init failed, rc: %d.\n", rc);
+		if (grp_gdata != NULL)
+			C_FREE_PTR(grp_gdata);
+		crt_gdata.cg_grp = NULL;
+	}
+	return rc;
+}
+
+int
+crt_grp_fini(void)
+{
+	struct crt_grp_gdata	*grp_gdata;
+	struct crt_pmix_gdata	*pmix_gdata;
+	int			 rc = 0;
+
+	C_ASSERT(crt_gdata.cg_grp_inited == 1);
+	C_ASSERT(crt_gdata.cg_grp != NULL);
+	grp_gdata = crt_gdata.cg_grp;
+	pmix_gdata = grp_gdata->gg_pmix;
+	C_ASSERT(pmix_gdata != NULL);
+
+	rc = crt_pmix_fini();
+	if (rc != 0)
+		C_GOTO(out, rc);
+
+	pthread_rwlock_destroy(&grp_gdata->gg_rwlock);
+	C_FREE_PTR(grp_gdata);
+	crt_gdata.cg_grp = NULL;
+	crt_gdata.cg_grp_inited = 0;
+
+out:
+	if (rc != 0)
+		C_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
+	return rc;
 }

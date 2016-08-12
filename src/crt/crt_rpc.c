@@ -113,7 +113,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated)
 
 	C_ASSERT(priv_allocated != NULL);
 
-	opc_info = crt_opc_lookup(crt_gdata.dg_opc_map, opc, CRT_UNLOCK);
+	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
 	if (opc_info == NULL) {
 		C_ERROR("opc: 0x%x, lookup failed.\n", opc);
 		C_GOTO(out, rc = -CER_UNREG);
@@ -162,9 +162,10 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 	/* TODO: possibly with multiple service group */
-	if (tgt_ep.ep_rank >= crt_gdata.dg_mcl_srv_set->size) {
+	if (tgt_ep.ep_rank >= crt_gdata.cg_grp->gg_srv_pri_grp->gp_size) {
 		C_ERROR("invalid parameter, rank %d, group_size: %d.\n",
-			tgt_ep.ep_rank, crt_gdata.dg_mcl_srv_set->size);
+			tgt_ep.ep_rank,
+			crt_gdata.cg_grp->gg_srv_pri_grp->gp_size);
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 

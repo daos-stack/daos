@@ -170,119 +170,19 @@ static void data_init()
 	 */
 	C_CASSERT(sizeof(uuid_t) == 16);
 
-	CRT_INIT_LIST_HEAD(&crt_gdata.dg_ctx_list);
+	CRT_INIT_LIST_HEAD(&crt_gdata.cg_ctx_list);
 
-	rc = pthread_rwlock_init(&crt_gdata.dg_rwlock, NULL);
+	rc = pthread_rwlock_init(&crt_gdata.cg_rwlock, NULL);
 	C_ASSERT(rc == 0);
 
-	crt_gdata.dg_ctx_num = 0;
-	crt_gdata.dg_refcount = 0;
-	crt_gdata.dg_inited = 0;
-	crt_gdata.dg_addr = NULL;
-	crt_gdata.dg_verbs = false;
-	crt_gdata.dg_multi_na = false;
+	crt_gdata.cg_ctx_num = 0;
+	crt_gdata.cg_refcount = 0;
+	crt_gdata.cg_inited = 0;
+	crt_gdata.cg_addr = NULL;
+	crt_gdata.cg_verbs = false;
+	crt_gdata.cg_multi_na = false;
 
 	gdata_init_flag = 1;
-}
-
-static int
-crt_mcl_init(crt_phy_addr_t *addr)
-{
-	struct mcl_set	*tmp_set;
-	int		rc;
-
-	C_ASSERT(addr != NULL && strlen(*addr) > 0);
-
-	crt_gdata.dg_mcl_state = mcl_init(addr);
-	if (crt_gdata.dg_mcl_state == NULL) {
-		C_ERROR("mcl_init failed.\n");
-		C_GOTO(out, rc = -CER_MCL);
-	}
-	C_DEBUG(CF_TP, "mcl_init succeed(server %d), nspace: %s, rank: %d, "
-		"univ_size: %d, self_uri: %s.\n",
-		crt_gdata.dg_server,
-		crt_gdata.dg_mcl_state->myproc.nspace,
-		crt_gdata.dg_mcl_state->myproc.rank,
-		crt_gdata.dg_mcl_state->univ_size,
-		crt_gdata.dg_mcl_state->self_uri);
-	if (crt_gdata.dg_server == true) {
-		rc = mcl_startup(crt_gdata.dg_mcl_state,
-				 crt_gdata.dg_hg->dhg_nacla,
-				 CRT_GLOBAL_SRV_GROUP_NAME, true,
-				 &crt_gdata.dg_mcl_srv_set);
-		tmp_set = crt_gdata.dg_mcl_srv_set;
-	} else {
-		rc = mcl_startup(crt_gdata.dg_mcl_state,
-				 crt_gdata.dg_hg->dhg_nacla,
-				 CRT_CLI_GROUP_NAME, false,
-				 &crt_gdata.dg_mcl_cli_set);
-		tmp_set = crt_gdata.dg_mcl_cli_set;
-	}
-	if (rc != MCL_SUCCESS) {
-		C_ERROR("mcl_startup failed(server: %d), rc: %d.\n",
-			crt_gdata.dg_server, rc);
-		mcl_finalize(crt_gdata.dg_mcl_state);
-		C_GOTO(out, rc = -CER_MCL);
-	}
-	C_DEBUG(CF_TP, "mcl_startup succeed(server: %d), grp_name: %s, "
-		"size %d, rank %d, is_local %d, is_service %d, self_uri: %s.\n",
-		crt_gdata.dg_server, tmp_set->name, tmp_set->size,
-		tmp_set->self, tmp_set->is_local, tmp_set->is_service,
-		tmp_set->state->self_uri);
-	if (crt_gdata.dg_server == true) {
-		C_ASSERT(crt_gdata.dg_mcl_srv_set != NULL);
-	} else {
-		C_ASSERT(crt_gdata.dg_mcl_cli_set != NULL);
-		/* for client, attach it to service process set. */
-		rc = mcl_attach(crt_gdata.dg_mcl_state,
-				CRT_GLOBAL_SRV_GROUP_NAME,
-				&crt_gdata.dg_mcl_srv_set);
-		if (rc == MCL_SUCCESS) {
-			C_ASSERT(crt_gdata.dg_mcl_srv_set != NULL);
-			tmp_set = crt_gdata.dg_mcl_srv_set;
-			C_DEBUG(CF_TP, "attached to group(name: %s, size %d, "
-				"rank %d, is_local %d, is_service %d).\n",
-				tmp_set->name, tmp_set->size,
-				tmp_set->self, tmp_set->is_local,
-				tmp_set->is_service);
-		} else {
-			C_ERROR("failed to attach to service group, rc: %d.\n",
-				rc);
-			mcl_set_free(NULL, crt_gdata.dg_mcl_cli_set);
-			mcl_finalize(crt_gdata.dg_mcl_state);
-			C_GOTO(out, rc = -CER_MCL);
-		}
-	}
-	crt_gdata.dg_srv_grp_id = CRT_GLOBAL_SRV_GROUP_NAME;
-	crt_gdata.dg_cli_grp_id = CRT_CLI_GROUP_NAME;
-
-out:
-	return rc;
-}
-
-static int
-crt_mcl_fini()
-{
-	int rc = 0;
-
-	C_ASSERT(crt_gdata.dg_mcl_state != NULL);
-	C_ASSERT(crt_gdata.dg_mcl_srv_set != NULL);
-
-	mcl_set_free(crt_gdata.dg_hg->dhg_nacla,
-		     crt_gdata.dg_mcl_srv_set);
-	if (crt_gdata.dg_server == false) {
-		mcl_set_free(crt_gdata.dg_hg->dhg_nacla,
-			     crt_gdata.dg_mcl_cli_set);
-	}
-
-	C_ASSERT(crt_gdata.dg_mcl_state != NULL);
-	rc = mcl_finalize(crt_gdata.dg_mcl_state);
-	if (rc == 0)
-		C_DEBUG(CF_TP, "mcl_finalize succeed.\n");
-	else
-		C_ERROR("mcl_finalize failed, rc: %d.\n", rc);
-
-	return rc;
 }
 
 int
@@ -303,12 +203,12 @@ crt_init(bool server)
 	}
 	C_ASSERT(gdata_init_flag == 1);
 
-	pthread_rwlock_wrlock(&crt_gdata.dg_rwlock);
-	if (crt_gdata.dg_inited == 0) {
-		crt_gdata.dg_server = server;
+	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
+	if (crt_gdata.cg_inited == 0) {
+		crt_gdata.cg_server = server;
 
 		if (server == true)
-			crt_gdata.dg_multi_na = true;
+			crt_gdata.cg_multi_na = true;
 
 		addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
 		if (addr_env == NULL) {
@@ -341,9 +241,9 @@ crt_init(bool server)
 				}
 			}
 			C_ASSERT(addr != NULL);
-			crt_gdata.dg_multi_na = false;
+			crt_gdata.cg_multi_na = false;
 		} else if (strncmp(addr_env, "cci+verbs", 9) == 0) {
-			crt_gdata.dg_verbs = true;
+			crt_gdata.cg_verbs = true;
 		}
 
 do_init:
@@ -362,14 +262,14 @@ do_init:
 			C_GOTO(unlock, rc);
 		}
 		C_ASSERT(addr != NULL);
-		crt_gdata.dg_addr = addr;
-		crt_gdata.dg_addr_len = strlen(addr);
+		crt_gdata.cg_addr = addr;
+		crt_gdata.cg_addr_len = strlen(addr);
 
-		rc = crt_mcl_init(&addr);
+		rc = crt_grp_init();
 		if (rc != 0) {
-			C_ERROR("crt_mcl_init failed, rc: %d.\n", rc);
+			C_ERROR("crt_grp_init failed, rc: %d.\n", rc);
 			crt_hg_fini();
-			C_FREE(crt_gdata.dg_addr, crt_gdata.dg_addr_len);
+			C_FREE(crt_gdata.cg_addr, crt_gdata.cg_addr_len);
 			C_GOTO(unlock, rc = -CER_MCL);
 		}
 
@@ -377,25 +277,25 @@ do_init:
 		if (rc != 0) {
 			C_ERROR("crt_opc_map_create failed rc: %d.\n", rc);
 			crt_hg_fini();
-			crt_mcl_fini();
-			C_FREE(crt_gdata.dg_addr, crt_gdata.dg_addr_len);
+			crt_grp_fini();
+			C_FREE(crt_gdata.cg_addr, crt_gdata.cg_addr_len);
 			C_GOTO(unlock, rc);
 		}
-		C_ASSERT(crt_gdata.dg_opc_map != NULL);
+		C_ASSERT(crt_gdata.cg_opc_map != NULL);
 
-		crt_gdata.dg_inited = 1;
+		crt_gdata.cg_inited = 1;
 	} else {
-		if (crt_gdata.dg_server == false && server == true) {
+		if (crt_gdata.cg_server == false && server == true) {
 			C_ERROR("CRT initialized as client, cannot set as "
 				"server again.\n");
 			C_GOTO(unlock, rc = -CER_INVAL);
 		}
 	}
 
-	crt_gdata.dg_refcount++;
+	crt_gdata.cg_refcount++;
 
 unlock:
-	pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 out:
 	C_DEBUG(CF_TP, "Exit crt_init, rc: %d.\n", rc);
 	return rc;
@@ -404,7 +304,7 @@ out:
 bool
 crt_initialized()
 {
-	return (gdata_init_flag == 1) && (crt_gdata.dg_inited == 1);
+	return (gdata_init_flag == 1) && (crt_gdata.cg_inited == 1);
 }
 
 int
@@ -414,58 +314,57 @@ crt_finalize(void)
 
 	C_DEBUG(CF_TP, "Enter crt_finalize.\n");
 
-	pthread_rwlock_wrlock(&crt_gdata.dg_rwlock);
+	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
 
 	if (!crt_initialized()) {
 		C_ERROR("cannot finalize before initializing.\n");
-		pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 		C_GOTO(out, rc = -CER_UNINIT);
 	}
-	if (crt_gdata.dg_ctx_num > 0) {
+	if (crt_gdata.cg_ctx_num > 0) {
 		C_ASSERT(!crt_context_empty(CRT_LOCKED));
 		C_ERROR("cannot finalize, current ctx_num(%d).\n",
-			crt_gdata.dg_ctx_num);
-		pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+			crt_gdata.cg_ctx_num);
+		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 		C_GOTO(out, rc = -CER_NO_PERM);
 	} else {
 		C_ASSERT(crt_context_empty(CRT_LOCKED));
 	}
 
-	crt_gdata.dg_refcount--;
-	if (crt_gdata.dg_refcount == 0) {
-		rc = crt_mcl_fini();
-		/* mcl finalize failure cause state unstable, just assert it */
+	crt_gdata.cg_refcount--;
+	if (crt_gdata.cg_refcount == 0) {
+		rc = crt_grp_fini();
 		C_ASSERT(rc == 0);
 
 		rc = crt_hg_fini();
 		if (rc != 0) {
 			C_ERROR("crt_hg_fini failed rc: %d.\n", rc);
-			crt_gdata.dg_refcount++;
-			pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+			crt_gdata.cg_refcount++;
+			pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 			C_GOTO(out, rc);
 		}
 
-		C_ASSERT(crt_gdata.dg_addr != NULL);
-		C_FREE(crt_gdata.dg_addr, crt_gdata.dg_addr_len);
-		crt_gdata.dg_server = false;
+		C_ASSERT(crt_gdata.cg_addr != NULL);
+		C_FREE(crt_gdata.cg_addr, crt_gdata.cg_addr_len);
+		crt_gdata.cg_server = false;
 
-		crt_opc_map_destroy(crt_gdata.dg_opc_map);
+		crt_opc_map_destroy(crt_gdata.cg_opc_map);
 
-		pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 
-		rc = pthread_rwlock_destroy(&crt_gdata.dg_rwlock);
+		rc = pthread_rwlock_destroy(&crt_gdata.cg_rwlock);
 		if (rc != 0) {
-			C_ERROR("failed to destroy dg_rwlock, rc: %d.\n", rc);
+			C_ERROR("failed to destroy cg_rwlock, rc: %d.\n", rc);
 			C_GOTO(out, rc = -rc);
 		}
 
 		/* allow the same program to re-initialize */
-		crt_gdata.dg_refcount = 0;
-		crt_gdata.dg_inited = 0;
+		crt_gdata.cg_refcount = 0;
+		crt_gdata.cg_inited = 0;
 		gdata_init_once = PTHREAD_ONCE_INIT;
 		gdata_init_flag = 0;
 	} else {
-		pthread_rwlock_unlock(&crt_gdata.dg_rwlock);
+		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 	}
 
 out:

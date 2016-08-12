@@ -86,11 +86,11 @@ typedef const char	*crt_const_string_t;
 /* CRT uses a string as the group ID */
 typedef crt_string_t	crt_group_id_t;
 /* max length of the group ID string including the trailing '\0' */
-#define CRT_GROUP_ID_MAX_LEN	(56)
+#define CRT_GROUP_ID_MAX_LEN	(64)
 
 typedef struct crt_group {
 	/* the group ID of this group */
-	crt_group_id_t		dg_grpid;
+	crt_group_id_t		cg_grpid;
 } crt_group_t;
 
 /* transport endpoint identifier */
@@ -348,8 +348,9 @@ typedef int (*crt_progress_cond_cb_t)(void *args);
  *
  * \return                      zero on success, negative value if error
  *
- * Notes: upper layer may don't know the addr... can change it after the
- *        bootstrapping mechanism be more clear
+ * Notes: crt_init() is a collective call which means every caller process
+ *	  should make the call collectively, as now it will internally call
+ *	  PMIx_Fence.
  */
 int
 crt_init(bool server);
@@ -411,6 +412,10 @@ crt_context_num(int *ctx_num);
  * Finalize CRT transport layer.
  *
  * \return                      zero on success, negative value if error
+ *
+ * Notes: crt_finalize() is a collective call which means every caller process
+ *	  should make the call collectively, as now it will internally call
+ *	  PMIx_Fence.
  */
 int
 crt_finalize(void);

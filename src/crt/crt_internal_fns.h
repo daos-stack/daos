@@ -33,11 +33,6 @@
 /** crt_init.c */
 bool crt_initialized();
 
-/** crt_group.c */
-crt_group_id_t crt_global_grp_id(void);
-int crt_hdlr_grp_create(crt_rpc_t *rpc_req);
-int crt_hdlr_grp_destroy(crt_rpc_t *rpc_req);
-
 /** crt_register.c */
 int crt_opc_map_create(unsigned int bits);
 void crt_opc_map_destroy(struct crt_opc_map *map);
@@ -48,16 +43,17 @@ int crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *drf,
 			 struct crt_corpc_ops *co_ops);
 
 /** crt_context.c */
-bool crt_context_empty(int locked);
-int crt_context_req_track(crt_rpc_t *req);
-void crt_context_req_untrack(crt_rpc_t *req);
-crt_context_t crt_context_lookup(int ctx_idx);
-void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
-
+/* return value of crt_context_req_track */
 enum {
 	CRT_REQ_TRACK_IN_INFLIGHQ = 0,
 	CRT_REQ_TRACK_IN_WAITQ,
 };
+
+int crt_context_req_track(crt_rpc_t *req);
+bool crt_context_empty(int locked);
+void crt_context_req_untrack(crt_rpc_t *req);
+crt_context_t crt_context_lookup(int ctx_idx);
+void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
 
 /** some simple helper functions */
 
@@ -76,28 +72,6 @@ crt_time_usec(unsigned sec_diff)
 
 	gettimeofday(&tv, NULL);
 	return (tv.tv_sec + sec_diff) * 1000 * 1000 + tv.tv_usec;
-}
-
-static inline bool
-crt_ep_identical(crt_endpoint_t *ep1, crt_endpoint_t *ep2)
-{
-	C_ASSERT(ep1 != NULL);
-	C_ASSERT(ep2 != NULL);
-	/* TODO: check group */
-	if (ep1->ep_rank == ep2->ep_rank)
-		return true;
-	else
-		return false;
-}
-
-static inline void
-crt_ep_copy(crt_endpoint_t *dst_ep, crt_endpoint_t *src_ep)
-{
-	C_ASSERT(dst_ep != NULL);
-	C_ASSERT(src_ep != NULL);
-	/* TODO: copy grp id */
-	dst_ep->ep_rank = src_ep->ep_rank;
-	dst_ep->ep_tag = src_ep->ep_tag;
 }
 
 #endif /* __CRT_INTERNAL_FNS_H__ */
