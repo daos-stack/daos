@@ -590,42 +590,179 @@ map_retrieve(const struct pool_svc *svc, struct pool_buf **map_buf,
 	return 0;
 }
 
-struct pool_connect_cb_arg {
-	struct pool_svc	       *pcc_svc;
-	int			pcc_skip_update;
-};
-
 static int
-pool_connect_cb(const struct dtp_bulk_cb_info *cb_info)
+bulk_cb(const struct dtp_bulk_cb_info *cb_info)
 {
-	struct dtp_bulk_desc	       *desc = cb_info->bci_bulk_desc;
-	struct pool_connect_cb_arg     *arg = cb_info->bci_arg;
-	struct pool_connect_in	       *in = dtp_req_get(desc->bd_rpc);
-	struct pool_connect_out	       *out = dtp_reply_get(desc->bd_rpc);
-	struct pool_hdl			hdl;
-	struct pool_svc		       *svc = arg->pcc_svc;
-	uint32_t			nhandles;
-	int				rc = cb_info->bci_rc;
+	ABT_eventual *eventual = cb_info->bci_arg;
 
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
+			 sizeof(cb_info->bci_rc));
+	return 0;
+}
 
+/*
+ * Transfer the pool map buffer to the client and set pco_pool_map_version. If
+ * the client bulk buffer is not large enough, then also set
+ * pco_pool_map_buf_size.
+ */
+static int
+pool_connect_bulk(dtp_rpc_t *rpc, struct pool_svc *svc)
+{
+	struct pool_connect_in	       *in = dtp_req_get(rpc);
+	struct pool_connect_out	       *out = dtp_reply_get(rpc);
+	struct pool_buf		       *map_buf;
+	size_t				map_buf_size;
+	daos_iov_t			map_iov;
+	daos_sg_list_t			map_sgl;
+	dtp_bulk_t			map_bulk;
+	struct dtp_bulk_desc		map_desc;
+	dtp_bulk_opid_t			map_opid;
+	daos_size_t			client_bulk_size;
+	ABT_eventual			eventual;
+	int			       *status;
+	int				rc;
+
+	/*
+	 * If successful, this stores the address of the persistent pool map
+	 * buffer into "map_buf".
+	 */
+	rc = map_retrieve(svc, &map_buf, &out->pco_pool_map_version);
 	if (rc != 0) {
-		D_ERROR("failed to transfer pool map to client: %d\n", rc);
+		D_ERROR("failed to read pool map: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	if (arg->pcc_skip_update)
-		D_GOTO(out, rc = 0);
+	map_buf_size = pool_buf_size(map_buf->pb_nr);
+
+	/* Check if the client bulk buffer is large enough. */
+	rc = dtp_bulk_get_len(in->pci_pool_map_bulk, &client_bulk_size);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	if (client_bulk_size < map_buf_size) {
+		D_ERROR("client pool map buffer ("DF_U64") < required (%ld)\n",
+			client_bulk_size, map_buf_size);
+		out->pco_pool_map_buf_size = map_buf_size;
+		D_GOTO(out, rc = -DER_TRUNC);
+	}
+
+	map_iov.iov_buf = map_buf;
+	map_iov.iov_buf_len = map_buf_size;
+	map_iov.iov_len = map_iov.iov_buf_len;
+	map_sgl.sg_nr.num = 1;
+	map_sgl.sg_nr.num_out = 0;
+	map_sgl.sg_iovs = &map_iov;
+
+	rc = dtp_bulk_create(rpc->dr_ctx, &map_sgl, DTP_BULK_RO, &map_bulk);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* Prepare "map_desc" for dtp_bulk_transfer(). */
+	map_desc.bd_rpc = rpc;
+	map_desc.bd_bulk_op = DTP_BULK_PUT;
+	map_desc.bd_remote_hdl = in->pci_pool_map_bulk;
+	map_desc.bd_remote_off = 0;
+	map_desc.bd_local_hdl = map_bulk;
+	map_desc.bd_local_off = 0;
+	map_desc.bd_len = map_iov.iov_len;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_bulk, rc = -DER_NOMEM);
+
+	rc = dtp_bulk_transfer(&map_desc, bulk_cb, &eventual, &map_opid);
+	if (rc != 0)
+		D_GOTO(out_eventual, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = -DER_NOMEM);
+
+	if (*status != 0)
+		D_GOTO(out_eventual, rc = *status);
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+out_bulk:
+	dtp_bulk_free(map_bulk);
+out:
+	return rc;
+}
+
+int
+dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
+{
+	struct pool_connect_in	       *in = dtp_req_get(rpc);
+	struct pool_connect_out	       *out = dtp_reply_get(rpc);
+	struct pool_svc		       *svc;
+	struct pool_attr		attr;
+	struct pool_hdl			hdl;
+	uint32_t			nhandles;
+	int				skip_update = 0;
+	int				rc;
+
+	D_DEBUG(DF_DSMS, "processing rpc %p\n", rpc);
+
+	rc = pool_svc_lookup(in->pci_pool, &svc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	pthread_rwlock_wrlock(&svc->ps_rwlock);
+
+	/* Check existing pool handles. */
+	rc = dsms_kvs_uv_lookup(svc->ps_handles, in->pci_pool_hdl, &hdl,
+				sizeof(hdl));
+	if (rc == 0) {
+		if (hdl.ph_capas == in->pci_capas) {
+			/*
+			 * The handle already exists; only do the pool map
+			 * transfer.
+			 */
+			skip_update = 1;
+		} else {
+			/* The existing one does not match the new one. */
+			D_ERROR("found conflicting pool handle\n");
+			D_GOTO(out_lock, rc = -DER_EXIST);
+		}
+	} else if (rc != -DER_NONEXIST) {
+		D_GOTO(out_lock, rc);
+	}
+
+	rc = pool_attr_read(svc, &attr);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	if (!permitted(&attr, in->pci_uid, in->pci_gid, in->pci_capas)) {
+		D_ERROR("refusing connect attempt for uid %u gid %u "DF_X64"\n",
+			in->pci_uid, in->pci_gid, in->pci_capas);
+		D_GOTO(out_lock, rc = -DER_NO_PERM);
+	}
+
+	out->pco_mode = attr.pa_mode;
+
+	/*
+	 * Transfer the pool map to the client before adding the pool handle,
+	 * so that we don't need to worry about rolling back the transaction
+	 * when the tranfer fails. The client has already been authenticated
+	 * and authorized at this point. If an error occurs after the transfer
+	 * completes, then we simply return the error and the client will throw
+	 * its pool_buf away.
+	 */
+	rc = pool_connect_bulk(rpc, svc);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	if (skip_update)
+		D_GOTO(out_lock, rc = 0);
 
 	hdl.ph_capas = in->pci_capas;
 
 	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_NHANDLES,
 				&nhandles, sizeof(nhandles));
 	if (rc != 0)
-		D_GOTO(out, rc);
-
+		D_GOTO(out_lock, rc);
 	nhandles++;
 
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 	TX_BEGIN(svc->ps_mpool->mp_pmem) {
 		rc = dsms_kvs_nv_update(svc->ps_mpool->mp_root, POOL_NHANDLES,
 					&nhandles, sizeof(nhandles));
@@ -643,169 +780,17 @@ pool_connect_cb(const struct dtp_bulk_cb_info *cb_info)
 	} TX_END
 
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(out_lock, rc);
 
 	/* For this pool handle. */
 	pool_svc_get(svc);
 
+out_lock:
+	pthread_rwlock_unlock(&svc->ps_rwlock);
+	pool_svc_put(svc);
 out:
-	dtp_bulk_free(desc->bd_local_hdl);
-	D_DEBUG(DF_DSMS, "replying rpc %p with %d\n", desc->bd_rpc, rc);
-	out->pco_ret = rc;
-	rc = dtp_reply_send(desc->bd_rpc);
-	dtp_req_decref(desc->bd_rpc);
-	D_FREE_PTR(arg);
-	pthread_rwlock_unlock(&svc->ps_rwlock);
-	pool_svc_put(svc);
-	return rc;
-}
-
-int
-dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
-{
-	struct pool_connect_in	       *pci;
-	struct pool_connect_out	       *pco;
-	struct pool_svc		       *svc;
-	struct pool_attr		attr;
-	struct pool_hdl			hdl;
-	struct pool_buf		       *map_buf;
-	size_t				map_buf_size;
-	daos_iov_t			map_iov;
-	daos_sg_list_t			map_sgl;
-	dtp_bulk_t			map_bulk;
-	struct dtp_bulk_desc		map_desc;
-	dtp_bulk_opid_t			map_opid;
-	struct pool_connect_cb_arg     *arg;
-	daos_size_t			client_bulk_size;
-	int				rc;
-
-	D_DEBUG(DF_DSMS, "processing rpc %p\n", rpc);
-
-	pci = dtp_req_get(rpc);
-	D_ASSERT(pci != NULL);
-	pco = dtp_reply_get(rpc);
-
-	rc = pool_svc_lookup(pci->pci_pool, &svc);
-	if (rc != 0)
-		D_GOTO(err, rc);
-
-	pthread_rwlock_wrlock(&svc->ps_rwlock);
-
-	rc = pool_attr_read(svc, &attr);
-	if (rc != 0)
-		D_GOTO(err_lock, rc);
-
-	if (!permitted(&attr, pci->pci_uid, pci->pci_gid,
-		       pci->pci_capas)) {
-		D_ERROR("refusing connect attempt for uid %u gid %u "DF_X64"\n",
-			pci->pci_uid, pci->pci_gid, pci->pci_capas);
-		D_GOTO(err_lock, rc = -DER_NO_PERM);
-	}
-
-	/*
-	 * Fill pco_mode here, since doing so in pool_connect_cb() would
-	 * require either "attr" or another KVS lookup.
-	 */
-	pco->pco_mode = attr.pa_mode;
-
-	/* Prepare "arg" for pool_connect_cb(). */
-	D_ALLOC_PTR(arg);
-	if (arg == NULL) {
-		D_ERROR("failed to allocate arg for bulk callback\n");
-		D_GOTO(err_lock, rc = -DER_NOMEM);
-	}
-
-	arg->pcc_svc = svc;
-	arg->pcc_skip_update = 0;
-
-	/* Check existing pool handles. */
-	rc = dsms_kvs_uv_lookup(svc->ps_handles, pci->pci_pool_hdl, &hdl,
-				sizeof(hdl));
-	if (rc == 0) {
-		if (hdl.ph_capas == pci->pci_capas) {
-			/*
-			 * We may skip the update transaction and only do the
-			 * pool map transfer.
-			 */
-			arg->pcc_skip_update = 1;
-		} else {
-			/* The existing one does not match the new one. */
-			D_ERROR("found conflicting pool handle\n");
-			D_GOTO(err_arg, rc = -DER_EXIST);
-		}
-	} else if (rc != -DER_NONEXIST) {
-		D_GOTO(err_arg, rc);
-	}
-
-	/*
-	 * If successful, this stores the address of the persistent pool map
-	 * buffer into "map_buf".
-	 */
-	rc = map_retrieve(svc, &map_buf, &pco->pco_pool_map_version);
-	if (rc != 0) {
-		D_ERROR("failed to read pool map: %d\n", rc);
-		D_GOTO(err_arg, rc);
-	}
-
-	map_buf_size = pool_buf_size(map_buf->pb_nr);
-
-	/* Check if the client bulk buffer is large enough. */
-	rc = dtp_bulk_get_len(pci->pci_pool_map_bulk, &client_bulk_size);
-	if (rc != 0)
-		D_GOTO(err_arg, rc);
-	if (client_bulk_size < map_buf_size) {
-		D_ERROR("client pool map buffer ("DF_U64") < required (%ld)\n",
-			client_bulk_size, map_buf_size);
-		pco->pco_pool_map_buf_size = map_buf_size;
-		D_GOTO(err_arg, rc = -DER_TRUNC);
-	}
-
-	map_iov.iov_buf = map_buf;
-	map_iov.iov_buf_len = map_buf_size;
-	map_iov.iov_len = map_iov.iov_buf_len;
-	map_sgl.sg_nr.num = 1;
-	map_sgl.sg_nr.num_out = 0;
-	map_sgl.sg_iovs = &map_iov;
-
-	rc = dtp_bulk_create(rpc->dr_ctx, &map_sgl, DTP_BULK_RO, &map_bulk);
-	if (rc != 0)
-		D_GOTO(err_arg, rc);
-
-	/* Prepare "map_desc" for dtp_bulk_transfer(). */
-	dtp_req_addref(rpc);
-	map_desc.bd_rpc = rpc;
-	map_desc.bd_bulk_op = DTP_BULK_PUT;
-	map_desc.bd_remote_hdl = pci->pci_pool_map_bulk;
-	map_desc.bd_remote_off = 0;
-	map_desc.bd_local_hdl = map_bulk;
-	map_desc.bd_local_off = 0;
-	map_desc.bd_len = map_iov.iov_len;
-
-	/*
-	 * Transfer the pool map to the client before adding the pool handle,
-	 * so that we don't need to worry about rolling back the transaction
-	 * when the tranfer fails. The client has already been authenticated
-	 * and authorized at this point. If an error occurs after the transfer
-	 * completes, then we simply return the error and the client will throw
-	 * its pool_buf away.
-	 */
-	rc = dtp_bulk_transfer(&map_desc, pool_connect_cb, arg, &map_opid);
-	if (rc != 0)
-		D_GOTO(err_rpc, rc);
-
-	return 0;
-
-err_rpc:
-	dtp_req_decref(map_desc.bd_rpc);
-	dtp_bulk_free(map_bulk);
-err_arg:
-	D_FREE_PTR(arg);
-err_lock:
-	pthread_rwlock_unlock(&svc->ps_rwlock);
-	pool_svc_put(svc);
-err:
 	D_DEBUG(DF_DSMS, "replying rpc %p with %d\n", rpc, rc);
-	pco->pco_ret = rc;
+	out->pco_ret = rc;
 	return dtp_reply_send(rpc);
 }
 
