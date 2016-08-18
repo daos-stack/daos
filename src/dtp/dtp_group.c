@@ -64,6 +64,13 @@ dtp_grp_insert_locked(struct dtp_grp_priv *grp_priv)
 	daos_list_add_tail(&grp_priv->gp_link, &dtp_grp_list);
 }
 
+static inline void
+dtp_grp_del_locked(struct dtp_grp_priv *grp_priv)
+{
+	D_ASSERT(grp_priv != NULL);
+	daos_list_del_init(&grp_priv->gp_link);
+}
+
 static inline int
 dtp_grp_priv_create(struct dtp_grp_priv **grp_priv_created,
 		    dtp_group_id_t grp_id, daos_rank_list_t *membs,
@@ -125,7 +132,6 @@ dtp_grp_lookup_create(dtp_group_id_t grp_id, daos_rank_list_t *member_ranks,
 	pthread_rwlock_wrlock(&dtp_grp_list_rwlock);
 	grp_priv = dtp_grp_lookup_locked(grp_id);
 	if (grp_priv != NULL) {
-		D_DEBUG(DF_TP, "group existed or in creating/destroying.\n");
 		pthread_rwlock_unlock(&dtp_grp_list_rwlock);
 		*grp_result = grp_priv;
 		D_GOTO(out, rc = -DER_EXIST);
@@ -153,6 +159,11 @@ dtp_grp_priv_destroy(struct dtp_grp_priv *grp_priv)
 {
 	if (grp_priv == NULL)
 		return;
+
+	/* remove from global list */
+	pthread_rwlock_wrlock(&dtp_grp_list_rwlock);
+	dtp_grp_del_locked(grp_priv);
+	pthread_rwlock_unlock(&dtp_grp_list_rwlock);
 
 	daos_rank_list_free(grp_priv->gp_membs);
 	daos_rank_list_free(grp_priv->gp_failed_ranks);
