@@ -411,18 +411,15 @@ class PreReqComponent(object):
 
         real_env = self.__env['ENV']
 
-        auth_sock = os.environ.get('SSH_AUTH_SOCK')
-        if auth_sock:
-            real_env['SSH_AUTH_SOCK'] = auth_sock
+        for var in ["HOME", "TERM", "SSH_AUTH_SOCK",
+                    "http_proxy", "https_proxy"]:
+            value = os.environ.get(var)
+            if value:
+                real_env[var] = value
 
         libtoolize = 'libtoolize'
         if self.__env['PLATFORM'] == 'darwin':
             libtoolize = 'glibtoolize'
-
-        real_env["HOME"] = os.environ.get("HOME")
-        term = os.environ.get("TERM")
-        if term:
-            real_env["TERM"] = term
 
         self.add_options()
         self.__setup_unit_test_builders()
