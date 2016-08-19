@@ -1,6 +1,7 @@
 """install test runner"""
 
-TESTRUNNER = ["__init__.py", "__main__.py", "TestRunner.py"]
+TESTRUNNER = ["__init__.py", "__main__.py", "TestRunner.py", "InfoRunner.py",
+              "DvmRunner.py"]
 
 def scons():
     """Run scons"""

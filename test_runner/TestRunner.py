@@ -22,91 +22,31 @@ except ImportError:
 
 class TestRunner():
     """Simple test runner"""
-    log_dir_base = "/tmp/testLogs/testRun"
+    log_dir_base = "testLogs/testRun"
     loop_name = ""
     last_testlogdir = ""
     loop_number = 0
-    config = {}
-    info = {}
     test_info = {}
     test_list = []
+    info = None
 
-    def __init__(self, config=None, test_list=None):
-        self.config = config
+    def __init__(self, info, test_list=None):
+        self.info = info
         self.test_list = test_list
-
-    def env_setup(self):
-        """ setup the environment """
-        print("TestRunner: setUp env begin")
-
-        rootpath = os.getcwd()
-        print("path: %s" % rootpath)
-        platform = os.uname()[0]
-        opts_file = rootpath + "/.build_vars.json"
-        print("use file: %s" % opts_file)
-        with open(opts_file, "r") as info_file:
-            self.info = json.load(info_file)
-
-        ompi_path = self.info['OMPI_PREFIX'] + "/bin"
-        path = os.getenv("PATH")
-        if path.find(ompi_path) < 0:
-            path = ompi_path + ":" + path
-        if 'MCL_PREFIX' in self.info:
-            mcl_path = self.info['MCL_PREFIX'] + "/bin"
-            if path.find(mcl_path) < 0:
-                path = mcl_path + ":" + path
-        installed_path = self.info['PREFIX']
-        test_path = installed_path + "/TESTING/tests"
-        if path.find(test_path) < 0:
-            path = test_path + ":" + path
-        bin_path = installed_path + "bin"
-        if path.find(bin_path) < 0:
-            path = bin_path + ":" + path
-        os.environ['PATH'] = path
-        if platform == "Darwin":
-            self.setup_Darwin()
-        self.rename_output_directory()
-        os.makedirs(self.log_dir_base)
-        print("TestRunner: setUp end\n")
-
-    def setup_Darwin(self):
-        """ setup mac OS environment """
-        os.environ['OMPI_MCA_orte_tmpdir_base'] = "/tmp"
-        dyld = os.getenv("DYLD_LIBRARY_PATH", default="")
-        lib_paths = []
-        for key in sorted(self.info.keys()):
-            if not isinstance(self.info[key], str):
-                continue
-            if not "PREFIX" in key:
-                continue
-            if self.info[key] == "/usr":
-                continue
-            lib = os.path.join(self.info[key], "lib")
-            lib64 = os.path.join(self.info[key], "lib64")
-            if os.path.exists(lib) and lib not in lib_paths:
-                lib_paths.insert(0, lib)
-            if os.path.exists(lib64) and lib64 not in lib_paths:
-                lib_paths.insert(0, lib64)
-        new_lib_path = os.pathsep.join(lib_paths) + dyld
-        os.environ['DYLD_LIBRARY_PATH'] = new_lib_path
-        print("DYLD_LIBRARY_PATH = %s" % new_lib_path)
 
     def add_default_env(self):
         """ add to default environment """
         module = self.test_info['module']
-        if self.config:
-            try:
-                host_list = self.config['host_list']
-                key_list = module['setKeyFromHost']
-                for k in range(0, len(key_list)):
-                    self.test_info['defaultENV'][key_list[k]] = host_list[k]
-            except KeyError:
-                pass
+        host_list = self.info.get_config('host_list')
+        hostkey_list = module.get('setKeyFromHost')
+        if host_list and hostkey_list:
+            for k in range(0, len(hostkey_list)):
+                self.test_info['defaultENV'][hostkey_list[k]] = host_list[k]
         key_list = module.get('setKeyFromInfo')
         if key_list:
             for item in range(0, len(key_list)):
                 (k, v, ex) = key_list[item]
-                self.test_info['defaultENV'][k] = self.info[v] + ex
+                self.test_info['defaultENV'][k] = self.info.get_info(v) + ex
 
     def setup_default_env(self):
         """ setup default environment """
@@ -163,7 +103,7 @@ class TestRunner():
         print("TestRunner: Callgrind annotate begin")
         module = self.test_info['module']
         srcdir = module.get('srcDir', "")
-        src_rootdir = self.info.get('SRCDIR', "")
+        src_rootdir = self.info.get_info('SRCDIR')
         if srcdir and src_rootdir:
             if isinstance(srcdir, str):
                 srcfile = " %s/%s/*.c" % (src_rootdir, srcdir)
@@ -171,8 +111,7 @@ class TestRunner():
                 srcfile = ""
                 for item in srcdir:
                     srcfile += " %s/%s/*.c" % (src_rootdir, item)
-            newdir = os.path.join(self.log_dir_base, self.last_testlogdir)
-            dirlist = os.listdir(newdir)
+            dirlist = os.listdir(self.last_testlogdir)
             for infile in dirlist:
                 if os.path.isfile(infile) and infile.find(".out"):
                     outfile = infile.replace("out", "gp.out")
@@ -195,8 +134,7 @@ class TestRunner():
     def dump_error_messages(self, testMethodName):
         """dump the ERROR tag from stdout file"""
         dirname = testMethodName.split('_', maxsplit=2)
-        newdir = os.path.join(self.log_dir_base, self.last_testlogdir,
-                              dirname[2])
+        newdir = os.path.join(self.last_testlogdir, dirname[2])
         if not os.path.exists(newdir):
             print("Directory not found: %s" % newdir)
             return
@@ -296,7 +234,6 @@ class TestRunner():
         sys.path.append("scripts")
         rtn = 0
         print("\n*************************************************************")
-        self.env_setup()
         for test_module_name in self.test_list:
             self.loop_name = os.path.splitext(
                 os.path.basename(test_module_name))[0]

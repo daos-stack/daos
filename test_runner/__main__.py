@@ -31,12 +31,17 @@ import json
 #pylint: disable=import-error
 try:
     from .TestRunner import TestRunner
+    from .InfoRunner import InfoRunner
+    from .DvmRunner  import DvmRunner
 except SystemError:
     from TestRunner import TestRunner
+    from InfoRunner import InfoRunner
+    from DvmRunner  import DvmRunner
 
 
 def main():
     """ main for test runner """
+    ortedvm = None
     config = {}
     test_list = []
     if len(sys.argv) > 1:
@@ -49,8 +54,15 @@ def main():
             start = 1
         for k in range(start, len(sys.argv)):
             test_list.append(sys.argv[k])
-    tester = TestRunner(config, test_list)
+    info = InfoRunner(config)
+    info.env_setup()
+    if config and config.get('use_orte-dvm'):
+        ortedvm = DvmRunner(info)
+        ortedvm.launch_dvm_process()
+    tester = TestRunner(info, test_list)
     rc = tester.run_testcases()
+    if ortedvm:
+        ortedvm.stop_dvm_process()
     if rc == 0:
         print("All tests passed\n")
     else:
