@@ -22,6 +22,7 @@ from SCons.Script import GetOption
 from SCons.Script import Configure
 from SCons.Script import AddOption
 from SCons.Script import Builder
+from SCons.Script import SConscript
 from build_info import BuildInfo
 
 class NotInitialized(Exception):
@@ -475,6 +476,11 @@ class PreReqComponent(object):
         self.setup_patch_prefix()
         self.__build_info = BuildInfo()
         self.__build_info.update("PREFIX", self.__env.subst("$PREFIX"))
+
+        local_script = os.path.expanduser("~/.scons_localrc")
+        if os.path.exists(local_script):
+            SConscript(local_script, exports=['env'])
+
 
     def get_build_info(self):
         """Retrieve the BuildInfo"""
