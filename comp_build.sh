@@ -269,7 +269,6 @@ fi
 
 set -x
 set -e
-scons -c
 rm -f ${B_COMP}-`uname -s`.conf
 scons $SET_PREFIX ${option}
 scons install
