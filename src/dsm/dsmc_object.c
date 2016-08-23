@@ -233,8 +233,7 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	D_ASSERT(oui != NULL);
 
 	oui->oui_oid = dobj->do_id;
-	uuid_copy(oui->oui_pool_uuid, dpool->dp_pool);
-	uuid_copy(oui->oui_co_uuid, dcont->dc_uuid);
+	uuid_copy(oui->oui_co_hdl, dcont->dc_cont_hdl);
 
 	dsmc_object_put(dobj);
 	dsmc_container_put(dcont);
@@ -535,8 +534,7 @@ dsm_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	D_ASSERT(oei != NULL);
 
 	oei->oei_oid = dobj->do_id;
-	uuid_copy(oei->oei_co_uuid, dcont->dc_uuid);
-	uuid_copy(oei->oei_pool_uuid, dpool->dp_pool);
+	uuid_copy(oei->oei_co_hdl, dcont->dc_cont_hdl);
 
 	oei->oei_epoch = epoch;
 	oei->oei_nr = *nr;

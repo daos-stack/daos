@@ -121,8 +121,7 @@ struct pool_disconnect_out {
 
 struct object_update_in {
 	daos_unit_oid_t oui_oid;
-	uuid_t		oui_co_uuid;
-	uuid_t		oui_pool_uuid;
+	uuid_t		oui_co_hdl;
 	uint64_t	oui_epoch;
 	uint32_t	oui_nr;
 	uint32_t	oui_pad;
@@ -223,11 +222,30 @@ struct tgt_pool_disconnect_out {
 	int32_t	tpdo_ret;	/* number of errors */
 };
 
+struct tgt_cont_open_in {
+	uuid_t		tcoi_pool;
+	uuid_t		tcoi_pool_hdl;
+	uuid_t		tcoi_cont;
+	uuid_t		tcoi_cont_hdl;
+	uint64_t	tcoi_capas;
+};
+
+struct tgt_cont_open_out {
+	int32_t	tcoo_ret;	/* number of errors */
+};
+
+struct tgt_cont_close_in {
+	uuid_t	tcci_cont_hdl;
+};
+
+struct tgt_cont_close_out {
+	int32_t	tcco_ret;	/* number of errors */
+};
+
 /* object Enumerate in/out */
 struct object_enumerate_in {
 	daos_unit_oid_t oei_oid;
-	uuid_t		oei_co_uuid;
-	uuid_t		oei_pool_uuid;
+	uuid_t		oei_co_hdl;
 	uint64_t	oei_epoch;
 	uint32_t	oei_nr;
 	uint32_t	oei_pad;

@@ -43,9 +43,10 @@
  * TODO: Store and look up this in a hash table.
  */
 struct cont_svc {
-	uuid_t			cs_pool;
+	uuid_t			cs_pool_uuid;
 	uint64_t		cs_id;
 	struct mpool	       *cs_mpool;
+	struct tgt_pool	       *cs_pool;
 	pthread_rwlock_t	cs_rwlock;
 	pthread_mutex_t		cs_lock;
 	int			cs_ref;
@@ -57,13 +58,21 @@ cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 {
 	int rc;
 
-	uuid_copy(svc->cs_pool, pool_uuid);
+	rc = dsms_tgt_pool_lookup(pool_uuid, NULL /* arg */, &svc->cs_pool);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			/* Therefore not a single pool handle exists. */
+			rc = -DER_NO_PERM;
+		D_GOTO(err, rc);
+	}
+
+	uuid_copy(svc->cs_pool_uuid, pool_uuid);
 	svc->cs_id = id;
 	svc->cs_ref = 1;
 
 	rc = dsms_mpool_lookup(pool_uuid, &svc->cs_mpool);
 	if (rc != 0)
-		D_GOTO(err, rc);
+		D_GOTO(err_pool, rc);
 
 	rc = pthread_rwlock_init(&svc->cs_rwlock, NULL /* attr */);
 	if (rc != 0) {
@@ -92,17 +101,22 @@ err_rwlock:
 	pthread_rwlock_destroy(&svc->cs_rwlock);
 err_mp:
 	dsms_mpool_put(svc->cs_mpool);
+err_pool:
+	dsms_tgt_pool_put(svc->cs_pool);
 err:
 	return rc;
 }
 
 static int
-cont_svc_lookup(const uuid_t pool_uuid, int id, struct cont_svc **svc)
+cont_svc_lookup(const uuid_t pool_uuid, uint64_t id, struct cont_svc **svc)
 {
 	struct cont_svc	       *p;
 	int			rc;
 
 	/* TODO: Hash table. */
+
+	D_DEBUG(DF_DSMS, DF_UUID"["DF_U64"]: allocating\n", DP_UUID(pool_uuid),
+		id);
 
 	D_ALLOC_PTR(p);
 	if (p == NULL) {
@@ -123,6 +137,8 @@ cont_svc_lookup(const uuid_t pool_uuid, int id, struct cont_svc **svc)
 static void
 cont_svc_put(struct cont_svc *svc)
 {
+	D_DEBUG(DF_DSMS, DF_UUID"["DF_U64"]: freeing\n",
+		DP_UUID(svc->cs_pool_uuid), svc->cs_id);
 	dbtree_close(svc->cs_containers);
 	pthread_mutex_destroy(&svc->cs_lock);
 	pthread_rwlock_destroy(&svc->cs_rwlock);
@@ -458,6 +474,52 @@ cont_put(struct cont *cont)
 	D_FREE_PTR(cont);
 }
 
+static int
+cont_open_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
+		const uuid_t cont_hdl, uint64_t capas)
+{
+	struct tgt_cont_open_in	       *in;
+	struct tgt_cont_open_out       *out;
+	dtp_rpc_t		       *rpc;
+	int				rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": bcasting: pool_hdl="DF_UUID" cont_hdl="
+		DF_UUID" capas="DF_X64"\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas);
+
+	rc = dsms_corpc_create(ctx, cont->c_svc->cs_pool->tp_group,
+			       DSM_TGT_CONT_OPEN, &rpc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	in = dtp_req_get(rpc);
+	uuid_copy(in->tcoi_pool, cont->c_svc->cs_pool_uuid);
+	uuid_copy(in->tcoi_pool_hdl, pool_hdl);
+	uuid_copy(in->tcoi_cont, cont->c_uuid);
+	uuid_copy(in->tcoi_cont_hdl, cont_hdl);
+	in->tcoi_capas = capas;
+
+	rc = dsms_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = dtp_reply_get(rpc);
+	rc = out->tcoo_ret;
+	if (rc != 0)
+		D_ERROR(DF_CONT": failed to open some targets: %d\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+
+out_rpc:
+	dtp_req_decref(rpc);
+out:
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: pool_hdl="DF_UUID" cont_hdl="DF_UUID
+		" capas="DF_X64":%d\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas, rc);
+	return rc;
+}
+
 int
 dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 {
@@ -476,10 +538,11 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 	D_ASSERT(in != NULL);
 	D_ASSERT(out != NULL);
 
-	D_DEBUG(DF_DSMS, "enter: pool="DF_UUID" pool_hdl="DF_UUID" cont="DF_UUID
-		" cont_hdl="DF_UUID"\n", DP_UUID(in->coi_pool),
-		DP_UUID(in->coi_pool_hdl), DP_UUID(in->coi_cont),
-		DP_UUID(in->coi_cont_hdl));
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: pool_hdl="DF_UUID
+		" cont_hdl="DF_UUID" capas="DF_X64"\n",
+		DP_CONT(in->coi_pool, in->coi_cont), rpc,
+		DP_UUID(in->coi_pool_hdl), DP_UUID(in->coi_cont_hdl),
+		in->coi_capas);
 
 	/* Verify the pool handle. */
 	pool_hdl = dsms_tgt_pool_hdl_lookup(in->coi_pool_hdl);
@@ -508,12 +571,20 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 				sizeof(chdl));
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0 && chdl.ch_capas != in->coi_capas) {
-			D_ERROR(DF_CONT"found conflicting container handle\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid));
+			D_ERROR(DF_CONT": found conflicting container handle\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid));
 			rc = -DER_EXIST;
 		}
 		D_GOTO(out_cont, rc);
 	}
+
+	rc = cont_open_bcast(rpc->dr_ctx, cont, in->coi_pool_hdl,
+			     in->coi_cont_hdl, in->coi_capas);
+	if (rc != 0)
+		D_GOTO(out_cont, rc);
+
+	/* TODO: Rollback cont_open_bcast() on errors from now on. */
 
 	/* Get GHPCE. */
 	rc = dsms_kvs_ec_fetch(cont->c_hces, BTR_PROBE_LAST,
@@ -543,25 +614,25 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 
 		rc = ec_increment(cont->c_hces, chdl.ch_hce);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to update hce kvs: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to update hce kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_increment(cont->c_lres, chdl.ch_lre);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to update lre kvs: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to update lre kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_increment(cont->c_lhes, chdl.ch_lhe);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to update lhe kvs: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to update lhe kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 	} TX_ONABORT {
@@ -595,9 +666,49 @@ out_rwlock:
 out_pool_hdl:
 	dsms_tgt_pool_hdl_put(pool_hdl);
 out:
-	D_DEBUG(DF_DSMS, "leave: rc=%d\n", rc);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+		DP_CONT(in->coi_pool, in->coi_cont), rpc, rc);
 	out->coo_ret = rc;
 	return dtp_reply_send(rpc);
+}
+
+static int
+cont_close_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t cont_hdl)
+{
+	struct tgt_cont_close_in       *in;
+	struct tgt_cont_close_out      *out;
+	dtp_rpc_t		       *rpc;
+	int				rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": bcasting: cont_hdl="DF_UUID"\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+		DP_UUID(cont_hdl));
+
+	rc = dsms_corpc_create(ctx, cont->c_svc->cs_pool->tp_group,
+			       DSM_TGT_CONT_CLOSE, &rpc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	in = dtp_req_get(rpc);
+	uuid_copy(in->tcci_cont_hdl, cont_hdl);
+
+	rc = dsms_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = dtp_reply_get(rpc);
+	rc = out->tcco_ret;
+	if (rc != 0)
+		D_ERROR(DF_CONT": failed to close some targets: %d\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+
+out_rpc:
+	dtp_req_decref(rpc);
+out:
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: cont_hdl="DF_UUID":%d\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+		DP_UUID(cont_hdl), rc);
+	return rc;
 }
 
 int
@@ -614,8 +725,8 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 	D_ASSERT(in != NULL);
 	D_ASSERT(out != NULL);
 
-	D_DEBUG(DF_DSMS, "enter: pool="DF_UUID" cont="DF_UUID" cont_hdl="DF_UUID
-		"\n", DP_UUID(in->cci_pool), DP_UUID(in->cci_cont),
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
+		DP_CONT(in->cci_pool, in->cci_cont), rpc,
 		DP_UUID(in->cci_cont_hdl));
 
 	rc = cont_svc_lookup(in->cci_pool, 0 /* id */, &svc);
@@ -633,12 +744,17 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 				sizeof(chdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DF_DSMS, "already closed: "DF_UUID"\n",
+			D_DEBUG(DF_DSMS, DF_CONT": already closed: "DF_UUID"\n",
+				DP_CONT(svc->cs_pool->tp_uuid, cont->c_uuid),
 				DP_UUID(in->cci_cont_hdl));
 			rc = 0;
 		}
 		D_GOTO(out_cont, rc);
 	}
+
+	rc = cont_close_bcast(rpc->dr_ctx, cont, in->cci_cont_hdl);
+	if (rc != 0)
+		D_GOTO(out_cont, rc);
 
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
 		rc = dsms_kvs_uv_delete(cont->c_handles, in->cci_cont_hdl);
@@ -647,25 +763,25 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 
 		rc = ec_decrement(cont->c_hces, chdl.ch_hce);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to update hce kvs: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to update hce kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_decrement(cont->c_lres, chdl.ch_lre);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to update lre kvs: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to update lre kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_decrement(cont->c_lhes, chdl.ch_lhe);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to update lhe kvs: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to update lhe kvs: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 
@@ -683,7 +799,8 @@ out_rwlock:
 	pthread_rwlock_unlock(&svc->cs_rwlock);
 	cont_svc_put(svc);
 out:
-	D_DEBUG(DF_DSMS, "leave: rc=%d\n", rc);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+		DP_CONT(in->cci_pool, in->cci_cont), rpc, rc);
 	out->cco_ret = rc;
 	return dtp_reply_send(rpc);
 }
@@ -749,17 +866,17 @@ cont_epoch_hold(struct cont_svc *svc, struct cont *cont,
 
 		rc = ec_decrement(cont->c_lhes, lhe);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to remove original lhe: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to remove original lhe: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_increment(cont->c_lhes, hdl->ch_lhe);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to add new lhe: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to add new lhe: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 	} TX_ONABORT {
@@ -805,42 +922,42 @@ cont_epoch_commit(struct cont_svc *svc, struct cont *cont,
 
 		rc = ec_decrement(cont->c_hces, hce);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to remove original hce: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to remove original hce: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_increment(cont->c_hces, hdl->ch_hce);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to add new hce: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to add new hce: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_decrement(cont->c_lhes, lhe);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to remove original lhe: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to remove original lhe: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = ec_increment(cont->c_lhes, hdl->ch_lhe);
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to add new lhe: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to add new lhe: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		rc = dsms_kvs_nv_update(cont->c_cont, CONT_GHCE, &hdl->ch_hce,
 					sizeof(hdl->ch_hce));
 		if (rc != 0) {
-			D_ERROR(DF_CONT"failed to update ghce: %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
-				rc);
+			D_ERROR(DF_CONT": failed to update ghce: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
 		}
 	} TX_ONABORT {
@@ -886,15 +1003,17 @@ dsms_hdlr_cont_op(dtp_rpc_t *rpc)
 				sizeof(hdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			D_ERROR(DF_CONT"rejecting unauthorized operation: "
+			D_ERROR(DF_CONT": rejecting unauthorized operation: "
 				DF_UUID"\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid),
 				DP_UUID(in->cpi_cont_hdl));
 			rc = -DER_NO_PERM;
 		} else {
-			D_ERROR(DF_CONT"failed to look up container handle "
+			D_ERROR(DF_CONT": failed to look up container handle "
 				DF_UUID": %d\n",
-				DP_CONT(cont->c_svc->cs_pool, cont->c_uuid),
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid),
 				DP_UUID(in->cpi_cont_hdl), rc);
 		}
 		D_GOTO(out_cont, rc);

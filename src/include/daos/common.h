@@ -148,7 +148,7 @@ do {									\
 char *DP_UUID(const void *uuid);
 
 /* For prefixes of error messages about a container */
-#define DF_CONT			DF_UUID"/"DF_UUID": "
+#define DF_CONT			DF_UUID"/"DF_UUID
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
 
 /* memory allocating macros */

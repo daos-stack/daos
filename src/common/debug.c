@@ -68,7 +68,10 @@ DP_UUID(const void *uuid)
 {
 	char *buf = thread_uuid_str_buf[thread_uuid_str_buf_idx];
 
-	uuid_unparse_lower(uuid, buf);
+	if (uuid == NULL)
+		snprintf(buf, DAOS_UUID_STR_SIZE, "?");
+	else
+		uuid_unparse_lower(uuid, buf);
 	thread_uuid_str_buf_idx = (thread_uuid_str_buf_idx + 1) % DF_UUID_MAX;
 	return buf;
 }

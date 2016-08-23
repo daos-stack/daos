@@ -165,6 +165,18 @@ static struct daos_rpc_handler dsms_handlers[] = {
 			.co_aggregate  = dsms_hdlr_tgt_pool_disconnect_aggregate
 		}
 	}, {
+		.dr_opc		= DSM_TGT_CONT_OPEN,
+		.dr_hdlr	= dsms_hdlr_tgt_cont_open,
+		.dr_corpc_ops	= {
+			.co_aggregate  = dsms_hdlr_tgt_cont_open_aggregate
+		}
+	}, {
+		.dr_opc		= DSM_TGT_CONT_CLOSE,
+		.dr_hdlr	= dsms_hdlr_tgt_cont_close,
+		.dr_corpc_ops	= {
+			.co_aggregate  = dsms_hdlr_tgt_cont_close_aggregate
+		}
+	}, {
 		.dr_opc		= DSM_TGT_OBJ_UPDATE,
 		.dr_hdlr	= dsms_hdlr_object_rw,
 	}, {
@@ -183,13 +195,30 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 	     struct dss_module_key *key)
 {
 	struct dsm_tls *tls;
+	int		rc;
 
 	D_ALLOC_PTR(tls);
 	if (tls == NULL)
 		return NULL;
 
+	rc = dsms_vcont_cache_create(&tls->dt_cont_cache);
+	if (rc != 0) {
+		D_ERROR("failed to create thread-local container cache: %d\n",
+			rc);
+		D_FREE_PTR(tls);
+		return NULL;
+	}
+
+	rc = dsms_tgt_cont_hdl_hash_create(&tls->dt_cont_hdl_hash);
+	if (rc != 0) {
+		D_ERROR("failed to create thread-local container handle cache: "
+			"%d\n", rc);
+		dsms_vcont_cache_destroy(tls->dt_cont_cache);
+		D_FREE_PTR(tls);
+		return NULL;
+	}
+
 	DAOS_INIT_LIST_HEAD(&tls->dt_pool_list);
-	DAOS_INIT_LIST_HEAD(&tls->dt_cont_list);
 	return tls;
 }
 
@@ -200,6 +229,8 @@ dsm_tls_fini(const struct dss_thread_local_storage *dtls,
 	struct dsm_tls *tls = data;
 
 	D_ASSERT(daos_list_empty(&tls->dt_pool_list));
+	dsms_tgt_cont_hdl_hash_destroy(&tls->dt_cont_hdl_hash);
+	dsms_vcont_cache_destroy(tls->dt_cont_cache);
 	D_FREE_PTR(tls);
 }
 

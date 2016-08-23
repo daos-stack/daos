@@ -39,81 +39,6 @@
 #include "dsms_internal.h"
 #include "dsms_layout.h"
 
-void
-dsms_conts_close()
-{
-	struct dsm_tls *tls = dsm_tls_get();
-	struct dsms_vcont *dcont;
-	struct dsms_vcont *tmp;
-
-	daos_list_for_each_entry_safe(dcont, tmp, &tls->dt_cont_list,
-				      dvc_list) {
-		daos_list_del(&dcont->dvc_list);
-		vos_co_close(dcont->dvc_hdl, NULL);
-		D_FREE_PTR(dcont);
-	}
-}
-
-static struct dsms_vcont *
-dsms_vcont_lookup(const uuid_t dc_uuid)
-{
-	struct dsm_tls *tls = dsm_tls_get();
-	struct dsms_vcont *dcont;
-
-	daos_list_for_each_entry(dcont, &tls->dt_cont_list, dvc_list) {
-		if (uuid_compare(dc_uuid, dcont->dvc_uuid) == 0)
-			return dcont;
-	}
-
-	return NULL;
-}
-
-static int
-dsms_co_open_create(daos_handle_t pool_hdl, uuid_t co_uuid,
-		    daos_handle_t *co_hdl)
-{
-	struct dsms_vcont *dcont;
-	struct dsm_tls *tls = dsm_tls_get();
-	int rc;
-
-	D_DEBUG(DF_MISC, "opening container "DF_UUID"\n",
-		DP_UUID(co_uuid));
-
-	dcont = dsms_vcont_lookup(co_uuid);
-	if (dcont != NULL) {
-		*co_hdl = dcont->dvc_hdl;
-		D_DEBUG(DF_MISC, "get container "DF_UUID" from cache.\n",
-			DP_UUID(co_uuid));
-		return 0;
-	}
-
-	rc = vos_co_open(pool_hdl, co_uuid, co_hdl, NULL);
-	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DF_MISC, "creating container "DF_UUID"\n",
-			DP_UUID(co_uuid));
-		/** create container on-the-fly */
-		rc = vos_co_create(pool_hdl, co_uuid, NULL);
-		if (rc != 0)
-			return rc;
-		/** attempt to open again now that it is created ... */
-		rc = vos_co_open(pool_hdl, co_uuid, co_hdl, NULL);
-		if (rc != 0)
-			return rc;
-	}
-
-	/* Add container to cache */
-	D_ALLOC_PTR(dcont);
-	if (dcont == NULL) {
-		vos_co_close(*co_hdl, NULL);
-		return -DER_NOMEM;
-	}
-
-	uuid_copy(dcont->dvc_uuid, co_uuid);
-	dcont->dvc_hdl = *co_hdl;
-	daos_list_add(&dcont->dvc_list, &tls->dt_cont_list);
-	return rc;
-}
-
 static void
 dsms_eu_free_iovs_sgls(daos_iov_t *iovs, daos_sg_list_t **sgls, int nr)
 {
@@ -238,10 +163,9 @@ bulk_complete_cb(const struct dtp_bulk_cb_info *cb_info)
 }
 
 static int
-dsms_bulk_transfer(dtp_rpc_t *rpc, daos_handle_t dph, daos_handle_t dch,
-		   dtp_bulk_t *remote_bulks, daos_sg_list_t **sgls,
-		   daos_iov_t *iovs, daos_handle_t ioh, int nr,
-		   dtp_bulk_op_t bulk_op)
+dsms_bulk_transfer(dtp_rpc_t *rpc, daos_handle_t dch, dtp_bulk_t *remote_bulks,
+		   daos_sg_list_t **sgls, daos_iov_t *iovs, daos_handle_t ioh,
+		   int nr, dtp_bulk_op_t bulk_op)
 {
 	dtp_bulk_opid_t		bulk_opid;
 	dtp_bulk_perm_t		bulk_perm;
@@ -316,11 +240,11 @@ int
 dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 {
 	struct object_update_in	*oui;
-	struct dsms_vpool	*vpool;
-	daos_handle_t		dch = DAOS_HDL_INVAL;
+	struct tgt_cont_hdl	*tch;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
 	daos_sg_list_t		**sgls = NULL;
 	dtp_bulk_op_t		bulk_op;
+	struct dsm_tls		*tls = dsm_tls_get();
 	int			i;
 	int			rc;
 
@@ -328,22 +252,19 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 	if (oui == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	vpool = dsms_vpool_lookup(oui->oui_pool_uuid);
-	if (vpool == NULL)
+	tch = dsms_tgt_cont_hdl_lookup(&tls->dt_cont_hdl_hash, oui->oui_co_hdl);
+	if (tch == NULL)
 		D_GOTO(out, rc = -DER_NO_PERM);
 
-	rc = dsms_co_open_create(vpool->dvp_hdl, oui->oui_co_uuid, &dch);
-	if (rc != 0)
-		D_GOTO(out_vpool, rc);
-
 	if (opc_get(rpc->dr_opc) == DSM_TGT_OBJ_UPDATE) {
-		rc = vos_obj_zc_update_begin(dch, oui->oui_oid, oui->oui_epoch,
+		rc = vos_obj_zc_update_begin(tch->tch_cont->dvc_hdl,
+					     oui->oui_oid, oui->oui_epoch,
 					     &oui->oui_dkey, oui->oui_nr,
 					     oui->oui_iods.arrays, &ioh, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UOID"preparing update fails: %d\n",
 				DP_UOID(oui->oui_oid), rc);
-			D_GOTO(out_vpool, rc);
+			D_GOTO(out_tch, rc);
 		}
 
 		bulk_op = DTP_BULK_GET;
@@ -356,13 +277,14 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		int		j;
 		int		idx = 0;
 
-		rc = vos_obj_zc_fetch_begin(dch, oui->oui_oid, oui->oui_epoch,
+		rc = vos_obj_zc_fetch_begin(tch->tch_cont->dvc_hdl,
+					    oui->oui_oid, oui->oui_epoch,
 					    &oui->oui_dkey, oui->oui_nr,
 					    oui->oui_iods.arrays, &ioh, NULL);
 		if (rc != 0) {
 			D_ERROR(DF_UOID"preparing fetch fails: %d\n",
 				DP_UOID(oui->oui_oid), rc);
-			D_GOTO(out_vpool, rc);
+			D_GOTO(out_tch, rc);
 		}
 
 		bulk_op = DTP_BULK_PUT;
@@ -377,7 +299,7 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 		D_ALLOC(ofo->ofo_sizes.arrays,
 			size_count * sizeof(uint64_t));
 		if (ofo->ofo_sizes.arrays == NULL)
-			D_GOTO(out_vpool, rc = -DER_NOMEM);
+			D_GOTO(out_tch, rc = -DER_NOMEM);
 
 		sizes = ofo->ofo_sizes.arrays;
 		for (i = 0; i < oui->oui_iods.count; i++) {
@@ -390,15 +312,16 @@ dsms_hdlr_object_rw(dtp_rpc_t *rpc)
 
 	D_ALLOC(sgls, oui->oui_nr * sizeof(*sgls));
 	if (sgls == NULL)
-		D_GOTO(out_vpool, rc);
+		D_GOTO(out_tch, rc);
 
 	for (i = 0; i < oui->oui_nr; i++)
 		vos_obj_zc_vec2sgl(ioh, i, &sgls[i]);
 
-	rc = dsms_bulk_transfer(rpc, vpool->dvp_hdl, dch, oui->oui_bulks.arrays,
-				sgls, NULL, ioh, oui->oui_nr, bulk_op);
-out_vpool:
-	dsms_vpool_put(vpool);
+	rc = dsms_bulk_transfer(rpc, tch->tch_cont->dvc_hdl,
+				oui->oui_bulks.arrays, sgls, NULL, ioh,
+				oui->oui_nr, bulk_op);
+out_tch:
+	dsms_tgt_cont_hdl_put(&tls->dt_cont_hdl_hash, tch);
 out:
 	dsms_rw_complete(rpc, ioh, rc);
 
@@ -463,13 +386,13 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 {
 	struct object_enumerate_in	*oei;
 	struct object_enumerate_out	*oeo;
-	struct dsms_vpool		*vpool;
-	daos_handle_t			dch = DAOS_HDL_INVAL;
+	struct tgt_cont_hdl		*tch;
 	daos_iov_t			*iovs = NULL;
 	daos_sg_list_t			**sgls = NULL;
 	vos_iter_param_t		param;
 	daos_key_desc_t			*kds;
 	daos_handle_t			ih;
+	struct dsm_tls			*tls = dsm_tls_get();
 	int				rc = 0;
 	int				dkey_nr = 0;
 
@@ -481,19 +404,15 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	vpool = dsms_vpool_lookup(oei->oei_pool_uuid);
-	if (vpool == NULL)
+	tch = dsms_tgt_cont_hdl_lookup(&tls->dt_cont_hdl_hash, oei->oei_co_hdl);
+	if (tch == NULL)
 		D_GOTO(out, rc = -DER_NO_PERM);
-
-	rc = dsms_co_open_create(vpool->dvp_hdl, oei->oei_co_uuid, &dch);
-	if (rc != 0)
-		D_GOTO(out_vpool, rc);
 
 	oeo = dtp_reply_get(rpc);
 	if (oei == NULL)
-		D_GOTO(out_vpool, rc = -DER_INVAL);
+		D_GOTO(out_tch, rc = -DER_INVAL);
 	memset(&param, 0, sizeof(param));
-	param.ip_hdl	= dch;
+	param.ip_hdl	= tch->tch_cont->dvc_hdl;
 	param.ip_oid	= oei->oei_oid;
 	param.ip_epr.epr_lo = oei->oei_epoch;
 	rc = vos_iter_prepare(VOS_ITER_DKEY, &param, &ih);
@@ -505,7 +424,7 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 		} else {
 			D_ERROR("Failed to prepare d-key iterator: %d\n", rc);
 		}
-		D_GOTO(out_vpool, rc);
+		D_GOTO(out_tch, rc);
 	}
 
 	rc = vos_iter_probe(ih, &oei->oei_anchor);
@@ -516,7 +435,7 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 			rc = 0;
 		}
 		vos_iter_finish(ih);
-		D_GOTO(out_vpool, rc);
+		D_GOTO(out_tch, rc);
 	}
 
 	/* Prepare key desciptor buffer */
@@ -524,7 +443,7 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 	D_ALLOC(oeo->oeo_kds.arrays,
 		oei->oei_nr * sizeof(daos_key_desc_t));
 	if (oeo->oeo_kds.arrays == NULL)
-		D_GOTO(out_vpool, rc = -DER_NOMEM);
+		D_GOTO(out_tch, rc = -DER_NOMEM);
 
 	dkey_nr = 0;
 	kds = oeo->oeo_kds.arrays;
@@ -577,17 +496,16 @@ dsms_hdlr_object_enumerate(dtp_rpc_t *rpc)
 		rc = 0;
 	} else if (rc < 0) {
 		D_ERROR("Failed to fetch dkey: %d\n", rc);
-		D_GOTO(out_vpool, rc);
+		D_GOTO(out_tch, rc);
 	}
 
 	oeo->oeo_kds.count = dkey_nr;
 
-	rc = dsms_bulk_transfer(rpc, vpool->dvp_hdl, dch, &oei->oei_bulk,
-				sgls, iovs, DAOS_HDL_INVAL, 1,
-				DTP_BULK_PUT);
+	rc = dsms_bulk_transfer(rpc, tch->tch_cont->dvc_hdl, &oei->oei_bulk,
+				sgls, iovs, DAOS_HDL_INVAL, 1, DTP_BULK_PUT);
 
-out_vpool:
-	dsms_vpool_put(vpool);
+out_tch:
+	dsms_tgt_cont_hdl_put(&tls->dt_cont_hdl_hash, tch);
 out:
 	dsms_eu_complete(rpc, sgls, iovs, rc);
 	return rc;

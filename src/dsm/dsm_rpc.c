@@ -141,6 +141,26 @@ struct dtp_msg_field *tgt_pool_disconnect_out_fields[] = {
 	&DMF_INT	/* ret */
 };
 
+struct dtp_msg_field *tgt_cont_open_in_fields[] = {
+	&DMF_UUID,	/* pool */
+	&DMF_UUID,	/* pool_hdl */
+	&DMF_UUID,	/* cont */
+	&DMF_UUID,	/* cont_hdl */
+	&DMF_UINT64	/* capas */
+};
+
+struct dtp_msg_field *tgt_cont_open_out_fields[] = {
+	&DMF_INT	/* ret */
+};
+
+struct dtp_msg_field *tgt_cont_close_in_fields[] = {
+	&DMF_UUID	/* cont_hdl */
+};
+
+struct dtp_msg_field *tgt_cont_close_out_fields[] = {
+	&DMF_INT	/* ret */
+};
+
 struct dtp_req_format DQF_POOL_CONNECT =
 	DEFINE_DTP_REQ_FMT("DSM_POOL_CONNECT", pool_connect_in_fields,
 			   pool_connect_out_fields);
@@ -182,10 +202,17 @@ struct dtp_req_format DQF_TGT_POOL_DISCONNECT =
 			   tgt_pool_disconnect_in_fields,
 			   tgt_pool_disconnect_out_fields);
 
+struct dtp_req_format DQF_TGT_CONT_OPEN =
+	DEFINE_DTP_REQ_FMT("DSM_TGT_CONT_OPEN", tgt_cont_open_in_fields,
+			   tgt_cont_open_out_fields);
+
+struct dtp_req_format DQF_TGT_CONT_CLOSE =
+	DEFINE_DTP_REQ_FMT("DSM_TGT_CONT_CLOSE", tgt_cont_close_in_fields,
+			   tgt_cont_close_out_fields);
+
 struct dtp_msg_field *dsm_obj_update_in_fields[] = {
 	&DMF_OID,	/* object ID */
-	&DMF_UUID,	/* container uuid */
-	&DMF_UUID,	/* pool uuid */
+	&DMF_UUID,	/* container handle uuid */
 	&DMF_UINT64,	/* epoch */
 	&DMF_UINT32,	/* count of vec_iod and sg */
 	&DMF_UINT32,	/* pad */
@@ -202,8 +229,7 @@ struct dtp_msg_field *dsm_obj_fetch_out_fields[] = {
 
 struct dtp_msg_field *dsm_dkey_enumerate_in_fields[] = {
 	&DMF_OID,	/* object ID */
-	&DMF_UUID,	/* container uuid */
-	&DMF_UUID,	/* pool uuid */
+	&DMF_UUID,	/* container handle uuid */
 	&DMF_UINT64,	/* epoch */
 	&DMF_UINT32,	/* number of kds */
 	&DMF_UINT32,	/* pad */
@@ -336,6 +362,18 @@ struct daos_rpc dsm_srv_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_TGT_POOL_DISCONNECT
+	}, {
+		.dr_name	= "DSM_TGT_CONT_OPEN",
+		.dr_opc		= DSM_TGT_CONT_OPEN,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_TGT_CONT_OPEN
+	}, {
+		.dr_name	= "DSM_TGT_CONT_CLOSE",
+		.dr_opc		= DSM_TGT_CONT_CLOSE,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_TGT_CONT_CLOSE
 	}, {
 		.dr_opc		= 0
 	}
