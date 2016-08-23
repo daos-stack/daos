@@ -73,7 +73,9 @@ SConscript('build/src/SConscript', exports=['env', 'PREREQS'])
 if have_scons_local:
     BUILDINFO = PREREQS.get_build_info()
     BUILDINFO.gen_script('.build_vars.sh')
-    BUILDINFO.save('.build_vars.py')
+    BUILDINFO.save('.build_vars.json')
+    env.InstallAs("$PREFIX/TESTING/.build_vars.sh", ".build_vars.sh")
+    env.InstallAs("$PREFIX/TESTING/.build_vars.json", ".build_vars.json")
 
 Default('build')
 Depends('install', 'build')
