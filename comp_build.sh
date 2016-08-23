@@ -244,6 +244,7 @@ if [ -z "$B_COMP" ]; then
   usage
 fi
 
+option=
 if [ -z "$WORKSPACE" ]; then
   CORAL_ARTIFACTS="/scratch/coral/artifacts"
   SET_PREFIX=
@@ -263,14 +264,14 @@ if [ -d "$CORAL_ARTIFACTS" ]; then
   for dep in $DEPS; do
     setup_dep $dep
   done
-  option="PREBUILT_PREFIX=${PREBUILT_AREA} $SET_PREFIX"
+  option="PREBUILT_PREFIX=${PREBUILT_AREA}"
 fi
 
 set -x
 set -e
 scons -c
 rm -f ${B_COMP}-`uname -s`.conf
-scons $option
+scons $SET_PREFIX ${option}
 scons install
 
 if [ -n "$CUSTOM_SCRIPT" ]; then
