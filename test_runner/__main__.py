@@ -25,8 +25,10 @@ set TR_USE_VALGRIND in the yaml file to callgrind
 
 """
 
+import os
 import sys
 import json
+import time
 
 #pylint: disable=import-error
 try:
@@ -50,13 +52,28 @@ def main():
             config_file = sys.argv[1].split("=", 1)
             with open(config_file[1], "r") as config_fd:
                 config = json.load(config_fd)
+        elif "client" in sys.argv[1]:
+            time.sleep(60)
+            sys.exit(0)
         else:
             start = 1
-        for k in range(start, len(sys.argv)):
-            test_list.append(sys.argv[k])
+    else:
+        print("No tests given\n")
+        sys.exit(1)
+
+    if 'build_path' in config:
+        testing_dir = os.path.realpath(os.path.join(
+            config.get('build_path'), 'TESTING'))
+        os.chdir(testing_dir)
+    else:
+        testing_dir = os.getcwd()
+    sys.path.append(testing_dir)
     info = InfoRunner(config)
     info.env_setup()
-    if config and config.get('use_orte-dvm'):
+    # load test list
+    for k in range(start, len(sys.argv)):
+        test_list.append(sys.argv[k])
+    if config and 'use_orte-dvm' in config:
         ortedvm = DvmRunner(info)
         ortedvm.launch_dvm_process()
     tester = TestRunner(info, test_list)
