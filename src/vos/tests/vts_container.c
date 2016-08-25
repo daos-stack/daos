@@ -48,6 +48,7 @@ struct vc_test_args {
 	daos_handle_t		poh;
 	daos_handle_t		coh[VCT_CONTAINERS];
 	uuid_t			uuid[VCT_CONTAINERS];
+	bool			anchor_flag;
 };
 
 static void
@@ -252,6 +253,123 @@ co_create_tests(void **state)
 }
 
 static int
+co_iter_tests_setup(void **state)
+{
+	struct vc_test_args	*arg = *state;
+	enum vts_ops_type	tmp[] = {CREAT};
+	int			i;
+
+	co_allocate_params(VCT_CONTAINERS, 1, arg);
+	for (i = 0; i < VCT_CONTAINERS; i++)
+		co_set_param(tmp, 1, &arg->seq_cnt[i],
+			     &arg->ops_seq[i]);
+	co_ops_run(state);
+	return 0;
+}
+
+static int
+co_uuid_iter_test(struct vc_test_args *arg)
+{
+	vos_iter_param_t	param;
+	daos_handle_t		ih;
+	int			nr = 0;
+	int			rc = 0;
+
+	memset(&param, 0, sizeof(param));
+	param.ip_hdl = arg->poh;
+
+	rc = vos_iter_prepare(VOS_ITER_COUUID, &param, &ih);
+	if (rc != 0) {
+		print_error("Failed to prepare co iterator\n");
+		return rc;
+	}
+
+	rc = vos_iter_probe(ih, NULL);
+	if (rc != 0) {
+		print_error("Failed to set iterator cursor: %d\n", rc);
+		goto out;
+	}
+
+	while (1) {
+		vos_iter_entry_t	ent;
+		daos_hash_out_t		anchor;
+
+		rc = vos_iter_fetch(ih, &ent, NULL);
+		if (rc == -DER_NONEXIST) {
+			print_message("Finishing obj iteration\n");
+			break;
+		}
+
+		if (rc != 0) {
+			print_error("Failed to fetch co uuid: %d\n", rc);
+			goto out;
+		}
+
+		if (!uuid_is_null(ent.ie_couuid)) {
+			D_DEBUG(DF_VOS3,
+				"COUUID:"DF_UUID"\n", DP_UUID(ent.ie_couuid));
+			nr++;
+		}
+
+
+		rc = vos_iter_next(ih);
+		if (rc == -DER_NONEXIST)
+			break;
+
+		if (rc != 0) {
+			print_error("Failed to move cursor: %d\n", rc);
+			goto out;
+		}
+
+		if (!arg->anchor_flag)
+			continue;
+
+		rc = vos_iter_fetch(ih, &ent, &anchor);
+		if (rc != 0) {
+			assert_true(rc != -DER_NONEXIST);
+			print_error("Failed to fetch anchor: %d\n", rc);
+			goto out;
+		}
+
+		rc = vos_iter_probe(ih, &anchor);
+		if (rc != 0) {
+			assert_true(rc != -DER_NONEXIST);
+			print_error("Failed to probe anchor: %d\n", rc);
+			goto out;
+		}
+	}
+out:
+	print_message("Enumerated %d, total: %d\n", nr, VCT_CONTAINERS);
+	assert_int_equal(nr, VCT_CONTAINERS);
+	vos_iter_finish(ih);
+	return rc;
+}
+
+static void
+co_iter_test(void **state)
+{
+	struct vc_test_args	*arg = *state;
+	int			rc = 0;
+
+	arg->anchor_flag = false;
+
+	rc = co_uuid_iter_test(arg);
+	assert_true(rc == 0 || rc == -DER_NONEXIST);
+}
+
+static void
+co_iter_test_with_anchor(void **state)
+{
+	struct vc_test_args	*arg = *state;
+	int			rc = 0;
+
+	arg->anchor_flag = true;
+
+	rc = co_uuid_iter_test(arg);
+	assert_true(rc == 0 || rc == -DER_NONEXIST);
+}
+
+static int
 co_tests(void **state)
 {
 	struct vc_test_args	*arg = *state;
@@ -265,13 +383,17 @@ co_tests(void **state)
 	return 0;
 }
 
-
 static const struct CMUnitTest vos_co_tests[] = {
 	{ "VOS100: container create test", co_ops_run, co_create_tests,
 		co_unit_teardown},
 	{ "VOS101: container all APIs", co_ops_run, co_tests,
 		co_unit_teardown},
-	{ "VOS102: container handle ref count tests", co_ref_count_test,
+	{ "VOS102: container uuid iter test", co_iter_test, co_iter_tests_setup,
+		co_unit_teardown},
+	{ "VOS103: container uuid iter test with anchor",
+		co_iter_test_with_anchor, co_iter_tests_setup,
+		co_unit_teardown},
+	{ "VOS104: container handle ref count tests", co_ref_count_test,
 		co_ref_count_setup, NULL},
 };
 

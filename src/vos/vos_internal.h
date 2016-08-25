@@ -133,6 +133,7 @@ struct vos_obj_ref {
 /** Iterator ops for objects and OIDs */
 extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_oid_iter_ops;
+extern struct vos_iter_ops vos_co_iter_ops;
 
 
 static inline struct vos_tls *

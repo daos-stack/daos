@@ -123,6 +123,12 @@ vos_pool_lookup_handle(struct daos_uuid *key, struct vp_hdl **vpool)
 }
 
 void
+vos_pool_addref_handle(struct vp_hdl *vpool)
+{
+	daos_uhash_link_addref(vos_get_hr_hash(), &vpool->vp_uhlink);
+}
+
+void
 vos_pool_putref_handle(struct vp_hdl *vpool)
 {
 	daos_uhash_link_putref(vos_get_hr_hash(), &vpool->vp_uhlink);
