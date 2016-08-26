@@ -140,8 +140,10 @@ class TestRunner():
             return
         dirlist = sorted(os.listdir(newdir), reverse=True)
         for psdir in dirlist:
-            rankdirlist = sorted(os.listdir(os.path.join(newdir, psdir)),
-                                 reverse=True)
+            dname = os.path.join(newdir, psdir)
+            if os.path.isfile(dname):
+                continue
+            rankdirlist = sorted(os.listdir(dname), reverse=True)
             for rankdir in rankdirlist:
                 dumpstdout = os.path.join(newdir, psdir, rankdir, "stdout")
                 dumpstderr = os.path.join(newdir, psdir, rankdir, "stderr")

@@ -17,18 +17,30 @@ class InfoRunner():
     def __init__(self, config=None):
         self.config = config
 
+    def load_build_vars(self):
+        """ load the build_vars file """
+
+        rootpath = os.getcwd()
+        print("path: %s" % rootpath)
+        opts_file = rootpath + "/.build_vars.json"
+        if not os.path.exists(opts_file):
+            buildpath = self.config.get('build_path', "")
+            opts_file = buildpath + "/.build_vars.json"
+            if not os.path.exists(opts_file):
+                print("build_vars.json file not found here:\n%s\nor here:\n%s" \
+                      % (rootpath, buildpath))
+            return 0
+        print("use file: %s" % opts_file)
+        with open(opts_file, "r") as info_file:
+            self.info = json.load(info_file)
+        return 1
+
     def env_setup(self):
         """ setup the environment """
         print("TestRunner: setUp env begin")
 
-        rootpath = os.getcwd()
-        print("path: %s" % rootpath)
-        platform = os.uname()[0]
-        opts_file = rootpath + "/.build_vars.json"
-        print("use file: %s" % opts_file)
-        with open(opts_file, "r") as info_file:
-            self.info = json.load(info_file)
-
+        if not self.load_build_vars():
+            return 0
         ompi_path = self.info['OMPI_PREFIX'] + "/bin"
         path = os.getenv("PATH")
         if path.find(ompi_path) < 0:
@@ -45,9 +57,10 @@ class InfoRunner():
         if path.find(bin_path) < 0:
             path = bin_path + ":" + path
         os.environ['PATH'] = path
-        if platform == "Darwin":
+        if os.uname()[0] == "Darwin":
             self.setup_Darwin()
         print("TestRunner: setUp  env end")
+        return 1
 
     def setup_Darwin(self):
         """ setup mac OS environment """
