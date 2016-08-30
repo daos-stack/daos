@@ -79,8 +79,7 @@ vos_oref_lru_alloc(void *key, unsigned int ksize,
 	 * was not found in DRAM cache
 	 * Looking it up in PMEM Object Index
 	 */
-	rc = vos_oi_lookup(co_hdl, lkey->vlk_obj_id,
-			   &lobj);
+	rc = vos_oi_find_alloc(co_hdl, lkey->vlk_obj_id, &lobj);
 	if (rc) {
 		D_ERROR("Error looking up container handle\n");
 		return rc;

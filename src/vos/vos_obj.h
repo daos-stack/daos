@@ -132,10 +132,9 @@ int
 vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
 
 /**
- * VOS object index lp
- * Lookup an entry from the OI index
- * If the entry is not found inserts it into the index
- * returns the direct pointer to the VOS object entry
+ * Lookup an object by @oid within the OI table.
+ * If the object is not found, create a new object for the @oid and return
+ * the direct pointer of the new allocated object.
  *
  * \param coh	[IN]	Container handle
  * \param oid	[IN]	DAOS object ID
@@ -145,8 +144,8 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  *			failure
  */
 int
-vos_oi_lookup(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
-	      struct vos_obj **obj);
+vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
+		  struct vos_obj **obj);
 /**
  * VOS object index remove
  * Remove an object ID entry in the object index table

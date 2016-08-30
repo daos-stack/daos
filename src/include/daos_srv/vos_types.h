@@ -87,7 +87,7 @@ typedef struct {
 	daos_unit_oid_t		ip_oid;
 	/** distribution key for VOS_ITER_AKEY */
 	daos_dkey_t		ip_dkey;
-	/** attribute key for VOS_ITER_RECX */
+	/** attribute key for VOS_ITER_DKEY/RECX */
 	daos_akey_t		ip_akey;
 	/** epoch validity range for the iterator */
 	daos_epoch_range_t	ip_epr;

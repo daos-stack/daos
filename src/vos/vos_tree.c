@@ -132,10 +132,7 @@ kbtr_rec_fetch_out(struct btr_instance *tins, struct btr_record *rec,
 	daos_iov_t	*iov	= rbund->rb_iov;
 	daos_csum_buf_t	*csum	= rbund->rb_csum;
 
-	iov->iov_len  = krec->kr_size;
-	csum->cs_len  = krec->kr_cs_size;
-	csum->cs_type = krec->kr_cs_type;
-
+	iov->iov_len = krec->kr_size;
 	if (iov->iov_buf == NULL) {
 		iov->iov_buf = vos_krec2key(krec);
 		iov->iov_buf_len = krec->kr_size;
@@ -144,6 +141,8 @@ kbtr_rec_fetch_out(struct btr_instance *tins, struct btr_record *rec,
 		memcpy(iov->iov_buf, vos_krec2key(krec), iov->iov_len);
 	}
 
+	csum->cs_len  = krec->kr_cs_size;
+	csum->cs_type = krec->kr_cs_type;
 	if (csum->cs_csum == NULL)
 		csum->cs_csum = vos_krec2csum(krec);
 	else if (csum->cs_buf_len > csum->cs_len)

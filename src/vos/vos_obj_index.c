@@ -125,11 +125,11 @@ static btr_ops_t vot_ops = {
 
 
 /**
- * Object index API
+ * Find the object by OID and return it, or create an object for the oid.
  */
 int
-vos_oi_lookup(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
-	      struct vos_obj **obj)
+vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
+		  struct vos_obj **obj)
 {
 	int				rc = 0;
 	daos_iov_t			key_iov, val_iov;
@@ -148,16 +148,19 @@ vos_oi_lookup(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 	daos_iov_set(&val_iov, NULL, 0);
 
 	rc = dbtree_lookup(co_hdl->vc_btr_hdl, &key_iov, &val_iov);
-	if (rc != 0) {
-		/* Object ID not found insert it to the OI tree */
-		D_DEBUG(DF_VOS1, "Object"DF_UOID" not found adding it..\n",
-			DP_UOID(oid));
-		rc = dbtree_update(co_hdl->vc_btr_hdl, &key_iov, &val_iov);
-		if (rc) {
-			D_ERROR("Failed to update Key for Object index\n");
-			return rc;
-		}
+	if (rc == 0)
+		goto found;
+
+	/* Object ID not found insert it to the OI tree */
+	D_DEBUG(DF_VOS1, "Object"DF_UOID" not found adding it..\n",
+		DP_UOID(oid));
+
+	rc = dbtree_update(co_hdl->vc_btr_hdl, &key_iov, &val_iov);
+	if (rc) {
+		D_ERROR("Failed to update Key for Object index\n");
+		return rc;
 	}
+ found:
 	/** Object found or updated  */
 	*obj = val_iov.iov_buf;
 	return rc;

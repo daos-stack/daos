@@ -38,8 +38,10 @@ struct vos_obj_iter {
 	struct vos_iterator	 it_iter;
 	/** handle of iterator */
 	daos_handle_t		 it_hdl;
-	/** epoch range (condition of the iterator) */
+	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
+	/** condition of the iterator: attribute key */
+	daos_key_t		 it_akey;
 	/* reference on the object */
 	struct vos_obj_ref	*it_oref;
 };
@@ -113,10 +115,6 @@ static void
 tree_rec_bundle2iov(struct vos_rec_bundle *rbund, daos_iov_t *iov)
 {
 	memset(rbund, 0, sizeof(*rbund));
-	if (rbund->rb_csum != NULL)
-		/* XXX remove this crap to support checksum */
-		memset(rbund->rb_csum, 0, sizeof(*rbund->rb_csum));
-
 	daos_iov_set(iov, rbund, sizeof(*rbund));
 }
 
@@ -142,7 +140,6 @@ tree_prepare(struct vos_obj_ref *oref, daos_handle_t parent_toh,
 	kbund.kb_key	= key;
 
 	tree_rec_bundle2iov(&rbund, &riov);
-	rbund.rb_iov	= key;
 	rbund.rb_csum	= &csum;
 	rbund.rb_mmid	= UMMID_NULL;
 	memset(&csum, 0, sizeof(csum));
@@ -156,12 +153,17 @@ tree_prepare(struct vos_obj_ref *oref, daos_handle_t parent_toh,
 	 *   create and return the root for the subtree.
 	 */
 	if (read_only) {
+		daos_key_t tmp;
+
+		daos_iov_set(&tmp, NULL, 0);
+		rbund.rb_iov = &tmp;
 		rc = dbtree_lookup(parent_toh, &kiov, &riov);
 		if (rc != 0) {
 			D_DEBUG(DF_VOS1, "Cannot find key: %d\n", rc);
 			return rc;
 		}
 	} else {
+		rbund.rb_iov = key;
 		rc = dbtree_update(parent_toh, &kiov, &riov);
 		if (rc != 0) {
 			D_DEBUG(DF_VOS1, "Cannot add key: %d\n", rc);
@@ -1140,24 +1142,119 @@ vos_obj_zc_vec2sgl(daos_handle_t ioh, unsigned int vec_at,
  */
 
 /**
- * VOS object iterators:
+ * @defgroup vos_obj_iters VOS object iterators
+ * @{
+ *
  * - iterate d-key
- * - iterate a-key (unsupported)
+ * - iterate a-key (vector)
  * - iterate recx
  */
 
-/** prepare a vector iterator */
+/**
+ * Iterator for the d-key tree.
+ */
 static int
-vec_iter_prepare(struct vos_obj_iter *oiter)
+dkey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *akey)
 {
+	/* optional condition, d-keys with the provided attribute (a-key) */
+	oiter->it_akey = *akey;
+
 	return dbtree_iter_prepare(oiter->it_oref->or_toh, 0, &oiter->it_hdl);
 }
 
 /**
- * Prepare the iterator for the record tree.
+ * Check if the current item can match the provided condition (with the
+ * giving a-key). If the item can't match the condition, this function
+ * traverses the tree until a matched item is found.
  */
 static int
-rec_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
+dkey_iter_probe_cond(struct vos_obj_iter *oiter)
+{
+	struct vos_obj_ref *oref = oiter->it_oref;
+
+	if (oiter->it_akey.iov_buf == NULL ||
+	    oiter->it_akey.iov_len == 0) /* no condition */
+		return 0;
+
+	while (1) {
+		vos_iter_entry_t	entry;
+		daos_handle_t		toh;
+		struct vos_key_bundle	kbund;
+		struct vos_rec_bundle	rbund;
+		daos_iov_t		kiov;
+		daos_iov_t		riov;
+		int			rc;
+
+		rc = tree_iter_fetch(oiter, &entry, NULL);
+		if (rc != 0)
+			return rc;
+
+		rc = tree_prepare(oref, oref->or_toh, &entry.ie_key, true,
+				  &toh);
+		if (rc != 0) {
+			D_DEBUG(DF_VOS1,
+				"Failed to load the record tree: %d\n", rc);
+			return rc;
+		}
+
+		/* check if the a-key exists */
+		tree_rec_bundle2iov(&rbund, &riov);
+		tree_key_bundle2iov(&kbund, &kiov);
+		kbund.kb_key = &oiter->it_akey;
+
+		rc = dbtree_lookup(toh, &kiov, &riov);
+		tree_release(toh);
+		if (rc == 0) /* match the condition (a-key), done */
+			return 0;
+
+		if (rc != -DER_NONEXIST)
+			return rc; /* a real failure */
+
+		/* move to the next dkey */
+		rc = tree_iter_next(oiter);
+		if (rc != 0)
+			return rc;
+	}
+}
+
+static int
+dkey_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
+{
+	int	rc;
+
+	rc = tree_iter_probe(oiter, anchor);
+	if (rc != 0)
+		return rc;
+
+	rc = dkey_iter_probe_cond(oiter);
+	return rc;
+}
+
+static int
+dkey_iter_next(struct vos_obj_iter *oiter)
+{
+	int	rc;
+
+	rc = tree_iter_next(oiter);
+	if (rc != 0)
+		return rc;
+
+	rc = dkey_iter_probe_cond(oiter);
+	return rc;
+}
+
+static int
+dkey_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
+	       daos_hash_out_t *anchor)
+{
+	return tree_iter_fetch(oiter, it_entry, anchor);
+}
+
+/**
+ * Iterator for the vector tree.
+ */
+static int
+vec_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
 {
 	struct vos_obj_ref *oref = oiter->it_oref;
 	daos_handle_t	    toh;
@@ -1175,9 +1272,29 @@ rec_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
 	return rc;
 }
 
+static int
+vec_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
+{
+	return tree_iter_probe(oiter, anchor);
+}
+
+static int
+vec_iter_next(struct vos_obj_iter *oiter)
+{
+	return tree_iter_next(oiter);
+}
+
+static int
+vec_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
+	       daos_hash_out_t *anchor)
+{
+	return tree_iter_fetch(oiter, it_entry, anchor);
+}
+
 /**
- * @addtogroup recx_tree
+ * Record extent (recx) iterator
  */
+
 /**
  * Record extent (recx) iterator
  */
@@ -1371,10 +1488,6 @@ recx_iter_next(struct vos_obj_iter *oiter)
 }
 
 /**
- * @} recx_tree
- */
-
-/**
  * common functions for iterator.
  */
 static int vos_obj_iter_fini(struct vos_iterator *vitr);
@@ -1425,11 +1538,11 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		break;
 
 	case VOS_ITER_DKEY:
-		rc = vec_iter_prepare(oiter);
+		rc = dkey_iter_prepare(oiter, &param->ip_akey);
 		break;
 
 	case VOS_ITER_AKEY:
-		rc = rec_iter_prepare(oiter, &param->ip_dkey);
+		rc = vec_iter_prepare(oiter, &param->ip_dkey);
 		break;
 
 	case VOS_ITER_RECX:
@@ -1480,8 +1593,10 @@ vos_obj_iter_probe(struct vos_iterator *iter, daos_hash_out_t *anchor)
 		return -DER_INVAL;
 
 	case VOS_ITER_DKEY:
+		return dkey_iter_probe(oiter, anchor);
+
 	case VOS_ITER_AKEY:
-		return tree_iter_probe(oiter, anchor);
+		return vec_iter_probe(oiter, anchor);
 
 	case VOS_ITER_RECX:
 		return recx_iter_probe(oiter, anchor);
@@ -1499,8 +1614,10 @@ vos_obj_iter_next(struct vos_iterator *iter)
 		return -DER_INVAL;
 
 	case VOS_ITER_DKEY:
+		return dkey_iter_next(oiter);
+
 	case VOS_ITER_AKEY:
-		return tree_iter_next(oiter);
+		return vec_iter_next(oiter);
 
 	case VOS_ITER_RECX:
 		return recx_iter_next(oiter);
@@ -1519,8 +1636,10 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		return -DER_INVAL;
 
 	case VOS_ITER_DKEY:
+		return dkey_iter_fetch(oiter, it_entry, anchor);
+
 	case VOS_ITER_AKEY:
-		return tree_iter_fetch(oiter, it_entry, anchor);
+		return vec_iter_fetch(oiter, it_entry, anchor);
 
 	case VOS_ITER_RECX:
 		return recx_iter_fetch(oiter, it_entry, anchor);
@@ -1534,3 +1653,6 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_next	= vos_obj_iter_next,
 	.iop_fetch	= vos_obj_iter_fetch,
 };
+/**
+ * @} vos_obj_iters
+ */
