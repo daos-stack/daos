@@ -1,21 +1,28 @@
 #!python
+"""Build cart src"""
 
-Import('env', 'PREREQS')
 
-env.AppendUnique(LIBPATH=[Dir('.')])
+def scons():
+    """Scons function"""
+    Import('env', 'prereqs')
 
-libraries = ['crt_util', 'mercury', 'abt']
+    env.AppendUnique(LIBPATH=[Dir('.')])
 
-if PREREQS is None:
-    libraries += ['na', 'pmix']
-else:
-    PREREQS.require(env, 'mercury', 'pmix', 'argobots')
+    libraries = ['crt_util', 'mercury', 'abt']
 
-denv = env.Clone()
-denv.Append(CPPPATH = ['#/src/crt'])
+    if prereqs:
+        prereqs.require(env, 'mercury', 'pmix', 'argobots')
+    else:
+        libraries += ['na', 'pmix']
 
-crt = denv.SharedLibrary('libcrt', Glob('*.c'), LIBS=libraries)
-denv.Install('$PREFIX/lib/', crt)
+    denv = env.Clone()
+    denv.Append(CPPPATH=['#/src/crt'])
 
-# Builders
-SConscript('tests/SConscript', exports='denv')
+    crt = denv.SharedLibrary('libcrt', Glob('*.c'), LIBS=libraries)
+    denv.Install('$PREFIX/lib/', crt)
+
+    # Builders
+    SConscript('tests/SConscript', exports='denv')
+
+if __name__ == "SCons.Script":
+    scons()

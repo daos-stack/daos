@@ -1,69 +1,87 @@
 #!python
+"""Build CaRT components"""
 
 import sys
 import os
 
-have_scons_local=False
-if os.path.exists('scons_local'):
-        try:
-                sys.path.insert(0, os.path.join(Dir('#').abspath,
-				'scons_local'))
-                from prereq_tools import PreReqComponent
-                from build_info import BuildInfo
-                have_scons_local=True
-                print ('Using scons_local build')
-        except ImportError:
-                print ('Using traditional build')
-                pass
+sys.path.insert(0, os.path.join(Dir('#').abspath, "scons_local"))
+try:
+    from prereq_tools import PreReqComponent
+except ImportError:
+    raise ImportError \
+          ("\'prereq_tools\' module not found; run \'git submodule update\'")
 
-env = Environment()
+def save_build_info(env, prereqs, platform):
+    """Save the build information"""
 
-config = Configure(env)
-if not config.CheckLib('crypto'):
+    build_info = prereqs.get_build_info()
+
+    #Save the build info locally
+    json_build_vars = '.build_vars-%s.json' % platform
+    sh_build_vars = '.build_vars-%s.sh' % platform
+    build_info.gen_script(sh_build_vars)
+    build_info.save(json_build_vars)
+
+    #Install the build info to the testing directory
+    env.InstallAs('$PREFIX/TESTING/.build_vars.sh', sh_build_vars)
+    env.InstallAs('$PREFIX/TESTING/.build_vars.json', json_build_vars)
+
+def scons():
+    """Scons function"""
+
+    platform = os.uname()[0]
+    env = DefaultEnvironment()
+    config = Configure(env)
+    if not config.CheckLib('crypto'):
         config.Finish()
-        print ('for libcrypto install openssl-devel package')
+        print "for libcrypto install openssl-devel package"
         exit(1)
 
-for required_header in ['openssl/md5.h']:
+    for required_header in ['openssl/md5.h']:
         if not config.CheckHeader(required_header):
-                config.Finish()
-                exit(1)
+            config.Finish()
+            exit(1)
 
-if have_scons_local:
-        OPTS_FILE = os.path.join(Dir('#').abspath, 'daos_m.conf')
-        OPTS = Variables(OPTS_FILE)
+    opts_file = os.path.join(Dir('#').abspath, 'cart-%s.conf' % platform)
+    opts = Variables(opts_file)
 
-        PREREQS = PreReqComponent(env, OPTS)
-        PREREQS.preload(os.path.join(Dir('#').abspath,
-                                     'scons_local',
-                             'components.py'))
-        OPTS.Save(OPTS_FILE, env)
-        # Define this now, and then the individual compenents can import this
-        # through PREREQS when they need it.
-        env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
-else:
-        PREREQS = None
-        env.Replace(PREFIX=Dir('#build').abspath)
+    if os.path.exists('daos_m.conf') and not os.path.exists(opts_file):
+        print 'Renaming legacy conf file'
+        os.rename('daos_m.conf', opts_file)
 
-env.Alias('install', '$PREFIX')
-config.Finish()
+    prereqs = PreReqComponent(env, opts, arch=platform)
+    prereqs.preload(os.path.join(Dir('#').abspath, 'scons_local',
+                                 'components.py'))
+    opts.Save(opts_file, env)
+    # Define this now, and then the individual compenents can import this
+    # through PREREQS when they need it.
+    env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
+    env.Alias('install', '$PREFIX')
+    config.Finish()
 
-if env['PLATFORM'] == 'darwin':
-	# generate .so on OSX instead of .dylib
-	env['SHLIBSUFFIX'] = '.so'
+    if platform == 'Darwin':
+        # generate .so on OSX instead of .dylib
+        env.Append(SHLIBSUFFIX='.so')
 
-# Compiler options
-env.Append(CCFLAGS = ['-g', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
-env.Append(CCFLAGS = ['-O2'])
+    # Compiler options
+    env.Append(CCFLAGS=['-g', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
+    env.Append(CCFLAGS=['-O2'])
 
-# generate targets in specific build dir to avoid polluting the source code
-VariantDir('build', '.', duplicate=0)
-SConscript('build/src/SConscript', exports=['env', 'PREREQS'])
+    # generate targets in specific build dir to avoid polluting the source code
+    VariantDir('build', '.', duplicate=0)
+    SConscript('build/src/SConscript', exports=['env', 'prereqs'])
 
-if have_scons_local:
-    BUILDINFO = PREREQS.get_build_info()
-    BUILDINFO.gen_script('.build_vars.sh')
-    BUILDINFO.save('.build_vars.py')
+    # Put this after all SConscript calls so that any imports they require can
+    # be included.
+    save_build_info(env, prereqs, platform)
 
-Default('build')
-Depends('install', 'build')
+    Depends('install', 'build')
+
+    try:
+        #if using SCons 2.4+, provide a more complete help
+        Help(opts.GenerateHelpText(env), append=True)
+    except TypeError:
+        Help(opts.GenerateHelpText(env))
+
+if __name__ == "SCons.Script":
+    scons()
