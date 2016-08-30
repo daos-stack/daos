@@ -1,3 +1,15 @@
+OVERVIEW
+
+scons_local is a set of build tools and scripts used to support
+building and configuration of third party, rapidly developing tools
+for use by libraries using these components.
+
+LICENSE
+
+scons_local is open source software distributed under the MIT License
+Please see the [LICENSE](./LICENSE) & [NOTICE](./NOTICE) files for
+more information.
+
 RUNTIME OPTIONS OVERVIEW
 Overview of runtime options added by prerequisite components
 
