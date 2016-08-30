@@ -42,7 +42,7 @@ except ImportError:
 
 class TestRunner():
     """Simple test runner"""
-    log_dir_base = "testLogs/testRun"
+    log_dir_base = ""
     loop_name = ""
     last_testlogdir = ""
     loop_number = 0
@@ -53,6 +53,7 @@ class TestRunner():
     def __init__(self, info, test_list=None):
         self.info = info
         self.test_list = test_list
+        self.log_dir_base = self.info.get_config('log_base_path')
 
     def add_default_env(self):
         """ add to default environment """

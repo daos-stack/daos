@@ -101,12 +101,16 @@ def main():
 
     if 'build_path' in config:
         testing_dir = os.path.realpath(os.path.join(
-            config.get('build_path'), 'TESTING'))
+            config.get('build_path'), "TESTING"))
         os.chdir(testing_dir)
     else:
         testing_dir = os.getcwd()
     sys.path.append(testing_dir)
     info = InfoRunner(config)
+    # setup log base directory name
+    if 'log_base_path' not in config:
+        info.set_config('log_base_path', '', "testLogs/testRun")
+    # setup default evnironment variables and path
     if not info.env_setup():
         exit(1)
     if config and 'client' in config:

@@ -60,19 +60,19 @@ class InfoRunner():
 
         if not self.load_build_vars():
             return 0
-        ompi_path = self.info['OMPI_PREFIX'] + "/bin"
+        ompi_path = os.path.join(self.info['OMPI_PREFIX'], "bin")
         path = os.getenv("PATH")
         if path.find(ompi_path) < 0:
             path = ompi_path + ":" + path
         if 'MCL_PREFIX' in self.info:
-            mcl_path = self.info['MCL_PREFIX'] + "/bin"
+            mcl_path = os.path.join(self.info['MCL_PREFIX'], "bin")
             if path.find(mcl_path) < 0:
                 path = mcl_path + ":" + path
         installed_path = self.info['PREFIX']
-        test_path = installed_path + "/TESTING/tests"
+        test_path = os.path.join(installed_path, "TESTING", "tests")
         if path.find(test_path) < 0:
             path = test_path + ":" + path
-        bin_path = installed_path + "bin"
+        bin_path = os.path.join(installed_path, "bin")
         if path.find(bin_path) < 0:
             path = bin_path + ":" + path
         os.environ['PATH'] = path
