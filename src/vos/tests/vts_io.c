@@ -79,6 +79,9 @@ static unsigned int		vts_key_gen;
 /** epoch generator */
 static daos_epoch_t		vts_epoch_gen;
 
+static uint64_t			vts_cookie_gen;
+
+
 /** test counters */
 struct vts_counter {
 	/* To verify during enumeration */
@@ -100,11 +103,25 @@ static struct vts_counter	vts_cntr;
 char		last_dkey[UPDATE_DKEY_SIZE];
 char		last_akey[UPDATE_AKEY_SIZE];
 
+/**
+ * Stores the last cookie ID to verify
+ * while updating
+ */
+uint64_t	last_cookie;
+
 daos_epoch_t
 gen_rand_epoch(void)
 {
 	vts_epoch_gen += rand() % 100;
 	return vts_epoch_gen;
+}
+
+uint64_t
+gen_rand_cookie(void)
+{
+	vts_cookie_gen += rand() % 100;
+	last_cookie	= vts_cookie_gen;
+	return vts_cookie_gen;
 }
 
 void
@@ -149,6 +166,7 @@ test_args_init(struct io_test_args *args)
 
 	vts_key_gen = 0;
 	vts_epoch_gen = 1;
+	vts_cookie_gen = 0;
 
 	rc = vts_ctx_init(&args->ctx, VPOOL_1G);
 	assert_int_equal(rc, 0);
@@ -396,11 +414,14 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	daos_iov_t	*vec_iov;
 	daos_iov_t	*srv_iov;
 	daos_handle_t	 ioh;
+	uint64_t	 dsm_cookie;
 	int		 rc;
 
+	dsm_cookie = gen_rand_cookie();
+
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
-		rc = vos_obj_update(arg->ctx.tc_co_hdl,
-				    arg->oid, epoch, dkey, 1, vio,
+		rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
+				    dsm_cookie, dkey, 1, vio,
 				    sgl, NULL);
 		if (rc != 0)
 			print_error("Failed to update: %d\n", rc);
@@ -424,7 +445,8 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	assert_true(srv_iov->iov_len == vec_iov->iov_len);
 	memcpy(vec_iov->iov_buf, srv_iov->iov_buf, srv_iov->iov_len);
 
-	rc = vos_obj_zc_update_end(ioh, dkey, 1, vio, 0, NULL);
+	rc = vos_obj_zc_update_end(ioh, dsm_cookie, dkey, 1, vio,
+				   0, NULL);
 	if (rc != 0)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
@@ -447,7 +469,6 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 				   sgl, NULL);
 		if (rc != 0)
 			print_error("Failed to fetch: %d\n", rc);
-
 		return rc;
 	}
 
@@ -556,6 +577,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	if (rc)
 		goto exit;
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+	assert_true(last_cookie == rex.rx_cookie);
 
 exit:
 	return rc;
@@ -1024,6 +1046,7 @@ io_simple_one_key_cross_container(void **state)
 	daos_dkey_t		dkey;
 	daos_epoch_t		epoch = gen_rand_epoch();
 	daos_unit_oid_t		l_oid;
+	uint64_t		cookie;
 
 	/* Creating an additional container */
 	uuid_generate_time_safe(arg->addn_co_uuid);
@@ -1067,16 +1090,17 @@ io_simple_one_key_cross_container(void **state)
 	vio.vd_nr	= 1;
 
 	l_oid = gen_oid();
-
-	rc  = vos_obj_update(arg->ctx.tc_co_hdl,
-			     arg->oid, epoch, &dkey, 1,
+	cookie = gen_rand_cookie();
+	rc  = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
+			     cookie, &dkey, 1,
 			     &vio, &sgl, NULL);
 	if (rc) {
 		print_error("Failed to update %d\n", rc);
 		goto failed;
 	}
 
-	rc = vos_obj_update(arg->addn_co, l_oid, epoch,
+	cookie = gen_rand_cookie();
+	rc = vos_obj_update(arg->addn_co, l_oid, epoch, cookie,
 			    &dkey, 1, &vio, &sgl, NULL);
 	if (rc) {
 		print_error("Failed to update %d\n", rc);

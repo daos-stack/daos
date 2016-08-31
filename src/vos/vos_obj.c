@@ -52,7 +52,7 @@ struct vos_vec_zbuf {
 	daos_sg_list_t		 zb_sgl;
 	/** number of pre-allocated pmem buffers for the ZC updates */
 	unsigned int		 zb_mmid_nr;
-	/** pre-allocated pmem buffers for the ZC updates of this vecotr */
+	/** pre-allocated pmem buffers for the ZC updates of this vector */
 	umem_id_t		*zb_mmids;
 };
 
@@ -220,7 +220,7 @@ tree_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
  */
 static int
 tree_recx_update(daos_handle_t toh, daos_epoch_range_t *epr,
-		 daos_recx_t *recx, daos_iov_t *iov,
+		 uint64_t cookie, daos_recx_t *recx, daos_iov_t *iov,
 		 daos_csum_buf_t *csum, umem_id_t mmid)
 {
 	struct vos_key_bundle	kbund;
@@ -231,6 +231,7 @@ tree_recx_update(daos_handle_t toh, daos_epoch_range_t *epr,
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_idx	= recx->rx_idx;
 	kbund.kb_epr	= epr;
+	kbund.kb_cookie	= cookie;
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_csum	= csum;
@@ -355,8 +356,10 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			return rc;
 		}
 
-		if (i == 0 && recx->rx_rsize == DAOS_REC_ANY)
-			recx->rx_rsize = recx_tmp.rx_rsize;
+		if (i == 0 && recx->rx_rsize == DAOS_REC_ANY) {
+			recx->rx_rsize	= recx_tmp.rx_rsize;
+			recx->rx_cookie	= recx_tmp.rx_cookie;
+		}
 
 		if (recx->rx_rsize != recx_tmp.rx_rsize) {
 			D_DEBUG(DF_VOS1,
@@ -530,9 +533,9 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * See comment of vos_recx_fetch for explanation of @off_p.
  */
 static int
-vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
-		daos_iov_t *iovs, unsigned iov_nr, daos_off_t *off_p,
-		umem_id_t *recx_mmids)
+vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, uint64_t cookie,
+		daos_recx_t *recx, daos_iov_t *iovs, unsigned int iov_nr,
+		daos_off_t *off_p, umem_id_t *recx_mmids)
 {
 	daos_iov_t	   *iov;
 	daos_csum_buf_t	    csum;
@@ -586,7 +589,7 @@ vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			}
 		}
 
-		rc = tree_recx_update(toh, &epr_tmp, &recx_tmp, iov,
+		rc = tree_recx_update(toh, &epr_tmp, cookie, &recx_tmp, iov,
 				      &csum, mmid);
 		if (rc != 0) {
 			D_DEBUG(DF_VOS1, "Failed to update subtree: %d\n", rc);
@@ -604,8 +607,8 @@ vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			epr_tmp.epr_lo = epr->epr_hi + 1;
 			epr_tmp.epr_hi = DAOS_EPOCH_MAX;
 
-			rc = tree_recx_update(toh, &epr_tmp, &recx_tmp, iov,
-					      NULL, UMMID_NULL);
+			rc = tree_recx_update(toh, &epr_tmp, cookie, &recx_tmp,
+					      iov, NULL, UMMID_NULL);
 			if (rc != 0)
 				return rc;
 		}
@@ -632,8 +635,9 @@ vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 /** update a set of record extents (recx) under the same akey */
 static int
 vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
-	       daos_handle_t vec_toh, daos_vec_iod_t *viod,
-	       daos_sg_list_t *sgl, struct vos_vec_zbuf *zbuf)
+	       uint64_t cookie, daos_handle_t vec_toh,
+	       daos_vec_iod_t *viod, daos_sg_list_t *sgl,
+	       struct vos_vec_zbuf *zbuf)
 {
 	umem_id_t		*mmids = NULL;
 	daos_epoch_range_t	 eprange;
@@ -665,7 +669,7 @@ vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
 			D_GOTO(failed, rc = -DER_INVAL);
 		}
 
-		rc = vos_recx_update(toh, epr, &viod->vd_recxs[i],
+		rc = vos_recx_update(toh, epr, cookie, &viod->vd_recxs[i],
 				     &sgl->sg_iovs[nr], sgl->sg_nr.num - nr,
 				     &off, mmids);
 		if (rc < 0)
@@ -682,8 +686,8 @@ vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
 }
 
 static int
-vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_key_t *dkey,
-		unsigned int viod_nr, daos_vec_iod_t *viods,
+vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, uint64_t cookie,
+		daos_key_t *dkey, unsigned int viod_nr, daos_vec_iod_t *viods,
 		daos_sg_list_t *sgls, struct vos_zc_context *zcc)
 {
 	daos_handle_t	toh;
@@ -711,7 +715,8 @@ vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_key_t *dkey,
 			zbuf = NULL;
 		}
 
-		rc = vos_vec_update(oref, epoch, toh, &viods[i], sgl, zbuf);
+		rc = vos_vec_update(oref, epoch, cookie, toh, &viods[i],
+				    sgl, zbuf);
 		if (rc != 0)
 			goto out;
 	}
@@ -725,8 +730,8 @@ vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_key_t *dkey,
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       daos_key_t *dkey, unsigned int viod_nr, daos_vec_iod_t *viods,
-	       daos_sg_list_t *sgls, daos_event_t *ev)
+	       uint64_t cookie, daos_key_t *dkey, unsigned int viod_nr,
+	       daos_vec_iod_t *viods, daos_sg_list_t *sgls, daos_event_t *ev)
 {
 	struct vos_obj_ref	*oref;
 	PMEMobjpool		*pop;
@@ -741,8 +746,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	pop = vos_oref2pop(oref);
 	TX_BEGIN(pop) {
-		rc = vos_dkey_update(oref, epoch, dkey, viod_nr, viods, sgls,
-				     NULL);
+		rc = vos_dkey_update(oref, epoch, cookie, dkey, viod_nr,
+				     viods, sgls, NULL);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DF_VOS1, "Failed to update object: %d\n", rc);
@@ -1088,7 +1093,8 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 	*ioh = vos_zcc2ioh(zcc);
 	return 0;
  failed:
-	vos_obj_zc_update_end(vos_zcc2ioh(zcc), dkey, viod_nr, viods, rc, NULL);
+	vos_obj_zc_update_end(vos_zcc2ioh(zcc), 0, dkey, viod_nr,
+			      viods, rc, NULL);
 	return rc;
 }
 
@@ -1097,8 +1103,9 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
  * resources.
  */
 int
-vos_obj_zc_update_end(daos_handle_t ioh, daos_key_t *dkey, unsigned int viod_nr,
-		      daos_vec_iod_t *viods, int err, daos_event_t *ev)
+vos_obj_zc_update_end(daos_handle_t ioh, uint64_t cookie, daos_key_t *dkey,
+		      unsigned int viod_nr, daos_vec_iod_t *viods, int err,
+		      daos_event_t *ev)
 {
 	struct vos_zc_context	*zcc = vos_ioh2zcc(ioh);
 	PMEMobjpool		*pop;
@@ -1112,9 +1119,8 @@ vos_obj_zc_update_end(daos_handle_t ioh, daos_key_t *dkey, unsigned int viod_nr,
 
 	TX_BEGIN(pop) {
 		D_DEBUG(DF_VOS1, "Submit ZC update\n");
-		err = vos_dkey_update(zcc->zc_oref, zcc->zc_epoch, dkey,
-				      viod_nr, viods, NULL, zcc);
-
+		err = vos_dkey_update(zcc->zc_oref, zcc->zc_epoch, cookie,
+				      dkey, viod_nr, viods, NULL, zcc);
 	} TX_ONABORT {
 		err = umem_tx_errno(err);
 		D_DEBUG(DF_VOS1, "Failed to submit ZC update: %d\n", err);

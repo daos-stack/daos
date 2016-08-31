@@ -68,6 +68,7 @@ static void
 dsrs_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status)
 {
 	struct obj_update_in	*oui;
+	uint64_t		cid = 0;
 	int rc;
 
 	obj_reply_set_status(rpc, status);
@@ -90,8 +91,12 @@ dsrs_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status)
 
 	oui = dtp_req_get(rpc);
 	D_ASSERT(oui != NULL);
+
+	/**
+	 * XXX FIXME: Currently the cookie-id handle is empty
+	 */
 	if (opc_get(rpc->dr_opc) == DAOS_OBJ_RPC_UPDATE)
-		rc = vos_obj_zc_update_end(ioh, &oui->oui_dkey,
+		rc = vos_obj_zc_update_end(ioh, cid, &oui->oui_dkey,
 					   oui->oui_nr,
 					   oui->oui_iods.da_arrays,
 					   0, NULL);

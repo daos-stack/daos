@@ -281,6 +281,8 @@ struct vos_key_bundle {
 	daos_epoch_range_t	*kb_epr;
 	/** index of recx */
 	uint64_t		 kb_idx;
+	/** Cookie ID for this update */
+	uint64_t		 kb_cookie;
 };
 
 /**
