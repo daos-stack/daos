@@ -331,7 +331,6 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			iov = &iov_tmp;
 			iov->iov_buf += *off_p;
 			iov->iov_buf_len -= *off_p;
-			iov->iov_len = recx->rx_rsize;
 
 			if (iov->iov_buf_len < recx->rx_rsize) {
 				D_DEBUG(DF_VOS1,
@@ -352,6 +351,17 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			D_DEBUG(DF_VOS1, "Failed to fetch index "DF_U64": %d\n",
 				recx->rx_idx, rc);
 			return rc;
+		}
+
+		if (i == 0 && recx->rx_rsize == DAOS_REC_ANY)
+			recx->rx_rsize = recx_tmp.rx_rsize;
+
+		if (recx->rx_rsize != recx_tmp.rx_rsize) {
+			D_DEBUG(DF_VOS1,
+				"Record sizes of all indices in the same "
+				"extent must be the same: "DF_U64"/"DF_U64"\n",
+				recx->rx_rsize, recx_tmp.rx_rsize);
+			return -DER_IO_INVAL;
 		}
 
 		/* If we store index and epoch in the same btree, then

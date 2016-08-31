@@ -530,6 +530,8 @@ typedef struct {
 enum {
 	/** reserved for cache miss */
 	DAOS_REC_MISSING	= -1,
+	/** any record size, it is used by fetch */
+	DAOS_REC_ANY		= 0,
 };
 
 /** Scatter/gather list for memory buffers */

@@ -175,7 +175,7 @@ lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
 	daos_iov_set(&req->val_iov, val, size);
 
 	/** record extent */
-	req->rex.rx_rsize = size;
+	req->rex.rx_rsize = DAOS_REC_ANY;
 	req->rex.rx_idx = idx;
 
 	/** XXX: to be fixed */

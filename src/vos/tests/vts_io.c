@@ -485,7 +485,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
-	rex.rx_rsize = 0;
+	rex.rx_rsize = DAOS_REC_ANY;
 	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &vio, &sgl);
 	if (rc)
 		goto exit;
@@ -711,7 +711,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
-	rex.rx_rsize = 0;
+	rex.rx_rsize = DAOS_REC_ANY;
 
 	/* Injecting an incorrect dkey for fetch! */
 	memset(dkey_buf, 0, UPDATE_DKEY_SIZE);
@@ -768,7 +768,7 @@ io_fetch_wo_object(void **state)
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
-	rex.rx_rsize = 0;
+	rex.rx_rsize = DAOS_REC_ANY;
 	rc = io_test_obj_fetch(arg, 1, &dkey, &vio, &sgl);
 	assert_int_equal(rc, -2005);
 
@@ -919,7 +919,7 @@ io_simple_one_key_cross_container(void **state)
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
-	rex.rx_rsize = 0;
+	rex.rx_rsize = DAOS_REC_ANY;
 
 	/**
 	 * Fetch from second container with local obj id
@@ -931,7 +931,7 @@ io_simple_one_key_cross_container(void **state)
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
-	rex.rx_rsize = 0;
+	rex.rx_rsize = DAOS_REC_ANY;
 
 	/**
 	 * Fetch the objiD used in first container
