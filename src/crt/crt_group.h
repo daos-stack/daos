@@ -50,6 +50,18 @@ enum crt_grp_status {
 	CRT_GRP_DESTROYING,
 };
 
+enum crt_rank_status {
+	CRT_RANK_NOENT = 0x87, /* rank non-existed for this primary group */
+	CRT_RANK_ALIVE, /* rank alive */
+	CRT_RANK_DEAD, /* rank dead */
+};
+
+/* the index of crt_rank_map[] is the PMIx global rank */
+struct crt_rank_map {
+	crt_rank_t		rm_rank; /* rank in primary group */
+	enum crt_rank_status	rm_status; /* health status */
+};
+
 /* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
 #define CRT_LOOKUP_CACHE_BITS	(4)
 
@@ -77,6 +89,11 @@ struct crt_grp_priv {
 				 gp_local:1, /* flag of local group, false means
 					      * attached remote group */
 				 gp_service:1; /* flag of service group */
+
+	/* rank map array, only needed for local primary group */
+	struct crt_rank_map	*gp_rank_map;
+	/* pmix errhdlr ref, used for PMIx_Deregister_event_handler */
+	size_t			 gp_errhdlr_ref;
 
 	/* TODO: reuse crt_corpc_info here */
 	/*

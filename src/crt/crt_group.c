@@ -1092,6 +1092,12 @@ crt_primary_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
 		grp_priv->gp_size = 1;
 		grp_priv->gp_self = 0;
 	} else {
+		/* init the rank map */
+		C_ALLOC(grp_priv->gp_rank_map,
+			pmix_gdata->pg_univ_size * sizeof(struct crt_rank_map));
+		if (grp_priv->gp_rank_map == NULL)
+			C_GOTO(out, rc = -CER_NOMEM);
+
 		rc = crt_pmix_assign_rank(grp_priv);
 		if (rc != 0)
 			C_GOTO(out, rc);
@@ -1099,6 +1105,8 @@ crt_primary_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
 		rc = crt_pmix_publish_self(grp_priv);
 		if (rc != 0)
 			C_GOTO(out, rc);
+
+		crt_pmix_reg_event_hdlr(grp_priv);
 
 		rc = crt_pmix_fence();
 		if (rc != 0)
@@ -1143,6 +1151,7 @@ out:
 static int
 crt_primary_grp_fini(void)
 {
+	struct crt_grp_priv	*grp_priv;
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_pmix_gdata	*pmix_gdata;
 	int			 rc = 0;
@@ -1153,12 +1162,23 @@ crt_primary_grp_fini(void)
 	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
 	C_ASSERT(pmix_gdata != NULL);
 
+	/* destroy the rank map */
+	grp_priv = crt_is_service() ? grp_gdata->gg_srv_pri_grp :
+				      grp_gdata->gg_cli_pri_grp;
+	if (grp_priv->gp_rank_map != NULL) {
+		crt_pmix_dereg_event_hdlr(grp_priv);
+
+		C_FREE(grp_priv->gp_rank_map,
+		       pmix_gdata->pg_univ_size * sizeof(struct crt_rank_map));
+		grp_priv->gp_rank_map = NULL;
+	}
+
 	if (crt_is_service()) {
-		rc = crt_grp_lc_destroy(grp_gdata->gg_srv_pri_grp);
+		rc = crt_grp_lc_destroy(grp_priv);
 		if (rc != 0)
 			C_GOTO(out, rc);
 
-		crt_grp_priv_destroy(grp_gdata->gg_srv_pri_grp);
+		crt_grp_priv_destroy(grp_priv);
 	} else {
 		rc = crt_grp_detach(&grp_gdata->gg_srv_pri_grp->gp_pub);
 		if (rc != 0) {
@@ -1166,7 +1186,7 @@ crt_primary_grp_fini(void)
 				"rc: %d.\n", rc);
 			C_GOTO(out, rc);
 		}
-		crt_grp_priv_destroy(grp_gdata->gg_cli_pri_grp);
+		crt_grp_priv_destroy(grp_priv);
 	}
 
 out:

@@ -224,21 +224,17 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	pmix_proc_t		 proc;
 	bool			 flag = true;
 	int			 nkeys = 1;
+	struct crt_rank_map	 *rank_map;
 	int			 i, rc = 0;
 
 	C_ASSERT(grp_priv != NULL);
-	/*
-	if (!crt_gdata.cg_grp_inited) {
-		C_ERROR("crt group un-initialized.\n");
-		C_GOTO(out, rc = -CER_UNINIT);
-	}
-	*/
-
 	C_ASSERT(crt_gdata.cg_grp != NULL);
 	pmix_gdata = crt_gdata.cg_grp->gg_pmix;
 	myproc = &pmix_gdata->pg_proc;
 	unpublish_key[0] = NULL;
 	unpublish_key[1] = NULL;
+	rank_map = grp_priv->gp_rank_map;
+	C_ASSERT(rank_map != NULL);
 
 	/* get incorrect result (grp_priv->gp_self = -1), so disable it */
 	if (/* pmix_gdata->pg_num_apps == 1 */ 0) {
@@ -268,6 +264,13 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 		}
 		grp_priv->gp_self = val->data.uint32;
 		PMIX_VALUE_RELEASE(val);
+
+		C_ASSERT(grp_priv->gp_size == pmix_gdata->pg_univ_size);
+		for (i = 0; i < grp_priv->gp_size; i++) {
+			rank_map[i].rm_rank = i;
+			rank_map[i].rm_status = CRT_RANK_ALIVE;
+		}
+
 		C_GOTO(out, rc = 0);
 	}
 
@@ -341,10 +344,24 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 		if (strncmp(grp_priv->gp_pub.cg_grpid,
 			    pdata[0].value.data.string,
 			    CRT_GROUP_ID_MAX_LEN) == 0) {
+			rank_map[i].rm_rank = grp_priv->gp_size;
+			rank_map[i].rm_status = CRT_RANK_ALIVE;
 			grp_priv->gp_size++;
+		} else {
+			rank_map[i].rm_status = CRT_RANK_NOENT;
 		}
 	}
 	PMIX_PDATA_FREE(pdata, 1);
+
+	/* call fence before unpublish */
+	rc = crt_pmix_fence();
+	if (rc != 0) {
+		C_ERROR("PMIx ns %s rank %d, crt_pmix_fence failed,rc: %d.\n",
+			myproc->nspace, myproc->rank, rc);
+		free(unpublish_key[0]);
+		C_GOTO(out, rc);
+	}
+
 	rc = PMIx_Unpublish(unpublish_key, NULL, 0);
 	if (rc != PMIX_SUCCESS) {
 		C_ERROR("PMIx ns %s rank %d, PMIx_Unpublish failed, rc: %d.\n",
@@ -547,4 +564,92 @@ out:
 		C_ERROR("crt_pmix_attach group %s failed, rc: %d.\n",
 			grp_priv->gp_pub.cg_grpid, rc);
 	return rc;
+}
+
+static void
+crt_pmix_notify_fn(size_t registration_id, pmix_status_t status,
+		   const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
+		   pmix_info_t results[], size_t nresults,
+		   pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
+{
+	struct crt_grp_gdata	*grp_gdata;
+	struct crt_pmix_gdata	*pmix_gdata;
+	struct crt_grp_priv	*grp_priv;
+	struct crt_rank_map	*rank_map;
+
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+	pmix_gdata = grp_gdata->gg_pmix;
+	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
+	C_ASSERT(pmix_gdata != NULL && pmix_gdata->pg_univ_size > 0);
+
+	C_DEBUG("got one PMIx notification, source->rank: %d.\n",
+		source->rank);
+	if (source->rank < 0 || source->rank >= pmix_gdata->pg_univ_size) {
+		C_ERROR("pmix rank %d out of range [0, %d].\n",
+			source->rank, pmix_gdata->pg_univ_size - 1);
+		goto out;
+	}
+
+	grp_priv = crt_is_service() ? grp_gdata->gg_srv_pri_grp :
+				      grp_gdata->gg_cli_pri_grp;
+	C_ASSERT(grp_priv != NULL);
+	rank_map = &grp_priv->gp_rank_map[source->rank];
+	if (rank_map->rm_status != CRT_RANK_NOENT) {
+		if (rank_map->rm_status == CRT_RANK_ALIVE) {
+			rank_map->rm_status = CRT_RANK_DEAD;
+			C_WARN("group %s, mark rank %d as dead",
+			       grp_priv->gp_pub.cg_grpid, rank_map->rm_rank);
+		} else {
+			C_ASSERT(rank_map->rm_status == CRT_RANK_DEAD);
+			C_ERROR("group %s, rank %d already dead.\n",
+				grp_priv->gp_pub.cg_grpid, rank_map->rm_rank);
+		}
+	} else {
+		C_DEBUG("PMIx rank %d not belong to group %s, ignore it.\n",
+			source->rank, grp_priv->gp_pub.cg_grpid);
+	}
+
+out:
+	/** let the notifier know we are done */
+	if (cbfunc)
+		cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
+}
+
+static void
+crt_pmix_errhdlr_reg_callbk(pmix_status_t status, size_t errhdlr_ref,
+			    void *cbdata)
+{
+	struct crt_grp_priv	*grp_priv;
+
+	grp_priv = (struct crt_grp_priv *) cbdata;
+	C_ASSERT(grp_priv != NULL);
+
+	C_DEBUG("crt_pmix_errhdlr_reg_callbk called with status %d, ref=%zu.\n",
+		status, errhdlr_ref);
+
+	grp_priv->gp_errhdlr_ref = errhdlr_ref;
+}
+
+void
+crt_pmix_reg_event_hdlr(struct crt_grp_priv *grp_priv)
+{
+	C_ASSERT(grp_priv != NULL);
+
+	PMIx_Register_event_handler(NULL, 0, NULL, 0, crt_pmix_notify_fn,
+				    crt_pmix_errhdlr_reg_callbk, grp_priv);
+}
+
+static void
+crt_pmix_dereg_cb(pmix_status_t status, void *cbdata)
+{
+	C_DEBUG("crt_pmix_dereg_cb with status %d", status);
+}
+
+void
+crt_pmix_dereg_event_hdlr(struct crt_grp_priv *grp_priv)
+{
+	C_ASSERT(grp_priv != NULL);
+	PMIx_Deregister_event_handler(grp_priv->gp_errhdlr_ref,
+				      crt_pmix_dereg_cb, NULL);
 }
