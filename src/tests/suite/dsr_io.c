@@ -206,7 +206,7 @@ obj_random(test_arg_t *arg, daos_obj_id_t *oid)
 	oid->lo	= rand();
 	oid->mid = rand();
 	oid->hi	= rand();
-	dsr_obj_id_generate(oid, DSR_OC_LARGE_RW);
+	dsr_obj_id_generate(oid, DSR_OC_REPLICA_RW);
 }
 
 /** test overwrite in different epoch */

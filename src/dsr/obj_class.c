@@ -71,6 +71,18 @@ static struct dsr_obj_class dsr_obj_classes[] = {
 		},
 	},
 	{
+		.oc_name	= "replica_rw",
+		.oc_id		= DSR_OC_REPLICA_RW,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= DAOS_OC_GRP_MAX,
+			.u.repl			= {
+				.r_num		= 2,
+			},
+		},
+	},
+	{
 		.oc_name	= NULL,
 		.oc_id		= DSR_OC_UNKNOWN,
 	},

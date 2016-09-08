@@ -829,13 +829,14 @@ ring_obj_place(struct pl_map *map, struct dsr_obj_md *md,
 
 	grp_size = dsr_oclass_grp_size(oc_attr);
 	D_ASSERT(grp_size != 0);
-	D_ASSERTF(grp_size <= rimap->rmp_target_nr, "grp_size=%u tgt_nr=%d\n",
-		  grp_size, rimap->rmp_target_nr);
 
 	grp_dist = grp_size * dist;
 
 	if (shard_md == NULL) {
 		unsigned int grp_max = rimap->rmp_target_nr / grp_size;
+
+		if (grp_max == 0)
+			grp_max = 1;
 
 		grp_nr	= dsr_oclass_grp_nr(oc_attr, md);
 		if (grp_nr > grp_max)
@@ -855,16 +856,28 @@ ring_obj_place(struct pl_map *map, struct dsr_obj_md *md,
 	if (rc != 0)
 		return rc;
 
+	D_ASSERT(layout->ol_nr > 0);
+
 	tgs   = pool_map_targets(rimap->rmp_poolmap);
 	tg_nr = pool_map_target_nr(rimap->rmp_poolmap);
 
 	plts = ring_oid2ring(rimap, oid)->ri_targets;
 	for (i = 0, k = 0; i < grp_nr; i++) {
 		for (j = 0; j < grp_size; j++, k++) {
-			int pos = plts[(begin + j * dist) % tg_nr].pt_pos;
+			if (j < tg_nr) {
+				int idx = (begin + j * dist) % tg_nr;
+				int pos = plts[idx].pt_pos;
 
-			layout->ol_shards[k]  = shard + k;
-			layout->ol_targets[k] = tgs[pos].ta_comp.co_id;
+				layout->ol_shards[k]  = shard + k;
+				layout->ol_targets[k] = tgs[pos].ta_comp.co_id;
+			} else {
+				/* If group size is larger than the target
+				 * number, let's disable the further shards
+				 * of the obj on this group.
+				 **/
+				layout->ol_shards[k] = -1;
+				layout->ol_targets[k] = -1;
+			}
 		}
 		begin += grp_dist;
 	}

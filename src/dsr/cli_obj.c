@@ -145,6 +145,12 @@ cli_obj_open_shard(struct dsr_cli_obj *obj, unsigned int shard,
 	int			 rc = 0;
 
 	layout = obj->cob_layout;
+
+	/* Skip the invalid shards and targets */
+	if (layout->ol_shards[shard] == -1 ||
+	    layout->ol_targets[shard] == -1)
+		return -DER_NONEXIST;
+
 	/* XXX could be otherwise for some object classes? */
 	D_ASSERT(layout->ol_shards[shard] == shard);
 
@@ -423,16 +429,65 @@ dsr_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
 	return -DER_NOSYS;
 }
 
-static unsigned int
-cli_obj_dkey2shard(struct dsr_cli_obj *obj, daos_dkey_t *dkey)
+static int
+cli_obj_get_grp_size(struct dsr_cli_obj *obj)
 {
-	uint64_t hash;
+	struct daos_oclass_attr *oc_attr;
+
+	oc_attr = dsr_oclass_attr_find(obj->cob_md.omd_id);
+	D_ASSERT(oc_attr != NULL);
+	return dsr_oclass_grp_size(oc_attr);
+}
+
+static unsigned int
+cli_obj_dkey2shard(struct dsr_cli_obj *obj, daos_dkey_t *dkey,
+		   unsigned int *shards_cnt,
+		   unsigned int *random_shard)
+{
+	int			grp_size;
+	uint64_t		hash;
+	uint64_t		start_shard;
+	uint64_t		adjust_grp_size;
+
+	grp_size = cli_obj_get_grp_size(obj);
+	D_ASSERT(grp_size > 0);
 
 	hash = daos_hash_murmur64((unsigned char *)dkey->iov_buf,
 				  dkey->iov_len, 5731);
-	hash %= obj->cob_layout->ol_nr; /* XXX, consistent hash? */
 
-	return (unsigned int)hash;
+	if (obj->cob_layout->ol_nr < grp_size)
+		adjust_grp_size = obj->cob_layout->ol_nr;
+	else
+		adjust_grp_size = grp_size;
+
+	/* XXX, consistent hash? */
+	start_shard = hash % (obj->cob_layout->ol_nr / adjust_grp_size);
+
+	if (shards_cnt != NULL)
+		*shards_cnt = adjust_grp_size;
+
+	/* Return an random shard among the group for fetch. */
+	/* XXX check if the target of the shard is avaible. */
+	if (random_shard != NULL) {
+		uint32_t idx = hash % grp_size + start_shard;
+		int i;
+
+		*random_shard = -1;
+		for (i = 0; i < grp_size; i++) {
+			if (obj->cob_layout->ol_shards[idx] != -1) {
+				*random_shard = idx;
+				break;
+			}
+
+			if (idx < start_shard + grp_size)
+				idx++;
+			else
+				idx = start_shard;
+		}
+		D_ASSERT(*random_shard != -1);
+	}
+
+	return (unsigned int)start_shard;
 }
 
 int
@@ -449,7 +504,7 @@ dsr_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	shard = cli_obj_dkey2shard(iocx->cx_obj, dkey);
+	shard = cli_obj_dkey2shard(iocx->cx_obj, dkey, NULL, &shard);
 	rc = cli_obj_iocx_new_oper(iocx, shard, &oper);
 	if (rc != 0)
 		D_GOTO(failed, rc);
@@ -471,40 +526,67 @@ dsr_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	return rc;
 }
 
+#define TMP_OPER_CNT	6
 int
 dsr_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_event_t *ev)
 {
 	struct cli_obj_io_ctx	*iocx;
-	struct cli_obj_io_oper	 oper;
+	struct cli_obj_io_oper	 tmp_oper[6];
+	struct cli_obj_io_oper	 *oper;
 	unsigned int		 shard;
+	unsigned int		 shards_cnt;
+	int			 i;
 	int			 rc;
 
 	rc = cli_obj_iocx_create(oh, ev, &iocx);
 	if (rc != 0)
 		return rc;
 
-	shard = cli_obj_dkey2shard(iocx->cx_obj, dkey);
-	rc = cli_obj_iocx_new_oper(iocx, shard, &oper);
+	shard = cli_obj_dkey2shard(iocx->cx_obj, dkey, &shards_cnt, NULL);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	rc = dsm_obj_update(oper.oo_oh, epoch, dkey, nr, iods, sgls,
-			    oper.oo_ev);
-	if (rc != 0) {
-		D_DEBUG(DF_SRC, "Failed to update data to DSM: %d\n", rc);
-		D_GOTO(failed, rc);
+	if (shards_cnt > TMP_OPER_CNT) {
+		D_ALLOC(oper, shards_cnt * sizeof(*oper));
+		if (oper == NULL)
+			D_GOTO(failed, rc = -DER_NOMEM);
+	} else {
+		oper = tmp_oper;
+	}
+
+	D_DEBUG(DF_MISC, "update "DF_OID" start %u cnt %u\n",
+		DP_OID(iocx->cx_obj->cob_md.omd_id), shard,
+		shards_cnt);
+
+	for (i = 0; i < shards_cnt; i++, shard++, oper++) {
+		rc = cli_obj_iocx_new_oper(iocx, shard, oper);
+		if (rc != 0) {
+			if (rc == -DER_NONEXIST)
+				continue;
+			D_GOTO(failed, rc);
+		}
+
+		rc = dsm_obj_update(oper->oo_oh, epoch, dkey, nr, iods,
+				    sgls, oper->oo_ev);
+		if (rc != 0)
+			D_GOTO(failed, rc);
 	}
 
 	rc = cli_obj_iocx_launch(iocx);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	return 0;
- failed:
-	cli_obj_iocx_destroy(iocx, rc);
+free:
+	if (oper != NULL && shards_cnt > TMP_OPER_CNT)
+		D_FREE(oper, shards_cnt * sizeof(*oper));
+
 	return rc;
+
+failed:
+	cli_obj_iocx_destroy(iocx, rc);
+	D_GOTO(free, rc);
 }
 
 static int
@@ -512,11 +594,15 @@ cli_obj_list_dkey_comp(struct cli_obj_io_ctx *ctx, int rc)
 {
 	struct dsr_cli_obj	*obj	 = ctx->cx_obj;
 	daos_hash_out_t		*anchor  = (daos_hash_out_t *)ctx->cx_args[0];
-	uint32_t		 shard   = (unsigned long)ctx->cx_args[1];
-	unsigned int		 enc_shard_at;
+	uint32_t		shard   = (unsigned long)ctx->cx_args[1];
+	int			grp_size;
+	unsigned int		enc_shard_at;
 
 	if (rc != 0)
 		return rc;
+
+	grp_size = cli_obj_get_grp_size(obj);
+	D_ASSERT(grp_size > 0);
 
 	/* XXX This is a nasty workaround: shard is encoded in the highest
 	 * four bytes of the hash anchor. It is ok for now because VOS does
@@ -527,10 +613,8 @@ cli_obj_list_dkey_comp(struct cli_obj_io_ctx *ctx, int rc)
 	if (!daos_hash_is_eof(anchor)) {
 		D_DEBUG(DF_SRC, "More keys in shard %d\n", shard);
 		memcpy(&anchor->body[enc_shard_at], &shard, sizeof(shard));
-
-
-	} else if (shard < obj->cob_layout->ol_nr - 1) {
-		shard++;
+	} else if (shard < obj->cob_layout->ol_nr - grp_size) {
+		shard += grp_size;
 		D_DEBUG(DF_SRC, "Enumerate the next shard %d\n", shard);
 
 		memset(anchor, 0, sizeof(*anchor));

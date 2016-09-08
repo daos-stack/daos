@@ -169,6 +169,7 @@ enum {
 	DSR_OC_TINY_RW,
 	DSR_OC_SMALL_RW,
 	DSR_OC_LARGE_RW,
+	DSR_OC_REPLICA_RW,
 };
 
 /**
