@@ -168,6 +168,10 @@ class DefaultEnvironment(object):
         """Fake Alias"""
         return []
 
+    def __getitem__(self, x):
+        """Fake __getitem__"""
+        return []
+
     def Install(self, *args, **kw):
         """Fake Install"""
         pass
@@ -321,9 +325,15 @@ def Platform():
     """Fake Platform"""
     return ''
 
+def Depends(*args, **kw):
+    """Fake Depends"""
+    pass
+
 COMMAND_LINE_TARGETS = []
 BUILD_TARGETS = []
 DEFAULT_TARGETS = []
+
+Environment = DefaultEnvironment
 
 __all__ = ['DefaultEnvironment',
            'Variables',
