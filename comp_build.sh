@@ -197,6 +197,14 @@ function setup_dep()
     comp_name=${cname}
   fi
   if [ -n "$latest" ]; then
+    #These can be used to override the "last good version"
+    #when there are breaking changes.   Jenkins will use
+    #$GOOD_* only if it is newer than the last version
+    #used by master
+    good_varname=GOOD_${upper_name}
+    good_version=${CORAL_ARTIFACTS}/${name}-update-scratch/$version
+    declare ${good_varname}=${good_version}
+    blessed_varname=SL_${upper_name}_PREFIX
     for subdir in /${comp_name}/TESTING/ /TESTING/scripts/ /${comp_name}/ /; do
       vars=${latest}${subdir}.build_vars.sh
       if [ -f ${vars} ]; then
@@ -205,18 +213,11 @@ function setup_dep()
     done
     if [ ! -f ${vars} ]; then
       print_status "$vars does not exist.   Check <build_vars> option"
-      usage
+      blessed_num=0
+    else
+      source ${vars}
+      blessed_num=$(basename $(dirname ${!blessed_varname}))
     fi
-    #These can be used to override the "last good version"
-    #when there are breaking changes.   Jenkins will use
-    #$GOOD_* only if it is newer than the last version
-    #used by master
-    good_varname=GOOD_${upper_name}
-    good_version=${CORAL_ARTIFACTS}/${name}-update-scratch/$version
-    declare ${good_varname}=${good_version}
-    source ${vars}
-    blessed_varname=SL_${upper_name}_PREFIX
-    blessed_num=$(basename $(dirname ${!blessed_varname}))
     if [ $version -gt $blessed_num ]; then
       declare $upper_name=${!good_varname}
     else
