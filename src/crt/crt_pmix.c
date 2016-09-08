@@ -209,7 +209,8 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	unpublish_key[0] = NULL;
 	unpublish_key[1] = NULL;
 
-	if (pmix_gdata->pg_num_apps == 1) {
+	/* get incorrect result (grp_priv->gp_self = -1), so disable it */
+	if (/* pmix_gdata->pg_num_apps == 1 */ 0) {
 		PMIX_PROC_CONSTRUCT(&proc);
 		strncpy(proc.nspace, myproc->nspace, PMIX_MAX_NSLEN);
 		proc.rank = PMIX_RANK_WILDCARD;
@@ -320,7 +321,10 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	free(unpublish_key[0]);
 
 out:
-	if (rc != 0 && myproc != NULL)
+	if (rc == 0)
+		C_DEBUG(CF_TP, "crt_pmix_assign_rank get size %d, self %d.\n",
+			grp_priv->gp_size, grp_priv->gp_self);
+	else if (myproc != NULL)
 		C_ERROR("PMIx ns %s rank %d, crt_pmix_assign_rank failed, "
 			"rc: %d.\n", myproc->nspace, myproc->rank, rc);
 	return rc;
@@ -362,7 +366,7 @@ crt_pmix_publish_self(struct crt_grp_priv *grp_priv)
 		C_GOTO(out, rc = -CER_NO_PERM);
 	}
 	if (!grp_priv->gp_service) {
-		C_ERROR("ignore publish self on non-service group.\n");
+		C_DEBUG(CF_TP, "ignore publish self on non-service group.\n");
 		C_GOTO(out, rc = 0);
 	}
 
@@ -424,7 +428,7 @@ out:
 	return 0;
 }
 
-/** lookup the URI of a rank in the service group through PMIX */
+/** lookup the URI of a rank in the primary service group through PMIX */
 int
 crt_pmix_uri_lookup(crt_group_id_t srv_grpid, crt_rank_t rank, char **uri)
 {
@@ -465,14 +469,17 @@ out:
 	return rc;
 }
 
+/* PMIx attach to a primary group */
 int
 crt_pmix_attach(struct crt_grp_priv *grp_priv)
 {
 	pmix_pdata_t	*pdata = NULL;
-	int		rc = 0;
+	crt_rank_t	 myrank;
+	int		 rc = 0;
+
+	C_ASSERT(grp_priv != NULL);
 
 	PMIX_PDATA_CREATE(pdata, 1);
-
 	snprintf(pdata[0].key, PMIX_MAX_KEYLEN + 1, "pmix-%s-size",
 		 grp_priv->gp_pub.cg_grpid);
 	rc = PMIx_Lookup(pdata, 1, NULL, 0);
@@ -488,11 +495,17 @@ crt_pmix_attach(struct crt_grp_priv *grp_priv)
 		C_GOTO(out, rc = -CER_PMIX);
 	}
 
-	/* TODO PSR? */
-	/*
-	core_set->set.psr_rank = state->local_set->self % core_set->set.size;
-	core_set->set.psr_uri = &core_set->set.cached[core_set->set.psr_rank];
-	*/
+	rc = crt_group_rank(NULL, &myrank);
+	C_ASSERT(rc == 0);
+	grp_priv->gp_psr_rank = myrank % grp_priv->gp_size;
+	rc = crt_pmix_uri_lookup(grp_priv->gp_pub.cg_grpid,
+				 grp_priv->gp_psr_rank,
+				 &grp_priv->gp_psr_phy_addr);
+	if (rc != 0)
+		C_ERROR("crt_pmix_uri_lookup(grpid: %s, rank %d) failed, "
+			"rc: %d.\n", grp_priv->gp_pub.cg_grpid,
+			grp_priv->gp_psr_rank, rc);
+
 out:
 	if (pdata != NULL)
 		PMIX_PDATA_FREE(pdata, 1);

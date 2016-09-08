@@ -39,6 +39,9 @@ enum crt_grp_status {
 	CRT_GRP_DESTROYING,
 };
 
+/* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
+#define CRT_LOOKUP_CACHE_BITS	(4)
+
 struct crt_grp_priv {
 	crt_list_t		 gp_link; /* link to crt_grp_list */
 	crt_group_t		 gp_pub; /* public grp handle */
@@ -49,9 +52,16 @@ struct crt_grp_priv {
 	crt_context_t		 gp_ctx;
 	enum crt_grp_status	 gp_status; /* group status */
 
-	uint32_t		 gp_size; /* size (number of membs) of group */
-	crt_rank_t		 gp_self; /* self rank in this group */
-	crt_rank_t		 gp_psr; /* PSR rank in attached group */
+	/* size (number of membs) of group */
+	uint32_t		 gp_size;
+	/* self rank in this group, only valid for local group */
+	crt_rank_t		 gp_self;
+	/* PSR rank in attached group */
+	crt_rank_t		 gp_psr_rank;
+	/* PSR phy addr address in attached group */
+	crt_phy_addr_t		 gp_psr_phy_addr;
+	/* address lookup cache, only valid for primary group */
+	struct dhash_table	*gp_lookup_cache;
 	uint32_t		 gp_primary:1, /* flag of primary group */
 				 gp_local:1, /* flag of local group, false means
 					      * attached remote group */
@@ -73,7 +83,25 @@ struct crt_grp_priv {
 	crt_grp_destroy_cb_t	 gp_destroy_cb; /* grp destroy completion cb */
 	void			*gp_destroy_cb_arg;
 
-	pthread_mutex_t		 gp_mutex; /* protect all fields above */
+	pthread_rwlock_t	gp_rwlock; /* protect all fields above */
+};
+
+/* lookup cache item for one target */
+struct crt_lookup_item {
+	/* link to crt_grp_priv::gp_lookup_cache */
+	crt_list_t		 li_link;
+	/* point back to grp_priv */
+	struct crt_grp_priv	*li_grp_priv;
+	/* rank of the target */
+	crt_rank_t		 li_rank;
+	/* base phy addr published through PMIx */
+	crt_phy_addr_t		 li_base_phy_addr;
+	/* connected HG addr */
+	na_addr_t		 li_tag_addr[CRT_SRV_CONTEXT_NUM];
+	/* reference count */
+	uint32_t		 li_ref;
+	uint32_t		 li_initialized:1;
+	pthread_mutex_t		 li_mutex;
 };
 
 /* structure of global group data */
@@ -104,9 +132,15 @@ struct crt_grp_gdata {
 crt_group_id_t crt_global_grp_id(void);
 int crt_hdlr_grp_create(crt_rpc_t *rpc_req);
 int crt_hdlr_grp_destroy(crt_rpc_t *rpc_req);
+int crt_hdlr_uri_lookup(crt_rpc_t *rpc_req);
 /* TODO refine and export crt_group_attach */
 int crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
-int crt_grp_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank, char **uri);
+int crt_grp_uri_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank,
+		       char **uri);
+int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv,
+		      struct crt_hg_context *hg_ctx, crt_rank_t rank,
+		      uint32_t tag, crt_phy_addr_t *base_addr,
+		      na_addr_t *na_addr);
 int crt_grp_init(void);
 int crt_grp_fini(void);
 

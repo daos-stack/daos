@@ -270,7 +270,7 @@ do_init:
 			C_ERROR("crt_grp_init failed, rc: %d.\n", rc);
 			crt_hg_fini();
 			C_FREE(crt_gdata.cg_addr, crt_gdata.cg_addr_len);
-			C_GOTO(unlock, rc = -CER_MCL);
+			C_GOTO(unlock, rc);
 		}
 
 		rc = crt_opc_map_create(CRT_OPC_MAP_BITS);

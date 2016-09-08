@@ -73,10 +73,8 @@ typedef enum {
 	CER_UNREG		= (CER_ERR_BASE + 21),
 	/** CRT failed to generate an address string */
 	CER_ADDRSTR_GEN		= (CER_ERR_BASE + 22),
-	/** CRT MCL layer error */
-	CER_MCL			= (CER_ERR_BASE + 33),
 	/** CRT PMIx layer error */
-	CER_PMIX		= (CER_ERR_BASE + 34),
+	CER_PMIX		= (CER_ERR_BASE + 23),
 	/** unknown error */
 	CER_UNKNOWN		= (CER_ERR_BASE + 500),
 	/** TODO: add more error numbers */

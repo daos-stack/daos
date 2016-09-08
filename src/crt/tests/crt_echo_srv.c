@@ -115,6 +115,7 @@ static int run_echo_srver(void)
 	/* ============= test-1 ============ */
 
 	/* send checkin RPC */
+	svr_ep.ep_grp = NULL;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_CHECKIN, &rpc_req);

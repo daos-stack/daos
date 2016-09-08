@@ -31,6 +31,9 @@
 #define CRT_RPC_MAGIC			(0xAB0C01EC)
 #define CRT_RPC_VERSION			(0x00000001)
 
+/* uri lookup RPC timeout 500mS */
+#define CRT_URI_LOOKUP_TIMEOUT		(1000 * 500)
+
 /* CaRT layer common header */
 struct crt_common_hdr {
 	uint32_t	dch_magic;
@@ -129,14 +132,14 @@ enum {
 /* CRT internal RPC definitions */
 struct crt_grp_create_in {
 	crt_group_id_t		 gc_grp_id;
-	crt_rank_list_t	*gc_membs;
+	crt_rank_list_t		*gc_membs;
 	/* the rank initiated the group create */
 	crt_rank_t		 gc_initiate_rank;
 };
 
 struct crt_grp_create_out {
 	/* failed rank list, can be used to aggregate the reply from child */
-	crt_rank_list_t	*gc_failed_ranks;
+	crt_rank_list_t		*gc_failed_ranks;
 	/* the rank sent out the reply */
 	crt_rank_t		 gc_rank;
 	/* return code, if failed the gc_rank should be in gc_failed_ranks */
@@ -151,11 +154,21 @@ struct crt_grp_destroy_in {
 
 struct crt_grp_destroy_out {
 	/* failed rank list, can be used to aggregate the reply from child */
-	crt_rank_list_t	*gd_failed_ranks;
+	crt_rank_list_t		*gd_failed_ranks;
 	/* the rank sent out the reply */
 	crt_rank_t		 gd_rank;
 	/* return code, if failed the gc_rank should be in gc_failed_ranks */
 	int			 gd_rc;
+};
+
+struct crt_uri_lookup_in {
+	crt_group_id_t		 ul_grp_id;
+	crt_rank_t		 ul_rank;
+};
+
+struct crt_uri_lookup_out {
+	crt_phy_addr_t		 ul_uri;
+	int			 ul_rc;
 };
 
 /* CRT internal RPC format definitions */

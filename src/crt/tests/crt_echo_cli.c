@@ -97,6 +97,7 @@ static void run_client(void)
 
 	/* send checkin RPC to different contexts of server*/
 	for (i = 0; i <= ECHO_EXTRA_CONTEXT_NUM; i++) {
+		svr_ep.ep_grp = NULL;
 		svr_ep.ep_rank = 0;
 		svr_ep.ep_tag = i;
 		rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_CHECKIN,
@@ -135,6 +136,7 @@ static void run_client(void)
 	/* ============= test-2 ============
 	 * simple bulk transferring */
 	rpc_req = NULL;
+	svr_ep.ep_grp = NULL;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_BULK_TEST,
@@ -229,7 +231,9 @@ static void run_client(void)
 		goto out;
 
 	rpc_req = NULL;
+	svr_ep.ep_grp = NULL;
 	svr_ep.ep_rank = 0;
+	svr_ep.ep_tag = 0;
 	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_SHUTDOWN, &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 

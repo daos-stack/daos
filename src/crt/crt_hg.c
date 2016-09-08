@@ -34,8 +34,8 @@ na_addr_lookup_cb(const struct na_cb_info *callback_info)
 	na_return_t	ret = NA_SUCCESS;
 
 	if (callback_info->ret != NA_SUCCESS) {
-		NA_LOG_ERROR("Return from callback with %s error code",
-		NA_Error_to_string(callback_info->ret));
+		C_ERROR("Return from callback with %s error code",
+			NA_Error_to_string(callback_info->ret));
 		return ret;
 	}
 
@@ -47,44 +47,27 @@ na_addr_lookup_cb(const struct na_cb_info *callback_info)
 /* connection timeout 10 second */
 #define CRT_CONNECT_TIMEOUT_SEC		(10)
 
-na_return_t
-crt_na_addr_lookup_wait(na_class_t *na_class, const char *name, na_addr_t *addr)
+int
+crt_na_addr_lookup_wait(na_class_t *na_class, na_context_t *na_context,
+			const char *name, na_addr_t *addr)
 {
 	na_addr_t		new_addr = NULL;
-	na_context_t		*context = NULL;
 	uint64_t		now;
 	uint64_t		end;
 	unsigned int		prog_msec;
 	na_return_t		ret = NA_SUCCESS;
+	int			rc = 0;
 
-	if (!na_class) {
-		NA_LOG_ERROR("NULL NA class");
-		ret = NA_INVALID_PARAM;
-		goto done;
-	}
-	if (!name) {
-		NA_LOG_ERROR("Lookup name is NULL");
-		ret = NA_INVALID_PARAM;
-		goto done;
-	}
-	if (!addr) {
-		NA_LOG_ERROR("NULL pointer to na_addr_t");
-		ret = NA_INVALID_PARAM;
-		goto done;
-	}
+	C_ASSERT(na_context != NULL);
+	C_ASSERT(na_class != NULL);
+	C_ASSERT(name != NULL);
+	C_ASSERT(addr != NULL);
 
-	context = NA_Context_create(na_class);
-	if (!context) {
-		NA_LOG_ERROR("Could not create context");
-		ret = NA_PROTOCOL_ERROR;
-		goto done;
-	}
-
-	ret = NA_Addr_lookup(na_class, context, &na_addr_lookup_cb, &new_addr,
-			     name, NA_OP_ID_IGNORE);
+	ret = NA_Addr_lookup(na_class, na_context, &na_addr_lookup_cb,
+			     &new_addr, name, NA_OP_ID_IGNORE);
 	if (ret != NA_SUCCESS) {
-		NA_LOG_ERROR("Could not start NA_Addr_lookup");
-		goto done;
+		C_ERROR("Could not start NA_Addr_lookup");
+		C_GOTO(done, rc = -CER_HG);
 	}
 
 	end = crt_time_usec(CRT_CONNECT_TIMEOUT_SEC);
@@ -95,7 +78,8 @@ crt_na_addr_lookup_wait(na_class_t *na_class, const char *name, na_addr_t *addr)
 		unsigned int	actual_count = 0;
 
 		do {
-			trigger_ret = NA_Trigger(context, 0, 1, &actual_count);
+			trigger_ret = NA_Trigger(na_context, 0, 1,
+						 &actual_count);
 		} while ((trigger_ret == NA_SUCCESS) && actual_count);
 
 		if (new_addr != NULL) {
@@ -103,9 +87,10 @@ crt_na_addr_lookup_wait(na_class_t *na_class, const char *name, na_addr_t *addr)
 			break;
 		}
 
-		ret = NA_Progress(na_class, context, prog_msec);
+		ret = NA_Progress(na_class, na_context, prog_msec);
 		if (ret != NA_SUCCESS && ret != NA_TIMEOUT) {
-			NA_LOG_ERROR("Could not make progress");
+			C_ERROR("Could not make progress");
+			rc = -CER_HG;
 			break;
 		}
 
@@ -120,7 +105,7 @@ crt_na_addr_lookup_wait(na_class_t *na_class, const char *name, na_addr_t *addr)
 			C_ERROR("Could not connect to %s within %d second "
 				"(rank %d, host %s).\n", name,
 				CRT_CONNECT_TIMEOUT_SEC, my_rank, my_host);
-			ret = NA_TIMEOUT;
+			rc = -CER_TIMEDOUT;
 			break;
 		}
 
@@ -128,12 +113,9 @@ crt_na_addr_lookup_wait(na_class_t *na_class, const char *name, na_addr_t *addr)
 			prog_msec = prog_msec << 1;
 	}
 
-	NA_Context_destroy(na_class, context);
-
 done:
-	if (new_addr == NULL)
-		C_ASSERT(ret != NA_SUCCESS);
-	return ret;
+	C_ASSERT(new_addr != NULL || rc != 0);
+	return rc;
 }
 
 static int
@@ -354,7 +336,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		else
 			info_string = "cci+tcp://";
 
-		na_class = NA_Initialize(info_string, crt_gdata.cg_server);
+		na_class = NA_Initialize(info_string, crt_is_service());
 		if (na_class == NULL) {
 			C_ERROR("Could not initialize NA class.\n");
 			C_GOTO(out, rc = -CER_HG);
@@ -624,100 +606,6 @@ out:
 	return hg_ret;
 }
 
-/*
- * MCL address lookup table, use a big array for simplicity. Also simplify the
- * lock needed for possible race of lookup (possible cause multiple address
- * resolution and one time memory leak).
- * The multiple listening addresses for one server rank is a temporary solution,
- * it will be replaced by OFI tag matching mechanism and then this should be
- * removed.
- */
-struct addr_entry {
-	/* rank's base uri is known by pmix */
-	crt_phy_addr_t	ae_base_uri;
-	na_addr_t	ae_tag_addrs[CRT_SRV_CONTEX_NUM];
-} addr_lookup_table[MCL_PS_SIZE_MAX];
-
-static int
-crt_addr_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank, uint32_t tag,
-	       na_class_t *na_class, na_addr_t *na_addr)
-{
-	na_addr_t	tmp_addr;
-	uint32_t	ctx_idx;
-	char		tmp_addrstr[CRT_ADDR_STR_MAX_LEN] = {'\0'};
-	char		*pchar, *uri;
-	int		port;
-	na_return_t	na_ret;
-	int		rc = 0;
-
-	if (tag >= CRT_SRV_CONTEX_NUM) {
-		C_ERROR("invalid tag %d (CRT_SRV_CONTEX_NUM %d).\n",
-			tag, CRT_SRV_CONTEX_NUM);
-		C_GOTO(out, rc = -CER_INVAL);
-	}
-
-	C_ASSERT(grp_priv != NULL && na_class != NULL && na_addr != NULL);
-	C_ASSERT(rank <= MCL_PS_SIZE_MAX);
-	ctx_idx = tag;
-
-	if (addr_lookup_table[rank].ae_tag_addrs[ctx_idx] != NULL) {
-		*na_addr = addr_lookup_table[rank].ae_tag_addrs[ctx_idx];
-		goto out;
-	}
-
-	if (addr_lookup_table[rank].ae_base_uri == NULL) {
-		rc = crt_grp_lookup(grp_priv, rank, &uri);
-		if (rc != 0) {
-			C_ERROR("crt_grp_lookup failed, rc: %d.\n", rc);
-			C_GOTO(out, rc);
-		}
-		C_ASSERT(uri != 0 && strlen(uri) != 0);
-
-		na_ret = crt_na_addr_lookup_wait(na_class, uri, &tmp_addr);
-		if (na_ret != NA_SUCCESS) {
-			C_ERROR("Could not connect to %s, na_ret: %d.\n",
-				uri, na_ret);
-			C_GOTO(out, rc = -CER_HG);
-		}
-
-		C_DEBUG(CF_TP, "Connect to %s succeed.\n", uri);
-		C_ASSERT(tmp_addr != NULL);
-
-		addr_lookup_table[rank].ae_base_uri = uri;
-		addr_lookup_table[rank].ae_tag_addrs[0] = tmp_addr;
-		if (ctx_idx == 0) {
-			*na_addr = tmp_addr;
-			C_GOTO(out, rc);
-		}
-	}
-
-	/* calculate the ctx_idx's listening address and connect to it */
-	strncpy(tmp_addrstr, addr_lookup_table[rank].ae_base_uri,
-		CRT_ADDR_STR_MAX_LEN);
-	pchar = strrchr(tmp_addrstr, ':');
-	pchar++;
-	port = atoi(pchar);
-	port += ctx_idx;
-	*pchar = '\0';
-	snprintf(pchar, 16, "%d", port);
-	C_DEBUG(CF_TP, "rank(%d), base uri(%s), tag(%d) uri(%s).\n",
-		rank, addr_lookup_table[rank].ae_base_uri, tag, tmp_addrstr);
-
-	na_ret = crt_na_addr_lookup_wait(na_class, tmp_addrstr, &tmp_addr);
-	if (na_ret == NA_SUCCESS) {
-		C_DEBUG(CF_TP, "Connect to %s succeed.\n", tmp_addrstr);
-		C_ASSERT(tmp_addr != NULL);
-		addr_lookup_table[rank].ae_tag_addrs[ctx_idx] = tmp_addr;
-		*na_addr = tmp_addr;
-	} else {
-		C_ERROR("Could not connect to %s, na_ret: %d.\n",
-			tmp_addrstr, na_ret);
-		C_GOTO(out, rc = -CER_HG);
-	}
-out:
-	return rc;
-}
-
 int
 crt_hg_req_create(struct crt_hg_context *hg_ctx, crt_endpoint_t tgt_ep,
 		  struct crt_rpc_priv *rpc_priv)
@@ -729,11 +617,11 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, crt_endpoint_t tgt_ep,
 		 hg_ctx->dhc_hgctx != NULL);
 	C_ASSERT(rpc_priv != NULL);
 
-	rc = crt_addr_lookup(crt_gdata.cg_grp->gg_srv_pri_grp, tgt_ep.ep_rank,
-			    tgt_ep.ep_tag, hg_ctx->dhc_nacla,
-			    &rpc_priv->drp_na_addr);
+	rc = crt_grp_lc_lookup(crt_gdata.cg_grp->gg_srv_pri_grp, hg_ctx,
+			       tgt_ep.ep_rank, tgt_ep.ep_tag,
+			       NULL /* base_addr */, &rpc_priv->drp_na_addr);
 	if (rc != 0) {
-		C_ERROR("crt_addr_lookup failed, rc: %d, opc: 0x%x.\n",
+		C_ERROR("crt_grp_lc_lookup failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_priv->drp_pub.dr_opc);
 		C_GOTO(out, rc);
 	}

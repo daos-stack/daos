@@ -57,6 +57,12 @@ void crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc);
 
 /** some simple helper functions */
 
+static inline bool
+crt_is_service()
+{
+	return crt_gdata.cg_server;
+}
+
 static inline void
 crt_bulk_desc_dup(struct crt_bulk_desc *bulk_desc_new,
 		  struct crt_bulk_desc *bulk_desc)

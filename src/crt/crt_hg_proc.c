@@ -352,6 +352,10 @@ struct crt_msg_field DMF_STRING =
 	DEFINE_CRT_MSG("crt_string", 0,
 		       sizeof(crt_string_t), crt_proc_crt_string_t);
 
+struct crt_msg_field DMF_PHY_ADDR =
+	DEFINE_CRT_MSG("crt_phy_addr", 0,
+		       sizeof(crt_phy_addr_t), crt_proc_crt_phy_addr_t);
+
 struct crt_msg_field DMF_RANK =
 	DEFINE_CRT_MSG("crt_rank", 0, sizeof(crt_rank_t),
 		       crt_proc_uint32_t);

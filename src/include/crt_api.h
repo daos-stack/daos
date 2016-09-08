@@ -113,7 +113,7 @@ typedef struct {
 typedef void *crt_context_t;
 
 /* Physical address string, e.g., "bmi+tcp://localhost:3344". */
-typedef char *crt_phy_addr_t;
+typedef crt_string_t crt_phy_addr_t;
 #define CRT_PHY_ADDR_ENV	"CRT_PHY_ADDR_STR"
 
 /*
@@ -256,6 +256,7 @@ extern struct crt_msg_field DMF_UINT64;
 extern struct crt_msg_field DMF_BULK;
 extern struct crt_msg_field DMF_BOOL;
 extern struct crt_msg_field DMF_STRING;
+extern struct crt_msg_field DMF_PHY_ADDR;
 extern struct crt_msg_field DMF_RANK;
 extern struct crt_msg_field DMF_RANK_LIST;
 extern struct crt_msg_field DMF_BULK_ARRAY;
@@ -803,7 +804,7 @@ typedef int (*crt_grp_create_cb_t)(crt_group_t *grp, void *priv, int status);
 typedef int (*crt_grp_destroy_cb_t)(void *args, int status);
 
 /*
- * Create CRT group.
+ * Create CRT sub-group (a subset of the primary group).
  *
  * \param grp_id [IN]		unique group ID.
  * \param member_ranks [IN]	rank list of members for the group.
@@ -1147,5 +1148,6 @@ crt_proc_crt_rank_list_t(crt_proc_t proc, crt_rank_list_t **data);
 #define crt_proc_crt_opcode_t		crt_proc_uint32_t
 #define crt_proc_int			crt_proc_int32_t
 #define crt_proc_crt_group_id_t		crt_proc_crt_string_t
+#define crt_proc_crt_phy_addr_t		crt_proc_crt_string_t
 
 #endif /* __CRT_API_H__ */

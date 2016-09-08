@@ -38,8 +38,6 @@
 
 #include <crt_hg.h>
 
-#define MCL_PS_SIZE_MAX		1024
-
 struct crt_hg_gdata;
 struct crt_grp_gdata;
 
@@ -80,8 +78,8 @@ struct crt_gdata {
 extern struct crt_gdata		crt_gdata;
 
 /* TODO may use a RPC to query server-side context number */
-#ifndef CRT_SRV_CONTEX_NUM
-# define CRT_SRV_CONTEX_NUM		(256)
+#ifndef CRT_SRV_CONTEXT_NUM
+# define CRT_SRV_CONTEXT_NUM		(256)
 #endif
 
 /* (1 << CRT_EPI_TABLE_BITS) is the number of buckets of epi hash table */

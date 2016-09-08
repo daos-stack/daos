@@ -75,6 +75,8 @@ int crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
 int crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout);
+int crt_na_addr_lookup_wait(na_class_t *na_class, na_context_t *na_context,
+			    const char *name, na_addr_t *addr);
 
 int crt_rpc_handler_common(hg_handle_t hg_hdl);
 
