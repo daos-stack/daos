@@ -733,7 +733,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 
 	/* If it is not force destroyed, then we need check if
 	 * there are still events linked here */
-	if (flags & DAOS_EQ_DESTROY_FORCE &&
+	if (((flags & DAOS_EQ_DESTROY_FORCE) == 0) &&
 	    (!daos_list_empty(&eq->eq_disp) ||
 	     !daos_list_empty(&eq->eq_comp))) {
 		rc = -DER_BUSY;
