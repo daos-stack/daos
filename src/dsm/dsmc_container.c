@@ -973,3 +973,44 @@ dsm_epoch_flush(daos_handle_t coh, daos_epoch_t epoch,
 {
 	return 0;
 }
+
+int
+dsm_tgt_idx2pool_tgt(daos_handle_t coh, struct pool_target **tgt,
+		     uint32_t tgt_idx)
+{
+	struct dsmc_container	*dc;
+	struct dsmc_pool	*pool;
+	int			n;
+
+	dc = dsmc_handle2container(coh);
+	if (dc == NULL)
+		return -DER_NO_HDL;
+
+	/* Get map_tgt so that we can have the rank of the target. */
+	pool = dsmc_handle2pool(dc->dc_pool_hdl);
+	D_ASSERT(pool != NULL);
+	n = pool_map_find_target(pool->dp_map, tgt_idx, tgt);
+	dsmc_pool_put(pool);
+	dsmc_container_put(dc);
+	if (n != 1) {
+		D_ERROR("failed to find target %u\n", tgt_idx);
+		return -DER_INVAL;
+	}
+	return 0;
+}
+
+int
+dsm_cont_hdl2uuid(daos_handle_t coh, uuid_t *con_hdl)
+{
+	struct dsmc_container	*dc;
+	int rc = 0;
+
+	dc = dsmc_handle2container(coh);
+	if (dc == NULL)
+		return -DER_NO_HDL;
+
+	uuid_copy(*con_hdl, dc->dc_cont_hdl);
+
+	dsmc_container_put(dc);
+	return rc;
+}

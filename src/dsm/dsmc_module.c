@@ -36,7 +36,7 @@
 
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static int		module_initialized;
-
+struct daos_hhash *dsmc_hhash;
 /**
  * Initialize dsmc client library.
  */

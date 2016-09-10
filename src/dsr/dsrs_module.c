@@ -26,6 +26,8 @@
 
 #include <daos_srv/daos_server.h>
 #include <daos/rpc.h>
+#include "dsr_rpc.h"
+#include "dsr_internal.h"
 
 static int
 dsr_mod_init(void)
@@ -39,12 +41,28 @@ dsr_mod_fini(void)
 	return 0;
 }
 
+/* Note: the rpc input/output parameters is defined in daos_rpc */
+static struct daos_rpc_handler dsrs_handlers[] = {
+	{
+		.dr_opc		= DSR_TGT_OBJ_UPDATE,
+		.dr_hdlr	= dsrs_hdlr_object_rw,
+	}, {
+		.dr_opc		= DSR_TGT_OBJ_FETCH,
+		.dr_hdlr	= dsrs_hdlr_object_rw,
+	}, {
+		.dr_opc		= DSR_TGT_OBJ_ENUMERATE,
+		.dr_hdlr	= dsrs_hdlr_object_enumerate,
+	}, {
+		.dr_opc		= 0
+	}
+};
+
 struct dss_module daos_sr_srv_module =  {
 	.sm_name	= "daos_sr_srv",
 	.sm_mod_id	= DAOS_DSR_MODULE,
 	.sm_ver		= 1,
 	.sm_init	= dsr_mod_init,
 	.sm_fini	= dsr_mod_fini,
-	.sm_cl_rpcs	= NULL, /** TBD */
-	.sm_handlers	= NULL, /** TBD */
+	.sm_cl_rpcs	= dsr_rpcs, /** TBD */
+	.sm_handlers	= dsrs_handlers,
 };

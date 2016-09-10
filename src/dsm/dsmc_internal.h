@@ -30,6 +30,7 @@
 #include <daos/transport.h>
 #include <daos/hash.h>
 #include <daos/pool_map.h>
+#include <daos/daos_m.h>
 
 /* hhash table for all of objects on daos client,
  * pool, container, object etc */

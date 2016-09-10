@@ -77,7 +77,7 @@ cli_obj_free(struct dsr_cli_obj *obj)
 	if (obj->cob_mohs != NULL) {
 		for (i = 0; i < layout->ol_nr; i++) {
 			if (!daos_handle_is_inval(obj->cob_mohs[i]))
-				dsm_obj_close(obj->cob_mohs[i], NULL);
+				dsr_shard_obj_close(obj->cob_mohs[i], NULL);
 		}
 		D_FREE(obj->cob_mohs, layout->ol_nr * sizeof(*obj->cob_mohs));
 	}
@@ -135,7 +135,7 @@ cli_obj_hdl_unlink(struct dsr_cli_obj *obj)
 }
 
 /**
- * Open an object shard (dsm object), cache the open handle.
+ * Open an object shard (dsr shard object), cache the open handle.
  */
 static int
 cli_obj_open_shard(struct dsr_cli_obj *obj, unsigned int shard,
@@ -161,12 +161,13 @@ cli_obj_open_shard(struct dsr_cli_obj *obj, unsigned int shard,
 		memset(&oid, 0, sizeof(oid));
 		oid.id_shard = shard;
 		oid.id_pub   = obj->cob_md.omd_id;
-		/* NB: dsm open is a local operation, so it is ok to call
+		/* NB: dsr open is a local operation, so it is ok to call
 		 * it in sync mode, at least for now.
 		 */
-		rc = dsm_obj_open(obj->cob_coh, layout->ol_targets[shard],
-				  oid, obj->cob_mode, &obj->cob_mohs[shard],
-				  NULL);
+		rc = dsr_shard_obj_open(obj->cob_coh,
+					layout->ol_targets[shard],
+					oid, obj->cob_mode,
+					&obj->cob_mohs[shard], NULL);
 	}
 
 	if (rc == 0)
@@ -509,8 +510,8 @@ dsr_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	rc = dsm_obj_fetch(oper.oo_oh, epoch, dkey, nr, iods, sgls, maps,
-			   oper.oo_ev);
+	rc = dsr_shard_obj_fetch(oper.oo_oh, epoch, dkey, nr, iods, sgls,
+				 maps, oper.oo_ev);
 	if (rc != 0) {
 		D_DEBUG(DF_SRC, "Failed to fetch data from DSM: %d\n", rc);
 		D_GOTO(failed, rc);
@@ -568,8 +569,8 @@ dsr_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 			D_GOTO(failed, rc);
 		}
 
-		rc = dsm_obj_update(oper->oo_oh, epoch, dkey, nr, iods,
-				    sgls, oper->oo_ev);
+		rc = dsr_shard_obj_update(oper->oo_oh, epoch, dkey,
+					  nr, iods, sgls, oper->oo_ev);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 	}
@@ -655,8 +656,8 @@ dsr_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	rc = dsm_obj_list_dkey(oper.oo_oh, epoch, nr, kds, sgl, anchor,
-			       oper.oo_ev);
+	rc = dsr_shard_obj_list_dkey(oper.oo_oh, epoch, nr, kds,
+				     sgl, anchor, oper.oo_ev);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 

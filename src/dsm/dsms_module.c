@@ -183,15 +183,6 @@ static struct daos_rpc_handler dsms_handlers[] = {
 			.co_aggregate  = dsms_hdlr_tgt_cont_close_aggregate
 		}
 	}, {
-		.dr_opc		= DSM_TGT_OBJ_UPDATE,
-		.dr_hdlr	= dsms_hdlr_object_rw,
-	}, {
-		.dr_opc		= DSM_TGT_OBJ_FETCH,
-		.dr_hdlr	= dsms_hdlr_object_rw,
-	}, {
-		.dr_opc		= DSM_TGT_OBJ_ENUMERATE,
-		.dr_hdlr	= dsms_hdlr_object_enumerate,
-	}, {
 		.dr_opc		= 0
 	}
 };

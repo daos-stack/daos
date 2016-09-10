@@ -2,7 +2,7 @@
 
 Import('denv')
 
-denv.Append(CPPPATH = ['#/src/dmg', '#/src/dsm', '#/src/dsr', '#/src/server'])
+denv.Append(CPPPATH = ['#/src/dmg', '#/src/dsm', '#/src/dsr', '#/src/server', '/usr/include/openmpi-x86_64/'])
 
 libraries = ['daos_common', 'daos_transport', 'daos_event']
 libraries += ['daos_mgmt', 'daos_m', 'daos_sr']

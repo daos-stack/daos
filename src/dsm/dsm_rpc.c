@@ -223,56 +223,6 @@ struct dtp_req_format DQF_TGT_CONT_CLOSE =
 	DEFINE_DTP_REQ_FMT("DSM_TGT_CONT_CLOSE", tgt_cont_close_in_fields,
 			   tgt_cont_close_out_fields);
 
-struct dtp_msg_field *dsm_obj_update_in_fields[] = {
-	&DMF_OID,	/* object ID */
-	&DMF_UUID,	/* container handle uuid */
-	&DMF_UINT64,	/* epoch */
-	&DMF_UINT32,	/* count of vec_iod and sg */
-	&DMF_UINT32,	/* pad */
-	&DMF_IOVEC,	/* dkey */
-	&DMF_VEC_IOD_ARRAY, /* daos_vector */
-	&DMF_BULK_ARRAY,    /* BULK ARRAY */
-};
-
-struct dtp_msg_field *dsm_obj_fetch_out_fields[] = {
-	&DMF_INT,	/* status */
-	&DMF_UINT32,	/* pad */
-	&DMF_REC_SIZE_ARRAY, /* actual size of records */
-};
-
-struct dtp_msg_field *dsm_dkey_enumerate_in_fields[] = {
-	&DMF_OID,	/* object ID */
-	&DMF_UUID,	/* container handle uuid */
-	&DMF_UINT64,	/* epoch */
-	&DMF_UINT32,	/* number of kds */
-	&DMF_UINT32,	/* pad */
-	&DMF_DAOS_HASH_OUT, /* hash anchor */
-	&DMF_BULK, /* BULK array for dkey */
-};
-
-struct dtp_msg_field *dsm_dkey_enumerate_out_fields[] = {
-	&DMF_INT,		/* status of the request */
-	&DMF_UINT32,		/* pad */
-	&DMF_DAOS_HASH_OUT,	/* hash anchor */
-	&DMF_KEY_DESC_ARRAY,	/* kds array */
-};
-
-struct dtp_req_format DQF_OBJ_UPDATE =
-	DEFINE_DTP_REQ_FMT_ARRAY("DSM_OBJ_UPDATE",
-				 dsm_obj_update_in_fields,
-				 ARRAY_SIZE(dsm_obj_update_in_fields),
-				 dtp_single_out_fields, 1);
-
-struct dtp_req_format DQF_OBJ_FETCH =
-	DEFINE_DTP_REQ_FMT("DSM_OBJ_UPDATE",
-			   dsm_obj_update_in_fields,
-			   dsm_obj_fetch_out_fields);
-
-struct dtp_req_format DQF_DKEY_ENUMERATE =
-	DEFINE_DTP_REQ_FMT("DSM_DKEY_ENUMERATE",
-			   dsm_dkey_enumerate_in_fields,
-			   dsm_dkey_enumerate_out_fields);
-
 int
 dsm_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
 	       dtp_opcode_t opc, dtp_rpc_t **req)
@@ -345,24 +295,6 @@ struct daos_rpc dsm_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_TGT_CONT_DESTROY
-	}, {
-		.dr_name	= "DSM_OBJ_UPDATE",
-		.dr_opc		= DSM_TGT_OBJ_UPDATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_OBJ_UPDATE,
-	}, {
-		.dr_name	= "DSM_OBJ_FETCH",
-		.dr_opc		= DSM_TGT_OBJ_FETCH,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_OBJ_FETCH,
-	}, {
-		.dr_name	= "DSM_OBJ_ENUMERATE",
-		.dr_opc		= DSM_TGT_OBJ_ENUMERATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_DKEY_ENUMERATE,
 	}, {
 		.dr_opc		= 0
 	}

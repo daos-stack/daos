@@ -744,8 +744,8 @@ tgt_cont_hdl_delete(struct dhash_table *hash, struct tgt_cont_hdl *hdl)
 	D_ASSERT(deleted == true);
 }
 
-struct tgt_cont_hdl *
-dsms_tgt_cont_hdl_lookup(struct dhash_table *hash, const uuid_t uuid)
+static struct tgt_cont_hdl *
+dsms_tgt_cont_hdl_lookup_internal(struct dhash_table *hash, const uuid_t uuid)
 {
 	daos_list_t *rlink;
 
@@ -756,10 +756,27 @@ dsms_tgt_cont_hdl_lookup(struct dhash_table *hash, const uuid_t uuid)
 	return tgt_cont_hdl_obj(rlink);
 }
 
-void
-dsms_tgt_cont_hdl_put(struct dhash_table *hash, struct tgt_cont_hdl *hdl)
+struct tgt_cont_hdl *
+dsms_tgt_cont_hdl_lookup(const uuid_t uuid)
+{
+	struct dhash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
+
+	return dsms_tgt_cont_hdl_lookup_internal(hash, uuid);
+}
+
+static void
+dsms_tgt_cont_hdl_put_internal(struct dhash_table *hash,
+			       struct tgt_cont_hdl *hdl)
 {
 	dhash_rec_decref(hash, &hdl->tch_entry);
+}
+
+void
+dsms_tgt_cont_hdl_put(struct tgt_cont_hdl *hdl)
+{
+	struct dhash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
+
+	dsms_tgt_cont_hdl_put_internal(hash, hdl);
 }
 
 int
@@ -963,8 +980,8 @@ es_cont_open(void *vin)
 	int				vos_co_created = 0;
 	int				rc;
 
-	hdl = dsms_tgt_cont_hdl_lookup(&tls->dt_cont_hdl_hash,
-				       in->tcoi_cont_hdl);
+	hdl = dsms_tgt_cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash,
+						in->tcoi_cont_hdl);
 	if (hdl != NULL) {
 		if (hdl->tch_capas == in->tcoi_capas) {
 			D_DEBUG(DF_DSMS, DF_CONT": found compatible container "
@@ -979,7 +996,7 @@ es_cont_open(void *vin)
 				DP_UUID(in->tcoi_cont_hdl), hdl->tch_capas);
 			rc = -DER_EXIST;
 		}
-		dsms_tgt_cont_hdl_put(&tls->dt_cont_hdl_hash, hdl);
+		dsms_tgt_cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 		return rc;
 	}
 
@@ -1080,14 +1097,14 @@ es_cont_close(void *vin)
 	struct dsm_tls		       *tls = dsm_tls_get();
 	struct tgt_cont_hdl	       *hdl;
 
-	hdl = dsms_tgt_cont_hdl_lookup(&tls->dt_cont_hdl_hash,
-				       in->tcci_cont_hdl);
+	hdl = dsms_tgt_cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash,
+						in->tcci_cont_hdl);
 	if (hdl == NULL)
 		return 0;
 
 	tgt_cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
 
-	dsms_tgt_cont_hdl_put(&tls->dt_cont_hdl_hash, hdl);
+	dsms_tgt_cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return 0;
 }
 

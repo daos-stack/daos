@@ -89,10 +89,6 @@ enum dsm_operation {
 
 	DSM_TGT_EPOCH_FLUSH	= 60,
 	DSM_TGT_EPOCH_DISCARD	= 61,
-
-	DSM_TGT_OBJ_UPDATE	= 70,
-	DSM_TGT_OBJ_FETCH	= 71,
-	DSM_TGT_OBJ_ENUMERATE	= 72,
 };
 
 struct pool_connect_in {
@@ -118,23 +114,6 @@ struct pool_disconnect_in {
 
 struct pool_disconnect_out {
 	int32_t pdo_ret;
-};
-
-struct object_update_in {
-	daos_unit_oid_t oui_oid;
-	uuid_t		oui_co_hdl;
-	uint64_t	oui_epoch;
-	uint32_t	oui_nr;
-	uint32_t	oui_pad;
-	daos_dkey_t	oui_dkey;
-	struct dtp_array oui_iods;
-	struct dtp_array oui_bulks;
-};
-
-struct object_fetch_out {
-	int		 ofo_ret;
-	int		 ofo_pad;
-	struct dtp_array ofo_sizes;
 };
 
 struct cont_create_in {
@@ -250,24 +229,6 @@ struct tgt_cont_close_in {
 
 struct tgt_cont_close_out {
 	int32_t	tcco_ret;	/* number of errors */
-};
-
-/* object Enumerate in/out */
-struct object_enumerate_in {
-	daos_unit_oid_t oei_oid;
-	uuid_t		oei_co_hdl;
-	uint64_t	oei_epoch;
-	uint32_t	oei_nr;
-	uint32_t	oei_pad;
-	daos_hash_out_t oei_anchor;
-	dtp_bulk_t	oei_bulk;
-};
-
-struct object_enumerate_out {
-	int	 oeo_ret;
-	int	 oeo_pad;
-	daos_hash_out_t oeo_anchor;
-	struct dtp_array oeo_kds;
 };
 
 int

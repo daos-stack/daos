@@ -34,6 +34,11 @@
 #include "dsr_types.h"
 #include "placement.h"
 
+/* hhash table for all of objects on daos client,
+ * pool, container, object etc
+ **/
+extern struct daos_hhash *dsr_shard_hhash;
+
 struct daos_oclass_attr *dsr_oclass_attr_find(daos_obj_id_t oid);
 int dsr_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 int dsr_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct dsr_obj_md *md);
@@ -44,5 +49,96 @@ int dsr_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct dsr_obj_md *md);
 void dsr_pl_map_fini(void);
 int  dsr_pl_map_init(struct pool_map *po_map);
 struct pl_map *dsr_pl_map_find(daos_handle_t coh, daos_obj_id_t oid);
+
+/* dsr shard object */
+struct dsr_shard_object {
+	struct daos_hlink	do_hlink;
+
+	/* rank of the target this object belongs to */
+	daos_rank_t		do_rank;
+
+	/* number of service threads running on the target */
+	int			do_nr_srv;
+
+	/* object id */
+	daos_unit_oid_t		do_id;
+
+	/* container handler of the object */
+	daos_handle_t		do_co_hdl;
+
+	/* list to the container */
+	daos_list_t		do_co_list;
+};
+
+int
+dsr_shard_obj_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
+		   unsigned int mode, daos_handle_t *oh, daos_event_t *ev);
+
+int
+dsr_shard_obj_close(daos_handle_t oh, daos_event_t *ev);
+
+int
+dsr_shard_obj_update(daos_handle_t oh, daos_epoch_t epoch,
+		     daos_dkey_t *dkey, unsigned int nr,
+		     daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+		     daos_event_t *ev);
+
+int
+dsr_shard_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
+		    daos_dkey_t *dkey, unsigned int nr,
+		    daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+		    daos_vec_map_t *maps, daos_event_t *ev);
+
+int
+dsr_shard_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
+			uint32_t *nr, daos_key_desc_t *kds,
+			daos_sg_list_t *sgl, daos_hash_out_t *anchor,
+			daos_event_t *ev);
+
+/**
+ * Temporary solution for packing the tag into the hash out,
+ * which will stay at 25-28 bytes of daos_hash_out_t->body
+ */
+#define DAOS_HASH_DSM_TAG_OFFSET 24
+#define DAOS_HASH_DSM_TAG_LENGTH 4
+
+static inline void
+dsr_hash_hkey_copy(daos_hash_out_t *dst, daos_hash_out_t *src)
+{
+	memcpy(&dst->body[DAOS_HASH_HKEY_START],
+	       &src->body[DAOS_HASH_HKEY_START],
+	       DAOS_HASH_HKEY_LENGTH);
+}
+
+static inline void
+dsr_hash_set_start(daos_hash_out_t *hash_out)
+{
+	memset(&hash_out->body[DAOS_HASH_HKEY_START], 0,
+	       DAOS_HASH_HKEY_LENGTH);
+}
+
+static inline uint32_t
+dsr_hash_get_tag(daos_hash_out_t *anchor)
+{
+	uint32_t tag;
+
+	D_CASSERT(DAOS_HASH_HKEY_START + DAOS_HASH_HKEY_LENGTH <
+		  DAOS_HASH_DSM_TAG_OFFSET);
+	memcpy(&tag, &anchor->body[DAOS_HASH_DSM_TAG_OFFSET],
+		     DAOS_HASH_DSM_TAG_LENGTH);
+	return tag;
+}
+
+static inline void
+dsr_hash_set_tag(daos_hash_out_t *anchor, uint32_t tag)
+{
+	memcpy(&anchor->body[DAOS_HASH_DSM_TAG_OFFSET], &tag,
+	       DAOS_HASH_DSM_TAG_LENGTH);
+}
+
+/* dsrs_object.c */
+int dsrs_hdlr_object_rw(dtp_rpc_t *rpc);
+int dsrs_hdlr_object_enumerate(dtp_rpc_t *rpc);
+
 
 #endif /* __DSR_INTENRAL_H__ */

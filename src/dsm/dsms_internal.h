@@ -40,6 +40,7 @@
 #include <daos/list.h>
 #include <daos/lru.h>
 #include <daos/transport.h>
+#include <daos/daos_m.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_server.h>
 
@@ -84,49 +85,6 @@ struct tgt_pool_hdl {
 	uint64_t		tph_capas;
 	struct tgt_pool	       *tph_pool;
 	int			tph_ref;
-};
-
-/*
- * Target service per-thread pool object
- *
- * Stores per-thread, per-pool information, such as the vos pool handle. And,
- * caches per-pool information, such as the pool map version, so that DAOS
- * object I/Os do not need to access global tgt_pool objects.
- */
-struct dsms_vpool {
-	daos_list_t	dvp_list;
-	daos_handle_t	dvp_hdl;
-	uuid_t		dvp_uuid;
-	uint32_t	dvp_map_version;
-	int		dvp_ref;
-};
-
-/*
- * Target service per-thread container object
- *
- * Stores per-container information, such as the vos container handle, for one
- * service thread.
- */
-struct dsms_vcont {
-	struct daos_llink	dvc_list;
-	daos_handle_t		dvc_hdl;
-	uuid_t			dvc_uuid;
-};
-
-/*
- * Target service per-thread container handle object
- *
- * Stores per-handle information, such as the container capabilities, for one
- * service thread. Used by container and target services. References the
- * container and the per-thread pool object.
- */
-struct tgt_cont_hdl {
-	daos_list_t		tch_entry;
-	uuid_t			tch_uuid;	/* of the container handle */
-	uint64_t		tch_capas;
-	struct dsms_vpool      *tch_pool;
-	struct dsms_vcont      *tch_cont;
-	int			tch_ref;
 };
 
 /**
@@ -256,15 +214,6 @@ int dsms_vcont_cache_create(struct daos_lru_cache **cache);
 void dsms_vcont_cache_destroy(struct daos_lru_cache *cache);
 int dsms_tgt_cont_hdl_hash_create(struct dhash_table *hash);
 void dsms_tgt_cont_hdl_hash_destroy(struct dhash_table *hash);
-struct tgt_cont_hdl *dsms_tgt_cont_hdl_lookup(struct dhash_table *hash,
-					      const uuid_t uuid);
-void dsms_tgt_cont_hdl_put(struct dhash_table *hash, struct tgt_cont_hdl *hdl);
-
-/*
- * dsms_object.c
- */
-int dsms_hdlr_object_rw(dtp_rpc_t *rpc);
-int dsms_hdlr_object_enumerate(dtp_rpc_t *rpc);
 
 void dsms_conts_close(void);
 

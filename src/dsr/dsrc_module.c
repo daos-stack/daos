@@ -25,8 +25,11 @@
  */
 
 #include <daos_m.h>
+#include <daos/rpc.h>
 #include <pthread.h>
 #include <daos/transport.h>
+#include "dsr_rpc.h"
+#include "dsr_internal.h"
 
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static int		module_initialized;
@@ -47,10 +50,23 @@ dsr_init(void)
 	if (rc != 0)
 		D_GOTO(unlock, rc);
 
+	rc = daos_rpc_register(dsr_rpcs, NULL, DAOS_DSR_MODULE);
+	if (rc != 0)
+		D_GOTO(out_dsm, rc);
+
+	rc = daos_hhash_create(DAOS_HHASH_BITS, &dsr_shard_hhash);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
 	module_initialized = 1;
 unlock:
 	pthread_mutex_unlock(&module_lock);
 	return rc;
+out_rpc:
+	daos_rpc_unregister(dsr_rpcs);
+out_dsm:
+	dsm_fini();
+	D_GOTO(unlock, rc);
 }
 
 /**
@@ -64,6 +80,9 @@ dsr_fini(void)
 	pthread_mutex_lock(&module_lock);
 	if (!module_initialized)
 		D_GOTO(unlock, rc = -DER_UNINIT);
+
+	daos_rpc_unregister(dsr_rpcs);
+	daos_hhash_destroy(dsr_shard_hhash);
 
 	rc = dsm_fini();
 	if (rc != 0)
