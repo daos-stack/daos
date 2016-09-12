@@ -49,6 +49,12 @@ import sys
 import json
 import time
 
+from yaml import load
+try:
+    from yaml import CLoader as Loader
+except ImportError:
+    from yaml import Loader
+
 #pylint: disable=import-error
 from TestRunner import TestRunner
 from InfoRunner import InfoRunner
@@ -61,8 +67,16 @@ def testmain(info=None, start=1):
     test_list = []
 
     # load test list
-    for k in range(start, len(sys.argv)):
-        test_list.append(sys.argv[k])
+    if len(sys.argv) <= start:
+        print("No test files given, using test_list")
+        with open("scripts/test_list.yml", 'r') as fd:
+            test_load = load(fd, Loader=Loader)
+        test_list = test_load['test_list'].copy()
+    else:
+        for k in range(start, len(sys.argv)):
+            test_list.append(sys.argv[k])
+    print("Test list: " + str(test_list))
+
     if info.get_config("use_orte-dvm", ""):
         ortedvm = DvmRunner(info)
         ortedvm.launch_dvm_process()
@@ -96,8 +110,7 @@ def main():
             with open(config_file[1], "r") as config_fd:
                 config = json.load(config_fd)
     else:
-        print("No tests or config file given\n")
-        sys.exit(1)
+        print("No config file given")
 
     if 'build_path' in config:
         testing_dir = os.path.realpath(os.path.join(

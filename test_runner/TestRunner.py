@@ -68,6 +68,10 @@ class TestRunner():
             for item in range(0, len(key_list)):
                 (k, v, ex) = key_list[item]
                 self.test_info['defaultENV'][k] = self.info.get_info(v) + ex
+        config_key_list = self.info.get_config('setKeyFromConfig')
+        if config_key_list:
+            for (key, value) in config_key_list.items():
+                self.test_info['defaultENV'][key] = value
 
     def setup_default_env(self):
         """ setup default environment """
@@ -263,8 +267,7 @@ class TestRunner():
             self.test_info.clear()
             with open(test_module_name, 'r') as fd:
                 self.test_info = load(fd, Loader=Loader)
-            if 'setKeyFromHost' in self.test_info['module']:
-                self.add_default_env()
+            self.add_default_env()
             self.setup_default_env()
             rtn |= self.execute_strategy()
             self.dump_test_info()
