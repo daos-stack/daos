@@ -13,7 +13,7 @@ def scons():
 
     denv = env.Clone()
 
-    src = ['debug.c', 'hash.c', 'misc.c']
+    src = ['debug.c', 'clog.c', 'hash.c', 'misc.c']
     common = denv.SharedLibrary('libcrt_util', src)
     denv.Install('$PREFIX/lib/', common)
 

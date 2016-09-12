@@ -82,7 +82,7 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 					       struct crt_opc_info, doi_link);
 			crt_list_del_init(&info->doi_link);
 			/*
-			C_DEBUG(CF_TP, "deleted opc: 0x%x from map(hash %d).\n",
+			C_DEBUG("deleted opc: 0x%x from map(hash %d).\n",
 				info->doi_opc, i);
 			*/
 			C_FREE_PTR(info);
@@ -166,16 +166,16 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
 	crt_list_for_each_entry(info, &map->dom_hash[hash], doi_link) {
 		if (info->doi_opc == opc) {
 			/*
-			C_DEBUG(CF_TP, "re-reg, opc 0x%x.\n", opc);
+			C_DEBUG("re-reg, opc 0x%x.\n", opc);
 			*/
 			if (info->doi_input_size != input_size) {
-				C_DEBUG(CF_TP, "opc 0x%x, update input_size "
+				C_DEBUG("opc 0x%x, update input_size "
 					"from "CF_U64" to "CF_U64".\n", opc,
 					info->doi_input_size, input_size);
 				info->doi_input_size = input_size;
 			}
 			if (info->doi_output_size != output_size) {
-				C_DEBUG(CF_TP, "opc 0x%x, update output_size "
+				C_DEBUG("opc 0x%x, update output_size "
 					"from "CF_U64" to "CF_U64".\n", opc,
 					info->doi_output_size, output_size);
 				info->doi_output_size = output_size;
@@ -183,7 +183,7 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
 			info->doi_drf = drf;
 			if (rpc_cb != NULL) {
 				if (info->doi_rpc_cb != NULL)
-					C_DEBUG(CF_TP, "re-reg rpc callback, "
+					C_DEBUG("re-reg rpc callback, "
 						"opc 0x%x.\n", opc);
 				else
 					info->doi_rpccb_init = 1;
@@ -191,7 +191,7 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
 			}
 			if (co_ops != NULL) {
 				if (info->doi_co_ops != NULL)
-					C_DEBUG(CF_TP, "re-reg co_ops, "
+					C_DEBUG("re-reg co_ops, "
 						"opc 0x%x.\n", opc);
 				else
 					info->doi_coops_init = 1;

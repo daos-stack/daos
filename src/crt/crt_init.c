@@ -83,10 +83,10 @@ crt_gen_bmi_phyaddr(crt_phy_addr_t *phy_addr)
 				C_GOTO(out, rc = -CER_ADDRSTR_GEN);
 			}
 			if (strcmp(ip_str_p, "127.0.0.1") == 0) {
-				/* C_DEBUG(CF_TP, "bypass 127.0.0.1.\n"); */
+				/* C_DEBUG("bypass 127.0.0.1.\n"); */
 				continue;
 			}
-			C_DEBUG(CF_TP, "Get %s IPv4 Address %s\n",
+			C_DEBUG("Get %s IPv4 Address %s\n",
 				ifa->ifa_name, ip_str);
 			break;
 		} else if (ifa->ifa_addr->sa_family == AF_INET6) {
@@ -96,7 +96,7 @@ crt_gen_bmi_phyaddr(crt_phy_addr_t *phy_addr)
 			 * &((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr;
 			 * inet_ntop(AF_INET6, tmp_ptr, ip_str,
 			 *           INET6_ADDRSTRLEN);
-			 * C_DEBUG(CF_TP, "Get %s IPv6 Address %s\n",
+			 * C_DEBUG("Get %s IPv6 Address %s\n",
 			 *         ifa->ifa_name, ip_str);
 			 */
 		}
@@ -145,7 +145,7 @@ crt_gen_bmi_phyaddr(crt_phy_addr_t *phy_addr)
 		 ntohs(tmp_socket.sin_port));
 	addrstr = strndup(tmp_addrstr, CRT_ADDR_STR_MAX_LEN);
 	if (addrstr != NULL) {
-		C_DEBUG(CF_TP, "generated phyaddr: %s.\n", addrstr);
+		C_DEBUG("generated phyaddr: %s.\n", addrstr);
 		*phy_addr = addrstr;
 	} else {
 		C_ERROR("strndup failed.\n");
@@ -162,7 +162,7 @@ static void data_init()
 {
 	int rc = 0;
 
-	C_DEBUG(CF_TP, "initializing crt_gdata...\n");
+	C_DEBUG("initializing crt_gdata...\n");
 
 	/*
 	 * avoid size mis-matching between client/server side
@@ -191,13 +191,11 @@ crt_init(bool server)
 	crt_phy_addr_t	addr = NULL, addr_env;
 	int		rc = 0;
 
-	C_DEBUG(CF_TP, "Enter crt_init.\n");
-
 	if (gdata_init_flag == 0) {
 		rc = pthread_once(&gdata_init_once, data_init);
 		if (rc != 0) {
-			C_ERROR("crt_init failed, rc(%d) - %s.\n",
-				rc, strerror(rc));
+			C_PRINT_ERR("crt_init failed, rc(%d) - %s.\n",
+				    rc, strerror(rc));
 			C_GOTO(out, rc = -rc);
 		}
 	}
@@ -206,23 +204,28 @@ crt_init(bool server)
 	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
 	if (crt_gdata.cg_inited == 0) {
 		crt_gdata.cg_server = server;
-
 		if (server == true)
 			crt_gdata.cg_multi_na = true;
 
+		rc = crt_debug_init();
+		if (rc != 0) {
+			C_PRINT_ERR("crt_debug_init failed, rc: %d.\n", rc);
+			C_GOTO(out, rc);
+		}
+
 		addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
 		if (addr_env == NULL) {
-			C_DEBUG(CF_TP, "ENV %s not found.\n", CRT_PHY_ADDR_ENV);
+			C_DEBUG("ENV %s not found.\n", CRT_PHY_ADDR_ENV);
 			goto do_init;
 		} else{
-			C_DEBUG(CF_TP, "EVN %s: %s.\n",
+			C_DEBUG("EVN %s: %s.\n",
 				CRT_PHY_ADDR_ENV, addr_env);
 		}
 		if (strncmp(addr_env, "bmi+tcp", 7) == 0) {
 			if (strcmp(addr_env, "bmi+tcp") == 0) {
 				rc = crt_gen_bmi_phyaddr(&addr);
 				if (rc == 0) {
-					C_DEBUG(CF_TP, "ENV %s (%s), generated "
+					C_DEBUG("ENV %s (%s), generated "
 						"a BMI phyaddr: %s.\n",
 						CRT_PHY_ADDR_ENV, addr_env,
 						addr);
@@ -232,7 +235,7 @@ crt_init(bool server)
 					C_GOTO(out, rc);
 				}
 			} else {
-				C_DEBUG(CF_TP, "ENV %s found, use addr %s.\n",
+				C_DEBUG("ENV %s found, use addr %s.\n",
 					CRT_PHY_ADDR_ENV, addr_env);
 				addr = strdup(addr_env);
 				if (addr == NULL) {
@@ -297,7 +300,8 @@ do_init:
 unlock:
 	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 out:
-	C_DEBUG(CF_TP, "Exit crt_init, rc: %d.\n", rc);
+	if (rc != 0)
+		C_PRINT_ERR("crt_init failed, rc: %d.\n", rc);
 	return rc;
 }
 
@@ -311,8 +315,6 @@ int
 crt_finalize(void)
 {
 	int rc = 0;
-
-	C_DEBUG(CF_TP, "Enter crt_finalize.\n");
 
 	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
 
@@ -363,11 +365,14 @@ crt_finalize(void)
 		crt_gdata.cg_inited = 0;
 		gdata_init_once = PTHREAD_ONCE_INIT;
 		gdata_init_flag = 0;
+
+		crt_debug_fini();
 	} else {
 		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 	}
 
 out:
-	C_DEBUG(CF_TP, "Exit crt_finalize, rc: %d.\n", rc);
+	if (rc != 0)
+		C_PRINT_ERR("crt_finalize failed, rc: %d.\n", rc);
 	return rc;
 }

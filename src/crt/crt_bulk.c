@@ -129,7 +129,7 @@ crt_bulk_free(crt_bulk_t bulk_hdl)
 	int	rc = 0;
 
 	if (bulk_hdl == CRT_BULK_NULL) {
-		C_DEBUG(CF_TP, "crt_bulk_free with NULL bulk_hdl.\n");
+		C_DEBUG("crt_bulk_free with NULL bulk_hdl.\n");
 		C_GOTO(out, rc);
 	}
 

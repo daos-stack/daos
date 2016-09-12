@@ -518,7 +518,7 @@ crt_corpc_send(crt_rpc_t *req)
 
 		if (crt_rank_in_rank_list(co_info->co_excluded_ranks,
 					   member_ranks->rl_ranks[i])) {
-			C_DEBUG(CF_TP, "rank %d in excluded list, ignored.\n",
+			C_DEBUG("rank %d in excluded list, ignored.\n",
 				member_ranks->rl_ranks[i]);
 			co_info->co_child_ack_num++;
 			continue;

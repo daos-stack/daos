@@ -244,7 +244,7 @@ crt_ctx_epi_abort(crt_list_t *rlink, void *args)
 				      drp_epi_link) {
 		C_ASSERT(epi->epi_req_wait_num > 0);
 		if (msg_logged == false) {
-			C_DEBUG(CF_TP, "destroy context (idx %d, rank %d, "
+			C_DEBUG("destroy context (idx %d, rank %d, "
 				"req_wait_num "CF_U64").\n", ctx->dc_idx,
 				epi->epi_ep.ep_rank, epi->epi_req_wait_num);
 			msg_logged = true;
@@ -265,7 +265,7 @@ crt_ctx_epi_abort(crt_list_t *rlink, void *args)
 				      drp_epi_link) {
 		C_ASSERT(epi->epi_req_num > epi->epi_reply_num);
 		if (msg_logged == false) {
-			C_DEBUG(CF_TP, "destroy context (idx %d, rank %d, "
+			C_DEBUG("destroy context (idx %d, rank %d, "
 				"epi_req_num "CF_U64", epi_reply_num "
 				""CF_U64", inflight "CF_U64").\n",
 				ctx->dc_idx, epi->epi_ep.ep_rank,
@@ -304,7 +304,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	rc = dhash_table_traverse(&ctx->dc_epi_table, crt_ctx_epi_abort,
 				  &force);
 	if (rc != 0) {
-		C_DEBUG(CF_TP, "destroy context (idx %d, force %d), "
+		C_DEBUG("destroy context (idx %d, force %d), "
 			"dhash_table_traverse failed rc: %d.\n",
 			ctx->dc_idx, force, rc);
 		pthread_mutex_unlock(&ctx->dc_mutex);

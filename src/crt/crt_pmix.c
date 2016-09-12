@@ -322,7 +322,7 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 
 out:
 	if (rc == 0)
-		C_DEBUG(CF_TP, "crt_pmix_assign_rank get size %d, self %d.\n",
+		C_DEBUG("crt_pmix_assign_rank get size %d, self %d.\n",
 			grp_priv->gp_size, grp_priv->gp_self);
 	else if (myproc != NULL)
 		C_ERROR("PMIx ns %s rank %d, crt_pmix_assign_rank failed, "
@@ -366,7 +366,7 @@ crt_pmix_publish_self(struct crt_grp_priv *grp_priv)
 		C_GOTO(out, rc = -CER_NO_PERM);
 	}
 	if (!grp_priv->gp_service) {
-		C_DEBUG(CF_TP, "ignore publish self on non-service group.\n");
+		C_DEBUG("ignore publish self on non-service group.\n");
 		C_GOTO(out, rc = 0);
 	}
 
@@ -395,7 +395,7 @@ crt_pmix_publish_self(struct crt_grp_priv *grp_priv)
 		PMIX_INFO_FREE(info, nkeys);
 		C_GOTO(out, rc = -CER_NOMEM);
 	}
-	/* C_DEBUG(CF_TP, "PMIx_Publish %s, rc: %d.\n", info[0].key, rc); */
+	/* C_DEBUG("PMIx_Publish %s, rc: %d.\n", info[0].key, rc); */
 	PMIX_INFO_FREE(info, nkeys);
 
 	if (grp_priv->gp_self == 0) {

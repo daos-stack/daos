@@ -381,7 +381,7 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 	int           rc = 0;
 
 	/*
-	 * C_DEBUG(CF_TP,"in crt_proc_common_hdr, opc: 0x%x.\n", hdr->dch_opc);
+	 * C_DEBUG("in crt_proc_common_hdr, opc: 0x%x.\n", hdr->dch_opc);
 	 */
 
 	if (proc == CRT_PROC_NULL || hdr == NULL)
@@ -665,7 +665,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 	rpc_priv = container_of(data, struct crt_rpc_priv, drp_pub.dr_input);
 	C_ASSERT(rpc_priv != NULL);
 
-	/* C_DEBUG(CF_TP,"in crt_proc_in_common, data: %p\n", *data); */
+	/* C_DEBUG("in crt_proc_in_common, data: %p\n", *data); */
 
 	rc = crt_proc_common_hdr(proc, &rpc_priv->drp_req_hdr);
 	if (rc != 0) {
@@ -675,7 +675,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 
 	if (*data == NULL) {
 		/*
-		C_DEBUG(CF_TP,"crt_proc_in_common, opc: 0x%x, NULL input.\n",
+		C_DEBUG("crt_proc_in_common, opc: 0x%x, NULL input.\n",
 			rpc_priv->drp_req_hdr.dch_opc);
 		*/
 		C_GOTO(out, rc);
@@ -705,7 +705,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 	rpc_priv = container_of(data, struct crt_rpc_priv, drp_pub.dr_output);
 	C_ASSERT(rpc_priv != NULL);
 
-	/* C_DEBUG(CF_TP,"in crt_proc_out_common, data: %p\n", *data); */
+	/* C_DEBUG("in crt_proc_out_common, data: %p\n", *data); */
 
 	rc = crt_proc_common_hdr(proc, &rpc_priv->drp_reply_hdr);
 	if (rc != 0) {
@@ -715,7 +715,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 
 	if (*data == NULL) {
 		/*
-		C_DEBUG(CF_TP,"crt_proc_out_common, opc: 0x%x, NULL output.\n",
+		C_DEBUG("crt_proc_out_common, opc: 0x%x, NULL output.\n",
 			rpc_priv->drp_req_hdr.dch_opc);
 		*/
 		C_GOTO(out, rc);

@@ -231,7 +231,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		}
 	}
 
-	C_DEBUG(CF_TP, "in crt_hg_init, listen address: %s.\n", *addr);
+	C_DEBUG("in crt_hg_init, listen address: %s.\n", *addr);
 
 out:
 	return rc;
@@ -317,7 +317,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 			NA_Finalize(na_class);
 			C_GOTO(out, rc = -CER_HG);
 		}
-		C_DEBUG(CF_TP, "New context(idx:%d), listen address: cci+%s.\n",
+		C_DEBUG("New context(idx:%d), listen address: cci+%s.\n",
 			idx, addr_str);
 
 		hg_class = HG_Init_na(na_class);
@@ -482,7 +482,6 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	C_ASSERT(proc != NULL);
 	opc = rpc_priv->drp_req_hdr.dch_opc;
 
-	/* C_DEBUG(CF_TP,"in crt_rpc_handler_common, opc: 0x%x.\n", opc); */
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
 	if (opc_info == NULL) {
 		C_ERROR("opc: 0x%x, lookup failed.\n", opc);
@@ -493,7 +492,6 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	C_ASSERT(opc_info->doi_opc == opc);
 	rpc_priv->drp_opc_info = opc_info;
 
-	/* C_DEBUG(CF_TP,"in crt_rpc_handler_common, opc: 0x%x.\n", opc); */
 	C_ASSERT(opc_info->doi_input_size <= CRT_MAX_INPUT_SIZE &&
 		 opc_info->doi_output_size <= CRT_MAX_OUTPUT_SIZE);
 
@@ -599,10 +597,6 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 	int		rc = 0;
 
 	C_ASSERT(rpc_priv != NULL);
-	/*
-	C_DEBUG(CF_TP,"enter crt_hg_req_destroy, opc: 0x%x.\n",
-		rpc_priv->drp_pub.dr_opc);
-	*/
 	if (rpc_priv->drp_output_got != 0) {
 		hg_ret = HG_Free_output(rpc_priv->drp_hg_hdl,
 					&rpc_priv->drp_pub.dr_output);
@@ -652,7 +646,6 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	hg_return_t			hg_ret = HG_SUCCESS;
 	int				rc = 0;
 
-	/* C_DEBUG(CF_TP,"enter crt_hg_req_send_cb.\n"); */
 	req_cbinfo = (struct crt_hg_send_cbinfo *)hg_cbinfo->arg;
 	C_ASSERT(req_cbinfo != NULL);
 	C_ASSERT(hg_cbinfo->type == HG_CB_FORWARD);
@@ -664,7 +657,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 
 	if (hg_cbinfo->ret != HG_SUCCESS) {
 		if (hg_cbinfo->ret == HG_CANCELED) {
-			C_DEBUG(CF_TP, "request being canceled, opx: 0x%x.\n",
+			C_DEBUG("request being canceled, opx: 0x%x.\n",
 				opc);
 			rc = -CER_CANCELED;
 		} else {
@@ -784,7 +777,6 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_opcode_t			opc;
 	int				rc = 0;
 
-	/* C_DEBUG(CF_TP,"enter crt_hg_reply_send_cb.\n"); */
 	req_cbinfo = (struct crt_hg_send_cbinfo *)hg_cbinfo->arg;
 	C_ASSERT(req_cbinfo != NULL && req_cbinfo->rsc_rpc_priv != NULL);
 
@@ -1009,7 +1001,7 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, crt_sg_list_t *sgl)
 	}
 
 	if (sgl->sg_nr.num < bulk_sgnum) {
-		C_DEBUG(CF_TP, "sgl->sg_nr.num (%d) too small, %d required.\n",
+		C_DEBUG("sgl->sg_nr.num (%d) too small, %d required.\n",
 			sgl->sg_nr.num, bulk_sgnum);
 		sgl->sg_nr.num_out = bulk_sgnum;
 		C_GOTO(out, rc = -CER_TRUNC);
@@ -1089,7 +1081,7 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 
 	if (hg_cbinfo->ret != HG_SUCCESS) {
 		if (hg_cbinfo->ret == HG_CANCELED) {
-			C_DEBUG(CF_TP, "bulk transferring canceled.\n");
+			C_DEBUG("bulk transferring canceled.\n");
 			rc = -CER_CANCELED;
 		} else {
 			C_ERROR("crt_hg_bulk_transfer_cb,hg_cbinfo->ret: %d.\n",
@@ -1100,7 +1092,7 @@ crt_hg_bulk_transfer_cb(const struct hg_cb_info *hg_cbinfo)
 	}
 
 	if (bulk_cbinfo->bci_cb == NULL) {
-		C_DEBUG(CF_TP, "No bulk completion callback registered.\n");
+		C_DEBUG("No bulk completion callback registered.\n");
 		C_GOTO(out, hg_ret);
 	}
 	crt_bulk_cbinfo.bci_arg = bulk_cbinfo->bci_arg;

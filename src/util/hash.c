@@ -287,7 +287,7 @@ dh_rec_insert(struct dhash_table *htable, unsigned idx, crt_list_t *rlink)
 		bucket->hb_dep++;
 		if (bucket->hb_dep > htable->ht_dep_max) {
 			htable->ht_dep_max = bucket->hb_dep;
-			C_DEBUG(CF_MISC, "Max depth %d/%d/%d\n",
+			crt_log(MISC_DBG, "Max depth %d/%d/%d\n",
 				htable->ht_dep_max, htable->ht_nr,
 				htable->ht_nr_max);
 		}
@@ -715,7 +715,7 @@ dhash_table_destroy_inplace(struct dhash_table *htable, bool force)
 	for (i = 0; i < nr; i++) {
 		while (!crt_list_empty(&buckets[i].hb_head)) {
 			if (!force) {
-				C_DEBUG(CF_MISC, "Warning, non-empty hash\n");
+				crt_log(MISC_DBG, "Warning, non-empty hash\n");
 				return -CER_BUSY;
 			}
 			dhash_rec_delete_at(htable, buckets[i].hb_head.next);
@@ -754,7 +754,7 @@ void
 dhash_table_debug(struct dhash_table *htable)
 {
 #if DHASH_DEBUG
-	C_DEBUG(CF_MISC, "max nr: %d, cur nr: %d, max_dep: %d\n",
+	crt_log(MISC_DBG, "max nr: %d, cur nr: %d, max_dep: %d\n",
 		htable->ht_nr_max, htable->ht_nr, htable->ht_dep_max);
 #endif
 }

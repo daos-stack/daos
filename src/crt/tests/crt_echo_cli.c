@@ -116,7 +116,7 @@ static void run_client(void)
 		e_req->age = 32 + svr_ep.ep_tag;
 		e_req->days = myrank;
 
-		C_ERROR("client(rank %d) sending checkin rpc with tag %d, "
+		C_DEBUG("client(rank %d) sending checkin rpc with tag %d, "
 		       "name: %s, age: %d, days: %d.\n",
 		       myrank, svr_ep.ep_tag, e_req->name, e_req->age,
 		       e_req->days);

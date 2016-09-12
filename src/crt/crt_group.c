@@ -229,14 +229,14 @@ crt_conn_tag(struct crt_hg_context *hg_ctx, crt_phy_addr_t base_addr,
 		port = atoi(pchar);
 		port += ctx_idx;
 		snprintf(pchar, 16, "%d", port);
-		C_DEBUG(CF_TP, "base uri(%s), tag(%d) uri(%s).\n",
+		C_DEBUG("base uri(%s), tag(%d) uri(%s).\n",
 			base_addr, tag, tmp_addrstr);
 	}
 
 	rc = crt_hg_addr_lookup_wait(hg_class, hg_context, tmp_addrstr,
 				     &tmp_addr);
 	if (rc == 0) {
-		C_DEBUG(CF_TP, "Connect to %s succeed.\n", tmp_addrstr);
+		C_DEBUG("Connect to %s succeed.\n", tmp_addrstr);
 		C_ASSERT(tmp_addr != NULL);
 		*na_addr = tmp_addr;
 	} else {
@@ -802,7 +802,7 @@ crt_group_lookup(crt_group_id_t grp_id)
 	pthread_rwlock_rdlock(&crt_grp_list_rwlock);
 	grp_priv = crt_grp_lookup_locked(grp_id);
 	if (grp_priv == NULL)
-		C_DEBUG(CF_TP, "group non-exist.\n");
+		C_DEBUG("group non-exist.\n");
 	pthread_rwlock_unlock(&crt_grp_list_rwlock);
 
 	return (grp_priv == NULL) ? NULL : &grp_priv->gp_pub;
@@ -825,7 +825,7 @@ crt_hdlr_grp_destroy(crt_rpc_t *rpc_req)
 	pthread_rwlock_rdlock(&crt_grp_list_rwlock);
 	grp_priv = crt_grp_lookup_locked(gd_in->gd_grp_id);
 	if (grp_priv == NULL) {
-		C_DEBUG(CF_TP, "group non-exist.\n");
+		C_DEBUG("group non-exist.\n");
 		pthread_rwlock_unlock(&crt_grp_list_rwlock);
 		C_GOTO(out, rc = -CER_NONEXIST);
 	}

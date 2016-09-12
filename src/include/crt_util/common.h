@@ -41,77 +41,65 @@
 #include <byteswap.h>
 
 #include <crt_api.h>
+#include <crt_util/clog.h>
 
-#define CRT_ENV_DEBUG	"CRT_DEBUG"
+extern int crt_logfac;
+extern int crt_mem_logfac;
+extern int crt_misc_logfac;
 
-/**
- * Debugging flags (32 bits, non-overlapping)
+#define CRT_ERR		(crt_logfac | CLOG_ERR)
+#define CRT_WARN	(crt_logfac | CLOG_WARN)
+#define CRT_DBG		(crt_logfac | CLOG_DBG)
+
+#define MEM_ERR		(crt_mem_logfac | CLOG_ERR)
+#define MEM_WARN	(crt_mem_logfac | CLOG_WARN)
+#define MEM_DBG		(crt_mem_logfac | CLOG_DBG)
+
+#define MISC_ERR	(crt_misc_logfac | CLOG_ERR)
+#define MISC_WARN	(crt_misc_logfac | CLOG_WARN)
+#define MISC_DBG	(crt_misc_logfac | CLOG_DBG)
+
+/*
+ * Add a new log facility.
+ *
+ * \param aname [IN]	abbr. name for the facility, for example DSR.
+ * \param lname [IN]	long name for the facility, for example CRT_SR.
+ *
+ * \return		new positive facility number on success, -1 on error.
  */
-enum {
-	CF_UNKNOWN	= (1 << 0),
-	CF_VERB_FUNC	= (1 << 1),
-	CF_VERB_ALL	= (1 << 2),
-	CF_CL		= (1 << 5),
-	CF_CL2		= (1 << 6),
-	CF_CL3		= (1 << 7),
-	CF_PL		= (1 << 8),
-	CF_PL2		= (1 << 9),
-	CF_PL3		= (1 << 10),
-	CF_TP		= (1 << 11),
-	CF_VOS1		= (1 << 12),
-	CF_VOS2		= (1 << 13),
-	CF_VOS3		= (1 << 14),
-	CF_SERVER	= (1 << 15),
-	CF_MGMT		= (1 << 16),
-	CF_DSMC		= (1 << 17),
-	CF_DSMS		= (1 << 18),
-	CF_SR		= (1 << 19),
-	CF_SRC		= (1 << 20),
-	CF_SRS		= (1 << 21),
-	CF_MISC		= (1 << 30),
-	CF_MEM		= (1 << 31),
-};
+static inline int
+crt_add_log_facility(char *aname, char *lname)
+{
+	return crt_log_allocfacility(aname, lname);
+}
 
-unsigned int crt_debug_mask(void);
-void crt_debug_set(unsigned int mask);
-
+/* C_PRINT and C_PRINT_ERR can be used before clog enabled or after disabled */
 #define C_PRINT(fmt, ...)						\
 do {									\
 	fprintf(stdout, fmt, ## __VA_ARGS__);				\
 	fflush(stdout);							\
 } while (0)
 
-#define C_DEBUG(mask, fmt, ...)						\
-do {									\
-	unsigned int __mask = crt_debug_mask();			\
-	if (!((__mask & (mask)) & ~(CF_VERB_FUNC | CF_VERB_ALL)))	\
-		break;							\
-	if (__mask & CF_VERB_ALL) {					\
-		fprintf(stdout, "%s:%d:%d:%s() " fmt, __FILE__,		\
-			getpid(), __LINE__, __func__, ## __VA_ARGS__);  \
-	} else if (__mask & CF_VERB_FUNC) {				\
-		fprintf(stdout, "%s() " fmt,				\
-			__func__, ## __VA_ARGS__);			\
-	} else {							\
-		fprintf(stdout, fmt, ## __VA_ARGS__);			\
-	}								\
-	fflush(stdout);							\
-} while (0)
-
-#define C_ERROR(fmt, ...)						\
+#define C_PRINT_ERR(fmt, ...)						\
 do {									\
 	fprintf(stderr, "%s:%d:%d:%s() " fmt, __FILE__, getpid(),	\
 		__LINE__, __func__, ## __VA_ARGS__);			\
 	fflush(stderr);							\
 } while (0)
 
-#define C_FATAL(error, fmt, ...)					\
-do {									\
-	fprintf(stderr, "%s:%d:%s() " fmt, __FILE__, __LINE__,		\
-		__func__, ## __VA_ARGS__);				\
-	fflush(stderr);							\
-	exit(error);							\
-} while (0)
+/*
+ * C_DEBUG/C_ERROR etc can-only be used when clog enabled. User can define other
+ * similar macros using different subsystem and log-level, for example:
+ * #define DSR_DEBUG(...) crt_log(DSR_DEBUG, ...)
+ */
+#define C_DEBUG(fmt, ...)						\
+	crt_log(CRT_DBG, fmt, ##__VA_ARGS__)
+
+#define C_WARN(fmt, ...)						\
+	crt_log(CRT_WARN, fmt, ##__VA_ARGS__)
+
+#define C_ERROR(fmt, ...)						\
+	crt_log(CRT_ERR, fmt, ##__VA_ARGS__)
 
 #define C_ASSERT(e)	assert(e)
 
@@ -156,9 +144,9 @@ char *CP_UUID(const void *uuid);
 	do {								 \
 		(ptr) = (__typeof__(ptr))calloc(1, size);		 \
 		if ((ptr) != NULL) {					 \
-			C_DEBUG(CF_MEM, "alloc #ptr : %d at %p.\n",	\
-				(int)(size), ptr);			\
-			break;						\
+			crt_log(MEM_DBG, "alloc #ptr : %d at %p.\n",	 \
+				(int)(size), ptr);			 \
+			break;						 \
 		}						 \
 		C_ERROR("out of memory (tried to alloc '" #ptr "' = %d)",\
 			(int)(size));					 \
@@ -166,7 +154,7 @@ char *CP_UUID(const void *uuid);
 
 # define C_FREE(ptr, size)						\
 	do {								\
-		C_DEBUG(CF_MEM, "free #ptr : %d at %p.\n",		\
+		crt_log(MEM_DBG, "free #ptr : %d at %p.\n",		\
 			(int)(size), ptr);				\
 		free(ptr);						\
 		(ptr) = NULL;						\

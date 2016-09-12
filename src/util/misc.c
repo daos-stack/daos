@@ -93,7 +93,7 @@ void
 crt_rank_list_copy(crt_rank_list_t *dst, crt_rank_list_t *src, bool input)
 {
 	if (dst == NULL || src == NULL) {
-		C_DEBUG(CF_MISC, "crt_rank_list_copy do nothing, dst: %p, "
+		crt_log(MISC_DBG, "crt_rank_list_copy do nothing, dst: %p, "
 			"src: %p.\n", dst, src);
 		return;
 	}
