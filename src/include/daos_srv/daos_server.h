@@ -172,4 +172,16 @@ struct dss_module {
 
 int dss_collective(int (*func)(void *), void *arg);
 
+/* Convert Argobots errno to DAOS ones. */
+static inline int
+dss_abterr2der(int abt_errno)
+{
+	switch (abt_errno) {
+	case ABT_SUCCESS:	return 0;
+	case ABT_ERR_MEM:	return -DER_NOMEM;
+	default:		return -DER_INVAL;
+	}
+	return 0;
+}
+
 #endif /* __DSS_API_H__ */

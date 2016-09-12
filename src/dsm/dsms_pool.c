@@ -667,7 +667,7 @@ pool_connect_bulk(dtp_rpc_t *rpc, struct pool_svc *svc)
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
-		D_GOTO(out_bulk, rc = -DER_NOMEM);
+		D_GOTO(out_bulk, rc = dss_abterr2der(rc));
 
 	rc = dtp_bulk_transfer(&map_desc, bulk_cb, &eventual, &map_opid);
 	if (rc != 0)
@@ -675,7 +675,7 @@ pool_connect_bulk(dtp_rpc_t *rpc, struct pool_svc *svc)
 
 	rc = ABT_eventual_wait(eventual, (void **)&status);
 	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = -DER_NOMEM);
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
 
 	if (*status != 0)
 		D_GOTO(out_eventual, rc = *status);

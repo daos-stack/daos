@@ -335,4 +335,5 @@ daos_errno2der(int err)
 	}
 	return 0;
 }
+
 #endif /* __DAOS_COMMON_H__ */

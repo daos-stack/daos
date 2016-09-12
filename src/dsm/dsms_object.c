@@ -331,7 +331,7 @@ dsms_bulk_transfer(dtp_rpc_t *rpc, daos_handle_t dph, daos_handle_t dch,
 	bulk_perm = bulk_op == DTP_BULK_PUT ? DTP_BULK_RO : DTP_BULK_RW;
 	rc = ABT_future_create(nr, NULL, &future);
 	if (rc != 0)
-		return -DER_NOMEM;
+		return dss_abterr2der(rc);
 
 	memset(&arg, 0, sizeof(arg));
 	arg.future = future;

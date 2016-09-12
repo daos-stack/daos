@@ -181,13 +181,13 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 	ret = ABT_sched_config_create(&config, cv_event_freq, 10,
 				      ABT_sched_config_var_end);
 	if (ret != ABT_SUCCESS)
-		return ret;
+		return dss_abterr2der(ret);
 
 	ret = ABT_sched_create(&sched_def, pool_num, pools, config,
 			       new_sched);
 	ABT_sched_config_free(&config);
 
-	return 0;
+	return dss_abterr2der(ret);
 }
 
 /**
@@ -326,7 +326,7 @@ dss_start_one_thread(hwloc_cpuset_t cpus, int idx)
 	rc = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPSC,
 				   ABT_TRUE, &dthread->dt_pool);
 	if (rc != ABT_SUCCESS)
-		D_GOTO(out_dthread, rc);
+		D_GOTO(out_dthread, rc = dss_abterr2der(rc));
 
 	rc = dss_sched_create(&dthread->dt_pool, 1, &dthread->dt_sched);
 	if (rc != 0) {
@@ -337,14 +337,14 @@ dss_start_one_thread(hwloc_cpuset_t cpus, int idx)
 	rc = ABT_xstream_create(dthread->dt_sched, &dthread->dt_xstream);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create xstream fails %d\n", rc);
-		D_GOTO(out_sched, rc = -DER_INVAL);
+		D_GOTO(out_sched, rc = dss_abterr2der(rc));
 	}
 
 	rc = ABT_thread_create(dthread->dt_pool, dss_srv_handler,
 			       dthread, ABT_THREAD_ATTR_NULL, NULL);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create thread failed: %d\n", rc);
-		D_GOTO(out_xthream, rc = -DER_INVAL);
+		D_GOTO(out_xthream, rc = dss_abterr2der(rc));
 	}
 
 	/** add to the list of started thread */
@@ -526,7 +526,7 @@ dss_collective(int (*func)(void *), void *arg)
 	 */
 	rc = ABT_future_create(dss_nthreads + 1, collective_reduce, &future);
 	if (rc != ABT_SUCCESS)
-		return -DER_NOMEM;
+		return dss_abterr2der(rc);
 	rc = ABT_future_set(future, &nfailed);
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 
@@ -542,7 +542,8 @@ dss_collective(int (*func)(void *), void *arg)
 		rc = ABT_task_create(dthread->dt_pool, collective_func, &carg,
 				     NULL /* task */);
 		if (rc != ABT_SUCCESS) {
-			rc = ABT_future_set(future, (void *)-DER_NOMEM);
+			rc = dss_abterr2der(rc);
+			rc = ABT_future_set(future, (void *)(intptr_t)rc);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
 	}
