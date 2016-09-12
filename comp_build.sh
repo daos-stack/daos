@@ -219,7 +219,12 @@ function setup_dep()
       blessed_num=$(basename $(dirname ${!blessed_varname}))
     fi
     if [ $version -gt $blessed_num ]; then
-      declare $upper_name=${!good_varname}
+      if [ ! -d ${!good_varname} ]; then
+        print_status "${!good_varname} not found. Using latest instead"
+        declare $upper_name=$(dirname ${!blessed_varname})
+      else
+        declare $upper_name=${!good_varname}
+      fi
     else
       declare $upper_name=$(dirname ${!blessed_varname})
     fi
