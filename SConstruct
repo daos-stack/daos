@@ -68,8 +68,11 @@ def scons():
     env.Append(CCFLAGS=['-O2'])
 
     # generate targets in specific build dir to avoid polluting the source code
-    VariantDir('build', '.', duplicate=0)
-    SConscript('build/src/SConscript', exports=['env', 'prereqs'])
+    arch_dir = 'build/%s' % platform
+    VariantDir(arch_dir, '.', duplicate=0)
+    SConscript('%s/src/SConscript' % arch_dir, exports=['env', 'prereqs'])
+    SConscript('%s/scons_local/test_runner/SConscript' % arch_dir,
+               exports=['env', 'prereqs'])
 
     # Put this after all SConscript calls so that any imports they require can
     # be included.
