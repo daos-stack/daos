@@ -221,7 +221,14 @@ function setup_dep()
     if [ $version -gt $blessed_num ]; then
       if [ ! -d ${!good_varname} ]; then
         print_status "${!good_varname} not found. Using latest instead"
-        declare $upper_name=$(dirname ${!blessed_varname})
+        if [ -n "${!blessed_varname}" ]; then
+          declare $upper_name=$(dirname ${!blessed_varname})
+        else
+          # No update-scratch job to get latest from.  Try component latest
+          print_status "No blessed version.  Using ${name} latest"
+          comp_latest=${CORAL_ARTIFACTS}/${name}-update-scratch/latest
+          declare $upper_name=${comp_latest}
+        fi
       else
         declare $upper_name=${!good_varname}
       fi
