@@ -74,7 +74,7 @@ REQS.define('openpa',
                       'make install'], libs=['opa'])
 
 RETRIEVER = \
-    GitRepoRetriever('ssh://review.whamcloud.com:29418/daos/mercury',
+    GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
                      True)
 REQS.define('mercury',
             retriever=RETRIEVER,
@@ -160,7 +160,7 @@ REQS.define('argobots',
             libs=['abt'],
             headers=['abt.h'])
 
-RETRIEVER = GitRepoRetriever("ssh://review.whamcloud.com:29418/coral/cppr",
+RETRIEVER = GitRepoRetriever("http://review.whamcloud.com/coral/cppr",
                              True)
 REQS.define('cppr',
             retriever=RETRIEVER,
@@ -176,7 +176,7 @@ REQS.define('cppr',
             libs=["cppr"],
             requires=['ompi', 'mercury'])
 
-RETRIEVER = GitRepoRetriever("ssh://review.whamcloud.com:29418/daos/iof",
+RETRIEVER = GitRepoRetriever("http://review.whamcloud.com/daos/iof",
                              True)
 REQS.define('iof',
             retriever=RETRIEVER,
@@ -212,7 +212,7 @@ REQS.define('ofi',
             libs=['fabric'],
             headers=['rdma/fabric.h'])
 
-RETRIEVER = GitRepoRetriever("ssh://review.whamcloud.com:29418/daos/mcl", True)
+RETRIEVER = GitRepoRetriever("http://review.whamcloud.com/daos/mcl", True)
 REQS.define('mcl',
             retriever=RETRIEVER,
             commands=["scons "
@@ -226,3 +226,19 @@ REQS.define('mcl',
             headers=["process_set.h", "mcl_log.h", "mcl_event.h"],
             libs=["mcl"],
             requires=['ompi', 'mercury'])
+
+RETRIEVER = GitRepoRetriever("http://review.whamcloud.com/daos/cart", True)
+REQS.define('cart',
+            retriever=RETRIEVER,
+            commands=["scons "
+                      "PMIX_PREBUILT=$PMIX_PREFIX " \
+                      "ARGOBOTS_PREBUILT=$ARGOBOTS_PREFIX " \
+                      "OMPI_PREBUILT=$OMPI_PREFIX " \
+                      "HWLOC_PREBUILT=$HWLOC_PREFIX " \
+                      "MERCURY_PREBUILT=$MERCURY_PREFIX " \
+                      "CCI_PREBUILT=$CCI_PREFIX " \
+                      "OPENPA_PREBUILT=$OPENPA_PREFIX " \
+                      "PREFIX=$CART_PREFIX install"],
+            headers=["crt_api.h"],
+            libs=["crt"],
+            requires=['ompi', 'mercury', 'argobots', 'pmix'])

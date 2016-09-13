@@ -1,6 +1,6 @@
 #!/bin/bash
 
-JOBS="argobots nvml daos cppr iof mcl mercury ompi"
+JOBS="argobots nvml daos cppr iof mcl mercury ompi cart"
 if [ $# -ne 1 ]; then
   cat << EOF
 Usage: $0 <path_to_duplicate>
