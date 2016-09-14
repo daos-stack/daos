@@ -70,27 +70,23 @@ vos_fini(void);
  * \param uuid	[IN]    Pool UUID
  * \param size	[IN]	Size of the pool
  * \param poh	[OUT]	Returned pool open handle
- * \param ev	[IN]    Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
-		daos_event_t *ev);
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t size);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
  * The open handle will be invalidated after the destroy.
  *
  * \param poh	[IN]	Pool open handle
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
+ * \param uuid	[IN]	Pool UUID
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_pool_destroy(const char *path, uuid_t uuid, daos_event_t *ev);
+vos_pool_destroy(const char *path, uuid_t uuid);
 
 /**
  * Open a Versioning Object Storage Pool (VOSP), load its root object
@@ -99,40 +95,33 @@ vos_pool_destroy(const char *path, uuid_t uuid, daos_event_t *ev);
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param poh	[OUT]	Returned pool handle
- * \param ev	[IN]    Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
-	      daos_event_t *ev);
+vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
  * will be revoked.
  *
  * \param poh	[IN]	Pool open handle
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_close(daos_handle_t poh, daos_event_t *ev);
+vos_pool_close(daos_handle_t poh);
 
 /**
  * Query attributes and statistics of the current pool
  *
  * \param poh	[IN]	Pool open handle
  * \param pinfo	[OUT]	Returned pool attributes and stats info
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev);
+vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo);
 
 /**
  * Create a container within a VOSP
@@ -140,13 +129,11 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev);
  * \param poh	[IN]	Pool open handle
  * \param co_uuid
  *		[IN]	UUID for the new container
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev);
+vos_co_create(daos_handle_t poh, uuid_t co_uuid);
 
 /**
  * Destroy a container
@@ -154,13 +141,11 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev);
  * \param poh	[IN]	Pool open handle
  * \param co_uuid
  *		[IN]	UUID for the container to be destroyed
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev);
+vos_co_destroy(daos_handle_t poh, uuid_t co_uuid);
 
 /**
  * Open a container within a VOSP
@@ -170,52 +155,43 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev);
  *		[IN]	Container uuid
  * \param mode	[IN]	open mode: rd-only, rdwr...
  * \param coh	[OUT]	Returned container handle
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
-	    daos_event_t *ev);
+vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh);
 
 /**
  * Release container open handle
  *
  * \param coh	[IN]	container open handle
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_close(daos_handle_t coh, daos_event_t *ev);
+vos_co_close(daos_handle_t coh);
 
 /**
  * Query container information.
  *
  * \param coh	[IN]	Container open handle.
  * \param cinfo	[OUT]	Returned container attributes and other information.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_query(daos_handle_t coh, vos_co_info_t *cinfo, daos_event_t *ev);
+vos_co_query(daos_handle_t coh, vos_co_info_t *cinfo);
 
 /**
  * Flush changes in the specified epoch to storage
  *
  * \param coh	[IN]	Container open handle
  * \param epoch	[IN]	Epoch to flush
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
+vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
 
 /**
  * Aggregates all epochs within the epoch range \a epr.
@@ -225,14 +201,11 @@ vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  *
  * \param coh	[IN]	Container open handle
  * \param epr	[IN]	The epoch range of aggregation
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_epoch_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-		    daos_event_t *ev);
+vos_epoch_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -244,15 +217,12 @@ vos_epoch_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  * \param epr		[IN]	The epoch range to discard
  * \param cookie	[IN]	Cookie ID to identify records,
  *				keys to discard
- * \param ev		[IN]	Completion event, it is optional
- *				and can be NULL. Function will run
- *				in blocking mode if \a ev is NULL.
  *
  * \return			Zero on success, negative value if error
  */
 int
 vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
-		  uint64_t cookie, daos_event_t *ev);
+		  uint64_t cookie);
 
 /**
  * VOS object API
@@ -279,15 +249,13 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
  *			sizes are also stored in this parameter.
  * \param sgls	[OUT]	Scatter/gather list to store the returned record values
  *			or value addresses.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_dkey_t *dkey, unsigned int viod_nr, daos_vec_iod_t *viods,
-	      daos_sg_list_t *sgls, daos_event_t *ev);
+	      daos_sg_list_t *sgls);
 
 
 /**
@@ -312,15 +280,13 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *			providing input buffers, then VOS will allocate spaces
  *			for the records and return addresses of them, so upper
  *			layer stack can transfer data via rdma.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uint64_t cookie, daos_dkey_t *dkey, unsigned int viod_nr,
-	       daos_vec_iod_t *viods, daos_sg_list_t *sgls, daos_event_t *ev);
+	       daos_vec_iod_t *viods, daos_sg_list_t *sgls);
 
 /**
  * Zero-Copy I/O APIs
@@ -346,16 +312,13 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *			Array of vector IO descriptors. The returned record
  *			sizes are also restored in this parameter.
  * \param ioh	[OUT]	The returned handle for the ZC I/O.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
 		       daos_epoch_t epoch, daos_dkey_t *dkey, unsigned int nr,
-		       daos_vec_iod_t *vios, daos_handle_t *ioh,
-		       daos_event_t *ev);
+		       daos_vec_iod_t *vios, daos_handle_t *ioh);
 
 /**
  * Finish the zero-copy fetch operation and release the responding resources.
@@ -367,14 +330,12 @@ vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
  * \param err	[IN]	Errno of the current fetch, zero if there is no error.
  *			All updates will be dropped if this function is called
  *			for \a vos_obj_zc_update with a non-zero error code.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_obj_zc_fetch_end(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int nr,
-		     daos_vec_iod_t *vios, int err, daos_event_t *ev);
+		     daos_vec_iod_t *vios, int err);
 
 /**
  * Prepare zero-copy sink buffers for the specified vectors of the given
@@ -391,8 +352,6 @@ vos_obj_zc_fetch_end(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int nr,
  * \param nr	[IN]	Number of vector IO descriptors in \a vios.
  * \param vios	[IN]	Array of vector IO descriptors.
  * \param ioh	[OUT]	The returned handle for the ZC I/O.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
@@ -400,7 +359,7 @@ int
 vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 			daos_epoch_t epoch, daos_dkey_t *dkey,
 			unsigned int nr, daos_vec_iod_t *vios,
-			daos_handle_t *ioh, daos_event_t *ev);
+			daos_handle_t *ioh);
 
 /**
  * Finish the current zero-copy update and release the responding resources.
@@ -415,15 +374,13 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
  * \param err	[IN]	Errno of the current update, zero if there is no error.
  *			All updates will be dropped if this function is called
  *			for \a vos_obj_zc_update with a non-zero error code.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_obj_zc_update_end(daos_handle_t ioh, uint64_t cookie,
 		      daos_dkey_t *dkey, unsigned int nr,
-		      daos_vec_iod_t *vios, int err, daos_event_t *ev);
+		      daos_vec_iod_t *vios, int err);
 
 /**
  * Get the zero-copy scatter/gather list for the specified vector.

@@ -199,7 +199,7 @@ vos_co_tree_lookup(struct vp_hdl *vpool, struct daos_uuid *ukey,
  * Create a container within a VOSP
  */
 int
-vos_co_create(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
+vos_co_create(daos_handle_t poh, uuid_t co_uuid)
 {
 
 	int				rc = 0;
@@ -248,8 +248,7 @@ exit:
  * Open a container within a VOSP
  */
 int
-vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh,
-	    daos_event_t *ev)
+vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 {
 
 	int				rc = 0;
@@ -328,7 +327,7 @@ exit:
  * Release container open handle
  */
 int
-vos_co_close(daos_handle_t coh, daos_event_t *ev)
+vos_co_close(daos_handle_t coh)
 {
 
 	struct vc_hdl			*co_hdl = NULL;
@@ -352,7 +351,7 @@ vos_co_close(daos_handle_t coh, daos_event_t *ev)
  * Query container information
  */
 int
-vos_co_query(daos_handle_t coh, vos_co_info_t *vc_info, daos_event_t *ev)
+vos_co_query(daos_handle_t coh, vos_co_info_t *vc_info)
 {
 
 	struct vc_hdl			*co_hdl;
@@ -372,7 +371,7 @@ vos_co_query(daos_handle_t coh, vos_co_info_t *vc_info, daos_event_t *ev)
  * Destroy a container
  */
 int
-vos_co_destroy(daos_handle_t poh, uuid_t co_uuid, daos_event_t *ev)
+vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 {
 
 	int				rc = 0;

@@ -83,21 +83,21 @@ pool_ref_count_test(void **state)
 	int			num = 10;
 
 	uuid_generate(uuid);
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, NULL);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M);
 	for (i = 0; i < num; i++) {
 		ret = vos_pool_open(arg->fname[0], uuid,
-				    &arg->poh[i], NULL);
+				    &arg->poh[i]);
 		assert_int_equal(ret, 0);
 	}
 	for (i = 0; i < num - 1; i++) {
-		ret = vos_pool_close(arg->poh[i], NULL);
+		ret = vos_pool_close(arg->poh[i]);
 		assert_int_equal(ret, 0);
 	}
-	ret = vos_pool_destroy(arg->fname[0], uuid, NULL);
+	ret = vos_pool_destroy(arg->fname[0], uuid);
 	assert_int_equal(ret, -DER_BUSY);
-	ret = vos_pool_close(arg->poh[num - 1], NULL);
+	ret = vos_pool_close(arg->poh[num - 1]);
 	assert_int_equal(ret, 0);
-	ret = vos_pool_destroy(arg->fname[0], uuid, NULL);
+	ret = vos_pool_destroy(arg->fname[0], uuid);
 	assert_int_equal(ret, 0);
 }
 
@@ -134,34 +134,30 @@ pool_ops_run(void **state)
 					assert_int_equal(ret, 0);
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
-							      0, NULL);
+							      0);
 				} else {
 					ret =
 					vts_alloc_gen_fname(&arg->fname[j]);
 					assert_int_equal(ret, 0);
 					ret = vos_pool_create(arg->fname[j],
 							      arg->uuid[j],
-							      VPOOL_16M,
-							      NULL);
+							      VPOOL_16M);
 				}
 				break;
 			case OPEN:
 				ret = vos_pool_open(arg->fname[j],
 						    arg->uuid[j],
-						    &arg->poh[j],
-						    NULL);
+						    &arg->poh[j]);
 				break;
 			case CLOSE:
-				ret = vos_pool_close(arg->poh[j], NULL);
+				ret = vos_pool_close(arg->poh[j]);
 			break;
 			case DESTROY:
 				ret = vos_pool_destroy(arg->fname[j],
-						       arg->uuid[j],
-						       NULL);
+						       arg->uuid[j]);
 				break;
 			case QUERY:
-				ret = vos_pool_query(arg->poh[j], &pinfo,
-						     NULL);
+				ret = vos_pool_query(arg->poh[j], &pinfo);
 				assert_int_equal(ret, 0);
 				assert_int_equal(pinfo.pif_ncos, 0);
 				assert_int_equal(pinfo.pif_nobjs, 0);

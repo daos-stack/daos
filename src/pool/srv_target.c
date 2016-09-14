@@ -73,7 +73,7 @@ vpool_put(struct dsms_vpool *vpool)
 		D_DEBUG(DF_DSMS, DF_UUID": destroying\n",
 			DP_UUID(vpool->dvp_uuid));
 		daos_list_del(&vpool->dvp_list);
-		vos_pool_close(vpool->dvp_hdl, NULL /* ev */);
+		vos_pool_close(vpool->dvp_hdl);
 		D_FREE_PTR(vpool);
 	}
 }
@@ -114,7 +114,7 @@ es_pool_lookup(void *varg)
 		return rc;
 	}
 
-	rc = vos_pool_open(path, arg->pla_uuid, &vpool->dvp_hdl, NULL /* ev */);
+	rc = vos_pool_open(path, arg->pla_uuid, &vpool->dvp_hdl);
 
 	free(path);
 

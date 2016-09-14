@@ -76,7 +76,7 @@ vcont_alloc_ref(void *key, unsigned int ksize, void *varg,
 
 	uuid_copy(cont->dvc_uuid, key);
 
-	rc = vos_co_open(pool->dvp_hdl, key, &cont->dvc_hdl, NULL /* ev */);
+	rc = vos_co_open(pool->dvp_hdl, key, &cont->dvc_hdl);
 	if (rc != 0) {
 		D_FREE_PTR(cont);
 		return rc;
@@ -92,7 +92,7 @@ vcont_free_ref(struct daos_llink *llink)
 	struct dsms_vcont *cont = vcont_obj(llink);
 
 	D_DEBUG(DF_DSMS, DF_CONT": freeing\n", DP_CONT(NULL, cont->dvc_uuid));
-	vos_co_close(cont->dvc_hdl, NULL /* ev */);
+	vos_co_close(cont->dvc_hdl);
 	D_FREE_PTR(cont);
 }
 
@@ -315,7 +315,7 @@ es_cont_destroy(void *vin)
 	D_DEBUG(DF_DSMS, DF_CONT": destroying vos container\n",
 		DP_CONT(pool->dvp_uuid, in->tcdi_cont));
 
-	rc = vos_co_destroy(pool->dvp_hdl, in->tcdi_cont, NULL /* ev */);
+	rc = vos_co_destroy(pool->dvp_hdl, in->tcdi_cont);
 
 out_pool:
 	vpool_put(pool);
@@ -401,8 +401,7 @@ es_cont_open(void *vin)
 		D_DEBUG(DF_DSMS, DF_CONT": creating new vos container\n",
 			DP_CONT(hdl->tch_pool->dvp_uuid, in->tcoi_cont));
 
-		rc = vos_co_create(hdl->tch_pool->dvp_hdl, in->tcoi_cont,
-				   NULL /* ev */);
+		rc = vos_co_create(hdl->tch_pool->dvp_hdl, in->tcoi_cont);
 		if (rc != 0)
 			D_GOTO(err_pool, rc);
 
@@ -431,8 +430,7 @@ err_vos_co:
 	if (vos_co_created) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
 			DP_CONT(hdl->tch_pool->dvp_uuid, in->tcoi_cont));
-		vos_co_destroy(hdl->tch_pool->dvp_hdl, in->tcoi_cont,
-			       NULL /* ev */);
+		vos_co_destroy(hdl->tch_pool->dvp_hdl, in->tcoi_cont);
 	}
 err_pool:
 	vpool_put(hdl->tch_pool);

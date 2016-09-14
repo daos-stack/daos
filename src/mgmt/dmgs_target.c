@@ -222,8 +222,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		}
 
 		/* A zero size accommodates the existing file */
-		rc = vos_pool_create(path, (unsigned char *)uuid, 0 /* size */,
-				     NULL /* event */);
+		rc = vos_pool_create(path, (unsigned char *)uuid, 0 /* size */);
 		if (rc) {
 			D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
 				DP_UUID(uuid), path, rc);

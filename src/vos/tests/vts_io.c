@@ -422,7 +422,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
 		rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
 				    dsm_cookie, dkey, 1, vio,
-				    sgl, NULL);
+				    sgl);
 		if (rc != 0)
 			print_error("Failed to update: %d\n", rc);
 		return rc;
@@ -430,7 +430,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	rc = vos_obj_zc_update_begin(arg->ctx.tc_co_hdl,
 				     arg->oid, epoch, dkey, 1, vio,
-				     &ioh, NULL);
+				     &ioh);
 	if (rc != 0) {
 		print_error("Failed to prepare ZC update: %d\n", rc);
 		return rc;
@@ -445,8 +445,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	assert_true(srv_iov->iov_len == vec_iov->iov_len);
 	memcpy(vec_iov->iov_buf, srv_iov->iov_buf, srv_iov->iov_len);
 
-	rc = vos_obj_zc_update_end(ioh, dsm_cookie, dkey, 1, vio,
-				   0, NULL);
+	rc = vos_obj_zc_update_end(ioh, dsm_cookie, dkey, 1, vio, 0);
 	if (rc != 0)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
@@ -466,7 +465,7 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
 		rc = vos_obj_fetch(arg->ctx.tc_co_hdl,
 				   arg->oid, epoch, dkey, 1, vio,
-				   sgl, NULL);
+				   sgl);
 		if (rc != 0)
 			print_error("Failed to fetch: %d\n", rc);
 		return rc;
@@ -474,7 +473,7 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	rc = vos_obj_zc_fetch_begin(arg->ctx.tc_co_hdl,
 				    arg->oid, epoch, dkey, 1, vio,
-				    &ioh, NULL);
+				    &ioh);
 	if (rc != 0) {
 		print_error("Failed to prepare ZC update: %d\n", rc);
 		return rc;
@@ -490,7 +489,7 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	memcpy(dst_iov->iov_buf, vec_iov->iov_buf, vec_iov->iov_len);
 	dst_iov->iov_len = vec_iov->iov_len;
 
-	rc = vos_obj_zc_fetch_end(ioh, dkey, 1, vio, 0, NULL);
+	rc = vos_obj_zc_fetch_end(ioh, dkey, 1, vio, 0);
 	if (rc != 0)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
@@ -1050,14 +1049,13 @@ io_simple_one_key_cross_container(void **state)
 
 	/* Creating an additional container */
 	uuid_generate_time_safe(arg->addn_co_uuid);
-	rc = vos_co_create(arg->ctx.tc_po_hdl, arg->addn_co_uuid, NULL);
+	rc = vos_co_create(arg->ctx.tc_po_hdl, arg->addn_co_uuid);
 	if (rc) {
 		print_error("vos container creation error: %d\n", rc);
 		return;
 	}
 
-	rc = vos_co_open(arg->ctx.tc_po_hdl, arg->addn_co_uuid, &arg->addn_co,
-			 NULL);
+	rc = vos_co_open(arg->ctx.tc_po_hdl, arg->addn_co_uuid, &arg->addn_co);
 	if (rc) {
 		print_error("vos container open error: %d\n", rc);
 		goto failed;
@@ -1092,8 +1090,7 @@ io_simple_one_key_cross_container(void **state)
 	l_oid = gen_oid();
 	cookie = gen_rand_cookie();
 	rc  = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
-			     cookie, &dkey, 1,
-			     &vio, &sgl, NULL);
+			     cookie, &dkey, 1, &vio, &sgl);
 	if (rc) {
 		print_error("Failed to update %d\n", rc);
 		goto failed;
@@ -1101,7 +1098,7 @@ io_simple_one_key_cross_container(void **state)
 
 	cookie = gen_rand_cookie();
 	rc = vos_obj_update(arg->addn_co, l_oid, epoch, cookie,
-			    &dkey, 1, &vio, &sgl, NULL);
+			    &dkey, 1, &vio, &sgl);
 	if (rc) {
 		print_error("Failed to update %d\n", rc);
 		goto failed;
@@ -1116,7 +1113,7 @@ io_simple_one_key_cross_container(void **state)
 	 * This should succeed.
 	 */
 	rc = vos_obj_fetch(arg->addn_co, l_oid, epoch,
-			   &dkey, 1, &vio, &sgl, NULL);
+			   &dkey, 1, &vio, &sgl);
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -1128,15 +1125,15 @@ io_simple_one_key_cross_container(void **state)
 	 * from second container should throw an error
 	 */
 	rc = vos_obj_fetch(arg->addn_co, arg->oid, epoch,
-			   &dkey, 1, &vio, &sgl, NULL);
+			   &dkey, 1, &vio, &sgl);
 	/* This fetch should fail */
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 failed:
-	rc = vos_co_close(arg->addn_co, NULL);
+	rc = vos_co_close(arg->addn_co);
 	assert_int_equal(rc, 0);
 
-	rc = vos_co_destroy(arg->ctx.tc_po_hdl, arg->addn_co_uuid, NULL);
+	rc = vos_co_destroy(arg->ctx.tc_po_hdl, arg->addn_co_uuid);
 	assert_int_equal(rc, 0);
 }
 

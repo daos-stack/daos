@@ -63,26 +63,23 @@ co_ops_run(void **state)
 			switch (arg->ops_seq[i][j]) {
 			case CREAT:
 				uuid_generate(arg->uuid[i]);
-				ret = vos_co_create(arg->poh, arg->uuid[i],
-						    NULL);
+				ret = vos_co_create(arg->poh, arg->uuid[i]);
 				break;
 			case OPEN:
 				ret = vos_co_open(arg->poh, arg->uuid[i],
-						  &arg->coh[i], NULL);
+						  &arg->coh[i]);
 				break;
 			case CLOSE:
-				ret = vos_co_close(arg->coh[i], NULL);
+				ret = vos_co_close(arg->coh[i]);
 				break;
 			case QUERY:
-				ret = vos_co_query(arg->coh[i], &cinfo,
-						   NULL);
+				ret = vos_co_query(arg->coh[i], &cinfo);
 				assert_int_equal(ret, 0);
 				assert_int_equal(cinfo.pci_nobjs, 0);
 				assert_int_equal(cinfo.pci_used, 0);
 				break;
 			case DESTROY:
-				ret = vos_co_destroy(arg->poh, arg->uuid[i],
-						     NULL);
+				ret = vos_co_destroy(arg->poh, arg->uuid[i]);
 				assert_int_equal(ret, 0);
 				uuid_clear(arg->uuid[i]);
 				break;
@@ -138,8 +135,7 @@ co_unit_teardown(void **state)
 			arg->ops_seq[i] = NULL;
 		}
 		if (!uuid_is_null(arg->uuid[i])) {
-			ret = vos_co_destroy(arg->poh,
-					     arg->uuid[i], NULL);
+			ret = vos_co_destroy(arg->poh, arg->uuid[i]);
 			assert_int_equal(ret, 0);
 			uuid_clear(arg->uuid[i]);
 		}
@@ -157,12 +153,11 @@ co_ref_count_setup(void **state)
 	struct vc_test_args	*arg = *state;
 	int			i, ret = 0;
 
-	ret = vos_co_create(arg->poh, arg->uuid[0], NULL);
+	ret = vos_co_create(arg->poh, arg->uuid[0]);
 	assert_int_equal(ret, 0);
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
-		ret = vos_co_open(arg->poh, arg->uuid[0], &arg->coh[i],
-				  NULL);
+		ret = vos_co_open(arg->poh, arg->uuid[0], &arg->coh[i]);
 		assert_int_equal(ret, 0);
 	}
 
@@ -176,15 +171,15 @@ co_ref_count_test(void **state)
 	struct vc_test_args	*arg = *state;
 	int			i, ret;
 
-	ret = vos_co_destroy(arg->poh, arg->uuid[0], NULL);
+	ret = vos_co_destroy(arg->poh, arg->uuid[0]);
 	assert_int_equal(ret, -DER_NO_PERM);
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
-		ret = vos_co_close(arg->coh[i], NULL);
+		ret = vos_co_close(arg->coh[i]);
 		assert_int_equal(ret, 0);
 	}
 
-	ret = vos_co_destroy(arg->poh, arg->uuid[0], NULL);
+	ret = vos_co_destroy(arg->poh, arg->uuid[0]);
 	assert_int_equal(ret, 0);
 }
 
@@ -200,10 +195,10 @@ setup(void **state)
 	uuid_generate_time_safe(test_arg->pool_uuid);
 	vts_pool_fallocate(&test_arg->fname);
 	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid,
-			      0, NULL);
+			      0);
 	assert_int_equal(ret, 0);
 	ret = vos_pool_open(test_arg->fname, test_arg->pool_uuid,
-			    &test_arg->poh, NULL);
+			    &test_arg->poh);
 	assert_int_equal(ret, 0);
 	*state = test_arg;
 	return 0;
@@ -215,10 +210,10 @@ teardown(void **state)
 	int			ret = 0;
 	struct vc_test_args	*test_arg = *state;
 
-	ret = vos_pool_close(test_arg->poh, NULL);
+	ret = vos_pool_close(test_arg->poh);
 	assert_int_equal(ret, 0);
 
-	ret = vos_pool_destroy(test_arg->fname, test_arg->pool_uuid, NULL);
+	ret = vos_pool_destroy(test_arg->fname, test_arg->pool_uuid);
 	assert_int_equal(ret, 0);
 
 	if (vts_file_exists(test_arg->fname))

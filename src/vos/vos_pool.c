@@ -86,8 +86,7 @@ pmem_pool2root(PMEMobjpool *ph)
  * Create a Versioning Object Storage Pool (VOSP) and its root object.
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
-		daos_event_t *ev)
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 {
 	int			rc    = 0;
 	PMEMobjpool		*ph;
@@ -183,7 +182,7 @@ exit:
  * and revoke all its handles
  */
 int
-vos_pool_destroy(const char *path, uuid_t uuid, daos_event_t *ev)
+vos_pool_destroy(const char *path, uuid_t uuid)
 {
 
 	int			rc    = 0;
@@ -219,8 +218,7 @@ exit:
  * and other internal data structures.
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
-	      daos_event_t *ev)
+vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 {
 
 	int				rc    = 0;
@@ -315,7 +313,7 @@ exit:
  * will be revoked.
  */
 int
-vos_pool_close(daos_handle_t poh, daos_event_t *ev)
+vos_pool_close(daos_handle_t poh)
 {
 
 	int			 rc    = 0;
@@ -338,7 +336,7 @@ vos_pool_close(daos_handle_t poh, daos_event_t *ev)
  * Query attributes and statistics of the current pool
  */
 int
-vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo, daos_event_t *ev)
+vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 {
 
 	struct vp_hdl			*vpool = NULL;

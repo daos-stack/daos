@@ -505,7 +505,7 @@ vos_dkey_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_key_t *dkey,
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_key_t *dkey, unsigned int viod_nr, daos_vec_iod_t *viods,
-	      daos_sg_list_t *sgls, daos_event_t *ev)
+	      daos_sg_list_t *sgls)
 {
 	struct vos_obj_ref *oref;
 	int		    rc;
@@ -731,7 +731,7 @@ vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, uint64_t cookie,
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uint64_t cookie, daos_key_t *dkey, unsigned int viod_nr,
-	       daos_vec_iod_t *viods, daos_sg_list_t *sgls, daos_event_t *ev)
+	       daos_vec_iod_t *viods, daos_sg_list_t *sgls)
 {
 	struct vos_obj_ref	*oref;
 	PMEMobjpool		*pop;
@@ -935,7 +935,7 @@ int
 vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
 		       daos_epoch_t epoch, daos_key_t *dkey,
 		       unsigned int viod_nr, daos_vec_iod_t *viods,
-		       daos_handle_t *ioh, daos_event_t *ev)
+		       daos_handle_t *ioh)
 {
 	struct vos_zc_context *zcc;
 	int		       rc;
@@ -953,7 +953,7 @@ vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
 	*ioh = vos_zcc2ioh(zcc);
 	return 0;
  failed:
-	vos_obj_zc_fetch_end(vos_zcc2ioh(zcc), dkey, viod_nr, viods, rc, NULL);
+	vos_obj_zc_fetch_end(vos_zcc2ioh(zcc), dkey, viod_nr, viods, rc);
 	return rc;
 }
 
@@ -963,7 +963,7 @@ vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
  */
 int
 vos_obj_zc_fetch_end(daos_handle_t ioh, daos_key_t *dkey, unsigned int viod_nr,
-		     daos_vec_iod_t *viods, int err, daos_event_t *ev)
+		     daos_vec_iod_t *viods, int err)
 {
 	struct vos_zc_context	*zcc = vos_ioh2zcc(ioh);
 
@@ -1066,7 +1066,7 @@ int
 vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 			daos_epoch_t epoch, daos_key_t *dkey,
 			unsigned int viod_nr, daos_vec_iod_t *viods,
-			daos_handle_t *ioh, daos_event_t *ev)
+			daos_handle_t *ioh)
 {
 	struct vos_zc_context	*zcc;
 	PMEMobjpool		*pop;
@@ -1094,7 +1094,7 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 	return 0;
  failed:
 	vos_obj_zc_update_end(vos_zcc2ioh(zcc), 0, dkey, viod_nr,
-			      viods, rc, NULL);
+			      viods, rc);
 	return rc;
 }
 
@@ -1104,8 +1104,7 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
  */
 int
 vos_obj_zc_update_end(daos_handle_t ioh, uint64_t cookie, daos_key_t *dkey,
-		      unsigned int viod_nr, daos_vec_iod_t *viods, int err,
-		      daos_event_t *ev)
+		      unsigned int viod_nr, daos_vec_iod_t *viods, int err)
 {
 	struct vos_zc_context	*zcc = vos_ioh2zcc(ioh);
 	PMEMobjpool		*pop;

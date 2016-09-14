@@ -99,12 +99,12 @@ dsrs_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status)
 		rc = vos_obj_zc_update_end(ioh, cid, &oui->oui_dkey,
 					   oui->oui_nr,
 					   oui->oui_iods.da_arrays,
-					   0, NULL);
+					   0);
 	else
 		rc = vos_obj_zc_fetch_end(ioh, &oui->oui_dkey,
 					  oui->oui_nr,
 					  oui->oui_iods.da_arrays,
-					  0, NULL);
+					  0);
 	if (rc != 0)
 		D_ERROR(DF_UOID "%x send reply failed: %d\n",
 			DP_UOID(oui->oui_oid),
@@ -264,8 +264,7 @@ ds_obj_rw_handler(dtp_rpc_t *rpc)
 		rc = vos_obj_zc_update_begin(tch->tch_cont->dvc_hdl,
 					     oui->oui_oid, oui->oui_epoch,
 					     &oui->oui_dkey, oui->oui_nr,
-					     oui->oui_iods.da_arrays, &ioh,
-					     NULL);
+					     oui->oui_iods.da_arrays, &ioh);
 		if (rc != 0) {
 			D_ERROR(DF_UOID"preparing update fails: %d\n",
 				DP_UOID(oui->oui_oid), rc);
@@ -285,8 +284,7 @@ ds_obj_rw_handler(dtp_rpc_t *rpc)
 		rc = vos_obj_zc_fetch_begin(tch->tch_cont->dvc_hdl,
 					    oui->oui_oid, oui->oui_epoch,
 					    &oui->oui_dkey, oui->oui_nr,
-					    oui->oui_iods.da_arrays, &ioh,
-					    NULL);
+					    oui->oui_iods.da_arrays, &ioh);
 		if (rc != 0) {
 			D_ERROR(DF_UOID"preparing fetch fails: %d\n",
 				DP_UOID(oui->oui_oid), rc);
