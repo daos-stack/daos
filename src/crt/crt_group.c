@@ -185,9 +185,9 @@ static int
 crt_conn_tag(struct crt_hg_context *hg_ctx, crt_phy_addr_t base_addr,
 	     uint32_t tag, na_addr_t *na_addr)
 {
-	na_class_t	*na_class;
-	na_context_t	*na_context;
-	na_addr_t	tmp_addr;
+	hg_class_t	*hg_class;
+	hg_context_t	*hg_context;
+	hg_addr_t	tmp_addr;
 	uint32_t	ctx_idx;
 	char		*tmp_addrstr;
 	bool		allocated = false;
@@ -205,10 +205,10 @@ crt_conn_tag(struct crt_hg_context *hg_ctx, crt_phy_addr_t base_addr,
 	C_ASSERT(base_addr != NULL && strlen(base_addr) > 0);
 	C_ASSERT(na_addr != NULL);
 
-	na_class = hg_ctx->dhc_nacla;
-	na_context = hg_ctx->dhc_nactx;
-	C_ASSERT(na_class != NULL);
-	C_ASSERT(na_context != NULL);
+	hg_class = hg_ctx->dhc_hgcla;
+	hg_context = hg_ctx->dhc_hgctx;
+	C_ASSERT(hg_class != NULL);
+	C_ASSERT(hg_context != NULL);
 
 	ctx_idx = tag;
 	if (ctx_idx == 0) {
@@ -233,7 +233,7 @@ crt_conn_tag(struct crt_hg_context *hg_ctx, crt_phy_addr_t base_addr,
 			base_addr, tag, tmp_addrstr);
 	}
 
-	rc = crt_na_addr_lookup_wait(na_class, na_context, tmp_addrstr,
+	rc = crt_hg_addr_lookup_wait(hg_class, hg_context, tmp_addrstr,
 				     &tmp_addr);
 	if (rc == 0) {
 		C_DEBUG(CF_TP, "Connect to %s succeed.\n", tmp_addrstr);

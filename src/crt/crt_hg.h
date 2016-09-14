@@ -49,7 +49,6 @@ struct crt_common_hdr;
 struct crt_hg_context {
 	bool			dhc_shared_na; /* flag for shared na_class */
 	na_class_t		*dhc_nacla; /* NA class */
-	na_context_t		*dhc_nactx; /* NA context */
 	hg_class_t		*dhc_hgcla; /* HG class */
 	hg_context_t		*dhc_hgctx; /* HG context */
 	hg_class_t		*dhc_bulkcla; /* bulk class */
@@ -59,7 +58,6 @@ struct crt_hg_context {
 /** HG level global data */
 struct crt_hg_gdata {
 	na_class_t		*dhg_nacla; /* NA class */
-	na_context_t		*dhg_nactx; /* NA context */
 	hg_class_t		*dhg_hgcla; /* HG class */
 };
 
@@ -75,8 +73,8 @@ int crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
 int crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout);
-int crt_na_addr_lookup_wait(na_class_t *na_class, na_context_t *na_context,
-			    const char *name, na_addr_t *addr);
+int crt_hg_addr_lookup_wait(hg_class_t *hg_class, hg_context_t *hg_context,
+			    const char *name, hg_addr_t *addr);
 
 int crt_rpc_handler_common(hg_handle_t hg_hdl);
 

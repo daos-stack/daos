@@ -27,15 +27,15 @@
 #include <crt_internal.h>
 #include <abt.h>
 
-static na_return_t
-na_addr_lookup_cb(const struct na_cb_info *callback_info)
+static hg_return_t
+hg_addr_lookup_cb(const struct hg_cb_info *callback_info)
 {
-	na_addr_t	*addr_ptr = (na_addr_t *) callback_info->arg;
-	na_return_t	ret = NA_SUCCESS;
+	hg_addr_t	*addr_ptr = (hg_addr_t *) callback_info->arg;
+	hg_return_t	ret = HG_SUCCESS;
 
-	if (callback_info->ret != NA_SUCCESS) {
+	if (callback_info->ret != HG_SUCCESS) {
 		C_ERROR("Return from callback with %s error code",
-			NA_Error_to_string(callback_info->ret));
+			HG_Error_to_string(callback_info->ret));
 		return ret;
 	}
 
@@ -48,25 +48,25 @@ na_addr_lookup_cb(const struct na_cb_info *callback_info)
 #define CRT_CONNECT_TIMEOUT_SEC		(10)
 
 int
-crt_na_addr_lookup_wait(na_class_t *na_class, na_context_t *na_context,
-			const char *name, na_addr_t *addr)
+crt_hg_addr_lookup_wait(hg_class_t *hg_class, hg_context_t *hg_context,
+			const char *name, hg_addr_t *addr)
 {
-	na_addr_t		new_addr = NULL;
+	hg_addr_t		new_addr = NULL;
 	uint64_t		now;
 	uint64_t		end;
 	unsigned int		prog_msec;
-	na_return_t		ret = NA_SUCCESS;
+	hg_return_t		ret = HG_SUCCESS;
 	int			rc = 0;
 
-	C_ASSERT(na_context != NULL);
-	C_ASSERT(na_class != NULL);
+	C_ASSERT(hg_context != NULL);
+	C_ASSERT(hg_class != NULL);
 	C_ASSERT(name != NULL);
 	C_ASSERT(addr != NULL);
 
-	ret = NA_Addr_lookup(na_class, na_context, &na_addr_lookup_cb,
-			     &new_addr, name, NA_OP_ID_IGNORE);
-	if (ret != NA_SUCCESS) {
-		C_ERROR("Could not start NA_Addr_lookup");
+	ret = HG_Addr_lookup(hg_context, &hg_addr_lookup_cb, &new_addr, name,
+			HG_OP_ID_IGNORE);
+	if (ret != HG_SUCCESS) {
+		C_ERROR("Could not start HG_Addr_lookup");
 		C_GOTO(done, rc = -CER_HG);
 	}
 
@@ -74,21 +74,21 @@ crt_na_addr_lookup_wait(na_class_t *na_class, na_context_t *na_context,
 	prog_msec = 1;
 
 	while (1) {
-		na_return_t	trigger_ret;
+		hg_return_t	trigger_ret;
 		unsigned int	actual_count = 0;
 
 		do {
-			trigger_ret = NA_Trigger(na_context, 0, 1,
+			trigger_ret = HG_Trigger(hg_context, 0, 1,
 						 &actual_count);
-		} while ((trigger_ret == NA_SUCCESS) && actual_count);
+		} while ((trigger_ret == HG_SUCCESS) && actual_count);
 
 		if (new_addr != NULL) {
 			*addr = new_addr;
 			break;
 		}
 
-		ret = NA_Progress(na_class, na_context, prog_msec);
-		if (ret != NA_SUCCESS && ret != NA_TIMEOUT) {
+		ret = HG_Progress(hg_context, prog_msec);
+		if (ret != HG_SUCCESS && ret != HG_TIMEOUT) {
 			C_ERROR("Could not make progress");
 			rc = -CER_HG;
 			break;
@@ -154,7 +154,6 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	const char		*info_string;
 	struct crt_hg_gdata	*hg_gdata;
 	na_class_t		*na_class = NULL;
-	na_context_t		*na_context = NULL;
 	hg_class_t		*hg_class = NULL;
 	int			rc = 0;
 
@@ -179,17 +178,9 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		C_GOTO(out, rc = -CER_HG);
 	}
 
-	na_context = NA_Context_create(na_class);
-	if (na_context == NULL) {
-		C_ERROR("Could not create NA context.\n");
-		NA_Finalize(na_class);
-		C_GOTO(out, rc = -CER_HG);
-	}
-
-	hg_class = HG_Init_na(na_class, na_context);
+	hg_class = HG_Init_na(na_class);
 	if (hg_class == NULL) {
 		C_ERROR("Could not initialize HG class.\n");
-		NA_Context_destroy(na_class, na_context);
 		NA_Finalize(na_class);
 		C_GOTO(out, rc = -CER_HG);
 	}
@@ -197,13 +188,11 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	C_ALLOC_PTR(hg_gdata);
 	if (hg_gdata == NULL) {
 		HG_Finalize(hg_class);
-		NA_Context_destroy(na_class, na_context);
 		NA_Finalize(na_class);
 		C_GOTO(out, rc = -CER_NOMEM);
 	}
 
 	hg_gdata->dhg_nacla = na_class;
-	hg_gdata->dhg_nactx = na_context;
 	hg_gdata->dhg_hgcla = hg_class;
 
 	crt_gdata.cg_hg = hg_gdata;
@@ -217,7 +206,6 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		C_ERROR("crt_hg_reg(rpcid: 0x%x), failed rc: %d.\n",
 			CRT_HG_RPCID, rc);
 		HG_Finalize(hg_class);
-		NA_Context_destroy(na_class, na_context);
 		NA_Finalize(na_class);
 		C_GOTO(out, rc = -CER_HG);
 	}
@@ -230,7 +218,6 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		if (rc != 0) {
 			C_ERROR("na_class_get_addr failed, rc: %d.\n", rc);
 			HG_Finalize(hg_class);
-			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			C_GOTO(out, rc = -CER_HG);
 		}
@@ -239,7 +226,6 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		if (*addr == NULL) {
 			C_ERROR("strdup failed, rc: %d.\n", rc);
 			HG_Finalize(hg_class);
-			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			C_GOTO(out, rc = -CER_HG);
 		}
@@ -256,7 +242,6 @@ int
 crt_hg_fini()
 {
 	na_class_t	*na_class;
-	na_context_t	*na_context;
 	hg_class_t	*hg_class;
 	hg_return_t	hg_ret = HG_SUCCESS;
 	na_return_t	na_ret = NA_SUCCESS;
@@ -268,10 +253,8 @@ crt_hg_fini()
 	}
 
 	na_class = crt_gdata.cg_hg->dhg_nacla;
-	na_context = crt_gdata.cg_hg->dhg_nactx;
 	hg_class = crt_gdata.cg_hg->dhg_hgcla;
 	C_ASSERT(na_class != NULL);
-	C_ASSERT(na_context != NULL);
 	C_ASSERT(hg_class != NULL);
 
 	hg_ret = HG_Finalize(hg_class);
@@ -279,18 +262,6 @@ crt_hg_fini()
 		C_ERROR("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
 		C_GOTO(out, rc = -CER_HG);
 	}
-
-	na_ret = NA_Context_destroy(na_class, na_context);
-	/*
-	 * Ignore the error due to a HG bug:
-	 * https://github.com/mercury-hpc/mercury/issues/88
-	 */
-	/*
-	if (na_ret != NA_SUCCESS) {
-		C_ERROR("Could not destroy NA context, na_ret: %d.\n", na_ret);
-		C_GOTO(out, rc = -CER_HG);
-	}
-	*/
 
 	na_ret = NA_Finalize(na_class);
 	if (na_ret != NA_SUCCESS) {
@@ -308,7 +279,6 @@ int
 crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 {
 	na_class_t	*na_class = NULL;
-	na_context_t	*na_context = NULL;
 	hg_class_t	*hg_class = NULL;
 	hg_context_t	*hg_context = NULL;
 	const char	*info_string;
@@ -324,7 +294,6 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		}
 
 		hg_ctx->dhc_nacla = crt_gdata.cg_hg->dhg_nacla;
-		hg_ctx->dhc_nactx = crt_gdata.cg_hg->dhg_nactx;
 		hg_ctx->dhc_hgcla = crt_gdata.cg_hg->dhg_hgcla;
 		hg_ctx->dhc_shared_na = true;
 	} else {
@@ -351,17 +320,9 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		C_DEBUG(CF_TP, "New context(idx:%d), listen address: cci+%s.\n",
 			idx, addr_str);
 
-		na_context = NA_Context_create(na_class);
-		if (na_context == NULL) {
-			C_ERROR("Could not create NA context.\n");
-			NA_Finalize(na_class);
-			C_GOTO(out, rc = -CER_HG);
-		}
-
-		hg_class = HG_Init_na(na_class, na_context);
+		hg_class = HG_Init_na(na_class);
 		if (hg_class == NULL) {
 			C_ERROR("Could not initialize HG class.\n");
-			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			C_GOTO(out, rc = -CER_HG);
 		}
@@ -370,7 +331,6 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		if (hg_context == NULL) {
 			C_ERROR("Could not create HG context.\n");
 			HG_Finalize(hg_class);
-			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			C_GOTO(out, rc = -CER_HG);
 		}
@@ -385,13 +345,11 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 				CRT_HG_RPCID, rc);
 			HG_Context_destroy(hg_context);
 			HG_Finalize(hg_class);
-			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			C_GOTO(out, rc = -CER_HG);
 		}
 
 		hg_ctx->dhc_nacla = na_class;
-		hg_ctx->dhc_nactx = na_context;
 		hg_ctx->dhc_hgcla = hg_class;
 		hg_ctx->dhc_shared_na = false;
 	}
@@ -434,10 +392,6 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	hg_ret = HG_Finalize(hg_ctx->dhc_hgcla);
 	if (hg_ret != HG_SUCCESS)
 		C_ERROR("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
-
-	na_ret = NA_Context_destroy(hg_ctx->dhc_nacla, hg_ctx->dhc_nactx);
-	if (na_ret != NA_SUCCESS)
-		C_ERROR("Could not destroy NA context, na_ret: %d.\n", na_ret);
 
 	na_ret = NA_Finalize(hg_ctx->dhc_nacla);
 	if (na_ret != NA_SUCCESS)
