@@ -114,7 +114,7 @@ REQS.define('pmix',
             commands=['./autogen.sh',
                       './configure --with-platform=optimized ' \
                       '--prefix=$PMIX_PREFIX ' \
-                      '--enable-debug ' \
+                      '--disable-visibility ' \
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make', 'make install'],
             libs=['pmix'],
