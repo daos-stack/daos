@@ -211,12 +211,14 @@ function setup_dep()
         break
       fi
     done
+    blessed_num=0
     if [ ! -f ${vars} ]; then
       print_status "$vars does not exist.   Check <build_vars> option"
-      blessed_num=0
     else
       source ${vars}
-      blessed_num=$(basename $(dirname ${!blessed_varname}))
+      if [ -n "${!blessed_varname}" ]; then
+        blessed_num=$(basename $(dirname ${!blessed_varname}))
+      fi
     fi
     if [ $version -gt $blessed_num ]; then
       if [ ! -d ${!good_varname} ]; then
