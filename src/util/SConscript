@@ -1,4 +1,5 @@
 #!python
+"""Build libcrt_utils"""
 
 def scons():
     """Scons function"""
@@ -8,7 +9,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     if prereqs is not None:
-            prereqs.require(env, 'argobots')
+        prereqs.require(env, 'argobots')
 
     denv = env.Clone()
 
@@ -16,7 +17,7 @@ def scons():
     common = denv.SharedLibrary('libcrt_util', src)
     denv.Install('$PREFIX/lib/', common)
 
-    denv.Append(CPPPATH = ['#/src/util'])
+    denv.Append(CPPPATH=['#/src/util'])
 
 if __name__ == "SCons.Script":
     scons()

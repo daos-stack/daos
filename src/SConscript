@@ -8,19 +8,19 @@ HEADERS_UTIL = ['common.h', 'hash.h', 'list.h']
 def scons():
     """Scons function"""
 
-    Import('env', 'prereqs')
+    Import('env prereqs')
 
     # Generic CaRT includes
     env.Append(CPPPATH=['#/src/include'])
     for header in HEADERS:
-        env.Install(os.path.join("$PREFIX", 'include'), 'include/%s' % header)
+        env.Install(os.path.join('$PREFIX', 'include'), 'include/%s' % header)
     for header in HEADERS_UTIL:
-        env.Install(os.path.join("$PREFIX", 'include', 'crt_util'),
+        env.Install(os.path.join('$PREFIX', 'include', 'crt_util'),
                     'include/crt_util/%s' % header)
 
     # Generate the common libraries used by everyone
-    SConscript('util/SConscript', exports=['env', 'prereqs'])
-    SConscript('crt/SConscript', exports=['env', 'prereqs'])
+    SConscript('util/SConscript', exports=["env", "prereqs"])
+    SConscript('crt/SConscript', exports=["env", "prereqs"])
 
 if __name__ == "SCons.Script":
     scons()

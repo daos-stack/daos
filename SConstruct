@@ -51,7 +51,8 @@ def scons():
 
     prereqs = PreReqComponent(env, opts, arch=platform)
     prereqs.preload(os.path.join(Dir('#').abspath, 'scons_local',
-                                 'components.py'))
+                                 'components.py'),
+                    prebuild=['ompi'])
     opts.Save(opts_file, env)
     # Define this now, and then the individual compenents can import this
     # through PREREQS when they need it.

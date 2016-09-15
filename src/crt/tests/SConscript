@@ -1,12 +1,18 @@
 #!python
+"""Build crt echo test"""
 
-Import('denv')
+def scons():
+    """scons function"""
+    Import('denv')
 
-denv.Append(CPPPATH = ['#/src/crt/tests'])
+    denv.Append(CPPPATH=['#/src/crt/tests'])
 
-libraries = ['crt_util', 'crt']
-libraries += ['pthread', 'crypto', 'uuid', 'pmix']
+    libraries = ['crt_util', 'crt']
+    libraries += ['pthread', 'crypto', 'uuid', 'pmix']
 
-# a simple example to use crt_xxx APIs
-denv.Program('crt_echo_cli', 'crt_echo_cli.c', LIBS=libraries)
-denv.Program('crt_echo_srv', 'crt_echo_srv.c', LIBS=libraries)
+    # a simple example to use crt_xxx APIs
+    denv.Program('crt_echo_cli', 'crt_echo_cli.c', LIBS=libraries)
+    denv.Program('crt_echo_srv', 'crt_echo_srv.c', LIBS=libraries)
+
+if __name__ == "SCons.Script":
+    scons()
