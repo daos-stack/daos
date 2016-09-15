@@ -49,7 +49,10 @@ class WrapScript(object):
                 if not scons_header:
                     scons_header = True
                     self.write_header(outfile)
-                variables = match.group(2).split()
+                variables = []
+                for var in match.group(2).split():
+                    newvar = var.strip("\",     '")
+                    variables.append(newvar)
                 new_lineno += self.write_variables(outfile, match.group(1),
                                                    variables)
 
@@ -68,9 +71,8 @@ class WrapScript(object):
         outfile.write("# pylint: disable=invalid-name\n")
 
         for variable in variables:
-
             if variable.upper() == 'PREREQS':
-                newlines += 4
+                newlines += 5
                 outfile.write("%sfrom prereq_tools import PreReqComponent\n"
                               % prefix)
                 outfile.write("%sscons_temp_env = DefaultEnvironment()\n"
@@ -78,6 +80,7 @@ class WrapScript(object):
                 outfile.write("%sscons_temp_opts = Variables()\n" % prefix)
                 outfile.write("%s%s = PreReqComponent(scons_temp_env, " \
                               "scons_temp_opts)\n" % (prefix, variable))
+                outfile.write("%sprint %s\n" % (prefix, variable))
                 variables.remove(variable)
         for variable in variables:
             if "ENV" in variable.upper():
