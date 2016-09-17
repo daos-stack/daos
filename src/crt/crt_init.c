@@ -201,10 +201,31 @@ static void data_init()
 }
 
 int
-crt_init(bool server)
+crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, bool server)
 {
 	crt_phy_addr_t	addr = NULL, addr_env;
+	size_t		len;
 	int		rc = 0;
+
+	if (cli_grpid != NULL) {
+		len = strlen(cli_grpid);
+		if (len == 0 || len > CRT_GROUP_ID_MAX_LEN) {
+			C_PRINT_ERR("invalid cli_grpid length %zu.\n", len);
+			C_GOTO(out, rc = -CER_INVAL);
+		}
+		if (strcmp(cli_grpid, CRT_DEFAULT_SRV_GRPID) == 0) {
+			C_PRINT_ERR("invalid cli_grpid (same as "
+				    "CRT_DEFAULT_SRV_GRPID).\n");
+			C_GOTO(out, rc = -CER_INVAL);
+		}
+	}
+	if (srv_grpid != NULL) {
+		len = strlen(srv_grpid);
+		if (len == 0 || len > CRT_GROUP_ID_MAX_LEN) {
+			C_PRINT_ERR("invalid srv_grpid length %zu.\n", len);
+			C_GOTO(out, rc = -CER_INVAL);
+		}
+	}
 
 	if (gdata_init_flag == 0) {
 		rc = pthread_once(&gdata_init_once, data_init);
@@ -283,7 +304,7 @@ do_init:
 		crt_gdata.cg_addr = addr;
 		crt_gdata.cg_addr_len = strlen(addr);
 
-		rc = crt_grp_init();
+		rc = crt_grp_init(cli_grpid, srv_grpid);
 		if (rc != 0) {
 			C_ERROR("crt_grp_init failed, rc: %d.\n", rc);
 			crt_hg_fini();
@@ -351,7 +372,12 @@ crt_finalize(void)
 	crt_gdata.cg_refcount--;
 	if (crt_gdata.cg_refcount == 0) {
 		rc = crt_grp_fini();
-		C_ASSERT(rc == 0);
+		if (rc != 0) {
+			C_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
+			crt_gdata.cg_refcount++;
+			pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+			C_GOTO(out, rc);
+		}
 
 		rc = crt_hg_fini();
 		if (rc != 0) {

@@ -102,6 +102,10 @@ typedef const char	*crt_const_string_t;
 typedef crt_string_t	crt_group_id_t;
 /* max length of the group ID string including the trailing '\0' */
 #define CRT_GROUP_ID_MAX_LEN	(64)
+/* default group ID */
+#define CRT_DEFAULT_SRV_GRPID	"crt_default_srv_group"
+#define CRT_DEFAULT_CLI_GRPID	"crt_default_cli_group"
+
 
 typedef struct crt_group {
 	/* the group ID of this group */
@@ -347,7 +351,7 @@ typedef int (*crt_bulk_cb_t)(const struct crt_bulk_cb_info *cb_info);
 /**
  * Progress condition callback, /see crt_progress().
  *
- * \param arg [IN]              argument to cond_cb.
+ * \param arg [IN]		argument to cond_cb.
  *
  * \return			zero means continue progressing
  *				>0 means stopping progress and return success
@@ -358,18 +362,25 @@ typedef int (*crt_progress_cond_cb_t)(void *args);
 /**
  * Initialize CRT transport layer.
  *
- * \param server [IN]           zero means pure client, otherwise will enable
- *                              the server which listens for incoming connection
- *                              request.
+ * \param cli_grpid [IN]	client-side primary group ID, be ignored for
+ *				server-side. User can provide a NULL value in
+ *				that case CRT_DEFAULT_CLI_GRPID will be used.
+ * \param srv_grpid [IN]	server-side primary group ID, client will attach
+ *				to it when initializing. User can provide a NULL
+ *				value in that case CRT_DEFAULT_SRV_GRPID will be
+ *				used.
+ * \param server [IN]		zero means pure client, otherwise will enable
+ *				the server which listens for incoming connection
+ *				request.
  *
- * \return                      zero on success, negative value if error
+ * \return			zero on success, negative value if error
  *
  * Notes: crt_init() is a collective call which means every caller process
  *	  should make the call collectively, as now it will internally call
  *	  PMIx_Fence.
  */
 int
-crt_init(bool server);
+crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, bool server);
 
 /**
  * Create CRT transport context.
@@ -867,6 +878,33 @@ crt_group_lookup(crt_group_id_t grp_id);
 int
 crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 		  void *args);
+
+/*
+ * Attach to a primary service group.
+ *
+ * In crt_init(), the client will internally attach to the default service
+ * primary group. User can pass crt_endpoint_t::ep_grp pointer as NULL to send
+ * RPC to the default service primary group.
+ * User can explicitly call this API to attach to other server tier, and set
+ * crt_endpoint_t::ep_grp as the returned attached_grp to send RPC to that tier.
+ *
+ * \param srv_grpid [IN]	Primary service group ID to attach to.
+ * \param attached_grp [OUT]	Returned attached group handle pointer.
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
+
+/*
+ * Detach a primary service group which was attached previously.
+ *
+ * \param attached_grp [IN]	attached primary service group handle.
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+crt_group_detach(crt_group_t *attached_grp);
 
 /*
  * Create collective RPC request. Can reuse the crt_req_send to broadcast it.

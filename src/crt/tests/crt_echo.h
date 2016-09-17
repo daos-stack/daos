@@ -58,6 +58,8 @@
 
 #define ECHO_EXTRA_CONTEXT_NUM (3)
 
+#define ECHO_2ND_TIER_GRPID	"echo_2nd_tier"
+
 struct gecho {
 	crt_context_t	crt_ctx;
 	crt_context_t	*extra_ctx;
@@ -123,6 +125,7 @@ struct crt_msg_field *echo_bulk_test_out[] = {
 	&DMF_STRING,
 	&DMF_INT,
 };
+
 struct crt_echo_bulk_out_reply {
 	char *echo_msg;
 	int ret;
@@ -141,11 +144,14 @@ struct crt_req_format DQF_ECHO_BULK_TEST =
 			   echo_bulk_test_out);
 
 static inline void
-echo_init(int server)
+echo_init(int server, bool tier2)
 {
 	int rc = 0, i;
 
-	rc = crt_init(server);
+	if (server != 0 && tier2 == true)
+		rc = crt_init(NULL, ECHO_2ND_TIER_GRPID, server);
+	else
+		rc = crt_init(NULL, NULL, server);
 	assert(rc == 0);
 
 	gecho.server = (server != 0);

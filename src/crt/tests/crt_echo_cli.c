@@ -41,6 +41,8 @@
 
 #include <crt_echo.h>
 
+bool test_multi_tiers;
+
 struct gecho gecho;
 
 static int client_wait(int num_retries, unsigned int wait_len_ms,
@@ -93,6 +95,7 @@ static int bulk_test_req_cb(const struct crt_cb_info *cb_info)
 
 static void run_client(void)
 {
+	crt_group_t			*grp_tier2 = NULL;
 	crt_endpoint_t			svr_ep;
 	crt_rpc_t			*rpc_req = NULL;
 	crt_sg_list_t			sgl, sgl_query;
@@ -237,8 +240,55 @@ static void run_client(void)
 	free(iovs);
 	C_FREE(pchar, 256);
 
+	/* ============= test-3 ============ */
+	/* attach to 2nd tier and send checkin RPC */
+	if (test_multi_tiers == false)
+		goto send_shutdown;
+
+	rc = crt_group_attach(ECHO_2ND_TIER_GRPID, &grp_tier2);
+	assert(rc == 0 && grp_tier2 != NULL);
+
+	for (i = 0; i <= ECHO_EXTRA_CONTEXT_NUM; i++) {
+		svr_ep.ep_grp = grp_tier2;
+		svr_ep.ep_rank = 0;
+		svr_ep.ep_tag = i;
+		rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_CHECKIN,
+				    &rpc_req);
+		assert(rc == 0 && rpc_req != NULL);
+
+		e_req = crt_req_get(rpc_req);
+		assert(e_req != NULL);
+
+		C_ALLOC(pchar, 256);
+		assert(pchar != NULL);
+		snprintf(pchar, 256, "Guest_%d_%d@client-side",
+			 myrank, svr_ep.ep_tag);
+
+		e_req->name = pchar;
+		e_req->age = 32 + svr_ep.ep_tag;
+		e_req->days = myrank;
+
+		C_DEBUG("client(rank %d) sending checkin rpc to tier2 with "
+			"tag %d, name: %s, age: %d, days: %d.\n",
+			myrank, svr_ep.ep_tag, e_req->name, e_req->age,
+			e_req->days);
+
+		gecho.complete = 0;
+		rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
+		assert(rc == 0);
+		/* wait two minutes (in case of manually starting up clients) */
+		rc = client_wait(120, 1000, &gecho.complete);
+		assert(rc == 0);
+		C_FREE(pchar, 256);
+
+		printf("client(rank %d, tag %d) checkin req sent to tier2.\n",
+		       myrank, svr_ep.ep_tag);
+	}
+
 	/* ====================== */
 	/* send an RPC to kill the server */
+	svr_ep.ep_grp = NULL;
+send_shutdown:
 	printf("client (rank 0) sending shutdown request...\n");
 	gecho.complete = 0;
 	assert(rc == 0);
@@ -246,7 +296,6 @@ static void run_client(void)
 		goto out;
 
 	rpc_req = NULL;
-	svr_ep.ep_grp = NULL;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_SHUTDOWN, &rpc_req);
@@ -261,13 +310,24 @@ static void run_client(void)
 	rc = client_wait(100, 100, &gecho.complete);
 	assert(rc == 0);
 
+	if (svr_ep.ep_grp == grp_tier2 && grp_tier2 != NULL) {
+		rc = crt_group_detach(grp_tier2);
+		assert(rc == 0);
+		goto out;
+	}
+
+	if (test_multi_tiers == true) {
+		svr_ep.ep_grp = grp_tier2;
+		goto send_shutdown;
+	}
+
 out:
 	printf("client(rank %d) shuting down...\n", myrank);
 }
 
 int main(int argc, char *argv[])
 {
-	echo_init(0);
+	echo_init(0, false);
 
 	run_client();
 

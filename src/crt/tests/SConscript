@@ -49,6 +49,7 @@ def scons():
     # a simple example to use crt_xxx APIs
     denv.Program('crt_echo_cli', 'crt_echo_cli.c', LIBS=libraries)
     denv.Program('crt_echo_srv', 'crt_echo_srv.c', LIBS=libraries)
+    denv.Program('crt_echo_srv2', 'crt_echo_srv2.c', LIBS=libraries)
 
 if __name__ == "SCons.Script":
     scons()

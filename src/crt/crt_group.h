@@ -44,10 +44,6 @@
 
 #include <crt_pmix.h>
 
-/* TODO export the group name to user? and multiple client groups? */
-#define CRT_GLOBAL_SRV_GROUP_NAME	"crt_global_srv_group"
-#define CRT_CLI_GROUP_NAME		"crt_cli_group"
-
 enum crt_grp_status {
 	CRT_GRP_CREATING = 0x66,
 	CRT_GRP_NORMAL,
@@ -144,19 +140,18 @@ struct crt_grp_gdata {
 	pthread_rwlock_t	 gg_rwlock;
 };
 
-crt_group_id_t crt_global_grp_id(void);
 int crt_hdlr_grp_create(crt_rpc_t *rpc_req);
 int crt_hdlr_grp_destroy(crt_rpc_t *rpc_req);
 int crt_hdlr_uri_lookup(crt_rpc_t *rpc_req);
-/* TODO refine and export crt_group_attach */
-int crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
+int crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
+int crt_grp_detach(crt_group_t *attached_grp);
 int crt_grp_uri_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank,
 		       char **uri);
 int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv,
 		      struct crt_hg_context *hg_ctx, crt_rank_t rank,
 		      uint32_t tag, crt_phy_addr_t *base_addr,
 		      na_addr_t *na_addr);
-int crt_grp_init(void);
+int crt_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid);
 int crt_grp_fini(void);
 
 static inline bool

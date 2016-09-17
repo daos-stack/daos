@@ -577,15 +577,20 @@ int
 crt_hg_req_create(struct crt_hg_context *hg_ctx, crt_endpoint_t tgt_ep,
 		  struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t    hg_ret = HG_SUCCESS;
-	int            rc = 0;
+	struct crt_grp_priv	*grp_priv;
+	hg_return_t		hg_ret = HG_SUCCESS;
+	int			rc = 0;
 
 	C_ASSERT(hg_ctx != NULL && hg_ctx->dhc_hgcla != NULL &&
 		 hg_ctx->dhc_hgctx != NULL);
 	C_ASSERT(rpc_priv != NULL);
 
-	rc = crt_grp_lc_lookup(crt_gdata.cg_grp->gg_srv_pri_grp, hg_ctx,
-			       tgt_ep.ep_rank, tgt_ep.ep_tag,
+	if (tgt_ep.ep_grp == NULL)
+		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+	else
+		grp_priv = container_of(tgt_ep.ep_grp, struct crt_grp_priv,
+					gp_pub);
+	rc = crt_grp_lc_lookup(grp_priv, hg_ctx, tgt_ep.ep_rank, tgt_ep.ep_tag,
 			       NULL /* base_addr */, &rpc_priv->drp_na_addr);
 	if (rc != 0) {
 		C_ERROR("crt_grp_lc_lookup failed, rc: %d, opc: 0x%x.\n",

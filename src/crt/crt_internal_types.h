@@ -67,7 +67,7 @@ struct crt_gdata {
 	bool			cg_multi_na;
 
 	/* CaRT contexts list */
-	crt_list_t             cg_ctx_list;
+	crt_list_t		cg_ctx_list;
 	/* actual number of items in CaRT contexts list */
 	int			cg_ctx_num;
 	/* the global opcode map */
@@ -77,17 +77,13 @@ struct crt_gdata {
 
 	struct crt_grp_gdata	*cg_grp;
 
-	/* the unique global server and client group ID */
-	crt_group_id_t		cg_srv_grp_id;
-	crt_group_id_t		cg_cli_grp_id;
-
-	/* protects crt_gdata */
-	pthread_rwlock_t	cg_rwlock;
 	/* refcount to protect crt_init/crt_finalize */
 	volatile unsigned int	cg_refcount;
 	volatile unsigned int	cg_inited:1,
 				cg_grp_inited:1; /* group initialized */
-	/* ... */
+
+	/* protects crt_gdata */
+	pthread_rwlock_t	cg_rwlock;
 };
 
 extern struct crt_gdata		crt_gdata;
