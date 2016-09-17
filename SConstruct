@@ -41,6 +41,7 @@ def scons():
         if not config.CheckHeader(required_header):
             config.Finish()
             exit(1)
+    config.Finish()
 
     opts_file = os.path.join(Dir('#').abspath, 'cart-%s.conf' % platform)
     opts = Variables(opts_file)
@@ -58,7 +59,6 @@ def scons():
     # through PREREQS when they need it.
     env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
     env.Alias('install', '$PREFIX')
-    config.Finish()
 
     if platform == 'Darwin':
         # generate .so on OSX instead of .dylib
