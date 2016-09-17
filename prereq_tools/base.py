@@ -1053,7 +1053,8 @@ class _Component(object):
 
         # Default to has_changes = True which will cause all deps
         # to be built first time scons is invoked.
-        has_changes = True
+        has_changes = self.prereqs.build_deps
+
         if self.src_exists():
             self.get()
             has_changes = self.has_changes()
