@@ -6,7 +6,9 @@ CaRT is an open-source RPC transport layer for Big Data and Exascale HPC. It sup
 
 ## License
 
-CaRT is open-sourced software licensed under the Apache License Version 2.0. Please see the [LICENSE](./LICENSE) & [NOTICE](./NOTICE) files for more information.
+CaRT is open source software distributed under a BSD license.
+Please see the [LICENSE](./LICENSE) & [NOTICE](./NOTICE) files for
+more information.
 
 ## Build
 
