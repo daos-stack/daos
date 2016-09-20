@@ -1,8 +1,8 @@
 diff --git a/VERSION b/VERSION
-index 1add62a..939d7ed 100644
+index fb771b4..d1e9386 100644
 --- a/VERSION
 +++ b/VERSION
-@@ -81,16 +81,16 @@ date="Unreleased developer copy"
+@@ -82,17 +82,17 @@ date="Unreleased developer copy"
  # Version numbers are described in the Libtool current:revision:age
  # format.
  
@@ -16,6 +16,7 @@ index 1add62a..939d7ed 100644
 -libopen_pal_so_version=0:0:0
 -libmpi_java_so_version=0:0:0
 -liboshmem_so_version=0:0:0
+-libompitrace_so_version=0:0:0
 +libmpi_so_version=1:0:0
 +libmpi_cxx_so_version=1:0:0
 +libmpi_mpifh_so_version=1:0:0
@@ -26,10 +27,11 @@ index 1add62a..939d7ed 100644
 +libopen_pal_so_version=1:0:0
 +libmpi_java_so_version=1:0:0
 +liboshmem_so_version=1:0:0
++libompitrace_so_version=1:0:0
  
  # "Common" components install standalone libraries that are run-time
  # linked by one or more components.  So they need to be versioned as
-@@ -98,14 +98,14 @@ liboshmem_so_version=0:0:0
+@@ -100,14 +100,14 @@ libompitrace_so_version=0:0:0
  # components-don't-affect-the-build-system abstraction.
  
  # OMPI layer
