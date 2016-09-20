@@ -89,6 +89,7 @@ REQS.define('mercury',
                       '-DMERCURY_ENABLE_VERBOSE_ERROR=OFF ' \
                       '-DBUILD_TESTING=ON ' \
                       '-DNA_USE_CCI=ON ' \
+                      '-DNA_CCI_USE_POLL=ON ' \
                       '-DBUILD_DOCUMENTATION=OFF ' \
                       '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC ' \
                       '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib ' \
@@ -114,7 +115,6 @@ REQS.define('pmix',
             commands=['./autogen.sh',
                       './configure --with-platform=optimized ' \
                       '--prefix=$PMIX_PREFIX ' \
-                      '--disable-visibility ' \
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make', 'make install'],
             libs=['pmix'],
@@ -137,7 +137,7 @@ REQS.define('ompi',
                       '--with-libevent=external ' \
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make', 'make install'],
-            libs=['libopen-rte'],
+            libs=['open-rte'],
             required_libs=['event'],
             required_progs=['g++', 'flex'],
             requires=['pmix', 'hwloc'])
