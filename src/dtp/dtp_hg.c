@@ -173,7 +173,6 @@ dtp_hg_init(dtp_phy_addr_t *addr, bool server)
 	const char		*info_string;
 	struct dtp_hg_gdata	*hg_gdata;
 	na_class_t		*na_class = NULL;
-	na_context_t		*na_context = NULL;
 	hg_class_t		*hg_class = NULL;
 	int			rc = 0;
 
@@ -198,17 +197,9 @@ dtp_hg_init(dtp_phy_addr_t *addr, bool server)
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
 
-	na_context = NA_Context_create(na_class);
-	if (na_context == NULL) {
-		D_ERROR("Could not create NA context.\n");
-		NA_Finalize(na_class);
-		D_GOTO(out, rc = -DER_DTP_HG);
-	}
-
-	hg_class = HG_Init_na(na_class, na_context);
+	hg_class = HG_Init_na(na_class);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
-		NA_Context_destroy(na_class, na_context);
 		NA_Finalize(na_class);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
@@ -216,13 +207,11 @@ dtp_hg_init(dtp_phy_addr_t *addr, bool server)
 	D_ALLOC_PTR(hg_gdata);
 	if (hg_gdata == NULL) {
 		HG_Finalize(hg_class);
-		NA_Context_destroy(na_class, na_context);
 		NA_Finalize(na_class);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	hg_gdata->dhg_nacla = na_class;
-	hg_gdata->dhg_nactx = na_context;
 	hg_gdata->dhg_hgcla = hg_class;
 
 	dtp_gdata.dg_hg = hg_gdata;
@@ -236,7 +225,6 @@ dtp_hg_init(dtp_phy_addr_t *addr, bool server)
 		D_ERROR("dtp_hg_reg(rpcid: 0x%x), failed rc: %d.\n",
 			DTP_HG_RPCID, rc);
 		HG_Finalize(hg_class);
-		NA_Context_destroy(na_class, na_context);
 		NA_Finalize(na_class);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
@@ -249,7 +237,6 @@ dtp_hg_init(dtp_phy_addr_t *addr, bool server)
 		if (rc != 0) {
 			D_ERROR("na_class_get_addr failed, rc: %d.\n", rc);
 			HG_Finalize(hg_class);
-			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_DTP_HG);
 		}
@@ -258,7 +245,6 @@ dtp_hg_init(dtp_phy_addr_t *addr, bool server)
 		if (*addr == NULL) {
 			D_ERROR("strdup failed, rc: %d.\n", rc);
 			HG_Finalize(hg_class);
-			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_DTP_HG);
 		}
@@ -275,7 +261,6 @@ int
 dtp_hg_fini()
 {
 	na_class_t	*na_class;
-	na_context_t	*na_context;
 	hg_class_t	*hg_class;
 	hg_return_t	hg_ret = HG_SUCCESS;
 	na_return_t	na_ret = NA_SUCCESS;
@@ -287,10 +272,8 @@ dtp_hg_fini()
 	}
 
 	na_class = dtp_gdata.dg_hg->dhg_nacla;
-	na_context = dtp_gdata.dg_hg->dhg_nactx;
 	hg_class = dtp_gdata.dg_hg->dhg_hgcla;
 	D_ASSERT(na_class != NULL);
-	D_ASSERT(na_context != NULL);
 	D_ASSERT(hg_class != NULL);
 
 	hg_ret = HG_Finalize(hg_class);
@@ -298,18 +281,6 @@ dtp_hg_fini()
 		D_ERROR("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
 		D_GOTO(out, rc = -DER_DTP_HG);
 	}
-
-	na_ret = NA_Context_destroy(na_class, na_context);
-	/*
-	 * Ignore the error due to a HG bug:
-	 * https://github.com/mercury-hpc/mercury/issues/88
-	 */
-	/*
-	if (na_ret != NA_SUCCESS) {
-		D_ERROR("Could not destroy NA context, na_ret: %d.\n", na_ret);
-		D_GOTO(out, rc = -DER_DTP_HG);
-	}
-	*/
 
 	na_ret = NA_Finalize(na_class);
 	if (na_ret != NA_SUCCESS) {
@@ -327,7 +298,6 @@ int
 dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 {
 	na_class_t	*na_class = NULL;
-	na_context_t	*na_context = NULL;
 	hg_class_t	*hg_class = NULL;
 	hg_context_t	*hg_context = NULL;
 	const char	*info_string;
@@ -343,7 +313,6 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 		}
 
 		hg_ctx->dhc_nacla = dtp_gdata.dg_hg->dhg_nacla;
-		hg_ctx->dhc_nactx = dtp_gdata.dg_hg->dhg_nactx;
 		hg_ctx->dhc_hgcla = dtp_gdata.dg_hg->dhg_hgcla;
 		hg_ctx->dhc_shared_na = true;
 	} else {
@@ -370,17 +339,9 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 		D_DEBUG(DF_TP, "New context(idx:%d), listen address: cci+%s.\n",
 			idx, addr_str);
 
-		na_context = NA_Context_create(na_class);
-		if (na_context == NULL) {
-			D_ERROR("Could not create NA context.\n");
-			NA_Finalize(na_class);
-			D_GOTO(out, rc = -DER_DTP_HG);
-		}
-
-		hg_class = HG_Init_na(na_class, na_context);
+		hg_class = HG_Init_na(na_class);
 		if (hg_class == NULL) {
 			D_ERROR("Could not initialize HG class.\n");
-			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_DTP_HG);
 		}
@@ -389,7 +350,6 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 		if (hg_context == NULL) {
 			D_ERROR("Could not create HG context.\n");
 			HG_Finalize(hg_class);
-			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_DTP_HG);
 		}
@@ -404,13 +364,11 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 				DTP_HG_RPCID, rc);
 			HG_Context_destroy(hg_context);
 			HG_Finalize(hg_class);
-			NA_Context_destroy(na_class, na_context);
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_DTP_HG);
 		}
 
 		hg_ctx->dhc_nacla = na_class;
-		hg_ctx->dhc_nactx = na_context;
 		hg_ctx->dhc_hgcla = hg_class;
 		hg_ctx->dhc_shared_na = false;
 	}
@@ -453,10 +411,6 @@ dtp_hg_ctx_fini(struct dtp_hg_context *hg_ctx)
 	hg_ret = HG_Finalize(hg_ctx->dhc_hgcla);
 	if (hg_ret != HG_SUCCESS)
 		D_ERROR("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
-
-	na_ret = NA_Context_destroy(hg_ctx->dhc_nacla, hg_ctx->dhc_nactx);
-	if (na_ret != NA_SUCCESS)
-		D_ERROR("Could not destroy NA context, na_ret: %d.\n", na_ret);
 
 	na_ret = NA_Finalize(hg_ctx->dhc_nacla);
 	if (na_ret != NA_SUCCESS)

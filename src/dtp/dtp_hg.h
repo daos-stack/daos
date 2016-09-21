@@ -50,7 +50,6 @@ struct dtp_common_hdr;
 struct dtp_hg_context {
 	bool			dhc_shared_na; /* flag for shared na_class */
 	na_class_t		*dhc_nacla; /* NA class */
-	na_context_t		*dhc_nactx; /* NA context */
 	hg_class_t		*dhc_hgcla; /* HG class */
 	hg_context_t		*dhc_hgctx; /* HG context */
 	hg_class_t		*dhc_bulkcla; /* bulk class */
@@ -60,7 +59,6 @@ struct dtp_hg_context {
 /** HG level global data */
 struct dtp_hg_gdata {
 	na_class_t		*dhg_nacla; /* NA class */
-	na_context_t		*dhg_nactx; /* NA context */
 	hg_class_t		*dhg_hgcla; /* HG class */
 };
 
