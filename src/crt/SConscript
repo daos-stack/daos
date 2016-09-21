@@ -46,19 +46,13 @@ def scons():
 
     libraries = ['crt_util', 'mercury', 'abt']
 
-    if prereqs:
-        prereqs.require(env, 'mercury', 'pmix', 'argobots')
-    else:
-        libraries += ['na', 'pmix']
+    prereqs.require(env, 'mercury', 'pmix', 'argobots')
 
     denv = env.Clone()
     denv.Append(CPPPATH=['#/src/crt'])
 
     crt = denv.SharedLibrary('libcrt', Glob('*.c'), LIBS=libraries)
     denv.Install('$PREFIX/lib/', crt)
-
-    # Builders
-    SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
     scons()

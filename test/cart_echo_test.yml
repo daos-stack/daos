@@ -1,0 +1,22 @@
+description: "process set test module"
+
+defaultENV:
+    OMPI_MCA_rmaps_base_oversubscribe: "1"
+
+module:
+    name: "cart_echo_test"
+    subLogKey: "CRT_TESTLOG"
+    setKeyFromHost: ["CRT_TEST_SERVER", "CRT_TEST_CLIENT"]
+    setKeyFromInfo:
+        - [CRT_PREFIX, PREFIX, ""]
+        - [CRT_OMPI_PREFIX, OMPI_PREFIX, ""]
+        - [CRT_OMPI_BIN, OMPI_PREFIX, "/bin/"]
+        - [CCI_CONFIG, PREFIX, "/etc/cci.ini"]
+    srcDir: "src/lib"
+
+directives:
+    loop: "no"
+
+execStrategy:
+    - id: default
+      setEnvVars:

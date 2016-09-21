@@ -42,7 +42,7 @@ fi
 
 flist="-s SConstruct -s src/SConscript -s src/crt/SConscript"
 flist+=" -s src/util/SConscript -s src/utest/SConscript"
-flist+=" -s src/crt/tests/SConscript -s test/SConscript"
+flist+=" -s src/test/SConscript -s test/SConscript"
 
 for f in test/*.py ; do
   [[ -f "$f" ]] || continue

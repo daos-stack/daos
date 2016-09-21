@@ -151,8 +151,8 @@ echo_init(int server, bool tier2)
 
 	flags = (server != 0) ? CRT_FLAG_BIT_SERVER : 0;
 	/*
-	flags |= CRT_FLAG_BIT_SINGLETON;
-	*/
+	 * flags |= CRT_FLAG_BIT_SINGLETON;
+	 */
 
 	if (server != 0 && tier2 == true)
 		rc = crt_init(NULL, ECHO_2ND_TIER_GRPID, flags);
@@ -179,7 +179,8 @@ echo_init(int server, bool tier2)
 	 * then client side can use crt_rpc_reg, and server side can use
 	 * crt_rpc_srv_reg.
 	 * If both client and server side know the rpc handler, they can call
-	 * the same crt_rpc_srv_reg. */
+	 * the same crt_rpc_srv_reg.
+	 */
 	if (server == 0) {
 		rc = crt_rpc_reg(ECHO_OPC_CHECKIN, &DQF_ECHO_PING_CHECK);
 		assert(rc == 0);

@@ -62,6 +62,8 @@ def save_build_info(env, prereqs, platform):
     env.InstallAs('$PREFIX/TESTING/.build_vars.sh', sh_build_vars)
     env.InstallAs('$PREFIX/TESTING/.build_vars.json', json_build_vars)
 
+    env.InstallAs('$PREFIX/etc/cci.ini', 'utils/cci/cci.ini')
+
 def scons():
     """Scons function"""
 
@@ -108,14 +110,13 @@ def scons():
     arch_dir = 'build/%s' % platform
     VariantDir(arch_dir, '.', duplicate=0)
     SConscript('%s/src/SConscript' % arch_dir, exports=['env', 'prereqs'])
+    SConscript('%s/test/SConscript' % arch_dir, exports=['env', 'prereqs'])
     SConscript('%s/scons_local/test_runner/SConscript' % arch_dir,
                exports=['env', 'prereqs'])
 
     # Put this after all SConscript calls so that any imports they require can
     # be included.
     save_build_info(env, prereqs, platform)
-
-    Depends('install', 'build')
 
     try:
         #if using SCons 2.4+, provide a more complete help

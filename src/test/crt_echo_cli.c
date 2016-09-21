@@ -39,7 +39,7 @@
  * This is a simple example of crt_echo rpc client based on crt APIs.
  */
 
-#include <crt_echo.h>
+#include "crt_echo.h"
 
 bool test_multi_tiers;
 
@@ -49,6 +49,7 @@ static int client_wait(int num_retries, unsigned int wait_len_ms,
 		       int *complete_flag)
 {
 	int retry, rc;
+
 	for (retry = 0; retry < num_retries; retry++) {
 		rc = crt_progress(gecho.crt_ctx, wait_len_ms * 1000, NULL,
 				  NULL);
@@ -151,8 +152,10 @@ static void run_client(void)
 		       myrank, svr_ep.ep_tag);
 	}
 
-	/* ============= test-2 ============
-	 * simple bulk transferring */
+	/*
+	 * ============= test-2 ============
+	 * simple bulk transferring
+	 */
 	rpc_req = NULL;
 	svr_ep.ep_grp = NULL;
 	svr_ep.ep_rank = 0;
@@ -181,6 +184,7 @@ static void run_client(void)
 	MD5_CTX md5_ctx;
 	unsigned char md5[16];
 	crt_string_t md5_str = (crt_string_t)malloc(33);
+
 	memset(md5_str, 0, 33);
 
 	rc = MD5_Init(&md5_ctx);

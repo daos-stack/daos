@@ -139,9 +139,9 @@ int corpc_example_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	reply_result->co_result += reply_source->co_result;
 
 	crt_group_rank(NULL, &my_rank);
-	printf("corpc_example_aggregate, rank %d, co_result %d, aggregate "
-	       "result %d.\n", my_rank, reply_source->co_result,
-	       reply_result->co_result);
+	printf("corpc_example_aggregate, rank %d, co_result %d, "
+	       "aggregate result %d.\n",
+	       my_rank, reply_source->co_result, reply_result->co_result);
 
 	return 0;
 }
@@ -252,8 +252,8 @@ int echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	rc = crt_bulk_get_sgnum(e_req->remote_bulk_hdl, &bulk_sgnum);
 
 	printf("echo_srver recv'd bulk_test, opc: 0x%x, intro_msg: %s, "
-	       "bulk_len: %ld, bulk_sgnum: %d.\n", rpc_req->dr_opc,
-		e_req->bulk_intro_msg, bulk_len, bulk_sgnum);
+	       "bulk_len: %ld, bulk_sgnum: %d.\n",
+	       rpc_req->dr_opc, e_req->bulk_intro_msg, bulk_len, bulk_sgnum);
 
 	iovs = (crt_iov_t *)malloc(sizeof(crt_iov_t));
 	iovs[0].iov_buf = malloc(bulk_len);

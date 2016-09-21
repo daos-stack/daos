@@ -1,0 +1,5 @@
+# default list of test description files to execute for MCL.
+# the file path is relative the TESTING direcory
+
+test_list:
+  - "scripts/cart_echo_test.yml"

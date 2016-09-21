@@ -58,5 +58,8 @@ def scons():
     SConscript('util/SConscript', exports=["env", "prereqs"])
     SConscript('crt/SConscript', exports=["env", "prereqs"])
 
+    # Builders
+    SConscript('test/SConscript', exports=["env", "prereqs"])
+
 if __name__ == "SCons.Script":
     scons()
