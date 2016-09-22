@@ -360,6 +360,18 @@ typedef int (*crt_bulk_cb_t)(const struct crt_bulk_cb_info *cb_info);
 typedef int (*crt_progress_cond_cb_t)(void *args);
 
 /**
+ * some bit flags:
+ * CRT_FLAG_BIT_SERVER		false means pure client, true will enable the
+ *				server which listens for incoming request.
+ * CRT_FLAG_BIT_SINGLETON	false means it is a multi-processes program,
+ *				true means with single process.
+ */
+enum crt_flag_bits {
+	CRT_FLAG_BIT_SERVER	= 1U << 0,
+	CRT_FLAG_BIT_SINGLETON	= 1U << 1
+};
+
+/**
  * Initialize CRT transport layer.
  *
  * \param cli_grpid [IN]	client-side primary group ID, be ignored for
@@ -372,6 +384,7 @@ typedef int (*crt_progress_cond_cb_t)(void *args);
  * \param server [IN]		zero means pure client, otherwise will enable
  *				the server which listens for incoming connection
  *				request.
+ * \param flags [IN]		bit flags, /see enum crt_flag_bits.
  *
  * \return			zero on success, negative value if error
  *
@@ -380,7 +393,7 @@ typedef int (*crt_progress_cond_cb_t)(void *args);
  *	  PMIx_Fence.
  */
 int
-crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, bool server);
+crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, uint32_t flags);
 
 /**
  * Create CRT transport context.

@@ -62,6 +62,7 @@ struct crt_gdata {
 	uint32_t		cg_addr_len;
 
 	bool			cg_server;
+	bool			cg_singleton; /* true for singleton client */
 	bool			cg_verbs; /* CCI verbs transport flag */
 	/* multiple NA addr flag, true for server when using CCI plugin */
 	bool			cg_multi_na;

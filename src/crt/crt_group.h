@@ -154,6 +154,10 @@ int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv,
 int crt_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid);
 int crt_grp_fini(void);
 
+#define CRT_ALLOW_SINGLETON_ENV		"CRT_ALLOW_SINGLETON"
+int crt_grp_save_attach_info(struct crt_grp_priv *grp_priv);
+int crt_grp_load_attach_info(struct crt_grp_priv *grp_priv);
+
 static inline bool
 crt_ep_identical(crt_endpoint_t *ep1, crt_endpoint_t *ep2)
 {

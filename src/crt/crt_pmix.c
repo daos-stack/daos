@@ -61,6 +61,12 @@ crt_pmix_init(void)
 	if (pmix_gdata == NULL)
 		C_GOTO(out, rc = -CER_NOMEM);
 
+	if (crt_is_singleton()) {
+		pmix_gdata->pg_univ_size = 1;
+		pmix_gdata->pg_num_apps = 1;
+		C_GOTO(bypass_pmix, rc);
+	}
+
 	rc = PMIx_Init(&pmix_gdata->pg_proc, NULL, 0);
 	if (rc != PMIX_SUCCESS) {
 		C_ERROR("PMIx_Init failed, rc: %d.\n", rc);
@@ -112,6 +118,7 @@ crt_pmix_init(void)
 	pmix_gdata->pg_num_apps = val->data.uint32;
 	PMIX_VALUE_RELEASE(val);
 
+bypass_pmix:
 	grp_gdata->gg_pmix = pmix_gdata;
 	grp_gdata->gg_pmix_inited = 1;
 
@@ -138,6 +145,9 @@ crt_pmix_fini(void)
 
 	pmix_gdata = grp_gdata->gg_pmix;
 
+	if (crt_is_singleton())
+		goto bypass;
+
 	rc = PMIx_Finalize(NULL, 0);
 	if (rc != PMIX_SUCCESS) {
 		C_ERROR("PMIx ns %s rank %d, PMIx_Finalize failed, rc: %d.\n",
@@ -146,6 +156,7 @@ crt_pmix_fini(void)
 		C_GOTO(out, rc = -CER_PMIX);
 	}
 
+bypass:
 	C_FREE_PTR(pmix_gdata);
 	grp_gdata->gg_pmix_inited = 0;
 	grp_gdata->gg_pmix = NULL;
@@ -170,6 +181,8 @@ crt_pmix_fence(void)
 	}
 	*/
 	myproc = &crt_gdata.cg_grp->gg_pmix->pg_proc;
+
+	/* PMIx_Commit(); */
 
 	PMIX_PROC_CONSTRUCT(&proc);
 	strncpy(proc.nspace, myproc->nspace, PMIX_MAX_NSLEN);
@@ -204,10 +217,13 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	pmix_pdata_t		*pdata;
 	pmix_value_t		*val;
 	char			*unpublish_key[2];
+	/*
 	pmix_persistence_t	 persistence;
 	pmix_data_range_t	 range;
+	*/
 	pmix_proc_t		 proc;
 	bool			 flag = true;
+	int			 nkeys = 1;
 	int			 i, rc = 0;
 
 	C_ASSERT(grp_priv != NULL);
@@ -259,12 +275,12 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	 * every process publishes its own address string using
 	 * (PMIx_rank, setname/addrString)
 	 */
-	PMIX_INFO_CREATE(info, 3);
+	PMIX_INFO_CREATE(info, nkeys);
 	snprintf(info[0].key, PMIX_MAX_KEYLEN + 1, "%s-%d-psname",
 		myproc->nspace, myproc->rank);
 	unpublish_key[0] = strndup(info[0].key, PMIX_MAX_KEYLEN);
 	if (!unpublish_key[0]) {
-		PMIX_INFO_FREE(info, 3);
+		PMIX_INFO_FREE(info, nkeys);
 		C_GOTO(out, rc = -CER_NOMEM);
 	}
 	info[0].value.type = PMIX_STRING;
@@ -276,20 +292,22 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 		C_GOTO(out, rc = -CER_NOMEM);
 	}
 
-	persistence = PMIX_PERSIST_PROC;
-	range = PMIX_RANGE_NAMESPACE;
+	/*
+	persistence = PMIX_PERSIST_SESSION;
+	range = PMIX_RANGE_GLOBAL;
 	PMIX_INFO_LOAD(&info[1], PMIX_PERSISTENCE, &persistence,
 			PMIX_UINT);
 	PMIX_INFO_LOAD(&info[2], PMIX_RANGE, &range, PMIX_UINT);
-	rc = PMIx_Publish(info, 3);
+	*/
+	rc = PMIx_Publish(info, nkeys);
 	if (rc != PMIX_SUCCESS) {
 		C_ERROR("PMIx ns %s rank %d, PMIx_Publish failed,rc: %d.\n",
 			myproc->nspace, myproc->rank, rc);
-		PMIX_INFO_FREE(info, 3);
+		PMIX_INFO_FREE(info, nkeys);
 		free(unpublish_key[0]);
 		C_GOTO(out, rc = -CER_PMIX);
 	}
-	PMIX_INFO_FREE(info, 3);
+	PMIX_INFO_FREE(info, nkeys);
 
 	/* call fence to ensure the data is received */
 	rc = crt_pmix_fence();
@@ -309,8 +327,9 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 
 		rc = PMIx_Lookup(pdata, 1, NULL, 0);
 		if (rc != PMIX_SUCCESS) {
-			C_ERROR("PMIx ns %s rank %d, PMIx_Lookup failed, "
-				"rc: %d.\n", myproc->nspace, myproc->rank, rc);
+			C_ERROR("PMIx ns %s rank %d, PMIx_Lookup %s failed, "
+				"rc: %d.\n", myproc->nspace, myproc->rank,
+				pdata[0].key, rc);
 			PMIX_PDATA_FREE(pdata, 1);
 			free(unpublish_key[0]);
 			C_GOTO(out, rc = -CER_PMIX);

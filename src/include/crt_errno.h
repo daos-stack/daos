@@ -90,6 +90,10 @@ typedef enum {
 	CER_ADDRSTR_GEN		= (CER_ERR_BASE + 22),
 	/** CRT PMIx layer error */
 	CER_PMIX		= (CER_ERR_BASE + 23),
+	/** CRT IV callback - cannot handle locally */
+	CER_IVCB_FORWARD	= (CER_ERR_BASE + 24),
+	/** CRT miscellaneous error */
+	CER_MISC		= (CER_ERR_BASE + 25),
 	/** unknown error */
 	CER_UNKNOWN		= (CER_ERR_BASE + 500),
 	/** TODO: add more error numbers */

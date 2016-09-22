@@ -108,7 +108,7 @@ crt_debug_init(void)
 	log_mask = getenv(CRT_LOG_MASK_ENV);
 
 	if (log_file == NULL || strlen(log_file) == 0) {
-		C_PRINT("ENV %s not valid, will log to stdout.\n",
+		C_PRINT("ENV %s invalid, will log to stdout.\n",
 			CRT_LOG_FILE_ENV);
 		log_file = "/dev/stdout";
 	} else {

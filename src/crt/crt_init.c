@@ -201,10 +201,13 @@ static void data_init()
 }
 
 int
-crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, bool server)
+crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, uint32_t flags)
 {
 	crt_phy_addr_t	addr = NULL, addr_env;
+	struct timeval	now;
+	unsigned int	seed;
 	size_t		len;
+	bool		server, allow_singleton = false;
 	int		rc = 0;
 
 	if (cli_grpid != NULL) {
@@ -237,11 +240,26 @@ crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, bool server)
 	}
 	C_ASSERT(gdata_init_flag == 1);
 
+	server = flags & CRT_FLAG_BIT_SERVER;
+
 	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
 	if (crt_gdata.cg_inited == 0) {
+		/* feed a seed for pseudo-random number generator */
+		gettimeofday(&now, NULL);
+		seed = (unsigned int)(now.tv_sec * 1000000 + now.tv_usec);
+		srandom(seed);
+
 		crt_gdata.cg_server = server;
 		if (server == true)
 			crt_gdata.cg_multi_na = true;
+
+		if (!server) {
+			crt_getenv_bool(CRT_ALLOW_SINGLETON_ENV,
+					&allow_singleton);
+			if ((flags & CRT_FLAG_BIT_SINGLETON) != 0 &&
+			    allow_singleton)
+				crt_gdata.cg_singleton = true;
+		}
 
 		rc = crt_debug_init();
 		if (rc != 0) {

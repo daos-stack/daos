@@ -108,13 +108,13 @@ do {									\
  * #define DSR_DEBUG(...) crt_log(DSR_DEBUG, ...)
  */
 #define C_DEBUG(fmt, ...)						\
-	crt_log(CRT_DBG, fmt, ##__VA_ARGS__)
+	crt_log(CRT_DBG, "%s:%d "fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 
 #define C_WARN(fmt, ...)						\
-	crt_log(CRT_WARN, fmt, ##__VA_ARGS__)
+	crt_log(CRT_WARN, "%s:%d "fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 
 #define C_ERROR(fmt, ...)						\
-	crt_log(CRT_ERR, fmt, ##__VA_ARGS__)
+	crt_log(CRT_ERR, "%s:%d "fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 
 #define C_ASSERT(e)	assert(e)
 
@@ -223,22 +223,16 @@ crt_power2_nbits(unsigned int val)
 	return val == LOWEST_BIT_SET(val) ? shift - 1 : shift;
 }
 
-int
-crt_rank_list_dup(crt_rank_list_t **dst, const crt_rank_list_t *src,
-		   bool input);
-void
-crt_rank_list_free(crt_rank_list_t *rank_list);
-void
-crt_rank_list_copy(crt_rank_list_t *dst, crt_rank_list_t *src, bool input);
-void
-crt_rank_list_sort(crt_rank_list_t *rank_list);
-bool
-crt_rank_list_find(crt_rank_list_t *rank_list, crt_rank_t rank, int *idx);
-bool
-crt_rank_list_identical(crt_rank_list_t *rank_list1,
-			 crt_rank_list_t *rank_list2, bool input);
-bool
-crt_rank_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank);
+int crt_rank_list_dup(crt_rank_list_t **dst, const crt_rank_list_t *src,
+		      bool input);
+void crt_rank_list_free(crt_rank_list_t *rank_list);
+void crt_rank_list_copy(crt_rank_list_t *dst, crt_rank_list_t *src, bool input);
+void crt_rank_list_sort(crt_rank_list_t *rank_list);
+bool crt_rank_list_find(crt_rank_list_t *rank_list, crt_rank_t rank, int *idx);
+bool crt_rank_list_identical(crt_rank_list_t *rank_list1,
+			     crt_rank_list_t *rank_list2, bool input);
+bool crt_rank_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank);
+void crt_getenv_bool(const char *env, bool *bool_val);
 
 
 #if !defined(container_of)

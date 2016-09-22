@@ -146,12 +146,18 @@ struct crt_req_format DQF_ECHO_BULK_TEST =
 static inline void
 echo_init(int server, bool tier2)
 {
-	int rc = 0, i;
+	uint32_t	flags;
+	int		rc = 0, i;
+
+	flags = (server != 0) ? CRT_FLAG_BIT_SERVER : 0;
+	/*
+	flags |= CRT_FLAG_BIT_SINGLETON;
+	*/
 
 	if (server != 0 && tier2 == true)
-		rc = crt_init(NULL, ECHO_2ND_TIER_GRPID, server);
+		rc = crt_init(NULL, ECHO_2ND_TIER_GRPID, flags);
 	else
-		rc = crt_init(NULL, NULL, server);
+		rc = crt_init(NULL, NULL, flags);
 	assert(rc == 0);
 
 	gecho.server = (server != 0);

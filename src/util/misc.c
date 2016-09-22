@@ -256,3 +256,26 @@ crt_sgl_fini(crt_sg_list_t *sgl, bool free_iovs)
 	C_FREE(sgl->sg_iovs, sgl->sg_nr.num * sizeof(*sgl->sg_iovs));
 	memset(sgl, 0, sizeof(*sgl));
 }
+
+/**
+ * get a bool type environment variables
+ *
+ * \param env	[IN]		name of the environment variable
+ * \param bool_val [IN/OUT]	returned value of the ENV. Will not change the
+ *				original value if ENV is not set. Set as false
+ *				if the env is set to 0, otherwise set as true.
+ */
+void crt_getenv_bool(const char *env, bool *bool_val)
+{
+	char *env_val;
+
+	if (env == NULL)
+		return;
+	C_ASSERT(bool_val != NULL);
+
+	env_val = getenv(env);
+	if (!env_val)
+		return;
+
+	*bool_val = (atoi(env_val) == 0 ? false : true);
+}

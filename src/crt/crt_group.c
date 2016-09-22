@@ -1088,21 +1088,35 @@ crt_primary_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
 	grp_priv->gp_local = 1;
 	grp_priv->gp_service = is_service;
 
-	rc = crt_pmix_assign_rank(grp_priv);
-	if (rc != 0)
-		C_GOTO(out, rc);
+	if (crt_is_singleton()) {
+		grp_priv->gp_size = 1;
+		grp_priv->gp_self = 0;
+	} else {
+		rc = crt_pmix_assign_rank(grp_priv);
+		if (rc != 0)
+			C_GOTO(out, rc);
 
-	rc = crt_pmix_publish_self(grp_priv);
-	if (rc != 0)
-		C_GOTO(out, rc);
+		rc = crt_pmix_publish_self(grp_priv);
+		if (rc != 0)
+			C_GOTO(out, rc);
 
-	rc = crt_pmix_fence();
-	if (rc != 0)
-		C_GOTO(out, rc);
+		rc = crt_pmix_fence();
+		if (rc != 0)
+			C_GOTO(out, rc);
+	}
 
 	if (is_service) {
 		grp_gdata->gg_srv_pri_grp = grp_priv;
 		rc = crt_grp_lc_create(grp_gdata->gg_srv_pri_grp);
+		if (rc != 0) {
+			C_ERROR("crt_grp_lc_create failed, rc: %d.\n",
+				rc);
+			C_GOTO(out, rc);
+		}
+		rc = crt_grp_save_attach_info(grp_priv);
+		if (rc != 0)
+			C_ERROR("crt_grp_save_attach_info failed, rc: %d.\n",
+				rc);
 	} else {
 		grp_gdata->gg_cli_pri_grp = grp_priv;
 		rc = crt_grp_attach(attach_grp_id, &srv_grp);
@@ -1408,11 +1422,20 @@ crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	grp_priv->gp_local = 0;
 	grp_priv->gp_service = 1;
 
-	rc = crt_pmix_attach(grp_priv);
-	if (rc != 0) {
-		C_ERROR("crt_pmix_attach GROUP %s failed, rc: %d.\n",
-			srv_grpid, rc);
-		C_GOTO(out, rc);
+	if (crt_is_singleton()) {
+		rc = crt_grp_load_attach_info(grp_priv);
+		if (rc != 0) {
+			C_ERROR("crt_grp_load_attach_info (grpid %s) failed, "
+				"rc: %d.\n", srv_grpid, rc);
+			C_GOTO(out, rc);
+		}
+	} else {
+		rc = crt_pmix_attach(grp_priv);
+		if (rc != 0) {
+			C_ERROR("crt_pmix_attach GROUP %s failed, rc: %d.\n",
+				srv_grpid, rc);
+			C_GOTO(out, rc);
+		}
 	}
 
 	rc = crt_grp_lc_create(grp_priv);
@@ -1607,5 +1630,216 @@ crt_grp_fini(void)
 out:
 	if (rc != 0)
 		C_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
+	return rc;
+}
+
+static inline char *
+crt_grp_attach_info_filename(struct crt_grp_priv *grp_priv)
+{
+	crt_group_id_t	 grpid;
+	char		*filename;
+	int		 rc;
+
+	C_ASSERT(grp_priv != NULL);
+	grpid = grp_priv->gp_pub.cg_grpid;
+
+	rc = asprintf(&filename, "/tmp/%s.attach_info_tmp", grpid);
+	if (rc == -1) {
+		C_ERROR("asprintf %s failed (%s).\n", grpid, strerror(errno));
+		filename = NULL;
+	} else {
+		C_ASSERT(filename != NULL);
+	}
+
+	return filename;
+}
+
+/**
+ * Save attach info to file with the name "/tmp/grpid.attach_info".
+ * The format of the file is:
+ * line 1: the process set name
+ * line 2: process set size
+ * line 3: starting from this line, each line contains a rank (uri, pair) like:
+ *         0 tcp://192.168.0.1:1234
+ *
+ * An example file named service_set.attach_info:
+ * ========================
+ * service_set
+ * 5
+ * 0 tcp://192.168.0.1:1234
+ * 1 tcp://192.168.0.1:1238
+ * 2 tcp://192.168.0.1:1232
+ * 3 tcp://192.168.0.1:1231
+ * 4 tcp://192.168.0.1:1244
+ * ========================
+ */
+int
+crt_grp_save_attach_info(struct crt_grp_priv *grp_priv)
+{
+	FILE		*fp = NULL;
+	char		*filename = NULL;
+	bool		allow_singleton = false;
+	crt_group_id_t	grpid;
+	crt_rank_t	rank;
+	int		rc = 0;
+
+	C_ASSERT(grp_priv != NULL);
+	if (grp_priv->gp_primary == 0 || grp_priv->gp_local == 0) {
+		C_DEBUG("ignore crt_grp_save_attach_info for non-primary or "
+			"non-local group.\n");
+		C_GOTO(out, rc);
+	}
+	if (!crt_is_service() || grp_priv->gp_service == 0) {
+		C_DEBUG("ignore crt_grp_save_attach_info for client.\n");
+		C_GOTO(out, rc);
+	}
+	if (grp_priv->gp_self != 0) {
+		C_DEBUG("ignore crt_grp_save_attach_info for non-zero rank.\n");
+		C_GOTO(out, rc);
+	}
+
+	crt_getenv_bool(CRT_ALLOW_SINGLETON_ENV, &allow_singleton);
+	if (!allow_singleton) {
+		C_DEBUG("ignore crt_grp_save_attach_info as "
+			"CRT_ALLOW_SINGLETON ENV invalid.\n");
+		C_GOTO(out, rc);
+	}
+	grpid = grp_priv->gp_pub.cg_grpid;
+	filename = crt_grp_attach_info_filename(grp_priv);
+	if (filename == NULL)
+		C_GOTO(out, rc = -CER_NOMEM);
+
+	fp = fopen(filename, "w");
+	if (fp == NULL) {
+		C_ERROR("cannot create file %s(%s).\n",
+			filename, strerror(errno));
+		C_GOTO(out, rc = -CER_MISC);
+	}
+	rc = fprintf(fp, "%s %s\n", "name", grpid);
+	if (rc < 0) {
+		C_ERROR("write to file %s failed (%s).\n",
+			filename, strerror(errno));
+		C_GOTO(out, rc = -CER_MISC);
+	}
+	rc = fprintf(fp, "%s %d\n", "size", grp_priv->gp_size);
+	if (rc < 0) {
+		C_ERROR("write to file %s failed (%s).\n",
+			filename, strerror(errno));
+		C_GOTO(out, rc = -CER_MISC);
+	}
+	/* save all address URIs in the primary group */
+	for (rank = 0; rank < grp_priv->gp_size; rank++) {
+		crt_phy_addr_t	addr_uri;
+
+		addr_uri = NULL;
+		rc = crt_grp_lc_lookup(grp_priv, NULL /* hg_ctx */,
+				       rank, 0 /* tag */, &addr_uri,
+				       NULL /* na_addr */);
+		if (rc != 0) {
+			C_ERROR("crt_grp_lc_lookup(grp %s, rank %d) failed, "
+				"rc: %d.\n", grpid, rank, rc);
+			C_GOTO(out, rc);
+		}
+		C_ASSERT(addr_uri != NULL);
+
+		rc = fprintf(fp, "%d %s\n", rank, addr_uri);
+		if (rc < 0) {
+			C_ERROR("write to file %s failed (%s).\n",
+				filename, strerror(errno));
+			C_GOTO(out, rc = -CER_MISC);
+		}
+		rc = 0;
+	}
+
+	if (fclose(fp) != 0) {
+		C_ERROR("file %s closing failed (%s).\n",
+			filename, strerror(errno));
+		fp = NULL;
+		C_GOTO(out, rc = -CER_MISC);
+	}
+	fp = NULL;
+
+out:
+	if (filename != NULL)
+		free(filename);
+	if (fp != NULL)
+		fclose(fp);
+	return rc;
+}
+
+int
+crt_grp_load_attach_info(struct crt_grp_priv *grp_priv)
+{
+	char		*filename;
+	FILE		*fp = NULL;
+	crt_rank_t	rank;
+	crt_rank_t	psr_rank;
+	crt_group_id_t	grpid, grpname = NULL;
+	crt_phy_addr_t	addr_str = NULL;
+	int		rc = 0;
+
+	C_ASSERT(grp_priv != NULL);
+
+	grpid = grp_priv->gp_pub.cg_grpid;
+	filename = crt_grp_attach_info_filename(grp_priv);
+	if (filename == NULL)
+		C_GOTO(out, rc = -CER_NOMEM);
+
+	fp = fopen(filename, "r");
+	if (fp == NULL) {
+		C_ERROR("open file %s failed (%s).\n",
+			filename, strerror(errno));
+		C_GOTO(out, rc = -CER_MISC);
+	}
+
+	C_ALLOC(grpname, CRT_GROUP_ID_MAX_LEN);
+	if (grpname == NULL)
+		C_GOTO(out, rc = -CER_NOMEM);
+	rc = fscanf(fp, "%*s%s", grpname);
+	if (rc == EOF) {
+		C_ERROR("read from file %s failed (%s).\n",
+			filename, strerror(errno));
+		C_GOTO(out, rc = -CER_MISC);
+	}
+	if (strncmp(grpname, grpid, CRT_GROUP_ID_MAX_LEN != 0)) {
+		C_ERROR("grpname %s in file mismatch with grpid %s.\n",
+			grpname, grpid);
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+
+	rc = fscanf(fp, "%*s%d", &grp_priv->gp_size);
+	if (rc == EOF) {
+		C_ERROR("read from file %s failed (%s).\n",
+			filename, strerror(errno));
+		C_GOTO(out, rc = -CER_MISC);
+	}
+	/** pick a random rank between 0 and size - 1 as the PSR */
+	psr_rank = rand() % grp_priv->gp_size;
+	C_ALLOC(addr_str, CRT_ADDR_STR_MAX_LEN);
+	if (addr_str == NULL)
+		C_GOTO(out, rc = -CER_NOMEM);
+	for (rank = 0; rank <= psr_rank; rank++) {
+		rc = fscanf(fp, "%d %s", &grp_priv->gp_psr_rank,
+			    (char *)addr_str);
+		if (rc == EOF)
+			break;
+	}
+	rc = 0;
+	C_ASSERT(grp_priv->gp_psr_rank == psr_rank);
+	grp_priv->gp_psr_phy_addr = addr_str;
+
+out:
+	if (fp)
+		fclose(fp);
+	if (filename != NULL)
+		free(filename);
+	if (grpname != NULL)
+		C_FREE(grpname, CRT_GROUP_ID_MAX_LEN);
+	if (rc != 0) {
+		if (addr_str != NULL)
+			C_FREE(addr_str, CRT_ADDR_STR_MAX_LEN);
+		C_ERROR("crt_grp_load_attach_info (grpid %s) failed, rc: %d.\n",
+			grpid, rc);
+	}
 	return rc;
 }
