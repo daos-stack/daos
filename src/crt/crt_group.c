@@ -1317,16 +1317,15 @@ crt_grp_uri_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank, char **uri)
 		ul_in->ul_rank = rank;
 
 		crt_req_addref(rpc_req);
-		rc = crt_sync_req(rpc_req, CRT_URI_LOOKUP_TIMEOUT);
+		rc = crt_req_send_sync(rpc_req, CRT_URI_LOOKUP_TIMEOUT);
 		if (rc != 0) {
-			C_ERROR("crt_sync_req URI_LOOKUP failed, rc: %d.\n",
-				rc);
+			C_ERROR("URI_LOOKUP request failed, rc: %d.\n", rc);
 			crt_req_decref(rpc_req);
 			C_GOTO(out, rc);
 		}
 
 		if (ul_out->ul_rc != 0) {
-			C_ERROR("crt_sync_req URI_LOOKUP reply rc: %d.\n",
+			C_ERROR("crt_req_send_sync URI_LOOKUP reply rc: %d.\n",
 				ul_out->ul_rc);
 			rc = ul_out->ul_rc;
 		} else {

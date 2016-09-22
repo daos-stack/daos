@@ -45,6 +45,10 @@
 
 struct dhash_table;
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 typedef struct {
 	/**
 	 * Optional, generate a key for the record @rlink.
@@ -248,5 +252,9 @@ bool crt_hhash_link_delete(struct crt_hhash *hhash,
 bool crt_hhash_link_empty(struct crt_hlink *hlink);
 void crt_hhash_link_key(struct crt_hlink *hlink, uint64_t *key);
 int crt_hhash_key_type(uint64_t key);
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /*__CRT_HASH_H__*/

@@ -74,6 +74,10 @@ extern int crt_misc_logfac;
 #define MISC_WARN	(crt_misc_logfac | CLOG_WARN)
 #define MISC_DBG	(crt_misc_logfac | CLOG_DBG)
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 /*
  * Add a new log facility.
  *
@@ -301,5 +305,9 @@ crt_errno2der(int err)
 	}
 	return 0;
 }
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /* __CRT_COMMON_H__ */

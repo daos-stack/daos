@@ -288,7 +288,7 @@ out:
 }
 
 int
-crt_rpc_reg(crt_opcode_t opc, struct crt_req_format *drf)
+crt_rpc_register(crt_opcode_t opc, struct crt_req_format *drf)
 {
 	if (crt_opcode_reserved(opc)) {
 		C_ERROR("opc 0x%x reserved.\n", opc);
@@ -298,7 +298,7 @@ crt_rpc_reg(crt_opcode_t opc, struct crt_req_format *drf)
 }
 
 int
-crt_rpc_srv_reg(crt_opcode_t opc, struct crt_req_format *drf,
+crt_rpc_srv_register(crt_opcode_t opc, struct crt_req_format *drf,
 		crt_rpc_cb_t rpc_handler)
 {
 	if (crt_opcode_reserved(opc)) {
@@ -314,8 +314,8 @@ crt_rpc_srv_reg(crt_opcode_t opc, struct crt_req_format *drf,
 }
 
 int
-crt_corpc_reg(crt_opcode_t opc, struct crt_req_format *drf,
-	      crt_rpc_cb_t rpc_handler, struct crt_corpc_ops *co_ops)
+crt_corpc_register(crt_opcode_t opc, struct crt_req_format *drf,
+		   crt_rpc_cb_t rpc_handler, struct crt_corpc_ops *co_ops)
 {
 	if (crt_opcode_reserved(opc)) {
 		C_ERROR("opc 0x%x reserved.\n", opc);

@@ -706,7 +706,7 @@ crt_cb_common(const struct crt_cb_info *cb_info)
  * \return		negative errno if sending fails or timeout.
  */
 int
-crt_sync_req(crt_rpc_t *rpc, uint64_t timeout)
+crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout)
 {
 	uint64_t now;
 	uint64_t end;
@@ -727,7 +727,7 @@ crt_sync_req(crt_rpc_t *rpc, uint64_t timeout)
 	end = crt_time_usec(0) + timeout;
 
 	while (1) {
-		uint64_t interval = 1000; /* milliseconds */
+		uint64_t interval = 1000; /* microseconds */
 
 		rc = crt_progress(rpc->dr_ctx, interval, NULL, NULL);
 		if (rc != 0 && rc != -CER_TIMEDOUT) {

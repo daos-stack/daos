@@ -66,6 +66,10 @@ typedef struct crt_list_head crt_list_t;
 	(ptr)->next = (ptr); (ptr)->prev = (ptr); \
 } while (0)
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 /**
  * Insert a new entry between two known consecutive entries.
  *
@@ -584,5 +588,9 @@ crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *next)
 	     pos && (n = pos->next, 1) &&                                      \
 		(tpos = crt_hlist_entry(pos, type, member), 1);               \
 	     pos = n)
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /* __CRT_LIST_H__ */

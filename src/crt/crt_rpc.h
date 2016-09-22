@@ -205,5 +205,7 @@ struct crt_internal_rpc {
 };
 
 int crt_internal_rpc_register(void);
+int crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout);
+
 
 #endif /* __CRT_RPC_H__ */

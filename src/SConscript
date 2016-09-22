@@ -38,7 +38,7 @@
 """Build cart src"""
 import os
 
-HEADERS = ['crt_api.h', 'crt_errno.h']
+HEADERS = ['crt_api.h', 'crt_iv.h', 'crt_types.h', 'crt_errno.h']
 HEADERS_UTIL = ['clog.h', 'common.h', 'hash.h', 'list.h']
 
 def scons():

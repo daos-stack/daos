@@ -176,30 +176,33 @@ echo_init(int server, bool tier2)
 	}
 
 	/* Just show the case that the client does not know the rpc handler,
-	 * then client side can use crt_rpc_reg, and server side can use
-	 * crt_rpc_srv_reg.
+	 * then client side can use crt_rpc_register, and server side can use
+	 * crt_rpc_srv_register.
 	 * If both client and server side know the rpc handler, they can call
-	 * the same crt_rpc_srv_reg.
+	 * the same crt_rpc_srv_register.
 	 */
 	if (server == 0) {
-		rc = crt_rpc_reg(ECHO_OPC_CHECKIN, &DQF_ECHO_PING_CHECK);
+		rc = crt_rpc_register(ECHO_OPC_CHECKIN, &DQF_ECHO_PING_CHECK);
 		assert(rc == 0);
-		rc = crt_rpc_reg(ECHO_OPC_BULK_TEST, &DQF_ECHO_BULK_TEST);
+		rc = crt_rpc_register(ECHO_OPC_BULK_TEST, &DQF_ECHO_BULK_TEST);
 		assert(rc == 0);
-		rc = crt_rpc_reg(ECHO_OPC_SHUTDOWN, NULL);
+		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, NULL);
 		assert(rc == 0);
 	} else {
-		rc = crt_rpc_srv_reg(ECHO_OPC_CHECKIN, &DQF_ECHO_PING_CHECK,
-				     echo_srv_checkin);
+		rc = crt_rpc_srv_register(ECHO_OPC_CHECKIN,
+					  &DQF_ECHO_PING_CHECK,
+					  echo_srv_checkin);
 		assert(rc == 0);
-		rc = crt_rpc_srv_reg(ECHO_OPC_BULK_TEST, &DQF_ECHO_BULK_TEST,
-				     echo_srv_bulk_test);
+		rc = crt_rpc_srv_register(ECHO_OPC_BULK_TEST,
+					  &DQF_ECHO_BULK_TEST,
+					  echo_srv_bulk_test);
 		assert(rc == 0);
-		rc = crt_rpc_srv_reg(ECHO_OPC_SHUTDOWN, NULL,
-				     echo_srv_shutdown);
+		rc = crt_rpc_srv_register(ECHO_OPC_SHUTDOWN, NULL,
+					  echo_srv_shutdown);
 		assert(rc == 0);
-		rc = crt_corpc_reg(ECHO_CORPC_EXAMPLE, &DQF_ECHO_CORPC_EXAMPLE,
-				   echo_srv_corpc_example, &echo_co_ops);
+		rc = crt_corpc_register(ECHO_CORPC_EXAMPLE,
+					&DQF_ECHO_CORPC_EXAMPLE,
+					echo_srv_corpc_example, &echo_co_ops);
 	}
 }
 

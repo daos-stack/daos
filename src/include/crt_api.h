@@ -47,329 +47,15 @@
 #include <stdbool.h>
 #include <uuid/uuid.h>
 
-#include <crt_errno.h>
-
 #include <abt.h>
 
-/**
- * Generic data type definition
- */
-typedef uint64_t	crt_size_t;
-typedef uint64_t	crt_off_t;
+#include <crt_types.h>
+#include <crt_errno.h>
+#include <crt_iv.h>
 
-/** iovec for memory buffer */
-typedef struct {
-	/** buffer address */
-	void	       *iov_buf;
-	/** buffer length */
-	crt_size_t	iov_buf_len;
-	/** data length */
-	crt_size_t	iov_len;
-} crt_iov_t;
-
-static inline void
-crt_iov_set(crt_iov_t *iov, void *buf, crt_size_t size)
-{
-	iov->iov_buf = buf;
-	iov->iov_len = iov->iov_buf_len = size;
-}
-
-/**
- * Server Identification & Addressing
- *
- * A server is identified by a group and a rank. A name (i.e. a string) is
- * associated with a group.
- */
-typedef uint32_t	crt_rank_t;
-
-typedef struct {
-	/** input number */
-	uint32_t	num;
-	/** output/returned number */
-	uint32_t	num_out;
-} crt_nr_t;
-
-typedef struct {
-	/** number of ranks */
-	crt_nr_t	 rl_nr;
-	crt_rank_t	*rl_ranks;
-} crt_rank_list_t;
-
-typedef char		*crt_string_t;
-typedef const char	*crt_const_string_t;
-
-/* CRT uses a string as the group ID */
-typedef crt_string_t	crt_group_id_t;
-/* max length of the group ID string including the trailing '\0' */
-#define CRT_GROUP_ID_MAX_LEN	(64)
-/* default group ID */
-#define CRT_DEFAULT_SRV_GRPID	"crt_default_srv_group"
-#define CRT_DEFAULT_CLI_GRPID	"crt_default_cli_group"
-
-
-typedef struct crt_group {
-	/* the group ID of this group */
-	crt_group_id_t		cg_grpid;
-} crt_group_t;
-
-/* transport endpoint identifier */
-typedef struct {
-	/* group handle, NULL means the primary group */
-	crt_group_t	 *ep_grp;
-	/* rank number within the group */
-	crt_rank_t	 ep_rank;
-	/* tag, now used as the context ID of the target rank */
-	uint32_t	 ep_tag;
-} crt_endpoint_t;
-
-/** Scatter/gather list for memory buffers */
-typedef struct {
-	crt_nr_t	 sg_nr;
-	crt_iov_t	*sg_iovs;
-} crt_sg_list_t;
-
-/* CaRT context handle */
-typedef void *crt_context_t;
-
-/* Physical address string, e.g., "bmi+tcp://localhost:3344". */
-typedef crt_string_t crt_phy_addr_t;
-#define CRT_PHY_ADDR_ENV	"CRT_PHY_ADDR_STR"
-
-/*
- * RPC is identified by opcode. All the opcodes with the highest 16 bits as 1
- * are reserved for internal usage, such as group maintenance etc. If user
- * defines its RPC using those reserved opcode, then undefined result is
- * expected.
- */
-typedef uint32_t crt_opcode_t;
-#define CRT_OPC_RESERVED_BITS	(0xFFFFU << 16)
-
-/*
- * Check if the opcode is reserved by CRT internally.
- *
- * \param opc [IN]		opcode to be checked.
- *
- * \return			zero means legal opcode for user, non-zero means
- *				CRT internally reserved opcode.
- */
-static inline int
-crt_opcode_reserved(crt_opcode_t opc)
-{
-	return (opc & CRT_OPC_RESERVED_BITS) == CRT_OPC_RESERVED_BITS;
-}
-
-typedef void *crt_rpc_input_t;
-typedef void *crt_rpc_output_t;
-
-typedef void *crt_bulk_t; /* abstract bulk handle */
-
-/**
- * max size of input/output parameters defined as 64M bytes, for larger length
- * the user should transfer by bulk.
- */
-#define CRT_MAX_INPUT_SIZE	(0x4000000)
-#define CRT_MAX_OUTPUT_SIZE	(0x4000000)
-
-enum crt_rpc_flags {
-	/*
-	 * ignore timedout. Default behavior (no this flags) is resending
-	 * request when timedout.
-	 */
-	CRT_RPC_FLAG_IGNORE_TIMEDOUT	= (1U << 0),
-	/* destroy group when the bcast RPC finishes, only valid for corpc */
-	CRT_CORPC_FLAG_GRP_DESTROY	= (1U << 31),
-};
-
-struct crt_rpc;
-
-typedef int (*crt_req_callback_t)(struct crt_rpc *rpc);
-
-/* Public RPC request/reply, exports to user */
-typedef struct crt_rpc {
-	crt_context_t		dr_ctx; /* CRT context of the RPC */
-	crt_endpoint_t		dr_ep; /* endpoint ID */
-	crt_opcode_t		dr_opc; /* opcode of the RPC */
-	/* user passed in flags, \see enum crt_rpc_flags */
-	enum crt_rpc_flags	dr_flags;
-	crt_rpc_input_t		dr_input; /* input parameter struct */
-	crt_rpc_output_t	dr_output; /* output parameter struct */
-	crt_size_t		dr_input_size; /* size of input struct */
-	crt_size_t		dr_output_size; /* size of output struct */
-	/* optional bulk handle for collective RPC */
-	crt_bulk_t		dr_co_bulk_hdl;
-} crt_rpc_t;
-
-/* Abstraction pack/unpack processor */
-typedef void *crt_proc_t;
-/* Proc callback for pack/unpack parameters */
-typedef int (*crt_proc_cb_t)(crt_proc_t proc, void *data);
-
-/* RPC message layout definitions */
-
-enum dmf_flags {
-	DMF_ARRAY_FLAG	= 1 << 0,
-};
-
-struct crt_msg_field {
-	const char		*dmf_name;
-	const uint32_t		dmf_flags;
-	const uint32_t		dmf_size;
-	crt_proc_cb_t		dmf_proc;
-};
-
-struct drf_field {
-	uint32_t		drf_count;
-	struct crt_msg_field	**drf_msg;
-};
-
-enum {
-	CRT_IN = 0,
-	CRT_OUT = 1,
-};
-
-struct crt_req_format {
-	const char		*drf_name;
-	uint32_t		drf_idx;
-	struct drf_field	drf_fields[2];
-};
-
-struct crt_array {
-	crt_size_t count;
-	void	*arrays;
-};
-
-#define DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, in_size,		\
-				 crt_out, out_size) {		\
-	.drf_name	= name,					\
-	.drf_fields	= {					\
-		[CRT_IN] = {					\
-			.drf_count = in_size,			\
-			.drf_msg = crt_in,			\
-		},						\
-		[CRT_OUT] = {					\
-			.drf_count = out_size,			\
-			.drf_msg = crt_out			\
-		}						\
-	}							\
-}
-
-#define DEFINE_CRT_REQ_FMT(name, crt_in, crt_out)		\
-DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, ARRAY_SIZE(crt_in),	\
-			 crt_out, ARRAY_SIZE(crt_out))
-
-#define DEFINE_CRT_MSG(name, flags, size, proc) {		\
-	.dmf_name = (name),					\
-	.dmf_flags = (flags),					\
-	.dmf_size = (size),					\
-	.dmf_proc = (crt_proc_cb_t)proc				\
-}
-
-
-/* Common request format type */
-extern struct crt_msg_field DMF_UUID;
-extern struct crt_msg_field DMF_GRP_ID;
-extern struct crt_msg_field DMF_INT;
-extern struct crt_msg_field DMF_UINT32;
-extern struct crt_msg_field DMF_CRT_SIZE;
-extern struct crt_msg_field DMF_UINT64;
-extern struct crt_msg_field DMF_BULK;
-extern struct crt_msg_field DMF_BOOL;
-extern struct crt_msg_field DMF_STRING;
-extern struct crt_msg_field DMF_PHY_ADDR;
-extern struct crt_msg_field DMF_RANK;
-extern struct crt_msg_field DMF_RANK_LIST;
-extern struct crt_msg_field DMF_BULK_ARRAY;
-
-extern struct crt_msg_field *crt_single_out_fields[];
-struct crt_single_out {
-	int	dso_ret;
-};
-
-typedef enum {
-	CRT_BULK_PUT = 0x68,
-	CRT_BULK_GET,
-} crt_bulk_op_t;
-
-typedef void *crt_bulk_opid_t;
-
-typedef enum {
-	/* read/write */
-	CRT_BULK_RW = 0x88,
-	/* read-only */
-	CRT_BULK_RO,
-	/* write-only */
-	CRT_BULK_WO,
-} crt_bulk_perm_t;
-
-/* bulk transferring descriptor */
-struct crt_bulk_desc {
-	crt_rpc_t	*bd_rpc; /* original RPC request */
-	crt_bulk_op_t	bd_bulk_op; /* CRT_BULK_PUT or CRT_BULK_GET */
-	crt_bulk_t	bd_remote_hdl; /* remote bulk handle */
-	crt_off_t	bd_remote_off; /* offset within remote bulk buffer */
-	crt_bulk_t	bd_local_hdl; /* local bulk handle */
-	crt_off_t	bd_local_off; /* offset within local bulk buffer */
-	crt_size_t	bd_len; /* length of the bulk transferring */
-};
-
-struct crt_cb_info {
-	crt_rpc_t		*dci_rpc; /* rpc struct */
-	void			*dci_arg; /* User passed in arg */
-	/* return code, will be set as:
-	 * 0                     for succeed RPC request,
-	 * -CER_TIMEDOUT         for timed out request,
-	 * other negative value  for other possible failure. */
-	int			dci_rc;
-};
-
-struct crt_bulk_cb_info {
-	struct crt_bulk_desc	*bci_bulk_desc; /* bulk descriptor */
-	void			*bci_arg; /* User passed in arg */
-	int			bci_rc; /* return code */
-};
-
-/* server-side RPC handler */
-typedef int (*crt_rpc_cb_t)(crt_rpc_t *rpc);
-
-/**
- * completion callback for crt_req_send
- *
- * \param cb_info [IN]		pointer to call back info.
- *
- * \return			zero means success.
- *				in the case of RPC request timed out, user
- *				register complete_cb will be called (with
- *				cb_info->dci_rc set as -CER_TIMEDOUT).
- *				complete_cb returns -CER_AGAIN means resending
- *				the RPC request.
- */
-typedef int (*crt_cb_t)(const struct crt_cb_info *cb_info);
-
-/* completion callback for bulk transferring, i.e. crt_bulk_transfer() */
-typedef int (*crt_bulk_cb_t)(const struct crt_bulk_cb_info *cb_info);
-
-/**
- * Progress condition callback, /see crt_progress().
- *
- * \param arg [IN]		argument to cond_cb.
- *
- * \return			zero means continue progressing
- *				>0 means stopping progress and return success
- *				<0 means failure
- */
-typedef int (*crt_progress_cond_cb_t)(void *args);
-
-/**
- * some bit flags:
- * CRT_FLAG_BIT_SERVER		false means pure client, true will enable the
- *				server which listens for incoming request.
- * CRT_FLAG_BIT_SINGLETON	false means it is a multi-processes program,
- *				true means with single process.
- */
-enum crt_flag_bits {
-	CRT_FLAG_BIT_SERVER	= 1U << 0,
-	CRT_FLAG_BIT_SINGLETON	= 1U << 1
-};
+#if defined(__cplusplus)
+extern "C" {
+#endif
 
 /**
  * Initialize CRT transport layer.
@@ -384,7 +70,7 @@ enum crt_flag_bits {
  * \param server [IN]		zero means pure client, otherwise will enable
  *				the server which listens for incoming connection
  *				request.
- * \param flags [IN]		bit flags, /see enum crt_flag_bits.
+ * \param flags [IN]		bit flags, /see enum crt_init_flag_bits.
  *
  * \return			zero on success, negative value if error
  *
@@ -459,18 +145,6 @@ crt_context_num(int *ctx_num);
  */
 int
 crt_finalize(void);
-
-/**
- * Send rpc synchronously
- *
- * \param[IN] rpc	point to CRT request.
- * \param[IN] timeout	timeout (Milliseconds) to wait, if
- *                      timeout <= 0, it will wait infinitely.
- * \return		0 if rpc return successfuly.
- * \return		negative errno if sending fails or timeout.
- */
-int
-crt_sync_req(crt_rpc_t *rpc, uint64_t timeout);
 
 /**
  * Progress CRT transport layer.
@@ -646,7 +320,7 @@ crt_ep_abort(crt_endpoint_t ep);
  * \return                      zero on success, negative value if error
  */
 int
-crt_rpc_reg(crt_opcode_t opc, struct crt_req_format *drf);
+crt_rpc_register(crt_opcode_t opc, struct crt_req_format *drf);
 
 /**
  * Dynamically register a RPC at server-side.
@@ -664,7 +338,7 @@ crt_rpc_reg(crt_opcode_t opc, struct crt_req_format *drf);
  * \return                      zero on success, negative value if error
  */
 int
-crt_rpc_srv_reg(crt_opcode_t opc, struct crt_req_format *drf,
+crt_rpc_srv_register(crt_opcode_t opc, struct crt_req_format *drf,
 		crt_rpc_cb_t rpc_handler);
 
 /******************************************************************************
@@ -937,8 +611,7 @@ crt_group_detach(crt_group_t *attached_grp);
  *				when this bcast RPC finished.
  * \param tree_topo[IN]		tree topology for the collective propagation,
  *				can be calculated by crt_tree_topo().
- *				/see enum crt_tree_type,
- *				/see crt_tree_topo().
+ *				/see enum crt_tree_type, /see crt_tree_topo().
  * \param req [out]		created collective RPC request
  *
  * \return			zero on success, negative value if error
@@ -972,8 +645,8 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
  * \return			zero on success, negative value if error
  */
 int
-crt_corpc_reg(crt_opcode_t opc, struct crt_req_format *drf,
-	      crt_rpc_cb_t rpc_handler, struct crt_corpc_ops *co_ops);
+crt_corpc_register(crt_opcode_t opc, struct crt_req_format *drf,
+		   crt_rpc_cb_t rpc_handler, struct crt_corpc_ops *co_ops);
 
 /**
  * Query the caller's rank number within group.
@@ -1215,5 +888,9 @@ crt_proc_crt_rank_list_t(crt_proc_t proc, crt_rank_list_t **data);
 #define crt_proc_int			crt_proc_int32_t
 #define crt_proc_crt_group_id_t		crt_proc_crt_string_t
 #define crt_proc_crt_phy_addr_t		crt_proc_crt_string_t
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /* __CRT_API_H__ */
