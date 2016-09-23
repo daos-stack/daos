@@ -1030,6 +1030,8 @@ int
 crt_group_size(crt_group_t *grp, uint32_t *size)
 {
 	struct crt_grp_gdata	*grp_gdata;
+	int rc = 0;
+	int ret = 0;
 
 	grp_gdata = crt_gdata.cg_grp;
 	if (grp_gdata == NULL) {
@@ -1041,14 +1043,30 @@ crt_group_size(crt_group_t *grp, uint32_t *size)
 		return -CER_INVAL;
 	}
 
-	/* now only support query the primary group */
-	if (grp == NULL)
+	if (grp == NULL) {
+		/* query size of the local primary group */
 		*size = crt_is_service() ? grp_gdata->gg_srv_pri_grp->gp_size :
 			grp_gdata->gg_cli_pri_grp->gp_size;
-	else
-		return -CER_NOSYS;
+	} else {
+		/* query size of a remote primary group */
+		pmix_pdata_t *pdata = NULL;
 
-	return 0;
+		PMIX_PDATA_CREATE(pdata, 1);
+		snprintf(pdata[0].key, PMIX_MAX_KEYLEN + 1, "crt-%s-size",
+				grp->cg_grpid);
+		rc = PMIx_Lookup(pdata, 1, NULL, 0);
+		if (rc == PMIX_SUCCESS && pdata[0].value.type == PMIX_UINT32) {
+			*size = pdata[0].value.data.uint32;
+		} else {
+			ret = -CER_PMIX;
+			C_ERROR(
+				"Error on %s: %d. Group doesn't exist, group name: %s"
+				, __FILE__, __LINE__, grp->cg_grpid);
+		}
+		PMIX_PDATA_FREE(pdata, 1);
+	}
+
+	return ret;
 }
 
 static int
