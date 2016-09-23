@@ -168,6 +168,7 @@ struct cont_open_in {
 
 struct cont_open_out {
 	int32_t			coo_ret;
+	uint32_t		coo_padding;
 	daos_epoch_state_t	coo_epoch_state;
 };
 
@@ -198,6 +199,7 @@ struct epoch_op_in {
 
 struct epoch_op_out {
 	struct cont_op_out	eoo_cont_op_out;
+	uint32_t		eoo_padding;
 	daos_epoch_state_t	eoo_epoch_state;
 };
 

@@ -466,6 +466,7 @@ tgt_pool_hdl_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
 {
 	struct tgt_pool_hdl *hdl = tgt_pool_hdl_obj(rlink);
 
+	D_ASSERTF(hdl->tph_ref > 0, "%d\n", hdl->tph_ref);
 	hdl->tph_ref--;
 	return hdl->tph_ref == 0;
 }
@@ -538,7 +539,13 @@ dsms_hdlr_tgt_pool_connect(dtp_rpc_t *rpc)
 
 	hdl = dsms_tgt_pool_hdl_lookup(in->tpci_pool_hdl);
 	if (hdl != NULL) {
-		if (hdl->tph_capas != in->tpci_capas) {
+		if (hdl->tph_capas == in->tpci_capas) {
+			D_DEBUG(DF_DSMS, DF_UUID": found compatible pool "
+				"handle: hdl="DF_UUID" capas="DF_U64"\n",
+				DP_UUID(in->tpci_pool),
+				DP_UUID(in->tpci_pool_hdl), hdl->tph_capas);
+			rc = 0;
+		} else {
 			D_ERROR(DF_UUID": found conflicting pool handle: hdl="
 				DF_UUID" capas="DF_U64"\n",
 				DP_UUID(in->tpci_pool),
@@ -598,7 +605,7 @@ dsms_hdlr_tgt_pool_disconnect(dtp_rpc_t *rpc)
 	struct tgt_pool_disconnect_in  *in = dtp_req_get(rpc);
 	struct tgt_pool_disconnect_out *out = dtp_reply_get(rpc);
 	struct tgt_pool_hdl	       *hdl;
-	int				rc;
+	int				rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->tpdi_pool), rpc, DP_UUID(in->tpdi_pool_hdl));
@@ -636,7 +643,7 @@ dsms_module_target_init(void)
 {
 	int rc;
 
-	rc = daos_lru_cache_create(2 /* bits */, DHASH_FT_NOLOCK /* feats */,
+	rc = daos_lru_cache_create(0 /* bits */, DHASH_FT_NOLOCK /* feats */,
 				   &tgt_pool_cache_ops, &tgt_pool_cache);
 	if (rc != 0)
 		return rc;

@@ -88,6 +88,7 @@ struct dtp_msg_field *cont_open_in_fields[] = {
 
 struct dtp_msg_field *cont_open_out_fields[] = {
 	&DMF_INT,		/* ret */
+	&DMF_UINT32,		/* padding */
 	&DMF_EPOCH_STATE	/* epoch_state */
 };
 
@@ -116,6 +117,7 @@ struct dtp_msg_field *epoch_op_in_fields[] = {
 
 struct dtp_msg_field *epoch_op_out_fields[] = {
 	&DMF_INT,		/* ret */
+	&DMF_UINT32,		/* padding */
 	&DMF_EPOCH_STATE	/* epoch_state */
 };
 
