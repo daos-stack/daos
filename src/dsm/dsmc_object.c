@@ -100,7 +100,7 @@ obj_rw_cp(void *arg, daos_event_t *ev, int rc)
 
 	oui = dtp_req_get(sp->sp_rpc);
 	D_ASSERT(oui != NULL);
-	bulks = oui->oui_bulks.arrays;
+	bulks = oui->oui_bulks.da_arrays;
 	if (rc) {
 		D_ERROR("RPC error: %d\n", rc);
 		D_GOTO(out, rc);
@@ -122,13 +122,13 @@ obj_rw_cp(void *arg, daos_event_t *ev, int rc)
 		int		idx = 0;
 
 		ofo = dtp_reply_get(sp->sp_rpc);
-		iods = oui->oui_iods.arrays;
-		sizes = ofo->ofo_sizes.arrays;
+		iods = oui->oui_iods.da_arrays;
+		sizes = ofo->ofo_sizes.da_arrays;
 
 		/* update the sizes in iods */
 		for (j = 0; j < oui->oui_nr; j++) {
 			for (k = 0; k < iods[j].vd_nr; k++) {
-				if (idx == ofo->ofo_sizes.count) {
+				if (idx == ofo->ofo_sizes.da_count) {
 					D_ERROR("Invalid return size %d\n",
 						idx);
 					D_GOTO(out, rc = -DER_PROTO);
@@ -143,7 +143,7 @@ out:
 		for (i = 0; i < oui->oui_nr; i++)
 			dtp_bulk_free(bulks[i]);
 
-		D_FREE(oui->oui_bulks.arrays,
+		D_FREE(oui->oui_bulks.da_arrays,
 		       oui->oui_nr * sizeof(dtp_bulk_t));
 	}
 	dtp_req_decref(sp->sp_rpc);
@@ -250,8 +250,8 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	/* FIXME: if iods is too long, then we needs to do bulk transfer
 	 * as well, but then we also needs to serialize the iods
 	 **/
-	oui->oui_iods.count = nr;
-	oui->oui_iods.arrays = iods;
+	oui->oui_iods.da_count = nr;
+	oui->oui_iods.da_arrays = iods;
 
 	D_ALLOC(bulks, nr * sizeof(*bulks));
 	if (bulks == NULL)
@@ -273,8 +273,8 @@ dsm_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 			}
 		}
 	}
-	oui->oui_bulks.count = nr;
-	oui->oui_bulks.arrays = bulks;
+	oui->oui_bulks.da_count = nr;
+	oui->oui_bulks.da_arrays = bulks;
 
 	sp = daos_ev2sp(ev);
 	dtp_req_addref(req);
@@ -462,15 +462,15 @@ enumerate_cp(void *arg, daos_event_t *ev, int rc)
 		D_GOTO(out, rc = oeo->oeo_ret);
 	}
 
-	if (*eaa->eaa_nr < oeo->oeo_kds.count) {
+	if (*eaa->eaa_nr < oeo->oeo_kds.da_count) {
 		D_ERROR("DSM_OBJ_ENUMERATE return more kds, rc: %d\n",
 			-DER_PROTO);
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
-	*(eaa->eaa_nr) = oeo->oeo_kds.count;
-	memcpy(eaa->eaa_kds, oeo->oeo_kds.arrays,
-	       sizeof(*eaa->eaa_kds) * oeo->oeo_kds.count);
+	*(eaa->eaa_nr) = oeo->oeo_kds.da_count;
+	memcpy(eaa->eaa_kds, oeo->oeo_kds.da_arrays,
+	       sizeof(*eaa->eaa_kds) * oeo->oeo_kds.da_count);
 
 	dsmc_hash_hkey_copy(eaa->eaa_anchor,
 			    &oeo->oeo_anchor);

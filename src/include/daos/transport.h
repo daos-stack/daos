@@ -164,8 +164,8 @@ struct dtp_req_format {
 };
 
 struct dtp_array {
-	daos_size_t count;
-	void	*arrays;
+	uint64_t	 da_count;
+	void		*da_arrays;
 };
 
 #define DEFINE_DTP_REQ_FMT_ARRAY(name, dtp_in, in_size,		\

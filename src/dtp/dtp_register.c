@@ -247,12 +247,18 @@ dtp_rpc_reg_internal(dtp_opcode_t opc, struct dtp_req_format *drf,
 	for (i = 0; i < drf->drf_fields[DTP_IN].drf_count; i++) {
 		dmf = drf->drf_fields[DTP_IN].drf_msg[i];
 		D_ASSERT(dmf->dmf_size > 0);
-		input_size += dmf->dmf_size;
+		if (dmf->dmf_flags & DMF_ARRAY_FLAG)
+			input_size += sizeof(struct dtp_array);
+		else
+			input_size += dmf->dmf_size;
 	}
 	for (i = 0; i < drf->drf_fields[DTP_OUT].drf_count; i++) {
 		dmf = drf->drf_fields[DTP_OUT].drf_msg[i];
 		D_ASSERT(dmf->dmf_size > 0);
-		output_size += dmf->dmf_size;
+		if (dmf->dmf_flags & DMF_ARRAY_FLAG)
+			output_size += sizeof(struct dtp_array);
+		else
+			output_size += dmf->dmf_size;
 	}
 
 	if (input_size > DTP_MAX_INPUT_SIZE ||
