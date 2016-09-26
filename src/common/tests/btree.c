@@ -301,8 +301,29 @@ ik_btr_close_destroy(bool destroy)
 	return rc;
 }
 
+enum ik_btr_opc {
+	BTR_OPC_UPDATE,
+	BTR_OPC_LOOKUP,
+	BTR_OPC_DELETE,
+};
+
+static char *
+btr_opc2str(enum ik_btr_opc opc)
+{
+	switch (opc) {
+	default:
+		return "unknown";
+	case BTR_OPC_UPDATE:
+		return "update";
+	case BTR_OPC_LOOKUP:
+		return "lookup";
+	case BTR_OPC_DELETE:
+		return "delete";
+	}
+}
+
 static int
-ik_btr_find_or_update(bool update, char *str)
+ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 {
 	int	count = 0;
 	int	rc;
@@ -320,7 +341,7 @@ ik_btr_find_or_update(bool update, char *str)
 
 		key = strtoul(str, NULL, 0);
 
-		if (update) {
+		if (opc == BTR_OPC_UPDATE) {
 			val = strchr(str, IK_SEP_VAL);
 			if (val == NULL) {
 				D_ERROR("Invalid parameters %s\n", str);
@@ -336,7 +357,10 @@ ik_btr_find_or_update(bool update, char *str)
 		}
 
 		daos_iov_set(&key_iov, &key, sizeof(key));
-		if (update) {
+		switch (opc) {
+		default:
+			return -1;
+		case BTR_OPC_UPDATE:
 			daos_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(ik_toh, &key_iov, &val_iov);
 			if (rc != 0) {
@@ -344,7 +368,22 @@ ik_btr_find_or_update(bool update, char *str)
 					key, val);
 				return -1;
 			}
-		} else {
+			break;
+
+		case BTR_OPC_DELETE:
+			rc = dbtree_delete(ik_toh, &key_iov);
+			if (rc != 0) {
+				D_ERROR("Failed to delete "DF_U64"\n", key);
+				return -1;
+			}
+			if (verbose)
+				D_PRINT("Deleted key "DF_U64"\n", key);
+
+			if (dbtree_is_empty(ik_toh))
+				D_PRINT("Tree is empty now\n");
+			break;
+
+		case BTR_OPC_LOOKUP:
 			D_DEBUG(DF_MISC, "Looking for "DF_U64"\n", key);
 
 			daos_iov_set(&val_iov, NULL, 0); /* get address */
@@ -353,12 +392,17 @@ ik_btr_find_or_update(bool update, char *str)
 				D_ERROR("Failed to lookup "DF_U64"\n", key);
 				return -1;
 			}
-			D_PRINT("Found key "DF_U64", value %s\n",
-				key, (char *)val_iov.iov_buf);
+
+			if (verbose) {
+				D_PRINT("Found key "DF_U64", value %s\n",
+					key, (char *)val_iov.iov_buf);
+			}
+			break;
 		}
 		count++;
 	}
-	D_PRINT("%s %d record(s)\n", update ? "Updated" : "Found", count);
+	if (verbose)
+		D_PRINT("%s %d record(s)\n", btr_opc2str(opc), count);
 	return 0;
 }
 
@@ -415,6 +459,104 @@ ik_btr_iterate(char *args)
 	return 0;
 }
 
+/* fill in @arr with natural number from 1 to key_nr, randomize their order */
+void
+ik_btr_gen_keys(unsigned int *arr, unsigned int key_nr)
+{
+	struct timeval	tv;
+	int		nr;
+	int		i;
+
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
+
+	for (i = 0; i < key_nr; i++)
+		arr[i] = i + 1;
+
+	for (nr = key_nr; nr > 0; nr--) {
+		unsigned int	tmp;
+		int		j;
+
+		j = rand() % nr;
+		if (j != nr - 1) {
+			tmp = arr[j];
+			arr[j] = arr[nr - 1];
+			arr[nr - 1] = tmp;
+		}
+	}
+}
+
+#define DEL_BATCH	10000
+/**
+ * batch btree operations:
+ * 1) insert @key_nr number of integer keys
+ * 2) lookup all the rest keys
+ * 3) delete nr=DEL_BATCH keys
+ * 4) repeat 2) and 3) util all keys are deleted
+ */
+static int
+ik_btr_batch_oper(unsigned int key_nr)
+{
+	unsigned int	*arr;
+	char		 buf[64];
+	int		 i;
+	int		 rc;
+	bool		 verbose = key_nr < 20;
+
+	if (key_nr == 0 || key_nr > (1U << 28)) {
+		D_PRINT("Invalid key number: %d\n", key_nr);
+		return -1;
+	}
+
+	arr = malloc(key_nr * sizeof(*arr));
+	D_ASSERT(arr != NULL);
+
+	D_PRINT("Batch add %d records.\n", key_nr);
+	ik_btr_gen_keys(arr, key_nr);
+	for (i = 0; i < key_nr; i++) {
+		sprintf(buf, "%d:%d", arr[i], arr[i]);
+
+		rc = ik_btr_kv_operate(BTR_OPC_UPDATE, buf, verbose);
+		if (rc != 0) {
+			D_PRINT("Batch update failed: %d\n", rc);
+			return -1;
+		}
+	}
+
+	/* lookup all rest records, delete 10000 of them, and repeat until
+	 * deleting all records.
+	 */
+	ik_btr_gen_keys(arr, key_nr);
+	for (i = 0; i < key_nr;) {
+		int	j;
+
+		D_PRINT("Batch lookup %d records.\n", key_nr - i);
+		for (j = i; j < key_nr; j++) {
+			sprintf(buf, "%d", arr[j]);
+
+			rc = ik_btr_kv_operate(BTR_OPC_LOOKUP, buf, verbose);
+			if (rc != 0) {
+				D_PRINT("Batch lookup failed: %d\n", rc);
+				return -1;
+			}
+		}
+
+		D_PRINT("Batch delete %d records.\n",
+			min(key_nr - i, DEL_BATCH));
+
+		for (j = 0; i < key_nr && j < DEL_BATCH; i++, j++) {
+			sprintf(buf, "%d", arr[i]);
+
+			rc = ik_btr_kv_operate(BTR_OPC_DELETE, buf, verbose);
+			if (rc != 0) {
+				D_PRINT("Batch delete failed: %d\n", rc);
+				return -1;
+			}
+		}
+	}
+	return 0;
+}
+
 static struct option btr_ops[] = {
 	{ "create",	required_argument,	NULL,	'C'	},
 	{ "destroy",	no_argument,		NULL,	'D'	},
@@ -424,6 +566,7 @@ static struct option btr_ops[] = {
 	{ "find",	required_argument,	NULL,	'f'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
 	{ "iterate",	required_argument,	NULL,	'i'	},
+	{ "batch",	required_argument,	NULL,	'b'	},
 	{ NULL,		0,			NULL,	0	},
 };
 
@@ -440,7 +583,7 @@ main(int argc, char **argv)
 	D_ASSERT(rc == 0);
 
 	optind = 0;
-	while ((rc = getopt_long(argc, argv, "C:Docu:d:f:i:",
+	while ((rc = getopt_long(argc, argv, "C:Docu:d:f:i:b:",
 				 btr_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'C':
@@ -456,15 +599,20 @@ main(int argc, char **argv)
 			rc = ik_btr_close_destroy(false);
 			break;
 		case 'u':
-			rc = ik_btr_find_or_update(true, optarg);
+			rc = ik_btr_kv_operate(BTR_OPC_UPDATE, optarg, true);
 			break;
 		case 'f':
-			rc = ik_btr_find_or_update(false, optarg);
+			rc = ik_btr_kv_operate(BTR_OPC_LOOKUP, optarg, true);
+			break;
+		case 'd':
+			rc = ik_btr_kv_operate(BTR_OPC_DELETE, optarg, true);
 			break;
 		case 'i':
 			rc = ik_btr_iterate(optarg);
 			break;
-		case 'd': /* TODO */
+		case 'b':
+			rc = ik_btr_batch_oper(atoi(optarg));
+			break;
 		default:
 			D_PRINT("Unsupported command %c\n", rc);
 			break;

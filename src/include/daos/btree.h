@@ -353,7 +353,7 @@ typedef enum {
 	/** probe the record whose key is little/equal to the provide key */
 	BTR_PROBE_LE		= BTR_PROBE_EQ | 2,
 	/**
-	 * private probe opcodes, tdon't pass them into APIs
+	 * private probe opcodes, don't pass them into APIs
 	 */
 	/** probe the record for update */
 	BTR_PROBE_UPDATE	= BTR_PROBE_EQ | 3,
@@ -364,12 +364,11 @@ int  dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 
 int  dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 		   unsigned int tree_order, struct umem_attr *uma,
-		   TMMID(struct btr_root) *root_tmmid_p,
-		   daos_handle_t *toh);
+		   TMMID(struct btr_root) *root_mmidp, daos_handle_t *toh);
 int  dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 			   unsigned int tree_order, struct umem_attr *uma,
 			   struct btr_root *root, daos_handle_t *toh);
-int  dbtree_open(TMMID(struct btr_root) root_oid, struct umem_attr *uma,
+int  dbtree_open(TMMID(struct btr_root) root_mmid, struct umem_attr *uma,
 		 daos_handle_t *toh);
 int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);

@@ -139,6 +139,8 @@ static struct btr_record *btr_node_rec_at(struct btr_context *tcx,
 static int btr_node_insert_rec(struct btr_context *tcx,
 			       struct btr_trace *trace,
 			       struct btr_record *rec);
+static void btr_node_destroy(struct btr_context *tcx,
+			     TMMID(struct btr_node) nd_mmid);
 static int btr_root_tx_add(struct btr_context *tcx);
 static bool btr_probe_prev(struct btr_context *tcx);
 static bool btr_probe_next(struct btr_context *tcx);
@@ -349,6 +351,12 @@ btr_hkey_gen(struct btr_context *tcx, daos_iov_t *key, void *hkey)
 	return btr_ops(tcx)->to_hkey_gen(&tcx->tc_tins, key, hkey);
 }
 
+static void
+btr_hkey_copy(struct btr_context *tcx, char *dst_key, char *src_key)
+{
+	memcpy(dst_key, src_key, btr_hkey_size(tcx));
+}
+
 static int
 btr_hkey_cmp(struct btr_context *tcx, struct btr_record *rec, void *hkey)
 {
@@ -428,7 +436,29 @@ btr_rec_at(struct btr_context *tcx, struct btr_record *rec, int at)
 {
 	char	*buf = (char *)rec;
 
-	return (struct btr_record *)&buf[at * btr_rec_size(tcx)];
+	buf += at * btr_rec_size(tcx); /* NB: at can be negative */
+	return (struct btr_record *)buf;
+}
+
+static void
+btr_rec_copy(struct btr_context *tcx, struct btr_record *dst_rec,
+	     struct btr_record *src_rec, int rec_nr)
+{
+	memcpy(dst_rec, src_rec, rec_nr * btr_rec_size(tcx));
+}
+
+static void
+btr_rec_move(struct btr_context *tcx, struct btr_record *dst_rec,
+	     struct btr_record *src_rec, int rec_nr)
+{
+	memmove(dst_rec, src_rec, rec_nr * btr_rec_size(tcx));
+}
+
+static void
+btr_rec_copy_hkey(struct btr_context *tcx, struct btr_record *dst_rec,
+		  struct btr_record *src_rec)
+{
+	btr_hkey_copy(tcx, &dst_rec->rec_hkey[0], &src_rec->rec_hkey[0]);
 }
 
 static inline int
@@ -498,21 +528,20 @@ btr_node_rec_at(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid,
 	return (struct btr_record *)&addr[btr_rec_size(tcx) * at];
 }
 
-static umem_id_t
-btr_node_mmid_at(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid,
-		 unsigned int at)
+static TMMID(struct btr_node)
+btr_node_child_at(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid,
+		  unsigned int at)
 {
 	struct btr_node	  *nd = btr_mmid2ptr(tcx, nd_mmid);
 	struct btr_record *rec;
 
-	/* NB: non-leaf node has +1 children than nkeys */
-	if (!(nd->tn_flags & BTR_NODE_LEAF)) {
-		if (at == 0)
-			return umem_id_t2u(nd->tn_child);
-		at--;
-	}
-	rec = btr_node_rec_at(tcx, nd_mmid, at);
-	return rec->rec_mmid;
+	D_ASSERT(!(nd->tn_flags & BTR_NODE_LEAF));
+	/* NB: non-leaf node has +1 children than number of keys */
+	if (at == 0)
+		return nd->tn_child;
+
+	rec = btr_node_rec_at(tcx, nd_mmid, at - 1);
+	return umem_id_u2t(rec->rec_mmid, struct btr_node);
 }
 
 static inline bool
@@ -602,7 +631,7 @@ btr_root_free(struct btr_context *tcx)
 			umem_free_typed(btr_umm(tcx), tins->ti_root_mmid);
 	}
 
-	tins->ti_root_mmid = TMMID_NULL(struct btr_root);
+	tins->ti_root_mmid = BTR_ROOT_NULL;
 	tins->ti_root = NULL;
 }
 
@@ -699,7 +728,7 @@ btr_root_start(struct btr_context *tcx, struct btr_record *rec)
 	btr_mmid2ptr(tcx, nd_mmid)->tn_keyn = 1;
 
 	rec_dst = btr_node_rec_at(tcx, nd_mmid, 0);
-	memcpy(rec_dst, rec, btr_rec_size(tcx));
+	btr_rec_copy(tcx, rec_dst, rec, 1);
 
 	if (btr_has_tx(tcx))
 		btr_root_tx_add(tcx); /* XXX check error */
@@ -748,7 +777,7 @@ btr_root_grow(struct btr_context *tcx, TMMID(struct btr_node) mmid_left,
 
 	btr_node_set(tcx, nd_mmid, BTR_NODE_ROOT);
 	rec_dst = btr_node_rec_at(tcx, nd_mmid, 0);
-	memcpy(rec_dst, rec, btr_rec_size(tcx));
+	btr_rec_copy(tcx, rec_dst, rec, 1);
 
 	nd = btr_mmid2ptr(tcx, nd_mmid);
 	nd->tn_child	= mmid_left;
@@ -788,12 +817,10 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 	rec_b = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at + 1);
 
 	nd = btr_mmid2ptr(tcx, trace->tr_node);
-	if (trace->tr_at != nd->tn_keyn) {
-		memmove(rec_b, rec_a,
-			btr_rec_size(tcx) * (nd->tn_keyn - trace->tr_at));
-	}
+	if (trace->tr_at != nd->tn_keyn)
+		btr_rec_move(tcx, rec_b, rec_a, nd->tn_keyn - trace->tr_at);
 
-	memcpy(rec_a, rec, btr_rec_size(tcx));
+	btr_rec_copy(tcx, rec_a, rec, 1);
 	nd->tn_keyn++;
 }
 
@@ -838,7 +865,6 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	struct btr_node		*nd_left;
 	struct btr_node		*nd_right;
 	int			 split_at;
-	int			 rec_size;
 	int			 level;
 	int			 rc;
 	bool			 leaf;
@@ -870,17 +896,15 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	nd_right->tn_keyn = nd_left->tn_keyn - split_at;
 	nd_left->tn_keyn  = split_at;
 
-	rec_size = btr_rec_size(tcx);
 	if (leaf) {
 		D_DEBUG(DF_MISC, "Splitting leaf node\n");
 
-		memcpy(rec_dst, rec_src, rec_size * nd_right->tn_keyn);
+		btr_rec_copy(tcx, rec_dst, rec_src, nd_right->tn_keyn);
 		btr_node_insert_rec_only(tcx, trace, rec);
 		/* insert the right node and the first key of the right
 		 * node to its parent
 		 */
-		memcpy(&rec->rec_hkey[0], &rec_dst->rec_hkey[0],
-		       btr_hkey_size(tcx));
+		btr_rec_copy_hkey(tcx, rec, rec_dst);
 		goto bubble_up;
 	}
 	/* non-leaf */
@@ -891,7 +915,7 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 		D_DEBUG(DF_MISC, "Bubble up the new key\n");
 		nd_right->tn_child = umem_id_u2t(rec->rec_mmid,
 						 struct btr_node);
-		memcpy(rec_dst, rec_src, rec_size * nd_right->tn_keyn);
+		btr_rec_copy(tcx, rec_dst, rec_src, nd_right->tn_keyn);
 		goto bubble_up;
 	}
 
@@ -912,16 +936,16 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	/* Copy from @rec_src[1] because @rec_src[0] will bubble up.
 	 * NB: call btr_rec_at instead of using array index, see btr_record.
 	 */
-	memcpy(rec_dst, btr_rec_at(tcx, rec_src, 1),
-	       rec_size * nd_right->tn_keyn);
+	btr_rec_copy(tcx, rec_dst, btr_rec_at(tcx, rec_src, 1),
+		     nd_right->tn_keyn);
 
 	/* backup it because the below btr_node_insert_rec_only may
 	 * overwrite it.
 	 */
-	memcpy(&hkey_buf[0], &rec_src->rec_hkey[0], btr_hkey_size(tcx));
+	btr_hkey_copy(tcx, &hkey_buf[0], &rec_src->rec_hkey[0]);
 
 	btr_node_insert_rec_only(tcx, trace, rec);
-	memcpy(&rec->rec_hkey[0], &hkey_buf[0], btr_hkey_size(tcx));
+	btr_hkey_copy(tcx, &rec->rec_hkey[0], &hkey_buf[0]);
 
  bubble_up:
 	D_DEBUG(DF_MISC, "left keyn %d, right keyn %d\n",
@@ -995,7 +1019,7 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 			D_ASSERT(anchor != NULL);
 			D_ASSERT(opc != BTR_PROBE_UPDATE);
 
-			memcpy(hkey, &anchor->body[0], btr_hkey_size(tcx));
+			btr_hkey_copy(tcx, hkey, &anchor->body[0]);
 		}
 	}
 
@@ -1003,8 +1027,6 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 	start = end = 0;
 
 	for (nextl = true, level = 0 ;;) {
-		umem_id_t ummid;
-
 		if (nextl) { /* search a new level of the tree */
 			nextl	= false;
 			start	= 0;
@@ -1054,8 +1076,7 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 		btr_trace_debug(tcx, &tcx->tc_trace[level], "probe child\n");
 
 		/* Search the next level. */
-		ummid = btr_node_mmid_at(tcx, nd_mmid, at);
-		nd_mmid = umem_id_u2t(ummid, struct btr_node);
+		nd_mmid = btr_node_child_at(tcx, nd_mmid, at);
 		nextl = true;
 		level++;
 	}
@@ -1145,12 +1166,12 @@ btr_probe_next(struct btr_context *tcx)
 	}
 
 	while (trace < &tcx->tc_trace[tcx->tc_depth - 1]) {
-		umem_id_t ummid;
+		TMMID(struct btr_node) tmp;
 
-		ummid = btr_node_mmid_at(tcx, trace->tr_node, trace->tr_at);
+		tmp = btr_node_child_at(tcx, trace->tr_node, trace->tr_at);
 		trace++;
 		trace->tr_at = 0;
-		trace->tr_node = umem_id_u2t(ummid, struct btr_node);
+		trace->tr_node = tmp;
 	}
 
 	btr_trace_debug(tcx, trace, "is the next\n");
@@ -1193,13 +1214,13 @@ btr_probe_prev(struct btr_context *tcx)
 	}
 
 	while (trace < &tcx->tc_trace[tcx->tc_depth - 1]) {
-		umem_id_t ummid;
-		bool	  leaf;
+		TMMID(struct btr_node)	tmp;
+		bool			leaf;
 
-		ummid = btr_node_mmid_at(tcx, trace->tr_node, trace->tr_at);
+		tmp = btr_node_child_at(tcx, trace->tr_node, trace->tr_at);
 
 		trace++;
-		trace->tr_node = umem_id_u2t(ummid, struct btr_node);
+		trace->tr_node = tmp;
 		leaf = btr_node_is_leaf(tcx, trace->tr_node);
 
 		nd = btr_mmid2ptr(tcx, trace->tr_node);
@@ -1413,7 +1434,7 @@ btr_tx_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 /**
  * Update value of the provided key.
  *
- * \param tcx		[IN]	Tree operation context.
+ * \param toh		[IN]	Tree open handle.
  * \param key		[IN]	Key to search.
  * \param val		[IN]	New value for the key, it will punch the
  *				original value if \val is NULL.
@@ -1439,12 +1460,738 @@ dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val)
 	return rc;
 }
 
+/**
+ * Delete the leaf record pointed by @cur_tr from the current node, then fill
+ * the deletion gap by shifting remainded records on the specified direction.
+ *
+ * NB: this function can delete the last record in the node, it means that
+ * caller should be responsible for deleting this node.
+ */
+static void
+btr_node_del_leaf_only(struct btr_context *tcx, struct btr_trace *trace,
+		       bool shift_left)
+{
+	struct btr_record *rec;
+	struct btr_node   *nd;
+
+	nd = btr_mmid2ptr(tcx, trace->tr_node);
+	D_ASSERT(nd->tn_keyn > 0 && nd->tn_keyn > trace->tr_at);
+
+	rec = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
+	btr_rec_free(tcx, rec);
+
+	nd->tn_keyn--;
+	if (shift_left && trace->tr_at != nd->tn_keyn) {
+		/* shift left records which are on the right side of the
+		 * deleted record.
+		 */
+		btr_rec_move(tcx, rec, btr_rec_at(tcx, rec, 1),
+			     nd->tn_keyn - trace->tr_at);
+
+	} else if (!shift_left && trace->tr_at != 0) {
+		/* shift right records which are on the left side of the
+		 * deleted record.
+		 */
+		rec = btr_node_rec_at(tcx, trace->tr_node, 0);
+		btr_rec_move(tcx, btr_rec_at(tcx, rec, 1), rec,
+			     trace->tr_at);
+	}
+}
+
+/**
+ * Delete the leaf record pointed by @cur_tr from the current node, then grab
+ * a leaf record from the sibling node @sib_mmid and add this record to the
+ * current node. Because of the records movement between sibling nodes, this
+ * function also needs to update the hashed key stored in the parent record
+ * pointed by @par_tr.
+ *
+ * NB: this function only grab one record from the sibling node, although we
+ * might want to grab multiple records in the future.
+ *
+ * \param tcx		[IN]	Tree operation context.
+ * \param par_tr	[IN]	Probe trace of the current node in the parent
+ *				node.
+ * \param cur_tr	[IN]	Probe trace of the record being deleted in the
+ *				current node.
+ * \param sib_mmid	[IN]	mmid of the sibling node.
+ * \param sib_on_right	[IN]	The sibling node is on the right/left side of
+ *				the current node:
+ *				TRUE	= right
+ *				FALSE	= left
+ */
+static void
+btr_node_del_leaf_rebal(struct btr_context *tcx,
+			struct btr_trace *par_tr, struct btr_trace *cur_tr,
+			TMMID(struct btr_node) sib_mmid, bool sib_on_right)
+{
+	struct btr_node		*cur_nd;
+	struct btr_node		*sib_nd;
+	struct btr_record	*par_rec;
+	struct btr_record	*src_rec;
+	struct btr_record	*dst_rec;
+
+	cur_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
+	sib_nd = btr_mmid2ptr(tcx, sib_mmid);
+	D_ASSERT(sib_nd->tn_keyn > 1);
+
+	btr_node_del_leaf_only(tcx, cur_tr, sib_on_right);
+	D_DEBUG(DF_MISC, "Grab records from the %s sibling, cur:sib=%d:%d\n",
+		sib_on_right ? "right" : "left", cur_nd->tn_keyn,
+		sib_nd->tn_keyn);
+
+	if (sib_on_right) {
+		/* grab the first record from the right sibling */
+		src_rec = btr_node_rec_at(tcx, sib_mmid, 0);
+		dst_rec = btr_node_rec_at(tcx, cur_tr->tr_node,
+					  cur_nd->tn_keyn);
+		btr_rec_copy(tcx, dst_rec, src_rec, 1);
+		/* shift left remainded record on the sibling */
+		btr_rec_move(tcx, src_rec, btr_rec_at(tcx, src_rec, 1),
+			     sib_nd->tn_keyn - 1);
+
+		/* copy the first hkey of the right sibling node to the
+		 * parent node.
+		 */
+		par_rec = btr_node_rec_at(tcx, par_tr->tr_node, par_tr->tr_at);
+		btr_rec_copy_hkey(tcx, par_rec, src_rec);
+	} else {
+		/* grab the last record from the left sibling */
+		src_rec = btr_node_rec_at(tcx, sib_mmid, sib_nd->tn_keyn - 1);
+		dst_rec = btr_node_rec_at(tcx, cur_tr->tr_node, 0);
+
+		btr_rec_copy(tcx, dst_rec, src_rec, 1);
+		/* copy the first record key of the current node to the
+		 * parent node.
+		 */
+		par_rec = btr_node_rec_at(tcx, par_tr->tr_node,
+					  par_tr->tr_at - 1);
+		btr_rec_copy_hkey(tcx, par_rec, dst_rec);
+	}
+	cur_nd->tn_keyn++;
+	sib_nd->tn_keyn--;
+}
+
+/**
+ * Delete the leaf record pointed by @cur_tr from the current node, then either
+ * merge the current node to its left sibling, or merge the right sibling to
+ * the current node. It means that caller should always delete the node on the
+ * right side, which will be stored in @par_tr, after returning from this
+ * function.
+ *
+ * NB: See \a btr_node_del_leaf_rebal for the details of parameters.
+ * NB: This function should be called only if btr_node_del_leaf_rebal() cannot
+ * be called (cannot rebalance the current node and its sibling).
+ */
+static void
+btr_node_del_leaf_merge(struct btr_context *tcx,
+			struct btr_trace *par_tr, struct btr_trace *cur_tr,
+			TMMID(struct btr_node) sib_mmid, bool sib_on_right)
+{
+	struct btr_node		*src_nd;
+	struct btr_node		*dst_nd;
+	struct btr_record	*src_rec;
+	struct btr_record	*dst_rec;
+
+	/* NB: always left shift because it is easier for the following
+	 * operations.
+	 */
+	btr_node_del_leaf_only(tcx, cur_tr, true);
+	if (sib_on_right) {
+		/* move all records from the right sibling node to the
+		 * current node.
+		 */
+
+		src_nd = btr_mmid2ptr(tcx, sib_mmid);
+		dst_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
+
+		D_DEBUG(DF_MISC,
+			"Merge the right sibling to current node, "
+			"cur:sib=%d:%d\n", dst_nd->tn_keyn, src_nd->tn_keyn);
+
+		src_rec = btr_node_rec_at(tcx, sib_mmid, 0);
+		dst_rec = btr_node_rec_at(tcx, cur_tr->tr_node,
+					  dst_nd->tn_keyn);
+
+	} else {
+		/* move all records from the current node to the left
+		 * sibling node.
+		 */
+		src_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
+		dst_nd = btr_mmid2ptr(tcx, sib_mmid);
+
+		D_DEBUG(DF_MISC,
+			"Merge the current node to left sibling, "
+			"cur:sib=%d:%d\n", src_nd->tn_keyn, dst_nd->tn_keyn);
+
+		if (src_nd->tn_keyn != 0) {
+			src_rec = btr_node_rec_at(tcx, cur_tr->tr_node, 0);
+			dst_rec = btr_node_rec_at(tcx, sib_mmid,
+						  dst_nd->tn_keyn);
+		} else { /* current node is empty */
+			src_rec = dst_rec = NULL;
+		}
+	}
+
+	if (src_rec != NULL) {
+		btr_rec_copy(tcx, dst_rec, src_rec, src_nd->tn_keyn);
+
+		dst_nd->tn_keyn += src_nd->tn_keyn;
+		D_ASSERT(dst_nd->tn_keyn < tcx->tc_order);
+		src_nd->tn_keyn = 0;
+	}
+
+	/* point at the node that needs be removed from the parent */
+	par_tr->tr_at += sib_on_right;
+}
+
+/**
+ * Delete the specified leaf record from the current node:
+ * - if the current node has more than one records, just delete and return.
+ * - if the current node only has one leaf record, and the sibling has more
+ *   than one leaf records, grab one record from the sibling node after
+ *   the deletion.
+ * - if the current node only has one leaf record, and the sibling has one
+ *   leaf record as well, merge the current node with the sibling after
+ *   the deletion.
+ *
+ * This functino returns false if the deletion does not need to bubble up
+ * to upper level tree, otherwise returns true.
+ */
+static bool
+btr_node_del_leaf(struct btr_context *tcx,
+		  struct btr_trace *par_tr, struct btr_trace *cur_tr,
+		  TMMID(struct btr_node) sib_mmid, bool sib_on_right)
+{
+	struct btr_node *sib_nd;
+
+	if (TMMID_IS_NULL(sib_mmid)) {
+		/* don't need to rebalance or merge */
+		btr_node_del_leaf_only(tcx, cur_tr, true);
+		return false;
+	}
+
+	sib_nd = btr_mmid2ptr(tcx, sib_mmid);
+	if (sib_nd->tn_keyn > 1) {
+		/* grab a record from the sibling */
+		btr_node_del_leaf_rebal(tcx, par_tr, cur_tr,
+					sib_mmid, sib_on_right);
+		return false;
+	}
+
+	/* the sibling can't give record to the current node, merge them */
+	btr_node_del_leaf_merge(tcx, par_tr, cur_tr, sib_mmid, sib_on_right);
+	return true;
+}
+
+/**
+ * Delete the child record (non-leaf) pointed by @cur_tr from the current node,
+ * then fill the deletion gap by shifting remainded records on the specified
+ * direction. In addition, caller should guarantee the child being deleted
+ * is already empty.
+ *
+ * NB: This function may leave the node in an intermeidate state if it only
+ * has one key (and two children). In this case, after returning from this
+ * function, caller should either grab a child from a sibling node, or move
+ * the only child of this node to a sibling node, then free this node.
+ */
+static void
+btr_node_del_child_only(struct btr_context *tcx, struct btr_trace *trace,
+			bool shift_left)
+{
+	struct btr_node		*nd;
+	struct btr_record	*rec;
+	TMMID(struct btr_node)	 mmid;
+
+	nd = btr_mmid2ptr(tcx, trace->tr_node);
+	D_ASSERT(nd->tn_keyn > 0 && nd->tn_keyn >= trace->tr_at);
+
+	/* free the child node being deleted */
+	mmid = btr_node_child_at(tcx, trace->tr_node, trace->tr_at);
+
+	/* NB: we always delete record/node from the bottom to top, so it is
+	 * unnecessary to do cascading free anymore (btr_node_destroy).
+	 */
+	btr_node_free(tcx, mmid);
+
+	nd->tn_keyn--;
+	if (shift_left) {
+		/* shift left those records that are on the right side of the
+		 * deleted record.
+		 */
+		if (trace->tr_at == 0) {
+			nd->tn_child = umem_id_u2t(nd->tn_recs[0].rec_mmid,
+						   struct btr_node);
+		} else {
+			trace->tr_at -= 1;
+		}
+
+		if (trace->tr_at != nd->tn_keyn) {
+			rec = btr_node_rec_at(tcx, trace->tr_node,
+					      trace->tr_at);
+			btr_rec_move(tcx, rec, btr_rec_at(tcx, rec, 1),
+				     nd->tn_keyn - trace->tr_at);
+		}
+
+	} else {
+		/* shift right those records that are on the left side of the
+		 * deleted record.
+		 */
+		if (trace->tr_at != 0) {
+			rec = btr_node_rec_at(tcx, trace->tr_node, 0);
+			if (trace->tr_at > 1) {
+				btr_rec_move(tcx, btr_rec_at(tcx, rec, 1), rec,
+					     trace->tr_at - 1);
+			}
+			rec->rec_mmid = umem_id_t2u(nd->tn_child);
+		}
+	}
+}
+
+/**
+ * Delete the child node pointed by @cur_tr, then grab a child node from the
+ * sibling node @sib_mmid and insert this record to the current node. Because
+ * of the record/node movement, this function also needs to updates the hashed
+ * key stored in the parent record pointed by @par_tr.
+ *
+ * NB: we only grab one child from the sibling node, although we might want
+ *     to grab more in the future.
+ * NB: see \a btr_node_del_leaf_rebal for the details of parameters
+ */
+static void
+btr_node_del_child_rebal(struct btr_context *tcx,
+			 struct btr_trace *par_tr, struct btr_trace *cur_tr,
+			 TMMID(struct btr_node) sib_mmid, bool sib_on_right)
+{
+	struct btr_node		*cur_nd;
+	struct btr_node		*sib_nd;
+	struct btr_record	*par_rec;
+	struct btr_record	*src_rec;
+	struct btr_record	*dst_rec;
+
+	cur_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
+	sib_nd = btr_mmid2ptr(tcx, sib_mmid);
+	D_ASSERT(sib_nd->tn_keyn > 1);
+
+	btr_node_del_child_only(tcx, cur_tr, sib_on_right);
+	D_DEBUG(DF_MISC, "Grab children from the %s sibling, cur:sib=%d:%d\n",
+		sib_on_right ? "right" : "left", cur_nd->tn_keyn,
+		sib_nd->tn_keyn);
+
+	if (sib_on_right) {
+		/* grab the first child from the right sibling */
+		src_rec = btr_node_rec_at(tcx, sib_mmid, 0);
+		dst_rec = btr_node_rec_at(tcx, cur_tr->tr_node,
+					  cur_nd->tn_keyn);
+		par_rec = btr_node_rec_at(tcx, par_tr->tr_node, par_tr->tr_at);
+
+		dst_rec->rec_mmid = umem_id_t2u(sib_nd->tn_child);
+		btr_rec_copy_hkey(tcx, dst_rec, par_rec);
+		btr_rec_copy_hkey(tcx, par_rec, src_rec);
+
+		sib_nd->tn_child = umem_id_u2t(src_rec->rec_mmid,
+					       struct btr_node);
+		btr_rec_move(tcx, src_rec, btr_rec_at(tcx, src_rec, 1),
+			     sib_nd->tn_keyn - 1);
+
+	} else {
+		/* grab the last child from the left sibling */
+		src_rec = btr_node_rec_at(tcx, sib_mmid, sib_nd->tn_keyn - 1);
+		dst_rec = btr_node_rec_at(tcx, cur_tr->tr_node, 0);
+		par_rec = btr_node_rec_at(tcx, par_tr->tr_node,
+					  par_tr->tr_at - 1);
+
+		btr_rec_copy_hkey(tcx, dst_rec, par_rec);
+		btr_rec_copy_hkey(tcx, par_rec, src_rec);
+
+		cur_nd->tn_child = umem_id_u2t(src_rec->rec_mmid,
+					       struct btr_node);
+	}
+	cur_nd->tn_keyn++;
+	sib_nd->tn_keyn--;
+}
+
+/**
+ * Delete the child node pointed by @cur_tr from the current node, then either
+ * merge the current node to its left sibling, or merge the right sibling to
+ * the current node. It means that caller should always delete the node on the
+ * right side, which will be stored in @par_tr, after returning from this
+ * function.
+ *
+ * NB: see \a btr_node_del_leaf_rebal for the details of parameters
+ */
+static void
+btr_node_del_child_merge(struct btr_context *tcx,
+			 struct btr_trace *par_tr, struct btr_trace *cur_tr,
+			 TMMID(struct btr_node) sib_mmid, bool sib_on_right)
+{
+	struct btr_node		*src_nd;
+	struct btr_node		*dst_nd;
+	struct btr_record	*par_rec;
+	struct btr_record	*src_rec;
+	struct btr_record	*dst_rec;
+
+	/* NB: always left shift because it is easier for the following
+	 * operations.
+	 */
+	btr_node_del_child_only(tcx, cur_tr, true);
+	if (sib_on_right) {
+		/* move children from the right sibling to the current node. */
+		src_nd = btr_mmid2ptr(tcx, sib_mmid);
+		dst_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
+
+		D_DEBUG(DF_MISC,
+			"Merge the right sibling to current node, "
+			"cur:sib=%d:%d\n", dst_nd->tn_keyn, src_nd->tn_keyn);
+
+		src_rec = btr_node_rec_at(tcx, sib_mmid, 0);
+		dst_rec = btr_node_rec_at(tcx, cur_tr->tr_node,
+					  dst_nd->tn_keyn);
+		par_rec = btr_node_rec_at(tcx, par_tr->tr_node, par_tr->tr_at);
+
+		dst_rec->rec_mmid = umem_id_t2u(src_nd->tn_child);
+
+	} else {
+		/* move children of the current node to the left sibling. */
+		src_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
+		dst_nd = btr_mmid2ptr(tcx, sib_mmid);
+
+		D_DEBUG(DF_MISC,
+			"Merge the current node to left sibling, "
+			"cur:sib=%d:%d\n", src_nd->tn_keyn, dst_nd->tn_keyn);
+
+		dst_rec = btr_node_rec_at(tcx, sib_mmid, dst_nd->tn_keyn);
+		par_rec = btr_node_rec_at(tcx, par_tr->tr_node,
+					  par_tr->tr_at - 1);
+
+		dst_rec->rec_mmid = umem_id_t2u(src_nd->tn_child);
+		src_rec = src_nd->tn_keyn == 0 ?
+			  NULL : btr_node_rec_at(tcx, cur_tr->tr_node, 0);
+	}
+	btr_rec_copy_hkey(tcx, dst_rec, par_rec);
+
+	if (src_rec != NULL) {
+		dst_rec = btr_rec_at(tcx, dst_rec, 1); /* the next record */
+		btr_rec_copy(tcx, dst_rec, src_rec, src_nd->tn_keyn);
+	}
+
+	/* NB: destination got an extra key from the parent, and an extra
+	 * child pointer from src_nd::tn_child.
+	 */
+	dst_nd->tn_keyn += src_nd->tn_keyn + 1;
+	D_ASSERT(dst_nd->tn_keyn < tcx->tc_order);
+	src_nd->tn_keyn = 0;
+
+	/* point at the node that needs be removed from the parent */
+	par_tr->tr_at += sib_on_right;
+}
+
+/**
+ * Delete the specified child node from the current node:
+ * - if the current node has more than two children, just delete and return
+ * - if the current node only has two children, and the sibling has more than
+ *   two children, grab one child from the sibling node after the deletion.
+ * - if the current node only has two children, and the sibling has two
+ *   children as well, merge the current node with the sibling after the
+ *   deletion.
+ *
+ * This functino returns false if the deletion does not need to bubble up
+ * to upper level tree, otherwise returns true.
+ */
+static bool
+btr_node_del_child(struct btr_context *tcx,
+		   struct btr_trace *par_tr, struct btr_trace *cur_tr,
+		   TMMID(struct btr_node) sib_mmid, bool sib_on_right)
+{
+	struct btr_node *sib_nd;
+
+	if (TMMID_IS_NULL(sib_mmid)) {
+		/* don't need to rebalance or merge */
+		btr_node_del_child_only(tcx, cur_tr, true);
+		return false;
+	}
+
+	sib_nd = btr_mmid2ptr(tcx, sib_mmid);
+	if (sib_nd->tn_keyn > 1) {
+		/* grab a child from the sibling */
+		btr_node_del_child_rebal(tcx, par_tr, cur_tr,
+					 sib_mmid, sib_on_right);
+		return false;
+	}
+
+	/* the sibling can't give any record to the current node, merge them */
+	btr_node_del_child_merge(tcx, par_tr, cur_tr, sib_mmid, sib_on_right);
+	return true;
+}
+
+/**
+ * Delete the child node or leaf record pointed by @cur_tr from the current
+ * node, if the deletion generates a new empty node (the current node or its
+ * sibling node), then the deletion needs to bubble up.
+ *
+ * \param par_tr	[IN/OUT]
+ *				Probe trace of the current node in the parent
+ *				node. If the deletion generates a new empty
+ *				node, this new empty node will be stored in
+ *				@par_tr as well.
+ * \param cur_tr	[IN]	Probe trace of the record being deleted in the
+ *				current node
+ */
+static bool
+btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
+		 struct btr_trace *cur_tr)
+{
+	struct btr_node		*par_nd;
+	struct btr_node		*cur_nd;
+	struct btr_node		*sib_nd;
+	bool			 is_leaf;
+	bool			 bubble_up;
+	bool			 sib_on_right;
+	TMMID(struct btr_node)	 sib_mmid;
+
+	is_leaf = btr_node_is_leaf(tcx, cur_tr->tr_node);
+
+	cur_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
+	par_nd = btr_mmid2ptr(tcx, par_tr->tr_node);
+	D_ASSERT(par_nd->tn_keyn > 0);
+
+	D_DEBUG(DF_MISC, "Delete %s from the %s node, key_nr = %d\n",
+		is_leaf ? "record" : "child", is_leaf ? "leaf" : "non-leaf",
+		cur_nd->tn_keyn);
+
+	if (cur_nd->tn_keyn > 1) {
+		/* OK to delete record without doing any extra work */
+		D_DEBUG(DF_MISC, "Straightaway deleteion, no rebalance.\n");
+		sib_mmid	= BTR_NODE_NULL;
+		sib_on_right	= false; /* whatever... */
+
+	} else { /* needs to rebalance or merge nodes */
+		D_DEBUG(DF_MISC, "Parent trace at=%d, key_nr=%d\n",
+			par_tr->tr_at, par_nd->tn_keyn);
+
+		if (par_tr->tr_at == 0) {
+			/* only has sibling on the right side */
+			sib_mmid = btr_node_child_at(tcx, par_tr->tr_node, 1);
+			sib_on_right = true;
+
+		} else if (par_tr->tr_at == par_nd->tn_keyn) {
+			/* only has sibling on the left side */
+			sib_mmid = btr_node_child_at(tcx, par_tr->tr_node,
+						     par_tr->tr_at - 1);
+			sib_on_right = false;
+		} else {
+			sib_mmid = btr_node_child_at(tcx, par_tr->tr_node,
+						     par_tr->tr_at + 1);
+			sib_nd = btr_mmid2ptr(tcx, sib_mmid);
+			D_ASSERT(sib_nd->tn_keyn > 0);
+
+			if (sib_nd->tn_keyn > 1) {
+				/* sufficient records on the right sibling */
+				sib_on_right = true;
+			} else {
+				/* try the left sibling */
+				sib_mmid = btr_node_child_at(tcx,
+							     par_tr->tr_node,
+							     par_tr->tr_at - 1);
+				sib_nd = btr_mmid2ptr(tcx, sib_mmid);
+				sib_on_right = false;
+			}
+		}
+		D_DEBUG(DF_MISC, "Delete and rebalance with the %s sibling.\n",
+			sib_on_right ? "right" : "left");
+	}
+
+	if (btr_has_tx(tcx)) {
+		btr_node_tx_add(tcx, cur_tr->tr_node);
+		/* if sib_mmid isn't NULL, it means rebalance/merge will happen
+		 * and the sibling and parent nodes will be changed.
+		 */
+		if (!TMMID_IS_NULL(sib_mmid)) {
+			btr_node_tx_add(tcx, sib_mmid);
+			btr_node_tx_add(tcx, par_tr->tr_node);
+		}
+	}
+
+	if (is_leaf) {
+		bubble_up = btr_node_del_leaf(tcx, par_tr, cur_tr,
+					      sib_mmid, sib_on_right);
+	} else {
+		bubble_up = btr_node_del_child(tcx, par_tr, cur_tr,
+					       sib_mmid, sib_on_right);
+	}
+	return bubble_up;
+}
+
+/**
+ * Deleted the record/child pointed by @trace from the root node.
+ *
+ * - If the root node is also a leaf, and the root is empty after the deletion,
+ *   then the root node will be freed as well.
+ * - If the root node is a non-leaf node, then the corresponding child node
+ *   will be deleted as well. If there is only one child left, then that child
+ *   will become the new root, the original root node will be freed.
+ */
+static void
+btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace)
+{
+	struct btr_node		*node;
+	struct btr_root		*root;
+
+	root = tcx->tc_tins.ti_root;
+	node = btr_mmid2ptr(tcx, trace->tr_node);
+
+	D_DEBUG(DF_MISC, "Delete record/child from tree root, depth=%d\n",
+		root->tr_depth);
+
+	if (btr_node_is_leaf(tcx, trace->tr_node)) {
+		D_DEBUG(DF_MISC, "Delete leaf from the root, key_nr=%d.\n",
+			node->tn_keyn);
+
+		/* the root is also a leaf node */
+		if (node->tn_keyn > 1) {
+			/* have more than one record, simply remove the record
+			 * to be deleted.
+			 */
+			if (btr_has_tx(tcx))
+				btr_node_tx_add(tcx, trace->tr_node);
+
+			btr_node_del_leaf_only(tcx, trace, true);
+		} else {
+
+			btr_node_destroy(tcx, trace->tr_node);
+			if (btr_has_tx(tcx))
+				btr_root_tx_add(tcx);
+
+			tcx->tc_depth	= 0;
+			root->tr_depth	= 0;
+			root->tr_node	= BTR_NODE_NULL;
+			D_DEBUG(DF_MISC, "Tree is empty now.\n");
+		}
+
+	} else {
+		/* non-leaf node */
+		D_DEBUG(DF_MISC, "Delete child from the root, key_nr=%d.\n",
+			node->tn_keyn);
+
+		if (btr_has_tx(tcx))
+			btr_node_tx_add(tcx, trace->tr_node);
+
+		btr_node_del_child_only(tcx, trace, true);
+		if (node->tn_keyn == 0) {
+			/* only has zero key and one child left, reduce
+			 * the tree depth by using the only child node
+			 * to replace the current node.
+			 */
+			if (btr_has_tx(tcx))
+				btr_root_tx_add(tcx);
+
+			tcx->tc_depth--;
+			root->tr_depth--;
+			root->tr_node = node->tn_child;
+			btr_node_set(tcx, node->tn_child, BTR_NODE_ROOT);
+			btr_node_free(tcx, trace->tr_node);
+
+			D_DEBUG(DF_MISC, "Shrink tree depth to %d\n",
+				root->tr_depth);
+		}
+	}
+}
+
+static int
+btr_delete(struct btr_context *tcx, daos_iov_t *key)
+{
+	struct btr_trace	*par_tr;
+	struct btr_trace	*cur_tr;
+
+	for (cur_tr = &tcx->tc_trace[tcx->tc_depth - 1];; cur_tr = par_tr) {
+		bool	bubble_up;
+
+		if (cur_tr == tcx->tc_trace) { /* root */
+			btr_root_del_rec(tcx, cur_tr);
+			break;
+		}
+
+		par_tr = cur_tr - 1;
+		bubble_up = btr_node_del_rec(tcx, par_tr, cur_tr);
+		if (!bubble_up)
+			break;
+	}
+	D_DEBUG(DF_MISC, "Deletion done\n");
+	return 0; /* no error so far */
+}
+
+static int
+btr_tx_delete(struct btr_context *tcx, daos_iov_t *key)
+{
+#if DAOS_HAS_NVML
+	struct umem_instance *umm = btr_umm(tcx);
+	int		      rc = 0;
+
+	TX_BEGIN(umm->umm_u.pmem_pool) {
+		rc = btr_delete(tcx, key);
+		if (rc != 0)
+			umem_tx_abort(btr_umm(tcx), rc);
+	} TX_ONABORT {
+		rc = umem_tx_errno(rc);
+		D_DEBUG(DF_MISC, "dbtree_delete tx aborted: %d\n", rc);
+
+	} TX_FINALLY {
+		D_DEBUG(DF_MISC, "dbtree_delete tx exited\n");
+	} TX_END
+
+	return rc;
+#else
+	D_ASSERT(0);
+	return -DER_NO_PERM;
+#endif
+}
+
+/**
+ * Delete the @key and the corresponding value from the btree.
+ *
+ * \param toh		[IN]	Tree open handle.
+ * \param key		[IN]	The key to be deleted.
+ */
 int
 dbtree_delete(daos_handle_t toh, daos_iov_t *key)
 {
-	/* XXX TODO */
-	D_ASSERT(0);
-	return -DER_NO_PERM;
+	struct btr_context *tcx;
+	int		    rc;
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	rc = btr_probe(tcx, BTR_PROBE_EQ, key, NULL);
+	if (rc != PROBE_RC_EQ) {
+		D_DEBUG(DF_MISC, "Cannot find key\n");
+		return -DER_NONEXIST;
+	}
+
+	if (btr_has_tx(tcx))
+		rc = btr_tx_delete(tcx, key);
+	else
+		rc = btr_delete(tcx, key);
+
+	return rc;
+}
+
+/**
+ * Is the btree empty or not
+ *
+ * \return	0	Not empty
+ *		1	Empty
+ *		-ve	error code
+ */
+int
+dbtree_is_empty(daos_handle_t toh)
+{
+	struct btr_context *tcx;
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	return tcx->tc_tins.ti_root->tr_depth == 0;
 }
 
 static int
@@ -1697,10 +2444,10 @@ btr_node_destroy(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid)
 	}
 
 	for (i = 0; i <= nd->tn_keyn; i++) {
-		umem_id_t ummid;
+		TMMID(struct btr_node) child_mmid;
 
-		ummid = btr_node_mmid_at(tcx, nd_mmid, i);
-		btr_node_destroy(tcx, umem_id_u2t(ummid, struct btr_node));
+		child_mmid = btr_node_child_at(tcx, nd_mmid, i);
+		btr_node_destroy(tcx, child_mmid);
 	}
 	btr_node_free(tcx, nd_mmid);
 }
@@ -2000,8 +2747,7 @@ dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 	rc = btr_rec_fetch(tcx, rec, key, val);
 	if (rc == 0 && anchor != NULL) {
 		memset(anchor, 0, sizeof(*anchor));
-		memcpy(&anchor->body[0], &rec->rec_hkey[0],
-		       btr_hkey_size(tcx));
+		btr_hkey_copy(tcx, &anchor->body[0], &rec->rec_hkey[0]);
 	}
 	return 0;
 }
