@@ -217,14 +217,15 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	pmix_pdata_t		*pdata;
 	pmix_value_t		*val;
 	char			*unpublish_key[2];
+	/*
 	pmix_persistence_t	 persistence;
 	pmix_data_range_t	 range;
+	*/
 	pmix_proc_t		 proc;
 	bool			 flag = true;
-	int			 nkeys = 3;
+	int			 nkeys = 1;
 	struct crt_rank_map	 *rank_map;
-	int			 i;
-	int			 rc = 0;
+	int			 i, rc = 0;
 
 	C_ASSERT(grp_priv != NULL);
 	C_ASSERT(crt_gdata.cg_grp != NULL);
@@ -294,13 +295,16 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 		C_GOTO(out, rc = -CER_NOMEM);
 	}
 
-	persistence = PMIX_PERSIST_PROC;
-	range = PMIX_RANGE_NAMESPACE;
-	PMIX_INFO_LOAD(&info[1], PMIX_PERSISTENCE, &persistence, PMIX_UINT);
+	/*
+	persistence = PMIX_PERSIST_SESSION;
+	range = PMIX_RANGE_GLOBAL;
+	PMIX_INFO_LOAD(&info[1], PMIX_PERSISTENCE, &persistence,
+			PMIX_UINT);
 	PMIX_INFO_LOAD(&info[2], PMIX_RANGE, &range, PMIX_UINT);
+	*/
 	rc = PMIx_Publish(info, nkeys);
 	if (rc != PMIX_SUCCESS) {
-		C_ERROR("PMIx ns %s rank %d, PMIx_Publish failed, rc: %d.\n",
+		C_ERROR("PMIx ns %s rank %d, PMIx_Publish failed,rc: %d.\n",
 			myproc->nspace, myproc->rank, rc);
 		PMIX_INFO_FREE(info, nkeys);
 		free(unpublish_key[0]);
@@ -311,7 +315,7 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	/* call fence to ensure the data is received */
 	rc = crt_pmix_fence();
 	if (rc != 0) {
-		C_ERROR("PMIx ns %s rank %d, crt_pmix_fence failed, rc: %d.\n",
+		C_ERROR("PMIx ns %s rank %d, crt_pmix_fence failed,rc: %d.\n",
 			myproc->nspace, myproc->rank, rc);
 		free(unpublish_key[0]);
 		C_GOTO(out, rc);
@@ -352,7 +356,7 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	/* call fence before unpublish */
 	rc = crt_pmix_fence();
 	if (rc != 0) {
-		C_ERROR("PMIx ns %s rank %d, crt_pmix_fence failed, rc: %d.\n",
+		C_ERROR("PMIx ns %s rank %d, crt_pmix_fence failed,rc: %d.\n",
 			myproc->nspace, myproc->rank, rc);
 		free(unpublish_key[0]);
 		C_GOTO(out, rc);
@@ -428,7 +432,7 @@ crt_pmix_publish_self(struct crt_grp_priv *grp_priv)
 	PMIX_INFO_LOAD(&info[1], PMIX_PERSISTENCE, &persistence, PMIX_UINT);
 	PMIX_INFO_LOAD(&info[2], PMIX_RANGE, &range, PMIX_UINT);
 	*/
-	snprintf(info[0].key, PMIX_MAX_KEYLEN + 1, "crt-%s-%d-uri",
+	snprintf(info[0].key, PMIX_MAX_KEYLEN + 1, "pmix-%s-%d-uri",
 		 grp_priv->gp_pub.cg_grpid, grp_priv->gp_self);
 	info[0].value.type = PMIX_STRING;
 	info[0].value.data.string = strndup(crt_gdata.cg_addr,
@@ -456,7 +460,7 @@ crt_pmix_publish_self(struct crt_grp_priv *grp_priv)
 				PMIX_UINT);
 		PMIX_INFO_LOAD(&info[2], PMIX_RANGE, &range, PMIX_UINT);
 		*/
-		snprintf(info[0].key, PMIX_MAX_KEYLEN + 1, "crt-%s-size",
+		snprintf(info[0].key, PMIX_MAX_KEYLEN + 1, "pmix-%s-size",
 			 grp_priv->gp_pub.cg_grpid);
 		info[0].value.type = PMIX_UINT32;
 		info[0].value.data.uint32 = grp_priv->gp_size;
@@ -490,7 +494,7 @@ crt_pmix_uri_lookup(crt_group_id_t srv_grpid, crt_rank_t rank, char **uri)
 		C_GOTO(out, rc = -CER_INVAL);
 
 	PMIX_PDATA_CREATE(pdata, 1);
-	snprintf(pdata[0].key, PMIX_MAX_NSLEN + 5, "crt-%s-%d-uri",
+	snprintf(pdata[0].key, PMIX_MAX_NSLEN + 5, "pmix-%s-%d-uri",
 		 srv_grpid, rank);
 	rc = PMIx_Lookup(&pdata[0], 1, NULL, 0);
 	if (rc != PMIX_SUCCESS || pdata[0].value.type != PMIX_STRING) {
@@ -527,7 +531,7 @@ crt_pmix_attach(struct crt_grp_priv *grp_priv)
 	C_ASSERT(grp_priv != NULL);
 
 	PMIX_PDATA_CREATE(pdata, 1);
-	snprintf(pdata[0].key, PMIX_MAX_KEYLEN + 1, "crt-%s-size",
+	snprintf(pdata[0].key, PMIX_MAX_KEYLEN + 1, "pmix-%s-size",
 		 grp_priv->gp_pub.cg_grpid);
 	rc = PMIx_Lookup(pdata, 1, NULL, 0);
 	if (rc == PMIX_SUCCESS && pdata[0].value.type == PMIX_UINT32) {
