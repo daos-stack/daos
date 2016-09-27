@@ -40,6 +40,39 @@
 #include <unistd.h>
 #include <string.h>
 
+static pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static PMEMobjpool *
+vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
+		   mode_t mode)
+{
+	PMEMobjpool *pop;
+
+	pthread_mutex_lock(&vos_pmemobj_lock);
+	pop = pmemobj_create(path, layout, poolsize, mode);
+	pthread_mutex_unlock(&vos_pmemobj_lock);
+	return pop;
+}
+
+static PMEMobjpool *
+vos_pmemobj_open(const char *path, const char *layout)
+{
+	PMEMobjpool *pop;
+
+	pthread_mutex_lock(&vos_pmemobj_lock);
+	pop = pmemobj_open(path, layout);
+	pthread_mutex_unlock(&vos_pmemobj_lock);
+	return pop;
+}
+
+void
+vos_pmemobj_close(PMEMobjpool *pop)
+{
+	pthread_mutex_lock(&vos_pmemobj_lock);
+	pmemobj_close(pop);
+	pthread_mutex_unlock(&vos_pmemobj_lock);
+}
+
 static inline struct vos_pool_root *
 pmem_pool2root(PMEMobjpool *ph)
 {
@@ -64,7 +97,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		return -DER_INVAL;
 
 	D_DEBUG(DF_VOS2, "Pool Path: %s, size: "DF_U64",UUID: "DF_UUID"\n",
-		path, size, uuid);
+		path, size, DP_UUID(uuid));
 
 	/**
 	 * Path must be a file with a certain size when size
@@ -75,8 +108,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		return -DER_NONEXIST;
 	}
 
-	ph = pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout),
-			    size, 0666);
+	ph = vos_pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout), size,
+				0666);
 	if (!ph) {
 		D_ERROR("Failed to create pool: %d\n", errno);
 		return  -DER_NOSPACE;
@@ -141,7 +174,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size,
 		D_GOTO(exit, rc);
 exit:
 	/* Close this local handle, opened using pool_open*/
-	pmemobj_close(ph);
+	vos_pmemobj_close(ph);
 	return rc;
 }
 
@@ -222,7 +255,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh,
 	D_DEBUG(DF_VOS2, "Allocated vos pool :%p\n", vpool);
 
 	vpool->vp_fpath = strdup(path);
-	vpool->vp_ph = pmemobj_open(path, POBJ_LAYOUT_NAME(vos_pool_layout));
+	vpool->vp_ph = vos_pmemobj_open(path,
+					POBJ_LAYOUT_NAME(vos_pool_layout));
 	if (vpool->vp_ph == NULL) {
 		D_ERROR("Error in opening the pool handle: %s\n",
 			pmemobj_errormsg());

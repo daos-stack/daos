@@ -51,7 +51,7 @@ vos_pool_uhash_free(struct daos_ulink *ulink)
 
 	vpool = vos_ulink2poh(ulink);
 	if (vpool->vp_ph)
-		pmemobj_close(vpool->vp_ph);
+		vos_pmemobj_close(vpool->vp_ph);
 	if (vpool->vp_fpath != NULL)
 		free(vpool->vp_fpath);
 

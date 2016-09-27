@@ -504,4 +504,6 @@ struct vos_iter_ops {
 			     daos_hash_out_t *anchor);
 };
 
+void vos_pmemobj_close(PMEMobjpool *pop);
+
 #endif /* __VOS_INTERNAL_H__ */
