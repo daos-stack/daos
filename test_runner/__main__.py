@@ -55,15 +55,27 @@ try:
 except ImportError:
     from yaml import Loader
 
+from importlib import import_module
 #pylint: disable=import-error
 from TestRunner import TestRunner
 from InfoRunner import InfoRunner
-from DvmRunner  import DvmRunner
 
+
+def import_daemon(name, info):
+    """ import the daemon module and load the class """
+    try:
+        _module = import_module(name)
+        try:
+            _class = getattr(_module, name)(info)
+        except AttributeError:
+            print("Class does not exist")
+    except ImportError:
+        print("Module does not exist")
+    return _class or None
 
 def testmain(info=None, start=1):
     """ main for test runner """
-    ortedvm = None
+    daemon = None
     test_list = []
 
     # load test list
@@ -77,13 +89,16 @@ def testmain(info=None, start=1):
             test_list.append(sys.argv[k])
     print("Test list: " + str(test_list))
 
-    if info.get_config("use_orte-dvm", ""):
-        ortedvm = DvmRunner(info)
-        ortedvm.launch_dvm_process()
+    # load and start daemon if required
+    use_daemon = info.get_config("use_daemon", "")
+    if use_daemon:
+        daemon = import_daemon(use_daemon, info)
+        daemon.launch_process()
+    # load test object and start the testing
     tester = TestRunner(info, test_list)
     rc = tester.run_testcases()
-    if ortedvm:
-        ortedvm.stop_dvm_process()
+    if daemon:
+        daemon.stop_process()
     if rc == 0:
         print("All tests passed\n")
     else:

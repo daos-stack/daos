@@ -39,7 +39,7 @@ class DvmRunner():
     def __init__(self, info=None):
         self.info = info
 
-    def launch_dvm_process(self):
+    def launch_process(self):
         """Launch otred processes """
         print("TestRunner: start orte-dvm process\n")
         hosts = ","
@@ -58,7 +58,7 @@ class DvmRunner():
         time.sleep(5)
         return not self.ortedvm
 
-    def stop_dvm_process(self):
+    def stop_process(self):
         """stop orted processes """
         print("TestRunner: stopping orte-dvm process\n")
         self.ortedvm.terminate()
