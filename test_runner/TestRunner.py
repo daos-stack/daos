@@ -55,23 +55,63 @@ class TestRunner():
         self.test_list = test_list
         self.log_dir_base = self.info.get_config('log_base_path')
 
-    def add_default_env(self):
+    def set_key_from_host(self):
         """ add to default environment """
         module = self.test_info['module']
         host_list = self.info.get_config('host_list')
         hostkey_list = module.get('setKeyFromHost')
-        if host_list and hostkey_list:
-            for k in range(0, len(hostkey_list)):
-                self.test_info['defaultENV'][hostkey_list[k]] = host_list[k]
+        for k in range(0, len(hostkey_list)):
+            self.test_info['defaultENV'][hostkey_list[k]] = host_list[k]
+
+    def set_key_from_info(self):
+        """ add to default environment """
+        module = self.test_info['module']
         key_list = module.get('setKeyFromInfo')
-        if key_list:
-            for item in range(0, len(key_list)):
-                (k, v, ex) = key_list[item]
-                self.test_info['defaultENV'][k] = self.info.get_info(v) + ex
+        for item in range(0, len(key_list)):
+            (k, v, ex) = key_list[item]
+            self.test_info['defaultENV'][k] = self.info.get_info(v) + ex
+
+    def create_append_key_from_info(self, append=False):
+        """ add to default environment """
+        save_value = ""
+        module = self.test_info['module']
+        key_list = module.get('appendKeyFromInfo')
+        for var in range(0, len(key_list)):
+            (k, ex, vlist) = key_list[var]
+            if append:
+                save_value = os.getenv(k)
+            new_list = []
+            for var_name in vlist:
+                var_value = self.info.get_info(var_name) + ex
+                if var_value not in save_value:
+                    new_list.append(var_value)
+            items = ":"
+            new_value = items.join(new_list)
+            if save_value:
+                self.test_info['defaultENV'][k] = \
+                    new_value + ":" + save_value
+            else:
+                self.test_info['defaultENV'][k] = new_value
+
+    def set_key_from_config(self):
+        """ add to default environment """
         config_key_list = self.info.get_config('setKeyFromConfig')
-        if config_key_list:
-            for (key, value) in config_key_list.items():
-                self.test_info['defaultENV'][key] = value
+        for (key, value) in config_key_list.items():
+            self.test_info['defaultENV'][key] = value
+
+    def add_default_env(self):
+        """ add to default environment """
+        module = self.test_info['module']
+        if self.info.get_config('host_list') and module.get('setKeyFromHost'):
+            self.set_key_from_host()
+        if module.get('setKeyFromInfo'):
+            self.set_key_from_info()
+        if module.get('createKeyFromInfo'):
+            self.create_append_key_from_info()
+        if module.get('appendKeyFromInfo'):
+            self.create_append_key_from_info(True)
+        if self.info.get_config('setKeyFromConfig'):
+            self.set_key_from_config()
 
     def setup_default_env(self):
         """ setup default environment """
