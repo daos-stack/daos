@@ -306,12 +306,18 @@ def define_check_test(mode=None):
 def run_test(source, target, env, for_signature, mode=None):
     """Create test actions."""
     count = 1
+    sup_dir = os.path.dirname(source[0].srcnode().abspath)
+    sup_file = os.path.join(sup_dir, "%s.sup" %  mode)
     action = ['touch %s'%target[0]]
     for test in source:
         valgrind_str = ""
         if mode in ["memcheck", "helgrind"]:
+            sup = ""
+            if os.path.exists(sup_file):
+                sup = "--suppressions=%s" % sup_file
             valgrind_str = "valgrind --xml=yes --xml-file=%s " \
-                           "--child-silent-after-fork=yes " % target[count]
+                           "--child-silent-after-fork=yes " \
+                           "%s " % (target[count], sup)
             if mode == "memcheck":
                 #Memory analysis
                 valgrind_str += "--leak-check=full "
