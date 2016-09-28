@@ -557,8 +557,8 @@ container_create(int rank)
 		rc = dsr_co_create(poh, co_uuid, NULL);
 		DBENCH_CHECK(rc, "Container create failed\n");
 
-		rc = dsr_co_open(poh, co_uuid, DAOS_COO_RW, NULL,
-				 &coh, &co_info, NULL);
+		rc = dsr_co_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info,
+				 NULL);
 		DBENCH_CHECK(rc, "Container open failed\n");
 	}
 }
@@ -673,7 +673,7 @@ kv_update_async(struct test *test, int key_type,
 	int		counter;
 
 	counter = (key_type == 2) ? test->t_nindexes : test->t_nkeys;
-	ghce = co_info.ci_epoch_state.es_glb_hce;
+	ghce = co_info.ci_epoch_state.es_ghce;
 	DBENCH_INFO("ghce: %"PRIu64, ghce);
 
 	ghce++;
@@ -1344,8 +1344,7 @@ int main(int argc, char *argv[])
 		svcl.rl_nr.num_out = 0;
 		svcl.rl_ranks = &rank;
 
-		rc = dsr_pool_connect(pool_uuid, NULL, &svcl,
-				      DAOS_PC_RW, NULL, &poh,
+		rc = dsr_pool_connect(pool_uuid, NULL, &svcl, DAOS_PC_RW, &poh,
 				      &pool_info, NULL);
 		DBENCH_CHECK(rc, "Pool %s connect failed\n",
 			     arg.t_pname);

@@ -62,8 +62,7 @@ dsr_pool_connect_comp(void *args, struct daos_event *ev, int rc)
 int
 dsr_pool_connect(const uuid_t uuid, const char *grp,
 		 const daos_rank_list_t *tgts, unsigned int flags,
-		 daos_rank_list_t *failed, daos_handle_t *poh,
-		 daos_pool_info_t *info, daos_event_t *ev)
+		 daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	struct daos_event *pool_event = ev;
 	int		  rc;
@@ -87,7 +86,7 @@ dsr_pool_connect(const uuid_t uuid, const char *grp,
 		D_GOTO(failed, rc);
 
 	/* Call it in sync mode to simplify things for now... */
-	rc = dsm_pool_connect(uuid, grp, tgts, flags, failed, poh, info,
+	rc = dsm_pool_connect(uuid, grp, tgts, flags, poh, info,
 			      pool_event);
 	if (rc != 0)
 		D_GOTO(failed, rc);

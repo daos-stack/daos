@@ -136,10 +136,9 @@ dsm_co_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
  */
 
 /**
- * Connect to the DAOS pool identified by UUID \a uuid.
- * Upon a successful completion, \a poh returns the pool handle and \a failed,
- * which shall be allocated by the caller, returns the targets that failed to
- * establish this connection.
+ * Connect to the DAOS pool identified by UUID \a uuid. Upon a successful
+ * completion, \a poh returns the pool handle, and \a info return the latest
+ * pool information.
  *
  * \param uuid	[IN]	UUID to identify a pool.
  * \param grp	[IN]	Process set name of the DAOS servers managing the pool
@@ -147,8 +146,6 @@ dsm_co_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
  *			replicas. If not aware of the ranks of the pool service
  *			replicas, the caller may pass in NULL.
  * \param flags	[IN]	Connect mode represented by the DAOS_PC_ bits.
- * \param failed
- *		[OUT]	Optional, buffer to store faulty targets on failure.
  * \param poh	[OUT]	Returned open handle.
  * \param info	[OUT]	Returned pool info.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
@@ -165,8 +162,7 @@ dsm_co_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
 int
 dsm_pool_connect(const uuid_t uuid, const char *grp,
 		 const daos_rank_list_t *svc, unsigned int flags,
-		 daos_rank_list_t *failed, daos_handle_t *poh,
-		 daos_pool_info_t *info, daos_event_t *ev);
+		 daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
 
 /**
  * Disconnect from the DAOS pool. It should revoke all the container open
@@ -278,16 +274,14 @@ int
 dsm_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev);
 
 /**
- * Open an existent container identified by UUID \a uuid.
- * Upon a successful completion, \a coh and \a info, both of which shall be
- * allocated by the caller, return the container handle and the container
- * information respectively.
+ * Open an existing container identified by UUID \a uuid. Upon a successful
+ * completion, \a coh and \a info, both of which shall be allocated by the
+ * caller, return the container handle and the latest container information
+ * respectively.
  *
  * \param poh	[IN]	Pool connection handle.
  * \param uuid	[IN]	UUID to identify container.
  * \param flags	[IN]	Open mode, represented by the DAOS_COO_ bits.
- * \param failed
- *		[OUT]	Optional, buffer to store faulty targets on failure.
  * \param coh	[OUT]	Returned open handle.
  * \param info	[OUT]	Optional, return container information
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
@@ -303,8 +297,7 @@ dsm_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev);
  */
 int
 dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
-	    daos_rank_list_t *failed, daos_handle_t *coh, daos_co_info_t *info,
-	    daos_event_t *ev);
+	    daos_handle_t *coh, daos_co_info_t *info, daos_event_t *ev);
 
 /**
  * Close an opened container.
@@ -489,10 +482,10 @@ int
 dsm_epoch_query(daos_handle_t coh, daos_epoch_state_t *state, daos_event_t *ev);
 
 /**
- * Set the lowest held epoch (LHE) of a container handle.
- * The resulting LHE becomes max(max(handle HCEs) + 1, epoch). The owner of the
- * container handle is responsible for releasing its held epochs by either
- * committing them or setting LHE to DAOS_EPOCH_MAX.
+ * Propose a new lowest held epoch (LHE) of a container handle. The resulting
+ * LHE may be higher than the one proposed. The owner of the container handle
+ * is responsible for releasing its held epochs by either committing them or
+ * setting LHE to DAOS_EPOCH_MAX.
  *
  * \param coh	[IN]	container handle
  * \param epoch	[IN]	minimum requested LHE, set to 0 if no requirement
@@ -522,10 +515,12 @@ dsm_epoch_slip(daos_handle_t coh, daos_epoch_t epoch, daos_epoch_state_t *state,
 	       daos_event_t *ev);
 
 /**
- * Commit an epoch of a container handle.
- * Unless already committed, the epoch must be higher than the LHE. Otherwise,
- * an error is returned. Once the epoch is committed successfully, the
- * resulting LHE becomes handle HCE + 1.
+ * Commit to an epoch for a container handle. Unless already committed, in
+ * which case the epoch state of the container handle is unchanged, epoch must
+ * be equal to or higher than the LHE. Otherwise, an error is returned. Once
+ * the commit succeeds, the HCE, LHE, and LRE (unless DAOS_COO_NOSLIP was
+ * specified when opening this container handle) of the container handle
+ * becomes epoch, epoch + 1, and epoch, respectively.
  *
  * \param coh	[IN]	container handle
  * \param epoch	[IN]	epoch to commit

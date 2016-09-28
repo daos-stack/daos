@@ -260,13 +260,13 @@ typedef struct {
 	 */
 
 	/** Global Highest Committed Epoch (gHCE). */
-	daos_epoch_t	es_glb_hce;
+	daos_epoch_t	es_ghce;
 
 	/** Global Lowest Referenced Epoch (gLRE). */
-	daos_epoch_t	es_glb_lre;
+	daos_epoch_t	es_glre;
 
 	/** Global Highest Partially Committed Epoch (gHPCE) */
-	daos_epoch_t	es_glb_hpce;
+	daos_epoch_t	es_ghpce;
 } daos_epoch_state_t;
 
 /**
@@ -279,9 +279,13 @@ typedef struct {
  *
  * DAOS_COO_RW opens the container for reading and writing. This flag conflicts
  * with DAOS_COO_RO.
+ *
+ * DAOS_COO_NOSLIP disables the automatic epoch slip at epoch commit time. See
+ * daos_epoch_commit().
  */
 #define DAOS_COO_RO	(1U << 0)
 #define DAOS_COO_RW	(1U << 1)
+#define DAOS_COO_NOSLIP	(1U << 2)
 
 /** Container information */
 typedef struct {

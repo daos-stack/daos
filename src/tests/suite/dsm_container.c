@@ -69,8 +69,8 @@ co_create(void **state)
 
 		print_message("opening container %ssynchronously\n",
 			      arg->async ? "a" : "");
-		rc = dsm_co_open(arg->poh, uuid, DAOS_COO_RW, NULL /* failed */,
-				 &coh, &info, arg->async ? &ev : NULL);
+		rc = dsm_co_open(arg->poh, uuid, DAOS_COO_RW, &coh, &info,
+				 arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
 
 		if (arg->async) {
@@ -87,11 +87,11 @@ co_create(void **state)
 		print_message("  lre: "DF_U64"\n", info.ci_epoch_state.es_lre);
 		print_message("  lhe: "DF_U64"\n", info.ci_epoch_state.es_lhe);
 		print_message("  ghce: "DF_U64"\n",
-			      info.ci_epoch_state.es_glb_hce);
+			      info.ci_epoch_state.es_ghce);
 		print_message("  glre: "DF_U64"\n",
-			      info.ci_epoch_state.es_glb_lre);
+			      info.ci_epoch_state.es_glre);
 		print_message("  ghpce: "DF_U64"\n",
-			      info.ci_epoch_state.es_glb_hpce);
+			      info.ci_epoch_state.es_ghpce);
 	}
 
 	if (arg->hdl_share)
@@ -183,8 +183,8 @@ setup(void **state)
 	/** connect to pool */
 	if (arg->myrank == 0) {
 		rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-				      DAOS_PC_RW, NULL /* failed */, &arg->poh,
-				      NULL /* info */, NULL /* ev */);
+				      DAOS_PC_RW, &arg->poh, NULL /* info */,
+				      NULL /* ev */);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)

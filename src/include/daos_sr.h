@@ -42,10 +42,9 @@ int
 dsr_fini(void);
 
 /**
- * Connect to the DAOS pool identified by UUID \a uuid.
- * Upon a successful completion, \a poh returns the pool handle and \a failed,
- * which shall be allocated by the caller, returns the targets that failed to
- * establish this connection.
+ * Connect to the DAOS pool identified by UUID \a uuid. Upon a successful
+ * completion, \a poh returns the pool handle, and \a info return the latest
+ * pool information.
  *
  * \param uuid	[IN]	UUID to identify a pool.
  * \param grp	[IN]	Process set name of the DAOS servers managing the pool
@@ -53,8 +52,6 @@ dsr_fini(void);
  *			replicas. If not aware of the ranks of the pool service
  *			replicas, the caller may pass in NULL.
  * \param flags	[IN]	Connect mode represented by the DAOS_PC_ bits.
- * \param failed
- *		[OUT]	Optional, buffer to store faulty targets on failure.
  * \param poh	[OUT]	Returned open handle.
  * \param info	[OUT]	Returned pool info.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
@@ -71,8 +68,7 @@ dsr_fini(void);
 int
 dsr_pool_connect(const uuid_t uuid, const char *grp,
 		 const daos_rank_list_t *svc, unsigned int flags,
-		 daos_rank_list_t *failed, daos_handle_t *poh,
-		 daos_pool_info_t *info, daos_event_t *ev);
+		 daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
 
 /**
  * Disconnect from the DAOS pool. It should revoke all the container open

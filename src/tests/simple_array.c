@@ -510,7 +510,6 @@ main(int argc, char **argv)
 		/** connect to the just created DAOS pool */
 		rc = dsr_pool_connect(pool_uuid, DSS_PSETID, &svcl,
 				      DAOS_PC_EX /* exclusive access */,
-				      NULL /* list of failed targets */,
 				      &poh /* returned pool handle */,
 				      NULL /* returned pool info */,
 				      NULL /* event */);
@@ -530,8 +529,7 @@ main(int argc, char **argv)
 		ASSERT(rc == 0, "container create failed with %d", rc);
 
 		/** open container */
-		rc = dsr_co_open(poh, co_uuid, DAOS_COO_RW, NULL, &coh, NULL,
-				 NULL);
+		rc = dsr_co_open(poh, co_uuid, DAOS_COO_RW, &coh, NULL, NULL);
 		ASSERT(rc == 0, "container open failed with %d", rc);
 	}
 

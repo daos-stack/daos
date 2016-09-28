@@ -702,9 +702,9 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 	out->coo_epoch_state.es_hce = chdl.ch_hce;
 	out->coo_epoch_state.es_lre = chdl.ch_lre;
 	out->coo_epoch_state.es_lhe = chdl.ch_lhe;
-	out->coo_epoch_state.es_glb_hce = ghce;
-	out->coo_epoch_state.es_glb_lre = glre;
-	out->coo_epoch_state.es_glb_hpce = chdl.ch_hce;
+	out->coo_epoch_state.es_ghce = ghce;
+	out->coo_epoch_state.es_glre = glre;
+	out->coo_epoch_state.es_ghpce = chdl.ch_hce;
 
 out_cont:
 	cont_put(cont);
@@ -868,9 +868,9 @@ epoch_state_set(struct container_hdl *hdl, daos_epoch_state_t *state)
 	state->es_hce = hdl->ch_hce;
 	state->es_lre = hdl->ch_lre;
 	state->es_lhe = hdl->ch_lhe;
-	state->es_glb_hce = hdl->ch_hce;
-	state->es_glb_lre = hdl->ch_lre;
-	state->es_glb_hpce = hdl->ch_hce;
+	state->es_ghce = hdl->ch_hce;
+	state->es_glre = hdl->ch_lre;
+	state->es_ghpce = hdl->ch_hce;
 }
 
 static int

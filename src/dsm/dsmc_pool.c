@@ -150,8 +150,7 @@ out:
 int
 dsm_pool_connect(const uuid_t uuid, const char *grp,
 		 const daos_rank_list_t *tgts, unsigned int flags,
-		 daos_rank_list_t *failed, daos_handle_t *poh,
-		 daos_pool_info_t *info, daos_event_t *ev)
+		 daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	dtp_endpoint_t		 ep;
 	dtp_rpc_t		*rpc;
@@ -166,8 +165,6 @@ dsm_pool_connect(const uuid_t uuid, const char *grp,
 
 	/* TODO: Implement these. */
 	D_ASSERT(grp == NULL);
-	/* D_ASSERT(tgts == NULL); */
-	D_ASSERT(failed == NULL);
 
 	if (uuid_is_null(uuid) || !flags_are_valid(flags) || poh == NULL)
 		return -DER_INVAL;

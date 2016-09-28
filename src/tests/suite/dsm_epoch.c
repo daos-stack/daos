@@ -32,9 +32,9 @@ assert_epoch_state_equal(daos_epoch_state_t *a, daos_epoch_state_t *b)
 	assert_int_equal(a->es_hce, b->es_hce);
 	assert_int_equal(a->es_lre, b->es_lre);
 	assert_int_equal(a->es_lhe, b->es_lhe);
-	assert_int_equal(a->es_glb_hce, b->es_glb_hce);
-	assert_int_equal(a->es_glb_lre, b->es_glb_lre);
-	assert_int_equal(a->es_glb_hpce, b->es_glb_hpce);
+	assert_int_equal(a->es_ghce, b->es_ghce);
+	assert_int_equal(a->es_glre, b->es_glre);
+	assert_int_equal(a->es_ghpce, b->es_ghpce);
 }
 
 static void
@@ -167,18 +167,18 @@ epoch_hold_commit(void **state)
 	assert_int_equal(rc, 0);
 	assert_int_equal(epoch_state.es_hce, epoch);
 	assert_int_equal(epoch_state.es_lhe, epoch + 1);
-	assert_int_equal(epoch_state.es_glb_hce, epoch);
-	assert_int_equal(epoch_state.es_glb_hpce, epoch);
+	assert_int_equal(epoch_state.es_ghce, epoch);
+	assert_int_equal(epoch_state.es_ghpce, epoch);
 	arg->co_info.ci_epoch_state.es_hce = epoch;
 	arg->co_info.ci_epoch_state.es_lhe = epoch + 1;
-	arg->co_info.ci_epoch_state.es_glb_hce = epoch;
-	arg->co_info.ci_epoch_state.es_glb_hpce = epoch;
+	arg->co_info.ci_epoch_state.es_ghce = epoch;
+	arg->co_info.ci_epoch_state.es_ghpce = epoch;
 	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
 
 	print_message("SUBTEST 4: hold an epoch <= GHPCE: shall succeed and "
 		      "end up holding GHPCE + 1.\n");
 	epoch = arg->co_info.ci_epoch_state.es_hce;
-	epoch_expected = arg->co_info.ci_epoch_state.es_glb_hpce + 1;
+	epoch_expected = arg->co_info.ci_epoch_state.es_ghpce + 1;
 	rc = do_epoch_hold(arg, &epoch, &epoch_state);
 	assert_int_equal(rc, 0);
 	assert_int_equal(epoch, epoch_state.es_lhe);
@@ -199,19 +199,19 @@ epoch_hold_commit(void **state)
 		      "succeed and report correct GLRE.\n");
 	rc = dsm_co_close(arg->coh, NULL);
 	assert_int_equal(rc, 0);
-	rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, NULL,
-			 &arg->coh, &arg->co_info, NULL);
+	rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &arg->coh,
+			 &arg->co_info, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(arg->co_info.ci_epoch_state.es_hce,
 			 epoch_state.es_hce);
 	assert_int_equal(arg->co_info.ci_epoch_state.es_lre,
 			 epoch_state.es_hce);
 	assert_int_equal(arg->co_info.ci_epoch_state.es_lhe, DAOS_EPOCH_MAX);
-	assert_int_equal(arg->co_info.ci_epoch_state.es_glb_hce,
-			 epoch_state.es_glb_hce);
-	assert_int_equal(arg->co_info.ci_epoch_state.es_glb_lre,
+	assert_int_equal(arg->co_info.ci_epoch_state.es_ghce,
+			 epoch_state.es_ghce);
+	assert_int_equal(arg->co_info.ci_epoch_state.es_glre,
 			 arg->co_info.ci_epoch_state.es_lre);
-	assert_int_equal(arg->co_info.ci_epoch_state.es_glb_hpce,
+	assert_int_equal(arg->co_info.ci_epoch_state.es_ghpce,
 			 arg->co_info.ci_epoch_state.es_hce);
 }
 
@@ -256,8 +256,8 @@ setup(void **state)
 
 	/** connect to pool */
 	rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-			      DAOS_PC_RW, NULL /* failed */, &arg->poh,
-			      &arg->pool_info, NULL /* ev */);
+			      DAOS_PC_RW, &arg->poh, &arg->pool_info,
+			      NULL /* ev */);
 	if (rc)
 		return rc;
 
@@ -268,8 +268,8 @@ setup(void **state)
 		return rc;
 
 	/** open container */
-	rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, NULL,
-			 &arg->coh, &arg->co_info, NULL);
+	rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &arg->coh,
+			 &arg->co_info, NULL);
 	if (rc)
 		return rc;
 

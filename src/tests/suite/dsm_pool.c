@@ -42,8 +42,7 @@ pool_connect_nonexist(void **state)
 
 	uuid_generate(uuid);
 	rc = dsm_pool_connect(uuid, NULL /* grp */, &arg->svc,
-			      DAOS_PC_RW, NULL /* failed */, &poh,
-			      NULL /* info */, NULL /* ev */);
+			      DAOS_PC_RW, &poh, NULL /* info */, NULL /* ev */);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
 
@@ -71,8 +70,8 @@ pool_connect(void **state)
 		print_message("rank 0 connecting to pool %ssynchronously ... ",
 			      arg->async ? "a" : "");
 		rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-				      DAOS_PC_RW, NULL /* failed */, &poh,
-				      &info, arg->async ? &ev : NULL /* ev */);
+				      DAOS_PC_RW, &poh, &info,
+				      arg->async ? &ev : NULL /* ev */);
 		assert_int_equal(rc, 0);
 
 		if (arg->async) {

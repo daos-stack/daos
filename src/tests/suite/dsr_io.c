@@ -670,8 +670,8 @@ setup(void **state)
 	if (arg->myrank == 0) {
 		/** connect to pool */
 		rc = dsr_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-				      DAOS_PC_RW, NULL /* failed */, &arg->poh,
-				      &arg->pool_info, NULL /* ev */);
+				      DAOS_PC_RW, &arg->poh, &arg->pool_info,
+				      NULL /* ev */);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
@@ -694,8 +694,8 @@ setup(void **state)
 
 	if (arg->myrank == 0) {
 		/** open container */
-		rc = dsr_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, NULL,
-				 &arg->coh, NULL, NULL);
+		rc = dsr_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &arg->coh,
+				 NULL, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)

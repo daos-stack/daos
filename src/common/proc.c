@@ -336,15 +336,15 @@ dtp_proc_daos_epoch_state_t(dtp_proc_t proc, daos_epoch_state_t *es)
 	if (rc != 0)
 		return -DER_DTP_HG;
 
-	rc = dtp_proc_uint64_t(proc, &es->es_glb_hce);
+	rc = dtp_proc_uint64_t(proc, &es->es_ghce);
 	if (rc != 0)
 		return -DER_DTP_HG;
 
-	rc = dtp_proc_uint64_t(proc, &es->es_glb_lre);
+	rc = dtp_proc_uint64_t(proc, &es->es_glre);
 	if (rc != 0)
 		return -DER_DTP_HG;
 
-	rc = dtp_proc_uint64_t(proc, &es->es_glb_hpce);
+	rc = dtp_proc_uint64_t(proc, &es->es_ghpce);
 	if (rc != 0)
 		return -DER_DTP_HG;
 

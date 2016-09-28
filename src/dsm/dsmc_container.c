@@ -333,8 +333,7 @@ out:
 
 int
 dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
-	    daos_rank_list_t *failed, daos_handle_t *coh, daos_co_info_t *info,
-	    daos_event_t *ev)
+	    daos_handle_t *coh, daos_co_info_t *info, daos_event_t *ev)
 {
 	struct cont_open_in    *in;
 	struct dsmc_pool       *pool;
@@ -344,8 +343,6 @@ dsm_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	struct daos_op_sp      *sp;
 	struct cont_open_arg   *arg;
 	int			rc;
-
-	D_ASSERT(failed == NULL);	/* TODO */
 
 	if (uuid_is_null(uuid) || coh == NULL)
 		D_GOTO(err, rc = -DER_INVAL);
