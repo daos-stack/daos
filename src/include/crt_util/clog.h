@@ -131,7 +131,7 @@ void crt_log(int flags, const char *fmt, ...)
  * \return			new facility number on success
  *				-1 on error - malloc problem.
  */
-int crt_log_allocfacility(char *aname, char *lname);
+int crt_log_allocfacility(const char *aname, const char *lname);
 
 /**
  * crt_log_close: close off an clog and release any allocated resources.

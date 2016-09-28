@@ -50,10 +50,13 @@ def scons():
     denv = env.Clone()
 
     src = ['debug.c', 'clog.c', 'hash.c', 'misc.c']
-    common = denv.SharedLibrary('libcrt_util', src)
+    crt_util_targets = denv.SharedObject(src)
+    common = denv.SharedLibrary('libcrt_util', crt_util_targets)
     denv.Install('$PREFIX/lib/', common)
 
     denv.Append(CPPPATH=['#/src/util'])
+
+    Export('crt_util_targets')
 
 if __name__ == "SCons.Script":
     scons()

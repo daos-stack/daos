@@ -64,14 +64,17 @@ extern int crt_misc_logfac;
 
 #define CRT_ERR		(crt_logfac | CLOG_ERR)
 #define CRT_WARN	(crt_logfac | CLOG_WARN)
+#define CRT_INFO	(crt_logfac | CLOG_INFO)
 #define CRT_DBG		(crt_logfac | CLOG_DBG)
 
 #define MEM_ERR		(crt_mem_logfac | CLOG_ERR)
 #define MEM_WARN	(crt_mem_logfac | CLOG_WARN)
+#define MEM_INFO	(crt_mem_logfac | CLOG_INFO)
 #define MEM_DBG		(crt_mem_logfac | CLOG_DBG)
 
 #define MISC_ERR	(crt_misc_logfac | CLOG_ERR)
 #define MISC_WARN	(crt_misc_logfac | CLOG_WARN)
+#define MISC_INFO	(crt_misc_logfac | CLOG_INFO)
 #define MISC_DBG	(crt_misc_logfac | CLOG_DBG)
 
 #if defined(__cplusplus)
@@ -92,19 +95,17 @@ crt_add_log_facility(char *aname, char *lname)
 	return crt_log_allocfacility(aname, lname);
 }
 
-/* C_PRINT and C_PRINT_ERR can be used before clog enabled or after disabled */
-#define C_PRINT(fmt, ...)						\
-do {									\
-	fprintf(stdout, fmt, ## __VA_ARGS__);				\
-	fflush(stdout);							\
-} while (0)
+/*
+ * C_PRINT_ERR must be used for any error logging before clog is enabled or
+ * after it is disabled
+ */
+#define C_PRINT_ERR(fmt, ...)                                          \
+	do {                                                           \
+		fprintf(stderr, "%s:%d:%d:%s() " fmt, __FILE__,        \
+			getpid(), __LINE__, __func__, ## __VA_ARGS__); \
+		fflush(stderr);                                        \
+	} while (0)
 
-#define C_PRINT_ERR(fmt, ...)						\
-do {									\
-	fprintf(stderr, "%s:%d:%d:%s() " fmt, __FILE__, getpid(),	\
-		__LINE__, __func__, ## __VA_ARGS__);			\
-	fflush(stderr);							\
-} while (0)
 
 /*
  * C_DEBUG/C_ERROR etc can-only be used when clog enabled. User can define other

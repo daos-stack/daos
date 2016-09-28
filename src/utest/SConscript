@@ -1,0 +1,110 @@
+# Copyright (C) 2016 Intel Corporation
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted for any purpose (including commercial purposes)
+# provided that the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice,
+#    this list of conditions, and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions, and the following disclaimer in the
+#    documentation and/or materials provided with the distribution.
+#
+# 3. In addition, redistributions of modified forms of the source or binary
+#    code must carry prominent notices stating that the original code was
+#    changed and the date of the change.
+#
+#  4. All publications or advertising materials mentioning features or use of
+#     this software are asked, but not required, to acknowledge that it was
+#     developed by Intel Corporation and credit the contributors.
+#
+# 5. Neither the name of Intel Corporation, nor the name of any Contributor
+#    may be used to endorse or promote products derived from this software
+#    without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Unit tests"""
+import os
+
+TEST_SRC = ['test_linkage.cpp']
+WRAPPERS = {'test_linkage.cpp':['PMIx_Init', 'PMIx_Get',
+                                'PMIx_Publish', 'PMIx_Lookup',
+                                'PMIx_Fence', 'PMIx_Unpublish',
+                                'PMIx_Register_event_handler']}
+LIBPATH = [Dir('../crt'), Dir('../util')]
+
+def scons():
+    """Scons function"""
+
+    Import('prereqs env crt_targets crt_util_targets')
+
+    # Run config in a new environment so the environment isn't polluted
+    # causing tests to be rebuilt when utest target is used
+    config_env = env.Clone()
+    config_env.Append(CPPPATH=['.'])
+    prereqs.require(config_env, "pmix", "mercury", "argobots")
+    config = Configure(config_env)
+    if not config.CheckHeader('utest_cmocka.h') or \
+       not config.CheckLib('cmocka'):
+        print "\n*****************************************************"
+        print "cmocka packages must be installed to enable unit tests"
+        print "*****************************************************\n"
+        # Just returning is the desired behavior here.  The utest target
+        # has yet to be defined so the build will just fail.
+        config.Finish()
+        return
+    config.Finish()
+
+    test_env = env.Clone()
+    prereqs.require(test_env, "pmix", "mercury", "argobots")
+    test_env.AppendUnique(LIBS=['pthread', 'uuid', 'cmocka'])
+    test_env.AppendUnique(CPPPATH=['../include'])
+    test_env.AppendUnique(LIBPATH=LIBPATH)
+    test_env.AppendUnique(RPATH=LIBPATH)
+    tests = []
+
+    wrap_obj = test_env.Object('utest_cmocka.c')
+
+    for test in TEST_SRC:
+        flags = []
+        if test in WRAPPERS:
+            for function in WRAPPERS[test]:
+                flags.append("-Wl,--wrap=%s" % function)
+        testobj = test_env.Object(test)
+        testname = os.path.splitext(test)[0]
+        testprog = test_env.Program(target=testname,
+                                    source=testobj + \
+                                    wrap_obj + \
+                                    crt_targets + \
+                                    crt_util_targets,
+                                    LINKFLAGS=flags)
+        tests.append(testprog)
+
+    Default(tests)
+
+    # Run tests in a new environment so a rebuilt of the tests isn't triggered
+    # by changes to the environment
+    run_env = test_env.Clone()
+    run_env.Append(ENV={'CRT_LOG_FILE':os.path.join(Dir('.').abspath,
+                                                    "utest.log"),
+                        'CRT_LOG_MASK':'DEBUG'})
+
+    run_tests = run_env.RunTests(tests)
+
+    run_env.Alias('utest', run_tests)
+
+    AlwaysBuild(run_tests)
+
+if __name__ == "SCons.Script":
+    scons()

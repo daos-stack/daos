@@ -57,7 +57,7 @@ else
 fi
 if [[ "$CART_TEST_MODE" =~ (native|all) ]]; then
   echo "Nothing to do yet, wish we could fail some tests"
-  #scons utest
+  scons utest
   cd ${TESTDIR}
   python3.4 test_runner scripts/cart_echo_test.yml
   cd -
@@ -65,7 +65,7 @@ fi
 
 if [[ "$CART_TEST_MODE" =~ (memcheck|all) ]]; then
   echo "Nothing to do yet"
-  #scons utest --utest-mode=memcheck
+  scons utest --utest-mode=memcheck
   cd ${TESTDIR}
   python3.4 test_runner scripts/cart_echo_test.yml
   TESTECHODIR="cart_echo_test_loop0/cart_echo_test_default"

@@ -621,7 +621,7 @@ void crt_log_close(void)
  * crt_log_namefacility: assign a name to a facility
  * return 0 on success, -1 on error (malloc problem).
  */
-int crt_log_namefacility(int facility, char *aname, char *lname)
+int crt_log_namefacility(int facility, const char *aname, const char *lname)
 {
 	int rv;
 	char *n, *nl;
@@ -666,7 +666,7 @@ done:
  * crt_log_allocfacility: allocate a new facility with the given name.
  * return new facility number on success, -1 on error (malloc problem).
  */
-int crt_log_allocfacility(char *aname, char *lname)
+int crt_log_allocfacility(const char *aname, const char *lname)
 {
 	int newfac;
 	/* not open? */

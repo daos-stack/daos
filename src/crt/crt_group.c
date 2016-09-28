@@ -1159,7 +1159,7 @@ crt_primary_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
 out:
 	if (rc != 0) {
 		C_ERROR("crt_primary_grp_init failed, rc: %d.\n", rc);
-		if (grp_priv == NULL)
+		if (grp_priv != NULL)
 			crt_grp_priv_destroy(grp_priv);
 	}
 

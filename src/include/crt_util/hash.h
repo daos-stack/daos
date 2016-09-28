@@ -51,6 +51,15 @@ extern "C" {
 
 typedef struct {
 	/**
+	 * Compare @key with the key of the record @rlink
+	 * This member function is mandatory.
+	 *
+	 * \return	true	The key of the record equals to @key.
+	 *		false	Not match
+	 */
+	bool	 (*hop_key_cmp)(struct dhash_table *htable, crt_list_t *rlink,
+				const void *key, unsigned int ksize);
+	/**
 	 * Optional, generate a key for the record @rlink.
 	 *
 	 * This function is called before inserting a record w/o key into a
@@ -78,15 +87,6 @@ typedef struct {
 	 */
 	uint32_t (*hop_key_hash)(struct dhash_table *htable, const void *key,
 				 unsigned int ksize);
-	/**
-	 * Compare @key with the key of the record @rlink
-	 * This member function is mandatory.
-	 *
-	 * \return	true	The key of the record equals to @key.
-	 *		false	Not match
-	 */
-	bool	 (*hop_key_cmp)(struct dhash_table *htable, crt_list_t *rlink,
-				const void *key, unsigned int ksize);
 	/**
 	 * Optional, increase refcount on the record @rlink
 	 * If this function is provided, it will be called for successfully

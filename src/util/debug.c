@@ -107,14 +107,8 @@ crt_debug_init(void)
 	log_file = getenv(CRT_LOG_FILE_ENV);
 	log_mask = getenv(CRT_LOG_MASK_ENV);
 
-	if (log_file == NULL || strlen(log_file) == 0) {
-		C_PRINT("ENV %s invalid, will log to stdout.\n",
-			CRT_LOG_FILE_ENV);
+	if (log_file == NULL || strlen(log_file) == 0)
 		log_file = "/dev/stdout";
-	} else {
-		C_PRINT("ENV %s found: %s, will log to it.\n",
-			CRT_LOG_FILE_ENV, log_file);
-	}
 
 	crt_log_initialized = false;
 	if (crt_log_open((char *)"CaRT" /* tag */, CLOG_MAX_FAC_HINT,

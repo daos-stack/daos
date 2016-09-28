@@ -61,5 +61,10 @@ def scons():
     # Builders
     SConscript('test/SConscript', exports=["env", "prereqs"])
 
+    # Build the unit tests
+    SConscript('utest/SConscript', exports=["env", "prereqs"])
+
+    Default('util', 'crt', 'test')
+
 if __name__ == "SCons.Script":
     scons()
