@@ -10,7 +10,7 @@ if PREREQS is None:
                 env.Append(LIBS=['pmemobj'])
         config.Finish()
 else:
-        PREREQS.require(env, 'nvml')
+        PREREQS.require(env, 'nvml', 'argobots')
 
 denv = env.Clone()
 

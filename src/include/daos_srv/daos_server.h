@@ -28,8 +28,8 @@
 #ifndef __DSS_API_H__
 #define __DSS_API_H__
 
-#include <daos/transport.h>
 #include <daos/common.h>
+#include <daos/transport.h>
 
 #include <pthread.h>
 #include <hwloc.h>

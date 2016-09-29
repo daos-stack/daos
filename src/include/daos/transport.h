@@ -27,26 +27,64 @@
 #ifndef __DAOS_TRANSPORT_H__
 #define __DAOS_TRANSPORT_H__
 
-#include <daos/common.h>
-#include <daos_types.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdbool.h>
+#include <uuid/uuid.h>
+
 #include <daos_errno.h>
 
-/* for proc macros */
-#include <boost/preprocessor.hpp>
-
 #include <abt.h>
-/* dtp context handle */
-typedef void *dtp_context_t;
 
-/* Physical address string, e.g., "bmi+tcp://localhost:3344". */
-typedef char *dtp_phy_addr_t;
-#define DTP_PHY_ADDR_ENV	"DTP_PHY_ADDR_STR"
+/**
+ * Generic data type definition
+ */
+typedef uint64_t	dtp_size_t;
+typedef uint64_t	dtp_off_t;
 
-typedef char *dtp_string_t;
-typedef const char *dtp_const_string_t;
+/** iovec for memory buffer */
+typedef struct {
+	/** buffer address */
+	void	       *iov_buf;
+	/** buffer length */
+	dtp_size_t	iov_buf_len;
+	/** data length */
+	dtp_size_t	iov_len;
+} dtp_iov_t;
+
+static inline void
+dtp_iov_set(dtp_iov_t *iov, void *buf, dtp_size_t size)
+{
+	iov->iov_buf = buf;
+	iov->iov_len = iov->iov_buf_len = size;
+}
+
+/**
+ * Server Identification & Addressing
+ *
+ * A server is identified by a group and a rank. A name (i.e. a string) is
+ * associated with a group.
+ */
+typedef uint32_t	dtp_rank_t;
+
+typedef struct {
+	/** input number */
+	uint32_t	num;
+	/** output/returned number */
+	uint32_t	num_out;
+} dtp_nr_t;
+
+typedef struct {
+	/** number of ranks */
+	dtp_nr_t	 rl_nr;
+	dtp_rank_t	*rl_ranks;
+} dtp_rank_list_t;
+
+typedef char		*dtp_string_t;
+typedef const char	*dtp_const_string_t;
 
 /* DTP uses a string as the group ID */
-typedef dtp_string_t dtp_group_id_t;
+typedef dtp_string_t	dtp_group_id_t;
 /* max length of the group ID string including the trailing '\0' */
 #define DTP_GROUP_ID_MAX_LEN	(56)
 
@@ -60,10 +98,23 @@ typedef struct {
 	/* group handle, NULL means the primary group */
 	dtp_group_t	 *ep_grp;
 	/* rank number within the group */
-	daos_rank_t	 ep_rank;
+	dtp_rank_t	 ep_rank;
 	/* tag, now used as the context ID of the target rank */
 	uint32_t	 ep_tag;
 } dtp_endpoint_t;
+
+/** Scatter/gather list for memory buffers */
+typedef struct {
+	dtp_nr_t	 sg_nr;
+	dtp_iov_t	*sg_iovs;
+} dtp_sg_list_t;
+
+/* dtp context handle */
+typedef void *dtp_context_t;
+
+/* Physical address string, e.g., "bmi+tcp://localhost:3344". */
+typedef char *dtp_phy_addr_t;
+#define DTP_PHY_ADDR_ENV	"DTP_PHY_ADDR_STR"
 
 /*
  * RPC is identified by opcode. All the opcodes with the highest 16 bits as 1
@@ -123,8 +174,8 @@ typedef struct dtp_rpc {
 	enum dtp_rpc_flags	dr_flags;
 	dtp_rpc_input_t		dr_input; /* input parameter struct */
 	dtp_rpc_output_t	dr_output; /* output parameter struct */
-	daos_size_t		dr_input_size; /* size of input struct */
-	daos_size_t		dr_output_size; /* size of output struct */
+	dtp_size_t		dr_input_size; /* size of input struct */
+	dtp_size_t		dr_output_size; /* size of output struct */
 	/* optional bulk handle for collective RPC */
 	dtp_bulk_t		dr_co_bulk_hdl;
 } dtp_rpc_t;
@@ -207,14 +258,8 @@ extern struct dtp_msg_field DMF_BOOL;
 extern struct dtp_msg_field DMF_STRING;
 extern struct dtp_msg_field DMF_RANK;
 extern struct dtp_msg_field DMF_RANK_LIST;
-extern struct dtp_msg_field DMF_OID;
-extern struct dtp_msg_field DMF_IOVEC;
-extern struct dtp_msg_field DMF_VEC_IOD_ARRAY;
 extern struct dtp_msg_field DMF_BULK_ARRAY;
-extern struct dtp_msg_field DMF_EPOCH_STATE;
-extern struct dtp_msg_field DMF_DAOS_HASH_OUT;
-extern struct dtp_msg_field DMF_KEY_DESC_ARRAY;
-extern struct dtp_msg_field DMF_REC_SIZE_ARRAY;
+extern struct dtp_msg_field DMF_IOVEC;
 
 extern struct dtp_msg_field *dtp_single_out_fields[];
 struct dtp_single_out {
@@ -242,10 +287,10 @@ struct dtp_bulk_desc {
 	dtp_rpc_t	*bd_rpc; /* original RPC request */
 	dtp_bulk_op_t	bd_bulk_op; /* DTP_BULK_PUT or DTP_BULK_GET */
 	dtp_bulk_t	bd_remote_hdl; /* remote bulk handle */
-	daos_off_t	bd_remote_off; /* offset within remote bulk buffer */
+	dtp_off_t	bd_remote_off; /* offset within remote bulk buffer */
 	dtp_bulk_t	bd_local_hdl; /* local bulk handle */
-	daos_off_t	bd_local_off; /* offset within local bulk buffer */
-	daos_size_t	bd_len; /* length of the bulk transferring */
+	dtp_off_t	bd_local_off; /* offset within local bulk buffer */
+	dtp_size_t	bd_len; /* length of the bulk transferring */
 };
 
 struct dtp_cb_info {
@@ -593,7 +638,7 @@ dtp_rpc_srv_reg(dtp_opcode_t opc, struct dtp_req_format *drf,
  * \return                      zero on success, negative value if error
  */
 int
-dtp_bulk_create(dtp_context_t dtp_ctx, daos_sg_list_t *sgl,
+dtp_bulk_create(dtp_context_t dtp_ctx, dtp_sg_list_t *sgl,
 		dtp_bulk_perm_t bulk_perm, dtp_bulk_t *bulk_hdl);
 
 /**
@@ -612,7 +657,7 @@ dtp_bulk_create(dtp_context_t dtp_ctx, daos_sg_list_t *sgl,
  * \return                      zero on success, negative value if error
  */
 int
-dtp_bulk_access(dtp_bulk_t bulk_hdl, daos_sg_list_t *sgl);
+dtp_bulk_access(dtp_bulk_t bulk_hdl, dtp_sg_list_t *sgl);
 
 /**
  * Free a bulk handle
@@ -650,7 +695,7 @@ dtp_bulk_transfer(struct dtp_bulk_desc *bulk_desc, dtp_bulk_cb_t complete_cb,
  * \return                      zero on success, negative value if error
  */
 int
-dtp_bulk_get_len(dtp_bulk_t bulk_hdl, daos_size_t *bulk_len);
+dtp_bulk_get_len(dtp_bulk_t bulk_hdl, dtp_size_t *bulk_len);
 
 /**
  * Get the number of segments of data abstracted by bulk handle.
@@ -773,7 +818,7 @@ typedef int (*dtp_grp_destroy_cb_t)(void *args, int status);
  * \return			zero on success, negative value if error
  */
 int
-dtp_group_create(dtp_group_id_t grp_id, daos_rank_list_t *member_ranks,
+dtp_group_create(dtp_group_id_t grp_id, dtp_rank_list_t *member_ranks,
 		 bool populate_now, dtp_grp_create_cb_t grp_create_cb,
 		 void *priv);
 
@@ -829,7 +874,7 @@ dtp_group_destroy(dtp_group_t *grp, dtp_grp_destroy_cb_t grp_destroy_cb,
  */
 int
 dtp_corpc_req_create(dtp_context_t dtp_ctx, dtp_group_t *grp,
-		     daos_rank_list_t *excluded_ranks, dtp_opcode_t opc,
+		     dtp_rank_list_t *excluded_ranks, dtp_opcode_t opc,
 		     dtp_bulk_t co_bulk_hdl, void *priv,  uint32_t flags,
 		     int tree_topo, dtp_rpc_t **req);
 
@@ -869,7 +914,7 @@ dtp_corpc_reg(dtp_opcode_t opc, struct dtp_req_format *drf,
  * \return			zero on success, negative value if error
  */
 int
-dtp_group_rank(dtp_group_t *grp, daos_rank_t *rank);
+dtp_group_rank(dtp_group_t *grp, dtp_rank_t *rank);
 
 /**
  * Query number of group members.
@@ -916,7 +961,7 @@ dtp_proc_get_op(dtp_proc_t proc, dtp_proc_op_t *proc_op);
  * \return                      zero on success, negative value if error
  */
 int
-dtp_proc_memcpy(dtp_proc_t proc, void *data, daos_size_t data_size);
+dtp_proc_memcpy(dtp_proc_t proc, void *data, dtp_size_t data_size);
 
 /**
  * Generic processing routine.
@@ -1027,7 +1072,7 @@ dtp_proc_bool(dtp_proc_t proc, bool *data);
  * \return                      zero on success, negative value if error
  */
 int
-dtp_proc_raw(dtp_proc_t proc, void *buf, daos_size_t buf_size);
+dtp_proc_raw(dtp_proc_t proc, void *buf, dtp_size_t buf_size);
 
 /**
  * Generic processing routine.
@@ -1082,19 +1127,30 @@ dtp_proc_uuid_t(dtp_proc_t proc, uuid_t *data);
  * \return                      zero on success, negative value if error
  *
  * Notes:
- * 1) here pass in the 2nd level pointer of daos_rank_list_t, to make it
+ * 1) here pass in the 2nd level pointer of dtp_rank_list_t, to make it
  *    possible to set it to NULL when decoding.
  * 2) if the rank_list is non-NULL, caller should firstly duplicate it and pass
  *    the duplicated rank list's 2nd level pointer as parameter, because this
  *    function will internally free the memory when freeing the input or output.
  */
 int
-dtp_proc_daos_rank_list_t(dtp_proc_t proc, daos_rank_list_t **data);
+dtp_proc_dtp_rank_list_t(dtp_proc_t proc, dtp_rank_list_t **data);
+
+/**
+ * Generic processing routine.
+ *
+ * \param proc [IN/OUT]         abstract processor object
+ * \param data [IN/OUT]         pointer to data
+ *
+ * \return                      zero on success, negative value if error
+ */
+int
+dtp_proc_dtp_iov_t(dtp_proc_t proc, dtp_iov_t *data);
 
 #define dtp_proc__Bool			dtp_proc_bool
-#define dtp_proc_daos_size_t		dtp_proc_uint64_t
-#define dtp_proc_daos_off_t		dtp_proc_uint64_t
-#define dtp_proc_daos_rank_t		dtp_proc_uint32_t
+#define dtp_proc_dtp_size_t		dtp_proc_uint64_t
+#define dtp_proc_dtp_off_t		dtp_proc_uint64_t
+#define dtp_proc_dtp_rank_t		dtp_proc_uint32_t
 #define dtp_proc_dtp_opcode_t		dtp_proc_uint32_t
 #define dtp_proc_int			dtp_proc_int32_t
 #define dtp_proc_dtp_group_id_t		dtp_proc_dtp_string_t

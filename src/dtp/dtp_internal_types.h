@@ -89,7 +89,7 @@ enum {
 struct dtp_grp_priv {
 	daos_list_t		 gp_link; /* link to dtp_grp_list */
 	dtp_group_t		 gp_pub; /* public grp handle */
-	daos_rank_list_t	*gp_membs; /* member ranks in global group */
+	dtp_rank_list_t	*gp_membs; /* member ranks in global group */
 	/* the priv pointer user passed in for dtp_group_create */
 	void			*gp_priv;
 	/* dtp context only for sending grp create/destroy RPCs */
@@ -106,7 +106,7 @@ struct dtp_grp_priv {
 	uint32_t		 gp_child_num;
 	uint32_t		 gp_child_ack_num;
 	int			 gp_rc; /* temporary recoded return code */
-	daos_rank_list_t	*gp_failed_ranks; /* failed ranks */
+	dtp_rank_list_t	*gp_failed_ranks; /* failed ranks */
 
 	dtp_grp_create_cb_t	 gp_create_cb; /* grp create completion cb */
 	dtp_grp_destroy_cb_t	 gp_destroy_cb; /* grp destroy completion cb */
@@ -188,8 +188,8 @@ struct dtp_opc_info {
 
 	dtp_rpc_cb_t		doi_rpc_cb;
 	struct dtp_corpc_ops	*doi_co_ops;
-	daos_size_t		doi_input_size;
-	daos_size_t		doi_output_size;
+	dtp_size_t		doi_input_size;
+	dtp_size_t		doi_output_size;
 	struct dtp_req_format	*doi_drf;
 };
 

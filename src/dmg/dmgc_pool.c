@@ -87,6 +87,7 @@ dmg_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 
 	uuid_generate(uuid);
 
+	svr_ep.ep_grp = NULL;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(DMG_POOL_CREATE, DAOS_DMG_MODULE, 1);
@@ -194,6 +195,7 @@ dmg_pool_destroy(const uuid_t uuid, const char *grp, int force,
 			return rc;
 	}
 
+	svr_ep.ep_grp = NULL;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(DMG_POOL_DESTROY, DAOS_DMG_MODULE, 1);

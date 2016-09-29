@@ -113,7 +113,7 @@ dtp_na_addr_lookup_wait(na_class_t *na_class, const char *name, na_addr_t *addr)
 		now = dtp_time_usec(0);
 		if (now >= end) {
 			char		my_host[DTP_ADDR_STR_MAX_LEN] = {'\0'};
-			daos_rank_t	my_rank;
+			dtp_rank_t	my_rank;
 
 			dtp_group_rank(NULL, &my_rank);
 			gethostname(my_host, DTP_ADDR_STR_MAX_LEN);
@@ -138,7 +138,7 @@ done:
 }
 
 static int
-na_class_get_addr(na_class_t *na_class, char *addr_str, daos_size_t *str_size)
+na_class_get_addr(na_class_t *na_class, char *addr_str, dtp_size_t *str_size)
 {
 	na_addr_t	self_addr;
 	na_return_t	na_ret;
@@ -231,7 +231,7 @@ dtp_hg_init(dtp_phy_addr_t *addr, bool server)
 
 	if (*addr == NULL) {
 		char		addr_str[DTP_ADDR_STR_MAX_LEN] = {'\0'};
-		daos_size_t	str_size = DTP_ADDR_STR_MAX_LEN;
+		dtp_size_t	str_size = DTP_ADDR_STR_MAX_LEN;
 
 		rc = na_class_get_addr(na_class, addr_str, &str_size);
 		if (rc != 0) {
@@ -317,7 +317,7 @@ dtp_hg_ctx_init(struct dtp_hg_context *hg_ctx, int idx)
 		hg_ctx->dhc_shared_na = true;
 	} else {
 		char		addr_str[DTP_ADDR_STR_MAX_LEN] = {'\0'};
-		daos_size_t	str_size = DTP_ADDR_STR_MAX_LEN;
+		dtp_size_t	str_size = DTP_ADDR_STR_MAX_LEN;
 
 		if (dtp_gdata.dg_verbs == true)
 			info_string = "cci+verbs://";
@@ -594,7 +594,7 @@ struct addr_entry {
 } addr_lookup_table[MCL_PS_SIZE_MAX];
 
 static int
-dtp_mcl_lookup(struct mcl_set *mclset, daos_rank_t rank, uint32_t tag,
+dtp_mcl_lookup(struct mcl_set *mclset, dtp_rank_t rank, uint32_t tag,
 	       na_class_t *na_class, na_addr_t *na_addr)
 {
 	na_addr_t	tmp_addr;
@@ -1021,7 +1021,7 @@ out:
 
 #define DTP_HG_IOVN_STACK	(8)
 int
-dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, daos_sg_list_t *sgl,
+dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, dtp_sg_list_t *sgl,
 		   dtp_bulk_perm_t bulk_perm, dtp_bulk_t *bulk_hdl)
 {
 	void		**buf_ptrs = NULL;
@@ -1086,11 +1086,11 @@ out:
 }
 
 int
-dtp_hg_bulk_access(dtp_bulk_t bulk_hdl, daos_sg_list_t *sgl)
+dtp_hg_bulk_access(dtp_bulk_t bulk_hdl, dtp_sg_list_t *sgl)
 {
 	unsigned int	bulk_sgnum;
 	unsigned int	actual_sgnum;
-	daos_size_t	bulk_len;
+	dtp_size_t	bulk_len;
 	void		**buf_ptrs = NULL;
 	void		*buf_ptrs_stack[DTP_HG_IOVN_STACK];
 	hg_size_t	*buf_sizes = NULL;

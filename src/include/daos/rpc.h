@@ -29,8 +29,9 @@
 #ifndef __DRPC_API_H__
 #define __DRPC_API_H__
 
-#include <daos/transport.h>
+#include <daos/common.h>
 #include <daos/event.h>
+#include <daos/transport.h>
 
 /* Opcode registered in dtp will be
  * client/server | mod_id | rpc_version | op_code
@@ -52,6 +53,14 @@
 	((opc & OPCODE_MASK) << OPCODE_OFFSET |			\
 	 (rpc_ver & RPC_VERSION_MASK) << RPC_VERSION_OFFSET |	\
 	 (mod_id & MODID_MASK) << MODID_OFFSET)
+
+extern struct dtp_msg_field DMF_OID;
+extern struct dtp_msg_field DMF_IOVEC;
+extern struct dtp_msg_field DMF_VEC_IOD_ARRAY;
+extern struct dtp_msg_field DMF_EPOCH_STATE;
+extern struct dtp_msg_field DMF_DAOS_HASH_OUT;
+extern struct dtp_msg_field DMF_KEY_DESC_ARRAY;
+extern struct dtp_msg_field DMF_REC_SIZE_ARRAY;
 
 enum daos_module_id {
 	DAOS_VOS_MODULE	= 0, /** version object store */

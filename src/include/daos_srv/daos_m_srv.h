@@ -28,6 +28,7 @@
 #define __DSM_SRV_H__
 
 #include <daos/transport.h>
+#include <daos_types.h>
 
 /*
  * Called by dmg on every storage node belonging to this pool. "path" is the

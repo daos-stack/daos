@@ -49,6 +49,7 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 
+#include <daos/common.h>
 #include <daos/transport.h>
 
 #include <dtp_internal_types.h>

@@ -49,7 +49,7 @@ epi_op_key_get(struct dhash_table *hhtab, daos_list_t *rlink, void **key_pp)
 static uint32_t
 epi_op_key_hash(struct dhash_table *hhtab, const void *key, unsigned int ksize)
 {
-	D_ASSERT(ksize == sizeof(daos_rank_t));
+	D_ASSERT(ksize == sizeof(dtp_rank_t));
 
 	return (unsigned int)(*(const uint32_t *)key %
 		(1U << DTP_EPI_TABLE_BITS));
@@ -61,10 +61,10 @@ epi_op_key_cmp(struct dhash_table *hhtab, daos_list_t *rlink,
 {
 	struct dtp_ep_inflight *epi = epi_link2ptr(rlink);
 
-	D_ASSERT(ksize == sizeof(daos_rank_t));
+	D_ASSERT(ksize == sizeof(dtp_rank_t));
 	/* TODO: use global rank */
 
-	return epi->epi_ep.ep_rank == *(daos_rank_t *)key;
+	return epi->epi_ep.ep_rank == *(dtp_rank_t *)key;
 }
 
 static void
@@ -386,7 +386,7 @@ dtp_context_req_track(dtp_rpc_t *req)
 	struct dtp_context	*dtp_ctx;
 	struct dtp_ep_inflight	*epi;
 	daos_list_t		*rlink;
-	daos_rank_t		ep_rank;
+	dtp_rank_t		ep_rank;
 	int			rc = 0;
 
 	D_ASSERT(req != NULL);

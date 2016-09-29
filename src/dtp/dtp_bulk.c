@@ -26,11 +26,11 @@
 
 #include <dtp_internal.h>
 
-/** Check the validation of the daos_sg_list_t parameter */
+/** Check the validation of the dtp_sg_list_t parameter */
 static inline bool
-dtp_sgl_valid(daos_sg_list_t *sgl)
+dtp_sgl_valid(dtp_sg_list_t *sgl)
 {
-	daos_iov_t	*iov;
+	dtp_iov_t	*iov;
 	int		i;
 
 	if (sgl == NULL || sgl->sg_nr.num == 0) {
@@ -98,7 +98,7 @@ dtp_bulk_desc_valid(struct dtp_bulk_desc *bulk_desc)
 }
 
 int
-dtp_bulk_create(dtp_context_t dtp_ctx, daos_sg_list_t *sgl,
+dtp_bulk_create(dtp_context_t dtp_ctx, dtp_sg_list_t *sgl,
 		dtp_bulk_perm_t bulk_perm, dtp_bulk_t *bulk_hdl)
 {
 	struct dtp_context	*ctx;
@@ -161,7 +161,7 @@ out:
 }
 
 int
-dtp_bulk_get_len(dtp_bulk_t bulk_hdl, daos_size_t *bulk_len)
+dtp_bulk_get_len(dtp_bulk_t bulk_hdl, dtp_size_t *bulk_len)
 {
 	int	rc = 0;
 
@@ -197,7 +197,7 @@ out:
 }
 
 int
-dtp_bulk_access(dtp_bulk_t bulk_hdl, daos_sg_list_t *sgl)
+dtp_bulk_access(dtp_bulk_t bulk_hdl, dtp_sg_list_t *sgl)
 {
 	int		rc = 0;
 

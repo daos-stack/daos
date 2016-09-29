@@ -39,7 +39,7 @@ struct dtp_common_hdr {
 	uint32_t	dch_cksum;
 	uint32_t	dch_flags;
 	/* gid and rank identify the rpc request sender */
-	daos_rank_t	dch_rank; /* uint32_t */
+	dtp_rank_t	dch_rank; /* uint32_t */
 	uint32_t	dch_grp_id; /* internal grp_id within the rank */
 	uint32_t	dch_padding[1];
 };
@@ -57,7 +57,7 @@ struct dtp_rpc_priv;
 
 struct dtp_corpc_info {
 	struct dtp_grp_priv	*co_grp_priv;
-	daos_rank_list_t	*co_excluded_ranks;
+	dtp_rank_list_t	*co_excluded_ranks;
 	/* dtp_bulk_t		 co_bulk_hdl; */ /* collective bulk handle */
 	/* the priv passed in dtp_corpc_req_create */
 	void			*co_priv;
@@ -125,16 +125,16 @@ enum {
 /* DTP internal RPC definitions */
 struct dtp_grp_create_in {
 	dtp_group_id_t		 gc_grp_id;
-	daos_rank_list_t	*gc_membs;
+	dtp_rank_list_t	*gc_membs;
 	/* the rank initiated the group create */
-	daos_rank_t		 gc_initiate_rank;
+	dtp_rank_t		 gc_initiate_rank;
 };
 
 struct dtp_grp_create_out {
 	/* failed rank list, can be used to aggregate the reply from child */
-	daos_rank_list_t	*gc_failed_ranks;
+	dtp_rank_list_t	*gc_failed_ranks;
 	/* the rank sent out the reply */
-	daos_rank_t		 gc_rank;
+	dtp_rank_t		 gc_rank;
 	/* return code, if failed the gc_rank should be in gc_failed_ranks */
 	int			 gc_rc;
 };
@@ -142,14 +142,14 @@ struct dtp_grp_create_out {
 struct dtp_grp_destroy_in {
 	dtp_group_id_t		gd_grp_id;
 	/* the rank initiated the group destroy */
-	daos_rank_t		gd_initiate_rank;
+	dtp_rank_t		gd_initiate_rank;
 };
 
 struct dtp_grp_destroy_out {
 	/* failed rank list, can be used to aggregate the reply from child */
-	daos_rank_list_t	*gd_failed_ranks;
+	dtp_rank_list_t	*gd_failed_ranks;
 	/* the rank sent out the reply */
-	daos_rank_t		 gd_rank;
+	dtp_rank_t		 gd_rank;
 	/* return code, if failed the gc_rank should be in gc_failed_ranks */
 	int			 gd_rc;
 };

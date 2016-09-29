@@ -27,6 +27,7 @@
 #include <daos_m.h>
 #include <daos/rpc.h>
 #include <pthread.h>
+#include <daos/common.h>
 #include <daos/transport.h>
 #include "dsr_rpc.h"
 #include "dsr_internal.h"

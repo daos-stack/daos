@@ -125,7 +125,7 @@ dtp_hg_bulk_free(dtp_bulk_t bulk_hdl)
 }
 
 static inline int
-dtp_hg_bulk_get_len(dtp_bulk_t bulk_hdl, daos_size_t *bulk_len)
+dtp_hg_bulk_get_len(dtp_bulk_t bulk_hdl, dtp_size_t *bulk_len)
 {
 	hg_size_t	hg_size;
 
@@ -148,9 +148,9 @@ dtp_hg_bulk_get_sgnum(dtp_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
 	return 0;
 }
 
-int dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, daos_sg_list_t *sgl,
+int dtp_hg_bulk_create(struct dtp_hg_context *hg_ctx, dtp_sg_list_t *sgl,
 		       dtp_bulk_perm_t bulk_perm, dtp_bulk_t *bulk_hdl);
-int dtp_hg_bulk_access(dtp_bulk_t bulk_hdl, daos_sg_list_t *sgl);
+int dtp_hg_bulk_access(dtp_bulk_t bulk_hdl, dtp_sg_list_t *sgl);
 int dtp_hg_bulk_transfer(struct dtp_bulk_desc *bulk_desc,
 			 dtp_bulk_cb_t complete_cb,
 			 void *arg, dtp_bulk_opid_t *opid);

@@ -80,12 +80,12 @@ static void run_client(void)
 {
 	dtp_endpoint_t			svr_ep;
 	dtp_rpc_t			*rpc_req = NULL;
-	daos_sg_list_t			sgl, sgl_query;
-	daos_iov_t			*iovs = NULL, iovs_query[2];
+	dtp_sg_list_t			sgl, sgl_query;
+	dtp_iov_t			*iovs = NULL, iovs_query[2];
 	dtp_bulk_t			bulk_hdl;
 	struct bulk_test_cli_cbinfo	*bulk_req_cbinfo;
 	char				*pchar;
-	daos_rank_t			myrank;
+	dtp_rank_t			myrank;
 	struct dtp_echo_checkin_req	*e_req;
 	struct dtp_echo_bulk_in_req	*e_bulk_req;
 	int				rc = 0, i;
@@ -141,7 +141,7 @@ static void run_client(void)
 			    &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 
-	iovs = (daos_iov_t *)malloc(2 * sizeof(daos_iov_t));
+	iovs = (dtp_iov_t *)malloc(2 * sizeof(dtp_iov_t));
 	iovs[0].iov_buf_len = 4097;
 	iovs[0].iov_len = 4097;
 	iovs[0].iov_buf = malloc(iovs[0].iov_buf_len);
@@ -186,7 +186,7 @@ static void run_client(void)
 	rc = dtp_bulk_access(bulk_hdl, &sgl_query);
 	assert(rc == 0);
 	assert(sgl_query.sg_nr.num_out == 2);
-	rc = memcmp(iovs, iovs_query, 2 * sizeof(daos_iov_t));
+	rc = memcmp(iovs, iovs_query, 2 * sizeof(dtp_iov_t));
 	assert(rc == 0);
 
 	D_ALLOC(pchar, 256);

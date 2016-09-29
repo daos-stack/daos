@@ -465,6 +465,8 @@ svc_create_fail:
 	}
 
 	/* do error handling, send tgt_destroy for succeed tgt_create */
+	svr_ep.ep_grp = NULL;
+	svr_ep.ep_tag = 0;
 	daos_list_for_each_entry_safe(tc, tc_next, &pc_inprog->pc_tc_list,
 				      ptc_link) {
 		daos_list_del_init(&tc->ptc_link);
@@ -580,6 +582,7 @@ dmgs_hdlr_pool_create(dtp_rpc_t *rpc_req)
 	pc_out->pc_svc->rl_nr.num = pc_in->pc_svc_nr;
 
 	/** send DMG_TGT_CREATE RPC to tgts */
+	svr_ep.ep_grp = NULL;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(DMG_TGT_CREATE, DAOS_DMG_MODULE, 1);
 	for (i = 0; i < pc_inprog->pc_tc_num; i++) {
@@ -879,6 +882,7 @@ dmgs_hdlr_pool_destroy(dtp_rpc_t *rpc_req)
 
 	/** send DMG_TGT_DESTROY RPC to tgts */
 	/* TODO query metadata the tgt list of the pool */
+	svr_ep.ep_grp = NULL;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(DMG_TGT_DESTROY, DAOS_DMG_MODULE, 1);
 	for (i = 0; i < pd_inprog->pd_td_num; i++) {

@@ -35,29 +35,25 @@
 #include <uuid/uuid.h>
 
 #include <daos_errno.h>
+/** for some other basic types like daos_iov_t/daos_rank_t/daos_sg_list_t etc */
+#include <daos/transport.h>
 
 /**
  * Generic data type definition
  */
 
-/** Size */
-typedef uint64_t	daos_size_t;
+typedef dtp_size_t		daos_size_t;
+typedef dtp_off_t		daos_off_t;
+typedef dtp_iov_t		daos_iov_t;
+typedef dtp_rank_t		daos_rank_t;
+typedef dtp_nr_t		daos_nr_t;
+typedef dtp_rank_list_t		daos_rank_list_t;
+typedef dtp_sg_list_t		daos_sg_list_t;
 
-/** Offset */
-typedef uint64_t	daos_off_t;
+#define daos_iov_set		dtp_iov_set
 
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
-
-/** iovec for memory buffer */
-typedef struct {
-	/** buffer address */
-	void	       *iov_buf;
-	/** buffer length */
-	daos_size_t	iov_buf_len;
-	/** data length */
-	daos_size_t	iov_len;
-} daos_iov_t;
 
 /**
  * NB: hide the dark secret that
@@ -75,13 +71,6 @@ typedef struct {
 	unsigned short	 cs_buf_len;
 	void		*cs_csum;
 } daos_csum_buf_t;
-
-static inline void
-daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
-{
-	iov->iov_buf = buf;
-	iov->iov_len = iov->iov_buf_len = size;
-}
 
 static inline void
 daos_csum_set(daos_csum_buf_t *csum, void *buf, uint16_t size)
@@ -130,34 +119,6 @@ daos_handle_is_inval(daos_handle_t hdl)
 {
 	return hdl.cookie == 0;
 }
-
-typedef uint32_t	daos_rank_t;
-
-typedef struct {
-	/** input number */
-	uint32_t	num;
-	/** output/returned number */
-	uint32_t	num_out;
-} daos_nr_t;
-
-/**
- * Server Identification & Addressing
- *
- * A server is identified by a process set and a rank. A name (i.e. a string)
- * is associated with a process set.
- */
-
-/**
- * One way to understand this: An array of "session network addresses", each of
- * which consists of a "UUID" part shares with all others, identifying the
- * session, and a "rank" part, uniquely identifies a process within this
- * session.
- */
-typedef struct {
-	/** number of ranks */
-	daos_nr_t	 rl_nr;
-	daos_rank_t	*rl_ranks;
-} daos_rank_list_t;
 
 /**
  * Storage Targets
@@ -536,12 +497,6 @@ enum {
 	/** any record size, it is used by fetch */
 	DAOS_REC_ANY		= 0,
 };
-
-/** Scatter/gather list for memory buffers */
-typedef struct {
-	daos_nr_t	 sg_nr;
-	daos_iov_t	*sg_iovs;
-} daos_sg_list_t;
 
 typedef enum {
 	/* hole extent */

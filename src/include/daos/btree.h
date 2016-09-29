@@ -29,8 +29,8 @@
 #ifndef __DAOS_BTREE_H__
 #define __DAOS_BTREE_H__
 
-#include <daos_types.h>
 #include <daos/common.h>
+#include <daos_types.h>
 #include <daos/mem.h>
 
 enum {

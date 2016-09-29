@@ -150,8 +150,8 @@ dtp_opc_lookup(struct dtp_opc_map *map, dtp_opcode_t opc, int locked)
 
 static int
 dtp_opc_reg(struct dtp_opc_map *map, dtp_opcode_t opc,
-	    struct dtp_req_format *drf, daos_size_t input_size,
-	    daos_size_t output_size, dtp_rpc_cb_t rpc_cb,
+	    struct dtp_req_format *drf, dtp_size_t input_size,
+	    dtp_size_t output_size, dtp_rpc_cb_t rpc_cb,
 	    struct dtp_corpc_ops *co_ops, int locked)
 {
 	struct dtp_opc_info *info = NULL, *new_info;
@@ -233,8 +233,8 @@ int
 dtp_rpc_reg_internal(dtp_opcode_t opc, struct dtp_req_format *drf,
 		     dtp_rpc_cb_t rpc_handler, struct dtp_corpc_ops *co_ops)
 {
-	daos_size_t		input_size = 0;
-	daos_size_t		output_size = 0;
+	dtp_size_t		input_size = 0;
+	dtp_size_t		output_size = 0;
 	struct dtp_msg_field	*dmf;
 	int			rc = 0;
 	int			i;

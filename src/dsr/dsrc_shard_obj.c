@@ -462,6 +462,7 @@ dsr_shard_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
 		return rc;
 	}
 
+	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = dobj->do_rank;
 	tgt_ep.ep_tag = dsr_hash_get_tag(anchor);
 	rc = dsr_req_create(daos_ev2ctx(ev), tgt_ep, DSR_TGT_OBJ_ENUMERATE,

@@ -202,7 +202,7 @@ out:
 
 static inline int
 dtp_corpc_info_init(struct dtp_rpc_priv *rpc_priv, dtp_group_t *grp,
-		    daos_rank_list_t *excluded_ranks, dtp_bulk_t co_bulk_hdl,
+		    dtp_rank_list_t *excluded_ranks, dtp_bulk_t co_bulk_hdl,
 		    void *priv, uint32_t flags, int tree_topo)
 {
 	struct dtp_corpc_info	*co_info;
@@ -249,7 +249,7 @@ out:
  */
 int
 dtp_corpc_req_create(dtp_context_t dtp_ctx, dtp_group_t *grp,
-		     daos_rank_list_t *excluded_ranks, dtp_opcode_t opc,
+		     dtp_rank_list_t *excluded_ranks, dtp_opcode_t opc,
 		     dtp_bulk_t co_bulk_hdl, void *priv,  uint32_t flags,
 		     int tree_topo, dtp_rpc_t **req)
 {
@@ -416,7 +416,7 @@ corpc_child_cb(const struct dtp_cb_info *cb_info)
 	dtp_rpc_t		*child_req;
 	struct dtp_opc_info	*opc_info;
 	struct dtp_corpc_ops	*co_ops;
-	daos_rank_t		 my_rank;
+	dtp_rank_t		 my_rank;
 	bool			 req_done = false;
 	int			 rc = 0;
 
@@ -472,7 +472,7 @@ int
 dtp_corpc_send(dtp_rpc_t *req)
 {
 	struct dtp_corpc_info	*co_info;
-	daos_rank_list_t	*member_ranks;
+	dtp_rank_list_t	*member_ranks;
 	struct dtp_rpc_priv	*rpc_priv, *child_rpc_priv;
 	bool			child_req_sent = false;
 	int			i, rc = 0;

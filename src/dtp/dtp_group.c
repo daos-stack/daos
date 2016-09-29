@@ -73,7 +73,7 @@ dtp_grp_del_locked(struct dtp_grp_priv *grp_priv)
 
 static inline int
 dtp_grp_priv_create(struct dtp_grp_priv **grp_priv_created,
-		    dtp_group_id_t grp_id, daos_rank_list_t *membs,
+		    dtp_group_id_t grp_id, dtp_rank_list_t *membs,
 		    dtp_grp_create_cb_t grp_create_cb, void *priv)
 {
 	struct dtp_grp_priv *grp_priv;
@@ -119,7 +119,7 @@ out:
 }
 
 static inline int
-dtp_grp_lookup_create(dtp_group_id_t grp_id, daos_rank_list_t *member_ranks,
+dtp_grp_lookup_create(dtp_group_id_t grp_id, dtp_rank_list_t *member_ranks,
 		      dtp_grp_create_cb_t grp_create_cb, void *priv,
 		      struct dtp_grp_priv **grp_result)
 {
@@ -168,7 +168,7 @@ dtp_grp_priv_destroy(struct dtp_grp_priv *grp_priv)
 	daos_rank_list_free(grp_priv->gp_membs);
 	daos_rank_list_free(grp_priv->gp_failed_ranks);
 	pthread_mutex_destroy(&grp_priv->gp_mutex);
-	D_FREE(grp_priv->gp_pub.dg_grpid, strlen(grp_priv->gp_pub.dg_grpid));
+	free(grp_priv->gp_pub.dg_grpid);
 
 	D_FREE_PTR(grp_priv);
 }
@@ -236,7 +236,7 @@ dtp_hdlr_grp_create(dtp_rpc_t *rpc_req)
 	struct dtp_grp_priv		*grp_priv = NULL;
 	struct dtp_grp_create_in	*gc_in;
 	struct dtp_grp_create_out	*gc_out;
-	daos_rank_t			my_rank;
+	dtp_rank_t			my_rank;
 	int				rc = 0;
 
 	D_ASSERT(rpc_req != NULL);
@@ -283,7 +283,7 @@ gc_rpc_cb(const struct dtp_cb_info *cb_info)
 	dtp_rpc_t			*gc_req;
 	struct dtp_grp_create_in	*gc_in;
 	struct dtp_grp_create_out	*gc_out;
-	daos_rank_t			 my_rank;
+	dtp_rank_t			 my_rank;
 	bool				 gc_done = false;
 	int				 rc = 0;
 
@@ -333,14 +333,14 @@ out:
 }
 
 int
-dtp_group_create(dtp_group_id_t grp_id, daos_rank_list_t *member_ranks,
+dtp_group_create(dtp_group_id_t grp_id, dtp_rank_list_t *member_ranks,
 		 bool populate_now, dtp_grp_create_cb_t grp_create_cb,
 		 void *priv)
 {
 	dtp_context_t		dtp_ctx;
 	struct dtp_grp_priv	*grp_priv = NULL;
 	bool			 gc_req_sent = false;
-	daos_rank_t		 myrank;
+	dtp_rank_t		 myrank;
 	bool			 in_grp = false;
 	int			 i;
 	int			 rc = 0;
@@ -456,7 +456,7 @@ dtp_hdlr_grp_destroy(dtp_rpc_t *rpc_req)
 	struct dtp_grp_priv		*grp_priv = NULL;
 	struct dtp_grp_destroy_in	*gd_in;
 	struct dtp_grp_destroy_out	*gd_out;
-	daos_rank_t			my_rank;
+	dtp_rank_t			my_rank;
 	int				rc = 0;
 
 	D_ASSERT(rpc_req != NULL);
@@ -496,7 +496,7 @@ gd_rpc_cb(const struct dtp_cb_info *cb_info)
 	dtp_rpc_t			*gd_req;
 	struct dtp_grp_destroy_in	*gd_in;
 	struct dtp_grp_destroy_out	*gd_out;
-	daos_rank_t			 my_rank;
+	dtp_rank_t			 my_rank;
 	bool				 gd_done = false;
 	int				 rc = 0;
 
@@ -546,7 +546,7 @@ dtp_group_destroy(dtp_group_t *grp, dtp_grp_destroy_cb_t grp_destroy_cb,
 		  void *args)
 {
 	struct dtp_grp_priv	*grp_priv = NULL;
-	daos_rank_list_t	*member_ranks;
+	dtp_rank_list_t	*member_ranks;
 	dtp_context_t		 dtp_ctx;
 	bool			 gd_req_sent = false;
 	int			 i;
@@ -628,7 +628,7 @@ out:
 
 /* TODO - currently only with one global service group and one client group */
 int
-dtp_group_rank(dtp_group_t *grp, daos_rank_t *rank)
+dtp_group_rank(dtp_group_t *grp, dtp_rank_t *rank)
 {
 	if (rank == NULL) {
 		D_ERROR("invalid parameter of NULL rank pointer.\n");

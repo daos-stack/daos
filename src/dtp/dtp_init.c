@@ -369,7 +369,7 @@ do_init:
 		if (rc != 0) {
 			D_ERROR("dtp_mcl_init failed, rc: %d.\n", rc);
 			dtp_hg_fini();
-			D_FREE(dtp_gdata.dg_addr, dtp_gdata.dg_addr_len);
+			free(dtp_gdata.dg_addr);
 			D_GOTO(unlock, rc = -DER_DTP_MCL);
 		}
 
@@ -378,7 +378,7 @@ do_init:
 			D_ERROR("dtp_opc_map_create failed rc: %d.\n", rc);
 			dtp_hg_fini();
 			dtp_mcl_fini();
-			D_FREE(dtp_gdata.dg_addr, dtp_gdata.dg_addr_len);
+			free(dtp_gdata.dg_addr);
 			D_GOTO(unlock, rc);
 		}
 		D_ASSERT(dtp_gdata.dg_opc_map != NULL);
@@ -446,7 +446,7 @@ dtp_finalize(void)
 		}
 
 		D_ASSERT(dtp_gdata.dg_addr != NULL);
-		D_FREE(dtp_gdata.dg_addr, dtp_gdata.dg_addr_len);
+		free(dtp_gdata.dg_addr);
 		dtp_gdata.dg_server = false;
 
 		dtp_opc_map_destroy(dtp_gdata.dg_opc_map);

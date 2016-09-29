@@ -92,7 +92,7 @@ static int run_echo_srver(void)
 	dtp_endpoint_t		svr_ep;
 	dtp_rpc_t		*rpc_req = NULL;
 	char			*pchar;
-	daos_rank_t		myrank;
+	dtp_rank_t		myrank;
 	uint32_t		mysize;
 	int			rc, loop = 0;
 	struct dtp_echo_checkin_req *e_req;
@@ -154,10 +154,10 @@ static int run_echo_srver(void)
 	/* ==================================== */
 	/* test group API and bcast RPC */
 	dtp_group_id_t		grp_id = "example_grp";
-	daos_rank_t		grp_ranks[4] = {5, 4, 1, 2};
-	daos_rank_list_t	grp_membs;
-	daos_rank_t		excluded_ranks[2] = {1, 2};
-	daos_rank_list_t	excluded_membs;
+	dtp_rank_t		grp_ranks[4] = {5, 4, 1, 2};
+	dtp_rank_list_t	grp_membs;
+	dtp_rank_t		excluded_ranks[2] = {1, 2};
+	dtp_rank_list_t	excluded_membs;
 
 	grp_membs.rl_nr.num = 4;
 	grp_membs.rl_ranks = grp_ranks;
@@ -227,7 +227,7 @@ int echo_srv_corpc_example(dtp_rpc_t *rpc_req)
 {
 	struct dtp_echo_corpc_example_req *req;
 	struct dtp_echo_corpc_example_reply *reply;
-	daos_rank_t my_rank;
+	dtp_rank_t my_rank;
 	int rc = 0;
 
 	req = dtp_req_get(rpc_req);
@@ -248,7 +248,7 @@ int echo_srv_corpc_example(dtp_rpc_t *rpc_req)
 int corpc_example_aggregate(dtp_rpc_t *source, dtp_rpc_t *result, void *priv)
 {
 	struct dtp_echo_corpc_example_reply *reply_source, *reply_result;
-	daos_rank_t my_rank;
+	dtp_rank_t my_rank;
 
 	D_ASSERT(source != NULL && result != NULL);
 	reply_source = dtp_reply_get(source);
@@ -300,7 +300,7 @@ int bulk_test_cb(const struct dtp_bulk_cb_info *cb_info)
 	dtp_rpc_t			*rpc_req;
 	struct dtp_bulk_desc		*bulk_desc;
 	dtp_bulk_t			local_bulk_hdl;
-	daos_iov_t			*iovs;
+	dtp_iov_t			*iovs;
 	struct dtp_echo_bulk_out_reply	*e_reply;
 	struct dtp_echo_bulk_in_req	*e_req;
 	int				rc = 0;
@@ -309,7 +309,7 @@ int bulk_test_cb(const struct dtp_bulk_cb_info *cb_info)
 	bulk_desc = cb_info->bci_bulk_desc;
 	/* printf("in bulk_test_cb, dci_rc: %d.\n", rc); */
 	rpc_req = bulk_desc->bd_rpc;
-	iovs = (daos_iov_t *)cb_info->bci_arg;
+	iovs = (dtp_iov_t *)cb_info->bci_arg;
 	assert(rpc_req != NULL && iovs != NULL);
 
 	local_bulk_hdl = bulk_desc->bd_local_hdl;
@@ -378,9 +378,9 @@ out:
 int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 {
 	dtp_bulk_t			local_bulk_hdl;
-	daos_sg_list_t			sgl;
-	daos_iov_t			*iovs = NULL;
-	daos_size_t			bulk_len;
+	dtp_sg_list_t			sgl;
+	dtp_iov_t			*iovs = NULL;
+	dtp_size_t			bulk_len;
 	unsigned int			bulk_sgnum;
 	struct dtp_bulk_desc		bulk_desc;
 	dtp_bulk_opid_t			bulk_opid;
@@ -397,7 +397,7 @@ int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 	       "bulk_len: %ld, bulk_sgnum: %d.\n", rpc_req->dr_opc,
 		e_req->bulk_intro_msg, bulk_len, bulk_sgnum);
 
-	iovs = (daos_iov_t *)malloc(sizeof(daos_iov_t));
+	iovs = (dtp_iov_t *)malloc(sizeof(dtp_iov_t));
 	iovs[0].iov_buf = malloc(bulk_len);
 	iovs[0].iov_buf_len = bulk_len;
 	memset(iovs[0].iov_buf, 0, iovs[0].iov_buf_len);
@@ -422,7 +422,7 @@ int echo_srv_bulk_test(dtp_rpc_t *rpc_req)
 
 	/* user needs to register the complete_cb inside which can do:
 	 * 1) resource reclaim includes freeing the:
-	 *    a) the buffers for bulk, maybe also the daos_iov_t (iovs)
+	 *    a) the buffers for bulk, maybe also the dtp_iov_t (iovs)
 	 *    b) local bulk handle
 	 *    c) cbinfo if needed,
 	 * 2) reply to original RPC request (if the bulk is derived from a RPC)
