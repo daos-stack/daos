@@ -139,7 +139,8 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
 /**
  * Incast variable on_refresh callback which will be called when the
  * synchronization/notification propagated to the node (flowing down from root
- * to leaf), or when serving invalidate request.
+ * to leaf), or when serving invalidate request. It also will be called when the
+ * fetch request's reply flows down.
  *
  * \param ivns [IN]		the local handle of the IV namespace
  * \param iv_key [IN]		key of the IV
@@ -212,7 +213,7 @@ struct crt_iv_class {
 /**
  * Create an incast variable namespace.
  *
- * \param crt_ctx [IN]          CRT transport namespace
+ * \param crt_ctx [IN]		CRT transport namespace
  * \param grp [IN]		CRT group for the IV namespace
  * \param tree_topo[IN]		tree topology for the IV message propagation,
  *				can be calculated by crt_tree_topo().

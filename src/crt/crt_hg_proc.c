@@ -47,11 +47,11 @@
 static inline hg_proc_op_t
 crt_proc_op2hg(crt_proc_op_t proc_op)
 {
-	if (proc_op == CRT_ENCODE)
+	if (proc_op == CRT_PROC_ENCODE)
 		return HG_ENCODE;
-	else if (proc_op == CRT_DECODE)
+	else if (proc_op == CRT_PROC_DECODE)
 		return HG_DECODE;
-	else if (proc_op == CRT_FREE)
+	else if (proc_op == CRT_PROC_FREE)
 		return HG_FREE;
 	else
 		return -CER_INVAL;
@@ -75,13 +75,13 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 	hg_proc_op = hg_proc_get_op(proc);
 	switch (hg_proc_op) {
 	case HG_ENCODE:
-		*proc_op = CRT_ENCODE;
+		*proc_op = CRT_PROC_ENCODE;
 		break;
 	case HG_DECODE:
-		*proc_op = CRT_DECODE;
+		*proc_op = CRT_PROC_DECODE;
 		break;
 	case HG_FREE:
-		*proc_op = CRT_FREE;
+		*proc_op = CRT_PROC_FREE;
 		break;
 	default:
 		C_ERROR("bad hg_proc_op: %d.\n", hg_proc_op);
@@ -331,6 +331,60 @@ out:
 	return rc;
 }
 
+int
+crt_proc_crt_iov_t(crt_proc_t proc, crt_iov_t *div)
+{
+	crt_proc_op_t	proc_op;
+	int		rc;
+
+	if (div == NULL) {
+		C_ERROR("invalid parameter, NULL div.\n");
+		return -CER_INVAL;
+	}
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc != 0)
+		return -CER_HG;
+
+	if (proc_op == CRT_PROC_FREE) {
+		if (div->iov_buf_len > 0)
+			C_FREE(div->iov_buf, div->iov_buf_len);
+		return 0;
+	}
+
+	rc = crt_proc_uint64_t(proc, &div->iov_len);
+	if (rc != 0)
+		return -CER_HG;
+
+	rc = crt_proc_uint64_t(proc, &div->iov_buf_len);
+	if (rc != 0)
+		return -CER_HG;
+
+	if (div->iov_buf_len < div->iov_len) {
+		C_ERROR("invalid iov buf len "CF_U64" < iov len "CF_U64"\n",
+			div->iov_buf_len, div->iov_len);
+		return -CER_HG;
+	}
+	if (proc_op == CRT_PROC_DECODE) {
+		if (div->iov_buf_len > 0) {
+			C_ALLOC(div->iov_buf, div->iov_buf_len);
+			if (div->iov_buf == NULL)
+				return -CER_NOMEM;
+		} else {
+			div->iov_buf = NULL;
+		}
+	}
+
+	rc = crt_proc_memcpy(proc, div->iov_buf, div->iov_len);
+	if (rc != 0) {
+		if (proc_op == CRT_PROC_DECODE)
+			C_FREE(div->iov_buf, div->iov_buf_len);
+		return -CER_HG;
+	}
+
+	return 0;
+}
+
 struct crt_msg_field DMF_UUID =
 	DEFINE_CRT_MSG("crt_uuid", 0, sizeof(uuid_t),
 		       crt_proc_uuid_t);
@@ -383,6 +437,9 @@ struct crt_msg_field DMF_BULK_ARRAY =
 	DEFINE_CRT_MSG("crt_bulks", DMF_ARRAY_FLAG,
 			sizeof(crt_bulk_t),
 			crt_proc_crt_bulk_t);
+
+struct crt_msg_field DMF_IOVEC =
+	DEFINE_CRT_MSG("crt_iov", 0, sizeof(crt_iov_t), crt_proc_crt_iov_t);
 
 struct crt_msg_field *crt_single_out_fields[] = {
 	&DMF_INT,	/* status */
@@ -671,10 +728,15 @@ int
 crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 {
 	struct crt_rpc_priv	*rpc_priv;
-	int			rc = 0;
+	crt_proc_op_t		 proc_op;
+	int			 rc = 0;
 
 	if (proc == CRT_PROC_NULL)
 		C_GOTO(out, rc = -CER_INVAL);
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc != 0)
+		return -CER_HG;
 
 	C_ASSERT(data != NULL);
 	rpc_priv = container_of(data, struct crt_rpc_priv, drp_pub.dr_input);
@@ -682,10 +744,12 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 
 	/* C_DEBUG("in crt_proc_in_common, data: %p\n", *data); */
 
-	rc = crt_proc_common_hdr(proc, &rpc_priv->drp_req_hdr);
-	if (rc != 0) {
-		C_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
-		C_GOTO(out, rc);
+	if (proc_op != CRT_PROC_FREE) {
+		rc = crt_proc_common_hdr(proc, &rpc_priv->drp_req_hdr);
+		if (rc != 0) {
+			C_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
+			C_GOTO(out, rc);
+		}
 	}
 
 	if (*data == NULL) {
@@ -711,10 +775,15 @@ int
 crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 {
 	struct crt_rpc_priv	*rpc_priv;
-	int			rc = 0;
+	crt_proc_op_t		 proc_op;
+	int			 rc = 0;
 
 	if (proc == CRT_PROC_NULL)
 		C_GOTO(out, rc = -CER_INVAL);
+
+	rc = crt_proc_get_op(proc, &proc_op);
+	if (rc != 0)
+		return -CER_HG;
 
 	C_ASSERT(data != NULL);
 	rpc_priv = container_of(data, struct crt_rpc_priv, drp_pub.dr_output);
@@ -722,10 +791,12 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 
 	/* C_DEBUG("in crt_proc_out_common, data: %p\n", *data); */
 
-	rc = crt_proc_common_hdr(proc, &rpc_priv->drp_reply_hdr);
-	if (rc != 0) {
-		C_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
-		C_GOTO(out, rc);
+	if (proc_op != CRT_PROC_FREE) {
+		rc = crt_proc_common_hdr(proc, &rpc_priv->drp_reply_hdr);
+		if (rc != 0) {
+			C_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
+			C_GOTO(out, rc);
+		}
 	}
 
 	if (*data == NULL) {

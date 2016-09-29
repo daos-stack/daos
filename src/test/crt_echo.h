@@ -79,12 +79,14 @@ int echo_srv_corpc_example(crt_rpc_t *rpc);
 struct crt_msg_field *echo_ping_checkin[] = {
 	&DMF_UINT32,
 	&DMF_UINT32,
+	&DMF_IOVEC,
 	&DMF_STRING,
 };
 struct crt_echo_checkin_req {
-	int age;
-	int days;
-	crt_string_t name;
+	int		age;
+	int		days;
+	crt_iov_t	raw_package;
+	crt_string_t	name;
 };
 
 struct crt_msg_field *echo_ping_checkout[] = {

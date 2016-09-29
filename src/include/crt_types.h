@@ -267,6 +267,7 @@ extern struct crt_msg_field DMF_PHY_ADDR;
 extern struct crt_msg_field DMF_RANK;
 extern struct crt_msg_field DMF_RANK_LIST;
 extern struct crt_msg_field DMF_BULK_ARRAY;
+extern struct crt_msg_field DMF_IOVEC;
 
 extern struct crt_msg_field *crt_single_out_fields[];
 struct crt_single_out {

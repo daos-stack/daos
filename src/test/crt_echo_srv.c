@@ -161,8 +161,9 @@ out:
 int g_roomno = 1082;
 int echo_srv_checkin(crt_rpc_t *rpc_req)
 {
-	struct crt_echo_checkin_req *e_req;
-	struct crt_echo_checkin_reply *e_reply;
+	struct crt_echo_checkin_req	*e_req;
+	struct crt_echo_checkin_reply	*e_reply;
+	char				*raw_buf;
 	int rc = 0;
 
 	/* CaRT internally already allocated the input/output buffer */
@@ -173,6 +174,12 @@ int echo_srv_checkin(crt_rpc_t *rpc_req)
 		rpc_req->dr_opc);
 	printf("tier1 checkin input - age: %d, name: %s, days: %d.\n",
 		e_req->age, e_req->name, e_req->days);
+	if (e_req->raw_package.iov_len != 0) {
+		C_ASSERT(e_req->raw_package.iov_buf != NULL);
+		raw_buf = e_req->raw_package.iov_buf;
+		printf("tier1 checkin, extra message in the raw_package: %s.\n",
+		       raw_buf);
+	}
 
 	e_reply = crt_reply_get(rpc_req);
 	C_ASSERT(e_reply != NULL);

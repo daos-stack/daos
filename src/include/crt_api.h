@@ -677,9 +677,9 @@ crt_group_size(crt_group_t *grp, uint32_t *size);
  ******************************************************************************/
 
 typedef enum {
-	CRT_ENCODE,  /* causes the type to be encoded into the stream */
-	CRT_DECODE,  /* causes the type to be extracted from the stream */
-	CRT_FREE     /* can be used to release the space allocated by an
+	CRT_PROC_ENCODE,  /* causes the type to be encoded into the stream */
+	CRT_PROC_DECODE,  /* causes the type to be extracted from the stream */
+	CRT_PROC_FREE     /* can be used to release the space allocated by an
 		      * CRT_DECODE request */
 } crt_proc_op_t;
 
@@ -879,6 +879,17 @@ crt_proc_uuid_t(crt_proc_t proc, uuid_t *data);
  */
 int
 crt_proc_crt_rank_list_t(crt_proc_t proc, crt_rank_list_t **data);
+
+/**
+ * Generic processing routine.
+ *
+ * \param proc [IN/OUT]         abstract processor object
+ * \param data [IN/OUT]         pointer to data
+ *
+ * \return                      zero on success, negative value if error
+ */
+int
+crt_proc_crt_iov_t(crt_proc_t proc, crt_iov_t *data);
 
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_crt_size_t		crt_proc_uint64_t

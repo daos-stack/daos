@@ -116,6 +116,8 @@ static void run_client(void)
 
 	/* send checkin RPC to different contexts of server*/
 	for (i = 0; i <= ECHO_EXTRA_CONTEXT_NUM; i++) {
+		char		*raw_buf;
+
 		svr_ep.ep_grp = NULL;
 		svr_ep.ep_rank = 0;
 		svr_ep.ep_tag = i;
@@ -131,8 +133,11 @@ static void run_client(void)
 		snprintf(pchar, 256, "Guest_%d_%d@client-side",
 			 myrank, svr_ep.ep_tag);
 
+		raw_buf = "testing_only ---- data_in_raw_package";
 		e_req->name = pchar;
 		e_req->age = 32 + svr_ep.ep_tag;
+		crt_iov_set(&e_req->raw_package, raw_buf,
+			    strlen(raw_buf) + 1);
 		e_req->days = myrank;
 
 		C_DEBUG("client(rank %d) sending checkin rpc with tag %d, "
