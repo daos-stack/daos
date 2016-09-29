@@ -37,6 +37,9 @@ pool_connect_nonexist(void **state)
 	daos_handle_t	 poh;
 	int		 rc;
 
+	if (arg->myrank != 0)
+		return;
+
 	uuid_generate(uuid);
 	rc = dsm_pool_connect(uuid, NULL /* grp */, &arg->svc,
 			      DAOS_PC_RW, NULL /* failed */, &poh,
@@ -171,6 +174,8 @@ static int
 teardown(void **state) {
 	test_arg_t	*arg = *state;
 	int		 rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (arg->myrank == 0) {
 		rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);

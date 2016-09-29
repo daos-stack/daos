@@ -714,6 +714,8 @@ teardown(void **state) {
 	test_arg_t	*arg = *state;
 	int		 rc, rc_reduce = 0;
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	rc = dsr_co_close(arg->coh, NULL);
 	MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 	if (rc_reduce)

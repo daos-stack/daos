@@ -203,6 +203,8 @@ teardown(void **state) {
 	test_arg_t	*arg = *state;
 	int		 rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	rc = dsm_pool_disconnect(arg->poh, NULL /* ev */);
 	if (rc)
 		return rc;
