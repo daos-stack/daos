@@ -28,5 +28,6 @@
                   -P3 "test_runner/__main__.py" \
                   -P3 "test_runner/TestRunner.py" \
                   -P3 "test_runner/InfoRunner.py" \
+                  -P3 "test_runner/CpprDaemonRunner.py" \
                   -P3 "test_runner/DvmRunner.py"
 exit $?

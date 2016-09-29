@@ -60,8 +60,19 @@ class TestRunner():
         module = self.test_info['module']
         host_list = self.info.get_config('host_list')
         hostkey_list = module.get('setKeyFromHost')
-        for k in range(0, len(hostkey_list)):
-            self.test_info['defaultENV'][hostkey_list[k]] = host_list[k]
+        host_config = module.get('hostConfig')
+        if not host_config or host_config['type'] == 'oneToOne':
+            for k in range(0, len(hostkey_list)):
+                self.test_info['defaultENV'][hostkey_list[k]] = host_list[k]
+        elif host_config['type'] == 'buildList':
+            items = ","
+            end = host_config['numServers']
+            server_list = items.join(host_list[0:end])
+            self.test_info['defaultENV'][hostkey_list[0]] = server_list
+            start = host_config['numServers']
+            end = start + host_config['numClients']
+            client_list = items.join(host_list[start:end])
+            self.test_info['defaultENV'][hostkey_list[1]] = client_list
 
     def set_key_from_info(self):
         """ add to default environment """
@@ -75,19 +86,24 @@ class TestRunner():
         """ add to default environment """
         save_value = ""
         module = self.test_info['module']
-        key_list = module.get('appendKeyFromInfo')
+        if append:
+            key_list = module.get('appendKeyFromInfo')
+        else:
+            key_list = module.get('createKeyFromInfo')
         for var in range(0, len(key_list)):
             (k, ex, vlist) = key_list[var]
             if append:
-                save_value = os.getenv(k)
+                save_value = self.test_info['defaultENV'].get(k, (os.getenv(k)))
             new_list = []
             for var_name in vlist:
                 var_value = self.info.get_info(var_name) + ex
-                if var_value not in save_value:
+                if not save_value or var_value not in save_value:
                     new_list.append(var_value)
             items = ":"
             new_value = items.join(new_list)
-            if save_value:
+            if not new_value:
+                self.test_info['defaultENV'][k] = save_value
+            elif save_value:
                 self.test_info['defaultENV'][k] = \
                     new_value + ":" + save_value
             else:
