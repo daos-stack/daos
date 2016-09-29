@@ -3,3 +3,4 @@
 
 test_list:
   - "scripts/cart_echo_test.yml"
+  - "scripts/cart_test_group.yml"

@@ -159,7 +159,7 @@ crt_finalize(void);
  *				CRT internally calls this function, when it
  *				returns non-zero then stops the progressing or
  *				waiting and returns.
- * \param arg		[IN]              argument to cond_cb.
+ * \param arg		[IN]	argument to cond_cb.
  *
  * \return			zero on success, negative value if error
  */

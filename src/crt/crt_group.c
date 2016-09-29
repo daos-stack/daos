@@ -1052,7 +1052,7 @@ crt_group_size(crt_group_t *grp, uint32_t *size)
 		pmix_pdata_t *pdata = NULL;
 
 		PMIX_PDATA_CREATE(pdata, 1);
-		snprintf(pdata[0].key, PMIX_MAX_KEYLEN + 1, "crt-%s-size",
+		snprintf(pdata[0].key, PMIX_MAX_KEYLEN + 1, "cart-%s-size",
 				grp->cg_grpid);
 		rc = PMIx_Lookup(pdata, 1, NULL, 0);
 		if (rc == PMIX_SUCCESS && pdata[0].value.type == PMIX_UINT32) {

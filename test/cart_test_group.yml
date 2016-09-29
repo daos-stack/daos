@@ -1,10 +1,10 @@
-description: "process set test module"
+description: "group test module"
 
 defaultENV:
     OMPI_MCA_rmaps_base_oversubscribe: "1"
 
 module:
-    name: "cart_echo_test"
+    name: "cart_test_group"
     subLogKey: "CRT_TESTLOG"
     setKeyFromHost: ["CRT_TEST_SERVER", "CRT_TEST_CLIENT"]
     setKeyFromInfo:

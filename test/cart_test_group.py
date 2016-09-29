@@ -37,24 +37,24 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # -*- coding: utf-8 -*-
 """
-mcl processs set test
+cart group test
 
 Usage:
 
 Execute from the install/$arch/TESTING directory. The results are placed in the
-testLogs/testRun/echo_test directory. Any echo_test output is under
-<file yaml>_loop#/<module.name.execStrategy.id>/1(process set)/rank<number>.
-There you will find anything written to stdout and stderr. The output from
-memcheck and callgrind are in the echo_test directory. At the end of a test run,
-the last testRun directory is renamed to testRun_<date stamp>
+testLogs/testRun/test_group directory. Any test_group output is under <file
+yaml>_loop#/<module.name.execStrategy.id>/1(process group)/rank<number>.  There
+you will find anything written to stdout and stderr. The output from memcheck
+and callgrind are in the test_group directory. At the end of a test run, the
+last testRun directory is renamed to testRun_<date stamp>
 
-python3 test_runner srcipts/mcl_echo_test.yml
+python3 test_runner srcipts/cart_test_group.yml
 
 To use valgrind memory checking
-set TR_USE_VALGRIND in mcl_echo_test.yml to memcheck
+set TR_USE_VALGRIND in cart_test_group.yml to memcheck
 
 To use valgrind call (callgrind) profiling
-set TR_USE_VALGRIND in mcl_echo_test.yml to callgrind
+set TR_USE_VALGRIND in cart_test_group.yml to callgrind
 
 """
 
@@ -72,33 +72,33 @@ NPROC = "4"
 def setUpModule():
     """ set up test environment """
 
-    print("\nTestEcho: module setup begin")
-    print("TestEcho: module setup end\n\n")
+    print("\nTestGroup: module setup begin")
+    print("TestGroup: module setup end\n\n")
 
 def tearDownModule():
     """teardown module for test"""
-    print("TestEcho: module tearDown begin")
-    testmsg = "terminate any echo_test processes"
-    cmdstr = "pkill crt_echo"
+    print("TestGroup: module tearDown begin")
+    testmsg = "terminate any group_test processes"
+    cmdstr = "pkill test_goup"
     launch_test(testmsg, cmdstr)
-    print("TestEcho: module tearDown end\n\n")
+    print("TestGroup: module tearDown end\n\n")
 
 def launch_test(msg, cmdstr):
-    """Launch process set test"""
-    print("TestEcho: start %s - input string:\n %s\n" % (msg, cmdstr))
+    """Launch process group test"""
+    print("TestGroup: start %s - input string:\n %s\n" % (msg, cmdstr))
     cmdarg = shlex.split(cmdstr)
     start_time = time.time()
     procrtn = subprocess.call(cmdarg, timeout=180,
                               stdout=subprocess.DEVNULL,
                               stderr=subprocess.DEVNULL)
     elapsed = time.time() - start_time
-    print("TestEcho: %s - return code: %d test duration: %d\n" %
+    print("TestGroup: %s - return code: %d test duration: %d\n" %
           (msg, procrtn, elapsed))
     return procrtn
 
 def launch_process(msg, cmdstr):
-    """Launch process set """
-    print("TestEcho: start process %s - input string:\n %s\n" % (msg, cmdstr))
+    """Launch process group """
+    print("TestGroup: start process %s - input string:\n %s\n" % (msg, cmdstr))
     cmdarg = shlex.split(cmdstr)
     proc = subprocess.Popen(cmdarg,
                             stdout=subprocess.DEVNULL,
@@ -107,7 +107,7 @@ def launch_process(msg, cmdstr):
 
 def stop_process(msg, proc):
     """ wait for process to terminate """
-    print("TestEcho: %s - stopping processes :%s" % (msg, proc.pid))
+    print("TestGroup: %s - stopping processes :%s" % (msg, proc.pid))
     i = 60
     procrtn = None
     while i:
@@ -120,7 +120,7 @@ def stop_process(msg, proc):
             i = i - 1
 
     if procrtn is None:
-        print("TestEcho: Again stopping processes :%s" % proc.pid)
+        print("TestGroup: Again stopping processes :%s" % proc.pid)
         procrtn = -1
         try:
             proc.terminate()
@@ -128,10 +128,10 @@ def stop_process(msg, proc):
         except ProcessLookupError:
             pass
         except Exception:
-            print("TestEcho: killing processes :%s" % proc.pid)
+            print("TestGroup: killing processes :%s" % proc.pid)
             proc.kill()
 
-    print("TestEcho: %s - return code: %d\n" % (msg, procrtn))
+    print("TestGroup: %s - return code: %d\n" % (msg, procrtn))
     return procrtn
 
 def logdir_name(fullname):
@@ -145,7 +145,7 @@ def add_prefix_logdir(testcase_id):
     global NPROC
     prefix = ""
     ompi_bin = os.getenv('CRT_OMPI_BIN', "")
-    log_path = os.getenv("CRT_TESTLOG", "echo_test") + logdir_name(testcase_id)
+    log_path = os.getenv("CRT_TESTLOG", "test_group") + logdir_name(testcase_id)
     os.makedirs(log_path, exist_ok=True)
     use_valgrind = os.getenv('TR_USE_VALGRIND', default="")
     if use_valgrind == 'memcheck':
@@ -193,58 +193,62 @@ def add_server_client():
     return (local_server, local_client)
 
 
-class TestEcho(unittest.TestCase):
-    """ Execute process set tests """
+class TestGroup(unittest.TestCase):
+    """ Execute group tests """
     pass_env = " -x PATH -x LD_LIBRARY_PATH -x CCI_CONFIG "
 
-    def one_node_echo_test(self):
-        """Simple process set test 1"""
+    def one_node_test_group(self):
+        """Simple process group test 1"""
         testmsg = self.shortDescription()
         (cmd, prefix) = add_prefix_logdir(self.id())
         (server, client) = add_server_client()
         cmdstr = cmd + \
-          "%s-np %s %s%s tests/crt_echo_srv :" % \
+          "%s-np %s %s%s tests/test_group " % \
           (server, NPROC, self.pass_env, prefix) + \
-          "%s-np %s %s%s tests/crt_echo_cli" % \
-          (client, NPROC, self.pass_env, prefix)
+          "--name service_group --is_service --holdtime 5 :" + \
+          "%s-np %s %s%s tests/test_group " % \
+          (client, NPROC, self.pass_env, prefix) + \
+          "--name client_group --attach_to service_group"
         procrtn = launch_test(testmsg, cmdstr)
         return procrtn
 
-    def two_node_echo_test(self):
-        """Simple process set test 1"""
+    def two_node_test_group(self):
+        """Simple process group test 1"""
         testmsg = self.shortDescription()
         print("test name: %s" % self.id())
         (cmd, prefix) = add_prefix_logdir(self.id() + "_server_node")
         (server, client) = add_server_client()
         cmdstr = cmd + \
-          "%s-np %s %s%s tests/crt_echo_srv :" % \
-          (server, NPROC, self.pass_env, prefix)
+          "%s-np %s %s%s tests/test_group " % \
+          (server, NPROC, self.pass_env, prefix) + \
+          "--name service_group --is_service --holdtime 5"
         proc_srv = launch_process(testmsg, cmdstr)
         (cmd, prefix) = add_prefix_logdir(self.id() + "_client_node")
         cmdstr = cmd + \
-          "%s-np %s %s%s tests/crt_echo_cli" % \
-          (client, NPROC, self.pass_env, prefix)
+          "%s-np %s %s%s tests/test_group " % \
+          (client, NPROC, self.pass_env, prefix) + \
+          "--name client_group --attach_to service_group"
         procrtn = launch_test(testmsg, cmdstr)
         procrtn |= stop_process(testmsg, proc_srv)
         return procrtn
 
-    def test_echo_test(self):
-        """Simple process set test 1"""
+    def test_group_test(self):
+        """Simple process group test 1"""
         if os.path.exists("./orted-uri"):
-            self.assertFalse(self.two_node_echo_test())
+            self.assertFalse(self.two_node_test_group())
         else:
-            self.assertFalse(self.one_node_echo_test())
+            self.assertFalse(self.one_node_test_group())
 
     def setUp(self):
         """teardown module for test"""
         print("******************************************************")
-        print("TestEcho: begin %s " % self.shortDescription())
+        print("TestGroup: begin %s " % self.shortDescription())
 
     def tearDown(self):
         """teardown module for test"""
-        print("TestEcho: tearDown begin")
-        testmsg = "terminate any crt_echo processes"
-        cmdstr = "pkill crt_echo"
+        print("TestGroup: tearDown begin")
+        testmsg = "terminate any test_group processes"
+        cmdstr = "pkill test_group"
         launch_test(testmsg, cmdstr)
-        print("TestEcho: end  %s"  % self.shortDescription())
+        print("TestGroup: end  %s"  % self.shortDescription())
         print("******************************************************")

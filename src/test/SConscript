@@ -40,6 +40,7 @@
 import os
 
 ECHO_SRC = ['crt_echo_cli.c', 'crt_echo_srv.c', 'crt_echo_srv2.c']
+TEST_GROUP_SRC = 'test_group.c'
 def scons():
     """scons function"""
     Import('env', 'prereqs')
@@ -54,6 +55,9 @@ def scons():
     for test in ECHO_SRC:
         target = tenv.Program(test, LIBS=libraries)
         tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
+
+    test_group = tenv.Program(TEST_GROUP_SRC, LIBS=libraries)
+    tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), test_group)
 
 if __name__ == "SCons.Script":
     scons()
