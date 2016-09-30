@@ -222,8 +222,8 @@ struct crt_req_format {
 };
 
 struct crt_array {
-	crt_size_t count;
-	void	*arrays;
+	crt_size_t	 da_count;
+	void		*da_arrays;
 };
 
 #define DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, in_size,		\

@@ -262,12 +262,18 @@ crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *drf,
 	for (i = 0; i < drf->drf_fields[CRT_IN].drf_count; i++) {
 		dmf = drf->drf_fields[CRT_IN].drf_msg[i];
 		C_ASSERT(dmf->dmf_size > 0);
-		input_size += dmf->dmf_size;
+		if (dmf->dmf_flags & DMF_ARRAY_FLAG)
+			input_size += sizeof(struct crt_array);
+		else
+			input_size += dmf->dmf_size;
 	}
 	for (i = 0; i < drf->drf_fields[CRT_OUT].drf_count; i++) {
 		dmf = drf->drf_fields[CRT_OUT].drf_msg[i];
 		C_ASSERT(dmf->dmf_size > 0);
-		output_size += dmf->dmf_size;
+		if (dmf->dmf_flags & DMF_ARRAY_FLAG)
+			output_size += sizeof(struct crt_array);
+		else
+			output_size += dmf->dmf_size;
 	}
 
 	if (input_size > CRT_MAX_INPUT_SIZE ||

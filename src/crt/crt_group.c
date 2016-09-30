@@ -452,7 +452,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 	rc = crt_rank_list_dup(&grp_priv->gp_membs, membs, true /* input */);
 	if (rc != 0) {
 		C_ERROR("crt_rank_list_dup failed, rc: %d.\n", rc);
-		C_FREE(grp_priv->gp_pub.cg_grpid, strlen(grp_id));
+		free(grp_priv->gp_pub.cg_grpid);
 		C_FREE_PTR(grp_priv);
 		C_GOTO(out, rc);
 	}
@@ -532,7 +532,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 	if (grp_priv->gp_psr_phy_addr != NULL)
 		free(grp_priv->gp_psr_phy_addr);
 	pthread_rwlock_destroy(&grp_priv->gp_rwlock);
-	C_FREE(grp_priv->gp_pub.cg_grpid, strlen(grp_priv->gp_pub.cg_grpid));
+	free(grp_priv->gp_pub.cg_grpid);
 
 	C_FREE_PTR(grp_priv);
 }

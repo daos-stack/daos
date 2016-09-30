@@ -326,7 +326,8 @@ do_init:
 		if (rc != 0) {
 			C_ERROR("crt_grp_init failed, rc: %d.\n", rc);
 			crt_hg_fini();
-			C_FREE(crt_gdata.cg_addr, crt_gdata.cg_addr_len);
+			free(crt_gdata.cg_addr);
+			crt_gdata.cg_addr = NULL;
 			C_GOTO(unlock, rc);
 		}
 
@@ -335,7 +336,8 @@ do_init:
 			C_ERROR("crt_opc_map_create failed rc: %d.\n", rc);
 			crt_hg_fini();
 			crt_grp_fini();
-			C_FREE(crt_gdata.cg_addr, crt_gdata.cg_addr_len);
+			free(crt_gdata.cg_addr);
+			crt_gdata.cg_addr = NULL;
 			C_GOTO(unlock, rc);
 		}
 		C_ASSERT(crt_gdata.cg_opc_map != NULL);
@@ -406,7 +408,8 @@ crt_finalize(void)
 		}
 
 		C_ASSERT(crt_gdata.cg_addr != NULL);
-		C_FREE(crt_gdata.cg_addr, crt_gdata.cg_addr_len);
+		free(crt_gdata.cg_addr);
+		crt_gdata.cg_addr = NULL;
 		crt_gdata.cg_server = false;
 
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
