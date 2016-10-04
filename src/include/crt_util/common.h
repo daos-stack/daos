@@ -112,14 +112,14 @@ crt_add_log_facility(char *aname, char *lname)
  * similar macros using different subsystem and log-level, for example:
  * #define DSR_DEBUG(...) crt_log(DSR_DEBUG, ...)
  */
-#define C_DEBUG(fmt, ...)						\
-	crt_log(CRT_DBG, "%s:%d "fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define C_DEBUG(fmt, ...)						 \
+	crt_log(CRT_DBG, "%s:%d " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 
-#define C_WARN(fmt, ...)						\
-	crt_log(CRT_WARN, "%s:%d "fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define C_WARN(fmt, ...)						 \
+	crt_log(CRT_WARN, "%s:%d " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 
-#define C_ERROR(fmt, ...)						\
-	crt_log(CRT_ERR, "%s:%d "fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define C_ERROR(fmt, ...)						 \
+	crt_log(CRT_ERR, "%s:%d " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
 
 #define C_ASSERT(e)	assert(e)
 
@@ -136,10 +136,10 @@ do {									\
 #define CF_U64		"%" PRIu64
 #define CF_X64		"%" PRIx64
 
-#define CF_OID		CF_U64"."CF_U64"."CF_U64
+#define CF_OID		CF_U64 "." CF_U64 "." CF_U64
 #define CP_OID(o)	(o).hi, (o).mid, (o).lo
 
-#define CF_UOID		CF_OID".%u"
+#define CF_UOID		CF_OID ".%u"
 #define CP_UOID(uo)	CP_OID((uo).id_pub), (uo).id_shard
 
 /*
@@ -156,7 +156,7 @@ do {									\
 char *CP_UUID(const void *uuid);
 
 /* For prefixes of error messages about a container */
-#define CF_CONT			CF_UUID"/"CF_UUID": "
+#define CF_CONT			CF_UUID "/" CF_UUID ": "
 #define CP_CONT(puuid, cuuid)	CP_UUID(puuid), CP_UUID(cuuid)
 
 /* memory allocating macros */
