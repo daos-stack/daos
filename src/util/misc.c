@@ -326,6 +326,44 @@ crt_rank_list_find(crt_rank_list_t *rank_list, crt_rank_t rank, int *idx)
 	return false;
 }
 
+/**
+ * delete the first occurance of rank, shrink the arrray storage size in
+ * rank_list, and reduce the size of rank_list by 1.
+ */
+int
+crt_rank_list_del(crt_rank_list_t *rank_list, crt_rank_t rank)
+{
+	uint32_t	 new_num;
+	uint32_t	 num_bytes;
+	void		*dest;
+	void		*src;
+	int		 idx;
+	int		 rc = 0;
+
+	if (rank_list == NULL) {
+		C_ERROR("rank_list cannot be NULL\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+	if (!crt_rank_list_find(rank_list, rank, &idx)) {
+		C_DEBUG("Rank %d not in the rank list.\n", rank);
+		C_GOTO(out, rc = -CER_OOG);
+	}
+	new_num = rank_list->rl_nr.num - 1;
+	src = &rank_list->rl_ranks[idx + 1];
+	dest = &rank_list->rl_ranks[idx];
+	num_bytes = (new_num - idx) * sizeof(crt_rank_t);
+	if (num_bytes == 0)
+		C_GOTO(out, rc);
+	memmove(dest, src, num_bytes);
+	rank_list = crt_rank_list_realloc(rank_list, new_num);
+	if (rank_list == NULL) {
+		C_ERROR("crt_rank_list_realloc() failed.\n");
+		C_GOTO(out, rc = -CER_NOMEM);
+	}
+out:
+	return rc;
+}
+
 /*
  * Compare whether or not the two rank lists are identical.
  * This function possibly will change the order of the passed in rank list, it

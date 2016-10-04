@@ -100,6 +100,11 @@ struct crt_grp_priv {
 	 * number within the primary group.
 	 */
 	crt_rank_list_t		*gp_membs;
+	/*
+	 * the version number of membership list gp_membs, also the version
+	 * number of the failed rank list gp_pri_srv->ps_failed_ranks
+	 */
+	uint32_t		 gp_membs_ver;
 	/* the priv pointer user passed in for crt_group_create */
 	void			*gp_priv;
 	/* CaRT context only for sending sub-grp create/destroy RPCs */

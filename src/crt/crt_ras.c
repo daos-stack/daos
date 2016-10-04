@@ -55,10 +55,6 @@ static int
 ras_update_sbscbd_rank_list(struct crt_grp_priv *grp_priv, crt_rank_t rank)
 {
 	uint32_t		 old_num;
-	void			*dest;
-	void			*src;
-	size_t			 num_bytes;
-	int			 idx;
 	int			 rc = 0;
 
 	if (grp_priv->gp_pri_srv->ps_ras != 1)
@@ -70,19 +66,11 @@ ras_update_sbscbd_rank_list(struct crt_grp_priv *grp_priv, crt_rank_t rank)
 			" to RAS.\n", grp_priv->gp_self);
 		C_GOTO(out, rc = -CER_NO_RAS_RANK);
 	}
-	if (!crt_rank_list_find(grp_priv->gp_pri_srv->ps_ras_ranks,
-				rank, &idx)) {
-		C_DEBUG("Rank %d not in the rank list.\n", rank);
+	rc = crt_rank_list_del(grp_priv->gp_pri_srv->ps_ras_ranks, rank);
+	if (rc != 0) {
+		C_ERROR("crt_rank_list_del() failed, rc: %d.\n", rc);
 		C_GOTO(out, rc);
 	}
-
-	grp_priv->gp_pri_srv->ps_ras_ranks->rl_nr.num--;
-	if (idx == old_num - 1)
-		C_GOTO(out, rc);
-	dest = &grp_priv->gp_pri_srv->ps_ras_ranks->rl_ranks[idx];
-	src = &grp_priv->gp_pri_srv->ps_ras_ranks->rl_ranks[idx + 1];
-	num_bytes = (old_num - idx - 1) * sizeof(crt_rank_t);
-	memmove(dest, src, num_bytes);
 out:
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 	return rc;
@@ -334,6 +322,29 @@ out:
 }
 
 /*
+ * update the membership list
+ *
+ * \param rank [IN]     the cart rank of the failed process
+ *
+ * \return              0 on success, error codes on failure
+ */
+static inline int
+ras_update_membs(struct crt_grp_priv *grp_priv, crt_rank_t rank)
+{
+	int              rc = 0;
+
+	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+	grp_priv->gp_membs_ver++;
+
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	C_DEBUG("rank %d, membership list generation number changed from %d to "
+		"%d.\n", grp_priv->gp_self,
+		grp_priv->gp_membs_ver - 1, grp_priv->gp_membs_ver);
+
+	return rc;
+}
+
+/*
  * This function is called on all RAS subscribers. This routine appends the pmix
  * rank of the failed process to the tail of the list of failed processes. This
  * routine also modifies the liveness map to indicate the current liveness of
@@ -393,6 +404,7 @@ crt_ras_event_hdlr_internal(crt_rank_t pmix_rank)
 				C_GOTO(out, rc);
 			}
 			ras_mark_evicted_in_ht(grp_priv, rank_map->rm_rank);
+			ras_update_membs(grp_priv, rank_map->rm_rank);
 		} else {
 			C_ASSERT(rank_map->rm_status == CRT_RANK_DEAD);
 			C_ERROR("group %s, rank %d already dead.\n",
@@ -575,6 +587,7 @@ crt_hdlr_rank_evict(crt_rpc_t *rpc_req)
 				goto out;
 			}
 			ras_mark_evicted_in_ht(grp_priv, rank_map->rm_rank);
+			ras_update_membs(grp_priv, rank_map->rm_rank);
 		} else {
 			C_DEBUG("group %s, rank %d already dead.\n",
 				grp_priv->gp_pub.cg_grpid, rank_map->rm_rank);

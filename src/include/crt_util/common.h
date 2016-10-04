@@ -274,6 +274,7 @@ void crt_rank_list_free(crt_rank_list_t *rank_list);
 void crt_rank_list_copy(crt_rank_list_t *dst, crt_rank_list_t *src, bool input);
 void crt_rank_list_sort(crt_rank_list_t *rank_list);
 bool crt_rank_list_find(crt_rank_list_t *rank_list, crt_rank_t rank, int *idx);
+int crt_rank_list_del(crt_rank_list_t *rank_list, crt_rank_t rank);
 bool crt_rank_list_identical(crt_rank_list_t *rank_list1,
 			     crt_rank_list_t *rank_list2, bool input);
 bool crt_rank_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank,
