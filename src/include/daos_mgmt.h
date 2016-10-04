@@ -27,18 +27,16 @@
 #include <daos_errno.h>
 
 /**
- *   Initialize dmgc client library.
- *
- *   This function will register the RPCs.
+ *   Initialize DAOS client library.
  */
 int
-dmg_init();
+daos_init();
 
 /**
- * Finalize dmgc client library.
+ * Finalize DAOS client library.
  */
 int
-dmg_fini();
+daos_fini();
 
 /**
  * Create a pool with \a uuid and \a mode.

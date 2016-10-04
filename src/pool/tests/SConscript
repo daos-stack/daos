@@ -1,0 +1,14 @@
+#!python
+
+Import('denv', 'PREREQS')
+
+denv.Append(CPPPATH = ['#/src/dsm', '#/src/server'])
+
+libraries = ['daos_common', 'daos', 'cart']
+libraries += ['uuid', 'mpi']
+libraries += ['cmocka']
+
+#if PREREQS is not None:
+#    PREREQS.require(denv, 'ompi')
+#
+#denv.Program('dsm_test', Glob('*.c'), LIBS = libraries)

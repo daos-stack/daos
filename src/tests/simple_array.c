@@ -137,14 +137,6 @@ pool_create(void)
 	int	rc;
 
 	/**
-	 * Initialize DAOS storage management API, only required to
-	 * create/destroy pool and is expected to be used only by the resource
-	 * manager
-	 */
-	rc = dmg_init();
-	ASSERT(rc == 0, "dmg_init failed with %d", rc);
-
-	/**
 	 * allocate list of service nodes, returned as output parameter of
 	 * dmg_pool_create() and used to connect
 	 */
@@ -174,10 +166,6 @@ pool_destroy(void)
 	rc = dmg_pool_destroy(pool_uuid, DSS_PSETID, 1 /* force */,
 			      NULL /* event */);
 	ASSERT(rc == 0, "pool destroy failed with %d", rc);
-
-	/** shutdown dmg module */
-	rc = dmg_fini();
-	ASSERT(rc == 0, "dmg_fini failed with %d", rc);
 }
 
 static inline void
@@ -496,7 +484,7 @@ main(int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &rankn);
 
 	/** initialize the local DAOS stack */
-	rc = dsr_init();
+	rc = daos_init();
 	ASSERT(rc == 0, "dsr_init failed with %d", rc);
 
 	/** create event queue */
@@ -590,8 +578,8 @@ main(int argc, char **argv)
 	ASSERT(rc == 0, "eq destroy failed with %d", rc);
 
 	/** shutdown the local DAOS stack */
-	rc = dsr_fini();
-	ASSERT(rc == 0, "dsr_fini failed with %d", rc);
+	rc = daos_fini();
+	ASSERT(rc == 0, "daos_fini failed with %d", rc);
 
 	MPI_Finalize();
 	return rc;

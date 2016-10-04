@@ -1,7 +1,0 @@
-#!python
-
-Import('denv')
-
-libraries = ['libdaos_sr', 'libdaos_m', 'libdaos_common', 'libdaos_event',
-	     'daos_transport']
-denv.Program('pl_map', 'pl_map.c',  LIBS = libraries)

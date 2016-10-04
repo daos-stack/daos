@@ -1,0 +1,19 @@
+#!python
+
+Import('env', 'PREREQS')
+
+env.AppendUnique(LIBPATH=[Dir('.')])
+denv = env.Clone()
+
+# dsms: DSM Server Module
+dsms = denv.SharedLibrary('pool',
+			  ['dsm_rpc.c', 'dsms_module.c', 'dsms_storage.c',
+			   'dsms_pool.c', 'dsms_target.c'])
+denv.Install('$PREFIX/lib/daos_srv', dsms)
+
+# Pool client library
+dc_pool_tgts = denv.SharedObject(['dsm_rpc.c', 'dsmc_pool.c', 'dsmc_module.c'])
+Export('dc_pool_tgts')
+
+# tests
+SConscript('tests/SConscript', exports = ['denv', 'PREREQS'])

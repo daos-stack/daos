@@ -1,0 +1,13 @@
+#!python
+
+Import('denv')
+
+denv.Append(CPPPATH = ['#/src/tier', '#/src/server'])
+
+libraries = ['pthread', 'uuid']
+libraries += ['daos_common', 'daos', 'cart', 'daos_ct']
+libraries += ['cmocka']
+
+
+denv.Program('dct_test', ['dct_ping_test.c', 'dct_test.c'],
+            LIBS=[libraries, 'daos_ct'])

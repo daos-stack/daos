@@ -67,4 +67,9 @@ dsms_pool_hdl_list(const uuid_t pool_uuid, uuid_t buf, size_t *size);
 int
 dsms_pool_hdl_evict(const uuid_t pool_uuid, const uuid_t handle_uuid);
 
+struct dsms_vpool *
+vpool_lookup(const uuid_t vp_uuid);
+
+void
+vpool_put(struct dsms_vpool *vpool);
 #endif /* __DSM_SRV_H__ */

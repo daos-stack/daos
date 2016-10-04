@@ -1,0 +1,6 @@
+#!python
+
+Import('denv')
+
+denv.Program('eq_test', Glob('eq_tests.c'),
+	     LIBS=['daos', 'daos_common', 'cart', 'pthread'])

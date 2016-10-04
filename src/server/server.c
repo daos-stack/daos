@@ -35,7 +35,7 @@
 #include "dss_internal.h"
 
 #define MAX_MODULE_OPTIONS	64
-#define MODULE_LIST		"vos,dmg,dsm,dsr,dct"
+#define MODULE_LIST		"vos,mgmt,pool,cont,obj,tier"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -64,22 +64,19 @@ modules_load()
 
 	mod = strsep(&run, ",");
 	while (mod != NULL) {
-		if (strcmp(mod, "daos_sr") == 0 ||
-		    strcmp(mod, "dsr") == 0)
-			rc = dss_module_load("daos_sr_srv");
-		else if (strcmp(mod, "daos_m") == 0 ||
-			 strcmp(mod, "dsm") == 0)
-			rc = dss_module_load("daos_m_srv");
-		else if (strcmp(mod, "daos_mgmt") == 0 ||
-			 strcmp(mod, "dmg") == 0)
-			rc = dss_module_load("daos_mgmt_srv");
+		if (strcmp(mod, "object") == 0)
+			mod = "obj";
+		else if (strcmp(mod, "po") == 0)
+			mod = "pool";
+		else if (strcmp(mod, "container") == 0 ||
+			 strcmp(mod, "co") == 0)
+			mod = "cont";
+		else if (strcmp(mod, "management") == 0)
+			mod = "mgmt";
 		else if (strcmp(mod, "vos") == 0)
-			rc = dss_module_load("vos_srv");
-		else if (strcmp(mod, "dct") == 0)
-			rc = dss_module_load("daos_ct_srv");
-		else
-			rc = dss_module_load(mod);
+			mod = "vos_srv";
 
+		rc = dss_module_load(mod);
 		if (rc != 0) {
 			D_DEBUG(DF_SERVER, "Failed to load module %s: %d\n",
 				mod, rc);
@@ -152,7 +149,8 @@ server_fini(bool force)
 static void
 usage(char *prog, FILE *out)
 {
-	fprintf(out, "Usage: %s [ -m vos,dmg,dsm,dsr,dct ] [-c #cores]\n",
+	fprintf(out,
+		"Usage: %s [ -m vos,mgmt,pool,cont,obj,tier ] [-c #cores]\n",
 		prog);
 }
 

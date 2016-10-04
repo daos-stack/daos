@@ -2,6 +2,8 @@
 
 Import('env', 'PREREQS')
 
+SConscript('dtp/SConscript', exports=['env', 'PREREQS'])
+
 env.AppendUnique(LIBPATH=[Dir('.')])
 
 if PREREQS is None:
@@ -14,9 +16,7 @@ else:
 
 denv = env.Clone()
 
-src = ['btree.c', 'debug.c', 'lru.c', 'hash.c', 'mem.c', 'misc.c', 'sort.c',
-       'pool_map.c']
-common = denv.SharedLibrary('libdaos_common', src)
+common = denv.SharedLibrary('libdaos_common', Glob('*.c'))
 denv.Install('$PREFIX/lib/', common)
 
 denv.Append(CPPPATH = ['#/src/common'])

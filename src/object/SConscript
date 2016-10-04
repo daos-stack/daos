@@ -1,0 +1,25 @@
+#!python
+
+Import('env')
+
+env.AppendUnique(LIBPATH=[Dir('.')])
+
+denv = env.Clone()
+
+# Common object code
+common_tgts = denv.SharedObject(['obj_class.c', 'dsr_rpc.c', 'pl_map.c',
+				 'ring_map.c'])
+
+# generate server module
+srv = denv.SharedLibrary('obj', common_tgts +
+			 ['dsrs_module.c', 'dsrs_object.c'])
+denv.Install('$PREFIX/lib/daos_srv', srv)
+
+# Object client library
+dc_obj_tgts = denv.SharedObject(['dsrc_module.c', 'cli_obj.c', 'cli_pool.c',
+			         'dsrc_shard_obj.c'])
+dc_obj_tgts += common_tgts
+Export('dc_obj_tgts')
+
+# Build tests
+SConscript('tests/SConscript', exports=['denv', 'common_tgts'])

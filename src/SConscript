@@ -1,14 +1,12 @@
 #!python
 
-Import('env', 'PREREQS')
+Import('env', 'PREREQS', 'DAOS_VERSION')
 
 # Generic DAOS includes
 env.Append(CPPPATH = ['#/src/include'])
 
 # Generate the common libraries used by everyone
 SConscript('common/SConscript', exports=['env', 'PREREQS'])
-SConscript('dtp/SConscript', exports=['env', 'PREREQS'])
-SConscript('common/SConscript.event', exports='env')
 
 # VOS comes with two flavors
 # A standalone library mostly used for testing
@@ -21,11 +19,18 @@ SConscript('vos_srv/SConscript', exports=['env', 'PREREQS', 'srv'])
 # Then the DAOS server executable
 SConscript('server/SConscript', exports=['env', 'PREREQS'])
 
-# Build each DAOS layers
-SConscript('dmg/SConscript', exports='env')
-SConscript('dsm/SConscript', exports=['env', 'PREREQS'])
-SConscript('dsr/SConscript', exports='env')
-SConscript('dct/SConscript', exports='env')
+# Build each DAOS component
+SConscript('mgmt/SConscript', exports='env')
+SConscript('pool/SConscript', exports=['env', 'PREREQS'])
+SConscript('container/SConscript', exports=['env', 'PREREQS'])
+SConscript('object/SConscript', exports='env')
+SConscript('rebuild/SConscript', exports='env')
+
+# Build DAOS client library
+SConscript('client/SConscript', exports=['env', 'DAOS_VERSION'])
+
+# Build multi-tier support
+SConscript('tier/SConscript', exports='env')
 
 # Build utilities
 SConscript('utils/SConscript', exports=['env', 'PREREQS'])

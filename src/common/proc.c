@@ -408,4 +408,3 @@ struct dtp_msg_field DMF_DAOS_HASH_OUT =
 	DEFINE_DTP_MSG("daos_hash_out_t", 0,
 			sizeof(daos_hash_out_t),
 			dtp_proc_daos_hash_out_t);
-

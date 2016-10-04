@@ -175,7 +175,7 @@ main(int argc, char *argv[])
 		return hdlr == NULL ? 2 : 0;
 	}
 
-	rc = dmg_init();
+	rc = daos_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize dmg: %d\n", rc);
 		return 1;
@@ -183,7 +183,7 @@ main(int argc, char *argv[])
 
 	rc = hdlr(argc, argv);
 
-	dmg_fini();
+	daos_fini();
 
 	if (rc < 0) {
 		return 1;

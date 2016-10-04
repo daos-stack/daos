@@ -30,16 +30,18 @@
 #include <daos_m.h>
 
 /**
- * Initialize the DAOS-SR library.
+ * Initialize the DAOS library.
  */
 int
-dsr_init(void);
+daos_init(void);
+#define dsr_init daos_init
 
 /**
- * Finalize the DAOS-SR library.
+ * Finalize the DAOS library.
  */
 int
-dsr_fini(void);
+daos_fini(void);
+#define dsr_fini daos_fini
 
 /**
  * Connect to the DAOS pool identified by UUID \a uuid. Upon a successful

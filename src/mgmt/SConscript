@@ -1,0 +1,21 @@
+#!python
+
+Import('env')
+
+env.AppendUnique(LIBPATH=[Dir('.')])
+
+denv = env.Clone()
+
+# dmgs: DMG Server Module
+mgmt_srv = denv.SharedLibrary('mgmt',
+			      ['dmg_rpc.c', 'dmgs_module.c', 'dmgs_pool.c',
+			       'dmgs_target.c'])
+denv.Install('$PREFIX/lib/daos_srv', mgmt_srv)
+
+# Client library
+dc_mgmt_tgts = denv.SharedObject(['dmg_rpc.c', 'dmgc_module.c', 'dmgc_pool.c'])
+Export('dc_mgmt_tgts')
+
+
+# tests
+SConscript('tests/SConscript', exports = 'denv')

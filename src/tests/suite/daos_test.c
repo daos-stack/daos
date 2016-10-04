@@ -42,15 +42,9 @@ main(int argc, char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	rc = dmg_init();
+	rc = daos_init();
 	if (rc) {
-		print_message("dmg_init() failed with %d\n", rc);
-		return -1;
-	}
-
-	rc = dsr_init();
-	if (rc) {
-		print_message("dsr_init() failed with %d\n", rc);
+		print_message("daos_init() failed with %d\n", rc);
 		return -1;
 	}
 
@@ -63,13 +57,9 @@ main(int argc, char **argv)
 	MPI_Allreduce(&nr_failed, &nr_total_failed, 1, MPI_INT, MPI_SUM,
 		      MPI_COMM_WORLD);
 
-	rc = dsr_fini();
+	rc = daos_fini();
 	if (rc)
-		print_message("dsr_fini() failed with %d\n", rc);
-
-	rc = dmg_fini();
-	if (rc)
-		print_message("dmg_fini() failed with %d\n", rc);
+		print_message("daos_fini() failed with %d\n", rc);
 
 	print_message("\n============ Summary %s\n", __FILE__);
 	if (nr_total_failed == 0)

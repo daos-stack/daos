@@ -1,0 +1,10 @@
+#!python
+
+Import('denv')
+
+denv.Append(CPPPATH = ['#/src/dmg', '#/src/server'])
+
+libraries = ['daos_common', 'daos', 'cart']
+libraries += ['uuid', 'cmocka']
+
+#denv.Program('dmg_test', 'dmg_test.c', LIBS = libraries)

@@ -521,21 +521,21 @@ lookup(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req,
 }
 
 static void
-daos_init(void)
+init(void)
 {
 	int	rc;
 
-	rc = dsr_init();
-	DBENCH_CHECK(rc, "Failed to initialize DAOS-SR\n");
+	rc = daos_init();
+	DBENCH_CHECK(rc, "Failed to initialize DAOS\n");
 }
 
 static void
-daos_fini(void)
+fini(void)
 {
 	int	rc;
 
-	rc = dsr_fini();
-	DBENCH_CHECK(rc, "dsr_fini failed with\n");
+	rc = daos_fini();
+	DBENCH_CHECK(rc, "daos_fini failed with\n");
 }
 
 static void
@@ -1325,7 +1325,7 @@ int main(int argc, char *argv[])
 		goto exit;
 	}
 
-	daos_init();
+	init();
 
 	rc = daos_eq_create(&eq);
 	DBENCH_CHECK(rc, "Event queue creation failed\n");
@@ -1370,7 +1370,7 @@ int main(int argc, char *argv[])
 	rc = daos_eq_destroy(eq, 0);
 	DBENCH_CHECK(rc, "Event queue destroy failed\n");
 
-	daos_fini();
+	fini();
 
 exit:
 	MPI_Finalize();

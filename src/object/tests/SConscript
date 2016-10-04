@@ -1,0 +1,8 @@
+#!python
+
+Import('denv')
+Import('common_tgts')
+
+test_tgt = denv.SharedObject('pl_map.c')
+denv.Program('pl_map', test_tgt + common_tgts,
+	     LIBS = ['libdaos_common', 'cart'])

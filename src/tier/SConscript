@@ -1,0 +1,20 @@
+#!python
+
+Import('env')
+
+env.AppendUnique(LIBPATH=[Dir('.')])
+denv = env.Clone()
+
+# generate server module
+ct_srv = denv.SharedLibrary('tier',
+			    ['dct_rpc.c', 'dcts_module.c','dcts_ping.c'])
+
+denv.Install('$PREFIX/lib/daos_srv', ct_srv)
+
+# generate client library
+ct_client = denv.SharedLibrary('daos_ct',
+			       ['dct_rpc.c', 'dctc_module.c', 'dctc_ping.c'])
+denv.Install('$PREFIX/lib/', ct_client)
+
+# tests
+SConscript('tests/SConscript', exports = 'denv')

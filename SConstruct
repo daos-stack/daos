@@ -58,6 +58,9 @@ else:
 env.Alias('install', '$PREFIX')
 config.Finish()
 
+DAOS_VERSION = "0.0.1"
+Export('DAOS_VERSION')
+
 if env['PLATFORM'] == 'darwin':
 	# generate .so on OSX instead of .dylib
 	env['SHLIBSUFFIX'] = '.so'
