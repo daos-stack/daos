@@ -201,6 +201,27 @@ char *CP_UUID(const void *uuid);
 			(int)(size));					 \
 	} while (0)
 
+static inline void *
+crt_c_realloc(void *ptrptr, size_t size)
+{
+	void *tmp_ptr;
+
+	tmp_ptr = realloc(ptrptr, size);
+	if (size == 0 || tmp_ptr != NULL) {
+		crt_log(MEM_DBG, "realloc #ptr : %d at %p.\n",
+			(int) size, ptrptr);
+
+		return tmp_ptr;
+	}
+	C_ERROR("out of memory (tried to realloc \" #ptr \" = %d)",
+		(int)(size));
+
+	return tmp_ptr;
+}
+/* memory reallocation */
+#define C_REALLOC(ptr, size)						\
+	(__typeof__(ptr)) crt_c_realloc((ptr), (size))
+
 # define C_FREE(ptr, size)						\
 	do {								\
 		crt_log(MEM_DBG, "free #ptr : %d at %p.\n",		\
@@ -264,6 +285,7 @@ int crt_rank_list_dup_sort_uniq(crt_rank_list_t **dst,
 void crt_rank_list_filter(crt_rank_list_t *src_set, crt_rank_list_t *dst_set,
 			  bool input, bool exclude);
 crt_rank_list_t *crt_rank_list_alloc(uint32_t size);
+crt_rank_list_t *crt_rank_list_realloc(crt_rank_list_t *ptr, uint32_t size);
 void crt_rank_list_free(crt_rank_list_t *rank_list);
 void crt_rank_list_copy(crt_rank_list_t *dst, crt_rank_list_t *src, bool input);
 void crt_rank_list_sort(crt_rank_list_t *rank_list);

@@ -62,6 +62,31 @@ struct crt_rank_map {
 	enum crt_rank_status	rm_status; /* health status */
 };
 
+/* fields only valid in primary service groups */
+struct crt_grp_priv_pri_srv {
+	/*
+	 * Minimum Viable Size for the group. If the number of live ranks is
+	 * less than MVS, the group should shut down
+	 */
+	uint32_t		 ps_mvs;
+	/* flag for ranks subscribed to RAS events */
+	uint32_t		 ps_ras:1,
+	/* 1 means there is eviction request bcast in flight, 0 means no such
+	 * bcast in flight
+	 */
+				 ps_ras_bcast_in_prog:1,
+				 /* flag for RAS related variables */
+				 ps_ras_initialized:1;
+	/*
+	 * index of next failed rank to broadcast. only meaninful on ras nodes
+	 * (nodes subscribed to RAS)
+	 */
+	uint32_t		 ps_ras_bcast_idx;
+	/* ranks subscribed to RAS events*/
+	crt_rank_list_t		*ps_ras_ranks;
+	crt_rank_list_t		*ps_failed_ranks; /* failed PMIx ranks */
+};
+
 /* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
 #define CRT_LOOKUP_CACHE_BITS	(4)
 
@@ -77,7 +102,6 @@ struct crt_grp_priv {
 	void			*gp_priv;
 	/* CaRT context only for sending sub-grp create/destroy RPCs */
 	crt_context_t		 gp_ctx;
-	enum crt_grp_status	 gp_status; /* group status */
 
 	/*
 	 * internal group ID, it is (gp_self << 32) for primary group,
@@ -103,6 +127,10 @@ struct crt_grp_priv {
 	crt_phy_addr_t		 gp_psr_phy_addr;
 	/* address lookup cache, only valid for primary group */
 	struct chash_table     **gp_lookup_cache;
+	enum crt_grp_status	 gp_status; /* group status */
+	/* set of variables only valid in primary service groups */
+	struct crt_grp_priv_pri_srv
+				*gp_pri_srv;
 	uint32_t		 gp_primary:1, /* flag of primary group */
 				 gp_local:1, /* flag of local group, false means
 					      * attached remote group */
@@ -123,7 +151,6 @@ struct crt_grp_priv {
 	uint32_t		 gp_child_num;
 	uint32_t		 gp_child_ack_num;
 	int			 gp_rc; /* temporary recoded return code */
-	crt_rank_list_t		*gp_failed_ranks; /* failed ranks */
 
 	crt_grp_create_cb_t	 gp_create_cb; /* grp create completion cb */
 	crt_grp_destroy_cb_t	 gp_destroy_cb; /* grp destroy completion cb */
@@ -146,7 +173,8 @@ struct crt_lookup_item {
 	na_addr_t		 li_tag_addr[CRT_SRV_CONTEXT_NUM];
 	/* reference count */
 	uint32_t		 li_ref;
-	uint32_t		 li_initialized:1;
+	uint32_t		 li_initialized:1,
+				 li_evicted:1;
 	pthread_mutex_t		 li_mutex;
 };
 
@@ -217,6 +245,10 @@ crt_ep_copy(crt_endpoint_t *dst_ep, crt_endpoint_t *src_ep)
 	dst_ep->ep_rank = src_ep->ep_rank;
 	dst_ep->ep_tag = src_ep->ep_tag;
 }
+
+void crt_li_destroy(struct crt_lookup_item *li);
+
+struct crt_lookup_item *crt_li_link2ptr(crt_list_t *rlink);
 
 static inline uint64_t
 crt_get_subgrp_id()

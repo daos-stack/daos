@@ -42,14 +42,15 @@ import os
 ECHO_SRC = ['crt_echo_cli.c', 'crt_echo_srv.c', 'crt_echo_srv2.c']
 BASIC_SRC = ['crt_basic.c']
 TEST_GROUP_SRC = 'test_group.c'
+COMMON_SRC = 'fake_events.c'
 def scons():
     """scons function"""
     Import('env', 'prereqs')
 
     tenv = env.Clone()
-    tenv.Append(CPPPATH=['#/src/test'])
+    tenv.Append(CPPPATH=['#/src/test', '#/src/crt'])
 
-    libraries = ['crt_util', 'crt', 'pthread']
+    libraries = ['crt_util', 'crt', 'pthread', 'uuid']
     tenv.AppendUnique(LIBS=libraries)
 
     prereqs.require(tenv, 'argobots', 'crypto', 'pmix', 'uuid',
@@ -60,7 +61,7 @@ def scons():
         target = tenv.Program(test)
         tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
 
-    test_group = tenv.Program(TEST_GROUP_SRC)
+    test_group = tenv.Program([TEST_GROUP_SRC, COMMON_SRC])
     tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), test_group)
 
     benv = tenv.Clone()

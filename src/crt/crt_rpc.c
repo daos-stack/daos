@@ -91,6 +91,55 @@ static struct crt_req_format CQF_CRT_URI_LOOKUP =
 	DEFINE_CRT_REQ_FMT("CRT_URI_LOOKUP", crt_uri_lookup_in_fields,
 			   crt_uri_lookup_out_fields);
 
+/* for broadcasting RAS notifications on rank failures */
+struct crt_msg_field *crt_rank_evict_in_fields[] = {
+	&CMF_UINT32,		/* ras event id */
+	&CMF_RANK,		/* failed rank */
+};
+
+struct crt_msg_field *crt_rank_evict_out_fields[] = {
+	&CMF_INT,		/* return value */
+};
+
+static struct crt_req_format CQF_CRT_RANK_EVICT =
+	DEFINE_CRT_REQ_FMT("CRT_RANK_EVICT",
+			   crt_rank_evict_in_fields,
+			   crt_rank_evict_out_fields);
+
+int crt_rank_evict_corpc_aggregate(crt_rpc_t *source,
+				   crt_rpc_t *result,
+				   void *priv)
+{
+	crt_rank_t			 my_rank;
+	struct crt_rank_evict_out	*reply_source;
+	struct crt_rank_evict_out	*reply_result;
+	int				 rc = 0;
+
+	crt_group_rank(NULL, &my_rank);
+	C_DEBUG("crt_rank_evict_corpc_aggregate is being called. "
+		"rank: %d\n", my_rank);
+	reply_source = crt_reply_get(source);
+	if (reply_source == NULL) {
+		C_ERROR("crt_reply_get() failed.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+	reply_result = crt_reply_get(result);
+	if (reply_result == NULL) {
+		C_ERROR("crt_reply_get() failed.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+	C_DEBUG("reply_source->creo_succeeded %d, reply_result->creo_succeeded "
+		"%d\n", reply_source->creo_succeeded,
+		reply_result->creo_succeeded);
+	reply_result->creo_succeeded += reply_source->creo_succeeded;
+out:
+	return rc;
+}
+
+struct crt_corpc_ops crt_rank_evict_co_ops = {
+	.co_aggregate = crt_rank_evict_corpc_aggregate,
+};
+
 struct crt_internal_rpc crt_internal_rpcs[] = {
 	{
 		.ir_name	= "CRT_GRP_CREATE",
@@ -116,6 +165,15 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_req_fmt	= &CQF_CRT_URI_LOOKUP,
 		.ir_hdlr	= crt_hdlr_uri_lookup,
 		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_RANK_EVICT",
+		.ir_opc		= CRT_OPC_RANK_EVICT,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_RANK_EVICT,
+		.ir_hdlr	= crt_hdlr_rank_evict,
+		.ir_co_ops	= &crt_rank_evict_co_ops,
+
 	}, {
 		.ir_opc		= 0
 	}

@@ -557,6 +557,7 @@ out:
 	return rc;
 }
 
+/* this function is called by the pmix thread */
 static void
 crt_pmix_notify_fn(size_t registration_id, pmix_status_t status,
 		   const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
@@ -565,43 +566,19 @@ crt_pmix_notify_fn(size_t registration_id, pmix_status_t status,
 {
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_pmix_gdata	*pmix_gdata;
-	struct crt_grp_priv	*grp_priv;
-	struct crt_rank_map	*rank_map;
 
 	grp_gdata = crt_gdata.cg_grp;
 	C_ASSERT(grp_gdata != NULL);
-	pmix_gdata = grp_gdata->gg_pmix;
 	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
-	C_ASSERT(pmix_gdata != NULL && pmix_gdata->pg_univ_size > 0);
+	C_ASSERT(grp_gdata->gg_pmix != NULL);
 
-	C_DEBUG("got one PMIx notification, source->rank: %d.\n",
-		source->rank);
-	if (source->rank >= pmix_gdata->pg_univ_size) {
-		C_ERROR("pmix rank %d out of range [0, %d].\n",
-			source->rank, pmix_gdata->pg_univ_size - 1);
-		goto out;
-	}
+	pmix_gdata = grp_gdata->gg_pmix;
 
-	grp_priv = crt_is_service() ? grp_gdata->gg_srv_pri_grp :
-				      grp_gdata->gg_cli_pri_grp;
-	C_ASSERT(grp_priv != NULL);
-	rank_map = &grp_priv->gp_rank_map[source->rank];
-	if (rank_map->rm_status != CRT_RANK_NOENT) {
-		if (rank_map->rm_status == CRT_RANK_ALIVE) {
-			rank_map->rm_status = CRT_RANK_DEAD;
-			C_WARN("group %s, mark rank %d as dead",
-			       grp_priv->gp_pub.cg_grpid, rank_map->rm_rank);
-		} else {
-			C_ASSERT(rank_map->rm_status == CRT_RANK_DEAD);
-			C_ERROR("group %s, rank %d already dead.\n",
-				grp_priv->gp_pub.cg_grpid, rank_map->rm_rank);
-		}
-	} else {
-		C_DEBUG("PMIx rank %d not belong to group %s, ignore it.\n",
-			source->rank, grp_priv->gp_pub.cg_grpid);
-	}
-
-out:
+	if (!strncmp(source->nspace, pmix_gdata->pg_proc.nspace,
+		     PMIX_MAX_NSLEN))
+		crt_ras_event_hdlr_internal(source->rank);
+	else
+		C_DEBUG("PMIx event not relevant to my namespace.\n");
 	/** let the notifier know we are done */
 	if (cbfunc)
 		cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);

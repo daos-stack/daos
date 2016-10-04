@@ -98,6 +98,10 @@ typedef enum {
 	CER_BADPATH		= (CER_ERR_BASE + 26),
 	/** Not a directory */
 	CER_NOTDIR		= (CER_ERR_BASE + 27),
+	/** corpc failed */
+	CER_CORPC_INCOMPLETE	= (CER_ERR_BASE + 28),
+	/** no rank is subscribed to RAS */
+	CER_NO_RAS_RANK		= (CER_ERR_BASE + 29),
 	/** unknown error */
 	CER_UNKNOWN		= (CER_ERR_BASE + 500),
 	/** TODO: add more error numbers */

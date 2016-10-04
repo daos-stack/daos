@@ -227,6 +227,29 @@ crt_rank_list_alloc(uint32_t size)
 	return rank_list;
 }
 
+crt_rank_list_t *
+crt_rank_list_realloc(crt_rank_list_t *ptr, uint32_t size)
+{
+	crt_rank_t *new_rl_ranks;
+
+	if (ptr == NULL)
+		return crt_rank_list_alloc(size);
+	if (size == 0) {
+		crt_rank_list_free(ptr);
+		return NULL;
+	}
+	new_rl_ranks = C_REALLOC(ptr->rl_ranks, size * sizeof(crt_rank_t));
+	if (new_rl_ranks != NULL) {
+		ptr->rl_ranks = new_rl_ranks;
+		ptr->rl_nr.num = size;
+	} else {
+		C_ERROR("crt_rank_list_realloc() failed.\n");
+		ptr = NULL;
+	}
+
+	return ptr;
+}
+
 void
 crt_rank_list_free(crt_rank_list_t *rank_list)
 {

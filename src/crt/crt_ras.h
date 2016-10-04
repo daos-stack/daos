@@ -36,45 +36,34 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * This file is part of CaRT. It it the common header file which be included by
- * all other .c files of CaRT.
+ * This file is part of CaRT. It gives out the data types and function
+ * declarations related with system RAS.
  */
+#ifndef __CRT_RAS_H__
+#define __CRT_RAS_H__
 
-#ifndef __CRT_INTERNAL_H__
-#define __CRT_INTERNAL_H__
+struct crt_rank_evict_in {
+	crt_rank_t		crei_rank;
+};
 
-#include <ctype.h>
-#include <errno.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <stddef.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <uuid/uuid.h>
-/* #include <netinet/in.h> */
-#include <arpa/inet.h>
-#include <ifaddrs.h>
+struct crt_rank_evict_out {
+	int creo_succeeded;
+	int creo_rc;
+};
 
-#include <crt_util/common.h>
-#include <crt_api.h>
+int crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
+int crt_notify_ras_event(crt_context_t crt_ctx, crt_rank_t dest,
+			 crt_rank_t failed_rank);
+void crt_drain_eviction_requests_kickoff(crt_context_t crt_ctx);
+void crt_ras_event_hdlr_internal(crt_rank_t pmix_rank);
 
-#include <crt_internal_types.h>
-#include <crt_internal_fns.h>
-#include <crt_rpc.h>
-#include <crt_group.h>
-#include <crt_tree.h>
+/**
+ * Internal function to handle RAS notifications. Both real RAS events and
+ * simulated RAS events (through the fake_event utility) will trigger this
+ * function.
+ *
+ * \param rank [IN]	pmix rank of the process related to the ras event
+ */
+void crt_fake_event_notify_fn(crt_rank_t rank);
 
-#include <crt_hg.h>
-#include <crt_pmix.h>
-#include <crt_ras.h>
-
-#endif /* __CRT_INTERNAL_H__ */
+#endif /* __CRT_RAS_H__ */

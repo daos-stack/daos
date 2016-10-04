@@ -7,6 +7,7 @@
 
 #include <crt_util/common.h>
 #include <crt_api.h>
+#include "crt_fake_events.h"
 
 #define ECHO_OPC_CHECKIN    (0xA1)
 #define ECHO_OPC_SHUTDOWN   (0x100)
@@ -224,11 +225,11 @@ int main(int argc, char **argv)
 	}
 
 	gethostname(hostname, sizeof(hostname));
-	fprintf(stdout, "Running on %s\n", hostname);
-	fflush(stdout);
+	fprintf(stderr, "Running on %s\n", hostname);
 
 
-	fprintf(stderr, "%s%s\n", name_of_group, name_of_target_group);
+	fprintf(stderr, "local group: %s remote group: %s\n",
+		name_of_group, name_of_target_group);
 	flag = is_service ? CRT_FLAG_BIT_SERVER : 0;
 	if (is_service) {
 		rc = crt_init(NULL, name_of_group, flag);
@@ -240,6 +241,11 @@ int main(int argc, char **argv)
 
 	rc = crt_group_rank(NULL, &myrank);
 	C_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
+	if (is_service) {
+		crt_fake_event_init(myrank);
+		C_ASSERTF(rc == 0, "crt_fake_event_init() failed. rc: %d\n",
+			  rc);
+	}
 
 	rc = crt_context_create(NULL, &crt_ctx);
 	C_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
@@ -261,7 +267,6 @@ int main(int argc, char **argv)
 		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, NULL);
 		C_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
 	}
-	fprintf(stderr, "name_of_target_group %s\n", name_of_target_group);
 	if (should_attach) {
 		target_group = crt_group_lookup(name_of_target_group);
 		C_ASSERTF(target_group != NULL, "crt_group_lookup() failed. "
@@ -329,6 +334,8 @@ int main(int argc, char **argv)
 				  rc);
 		}
 	}
+	if (is_service)
+		crt_fake_event_fini(myrank);
 	rc = crt_context_destroy(crt_ctx, 0);
 	C_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
 	rc = crt_finalize();
