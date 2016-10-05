@@ -125,6 +125,8 @@ class InfoRunner():
     def set_config(self, keyname=None, subkey=None, keyvalue=None):
         """ setup the environment """
         if subkey:
+            if keyname not in self.config:
+                self.config[keyname] = {}
             self.config[keyname][subkey] = keyvalue
         else:
             self.config[keyname] = keyvalue
