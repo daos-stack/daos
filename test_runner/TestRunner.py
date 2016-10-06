@@ -31,6 +31,7 @@ import sys
 import subprocess
 import unittest
 import json
+from time import time
 from datetime import datetime
 
 from yaml import load, dump
@@ -48,6 +49,7 @@ class TestRunner():
     loop_number = 0
     test_info = {}
     test_list = []
+    subtest_results = []
     info = None
 
     def __init__(self, info, test_list=None):
@@ -163,6 +165,15 @@ class TestRunner():
         os.environ[test_module['subLogKey']] = value
         self.last_testlogdir = value
 
+    def dump_subtest_results(self):
+        """ dump the test results to the log directory """
+        log_dir = os.path.dirname(self.info.get_config('log_base_path'))
+        if os.path.exists(log_dir):
+            name = "%s/subtest_results.yml" % log_dir
+            with open(name, 'w') as fd:
+                dump(self.subtest_results, fd, Dumper=Dumper, indent=4,
+                     default_flow_style=False)
+
     def dump_test_info(self):
         """ dump the test info to the output directory """
         if os.path.exists(self.log_dir_base):
@@ -209,6 +220,7 @@ class TestRunner():
     def post_run(self):
         """ post run processing """
         print("TestRunner: tearDown begin")
+        self.dump_subtest_results()
         self.rename_output_directory()
         print("TestRunner: tearDown end\n\n")
 
@@ -293,11 +305,14 @@ class TestRunner():
     def execute_strategy(self):
         """ execute test strategy """
 
+        info = {}
         rtn = 0
         test_directives = self.test_info.get('directives', None)
+        info['name'] = self.test_info['module']['name']
         print("***************** %s *********************************" % \
-              self.test_info['module']['name'])
+              info['name'])
         loop = str(test_directives.get('loop', "no"))
+        start_time = time()
         if loop.lower() == "no":
             self.loop_number = 0
             rtn = self.execute_list()
@@ -309,7 +324,14 @@ class TestRunner():
                 toexit = test_directives.get('exitLoopOnError', "yes")
                 if rtn and toexit.lower() == "yes":
                     break
-        return rtn
+        info['duration'] = time() - start_time
+        info['return'] = rtn
+        if rtn == 0:
+            info['status'] = "PASS"
+        else:
+            info['status'] = "FAIL"
+        info['error'] = ""
+        return info
 
     def run_testcases(self):
         """ execute test scripts """
@@ -325,7 +347,9 @@ class TestRunner():
                 self.test_info = load(fd, Loader=Loader)
             self.add_default_env()
             self.setup_default_env()
-            rtn |= self.execute_strategy()
+            rtn_info = self.execute_strategy()
+            rtn |= rtn_info['return']
+            self.subtest_results.append(rtn_info)
             self.dump_test_info()
         self.post_run()
         return rtn
