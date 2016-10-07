@@ -23,6 +23,7 @@ SConscript('server/SConscript', exports=['env', 'PREREQS'])
 SConscript('mgmt/SConscript', exports='env')
 SConscript('pool/SConscript', exports=['env', 'PREREQS'])
 SConscript('container/SConscript', exports=['env', 'PREREQS'])
+SConscript('placement/SConscript', exports=['env', 'PREREQS'])
 SConscript('object/SConscript', exports='env')
 SConscript('rebuild/SConscript', exports='env')
 

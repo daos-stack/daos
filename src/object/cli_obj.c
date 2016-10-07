@@ -311,14 +311,14 @@ cli_obj_iocx_new_oper(struct cli_obj_io_ctx *iocx, unsigned int shard,
 }
 
 int
-dsr_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-		dsr_obj_attr_t *oa, daos_event_t *ev)
+daos_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+		daos_obj_attr_t *oa, daos_event_t *ev)
 {
 	struct daos_oclass_attr *oc_attr;
 	int			 rc;
 
 	/* XXX Only support internal classes for now */
-	oc_attr = dsr_oclass_attr_find(oid);
+	oc_attr = daos_oclass_attr_find(oid);
 	rc = oc_attr != NULL ? 0 : -DER_INVAL;
 
 	if (rc == 0 && ev != NULL) {
@@ -329,7 +329,7 @@ dsr_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 }
 
 static int
-cli_obj_md_fetch(daos_obj_id_t oid, struct dsr_obj_md *md, daos_event_t *ev)
+cli_obj_md_fetch(daos_obj_id_t oid, struct daos_obj_md *md, daos_event_t *ev)
 {
 	/* For predefined object classes, do nothing at here. But for those
 	 * customized classes, we need to fetch for the remote OI table.
@@ -340,7 +340,7 @@ cli_obj_md_fetch(daos_obj_id_t oid, struct dsr_obj_md *md, daos_event_t *ev)
 }
 
 int
-dsr_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	     unsigned int mode, daos_handle_t *oh, daos_event_t *ev)
 {
 	struct dsr_cli_obj	*obj;
@@ -362,7 +362,7 @@ dsr_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	map = dsr_pl_map_find(coh, oid);
+	map = pl_map_find(coh, oid);
 	if (map == NULL) {
 		D_DEBUG(DF_SRC, "Cannot find valid placement map\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -397,7 +397,7 @@ dsr_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 }
 
 int
-dsr_obj_close(daos_handle_t oh, daos_event_t *ev)
+daos_obj_close(daos_handle_t oh, daos_event_t *ev)
 {
 	struct dsr_cli_obj   *obj;
 
@@ -416,14 +416,14 @@ dsr_obj_close(daos_handle_t oh, daos_event_t *ev)
 }
 
 int
-dsr_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
+daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 
 int
-dsr_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
+daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
 	      daos_rank_list_t *ranks, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
@@ -435,9 +435,9 @@ cli_obj_get_grp_size(struct dsr_cli_obj *obj)
 {
 	struct daos_oclass_attr *oc_attr;
 
-	oc_attr = dsr_oclass_attr_find(obj->cob_md.omd_id);
+	oc_attr = daos_oclass_attr_find(obj->cob_md.omd_id);
 	D_ASSERT(oc_attr != NULL);
-	return dsr_oclass_grp_size(oc_attr);
+	return daos_oclass_grp_size(oc_attr);
 }
 
 static unsigned int
@@ -492,7 +492,7 @@ cli_obj_dkey2shard(struct dsr_cli_obj *obj, daos_dkey_t *dkey,
 }
 
 int
-dsr_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	      unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	      daos_vec_map_t *maps, daos_event_t *ev)
 {
@@ -529,7 +529,7 @@ dsr_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 
 #define TMP_OPER_CNT	6
 int
-dsr_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_event_t *ev)
 {
@@ -627,7 +627,7 @@ cli_obj_list_dkey_comp(struct cli_obj_io_ctx *ctx, int rc)
 }
 
 int
-dsr_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
+daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_hash_out_t *anchor, daos_event_t *ev)
 {
@@ -672,7 +672,7 @@ dsr_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 }
 
 int
-dsr_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 		  uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_hash_out_t *anchor, daos_event_t *ev)
 {

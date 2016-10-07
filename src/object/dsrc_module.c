@@ -24,7 +24,7 @@
  * dsrc: Module Definitions
  */
 
-#include <daos_m.h>
+#include <daos_types.h>
 #include <daos/rpc.h>
 #include <pthread.h>
 #include <daos/common.h>

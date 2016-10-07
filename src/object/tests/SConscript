@@ -3,6 +3,6 @@
 Import('denv')
 Import('common_tgts')
 
-test_tgt = denv.SharedObject('pl_map.c')
+test_tgt = denv.SharedObject('place_obj.c')
 denv.Program('pl_map', test_tgt + common_tgts,
-	     LIBS = ['libdaos_common', 'cart'])
+	     LIBS = ['daos_common', 'cart', 'placement'])

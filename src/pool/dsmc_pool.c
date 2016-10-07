@@ -24,7 +24,8 @@
  * dsmc: Pool Methods
  */
 
-#include <daos_m.h>
+#include <daos_types.h>
+#include <daos_api.h>
 #include <unistd.h>
 #include "dsm_rpc.h"
 #include "dsmc_internal.h"
@@ -148,9 +149,9 @@ out:
 }
 
 int
-dsm_pool_connect(const uuid_t uuid, const char *grp,
-		 const daos_rank_list_t *tgts, unsigned int flags,
-		 daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
+daos_pool_connect(const uuid_t uuid, const char *grp,
+		  const daos_rank_list_t *tgts, unsigned int flags,
+		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	dtp_endpoint_t		 ep;
 	dtp_rpc_t		*rpc;
@@ -304,7 +305,7 @@ out:
 }
 
 int
-dsm_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
+daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
 	struct dsmc_pool		*pool;
 	dtp_endpoint_t			 ep;
@@ -484,7 +485,7 @@ out:
 }
 
 int
-dsm_pool_local2global(daos_handle_t poh, daos_iov_t *glob)
+daos_pool_local2global(daos_handle_t poh, daos_iov_t *glob)
 {
 	int	rc = 0;
 
@@ -565,7 +566,7 @@ out:
 }
 
 int
-dsm_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
+daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 {
 	struct dsmc_pool_glob	 *pool_glob;
 	int			  rc = 0;

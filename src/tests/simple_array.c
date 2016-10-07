@@ -45,7 +45,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <daos_sr.h>
 #include <daos_mgmt.h>
 #include "suite/daos_test.h"
 #include <mpi.h>
@@ -226,7 +225,7 @@ array(void)
 	ioreqs_init(reqs);
 
 	/** open DAOS object */
-	rc = dsr_obj_open(coh, oid, epoch, DAOS_OO_RW, &oh, NULL);
+	rc = daos_obj_open(coh, oid, epoch, DAOS_OO_RW, &oh, NULL);
 	ASSERT(rc == 0, "object open failed with %d", rc);
 
 	/** Transactional overwrite of the array at each iteration */
@@ -275,7 +274,7 @@ array(void)
 			req->recx.rx_idx = sid * SLICE_SIZE;
 
 			/** submit I/O operation */
-			rc = dsr_obj_update(oh, epoch, &req->dkey, 1,
+			rc = daos_obj_update(oh, epoch, &req->dkey, 1,
 					    &req->iod, &req->sg,
 					    &req->ev);
 			ASSERT(rc == 0, "object update failed with %d", rc);
@@ -329,7 +328,7 @@ array(void)
 	}
 
 	/** close DAOS object */
-	rc = dsr_obj_close(oh, NULL);
+	rc = daos_obj_close(oh, NULL);
 	ASSERT(rc == 0, "object cloase failed with %d", rc);
 
 	/** release events */
@@ -427,7 +426,7 @@ committer()
 				       "flush failed with %d", ev.ev_error);
 				*state = EP_FLUSHED;
 				/** start commit */
-				rc = dsr_epoch_commit(coh, epoch, NULL, &ev);
+				rc = daos_epoch_commit(coh, epoch, NULL, &ev);
 				ASSERT(rc == 0,
 				       "commit start failed with %d", rc);
 			} else if (*state == EP_FLUSHED) {
@@ -457,7 +456,7 @@ committer()
 			*state = EP_WR_DONE;
 
 			/** start flush on behalf of everyone */
-			rc = dsr_epoch_flush(coh, epoch, NULL, &ev);
+			rc = daos_epoch_flush(coh, epoch, NULL, &ev);
 			ASSERT(rc == 0, "flush start failed with %d", rc);
 		}
 	}
@@ -485,7 +484,7 @@ main(int argc, char **argv)
 
 	/** initialize the local DAOS stack */
 	rc = daos_init();
-	ASSERT(rc == 0, "dsr_init failed with %d", rc);
+	ASSERT(rc == 0, "daos_init failed with %d", rc);
 
 	/** create event queue */
 	rc = daos_eq_create(&eq);
@@ -496,36 +495,36 @@ main(int argc, char **argv)
 		pool_create();
 
 		/** connect to the just created DAOS pool */
-		rc = dsr_pool_connect(pool_uuid, DSS_PSETID, &svcl,
-				      DAOS_PC_EX /* exclusive access */,
-				      &poh /* returned pool handle */,
-				      NULL /* returned pool info */,
-				      NULL /* event */);
+		rc = daos_pool_connect(pool_uuid, DSS_PSETID, &svcl,
+				       DAOS_PC_EX /* exclusive access */,
+				       &poh /* returned pool handle */,
+				       NULL /* returned pool info */,
+				       NULL /* event */);
 		ASSERT(rc == 0, "pool connect failed with %d", rc);
 	}
 
 	/** share pool handle with peer tasks */
-	handle_share(&poh, HANDLE_POOL, rank, poh,/* useless */
-		     HANDLE_SHARE_DSR, 1);
+	handle_share(&poh, HANDLE_POOL, rank, poh, 1);
 
 	if (rank == 0) {
 		/** generate uuid for container */
 		uuid_generate(co_uuid);
 
 		/** create container */
-		rc = dsr_co_create(poh, co_uuid, NULL /* event */);
+		rc = daos_cont_create(poh, co_uuid, NULL /* event */);
 		ASSERT(rc == 0, "container create failed with %d", rc);
 
 		/** open container */
-		rc = dsr_co_open(poh, co_uuid, DAOS_COO_RW, &coh, NULL, NULL);
+		rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, NULL,
+				    NULL);
 		ASSERT(rc == 0, "container open failed with %d", rc);
 	}
 
 	/** share container handle with peer tasks */
-	handle_share(&coh, HANDLE_CO, rank, poh, HANDLE_SHARE_DSR, 1);
+	handle_share(&coh, HANDLE_CO, rank, poh, 1);
 
 	/** generate objid */
-	dsr_obj_id_generate(&oid, cid);
+	daos_obj_id_generate(&oid, cid);
 
 	if (rank == 0) {
 		daos_oclass_attr_t	cattr = {
@@ -540,15 +539,15 @@ main(int argc, char **argv)
 		};
 
 		/** obtain an epoch hold */
-		rc = dsr_epoch_hold(coh, &epoch, NULL, NULL);
+		rc = daos_epoch_hold(coh, &epoch, NULL, NULL);
 		ASSERT(rc == 0, "container open failed with %d", rc);
 
 		/** register a default object class */
-		rc = dsr_oclass_register(coh, cid, &cattr, NULL);
+		rc = daos_oclass_register(coh, cid, &cattr, NULL);
 		ASSERT(rc == 0, "class register failed with %d", rc);
 
 		/** declare the object */
-		rc = dsr_obj_declare(coh, oid, epoch, NULL, NULL);
+		rc = daos_obj_declare(coh, oid, epoch, NULL, NULL);
 		ASSERT(rc == 0, "object declare failed with %d", rc);
 	}
 
@@ -565,10 +564,10 @@ main(int argc, char **argv)
 		array();
 
 	/** close container */
-	dsr_co_close(coh, NULL);
+	daos_cont_close(coh, NULL);
 
 	/** disconnect from pool & destroy it */
-	dsr_pool_disconnect(poh, NULL);
+	daos_pool_disconnect(poh, NULL);
 	if (rank == 0)
 		/** free allocated storage */
 		pool_destroy();

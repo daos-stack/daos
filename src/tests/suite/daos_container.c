@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of dsm
+ * This file is part of daos
  *
  * tests/suite/container.c
  */
@@ -35,7 +35,7 @@ co_create(void **state)
 	test_arg_t	*arg = *state;
 	uuid_t		 uuid;
 	daos_handle_t	 coh;
-	daos_co_info_t	 info;
+	daos_cont_info_t info;
 	daos_event_t	 ev;
 	daos_event_t	*evp;
 	int		 rc;
@@ -55,7 +55,7 @@ co_create(void **state)
 	if (arg->myrank == 0) {
 		print_message("creating container %ssynchronously ...\n",
 			      arg->async ? "a" : "");
-		rc = dsm_co_create(arg->poh, uuid, arg->async ? &ev : NULL);
+		rc = daos_cont_create(arg->poh, uuid, arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
 
 		if (arg->async) {
@@ -69,7 +69,7 @@ co_create(void **state)
 
 		print_message("opening container %ssynchronously\n",
 			      arg->async ? "a" : "");
-		rc = dsm_co_open(arg->poh, uuid, DAOS_COO_RW, &coh, &info,
+		rc = daos_cont_open(arg->poh, uuid, DAOS_COO_RW, &coh, &info,
 				 arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
 
@@ -95,12 +95,11 @@ co_create(void **state)
 	}
 
 	if (arg->hdl_share)
-		handle_share(&coh, HANDLE_CO, arg->myrank, arg->poh,
-			     HANDLE_SHARE_DSM, 1);
+		handle_share(&coh, HANDLE_CO, arg->myrank, arg->poh, 1);
 
 	print_message("closing container %ssynchronously ...\n",
 		      arg->async ? "a" : "");
-	rc = dsm_co_close(coh, arg->async ? &ev : NULL);
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {
@@ -119,7 +118,7 @@ co_create(void **state)
 	if (arg->myrank == 0) {
 		print_message("destroying container %ssynchronously ...\n",
 			      arg->async ? "a" : "");
-		rc = dsm_co_destroy(arg->poh, uuid, 1 /* force */,
+		rc = daos_cont_destroy(arg->poh, uuid, 1 /* force */,
 				    arg->async ? &ev : NULL);
 		assert_int_equal(rc, 0);
 
@@ -182,17 +181,17 @@ setup(void **state)
 
 	/** connect to pool */
 	if (arg->myrank == 0) {
-		rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-				      DAOS_PC_RW, &arg->poh, NULL /* info */,
-				      NULL /* ev */);
+		rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+				       &arg->svc, DAOS_PC_RW, &arg->poh,
+				       NULL /* info */,
+				       NULL /* ev */);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
 
 	/** l2g and g2l the pool handle */
-	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh,
-		     HANDLE_SHARE_DSM, 1);
+	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 1);
 
 	*state = arg;
 	return 0;
@@ -205,7 +204,7 @@ teardown(void **state) {
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	rc = dsm_pool_disconnect(arg->poh, NULL /* ev */);
+	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
 	if (rc)
 		return rc;
 
@@ -225,7 +224,7 @@ teardown(void **state) {
 }
 
 int
-run_dsm_co_test(int rank, int size)
+run_daos_cont_test(int rank, int size)
 {
 	int rc = 0;
 

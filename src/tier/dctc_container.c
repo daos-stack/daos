@@ -43,8 +43,8 @@ dct_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 
 int
 dct_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
-	    daos_rank_list_t *failed, daos_handle_t *coh, daos_co_info_t *info,
-	    daos_event_t *ev)
+	    daos_rank_list_t *failed, daos_handle_t *coh,
+	    daos_cont_info_t *info, daos_event_t *ev)
 {
 	return 0;
 }

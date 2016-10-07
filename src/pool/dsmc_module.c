@@ -27,7 +27,7 @@
  * daos_m.h.
  */
 
-#include <daos_m.h>
+#include <daos_types.h>
 #include <pthread.h>
 #include <daos/rpc.h>
 #include <daos/transport.h>

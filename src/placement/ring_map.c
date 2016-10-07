@@ -23,10 +23,9 @@
 /**
  * This file is part of DSR
  *
- * src/dsr/ring_map.c
+ * src/placement/ring_map.c
  */
-#include "placement.h"
-#include "dsr_internal.h"
+#include "pl_map.h"
 
 /** placement ring */
 struct pl_ring {
@@ -798,8 +797,8 @@ ring_obj_place_dist(struct pl_ring_map *rimap, daos_obj_id_t oid)
 
 /** see \a dsr_obj_place */
 static int
-ring_obj_place(struct pl_map *map, struct dsr_obj_md *md,
-	       struct dsr_obj_shard_md *shard_md,
+ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
+	       struct daos_obj_shard_md *shard_md,
 	       struct pl_obj_layout **layout_pp)
 {
 	struct pl_ring_map	*rimap = pl_map2rimap(map);
@@ -821,13 +820,13 @@ ring_obj_place(struct pl_map *map, struct dsr_obj_md *md,
 	int			 rc;
 
 	oid = md->omd_id;
-	oc_attr = dsr_oclass_attr_find(oid);
+	oc_attr = daos_oclass_attr_find(oid);
 	D_ASSERT(oc_attr != NULL);
 
 	begin	 = ring_obj_place_begin(rimap, oid);
 	dist	 = ring_obj_place_dist(rimap, oid);
 
-	grp_size = dsr_oclass_grp_size(oc_attr);
+	grp_size = daos_oclass_grp_size(oc_attr);
 	D_ASSERT(grp_size != 0);
 
 	grp_dist = grp_size * dist;
@@ -838,7 +837,7 @@ ring_obj_place(struct pl_map *map, struct dsr_obj_md *md,
 		if (grp_max == 0)
 			grp_max = 1;
 
-		grp_nr	= dsr_oclass_grp_nr(oc_attr, md);
+		grp_nr	= daos_oclass_grp_nr(oc_attr, md);
 		if (grp_nr > grp_max)
 			grp_nr = grp_max;
 		shard	= 0;
@@ -887,8 +886,8 @@ ring_obj_place(struct pl_map *map, struct dsr_obj_md *md,
 
 /** see \a dsr_obj_find_rebuild */
 int
-ring_obj_find_rebuild(struct pl_map *map, struct dsr_obj_md *md,
-		      struct dsr_obj_shard_md *shard_md,
+ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
+		      struct daos_obj_shard_md *shard_md,
 		      struct pl_target_grp *tgp_failed,
 		      uint32_t *tgt_rebuild)
 {
@@ -898,8 +897,8 @@ ring_obj_find_rebuild(struct pl_map *map, struct dsr_obj_md *md,
 
 /** see \a dsr_obj_find_reint */
 int
-ring_obj_find_reint(struct pl_map *map, struct dsr_obj_md *md,
-		    struct dsr_obj_shard_md *shard_md,
+ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
+		    struct daos_obj_shard_md *shard_md,
 		    struct pl_target_grp *tgp_reint,
 		    uint32_t *tgt_reint)
 {

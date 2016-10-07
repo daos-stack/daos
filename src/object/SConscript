@@ -7,8 +7,7 @@ env.AppendUnique(LIBPATH=[Dir('.')])
 denv = env.Clone()
 
 # Common object code
-common_tgts = denv.SharedObject(['obj_class.c', 'dsr_rpc.c', 'pl_map.c',
-				 'ring_map.c'])
+common_tgts = denv.SharedObject(['obj_class.c', 'dsr_rpc.c'])
 
 # generate server module
 srv = denv.SharedLibrary('obj', common_tgts +
@@ -16,7 +15,7 @@ srv = denv.SharedLibrary('obj', common_tgts +
 denv.Install('$PREFIX/lib/daos_srv', srv)
 
 # Object client library
-dc_obj_tgts = denv.SharedObject(['dsrc_module.c', 'cli_obj.c', 'cli_pool.c',
+dc_obj_tgts = denv.SharedObject(['dsrc_module.c', 'cli_obj.c',
 			         'dsrc_shard_obj.c'])
 dc_obj_tgts += common_tgts
 Export('dc_obj_tgts')

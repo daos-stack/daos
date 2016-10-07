@@ -41,8 +41,9 @@ pool_connect_nonexist(void **state)
 		return;
 
 	uuid_generate(uuid);
-	rc = dsm_pool_connect(uuid, NULL /* grp */, &arg->svc,
-			      DAOS_PC_RW, &poh, NULL /* info */, NULL /* ev */);
+	rc = daos_pool_connect(uuid, NULL /* grp */, &arg->svc,
+			       DAOS_PC_RW, &poh, NULL /* info */,
+			       NULL /* ev */);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
 
@@ -69,8 +70,8 @@ pool_connect(void **state)
 		/** connect to pool */
 		print_message("rank 0 connecting to pool %ssynchronously ... ",
 			      arg->async ? "a" : "");
-		rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-				      DAOS_PC_RW, &poh, &info,
+		rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+				       &arg->svc, DAOS_PC_RW, &poh, &info,
 				      arg->async ? &ev : NULL /* ev */);
 		assert_int_equal(rc, 0);
 
@@ -90,13 +91,12 @@ pool_connect(void **state)
 	}
 
 	if (arg->hdl_share)
-		handle_share(&poh, HANDLE_POOL, arg->myrank, poh,
-			     HANDLE_SHARE_DSM, 1);
+		handle_share(&poh, HANDLE_POOL, arg->myrank, poh, 1);
 
 	/** disconnect from pool */
 	print_message("rank %d disconnecting from pool %ssynchronously ... ",
 		      arg->myrank, arg->async ? "a" : "");
-	rc = dsm_pool_disconnect(poh, arg->async ? &ev : NULL /* ev */);
+	rc = daos_pool_disconnect(poh, arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {
@@ -194,7 +194,7 @@ teardown(void **state) {
 }
 
 int
-run_dsm_pool_test(int rank, int size)
+run_daos_pool_test(int rank, int size)
 {
 	int rc = 0;
 

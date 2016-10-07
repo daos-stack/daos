@@ -30,25 +30,13 @@
 
 #include <daos/common.h>
 #include <daos/event.h>
-#include <daos_sr.h>
-#include "placement.h"
-#include "dsr_types.h"
+#include <daos/placement.h>
+#include <daos_api.h>
 
 /* hhash table for all of objects on daos client,
  * pool, container, object etc
  **/
 extern struct daos_hhash *dsr_shard_hhash;
-
-struct daos_oclass_attr *dsr_oclass_attr_find(daos_obj_id_t oid);
-int dsr_oclass_grp_size(struct daos_oclass_attr *oc_attr);
-int dsr_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct dsr_obj_md *md);
-
-/* XXX These functions should be changed to support per-pool
- * placement map.
- */
-void dsr_pl_map_fini(void);
-int  dsr_pl_map_init(struct pool_map *po_map);
-struct pl_map *dsr_pl_map_find(daos_handle_t coh, daos_obj_id_t oid);
 
 /* dsr shard object */
 struct dsr_shard_object {

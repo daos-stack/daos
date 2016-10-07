@@ -38,7 +38,7 @@
 
 #include <daos_types.h>
 #include <daos/list.h>
-#include <daos_sr.h>
+#include <daos_api.h>
 #include <errno.h>
 #include "suite/daos_test.h"
 
@@ -72,8 +72,8 @@ daos_pool_info_t		pool_info;
 daos_handle_t			poh = DAOS_HDL_INVAL;
 daos_handle_t			coh = DAOS_HDL_INVAL;
 daos_handle_t			oh = DAOS_HDL_INVAL;
-uuid_t				co_uuid;
-daos_co_info_t			co_info;
+uuid_t				cont_uuid;
+daos_cont_info_t		cont_info;
 daos_obj_id_t			oid;
 daos_epoch_t			ghce;
 daos_rank_t			svc;
@@ -84,7 +84,7 @@ void				*akbuf;
 static daos_handle_t		eq;
 unsigned int			naios;
 static daos_event_t		**events;
-static daos_oclass_id_t		obj_class = DSR_OC_LARGE_RW;
+static daos_oclass_id_t		obj_class = DAOS_OC_LARGE_RW;
 bool				t_validate;
 bool				t_pretty_print;
 
@@ -426,16 +426,14 @@ object_open(int t_id, daos_epoch_t epoch,
 		oid.mid = t_id + 1;
 		oid.lo = t_id;
 	}
-	dsr_obj_id_generate(&oid, obj_class);
+	daos_obj_id_generate(&oid, obj_class);
 
 	if (enum_flag) {
-		rc = dsr_obj_declare(coh, oid, epoch, NULL,
-				     NULL);
+		rc = daos_obj_declare(coh, oid, epoch, NULL, NULL);
 		DBENCH_CHECK(rc, "Failed to declare object");
 	} else {
 		if (comm_world_rank == 0) {
-			rc = dsr_obj_declare(coh, oid, epoch, NULL,
-					     NULL);
+			rc = daos_obj_declare(coh, oid, epoch, NULL, NULL);
 			DBENCH_CHECK(rc, "Failed to declare object");
 		}
 	}
@@ -443,7 +441,7 @@ object_open(int t_id, daos_epoch_t epoch,
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	flags = DAOS_OO_RW;
-	rc = dsr_obj_open(coh, oid, epoch, flags, object, NULL);
+	rc = daos_obj_open(coh, oid, epoch, flags, object, NULL);
 	DBENCH_CHECK(rc, "Failed to open object");
 }
 
@@ -452,7 +450,7 @@ object_close(daos_handle_t object)
 {
 	int rc;
 
-	rc = dsr_obj_close(object, NULL /* ev */);
+	rc = daos_obj_close(object, NULL /* ev */);
 	DBENCH_CHECK(rc, "Failed to close object");
 }
 
@@ -469,8 +467,8 @@ insert(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req)
 	req->erange.epr_lo = epoch;
 
 	/** execute update operation */
-	rc = dsr_obj_update(oh, epoch, &req->dkey, 1, &req->vio,
-			    &req->sgl, &req->ev);
+	rc = daos_obj_update(oh, epoch, &req->dkey, 1, &req->vio,
+			     &req->sgl, &req->ev);
 	DBENCH_CHECK(rc, "dsr fetch failed\n");
 }
 
@@ -483,11 +481,10 @@ enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	daos_iov_set(&req->val_iov, buf, len);
 
 	/** execute fetch operation */
-	rc = dsr_obj_list_dkey(oh, epoch, number, kds,
-			       &req->sgl, anchor,
-			       NULL);
+	rc = daos_obj_list_dkey(oh, epoch, number, kds, &req->sgl, anchor,
+				NULL);
 
-	DBENCH_CHECK(rc, "dsr_obj_list_dkey failed\n");
+	DBENCH_CHECK(rc, "daos_obj_list_dkey failed\n");
 }
 
 static void
@@ -515,8 +512,8 @@ lookup(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req,
 			    req->sgl.sg_iovs->iov_buf_len);
 
 	/** execute fetch operation */
-	rc = dsr_obj_fetch(oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
-			   NULL, verify ? NULL : &req->ev);
+	rc = daos_obj_fetch(oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
+			    NULL, verify ? NULL : &req->ev);
 	DBENCH_CHECK(rc, "dsr fetch failed\n");
 }
 
@@ -543,7 +540,7 @@ pool_disconnect(int rank)
 {
 	int	rc = 0;
 
-	rc = dsr_pool_disconnect(poh, NULL);
+	rc = daos_pool_disconnect(poh, NULL);
 	DBENCH_CHECK(rc, "pool disconnect failed\n");
 }
 
@@ -553,12 +550,12 @@ container_create(int rank)
 	if (!rank) {
 		int	rc;
 
-		uuid_generate(co_uuid);
-		rc = dsr_co_create(poh, co_uuid, NULL);
+		uuid_generate(cont_uuid);
+		rc = daos_cont_create(poh, cont_uuid, NULL);
 		DBENCH_CHECK(rc, "Container create failed\n");
 
-		rc = dsr_co_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info,
-				 NULL);
+		rc = daos_cont_open(poh, cont_uuid, DAOS_COO_RW, &coh,
+				    &cont_info, NULL);
 		DBENCH_CHECK(rc, "Container open failed\n");
 	}
 }
@@ -569,7 +566,7 @@ container_close(int rank)
 	int	rc;
 
 	if (rank != 0) {
-		rc  = dsr_co_close(coh, NULL);
+		rc  = daos_cont_close(coh, NULL);
 		DBENCH_CHECK(rc, "Failed to close container\n");
 	}
 
@@ -577,7 +574,7 @@ container_close(int rank)
 	DBENCH_CHECK(rc, "Failed at barrier in container close\n");
 
 	if (!rank) {
-		rc = dsr_co_close(coh, NULL);
+		rc = daos_cont_close(coh, NULL);
 		DBENCH_CHECK(rc, "Failed to close container\n");
 	}
 
@@ -591,7 +588,7 @@ container_destroy(int rank)
 	if (!rank) {
 		int	rc;
 
-		rc = dsr_co_destroy(poh, co_uuid, 1, NULL);
+		rc = daos_cont_destroy(poh, cont_uuid, 1, NULL);
 		DBENCH_CHECK(rc, "Container destroy failed\n");
 	}
 }
@@ -673,14 +670,14 @@ kv_update_async(struct test *test, int key_type,
 	int		counter;
 
 	counter = (key_type == 2) ? test->t_nindexes : test->t_nkeys;
-	ghce = co_info.ci_epoch_state.es_ghce;
+	ghce = cont_info.ci_epoch_state.es_ghce;
 	DBENCH_INFO("ghce: %"PRIu64, ghce);
 
 	ghce++;
 	test->t_epoch = ghce;
 
 	if (comm_world_rank == 0) {
-		rc = dsr_epoch_hold(coh, &test->t_epoch, NULL, NULL);
+		rc = daos_epoch_hold(coh, &test->t_epoch, NULL, NULL);
 		DBENCH_CHECK(rc, "Failed to hold epoch\n");
 	}
 
@@ -754,11 +751,11 @@ kv_flush_and_commit(struct test *test)
 	if (comm_world_rank == 0) {
 		DBENCH_INFO("Flushing Epoch %lu", test->t_epoch);
 
-		rc = dsr_epoch_flush(coh, test->t_epoch, NULL, NULL);
+		rc = daos_epoch_flush(coh, test->t_epoch, NULL, NULL);
 		DBENCH_CHECK(rc, "Failed to flush epoch");
 
 		DBENCH_INFO("Committing Epoch :%lu", test->t_epoch);
-		rc = dsr_epoch_commit(coh, test->t_epoch, NULL, NULL);
+		rc = daos_epoch_commit(coh, test->t_epoch, NULL, NULL);
 		DBENCH_CHECK(rc, "Failed to commit object write\n");
 	}
 
@@ -1344,20 +1341,20 @@ int main(int argc, char *argv[])
 		svcl.rl_nr.num_out = 0;
 		svcl.rl_ranks = &rank;
 
-		rc = dsr_pool_connect(pool_uuid, NULL, &svcl, DAOS_PC_RW, &poh,
-				      &pool_info, NULL);
+		rc = daos_pool_connect(pool_uuid, NULL, &svcl, DAOS_PC_RW,
+				       &poh, &pool_info, NULL);
 		DBENCH_CHECK(rc, "Pool %s connect failed\n",
 			     arg.t_pname);
 	}
 
-	handle_share(&poh, HANDLE_POOL, comm_world_rank, poh, HANDLE_SHARE_DSR,
+	handle_share(&poh, HANDLE_POOL, comm_world_rank, poh,
 		     verbose ? 1 : 0);
 	rc = MPI_Bcast(&pool_info, sizeof(pool_info), MPI_BYTE, 0,
 		       MPI_COMM_WORLD);
 	DBENCH_CHECK(rc, "broadcast pool_info error\n");
 
 	container_create(comm_world_rank);
-	handle_share(&coh, HANDLE_CO, comm_world_rank, poh, HANDLE_SHARE_DSR,
+	handle_share(&coh, HANDLE_CO, comm_world_rank, poh,
 		     verbose ? 1 : 0);
 
 	/** Invoke test **/

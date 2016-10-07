@@ -32,8 +32,8 @@
 #ifndef __DCT_API_H__
 #define __DCT_API_H__
 
-#include <daos_sr.h>
 #include <daos_types.h>
+#include <daos_api.h>
 
 /**
  * CT Specific Structs
@@ -216,8 +216,8 @@ dct_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev);
  */
 int
 dct_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
-	    daos_rank_list_t *failed, daos_handle_t *coh, daos_co_info_t *info,
-	    daos_event_t *ev);
+	    daos_rank_list_t *failed, daos_handle_t *coh,
+	    daos_cont_info_t *info, daos_event_t *ev);
 
 /**
  * Close an opened container.
@@ -292,7 +292,7 @@ dct_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
  */
 int
 dct_obj_declare(daos_handle_t coh, daos_obj_id_t *id, daos_epoch_t epoch,
-		dsr_obj_attr_t *oa, daos_handle_t *oh, daos_event_t *ev);
+		daos_obj_attr_t *oa, daos_handle_t *oh, daos_event_t *ev);
 
 /**
  * Open an declared DAOS-SR object.
@@ -373,7 +373,7 @@ dct_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
  *			-DER_UNREACH	Network is unreachable
  */
 int
-dct_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
+dct_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
 	      daos_rank_list_t *ranks, daos_event_t *ev);
 
 /**
@@ -598,49 +598,49 @@ dct_ping(uint32_t ping_val, daos_event_t *ev);
  * Pool APIs from DAOS-SR
  */
 
-#define dct_pool_connect	dsr_pool_connect
-#define dct_pool_disconnect	dsr_pool_disconnect
-#define dct_pool_exclude	dsr_pool_exclude
-#define dct_pool_query		dsr_pool_query
-#define dct_pool_target_query	dsr_pool_target_query
+#define dct_pool_connect	daos_pool_connect
+#define dct_pool_disconnect	daos_pool_disconnect
+#define dct_pool_exclude	daos_pool_exclude
+#define dct_pool_query		daos_pool_query
+#define dct_pool_target_query	daos_pool_target_query
 
 /**
  * Container APIs from DAOS-SR
  */
 
-#define dct_co_query		dsr_co_query
-#define dct_co_attr_list	dsr_co_attr_list
-#define dct_co_attr_get		dsr_co_attr_get
-#define dct_co_attr_set		dsr_co_attr_set
+#define dct_co_query		daos_cont_query
+#define dct_co_attr_list	daos_cont_attr_list
+#define dct_co_attr_get		daos_cont_attr_get
+#define dct_co_attr_set		daos_cont_attr_set
 
 /**
  * Epoch APIs from DAOS-SR
  */
 
-#define dct_epoch_flush			dsr_epoch_flush
-#define dct_epoch_flush_target		dsr_epoch_flush_target
-#define dct_epoch_discard		dsr_epoch_discard
-#define dct_epoch_discard_target	dsr_epoch_discard_target
-#define dct_epoch_query			dsr_epoch_query
-#define dct_epoch_hold			dsr_epoch_hold
-#define dct_epoch_slip			dsr_epoch_slip
-#define dct_epoch_commit		dsr_epoch_commit
-#define dct_epoch_wait			dsr_epoch_wait
+#define dct_epoch_flush			daos_epoch_flush
+#define dct_epoch_flush_target		daos_epoch_flush_target
+#define dct_epoch_discard		daos_epoch_discard
+#define dct_epoch_discard_target	daos_epoch_discard_target
+#define dct_epoch_query			daos_epoch_query
+#define dct_epoch_hold			daos_epoch_hold
+#define dct_epoch_slip			daos_epoch_slip
+#define dct_epoch_commit		daos_epoch_commit
+#define dct_epoch_wait			daos_epoch_wait
 
 /**
  * Snapshot APIs from DAOS-SR
  */
 
-#define dct_snap_list		dsr_snap_list
-#define dct_snap_create		dsr_snap_create
-#define dct_snap_destroy	dsr_snap_destroy
+#define dct_snap_list		daos_snap_list
+#define dct_snap_create		daos_snap_create
+#define dct_snap_destroy	daos_snap_destroy
 
 /**
  * Object Class APIs from DAOS-SR
  */
 
-#define dct_oclass_register	dsr_oclass_register
-#define dct_oclass_query	dsr_oclass_query
-#define dct_oclass_list		dsr_oclass_list
+#define dct_oclass_register	daos_oclass_register
+#define dct_oclass_query	daos_oclass_query
+#define dct_oclass_list		daos_oclass_list
 
 #endif /* __DCT_API_H__ */

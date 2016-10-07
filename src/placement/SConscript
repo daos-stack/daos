@@ -1,0 +1,18 @@
+#!python
+
+Import('env')
+
+env.AppendUnique(LIBPATH=[Dir('.')])
+
+denv = env.Clone()
+
+# Common placement code
+common_tgts = denv.SharedObject(['pl_map.c', 'ring_map.c'])
+
+# generate server module
+srv = denv.SharedLibrary('placement', common_tgts)
+denv.Install('$PREFIX/lib/daos_srv', srv)
+
+# placement client library
+dc_placement_tgts = common_tgts
+Export('dc_placement_tgts')

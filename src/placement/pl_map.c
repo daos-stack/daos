@@ -23,10 +23,9 @@
 /**
  * This file is part of daos_sr
  *
- * src/dsr/pl_map.c
+ * src/placement/pl_map.c
  */
-#include "dsr_internal.h"
-#include "placement.h"
+#include "pl_map.h"
 
 extern struct pl_map_ops	ring_map_ops;
 
@@ -116,8 +115,8 @@ void pl_map_print(struct pl_map *map)
  * is not NULL.
  */
 int
-pl_obj_place(struct pl_map *map, struct dsr_obj_md *md,
-	     struct dsr_obj_shard_md *shard_md,
+pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
+	     struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp)
 {
 	D_ASSERT(map->pl_ops != NULL);
@@ -135,8 +134,8 @@ pl_obj_place(struct pl_map *map, struct dsr_obj_md *md,
  *		-ve	error code.
  */
 int
-pl_obj_find_rebuild(struct pl_map *map, struct dsr_obj_md *md,
-		    struct dsr_obj_shard_md *shard_md,
+pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
+		    struct daos_obj_shard_md *shard_md,
 		    struct pl_target_grp *tgp_failed, uint32_t *tgt_rebuild)
 {
 	D_ASSERT(map->pl_ops != NULL);
@@ -157,8 +156,8 @@ pl_obj_find_rebuild(struct pl_map *map, struct dsr_obj_md *md,
  *		-ve	error code.
  */
 int
-pl_obj_find_reint(struct pl_map *map, struct dsr_obj_md *md,
-		  struct dsr_obj_shard_md *shard_md,
+pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
+		  struct daos_obj_shard_md *shard_md,
 		  struct pl_target_grp *tgp_reint, uint32_t *tgt_reint)
 {
 	D_ASSERT(map->pl_ops != NULL);
@@ -220,7 +219,7 @@ pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
  * belongs to.
  */
 unsigned int
-pl_obj_shard2grp_head(struct dsr_obj_shard_md *shard_md,
+pl_obj_shard2grp_head(struct daos_obj_shard_md *shard_md,
 		      struct daos_oclass_attr *oc_attr)
 {
 	int sid	= shard_md->smd_id.id_shard;
@@ -235,14 +234,14 @@ pl_obj_shard2grp_head(struct dsr_obj_shard_md *shard_md,
 
 	case DAOS_RES_EC:
 	case DAOS_RES_REPL:
-		return sid - sid % dsr_oclass_grp_size(oc_attr);
+		return sid - sid % daos_oclass_grp_size(oc_attr);
 	}
 }
 /**
  * Returns the redundancy group index of @shard_md.
  */
 unsigned int
-pl_obj_shard2grp_index(struct dsr_obj_shard_md *shard_md,
+pl_obj_shard2grp_index(struct daos_obj_shard_md *shard_md,
 		       struct daos_oclass_attr *oc_attr)
 {
 	int sid	= shard_md->smd_id.id_shard;
@@ -257,20 +256,20 @@ pl_obj_shard2grp_index(struct dsr_obj_shard_md *shard_md,
 
 	case DAOS_RES_EC:
 	case DAOS_RES_REPL:
-		return sid / dsr_oclass_grp_size(oc_attr);
+		return sid / daos_oclass_grp_size(oc_attr);
 	}
 }
 
 /**
  * XXX this should be per-pool.
  */
-struct dsr_pl_map_data {
+struct daos_placement_data {
 	struct pl_map	*pd_pl_map;
 	unsigned int	 pd_ref;
 	pthread_mutex_t	 pd_lock;
 };
 
-static struct dsr_pl_map_data pl_map_data = {
+static struct daos_placement_data placement_data = {
 	.pd_pl_map	= NULL,
 	.pd_ref		= 0,
 	.pd_lock	= PTHREAD_MUTEX_INITIALIZER,
@@ -278,21 +277,31 @@ static struct dsr_pl_map_data pl_map_data = {
 
 #define DSR_RING_DOMAIN		PO_COMP_TP_RACK
 
+struct pl_map *
+pl_map_find(daos_handle_t coh, daos_obj_id_t oid)
+{
+	return placement_data.pd_pl_map;
+}
+
+/**
+ * Initialize placement maps for a pool.
+ * XXX: placement maps should be attached on each pool.
+ */
 int
-dsr_pl_map_init(struct pool_map *po_map)
+daos_placement_init(struct pool_map *po_map)
 {
 	struct pl_map_init_attr	mia;
 	int			rc = 0;
 
-	pthread_mutex_lock(&pl_map_data.pd_lock);
-	if (pl_map_data.pd_pl_map != NULL) {
+	pthread_mutex_lock(&placement_data.pd_lock);
+	if (placement_data.pd_pl_map != NULL) {
 		D_DEBUG(DF_SR, "Placement map has been referenced %d\n",
-			pl_map_data.pd_ref);
-		pl_map_data.pd_ref++;
+			placement_data.pd_ref);
+		placement_data.pd_ref++;
 		goto out;
 	}
 
-	D_ASSERT(pl_map_data.pd_ref == 0);
+	D_ASSERT(placement_data.pd_ref == 0);
 
 	memset(&mia, 0, sizeof(mia));
 	mia.ia_ver	    = pool_map_get_version(po_map);
@@ -300,30 +309,25 @@ dsr_pl_map_init(struct pool_map *po_map)
 	mia.ia_ring.domain  = DSR_RING_DOMAIN;
 	mia.ia_ring.ring_nr = 1;
 
-	rc = pl_map_create(po_map, &mia, &pl_map_data.pd_pl_map);
+	rc = pl_map_create(po_map, &mia, &placement_data.pd_pl_map);
 	if (rc != 0)
 		goto out;
 
-	pl_map_data.pd_ref = 1;
+	placement_data.pd_ref = 1;
  out:
-	pthread_mutex_unlock(&pl_map_data.pd_lock);
+	pthread_mutex_unlock(&placement_data.pd_lock);
 	return rc;
 }
 
+/** Finalize placement maps for a pool */
 void
-dsr_pl_map_fini(void)
+daos_placement_fini(struct pool_map *po_map)
 {
-	pthread_mutex_lock(&pl_map_data.pd_lock);
-	pl_map_data.pd_ref--;
-	if (pl_map_data.pd_ref == 0) {
-		pl_map_destroy(pl_map_data.pd_pl_map);
-		pl_map_data.pd_pl_map = NULL;
+	pthread_mutex_lock(&placement_data.pd_lock);
+	placement_data.pd_ref--;
+	if (placement_data.pd_ref == 0) {
+		pl_map_destroy(placement_data.pd_pl_map);
+		placement_data.pd_pl_map = NULL;
 	}
-	pthread_mutex_unlock(&pl_map_data.pd_lock);
-}
-
-struct pl_map *
-dsr_pl_map_find(daos_handle_t coh, daos_obj_id_t oid)
-{
-	return pl_map_data.pd_pl_map;
+	pthread_mutex_unlock(&placement_data.pd_lock);
 }

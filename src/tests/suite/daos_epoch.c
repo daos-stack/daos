@@ -54,7 +54,7 @@ epoch_query(void **state)
 	print_message("querying epoch state %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 
-	rc = dsm_epoch_query(arg->coh, &epoch_state, arg->async ? &ev : NULL);
+	rc = daos_epoch_query(arg->coh, &epoch_state, arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {
@@ -85,7 +85,7 @@ do_epoch_hold(test_arg_t *arg, daos_epoch_t *epoch, daos_epoch_state_t *state)
 	print_message("holding epoch "DF_U64" %ssynchronously ...\n", *epoch,
 		      arg->async ? "a" : "");
 
-	rc = dsm_epoch_hold(arg->coh, epoch, state, arg->async ? &ev : NULL);
+	rc = daos_epoch_hold(arg->coh, epoch, state, arg->async ? &ev : NULL);
 
 	if (arg->async) {
 		assert_int_equal(rc, 0);
@@ -117,7 +117,7 @@ do_epoch_commit(test_arg_t *arg, daos_epoch_t epoch, daos_epoch_state_t *state)
 	print_message("committing epoch "DF_U64" %ssynchronously ...\n",
 		      epoch, arg->async ? "a" : "");
 
-	rc = dsm_epoch_commit(arg->coh, epoch, state, arg->async ? &ev : NULL);
+	rc = daos_epoch_commit(arg->coh, epoch, state, arg->async ? &ev : NULL);
 
 	if (arg->async) {
 		assert_int_equal(rc, 0);
@@ -197,10 +197,10 @@ epoch_hold_commit(void **state)
 
 	print_message("SUBTEST 6: close and open the container again: shall "
 		      "succeed and report correct GLRE.\n");
-	rc = dsm_co_close(arg->coh, NULL);
+	rc = daos_cont_close(arg->coh, NULL);
 	assert_int_equal(rc, 0);
-	rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &arg->coh,
-			 &arg->co_info, NULL);
+	rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &arg->coh,
+			    &arg->co_info, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(arg->co_info.ci_epoch_state.es_hce,
 			 epoch_state.es_hce);
@@ -255,21 +255,21 @@ setup(void **state)
 		return rc;
 
 	/** connect to pool */
-	rc = dsm_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-			      DAOS_PC_RW, &arg->poh, &arg->pool_info,
-			      NULL /* ev */);
+	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+			       DAOS_PC_RW, &arg->poh, &arg->pool_info,
+			       NULL /* ev */);
 	if (rc)
 		return rc;
 
 	/** create container */
 	uuid_generate(arg->co_uuid);
-	rc = dsm_co_create(arg->poh, arg->co_uuid, NULL);
+	rc = daos_cont_create(arg->poh, arg->co_uuid, NULL);
 	if (rc)
 		return rc;
 
 	/** open container */
-	rc = dsm_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &arg->coh,
-			 &arg->co_info, NULL);
+	rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &arg->coh,
+			    &arg->co_info, NULL);
 	if (rc)
 		return rc;
 
@@ -282,15 +282,15 @@ teardown(void **state) {
 	test_arg_t	*arg = *state;
 	int		 rc;
 
-	rc = dsm_co_close(arg->coh, NULL);
+	rc = daos_cont_close(arg->coh, NULL);
 	if (rc)
 		return rc;
 
-	rc = dsm_co_destroy(arg->poh, arg->co_uuid, 1, NULL);
+	rc = daos_cont_destroy(arg->poh, arg->co_uuid, 1, NULL);
 	if (rc)
 		return rc;
 
-	rc = dsm_pool_disconnect(arg->poh, NULL /* ev */);
+	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
 	if (rc)
 		return rc;
 
@@ -307,7 +307,7 @@ teardown(void **state) {
 }
 
 int
-run_dsm_epoch_test(int rank, int size)
+run_daos_epoch_test(int rank, int size)
 {
 	int	rc;
 

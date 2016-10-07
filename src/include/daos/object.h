@@ -20,13 +20,13 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#ifndef __DSR_TYPES_H__
-#define __DSR_TYPES_H__
+#ifndef __DAOS_OBJECT_H__
+#define __DAOS_OBJECT_H__
 
 #include <daos_types.h>
 
 /** object metadata stored in the global OI table of container */
-struct dsr_obj_md {
+struct daos_obj_md {
 	daos_obj_id_t		omd_id;
 	uint32_t		omd_ver;
 	uint32_t		omd_padding;
@@ -37,11 +37,16 @@ struct dsr_obj_md {
 };
 
 /** object shard metadata stored in each contianer shard */
-struct dsr_obj_shard_md {
+struct daos_obj_shard_md {
 	/** ID of the object shard */
 	daos_unit_oid_t		smd_id;
 	uint32_t		smd_po_ver;
 	uint32_t		smd_padding;
 };
 
-#endif /* __DSR_TYPES_H__ */
+struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
+int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
+int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
+		       struct daos_obj_md *md);
+
+#endif /* __DAOS_OBJECT_H__ */

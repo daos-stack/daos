@@ -298,7 +298,7 @@ typedef struct {
 	/** epochs of returns snapshots */
 	daos_epoch_t	       *ci_snapshots;
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
-} daos_co_info_t;
+} daos_cont_info_t;
 
 /**
  * Object

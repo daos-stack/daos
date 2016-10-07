@@ -28,7 +28,8 @@
 #ifndef __DSR_CLI_INTENRAL_H__
 #define __DSR_CLI_INTENRAL_H__
 
-#include <daos_m.h>
+#include <daos_event.h>
+#include <daos/object.h>
 #include "dsr_internal.h"
 
 /** Client stack DSR object */
@@ -38,7 +39,7 @@ struct dsr_cli_obj {
 	 * and have no metadata in OI table, DSR only stores OID and pool map
 	 * version in it.
 	 */
-	struct dsr_obj_md	 cob_md;
+	struct daos_obj_md	 cob_md;
 	/** container open handle */
 	daos_handle_t		 cob_coh;
 	/** object open mode */

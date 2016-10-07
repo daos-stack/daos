@@ -90,7 +90,7 @@ ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
 	print_message("open oid=%lu.%lu.%lu\n", oid.lo, oid.mid, oid.hi);
 
 	/** open the object */
-	rc = dsr_obj_open(arg->coh, oid, 0, 0, &req->oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, 0, &req->oh, NULL);
 	assert_int_equal(rc, 0);
 }
 
@@ -99,7 +99,7 @@ ioreq_fini(struct ioreq *req)
 {
 	int rc;
 
-	rc = dsr_obj_close(req->oh, NULL);
+	rc = daos_obj_close(req->oh, NULL);
 	assert_int_equal(rc, 0);
 
 	if (req->arg->async) {
@@ -131,8 +131,8 @@ insert(const char *dkey, const char *akey, uint64_t idx, void *val,
 	req->erange.epr_lo = epoch;
 
 	/** execute update operation */
-	rc = dsr_obj_update(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
-			    req->arg->async ? &req->ev : NULL);
+	rc = daos_obj_update(req->oh, epoch, &req->dkey, 1, &req->vio,
+			     &req->sgl, req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async && rc != 0)
 		ioreq_fini(req);
 	assert_int_equal(rc, 0);
@@ -180,8 +180,8 @@ lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
 	req->erange.epr_lo = epoch;
 
 	/** execute fetch operation */
-	rc = dsr_obj_fetch(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
-			   NULL, req->arg->async ? &req->ev : NULL);
+	rc = daos_obj_fetch(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
+			    NULL, req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async && rc != 0)
 		ioreq_fini(req);
 	assert_int_equal(rc, 0);
@@ -206,7 +206,7 @@ obj_random(test_arg_t *arg, daos_obj_id_t *oid)
 	oid->lo	= rand();
 	oid->mid = rand();
 	oid->hi	= rand();
-	dsr_obj_id_generate(oid, DSR_OC_REPLICA_RW);
+	daos_obj_id_generate(oid, DAOS_OC_REPLICA_RW);
 }
 
 /** test overwrite in different epoch */
@@ -476,9 +476,8 @@ enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 
 	daos_iov_set(&req->val_iov, buf, len);
 	/** execute fetch operation */
-	rc = dsr_obj_list_dkey(req->oh, epoch, number, kds,
-			       &req->sgl, anchor,
-			       req->arg->async ? &req->ev : NULL);
+	rc = daos_obj_list_dkey(req->oh, epoch, number, kds, &req->sgl, anchor,
+				req->arg->async ? &req->ev : NULL);
 	assert_int_equal(rc, 0);
 
 	if (req->arg->async) {
@@ -669,9 +668,9 @@ setup(void **state)
 
 	if (arg->myrank == 0) {
 		/** connect to pool */
-		rc = dsr_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-				      DAOS_PC_RW, &arg->poh, &arg->pool_info,
-				      NULL /* ev */);
+		rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+				       &arg->svc, DAOS_PC_RW, &arg->poh,
+				       &arg->pool_info, NULL /* ev */);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
@@ -680,13 +679,11 @@ setup(void **state)
 		  MPI_COMM_WORLD);
 
 	/** l2g and g2l the pool handle */
-	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh,
-		     HANDLE_SHARE_DSR, 1);
-
+	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 1);
 	if (arg->myrank == 0) {
 		/** create container */
 		uuid_generate(arg->co_uuid);
-		rc = dsr_co_create(arg->poh, arg->co_uuid, NULL);
+		rc = daos_cont_create(arg->poh, arg->co_uuid, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
@@ -694,16 +691,15 @@ setup(void **state)
 
 	if (arg->myrank == 0) {
 		/** open container */
-		rc = dsr_co_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &arg->coh,
-				 NULL, NULL);
+		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
+				    &arg->coh, NULL, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
 
 	/** l2g and g2l the container handle */
-	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh,
-		     HANDLE_SHARE_DSR, 1);
+	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 1);
 
 	*state = arg;
 	return 0;
@@ -716,18 +712,18 @@ teardown(void **state) {
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	rc = dsr_co_close(arg->coh, NULL);
+	rc = daos_cont_close(arg->coh, NULL);
 	MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 	if (rc_reduce)
 		return rc_reduce;
 
 	if (arg->myrank == 0)
-		rc = dsr_co_destroy(arg->poh, arg->co_uuid, 1, NULL);
+		rc = daos_cont_destroy(arg->poh, arg->co_uuid, 1, NULL);
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;
 
-	rc = dsr_pool_disconnect(arg->poh, NULL /* ev */);
+	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
 	MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 	if (rc_reduce)
 		return rc_reduce;
@@ -747,7 +743,7 @@ teardown(void **state) {
 }
 
 int
-run_dsr_io_test(int rank, int size)
+run_daos_io_test(int rank, int size)
 {
 	int rc = 0;
 

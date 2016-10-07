@@ -35,8 +35,7 @@
 #include <mpi.h>
 
 #include <daos_mgmt.h>
-#include <daos_m.h>
-#include <daos_sr.h>
+#include <daos_api.h>
 #include <daos_event.h>
 #include <daos/common.h>
 
@@ -54,7 +53,7 @@ typedef struct {
 	daos_handle_t		poh;
 	daos_handle_t		coh;
 	daos_pool_info_t	pool_info;
-	daos_co_info_t		co_info;
+	daos_cont_info_t	co_info;
 	bool			async;
 	bool			hdl_share;
 } test_arg_t;
@@ -87,25 +86,19 @@ hdl_share_enable(void **state)
 }
 
 int run_dmg_pool_test(int rank, int size);
-int run_dsm_pool_test(int rank, int size);
-int run_dsm_co_test(int rank, int size);
-int run_dsm_io_test(int rank, int size);
-int run_dsm_epoch_test(int rank, int size);
-int run_dsr_io_test(int rank, int size);
+int run_daos_pool_test(int rank, int size);
+int run_daos_cont_test(int rank, int size);
+int run_daos_io_test(int rank, int size);
+int run_daos_epoch_test(int rank, int size);
 
 enum {
 	HANDLE_POOL,
 	HANDLE_CO
 };
 
-enum {
-	HANDLE_SHARE_DSM,
-	HANDLE_SHARE_DSR
-};
-
 static inline void
 handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
-	     int share_type, int verbose)
+	     int verbose)
 {
 	daos_iov_t	ghdl = { NULL, 0, 0 };
 	int		rc;
@@ -113,9 +106,9 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	if (rank == 0) {
 		/** fetch size of global handle */
 		if (type == HANDLE_POOL)
-			rc = dsm_pool_local2global(*hdl, &ghdl);
+			rc = daos_pool_local2global(*hdl, &ghdl);
 		else
-			rc = dsm_co_local2global(*hdl, &ghdl);
+			rc = daos_cont_local2global(*hdl, &ghdl);
 		assert_int_equal(rc, 0);
 	}
 
@@ -134,9 +127,9 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 				      (type == HANDLE_POOL) ?
 				      "pool" : "container");
 		if (type == HANDLE_POOL)
-			rc = dsm_pool_local2global(*hdl, &ghdl);
+			rc = daos_pool_local2global(*hdl, &ghdl);
 		else
-			rc = dsm_co_local2global(*hdl, &ghdl);
+			rc = daos_cont_local2global(*hdl, &ghdl);
 		assert_int_equal(rc, 0);
 		if (verbose)
 			print_message("success\n");
@@ -161,12 +154,9 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 		if (type == HANDLE_POOL) {
 			/* NB: Only pool_global2local are different for
 			 * DSM and DSR */
-			if (share_type == HANDLE_SHARE_DSR)
-				rc = dsr_pool_global2local(ghdl, hdl);
-			else
-				rc = dsm_pool_global2local(ghdl, hdl);
+			rc = daos_pool_global2local(ghdl, hdl);
 		} else {
-			rc = dsm_co_global2local(poh, ghdl, hdl);
+			rc = daos_cont_global2local(poh, ghdl, hdl);
 		}
 
 		assert_int_equal(rc, 0);

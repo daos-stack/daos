@@ -21,8 +21,8 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 #include <daos/common.h>
-#include <daos_sr.h>
-#include "../placement.h"
+#include <daos/placement.h>
+#include <daos_api.h>
 
 #define DOM_NR		8
 #define	TARGET_PER_DOM	4
@@ -36,7 +36,7 @@ static int
 plt_obj_place(daos_obj_id_t oid)
 {
 	struct pl_obj_layout	*layout;
-	struct dsr_obj_md	 md;
+	struct daos_obj_md	 md;
 	int			 i;
 	int			 rc;
 
@@ -110,7 +110,7 @@ main(int argc, char **argv)
 
 	pl_map_print(pl_map);
 
-	dsr_obj_id_generate(&oid, DSR_OC_SMALL_RW);
+	daos_obj_id_generate(&oid, DAOS_OC_SMALL_RW);
 	rc = plt_obj_place(oid);
 	D_ASSERT(rc == 0);
 

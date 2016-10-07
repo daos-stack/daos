@@ -24,7 +24,7 @@
  * dctc: Module Definitions
  *
  * dctc is the DCT client module/library. It exports the DCT API defined in
- * daos_m.h.
+ * daos_api.h.
  */
 
 #include <daos_ct.h>
@@ -40,7 +40,7 @@ static int		module_initialized;
 
 
 /**
- *   Initialize dsmc client library.
+ *   Initialize daos client library.
  *
  *   This function will initialize dtp interface and create
  *   a dtp context for the daos_ct client.
@@ -76,7 +76,7 @@ unlock:
 }
 
 /**
- * Finish dsmc client.
+ * Finish daos client.
  */
 int
 dct_fini(void)
