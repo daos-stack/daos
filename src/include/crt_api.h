@@ -269,7 +269,7 @@ crt_reply_send(crt_rpc_t *req);
 static inline void *
 crt_req_get(crt_rpc_t *rpc)
 {
-	return rpc->dr_input;
+	return rpc->cr_input;
 };
 
 /**
@@ -282,7 +282,7 @@ crt_req_get(crt_rpc_t *rpc)
 static inline void *
 crt_reply_get(crt_rpc_t *rpc)
 {
-	return rpc->dr_output;
+	return rpc->cr_output;
 }
 
 /**

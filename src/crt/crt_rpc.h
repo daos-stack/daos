@@ -51,15 +51,15 @@
 
 /* CaRT layer common header */
 struct crt_common_hdr {
-	uint32_t	dch_magic;
-	uint32_t	dch_version;
-	uint32_t	dch_opc;
-	uint32_t	dch_cksum;
-	uint32_t	dch_flags;
+	uint32_t	cch_magic;
+	uint32_t	cch_version;
+	uint32_t	cch_opc;
+	uint32_t	cch_cksum;
+	uint32_t	cch_flags;
 	/* gid and rank identify the rpc request sender */
-	crt_rank_t	dch_rank; /* uint32_t */
-	uint32_t	dch_grp_id; /* internal grp_id within the rank */
-	uint32_t	dch_padding[1];
+	crt_rank_t	cch_rank; /* uint32_t */
+	uint32_t	cch_grp_id; /* internal grp_id within the rank */
+	uint32_t	cch_padding[1];
 };
 
 typedef enum {
@@ -91,40 +91,40 @@ struct crt_corpc_info {
 
 struct crt_rpc_priv {
 	/* link to crt_ep_inflight::epi_req_q/::epi_req_waitq */
-	crt_list_t		drp_epi_link;
+	crt_list_t		crp_epi_link;
 	/* tmp_link used in crt_context_req_untrack */
-	crt_list_t		drp_tmp_link;
-	uint64_t		drp_ts; /* time stamp */
-	crt_cb_t		drp_complete_cb;
-	void			*drp_arg; /* argument for drp_complete_cb */
-	struct crt_ep_inflight	*drp_epi; /* point back to inflight ep */
+	crt_list_t		crp_tmp_link;
+	uint64_t		crp_ts; /* time stamp */
+	crt_cb_t		crp_complete_cb;
+	void			*crp_arg; /* argument for crp_complete_cb */
+	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
 
-	crt_rpc_t		drp_pub; /* public part */
-	struct crt_common_hdr	drp_req_hdr; /* common header for request */
-	struct crt_common_hdr	drp_reply_hdr; /* common header for reply */
-	crt_rpc_state_t		drp_state; /* RPC state */
-	hg_handle_t		drp_hg_hdl;
-	na_addr_t		drp_na_addr;
-	uint32_t		drp_srv:1, /* flag of server received request */
-				drp_output_got:1,
-				drp_input_got:1,
-				drp_coll:1; /* flag of collective RPC */
-	uint32_t		drp_refcount;
-	pthread_spinlock_t	drp_lock;
-	struct crt_opc_info	*drp_opc_info;
-	/* corpc info, only valid when (drp_coll == 1) */
-	struct crt_corpc_info	*drp_corpc_info;
+	crt_rpc_t		crp_pub; /* public part */
+	struct crt_common_hdr	crp_req_hdr; /* common header for request */
+	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
+	crt_rpc_state_t		crp_state; /* RPC state */
+	hg_handle_t		crp_hg_hdl;
+	na_addr_t		crp_na_addr;
+	uint32_t		crp_srv:1, /* flag of server received request */
+				crp_output_got:1,
+				crp_input_got:1,
+				crp_coll:1; /* flag of collective RPC */
+	uint32_t		crp_refcount;
+	pthread_spinlock_t	crp_lock;
+	struct crt_opc_info	*crp_opc_info;
+	/* corpc info, only valid when (crp_coll == 1) */
+	struct crt_corpc_info	*crp_corpc_info;
 };
 
 static inline void
 crt_common_hdr_init(struct crt_common_hdr *hdr, crt_opcode_t opc)
 {
 	C_ASSERT(hdr != NULL);
-	hdr->dch_opc = opc;
-	hdr->dch_magic = CRT_RPC_MAGIC;
-	hdr->dch_version = CRT_RPC_VERSION;
-	hdr->dch_grp_id = 0; /* TODO primary group with internal grp_id as 0 */
-	C_ASSERT(crt_group_rank(0, &hdr->dch_rank) == 0);
+	hdr->cch_opc = opc;
+	hdr->cch_magic = CRT_RPC_MAGIC;
+	hdr->cch_version = CRT_RPC_VERSION;
+	hdr->cch_grp_id = 0; /* TODO primary group with internal grp_id as 0 */
+	C_ASSERT(crt_group_rank(0, &hdr->cch_rank) == 0);
 }
 
 void crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,

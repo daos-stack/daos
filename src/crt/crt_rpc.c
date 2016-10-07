@@ -44,15 +44,15 @@
 
 /* group create */
 struct crt_msg_field *crt_grp_create_in_fields[] = {
-	&DMF_GRP_ID,		/* gc_grp_id */
-	&DMF_RANK_LIST,		/* gc_membs */
-	&DMF_RANK,		/* gc_initiate_rank */
+	&CMF_GRP_ID,		/* gc_grp_id */
+	&CMF_RANK_LIST,		/* gc_membs */
+	&CMF_RANK,		/* gc_initiate_rank */
 };
 
 struct crt_msg_field *crt_grp_create_out_fields[] = {
-	&DMF_RANK_LIST,		/* gc_failed_ranks */
-	&DMF_RANK,		/* gc_rank */
-	&DMF_INT,		/* gc_rc */
+	&CMF_RANK_LIST,		/* gc_failed_ranks */
+	&CMF_RANK,		/* gc_rank */
+	&CMF_INT,		/* gc_rc */
 };
 
 struct crt_req_format DQF_CRT_GRP_CREATE =
@@ -61,14 +61,14 @@ struct crt_req_format DQF_CRT_GRP_CREATE =
 
 /* group destroy */
 struct crt_msg_field *crt_grp_destroy_in_fields[] = {
-	&DMF_GRP_ID,		/* gd_grp_id */
-	&DMF_RANK,		/* gd_initiate_rank */
+	&CMF_GRP_ID,		/* gd_grp_id */
+	&CMF_RANK,		/* gd_initiate_rank */
 };
 
 struct crt_msg_field *crt_grp_destroy_out_fields[] = {
-	&DMF_RANK_LIST,		/* gd_failed_ranks */
-	&DMF_RANK,		/* gd_rank */
-	&DMF_INT,		/* gd_rc */
+	&CMF_RANK_LIST,		/* gd_failed_ranks */
+	&CMF_RANK,		/* gd_rank */
+	&CMF_INT,		/* gd_rc */
 };
 
 struct crt_req_format DQF_CRT_GRP_DESTROY =
@@ -77,13 +77,13 @@ struct crt_req_format DQF_CRT_GRP_DESTROY =
 
 /* uri lookup */
 struct crt_msg_field *crt_uri_lookup_in_fields[] = {
-	&DMF_GRP_ID,		/* ul_grp_id */
-	&DMF_RANK,		/* ul_rank */
+	&CMF_GRP_ID,		/* ul_grp_id */
+	&CMF_RANK,		/* ul_rank */
 };
 
 struct crt_msg_field *crt_uri_lookup_out_fields[] = {
-	&DMF_PHY_ADDR,		/* ul_uri */
-	&DMF_INT,		/* ul_rc */
+	&CMF_PHY_ADDR,		/* ul_uri */
+	&CMF_INT,		/* ul_rc */
 };
 
 struct crt_req_format DQF_CRT_URI_LOOKUP =
@@ -156,14 +156,14 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated)
 		C_ERROR("opc: 0x%x, lookup failed.\n", opc);
 		C_GOTO(out, rc = -CER_UNREG);
 	}
-	C_ASSERT(opc_info->doi_input_size <= CRT_MAX_INPUT_SIZE &&
-		 opc_info->doi_output_size <= CRT_MAX_OUTPUT_SIZE);
+	C_ASSERT(opc_info->coi_input_size <= CRT_MAX_INPUT_SIZE &&
+		 opc_info->coi_output_size <= CRT_MAX_OUTPUT_SIZE);
 
 	C_ALLOC_PTR(rpc_priv);
 	if (rpc_priv == NULL)
 		C_GOTO(out, rc = -CER_NOMEM);
 
-	rpc_priv->drp_opc_info = opc_info;
+	rpc_priv->crp_opc_info = opc_info;
 	*priv_allocated = rpc_priv;
 
 out:
@@ -176,13 +176,13 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv == NULL)
 		return;
 
-	if (rpc_priv->drp_coll && rpc_priv->drp_corpc_info) {
+	if (rpc_priv->crp_coll && rpc_priv->crp_corpc_info) {
 		crt_rank_list_free(
-			rpc_priv->drp_corpc_info->co_excluded_ranks);
-		C_FREE_PTR(rpc_priv->drp_corpc_info);
+			rpc_priv->crp_corpc_info->co_excluded_ranks);
+		C_FREE_PTR(rpc_priv->crp_corpc_info);
 	}
 
-	pthread_spin_destroy(&rpc_priv->drp_lock);
+	pthread_spin_destroy(&rpc_priv->crp_lock);
 	C_FREE_PTR(rpc_priv);
 }
 
@@ -214,8 +214,8 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
 	}
 
 	C_ASSERT(rpc_priv != NULL);
-	rpc_pub = &rpc_priv->drp_pub;
-	rpc_pub->dr_ep = tgt_ep;
+	rpc_pub = &rpc_priv->crp_pub;
+	rpc_pub->cr_ep = tgt_ep;
 
 	rc = crt_rpc_inout_buff_init(rpc_pub);
 	if (rc != 0)
@@ -224,7 +224,7 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
 	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, 0);
 
 	ctx = (struct crt_context *)crt_ctx;
-	rc = crt_hg_req_create(&ctx->dc_hg_ctx, tgt_ep, rpc_priv);
+	rc = crt_hg_req_create(&ctx->cc_hg_ctx, tgt_ep, rpc_priv);
 	if (rc != 0) {
 		C_ERROR("crt_hg_req_create failed, rc: %d, opc: 0x%x.\n",
 			rc, opc);
@@ -263,7 +263,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv, crt_group_t *grp,
 		C_GOTO(out, rc);
 	}
 	crt_rank_list_sort(co_info->co_excluded_ranks);
-	rpc_priv->drp_pub.dr_co_bulk_hdl = co_bulk_hdl;
+	rpc_priv->crp_pub.cr_co_bulk_hdl = co_bulk_hdl;
 	co_info->co_priv = priv;
 	co_info->co_tree_topo = tree_topo;
 	co_info->co_grp_destroy =
@@ -274,8 +274,8 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv, crt_group_t *grp,
 	co_info->co_child_num = co_info->co_grp_priv->gp_membs->rl_nr.num;
 	co_info->co_child_ack_num = 0;
 
-	rpc_priv->drp_corpc_info = co_info;
-	rpc_priv->drp_coll = 1;
+	rpc_priv->crp_corpc_info = co_info;
+	rpc_priv->crp_coll = 1;
 
 out:
 	return rc;
@@ -308,7 +308,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	}
 
 	C_ASSERT(rpc_priv != NULL);
-	rpc_pub = &rpc_priv->drp_pub;
+	rpc_pub = &rpc_priv->crp_pub;
 	rc = crt_rpc_inout_buff_init(rpc_pub);
 	if (rc != 0)
 		C_GOTO(out, rc);
@@ -340,10 +340,10 @@ crt_req_addref(crt_rpc_t *req)
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
-	rpc_priv = container_of(req, struct crt_rpc_priv, drp_pub);
-	pthread_spin_lock(&rpc_priv->drp_lock);
-	rpc_priv->drp_refcount++;
-	pthread_spin_unlock(&rpc_priv->drp_lock);
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	pthread_spin_lock(&rpc_priv->crp_lock);
+	rpc_priv->crp_refcount++;
+	pthread_spin_unlock(&rpc_priv->crp_lock);
 
 out:
 	return rc;
@@ -360,18 +360,18 @@ crt_req_decref(crt_rpc_t *req)
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
-	rpc_priv = container_of(req, struct crt_rpc_priv, drp_pub);
-	pthread_spin_lock(&rpc_priv->drp_lock);
-	rpc_priv->drp_refcount--;
-	if (rpc_priv->drp_refcount == 0)
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	pthread_spin_lock(&rpc_priv->crp_lock);
+	rpc_priv->crp_refcount--;
+	if (rpc_priv->crp_refcount == 0)
 		destroy = 1;
-	pthread_spin_unlock(&rpc_priv->drp_lock);
+	pthread_spin_unlock(&rpc_priv->crp_lock);
 
 	if (destroy == 1) {
 		rc = crt_hg_req_destroy(rpc_priv);
 		if (rc != 0)
 			C_ERROR("crt_hg_req_destroy failed, rc: %d, "
-				"opc: 0x%x.\n", rc, req->dr_opc);
+				"opc: 0x%x.\n", rc, req->cr_opc);
 	}
 
 out:
@@ -393,24 +393,24 @@ corpc_add_child_rpc(struct crt_rpc_priv *parent_rpc,
 
 	C_ASSERT(parent_rpc != NULL);
 	C_ASSERT(child_rpc != NULL);
-	C_ASSERT(parent_rpc->drp_coll == 1 &&
-		 parent_rpc->drp_corpc_info != NULL);
+	C_ASSERT(parent_rpc->crp_coll == 1 &&
+		 parent_rpc->crp_corpc_info != NULL);
 
-	co_info = parent_rpc->drp_corpc_info;
+	co_info = parent_rpc->crp_corpc_info;
 
 	C_ALLOC_PTR(child_req_item);
 	if (child_req_item == NULL)
 		C_GOTO(out, rc = -CER_NOMEM);
 
 	CRT_INIT_LIST_HEAD(&child_req_item->cr_link);
-	child_req_item->cr_rpc = &child_rpc->drp_pub;
+	child_req_item->cr_rpc = &child_rpc->crp_pub;
 
-	rc = crt_req_addref(&child_rpc->drp_pub);
+	rc = crt_req_addref(&child_rpc->crp_pub);
 	C_ASSERT(rc == 0);
 
-	pthread_spin_lock(&parent_rpc->drp_lock);
+	pthread_spin_lock(&parent_rpc->crp_lock);
 	crt_list_add_tail(&child_req_item->cr_link, &co_info->co_child_rpcs);
-	pthread_spin_unlock(&parent_rpc->drp_lock);
+	pthread_spin_unlock(&parent_rpc->crp_lock);
 
 out:
 	return rc;
@@ -426,24 +426,24 @@ corpc_del_child_rpc(struct crt_rpc_priv *parent_rpc,
 
 	C_ASSERT(parent_rpc != NULL);
 	C_ASSERT(child_rpc != NULL);
-	C_ASSERT(parent_rpc->drp_coll == 1 &&
-		 parent_rpc->drp_corpc_info != NULL);
+	C_ASSERT(parent_rpc->crp_coll == 1 &&
+		 parent_rpc->crp_corpc_info != NULL);
 
-	co_info = parent_rpc->drp_corpc_info;
-	pthread_spin_lock(&parent_rpc->drp_lock);
+	co_info = parent_rpc->crp_corpc_info;
+	pthread_spin_lock(&parent_rpc->crp_lock);
 	crt_list_for_each_entry_safe(child_req_item, next,
 				      &co_info->co_child_rpcs, cr_link) {
-		if (child_req_item->cr_rpc == &child_rpc->drp_pub) {
+		if (child_req_item->cr_rpc == &child_rpc->crp_pub) {
 			crt_list_del_init(&child_req_item->cr_link);
 			/* decref corresponds to the addref in
 			 * corpc_add_child_rpc */
-			rc = crt_req_decref(&child_rpc->drp_pub);
+			rc = crt_req_decref(&child_rpc->crp_pub);
 			C_ASSERT(rc == 0);
 			C_FREE_PTR(child_req_item);
 			break;
 		}
 	}
-	pthread_spin_unlock(&parent_rpc->drp_lock);
+	pthread_spin_unlock(&parent_rpc->crp_lock);
 }
 
 static int
@@ -459,24 +459,24 @@ corpc_child_cb(const struct crt_cb_info *cb_info)
 	bool			 req_done = false;
 	int			 rc = 0;
 
-	child_req = cb_info->dci_rpc;
-	rc = cb_info->dci_rc;
-	parent_rpc_priv = (struct crt_rpc_priv *)cb_info->dci_arg;
+	child_req = cb_info->cci_rpc;
+	rc = cb_info->cci_rc;
+	parent_rpc_priv = (struct crt_rpc_priv *)cb_info->cci_arg;
 	C_ASSERT(child_req != NULL && parent_rpc_priv != NULL);
-	child_rpc_priv = container_of(child_req, struct crt_rpc_priv, drp_pub);
-	co_info = parent_rpc_priv->drp_corpc_info;
+	child_rpc_priv = container_of(child_req, struct crt_rpc_priv, crp_pub);
+	co_info = parent_rpc_priv->crp_corpc_info;
 	C_ASSERT(co_info != NULL);
-	C_ASSERT(parent_rpc_priv->drp_pub.dr_opc == child_req->dr_opc);
-	opc_info = parent_rpc_priv->drp_opc_info;
+	C_ASSERT(parent_rpc_priv->crp_pub.cr_opc == child_req->cr_opc);
+	opc_info = parent_rpc_priv->crp_opc_info;
 	C_ASSERT(opc_info != NULL);
-	co_ops = opc_info->doi_co_ops;
+	co_ops = opc_info->coi_co_ops;
 
 	crt_group_rank(NULL, &my_rank);
 
-	pthread_spin_lock(&parent_rpc_priv->drp_lock);
+	pthread_spin_lock(&parent_rpc_priv->crp_lock);
 	if (rc != 0) {
 		C_ERROR("RPC(opc: 0x%x) error, rc: %d.\n",
-			child_req->dr_opc, rc);
+			child_req->cr_opc, rc);
 		co_info->co_rc = rc;
 	}
 	co_info->co_child_ack_num++;
@@ -486,15 +486,15 @@ corpc_child_cb(const struct crt_cb_info *cb_info)
 	/* call user aggregate callback */
 	if (co_ops != NULL) {
 		C_ASSERT(co_ops->co_aggregate != NULL);
-		rc = co_ops->co_aggregate(child_req, &parent_rpc_priv->drp_pub,
+		rc = co_ops->co_aggregate(child_req, &parent_rpc_priv->crp_pub,
 					  co_info->co_priv);
 		if (rc != 0) {
 			C_ERROR("co_ops->co_aggregate failed, rc: %d, "
-				"opc: 0x%x.\n", rc, child_req->dr_opc);
+				"opc: 0x%x.\n", rc, child_req->cr_opc);
 			rc = 0;
 		}
 	}
-	pthread_spin_unlock(&parent_rpc_priv->drp_lock);
+	pthread_spin_unlock(&parent_rpc_priv->crp_lock);
 
 	corpc_del_child_rpc(parent_rpc_priv, child_rpc_priv);
 
@@ -517,8 +517,8 @@ crt_corpc_send(crt_rpc_t *req)
 	int			i, rc = 0;
 
 	C_ASSERT(req != NULL);
-	rpc_priv = container_of(req, struct crt_rpc_priv, drp_pub);
-	co_info = rpc_priv->drp_corpc_info;
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	co_info = rpc_priv->crp_corpc_info;
 	C_ASSERT(co_info != NULL);
 	member_ranks = co_info->co_grp_priv->gp_membs;
 	C_ASSERT(member_ranks != NULL);
@@ -540,33 +540,33 @@ crt_corpc_send(crt_rpc_t *req)
 		tgt_ep.ep_grp = NULL;
 		tgt_ep.ep_rank = member_ranks->rl_ranks[i];
 		tgt_ep.ep_tag = 0;
-		rc = crt_req_create(req->dr_ctx, tgt_ep, req->dr_opc,
+		rc = crt_req_create(req->cr_ctx, tgt_ep, req->cr_opc,
 				    &child_rpc);
 		if (rc != 0) {
 			C_ERROR("crt_req_create(opc: 0x%x) failed, tgt_ep: %d, "
-				"rc: %d.\n", req->dr_opc, tgt_ep.ep_rank, rc);
+				"rc: %d.\n", req->cr_opc, tgt_ep.ep_rank, rc);
 			co_info->co_child_ack_num += co_info->co_child_num - i;
 			co_info->co_rc = rc;
 			C_GOTO(out, rc);
 		}
 
 		C_ASSERT(child_rpc != NULL);
-		C_ASSERT(child_rpc->dr_input_size == req->dr_input_size);
-		C_ASSERT(child_rpc->dr_output_size == req->dr_output_size);
+		C_ASSERT(child_rpc->cr_input_size == req->cr_input_size);
+		C_ASSERT(child_rpc->cr_output_size == req->cr_output_size);
 		child_rpc_priv = container_of(child_rpc, struct crt_rpc_priv,
-					      drp_pub);
+					      crp_pub);
 
 		/* TODO: should avoid this memcpy */
-		if (child_rpc->dr_input_size != 0) {
-			C_ASSERT(child_rpc->dr_input != NULL);
-			C_ASSERT(req->dr_input != NULL);
-			memcpy(child_rpc->dr_input, req->dr_input,
-			       req->dr_input_size);
+		if (child_rpc->cr_input_size != 0) {
+			C_ASSERT(child_rpc->cr_input != NULL);
+			C_ASSERT(req->cr_input != NULL);
+			memcpy(child_rpc->cr_input, req->cr_input,
+			       req->cr_input_size);
 		}
 		rc = crt_req_send(child_rpc, corpc_child_cb, rpc_priv);
 		if (rc != 0) {
 			C_ERROR("crt_req_send(opc: 0x%x) failed, tgt_ep: %d, "
-				"rc: %d.\n", req->dr_opc, tgt_ep.ep_rank, rc);
+				"rc: %d.\n", req->cr_opc, tgt_ep.ep_rank, rc);
 			co_info->co_child_ack_num += co_info->co_child_num - i;
 			co_info->co_rc = rc;
 			C_GOTO(out, rc);
@@ -581,7 +581,7 @@ out:
 	if (child_req_sent == false) {
 		C_ASSERT(rc != 0);
 		C_ERROR("crt_corpc_send(rpc: 0x%x) failed, rc: %d.\n",
-			req->dr_opc, rc);
+			req->cr_opc, rc);
 		crt_req_addref(req);
 		crt_rpc_complete(rpc_priv, rc);
 		crt_req_decref(req);
@@ -599,20 +599,20 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		C_ERROR("invalid parameter (NULL req).\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
-	if (req->dr_ctx == NULL) {
-		C_ERROR("invalid parameter (NULL req->dr_ctx).\n");
+	if (req->cr_ctx == NULL) {
+		C_ERROR("invalid parameter (NULL req->cr_ctx).\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
-	rpc_priv = container_of(req, struct crt_rpc_priv, drp_pub);
-	rpc_priv->drp_complete_cb = complete_cb;
-	rpc_priv->drp_arg = arg;
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	rpc_priv->crp_complete_cb = complete_cb;
+	rpc_priv->crp_arg = arg;
 
-	if (rpc_priv->drp_coll) {
+	if (rpc_priv->crp_coll) {
 		rc = crt_corpc_send(req);
 		if (rc != 0)
 			C_ERROR("crt_corpc_send failed, rc: %d, opc: 0x%x.\n",
-				rc, req->dr_opc);
+				rc, req->cr_opc);
 		C_GOTO(out, rc);
 	}
 
@@ -620,12 +620,12 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 	if (rc == CRT_REQ_TRACK_IN_INFLIGHQ) {
 		/* tracked in crt_ep_inflight::epi_req_q */
 		/* set state before sending to avoid race with complete_cb */
-		rpc_priv->drp_state = RPC_REQ_SENT;
+		rpc_priv->crp_state = RPC_REQ_SENT;
 		rc = crt_hg_req_send(rpc_priv);
 		if (rc != 0) {
 			C_ERROR("crt_hg_req_send failed, rc: %d, opc: 0x%x.\n",
-				rc, rpc_priv->drp_pub.dr_opc);
-			rpc_priv->drp_state = RPC_INITED;
+				rc, rpc_priv->crp_pub.cr_opc);
+			rpc_priv->crp_state = RPC_INITED;
 			crt_context_req_untrack(req);
 		}
 	} else if (rc == CRT_REQ_TRACK_IN_WAITQ) {
@@ -633,7 +633,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		rc = 0;
 	} else {
 		C_ERROR("crt_req_track failed, rc: %d, opc: 0x%x.\n",
-			rc, rpc_priv->drp_pub.dr_opc);
+			rc, rpc_priv->crp_pub.cr_opc);
 	}
 
 out:
@@ -654,11 +654,11 @@ crt_reply_send(crt_rpc_t *req)
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
-	rpc_priv = container_of(req, struct crt_rpc_priv, drp_pub);
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	rc = crt_hg_reply_send(rpc_priv);
 	if (rc != 0) {
 		C_ERROR("crt_hg_reply_send failed, rc: %d, opc: 0x%x.\n",
-			rc, rpc_priv->drp_pub.dr_opc);
+			rc, rpc_priv->crp_pub.cr_opc);
 	}
 
 out:
@@ -676,11 +676,11 @@ crt_req_abort(crt_rpc_t *req)
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
-	rpc_priv = container_of(req, struct crt_rpc_priv, drp_pub);
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	rc = crt_hg_req_cancel(rpc_priv);
 	if (rc != 0) {
 		C_ERROR("crt_hg_req_cancel failed, rc: %d, opc: 0x%x.\n",
-			rc, rpc_priv->drp_pub.dr_opc);
+			rc, rpc_priv->crp_pub.cr_opc);
 	}
 
 out:
@@ -692,7 +692,7 @@ out:
 static int
 crt_cb_common(const struct crt_cb_info *cb_info)
 {
-	*(int *)cb_info->dci_arg = 1;
+	*(int *)cb_info->cci_arg = 1;
 	return 0;
 }
 
@@ -729,7 +729,7 @@ crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout)
 	while (1) {
 		uint64_t interval = 1000; /* microseconds */
 
-		rc = crt_progress(rpc->dr_ctx, interval, NULL, NULL);
+		rc = crt_progress(rpc->cr_ctx, interval, NULL, NULL);
 		if (rc != 0 && rc != -CER_TIMEDOUT) {
 			C_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
@@ -755,20 +755,20 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 		  crt_opcode_t opc, int srv_flag)
 {
 	C_ASSERT(rpc_priv != NULL);
-	CRT_INIT_LIST_HEAD(&rpc_priv->drp_epi_link);
-	CRT_INIT_LIST_HEAD(&rpc_priv->drp_tmp_link);
-	rpc_priv->drp_complete_cb = NULL;
-	rpc_priv->drp_arg = NULL;
-	crt_common_hdr_init(&rpc_priv->drp_req_hdr, opc);
-	crt_common_hdr_init(&rpc_priv->drp_reply_hdr, opc);
-	rpc_priv->drp_state = RPC_INITED;
-	rpc_priv->drp_srv = (srv_flag != 0);
+	CRT_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
+	CRT_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link);
+	rpc_priv->crp_complete_cb = NULL;
+	rpc_priv->crp_arg = NULL;
+	crt_common_hdr_init(&rpc_priv->crp_req_hdr, opc);
+	crt_common_hdr_init(&rpc_priv->crp_reply_hdr, opc);
+	rpc_priv->crp_state = RPC_INITED;
+	rpc_priv->crp_srv = (srv_flag != 0);
 	/* initialize as 1, so user can cal crt_req_decref to destroy new req */
-	rpc_priv->drp_refcount = 1;
-	pthread_spin_init(&rpc_priv->drp_lock, PTHREAD_PROCESS_PRIVATE);
+	rpc_priv->crp_refcount = 1;
+	pthread_spin_init(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
 
-	rpc_priv->drp_pub.dr_opc = opc;
-	rpc_priv->drp_pub.dr_ctx = crt_ctx;
+	rpc_priv->crp_pub.cr_opc = opc;
+	rpc_priv->crp_pub.cr_ctx = crt_ctx;
 }
 
 void
@@ -776,16 +776,16 @@ crt_rpc_inout_buff_fini(crt_rpc_t *rpc_pub)
 {
 	C_ASSERT(rpc_pub != NULL);
 
-	if (rpc_pub->dr_input != NULL) {
-		C_ASSERT(rpc_pub->dr_input_size != 0);
-		C_FREE(rpc_pub->dr_input, rpc_pub->dr_input_size);
-		rpc_pub->dr_input_size = 0;
+	if (rpc_pub->cr_input != NULL) {
+		C_ASSERT(rpc_pub->cr_input_size != 0);
+		C_FREE(rpc_pub->cr_input, rpc_pub->cr_input_size);
+		rpc_pub->cr_input_size = 0;
 	}
 
-	if (rpc_pub->dr_output != NULL) {
-		C_ASSERT(rpc_pub->dr_output_size != 0);
-		C_FREE(rpc_pub->dr_output, rpc_pub->dr_output_size);
-		rpc_pub->dr_output_size = 0;
+	if (rpc_pub->cr_output != NULL) {
+		C_ASSERT(rpc_pub->cr_output_size != 0);
+		C_FREE(rpc_pub->cr_output, rpc_pub->cr_output_size);
+		rpc_pub->cr_output_size = 0;
 	}
 }
 
@@ -797,29 +797,29 @@ crt_rpc_inout_buff_init(crt_rpc_t *rpc_pub)
 	int			rc = 0;
 
 	C_ASSERT(rpc_pub != NULL);
-	C_ASSERT(rpc_pub->dr_input == NULL);
-	C_ASSERT(rpc_pub->dr_output == NULL);
-	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, drp_pub);
-	opc_info = rpc_priv->drp_opc_info;
+	C_ASSERT(rpc_pub->cr_input == NULL);
+	C_ASSERT(rpc_pub->cr_output == NULL);
+	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
+	opc_info = rpc_priv->crp_opc_info;
 	C_ASSERT(opc_info != NULL);
 
-	if (opc_info->doi_input_size > 0) {
-		C_ALLOC(rpc_pub->dr_input, opc_info->doi_input_size);
-		if (rpc_pub->dr_input == NULL) {
+	if (opc_info->coi_input_size > 0) {
+		C_ALLOC(rpc_pub->cr_input, opc_info->coi_input_size);
+		if (rpc_pub->cr_input == NULL) {
 			C_ERROR("cannot allocate memory(size "CF_U64") for "
-				"dr_input.\n", opc_info->doi_input_size);
+				"cr_input.\n", opc_info->coi_input_size);
 			C_GOTO(out, rc = -CER_NOMEM);
 		}
-		rpc_pub->dr_input_size = opc_info->doi_input_size;
+		rpc_pub->cr_input_size = opc_info->coi_input_size;
 	}
-	if (opc_info->doi_output_size > 0) {
-		C_ALLOC(rpc_pub->dr_output, opc_info->doi_output_size);
-		if (rpc_pub->dr_output == NULL) {
+	if (opc_info->coi_output_size > 0) {
+		C_ALLOC(rpc_pub->cr_output, opc_info->coi_output_size);
+		if (rpc_pub->cr_output == NULL) {
 			C_ERROR("cannot allocate memory(size "CF_U64") for "
-				"dr_putput.\n", opc_info->doi_input_size);
+				"cr_putput.\n", opc_info->coi_input_size);
 			C_GOTO(out, rc = -CER_NOMEM);
 		}
-		rpc_pub->dr_output_size = opc_info->doi_output_size;
+		rpc_pub->cr_output_size = opc_info->coi_output_size;
 	}
 
 out:

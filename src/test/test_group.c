@@ -13,9 +13,9 @@
 static int g_shutdown;
 
 struct crt_msg_field *echo_ping_checkin[] = {
-	&DMF_UINT32,
-	&DMF_UINT32,
-	&DMF_STRING,
+	&CMF_UINT32,
+	&CMF_UINT32,
+	&CMF_STRING,
 };
 struct crt_echo_checkin_req {
 	int		age;
@@ -23,8 +23,8 @@ struct crt_echo_checkin_req {
 	crt_string_t	name;
 };
 struct crt_msg_field *echo_ping_checkout[] = {
-	&DMF_INT,
-	&DMF_UINT32,
+	&CMF_INT,
+	&CMF_UINT32,
 };
 struct crt_echo_checkin_reply {
 	int		ret;
@@ -46,7 +46,7 @@ int echo_checkin_handler(crt_rpc_t *rpc_req)
 	C_ASSERT(e_req != NULL);
 
 	printf("tier1 echo_srver recv'd checkin, opc: 0x%x.\n",
-		rpc_req->dr_opc);
+		rpc_req->cr_opc);
 	printf("tier1 checkin input - age: %d, name: %s, days: %d.\n",
 		e_req->age, e_req->name, e_req->days);
 
@@ -69,11 +69,11 @@ int client_cb_common(const struct crt_cb_info *cb_info)
 	struct crt_echo_checkin_req		*rpc_req_input;
 	struct crt_echo_checkin_reply		*rpc_req_output;
 
-	rpc_req = cb_info->dci_rpc;
+	rpc_req = cb_info->cci_rpc;
 
-	*(int *) cb_info->dci_arg = 1;
+	*(int *) cb_info->cci_arg = 1;
 
-	switch (cb_info->dci_rpc->dr_opc) {
+	switch (cb_info->cci_rpc->cr_opc) {
 	case ECHO_OPC_CHECKIN:
 		rpc_req_input = crt_req_get(rpc_req);
 		if (rpc_req_input == NULL)
@@ -144,10 +144,10 @@ int echo_shutdown_handler(crt_rpc_t *rpc_req)
 	int		rc = 0;
 
 	printf("tier1 echo_srver received shutdown request, opc: 0x%x.\n",
-	       rpc_req->dr_opc);
+	       rpc_req->cr_opc);
 
-	assert(rpc_req->dr_input == NULL);
-	assert(rpc_req->dr_output == NULL);
+	assert(rpc_req->cr_input == NULL);
+	assert(rpc_req->cr_output == NULL);
 
 	rc = crt_reply_send(rpc_req);
 	printf("tier1 echo_srver done issuing shutdown responses.\n");

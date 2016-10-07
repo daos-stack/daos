@@ -100,19 +100,19 @@ extern struct crt_gdata		crt_gdata;
 
 /* crt_context */
 struct crt_context {
-	crt_list_t		 dc_link; /* link to gdata.cg_ctx_list */
-	int			 dc_idx; /* context index */
-	struct crt_hg_context	 dc_hg_ctx; /* HG context */
-	void			*dc_pool; /* pool for ES on server stack */
+	crt_list_t		 cc_link; /* link to gdata.cg_ctx_list */
+	int			 cc_idx; /* context index */
+	struct crt_hg_context	 cc_hg_ctx; /* HG context */
+	void			*cc_pool; /* pool for ES on server stack */
 	/* in-flight endpoint tracking hash table */
-	struct dhash_table	 dc_epi_table;
-	/* mutex to protect dc_epi_table */
-	pthread_mutex_t		 dc_mutex;
+	struct dhash_table	 cc_epi_table;
+	/* mutex to protect cc_epi_table */
+	pthread_mutex_t		 cc_mutex;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */
 struct crt_ep_inflight {
-	/* link to crt_context::dc_epi_table */
+	/* link to crt_context::cc_epi_table */
 	crt_list_t		epi_link;
 	/* endpoint address */
 	crt_endpoint_t		epi_ep;
@@ -142,25 +142,25 @@ struct crt_ep_inflight {
 
 /* opcode map (hash list) */
 struct crt_opc_map {
-	pthread_rwlock_t	dom_rwlock;
-	unsigned int		dom_lock_init:1;
-	unsigned int		dom_pid;
-	unsigned int		dom_bits;
-	crt_list_t		*dom_hash;
+	pthread_rwlock_t	com_rwlock;
+	unsigned int		com_lock_init:1;
+	unsigned int		com_pid;
+	unsigned int		com_bits;
+	crt_list_t		*com_hash;
 };
 
 struct crt_opc_info {
-	crt_list_t		doi_link;
-	crt_opcode_t		doi_opc;
-	unsigned int		doi_proc_init:1,
-				doi_rpccb_init:1,
-				doi_coops_init:1;
+	crt_list_t		coi_link;
+	crt_opcode_t		coi_opc;
+	unsigned int		coi_proc_init:1,
+				coi_rpccb_init:1,
+				coi_coops_init:1;
 
-	crt_rpc_cb_t		doi_rpc_cb;
-	struct crt_corpc_ops	*doi_co_ops;
-	crt_size_t		doi_input_size;
-	crt_size_t		doi_output_size;
-	struct crt_req_format	*doi_drf;
+	crt_rpc_cb_t		coi_rpc_cb;
+	struct crt_corpc_ops	*coi_co_ops;
+	crt_size_t		coi_input_size;
+	crt_size_t		coi_output_size;
+	struct crt_req_format	*coi_crf;
 };
 
 #endif /* __CRT_INTERNAL_TYPES_H__ */

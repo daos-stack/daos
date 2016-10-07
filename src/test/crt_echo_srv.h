@@ -253,7 +253,7 @@ int echo_srv_bulk_test(crt_rpc_t *rpc_req)
 
 	printf("echo_srver recv'd bulk_test, opc: 0x%x, intro_msg: %s, "
 	       "bulk_len: %ld, bulk_sgnum: %d.\n",
-	       rpc_req->dr_opc, e_req->bulk_intro_msg, bulk_len, bulk_sgnum);
+	       rpc_req->cr_opc, e_req->bulk_intro_msg, bulk_len, bulk_sgnum);
 
 	iovs = (crt_iov_t *)malloc(sizeof(crt_iov_t));
 	iovs[0].iov_buf = malloc(bulk_len);
@@ -262,7 +262,7 @@ int echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	sgl.sg_nr.num = 1;
 	sgl.sg_iovs = iovs;
 
-	rc = crt_bulk_create(rpc_req->dr_ctx, &sgl, CRT_BULK_RW,
+	rc = crt_bulk_create(rpc_req->cr_ctx, &sgl, CRT_BULK_RW,
 			     &local_bulk_hdl);
 	assert(rc == 0);
 

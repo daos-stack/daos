@@ -77,10 +77,10 @@ int echo_srv_shutdown(crt_rpc_t *rpc);
 int echo_srv_corpc_example(crt_rpc_t *rpc);
 
 struct crt_msg_field *echo_ping_checkin[] = {
-	&DMF_UINT32,
-	&DMF_UINT32,
-	&DMF_IOVEC,
-	&DMF_STRING,
+	&CMF_UINT32,
+	&CMF_UINT32,
+	&CMF_IOVEC,
+	&CMF_STRING,
 };
 struct crt_echo_checkin_req {
 	int		age;
@@ -90,8 +90,8 @@ struct crt_echo_checkin_req {
 };
 
 struct crt_msg_field *echo_ping_checkout[] = {
-	&DMF_INT,
-	&DMF_UINT32,
+	&CMF_INT,
+	&CMF_UINT32,
 };
 struct crt_echo_checkin_reply {
 	int ret;
@@ -99,23 +99,23 @@ struct crt_echo_checkin_reply {
 };
 
 struct crt_msg_field *echo_corpc_example_in[] = {
-	&DMF_STRING,
+	&CMF_STRING,
 };
 struct crt_echo_corpc_example_req {
 	crt_string_t	co_msg;
 };
 
 struct crt_msg_field *echo_corpc_example_out[] = {
-	&DMF_UINT32,
+	&CMF_UINT32,
 };
 struct crt_echo_corpc_example_reply {
 	uint32_t	co_result;
 };
 
 struct crt_msg_field *echo_bulk_test_in[] = {
-	&DMF_STRING,
-	&DMF_STRING,
-	&DMF_BULK,
+	&CMF_STRING,
+	&CMF_STRING,
+	&CMF_BULK,
 };
 struct crt_echo_bulk_in_req {
 	crt_string_t bulk_intro_msg;
@@ -124,8 +124,8 @@ struct crt_echo_bulk_in_req {
 };
 
 struct crt_msg_field *echo_bulk_test_out[] = {
-	&DMF_STRING,
-	&DMF_INT,
+	&CMF_STRING,
+	&CMF_INT,
 };
 
 struct crt_echo_bulk_out_reply {
@@ -249,14 +249,14 @@ int client_cb_common(const struct crt_cb_info *cb_info)
 	struct crt_echo_checkin_reply *e_reply;
 	struct crt_echo_corpc_example_reply *corpc_reply;
 
-	rpc_req = cb_info->dci_rpc;
+	rpc_req = cb_info->cci_rpc;
 
 	/* set complete flag */
-	printf("in client_cb_common, opc: 0x%x, dci_rc: %d.\n",
-	       rpc_req->dr_opc, cb_info->dci_rc);
-	*(int *) cb_info->dci_arg = 1;
+	printf("in client_cb_common, opc: 0x%x, cci_rc: %d.\n",
+	       rpc_req->cr_opc, cb_info->cci_rc);
+	*(int *) cb_info->cci_arg = 1;
 
-	switch (cb_info->dci_rpc->dr_opc) {
+	switch (cb_info->cci_rpc->cr_opc) {
 	case ECHO_OPC_CHECKIN:
 		e_req = crt_req_get(rpc_req);
 		if (e_req == NULL)

@@ -75,11 +75,11 @@ static int bulk_test_req_cb(const struct crt_cb_info *cb_info)
 	struct crt_echo_bulk_out_reply	*e_reply;
 	int				rc;
 
-	rpc_req = cb_info->dci_rpc;
-	bulk_test_cbinfo = (struct bulk_test_cli_cbinfo *)cb_info->dci_arg;
+	rpc_req = cb_info->cci_rpc;
+	bulk_test_cbinfo = (struct bulk_test_cli_cbinfo *)cb_info->cci_arg;
 
-	printf("in bulk_test_req_cb, opc: 0x%x, dci_rc: %d.\n",
-	       rpc_req->dr_opc, cb_info->dci_rc);
+	printf("in bulk_test_req_cb, opc: 0x%x, cci_rc: %d.\n",
+	       rpc_req->cr_opc, cb_info->cci_rc);
 
 	e_reply = crt_reply_get(rpc_req);
 	printf("bulk_test_output->bulk_echo_msg: %s. ret %d\n",
@@ -310,8 +310,8 @@ send_shutdown:
 	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_SHUTDOWN, &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 
-	assert(rpc_req->dr_input == NULL);
-	assert(rpc_req->dr_output == NULL);
+	assert(rpc_req->cr_input == NULL);
+	assert(rpc_req->cr_output == NULL);
 
 	rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
 	assert(rc == 0);

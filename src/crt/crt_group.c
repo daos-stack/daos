@@ -139,7 +139,7 @@ crt_li_destroy(struct crt_lookup_item *li)
 		if (li->li_tag_addr[i] == NULL)
 			continue;
 		ctx = li->li_grp_priv->gp_ctx;
-		hg_ret = HG_Addr_free(ctx->dc_hg_ctx.dhc_hgcla,
+		hg_ret = HG_Addr_free(ctx->dc_hg_ctx.chc_hgcla,
 				      li->li_tag_addr[i]);
 		if (hg_ret != HG_SUCCESS)
 			C_ERROR("HG_Addr_free failed, hg_ret: %d.\n", hg_ret);
@@ -220,8 +220,8 @@ crt_conn_tag(struct crt_hg_context *hg_ctx, crt_phy_addr_t base_addr,
 	C_ASSERT(base_addr != NULL && strlen(base_addr) > 0);
 	C_ASSERT(na_addr != NULL);
 
-	hg_class = hg_ctx->dhc_hgcla;
-	hg_context = hg_ctx->dhc_hgctx;
+	hg_class = hg_ctx->chc_hgcla;
+	hg_context = hg_ctx->chc_hgctx;
 	C_ASSERT(hg_class != NULL);
 	C_ASSERT(hg_context != NULL);
 
@@ -613,7 +613,7 @@ crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 				   &grp_priv);
 	if (rc == 0) {
 		grp_priv->gp_status = CRT_GRP_NORMAL;
-		grp_priv->gp_ctx = rpc_req->dr_ctx;
+		grp_priv->gp_ctx = rpc_req->cr_ctx;
 		C_GOTO(out, rc);
 	}
 	if (rc == -CER_EXIST) {
@@ -622,7 +622,7 @@ crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 		if (my_rank == gc_in->gc_initiate_rank &&
 		    grp_priv->gp_status == CRT_GRP_CREATING) {
 			grp_priv->gp_status = CRT_GRP_NORMAL;
-			grp_priv->gp_ctx = rpc_req->dr_ctx;
+			grp_priv->gp_ctx = rpc_req->cr_ctx;
 			rc = 0;
 		}
 	} else {
@@ -636,7 +636,7 @@ out:
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		C_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
-			rc, rpc_req->dr_opc);
+			rc, rpc_req->cr_opc);
 	return rc;
 }
 
@@ -651,11 +651,11 @@ gc_rpc_cb(const struct crt_cb_info *cb_info)
 	bool				 gc_done = false;
 	int				 rc = 0;
 
-	gc_req = cb_info->dci_rpc;
+	gc_req = cb_info->cci_rpc;
 	gc_in = crt_req_get(gc_req);
 	gc_out = crt_reply_get(gc_req);
-	rc = cb_info->dci_rc;
-	grp_priv = (struct crt_grp_priv *)cb_info->dci_arg;
+	rc = cb_info->cci_rc;
+	grp_priv = (struct crt_grp_priv *)cb_info->cci_arg;
 	C_ASSERT(grp_priv != NULL && gc_in != NULL && gc_out != NULL);
 
 	crt_group_rank(NULL, &my_rank);
@@ -858,7 +858,7 @@ out:
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		C_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
-			rc, rpc_req->dr_opc);
+			rc, rpc_req->cr_opc);
 	return rc;
 }
 
@@ -873,11 +873,11 @@ gd_rpc_cb(const struct crt_cb_info *cb_info)
 	bool				 gd_done = false;
 	int				 rc = 0;
 
-	gd_req = cb_info->dci_rpc;
+	gd_req = cb_info->cci_rpc;
 	gd_in = crt_req_get(gd_req);
 	gd_out = crt_reply_get(gd_req);
-	rc = cb_info->dci_rc;
-	grp_priv = (struct crt_grp_priv *)cb_info->dci_arg;
+	rc = cb_info->cci_rc;
+	grp_priv = (struct crt_grp_priv *)cb_info->cci_arg;
 	C_ASSERT(grp_priv != NULL && gd_in != NULL && gd_out != NULL);
 
 	crt_group_rank(NULL, &my_rank);
@@ -1243,7 +1243,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		C_GOTO(out, rc = 0);
 	}
 
-	hg_ctx = &((struct crt_context *)rpc_req->dr_ctx)->dc_hg_ctx;
+	hg_ctx = &((struct crt_context *)rpc_req->cr_ctx)->cc_hg_ctx;
 	rc = crt_grp_lc_lookup(grp_priv, hg_ctx, ul_in->ul_rank, 0 /* tag */,
 			       &ul_out->ul_uri, NULL /* na_addr */);
 	if (rc != 0)
@@ -1255,7 +1255,7 @@ out:
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		C_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
-			rc, rpc_req->dr_opc);
+			rc, rpc_req->cr_opc);
 	return rc;
 }
 

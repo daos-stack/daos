@@ -175,17 +175,17 @@ typedef int (*crt_req_callback_t)(struct crt_rpc *rpc);
 
 /* Public RPC request/reply, exports to user */
 typedef struct crt_rpc {
-	crt_context_t		dr_ctx; /* CRT context of the RPC */
-	crt_endpoint_t		dr_ep; /* endpoint ID */
-	crt_opcode_t		dr_opc; /* opcode of the RPC */
+	crt_context_t		cr_ctx; /* CRT context of the RPC */
+	crt_endpoint_t		cr_ep; /* endpoint ID */
+	crt_opcode_t		cr_opc; /* opcode of the RPC */
 	/* user passed in flags, \see enum crt_rpc_flags */
-	enum crt_rpc_flags	dr_flags;
-	crt_rpc_input_t		dr_input; /* input parameter struct */
-	crt_rpc_output_t	dr_output; /* output parameter struct */
-	crt_size_t		dr_input_size; /* size of input struct */
-	crt_size_t		dr_output_size; /* size of output struct */
+	enum crt_rpc_flags	cr_flags;
+	crt_rpc_input_t		cr_input; /* input parameter struct */
+	crt_rpc_output_t	cr_output; /* output parameter struct */
+	crt_size_t		cr_input_size; /* size of input struct */
+	crt_size_t		cr_output_size; /* size of output struct */
 	/* optional bulk handle for collective RPC */
-	crt_bulk_t		dr_co_bulk_hdl;
+	crt_bulk_t		cr_co_bulk_hdl;
 } crt_rpc_t;
 
 /* Abstraction pack/unpack processor */
@@ -194,20 +194,20 @@ typedef void *crt_proc_t;
 typedef int (*crt_proc_cb_t)(crt_proc_t proc, void *data);
 
 /* RPC message layout definitions */
-enum dmf_flags {
-	DMF_ARRAY_FLAG	= 1 << 0,
+enum cmf_flags {
+	CMF_ARRAY_FLAG	= 1 << 0,
 };
 
 struct crt_msg_field {
-	const char		*dmf_name;
-	const uint32_t		dmf_flags;
-	const uint32_t		dmf_size;
-	crt_proc_cb_t		dmf_proc;
+	const char		*cmf_name;
+	const uint32_t		cmf_flags;
+	const uint32_t		cmf_size;
+	crt_proc_cb_t		cmf_proc;
 };
 
-struct drf_field {
-	uint32_t		drf_count;
-	struct crt_msg_field	**drf_msg;
+struct crf_field {
+	uint32_t		crf_count;
+	struct crt_msg_field	**crf_msg;
 };
 
 enum {
@@ -216,9 +216,9 @@ enum {
 };
 
 struct crt_req_format {
-	const char		*drf_name;
-	uint32_t		drf_idx;
-	struct drf_field	drf_fields[2];
+	const char		*crf_name;
+	uint32_t		crf_idx;
+	struct crf_field	crf_fields[2];
 };
 
 struct crt_array {
@@ -228,16 +228,16 @@ struct crt_array {
 
 #define DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, in_size,		\
 				 crt_out, out_size) {		\
-	drf_name :	name,					\
-	drf_idx :	0,					\
-	drf_fields : {						\
+	crf_name :	name,					\
+	crf_idx :	0,					\
+	crf_fields : {						\
 		/* [CRT_IN] = */ {				\
-			drf_count :	in_size,		\
-			drf_msg :	crt_in			\
+			crf_count :	in_size,		\
+			crf_msg :	crt_in			\
 		},						\
 		/* [CRT_OUT] = */ {				\
-			drf_count :	out_size,		\
-			drf_msg :	crt_out			\
+			crf_count :	out_size,		\
+			crf_msg :	crt_out			\
 		}						\
 	}							\
 }
@@ -247,27 +247,27 @@ DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, ARRAY_SIZE(crt_in),	\
 			 crt_out, ARRAY_SIZE(crt_out))
 
 #define DEFINE_CRT_MSG(name, flags, size, proc) {		\
-	dmf_name :	(name),					\
-	dmf_flags :	(flags),				\
-	dmf_size :	(size),					\
-	dmf_proc :	(crt_proc_cb_t)proc			\
+	cmf_name :	(name),					\
+	cmf_flags :	(flags),				\
+	cmf_size :	(size),					\
+	cmf_proc :	(crt_proc_cb_t)proc			\
 }
 
 /* Common request format type */
-extern struct crt_msg_field DMF_UUID;
-extern struct crt_msg_field DMF_GRP_ID;
-extern struct crt_msg_field DMF_INT;
-extern struct crt_msg_field DMF_UINT32;
-extern struct crt_msg_field DMF_CRT_SIZE;
-extern struct crt_msg_field DMF_UINT64;
-extern struct crt_msg_field DMF_BULK;
-extern struct crt_msg_field DMF_BOOL;
-extern struct crt_msg_field DMF_STRING;
-extern struct crt_msg_field DMF_PHY_ADDR;
-extern struct crt_msg_field DMF_RANK;
-extern struct crt_msg_field DMF_RANK_LIST;
-extern struct crt_msg_field DMF_BULK_ARRAY;
-extern struct crt_msg_field DMF_IOVEC;
+extern struct crt_msg_field CMF_UUID;
+extern struct crt_msg_field CMF_GRP_ID;
+extern struct crt_msg_field CMF_INT;
+extern struct crt_msg_field CMF_UINT32;
+extern struct crt_msg_field CMF_CRT_SIZE;
+extern struct crt_msg_field CMF_UINT64;
+extern struct crt_msg_field CMF_BULK;
+extern struct crt_msg_field CMF_BOOL;
+extern struct crt_msg_field CMF_STRING;
+extern struct crt_msg_field CMF_PHY_ADDR;
+extern struct crt_msg_field CMF_RANK;
+extern struct crt_msg_field CMF_RANK_LIST;
+extern struct crt_msg_field CMF_BULK_ARRAY;
+extern struct crt_msg_field CMF_IOVEC;
 
 extern struct crt_msg_field *crt_single_out_fields[];
 struct crt_single_out {
@@ -302,15 +302,15 @@ struct crt_bulk_desc {
 };
 
 struct crt_cb_info {
-	crt_rpc_t		*dci_rpc; /* rpc struct */
-	void			*dci_arg; /* User passed in arg */
+	crt_rpc_t		*cci_rpc; /* rpc struct */
+	void			*cci_arg; /* User passed in arg */
 	/*
 	 * return code, will be set as:
 	 * 0                     for succeed RPC request,
 	 * -CER_TIMEDOUT         for timed out request,
 	 * other negative value  for other possible failure.
 	 */
-	int			dci_rc;
+	int			cci_rc;
 };
 
 struct crt_bulk_cb_info {
@@ -330,7 +330,7 @@ typedef int (*crt_rpc_cb_t)(crt_rpc_t *rpc);
  * \return			zero means success.
  *				in the case of RPC request timed out, user
  *				register complete_cb will be called (with
- *				cb_info->dci_rc set as -CER_TIMEDOUT).
+ *				cb_info->cci_rc set as -CER_TIMEDOUT).
  *				complete_cb returns -CER_AGAIN means resending
  *				the RPC request.
  */

@@ -62,18 +62,18 @@ struct crt_common_hdr;
 
 /** HG context */
 struct crt_hg_context {
-	bool			dhc_shared_na; /* flag for shared na_class */
-	na_class_t		*dhc_nacla; /* NA class */
-	hg_class_t		*dhc_hgcla; /* HG class */
-	hg_context_t		*dhc_hgctx; /* HG context */
-	hg_class_t		*dhc_bulkcla; /* bulk class */
-	hg_context_t		*dhc_bulkctx; /* bulk context */
+	bool			chc_shared_na; /* flag for shared na_class */
+	na_class_t		*chc_nacla; /* NA class */
+	hg_class_t		*chc_hgcla; /* HG class */
+	hg_context_t		*chc_hgctx; /* HG context */
+	hg_class_t		*chc_bulkcla; /* bulk class */
+	hg_context_t		*chc_bulkctx; /* bulk context */
 };
 
 /** HG level global data */
 struct crt_hg_gdata {
-	na_class_t		*dhg_nacla; /* NA class */
-	hg_class_t		*dhg_hgcla; /* HG class */
+	na_class_t		*chg_nacla; /* NA class */
+	hg_class_t		*chg_hgcla; /* HG class */
 };
 
 /* crt_hg.c */
@@ -97,7 +97,7 @@ int crt_rpc_handler_common(hg_handle_t hg_hdl);
 int crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr);
 int crt_hg_unpack_header(struct crt_rpc_priv *rpc_priv, crt_proc_t *proc);
 void crt_hg_unpack_cleanup(crt_proc_t proc);
-int crt_proc_internal(struct drf_field *drf, crt_proc_t proc, void *data);
+int crt_proc_internal(struct crf_field *drf, crt_proc_t proc, void *data);
 int crt_proc_input(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
 int crt_proc_output(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
 int crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);

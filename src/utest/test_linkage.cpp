@@ -77,9 +77,9 @@ test_crt_api_linkage(void **state)
 
 /* Just a compilation test */
 struct crt_msg_field *test_input[] = {
-	&DMF_UINT32,
-	&DMF_STRING,
-	&DMF_BULK,
+	&CMF_UINT32,
+	&CMF_STRING,
+	&CMF_BULK,
 };
 
 static void

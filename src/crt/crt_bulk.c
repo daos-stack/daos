@@ -82,7 +82,7 @@ static inline bool
 crt_bulk_desc_valid(struct crt_bulk_desc *bulk_desc)
 {
 	if (bulk_desc == NULL || bulk_desc->bd_rpc == NULL ||
-	    bulk_desc->bd_rpc->dr_ctx == CRT_CONTEXT_NULL ||
+	    bulk_desc->bd_rpc->cr_ctx == CRT_CONTEXT_NULL ||
 	    bulk_desc->bd_remote_hdl == CRT_BULK_NULL ||
 	    bulk_desc->bd_local_hdl == CRT_BULK_NULL ||
 	    (bulk_desc->bd_bulk_op != CRT_BULK_PUT &&
@@ -96,7 +96,7 @@ crt_bulk_desc_valid(struct crt_bulk_desc *bulk_desc)
 			C_ERROR("invalid parameter(NULL bulk_desc->db_rpc).\n");
 			return false;
 		}
-		if (bulk_desc->bd_rpc->dr_ctx == CRT_CONTEXT_NULL) {
+		if (bulk_desc->bd_rpc->cr_ctx == CRT_CONTEXT_NULL) {
 			C_ERROR("invalid parameter(NULL bulk_desc->db_rpc"
 				"->dr_ctx).\n");
 			return false;
@@ -130,7 +130,7 @@ crt_bulk_create(crt_context_t crt_ctx, crt_sg_list_t *sgl,
 	}
 
 	ctx = (struct crt_context *)crt_ctx;
-	rc = crt_hg_bulk_create(&ctx->dc_hg_ctx, sgl, bulk_perm, bulk_hdl);
+	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, bulk_hdl);
 	if (rc != 0)
 		C_ERROR("crt_hg_bulk_create failed, rc: %d.\n", rc);
 
