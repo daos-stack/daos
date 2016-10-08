@@ -305,13 +305,16 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 		 */
 		D_GOTO(out, rc = -DER_NO_HDL);
 	}
+
+	rc = daos_placement_init(pool->dp_map);
+	if (rc != 0) {
+		pthread_rwlock_unlock(&pool->dp_co_list_lock);
+		D_GOTO(out, rc);
+	}
+
 	daos_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = sp->sp_hdl;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
-
-	rc = daos_placement_init(pool->dp_map);
-	if (rc != 0)
-		D_GOTO(out, rc);
 
 	dsmc_container_add_cache(cont, sp->sp_hdlp);
 
@@ -329,12 +332,6 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 	arg->coa_info->ci_snapshots = NULL;
 
 out:
-	if (rc != 0) {
-		pthread_rwlock_wrlock(&pool->dp_co_list_lock);
-		daos_list_del_init(&cont->dc_po_list);
-		pthread_rwlock_unlock(&pool->dp_co_list_lock);
-	}
-
 	dtp_req_decref(sp->sp_rpc);
 	D_FREE_PTR(arg);
 	dsmc_container_put(cont);
@@ -649,10 +646,6 @@ dsmc_co_l2g(daos_handle_t coh, daos_iov_t *glob)
 	if (pool == NULL)
 		D_GOTO(out_cont, rc = -DER_NO_HDL);
 
-	rc = daos_placement_init(pool->dp_map);
-	if (rc != 0)
-		D_GOTO(out_pool, rc);
-
 	/* init global handle */
 	cont_glob = (struct dsmc_container_glob *)glob->iov_buf;
 	dsmc_hdl_glob_hdr_init(&cont_glob->dcg_header, DSMC_GLOB_CO);
@@ -661,7 +654,6 @@ dsmc_co_l2g(daos_handle_t coh, daos_iov_t *glob)
 	uuid_copy(cont_glob->dcg_cont_hdl, cont->dc_cont_hdl);
 	cont_glob->dcg_capas = cont->dc_capas;
 
-out_pool:
 	dsmc_pool_put(pool);
 out_cont:
 	dsmc_container_put(cont);
@@ -739,6 +731,13 @@ dc_cont_g2l(daos_handle_t poh, struct dsmc_container_glob *cont_glob,
 		D_ERROR("pool connection being invalidated\n");
 		D_GOTO(out_cont, rc = -DER_NO_HDL);
 	}
+
+	rc = daos_placement_init(pool->dp_map);
+	if (rc != 0) {
+		pthread_rwlock_unlock(&pool->dp_co_list_lock);
+		D_GOTO(out_cont, rc);
+	}
+
 	daos_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = poh;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
