@@ -710,7 +710,7 @@ crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 	int			 rc = 0;
 
 	if (!crt_initialized()) {
-		C_ERROR("CRT un-initialized.\n");
+		C_ERROR("CRT not initialized.\n");
 		C_GOTO(out, rc = -CER_UNINIT);
 	}
 	if (!crt_is_service()) {
@@ -813,13 +813,56 @@ crt_group_t *
 crt_group_lookup(crt_group_id_t grp_id)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
+	struct crt_grp_gdata	*grp_gdata;
+	crt_size_t		 size;
 
+	if (!crt_initialized()) {
+		C_ERROR("CaRT not initialized yet.\n");
+		goto out;
+	}
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+	if (grp_id == NULL) {
+		/* to lookup local primary group handle */
+		grp_priv = crt_is_service() ? grp_gdata->gg_srv_pri_grp :
+					      grp_gdata->gg_cli_pri_grp;
+		goto out;
+	}
+	size = strlen(grp_id);
+	if (size == 0 || size > CRT_GROUP_ID_MAX_LEN) {
+		C_ERROR("grp_id %s (len %zu, CRT_GROUP_ID_MAX_LEN %d).\n",
+			grp_id, strlen(grp_id), CRT_GROUP_ID_MAX_LEN);
+		goto out;
+	}
+
+	/* check with local primary group or attached remote primary group */
+	if (!crt_is_service()) {
+		grp_priv = grp_gdata->gg_cli_pri_grp;
+		if (crt_grp_id_identical(grp_id, grp_priv->gp_pub.cg_grpid))
+			goto out;
+	}
+	grp_priv = grp_gdata->gg_srv_pri_grp;
+	if (crt_grp_id_identical(grp_id, grp_priv->gp_pub.cg_grpid))
+		goto out;
+
+	pthread_rwlock_rdlock(&grp_gdata->gg_rwlock);
+	crt_list_for_each_entry(grp_priv, &grp_gdata->gg_srv_grps_attached,
+				gp_link) {
+		if (crt_grp_id_identical(grp_id, grp_priv->gp_pub.cg_grpid)) {
+			pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
+			goto out;
+		}
+	}
+	pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
+
+	/* check sub-group */
 	pthread_rwlock_rdlock(&crt_grp_list_rwlock);
 	grp_priv = crt_grp_lookup_locked(grp_id);
 	if (grp_priv == NULL)
 		C_DEBUG("group non-exist.\n");
 	pthread_rwlock_unlock(&crt_grp_list_rwlock);
 
+out:
 	return (grp_priv == NULL) ? NULL : &grp_priv->gp_pub;
 }
 
@@ -1005,68 +1048,73 @@ int
 crt_group_rank(crt_group_t *grp, crt_rank_t *rank)
 {
 	struct crt_grp_gdata	*grp_gdata;
+	struct crt_grp_priv	*grp_priv;
+	int			 rc = 0;
 
-	grp_gdata = crt_gdata.cg_grp;
-	if (grp_gdata == NULL) {
-		C_ERROR("crt group un-initialized.\n");
-		return -CER_UNINIT;
-	}
 	if (rank == NULL) {
 		C_ERROR("invalid parameter of NULL rank pointer.\n");
-		return -CER_INVAL;
+		C_GOTO(out, rc = -CER_INVAL);
 	}
 
-	/* now only support query the primary group */
-	if (grp == NULL)
+	if (!crt_initialized()) {
+		C_ERROR("CRT not initialized.\n");
+		C_GOTO(out, rc = -CER_UNINIT);
+	}
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+
+	if (grp == NULL) {
 		*rank = crt_is_service() ? grp_gdata->gg_srv_pri_grp->gp_self :
 			grp_gdata->gg_cli_pri_grp->gp_self;
-	else
-		return -CER_NOSYS;
+	} else {
+		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
+		if (!grp_priv->gp_local) {
+			C_DEBUG("not belong to attached remote group (%s).\n",
+				grp->cg_grpid);
+			C_GOTO(out, rc = -CER_OOG);
+		}
+		if (!grp_priv->gp_primary) {
+			C_DEBUG("can only query the rank in primary group.\n");
+			C_GOTO(out, rc = -CER_NOSYS);
+		}
+		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
+		*rank = grp_priv->gp_self;
+	}
 
-	return 0;
+out:
+	return rc;
 }
 
 int
 crt_group_size(crt_group_t *grp, uint32_t *size)
 {
 	struct crt_grp_gdata	*grp_gdata;
-	int rc = 0;
-	int ret = 0;
+	struct crt_grp_priv	*grp_priv;
+	int			 rc = 0;
 
-	grp_gdata = crt_gdata.cg_grp;
-	if (grp_gdata == NULL) {
-		C_ERROR("crt group un-initialized.\n");
-		return -CER_UNINIT;
-	}
 	if (size == NULL) {
 		C_ERROR("invalid parameter of NULL size pointer.\n");
-		return -CER_INVAL;
+		C_GOTO(out, rc = -CER_INVAL);
 	}
+
+	if (!crt_initialized()) {
+		C_ERROR("CRT not initialized.\n");
+		C_GOTO(out, rc = -CER_UNINIT);
+	}
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
 
 	if (grp == NULL) {
 		/* query size of the local primary group */
 		*size = crt_is_service() ? grp_gdata->gg_srv_pri_grp->gp_size :
 			grp_gdata->gg_cli_pri_grp->gp_size;
 	} else {
-		/* query size of a remote primary group */
-		pmix_pdata_t *pdata = NULL;
-
-		PMIX_PDATA_CREATE(pdata, 1);
-		snprintf(pdata[0].key, PMIX_MAX_KEYLEN + 1, "cart-%s-size",
-				grp->cg_grpid);
-		rc = PMIx_Lookup(pdata, 1, NULL, 0);
-		if (rc == PMIX_SUCCESS && pdata[0].value.type == PMIX_UINT32) {
-			*size = pdata[0].value.data.uint32;
-		} else {
-			ret = -CER_PMIX;
-			C_ERROR(
-				"Error on %s: %d. Group doesn't exist, group name: %s"
-				, __FILE__, __LINE__, grp->cg_grpid);
-		}
-		PMIX_PDATA_FREE(pdata, 1);
+		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
+		*size = grp_priv->gp_size;
 	}
 
-	return ret;
+out:
+	return rc;
 }
 
 static int
@@ -1373,7 +1421,7 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	}
 
 	if (crt_gdata.cg_grp_inited == 0) {
-		C_ERROR("crt group un-initialized.\n");
+		C_ERROR("crt group not initialized.\n");
 		C_GOTO(out, rc = -CER_UNINIT);
 	}
 	grp_gdata = crt_gdata.cg_grp;
@@ -1504,7 +1552,7 @@ crt_group_detach(crt_group_t *attached_grp)
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 	if (crt_gdata.cg_grp_inited == 0) {
-		C_ERROR("crt group un-initialized.\n");
+		C_ERROR("crt group not initialized.\n");
 		C_GOTO(out, rc = -CER_UNINIT);
 	}
 	grp_gdata = crt_gdata.cg_grp;

@@ -679,7 +679,7 @@ dhash_table_traverse(struct dhash_table *htable, dhash_traverse_cb_t cb,
 	int		     rc = 0;
 
 	if (buckets == NULL) {
-		C_ERROR("dhash_table %p un-initialized (NULL buckets).\n",
+		C_ERROR("dhash_table %p not initialized (NULL buckets).\n",
 			htable);
 		C_GOTO(out, rc = -CER_UNINIT);
 	}

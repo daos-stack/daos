@@ -541,9 +541,23 @@ crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 		 void *priv);
 
 /*
- * Lookup crt_group_t of one group ID. The group creation is initiated by one
- * node, after the group being populated user can query the crt_group_t on
- * other nodes.
+ * Lookup the group handle of one group ID (sub-group or primary group).
+ *
+ * For sub-group, its creation is initiated by one node, after the group being
+ * populated (internally performed inside crt_group_create) user can query the
+ * group handle (crt_group_t *) on other nodes.
+ *
+ * The primary group can be queried using the group ID passed to crt_init.
+ * Some special cases:
+ * 1) If (grp_id == NULL), it means the default local primary group ID, i.e.
+ *    the CRT_DEFAULT_CLI_GRPID for client and CRT_DEFAULT_SRV_GRPID for server.
+ * 2) To query attached remote service primary group, can pass in its group ID.
+ *    For the client-side, if it passed in NULL as crt_init's srv_grpid
+ *    parameter, then can use CRT_DEFAULT_SRV_GRPID to lookup the attached
+ *    service primary group handle.
+ *
+ * Notes: user can cache the returned group handle to avoid the overhead of
+ *	  frequent lookup.
  *
  * \param grp_id [IN]		unique group ID.
  *

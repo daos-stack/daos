@@ -174,12 +174,6 @@ crt_pmix_fence(void)
 	bool		flag;
 	int		rc = 0;
 
-	/*
-	if (!crt_gdata.cg_grp_inited) {
-		C_ERROR("crt group un-initialized.\n");
-		C_GOTO(out, rc = -CER_UNINIT);
-	}
-	*/
 	myproc = &crt_gdata.cg_grp->gg_pmix->pg_proc;
 
 	/* PMIx_Commit(); */
@@ -401,12 +395,6 @@ crt_pmix_publish_self(struct crt_grp_priv *grp_priv)
 	int			rc;
 
 	C_ASSERT(grp_priv != NULL);
-	/*
-	if (!crt_gdata.cg_grp_inited) {
-		C_ERROR("crt group un-initialized.\n");
-		C_GOTO(out, rc = -CER_UNINIT);
-	}
-	*/
 
 	C_ASSERT(crt_gdata.cg_grp != NULL);
 	pmix_gdata = crt_gdata.cg_grp->gg_pmix;
@@ -524,9 +512,10 @@ out:
 int
 crt_pmix_attach(struct crt_grp_priv *grp_priv)
 {
-	pmix_pdata_t	*pdata = NULL;
-	crt_rank_t	 myrank;
-	int		 rc = 0;
+	struct crt_grp_gdata	*grp_gdata;
+	pmix_pdata_t		*pdata = NULL;
+	crt_rank_t		 myrank;
+	int			 rc = 0;
 
 	C_ASSERT(grp_priv != NULL);
 
@@ -546,8 +535,10 @@ crt_pmix_attach(struct crt_grp_priv *grp_priv)
 		C_GOTO(out, rc = -CER_PMIX);
 	}
 
-	rc = crt_group_rank(NULL, &myrank);
-	C_ASSERT(rc == 0);
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+	myrank = crt_is_service() ? grp_gdata->gg_srv_pri_grp->gp_self :
+				    grp_gdata->gg_cli_pri_grp->gp_self;
 	grp_priv->gp_psr_rank = myrank % grp_priv->gp_size;
 	rc = crt_pmix_uri_lookup(grp_priv->gp_pub.cg_grpid,
 				 grp_priv->gp_psr_rank,

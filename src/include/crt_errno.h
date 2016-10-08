@@ -72,7 +72,7 @@ typedef enum {
 	CER_AGAIN		= (CER_ERR_BASE + 13),
 	/** incompatible protocol */
 	CER_PROTO		= (CER_ERR_BASE + 14),
-	/** un-initialized */
+	/** not initialized */
 	CER_UNINIT		= (CER_ERR_BASE + 15),
 	/** buffer too short (larger buffer needed) */
 	CER_TRUNC		= (CER_ERR_BASE + 16),

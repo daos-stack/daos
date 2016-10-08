@@ -169,7 +169,7 @@ int main(int argc, char **argv)
 	int				 rc = 0;
 	int				 option_index = 0;
 	uint32_t			 flag;
-	crt_group_t			 target_group;
+	crt_group_t			*target_group = NULL;
 	crt_context_t			crt_ctx;
 	crt_rpc_t			*rpc_req = NULL;
 	struct crt_echo_checkin_req	*rpc_req_input;
@@ -258,8 +258,9 @@ int main(int argc, char **argv)
 	}
 	fprintf(stderr, "name_of_target_group %s\n", name_of_target_group);
 	if (should_attach) {
-		target_group.cg_grpid = name_of_target_group;
-		crt_group_size(&target_group, &target_group_size);
+		target_group = crt_group_lookup(name_of_target_group);
+		assert(target_group != NULL);
+		crt_group_size(target_group, &target_group_size);
 		fprintf(stderr, "size of %s is %d\n", name_of_target_group,
 				target_group_size);
 		for (ii = 0; ii < target_group_size; ii++) {

@@ -96,6 +96,8 @@ static int bulk_test_req_cb(const struct crt_cb_info *cb_info)
 
 static void run_client(void)
 {
+	crt_group_t			*pri_local_grp = NULL;
+	crt_group_t			*pri_srv_grp = NULL;
 	crt_group_t			*grp_tier2 = NULL;
 	crt_endpoint_t			svr_ep;
 	crt_rpc_t			*rpc_req = NULL;
@@ -105,12 +107,33 @@ static void run_client(void)
 	struct bulk_test_cli_cbinfo	*bulk_req_cbinfo;
 	char				*pchar;
 	crt_rank_t			myrank;
+	uint32_t			grp_size_cli = 0;
+	uint32_t			grp_size_srv = 0;
 	struct crt_echo_checkin_req	*e_req;
 	struct crt_echo_bulk_in_req	*e_bulk_req;
 	int				rc = 0, i;
 
 	rc = crt_group_rank(NULL, &myrank);
-	assert(rc == 0);
+	C_ASSERT(rc == 0);
+	pri_local_grp = crt_group_lookup(NULL);
+	C_ASSERT(pri_local_grp != NULL);
+	pri_srv_grp = crt_group_lookup("non-existent-grp");
+	C_ASSERT(pri_srv_grp == NULL);
+	pri_srv_grp = crt_group_lookup(CRT_DEFAULT_SRV_GRPID);
+	C_ASSERT(pri_srv_grp != NULL);
+
+	rc = crt_group_rank(pri_srv_grp, &myrank);
+	C_ASSERT(rc == -CER_OOG);
+	rc = crt_group_rank(pri_local_grp, &myrank);
+	C_ASSERT(rc == 0);
+	rc = crt_group_size(pri_local_grp, &grp_size_cli);
+	C_ASSERT(rc == 0 && grp_size_cli > 0);
+	rc = crt_group_size(pri_srv_grp, &grp_size_srv);
+	C_ASSERT(rc == 0 && grp_size_srv > 0);
+
+	printf("I'm rank %d in group %s(size %d), srv_group %s with size %d.\n",
+	       myrank, pri_local_grp->cg_grpid, grp_size_cli,
+	       pri_srv_grp->cg_grpid, grp_size_srv);
 
 	/* ============= test-1 ============ */
 
