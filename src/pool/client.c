@@ -21,22 +21,53 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsmc: Pool Methods
+ * dc_pool: Pool Client
+ *
+ * This module is part of libdaos. It implements the pool methods of DAOS API
+ * as well as daos/pool.h.
  */
 
 #include <daos_types.h>
 #include <daos_api.h>
-#include <unistd.h>
-#include "dsm_rpc.h"
-#include "dsmc_internal.h"
+#include <daos/pool.h>
 
-static inline int
-flags_are_valid(unsigned int flags)
+#include <daos/rpc.h>
+#include "client_internal.h"
+#include "rpc.h"
+
+struct daos_hhash *dsmc_hhash;
+
+/**
+ * Initialize pool interface
+ */
+int
+dc_pool_init(void)
 {
-	unsigned int mode = flags & (DAOS_PC_RO | DAOS_PC_RW | DAOS_PC_EX);
+	int rc;
 
-	return (mode = DAOS_PC_RO) || (mode = DAOS_PC_RW) ||
-	       (mode = DAOS_PC_EX);
+	rc = daos_rpc_register(pool_rpcs, NULL, DAOS_POOL_MODULE);
+	if (rc != 0)
+		return rc;
+
+	rc = daos_hhash_create(DAOS_HHASH_BITS, &dsmc_hhash);
+	if (rc != 0)
+		daos_rpc_unregister(pool_rpcs);
+
+	return rc;
+}
+
+/**
+ * Finalize pool interface
+ */
+void
+dc_pool_fini(void)
+{
+	daos_rpc_unregister(pool_rpcs);
+
+	if (dsmc_hhash != NULL) {
+		daos_hhash_destroy(dsmc_hhash);
+		dsmc_hhash = NULL;
+	}
 }
 
 static void
@@ -57,6 +88,15 @@ pool_free(struct daos_hlink *hlink)
 static struct daos_hlink_ops pool_h_ops = {
 	.hop_free = pool_free,
 };
+
+static inline int
+flags_are_valid(unsigned int flags)
+{
+	unsigned int mode = flags & (DAOS_PC_RO | DAOS_PC_RW | DAOS_PC_EX);
+
+	return (mode = DAOS_PC_RO) || (mode = DAOS_PC_RW) ||
+	       (mode = DAOS_PC_EX);
+}
 
 static struct dsmc_pool *
 pool_alloc(void)
@@ -424,8 +464,8 @@ dsmc_swap_pool_glob(struct dsmc_pool_glob *pool_glob)
 {
 	D_ASSERT(pool_glob != NULL);
 
-	D_SWAP32S(&pool_glob->dpg_header.hgh_magic);
-	D_SWAP32S(&pool_glob->dpg_header.hgh_type);
+	D_SWAP32S(&pool_glob->dpg_magic);
+	/* skip pool_glob->dpg_padding) */
 	/* skip pool_glob->dpg_pool (uuid_t) */
 	/* skip pool_glob->dpg_pool_hdl (uuid_t) */
 	D_SWAP64S(&pool_glob->dpg_capas);
@@ -468,7 +508,7 @@ dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 
 	/* init pool global handle */
 	pool_glob = (struct dsmc_pool_glob *)glob->iov_buf;
-	dsmc_hdl_glob_hdr_init(&pool_glob->dpg_header, DSMC_GLOB_POOL);
+	pool_glob->dpg_magic = DC_POOL_GLOB_MAGIC;
 	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
 	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
 	pool_glob->dpg_capas = pool->dp_capas;
@@ -584,17 +624,11 @@ daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 	}
 
 	pool_glob = (struct dsmc_pool_glob *)glob.iov_buf;
-	if (pool_glob->dpg_header.hgh_magic == D_SWAP32(DSM_GLOB_HDL_MAGIC)) {
+	if (pool_glob->dpg_magic == D_SWAP32(DC_POOL_GLOB_MAGIC)) {
 		dsmc_swap_pool_glob(pool_glob);
-		D_ASSERT(pool_glob->dpg_header.hgh_magic == DSM_GLOB_HDL_MAGIC);
-	} else if (pool_glob->dpg_header.hgh_magic != DSM_GLOB_HDL_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n",
-			pool_glob->dpg_header.hgh_magic);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	if (pool_glob->dpg_header.hgh_type != DSMC_GLOB_POOL) {
-		D_ERROR("Bad hgh_type: %d.\n", pool_glob->dpg_header.hgh_type);
+		D_ASSERT(pool_glob->dpg_magic == DC_POOL_GLOB_MAGIC);
+	} else if (pool_glob->dpg_magic != DC_POOL_GLOB_MAGIC) {
+		D_ERROR("Bad hgh_magic: 0x%x.\n", pool_glob->dpg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

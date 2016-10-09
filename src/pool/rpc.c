@@ -21,12 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsm: RPC Protocol Serialization Functions
+ * dc_pool/ds_pool: RPC Protocol Serialization Functions
  */
 
-#include <daos/event.h>
 #include <daos/rpc.h>
-#include "dsm_rpc.h"
+#include "rpc.h"
 
 struct dtp_msg_field *pool_connect_in_fields[] = {
 	&DMF_UUID,	/* pool */

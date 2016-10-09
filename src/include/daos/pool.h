@@ -1,0 +1,79 @@
+/**
+ * (C) Copyright 2016 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+/**
+ * dc_pool: Pool Client API
+ *
+ * This consists of dc_pool methods that do not belong to DAOS API.
+ */
+
+#ifndef __DAOS_POOL_H__
+#define __DAOS_POOL_H__
+
+#include <daos_types.h>
+#include <daos/client.h>
+#include <daos/common.h>
+#include <daos/hash.h>
+
+int dc_pool_init(void);
+void dc_pool_fini(void);
+
+/* Client pool handle */
+struct dsmc_pool {
+	/* link to dsmc_hhash */
+	struct daos_hlink	dp_hlink;
+	/* container list of the pool */
+	daos_list_t		dp_co_list;
+	/* lock for the container list */
+	pthread_rwlock_t	dp_co_list_lock;
+	/* pool uuid */
+	uuid_t			dp_pool;
+	uuid_t			dp_pool_hdl;
+	uint64_t		dp_capas;
+	struct pool_map	       *dp_map;
+	struct pool_buf	       *dp_map_buf;	/* TODO: pool_map => pool_buf */
+	uint32_t		dp_disconnecting:1,
+				dp_slave:1; /* generated via g2l */
+};
+
+static inline struct dsmc_pool *
+dsmc_handle2pool(daos_handle_t poh)
+{
+	struct daos_hlink *dlink;
+
+	if (daos_hhash_key_type(poh.cookie) != DAOS_HTYPE_POOL)
+		return NULL;
+
+	dlink = daos_hhash_link_lookup(dsmc_hhash, poh.cookie);
+	if (dlink == NULL)
+		return NULL;
+
+	return container_of(dlink, struct dsmc_pool, dp_hlink);
+}
+
+static inline void
+dsmc_pool_put(struct dsmc_pool *pool)
+{
+	daos_hhash_link_putref(dsmc_hhash, &pool->dp_hlink);
+}
+
+#endif /* __DAOS_POOL_H__ */

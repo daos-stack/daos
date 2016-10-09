@@ -26,8 +26,8 @@
  * src/include/daos/pool_map.h
  */
 
-#ifndef __DAOS_POOL_H__
-#define __DAOS_POOL_H__
+#ifndef __DAOS_POOL_MAP_H__
+#define __DAOS_POOL_MAP_H__
 
 #include <daos/common.h>
 
@@ -192,4 +192,4 @@ pool_comp_name(struct pool_component *comp)
 #define pool_target_name(target)	pool_comp_name(&(target)->ta_comp)
 #define pool_domain_name(domain)	pool_comp_name(&(domain)->do_comp)
 
-#endif /* __DAOS_POOL_H__ */
+#endif /* __DAOS_POOL_MAP_H__ */

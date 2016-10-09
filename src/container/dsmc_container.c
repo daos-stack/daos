@@ -26,6 +26,7 @@
 
 #include <daos_types.h>
 #include <daos/placement.h>
+#include <daos/pool.h>
 
 #include "dsm_rpc.h"
 #include "dsmc_internal.h"
@@ -605,8 +606,8 @@ dsmc_swap_co_glob(struct dsmc_container_glob *cont_glob)
 {
 	D_ASSERT(cont_glob != NULL);
 
-	D_SWAP32S(&cont_glob->dcg_header.hgh_magic);
-	D_SWAP32S(&cont_glob->dcg_header.hgh_type);
+	D_SWAP32S(&cont_glob->dcg_magic);
+	/* skip cont_glob->dcg_padding) */
 	/* skip cont_glob->dcg_pool_hdl (uuid_t) */
 	/* skip cont_glob->dcg_uuid (uuid_t) */
 	/* skip cont_glob->dcg_cont_hdl (uuid_t) */
@@ -648,7 +649,7 @@ dsmc_co_l2g(daos_handle_t coh, daos_iov_t *glob)
 
 	/* init global handle */
 	cont_glob = (struct dsmc_container_glob *)glob->iov_buf;
-	dsmc_hdl_glob_hdr_init(&cont_glob->dcg_header, DSMC_GLOB_CO);
+	cont_glob->dcg_magic = DC_CONT_GLOB_MAGIC;
 	uuid_copy(cont_glob->dcg_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(cont_glob->dcg_uuid, cont->dc_uuid);
 	uuid_copy(cont_glob->dcg_cont_hdl, cont->dc_cont_hdl);
@@ -781,17 +782,11 @@ daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 	}
 
 	cont_glob = (struct dsmc_container_glob *)glob.iov_buf;
-	if (cont_glob->dcg_header.hgh_magic == D_SWAP32(DSM_GLOB_HDL_MAGIC)) {
+	if (cont_glob->dcg_magic == D_SWAP32(DC_CONT_GLOB_MAGIC)) {
 		dsmc_swap_co_glob(cont_glob);
-		D_ASSERT(cont_glob->dcg_header.hgh_magic == DSM_GLOB_HDL_MAGIC);
-	} else if (cont_glob->dcg_header.hgh_magic != DSM_GLOB_HDL_MAGIC) {
-		D_ERROR("Bad hgh_magic: 0x%x.\n",
-			cont_glob->dcg_header.hgh_magic);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	if (cont_glob->dcg_header.hgh_type != DSMC_GLOB_CO) {
-		D_ERROR("Bad hgh_type: %d.\n", cont_glob->dcg_header.hgh_type);
+		D_ASSERT(cont_glob->dcg_magic == DC_CONT_GLOB_MAGIC);
+	} else if (cont_glob->dcg_magic != DC_CONT_GLOB_MAGIC) {
+		D_ERROR("Bad hgh_magic: 0x%x.\n", cont_glob->dcg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

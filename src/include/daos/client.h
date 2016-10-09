@@ -27,12 +27,10 @@
 extern struct daos_hhash *dsmc_hhash;
 
 int dc_mgmt_init();
-int dc_pool_init();
 int dc_cont_init();
 int dc_obj_init();
 
 int dc_mgmt_fini();
-int dc_pool_fini();
 int dc_cont_fini();
 int dc_obj_fini();
 

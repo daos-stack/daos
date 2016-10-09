@@ -44,7 +44,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
 
-#include "dsm_rpc.h"
+#include "rpc.h"
 #include "dsms_internal.h"
 #include "dsms_layout.h"
 
