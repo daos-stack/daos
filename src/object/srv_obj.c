@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsms: object Operations
+ * object server operations
  *
  * This file contains the server API methods and the RPC handlers that are both
  * related to object.
@@ -35,8 +35,8 @@
 #include <daos_srv/daos_m_srv.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/daos_server.h>
-#include "dsr_rpc.h"
-#include "dsr_internal.h"
+#include "obj_rpc.h"
+#include "obj_internal.h"
 
 static void
 dsrs_eu_free_iovs_sgls(daos_iov_t *iovs, daos_sg_list_t **sgls, int nr)
@@ -67,16 +67,16 @@ dsrs_eu_free_iovs_sgls(daos_iov_t *iovs, daos_sg_list_t **sgls, int nr)
 static void
 dsrs_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status)
 {
-	struct object_update_in	*oui;
+	struct obj_update_in	*oui;
 	int rc;
 
-	dsr_set_reply_status(rpc, status);
+	obj_reply_set_status(rpc, status);
 	rc = dtp_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: %d\n", rc);
 
-	if (opc_get(rpc->dr_opc) == DSR_TGT_OBJ_FETCH) {
-		struct object_fetch_out *ofo;
+	if (opc_get(rpc->dr_opc) == DAOS_OBJ_RPC_FETCH) {
+		struct obj_fetch_out *ofo;
 
 		ofo = dtp_reply_get(rpc);
 
@@ -90,7 +90,7 @@ dsrs_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status)
 
 	oui = dtp_req_get(rpc);
 	D_ASSERT(oui != NULL);
-	if (opc_get(rpc->dr_opc) == DSR_TGT_OBJ_UPDATE)
+	if (opc_get(rpc->dr_opc) == DAOS_OBJ_RPC_UPDATE)
 		rc = vos_obj_zc_update_end(ioh, &oui->oui_dkey,
 					   oui->oui_nr,
 					   oui->oui_iods.da_arrays,
@@ -110,10 +110,10 @@ static void
 dsrs_eu_complete(dtp_rpc_t *rpc, daos_sg_list_t **sgls,
 		 daos_iov_t *iov, int status)
 {
-	struct object_enumerate_out *oeo;
+	struct obj_key_enum_out *oeo;
 	int rc;
 
-	dsr_set_reply_status(rpc, status);
+	obj_reply_set_status(rpc, status);
 	rc = dtp_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: %d\n", rc);
@@ -237,9 +237,9 @@ dsrs_bulk_transfer(dtp_rpc_t *rpc,
 }
 
 int
-dsrs_hdlr_object_rw(dtp_rpc_t *rpc)
+ds_obj_rw_handler(dtp_rpc_t *rpc)
 {
-	struct object_update_in	*oui;
+	struct obj_update_in	*oui;
 	struct tgt_cont_hdl	*tch;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
 	daos_sg_list_t		**sgls = NULL;
@@ -255,7 +255,7 @@ dsrs_hdlr_object_rw(dtp_rpc_t *rpc)
 	if (tch == NULL)
 		D_GOTO(out, rc = -DER_NO_PERM);
 
-	if (opc_get(rpc->dr_opc) == DSR_TGT_OBJ_UPDATE) {
+	if (opc_get(rpc->dr_opc) == DAOS_OBJ_RPC_UPDATE) {
 		rc = vos_obj_zc_update_begin(tch->tch_cont->dvc_hdl,
 					     oui->oui_oid, oui->oui_epoch,
 					     &oui->oui_dkey, oui->oui_nr,
@@ -269,7 +269,7 @@ dsrs_hdlr_object_rw(dtp_rpc_t *rpc)
 
 		bulk_op = DTP_BULK_GET;
 	} else {
-		struct object_fetch_out *ofo;
+		struct obj_fetch_out *ofo;
 		daos_vec_iod_t	*vecs;
 		uint64_t	*sizes;
 		int		size_count = 0;
@@ -382,10 +382,10 @@ out:
 }
 
 int
-dsrs_hdlr_object_enumerate(dtp_rpc_t *rpc)
+ds_obj_enum_handler(dtp_rpc_t *rpc)
 {
-	struct object_enumerate_in	*oei;
-	struct object_enumerate_out	*oeo;
+	struct obj_key_enum_in		*oei;
+	struct obj_key_enum_out		*oeo;
 	struct tgt_cont_hdl		*tch;
 	daos_iov_t			*iovs = NULL;
 	daos_sg_list_t			**sgls = NULL;

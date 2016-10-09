@@ -21,35 +21,34 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_sr
- *
- * src/dsr/cli_internal.h
+ * object client: Module Definitions
  */
-#ifndef __DSR_CLI_INTENRAL_H__
-#define __DSR_CLI_INTENRAL_H__
 
-#include <daos_event.h>
-#include <daos/object.h>
-#include "dsr_internal.h"
+#include <daos_types.h>
+#include <daos/rpc.h>
+#include <pthread.h>
+#include <daos/common.h>
+#include <daos/transport.h>
+#include "obj_rpc.h"
+#include "obj_internal.h"
 
-/** Client stack DSR object */
-struct dsr_cli_obj {
-	/**
-	 * Object metadata stored in the OI table. For those object classes
-	 * and have no metadata in OI table, DSR only stores OID and pool map
-	 * version in it.
-	 */
-	struct daos_obj_md	 cob_md;
-	/** container open handle */
-	daos_handle_t		 cob_coh;
-	/** object open mode */
-	unsigned int		 cob_mode;
-	/** refcount on this object */
-	unsigned int		 cob_ref;
-	/** algorithmically generated object layout */
-	struct pl_obj_layout	*cob_layout;
-	/** object handles of underlying DSM objects */
-	daos_handle_t		*cob_mohs;
-};
+/**
+ * Initialize object interface
+ */
+int
+dc_obj_init(void)
+{
+	int rc;
 
-#endif /* __DSR_CLI_INTENRAL_H__ */
+	rc = daos_rpc_register(daos_obj_rpcs, NULL, DAOS_OBJ_MODULE);
+	return rc;
+}
+
+/**
+ * Finalize object interface
+ */
+void
+dc_obj_fini(void)
+{
+	daos_rpc_unregister(daos_obj_rpcs);
+}

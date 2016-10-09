@@ -21,88 +21,92 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsr sub object operation.
- *
- * dsr sub object is mainly for IO on each shard.
+ * object shard operations.
  */
 
 #include <daos/pool_map.h>
 #include <daos/transport.h>
 #include <daos/daos_m.h>
-#include "dsr_rpc.h"
-#include "dsr_internal.h"
+#include "obj_rpc.h"
+#include "obj_internal.h"
 
-struct daos_hhash *dsr_shard_hhash;
-
-static inline void
-dsr_shard_object_add_cache(struct dsr_shard_object *dobj, daos_handle_t *hdl)
+static void
+obj_shard_free(struct dc_obj_shard *shard)
 {
-	/* add obj to hash and assign the cookie to hdl */
-	daos_hhash_link_insert(dsr_shard_hhash, &dobj->do_hlink,
-			       DAOS_HTYPE_OBJ);
-	daos_hhash_link_key(&dobj->do_hlink, &hdl->cookie);
+	D_FREE_PTR(shard);
 }
 
-static inline void
-dsr_shard_object_del_cache(struct dsr_shard_object *dobj)
+static struct dc_obj_shard *
+obj_shard_alloc(daos_rank_t rank, daos_unit_oid_t id, uint32_t nr_srv)
 {
-	daos_hhash_link_delete(dsr_shard_hhash, &dobj->do_hlink);
-}
+	struct dc_obj_shard *shard;
 
-static inline void
-dsr_shard_object_put(struct dsr_shard_object *dobj)
-{
-	daos_hhash_link_putref(dsr_shard_hhash, &dobj->do_hlink);
-}
-
-static inline struct dsr_shard_object*
-dsr_handle2shard_obj(daos_handle_t hdl)
-{
-	struct daos_hlink *dlink;
-
-	dlink = daos_hhash_link_lookup(dsr_shard_hhash, hdl.cookie);
-	if (dlink == NULL)
+	D_ALLOC_PTR(shard);
+	if (shard == NULL)
 		return NULL;
 
-	return container_of(dlink, struct dsr_shard_object, do_hlink);
+	shard->do_rank	= rank;
+	shard->do_nr_srv = nr_srv;
+	shard->do_id	= id;
+	DAOS_INIT_LIST_HEAD(&shard->do_co_list);
+
+	return shard;
 }
 
 static void
-dsr_shard_object_free(struct daos_hlink *hlink)
+obj_shard_decref(struct dc_obj_shard *shard)
 {
-	struct dsr_shard_object *dobj;
-
-	dobj = container_of(hlink, struct dsr_shard_object, do_hlink);
-	D_FREE_PTR(dobj);
+	D_ASSERT(shard->do_ref > 0);
+	shard->do_ref--;
+	if (shard->do_ref == 0)
+		obj_shard_free(shard);
 }
 
-struct daos_hlink_ops dobj_h_ops = {
-	.hop_free = dsr_shard_object_free,
-};
-
-static struct dsr_shard_object *
-dsr_shard_obj_alloc(daos_rank_t rank, daos_unit_oid_t id, uint32_t nr_srv)
+static void
+obj_shard_addref(struct dc_obj_shard *shard)
 {
-	struct dsr_shard_object *dobj;
+	shard->do_ref++;
+}
 
-	D_ALLOC_PTR(dobj);
-	if (dobj == NULL)
+static void
+obj_shard_hdl_link(struct dc_obj_shard *shard)
+{
+	obj_shard_addref(shard);
+}
+
+static void
+obj_shard_hdl_unlink(struct dc_obj_shard *shard)
+{
+	obj_shard_decref(shard);
+}
+
+static struct dc_obj_shard*
+obj_shard_hdl2ptr(daos_handle_t hdl)
+{
+	struct dc_obj_shard *shard;
+
+	if (hdl.cookie == 0)
 		return NULL;
 
-	dobj->do_rank	= rank;
-	dobj->do_nr_srv = nr_srv;
-	dobj->do_id	= id;
-	DAOS_INIT_LIST_HEAD(&dobj->do_co_list);
-	daos_hhash_hlink_init(&dobj->do_hlink, &dobj_h_ops);
+	shard = (struct dc_obj_shard *)hdl.cookie;
+	obj_shard_addref(shard);
+	return shard;
+}
 
-	return dobj;
+static daos_handle_t
+obj_shard_ptr2hdl(struct dc_obj_shard *shard)
+{
+	daos_handle_t oh;
+
+	oh.cookie = (uint64_t)shard;
+	return oh;
 }
 
 int
-dsr_shard_obj_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
-		   unsigned int mode, daos_handle_t *oh, daos_event_t *ev)
+dc_obj_shard_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
+		  unsigned int mode, daos_handle_t *oh, daos_event_t *ev)
 {
-	struct dsr_shard_object	*dobj;
+	struct dc_obj_shard	*dobj;
 	struct pool_target	*map_tgt;
 	int			rc;
 
@@ -110,37 +114,37 @@ dsr_shard_obj_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
 	if (rc != 0)
 		return rc;
 
-	dobj = dsr_shard_obj_alloc(map_tgt->ta_comp.co_rank, id,
-				   map_tgt->ta_comp.co_nr);
+	dobj = obj_shard_alloc(map_tgt->ta_comp.co_rank, id,
+				  map_tgt->ta_comp.co_nr);
 	if (dobj == NULL)
 		return -DER_NOMEM;
 
 	dobj->do_co_hdl = coh;
+	obj_shard_hdl_link(dobj);
+	*oh = obj_shard_ptr2hdl(dobj);
 
-	dsr_shard_object_add_cache(dobj, oh);
 	return 0;
 }
 
 int
-dsr_shard_obj_close(daos_handle_t oh, daos_event_t *ev)
+dc_obj_shard_close(daos_handle_t oh, daos_event_t *ev)
 {
-	struct dsr_shard_object *dobj;
+	struct dc_obj_shard *dobj;
 
-	dobj = dsr_handle2shard_obj(oh);
+	dobj = obj_shard_hdl2ptr(oh);
 	if (dobj == NULL)
 		return -DER_NO_HDL;
 
-	/* remove from hash */
-	dsr_shard_object_put(dobj);
-	dsr_shard_object_del_cache(dobj);
+	obj_shard_hdl_unlink(dobj);
+	obj_shard_decref(dobj);
 	return 0;
 }
 
 static int
 obj_rw_cp(void *arg, daos_event_t *ev, int rc)
 {
-	struct daos_op_sp *sp = arg;
-	struct object_update_in *oui;
+	struct daos_op_sp	*sp = arg;
+	struct obj_update_in	*oui;
 	dtp_bulk_t		*bulks;
 	int			i;
 	int			ret;
@@ -153,15 +157,15 @@ obj_rw_cp(void *arg, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	ret = dsr_get_reply_status(sp->sp_rpc);
+	ret = obj_reply_get_status(sp->sp_rpc);
 	if (ret != 0) {
 		D_ERROR("DSR_OBJ_UPDATE/FETCH replied failed, rc: %d\n",
 			ret);
 		D_GOTO(out, rc = ret);
 	}
 
-	if (opc_get(sp->sp_rpc->dr_opc) == DSR_TGT_OBJ_FETCH) {
-		struct object_fetch_out *ofo;
+	if (opc_get(sp->sp_rpc->dr_opc) == DAOS_OBJ_RPC_FETCH) {
+		struct obj_fetch_out *ofo;
 		daos_vec_iod_t	*iods;
 		uint64_t	*sizes;
 		int		j;
@@ -198,7 +202,7 @@ out:
 }
 
 static inline bool
-dsr_shard_io_check(unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls)
+obj_shard_io_check(unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls)
 {
 	int i;
 
@@ -216,10 +220,10 @@ dsr_shard_io_check(unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls)
  * XXX: Only use dkey to distribute the data among targets for
  * now, and eventually, it should use dkey + akey, but then
  * it means the I/O vector might needs to be split into
- * mulitple requests in dsr_shard_obj_rw()
+ * mulitple requests in obj_shard_rw()
  */
 static uint32_t
-dsr_shard_get_tag(struct dsr_shard_object *dobj, daos_dkey_t *dkey)
+obj_shard_dkey2tag(struct dc_obj_shard *dobj, daos_dkey_t *dkey)
 {
 	uint64_t hash;
 
@@ -232,27 +236,27 @@ dsr_shard_get_tag(struct dsr_shard_object *dobj, daos_dkey_t *dkey)
 }
 
 static int
-dsr_shard_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-		 unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-		 daos_event_t *ev, enum dsr_operation op)
+obj_shard_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+	     unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+	     daos_event_t *ev, enum obj_rpc_opc op)
 {
-	struct dsr_shard_object	*dobj;
-	dtp_endpoint_t		 tgt_ep;
+	struct dc_obj_shard	*dobj;
 	dtp_rpc_t		*req;
-	struct object_update_in *oui;
 	dtp_bulk_t		*bulks;
-	dtp_bulk_perm_t		 bulk_perm;
+	struct obj_update_in	*oui;
 	struct daos_op_sp	*sp;
-	uuid_t			cont_hdl_uuid;
+	dtp_bulk_perm_t		 bulk_perm;
+	dtp_endpoint_t		 tgt_ep;
+	uuid_t			 cont_hdl_uuid;
 	int			 i;
 	int			 rc;
 
-	D_ASSERT(op == DSR_TGT_OBJ_UPDATE || op == DSR_TGT_OBJ_FETCH);
-	bulk_perm = (op == DSR_TGT_OBJ_UPDATE) ? DTP_BULK_RO : DTP_BULK_RW;
+	D_ASSERT(op == DAOS_OBJ_RPC_UPDATE || op == DAOS_OBJ_RPC_FETCH);
+	bulk_perm = (op == DAOS_OBJ_RPC_UPDATE) ? DTP_BULK_RO : DTP_BULK_RW;
 
 	/** sanity check input parameters */
 	if (dkey == NULL || dkey->iov_buf == NULL || nr == 0 ||
-	    !dsr_shard_io_check(nr, iods, sgls))
+	    !obj_shard_io_check(nr, iods, sgls))
 		return -DER_INVAL;
 
 	if (ev == NULL) {
@@ -261,21 +265,21 @@ dsr_shard_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 			return rc;
 	}
 
-	dobj = dsr_handle2shard_obj(oh);
+	dobj = obj_shard_hdl2ptr(oh);
 	if (dobj == NULL)
 		return -DER_NO_HDL;
 
 	rc = dsm_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid);
 	if (rc != 0) {
-		dsr_shard_object_put(dobj);
+		obj_shard_decref(dobj);
 		return rc;
 	}
 
 	tgt_ep.ep_rank = dobj->do_rank;
-	tgt_ep.ep_tag = dsr_shard_get_tag(dobj, dkey);
-	rc = dsr_req_create(daos_ev2ctx(ev), tgt_ep, op, &req);
+	tgt_ep.ep_tag = obj_shard_dkey2tag(dobj, dkey);
+	rc = obj_req_create(daos_ev2ctx(ev), tgt_ep, op, &req);
 	if (rc != 0) {
-		dsr_shard_object_put(dobj);
+		obj_shard_decref(dobj);
 		return rc;
 	}
 
@@ -285,7 +289,7 @@ dsr_shard_obj_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	oui->oui_oid = dobj->do_id;
 	uuid_copy(oui->oui_co_hdl, cont_hdl_uuid);
 
-	dsr_shard_object_put(dobj);
+	obj_shard_decref(dobj);
 	dobj = NULL;
 
 	oui->oui_epoch = epoch;
@@ -349,39 +353,69 @@ out:
 }
 
 int
-dsr_shard_obj_update(daos_handle_t oh, daos_epoch_t epoch,
-		     daos_dkey_t *dkey, unsigned int nr,
-		     daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-		     daos_event_t *ev)
+dc_obj_shard_update(daos_handle_t oh, daos_epoch_t epoch,
+		    daos_dkey_t *dkey, unsigned int nr,
+		    daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+		    daos_event_t *ev)
 {
-	return dsr_shard_obj_rw(oh, epoch, dkey, nr, iods, sgls, ev,
-				DSR_TGT_OBJ_UPDATE);
+	return obj_shard_rw(oh, epoch, dkey, nr, iods, sgls, ev,
+			    DAOS_OBJ_RPC_UPDATE);
 }
 
 int
-dsr_shard_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
-		    daos_dkey_t *dkey, unsigned int nr,
-		    daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-		    daos_vec_map_t *maps, daos_event_t *ev)
+dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
+		   daos_dkey_t *dkey, unsigned int nr,
+		   daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+		   daos_vec_map_t *maps, daos_event_t *ev)
 {
-	return dsr_shard_obj_rw(oh, epoch, dkey, nr, iods, sgls, ev,
-				DSR_TGT_OBJ_FETCH);
+	return obj_shard_rw(oh, epoch, dkey, nr, iods, sgls, ev,
+			    DAOS_OBJ_RPC_FETCH);
 }
 
-struct enumerate_async_arg {
+/**
+ * Temporary solution for packing the tag into the hash out,
+ * which will stay at 25-28 bytes of daos_hash_out_t->body
+ */
+#define ENUM_ANCHOR_TAG_OFF		24
+
+static void
+enum_anchor_copy(daos_hash_out_t *dst, daos_hash_out_t *src)
+{
+	memcpy(&dst->body[DAOS_HASH_HKEY_START],
+	       &src->body[DAOS_HASH_HKEY_START], DAOS_HASH_HKEY_LENGTH);
+}
+
+static uint32_t
+enum_anchor_get_tag(daos_hash_out_t *anchor)
+{
+	uint32_t tag;
+
+	D_CASSERT(DAOS_HASH_HKEY_START + DAOS_HASH_HKEY_LENGTH <
+		  ENUM_ANCHOR_TAG_OFF);
+	memcpy(&tag, &anchor->body[ENUM_ANCHOR_TAG_OFF], sizeof(tag));
+	return tag;
+}
+
+static void
+enum_anchor_set_tag(daos_hash_out_t *anchor, uint32_t tag)
+{
+	memcpy(&anchor->body[ENUM_ANCHOR_TAG_OFF], &tag, sizeof(tag));
+}
+
+struct enum_async_arg {
 	uint32_t	*eaa_nr;
 	daos_key_desc_t *eaa_kds;
 	daos_hash_out_t *eaa_anchor;
-	struct dsr_shard_object *eaa_obj;
+	struct dc_obj_shard *eaa_obj;
 };
 
 static int
 enumerate_cp(void *arg, daos_event_t *ev, int rc)
 {
 	struct daos_op_sp		*sp = arg;
-	struct object_enumerate_in	*oei;
-	struct object_enumerate_out	*oeo;
-	struct enumerate_async_arg	*eaa;
+	struct obj_key_enum_in		*oei;
+	struct obj_key_enum_out		*oeo;
+	struct enum_async_arg		*eaa;
 	int				 tgt_tag;
 
 	oei = dtp_req_get(sp->sp_rpc);
@@ -410,18 +444,18 @@ enumerate_cp(void *arg, daos_event_t *ev, int rc)
 	memcpy(eaa->eaa_kds, oeo->oeo_kds.da_arrays,
 	       sizeof(*eaa->eaa_kds) * oeo->oeo_kds.da_count);
 
-	dsr_hash_hkey_copy(eaa->eaa_anchor, &oeo->oeo_anchor);
+	enum_anchor_copy(eaa->eaa_anchor, &oeo->oeo_anchor);
 	if (daos_hash_is_eof(&oeo->oeo_anchor)) {
-		tgt_tag = dsr_hash_get_tag(eaa->eaa_anchor);
+		tgt_tag = enum_anchor_get_tag(eaa->eaa_anchor);
 		if (tgt_tag < eaa->eaa_obj->do_nr_srv - 1) {
-			dsr_hash_set_tag(eaa->eaa_anchor, ++tgt_tag);
-			dsr_hash_set_start(eaa->eaa_anchor);
+			memset(eaa->eaa_anchor, 0, sizeof(*eaa->eaa_anchor));
+			enum_anchor_set_tag(eaa->eaa_anchor, ++tgt_tag);
 		}
 	}
 
 out:
 	if (eaa->eaa_obj != NULL)
-		dsr_shard_object_put(eaa->eaa_obj);
+		obj_shard_decref(eaa->eaa_obj);
 
 	D_FREE_PTR(eaa);
 	dtp_bulk_free(oei->oei_bulk);
@@ -431,17 +465,16 @@ out:
 }
 
 int
-dsr_shard_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
-			uint32_t *nr, daos_key_desc_t *kds,
-			daos_sg_list_t *sgl, daos_hash_out_t *anchor,
-			daos_event_t *ev)
+dc_obj_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
+		       daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		       daos_hash_out_t *anchor, daos_event_t *ev)
 {
 	dtp_endpoint_t		tgt_ep;
 	dtp_rpc_t		*req;
-	struct dsr_shard_object	*dobj;
+	struct dc_obj_shard	*dobj;
 	uuid_t			cont_hdl_uuid;
-	struct object_enumerate_in *oei;
-	struct enumerate_async_arg *eaa;
+	struct obj_key_enum_in	*oei;
+	struct enum_async_arg	*eaa;
 	dtp_bulk_t		bulk;
 	struct daos_op_sp	*sp;
 	int			rc;
@@ -452,20 +485,20 @@ dsr_shard_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
 			return rc;
 	}
 
-	dobj = dsr_handle2shard_obj(oh);
+	dobj = obj_shard_hdl2ptr(oh);
 	if (dobj == NULL)
 		return -DER_NO_HDL;
 
 	rc = dsm_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid);
 	if (rc != 0) {
-		dsr_shard_object_put(dobj);
+		obj_shard_decref(dobj);
 		return rc;
 	}
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = dobj->do_rank;
-	tgt_ep.ep_tag = dsr_hash_get_tag(anchor);
-	rc = dsr_req_create(daos_ev2ctx(ev), tgt_ep, DSR_TGT_OBJ_ENUMERATE,
+	tgt_ep.ep_tag = enum_anchor_get_tag(anchor);
+	rc = obj_req_create(daos_ev2ctx(ev), tgt_ep, DAOS_OBJ_RPC_ENUMERATE,
 			    &req);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
@@ -479,7 +512,7 @@ dsr_shard_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
 	oei->oei_epoch = epoch;
 	oei->oei_nr = *nr;
 
-	dsr_hash_hkey_copy(&oei->oei_anchor, anchor);
+	enum_anchor_copy(&oei->oei_anchor, anchor);
 	/* Create bulk */
 	rc = dtp_bulk_create(daos_ev2ctx(ev), sgl, DTP_BULK_RW, &bulk);
 	if (rc < 0)
@@ -517,6 +550,6 @@ out_bulk:
 out_req:
 	dtp_req_decref(req);
 out_put:
-	dsr_shard_object_put(dobj);
+	obj_shard_decref(dobj);
 	return rc;
 }

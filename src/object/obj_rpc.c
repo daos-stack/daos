@@ -26,9 +26,9 @@
 
 #include <daos/event.h>
 #include <daos/rpc.h>
-#include "dsr_rpc.h"
+#include "obj_rpc.h"
 
-struct dtp_msg_field *dsr_obj_update_in_fields[] = {
+static struct dtp_msg_field *obj_update_in_fields[] = {
 	&DMF_OID,	/* object ID */
 	&DMF_UUID,	/* container handle uuid */
 	&DMF_UINT64,	/* epoch */
@@ -39,13 +39,13 @@ struct dtp_msg_field *dsr_obj_update_in_fields[] = {
 	&DMF_BULK_ARRAY,    /* BULK ARRAY */
 };
 
-struct dtp_msg_field *dsr_obj_fetch_out_fields[] = {
+static struct dtp_msg_field *obj_fetch_out_fields[] = {
 	&DMF_INT,	/* status */
 	&DMF_UINT32,	/* pad */
 	&DMF_REC_SIZE_ARRAY, /* actual size of records */
 };
 
-struct dtp_msg_field *dsr_dkey_enumerate_in_fields[] = {
+static struct dtp_msg_field *obj_dkey_enum_in_fields[] = {
 	&DMF_OID,	/* object ID */
 	&DMF_UUID,	/* container handle uuid */
 	&DMF_UINT64,	/* epoch */
@@ -55,31 +55,55 @@ struct dtp_msg_field *dsr_dkey_enumerate_in_fields[] = {
 	&DMF_BULK, /* BULK array for dkey */
 };
 
-struct dtp_msg_field *dsr_dkey_enumerate_out_fields[] = {
+static struct dtp_msg_field *obj_dkey_enum_out_fields[] = {
 	&DMF_INT,		/* status of the request */
 	&DMF_UINT32,		/* pad */
 	&DMF_DAOS_HASH_OUT,	/* hash anchor */
 	&DMF_KEY_DESC_ARRAY,	/* kds array */
 };
 
-struct dtp_req_format DQF_OBJ_UPDATE =
-	DEFINE_DTP_REQ_FMT_ARRAY("DSR_OBJ_UPDATE",
-				 dsr_obj_update_in_fields,
-				 ARRAY_SIZE(dsr_obj_update_in_fields),
+static struct dtp_req_format DQF_OBJ_UPDATE =
+	DEFINE_DTP_REQ_FMT_ARRAY("DAOS_OBJ_UPDATE",
+				 obj_update_in_fields,
+				 ARRAY_SIZE(obj_update_in_fields),
 				 dtp_single_out_fields, 1);
 
-struct dtp_req_format DQF_OBJ_FETCH =
-	DEFINE_DTP_REQ_FMT("DSR_OBJ_UPDATE",
-			   dsr_obj_update_in_fields,
-			   dsr_obj_fetch_out_fields);
+static struct dtp_req_format DQF_OBJ_FETCH =
+	DEFINE_DTP_REQ_FMT("DAOS_OBJ_UPDATE",
+			   obj_update_in_fields,
+			   obj_fetch_out_fields);
 
-struct dtp_req_format DQF_DKEY_ENUMERATE =
-	DEFINE_DTP_REQ_FMT("DSR_DKEY_ENUMERATE",
-			   dsr_dkey_enumerate_in_fields,
-			   dsr_dkey_enumerate_out_fields);
+static struct dtp_req_format DQF_DKEY_ENUMERATE =
+	DEFINE_DTP_REQ_FMT("DAOS_DKEY_ENUM",
+			   obj_dkey_enum_in_fields,
+			   obj_dkey_enum_out_fields);
+
+struct daos_rpc daos_obj_rpcs[] = {
+	{
+		.dr_name	= "DAOS_OBJ_UPDATE",
+		.dr_opc		= DAOS_OBJ_RPC_UPDATE,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_OBJ_UPDATE,
+	}, {
+		.dr_name	= "DAOS_OBJ_FETCH",
+		.dr_opc		= DAOS_OBJ_RPC_FETCH,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_OBJ_FETCH,
+	}, {
+		.dr_name	= "DAOS_DKEY_ENUM",
+		.dr_opc		= DAOS_OBJ_RPC_ENUMERATE,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_DKEY_ENUMERATE,
+	}, {
+		.dr_opc		= 0
+	}
+};
 
 int
-dsr_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
+obj_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
 	       dtp_opcode_t opc, dtp_rpc_t **req)
 {
 	dtp_opcode_t opcode;
@@ -89,26 +113,30 @@ dsr_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
 	return dtp_req_create(dtp_ctx, tgt_ep, opcode, req);
 }
 
-struct daos_rpc dsr_rpcs[] = {
-	{
-		.dr_name	= "DSR_OBJ_UPDATE",
-		.dr_opc		= DSR_TGT_OBJ_UPDATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_OBJ_UPDATE,
-	}, {
-		.dr_name	= "DSR_OBJ_FETCH",
-		.dr_opc		= DSR_TGT_OBJ_FETCH,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_OBJ_FETCH,
-	}, {
-		.dr_name	= "DSR_OBJ_ENUMERATE",
-		.dr_opc		= DSR_TGT_OBJ_ENUMERATE,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_DKEY_ENUMERATE,
-	}, {
-		.dr_opc		= 0
-	}
-};
+void
+obj_reply_set_status(dtp_rpc_t *rpc, int status)
+{
+	int *ret;
+
+	/* FIXME; The right way to do it might be find the
+	 * status offset and set it, but let's put status
+	 * in front of the bulk reply for now
+	 */
+	D_ASSERT(rpc != NULL);
+	ret = dtp_reply_get(rpc);
+	D_ASSERT(ret != NULL);
+	*ret = status;
+}
+
+int
+obj_reply_get_status(dtp_rpc_t *rpc)
+{
+	int *ret;
+
+	/* FIXME; The right way to do it might be find the
+	 * status offset and set it, but let's put status
+	 * in front of the bulk reply for now
+	 */
+	ret = dtp_reply_get(rpc);
+	return *ret;
+}

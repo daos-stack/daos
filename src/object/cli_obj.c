@@ -23,38 +23,39 @@
 /**
  * This file is part of daos_sr
  *
- * src/dsr/cli_obj.c
+ * src/object/cli_obj.c
  */
-#include "cli_internal.h"
+#include <daos_event.h>
+#include "obj_internal.h"
 
 #define CLI_OBJ_IO_PARMS	8
 
-struct cli_obj_io_ctx;
-typedef int (*cli_obj_io_comp_t)(struct cli_obj_io_ctx *iocx, int rc);
+struct obj_io_ctx;
+typedef int (*obj_io_comp_t)(struct obj_io_ctx *iocx, int rc);
 
 /** I/O context for DSR client object */
-struct cli_obj_io_ctx {
+struct obj_io_ctx {
 	/** reference of the object */
-	struct dsr_cli_obj	*cx_obj;
+	struct dc_object	*cx_obj;
 	/** operation group */
 	struct daos_event	*cx_event;
 	/** pointer to list anchor */
 	void			*cx_args[CLI_OBJ_IO_PARMS];
 	/** completion callback */
-	cli_obj_io_comp_t	 cx_comp;
+	obj_io_comp_t		 cx_comp;
 
-	int			cx_sync:1;
+	int			 cx_sync:1;
 };
 
-struct cli_obj_io_oper {
+struct obj_io_oper {
 	daos_handle_t		 oo_oh;
 	daos_event_t		*oo_ev;
 };
 
-static struct dsr_cli_obj *
-cli_obj_alloc(void)
+static struct dc_object *
+obj_alloc(void)
 {
-	struct dsr_cli_obj *obj;
+	struct dc_object *obj;
 
 	D_ALLOC_PTR(obj);
 	if (obj == NULL)
@@ -65,7 +66,7 @@ cli_obj_alloc(void)
 }
 
 static void
-cli_obj_free(struct dsr_cli_obj *obj)
+obj_free(struct dc_object *obj)
 {
 	struct pl_obj_layout *layout;
 	int		      i;
@@ -77,7 +78,7 @@ cli_obj_free(struct dsr_cli_obj *obj)
 	if (obj->cob_mohs != NULL) {
 		for (i = 0; i < layout->ol_nr; i++) {
 			if (!daos_handle_is_inval(obj->cob_mohs[i]))
-				dsr_shard_obj_close(obj->cob_mohs[i], NULL);
+				dc_obj_shard_close(obj->cob_mohs[i], NULL);
 		}
 		D_FREE(obj->cob_mohs, layout->ol_nr * sizeof(*obj->cob_mohs));
 	}
@@ -87,24 +88,22 @@ cli_obj_free(struct dsr_cli_obj *obj)
 	D_FREE_PTR(obj);
 }
 
-/* TODO use real handle for the client objects */
-
 static void
-cli_obj_decref(struct dsr_cli_obj *obj)
+obj_decref(struct dc_object *obj)
 {
 	obj->cob_ref--;
 	if (obj->cob_ref == 0)
-		cli_obj_free(obj);
+		obj_free(obj);
 }
 
 static void
-cli_obj_addref(struct dsr_cli_obj *obj)
+obj_addref(struct dc_object *obj)
 {
 	obj->cob_ref++;
 }
 
 static daos_handle_t
-cli_obj2hdl(struct dsr_cli_obj *obj)
+obj_ptr2hdl(struct dc_object *obj)
 {
 	daos_handle_t oh;
 
@@ -112,34 +111,33 @@ cli_obj2hdl(struct dsr_cli_obj *obj)
 	return oh;
 }
 
-static struct dsr_cli_obj *
-cli_hdl2obj(daos_handle_t oh)
+static struct dc_object *
+obj_hdl2ptr(daos_handle_t oh)
 {
-	struct dsr_cli_obj *obj;
+	struct dc_object *obj;
 
-	obj = (struct dsr_cli_obj *)oh.cookie;
-	cli_obj_addref(obj);
+	obj = (struct dc_object *)oh.cookie;
+	obj_addref(obj);
 	return obj;
 }
 
 static void
-cli_obj_hdl_link(struct dsr_cli_obj *obj)
+obj_hdl_link(struct dc_object *obj)
 {
-	cli_obj_addref(obj);
+	obj_addref(obj);
 }
 
 static void
-cli_obj_hdl_unlink(struct dsr_cli_obj *obj)
+obj_hdl_unlink(struct dc_object *obj)
 {
-	cli_obj_decref(obj);
+	obj_decref(obj);
 }
 
 /**
  * Open an object shard (dsr shard object), cache the open handle.
  */
 static int
-cli_obj_open_shard(struct dsr_cli_obj *obj, unsigned int shard,
-		   daos_handle_t *oh)
+obj_shard_open(struct dc_object *obj, unsigned int shard, daos_handle_t *oh)
 {
 	struct pl_obj_layout	*layout;
 	int			 rc = 0;
@@ -164,10 +162,10 @@ cli_obj_open_shard(struct dsr_cli_obj *obj, unsigned int shard,
 		/* NB: dsr open is a local operation, so it is ok to call
 		 * it in sync mode, at least for now.
 		 */
-		rc = dsr_shard_obj_open(obj->cob_coh,
-					layout->ol_targets[shard],
-					oid, obj->cob_mode,
-					&obj->cob_mohs[shard], NULL);
+		rc = dc_obj_shard_open(obj->cob_coh,
+				       layout->ol_targets[shard],
+				       oid, obj->cob_mode,
+				       &obj->cob_mohs[shard], NULL);
 	}
 
 	if (rc == 0)
@@ -177,18 +175,18 @@ cli_obj_open_shard(struct dsr_cli_obj *obj, unsigned int shard,
 }
 
 static int
-cli_obj_iocx_comp(void *args, struct daos_event *ev, int rc)
+obj_iocx_comp(void *args, struct daos_event *ev, int rc)
 {
-	struct cli_obj_io_ctx	*iocx = args;
+	struct obj_io_ctx	*iocx = args;
 
 	D_DEBUG(DF_SRC, "iocx completion.\n");
 	if (iocx->cx_comp)
 		iocx->cx_comp(iocx, rc);
 
 	if (iocx->cx_obj != NULL)
-		cli_obj_decref(iocx->cx_obj);
+		obj_decref(iocx->cx_obj);
 
-	/* Let's destroy all os children created by cli_obj */
+	/* Let's destroy all os children created by dc_obj */
 	daos_event_destroy_children(iocx->cx_event, 1);
 
 	D_FREE_PTR(iocx);
@@ -197,23 +195,22 @@ cli_obj_iocx_comp(void *args, struct daos_event *ev, int rc)
 
 /** Initialise I/O context for a client object */
 static int
-cli_obj_iocx_create(daos_handle_t oh, daos_event_t *ev,
-		    struct cli_obj_io_ctx **iocx_pp)
+obj_iocx_create(daos_handle_t oh, daos_event_t *ev,
+		struct obj_io_ctx **iocx_pp)
 {
-	struct cli_obj_io_ctx	*iocx;
+	struct obj_io_ctx	*iocx;
 	int			 rc;
 
 	D_ALLOC_PTR(iocx);
 	if (iocx == NULL)
 		return -DER_NOMEM;
 
-	iocx->cx_obj = cli_hdl2obj(oh);
+	iocx->cx_obj = obj_hdl2ptr(oh);
 	if (iocx->cx_obj == NULL)
 		D_GOTO(failed, rc = -DER_NO_HDL);
 	iocx->cx_event = ev;
 	if (ev != NULL) {
-		rc = daos_event_register_comp_cb(ev, cli_obj_iocx_comp,
-						 iocx);
+		rc = daos_event_register_comp_cb(ev, obj_iocx_comp, iocx);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 	}
@@ -221,12 +218,12 @@ cli_obj_iocx_create(daos_handle_t oh, daos_event_t *ev,
 	*iocx_pp = iocx;
 	return 0;
  failed:
-	cli_obj_iocx_comp((void *)iocx, NULL, rc);
+	obj_iocx_comp((void *)iocx, NULL, rc);
 	return rc;
 }
 
 static void
-cli_obj_iocx_destroy(struct cli_obj_io_ctx *iocx, int rc)
+obj_iocx_destroy(struct obj_io_ctx *iocx, int rc)
 {
 	if (iocx->cx_sync) {
 		if (iocx->cx_event != NULL) {
@@ -238,7 +235,7 @@ cli_obj_iocx_destroy(struct cli_obj_io_ctx *iocx, int rc)
 }
 
 static int
-cli_obj_iocx_launch(struct cli_obj_io_ctx *iocx)
+obj_iocx_launch(struct obj_io_ctx *iocx)
 {
 	int rc;
 
@@ -263,14 +260,14 @@ cli_obj_iocx_launch(struct cli_obj_io_ctx *iocx)
 }
 
 static int
-cli_obj_iocx_new_oper(struct cli_obj_io_ctx *iocx, unsigned int shard,
-		      struct cli_obj_io_oper *oper)
+obj_iocx_new_oper(struct obj_io_ctx *iocx, unsigned int shard,
+		     struct obj_io_oper *oper)
 {
 	daos_handle_t	oh;
 	int		rc;
 
 	memset(oper, 0, sizeof(*oper));
-	rc = cli_obj_open_shard(iocx->cx_obj, shard, &oh);
+	rc = obj_shard_open(iocx->cx_obj, shard, &oh);
 	if (rc != 0)
 		return rc;
 
@@ -288,8 +285,7 @@ cli_obj_iocx_new_oper(struct cli_obj_io_ctx *iocx, unsigned int shard,
 		}
 
 		rc = daos_event_register_comp_cb(iocx->cx_event,
-						 cli_obj_iocx_comp,
-						 iocx);
+						 obj_iocx_comp, iocx);
 		if (rc != 0)
 			return rc;
 	}
@@ -312,7 +308,7 @@ cli_obj_iocx_new_oper(struct cli_obj_io_ctx *iocx, unsigned int shard,
 
 int
 daos_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-		daos_obj_attr_t *oa, daos_event_t *ev)
+		 daos_obj_attr_t *oa, daos_event_t *ev)
 {
 	struct daos_oclass_attr *oc_attr;
 	int			 rc;
@@ -329,7 +325,7 @@ daos_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 }
 
 static int
-cli_obj_md_fetch(daos_obj_id_t oid, struct daos_obj_md *md, daos_event_t *ev)
+obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md, daos_event_t *ev)
 {
 	/* For predefined object classes, do nothing at here. But for those
 	 * customized classes, we need to fetch for the remote OI table.
@@ -341,16 +337,16 @@ cli_obj_md_fetch(daos_obj_id_t oid, struct daos_obj_md *md, daos_event_t *ev)
 
 int
 daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	     unsigned int mode, daos_handle_t *oh, daos_event_t *ev)
+	      unsigned int mode, daos_handle_t *oh, daos_event_t *ev)
 {
-	struct dsr_cli_obj	*obj;
+	struct dc_object	*obj;
 	struct pl_obj_layout	*layout;
 	struct pl_map		*map;
 	int			 i;
 	int			 nr;
 	int			 rc;
 
-	obj = cli_obj_alloc();
+	obj = obj_alloc();
 	if (obj == NULL)
 		return -DER_NOMEM;
 
@@ -358,7 +354,7 @@ daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	obj->cob_mode = mode;
 
 	/* it is a local operation for now, does not require event */
-	rc = cli_obj_md_fetch(oid, &obj->cob_md, NULL);
+	rc = obj_fetch_md(oid, &obj->cob_md, NULL);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -385,10 +381,10 @@ daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	for (i = 0; i < nr; i++)
 		obj->cob_mohs[i] = DAOS_HDL_INVAL;
 
-	cli_obj_hdl_link(obj);
-	*oh = cli_obj2hdl(obj);
+	obj_hdl_link(obj);
+	*oh = obj_ptr2hdl(obj);
  out:
-	cli_obj_decref(obj);
+	obj_decref(obj);
 	if (rc == 0 && ev != NULL) {
 		daos_event_launch(ev);
 		daos_event_complete(ev, 0);
@@ -399,14 +395,14 @@ daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 int
 daos_obj_close(daos_handle_t oh, daos_event_t *ev)
 {
-	struct dsr_cli_obj   *obj;
+	struct dc_object   *obj;
 
-	obj = cli_hdl2obj(oh);
+	obj = obj_hdl2ptr(oh);
 	if (obj == NULL)
 		return -DER_NO_HDL;
 
-	cli_obj_hdl_unlink(obj);
-	cli_obj_decref(obj);
+	obj_hdl_unlink(obj);
+	obj_decref(obj);
 
 	if (ev != NULL) {
 		daos_event_launch(ev);
@@ -431,7 +427,7 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
 }
 
 static int
-cli_obj_get_grp_size(struct dsr_cli_obj *obj)
+obj_get_grp_size(struct dc_object *obj)
 {
 	struct daos_oclass_attr *oc_attr;
 
@@ -441,7 +437,7 @@ cli_obj_get_grp_size(struct dsr_cli_obj *obj)
 }
 
 static unsigned int
-cli_obj_dkey2shard(struct dsr_cli_obj *obj, daos_dkey_t *dkey,
+obj_dkey2shard(struct dc_object *obj, daos_dkey_t *dkey,
 		   unsigned int *shards_cnt,
 		   unsigned int *random_shard)
 {
@@ -450,7 +446,7 @@ cli_obj_dkey2shard(struct dsr_cli_obj *obj, daos_dkey_t *dkey,
 	uint64_t		start_shard;
 	uint64_t		adjust_grp_size;
 
-	grp_size = cli_obj_get_grp_size(obj);
+	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
 
 	hash = daos_hash_murmur64((unsigned char *)dkey->iov_buf,
@@ -496,34 +492,34 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	      unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	      daos_vec_map_t *maps, daos_event_t *ev)
 {
-	struct cli_obj_io_ctx	*iocx;
-	struct cli_obj_io_oper	 oper;
+	struct obj_io_ctx	*iocx;
+	struct obj_io_oper	 oper;
 	unsigned int		 shard;
 	int			 rc;
 
-	rc = cli_obj_iocx_create(oh, ev, &iocx);
+	rc = obj_iocx_create(oh, ev, &iocx);
 	if (rc != 0)
 		return rc;
 
-	shard = cli_obj_dkey2shard(iocx->cx_obj, dkey, NULL, &shard);
-	rc = cli_obj_iocx_new_oper(iocx, shard, &oper);
+	shard = obj_dkey2shard(iocx->cx_obj, dkey, NULL, &shard);
+	rc = obj_iocx_new_oper(iocx, shard, &oper);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	rc = dsr_shard_obj_fetch(oper.oo_oh, epoch, dkey, nr, iods, sgls,
-				 maps, oper.oo_ev);
+	rc = dc_obj_shard_fetch(oper.oo_oh, epoch, dkey, nr, iods, sgls,
+				maps, oper.oo_ev);
 	if (rc != 0) {
 		D_DEBUG(DF_SRC, "Failed to fetch data from DSM: %d\n", rc);
 		D_GOTO(failed, rc);
 	}
 
-	rc = cli_obj_iocx_launch(iocx);
+	rc = obj_iocx_launch(iocx);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
 	return 0;
  failed:
-	cli_obj_iocx_destroy(iocx, rc);
+	obj_iocx_destroy(iocx, rc);
 	return rc;
 }
 
@@ -533,19 +529,19 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_event_t *ev)
 {
-	struct cli_obj_io_ctx	*iocx;
-	struct cli_obj_io_oper	 tmp_oper[6];
-	struct cli_obj_io_oper	 *oper;
+	struct obj_io_ctx	*iocx;
+	struct obj_io_oper	 tmp_oper[6];
+	struct obj_io_oper	 *oper;
 	unsigned int		 shard;
 	unsigned int		 shards_cnt;
 	int			 i;
 	int			 rc;
 
-	rc = cli_obj_iocx_create(oh, ev, &iocx);
+	rc = obj_iocx_create(oh, ev, &iocx);
 	if (rc != 0)
 		return rc;
 
-	shard = cli_obj_dkey2shard(iocx->cx_obj, dkey, &shards_cnt, NULL);
+	shard = obj_dkey2shard(iocx->cx_obj, dkey, &shards_cnt, NULL);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
@@ -562,20 +558,20 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 		shards_cnt);
 
 	for (i = 0; i < shards_cnt; i++, shard++, oper++) {
-		rc = cli_obj_iocx_new_oper(iocx, shard, oper);
+		rc = obj_iocx_new_oper(iocx, shard, oper);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST)
 				continue;
 			D_GOTO(failed, rc);
 		}
 
-		rc = dsr_shard_obj_update(oper->oo_oh, epoch, dkey,
-					  nr, iods, sgls, oper->oo_ev);
+		rc = dc_obj_shard_update(oper->oo_oh, epoch, dkey,
+					 nr, iods, sgls, oper->oo_ev);
 		if (rc != 0)
 			D_GOTO(failed, rc);
 	}
 
-	rc = cli_obj_iocx_launch(iocx);
+	rc = obj_iocx_launch(iocx);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
@@ -586,14 +582,14 @@ free:
 	return rc;
 
 failed:
-	cli_obj_iocx_destroy(iocx, rc);
+	obj_iocx_destroy(iocx, rc);
 	D_GOTO(free, rc);
 }
 
 static int
-cli_obj_list_dkey_comp(struct cli_obj_io_ctx *ctx, int rc)
+obj_list_dkey_comp(struct obj_io_ctx *ctx, int rc)
 {
-	struct dsr_cli_obj	*obj	 = ctx->cx_obj;
+	struct dc_object	*obj	 = ctx->cx_obj;
 	daos_hash_out_t		*anchor  = (daos_hash_out_t *)ctx->cx_args[0];
 	uint32_t		shard   = (unsigned long)ctx->cx_args[1];
 	int			grp_size;
@@ -602,7 +598,7 @@ cli_obj_list_dkey_comp(struct cli_obj_io_ctx *ctx, int rc)
 	if (rc != 0)
 		return rc;
 
-	grp_size = cli_obj_get_grp_size(obj);
+	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
 
 	/* XXX This is a nasty workaround: shard is encoded in the highest
@@ -631,13 +627,13 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_hash_out_t *anchor, daos_event_t *ev)
 {
-	struct cli_obj_io_ctx	*iocx;
-	struct cli_obj_io_oper	 oper;
+	struct obj_io_ctx	*iocx;
+	struct obj_io_oper	 oper;
 	uint32_t		 shard;
 	int			 rc;
 	int			 enc_shard_at;
 
-	rc = cli_obj_iocx_create(oh, ev, &iocx);
+	rc = obj_iocx_create(oh, ev, &iocx);
 	if (rc != 0)
 		return rc;
 
@@ -650,24 +646,24 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 
 	iocx->cx_args[0] = (void *)anchor;
 	iocx->cx_args[1] = (void *)(unsigned long)shard;
-	iocx->cx_comp	 = cli_obj_list_dkey_comp;
+	iocx->cx_comp	 = obj_list_dkey_comp;
 
-	rc = cli_obj_iocx_new_oper(iocx, shard, &oper);
+	rc = obj_iocx_new_oper(iocx, shard, &oper);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	rc = dsr_shard_obj_list_dkey(oper.oo_oh, epoch, nr, kds,
-				     sgl, anchor, oper.oo_ev);
+	rc = dc_obj_shard_list_dkey(oper.oo_oh, epoch, nr, kds,
+				    sgl, anchor, oper.oo_ev);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	rc = cli_obj_iocx_launch(iocx);
+	rc = obj_iocx_launch(iocx);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
 	return 0;
  failed:
-	cli_obj_iocx_destroy(iocx, rc);
+	obj_iocx_destroy(iocx, rc);
 	return rc;
 }
 

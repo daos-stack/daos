@@ -23,7 +23,7 @@
 
 #include <daos/rpc.h>
 
-int
+static int
 daos_rpc_cb(const struct dtp_cb_info *cb_info)
 {
 	daos_event_t    *ev = (daos_event_t *)cb_info->dci_arg;
@@ -35,4 +35,27 @@ daos_rpc_cb(const struct dtp_cb_info *cb_info)
 	daos_event_complete(ev, cb_info->dci_rc);
 
 	return 0;
+}
+
+int
+daos_rpc_send(dtp_rpc_t *rpc, daos_event_t *ev)
+{
+	int	rc;
+
+	/* Send request */
+	rc = dtp_req_send(rpc, daos_rpc_cb, ev);
+	if (rc != 0) {
+		/**
+		 * event was started already, let's report the error
+		 * asynchronously
+		 */
+		daos_event_complete(ev, rc);
+		rc = 0;
+	}
+
+	/** wait for completion if blocking mode */
+	if (daos_event_is_priv(ev))
+		rc = daos_event_priv_wait(ev);
+
+	return rc;
 }

@@ -21,9 +21,9 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include "dsr_internal.h"
+#include "obj_internal.h"
 
-/** DSR object class */
+/** DAOS object class */
 struct daos_obj_class {
 	/** class name */
 	char				*oc_name;

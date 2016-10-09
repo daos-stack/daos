@@ -20,46 +20,52 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * dsrc: Module Definitions
+/*
+ * object server: module definitions
  */
 
-#include <daos_types.h>
+#include <daos_srv/daos_server.h>
 #include <daos/rpc.h>
-#include <pthread.h>
-#include <daos/common.h>
-#include <daos/transport.h>
-#include "dsr_rpc.h"
-#include "dsr_internal.h"
+#include "obj_rpc.h"
+#include "obj_internal.h"
 
-/**
- * Initialize object interface
- */
-int
-dc_obj_init(void)
+static int
+obj_mod_init(void)
 {
-	int rc;
-
-	rc = daos_rpc_register(dsr_rpcs, NULL, DAOS_OBJ_MODULE);
-	if (rc != 0)
-		return rc;
-
-	rc = daos_hhash_create(DAOS_HHASH_BITS, &dsr_shard_hhash);
-	if (rc != 0)
-		daos_rpc_unregister(dsr_rpcs);
-
-	return rc;
+	return 0;
 }
 
-/**
- * Finalize object interface
- */
-void
-dc_obj_fini(void)
+static int
+obj_mod_fini(void)
 {
-	daos_rpc_unregister(dsr_rpcs);
-	if (dsr_shard_hhash != NULL) {
-		daos_hhash_destroy(dsr_shard_hhash);
-		dsr_shard_hhash = NULL;
+	return 0;
+}
+
+/* Note: the rpc input/output parameters is defined in daos_rpc */
+static struct daos_rpc_handler obj_handlers[] = {
+	{
+		.dr_opc		= DAOS_OBJ_RPC_UPDATE,
+		.dr_hdlr	= ds_obj_rw_handler,
+	},
+	{
+		.dr_opc		= DAOS_OBJ_RPC_FETCH,
+		.dr_hdlr	= ds_obj_rw_handler,
+	},
+	{
+		.dr_opc		= DAOS_OBJ_RPC_ENUMERATE,
+		.dr_hdlr	= ds_obj_enum_handler,
+	},
+	{
+		.dr_opc		= 0
 	}
-}
+};
+
+struct dss_module obj_module =  {
+	.sm_name	= "obj",
+	.sm_mod_id	= DAOS_OBJ_MODULE,
+	.sm_ver		= 1,
+	.sm_init	= obj_mod_init,
+	.sm_fini	= obj_mod_fini,
+	.sm_cl_rpcs	= daos_obj_rpcs, /** TBD */
+	.sm_handlers	= obj_handlers,
+};
