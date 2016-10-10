@@ -26,8 +26,7 @@
  * dct/tests/dct_test
  */
 #include <dct_rpc.h>
-#include <daos_ct.h>
-#include <daos_event.h>
+#include <daos.h>
 #include <daos/event.h>
 #include <daos/transport.h>
 
@@ -42,15 +41,15 @@ main(int argc, char **argv)
 {
 	int	rc = 0;
 
-	rc = dct_init();
+	rc = daos_init();
 	if (rc != 0) {
-		D_ERROR("dct init fails: rc = %d\n", rc);
+		D_ERROR("daos init fails: rc = %d\n", rc);
 		return rc;
 	}
 
 	/*Actually run the tests*/
 	run_dct_ping_test();
 
-	dct_fini();
+	daos_fini();
 	return rc;
 }

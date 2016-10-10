@@ -24,7 +24,7 @@
  * dctc_ping: Client portion of ping test
  */
 
-#include <daos_ct.h>
+#include <daos_tier.h>
 #include "dct_rpc.h"
 
 static int

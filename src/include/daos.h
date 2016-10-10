@@ -28,5 +28,6 @@
 
 #include <daos_api.h>
 #include <daos_mgmt.h>
+#include <daos_tier.h>
 
 #endif /* __DAOS_H__ */

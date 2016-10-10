@@ -27,7 +27,7 @@
  * daos_api.h.
  */
 
-#include <daos_ct.h>
+#include <daos_tier.h>
 #include <pthread.h>
 #include <daos/rpc.h>
 #include <daos/transport.h>

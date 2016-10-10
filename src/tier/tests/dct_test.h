@@ -35,7 +35,7 @@
 #include <cmocka.h>
 
 #include <cmocka.h>
-#include <daos_ct.h>
+#include <daos_tier.h>
 #include <daos_event.h>
 #include <daos/common.h>
 

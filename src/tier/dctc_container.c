@@ -24,10 +24,10 @@
  * dctc: Client container operations
  *
  * dctc is the DCT client module/library. It exports the DCT API defined in
- * daos_ct.h.
+ * daos_tier.h.
  */
 
-#include <daos_ct.h>
+#include <daos_tier.h>
 #include <pthread.h>
 #include <daos/rpc.h>
 #include <daos/transport.h>
@@ -35,30 +35,30 @@
 
 
 int
-dct_co_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
+daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 {
 	return 0;
 }
 
 
 int
-dct_co_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
-	    daos_rank_list_t *failed, daos_handle_t *coh,
-	    daos_cont_info_t *info, daos_event_t *ev)
+daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
+	       daos_rank_list_t *failed, daos_handle_t *coh,
+	       daos_cont_info_t *info, daos_event_t *ev)
 {
 	return 0;
 }
 
 int
-dct_co_close(daos_handle_t coh, daos_event_t *ev)
+daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 {
 	return 0;
 }
 
 
 int
-dct_co_destroy(daos_handle_t poh, const uuid_t uuid, int force,
-	       daos_event_t *ev)
+daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
+		  daos_event_t *ev)
 {
 	return 0;
 }

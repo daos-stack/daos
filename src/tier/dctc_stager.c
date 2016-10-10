@@ -24,16 +24,16 @@
  * client portion of the fetch operation
  *
  * dctc is the DCT part of client module/library. It exports part of the DCT
- * API defined in daos_ct.h.
+ * API defined in daos_tier.h.
  */
 
-#include <daos_ct.h>
+#include <daos_tier.h>
 
 /* TODO, currently stub */
 int
-dct_fetch_container(daos_handle_t poh, const uuid_t cont_id,
-		    daos_epoch_t fetch_ep, daos_oid_list_t obj_list,
-		    daos_event_t *ev)
+daos_fetch_container(daos_handle_t poh, const uuid_t cont_id,
+		     daos_epoch_t fetch_ep, daos_oid_list_t obj_list,
+		     daos_event_t *ev)
 {
 	return 0;
 }
