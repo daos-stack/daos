@@ -48,7 +48,8 @@
 enum obj_rpc_opc {
 	DAOS_OBJ_RPC_UPDATE	= 1,
 	DAOS_OBJ_RPC_FETCH	= 2,
-	DAOS_OBJ_RPC_ENUMERATE	= 3,
+	DAOS_OBJ_DKEY_RPC_ENUMERATE = 3,
+	DAOS_OBJ_AKEY_RPC_ENUMERATE = 4,
 };
 
 struct obj_update_in {
@@ -57,7 +58,7 @@ struct obj_update_in {
 	uint64_t		oui_epoch;
 	uint32_t		oui_nr;
 	uint32_t		oui_pad;
-	daos_dkey_t		oui_dkey;
+	daos_key_t		oui_dkey;
 	struct dtp_array	oui_iods;
 	struct dtp_array	oui_bulks;
 };
@@ -71,6 +72,7 @@ struct obj_fetch_out {
 /* object Enumerate in/out */
 struct obj_key_enum_in {
 	daos_unit_oid_t		oei_oid;
+	daos_key_t		oei_key;
 	uuid_t			oei_co_hdl;
 	uint64_t		oei_epoch;
 	uint32_t		oei_nr;

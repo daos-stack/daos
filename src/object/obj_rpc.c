@@ -45,8 +45,9 @@ static struct dtp_msg_field *obj_fetch_out_fields[] = {
 	&DMF_REC_SIZE_ARRAY, /* actual size of records */
 };
 
-static struct dtp_msg_field *obj_dkey_enum_in_fields[] = {
+static struct dtp_msg_field *obj_key_enum_in_fields[] = {
 	&DMF_OID,	/* object ID */
+	&DMF_IOVEC,     /* key */
 	&DMF_UUID,	/* container handle uuid */
 	&DMF_UINT64,	/* epoch */
 	&DMF_UINT32,	/* number of kds */
@@ -55,7 +56,7 @@ static struct dtp_msg_field *obj_dkey_enum_in_fields[] = {
 	&DMF_BULK, /* BULK array for dkey */
 };
 
-static struct dtp_msg_field *obj_dkey_enum_out_fields[] = {
+static struct dtp_msg_field *obj_key_enum_out_fields[] = {
 	&DMF_INT,		/* status of the request */
 	&DMF_UINT32,		/* pad */
 	&DMF_DAOS_HASH_OUT,	/* hash anchor */
@@ -75,12 +76,16 @@ static struct dtp_req_format DQF_OBJ_FETCH =
 
 static struct dtp_req_format DQF_DKEY_ENUMERATE =
 	DEFINE_DTP_REQ_FMT("DAOS_DKEY_ENUM",
-			   obj_dkey_enum_in_fields,
-			   obj_dkey_enum_out_fields);
+			   obj_key_enum_in_fields,
+			   obj_key_enum_out_fields);
+
+struct dtp_req_format DQF_AKEY_ENUMERATE =
+	DEFINE_DTP_REQ_FMT("DSR_DKEY_AKEY_ENUMERATE",
+			   obj_key_enum_in_fields,
+			   obj_key_enum_out_fields);
 
 struct daos_rpc daos_obj_rpcs[] = {
 	{
-		.dr_name	= "DAOS_OBJ_UPDATE",
 		.dr_opc		= DAOS_OBJ_RPC_UPDATE,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
@@ -93,10 +98,16 @@ struct daos_rpc daos_obj_rpcs[] = {
 		.dr_req_fmt	= &DQF_OBJ_FETCH,
 	}, {
 		.dr_name	= "DAOS_DKEY_ENUM",
-		.dr_opc		= DAOS_OBJ_RPC_ENUMERATE,
+		.dr_opc		= DAOS_OBJ_DKEY_RPC_ENUMERATE,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_DKEY_ENUMERATE,
+	}, {
+		.dr_name        = "DAOS_AKEY_ENUM",
+		.dr_opc         = DAOS_OBJ_AKEY_RPC_ENUMERATE,
+		.dr_ver         = 1,
+		.dr_flags       = 0,
+		.dr_req_fmt     = &DQF_AKEY_ENUMERATE,
 	}, {
 		.dr_opc		= 0
 	}

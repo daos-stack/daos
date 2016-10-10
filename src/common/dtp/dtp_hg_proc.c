@@ -346,7 +346,7 @@ dtp_proc_dtp_iov_t(dtp_proc_t proc, dtp_iov_t *div)
 			div->iov_buf_len, div->iov_len);
 		return -DER_DTP_HG;
 	}
-	if (proc_op == DTP_DECODE) {
+	if (proc_op == DTP_DECODE && div->iov_buf_len > 0) {
 		D_ALLOC(div->iov_buf, div->iov_buf_len);
 		if (div->iov_buf == NULL)
 			return -DER_NOMEM;
@@ -354,11 +354,13 @@ dtp_proc_dtp_iov_t(dtp_proc_t proc, dtp_iov_t *div)
 		D_FREE(div->iov_buf, div->iov_buf_len);
 	}
 
-	rc = dtp_proc_memcpy(proc, div->iov_buf, div->iov_len);
-	if (rc != 0) {
-		if (proc_op == DTP_DECODE)
-			D_FREE(div->iov_buf, div->iov_buf_len);
-		return -DER_DTP_HG;
+	if (div->iov_len > 0) {
+		rc = dtp_proc_memcpy(proc, div->iov_buf, div->iov_len);
+		if (rc != 0) {
+			if (proc_op == DTP_DECODE)
+				D_FREE(div->iov_buf, div->iov_buf_len);
+			return -DER_DTP_HG;
+		}
 	}
 
 	return 0;

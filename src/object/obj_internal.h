@@ -88,12 +88,11 @@ dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		   daos_dkey_t *dkey, unsigned int nr,
 		   daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 		   daos_vec_map_t *maps, struct daos_task *task);
-
 int
-dc_obj_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
-		       uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		       daos_hash_out_t *anchor, struct daos_task *task);
-
+dc_obj_shard_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
+		      daos_key_t *key, uint32_t *nr, daos_key_desc_t *kds,
+		      daos_sg_list_t *sgl, daos_hash_out_t *anchor,
+		      struct daos_task *task);
 /* srv_obj.c */
 int ds_obj_rw_handler(dtp_rpc_t *rpc);
 int ds_obj_enum_handler(dtp_rpc_t *rpc);

@@ -52,8 +52,12 @@ static struct daos_rpc_handler obj_handlers[] = {
 		.dr_hdlr	= ds_obj_rw_handler,
 	},
 	{
-		.dr_opc		= DAOS_OBJ_RPC_ENUMERATE,
+		.dr_opc		= DAOS_OBJ_DKEY_RPC_ENUMERATE,
 		.dr_hdlr	= ds_obj_enum_handler,
+	},
+	{
+		.dr_opc         = DAOS_OBJ_AKEY_RPC_ENUMERATE,
+		.dr_hdlr        = ds_obj_enum_handler,
 	},
 	{
 		.dr_opc		= 0
@@ -66,6 +70,6 @@ struct dss_module obj_module =  {
 	.sm_ver		= 1,
 	.sm_init	= obj_mod_init,
 	.sm_fini	= obj_mod_fini,
-	.sm_cl_rpcs	= daos_obj_rpcs, /** TBD */
+	.sm_cl_rpcs	= daos_obj_rpcs,
 	.sm_handlers	= obj_handlers,
 };

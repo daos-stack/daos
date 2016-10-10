@@ -394,10 +394,14 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 	daos_handle_t			ih;
 	int				rc = 0;
 	int				dkey_nr = 0;
+	int				type;
 
+	if (opc_get(rpc->dr_opc) == DAOS_OBJ_AKEY_RPC_ENUMERATE)
+		type = VOS_ITER_AKEY;
+	else
+		type = VOS_ITER_DKEY;
 	oei = dtp_req_get(rpc);
-	if (oei == NULL)
-		D_GOTO(out, rc = -DER_INVAL);
+	D_ASSERT(oei != NULL);
 
 	rc = dsrs_eu_bulks_prep(rpc, 1, &iovs, &sgls, &oei->oei_bulk);
 	if (rc != 0)
@@ -415,7 +419,16 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 	param.ip_hdl	= tch->tch_cont->dvc_hdl;
 	param.ip_oid	= oei->oei_oid;
 	param.ip_epr.epr_lo = oei->oei_epoch;
-	rc = vos_iter_prepare(VOS_ITER_DKEY, &param, &ih);
+	if (type == VOS_ITER_AKEY) {
+		if (oei->oei_key.iov_len == 0)
+			D_GOTO(out_tch, rc = -DER_PROTO);
+		param.ip_dkey = oei->oei_key;
+	} else {
+		if (oei->oei_key.iov_len > 0)
+			param.ip_akey = oei->oei_key;
+	}
+
+	rc = vos_iter_prepare(type, &param, &ih);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
 			daos_hash_set_eof(&oeo->oeo_anchor);

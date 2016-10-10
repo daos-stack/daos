@@ -26,6 +26,8 @@
  * src/object/cli_obj.c
  */
 #include <daos_event.h>
+#include <daos_types.h>
+#include "obj_rpc.h"
 #include "obj_internal.h"
 
 #define CLI_OBJ_IO_PARMS	8
@@ -414,14 +416,13 @@ obj_get_grp_size(struct dc_object *obj)
 }
 
 static unsigned int
-obj_dkey2shard(struct dc_object *obj, daos_dkey_t *dkey,
+obj_dkey2shard(struct dc_object *obj, daos_key_t *dkey,
 		   unsigned int *shards_cnt,
 		   unsigned int *random_shard)
 {
 	int			grp_size;
 	uint64_t		hash;
 	uint64_t		start_shard;
-	uint64_t		adjust_grp_size;
 
 	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
@@ -429,16 +430,12 @@ obj_dkey2shard(struct dc_object *obj, daos_dkey_t *dkey,
 	hash = daos_hash_murmur64((unsigned char *)dkey->iov_buf,
 				  dkey->iov_len, 5731);
 
-	if (obj->cob_layout->ol_nr < grp_size)
-		adjust_grp_size = obj->cob_layout->ol_nr;
-	else
-		adjust_grp_size = grp_size;
+	D_ASSERT(obj->cob_layout->ol_nr >= grp_size);
 
 	/* XXX, consistent hash? */
-	start_shard = hash % (obj->cob_layout->ol_nr / adjust_grp_size);
-
+	start_shard = hash % (obj->cob_layout->ol_nr / grp_size);
 	if (shards_cnt != NULL)
-		*shards_cnt = adjust_grp_size;
+		*shards_cnt = grp_size;
 
 	/* Return an random shard among the group for fetch. */
 	/* XXX check if the target of the shard is avaible. */
@@ -453,7 +450,7 @@ obj_dkey2shard(struct dc_object *obj, daos_dkey_t *dkey,
 				break;
 			}
 
-			if (idx < start_shard + grp_size)
+			if (idx < start_shard + grp_size - 1)
 				idx++;
 			else
 				idx = start_shard;
@@ -467,7 +464,7 @@ obj_dkey2shard(struct dc_object *obj, daos_dkey_t *dkey,
 struct daos_obj_fetch_arg {
 	daos_handle_t oh;
 	daos_epoch_t epoch;
-	daos_dkey_t *dkey;
+	daos_key_t *dkey;
 	unsigned int nr;
 	daos_vec_iod_t *iods;
 	daos_sg_list_t *sgls;
@@ -485,7 +482,7 @@ obj_shard_fetch_task(struct daos_task *task)
 }
 
 int
-daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	      unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	      daos_vec_map_t *maps, daos_event_t *ev)
 {
@@ -500,7 +497,7 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	shard = obj_dkey2shard(iocx->cx_obj, dkey, NULL, &shard);
+	obj_dkey2shard(iocx->cx_obj, dkey, NULL, &shard);
 	rc = obj_shard_open(iocx->cx_obj, shard, &shard_oh);
 	if (rc != 0)
 		D_GOTO(failed, rc);
@@ -546,7 +543,7 @@ failed:
 struct daos_obj_update_arg {
 	daos_handle_t oh;
 	daos_epoch_t epoch;
-	daos_dkey_t *dkey;
+	daos_key_t *dkey;
 	unsigned int nr;
 	daos_vec_iod_t *iods;
 	daos_sg_list_t *sgls;
@@ -571,7 +568,7 @@ daos_obj_update_callback(void *arg)
 }
 
 int
-daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 		daos_event_t *ev)
 {
@@ -694,13 +691,29 @@ obj_list_dkey_comp(struct obj_io_ctx *ctx, int rc)
 	return rc;
 }
 
+static int
+obj_list_akey_comp(struct obj_io_ctx *ctx, int rc)
+{
+	daos_hash_out_t *anchor = ctx->cx_args[0];
+
+	if (rc != 0)
+		return rc;
+
+	if (daos_hash_is_eof(anchor))
+		D_DEBUG(DF_SRC, "Enumerated All shards\n");
+
+	return 0;
+}
+
 struct daos_obj_list_args {
 	daos_handle_t	oh;
 	daos_epoch_t	epoch;
+	daos_key_t	*key;
 	uint32_t	*nr;
 	daos_key_desc_t *kds;
 	daos_sg_list_t	*sgl;
 	daos_hash_out_t *anchor;
+	uint32_t	op;
 };
 
 static int
@@ -708,15 +721,16 @@ obj_shard_list_task(struct daos_task *task)
 {
 	struct daos_obj_list_args *arg = daos_task2arg(task);
 
-	return dc_obj_shard_list_dkey(arg->oh, arg->epoch, arg->nr,
-				      arg->kds, arg->sgl, arg->anchor,
-				      task);
+	return dc_obj_shard_list_key(arg->oh, arg->op, arg->epoch, arg->key,
+				     arg->nr, arg->kds, arg->sgl, arg->anchor,
+				     task);
 }
 
-int
-daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
-		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		   daos_hash_out_t *anchor, daos_event_t *ev)
+static int
+daos_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
+		  daos_key_t *key, uint32_t *nr,
+		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		  daos_hash_out_t *anchor, daos_event_t *ev)
 {
 	struct obj_io_ctx	*iocx;
 	struct daos_obj_list_args *arg;
@@ -732,14 +746,20 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 
 	enc_shard_at = sizeof(anchor->body) - sizeof(shard);
 
-	memcpy(&shard, &anchor->body[enc_shard_at], sizeof(shard));
 	memset(&anchor->body[enc_shard_at], 0, sizeof(shard));
+	if (op == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
+		obj_dkey2shard(iocx->cx_obj, key, NULL, &shard);
+		iocx->cx_comp = obj_list_akey_comp;
+	} else {
+		memcpy(&shard, &anchor->body[enc_shard_at],
+		      sizeof(shard));
+		iocx->cx_comp = obj_list_dkey_comp;
+	}
 
 	D_DEBUG(DF_SRC, "Enumerate keys in shard %d\n", shard);
 
 	iocx->cx_args[0] = (void *)anchor;
 	iocx->cx_args[1] = (void *)(unsigned long)shard;
-	iocx->cx_comp	 = obj_list_dkey_comp;
 
 	rc = obj_shard_open(iocx->cx_obj, shard, &shard_oh);
 	if (rc != 0)
@@ -758,10 +778,12 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	arg = daos_task2arg(task);
 	arg->oh = shard_oh;
 	arg->epoch = epoch;
+	arg->key = key;
 	arg->nr = nr;
 	arg->kds = kds;
 	arg->sgl = sgl;
 	arg->anchor = anchor;
+	arg->op = op;
 
 	rc = obj_iocx_launch(iocx);
 	if (rc != 0)
@@ -781,10 +803,20 @@ failed:
 }
 
 int
-daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
+		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		   daos_hash_out_t *anchor, daos_event_t *ev)
+{
+	/* XXX list_dkey might also input akey later */
+	return daos_obj_list_key(oh, DAOS_OBJ_DKEY_RPC_ENUMERATE, epoch, NULL,
+				 nr, kds, sgl, anchor, ev);
+}
+
+int
+daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		  uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_hash_out_t *anchor, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API.\n");
-	return -DER_NOSYS;
+	return daos_obj_list_key(oh, DAOS_OBJ_AKEY_RPC_ENUMERATE, epoch, dkey,
+				 nr, kds, sgl, anchor, ev);
 }

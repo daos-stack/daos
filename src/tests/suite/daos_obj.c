@@ -491,6 +491,32 @@ enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	}
 }
 
+static void
+enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
+	       daos_key_desc_t *kds, daos_hash_out_t *anchor, char *buf,
+	       int len, struct ioreq *req)
+{
+	int rc;
+
+	daos_iov_set(&req->val_iov, buf, len);
+	daos_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
+	/** execute fetch operation */
+	rc = daos_obj_list_akey(req->oh, epoch, &req->dkey, number, kds,
+				&req->sgl, anchor,
+				req->arg->async ? &req->ev : NULL);
+	assert_int_equal(rc, 0);
+
+	if (req->arg->async) {
+		daos_event_t    *evp;
+
+		/** wait for fetch completion */
+		rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		assert_int_equal(rc, 1);
+		assert_ptr_equal(evp, &req->ev);
+		assert_int_equal(evp->ev_error, 0);
+	}
+}
+
 /** very basic enumerate */
 static void
 enumerate_simple(void **state)
@@ -526,7 +552,41 @@ enumerate_simple(void **state)
 	while (!daos_hash_is_eof(&hash_out)) {
 		enumerate(0, &number, kds, &hash_out, buf, 512, &req);
 		if (number == 0)
-			goto next;
+			goto next_dkey;
+		ptr = buf;
+		total_keys += number;
+		for (i = 0; i < number; i++) {
+			char key[32];
+
+			snprintf(key, kds[i].kd_key_len + 1, ptr);
+			print_message("i %d key %s len %d\n", i, key,
+				      (int)kds[i].kd_key_len);
+			ptr += kds[i].kd_key_len;
+		}
+next_dkey:
+		if (daos_hash_is_eof(&hash_out))
+			break;
+		memset(buf, 0, 512);
+		number = 5;
+	}
+	assert_int_equal(total_keys, 1000);
+
+	print_message("Insert 1000 kv record\n");
+	for (i = 0; i < 1000; i++) {
+		char akey[10];
+
+		sprintf(akey, "%d", i);
+		insert("d_key", akey, 0, "data", strlen("data") + 1, 0, &req);
+	}
+
+	total_keys = 0;
+	memset(&hash_out, 0, sizeof(hash_out));
+	/** enumerate records */
+	while (!daos_hash_is_eof(&hash_out)) {
+		enumerate_akey(0, "d_key", &number, kds, &hash_out,
+			       buf, 512, &req);
+		if (number == 0)
+			goto next_akey;
 		ptr = buf;
 		total_keys += number;
 		for (i = 0; i < number; i++) {
@@ -537,7 +597,7 @@ enumerate_simple(void **state)
 				     (int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 		}
-next:
+next_akey:
 		if (daos_hash_is_eof(&hash_out))
 			break;
 		memset(buf, 0, 512);
