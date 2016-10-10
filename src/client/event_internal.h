@@ -29,24 +29,12 @@
 #ifndef EVENT_INTERNAL_H
 #define EVENT_INTERNAL_H
 
-#include <stdint.h>
-#include <string.h>
-#include <inttypes.h>
-#include <unistd.h>
-#include <errno.h>
-#include <dirent.h>
-#include <fcntl.h>
-#include <assert.h>
-#include <sys/file.h>
-#include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/shm.h>
 #include <pthread.h>
 #include <daos/common.h>
 #include <daos_event.h>
 #include <daos/event.h>
 #include <daos/list.h>
-#include <daos/hash.h>
+#include <daos/scheduler.h>
 
 typedef struct daos_eq {
 	/* After event is completed, it will be moved to the eq_comp list */
@@ -91,6 +79,7 @@ struct daos_event_private {
 
 	dtp_context_t		evx_ctx;
 	struct daos_event_callback evx_callback;
+	struct daos_sched	evx_sched;
 };
 
 static inline struct daos_event_private *

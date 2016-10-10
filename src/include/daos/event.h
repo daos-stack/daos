@@ -50,11 +50,14 @@ enum daos_ev_flags {
 	DAOS_EVF_NEED_LAUNCH	= (1 << 1),
 };
 
+struct daos_task;
+typedef int (*daos_sp_comp_cb_t)(struct daos_task *task, int rc);
 /** Common scratchpad for the operation in flight */
 struct daos_op_sp {
 	dtp_rpc_t	*sp_rpc;
 	daos_handle_t	 sp_hdl;
 	daos_handle_t	*sp_hdlp;
+	daos_sp_comp_cb_t sp_callback;
 	void		*sp_arg;
 };
 

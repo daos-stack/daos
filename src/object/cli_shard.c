@@ -141,9 +141,9 @@ dc_obj_shard_close(daos_handle_t oh, daos_event_t *ev)
 }
 
 static int
-obj_rw_cp(void *arg, daos_event_t *ev, int rc)
+obj_rw_cp(struct daos_task *task, int rc)
 {
-	struct daos_op_sp	*sp = arg;
+	struct daos_op_sp *sp = daos_task2sp(task);
 	struct obj_update_in	*oui;
 	dtp_bulk_t		*bulks;
 	int			i;
@@ -159,7 +159,7 @@ obj_rw_cp(void *arg, daos_event_t *ev, int rc)
 
 	ret = obj_reply_get_status(sp->sp_rpc);
 	if (ret != 0) {
-		D_ERROR("DSR_OBJ_UPDATE/FETCH replied failed, rc: %d\n",
+		D_ERROR("DAOS_OBJ_RPC_UPDATE/FETCH replied failed, rc: %d\n",
 			ret);
 		D_GOTO(out, rc = ret);
 	}
@@ -235,10 +235,26 @@ obj_shard_dkey2tag(struct dc_obj_shard *dobj, daos_dkey_t *dkey)
 	return hash;
 }
 
+int
+dc_obj_shard_rpc_cb(const struct dtp_cb_info *cb_info)
+{
+	struct daos_task	*task = cb_info->dci_arg;
+
+	if (cb_info->dci_rc == -DER_TIMEDOUT)
+		/** TODO */
+		;
+
+	if (task->dt_result == 0)
+		task->dt_result = cb_info->dci_rc;
+
+	task->dt_comp_cb(task);
+	return 0;
+}
+
 static int
 obj_shard_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	     unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-	     daos_event_t *ev, enum obj_rpc_opc op)
+	     struct daos_task *task, enum obj_rpc_opc op)
 {
 	struct dc_obj_shard	*dobj;
 	dtp_rpc_t		*req;
@@ -259,12 +275,6 @@ obj_shard_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	    !obj_shard_io_check(nr, iods, sgls))
 		return -DER_INVAL;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
 	dobj = obj_shard_hdl2ptr(oh);
 	if (dobj == NULL)
 		return -DER_NO_HDL;
@@ -277,7 +287,7 @@ obj_shard_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 
 	tgt_ep.ep_rank = dobj->do_rank;
 	tgt_ep.ep_tag = obj_shard_dkey2tag(dobj, dkey);
-	rc = obj_req_create(daos_ev2ctx(ev), tgt_ep, op, &req);
+	rc = obj_req_create(daos_task2ctx(task), tgt_ep, op, &req);
 	if (rc != 0) {
 		obj_shard_decref(dobj);
 		return rc;
@@ -311,7 +321,7 @@ obj_shard_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	for (i = 0; i < nr; i++) {
 		if (sgls != NULL && sgls[i].sg_iovs != NULL &&
 		    sgls[i].sg_iovs[0].iov_buf != NULL) {
-			rc = dtp_bulk_create(daos_ev2ctx(ev), &sgls[i],
+			rc = dtp_bulk_create(daos_task2ctx(task), &sgls[i],
 					     bulk_perm, &bulks[i]);
 			if (rc < 0) {
 				int j;
@@ -326,21 +336,16 @@ obj_shard_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	oui->oui_bulks.da_count = nr;
 	oui->oui_bulks.da_arrays = bulks;
 
-	sp = daos_ev2sp(ev);
+	sp = daos_task2sp(task);
 	dtp_req_addref(req);
 	sp->sp_rpc = req;
+	sp->sp_callback = obj_rw_cp;
 
-	rc = daos_event_register_comp_cb(ev, obj_rw_cp, sp);
+	rc = dtp_req_send(req, dc_obj_shard_rpc_cb, task);
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
 
-	rc = daos_event_launch(ev);
-	if (rc != 0)
-		D_GOTO(out_bulk, rc);
-
-	/** send the request */
-	return daos_rpc_send(req, ev);
-
+	return rc;
 out_bulk:
 	for (i = 0; i < nr; i++)
 		rc = dtp_bulk_free(bulks[i]);
@@ -356,9 +361,9 @@ int
 dc_obj_shard_update(daos_handle_t oh, daos_epoch_t epoch,
 		    daos_dkey_t *dkey, unsigned int nr,
 		    daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-		    daos_event_t *ev)
+		    struct daos_task *task)
 {
-	return obj_shard_rw(oh, epoch, dkey, nr, iods, sgls, ev,
+	return obj_shard_rw(oh, epoch, dkey, nr, iods, sgls, task,
 			    DAOS_OBJ_RPC_UPDATE);
 }
 
@@ -366,9 +371,9 @@ int
 dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		   daos_dkey_t *dkey, unsigned int nr,
 		   daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-		   daos_vec_map_t *maps, daos_event_t *ev)
+		   daos_vec_map_t *maps, struct daos_task *task)
 {
-	return obj_shard_rw(oh, epoch, dkey, nr, iods, sgls, ev,
+	return obj_shard_rw(oh, epoch, dkey, nr, iods, sgls, task,
 			    DAOS_OBJ_RPC_FETCH);
 }
 
@@ -410,13 +415,13 @@ struct enum_async_arg {
 };
 
 static int
-enumerate_cp(void *arg, daos_event_t *ev, int rc)
+enumerate_cp(struct daos_task *task, int rc)
 {
-	struct daos_op_sp		*sp = arg;
-	struct obj_key_enum_in		*oei;
-	struct obj_key_enum_out		*oeo;
-	struct enum_async_arg		*eaa;
-	int				 tgt_tag;
+	struct daos_op_sp	*sp = daos_task2sp(task);
+	struct obj_key_enum_in	*oei;
+	struct obj_key_enum_out	*oeo;
+	struct enum_async_arg	*eaa;
+	int			tgt_tag;
 
 	oei = dtp_req_get(sp->sp_rpc);
 	D_ASSERT(oei != NULL);
@@ -429,13 +434,13 @@ enumerate_cp(void *arg, daos_event_t *ev, int rc)
 
 	oeo = dtp_reply_get(sp->sp_rpc);
 	if (oeo->oeo_ret < 0) {
-		D_ERROR("DSR_OBJ_ENUMERATE replied failed, rc: %d\n",
+		D_ERROR("DAOS_OBJ_RPC_ENUMERATE replied failed, rc: %d\n",
 			oeo->oeo_ret);
 		D_GOTO(out, rc = oeo->oeo_ret);
 	}
 
 	if (*eaa->eaa_nr < oeo->oeo_kds.da_count) {
-		D_ERROR("DSM_OBJ_ENUMERATE return more kds, rc: %d\n",
+		D_ERROR("DAOS_OBJ_RPC_ENUMERATE return more kds, rc: %d\n",
 			-DER_PROTO);
 		D_GOTO(out, rc = -DER_PROTO);
 	}
@@ -465,9 +470,10 @@ out:
 }
 
 int
-dc_obj_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
-		       daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		       daos_hash_out_t *anchor, daos_event_t *ev)
+dc_obj_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch,
+		       uint32_t *nr, daos_key_desc_t *kds,
+		       daos_sg_list_t *sgl, daos_hash_out_t *anchor,
+		       struct daos_task *task)
 {
 	dtp_endpoint_t		tgt_ep;
 	dtp_rpc_t		*req;
@@ -478,12 +484,6 @@ dc_obj_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	dtp_bulk_t		bulk;
 	struct daos_op_sp	*sp;
 	int			rc;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
 
 	dobj = obj_shard_hdl2ptr(oh);
 	if (dobj == NULL)
@@ -498,7 +498,7 @@ dc_obj_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = dobj->do_rank;
 	tgt_ep.ep_tag = enum_anchor_get_tag(anchor);
-	rc = obj_req_create(daos_ev2ctx(ev), tgt_ep, DAOS_OBJ_RPC_ENUMERATE,
+	rc = obj_req_create(daos_task2ctx(task), tgt_ep, DAOS_OBJ_RPC_ENUMERATE,
 			    &req);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
@@ -514,13 +514,13 @@ dc_obj_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 
 	enum_anchor_copy(&oei->oei_anchor, anchor);
 	/* Create bulk */
-	rc = dtp_bulk_create(daos_ev2ctx(ev), sgl, DTP_BULK_RW, &bulk);
+	rc = dtp_bulk_create(daos_task2ctx(task), sgl, DTP_BULK_RW, &bulk);
 	if (rc < 0)
 		D_GOTO(out_req, rc);
 
 	oei->oei_bulk = bulk;
 
-	sp = daos_ev2sp(ev);
+	sp = daos_task2sp(task);
 	dtp_req_addref(req);
 	sp->sp_rpc = req;
 	D_ALLOC_PTR(eaa);
@@ -532,17 +532,13 @@ dc_obj_shard_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	eaa->eaa_anchor = anchor;
 	eaa->eaa_obj = dobj;
 	sp->sp_arg = eaa;
+	sp->sp_callback = enumerate_cp;
 
-	rc = daos_event_register_comp_cb(ev, enumerate_cp, sp);
+	rc = dtp_req_send(req, dc_obj_shard_rpc_cb, task);
 	if (rc != 0)
 		D_GOTO(out_eaa, rc);
 
-	rc = daos_event_launch(ev);
-	if (rc != 0)
-		D_GOTO(out_eaa, rc);
-
-	/** send the request */
-	return daos_rpc_send(req, ev);
+	return rc;
 out_eaa:
 	D_FREE_PTR(eaa);
 out_bulk:

@@ -952,6 +952,9 @@ daos_event_fini(struct daos_event *ev)
 		evx->evx_ctx = NULL;
 	}
 
+	/* Make sure the scheduler has been finished */
+	D_ASSERT(daos_ev2sched(ev)->ds_event == NULL);
+
 	/* Remove from the evx_link */
 	if (!daos_list_empty(&evx->evx_link)) {
 		daos_list_del(&evx->evx_link);

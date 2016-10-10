@@ -37,8 +37,10 @@ typedef int (*obj_io_comp_t)(struct obj_io_ctx *iocx, int rc);
 struct obj_io_ctx {
 	/** reference of the object */
 	struct dc_object	*cx_obj;
-	/** operation group */
+	/** event for the I/O context */
 	struct daos_event	*cx_event;
+	/** scheduler for the I/O context */
+	struct daos_sched	*cx_sched;
 	/** pointer to list anchor */
 	void			*cx_args[CLI_OBJ_IO_PARMS];
 	/** completion callback */
@@ -134,7 +136,7 @@ obj_hdl_unlink(struct dc_object *obj)
 }
 
 /**
- * Open an object shard (dsr shard object), cache the open handle.
+ * Open an object shard (shard object), cache the open handle.
  */
 static int
 obj_shard_open(struct dc_object *obj, unsigned int shard, daos_handle_t *oh)
@@ -159,7 +161,7 @@ obj_shard_open(struct dc_object *obj, unsigned int shard, daos_handle_t *oh)
 		memset(&oid, 0, sizeof(oid));
 		oid.id_shard = shard;
 		oid.id_pub   = obj->cob_md.omd_id;
-		/* NB: dsr open is a local operation, so it is ok to call
+		/* NB: obj open is a local operation, so it is ok to call
 		 * it in sync mode, at least for now.
 		 */
 		rc = dc_obj_shard_open(obj->cob_coh,
@@ -175,7 +177,7 @@ obj_shard_open(struct dc_object *obj, unsigned int shard, daos_handle_t *oh)
 }
 
 static int
-obj_iocx_comp(void *args, struct daos_event *ev, int rc)
+obj_iocx_comp(void *args, int rc)
 {
 	struct obj_io_ctx	*iocx = args;
 
@@ -185,9 +187,6 @@ obj_iocx_comp(void *args, struct daos_event *ev, int rc)
 
 	if (iocx->cx_obj != NULL)
 		obj_decref(iocx->cx_obj);
-
-	/* Let's destroy all os children created by dc_obj */
-	daos_event_destroy_children(iocx->cx_event, 1);
 
 	D_FREE_PTR(iocx);
 	return rc;
@@ -199,7 +198,8 @@ obj_iocx_create(daos_handle_t oh, daos_event_t *ev,
 		struct obj_io_ctx **iocx_pp)
 {
 	struct obj_io_ctx	*iocx;
-	int			 rc;
+	daos_event_t		*event;
+	int			rc;
 
 	D_ALLOC_PTR(iocx);
 	if (iocx == NULL)
@@ -208,102 +208,79 @@ obj_iocx_create(daos_handle_t oh, daos_event_t *ev,
 	iocx->cx_obj = obj_hdl2ptr(oh);
 	if (iocx->cx_obj == NULL)
 		D_GOTO(failed, rc = -DER_NO_HDL);
-	iocx->cx_event = ev;
-	if (ev != NULL) {
-		rc = daos_event_register_comp_cb(ev, obj_iocx_comp, iocx);
-		if (rc != 0)
+
+	if (ev == NULL) {
+		iocx->cx_sync = 1;
+
+		D_ALLOC_PTR(event);
+		if (event == NULL)
+			D_GOTO(failed, rc = -DER_NOMEM);
+
+		rc = daos_event_init(event, DAOS_HDL_INVAL, NULL);
+		if (rc != 0) {
+			D_FREE_PTR(event);
 			D_GOTO(failed, rc);
+		}
+	} else {
+		event = ev;
 	}
+
+	iocx->cx_event = event;
+	/* Create a daos scheduler for this IO */
+	iocx->cx_sched = daos_ev2sched(event);
+	if (iocx->cx_sched == NULL)
+		D_GOTO(failed, rc = -DER_NOMEM);
+
+	rc = daos_sched_init(iocx->cx_sched, event);
+	if (rc != 0)
+		D_GOTO(failed, rc);
+
+	rc = daos_sched_register_comp_cb(iocx->cx_sched, obj_iocx_comp, iocx);
+	if (rc != 0)
+		D_GOTO(failed, rc);
 
 	*iocx_pp = iocx;
-	return 0;
- failed:
-	obj_iocx_comp((void *)iocx, NULL, rc);
-	return rc;
-}
 
-static void
-obj_iocx_destroy(struct obj_io_ctx *iocx, int rc)
-{
-	if (iocx->cx_sync) {
-		if (iocx->cx_event != NULL) {
-			daos_event_abort(iocx->cx_event);
-			daos_event_destroy(iocx->cx_event, 1);
-			iocx->cx_event = NULL;
-		}
+	return 0;
+
+failed:
+	if (iocx->cx_sched != NULL)
+		daos_sched_cancel(iocx->cx_sched, rc);
+
+	obj_iocx_comp((void *)iocx, rc);
+	if (event != ev && event != NULL) {
+		daos_event_destroy(event, true);
+		D_FREE_PTR(event);
+	} else if (event != NULL) {
+		daos_event_complete(event, rc);
 	}
+
+	return rc;
 }
 
 static int
 obj_iocx_launch(struct obj_io_ctx *iocx)
 {
-	int rc;
+	struct daos_event *event = iocx->cx_event;
+	int rc = 0;
 
-	if (iocx->cx_event == NULL)
+	rc = daos_event_launch(event);
+	if (rc != 0)
+		return rc;
+
+	daos_sched_run(iocx->cx_sched);
+	if (!iocx->cx_sync)
 		return 0;
 
-	rc = daos_event_launch(iocx->cx_event);
-	if (rc != 0)
-		return rc;
-
-	if (iocx->cx_sync) {
-		/* Wait the event to complete */
-		struct daos_event *event = iocx->cx_event;
-
-		D_ASSERT(event != NULL);
-		rc = daos_event_test(event, DAOS_EQ_WAIT);
-		daos_event_fini(event);
-		D_FREE_PTR(event);
-	}
+	/* Wait the event to complete */
+	D_ASSERT(event != NULL);
+	rc = daos_event_test(event, DAOS_EQ_WAIT);
+	if (rc == 0)
+		rc = event->ev_error;
+	daos_event_fini(event);
+	D_FREE_PTR(event);
 
 	return rc;
-}
-
-static int
-obj_iocx_new_oper(struct obj_io_ctx *iocx, unsigned int shard,
-		     struct obj_io_oper *oper)
-{
-	daos_handle_t	oh;
-	int		rc;
-
-	memset(oper, 0, sizeof(*oper));
-	rc = obj_shard_open(iocx->cx_obj, shard, &oh);
-	if (rc != 0)
-		return rc;
-
-	if (iocx->cx_event == NULL) {
-		iocx->cx_sync = 1;
-
-		D_ALLOC_PTR(iocx->cx_event);
-		if (iocx->cx_event == NULL)
-			return -DER_NOMEM;
-
-		rc = daos_event_init(iocx->cx_event, DAOS_HDL_INVAL, NULL);
-		if (rc != 0) {
-			D_FREE_PTR(iocx->cx_event);
-			return rc;
-		}
-
-		rc = daos_event_register_comp_cb(iocx->cx_event,
-						 obj_iocx_comp, iocx);
-		if (rc != 0)
-			return rc;
-	}
-
-	D_ALLOC_PTR(oper->oo_ev);
-	if (oper->oo_ev == NULL)
-		return -DER_NOMEM;
-
-	rc = daos_event_init(oper->oo_ev, DAOS_HDL_INVAL, iocx->cx_event);
-	if (rc != 0) {
-		/* In the failed case, we don't need to close the opened shard
-		 * because we want to cache the open handle anyway.
-		 */
-		D_FREE_PTR(oper->oo_ev);
-		return rc;
-	}
-	oper->oo_oh = oh;
-	return 0;
 }
 
 int
@@ -487,14 +464,36 @@ obj_dkey2shard(struct dc_object *obj, daos_dkey_t *dkey,
 	return (unsigned int)start_shard;
 }
 
+struct daos_obj_fetch_arg {
+	daos_handle_t oh;
+	daos_epoch_t epoch;
+	daos_dkey_t *dkey;
+	unsigned int nr;
+	daos_vec_iod_t *iods;
+	daos_sg_list_t *sgls;
+	daos_vec_map_t *maps;
+};
+
+static int
+obj_shard_fetch_task(struct daos_task *task)
+{
+	struct daos_obj_fetch_arg *arg = daos_task2arg(task);
+
+	return dc_obj_shard_fetch(arg->oh, arg->epoch, arg->dkey,
+				  arg->nr, arg->iods, arg->sgls,
+				  arg->maps, task);
+}
+
 int
 daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	      unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	      daos_vec_map_t *maps, daos_event_t *ev)
 {
 	struct obj_io_ctx	*iocx;
-	struct obj_io_oper	 oper;
-	unsigned int		 shard;
+	unsigned int		shard;
+	daos_handle_t		shard_oh;
+	struct daos_task	*task = NULL;
+	struct daos_obj_fetch_arg *arg;
 	int			 rc;
 
 	rc = obj_iocx_create(oh, ev, &iocx);
@@ -502,40 +501,87 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 		return rc;
 
 	shard = obj_dkey2shard(iocx->cx_obj, dkey, NULL, &shard);
-	rc = obj_iocx_new_oper(iocx, shard, &oper);
+	rc = obj_shard_open(iocx->cx_obj, shard, &shard_oh);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	rc = dc_obj_shard_fetch(oper.oo_oh, epoch, dkey, nr, iods, sgls,
-				maps, oper.oo_ev);
+	D_ALLOC_PTR(task);
+	if (task == NULL)
+		D_GOTO(failed, rc);
+
+	/* Create a daos task and schedule it */
+	rc = daos_task_init(task, obj_shard_fetch_task,
+			    iocx->cx_sched);
 	if (rc != 0) {
-		D_DEBUG(DF_SRC, "Failed to fetch data from DSM: %d\n", rc);
+		D_FREE_PTR(task);
 		D_GOTO(failed, rc);
 	}
+
+	arg = daos_task2arg(task);
+	arg->oh = shard_oh;
+	arg->epoch = epoch;
+	arg->dkey = dkey;
+	arg->nr = nr;
+	arg->iods = iods;
+	arg->sgls = sgls;
+	arg->maps = maps;
 
 	rc = obj_iocx_launch(iocx);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
 	return 0;
- failed:
-	obj_iocx_destroy(iocx, rc);
+
+failed:
+	if (iocx->cx_sched != NULL)
+		daos_sched_cancel(iocx->cx_sched, rc);
+
+	if (iocx->cx_event != NULL && iocx->cx_event != ev)
+		daos_event_destroy(iocx->cx_event, true);
+
+	obj_iocx_comp((void *)iocx, rc);
 	return rc;
 }
 
-#define TMP_OPER_CNT	6
+struct daos_obj_update_arg {
+	daos_handle_t oh;
+	daos_epoch_t epoch;
+	daos_dkey_t *dkey;
+	unsigned int nr;
+	daos_vec_iod_t *iods;
+	daos_sg_list_t *sgls;
+};
+
+static int
+obj_shard_update_task(struct daos_task *task)
+{
+	struct daos_obj_update_arg *arg = daos_task2arg(task);
+
+	return dc_obj_shard_update(arg->oh, arg->epoch, arg->dkey,
+				   arg->nr, arg->iods, arg->sgls, task);
+}
+
+int
+daos_obj_update_callback(void *arg)
+{
+	/* Check if update succeeds, or it will need to update
+	 * pool map
+	 **/
+	return 0;
+}
+
 int
 daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-	       daos_event_t *ev)
+		unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+		daos_event_t *ev)
 {
 	struct obj_io_ctx	*iocx;
-	struct obj_io_oper	 tmp_oper[6];
-	struct obj_io_oper	 *oper;
+	struct daos_task_group	*dtg;
 	unsigned int		 shard;
 	unsigned int		 shards_cnt;
 	int			 i;
 	int			 rc;
+	bool			non_tasks = true;
 
 	rc = obj_iocx_create(oh, ev, &iocx);
 	if (rc != 0)
@@ -545,45 +591,71 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	if (shards_cnt > TMP_OPER_CNT) {
-		D_ALLOC(oper, shards_cnt * sizeof(*oper));
-		if (oper == NULL)
-			D_GOTO(failed, rc = -DER_NOMEM);
-	} else {
-		oper = tmp_oper;
-	}
-
 	D_DEBUG(DF_MISC, "update "DF_OID" start %u cnt %u\n",
 		DP_OID(iocx->cx_obj->cob_md.omd_id), shard,
 		shards_cnt);
 
-	for (i = 0; i < shards_cnt; i++, shard++, oper++) {
-		rc = obj_iocx_new_oper(iocx, shard, oper);
+	dtg = daos_sched_get_inline_dtg(iocx->cx_sched);
+	daos_task_group_init(dtg, iocx->cx_sched,
+			     daos_obj_update_callback, NULL);
+	for (i = 0; i < shards_cnt; i++, shard++) {
+		struct daos_task *task;
+		struct daos_obj_update_arg *arg;
+		daos_handle_t shard_oh;
+
+		rc = obj_shard_open(iocx->cx_obj, shard, &shard_oh);
 		if (rc != 0) {
-			if (rc == -DER_NONEXIST)
+			if (rc == -DER_NONEXIST) {
+				rc = 0;
 				continue;
+			}
 			D_GOTO(failed, rc);
 		}
 
-		rc = dc_obj_shard_update(oper->oo_oh, epoch, dkey,
-					 nr, iods, sgls, oper->oo_ev);
+		D_ALLOC_PTR(task);
+		if (task == NULL)
+			D_GOTO(failed, rc);
+
+		/* Create a daos task and schedule it */
+		rc = daos_task_init(task, obj_shard_update_task,
+				    iocx->cx_sched);
+		if (rc != 0) {
+			D_FREE_PTR(task);
+			D_GOTO(failed, rc);
+		}
+
+		rc = daos_task_group_add(dtg, task);
 		if (rc != 0)
 			D_GOTO(failed, rc);
+
+		arg = daos_task2arg(task);
+		arg->oh = shard_oh;
+		arg->epoch = epoch;
+		arg->dkey = dkey;
+		arg->nr = nr;
+		arg->iods = iods;
+		arg->sgls = sgls;
+		non_tasks = false;
+
 	}
+
+	if (non_tasks)
+		D_GOTO(failed, rc = -DER_NONEXIST);
 
 	rc = obj_iocx_launch(iocx);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-free:
-	if (oper != NULL && shards_cnt > TMP_OPER_CNT)
-		D_FREE(oper, shards_cnt * sizeof(*oper));
-
 	return rc;
-
 failed:
-	obj_iocx_destroy(iocx, rc);
-	D_GOTO(free, rc);
+	if (iocx->cx_sched != NULL)
+		daos_sched_cancel(iocx->cx_sched, rc);
+
+	if (iocx->cx_event != NULL && iocx->cx_event != ev)
+		daos_event_destroy(iocx->cx_event, true);
+
+	obj_iocx_comp((void *)iocx, rc);
+	return rc;
 }
 
 static int
@@ -622,16 +694,37 @@ obj_list_dkey_comp(struct obj_io_ctx *ctx, int rc)
 	return rc;
 }
 
+struct daos_obj_list_args {
+	daos_handle_t	oh;
+	daos_epoch_t	epoch;
+	uint32_t	*nr;
+	daos_key_desc_t *kds;
+	daos_sg_list_t	*sgl;
+	daos_hash_out_t *anchor;
+};
+
+static int
+obj_shard_list_task(struct daos_task *task)
+{
+	struct daos_obj_list_args *arg = daos_task2arg(task);
+
+	return dc_obj_shard_list_dkey(arg->oh, arg->epoch, arg->nr,
+				      arg->kds, arg->sgl, arg->anchor,
+				      task);
+}
+
 int
 daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
-		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		  daos_hash_out_t *anchor, daos_event_t *ev)
+		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		   daos_hash_out_t *anchor, daos_event_t *ev)
 {
 	struct obj_io_ctx	*iocx;
-	struct obj_io_oper	 oper;
-	uint32_t		 shard;
-	int			 rc;
-	int			 enc_shard_at;
+	struct daos_obj_list_args *arg;
+	struct daos_task	*task;
+	daos_handle_t		shard_oh;
+	uint32_t		shard;
+	int			rc;
+	int			enc_shard_at;
 
 	rc = obj_iocx_create(oh, ev, &iocx);
 	if (rc != 0)
@@ -648,22 +741,42 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	iocx->cx_args[1] = (void *)(unsigned long)shard;
 	iocx->cx_comp	 = obj_list_dkey_comp;
 
-	rc = obj_iocx_new_oper(iocx, shard, &oper);
+	rc = obj_shard_open(iocx->cx_obj, shard, &shard_oh);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	rc = dc_obj_shard_list_dkey(oper.oo_oh, epoch, nr, kds,
-				    sgl, anchor, oper.oo_ev);
+	D_ALLOC_PTR(task);
+	if (task == NULL)
+		D_GOTO(failed, rc);
+
+	/* Create a daos task and schedule it */
+	rc = daos_task_init(task, obj_shard_list_task,
+			    iocx->cx_sched);
 	if (rc != 0)
 		D_GOTO(failed, rc);
+
+	arg = daos_task2arg(task);
+	arg->oh = shard_oh;
+	arg->epoch = epoch;
+	arg->nr = nr;
+	arg->kds = kds;
+	arg->sgl = sgl;
+	arg->anchor = anchor;
 
 	rc = obj_iocx_launch(iocx);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
 	return 0;
- failed:
-	obj_iocx_destroy(iocx, rc);
+
+failed:
+	if (iocx->cx_sched != NULL)
+		daos_sched_cancel(iocx->cx_sched, rc);
+
+	if (iocx->cx_event != NULL && iocx->cx_event != ev)
+		daos_event_destroy(iocx->cx_event, true);
+
+	obj_iocx_comp((void *)iocx, rc);
 	return rc;
 }
 
