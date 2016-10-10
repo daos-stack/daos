@@ -31,7 +31,7 @@
 
 #include <daos_srv/daos_server.h>
 #include <daos/rpc.h>
-#include "dsm_rpc.h"
+#include "rpc.h"
 #include "dsms_internal.h"
 
 int

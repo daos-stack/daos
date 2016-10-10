@@ -21,53 +21,23 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsmc: Module Definitions
+ * dc_cont: Container Client API
  *
- * dsmc is the DSM client module/library. It exports the DSM API defined in
- * daos_m.h.
+ * This consists of dc_cont methods that do not belong to DAOS API.
  */
 
-#include <daos/rpc.h>
-#include <daos/transport.h>
-#include "dsm_rpc.h"
-#include "dsmc_internal.h"
+#ifndef __DAOS_CONTAINER_H__
+#define __DAOS_CONTAINER_H__
 
-/** XXX share hash table between pool & container
- *  struct daos_hhash *dsmc_hhash;
- */
+#include <daos_types.h>
+#include <daos/pool_map.h>
 
-/**
- * Initialize container interface
- */
-int
-dc_cont_init(void)
-{
-	int rc;
+int dc_cont_init(void);
+void dc_cont_fini(void);
 
-	rc = daos_rpc_register(cont_rpcs, NULL, DAOS_CONT_MODULE);
-	if (rc != 0)
-		return rc;
-#if 0
-	rc = daos_hhash_create(DAOS_HHASH_BITS, &dsmc_hhash);
-	if (rc != 0)
-		daos_rpc_unregister(cont_rpcs);
-#endif
+int dsm_tgt_idx2pool_tgt(daos_handle_t coh, struct pool_target **tgt,
+			 uint32_t tgt_idx);
 
-	return rc;
-}
+int dsm_cont_hdl2uuid(daos_handle_t coh, uuid_t *con_hdl);
 
-/**
- * Finalize container interface
- */
-void
-dc_cont_fini(void)
-{
-	daos_rpc_unregister(cont_rpcs);
-
-#if 0
-	if (dsmc_hhash != NULL) {
-		daos_hhash_destroy(dsmc_hhash);
-		dsmc_hhash = NULL;
-	}
-#endif
-}
+#endif /* __DAOS_CONTAINER_H__ */

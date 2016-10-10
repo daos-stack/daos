@@ -36,32 +36,6 @@
 #include <daos/lru.h>
 
 /**
- * Get pool_target by container handle and target index.
- *
- * \param coh [IN]	container handle.
- * \param tgt [OUT]	pool target found.
- * \param tgt_idx [IN]	target index.
- *
- * \return		0 if get the pool_target.
- * \return		errno if it does not get the pool_target.
- */
-int
-dsm_tgt_idx2pool_tgt(daos_handle_t coh, struct pool_target **tgt,
-		     uint32_t tgt_idx);
-
-/**
- * Get container handle uuid by container handle.
- *
- * \param coh [IN]		container handle.
- * \param con_uuid [OUT]	container hdl uuid got by container handle.
- *
- * \return			0 if get container and pool uuid.
- * \return			errno if it does not get.
- */
-int
-dsm_cont_hdl2uuid(daos_handle_t coh, uuid_t *con_uuid);
-
-/**
  * lookup target container handle by container handle uuid (usually from req)
  *
  * \param uuid [IN]		container handle uuid

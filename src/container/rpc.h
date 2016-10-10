@@ -21,22 +21,14 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsm: RPC Protocol Definitions
+ * dc_cont, ds_cont: RPC Protocol Definitions
  *
- * This is naturally shared by both dsmc and dsms. The in and out data
- * structures may safely contain compiler-generated paddings, which will be
- * removed dtp's serialization process.
- *
- * Every pool operation shall pass in the UUID of the pool it intends to access
- * and the UUID of its pool handle. The pool UUID enables server to quickly
- * locate the right mpool.
- *
- * Every container operation shall pass in the UUID of the container and the
- * UUID of its container handle.
+ * This is naturally shared by both dc_cont and ds_cont. The in and out data
+ * structures must be absent of any compiler-generated paddings.
  */
 
-#ifndef __DSM_RPC_H__
-#define __DSM_RPC_H__
+#ifndef __CONTAINER_RPC_H__
+#define __CONTAINER_RPC_H__
 
 #include <stdint.h>
 #include <uuid/uuid.h>
@@ -256,4 +248,4 @@ dsm_get_reply_status(dtp_rpc_t *rpc)
 	return *ret;
 }
 
-#endif /* __DSM_RPC_H__ */
+#endif /* __CONTAINER_RPC_H__ */

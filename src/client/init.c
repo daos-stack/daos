@@ -28,6 +28,7 @@
 #include <daos/client.h>
 #include <daos/event.h>
 #include <daos/pool.h>
+#include <daos/container.h>
 #include <pthread.h>
 
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;

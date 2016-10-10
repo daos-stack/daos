@@ -21,11 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsmc: Internal Declarations
+ * dc_cont: Container Client Internal Declarations
  */
 
-#ifndef __DSMC_INTERNAL_H__
-#define __DSMC_INTERNAL_H__
+#ifndef __CONTAINER_CLIENT_INTERNAL_H__
+#define __CONTAINER_CLIENT_INTERNAL_H__
 
 #include <daos/pool_map.h>
 
@@ -116,4 +116,4 @@ dsmc_container_put(struct dsmc_container *dc)
 
 int dsmc_co_l2g(daos_handle_t loc, daos_iov_t *glob);
 
-#endif /* __DSMC_INTERNAL_H__ */
+#endif /* __CONTAINER_CLIENT_INTERNAL_H__ */

@@ -7,13 +7,12 @@ denv = env.Clone()
 
 # dsms: DSM Server Module
 dsms = denv.SharedLibrary('cont',
-			  ['dsm_rpc.c', 'dsms_module.c',
+			  ['rpc.c', 'dsms_module.c',
 			   'dsms_container.c', 'dsms_target.c'])
 denv.Install('$PREFIX/lib/daos_srv', dsms)
 
 # Container client library
-dc_co_tgts = denv.SharedObject(['dsm_rpc.c', 'dsmc_module.c',
-				'dsmc_container.c'])
+dc_co_tgts = denv.SharedObject(['client.c', 'rpc.c'])
 Export('dc_co_tgts')
 
 # tests

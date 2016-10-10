@@ -24,6 +24,7 @@
  * object shard operations.
  */
 
+#include <daos/container.h>
 #include <daos/pool_map.h>
 #include <daos/transport.h>
 #include <daos/daos_m.h>

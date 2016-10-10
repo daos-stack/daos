@@ -21,15 +21,39 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsmc: Container Methods
+ * dc_cont: Container Client
+ *
+ * This module is part of libdaos. It implements the container methods of DAOS
+ * API as well as daos/container.h.
  */
 
 #include <daos_types.h>
+#include <daos_api.h>
+#include <daos/container.h>
+
 #include <daos/placement.h>
 #include <daos/pool.h>
+#include <daos/rpc.h>
+#include "client_internal.h"
+#include "rpc.h"
 
-#include "dsm_rpc.h"
-#include "dsmc_internal.h"
+/**
+ * Initialize container interface
+ */
+int
+dc_cont_init(void)
+{
+	return daos_rpc_register(cont_rpcs, NULL, DAOS_CONT_MODULE);
+}
+
+/**
+ * Finalize container interface
+ */
+void
+dc_cont_fini(void)
+{
+	daos_rpc_unregister(cont_rpcs);
+}
 
 static int
 cont_create_complete(void *arg, daos_event_t *ev, int rc)
@@ -981,6 +1005,16 @@ daos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch,
 	return 0;
 }
 
+/**
+ * Get pool_target by container handle and target index.
+ *
+ * \param coh [IN]	container handle.
+ * \param tgt [OUT]	pool target found.
+ * \param tgt_idx [IN]	target index.
+ *
+ * \return		0 if get the pool_target.
+ * \return		errno if it does not get the pool_target.
+ */
 int
 dsm_tgt_idx2pool_tgt(daos_handle_t coh, struct pool_target **tgt,
 		     uint32_t tgt_idx)
