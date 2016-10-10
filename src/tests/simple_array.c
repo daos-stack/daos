@@ -45,7 +45,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <daos_mgmt.h>
+#include <daos.h>
 #include "suite/daos_test.h"
 #include <mpi.h>
 
@@ -137,22 +137,22 @@ pool_create(void)
 
 	/**
 	 * allocate list of service nodes, returned as output parameter of
-	 * dmg_pool_create() and used to connect
+	 * daos_pool_create() and used to connect
 	 */
 
 	/** create pool over all the storage targets */
 	svcl.rl_nr.num	= 1;
 	svcl.rl_ranks	= &svc;
-	rc = dmg_pool_create(0731 /* mode */,
-			     geteuid() /* user owner */,
-			     getegid() /* group owner */,
-			     DSS_PSETID /* daos server process set ID */,
-			     NULL /* list of targets, NULL = all */,
-			     NULL /* storage type to use, use default */,
-			     10 * 1024 * 1024 * 1024UL /* target size, 10G */,
-			     &svcl /* pool service nodes, used for connect */,
-			     pool_uuid, /* the uuid of the pool created */
-			     NULL /* event, use blocking call for now */);
+	rc = daos_pool_create(0731 /* mode */,
+			      geteuid() /* user owner */,
+			      getegid() /* group owner */,
+			      DSS_PSETID /* daos server process set ID */,
+			      NULL /* list of targets, NULL = all */,
+			      NULL /* storage type to use, use default */,
+			      10 * 1024 * 1024 * 1024UL /* target size, 10G */,
+			      &svcl /* pool service nodes, used for connect */,
+			      pool_uuid, /* the uuid of the pool created */
+			      NULL /* event, use blocking call for now */);
 	ASSERT(rc == 0, "pool create failed with %d", rc);
 }
 
@@ -162,8 +162,8 @@ pool_destroy(void)
 	int	rc;
 
 	/** destroy the pool created in pool_create */
-	rc = dmg_pool_destroy(pool_uuid, DSS_PSETID, 1 /* force */,
-			      NULL /* event */);
+	rc = daos_pool_destroy(pool_uuid, DSS_PSETID, 1 /* force */,
+			       NULL /* event */);
 	ASSERT(rc == 0, "pool destroy failed with %d", rc);
 }
 

@@ -36,9 +36,8 @@
 #include <assert.h>
 #include <mpi.h>
 
-#include <daos_types.h>
 #include <daos/list.h>
-#include <daos_api.h>
+#include <daos.h>
 #include <errno.h>
 #include "suite/daos_test.h"
 

@@ -53,10 +53,10 @@ out:
 }
 
 int
-dmg_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
-		const char *grp, const daos_rank_list_t *tgts, const char *dev,
-		daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
-		daos_event_t *ev)
+daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
+		 const char *grp, const daos_rank_list_t *tgts, const char *dev,
+		 daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
+		 daos_event_t *ev)
 {
 	dtp_endpoint_t			 svr_ep;
 	dtp_rpc_t			*rpc_req = NULL;
@@ -161,8 +161,8 @@ out:
 }
 
 int
-dmg_pool_destroy(const uuid_t uuid, const char *grp, int force,
-		 daos_event_t *ev)
+daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
+		  daos_event_t *ev)
 {
 	dtp_endpoint_t			 svr_ep;
 	dtp_rpc_t			*rpc_req = NULL;

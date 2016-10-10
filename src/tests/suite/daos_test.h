@@ -34,9 +34,7 @@
 
 #include <mpi.h>
 
-#include <daos_mgmt.h>
-#include <daos_api.h>
-#include <daos_event.h>
+#include <daos.h>
 #include <daos/common.h>
 
 typedef struct {

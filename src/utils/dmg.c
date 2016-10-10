@@ -26,7 +26,7 @@
 
 #include <getopt.h>
 #include <stdio.h>
-#include <daos_mgmt.h>
+#include <daos.h>
 #include <daos/common.h>
 
 typedef int (*command_hdlr_t)(int, char *[]);
@@ -78,8 +78,8 @@ create_hdlr(int argc, char *argv[])
 	svc.rl_nr.num_out = 0;
 	svc.rl_ranks = ranks;
 
-	rc = dmg_pool_create(mode, uid, gid, group, NULL /* tgts */, "pmem",
-			     size, &svc, uuid, NULL /* ev */);
+	rc = daos_pool_create(mode, uid, gid, group, NULL /* tgts */, "pmem",
+			      size, &svc, uuid, NULL /* ev */);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: %d\n", rc);
 		return rc;
@@ -124,7 +124,7 @@ destroy_hdlr(int argc, char *argv[])
 		}
 	}
 
-	rc = dmg_pool_destroy(uuid, group, force, NULL /* ev */);
+	rc = daos_pool_destroy(uuid, group, force, NULL /* ev */);
 	if (rc != 0) {
 		D_ERROR("failed to destroy pool: %d\n", rc);
 		return rc;
@@ -177,7 +177,7 @@ main(int argc, char *argv[])
 
 	rc = daos_init();
 	if (rc != 0) {
-		D_ERROR("failed to initialize dmg: %d\n", rc);
+		D_ERROR("failed to initialize daos: %d\n", rc);
 		return 1;
 	}
 

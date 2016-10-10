@@ -248,9 +248,9 @@ setup(void **state)
 	uuid_clear(arg->pool_uuid);
 
 	/** create pool with minimal size */
-	rc = dmg_pool_create(0731, geteuid(), getegid(), "srv_grp", NULL,
-			     "pmem", 256*1024*1024, &arg->svc,
-			     arg->pool_uuid, NULL);
+	rc = daos_pool_create(0731, geteuid(), getegid(), "srv_grp", NULL,
+			      "pmem", 256*1024*1024, &arg->svc,
+			      arg->pool_uuid, NULL);
 	if (rc)
 		return rc;
 
@@ -294,7 +294,7 @@ teardown(void **state) {
 	if (rc)
 		return rc;
 
-	rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
+	rc = daos_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
 	if (rc)
 		return rc;
 

@@ -170,9 +170,9 @@ setup(void **state)
 
 	if (arg->myrank == 0) {
 		/** create pool with minimal size */
-		rc = dmg_pool_create(0731, geteuid(), getegid(), "srv_grp",
-				     NULL, "pmem", 0, &arg->svc, arg->pool_uuid,
-				     NULL);
+		rc = daos_pool_create(0731, geteuid(), getegid(), "srv_grp",
+				      NULL, "pmem", 0, &arg->svc,
+				      arg->pool_uuid, NULL);
 	}
 
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -209,7 +209,7 @@ teardown(void **state) {
 		return rc;
 
 	if (arg->myrank == 0)
-		rc = dmg_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
+		rc = daos_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
 
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)

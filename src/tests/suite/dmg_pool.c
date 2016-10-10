@@ -56,11 +56,11 @@ pool_create_all(void **state)
 	/** create container */
 	print_message("creating pool %ssynchronously ... ",
 		      arg->async ? "a" : "");
-	rc = dmg_pool_create(0 /* mode */, 0 /* uid */, 0 /* gid */,
-			     "srv_grp" /* grp */, NULL /* tgts */,
-			     "pmem" /* dev */, 0 /* minimal size */,
-			     &arg->svc /* svc */, uuid,
-			     arg->async ? &ev : NULL);
+	rc = daos_pool_create(0 /* mode */, 0 /* uid */, 0 /* gid */,
+			      "srv_grp" /* grp */, NULL /* tgts */,
+			      "pmem" /* dev */, 0 /* minimal size */,
+			      &arg->svc /* svc */, uuid,
+			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {
@@ -77,7 +77,7 @@ pool_create_all(void **state)
 	/** destroy container */
 	print_message("destroying pool %ssynchronously ... ",
 		      arg->async ? "a" : "");
-	rc = dmg_pool_destroy(uuid, "srv_grp", 1, arg->async ? &ev : NULL);
+	rc = daos_pool_destroy(uuid, "srv_grp", 1, arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {

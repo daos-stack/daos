@@ -17,26 +17,13 @@
  * DAOS Management API.
  */
 
-#ifndef __DMG_API_H__
-#define __DMG_API_H__
+#ifndef __DAOS_MGMT_H__
+#define __DAOS_MGMT_H__
 
 #include <uuid/uuid.h>
 
 #include <daos_event.h>
 #include <daos_types.h>
-#include <daos_errno.h>
-
-/**
- *   Initialize DAOS client library.
- */
-int
-daos_init();
-
-/**
- * Finalize DAOS client library.
- */
-int
-daos_fini();
 
 /**
  * Create a pool with \a uuid and \a mode.
@@ -75,10 +62,10 @@ daos_fini();
  *			Function will run in blocking mode if \a ev is NULL.
  */
 int
-dmg_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
-		const char *grp, const daos_rank_list_t *tgts, const char *dev,
-		daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
-		daos_event_t *ev);
+daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
+		 const char *grp, const daos_rank_list_t *tgts, const char *dev,
+		 daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
+		 daos_event_t *ev);
 
 /**
  * Destroy a pool with \a uuid. If there is at least one connection to this
@@ -92,8 +79,8 @@ dmg_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
  *			Function will run in blocking mode if \a ev is NULL.
  */
 int
-dmg_pool_destroy(const uuid_t uuid, const char *grp, int force,
-		 daos_event_t *ev);
+daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
+		  daos_event_t *ev);
 
 /**
  * Extend the pool to more targets. If \a tgts is NULL, this function
@@ -120,6 +107,6 @@ dmg_pool_destroy(const uuid_t uuid, const char *grp, int force,
  *			-DER_NONEXIST	Storage target is nonexistent
  */
 int
-dmg_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
-		daos_rank_list_t *failed, daos_event_t *ev);
-#endif /* __DMG_API_H__ */
+daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
+		 daos_rank_list_t *failed, daos_event_t *ev);
+#endif /* __DAOS_MGMT_H__ */
