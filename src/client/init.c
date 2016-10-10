@@ -51,6 +51,13 @@ daos_init(void)
 	if (module_initialized)
 		D_GOTO(unlock, rc = -DER_ALREADY);
 
+	/* Init fail location */
+	rc = daos_fail_loc_init();
+	if (rc != 0) {
+		D_ERROR("failed to init fail loc: %d\n", rc);
+		D_GOTO(unlock, rc);
+	}
+
 	rc = daos_hhash_create(DAOS_HHASH_BITS, &daos_client_hhash);
 	if (rc != 0) {
 		D_ERROR("failed to create handle hash table: %d\n", rc);

@@ -338,4 +338,7 @@ daos_errno2der(int err)
 	}
 }
 
+int
+daos_fail_loc_init();
+
 #endif /* __DAOS_COMMON_H__ */
