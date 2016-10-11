@@ -38,10 +38,10 @@
  *                               tgt_cont_hdl
  */
 
-#include <daos_srv/daos_m_srv.h>
 #include <uuid/uuid.h>
 #include <daos/pool_map.h>
 #include <daos/transport.h>
+#include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
 #include "rpc.h"
 #include "dsms_internal.h"

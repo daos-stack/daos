@@ -21,18 +21,16 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsms: Module Definitions
+ * ds_pool: Pool Server
  *
- * dsms is the DSM server module/library. It exports the DSM RPC handlers and
- * the DSM server API. This file contains the definitions expected by server;
- * the DSM server API methods are exported directly where they are defined as
- * extern functions.
+ * This is part of daos_server. It exports the pool RPC handlers and implements
+ * Pool Server API.
  */
 
-#include <daos_srv/daos_server.h>
 #include <daos/rpc.h>
+#include <daos_srv/daos_server.h>
 #include "rpc.h"
-#include "dsms_internal.h"
+#include "srv_internal.h"
 
 int
 dsms_corpc_create(dtp_context_t ctx, dtp_group_t *group, dtp_opcode_t opcode,

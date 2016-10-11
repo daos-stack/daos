@@ -32,7 +32,7 @@
 #include "dmgs_internal.h"
 
 #include <daos_srv/vos.h>
-#include <daos_srv/daos_m_srv.h>
+#include <daos_srv/pool.h>
 #include <daos_srv/daos_mgmt_srv.h>
 
 /** TODO: Not use harcoded path to storage */

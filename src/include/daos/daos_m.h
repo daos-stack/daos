@@ -47,21 +47,6 @@ struct tgt_cont_hdl *
 dsms_tgt_cont_hdl_lookup(const uuid_t uuid);
 
 /*
- * Target service per-thread pool object
- *
- * Stores per-thread, per-pool information, such as the vos pool handle. And,
- * caches per-pool information, such as the pool map version, so that DAOS
- * object I/Os do not need to access global tgt_pool objects.
- */
-struct dsms_vpool {
-	daos_list_t	dvp_list;
-	daos_handle_t	dvp_hdl;
-	uuid_t		dvp_uuid;
-	uint32_t	dvp_map_version;
-	int		dvp_ref;
-};
-
-/*
  * Target service per-thread container object
  *
  * Stores per-container information, such as the vos container handle, for one

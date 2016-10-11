@@ -5,11 +5,11 @@ Import('env', 'PREREQS')
 env.AppendUnique(LIBPATH=[Dir('.')])
 denv = env.Clone()
 
-# dsms: DSM Server Module
-dsms = denv.SharedLibrary('pool',
-			  ['rpc.c', 'dsms_module.c', 'dsms_storage.c',
-			   'dsms_pool.c', 'dsms_target.c'])
-denv.Install('$PREFIX/lib/daos_srv', dsms)
+# ds_pool: Pool Server
+ds_pool = denv.SharedLibrary('pool',
+			     ['srv.c', 'srv_pool.c', 'srv_target.c',
+			      'srv_storage.c', 'rpc.c'])
+denv.Install('$PREFIX/lib/daos_srv', ds_pool)
 
 # dc_pool: Pool Client
 dc_pool_tgts = denv.SharedObject(['cli.c', 'rpc.c'])

@@ -27,9 +27,10 @@
  * related container metadata.
  */
 
-#include <daos_srv/daos_m_srv.h>
 #include <uuid/uuid.h>
+#include <daos/btree_class.h>
 #include <daos/transport.h>
+#include <daos_srv/pool.h>
 #include "rpc.h"
 #include "dsms_internal.h"
 #include "dsms_layout.h"
@@ -50,13 +51,15 @@ struct cont_svc {
 	pthread_rwlock_t	cs_rwlock;
 	pthread_mutex_t		cs_lock;
 	int			cs_ref;
-	daos_handle_t		cs_containers;	/* container index KVS */
+	daos_handle_t		cs_root;	/* root tree */
+	daos_handle_t		cs_containers;	/* container index tree */
 };
 
 static int
 cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 {
-	int rc;
+	struct umem_attr	uma;
+	int			rc;
 
 	rc = dsms_tgt_pool_lookup(pool_uuid, NULL /* arg */, &svc->cs_pool);
 	if (rc != 0) {
@@ -86,15 +89,26 @@ cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 		D_GOTO(err_rwlock, rc = -DER_NOMEM);
 	}
 
-	rc = dsms_kvs_nv_open_kvs(svc->cs_mpool->mp_root, CONTAINERS,
-				  svc->cs_mpool->mp_pmem, &svc->cs_containers);
+	uma.uma_id = UMEM_CLASS_PMEM;
+	uma.uma_u.pmem_pool = svc->cs_mpool->mp_pmem;
+	rc = dbtree_open_inplace(&svc->cs_mpool->mp_sb->s_cont_root, &uma,
+				 &svc->cs_root);
 	if (rc != 0) {
-		D_ERROR("failed to open containers kvs: %d\n", rc);
+		D_ERROR("failed to open container root tree: %d\n", rc);
 		D_GOTO(err_lock, rc);
+	}
+
+	rc = dbtree_nv_open_tree(svc->cs_root, CONTAINERS,
+				 svc->cs_mpool->mp_pmem, &svc->cs_containers);
+	if (rc != 0) {
+		D_ERROR("failed to open containers tree: %d\n", rc);
+		D_GOTO(err_root, rc);
 	}
 
 	return 0;
 
+err_root:
+	dbtree_close(svc->cs_root);
 err_lock:
 	pthread_mutex_destroy(&svc->cs_lock);
 err_rwlock:
@@ -192,54 +206,54 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 		daos_handle_t	h;
 		uint64_t	ghce = 0;
 
-		/* Create the container KVS under the container index KVS. */
-		rc = dsms_kvs_uv_create_kvs(svc->cs_containers, in->cci_cont,
-					    KVS_NV, 0 /* feats */,
-					    16 /* order */,
-					    svc->cs_mpool->mp_pmem, &h);
+		/* Create the container tree under the container index tree. */
+		rc = dbtree_uv_create_tree(svc->cs_containers, in->cci_cont,
+					   DBTREE_CLASS_NV, 0 /* feats */,
+					   16 /* order */,
+					   svc->cs_mpool->mp_pmem, &h);
 		if (rc != 0) {
-			D_ERROR("failed to create container kvs: %d\n", rc);
+			D_ERROR("failed to create container tree: %d\n", rc);
 			pmemobj_tx_abort(rc);
 		}
 
 		ch = h;
 
-		rc = dsms_kvs_nv_update(ch, CONT_GHCE, &ghce, sizeof(ghce));
+		rc = dbtree_nv_update(ch, CONT_GHCE, &ghce, sizeof(ghce));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_create_kvs(ch, CONT_HCES, KVS_EC,
-					    0 /* feats */, 16 /* order */,
-					    svc->cs_mpool->mp_pmem,
-					    NULL /* kvsh_new */);
+		rc = dbtree_nv_create_tree(ch, CONT_HCES, DBTREE_CLASS_EC,
+					   0 /* feats */, 16 /* order */,
+					   svc->cs_mpool->mp_pmem,
+					   NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_create_kvs(ch, CONT_LRES, KVS_EC,
-					    0 /* feats */, 16 /* order */,
-					    svc->cs_mpool->mp_pmem,
-					    NULL /* kvsh_new */);
+		rc = dbtree_nv_create_tree(ch, CONT_LRES, DBTREE_CLASS_EC,
+					   0 /* feats */, 16 /* order */,
+					   svc->cs_mpool->mp_pmem,
+					   NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_create_kvs(ch, CONT_LHES, KVS_EC,
-					    0 /* feats */, 16 /* order */,
-					    svc->cs_mpool->mp_pmem,
-					    NULL /* kvsh_new */);
+		rc = dbtree_nv_create_tree(ch, CONT_LHES, DBTREE_CLASS_EC,
+					   0 /* feats */, 16 /* order */,
+					   svc->cs_mpool->mp_pmem,
+					   NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_create_kvs(ch, CONT_SNAPSHOTS, KVS_EC,
-					    0 /* feats */, 16 /* order */,
-					    svc->cs_mpool->mp_pmem,
-					    NULL /* kvsh_new */);
+		rc = dbtree_nv_create_tree(ch, CONT_SNAPSHOTS, DBTREE_CLASS_EC,
+					   0 /* feats */, 16 /* order */,
+					   svc->cs_mpool->mp_pmem,
+					   NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_create_kvs(ch, CONT_HANDLES, KVS_UV,
-					    0 /* feats */, 16 /* order */,
-					    svc->cs_mpool->mp_pmem,
-					    NULL /* kvsh_new */);
+		rc = dbtree_nv_create_tree(ch, CONT_HANDLES, DBTREE_CLASS_UV,
+					   0 /* feats */, 16 /* order */,
+					   svc->cs_mpool->mp_pmem,
+					   NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
@@ -332,8 +346,8 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 
 	pthread_rwlock_wrlock(&svc->cs_rwlock);
 
-	rc = dsms_kvs_uv_open_kvs(svc->cs_containers, in->cdi_cont,
-				  svc->cs_mpool->mp_pmem, &h);
+	rc = dbtree_uv_open_tree(svc->cs_containers, in->cdi_cont,
+				 svc->cs_mpool->mp_pmem, &h);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			rc = 0;
@@ -347,28 +361,28 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 
 
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
-		rc = dsms_kvs_nv_destroy_kvs(ch, CONT_HANDLES,
-					     svc->cs_mpool->mp_pmem);
+		rc = dbtree_nv_destroy_tree(ch, CONT_HANDLES,
+					    svc->cs_mpool->mp_pmem);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_destroy_kvs(ch, CONT_SNAPSHOTS,
-					     svc->cs_mpool->mp_pmem);
+		rc = dbtree_nv_destroy_tree(ch, CONT_SNAPSHOTS,
+					    svc->cs_mpool->mp_pmem);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_destroy_kvs(ch, CONT_LHES,
-					     svc->cs_mpool->mp_pmem);
+		rc = dbtree_nv_destroy_tree(ch, CONT_LHES,
+					    svc->cs_mpool->mp_pmem);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_destroy_kvs(ch, CONT_LRES,
-					     svc->cs_mpool->mp_pmem);
+		rc = dbtree_nv_destroy_tree(ch, CONT_LRES,
+					    svc->cs_mpool->mp_pmem);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_destroy_kvs(ch, CONT_HCES,
-					     svc->cs_mpool->mp_pmem);
+		rc = dbtree_nv_destroy_tree(ch, CONT_HCES,
+					    svc->cs_mpool->mp_pmem);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -378,9 +392,9 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 
 		ch = DAOS_HDL_INVAL;
 
-		rc = dsms_kvs_uv_delete(svc->cs_containers, in->cdi_cont);
+		rc = dbtree_uv_delete(svc->cs_containers, in->cdi_cont);
 		if (rc != 0) {
-			D_ERROR("failed to delete container kvs: %d\n", rc);
+			D_ERROR("failed to delete container tree: %d\n", rc);
 			pmemobj_tx_abort(rc);
 		}
 	} TX_ONABORT {
@@ -403,13 +417,13 @@ out:
 }
 
 static int
-ec_increment(daos_handle_t kvsh, uint64_t epoch)
+ec_increment(daos_handle_t tree, uint64_t epoch)
 {
 	uint64_t	c = 0;
 	uint64_t	c_new;
 	int		rc;
 
-	rc = dsms_kvs_ec_lookup(kvsh, epoch, &c);
+	rc = dbtree_ec_lookup(tree, epoch, &c);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		return rc;
 
@@ -417,17 +431,17 @@ ec_increment(daos_handle_t kvsh, uint64_t epoch)
 	if (c_new < c)
 		return -DER_OVERFLOW;
 
-	return dsms_kvs_ec_update(kvsh, epoch, &c_new);
+	return dbtree_ec_update(tree, epoch, &c_new);
 }
 
 static int
-ec_decrement(daos_handle_t kvsh, uint64_t epoch)
+ec_decrement(daos_handle_t tree, uint64_t epoch)
 {
 	uint64_t	c = 0;
 	uint64_t	c_new;
 	int		rc;
 
-	rc = dsms_kvs_ec_lookup(kvsh, epoch, &c);
+	rc = dbtree_ec_lookup(tree, epoch, &c);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		return rc;
 
@@ -436,9 +450,9 @@ ec_decrement(daos_handle_t kvsh, uint64_t epoch)
 		return -DER_OVERFLOW;
 
 	if (c_new == 0)
-		rc = dsms_kvs_ec_delete(kvsh, epoch);
+		rc = dbtree_ec_delete(tree, epoch);
 	else
-		rc = dsms_kvs_ec_update(kvsh, epoch, &c_new);
+		rc = dbtree_ec_update(tree, epoch, &c_new);
 
 	return rc;
 }
@@ -447,11 +461,11 @@ ec_decrement(daos_handle_t kvsh, uint64_t epoch)
 struct cont {
 	uuid_t			c_uuid;
 	struct cont_svc	       *c_svc;
-	daos_handle_t		c_cont;		/* container KVS */
-	daos_handle_t		c_hces;		/* HCE KVS */
-	daos_handle_t		c_lres;		/* LRE KVS */
-	daos_handle_t		c_lhes;		/* LHE KVS */
-	daos_handle_t		c_handles;	/* container handle KVS */
+	daos_handle_t		c_cont;		/* container tree */
+	daos_handle_t		c_hces;		/* HCE tree */
+	daos_handle_t		c_lres;		/* LRE tree */
+	daos_handle_t		c_lhes;		/* LHE tree */
+	daos_handle_t		c_handles;	/* container handle tree */
 };
 
 static int
@@ -469,28 +483,28 @@ cont_lookup(const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 	uuid_copy(p->c_uuid, uuid);
 	p->c_svc = (struct cont_svc *)svc;
 
-	rc = dsms_kvs_uv_open_kvs(svc->cs_containers, uuid,
-				  svc->cs_mpool->mp_pmem, &p->c_cont);
+	rc = dbtree_uv_open_tree(svc->cs_containers, uuid,
+				 svc->cs_mpool->mp_pmem, &p->c_cont);
 	if (rc != 0)
 		D_GOTO(err_p, rc);
 
-	rc = dsms_kvs_nv_open_kvs(p->c_cont, CONT_HCES, svc->cs_mpool->mp_pmem,
-				  &p->c_hces);
+	rc = dbtree_nv_open_tree(p->c_cont, CONT_HCES, svc->cs_mpool->mp_pmem,
+				 &p->c_hces);
 	if (rc != 0)
 		D_GOTO(err_cont, rc);
 
-	rc = dsms_kvs_nv_open_kvs(p->c_cont, CONT_LRES, svc->cs_mpool->mp_pmem,
-				  &p->c_lres);
+	rc = dbtree_nv_open_tree(p->c_cont, CONT_LRES, svc->cs_mpool->mp_pmem,
+				 &p->c_lres);
 	if (rc != 0)
 		D_GOTO(err_hces, rc);
 
-	rc = dsms_kvs_nv_open_kvs(p->c_cont, CONT_LHES, svc->cs_mpool->mp_pmem,
-				  &p->c_lhes);
+	rc = dbtree_nv_open_tree(p->c_cont, CONT_LHES, svc->cs_mpool->mp_pmem,
+				 &p->c_lhes);
 	if (rc != 0)
 		D_GOTO(err_lres, rc);
 
-	rc = dsms_kvs_nv_open_kvs(p->c_cont, CONT_HANDLES,
-				  svc->cs_mpool->mp_pmem, &p->c_handles);
+	rc = dbtree_nv_open_tree(p->c_cont, CONT_HANDLES,
+				 svc->cs_mpool->mp_pmem, &p->c_handles);
 	if (rc != 0)
 		D_GOTO(err_lhes, rc);
 
@@ -615,8 +629,8 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 		D_GOTO(out_rwlock, rc);
 
 	/* See if this container handle already exists. */
-	rc = dsms_kvs_uv_lookup(cont->c_handles, in->coi_cont_hdl, &chdl,
-				sizeof(chdl));
+	rc = dbtree_uv_lookup(cont->c_handles, in->coi_cont_hdl, &chdl,
+			      sizeof(chdl));
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0 && chdl.ch_capas != in->coi_capas) {
 			D_ERROR(DF_CONT": found conflicting container handle\n",
@@ -635,13 +649,13 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 	/* TODO: Rollback cont_open_bcast() on errors from now on. */
 
 	/* Get GHPCE. */
-	rc = dsms_kvs_ec_fetch(cont->c_hces, BTR_PROBE_LAST,
-			       NULL /* epoch_in */, &ghpce, NULL /* count */);
+	rc = dbtree_ec_fetch(cont->c_hces, BTR_PROBE_LAST, NULL /* epoch_in */,
+			     &ghpce, NULL /* count */);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		D_GOTO(out_cont, rc);
 
 	/* Get GHCE. */
-	rc = dsms_kvs_nv_lookup(cont->c_cont, CONT_GHCE, &ghce, sizeof(ghce));
+	rc = dbtree_nv_lookup(cont->c_cont, CONT_GHCE, &ghce, sizeof(ghce));
 	if (rc != 0)
 		D_GOTO(out_cont, rc);
 
@@ -655,14 +669,14 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 	chdl.ch_capas = in->coi_capas;
 
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
-		rc = dsms_kvs_uv_update(cont->c_handles, in->coi_cont_hdl,
-					&chdl, sizeof(chdl));
+		rc = dbtree_uv_update(cont->c_handles, in->coi_cont_hdl, &chdl,
+				      sizeof(chdl));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
 		rc = ec_increment(cont->c_hces, chdl.ch_hce);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update hce kvs: %d\n",
+			D_ERROR(DF_CONT": failed to update hce tree: %d\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
@@ -670,7 +684,7 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 
 		rc = ec_increment(cont->c_lres, chdl.ch_lre);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update lre kvs: %d\n",
+			D_ERROR(DF_CONT": failed to update lre tree: %d\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
@@ -678,7 +692,7 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 
 		rc = ec_increment(cont->c_lhes, chdl.ch_lhe);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update lhe kvs: %d\n",
+			D_ERROR(DF_CONT": failed to update lhe tree: %d\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
@@ -691,8 +705,8 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 		D_GOTO(out_cont, rc);
 
 	/* Calculate GLRE. */
-	rc = dsms_kvs_ec_fetch(cont->c_lres, BTR_PROBE_FIRST,
-			       NULL /* epoch_in */, &glre, NULL /* count */);
+	rc = dbtree_ec_fetch(cont->c_lres, BTR_PROBE_FIRST, NULL /* epoch_in */,
+			     &glre, NULL /* count */);
 	if (rc != 0) {
 		/* At least there shall be this handle's LRE. */
 		D_ASSERT(rc != -DER_NONEXIST);
@@ -788,8 +802,8 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 		D_GOTO(out_rwlock, rc);
 
 	/* See if this container handle is already closed. */
-	rc = dsms_kvs_uv_lookup(cont->c_handles, in->cci_cont_hdl, &chdl,
-				sizeof(chdl));
+	rc = dbtree_uv_lookup(cont->c_handles, in->cci_cont_hdl, &chdl,
+			      sizeof(chdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DF_DSMS, DF_CONT": already closed: "DF_UUID"\n",
@@ -805,13 +819,13 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 		D_GOTO(out_cont, rc);
 
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
-		rc = dsms_kvs_uv_delete(cont->c_handles, in->cci_cont_hdl);
+		rc = dbtree_uv_delete(cont->c_handles, in->cci_cont_hdl);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
 		rc = ec_decrement(cont->c_hces, chdl.ch_hce);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update hce kvs: %d\n",
+			D_ERROR(DF_CONT": failed to update hce tree: %d\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
@@ -819,7 +833,7 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 
 		rc = ec_decrement(cont->c_lres, chdl.ch_lre);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update lre kvs: %d\n",
+			D_ERROR(DF_CONT": failed to update lre tree: %d\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
@@ -827,7 +841,7 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 
 		rc = ec_decrement(cont->c_lhes, chdl.ch_lhe);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update lhe kvs: %d\n",
+			D_ERROR(DF_CONT": failed to update lhe tree: %d\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid), rc);
 			pmemobj_tx_abort(rc);
@@ -906,9 +920,9 @@ cont_epoch_hold(struct cont_svc *svc, struct cont *cont,
 	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
 
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
-		rc = dsms_kvs_uv_update(cont->c_handles,
-					in->eoi_cont_op_in.cpi_cont_hdl, hdl,
-					sizeof(*hdl));
+		rc = dbtree_uv_update(cont->c_handles,
+				      in->eoi_cont_op_in.cpi_cont_hdl, hdl,
+				      sizeof(*hdl));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -962,9 +976,9 @@ cont_epoch_commit(struct cont_svc *svc, struct cont *cont,
 	D_DEBUG(DF_DSMS, "hce="DF_U64" hce'="DF_U64"\n", hce, hdl->ch_hce);
 
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
-		rc = dsms_kvs_uv_update(cont->c_handles,
-					in->eoi_cont_op_in.cpi_cont_hdl, hdl,
-					sizeof(*hdl));
+		rc = dbtree_uv_update(cont->c_handles,
+				      in->eoi_cont_op_in.cpi_cont_hdl, hdl,
+				      sizeof(*hdl));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -1000,8 +1014,8 @@ cont_epoch_commit(struct cont_svc *svc, struct cont *cont,
 			pmemobj_tx_abort(rc);
 		}
 
-		rc = dsms_kvs_nv_update(cont->c_cont, CONT_GHCE, &hdl->ch_hce,
-					sizeof(hdl->ch_hce));
+		rc = dbtree_nv_update(cont->c_cont, CONT_GHCE, &hdl->ch_hce,
+				      sizeof(hdl->ch_hce));
 		if (rc != 0) {
 			D_ERROR(DF_CONT": failed to update ghce: %d\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
@@ -1047,8 +1061,8 @@ dsms_hdlr_cont_op(dtp_rpc_t *rpc)
 		D_GOTO(out_rwlock, rc);
 
 	/* Verify the container handle. */
-	rc = dsms_kvs_uv_lookup(cont->c_handles, in->cpi_cont_hdl, &hdl,
-				sizeof(hdl));
+	rc = dbtree_uv_lookup(cont->c_handles, in->cpi_cont_hdl, &hdl,
+			      sizeof(hdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
 			D_ERROR(DF_CONT": rejecting unauthorized operation: "

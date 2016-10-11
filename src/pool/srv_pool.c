@@ -21,36 +21,27 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsms: Pool Operations
+ * ds_pool: Pool Service
  *
  * This file contains the server API methods and the RPC handlers that are both
  * related pool metadata.
  */
 
-#include <daos_srv/daos_m_srv.h>
+#include <daos_srv/pool.h>
 
-#include <errno.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-#include <libpmemobj.h>
-#include <uuid/uuid.h>
-
-#include <daos/btree.h>
-#include <daos/mem.h>
+#include <daos/btree_class.h>
 #include <daos/pool_map.h>
 #include <daos/transport.h>
+#include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
-
 #include "rpc.h"
-#include "dsms_internal.h"
-#include "dsms_layout.h"
+#include "srv_internal.h"
+#include "srv_layout.h"
 
 /*
- * Create the mpool, create the root kvs, create the superblock, and return the
- * target UUID.
+ * Create the mpool, create the root trees, create the superblock, and return
+ * the target UUID.
  */
 static int
 mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
@@ -58,7 +49,8 @@ mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 	PMEMobjpool	       *mp;
 	PMEMoid			sb_oid;
 	struct superblock      *sb;
-	volatile daos_handle_t	kvsh = DAOS_HDL_INVAL;
+	volatile daos_handle_t	pool_root = DAOS_HDL_INVAL;
+	volatile daos_handle_t	cont_root = DAOS_HDL_INVAL;
 	uuid_t			target_uuid;
 	int			rc = 0;
 
@@ -84,7 +76,7 @@ mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 
 	TX_BEGIN(mp) {
 		struct umem_attr	uma;
-		daos_handle_t		h;
+		daos_handle_t		tmp;
 
 		pmemobj_tx_add_range_direct(sb, sizeof(*sb));
 
@@ -92,33 +84,38 @@ mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 		uuid_copy(sb->s_pool_uuid, pool_uuid);
 		uuid_copy(sb->s_target_uuid, target_uuid);
 
-		/* sb->s_root */
 		uma.uma_id = UMEM_CLASS_PMEM;
 		uma.uma_u.pmem_pool = mp;
-		rc = dbtree_create_inplace(KVS_NV, 0 /* feats */, 4 /* order */,
-					   &uma, &sb->s_root, &h);
+
+		/* sb->s_pool_root */
+		rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0 /* feats */,
+					   4 /* order */, &uma,
+					   &sb->s_pool_root, &tmp);
 		if (rc != 0) {
-			D_ERROR("failed to create root kvs: %d\n", rc);
+			D_ERROR("failed to create pool root tree: %d\n", rc);
 			pmemobj_tx_abort(rc);
 		}
-		kvsh = h;
+		pool_root = tmp;
 
-		rc = dsms_kvs_nv_update(kvsh, POOL_UUID, pool_uuid,
-					sizeof(uuid_t));
-		if (rc != 0)
+		/* sb->s_cont_root */
+		rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0 /* feats */,
+					   4 /* order */, &uma,
+					   &sb->s_cont_root, &tmp);
+		if (rc != 0) {
+			D_ERROR("failed to create container root tree: %d\n",
+				rc);
 			pmemobj_tx_abort(rc);
-
-		rc = dsms_kvs_nv_update(kvsh, TARGET_UUID, target_uuid,
-					sizeof(uuid_t));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
+		}
+		cont_root = tmp;
 	} TX_ONABORT {
 		rc = pmemobj_tx_errno();
 		if (rc > 0)
 			rc = -DER_NOSPACE;
 	} TX_FINALLY {
-		if (!daos_handle_is_inval(kvsh))
-			dbtree_close(kvsh);
+		if (!daos_handle_is_inval(cont_root))
+			dbtree_close(cont_root);
+		if (!daos_handle_is_inval(pool_root))
+			dbtree_close(pool_root);
 	} TX_END
 
 	if (rc != 0)
@@ -161,7 +158,7 @@ uuid_compare_cb(const void *a, const void *b)
 }
 
 static int
-pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
+pool_metadata_init(PMEMobjpool *mp, daos_handle_t root, uint32_t uid,
 		   uint32_t gid, uint32_t mode, uint32_t ntargets,
 		   uuid_t target_uuids[], const char *group,
 		   const daos_rank_list_t *target_addrs, uint32_t ndomains,
@@ -235,36 +232,36 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 	}
 
 	TX_BEGIN(mp) {
-		rc = dsms_kvs_nv_update(kvsh, POOL_UID, &uid, sizeof(uid));
+		rc = dbtree_nv_update(root, POOL_UID, &uid, sizeof(uid));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
-		rc = dsms_kvs_nv_update(kvsh, POOL_GID, &gid, sizeof(gid));
+		rc = dbtree_nv_update(root, POOL_GID, &gid, sizeof(gid));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
-		rc = dsms_kvs_nv_update(kvsh, POOL_MODE, &mode, sizeof(mode));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_VERSION, &map_version,
-					sizeof(map_version));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_BUFFER, map_buf,
-					pool_buf_size(map_buf->pb_nr));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-		rc = dsms_kvs_nv_update(kvsh, POOL_MAP_TARGET_UUIDS, uuids,
-					sizeof(uuid_t) * ntargets);
+		rc = dbtree_nv_update(root, POOL_MODE, &mode, sizeof(mode));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_update(kvsh, POOL_NHANDLES, &nhandles,
-					sizeof(nhandles));
+		rc = dbtree_nv_update(root, POOL_MAP_VERSION, &map_version,
+				      sizeof(map_version));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
-		rc = dsms_kvs_nv_create_kvs(kvsh, POOL_HANDLES, KVS_UV,
-					    0 /* feats */, 16 /* order */, mp,
-					    NULL /* kvsh_new */);
+		rc = dbtree_nv_update(root, POOL_MAP_BUFFER, map_buf,
+				      pool_buf_size(map_buf->pb_nr));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+		rc = dbtree_nv_update(root, POOL_MAP_TARGET_UUIDS, uuids,
+				      sizeof(uuid_t) * ntargets);
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+
+		rc = dbtree_nv_update(root, POOL_NHANDLES, &nhandles,
+				      sizeof(nhandles));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+		rc = dbtree_nv_create_tree(root, POOL_HANDLES, DBTREE_CLASS_UV,
+					   0 /* feats */, 16 /* order */, mp,
+					   NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 	} TX_FINALLY {
@@ -275,11 +272,14 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t kvsh, uint32_t uid,
 	return 0;
 }
 
+/* TODO: Call a ds_cont method instead. */
+#include "../container/dsms_layout.h"
 static int
-cont_metadata_init(PMEMobjpool *mp, daos_handle_t rooth)
+cont_metadata_init(PMEMobjpool *mp, daos_handle_t root)
 {
-	return dsms_kvs_nv_create_kvs(rooth, CONTAINERS, KVS_UV, 0 /* feats */,
-				      16 /* order */, mp, NULL /* kvsh_new */);
+	return dbtree_nv_create_tree(root, CONTAINERS, DBTREE_CLASS_UV,
+				     0 /* feats */, 16 /* order */, mp,
+				     NULL /* tree_new */);
 }
 
 int
@@ -293,7 +293,8 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	PMEMoid			sb_oid;
 	struct superblock      *sb;
 	struct umem_attr	uma;
-	daos_handle_t		kvsh;
+	daos_handle_t		pool_root;
+	daos_handle_t		cont_root;
 	char		       *path;
 	int			rc;
 
@@ -319,14 +320,22 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 
 	uma.uma_id = UMEM_CLASS_PMEM;
 	uma.uma_u.pmem_pool = mp;
-	rc = dbtree_open_inplace(&sb->s_root, &uma, &kvsh);
+
+	rc = dbtree_open_inplace(&sb->s_pool_root, &uma, &pool_root);
 	if (rc != 0) {
-		D_ERROR("failed to open root kvs in %s: %d\n", path, rc);
+		D_ERROR("failed to open pool root tree in %s: %d\n", path, rc);
 		D_GOTO(out_mp, rc);
 	}
 
+	rc = dbtree_open_inplace(&sb->s_cont_root, &uma, &cont_root);
+	if (rc != 0) {
+		D_ERROR("failed to open container root tree in %s: %d\n", path,
+			rc);
+		D_GOTO(out_pool_root, rc);
+	}
+
 	TX_BEGIN(mp) {
-		rc = pool_metadata_init(mp, kvsh, uid, gid, mode, ntargets,
+		rc = pool_metadata_init(mp, pool_root, uid, gid, mode, ntargets,
 					target_uuids, group, target_addrs,
 					ndomains, domains);
 		if (rc != 0) {
@@ -334,7 +343,7 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 			pmemobj_tx_abort(rc);
 		}
 
-		rc = cont_metadata_init(mp, kvsh);
+		rc = cont_metadata_init(mp, cont_root);
 		if (rc != 0) {
 			D_ERROR("failed to init container metadata: %d\n", rc);
 			pmemobj_tx_abort(rc);
@@ -345,7 +354,9 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 			rc = -DER_NOSPACE;
 	} TX_END
 
-	dbtree_close(kvsh);
+	dbtree_close(cont_root);
+out_pool_root:
+	dbtree_close(pool_root);
 out_mp:
 	pmemobj_close(mp);
 out_path:
@@ -370,7 +381,8 @@ struct pool_svc {
 	pthread_rwlock_t	ps_rwlock;	/* see TODO in struct comment */
 	pthread_mutex_t		ps_lock;
 	int			ps_ref;
-	daos_handle_t		ps_handles;	/* pool handle KVS */
+	daos_handle_t		ps_root;	/* root tree */
+	daos_handle_t		ps_handles;	/* pool handle tree */
 	struct tgt_pool	       *ps_pool;
 };
 
@@ -392,14 +404,14 @@ pool_svc_pool_init(struct pool_svc *svc)
 	size_t				map_buf_size;
 	int				rc;
 
-	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_MAP_VERSION,
-				&arg.pca_map_version,
-				sizeof(arg.pca_map_version));
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_MAP_VERSION,
+			      &arg.pca_map_version,
+			      sizeof(arg.pca_map_version));
 	if (rc != 0)
 		return rc;
 
-	rc = dsms_kvs_nv_lookup_ptr(svc->ps_mpool->mp_root, POOL_MAP_BUFFER,
-				    (void **)&arg.pca_map_buf, &map_buf_size);
+	rc = dbtree_nv_lookup_ptr(svc->ps_root, POOL_MAP_BUFFER,
+				  (void **)&arg.pca_map_buf, &map_buf_size);
 	if (rc != 0)
 		return rc;
 
@@ -413,7 +425,7 @@ pool_svc_init(const uuid_t uuid, struct pool_svc *svc)
 {
 	struct mpool	       *mpool;
 	uint32_t		nhandles;
-	struct btr_root	       *kvs;
+	struct btr_root	       *root;
 	size_t			size;
 	struct umem_attr	uma;
 	int			rc;
@@ -440,24 +452,32 @@ pool_svc_init(const uuid_t uuid, struct pool_svc *svc)
 		D_GOTO(err_rwlock, rc = -DER_NOMEM);
 	}
 
-	rc = dsms_kvs_nv_lookup(mpool->mp_root, POOL_NHANDLES, &nhandles,
-				sizeof(nhandles));
-	if (rc != 0)
+	uma.uma_id = UMEM_CLASS_PMEM;
+	uma.uma_u.pmem_pool = mpool->mp_pmem;
+
+	rc = dbtree_open_inplace(&mpool->mp_sb->s_pool_root, &uma,
+				 &svc->ps_root);
+	if (rc != 0) {
+		D_ERROR("failed to open pool root tree: %d\n", rc);
 		D_GOTO(err_lock, rc);
+	}
+
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES, &nhandles,
+			      sizeof(nhandles));
+	if (rc != 0)
+		D_GOTO(err_root, rc);
 
 	svc->ps_ref += nhandles;
 
-	rc = dsms_kvs_nv_lookup_ptr(mpool->mp_root, POOL_HANDLES, (void **)&kvs,
-				    &size);
+	rc = dbtree_nv_lookup_ptr(svc->ps_root, POOL_HANDLES, (void **)&root,
+				  &size);
 	if (rc != 0)
-		D_GOTO(err_lock, rc);
+		D_GOTO(err_root, rc);
 
-	uma.uma_id = UMEM_CLASS_PMEM;
-	uma.uma_u.pmem_pool = mpool->mp_pmem;
-	rc = dbtree_open_inplace(kvs, &uma, &svc->ps_handles);
+	rc = dbtree_open_inplace(root, &uma, &svc->ps_handles);
 	if (rc != 0) {
-		D_ERROR("failed to open pool handle kvs: %d\n", rc);
-		D_GOTO(err_lock, rc);
+		D_ERROR("failed to open pool handle tree: %d\n", rc);
+		D_GOTO(err_root, rc);
 	}
 
 	rc = pool_svc_pool_init(svc);
@@ -468,6 +488,8 @@ pool_svc_init(const uuid_t uuid, struct pool_svc *svc)
 
 err_handles:
 	dbtree_close(svc->ps_handles);
+err_root:
+	dbtree_close(svc->ps_root);
 err_lock:
 	pthread_mutex_destroy(&svc->ps_lock);
 err_rwlock:
@@ -566,18 +588,18 @@ pool_attr_read(const struct pool_svc *svc, struct pool_attr *attr)
 {
 	int rc;
 
-	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_UID, &attr->pa_uid,
-				sizeof(uint32_t));
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_UID, &attr->pa_uid,
+			      sizeof(uint32_t));
 	if (rc != 0)
 		return rc;
 
-	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_GID, &attr->pa_gid,
-				sizeof(uint32_t));
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_GID, &attr->pa_gid,
+			      sizeof(uint32_t));
 	if (rc != 0)
 		return rc;
 
-	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_MODE,
-				&attr->pa_mode, sizeof(uint32_t));
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_MODE, &attr->pa_mode,
+			      sizeof(uint32_t));
 	if (rc != 0)
 		return rc;
 
@@ -595,7 +617,7 @@ permitted(const struct pool_attr *attr, uint32_t uid, uint32_t gid,
 
 	/*
 	 * Determine which set of capability bits applies. See also the
-	 * comment/diagram for POOL_MODE in dsms_layout.h.
+	 * comment/diagram for POOL_MODE in src/pool/srv_layout.h.
 	 */
 	if (uid == attr->pa_uid)
 		shift = DAOS_PC_NBITS * 2;	/* user */
@@ -624,14 +646,14 @@ map_retrieve(const struct pool_svc *svc, struct pool_buf **map_buf,
 	uint32_t		version;
 	int			rc;
 
-	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_MAP_VERSION,
-				&version, sizeof(version));
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_MAP_VERSION, &version,
+			      sizeof(version));
 	if (rc != 0)
 		return rc;
 
 	/* Look up the address of the persistent pool map buffer. */
-	rc = dsms_kvs_nv_lookup_ptr(svc->ps_mpool->mp_root, POOL_MAP_BUFFER,
-				    (void **)&buf, &buf_size);
+	rc = dbtree_nv_lookup_ptr(svc->ps_root, POOL_MAP_BUFFER, (void **)&buf,
+				  &buf_size);
 	if (rc != 0)
 		return rc;
 
@@ -802,8 +824,8 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 	pthread_rwlock_wrlock(&svc->ps_rwlock);
 
 	/* Check existing pool handles. */
-	rc = dsms_kvs_uv_lookup(svc->ps_handles, in->pci_pool_hdl, &hdl,
-				sizeof(hdl));
+	rc = dbtree_uv_lookup(svc->ps_handles, in->pci_pool_hdl, &hdl,
+			      sizeof(hdl));
 	if (rc == 0) {
 		if (hdl.ph_capas == in->pci_capas) {
 			/*
@@ -854,21 +876,21 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 
 	hdl.ph_capas = in->pci_capas;
 
-	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_NHANDLES,
-				&nhandles, sizeof(nhandles));
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES, &nhandles,
+			      sizeof(nhandles));
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 	nhandles++;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 	TX_BEGIN(svc->ps_mpool->mp_pmem) {
-		rc = dsms_kvs_nv_update(svc->ps_mpool->mp_root, POOL_NHANDLES,
-					&nhandles, sizeof(nhandles));
+		rc = dbtree_nv_update(svc->ps_root, POOL_NHANDLES, &nhandles,
+				      sizeof(nhandles));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_uv_update(svc->ps_handles, in->pci_pool_hdl, &hdl,
-					sizeof(hdl));
+		rc = dbtree_uv_update(svc->ps_handles, in->pci_pool_hdl, &hdl,
+				      sizeof(hdl));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
@@ -951,8 +973,8 @@ dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 
 	pthread_rwlock_wrlock(&svc->ps_rwlock);
 
-	rc = dsms_kvs_uv_lookup(svc->ps_handles, pdi->pdi_pool_hdl, &hdl,
-				sizeof(hdl));
+	rc = dbtree_uv_lookup(svc->ps_handles, pdi->pdi_pool_hdl, &hdl,
+			      sizeof(hdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			rc = 0;
@@ -963,20 +985,20 @@ dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	rc = dsms_kvs_nv_lookup(svc->ps_mpool->mp_root, POOL_NHANDLES,
-				&nhandles, sizeof(nhandles));
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES, &nhandles,
+			      sizeof(nhandles));
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
 	nhandles--;
 
 	TX_BEGIN(svc->ps_mpool->mp_pmem) {
-		rc = dsms_kvs_uv_delete(svc->ps_handles, pdi->pdi_pool_hdl);
+		rc = dbtree_uv_delete(svc->ps_handles, pdi->pdi_pool_hdl);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dsms_kvs_nv_update(svc->ps_mpool->mp_root, POOL_NHANDLES,
-					&nhandles, sizeof(nhandles));
+		rc = dbtree_nv_update(svc->ps_root, POOL_NHANDLES, &nhandles,
+				      sizeof(nhandles));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
@@ -1019,36 +1041,4 @@ void
 dsms_module_pool_fini(void)
 {
 	pthread_mutex_destroy(&pool_svc_cache_lock);
-}
-
-/*
- * dsms_vpool objects: thread-local pool cache
- */
-struct dsms_vpool *
-vpool_lookup(const uuid_t vp_uuid)
-{
-	struct dsms_vpool *dvp;
-	struct dsm_tls  *tls = dsm_tls_get();
-
-	daos_list_for_each_entry(dvp, &tls->dt_pool_list, dvp_list) {
-		if (uuid_compare(vp_uuid, dvp->dvp_uuid) == 0) {
-			dvp->dvp_ref++;
-			return dvp;
-		}
-	}
-	return NULL;
-}
-
-void
-vpool_put(struct dsms_vpool *vpool)
-{
-	D_ASSERTF(vpool->dvp_ref > 0, "%d\n", vpool->dvp_ref);
-	vpool->dvp_ref--;
-	if (vpool->dvp_ref == 0) {
-		D_DEBUG(DF_DSMS, DF_UUID": destroying\n",
-			DP_UUID(vpool->dvp_uuid));
-		daos_list_del(&vpool->dvp_list);
-		vos_pool_close(vpool->dvp_hdl, NULL /* ev */);
-		D_FREE_PTR(vpool);
-	}
 }

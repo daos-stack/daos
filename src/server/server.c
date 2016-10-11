@@ -31,6 +31,7 @@
 #include <getopt.h>
 #include <errno.h>
 
+#include <daos/btree_class.h>
 #include <daos/common.h>
 #include "dss_internal.h"
 
@@ -48,6 +49,37 @@ static unsigned int	nr_threads;
 
 /** HW topology */
 hwloc_topology_t	dss_topo;
+
+/*
+ * Register the dbtree classes used by native server-side modules (e.g.,
+ * ds_pool, ds_cont, etc.). Unregistering is currently not supported.
+ */
+static int
+register_dbtree_classes(void)
+{
+	int rc;
+
+	rc = dbtree_class_register(DBTREE_CLASS_NV, 0 /* feats */,
+				   &dbtree_nv_ops);
+	if (rc != 0) {
+		D_ERROR("failed to register DBTREE_CLASS_NV: %d\n", rc);
+		return rc;
+	}
+
+	rc = dbtree_class_register(DBTREE_CLASS_UV, 0 /* feats */,
+				   &dbtree_uv_ops);
+	if (rc != 0) {
+		D_ERROR("failed to register DBTREE_CLASS_UV: %d\n", rc);
+		return rc;
+	}
+
+	rc = dbtree_class_register(DBTREE_CLASS_EC, 0 /* feats */,
+				   &dbtree_ec_ops);
+	if (rc != 0)
+		D_ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
+
+	return rc;
+}
 
 static int
 modules_load()
@@ -97,6 +129,10 @@ server_init()
 
 	/** enable DF_SERVER */
 	daos_debug_set(DF_SERVER);
+
+	rc = register_dbtree_classes();
+	if (rc != 0)
+		return rc;
 
 	/** initialize server topology data */
 	hwloc_topology_init(&dss_topo);

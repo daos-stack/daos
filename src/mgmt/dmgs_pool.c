@@ -26,7 +26,7 @@
 
 #include "dmgs_internal.h"
 
-#include <daos_srv/daos_m_srv.h>
+#include <daos_srv/pool.h>
 
 struct pc_inprogress {
 	/* uuid as the unique ID of the pool-creating */

@@ -21,29 +21,25 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsms: Storage Implementation
+ * dbtree Classes
  *
- * This file implements the dbtree classes used by dsms and other
- * storage-related stuff.
+ * This file implements dbtree classes for different key and value types.
  */
 
+#include <daos/btree_class.h>
+
 #include <string.h>
-#include <daos/btree.h>
-#include <daos/mem.h>
-#include <daos_errno.h>
-#include "dsms_internal.h"
-#include "dsms_layout.h"
 
 #define HAVE_DBTREE_DELETE 0	/* dbtree_delete() not yet implemented */
 
 #if !HAVE_DBTREE_DELETE
 
 static int
-lookup(daos_handle_t kvsh, daos_iov_t *key, daos_iov_t *val)
+lookup(daos_handle_t tree, daos_iov_t *key, daos_iov_t *val)
 {
 	int rc;
 
-	rc = dbtree_lookup(kvsh, key, val);
+	rc = dbtree_lookup(tree, key, val);
 	if (rc != 0)
 		return rc;
 
@@ -54,7 +50,7 @@ lookup(daos_handle_t kvsh, daos_iov_t *key, daos_iov_t *val)
 }
 
 static int
-delete(daos_handle_t kvsh, daos_iov_t *key)
+delete(daos_handle_t tree, daos_iov_t *key)
 {
 	daos_iov_t val;
 
@@ -62,7 +58,7 @@ delete(daos_handle_t kvsh, daos_iov_t *key)
 	val.iov_buf_len = 0;
 	val.iov_len = val.iov_buf_len;
 
-	return dbtree_update(kvsh, key, &val);
+	return dbtree_update(tree, key, &val);
 }
 
 #define dbtree_lookup	lookup
@@ -71,7 +67,7 @@ delete(daos_handle_t kvsh, daos_iov_t *key)
 #endif
 
 static int
-lookup_ptr(daos_handle_t kvsh, daos_iov_t *key, daos_iov_t *val)
+lookup_ptr(daos_handle_t tree, daos_iov_t *key, daos_iov_t *val)
 {
 	int rc;
 
@@ -79,7 +75,7 @@ lookup_ptr(daos_handle_t kvsh, daos_iov_t *key, daos_iov_t *val)
 	val->iov_buf_len = 0;
 	val->iov_len = val->iov_buf_len;
 
-	rc = dbtree_lookup(kvsh, key, val);
+	rc = dbtree_lookup(tree, key, val);
 	if (rc != 0)
 		return rc;
 
@@ -87,9 +83,9 @@ lookup_ptr(daos_handle_t kvsh, daos_iov_t *key, daos_iov_t *val)
 }
 
 static int
-create_kvs(daos_handle_t kvsh, daos_iov_t *key, unsigned int class,
-	   uint64_t feats, unsigned int order, PMEMobjpool *mp,
-	   daos_handle_t *kvsh_new)
+create_tree(daos_handle_t tree, daos_iov_t *key, unsigned int class,
+	    uint64_t feats, unsigned int order, PMEMobjpool *mp,
+	    daos_handle_t *tree_new)
 {
 	struct btr_root		buf;
 	daos_iov_t		val;
@@ -104,11 +100,11 @@ create_kvs(daos_handle_t kvsh, daos_iov_t *key, unsigned int class,
 	val.iov_buf_len = sizeof(buf);
 	val.iov_len = val.iov_buf_len;
 
-	rc = dbtree_update(kvsh, key, &val);
+	rc = dbtree_update(tree, key, &val);
 	if (rc != 0)
 		return rc;
 
-	rc = lookup_ptr(kvsh, key, &val);
+	rc = lookup_ptr(tree, key, &val);
 	if (rc != 0)
 		return rc;
 
@@ -119,30 +115,30 @@ create_kvs(daos_handle_t kvsh, daos_iov_t *key, unsigned int class,
 	if (rc != 0)
 		return rc;
 
-	if (kvsh_new == NULL)
+	if (tree_new == NULL)
 		dbtree_close(h);
 	else
-		*kvsh_new = h;
+		*tree_new = h;
 
 	return 0;
 }
 
 static int
-open_kvs(daos_handle_t kvsh, daos_iov_t *key, PMEMobjpool *mp,
-	 daos_handle_t *kvsh_child)
+open_tree(daos_handle_t tree, daos_iov_t *key, PMEMobjpool *mp,
+	  daos_handle_t *tree_child)
 {
 	daos_iov_t		val;
 	struct umem_attr	uma;
 	int			rc;
 
-	rc = lookup_ptr(kvsh, key, &val);
+	rc = lookup_ptr(tree, key, &val);
 	if (rc != 0)
 		return rc;
 
 	uma.uma_id = UMEM_CLASS_PMEM;
 	uma.uma_u.pmem_pool = mp;
 
-	rc = dbtree_open_inplace(val.iov_buf, &uma, kvsh_child);
+	rc = dbtree_open_inplace(val.iov_buf, &uma, tree_child);
 	if (rc != 0)
 		return rc;
 
@@ -150,13 +146,13 @@ open_kvs(daos_handle_t kvsh, daos_iov_t *key, PMEMobjpool *mp,
 }
 
 static int
-destroy_kvs(daos_handle_t kvsh, daos_iov_t *key, PMEMobjpool *mp)
+destroy_tree(daos_handle_t tree, daos_iov_t *key, PMEMobjpool *mp)
 {
 	volatile daos_handle_t	h;
 	daos_handle_t		tmp;
 	volatile int		rc;
 
-	rc = open_kvs(kvsh, key, mp, &tmp);
+	rc = open_tree(tree, key, mp, &tmp);
 	if (rc != 0)
 		return rc;
 
@@ -169,7 +165,7 @@ destroy_kvs(daos_handle_t kvsh, daos_iov_t *key, PMEMobjpool *mp)
 
 		h = DAOS_HDL_INVAL;
 
-		rc = dbtree_delete(kvsh, key);
+		rc = dbtree_delete(tree, key);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
@@ -362,7 +358,7 @@ nv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 	return buf;
 }
 
-static btr_ops_t nv_ops = {
+btr_ops_t dbtree_nv_ops = {
 	.to_hkey_gen	= nv_hkey_gen,
 	.to_hkey_size	= nv_hkey_size,
 	.to_key_cmp	= nv_key_cmp,
@@ -374,8 +370,8 @@ static btr_ops_t nv_ops = {
 };
 
 int
-dsms_kvs_nv_update(daos_handle_t kvsh, const char *name, const void *value,
-		   size_t size)
+dbtree_nv_update(daos_handle_t tree, const char *name, const void *value,
+		 size_t size)
 {
 	daos_iov_t	key;
 	daos_iov_t	val;
@@ -391,7 +387,7 @@ dsms_kvs_nv_update(daos_handle_t kvsh, const char *name, const void *value,
 	val.iov_buf_len = size;
 	val.iov_len = val.iov_buf_len;
 
-	rc = dbtree_update(kvsh, &key, &val);
+	rc = dbtree_update(tree, &key, &val);
 	if (rc != 0)
 		D_ERROR("failed to update \"%s\": %d\n", name, rc);
 
@@ -399,8 +395,7 @@ dsms_kvs_nv_update(daos_handle_t kvsh, const char *name, const void *value,
 }
 
 int
-dsms_kvs_nv_lookup(daos_handle_t kvsh, const char *name, void *value,
-		   size_t size)
+dbtree_nv_lookup(daos_handle_t tree, const char *name, void *value, size_t size)
 {
 	daos_iov_t	key;
 	daos_iov_t	val;
@@ -416,7 +411,7 @@ dsms_kvs_nv_lookup(daos_handle_t kvsh, const char *name, void *value,
 	val.iov_buf_len = size;
 	val.iov_len = val.iov_buf_len;
 
-	rc = dbtree_lookup(kvsh, &key, &val);
+	rc = dbtree_lookup(tree, &key, &val);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
@@ -433,8 +428,8 @@ dsms_kvs_nv_lookup(daos_handle_t kvsh, const char *name, void *value,
  * memory.
  */
 int
-dsms_kvs_nv_lookup_ptr(daos_handle_t kvsh, const char *name, void **value,
-		       size_t *size)
+dbtree_nv_lookup_ptr(daos_handle_t tree, const char *name, void **value,
+		     size_t *size)
 {
 	daos_iov_t	key;
 	daos_iov_t	val;
@@ -446,7 +441,7 @@ dsms_kvs_nv_lookup_ptr(daos_handle_t kvsh, const char *name, void **value,
 	key.iov_buf_len = strlen(name) + 1;
 	key.iov_len = key.iov_buf_len;
 
-	rc = lookup_ptr(kvsh, &key, &val);
+	rc = lookup_ptr(tree, &key, &val);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
@@ -461,7 +456,7 @@ dsms_kvs_nv_lookup_ptr(daos_handle_t kvsh, const char *name, void **value,
 }
 
 int
-dsms_kvs_nv_delete(daos_handle_t kvsh, const char *name)
+dbtree_nv_delete(daos_handle_t tree, const char *name)
 {
 	daos_iov_t	key;
 	int		rc;
@@ -472,7 +467,7 @@ dsms_kvs_nv_delete(daos_handle_t kvsh, const char *name)
 	key.iov_buf_len = strlen(name) + 1;
 	key.iov_len = key.iov_buf_len;
 
-	rc = dbtree_delete(kvsh, &key);
+	rc = dbtree_delete(tree, &key);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
@@ -484,15 +479,15 @@ dsms_kvs_nv_delete(daos_handle_t kvsh, const char *name)
 }
 
 /*
- * Create a KVS in place as the value for "name". If "kvsh_new" is not NULL,
- * then leave the new KVS open and return the handle in "*kvsh_new"; otherwise,
+ * Create a KVS in place as the value for "name". If "tree_new" is not NULL,
+ * then leave the new KVS open and return the handle in "*tree_new"; otherwise,
  * close the new KVS. "class", "feats", and "order" are passed to
  * dbtree_create_inplace() unchanged.
  */
 int
-dsms_kvs_nv_create_kvs(daos_handle_t kvsh, const char *name, unsigned int class,
-		       uint64_t feats, unsigned int order, PMEMobjpool *mp,
-		       daos_handle_t *kvsh_new)
+dbtree_nv_create_tree(daos_handle_t tree, const char *name, unsigned int class,
+		      uint64_t feats, unsigned int order, PMEMobjpool *mp,
+		      daos_handle_t *tree_new)
 {
 	daos_iov_t	key;
 	int		rc;
@@ -501,7 +496,7 @@ dsms_kvs_nv_create_kvs(daos_handle_t kvsh, const char *name, unsigned int class,
 	key.iov_buf_len = strlen(name) + 1;
 	key.iov_len = key.iov_buf_len;
 
-	rc = create_kvs(kvsh, &key, class, feats, order, mp, kvsh_new);
+	rc = create_tree(tree, &key, class, feats, order, mp, tree_new);
 	if (rc != 0)
 		D_ERROR("failed to create \"%s\": %d\n", name, rc);
 
@@ -509,8 +504,8 @@ dsms_kvs_nv_create_kvs(daos_handle_t kvsh, const char *name, unsigned int class,
 }
 
 int
-dsms_kvs_nv_open_kvs(daos_handle_t kvsh, const char *name, PMEMobjpool *mp,
-		     daos_handle_t *kvsh_child)
+dbtree_nv_open_tree(daos_handle_t tree, const char *name, PMEMobjpool *mp,
+		    daos_handle_t *tree_child)
 {
 	daos_iov_t	key;
 	int		rc;
@@ -519,7 +514,7 @@ dsms_kvs_nv_open_kvs(daos_handle_t kvsh, const char *name, PMEMobjpool *mp,
 	key.iov_buf_len = strlen(name) + 1;
 	key.iov_len = key.iov_buf_len;
 
-	rc = open_kvs(kvsh, &key, mp, kvsh_child);
+	rc = open_tree(tree, &key, mp, tree_child);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
@@ -532,7 +527,7 @@ dsms_kvs_nv_open_kvs(daos_handle_t kvsh, const char *name, PMEMobjpool *mp,
 
 /* Destroy a KVS in place as the value for "name". */
 int
-dsms_kvs_nv_destroy_kvs(daos_handle_t kvsh, const char *name, PMEMobjpool *mp)
+dbtree_nv_destroy_tree(daos_handle_t tree, const char *name, PMEMobjpool *mp)
 {
 	daos_iov_t	key;
 	int		rc;
@@ -541,7 +536,7 @@ dsms_kvs_nv_destroy_kvs(daos_handle_t kvsh, const char *name, PMEMobjpool *mp)
 	key.iov_buf_len = strlen(name) + 1;
 	key.iov_len = key.iov_buf_len;
 
-	rc = destroy_kvs(kvsh, &key, mp);
+	rc = destroy_tree(tree, &key, mp);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
@@ -701,7 +696,7 @@ uv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 	return buf;
 }
 
-static btr_ops_t uv_ops = {
+btr_ops_t dbtree_uv_ops = {
 	.to_hkey_gen	= uv_hkey_gen,
 	.to_hkey_size	= uv_hkey_size,
 	.to_rec_alloc	= uv_rec_alloc,
@@ -712,8 +707,8 @@ static btr_ops_t uv_ops = {
 };
 
 int
-dsms_kvs_uv_update(daos_handle_t kvsh, const uuid_t uuid, const void *value,
-		   size_t size)
+dbtree_uv_update(daos_handle_t tree, const uuid_t uuid, const void *value,
+		 size_t size)
 {
 	daos_iov_t	key;
 	daos_iov_t	val;
@@ -727,7 +722,7 @@ dsms_kvs_uv_update(daos_handle_t kvsh, const uuid_t uuid, const void *value,
 	val.iov_buf_len = size;
 	val.iov_len = val.iov_buf_len;
 
-	rc = dbtree_update(kvsh, &key, &val);
+	rc = dbtree_update(tree, &key, &val);
 	if (rc != 0)
 		D_ERROR("failed to update "DF_UUID": %d\n", DP_UUID(uuid), rc);
 
@@ -735,8 +730,8 @@ dsms_kvs_uv_update(daos_handle_t kvsh, const uuid_t uuid, const void *value,
 }
 
 int
-dsms_kvs_uv_lookup(daos_handle_t kvsh, const uuid_t uuid, void *value,
-		   size_t size)
+dbtree_uv_lookup(daos_handle_t tree, const uuid_t uuid, void *value,
+		 size_t size)
 {
 	daos_iov_t	key;
 	daos_iov_t	val;
@@ -750,7 +745,7 @@ dsms_kvs_uv_lookup(daos_handle_t kvsh, const uuid_t uuid, void *value,
 	val.iov_buf_len = size;
 	val.iov_len = val.iov_buf_len;
 
-	rc = dbtree_lookup(kvsh, &key, &val);
+	rc = dbtree_lookup(tree, &key, &val);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
@@ -765,7 +760,7 @@ dsms_kvs_uv_lookup(daos_handle_t kvsh, const uuid_t uuid, void *value,
 }
 
 int
-dsms_kvs_uv_delete(daos_handle_t kvsh, const uuid_t uuid)
+dbtree_uv_delete(daos_handle_t tree, const uuid_t uuid)
 {
 	daos_iov_t	key;
 	int		rc;
@@ -774,7 +769,7 @@ dsms_kvs_uv_delete(daos_handle_t kvsh, const uuid_t uuid)
 	key.iov_buf_len = sizeof(uuid_t);
 	key.iov_len = key.iov_buf_len;
 
-	rc = dbtree_delete(kvsh, &key);
+	rc = dbtree_delete(tree, &key);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
@@ -788,15 +783,15 @@ dsms_kvs_uv_delete(daos_handle_t kvsh, const uuid_t uuid)
 }
 
 /*
- * Create a KVS in place as the value for "uuid". If "kvsh_new" is not NULL,
- * then leave the new KVS open and return the handle in "*kvsh_new"; otherwise,
+ * Create a KVS in place as the value for "uuid". If "tree_new" is not NULL,
+ * then leave the new KVS open and return the handle in "*tree_new"; otherwise,
  * close the new KVS. "class", "feats", and "order" are passed to
  * dbtree_create_inplace() unchanged.
  */
 int
-dsms_kvs_uv_create_kvs(daos_handle_t kvsh, const uuid_t uuid,
-		       unsigned int class, uint64_t feats, unsigned int order,
-		       PMEMobjpool *mp, daos_handle_t *kvsh_new)
+dbtree_uv_create_tree(daos_handle_t tree, const uuid_t uuid, unsigned int class,
+		      uint64_t feats, unsigned int order, PMEMobjpool *mp,
+		      daos_handle_t *tree_new)
 {
 	daos_iov_t	key;
 	int		rc;
@@ -805,7 +800,7 @@ dsms_kvs_uv_create_kvs(daos_handle_t kvsh, const uuid_t uuid,
 	key.iov_buf_len = sizeof(uuid_t);
 	key.iov_len = key.iov_buf_len;
 
-	rc = create_kvs(kvsh, &key, class, feats, order, mp, kvsh_new);
+	rc = create_tree(tree, &key, class, feats, order, mp, tree_new);
 	if (rc != 0)
 		D_ERROR("failed to create "DF_UUID": %d\n", DP_UUID(uuid), rc);
 
@@ -813,8 +808,8 @@ dsms_kvs_uv_create_kvs(daos_handle_t kvsh, const uuid_t uuid,
 }
 
 int
-dsms_kvs_uv_open_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp,
-		     daos_handle_t *kvsh_child)
+dbtree_uv_open_tree(daos_handle_t tree, const uuid_t uuid, PMEMobjpool *mp,
+		    daos_handle_t *tree_child)
 {
 	daos_iov_t	key;
 	int		rc;
@@ -823,7 +818,7 @@ dsms_kvs_uv_open_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp,
 	key.iov_buf_len = sizeof(uuid_t);
 	key.iov_len = key.iov_buf_len;
 
-	rc = open_kvs(kvsh, &key, mp, kvsh_child);
+	rc = open_tree(tree, &key, mp, tree_child);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
@@ -838,7 +833,7 @@ dsms_kvs_uv_open_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp,
 
 /* Destroy a KVS in place as the value for "uuid". */
 int
-dsms_kvs_uv_destroy_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp)
+dbtree_uv_destroy_tree(daos_handle_t tree, const uuid_t uuid, PMEMobjpool *mp)
 {
 	daos_iov_t	key;
 	int		rc;
@@ -847,7 +842,7 @@ dsms_kvs_uv_destroy_kvs(daos_handle_t kvsh, const uuid_t uuid, PMEMobjpool *mp)
 	key.iov_buf_len = sizeof(uuid_t);
 	key.iov_len = key.iov_buf_len;
 
-	rc = destroy_kvs(kvsh, &key, mp);
+	rc = destroy_tree(tree, &key, mp);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
@@ -998,7 +993,7 @@ ec_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 	return buf;
 }
 
-static btr_ops_t ec_ops = {
+btr_ops_t dbtree_ec_ops = {
 	.to_hkey_gen	= ec_hkey_gen,
 	.to_hkey_size	= ec_hkey_size,
 	.to_rec_alloc	= ec_rec_alloc,
@@ -1009,7 +1004,7 @@ static btr_ops_t ec_ops = {
 };
 
 int
-dsms_kvs_ec_update(daos_handle_t kvsh, uint64_t epoch, const uint64_t *count)
+dbtree_ec_update(daos_handle_t tree, uint64_t epoch, const uint64_t *count)
 {
 	daos_iov_t	key;
 	daos_iov_t	val;
@@ -1025,7 +1020,7 @@ dsms_kvs_ec_update(daos_handle_t kvsh, uint64_t epoch, const uint64_t *count)
 	val.iov_buf_len = sizeof(*count);
 	val.iov_len = val.iov_buf_len;
 
-	rc = dbtree_update(kvsh, &key, &val);
+	rc = dbtree_update(tree, &key, &val);
 	if (rc != 0)
 		D_ERROR("failed to update "DF_U64": %d\n", epoch, rc);
 
@@ -1033,7 +1028,7 @@ dsms_kvs_ec_update(daos_handle_t kvsh, uint64_t epoch, const uint64_t *count)
 }
 
 int
-dsms_kvs_ec_lookup(daos_handle_t kvsh, uint64_t epoch, uint64_t *count)
+dbtree_ec_lookup(daos_handle_t tree, uint64_t epoch, uint64_t *count)
 {
 	daos_iov_t	key;
 	daos_iov_t	val;
@@ -1047,7 +1042,7 @@ dsms_kvs_ec_lookup(daos_handle_t kvsh, uint64_t epoch, uint64_t *count)
 	val.iov_buf_len = sizeof(*count);
 	val.iov_len = val.iov_buf_len;
 
-	rc = dbtree_lookup(kvsh, &key, &val);
+	rc = dbtree_lookup(tree, &key, &val);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find "DF_U64"\n", epoch);
@@ -1060,9 +1055,8 @@ dsms_kvs_ec_lookup(daos_handle_t kvsh, uint64_t epoch, uint64_t *count)
 
 #if HAVE_DBTREE_DELETE
 int
-dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
-		  const uint64_t *epoch_in, uint64_t *epoch_out,
-		  uint64_t *count)
+dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
+		const uint64_t *epoch_in, uint64_t *epoch_out, uint64_t *count)
 {
 	daos_iov_t	key_in;
 	daos_iov_t	key_out;
@@ -1081,7 +1075,7 @@ dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
 	val.iov_buf_len = sizeof(*count);
 	val.iov_len = val.iov_buf_len;
 
-	rc = dbtree_fetch(kvsh, opc, &key_in, &key_out, &val);
+	rc = dbtree_fetch(tree, opc, &key_in, &key_out, &val);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find opc=%d in="DF_U64"\n",
@@ -1095,9 +1089,8 @@ dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
 }
 #else
 int
-dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
-		  const uint64_t *epoch_in, uint64_t *epoch_out,
-		  uint64_t *count)
+dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
+		const uint64_t *epoch_in, uint64_t *epoch_out, uint64_t *count)
 {
 	daos_iov_t	key_in;
 	daos_iov_t	key_out;
@@ -1113,7 +1106,7 @@ dsms_kvs_ec_fetch(daos_handle_t kvsh, dbtree_probe_opc_t opc,
 	D_ASSERT(opc == BTR_PROBE_FIRST || opc == BTR_PROBE_LAST ||
 		 epoch_in != NULL);
 
-	rc = dbtree_iter_prepare(kvsh, 0 /* options */, &iter);
+	rc = dbtree_iter_prepare(tree, 0 /* options */, &iter);
 	if (rc != 0) {
 		D_ERROR("failed to prepare iterator for opc=%d in="DF_U64
 			": %d\n", opc, epoch_in == NULL ? -1 : *epoch_in, rc);
@@ -1206,7 +1199,7 @@ out:
 #endif
 
 int
-dsms_kvs_ec_delete(daos_handle_t kvsh, uint64_t epoch)
+dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
 {
 	daos_iov_t	key;
 	int		rc;
@@ -1217,7 +1210,7 @@ dsms_kvs_ec_delete(daos_handle_t kvsh, uint64_t epoch)
 	key.iov_buf_len = sizeof(epoch);
 	key.iov_len = key.iov_buf_len;
 
-	rc = dbtree_delete(kvsh, &key);
+	rc = dbtree_delete(tree, &key);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find "DF_U64"\n", epoch);
@@ -1226,193 +1219,4 @@ dsms_kvs_ec_delete(daos_handle_t kvsh, uint64_t epoch)
 	}
 
 	return rc;
-}
-
-static DAOS_LIST_HEAD(mpool_cache);
-static pthread_mutex_t mpool_cache_lock;
-
-static int
-mpool_init(const uuid_t pool_uuid, struct mpool *mp)
-{
-	PMEMoid			sb_oid;
-	struct superblock      *sb;
-	struct umem_attr	uma;
-	char		       *path;
-	int			rc;
-
-	DAOS_INIT_LIST_HEAD(&mp->mp_entry);
-	uuid_copy(mp->mp_uuid, pool_uuid);
-	mp->mp_ref = 1;
-
-	rc = pthread_mutex_init(&mp->mp_lock, NULL /* attr */);
-	if (rc != 0) {
-		D_ERROR("failed to initialize mp_lock: %d\n", rc);
-		D_GOTO(err, rc = -DER_NOMEM);
-	}
-
-	rc = dmgs_tgt_file(pool_uuid, DSM_META_FILE, NULL, &path);
-	if (rc != 0) {
-		D_ERROR("failed to lookup path: %d\n", rc);
-		D_GOTO(err_lock, rc);
-	}
-
-	mp->mp_pmem = pmemobj_open(path, MPOOL_LAYOUT);
-	if (mp->mp_pmem == NULL) {
-		if (errno == ENOENT)
-			D_DEBUG(DF_DSMS, "cannot find %s: %d\n", path, errno);
-		else
-			D_ERROR("failed to open %s: %d\n", path, errno);
-		D_GOTO(err_path, rc = -DER_NONEXIST);
-	}
-
-	sb_oid = pmemobj_root(mp->mp_pmem, sizeof(*sb));
-	sb = pmemobj_direct(sb_oid);
-
-	if (sb->s_magic != SUPERBLOCK_MAGIC) {
-		D_ERROR("found invalid superblock magic: "DF_X64"\n",
-			sb->s_magic);
-		D_GOTO(err_pmem, rc = -DER_NONEXIST);
-	}
-
-	D_DEBUG(DF_DSMS, DF_UUID": opening root kvs\n", DP_UUID(pool_uuid));
-
-	uma.uma_id = UMEM_CLASS_PMEM;
-	uma.uma_u.pmem_pool = mp->mp_pmem;
-	rc = dbtree_open_inplace(&sb->s_root, &uma, &mp->mp_root);
-	if (rc != 0) {
-		D_ERROR("failed to open root kvs: %d\n", rc);
-		D_GOTO(err_pmem, rc);
-	}
-
-	return 0;
-
-err_pmem:
-	pmemobj_close(mp->mp_pmem);
-err_path:
-	free(path);
-err_lock:
-	pthread_mutex_destroy(&mp->mp_lock);
-err:
-	return rc;
-}
-
-void
-dsms_mpool_get(struct mpool *mpool)
-{
-	pthread_mutex_lock(&mpool->mp_lock);
-	mpool->mp_ref++;
-	pthread_mutex_unlock(&mpool->mp_lock);
-}
-
-int
-dsms_mpool_lookup(const uuid_t pool_uuid, struct mpool **mpool)
-{
-	struct mpool   *mp;
-	int		rc = 0;
-
-	D_DEBUG(DF_DSMS, DF_UUID": looking up\n", DP_UUID(pool_uuid));
-
-	pthread_mutex_lock(&mpool_cache_lock);
-
-	daos_list_for_each_entry(mp, &mpool_cache, mp_entry) {
-		if (uuid_compare(mp->mp_uuid, pool_uuid) == 0) {
-			D_DEBUG(DF_DSMS, DF_UUID": found %p\n",
-				DP_UUID(pool_uuid), mp);
-			dsms_mpool_get(mp);
-			*mpool = mp;
-			D_GOTO(out, rc = 0);
-		}
-	}
-
-	D_ALLOC_PTR(mp);
-	if (mp == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rc = mpool_init(pool_uuid, mp);
-	if (rc != 0) {
-		D_FREE_PTR(mp);
-		D_GOTO(out, rc);
-	}
-
-	daos_list_add(&mp->mp_entry, &mpool_cache);
-	D_DEBUG(DF_DSMS, DF_UUID": allocated %p\n", DP_UUID(pool_uuid), mp);
-
-	*mpool = mp;
-out:
-	pthread_mutex_unlock(&mpool_cache_lock);
-	return rc;
-}
-
-void
-dsms_mpool_put(struct mpool *mpool)
-{
-	int is_last_ref = 0;
-
-	pthread_mutex_lock(&mpool->mp_lock);
-	D_ASSERTF(mpool->mp_ref > 0, "%d\n", mpool->mp_ref);
-	if (mpool->mp_ref == 1)
-		is_last_ref = 1;
-	else
-		mpool->mp_ref--;
-	pthread_mutex_unlock(&mpool->mp_lock);
-
-	if (is_last_ref) {
-		pthread_mutex_lock(&mpool_cache_lock);
-		pthread_mutex_lock(&mpool->mp_lock);
-		mpool->mp_ref--;
-		if (mpool->mp_ref == 0) {
-			D_DEBUG(DF_DSMS, "freeing mpool %p\n", mpool);
-			dbtree_close(mpool->mp_root);
-			pmemobj_close(mpool->mp_pmem);
-			pthread_mutex_destroy(&mpool->mp_lock);
-			daos_list_del(&mpool->mp_entry);
-			D_FREE_PTR(mpool);
-		} else {
-			pthread_mutex_unlock(&mpool->mp_lock);
-		}
-		pthread_mutex_unlock(&mpool_cache_lock);
-	}
-}
-
-int
-dsms_storage_init(void)
-{
-	int rc;
-
-	rc = dbtree_class_register(KVS_NV, 0 /* feats */, &nv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register KVS_NV: %d\n", rc);
-		return rc;
-	}
-
-	rc = dbtree_class_register(KVS_UV, 0 /* feats */, &uv_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register KVS_UV: %d\n", rc);
-		return rc;
-	}
-
-	rc = dbtree_class_register(KVS_EC, 0 /* feats */, &ec_ops);
-	if (rc != 0) {
-		D_ERROR("failed to register KVS_EC: %d\n", rc);
-		return rc;
-	}
-
-	rc = pthread_mutex_init(&mpool_cache_lock, NULL /* attr */);
-	if (rc != 0) {
-		D_ERROR("failed to initialize mpool cache lock: %d\n", rc);
-		rc = -DER_NOMEM;
-	}
-
-	return rc;
-}
-
-void
-dsms_storage_fini(void)
-{
-	/*
-	 * Because there isn't a dbtree_class_unregister() at the moment, we
-	 * cannot safely unload this module in theory.
-	 */
-
-	pthread_mutex_destroy(&mpool_cache_lock);
 }

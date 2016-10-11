@@ -21,11 +21,10 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsms: Target Operations
+ * ds_pool: Target Operations
  *
  * This file contains the server API methods and the RPC handlers that are both
- * related target states. Note that object I/O methods and handlers are in
- * dsms_object.c.
+ * related target states.
  *
  * Data structures used here:
  *
@@ -38,18 +37,47 @@
  *                               tgt_cont_hdl
  */
 
-#include <daos_srv/daos_m_srv.h>
-#include <uuid/uuid.h>
+#include <daos_srv/pool.h>
+
 #include <daos/pool_map.h>
 #include <daos/transport.h>
+#include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/vos.h>
 #include "rpc.h"
-#include "dsms_internal.h"
-#include "dsms_layout.h"
+#include "srv_internal.h"
 
 /*
  * dsms_vpool objects: thread-local pool cache
  */
+struct dsms_vpool *
+vpool_lookup(const uuid_t vp_uuid)
+{
+	struct dsms_vpool *dvp;
+	struct dsm_tls  *tls = dsm_tls_get();
+
+	daos_list_for_each_entry(dvp, &tls->dt_pool_list, dvp_list) {
+		if (uuid_compare(vp_uuid, dvp->dvp_uuid) == 0) {
+			dvp->dvp_ref++;
+			return dvp;
+		}
+	}
+	return NULL;
+}
+
+void
+vpool_put(struct dsms_vpool *vpool)
+{
+	D_ASSERTF(vpool->dvp_ref > 0, "%d\n", vpool->dvp_ref);
+	vpool->dvp_ref--;
+	if (vpool->dvp_ref == 0) {
+		D_DEBUG(DF_DSMS, DF_UUID": destroying\n",
+			DP_UUID(vpool->dvp_uuid));
+		daos_list_del(&vpool->dvp_list);
+		vos_pool_close(vpool->dvp_hdl, NULL /* ev */);
+		D_FREE_PTR(vpool);
+	}
+}
+
 struct es_pool_lookup_arg {
 	void	       *pla_uuid;
 	uint32_t	pla_map_version;

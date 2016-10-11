@@ -32,7 +32,7 @@
 #include <abt.h>
 #include <daos/transport.h>
 #include <daos/daos_m.h>
-#include <daos_srv/daos_m_srv.h>
+#include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/daos_server.h>
 #include "obj_rpc.h"
