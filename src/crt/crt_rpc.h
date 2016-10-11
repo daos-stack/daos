@@ -127,11 +127,11 @@ crt_common_hdr_init(struct crt_common_hdr *hdr, crt_opcode_t opc)
 	C_ASSERT(crt_group_rank(0, &hdr->cch_rank) == 0);
 }
 
-void crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
-		       crt_opcode_t opc, int srv_flag);
-void crt_rpc_inout_buff_fini(crt_rpc_t *rpc_pub);
-int crt_rpc_inout_buff_init(crt_rpc_t *rpc_pub);
+int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated);
 void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
+int crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
+		       crt_opcode_t opc, int srv_flag);
+void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
 
 /* CRT internal opcode definitions, must be 0xFFFFxxxx.*/
 enum {
@@ -206,6 +206,5 @@ struct crt_internal_rpc {
 
 int crt_internal_rpc_register(void);
 int crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout);
-
 
 #endif /* __CRT_RPC_H__ */

@@ -230,6 +230,8 @@ crt_power2_nbits(unsigned int val)
 
 int crt_rank_list_dup(crt_rank_list_t **dst, const crt_rank_list_t *src,
 		      bool input);
+int crt_rank_list_dup_sort_uniq(crt_rank_list_t **dst,
+				const crt_rank_list_t *src, bool input);
 crt_rank_list_t *crt_rank_list_alloc(uint32_t size);
 void crt_rank_list_free(crt_rank_list_t *rank_list);
 void crt_rank_list_copy(crt_rank_list_t *dst, crt_rank_list_t *src, bool input);
@@ -291,7 +293,7 @@ void crt_getenv_bool(const char *env, bool *bool_val);
 #define C_SWAP64S(x)	do { *(x) = C_SWAP64(*(x)); } while (0)
 
 static inline int
-crt_errno2der(int err)
+crt_errno2cer(int err)
 {
 	switch (err) {
 	case 0:		return 0;
@@ -303,9 +305,59 @@ crt_errno2der(int err)
 	case EEXIST:	return -CER_EXIST;
 	case ENOENT:	return -CER_NONEXIST;
 	case ECANCELED:	return -CER_CANCELED;
-	default:	return -CER_INVAL;
+	default:	return -CER_MISC;
 	}
 	return 0;
+}
+
+/* timing utilities */
+static inline int
+crt_gettime(struct timespec *t)
+{
+	int	rc;
+
+	rc = clock_gettime(CLOCK_MONOTONIC, t);
+	if (rc != 0) {
+		C_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n",
+			rc, errno, strerror(errno));
+		rc = crt_errno2cer(errno);
+	}
+
+	return rc;
+}
+
+static inline struct timespec
+crt_timediff(struct timespec start, struct timespec end)
+{
+	struct timespec		temp;
+
+	if ((end.tv_nsec - start.tv_nsec) < 0) {
+		temp.tv_sec = end.tv_sec - start.tv_sec - 1;
+		temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
+	} else {
+		temp.tv_sec = end.tv_sec - start.tv_sec;
+		temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+	}
+
+	return temp;
+}
+
+static inline double
+crt_time2ms(struct timespec t)
+{
+	return (double) t.tv_sec * 1e3 + (double) t.tv_nsec / 1e6;
+}
+
+static inline double
+crt_time2us(struct timespec t)
+{
+	return (double) t.tv_sec * 1e6 + (double) t.tv_nsec / 1e3;
+}
+
+static inline double
+crt_time2s(struct timespec t)
+{
+	return (double) t.tv_sec + (double) t.tv_nsec / 1e9;
 }
 
 #if defined(__cplusplus)

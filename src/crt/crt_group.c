@@ -468,9 +468,10 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 		C_FREE_PTR(grp_priv);
 		C_GOTO(out, rc = -CER_NOMEM);
 	}
-	rc = crt_rank_list_dup(&grp_priv->gp_membs, membs, true /* input */);
+	rc = crt_rank_list_dup_sort_uniq(&grp_priv->gp_membs, membs,
+					 true /* input */);
 	if (rc != 0) {
-		C_ERROR("crt_rank_list_dup failed, rc: %d.\n", rc);
+		C_ERROR("crt_rank_list_dup_sort_uniq failed, rc: %d.\n", rc);
 		free(grp_priv->gp_pub.cg_grpid);
 		C_FREE_PTR(grp_priv);
 		C_GOTO(out, rc);
@@ -1062,7 +1063,6 @@ out:
 	return rc;
 }
 
-/* TODO - currently only with one global service group and one client group */
 int
 crt_group_rank(crt_group_t *grp, crt_rank_t *rank)
 {
@@ -1826,19 +1826,19 @@ crt_grp_save_attach_info(struct crt_grp_priv *grp_priv)
 	if (fp == NULL) {
 		C_ERROR("cannot create file %s(%s).\n",
 			filename, strerror(errno));
-		C_GOTO(out, rc = -CER_MISC);
+		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
 	rc = fprintf(fp, "%s %s\n", "name", grpid);
 	if (rc < 0) {
 		C_ERROR("write to file %s failed (%s).\n",
 			filename, strerror(errno));
-		C_GOTO(out, rc = -CER_MISC);
+		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
 	rc = fprintf(fp, "%s %d\n", "size", grp_priv->gp_size);
 	if (rc < 0) {
 		C_ERROR("write to file %s failed (%s).\n",
 			filename, strerror(errno));
-		C_GOTO(out, rc = -CER_MISC);
+		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
 	/* save all address URIs in the primary group */
 	for (rank = 0; rank < grp_priv->gp_size; rank++) {
@@ -1859,7 +1859,7 @@ crt_grp_save_attach_info(struct crt_grp_priv *grp_priv)
 		if (rc < 0) {
 			C_ERROR("write to file %s failed (%s).\n",
 				filename, strerror(errno));
-			C_GOTO(out, rc = -CER_MISC);
+			C_GOTO(out, rc = crt_errno2cer(errno));
 		}
 		rc = 0;
 	}
@@ -1868,7 +1868,7 @@ crt_grp_save_attach_info(struct crt_grp_priv *grp_priv)
 		C_ERROR("file %s closing failed (%s).\n",
 			filename, strerror(errno));
 		fp = NULL;
-		C_GOTO(out, rc = -CER_MISC);
+		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
 	fp = NULL;
 
@@ -1902,7 +1902,7 @@ crt_grp_load_attach_info(struct crt_grp_priv *grp_priv)
 	if (fp == NULL) {
 		C_ERROR("open file %s failed (%s).\n",
 			filename, strerror(errno));
-		C_GOTO(out, rc = -CER_MISC);
+		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
 
 	C_ALLOC(grpname, CRT_GROUP_ID_MAX_LEN);
@@ -1912,7 +1912,7 @@ crt_grp_load_attach_info(struct crt_grp_priv *grp_priv)
 	if (rc == EOF) {
 		C_ERROR("read from file %s failed (%s).\n",
 			filename, strerror(errno));
-		C_GOTO(out, rc = -CER_MISC);
+		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
 	if (strncmp(grpname, grpid, CRT_GROUP_ID_MAX_LEN != 0)) {
 		C_ERROR("grpname %s in file mismatch with grpid %s.\n",
@@ -1924,7 +1924,7 @@ crt_grp_load_attach_info(struct crt_grp_priv *grp_priv)
 	if (rc == EOF) {
 		C_ERROR("read from file %s failed (%s).\n",
 			filename, strerror(errno));
-		C_GOTO(out, rc = -CER_MISC);
+		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
 	/** pick a random rank between 0 and size - 1 as the PSR */
 	psr_rank = rand() % grp_priv->gp_size;

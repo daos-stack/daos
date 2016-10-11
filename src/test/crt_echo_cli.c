@@ -140,13 +140,22 @@ static void run_client(void)
 	/* send checkin RPC to different contexts of server*/
 	for (i = 0; i <= ECHO_EXTRA_CONTEXT_NUM; i++) {
 		char		*raw_buf;
+		struct timespec	t1, t2;
+		double		time_us;
 
 		svr_ep.ep_grp = NULL;
 		svr_ep.ep_rank = 0;
 		svr_ep.ep_tag = i;
+
+		rc = crt_gettime(&t1);
+		assert(rc == 0);
 		rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_CHECKIN,
 				    &rpc_req);
 		assert(rc == 0 && rpc_req != NULL);
+		rc = crt_gettime(&t2);
+		assert(rc == 0);
+		time_us = crt_time2us(crt_timediff(t1, t2));
+		printf("time for crt_req_create: %.3e uS.\n", time_us);
 
 		e_req = crt_req_get(rpc_req);
 		assert(e_req != NULL);

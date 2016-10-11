@@ -44,7 +44,7 @@
 
 int
 crt_rank_list_dup(crt_rank_list_t **dst, const crt_rank_list_t *src,
-		   bool input)
+		  bool input)
 {
 	crt_rank_list_t		*rank_list;
 	uint32_t		rank_num;
@@ -89,6 +89,59 @@ crt_rank_list_dup(crt_rank_list_t **dst, const crt_rank_list_t *src,
 
 	memcpy(rank_list->rl_ranks, src->rl_ranks, size);
 	*dst = rank_list;
+out:
+	return rc;
+}
+
+int
+crt_rank_list_dup_sort_uniq(crt_rank_list_t **dst, const crt_rank_list_t *src,
+			    bool input)
+{
+	crt_rank_list_t		*rank_list;
+	crt_rank_t		 rank_tmp;
+	uint32_t		 rank_num, identical_num;
+	int			 i, j;
+	int			 rc = 0;
+
+	rc = crt_rank_list_dup(dst, src, input);
+	if (rc != 0) {
+		C_ERROR("crt_rank_list_dup failed, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+
+	rank_list = *dst;
+	if (rank_list == NULL || rank_list->rl_ranks == NULL)
+		C_GOTO(out, rc);
+
+	crt_rank_list_sort(rank_list);
+
+	/* uniq - remove same rank number in the list */
+	rank_num = (input == true) ? src->rl_nr.num : src->rl_nr.num_out;
+	if (rank_num <= 1)
+		C_GOTO(out, rc);
+	identical_num = 0;
+	rank_tmp = rank_list->rl_ranks[0];
+	for (i = 1; i < rank_num - identical_num; i++) {
+		if (rank_tmp == rank_list->rl_ranks[i]) {
+			identical_num++;
+			for (j = i; j < rank_num; j++)
+				rank_list->rl_ranks[j - 1] =
+					rank_list->rl_ranks[j];
+			crt_log(MISC_DBG, "%s:%d, rank_list %p, removed "
+				"identical rank[%d](%d).\n", __FILE__, __LINE__,
+				rank_list, i, rank_tmp);
+		}
+		rank_tmp = rank_list->rl_ranks[i];
+	}
+	if (identical_num != 0) {
+		if (input == true)
+			rank_list->rl_nr.num -= identical_num;
+		else
+			rank_list->rl_nr.num_out -= identical_num;
+		crt_log(MISC_DBG, "%s:%d, rank_list %p, removed %d ranks.\n",
+			__FILE__, __LINE__, rank_list, identical_num);
+	}
+
 out:
 	return rc;
 }

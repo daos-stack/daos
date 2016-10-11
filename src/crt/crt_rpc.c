@@ -190,20 +190,39 @@ int
 crt_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req)
 {
+	struct crt_grp_gdata	*grp_gdata;
 	struct crt_context	*ctx;
 	struct crt_rpc_priv	*rpc_priv = NULL;
+	struct crt_grp_priv	*grp_priv;
 	crt_rpc_t		*rpc_pub;
-	int			rc = 0;
+	int			 rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		C_ERROR("invalid parameter (NULL crt_ctx or req).\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
-	/* TODO: possibly with multiple service group */
-	if (tgt_ep.ep_rank >= crt_gdata.cg_grp->gg_srv_pri_grp->gp_size) {
+	if (!crt_initialized()) {
+		C_ERROR("CRT not initialized.\n");
+		C_GOTO(out, rc = -CER_UNINIT);
+	}
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+	if (tgt_ep.ep_grp == NULL) {
+		grp_priv = grp_gdata->gg_srv_pri_grp;
+	} else {
+		grp_priv = container_of(tgt_ep.ep_grp, struct crt_grp_priv,
+					gp_pub);
+		if (grp_priv->gp_primary == 0 || grp_priv->gp_service == 0) {
+			C_ERROR("bad parameter tgt_ep.ep_grp: %p (gp_primary: "
+				"%d, gp_service: %d, gp_local: %d.\n",
+				tgt_ep.ep_grp, grp_priv->gp_primary,
+				grp_priv->gp_service, grp_priv->gp_local);
+			C_GOTO(out, rc = -CER_INVAL);
+		}
+	}
+	if (tgt_ep.ep_rank >= grp_priv->gp_size) {
 		C_ERROR("invalid parameter, rank %d, group_size: %d.\n",
-			tgt_ep.ep_rank,
-			crt_gdata.cg_grp->gg_srv_pri_grp->gp_size);
+			tgt_ep.ep_rank, grp_priv->gp_size);
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
@@ -217,11 +236,12 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
 	rpc_pub = &rpc_priv->crp_pub;
 	rpc_pub->cr_ep = tgt_ep;
 
-	rc = crt_rpc_inout_buff_init(rpc_pub);
-	if (rc != 0)
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, 0);
+	if (rc != 0) {
+		C_ERROR("crt_rpc_priv_init failed, opc: 0x%x, rc: %d.\n",
+			opc, rc);
 		C_GOTO(out, rc);
-
-	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, 0);
+	}
 
 	ctx = (struct crt_context *)crt_ctx;
 	rc = crt_hg_req_create(&ctx->cc_hg_ctx, ctx->cc_idx, tgt_ep, rpc_priv);
@@ -255,8 +275,8 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv, crt_group_t *grp,
 		C_GOTO(out, rc = -CER_NOMEM);
 
 	co_info->co_grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
-	rc = crt_rank_list_dup(&co_info->co_excluded_ranks, excluded_ranks,
-				true /* input */);
+	rc = crt_rank_list_dup_sort_uniq(&co_info->co_excluded_ranks,
+					 excluded_ranks, true /* input */);
 	if (rc != 0) {
 		C_ERROR("crt_rank_list_dup failed, rc: %d.\n", rc);
 		C_FREE_PTR(rpc_priv);
@@ -282,8 +302,6 @@ out:
 }
 
 /* TODO:
- * 1. refine the process of req create/destroy, for P2P RPC, corpc and in
- *    RPC handler
  * 2. collective bulk
  */
 int
@@ -299,7 +317,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	int			 rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
-		C_ERROR("invalid parameter (NULL crt_ctx, grp or req).\n");
+		C_ERROR("invalid parameter (NULL crt_ctx or req).\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 	if (!crt_is_service()) {
@@ -325,10 +343,12 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 
 	C_ASSERT(rpc_priv != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
-	rc = crt_rpc_inout_buff_init(rpc_pub);
-	if (rc != 0)
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, 0);
+	if (rc != 0) {
+		C_ERROR("crt_rpc_priv_init failed, opc: 0x%x, rc: %d.\n",
+			opc, rc);
 		C_GOTO(out, rc);
-	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, 0);
+	}
 
 	rc = crt_corpc_info_init(rpc_priv, grp, excluded_ranks, co_bulk_hdl,
 				 priv, flags, tree_topo);
@@ -766,31 +786,13 @@ crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout)
 	return rc;
 }
 
-void
-crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
-		  crt_opcode_t opc, int srv_flag)
+static void
+crt_rpc_inout_buff_fini(struct crt_rpc_priv *rpc_priv)
 {
+	crt_rpc_t	*rpc_pub;
+
 	C_ASSERT(rpc_priv != NULL);
-	CRT_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
-	CRT_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link);
-	rpc_priv->crp_complete_cb = NULL;
-	rpc_priv->crp_arg = NULL;
-	crt_common_hdr_init(&rpc_priv->crp_req_hdr, opc);
-	crt_common_hdr_init(&rpc_priv->crp_reply_hdr, opc);
-	rpc_priv->crp_state = RPC_INITED;
-	rpc_priv->crp_srv = (srv_flag != 0);
-	/* initialize as 1, so user can cal crt_req_decref to destroy new req */
-	rpc_priv->crp_refcount = 1;
-	pthread_spin_init(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
-
-	rpc_priv->crp_pub.cr_opc = opc;
-	rpc_priv->crp_pub.cr_ctx = crt_ctx;
-}
-
-void
-crt_rpc_inout_buff_fini(crt_rpc_t *rpc_pub)
-{
-	C_ASSERT(rpc_pub != NULL);
+	rpc_pub = &rpc_priv->crp_pub;
 
 	if (rpc_pub->cr_input != NULL) {
 		C_ASSERT(rpc_pub->cr_input_size != 0);
@@ -805,14 +807,15 @@ crt_rpc_inout_buff_fini(crt_rpc_t *rpc_pub)
 	}
 }
 
-int
-crt_rpc_inout_buff_init(crt_rpc_t *rpc_pub)
+static int
+crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_rpc_priv	*rpc_priv;
+	crt_rpc_t		*rpc_pub;
 	struct crt_opc_info	*opc_info;
 	int			rc = 0;
 
-	C_ASSERT(rpc_pub != NULL);
+	C_ASSERT(rpc_priv != NULL);
+	rpc_pub = &rpc_priv->crp_pub;
 	C_ASSERT(rpc_pub->cr_input == NULL);
 	C_ASSERT(rpc_pub->cr_output == NULL);
 	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
@@ -840,6 +843,45 @@ crt_rpc_inout_buff_init(crt_rpc_t *rpc_pub)
 
 out:
 	if (rc < 0)
-		crt_rpc_inout_buff_fini(rpc_pub);
+		crt_rpc_inout_buff_fini(rpc_priv);
 	return rc;
+}
+
+int
+crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
+		  crt_opcode_t opc, int srv_flag)
+{
+	int	rc = 0;
+
+	C_ASSERT(rpc_priv != NULL);
+	CRT_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
+	CRT_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link);
+	rpc_priv->crp_complete_cb = NULL;
+	rpc_priv->crp_arg = NULL;
+	if (srv_flag == 0) {
+		crt_common_hdr_init(&rpc_priv->crp_req_hdr, opc);
+		crt_common_hdr_init(&rpc_priv->crp_reply_hdr, opc);
+	}
+	rpc_priv->crp_state = RPC_INITED;
+	rpc_priv->crp_srv = (srv_flag != 0);
+	/* initialize as 1, so user can cal crt_req_decref to destroy new req */
+	rpc_priv->crp_refcount = 1;
+	pthread_spin_init(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
+
+	rpc_priv->crp_pub.cr_opc = opc;
+	rpc_priv->crp_pub.cr_ctx = crt_ctx;
+
+	rc = crt_rpc_inout_buff_init(rpc_priv);
+	if (rc != 0)
+		C_ERROR("crt_rpc_inout_buff_init failed, opc: 0x%x, rc: %d.\n",
+			rpc_priv->crp_pub.cr_opc, rc);
+
+	return rc;
+}
+
+void
+crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv)
+{
+	C_ASSERT(rpc_priv != NULL);
+	crt_rpc_inout_buff_fini(rpc_priv);
 }
