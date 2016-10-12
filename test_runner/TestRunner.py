@@ -25,12 +25,17 @@ test runner class
 """
 
 #pylint: disable=unused-import
+#pylint: disable=too-many-instance-attributes
+#pylint: disable=too-many-locals
+#pylint: disable=too-many-public-methods
 
 import os
 import sys
 import subprocess
+import shutil
 import unittest
 import json
+import tempfile
 from time import time
 from datetime import datetime
 
@@ -50,12 +55,14 @@ class TestRunner():
     test_info = {}
     test_list = []
     subtest_results = []
+    test_directives = {}
     info = None
 
     def __init__(self, info, test_list=None):
         self.info = info
         self.test_list = test_list
         self.log_dir_base = self.info.get_config('log_base_path')
+        self.test_directives = self.test_info.get('directives', {})
 
     def set_key_from_host(self):
         """ add to default environment """
@@ -117,6 +124,18 @@ class TestRunner():
         for (key, value) in config_key_list.items():
             self.test_info['defaultENV'][key] = value
 
+    def set_directive_from_config(self):
+        """ add to default test directives """
+        config_key_list = self.info.get_config('setDirectiveFromConfig')
+        for (key, value) in config_key_list.items():
+            self.test_directives[key] = value
+
+    def create_tmp_dir(self):
+        """ add to default environment """
+        envName = self.test_info['module']['createTmpDir']
+        tmpdir = tempfile.mkdtemp()
+        self.test_info['defaultENV'][envName] = tmpdir
+
     def add_default_env(self):
         """ add to default environment """
         module = self.test_info['module']
@@ -130,6 +149,10 @@ class TestRunner():
             self.create_append_key_from_info(True)
         if self.info.get_config('setKeyFromConfig'):
             self.set_key_from_config()
+        if self.info.get_config('setDirectiveFromConfig'):
+            self.set_directive_from_config()
+        if module.get('createTmpDir'):
+            self.create_tmp_dir()
 
     def setup_default_env(self):
         """ setup default environment """
@@ -147,8 +170,6 @@ class TestRunner():
 
     def resetenv(self, testcase):
         """ reset testcase environment """
-        if os.getenv('TR_USE_VALGRIND', "") == "callgrind":
-            self.callgrind_annotate()
         module_env = testcase['setEnvVars']
         module_default_env = self.test_info['defaultENV']
         if module_env != None:
@@ -185,10 +206,58 @@ class TestRunner():
     def rename_output_directory(self):
         """ rename the output directory """
         if os.path.exists(self.log_dir_base):
-            newname = "%s_%s" % \
-                      (self.log_dir_base, datetime.now().isoformat())
+            if str(self.test_directives.get('renameTestRun', "yes")).lower() \
+               == "yes":
+                newname = "%s_%s" % \
+                          (self.log_dir_base, datetime.now().isoformat())
+            else:
+                newdir = str(self.test_directives.get('renameTestRun'))
+                logdir = os.path.dirname(self.log_dir_base)
+                newname = os.path.join(logdir, newdir)
             os.rename(self.log_dir_base, newname)
             print("TestRunner: test log directory\n %s" % newname)
+
+    def valgrind_memcheck(self):
+        """ If memcheck is used to check the results """
+        print("TestRunner: valgrind memcheck begin")
+        from xml.etree import ElementTree
+        rtn = 0
+        error_str = ""
+        newdir = self.last_testlogdir
+        if not os.path.exists(newdir):
+            print("Directory not found: %s" % newdir)
+            return
+        dirlist = os.listdir(newdir)
+        for psdir in dirlist:
+            dname = os.path.join(newdir, psdir)
+            if os.path.isfile(dname):
+                continue
+            testdirlist = os.listdir(dname)
+            for fname in testdirlist:
+                if str(fname).endswith(".xml"):
+                    with open(os.path.join(dname, fname), "r") as xmlfile:
+                        tree = ElementTree.parse(xmlfile)
+                    error_types = {}
+                    for node in tree.iter('error'):
+                        kind = node.find('./kind')
+                        if not kind.text in error_types:
+                            error_types[kind.text] = 0
+                        error_types[kind.text] += 1
+                    if error_types:
+                        error_str += "test dir: %s  file: %s\n" % (psdir, fname)
+                        for err in error_types:
+                            error_str += "%-3d %s errors\n"%(error_types[err],
+                                                             err)
+        if error_str:
+            print("""
+#########################################################
+    memcheck TESTS failed.
+%s
+#########################################################
+""" % error_str)
+            rtn = 1
+        print("TestRunner: valgrind memcheck end")
+        return rtn
 
     def callgrind_annotate(self):
         """ If callgrind is used pull in the results """
@@ -221,7 +290,12 @@ class TestRunner():
         """ post run processing """
         print("TestRunner: tearDown begin")
         self.dump_subtest_results()
-        self.rename_output_directory()
+        if self.test_info['module'].get('createTmpDir'):
+            envName = self.test_info['module']['createTmpDir']
+            shutil.rmtree(self.test_info['defaultENV'][envName])
+        if str(self.test_directives.get('renameTestRun', "yes")).lower() \
+           != "no":
+            self.rename_output_directory()
         print("TestRunner: tearDown end\n\n")
 
     def dump_error_messages(self, testMethodName):
@@ -296,6 +370,13 @@ class TestRunner():
                     self.dump_error_messages(
                         test_object_dict['_testMethodName'])
 
+            use_valgrind = os.getenv('TR_USE_VALGRIND', "")
+            if use_valgrind == "memcheck" and \
+               str(self.test_directives.get('checkXml', "no")).lower() == "yes":
+                self.valgrind_memcheck()
+            elif use_valgrind == "callgrind":
+                self.callgrind_annotate()
+
             print("***********************************************************")
             if 'setEnvVars' in testrun:
                 self.resetenv(testrun)
@@ -307,11 +388,10 @@ class TestRunner():
 
         info = {}
         rtn = 0
-        test_directives = self.test_info.get('directives', None)
         info['name'] = self.test_info['module']['name']
         print("***************** %s *********************************" % \
               info['name'])
-        loop = str(test_directives.get('loop', "no"))
+        loop = str(self.test_directives.get('loop', "no"))
         start_time = time()
         if loop.lower() == "no":
             self.loop_number = 0
@@ -321,11 +401,11 @@ class TestRunner():
                 print("***************loop %d *************************" % i)
                 self.loop_number = i
                 rtn |= self.execute_list()
-                toexit = test_directives.get('exitLoopOnError', "yes")
+                toexit = self.test_directives.get('exitLoopOnError', "yes")
                 if rtn and toexit.lower() == "yes":
                     break
         info['duration'] = time() - start_time
-        info['return'] = rtn
+        info['return_code'] = rtn
         if rtn == 0:
             info['status'] = "PASS"
         else:
@@ -348,7 +428,7 @@ class TestRunner():
             self.add_default_env()
             self.setup_default_env()
             rtn_info = self.execute_strategy()
-            rtn |= rtn_info['return']
+            rtn |= rtn_info['return_code']
             self.subtest_results.append(rtn_info)
             self.dump_test_info()
         self.post_run()
