@@ -27,11 +27,8 @@
 #ifndef __CONTAINER_CLIENT_INTERNAL_H__
 #define __CONTAINER_CLIENT_INTERNAL_H__
 
+#include <daos/client.h>
 #include <daos/pool_map.h>
-
-/* hhash table for all of objects on daos client,
- * pool, container, object etc */
-extern struct daos_hhash *dsmc_hhash;
 
 /* container in dsm client cache */
 struct dsmc_container {
@@ -87,7 +84,7 @@ dsmc_handle2container(daos_handle_t hdl)
 	if (dsmc_handle_type(hdl) != DAOS_HTYPE_CO)
 		return NULL;
 
-	dlink = daos_hhash_link_lookup(dsmc_hhash, hdl.cookie);
+	dlink = daos_hhash_link_lookup(daos_client_hhash, hdl.cookie);
 	if (dlink == NULL)
 		return NULL;
 
@@ -98,20 +95,20 @@ static inline void
 dsmc_container_add_cache(struct dsmc_container *dc, daos_handle_t *hdl)
 {
 	/* add pool to hash and assign the cookie to hdl */
-	daos_hhash_link_insert(dsmc_hhash, &dc->dc_hlink, DAOS_HTYPE_CO);
+	daos_hhash_link_insert(daos_client_hhash, &dc->dc_hlink, DAOS_HTYPE_CO);
 	daos_hhash_link_key(&dc->dc_hlink, &hdl->cookie);
 }
 
 static inline void
 dsmc_container_del_cache(struct dsmc_container *dc)
 {
-	daos_hhash_link_delete(dsmc_hhash, &dc->dc_hlink);
+	daos_hhash_link_delete(daos_client_hhash, &dc->dc_hlink);
 }
 
 static inline void
 dsmc_container_put(struct dsmc_container *dc)
 {
-	daos_hhash_link_putref(dsmc_hhash, &dc->dc_hlink);
+	daos_hhash_link_putref(daos_client_hhash, &dc->dc_hlink);
 }
 
 int dsmc_co_l2g(daos_handle_t loc, daos_iov_t *glob);

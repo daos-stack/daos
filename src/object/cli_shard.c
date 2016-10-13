@@ -111,7 +111,7 @@ dc_obj_shard_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
 	struct pool_target	*map_tgt;
 	int			rc;
 
-	rc = dsm_tgt_idx2pool_tgt(coh, &map_tgt, tgt);
+	rc = dc_cont_tgt_idx2pool_tgt(coh, &map_tgt, tgt);
 	if (rc != 0)
 		return rc;
 
@@ -280,7 +280,7 @@ obj_shard_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (dobj == NULL)
 		return -DER_NO_HDL;
 
-	rc = dsm_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid);
+	rc = dc_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid);
 	if (rc != 0) {
 		obj_shard_decref(dobj);
 		return rc;
@@ -491,7 +491,7 @@ dc_obj_shard_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	if (dobj == NULL)
 		return -DER_NO_HDL;
 
-	rc = dsm_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid);
+	rc = dc_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid);
 	if (rc != 0) {
 		obj_shard_decref(dobj);
 		return rc;

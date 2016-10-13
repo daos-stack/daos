@@ -32,10 +32,8 @@
 #include <daos/pool.h>
 
 #include <daos/rpc.h>
-#include "client_internal.h"
+#include "cli_internal.h"
 #include "rpc.h"
-
-struct daos_hhash *dsmc_hhash;
 
 /**
  * Initialize pool interface
@@ -47,11 +45,7 @@ dc_pool_init(void)
 
 	rc = daos_rpc_register(pool_rpcs, NULL, DAOS_POOL_MODULE);
 	if (rc != 0)
-		return rc;
-
-	rc = daos_hhash_create(DAOS_HHASH_BITS, &dsmc_hhash);
-	if (rc != 0)
-		daos_rpc_unregister(pool_rpcs);
+		D_ERROR("failed to register pool RPCs: %d\n", rc);
 
 	return rc;
 }
@@ -63,19 +57,14 @@ void
 dc_pool_fini(void)
 {
 	daos_rpc_unregister(pool_rpcs);
-
-	if (dsmc_hhash != NULL) {
-		daos_hhash_destroy(dsmc_hhash);
-		dsmc_hhash = NULL;
-	}
 }
 
 static void
 pool_free(struct daos_hlink *hlink)
 {
-	struct dsmc_pool *pool;
+	struct dc_pool *pool;
 
-	pool = container_of(hlink, struct dsmc_pool, dp_hlink);
+	pool = container_of(hlink, struct dc_pool, dp_hlink);
 	pthread_rwlock_destroy(&pool->dp_co_list_lock);
 	D_ASSERT(daos_list_empty(&pool->dp_co_list));
 	if (pool->dp_map != NULL)
@@ -98,10 +87,10 @@ flags_are_valid(unsigned int flags)
 	       (mode = DAOS_PC_EX);
 }
 
-static struct dsmc_pool *
+static struct dc_pool *
 pool_alloc(void)
 {
-	struct dsmc_pool *pool;
+	struct dc_pool *pool;
 
 	/** allocate and fill in pool connection */
 	D_ALLOC_PTR(pool);
@@ -118,7 +107,7 @@ pool_alloc(void)
 }
 
 struct pool_connect_arg {
-	struct dsmc_pool       *pca_pool;
+	struct dc_pool	       *pca_pool;
 	daos_pool_info_t       *pca_info;
 	struct pool_buf	       *pca_map_buf;
 };
@@ -126,9 +115,9 @@ struct pool_connect_arg {
 static int
 pool_connect_cp(void *data, daos_event_t *ev, int rc)
 {
-	struct daos_op_sp *sp = data;
+	struct daos_op_sp	*sp = data;
 	struct pool_connect_arg	*arg = sp->sp_arg;
-	struct dsmc_pool	*pool = arg->pca_pool;
+	struct dc_pool		*pool = arg->pca_pool;
 	daos_pool_info_t	*info = arg->pca_info;
 	struct pool_buf		*map_buf = arg->pca_map_buf;
 	struct pool_connect_in	*pci = dtp_req_get(sp->sp_rpc);
@@ -184,7 +173,7 @@ out:
 	D_FREE_PTR(arg);
 	if (rc)
 		pool_buf_free(map_buf);
-	dsmc_pool_put(pool);
+	dc_pool_put(pool);
 	return rc;
 }
 
@@ -196,7 +185,7 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 	dtp_endpoint_t		 ep;
 	dtp_rpc_t		*rpc;
 	struct pool_connect_in	*pci;
-	struct dsmc_pool	*pool;
+	struct dc_pool		*pool;
 	struct daos_op_sp	*sp;
 	struct pool_connect_arg	*arg;
 	struct pool_buf		*map_buf;
@@ -309,7 +298,7 @@ out_arg:
 out_map_buf:
 	pool_buf_free(map_buf);
 out_pool:
-	dsmc_pool_put(pool);
+	dc_pool_put(pool);
 	return rc;
 }
 
@@ -317,7 +306,7 @@ static int
 pool_disconnect_cp(void *arg, daos_event_t *ev, int rc)
 {
 	struct daos_op_sp		*sp = arg;
-	struct dsmc_pool		*pool = (struct dsmc_pool *)sp->sp_arg;
+	struct dc_pool			*pool = (struct dc_pool *)sp->sp_arg;
 	struct pool_disconnect_out	*pdo;
 
 	if (rc) {
@@ -340,21 +329,21 @@ pool_disconnect_cp(void *arg, daos_event_t *ev, int rc)
 	sp->sp_hdl.cookie = 0;
 out:
 	dtp_req_decref(sp->sp_rpc);
-	dsmc_pool_put(pool);
+	dc_pool_put(pool);
 	return rc;
 }
 
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
-	struct dsmc_pool		*pool;
+	struct dc_pool			*pool;
 	dtp_endpoint_t			 ep;
 	dtp_rpc_t			*rpc;
 	struct pool_disconnect_in	*pdi;
 	struct daos_op_sp		*sp;
 	int				 rc = 0;
 
-	pool = dsmc_handle2pool(poh);
+	pool = dc_pool_lookup(poh);
 	if (pool == NULL)
 		return -DER_NO_HDL;
 
@@ -365,7 +354,7 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	pthread_rwlock_rdlock(&pool->dp_co_list_lock);
 	if (!daos_list_empty(&pool->dp_co_list)) {
 		pthread_rwlock_unlock(&pool->dp_co_list_lock);
-		dsmc_pool_put(pool);
+		dc_pool_put(pool);
 		return -DER_BUSY;
 	}
 	pool->dp_disconnecting = 1;
@@ -377,7 +366,7 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 			DP_UUID(pool->dp_pool_hdl));
 		dsmc_pool_del_cache(pool);
 		poh.cookie = 0;
-		dsmc_pool_put(pool);
+		dc_pool_put(pool);
 		if (ev != NULL) {
 			daos_event_launch(ev);
 			daos_event_complete(ev, rc);
@@ -396,7 +385,7 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	rc = pool_req_create(daos_ev2ctx(ev), ep, DSM_POOL_DISCONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
-		dsmc_pool_put(pool);
+		dc_pool_put(pool);
 		return rc;
 	}
 
@@ -428,7 +417,7 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 out_put_req:
 	dtp_req_decref(rpc); /* scratchpad */
 	dtp_req_decref(rpc); /* free req */
-	dsmc_pool_put(pool);
+	dc_pool_put(pool);
 	return rc;
 
 }
@@ -477,7 +466,7 @@ dsmc_swap_pool_glob(struct dsmc_pool_glob *pool_glob)
 static int
 dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 {
-	struct dsmc_pool	*pool;
+	struct dc_pool		*pool;
 	struct dsmc_pool_glob	*pool_glob;
 	daos_size_t		 glob_buf_size;
 	uint32_t		 pb_nr;
@@ -485,7 +474,7 @@ dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 
 	D_ASSERT(glob != NULL);
 
-	pool = dsmc_handle2pool(poh);
+	pool = dc_pool_lookup(poh);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
@@ -517,7 +506,7 @@ dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	memcpy(pool_glob->dpg_map_buf, pool->dp_map_buf, pool_buf_size(pb_nr));
 
 out_pool:
-	dsmc_pool_put(pool);
+	dc_pool_put(pool);
 out:
 	if (rc != 0)
 		D_ERROR("dsmc_pool_l2g failed, rc: %d\n", rc);
@@ -555,9 +544,9 @@ out:
 static int
 dsmc_pool_g2l(struct dsmc_pool_glob *pool_glob, daos_handle_t *poh)
 {
-	struct dsmc_pool	*pool;
+	struct dc_pool		*pool;
 	struct pool_buf		*map_buf;
-	int			rc = 0;
+	int			 rc = 0;
 
 	D_ASSERT(pool_glob != NULL);
 	D_ASSERT(poh != NULL);
@@ -601,7 +590,7 @@ out:
 		pool_buf_free(map_buf);
 	}
 	if (pool != NULL)
-		dsmc_pool_put(pool);
+		dc_pool_put(pool);
 	return rc;
 }
 

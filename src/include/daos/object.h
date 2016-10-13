@@ -25,6 +25,9 @@
 
 #include <daos_types.h>
 
+int dc_obj_init(void);
+void dc_obj_fini(void);
+
 /** object metadata stored in the global OI table of container */
 struct daos_obj_md {
 	daos_obj_id_t		omd_id;

@@ -27,6 +27,7 @@
 #ifndef __POOL_CLIENT_INTERNAL_H__
 #define __POOL_CLIENT_INTERNAL_H__
 
+#include <daos/client.h>
 #include <daos/pool_map.h>
 
 #define DC_POOL_GLOB_MAGIC	(0x16da0386)
@@ -61,17 +62,18 @@ dsmc_handle_type(daos_handle_t hdl)
 }
 
 static inline void
-dsmc_pool_add_cache(struct dsmc_pool *pool, daos_handle_t *hdl)
+dsmc_pool_add_cache(struct dc_pool *pool, daos_handle_t *hdl)
 {
 	/* add pool to hash and assign the cookie to hdl */
-	daos_hhash_link_insert(dsmc_hhash, &pool->dp_hlink, DAOS_HTYPE_POOL);
+	daos_hhash_link_insert(daos_client_hhash, &pool->dp_hlink,
+			       DAOS_HTYPE_POOL);
 	daos_hhash_link_key(&pool->dp_hlink, &hdl->cookie);
 }
 
 static inline void
-dsmc_pool_del_cache(struct dsmc_pool *pool)
+dsmc_pool_del_cache(struct dc_pool *pool)
 {
-	daos_hhash_link_delete(dsmc_hhash, &pool->dp_hlink);
+	daos_hhash_link_delete(daos_client_hhash, &pool->dp_hlink);
 }
 
 #endif /* __POOL_CLIENT_INTERNAL_H__ */

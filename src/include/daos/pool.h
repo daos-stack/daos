@@ -38,8 +38,8 @@ int dc_pool_init(void);
 void dc_pool_fini(void);
 
 /* Client pool handle */
-struct dsmc_pool {
-	/* link to dsmc_hhash */
+struct dc_pool {
+	/* link to daos_client_hhash */
 	struct daos_hlink	dp_hlink;
 	/* container list of the pool */
 	daos_list_t		dp_co_list;
@@ -55,25 +55,25 @@ struct dsmc_pool {
 				dp_slave:1; /* generated via g2l */
 };
 
-static inline struct dsmc_pool *
-dsmc_handle2pool(daos_handle_t poh)
+static inline struct dc_pool *
+dc_pool_lookup(daos_handle_t poh)
 {
 	struct daos_hlink *dlink;
 
 	if (daos_hhash_key_type(poh.cookie) != DAOS_HTYPE_POOL)
 		return NULL;
 
-	dlink = daos_hhash_link_lookup(dsmc_hhash, poh.cookie);
+	dlink = daos_hhash_link_lookup(daos_client_hhash, poh.cookie);
 	if (dlink == NULL)
 		return NULL;
 
-	return container_of(dlink, struct dsmc_pool, dp_hlink);
+	return container_of(dlink, struct dc_pool, dp_hlink);
 }
 
 static inline void
-dsmc_pool_put(struct dsmc_pool *pool)
+dc_pool_put(struct dc_pool *pool)
 {
-	daos_hhash_link_putref(dsmc_hhash, &pool->dp_hlink);
+	daos_hhash_link_putref(daos_client_hhash, &pool->dp_hlink);
 }
 
 #endif /* __DAOS_POOL_H__ */

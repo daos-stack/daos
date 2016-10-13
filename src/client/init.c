@@ -29,7 +29,11 @@
 #include <daos/event.h>
 #include <daos/pool.h>
 #include <daos/container.h>
+#include <daos/object.h>
 #include <pthread.h>
+
+/* Shared by pool, container, and object handles. */
+struct daos_hhash *daos_client_hhash;
 
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool		module_initialized;
@@ -46,11 +50,17 @@ daos_init(void)
 	if (module_initialized)
 		D_GOTO(unlock, rc = -DER_ALREADY);
 
+	rc = daos_hhash_create(DAOS_HHASH_BITS, &daos_client_hhash);
+	if (rc != 0) {
+		D_ERROR("failed to create handle hash table: %d\n", rc);
+		D_GOTO(unlock, rc);
+	}
+
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: %d\n", rc);
-		D_GOTO(unlock, rc);
+		D_GOTO(out_hhash, rc);
 	}
 
 	/** set up management interface */
@@ -76,6 +86,8 @@ daos_init(void)
 	module_initialized = true;
 	D_GOTO(unlock, rc = 0);
 
+out_hhash:
+	daos_hhash_destroy(daos_client_hhash);
 out_co:
 	dc_cont_fini();
 out_pool:
@@ -111,6 +123,9 @@ daos_fini(void)
 	dc_cont_fini();
 	dc_pool_fini();
 	dc_mgmt_fini();
+
+	daos_hhash_destroy(daos_client_hhash);
+	daos_client_hhash = NULL;
 
 	module_initialized = false;
 unlock:

@@ -23,13 +23,10 @@
 #ifndef __DAOS_CLIENT_H__
 #define __DAOS_CLIENT_H__
 
-/** XXX use single hash for both pool & container */
-extern struct daos_hhash *dsmc_hhash;
+extern struct daos_hhash *daos_client_hhash;
 
 int dc_mgmt_init();
-int dc_obj_init();
 
 int dc_mgmt_fini();
-int dc_obj_fini();
 
 #endif

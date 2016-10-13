@@ -12,7 +12,7 @@ dsms = denv.SharedLibrary('pool',
 denv.Install('$PREFIX/lib/daos_srv', dsms)
 
 # dc_pool: Pool Client
-dc_pool_tgts = denv.SharedObject(['client.c', 'rpc.c'])
+dc_pool_tgts = denv.SharedObject(['cli.c', 'rpc.c'])
 Export('dc_pool_tgts')
 
 # tests

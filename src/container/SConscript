@@ -11,8 +11,8 @@ dsms = denv.SharedLibrary('cont',
 			   'dsms_container.c', 'dsms_target.c'])
 denv.Install('$PREFIX/lib/daos_srv', dsms)
 
-# Container client library
-dc_co_tgts = denv.SharedObject(['client.c', 'rpc.c'])
+# dc_cont: Container Client
+dc_co_tgts = denv.SharedObject(['cli.c', 'rpc.c'])
 Export('dc_co_tgts')
 
 # tests
