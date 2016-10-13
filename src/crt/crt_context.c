@@ -243,12 +243,12 @@ crt_ctx_epi_abort(crt_list_t *rlink, void *args)
 		C_GOTO(out, rc = 0);
 
 	force = *(int *)args;
-	if (force != 0) {
+	if (force == 0) {
 		C_ERROR("cannot abort endpoint (idx %d, rank %d, req_wait_num "
 			CF_U64", req_num "CF_U64", reply_num "CF_U64", "
-			"inflight "CF_U64"\n", ctx->cc_idx, epi->epi_ep.ep_rank,
-			epi->epi_req_wait_num, epi->epi_req_num,
-			epi->epi_reply_num,
+			"inflight "CF_U64", with force == 0.\n", ctx->cc_idx,
+			epi->epi_ep.ep_rank, epi->epi_req_wait_num,
+			epi->epi_req_num, epi->epi_reply_num,
 			epi->epi_req_num - epi->epi_reply_num);
 		C_GOTO(out, rc = -CER_BUSY);
 	}
