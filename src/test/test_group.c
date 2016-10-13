@@ -305,6 +305,7 @@ int main(int argc, char **argv)
 			rc = crt_req_create(crt_ctx, server_ep,
 					ECHO_OPC_SHUTDOWN, &rpc_req);
 			assert(rc == 0 && rpc_req != NULL);
+			complete = 0;
 			rc = crt_req_send(rpc_req, client_cb_common, &complete);
 			assert(rc == 0);
 			rc = client_wait(crt_ctx, 120, 1000, &complete);

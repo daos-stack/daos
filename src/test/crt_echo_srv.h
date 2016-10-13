@@ -241,7 +241,6 @@ int echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	crt_size_t			bulk_len;
 	unsigned int			bulk_sgnum;
 	struct crt_bulk_desc		bulk_desc;
-	crt_bulk_opid_t			bulk_opid;
 	struct crt_echo_bulk_in_req	*e_req;
 	int				rc = 0;
 
@@ -288,7 +287,7 @@ int echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	 *    reference to avoid the RPC request be destroyed by CRT, then need
 	 *    to release the reference at bulk's complete_cb);
 	 */
-	rc = crt_bulk_transfer(&bulk_desc, bulk_test_cb, iovs, &bulk_opid);
+	rc = crt_bulk_transfer(&bulk_desc, bulk_test_cb, iovs, NULL);
 	assert(rc == 0);
 
 	return rc;

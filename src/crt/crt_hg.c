@@ -1148,7 +1148,7 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	hg_return_t			hg_ret = HG_SUCCESS;
 	int				rc = 0;
 
-	C_ASSERT(bulk_desc != NULL && opid != NULL);
+	C_ASSERT(bulk_desc != NULL);
 	C_ASSERT(bulk_desc->bd_bulk_op == CRT_BULK_PUT ||
 		 bulk_desc->bd_bulk_op == CRT_BULK_GET);
 	C_ASSERT(bulk_desc->bd_rpc != NULL);
@@ -1178,7 +1178,8 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 			bulk_cbinfo, hg_bulk_op, rpc_priv->crp_na_addr,
 			bulk_desc->bd_remote_hdl, bulk_desc->bd_remote_off,
 			bulk_desc->bd_local_hdl, bulk_desc->bd_local_off,
-			bulk_desc->bd_len, (hg_op_id_t *)opid);
+			bulk_desc->bd_len,
+			opid != NULL ? (hg_op_id_t *)opid : HG_OP_ID_IGNORE);
 	if (hg_ret != HG_SUCCESS) {
 		C_ERROR("HG_Bulk_transfer failed, hg_ret: %d.\n", hg_ret);
 		C_FREE_PTR(bulk_cbinfo);

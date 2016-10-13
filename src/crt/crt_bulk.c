@@ -162,8 +162,8 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 {
 	int			rc = 0;
 
-	if (!crt_bulk_desc_valid(bulk_desc) || opid == NULL) {
-		C_ERROR("invalid parameter for crt_bulk_transfer.\n");
+	if (!crt_bulk_desc_valid(bulk_desc)) {
+		C_ERROR("invalid parameter of bulk_desc.\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 

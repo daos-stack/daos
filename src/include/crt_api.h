@@ -396,7 +396,8 @@ crt_bulk_free(crt_bulk_t bulk_hdl);
  * \param complete_cb [IN]      completion callback
  * \param arg [IN]              arguments for the \a complete_cb
  * \param opid [OUT]            returned bulk opid which can be used to abort
- *				the bulk (not implemented yet).
+ *				the bulk. It is optional, can pass in NULL if
+ *				don't need it.
  *
  * \return                      zero on success, negative value if error
  */
