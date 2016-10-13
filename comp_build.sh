@@ -280,7 +280,11 @@ fi
 
 option=
 if [ -z "$WORKSPACE" ]; then
-  CORAL_ARTIFACTS="/scratch/coral/artifacts"
+  if [ -d "/scratch/jenkins-2/artifacts"]; then
+    CORAL_ARTIFACTS="/scratch/jenkins-2/artifacts"
+  else
+    CORAL_ARTIFACTS="/scratch/coral/artifacts"
+  fi
   SET_PREFIX=
   B_INS_PATH=`pwd`/install/`uname -s`
   #Set job name so it thinks it's a review job
