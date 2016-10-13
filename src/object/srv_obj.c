@@ -75,11 +75,13 @@ ds_obj_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status,
 		   uint32_t map_version)
 {
 	struct obj_rw_in	*orwi;
-	uint64_t		cid = 0;
+	uuid_t			cookie;
 	int rc;
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
+	uuid_clear(cookie);
+
 	rc = dtp_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: %d\n", rc);
@@ -110,7 +112,7 @@ ds_obj_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status,
 	orwi = dtp_req_get(rpc);
 	D_ASSERT(orwi != NULL);
 	if (opc_get(rpc->dr_opc) == DAOS_OBJ_RPC_UPDATE)
-		rc = vos_obj_zc_update_end(ioh, cid, &orwi->orw_dkey,
+		rc = vos_obj_zc_update_end(ioh, cookie, &orwi->orw_dkey,
 					   orwi->orw_nr,
 					   orwi->orw_iods.da_arrays,
 					   0);
@@ -307,8 +309,9 @@ ds_obj_rw_inline(dtp_rpc_t *rpc, struct ds_cont_hdl *cont_hdl)
 	int			rc;
 
 	if (opc_get(rpc->dr_opc) == DAOS_OBJ_RPC_UPDATE) {
-		uint64_t cookie = 0;
+		uuid_t cookie;
 
+		memset(cookie, 0, sizeof(uuid_t));
 		rc = vos_obj_update(cont_hdl->sch_cont->sc_hdl,
 				    orw->orw_oid, orw->orw_epoch,
 				    cookie, &orw->orw_dkey, orw->orw_nr,

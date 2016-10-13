@@ -44,10 +44,10 @@
 struct vos_container_index;
 struct vos_container;
 struct vos_object_index;
-struct vos_epoch_index;
-struct vos_kv_index;
-struct vos_ba_index;
 struct vos_obj;
+struct vos_cookie_index;
+struct vos_cookie_entry;
+struct vos_epoch_index;
 struct vos_krec;
 struct vos_irec;
 
@@ -68,14 +68,42 @@ POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_root);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_object_index);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_epoch_index);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_kv_index);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_ba_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_index);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_entry);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_epoch_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_irec);
-
 POBJ_LAYOUT_END(vos_pool_layout);
+
+
+/**
+ * VOS container index
+ * PMEM container index in each pool
+ */
+struct vos_container_index {
+	struct btr_root		ci_btree;
+};
+
+/**
+ * VOS cookie index
+ * In-memory BTR index to hold
+ * all cookies and max epoch updated
+ */
+struct vos_cookie_index {
+	struct btr_root		cookie_btr;
+	struct umem_attr	cookie_btr_attr;
+};
+
+/**
+ *  VOS cookie table
+ *  Data structure to store max90
+ */
+struct vos_cookie_entry {
+	daos_epoch_t	vce_max_epoch;
+};
+
+
 
 struct vos_pool_root {
 	/* Structs stored in LE or BE representation */
@@ -92,14 +120,9 @@ struct vos_pool_root {
 	vos_pool_info_t				vpr_pool_info;
 };
 
-struct vos_container_index {
-	struct btr_root		ci_btree;
-	/* More items to be added*/
-};
 
 struct vos_epoch_index {
 	struct btr_root		ehtable;
-	/* More items to be added*/
 };
 
 /* VOS Container Value */

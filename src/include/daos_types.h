@@ -449,8 +449,6 @@ typedef struct {
 	 * If rx_nr is equal to 1, the range identifies a single record of
 	 * indice rx_idx */
 	uint64_t	rx_nr;
-	/** returned cookie ID stored in recx */
-	uint64_t	rx_cookie;
 } daos_recx_t;
 
 /**

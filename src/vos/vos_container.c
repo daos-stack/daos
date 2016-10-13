@@ -38,6 +38,8 @@
 #include <vos_obj.h>
 #include <vos_hhash.h>
 
+#define CT_BTREE_ORDER 20
+
 /**
  * Wrapper buffer to fetch
  * direct pointers
@@ -485,7 +487,7 @@ vos_ci_create(struct umem_attr *p_umem_attr,
 	D_ASSERT(ci_root->tr_class == 0);
 	D_DEBUG(DF_VOS2, "Create CI Tree in-place: %d\n",
 		VOS_BTR_CIT);
-	rc = dbtree_create_inplace(VOS_BTR_CIT, 0, OT_BTREE_ORDER,
+	rc = dbtree_create_inplace(VOS_BTR_CIT, 0, CT_BTREE_ORDER,
 				   p_umem_attr,
 				   &co_index->ci_btree,
 				   &btr_hdl);

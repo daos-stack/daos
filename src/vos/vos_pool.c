@@ -40,39 +40,6 @@
 #include <unistd.h>
 #include <string.h>
 
-static pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
-
-static PMEMobjpool *
-vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
-		   mode_t mode)
-{
-	PMEMobjpool *pop;
-
-	pthread_mutex_lock(&vos_pmemobj_lock);
-	pop = pmemobj_create(path, layout, poolsize, mode);
-	pthread_mutex_unlock(&vos_pmemobj_lock);
-	return pop;
-}
-
-static PMEMobjpool *
-vos_pmemobj_open(const char *path, const char *layout)
-{
-	PMEMobjpool *pop;
-
-	pthread_mutex_lock(&vos_pmemobj_lock);
-	pop = pmemobj_open(path, layout);
-	pthread_mutex_unlock(&vos_pmemobj_lock);
-	return pop;
-}
-
-void
-vos_pmemobj_close(PMEMobjpool *pop)
-{
-	pthread_mutex_lock(&vos_pmemobj_lock);
-	pmemobj_close(pop);
-	pthread_mutex_unlock(&vos_pmemobj_lock);
-}
-
 static inline struct vos_pool_root *
 pmem_pool2root(PMEMobjpool *ph)
 {
@@ -226,6 +193,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	struct vos_pool_root		*root  = NULL;
 	struct vos_container_index	*co_idx = NULL;
 	struct daos_uuid		ukey;
+	struct vos_cookie_index		*ck_index = NULL;
 
 	if (path == NULL) {
 		D_ERROR("Invalid Pool Path\n");
@@ -300,6 +268,12 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		D_ERROR("Container Tree open failed\n");
 		D_GOTO(exit, rc = -DER_NONEXIST);
 	}
+
+	/** Create a cookie index and cache handle in VOS pool handle */
+	ck_index = &vpool->vp_cookie_index;
+	rc = vos_cookie_index_create(ck_index, &vpool->vp_ck_hdl);
+	if (rc)
+		D_ERROR("Cookie tree create failed\n");
 
 exit:
 	if (rc != 0 && vpool != NULL)

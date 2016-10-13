@@ -46,6 +46,8 @@ struct vos_obj_iter {
 	struct vos_obj_ref	*it_oref;
 };
 
+
+
 /** zero-copy I/O buffer for a vector */
 struct vos_vec_zbuf {
 	/** scatter/gather list for the ZC IO on this vector */
@@ -87,6 +89,13 @@ vos_empty_viod(daos_vec_iod_t *viod)
 	for (i = 0; i < viod->vd_nr; i++)
 		viod->vd_recxs[i].rx_rsize = 0;
 }
+
+static struct vos_obj_iter *
+vos_iter2oiter(struct vos_iterator *iter)
+{
+	return container_of(iter, struct vos_obj_iter, it_iter);
+}
+
 
 /**
  */
@@ -220,7 +229,7 @@ tree_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
  */
 static int
 tree_recx_update(daos_handle_t toh, daos_epoch_range_t *epr,
-		 uint64_t cookie, daos_recx_t *recx, daos_iov_t *iov,
+		 uuid_t cookie, daos_recx_t *recx, daos_iov_t *iov,
 		 daos_csum_buf_t *csum, umem_id_t mmid)
 {
 	struct vos_key_bundle	kbund;
@@ -231,7 +240,7 @@ tree_recx_update(daos_handle_t toh, daos_epoch_range_t *epr,
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_idx	= recx->rx_idx;
 	kbund.kb_epr	= epr;
-	kbund.kb_cookie	= cookie;
+	uuid_copy(kbund.kb_cookie, cookie);
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_csum	= csum;
@@ -266,6 +275,7 @@ tree_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	rbund.rb_iov	= &it_entry->ie_key;
 	rbund.rb_csum	= &csum;
+
 	daos_iov_set(rbund.rb_iov, NULL, 0); /* no copy */
 	daos_csum_set(rbund.rb_csum, NULL, 0);
 
@@ -356,10 +366,9 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			return rc;
 		}
 
-		if (i == 0 && recx->rx_rsize == DAOS_REC_ANY) {
+		if (i == 0 && recx->rx_rsize == DAOS_REC_ANY)
 			recx->rx_rsize	= recx_tmp.rx_rsize;
-			recx->rx_cookie	= recx_tmp.rx_cookie;
-		}
+
 
 		if (recx->rx_rsize != recx_tmp.rx_rsize) {
 			D_DEBUG(DF_VOS1,
@@ -536,7 +545,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * See comment of vos_recx_fetch for explanation of @off_p.
  */
 static int
-vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, uint64_t cookie,
+vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 		daos_recx_t *recx, daos_iov_t *iovs, unsigned int iov_nr,
 		daos_off_t *off_p, umem_id_t *recx_mmids)
 {
@@ -638,7 +647,7 @@ vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, uint64_t cookie,
 /** update a set of record extents (recx) under the same akey */
 static int
 vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
-	       uint64_t cookie, daos_handle_t vec_toh,
+	       uuid_t cookie, daos_handle_t vec_toh,
 	       daos_vec_iod_t *viod, daos_sg_list_t *sgl,
 	       struct vos_vec_zbuf *zbuf)
 {
@@ -689,11 +698,12 @@ vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
 }
 
 static int
-vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, uint64_t cookie,
+vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, uuid_t cookie,
 		daos_key_t *dkey, unsigned int viod_nr, daos_vec_iod_t *viods,
 		daos_sg_list_t *sgls, struct vos_zc_context *zcc)
 {
 	daos_handle_t	toh;
+	daos_handle_t	cookie_hdl;
 	int		i;
 	int		rc;
 
@@ -721,8 +731,14 @@ vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, uint64_t cookie,
 		rc = vos_vec_update(oref, epoch, cookie, toh, &viods[i],
 				    sgl, zbuf);
 		if (rc != 0)
-			goto out;
+			D_GOTO(out, rc);
 	}
+
+	/** If dkey update is successful update the cookie tree */
+	cookie_hdl = vos_oref2cookie_hdl(oref);
+	rc = vos_cookie_find_update(cookie_hdl, cookie, epoch, NULL);
+	if (rc)
+		D_ERROR("Error while updating cookie index table\n");
  out:
 	tree_release(toh);
 	return rc;
@@ -733,12 +749,12 @@ vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, uint64_t cookie,
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uint64_t cookie, daos_key_t *dkey, unsigned int viod_nr,
+	       uuid_t cookie, daos_key_t *dkey, unsigned int viod_nr,
 	       daos_vec_iod_t *viods, daos_sg_list_t *sgls)
 {
 	struct vos_obj_ref	*oref;
 	PMEMobjpool		*pop;
-	int			 rc;
+	int			rc;
 
 	D_DEBUG(DF_VOS2, "Update "DF_UOID", desc_nr %d\n",
 		DP_UOID(oid), viod_nr);
@@ -1106,7 +1122,7 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
  * resources.
  */
 int
-vos_obj_zc_update_end(daos_handle_t ioh, uint64_t cookie, daos_key_t *dkey,
+vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, daos_key_t *dkey,
 		      unsigned int viod_nr, daos_vec_iod_t *viods, int err)
 {
 	struct vos_zc_context	*zcc = vos_ioh2zcc(ioh);
@@ -1308,6 +1324,7 @@ vec_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
  */
 static int recx_iter_fetch(struct vos_obj_iter *oiter,
 			   vos_iter_entry_t *it_entry,
+			   struct daos_uuid *cookie,
 			   daos_hash_out_t *anchor);
 /**
  * Prepare the iterator for the recx tree.
@@ -1368,7 +1385,7 @@ recx_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 		return rc;
 
 	memset(entry, 0, sizeof(*entry));
-	rc = recx_iter_fetch(oiter, entry, NULL);
+	rc = recx_iter_fetch(oiter, entry, NULL, NULL);
 	return rc;
 }
 
@@ -1426,7 +1443,7 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 	kbund.kb_epr = &entry.ie_epr;
 
 	memset(&entry, 0, sizeof(entry));
-	rc = recx_iter_fetch(oiter, &entry, &tmp);
+	rc = recx_iter_fetch(oiter, &entry, NULL, &tmp);
 	if (rc != 0)
 		return rc;
 
@@ -1445,9 +1462,35 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 	return rc;
 }
 
+int
+vos_iter_fetch_cookie(daos_handle_t ih, vos_iter_entry_t *it_entry,
+			   struct daos_uuid *cookie, daos_hash_out_t *anchor)
+{
+
+	struct vos_iterator	*iter = vos_hdl2iter(ih);
+	struct vos_obj_iter	*oiter;
+	int			rc;
+
+	if (iter->it_state == VOS_ITS_NONE) {
+		D_DEBUG(DF_VOS1,
+		       "Please call vos_iter_probe to initialize cursor\n");
+		return -DER_NO_PERM;
+	}
+
+	if (iter->it_state == VOS_ITS_END) {
+		D_DEBUG(DF_VOS1, "The end of iteration\n");
+		return -DER_NONEXIST;
+	}
+
+	oiter = vos_iter2oiter(iter);
+	rc = recx_iter_fetch(oiter, it_entry, cookie, anchor);
+	return rc;
+
+}
+
 static int
 recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
-		daos_hash_out_t *anchor)
+		struct daos_uuid *cookie, daos_hash_out_t *anchor)
 {
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
@@ -1463,6 +1506,8 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	rbund.rb_recx	= &it_entry->ie_recx;
 	rbund.rb_iov	= &it_entry->ie_iov;
 	rbund.rb_csum	= &csum;
+	if (cookie != NULL)
+		rbund.rb_cookie = cookie;
 
 	daos_iov_set(rbund.rb_iov, NULL, 0); /* no data copy */
 	daos_csum_set(rbund.rb_csum, NULL, 0);
@@ -1478,7 +1523,7 @@ recx_iter_next(struct vos_obj_iter *oiter)
 	int		 rc;
 
 	memset(&entry, 0, sizeof(entry));
-	rc = recx_iter_fetch(oiter, &entry, NULL);
+	rc = recx_iter_fetch(oiter, &entry, NULL, NULL);
 	if (rc != 0)
 		return rc;
 
@@ -1499,12 +1544,6 @@ recx_iter_next(struct vos_obj_iter *oiter)
  * common functions for iterator.
  */
 static int vos_obj_iter_fini(struct vos_iterator *vitr);
-
-static struct vos_obj_iter *
-vos_iter2oiter(struct vos_iterator *iter)
-{
-	return container_of(iter, struct vos_obj_iter, it_iter);
-}
 
 /** prepare an object content iterator */
 int
@@ -1650,7 +1689,7 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		return vec_iter_fetch(oiter, it_entry, anchor);
 
 	case VOS_ITER_RECX:
-		return recx_iter_fetch(oiter, it_entry, anchor);
+		return recx_iter_fetch(oiter, it_entry, NULL, anchor);
 	}
 }
 

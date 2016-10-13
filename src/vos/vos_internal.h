@@ -40,6 +40,7 @@
 #include <vos_obj.h>
 
 extern struct dss_module_key vos_module_key;
+static pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * VOS pool handle (DRAM)
@@ -59,6 +60,10 @@ struct vp_hdl {
 	struct umem_instance	vp_umm;
 	/** btr handle for container tree */
 	daos_handle_t		vp_ct_hdl;
+	/** cookie index in-place part of the handle */
+	struct vos_cookie_index	vp_cookie_index;
+	/** btr handle for cookie tree */
+	daos_handle_t		vp_ck_hdl;
 };
 
 /**
@@ -135,6 +140,9 @@ extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_oid_iter_ops;
 extern struct vos_iter_ops vos_co_iter_ops;
 
+int
+vos_iter_fetch_cookie(daos_handle_t ih, vos_iter_entry_t *it_entry,
+		      struct daos_uuid *cookie, daos_hash_out_t *anchor);
 
 static inline struct vos_tls *
 vos_tls_get()
@@ -145,6 +153,37 @@ vos_tls_get()
 	dtc = dss_tls_get();
 	tls = (struct vos_tls *)dss_module_key_get(dtc, &vos_module_key);
 	return tls;
+}
+
+static inline PMEMobjpool *
+vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
+		   mode_t mode)
+{
+	PMEMobjpool *pop;
+
+	pthread_mutex_lock(&vos_pmemobj_lock);
+	pop = pmemobj_create(path, layout, poolsize, mode);
+	pthread_mutex_unlock(&vos_pmemobj_lock);
+	return pop;
+}
+
+static inline PMEMobjpool *
+vos_pmemobj_open(const char *path, const char *layout)
+{
+	PMEMobjpool *pop;
+
+	pthread_mutex_lock(&vos_pmemobj_lock);
+	pop = pmemobj_open(path, layout);
+	pthread_mutex_unlock(&vos_pmemobj_lock);
+	return pop;
+}
+
+static inline void
+vos_pmemobj_close(PMEMobjpool *pop)
+{
+	pthread_mutex_lock(&vos_pmemobj_lock);
+	pmemobj_close(pop);
+	pthread_mutex_unlock(&vos_pmemobj_lock);
 }
 
 static inline struct vos_pool_root *
@@ -224,6 +263,60 @@ int
 vos_ci_create(struct umem_attr *p_umem_attr,
 	      struct vos_container_index *co_index);
 
+
+/**
+ * VOS cookie index class register for btree
+ * to be called withing vos_init()
+ *
+ * \return		0 on success and negative on
+ *			failure
+ */
+
+int
+vos_cookie_index_init();
+
+/**
+ * VOS Cookie index create
+ * Create a new DRAM B-Tree for empty container index
+ * Called from vos_pool_create
+ *
+ * \param cookie_index	[IN]	vos cookie index
+ *				(DRAM pointer)
+ * \param cookie_handle [OUT]	cookie_btree handle
+ *
+ * \return		0 on success and negative on
+ *			failure
+ */
+int
+vos_cookie_index_create(struct vos_cookie_index *cookie_index,
+			daos_handle_t *cookie_handle);
+
+
+/**
+ * VOS cookie index destroy
+ * Destroy the cookie index table
+ *
+ * \param cih	[IN]	cookie index handle
+ */
+int
+vos_cookie_index_destroy(daos_handle_t cih);
+
+/**
+ * VOS cookie find and update
+ * Find cookie if it exists update the
+ * max_epoch, if not found add the entry
+ * if less than max_epoch do nothing
+ *
+ * \param cih		[IN]	cookie index handle
+ * \param cookie	[IN]	cookie
+ * \param epoch		[IN]	epoch to update
+ * \param epoch_ret	[OUT]	max_epoch returned
+ */
+int
+vos_cookie_find_update(daos_handle_t cih, uuid_t cookie,
+		       daos_epoch_t epoch, daos_epoch_t *epoch_ret);
+
+
 /**
  * VOS object index class register for btree
  * Called with vos_init()
@@ -282,7 +375,7 @@ struct vos_key_bundle {
 	/** index of recx */
 	uint64_t		 kb_idx;
 	/** Cookie ID for this update */
-	uint64_t		 kb_cookie;
+	uuid_t			 kb_cookie;
 };
 
 /**
@@ -304,6 +397,8 @@ struct vos_rec_bundle {
 	struct btr_root		*rb_btr;
 	/** returned size and nr of recx */
 	daos_recx_t		*rb_recx;
+	/** returned cookie associated with this record */
+	struct daos_uuid	*rb_cookie;
 };
 
 #define VOS_SIZE_ROUND		8
@@ -411,6 +506,8 @@ enum {
 	VOS_BTR_OIT		= (VOS_BTR_BEGIN + 3),
 	/** container index table */
 	VOS_BTR_CIT		= (VOS_BTR_BEGIN + 4),
+	/** cookie index table */
+	VOS_BTR_CKT		= (VOS_BTR_BEGIN + 5),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
@@ -423,6 +520,12 @@ static inline PMEMobjpool *
 vos_oref2pop(struct vos_obj_ref *oref)
 {
 	return oref->or_co->vc_phdl->vp_ph;
+}
+
+static inline daos_handle_t
+vos_oref2cookie_hdl(struct vos_obj_ref *oref)
+{
+	return oref->or_co->vc_phdl->vp_ck_hdl;
 }
 
 static inline struct umem_attr *
@@ -506,6 +609,11 @@ struct vos_iter_ops {
 			     daos_hash_out_t *anchor);
 };
 
-void vos_pmemobj_close(PMEMobjpool *pop);
+static  inline struct vos_iterator *
+vos_hdl2iter(daos_handle_t hdl)
+{
+	return (struct vos_iterator *)hdl.cookie;
+}
+
 
 #endif /* __VOS_INTERNAL_H__ */

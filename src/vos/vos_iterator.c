@@ -71,12 +71,6 @@ static struct vos_iter_dict vos_iterators[] = {
 	},
 };
 
-static struct vos_iterator *
-vos_hdl2iter(daos_handle_t hdl)
-{
-	return (struct vos_iterator *)hdl.cookie;
-}
-
 static daos_handle_t
 vos_iter2hdl(struct vos_iterator *iter)
 {

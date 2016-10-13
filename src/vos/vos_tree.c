@@ -354,7 +354,7 @@ struct idx_btr_key {
 	/** */
 	uint64_t	ih_epoch;
 	/** cookie ID tag for this update */
-	uint64_t	ih_cookie;
+	uuid_t		ih_cookie;
 };
 
 /**
@@ -371,7 +371,7 @@ ibtr_rec_fetch_in(struct btr_instance *tins, struct btr_record *rec,
 
 	/** Updating the cookie for this update */
 	ihkey = (struct idx_btr_key *)&rec->rec_hkey[0];
-	ihkey->ih_cookie = kbund->kb_cookie;
+	uuid_copy(ihkey->ih_cookie, kbund->kb_cookie);
 
 	irec->ir_cs_size = csum->cs_len;
 	if (csum->cs_len != 0) {
@@ -423,6 +423,7 @@ ibtr_rec_fetch_out(struct btr_instance *tins, struct btr_record *rec,
 	daos_csum_buf_t	   *csum  = rbund->rb_csum;
 	daos_iov_t	   *iov   = rbund->rb_iov;
 	daos_recx_t	   *recx  = rbund->rb_recx;
+	struct daos_uuid   *ck    = rbund->rb_cookie;
 
 	if (kbund != NULL) { /* called from iterator */
 		kbund->kb_epr->epr_lo	= ihkey->ih_epoch;
@@ -435,10 +436,12 @@ ibtr_rec_fetch_out(struct btr_instance *tins, struct btr_record *rec,
 
 	if (recx != NULL) {
 		recx->rx_idx	= ihkey->ih_index;
-		recx->rx_cookie	= ihkey->ih_cookie;
 		recx->rx_rsize	= irec->ir_size;
 		recx->rx_nr	= 1;
 	}
+
+	if (ck != NULL)
+		uuid_copy(ck->uuid, ihkey->ih_cookie);
 
 	if (irec->ir_size == 0)
 		return 0; /* punched record */

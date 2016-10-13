@@ -47,9 +47,9 @@ vos_co_uhash_free(struct daos_ulink *ulink)
 void
 vos_pool_uhash_free(struct daos_ulink *ulink)
 {
-	struct vp_hdl *vpool;
+	struct vp_hdl		*vpool;
 
-	vpool = vos_ulink2poh(ulink);
+	vpool	 = vos_ulink2poh(ulink);
 	if (vpool->vp_ph)
 		vos_pmemobj_close(vpool->vp_ph);
 	if (vpool->vp_fpath != NULL)
@@ -144,6 +144,12 @@ vos_pool_release_handle(struct vp_hdl *vpool)
 		rc = dbtree_close(vpool->vp_ct_hdl);
 		if (rc) {
 			D_ERROR("Closing btree open handle: %d\n", rc);
+			return rc;
+		}
+		rc = vos_cookie_index_destroy(vpool->vp_ck_hdl);
+		if (rc) {
+			D_ERROR("Destroying btr handle for cookie index :%d\n",
+				rc);
 			return rc;
 		}
 		daos_uhash_link_delete(vos_get_hr_hash(), &vpool->vp_uhlink);

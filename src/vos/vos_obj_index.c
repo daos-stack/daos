@@ -22,7 +22,7 @@
  */
 /**
  * VOS object table definition
- * vos/vos_object_table.c
+ * vos/vos_obj_index.c
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
@@ -114,7 +114,7 @@ vo_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
-static btr_ops_t vot_ops = {
+static btr_ops_t voi_ops = {
 	.to_hkey_size	= vo_hkey_size,
 	.to_hkey_gen	= vo_hkey_gen,
 	.to_rec_alloc	= vo_rec_alloc,
@@ -183,7 +183,7 @@ vos_oi_init()
 	D_DEBUG(DF_VOS2, "Registering class for OI table Class: %d\n",
 		VOS_BTR_OIT);
 
-	rc = dbtree_class_register(VOS_BTR_OIT, 0, &vot_ops);
+	rc = dbtree_class_register(VOS_BTR_OIT, 0, &voi_ops);
 	if (rc)
 		D_ERROR("dbtree create failed\n");
 	return rc;

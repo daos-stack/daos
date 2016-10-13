@@ -222,7 +222,7 @@ vos_epoch_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
  */
 int
 vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
-		  uint64_t cookie);
+		  uuid_t cookie);
 
 /**
  * VOS object API
@@ -285,7 +285,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uint64_t cookie, daos_dkey_t *dkey, unsigned int viod_nr,
+	       uuid_t cookie, daos_dkey_t *dkey, unsigned int viod_nr,
 	       daos_vec_iod_t *viods, daos_sg_list_t *sgls);
 
 /**
@@ -378,7 +378,7 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_zc_update_end(daos_handle_t ioh, uint64_t cookie,
+vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie,
 		      daos_dkey_t *dkey, unsigned int nr,
 		      daos_vec_iod_t *vios, int err);
 
