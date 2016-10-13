@@ -261,7 +261,7 @@ failed:
 }
 
 static int
-obj_iocx_launch(struct obj_io_ctx *iocx)
+obj_iocx_launch(struct obj_io_ctx *iocx, bool *launched)
 {
 	struct daos_event *event = iocx->cx_event;
 	int rc = 0;
@@ -270,6 +270,7 @@ obj_iocx_launch(struct obj_io_ctx *iocx)
 	if (rc != 0)
 		return rc;
 
+	*launched = true;
 	daos_sched_run(iocx->cx_sched);
 	if (!iocx->cx_sync)
 		return 0;
@@ -491,7 +492,8 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	daos_handle_t		shard_oh;
 	struct daos_task	*task = NULL;
 	struct daos_obj_fetch_arg *arg;
-	int			 rc;
+	bool			launched = false;
+	int			rc;
 
 	rc = obj_iocx_create(oh, ev, &iocx);
 	if (rc != 0)
@@ -523,11 +525,11 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	arg->sgls = sgls;
 	arg->maps = maps;
 
-	rc = obj_iocx_launch(iocx);
-	if (rc != 0)
+	rc = obj_iocx_launch(iocx, &launched);
+	if (!launched)
 		D_GOTO(failed, rc);
 
-	return 0;
+	return rc;
 
 failed:
 	if (iocx->cx_sched != NULL)
@@ -579,6 +581,7 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int			 i;
 	int			 rc;
 	bool			non_tasks = true;
+	bool			launched = false;
 
 	rc = obj_iocx_create(oh, ev, &iocx);
 	if (rc != 0)
@@ -639,8 +642,8 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	if (non_tasks)
 		D_GOTO(failed, rc = -DER_NONEXIST);
 
-	rc = obj_iocx_launch(iocx);
-	if (rc != 0)
+	rc = obj_iocx_launch(iocx, &launched);
+	if (!launched)
 		D_GOTO(failed, rc);
 
 	return rc;
@@ -737,6 +740,7 @@ daos_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	struct daos_task	*task;
 	daos_handle_t		shard_oh;
 	uint32_t		shard;
+	bool			launched = false;
 	int			rc;
 	int			enc_shard_at;
 
@@ -785,11 +789,11 @@ daos_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	arg->anchor = anchor;
 	arg->op = op;
 
-	rc = obj_iocx_launch(iocx);
-	if (rc != 0)
+	rc = obj_iocx_launch(iocx, &launched);
+	if (!launched)
 		D_GOTO(failed, rc);
 
-	return 0;
+	return rc;
 
 failed:
 	if (iocx->cx_sched != NULL)

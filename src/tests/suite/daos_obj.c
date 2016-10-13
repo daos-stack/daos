@@ -29,6 +29,9 @@
 #include "daos_test.h"
 
 #define UPDATE_CSUM_SIZE	32
+#define IOREQ_VD_NR	5
+#define IOREQ_SG_NR	5
+#define IOREQ_SG_VD_NR	5
 
 struct ioreq {
 	daos_handle_t	 oh;
@@ -39,22 +42,24 @@ struct ioreq {
 
 	daos_dkey_t	 dkey;
 
-	daos_iov_t	 val_iov;
+	daos_iov_t	 val_iov[IOREQ_SG_VD_NR][IOREQ_SG_NR];
+	daos_sg_list_t	 sgl[IOREQ_SG_VD_NR];
 
 	daos_csum_buf_t	 csum;
 	char		 csum_buf[UPDATE_CSUM_SIZE];
 
-	daos_vec_iod_t	 vio;
-	daos_recx_t	 rex;
-	daos_epoch_range_t erange;
-
-	daos_sg_list_t	 sgl;
+	daos_recx_t	 rex[IOREQ_SG_VD_NR][IOREQ_VD_NR];
+	daos_epoch_range_t erange[IOREQ_SG_VD_NR][IOREQ_VD_NR];
+	daos_vec_iod_t	 vio[IOREQ_SG_VD_NR];
 };
+
+#define SEGMENT_SIZE	(10 * 1048576)	/* 10MB */
 
 static void
 ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
 {
 	int rc;
+	int i;
 
 	memset(req, 0, sizeof(*req));
 
@@ -64,28 +69,40 @@ ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
 		assert_int_equal(rc, 0);
 	}
 
-	/** sgl */
-	req->sgl.sg_nr.num = 1;
-	req->sgl.sg_iovs = &req->val_iov;
+	/* init sgl */
+	for (i = 0; i < IOREQ_SG_VD_NR; i++) {
+		req->sgl[i].sg_nr.num = IOREQ_SG_NR;
+		req->sgl[i].sg_iovs = req->val_iov[i];
+	}
 
-	/** csum */
+	/* init csum */
 	daos_csum_set(&req->csum, &req->csum_buf[0], UPDATE_CSUM_SIZE);
 
-	/** record extent */
-	req->rex.rx_nr		= 1;
-	req->rex.rx_idx		= 0;
+	/* init record extent */
+	for (i = 0; i < IOREQ_SG_VD_NR; i++) {
+		int j;
 
-	/** epoch range: required by the wire format */
-	req->erange.epr_lo = 0;
-	req->erange.epr_hi = DAOS_EPOCH_MAX;
+		for (j = 0; j < IOREQ_VD_NR; j++) {
+			req->rex[i][j].rx_nr = 1;
+			req->rex[i][j].rx_idx = 0;
 
-	req->vio.vd_kcsum.cs_csum = NULL;
-	req->vio.vd_kcsum.cs_buf_len = 0;
-	req->vio.vd_kcsum.cs_len = 0;
+			/** epoch range: required by the wire format */
+			req->erange[i][j].epr_lo = 0;
+			req->erange[i][j].epr_hi = DAOS_EPOCH_MAX;
+		}
 
-	/** vector I/O descriptor */
-	req->vio.vd_recxs	= &req->rex;
-	req->vio.vd_nr		= 1;
+		/* vector I/O descriptor */
+		req->vio[i].vd_recxs = req->rex[i];
+		req->vio[i].vd_nr = IOREQ_VD_NR;
+
+		/* epoch descriptor */
+		req->vio[i].vd_eprs = req->erange[i];
+
+		req->vio[i].vd_kcsum.cs_csum = NULL;
+		req->vio[i].vd_kcsum.cs_buf_len = 0;
+		req->vio[i].vd_kcsum.cs_len = 0;
+
+	}
 
 	print_message("open oid=%lu.%lu.%lu\n", oid.lo, oid.mid, oid.hi);
 
@@ -109,30 +126,14 @@ ioreq_fini(struct ioreq *req)
 }
 
 static void
-insert(const char *dkey, const char *akey, uint64_t idx, void *val,
-       daos_size_t size, daos_epoch_t epoch, struct ioreq *req)
+insert_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
+		daos_vec_iod_t *vds, daos_epoch_t epoch, struct ioreq *req)
 {
-	int		 rc;
-
-	/** dkey */
-	daos_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
-
-	/** akey */
-	daos_iov_set(&req->vio.vd_name, (void *)akey, strlen(akey));
-
-	/** val */
-	daos_iov_set(&req->val_iov, val, size);
-
-	/** record extent */
-	req->rex.rx_rsize = size;
-	req->rex.rx_idx = idx;
-
-	/** XXX: to be fixed */
-	req->erange.epr_lo = epoch;
+	int rc;
 
 	/** execute update operation */
-	rc = daos_obj_update(req->oh, epoch, &req->dkey, 1, &req->vio,
-			     &req->sgl, req->arg->async ? &req->ev : NULL);
+	rc = daos_obj_update(req->oh, epoch, dkey, nr, vds, sgls,
+			     req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async && rc != 0)
 		ioreq_fini(req);
 	assert_int_equal(rc, 0);
@@ -151,36 +152,102 @@ insert(const char *dkey, const char *akey, uint64_t idx, void *val,
 }
 
 static void
-punch(const char *dkey, const char *akey, uint64_t idx,
-      daos_epoch_t epoch, struct ioreq *req)
+ioreq_dkey_set(struct ioreq *req, const char *dkey)
 {
-	insert(dkey, akey, idx, NULL, 0, epoch, req);
+	daos_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
 }
 
 static void
-lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
-       daos_size_t size, daos_epoch_t epoch, struct ioreq *req)
+ioreq_akey_set(struct ioreq *req, const char **akey, int nr)
+{
+	int i;
+
+	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
+	/** akey */
+	for (i = 0; i < nr; i++)
+		daos_iov_set(&req->vio[i].vd_name, (void *)akey[i],
+			     strlen(akey[i]));
+}
+
+static void
+ioreq_sgl_simple_set(struct ioreq *req, void **value,
+		     daos_size_t *size, int nr)
+{
+	daos_sg_list_t *sgl = req->sgl;
+	int i;
+
+	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
+	for (i = 0; i < nr; i++) {
+		sgl[i].sg_nr.num = 1;
+		daos_iov_set(&sgl[i].sg_iovs[0], value[i], size[i]);
+	}
+}
+
+static void
+ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
+		     uint64_t *idx, daos_epoch_t *epoch, int nr)
+{
+	daos_vec_iod_t *vio = req->vio;
+	int i;
+
+	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
+	for (i = 0; i < nr; i++) {
+		/** record extent */
+		vio[i].vd_recxs[0].rx_rsize = size[i];
+		vio[i].vd_recxs[0].rx_idx = idx[i] + i * SEGMENT_SIZE;
+		vio[i].vd_recxs[0].rx_nr = 1;
+
+		/** XXX: to be fixed */
+		vio[i].vd_eprs[0].epr_lo = epoch[i];
+		vio[i].vd_nr = 1;
+	}
+}
+
+static void
+insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
+       void **val, daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req)
+{
+	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
+
+	/* dkey */
+	ioreq_dkey_set(req, dkey);
+
+	/* akey */
+	ioreq_akey_set(req, akey, nr);
+
+	/* set sgl */
+	ioreq_sgl_simple_set(req, val, size, nr);
+
+	/* set iod */
+	ioreq_iod_simple_set(req, size, idx, epoch, nr);
+
+	insert_internal(&req->dkey, nr, req->sgl, req->vio, *epoch, req);
+}
+
+static void
+insert_single(const char *dkey, const char *akey, uint64_t idx,
+	      void *value, daos_size_t size, daos_epoch_t epoch,
+	      struct ioreq *req)
+{
+	insert(dkey, 1, &akey, &idx, &value, &size, &epoch, req);
+
+}
+
+static void
+punch(const char *dkey, const char *akey, uint64_t idx,
+      daos_epoch_t epoch, struct ioreq *req)
+{
+	insert_single(dkey, akey, idx, NULL, 0, epoch, req);
+}
+
+static void
+lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
+		daos_vec_iod_t *vds, daos_epoch_t epoch, struct ioreq *req)
 {
 	int rc;
 
-	/** dkey */
-	daos_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
-
-	/** akey */
-	daos_iov_set(&req->vio.vd_name, (void *)akey, strlen(akey));
-
-	/** val */
-	daos_iov_set(&req->val_iov, val, size);
-
-	/** record extent */
-	req->rex.rx_rsize = DAOS_REC_ANY;
-	req->rex.rx_idx = idx;
-
-	/** XXX: to be fixed */
-	req->erange.epr_lo = epoch;
-
 	/** execute fetch operation */
-	rc = daos_obj_fetch(req->oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
+	rc = daos_obj_fetch(req->oh, epoch, dkey, nr, vds, sgls,
 			    NULL, req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async && rc != 0)
 		ioreq_fini(req);
@@ -197,6 +264,38 @@ lookup(const char *dkey, const char *akey, uint64_t idx, void *val,
 			ioreq_fini(req);
 		assert_int_equal(evp->ev_error, 0);
 	}
+}
+
+static void
+lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
+       daos_size_t *read_size, void **val, daos_size_t *size,
+       daos_epoch_t *epoch, struct ioreq *req)
+{
+	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
+
+	/* dkey */
+	ioreq_dkey_set(req, dkey);
+
+	/* akey */
+	ioreq_akey_set(req, akey, nr);
+
+	/* set sgl */
+	ioreq_sgl_simple_set(req, val, size, nr);
+
+	/* set iod */
+	ioreq_iod_simple_set(req, read_size, idx, epoch, nr);
+
+	lookup_internal(&req->dkey, nr, req->sgl, req->vio, *epoch, req);
+}
+
+static void
+lookup_single(const char *dkey, const char *akey, uint64_t idx,
+	      void *val, daos_size_t size, daos_epoch_t epoch,
+	      struct ioreq *req)
+{
+	daos_size_t read_size = DAOS_REC_ANY;
+
+	lookup(dkey, 1, &akey, &idx, &read_size, &val, &size, &epoch, req);
 }
 
 static inline void
@@ -229,18 +328,18 @@ io_epoch_overwrite(void **state)
 	size = strlen(ubuf);
 
 	for (i = 0; i < size; i++)
-		insert("d", "a", i, &ubuf[i], 1, e, &req);
+		insert_single("d", "a", i, &ubuf[i], 1, e, &req);
 
 	for (i = 0; i < size; i++) {
 		e++;
 		ubuf[i] += 32;
-		insert("d", "a", i, &ubuf[i], 1, e, &req);
+		insert_single("d", "a", i, &ubuf[i], 1, e, &req);
 	}
 
 	memset(fbuf, 0, sizeof(fbuf));
 	for (;;) {
 		for (i = 0; i < size; i++)
-			lookup("d", "a", i, &fbuf[i], 1, e, &req);
+			lookup_single("d", "a", i, &fbuf[i], 1, e, &req);
 		print_message("e = %lu, fbuf = %s\n", e, fbuf);
 		assert_string_equal(fbuf, ubuf);
 		if (e == 0)
@@ -272,14 +371,14 @@ io_var_idx_offset(void **state)
 		print_message("idx offset: %lu\n", offset);
 
 		/** Insert */
-		insert("var_idx_off_d", "var_idx_off_a", offset, "data",
+		insert_single("var_idx_off_d", "var_idx_off_a", offset, "data",
 		       strlen("data") + 1, 0, &req);
 
 		/** Lookup */
 		memset(buf, 0, 10);
-		lookup("var_idx_off_d", "var_idx_off_a", offset, buf, 10, 0,
-		       &req);
-		assert_int_equal(req.rex.rx_rsize, strlen(buf) + 1);
+		lookup_single("var_idx_off_d", "var_idx_off_a", offset,
+			      buf, 10, 0, &req);
+		assert_int_equal(req.rex[0][0].rx_rsize, strlen(buf) + 1);
 
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
@@ -319,13 +418,14 @@ io_var_akey_size(void **state)
 
 		/** Insert */
 		key[size] = '\0';
-		insert("var_akey_size_d", key, 0, "data", strlen("data") + 1, 0,
-		       &req);
+		insert_single("var_akey_size_d", key, 0, "data",
+			      strlen("data") + 1, 0, &req);
 
 		/** Lookup */
 		memset(buf, 0, 10);
-		lookup("var_dkey_size_d", key, 0, buf, 10, 0, &req);
-		assert_int_equal(req.rex.rx_rsize, strlen("data") + 1);
+		lookup_single("var_dkey_size_d", key, 0, buf,
+			      10, 0, &req);
+		assert_int_equal(req.rex[0][0].rx_rsize, strlen("data") + 1);
 
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
@@ -363,13 +463,13 @@ io_var_dkey_size(void **state)
 
 		/** Insert */
 		key[size] = '\0';
-		insert(key, "var_dkey_size_a", 0, "data", strlen("data") + 1, 0,
-		       &req);
+		insert_single(key, "var_dkey_size_a", 0, "data",
+			      strlen("data") + 1, 0, &req);
 
 		/** Lookup */
 		memset(buf, 0, 10);
-		lookup(key, "var_dkey_size_a", 0, buf, 10, 0, &req);
-		assert_int_equal(req.rex.rx_rsize, strlen("data") + 1);
+		lookup_single(key, "var_dkey_size_a", 0, buf, 10, 0, &req);
+		assert_int_equal(req.rex[0][0].rx_rsize, strlen("data") + 1);
 
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
@@ -389,7 +489,7 @@ io_var_rec_size(void **state)
 	daos_epoch_t	 epoch;
 	struct ioreq	 req;
 	daos_size_t	 size;
-	const int	 max_size = 1 << 20;
+	const int	 max_size = 1 << 22;
 	char		*fetch_buf;
 	char		*update_buf;
 
@@ -416,14 +516,14 @@ io_var_rec_size(void **state)
 
 		/** Insert */
 		sprintf(dkey, DF_U64, epoch);
-		insert(dkey, "var_rec_size_a", 0, update_buf,
-		       size, epoch, &req);
+		insert_single(dkey, "var_rec_size_a", 0, update_buf,
+			      size, epoch, &req);
 
 		/** Lookup */
 		memset(fetch_buf, 0, max_size);
-		lookup(dkey, "var_rec_size_a", 0, fetch_buf,
-		       max_size, epoch, &req);
-		assert_int_equal(req.rex.rx_rsize, size);
+		lookup_single(dkey, "var_rec_size_a", 0, fetch_buf,
+			      max_size, epoch, &req);
+		assert_int_equal(req.rex[0][0].rx_rsize, size);
 
 		/** Verify data consistency */
 		assert_memory_equal(update_buf, fetch_buf, size);
@@ -453,16 +553,16 @@ io_simple(void **state)
 	/** Insert */
 	print_message("Insert(e=0)/lookup(e=0)/verify simple kv record\n");
 
-	insert(dkey, akey, 0, (void *)rec, strlen(rec), 0, &req);
+	insert_single(dkey, akey, 0, (void *)rec, strlen(rec), 0, &req);
 
 	/** Lookup */
 	buf = calloc(64, 1);
 	assert_non_null(buf);
-	lookup(dkey, akey, 0, buf, 64, 0, &req);
+	lookup_single(dkey, akey, 0, buf, 64, 0, &req);
 
 	/** Verify data consistency */
-	print_message("size = %lu\n", req.rex.rx_rsize);
-	assert_int_equal(req.rex.rx_rsize, strlen(rec));
+	print_message("size = %lu\n", req.rex[0][0].rx_rsize);
+	assert_int_equal(req.rex[0][0].rx_rsize, strlen(rec));
 	assert_memory_equal(buf, rec, strlen(rec));
 	free(buf);
 	ioreq_fini(&req);
@@ -470,13 +570,14 @@ io_simple(void **state)
 
 static void
 enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
-	  daos_hash_out_t *anchor, char *buf, int len, struct ioreq *req)
+	  daos_hash_out_t *anchor, void *buf, daos_size_t len,
+	  struct ioreq *req)
 {
 	int rc;
 
-	daos_iov_set(&req->val_iov, buf, len);
+	ioreq_sgl_simple_set(req, &buf, &len, 1);
 	/** execute fetch operation */
-	rc = daos_obj_list_dkey(req->oh, epoch, number, kds, &req->sgl, anchor,
+	rc = daos_obj_list_dkey(req->oh, epoch, number, kds, req->sgl, anchor,
 				req->arg->async ? &req->ev : NULL);
 	assert_int_equal(rc, 0);
 
@@ -493,16 +594,16 @@ enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 
 static void
 enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
-	       daos_key_desc_t *kds, daos_hash_out_t *anchor, char *buf,
-	       int len, struct ioreq *req)
+	       daos_key_desc_t *kds, daos_hash_out_t *anchor, void *buf,
+	       daos_size_t len, struct ioreq *req)
 {
 	int rc;
 
-	daos_iov_set(&req->val_iov, buf, len);
-	daos_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
+	ioreq_sgl_simple_set(req, &buf, &len, 1);
+	ioreq_dkey_set(req, dkey);
 	/** execute fetch operation */
 	rc = daos_obj_list_akey(req->oh, epoch, &req->dkey, number, kds,
-				&req->sgl, anchor,
+				req->sgl, anchor,
 				req->arg->async ? &req->ev : NULL);
 	assert_int_equal(rc, 0);
 
@@ -542,7 +643,8 @@ enumerate_simple(void **state)
 		char dkey[10];
 
 		sprintf(dkey, "%d", i);
-		insert(dkey, "a_key", 0, "data", strlen("data") + 1, 0, &req);
+		insert_single(dkey, "a_key", 0, "data",
+			      strlen("data") + 1, 0, &req);
 	}
 
 	print_message("Enumerate records\n");
@@ -576,7 +678,8 @@ next_dkey:
 		char akey[10];
 
 		sprintf(akey, "%d", i);
-		insert("d_key", akey, 0, "data", strlen("data") + 1, 0, &req);
+		insert_single("d_key", akey, 0, "data",
+			      strlen("data") + 1, 0, &req);
 	}
 
 	total_keys = 0;
@@ -628,11 +731,16 @@ punch_simple(void **state)
 
 	/** Insert record*/
 	print_message("Insert a few kv record\n");
-	insert("punch_test0", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("punch_test1", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("punch_test2", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("punch_test3", "a_key", 0, "data", strlen("data") + 1, 0, &req);
-	insert("punch_test4", "a_key", 0, "data", strlen("data") + 1, 0, &req);
+	insert_single("punch_test0", "a_key", 0, "data",
+		      strlen("data") + 1, 0, &req);
+	insert_single("punch_test1", "a_key", 0, "data",
+		      strlen("data") + 1, 0, &req);
+	insert_single("punch_test2", "a_key", 0, "data",
+		      strlen("data") + 1, 0, &req);
+	insert_single("punch_test3", "a_key", 0, "data",
+		      strlen("data") + 1, 0, &req);
+	insert_single("punch_test4", "a_key", 0, "data",
+		      strlen("data") + 1, 0, &req);
 
 	memset(&hash_out, 0, sizeof(hash_out));
 	buf = calloc(512, 1);
@@ -670,6 +778,60 @@ punch_simple(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+io_complex(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	const char	 dkey[] = "test_update dkey";
+	char		*akey[5];
+	char		*rec[5];
+	daos_size_t	rec_size[5];
+	daos_off_t	offset[5];
+	char		*val[5];
+	daos_size_t	val_size[5];
+	daos_epoch_t	epoch = 0;
+	int		i;
+
+	obj_random(arg, &oid);
+	ioreq_init(&req, oid, arg);
+
+	print_message("Insert(e=0)/lookup(e=0)/verify complex kv record\n");
+	for (i = 0; i < 5; i++) {
+		akey[i] = calloc(20, 1);
+		assert_non_null(akey[i]);
+		sprintf(akey[i], "test_update akey%d", i);
+		rec[i] = calloc(20, 1);
+		assert_non_null(rec[i]);
+		sprintf(rec[i], "test_update val%d", i);
+		rec_size[i] = strlen(rec[i]);
+		offset[i] = i * 20;
+		val[i] = calloc(64, 1);
+		assert_non_null(val[i]);
+		val_size[i] = 64;
+	}
+
+	/** Insert */
+	insert(dkey, 5, (const char **)akey, offset, (void **)rec,
+	       rec_size, &epoch, &req);
+
+	/** Lookup */
+	lookup(dkey, 5, (const char **)akey, offset, rec_size,
+	       (void **)val, val_size, &epoch, &req);
+
+	/** Verify data consistency */
+	for (i = 0; i < 5; i++) {
+		print_message("size = %lu\n", req.rex[i][0].rx_rsize);
+		assert_int_equal(req.rex[i][0].rx_rsize, strlen(rec[i]));
+		assert_memory_equal(val[i], rec[i], strlen(rec[i]));
+		free(val[i]);
+		free(akey[i]);
+		free(rec[i]);
+	}
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "DSR200: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
@@ -690,6 +852,8 @@ static const struct CMUnitTest io_tests[] = {
 	{ "DSR208: simple enumerate", enumerate_simple,
 	  async_disable, NULL},
 	{ "DSR209: simple punch", punch_simple,
+	  async_disable, NULL},
+	{ "DSR210: complex update/fetch/verify", io_complex,
 	  async_disable, NULL},
 };
 
