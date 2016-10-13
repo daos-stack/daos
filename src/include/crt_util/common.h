@@ -230,6 +230,7 @@ crt_power2_nbits(unsigned int val)
 
 int crt_rank_list_dup(crt_rank_list_t **dst, const crt_rank_list_t *src,
 		      bool input);
+crt_rank_list_t *crt_rank_list_alloc(uint32_t size);
 void crt_rank_list_free(crt_rank_list_t *rank_list);
 void crt_rank_list_copy(crt_rank_list_t *dst, crt_rank_list_t *src, bool input);
 void crt_rank_list_sort(crt_rank_list_t *rank_list);

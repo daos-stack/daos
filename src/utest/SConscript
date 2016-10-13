@@ -70,7 +70,7 @@ def scons():
     prereqs.require(test_env, "pmix", "mercury", "argobots")
     test_env.AppendUnique(LIBS=['pthread', 'uuid', 'cmocka'])
     test_env.AppendUnique(CPPPATH=['../include'])
-    test_env.AppendUnique(CXXFLAGS=['-std=c++11'])
+    test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
     test_env.AppendUnique(LIBPATH=LIBPATH)
     test_env.AppendUnique(RPATH=LIBPATH)
     tests = []

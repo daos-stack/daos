@@ -84,7 +84,7 @@ struct crt_grp_priv {
 	/* PSR phy addr address in attached group */
 	crt_phy_addr_t		 gp_psr_phy_addr;
 	/* address lookup cache, only valid for primary group */
-	struct dhash_table	*gp_lookup_cache;
+	struct dhash_table     **gp_lookup_cache;
 	uint32_t		 gp_primary:1, /* flag of primary group */
 				 gp_local:1, /* flag of local group, false means
 					      * attached remote group */
@@ -116,7 +116,7 @@ struct crt_grp_priv {
 
 /* lookup cache item for one target */
 struct crt_lookup_item {
-	/* link to crt_grp_priv::gp_lookup_cache */
+	/* link to crt_grp_priv::gp_lookup_cache[ctx_idx] */
 	crt_list_t		 li_link;
 	/* point back to grp_priv */
 	struct crt_grp_priv	*li_grp_priv;
@@ -164,7 +164,7 @@ int crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
 int crt_grp_detach(crt_group_t *attached_grp);
 int crt_grp_uri_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank,
 		       char **uri);
-int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv,
+int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		      struct crt_hg_context *hg_ctx, crt_rank_t rank,
 		      uint32_t tag, crt_phy_addr_t *base_addr,
 		      na_addr_t *na_addr);

@@ -81,8 +81,8 @@ int crt_hg_init(crt_phy_addr_t *addr, bool server);
 int crt_hg_fini();
 int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx);
 int crt_hg_ctx_fini(struct crt_hg_context *hg_ctx);
-int crt_hg_req_create(struct crt_hg_context *hg_ctx, crt_endpoint_t tgt_ep,
-		      struct crt_rpc_priv *rpc_priv);
+int crt_hg_req_create(struct crt_hg_context *hg_ctx, int ctx_idx,
+		      crt_endpoint_t tgt_ep, struct crt_rpc_priv *rpc_priv);
 int crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv);
 int crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);

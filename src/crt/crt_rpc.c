@@ -224,7 +224,7 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
 	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, 0);
 
 	ctx = (struct crt_context *)crt_ctx;
-	rc = crt_hg_req_create(&ctx->cc_hg_ctx, tgt_ep, rpc_priv);
+	rc = crt_hg_req_create(&ctx->cc_hg_ctx, ctx->cc_idx, tgt_ep, rpc_priv);
 	if (rc != 0) {
 		C_ERROR("crt_hg_req_create failed, rc: %d, opc: 0x%x.\n",
 			rc, opc);
@@ -292,13 +292,29 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		     crt_bulk_t co_bulk_hdl, void *priv,  uint32_t flags,
 		     int tree_topo, crt_rpc_t **req)
 {
+	struct crt_grp_priv	*grp_priv = NULL;
+	struct crt_grp_gdata	*grp_gdata;
 	struct crt_rpc_priv	*rpc_priv = NULL;
 	crt_rpc_t		*rpc_pub;
-	int			rc = 0;
+	int			 rc = 0;
 
-	if (crt_ctx == CRT_CONTEXT_NULL || grp == NULL || req == NULL) {
+	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		C_ERROR("invalid parameter (NULL crt_ctx, grp or req).\n");
 		C_GOTO(out, rc = -CER_INVAL);
+	}
+	if (!crt_is_service()) {
+		C_ERROR("corpc invalid on client-side.\n");
+		C_GOTO(out, rc = -CER_NO_PERM);
+	}
+	if (!crt_initialized()) {
+		C_ERROR("CaRT not initialized yet.\n");
+		C_GOTO(out, rc = -CER_UNINIT);
+	}
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+	if (grp == NULL) {
+		grp_priv = grp_gdata->gg_srv_pri_grp;
+		grp = &grp_priv->gp_pub;
 	}
 
 	rc = crt_rpc_priv_alloc(opc, &rpc_priv);

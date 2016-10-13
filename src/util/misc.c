@@ -93,6 +93,37 @@ out:
 	return rc;
 }
 
+crt_rank_list_t *
+crt_rank_list_alloc(uint32_t size)
+{
+	crt_rank_list_t		*rank_list;
+	int			 i;
+
+	C_ALLOC_PTR(rank_list);
+	if (rank_list == NULL)
+		return NULL;
+
+	if (size == 0) {
+		rank_list->rl_nr.num = 0;
+		rank_list->rl_nr.num_out = 0;
+		rank_list->rl_ranks = NULL;
+		return rank_list;
+	}
+
+	C_ALLOC(rank_list->rl_ranks, size * sizeof(crt_rank_t));
+	if (rank_list->rl_ranks == NULL) {
+		C_FREE_PTR(rank_list);
+		return NULL;
+	}
+
+	rank_list->rl_nr.num = size;
+	rank_list->rl_nr.num_out = size;
+	for (i = 0; i < size; i++)
+		rank_list->rl_ranks[i] = i;
+
+	return rank_list;
+}
+
 void
 crt_rank_list_free(crt_rank_list_t *rank_list)
 {

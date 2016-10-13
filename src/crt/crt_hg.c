@@ -574,8 +574,8 @@ out:
 }
 
 int
-crt_hg_req_create(struct crt_hg_context *hg_ctx, crt_endpoint_t tgt_ep,
-		  struct crt_rpc_priv *rpc_priv)
+crt_hg_req_create(struct crt_hg_context *hg_ctx, int ctx_idx,
+		  crt_endpoint_t tgt_ep, struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_grp_priv	*grp_priv;
 	hg_return_t		hg_ret = HG_SUCCESS;
@@ -590,8 +590,9 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, crt_endpoint_t tgt_ep,
 	else
 		grp_priv = container_of(tgt_ep.ep_grp, struct crt_grp_priv,
 					gp_pub);
-	rc = crt_grp_lc_lookup(grp_priv, hg_ctx, tgt_ep.ep_rank, tgt_ep.ep_tag,
-			       NULL /* base_addr */, &rpc_priv->crp_na_addr);
+	rc = crt_grp_lc_lookup(grp_priv, ctx_idx, hg_ctx, tgt_ep.ep_rank,
+			       tgt_ep.ep_tag, NULL /* base_addr */,
+			       &rpc_priv->crp_na_addr);
 	if (rc != 0) {
 		C_ERROR("crt_grp_lc_lookup failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
