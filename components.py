@@ -42,7 +42,16 @@ if REQS.get_env('PLATFORM') == 'darwin':
 else:
     REQS.define('rt', libs=['rt'])
 
-REQS.define('boost', headers=['boost/preprocessor.hpp'])
+REQS.define('tbbmalloc', libs=['tbbmalloc_proxy'], package='tbb-devel')
+
+REQS.define('jemalloc', libs=['jemalloc'], package='jemalloc-devel')
+
+REQS.define('boost', headers=['boost/preprocessor.hpp'], package='boost-devel')
+
+REQS.define('event', libs=['event'], package='libevent-devel')
+
+REQS.define('crypto', libs=['crypto'], headers=['openssl/md5.h'],
+            package='openssl-devel')
 
 CCI_BUILD = ['patch -N -p1 < $PATCH_PREFIX/cci_port_number.patch; ' \
              'if [ $? -gt 1 ]; then false; else true; fi;',
@@ -118,10 +127,9 @@ REQS.define('pmix',
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make', 'make install'],
             libs=['pmix'],
-            required_libs=['event'],
             required_progs=['autoreconf', 'aclocal', 'libtool'],
             headers=['pmix.h'],
-            requires=['hwloc'])
+            requires=['hwloc', 'event'])
 
 RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
 REQS.define('ompi',
@@ -138,9 +146,8 @@ REQS.define('ompi',
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make', 'make install'],
             libs=['open-rte'],
-            required_libs=['event'],
             required_progs=['g++', 'flex'],
-            requires=['pmix', 'hwloc'])
+            requires=['pmix', 'hwloc', 'event'])
 
 RETRIEVER = GitRepoRetriever("https://github.com/pmem/nvml")
 REQS.define('nvml',
@@ -240,5 +247,5 @@ REQS.define('cart',
                       "OPENPA_PREBUILT=$OPENPA_PREFIX " \
                       "PREFIX=$CART_PREFIX install"],
             headers=["crt_api.h"],
-            libs=["crt"],
-            requires=['ompi', 'mercury', 'argobots', 'pmix'])
+            libs=["crt", "crt_util"],
+            requires=['ompi', 'mercury', 'argobots', 'pmix', 'crypto'])

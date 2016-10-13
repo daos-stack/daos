@@ -176,14 +176,18 @@ class MissingTargets(Exception):
         component    -- component that has missing targets
     """
 
-    def __init__(self, component):
+    def __init__(self, component, package):
         super(MissingTargets, self).__init__()
         self.component = component
+        self.package = package
 
     def __str__(self):
         """ Exception string """
-        return "%s has missing targets after build.  " \
-               "See config.log for details"%(self.component)
+        if self.package is None:
+            return "%s has missing targets after build.  " \
+                   "See config.log for details"%(self.component)
+        return "Package %s is required. " \
+               "Check config.log"%(self.package)
 
 class MissingSystemLibs(Exception):
     """Exception raised when libraries required for target build are not met
@@ -617,6 +621,7 @@ class PreReqComponent(object):
         requires -- A list of names of required component definitions
         required_libs -- A list of system libraries to be checked for
         defines -- Defines needed to use the component
+        package -- Name of package to install
         commands -- A list of commands to run to build the component
         retriever -- A retriever object to download component
         extra_lib_path -- Subdirectories to add to dependent component path
@@ -824,6 +829,7 @@ class _Component(object):
         headers -- A list of expected headers
         requires -- A list of names of required component definitions
         commands -- A list of commands to run to build the component
+        package -- Name of package to install
         retriever -- A retriever object to download component
         extra_lib_path -- Subdirectories to add to dependent component path
         extra_include_path -- Subdirectories to add to dependent component path
@@ -844,6 +850,7 @@ class _Component(object):
         self.src_path = None
         self.prefix = None
         self.component_prefix = None
+        self.package = kw.get("package", None)
         self.libs = kw.get("libs", [])
         self.required_libs = kw.get("required_libs", [])
         self.required_progs = kw.get("required_progs", [])
@@ -972,7 +979,6 @@ class _Component(object):
 
     def has_missing_targets(self, env):
         """Check for expected build targets (e.g. libraries or headers)"""
-
         if self.targets_found:
             return False
 
@@ -1039,6 +1045,15 @@ class _Component(object):
         for lib in self.libs:
             env.AppendUnique(LIBS=[lib])
 
+    def check_installed_package(self, env):
+        """Check installed targets"""
+        if self.retriever is None and self.has_missing_targets(env):
+            if self.package is None:
+                raise MissingTargets(self.name, self.name)
+            else:
+                raise MissingTargets(self.name, self.package)
+
+
     def build(self, env, headers_only):
         """Build the component, if necessary"""
         # Ensure requirements are met
@@ -1055,6 +1070,7 @@ class _Component(object):
             return
         self.set_environment(envcopy, False)
         if self.prebuilt_path:
+            self.check_installed_package(envcopy)
             return False
 
         # Default to has_changes = True which will cause all deps
@@ -1085,7 +1101,7 @@ class _Component(object):
                 raise BuildFailure(self.name)
 
         if self.has_missing_targets(envcopy):
-            raise MissingTargets(self.name)
+            raise MissingTargets(self.name, None)
         new_crc = self.calculate_crc()
         with open(self.crc_file, 'w') as crcfile:
             crcfile.write(new_crc)
