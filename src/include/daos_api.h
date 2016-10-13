@@ -41,7 +41,7 @@ daos_fini(void);
 
 /**
  * Connect to the DAOS pool identified by UUID \a uuid. Upon a successful
- * completion, \a poh returns the pool handle, and \a info return the latest
+ * completion, \a poh returns the pool handle, and \a info returns the latest
  * pool information.
  *
  * \param uuid	[IN]	UUID to identify a pool.
@@ -268,14 +268,14 @@ daos_pool_target_query(daos_handle_t poh, daos_rank_list_t *tgts,
  *			-DER_INVAL	Invalid parameter
  *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	network is unreachable
- *			-DER_EXIST	Container uuid already existed
+ *			-DER_EXIST	Container uuid exists already
  *			-DER_NONEXIST	Storage target is nonexistent
  */
 int
 daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev);
 
 /**
- * Open an existing container identified by UUID \a uuid. Upon a successful
+ * Open an existing container identified by UUID \a uuid. Upon successful
  * completion, \a coh and \a info, both of which shall be allocated by the
  * caller, return the container handle and the latest container information
  * respectively.
@@ -325,9 +325,10 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev);
  *
  * \param poh	[IN]	Pool connection handle.
  * \param uuid	[IN]	Container UUID.
- * \param force	[IN]	Container destroy will return failure is the container
- *			is still busy (still have openers), this parameter will
- *			force the destroy to proceed even there is opener.
+ * \param force	[IN]	Container destroy will return failure if the container
+ *			is still busy (outstanding open handles). This parameter
+ *			will force the destroy to proceed even if there is an
+ *			outstanding open handle.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -406,9 +407,8 @@ daos_cont_attr_get(daos_handle_t coh, int n, const char *const names[],
  * \param values
  *		[IN]	array of attribute values
  * \param sizes	[IN]	array of value sizes
- * \param ev	[IN]	Completion event, it is optional and can be
- *				NULL. Function will run in blocking mode if
- *				\a ev is NULL.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
  */
 int
 daos_cont_attr_set(daos_handle_t coh, int n, const char *const names[],
@@ -451,7 +451,7 @@ daos_epoch_flush_target(daos_handle_t coh, daos_epoch_t epoch, daos_rank_t tgt,
  *
  * \param coh	[IN]	container handle
  * \param epoch	[IN]	epoch to discard
- * \param state	[OUT]	Optiona, latest epoch state
+ * \param state	[OUT]	Optional, latest epoch state
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  */
@@ -464,7 +464,7 @@ daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
  *
  * \param coh	[IN]	container handle
  * \param epoch	[IN]	epoch to discard
- * \param state	[OUT]	Opiontal, latest epoch state
+ * \param state	[OUT]	Optional, latest epoch state
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  */
@@ -486,7 +486,7 @@ daos_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
 		 daos_event_t *ev);
 
 /**
- * Propose a new lowest held epoch (LHE) of a container handle. The resulting
+ * Propose a new lowest held epoch (LHE) on a container handle. The resulting
  * LHE may be higher than the one proposed. The owner of the container handle
  * is responsible for releasing its held epochs by either committing them or
  * setting LHE to DAOS_EPOCH_MAX.
@@ -528,7 +528,7 @@ daos_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
  *
  * \param coh	[IN]	container handle
  * \param epoch	[IN]	epoch to commit
- * \param state	[OUT]	Opitional, latest epoch state
+ * \param state	[OUT]	Optional, latest epoch state
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  */
@@ -554,12 +554,12 @@ daos_epoch_wait(daos_handle_t coh, daos_epoch_t epoch,
  */
 
 /**
- * List epochs of all snapshot of a container.
+ * List epochs of all the snapshots of a container.
  *
- * \param coh	[IN]	container coh
- * \param buf	[IN]	buffer to epochs
+ * \param coh	[IN]	container handle
+ * \param buf	[IN]	buffer to hold the epochs
  *		[OUT]	array of epochs of snapshots
- * \param n	[IN]	number of epochs buffer can hold
+ * \param n	[IN]	number of epochs the buffer can hold
  *		[OUT]	number of all snapshots (regardless of buffer size)
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -568,9 +568,9 @@ int
 daos_snap_list(daos_handle_t coh, daos_epoch_t *buf, int *n, daos_event_t *ev);
 
 /**
- * Take a snapshot of an epoch.
+ * Take a snapshot of a container at an epoch.
  *
- * \param coh	[IN]	container coh
+ * \param coh	[IN]	container handle
  * \param epoch	[IN]	epoch to snapshot
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -582,8 +582,8 @@ daos_snap_create(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  * Destroy a snapshot. The epoch corresponding to the snapshot is not
  * discarded, but may be aggregated.
  *
- * \param coh	[IN]	container coh
- * \param epoch	[IN]	epoch to snapshot
+ * \param coh	[IN]	container handle
+ * \param epoch	[IN]	epoch of snapshot to destroy
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  */
@@ -607,7 +607,7 @@ enum {
 
 /**
  * Register a new object class.
- * A object class cannot be unregistered for the time being.
+ * An object class cannot be unregistered for the time being.
  *
  * \param coh	[IN]	Container open handle.
  * \param cid	[IN]	ID for the new object class.
@@ -629,7 +629,7 @@ daos_oclass_register(daos_handle_t coh, daos_oclass_id_t cid,
 		     daos_oclass_attr_t *cattr, daos_event_t *ev);
 
 /**
- * Query attributes of object class by its ID.
+ * Query attributes of an object class by its ID.
  *
  * \param coh	[IN]	Container open handle.
  * \param cid	[IN]	Class ID to query.
@@ -650,13 +650,13 @@ daos_oclass_query(daos_handle_t coh, daos_oclass_id_t cid,
 		  daos_oclass_attr_t *cattr, daos_event_t *ev);
 
 /**
- * List existing object class.
+ * List existing object classes.
  *
  * \param coh	[IN]	Container open handle.
  * \param clist	[OUT]	Sink buffer for returned class list.
  * \param anchor [IN/OUT]
- *			Hash anchor for the next call, it should be set to
- *			zeroes for the first call, it should not be altered
+ *			Hash anchor for the next call. It should be set to
+ *			zeroes for the first call. It should not be altered
  *			by caller between calls.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
@@ -810,7 +810,7 @@ daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
 
 /**
  * Query attributes of an object.
- * Caller should provide at least one of output parameters.
+ * Caller should provide at least one of the output parameters.
  *
  * \param oh	[IN]	Object open handle.
  * \param epoch	[IN]	Epoch to query.
