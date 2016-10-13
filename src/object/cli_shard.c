@@ -143,15 +143,15 @@ dc_obj_shard_close(daos_handle_t oh, daos_event_t *ev)
 static int
 obj_rw_cp(struct daos_task *task, int rc)
 {
-	struct daos_op_sp *sp = daos_task2sp(task);
-	struct obj_update_in	*oui;
+	struct daos_op_sp	*sp = daos_task2sp(task);
+	struct obj_rw_in	*orw;
 	dtp_bulk_t		*bulks;
 	int			i;
 	int			ret;
 
-	oui = dtp_req_get(sp->sp_rpc);
-	D_ASSERT(oui != NULL);
-	bulks = oui->oui_bulks.da_arrays;
+	orw = dtp_req_get(sp->sp_rpc);
+	D_ASSERT(orw != NULL);
+	bulks = orw->orw_bulks.da_arrays;
 	if (rc) {
 		D_ERROR("RPC error: %d\n", rc);
 		D_GOTO(out, rc);
@@ -159,27 +159,34 @@ obj_rw_cp(struct daos_task *task, int rc)
 
 	ret = obj_reply_get_status(sp->sp_rpc);
 	if (ret != 0) {
-		D_ERROR("DAOS_OBJ_RPC_UPDATE/FETCH replied failed, rc: %d\n",
-			ret);
+		if (ret == -DER_STALE &&
+		    orw->orw_map_ver < obj_reply_map_version_get(sp->sp_rpc)) {
+			D_ERROR("update ver %u ---> %u\n", orw->orw_map_ver,
+				obj_reply_map_version_get(sp->sp_rpc));
+			/* XXX Push new tasks to update the map version */
+		} else {
+			D_ERROR("DAOS_OBJ_RPC_UPDATE/FETCH failed, rc: %d\n",
+				ret);
+		}
 		D_GOTO(out, rc = ret);
 	}
 
 	if (opc_get(sp->sp_rpc->dr_opc) == DAOS_OBJ_RPC_FETCH) {
-		struct obj_fetch_out *ofo;
+		struct obj_rw_out *orwo;
 		daos_vec_iod_t	*iods;
 		uint64_t	*sizes;
 		int		j;
 		int		k;
 		int		idx = 0;
 
-		ofo = dtp_reply_get(sp->sp_rpc);
-		iods = oui->oui_iods.da_arrays;
-		sizes = ofo->ofo_sizes.da_arrays;
+		orwo = dtp_reply_get(sp->sp_rpc);
+		iods = orw->orw_iods.da_arrays;
+		sizes = orwo->orw_sizes.da_arrays;
 
 		/* update the sizes in iods */
-		for (j = 0; j < oui->oui_nr; j++) {
+		for (j = 0; j < orw->orw_nr; j++) {
 			for (k = 0; k < iods[j].vd_nr; k++) {
-				if (idx == ofo->ofo_sizes.da_count) {
+				if (idx == orwo->orw_sizes.da_count) {
 					D_ERROR("Invalid return size %d\n",
 						idx);
 					D_GOTO(out, rc = -DER_PROTO);
@@ -191,11 +198,11 @@ obj_rw_cp(struct daos_task *task, int rc)
 	}
 out:
 	if (bulks != NULL) {
-		for (i = 0; i < oui->oui_nr; i++)
+		for (i = 0; i < orw->orw_nr; i++)
 			dtp_bulk_free(bulks[i]);
 
-		D_FREE(oui->oui_bulks.da_arrays,
-		       oui->oui_nr * sizeof(dtp_bulk_t));
+		D_FREE(orw->orw_bulks.da_arrays,
+		       orw->orw_nr * sizeof(dtp_bulk_t));
 	}
 	dtp_req_decref(sp->sp_rpc);
 	return rc;
@@ -259,13 +266,14 @@ obj_shard_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	struct dc_obj_shard	*dobj;
 	dtp_rpc_t		*req;
 	dtp_bulk_t		*bulks;
-	struct obj_update_in	*oui;
+	struct obj_rw_in	*orw;
 	struct daos_op_sp	*sp;
-	dtp_bulk_perm_t		 bulk_perm;
-	dtp_endpoint_t		 tgt_ep;
-	uuid_t			 cont_hdl_uuid;
-	int			 i;
-	int			 rc;
+	dtp_bulk_perm_t		bulk_perm;
+	dtp_endpoint_t		tgt_ep;
+	uuid_t			cont_hdl_uuid;
+	uint32_t		map_version;
+	int			i;
+	int			rc;
 
 	D_ASSERT(op == DAOS_OBJ_RPC_UPDATE || op == DAOS_OBJ_RPC_FETCH);
 	bulk_perm = (op == DAOS_OBJ_RPC_UPDATE) ? DTP_BULK_RO : DTP_BULK_RW;
@@ -279,7 +287,8 @@ obj_shard_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (dobj == NULL)
 		return -DER_NO_HDL;
 
-	rc = dc_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid);
+	rc = dc_cont_hdl2uuid_map_ver(dobj->do_co_hdl, &cont_hdl_uuid,
+				      &map_version);
 	if (rc != 0) {
 		obj_shard_decref(dobj);
 		return rc;
@@ -293,25 +302,26 @@ obj_shard_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 		return rc;
 	}
 
-	oui = dtp_req_get(req);
-	D_ASSERT(oui != NULL);
+	orw = dtp_req_get(req);
+	D_ASSERT(orw != NULL);
 
-	oui->oui_oid = dobj->do_id;
-	uuid_copy(oui->oui_co_hdl, cont_hdl_uuid);
+	orw->orw_map_ver = map_version;
+	orw->orw_oid = dobj->do_id;
+	uuid_copy(orw->orw_co_hdl, cont_hdl_uuid);
 
 	obj_shard_decref(dobj);
 	dobj = NULL;
 
-	oui->oui_epoch = epoch;
-	oui->oui_nr = nr;
+	orw->orw_epoch = epoch;
+	orw->orw_nr = nr;
 	/** FIXME: large dkey should be transferred via bulk */
-	oui->oui_dkey = *dkey;
+	orw->orw_dkey = *dkey;
 
 	/* FIXME: if iods is too long, then we needs to do bulk transfer
 	 * as well, but then we also needs to serialize the iods
 	 **/
-	oui->oui_iods.da_count = nr;
-	oui->oui_iods.da_arrays = iods;
+	orw->orw_iods.da_count = nr;
+	orw->orw_iods.da_arrays = iods;
 
 	D_ALLOC(bulks, nr * sizeof(*bulks));
 	if (bulks == NULL)
@@ -333,8 +343,8 @@ obj_shard_rw(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 			}
 		}
 	}
-	oui->oui_bulks.da_count = nr;
-	oui->oui_bulks.da_arrays = bulks;
+	orw->orw_bulks.da_count = nr;
+	orw->orw_bulks.da_arrays = bulks;
 
 	sp = daos_task2sp(task);
 	dtp_req_addref(req);
@@ -434,8 +444,14 @@ enumerate_cp(struct daos_task *task, int rc)
 
 	oeo = dtp_reply_get(sp->sp_rpc);
 	if (oeo->oeo_ret < 0) {
-		D_ERROR("DAOS_OBJ_RPC_ENUMERATE replied failed, rc: %d\n",
-			oeo->oeo_ret);
+		if (oeo->oeo_ret == -DER_STALE &&
+		    oei->oei_map_ver < obj_reply_map_version_get(sp->sp_rpc)) {
+			D_ERROR("update ver %u ---> %u\n", oei->oei_map_ver,
+				obj_reply_map_version_get(sp->sp_rpc));
+			/* XXX Push new tasks to update the map version */
+		} else {
+			D_ERROR("enumerate failed, rc: %d\n", oeo->oeo_ret);
+		}
 		D_GOTO(out, rc = oeo->oeo_ret);
 	}
 
@@ -484,17 +500,17 @@ dc_obj_shard_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	struct enum_async_arg	*eaa;
 	dtp_bulk_t		bulk;
 	struct daos_op_sp	*sp;
+	uint32_t		map_version;
 	int			rc;
 
 	dobj = obj_shard_hdl2ptr(oh);
 	if (dobj == NULL)
 		return -DER_NO_HDL;
 
-	rc = dc_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid);
-	if (rc != 0) {
-		obj_shard_decref(dobj);
-		return rc;
-	}
+	rc = dc_cont_hdl2uuid_map_ver(dobj->do_co_hdl, &cont_hdl_uuid,
+				      &map_version);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = dobj->do_rank;
@@ -518,6 +534,7 @@ dc_obj_shard_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	oei->oei_oid = dobj->do_id;
 	uuid_copy(oei->oei_co_hdl, cont_hdl_uuid);
 
+	oei->oei_map_ver = map_version;
 	oei->oei_epoch = epoch;
 	oei->oei_nr = *nr;
 

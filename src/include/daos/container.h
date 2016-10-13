@@ -38,6 +38,6 @@ void dc_cont_fini(void);
 int dc_cont_tgt_idx2pool_tgt(daos_handle_t coh, struct pool_target **tgt,
 			     uint32_t tgt_idx);
 
-int dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *con_hdl);
-
+int dc_cont_hdl2uuid_map_ver(daos_handle_t coh, uuid_t *con_hdl,
+			      uint32_t *ver);
 #endif /* __DAOS_CONTAINER_H__ */

@@ -127,27 +127,75 @@ obj_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
 void
 obj_reply_set_status(dtp_rpc_t *rpc, int status)
 {
-	int *ret;
+	void *reply = dtp_reply_get(rpc);
 
-	/* FIXME; The right way to do it might be find the
-	 * status offset and set it, but let's put status
-	 * in front of the bulk reply for now
-	 */
-	D_ASSERT(rpc != NULL);
-	ret = dtp_reply_get(rpc);
-	D_ASSERT(ret != NULL);
-	*ret = status;
+	switch (opc_get(rpc->dr_opc)) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_FETCH:
+		((struct obj_rw_out *)reply)->orw_ret = status;
+		break;
+	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+		((struct obj_key_enum_out *)reply)->oeo_ret = status;
+		break;
+	default:
+		D_ASSERT(0);
+	}
 }
 
 int
 obj_reply_get_status(dtp_rpc_t *rpc)
 {
-	int *ret;
+	void *reply = dtp_reply_get(rpc);
 
-	/* FIXME; The right way to do it might be find the
-	 * status offset and set it, but let's put status
-	 * in front of the bulk reply for now
-	 */
-	ret = dtp_reply_get(rpc);
-	return *ret;
+	switch (opc_get(rpc->dr_opc)) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_FETCH:
+		return ((struct obj_rw_out *)reply)->orw_ret;
+	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+		return ((struct obj_key_enum_out *)reply)->oeo_ret;
+	default:
+		D_ASSERT(0);
+	}
+	return 0;
 }
+
+void
+obj_reply_map_version_set(dtp_rpc_t *rpc, uint32_t map_version)
+{
+	void *reply = dtp_reply_get(rpc);
+
+	switch (opc_get(rpc->dr_opc)) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_FETCH:
+		((struct obj_rw_out *)reply)->orw_map_version = map_version;
+		break;
+	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+		((struct obj_key_enum_out *)reply)->oeo_map_version =
+								map_version;
+		break;
+	default:
+		D_ASSERT(0);
+	}
+}
+
+uint32_t
+obj_reply_map_version_get(dtp_rpc_t *rpc)
+{
+	void *reply = dtp_reply_get(rpc);
+
+	switch (opc_get(rpc->dr_opc)) {
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_FETCH:
+		return ((struct obj_rw_out *)reply)->orw_map_version;
+	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+		return ((struct obj_key_enum_out *)reply)->oeo_map_version;
+	default:
+		D_ASSERT(0);
+	}
+	return 0;
+}
+
