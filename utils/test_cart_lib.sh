@@ -56,7 +56,7 @@ then
 else
     echo "checking libcrt.so"
     nm -g ${SL_PREFIX}/lib/libcrt.so |
-        grep -v " U " |  grep -v " w " |  grep -v " crt_" |
+        grep -v " U " |  grep -v " w " |  grep -v " crt_" | grep -v "CMF_" |
         grep -v " D _edata" | grep -v " T _fini" | grep -v " T _init" |
         grep -v " B __bss_start" | grep -v " B _end" |
         grep -v " B addr_lookup_table" | grep -v " D CMF_";

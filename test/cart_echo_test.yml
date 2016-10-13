@@ -2,6 +2,7 @@ description: "process set test module"
 
 defaultENV:
     OMPI_MCA_rmaps_base_oversubscribe: "1"
+    CRT_LOG_MASK: "ERR"
 
 module:
     name: "cart_echo_test"
@@ -12,7 +13,7 @@ module:
         - [CRT_OMPI_PREFIX, OMPI_PREFIX, ""]
         - [CRT_OMPI_BIN, OMPI_PREFIX, "/bin/"]
         - [CCI_CONFIG, PREFIX, "/etc/cci.ini"]
-    appendKeyFromInfo:
+    createKeyFromInfo:
         - [LD_LIBRARY_PATH, "/lib", [OMPI_PREFIX, PREFIX]]
     srcDir: "src/lib"
 
