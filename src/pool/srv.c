@@ -45,46 +45,6 @@ dsms_corpc_create(dtp_context_t ctx, dtp_group_t *group, dtp_opcode_t opcode,
 }
 
 static int
-rpc_cb(const struct dtp_cb_info *cb_info)
-{
-	ABT_eventual *eventual = cb_info->dci_arg;
-
-	ABT_eventual_set(*eventual, (void *)&cb_info->dci_rc,
-			 sizeof(cb_info->dci_rc));
-	return 0;
-}
-
-/* Send the request and wait for the reply. Does not consume rpc references. */
-int
-dsms_rpc_send(dtp_rpc_t *rpc)
-{
-	ABT_eventual	eventual;
-	int	       *status;
-	int		rc;
-
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	dtp_req_addref(rpc);
-
-	rc = dtp_req_send(rpc, rpc_cb, &eventual);
-	if (rc != 0)
-		D_GOTO(out_eventual, rc);
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-
-	rc = *status;
-
-out_eventual:
-	ABT_eventual_free(&eventual);
-out:
-	return rc;
-}
-
-static int
 init(void)
 {
 	int rc;

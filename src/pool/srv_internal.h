@@ -56,7 +56,6 @@ dsm_tls_get()
  */
 int dsms_corpc_create(dtp_context_t ctx, dtp_group_t *group,
 		      dtp_opcode_t opcode, dtp_rpc_t **rpc);
-int dsms_rpc_send(dtp_rpc_t *rpc);
 
 /*
  * srv_storage.c

@@ -273,7 +273,7 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t root, uint32_t uid,
 }
 
 /* TODO: Call a ds_cont method instead. */
-#include "../container/dsms_layout.h"
+#include "../container/srv_layout.h"
 static int
 cont_metadata_init(PMEMobjpool *mp, daos_handle_t root)
 {
@@ -687,7 +687,7 @@ pool_connect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 	in->tpci_capas = capas;
 	in->tpci_pool_map_version = pool_map_get_version(svc->ps_pool->tp_map);
 
-	rc = dsms_rpc_send(rpc);
+	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -935,7 +935,7 @@ pool_disconnect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 	uuid_copy(in->tpdi_pool, svc->ps_uuid);
 	uuid_copy(in->tpdi_pool_hdl, pool_hdl);
 
-	rc = dsms_rpc_send(rpc);
+	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 

@@ -21,22 +21,20 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsms: Module Definitions
+ * ds_cont: Container Server
  *
- * dsms is the DSM server module/library. It exports the DSM RPC handlers and
- * the DSM server API. This file contains the definitions expected by server;
- * the DSM server API methods are exported directly where they are defined as
- * extern functions.
+ * This is part of daos_server. It exports the container RPC handlers and
+ * Container Server API.
  */
 
 #include <daos_srv/daos_server.h>
 #include <daos/rpc.h>
 #include "rpc.h"
-#include "dsms_internal.h"
+#include "srv_internal.h"
 
 int
-dcont_corpc_create(dtp_context_t ctx, dtp_group_t *group, dtp_opcode_t opcode,
-		  dtp_rpc_t **rpc)
+ds_cont_corpc_create(dtp_context_t ctx, dtp_group_t *group, dtp_opcode_t opcode,
+		     dtp_rpc_t **rpc)
 {
 	dtp_opcode_t opc;
 
@@ -47,56 +45,14 @@ dcont_corpc_create(dtp_context_t ctx, dtp_group_t *group, dtp_opcode_t opcode,
 }
 
 static int
-rpc_cb(const struct dtp_cb_info *cb_info)
-{
-	ABT_eventual *eventual = cb_info->dci_arg;
-
-	ABT_eventual_set(*eventual, (void *)&cb_info->dci_rc,
-			 sizeof(cb_info->dci_rc));
-	return 0;
-}
-
-/* Send the request and wait for the reply. Does not consume rpc references. */
-int
-dsms_rpc_send(dtp_rpc_t *rpc)
-{
-	ABT_eventual	eventual;
-	int	       *status;
-	int		rc;
-
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	dtp_req_addref(rpc);
-
-	rc = dtp_req_send(rpc, rpc_cb, &eventual);
-	if (rc != 0)
-		D_GOTO(out_eventual, rc);
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-
-	rc = *status;
-
-out_eventual:
-	ABT_eventual_free(&eventual);
-out:
-	return rc;
-}
-
-static int
 init(void)
 {
-	/** XXX storage for medata managed by pool */
 	return 0;
 }
 
 static int
 fini(void)
 {
-	dsms_conts_close();
 	return 0;
 }
 

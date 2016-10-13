@@ -183,4 +183,6 @@ dss_abterr2der(int abt_errno)
 	}
 }
 
+int dss_rpc_send(dtp_rpc_t *rpc);
+
 #endif /* __DSS_API_H__ */

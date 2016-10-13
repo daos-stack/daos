@@ -21,11 +21,10 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsms: Target Operations
+ * ds_cont: Target Operations
  *
  * This file contains the server API methods and the RPC handlers that are both
- * related target states. Note that object I/O methods and handlers are in
- * dsms_object.c.
+ * related target states.
  *
  * Data structures used here:
  *
@@ -38,14 +37,13 @@
  *                               tgt_cont_hdl
  */
 
-#include <uuid/uuid.h>
-#include <daos/pool_map.h>
+#include <daos_srv/container.h>
+
 #include <daos/transport.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
 #include "rpc.h"
-#include "dsms_internal.h"
-#include "dsms_layout.h"
+#include "srv_internal.h"
 
 /*
  * dsms_vcont objects: thread-local container cache
@@ -262,6 +260,14 @@ dsms_tgt_cont_hdl_lookup_internal(struct dhash_table *hash, const uuid_t uuid)
 	return tgt_cont_hdl_obj(rlink);
 }
 
+/**
+ * lookup target container handle by container handle uuid (usually from req)
+ *
+ * \param uuid [IN]		container handle uuid
+ *
+ * \return			target container handle if succeeds.
+ * \return			NULL if it does not find.
+ */
 struct tgt_cont_hdl *
 dsms_tgt_cont_hdl_lookup(const uuid_t uuid)
 {
@@ -277,6 +283,11 @@ dsms_tgt_cont_hdl_put_internal(struct dhash_table *hash,
 	dhash_rec_decref(hash, &hdl->tch_entry);
 }
 
+/**
+ * Put target container handle.
+ *
+ * \param hdl [IN]		container handle to be put.
+ **/
 void
 dsms_tgt_cont_hdl_put(struct tgt_cont_hdl *hdl)
 {

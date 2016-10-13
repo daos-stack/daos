@@ -41,13 +41,10 @@
  *       ... (more container trees)
  */
 
-#ifndef __DSM_STORAGE_H__
-#define __DSM_STORAGE_H__
+#ifndef __CONTAINER_SERVER_LAYOUT_H__
+#define __CONTAINER_SERVER_LAYOUT_H__
 
 #include <stdint.h>
-#include <uuid/uuid.h>
-#include <daos/btree.h>
-#include <daos/mem.h>
 
 /* Root tree (DBTREE_CLASS_NV): container attributes */
 #define CONTAINERS	"containers"	/* btr_root (container index tree) */
@@ -98,4 +95,4 @@ struct container_hdl {
 #define CONT_HDL_RO	1
 #define CONT_HDL_RW	2
 
-#endif /* __DSM_STORAGE_H__ */
+#endif /* __CONTAINER_SERVER_LAYOUT_H__ */

@@ -21,19 +21,18 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsms: Container Operations
+ * ds_cont: Container Operations
  *
  * This file contains the server API methods and the RPC handlers that are both
  * related container metadata.
  */
 
-#include <uuid/uuid.h>
 #include <daos/btree_class.h>
 #include <daos/transport.h>
 #include <daos_srv/pool.h>
 #include "rpc.h"
-#include "dsms_internal.h"
-#include "dsms_layout.h"
+#include "srv_internal.h"
+#include "srv_layout.h"
 
 /*
  * Container service
@@ -286,8 +285,8 @@ cont_destroy_bcast(dtp_context_t ctx, struct cont_svc *svc,
 	D_DEBUG(DF_DSMS, DF_CONT": bcasting\n",
 		DP_CONT(svc->cs_pool_uuid, cont_uuid));
 
-	rc = dcont_corpc_create(ctx, svc->cs_pool->tp_group,
-			       DSM_TGT_CONT_DESTROY, &rpc);
+	rc = ds_cont_corpc_create(ctx, svc->cs_pool->tp_group,
+				  DSM_TGT_CONT_DESTROY, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -295,7 +294,7 @@ cont_destroy_bcast(dtp_context_t ctx, struct cont_svc *svc,
 	uuid_copy(in->tcdi_pool, svc->cs_pool_uuid);
 	uuid_copy(in->tcdi_cont, cont_uuid);
 
-	rc = dsms_rpc_send(rpc);
+	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -550,8 +549,8 @@ cont_open_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas);
 
-	rc = dcont_corpc_create(ctx, cont->c_svc->cs_pool->tp_group,
-			       DSM_TGT_CONT_OPEN, &rpc);
+	rc = ds_cont_corpc_create(ctx, cont->c_svc->cs_pool->tp_group,
+				  DSM_TGT_CONT_OPEN, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -562,7 +561,7 @@ cont_open_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 	uuid_copy(in->tcoi_cont_hdl, cont_hdl);
 	in->tcoi_capas = capas;
 
-	rc = dsms_rpc_send(rpc);
+	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -746,15 +745,15 @@ cont_close_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t cont_hdl)
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(cont_hdl));
 
-	rc = dcont_corpc_create(ctx, cont->c_svc->cs_pool->tp_group,
-			       DSM_TGT_CONT_CLOSE, &rpc);
+	rc = ds_cont_corpc_create(ctx, cont->c_svc->cs_pool->tp_group,
+				  DSM_TGT_CONT_CLOSE, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	in = dtp_req_get(rpc);
 	uuid_copy(in->tcci_cont_hdl, cont_hdl);
 
-	rc = dsms_rpc_send(rpc);
+	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 

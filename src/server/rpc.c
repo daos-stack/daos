@@ -1,0 +1,73 @@
+/**
+ * (C) Copyright 2016 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+/**
+ * server: RPC Utilities
+ */
+
+#include <daos_srv/daos_server.h>
+
+static int
+rpc_cb(const struct dtp_cb_info *cb_info)
+{
+	ABT_eventual *eventual = cb_info->dci_arg;
+
+	ABT_eventual_set(*eventual, (void *)&cb_info->dci_rc,
+			 sizeof(cb_info->dci_rc));
+	return 0;
+}
+
+/**
+ * Send \a rpc and wait for the reply. Does not consume any references to \a
+ * rpc.
+ *
+ * \param[in] rpc	RPC to be sent
+ * \return		error code
+ */
+int
+dss_rpc_send(dtp_rpc_t *rpc)
+{
+	ABT_eventual	eventual;
+	int	       *status;
+	int		rc;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out, rc = dss_abterr2der(rc));
+
+	dtp_req_addref(rpc);
+
+	rc = dtp_req_send(rpc, rpc_cb, &eventual);
+	if (rc != 0)
+		D_GOTO(out_eventual, rc);
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
+
+	rc = *status;
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+out:
+	return rc;
+}

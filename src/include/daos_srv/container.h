@@ -21,30 +21,14 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * DAOS-M API used by other DAOS component.
- *
+ * ds_cont: Container Server API
  */
-#ifndef __DAOS_M_H__
-#define __DAOS_M_H__
 
-#include <uuid/uuid.h>
-#include <daos_event.h>
+#ifndef __DAOS_SRV_CONTAINER_H__
+#define __DAOS_SRV_CONTAINER_H__
+
 #include <daos_types.h>
-#include <daos_errno.h>
-#include <daos/pool_map.h>
-#include <daos/list.h>
-#include <daos/lru.h>
-
-/**
- * lookup target container handle by container handle uuid (usually from req)
- *
- * \param uuid [IN]		container handle uuid
- *
- * \return			target container handle if succeeds.
- * \return			NULL if it does not find.
- **/
-struct tgt_cont_hdl *
-dsms_tgt_cont_hdl_lookup(const uuid_t uuid);
+#include <daos_srv/pool.h>
 
 /*
  * Target service per-thread container object
@@ -74,12 +58,7 @@ struct tgt_cont_hdl {
 	int			tch_ref;
 };
 
-/**
- * Put target container handle.
- *
- * \param hdl [IN]		container handle to be put.
- **/
-void
-dsms_tgt_cont_hdl_put(struct tgt_cont_hdl *hdl);
+struct tgt_cont_hdl *dsms_tgt_cont_hdl_lookup(const uuid_t uuid);
+void dsms_tgt_cont_hdl_put(struct tgt_cont_hdl *hdl);
 
-#endif /* __DAOS_M_H__ */
+#endif /* ___DAOS_SRV_CONTAINER_H_ */

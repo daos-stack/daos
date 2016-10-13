@@ -27,7 +27,6 @@
 #include <daos/container.h>
 #include <daos/pool_map.h>
 #include <daos/transport.h>
-#include <daos/daos_m.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
