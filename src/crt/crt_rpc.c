@@ -55,7 +55,7 @@ static struct crt_msg_field *crt_grp_create_out_fields[] = {
 	&CMF_INT,		/* gc_rc */
 };
 
-static struct crt_req_format DQF_CRT_GRP_CREATE =
+static struct crt_req_format CQF_CRT_GRP_CREATE =
 	DEFINE_CRT_REQ_FMT("CRT_GRP_CREATE", crt_grp_create_in_fields,
 			   crt_grp_create_out_fields);
 
@@ -71,7 +71,7 @@ static struct crt_msg_field *crt_grp_destroy_out_fields[] = {
 	&CMF_INT,		/* gd_rc */
 };
 
-static struct crt_req_format DQF_CRT_GRP_DESTROY =
+static struct crt_req_format CQF_CRT_GRP_DESTROY =
 	DEFINE_CRT_REQ_FMT("CRT_GRP_DESTROY", crt_grp_destroy_in_fields,
 			   crt_grp_destroy_out_fields);
 
@@ -86,7 +86,7 @@ static struct crt_msg_field *crt_uri_lookup_out_fields[] = {
 	&CMF_INT,		/* ul_rc */
 };
 
-static struct crt_req_format DQF_CRT_URI_LOOKUP =
+static struct crt_req_format CQF_CRT_URI_LOOKUP =
 	DEFINE_CRT_REQ_FMT("CRT_URI_LOOKUP", crt_uri_lookup_in_fields,
 			   crt_uri_lookup_out_fields);
 
@@ -96,7 +96,7 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_opc		= CRT_OPC_GRP_CREATE,
 		.ir_ver		= 1,
 		.ir_flags	= 0,
-		.ir_req_fmt	= &DQF_CRT_GRP_CREATE,
+		.ir_req_fmt	= &CQF_CRT_GRP_CREATE,
 		.ir_hdlr	= crt_hdlr_grp_create,
 		.ir_co_ops	= NULL,
 	}, {
@@ -104,7 +104,7 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_opc		= CRT_OPC_GRP_DESTROY,
 		.ir_ver		= 1,
 		.ir_flags	= 0,
-		.ir_req_fmt	= &DQF_CRT_GRP_DESTROY,
+		.ir_req_fmt	= &CQF_CRT_GRP_DESTROY,
 		.ir_hdlr	= crt_hdlr_grp_destroy,
 		.ir_co_ops	= NULL,
 	}, {
@@ -112,7 +112,7 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_opc		= CRT_OPC_URI_LOOKUP,
 		.ir_ver		= 1,
 		.ir_flags	= 0,
-		.ir_req_fmt	= &DQF_CRT_URI_LOOKUP,
+		.ir_req_fmt	= &CQF_CRT_URI_LOOKUP,
 		.ir_hdlr	= crt_hdlr_uri_lookup,
 		.ir_co_ops	= NULL,
 	}, {

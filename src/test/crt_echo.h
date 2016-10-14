@@ -133,15 +133,15 @@ struct crt_echo_bulk_out_reply {
 	int ret;
 };
 
-struct crt_req_format DQF_ECHO_PING_CHECK =
+struct crt_req_format CQF_ECHO_PING_CHECK =
 	DEFINE_CRT_REQ_FMT("ECHO_PING_CHECK", echo_ping_checkin,
 			   echo_ping_checkout);
 
-struct crt_req_format DQF_ECHO_CORPC_EXAMPLE =
+struct crt_req_format CQF_ECHO_CORPC_EXAMPLE =
 	DEFINE_CRT_REQ_FMT("ECHO_CORPC_EXAMPLE", echo_corpc_example_in,
 			   echo_corpc_example_out);
 
-struct crt_req_format DQF_ECHO_BULK_TEST =
+struct crt_req_format CQF_ECHO_BULK_TEST =
 	DEFINE_CRT_REQ_FMT("ECHO_BULK_TEST", echo_bulk_test_in,
 			   echo_bulk_test_out);
 
@@ -184,26 +184,26 @@ echo_init(int server, bool tier2)
 	 * the same crt_rpc_srv_register.
 	 */
 	if (server == 0) {
-		rc = crt_rpc_register(ECHO_OPC_CHECKIN, &DQF_ECHO_PING_CHECK);
+		rc = crt_rpc_register(ECHO_OPC_CHECKIN, &CQF_ECHO_PING_CHECK);
 		assert(rc == 0);
-		rc = crt_rpc_register(ECHO_OPC_BULK_TEST, &DQF_ECHO_BULK_TEST);
+		rc = crt_rpc_register(ECHO_OPC_BULK_TEST, &CQF_ECHO_BULK_TEST);
 		assert(rc == 0);
 		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, NULL);
 		assert(rc == 0);
 	} else {
 		rc = crt_rpc_srv_register(ECHO_OPC_CHECKIN,
-					  &DQF_ECHO_PING_CHECK,
+					  &CQF_ECHO_PING_CHECK,
 					  echo_srv_checkin);
 		assert(rc == 0);
 		rc = crt_rpc_srv_register(ECHO_OPC_BULK_TEST,
-					  &DQF_ECHO_BULK_TEST,
+					  &CQF_ECHO_BULK_TEST,
 					  echo_srv_bulk_test);
 		assert(rc == 0);
 		rc = crt_rpc_srv_register(ECHO_OPC_SHUTDOWN, NULL,
 					  echo_srv_shutdown);
 		assert(rc == 0);
 		rc = crt_corpc_register(ECHO_CORPC_EXAMPLE,
-					&DQF_ECHO_CORPC_EXAMPLE,
+					&CQF_ECHO_CORPC_EXAMPLE,
 					echo_srv_corpc_example, &echo_co_ops);
 	}
 }

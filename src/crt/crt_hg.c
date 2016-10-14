@@ -834,17 +834,23 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 	cb_info->rsc_rpc_priv = rpc_priv;
 
+	rc = crt_req_addref(&rpc_priv->crp_pub);
+	if (rc != 0) {
+		C_ERROR("crt_req_addref(rpc_priv: %p) failed, rc: %d.\n",
+			rpc_priv, rc);
+		C_GOTO(out, rc);
+	}
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb, cb_info,
 			    hg_out_struct);
 	if (hg_ret != HG_SUCCESS) {
 		C_ERROR("HG_Respond failed, hg_ret: %d, opc: 0x%x.\n",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
 		C_FREE_PTR(cb_info);
+		/* should success as addref above */
+		rc = crt_req_decref(&rpc_priv->crp_pub);
+		C_ASSERT(rc == 0);
 		rc = -CER_HG;
 	}
-
-	rc = crt_req_addref(&rpc_priv->crp_pub);
-	C_ASSERT(rc == 0);
 
 out:
 	return rc;
