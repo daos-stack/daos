@@ -43,50 +43,50 @@
 /* CRT internal RPC format definitions */
 
 /* group create */
-struct crt_msg_field *crt_grp_create_in_fields[] = {
+static struct crt_msg_field *crt_grp_create_in_fields[] = {
 	&CMF_GRP_ID,		/* gc_grp_id */
 	&CMF_RANK_LIST,		/* gc_membs */
 	&CMF_RANK,		/* gc_initiate_rank */
 };
 
-struct crt_msg_field *crt_grp_create_out_fields[] = {
+static struct crt_msg_field *crt_grp_create_out_fields[] = {
 	&CMF_RANK_LIST,		/* gc_failed_ranks */
 	&CMF_RANK,		/* gc_rank */
 	&CMF_INT,		/* gc_rc */
 };
 
-struct crt_req_format DQF_CRT_GRP_CREATE =
+static struct crt_req_format DQF_CRT_GRP_CREATE =
 	DEFINE_CRT_REQ_FMT("CRT_GRP_CREATE", crt_grp_create_in_fields,
 			   crt_grp_create_out_fields);
 
 /* group destroy */
-struct crt_msg_field *crt_grp_destroy_in_fields[] = {
+static struct crt_msg_field *crt_grp_destroy_in_fields[] = {
 	&CMF_GRP_ID,		/* gd_grp_id */
 	&CMF_RANK,		/* gd_initiate_rank */
 };
 
-struct crt_msg_field *crt_grp_destroy_out_fields[] = {
+static struct crt_msg_field *crt_grp_destroy_out_fields[] = {
 	&CMF_RANK_LIST,		/* gd_failed_ranks */
 	&CMF_RANK,		/* gd_rank */
 	&CMF_INT,		/* gd_rc */
 };
 
-struct crt_req_format DQF_CRT_GRP_DESTROY =
+static struct crt_req_format DQF_CRT_GRP_DESTROY =
 	DEFINE_CRT_REQ_FMT("CRT_GRP_DESTROY", crt_grp_destroy_in_fields,
 			   crt_grp_destroy_out_fields);
 
 /* uri lookup */
-struct crt_msg_field *crt_uri_lookup_in_fields[] = {
+static struct crt_msg_field *crt_uri_lookup_in_fields[] = {
 	&CMF_GRP_ID,		/* ul_grp_id */
 	&CMF_RANK,		/* ul_rank */
 };
 
-struct crt_msg_field *crt_uri_lookup_out_fields[] = {
+static struct crt_msg_field *crt_uri_lookup_out_fields[] = {
 	&CMF_PHY_ADDR,		/* ul_uri */
 	&CMF_INT,		/* ul_rc */
 };
 
-struct crt_req_format DQF_CRT_URI_LOOKUP =
+static struct crt_req_format DQF_CRT_URI_LOOKUP =
 	DEFINE_CRT_REQ_FMT("CRT_URI_LOOKUP", crt_uri_lookup_in_fields,
 			   crt_uri_lookup_out_fields);
 

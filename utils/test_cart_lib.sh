@@ -59,7 +59,7 @@ else
         grep -v " U " |  grep -v " w " |  grep -v " crt_" |
         grep -v " D _edata" | grep -v " T _fini" | grep -v " T _init" |
         grep -v " B __bss_start" | grep -v " B _end" |
-        grep -v " B addr_lookup_table" | grep -v " D DMF_" | grep -v " D DQF_";
+        grep -v " B addr_lookup_table" | grep -v " D CMF_";
     if [ $? -ne 1 ]; then RC=1; fi
     echo "checking libcrt_util.so"
     nm -g ${SL_PREFIX}/lib/libcrt_util.so |
