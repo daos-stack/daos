@@ -39,13 +39,14 @@
  * This file is part of CaRT.  It tests that header files can be included
  * and invoked from C++ applications
  */
-
 #include <stdlib.h>
 #include <pmix.h>
 #include <crt_api.h>
 #include <crt_util/clog.h>
 #include <crt_util/hash.h>
 #include <crt_util/common.h>
+#include <crt_util/sysqueue.h>
+#include <crt_util/list.h>
 #include "utest_cmocka.h"
 
 static void

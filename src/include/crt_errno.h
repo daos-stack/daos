@@ -94,6 +94,10 @@ typedef enum {
 	CER_IVCB_FORWARD	= (CER_ERR_BASE + 24),
 	/** CRT miscellaneous error */
 	CER_MISC		= (CER_ERR_BASE + 25),
+	/** Bad path name */
+	CER_BADPATH		= (CER_ERR_BASE + 26),
+	/** Not a directory */
+	CER_NOTDIR		= (CER_ERR_BASE + 27),
 	/** unknown error */
 	CER_UNKNOWN		= (CER_ERR_BASE + 500),
 	/** TODO: add more error numbers */

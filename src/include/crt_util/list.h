@@ -35,10 +35,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-
 #ifndef __CRT_LIST_H__
 #define __CRT_LIST_H__
-
 /*
  * Simple doubly linked list implementation.
  *
@@ -391,15 +389,16 @@ crt_hlist_add_before(crt_hlist_node_t *n, crt_hlist_node_t *next)
 	*(n->pprev) = n;
 }
 
+/* prev must be != NULL */
 static inline void
-crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *next)
+crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *prev)
 {
-	next->next = n->next;
-	n->next = next;
-	next->pprev = &n->next;
+	n->pprev = &prev->next;
+	n->next = prev->next;
+	prev->next = n;
 
-	if(next->next)
-		next->next->pprev  = &next->next;
+	if (n->next)
+		n->next->pprev  = &n->next;
 }
 
 #define crt_hlist_entry(ptr, type, member) container_of(ptr, type, member)

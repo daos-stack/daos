@@ -54,6 +54,32 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
+#ifdef __APPLE__
+#include <mach/clock.h>
+#include <mach/mach.h>
+
+/* Get the current time using a monotonic timer
+ * param[out] ts A timespec structure for the result
+ */
+static inline int _crt_gettime(struct timespec *ts)
+{
+	clock_serv_t cclock;
+	mach_timespec_t mts;
+
+	host_get_clock_service(mach_host_self(), SYSTEM_CLOCK, &cclock);
+	clock_get_time(cclock, &mts);
+	mach_port_deallocate(mach_task_self(), cclock);
+	ts->tv_sec = mts.tv_sec;
+	ts->tv_nsec = mts.tv_nsec;
+	return 0;
+}
+#else
+#include <time.h>
+/* Get the current time using a monotonic timer
+ * param[out] ts A timespec structure for the result
+ */
+#define _crt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
+#endif
 
 #include <crt_api.h>
 #include <crt_util/clog.h>
@@ -310,13 +336,23 @@ crt_errno2cer(int err)
 	return 0;
 }
 
+#ifndef NSEC_PER_SEC
+#define NSEC_PER_SEC  1000000000
+#endif
+#ifndef NSEC_PER_MSEC
+#define NSEC_PER_MSEC 1000000
+#endif
+#ifndef NSEC_PER_USEC
+#define NSEC_PER_USEC 1000
+#endif
+
 /* timing utilities */
 static inline int
 crt_gettime(struct timespec *t)
 {
 	int	rc;
 
-	rc = clock_gettime(CLOCK_MONOTONIC, t);
+	rc = _crt_gettime(t);
 	if (rc != 0) {
 		C_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n",
 			rc, errno, strerror(errno));
@@ -326,6 +362,15 @@ crt_gettime(struct timespec *t)
 	return rc;
 }
 
+/* Calculate t2 - t1 in nanoseconds */
+static inline int64_t
+crt_timediff_ns(const struct timespec *t1, const struct timespec *t2)
+{
+	return ((t2->tv_sec - t1->tv_sec) * NSEC_PER_SEC) +
+		t2->tv_nsec - t1->tv_nsec;
+}
+
+/* Calculate end - start as timespec. */
 static inline struct timespec
 crt_timediff(struct timespec start, struct timespec end)
 {
@@ -333,13 +378,40 @@ crt_timediff(struct timespec start, struct timespec end)
 
 	if ((end.tv_nsec - start.tv_nsec) < 0) {
 		temp.tv_sec = end.tv_sec - start.tv_sec - 1;
-		temp.tv_nsec = 1000000000 + end.tv_nsec - start.tv_nsec;
+		temp.tv_nsec = NSEC_PER_SEC + end.tv_nsec - start.tv_nsec;
 	} else {
 		temp.tv_sec = end.tv_sec - start.tv_sec;
 		temp.tv_nsec = end.tv_nsec - start.tv_nsec;
 	}
 
+
 	return temp;
+}
+
+/* Calculate remaining time in ns */
+static inline int64_t
+crt_timeleft_ns(const struct timespec *expiration)
+{
+	struct timespec now;
+	int64_t ns;
+
+	crt_gettime(&now);
+
+	ns = crt_timediff_ns(&now, expiration);
+
+	if (ns <= 0)
+		return 0;
+
+	return ns;
+}
+
+/* Increment time by ns nanoseconds */
+static inline void
+crt_timeinc(struct timespec *now, uint64_t ns)
+{
+	now->tv_nsec += ns;
+	now->tv_sec += now->tv_nsec / NSEC_PER_SEC;
+	now->tv_nsec = now->tv_nsec % NSEC_PER_SEC;
 }
 
 static inline double
