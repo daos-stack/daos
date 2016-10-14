@@ -37,16 +37,16 @@
 /*
  * Container service
  *
- * References the mpool descriptor. Identified by a number unique within the
- * pool.
+ * References the ds_pool_mpool descriptor. Identified by a number unique
+ * within the pool.
  *
  * TODO: Store and look up this in a hash table.
  */
 struct cont_svc {
 	uuid_t			cs_pool_uuid;
 	uint64_t		cs_id;
-	struct mpool	       *cs_mpool;
-	struct tgt_pool	       *cs_pool;
+	struct ds_pool_mpool   *cs_mpool;
+	struct ds_pool	       *cs_pool;
 	pthread_rwlock_t	cs_rwlock;
 	pthread_mutex_t		cs_lock;
 	int			cs_ref;
@@ -60,7 +60,7 @@ cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 	struct umem_attr	uma;
 	int			rc;
 
-	rc = dsms_tgt_pool_lookup(pool_uuid, NULL /* arg */, &svc->cs_pool);
+	rc = ds_pool_lookup(pool_uuid, NULL /* arg */, &svc->cs_pool);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			/* Therefore not a single pool handle exists. */
@@ -72,7 +72,7 @@ cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 	svc->cs_id = id;
 	svc->cs_ref = 1;
 
-	rc = dsms_mpool_lookup(pool_uuid, &svc->cs_mpool);
+	rc = ds_pool_mpool_lookup(pool_uuid, &svc->cs_mpool);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
 
@@ -113,9 +113,9 @@ err_lock:
 err_rwlock:
 	pthread_rwlock_destroy(&svc->cs_rwlock);
 err_mp:
-	dsms_mpool_put(svc->cs_mpool);
+	ds_pool_mpool_put(svc->cs_mpool);
 err_pool:
-	dsms_tgt_pool_put(svc->cs_pool);
+	ds_pool_put(svc->cs_pool);
 err:
 	return rc;
 }
@@ -155,7 +155,7 @@ cont_svc_put(struct cont_svc *svc)
 	dbtree_close(svc->cs_containers);
 	pthread_mutex_destroy(&svc->cs_lock);
 	pthread_rwlock_destroy(&svc->cs_rwlock);
-	dsms_mpool_put(svc->cs_mpool);
+	ds_pool_mpool_put(svc->cs_mpool);
 	D_FREE_PTR(svc);
 }
 
@@ -165,7 +165,7 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 	struct cont_create_in  *in = dtp_req_get(rpc);
 	struct cont_create_out *out = dtp_reply_get(rpc);
 	struct cont_svc	       *svc;
-	struct tgt_pool_hdl    *pool_hdl;
+	struct ds_pool_hdl     *pool_hdl;
 	volatile daos_handle_t	ch = DAOS_HDL_INVAL;
 	int			rc;
 
@@ -178,11 +178,11 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 		DP_UUID(in->cci_pool_hdl));
 
 	/* Verify the pool handle. */
-	pool_hdl = dsms_tgt_pool_hdl_lookup(in->cci_pool_hdl);
+	pool_hdl = ds_pool_hdl_lookup(in->cci_pool_hdl);
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_PERM);
-	else if (!(pool_hdl->tph_capas & DAOS_PC_RW) &&
-		 !(pool_hdl->tph_capas & DAOS_PC_EX))
+	else if (!(pool_hdl->sph_capas & DAOS_PC_RW) &&
+		 !(pool_hdl->sph_capas & DAOS_PC_EX))
 		D_GOTO(out_pool_hdl, rc = -DER_NO_PERM);
 
 	/*
@@ -265,7 +265,7 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 	pthread_rwlock_unlock(&svc->cs_rwlock);
 	cont_svc_put(svc);
 out_pool_hdl:
-	dsms_tgt_pool_hdl_put(pool_hdl);
+	ds_pool_hdl_put(pool_hdl);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(in->cci_pool, in->cci_cont), rpc, rc);
@@ -285,7 +285,7 @@ cont_destroy_bcast(dtp_context_t ctx, struct cont_svc *svc,
 	D_DEBUG(DF_DSMS, DF_CONT": bcasting\n",
 		DP_CONT(svc->cs_pool_uuid, cont_uuid));
 
-	rc = ds_cont_corpc_create(ctx, svc->cs_pool->tp_group,
+	rc = ds_cont_corpc_create(ctx, svc->cs_pool->sp_group,
 				  DSM_TGT_CONT_DESTROY, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -318,7 +318,7 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 	struct cont_destroy_in	       *in = dtp_req_get(rpc);
 	struct cont_destroy_out	       *out = dtp_reply_get(rpc);
 	struct cont_svc		       *svc;
-	struct tgt_pool_hdl	       *pool_hdl;
+	struct ds_pool_hdl	       *pool_hdl;
 	volatile daos_handle_t		ch;
 	daos_handle_t			h;
 	int				rc;
@@ -332,11 +332,11 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 		DP_UUID(in->cdi_pool_hdl), in->cdi_force);
 
 	/* Verify the pool handle. */
-	pool_hdl = dsms_tgt_pool_hdl_lookup(in->cdi_pool_hdl);
+	pool_hdl = ds_pool_hdl_lookup(in->cdi_pool_hdl);
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_PERM);
-	else if (!(pool_hdl->tph_capas & DAOS_PC_RW) &&
-		 !(pool_hdl->tph_capas & DAOS_PC_EX))
+	else if (!(pool_hdl->sph_capas & DAOS_PC_RW) &&
+		 !(pool_hdl->sph_capas & DAOS_PC_EX))
 		D_GOTO(out_pool_hdl, rc = -DER_NO_PERM);
 
 	rc = cont_svc_lookup(in->cdi_pool, 0 /* id */, &svc);
@@ -407,7 +407,7 @@ out_rwlock:
 	pthread_rwlock_unlock(&svc->cs_rwlock);
 	cont_svc_put(svc);
 out_pool_hdl:
-	dsms_tgt_pool_hdl_put(pool_hdl);
+	ds_pool_hdl_put(pool_hdl);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(in->cdi_pool, in->cdi_cont), rpc, rc);
@@ -549,7 +549,7 @@ cont_open_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas);
 
-	rc = ds_cont_corpc_create(ctx, cont->c_svc->cs_pool->tp_group,
+	rc = ds_cont_corpc_create(ctx, cont->c_svc->cs_pool->sp_group,
 				  DSM_TGT_CONT_OPEN, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -587,7 +587,7 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 	struct cont_open_in	*in = dtp_req_get(rpc);
 	struct cont_open_out	*out = dtp_reply_get(rpc);
 	struct cont_svc		*svc;
-	struct tgt_pool_hdl	*pool_hdl;
+	struct ds_pool_hdl	*pool_hdl;
 	struct cont		*cont;
 	struct container_hdl	chdl;
 	daos_epoch_t		ghce;
@@ -606,14 +606,14 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 		in->coi_capas);
 
 	/* Verify the pool handle. */
-	pool_hdl = dsms_tgt_pool_hdl_lookup(in->coi_pool_hdl);
+	pool_hdl = ds_pool_hdl_lookup(in->coi_pool_hdl);
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_PERM);
-	else if ((!(pool_hdl->tph_capas & DAOS_PC_RO) &&
-		  !(pool_hdl->tph_capas & DAOS_PC_RW) &&
-		  !(pool_hdl->tph_capas & DAOS_PC_EX)) ||
-		 (!(pool_hdl->tph_capas & DAOS_PC_RW) &&
-		  !(pool_hdl->tph_capas & DAOS_PC_EX) &&
+	else if ((!(pool_hdl->sph_capas & DAOS_PC_RO) &&
+		  !(pool_hdl->sph_capas & DAOS_PC_RW) &&
+		  !(pool_hdl->sph_capas & DAOS_PC_EX)) ||
+		 (!(pool_hdl->sph_capas & DAOS_PC_RW) &&
+		  !(pool_hdl->sph_capas & DAOS_PC_EX) &&
 		  (in->coi_capas & DAOS_COO_RW)))
 		D_GOTO(out_pool_hdl, rc = -DER_NO_PERM);
 
@@ -725,7 +725,7 @@ out_rwlock:
 	pthread_rwlock_unlock(&svc->cs_rwlock);
 	cont_svc_put(svc);
 out_pool_hdl:
-	dsms_tgt_pool_hdl_put(pool_hdl);
+	ds_pool_hdl_put(pool_hdl);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(in->coi_pool, in->coi_cont), rpc, rc);
@@ -745,7 +745,7 @@ cont_close_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t cont_hdl)
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(cont_hdl));
 
-	rc = ds_cont_corpc_create(ctx, cont->c_svc->cs_pool->tp_group,
+	rc = ds_cont_corpc_create(ctx, cont->c_svc->cs_pool->sp_group,
 				  DSM_TGT_CONT_CLOSE, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -806,7 +806,7 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DF_DSMS, DF_CONT": already closed: "DF_UUID"\n",
-				DP_CONT(svc->cs_pool->tp_uuid, cont->c_uuid),
+				DP_CONT(svc->cs_pool->sp_uuid, cont->c_uuid),
 				DP_UUID(in->cci_cont_hdl));
 			rc = 0;
 		}

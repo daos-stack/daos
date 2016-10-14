@@ -46,13 +46,13 @@
 static int
 mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 {
-	PMEMobjpool	       *mp;
-	PMEMoid			sb_oid;
-	struct superblock      *sb;
-	volatile daos_handle_t	pool_root = DAOS_HDL_INVAL;
-	volatile daos_handle_t	cont_root = DAOS_HDL_INVAL;
-	uuid_t			target_uuid;
-	int			rc = 0;
+	PMEMobjpool		       *mp;
+	PMEMoid				sb_oid;
+	struct ds_pool_mpool_sb	       *sb;
+	volatile daos_handle_t		pool_root = DAOS_HDL_INVAL;
+	volatile daos_handle_t		cont_root = DAOS_HDL_INVAL;
+	uuid_t				target_uuid;
+	int				rc = 0;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
@@ -60,7 +60,8 @@ mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 
 	uuid_generate(target_uuid);
 
-	mp = pmemobj_create(path, MPOOL_LAYOUT, MPOOL_SIZE, 0666);
+	mp = pmemobj_create(path, DS_POOL_MPOOL_LAYOUT, DS_POOL_MPOOL_SIZE,
+			    0666);
 	if (mp == NULL) {
 		D_ERROR("failed to create meta pool in %s: %d\n", path, errno);
 		D_GOTO(err, rc = -DER_NOSPACE);
@@ -80,7 +81,7 @@ mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
 
 		pmemobj_tx_add_range_direct(sb, sizeof(*sb));
 
-		sb->s_magic = SUPERBLOCK_MAGIC;
+		sb->s_magic = DS_POOL_MPOOL_SB_MAGIC;
 		uuid_copy(sb->s_pool_uuid, pool_uuid);
 		uuid_copy(sb->s_target_uuid, target_uuid);
 
@@ -133,8 +134,13 @@ err:
 	return rc;
 }
 
+/*
+ * Called by dmg on every storage node belonging to this pool. "path" is the
+ * directory under which the VOS and metadata files shall be. "target_uuid"
+ * returns the UUID generated for the target on this storage node.
+ */
 int
-dsms_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
+ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 {
 	char	*fpath;
 	int	 rc;
@@ -282,21 +288,27 @@ cont_metadata_init(PMEMobjpool *mp, daos_handle_t root)
 				     NULL /* tree_new */);
 }
 
+/*
+ * Called by dmg on a single storage node belonging to this pool after the
+ * ds_pool_create() phase completes. "target_uuids" shall be an array of the
+ * target UUIDs returned by the ds_pool_create() calls. "svc_addrs" returns the
+ * ranks of the pool services replicas within "group".
+ */
 int
-dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
-		     unsigned int mode, int ntargets,
-		     uuid_t target_uuids[], const char *group,
-		     const daos_rank_list_t *target_addrs, int ndomains,
-		     const int *domains, daos_rank_list_t *svc_addrs)
+ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
+		   unsigned int mode, int ntargets, uuid_t target_uuids[],
+		   const char *group, const daos_rank_list_t *target_addrs,
+		   int ndomains, const int *domains,
+		   daos_rank_list_t *svc_addrs)
 {
-	PMEMobjpool	       *mp;
-	PMEMoid			sb_oid;
-	struct superblock      *sb;
-	struct umem_attr	uma;
-	daos_handle_t		pool_root;
-	daos_handle_t		cont_root;
-	char		       *path;
-	int			rc;
+	PMEMobjpool		       *mp;
+	PMEMoid				sb_oid;
+	struct ds_pool_mpool_sb	       *sb;
+	struct umem_attr		uma;
+	daos_handle_t			pool_root;
+	daos_handle_t			cont_root;
+	char			       *path;
+	int				rc;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
@@ -304,7 +316,7 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	if (rc)
 		D_GOTO(out, rc);
 
-	mp = pmemobj_open(path, MPOOL_LAYOUT);
+	mp = pmemobj_open(path, DS_POOL_MPOOL_LAYOUT);
 	if (mp == NULL) {
 		D_ERROR("failed to open meta pool %s: %d\n", path, errno);
 		D_GOTO(out_path, rc = -DER_INVAL);
@@ -368,7 +380,7 @@ out:
 /*
  * Pool service
  *
- * References the mpool descriptor.
+ * References the ds_pool_mpool descriptor.
  *
  * TODO: p_rwlock currently protects all pool metadata, both volatile and
  * persistent.  When moving to the event-driven model, we shall replace it with
@@ -377,13 +389,13 @@ out:
 struct pool_svc {
 	daos_list_t		ps_entry;
 	uuid_t			ps_uuid;
-	struct mpool	       *ps_mpool;
+	struct ds_pool_mpool   *ps_mpool;
 	pthread_rwlock_t	ps_rwlock;	/* see TODO in struct comment */
 	pthread_mutex_t		ps_lock;
 	int			ps_ref;
 	daos_handle_t		ps_root;	/* root tree */
 	daos_handle_t		ps_handles;	/* pool handle tree */
-	struct tgt_pool	       *ps_pool;
+	struct ds_pool	       *ps_pool;
 };
 
 /*
@@ -400,7 +412,7 @@ static pthread_mutex_t pool_svc_cache_lock;
 static int
 pool_svc_pool_init(struct pool_svc *svc)
 {
-	struct tgt_pool_create_arg	arg;
+	struct ds_pool_create_arg	arg;
 	size_t				map_buf_size;
 	int				rc;
 
@@ -417,13 +429,13 @@ pool_svc_pool_init(struct pool_svc *svc)
 
 	arg.pca_create_group = 1;
 
-	return dsms_tgt_pool_lookup(svc->ps_uuid, &arg, &svc->ps_pool);
+	return ds_pool_lookup(svc->ps_uuid, &arg, &svc->ps_pool);
 }
 
 static int
 pool_svc_init(const uuid_t uuid, struct pool_svc *svc)
 {
-	struct mpool	       *mpool;
+	struct ds_pool_mpool   *mpool;
 	uint32_t		nhandles;
 	struct btr_root	       *root;
 	size_t			size;
@@ -434,7 +446,7 @@ pool_svc_init(const uuid_t uuid, struct pool_svc *svc)
 	uuid_copy(svc->ps_uuid, uuid);
 	svc->ps_ref = 1;
 
-	rc = dsms_mpool_lookup(uuid, &mpool);
+	rc = ds_pool_mpool_lookup(uuid, &mpool);
 	if (rc != 0)
 		D_GOTO(err, rc);
 
@@ -495,7 +507,7 @@ err_lock:
 err_rwlock:
 	pthread_rwlock_destroy(&svc->ps_rwlock);
 err_mp:
-	dsms_mpool_put(mpool);
+	ds_pool_mpool_put(mpool);
 err:
 	return rc;
 }
@@ -563,11 +575,11 @@ pool_svc_put(struct pool_svc *svc)
 		svc->ps_ref--;
 		if (svc->ps_ref == 0) {
 			D_DEBUG(DF_DSMS, "freeing pool_svc %p\n", svc);
-			dsms_tgt_pool_put(svc->ps_pool);
+			ds_pool_put(svc->ps_pool);
 			dbtree_close(svc->ps_handles);
 			pthread_mutex_destroy(&svc->ps_lock);
 			pthread_rwlock_destroy(&svc->ps_rwlock);
-			dsms_mpool_put(svc->ps_mpool);
+			ds_pool_mpool_put(svc->ps_mpool);
 			daos_list_del(&svc->ps_entry);
 			D_FREE_PTR(svc);
 		} else {
@@ -676,7 +688,7 @@ pool_connect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 
 	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
-	rc = dsms_corpc_create(ctx, svc->ps_pool->tp_group,
+	rc = dsms_corpc_create(ctx, svc->ps_pool->sp_group,
 			       DSM_TGT_POOL_CONNECT, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -685,7 +697,7 @@ pool_connect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 	uuid_copy(in->tpci_pool, svc->ps_uuid);
 	uuid_copy(in->tpci_pool_hdl, pool_hdl);
 	in->tpci_capas = capas;
-	in->tpci_pool_map_version = pool_map_get_version(svc->ps_pool->tp_map);
+	in->tpci_pool_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -926,7 +938,7 @@ pool_disconnect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 
 	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
-	rc = dsms_corpc_create(ctx, svc->ps_pool->tp_group,
+	rc = dsms_corpc_create(ctx, svc->ps_pool->sp_group,
 			       DSM_TGT_POOL_DISCONNECT, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);

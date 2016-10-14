@@ -113,7 +113,7 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 	if (tls == NULL)
 		return NULL;
 
-	rc = dsms_vcont_cache_create(&tls->dt_cont_cache);
+	rc = ds_cont_cache_create(&tls->dt_cont_cache);
 	if (rc != 0) {
 		D_ERROR("failed to create thread-local container cache: %d\n",
 			rc);
@@ -121,11 +121,11 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 		return NULL;
 	}
 
-	rc = dsms_tgt_cont_hdl_hash_create(&tls->dt_cont_hdl_hash);
+	rc = ds_cont_hdl_hash_create(&tls->dt_cont_hdl_hash);
 	if (rc != 0) {
 		D_ERROR("failed to create thread-local container handle cache: "
 			"%d\n", rc);
-		dsms_vcont_cache_destroy(tls->dt_cont_cache);
+		ds_cont_cache_destroy(tls->dt_cont_cache);
 		D_FREE_PTR(tls);
 		return NULL;
 	}
@@ -139,8 +139,8 @@ dsm_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct dsm_tls *tls = data;
 
-	dsms_tgt_cont_hdl_hash_destroy(&tls->dt_cont_hdl_hash);
-	dsms_vcont_cache_destroy(tls->dt_cont_cache);
+	ds_cont_hdl_hash_destroy(&tls->dt_cont_hdl_hash);
+	ds_cont_cache_destroy(tls->dt_cont_cache);
 	D_FREE_PTR(tls);
 }
 

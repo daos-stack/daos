@@ -89,9 +89,9 @@ int dsms_hdlr_tgt_cont_open_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
 int dsms_hdlr_tgt_cont_close(dtp_rpc_t *rpc);
 int dsms_hdlr_tgt_cont_close_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
 				       void *priv);
-int dsms_vcont_cache_create(struct daos_lru_cache **cache);
-void dsms_vcont_cache_destroy(struct daos_lru_cache *cache);
-int dsms_tgt_cont_hdl_hash_create(struct dhash_table *hash);
-void dsms_tgt_cont_hdl_hash_destroy(struct dhash_table *hash);
+int ds_cont_cache_create(struct daos_lru_cache **cache);
+void ds_cont_cache_destroy(struct daos_lru_cache *cache);
+int ds_cont_hdl_hash_create(struct dhash_table *hash);
+void ds_cont_hdl_hash_destroy(struct dhash_table *hash);
 
 #endif /* __CONTAINER_SERVER_INTERNAL_H__ */

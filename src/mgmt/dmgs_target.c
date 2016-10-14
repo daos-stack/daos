@@ -273,9 +273,9 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t size, char *path)
 		D_GOTO(out_tree, rc);
 
 	/** initialize DAOS-M target and fetch uuid */
-	rc = dsms_pool_create(pool_uuid, newborn, tgt_uuid);
+	rc = ds_pool_create(pool_uuid, newborn, tgt_uuid);
 	if (rc) {
-		D_ERROR("dsms_pool_create failed, rc: %d.\n", rc);
+		D_ERROR("ds_pool_create failed, rc: %d.\n", rc);
 		D_GOTO(out_tree, rc);
 	}
 

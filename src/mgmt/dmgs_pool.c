@@ -443,14 +443,12 @@ tgt_create_cb(const struct dtp_cb_info *cb_info)
 		 * TODO: fetch domain list from external source
 		 * Report 1 domain per target for now
 		 */
-		rc = dsms_pool_svc_create(pc_inprog->pc_pool_uuid,
-					  pc_in->pc_uid, pc_in->pc_gid,
-					  pc_in->pc_mode, pc_inprog->pc_tc_num,
-					  pc_inprog->pc_tgt_uuids,
-					  pc_in->pc_grp,
-					  pc_in->pc_tgts ?: &ranks,
-					  ARRAY_SIZE(doms), doms,
-					  pc_out->pc_svc);
+		rc = ds_pool_svc_create(pc_inprog->pc_pool_uuid, pc_in->pc_uid,
+					pc_in->pc_gid, pc_in->pc_mode,
+					pc_inprog->pc_tc_num,
+					pc_inprog->pc_tgt_uuids, pc_in->pc_grp,
+					pc_in->pc_tgts ?: &ranks,
+					ARRAY_SIZE(doms), doms, pc_out->pc_svc);
 
 		if (pc_in->pc_tgts == NULL)
 			D_FREE(ranks.rl_ranks,

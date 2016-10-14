@@ -31,34 +31,33 @@
 #include <daos_srv/pool.h>
 
 /*
- * Target service per-thread container object
+ * Per-thread container object
  *
- * Stores per-container information, such as the vos container handle, for one
- * service thread.
+ * Stores per-thread, per-container information, such as the vos container
+ * handle.
  */
-struct dsms_vcont {
-	struct daos_llink	dvc_list;
-	daos_handle_t		dvc_hdl;
-	uuid_t			dvc_uuid;
+struct ds_cont {
+	struct daos_llink	sc_list;
+	daos_handle_t		sc_hdl;
+	uuid_t			sc_uuid;
 };
 
 /*
- * Target service per-thread container handle object
+ * Per-thread container handle object
  *
- * Stores per-handle information, such as the container capabilities, for one
- * service thread. Used by container and target services. References the
- * container and the per-thread pool object.
+ * Stores per-thread, per-handle information, such as the container
+ * capabilities. References the ds_cont and the ds_pool_child objects.
  */
-struct tgt_cont_hdl {
-	daos_list_t		tch_entry;
-	uuid_t			tch_uuid;	/* of the container handle */
-	uint64_t		tch_capas;
-	struct dsms_vpool      *tch_pool;
-	struct dsms_vcont      *tch_cont;
-	int			tch_ref;
+struct ds_cont_hdl {
+	daos_list_t		sch_entry;
+	uuid_t			sch_uuid;	/* of the container handle */
+	uint64_t		sch_capas;
+	struct ds_pool_child   *sch_pool;
+	struct ds_cont	       *sch_cont;
+	int			sch_ref;
 };
 
-struct tgt_cont_hdl *dsms_tgt_cont_hdl_lookup(const uuid_t uuid);
-void dsms_tgt_cont_hdl_put(struct tgt_cont_hdl *hdl);
+struct ds_cont_hdl *ds_cont_hdl_lookup(const uuid_t uuid);
+void ds_cont_hdl_put(struct ds_cont_hdl *hdl);
 
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

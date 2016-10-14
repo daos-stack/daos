@@ -34,7 +34,7 @@ static DAOS_LIST_HEAD(mpool_cache);
 static pthread_mutex_t mpool_cache_lock;
 
 static int
-mpool_init(const uuid_t pool_uuid, struct mpool *mp)
+mpool_init(const uuid_t pool_uuid, struct ds_pool_mpool *mp)
 {
 	PMEMoid	sb_oid;
 	char   *path;
@@ -56,7 +56,7 @@ mpool_init(const uuid_t pool_uuid, struct mpool *mp)
 		D_GOTO(err_lock, rc);
 	}
 
-	mp->mp_pmem = pmemobj_open(path, MPOOL_LAYOUT);
+	mp->mp_pmem = pmemobj_open(path, DS_POOL_MPOOL_LAYOUT);
 	if (mp->mp_pmem == NULL) {
 		if (errno == ENOENT)
 			D_DEBUG(DF_DSMS, "cannot find %s: %d\n", path, errno);
@@ -68,7 +68,7 @@ mpool_init(const uuid_t pool_uuid, struct mpool *mp)
 	sb_oid = pmemobj_root(mp->mp_pmem, sizeof(*mp->mp_sb));
 	mp->mp_sb = pmemobj_direct(sb_oid);
 
-	if (mp->mp_sb->s_magic != SUPERBLOCK_MAGIC) {
+	if (mp->mp_sb->s_magic != DS_POOL_MPOOL_SB_MAGIC) {
 		D_ERROR("found invalid superblock magic: "DF_X64"\n",
 			mp->mp_sb->s_magic);
 		D_GOTO(err_pmem, rc = -DER_NONEXIST);
@@ -87,7 +87,7 @@ err:
 }
 
 void
-dsms_mpool_get(struct mpool *mpool)
+ds_pool_mpool_get(struct ds_pool_mpool *mpool)
 {
 	pthread_mutex_lock(&mpool->mp_lock);
 	mpool->mp_ref++;
@@ -95,10 +95,10 @@ dsms_mpool_get(struct mpool *mpool)
 }
 
 int
-dsms_mpool_lookup(const uuid_t pool_uuid, struct mpool **mpool)
+ds_pool_mpool_lookup(const uuid_t pool_uuid, struct ds_pool_mpool **mpool)
 {
-	struct mpool   *mp;
-	int		rc = 0;
+	struct ds_pool_mpool   *mp;
+	int			rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_UUID": looking up\n", DP_UUID(pool_uuid));
 
@@ -108,7 +108,7 @@ dsms_mpool_lookup(const uuid_t pool_uuid, struct mpool **mpool)
 		if (uuid_compare(mp->mp_uuid, pool_uuid) == 0) {
 			D_DEBUG(DF_DSMS, DF_UUID": found %p\n",
 				DP_UUID(pool_uuid), mp);
-			dsms_mpool_get(mp);
+			ds_pool_mpool_get(mp);
 			*mpool = mp;
 			D_GOTO(out, rc = 0);
 		}
@@ -134,7 +134,7 @@ out:
 }
 
 void
-dsms_mpool_put(struct mpool *mpool)
+ds_pool_mpool_put(struct ds_pool_mpool *mpool)
 {
 	int is_last_ref = 0;
 

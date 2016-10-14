@@ -31,63 +31,61 @@
 #include <daos/lru.h>
 
 /*
- * Target service pool object
+ * Pool object
  *
- * Caches per-pool information, such as the pool map. Used by pool, container,
- * and target services. Referenced by pool_svc, cont_svc, and tgt_pool_hdl
- * objects.
+ * Caches per-pool information, such as the pool map.
  */
-struct tgt_pool {
-	struct daos_llink	tp_entry;
-	uuid_t			tp_uuid;
-	struct pool_map	       *tp_map;
-	uint32_t		tp_map_version;	/* until map is everywhere */
-	dtp_group_t	       *tp_group;
+struct ds_pool {
+	struct daos_llink	sp_entry;
+	uuid_t			sp_uuid;
+	struct pool_map	       *sp_map;
+	uint32_t		sp_map_version;	/* temporary */
+	dtp_group_t	       *sp_group;
 };
 
-struct tgt_pool_create_arg {
+struct ds_pool_create_arg {
 	struct pool_buf	       *pca_map_buf;
 	uint32_t		pca_map_version;
 	int			pca_create_group;
 };
-int dsms_tgt_pool_lookup(const uuid_t uuid, struct tgt_pool_create_arg *arg,
-			 struct tgt_pool **pool);
-void dsms_tgt_pool_put(struct tgt_pool *pool);
+int ds_pool_lookup(const uuid_t uuid, struct ds_pool_create_arg *arg,
+		   struct ds_pool **pool);
+void ds_pool_put(struct ds_pool *pool);
 
 /*
- * Target service pool handle object
+ * Pool handle object
  *
- * Stores per-handle information, such as the capabilities. Used by container
- * and target services. References the pool object.
+ * Stores per-handle information, such as the capabilities. References the pool
+ * object.
  */
-struct tgt_pool_hdl {
-	daos_list_t		tph_entry;
-	uuid_t			tph_uuid;	/* of the pool handle */
-	uint64_t		tph_capas;
-	struct tgt_pool	       *tph_pool;
-	int			tph_ref;
+struct ds_pool_hdl {
+	daos_list_t		sph_entry;
+	uuid_t			sph_uuid;	/* of the pool handle */
+	uint64_t		sph_capas;
+	struct ds_pool	       *sph_pool;
+	int			sph_ref;
 };
 
-struct tgt_pool_hdl *dsms_tgt_pool_hdl_lookup(const uuid_t uuid);
-void dsms_tgt_pool_hdl_put(struct tgt_pool_hdl *hdl);
+struct ds_pool_hdl *ds_pool_hdl_lookup(const uuid_t uuid);
+void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
 
 /*
- * Target service per-thread pool object
+ * Per-thread pool object
  *
  * Stores per-thread, per-pool information, such as the vos pool handle. And,
  * caches per-pool information, such as the pool map version, so that DAOS
- * object I/Os do not need to access global tgt_pool objects.
+ * object I/Os do not need to access global, parent ds_pool objects.
  */
-struct dsms_vpool {
-	daos_list_t	dvp_list;
-	daos_handle_t	dvp_hdl;
-	uuid_t		dvp_uuid;
-	uint32_t	dvp_map_version;
-	int		dvp_ref;
+struct ds_pool_child {
+	daos_list_t	spc_list;
+	daos_handle_t	spc_hdl;
+	uuid_t		spc_uuid;
+	uint32_t	spc_map_version;
+	int		spc_ref;
 };
 
-struct dsms_vpool *vpool_lookup(const uuid_t vp_uuid);
-void vpool_put(struct dsms_vpool *vpool);
+struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
+void ds_pool_child_put(struct ds_pool_child *child);
 
 /*
  * Metadata pmem pool descriptor
@@ -96,18 +94,18 @@ void vpool_put(struct dsms_vpool *vpool);
  * use separate files for ds_pool and ds_cont, after which the mpool code can
  * be retired.
  */
-struct mpool {
-	daos_list_t		mp_entry;
-	uuid_t			mp_uuid;	/* of the DAOS pool */
-	pthread_mutex_t		mp_lock;
-	int			mp_ref;
-	PMEMobjpool	       *mp_pmem;
-	struct superblock      *mp_sb;
+struct ds_pool_mpool {
+	daos_list_t			mp_entry;
+	uuid_t				mp_uuid;	/* of the DAOS pool */
+	pthread_mutex_t			mp_lock;
+	int				mp_ref;
+	PMEMobjpool		       *mp_pmem;
+	struct ds_pool_mpool_sb	       *mp_sb;
 };
 
-int dsms_mpool_lookup(const uuid_t pool_uuid, struct mpool **mpool);
-void dsms_mpool_get(struct mpool *mpool);
-void dsms_mpool_put(struct mpool *mpool);
+int ds_pool_mpool_lookup(const uuid_t pool_uuid, struct ds_pool_mpool **mpool);
+void ds_pool_mpool_get(struct ds_pool_mpool *mpool);
+void ds_pool_mpool_put(struct ds_pool_mpool *mpool);
 
 /*
  * mpool storage layout
@@ -129,18 +127,18 @@ void dsms_mpool_put(struct mpool *mpool);
  */
 
 /* These are for pmemobj_create() and/or pmemobj_open(). */
-#define MPOOL_LAYOUT	"dsms_metadata"
-#define MPOOL_SIZE	(1 << 26)	/* 64 MB */
+#define DS_POOL_MPOOL_LAYOUT	"dsms_metadata"
+#define DS_POOL_MPOOL_SIZE	(1 << 26)	/* 64 MB */
 
 /*
- * Superblock (pmemobj_root)
+ * mpool superblock (pmemobj_root)
  *
  * Because pool UUIDs are important and constant, they are stored redundantly
  * in path names and superblocks.
  *
  * TODO: Add compatibility and checksum stuff.
  */
-struct superblock {
+struct ds_pool_mpool_sb {
 	uint64_t	s_magic;
 	uuid_t		s_pool_uuid;
 	uuid_t		s_target_uuid;
@@ -148,34 +146,22 @@ struct superblock {
 	struct btr_root	s_cont_root;	/* ds_cont root tree */
 };
 
-/* superblock::s_magic */
-#define SUPERBLOCK_MAGIC	0x8120da0367913ef9
+/* ds_pool_mpool_sb::s_magic */
+#define DS_POOL_MPOOL_SB_MAGIC 0x8120da0367913ef9
 
 /*
  * TODO: Make the following internal functions of ds_pool after merging in
  * mgmt.
  */
 
-/*
- * Called by dmg on every storage node belonging to this pool. "path" is the
- * directory under which the VOS and metadata files shall be. "target_uuid"
- * returns the UUID generated for the target on this storage node.
- */
-int
-dsms_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid);
+int ds_pool_create(const uuid_t pool_uuid, const char *path,
+		   uuid_t target_uuid);
 
-/*
- * Called by dmg on a single storage node belonging to this pool after the
- * dsms_pool_create() phase completes. "target_uuids" shall be an array of the
- * target UUIDs returned by the dsms_pool_create() calls. "svc_addrs" returns
- * the ranks of the pool services replicas within "group".
- */
-int
-dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
-		     unsigned int mode, int ntargets, uuid_t target_uuids[],
-		     const char *group, const daos_rank_list_t *target_addrs,
-		     int ndomains, const int *domains,
-		     daos_rank_list_t *svc_addrs);
+int ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid,
+		       unsigned int gid, unsigned int mode, int ntargets,
+		       uuid_t target_uuids[], const char *group,
+		       const daos_rank_list_t *target_addrs, int ndomains,
+		       const int *domains, daos_rank_list_t *svc_addrs);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
@@ -183,14 +169,12 @@ dsms_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
  * large enough, while "size" returns the size of all the handle UUIDs assuming
  * "buf" is large enough.
  */
-int
-dsms_pool_hdl_list(const uuid_t pool_uuid, uuid_t buf, size_t *size);
+int ds_pool_hdl_list(const uuid_t pool_uuid, uuid_t buf, size_t *size);
 
 /*
  * Called by dmg on the pool service leader to evict one or all pool handles of
  * a pool. If "handle_uuid" is NULL, all pool handles of the pool are evicted.
  */
-int
-dsms_pool_hdl_evict(const uuid_t pool_uuid, const uuid_t handle_uuid);
+int ds_pool_hdl_evict(const uuid_t pool_uuid, const uuid_t handle_uuid);
 
 #endif /* __DAOS_SRV_POOL_H__ */

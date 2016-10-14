@@ -245,7 +245,7 @@ int
 ds_obj_rw_handler(dtp_rpc_t *rpc)
 {
 	struct obj_update_in	*oui;
-	struct tgt_cont_hdl	*tch;
+	struct ds_cont_hdl	*cont_hdl;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
 	daos_sg_list_t		**sgls = NULL;
 	dtp_bulk_op_t		bulk_op;
@@ -256,12 +256,12 @@ ds_obj_rw_handler(dtp_rpc_t *rpc)
 	if (oui == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	tch = dsms_tgt_cont_hdl_lookup(oui->oui_co_hdl);
-	if (tch == NULL)
+	cont_hdl = ds_cont_hdl_lookup(oui->oui_co_hdl);
+	if (cont_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	if (opc_get(rpc->dr_opc) == DAOS_OBJ_RPC_UPDATE) {
-		rc = vos_obj_zc_update_begin(tch->tch_cont->dvc_hdl,
+		rc = vos_obj_zc_update_begin(cont_hdl->sch_cont->sc_hdl,
 					     oui->oui_oid, oui->oui_epoch,
 					     &oui->oui_dkey, oui->oui_nr,
 					     oui->oui_iods.da_arrays, &ioh);
@@ -281,7 +281,7 @@ ds_obj_rw_handler(dtp_rpc_t *rpc)
 		int		j;
 		int		idx = 0;
 
-		rc = vos_obj_zc_fetch_begin(tch->tch_cont->dvc_hdl,
+		rc = vos_obj_zc_fetch_begin(cont_hdl->sch_cont->sc_hdl,
 					    oui->oui_oid, oui->oui_epoch,
 					    &oui->oui_dkey, oui->oui_nr,
 					    oui->oui_iods.da_arrays, &ioh);
@@ -324,7 +324,7 @@ ds_obj_rw_handler(dtp_rpc_t *rpc)
 	rc = dsrs_bulk_transfer(rpc, oui->oui_bulks.da_arrays,
 				sgls, NULL, ioh, oui->oui_nr, bulk_op);
 out_tch:
-	dsms_tgt_cont_hdl_put(tch);
+	ds_cont_hdl_put(cont_hdl);
 out:
 	dsrs_rw_complete(rpc, ioh, rc);
 
@@ -389,7 +389,7 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 {
 	struct obj_key_enum_in		*oei;
 	struct obj_key_enum_out		*oeo;
-	struct tgt_cont_hdl		*tch;
+	struct ds_cont_hdl		*cont_hdl;
 	daos_iov_t			*iovs = NULL;
 	daos_sg_list_t			**sgls = NULL;
 	vos_iter_param_t		param;
@@ -410,8 +410,8 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	tch = dsms_tgt_cont_hdl_lookup(oei->oei_co_hdl);
-	if (tch == NULL)
+	cont_hdl = ds_cont_hdl_lookup(oei->oei_co_hdl);
+	if (cont_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	oeo = dtp_reply_get(rpc);
@@ -419,7 +419,7 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 		D_GOTO(out_tch, rc = -DER_INVAL);
 
 	memset(&param, 0, sizeof(param));
-	param.ip_hdl	= tch->tch_cont->dvc_hdl;
+	param.ip_hdl	= cont_hdl->sch_cont->sc_hdl;
 	param.ip_oid	= oei->oei_oid;
 	param.ip_epr.epr_lo = oei->oei_epoch;
 	if (type == VOS_ITER_AKEY) {
@@ -521,7 +521,7 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 				sgls, iovs, DAOS_HDL_INVAL, 1,
 				DTP_BULK_PUT);
 out_tch:
-	dsms_tgt_cont_hdl_put(tch);
+	ds_cont_hdl_put(cont_hdl);
 
 out:
 	dsrs_eu_complete(rpc, sgls, iovs, rc);

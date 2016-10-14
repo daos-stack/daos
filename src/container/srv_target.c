@@ -28,13 +28,13 @@
  *
  * Data structures used here:
  *
- *                 Pool          Container
+ *                 Pool           Container
  *
- *         Global  tgt_pool
- *                 tgt_pool_hdl
+ *         Global  ds_pool
+ *                 ds_pool_hdl
  *
- *   Thread-local  dsms_vpool    dsms_vcont
- *                               tgt_cont_hdl
+ *   Thread-local  ds_pool_child  ds_cont
+ *                                ds_cont_hdl
  */
 
 #include <daos_srv/container.h>
@@ -45,93 +45,91 @@
 #include "rpc.h"
 #include "srv_internal.h"
 
-/*
- * dsms_vcont objects: thread-local container cache
- */
+/* ds_cont ********************************************************************/
 
-static inline struct dsms_vcont *
-vcont_obj(struct daos_llink *llink)
+static inline struct ds_cont *
+cont_obj(struct daos_llink *llink)
 {
-	return container_of(llink, struct dsms_vcont, dvc_list);
+	return container_of(llink, struct ds_cont, sc_list);
 }
 
 static int
-vcont_alloc_ref(void *key, unsigned int ksize, void *varg,
-		struct daos_llink **link)
+cont_alloc_ref(void *key, unsigned int ksize, void *varg,
+	       struct daos_llink **link)
 {
-	struct dsms_vpool      *pool = varg;
-	struct dsms_vcont      *cont;
+	struct ds_pool_child   *pool = varg;
+	struct ds_cont	       *cont;
 	int			rc;
 
 	if (pool == NULL)
 		return -DER_NONEXIST;
 
-	D_DEBUG(DF_DSMS, DF_CONT": creating\n", DP_CONT(pool->dvp_uuid, key));
+	D_DEBUG(DF_DSMS, DF_CONT": creating\n", DP_CONT(pool->spc_uuid, key));
 
 	D_ALLOC_PTR(cont);
 	if (cont == NULL)
 		return -DER_NOMEM;
 
-	uuid_copy(cont->dvc_uuid, key);
+	uuid_copy(cont->sc_uuid, key);
 
-	rc = vos_co_open(pool->dvp_hdl, key, &cont->dvc_hdl);
+	rc = vos_co_open(pool->spc_hdl, key, &cont->sc_hdl);
 	if (rc != 0) {
 		D_FREE_PTR(cont);
 		return rc;
 	}
 
-	*link = &cont->dvc_list;
+	*link = &cont->sc_list;
 	return 0;
 }
 
 static void
-vcont_free_ref(struct daos_llink *llink)
+cont_free_ref(struct daos_llink *llink)
 {
-	struct dsms_vcont *cont = vcont_obj(llink);
+	struct ds_cont *cont = cont_obj(llink);
 
-	D_DEBUG(DF_DSMS, DF_CONT": freeing\n", DP_CONT(NULL, cont->dvc_uuid));
-	vos_co_close(cont->dvc_hdl);
+	D_DEBUG(DF_DSMS, DF_CONT": freeing\n", DP_CONT(NULL, cont->sc_uuid));
+	vos_co_close(cont->sc_hdl);
 	D_FREE_PTR(cont);
 }
 
 static bool
-vcont_cmp_keys(const void *key, unsigned int ksize, struct daos_llink *llink)
+cont_cmp_keys(const void *key, unsigned int ksize, struct daos_llink *llink)
 {
-	struct dsms_vcont *cont = vcont_obj(llink);
+	struct ds_cont *cont = cont_obj(llink);
 
-	return uuid_compare(key, cont->dvc_uuid) == 0;
+	return uuid_compare(key, cont->sc_uuid) == 0;
 }
 
-static struct daos_llink_ops vcont_cache_ops = {
-	.lop_alloc_ref	= vcont_alloc_ref,
-	.lop_free_ref	= vcont_free_ref,
-	.lop_cmp_keys	= vcont_cmp_keys
+static struct daos_llink_ops cont_cache_ops = {
+	.lop_alloc_ref	= cont_alloc_ref,
+	.lop_free_ref	= cont_free_ref,
+	.lop_cmp_keys	= cont_cmp_keys
 };
 
 int
-dsms_vcont_cache_create(struct daos_lru_cache **cache)
+ds_cont_cache_create(struct daos_lru_cache **cache)
 {
 	/*
 	 * Since there's currently no way to evict an idle object, we don't
 	 * really cache any idle objects.
 	 */
 	return daos_lru_cache_create(0 /* bits */, DHASH_FT_NOLOCK /* feats */,
-				     &vcont_cache_ops, cache);
+				     &cont_cache_ops, cache);
 }
 
 void
-dsms_vcont_cache_destroy(struct daos_lru_cache *cache)
+ds_cont_cache_destroy(struct daos_lru_cache *cache)
 {
 	daos_lru_cache_destroy(cache);
 }
 
 /*
  * If "pool == NULL", then this is assumed to be a pure lookup. In this case,
- * -DER_NONEXIST is returned if the dsms_vcont object does not exist.
+ * -DER_NONEXIST is returned if the ds_cont object does not exist.
  */
 static int
-vcont_lookup(struct daos_lru_cache *cache, const uuid_t uuid,
-	     struct dsms_vpool *pool, struct dsms_vcont **cont)
+cont_lookup(struct daos_lru_cache *cache, const uuid_t uuid,
+	    struct ds_pool_child *pool, struct ds_cont **cont)
 {
 	struct daos_llink      *llink;
 	int			rc;
@@ -150,106 +148,104 @@ vcont_lookup(struct daos_lru_cache *cache, const uuid_t uuid,
 		return rc;
 	}
 
-	*cont = vcont_obj(llink);
+	*cont = cont_obj(llink);
 	return 0;
 }
 
 static void
-vcont_put(struct daos_lru_cache *cache, struct dsms_vcont *cont)
+cont_put(struct daos_lru_cache *cache, struct ds_cont *cont)
 {
-	daos_lru_ref_release(cache, &cont->dvc_list);
+	daos_lru_ref_release(cache, &cont->sc_list);
 }
 
-/*
- * tgt_cont_hdl objects: thread-local container handle hash table
- */
+/* ds_cont_hdl ****************************************************************/
 
-static inline struct tgt_cont_hdl *
-tgt_cont_hdl_obj(daos_list_t *rlink)
+static inline struct ds_cont_hdl *
+cont_hdl_obj(daos_list_t *rlink)
 {
-	return container_of(rlink, struct tgt_cont_hdl, tch_entry);
+	return container_of(rlink, struct ds_cont_hdl, sch_entry);
 }
 
 static bool
-tgt_cont_hdl_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
-		     const void *key, unsigned int ksize)
+cont_hdl_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
+		 const void *key, unsigned int ksize)
 {
-	struct tgt_cont_hdl *hdl = tgt_cont_hdl_obj(rlink);
+	struct ds_cont_hdl *hdl = cont_hdl_obj(rlink);
 
 	D_ASSERTF(ksize == sizeof(uuid_t), "%u\n", ksize);
-	return uuid_compare(hdl->tch_uuid, key) == 0;
+	return uuid_compare(hdl->sch_uuid, key) == 0;
 }
 
 static void
-tgt_cont_hdl_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+cont_hdl_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
 {
-	tgt_cont_hdl_obj(rlink)->tch_ref++;
+	cont_hdl_obj(rlink)->sch_ref++;
 }
 
 static bool
-tgt_cont_hdl_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+cont_hdl_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
 {
-	struct tgt_cont_hdl *hdl = tgt_cont_hdl_obj(rlink);
+	struct ds_cont_hdl *hdl = cont_hdl_obj(rlink);
 
-	hdl->tch_ref--;
-	return hdl->tch_ref == 0;
+	hdl->sch_ref--;
+	return hdl->sch_ref == 0;
 }
 
 static void
-tgt_cont_hdl_rec_free(struct dhash_table *htable, daos_list_t *rlink)
+cont_hdl_rec_free(struct dhash_table *htable, daos_list_t *rlink)
 {
-	struct tgt_cont_hdl    *hdl = tgt_cont_hdl_obj(rlink);
+	struct ds_cont_hdl     *hdl = cont_hdl_obj(rlink);
 	struct dsm_tls	       *tls = dsm_tls_get();
 
 	D_DEBUG(DF_DSMS, DF_CONT": freeing "DF_UUID"\n",
-		DP_CONT(hdl->tch_pool->dvp_uuid, hdl->tch_cont->dvc_uuid),
-		DP_UUID(hdl->tch_uuid));
-	D_ASSERT(dhash_rec_unlinked(&hdl->tch_entry));
-	D_ASSERTF(hdl->tch_ref == 0, "%d\n", hdl->tch_ref);
-	vcont_put(tls->dt_cont_cache, hdl->tch_cont);
-	vpool_put(hdl->tch_pool);
+		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
+		DP_UUID(hdl->sch_uuid));
+	D_ASSERT(dhash_rec_unlinked(&hdl->sch_entry));
+	D_ASSERTF(hdl->sch_ref == 0, "%d\n", hdl->sch_ref);
+	cont_put(tls->dt_cont_cache, hdl->sch_cont);
+	ds_pool_child_put(hdl->sch_pool);
 	D_FREE_PTR(hdl);
 }
 
-static dhash_table_ops_t tgt_cont_hdl_hash_ops = {
-	.hop_key_cmp	= tgt_cont_hdl_key_cmp,
-	.hop_rec_addref	= tgt_cont_hdl_rec_addref,
-	.hop_rec_decref	= tgt_cont_hdl_rec_decref,
-	.hop_rec_free	= tgt_cont_hdl_rec_free
+static dhash_table_ops_t cont_hdl_hash_ops = {
+	.hop_key_cmp	= cont_hdl_key_cmp,
+	.hop_rec_addref	= cont_hdl_rec_addref,
+	.hop_rec_decref	= cont_hdl_rec_decref,
+	.hop_rec_free	= cont_hdl_rec_free
 };
 
 int
-dsms_tgt_cont_hdl_hash_create(struct dhash_table *hash)
+ds_cont_hdl_hash_create(struct dhash_table *hash)
 {
 	return dhash_table_create_inplace(0 /* feats */, 8 /* bits */,
 					  NULL /* priv */,
-					  &tgt_cont_hdl_hash_ops, hash);
+					  &cont_hdl_hash_ops, hash);
 }
 
 void
-dsms_tgt_cont_hdl_hash_destroy(struct dhash_table *hash)
+ds_cont_hdl_hash_destroy(struct dhash_table *hash)
 {
 	dhash_table_destroy_inplace(hash, true /* force */);
 }
 
 static int
-tgt_cont_hdl_add(struct dhash_table *hash, struct tgt_cont_hdl *hdl)
+cont_hdl_add(struct dhash_table *hash, struct ds_cont_hdl *hdl)
 {
-	return dhash_rec_insert(hash, hdl->tch_uuid, sizeof(uuid_t),
-				&hdl->tch_entry, true /* exclusive */);
+	return dhash_rec_insert(hash, hdl->sch_uuid, sizeof(uuid_t),
+				&hdl->sch_entry, true /* exclusive */);
 }
 
 static void
-tgt_cont_hdl_delete(struct dhash_table *hash, struct tgt_cont_hdl *hdl)
+cont_hdl_delete(struct dhash_table *hash, struct ds_cont_hdl *hdl)
 {
 	bool deleted;
 
-	deleted = dhash_rec_delete(hash, hdl->tch_uuid, sizeof(uuid_t));
+	deleted = dhash_rec_delete(hash, hdl->sch_uuid, sizeof(uuid_t));
 	D_ASSERT(deleted == true);
 }
 
-static struct tgt_cont_hdl *
-dsms_tgt_cont_hdl_lookup_internal(struct dhash_table *hash, const uuid_t uuid)
+static struct ds_cont_hdl *
+cont_hdl_lookup_internal(struct dhash_table *hash, const uuid_t uuid)
 {
 	daos_list_t *rlink;
 
@@ -257,7 +253,7 @@ dsms_tgt_cont_hdl_lookup_internal(struct dhash_table *hash, const uuid_t uuid)
 	if (rlink == NULL)
 		return NULL;
 
-	return tgt_cont_hdl_obj(rlink);
+	return cont_hdl_obj(rlink);
 }
 
 /**
@@ -268,19 +264,19 @@ dsms_tgt_cont_hdl_lookup_internal(struct dhash_table *hash, const uuid_t uuid)
  * \return			target container handle if succeeds.
  * \return			NULL if it does not find.
  */
-struct tgt_cont_hdl *
-dsms_tgt_cont_hdl_lookup(const uuid_t uuid)
+struct ds_cont_hdl *
+ds_cont_hdl_lookup(const uuid_t uuid)
 {
 	struct dhash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
 
-	return dsms_tgt_cont_hdl_lookup_internal(hash, uuid);
+	return cont_hdl_lookup_internal(hash, uuid);
 }
 
 static void
-dsms_tgt_cont_hdl_put_internal(struct dhash_table *hash,
-			       struct tgt_cont_hdl *hdl)
+cont_hdl_put_internal(struct dhash_table *hash,
+			       struct ds_cont_hdl *hdl)
 {
-	dhash_rec_decref(hash, &hdl->tch_entry);
+	dhash_rec_decref(hash, &hdl->sch_entry);
 }
 
 /**
@@ -289,47 +285,47 @@ dsms_tgt_cont_hdl_put_internal(struct dhash_table *hash,
  * \param hdl [IN]		container handle to be put.
  **/
 void
-dsms_tgt_cont_hdl_put(struct tgt_cont_hdl *hdl)
+ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 {
 	struct dhash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
 
-	dsms_tgt_cont_hdl_put_internal(hash, hdl);
+	cont_hdl_put_internal(hash, hdl);
 }
 
 /*
- * Called via dss_collective() to destroy the per-thread container (i.e.,
- * dsms_vcont) as well as the vos container.
+ * Called via dss_collective() to destroy the ds_cont object as well as the vos
+ * container.
  */
 static int
-es_cont_destroy(void *vin)
+cont_destroy_one(void *vin)
 {
 	struct tgt_cont_destroy_in     *in = vin;
 	struct dsm_tls		       *tls = dsm_tls_get();
-	struct dsms_vpool	       *pool;
-	struct dsms_vcont	       *cont;
+	struct ds_pool_child	       *pool;
+	struct ds_cont		       *cont;
 	int				rc;
 
-	pool = vpool_lookup(in->tcdi_pool);
+	pool = ds_pool_child_lookup(in->tcdi_pool);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_PERM);
 
-	rc = vcont_lookup(tls->dt_cont_cache, in->tcdi_cont, NULL /* arg */,
-			  &cont);
+	rc = cont_lookup(tls->dt_cont_cache, in->tcdi_cont, NULL /* arg */,
+			 &cont);
 	if (rc == 0) {
 		/* Should evict if idle, but no such interface at the moment. */
-		vcont_put(tls->dt_cont_cache, cont);
+		cont_put(tls->dt_cont_cache, cont);
 		D_GOTO(out_pool, rc = -DER_BUSY);
 	} else if (rc != -DER_NONEXIST) {
 		D_GOTO(out_pool, rc);
 	}
 
 	D_DEBUG(DF_DSMS, DF_CONT": destroying vos container\n",
-		DP_CONT(pool->dvp_uuid, in->tcdi_cont));
+		DP_CONT(pool->spc_uuid, in->tcdi_cont));
 
-	rc = vos_co_destroy(pool->dvp_hdl, in->tcdi_cont);
+	rc = vos_co_destroy(pool->spc_hdl, in->tcdi_cont);
 
 out_pool:
-	vpool_put(pool);
+	ds_pool_child_put(pool);
 out:
 	return rc;
 }
@@ -344,7 +340,7 @@ dsms_hdlr_tgt_cont_destroy(dtp_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tcdi_pool, in->tcdi_cont), rpc);
 
-	rc = dss_collective(es_cont_destroy, in);
+	rc = dss_collective(cont_destroy_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	out->tcdo_ret = (rc == 0 ? 0 : 1);
@@ -365,36 +361,35 @@ dsms_hdlr_tgt_cont_destroy_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
 }
 
 /*
- * Called via dss_collective() to establish the per-thread container handle
- * (i.e., tgt_cont_hdl) as well as the per-thread container object (i.e.,
- * dsms_vcont).
+ * Called via dss_collective() to establish the ds_cont_hdl object as well as
+ * the ds_cont object.
  */
 static int
-es_cont_open(void *vin)
+cont_open_one(void *vin)
 {
 	struct tgt_cont_open_in	       *in = vin;
 	struct dsm_tls		       *tls = dsm_tls_get();
-	struct tgt_cont_hdl	       *hdl;
+	struct ds_cont_hdl	       *hdl;
 	int				vos_co_created = 0;
 	int				rc;
 
-	hdl = dsms_tgt_cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash,
-						in->tcoi_cont_hdl);
+	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash,
+				       in->tcoi_cont_hdl);
 	if (hdl != NULL) {
-		if (hdl->tch_capas == in->tcoi_capas) {
+		if (hdl->sch_capas == in->tcoi_capas) {
 			D_DEBUG(DF_DSMS, DF_CONT": found compatible container "
 				"handle: hdl="DF_UUID" capas="DF_U64"\n",
 				DP_CONT(in->tcoi_pool, in->tcoi_cont),
-				DP_UUID(in->tcoi_cont_hdl), hdl->tch_capas);
+				DP_UUID(in->tcoi_cont_hdl), hdl->sch_capas);
 			rc = 0;
 		} else {
 			D_ERROR(DF_CONT": found conflicting container handle: "
 				"hdl="DF_UUID" capas="DF_U64"\n",
 				DP_CONT(in->tcoi_pool, in->tcoi_cont),
-				DP_UUID(in->tcoi_cont_hdl), hdl->tch_capas);
+				DP_UUID(in->tcoi_cont_hdl), hdl->sch_capas);
 			rc = -DER_EXIST;
 		}
-		dsms_tgt_cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
+		cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 		return rc;
 	}
 
@@ -402,49 +397,49 @@ es_cont_open(void *vin)
 	if (hdl == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	hdl->tch_pool = vpool_lookup(in->tcoi_pool);
-	if (hdl->tch_pool == NULL)
+	hdl->sch_pool = ds_pool_child_lookup(in->tcoi_pool);
+	if (hdl->sch_pool == NULL)
 		D_GOTO(err_hdl, rc = -DER_NO_PERM);
 
-	rc = vcont_lookup(tls->dt_cont_cache, in->tcoi_cont, hdl->tch_pool,
-			  &hdl->tch_cont);
+	rc = cont_lookup(tls->dt_cont_cache, in->tcoi_cont, hdl->sch_pool,
+			  &hdl->sch_cont);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DF_DSMS, DF_CONT": creating new vos container\n",
-			DP_CONT(hdl->tch_pool->dvp_uuid, in->tcoi_cont));
+			DP_CONT(hdl->sch_pool->spc_uuid, in->tcoi_cont));
 
-		rc = vos_co_create(hdl->tch_pool->dvp_hdl, in->tcoi_cont);
+		rc = vos_co_create(hdl->sch_pool->spc_hdl, in->tcoi_cont);
 		if (rc != 0)
 			D_GOTO(err_pool, rc);
 
 		vos_co_created = 1;
 
-		rc = vcont_lookup(tls->dt_cont_cache, in->tcoi_cont,
-				  hdl->tch_pool, &hdl->tch_cont);
+		rc = cont_lookup(tls->dt_cont_cache, in->tcoi_cont,
+				  hdl->sch_pool, &hdl->sch_cont);
 		if (rc != 0)
 			D_GOTO(err_vos_co, rc);
 	} else if (rc != 0) {
 		D_GOTO(err_pool, rc);
 	}
 
-	uuid_copy(hdl->tch_uuid, in->tcoi_cont_hdl);
-	hdl->tch_capas = in->tcoi_capas;
+	uuid_copy(hdl->sch_uuid, in->tcoi_cont_hdl);
+	hdl->sch_capas = in->tcoi_capas;
 
-	rc = tgt_cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
+	rc = cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
 	if (rc != 0)
 		D_GOTO(err_cont, rc);
 
 	return 0;
 
 err_cont:
-	vcont_put(tls->dt_cont_cache, hdl->tch_cont);
+	cont_put(tls->dt_cont_cache, hdl->sch_cont);
 err_vos_co:
 	if (vos_co_created) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
-			DP_CONT(hdl->tch_pool->dvp_uuid, in->tcoi_cont));
-		vos_co_destroy(hdl->tch_pool->dvp_hdl, in->tcoi_cont);
+			DP_CONT(hdl->sch_pool->spc_uuid, in->tcoi_cont));
+		vos_co_destroy(hdl->sch_pool->spc_hdl, in->tcoi_cont);
 	}
 err_pool:
-	vpool_put(hdl->tch_pool);
+	ds_pool_child_put(hdl->sch_pool);
 err_hdl:
 	D_FREE_PTR(hdl);
 err:
@@ -462,7 +457,7 @@ dsms_hdlr_tgt_cont_open(dtp_rpc_t *rpc)
 		DP_CONT(in->tcoi_pool, in->tcoi_cont), rpc,
 		DP_UUID(in->tcoi_cont_hdl));
 
-	rc = dss_collective(es_cont_open, in);
+	rc = dss_collective(cont_open_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	out->tcoo_ret = (rc == 0 ? 0 : 1);
@@ -482,25 +477,22 @@ dsms_hdlr_tgt_cont_open_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
 	return 0;
 }
 
-/*
- * Called via dss_collective() to close the per-thread container handle
- * (i.e., tgt_cont_hdl).
- */
+/* Called via dss_collective() to close the ds_cont_hdl object. */
 static int
-es_cont_close(void *vin)
+cont_close_one(void *vin)
 {
 	struct tgt_cont_close_in       *in = vin;
 	struct dsm_tls		       *tls = dsm_tls_get();
-	struct tgt_cont_hdl	       *hdl;
+	struct ds_cont_hdl	       *hdl;
 
-	hdl = dsms_tgt_cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash,
-						in->tcci_cont_hdl);
+	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash,
+				       in->tcci_cont_hdl);
 	if (hdl == NULL)
 		return 0;
 
-	tgt_cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
 
-	dsms_tgt_cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
+	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
 	return 0;
 }
 
@@ -514,7 +506,7 @@ dsms_hdlr_tgt_cont_close(dtp_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(NULL, NULL), rpc, DP_UUID(in->tcci_cont_hdl));
 
-	rc = dss_collective(es_cont_close, in);
+	rc = dss_collective(cont_close_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	out->tcco_ret = (rc == 0 ? 0 : 1);

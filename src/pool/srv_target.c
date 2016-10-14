@@ -28,13 +28,13 @@
  *
  * Data structures used here:
  *
- *                 Pool          Container
+ *                 Pool           Container
  *
- *         Global  tgt_pool
- *                 tgt_pool_hdl
+ *         Global  ds_pool
+ *                 ds_pool_hdl
  *
- *   Thread-local  dsms_vpool    dsms_vcont
- *                               tgt_cont_hdl
+ *   Thread-local  ds_pool_child  ds_cont
+ *                                ds_cont_hdl
  */
 
 #include <daos_srv/pool.h>
@@ -46,115 +46,116 @@
 #include "rpc.h"
 #include "srv_internal.h"
 
-/*
- * dsms_vpool objects: thread-local pool cache
- */
-struct dsms_vpool *
-vpool_lookup(const uuid_t vp_uuid)
-{
-	struct dsms_vpool *dvp;
-	struct dsm_tls  *tls = dsm_tls_get();
+/* ds_pool_child **************************************************************/
 
-	daos_list_for_each_entry(dvp, &tls->dt_pool_list, dvp_list) {
-		if (uuid_compare(vp_uuid, dvp->dvp_uuid) == 0) {
-			dvp->dvp_ref++;
-			return dvp;
+struct ds_pool_child *
+ds_pool_child_lookup(const uuid_t uuid)
+{
+	struct ds_pool_child   *child;
+	struct dsm_tls	       *tls = dsm_tls_get();
+
+	daos_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
+		if (uuid_compare(uuid, child->spc_uuid) == 0) {
+			child->spc_ref++;
+			return child;
 		}
 	}
 	return NULL;
 }
 
 void
-vpool_put(struct dsms_vpool *vpool)
+ds_pool_child_put(struct ds_pool_child *child)
 {
-	D_ASSERTF(vpool->dvp_ref > 0, "%d\n", vpool->dvp_ref);
-	vpool->dvp_ref--;
-	if (vpool->dvp_ref == 0) {
+	D_ASSERTF(child->spc_ref > 0, "%d\n", child->spc_ref);
+	child->spc_ref--;
+	if (child->spc_ref == 0) {
 		D_DEBUG(DF_DSMS, DF_UUID": destroying\n",
-			DP_UUID(vpool->dvp_uuid));
-		daos_list_del(&vpool->dvp_list);
-		vos_pool_close(vpool->dvp_hdl);
-		D_FREE_PTR(vpool);
+			DP_UUID(child->spc_uuid));
+		daos_list_del(&child->spc_list);
+		vos_pool_close(child->spc_hdl);
+		D_FREE_PTR(child);
 	}
 }
 
-struct es_pool_lookup_arg {
+struct pool_child_lookup_arg {
 	void	       *pla_uuid;
 	uint32_t	pla_map_version;
 };
 
 /*
- * Called via dss_collective() to look up or create the per-thread pool object.
+ * Called via dss_collective() to look up or create the ds_pool_child object
+ * for one thread.
  */
 static int
-es_pool_lookup(void *varg)
+pool_child_lookup_one(void *varg)
 {
-	struct es_pool_lookup_arg      *arg = varg;
+	struct pool_child_lookup_arg   *arg = varg;
 	struct dsm_tls		       *tls = dsm_tls_get();
-	struct dsms_vpool	       *vpool;
+	struct ds_pool_child	       *child;
 	struct dss_module_info	       *info = dss_get_module_info();
 	char			       *path;
 	int				rc;
 
-	vpool = vpool_lookup(arg->pla_uuid);
-	if (vpool != NULL) {
-		vpool_put(vpool);
+	child = ds_pool_child_lookup(arg->pla_uuid);
+	if (child != NULL) {
+		ds_pool_child_put(child);
 		return 0;
 	}
 
 	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(arg->pla_uuid));
 
-	D_ALLOC_PTR(vpool);
-	if (vpool == NULL)
+	D_ALLOC_PTR(child);
+	if (child == NULL)
 		return -DER_NOMEM;
 
 	rc = dmgs_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tid, &path);
 	if (rc != 0) {
-		D_FREE_PTR(vpool);
+		D_FREE_PTR(child);
 		return rc;
 	}
 
-	rc = vos_pool_open(path, arg->pla_uuid, &vpool->dvp_hdl);
+	rc = vos_pool_open(path, arg->pla_uuid, &child->spc_hdl);
 
 	free(path);
 
 	if (rc != 0) {
-		D_FREE_PTR(vpool);
+		D_FREE_PTR(child);
 		return rc;
 	}
 
-	uuid_copy(vpool->dvp_uuid, arg->pla_uuid);
-	vpool->dvp_map_version = arg->pla_map_version;
-	vpool->dvp_ref = 1;
-	daos_list_add(&vpool->dvp_list, &tls->dt_pool_list);
-	return 0;
-}
-
-/* Called via dss_collective() to put or free the per-thread pool object. */
-static int
-es_pool_put(void *uuid)
-{
-	struct dsms_vpool      *vpool;
-
-	vpool = vpool_lookup(uuid);
-	if (vpool == NULL)
-		return 0;
-
-	vpool_put(vpool);
-	vpool_put(vpool);
+	uuid_copy(child->spc_uuid, arg->pla_uuid);
+	child->spc_map_version = arg->pla_map_version;
+	child->spc_ref = 1;
+	daos_list_add(&child->spc_list, &tls->dt_pool_list);
 	return 0;
 }
 
 /*
- * tgt_pool objects: global pool cache
+ * Called via dss_collective() to put or free the ds_pool_child object for one
+ * thread.
  */
-
-static struct daos_lru_cache *tgt_pool_cache;
-
-static inline struct tgt_pool *
-tgt_pool_obj(struct daos_llink *llink)
+static int
+pool_child_put_one(void *uuid)
 {
-	return container_of(llink, struct tgt_pool, tp_entry);
+	struct ds_pool_child *child;
+
+	child = ds_pool_child_lookup(uuid);
+	if (child == NULL)
+		return 0;
+
+	ds_pool_child_put(child);
+	ds_pool_child_put(child);
+	return 0;
+}
+
+/* ds_pool ********************************************************************/
+
+static struct daos_lru_cache *pool_cache;
+
+static inline struct ds_pool *
+pool_obj(struct daos_llink *llink)
+{
+	return container_of(llink, struct ds_pool, sp_entry);
 }
 
 enum map_ranks_class {
@@ -316,12 +317,12 @@ out:
 }
 
 static int
-tgt_pool_alloc_ref(void *key, unsigned int ksize, void *varg,
-		   struct daos_llink **link)
+pool_alloc_ref(void *key, unsigned int ksize, void *varg,
+	       struct daos_llink **link)
 {
-	struct tgt_pool_create_arg     *arg = varg;
-	struct tgt_pool		       *pool;
-	struct es_pool_lookup_arg	es_arg;
+	struct ds_pool_create_arg      *arg = varg;
+	struct ds_pool		       *pool;
+	struct pool_child_lookup_arg	collective_arg;
 	int				rc;
 	int				rc_tmp;
 
@@ -334,37 +335,37 @@ tgt_pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	uuid_copy(pool->tp_uuid, key);
-	pool->tp_map_version = arg->pca_map_version;
+	uuid_copy(pool->sp_uuid, key);
+	pool->sp_map_version = arg->pca_map_version;
 
 	if (arg->pca_map_buf != NULL) {
 		rc = pool_map_create(arg->pca_map_buf, arg->pca_map_version,
-				     &pool->tp_map);
+				     &pool->sp_map);
 		if (rc != 0)
 			D_GOTO(err_pool, rc);
 	}
 
-	es_arg.pla_uuid = key;
-	es_arg.pla_map_version = arg->pca_map_version;
+	collective_arg.pla_uuid = key;
+	collective_arg.pla_map_version = arg->pca_map_version;
 
-	rc = dss_collective(es_pool_lookup, &es_arg);
+	rc = dss_collective(pool_child_lookup_one, &collective_arg);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	if (arg->pca_create_group) {
-		D_ASSERT(pool->tp_map != NULL);
-		rc = group_create(key, pool->tp_map, &pool->tp_group);
+		D_ASSERT(pool->sp_map != NULL);
+		rc = group_create(key, pool->sp_map, &pool->sp_group);
 		if (rc != 0)
 			D_GOTO(err_collective, rc);
 	}
 
-	*link = &pool->tp_entry;
+	*link = &pool->sp_entry;
 	return 0;
 
 err_collective:
-	rc_tmp = dss_collective(es_pool_put, key);
+	rc_tmp = dss_collective(pool_child_put_one, key);
 	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
 	if (arg->pca_map_buf != NULL)
-		pool_map_destroy(pool->tp_map);
+		pool_map_destroy(pool->sp_map);
 err_pool:
 	D_FREE_PTR(pool);
 err:
@@ -372,49 +373,49 @@ err:
 }
 
 static void
-tgt_pool_free_ref(struct daos_llink *llink)
+pool_free_ref(struct daos_llink *llink)
 {
-	struct tgt_pool	       *pool = tgt_pool_obj(llink);
-	int			rc;
+	struct ds_pool *pool = pool_obj(llink);
+	int		rc;
 
-	D_DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(pool->tp_uuid));
+	D_DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
-	if (pool->tp_group != NULL) {
-		rc = group_destroy(pool->tp_group);
+	if (pool->sp_group != NULL) {
+		rc = group_destroy(pool->sp_group);
 		D_ASSERTF(rc == 0, "%d\n", rc);
 	}
 
-	rc = dss_collective(es_pool_put, pool->tp_uuid);
+	rc = dss_collective(pool_child_put_one, pool->sp_uuid);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
-	if (pool->tp_map != NULL)
-		pool_map_destroy(pool->tp_map);
+	if (pool->sp_map != NULL)
+		pool_map_destroy(pool->sp_map);
 
 	D_FREE_PTR(pool);
 }
 
 static bool
-tgt_pool_cmp_keys(const void *key, unsigned int ksize, struct daos_llink *llink)
+pool_cmp_keys(const void *key, unsigned int ksize, struct daos_llink *llink)
 {
-	struct tgt_pool *pool = tgt_pool_obj(llink);
+	struct ds_pool *pool = pool_obj(llink);
 
-	return uuid_compare(key, pool->tp_uuid) == 0;
+	return uuid_compare(key, pool->sp_uuid) == 0;
 }
 
-static struct daos_llink_ops tgt_pool_cache_ops = {
-	.lop_alloc_ref	= tgt_pool_alloc_ref,
-	.lop_free_ref	= tgt_pool_free_ref,
-	.lop_cmp_keys	= tgt_pool_cmp_keys
+static struct daos_llink_ops pool_cache_ops = {
+	.lop_alloc_ref	= pool_alloc_ref,
+	.lop_free_ref	= pool_free_ref,
+	.lop_cmp_keys	= pool_cmp_keys
 };
 
 /*
  * If "arg == NULL", then this is assumed to be a pure lookup. In this case,
- * -DER_NONEXIST is returned if the tgt_pool object does not exist in the
- * cache. A group is only created if "arg->pca_create_group != 0".
+ * -DER_NONEXIST is returned if the ds_pool object does not exist in the cache.
+ * A group is only created if "arg->pca_create_group != 0".
  */
 int
-dsms_tgt_pool_lookup(const uuid_t uuid, struct tgt_pool_create_arg *arg,
-		     struct tgt_pool **pool)
+ds_pool_lookup(const uuid_t uuid, struct ds_pool_create_arg *arg,
+	       struct ds_pool **pool)
 {
 	struct daos_llink      *llink;
 	int			rc;
@@ -422,7 +423,7 @@ dsms_tgt_pool_lookup(const uuid_t uuid, struct tgt_pool_create_arg *arg,
 	D_ASSERT(arg == NULL || !arg->pca_create_group ||
 		 arg->pca_map_buf != NULL);
 
-	rc = daos_lru_ref_hold(tgt_pool_cache, (void *)uuid, sizeof(uuid_t),
+	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
 			       arg, &llink);
 	if (rc != 0) {
 		if (arg == NULL && rc == -DER_NONEXIST)
@@ -435,108 +436,106 @@ dsms_tgt_pool_lookup(const uuid_t uuid, struct tgt_pool_create_arg *arg,
 		return rc;
 	}
 
-	*pool = tgt_pool_obj(llink);
+	*pool = pool_obj(llink);
 	return 0;
 }
 
 void
-dsms_tgt_pool_put(struct tgt_pool *pool)
+ds_pool_put(struct ds_pool *pool)
 {
-	daos_lru_ref_release(tgt_pool_cache, &pool->tp_entry);
+	daos_lru_ref_release(pool_cache, &pool->sp_entry);
 }
 
-/*
- * tgt_pool_hdl objects: global pool handle hash table
- */
+/* ds_pool_hdl ****************************************************************/
 
-static struct dhash_table *tgt_pool_hdl_hash;
+static struct dhash_table *pool_hdl_hash;
 
-static inline struct tgt_pool_hdl *
-tgt_pool_hdl_obj(daos_list_t *rlink)
+static inline struct ds_pool_hdl *
+pool_hdl_obj(daos_list_t *rlink)
 {
-	return container_of(rlink, struct tgt_pool_hdl, tph_entry);
+	return container_of(rlink, struct ds_pool_hdl, sph_entry);
 }
 
 static bool
-tgt_pool_hdl_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
-		     const void *key, unsigned int ksize)
+pool_hdl_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
+		 const void *key, unsigned int ksize)
 {
-	struct tgt_pool_hdl *hdl = tgt_pool_hdl_obj(rlink);
+	struct ds_pool_hdl *hdl = pool_hdl_obj(rlink);
 
 	D_ASSERTF(ksize == sizeof(uuid_t), "%u\n", ksize);
-	return uuid_compare(hdl->tph_uuid, key) == 0;
+	return uuid_compare(hdl->sph_uuid, key) == 0;
 }
 
 static void
-tgt_pool_hdl_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+pool_hdl_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
 {
-	tgt_pool_hdl_obj(rlink)->tph_ref++;
+	pool_hdl_obj(rlink)->sph_ref++;
 }
 
 static bool
-tgt_pool_hdl_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+pool_hdl_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
 {
-	struct tgt_pool_hdl *hdl = tgt_pool_hdl_obj(rlink);
+	struct ds_pool_hdl *hdl = pool_hdl_obj(rlink);
 
-	D_ASSERTF(hdl->tph_ref > 0, "%d\n", hdl->tph_ref);
-	hdl->tph_ref--;
-	return hdl->tph_ref == 0;
+	D_ASSERTF(hdl->sph_ref > 0, "%d\n", hdl->sph_ref);
+	hdl->sph_ref--;
+	return hdl->sph_ref == 0;
 }
 
 static void
-tgt_pool_hdl_rec_free(struct dhash_table *htable, daos_list_t *rlink)
+pool_hdl_rec_free(struct dhash_table *htable, daos_list_t *rlink)
 {
-	struct tgt_pool_hdl *hdl = tgt_pool_hdl_obj(rlink);
+	struct ds_pool_hdl *hdl = pool_hdl_obj(rlink);
 
 	D_DEBUG(DF_DSMS, DF_UUID": freeing "DF_UUID"\n",
-		DP_UUID(hdl->tph_pool->tp_uuid), DP_UUID(hdl->tph_uuid));
-	D_ASSERT(dhash_rec_unlinked(&hdl->tph_entry));
-	D_ASSERTF(hdl->tph_ref == 0, "%d\n", hdl->tph_ref);
-	dsms_tgt_pool_put(hdl->tph_pool);
+		DP_UUID(hdl->sph_pool->sp_uuid), DP_UUID(hdl->sph_uuid));
+	D_ASSERT(dhash_rec_unlinked(&hdl->sph_entry));
+	D_ASSERTF(hdl->sph_ref == 0, "%d\n", hdl->sph_ref);
+	ds_pool_put(hdl->sph_pool);
 	D_FREE_PTR(hdl);
 }
 
-static dhash_table_ops_t tgt_pool_hdl_hash_ops = {
-	.hop_key_cmp	= tgt_pool_hdl_key_cmp,
-	.hop_rec_addref	= tgt_pool_hdl_rec_addref,
-	.hop_rec_decref	= tgt_pool_hdl_rec_decref,
-	.hop_rec_free	= tgt_pool_hdl_rec_free
+static dhash_table_ops_t pool_hdl_hash_ops = {
+	.hop_key_cmp	= pool_hdl_key_cmp,
+	.hop_rec_addref	= pool_hdl_rec_addref,
+	.hop_rec_decref	= pool_hdl_rec_decref,
+	.hop_rec_free	= pool_hdl_rec_free
 };
 
 static int
-tgt_pool_hdl_add(struct tgt_pool_hdl *hdl)
+pool_hdl_add(struct ds_pool_hdl *hdl)
 {
-	return dhash_rec_insert(tgt_pool_hdl_hash, hdl->tph_uuid,
-				sizeof(uuid_t), &hdl->tph_entry,
+	return dhash_rec_insert(pool_hdl_hash, hdl->sph_uuid,
+				sizeof(uuid_t), &hdl->sph_entry,
 				true /* exclusive */);
 }
 
 static void
-tgt_pool_hdl_delete(struct tgt_pool_hdl *hdl)
+pool_hdl_delete(struct ds_pool_hdl *hdl)
 {
 	bool deleted;
 
-	deleted = dhash_rec_delete(tgt_pool_hdl_hash, hdl->tph_uuid,
+	deleted = dhash_rec_delete(pool_hdl_hash, hdl->sph_uuid,
 				   sizeof(uuid_t));
 	D_ASSERT(deleted == true);
 }
 
-struct tgt_pool_hdl *
-dsms_tgt_pool_hdl_lookup(const uuid_t uuid)
+struct ds_pool_hdl *
+ds_pool_hdl_lookup(const uuid_t uuid)
 {
 	daos_list_t *rlink;
 
-	rlink = dhash_rec_find(tgt_pool_hdl_hash, uuid, sizeof(uuid_t));
+	rlink = dhash_rec_find(pool_hdl_hash, uuid, sizeof(uuid_t));
 	if (rlink == NULL)
 		return NULL;
 
-	return tgt_pool_hdl_obj(rlink);
+	return pool_hdl_obj(rlink);
 }
 
 void
-dsms_tgt_pool_hdl_put(struct tgt_pool_hdl *hdl)
+ds_pool_hdl_put(struct ds_pool_hdl *hdl)
 {
-	dhash_rec_decref(tgt_pool_hdl_hash, &hdl->tph_entry);
+	dhash_rec_decref(pool_hdl_hash, &hdl->sph_entry);
 }
 
 int
@@ -544,30 +543,30 @@ dsms_hdlr_tgt_pool_connect(dtp_rpc_t *rpc)
 {
 	struct tgt_pool_connect_in     *in = dtp_req_get(rpc);
 	struct tgt_pool_connect_out    *out = dtp_reply_get(rpc);
-	struct tgt_pool		       *pool;
-	struct tgt_pool_hdl	       *hdl;
-	struct tgt_pool_create_arg	arg;
+	struct ds_pool		       *pool;
+	struct ds_pool_hdl	       *hdl;
+	struct ds_pool_create_arg	arg;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->tpci_pool), rpc, DP_UUID(in->tpci_pool_hdl));
 
-	hdl = dsms_tgt_pool_hdl_lookup(in->tpci_pool_hdl);
+	hdl = ds_pool_hdl_lookup(in->tpci_pool_hdl);
 	if (hdl != NULL) {
-		if (hdl->tph_capas == in->tpci_capas) {
+		if (hdl->sph_capas == in->tpci_capas) {
 			D_DEBUG(DF_DSMS, DF_UUID": found compatible pool "
 				"handle: hdl="DF_UUID" capas="DF_U64"\n",
 				DP_UUID(in->tpci_pool),
-				DP_UUID(in->tpci_pool_hdl), hdl->tph_capas);
+				DP_UUID(in->tpci_pool_hdl), hdl->sph_capas);
 			rc = 0;
 		} else {
 			D_ERROR(DF_UUID": found conflicting pool handle: hdl="
 				DF_UUID" capas="DF_U64"\n",
 				DP_UUID(in->tpci_pool),
-				DP_UUID(in->tpci_pool_hdl), hdl->tph_capas);
+				DP_UUID(in->tpci_pool_hdl), hdl->sph_capas);
 			rc = -DER_EXIST;
 		}
-		dsms_tgt_pool_hdl_put(hdl);
+		ds_pool_hdl_put(hdl);
 		D_GOTO(out, rc);
 	}
 
@@ -579,20 +578,19 @@ dsms_hdlr_tgt_pool_connect(dtp_rpc_t *rpc)
 	arg.pca_map_version = in->tpci_pool_map_version;
 	arg.pca_create_group = 0;
 
-	rc = dsms_tgt_pool_lookup(in->tpci_pool, &arg,
-				  &pool);
+	rc = ds_pool_lookup(in->tpci_pool, &arg, &pool);
 	if (rc != 0) {
 		D_FREE_PTR(hdl);
 		D_GOTO(out, rc);
 	}
 
-	uuid_copy(hdl->tph_uuid, in->tpci_pool_hdl);
-	hdl->tph_capas = in->tpci_capas;
-	hdl->tph_pool = pool;
+	uuid_copy(hdl->sph_uuid, in->tpci_pool_hdl);
+	hdl->sph_capas = in->tpci_capas;
+	hdl->sph_pool = pool;
 
-	rc = tgt_pool_hdl_add(hdl);
+	rc = pool_hdl_add(hdl);
 	if (rc != 0) {
-		dsms_tgt_pool_put(pool);
+		ds_pool_put(pool);
 		D_GOTO(out, rc);
 	}
 
@@ -619,27 +617,27 @@ dsms_hdlr_tgt_pool_disconnect(dtp_rpc_t *rpc)
 {
 	struct tgt_pool_disconnect_in  *in = dtp_req_get(rpc);
 	struct tgt_pool_disconnect_out *out = dtp_reply_get(rpc);
-	struct tgt_pool_hdl	       *hdl;
+	struct ds_pool_hdl	       *hdl;
 	int				rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->tpdi_pool), rpc, DP_UUID(in->tpdi_pool_hdl));
 
-	hdl = dsms_tgt_pool_hdl_lookup(in->tpdi_pool_hdl);
+	hdl = ds_pool_hdl_lookup(in->tpdi_pool_hdl);
 	if (hdl == NULL) {
 		D_DEBUG(DF_DSMS, DF_UUID": handle "DF_UUID" does not exist\n",
 			DP_UUID(in->tpdi_pool), DP_UUID(in->tpdi_pool_hdl));
 		D_GOTO(out, rc = 0);
 	}
 
-	tgt_pool_hdl_delete(hdl);
+	pool_hdl_delete(hdl);
 
 	/*
 	 * TODO: Release all container handles associated with this pool
 	 * handle.
 	 */
 
-	dsms_tgt_pool_hdl_put(hdl);
+	ds_pool_hdl_put(hdl);
 out:
 	out->tpdo_ret = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
@@ -664,14 +662,14 @@ dsms_module_target_init(void)
 	int rc;
 
 	rc = daos_lru_cache_create(0 /* bits */, DHASH_FT_NOLOCK /* feats */,
-				   &tgt_pool_cache_ops, &tgt_pool_cache);
+				   &pool_cache_ops, &pool_cache);
 	if (rc != 0)
 		return rc;
 
 	rc = dhash_table_create(0 /* feats */, 4 /* bits */, NULL /* priv */,
-				&tgt_pool_hdl_hash_ops, &tgt_pool_hdl_hash);
+				&pool_hdl_hash_ops, &pool_hdl_hash);
 	if (rc != 0)
-		daos_lru_cache_destroy(tgt_pool_cache);
+		daos_lru_cache_destroy(pool_cache);
 
 	return rc;
 }
@@ -679,7 +677,7 @@ dsms_module_target_init(void)
 void
 dsms_module_target_fini(void)
 {
-	/* Currently, we use "force" to purge all tgt_pool_hdl objects. */
-	dhash_table_destroy(tgt_pool_hdl_hash, true /* force */);
-	daos_lru_cache_destroy(tgt_pool_cache);
+	/* Currently, we use "force" to purge all ds_pool_hdl objects. */
+	dhash_table_destroy(pool_hdl_hash, true /* force */);
+	daos_lru_cache_destroy(pool_cache);
 }
