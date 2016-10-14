@@ -280,7 +280,7 @@ fi
 
 option=
 if [ -z "$WORKSPACE" ]; then
-  if [ -d "/scratch/jenkins-2/artifacts"]; then
+  if [ -d "/scratch/jenkins-2/artifacts" ]; then
     CORAL_ARTIFACTS="/scratch/jenkins-2/artifacts"
   else
     CORAL_ARTIFACTS="/scratch/coral/artifacts"
