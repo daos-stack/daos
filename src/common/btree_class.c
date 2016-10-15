@@ -54,9 +54,7 @@ delete(daos_handle_t tree, daos_iov_t *key)
 {
 	daos_iov_t val;
 
-	val.iov_buf = NULL;
-	val.iov_buf_len = 0;
-	val.iov_len = val.iov_buf_len;
+	daos_iov_set(&val, NULL /* buf */, 0 /* size */);
 
 	return dbtree_update(tree, key, &val);
 }
@@ -71,9 +69,7 @@ lookup_ptr(daos_handle_t tree, daos_iov_t *key, daos_iov_t *val)
 {
 	int rc;
 
-	val->iov_buf = NULL;
-	val->iov_buf_len = 0;
-	val->iov_len = val->iov_buf_len;
+	daos_iov_set(val, NULL /* buf */, 0 /* size */);
 
 	rc = dbtree_lookup(tree, key, val);
 	if (rc != 0)
@@ -96,9 +92,7 @@ create_tree(daos_handle_t tree, daos_iov_t *key, unsigned int class,
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
 
 	memset(&buf, 0, sizeof(buf));
-	val.iov_buf = (void *)&buf;
-	val.iov_buf_len = sizeof(buf);
-	val.iov_len = val.iov_buf_len;
+	daos_iov_set(&val, &buf, sizeof(buf));
 
 	rc = dbtree_update(tree, key, &val);
 	if (rc != 0)
@@ -379,13 +373,8 @@ dbtree_nv_update(daos_handle_t tree, const char *name, const void *value,
 
 	D_DEBUG(DF_DSMS, "updating \"%s\":%p+%zu\n", name, value, size);
 
-	key.iov_buf = (void *)name;
-	key.iov_buf_len = strlen(name) + 1;
-	key.iov_len = key.iov_buf_len;
-
-	val.iov_buf = (void *)value;
-	val.iov_buf_len = size;
-	val.iov_len = val.iov_buf_len;
+	daos_iov_set(&key, (void *)name, strlen(name) + 1);
+	daos_iov_set(&val, (void *)value, size);
 
 	rc = dbtree_update(tree, &key, &val);
 	if (rc != 0)
@@ -403,13 +392,8 @@ dbtree_nv_lookup(daos_handle_t tree, const char *name, void *value, size_t size)
 
 	D_DEBUG(DF_DSMS, "looking up \"%s\"\n", name);
 
-	key.iov_buf = (void *)name;
-	key.iov_buf_len = strlen(name) + 1;
-	key.iov_len = key.iov_buf_len;
-
-	val.iov_buf = value;
-	val.iov_buf_len = size;
-	val.iov_len = val.iov_buf_len;
+	daos_iov_set(&key, (void *)name, strlen(name) + 1);
+	daos_iov_set(&val, value, size);
 
 	rc = dbtree_lookup(tree, &key, &val);
 	if (rc != 0) {
@@ -437,9 +421,7 @@ dbtree_nv_lookup_ptr(daos_handle_t tree, const char *name, void **value,
 
 	D_DEBUG(DF_DSMS, "looking up \"%s\" ptr\n", name);
 
-	key.iov_buf = (void *)name;
-	key.iov_buf_len = strlen(name) + 1;
-	key.iov_len = key.iov_buf_len;
+	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 
 	rc = lookup_ptr(tree, &key, &val);
 	if (rc != 0) {
@@ -463,9 +445,7 @@ dbtree_nv_delete(daos_handle_t tree, const char *name)
 
 	D_DEBUG(DF_DSMS, "deleting \"%s\"\n", name);
 
-	key.iov_buf = (void *)name;
-	key.iov_buf_len = strlen(name) + 1;
-	key.iov_len = key.iov_buf_len;
+	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 
 	rc = dbtree_delete(tree, &key);
 	if (rc != 0) {
@@ -492,9 +472,7 @@ dbtree_nv_create_tree(daos_handle_t tree, const char *name, unsigned int class,
 	daos_iov_t	key;
 	int		rc;
 
-	key.iov_buf = (void *)name;
-	key.iov_buf_len = strlen(name) + 1;
-	key.iov_len = key.iov_buf_len;
+	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 
 	rc = create_tree(tree, &key, class, feats, order, mp, tree_new);
 	if (rc != 0)
@@ -510,9 +488,7 @@ dbtree_nv_open_tree(daos_handle_t tree, const char *name, PMEMobjpool *mp,
 	daos_iov_t	key;
 	int		rc;
 
-	key.iov_buf = (void *)name;
-	key.iov_buf_len = strlen(name) + 1;
-	key.iov_len = key.iov_buf_len;
+	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 
 	rc = open_tree(tree, &key, mp, tree_child);
 	if (rc != 0) {
@@ -532,9 +508,7 @@ dbtree_nv_destroy_tree(daos_handle_t tree, const char *name, PMEMobjpool *mp)
 	daos_iov_t	key;
 	int		rc;
 
-	key.iov_buf = (void *)name;
-	key.iov_buf_len = strlen(name) + 1;
-	key.iov_len = key.iov_buf_len;
+	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 
 	rc = destroy_tree(tree, &key, mp);
 	if (rc != 0) {
@@ -714,13 +688,8 @@ dbtree_uv_update(daos_handle_t tree, const uuid_t uuid, const void *value,
 	daos_iov_t	val;
 	int		rc;
 
-	key.iov_buf = (void *)uuid;
-	key.iov_buf_len = sizeof(uuid_t);
-	key.iov_len = key.iov_buf_len;
-
-	val.iov_buf = (void *)value;
-	val.iov_buf_len = size;
-	val.iov_len = val.iov_buf_len;
+	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+	daos_iov_set(&val, (void *)value, size);
 
 	rc = dbtree_update(tree, &key, &val);
 	if (rc != 0)
@@ -737,13 +706,8 @@ dbtree_uv_lookup(daos_handle_t tree, const uuid_t uuid, void *value,
 	daos_iov_t	val;
 	int		rc;
 
-	key.iov_buf = (void *)uuid;
-	key.iov_buf_len = sizeof(uuid_t);
-	key.iov_len = key.iov_buf_len;
-
-	val.iov_buf = value;
-	val.iov_buf_len = size;
-	val.iov_len = val.iov_buf_len;
+	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+	daos_iov_set(&val, value, size);
 
 	rc = dbtree_lookup(tree, &key, &val);
 	if (rc != 0) {
@@ -765,9 +729,7 @@ dbtree_uv_delete(daos_handle_t tree, const uuid_t uuid)
 	daos_iov_t	key;
 	int		rc;
 
-	key.iov_buf = (void *)uuid;
-	key.iov_buf_len = sizeof(uuid_t);
-	key.iov_len = key.iov_buf_len;
+	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
 	rc = dbtree_delete(tree, &key);
 	if (rc != 0) {
@@ -796,9 +758,7 @@ dbtree_uv_create_tree(daos_handle_t tree, const uuid_t uuid, unsigned int class,
 	daos_iov_t	key;
 	int		rc;
 
-	key.iov_buf = (void *)uuid;
-	key.iov_buf_len = sizeof(uuid_t);
-	key.iov_len = key.iov_buf_len;
+	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
 	rc = create_tree(tree, &key, class, feats, order, mp, tree_new);
 	if (rc != 0)
@@ -814,9 +774,7 @@ dbtree_uv_open_tree(daos_handle_t tree, const uuid_t uuid, PMEMobjpool *mp,
 	daos_iov_t	key;
 	int		rc;
 
-	key.iov_buf = (void *)uuid;
-	key.iov_buf_len = sizeof(uuid_t);
-	key.iov_len = key.iov_buf_len;
+	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
 	rc = open_tree(tree, &key, mp, tree_child);
 	if (rc != 0) {
@@ -838,9 +796,7 @@ dbtree_uv_destroy_tree(daos_handle_t tree, const uuid_t uuid, PMEMobjpool *mp)
 	daos_iov_t	key;
 	int		rc;
 
-	key.iov_buf = (void *)uuid;
-	key.iov_buf_len = sizeof(uuid_t);
-	key.iov_len = key.iov_buf_len;
+	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
 	rc = destroy_tree(tree, &key, mp);
 	if (rc != 0) {
@@ -1012,13 +968,8 @@ dbtree_ec_update(daos_handle_t tree, uint64_t epoch, const uint64_t *count)
 
 	D_DEBUG(DF_DSMS, "updating "DF_U64":"DF_U64"\n", epoch, *count);
 
-	key.iov_buf = &epoch;
-	key.iov_buf_len = sizeof(epoch);
-	key.iov_len = key.iov_buf_len;
-
-	val.iov_buf = (void *)count;
-	val.iov_buf_len = sizeof(*count);
-	val.iov_len = val.iov_buf_len;
+	daos_iov_set(&key, &epoch, sizeof(epoch));
+	daos_iov_set(&val, (void *)count, sizeof(*count));
 
 	rc = dbtree_update(tree, &key, &val);
 	if (rc != 0)
@@ -1034,13 +985,8 @@ dbtree_ec_lookup(daos_handle_t tree, uint64_t epoch, uint64_t *count)
 	daos_iov_t	val;
 	int		rc;
 
-	key.iov_buf = &epoch;
-	key.iov_buf_len = sizeof(epoch);
-	key.iov_len = key.iov_buf_len;
-
-	val.iov_buf = count;
-	val.iov_buf_len = sizeof(*count);
-	val.iov_len = val.iov_buf_len;
+	daos_iov_set(&key, &epoch, sizeof(epoch));
+	daos_iov_set(&val, (void *)count, sizeof(*count));
 
 	rc = dbtree_lookup(tree, &key, &val);
 	if (rc != 0) {
@@ -1063,17 +1009,9 @@ dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 	daos_iov_t	val;
 	int		rc;
 
-	key_in.iov_buf = (void *)epoch_in;
-	key_in.iov_buf_len = sizeof(*epoch_in);
-	key_in.iov_len = key_in.iov_buf_len;
-
-	key_out.iov_buf = epoch_out;
-	key_out.iov_buf_len = sizeof(*epoch_out);
-	key_out.iov_len = key_out.iov_buf_len;
-
-	val.iov_buf = count;
-	val.iov_buf_len = sizeof(*count);
-	val.iov_len = val.iov_buf_len;
+	daos_iov_set(&key_in, (void *)epoch_in, sizeof(*epoch_in));
+	daos_iov_set(&key_out, epoch_out, sizeof(*epoch_out));
+	daos_iov_set(&val, (void *)count, sizeof(*count));
 
 	rc = dbtree_fetch(tree, opc, &key_in, &key_out, &val);
 	if (rc != 0) {
@@ -1113,9 +1051,7 @@ dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 		D_GOTO(out, rc);
 	}
 
-	key_in.iov_buf = (void *)epoch_in;
-	key_in.iov_buf_len = sizeof(*epoch_in);
-	key_in.iov_len = key_in.iov_buf_len;
+	daos_iov_set(&key_in, (void *)epoch_in, sizeof(*epoch_in));
 
 	rc = dbtree_iter_probe(iter, opc, &key_in, NULL /* anchor */);
 	if (rc != 0) {
@@ -1125,13 +1061,8 @@ dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 		D_GOTO(out_iter, rc);
 	}
 
-	key_out.iov_buf = &e;
-	key_out.iov_buf_len = sizeof(e);
-	key_out.iov_len = key_out.iov_buf_len;
-
-	val.iov_buf = &c;
-	val.iov_buf_len = sizeof(c);
-	val.iov_len = val.iov_buf_len;
+	daos_iov_set(&key_out, &e, sizeof(e));
+	daos_iov_set(&val, &c, sizeof(c));
 
 	rc = dbtree_iter_fetch(iter, &key_out, &val, NULL /* anchor */);
 	if (rc != 0) {
@@ -1206,9 +1137,7 @@ dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
 
 	D_DEBUG(DF_DSMS, "deleting "DF_U64"\n", epoch);
 
-	key.iov_buf = &epoch;
-	key.iov_buf_len = sizeof(epoch);
-	key.iov_len = key.iov_buf_len;
+	daos_iov_set(&key, &epoch, sizeof(epoch));
 
 	rc = dbtree_delete(tree, &key);
 	if (rc != 0) {
