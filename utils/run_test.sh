@@ -70,10 +70,12 @@ if [[ "$CART_TEST_MODE" =~ (memcheck|all) ]]; then
   python3.4 test_runner scripts/cart_echo_test.yml scripts/cart_test_group.yml
   TESTLOGS="/testLogs/testRun"
   TESTECHODIR="cart_echo_test_loop0/cart_echo_test_default"
-  cp -R ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/*/valgrind*.xml testLogs/.
-
-  TESTECHODIR="cart_echo_test_loop0/cart_test_group_default"
-  cp -R ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/*/valgrind*.xml testLogs/.
-
   cd -
+  RESULTS="valgrind_results"
+  if [[ ! -e ${RESULTS} ]]; then mkdir ${RESULTS}; fi
+  cp -R ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/*/valgrind*.xml ${RESULTS}/.
+
+  TESTECHODIR="cart_test_group_loop0/cart_test_group_default"
+  cp -R ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/*/valgrind*.xml ${RESULTS}/.
+
 fi

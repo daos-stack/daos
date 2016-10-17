@@ -14,6 +14,7 @@ config.log
 *.tar.gz
 /install/
 valgrind.*.xml
+/valgrind_results/
 cart-*.conf
 daos_m.conf
 *~
