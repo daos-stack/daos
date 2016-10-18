@@ -161,6 +161,8 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 	for (d = &comp_type_dict[0]; d->td_type != PO_COMP_TP_UNKNOWN; d++)
 
 static bool pool_map_empty(struct pool_map *map);
+static void pool_tree_count(struct pool_domain *tree,
+			    struct pool_comp_cntr *cntr);
 
 const char *
 pool_comp_state2str(pool_comp_state_t state)
@@ -562,6 +564,72 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 	return 0;
  failed:
 	D_FREE(tree, size);
+	return rc;
+}
+
+/**
+ * Extract pool buffer from a pool map.
+ *
+ * \param map		[IN]	The pool map to extract from.
+ * \param buf_pp	[OUT]	The returned pool buffer, should be freed
+ *				by pool_buf_free.
+ */
+int
+pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp)
+{
+	struct pool_buf		*buf;
+	struct pool_domain	*tree;
+	struct pool_comp_cntr	 cntr;
+	unsigned int		 dom_nr;
+	int			 i;
+	int			 rc;
+
+	D_ASSERT(map->po_tree != NULL);
+	tree = &map->po_tree[1]; /* skip the root */
+	pool_tree_count(tree, &cntr);
+
+	if (cntr.cc_domains + cntr.cc_targets == 0) {
+		D_DEBUG(DF_CL, "Empty pool map.\n");
+		return -DER_NONEXIST;
+	}
+
+	buf = pool_buf_alloc(cntr.cc_domains + cntr.cc_targets);
+	if (buf == NULL)
+		return -DER_NOMEM;
+
+	for (dom_nr = cntr.cc_top_doms; dom_nr != 0;
+	     tree = tree[0].do_children) {
+		int     child_nr;
+
+		for (i = child_nr = 0; i < dom_nr; i++) {
+			struct pool_component	comp;
+
+			comp = tree[i].do_comp;
+			if (tree[i].do_children != NULL) {
+				/* intermediate domain */
+				child_nr += tree[i].do_child_nr;
+			} else {
+				/* the last level domain */
+				comp.co_nr = tree[i].do_target_nr;
+			}
+			pool_buf_attach(buf, &comp, 1);
+		}
+		dom_nr = child_nr;
+	}
+
+	tree = &map->po_tree[0];
+	for (i = 0; i < cntr.cc_targets; i++)
+		pool_buf_attach(buf, &tree->do_targets[i].ta_comp, 1);
+
+	if (buf->pb_nr != buf->pb_target_nr + buf->pb_domain_nr) {
+		D_DEBUG(DF_CL, "Invalid pool map format.\n");
+		D_GOTO(failed, rc = -DER_INVAL);
+	}
+
+	*buf_pp = buf;
+	return 0;
+ failed:
+	pool_buf_free(buf);
 	return rc;
 }
 
