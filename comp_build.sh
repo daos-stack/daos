@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright (c) 2016 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,6 +19,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+set -x
+
 function usage()
 {
   cat << EOF
@@ -32,10 +34,12 @@ Usage: $0 [-c <config_file>] [<custom_build_script>]
 OVERVIEW
        This script is used to build components that use scons_local.  It
        is intended to be used on systems that have access to CORAL_ARTIFACTS
-       as produced by Jenkins.   It utilizes the <name>-update-scratch jobs
+       as produced by Jenkins.   It utilizes the <name>-<job_suffix> jobs
        to grab required dependences for a component.  Therefore, a
        configuration file is required to specify the <name> of the component
        and its dependences.
+       The default job suffix is "-update-scratch" and will be used
+       in this documentation.
 
 CONFIG
        A build configuration file is required.  The file must have the
@@ -182,18 +186,23 @@ function setup_dep()
     echo "Good version can be pulled from $cname"
   fi
 
+  # If matrix jobs are used, then the specific job matrix must be
+  # used to pick up the artifacts
+  # Allow the JOB_SUFFIX to be something else.
+  job_end=${JOB_SUFFIX}${job_matrix}
+
   #Use the latest by default
-  declare $upper_name=${CORAL_ARTIFACTS}/${name}-update-scratch/latest
+  declare $upper_name=${CORAL_ARTIFACTS}/${name}${job_end}/latest
   latest=
-  if [ "${JOB_NAME}" != "${B_COMP}-update-scratch" ]; then
+  if [ "${JOB_NAME}" != "${B_COMP}${JOB_SUFFIX}" ]; then
     #If it's not the scratch job, use a previous build of the scratch job
     echo "Getting $name build from $B_COMP latest"
     comp_name=${B_COMP}
-    latest=$(readlink -f ${CORAL_ARTIFACTS}/${B_COMP}-update-scratch/latest)
+    latest=$(readlink -f ${CORAL_ARTIFACTS}/${B_COMP}${job_end}/latest)
   elif [ -n "$cname" ]; then
     #If it is the scratch job, use a child job, if specified
     echo "Getting $name build from $cname latest"
-    latest=$(readlink -f ${CORAL_ARTIFACTS}/${cname}-update-scratch/latest)
+    latest=$(readlink -f ${CORAL_ARTIFACTS}/${cname}${job_end}/latest)
     comp_name=${cname}
   fi
   if [ -n "$latest" ]; then
@@ -202,7 +211,7 @@ function setup_dep()
     #$GOOD_* only if it is newer than the last version
     #used by master
     good_varname=GOOD_${upper_name}
-    good_version=${CORAL_ARTIFACTS}/${name}-update-scratch/$version
+    good_version=${CORAL_ARTIFACTS}/${name}${job_end}/$version
     declare ${good_varname}=${good_version}
     blessed_varname=SL_${upper_name}_PREFIX
     for subdir in /${comp_name}/TESTING/ /TESTING/scripts/ /${comp_name}/ /; do
@@ -228,7 +237,7 @@ function setup_dep()
         else
           # No update-scratch job to get latest from.  Try component latest
           print_status "No blessed version.  Using ${name} latest"
-          comp_latest=${CORAL_ARTIFACTS}/${name}-update-scratch/latest
+          comp_latest=${CORAL_ARTIFACTS}/${name}${job_end}/latest
           declare $upper_name=${comp_latest}
         fi
       else
@@ -238,13 +247,53 @@ function setup_dep()
       declare $upper_name=$(dirname ${!blessed_varname})
     fi
   fi
-  PREBUILT_AREA=${PREBUILT_AREA}${!upper_name}:
+  if [ "${DOCKER_IMAGE}x" == "x" ]; then
+    PREBUILT_AREA=${PREBUILT_AREA}${!upper_name}:
+  else
+    comp_src=`readlink -f "${!upper_name}"`
+    # If the upper_name is from an older build, it will be the
+    # container absolute path which readlink can not resolve
+    # in the Jenkins workspace
+    if [ "${comp_src}x" == "x" ]; then
+      comp_src=${!upper_name}
+    fi
+    comp_no=`basename "${comp_src}"`
+    # comp_target is path inside the container only
+    comp_target="${DIST_MOUNT}/${name}/${comp_no}"
+    PREBUILT_AREA="${PREBUILT_AREA}${comp_target}:"
+    # WORK_TARGET is base of where comp_target is in the Jenkins workspace
+    mkdir -p ${WORK_TARGET}/${name}/${comp_no}
+    pushd ${WORK_TARGET}/${name}
+      ln -sfn ${comp_no} latest
+    popd
+    tarballs=`find -L ${CORAL_ARTIFACTS}/${name}${job_end}/${comp_no} \
+              -name '*_files.tar.gz'`
+    IFS=$'\n'
+    pushd ${WORK_TARGET}/${name}/${comp_no}
+      for tarball in ${tarballs}; do
+        tarname=`basename ${tarball%_files.tar.gz}`
+        mkdir -p ${tarname}
+        pushd ${tarname}
+          tar -xzf ${tarball}
+        popd
+      done
+    popd
+  fi
 
   echo "$name version is ${!upper_name}"
 }
 
+: ${JOB_SUFFIX:="-update-scratch"}
+if [ -d "/scratch/jenkins-2/artifacts" ];then
+  : ${CORAL_ARTIFACTS:="/scratch/jenkins-2/artifacts"}
+else
+  : ${CORAL_ARTIFACTS:="/scratch/coral/artifacts"}
+fi
+
+
 BUILD_CONFIG=`pwd`/build.config
 CUSTOM_SCRIPT=
+CUSTOM_SCRIPT_PASSED=
 
 while [ -n "$*" ]; do
   case "$1" in
@@ -255,6 +304,7 @@ while [ -n "$*" ]; do
       ;;
     *)
       CUSTOM_SCRIPT=$(realpath $1)
+      CUSTOM_SCRIPT_PASSED=${1}
       shift
       ;;
   esac
@@ -278,23 +328,33 @@ if [ -z "$B_COMP" ]; then
   usage
 fi
 
+job_matrix=
 option=
 if [ -z "$WORKSPACE" ]; then
-  if [ -d "/scratch/jenkins-2/artifacts" ]; then
-    CORAL_ARTIFACTS="/scratch/jenkins-2/artifacts"
-  else
-    CORAL_ARTIFACTS="/scratch/coral/artifacts"
-  fi
   SET_PREFIX=
   B_INS_PATH=`pwd`/install/`uname -s`
   #Set job name so it thinks it's a review job
   JOB_NAME=invalid_job_name
   print_status "Not in Jenkins workspace"
 else
-  B_LINK_PATH="${CORAL_ARTIFACTS}/${JOB_NAME}/${BUILD_NUMBER}"
-  B_INS_PATH="${B_LINK_PATH}/${B_COMP}"
+  if [ "${DOCKER_IMAGE}x" == "x" ]; then
+    B_LINK_PATH="${CORAL_ARTIFACTS}/${JOB_NAME}/${BUILD_NUMBER}"
+    B_INS_PATH="${B_LINK_PATH}/${B_COMP}"
+  else
+    B_LINK_PATH=${DIST_TARGET}
+    B_INS_PATH=${B_LINK_PATH}/${B_COMP}
+  fi
   SET_PREFIX="PREFIX=${B_INS_PATH}"
   print_status "Building $B_INS_PATH in Jenkins workspace"
+  # This will probably break with folders.
+  # Folders are prepended to the displayed job name
+  # matrixes are appended to the displayed job name
+  # Not easy to detect if a matrix job is in a folder, so not trying for now.
+  is_matrix=${JOB_NAME#*/}
+  if [ "${is_matrix}" != "${JOB_NAME}" ]; then
+    # Not equal means a matrix
+    job_matrix="/${is_matrix}"
+  fi
 fi
 
 if [ -d "$CORAL_ARTIFACTS" ]; then
@@ -308,16 +368,31 @@ fi
 set -x
 set -e
 rm -f ${B_COMP}-`uname -s`.conf
-scons $SET_PREFIX ${option}
-scons install
+if [ "${DOCKER_IMAGE}x" == "x" ]; then
+  scons $SET_PREFIX ${option}
+  scons install
 
-if [ -n "$CUSTOM_SCRIPT" ]; then
-  #custom build step
-  print_status "Running custom build step"
-  COMP_PREFIX=${B_INS_PATH}
-  source $CUSTOM_SCRIPT
-fi
+  if [ -n "$CUSTOM_SCRIPT" ]; then
+    #custom build step
+    print_status "Running custom build step"
+    COMP_PREFIX=${B_INS_PATH}
+    source $CUSTOM_SCRIPT
+  fi
 
 if [ -n "${B_LINK_PATH}" ]; then
   ln -sfn ${BUILD_NUMBER} ${CORAL_ARTIFACTS}/${JOB_NAME}/latest
 fi
+else
+
+  docker_script=`find . -name docker_scons_comp_build.sh`
+
+  docker run --rm -u $USER \
+  --cap-add SYS_ADMIN --device /dev/fuse --privileged \
+  -v ${PWD}:/work -v ${WORK_TARGET}:${DIST_MOUNT} \
+  -a stderr -a stdout -i coral/${DOCKER_IMAGE} \
+  /work/${docker_script} "${SET_PREFIX}" "${option}" \
+  "${CUSTOM_SCRIPT_PASSED}" ${B_INS_PATH} \
+  | tee docker_build.log
+
+fi
+
