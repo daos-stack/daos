@@ -70,6 +70,73 @@ struct dc_obj_shard {
 	daos_list_t		do_co_list;
 };
 
+/**
+ * Temporary solution for packing the tag/shard into the hash out,
+ * tag stays at 25-28 bytes of daos_hash_out_t->body; shard stays
+ * at 29-32 bytes of daos_hash_out_t->body; and the first 16 bytes
+ * are hash key, see DAOS_HASH_HKEY_LENGTH.
+ */
+
+/* XXX This is a nasty workaround: shard is encoded in the highest
+ * four bytes of the hash anchor. It is ok for now because VOS does
+ * not use those bytes. We need a cleaner way to store shard index.
+ */
+#define ENUM_ANCHOR_TAG_OFF		24
+#define ENUM_ANCHOR_TAG_LENGTH		4
+#define ENUM_ANCHOR_SHARD_OFF		28
+#define ENUM_ANCHOR_SHARD_LENGTH	4
+
+static inline void
+enum_anchor_copy(daos_hash_out_t *dst, daos_hash_out_t *src)
+{
+	memcpy(&dst->body[DAOS_HASH_HKEY_START],
+	       &src->body[DAOS_HASH_HKEY_START], DAOS_HASH_HKEY_LENGTH);
+}
+
+static inline uint32_t
+enum_anchor_get_tag(daos_hash_out_t *anchor)
+{
+	uint32_t tag;
+
+	D_CASSERT(DAOS_HASH_HKEY_START + DAOS_HASH_HKEY_LENGTH <
+		  ENUM_ANCHOR_TAG_OFF);
+	D_CASSERT(DAOS_HASH_HKEY_LENGTH + ENUM_ANCHOR_TAG_LENGTH +
+		  ENUM_ANCHOR_SHARD_LENGTH <= DAOS_HKEY_MAX);
+
+	memcpy(&tag, &anchor->body[ENUM_ANCHOR_TAG_OFF],
+	       ENUM_ANCHOR_TAG_LENGTH);
+
+	return tag;
+}
+
+static inline void
+enum_anchor_set_tag(daos_hash_out_t *anchor, uint32_t tag)
+{
+	memcpy(&anchor->body[ENUM_ANCHOR_TAG_OFF], &tag,
+	       ENUM_ANCHOR_TAG_LENGTH);
+}
+
+static inline uint32_t
+enum_anchor_get_shard(daos_hash_out_t *anchor)
+{
+	uint32_t tag;
+
+	D_CASSERT(DAOS_HASH_HKEY_START + DAOS_HASH_HKEY_LENGTH +
+		  ENUM_ANCHOR_TAG_LENGTH < ENUM_ANCHOR_SHARD_OFF);
+
+	memcpy(&tag, &anchor->body[ENUM_ANCHOR_SHARD_OFF],
+	       ENUM_ANCHOR_SHARD_LENGTH);
+
+	return tag;
+}
+
+static inline void
+enum_anchor_set_shard(daos_hash_out_t *anchor, uint32_t shard)
+{
+	memcpy(&anchor->body[ENUM_ANCHOR_SHARD_OFF], &shard,
+	       ENUM_ANCHOR_SHARD_LENGTH);
+}
+
 int
 dc_obj_shard_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
 		  unsigned int mode, daos_handle_t *oh, daos_event_t *ev);

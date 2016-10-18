@@ -387,36 +387,6 @@ dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
 			    DAOS_OBJ_RPC_FETCH);
 }
 
-/**
- * Temporary solution for packing the tag into the hash out,
- * which will stay at 25-28 bytes of daos_hash_out_t->body
- */
-#define ENUM_ANCHOR_TAG_OFF		24
-
-static void
-enum_anchor_copy(daos_hash_out_t *dst, daos_hash_out_t *src)
-{
-	memcpy(&dst->body[DAOS_HASH_HKEY_START],
-	       &src->body[DAOS_HASH_HKEY_START], DAOS_HASH_HKEY_LENGTH);
-}
-
-static uint32_t
-enum_anchor_get_tag(daos_hash_out_t *anchor)
-{
-	uint32_t tag;
-
-	D_CASSERT(DAOS_HASH_HKEY_START + DAOS_HASH_HKEY_LENGTH <
-		  ENUM_ANCHOR_TAG_OFF);
-	memcpy(&tag, &anchor->body[ENUM_ANCHOR_TAG_OFF], sizeof(tag));
-	return tag;
-}
-
-static void
-enum_anchor_set_tag(daos_hash_out_t *anchor, uint32_t tag)
-{
-	memcpy(&anchor->body[ENUM_ANCHOR_TAG_OFF], &tag, sizeof(tag));
-}
-
 struct enum_async_arg {
 	uint32_t	*eaa_nr;
 	daos_key_desc_t *eaa_kds;

@@ -661,11 +661,10 @@ failed:
 static int
 obj_list_dkey_comp(struct obj_io_ctx *ctx, int rc)
 {
-	struct dc_object	*obj	 = ctx->cx_obj;
-	daos_hash_out_t		*anchor  = (daos_hash_out_t *)ctx->cx_args[0];
-	uint32_t		shard   = (unsigned long)ctx->cx_args[1];
+	struct dc_object	*obj = ctx->cx_obj;
+	daos_hash_out_t		*anchor = ctx->cx_args[0];
+	uint32_t		shard = (unsigned long)ctx->cx_args[1];
 	int			grp_size;
-	unsigned int		enc_shard_at;
 
 	if (rc != 0)
 		return rc;
@@ -673,21 +672,15 @@ obj_list_dkey_comp(struct obj_io_ctx *ctx, int rc)
 	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
 
-	/* XXX This is a nasty workaround: shard is encoded in the highest
-	 * four bytes of the hash anchor. It is ok for now because VOS does
-	 * not use those bytes. We need a cleaner way to store shard index.
-	 */
-	enc_shard_at = sizeof(anchor->body) - sizeof(shard);
-
 	if (!daos_hash_is_eof(anchor)) {
 		D_DEBUG(DF_SRC, "More keys in shard %d\n", shard);
-		memcpy(&anchor->body[enc_shard_at], &shard, sizeof(shard));
-	} else if (shard < obj->cob_layout->ol_nr - grp_size) {
+		enum_anchor_set_shard(anchor, shard);
+	} else if (shard < obj->cob_layout->ol_nr/grp_size) {
 		shard += grp_size;
 		D_DEBUG(DF_SRC, "Enumerate the next shard %d\n", shard);
 
 		memset(anchor, 0, sizeof(*anchor));
-		memcpy(&anchor->body[enc_shard_at], &shard, sizeof(shard));
+		enum_anchor_set_shard(anchor, shard);
 	} else {
 		D_DEBUG(DF_SRC, "Enumerated All shards\n");
 	}
@@ -742,21 +735,22 @@ daos_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	uint32_t		shard;
 	bool			launched = false;
 	int			rc;
-	int			enc_shard_at;
 
 	rc = obj_iocx_create(oh, ev, &iocx);
 	if (rc != 0)
 		return rc;
 
-	enc_shard_at = sizeof(anchor->body) - sizeof(shard);
-
-	memset(&anchor->body[enc_shard_at], 0, sizeof(shard));
 	if (op == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
 		obj_dkey2shard(iocx->cx_obj, key, NULL, &shard);
 		iocx->cx_comp = obj_list_akey_comp;
+		enum_anchor_set_shard(anchor, shard);
 	} else {
-		memcpy(&shard, &anchor->body[enc_shard_at],
-		      sizeof(shard));
+		shard = enum_anchor_get_shard(anchor);
+		if (shard >= iocx->cx_obj->cob_layout->ol_nr) {
+			D_ERROR("Invalid shard (%u) > layout_nr (%u)\n",
+				shard, iocx->cx_obj->cob_layout->ol_nr);
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
 		iocx->cx_comp = obj_list_dkey_comp;
 	}
 
