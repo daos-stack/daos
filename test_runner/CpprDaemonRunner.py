@@ -52,7 +52,7 @@ class CpprDaemonRunner:
         hostlist = hosts.join(self.info.get_config('host_list'))
         daemon_exe = \
             os.path.join(
-                self.info.get_config("PREFIX"),
+                self.info.get_info("PREFIX"),
                 "TESTING",
                 "scripts",
                 "run_cppr.sh")
@@ -76,7 +76,7 @@ class CpprDaemonRunner:
         hostlist = hosts.join(self.info.get_config('host_list'))
         daemon_exe = \
             os.path.join(
-                self.info.get_config("PREFIX"),
+                self.info.get_info("PREFIX"),
                 "TESTING",
                 "scripts",
                 "run_cppr.sh")
