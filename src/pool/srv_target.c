@@ -71,7 +71,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 	if (child->spc_ref == 0) {
 		D_DEBUG(DF_DSMS, DF_UUID": destroying\n",
 			DP_UUID(child->spc_uuid));
-		daos_list_del(&child->spc_list);
+		D_ASSERT(daos_list_empty(&child->spc_list));
 		vos_pool_close(child->spc_hdl);
 		D_FREE_PTR(child);
 	}
@@ -83,11 +83,11 @@ struct pool_child_lookup_arg {
 };
 
 /*
- * Called via dss_collective() to look up or create the ds_pool_child object
- * for one thread.
+ * Called via dss_collective() to create and add the ds_pool_child object for
+ * one thread. This opens the matching VOS pool.
  */
 static int
-pool_child_lookup_one(void *varg)
+pool_child_add_one(void *varg)
 {
 	struct pool_child_lookup_arg   *arg = varg;
 	struct dsm_tls		       *tls = dsm_tls_get();
@@ -131,11 +131,12 @@ pool_child_lookup_one(void *varg)
 }
 
 /*
- * Called via dss_collective() to put or free the ds_pool_child object for one
- * thread.
+ * Called via dss_collective() to delete the ds_pool_child object for one
+ * thread. If nobody else is referencing this object, then its VOS pool handle
+ * is closed and the object itself is freed.
  */
 static int
-pool_child_put_one(void *uuid)
+pool_child_delete_one(void *uuid)
 {
 	struct ds_pool_child *child;
 
@@ -143,7 +144,9 @@ pool_child_put_one(void *uuid)
 	if (child == NULL)
 		return 0;
 
+	daos_list_del_init(&child->spc_list);
 	ds_pool_child_put(child);
+
 	ds_pool_child_put(child);
 	return 0;
 }
@@ -348,7 +351,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
 
-	rc = dss_collective(pool_child_lookup_one, &collective_arg);
+	rc = dss_collective(pool_child_add_one, &collective_arg);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	if (arg->pca_create_group) {
@@ -362,7 +365,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	return 0;
 
 err_collective:
-	rc_tmp = dss_collective(pool_child_put_one, key);
+	rc_tmp = dss_collective(pool_child_delete_one, key);
 	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
 	if (arg->pca_map_buf != NULL)
 		pool_map_destroy(pool->sp_map);
@@ -385,7 +388,7 @@ pool_free_ref(struct daos_llink *llink)
 		D_ASSERTF(rc == 0, "%d\n", rc);
 	}
 
-	rc = dss_collective(pool_child_put_one, pool->sp_uuid);
+	rc = dss_collective(pool_child_delete_one, pool->sp_uuid);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	if (pool->sp_map != NULL)

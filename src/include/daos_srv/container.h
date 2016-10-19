@@ -31,7 +31,7 @@
 #include <daos_srv/pool.h>
 
 /*
- * Per-thread container object
+ * Per-thread container (memory) object
  *
  * Stores per-thread, per-container information, such as the vos container
  * handle.
@@ -43,7 +43,7 @@ struct ds_cont {
 };
 
 /*
- * Per-thread container handle object
+ * Per-thread container handle (memory) object
  *
  * Stores per-thread, per-handle information, such as the container
  * capabilities. References the ds_cont and the ds_pool_child objects.
