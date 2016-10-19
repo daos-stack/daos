@@ -46,8 +46,12 @@ class DvmRunner():
         print("TestRunner: start orte-dvm process\n")
         hosts = ","
         log_path = os.path.dirname(self.info.get_config('log_base_path'))
+        if not os.path.exists(log_path):
+            os.makedirs(log_path)
         self.report = os.path.join(log_path, "orted-uri")
+        # set both names for now.
         self.info.set_config('setKeyFromConfig', 'TR_USE_URL', self.report)
+        self.info.set_config('setKeyFromConfig', 'TR_USE_URI', self.report)
         self.logfileout = os.path.join(log_path, "orte-dvm.out")
         self.logfilerr = os.path.join(log_path, "orte-dvm.err")
         ompi_path = self.info.get_info('OMPI_PREFIX')

@@ -38,6 +38,9 @@ import json
 import tempfile
 from time import time
 from datetime import datetime
+#pylint: disable=import-error
+import findTestLogs
+#pylint: enable=import-error
 
 from yaml import load, dump
 try:
@@ -216,6 +219,9 @@ class TestRunner():
                 newname = os.path.join(logdir, newdir)
             os.rename(self.log_dir_base, newname)
             print("TestRunner: test log directory\n %s" % newname)
+            if str(self.test_directives.get('printTestLogPath', "no")).lower() \
+               == "yes":
+                findTestLogs.top_logdir(newname)
 
     def valgrind_memcheck(self):
         """ If memcheck is used to check the results """
