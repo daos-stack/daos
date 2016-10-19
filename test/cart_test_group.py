@@ -164,8 +164,8 @@ def add_prefix_logdir(testcase_id):
         # needed to clear any preceding value
         NPROC = "1"
 
-    if os.getenv('TR_USE_URL', ""):
-        dvmfile = " --hnp file:%s " % os.getenv('TR_USE_URL')
+    if os.getenv('TR_USE_URI', ""):
+        dvmfile = " --hnp file:%s " % os.getenv('TR_USE_URI')
     else:
         dvmfile = " "
     if getpass.getuser() == "root":
@@ -234,7 +234,7 @@ class TestGroup(unittest.TestCase):
 
     def test_group_test(self):
         """Simple process group test 1"""
-        if os.path.exists("./orted-uri"):
+        if os.getenv('TR_USE_URI', ""):
             self.assertFalse(self.two_node_test_group())
         else:
             self.assertFalse(self.one_node_test_group())
