@@ -62,7 +62,7 @@ test_crt_api_linkage(void **state)
 
 	/* Lookup group name */
 	expect_pmix_lookup(PMIX_STRING,
-		   cast_ptr_to_largest_integral_type("bogus_svr_group"));
+		   cast_ptr_to_largest_integral_type("bogus_cli_group"));
 	expect_pmix_lookup(PMIX_UINT32, 1); /* group size */
 	/* Lookup uri */
 	expect_pmix_lookup(PMIX_STRING,
