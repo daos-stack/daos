@@ -42,6 +42,8 @@ class CpprDaemonRunner:
         print("TestRunner: start cppr_daemon process.")
 
         w_path = os.path.join("/tmp/", pwd.getpwuid(os.getuid()).pw_name)
+        self.info.set_config('setKeyFromConfig', "CPPR_PREFIX",
+                             os.path.join(w_path, "local"))
         g_path = os.path.join(os.path.expanduser("~/"), "tmp")
         if not os.path.exists(w_path):
             os.makedirs(w_path)
