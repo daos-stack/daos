@@ -1752,11 +1752,23 @@ crt_grp_attach_info_filename(struct crt_grp_priv *grp_priv)
 	crt_group_id_t	 grpid;
 	char		*filename;
 	int		 rc;
+	char		*prefix;
 
 	C_ASSERT(grp_priv != NULL);
 	grpid = grp_priv->gp_pub.cg_grpid;
 
-	rc = asprintf(&filename, "/tmp/%s.attach_info_tmp", grpid);
+	prefix = getenv("CRT_ATTACH_INFO_PREFIX");
+
+	if (!prefix)
+		prefix = getlogin();
+
+	if (!prefix) {
+		C_ERROR("getlogin() failed (%s). Setting prefix to 'none'\n",
+			strerror(errno));
+		prefix = "none";
+	}
+
+	rc = asprintf(&filename, "/tmp/%s_%s.attach_info_tmp", prefix, grpid);
 	if (rc == -1) {
 		C_ERROR("asprintf %s failed (%s).\n", grpid, strerror(errno));
 		filename = NULL;
