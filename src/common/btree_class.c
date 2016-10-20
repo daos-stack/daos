@@ -30,39 +30,28 @@
 
 #include <string.h>
 
-#define HAVE_DBTREE_DELETE 1	/* dbtree_delete() not yet implemented */
+enum {
+	BTR_NO_TX,		/**< no transaction support */
+	BTR_IN_TX,		/**< already in a transaction */
+	BTR_SUPPORT_TX,		/**< can support transaction */
+};
 
-#if !HAVE_DBTREE_DELETE
-
-static int
-lookup(daos_handle_t tree, daos_iov_t *key, daos_iov_t *val)
-{
-	int rc;
-
-	rc = dbtree_lookup(tree, key, val);
-	if (rc != 0)
-		return rc;
-
-	if (val->iov_len == 0)
-		return -DER_NONEXIST;
-
-	return 0;
-}
 
 static int
-delete(daos_handle_t tree, daos_iov_t *key)
+btr_check_tx(struct btr_attr *attr)
 {
-	daos_iov_t val;
+#if DAOS_HAS_NVML
+	if (attr->ba_uma.uma_id != UMEM_CLASS_PMEM)
+		return BTR_NO_TX;
 
-	daos_iov_set(&val, NULL /* buf */, 0 /* size */);
+	if (pmemobj_tx_stage() == TX_STAGE_WORK)
+		return BTR_IN_TX;
 
-	return dbtree_update(tree, key, &val);
-}
-
-#define dbtree_lookup	lookup
-#define dbtree_delete	delete
-
+	return BTR_SUPPORT_TX;
+#else
+	return BTR_NO_TX;
 #endif
+}
 
 static int
 lookup_ptr(daos_handle_t tree, daos_iov_t *key, daos_iov_t *val)
@@ -80,16 +69,20 @@ lookup_ptr(daos_handle_t tree, daos_iov_t *key, daos_iov_t *val)
 
 static int
 create_tree(daos_handle_t tree, daos_iov_t *key, unsigned int class,
-	    uint64_t feats, unsigned int order, PMEMobjpool *mp,
-	    daos_handle_t *tree_new)
+	    uint64_t feats, unsigned int order, daos_handle_t *tree_new)
 {
 	struct btr_root		buf;
+	struct btr_attr		attr;
 	daos_iov_t		val;
-	struct umem_attr	uma;
 	daos_handle_t		h;
 	int			rc;
 
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
+	rc = dbtree_query(tree, &attr, NULL);
+	if (rc != 0)
+		return rc;
+
+	D_ASSERT(btr_check_tx(&attr) == BTR_NO_TX ||
+		 btr_check_tx(&attr) == BTR_IN_TX);
 
 	memset(&buf, 0, sizeof(buf));
 	daos_iov_set(&val, &buf, sizeof(buf));
@@ -102,10 +95,8 @@ create_tree(daos_handle_t tree, daos_iov_t *key, unsigned int class,
 	if (rc != 0)
 		return rc;
 
-	uma.uma_id = UMEM_CLASS_PMEM;
-	uma.uma_u.pmem_pool = mp;
-
-	rc = dbtree_create_inplace(class, feats, order, &uma, val.iov_buf, &h);
+	rc = dbtree_create_inplace(class, feats, order, &attr.ba_uma,
+				   val.iov_buf, &h);
 	if (rc != 0)
 		return rc;
 
@@ -118,55 +109,74 @@ create_tree(daos_handle_t tree, daos_iov_t *key, unsigned int class,
 }
 
 static int
-open_tree(daos_handle_t tree, daos_iov_t *key, PMEMobjpool *mp,
+open_tree(daos_handle_t tree, daos_iov_t *key, struct btr_attr *attr,
 	  daos_handle_t *tree_child)
 {
+	struct btr_attr		bta;
 	daos_iov_t		val;
-	struct umem_attr	uma;
 	int			rc;
+
+	rc = dbtree_query(tree, &bta, NULL);
+	if (rc != 0)
+		return rc;
 
 	rc = lookup_ptr(tree, key, &val);
 	if (rc != 0)
 		return rc;
 
-	uma.uma_id = UMEM_CLASS_PMEM;
-	uma.uma_u.pmem_pool = mp;
-
-	rc = dbtree_open_inplace(val.iov_buf, &uma, tree_child);
+	rc = dbtree_open_inplace(val.iov_buf, &bta.ba_uma, tree_child);
 	if (rc != 0)
 		return rc;
+
+	if (attr != NULL)
+		*attr = bta;
 
 	return 0;
 }
 
 static int
-destroy_tree(daos_handle_t tree, daos_iov_t *key, PMEMobjpool *mp)
+destroy_tree(daos_handle_t tree, daos_iov_t *key)
 {
-	volatile daos_handle_t	h;
-	daos_handle_t		tmp;
-	volatile int		rc;
+	daos_handle_t		hdl;
+	struct btr_attr		attr;
+	int			rc;
 
-	rc = open_tree(tree, key, mp, &tmp);
+	rc = open_tree(tree, key, &attr, &hdl);
 	if (rc != 0)
 		return rc;
 
-	h = tmp;
-
-	TX_BEGIN(mp) {
-		rc = dbtree_destroy(h);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		h = DAOS_HDL_INVAL;
-
+	if (btr_check_tx(&attr) == BTR_NO_TX) {
+		rc = dbtree_destroy(hdl);
+		if (rc != 0) {
+			dbtree_close(hdl);
+			D_GOTO(out, rc);
+		}
 		rc = dbtree_delete(tree, key);
 		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		if (!daos_handle_is_inval(h))
-			dbtree_close(h);
-	} TX_END
+			D_GOTO(out, rc);
+	} else {
+#ifdef DAOS_HAS_NVML
+		volatile daos_handle_t	hdl_tmp = hdl;
+		volatile int		rc_tmp = 0;
 
+		TX_BEGIN(attr.ba_uma.uma_u.pmem_pool) {
+			rc_tmp = dbtree_destroy(hdl_tmp);
+			if (rc_tmp != 0)
+				pmemobj_tx_abort(rc_tmp);
+
+			hdl_tmp = DAOS_HDL_INVAL;
+
+			rc_tmp = dbtree_delete(tree, key);
+			if (rc_tmp != 0)
+				pmemobj_tx_abort(rc_tmp);
+		} TX_ONABORT {
+			if (!daos_handle_is_inval(hdl_tmp))
+				dbtree_close(hdl_tmp);
+			rc = rc_tmp;
+		} TX_END
+#endif
+	}
+out:
 	return rc;
 }
 
@@ -466,7 +476,7 @@ dbtree_nv_delete(daos_handle_t tree, const char *name)
  */
 int
 dbtree_nv_create_tree(daos_handle_t tree, const char *name, unsigned int class,
-		      uint64_t feats, unsigned int order, PMEMobjpool *mp,
+		      uint64_t feats, unsigned int order,
 		      daos_handle_t *tree_new)
 {
 	daos_iov_t	key;
@@ -474,7 +484,7 @@ dbtree_nv_create_tree(daos_handle_t tree, const char *name, unsigned int class,
 
 	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 
-	rc = create_tree(tree, &key, class, feats, order, mp, tree_new);
+	rc = create_tree(tree, &key, class, feats, order, tree_new);
 	if (rc != 0)
 		D_ERROR("failed to create \"%s\": %d\n", name, rc);
 
@@ -482,7 +492,7 @@ dbtree_nv_create_tree(daos_handle_t tree, const char *name, unsigned int class,
 }
 
 int
-dbtree_nv_open_tree(daos_handle_t tree, const char *name, PMEMobjpool *mp,
+dbtree_nv_open_tree(daos_handle_t tree, const char *name,
 		    daos_handle_t *tree_child)
 {
 	daos_iov_t	key;
@@ -490,7 +500,7 @@ dbtree_nv_open_tree(daos_handle_t tree, const char *name, PMEMobjpool *mp,
 
 	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 
-	rc = open_tree(tree, &key, mp, tree_child);
+	rc = open_tree(tree, &key, NULL, tree_child);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
@@ -503,14 +513,14 @@ dbtree_nv_open_tree(daos_handle_t tree, const char *name, PMEMobjpool *mp,
 
 /* Destroy a KVS in place as the value for "name". */
 int
-dbtree_nv_destroy_tree(daos_handle_t tree, const char *name, PMEMobjpool *mp)
+dbtree_nv_destroy_tree(daos_handle_t tree, const char *name)
 {
 	daos_iov_t	key;
 	int		rc;
 
 	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 
-	rc = destroy_tree(tree, &key, mp);
+	rc = destroy_tree(tree, &key);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
@@ -752,7 +762,7 @@ dbtree_uv_delete(daos_handle_t tree, const uuid_t uuid)
  */
 int
 dbtree_uv_create_tree(daos_handle_t tree, const uuid_t uuid, unsigned int class,
-		      uint64_t feats, unsigned int order, PMEMobjpool *mp,
+		      uint64_t feats, unsigned int order,
 		      daos_handle_t *tree_new)
 {
 	daos_iov_t	key;
@@ -760,7 +770,7 @@ dbtree_uv_create_tree(daos_handle_t tree, const uuid_t uuid, unsigned int class,
 
 	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
-	rc = create_tree(tree, &key, class, feats, order, mp, tree_new);
+	rc = create_tree(tree, &key, class, feats, order, tree_new);
 	if (rc != 0)
 		D_ERROR("failed to create "DF_UUID": %d\n", DP_UUID(uuid), rc);
 
@@ -768,7 +778,7 @@ dbtree_uv_create_tree(daos_handle_t tree, const uuid_t uuid, unsigned int class,
 }
 
 int
-dbtree_uv_open_tree(daos_handle_t tree, const uuid_t uuid, PMEMobjpool *mp,
+dbtree_uv_open_tree(daos_handle_t tree, const uuid_t uuid,
 		    daos_handle_t *tree_child)
 {
 	daos_iov_t	key;
@@ -776,7 +786,7 @@ dbtree_uv_open_tree(daos_handle_t tree, const uuid_t uuid, PMEMobjpool *mp,
 
 	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
-	rc = open_tree(tree, &key, mp, tree_child);
+	rc = open_tree(tree, &key, NULL, tree_child);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
@@ -791,14 +801,14 @@ dbtree_uv_open_tree(daos_handle_t tree, const uuid_t uuid, PMEMobjpool *mp,
 
 /* Destroy a KVS in place as the value for "uuid". */
 int
-dbtree_uv_destroy_tree(daos_handle_t tree, const uuid_t uuid, PMEMobjpool *mp)
+dbtree_uv_destroy_tree(daos_handle_t tree, const uuid_t uuid)
 {
 	daos_iov_t	key;
 	int		rc;
 
 	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
-	rc = destroy_tree(tree, &key, mp);
+	rc = destroy_tree(tree, &key);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
@@ -820,9 +830,6 @@ dbtree_uv_destroy_tree(daos_handle_t tree, const uuid_t uuid, PMEMobjpool *mp)
 
 struct ec_rec {
 	uint64_t	er_counter;
-#if !HAVE_DBTREE_DELETE
-	uint64_t	er_deleted;
-#endif
 };
 
 static void
@@ -886,13 +893,6 @@ ec_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	if (val != NULL) {
 		struct ec_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
-#if !HAVE_DBTREE_DELETE
-		if (r->er_deleted) {
-			val->iov_len = 0;
-			return 0;
-		}
-#endif
-
 		if (val->iov_buf == NULL)
 			val->iov_buf = &r->er_counter;
 		else if (val->iov_buf_len >= sizeof(r->er_counter))
@@ -910,25 +910,11 @@ ec_rec_update(struct btr_instance *tins, struct btr_record *rec,
 {
 	struct ec_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
-#if HAVE_DBTREE_DELETE
 	if (val->iov_len != sizeof(r->er_counter))
-#else
-	if (val->iov_len != sizeof(r->er_counter) && val->iov_len != 0)
-#endif
 		return -DER_INVAL;
 
 	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
-#if HAVE_DBTREE_DELETE
 	r->er_counter = *(uint64_t *)val->iov_buf;
-#else
-	if (val->iov_len == 0) {
-		r->er_counter = 0;
-		r->er_deleted = 1;
-	} else {
-		r->er_counter = *(uint64_t *)val->iov_buf;
-		r->er_deleted = 0;
-	}
-#endif
 	return 0;
 }
 
@@ -989,17 +975,14 @@ dbtree_ec_lookup(daos_handle_t tree, uint64_t epoch, uint64_t *count)
 	daos_iov_set(&val, (void *)count, sizeof(*count));
 
 	rc = dbtree_lookup(tree, &key, &val);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find "DF_U64"\n", epoch);
-		else
-			D_ERROR("failed to look up "DF_U64": %d\n", epoch, rc);
-	}
+	if (rc == -DER_NONEXIST)
+		D_DEBUG(DF_DSMS, "cannot find "DF_U64"\n", epoch);
+	else if (rc != 0)
+		D_ERROR("failed to look up "DF_U64": %d\n", epoch, rc);
 
 	return rc;
 }
 
-#if HAVE_DBTREE_DELETE
 int
 dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 		const uint64_t *epoch_in, uint64_t *epoch_out, uint64_t *count)
@@ -1014,120 +997,14 @@ dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 	daos_iov_set(&val, (void *)count, sizeof(*count));
 
 	rc = dbtree_fetch(tree, opc, &key_in, &key_out, &val);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find opc=%d in="DF_U64"\n",
-				opc, epoch_in == NULL ? -1 : *epoch_in);
-		else
-			D_ERROR("failed to fetch opc=%d in="DF_U64": %d\n", opc,
-				epoch_in == NULL ? -1 : *epoch_in, rc);
-	}
-
-	return rc;
-}
-#else
-int
-dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
-		const uint64_t *epoch_in, uint64_t *epoch_out, uint64_t *count)
-{
-	daos_iov_t	key_in;
-	daos_iov_t	key_out;
-	daos_iov_t	val;
-	uint64_t	e;
-	uint64_t	c;
-	daos_handle_t	iter;
-	int		rc;
-
-	D_ASSERT(opc == BTR_PROBE_FIRST || opc == BTR_PROBE_LAST ||
-		 opc == BTR_PROBE_EQ || opc == BTR_PROBE_GE ||
-		 opc == BTR_PROBE_LE);
-	D_ASSERT(opc == BTR_PROBE_FIRST || opc == BTR_PROBE_LAST ||
-		 epoch_in != NULL);
-
-	rc = dbtree_iter_prepare(tree, 0 /* options */, &iter);
-	if (rc != 0) {
-		D_ERROR("failed to prepare iterator for opc=%d in="DF_U64
-			": %d\n", opc, epoch_in == NULL ? -1 : *epoch_in, rc);
-		D_GOTO(out, rc);
-	}
-
-	daos_iov_set(&key_in, (void *)epoch_in, sizeof(*epoch_in));
-
-	rc = dbtree_iter_probe(iter, opc, &key_in, NULL /* anchor */);
-	if (rc != 0) {
-		if (rc != -DER_NONEXIST)
-			D_ERROR("failed to probe opc=%d in="DF_U64": %d\n", opc,
-				epoch_in == NULL ? -1 : *epoch_in, rc);
-		D_GOTO(out_iter, rc);
-	}
-
-	daos_iov_set(&key_out, &e, sizeof(e));
-	daos_iov_set(&val, &c, sizeof(c));
-
-	rc = dbtree_iter_fetch(iter, &key_out, &val, NULL /* anchor */);
-	if (rc != 0) {
+	if (rc == -DER_NONEXIST)
+		D_DEBUG(DF_DSMS, "cannot find opc=%d in="DF_U64"\n",
+			opc, epoch_in == NULL ? -1 : *epoch_in);
+	else if (rc != 0)
 		D_ERROR("failed to fetch opc=%d in="DF_U64": %d\n", opc,
 			epoch_in == NULL ? -1 : *epoch_in, rc);
-		D_GOTO(out_iter, rc);
-	}
-
-	/* Done if the record is not deleted. */
-	if (val.iov_len != 0)
-		D_GOTO(out_fill, rc = 0);
-
-	D_DEBUG(DF_DSMS, "found deleted opc=%d in="DF_U64"\n", opc,
-		epoch_in == NULL ? -1 : *epoch_in);
-
-	if (opc == BTR_PROBE_EQ)
-		D_GOTO(out_iter, rc = -DER_NONEXIST);
-
-	for (;;) {
-		D_DEBUG(DF_DSMS, "moving to next/prev\n");
-
-		if (opc == BTR_PROBE_FIRST || opc == BTR_PROBE_GE)
-			rc = dbtree_iter_next(iter);
-		else
-			rc = dbtree_iter_prev(iter);
-		if (rc != 0) {
-			if (rc != -DER_NONEXIST)
-				D_ERROR("failed to move iterator for opc=%d in="
-					DF_U64": %d\n", opc,
-					epoch_in == NULL ?
-					-1 : *epoch_in, rc);
-			D_GOTO(out_iter, rc);
-		}
-
-		rc = dbtree_iter_fetch(iter, &key_out, &val,
-				       NULL /* anchor */);
-		if (rc != 0) {
-			D_ERROR("failed to fetch opc=%d in="DF_U64
-				": %d\n", opc,
-				epoch_in == NULL ? -1 : *epoch_in, rc);
-			D_GOTO(out_iter, rc);
-		}
-
-		/* Done if the record is not deleted. */
-		if (val.iov_len != 0)
-			break;
-	}
-
-out_fill:
-	if (epoch_out != NULL)
-		*epoch_out = e;
-	if (count != NULL)
-		*count = c;
-out_iter:
-	dbtree_iter_finish(iter);
-out:
-	if (rc == -DER_NONEXIST)
-		D_DEBUG(DF_DSMS, "cannot find opc=%d in="DF_U64"\n", opc,
-			epoch_in == NULL ? -1 : *epoch_in);
-	else if (rc == 0)
-		D_DEBUG(DF_DSMS, "found opc=%d in="DF_U64": "DF_U64":"DF_U64
-			"\n", opc, epoch_in == NULL ? -1 : *epoch_in, e, c);
 	return rc;
 }
-#endif
 
 int
 dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
@@ -1140,12 +1017,10 @@ dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
 	daos_iov_set(&key, &epoch, sizeof(epoch));
 
 	rc = dbtree_delete(tree, &key);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find "DF_U64"\n", epoch);
-		else
-			D_ERROR("failed to delete "DF_U64": %d\n", epoch, rc);
-	}
+	if (rc == -DER_NONEXIST)
+		D_DEBUG(DF_DSMS, "cannot find "DF_U64"\n", epoch);
+	else if (rc != 0)
+		D_ERROR("failed to delete "DF_U64": %d\n", epoch, rc);
 
 	return rc;
 }

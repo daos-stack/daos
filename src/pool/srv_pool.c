@@ -332,7 +332,7 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t root, uint32_t uid,
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 		rc = dbtree_nv_create_tree(root, POOL_HANDLES, DBTREE_CLASS_UV,
-					   0 /* feats */, 16 /* order */, mp,
+					   0 /* feats */, 16 /* order */,
 					   NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
@@ -347,18 +347,18 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t root, uint32_t uid,
 /* TODO: Call a ds_cont method instead. */
 #include "../container/srv_layout.h"
 static int
-cont_metadata_init(PMEMobjpool *mp, daos_handle_t root)
+cont_metadata_init(daos_handle_t root)
 {
 	int rc;
 
 	rc = dbtree_nv_create_tree(root, CONTAINERS, DBTREE_CLASS_UV,
-				   0 /* feats */, 16 /* order */, mp,
+				   0 /* feats */, 16 /* order */,
 				   NULL /* tree_new */);
 	if (rc != 0)
 		return rc;
 
 	return dbtree_nv_create_tree(root, CONTAINER_HDLS, DBTREE_CLASS_UV,
-				     0 /* feats */, 16 /* order */, mp,
+				     0 /* feats */, 16 /* order */,
 				     NULL /* tree_new */);
 }
 
@@ -429,7 +429,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 			pmemobj_tx_abort(rc);
 		}
 
-		rc = cont_metadata_init(mp, cont_root);
+		rc = cont_metadata_init(cont_root);
 		if (rc != 0) {
 			D_ERROR("failed to init container metadata: %d\n", rc);
 			pmemobj_tx_abort(rc);

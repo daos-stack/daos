@@ -188,6 +188,22 @@ ik_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	return 0;
 }
 
+static int
+ik_rec_stat(struct btr_instance *tins, struct btr_record *rec,
+	    struct btr_rec_stat *stat)
+{
+	struct umem_instance	*umm = &tins->ti_umm;
+	struct ik_rec		*irec;
+	TMMID(struct ik_rec)	 irec_mmid;
+
+	irec_mmid = umem_id_u2t(rec->rec_mmid, struct ik_rec);
+	irec = umem_id2ptr_typed(umm, irec_mmid);
+
+	stat->rs_ksize = sizeof(irec->ir_key);
+	stat->rs_vsize = irec->ir_val_size;
+	return 0;
+}
+
 static btr_ops_t ik_ops = {
 	.to_hkey_size	= ik_hkey_size,
 	.to_hkey_gen	= ik_hkey_gen,
@@ -196,6 +212,7 @@ static btr_ops_t ik_ops = {
 	.to_rec_fetch	= ik_rec_fetch,
 	.to_rec_update	= ik_rec_update,
 	.to_rec_string	= ik_rec_string,
+	.to_rec_stat	= ik_rec_stat,
 };
 
 #define IK_ORDER_DEF	16
@@ -407,6 +424,31 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 }
 
 static int
+ik_btr_query(void)
+{
+	struct btr_attr		attr;
+	struct btr_stat		stat;
+	int			rc;
+
+	rc = dbtree_query(ik_toh, &attr, &stat);
+	if (rc != 0) {
+		D_ERROR("Failed to query btree: %d\n", rc);
+		return -1;
+	}
+
+	D_PRINT("tree   [order=%d, depth=%d]\n", attr.ba_order, attr.ba_depth);
+	D_PRINT("node   [total="DF_U64"]\n"
+		"record [total="DF_U64"]\n"
+		"key    [total="DF_U64", max="DF_U64"]\n"
+		"val    [total="DF_U64", max="DF_U64"]\n",
+		stat.bs_node_nr, stat.bs_rec_nr,
+		stat.bs_key_sum, stat.bs_key_max,
+		stat.bs_val_sum, stat.bs_val_max);
+
+	return 0;
+}
+
+static int
 ik_btr_iterate(char *args)
 {
 	daos_handle_t	ih;
@@ -573,6 +615,7 @@ ik_btr_batch_oper(unsigned int key_nr)
 		}
 	}
 
+	ik_btr_query();
 	/* lookup all rest records, delete 10000 of them, and repeat until
 	 * deleting all records.
 	 */
@@ -604,6 +647,7 @@ ik_btr_batch_oper(unsigned int key_nr)
 			}
 		}
 	}
+	ik_btr_query();
 	return 0;
 }
 
@@ -615,6 +659,7 @@ static struct option btr_ops[] = {
 	{ "update",	required_argument,	NULL,	'u'	},
 	{ "find",	required_argument,	NULL,	'f'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
+	{ "query",	no_argument,		NULL,	'q'	},
 	{ "iterate",	required_argument,	NULL,	'i'	},
 	{ "batch",	required_argument,	NULL,	'b'	},
 	{ NULL,		0,			NULL,	0	},
@@ -633,7 +678,7 @@ main(int argc, char **argv)
 	D_ASSERT(rc == 0);
 
 	optind = 0;
-	while ((rc = getopt_long(argc, argv, "C:Docu:d:f:i:b:",
+	while ((rc = getopt_long(argc, argv, "C:Docqu:d:f:i:b:",
 				 btr_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'C':
@@ -647,6 +692,9 @@ main(int argc, char **argv)
 			break;
 		case 'c':
 			rc = ik_btr_close_destroy(false);
+			break;
+		case 'q':
+			rc = ik_btr_query();
 			break;
 		case 'u':
 			rc = ik_btr_kv_operate(BTR_OPC_UPDATE, optarg, true);

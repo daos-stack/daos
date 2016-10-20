@@ -29,9 +29,12 @@ $BTR	-C ${IPL}o:$ORDER		\
 	-o				\
 	-u $RECORDS			\
 	-i $IDIR			\
+	-q				\
 	-f $KEYS			\
 	-d $KEYS			\
+	-q				\
 	-u $RECORDS			\
+	-q				\
 	-i $IDIR:3			\
 	-D
 

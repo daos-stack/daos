@@ -117,6 +117,41 @@ struct btr_root {
 	TMMID(struct btr_node)		tr_node;
 };
 
+/** btree attributes returned by query function. */
+struct btr_attr {
+	/** tree order */
+	unsigned int			ba_order;
+	/** tree depth */
+	unsigned int			ba_depth;
+	unsigned int			ba_class;
+	uint64_t			ba_feats;
+	/** memory class, pmem pool etc */
+	struct umem_attr		ba_uma;
+};
+
+/** btree statistics returned by query function. */
+struct btr_stat {
+	/** total number of tree nodes */
+	uint64_t			bs_node_nr;
+	/** total number of records in the tree */
+	uint64_t			bs_rec_nr;
+	/** total number of bytes of all keys */
+	uint64_t			bs_key_sum;
+	/** max key size */
+	uint64_t			bs_key_max;
+	/** total number of bytes of all values */
+	uint64_t			bs_val_sum;
+	/** max value size */
+	uint64_t			bs_val_max;
+};
+
+struct btr_rec_stat {
+	/** record key size */
+	uint64_t			rs_ksize;
+	/** record value size */
+	uint64_t			rs_vsize;
+};
+
 struct btr_instance;
 
 /**
@@ -227,6 +262,17 @@ typedef struct {
 	int		(*to_rec_update)(struct btr_instance *tins,
 					 struct btr_record *rec,
 					 daos_iov_t *key, daos_iov_t *val);
+	/**
+	 * Optional:
+	 * Return key and value size of the record.
+	 * \param tins	[IN]	Tree instance which contains the root mmid
+	 *			and memory class etc.
+	 * \param rec	[IN]	Record to get size from.
+	 * \param rstat	[OUT]	Returned key & value size.
+	 */
+	int		(*to_rec_stat)(struct btr_instance *tins,
+				       struct btr_record *rec,
+				       struct btr_rec_stat *rstat);
 	/**
 	 * Convert record into readable string and store it in \a buf.
 	 *
@@ -379,6 +425,8 @@ int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc,
 		  daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out);
 int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out);
 int  dbtree_delete(daos_handle_t toh, daos_iov_t *key);
+int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
+		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
 
 /******* iterator API ******************************************************/

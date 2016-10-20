@@ -414,6 +414,16 @@ btr_rec_update(struct btr_context *tcx, struct btr_record *rec,
 	return btr_ops(tcx)->to_rec_update(&tcx->tc_tins, rec, key, val);
 }
 
+static int
+btr_rec_stat(struct btr_context *tcx, struct btr_record *rec,
+	     struct btr_rec_stat *stat)
+{
+	if (!btr_ops(tcx)->to_rec_stat)
+		return -DER_NOSYS;
+
+	return btr_ops(tcx)->to_rec_stat(&tcx->tc_tins, rec, stat);
+}
+
 static char *
 btr_rec_string(struct btr_context *tcx, struct btr_record *rec,
 	       bool leaf, char *buf, int buf_len)
@@ -2186,6 +2196,99 @@ dbtree_delete(daos_handle_t toh, daos_iov_t *key)
 		rc = btr_delete(tcx);
 
 	return rc;
+}
+
+/** gather statistics from a tree node and all its children recursively. */
+static void
+btr_node_stat(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid,
+	      struct btr_stat *stat)
+{
+	struct btr_node *nd	= btr_mmid2ptr(tcx, nd_mmid);
+	bool		 leaf	= btr_node_is_leaf(tcx, nd_mmid);
+	int		 rc;
+	int		 i;
+
+	D_DEBUG(DF_MISC, "Stat tree %s "TMMID_PF", keyn %d\n",
+		leaf ? "leaf" : "node", TMMID_P(nd_mmid), nd->tn_keyn);
+
+	if (!leaf) {
+		stat->bs_node_nr += nd->tn_keyn + 1;
+		for (i = 0; i <= nd->tn_keyn; i++) {
+			TMMID(struct btr_node) child_mmid;
+
+			child_mmid = btr_node_child_at(tcx, nd_mmid, i);
+			btr_node_stat(tcx, child_mmid, stat);
+		}
+		return;
+	}
+	/* leaf */
+	stat->bs_rec_nr += nd->tn_keyn;
+	for (i = 0; i < nd->tn_keyn; i++) {
+		struct btr_record	*rec;
+		struct btr_rec_stat	 rs;
+
+		rec = btr_node_rec_at(tcx, nd_mmid, i);
+		rc = btr_rec_stat(tcx, rec, &rs);
+		if (rc != 0)
+			continue;
+
+		stat->bs_key_sum += rs.rs_ksize;
+		stat->bs_val_sum += rs.rs_vsize;
+
+		if (stat->bs_key_max < rs.rs_ksize)
+			stat->bs_key_max = rs.rs_ksize;
+		if (stat->bs_val_max < rs.rs_vsize)
+			stat->bs_val_max = rs.rs_vsize;
+	}
+}
+
+/** scan all tree nodes and records, gather their stats */
+static int
+btr_tree_stat(struct btr_context *tcx, struct btr_stat *stat)
+{
+	struct btr_root *root;
+
+	memset(stat, 0, sizeof(*stat));
+
+	root = tcx->tc_tins.ti_root;
+	if (!TMMID_IS_NULL(root->tr_node)) {
+		/* stat the root and all descendants */
+		stat->bs_node_nr = 1;
+		btr_node_stat(tcx, root->tr_node, stat);
+	}
+	return 0;
+}
+
+/**
+ * Query attributes and/or gather nodes and records statistics of btree.
+ *
+ * \param toh	[IN]	The tree open handle.
+ * \param attr	[OUT]	Optional, returned tree attributes.
+ * \param stat	[OUT]	Optional, returned nodes and records statistics.
+ */
+int
+dbtree_query(daos_handle_t toh, struct btr_attr *attr, struct btr_stat *stat)
+{
+	struct btr_context *tcx;
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	if (attr != NULL) {
+		struct btr_root *root = tcx->tc_tins.ti_root;
+
+		attr->ba_order	= root->tr_order;
+		attr->ba_depth	= root->tr_depth;
+		attr->ba_class	= root->tr_class;
+		attr->ba_feats	= root->tr_feats;
+		umem_attr_get(&tcx->tc_tins.ti_umm, &attr->ba_uma);
+	}
+
+	if (stat != NULL)
+		btr_tree_stat(tcx, stat);
+
+	return 0;
 }
 
 /**

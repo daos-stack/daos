@@ -101,15 +101,13 @@ cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 		D_GOTO(err_lock, rc);
 	}
 
-	rc = dbtree_nv_open_tree(svc->cs_root, CONTAINERS,
-				 svc->cs_mpool->mp_pmem, &svc->cs_containers);
+	rc = dbtree_nv_open_tree(svc->cs_root, CONTAINERS, &svc->cs_containers);
 	if (rc != 0) {
 		D_ERROR("failed to open container tree: %d\n", rc);
 		D_GOTO(err_root, rc);
 	}
 
-	rc = dbtree_nv_open_tree(svc->cs_root, CONTAINER_HDLS,
-				 svc->cs_mpool->mp_pmem, &svc->cs_hdls);
+	rc = dbtree_nv_open_tree(svc->cs_root, CONTAINER_HDLS, &svc->cs_hdls);
 	if (rc != 0) {
 		D_ERROR("failed to open container handle tree: %d\n", rc);
 		D_GOTO(err_containers, rc);
@@ -272,8 +270,7 @@ cont_create(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 		 */
 		rc = dbtree_uv_create_tree(svc->cs_containers,
 					   in->cci_op.ci_uuid, DBTREE_CLASS_NV,
-					   0 /* feats */, 16 /* order */,
-					   svc->cs_mpool->mp_pmem, &h);
+					   0 /* feats */, 16 /* order */, &h);
 		if (rc != 0) {
 			D_ERROR("failed to create container attribute tree: "
 				"%d\n", rc);
@@ -288,28 +285,24 @@ cont_create(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 
 		rc = dbtree_nv_create_tree(ch, CONT_HCES, DBTREE_CLASS_EC,
 					   0 /* feats */, 16 /* order */,
-					   svc->cs_mpool->mp_pmem,
 					   NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
 		rc = dbtree_nv_create_tree(ch, CONT_LRES, DBTREE_CLASS_EC,
 					   0 /* feats */, 16 /* order */,
-					   svc->cs_mpool->mp_pmem,
 					   NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
 		rc = dbtree_nv_create_tree(ch, CONT_LHES, DBTREE_CLASS_EC,
 					   0 /* feats */, 16 /* order */,
-					   svc->cs_mpool->mp_pmem,
 					   NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
 		rc = dbtree_nv_create_tree(ch, CONT_SNAPSHOTS, DBTREE_CLASS_EC,
 					   0 /* feats */, 16 /* order */,
-					   svc->cs_mpool->mp_pmem,
 					   NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
@@ -384,8 +377,7 @@ cont_destroy(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* Open the container attribute tree. */
-	rc = dbtree_uv_open_tree(svc->cs_containers, in->cdi_op.ci_uuid,
-				 svc->cs_mpool->mp_pmem, &h);
+	rc = dbtree_uv_open_tree(svc->cs_containers, in->cdi_op.ci_uuid, &h);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			rc = 0;
@@ -398,23 +390,19 @@ cont_destroy(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 		D_GOTO(out_ch, rc);
 
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
-		rc = dbtree_nv_destroy_tree(ch, CONT_SNAPSHOTS,
-					    svc->cs_mpool->mp_pmem);
+		rc = dbtree_nv_destroy_tree(ch, CONT_SNAPSHOTS);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_destroy_tree(ch, CONT_LHES,
-					    svc->cs_mpool->mp_pmem);
+		rc = dbtree_nv_destroy_tree(ch, CONT_LHES);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_destroy_tree(ch, CONT_LRES,
-					    svc->cs_mpool->mp_pmem);
+		rc = dbtree_nv_destroy_tree(ch, CONT_LRES);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_destroy_tree(ch, CONT_HCES,
-					    svc->cs_mpool->mp_pmem);
+		rc = dbtree_nv_destroy_tree(ch, CONT_HCES);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -510,23 +498,19 @@ cont_lookup(const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 	uuid_copy(p->c_uuid, uuid);
 	p->c_svc = (struct cont_svc *)svc;
 
-	rc = dbtree_uv_open_tree(svc->cs_containers, uuid,
-				 svc->cs_mpool->mp_pmem, &p->c_cont);
+	rc = dbtree_uv_open_tree(svc->cs_containers, uuid, &p->c_cont);
 	if (rc != 0)
 		D_GOTO(err_p, rc);
 
-	rc = dbtree_nv_open_tree(p->c_cont, CONT_HCES, svc->cs_mpool->mp_pmem,
-				 &p->c_hces);
+	rc = dbtree_nv_open_tree(p->c_cont, CONT_HCES, &p->c_hces);
 	if (rc != 0)
 		D_GOTO(err_cont, rc);
 
-	rc = dbtree_nv_open_tree(p->c_cont, CONT_LRES, svc->cs_mpool->mp_pmem,
-				 &p->c_lres);
+	rc = dbtree_nv_open_tree(p->c_cont, CONT_LRES, &p->c_lres);
 	if (rc != 0)
 		D_GOTO(err_hces, rc);
 
-	rc = dbtree_nv_open_tree(p->c_cont, CONT_LHES, svc->cs_mpool->mp_pmem,
-				 &p->c_lhes);
+	rc = dbtree_nv_open_tree(p->c_cont, CONT_LHES, &p->c_lhes);
 	if (rc != 0)
 		D_GOTO(err_lres, rc);
 

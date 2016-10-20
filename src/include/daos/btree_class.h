@@ -42,13 +42,11 @@ int dbtree_nv_lookup_ptr(daos_handle_t tree, const char *name, void **value,
 int dbtree_nv_delete(daos_handle_t tree, const char *name);
 int dbtree_nv_create_tree(daos_handle_t tree, const char *name,
 			  unsigned int class, uint64_t feats,
-			  unsigned int order, PMEMobjpool *mp,
-			  daos_handle_t *tree_new);
-int dbtree_nv_open_tree(daos_handle_t tree, const char *name, PMEMobjpool *mp,
+			  unsigned int order, daos_handle_t *tree_new);
+int dbtree_nv_open_tree(daos_handle_t tree, const char *name,
 			daos_handle_t *tree_child);
-int dbtree_nv_destroy_tree(daos_handle_t tree, const char *name,
-			   PMEMobjpool *mp);
-int dbtree_nv_destroy(daos_handle_t tree, const char *name, PMEMobjpool *mp);
+int dbtree_nv_destroy_tree(daos_handle_t tree, const char *name);
+int dbtree_nv_destroy(daos_handle_t tree, const char *name);
 
 /* uuid_t-value: unordered keys */
 #define DBTREE_CLASS_UV (DBTREE_DSM_BEGIN + 1)
@@ -60,13 +58,11 @@ int dbtree_uv_lookup(daos_handle_t tree, const uuid_t uuid, void *value,
 int dbtree_uv_delete(daos_handle_t tree, const uuid_t uuid);
 int dbtree_uv_create_tree(daos_handle_t tree, const uuid_t uuid,
 			  unsigned int class, uint64_t feats,
-			  unsigned int order, PMEMobjpool *mp,
-			  daos_handle_t *tree_new);
-int dbtree_uv_open_tree(daos_handle_t tree, const uuid_t uuid, PMEMobjpool *mp,
+			  unsigned int order, daos_handle_t *tree_new);
+int dbtree_uv_open_tree(daos_handle_t tree, const uuid_t uuid,
 			daos_handle_t *tree_child);
-int dbtree_uv_destroy_tree(daos_handle_t tree, const uuid_t uuid,
-			   PMEMobjpool *mp);
-int dbtree_uv_destroy(daos_handle_t tree, const uuid_t uuid, PMEMobjpool *mp);
+int dbtree_uv_destroy_tree(daos_handle_t tree, const uuid_t uuid);
+int dbtree_uv_destroy(daos_handle_t tree, const uuid_t uuid);
 
 /* epoch-count: ordered keys */
 #define DBTREE_CLASS_EC (DBTREE_DSM_BEGIN + 2)
