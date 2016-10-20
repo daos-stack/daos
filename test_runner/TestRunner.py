@@ -419,6 +419,32 @@ class TestRunner():
         info['error'] = ""
         return info
 
+    def load_testcases(self, test_module_name):
+        """ load and check test description file """
+
+        rtn = 0
+        with open(test_module_name, 'r') as fd:
+            self.test_info = load(fd, Loader=Loader)
+
+        if 'description' not in self.test_info:
+            print(" No description defined in file: %s" % test_module_name)
+            rtn = 1
+        if 'defaultENV' not in self.test_info or \
+           self.test_info['defaultENV'] is None:
+            self.test_info['defaultENV'] = {}
+        if 'module' not in self.test_info:
+            print(" No module section defined in file: %s" % test_module_name)
+            rtn = 1
+        if 'directives' not in self.test_info or \
+           self.test_info['directives'] is None:
+            self.test_info['directives'] = {}
+            rtn = 1
+        if 'execStrategy' not in self.test_info:
+            print(" No execStrategy section defined in file: %s" %
+                  test_module_name)
+            rtn = 1
+        return rtn
+
     def run_testcases(self):
         """ execute test scripts """
 
@@ -429,8 +455,9 @@ class TestRunner():
             self.loop_name = os.path.splitext(
                 os.path.basename(test_module_name))[0]
             self.test_info.clear()
-            with open(test_module_name, 'r') as fd:
-                self.test_info = load(fd, Loader=Loader)
+            if self.load_testcases(test_module_name):
+                rtn = 1
+                continue
             self.add_default_env()
             self.setup_default_env()
             rtn_info = self.execute_strategy()

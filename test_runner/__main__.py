@@ -138,6 +138,9 @@ def main():
     # setup log base directory name
     if 'log_base_path' not in config:
         info.set_config('log_base_path', '', "testLogs/testRun")
+    log_base = info.get_config('log_base_path')
+    if not os.path.exists(log_base):
+        os.makedirs(log_base)
     # setup default evnironment variables and path
     if not info.env_setup():
         exit(1)
