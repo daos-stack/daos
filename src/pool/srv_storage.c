@@ -164,7 +164,7 @@ ds_pool_mpool_put(struct ds_pool_mpool *mpool)
 }
 
 int
-dsms_storage_init(void)
+ds_pool_mpool_cache_init(void)
 {
 	int rc;
 
@@ -178,7 +178,7 @@ dsms_storage_init(void)
 }
 
 void
-dsms_storage_fini(void)
+ds_pool_mpool_cache_fini(void)
 {
 	pthread_mutex_destroy(&mpool_cache_lock);
 }

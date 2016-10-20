@@ -27,46 +27,42 @@
  * Pool Server API.
  */
 
+#include <daos_srv/pool.h>
+
 #include <daos/rpc.h>
 #include <daos_srv/daos_server.h>
 #include "rpc.h"
 #include "srv_internal.h"
-
-int
-dsms_corpc_create(dtp_context_t ctx, dtp_group_t *group, dtp_opcode_t opcode,
-		  dtp_rpc_t **rpc)
-{
-	dtp_opcode_t opc;
-
-	opc = DAOS_RPC_OPCODE(opcode, DAOS_POOL_MODULE, 1);
-	return dtp_corpc_req_create(ctx, group, NULL /* excluded_ranks */, opc,
-				    NULL /* co_bulk_hdl */, NULL /* priv */,
-				    0 /* flags */, 0 /* tree_topo */, rpc);
-}
 
 static int
 init(void)
 {
 	int rc;
 
-	rc = dsms_storage_init();
+	rc = ds_pool_mpool_cache_init();
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	rc = dsms_module_pool_init();
+	rc = ds_pool_svc_cache_init();
 	if (rc != 0)
 		D_GOTO(err_storage, rc);
 
-	rc = dsms_module_target_init();
+	rc = ds_pool_cache_init();
 	if (rc != 0)
-		D_GOTO(err_pool, rc);
+		D_GOTO(err_pool_svc, rc);
+
+	rc = ds_pool_hdl_hash_init();
+	if (rc != 0)
+		D_GOTO(err_pool_cache, rc);
 
 	return 0;
 
-err_pool:
-	dsms_module_pool_fini();
+err_pool_cache:
+	ds_pool_cache_fini();
+err_pool_svc:
+	ds_pool_svc_cache_fini();
 err_storage:
-	dsms_storage_fini();
+	ds_pool_mpool_cache_fini();
 err:
 	return rc;
 }
@@ -74,31 +70,41 @@ err:
 static int
 fini(void)
 {
-	dsms_module_target_fini();
-	dsms_module_pool_fini();
-	dsms_storage_fini();
+	ds_pool_hdl_hash_fini();
+	ds_pool_cache_fini();
+	ds_pool_svc_cache_fini();
+	ds_pool_mpool_cache_fini();
 	return 0;
 }
 
 /* Note: the rpc input/output parameters is defined in daos_rpc */
-static struct daos_rpc_handler dsms_handlers[] = {
+static struct daos_rpc_handler pool_handlers[] = {
 	{
-		.dr_opc		= DSM_POOL_CONNECT,
-		.dr_hdlr	= dsms_hdlr_pool_connect
+		.dr_opc		= POOL_CONNECT,
+		.dr_hdlr	= ds_pool_connect_handler
 	}, {
-		.dr_opc		= DSM_POOL_DISCONNECT,
-		.dr_hdlr	= dsms_hdlr_pool_disconnect
+		.dr_opc		= POOL_DISCONNECT,
+		.dr_hdlr	= ds_pool_disconnect_handler
 	}, {
-		.dr_opc		= DSM_TGT_POOL_CONNECT,
-		.dr_hdlr	= dsms_hdlr_tgt_pool_connect,
+		.dr_opc		= POOL_EXCLUDE,
+		.dr_hdlr	= ds_pool_exclude_handler
+	}, {
+		.dr_opc		= POOL_TGT_CONNECT,
+		.dr_hdlr	= ds_pool_tgt_connect_handler,
 		.dr_corpc_ops	= {
-			.co_aggregate	= dsms_hdlr_tgt_pool_connect_aggregate
+			.co_aggregate	= ds_pool_tgt_connect_aggregator
 		}
 	}, {
-		.dr_opc		= DSM_TGT_POOL_DISCONNECT,
-		.dr_hdlr	= dsms_hdlr_tgt_pool_disconnect,
+		.dr_opc		= POOL_TGT_DISCONNECT,
+		.dr_hdlr	= ds_pool_tgt_disconnect_handler,
 		.dr_corpc_ops	= {
-			.co_aggregate  = dsms_hdlr_tgt_pool_disconnect_aggregate
+			.co_aggregate	= ds_pool_tgt_disconnect_aggregator
+		}
+	}, {
+		.dr_opc		= POOL_TGT_UPDATE_MAP,
+		.dr_hdlr	= ds_pool_tgt_update_map_handler,
+		.dr_corpc_ops	= {
+			.co_aggregate	= ds_pool_tgt_update_map_aggregator
 		}
 	}, {
 		.dr_opc		= 0
@@ -144,6 +150,6 @@ struct dss_module pool_module =  {
 	.sm_fini	= fini,
 	.sm_cl_rpcs	= pool_rpcs,
 	.sm_srv_rpcs	= pool_srv_rpcs,
-	.sm_handlers	= dsms_handlers,
+	.sm_handlers	= pool_handlers,
 	.sm_key		= &dsm_module_key,
 };

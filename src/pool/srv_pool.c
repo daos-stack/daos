@@ -40,6 +40,75 @@
 #include "srv_layout.h"
 
 /*
+ * To be called inside a TX. Callers must abort the TX if an error is returned.
+ */
+static int
+write_map_buf(daos_handle_t root, struct pool_buf *buf, uint32_t version)
+{
+	int rc;
+
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
+
+	D_DEBUG(DF_DSMS, "version=%u ntargets=%u ndomains=%u\n", version,
+		buf->pb_target_nr, buf->pb_domain_nr);
+
+	rc = dbtree_nv_update(root, POOL_MAP_VERSION, &version,
+			      sizeof(version));
+	if (rc != 0)
+		return rc;
+
+	return dbtree_nv_update(root, POOL_MAP_BUFFER, buf,
+				pool_buf_size(buf->pb_nr));
+}
+
+/*
+ * Retrieve the address of the persistent pool map buffer and the pool map
+ * version into "map_buf" and "map_version", respectively.
+ */
+static int
+read_map_buf(daos_handle_t root, struct pool_buf **map_buf,
+	     uint32_t *map_version)
+{
+	struct pool_buf	       *buf;
+	size_t			buf_size;
+	uint32_t		version;
+	int			rc;
+
+	rc = dbtree_nv_lookup(root, POOL_MAP_VERSION, &version,
+			      sizeof(version));
+	if (rc != 0)
+		return rc;
+
+	/* Look up the address of the persistent pool map buffer. */
+	rc = dbtree_nv_lookup_ptr(root, POOL_MAP_BUFFER, (void **)&buf,
+				  &buf_size);
+	if (rc != 0)
+		return rc;
+
+	D_DEBUG(DF_DSMS, "version=%u ntargets=%u ndomains=%u\n", version,
+		buf->pb_target_nr, buf->pb_domain_nr);
+
+	*map_buf = buf;
+	*map_version = version;
+	return 0;
+}
+
+/* Callers are responsible for destroying the object via pool_map_destroy(). */
+static int
+read_map(daos_handle_t root, struct pool_map **map)
+{
+	struct pool_buf	       *buf;
+	uint32_t		version;
+	int			rc;
+
+	rc = read_map_buf(root, &buf, &version);
+	if (rc != 0)
+		return rc;
+
+	return pool_map_create(buf, version, map);
+}
+
+/*
  * Create the mpool, create the root trees, create the superblock, and return
  * the target UUID.
  */
@@ -248,14 +317,10 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t root, uint32_t uid,
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_update(root, POOL_MAP_VERSION, &map_version,
-				      sizeof(map_version));
+		rc = write_map_buf(root, map_buf, map_version);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
-		rc = dbtree_nv_update(root, POOL_MAP_BUFFER, map_buf,
-				      pool_buf_size(map_buf->pb_nr));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
+		/* Unused currently. */
 		rc = dbtree_nv_update(root, POOL_MAP_TARGET_UUIDS, uuids,
 				      sizeof(uuid_t) * ntargets);
 		if (rc != 0)
@@ -381,18 +446,14 @@ out:
  * Pool service
  *
  * References the ds_pool_mpool descriptor.
- *
- * TODO: p_rwlock currently protects all pool metadata, both volatile and
- * persistent.  When moving to the event-driven model, we shall replace it with
- * a non-blocking implementation.
  */
 struct pool_svc {
 	daos_list_t		ps_entry;
 	uuid_t			ps_uuid;
-	struct ds_pool_mpool   *ps_mpool;
-	pthread_rwlock_t	ps_rwlock;	/* see TODO in struct comment */
-	pthread_mutex_t		ps_lock;
+	pthread_mutex_t		ps_ref_lock;
 	int			ps_ref;
+	ABT_rwlock		ps_lock;
+	struct ds_pool_mpool   *ps_mpool;
 	daos_handle_t		ps_root;	/* root tree */
 	daos_handle_t		ps_handles;	/* pool handle tree */
 	struct ds_pool	       *ps_pool;
@@ -405,31 +466,45 @@ struct pool_svc {
 static DAOS_LIST_HEAD(pool_svc_cache);
 static pthread_mutex_t pool_svc_cache_lock;
 
+int
+ds_pool_svc_cache_init(void)
+{
+	int rc;
+
+	rc = pthread_mutex_init(&pool_svc_cache_lock, NULL /* attr */);
+	if (rc != 0) {
+		D_ERROR("failed to initialize pool_svc cache lock: %d\n", rc);
+		rc = -DER_NOMEM;
+	}
+
+	return rc;
+}
+
+void
+ds_pool_svc_cache_fini(void)
+{
+	pthread_mutex_destroy(&pool_svc_cache_lock);
+}
+
 /*
  * Initialize svc->ps_pool. When this function is called, svc->ps_uuid and
  * svc->ps_mpool must contain valid values.
  */
 static int
-pool_svc_pool_init(struct pool_svc *svc)
+pool_svc_init_pool(struct pool_svc *svc)
 {
 	struct ds_pool_create_arg	arg;
-	size_t				map_buf_size;
 	int				rc;
 
-	rc = dbtree_nv_lookup(svc->ps_root, POOL_MAP_VERSION,
-			      &arg.pca_map_version,
-			      sizeof(arg.pca_map_version));
-	if (rc != 0)
-		return rc;
-
-	rc = dbtree_nv_lookup_ptr(svc->ps_root, POOL_MAP_BUFFER,
-				  (void **)&arg.pca_map_buf, &map_buf_size);
+	rc = read_map_buf(svc->ps_root, &arg.pca_map_buf,
+			  &arg.pca_map_version);
 	if (rc != 0)
 		return rc;
 
 	arg.pca_create_group = 1;
 
-	return ds_pool_lookup(svc->ps_uuid, &arg, &svc->ps_pool);
+	/* TODO: Revalidate the pool map cache after leadership changes. */
+	return ds_pool_lookup_create(svc->ps_uuid, &arg, &svc->ps_pool);
 }
 
 static int
@@ -452,15 +527,15 @@ pool_svc_init(const uuid_t uuid, struct pool_svc *svc)
 
 	svc->ps_mpool = mpool;
 
-	rc = pthread_rwlock_init(&svc->ps_rwlock, NULL /* attr */);
-	if (rc != 0) {
-		D_ERROR("failed to initialize ps_rwlock: %d\n", rc);
-		D_GOTO(err_mp, rc = -DER_NOMEM);
+	rc = ABT_rwlock_create(&svc->ps_lock);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create ps_lock: %d\n", rc);
+		D_GOTO(err_mp, rc = dss_abterr2der(rc));
 	}
 
-	rc = pthread_mutex_init(&svc->ps_lock, NULL /* attr */);
+	rc = pthread_mutex_init(&svc->ps_ref_lock, NULL /* attr */);
 	if (rc != 0) {
-		D_ERROR("failed to initialize ps_lock: %d\n", rc);
+		D_ERROR("failed to initialize ps_ref_lock: %d\n", rc);
 		D_GOTO(err_rwlock, rc = -DER_NOMEM);
 	}
 
@@ -492,7 +567,7 @@ pool_svc_init(const uuid_t uuid, struct pool_svc *svc)
 		D_GOTO(err_root, rc);
 	}
 
-	rc = pool_svc_pool_init(svc);
+	rc = pool_svc_init_pool(svc);
 	if (rc != 0)
 		D_GOTO(err_handles, rc);
 
@@ -503,9 +578,9 @@ err_handles:
 err_root:
 	dbtree_close(svc->ps_root);
 err_lock:
-	pthread_mutex_destroy(&svc->ps_lock);
+	pthread_mutex_destroy(&svc->ps_ref_lock);
 err_rwlock:
-	pthread_rwlock_destroy(&svc->ps_rwlock);
+	ABT_rwlock_free(&svc->ps_lock);
 err_mp:
 	ds_pool_mpool_put(mpool);
 err:
@@ -515,9 +590,9 @@ err:
 static void
 pool_svc_get(struct pool_svc *svc)
 {
-	pthread_mutex_lock(&svc->ps_lock);
+	pthread_mutex_lock(&svc->ps_ref_lock);
 	svc->ps_ref++;
-	pthread_mutex_unlock(&svc->ps_lock);
+	pthread_mutex_unlock(&svc->ps_ref_lock);
 }
 
 static int
@@ -562,31 +637,39 @@ pool_svc_put(struct pool_svc *svc)
 {
 	int is_last_ref = 0;
 
-	pthread_mutex_lock(&svc->ps_lock);
+	pthread_mutex_lock(&svc->ps_ref_lock);
 	if (svc->ps_ref == 1)
 		is_last_ref = 1;
 	else
 		svc->ps_ref--;
-	pthread_mutex_unlock(&svc->ps_lock);
+	pthread_mutex_unlock(&svc->ps_ref_lock);
 
 	if (is_last_ref) {
 		pthread_mutex_lock(&pool_svc_cache_lock);
-		pthread_mutex_lock(&svc->ps_lock);
+		pthread_mutex_lock(&svc->ps_ref_lock);
 		svc->ps_ref--;
 		if (svc->ps_ref == 0) {
 			D_DEBUG(DF_DSMS, "freeing pool_svc %p\n", svc);
 			ds_pool_put(svc->ps_pool);
 			dbtree_close(svc->ps_handles);
-			pthread_mutex_destroy(&svc->ps_lock);
-			pthread_rwlock_destroy(&svc->ps_rwlock);
+			pthread_mutex_destroy(&svc->ps_ref_lock);
+			ABT_rwlock_free(&svc->ps_lock);
 			ds_pool_mpool_put(svc->ps_mpool);
 			daos_list_del(&svc->ps_entry);
 			D_FREE_PTR(svc);
 		} else {
-			pthread_mutex_unlock(&svc->ps_lock);
+			pthread_mutex_unlock(&svc->ps_ref_lock);
 		}
 		pthread_mutex_unlock(&pool_svc_cache_lock);
 	}
+}
+
+static int
+bcast_create(dtp_context_t ctx, struct pool_svc *svc, dtp_opcode_t opcode,
+	     dtp_rpc_t **rpc)
+{
+	return ds_pool_bcast_create(ctx, svc->ps_pool, DAOS_POOL_MODULE, opcode,
+				    rpc);
 }
 
 struct pool_attr {
@@ -645,66 +728,33 @@ permitted(const struct pool_attr *attr, uint32_t uid, uint32_t gid,
 	return (capas & capas_permitted) == capas;
 }
 
-/*
- * Retrieve the address of the persistent pool map buffer and the pool map
- * version into "map_buf" and "map_version", respectively.
- */
-static int
-map_retrieve(const struct pool_svc *svc, struct pool_buf **map_buf,
-	     uint32_t *map_version)
-{
-	struct pool_buf	       *buf;
-	size_t			buf_size;
-	uint32_t		version;
-	int			rc;
-
-	rc = dbtree_nv_lookup(svc->ps_root, POOL_MAP_VERSION, &version,
-			      sizeof(version));
-	if (rc != 0)
-		return rc;
-
-	/* Look up the address of the persistent pool map buffer. */
-	rc = dbtree_nv_lookup_ptr(svc->ps_root, POOL_MAP_BUFFER, (void **)&buf,
-				  &buf_size);
-	if (rc != 0)
-		return rc;
-
-	D_DEBUG(DF_DSMS, "version=%u ntargets=%u ndomains=%u\n", version,
-		buf->pb_target_nr, buf->pb_domain_nr);
-
-	*map_buf = buf;
-	*map_version = version;
-	return 0;
-}
-
 static int
 pool_connect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 		   const uuid_t pool_hdl, uint64_t capas)
 {
-	struct tgt_pool_connect_in     *in;
-	struct tgt_pool_connect_out    *out;
+	struct pool_tgt_connect_in     *in;
+	struct pool_tgt_connect_out    *out;
 	dtp_rpc_t		       *rpc;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
-	rc = dsms_corpc_create(ctx, svc->ps_pool->sp_group,
-			       DSM_TGT_POOL_CONNECT, &rpc);
+	rc = bcast_create(ctx, svc, POOL_TGT_CONNECT, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	in = dtp_req_get(rpc);
-	uuid_copy(in->tpci_pool, svc->ps_uuid);
-	uuid_copy(in->tpci_pool_hdl, pool_hdl);
-	in->tpci_capas = capas;
-	in->tpci_pool_map_version = pool_map_get_version(svc->ps_pool->sp_map);
+	uuid_copy(in->tci_uuid, svc->ps_uuid);
+	uuid_copy(in->tci_handle, pool_hdl);
+	in->tci_capas = capas;
+	in->tci_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
 	out = dtp_reply_get(rpc);
-	rc = out->tpco_ret;
+	rc = out->tco_rc;
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to connect to some targets: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
@@ -752,7 +802,7 @@ pool_connect_bulk(dtp_rpc_t *rpc, struct pool_svc *svc)
 	 * If successful, this stores the address of the persistent pool map
 	 * buffer into "map_buf".
 	 */
-	rc = map_retrieve(svc, &map_buf, &out->pco_pool_map_version);
+	rc = read_map_buf(svc->ps_root, &map_buf, &out->pco_op.po_map_version);
 	if (rc != 0) {
 		D_ERROR("failed to read pool map: %d\n", rc);
 		D_GOTO(out, rc);
@@ -761,13 +811,13 @@ pool_connect_bulk(dtp_rpc_t *rpc, struct pool_svc *svc)
 	map_buf_size = pool_buf_size(map_buf->pb_nr);
 
 	/* Check if the client bulk buffer is large enough. */
-	rc = dtp_bulk_get_len(in->pci_pool_map_bulk, &client_bulk_size);
+	rc = dtp_bulk_get_len(in->pci_map_bulk, &client_bulk_size);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	if (client_bulk_size < map_buf_size) {
 		D_ERROR("client pool map buffer ("DF_U64") < required (%ld)\n",
 			client_bulk_size, map_buf_size);
-		out->pco_pool_map_buf_size = map_buf_size;
+		out->pco_map_buf_size = map_buf_size;
 		D_GOTO(out, rc = -DER_TRUNC);
 	}
 
@@ -785,7 +835,7 @@ pool_connect_bulk(dtp_rpc_t *rpc, struct pool_svc *svc)
 	/* Prepare "map_desc" for dtp_bulk_transfer(). */
 	map_desc.bd_rpc = rpc;
 	map_desc.bd_bulk_op = DTP_BULK_PUT;
-	map_desc.bd_remote_hdl = in->pci_pool_map_bulk;
+	map_desc.bd_remote_hdl = in->pci_map_bulk;
 	map_desc.bd_remote_off = 0;
 	map_desc.bd_local_hdl = map_bulk;
 	map_desc.bd_local_off = 0;
@@ -815,7 +865,7 @@ out:
 }
 
 int
-dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
+ds_pool_connect_handler(dtp_rpc_t *rpc)
 {
 	struct pool_connect_in	       *in = dtp_req_get(rpc);
 	struct pool_connect_out	       *out = dtp_reply_get(rpc);
@@ -827,16 +877,17 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
-		DP_UUID(in->pci_pool), rpc, DP_UUID(in->pci_pool_hdl));
+		DP_UUID(in->pci_op.pi_uuid), rpc,
+		DP_UUID(in->pci_op.pi_handle));
 
-	rc = pool_svc_lookup(in->pci_pool, &svc);
+	rc = pool_svc_lookup(in->pci_op.pi_uuid, &svc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	pthread_rwlock_wrlock(&svc->ps_rwlock);
+	ABT_rwlock_wrlock(svc->ps_lock);
 
 	/* Check existing pool handles. */
-	rc = dbtree_uv_lookup(svc->ps_handles, in->pci_pool_hdl, &hdl,
+	rc = dbtree_uv_lookup(svc->ps_handles, in->pci_op.pi_handle, &hdl,
 			      sizeof(hdl));
 	if (rc == 0) {
 		if (hdl.ph_capas == in->pci_capas) {
@@ -881,7 +932,7 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 	if (skip_update)
 		D_GOTO(out_lock, rc = 0);
 
-	rc = pool_connect_bcast(rpc->dr_ctx, svc, in->pci_pool_hdl,
+	rc = pool_connect_bcast(rpc->dr_ctx, svc, in->pci_op.pi_handle,
 				in->pci_capas);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
@@ -901,8 +952,8 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_uv_update(svc->ps_handles, in->pci_pool_hdl, &hdl,
-				      sizeof(hdl));
+		rc = dbtree_uv_update(svc->ps_handles, in->pci_op.pi_handle,
+				      &hdl, sizeof(hdl));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
@@ -918,12 +969,12 @@ dsms_hdlr_pool_connect(dtp_rpc_t *rpc)
 	pool_svc_get(svc);
 
 out_lock:
-	pthread_rwlock_unlock(&svc->ps_rwlock);
+	ABT_rwlock_unlock(svc->ps_lock);
 	pool_svc_put(svc);
 out:
-	out->pco_ret = rc;
+	out->pco_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pci_pool), rpc, rc);
+		DP_UUID(in->pci_op.pi_uuid), rpc, rc);
 	return dtp_reply_send(rpc);
 }
 
@@ -931,28 +982,27 @@ static int
 pool_disconnect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 		      const uuid_t pool_hdl)
 {
-	struct tgt_pool_disconnect_in  *in;
-	struct tgt_pool_disconnect_out *out;
+	struct pool_tgt_disconnect_in  *in;
+	struct pool_tgt_disconnect_out *out;
 	dtp_rpc_t		       *rpc;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
-	rc = dsms_corpc_create(ctx, svc->ps_pool->sp_group,
-			       DSM_TGT_POOL_DISCONNECT, &rpc);
+	rc = bcast_create(ctx, svc, POOL_TGT_DISCONNECT, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	in = dtp_req_get(rpc);
-	uuid_copy(in->tpdi_pool, svc->ps_uuid);
-	uuid_copy(in->tpdi_pool_hdl, pool_hdl);
+	uuid_copy(in->tdi_uuid, svc->ps_uuid);
+	uuid_copy(in->tdi_handle, pool_hdl);
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
 	out = dtp_reply_get(rpc);
-	rc = out->tpdo_ret;
+	rc = out->tdo_rc;
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to disconnect from some targets: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
@@ -965,7 +1015,7 @@ out:
 }
 
 int
-dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
+ds_pool_disconnect_handler(dtp_rpc_t *rpc)
 {
 	struct pool_disconnect_in      *pdi = dtp_req_get(rpc);
 	struct pool_disconnect_out     *pdo = dtp_reply_get(rpc);
@@ -977,15 +1027,16 @@ dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
-		DP_UUID(pdi->pdi_pool), rpc, DP_UUID(pdi->pdi_pool_hdl));
+		DP_UUID(pdi->pdi_op.pi_uuid), rpc,
+		DP_UUID(pdi->pdi_op.pi_handle));
 
-	rc = pool_svc_lookup(pdi->pdi_pool, &svc);
+	rc = pool_svc_lookup(pdi->pdi_op.pi_uuid, &svc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	pthread_rwlock_wrlock(&svc->ps_rwlock);
+	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = dbtree_uv_lookup(svc->ps_handles, pdi->pdi_pool_hdl, &hdl,
+	rc = dbtree_uv_lookup(svc->ps_handles, pdi->pdi_op.pi_handle, &hdl,
 			      sizeof(hdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -993,7 +1044,7 @@ dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 		D_GOTO(out_lock, rc);
 	}
 
-	rc = pool_disconnect_bcast(rpc->dr_ctx, svc, pdi->pdi_pool_hdl);
+	rc = pool_disconnect_bcast(rpc->dr_ctx, svc, pdi->pdi_op.pi_handle);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
@@ -1005,7 +1056,7 @@ dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 	nhandles--;
 
 	TX_BEGIN(svc->ps_mpool->mp_pmem) {
-		rc = dbtree_uv_delete(svc->ps_handles, pdi->pdi_pool_hdl);
+		rc = dbtree_uv_delete(svc->ps_handles, pdi->pdi_op.pi_handle);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -1022,35 +1073,195 @@ dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	/* For this pool handle. See pool_connect_cb(). */
+	/* For this pool handle. See ds_pool_connect_handler(). */
 	pool_svc_put(svc);
 
 out_lock:
-	pthread_rwlock_unlock(&svc->ps_rwlock);
+	ABT_rwlock_unlock(svc->ps_lock);
 	pool_svc_put(svc);
 out:
-	pdo->pdo_ret = rc;
+	pdo->pdo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(pdi->pdi_pool), rpc, rc);
+		DP_UUID(pdi->pdi_op.pi_uuid), rpc, rc);
 	return dtp_reply_send(rpc);
 }
 
-int
-dsms_module_pool_init(void)
+static int
+pool_update_map_bcast(dtp_context_t ctx, struct pool_svc *svc,
+		      uint32_t map_version)
 {
-	int rc;
+	struct pool_tgt_update_map_in  *in;
+	struct pool_tgt_update_map_out *out;
+	dtp_rpc_t		       *rpc;
+	int				rc;
 
-	rc = pthread_mutex_init(&pool_svc_cache_lock, NULL /* attr */);
-	if (rc != 0) {
-		D_ERROR("failed to initialize pool_svc cache lock: %d\n", rc);
-		rc = -DER_NOMEM;
-	}
+	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
+	rc = bcast_create(ctx, svc, POOL_TGT_UPDATE_MAP, &rpc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	in = dtp_req_get(rpc);
+	uuid_copy(in->tui_uuid, svc->ps_uuid);
+	in->tui_map_version = map_version;
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = dtp_reply_get(rpc);
+	rc = out->tuo_rc;
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to update pool map on some targets: "
+			"%d\n", DP_UUID(svc->ps_uuid), rc);
+
+out_rpc:
+	dtp_req_decref(rpc);
+out:
+	D_DEBUG(DF_DSMS, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
 	return rc;
 }
 
-void
-dsms_module_pool_fini(void)
+/* Callers are expected to hold svc->ps_lock for writing. */
+static int
+ds_pool_exclude(struct pool_svc *svc, daos_rank_list_t *tgts,
+		daos_rank_list_t *tgts_failed)
 {
-	pthread_mutex_destroy(&pool_svc_cache_lock);
+	struct pool_map	       *map;
+	uint32_t		map_version_before;
+	uint32_t		map_version;
+	struct pool_buf	       *map_buf;
+	struct pool_map	       *map_tmp;
+	struct dss_module_info *info = dss_get_module_info();
+	int			rc;
+
+	/* Create a temporary pool map based on the last committed version. */
+	rc = read_map(svc->ps_root, &map);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/*
+	 * Attempt to modify the temporary pool map and save its versions
+	 * before and after.
+	 */
+	map_version_before = pool_map_get_version(map);
+	ds_pool_map_exclude_targets(map, tgts, tgts_failed);
+	map_version = pool_map_get_version(map);
+
+	D_DEBUG(DF_DSMS, DF_UUID": version=%u->%u failed=%d\n",
+		DP_UUID(svc->ps_uuid), map_version_before, map_version,
+		tgts_failed == NULL ? -1 : tgts_failed->rl_nr.num_out);
+
+	/* Any actual pool map changes? */
+	if (map_version == map_version_before)
+		D_GOTO(out_map, rc = 0);
+
+	rc = pool_buf_extract(map, &map_buf);
+	if (rc != 0)
+		D_GOTO(out_map, rc);
+
+	TX_BEGIN(svc->ps_mpool->mp_pmem) {
+		rc = write_map_buf(svc->ps_root, map_buf, map_version);
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+	} TX_ONABORT {
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
+			rc = -DER_NOSPACE;
+	} TX_END
+
+	pool_buf_free(map_buf);
+
+	if (rc != 0)
+		D_GOTO(out_map, rc);
+
+	/* Swap the new pool map with the old one in the cache. */
+	ABT_rwlock_wrlock(svc->ps_pool->sp_lock);
+	map_tmp = svc->ps_pool->sp_map;
+	svc->ps_pool->sp_map = map;
+	map = map_tmp;
+	svc->ps_pool->sp_map_version = map_version;
+	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+
+	/*
+	 * Ignore the return code as we are more about committing a pool map
+	 * change than its dissemination.
+	 */
+	pool_update_map_bcast(info->dmi_ctx, svc, map_version);
+
+out_map:
+	pool_map_destroy(map);
+out:
+	return rc;
+}
+
+int
+ds_pool_exclude_handler(dtp_rpc_t *rpc)
+{
+	struct pool_exclude_in	       *in = dtp_req_get(rpc);
+	struct pool_exclude_out	       *out = dtp_reply_get(rpc);
+	struct pool_svc		       *svc;
+	struct pool_hdl			hdl;
+	int				rc;
+
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+
+	if (in->pei_targets == NULL || in->pei_targets->rl_nr.num == 0)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID
+		" ntargets=%u\n", DP_UUID(in->pei_op.pi_uuid), rpc,
+		DP_UUID(in->pei_op.pi_handle), in->pei_targets->rl_nr.num);
+
+	rc = pool_svc_lookup(in->pei_op.pi_uuid, &svc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	/* Verify the pool handle. */
+	rc = dbtree_uv_lookup(svc->ps_handles, in->pei_op.pi_handle, &hdl,
+			      sizeof(hdl));
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			rc = -DER_NO_PERM;
+		D_GOTO(out_lock, rc);
+	}
+
+	/* These have be freed after the reply is sent. */
+	D_ALLOC_PTR(out->peo_targets);
+	if (out->peo_targets == NULL)
+		D_GOTO(out_map_version, rc = -DER_NOMEM);
+	D_ALLOC(out->peo_targets->rl_ranks,
+		sizeof(*out->peo_targets->rl_ranks) *
+		in->pei_targets->rl_nr.num);
+	if (out->peo_targets->rl_ranks == NULL)
+		D_GOTO(out_map_version, rc = -DER_NOMEM);
+	out->peo_targets->rl_nr.num = in->pei_targets->rl_nr.num;
+
+	rc = ds_pool_exclude(svc, in->pei_targets, out->peo_targets);
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
+
+	/* The RPC encoding code only looks at rl_nr.num. */
+	out->peo_targets->rl_nr.num = out->peo_targets->rl_nr.num_out;
+
+out_map_version:
+	out->peo_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	pool_svc_put(svc);
+out:
+	out->peo_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->pei_op.pi_uuid), rpc, rc);
+	rc = dtp_reply_send(rpc);
+	if (out->peo_targets != NULL) {
+		if (out->peo_targets->rl_ranks != NULL)
+			D_FREE(out->peo_targets->rl_ranks,
+			       sizeof(*out->peo_targets->rl_ranks) *
+			       in->pei_targets->rl_nr.num);
+		D_FREE_PTR(out->peo_targets);
+	}
+	return rc;
 }

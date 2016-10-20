@@ -1565,3 +1565,31 @@ pool_map_empty(struct pool_map *map)
 {
 	return map->po_tree == NULL;
 }
+
+/**
+ * Find a target whose rank equals \a rank by an unoptimized linear search.
+ *
+ * \param map	[IN]		The pool map to search
+ * \param rank	[IN]		Target rank to search
+ * \return			NULL if not found; target address if found
+ */
+struct pool_target *
+pool_map_find_target_by_rank(struct pool_map *map, uint32_t rank)
+{
+	struct pool_target	*targets;
+	int			 i;
+
+	if (pool_map_empty(map)) {
+		D_ERROR("Uninitialized pool map\n");
+		return NULL;
+	}
+
+	targets = map->po_tree[0].do_targets;
+
+	for (i = 0; i < map->po_tree[0].do_target_nr; i++) {
+		if (targets[i].ta_comp.co_rank == rank)
+			return &targets[i];
+	}
+
+	return NULL;
+}

@@ -90,21 +90,6 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
  */
 
 /**
- * Create a local pool connection for global representation data.
- *
- * \param glob	[IN]	global (shared) representation of a collective handle
- *			to be extracted
- * \param poh	[OUT]	returned local pool connection handle
- *
- * \return		These values will be returned:
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- */
-int
-daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
-
-/**
  * Convert a local pool connection to global representation data which can be
  * shared with peer processes.
  * If glob->iov_buf is set to NULL, the actual size of the global handle is
@@ -197,7 +182,6 @@ daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Storage target is nonexistent
  */
 int
 daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev);

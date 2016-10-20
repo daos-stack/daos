@@ -54,33 +54,53 @@ dsm_tls_get()
 /*
  * srv.c
  */
-int dsms_corpc_create(dtp_context_t ctx, dtp_group_t *group,
-		      dtp_opcode_t opcode, dtp_rpc_t **rpc);
 
 /*
  * srv_storage.c
  */
-int dsms_storage_init(void);
-void dsms_storage_fini(void);
+int ds_pool_mpool_cache_init(void);
+void ds_pool_mpool_cache_fini(void);
 
 /*
  * srv_pool.c
  */
-int dsms_module_pool_init(void);
-void dsms_module_pool_fini(void);
-int dsms_hdlr_pool_connect(dtp_rpc_t *rpc);
-int dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
+int ds_pool_svc_cache_init(void);
+void ds_pool_svc_cache_fini(void);
+int ds_pool_connect_handler(dtp_rpc_t *rpc);
+int ds_pool_disconnect_handler(dtp_rpc_t *rpc);
+int ds_pool_exclude_handler(dtp_rpc_t *rpc);
 
 /*
  * srv_target.c
  */
-int dsms_module_target_init(void);
-void dsms_module_target_fini(void);
-int dsms_hdlr_tgt_pool_connect(dtp_rpc_t *rpc);
-int dsms_hdlr_tgt_pool_connect_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
-					 void *priv);
-int dsms_hdlr_tgt_pool_disconnect(dtp_rpc_t *rpc);
-int dsms_hdlr_tgt_pool_disconnect_aggregate(dtp_rpc_t *source,
-					    dtp_rpc_t *result, void *priv);
+int ds_pool_cache_init(void);
+void ds_pool_cache_fini(void);
+int ds_pool_hdl_hash_init(void);
+void ds_pool_hdl_hash_fini(void);
+int ds_pool_tgt_connect_handler(dtp_rpc_t *rpc);
+int ds_pool_tgt_connect_aggregator(dtp_rpc_t *source, dtp_rpc_t *result,
+				   void *priv);
+int ds_pool_tgt_disconnect_handler(dtp_rpc_t *rpc);
+int ds_pool_tgt_disconnect_aggregator(dtp_rpc_t *source, dtp_rpc_t *result,
+				      void *priv);
+int ds_pool_tgt_update_map_handler(dtp_rpc_t *rpc);
+int ds_pool_tgt_update_map_aggregator(dtp_rpc_t *source, dtp_rpc_t *result,
+				      void *priv);
+struct ds_pool_create_arg {
+	struct pool_buf	       *pca_map_buf;
+	uint32_t		pca_map_version;
+	int			pca_create_group;
+};
+int ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
+			  struct ds_pool **pool);
+
+/*
+ * srv_util.c
+ */
+int ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
+			 dtp_group_t **group);
+int ds_pool_group_destroy(dtp_group_t *group);
+void ds_pool_map_exclude_targets(struct pool_map *map, daos_rank_list_t *tgts,
+				 daos_rank_list_t *tgts_failed);
 
 #endif /* __POOL_SERVER_INTERNAL_H__ */

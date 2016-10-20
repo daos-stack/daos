@@ -41,62 +41,88 @@
  * RPC operation codes
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
- * dtp_req_create(..., opc, ...). See daos_rpc.h.
+ * dtp_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-enum dsm_operation {
-	DSM_POOL_CONNECT	= 1,
-	DSM_POOL_DISCONNECT	= 2,
+enum pool_operation {
+	POOL_CONNECT		= 1,
+	POOL_DISCONNECT		= 2,
+	POOL_QUERY		= 3,
+	POOL_EXCLUDE		= 4,
 
-	DSM_POOL_QUERY		= 3,
-	DSM_POOL_EXCLUDE	= 4,
+	POOL_TGT_CONNECT	= 11,
+	POOL_TGT_DISCONNECT	= 12,
+	POOL_TGT_UPDATE_MAP	= 13
+};
 
-	DSM_TGT_POOL_CONNECT	= 20,
-	DSM_TGT_POOL_DISCONNECT	= 21,
+struct pool_op_in {
+	uuid_t	pi_uuid;	/* pool UUID */
+	uuid_t	pi_handle;	/* pool handle UUID */
+};
+
+struct pool_op_out {
+	int32_t		po_rc;		/* operation return code */
+	uint32_t	po_map_version;	/* latest pool map version or zero */
 };
 
 struct pool_connect_in {
-	uuid_t		pci_pool;
-	uuid_t		pci_pool_hdl;
-	uint32_t	pci_uid;
-	uint32_t	pci_gid;
-	uint64_t	pci_capas;
-	dtp_bulk_t	pci_pool_map_bulk;
+	struct pool_op_in	pci_op;
+	uint32_t		pci_uid;
+	uint32_t		pci_gid;
+	uint64_t		pci_capas;
+	dtp_bulk_t		pci_map_bulk;
 };
 
 struct pool_connect_out {
-	int32_t		pco_ret;
-	uint32_t	pco_mode;
-	uint32_t	pco_pool_map_version;
-	uint32_t	pco_pool_map_buf_size;	/* only set on -DER_TRUNC */
+	struct pool_op_out	pco_op;
+	uint32_t		pco_mode;
+	uint32_t		pco_map_buf_size;   /* only set on -DER_TRUNC */
 };
 
 struct pool_disconnect_in {
-	uuid_t	pdi_pool;
-	uuid_t	pdi_pool_hdl;
+	struct pool_op_in	pdi_op;
 };
 
 struct pool_disconnect_out {
-	int32_t pdo_ret;
+	struct pool_op_out	pdo_op;	/* .po_map_version not set */
 };
 
-struct tgt_pool_connect_in {
-	uuid_t		tpci_pool;
-	uuid_t		tpci_pool_hdl;
-	uint64_t	tpci_capas;
-	uint32_t	tpci_pool_map_version;
+struct pool_exclude_in {
+	struct pool_op_in	pei_op;
+	daos_rank_list_t       *pei_targets;
 };
 
-struct tgt_pool_connect_out {
-	int32_t	tpco_ret;	/* number of errors */
+struct pool_exclude_out {
+	struct pool_op_out	peo_op;
+	daos_rank_list_t       *peo_targets;	/* that are not found in pool */
 };
 
-struct tgt_pool_disconnect_in {
-	uuid_t		tpdi_pool;
-	uuid_t		tpdi_pool_hdl;
+struct pool_tgt_connect_in {
+	uuid_t		tci_uuid;		/* pool UUID */
+	uuid_t		tci_handle;
+	uint64_t	tci_capas;
+	uint32_t	tci_map_version;
 };
 
-struct tgt_pool_disconnect_out {
-	int32_t	tpdo_ret;	/* number of errors */
+struct pool_tgt_connect_out {
+	int32_t	tco_rc;	/* number of errors */
+};
+
+struct pool_tgt_disconnect_in {
+	uuid_t		tdi_uuid;	/* pool UUID */
+	uuid_t		tdi_handle;
+};
+
+struct pool_tgt_disconnect_out {
+	int32_t	tdo_rc;	/* number of errors */
+};
+
+struct pool_tgt_update_map_in {
+	uuid_t		tui_uuid;		/* pool UUID */
+	uint32_t	tui_map_version;
+};
+
+struct pool_tgt_update_map_out {
+	int32_t	tuo_rc;	/* number of errors */
 };
 
 int

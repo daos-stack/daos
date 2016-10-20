@@ -60,13 +60,10 @@ cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 	struct umem_attr	uma;
 	int			rc;
 
-	rc = ds_pool_lookup(pool_uuid, NULL /* arg */, &svc->cs_pool);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			/* Therefore not a single pool handle exists. */
-			rc = -DER_NO_PERM;
-		D_GOTO(err, rc);
-	}
+	svc->cs_pool = ds_pool_lookup(pool_uuid);
+	if (svc->cs_pool == NULL)
+		/* Therefore not a single pool handle exists. */
+		D_GOTO(err, rc = -DER_NO_PERM);
 
 	uuid_copy(svc->cs_pool_uuid, pool_uuid);
 	svc->cs_id = id;
@@ -157,6 +154,14 @@ cont_svc_put(struct cont_svc *svc)
 	pthread_rwlock_destroy(&svc->cs_rwlock);
 	ds_pool_mpool_put(svc->cs_mpool);
 	D_FREE_PTR(svc);
+}
+
+static int
+bcast_create(dtp_context_t ctx, struct cont_svc *svc, dtp_opcode_t opcode,
+	     dtp_rpc_t **rpc)
+{
+	return ds_pool_bcast_create(ctx, svc->cs_pool, DAOS_CONT_MODULE, opcode,
+				    rpc);
 }
 
 int
@@ -285,8 +290,7 @@ cont_destroy_bcast(dtp_context_t ctx, struct cont_svc *svc,
 	D_DEBUG(DF_DSMS, DF_CONT": bcasting\n",
 		DP_CONT(svc->cs_pool_uuid, cont_uuid));
 
-	rc = ds_cont_corpc_create(ctx, svc->cs_pool->sp_group,
-				  DSM_TGT_CONT_DESTROY, &rpc);
+	rc = bcast_create(ctx, svc, DSM_TGT_CONT_DESTROY, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -549,8 +553,7 @@ cont_open_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas);
 
-	rc = ds_cont_corpc_create(ctx, cont->c_svc->cs_pool->sp_group,
-				  DSM_TGT_CONT_OPEN, &rpc);
+	rc = bcast_create(ctx, cont->c_svc, DSM_TGT_CONT_OPEN, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -745,8 +748,7 @@ cont_close_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t cont_hdl)
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(cont_hdl));
 
-	rc = ds_cont_corpc_create(ctx, cont->c_svc->cs_pool->sp_group,
-				  DSM_TGT_CONT_CLOSE, &rpc);
+	rc = bcast_create(ctx, cont->c_svc, DSM_TGT_CONT_CLOSE, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

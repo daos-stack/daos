@@ -114,6 +114,93 @@ pool_connect(void **state)
 	print_message("rank %d success\n", arg->myrank);
 }
 
+/** exclude a target from the pool */
+static void
+pool_exclude(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_handle_t	 poh;
+	daos_event_t	 ev;
+	daos_event_t	*evp;
+	daos_pool_info_t info;
+	daos_rank_list_t ranks;
+	daos_rank_t	 rank;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	/** connect to pool */
+	print_message("rank 0 connecting to pool %ssynchronously... ",
+		      arg->async ? "a" : "");
+	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+			       &arg->svc, DAOS_PC_RW, &poh, &info,
+			       arg->async ? &ev : NULL /* ev */);
+	assert_int_equal(rc, 0);
+
+	if (arg->async) {
+		/** wait for pool connection */
+		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		assert_int_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(ev.ev_error, 0);
+	}
+
+	print_message("success\n");
+
+	if (info.pi_ntargets < 2) {
+		print_message("not enough targets; skipping\n");
+		goto disconnect;
+	}
+
+	/** exclude rank 1 */
+	rank = 1;
+	ranks.rl_nr.num = 1;
+	ranks.rl_nr.num_out = ranks.rl_nr.num;
+	ranks.rl_ranks = &rank;
+
+	print_message("rank 0 excluding rank %u... ", rank);
+	rc = daos_pool_exclude(poh, &ranks,
+			       arg->async ? &ev : NULL /* ev */);
+	assert_int_equal(rc, 0);
+
+	if (arg->async) {
+		/** wait for pool exclusion */
+		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		assert_int_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(ev.ev_error, 0);
+	}
+
+	print_message("success\n");
+
+disconnect:
+	/** disconnect from pool */
+	print_message("rank %d disconnecting from pool %ssynchronously ... ",
+		      arg->myrank, arg->async ? "a" : "");
+	rc = daos_pool_disconnect(poh, arg->async ? &ev : NULL /* ev */);
+	assert_int_equal(rc, 0);
+
+	if (arg->async) {
+		/** wait for pool disconnection */
+		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		assert_int_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(ev.ev_error, 0);
+
+		rc = daos_event_fini(&ev);
+		assert_int_equal(rc, 0);
+		/* disable the async after testing done */
+		arg->async = false;
+	}
+	print_message("rank %d success\n", arg->myrank);
+}
+
 static const struct CMUnitTest pool_tests[] = {
 	{ "DSM1: connect to non-existing pool",
 	  pool_connect_nonexist, NULL, NULL},
@@ -123,6 +210,9 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_connect, async_enable, NULL},
 	{ "DSM4: pool handle local2global and global2local",
 	  pool_connect, hdl_share_enable, NULL},
+	/* Keep this one at the end, as it excludes target rank 1. */
+	{ "DSM5: exclude targets",
+	  pool_exclude, async_disable, NULL}
 };
 
 static int

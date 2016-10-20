@@ -126,8 +126,7 @@ pool_connect_cp(void *data, daos_event_t *ev, int rc)
 	if (rc == -DER_TRUNC) {
 		/* TODO: Reallocate a larger buffer and reconnect. */
 		D_ERROR("pool map buffer (%ld) < required (%u)\n",
-			pool_buf_size(map_buf->pb_nr),
-			pco->pco_pool_map_buf_size);
+			pool_buf_size(map_buf->pb_nr), pco->pco_map_buf_size);
 		D_GOTO(out, rc);
 	}
 
@@ -136,13 +135,14 @@ pool_connect_cp(void *data, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	rc = pco->pco_ret;
+	rc = pco->pco_op.po_rc;
 	if (rc) {
 		D_ERROR("failed to connect to pool: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	rc = pool_map_create(map_buf, pco->pco_pool_map_version, &pool->dp_map);
+	rc = pool_map_create(map_buf, pco->pco_op.po_map_version,
+			     &pool->dp_map);
 	if (rc != 0) {
 		/* TODO: What do we do about the remote connection state? */
 		D_ERROR("failed to create local pool map: %d\n", rc);
@@ -168,7 +168,7 @@ pool_connect_cp(void *data, daos_event_t *ev, int rc)
 	info->pi_space.foo = 0;
 
 out:
-	dtp_bulk_free(pci->pci_pool_map_bulk);
+	dtp_bulk_free(pci->pci_map_bulk);
 	dtp_req_decref(sp->sp_rpc);
 	D_FREE_PTR(arg);
 	if (rc)
@@ -246,7 +246,7 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
-	rc = pool_req_create(daos_ev2ctx(ev), ep, DSM_POOL_CONNECT, &rpc);
+	rc = pool_req_create(daos_ev2ctx(ev), ep, POOL_CONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(out_arg, rc);
@@ -254,14 +254,14 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 
 	/** fill in request buffer */
 	pci = dtp_req_get(rpc);
-	uuid_copy(pci->pci_pool, uuid);
-	uuid_copy(pci->pci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(pci->pci_op.pi_uuid, uuid);
+	uuid_copy(pci->pci_op.pi_handle, pool->dp_pool_hdl);
 	pci->pci_uid = geteuid();
 	pci->pci_gid = getegid();
 	pci->pci_capas = flags;
 
 	rc = dtp_bulk_create(daos_ev2ctx(ev), &map_sgl, DTP_BULK_RW,
-			     &pci->pci_pool_map_bulk);
+			     &pci->pci_map_bulk);
 	if (rc != 0)
 		D_GOTO(out_req, rc);
 
@@ -289,7 +289,7 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 	return rc;
 
 out_bulk:
-	dtp_bulk_free(pci->pci_pool_map_bulk);
+	dtp_bulk_free(pci->pci_map_bulk);
 out_req:
 	dtp_req_decref(rpc); /* scratchpad */
 	dtp_req_decref(rpc); /* free req */
@@ -315,7 +315,7 @@ pool_disconnect_cp(void *arg, daos_event_t *ev, int rc)
 	}
 
 	pdo = dtp_reply_get(sp->sp_rpc);
-	rc = pdo->pdo_ret;
+	rc = pdo->pdo_op.po_rc;
 	if (rc) {
 		D_ERROR("failed to disconnect from pool: %d\n", rc);
 		D_GOTO(out, rc);
@@ -382,7 +382,7 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
-	rc = pool_req_create(daos_ev2ctx(ev), ep, DSM_POOL_DISCONNECT, &rpc);
+	rc = pool_req_create(daos_ev2ctx(ev), ep, POOL_DISCONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		dc_pool_put(pool);
@@ -392,8 +392,8 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	/** fill in request buffer */
 	pdi = dtp_req_get(rpc);
 	D_ASSERT(pdi != NULL);
-	uuid_copy(pdi->pdi_pool, pool->dp_pool);
-	uuid_copy(pdi->pdi_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(pdi->pdi_op.pi_uuid, pool->dp_pool);
+	uuid_copy(pdi->pdi_op.pi_handle, pool->dp_pool_hdl);
 
 	/** fill in scratchpad associated with the event */
 	sp = daos_ev2sp(ev);
@@ -626,5 +626,101 @@ daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 		D_ERROR("dsmc_pool_g2l failed, rc: %d.\n", rc);
 
 out:
+	return rc;
+}
+
+static int
+pool_exclude_cp(void *arg, daos_event_t *ev, int rc)
+{
+	struct daos_op_sp	       *sp = arg;
+	struct pool_exclude_out	       *out = dtp_reply_get(sp->sp_rpc);
+	struct dc_pool		       *pool = sp->sp_arg;
+
+	if (rc != 0) {
+		D_ERROR("RPC error while excluding targets: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = out->peo_op.po_rc;
+	if (rc != 0) {
+		D_ERROR("failed to exclude targets: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, DF_UUID": excluded: hdl="DF_UUID" failed=%u\n",
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl),
+		out->peo_targets == NULL ? 0 : out->peo_targets->rl_nr.num);
+
+	if (out->peo_targets != NULL && out->peo_targets->rl_nr.num > 0)
+		rc = -DER_NONEXIST;
+
+out:
+	dtp_req_decref(sp->sp_rpc);
+	dc_pool_put(pool);
+	return rc;
+}
+
+int
+daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
+{
+	struct dc_pool	       *pool;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t	       *rpc;
+	struct pool_exclude_in *in;
+	struct daos_op_sp      *sp;
+	int			rc;
+
+	if (tgts == NULL)
+		return -DER_INVAL;
+
+	pool = dc_pool_lookup(poh);
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	D_DEBUG(DF_DSMC, DF_UUID": excluding %u targets: hdl="DF_UUID
+		" tgts[0]=%u\n", DP_UUID(pool->dp_pool), tgts->rl_nr.num,
+		DP_UUID(pool->dp_pool_hdl), tgts->rl_ranks[0]);
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			D_GOTO(err_pool, rc);
+	}
+
+	ep.ep_grp = NULL;
+	ep.ep_rank = 0;
+	ep.ep_tag = 0;
+
+	rc = pool_req_create(daos_ev2ctx(ev), ep, POOL_EXCLUDE, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: %d\n", rc);
+		D_GOTO(err_pool, rc);
+	}
+
+	in = dtp_req_get(rpc);
+	uuid_copy(in->pei_op.pi_uuid, pool->dp_pool);
+	uuid_copy(in->pei_op.pi_handle, pool->dp_pool_hdl);
+	in->pei_targets = tgts;
+
+	sp = daos_ev2sp(ev);
+	dtp_req_addref(rpc);
+	sp->sp_rpc = rpc;
+	sp->sp_arg = pool;
+
+	rc = daos_event_register_comp_cb(ev, pool_exclude_cp, sp);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	return daos_rpc_send(rpc, ev);
+
+err_rpc:
+	dtp_req_decref(sp->sp_rpc);
+	dtp_req_decref(rpc);
+err_pool:
+	dc_pool_put(pool);
 	return rc;
 }

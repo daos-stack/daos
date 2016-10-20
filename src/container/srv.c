@@ -32,18 +32,6 @@
 #include "rpc.h"
 #include "srv_internal.h"
 
-int
-ds_cont_corpc_create(dtp_context_t ctx, dtp_group_t *group, dtp_opcode_t opcode,
-		     dtp_rpc_t **rpc)
-{
-	dtp_opcode_t opc;
-
-	opc = DAOS_RPC_OPCODE(opcode, DAOS_CONT_MODULE, 1);
-	return dtp_corpc_req_create(ctx, group, NULL /* excluded_ranks */, opc,
-				    NULL /* co_bulk_hdl */, NULL /* priv */,
-				    0 /* flags */, 0 /* tree_topo */, rpc);
-}
-
 static int
 init(void)
 {

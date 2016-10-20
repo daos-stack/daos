@@ -158,6 +158,8 @@ uint32_t pool_map_get_version(struct pool_map *map);
 
 int pool_map_find_target(struct pool_map *map, uint32_t id,
 			 struct pool_target **target_pp);
+struct pool_target *pool_map_find_target_by_rank(struct pool_map *map,
+						 uint32_t rank);
 int pool_map_find_domain(struct pool_map *map, pool_comp_type_t type,
 			 uint32_t id, struct pool_domain **domain_pp);
 

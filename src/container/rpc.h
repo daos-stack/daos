@@ -74,31 +74,6 @@ enum dsm_operation {
 	DSM_TGT_EPOCH_DISCARD	= 51,
 };
 
-struct pool_connect_in {
-	uuid_t		pci_pool;
-	uuid_t		pci_pool_hdl;
-	uint32_t	pci_uid;
-	uint32_t	pci_gid;
-	uint64_t	pci_capas;
-	dtp_bulk_t	pci_pool_map_bulk;
-};
-
-struct pool_connect_out {
-	int32_t		pco_ret;
-	uint32_t	pco_mode;
-	uint32_t	pco_pool_map_version;
-	uint32_t	pco_pool_map_buf_size;	/* only set on -DER_TRUNC */
-};
-
-struct pool_disconnect_in {
-	uuid_t	pdi_pool;
-	uuid_t	pdi_pool_hdl;
-};
-
-struct pool_disconnect_out {
-	int32_t pdo_ret;
-};
-
 struct cont_create_in {
 	uuid_t	cci_pool;
 	uuid_t	cci_pool_hdl;
