@@ -51,11 +51,6 @@ struct obj_io_ctx {
 	int			 cx_sync:1;
 };
 
-struct obj_io_oper {
-	daos_handle_t		 oo_oh;
-	daos_event_t		*oo_ev;
-};
-
 static struct dc_object *
 obj_alloc(void)
 {
@@ -82,7 +77,7 @@ obj_free(struct dc_object *obj)
 	if (obj->cob_mohs != NULL) {
 		for (i = 0; i < layout->ol_nr; i++) {
 			if (!daos_handle_is_inval(obj->cob_mohs[i]))
-				dc_obj_shard_close(obj->cob_mohs[i], NULL);
+				dc_obj_shard_close(obj->cob_mohs[i]);
 		}
 		D_FREE(obj->cob_mohs, layout->ol_nr * sizeof(*obj->cob_mohs));
 	}
@@ -169,7 +164,7 @@ obj_shard_open(struct dc_object *obj, unsigned int shard, daos_handle_t *oh)
 		rc = dc_obj_shard_open(obj->cob_coh,
 				       layout->ol_targets[shard],
 				       oid, obj->cob_mode,
-				       &obj->cob_mohs[shard], NULL);
+				       &obj->cob_mohs[shard]);
 	}
 
 	if (rc == 0)
@@ -463,13 +458,13 @@ obj_dkey2shard(struct dc_object *obj, daos_key_t *dkey,
 }
 
 struct daos_obj_fetch_arg {
-	daos_handle_t oh;
-	daos_epoch_t epoch;
-	daos_key_t *dkey;
-	unsigned int nr;
-	daos_vec_iod_t *iods;
-	daos_sg_list_t *sgls;
-	daos_vec_map_t *maps;
+	daos_handle_t		 oh;
+	daos_epoch_t		 epoch;
+	daos_key_t		*dkey;
+	unsigned int		 nr;
+	daos_vec_iod_t		*iods;
+	daos_sg_list_t		*sgls;
+	daos_vec_map_t		*maps;
 };
 
 static int
@@ -484,8 +479,8 @@ obj_shard_fetch_task(struct daos_task *task)
 
 int
 daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-	      unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-	      daos_vec_map_t *maps, daos_event_t *ev)
+	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+	       daos_vec_map_t *maps, daos_event_t *ev)
 {
 	struct obj_io_ctx	*iocx;
 	unsigned int		shard;
@@ -517,13 +512,13 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	}
 
 	arg = daos_task2arg(task);
-	arg->oh = shard_oh;
-	arg->epoch = epoch;
-	arg->dkey = dkey;
-	arg->nr = nr;
-	arg->iods = iods;
-	arg->sgls = sgls;
-	arg->maps = maps;
+	arg->oh		= shard_oh;
+	arg->epoch	= epoch;
+	arg->dkey	= dkey;
+	arg->nr		= nr;
+	arg->iods	= iods;
+	arg->sgls	= sgls;
+	arg->maps	= maps;
 
 	rc = obj_iocx_launch(iocx, &launched);
 	if (!launched)
@@ -629,13 +624,13 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 			D_GOTO(failed, rc);
 
 		arg = daos_task2arg(task);
-		arg->oh = shard_oh;
-		arg->epoch = epoch;
-		arg->dkey = dkey;
-		arg->nr = nr;
-		arg->iods = iods;
-		arg->sgls = sgls;
-		non_tasks = false;
+		arg->oh		= shard_oh;
+		arg->epoch	= epoch;
+		arg->dkey	= dkey;
+		arg->nr		= nr;
+		arg->iods	= iods;
+		arg->sgls	= sgls;
+		non_tasks	= false;
 
 	}
 
@@ -702,14 +697,14 @@ obj_list_akey_comp(struct obj_io_ctx *ctx, int rc)
 }
 
 struct daos_obj_list_args {
-	daos_handle_t	oh;
-	daos_epoch_t	epoch;
+	daos_handle_t	 oh;
+	uint32_t	 op;
+	daos_epoch_t	 epoch;
 	daos_key_t	*key;
 	uint32_t	*nr;
 	daos_key_desc_t *kds;
 	daos_sg_list_t	*sgl;
 	daos_hash_out_t *anchor;
-	uint32_t	op;
 };
 
 static int
@@ -774,14 +769,14 @@ daos_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 		D_GOTO(failed, rc);
 
 	arg = daos_task2arg(task);
-	arg->oh = shard_oh;
-	arg->epoch = epoch;
-	arg->key = key;
-	arg->nr = nr;
-	arg->kds = kds;
-	arg->sgl = sgl;
-	arg->anchor = anchor;
-	arg->op = op;
+	arg->oh		= shard_oh;
+	arg->epoch	= epoch;
+	arg->key	= key;
+	arg->nr		= nr;
+	arg->kds	= kds;
+	arg->sgl	= sgl;
+	arg->anchor	= anchor;
+	arg->op		= op;
 
 	rc = obj_iocx_launch(iocx, &launched);
 	if (!launched)

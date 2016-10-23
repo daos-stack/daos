@@ -1009,15 +1009,15 @@ daos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch,
  * Get pool_target by container handle and target index.
  *
  * \param coh [IN]	container handle.
- * \param tgt [OUT]	pool target found.
  * \param tgt_idx [IN]	target index.
+ * \param tgt [OUT]	pool target pointer.
  *
  * \return		0 if get the pool_target.
  * \return		errno if it does not get the pool_target.
  */
 int
-dc_cont_tgt_idx2pool_tgt(daos_handle_t coh, struct pool_target **tgt,
-			 uint32_t tgt_idx)
+dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
+		    struct pool_target **tgt)
 {
 	struct dsmc_container	*dc;
 	struct dc_pool		*pool;

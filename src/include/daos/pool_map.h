@@ -79,7 +79,7 @@ struct pool_component {
 	uint32_t		co_ver;
 	/** failure sequence */
 	uint32_t		co_fseq;
-	/** number of children or VOSs */
+	/** number of children or storage partitions */
 	uint32_t		co_nr;
 };
 
