@@ -221,6 +221,7 @@ echo_fini(void)
 			rc = crt_context_destroy(gecho.extra_ctx[i], 0);
 			assert(rc == 0);
 		}
+		free(gecho.extra_ctx);
 	}
 
 	rc = crt_finalize();

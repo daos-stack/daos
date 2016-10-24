@@ -1,0 +1,72 @@
+{
+    4 byte invalid read in PMIx, will remove
+    Memcheck:Addr4
+    fun:register_variable
+    ...
+    fun:PMIx_Init
+}
+{
+    Memory leak in PMIx_Init()
+    Memcheck:Leak
+    fun:*alloc
+    ...
+    fun:PMIx_Init
+}
+{
+    Memory leak in PMIx progress thread
+    Memcheck:Leak
+    fun:*alloc
+    ...
+    fun:pmix*
+    ...
+    fun:progress_engine
+}
+{
+    Memory leak in PMIx_Lookup
+    Memcheck:Leak
+    fun:*alloc
+    ...
+    fun:pmix_argv*
+    ...
+    fun:PMIx_Lookup
+}
+{
+    Memory leak in PMIx module lookup
+    Memcheck:Leak
+    fun:*alloc
+    ...
+    fun:pdlopen_open*
+}
+{
+    Leak from PMIx event handler registration.
+    Memcheck:Leak
+    fun:*alloc
+    ...
+    fun:PMIx_Register_event_handler
+}
+{
+    CCI memory leak, NA_Initialize
+    Memcheck:Leak
+    ...
+    fun:cci_init
+    fun:na_cci_check_protocol
+    fun:NA_Initialize
+}
+{
+    CCI memory leak, NA_Addr_lookup
+    Memcheck:Leak
+    fun:*malloc
+    ...
+    fun:na_cci_addr_lookup
+    fun:NA_Addr_lookup
+}
+{
+    dlopen leaks
+    Memcheck:Leak
+    match-leak-kinds: reachable
+    ...
+    fun:_dl_open
+}
+
+
+

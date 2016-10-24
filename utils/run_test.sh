@@ -66,8 +66,12 @@ fi
 if [[ "$CART_TEST_MODE" =~ (memcheck|all) ]]; then
   echo "Nothing to do yet"
   scons utest --utest-mode=memcheck
+  export TR_USE_VALGRIND=memcheck
   cd ${TESTDIR}
+  set +e
   python3.4 test_runner scripts/cart_echo_test.yml scripts/cart_test_group.yml
+  error=$?
+  set -e
   TESTLOGS="/testLogs/testRun"
   TESTECHODIR="cart_echo_test_loop0/cart_echo_test_default"
   cd -
@@ -77,5 +81,7 @@ if [[ "$CART_TEST_MODE" =~ (memcheck|all) ]]; then
 
   TESTECHODIR="cart_test_group_loop0/cart_test_group_default"
   cp -R ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/*/valgrind*.xml ${RESULTS}/.
-
+  if [ $error != 0 ]; then
+    exit $error
+  fi
 fi

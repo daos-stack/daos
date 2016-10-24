@@ -67,7 +67,7 @@ import getpass
 
 #pylint: disable=broad-except
 
-NPROC = "4"
+NPROC = "1"
 
 def setUpModule():
     """ set up test environment """
@@ -142,27 +142,21 @@ def logdir_name(fullname):
 
 def add_prefix_logdir(testcase_id):
     """add the log directory to the prefix"""
-    global NPROC
     prefix = ""
     ompi_bin = os.getenv('CRT_OMPI_BIN', "")
     log_path = os.getenv("CRT_TESTLOG", "test_group") + logdir_name(testcase_id)
     os.makedirs(log_path, exist_ok=True)
     use_valgrind = os.getenv('TR_USE_VALGRIND', default="")
     if use_valgrind == 'memcheck':
-        NPROC = "2"
         suppressfile = os.path.join(os.getenv('CRT_PREFIX', ".."), "etc", \
-                       "memcheck-mcl.supp")
+                       "memcheck-cart.supp")
         prefix = "valgrind --xml=yes" + \
             " --xml-file=" + log_path + "/valgrind.%q{PMIX_ID}.xml" + \
             " --leak-check=yes --gen-suppressions=all" + \
             " --suppressions=" + suppressfile + " --show-reachable=yes"
     elif use_valgrind == "callgrind":
-        NPROC = "2"
         prefix = "valgrind --tool=callgrind --callgrind-out-file=" + \
                  log_path + "/callgrind.%q{PMIX_ID}.out"
-    else:
-        # needed to clear any preceding value
-        NPROC = "1"
 
     if os.getenv('TR_USE_URI', ""):
         dvmfile = " --hnp file:%s " % os.getenv('TR_USE_URI')

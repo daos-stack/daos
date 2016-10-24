@@ -114,6 +114,8 @@ def scons():
     SConscript('%s/scons_local/test_runner/SConscript' % arch_dir,
                exports=['env', 'prereqs'])
 
+    env.Install('$PREFIX/etc', ['utils/memcheck-cart.supp'])
+
     # Put this after all SConscript calls so that any imports they require can
     # be included.
     save_build_info(env, prereqs, platform)

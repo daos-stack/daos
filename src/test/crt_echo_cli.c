@@ -275,6 +275,7 @@ static void run_client(void)
 	assert(rc == 0);
 
 	rc = client_wait(100, 100, &gecho.complete);
+	free(md5_str);
 	assert(rc == 0);
 	free(iovs[0].iov_buf);
 	free(iovs[1].iov_buf);

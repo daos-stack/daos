@@ -48,13 +48,13 @@ There you will find anything written to stdout and stderr. The output from
 memcheck and callgrind are in the echo_test directory. At the end of a test run,
 the last testRun directory is renamed to testRun_<date stamp>
 
-python3 test_runner srcipts/mcl_echo_test.yml
+python3 test_runner srcipts/cart_echo_test.yml
 
 To use valgrind memory checking
-set TR_USE_VALGRIND in mcl_echo_test.yml to memcheck
+set TR_USE_VALGRIND in cart_echo_test.yml to memcheck
 
 To use valgrind call (callgrind) profiling
-set TR_USE_VALGRIND in mcl_echo_test.yml to callgrind
+set TR_USE_VALGRIND in cart_echo_test.yml to callgrind
 
 """
 
@@ -67,13 +67,14 @@ import getpass
 
 #pylint: disable=broad-except
 
-NPROC = "4"
+NPROC = "1"
 
 def setUpModule():
     """ set up test environment """
 
     print("\nTestEcho: module setup begin")
     print("TestEcho: module setup end\n\n")
+    print("os.environ['CCI_CONFIG'] = %s" % os.environ.get("CCI_CONFIG"))
 
 def tearDownModule():
     """teardown module for test"""
@@ -142,27 +143,21 @@ def logdir_name(fullname):
 
 def add_prefix_logdir(testcase_id):
     """add the log directory to the prefix"""
-    global NPROC
     prefix = ""
     ompi_bin = os.getenv('CRT_OMPI_BIN', "")
     log_path = os.getenv("CRT_TESTLOG", "echo_test") + logdir_name(testcase_id)
     os.makedirs(log_path, exist_ok=True)
     use_valgrind = os.getenv('TR_USE_VALGRIND', default="")
     if use_valgrind == 'memcheck':
-        NPROC = "2"
         suppressfile = os.path.join(os.getenv('CRT_PREFIX', ".."), "etc", \
-                       "memcheck-mcl.supp")
+                       "memcheck-cart.supp")
         prefix = "valgrind --xml=yes" + \
             " --xml-file=" + log_path + "/valgrind.%q{PMIX_ID}.xml" + \
             " --leak-check=yes --gen-suppressions=all" + \
             " --suppressions=" + suppressfile + " --show-reachable=yes"
     elif use_valgrind == "callgrind":
-        NPROC = "2"
         prefix = "valgrind --tool=callgrind --callgrind-out-file=" + \
                  log_path + "/callgrind.%q{PMIX_ID}.out"
-    else:
-        # needed to clear any preceding value
-        NPROC = "1"
 
     if os.getenv('TR_USE_URI', ""):
         dvmfile = " --hnp file:%s " % os.getenv('TR_USE_URI')
