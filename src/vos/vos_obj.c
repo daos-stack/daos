@@ -383,6 +383,9 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 				memset(iov->iov_buf, 0, iov->iov_len);
 		}
 
+		if (!is_zc)
+			iovs[iov_cur].iov_len = iov->iov_len;
+
 		/* move to the next index */
 		recx_tmp.rx_idx = recx->rx_idx + i + 1;
 		if (is_zc) {

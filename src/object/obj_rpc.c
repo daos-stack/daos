@@ -32,47 +32,62 @@ static struct dtp_msg_field *obj_update_in_fields[] = {
 	&DMF_OID,	/* object ID */
 	&DMF_UUID,	/* container handle uuid */
 	&DMF_UINT64,	/* epoch */
+	&DMF_UINT32,	/* map_version */
 	&DMF_UINT32,	/* count of vec_iod and sg */
-	&DMF_UINT32,	/* pad */
 	&DMF_IOVEC,	/* dkey */
 	&DMF_VEC_IOD_ARRAY, /* daos_vector */
+	&DMF_SGL_ARRAY, /* sgl_vector */
 	&DMF_BULK_ARRAY,    /* BULK ARRAY */
 };
 
-static struct dtp_msg_field *obj_fetch_out_fields[] = {
+static struct dtp_msg_field *obj_fetch_in_fields[] = {
+	&DMF_OID,	/* object ID */
+	&DMF_UUID,	/* container handle uuid */
+	&DMF_UINT64,	/* epoch */
+	&DMF_UINT32,	/* map version */
+	&DMF_UINT32,	/* count of vec_iod and sg */
+	&DMF_IOVEC,	/* dkey */
+	&DMF_VEC_IOD_ARRAY, /* daos_vector */
+	&DMF_SGL_DESC_ARRAY, /* sgl_descriptor vector */
+	&DMF_BULK_ARRAY,    /* BULK ARRAY */
+};
+
+static struct dtp_msg_field *obj_rw_out_fields[] = {
 	&DMF_INT,	/* status */
-	&DMF_UINT32,	/* pad */
+	&DMF_UINT32,	/* map version */
 	&DMF_REC_SIZE_ARRAY, /* actual size of records */
+	&DMF_SGL_ARRAY, /* return buffer */
 };
 
 static struct dtp_msg_field *obj_key_enum_in_fields[] = {
 	&DMF_OID,	/* object ID */
-	&DMF_IOVEC,     /* key */
 	&DMF_UUID,	/* container handle uuid */
 	&DMF_UINT64,	/* epoch */
+	&DMF_UINT32,	/* map_version */
 	&DMF_UINT32,	/* number of kds */
-	&DMF_UINT32,	/* pad */
+	&DMF_IOVEC,     /* key */
 	&DMF_DAOS_HASH_OUT, /* hash anchor */
+	&DMF_SGL_DESC,	/* sgl_descriptor */
 	&DMF_BULK, /* BULK array for dkey */
 };
 
 static struct dtp_msg_field *obj_key_enum_out_fields[] = {
 	&DMF_INT,		/* status of the request */
-	&DMF_UINT32,		/* pad */
+	&DMF_UINT32,		/* map version */
 	&DMF_DAOS_HASH_OUT,	/* hash anchor */
 	&DMF_KEY_DESC_ARRAY,	/* kds array */
+	&DMF_SGL,		/* SGL buffer */
 };
 
 static struct dtp_req_format DQF_OBJ_UPDATE =
-	DEFINE_DTP_REQ_FMT_ARRAY("DAOS_OBJ_UPDATE",
-				 obj_update_in_fields,
-				 ARRAY_SIZE(obj_update_in_fields),
-				 dtp_single_out_fields, 1);
-
-static struct dtp_req_format DQF_OBJ_FETCH =
 	DEFINE_DTP_REQ_FMT("DAOS_OBJ_UPDATE",
 			   obj_update_in_fields,
-			   obj_fetch_out_fields);
+			   obj_rw_out_fields);
+
+static struct dtp_req_format DQF_OBJ_FETCH =
+	DEFINE_DTP_REQ_FMT("DAOS_OBJ_FETCH",
+			   obj_fetch_in_fields,
+			   obj_rw_out_fields);
 
 static struct dtp_req_format DQF_DKEY_ENUMERATE =
 	DEFINE_DTP_REQ_FMT("DAOS_DKEY_ENUM",
@@ -86,6 +101,7 @@ struct dtp_req_format DQF_AKEY_ENUMERATE =
 
 struct daos_rpc daos_obj_rpcs[] = {
 	{
+		.dr_name	= "DAOS_OBJ_UPDATE",
 		.dr_opc		= DAOS_OBJ_RPC_UPDATE,
 		.dr_ver		= 1,
 		.dr_flags	= 0,

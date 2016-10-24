@@ -39,6 +39,8 @@
 #include <daos/transport.h>
 #include <daos_event.h>
 
+#define OBJ_BULK_LIMIT	(4 * 1024) /* 4KB bytes */
+
 /*
  * RPC operation codes
  *
@@ -52,15 +54,15 @@ enum obj_rpc_opc {
 	DAOS_OBJ_AKEY_RPC_ENUMERATE = 4,
 };
 
-/* request for update/fetch */
 struct obj_rw_in {
 	daos_unit_oid_t		orw_oid;
 	uuid_t			orw_co_hdl;
 	uint64_t		orw_epoch;
-	uint32_t		orw_nr;
 	uint32_t		orw_map_ver;
+	uint32_t		orw_nr;
 	daos_key_t		orw_dkey;
 	struct dtp_array	orw_iods;
+	struct dtp_array	orw_sgls;
 	struct dtp_array	orw_bulks;
 };
 
@@ -69,17 +71,19 @@ struct obj_rw_out {
 	int32_t			orw_ret;
 	uint32_t		orw_map_version;
 	struct dtp_array	orw_sizes;
+	struct dtp_array	orw_sgls;
 };
 
 /* object Enumerate in/out */
 struct obj_key_enum_in {
 	daos_unit_oid_t		oei_oid;
-	daos_key_t		oei_key;
 	uuid_t			oei_co_hdl;
 	uint64_t		oei_epoch;
-	uint32_t		oei_nr;
 	uint32_t		oei_map_ver;
+	uint32_t		oei_nr;
+	daos_key_t		oei_key;
 	daos_hash_out_t		oei_anchor;
+	daos_sg_list_t		oei_sgl;
 	dtp_bulk_t		oei_bulk;
 };
 
@@ -88,6 +92,7 @@ struct obj_key_enum_out {
 	uint32_t		oeo_map_version;
 	daos_hash_out_t		oeo_anchor;
 	struct dtp_array	oeo_kds;
+	daos_sg_list_t		oeo_sgl;
 };
 
 extern struct daos_rpc daos_obj_rpcs[];

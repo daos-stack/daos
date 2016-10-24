@@ -418,10 +418,6 @@ struct dtp_msg_field DMF_BULK_ARRAY =
 struct dtp_msg_field DMF_IOVEC =
 	DEFINE_DTP_MSG("daos_iov", 0, sizeof(daos_iov_t), dtp_proc_dtp_iov_t);
 
-struct dtp_msg_field *dtp_single_out_fields[] = {
-	&DMF_INT,	/* status */
-};
-
 int
 dtp_proc_common_hdr(dtp_proc_t proc, struct dtp_common_hdr *hdr)
 {
@@ -572,8 +568,7 @@ dtp_hg_unpack_cleanup(dtp_proc_t proc)
 }
 
 int
-dtp_proc_internal(struct drf_field *drf,
-			 dtp_proc_t proc, void *data)
+dtp_proc_internal(struct drf_field *drf, dtp_proc_t proc, void *data)
 {
 	int rc = 0;
 	void *ptr = data;
@@ -594,11 +589,21 @@ dtp_proc_internal(struct drf_field *drf,
 				break;
 			}
 
-			/* Let's assume array is not zero size now */
-			if (array->da_count == 0)
-				break;
-
 			proc_op = hg_proc_get_op(proc);
+			if (array->da_count == 0) {
+				hg_ret = hg_proc_memcpy(proc, &array->da_arrays,
+						      sizeof(array->da_arrays));
+				if (hg_ret != HG_SUCCESS) {
+					rc = -DER_DTP_HG;
+					break;
+				}
+
+				if (proc_op == HG_DECODE)
+					array->da_arrays = NULL;
+				ptr = (char *)ptr + sizeof(struct dtp_array);
+				continue;
+			}
+
 			if (proc_op == HG_DECODE) {
 				D_ALLOC(array->da_arrays, array->da_count *
 					drf->drf_msg[i]->dmf_size);
@@ -607,6 +612,7 @@ dtp_proc_internal(struct drf_field *drf,
 					break;
 				}
 			}
+
 			array_ptr = array->da_arrays;
 			for (j = 0; j < array->da_count; j++) {
 				rc = drf->drf_msg[i]->dmf_proc(proc, array_ptr);

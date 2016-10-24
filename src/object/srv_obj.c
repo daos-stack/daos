@@ -38,26 +38,32 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+/**
+ * Free a single entry sgl/iov for server side use.
+ **/
 static void
-dsrs_eu_free_iovs_sgls(daos_iov_t *iovs, daos_sg_list_t **sgls, int nr)
+ds_sgls_free(daos_sg_list_t *sgls, int nr)
 {
 	int i;
+	int j;
 
-	if (iovs != NULL) {
-		for (i = 0; i < nr; i++) {
-			if (iovs[i].iov_buf != NULL)
-				D_FREE(iovs[i].iov_buf,
-				       iovs[i].iov_buf_len);
-		}
-		D_FREE(iovs, nr * sizeof(*iovs));
-	}
+	if (sgls == NULL)
+		return;
 
-	if (sgls != NULL) {
-		for (i = 0; i < nr; i++) {
-			if (sgls[i] != NULL)
-				D_FREE_PTR(sgls[i]);
+	for (i = 0; i < nr; i++) {
+		if (sgls[i].sg_nr.num == 0 || sgls[i].sg_iovs == NULL)
+			continue;
+
+		for (j = 0; j < sgls[i].sg_nr.num; j++) {
+			if (sgls[i].sg_iovs[j].iov_buf == NULL)
+				continue;
+
+			D_FREE(sgls[i].sg_iovs[j].iov_buf,
+			       sgls[i].sg_iovs[j].iov_buf_len);
 		}
-		D_FREE(sgls, nr * sizeof(*sgls));
+
+		D_FREE(sgls[i].sg_iovs,
+		       sgls[i].sg_nr.num * sizeof(sgls[i].sg_iovs[0]));
 	}
 }
 
@@ -65,8 +71,8 @@ dsrs_eu_free_iovs_sgls(daos_iov_t *iovs, daos_sg_list_t **sgls, int nr)
  * After bulk finish, let's send reply, then release the resource.
  */
 static void
-dsrs_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status,
-		 uint32_t map_version)
+ds_obj_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status,
+		   uint32_t map_version)
 {
 	struct obj_rw_in	*orwi;
 	uint64_t		cid = 0;
@@ -83,8 +89,19 @@ dsrs_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status,
 
 		orwo = dtp_reply_get(rpc);
 		D_ASSERT(orwo != NULL);
-		D_FREE(orwo->orw_sizes.da_arrays,
-		       orwo->orw_sizes.da_count * sizeof(uint64_t));
+
+		if (orwo->orw_sgls.da_arrays != NULL) {
+			ds_sgls_free(orwo->orw_sgls.da_arrays,
+				     orwo->orw_sgls.da_count);
+			D_FREE(orwo->orw_sgls.da_arrays,
+			      orwo->orw_sgls.da_count * sizeof(daos_sg_list_t));
+			orwo->orw_sgls.da_count = 0;
+		}
+		if (orwo->orw_sizes.da_arrays != NULL) {
+			D_FREE(orwo->orw_sizes.da_arrays,
+			       orwo->orw_sizes.da_count * sizeof(uint64_t));
+			orwo->orw_sizes.da_count = 0;
+		}
 	}
 
 	if (daos_handle_is_inval(ioh))
@@ -97,7 +114,7 @@ dsrs_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status,
 					   orwi->orw_nr,
 					   orwi->orw_iods.da_arrays,
 					   0);
-	else
+	else if (opc_get(rpc->dr_opc) == DAOS_OBJ_RPC_FETCH)
 		rc = vos_obj_zc_fetch_end(ioh, &orwi->orw_dkey,
 					  orwi->orw_nr,
 					  orwi->orw_iods.da_arrays,
@@ -108,28 +125,7 @@ dsrs_rw_complete(dtp_rpc_t *rpc, daos_handle_t ioh, int status,
 			opc_get(rpc->dr_opc), rc);
 }
 
-static void
-dsrs_eu_complete(dtp_rpc_t *rpc, daos_sg_list_t **sgls,
-		 daos_iov_t *iov, int status, uint32_t map_version)
-{
-	struct obj_key_enum_out *oeo;
-	int rc;
-
-	obj_reply_set_status(rpc, status);
-	obj_reply_map_version_set(rpc, map_version);
-	rc = dtp_reply_send(rpc);
-	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
-
-	dsrs_eu_free_iovs_sgls(iov, sgls, 1);
-
-	oeo = dtp_reply_get(rpc);
-	D_ASSERT(oeo != NULL);
-	D_FREE(oeo->oeo_kds.da_arrays,
-	       oeo->oeo_kds.da_count * sizeof(daos_key_desc_t));
-}
-
-struct dsrs_bulk_async_args {
+struct ds_bulk_async_args {
 	ABT_future	future;
 	int		result;
 };
@@ -137,7 +133,7 @@ struct dsrs_bulk_async_args {
 static int
 bulk_complete_cb(const struct dtp_bulk_cb_info *cb_info)
 {
-	struct dsrs_bulk_async_args	*arg;
+	struct ds_bulk_async_args	*arg;
 	struct dtp_bulk_desc		*bulk_desc;
 	dtp_rpc_t			*rpc;
 	dtp_bulk_t			local_bulk_hdl;
@@ -150,7 +146,7 @@ bulk_complete_cb(const struct dtp_bulk_cb_info *cb_info)
 	bulk_desc = cb_info->bci_bulk_desc;
 	local_bulk_hdl = bulk_desc->bd_local_hdl;
 	rpc = bulk_desc->bd_rpc;
-	arg = (struct dsrs_bulk_async_args *)cb_info->bci_arg;
+	arg = (struct ds_bulk_async_args *)cb_info->bci_arg;
 	/**
 	 * Note: only one thread will access arg.result, so
 	 * it should be safe here.
@@ -165,15 +161,14 @@ bulk_complete_cb(const struct dtp_bulk_cb_info *cb_info)
 }
 
 static int
-dsrs_bulk_transfer(dtp_rpc_t *rpc,
-		   dtp_bulk_t *remote_bulks, daos_sg_list_t **sgls,
-		   daos_iov_t *iovs, daos_handle_t ioh, int nr,
-		   dtp_bulk_op_t bulk_op)
+ds_bulk_transfer(dtp_rpc_t *rpc, dtp_bulk_t *remote_bulks,
+		 daos_sg_list_t **sgls, daos_handle_t ioh,
+		 int nr, dtp_bulk_op_t bulk_op)
 {
 	dtp_bulk_opid_t		bulk_opid;
 	dtp_bulk_perm_t		bulk_perm;
 	ABT_future		future;
-	struct dsrs_bulk_async_args arg;
+	struct ds_bulk_async_args arg;
 	int			i;
 	int			rc;
 
@@ -239,6 +234,128 @@ dsrs_bulk_transfer(dtp_rpc_t *rpc,
 	return rc;
 }
 
+static int
+ds_sgls_prep(daos_sg_list_t *dst_sgls, daos_sg_list_t *sgls, int number)
+{
+	int i;
+	int j;
+	int rc = 0;
+
+	for (i = 0; i < number; i++) {
+		dst_sgls[i].sg_nr.num = sgls[i].sg_nr.num;
+		D_ALLOC(dst_sgls[i].sg_iovs,
+			sgls[i].sg_nr.num * sizeof(*sgls[i].sg_iovs));
+		if (dst_sgls[i].sg_iovs == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		for (j = 0; j < dst_sgls[i].sg_nr.num; j++) {
+			dst_sgls[i].sg_iovs[j].iov_buf_len =
+				sgls[i].sg_iovs[j].iov_buf_len;
+
+			D_ALLOC(dst_sgls[i].sg_iovs[j].iov_buf,
+				dst_sgls[i].sg_iovs[j].iov_buf_len);
+			if (dst_sgls[i].sg_iovs[j].iov_buf == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+	}
+out:
+	return rc;
+}
+
+static int
+ds_obj_update_sizes_in_reply(dtp_rpc_t *rpc)
+{
+	struct obj_rw_in	*orw = dtp_req_get(rpc);
+	struct obj_rw_out	*orwo = dtp_reply_get(rpc);
+	daos_vec_iod_t		*vecs;
+	uint64_t		*sizes;
+	int			size_count = 0;
+	int			idx = 0;
+	int			i;
+	int			j;
+
+	D_ASSERT(opc_get(rpc->dr_opc) == DAOS_OBJ_RPC_FETCH);
+
+	D_ASSERT(orwo != NULL);
+	D_ASSERT(orw != NULL);
+
+	vecs = orw->orw_iods.da_arrays;
+	for (i = 0; i < orw->orw_iods.da_count; i++)
+		size_count += vecs[i].vd_nr;
+
+	orwo->orw_sizes.da_count = size_count;
+	D_ALLOC(orwo->orw_sizes.da_arrays, size_count * sizeof(uint64_t));
+	if (orwo->orw_sizes.da_arrays == NULL)
+		return -DER_NOMEM;
+
+	sizes = orwo->orw_sizes.da_arrays;
+	for (i = 0; i < orw->orw_iods.da_count; i++) {
+		for (j = 0; j < vecs[i].vd_nr; j++) {
+			sizes[idx] = vecs[i].vd_recxs[j].rx_rsize;
+			idx++;
+		}
+	}
+
+	return 0;
+}
+
+static int
+ds_obj_rw_inline(dtp_rpc_t *rpc, struct ds_cont_hdl *cont_hdl)
+{
+	struct obj_rw_in	*orw = dtp_req_get(rpc);
+	daos_sg_list_t		*sgls = orw->orw_sgls.da_arrays;
+	int			rc;
+
+	if (opc_get(rpc->dr_opc) == DAOS_OBJ_RPC_UPDATE) {
+		uint64_t cookie = 0;
+
+		rc = vos_obj_update(cont_hdl->sch_cont->sc_hdl,
+				    orw->orw_oid, orw->orw_epoch,
+				    cookie, &orw->orw_dkey, orw->orw_nr,
+				    orw->orw_iods.da_arrays, sgls);
+	} else {
+		struct obj_rw_out *orwo;
+
+		orwo = dtp_reply_get(rpc);
+		orwo->orw_sgls.da_count = orw->orw_sgls.da_count;
+		if (orwo->orw_sgls.da_arrays == NULL)
+			D_ALLOC(orwo->orw_sgls.da_arrays,
+				orwo->orw_sgls.da_count * sizeof(*sgls));
+
+		rc = ds_sgls_prep(orwo->orw_sgls.da_arrays, sgls,
+				  orw->orw_sgls.da_count);
+		if (rc < 0)
+			D_GOTO(out_sgl, rc);
+
+		rc = vos_obj_fetch(cont_hdl->sch_cont->sc_hdl,
+				   orw->orw_oid, orw->orw_epoch,
+				   &orw->orw_dkey, orw->orw_nr,
+				   orw->orw_iods.da_arrays,
+				   orwo->orw_sgls.da_arrays);
+		if (rc != 0)
+			D_GOTO(out_sgl, rc);
+
+		rc = ds_obj_update_sizes_in_reply(rpc);
+		if (rc != 0)
+			D_GOTO(out_sgl, rc);
+
+out_sgl:
+		if (rc != 0) {
+			ds_sgls_free(orwo->orw_sgls.da_arrays,
+				     orwo->orw_sgls.da_count);
+			D_FREE(orwo->orw_sgls.da_arrays,
+			       orwo->orw_sgls.da_count * sizeof(*sgls));
+			orwo->orw_sgls.da_arrays = NULL;
+			orwo->orw_sgls.da_count = 0;
+		}
+	}
+
+	D_DEBUG(DF_MISC, "obj"DF_OID" rw inline rc = %d\n",
+		DP_OID(orw->orw_oid.id_pub), rc);
+
+	return rc;
+}
+
 int
 ds_obj_rw_handler(dtp_rpc_t *rpc)
 {
@@ -261,8 +378,15 @@ ds_obj_rw_handler(dtp_rpc_t *rpc)
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	map_version = cont_hdl->sch_pool->spc_map_version;
 	if (orw->orw_map_ver < map_version)
-		D_GOTO(out, rc = -DER_STALE);
+		D_GOTO(out_tch, rc = -DER_STALE);
 
+	/* Inline update/fetch */
+	if (orw->orw_sgls.da_arrays != NULL && orw->orw_sgls.da_count > 0) {
+		rc = ds_obj_rw_inline(rpc, cont_hdl);
+		D_GOTO(out_tch, rc);
+	}
+
+	/* bulk update/fetch */
 	if (opc_get(rpc->dr_opc) == DAOS_OBJ_RPC_UPDATE) {
 		rc = vos_obj_zc_update_begin(cont_hdl->sch_cont->sc_hdl,
 					     orw->orw_oid, orw->orw_epoch,
@@ -276,14 +400,6 @@ ds_obj_rw_handler(dtp_rpc_t *rpc)
 
 		bulk_op = DTP_BULK_GET;
 	} else {
-		struct obj_rw_out *orwo;
-		daos_vec_iod_t	*vecs;
-		uint64_t	*sizes;
-		int		size_count = 0;
-		int		i;
-		int		j;
-		int		idx = 0;
-
 		rc = vos_obj_zc_fetch_begin(cont_hdl->sch_cont->sc_hdl,
 					    orw->orw_oid, orw->orw_epoch,
 					    &orw->orw_dkey, orw->orw_nr,
@@ -296,26 +412,9 @@ ds_obj_rw_handler(dtp_rpc_t *rpc)
 
 		bulk_op = DTP_BULK_PUT;
 
-		/* update the sizes in reply */
-		vecs = orw->orw_iods.da_arrays;
-		for (i = 0; i < orw->orw_iods.da_count; i++)
-			size_count += vecs[i].vd_nr;
-
-		orwo = dtp_reply_get(rpc);
-		D_ASSERT(orwo != NULL);
-		orwo->orw_sizes.da_count = size_count;
-		D_ALLOC(orwo->orw_sizes.da_arrays,
-			size_count * sizeof(uint64_t));
-		if (orwo->orw_sizes.da_arrays == NULL)
-			D_GOTO(out_tch, rc = -DER_NOMEM);
-
-		sizes = orwo->orw_sizes.da_arrays;
-		for (i = 0; i < orw->orw_iods.da_count; i++) {
-			for (j = 0; j < vecs[i].vd_nr; j++) {
-				sizes[idx] = vecs[i].vd_recxs[j].rx_rsize;
-				idx++;
-			}
-		}
+		rc = ds_obj_update_sizes_in_reply(rpc);
+		if (rc != 0)
+			D_GOTO(out_tch, rc);
 	}
 
 	D_ALLOC(sgls, orw->orw_nr * sizeof(*sgls));
@@ -325,67 +424,36 @@ ds_obj_rw_handler(dtp_rpc_t *rpc)
 	for (i = 0; i < orw->orw_nr; i++)
 		vos_obj_zc_vec2sgl(ioh, i, &sgls[i]);
 
-	rc = dsrs_bulk_transfer(rpc, orw->orw_bulks.da_arrays,
-				sgls, NULL, ioh, orw->orw_nr, bulk_op);
+	rc = ds_bulk_transfer(rpc, orw->orw_bulks.da_arrays,
+			      sgls, ioh, orw->orw_nr, bulk_op);
 out_tch:
 	ds_cont_hdl_put(cont_hdl);
 out:
-	dsrs_rw_complete(rpc, ioh, rc, map_version);
+	ds_obj_rw_complete(rpc, ioh, rc, map_version);
 
 	return rc;
 }
 
-static int
-dsrs_eu_bulks_prep(dtp_rpc_t *rpc, int nr, daos_iov_t **piovs,
-		   daos_sg_list_t ***psgls, dtp_bulk_t *remote_bulks)
+static void
+ds_eu_complete(dtp_rpc_t *rpc, daos_sg_list_t *sgl, int status,
+	       uint32_t map_version)
 {
-	daos_iov_t	*iovs = NULL;
-	daos_sg_list_t	**sgls = NULL;
-	int		i;
-	int		rc;
+	struct obj_key_enum_out *oeo;
+	int rc;
 
-	D_ALLOC(iovs, nr * sizeof(*iovs));
-	if (iovs == NULL)
-		return -DER_NOMEM;
-
-	D_ALLOC(sgls, nr * sizeof(*sgls));
-	if (sgls == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	for (i = 0; i < nr; i++) {
-		daos_size_t bulk_len = 0;
-
-		if (remote_bulks[i] != NULL) {
-			/** FIXME must support more than one iov per sg */
-			rc = dtp_bulk_get_len(remote_bulks[i], &bulk_len);
-			if (rc != 0) {
-				D_ERROR("i %d get bulk len error.: rc = %d\n",
-					 i, rc);
-				D_GOTO(out, rc);
-			}
-		}
-
-		iovs[i].iov_len = 0;
-		iovs[i].iov_buf_len = bulk_len;
-		D_ALLOC(iovs[i].iov_buf, bulk_len);
-		if (iovs[i].iov_buf == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-
-		D_ALLOC_PTR(sgls[i]);
-		if (sgls[i] == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-
-		sgls[i]->sg_nr.num = 1;
-		sgls[i]->sg_iovs = &iovs[i];
-	}
-
-	*piovs = iovs;
-	*psgls = sgls;
-out:
+	obj_reply_set_status(rpc, status);
+	obj_reply_map_version_set(rpc, map_version);
+	rc = dtp_reply_send(rpc);
 	if (rc != 0)
-		dsrs_eu_free_iovs_sgls(iovs, sgls, 1);
+		D_ERROR("send reply failed: %d\n", rc);
 
-	return rc;
+	oeo = dtp_reply_get(rpc);
+	D_ASSERT(oeo != NULL);
+	D_FREE(oeo->oeo_kds.da_arrays,
+	       oeo->oeo_kds.da_count * sizeof(daos_key_desc_t));
+
+	ds_sgls_free(sgl, 1);
+	oeo->oeo_sgl.sg_iovs = NULL;
 }
 
 int
@@ -395,10 +463,12 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 	struct obj_key_enum_out		*oeo;
 	struct ds_cont_hdl		*cont_hdl;
 	daos_iov_t			*iovs = NULL;
-	daos_sg_list_t			**sgls = NULL;
+	int				iovs_nr;
+	int				iovs_idx;
 	vos_iter_param_t		param;
 	daos_key_desc_t			*kds;
 	daos_handle_t			ih;
+	daos_sg_list_t			sgl;
 	uint32_t			map_version = 0;
 	int				rc = 0;
 	int				dkey_nr = 0;
@@ -423,9 +493,13 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 	oeo = dtp_reply_get(rpc);
 	D_ASSERT(oeo != NULL);
 
-	rc = dsrs_eu_bulks_prep(rpc, 1, &iovs, &sgls, &oei->oei_bulk);
+	/* prepare buffer for enumerate */
+	rc = ds_sgls_prep(&sgl, &oei->oei_sgl, 1);
 	if (rc != 0)
 		D_GOTO(out_tch, rc);
+
+	iovs = sgl.sg_iovs;
+	iovs_nr = sgl.sg_nr.num;
 
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl	= cont_hdl->sch_cont->sc_hdl;
@@ -470,69 +544,83 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 	if (oeo->oeo_kds.da_arrays == NULL)
 		D_GOTO(out_tch, rc = -DER_NOMEM);
 
+	iovs_idx = 0;
 	dkey_nr = 0;
 	kds = oeo->oeo_kds.da_arrays;
 	while (1) {
 		vos_iter_entry_t  dkey_ent;
-		bool nospace = false;
 
 		rc = vos_iter_fetch(ih, &dkey_ent, &oeo->oeo_anchor);
 		if (rc != 0)
-			break;
+			D_GOTO(next, rc);
 
 		D_DEBUG(DF_MISC, "get key %s len "DF_U64
 			"iov_len "DF_U64" buflen "DF_U64"\n",
 			(char *)dkey_ent.ie_key.iov_buf,
 			dkey_ent.ie_key.iov_len,
-			iovs->iov_len, iovs->iov_buf_len);
+			iovs[iovs_idx].iov_len, iovs[iovs_idx].iov_buf_len);
 
-		/* fill the key to iovs if there are enough space */
-		if (iovs->iov_len + dkey_ent.ie_key.iov_len <
-		    iovs->iov_buf_len) {
-			/* Fill key descriptor */
-			kds[dkey_nr].kd_key_len = dkey_ent.ie_key.iov_len;
-			/* FIXME no checksum now */
-			kds[dkey_nr].kd_csum_len = 0;
-			dkey_nr++;
+		/* fill the key to iov if there are enough space */
+		while (iovs_idx < iovs_nr) {
+			if (iovs[iovs_idx].iov_len + dkey_ent.ie_key.iov_len <
+			    iovs[iovs_idx].iov_buf_len) {
+				/* Fill key descriptor */
+				/* FIXME no checksum now */
+				kds[dkey_nr].kd_key_len =
+						dkey_ent.ie_key.iov_len;
+				kds[dkey_nr].kd_csum_len = 0;
+				dkey_nr++;
 
-			memcpy(iovs->iov_buf + iovs->iov_len,
-			       dkey_ent.ie_key.iov_buf,
-			       dkey_ent.ie_key.iov_len);
-			iovs->iov_len += dkey_ent.ie_key.iov_len;
-			rc = vos_iter_next(ih);
-			if (rc != 0) {
-				if (rc == -DER_NONEXIST)
-					daos_hash_set_eof(&oeo->oeo_anchor);
+				memcpy(iovs[iovs_idx].iov_buf +
+				       iovs[iovs_idx].iov_len,
+				       dkey_ent.ie_key.iov_buf,
+				       dkey_ent.ie_key.iov_len);
+				iovs[iovs_idx].iov_len +=
+						dkey_ent.ie_key.iov_len;
+
+				rc = vos_iter_next(ih);
 				break;
 			}
-		} else {
-			nospace = true;
+			iovs_idx++;
 		}
-
-		if (dkey_nr >= oei->oei_nr || nospace) {
-			rc = vos_iter_fetch(ih, &dkey_ent, &oeo->oeo_anchor);
+next:
+		if (dkey_nr >= oei->oei_nr || iovs_idx >= iovs_nr || rc != 0) {
+			/* it means iteration hit the end */
+			if (rc == -DER_NONEXIST) {
+				daos_hash_set_eof(&oeo->oeo_anchor);
+				rc = 0;
+			} else if (rc == 0) {
+				rc = vos_iter_fetch(ih, &dkey_ent,
+						    &oeo->oeo_anchor);
+			}
 			break;
 		}
 	}
 	vos_iter_finish(ih);
-
-	/* it means iteration hit the end */
-	if (rc == -DER_NONEXIST) {
-		rc = 0;
-	} else if (rc < 0) {
+	if (rc < 0) {
 		D_ERROR("Failed to fetch dkey: %d\n", rc);
 		D_GOTO(out_tch, rc);
 	}
 
 	oeo->oeo_kds.da_count = dkey_nr;
+	if (oei->oei_bulk != NULL) {
+		daos_sg_list_t *sgls = &sgl;
 
-	rc = dsrs_bulk_transfer(rpc, &oei->oei_bulk,
-				sgls, iovs, DAOS_HDL_INVAL, 1,
-				DTP_BULK_PUT);
+		rc = ds_bulk_transfer(rpc, &oei->oei_bulk, &sgls,
+				      DAOS_HDL_INVAL, 1, DTP_BULK_PUT);
+		if (rc != 0)
+			D_GOTO(out_tch, rc);
+
+		oeo->oeo_sgl.sg_iovs = NULL;
+		oeo->oeo_sgl.sg_nr.num = 0;
+		oeo->oeo_sgl.sg_nr.num_out = 0;
+	} else {
+		oeo->oeo_sgl = sgl;
+		oeo->oeo_sgl.sg_nr.num = iovs_idx;
+	}
 out_tch:
 	ds_cont_hdl_put(cont_hdl);
-
 out:
-	dsrs_eu_complete(rpc, sgls, iovs, rc, map_version);
+	ds_eu_complete(rpc, &sgl, rc, map_version);
 	return rc;
 }

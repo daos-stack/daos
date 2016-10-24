@@ -260,11 +260,10 @@ extern struct dtp_msg_field DMF_RANK;
 extern struct dtp_msg_field DMF_RANK_LIST;
 extern struct dtp_msg_field DMF_BULK_ARRAY;
 extern struct dtp_msg_field DMF_IOVEC;
-
-extern struct dtp_msg_field *dtp_single_out_fields[];
-struct dtp_single_out {
-	int	dso_ret;
-};
+extern struct dtp_msg_field DMF_SGL;
+extern struct dtp_msg_field DMF_SGL_ARRAY;
+extern struct dtp_msg_field DMF_SGL_DESC;
+extern struct dtp_msg_field DMF_SGL_DESC_ARRAY;
 
 typedef enum {
 	DTP_BULK_PUT = 0x68,

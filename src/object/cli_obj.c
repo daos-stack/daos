@@ -178,7 +178,6 @@ obj_iocx_comp(void *args, int rc)
 {
 	struct obj_io_ctx	*iocx = args;
 
-	D_DEBUG(DF_SRC, "iocx completion.\n");
 	if (iocx->cx_comp)
 		iocx->cx_comp(iocx, rc);
 
