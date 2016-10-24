@@ -114,6 +114,9 @@ daos_task2sp(struct daos_task *task);
 dtp_context_t *
 daos_task2ctx(struct daos_task *task);
 
+struct daos_sched *
+daos_task2sched(struct daos_task *task);
+
 /**
  * Initialize the daos_task.
  *

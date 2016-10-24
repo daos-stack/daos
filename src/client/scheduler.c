@@ -92,6 +92,18 @@ daos_task2ctx(struct daos_task *task)
 	return daos_ev2ctx(sched->ds_event);
 }
 
+struct daos_sched *
+daos_task2sched(struct daos_task *task)
+{
+	struct daos_sched_private	*sched_priv;
+	struct daos_sched		*sched;
+
+	sched_priv = daos_task2priv(task)->dtp_sched;
+	sched = daos_priv2sched(sched_priv);
+
+	return sched;
+}
+
 /* Assume scheduler is being locked before finish */
 static void
 daos_sched_fini(struct daos_sched *sched)
