@@ -670,7 +670,7 @@ obj_list_dkey_comp(struct obj_io_ctx *ctx, int rc)
 	if (!daos_hash_is_eof(anchor)) {
 		D_DEBUG(DF_SRC, "More keys in shard %d\n", shard);
 		enum_anchor_set_shard(anchor, shard);
-	} else if (shard < obj->cob_layout->ol_nr/grp_size) {
+	} else if (shard < obj->cob_layout->ol_nr - grp_size) {
 		shard += grp_size;
 		D_DEBUG(DF_SRC, "Enumerate the next shard %d\n", shard);
 
