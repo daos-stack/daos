@@ -27,7 +27,7 @@
 
 #include <pthread.h>
 
-#include "dss_internal.h"
+#include "srv_internal.h"
 
 /* The array remember all of registered module keys on one node. */
 struct dss_module_key *dss_module_keys[DAOS_MODULE_KEYS_NR] = { NULL };

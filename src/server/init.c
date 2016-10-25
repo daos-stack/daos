@@ -33,7 +33,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/common.h>
-#include "dss_internal.h"
+#include "srv_internal.h"
 
 #define MAX_MODULE_OPTIONS	64
 #define MODULE_LIST		"vos,mgmt,pool,cont,obj,tier"

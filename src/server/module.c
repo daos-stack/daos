@@ -33,7 +33,7 @@
 #include <daos/list.h>
 #include <daos/rpc.h>
 
-#include "dss_internal.h"
+#include "srv_internal.h"
 
 /* Loaded module instance */
 struct loaded_mod {

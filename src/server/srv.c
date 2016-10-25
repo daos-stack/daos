@@ -34,7 +34,7 @@
 #include <abt.h>
 #include <daos_errno.h>
 #include <daos/list.h>
-#include "dss_internal.h"
+#include "srv_internal.h"
 
 /** Number of started threads or cores used */
 unsigned int	dss_nthreads;

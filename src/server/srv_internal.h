@@ -20,6 +20,8 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+#ifndef __DAOS_SRV_INTERNAL__
+#define __DAOS_SRV_INTERNAL__
 
 #include <daos_srv/daos_server.h>
 
@@ -32,8 +34,10 @@ void dss_module_unload_all(void);
 
 /* srv.c */
 int dss_srv_init(int);
-int dss_srv_fini();
+int dss_srv_fini(void);
 
 /* tls.c */
 void dss_tls_fini(void *arg);
 struct dss_thread_local_storage *dss_tls_init(int tag);
+
+#endif /* __DAOS_SRV_INTERNAL__ */
