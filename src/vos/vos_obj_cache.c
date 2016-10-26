@@ -133,6 +133,7 @@ vos_oref_lru_free(struct daos_llink *llink)
 	D_ASSERT(llink);
 
 	oref = container_of(llink, struct vos_obj_ref, or_llink);
+	vos_obj_tree_fini(oref);
 	D_FREE_PTR(oref);
 }
 

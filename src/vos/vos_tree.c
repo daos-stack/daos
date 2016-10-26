@@ -656,20 +656,13 @@ vos_obj_tree_init(struct vos_obj_ref *oref)
 	return rc;
 }
 
-/** close/destroy btree for an object */
+/** close btree for an object */
 int
 vos_obj_tree_fini(struct vos_obj_ref *oref)
 {
-	int	rc;
-
-	if (!daos_handle_is_inval(oref->or_toh))
-		return 0;
-
-	if (vos_obj_is_zombie(oref->or_obj))
-		rc = dbtree_destroy(oref->or_toh);
-	else
-		rc = dbtree_close(oref->or_toh);
-	return rc;
+	/* NB: tree is created inplace, so don't need to destroy */
+	return daos_handle_is_inval(oref->or_toh) ?
+	       0 : dbtree_close(oref->or_toh);
 }
 
 /** register all tree classes for VOS. */
