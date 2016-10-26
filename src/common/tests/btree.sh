@@ -31,6 +31,8 @@ $BTR	-C ${IPL}o:$ORDER		\
 	-i $IDIR			\
 	-f $KEYS			\
 	-d $KEYS			\
+	-u $RECORDS			\
+	-i $IDIR:3			\
 	-D
 
 echo "B+tree batch operations test..."

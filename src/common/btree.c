@@ -1023,6 +1023,10 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 		}
 	}
 
+	/* depth could be changed by dbtree_delete/dbtree_iter_delete from
+	 * a different btr_context.
+	 */
+	tcx->tc_depth = tcx->tc_tins.ti_root->tr_depth;
 	nd_mmid = tcx->tc_tins.ti_root->tr_node;
 	start = end = 0;
 
@@ -2097,7 +2101,7 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace)
 }
 
 static int
-btr_delete(struct btr_context *tcx, daos_iov_t *key)
+btr_delete(struct btr_context *tcx)
 {
 	struct btr_trace	*par_tr;
 	struct btr_trace	*cur_tr;
@@ -2120,14 +2124,14 @@ btr_delete(struct btr_context *tcx, daos_iov_t *key)
 }
 
 static int
-btr_tx_delete(struct btr_context *tcx, daos_iov_t *key)
+btr_tx_delete(struct btr_context *tcx)
 {
 #if DAOS_HAS_NVML
 	struct umem_instance *umm = btr_umm(tcx);
 	int		      rc = 0;
 
 	TX_BEGIN(umm->umm_u.pmem_pool) {
-		rc = btr_delete(tcx, key);
+		rc = btr_delete(tcx);
 		if (rc != 0)
 			umem_tx_abort(btr_umm(tcx), rc);
 	} TX_ONABORT {
@@ -2168,9 +2172,9 @@ dbtree_delete(daos_handle_t toh, daos_iov_t *key)
 	}
 
 	if (btr_has_tx(tcx))
-		rc = btr_tx_delete(tcx, key);
+		rc = btr_tx_delete(tcx);
 	else
-		rc = btr_delete(tcx, key);
+		rc = btr_delete(tcx);
 
 	return rc;
 }
@@ -2654,28 +2658,39 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 }
 
 static int
-btr_iter_move(daos_handle_t ih, bool forward)
+btr_iter_is_ready(struct btr_iterator *iter)
 {
-	struct btr_context  *tcx;
-	struct btr_iterator *itr;
-	bool		     found;
+	D_DEBUG(DF_MISC, "iterator state is %d\n", iter->it_state);
 
-	tcx = btr_hdl2tcx(ih);
-	if (tcx == NULL)
-		return -DER_NO_HDL;
-
-	itr = &tcx->tc_itr;
-	switch (itr->it_state) {
+	switch (iter->it_state) {
 	default:
 		D_ASSERT(0);
 	case BTR_ITR_NONE:
 	case BTR_ITR_INIT:
 		return -DER_NO_PERM;
 	case BTR_ITR_READY:
-		break;
+		return 0;
 	case BTR_ITR_FINI:
 		return -DER_NONEXIST;
 	}
+}
+
+static int
+btr_iter_move(daos_handle_t ih, bool forward)
+{
+	struct btr_context  *tcx;
+	struct btr_iterator *itr;
+	bool		     found;
+	int		     rc;
+
+	tcx = btr_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	itr = &tcx->tc_itr;
+	rc = btr_iter_is_ready(itr);
+	if (rc != 0)
+		return rc;
 
 	found = forward ? btr_probe_next(tcx) : btr_probe_prev(tcx);
 	if (!found) {
@@ -2716,7 +2731,6 @@ int
 dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 		  daos_iov_t *val, daos_hash_out_t *anchor)
 {
-	struct btr_iterator *itr;
 	struct btr_context  *tcx;
 	struct btr_record   *rec;
 	int		     rc;
@@ -2727,18 +2741,9 @@ dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	itr = &tcx->tc_itr;
-	switch (itr->it_state) {
-	default:
-		D_ASSERT(0);
-	case BTR_ITR_NONE:
-	case BTR_ITR_INIT:
-		return -DER_NO_PERM;
-	case BTR_ITR_READY:
-		break;
-	case BTR_ITR_FINI:
-		return -DER_NONEXIST;
-	}
+	rc = btr_iter_is_ready(&tcx->tc_itr);
+	if (rc != 0)
+		return rc;
 
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
 	if (rec == NULL)
@@ -2750,6 +2755,41 @@ dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 		btr_hkey_copy(tcx, &anchor->body[0], &rec->rec_hkey[0]);
 	}
 	return 0;
+}
+
+/**
+ * Delete the record pointed by the current iterating cursor. This function
+ * will reset interator before return, it means that caller should call
+ * dbtree_iter_probe() again to reinitialize the iterator.
+ *
+ * \parma ih	[IN]	Iterator open handle.
+ */
+int
+dbtree_iter_delete(daos_handle_t ih)
+{
+	struct btr_iterator *itr;
+	struct btr_context  *tcx;
+	int		     rc;
+
+	D_DEBUG(DF_MISC, "Current iterator\n");
+
+	tcx = btr_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	itr = &tcx->tc_itr;
+	rc = btr_iter_is_ready(itr);
+	if (rc != 0)
+		return rc;
+
+	if (btr_has_tx(tcx))
+		rc = btr_tx_delete(tcx);
+	else
+		rc = btr_delete(tcx);
+
+	/* reset iterator */
+	itr->it_state = BTR_ITR_INIT;
+	return rc;
 }
 
 #define BTR_TYPE_MAX	1024

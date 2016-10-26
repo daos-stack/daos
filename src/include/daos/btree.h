@@ -401,6 +401,7 @@ int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
 int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 		      daos_iov_t *val, daos_hash_out_t *anchor);
+int dbtree_iter_delete(daos_handle_t ih);
 
 enum {
 	DBTREE_VOS_BEGIN	= 10,

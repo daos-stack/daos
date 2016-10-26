@@ -411,8 +411,11 @@ ik_btr_iterate(char *args)
 {
 	daos_handle_t	ih;
 	int		i;
+	int		d;
+	int		del;
 	int		rc;
 	int		opc;
+	char		*err;
 
 	if (daos_handle_is_inval(ik_toh)) {
 		D_ERROR("Can't find opened tree\n");
@@ -421,8 +424,8 @@ ik_btr_iterate(char *args)
 
 	rc = dbtree_iter_prepare(ik_toh, BTR_ITER_EMBEDDED, &ih);
 	if (rc != 0) {
-		D_ERROR("can't intialise iterator\n");
-		return -1;
+		err = "initialize";
+		goto failed;
 	}
 
 	if (args[0] == 'b')
@@ -430,33 +433,80 @@ ik_btr_iterate(char *args)
 	else
 		opc = BTR_PROBE_FIRST;
 
-	rc = dbtree_iter_probe(ih, opc, NULL, NULL);
-	for (i = 0;; i++) {
+	if (strlen(args) >= 3 && args[1] == ':')
+		del = atoi(&args[2]);
+	else
+		del = 0;
+
+	for (i = d = 0;; i++) {
 		daos_iov_t	key_iov;
 		daos_iov_t	val_iov;
 		uint64_t	key;
 
+		if (i == 0 || (del != 0 && d <= del)) {
+			rc = dbtree_iter_probe(ih, opc, NULL, NULL);
+			if (rc == -DER_NONEXIST)
+				break;
+
+			if (rc != 0) {
+				err = "probe";
+				goto failed;
+			}
+
+			if (del != 0) {
+				if (d == del)
+					del = d = 0; /* done */
+				else
+					d++;
+			}
+		}
+
 		daos_iov_set(&key_iov, NULL, 0);
 		daos_iov_set(&val_iov, NULL, 0);
 		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
-		if (rc != 0)
-			break;
+		if (rc != 0) {
+			err = "fetch";
+			goto failed;
+		}
 
 		D_ASSERT(key_iov.iov_len == sizeof(key));
 		memcpy(&key, key_iov.iov_buf, sizeof(key));
 
-		D_PRINT(DF_U64": %s\n", key, (char *)val_iov.iov_buf);
+		if (d != 0) { /* delete */
+			D_PRINT("Delete "DF_U64": %s\n",
+				key, (char *)val_iov.iov_buf);
+			rc = dbtree_iter_delete(ih);
+			if (rc != 0) {
+				err = "delete";
+				goto failed;
+			}
 
-		if (opc == BTR_PROBE_LAST)
-			dbtree_iter_prev(ih);
-		else
-			dbtree_iter_next(ih);
+		} else { /* iterate */
+			D_PRINT(DF_U64": %s\n", key, (char *)val_iov.iov_buf);
+
+			if (opc == BTR_PROBE_LAST)
+				rc = dbtree_iter_prev(ih);
+			else
+				rc = dbtree_iter_next(ih);
+
+			if (rc == -DER_NONEXIST)
+				break;
+
+			if (rc != 0) {
+				err = "move";
+				goto failed;
+			}
+		}
 	}
 
-	D_PRINT("%s iterator: total %d record(s)\n",
-		opc == BTR_PROBE_FIRST ? "forward" : "backward", i);
+	D_PRINT("%s iterator: total %d, deleted %d\n",
+		opc == BTR_PROBE_FIRST ? "forward" : "backward", i, d);
 	dbtree_iter_finish(ih);
 	return 0;
+ failed:
+	D_PRINT("Iterator %s failed: %d\n", err, rc);
+	dbtree_iter_finish(ih);
+	return -1;
 }
 
 /* fill in @arr with natural number from 1 to key_nr, randomize their order */
