@@ -121,7 +121,7 @@ typedef struct {
  */
 int
 daos_cont_fetch(daos_handle_t poh, const uuid_t cont_id,
-		daos_epoch_t fetch_ep, daos_oid_list_t obj_list,
+		daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
 		daos_event_t *ev);
 
 /**

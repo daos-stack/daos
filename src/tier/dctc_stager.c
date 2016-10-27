@@ -28,13 +28,105 @@
  */
 
 #include <daos_tier.h>
+#include <daos/pool.h>
+#include "dct_rpc.h"
 
-/* TODO, currently stub */
+static int
+dct_fetch_cb(void *arg, daos_event_t *ev, int rc)
+{
+	struct daos_op_sp		*sp = arg;
+	struct dc_pool			*pool = (struct dc_pool *)sp->sp_arg;
+	struct tier_fetch_out		*tfo;
+
+	if (rc) {
+		D_ERROR("RPC error while fetching: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	tfo = dtp_reply_get(sp->sp_rpc);
+	rc = tfo->tfo_ret;
+	if (rc) {
+		D_ERROR("failed to fetch: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	sp->sp_hdl.cookie = 0;
+out:
+	dtp_req_decref(sp->sp_rpc);
+	dc_pool_put(pool);
+	return rc;
+}
 int
-daos_fetch_container(daos_handle_t poh, const uuid_t cont_id,
-		     daos_epoch_t fetch_ep, daos_oid_list_t obj_list,
+daos_cont_fetch(daos_handle_t poh, const uuid_t cont_id,
+		     daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
 		     daos_event_t *ev)
 {
-	return 0;
+
+	struct tier_fetch_in	*in;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t		*rpc;
+	int			rc;
+	struct daos_op_sp       *sp;
+	struct dc_pool		*pool;
+
+	D_DEBUG(DF_MISC, "Entering daos_fetch_container()\n");
+
+	/* FIXME Harded coded enpoint stuff */
+	ep.ep_grp = NULL;
+	ep.ep_rank = 0;
+	ep.ep_tag = 0;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc)
+			return rc;
+	}
+
+	/* Create RPC and allocate memory for the various field-eybops */
+	rc = dct_req_create(daos_ev2ctx(ev), ep, TIER_FETCH, &rpc);
+
+	/* Grab the input struct of the RPC */
+	in = dtp_req_get(rpc);
+
+
+	pool = dc_pool_lookup(poh);
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	uuid_copy(in->tfi_co_hdl, cont_id);
+	uuid_copy(in->tfi_pool, pool->dp_pool);
+	uuid_copy(in->tfi_pool_hdl, pool->dp_pool_hdl);
+	in->tfi_ep  = fetch_ep;
+
+	/*
+	 * Get the "scratch pad" data affiliated with this RPC
+	 * used to maintain per-call invocation state (I think)
+	 */
+	sp = daos_ev2sp(ev);
+	dtp_req_addref(rpc);
+	sp->sp_rpc = rpc;
+	sp->sp_hdl = poh;
+	sp->sp_arg = pool;
+
+	rc = daos_event_register_comp_cb(ev, dct_fetch_cb, sp);
+	if (rc != 0)
+		D_GOTO(out_req_put, rc);
+
+	/* Mark the event as inflight and register our various callbacks */
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out_req_put, rc);
+
+	/* And now actually issue the darn RPC */
+	rc = daos_rpc_send(rpc, ev);
+	D_DEBUG(DF_MISC, "leaving dct_ping()\n");
+
+	return rc;
+
+out_req_put:
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
+	return rc;
 }
+
 

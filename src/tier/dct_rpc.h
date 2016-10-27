@@ -51,6 +51,7 @@
  */
 enum dct_operation {
 	DCT_PING		= 1,
+	TIER_FETCH		= 2,
 };
 
 struct dct_ping_in {
@@ -61,6 +62,16 @@ struct dct_ping_out {
 	uint32_t	ping_out;
 };
 
+struct tier_fetch_in {
+	uuid_t		   tfi_pool;
+	uuid_t		   tfi_pool_hdl;
+	uuid_t		   tfi_co_hdl;
+	daos_epoch_t       tfi_ep;
+};
+
+struct tier_fetch_out {
+	int32_t		tfo_ret;
+};
 
 int
 dct_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,

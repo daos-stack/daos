@@ -30,6 +30,7 @@
 #include <daos/pool.h>
 #include <daos/container.h>
 #include <daos/object.h>
+#include <daos/tier.h>
 #include <pthread.h>
 
 /* Shared by pool, container, and object handles. */
@@ -83,11 +84,16 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
+	/** set up tiering */
+	rc = dc_tier_init();
+	if (rc != 0)
+		D_GOTO(out_obj, rc);
+
 	module_initialized = true;
 	D_GOTO(unlock, rc = 0);
 
-out_hhash:
-	daos_hhash_destroy(daos_client_hhash);
+out_obj:
+	dc_obj_fini();
 out_co:
 	dc_cont_fini();
 out_pool:
@@ -96,6 +102,8 @@ out_mgmt:
 	dc_mgmt_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_hhash:
+	daos_hhash_destroy(daos_client_hhash);
 unlock:
 	pthread_mutex_unlock(&module_lock);
 	return rc;
@@ -119,6 +127,7 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+	dc_tier_fini();
 	dc_obj_fini();
 	dc_cont_fini();
 	dc_pool_fini();

@@ -38,13 +38,13 @@ dcts_hdlr_ping(dtp_rpc_t *rpc)
 	struct dct_ping_out *out = dtp_reply_get(rpc);
 	int  rc = 0;
 
-	D_DEBUG(DF_UNKNOWN, "receive, ping %d.\n", rpc->dr_opc);
+	D_DEBUG(DF_TIERS, "receive, ping %d.\n", rpc->dr_opc);
 
 	out->ping_out = in->ping_in + 1;
 
 	rc = dtp_reply_send(rpc);
 
-	D_DEBUG(DF_UNKNOWN, "ping ret val, 1 higher than input: %d\n",
+	D_DEBUG(DF_TIERS, "ping ret val, 1 higher than input: %d\n",
 		out->ping_out);
 
 	return rc;

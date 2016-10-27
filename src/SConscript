@@ -27,11 +27,11 @@ SConscript('placement/SConscript', exports=['env', 'PREREQS'])
 SConscript('object/SConscript', exports='env')
 SConscript('rebuild/SConscript', exports='env')
 
-# Build DAOS client library
-SConscript('client/SConscript', exports=['env', 'DAOS_VERSION'])
-
 # Build multi-tier support
 SConscript('tier/SConscript', exports='env')
+
+# Build DAOS client library
+SConscript('client/SConscript', exports=['env', 'DAOS_VERSION'])
 
 # Build utilities
 SConscript('utils/SConscript', exports=['env', 'PREREQS'])

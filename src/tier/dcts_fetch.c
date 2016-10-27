@@ -21,22 +21,34 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * dsms: Internal Declarations
- *
- * This file contains all declarations that are only used by dcts but do not
- * belong to the more specific headers.  All external
- * variables and functions must have a "dcts_" prefix, however, even if they
- * are only used by dsms.
+ * dcts_fetch
+ * Implements cross-tier fetching of objects and sub-objects (or will soon).
  **/
 
-#ifndef __DCTS_INTERNAL_H__
-#define __DCTS_INTERNAL_H__
+#include <daos_srv/daos_ct_srv.h>
+#include <daos/transport.h>
+#include "dct_rpc.h"
 
-/* dcts_ping.c */
 
-/* ping test handler, more of a self-teaching widget */
-int dcts_hdlr_ping(dtp_rpc_t *rpc);
+int
+dcts_hdlr_fetch(dtp_rpc_t *rpc)
+{
 
-int dcts_hdlr_fetch(dtp_rpc_t *rpc);
+	struct tier_fetch_in *in = dtp_req_get(rpc);
+	struct tier_fetch_out *out = dtp_reply_get(rpc);
+	int  rc = 0;
 
-#endif /*__DCTS_INTERNAL_H__*/
+	D_DEBUG(DF_TIERS, "dcts_fetch\n");
+	D_DEBUG(DF_TIERS, "\tpool:"DF_UUIDF"\n", in->tfi_pool);
+	D_DEBUG(DF_TIERS, "\tpool_hdl:"DF_UUIDF"\n", in->tfi_pool_hdl);
+	D_DEBUG(DF_TIERS, "\tcont_id:"DF_UUIDF"\n", in->tfi_co_hdl);
+	D_DEBUG(DF_TIERS, "\tepoch:"DF_U64"\n", in->tfi_ep);
+
+	out->tfo_ret = 0;
+
+	rc = dtp_reply_send(rpc);
+
+	return rc;
+}
+
+

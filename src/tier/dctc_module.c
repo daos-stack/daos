@@ -27,16 +27,11 @@
  * daos_api.h.
  */
 
-#include <daos_tier.h>
 #include <pthread.h>
 #include <daos/rpc.h>
 #include <daos/transport.h>
 #include "dct_rpc.h"
-
-#define DTP_DESTROY_FORCE	1 /* belongs in transport.h */
-
-static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
-static int		module_initialized;
+#include <daos/tier.h>
 
 
 /**
@@ -46,31 +41,15 @@ static int		module_initialized;
  *   a dtp context for the daos_ct client.
  */
 int
-dct_init(void)
+dc_tier_init(void)
 {
-	D_DEBUG(DF_MISC, "Entered dct_init()\n");
+	int rc = 0;
 
-	int rc;
-
-	pthread_mutex_lock(&module_lock);
-	if (module_initialized)
-		D_GOTO(unlock, rc = -DER_ALREADY);
-
-	rc = daos_eq_lib_init();
-	if (rc != 0)
-		D_GOTO(unlock, rc);
-
+	D_DEBUG(DF_TIER, "Entered dc_tier_init()\n");
 	rc = daos_rpc_register(dct_rpcs, NULL, DAOS_TIER_MODULE);
 	if (rc != 0) {
 		D_ERROR("rpc register failure: rc = %d\n", rc);
-		daos_eq_lib_fini();
-		D_GOTO(unlock, rc);
 	}
-
-	module_initialized = 1;
-unlock:
-	pthread_mutex_unlock(&module_lock);
-	D_DEBUG(DF_MISC, "Returning from dct_init()\n");
 	return rc;
 
 }
@@ -78,29 +57,11 @@ unlock:
 /**
  * Finish daos client.
  */
-int
-dct_fini(void)
+void
+dc_tier_fini(void)
 {
-	D_DEBUG(DF_MISC, "Entered dct_fini()\n");
+	D_DEBUG(DF_TIER, "Entered dc_tier_fini()\n");
 
-	int rc;
-
-	pthread_mutex_lock(&module_lock);
-	if (!module_initialized)
-		D_GOTO(unlock, rc = -DER_UNINIT);
 
 	daos_rpc_unregister(dct_rpcs);
-
-	rc = daos_eq_lib_fini();
-	if (rc != 0) {
-		D_ERROR("failed to finalize eq: %d\n", rc);
-		D_GOTO(unlock, rc);
-	}
-
-	module_initialized = 0;
-
-unlock:
-	pthread_mutex_unlock(&module_lock);
-	D_DEBUG(DF_MISC, "Returning from dct_fini()\n");
-	return rc;
 }

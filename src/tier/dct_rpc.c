@@ -40,6 +40,20 @@ struct dtp_msg_field *dct_ping_out_fields[] = {
 struct dtp_req_format DCT_RF_PING =
 	DEFINE_DTP_REQ_FMT("DCT_PING", dct_ping_in_fields, dct_ping_out_fields);
 
+struct dtp_msg_field *tier_fetch_in_fields[] = {
+	&DMF_UUID,	/* pool uuid */
+	&DMF_UUID,	/* pool handle uuid */
+	&DMF_UUID,	/* Container handle uuid */
+	&DMF_UINT64,    /* epoch */
+};
+
+struct dtp_msg_field *tier_fetch_out_fields[] = {
+	&DMF_INT,	/* status */
+};
+
+struct dtp_req_format DQF_TIER_FETCH =
+	DEFINE_DTP_REQ_FMT("TIER_FETCH", tier_fetch_in_fields,
+			   tier_fetch_out_fields);
 int
 dct_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
 	       dtp_opcode_t opc, dtp_rpc_t **req)
@@ -58,6 +72,12 @@ struct daos_rpc dct_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DCT_RF_PING,
+	}, {
+		.dr_name	= "TIER_FETCH",
+		.dr_opc		= TIER_FETCH,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_TIER_FETCH,
 	}, {
 		.dr_opc		= 0
 	}

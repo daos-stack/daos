@@ -68,6 +68,9 @@ enum {
 	DF_SR		= (1 << 19),
 	DF_SRC		= (1 << 20),
 	DF_SRS		= (1 << 21),
+	DF_TIER		= (1 << 22),
+	DF_TIERC	= (1 << 23),
+	DF_TIERS	= (1 << 24),
 	DF_MISC		= (1 << 30),
 	DF_MEM		= (1 << 31),
 };

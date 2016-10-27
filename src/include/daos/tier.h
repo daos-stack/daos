@@ -20,23 +20,16 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/*
- * dsms: Internal Declarations
- *
- * This file contains all declarations that are only used by dcts but do not
- * belong to the more specific headers.  All external
- * variables and functions must have a "dcts_" prefix, however, even if they
- * are only used by dsms.
- **/
+/**
+ * Tier-related client library items that do not belong in the API.
+ */
+#ifndef __DC_TIER_H__
+#define __DC_TIER_H__
 
-#ifndef __DCTS_INTERNAL_H__
-#define __DCTS_INTERNAL_H__
+#include <daos_types.h>
 
-/* dcts_ping.c */
+int  dc_tier_init(void);
+void dc_tier_fini(void);
 
-/* ping test handler, more of a self-teaching widget */
-int dcts_hdlr_ping(dtp_rpc_t *rpc);
 
-int dcts_hdlr_fetch(dtp_rpc_t *rpc);
-
-#endif /*__DCTS_INTERNAL_H__*/
+#endif /* __DC_TIER_H__ */
