@@ -1,8 +1,25 @@
-# Distributed Asynchronous Object Storage (DAOS)
+# Distributed Asynchronous Object Store (DAOS)
 
 > :warning: **Warning:** DAOS is under heavy development. Use at your own risk.
 
-DAOS is an open-source storage stack designed for Big Data and Exascale HPC. It provides transactional object storage supporting multi-version concurrency control and is built from the ground up to exploit persistent memory and integrated fabrics. The DAOS stack abstracts multi-tier storage architecture and offers a unified storage model over which multiple top-level APIs are being developed.
+The Distributed Asynchronous Object Store (DAOS) provides a new storage paradigm for Exascale computing and Big Data. DAOS is an open-source storage stack designed from the ground up to exploit NVRAM and NVMe storage technologies with integrated fabric. It provides ultra-fine grained I/O by using a persistent memory storage model for byte-granular data & metadata combined with NVMe storage for bulk data, all this with end-to-end OS bypass to guarantee ultra-low latency. The DAOS stack aims at increasing data velocity by several orders of magnitude over conventional storage stacks and providing extreme scalability and resilience.
+
+The essence of the DAOS storage model is a key-value store interface over which specific data models can be implemented. A DAOS object is effectively a table of records which are addressed through a flexible multi-level key allowing fine-grain control over colocation of related data. Objects are collected into manageable units called containers. DAOS provides scalable distributed transactions across all objects of a container guaranteeing data consistency and automoted rollback on failure to I/O middelware libraries and applications. The DAOS transaction mechanism supports complex workflows with native producer/consumer pipeline in which producers are not blocked by concurrent consumers and consumers receive notification on complete atomic updates and see a consistent snapshot of data.
+
+For both performance and resilience, DAOS objects support multiple distribution and redundancy schemas with fully automated and distributed recovery on storage failure. DAOS uses declustered replication and/or erasure coding over homogeneous shared-nothing servers and provides a lockless consistency model at arbitrary alignment.
+
+Moreover, the DAOS stack abstracts multi-tier storage architecture and offers a unified storage model over which multiple top-level APIs will be developed. This includes domain-specific APIs like HDF5, SCiDB, ADIOS and high-level data models like HDFS, Spark and Graph A. A POSIX namespace encapsulation inside a DAOS container is also under consideration.
+
+Finally, the DAOS stack is proud to leverage the following open source projects:
+- Mercury (https://mercury-hpc.github.io) and CaRT (https://github.com/daos-stack/cart) for network transport
+- Argobots (https://github.com/pmodels/argobots) for thread management
+- NVML (http://pmem.io/nvml/) for persistent memory programming
+- SPDK (http://spdk.io) for NVMe device access and management
+- ISA-L (https://github.com/01org/isa-l) for checksum and erasure code computation
+
+## Project History
+
+The project started back in 2012 with the Fast Forward Storage & I/O program supported by the U.S. DoE in which a first DAOS prototype was implemented over the Lustre filesystem and ZFS. In 2015, a follow-on program called Extreme Scale Storage and I/O (ESSIO) continued the momentum with the development of a new standalone prototype fully in userspace which is the code base provided in this repository.
 
 ## Motivation
 
@@ -10,7 +27,7 @@ The emergence of data-intensive applications in business, government and academi
 
 This revolution requires a radical rethink of the complete storage stack. To unleash the full potential of this new technology, the new stack must embrace byte-granular shared-nothing interface from the ground up and be able to support massively distributed storage for which failure will be the norm, while preserving low latency and high bandwidth access over the fabric.
 
-DAOS is a complete I/O architecture that aggregates persistent memory distributed across the fabric into globally-accessible object address spaces, providing consistency, availability and resiliency guarantees without compromising performance.
+DAOS is a complete I/O architecture that aggregates persistent memory and NVMe storage distributed across the fabric into globally-accessible object address spaces, providing consistency, availability and resiliency guarantees without compromising performance.
 
 ## License
 
@@ -31,3 +48,7 @@ DAOS depends on some third-party libraries:
 - NVML library (https://github.com/pmem/nvml.git) for thread-local persistent memory transaction
 
 Can execute "scons" in top DAOS source directory to build it when all the dependent modules installed.
+
+## Contacts
+
+For more information on DAOS, please post to our [Google group](https://groups.google.com/forum/#!forum/daos-users).
