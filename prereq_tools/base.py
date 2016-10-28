@@ -266,6 +266,7 @@ RUNNER = Runner()
 
 def check_test(target, source, env, mode):
     """Check the results of the test"""
+    val_str = ""
     error_str = ""
     with open(target[0].path, "r") as fobj:
         for line in fobj.readlines():
@@ -289,18 +290,23 @@ the issues causing the TESTS to fail.
                         error_types[kind.text] = 0
                     error_types[kind.text] += 1
                 if error_types:
-                    error_str += """
+                    val_str += """
 Valgrind %s check failed.  See %s:"""%(mode, str(fname))
                     for err in error_types:
-                        error_str += "\n%-3d %s errors"%(error_types[err],
-                                                         err)
+                        val_str += "\n%-3d %s errors"%(error_types[err], err)
+    if val_str != "":
+        print """
+#########################################################%s
+#########################################################
+""" % val_str
+
     if error_str:
         return """
 #########################################################
 Libraries built successfully but some unit TESTS failed.
 %s
 #########################################################
-"""%error_str
+""" % error_str
     return None
 
 def define_check_test(mode=None):
