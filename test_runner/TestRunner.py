@@ -31,15 +31,14 @@ test runner class
 
 import os
 import sys
-import subprocess
 import shutil
 import unittest
-import json
-import tempfile
+import logging
 from time import time
 from datetime import datetime
 #pylint: disable=import-error
-import findTestLogs
+import PreRunner
+import PostRunner
 #pylint: enable=import-error
 
 from yaml import load, dump
@@ -49,7 +48,7 @@ except ImportError:
     from yaml import Loader, Dumper
 
 
-class TestRunner():
+class TestRunner(PreRunner.PreRunner, PostRunner.PostRunner):
     """Simple test runner"""
     log_dir_base = ""
     loop_name = ""
@@ -60,134 +59,17 @@ class TestRunner():
     subtest_results = []
     test_directives = {}
     info = None
+    logger = None
+    file_hdlr = None
 
     def __init__(self, info, test_list=None):
         self.info = info
         self.test_list = test_list
         self.log_dir_base = self.info.get_config('log_base_path')
-        self.test_directives = self.test_info.get('directives', {})
-
-    def set_key_from_host(self):
-        """ add to default environment """
-        module = self.test_info['module']
-        host_list = self.info.get_config('host_list')
-        hostkey_list = module.get('setKeyFromHost')
-        host_config = module.get('hostConfig')
-        if not host_config or host_config['type'] == 'oneToOne':
-            for k in range(0, len(hostkey_list)):
-                self.test_info['defaultENV'][hostkey_list[k]] = host_list[k]
-        elif host_config['type'] == 'buildList':
-            items = ","
-            end = host_config['numServers']
-            server_list = items.join(host_list[0:end])
-            self.test_info['defaultENV'][hostkey_list[0]] = server_list
-            start = host_config['numServers']
-            end = start + host_config['numClients']
-            client_list = items.join(host_list[start:end])
-            self.test_info['defaultENV'][hostkey_list[1]] = client_list
-
-    def set_key_from_info(self):
-        """ add to default environment """
-        module = self.test_info['module']
-        key_list = module.get('setKeyFromInfo')
-        for item in range(0, len(key_list)):
-            (k, v, ex) = key_list[item]
-            self.test_info['defaultENV'][k] = self.info.get_info(v) + ex
-
-    def create_append_key_from_info(self, append=False):
-        """ add to default environment """
-        save_value = ""
-        module = self.test_info['module']
-        if append:
-            key_list = module.get('appendKeyFromInfo')
-        else:
-            key_list = module.get('createKeyFromInfo')
-        for var in range(0, len(key_list)):
-            (k, ex, vlist) = key_list[var]
-            if append:
-                save_value = self.test_info['defaultENV'].get(k, (os.getenv(k)))
-            new_list = []
-            for var_name in vlist:
-                var_value = self.info.get_info(var_name) + ex
-                if not save_value or var_value not in save_value:
-                    new_list.append(var_value)
-            items = ":"
-            new_value = items.join(new_list)
-            if not new_value:
-                self.test_info['defaultENV'][k] = save_value
-            elif save_value:
-                self.test_info['defaultENV'][k] = \
-                    new_value + ":" + save_value
-            else:
-                self.test_info['defaultENV'][k] = new_value
-
-    def set_key_from_config(self):
-        """ add to default environment """
-        config_key_list = self.info.get_config('setKeyFromConfig')
-        for (key, value) in config_key_list.items():
-            self.test_info['defaultENV'][key] = value
-
-    def set_directive_from_config(self):
-        """ add to default test directives """
-        config_key_list = self.info.get_config('setDirectiveFromConfig')
-        for (key, value) in config_key_list.items():
-            self.test_directives[key] = value
-
-    def create_tmp_dir(self):
-        """ add to default environment """
-        envName = self.test_info['module']['createTmpDir']
-        tmpdir = tempfile.mkdtemp()
-        self.test_info['defaultENV'][envName] = tmpdir
-
-    def add_default_env(self):
-        """ add to default environment """
-        module = self.test_info['module']
-        if self.info.get_config('host_list') and module.get('setKeyFromHost'):
-            self.set_key_from_host()
-        if module.get('setKeyFromInfo'):
-            self.set_key_from_info()
-        if module.get('createKeyFromInfo'):
-            self.create_append_key_from_info()
-        if module.get('appendKeyFromInfo'):
-            self.create_append_key_from_info(True)
-        if self.info.get_config('setKeyFromConfig'):
-            self.set_key_from_config()
-        if self.info.get_config('setDirectiveFromConfig'):
-            self.set_directive_from_config()
-        if module.get('createTmpDir'):
-            self.create_tmp_dir()
-
-    def setup_default_env(self):
-        """ setup default environment """
-        module_env = self.test_info['defaultENV']
-        for (key, value) in module_env.items():
-            os.environ[str(key)] = value
-
-    @staticmethod
-    def setenv(testcase):
-        """ setup testcase environment """
-        module_env = testcase['setEnvVars']
-        if module_env != None:
-            for (key, value) in module_env.items():
-                os.environ[str(key)] = value
-
-    def resetenv(self, testcase):
-        """ reset testcase environment """
-        module_env = testcase['setEnvVars']
-        module_default_env = self.test_info['defaultENV']
-        if module_env != None:
-            for key in module_env.keys():
-                value = module_default_env.get(key, "")
-                os.environ[str(key)] = value
-
-    def settestlog(self, testcase_id):
-        """ setup testcase environment """
-        test_module = self.test_info['module']
-        value = self.log_dir_base + "/" + \
-                self.loop_name + "_loop" + str(self.loop_number) + "/" + \
-                test_module['name'] + "_" + str(testcase_id)
-        os.environ[test_module['subLogKey']] = value
-        self.last_testlogdir = value
+        self.logger = logging.getLogger("TestRunnerLogger")
+        self.logger.setLevel(logging.DEBUG)
+        ch = logging.StreamHandler(sys.stdout)
+        self.logger.addHandler(ch)
 
     def dump_subtest_results(self):
         """ dump the test results to the log directory """
@@ -218,83 +100,14 @@ class TestRunner():
                 logdir = os.path.dirname(self.log_dir_base)
                 newname = os.path.join(logdir, newdir)
             os.rename(self.log_dir_base, newname)
-            print("TestRunner: test log directory\n %s" % newname)
+            self.logger.info("TestRunner: test log directory\n %s", newname)
             if str(self.test_directives.get('printTestLogPath', "no")).lower() \
                == "yes":
-                findTestLogs.top_logdir(newname)
-
-    def valgrind_memcheck(self):
-        """ If memcheck is used to check the results """
-        print("TestRunner: valgrind memcheck begin")
-        from xml.etree import ElementTree
-        rtn = 0
-        error_str = ""
-        newdir = self.last_testlogdir
-        if not os.path.exists(newdir):
-            print("Directory not found: %s" % newdir)
-            return
-        dirlist = os.listdir(newdir)
-        for psdir in dirlist:
-            dname = os.path.join(newdir, psdir)
-            if os.path.isfile(dname):
-                continue
-            testdirlist = os.listdir(dname)
-            for fname in testdirlist:
-                if str(fname).endswith(".xml"):
-                    with open(os.path.join(dname, fname), "r") as xmlfile:
-                        tree = ElementTree.parse(xmlfile)
-                    error_types = {}
-                    for node in tree.iter('error'):
-                        kind = node.find('./kind')
-                        if not kind.text in error_types:
-                            error_types[kind.text] = 0
-                        error_types[kind.text] += 1
-                    if error_types:
-                        error_str += "test dir: %s  file: %s\n" % (psdir, fname)
-                        for err in error_types:
-                            error_str += "%-3d %s errors\n"%(error_types[err],
-                                                             err)
-        if error_str:
-            print("""
-#########################################################
-    memcheck TESTS failed.
-%s
-#########################################################
-""" % error_str)
-            rtn = 1
-        print("TestRunner: valgrind memcheck end")
-        return rtn
-
-    def callgrind_annotate(self):
-        """ If callgrind is used pull in the results """
-        print("TestRunner: Callgrind annotate begin")
-        module = self.test_info['module']
-        srcdir = module.get('srcDir', "")
-        src_rootdir = self.info.get_info('SRCDIR')
-        if srcdir and src_rootdir:
-            if isinstance(srcdir, str):
-                srcfile = " %s/%s/*.c" % (src_rootdir, srcdir)
-            else:
-                srcfile = ""
-                for item in srcdir:
-                    srcfile += " %s/%s/*.c" % (src_rootdir, item)
-            dirlist = os.listdir(self.last_testlogdir)
-            for infile in dirlist:
-                if os.path.isfile(infile) and infile.find(".out"):
-                    outfile = infile.replace("out", "gp.out")
-                    cmdarg = "callgrind_annotate " + infile + srcfile
-                    print(cmdarg)
-                    with open(outfile, 'w') as out:
-                        subprocess.call(cmdarg, timeout=30, shell=True,
-                                        stdout=out,
-                                        stderr=subprocess.STDOUT)
-        else:
-            print("TestRunner: Callgrind no source directory")
-        print("TestRunner: Callgrind annotate end")
+                self.top_logdir(newname)
 
     def post_run(self):
         """ post run processing """
-        print("TestRunner: tearDown begin")
+        self.logger.info("TestRunner: tearDown begin")
         self.dump_subtest_results()
         if self.test_info['module'].get('createTmpDir'):
             envName = self.test_info['module']['createTmpDir']
@@ -302,44 +115,33 @@ class TestRunner():
         if str(self.test_directives.get('renameTestRun', "yes")).lower() \
            != "no":
             self.rename_output_directory()
-        print("TestRunner: tearDown end\n\n")
+        self.logger.info("TestRunner: tearDown end\n\n")
 
-    def dump_error_messages(self, testMethodName):
-        """dump the ERROR tag from stdout file"""
-        dirname = testMethodName.split('_', maxsplit=2)
-        newdir = os.path.join(self.last_testlogdir, dirname[2])
-        if not os.path.exists(newdir):
-            print("Directory not found: %s" % newdir)
-            return
-        dirlist = sorted(os.listdir(newdir), reverse=True)
-        for psdir in dirlist:
-            dname = os.path.join(newdir, psdir)
-            if os.path.isfile(dname):
-                continue
-            rankdirlist = sorted(os.listdir(dname), reverse=True)
-            for rankdir in rankdirlist:
-                dumpstdout = os.path.join(newdir, psdir, rankdir, "stdout")
-                dumpstderr = os.path.join(newdir, psdir, rankdir, "stderr")
-                print("******************************************************")
-                print("Error info from file\n %s" % dumpstdout)
-                filesize = os.path.getsize(dumpstdout) > 1024
-                if filesize > 1024:
-                    print("File too large (%d bytes), showing errors only" % \
-                          filesize)
-                    with open(dumpstdout, 'r') as file:
-                        for line in file:
-                            if line.startswith("ERROR:"):
-                                print(line)
-                else:
-                    with open(dumpstdout, 'r') as file:
-                        print(file.read())
+    @staticmethod
+    def setenv(testcase):
+        """ setup testcase environment """
+        module_env = testcase['setEnvVars']
+        if module_env != None:
+            for (key, value) in module_env.items():
+                os.environ[str(key)] = value
 
-                print("Error info from file\n %s" % dumpstderr)
-                if os.path.getsize(dumpstderr) > 0:
-                    with open(dumpstderr, 'r') as file:
-                        print(file.read())
-                else:
-                    print("--- empty ---\n")
+    def resetenv(self, testcase):
+        """ reset testcase environment """
+        module_env = testcase['setEnvVars']
+        module_default_env = self.test_info['defaultENV']
+        if module_env != None:
+            for key in module_env.keys():
+                value = module_default_env.get(key, "")
+                os.environ[str(key)] = value
+
+    def settestlog(self, testcase_id):
+        """ setup testcase environment """
+        test_module = self.test_info['module']
+        value = self.log_dir_base + "/" + \
+                self.loop_name + "_loop" + str(self.loop_number) + "/" + \
+                test_module['name'] + "_" + str(testcase_id)
+        os.environ[test_module['subLogKey']] = value
+        self.last_testlogdir = value
 
     def execute_list(self):
         """ execute test scripts """
@@ -347,8 +149,10 @@ class TestRunner():
         rtn = 0
         test_module = self.test_info['module']
         for testrun in self.test_info['execStrategy']:
-            print("************** run %s ******************************" % \
-                  testrun['id'])
+            self.logger.info("************** run " + \
+                             str(testrun['id']) + \
+                             "******************************"
+                            )
             if 'setEnvVars' in testrun:
                 self.setenv(testrun)
             self.settestlog(testrun['id'])
@@ -357,21 +161,25 @@ class TestRunner():
             results = unittest.TestResult()
             suite.run(results)
 
-            print("***************** Results *********************************")
-            print("Number test run: %s" % results.testsRun)
+            self.logger.info("***************** Results " + \
+                             "*********************************"
+                            )
+            self.logger.info("Number test run: %s", results.testsRun)
             if results.wasSuccessful() is True:
-                print("Test was successful\n")
+                self.logger.info("Test was successful\n")
             else:
                 rtn |= 1
-                print("Test failed")
-                print("\nNumber test errors: %d" % len(results.errors))
+                self.logger.info("Test failed")
+                self.logger.info("\nNumber test errors: %d", \
+                                 len(results.errors))
                 for error_item in results.errors:
-                    print(error_item[0])
-                    print(error_item[1])
-                print("\nNumber test failures: %d" % len(results.failures))
+                    self.logger.info(error_item[0])
+                    self.logger.info(error_item[1])
+                self.logger.info("\nNumber test failures: %d",
+                                 len(results.failures))
                 for results_item in results.failures:
-                    print(results_item[0])
-                    print(results_item[1])
+                    self.logger.info(results_item[0])
+                    self.logger.info(results_item[1])
                     test_object_dict = results_item[0].__dict__
                     self.dump_error_messages(
                         test_object_dict['_testMethodName'])
@@ -383,7 +191,8 @@ class TestRunner():
             elif use_valgrind == "callgrind":
                 self.callgrind_annotate()
 
-            print("***********************************************************")
+            self.logger.info(
+                "***********************************************************")
             if 'setEnvVars' in testrun:
                 self.resetenv(testrun)
 
@@ -395,8 +204,14 @@ class TestRunner():
         info = {}
         rtn = 0
         info['name'] = self.test_info['module']['name']
-        print("***************** %s *********************************" % \
-              info['name'])
+        value = self.log_dir_base + "/" + str(info['name']) + ".log"
+        self.file_hdlr = logging.FileHandler(value)
+        self.file_hdlr.setLevel(logging.DEBUG)
+        self.logger.addHandler(self.file_hdlr)
+        self.logger.info("***************** " + \
+                         str(info['name']) + \
+                         " *********************************"
+                        )
         loop = str(self.test_directives.get('loop', "no"))
         start_time = time()
         if loop.lower() == "no":
@@ -404,7 +219,10 @@ class TestRunner():
             rtn = self.execute_list()
         else:
             for i in range(int(loop)):
-                print("***************loop %d *************************" % i)
+                self.logger.info("***************" + \
+                                 str(" loop %d " % i) +\
+                                 "*************************"
+                                )
                 self.loop_number = i
                 rtn |= self.execute_list()
                 toexit = self.test_directives.get('exitLoopOnError', "yes")
@@ -417,6 +235,8 @@ class TestRunner():
         else:
             info['status'] = "FAIL"
         info['error'] = ""
+        self.file_hdlr.close()
+        self.logger.removeHandler(self.file_hdlr)
         return info
 
     def load_testcases(self, test_module_name):
@@ -427,21 +247,22 @@ class TestRunner():
             self.test_info = load(fd, Loader=Loader)
 
         if 'description' not in self.test_info:
-            print(" No description defined in file: %s" % test_module_name)
+            self.logger.info(" No description defined in file: %s", \
+                             test_module_name)
             rtn = 1
         if 'defaultENV' not in self.test_info or \
            self.test_info['defaultENV'] is None:
             self.test_info['defaultENV'] = {}
         if 'module' not in self.test_info:
-            print(" No module section defined in file: %s" % test_module_name)
+            self.logger.info(" No module section defined in file: %s", \
+                             test_module_name)
             rtn = 1
         if 'directives' not in self.test_info or \
            self.test_info['directives'] is None:
             self.test_info['directives'] = {}
-            rtn = 1
         if 'execStrategy' not in self.test_info:
-            print(" No execStrategy section defined in file: %s" %
-                  test_module_name)
+            self.logger.info(" No execStrategy section defined in file: %s",
+                             test_module_name)
             rtn = 1
         return rtn
 
@@ -450,7 +271,8 @@ class TestRunner():
 
         sys.path.append("scripts")
         rtn = 0
-        print("\n*************************************************************")
+        self.logger.info(
+            "\n*************************************************************")
         for test_module_name in self.test_list:
             self.loop_name = os.path.splitext(
                 os.path.basename(test_module_name))[0]
@@ -458,6 +280,7 @@ class TestRunner():
             if self.load_testcases(test_module_name):
                 rtn = 1
                 continue
+            self.test_directives = self.test_info.get('directives', {})
             self.add_default_env()
             self.setup_default_env()
             rtn_info = self.execute_strategy()
