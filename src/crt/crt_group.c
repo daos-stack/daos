@@ -1818,10 +1818,6 @@ crt_grp_save_attach_info(struct crt_grp_priv *grp_priv)
 		C_DEBUG("ignore crt_grp_save_attach_info for client.\n");
 		C_GOTO(out, rc);
 	}
-	if (grp_priv->gp_self != 0) {
-		C_DEBUG("ignore crt_grp_save_attach_info for non-zero rank.\n");
-		C_GOTO(out, rc);
-	}
 
 	crt_getenv_bool(CRT_ALLOW_SINGLETON_ENV, &allow_singleton);
 	if (!allow_singleton) {
