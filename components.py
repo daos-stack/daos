@@ -159,7 +159,7 @@ REQS.define('ompi_pmix',
                       '--with-devel-headers ' \
                       '--enable-orterun-prefix-by-default ' \
                       '--prefix=$OMPI_PMIX_PREFIX ' \
-                      '--disable-mpi-fortran ' \
+                      '--disable-mpi-fortran ',
                       'make', 'make install'],
             libs=['pmix'],
             headers=['pmix.h'],
