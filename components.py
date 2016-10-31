@@ -149,6 +149,22 @@ REQS.define('ompi',
             required_progs=['g++', 'flex'],
             requires=['pmix', 'hwloc', 'event'])
 
+RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
+REQS.define('ompi_pmix',
+            retriever=RETRIEVER,
+            commands=['patch -N -p1 < $PATCH_PREFIX/ompi_version.patch; ' \
+                      'if [ $? -gt 1 ]; then false; else true; fi;',
+                      './autogen.pl --no-oshmem',
+                      './configure --with-platform=optimized ' \
+                      '--with-devel-headers ' \
+                      '--enable-orterun-prefix-by-default ' \
+                      '--prefix=$OMPI_PMIX_PREFIX ' \
+                      '--disable-mpi-fortran ' \
+                      'make', 'make install'],
+            libs=['pmix'],
+            headers=['pmix.h'],
+            required_progs=['g++', 'flex', 'autoreconf', 'aclocal', 'libtool'])
+
 RETRIEVER = GitRepoRetriever("https://github.com/pmem/nvml")
 REQS.define('nvml',
             retriever=RETRIEVER,
