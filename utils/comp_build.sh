@@ -21,13 +21,6 @@
 
 set -x
 
-cat << EOF
-#############################################################
-comp_build.sh is deprecated.  Use utils/comp_build.sh instead
-#############################################################
-EOF
-
-
 function usage()
 {
   cat << EOF
@@ -59,19 +52,15 @@ CONFIG
 
        It must also specify each dependence using the following format:
 
-           depends=<name>[:<min_build>][:<parent_name>]
+           depends=<name>:<build_no>
 
        Only dependences that have corresponding <name>-update-scratch jobs
        are specified.   For example, ompi-update-scratch also builds pmix
        and hwloc but only ompi should be specified as a dependence.
-       The <min_build> specifies a Jenkins build number that is required.
-       This is only used when the component update-scratch job is failing
-       due to a breaking change in a dependence.  The <parent_name> defines
-       a higher level component from which a default build nubmer can be
-       pulled.   For example, one may specify iof as a parent for mcl,
-       mercury, and ompi.   This is a way of telling the build script to
-       use a dependent job to test lower level components to avoid
-       broken versions.
+       The <build_no> specifies a Jenkins build number to use for the
+       component.   This build will be used for the component.  If it isn't
+       specified, the tool will use the latest successful build to determine
+       a version to use.
 
 DETAILS
        This tool uses the .build_info.sh script that is saved with various
@@ -85,23 +74,8 @@ DETAILS
        For update-scratch builds, it automatically updates the latest link if
        the build and any user custom script runs without errors.
 
-       There are 2 types of builds supported by this script:
-           1. update-scratch This is a build that takes place after changes to
-                             master or to dependent components.   The default
-                             build numbers for each component come from the
-                             latest good <name>-update-scratch or, if
-                             applicable, <parent_name>-update-scratch for each
-                             dependence.
-           2. review         This is a build that takes place for reviews or
-                             interactive builds.  In this case, the default
-                             build number for each dependence is pulled from
-                             the latest good <component>-update-scratch
-                             build.
-
-       If the default build number for a dependence needs to be updated (due
-       to an API change, for example), then the user can specify <build_number>
-       for that component to a value larger than the default.   The script
-       will always choose the larger of the two values.
+       Otherwise, there is no difference between an update-scratch build and
+       a review build.
 
 CUSTOM
        If a custom script is specified on the command line, the script will be
@@ -110,7 +84,7 @@ CUSTOM
        directory of the component.
 
 EXAMPLE
-       Building IOF, mcl, DAOS, and CPPR from the job script:
+       Building IOF, cart, mcl, DAOS, and CPPR from the job script:
        This script normalizes the build between various components.  It is no
        longer necessary to copy boiler plate code into all of the components.
        This should make things more maintainable.
@@ -121,17 +95,19 @@ EXAMPLE
            scons_local/comp_build.sh comp_test.sh
 
        As an example, let's use CPPR
-       In the case of CPPR, let's say it depends on at least iof build 33, mcl
-       build 27, ompi build 88, and mercury build 123, we would create a config
-       file, call it build.config,  with the following:
+       In the case of CPPR, let's say it wants build 33 of iof, 54 of mcl, 111
+       of ompi, and 32 of mercury.  To use those versions, it would specify the
+       following in the top level build.config file:
 
            component=cppr
            depends=iof:33
-           depends=mcl:27:iof
-           depends=ompi:88:iof
-           depends=mercury:123:iof
+           depends=mcl:54
+           depends=ompi:111
+           depends=mercury:32
 
-       we would then create comp_test.sh with the following lines:
+       If the specified version doesn't exist, the build will fail.
+
+       For testing, we would also create comp_test.sh with the following lines:
 
            scons utest
            scons utest --utest-mode=memcheck
@@ -143,13 +119,6 @@ EXAMPLE
            ${COMP_PREFIX}/TESTING/scripts/run_test.sh -e m -l 4
 
        And we would run with the command listed above.
-
-       Notice the <parent_name> for mcl, ompi, and mercury is set to iof.
-       This is for the cppr-update-scratch job to tell it to only use these
-       components that have been blessed by a successful iof-update-scratch
-       job.   For review or interactive building, it will always default to
-       the version blessed by the latest cppr-update-scratch job.  In both
-       cases, the <build_number> can force a newer version of a component.
 EOF
   exit 1
 }
@@ -169,91 +138,24 @@ function setup_dep()
   IFS=$TEMP_IFS
 
   len=${#array[@]}
-  if [ $len -lt 1 ] || [ $len -gt 3 ]; then
-    print_status "Bad argument $1"
+  if [ $len -ne 2 ]; then
+    print_status "Bad dependence specification $1"
     usage
   fi
 
   name=${array[0]}
   upper_name=${name^^}
-  version=0
-  cname=
-  item=1
-  while [ $item -lt $len ]; do
-    if [[ ${array[$item]} = *[[:digit:]]* ]]; then
-      version=${array[$item]}
-    else
-     cname=${array[$item]}
-    fi
-    item=$[ $item + 1 ]
-  done
+  version=${array[1]}
 
-  echo "Setting up $upper_name.  Minimum version is $version."
-  if [ -n "$cname" ]; then
-    echo "Good version can be pulled from $cname"
-  fi
+  echo "Setting up $upper_name.  Build version is $version."
 
   # If matrix jobs are used, then the specific job matrix must be
   # used to pick up the artifacts
   # Allow the JOB_SUFFIX to be something else.
   job_end=${JOB_SUFFIX}${job_matrix}
 
-  #Use the latest by default
-  declare $upper_name=${CORAL_ARTIFACTS}/${name}${job_end}/latest
-  latest=
-  if [ "${JOB_NAME}" != "${B_COMP}${JOB_SUFFIX}" ]; then
-    #If it's not the scratch job, use a previous build of the scratch job
-    echo "Getting $name build from $B_COMP latest"
-    comp_name=${B_COMP}
-    latest=$(readlink -f ${CORAL_ARTIFACTS}/${B_COMP}${job_end}/latest)
-  elif [ -n "$cname" ]; then
-    #If it is the scratch job, use a child job, if specified
-    echo "Getting $name build from $cname latest"
-    latest=$(readlink -f ${CORAL_ARTIFACTS}/${cname}${job_end}/latest)
-    comp_name=${cname}
-  fi
-  if [ -n "$latest" ]; then
-    #These can be used to override the "last good version"
-    #when there are breaking changes.   Jenkins will use
-    #$GOOD_* only if it is newer than the last version
-    #used by master
-    good_varname=GOOD_${upper_name}
-    good_version=${CORAL_ARTIFACTS}/${name}${job_end}/$version
-    declare ${good_varname}=${good_version}
-    blessed_varname=SL_${upper_name}_PREFIX
-    for subdir in /${comp_name}/TESTING/ /TESTING/scripts/ /${comp_name}/ /; do
-      vars=${latest}${subdir}.build_vars.sh
-      if [ -f ${vars} ]; then
-        break
-      fi
-    done
-    blessed_num=0
-    if [ ! -f ${vars} ]; then
-      print_status "$vars does not exist.   Check <build_vars> option"
-    else
-      source ${vars}
-      if [ -n "${!blessed_varname}" ]; then
-        blessed_num=$(basename $(dirname ${!blessed_varname}))
-      fi
-    fi
-    if [ $version -gt $blessed_num ]; then
-      if [ ! -d ${!good_varname} ]; then
-        print_status "${!good_varname} not found. Using latest instead"
-        if [ -n "${!blessed_varname}" ]; then
-          declare $upper_name=$(dirname ${!blessed_varname})
-        else
-          # No update-scratch job to get latest from.  Try component latest
-          print_status "No blessed version.  Using ${name} latest"
-          comp_latest=${CORAL_ARTIFACTS}/${name}${job_end}/latest
-          declare $upper_name=${comp_latest}
-        fi
-      else
-        declare $upper_name=${!good_varname}
-      fi
-    else
-      declare $upper_name=$(dirname ${!blessed_varname})
-    fi
-  fi
+  #Find the specified version
+  declare $upper_name=${CORAL_ARTIFACTS}/${name}${job_end}/$version
   if [ "${DOCKER_IMAGE}x" == "x" ]; then
     PREBUILT_AREA=${PREBUILT_AREA}${!upper_name}:
   else
@@ -376,7 +278,7 @@ set -x
 set -e
 rm -f ${B_COMP}-`uname -s`.conf
 if [ "${DOCKER_IMAGE}x" == "x" ]; then
-  scons $SET_PREFIX ${option}
+  scons $SET_PREFIX ${option} --config=force
   scons install
 
   if [ -n "$CUSTOM_SCRIPT" ]; then
@@ -402,4 +304,3 @@ else
   | tee docker_build.log
 
 fi
-
