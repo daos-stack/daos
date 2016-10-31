@@ -49,8 +49,8 @@ struct dc_pool {
 	uuid_t			dp_pool;
 	uuid_t			dp_pool_hdl;
 	uint64_t		dp_capas;
+	pthread_rwlock_t	dp_map_lock;
 	struct pool_map	       *dp_map;
-	struct pool_buf	       *dp_map_buf;	/* TODO: pool_map => pool_buf */
 	uint32_t		dp_disconnecting:1,
 				dp_slave:1; /* generated via g2l */
 };
@@ -71,9 +71,22 @@ dc_pool_lookup(daos_handle_t poh)
 }
 
 static inline void
+dc_pool_get(struct dc_pool *pool)
+{
+	daos_hhash_link_getref(daos_client_hhash, &pool->dp_hlink);
+}
+
+static inline void
 dc_pool_put(struct dc_pool *pool)
 {
 	daos_hhash_link_putref(daos_client_hhash, &pool->dp_hlink);
 }
+
+typedef void (*dc_pool_query_cb_t)(struct dc_pool *pool, void *arg, int rc,
+				   daos_rank_list_t *tgts,
+				   daos_pool_info_t *info);
+int dc_pool_query(struct dc_pool *pool, dtp_context_t ctx,
+		  daos_rank_list_t *tgts, daos_pool_info_t *info,
+		  dc_pool_query_cb_t cb, void *cb_arg);
 
 #endif /* __DAOS_POOL_H__ */

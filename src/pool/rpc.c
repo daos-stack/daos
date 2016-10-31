@@ -53,6 +53,19 @@ struct dtp_msg_field *pool_disconnect_out_fields[] = {
 	&DMF_UINT32	/* op.map_version */
 };
 
+struct dtp_msg_field *pool_query_in_fields[] = {
+	&DMF_UUID,	/* op.uuid */
+	&DMF_UUID,	/* op.handle */
+	&DMF_BULK	/* map_bulk */
+};
+
+struct dtp_msg_field *pool_query_out_fields[] = {
+	&DMF_INT,	/* op.rc */
+	&DMF_UINT32,	/* op.map_version */
+	&DMF_UINT32,	/* mode */
+	&DMF_UINT32	/* map_buf_size */
+};
+
 struct dtp_msg_field *pool_exclude_in_fields[] = {
 	&DMF_UUID,	/* op.uuid */
 	&DMF_UUID,	/* op.handle */
@@ -102,6 +115,10 @@ struct dtp_req_format DQF_POOL_DISCONNECT =
 	DEFINE_DTP_REQ_FMT("POOL_DISCONNECT", pool_disconnect_in_fields,
 			   pool_disconnect_out_fields);
 
+struct dtp_req_format DQF_POOL_QUERY =
+	DEFINE_DTP_REQ_FMT("POOL_QUERY", pool_query_in_fields,
+			   pool_query_out_fields);
+
 struct dtp_req_format DQF_POOL_EXCLUDE =
 	DEFINE_DTP_REQ_FMT("POOL_EXCLUDE", pool_exclude_in_fields,
 			   pool_exclude_out_fields);
@@ -142,6 +159,12 @@ struct daos_rpc pool_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_POOL_DISCONNECT,
+	}, {
+		.dr_name	= "POOL_QUERY",
+		.dr_opc		= POOL_QUERY,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_QUERY
 	}, {
 		.dr_name	= "POOL_EXCLUDE",
 		.dr_opc		= POOL_EXCLUDE,

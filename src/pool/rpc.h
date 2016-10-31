@@ -32,10 +32,8 @@
 
 #include <stdint.h>
 #include <uuid/uuid.h>
-#include <daos/event.h>
 #include <daos/rpc.h>
 #include <daos/transport.h>
-#include <daos_event.h>
 
 /*
  * RPC operation codes
@@ -56,7 +54,7 @@ enum pool_operation {
 
 struct pool_op_in {
 	uuid_t	pi_uuid;	/* pool UUID */
-	uuid_t	pi_handle;	/* pool handle UUID */
+	uuid_t	pi_hdl;		/* pool handle UUID */
 };
 
 struct pool_op_out {
@@ -86,6 +84,17 @@ struct pool_disconnect_out {
 	struct pool_op_out	pdo_op;	/* .po_map_version not set */
 };
 
+struct pool_query_in {
+	struct pool_op_in	pqi_op;
+	dtp_bulk_t		pqi_map_bulk;
+};
+
+struct pool_query_out {
+	struct pool_op_out	pqo_op;
+	uint32_t		pqo_mode;
+	uint32_t		pqo_map_buf_size;   /* only set on -DER_TRUNC */
+};
+
 struct pool_exclude_in {
 	struct pool_op_in	pei_op;
 	daos_rank_list_t       *pei_targets;
@@ -98,7 +107,7 @@ struct pool_exclude_out {
 
 struct pool_tgt_connect_in {
 	uuid_t		tci_uuid;		/* pool UUID */
-	uuid_t		tci_handle;
+	uuid_t		tci_hdl;
 	uint64_t	tci_capas;
 	uint32_t	tci_map_version;
 };
@@ -109,7 +118,7 @@ struct pool_tgt_connect_out {
 
 struct pool_tgt_disconnect_in {
 	uuid_t		tdi_uuid;	/* pool UUID */
-	uuid_t		tdi_handle;
+	uuid_t		tdi_hdl;
 };
 
 struct pool_tgt_disconnect_out {
@@ -125,38 +134,10 @@ struct pool_tgt_update_map_out {
 	int32_t	tuo_rc;	/* number of errors */
 };
 
-int
-pool_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
-		dtp_opcode_t opc, dtp_rpc_t **req);
+int pool_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
+		    dtp_opcode_t opc, dtp_rpc_t **req);
 
 extern struct daos_rpc pool_rpcs[];
 extern struct daos_rpc pool_srv_rpcs[];
-
-static inline void
-dsm_set_reply_status(dtp_rpc_t *rpc, int status)
-{
-	int *ret;
-
-	/* FIXME; The right way to do it might be find the
-	 * status offset and set it, but let's put status
-	 * in front of the bulk reply for now
-	 **/
-	D_ASSERT(rpc != NULL);
-	ret = dtp_reply_get(rpc);
-	D_ASSERT(ret != NULL);
-	*ret = status;
-}
-
-static inline int
-dsm_get_reply_status(dtp_rpc_t *rpc)
-{
-	int *ret;
-	/* FIXME; The right way to do it might be find the
-	 * status offset and set it, but let's put status
-	 * in front of the bulk reply for now
-	 **/
-	ret = dtp_reply_get(rpc);
-	return *ret;
-}
 
 #endif /* __POOL_RPC_H__ */

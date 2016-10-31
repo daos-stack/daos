@@ -331,7 +331,9 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 
+	pthread_rwlock_rdlock(&pool->dp_map_lock);
 	rc = daos_placement_init(pool->dp_map);
+	pthread_rwlock_unlock(&pool->dp_map_lock);
 	if (rc != 0) {
 		pthread_rwlock_unlock(&pool->dp_co_list_lock);
 		D_GOTO(out, rc);
@@ -501,7 +503,9 @@ cont_close_complete(void *data, daos_event_t *ev, int rc)
 	daos_list_del_init(&cont->dc_po_list);
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
+	pthread_rwlock_rdlock(&pool->dp_map_lock);
 	daos_placement_fini(pool->dp_map);
+	pthread_rwlock_unlock(&pool->dp_map_lock);
 out:
 	dtp_req_decref(sp->sp_rpc);
 	dc_pool_put(pool);
@@ -757,7 +761,9 @@ dc_cont_g2l(daos_handle_t poh, struct dsmc_container_glob *cont_glob,
 		D_GOTO(out_cont, rc = -DER_NO_HDL);
 	}
 
+	pthread_rwlock_rdlock(&pool->dp_map_lock);
 	rc = daos_placement_init(pool->dp_map);
+	pthread_rwlock_unlock(&pool->dp_map_lock);
 	if (rc != 0) {
 		pthread_rwlock_unlock(&pool->dp_co_list_lock);
 		D_GOTO(out_cont, rc);
@@ -1030,7 +1036,9 @@ dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
 	/* Get map_tgt so that we can have the rank of the target. */
 	pool = dc_pool_lookup(dc->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
+	pthread_rwlock_rdlock(&pool->dp_map_lock);
 	n = pool_map_find_target(pool->dp_map, tgt_idx, tgt);
+	pthread_rwlock_unlock(&pool->dp_map_lock);
 	dc_pool_put(pool);
 	dsmc_container_put(dc);
 	if (n != 1) {
@@ -1058,7 +1066,9 @@ dc_cont_hdl2uuid_map_ver(daos_handle_t coh, uuid_t *con_hdl,
 	D_ASSERT(pool != NULL);
 	D_ASSERT(pool->dp_map != NULL);
 
+	pthread_rwlock_rdlock(&pool->dp_map_lock);
 	*version = pool_map_get_version(pool->dp_map);
+	pthread_rwlock_unlock(&pool->dp_map_lock);
 	dc_pool_put(pool);
 	dsmc_container_put(dc);
 	return rc;

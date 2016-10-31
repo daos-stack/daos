@@ -745,7 +745,7 @@ pool_connect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 
 	in = dtp_req_get(rpc);
 	uuid_copy(in->tci_uuid, svc->ps_uuid);
-	uuid_copy(in->tci_handle, pool_hdl);
+	uuid_copy(in->tci_hdl, pool_hdl);
 	in->tci_capas = capas;
 	in->tci_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 
@@ -777,67 +777,72 @@ bulk_cb(const struct dtp_bulk_cb_info *cb_info)
 }
 
 /*
- * Transfer the pool map buffer to the client and set pco_pool_map_version. If
- * the client bulk buffer is not large enough, then also set
- * pco_pool_map_buf_size.
+ * Transfer the pool map to "remote_bulk". If the remote bulk buffer is too
+ * small, then return -DER_TRUNC and set "required_buf_size" to the local pool
+ * map buffer size.
  */
 static int
-pool_connect_bulk(dtp_rpc_t *rpc, struct pool_svc *svc)
+transfer_map_buf(struct pool_svc *svc, dtp_rpc_t *rpc, dtp_bulk_t remote_bulk,
+		 uint32_t *required_buf_size)
 {
-	struct pool_connect_in	       *in = dtp_req_get(rpc);
-	struct pool_connect_out	       *out = dtp_reply_get(rpc);
-	struct pool_buf		       *map_buf;
-	size_t				map_buf_size;
-	daos_iov_t			map_iov;
-	daos_sg_list_t			map_sgl;
-	dtp_bulk_t			map_bulk;
-	struct dtp_bulk_desc		map_desc;
-	dtp_bulk_opid_t			map_opid;
-	daos_size_t			client_bulk_size;
-	ABT_eventual			eventual;
-	int			       *status;
-	int				rc;
+	struct pool_buf	       *map_buf;
+	size_t			map_buf_size;
+	uint32_t		map_version;
+	daos_size_t		remote_bulk_size;
+	daos_iov_t		map_iov;
+	daos_sg_list_t		map_sgl;
+	dtp_bulk_t		bulk;
+	struct dtp_bulk_desc	map_desc;
+	dtp_bulk_opid_t		map_opid;
+	ABT_eventual		eventual;
+	int		       *status;
+	int			rc;
 
-	/*
-	 * If successful, this stores the address of the persistent pool map
-	 * buffer into "map_buf".
-	 */
-	rc = read_map_buf(svc->ps_root, &map_buf, &out->pco_op.po_map_version);
+	rc = read_map_buf(svc->ps_root, &map_buf, &map_version);
 	if (rc != 0) {
-		D_ERROR("failed to read pool map: %d\n", rc);
+		D_ERROR(DF_UUID": failed to read pool map: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
 		D_GOTO(out, rc);
+	}
+
+	if (map_version != pool_map_get_version(svc->ps_pool->sp_map)) {
+		D_ERROR(DF_UUID": found different cached and persistent pool "
+			"map versions: cached=%u persistent=%u\n",
+			DP_UUID(svc->ps_uuid),
+			pool_map_get_version(svc->ps_pool->sp_map),
+			map_version);
+		D_GOTO(out, rc = -DER_IO);
 	}
 
 	map_buf_size = pool_buf_size(map_buf->pb_nr);
 
 	/* Check if the client bulk buffer is large enough. */
-	rc = dtp_bulk_get_len(in->pci_map_bulk, &client_bulk_size);
+	rc = dtp_bulk_get_len(remote_bulk, &remote_bulk_size);
 	if (rc != 0)
 		D_GOTO(out, rc);
-	if (client_bulk_size < map_buf_size) {
-		D_ERROR("client pool map buffer ("DF_U64") < required (%ld)\n",
-			client_bulk_size, map_buf_size);
-		out->pco_map_buf_size = map_buf_size;
+	if (remote_bulk_size < map_buf_size) {
+		D_ERROR(DF_UUID": remote pool map buffer ("DF_U64") < required "
+			"(%lu)\n", DP_UUID(svc->ps_uuid), remote_bulk_size,
+			map_buf_size);
+		*required_buf_size = map_buf_size;
 		D_GOTO(out, rc = -DER_TRUNC);
 	}
 
-	map_iov.iov_buf = map_buf;
-	map_iov.iov_buf_len = map_buf_size;
-	map_iov.iov_len = map_iov.iov_buf_len;
+	daos_iov_set(&map_iov, map_buf, map_buf_size);
 	map_sgl.sg_nr.num = 1;
 	map_sgl.sg_nr.num_out = 0;
 	map_sgl.sg_iovs = &map_iov;
 
-	rc = dtp_bulk_create(rpc->dr_ctx, &map_sgl, DTP_BULK_RO, &map_bulk);
+	rc = dtp_bulk_create(rpc->dr_ctx, &map_sgl, DTP_BULK_RO, &bulk);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	/* Prepare "map_desc" for dtp_bulk_transfer(). */
 	map_desc.bd_rpc = rpc;
 	map_desc.bd_bulk_op = DTP_BULK_PUT;
-	map_desc.bd_remote_hdl = in->pci_map_bulk;
+	map_desc.bd_remote_hdl = remote_bulk;
 	map_desc.bd_remote_off = 0;
-	map_desc.bd_local_hdl = map_bulk;
+	map_desc.bd_local_hdl = bulk;
 	map_desc.bd_local_off = 0;
 	map_desc.bd_len = map_iov.iov_len;
 
@@ -859,7 +864,7 @@ pool_connect_bulk(dtp_rpc_t *rpc, struct pool_svc *svc)
 out_eventual:
 	ABT_eventual_free(&eventual);
 out_bulk:
-	dtp_bulk_free(map_bulk);
+	dtp_bulk_free(bulk);
 out:
 	return rc;
 }
@@ -877,8 +882,7 @@ ds_pool_connect_handler(dtp_rpc_t *rpc)
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
-		DP_UUID(in->pci_op.pi_uuid), rpc,
-		DP_UUID(in->pci_op.pi_handle));
+		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
 
 	rc = pool_svc_lookup(in->pci_op.pi_uuid, &svc);
 	if (rc != 0)
@@ -887,7 +891,7 @@ ds_pool_connect_handler(dtp_rpc_t *rpc)
 	ABT_rwlock_wrlock(svc->ps_lock);
 
 	/* Check existing pool handles. */
-	rc = dbtree_uv_lookup(svc->ps_handles, in->pci_op.pi_handle, &hdl,
+	rc = dbtree_uv_lookup(svc->ps_handles, in->pci_op.pi_hdl, &hdl,
 			      sizeof(hdl));
 	if (rc == 0) {
 		if (hdl.ph_capas == in->pci_capas) {
@@ -907,12 +911,12 @@ ds_pool_connect_handler(dtp_rpc_t *rpc)
 
 	rc = pool_attr_read(svc, &attr);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		D_GOTO(out_map_version, rc);
 
 	if (!permitted(&attr, in->pci_uid, in->pci_gid, in->pci_capas)) {
 		D_ERROR("refusing connect attempt for uid %u gid %u "DF_X64"\n",
 			in->pci_uid, in->pci_gid, in->pci_capas);
-		D_GOTO(out_lock, rc = -DER_NO_PERM);
+		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
 	out->pco_mode = attr.pa_mode;
@@ -925,24 +929,25 @@ ds_pool_connect_handler(dtp_rpc_t *rpc)
 	 * completes, then we simply return the error and the client will throw
 	 * its pool_buf away.
 	 */
-	rc = pool_connect_bulk(rpc, svc);
+	rc = transfer_map_buf(svc, rpc, in->pci_map_bulk,
+			      &out->pco_map_buf_size);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		D_GOTO(out_map_version, rc);
 
 	if (skip_update)
-		D_GOTO(out_lock, rc = 0);
+		D_GOTO(out_map_version, rc = 0);
 
-	rc = pool_connect_bcast(rpc->dr_ctx, svc, in->pci_op.pi_handle,
+	rc = pool_connect_bcast(rpc->dr_ctx, svc, in->pci_op.pi_hdl,
 				in->pci_capas);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		D_GOTO(out_map_version, rc);
 
 	hdl.ph_capas = in->pci_capas;
 
 	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES, &nhandles,
 			      sizeof(nhandles));
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		D_GOTO(out_map_version, rc);
 	nhandles++;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
@@ -952,8 +957,8 @@ ds_pool_connect_handler(dtp_rpc_t *rpc)
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_uv_update(svc->ps_handles, in->pci_op.pi_handle,
-				      &hdl, sizeof(hdl));
+		rc = dbtree_uv_update(svc->ps_handles, in->pci_op.pi_hdl, &hdl,
+				      sizeof(hdl));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
@@ -963,11 +968,13 @@ ds_pool_connect_handler(dtp_rpc_t *rpc)
 	} TX_END
 
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		D_GOTO(out_map_version, rc);
 
 	/* For this pool handle. */
 	pool_svc_get(svc);
 
+out_map_version:
+	out->pco_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	pool_svc_put(svc);
@@ -995,7 +1002,7 @@ pool_disconnect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 
 	in = dtp_req_get(rpc);
 	uuid_copy(in->tdi_uuid, svc->ps_uuid);
-	uuid_copy(in->tdi_handle, pool_hdl);
+	uuid_copy(in->tdi_hdl, pool_hdl);
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -1027,8 +1034,7 @@ ds_pool_disconnect_handler(dtp_rpc_t *rpc)
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
-		DP_UUID(pdi->pdi_op.pi_uuid), rpc,
-		DP_UUID(pdi->pdi_op.pi_handle));
+		DP_UUID(pdi->pdi_op.pi_uuid), rpc, DP_UUID(pdi->pdi_op.pi_hdl));
 
 	rc = pool_svc_lookup(pdi->pdi_op.pi_uuid, &svc);
 	if (rc != 0)
@@ -1036,7 +1042,7 @@ ds_pool_disconnect_handler(dtp_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = dbtree_uv_lookup(svc->ps_handles, pdi->pdi_op.pi_handle, &hdl,
+	rc = dbtree_uv_lookup(svc->ps_handles, pdi->pdi_op.pi_hdl, &hdl,
 			      sizeof(hdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -1044,7 +1050,7 @@ ds_pool_disconnect_handler(dtp_rpc_t *rpc)
 		D_GOTO(out_lock, rc);
 	}
 
-	rc = pool_disconnect_bcast(rpc->dr_ctx, svc, pdi->pdi_op.pi_handle);
+	rc = pool_disconnect_bcast(rpc->dr_ctx, svc, pdi->pdi_op.pi_hdl);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
@@ -1056,7 +1062,7 @@ ds_pool_disconnect_handler(dtp_rpc_t *rpc)
 	nhandles--;
 
 	TX_BEGIN(svc->ps_mpool->mp_pmem) {
-		rc = dbtree_uv_delete(svc->ps_handles, pdi->pdi_op.pi_handle);
+		rc = dbtree_uv_delete(svc->ps_handles, pdi->pdi_op.pi_hdl);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -1076,6 +1082,7 @@ ds_pool_disconnect_handler(dtp_rpc_t *rpc)
 	/* For this pool handle. See ds_pool_connect_handler(). */
 	pool_svc_put(svc);
 
+	/* No need to set pdo->pdo_op.po_map_version. */
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	pool_svc_put(svc);
@@ -1083,6 +1090,57 @@ out:
 	pdo->pdo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, rc);
+	return dtp_reply_send(rpc);
+}
+
+int
+ds_pool_query_handler(dtp_rpc_t *rpc)
+{
+	struct pool_query_in   *in = dtp_req_get(rpc);
+	struct pool_query_out  *out = dtp_reply_get(rpc);
+	struct pool_svc	       *svc;
+	struct pool_hdl		hdl;
+	struct pool_attr	attr;
+	int			rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
+		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_UUID(in->pqi_op.pi_hdl));
+
+	rc = pool_svc_lookup(in->pqi_op.pi_uuid, &svc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	ABT_rwlock_rdlock(svc->ps_lock);
+
+	/* Verify the pool handle. */
+	rc = dbtree_uv_lookup(svc->ps_handles, in->pqi_op.pi_hdl, &hdl,
+			      sizeof(hdl));
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			rc = -DER_NO_PERM;
+		D_GOTO(out_lock, rc);
+	}
+
+	rc = pool_attr_read(svc, &attr);
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
+
+	out->pqo_mode = attr.pa_mode;
+
+	rc = transfer_map_buf(svc, rpc, in->pqi_map_bulk,
+			      &out->pqo_map_buf_size);
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
+
+out_map_version:
+	out->pqo_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	pool_svc_put(svc);
+out:
+	out->pqo_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->pqi_op.pi_uuid), rpc, rc);
 	return dtp_reply_send(rpc);
 }
 
@@ -1211,7 +1269,7 @@ ds_pool_exclude_handler(dtp_rpc_t *rpc)
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID
 		" ntargets=%u\n", DP_UUID(in->pei_op.pi_uuid), rpc,
-		DP_UUID(in->pei_op.pi_handle), in->pei_targets->rl_nr.num);
+		DP_UUID(in->pei_op.pi_hdl), in->pei_targets->rl_nr.num);
 
 	rc = pool_svc_lookup(in->pei_op.pi_uuid, &svc);
 	if (rc != 0)
@@ -1220,7 +1278,7 @@ ds_pool_exclude_handler(dtp_rpc_t *rpc)
 	ABT_rwlock_wrlock(svc->ps_lock);
 
 	/* Verify the pool handle. */
-	rc = dbtree_uv_lookup(svc->ps_handles, in->pei_op.pi_handle, &hdl,
+	rc = dbtree_uv_lookup(svc->ps_handles, in->pei_op.pi_hdl, &hdl,
 			      sizeof(hdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)

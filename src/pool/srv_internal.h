@@ -68,6 +68,7 @@ int ds_pool_svc_cache_init(void);
 void ds_pool_svc_cache_fini(void);
 int ds_pool_connect_handler(dtp_rpc_t *rpc);
 int ds_pool_disconnect_handler(dtp_rpc_t *rpc);
+int ds_pool_query_handler(dtp_rpc_t *rpc);
 int ds_pool_exclude_handler(dtp_rpc_t *rpc);
 
 /*

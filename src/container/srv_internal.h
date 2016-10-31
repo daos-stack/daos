@@ -55,12 +55,6 @@ dsm_tls_get()
  */
 
 /*
- * srv_pool.c
- */
-int dsms_hdlr_pool_connect(dtp_rpc_t *rpc);
-int dsms_hdlr_pool_disconnect(dtp_rpc_t *rpc);
-
-/*
  * srv_container.c
  */
 int dsms_hdlr_cont_create(dtp_rpc_t *rpc);

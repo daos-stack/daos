@@ -65,12 +65,11 @@ pool_free(struct daos_hlink *hlink)
 	struct dc_pool *pool;
 
 	pool = container_of(hlink, struct dc_pool, dp_hlink);
+	pthread_rwlock_destroy(&pool->dp_map_lock);
 	pthread_rwlock_destroy(&pool->dp_co_list_lock);
 	D_ASSERT(daos_list_empty(&pool->dp_co_list));
 	if (pool->dp_map != NULL)
 		pool_map_destroy(pool->dp_map);
-	if (pool->dp_map_buf != NULL)
-		pool_buf_free(pool->dp_map_buf);
 	D_FREE_PTR(pool);
 }
 
@@ -101,9 +100,114 @@ pool_alloc(void)
 
 	DAOS_INIT_LIST_HEAD(&pool->dp_co_list);
 	pthread_rwlock_init(&pool->dp_co_list_lock, NULL);
+	pthread_rwlock_init(&pool->dp_map_lock, NULL);
 	daos_hhash_hlink_init(&pool->dp_hlink, &pool_h_ops);
 
 	return pool;
+}
+
+static int
+map_bulk_create(dtp_context_t ctx, dtp_bulk_t *bulk, struct pool_buf **buf)
+{
+	daos_iov_t	iov;
+	daos_sg_list_t	sgl;
+	int		rc;
+
+	/* Use a fixed-size pool buffer until DER_TRUNCs are handled. */
+	*buf = pool_buf_alloc(128);
+	if (*buf == NULL)
+		return -DER_NOMEM;
+
+	daos_iov_set(&iov, *buf, pool_buf_size((*buf)->pb_nr));
+	sgl.sg_nr.num = 1;
+	sgl.sg_nr.num_out = 0;
+	sgl.sg_iovs = &iov;
+
+	rc = dtp_bulk_create(ctx, &sgl, DTP_BULK_RW, bulk);
+	if (rc != 0) {
+		pool_buf_free(*buf);
+		*buf = NULL;
+	}
+
+	return rc;
+}
+
+static void
+map_bulk_destroy(dtp_bulk_t bulk, struct pool_buf *buf)
+{
+	dtp_bulk_free(bulk);
+	pool_buf_free(buf);
+}
+
+/*
+ * Using "map_buf", "map_version", and "mode", update "pool->dp_map" and fill
+ * "tgts" and/or "info" if not NULL.
+ */
+static int
+process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
+		    uint32_t map_version, uint32_t mode, daos_rank_list_t *tgts,
+		    daos_pool_info_t *info)
+{
+	struct pool_map	       *map;
+	struct pool_map	       *map_tmp;
+	int			rc;
+
+	rc = pool_map_create(map_buf, map_version, &map);
+	if (rc != 0) {
+		D_ERROR("failed to create local pool map: %d\n", rc);
+		return rc;
+	}
+
+	pthread_rwlock_wrlock(&pool->dp_map_lock);
+
+	if (pool->dp_map == NULL ||
+	    map_version > pool_map_get_version(pool->dp_map)) {
+		D_DEBUG(DF_DSMC, DF_UUID": updating pool map: %u -> %u\n",
+			DP_UUID(pool->dp_pool),
+			pool->dp_map == NULL ?
+			0 : pool_map_get_version(pool->dp_map), map_version);
+		map_tmp = pool->dp_map;
+		pool->dp_map = map;
+		map = map_tmp;
+	} else if (map_version < pool_map_get_version(pool->dp_map)) {
+		D_DEBUG(DF_DSMC, DF_UUID": received older pool map: %u -> %u\n",
+			DP_UUID(pool->dp_pool),
+			pool_map_get_version(pool->dp_map), map_version);
+	}
+
+	if (map != NULL)
+		pool_map_destroy(map);
+
+	/* Scan all targets for info->pi_ndisabled and/or tgts. */
+	if (info != NULL || tgts != NULL) {
+		struct pool_target     *ts;
+		int			i;
+
+		if (info != NULL)
+			memset(info, 0, sizeof(*info));
+
+		rc = pool_map_find_target(pool->dp_map, PO_COMP_ID_ALL, &ts);
+		D_ASSERTF(rc > 0, "%d\n", rc);
+		for (i = 0; i < rc; i++) {
+			int status = ts[i].ta_comp.co_status;
+
+			if (info != NULL &&
+			    (status == PO_COMP_ST_DOWN ||
+			     status == PO_COMP_ST_DOWNOUT))
+				info->pi_ndisabled++;
+			/* TODO: Take care of tgts. */
+		}
+	}
+
+	pthread_rwlock_unlock(&pool->dp_map_lock);
+
+	if (info != NULL) {
+		uuid_copy(info->pi_uuid, pool->dp_pool);
+		info->pi_ntargets = map_buf->pb_target_nr;
+		info->pi_mode = mode;
+	}
+
+	return 0;
 }
 
 struct pool_connect_arg {
@@ -141,15 +245,13 @@ pool_connect_cp(void *data, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	rc = pool_map_create(map_buf, pco->pco_op.po_map_version,
-			     &pool->dp_map);
+	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
+				 pco->pco_mode, NULL /* tgts */, info);
 	if (rc != 0) {
 		/* TODO: What do we do about the remote connection state? */
 		D_ERROR("failed to create local pool map: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-
-	pool->dp_map_buf = map_buf;
 
 	/* add pool to hash */
 	dsmc_pool_add_cache(pool, sp->sp_hdlp);
@@ -158,21 +260,10 @@ pool_connect_cp(void *data, daos_event_t *ev, int rc)
 		" master\n", DP_UUID(pool->dp_pool), sp->sp_hdlp->cookie,
 		DP_UUID(pool->dp_pool_hdl));
 
-	if (info == NULL)
-		D_GOTO(out, rc = 0);
-
-	uuid_copy(info->pi_uuid, pool->dp_pool);
-	info->pi_ntargets = map_buf->pb_target_nr;
-	info->pi_ndisabled = 0;
-	info->pi_mode = pco->pco_mode;
-	info->pi_space.foo = 0;
-
 out:
-	dtp_bulk_free(pci->pci_map_bulk);
 	dtp_req_decref(sp->sp_rpc);
 	D_FREE_PTR(arg);
-	if (rc)
-		pool_buf_free(map_buf);
+	map_bulk_destroy(pci->pci_map_bulk, map_buf);
 	dc_pool_put(pool);
 	return rc;
 }
@@ -189,8 +280,6 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 	struct daos_op_sp	*sp;
 	struct pool_connect_arg	*arg;
 	struct pool_buf		*map_buf;
-	daos_iov_t		 map_iov;
-	daos_sg_list_t		 map_sgl;
 	int			 rc;
 
 	/* TODO: Implement these. */
@@ -217,27 +306,6 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 	D_DEBUG(DF_DSMC, DF_UUID": connecting: hdl="DF_UUIDF" flags=%x\n",
 		DP_UUID(uuid), DP_UUID(pool->dp_pool_hdl), flags);
 
-	/* Prepare "map_sgl" for dtp_bulk_create(). */
-	map_buf = pool_buf_alloc(128);
-	if (map_buf == NULL)
-		D_GOTO(out_pool, rc = -DER_NOMEM);
-
-	map_iov.iov_buf = map_buf;
-	map_iov.iov_buf_len = pool_buf_size(map_buf->pb_nr);
-	map_iov.iov_len = 0;
-	map_sgl.sg_nr.num = 1;
-	map_sgl.sg_nr.num_out = 0;
-	map_sgl.sg_iovs = &map_iov;
-
-	/* Prepare "arg" for pool_connect_cp(). */
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(out_map_buf, rc = -DER_NOMEM);
-
-	arg->pca_pool = pool;
-	arg->pca_info = info;
-	arg->pca_map_buf = map_buf;
-
 	/*
 	 * Currently, rank 0 runs the pool and the (only) container service.
 	 * ep.ep_grp_id and ep.ep_tag are not used at the moment.
@@ -249,21 +317,29 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 	rc = pool_req_create(daos_ev2ctx(ev), ep, POOL_CONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
-		D_GOTO(out_arg, rc);
+		D_GOTO(out_pool, rc);
 	}
 
 	/** fill in request buffer */
 	pci = dtp_req_get(rpc);
 	uuid_copy(pci->pci_op.pi_uuid, uuid);
-	uuid_copy(pci->pci_op.pi_handle, pool->dp_pool_hdl);
+	uuid_copy(pci->pci_op.pi_hdl, pool->dp_pool_hdl);
 	pci->pci_uid = geteuid();
 	pci->pci_gid = getegid();
 	pci->pci_capas = flags;
 
-	rc = dtp_bulk_create(daos_ev2ctx(ev), &map_sgl, DTP_BULK_RW,
-			     &pci->pci_map_bulk);
+	rc = map_bulk_create(daos_ev2ctx(ev), &pci->pci_map_bulk, &map_buf);
 	if (rc != 0)
 		D_GOTO(out_req, rc);
+
+	/* Prepare "arg" for pool_connect_cp(). */
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		D_GOTO(out_bulk, rc = -DER_NOMEM);
+
+	arg->pca_pool = pool;
+	arg->pca_info = info;
+	arg->pca_map_buf = map_buf;
 
 	/** fill in scratchpad associated with the event */
 	sp = daos_ev2sp(ev);
@@ -274,29 +350,28 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 
 	rc = daos_event_register_comp_cb(ev, pool_connect_cp, sp);
 	if (rc != 0)
-		D_GOTO(out_bulk, rc);
+		D_GOTO(out_sp, rc);
+
 	/**
 	 * mark event as in-flight, must be called before sending the request
 	 * since it can race with the request callback execution
 	 */
 	rc = daos_event_launch(ev);
 	if (rc)
-		D_GOTO(out_bulk, rc);
+		D_GOTO(out_sp, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, ev);
 
 	return rc;
 
-out_bulk:
-	dtp_bulk_free(pci->pci_map_bulk);
-out_req:
-	dtp_req_decref(rpc); /* scratchpad */
-	dtp_req_decref(rpc); /* free req */
-out_arg:
+out_sp:
+	dtp_req_decref(sp->sp_rpc);
 	D_FREE_PTR(arg);
-out_map_buf:
-	pool_buf_free(map_buf);
+out_bulk:
+	map_bulk_destroy(pci->pci_map_bulk, map_buf);
+out_req:
+	dtp_req_decref(rpc);
 out_pool:
 	dc_pool_put(pool);
 	return rc;
@@ -393,7 +468,7 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	pdi = dtp_req_get(rpc);
 	D_ASSERT(pdi != NULL);
 	uuid_copy(pdi->pdi_op.pi_uuid, pool->dp_pool);
-	uuid_copy(pdi->pdi_op.pi_handle, pool->dp_pool_hdl);
+	uuid_copy(pdi->pdi_op.pi_hdl, pool->dp_pool_hdl);
 
 	/** fill in scratchpad associated with the event */
 	sp = daos_ev2sp(ev);
@@ -467,6 +542,8 @@ static int
 dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 {
 	struct dc_pool		*pool;
+	struct pool_buf		*map_buf;
+	uint32_t		 map_version;
 	struct dsmc_pool_glob	*pool_glob;
 	daos_size_t		 glob_buf_size;
 	uint32_t		 pb_nr;
@@ -478,22 +555,27 @@ dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	pb_nr = pool->dp_map_buf->pb_nr;
+	pthread_rwlock_rdlock(&pool->dp_map_lock);
+	map_version = pool_map_get_version(pool->dp_map);
+	rc = pool_buf_extract(pool->dp_map, &map_buf);
+	pthread_rwlock_unlock(&pool->dp_map_lock);
+	if (rc != 0)
+		D_GOTO(out_pool, rc);
+
+	pb_nr = map_buf->pb_nr;
 	glob_buf_size = dsmc_pool_glob_buf_size(pb_nr);
 	if (glob->iov_buf == NULL) {
 		glob->iov_buf_len = glob_buf_size;
-		D_GOTO(out_pool, rc = 0);
+		D_GOTO(out_map_buf, rc = 0);
 	}
 	if (glob->iov_buf_len < glob_buf_size) {
 		D_ERROR("Larger glob buffer needed ("DF_U64" bytes provided, "
 			""DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;
-		D_GOTO(out_pool, rc = -DER_TRUNC);
+		D_GOTO(out_map_buf, rc = -DER_TRUNC);
 	}
 	glob->iov_len = glob_buf_size;
-
-	/* TODO: possible pool map changing during the l2g? */
 
 	/* init pool global handle */
 	pool_glob = (struct dsmc_pool_glob *)glob->iov_buf;
@@ -501,10 +583,12 @@ dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
 	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
 	pool_glob->dpg_capas = pool->dp_capas;
-	pool_glob->dpg_map_version = pool_map_get_version(pool->dp_map);
+	pool_glob->dpg_map_version = map_version;
 	pool_glob->dpg_map_pb_nr = pb_nr;
-	memcpy(pool_glob->dpg_map_buf, pool->dp_map_buf, pool_buf_size(pb_nr));
+	memcpy(pool_glob->dpg_map_buf, map_buf, pool_buf_size(pb_nr));
 
+out_map_buf:
+	pool_buf_free(map_buf);
 out_pool:
 	dc_pool_put(pool);
 out:
@@ -570,11 +654,6 @@ dsmc_pool_g2l(struct dsmc_pool_glob *pool_glob, daos_handle_t *poh)
 		D_ERROR("failed to create local pool map: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	pool->dp_map_buf = pool_buf_dup(map_buf);
-	if (pool->dp_map_buf == NULL) {
-		D_ERROR("pool_buf_dup failed.\n");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
 
 	/* add pool to hash */
 	dsmc_pool_add_cache(pool, poh);
@@ -584,11 +663,8 @@ dsmc_pool_g2l(struct dsmc_pool_glob *pool_glob, daos_handle_t *poh)
 		DP_UUID(pool->dp_pool_hdl));
 
 out:
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("dsmc_pool_g2l failed, rc: %d.\n", rc);
-		/* in error case have not set pool->dp_map_buf */
-		pool_buf_free(map_buf);
-	}
 	if (pool != NULL)
 		dc_pool_put(pool);
 	return rc;
@@ -699,7 +775,7 @@ daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
 
 	in = dtp_req_get(rpc);
 	uuid_copy(in->pei_op.pi_uuid, pool->dp_pool);
-	uuid_copy(in->pei_op.pi_handle, pool->dp_pool_hdl);
+	uuid_copy(in->pei_op.pi_hdl, pool->dp_pool_hdl);
 	in->pei_targets = tgts;
 
 	sp = daos_ev2sp(ev);
@@ -721,6 +797,176 @@ err_rpc:
 	dtp_req_decref(sp->sp_rpc);
 	dtp_req_decref(rpc);
 err_pool:
+	dc_pool_put(pool);
+	return rc;
+}
+
+struct dc_pool_query_arg {
+	struct dc_pool	       *dqa_pool;
+	daos_rank_list_t       *dqa_tgts;
+	daos_pool_info_t       *dqa_info;
+	struct pool_buf	       *dqa_map_buf;
+	dc_pool_query_cb_t	dqa_cb;
+	void		       *dqa_cb_arg;
+};
+
+static int
+dc_pool_query_cb(const struct dtp_cb_info *cb_info)
+{
+	struct dc_pool_query_arg       *arg = cb_info->dci_arg;
+	struct pool_query_in	       *in = dtp_req_get(cb_info->dci_rpc);
+	struct pool_query_out	       *out = dtp_reply_get(cb_info->dci_rpc);
+	int				rc = cb_info->dci_rc;
+
+	D_DEBUG(DF_DSMC, DF_UUID": query rpc done: %d\n",
+		DP_UUID(arg->dqa_pool->dp_pool), rc);
+
+	/* TODO: Upon -DER_TRUNC, reallocate a larger buffer and retry. */
+	if (rc == -DER_TRUNC)
+		D_ERROR(DF_UUID": pool buffer too small: %d\n",
+			DP_UUID(arg->dqa_pool->dp_pool), rc);
+
+	if (rc == 0)
+		rc = process_query_reply(arg->dqa_pool, arg->dqa_map_buf,
+					 out->pqo_op.po_map_version,
+					 out->pqo_mode, arg->dqa_tgts,
+					 arg->dqa_info);
+
+	arg->dqa_cb(arg->dqa_pool, arg->dqa_cb_arg, rc, arg->dqa_tgts,
+		    arg->dqa_info);
+
+	dc_pool_put(arg->dqa_pool);
+	map_bulk_destroy(in->pqi_map_bulk, arg->dqa_map_buf);
+	D_FREE_PTR(arg);
+	return 0;
+}
+
+/**
+ * Query the latest pool information (i.e., mainly the pool map). This is meant
+ * to be an "uneventful" interface; callers wishing to play with events shall
+ * do so with \a cb and \a cb_arg.
+ *
+ * \param[in]	pool	pool handle object
+ * \param[in]	ctx	RPC context
+ * \param[out]	tgts	if not NULL, pool target ranks returned on success
+ * \param[out]	info	if not NULL, pool information returned on success
+ * \param[in]	cb	callback called only on success
+ * \param[in]	cb_arg	argument passed to \a cb
+ * \return		zero or error
+ *
+ * TODO: Avoid redundant POOL_QUERY RPCs triggered by multiple
+ * threads/operations.
+ */
+int
+dc_pool_query(struct dc_pool *pool, dtp_context_t ctx, daos_rank_list_t *tgts,
+	      daos_pool_info_t *info, dc_pool_query_cb_t cb, void *cb_arg)
+{
+	dtp_endpoint_t			ep;
+	dtp_rpc_t		       *rpc;
+	struct pool_query_in	       *in;
+	struct pool_buf		       *map_buf;
+	struct dc_pool_query_arg       *arg;
+	int				rc;
+
+	D_ASSERT(tgts == NULL); /* TODO */
+
+	D_DEBUG(DF_DSMC, DF_UUID": querying: hdl="DF_UUID" tgts=%p info=%p\n",
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl), tgts, info);
+
+	ep.ep_grp = NULL;
+	ep.ep_rank = 0;
+	ep.ep_tag = 0;
+
+	rc = pool_req_create(ctx, ep, POOL_QUERY, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool query rpc: %d\n",
+			DP_UUID(pool->dp_pool), rc);
+		D_GOTO(err, rc);
+	}
+
+	in = dtp_req_get(rpc);
+	uuid_copy(in->pqi_op.pi_uuid, pool->dp_pool);
+	uuid_copy(in->pqi_op.pi_hdl, pool->dp_pool_hdl);
+
+	rc = map_bulk_create(ctx, &in->pqi_map_bulk, &map_buf);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		D_GOTO(err_bulk, rc = -DER_NOMEM);
+
+	dc_pool_get(pool);
+	arg->dqa_pool = pool;
+	arg->dqa_info = info;
+	arg->dqa_map_buf = map_buf;
+	arg->dqa_cb = cb;
+	arg->dqa_cb_arg = cb_arg;
+
+	rc = dtp_req_send(rpc, dc_pool_query_cb, arg);
+	if (rc != 0)
+		D_GOTO(err_pool, rc);
+
+	return 0;
+
+err_pool:
+	dc_pool_put(pool);
+	D_FREE_PTR(arg);
+err_bulk:
+	map_bulk_destroy(in->pqi_map_bulk, map_buf);
+err_rpc:
+	dtp_req_decref(rpc);
+err:
+	return rc;
+}
+
+static void
+pool_query_cp(struct dc_pool *pool, void *arg, int rc, daos_rank_list_t *tgts,
+	      daos_pool_info_t *info)
+{
+	D_DEBUG(DF_DSMC, DF_UUID": queried: hdl="DF_UUID" rc=%d\n",
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl), rc);
+	daos_event_complete(arg, rc);
+}
+
+int
+daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
+		daos_pool_info_t *info, daos_event_t *ev)
+{
+	struct dc_pool *pool;
+	int		rc;
+
+	if (tgts == NULL && info == NULL)
+		return -DER_INVAL;
+
+	pool = dc_pool_lookup(poh);
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	D_DEBUG(DF_DSMC, DF_UUID": querying: hdl="DF_UUID"\n",
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			D_GOTO(out_pool, rc);
+	}
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out_pool, rc);
+
+	rc = dc_pool_query(pool, daos_ev2ctx(ev), tgts, info, pool_query_cp,
+			   ev);
+	if (rc != 0) {
+		daos_event_complete(ev, rc);
+		rc = 0;
+	}
+
+	if (daos_event_is_priv(ev))
+		rc = daos_event_priv_wait(ev);
+
+out_pool:
 	dc_pool_put(pool);
 	return rc;
 }

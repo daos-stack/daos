@@ -88,6 +88,23 @@ pool_connect(void **state)
 		assert_int_equal(info.pi_ndisabled, 0);
 		assert_int_equal(info.pi_mode, arg->mode);
 		print_message("success\n");
+
+		print_message("rank 0 querying pool info... ");
+		memset(&info, 'D', sizeof(info));
+		rc = daos_pool_query(poh, NULL /* tgts */, &info,
+				     arg->async ? &ev : NULL /* ev */);
+		assert_int_equal(rc, 0);
+
+		if (arg->async) {
+			/** wait for pool query */
+			rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+			assert_int_equal(rc, 1);
+			assert_ptr_equal(evp, &ev);
+			assert_int_equal(ev.ev_error, 0);
+		}
+
+		assert_int_equal(info.pi_ndisabled, 0);
+		print_message("success\n");
 	}
 
 	if (arg->hdl_share)
@@ -179,6 +196,23 @@ pool_exclude(void **state)
 
 	print_message("success\n");
 
+	print_message("rank 0 querying pool info... ");
+	memset(&info, 'D', sizeof(info));
+	rc = daos_pool_query(poh, NULL /* tgts */, &info,
+			     arg->async ? &ev : NULL /* ev */);
+	assert_int_equal(rc, 0);
+
+	if (arg->async) {
+		/** wait for pool query */
+		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+		assert_int_equal(rc, 1);
+		assert_ptr_equal(evp, &ev);
+		assert_int_equal(ev.ev_error, 0);
+	}
+
+	assert_int_equal(info.pi_ndisabled, 1);
+	print_message("success\n");
+
 disconnect:
 	/** disconnect from pool */
 	print_message("rank %d disconnecting from pool %ssynchronously ... ",
@@ -211,7 +245,7 @@ static const struct CMUnitTest pool_tests[] = {
 	{ "DSM4: pool handle local2global and global2local",
 	  pool_connect, hdl_share_enable, NULL},
 	/* Keep this one at the end, as it excludes target rank 1. */
-	{ "DSM5: exclude targets",
+	{ "DSM5: exclude targets and query pool info",
 	  pool_exclude, async_disable, NULL}
 };
 

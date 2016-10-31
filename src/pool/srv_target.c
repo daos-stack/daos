@@ -440,20 +440,20 @@ ds_pool_tgt_connect_handler(dtp_rpc_t *rpc)
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
-		DP_UUID(in->tci_uuid), rpc, DP_UUID(in->tci_handle));
+		DP_UUID(in->tci_uuid), rpc, DP_UUID(in->tci_hdl));
 
-	hdl = ds_pool_hdl_lookup(in->tci_handle);
+	hdl = ds_pool_hdl_lookup(in->tci_hdl);
 	if (hdl != NULL) {
 		if (hdl->sph_capas == in->tci_capas) {
 			D_DEBUG(DF_DSMS, DF_UUID": found compatible pool "
 				"handle: hdl="DF_UUID" capas="DF_U64"\n",
-				DP_UUID(in->tci_uuid), DP_UUID(in->tci_handle),
+				DP_UUID(in->tci_uuid), DP_UUID(in->tci_hdl),
 				hdl->sph_capas);
 			rc = 0;
 		} else {
 			D_ERROR(DF_UUID": found conflicting pool handle: hdl="
 				DF_UUID" capas="DF_U64"\n",
-				DP_UUID(in->tci_uuid), DP_UUID(in->tci_handle),
+				DP_UUID(in->tci_uuid), DP_UUID(in->tci_hdl),
 				hdl->sph_capas);
 			rc = -DER_EXIST;
 		}
@@ -475,7 +475,7 @@ ds_pool_tgt_connect_handler(dtp_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	uuid_copy(hdl->sph_uuid, in->tci_handle);
+	uuid_copy(hdl->sph_uuid, in->tci_hdl);
 	hdl->sph_capas = in->tci_capas;
 	hdl->sph_pool = pool;
 
@@ -511,12 +511,12 @@ ds_pool_tgt_disconnect_handler(dtp_rpc_t *rpc)
 	int				rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
-		DP_UUID(in->tdi_uuid), rpc, DP_UUID(in->tdi_handle));
+		DP_UUID(in->tdi_uuid), rpc, DP_UUID(in->tdi_hdl));
 
-	hdl = ds_pool_hdl_lookup(in->tdi_handle);
+	hdl = ds_pool_hdl_lookup(in->tdi_hdl);
 	if (hdl == NULL) {
 		D_DEBUG(DF_DSMS, DF_UUID": handle "DF_UUID" does not exist\n",
-			DP_UUID(in->tdi_uuid), DP_UUID(in->tdi_handle));
+			DP_UUID(in->tdi_uuid), DP_UUID(in->tdi_hdl));
 		D_GOTO(out, rc = 0);
 	}
 

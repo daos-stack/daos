@@ -973,6 +973,12 @@ daos_hhash_link_delete(struct daos_hhash *hhtab, struct daos_hlink *hlink)
 }
 
 void
+daos_hhash_link_getref(struct daos_hhash *hhtab, struct daos_hlink *hlink)
+{
+	dhash_rec_addref(&hhtab->dh_htable, &hlink->hl_link.rl_link);
+}
+
+void
 daos_hhash_link_putref(struct daos_hhash *hhtab, struct daos_hlink *hlink)
 {
 	dhash_rec_decref(&hhtab->dh_htable, &hlink->hl_link.rl_link);

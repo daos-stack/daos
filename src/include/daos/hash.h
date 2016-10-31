@@ -242,6 +242,7 @@ void daos_hhash_link_insert(struct daos_hhash *hhash,
 			    struct daos_hlink *hlink, int type);
 struct daos_hlink *daos_hhash_link_lookup(struct daos_hhash *hhash,
 					  uint64_t key);
+void daos_hhash_link_getref(struct daos_hhash *hhtab, struct daos_hlink *hlink);
 void daos_hhash_link_putref(struct daos_hhash *hhash, struct daos_hlink *hlink);
 bool daos_hhash_link_delete(struct daos_hhash *hhash, struct daos_hlink *hlink);
 bool daos_hhash_link_empty(struct daos_hlink *hlink);
