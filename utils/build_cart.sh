@@ -44,4 +44,4 @@ if [ ! -d "scons_local" ];then
   cd ..
 fi
 
-scons_local/comp_build.sh -c utils/build.config utils/run_test.sh
+scons_local/utils/comp_build.sh -c utils/build.config utils/run_test.sh

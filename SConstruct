@@ -62,7 +62,25 @@ def save_build_info(env, prereqs, platform):
     env.InstallAs('$PREFIX/TESTING/.build_vars.sh', sh_build_vars)
     env.InstallAs('$PREFIX/TESTING/.build_vars.json', json_build_vars)
 
-    env.InstallAs('$PREFIX/etc/cci.ini', 'utils/cci/cci.ini')
+    with open("cci.ini", "w") as ini_file:
+        job_id = 1 + int(os.environ.get("BUILD_NUMBER", 0))
+        port = 11000 + ((job_id * 50) % 6000)
+        ini_file.write("""[server_tcp]
+transport = tcp
+interface = eth0
+port = %d
+priority = 10
+mtu = 9000
+
+[server_ib]
+transport = verbs
+interface = ib0
+port = %d
+priority = 10
+""" % (port, port + 8000))
+        ini_file.close()
+
+    env.InstallAs('$PREFIX/etc/cci.ini', 'cci.ini')
 
 def scons():
     """Scons function"""
