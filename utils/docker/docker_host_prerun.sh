@@ -57,6 +57,9 @@ if [ $? == 0 ]; then
   printf "export https_proxy=\"https://${proxy_host}:912\"\n" >> \
     ${docker_setup_file}
 fi
+# Export the build number
+printf "export BUILD_NUMBER=${BUILD_NUMBER}\n" >> \
+    ${docker_setup_file}
 set -e
 chmod 755 ${docker_setup_file}
 
