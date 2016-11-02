@@ -442,7 +442,7 @@ daos_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
 		 daos_event_t *ev);
 
 /**
- * Propose a new lowest held epoch (LHE) on a container handle. The resulting
+ * Propose a new lowest held epoch (LHE) of a container handle. The resulting
  * LHE may be higher than the one proposed. The owner of the container handle
  * is responsible for releasing its held epochs by either committing them or
  * setting LHE to DAOS_EPOCH_MAX.
@@ -493,10 +493,11 @@ daos_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
 		  daos_epoch_state_t *state, daos_event_t *ev);
 
 /**
- * Wait for an epoch to be committed.
+ * Wait for an epoch to be committed. This function is typically used by a
+ * consumer application waiting for the producer to commit a specific epoch.
  *
  * \param coh	[IN]	container handle
- * \param epoch	[IN]	epoch to commit
+ * \param epoch	[IN]	epoch to wait on
  * \param state	[OUT]	Optional, latest epoch state
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
