@@ -45,6 +45,8 @@ class CpprDaemonRunner:
         self.info.set_config('setKeyFromConfig', "CPPR_PREFIX",
                              os.path.join(w_path, "local"))
         g_path = os.path.join(os.path.expanduser("~/"), "tmp")
+        self.info.set_config('setKeyFromConfig', "GLOBAL_PATH",
+                             os.path.join(g_path, "global"))
         if not os.path.exists(w_path):
             os.makedirs(w_path)
         if not os.path.exists(g_path):
