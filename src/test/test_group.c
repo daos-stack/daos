@@ -43,7 +43,7 @@ int echo_checkin_handler(crt_rpc_t *rpc_req)
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
-	C_ASSERT(e_req != NULL);
+	C_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
 	printf("tier1 echo_srver recv'd checkin, opc: 0x%x.\n",
 		rpc_req->cr_opc);
@@ -51,11 +51,13 @@ int echo_checkin_handler(crt_rpc_t *rpc_req)
 		e_req->age, e_req->name, e_req->days);
 
 	e_reply = crt_reply_get(rpc_req);
-	C_ASSERT(e_reply != NULL);
+	C_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
+		  e_reply);
 	e_reply->ret = 0;
 	e_reply->room_no = g_roomno++;
 
 	rc = crt_reply_send(rpc_req);
+	C_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
 	printf("tier1 echo_srver sent checkin reply, ret: %d, room_no: %d.\n",
 	       e_reply->ret, e_reply->room_no);
@@ -146,8 +148,8 @@ int echo_shutdown_handler(crt_rpc_t *rpc_req)
 	printf("tier1 echo_srver received shutdown request, opc: 0x%x.\n",
 	       rpc_req->cr_opc);
 
-	assert(rpc_req->cr_input == NULL);
-	assert(rpc_req->cr_output == NULL);
+	C_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
+	C_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
 	rc = crt_reply_send(rpc_req);
 	printf("tier1 echo_srver done issuing shutdown responses.\n");
@@ -230,36 +232,40 @@ int main(int argc, char **argv)
 	flag = is_service ? CRT_FLAG_BIT_SERVER : 0;
 	if (is_service) {
 		rc = crt_init(NULL, name_of_group, flag);
-		assert(rc == 0);
+		C_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 	} else {
 		rc = crt_init(name_of_group, name_of_target_group, flag);
-		assert(rc == 0);
+		C_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 	}
 
 	rc = crt_group_rank(NULL, &myrank);
-	assert(rc == 0);
+	C_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 
 	rc = crt_context_create(NULL, &crt_ctx);
-	assert(rc == 0);
+	C_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 	/* register RPCs */
 	if (is_service) {
 		rc = crt_rpc_srv_register(ECHO_OPC_CHECKIN,
 				&CQF_ECHO_PING_CHECK, echo_checkin_handler);
-		assert(rc == 0);
+		C_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
+			  rc);
 		rc = crt_rpc_srv_register(ECHO_OPC_SHUTDOWN, NULL,
 				echo_shutdown_handler);
+		C_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
+			  rc);
 		rc = pthread_create(&tid, NULL, progress_thread, crt_ctx);
-		assert(rc == 0);
+		C_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
 	} else {
 		rc = crt_rpc_register(ECHO_OPC_CHECKIN, &CQF_ECHO_PING_CHECK);
-		assert(rc == 0);
+		C_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
 		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, NULL);
-		assert(rc == 0);
+		C_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
 	}
 	fprintf(stderr, "name_of_target_group %s\n", name_of_target_group);
 	if (should_attach) {
 		target_group = crt_group_lookup(name_of_target_group);
-		assert(target_group != NULL);
+		C_ASSERTF(target_group != NULL, "crt_group_lookup() failed. "
+			  "target_group = %p\n", target_group);
 		crt_group_size(target_group, &target_group_size);
 		fprintf(stderr, "size of %s is %d\n", name_of_target_group,
 				target_group_size);
@@ -269,11 +275,16 @@ int main(int argc, char **argv)
 			server_ep.ep_tag = 0;
 			rc = crt_req_create(crt_ctx, server_ep,
 					ECHO_OPC_CHECKIN, &rpc_req);
-			assert(rc == 0 && rpc_req != NULL);
+			C_ASSERTF(rc == 0 && rpc_req != NULL,
+				  "crt_req_create() failed, "
+				  "rc: %d rpc_req: %p\n",
+				  rc, rpc_req);
+
 			rpc_req_input = crt_req_get(rpc_req);
-			assert(rpc_req_input != NULL);
+			C_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
+				  " rpc_req_input: %p\n", rpc_req_input);
 			C_ALLOC(buffer, 256);
-			assert(buffer != NULL);
+			C_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
 			snprintf(buffer,  256, "Guest %d", myrank);
 			rpc_req_input->name = buffer;
 			rpc_req_input->age = 21;
@@ -285,10 +296,12 @@ int main(int argc, char **argv)
 			complete = 0;
 			/* send an rpc, print out reply */
 			rc = crt_req_send(rpc_req, client_cb_common, &complete);
-			assert(rc == 0);
+			C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
+				  rc);
 			/* wait for reply */
 			rc = client_wait(crt_ctx, 120, 1000, &complete);
-			assert(rc == 0);
+			C_ASSERTF(rc == 0, "client_wait() failed. rc: %d\n",
+				  rc);
 			C_FREE(buffer, 256);
 		}
 	}
@@ -304,18 +317,22 @@ int main(int argc, char **argv)
 			server_ep.ep_rank = ii;
 			rc = crt_req_create(crt_ctx, server_ep,
 					ECHO_OPC_SHUTDOWN, &rpc_req);
-			assert(rc == 0 && rpc_req != NULL);
+			C_ASSERTF(rc == 0 && rpc_req != NULL,
+				  "crt_req_create() failed. "
+				  "rc: %d, rpc_req: %p\n", rc, rpc_req);
 			complete = 0;
 			rc = crt_req_send(rpc_req, client_cb_common, &complete);
-			assert(rc == 0);
+			C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
+				  rc);
 			rc = client_wait(crt_ctx, 120, 1000, &complete);
-			assert(rc == 0);
+			C_ASSERTF(rc == 0, "client_wait() failed. rc: %d\n",
+				  rc);
 		}
 	}
 	rc = crt_context_destroy(crt_ctx, 0);
-	assert(rc == 0);
+	C_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
 	rc = crt_finalize();
-	assert(rc == 0);
+	C_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
 	return rc;
 }
