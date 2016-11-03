@@ -429,6 +429,34 @@ crt_grp_lookup_locked(crt_group_id_t grp_id)
 	return (found == true) ? grp_priv : NULL;
 }
 
+/* lookup by internal subgrp id */
+static inline struct crt_grp_priv *
+crt_grp_lookup_int_grpid_locked(uint64_t int_grpid)
+{
+	struct crt_grp_priv	*grp_priv;
+	bool			found = false;
+
+	crt_list_for_each_entry(grp_priv, &crt_grp_list, gp_link) {
+		if (grp_priv->gp_int_grpid == int_grpid) {
+			found = true;
+			break;
+		}
+	}
+	return (found == true) ? grp_priv : NULL;
+}
+
+struct crt_grp_priv *
+crt_grp_lookup_int_grpid(uint64_t int_grpid)
+{
+	struct crt_grp_priv	*grp_priv;
+
+	pthread_rwlock_rdlock(&crt_grp_list_rwlock);
+	grp_priv = crt_grp_lookup_int_grpid_locked(int_grpid);
+	pthread_rwlock_unlock(&crt_grp_list_rwlock);
+
+	return grp_priv;
+}
+
 static inline void
 crt_grp_insert_locked(struct crt_grp_priv *grp_priv)
 {
@@ -482,7 +510,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 	grp_priv->gp_priv = priv;
 
 	if (!primary_grp) {
-		crt_rank_list_sort(grp_priv->gp_membs);
+		C_ASSERT(grp_priv->gp_membs != NULL);
 		grp_priv->gp_parent_rpc = NULL;
 		/* TODO tree children num */
 		grp_priv->gp_child_num = membs->rl_nr.num;
@@ -620,43 +648,72 @@ crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 	struct crt_grp_priv		*grp_priv = NULL;
 	struct crt_grp_create_in	*gc_in;
 	struct crt_grp_create_out	*gc_out;
-	crt_rank_t			my_rank;
-	int				rc = 0;
+	crt_rank_t			 pri_rank;
+	int				 rc = 0;
 
 	C_ASSERT(rpc_req != NULL);
 	gc_in = crt_req_get(rpc_req);
 	gc_out = crt_reply_get(rpc_req);
 	C_ASSERT(gc_in != NULL && gc_out != NULL);
 
+	rc = crt_group_rank(NULL, &pri_rank);
+	C_ASSERT(rc == 0);
+
+	/*
+	 * the grp_priv->gp_membs will be duplicated from gc_membs and sorted
+	 * unique after returns succeed. (crt_rank_list_dup_sort_uniq).
+	 */
 	rc = crt_grp_lookup_create(gc_in->gc_grp_id, gc_in->gc_membs,
 				   NULL /* grp_create_cb */, NULL /* priv */,
 				   &grp_priv);
 	if (rc == 0) {
+		C_ASSERT(grp_priv != NULL);
 		grp_priv->gp_status = CRT_GRP_NORMAL;
 		grp_priv->gp_ctx = rpc_req->cr_ctx;
-		C_GOTO(out, rc);
-	}
-	if (rc == -CER_EXIST) {
-		rc = crt_group_rank(NULL, &my_rank);
-		C_ASSERT(rc == 0);
-		if (my_rank == gc_in->gc_initiate_rank &&
+		grp_priv->gp_int_grpid = gc_in->gc_int_grpid;
+	} else if (rc == -CER_EXIST) {
+		C_ASSERT(grp_priv != NULL);
+		if (pri_rank == gc_in->gc_initiate_rank &&
 		    grp_priv->gp_status == CRT_GRP_CREATING) {
 			grp_priv->gp_status = CRT_GRP_NORMAL;
 			grp_priv->gp_ctx = rpc_req->cr_ctx;
 			rc = 0;
+		} else {
+			C_ERROR("crt_grp_lookup_create (%s) failed, existed.\n",
+				gc_in->gc_grp_id);
+			C_GOTO(out, rc);
 		}
 	} else {
-		C_ERROR("crt_grp_lookup_create failed, rc: %d.\n", rc);
+		C_ERROR("crt_grp_lookup_create (%s) failed, rc: %d.\n",
+			gc_in->gc_grp_id, rc);
 		C_GOTO(out, rc);
 	}
 
+	/* assign the size and logical rank number for the subgrp */
+	C_ASSERT(grp_priv->gp_membs != NULL &&
+		 grp_priv->gp_membs->rl_nr.num > 0 &&
+		 grp_priv->gp_membs->rl_ranks != NULL);
+	grp_priv->gp_size = grp_priv->gp_membs->rl_nr.num;
+	rc = crt_idx_in_rank_list(grp_priv->gp_membs, pri_rank,
+				  &grp_priv->gp_self, true /* input */);
+	if (rc != 0) {
+		C_ERROR("crt_idx_in_rank_list(rank %d, group %s) failed, "
+			"rc: %d.\n", pri_rank, gc_in->gc_grp_id, rc);
+		rc = -CER_OOG;
+	}
+
 out:
-	crt_group_rank(NULL, &gc_out->gc_rank);
+	gc_out->gc_rank = pri_rank;
 	gc_out->gc_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
 		C_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_req->cr_opc);
+	else if (gc_out->gc_rc == 0)
+		C_DEBUG("pri_rank %d created subgrp (%s), internal group id 0x"
+			CF_X64", gp_size %d, gp_self %d.\n", pri_rank,
+			grp_priv->gp_pub.cg_grpid, grp_priv->gp_int_grpid,
+			grp_priv->gp_size, grp_priv->gp_self);
 	return rc;
 }
 
@@ -721,10 +778,11 @@ crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 		 bool populate_now, crt_grp_create_cb_t grp_create_cb,
 		 void *priv)
 {
-	crt_context_t		crt_ctx;
+	crt_context_t		 crt_ctx;
 	struct crt_grp_priv	*grp_priv = NULL;
 	bool			 gc_req_sent = false;
 	crt_rank_t		 myrank;
+	uint32_t		 grp_size;
 	bool			 in_grp = false;
 	int			 i;
 	int			 rc = 0;
@@ -748,10 +806,16 @@ crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 	crt_group_rank(NULL, &myrank);
+	crt_group_size(NULL, &grp_size);
 	for (i = 0; i < member_ranks->rl_nr.num; i++) {
+		if (member_ranks->rl_ranks[i] >= grp_size) {
+			C_ERROR("invalid arg, member_ranks[%d]: %d exceed "
+				"primary group size %d.\n",
+				i, member_ranks->rl_ranks[i], grp_size);
+			C_GOTO(out, rc = -CER_INVAL);
+		}
 		if (member_ranks->rl_ranks[i] == myrank) {
 			in_grp = true;
-			break;
 		}
 	}
 	if (in_grp == false) {
@@ -771,6 +835,7 @@ crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 		C_ERROR("crt_grp_lookup_create failed, rc: %d.\n", rc);
 		C_GOTO(out, rc);
 	}
+	grp_priv->gp_int_grpid = crt_get_subgrp_id();
 	grp_priv->gp_ctx = crt_ctx;
 
 	/* TODO handle the populate_now == false */
@@ -798,6 +863,7 @@ crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 		gc_in = crt_req_get(gc_rpc);
 		C_ASSERT(gc_in != NULL);
 		gc_in->gc_grp_id = grp_id;
+		gc_in->gc_int_grpid = grp_priv->gp_int_grpid;
 		gc_in->gc_membs = member_ranks;
 		crt_group_rank(NULL, &gc_in->gc_initiate_rank);
 
@@ -988,11 +1054,23 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 	int			 i;
 	int			 rc = 0;
 
+	if (!crt_initialized()) {
+		C_ERROR("CRT not initialized.\n");
+		C_GOTO(out, rc = -CER_UNINIT);
+	}
+	if (!crt_is_service()) {
+		C_ERROR("Cannot destroy subgroup on pure client side.\n");
+		C_GOTO(out, rc = -CER_NO_PERM);
+	}
 	if (grp == NULL) {
 		C_ERROR("invalid paramete of NULL grp.\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
+	if (grp_priv->gp_primary) {
+		C_DEBUG("cannot destroy primary group.\n");
+		C_GOTO(out, rc = -CER_NO_PERM);
+	}
 
 	pthread_rwlock_rdlock(&crt_grp_list_rwlock);
 	if (grp_priv->gp_status != CRT_GRP_NORMAL) {
@@ -1091,10 +1169,6 @@ crt_group_rank(crt_group_t *grp, crt_rank_t *rank)
 			C_DEBUG("not belong to attached remote group (%s).\n",
 				grp->cg_grpid);
 			C_GOTO(out, rc = -CER_OOG);
-		}
-		if (!grp_priv->gp_primary) {
-			C_DEBUG("can only query the rank in primary group.\n");
-			C_GOTO(out, rc = -CER_NOSYS);
 		}
 		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 		*rank = grp_priv->gp_self;
@@ -1205,6 +1279,9 @@ crt_primary_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
 	}
 
 	if (is_service) {
+		grp_priv->gp_int_grpid = ((uint64_t)grp_priv->gp_self << 32);
+		grp_priv->gp_subgrp_idx = 1;
+
 		grp_gdata->gg_srv_pri_grp = grp_priv;
 		rc = crt_grp_lc_create(grp_gdata->gg_srv_pri_grp);
 		if (rc != 0) {
@@ -1230,7 +1307,11 @@ crt_primary_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
 	}
 
 out:
-	if (rc != 0) {
+	if (rc == 0) {
+		C_DEBUG("primary group %s, gp_size %d, gp_self %d.\n",
+			grp_priv->gp_pub.cg_grpid, grp_priv->gp_size,
+			grp_priv->gp_self);
+	} else {
 		C_ERROR("crt_primary_grp_init failed, rc: %d.\n", rc);
 		if (grp_priv != NULL)
 			crt_grp_priv_destroy(grp_priv);

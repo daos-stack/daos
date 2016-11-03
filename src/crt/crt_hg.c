@@ -460,20 +460,6 @@ crt_hg_context_lookup(hg_context_t *hg_ctx)
 	return (found == 1) ? crt_ctx : NULL;
 }
 
-static void
-crt_handle_rpc(void *arg)
-{
-	struct crt_rpc_priv	*rpc_priv = arg;
-	crt_rpc_t		*rpc_pub;
-
-	C_ASSERT(rpc_priv != NULL);
-	C_ASSERT(rpc_priv->crp_opc_info != NULL);
-	C_ASSERT(rpc_priv->crp_opc_info->coi_rpc_cb != NULL);
-	rpc_pub = &rpc_priv->crp_pub;
-	rpc_priv->crp_opc_info->coi_rpc_cb(rpc_pub);
-	crt_req_decref(rpc_pub);
-}
-
 int
 crt_rpc_handler_common(hg_handle_t hg_hdl)
 {
@@ -482,11 +468,12 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	struct hg_info		*hg_info;
 	struct crt_rpc_priv	*rpc_priv;
 	crt_rpc_t		*rpc_pub;
-	crt_opcode_t		opc;
-	crt_proc_t		proc = NULL;
+	crt_opcode_t		 opc;
+	crt_proc_t		 proc = NULL;
 	struct crt_opc_info	*opc_info = NULL;
-	hg_return_t		hg_ret = HG_SUCCESS;
-	int			rc = 0;
+	hg_return_t		 hg_ret = HG_SUCCESS;
+	bool			 is_coll_req = false;
+	int			 rc = 0;
 
 	hg_info = HG_Get_info(hg_hdl);
 	if (hg_info == NULL) {
@@ -520,6 +507,10 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		C_FREE_PTR(rpc_priv);
 		C_GOTO(out, hg_ret = HG_OTHER_ERROR);
 	}
+	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
+		is_coll_req = true;
+		rpc_priv->crp_input_got = 1;
+	}
 	C_ASSERT(proc != NULL);
 	opc = rpc_priv->crp_req_hdr.cch_opc;
 
@@ -533,7 +524,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	C_ASSERT(opc_info->coi_opc == opc);
 	rpc_priv->crp_opc_info = opc_info;
 
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, 1);
+	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, true /* srv_flag */,
+			       false /* forward */);
 	if (rc != 0) {
 		C_ERROR("crt_rpc_priv_init faied, opc: 0x%x, rc: %d.\n",
 			opc, rc);
@@ -563,32 +555,25 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		crt_hg_unpack_cleanup(proc);
 	}
 
-	if (opc_info->coi_rpc_cb != NULL) {
-		if (crt_ctx->cc_pool != NULL) {
-			rc = ABT_thread_create(*(ABT_pool *)crt_ctx->cc_pool,
-					       crt_handle_rpc, rpc_priv,
-					       ABT_THREAD_ATTR_NULL, NULL);
-		} else {
-			rc = opc_info->coi_rpc_cb(rpc_pub);
-			if (rc != 0)
-				C_ERROR("coi_rpc_cb failed, rc: %d, "
-					"opc: 0x%x.\n", rc, opc);
-		}
-	} else {
+	if (opc_info->coi_rpc_cb == NULL) {
 		C_ERROR("NULL crp_hg_hdl, opc: 0x%x.\n", opc);
 		hg_ret = HG_NO_MATCH;
 		rc = -CER_UNREG;
+		C_GOTO(decref, hg_ret = HG_NO_MATCH);
 	}
+
+	if (!is_coll_req)
+		rc = crt_rpc_common_hdlr(rpc_priv);
+	else
+		rc = crt_corpc_common_hdlr(rpc_priv);
 
 decref:
 	/* if ABT enabled and the ULT created successfully, the crt_handle_rpc
 	 * will decref it. */
 	if (rc != 0 || crt_ctx->cc_pool == NULL) {
-		int rc1;
-
-		rc1 = crt_req_decref(rpc_pub);
-		if (rc1 != 0)
-			C_ERROR("crt_req_decref failed, rc: %d.\n", rc1);
+		rc = crt_req_decref(rpc_pub);
+		if (rc != 0)
+			C_ERROR("crt_req_decref failed, rc: %d.\n", rc);
 	}
 out:
 	return hg_ret;

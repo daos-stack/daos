@@ -166,14 +166,17 @@ typedef void *crt_bulk_t; /* abstract bulk handle */
 #define CRT_MAX_INPUT_SIZE	(0x4000000)
 #define CRT_MAX_OUTPUT_SIZE	(0x4000000)
 
+#define CRT_RPC_FLAGS_PUB_BITS	(2)
+#define CRT_RPC_FLAGS_PUB_MASK	((1U << CRT_RPC_FLAGS_PUB_BITS) - 1)
 enum crt_rpc_flags {
 	/*
 	 * ignore timedout. Default behavior (no this flags) is resending
-	 * request when timedout.
+	 * request when timeout.
 	 */
 	CRT_RPC_FLAG_IGNORE_TIMEOUT	= (1U << 0),
 	/* destroy group when the bcast RPC finishes, only valid for corpc */
-	CRT_CORPC_FLAG_GRP_DESTROY	= (1U << 31),
+	CRT_RPC_FLAG_GRP_DESTROY	= (1U << 1),
+	/* All other bits, are reserved for internal usage. */
 };
 
 struct crt_rpc;

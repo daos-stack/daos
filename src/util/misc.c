@@ -146,6 +146,56 @@ out:
 	return rc;
 }
 
+/*
+ * Filter the rank list:
+ * 1) exclude == true, the result dst_set does not has any rank belong to src_
+ *    set, i.e. the ranks belong to src_set will be filtered out from dst_set
+ * 2) exclude == false, the result dst_set does not has any rank not belong to
+ *    src_set, i.e. the ranks not belong to src_set will be filtered out
+ *    from dst_set
+ */
+void
+crt_rank_list_filter(crt_rank_list_t *src_set, crt_rank_list_t *dst_set,
+		     bool input, bool exclude)
+{
+	crt_rank_t	rank;
+	uint32_t	rank_num, filter_num;
+	int		i, j;
+
+	if (src_set == NULL || dst_set == NULL)
+		return;
+	if (src_set->rl_ranks == NULL || dst_set->rl_ranks == NULL)
+		return;
+
+	rank_num = (input == true) ? dst_set->rl_nr.num :
+				     dst_set->rl_nr.num_out;
+	if (rank_num == 0)
+		return;
+
+	filter_num = 0;
+	for (i = 0; i < rank_num - filter_num; i++) {
+		rank = dst_set->rl_ranks[i];
+		if (crt_rank_in_rank_list(src_set, rank, input) != exclude)
+			continue;
+		filter_num++;
+		for (j = i; j < rank_num - 1; j++)
+			dst_set->rl_ranks[j] =
+				dst_set->rl_ranks[j + 1];
+		crt_log(MISC_DBG, "%s:%d, rank_list %p, filter rank[%d](%d).\n",
+			__FILE__, __LINE__, dst_set, i, rank);
+		/* as dst_set moved one item ahead */
+		i--;
+	}
+	if (filter_num != 0) {
+		if (input == true)
+			dst_set->rl_nr.num -= filter_num;
+		else
+			dst_set->rl_nr.num_out -= filter_num;
+		crt_log(MISC_DBG, "%s:%d, rank_list %p, filter %d ranks.\n",
+			__FILE__, __LINE__, dst_set, filter_num);
+	}
+}
+
 crt_rank_list_t *
 crt_rank_list_alloc(uint32_t size)
 {
@@ -290,18 +340,49 @@ crt_rank_list_identical(crt_rank_list_t *rank_list1,
 
 /* check whether one rank included in the rank list, all are global ranks. */
 bool
-crt_rank_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank)
+crt_rank_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank, bool input)
 {
-	int i;
+	uint32_t	rank_num, i;
 
 	if (rank_list == NULL)
 		return false;
 
-	for (i = 0; i < rank_list->rl_nr.num; i++) {
+	rank_num = (input == true) ? rank_list->rl_nr.num :
+				     rank_list->rl_nr.num_out;
+	for (i = 0; i < rank_num; i++) {
 		if (rank_list->rl_ranks[i] == rank)
 			return true;
 	}
 	return false;
+}
+
+/*
+ * query the idx of rank within the rank_list.
+ *
+ * return -CER_OOG when rank not belong to rank list.
+ */
+int
+crt_idx_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank, uint32_t *idx,
+		     bool input)
+{
+	uint32_t	rank_num;
+	bool		found = false;
+	uint32_t	i;
+
+	if (rank_list == NULL || idx == NULL)
+		return -CER_INVAL;
+
+	rank_num = (input == true) ? rank_list->rl_nr.num :
+				     rank_list->rl_nr.num_out;
+	for (i = 0; i < rank_num; i++) {
+		if (rank_list->rl_ranks[i] == rank) {
+			found = true;
+			*idx = i;
+			break;
+		}
+	}
+
+	return found == true ? 0 : -CER_OOG;
 }
 
 /**

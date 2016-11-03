@@ -210,6 +210,8 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 		cbinfo.cci_rpc = &rpc_priv->crp_pub;
 		cbinfo.cci_arg = rpc_priv->crp_arg;
 		cbinfo.cci_rc = rc;
+		if (cbinfo.cci_rc == 0)
+			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_co_rc;
 		if (rc == -CER_CANCELED)
 			rpc_priv->crp_state = RPC_CANCELED;
 		else

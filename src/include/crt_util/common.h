@@ -138,14 +138,17 @@ crt_add_log_facility(char *aname, char *lname)
  * similar macros using different subsystem and log-level, for example:
  * #define DSR_DEBUG(...) crt_log(DSR_DEBUG, ...)
  */
-#define C_DEBUG(fmt, ...)						 \
-	crt_log(CRT_DBG, "%s:%d " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define C_DEBUG(fmt, ...)						\
+	crt_log(CRT_DBG, "%s:%d %s " fmt, __FILE__, __LINE__, __func__,	\
+		##__VA_ARGS__)
 
-#define C_WARN(fmt, ...)						 \
-	crt_log(CRT_WARN, "%s:%d " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define C_WARN(fmt, ...)						\
+	crt_log(CRT_WARN, "%s:%d %s " fmt, __FILE__, __LINE__, __func__,\
+		##__VA_ARGS__)
 
-#define C_ERROR(fmt, ...)						 \
-	crt_log(CRT_ERR, "%s:%d " fmt, __FILE__, __LINE__, ##__VA_ARGS__)
+#define C_ERROR(fmt, ...)						\
+	crt_log(CRT_ERR, "%s:%d %s " fmt, __FILE__, __LINE__, __func__,	\
+		##__VA_ARGS__)
 
 #define C_ASSERT(e)	assert(e)
 
@@ -258,6 +261,8 @@ int crt_rank_list_dup(crt_rank_list_t **dst, const crt_rank_list_t *src,
 		      bool input);
 int crt_rank_list_dup_sort_uniq(crt_rank_list_t **dst,
 				const crt_rank_list_t *src, bool input);
+void crt_rank_list_filter(crt_rank_list_t *src_set, crt_rank_list_t *dst_set,
+			  bool input, bool exclude);
 crt_rank_list_t *crt_rank_list_alloc(uint32_t size);
 void crt_rank_list_free(crt_rank_list_t *rank_list);
 void crt_rank_list_copy(crt_rank_list_t *dst, crt_rank_list_t *src, bool input);
@@ -265,7 +270,10 @@ void crt_rank_list_sort(crt_rank_list_t *rank_list);
 bool crt_rank_list_find(crt_rank_list_t *rank_list, crt_rank_t rank, int *idx);
 bool crt_rank_list_identical(crt_rank_list_t *rank_list1,
 			     crt_rank_list_t *rank_list2, bool input);
-bool crt_rank_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank);
+bool crt_rank_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank,
+			   bool input);
+int crt_idx_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank,
+			 uint32_t *idx, bool input);
 int crt_sgl_init(crt_sg_list_t *sgl, unsigned int nr);
 void crt_sgl_fini(crt_sg_list_t *sgl, bool free_iovs);
 void crt_getenv_bool(const char *env, bool *bool_val);

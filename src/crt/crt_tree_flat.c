@@ -36,44 +36,67 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * This file is part of CaRT. It it the common header file which be included by
- * all other .c files of CaRT.
+ * This file is part of CaRT. It gives out the flat tree topo related
+ * function implementation.
  */
 
-#ifndef __CRT_INTERNAL_H__
-#define __CRT_INTERNAL_H__
+#include <crt_internal.h>
 
-#include <ctype.h>
-#include <errno.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <stddef.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <uuid/uuid.h>
-/* #include <netinet/in.h> */
-#include <arpa/inet.h>
-#include <ifaddrs.h>
+int
+crt_flat_get_children_cnt(uint32_t grp_size, uint32_t branch_ratio,
+			  uint32_t grp_root, uint32_t grp_self,
+			  uint32_t *nchildren)
+{
+	C_ASSERT(grp_size > 0);
+	C_ASSERT(grp_root < grp_size && grp_self < grp_size);
+	C_ASSERT(nchildren != NULL);
 
-#include <crt_util/common.h>
-#include <crt_api.h>
+	if (grp_self == grp_root)
+		*nchildren = grp_size - 1;
+	else
+		*nchildren = 0;
 
-#include <crt_internal_types.h>
-#include <crt_internal_fns.h>
-#include <crt_rpc.h>
-#include <crt_group.h>
-#include <crt_tree.h>
+	return 0;
+}
 
-#include <crt_hg.h>
-#include <crt_pmix.h>
+int
+crt_flat_get_children(uint32_t grp_size, uint32_t branch_ratio,
+		      uint32_t grp_root, uint32_t grp_self, uint32_t *children)
+{
+	int	i, j;
 
-#endif /* __CRT_INTERNAL_H__ */
+	C_ASSERT(grp_size > 0);
+	C_ASSERT(grp_root < grp_size && grp_self < grp_size);
+	C_ASSERT(children != NULL);
+
+	if (grp_self != grp_root)
+		return -CER_INVAL;
+
+	for (i = 0, j = 0; i < grp_size; i++) {
+		if (grp_root != i)
+			children[j++] = i;
+	}
+
+	return 0;
+}
+
+int
+crt_flat_get_parent(uint32_t grp_size, uint32_t branch_ratio, uint32_t grp_root,
+		    uint32_t grp_self, uint32_t *parent)
+{
+	C_ASSERT(grp_size > 0);
+	C_ASSERT(grp_root < grp_size && grp_self < grp_size);
+	C_ASSERT(parent != NULL);
+
+	if (grp_self == grp_root)
+		return -CER_INVAL;
+
+	*parent = grp_root;
+	return 0;
+}
+
+struct crt_topo_ops crt_flat_ops = {
+	.to_get_children_cnt	= crt_flat_get_children_cnt,
+	.to_get_children	= crt_flat_get_children,
+	.to_get_parent		= crt_flat_get_parent
+};

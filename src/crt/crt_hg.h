@@ -59,6 +59,7 @@
 
 struct crt_rpc_priv;
 struct crt_common_hdr;
+struct crt_corpc_hdr;
 
 /** HG context */
 struct crt_hg_context {
@@ -95,6 +96,7 @@ int crt_rpc_handler_common(hg_handle_t hg_hdl);
 
 /* crt_hg_proc.c */
 int crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr);
+int crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr);
 int crt_hg_unpack_header(struct crt_rpc_priv *rpc_priv, crt_proc_t *proc);
 void crt_hg_unpack_cleanup(crt_proc_t proc);
 int crt_proc_internal(struct crf_field *drf, crt_proc_t proc, void *data);

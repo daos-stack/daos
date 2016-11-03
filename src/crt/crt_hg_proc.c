@@ -446,6 +446,62 @@ struct crt_msg_field *crt_single_out_fields[] = {
 };
 
 int
+crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
+{
+	hg_proc_t     hg_proc;
+	hg_return_t   hg_ret = HG_SUCCESS;
+	int           rc = 0;
+
+	if (proc == CRT_PROC_NULL || hdr == NULL)
+		C_GOTO(out, rc = -CER_INVAL);
+
+	hg_proc = proc;
+	hg_ret = hg_proc_hg_uint64_t(hg_proc, &hdr->coh_int_grpid);
+	if (hg_ret != HG_SUCCESS) {
+		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		C_GOTO(out, rc = -CER_HG);
+	}
+	rc = crt_proc_crt_bulk_t(hg_proc, &hdr->coh_bulk_hdl);
+	if (rc != 0) {
+		C_ERROR("crt proc error, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+	rc = crt_proc_crt_rank_list_t(hg_proc, &hdr->coh_excluded_ranks);
+	if (rc != 0) {
+		C_ERROR("crt proc error, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+	rc = crt_proc_crt_rank_list_t(hg_proc, &hdr->coh_inline_ranks);
+	if (rc != 0) {
+		C_ERROR("crt proc error, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_grp_ver);
+	if (hg_ret != HG_SUCCESS) {
+		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		C_GOTO(out, rc = -CER_HG);
+	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_tree_topo);
+	if (hg_ret != HG_SUCCESS) {
+		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		C_GOTO(out, rc = -CER_HG);
+	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_root);
+	if (hg_ret != HG_SUCCESS) {
+		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		C_GOTO(out, rc = -CER_HG);
+	}
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_padding);
+	if (hg_ret != HG_SUCCESS) {
+		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		rc = -CER_HG;
+	}
+
+out:
+	return rc;
+}
+
+int
 crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 {
 	hg_proc_t     hg_proc;
@@ -495,11 +551,11 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		C_GOTO(out, rc = -CER_HG);
 	}
-
-	/* proc the paddings */
-	hg_ret = hg_proc_memcpy(hg_proc, hdr->cch_padding, sizeof(uint32_t));
-	if (hg_ret != HG_SUCCESS)
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_co_rc);
+	if (hg_ret != HG_SUCCESS) {
 		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		rc = -CER_HG;
+	}
 
 out:
 	return rc;
@@ -550,10 +606,21 @@ crt_hg_unpack_header(struct crt_rpc_priv *rpc_priv, crt_proc_t *proc)
 
 	/* Decode header */
 	rc = crt_proc_common_hdr(hg_proc, &rpc_priv->crp_req_hdr);
-	if (rc != 0)
+	if (rc != 0) {
 		C_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+	rpc_priv->crp_flags = rpc_priv->crp_req_hdr.cch_flags;
+	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
+		rc = crt_proc_corpc_hdr(hg_proc, &rpc_priv->crp_coreq_hdr);
+		if (rc != 0) {
+			C_ERROR("crt_proc_corpc_hdr failed rc: %d.\n", rc);
+			C_GOTO(out, rc);
+		}
+	}
 
 	*proc = hg_proc;
+
 out:
 	return rc;
 #else
@@ -760,9 +827,21 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 	/* C_DEBUG("in crt_proc_in_common, data: %p\n", *data); */
 
 	if (proc_op != CRT_PROC_FREE) {
+		if (proc_op == CRT_PROC_ENCODE)
+			rpc_priv->crp_req_hdr.cch_flags = rpc_priv->crp_flags;
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_req_hdr);
 		if (rc != 0) {
 			C_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
+			C_GOTO(out, rc);
+		}
+		if (proc_op == CRT_PROC_DECODE)
+			rpc_priv->crp_flags = rpc_priv->crp_req_hdr.cch_flags;
+	}
+
+	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
+		rc = crt_proc_corpc_hdr(proc, &rpc_priv->crp_coreq_hdr);
+		if (rc != 0) {
+			C_ERROR("crt_proc_corpc_hdr failed rc: %d.\n", rc);
 			C_GOTO(out, rc);
 		}
 	}

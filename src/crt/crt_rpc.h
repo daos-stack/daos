@@ -49,17 +49,48 @@
 /* uri lookup RPC timeout 500mS */
 #define CRT_URI_LOOKUP_TIMEOUT		(1000 * 500)
 
+enum crt_rpc_flags_internal {
+	/* flag of collective RPC (bcast) */
+	CRT_RPC_FLAG_COLL		= (1U << 16),
+	/* flag of incast variable */
+	CRT_RPC_FLAG_INCAST		= (1U << 17),
+	/* flag of targeting primary group */
+	CRT_RPC_FLAG_PRIMARY_GRP	= (1U << 18),
+	/* group members piggyback */
+	CRT_RPC_FLAG_MEMBS_INLINE	= (1U << 19),
+};
+
+struct crt_corpc_hdr {
+	/* internal group ID */
+	uint64_t		 coh_int_grpid;
+	/* collective bulk handle */
+	crt_bulk_t		 coh_bulk_hdl;
+	/* optional excluded ranks */
+	crt_rank_list_t		*coh_excluded_ranks;
+	/* optional inline ranks, for example piggyback the group members */
+	crt_rank_list_t		*coh_inline_ranks;
+	/* group membership version */
+	uint32_t		 coh_grp_ver;
+	uint32_t		 coh_tree_topo;
+	/* root rank of the tree, it is the logical rank within the group */
+	uint32_t		 coh_root;
+	uint32_t		 coh_padding;
+};
+
 /* CaRT layer common header */
 struct crt_common_hdr {
 	uint32_t	cch_magic;
-	uint32_t	cch_version;
+	uint32_t	cch_version; /* RPC version */
 	uint32_t	cch_opc;
 	uint32_t	cch_cksum;
+	/* RPC request flag, see enum crt_rpc_flags/crt_rpc_flags_internal */
 	uint32_t	cch_flags;
 	/* gid and rank identify the rpc request sender */
-	crt_rank_t	cch_rank; /* uint32_t */
-	uint32_t	cch_grp_id; /* internal grp_id within the rank */
-	uint32_t	cch_padding[1];
+	crt_rank_t	cch_rank;
+	/* TODO: maybe used as a tier ID or something else, ignore for now */
+	uint32_t	cch_grp_id;
+	/* used only in crp_reply_hdr to propagate corpc failure back to root */
+	uint32_t	cch_co_rc;
 };
 
 typedef enum {
@@ -73,19 +104,35 @@ typedef enum {
 
 struct crt_rpc_priv;
 
+/* corpc info to track the tree topo and child RPCs info */
 struct crt_corpc_info {
 	struct crt_grp_priv	*co_grp_priv;
-	crt_rank_list_t	*co_excluded_ranks;
-	/* crt_bulk_t		 co_bulk_hdl; */ /* collective bulk handle */
+	crt_rank_list_t		*co_excluded_ranks;
+	uint32_t		 co_grp_ver;
+	uint32_t		 co_tree_topo;
+	crt_rank_t		 co_root;
 	/* the priv passed in crt_corpc_req_create */
 	void			*co_priv;
-	int			 co_tree_topo;
-	uint32_t		 co_grp_destroy:1; /* grp destroy flag */
-
-	struct crt_rpc_priv	*co_parent_rpc; /* parent RPC, NULL on root */
-	crt_list_t		 co_child_rpcs; /* child RPCs list */
+	/* child RPCs list */
+	crt_list_t		 co_child_rpcs;
+	/*
+	 * replied child RPC list, when a child RPC being replied and parent
+	 * RPC has not been locally handled, we can not aggregate the reply
+	 * as it possibly be over-written by local RPC handler. So when child
+	 * RPC being replied and parent RPC not finished, the child RPC is
+	 * queued at co_replied_rpcs.
+	 */
+	crt_list_t		 co_replied_rpcs;
 	uint32_t		 co_child_num;
 	uint32_t		 co_child_ack_num;
+	uint32_t		 co_child_failed_num;
+	/*
+	 * co_local_done is the flag of local RPC finish handling
+	 * (local reply ready).
+	 */
+	uint32_t		 co_local_done:1,
+	/* co_root_excluded is the flag of root in excluded rank list */
+				 co_root_excluded:1;
 	int			 co_rc;
 };
 
@@ -94,44 +141,38 @@ struct crt_rpc_priv {
 	crt_list_t		crp_epi_link;
 	/* tmp_link used in crt_context_req_untrack */
 	crt_list_t		crp_tmp_link;
+	/* link to parent RPC crp_opc_info->co_child_rpcs/co_replied_rpcs */
+	crt_list_t		crp_parent_link;
 	uint64_t		crp_ts; /* time stamp */
 	crt_cb_t		crp_complete_cb;
 	void			*crp_arg; /* argument for crp_complete_cb */
 	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
 
 	crt_rpc_t		crp_pub; /* public part */
-	struct crt_common_hdr	crp_req_hdr; /* common header for request */
-	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
 	crt_rpc_state_t		crp_state; /* RPC state */
 	hg_handle_t		crp_hg_hdl;
 	na_addr_t		crp_na_addr;
+	/*
+	 * RPC request flag, see enum crt_rpc_flags/crt_rpc_flags_internal,
+	 * match with crp_req_hdr.cch_flags.
+	 */
+	uint32_t		crp_flags;
 	uint32_t		crp_srv:1, /* flag of server received request */
 				crp_output_got:1,
 				crp_input_got:1,
-				crp_coll:1; /* flag of collective RPC */
+				/* flag of collective RPC request */
+				crp_coll:1,
+				/* flag of forwarded rpc for corpc */
+				crp_forward:1;
 	uint32_t		crp_refcount;
-	pthread_spinlock_t	crp_lock;
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
 	struct crt_corpc_info	*crp_corpc_info;
+	pthread_spinlock_t	crp_lock;
+	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
+	struct crt_common_hdr	crp_req_hdr; /* common header for request */
+	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
-
-static inline void
-crt_common_hdr_init(struct crt_common_hdr *hdr, crt_opcode_t opc)
-{
-	C_ASSERT(hdr != NULL);
-	hdr->cch_opc = opc;
-	hdr->cch_magic = CRT_RPC_MAGIC;
-	hdr->cch_version = CRT_RPC_VERSION;
-	hdr->cch_grp_id = 0; /* TODO primary group with internal grp_id as 0 */
-	C_ASSERT(crt_group_rank(0, &hdr->cch_rank) == 0);
-}
-
-int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated);
-void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
-int crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
-		       crt_opcode_t opc, int srv_flag);
-void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
 
 /* CRT internal opcode definitions, must be 0xFFFFxxxx.*/
 enum {
@@ -146,7 +187,10 @@ enum {
 
 /* CRT internal RPC definitions */
 struct crt_grp_create_in {
+	/* user visible grp id (group name) */
 	crt_group_id_t		 gc_grp_id;
+	/* internal subgrp id */
+	uint64_t		 gc_int_grpid;
 	crt_rank_list_t		*gc_membs;
 	/* the rank initiated the group create */
 	crt_rank_t		 gc_initiate_rank;
@@ -204,7 +248,32 @@ struct crt_internal_rpc {
 	struct crt_corpc_ops	*ir_co_ops;
 };
 
+static inline void
+crt_common_hdr_init(struct crt_common_hdr *hdr, crt_opcode_t opc)
+{
+	C_ASSERT(hdr != NULL);
+	hdr->cch_opc = opc;
+	hdr->cch_magic = CRT_RPC_MAGIC;
+	hdr->cch_version = CRT_RPC_VERSION;
+	hdr->cch_grp_id = 0;
+	C_ASSERT(crt_group_rank(0, &hdr->cch_rank) == 0);
+}
+
+/* crt_rpc.c */
+int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated);
+void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
+int crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
+		       crt_opcode_t opc, bool srv_flag, bool forward);
+void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
+int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+			    crt_opcode_t opc, bool forward, crt_rpc_t **req);
 int crt_internal_rpc_register(void);
 int crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout);
+int crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
+
+/* crt_corpc.c */
+int crt_corpc_req_hdlr(crt_rpc_t *req);
+int crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info);
+int crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
 
 #endif /* __CRT_RPC_H__ */

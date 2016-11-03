@@ -71,14 +71,16 @@ setup_clog_facnamemask(char *masks)
 		C_PRINT_ERR("crt_add_log_facility CLOG failed.\n");
 		C_GOTO(out, rc = -CER_UNINIT);
 	}
-	rc = crt_add_log_facility("MEM", "memory");
+	crt_mem_logfac = crt_add_log_facility("MEM", "memory");
 	if (rc < 0) {
-		C_PRINT_ERR("crt_add_log_facility CLOG failed.\n");
+		C_PRINT_ERR("crt_add_log_facility failed, crt_mem_logfac %d.\n",
+			    crt_mem_logfac);
 		C_GOTO(out, rc = -CER_UNINIT);
 	}
-	rc = crt_add_log_facility("MISC", "miscellaneous");
-	if (rc < 0) {
-		C_PRINT_ERR("crt_add_log_facility CLOG failed.\n");
+	crt_misc_logfac = crt_add_log_facility("MISC", "miscellaneous");
+	if (crt_misc_logfac < 0) {
+		C_PRINT_ERR("crt_add_log_facility failed,crt_misc_logfac %d.\n",
+			    crt_misc_logfac);
 		C_GOTO(out, rc = -CER_UNINIT);
 	}
 	rc = 0;

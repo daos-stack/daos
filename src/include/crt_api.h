@@ -456,18 +456,24 @@ enum crt_tree_type {
 };
 
 #define CRT_TREE_TYPE_SHIFT	(16U)
+#define CRT_TREE_MAX_RATIO	(64)
+#define CRT_TREE_MIN_RATIO	(2)
 
 /*
  * Calculate the tree topology.
  *
  * \param tree_type [IN]	tree type
  * \param branch_ratio [IN]	branch ratio, be ignored for CRT_TREE_FLAT.
+ *				for KNOMIAL tree or KARY tree, the valid value
+ *				should within the range of
+ *				[CRT_TREE_MIN_RATIO, CRT_TREE_MAX_RATIO], or
+ *				will be treated as invalid parameter.
  *
  * \return			tree topology value on success,
  *				negative value if error.
  */
 static inline int
-crt_tree_topo(enum crt_tree_type tree_type, unsigned branch_ratio)
+crt_tree_topo(enum crt_tree_type tree_type, uint32_t branch_ratio)
 {
 	if (tree_type < CRT_TREE_MIN || tree_type > CRT_TREE_MAX)
 		return -CER_INVAL;
@@ -569,7 +575,7 @@ crt_group_lookup(crt_group_id_t grp_id);
 
 /*
  * Destroy a CRT group. Can either call this API or pass a special flag -
- * CRT_CORPC_FLAG_GRP_DESTROY to a broadcast RPC to destroy the group.
+ * CRT_RPC_FLAG_GRP_DESTROY to a broadcast RPC to destroy the group.
  *
  * \param grp [IN]		group handle to be destroyed.
  * \param grp_destroy_cb [IN]	optional completion callback.
@@ -616,13 +622,15 @@ crt_group_detach(crt_group_t *attached_grp);
  * \param excluded_ranks [IN]	optional excluded ranks, the RPC will be
  *				delivered to all members in the group except
  *				those in excluded_ranks.
+ *				the ranks in excluded_ranks are numbered in
+ *				primary group.
  * \param opc [IN]		unique opcode for the RPC
  * \param co_bulk_hdl [IN]	collective bulk handle
  * \param priv [IN]		A private pointer associated with the request
  *				will be passed to crt_corpc_ops::co_aggregate as
  *				2nd parameter.
  * \param flags [IN]		collective RPC flags for example taking
- *				CRT_CORPC_FLAG_GRP_DESTROY to destroy the group
+ *				CRT_RPC_FLAG_GRP_DESTROY to destroy the group
  *				when this bcast RPC finished.
  * \param tree_topo[IN]		tree topology for the collective propagation,
  *				can be calculated by crt_tree_topo().
@@ -692,10 +700,12 @@ crt_group_size(crt_group_t *grp, uint32_t *size);
  ******************************************************************************/
 
 typedef enum {
-	CRT_PROC_ENCODE,  /* causes the type to be encoded into the stream */
-	CRT_PROC_DECODE,  /* causes the type to be extracted from the stream */
-	CRT_PROC_FREE     /* can be used to release the space allocated by an
-		      * CRT_DECODE request */
+	/* causes the type to be encoded into the stream */
+	CRT_PROC_ENCODE,
+	/* causes the type to be extracted from the stream */
+	CRT_PROC_DECODE,
+	/* can be used to release the space allocated by CRT_DECODE request */
+	CRT_PROC_FREE
 } crt_proc_op_t;
 
 /**

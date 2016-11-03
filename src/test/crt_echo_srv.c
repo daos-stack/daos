@@ -107,18 +107,18 @@ static int run_echo_srver(void)
 
 	/* ==================================== */
 	/* test group API and bcast RPC */
-	crt_group_id_t		grp_id = "example_grp";
-	crt_rank_t		grp_ranks[4] = {5, 4, 1, 2};
+	crt_group_id_t		grp_id = "example_grpid";
+	crt_rank_t		grp_ranks[6] = {5, 7, 4, 1, 2, 6};
 	crt_rank_list_t	grp_membs;
-	crt_rank_t		excluded_ranks[2] = {1, 2};
+	crt_rank_t		excluded_ranks[4] = {1, 4, 2, 9};
 	crt_rank_list_t	excluded_membs;
 
-	grp_membs.rl_nr.num = 4;
+	grp_membs.rl_nr.num = 6;
 	grp_membs.rl_ranks = grp_ranks;
-	excluded_membs.rl_nr.num = 2;
+	excluded_membs.rl_nr.num = 4;
 	excluded_membs.rl_ranks = excluded_ranks;
 
-	if (mysize >= 6 && myrank == 4) {
+	if (mysize >= 8 && myrank == 4) {
 		crt_rpc_t				*corpc_req;
 		struct crt_echo_corpc_example_req	*corpc_in;
 
@@ -127,9 +127,11 @@ static int run_echo_srver(void)
 		printf("crt_group_create rc: %d, priv %p.\n", rc, &myrank);
 		sleep(1); /* just to ensure grp populated */
 
-		rc = crt_corpc_req_create(gecho.crt_ctx, example_grp,
+		rc = crt_corpc_req_create(gecho.crt_ctx, example_grp_hdl,
 					  &excluded_membs, ECHO_CORPC_EXAMPLE,
-					  NULL, NULL, 0, 0, &corpc_req);
+					  NULL, NULL, 0,
+					  crt_tree_topo(CRT_TREE_KNOMIAL, 4),
+					  &corpc_req);
 		C_ASSERT(rc == 0 && corpc_req != NULL);
 		corpc_in = crt_req_get(corpc_req);
 		C_ASSERT(corpc_in != NULL);
@@ -142,7 +144,8 @@ static int run_echo_srver(void)
 		sleep(1); /* just to ensure corpc handled */
 		C_ASSERT(gecho.complete == 1);
 
-		rc = crt_group_destroy(example_grp, grp_destroy_cb, &myrank);
+		rc = crt_group_destroy(example_grp_hdl, grp_destroy_cb,
+				       &myrank);
 		printf("crt_group_destroy rc: %d, arg %p.\n", rc, &myrank);
 	}
 

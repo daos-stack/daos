@@ -68,16 +68,34 @@ struct crt_rank_map {
 struct crt_grp_priv {
 	crt_list_t		 gp_link; /* link to crt_grp_list */
 	crt_group_t		 gp_pub; /* public grp handle */
-	crt_rank_list_t		*gp_membs; /* member ranks in global group */
+	/*
+	 * member ranks, should be unique and sorted, each member is the rank
+	 * number within the primary group.
+	 */
+	crt_rank_list_t		*gp_membs;
 	/* the priv pointer user passed in for crt_group_create */
 	void			*gp_priv;
 	/* CaRT context only for sending sub-grp create/destroy RPCs */
 	crt_context_t		 gp_ctx;
 	enum crt_grp_status	 gp_status; /* group status */
 
+	/*
+	 * internal group ID, it is (gp_self << 32) for primary group,
+	 * and plus with the gp_subgrp_idx as the internal sub-group ID.
+	 */
+	uint64_t		 gp_int_grpid;
+	/*
+	 * subgrp index within the primary group, it bumps up one for every
+	 * sub-group creation.
+	 */
+	uint32_t		 gp_subgrp_idx;
 	/* size (number of membs) of group */
 	uint32_t		 gp_size;
-	/* self rank in this group, only valid for local group */
+	/*
+	 * logical self rank in this group, only valid for local group.
+	 * the gp_membs->rl_ranks[gp_self] is its rank number in primary group.
+	 * For primary group, gp_self == gp_membs->rl_ranks[gp_self].
+	 */
 	crt_rank_t		 gp_self;
 	/* PSR rank in attached group */
 	crt_rank_t		 gp_psr_rank;
@@ -168,12 +186,15 @@ int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		      struct crt_hg_context *hg_ctx, crt_rank_t rank,
 		      uint32_t tag, crt_phy_addr_t *base_addr,
 		      na_addr_t *na_addr);
+struct crt_grp_priv *crt_grp_lookup_int_grpid(uint64_t int_grpid);
 int crt_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid);
 int crt_grp_fini(void);
 
 #define CRT_ALLOW_SINGLETON_ENV		"CRT_ALLOW_SINGLETON"
 int crt_grp_save_attach_info(struct crt_grp_priv *grp_priv);
 int crt_grp_load_attach_info(struct crt_grp_priv *grp_priv);
+
+/* some simple helpers */
 
 static inline bool
 crt_ep_identical(crt_endpoint_t *ep1, crt_endpoint_t *ep2)
@@ -195,6 +216,28 @@ crt_ep_copy(crt_endpoint_t *dst_ep, crt_endpoint_t *src_ep)
 	/* TODO: copy grp id */
 	dst_ep->ep_rank = src_ep->ep_rank;
 	dst_ep->ep_tag = src_ep->ep_tag;
+}
+
+static inline uint64_t
+crt_get_subgrp_id()
+{
+	struct crt_grp_priv	*grp_priv;
+	uint64_t		 subgrp_id;
+
+	C_ASSERT(crt_initialized());
+	C_ASSERT(crt_is_service());
+	grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+	C_ASSERT(grp_priv != NULL);
+	C_ASSERT(grp_priv->gp_primary && grp_priv->gp_local);
+
+	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+	subgrp_id = grp_priv->gp_int_grpid + grp_priv->gp_subgrp_idx;
+	grp_priv->gp_subgrp_idx++;
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+
+	C_DEBUG("crt_get_subgrp_id get subgrp_id: "CF_X64".\n", subgrp_id);
+
+	return subgrp_id;
 }
 
 #endif /* __CRT_GROUP_H__ */

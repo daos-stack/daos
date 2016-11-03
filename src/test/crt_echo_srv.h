@@ -91,12 +91,12 @@ static void *progress_handler(void *arg)
 	pthread_exit(NULL);
 }
 
-crt_group_t *example_grp;
+crt_group_t *example_grp_hdl;
 int grp_create_cb(crt_group_t *grp, void *priv, int status)
 {
 	printf("in grp_create_cb, grp %p, priv %p, status %d.\n",
 		grp, priv, status);
-	example_grp = grp;
+	example_grp_hdl = grp;
 	return 0;
 }
 
