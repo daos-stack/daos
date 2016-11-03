@@ -302,6 +302,21 @@ int
 vos_cookie_index_destroy(daos_handle_t cih);
 
 /**
+ * VOS cookie update
+ *
+ * \param cih		[IN]	cookie index handle
+ * \param cookie	[IN]	cookie
+ * \param epoch		[IN]	epoch
+ *
+ * \return		0 on success -DER_NONEXIST when
+ *			not found and -DER_INVAL if
+ *			invalid handle
+ */
+int
+vos_cookie_update(daos_handle_t cih, uuid_t cookie,
+		  daos_epoch_t epoch);
+
+/**
  * VOS cookie find and update
  * Find cookie if it exists update the
  * max_epoch, if not found add the entry
@@ -310,12 +325,12 @@ vos_cookie_index_destroy(daos_handle_t cih);
  * \param cih		[IN]	cookie index handle
  * \param cookie	[IN]	cookie
  * \param epoch		[IN]	epoch to update
+ * \param update_flag	[IN]	flag to update/lookup
  * \param epoch_ret	[OUT]	max_epoch returned
  */
 int
-vos_cookie_find_update(daos_handle_t cih, uuid_t cookie,
-		       daos_epoch_t epoch, daos_epoch_t *epoch_ret);
-
+vos_cookie_find_update(daos_handle_t cih, uuid_t cookie, daos_epoch_t epoch,
+		       bool update_flag, daos_epoch_t *epoch_ret);
 
 /**
  * VOS object index class register for btree
@@ -487,6 +502,12 @@ vos_obj_is_new(struct vos_obj *obj)
 	return obj->vo_tree.tr_class == 0;
 }
 
+static inline bool
+vos_subtree_is_empty(daos_handle_t toh)
+{
+	return dbtree_is_empty(toh) == 1;
+}
+
 static inline bool vos_obj_is_zombie(struct vos_obj *obj)
 {
 	/* TODO */
@@ -516,10 +537,23 @@ int vos_obj_tree_init(struct vos_obj_ref *oref);
 int vos_obj_tree_fini(struct vos_obj_ref *oref);
 int vos_obj_tree_register(void);
 
+int
+tree_prepare(struct vos_obj_ref *oref, daos_handle_t parent_toh,
+	     daos_key_t *key, bool read_only, daos_handle_t *toh);
+
+void
+tree_release(daos_handle_t toh);
+
 static inline PMEMobjpool *
 vos_oref2pop(struct vos_obj_ref *oref)
 {
 	return oref->or_co->vc_phdl->vp_ph;
+}
+
+static inline PMEMobjpool *
+vos_co2pop(struct vc_hdl *co_hdl)
+{
+	return co_hdl->vc_phdl->vp_ph;
 }
 
 static inline daos_handle_t
@@ -570,6 +604,16 @@ vos_hdl2co(daos_handle_t coh)
 	return (struct vc_hdl *)(coh.cookie);
 }
 
+static inline daos_handle_t
+vos_coh2cih(daos_handle_t coh)
+{
+	struct vc_hdl *chdl = vos_hdl2co(coh);
+
+	return chdl->vc_phdl->vp_ck_hdl;
+}
+
+
+
 /**
  * iterators
  */
@@ -607,6 +651,8 @@ struct vos_iter_ops {
 	int	(*iop_fetch)(struct vos_iterator *iter,
 			     vos_iter_entry_t *it_entry,
 			     daos_hash_out_t *anchor);
+	/** Delete the record that the cursor points to */
+	int	(*iop_delete)(struct vos_iterator *iter);
 };
 
 static  inline struct vos_iterator *
@@ -615,5 +661,14 @@ vos_hdl2iter(daos_handle_t hdl)
 	return (struct vos_iterator *)hdl.cookie;
 }
 
+/** Pack a key bundle into an iovec */
+void
+tree_key_bundle2iov(struct vos_key_bundle *kbund, daos_iov_t *iov);
+
+struct vos_obj_iter*
+vos_hdl2oiter(daos_handle_t hdl);
+
+struct vos_oid_iter*
+vos_hdl2oid_iter(daos_handle_t hdl);
 
 #endif /* __VOS_INTERNAL_H__ */

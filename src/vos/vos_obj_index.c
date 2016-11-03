@@ -123,20 +123,16 @@ static btr_ops_t voi_ops = {
 	.to_rec_update	= vo_rec_update,
 };
 
-
 /**
- * Find the object by OID and return it, or create an object for the oid.
+ * For testing obj index deletion
  */
 int
-vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
-		  struct vos_obj **obj)
+vos_oi_find(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
+	    struct vos_obj **obj)
 {
 	int				rc = 0;
 	daos_iov_t			key_iov, val_iov;
 	struct vos_object_index		*obj_index = NULL;
-
-	D_DEBUG(DF_VOS2, "Lookup obj "DF_UOID" in the OI table.\n",
-		DP_UOID(oid));
 
 	obj_index = co_hdl->vc_obj_table;
 	if (!obj_index) {
@@ -149,7 +145,31 @@ vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 
 	rc = dbtree_lookup(co_hdl->vc_btr_hdl, &key_iov, &val_iov);
 	if (rc == 0)
-		goto found;
+		*obj = val_iov.iov_buf;
+
+	return rc;
+}
+
+
+/**
+ * Find the object by OID and return it, or create an object for the oid.
+ */
+int
+vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
+		  struct vos_obj **obj)
+{
+	int				rc = 0;
+	daos_iov_t			key_iov, val_iov;
+
+	D_DEBUG(DF_VOS2, "Lookup obj "DF_UOID" in the OI table.\n",
+		DP_UOID(oid));
+
+	daos_iov_set(&key_iov, &oid, sizeof(daos_unit_oid_t));
+	daos_iov_set(&val_iov, NULL, 0);
+
+	rc = vos_oi_find(co_hdl, oid, obj);
+	if (rc == 0)
+		return rc;
 
 	/* Object ID not found insert it to the OI tree */
 	D_DEBUG(DF_VOS1, "Object"DF_UOID" not found adding it..\n",
@@ -160,8 +180,7 @@ vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 		D_ERROR("Failed to update Key for Object index\n");
 		return rc;
 	}
- found:
-	/** Object found or updated  */
+
 	*obj = val_iov.iov_buf;
 	return rc;
 }
@@ -213,9 +232,8 @@ vos_oi_create(struct vp_hdl *po_hdl,
 			VOS_BTR_OIT);
 
 		rc = dbtree_create_inplace(VOS_BTR_OIT, 0, OT_BTREE_ORDER,
-					  &po_hdl->vp_uma,
-					  &obj_index->obtable,
-					  &btr_hdl);
+					   &po_hdl->vp_uma, &obj_index->obtable,
+					   &btr_hdl);
 		if (rc)
 			D_ERROR("dbtree create failed\n");
 	}
@@ -263,6 +281,12 @@ static struct vos_oid_iter*
 vos_iter2oid_iter(struct vos_iterator *iter)
 {
 	return container_of(iter, struct vos_oid_iter, oit_iter);
+}
+
+struct vos_oid_iter*
+vos_hdl2oid_iter(daos_handle_t hdl)
+{
+	return vos_iter2oid_iter(vos_hdl2iter(hdl));
 }
 
 static int
@@ -356,7 +380,7 @@ vos_oid_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	struct vos_obj		*vo_rec;
 	int			rc;
 
-	D_DEBUG(DF_VOS2, "obj-iter oid fetch callback");
+	D_DEBUG(DF_VOS2, "obj-iter oid fetch callback\n");
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
 	daos_iov_set(&rec_iov, NULL, 0);
@@ -373,10 +397,33 @@ vos_oid_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	return 0;
 }
 
+static int
+vos_oid_iter_delete(struct vos_iterator *iter)
+{
+	struct vos_oid_iter	*oiter = vos_iter2oid_iter(iter);
+	PMEMobjpool		*pop;
+	int			rc = 0;
+
+
+	D_DEBUG(DF_VOS2, "oid-iter delete callback\n");
+	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
+	pop = vos_co2pop(oiter->oit_chdl);
+
+	TX_BEGIN(pop) {
+		rc = dbtree_iter_delete(oiter->oit_hdl);
+	} TX_ONABORT {
+		rc = umem_tx_errno(rc);
+		D_DEBUG(DF_VOS1, "Failed to delete oid entry: %d\n", rc);
+	} TX_END
+
+	return rc;
+}
+
 struct vos_iter_ops vos_oid_iter_ops = {
 	.iop_prepare =	vos_oid_iter_prep,
 	.iop_finish  =  vos_oid_iter_fini,
 	.iop_probe   =	vos_oid_iter_probe,
 	.iop_next    =  vos_oid_iter_next,
 	.iop_fetch   =  vos_oid_iter_fetch,
+	.iop_delete  =	vos_oid_iter_delete,
 };

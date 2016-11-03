@@ -98,7 +98,7 @@ int
 run_co_test(void);
 
 int
-run_chtable_tests(void);
+run_discard_test(void);
 
 int
 run_io_test(void);

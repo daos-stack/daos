@@ -189,3 +189,27 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 	D_ASSERT(iter->it_ops != NULL);
 	return iter->it_ops->iop_fetch(iter, it_entry, anchor);
 }
+
+int
+vos_iter_delete(daos_handle_t ih)
+{
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+
+	if (iter->it_state == VOS_ITS_NONE) {
+		D_DEBUG(DF_VOS1,
+			"Please call vos_iter_probe to initialize the cursor");
+		return -DER_NO_PERM;
+	}
+
+	if (iter->it_state == VOS_ITS_END) {
+		D_DEBUG(DF_VOS1, "The end of iteration\n");
+		return -DER_NONEXIST;
+	}
+
+	D_ASSERT(iter->it_ops != NULL);
+
+	if (iter->it_ops->iop_delete == NULL)
+		return -DER_NOSYS;
+
+	return iter->it_ops->iop_delete(iter);
+}

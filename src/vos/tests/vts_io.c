@@ -27,54 +27,7 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venaktesan@intel.com>
  */
-
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <stddef.h>
-#include <setjmp.h>
-#include <cmocka.h>
-#include <time.h>
-#include <vts_common.h>
-
-#include <daos/common.h>
-#include <daos_srv/vos.h>
-#include <vos_obj.h>
-#include <vos_internal.h>
-#include <vos_hhash.h>
-
-#define UPDATE_DKEY_SIZE	32
-#define UPDATE_DKEY		"dkey"
-#define UPDATE_AKEY_SIZE	32
-#define UPDATE_AKEY		"akey"
-#define UPDATE_AKEY_FIXED	"akey.fixed"
-#define	UPDATE_BUF_SIZE		64
-#define UPDATE_REC_SIZE		16
-#define UPDATE_CSUM_SIZE	32
-#define VTS_IO_OIDS		1
-#define VTS_IO_KEYS		100000
-#define NUM_UNIQUE_COOKIES	20
-
-enum vts_test_flags {
-	TF_IT_ANCHOR		= (1 << 0),
-	TF_ZERO_COPY		= (1 << 1),
-	TF_OVERWRITE		= (1 << 2),
-	TF_PUNCH		= (1 << 3),
-	TF_REC_EXT		= (1 << 4),
-	TF_FIXED_AKEY		= (1 << 5),
-};
-
-struct io_test_args {
-	struct vos_test_ctx	ctx;
-	daos_unit_oid_t		oid;
-	/* Optional addn container create params */
-	uuid_t			addn_co_uuid;
-	daos_handle_t		addn_co;
-	int			co_create_step;
-	/* testing flags, see vts_test_flags */
-	unsigned long		ta_flags;
-	bool			cookie_flag;
-};
+#include <vts_io.h>
 
 /* key generator */
 static unsigned int		vts_key_gen;
@@ -84,18 +37,6 @@ static daos_epoch_t		vts_epoch_gen;
 /** Create dictionary of unique cookies */
 static uuid_t			cookie_dict[NUM_UNIQUE_COOKIES];
 
-
-/** test counters */
-struct vts_counter {
-	/* To verify during enumeration */
-	unsigned long		cn_dkeys;
-	/* # dkey with the fixed akey */
-	unsigned long		cn_fa_dkeys;
-	/** # oids */
-	unsigned long		cn_oids;
-	/* # punch */
-	unsigned long		cn_punch;
-};
 
 static struct vts_counter	vts_cntr;
 
@@ -163,7 +104,7 @@ gen_oid(void)
 	return oid;
 }
 
-static void
+void
 inc_cntr(unsigned long op_flags)
 {
 	if (op_flags & TF_OVERWRITE) {
@@ -175,7 +116,21 @@ inc_cntr(unsigned long op_flags)
 	}
 }
 
-static void
+void
+inc_cntr_manual(unsigned long op_flags, struct vts_counter *cntrs)
+{
+	if (op_flags & TF_OVERWRITE) {
+		cntrs->cn_punch++;
+	} else {
+		cntrs->cn_dkeys++;
+		if (op_flags & TF_FIXED_AKEY)
+			cntrs->cn_fa_dkeys++;
+	}
+}
+
+
+
+void
 test_args_init(struct io_test_args *args)
 {
 	int	rc, i;
@@ -195,7 +150,7 @@ test_args_init(struct io_test_args *args)
 	args->cookie_flag = false;
 }
 
-static void
+void
 test_args_reset(struct io_test_args *args)
 {
 	vts_ctx_fini(&args->ctx);
@@ -204,8 +159,8 @@ test_args_reset(struct io_test_args *args)
 
 static struct io_test_args	test_args;
 
-static int
-setup(void **state)
+int
+setup_io(void **state)
 {
 	srand(10);
 	test_args_init(&test_args);
@@ -214,8 +169,8 @@ setup(void **state)
 	return 0;
 }
 
-static int
-teardown(void **state)
+int
+teardown_io(void **state)
 {
 	struct io_test_args *arg = *state;
 
@@ -445,24 +400,23 @@ io_obj_iter_test(struct io_test_args *arg)
 	return rc;
 }
 
-static int
+int
 io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
-		   daos_vec_iod_t *vio, daos_sg_list_t *sgl)
+		   daos_vec_iod_t *vio, daos_sg_list_t *sgl,
+		   struct daos_uuid *dsm_cookie, bool verbose)
 {
 	daos_sg_list_t		*vec_sgl;
 	daos_iov_t		*vec_iov;
 	daos_iov_t		*srv_iov;
 	daos_handle_t		ioh;
-	struct daos_uuid	dsm_cookie;
 	int			rc;
 
-	dsm_cookie = gen_rand_cookie();
 
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
 		rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
-				    dsm_cookie.uuid, dkey, 1, vio,
+				    dsm_cookie->uuid, dkey, 1, vio,
 				    sgl);
-		if (rc != 0)
+		if (rc != 0 && verbose)
 			print_error("Failed to update: %d\n", rc);
 		return rc;
 	}
@@ -471,7 +425,8 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 				     arg->oid, epoch, dkey, 1, vio,
 				     &ioh);
 	if (rc != 0) {
-		print_error("Failed to prepare ZC update: %d\n", rc);
+		if (verbose)
+			print_error("Failed to prepare ZC update: %d\n", rc);
 		return rc;
 	}
 
@@ -484,16 +439,16 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	assert_true(srv_iov->iov_len == vec_iov->iov_len);
 	memcpy(vec_iov->iov_buf, srv_iov->iov_buf, srv_iov->iov_len);
 
-	rc = vos_obj_zc_update_end(ioh, dsm_cookie.uuid, dkey, 1, vio, 0);
-	if (rc != 0)
+	rc = vos_obj_zc_update_end(ioh, dsm_cookie->uuid, dkey, 1, vio, 0);
+	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
 	return rc;
 }
 
-static int
+int
 io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
-		  daos_vec_iod_t *vio, daos_sg_list_t *sgl)
+		  daos_vec_iod_t *vio, daos_sg_list_t *sgl, bool verbose)
 {
 	daos_sg_list_t	*vec_sgl;
 	daos_iov_t	*vec_iov;
@@ -505,7 +460,7 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 		rc = vos_obj_fetch(arg->ctx.tc_co_hdl,
 				   arg->oid, epoch, dkey, 1, vio,
 				   sgl);
-		if (rc != 0)
+		if (rc != 0 && verbose)
 			print_error("Failed to fetch: %d\n", rc);
 		return rc;
 	}
@@ -514,13 +469,15 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 				    arg->oid, epoch, dkey, 1, vio,
 				    &ioh);
 	if (rc != 0) {
-		print_error("Failed to prepare ZC update: %d\n", rc);
+		if (verbose)
+			print_error("Failed to prepare ZC update: %d\n", rc);
 		return rc;
 	}
 
 	dst_iov = &sgl->sg_iovs[0];
 
 	vos_obj_zc_vec2sgl(ioh, 0, &vec_sgl);
+
 	assert_true(vec_sgl->sg_nr.num == 1);
 	vec_iov = &vec_sgl->sg_iovs[0];
 
@@ -529,7 +486,7 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	dst_iov->iov_len = vec_iov->iov_len;
 
 	rc = vos_obj_zc_fetch_end(ioh, dkey, 1, vio, 0);
-	if (rc != 0)
+	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
 	return rc;
@@ -551,6 +508,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_vec_iod_t		vio;
 	daos_sg_list_t		sgl;
+	struct daos_uuid	dsm_cookie;
 
 	memset(&vio, 0, sizeof(vio));
 	memset(&rex, 0, sizeof(rex));
@@ -601,7 +559,10 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	vio.vd_recxs	= &rex;
 	vio.vd_nr	= 1;
 
-	rc = io_test_obj_update(arg, update_epoch, &dkey, &vio, &sgl);
+	uuid_copy(dsm_cookie.uuid, cookie_dict[(rand() % NUM_UNIQUE_COOKIES)]);
+
+	rc = io_test_obj_update(arg, update_epoch, &dkey, &vio, &sgl,
+				&dsm_cookie, true);
 	if (rc)
 		goto exit;
 
@@ -611,7 +572,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
 	rex.rx_rsize = DAOS_REC_ANY;
-	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &vio, &sgl);
+	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &vio, &sgl, true);
 	if (rc)
 		goto exit;
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
@@ -826,6 +787,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	daos_vec_iod_t		vio;
 	daos_sg_list_t		sgl;
+	struct daos_uuid	dsm_cookie;
 
 	memset(&vio, 0, sizeof(vio));
 	memset(&rex, 0, sizeof(rex));
@@ -853,7 +815,9 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	vio.vd_recxs	= &rex;
 	vio.vd_nr	= 1;
 
-	rc = io_test_obj_update(arg, update_epoch, &dkey, &vio, &sgl);
+	uuid_copy(dsm_cookie.uuid, cookie_dict[rand() % NUM_UNIQUE_COOKIES]);
+	rc = io_test_obj_update(arg, update_epoch, &dkey, &vio, &sgl,
+				&dsm_cookie, true);
 	if (rc)
 		goto exit;
 
@@ -867,7 +831,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	/* Injecting an incorrect dkey for fetch! */
 	gen_rand_key(&dkey_buf[0], UPDATE_DKEY,  UPDATE_DKEY_SIZE);
 
-	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &vio, &sgl);
+	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &vio, &sgl, true);
 	if (rc)
 		goto exit;
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
@@ -919,7 +883,7 @@ io_fetch_wo_object(void **state)
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
 	rex.rx_rsize = DAOS_REC_ANY;
-	rc = io_test_obj_fetch(arg, 1, &dkey, &vio, &sgl);
+	rc = io_test_obj_fetch(arg, 1, &dkey, &vio, &sgl, true);
 	assert_int_equal(rc, -2005);
 
 }
@@ -1360,5 +1324,5 @@ int
 run_io_test(void)
 {
 	return cmocka_run_group_tests_name("VOS IO tests", io_tests,
-					   setup, teardown);
+					   setup_io, teardown_io);
 }

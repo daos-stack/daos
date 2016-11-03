@@ -450,7 +450,7 @@ cookie_table_test(void **state)
 		}
 
 		ret = vos_cookie_find_update(cookie_hdl, cookie_array[j].uuid,
-					     epochs[i], &epoch_ret);
+					     epochs[i], true, &epoch_ret);
 		if (ret != 0)
 			print_error("find and update error\n");
 
@@ -458,8 +458,7 @@ cookie_table_test(void **state)
 			DP_UUID(cookie_array[j].uuid), epochs[i]);
 		D_DEBUG(DF_VOS3, "Returned max_epoch: %"PRIu64"\n",
 			epoch_ret);
-		if (epoch_ret != 0)
-			assert_true(epoch_ret == l_entry->max_epoch);
+		assert_true(epoch_ret == l_entry->max_epoch);
 
 	}
 	/* Cleanup allocations */

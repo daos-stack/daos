@@ -481,4 +481,16 @@ int
 vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *entry,
 	       daos_hash_out_t *anchor);
 
+/**
+ * Delete the current data entry of the iterator
+ *
+ * \param ih	[IN]	Iterator handle
+ *
+ * \return		Zero on Success
+ *			-DER_NONEXIST if cursor does
+ *			not exist. negative value if error
+ */
+int
+vos_iter_delete(daos_handle_t ih);
+
 #endif /* __VOS_API_H */

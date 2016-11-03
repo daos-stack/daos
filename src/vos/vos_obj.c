@@ -48,8 +48,6 @@ struct vos_obj_iter {
 	struct vos_obj_ref	*it_oref;
 };
 
-
-
 /** zero-copy I/O buffer for a vector */
 struct vos_vec_zbuf {
 	/** scatter/gather list for the ZC IO on this vector */
@@ -98,6 +96,11 @@ vos_iter2oiter(struct vos_iterator *iter)
 	return container_of(iter, struct vos_obj_iter, it_iter);
 }
 
+struct vos_obj_iter*
+vos_hdl2oiter(daos_handle_t hdl)
+{
+	return vos_iter2oiter(vos_hdl2iter(hdl));
+}
 
 /**
  */
@@ -110,7 +113,7 @@ vos_iter2oiter(struct vos_iterator *iter)
  * store a bundle of parameters into a iovec, which is going to be passed
  * into dbtree operations as a compound key.
  */
-static void
+void
 tree_key_bundle2iov(struct vos_key_bundle *kbund, daos_iov_t *iov)
 {
 	memset(kbund, 0, sizeof(*kbund));
@@ -136,7 +139,7 @@ tree_rec_bundle2iov(struct vos_rec_bundle *rbund, daos_iov_t *iov)
  * vector tree	: all akeys under the same dkey
  * recx tree	: all record extents under the same akey
  */
-static int
+int
 tree_prepare(struct vos_obj_ref *oref, daos_handle_t parent_toh,
 	     daos_key_t *key, bool read_only, daos_handle_t *toh)
 {
@@ -194,7 +197,7 @@ tree_prepare(struct vos_obj_ref *oref, daos_handle_t parent_toh,
 }
 
 /** close the record extent tree */
-static void
+void
 tree_release(daos_handle_t toh)
 {
 	int	rc;
@@ -743,7 +746,8 @@ vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, uuid_t cookie,
 
 	/** If dkey update is successful update the cookie tree */
 	cookie_hdl = vos_oref2cookie_hdl(oref);
-	rc = vos_cookie_find_update(cookie_hdl, cookie, epoch, NULL);
+	rc = vos_cookie_find_update(cookie_hdl, cookie, epoch, true,
+				    NULL);
 	if (rc)
 		D_ERROR("Error while updating cookie index table\n");
  out:
@@ -1572,6 +1576,25 @@ recx_iter_next(struct vos_obj_iter *oiter)
 	return rc;
 }
 
+static int
+obj_iter_delete(struct vos_obj_iter *oiter)
+{
+	int		rc = 0;
+	PMEMobjpool	*pop;
+
+	D_DEBUG(DF_VOS2, "BTR delete called of obj\n");
+	pop = vos_oref2pop(oiter->it_oref);
+
+	TX_BEGIN(pop) {
+		rc = dbtree_iter_delete(oiter->it_hdl);
+	} TX_ONABORT {
+		rc = umem_tx_errno(rc);
+		D_DEBUG(DF_VOS1, "Failed to delete iter entry: %d\n", rc);
+	} TX_END
+
+	return rc;
+}
+
 /**
  * common functions for iterator.
  */
@@ -1726,12 +1749,28 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 }
 
+static int
+vos_obj_iter_delete(struct vos_iterator *iter)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+
+	switch (iter->it_type) {
+	default:
+		D_ASSERT(0);
+		return -DER_INVAL;
+	case VOS_ITER_DKEY:
+	case VOS_ITER_AKEY:
+	case VOS_ITER_RECX:
+		return obj_iter_delete(oiter);
+	}
+}
 struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_prepare	= vos_obj_iter_prep,
 	.iop_finish	= vos_obj_iter_fini,
 	.iop_probe	= vos_obj_iter_probe,
 	.iop_next	= vos_obj_iter_next,
 	.iop_fetch	= vos_obj_iter_fetch,
+	.iop_delete	= vos_obj_iter_delete,
 };
 /**
  * @} vos_obj_iters

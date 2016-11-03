@@ -170,7 +170,6 @@ exit:
 
 }
 
-
 int
 vos_cookie_index_destroy(daos_handle_t cih)
 {
@@ -185,13 +184,12 @@ vos_cookie_index_destroy(daos_handle_t cih)
 
 /**
  * Find the cookie by cookie id and return max epoch,
- * or update the max_epoch for the cookie
+ * (or) update the max_epoch for the cookie based on update flag
  * or if no cookie exists, add one to the cookie index
  */
-
 int
-vos_cookie_find_update(daos_handle_t cih, uuid_t cookie,
-		       daos_epoch_t epoch, daos_epoch_t *epoch_ret)
+vos_cookie_find_update(daos_handle_t cih, uuid_t cookie, daos_epoch_t epoch,
+		       bool update_flag, daos_epoch_t *epoch_ret)
 {
 	int			rc = 0;
 	daos_epoch_t		max_epoch = 0;
@@ -203,7 +201,12 @@ vos_cookie_find_update(daos_handle_t cih, uuid_t cookie,
 	daos_iov_set(&value, &max_epoch, sizeof(daos_epoch_t));
 
 	rc = dbtree_lookup(cih, &key, &value);
-	if (!rc) {
+	if (rc != 0 && !update_flag)
+		return -DER_NONEXIST;
+	if (!update_flag)
+		D_GOTO(exit, rc);
+
+	if (rc == 0) {
 		D_DEBUG(DF_VOS2, "Cookie already exists\n");
 		/**
 		 * If epoch in tree is greater than max_epoch,
@@ -212,8 +215,9 @@ vos_cookie_find_update(daos_handle_t cih, uuid_t cookie,
 		D_DEBUG(DF_VOS2,
 			"dbtree lookup found "DF_UUID","DF_U64"\n",
 			DP_UUID(cookie), max_epoch);
+		/** Nothing to update, exit */
 		if (max_epoch >= epoch)
-			D_GOTO(exit, rc = 0); /** Nothing to update, exit */
+			D_GOTO(exit, rc = 0);
 	}
 
 	/** if not found or max_epoch < epoch, update */
@@ -224,6 +228,5 @@ vos_cookie_find_update(daos_handle_t cih, uuid_t cookie,
 exit:
 	if (epoch_ret != NULL)
 		*epoch_ret = max_epoch;
-
 	return rc;
 }

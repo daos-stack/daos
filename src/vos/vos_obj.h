@@ -146,17 +146,21 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
 int
 vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 		  struct vos_obj **obj);
+
 /**
- * VOS object index remove
- * Remove an object ID entry in the object index table
+ * Find an enty in the obj_index by @oid
+ * Created to us in tests for checking sanity of obj index
+ * after deletion
  *
  * \param coh	[IN]	Container handle
  * \param oid	[IN]	DAOS object ID
+ * \param obj	[OUT]	Direct pointer to VOS object
  *
  * \return		0 on success and negative on
  *			failure
  */
 int
-vos_oi_remove(struct vc_hdl *co_hdl, daos_unit_oid_t oid);
+vos_oi_find(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
+	    struct vos_obj **obj);
 
 #endif

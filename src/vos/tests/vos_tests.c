@@ -57,7 +57,7 @@ run_all_tests()
 	failed += run_pool_test();
 	failed += run_co_test();
 	failed += run_io_test();
-
+	failed += run_discard_test();
 	return failed;
 }
 
@@ -73,6 +73,7 @@ main(int argc, char **argv)
 		{"pool_tests",	no_argument, 0, 'p'},
 		{"container_tests", no_argument, 0, 'c'},
 		{"io_tests", no_argument, 0, 'i'},
+		{"discard_tests", no_argument, 0, 'd'},
 		{"help", no_argument, 0, 'h'},
 	};
 
@@ -86,7 +87,7 @@ main(int argc, char **argv)
 	if (argc < 2) {
 		nr_failed = run_all_tests();
 	} else {
-		while ((opt = getopt_long(argc, argv, "apctih",
+		while ((opt = getopt_long(argc, argv, "apcdtih",
 				  long_options, &index)) != -1) {
 			switch (opt) {
 			case 'p':
@@ -103,6 +104,9 @@ main(int argc, char **argv)
 				goto exit;
 			case 'a':
 				nr_failed = run_all_tests();
+				break;
+			case 'd':
+				nr_failed = run_discard_test();
 				break;
 			default:
 				print_error("Unkown option\n");
