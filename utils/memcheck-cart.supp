@@ -17,8 +17,7 @@
     Memcheck:Leak
     fun:*alloc
     ...
-    fun:pmix*
-    ...
+    fun:event_base_loop
     fun:progress_engine
 }
 {
@@ -49,8 +48,14 @@
     Memcheck:Leak
     ...
     fun:cci_init
-    fun:na_cci_check_protocol
-    fun:NA_Initialize
+}
+{
+   CCI syscall param
+   Memcheck:Cond
+   ...
+   fun:cci_init
+   fun:na_cci_check_protocol
+   fun:NA_Initialize
 }
 {
     CCI memory leak, NA_Addr_lookup
