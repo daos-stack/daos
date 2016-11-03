@@ -371,13 +371,18 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 		if (i == 0 && recx->rx_rsize == DAOS_REC_ANY)
 			recx->rx_rsize	= recx_tmp.rx_rsize;
 
-
 		if (recx->rx_rsize != recx_tmp.rx_rsize) {
-			D_DEBUG(DF_VOS1,
-				"Record sizes of all indices in the same "
-				"extent must be the same: "DF_U64"/"DF_U64"\n",
+
+			if (recx_tmp.rx_rsize == 0) {
+				D_DEBUG(DF_VOS1, "Punched Entry\n");
+				recx->rx_rsize = 0;
+			} else {
+				D_DEBUG(DF_VOS1, "%s %s : "DF_U64"/"DF_U64"\n",
+				"Record sizes of all indices in same ",
+				"extent must be the same",
 				recx->rx_rsize, recx_tmp.rx_rsize);
-			return -DER_IO_INVAL;
+				return -DER_IO_INVAL;
+			}
 		}
 
 		/* If we store index and epoch in the same btree, then
