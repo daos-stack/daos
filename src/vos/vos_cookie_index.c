@@ -199,7 +199,7 @@ vos_cookie_find_update(daos_handle_t cih, uuid_t cookie,
 	struct daos_uuid	uuid_key;
 
 	uuid_copy(uuid_key.uuid, cookie);
-	daos_iov_set(&key, &cookie, sizeof(struct daos_uuid));
+	daos_iov_set(&key, &uuid_key, sizeof(struct daos_uuid));
 	daos_iov_set(&value, &max_epoch, sizeof(daos_epoch_t));
 
 	rc = dbtree_lookup(cih, &key, &value);
