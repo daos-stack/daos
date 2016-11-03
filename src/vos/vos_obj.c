@@ -1155,7 +1155,12 @@ vos_obj_zc_vec2sgl(daos_handle_t ioh, unsigned int vec_at,
 	struct vos_zc_context *zcc = vos_ioh2zcc(ioh);
 
 	D_ASSERT(zcc->zc_vec_zbufs != NULL);
-	D_ASSERT(vec_at < zcc->zc_vec_nr);
+	if (vec_at >= zcc->zc_vec_nr) {
+		*sgl_pp = NULL;
+		D_DEBUG(DF_VOS1, "Invalid vector index %d/%d.\n",
+			vec_at, zcc->zc_vec_nr);
+		return -DER_NONEXIST;
+	}
 
 	*sgl_pp = &zcc->zc_vec_zbufs[vec_at].zb_sgl;
 	return 0;
