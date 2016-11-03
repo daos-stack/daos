@@ -64,6 +64,13 @@ crt_iov_set(crt_iov_t *iov, void *buf, crt_size_t size)
 }
 
 /**
+ * hide the dark secret that uuid_t is an array not a structure.
+ */
+struct crt_uuid {
+	uuid_t		uuid;
+};
+
+/**
  * Server Identification & Addressing
  *
  * A server is identified by a group and a rank. A name (i.e. a string) is

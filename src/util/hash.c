@@ -35,12 +35,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * This file is part of CRTM
- *
- * crt_event/hash.c
- *
- * Author: Liang Zhen  <liang.zhen@intel.com>
+/**
+ * This file is part of cart, it implements the hash table functions.
  */
 
 #include <pthread.h>
@@ -775,7 +771,7 @@ dhash_table_debug(struct dhash_table *htable)
 }
 
 /**
- * handle hash table: the first user of dhash_table
+ * daos handle hash table: the first user of dhash_table
  */
 
 struct crt_hhash {
@@ -783,10 +779,53 @@ struct crt_hhash {
 	struct dhash_table	dh_htable;
 };
 
-static struct crt_hlink *
-hh_link2ptr(crt_list_t *rlink)
+static struct crt_rlink*
+link2rlink(crt_list_t *link)
 {
-	return container_of(rlink, struct crt_hlink, hl_link);
+	C_ASSERT(link != NULL);
+	return container_of(link, struct crt_rlink, rl_link);
+}
+
+static void
+rlink_op_addref(struct crt_rlink *rlink)
+{
+	rlink->rl_ref++;
+}
+
+static bool
+rlink_op_decref(struct crt_rlink *rlink)
+{
+	C_ASSERT(rlink->rl_ref > 0);
+	rlink->rl_ref--;
+
+	return rlink->rl_ref == 0;
+}
+
+static void
+rlink_op_init(struct crt_rlink *rlink)
+{
+	CRT_INIT_LIST_HEAD(&rlink->rl_link);
+	rlink->rl_initialized	= 1;
+	rlink->rl_ref		= 1; /* for caller */
+}
+
+
+static bool
+rlink_op_empty(struct crt_rlink *rlink)
+{
+	if (!rlink->rl_initialized)
+		return 1;
+	C_ASSERT(rlink->rl_ref != 0 || dhash_rec_unlinked(&rlink->rl_link));
+	return dhash_rec_unlinked(&rlink->rl_link);
+}
+
+static struct crt_hlink *
+hh_link2ptr(crt_list_t *link)
+{
+	struct crt_rlink	*rlink;
+
+	rlink = link2rlink(link);
+	return	container_of(rlink, struct crt_hlink, hl_link);
 }
 
 static void
@@ -829,35 +868,31 @@ hh_op_key_hash(struct dhash_table *hhtab, const void *key, unsigned int ksize)
 }
 
 static bool
-hh_op_key_cmp(struct dhash_table *hhtab, crt_list_t *rlink,
+hh_op_key_cmp(struct dhash_table *hhtab, crt_list_t *link,
 	  const void *key, unsigned int ksize)
 {
-	struct crt_hlink *hlink = hh_link2ptr(rlink);
+	struct crt_hlink *hlink = hh_link2ptr(link);
 
 	C_ASSERT(ksize == sizeof(uint64_t));
 	return hlink->hl_key == *(uint64_t *)key;
 }
 
 static void
-hh_op_rec_addref(struct dhash_table *hhtab, crt_list_t *rlink)
+hh_op_rec_addref(struct dhash_table *hhtab, crt_list_t *link)
 {
-	hh_link2ptr(rlink)->hl_ref++;
+	rlink_op_addref(link2rlink(link));
 }
 
 static bool
-hh_op_rec_decref(struct dhash_table *hhtab, crt_list_t *rlink)
+hh_op_rec_decref(struct dhash_table *hhtab, crt_list_t *link)
 {
-	struct  crt_hlink *hlink = hh_link2ptr(rlink);
-
-	hlink->hl_ref--;
-	return hlink->hl_ref == 0;
+	return rlink_op_decref(link2rlink(link));
 }
 
-
 static void
-hh_op_rec_free(struct dhash_table *hhtab, crt_list_t *rlink)
+hh_op_rec_free(struct dhash_table *hhtab, crt_list_t *link)
 {
-	struct crt_hlink *hlink = hh_link2ptr(rlink);
+	struct crt_hlink *hlink = hh_link2ptr(link);
 
 	if (hlink->hl_ops != NULL &&
 	    hlink->hl_ops->hop_free != NULL)
@@ -908,51 +943,56 @@ crt_hhash_destroy(struct crt_hhash *hhtab)
 void
 crt_hhash_hlink_init(struct crt_hlink *hlink, struct crt_hlink_ops *ops)
 {
-	CRT_INIT_LIST_HEAD(&hlink->hl_link);
-	hlink->hl_initialized	= 1;
-	hlink->hl_ref		= 1; /* for caller */
-	hlink->hl_ops		= ops;
+	hlink->hl_ops = ops;
+	rlink_op_init(&hlink->hl_link);
+}
+
+bool
+crt_uhash_link_empty(struct crt_ulink *ulink)
+{
+	return rlink_op_empty(&ulink->ul_link);
 }
 
 void
 crt_hhash_link_insert(struct crt_hhash *hhtab, struct crt_hlink *hlink,
 		       int type)
 {
-	C_ASSERT(hlink->hl_initialized);
-	dhash_rec_insert_anonym(&hhtab->dh_htable, &hlink->hl_link,
+	C_ASSERT(hlink->hl_link.rl_initialized);
+	dhash_rec_insert_anonym(&hhtab->dh_htable, &hlink->hl_link.rl_link,
 				(void *)&type);
+}
+
+static inline struct crt_hlink*
+crt_hlink_find(struct dhash_table *htable, void *key, size_t size)
+{
+	crt_list_t		*link;
+
+	link = dhash_rec_find(htable, key, size);
+	return link == NULL ? NULL : hh_link2ptr(link);
 }
 
 struct crt_hlink *
 crt_hhash_link_lookup(struct crt_hhash *hhtab, uint64_t key)
 {
-	crt_list_t	*rlink;
-
-	rlink = dhash_rec_find(&hhtab->dh_htable, (void *)&key, sizeof(key));
-	return rlink == NULL ? NULL :
-	       crt_list_entry(rlink, struct crt_hlink, hl_link);
+	return crt_hlink_find(&hhtab->dh_htable, (void *)&key, sizeof(key));
 }
 
 bool
 crt_hhash_link_delete(struct crt_hhash *hhtab, struct crt_hlink *hlink)
 {
-	return dhash_rec_delete_at(&hhtab->dh_htable, &hlink->hl_link);
+	return dhash_rec_delete_at(&hhtab->dh_htable, &hlink->hl_link.rl_link);
 }
 
 void
 crt_hhash_link_putref(struct crt_hhash *hhtab, struct crt_hlink *hlink)
 {
-	dhash_rec_decref(&hhtab->dh_htable, &hlink->hl_link);
+	dhash_rec_decref(&hhtab->dh_htable, &hlink->hl_link.rl_link);
 }
 
 bool
 crt_hhash_link_empty(struct crt_hlink *hlink)
 {
-	if (!hlink->hl_initialized)
-		return 1;
-
-	C_ASSERT(hlink->hl_ref != 0 || dhash_rec_unlinked(&hlink->hl_link));
-	return dhash_rec_unlinked(&hlink->hl_link);
+	return rlink_op_empty(&hlink->hl_link);
 }
 
 void
@@ -964,4 +1004,153 @@ crt_hhash_link_key(struct crt_hlink *hlink, uint64_t *key)
 int crt_hhash_key_type(uint64_t key)
 {
 	return hh_key_type(&key);
+}
+
+/**
+ * daos uuid hash table
+ * Key UUID, val: generic ptr
+ */
+
+static struct crt_ulink *
+uh_link2ptr(crt_list_t *link)
+{
+	struct crt_rlink	*rlink;
+
+	rlink = link2rlink(link);
+	return container_of(rlink, struct crt_ulink, ul_link);
+}
+
+static unsigned int
+uh_op_key_hash(struct dhash_table *uhtab, const void *key, unsigned int ksize)
+{
+	struct crt_uuid *lkey = (struct crt_uuid *)key;
+
+	C_ASSERT(ksize == sizeof(struct crt_uuid));
+	crt_log(MISC_DBG, "uuid_key: "CF_UUID"\n", CP_UUID(lkey->uuid));
+
+	return (unsigned int)(crt_hash_string_u32((const char *)lkey->uuid,
+						   sizeof(uuid_t)));
+}
+
+static bool
+uh_op_key_cmp(struct dhash_table *uhtab, crt_list_t *link, const void *key,
+	      unsigned int ksize)
+{
+	struct crt_ulink *ulink = uh_link2ptr(link);
+	struct crt_uuid  *lkey = (struct crt_uuid *)key;
+
+	C_ASSERT(ksize == sizeof(struct crt_uuid));
+	crt_log(MISC_DBG, "Link key, Key:"CF_UUID","CF_UUID"\n",
+		CP_UUID(lkey->uuid),
+		CP_UUID(ulink->ul_uuid.uuid));
+
+	return !uuid_compare(ulink->ul_uuid.uuid, lkey->uuid);
+}
+
+static void
+uh_op_rec_free(struct dhash_table *hhtab, crt_list_t *link)
+{
+	struct crt_ulink *ulink = uh_link2ptr(link);
+
+	if (ulink->ul_ops != NULL &&
+	    ulink->ul_ops->uop_free != NULL)
+		ulink->ul_ops->uop_free(ulink);
+}
+
+
+
+static dhash_table_ops_t uh_ops = {
+	.hop_key_hash	= uh_op_key_hash,
+	.hop_key_cmp	= uh_op_key_cmp,
+	.hop_rec_addref	= hh_op_rec_addref, /* Reuse hh_op_add/decref */
+	.hop_rec_decref = hh_op_rec_decref,
+	.hop_rec_free	= uh_op_rec_free,
+};
+
+int
+crt_uhash_create(int feats, unsigned int bits, struct dhash_table **htable_pp)
+{
+	struct dhash_table	*uhtab;
+	int			rc;
+
+	rc = dhash_table_create(feats, bits, NULL, &uh_ops, &uhtab);
+	if (rc != 0)
+		goto failed;
+
+	*htable_pp = uhtab;
+	return 0;
+
+failed:
+	return -CER_NOMEM;
+}
+
+void
+crt_uhash_destroy(struct dhash_table *uhtab)
+{
+	dhash_table_debug(uhtab);
+	dhash_table_destroy(uhtab, true);
+}
+
+void
+crt_uhash_ulink_init(struct crt_ulink *ulink, struct crt_ulink_ops *ops)
+{
+	ulink->ul_ops = ops;
+	rlink_op_init(&ulink->ul_link);
+}
+
+static inline struct crt_ulink*
+crt_ulink_find(struct dhash_table *htable, void *key, size_t size)
+{
+	crt_list_t		*link;
+
+	link = dhash_rec_find(htable, key, size);
+	return link == NULL ? NULL : uh_link2ptr(link);
+}
+
+struct crt_ulink*
+crt_uhash_link_lookup(struct dhash_table *uhtab, struct crt_uuid *key)
+{
+	return crt_ulink_find(uhtab, (void *)key, sizeof(struct crt_uuid));
+}
+
+void
+crt_uhash_link_addref(struct dhash_table *uhtab, struct crt_ulink *ulink)
+{
+	dhash_rec_addref(uhtab, &ulink->ul_link.rl_link);
+}
+
+void
+crt_uhash_link_putref(struct dhash_table *uhtab, struct crt_ulink *ulink)
+{
+	dhash_rec_decref(uhtab, &ulink->ul_link.rl_link);
+}
+
+int
+crt_uhash_link_insert(struct dhash_table *uhtab, struct crt_uuid *key,
+		       struct crt_ulink *ulink)
+{
+	int	rc = 0;
+
+	C_ASSERT(ulink->ul_link.rl_initialized);
+
+	uuid_copy(ulink->ul_uuid.uuid, key->uuid);
+	rc = dhash_rec_insert(uhtab, (void *)key, sizeof(struct crt_uuid),
+			      &ulink->ul_link.rl_link, true);
+
+	if (rc)
+		C_ERROR("Error Inserting handle in UUID in-memory hash\n");
+
+	return rc;
+}
+
+bool
+crt_uhash_link_last_ref(struct crt_ulink *ulink)
+{
+	return ulink->ul_link.rl_ref == 1;
+}
+
+void
+crt_uhash_link_delete(struct dhash_table *uhtab, struct crt_ulink *ulink)
+{
+	dhash_rec_delete_at(uhtab, &ulink->ul_link.rl_link);
 }

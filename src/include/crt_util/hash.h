@@ -221,23 +221,38 @@ enum {
 };
 
 struct crt_hlink;
-
+struct crt_ulink;
 struct crt_hlink_ops {
 	/** free callback */
-	void	(*hop_free)(struct crt_hlink *hlink);
+	void	(*hop_free)(struct crt_hlink *rlink);
+};
+
+struct crt_ulink_ops {
+	/** free callback */
+	void	(*uop_free)(struct crt_ulink *ulink);
+};
+
+struct crt_rlink {
+	crt_list_t		rl_link;
+	unsigned int		rl_ref;
+	unsigned int		rl_initialized:1;
 };
 
 struct crt_hlink {
-	crt_list_t		 hl_link;
-	uint64_t		 hl_key;
-	unsigned int		 hl_ref;
-	unsigned int		 hl_initialized:1;
+	struct crt_rlink	hl_link;
+	uint64_t		hl_key;
 	struct crt_hlink_ops	*hl_ops;
+};
+
+struct crt_ulink {
+	struct crt_rlink	ul_link;
+	struct crt_uuid		ul_uuid;
+	struct crt_ulink_ops	*ul_ops;
 };
 
 struct crt_hhash;
 
-int crt_hhash_create(unsigned int bits, struct crt_hhash **hhash);
+int  crt_hhash_create(unsigned int bits, struct crt_hhash **hhash);
 void crt_hhash_destroy(struct crt_hhash *hh);
 void crt_hhash_hlink_init(struct crt_hlink *hlink,
 			   struct crt_hlink_ops *ops);
@@ -245,13 +260,28 @@ void crt_hhash_link_insert(struct crt_hhash *hhash,
 			    struct crt_hlink *hlink, int type);
 struct crt_hlink *crt_hhash_link_lookup(struct crt_hhash *hhash,
 					  uint64_t key);
-void crt_hhash_link_putref(struct crt_hhash *hhash,
-			    struct crt_hlink *hlink);
-bool crt_hhash_link_delete(struct crt_hhash *hhash,
-			    struct crt_hlink *hlink);
+void crt_hhash_link_putref(struct crt_hhash *hhash, struct crt_hlink *hlink);
+bool crt_hhash_link_delete(struct crt_hhash *hhash, struct crt_hlink *hlink);
 bool crt_hhash_link_empty(struct crt_hlink *hlink);
 void crt_hhash_link_key(struct crt_hlink *hlink, uint64_t *key);
-int crt_hhash_key_type(uint64_t key);
+int  crt_hhash_key_type(uint64_t key);
+
+int crt_uhash_create(int feats, unsigned int bits, struct dhash_table **uhtab);
+void crt_uhash_destroy(struct dhash_table *uhtab);
+void crt_uhash_ulink_init(struct crt_ulink *ulink,
+			   struct crt_ulink_ops *rl_ops);
+bool crt_uhash_link_empty(struct crt_ulink *ulink);
+bool crt_uhash_link_last_ref(struct crt_ulink *ulink);
+void crt_uhash_link_addref(struct dhash_table *uhtab,
+			    struct crt_ulink *hlink);
+void crt_uhash_link_putref(struct dhash_table *uhtab,
+			    struct crt_ulink *hlink);
+void crt_uhash_link_delete(struct dhash_table *uhtab,
+			    struct crt_ulink *hlink);
+int  crt_uhash_link_insert(struct dhash_table *uhtab, struct crt_uuid *key,
+			    struct crt_ulink *hlink);
+struct crt_ulink *crt_uhash_link_lookup(struct dhash_table *uhtab,
+					  struct crt_uuid *key);
 
 #if defined(__cplusplus)
 }

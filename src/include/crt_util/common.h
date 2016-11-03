@@ -266,6 +266,8 @@ bool crt_rank_list_find(crt_rank_list_t *rank_list, crt_rank_t rank, int *idx);
 bool crt_rank_list_identical(crt_rank_list_t *rank_list1,
 			     crt_rank_list_t *rank_list2, bool input);
 bool crt_rank_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank);
+int crt_sgl_init(crt_sg_list_t *sgl, unsigned int nr);
+void crt_sgl_fini(crt_sg_list_t *sgl, bool free_iovs);
 void crt_getenv_bool(const char *env, bool *bool_val);
 
 
