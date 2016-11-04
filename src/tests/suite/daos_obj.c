@@ -569,9 +569,9 @@ io_simple(void **state)
 }
 
 static void
-enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
-	  daos_hash_out_t *anchor, void *buf, daos_size_t len,
-	  struct ioreq *req)
+enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
+	       daos_hash_out_t *anchor, void *buf, daos_size_t len,
+	       struct ioreq *req)
 {
 	int rc;
 
@@ -618,99 +618,92 @@ enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 	}
 }
 
+#define ENUM_KEY_BUF	32
+#define ENUM_KEY_NR	1000
+
+#define ENUM_DESC_BUF	512
+#define ENUM_DESC_NR	5
+
 /** very basic enumerate */
 static void
 enumerate_simple(void **state)
 {
 	test_arg_t	*arg = *state;
+	char		*buf;
+	char		*ptr;
+	char		 key[ENUM_KEY_BUF];
+	daos_key_desc_t  kds[ENUM_DESC_NR];
+	daos_hash_out_t  hash_out;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
-	uint32_t	number = 5;
-	daos_key_desc_t kds[5];
-	daos_hash_out_t hash_out;
-	char *buf;
-	char *ptr;
-	int total_keys = 0;
-	int i;
+	uint32_t	 number;
+	int		 key_nr;
+	int		 i;
 
 	obj_random(arg, &oid);
 
 	ioreq_init(&req, oid, (test_arg_t *)*state);
 
 	/** Insert record*/
-	print_message("Insert 1000 kv record\n");
-	for (i = 0; i < 1000; i++) {
-		char dkey[10];
-
-		sprintf(dkey, "%d", i);
-		insert_single(dkey, "a_key", 0, "data",
+	print_message("Insert %d kv record\n", ENUM_KEY_NR);
+	for (i = 0; i < ENUM_KEY_NR; i++) {
+		sprintf(key, "%d", i);
+		insert_single(key, "a_key", 0, "data",
 			      strlen("data") + 1, 0, &req);
 	}
 
 	print_message("Enumerate records\n");
-	memset(&hash_out, 0, sizeof(hash_out));
-	buf = calloc(512, 1);
-	/** enumerate records */
-	while (!daos_hash_is_eof(&hash_out)) {
-		enumerate(0, &number, kds, &hash_out, buf, 512, &req);
-		if (number == 0)
-			goto next_dkey;
-		ptr = buf;
-		total_keys += number;
-		for (i = 0; i < number; i++) {
-			char key[32];
+	buf = malloc(ENUM_DESC_BUF);
 
+	memset(&hash_out, 0, sizeof(hash_out));
+	/** enumerate records */
+	for (number = ENUM_DESC_NR, key_nr = 0; !daos_hash_is_eof(&hash_out);
+	     number = ENUM_DESC_NR) {
+		memset(buf, 0, ENUM_DESC_BUF);
+		enumerate_dkey(0, &number, kds, &hash_out, buf, 512, &req);
+		if (number == 0)
+			continue; /* loop should break for EOF */
+
+		key_nr += number;
+		for (ptr = buf, i = 0; i < number; i++) {
 			snprintf(key, kds[i].kd_key_len + 1, ptr);
 			print_message("i %d key %s len %d\n", i, key,
 				      (int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 		}
-next_dkey:
-		if (daos_hash_is_eof(&hash_out))
-			break;
-		memset(buf, 0, 512);
-		number = 5;
 	}
-	assert_int_equal(total_keys, 1000);
+	assert_int_equal(key_nr, ENUM_KEY_NR);
 
-	print_message("Insert 1000 kv record\n");
-	for (i = 0; i < 1000; i++) {
-		char akey[10];
-
-		sprintf(akey, "%d", i);
-		insert_single("d_key", akey, 0, "data",
+	print_message("Insert %d kv record\n", ENUM_KEY_NR);
+	for (i = 0; i < ENUM_KEY_NR; i++) {
+		sprintf(key, "%d", i);
+		insert_single("d_key", key, 0, "data",
 			      strlen("data") + 1, 0, &req);
 	}
 
-	total_keys = 0;
 	memset(&hash_out, 0, sizeof(hash_out));
 	/** enumerate records */
-	while (!daos_hash_is_eof(&hash_out)) {
+	for (number = ENUM_DESC_NR, key_nr = 0; !daos_hash_is_eof(&hash_out);
+	     number = ENUM_DESC_NR) {
+		memset(buf, 0, ENUM_DESC_BUF);
 		enumerate_akey(0, "d_key", &number, kds, &hash_out,
-			       buf, 512, &req);
+			       buf, ENUM_DESC_BUF, &req);
 		if (number == 0)
-			goto next_akey;
-		ptr = buf;
-		total_keys += number;
-		for (i = 0; i < number; i++) {
-			char key[32];
+			continue; /* loop should break for EOF */
 
+		key_nr += number;
+		for (ptr = buf, i = 0; i < number; i++) {
 			snprintf(key, kds[i].kd_key_len + 1, ptr);
 			print_message("i %d key %s len %d\n", i, key,
 				     (int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 		}
-next_akey:
-		if (daos_hash_is_eof(&hash_out))
-			break;
-		memset(buf, 0, 512);
-		number = 5;
 	}
 
 	free(buf);
 	/** XXX Verify kds */
 	ioreq_fini(&req);
-	assert_int_equal(total_keys, 1000);
+	assert_int_equal(key_nr, ENUM_KEY_NR);
 }
 
 /** basic punch test */
@@ -747,7 +740,7 @@ punch_simple(void **state)
 	/** enumerate records */
 	print_message("Enumerate records\n");
 	while (number > 0) {
-		enumerate(0, &number, kds, &hash_out, buf, 512, &req);
+		enumerate_dkey(0, &number, kds, &hash_out, buf, 512, &req);
 		total_keys += number;
 		if (daos_hash_is_eof(&hash_out))
 			break;
@@ -767,7 +760,7 @@ punch_simple(void **state)
 	/** enumerate records */
 	print_message("Enumerate records again\n");
 	while (number > 0) {
-		enumerate(0, &number, kds, &hash_out, buf, 512, &req);
+		enumerate_dkey(0, &number, kds, &hash_out, buf, 512, &req);
 		total_keys += number;
 		if (daos_hash_is_eof(&hash_out))
 			break;

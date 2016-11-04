@@ -474,7 +474,7 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 	daos_sg_list_t			sgl;
 	uint32_t			map_version = 0;
 	int				rc = 0;
-	int				dkey_nr = 0;
+	int				key_nr = 0;
 	int				type;
 
 	if (opc_get(rpc->dr_opc) == DAOS_OBJ_AKEY_RPC_ENUMERATE)
@@ -548,38 +548,38 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 		D_GOTO(out_tch, rc = -DER_NOMEM);
 
 	iovs_idx = 0;
-	dkey_nr = 0;
+	key_nr = 0;
 	kds = oeo->oeo_kds.da_arrays;
 	while (1) {
-		vos_iter_entry_t  dkey_ent;
+		vos_iter_entry_t  key_ent;
 
-		rc = vos_iter_fetch(ih, &dkey_ent, &oeo->oeo_anchor);
+		rc = vos_iter_fetch(ih, &key_ent, &oeo->oeo_anchor);
 		if (rc != 0)
 			D_GOTO(next, rc);
 
 		D_DEBUG(DF_MISC, "get key %s len "DF_U64
 			"iov_len "DF_U64" buflen "DF_U64"\n",
-			(char *)dkey_ent.ie_key.iov_buf,
-			dkey_ent.ie_key.iov_len,
+			(char *)key_ent.ie_key.iov_buf,
+			key_ent.ie_key.iov_len,
 			iovs[iovs_idx].iov_len, iovs[iovs_idx].iov_buf_len);
 
 		/* fill the key to iov if there are enough space */
 		while (iovs_idx < iovs_nr) {
-			if (iovs[iovs_idx].iov_len + dkey_ent.ie_key.iov_len <
+			if (iovs[iovs_idx].iov_len + key_ent.ie_key.iov_len <
 			    iovs[iovs_idx].iov_buf_len) {
 				/* Fill key descriptor */
 				/* FIXME no checksum now */
-				kds[dkey_nr].kd_key_len =
-						dkey_ent.ie_key.iov_len;
-				kds[dkey_nr].kd_csum_len = 0;
-				dkey_nr++;
+				kds[key_nr].kd_key_len =
+						key_ent.ie_key.iov_len;
+				kds[key_nr].kd_csum_len = 0;
+				key_nr++;
 
 				memcpy(iovs[iovs_idx].iov_buf +
 				       iovs[iovs_idx].iov_len,
-				       dkey_ent.ie_key.iov_buf,
-				       dkey_ent.ie_key.iov_len);
+				       key_ent.ie_key.iov_buf,
+				       key_ent.ie_key.iov_len);
 				iovs[iovs_idx].iov_len +=
-						dkey_ent.ie_key.iov_len;
+						key_ent.ie_key.iov_len;
 
 				rc = vos_iter_next(ih);
 				break;
@@ -587,13 +587,13 @@ ds_obj_enum_handler(dtp_rpc_t *rpc)
 			iovs_idx++;
 		}
 next:
-		if (dkey_nr >= oei->oei_nr || iovs_idx >= iovs_nr || rc != 0) {
+		if (key_nr >= oei->oei_nr || iovs_idx >= iovs_nr || rc != 0) {
 			/* it means iteration hit the end */
 			if (rc == -DER_NONEXIST) {
 				daos_hash_set_eof(&oeo->oeo_anchor);
 				rc = 0;
 			} else if (rc == 0) {
-				rc = vos_iter_fetch(ih, &dkey_ent,
+				rc = vos_iter_fetch(ih, &key_ent,
 						    &oeo->oeo_anchor);
 			}
 			break;
@@ -605,7 +605,7 @@ next:
 		D_GOTO(out_tch, rc);
 	}
 
-	oeo->oeo_kds.da_count = dkey_nr;
+	oeo->oeo_kds.da_count = key_nr;
 	if (oei->oei_bulk != NULL) {
 		daos_sg_list_t *sgls = &sgl;
 

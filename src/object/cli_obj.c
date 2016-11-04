@@ -730,6 +730,11 @@ daos_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	bool			launched = false;
 	int			rc;
 
+	if (nr == NULL || *nr == 0 || kds == NULL || sgl == NULL) {
+		D_DEBUG(DF_SRC, "Invalid API parameter.\n");
+		return -DER_INVAL;
+	}
+
 	rc = obj_iocx_create(oh, ev, &iocx);
 	if (rc != 0)
 		return rc;
