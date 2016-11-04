@@ -617,12 +617,23 @@ crt_proc_internal(struct crf_field *crf,
 				break;
 			}
 
-			/* Let's assume array is not zero size now */
-			if (array->da_count == 0)
-				break;
-
 			proc_op = hg_proc_get_op(proc);
+			if (array->da_count == 0) {
+				hg_ret = hg_proc_memcpy(proc, &array->da_arrays,
+						      sizeof(array->da_arrays));
+				if (hg_ret != HG_SUCCESS) {
+					rc = -CER_HG;
+					break;
+				}
+
+				if (proc_op == HG_DECODE)
+					array->da_arrays = NULL;
+				ptr = (char *)ptr + sizeof(struct crt_array);
+				continue;
+			}
+
 			if (proc_op == HG_DECODE) {
+				C_ASSERT(array->da_count > 0);
 				C_ALLOC(array->da_arrays, array->da_count *
 						crf->crf_msg[i]->cmf_size);
 				if (array->da_arrays == NULL) {
