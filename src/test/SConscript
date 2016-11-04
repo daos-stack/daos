@@ -48,15 +48,17 @@ def scons():
     tenv = env.Clone()
     tenv.Append(CPPPATH=['#/src/test'])
 
-    libraries = ['crt_util', 'crt']
-    libraries += ['pthread', 'crypto', 'uuid', 'pmix']
+    libraries = ['crt_util', 'crt', 'pthread', 'uuid']
+    tenv.AppendUnique(LIBS=libraries)
+
+    prereqs.require(tenv, 'argobots', 'crypto', 'pmix')
 
     # a simple example to use crt_xxx APIs
     for test in ECHO_SRC:
-        target = tenv.Program(test, LIBS=libraries)
+        target = tenv.Program(test)
         tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
 
-    test_group = tenv.Program(TEST_GROUP_SRC, LIBS=libraries)
+    test_group = tenv.Program(TEST_GROUP_SRC)
     tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), test_group)
 
 if __name__ == "SCons.Script":

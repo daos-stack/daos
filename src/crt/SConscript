@@ -44,15 +44,17 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-    libraries = ['crt_util', 'mercury', 'abt']
-
-    prereqs.require(env, 'mercury', 'pmix', 'argobots')
-
     denv = env.Clone()
+
+    libraries = ['crt_util']
+
     denv.Append(CPPPATH=['#/src/crt'])
+    denv.AppendUnique(LIBS=libraries)
+    prereqs.require(denv, 'mercury', 'pmix', 'argobots')
+    denv.AppendUnique(RPATH=['$PREFIX/lib'])
 
     crt_targets = denv.SharedObject(Glob('*.c'))
-    crt = denv.SharedLibrary('libcrt', crt_targets, LIBS=libraries)
+    crt = denv.SharedLibrary('libcrt', crt_targets)
     denv.Install('$PREFIX/lib/', crt)
 
     Export('crt_targets')

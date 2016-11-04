@@ -87,17 +87,6 @@ def scons():
 
     platform = os.uname()[0]
     env = DefaultEnvironment()
-    config = Configure(env)
-    if not config.CheckLib('crypto'):
-        config.Finish()
-        print "for libcrypto install openssl-devel package"
-        exit(1)
-
-    for required_header in ['openssl/md5.h']:
-        if not config.CheckHeader(required_header):
-            config.Finish()
-            exit(1)
-    config.Finish()
 
     opts_file = os.path.join(Dir('#').abspath, 'cart-%s.conf' % platform)
     opts = Variables(opts_file)
