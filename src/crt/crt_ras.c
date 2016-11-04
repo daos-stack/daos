@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -97,9 +97,10 @@ ras_add_rank_entry(struct crt_grp_priv *grp_priv, crt_rank_t rank)
 	grp_priv->gp_pri_srv->ps_failed_ranks->rl_ranks[old_num] = rank;
 	C_ASSERT(grp_priv->gp_pri_srv->ps_failed_ranks->rl_nr.num <
 		 grp_priv->gp_size);
-
 out:
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+
+	crt_barrier_handle_eviction(grp_priv);
 
 	return rc;
 }

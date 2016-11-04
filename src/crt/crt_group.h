@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,8 @@
 #ifndef __CRT_GROUP_H__
 #define __CRT_GROUP_H__
 
-#include <crt_pmix.h>
+#include "crt_barrier.h"
+#include "crt_pmix.h"
 
 enum crt_grp_status {
 	CRT_GRP_CREATING = 0x66,
@@ -152,6 +153,8 @@ struct crt_grp_priv {
 	struct crt_rank_map	*gp_rank_map;
 	/* pmix errhdlr ref, used for PMIx_Deregister_event_handler */
 	size_t			 gp_errhdlr_ref;
+	/* Barrier information.  Only used in local service groups */
+	struct crt_barrier_info	 gp_barrier_info;
 
 	/* TODO: reuse crt_corpc_info here */
 	/*

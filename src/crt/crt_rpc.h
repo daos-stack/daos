@@ -218,6 +218,8 @@ enum {
 	CRT_OPC_IV_INVALIDATE			= CRT_OPC_INTERNAL_BASE + 0x302,
 	CRT_OPC_IV_REFRESH			= CRT_OPC_INTERNAL_BASE + 0x303,
 	CRT_OPC_IV_SYNC				= CRT_OPC_INTERNAL_BASE + 0x304,
+	CRT_OPC_BARRIER_ENTER			= CRT_OPC_INTERNAL_BASE + 0x400,
+	CRT_OPC_BARRIER_EXIT			= CRT_OPC_INTERNAL_BASE + 0x401,
 };
 
 /* CRT internal RPC definitions */
@@ -263,6 +265,14 @@ struct crt_uri_lookup_in {
 struct crt_uri_lookup_out {
 	crt_phy_addr_t		 ul_uri;
 	int			 ul_rc;
+};
+
+struct crt_barrier_in {
+	int			b_num;
+};
+
+struct crt_barrier_out {
+	int			b_rc;
 };
 
 /* CRT internal RPC format definitions */

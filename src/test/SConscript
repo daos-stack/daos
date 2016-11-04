@@ -1,5 +1,5 @@
 #!python
-# Copyright (C) 2016 Intel Corporation
+# Copyright (C) 2016-2017 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,8 @@
 
 import os
 
-ECHO_SRC = ['crt_echo_cli.c', 'crt_echo_srv.c', 'crt_echo_srv2.c']
+SIMPLE_TEST_SRC = ['crt_echo_cli.c', 'crt_echo_srv.c', 'crt_echo_srv2.c',
+                   'test_crt_barrier.c']
 BASIC_SRC = ['crt_basic.c']
 TEST_GROUP_SRC = 'test_group.c'
 COMMON_SRC = 'fake_events.c'
@@ -58,8 +59,8 @@ def scons():
 
     prereqs.require(tenv, 'crypto', 'pmix', 'mercury')
 
-    # a simple example to use crt_xxx APIs
-    for test in ECHO_SRC:
+    # Compile all of the tests
+    for test in SIMPLE_TEST_SRC:
         target = tenv.Program(test)
         tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
 
@@ -74,6 +75,5 @@ def scons():
 
     benv.AppendUnique(CFLAGS=['-std=gnu99', '-pedantic'])
     benv.Program(BASIC_SRC)
-
 if __name__ == "SCons.Script":
     scons()

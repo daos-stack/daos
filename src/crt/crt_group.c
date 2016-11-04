@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -564,6 +564,8 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 
 	pthread_rwlock_init(&grp_priv->gp_rwlock, NULL);
 
+	crt_barrier_info_init(grp_priv);
+
 	*grp_priv_created = grp_priv;
 
 out:
@@ -623,6 +625,8 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 		free(grp_priv->gp_psr_phy_addr);
 	pthread_rwlock_destroy(&grp_priv->gp_rwlock);
 	free(grp_priv->gp_pub.cg_grpid);
+
+	crt_barrier_info_destroy(grp_priv);
 
 	C_FREE_PTR(grp_priv);
 }
@@ -741,9 +745,10 @@ crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 	if (rc != 0) {
 		C_ERROR("crt_idx_in_rank_list(rank %d, group %s) failed, "
 			"rc: %d.\n", pri_rank, gc_in->gc_grp_id, rc);
-		rc = -CER_OOG;
+		C_GOTO(out, rc = -CER_OOG);
 	}
 
+	crt_barrier_update_master(grp_priv);
 out:
 	gc_out->gc_rank = pri_rank;
 	gc_out->gc_rc = rc;
@@ -1194,7 +1199,6 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 
 		gd_req_sent =  true;
 	}
-
 out:
 	if (gd_req_sent == false) {
 		C_ASSERT(rc != 0);
@@ -1230,7 +1234,7 @@ crt_group_rank(crt_group_t *grp, crt_rank_t *rank)
 			grp_gdata->gg_cli_pri_grp->gp_self;
 	} else {
 		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
-		if (!grp_priv->gp_local) {
+		if (grp_priv->gp_primary && !grp_priv->gp_local) {
 			C_DEBUG("not belong to attached remote group (%s).\n",
 				grp->cg_grpid);
 			C_GOTO(out, rc = -CER_OOG);
@@ -1450,8 +1454,12 @@ crt_primary_grp_init(crt_group_id_t grpid)
 			C_GOTO(out, rc);
 		}
 		rc = crt_grp_ras_init(grp_priv);
-		if (rc != 0)
+		if (rc != 0) {
 			C_ERROR("crt_grp_ras_init() failed, rc %d.\n", rc);
+			C_GOTO(out, rc);
+		}
+
+		crt_barrier_update_master(grp_priv);
 	} else {
 		grp_gdata->gg_cli_pri_grp = grp_priv;
 	}

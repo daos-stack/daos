@@ -252,7 +252,6 @@ struct crt_corpc_ops crt_rank_evict_co_ops = {
 	.co_aggregate = crt_rank_evict_corpc_aggregate,
 };
 
-
 static struct crt_msg_field *crt_iv_fetch_in_fields[] = {
 	&CMF_IOVEC, /* crt_ivns_id */
 	&CMF_IOVEC, /* key */
@@ -310,6 +309,22 @@ static struct crt_req_format CQF_CRT_IV_UPDATE =
 	DEFINE_CRT_REQ_FMT("CRT_IV_UPDATE", crt_iv_update_in_fields,
 			crt_iv_update_out_fields);
 
+/* barrier */
+static struct crt_msg_field *crt_barrier_in_fields[] = {
+	&CMF_INT,		/* enter_num */
+};
+
+static struct crt_msg_field *crt_barrier_out_fields[] = {
+	&CMF_INT,		/* barrier_rc */
+};
+
+static struct crt_req_format CQF_CRT_BARRIER =
+	DEFINE_CRT_REQ_FMT("CRT_BARRIER", crt_barrier_in_fields,
+			   crt_barrier_out_fields);
+
+static struct crt_corpc_ops crt_barrier_corpc_ops = {
+	.co_aggregate = crt_hdlr_barrier_aggregate,
+};
 
 struct crt_internal_rpc crt_internal_rpcs[] = {
 	{
@@ -456,6 +471,22 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_req_fmt	= &CQF_CRT_IV_SYNC,
 		.ir_hdlr	= crt_hdlr_iv_sync,
 		.ir_co_ops	= &crt_iv_sync_co_ops,
+	}, {
+		.ir_name	= "CRT_BARRIER_ENTER",
+		.ir_opc		= CRT_OPC_BARRIER_ENTER,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_BARRIER,
+		.ir_hdlr	= crt_hdlr_barrier_enter,
+		.ir_co_ops	= &crt_barrier_corpc_ops,
+	}, {
+		.ir_name	= "CRT_BARRIER_EXIT",
+		.ir_opc		= CRT_OPC_BARRIER_EXIT,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_BARRIER,
+		.ir_hdlr	= crt_hdlr_barrier_exit,
+		.ir_co_ops	= &crt_barrier_corpc_ops,
 	}, {
 		.ir_opc		= 0
 	}

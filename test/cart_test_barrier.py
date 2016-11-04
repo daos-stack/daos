@@ -1,5 +1,5 @@
-#!python
-# Copyright (C) 2016-2017 Intel Corporation
+#!/usr/bin/env python3
+# Copyright (C) 2017 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -35,30 +35,67 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""Build cart src"""
+# -*- coding: utf-8 -*-
+"""
+cart barrier test
 
-def scons():
-    """Scons function"""
-    Import('env', 'prereqs')
+Usage:
 
-    env.AppendUnique(LIBPATH=[Dir('.')])
+Execute from the install/$arch/TESTING directory.
 
-    denv = env.Clone()
+python3 test_runner srcipts/cart_test_barrier.yml
 
-    libraries = ['crt_util']
+To use valgrind memory checking
+set TR_USE_VALGRIND in cart_test_barrier.yml to memcheck
 
-    denv.Append(CPPPATH=['#/src/crt'])
-    denv.AppendUnique(LIBS=libraries)
-    prereqs.require(denv, 'mercury', 'pmix', 'argobots')
-    denv.AppendUnique(RPATH=['$PREFIX/lib'])
+To use valgrind call (callgrind) profiling
+set TR_USE_VALGRIND in cart_test_barrier.yml to callgrind
 
-    crt_targets = denv.SharedObject(Glob('*.c'))
-    crt = denv.SharedLibrary('libcrt', crt_targets)
-    denv.Install('$PREFIX/lib/', crt)
+"""
 
-    Default(crt)
+import time
+import commontestsuite
 
-    Export('crt_targets')
+class TestBarrier(commontestsuite.CommonTestSuite):
+    """ Execute process set tests """
+    pass_env = " -x CCI_CONFIG -x CRT_LOG_MASK "
 
-if __name__ == "SCons.Script":
-    scons()
+    def setUp(self):
+        self.get_test_info()
+
+    def test_barrier_test(self):
+        """Simple barrier test"""
+        testmsg = self.shortDescription()
+
+        servers = self.get_server_list()
+        if not servers:
+            self.skipTest('Server list is empty.')
+
+        all_servers = ','.join(servers)
+        hosts = ''.join([' -H ', all_servers])
+
+        # Launch a test_crt_barrier in the background.
+        # This will remain running for the duration.
+        proc_srv = self.launch_bg(testmsg, '1', self.pass_env, \
+                                  hosts, 'tests/test_crt_barrier')
+
+        if proc_srv is None:
+            self.fail("Server launch failed, return code %s" \
+                       % proc_srv.returncode)
+
+        time.sleep(2)
+
+        # Verify the server is still running.
+        if not self.check_process(proc_srv):
+            procrtn = self.stop_process(testmsg, proc_srv)
+            self.fail("Server did not launch, return code %s" \
+                       % procrtn)
+        self.logger.info("Server running")
+
+        # Stop the server.  This will normally run forever because of the hold
+        # option, so allow stop_process() to kill it.
+        srv_rtn = self.stop_process(testmsg, proc_srv)
+
+        if srv_rtn:
+            self.fail("Barrier test Failed, return code %d" % srv_rtn)
+        return srv_rtn

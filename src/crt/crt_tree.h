@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -125,7 +125,7 @@ crt_tree_topo_valid(int tree_topo)
 					   tree_ratio <= CRT_TREE_MAX_RATIO))) {
 		valid = true;
 	} else {
-		C_ERROR("invalid parameter, tree_type %d, tee_ratio %d.\n",
+		C_ERROR("invalid parameter, tree_type %d, tree_ratio %d.\n",
 			tree_type, tree_ratio);
 		valid = false;
 	}

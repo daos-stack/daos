@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -713,6 +713,31 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 int
 crt_corpc_register(crt_opcode_t opc, struct crt_req_format *drf,
 		   crt_rpc_cb_t rpc_handler, struct crt_corpc_ops *co_ops);
+
+/**
+ * Start execution of the next available barrier.  If this function
+ * returns an error, no internal state is changed.
+ *
+ * \param grp [IN]		CRT group handle [for future use].   Only the
+ *                              primary service group is presently supported
+ *                              and it may be indicated by passing NULL.
+ * \param complete_cb [IN]	Required callback to be executed when barrier
+ *                              is complete
+ * \param cb_arg [IN]		Optional argument passed to completion callback
+ *
+ * \return			zero on success
+ *                              -CER_BUSY if a barrier slot isn't available
+ *                              suggesting that prior barriers need to complete
+ *                              before trying again.
+ *                              Other negative error codes are possible if
+ *                              grp doesn't exist or complete_cb is invalid.
+ *
+ * When the rank that is responsible to notify other members of the set of
+ * barrier events hits an unrecoverable error (e.g. unable to communicate with
+ * any other ranks), the completion callback will be invoked with an error.
+ */
+int
+crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg);
 
 /**
  * Query the caller's rank number within group.

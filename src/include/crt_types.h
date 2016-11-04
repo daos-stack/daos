@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -355,6 +355,17 @@ typedef int (*crt_rpc_cb_t)(crt_rpc_t *rpc);
  *				the RPC request.
  */
 typedef int (*crt_cb_t)(const struct crt_cb_info *cb_info);
+
+struct crt_barrier_cb_info {
+	void	*bci_arg;  /* optional argument passed by user */
+	int	bci_rc;    /* return code for barrier */
+};
+/**
+ * completion callback for crt_barrier
+ *
+ * \param arg [IN]	User defined argument
+ */
+typedef void (*crt_barrier_cb_t)(struct crt_barrier_cb_info *info);
 
 /* completion callback for bulk transferring, i.e. crt_bulk_transfer() */
 typedef int (*crt_bulk_cb_t)(const struct crt_bulk_cb_info *cb_info);
