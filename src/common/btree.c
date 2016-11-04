@@ -2720,7 +2720,7 @@ dbtree_iter_prev(daos_handle_t ih)
  * address in \a key or/and \a val is/are NULL, then this function only
  * returns addresses of key or/and value of the current record.
  *
- * \parma ih	[IN]	Iterator open handle.
+ * \param ih	[IN]	Iterator open handle.
  * \param key	[OUT]	Sink buffer for the returned key, the key address is
  *			returned if buffer address is NULL.
  * \param val	[OUT]	Sink buffer for the returned value, the value address

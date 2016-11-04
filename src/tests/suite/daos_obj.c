@@ -1157,7 +1157,7 @@ setup(void **state)
 	if (arg->myrank == 0) {
 		/** create pool with minimal size */
 		rc = daos_pool_create(0731, geteuid(), getegid(), "srv_grp",
-				      NULL, "pmem", 256 << 20, &arg->svc,
+				      NULL, "pmem", 1024 << 20, &arg->svc,
 				      arg->pool_uuid, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
