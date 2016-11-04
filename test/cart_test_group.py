@@ -59,143 +59,31 @@ set TR_USE_VALGRIND in cart_test_group.yml to callgrind
 """
 
 import os
-import unittest
-import subprocess
-import shlex
-import time
-import getpass
+import commontestsuite
 
 #pylint: disable=broad-except
 
 NPROC = "1"
+testsuite = "Test Group"
+testprocess = "test_group"
 
 def setUpModule():
     """ set up test environment """
-
-    print("\nTestGroup: module setup begin")
-    print("TestGroup: module setup end\n\n")
+    commontestsuite.commonSetUpModule(testsuite)
 
 def tearDownModule():
     """teardown module for test"""
-    print("TestGroup: module tearDown begin")
-    testmsg = "terminate any group_test processes"
-    cmdstr = "pkill test_goup"
-    launch_test(testmsg, cmdstr)
-    print("TestGroup: module tearDown end\n\n")
+    commontestsuite.commonTearDownModule(testsuite, testprocess)
 
-def launch_test(msg, cmdstr):
-    """Launch process group test"""
-    print("TestGroup: start %s - input string:\n %s\n" % (msg, cmdstr))
-    cmdarg = shlex.split(cmdstr)
-    start_time = time.time()
-    procrtn = subprocess.call(cmdarg, timeout=180,
-                              stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL)
-    elapsed = time.time() - start_time
-    print("TestGroup: %s - return code: %d test duration: %d\n" %
-          (msg, procrtn, elapsed))
-    return procrtn
-
-def launch_process(msg, cmdstr):
-    """Launch process group """
-    print("TestGroup: start process %s - input string:\n %s\n" % (msg, cmdstr))
-    cmdarg = shlex.split(cmdstr)
-    proc = subprocess.Popen(cmdarg,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL)
-    return proc
-
-def stop_process(msg, proc):
-    """ wait for process to terminate """
-    print("TestGroup: %s - stopping processes :%s" % (msg, proc.pid))
-    i = 60
-    procrtn = None
-    while i:
-        proc.poll()
-        procrtn = proc.returncode
-        if procrtn is not None:
-            break
-        else:
-            time.sleep(1)
-            i = i - 1
-
-    if procrtn is None:
-        print("TestGroup: Again stopping processes :%s" % proc.pid)
-        procrtn = -1
-        try:
-            proc.terminate()
-            proc.wait(2)
-        except ProcessLookupError:
-            pass
-        except Exception:
-            print("TestGroup: killing processes :%s" % proc.pid)
-            proc.kill()
-
-    print("TestGroup: %s - return code: %d\n" % (msg, procrtn))
-    return procrtn
-
-def logdir_name(fullname):
-    """create the log directory name"""
-    names = fullname.split('.')
-    items = names[-1].split('_', maxsplit=2)
-    return "/" + items[2]
-
-def add_prefix_logdir(testcase_id):
-    """add the log directory to the prefix"""
-    prefix = ""
-    ompi_bin = os.getenv('CRT_OMPI_BIN', "")
-    log_path = os.getenv("CRT_TESTLOG", "test_group") + logdir_name(testcase_id)
-    os.makedirs(log_path, exist_ok=True)
-    use_valgrind = os.getenv('TR_USE_VALGRIND', default="")
-    if use_valgrind == 'memcheck':
-        suppressfile = os.path.join(os.getenv('CRT_PREFIX', ".."), "etc", \
-                       "memcheck-cart.supp")
-        prefix = "valgrind --xml=yes" + \
-            " --xml-file=" + log_path + "/valgrind.%q{PMIX_ID}.xml" + \
-            " --leak-check=yes --gen-suppressions=all" + \
-            " --suppressions=" + suppressfile + " --show-reachable=yes"
-    elif use_valgrind == "callgrind":
-        prefix = "valgrind --tool=callgrind --callgrind-out-file=" + \
-                 log_path + "/callgrind.%q{PMIX_ID}.out"
-
-    if os.getenv('TR_USE_URI', ""):
-        dvmfile = " --hnp file:%s " % os.getenv('TR_USE_URI')
-    else:
-        dvmfile = " "
-    if getpass.getuser() == "root":
-        allow_root = " --allow-run-as-root"
-    else:
-        allow_root = ""
-    cmdstr = "%sorterun%s--output-filename %s%s" % \
-             (ompi_bin, dvmfile, log_path, allow_root)
-
-    return (cmdstr, prefix)
-
-def add_server_client():
-    """create the server and client prefix"""
-    server = os.getenv('CRT_TEST_SERVER')
-    if server:
-        local_server = " -H %s " % server
-    else:
-        local_server = " "
-    client = os.getenv('CRT_TEST_CLIENT')
-    if client:
-        local_client = " -H %s " % client
-    else:
-        local_client = " "
-
-    return (local_server, local_client)
-
-
-class TestGroup(unittest.TestCase):
+class TestGroup(commontestsuite.CommonTestSuite):
     """ Execute group tests """
     pass_env = " -x PATH -x LD_LIBRARY_PATH -x CCI_CONFIG "
 
     def one_node_test_group(self):
         """Simple process group test 1"""
         testmsg = self.shortDescription()
-        (cmd, prefix) = add_prefix_logdir(self.id())
-        (server, client) = add_server_client()
+        (cmd, prefix) = self.common_add_prefix_logdir(self.id(), testprocess)
+        (server, client) = self.common_add_server_client()
         cmdstr = cmd + \
           "%s-np %s %s%s tests/test_group " % \
           (server, NPROC, self.pass_env, prefix) + \
@@ -203,27 +91,29 @@ class TestGroup(unittest.TestCase):
           "%s-np %s %s%s tests/test_group " % \
           (client, NPROC, self.pass_env, prefix) + \
           "--name client_group --attach_to service_group"
-        procrtn = launch_test(testmsg, cmdstr)
+        procrtn = self.common_launch_test(testsuite, testmsg, cmdstr)
         return procrtn
 
     def two_node_test_group(self):
         """Simple process group test 1"""
         testmsg = self.shortDescription()
-        print("test name: %s" % self.id())
-        (cmd, prefix) = add_prefix_logdir(self.id() + "_server_node")
-        (server, client) = add_server_client()
+        self.logger.info("test name: %s", self.id())
+        (cmd, prefix) = self.common_add_prefix_logdir(self.id() + \
+          "_server_node", testprocess)
+        (server, client) = self.common_add_server_client()
         cmdstr = cmd + \
           "%s-np %s %s%s tests/test_group " % \
           (server, NPROC, self.pass_env, prefix) + \
           "--name service_group --is_service --holdtime 5"
-        proc_srv = launch_process(testmsg, cmdstr)
-        (cmd, prefix) = add_prefix_logdir(self.id() + "_client_node")
+        proc_srv = self.common_launch_process(testsuite, testmsg, cmdstr)
+        (cmd, prefix) = self.common_add_prefix_logdir(self.id() + \
+          "_client_node", testprocess)
         cmdstr = cmd + \
           "%s-np %s %s%s tests/test_group " % \
           (client, NPROC, self.pass_env, prefix) + \
           "--name client_group --attach_to service_group"
-        procrtn = launch_test(testmsg, cmdstr)
-        procrtn |= stop_process(testmsg, proc_srv)
+        procrtn = self.common_launch_test(testsuite, testmsg, cmdstr)
+        procrtn |= self.common_stop_process(testsuite, testmsg, proc_srv)
         return procrtn
 
     def test_group_test(self):
@@ -235,14 +125,14 @@ class TestGroup(unittest.TestCase):
 
     def setUp(self):
         """teardown module for test"""
-        print("******************************************************")
-        print("TestGroup: begin %s " % self.shortDescription())
+        self.logger.info("**************************************************")
+        self.logger.info("TestGroup: begin %s ", self.shortDescription())
 
     def tearDown(self):
         """teardown module for test"""
-        print("TestGroup: tearDown begin")
+        self.logger.info("TestGroup: tearDown begin")
         testmsg = "terminate any test_group processes"
         cmdstr = "pkill test_group"
-        launch_test(testmsg, cmdstr)
-        print("TestGroup: end  %s"  % self.shortDescription())
-        print("******************************************************")
+        self.common_launch_test(testsuite, testmsg, cmdstr)
+        self.logger.info("TestGroup: end  %s", self.shortDescription())
+        self.logger.info("**************************************************")

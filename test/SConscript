@@ -36,7 +36,7 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """install test scripts"""
 
-TESTSCRIPTS = ["cart_echo_test.py", "cart_test_group.py"]
+TESTSCRIPTS = ["cart_echo_test.py", "cart_test_group.py", "commontestsuite.py"]
 
 def scons():
     """Run scons"""
