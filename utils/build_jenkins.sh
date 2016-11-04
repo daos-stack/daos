@@ -3,4 +3,4 @@
 set -e
 set -x
 
-scons_local/comp_build.sh -c utils/build.config
+scons_local/utils/comp_build.sh -c utils/build.config
