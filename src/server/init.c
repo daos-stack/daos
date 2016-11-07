@@ -145,7 +145,7 @@ server_init()
 	D_DEBUG(DF_SERVER, "Module interface successfully initialized\n");
 
 	/* initialize the network layer */
-	rc = crt_init(NULL, NULL, CRT_FLAG_BIT_SERVER);
+	rc = dtp_init(true);
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	D_DEBUG(DF_SERVER, "Network successfully initialized\n");
@@ -166,7 +166,7 @@ server_init()
 
 exit_mod_loaded:
 	dss_module_unload_all();
-	crt_finalize();
+	dtp_finalize();
 exit_mod_init:
 	dss_module_fini(true);
 	return rc;
@@ -178,7 +178,7 @@ server_fini(bool force)
 	D_DEBUG(DF_SERVER, "Service is shutting down\n");
 	dss_srv_fini();
 	dss_module_fini(force);
-	crt_finalize();
+	dtp_finalize();
 	dss_module_unload_all();
 }
 

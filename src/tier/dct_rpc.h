@@ -25,7 +25,7 @@
  *
  * This is naturally shared by both dctc and dcts. The in and out data
  * structures may safely contain compiler-generated paddings, which will be
- * removed crt's serialization process.
+ * removed dtp's serialization process.
  *
  * Every pool operation shall pass in the UUID of the pool it intends to access
  * and the UUID of its pool handle. The pool UUID enables server to quickly
@@ -46,8 +46,8 @@
 /*
  * RPC operation codes
  *
- * These are for daos_rpc::cr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
- * crt_req_create(..., opc, ...). See daos_rpc.h.
+ * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
+ * dtp_req_create(..., opc, ...). See daos_rpc.h.
  */
 enum dct_operation {
 	DCT_PING		= 1,
@@ -74,8 +74,8 @@ struct tier_fetch_out {
 };
 
 int
-dct_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
-	       crt_opcode_t opc, crt_rpc_t **req);
+dct_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
+	       dtp_opcode_t opc, dtp_rpc_t **req);
 
 
 extern struct daos_rpc dct_rpcs[];

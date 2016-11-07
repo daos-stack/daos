@@ -31,7 +31,7 @@
 #include <daos_errno.h>
 #include <daos/common.h>
 #include <daos/mem.h>
-#include <crt_util/hash.h>
+#include <daos/hash.h>
 #include <daos/btree.h>
 #include <daos_types.h>
 #include <vos_internal.h>
@@ -62,13 +62,13 @@ struct vos_co_iter {
 static int
 vc_hkey_size(struct btr_instance *tins)
 {
-	return sizeof(struct crt_uuid);
+	return sizeof(struct daos_uuid);
 }
 
 static void
-vc_hkey_gen(struct btr_instance *tins, crt_iov_t *key_iov, void *hkey)
+vc_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 {
-	D_ASSERT(key_iov->iov_len == sizeof(struct crt_uuid));
+	D_ASSERT(key_iov->iov_len == sizeof(struct daos_uuid));
 	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
 }
 
@@ -97,20 +97,20 @@ vc_rec_free(struct btr_instance *tins, struct btr_record *rec)
 }
 
 static int
-vc_rec_alloc(struct btr_instance *tins, crt_iov_t *key_iov,
-	     crt_iov_t *val_iov, struct btr_record *rec)
+vc_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
+	     daos_iov_t *val_iov, struct btr_record *rec)
 {
 	TMMID(struct vos_container)	vc_cid;
 	struct vos_container		*vc_rec = NULL;
 	struct vos_object_index		*vc_oi = NULL;
 	struct vc_val_buf		*vc_val_buf = NULL;
-	struct crt_uuid			*u_key = NULL;
+	struct daos_uuid		*u_key = NULL;
 	int				rc = 0;
 
 	D_DEBUG(DF_VOS3, "Allocating entry for container table\n");
-	u_key = (struct crt_uuid *)key_iov->iov_buf;
+	u_key = (struct daos_uuid *)key_iov->iov_buf;
 	D_DEBUG(DF_VOS3, DF_UUID" Allocating record for container\n",
-		CP_UUID(u_key->uuid));
+		DP_UUID(u_key->uuid));
 
 	vc_val_buf = (struct vc_val_buf *)(val_iov->iov_buf);
 	vc_cid = umem_znew_typed(&tins->ti_umm, struct vos_container);
@@ -147,7 +147,7 @@ exit:
 
 static int
 vc_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	     crt_iov_t *key_iov, crt_iov_t *val_iov)
+	     daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
 	struct vos_container		*vc_rec = NULL;
 	struct vc_val_buf		*vc_val_buf = NULL;
@@ -162,7 +162,7 @@ vc_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 vc_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      crt_iov_t *key, crt_iov_t *val)
+	      daos_iov_t *key, daos_iov_t *val)
 {
 	D_DEBUG(DF_VOS3, "At VOS container rec update\n");
 	D_DEBUG(DF_VOS3, "Record exists already. Nothing to do\n");
@@ -179,20 +179,20 @@ static btr_ops_t vct_ops = {
 };
 
 static inline int
-vos_co_tree_lookup(struct vp_hdl *vpool, struct crt_uuid *ukey,
+vos_co_tree_lookup(struct vp_hdl *vpool, struct daos_uuid *ukey,
 		   struct vc_val_buf *sbuf)
 {
 	struct vos_container_index	*coi;
 	daos_handle_t			btr_hdl;
-	crt_iov_t			key, value;
+	daos_iov_t			key, value;
 	int				rc;
 
 	coi = vos_pool2coi_table(vpool);
 	rc = dbtree_open_inplace(&coi->ci_btree, &vpool->vp_uma,
 				 &btr_hdl);
 	D_ASSERT(rc == 0);
-	crt_iov_set(&key, ukey, sizeof(struct crt_uuid));
-	crt_iov_set(&value, sbuf, sizeof(struct vc_val_buf));
+	daos_iov_set(&key, ukey, sizeof(struct daos_uuid));
+	daos_iov_set(&value, sbuf, sizeof(struct vc_val_buf));
 	return dbtree_lookup(btr_hdl, &key, &value);
 }
 
@@ -206,7 +206,7 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid)
 
 	int				rc = 0;
 	struct vp_hdl			*vpool = NULL;
-	struct crt_uuid			ukey;
+	struct daos_uuid		ukey;
 	struct vc_val_buf		s_buf;
 
 	vpool = vos_hdl2pool(poh);
@@ -227,10 +227,10 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid)
 	}
 
 	TX_BEGIN(vpool->vp_ph) {
-		crt_iov_t key, value;
+		daos_iov_t key, value;
 
-		crt_iov_set(&key, &ukey, sizeof(struct crt_uuid));
-		crt_iov_set(&value, &s_buf, sizeof(struct vc_val_buf));
+		daos_iov_set(&key, &ukey, sizeof(struct daos_uuid));
+		daos_iov_set(&value, &s_buf, sizeof(struct vc_val_buf));
 
 		rc = dbtree_update(vpool->vp_ct_hdl, &key, &value);
 		if (rc) {
@@ -255,13 +255,13 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	int				rc = 0;
 	struct vp_hdl			*vpool = NULL;
-	struct crt_uuid			ukey;
+	struct daos_uuid		ukey;
 	struct vc_val_buf		s_buf;
 	struct vc_hdl			*co_hdl = NULL;
 
-	D_DEBUG(DF_VOS2, "Open container "DF_UUID"\n", CP_UUID(co_uuid));
+	D_DEBUG(DF_VOS2, "Open container "DF_UUID"\n", DP_UUID(co_uuid));
 	D_DEBUG(DF_VOS2, "Checking if container handle exists for "DF_UUID"\n",
-		CP_UUID(co_uuid));
+		DP_UUID(co_uuid));
 	D_DEBUG(DF_VOS3, "looking up co_id in container index\n");
 
 	vpool = vos_hdl2pool(poh);
@@ -285,7 +285,7 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	rc = vos_co_tree_lookup(vpool, &ukey, &s_buf);
 	if (rc) {
 		D_DEBUG(DF_VOS3, DF_UUID" container does not exist\n",
-			CP_UUID(co_uuid));
+			DP_UUID(co_uuid));
 		D_GOTO(exit, rc);
 	}
 
@@ -378,14 +378,14 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 
 	int				rc = 0;
 	struct vp_hdl			*vpool;
-	struct crt_uuid			ukey;
+	struct daos_uuid		ukey;
 	struct vc_val_buf		s_buf;
 	struct vos_object_index		*vc_oi = NULL;
 	struct vc_hdl			*co_hdl = NULL;
 
 	uuid_copy(ukey.uuid, co_uuid);
 	D_DEBUG(DF_VOS3, "Destroying CO ID in container index"DF_UUID"\n",
-		CP_UUID(ukey.uuid));
+		DP_UUID(ukey.uuid));
 
 	vpool = vos_hdl2pool(poh);
 	if (vpool == NULL) {
@@ -403,7 +403,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 	rc = vos_co_tree_lookup(vpool, &ukey, &s_buf);
 	if (rc) {
 		D_DEBUG(DF_VOS3, DF_UUID" container does not exist\n",
-			CP_UUID(co_uuid));
+			DP_UUID(co_uuid));
 		D_GOTO(exit, rc);
 	}
 
@@ -574,16 +574,16 @@ vos_co_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		  daos_hash_out_t *anchor)
 {
 	struct vos_co_iter	*co_iter = vos_iter2co_iter(iter);
-	crt_iov_t		key, value;
-	struct crt_uuid		ukey;
+	daos_iov_t		key, value;
+	struct daos_uuid	ukey;
 	struct vc_val_buf	vc_val_buf;
 	int			rc;
 
 	D_DEBUG(DF_VOS2, "Container iter co uuid fetch callback\n");
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
-	crt_iov_set(&key, &ukey, sizeof(struct crt_uuid));
-	crt_iov_set(&value, &vc_val_buf, sizeof(struct vc_val_buf));
+	daos_iov_set(&key, &ukey, sizeof(struct daos_uuid));
+	daos_iov_set(&value, &vc_val_buf, sizeof(struct vc_val_buf));
 
 	uuid_clear(it_entry->ie_couuid);
 
@@ -608,13 +608,13 @@ static int
 vos_co_iter_check(struct vos_co_iter *co_iter, daos_hash_out_t *anchor)
 {
 
-	crt_iov_t		key, value;
-	struct crt_uuid		ukey;
+	daos_iov_t		key, value;
+	struct daos_uuid	ukey;
 	struct vc_val_buf	vc_val_buf;
 	int			rc = 0;
 
-	crt_iov_set(&key, &ukey, sizeof(struct crt_uuid));
-	crt_iov_set(&value, &vc_val_buf, sizeof(struct vc_val_buf));
+	daos_iov_set(&key, &ukey, sizeof(struct daos_uuid));
+	daos_iov_set(&value, &vc_val_buf, sizeof(struct vc_val_buf));
 	rc = dbtree_iter_fetch(co_iter->cot_hdl, &key, &value, anchor);
 	if (rc != 0) {
 		D_ERROR("Error while fetching co info: %d\n", rc);

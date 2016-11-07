@@ -97,7 +97,7 @@ vos_oref_lru_alloc(void *key, unsigned int ksize,
 	oref->or_co	= co_hdl;
 
 	D_DEBUG(DF_VOS2, "oref create_cb co uuid:"DF_UUID"\n",
-		CP_UUID(co_hdl->vc_id));
+		DP_UUID(co_hdl->vc_id));
 	D_DEBUG(DF_VOS2, "Object Hold of obj_id: "DF_UOID"\n",
 		DP_UOID(lkey->vlk_obj_id));
 
@@ -145,7 +145,7 @@ vos_oref_lru_printkey(void *key, unsigned int ksize)
 	lkey = (struct vos_lru_key *) key;
 	D_ASSERT(lkey != NULL);
 	D_DEBUG(DF_VOS2, "Container uuid:"DF_UUID"\n",
-		CP_UUID(lkey->vlk_co_uuid));
+		DP_UUID(lkey->vlk_co_uuid));
 	D_DEBUG(DF_VOS2, "Object id: "DF_UOID"\n",
 		DP_UOID(lkey->vlk_obj_id));
 }
@@ -234,7 +234,7 @@ vos_obj_ref_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	D_DEBUG(DF_VOS2, "Object "DF_UOID" ref hold successful\n",
 		DP_UOID(oid));
 	D_DEBUG(DF_VOS2, "Container UUID:"DF_UUID"\n",
-		CP_UUID(lref->or_co->vc_id));
+		DP_UUID(lref->or_co->vc_id));
 	*oref_p = lref;
 
 	return	rc;

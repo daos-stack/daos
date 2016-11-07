@@ -30,7 +30,7 @@
 #include <daos_srv/daos_mgmt_srv.h>
 #include "srv_layout.h"
 
-static CRT_LIST_HEAD(mpool_cache);
+static DAOS_LIST_HEAD(mpool_cache);
 static pthread_mutex_t mpool_cache_lock;
 
 static int
@@ -40,7 +40,7 @@ mpool_init(const uuid_t pool_uuid, struct ds_pool_mpool *mp)
 	char   *path;
 	int	rc;
 
-	CRT_INIT_LIST_HEAD(&mp->mp_entry);
+	DAOS_INIT_LIST_HEAD(&mp->mp_entry);
 	uuid_copy(mp->mp_uuid, pool_uuid);
 	mp->mp_ref = 1;
 
@@ -100,14 +100,14 @@ ds_pool_mpool_lookup(const uuid_t pool_uuid, struct ds_pool_mpool **mpool)
 	struct ds_pool_mpool   *mp;
 	int			rc = 0;
 
-	D_DEBUG(DF_DSMS, DF_UUID": looking up\n", CP_UUID(pool_uuid));
+	D_DEBUG(DF_DSMS, DF_UUID": looking up\n", DP_UUID(pool_uuid));
 
 	pthread_mutex_lock(&mpool_cache_lock);
 
-	crt_list_for_each_entry(mp, &mpool_cache, mp_entry) {
+	daos_list_for_each_entry(mp, &mpool_cache, mp_entry) {
 		if (uuid_compare(mp->mp_uuid, pool_uuid) == 0) {
 			D_DEBUG(DF_DSMS, DF_UUID": found %p\n",
-				CP_UUID(pool_uuid), mp);
+				DP_UUID(pool_uuid), mp);
 			ds_pool_mpool_get(mp);
 			*mpool = mp;
 			D_GOTO(out, rc = 0);
@@ -124,8 +124,8 @@ ds_pool_mpool_lookup(const uuid_t pool_uuid, struct ds_pool_mpool **mpool)
 		D_GOTO(out, rc);
 	}
 
-	crt_list_add(&mp->mp_entry, &mpool_cache);
-	D_DEBUG(DF_DSMS, DF_UUID": allocated %p\n", CP_UUID(pool_uuid), mp);
+	daos_list_add(&mp->mp_entry, &mpool_cache);
+	D_DEBUG(DF_DSMS, DF_UUID": allocated %p\n", DP_UUID(pool_uuid), mp);
 
 	*mpool = mp;
 out:
@@ -154,7 +154,7 @@ ds_pool_mpool_put(struct ds_pool_mpool *mpool)
 			D_DEBUG(DF_DSMS, "freeing mpool %p\n", mpool);
 			pmemobj_close(mpool->mp_pmem);
 			pthread_mutex_destroy(&mpool->mp_lock);
-			crt_list_del(&mpool->mp_entry);
+			daos_list_del(&mpool->mp_entry);
 			D_FREE_PTR(mpool);
 		} else {
 			pthread_mutex_unlock(&mpool->mp_lock);

@@ -86,7 +86,7 @@ typedef struct {
 /*Convenient struct for moving all tier info together*/
 typedef struct {
 	/* Number of tiers*/
-	crt_nr_t		tl_nr;
+	daos_nr_t		tl_nr;
 	/*refernce to tier list*/
 	daos_tier_info_t	*tl_tiers;
 } daos_tier_list_t;

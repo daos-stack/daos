@@ -132,7 +132,7 @@ typedef struct {
 	 * \param hkey	[OUT]	hashed key
 	 */
 	void		(*to_hkey_gen)(struct btr_instance *tins,
-				       crt_iov_t *key, void *hkey);
+				       daos_iov_t *key, void *hkey);
 	/**
 	 * Size of the hashed key.
 	 *
@@ -170,7 +170,7 @@ typedef struct {
 	 * \param key	[IN]	Key to be compared with key of \a rec.
 	 */
 	int		(*to_key_cmp)(struct btr_instance *tins,
-				      struct btr_record *rec, crt_iov_t *key);
+				      struct btr_record *rec, daos_iov_t *key);
 	/**
 	 * Allocate record body for \a key and \a val.
 	 *
@@ -184,7 +184,7 @@ typedef struct {
 	 *			See \a btr_record for the details.
 	 */
 	int		(*to_rec_alloc)(struct btr_instance *tins,
-					crt_iov_t *key, crt_iov_t *val,
+					daos_iov_t *key, daos_iov_t *val,
 					struct btr_record *rec);
 	/**
 	 * Free the record body stored in \a rec::rec_mmid
@@ -208,7 +208,7 @@ typedef struct {
 	 */
 	int		(*to_rec_fetch)(struct btr_instance *tins,
 					struct btr_record *rec,
-					crt_iov_t *key, crt_iov_t *val);
+					daos_iov_t *key, daos_iov_t *val);
 	/**
 	 * Update value of a record, the new value should be stored in the
 	 * current rec::rec_mmid.
@@ -226,7 +226,7 @@ typedef struct {
 	 */
 	int		(*to_rec_update)(struct btr_instance *tins,
 					 struct btr_record *rec,
-					 crt_iov_t *key, crt_iov_t *val);
+					 daos_iov_t *key, daos_iov_t *val);
 	/**
 	 * Convert record into readable string and store it in \a buf.
 	 *
@@ -374,11 +374,11 @@ int  dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 			 daos_handle_t *toh);
 int  dbtree_close(daos_handle_t toh);
 int  dbtree_destroy(daos_handle_t toh);
-int  dbtree_update(daos_handle_t toh, crt_iov_t *key, crt_iov_t *val);
+int  dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val);
 int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc,
-		  crt_iov_t *key, crt_iov_t *key_out, crt_iov_t *val_out);
-int  dbtree_lookup(daos_handle_t toh, crt_iov_t *key, crt_iov_t *val_out);
-int  dbtree_delete(daos_handle_t toh, crt_iov_t *key);
+		  daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out);
+int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out);
+int  dbtree_delete(daos_handle_t toh, daos_iov_t *key);
 int  dbtree_is_empty(daos_handle_t toh);
 
 /******* iterator API ******************************************************/
@@ -396,11 +396,11 @@ int dbtree_iter_prepare(daos_handle_t toh, unsigned int options,
 			daos_handle_t *ih);
 int dbtree_iter_finish(daos_handle_t ih);
 int dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
-		      crt_iov_t *key, daos_hash_out_t *anchor);
+		      daos_iov_t *key, daos_hash_out_t *anchor);
 int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
-int dbtree_iter_fetch(daos_handle_t ih, crt_iov_t *key,
-		      crt_iov_t *val, daos_hash_out_t *anchor);
+int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
+		      daos_iov_t *val, daos_hash_out_t *anchor);
 int dbtree_iter_delete(daos_handle_t ih);
 
 enum {

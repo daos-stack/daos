@@ -394,7 +394,7 @@ daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
 
 int
 daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
-	      crt_rank_list_t *ranks, daos_event_t *ev)
+	      daos_rank_list_t *ranks, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;
@@ -422,7 +422,7 @@ obj_dkey2shard(struct dc_object *obj, daos_key_t *dkey,
 	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
 
-	hash = crt_hash_murmur64((unsigned char *)dkey->iov_buf,
+	hash = daos_hash_murmur64((unsigned char *)dkey->iov_buf,
 				  dkey->iov_len, 5731);
 
 	D_ASSERT(obj->cob_layout->ol_nr >= grp_size);
@@ -462,7 +462,7 @@ struct daos_obj_fetch_arg {
 	daos_key_t		*dkey;
 	unsigned int		 nr;
 	daos_vec_iod_t		*iods;
-	crt_sg_list_t		*sgls;
+	daos_sg_list_t		*sgls;
 	daos_vec_map_t		*maps;
 };
 
@@ -478,7 +478,7 @@ obj_shard_fetch_task(struct daos_task *task)
 
 int
 daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-	       unsigned int nr, daos_vec_iod_t *iods, crt_sg_list_t *sgls,
+	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_vec_map_t *maps, daos_event_t *ev)
 {
 	struct obj_io_ctx	*iocx;
@@ -542,7 +542,7 @@ struct daos_obj_update_arg {
 	daos_key_t *dkey;
 	unsigned int nr;
 	daos_vec_iod_t *iods;
-	crt_sg_list_t *sgls;
+	daos_sg_list_t *sgls;
 };
 
 static int
@@ -565,7 +565,7 @@ daos_obj_update_callback(void *arg)
 
 int
 daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		unsigned int nr, daos_vec_iod_t *iods, crt_sg_list_t *sgls,
+		unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 		daos_event_t *ev)
 {
 	struct obj_io_ctx	*iocx;
@@ -702,7 +702,7 @@ struct daos_obj_list_args {
 	daos_key_t	*key;
 	uint32_t	*nr;
 	daos_key_desc_t *kds;
-	crt_sg_list_t	*sgl;
+	daos_sg_list_t	*sgl;
 	daos_hash_out_t *anchor;
 };
 
@@ -719,7 +719,7 @@ obj_shard_list_task(struct daos_task *task)
 static int
 daos_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 		  daos_key_t *key, uint32_t *nr,
-		  daos_key_desc_t *kds, crt_sg_list_t *sgl,
+		  daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_hash_out_t *anchor, daos_event_t *ev)
 {
 	struct obj_io_ctx	*iocx;
@@ -801,7 +801,7 @@ failed:
 
 int
 daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
-		   daos_key_desc_t *kds, crt_sg_list_t *sgl,
+		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev)
 {
 	/* XXX list_dkey might also input akey later */
@@ -811,7 +811,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 
 int
 daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		  uint32_t *nr, daos_key_desc_t *kds, crt_sg_list_t *sgl,
+		  uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		  daos_hash_out_t *anchor, daos_event_t *ev)
 {
 	return daos_obj_list_key(oh, DAOS_OBJ_AKEY_RPC_ENUMERATE, epoch, dkey,

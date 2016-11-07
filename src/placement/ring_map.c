@@ -126,8 +126,8 @@ ring_comp_shuff_cmp(struct pool_component *comp_a,
 	uint64_t	key_a = comp_a->co_id;
 	uint64_t	key_b = comp_b->co_id;
 
-	key_a = crt_hash_mix96(seed, key_a % prime, key_a);
-	key_b = crt_hash_mix96(seed, key_b % prime, key_b);
+	key_a = daos_hash_mix96(seed, key_a % prime, key_a);
+	key_b = daos_hash_mix96(seed, key_b % prime, key_b);
 
 	if (key_a > key_b)
 		return 1;
@@ -636,7 +636,7 @@ ring_map_hash_build(struct pl_ring_map *rimap)
 
 	tg_per_dom = rimap->rmp_target_nr / rimap->rmp_domain_nr;
 	rimap->rmp_target_hbits = DOMAIN_BITS + TARGET_BITS +
-				  crt_power2_nbits(tg_per_dom);
+				  daos_power2_nbits(tg_per_dom);
 	if (rimap->rmp_target_hbits > TARGET_HASH_BITS)
 		rimap->rmp_target_hbits = TARGET_HASH_BITS;
 
@@ -758,7 +758,7 @@ ring_oid2ring(struct pl_ring_map *rimap, daos_obj_id_t id)
 	uint64_t hash;
 
 	hash = pl_hash64(id.lo, RING_HASH_BITS);
-	hash = crt_chash_srch_u64(rimap->rmp_ring_hashes,
+	hash = daos_chash_srch_u64(rimap->rmp_ring_hashes,
 				   rimap->rmp_ring_nr, hash);
 	return &rimap->rmp_rings[hash];
 }
@@ -776,10 +776,10 @@ ring_obj_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid)
 	hash -= hash << 17;
 	hash ^= oid.mid;
 
-	hash  = crt_u64_hash(hash, TARGET_HASH_BITS);
+	hash  = daos_u64_hash(hash, TARGET_HASH_BITS);
 	hash &= (1ULL << rimap->rmp_target_hbits) - 1;
 
-	return crt_chash_srch_u64(rimap->rmp_target_hashes,
+	return daos_chash_srch_u64(rimap->rmp_target_hashes,
 				   rimap->rmp_target_nr, hash);
 }
 

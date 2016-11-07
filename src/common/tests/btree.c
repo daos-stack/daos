@@ -43,7 +43,7 @@ ik_hkey_size(struct btr_instance *tins)
 }
 
 static void
-ik_hkey_gen(struct btr_instance *tins, crt_iov_t *key_iov, void *hkey)
+ik_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 {
 	uint64_t	*ikey;
 
@@ -53,8 +53,8 @@ ik_hkey_gen(struct btr_instance *tins, crt_iov_t *key_iov, void *hkey)
 }
 
 static int
-ik_rec_alloc(struct btr_instance *tins, crt_iov_t *key_iov,
-	      crt_iov_t *val_iov, struct btr_record *rec)
+ik_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
+	      daos_iov_t *val_iov, struct btr_record *rec)
 {
 	TMMID(struct ik_rec)   irec_mmid;
 	struct ik_rec	      *irec;
@@ -96,7 +96,7 @@ ik_rec_free(struct btr_instance *tins, struct btr_record *rec)
 
 static int
 ik_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	     crt_iov_t *key_iov, crt_iov_t *val_iov)
+	     daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
 	struct ik_rec	*irec;
 	char		*val;
@@ -160,7 +160,7 @@ ik_rec_string(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 ik_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	       crt_iov_t *key, crt_iov_t *val_iov)
+	       daos_iov_t *key, daos_iov_t *val_iov)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	struct ik_rec		*irec;
@@ -335,8 +335,8 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 
 	while (str != NULL && !isspace(*str) && *str != '\0') {
 		char	   *val = NULL;
-		crt_iov_t  key_iov;
-		crt_iov_t  val_iov;
+		daos_iov_t  key_iov;
+		daos_iov_t  val_iov;
 		uint64_t    key;
 
 		key = strtoul(str, NULL, 0);
@@ -356,12 +356,12 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 			str++;
 		}
 
-		crt_iov_set(&key_iov, &key, sizeof(key));
+		daos_iov_set(&key_iov, &key, sizeof(key));
 		switch (opc) {
 		default:
 			return -1;
 		case BTR_OPC_UPDATE:
-			crt_iov_set(&val_iov, val, strlen(val) + 1);
+			daos_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(ik_toh, &key_iov, &val_iov);
 			if (rc != 0) {
 				D_ERROR("Failed to update "DF_U64":%s\n",
@@ -386,7 +386,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 		case BTR_OPC_LOOKUP:
 			D_DEBUG(DF_MISC, "Looking for "DF_U64"\n", key);
 
-			crt_iov_set(&val_iov, NULL, 0); /* get address */
+			daos_iov_set(&val_iov, NULL, 0); /* get address */
 			rc = dbtree_lookup(ik_toh, &key_iov, &val_iov);
 			if (rc != 0) {
 				D_ERROR("Failed to lookup "DF_U64"\n", key);
@@ -439,8 +439,8 @@ ik_btr_iterate(char *args)
 		del = 0;
 
 	for (i = d = 0;; i++) {
-		crt_iov_t	key_iov;
-		crt_iov_t	val_iov;
+		daos_iov_t	key_iov;
+		daos_iov_t	val_iov;
 		uint64_t	key;
 
 		if (i == 0 || (del != 0 && d <= del)) {
@@ -461,8 +461,8 @@ ik_btr_iterate(char *args)
 			}
 		}
 
-		crt_iov_set(&key_iov, NULL, 0);
-		crt_iov_set(&val_iov, NULL, 0);
+		daos_iov_set(&key_iov, NULL, 0);
+		daos_iov_set(&val_iov, NULL, 0);
 		rc = dbtree_iter_fetch(ih, &key_iov, &val_iov, NULL);
 		if (rc != 0) {
 			err = "fetch";

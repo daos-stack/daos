@@ -42,8 +42,8 @@ struct ioreq {
 
 	daos_dkey_t	 dkey;
 
-	crt_iov_t	 val_iov[IOREQ_SG_VD_NR][IOREQ_SG_NR];
-	crt_sg_list_t	 sgl[IOREQ_SG_VD_NR];
+	daos_iov_t	 val_iov[IOREQ_SG_VD_NR][IOREQ_SG_NR];
+	daos_sg_list_t	 sgl[IOREQ_SG_VD_NR];
 
 	daos_csum_buf_t	 csum;
 	char		 csum_buf[UPDATE_CSUM_SIZE];
@@ -126,7 +126,7 @@ ioreq_fini(struct ioreq *req)
 }
 
 static void
-insert_internal(daos_key_t *dkey, int nr, crt_sg_list_t *sgls,
+insert_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 		daos_vec_iod_t *vds, daos_epoch_t epoch, struct ioreq *req)
 {
 	int rc;
@@ -154,7 +154,7 @@ insert_internal(daos_key_t *dkey, int nr, crt_sg_list_t *sgls,
 static void
 ioreq_dkey_set(struct ioreq *req, const char *dkey)
 {
-	crt_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
+	daos_iov_set(&req->dkey, (void *)dkey, strlen(dkey));
 }
 
 static void
@@ -165,26 +165,26 @@ ioreq_akey_set(struct ioreq *req, const char **akey, int nr)
 	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
 	/** akey */
 	for (i = 0; i < nr; i++)
-		crt_iov_set(&req->vio[i].vd_name, (void *)akey[i],
+		daos_iov_set(&req->vio[i].vd_name, (void *)akey[i],
 			     strlen(akey[i]));
 }
 
 static void
 ioreq_sgl_simple_set(struct ioreq *req, void **value,
-		     crt_size_t *size, int nr)
+		     daos_size_t *size, int nr)
 {
-	crt_sg_list_t *sgl = req->sgl;
+	daos_sg_list_t *sgl = req->sgl;
 	int i;
 
 	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
 	for (i = 0; i < nr; i++) {
 		sgl[i].sg_nr.num = 1;
-		crt_iov_set(&sgl[i].sg_iovs[0], value[i], size[i]);
+		daos_iov_set(&sgl[i].sg_iovs[0], value[i], size[i]);
 	}
 }
 
 static void
-ioreq_iod_simple_set(struct ioreq *req, crt_size_t *size,
+ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
 		     uint64_t *idx, daos_epoch_t *epoch, int nr)
 {
 	daos_vec_iod_t *vio = req->vio;
@@ -204,8 +204,8 @@ ioreq_iod_simple_set(struct ioreq *req, crt_size_t *size,
 }
 
 static void
-insert(const char *dkey, int nr, const char **akey, uint64_t *idx, void **val,
-       crt_size_t *size, daos_epoch_t *epoch, struct ioreq *req)
+insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
+       void **val, daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req)
 {
 	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
 
@@ -226,7 +226,7 @@ insert(const char *dkey, int nr, const char **akey, uint64_t *idx, void **val,
 
 static void
 insert_single(const char *dkey, const char *akey, uint64_t idx,
-	      void *value, crt_size_t size, daos_epoch_t epoch,
+	      void *value, daos_size_t size, daos_epoch_t epoch,
 	      struct ioreq *req)
 {
 	insert(dkey, 1, &akey, &idx, &value, &size, &epoch, req);
@@ -241,7 +241,7 @@ punch(const char *dkey, const char *akey, uint64_t idx,
 }
 
 static void
-lookup_internal(daos_key_t *dkey, int nr, crt_sg_list_t *sgls,
+lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 		daos_vec_iod_t *vds, daos_epoch_t epoch, struct ioreq *req)
 {
 	int rc;
@@ -268,7 +268,7 @@ lookup_internal(daos_key_t *dkey, int nr, crt_sg_list_t *sgls,
 
 static void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
-       crt_size_t *read_size, void **val, crt_size_t *size,
+       daos_size_t *read_size, void **val, daos_size_t *size,
        daos_epoch_t *epoch, struct ioreq *req)
 {
 	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
@@ -290,10 +290,10 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 
 static void
 lookup_single(const char *dkey, const char *akey, uint64_t idx,
-	      void *val, crt_size_t size, daos_epoch_t epoch,
+	      void *val, daos_size_t size, daos_epoch_t epoch,
 	      struct ioreq *req)
 {
-	crt_size_t read_size = DAOS_REC_ANY;
+	daos_size_t read_size = DAOS_REC_ANY;
 
 	lookup(dkey, 1, &akey, &idx, &read_size, &val, &size, &epoch, req);
 }
@@ -315,7 +315,7 @@ io_epoch_overwrite(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
-	crt_size_t	 size;
+	daos_size_t	 size;
 	char		 ubuf[] = "DAOS";
 	char		 fbuf[] = "DAOS";
 	int		 i;
@@ -358,7 +358,7 @@ io_var_idx_offset(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
-	crt_off_t	 offset;
+	daos_off_t	 offset;
 
 	/** choose random object */
 	obj_random(arg, &oid);
@@ -395,7 +395,7 @@ io_var_akey_size(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
-	crt_size_t	 size;
+	daos_size_t	 size;
 	const int	 max_size = 1 << 10;
 	char		*key;
 
@@ -443,7 +443,7 @@ io_var_dkey_size(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
-	crt_size_t	 size;
+	daos_size_t	 size;
 	const int	 max_size = 1 << 10;
 	char		*key;
 
@@ -488,7 +488,7 @@ io_var_rec_size(void **state)
 	daos_obj_id_t	 oid;
 	daos_epoch_t	 epoch;
 	struct ioreq	 req;
-	crt_size_t	 size;
+	daos_size_t	 size;
 	const int	 max_size = 1 << 22;
 	char		*fetch_buf;
 	char		*update_buf;
@@ -570,7 +570,7 @@ io_simple(void **state)
 
 static void
 enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
-	       daos_hash_out_t *anchor, void *buf, crt_size_t len,
+	       daos_hash_out_t *anchor, void *buf, daos_size_t len,
 	       struct ioreq *req)
 {
 	int rc;
@@ -595,7 +595,7 @@ enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 static void
 enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 	       daos_key_desc_t *kds, daos_hash_out_t *anchor, void *buf,
-	       crt_size_t len, struct ioreq *req)
+	       daos_size_t len, struct ioreq *req)
 {
 	int rc;
 
@@ -780,10 +780,10 @@ io_complex(void **state)
 	const char	 dkey[] = "test_update dkey";
 	char		*akey[5];
 	char		*rec[5];
-	crt_size_t	rec_size[5];
-	crt_off_t	offset[5];
+	daos_size_t	rec_size[5];
+	daos_off_t	offset[5];
 	char		*val[5];
-	crt_size_t	val_size[5];
+	daos_size_t	val_size[5];
 	daos_epoch_t	epoch = 0;
 	int		i;
 

@@ -1,0 +1,21 @@
+#!python
+
+Import('env', 'PREREQS')
+
+env.AppendUnique(LIBPATH=[Dir('.')])
+
+libraries = ['mercury', 'abt']
+
+if PREREQS is None:
+    libraries += ['na','mcl']
+else:
+    PREREQS.require(env, 'mercury', 'mcl', 'argobots')
+
+denv = env.Clone()
+denv.Append(CPPPATH = ['#/src/common/dtp'])
+
+dtp = denv.SharedLibrary('libcart', Glob('*.c'), LIBS=libraries)
+denv.Install('$PREFIX/lib/', dtp)
+
+# Builders
+SConscript('tests/SConscript', exports='denv')

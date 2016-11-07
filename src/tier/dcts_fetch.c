@@ -31,11 +31,11 @@
 
 
 int
-dcts_hdlr_fetch(crt_rpc_t *rpc)
+dcts_hdlr_fetch(dtp_rpc_t *rpc)
 {
 
-	struct tier_fetch_in *in = crt_req_get(rpc);
-	struct tier_fetch_out *out = crt_reply_get(rpc);
+	struct tier_fetch_in *in = dtp_req_get(rpc);
+	struct tier_fetch_out *out = dtp_reply_get(rpc);
 	int  rc = 0;
 
 	D_DEBUG(DF_TIERS, "dcts_fetch\n");
@@ -46,7 +46,7 @@ dcts_hdlr_fetch(crt_rpc_t *rpc)
 
 	out->tfo_ret = 0;
 
-	rc = crt_reply_send(rpc);
+	rc = dtp_reply_send(rpc);
 
 	return rc;
 }

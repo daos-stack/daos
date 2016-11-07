@@ -36,7 +36,7 @@ dct_ping_cb(void *arg, daos_event_t *ev, int rc)
 	D_DEBUG(DF_MISC, "Entering dct_ping_cb\n");
 
 	/* extract the RPC reply */
-	out = crt_reply_get(sp->sp_rpc);
+	out = dtp_reply_get(sp->sp_rpc);
 
 	D_DEBUG(DF_MISC, "DCT Ping Return Val %d\n", out->ping_out);
 
@@ -52,8 +52,8 @@ dct_ping(uint32_t ping_val, daos_event_t *ev)
 	D_DEBUG(DF_MISC, "Entering dct_ping()\n");
 
 	struct dct_ping_in	*in;
-	crt_endpoint_t		ep;
-	crt_rpc_t		*rpc;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t		*rpc;
 	int			rc;
 	struct daos_op_sp      *sp;
 
@@ -79,7 +79,7 @@ dct_ping(uint32_t ping_val, daos_event_t *ev)
 	rc = dct_req_create(daos_ev2ctx(ev), ep, DCT_PING, &rpc);
 
 	/* Grab the input struct of the RPC */
-	in = crt_req_get(rpc);
+	in = dtp_req_get(rpc);
 
 	/* set the value we want to send out */
 	in->ping_in = ping_val;
@@ -89,7 +89,7 @@ dct_ping(uint32_t ping_val, daos_event_t *ev)
 	 * used to maintain per-call invocation state (I think)
 	 */
 	sp = daos_ev2sp(ev);
-	crt_req_addref(rpc);
+	dtp_req_addref(rpc);
 	sp->sp_rpc = rpc;
 
 	rc = daos_event_register_comp_cb(ev, dct_ping_cb, sp);
@@ -113,7 +113,7 @@ dct_ping(uint32_t ping_val, daos_event_t *ev)
 	return rc;
 
 out_req_put:
-	crt_req_decref(rpc);
-	crt_req_decref(rpc);
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
 	return rc;
 }

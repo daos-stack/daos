@@ -27,7 +27,7 @@
 #ifndef __POOL_SERVER_INTERNAL_H__
 #define __POOL_SERVER_INTERNAL_H__
 
-#include <crt_util/list.h>
+#include <daos/list.h>
 #include <daos_srv/daos_server.h>
 
 /**
@@ -35,7 +35,7 @@
  */
 struct dsm_tls {
 	/* in-memory structures TLS instance */
-	struct crt_list_head	dt_pool_list;
+	struct daos_list_head	dt_pool_list;
 };
 
 extern struct dss_module_key dsm_module_key;
@@ -66,9 +66,9 @@ void ds_pool_mpool_cache_fini(void);
  */
 int ds_pool_svc_cache_init(void);
 void ds_pool_svc_cache_fini(void);
-int ds_pool_connect_handler(crt_rpc_t *rpc);
-int ds_pool_disconnect_handler(crt_rpc_t *rpc);
-int ds_pool_exclude_handler(crt_rpc_t *rpc);
+int ds_pool_connect_handler(dtp_rpc_t *rpc);
+int ds_pool_disconnect_handler(dtp_rpc_t *rpc);
+int ds_pool_exclude_handler(dtp_rpc_t *rpc);
 
 /*
  * srv_target.c
@@ -77,14 +77,14 @@ int ds_pool_cache_init(void);
 void ds_pool_cache_fini(void);
 int ds_pool_hdl_hash_init(void);
 void ds_pool_hdl_hash_fini(void);
-int ds_pool_tgt_connect_handler(crt_rpc_t *rpc);
-int ds_pool_tgt_connect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+int ds_pool_tgt_connect_handler(dtp_rpc_t *rpc);
+int ds_pool_tgt_connect_aggregator(dtp_rpc_t *source, dtp_rpc_t *result,
 				   void *priv);
-int ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
-int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+int ds_pool_tgt_disconnect_handler(dtp_rpc_t *rpc);
+int ds_pool_tgt_disconnect_aggregator(dtp_rpc_t *source, dtp_rpc_t *result,
 				      void *priv);
-int ds_pool_tgt_update_map_handler(crt_rpc_t *rpc);
-int ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+int ds_pool_tgt_update_map_handler(dtp_rpc_t *rpc);
+int ds_pool_tgt_update_map_aggregator(dtp_rpc_t *source, dtp_rpc_t *result,
 				      void *priv);
 struct ds_pool_create_arg {
 	struct pool_buf	       *pca_map_buf;
@@ -98,9 +98,9 @@ int ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
  * srv_util.c
  */
 int ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
-			 crt_group_t **group);
-int ds_pool_group_destroy(crt_group_t *group);
-void ds_pool_map_exclude_targets(struct pool_map *map, crt_rank_list_t *tgts,
-				 crt_rank_list_t *tgts_failed);
+			 dtp_group_t **group);
+int ds_pool_group_destroy(dtp_group_t *group);
+void ds_pool_map_exclude_targets(struct pool_map *map, daos_rank_list_t *tgts,
+				 daos_rank_list_t *tgts_failed);
 
 #endif /* __POOL_SERVER_INTERNAL_H__ */

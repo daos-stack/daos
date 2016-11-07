@@ -32,11 +32,11 @@
 
 /* container in dsm client cache */
 struct dsmc_container {
-	struct crt_hlink dc_hlink;
+	struct daos_hlink dc_hlink;
 	/* list to pool */
-	crt_list_t	  dc_po_list;
+	daos_list_t	  dc_po_list;
 	/* object list for this container */
-	crt_list_t	  dc_obj_list;
+	daos_list_t	  dc_obj_list;
 	/* lock for list of dc_obj_list */
 	pthread_rwlock_t  dc_obj_list_lock;
 	/* uuid for this container */
@@ -64,7 +64,7 @@ struct dsmc_container_glob {
 	uint64_t	dcg_capas;
 };
 
-static inline crt_size_t
+static inline daos_size_t
 dsmc_container_glob_buf_size()
 {
        return sizeof(struct dsmc_container_glob);
@@ -73,18 +73,18 @@ dsmc_container_glob_buf_size()
 static inline int
 dsmc_handle_type(daos_handle_t hdl)
 {
-	return crt_hhash_key_type(hdl.cookie);
+	return daos_hhash_key_type(hdl.cookie);
 }
 
 static inline struct dsmc_container*
 dsmc_handle2container(daos_handle_t hdl)
 {
-	struct crt_hlink *dlink;
+	struct daos_hlink *dlink;
 
-	if (dsmc_handle_type(hdl) != CRT_HTYPE_CO)
+	if (dsmc_handle_type(hdl) != DAOS_HTYPE_CO)
 		return NULL;
 
-	dlink = crt_hhash_link_lookup(daos_client_hhash, hdl.cookie);
+	dlink = daos_hhash_link_lookup(daos_client_hhash, hdl.cookie);
 	if (dlink == NULL)
 		return NULL;
 
@@ -95,22 +95,22 @@ static inline void
 dsmc_container_add_cache(struct dsmc_container *dc, daos_handle_t *hdl)
 {
 	/* add pool to hash and assign the cookie to hdl */
-	crt_hhash_link_insert(daos_client_hhash, &dc->dc_hlink, CRT_HTYPE_CO);
-	crt_hhash_link_key(&dc->dc_hlink, &hdl->cookie);
+	daos_hhash_link_insert(daos_client_hhash, &dc->dc_hlink, DAOS_HTYPE_CO);
+	daos_hhash_link_key(&dc->dc_hlink, &hdl->cookie);
 }
 
 static inline void
 dsmc_container_del_cache(struct dsmc_container *dc)
 {
-	crt_hhash_link_delete(daos_client_hhash, &dc->dc_hlink);
+	daos_hhash_link_delete(daos_client_hhash, &dc->dc_hlink);
 }
 
 static inline void
 dsmc_container_put(struct dsmc_container *dc)
 {
-	crt_hhash_link_putref(daos_client_hhash, &dc->dc_hlink);
+	daos_hhash_link_putref(daos_client_hhash, &dc->dc_hlink);
 }
 
-int dsmc_co_l2g(daos_handle_t loc, crt_iov_t *glob);
+int dsmc_co_l2g(daos_handle_t loc, daos_iov_t *glob);
 
 #endif /* __CONTAINER_CLIENT_INTERNAL_H__ */

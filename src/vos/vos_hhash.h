@@ -32,28 +32,30 @@
 #define __VOS_HHASH_H__
 
 #include <daos/common.h>
+#include <daos/hash.h>
+#include <daos/list.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
 
 static inline struct vc_hdl*
-vos_ulink2coh(struct crt_ulink *ulink)
+vos_ulink2coh(struct daos_ulink *ulink)
 {
 	D_ASSERT(ulink != NULL);
 	return container_of(ulink, struct vc_hdl, vc_uhlink);
 }
 
 static inline struct vp_hdl*
-vos_ulink2poh(struct crt_ulink *ulink)
+vos_ulink2poh(struct daos_ulink *ulink)
 {
 	D_ASSERT(ulink != NULL);
 	return	container_of(ulink, struct vp_hdl, vp_uhlink);
 }
 
 void
-vos_co_uhash_free(struct crt_ulink *ulink);
+vos_co_uhash_free(struct daos_ulink *ulink);
 
 void
-vos_pool_uhash_free(struct crt_ulink *ulink);
+vos_pool_uhash_free(struct daos_ulink *ulink);
 
 /**
  * Getting handle has
@@ -68,11 +70,11 @@ void
 vos_pool_handle_init(struct vp_hdl *vp_hdl);
 
 int
-vos_pool_insert_handle(struct vp_hdl *vp_hdl, struct crt_uuid *key,
+vos_pool_insert_handle(struct vp_hdl *vp_hdl, struct daos_uuid *key,
 		       daos_handle_t *poh);
 
 int
-vos_pool_lookup_handle(struct crt_uuid *key, struct vp_hdl **vpool);
+vos_pool_lookup_handle(struct daos_uuid *key, struct vp_hdl **vpool);
 
 void
 vos_pool_addref_handle(struct vp_hdl *vpool);
@@ -90,11 +92,11 @@ void
 vos_co_handle_init(struct vc_hdl *co_hdl);
 
 int
-vos_co_insert_handle(struct vc_hdl *vc_hdl, struct crt_uuid *key,
+vos_co_insert_handle(struct vc_hdl *vc_hdl, struct daos_uuid *key,
 		     daos_handle_t *coh);
 
 int
-vos_co_lookup_handle(struct crt_uuid *key, struct vc_hdl **co_hdl);
+vos_co_lookup_handle(struct daos_uuid *key, struct vc_hdl **co_hdl);
 
 void
 vos_co_putref_handle(struct vc_hdl *co_hdl);

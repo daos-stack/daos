@@ -62,8 +62,8 @@ daos_handle_t	eq;
 
 /** Pool information */
 uuid_t			 pool_uuid;	/* only used on rank 0 */
-crt_rank_t		 svc;		/* only used on rank 0 */
-crt_rank_list_t	 svcl;		/* only used on rank 0 */
+daos_rank_t		 svc;		/* only used on rank 0 */
+daos_rank_list_t	 svcl;		/* only used on rank 0 */
 daos_handle_t		 poh;		/* shared pool handle */
 
 /** Container information */
@@ -105,8 +105,8 @@ struct ioreq {
 	daos_recx_t	recx;
 	daos_vec_iod_t	iod;
 
-	crt_iov_t	iov;
-	crt_sg_list_t	sg;
+	daos_iov_t	iov;
+	daos_sg_list_t	sg;
 
 	daos_event_t	ev;
 };
@@ -200,7 +200,7 @@ ioreqs_init(struct ioreq *reqs) {
 		req->iod.vd_recxs	= &req->recx;
 
 		/** initialize scatter/gather */
-		req->iov = (crt_iov_t) {
+		req->iov = (daos_iov_t) {
 			.iov_buf	= &data,
 			.iov_buf_len	= SLICE_SIZE * sizeof(data[0]),
 			.iov_len	= SLICE_SIZE * sizeof(data[0]),

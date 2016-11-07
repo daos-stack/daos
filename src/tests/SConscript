@@ -2,13 +2,13 @@
 
 Import('env', 'PREREQS')
 
-libs = ['daos', 'daos_common', 'daos_tier', 'crt', 'crt_util',
+libs = ['daos', 'daos_common', 'daos_tier', 'cart',
 	'mpi', 'uuid', 'cmocka']
 
 denv = env.Clone()
 
 if PREREQS is not None:
-    PREREQS.require(denv, 'ompi', 'cart')
+    PREREQS.require(denv, 'ompi')
 
 denv.Program('simple_array', 'simple_array.c', LIBS=libs)
 denv.Program('daosbench', 'daosbench.c', LIBS=libs)

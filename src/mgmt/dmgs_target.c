@@ -142,8 +142,8 @@ path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx,
 	int	 size;
 	int	 off;
 
-	/** CRT_UUID_STR_SIZE includes the trailing '\0', +1 for '/' */
-	size = strlen(dir) + CRT_UUID_STR_SIZE + 1;
+	/** DAOS_UUID_STR_SIZE includes the trailing '\0', +1 for '/' */
+	size = strlen(dir) + DAOS_UUID_STR_SIZE + 1;
 	if (fname)
 		size += strlen(fname);
 	if (idx)
@@ -159,7 +159,7 @@ path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx,
 	 */
 	off = sprintf(*fpath, "%s", dir);
 	uuid_unparse_lower(pool_uuid, *fpath + off);
-	off += CRT_UUID_STR_SIZE - 1;
+	off += DAOS_UUID_STR_SIZE - 1;
 	off += sprintf(*fpath + off, "/");
 	if (fname)
 		off += sprintf(*fpath + off, fname);
@@ -180,9 +180,9 @@ dmgs_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx, char **fpath)
 }
 
 static int
-tgt_vos_create(uuid_t uuid, crt_size_t tgt_size)
+tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 {
-	crt_size_t	 size;
+	daos_size_t	 size;
 	int		 i;
 	char		*path = NULL;
 	int		 fd = -1;
@@ -202,12 +202,12 @@ tgt_vos_create(uuid_t uuid, crt_size_t tgt_size)
 			break;
 
 		D_DEBUG(DF_MGMT, DF_UUID": creating vos file %s\n",
-			CP_UUID(uuid), path);
+			DP_UUID(uuid), path);
 
 		fd = open(path, O_CREAT|O_RDWR, 0600);
 		if (fd < 0) {
 			D_ERROR(DF_UUID": failed to create vos file %s: %d\n",
-				CP_UUID(uuid), path, rc);
+				DP_UUID(uuid), path, rc);
 			rc = daos_errno2der(errno);
 			break;
 		}
@@ -216,7 +216,7 @@ tgt_vos_create(uuid_t uuid, crt_size_t tgt_size)
 		if (rc) {
 			D_ERROR(DF_UUID": failed to allocate vos file %s with "
 				"size: "DF_U64", rc: %d.\n",
-				CP_UUID(uuid), path, size, rc);
+				DP_UUID(uuid), path, size, rc);
 			rc = daos_errno2der(errno);
 			break;
 		}
@@ -225,7 +225,7 @@ tgt_vos_create(uuid_t uuid, crt_size_t tgt_size)
 		rc = vos_pool_create(path, (unsigned char *)uuid, 0 /* size */);
 		if (rc) {
 			D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
-				CP_UUID(uuid), path, rc);
+				DP_UUID(uuid), path, rc);
 			break;
 		}
 
@@ -234,7 +234,7 @@ tgt_vos_create(uuid_t uuid, crt_size_t tgt_size)
 		fd = -1;
 		if (rc) {
 			D_ERROR(DF_UUID": failed to sync vos pool %s: %d\n",
-				CP_UUID(uuid), path, rc);
+				DP_UUID(uuid), path, rc);
 			rc = daos_errno2der(errno);
 			break;
 		}
@@ -249,7 +249,7 @@ tgt_vos_create(uuid_t uuid, crt_size_t tgt_size)
 }
 
 static int
-tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, crt_size_t size, char *path)
+tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t size, char *path)
 {
 	char	*newborn = NULL;
 	int	 rc;
@@ -304,7 +304,7 @@ out:
  * RPC handler for target creation
  */
 int
-dmgs_hdlr_tgt_create(crt_rpc_t *tc_req)
+dmgs_hdlr_tgt_create(dtp_rpc_t *tc_req)
 {
 	struct dmg_tgt_create_in	*tc_in;
 	struct dmg_tgt_create_out	*tc_out;
@@ -312,9 +312,9 @@ dmgs_hdlr_tgt_create(crt_rpc_t *tc_req)
 	int				 rc = 0;
 
 	/** incoming request buffer */
-	tc_in = crt_req_get(tc_req);
+	tc_in = dtp_req_get(tc_req);
 	/** reply buffer */
-	tc_out = crt_reply_get(tc_req);
+	tc_out = dtp_reply_get(tc_req);
 	D_ASSERT(tc_in != NULL && tc_out != NULL);
 
 	/** generate path to the target directory */
@@ -345,7 +345,7 @@ dmgs_hdlr_tgt_create(crt_rpc_t *tc_req)
 	free(path);
 out:
 	tc_out->tc_rc = rc;
-	return crt_reply_send(tc_req);
+	return dtp_reply_send(tc_req);
 }
 
 static int
@@ -387,7 +387,7 @@ out:
  * RPC handler for target destroy
  */
 int
-dmgs_hdlr_tgt_destroy(crt_rpc_t *td_req)
+dmgs_hdlr_tgt_destroy(dtp_rpc_t *td_req)
 {
 	struct dmg_tgt_destroy_in	*td_in;
 	struct dmg_tgt_destroy_out	*td_out;
@@ -395,9 +395,9 @@ dmgs_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	int				 rc;
 
 	/** incoming request buffer */
-	td_in = crt_req_get(td_req);
+	td_in = dtp_req_get(td_req);
 	/** reply buffer */
-	td_out = crt_reply_get(td_req);
+	td_out = dtp_reply_get(td_req);
 	D_ASSERT(td_in != NULL && td_out != NULL);
 
 	/** generate path to the target directory */
@@ -409,7 +409,7 @@ dmgs_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	rc = access(path, F_OK);
 	if (rc >= 0) {
 		/** target is still there, destroy it */
-		rc = tgt_destroy(td_req->cr_input, path);
+		rc = tgt_destroy(td_req->dr_input, path);
 	} else if (errno == ENOENT) {
 		char	*zombie;
 
@@ -433,5 +433,5 @@ dmgs_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	free(path);
 out:
 	td_out->td_rc = rc;
-	return crt_reply_send(td_req);
+	return dtp_reply_send(td_req);
 }

@@ -308,7 +308,7 @@ co_uuid_iter_test(struct vc_test_args *arg)
 
 		if (!uuid_is_null(ent.ie_couuid)) {
 			D_DEBUG(DF_VOS3,
-				"COUUID:"DF_UUID"\n", CP_UUID(ent.ie_couuid));
+				"COUUID:"DF_UUID"\n", DP_UUID(ent.ie_couuid));
 			nr++;
 		}
 
@@ -372,13 +372,13 @@ co_iter_test_with_anchor(void **state)
 
 
 struct cookie_entry {
-	struct crt_ulink	ulink;
+	struct daos_ulink	ulink;
 	uuid_t			cookie;
 	daos_epoch_t		max_epoch;
 };
 
 void
-cookie_uhash_free(struct crt_ulink *uhlink)
+cookie_uhash_free(struct daos_ulink *uhlink)
 {
 	struct cookie_entry	*entry;
 
@@ -386,7 +386,7 @@ cookie_uhash_free(struct crt_ulink *uhlink)
 	D_FREE_PTR(entry);
 }
 
-struct crt_ulink_ops	cookie_uh_ops = {
+struct daos_ulink_ops	cookie_uh_ops = {
 	.uop_free	= cookie_uhash_free,
 };
 
@@ -396,22 +396,22 @@ cookie_table_test(void **state)
 	int				ret = 0;
 	int				i = 0, j = 0, k = 0;
 	struct vos_cookie_index		*index;
-	struct crt_uuid			*cookie_array;
+	struct daos_uuid		*cookie_array;
 	daos_epoch_t			*epochs;
 	uint64_t			epoch_ret;
 	daos_handle_t			cookie_hdl;
 	/* static uuid hash for verification */
 	struct cookie_entry		*cookie_entries, *l_entry = NULL;
 	struct dhash_table		*uhtab = NULL;
-	struct crt_ulink		*l_ulink = NULL;
+	struct daos_ulink		*l_ulink = NULL;
 
 	D_ALLOC_PTR(index);
-	D_ALLOC(cookie_array, VCT_COOKIES * sizeof(struct crt_uuid));
+	D_ALLOC(cookie_array, VCT_COOKIES * sizeof(struct daos_uuid));
 	D_ALLOC(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
 	D_ALLOC(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
 
 
-	ret = crt_uhash_create(0, 8, &uhtab);
+	ret = daos_uhash_create(0, 8, &uhtab);
 	if (ret != 0)
 		print_error("Error creating daos Uhash  for verification\n");
 
@@ -428,7 +428,7 @@ cookie_table_test(void **state)
 		j = (rand()%VCT_COOKIES) - 1;
 		epochs[i] = rand()%100;
 
-		l_ulink = crt_uhash_link_lookup(uhtab, &cookie_array[j]);
+		l_ulink = daos_uhash_link_lookup(uhtab, &cookie_array[j]);
 		if (l_ulink != NULL) {
 			l_entry = container_of(l_ulink, struct cookie_entry,
 					       ulink);
@@ -439,9 +439,9 @@ cookie_table_test(void **state)
 			uuid_copy(cookie_entries[k].cookie,
 				  cookie_array[j].uuid);
 			cookie_entries[k].max_epoch = epochs[i];
-			crt_uhash_ulink_init(&cookie_entries[k].ulink,
+			daos_uhash_ulink_init(&cookie_entries[k].ulink,
 					      &cookie_uh_ops);
-			ret = crt_uhash_link_insert(uhtab, &cookie_array[j],
+			ret = daos_uhash_link_insert(uhtab, &cookie_array[j],
 						     &cookie_entries[k].ulink);
 			if (ret != 0)
 				D_ERROR("Inserting handle to UUID hash\n");
@@ -455,7 +455,7 @@ cookie_table_test(void **state)
 			print_error("find and update error\n");
 
 		D_DEBUG(DF_VOS3, "Cookie: "DF_UUID" Epoch :%"PRIu64"\t",
-			CP_UUID(cookie_array[j].uuid), epochs[i]);
+			DP_UUID(cookie_array[j].uuid), epochs[i]);
 		D_DEBUG(DF_VOS3, "Returned max_epoch: %"PRIu64"\n",
 			epoch_ret);
 		if (epoch_ret != 0)
@@ -463,12 +463,12 @@ cookie_table_test(void **state)
 
 	}
 	/* Cleanup allocations */
-	crt_uhash_destroy(uhtab);
+	daos_uhash_destroy(uhtab);
 	ret = vos_cookie_index_destroy(cookie_hdl);
 	if (ret != 0)
 		D_ERROR("Cookie index destroy error\n");
 	D_FREE_PTR(index);
-	D_FREE(cookie_array, VCT_COOKIES * sizeof(struct crt_uuid));
+	D_FREE(cookie_array, VCT_COOKIES * sizeof(struct daos_uuid));
 	D_FREE(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
 	D_FREE(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
 }

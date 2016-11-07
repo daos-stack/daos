@@ -25,7 +25,7 @@
  *
  * This is naturally shared by both dsrc and dsrs. The in and out data
  * structures may safely contain compiler-generated paddings, which will be
- * removed crt's serialization process.
+ * removed dtp's serialization process.
  *
  */
 
@@ -44,8 +44,8 @@
 /*
  * RPC operation codes
  *
- * These are for daos_rpc::cr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
- * crt_req_create(..., opc, ...). See daos_rpc.h.
+ * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
+ * dtp_req_create(..., opc, ...). See daos_rpc.h.
  */
 enum obj_rpc_opc {
 	DAOS_OBJ_RPC_UPDATE	= 1,
@@ -61,17 +61,17 @@ struct obj_rw_in {
 	uint32_t		orw_map_ver;
 	uint32_t		orw_nr;
 	daos_key_t		orw_dkey;
-	struct crt_array	orw_iods;
-	struct crt_array	orw_sgls;
-	struct crt_array	orw_bulks;
+	struct dtp_array	orw_iods;
+	struct dtp_array	orw_sgls;
+	struct dtp_array	orw_bulks;
 };
 
 /* reply for update/fetch */
 struct obj_rw_out {
 	int32_t			orw_ret;
 	uint32_t		orw_map_version;
-	struct crt_array	orw_sizes;
-	struct crt_array	orw_sgls;
+	struct dtp_array	orw_sizes;
+	struct dtp_array	orw_sgls;
 };
 
 /* object Enumerate in/out */
@@ -83,25 +83,25 @@ struct obj_key_enum_in {
 	uint32_t		oei_nr;
 	daos_key_t		oei_key;
 	daos_hash_out_t		oei_anchor;
-	crt_sg_list_t		oei_sgl;
-	crt_bulk_t		oei_bulk;
+	daos_sg_list_t		oei_sgl;
+	dtp_bulk_t		oei_bulk;
 };
 
 struct obj_key_enum_out {
 	int32_t			oeo_ret;
 	uint32_t		oeo_map_version;
 	daos_hash_out_t		oeo_anchor;
-	struct crt_array	oeo_kds;
-	crt_sg_list_t		oeo_sgl;
+	struct dtp_array	oeo_kds;
+	daos_sg_list_t		oeo_sgl;
 };
 
 extern struct daos_rpc daos_obj_rpcs[];
 
-int obj_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
-		   crt_opcode_t opc, crt_rpc_t **req);
-void obj_reply_set_status(crt_rpc_t *rpc, int status);
-int obj_reply_get_status(crt_rpc_t *rpc);
-void obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version);
-uint32_t obj_reply_map_version_get(crt_rpc_t *rpc);
+int obj_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
+		   dtp_opcode_t opc, dtp_rpc_t **req);
+void obj_reply_set_status(dtp_rpc_t *rpc, int status);
+int obj_reply_get_status(dtp_rpc_t *rpc);
+void obj_reply_map_version_set(dtp_rpc_t *rpc, uint32_t map_version);
+uint32_t obj_reply_map_version_get(dtp_rpc_t *rpc);
 
 #endif /* __DAOS_OBJ_RPC_H__ */

@@ -30,9 +30,8 @@
 
 #include <daos_errno.h>
 #include <daos/common.h>
+#include <daos/list.h>
 #include <daos/rpc.h>
-
-#include <crt_util/list.h>
 
 #include "srv_internal.h"
 
@@ -43,11 +42,11 @@ struct loaded_mod {
 	/* module interface looked up via dlsym(3) */
 	struct dss_module	*lm_dss_mod;
 	/* linked list of loaded module */
-	crt_list_t		 lm_lk;
+	daos_list_t		 lm_lk;
 };
 
 /* Track list of loaded modules */
-CRT_LIST_HEAD(loaded_mod_list);
+DAOS_LIST_HEAD(loaded_mod_list);
 pthread_mutex_t loaded_mod_list_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static struct loaded_mod *
@@ -56,7 +55,7 @@ dss_module_search(const char *modname)
 	struct loaded_mod *mod;
 
 	/* search for the module in the loaded module list */
-	crt_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
+	daos_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
 		if (strcmp(mod->lm_dss_mod->sm_name, modname) == 0)
 			return mod;
 	}
@@ -149,7 +148,7 @@ dss_module_load(const char *modname)
 
 	/* module successfully loaded, add it to the tracking list */
 	pthread_mutex_lock(&loaded_mod_list_lock);
-	crt_list_add_tail(&lmod->lm_lk, &loaded_mod_list);
+	daos_list_add_tail(&lmod->lm_lk, &loaded_mod_list);
 	pthread_mutex_unlock(&loaded_mod_list_lock);
 	return 0;
 
@@ -214,7 +213,7 @@ dss_module_unload(const char *modname)
 		/* module not found ... */
 		return -DER_ENOENT;
 	}
-	crt_list_del_init(&lmod->lm_lk);
+	daos_list_del_init(&lmod->lm_lk);
 	pthread_mutex_unlock(&loaded_mod_list_lock);
 
 	dss_module_unload_internal(lmod);
@@ -242,18 +241,18 @@ dss_module_unload_all(void)
 {
 	struct loaded_mod	*mod;
 	struct loaded_mod	*tmp;
-	struct crt_list_head	destroy_list;
+	struct daos_list_head	destroy_list;
 
-	CRT_INIT_LIST_HEAD(&destroy_list);
+	DAOS_INIT_LIST_HEAD(&destroy_list);
 	pthread_mutex_lock(&loaded_mod_list_lock);
-	crt_list_for_each_entry_safe(mod, tmp, &loaded_mod_list, lm_lk) {
-		crt_list_del_init(&mod->lm_lk);
-		crt_list_add(&mod->lm_lk, &destroy_list);
+	daos_list_for_each_entry_safe(mod, tmp, &loaded_mod_list, lm_lk) {
+		daos_list_del_init(&mod->lm_lk);
+		daos_list_add(&mod->lm_lk, &destroy_list);
 	}
 	pthread_mutex_unlock(&loaded_mod_list_lock);
 
-	crt_list_for_each_entry_safe(mod, tmp, &destroy_list, lm_lk) {
-		crt_list_del_init(&mod->lm_lk);
+	daos_list_for_each_entry_safe(mod, tmp, &destroy_list, lm_lk) {
+		daos_list_del_init(&mod->lm_lk);
 		dss_module_unload_internal(mod);
 		D_FREE_PTR(mod);
 	}

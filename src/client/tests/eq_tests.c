@@ -31,8 +31,8 @@
 #include <daos/common.h>
 #include <daos_event.h>
 #include <daos/event.h>
-#include <crt_util/list.h>
-#include <crt_util/hash.h>
+#include <daos/list.h>
+#include <daos/hash.h>
 
 /* XXX For the testing purpose, this test case will use
  * some internal api of event queue, and for real use

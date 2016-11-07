@@ -33,10 +33,8 @@
 
 #include <abt.h>
 #include <daos_errno.h>
+#include <daos/list.h>
 #include "srv_internal.h"
-
-#include <crt_util/list.h>
-#include <crt_util/hash.h>
 
 /** Number of started threads or cores used */
 unsigned int	dss_nthreads;
@@ -46,7 +44,7 @@ struct dss_thread {
 	pthread_t	dt_id;
 	int		dt_idx;
 	pthread_mutex_t	dt_lock;
-	crt_list_t	dt_list;
+	daos_list_t	dt_list;
 	hwloc_cpuset_t	dt_cpuset;
 	ABT_xstream	dt_xstream;
 	ABT_pool	dt_pool;
@@ -55,7 +53,7 @@ struct dss_thread {
 };
 
 /** List of running service threads */
-static crt_list_t dss_thread_list;
+static daos_list_t dss_thread_list;
 
 void
 dss_srv_handler_cleanup(void *param)
@@ -68,7 +66,7 @@ dss_srv_handler_cleanup(void *param)
 	dmi = (struct dss_module_info *)
 	      dss_module_key_get(dtc, &daos_srv_modkey);
 	D_ASSERT(dmi != NULL);
-	rc = crt_context_destroy(dmi->dmi_ctx, true);
+	rc = dtp_context_destroy(dmi->dmi_ctx, true);
 	if (rc)
 		D_ERROR("failed to destroy context: %d\n", rc);
 }
@@ -196,9 +194,9 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
  *
  The handling process would like
  *
- * 1. The service thread creates a private CRT context
+ * 1. The service thread creates a private DTP context
  *
- * 2. Then polls the request from CRT context
+ * 2. Then polls the request from DTP context
  **/
 static void
 dss_srv_handler(void *arg)
@@ -228,9 +226,9 @@ dss_srv_handler(void *arg)
 	D_ASSERT(dmi != NULL);
 
 	/* create private transport context */
-	rc = crt_context_create(&dthread->dt_pool, &dmi->dmi_ctx);
+	rc = dtp_context_create(&dthread->dt_pool, &dmi->dmi_ctx);
 	if (rc != 0) {
-		D_ERROR("Can not create crt ctxt: rc = %d\n", rc);
+		D_ERROR("Can not create dtp ctxt: rc = %d\n", rc);
 		D_GOTO(err_out, rc);
 	}
 
@@ -246,11 +244,11 @@ dss_srv_handler(void *arg)
 	pthread_mutex_unlock(&dthread->dt_lock);
 
 	/* main service loop processing incoming request */
-	rc = crt_progress(dmi->dmi_ctx, -1, dss_progress_cb, NULL);
+	rc = dtp_progress(dmi->dmi_ctx, -1, dss_progress_cb, NULL);
 	D_ERROR("service thread exited from progress with %d\n", rc);
 
 	pthread_cleanup_pop(0);
-	crt_context_destroy(dmi->dmi_ctx, true);
+	dtp_context_destroy(dmi->dmi_ctx, true);
 	return;
 
 err_out:
@@ -286,7 +284,7 @@ dss_thread_alloc(int idx, hwloc_cpuset_t cpus)
 	}
 
 	dthread->dt_idx = idx;
-	CRT_INIT_LIST_HEAD(&dthread->dt_list);
+	DAOS_INIT_LIST_HEAD(&dthread->dt_list);
 
 	return dthread;
 
@@ -350,7 +348,7 @@ dss_start_one_thread(hwloc_cpuset_t cpus, int idx)
 	}
 
 	/** add to the list of started thread */
-	crt_list_add_tail(&dthread->dt_list, &dss_thread_list);
+	daos_list_add_tail(&dthread->dt_list, &dss_thread_list);
 
 	return 0;
 out_xthream:
@@ -377,8 +375,8 @@ dss_threads_fini()
 	D_DEBUG(DF_SERVER, "stopping service threads\n");
 
 	/* wait for each thread to complete */
-	crt_list_for_each_entry_safe(dthread, tmp, &dss_thread_list, dt_list) {
-		crt_list_del(&dthread->dt_list);
+	daos_list_for_each_entry_safe(dthread, tmp, &dss_thread_list, dt_list) {
+		daos_list_del(&dthread->dt_list);
 		ABT_xstream_join(&dthread->dt_xstream);
 		ABT_xstream_free(&dthread->dt_xstream);
 		/* housekeeping ... */
@@ -540,7 +538,7 @@ dss_collective(int (*func)(void *), void *arg)
 	 * Create tasklets and store return codes in the value array as
 	 * "void *" pointers.
 	 */
-	crt_list_for_each_entry(dthread, &dss_thread_list, dt_list) {
+	daos_list_for_each_entry(dthread, &dss_thread_list, dt_list) {
 		rc = ABT_task_create(dthread->dt_pool, collective_func, &carg,
 				     NULL /* task */);
 		if (rc != ABT_SUCCESS) {
@@ -574,7 +572,7 @@ dss_srv_init(int nr)
 {
 	int	rc;
 
-	CRT_INIT_LIST_HEAD(&dss_thread_list);
+	DAOS_INIT_LIST_HEAD(&dss_thread_list);
 
 	/** register global tls accessible to all modules */
 	dss_register_key(&daos_srv_modkey);

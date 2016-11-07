@@ -29,57 +29,57 @@
 
 
 
-struct crt_msg_field *dct_ping_in_fields[] = {
-	&CMF_INT
+struct dtp_msg_field *dct_ping_in_fields[] = {
+	&DMF_INT
 };
 
-struct crt_msg_field *dct_ping_out_fields[] = {
-	&CMF_INT
+struct dtp_msg_field *dct_ping_out_fields[] = {
+	&DMF_INT
 };
 
-struct crt_req_format DCT_RF_PING =
-	DEFINE_CRT_REQ_FMT("DCT_PING", dct_ping_in_fields, dct_ping_out_fields);
+struct dtp_req_format DCT_RF_PING =
+	DEFINE_DTP_REQ_FMT("DCT_PING", dct_ping_in_fields, dct_ping_out_fields);
 
-struct crt_msg_field *tier_fetch_in_fields[] = {
-	&CMF_UUID,	/* pool uuid */
-	&CMF_UUID,	/* pool handle uuid */
-	&CMF_UUID,	/* Container handle uuid */
-	&CMF_UINT64,    /* epoch */
+struct dtp_msg_field *tier_fetch_in_fields[] = {
+	&DMF_UUID,	/* pool uuid */
+	&DMF_UUID,	/* pool handle uuid */
+	&DMF_UUID,	/* Container handle uuid */
+	&DMF_UINT64,    /* epoch */
 };
 
-struct crt_msg_field *tier_fetch_out_fields[] = {
-	&CMF_INT,	/* status */
+struct dtp_msg_field *tier_fetch_out_fields[] = {
+	&DMF_INT,	/* status */
 };
 
-struct crt_req_format DQF_TIER_FETCH =
-	DEFINE_CRT_REQ_FMT("TIER_FETCH", tier_fetch_in_fields,
+struct dtp_req_format DQF_TIER_FETCH =
+	DEFINE_DTP_REQ_FMT("TIER_FETCH", tier_fetch_in_fields,
 			   tier_fetch_out_fields);
 int
-dct_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
-	       crt_opcode_t opc, crt_rpc_t **req)
+dct_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
+	       dtp_opcode_t opc, dtp_rpc_t **req)
 {
-	crt_opcode_t opcode;
+	dtp_opcode_t opcode;
 
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_TIER_MODULE, 1);
 
-	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
+	return dtp_req_create(dtp_ctx, tgt_ep, opcode, req);
 }
 
 struct daos_rpc dct_rpcs[] = {
 	{
 		.dr_name	= "DCT_PING",
-		.cr_opc		= DCT_PING,
+		.dr_opc		= DCT_PING,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DCT_RF_PING,
 	}, {
 		.dr_name	= "TIER_FETCH",
-		.cr_opc		= TIER_FETCH,
+		.dr_opc		= TIER_FETCH,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_TIER_FETCH,
 	}, {
-		.cr_opc		= 0
+		.dr_opc		= 0
 	}
 };
 

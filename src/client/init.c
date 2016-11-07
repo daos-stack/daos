@@ -34,7 +34,7 @@
 #include <pthread.h>
 
 /* Shared by pool, container, and object handles. */
-struct crt_hhash *daos_client_hhash;
+struct daos_hhash *daos_client_hhash;
 
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool		module_initialized;
@@ -58,7 +58,7 @@ daos_init(void)
 		D_GOTO(unlock, rc);
 	}
 
-	rc = crt_hhash_create(CRT_HHASH_BITS, &daos_client_hhash);
+	rc = daos_hhash_create(DAOS_HHASH_BITS, &daos_client_hhash);
 	if (rc != 0) {
 		D_ERROR("failed to create handle hash table: %d\n", rc);
 		D_GOTO(unlock, rc);
@@ -110,7 +110,7 @@ out_mgmt:
 out_eq:
 	daos_eq_lib_fini();
 out_hhash:
-	crt_hhash_destroy(daos_client_hhash);
+	daos_hhash_destroy(daos_client_hhash);
 unlock:
 	pthread_mutex_unlock(&module_lock);
 	return rc;
@@ -140,7 +140,7 @@ daos_fini(void)
 	dc_pool_fini();
 	dc_mgmt_fini();
 
-	crt_hhash_destroy(daos_client_hhash);
+	daos_hhash_destroy(daos_client_hhash);
 	daos_client_hhash = NULL;
 
 	module_initialized = false;

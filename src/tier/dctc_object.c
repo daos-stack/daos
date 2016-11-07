@@ -62,7 +62,7 @@ daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
 
 int
 daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
-	       crt_rank_list_t *ranks, daos_event_t *ev)
+	       daos_rank_list_t *ranks, daos_event_t *ev)
 {
 	return 0;
 }
@@ -73,7 +73,7 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, dsr_obj_attr_t *oa,
 
 int
 daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-	       unsigned int nr, daos_vec_iod_t *iods, crt_sg_list_t *sgls,
+	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_vec_map_t *maps, daos_event_t *ev)
 {
 	return 0;
@@ -81,7 +81,7 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 
 int
 daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-		unsigned int nr, daos_vec_iod_t *iods, crt_sg_list_t *sgls,
+		unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 		daos_event_t *ev)
 {
 	return 0;
@@ -89,8 +89,8 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 
 
 int
-daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, crt_nr_t *nr,
-		   daos_key_desc_t *kds, crt_sg_list_t *sgl,
+daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, daos_nr_t *nr,
+		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev)
 {
 	return 0;
@@ -98,7 +98,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, crt_nr_t *nr,
 
 int
 daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-		   crt_nr_t *nr, daos_key_desc_t *kds, crt_sg_list_t *sgl,
+		   daos_nr_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev)
 {
 	return 0;

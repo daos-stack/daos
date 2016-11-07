@@ -30,15 +30,14 @@
 #ifndef __VOS_INTERNAL_H__
 #define __VOS_INTERNAL_H__
 
+#include <daos/list.h>
+#include <daos/hash.h>
 #include <daos/btree.h>
 #include <daos/common.h>
 #include <daos/lru.h>
 #include <daos_srv/daos_server.h>
 #include <vos_layout.h>
 #include <vos_obj.h>
-
-#include <crt_util/list.h>
-#include <crt_util/hash.h>
 
 extern struct dss_module_key vos_module_key;
 static pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -48,7 +47,7 @@ static pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
  */
 struct vp_hdl {
 	/** VOS uuid hash-link with refcnt */
-	struct crt_ulink	vp_uhlink;
+	struct daos_ulink	vp_uhlink;
 	/** UUID of vos pool */
 	uuid_t			vp_id;
 	/** Pointer to PMEMobjpool **/
@@ -72,7 +71,7 @@ struct vp_hdl {
  */
 struct vc_hdl {
 	/* VOS uuid hash with refcnt */
-	struct crt_ulink	vc_uhlink;
+	struct daos_ulink	vc_uhlink;
 	/* VOS PMEMobjpool pointer */
 	struct vp_hdl		*vc_phdl;
 	/* Unique UID of VOS container */
@@ -143,7 +142,7 @@ extern struct vos_iter_ops vos_co_iter_ops;
 
 int
 vos_iter_fetch_cookie(daos_handle_t ih, vos_iter_entry_t *it_entry,
-		      struct crt_uuid *cookie, daos_hash_out_t *anchor);
+		      struct daos_uuid *cookie, daos_hash_out_t *anchor);
 
 static inline struct vos_tls *
 vos_tls_get()
@@ -391,7 +390,7 @@ struct vos_rec_bundle {
 	 *	    TODO also support scatter/gather list input.
 	 * Output : parameter to return value address.
 	 */
-	crt_iov_t		*rb_iov;
+	daos_iov_t		*rb_iov;
 	/** Optional, externally allocated d-key record mmid (rdma vos_krec) */
 	umem_id_t		 rb_mmid;
 	/** returned subtree root */
@@ -399,7 +398,7 @@ struct vos_rec_bundle {
 	/** returned size and nr of recx */
 	daos_recx_t		*rb_recx;
 	/** returned cookie associated with this record */
-	struct crt_uuid	*rb_cookie;
+	struct daos_uuid	*rb_cookie;
 };
 
 #define VOS_SIZE_ROUND		8
@@ -426,7 +425,7 @@ vos_rec2irec(struct btr_instance *tins, struct btr_record *rec)
 static inline uint64_t
 vos_krec_size(struct vos_rec_bundle *rbund)
 {
-	crt_iov_t	*key;
+	daos_iov_t	*key;
 	uint64_t	 size;
 
 	key = rbund->rb_iov;

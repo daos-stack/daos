@@ -98,13 +98,13 @@ typedef enum {
 	/** domain of cluster component can't match */
 	DER_DOMAIN		= (DER_ERR_BASE + 500),
 	/** transport layer mercury error */
-	DER_CRT_HG		= (DER_ERR_BASE + 600),
-	/** CRT RPC (opcode) unregister */
-	DER_CRT_UNREG		= (DER_ERR_BASE + 601),
-	/** CRT failed to generate an address string */
-	DER_CRT_ADDRSTR_GEN	= (DER_ERR_BASE + 602),
-	/** CRT MCL layer error */
-	DER_CRT_MCL		= (DER_ERR_BASE + 603),
+	DER_DTP_HG		= (DER_ERR_BASE + 600),
+	/** DTP RPC (opcode) unregister */
+	DER_DTP_UNREG		= (DER_ERR_BASE + 601),
+	/** DTP failed to generate an address string */
+	DER_DTP_ADDRSTR_GEN	= (DER_ERR_BASE + 602),
+	/** DTP MCL layer error */
+	DER_DTP_MCL		= (DER_ERR_BASE + 603),
 	/** unknown error */
 	DER_UNKNOWN		= (DER_ERR_BASE + 1000),
 	/** TODO: add more error numbers */

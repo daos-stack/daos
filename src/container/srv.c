@@ -47,46 +47,46 @@ fini(void)
 /* Note: the rpc input/output parameters is defined in daos_rpc */
 static struct daos_rpc_handler dsms_handlers[] = {
 	{
-		.cr_opc		= DSM_CONT_CREATE,
+		.dr_opc		= DSM_CONT_CREATE,
 		.dr_hdlr	= dsms_hdlr_cont_create
 	}, {
-		.cr_opc		= DSM_CONT_DESTROY,
+		.dr_opc		= DSM_CONT_DESTROY,
 		.dr_hdlr	= dsms_hdlr_cont_destroy
 	}, {
-		.cr_opc		= DSM_CONT_OPEN,
+		.dr_opc		= DSM_CONT_OPEN,
 		.dr_hdlr	= dsms_hdlr_cont_open
 	}, {
-		.cr_opc		= DSM_CONT_CLOSE,
+		.dr_opc		= DSM_CONT_CLOSE,
 		.dr_hdlr	= dsms_hdlr_cont_close
 	}, {
-		.cr_opc		= DSM_CONT_EPOCH_QUERY,
+		.dr_opc		= DSM_CONT_EPOCH_QUERY,
 		.dr_hdlr	= dsms_hdlr_cont_op
 	}, {
-		.cr_opc		= DSM_CONT_EPOCH_HOLD,
+		.dr_opc		= DSM_CONT_EPOCH_HOLD,
 		.dr_hdlr	= dsms_hdlr_cont_op
 	}, {
-		.cr_opc		= DSM_CONT_EPOCH_COMMIT,
+		.dr_opc		= DSM_CONT_EPOCH_COMMIT,
 		.dr_hdlr	= dsms_hdlr_cont_op
 	}, {
-		.cr_opc		= DSM_TGT_CONT_DESTROY,
+		.dr_opc		= DSM_TGT_CONT_DESTROY,
 		.dr_hdlr	= dsms_hdlr_tgt_cont_destroy,
 		.dr_corpc_ops	= {
 			.co_aggregate  = dsms_hdlr_tgt_cont_destroy_aggregate
 		}
 	}, {
-		.cr_opc		= DSM_TGT_CONT_OPEN,
+		.dr_opc		= DSM_TGT_CONT_OPEN,
 		.dr_hdlr	= dsms_hdlr_tgt_cont_open,
 		.dr_corpc_ops	= {
 			.co_aggregate  = dsms_hdlr_tgt_cont_open_aggregate
 		}
 	}, {
-		.cr_opc		= DSM_TGT_CONT_CLOSE,
+		.dr_opc		= DSM_TGT_CONT_CLOSE,
 		.dr_hdlr	= dsms_hdlr_tgt_cont_close,
 		.dr_corpc_ops	= {
 			.co_aggregate  = dsms_hdlr_tgt_cont_close_aggregate
 		}
 	}, {
-		.cr_opc		= 0
+		.dr_opc		= 0
 	}
 };
 

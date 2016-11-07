@@ -23,7 +23,7 @@
 #ifndef __DAOS_CLIENT_H__
 #define __DAOS_CLIENT_H__
 
-extern struct crt_hhash *daos_client_hhash;
+extern struct daos_hhash *daos_client_hhash;
 
 int dc_mgmt_init();
 

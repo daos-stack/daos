@@ -63,8 +63,8 @@
  */
 int
 daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
-		 const char *grp, const crt_rank_list_t *tgts, const char *dev,
-		 crt_size_t size, crt_rank_list_t *svc, uuid_t uuid,
+		 const char *grp, const daos_rank_list_t *tgts, const char *dev,
+		 daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
 		 daos_event_t *ev);
 
 /**
@@ -107,6 +107,6 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
  *			-DER_NONEXIST	Storage target is nonexistent
  */
 int
-daos_pool_extend(const uuid_t uuid, const char *grp, crt_rank_list_t *tgts,
-		 crt_rank_list_t *failed, daos_event_t *ev);
+daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
+		 daos_rank_list_t *failed, daos_event_t *ev);
 #endif /* __DAOS_MGMT_H__ */

@@ -49,7 +49,7 @@ struct ds_cont {
  * capabilities. References the ds_cont and the ds_pool_child objects.
  */
 struct ds_cont_hdl {
-	crt_list_t		sch_entry;
+	daos_list_t		sch_entry;
 	uuid_t			sch_uuid;	/* of the container handle */
 	uint64_t		sch_capas;
 	struct ds_pool_child   *sch_pool;

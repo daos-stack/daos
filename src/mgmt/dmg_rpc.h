@@ -35,8 +35,8 @@
 /*
  * RPC operation codes
  *
- * These are for daos_rpc::cr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
- * crt_req_create(..., opc, ...). See daos_rpc.h.
+ * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
+ * dtp_req_create(..., opc, ...). See daos_rpc.h.
  */
 enum dmg_operation {
 	DMG_POOL_CREATE		= 1,
@@ -49,10 +49,10 @@ enum dmg_operation {
 
 struct dmg_pool_create_in {
 	uuid_t			 pc_pool_uuid;
-	crt_string_t		 pc_grp;
-	crt_string_t		 pc_tgt_dev;
-	crt_rank_list_t	*pc_tgts;
-	crt_size_t		 pc_tgt_size;
+	dtp_string_t		 pc_grp;
+	dtp_string_t		 pc_tgt_dev;
+	daos_rank_list_t	*pc_tgts;
+	daos_size_t		 pc_tgt_size;
 	uint32_t		 pc_svc_nr;
 	uint32_t		 pc_mode;
 	uint32_t		 pc_uid;
@@ -60,13 +60,13 @@ struct dmg_pool_create_in {
 };
 
 struct dmg_pool_create_out {
-	crt_rank_list_t	*pc_svc;
+	daos_rank_list_t	*pc_svc;
 	int			 pc_rc;
 };
 
 struct dmg_pool_destroy_in {
 	uuid_t			pd_pool_uuid;
-	crt_string_t		pd_grp;
+	dtp_string_t		pd_grp;
 	int			pd_force;
 };
 
@@ -76,8 +76,8 @@ struct dmg_pool_destroy_out {
 
 struct dmg_tgt_create_in {
 	uuid_t			tc_pool_uuid;
-	crt_string_t		tc_tgt_dev;
-	crt_size_t		tc_tgt_size;
+	dtp_string_t		tc_tgt_dev;
+	daos_size_t		tc_tgt_size;
 };
 
 struct dmg_tgt_create_out {

@@ -66,7 +66,7 @@ cont_create_complete(void *arg, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	out = crt_reply_get(sp->sp_rpc);
+	out = dtp_reply_get(sp->sp_rpc);
 
 	rc = out->cco_ret;
 	if (rc != 0) {
@@ -77,7 +77,7 @@ cont_create_complete(void *arg, daos_event_t *ev, int rc)
 	D_DEBUG(DF_DSMC, "completed creating container\n");
 
 out:
-	crt_req_decref(sp->sp_rpc);
+	dtp_req_decref(sp->sp_rpc);
 	return rc;
 }
 
@@ -86,8 +86,8 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 {
 	struct cont_create_in  *in;
 	struct dc_pool	       *pool;
-	crt_endpoint_t		ep;
-	crt_rpc_t	       *rpc;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
 	int			rc;
 
@@ -112,7 +112,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	}
 
 	D_DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
-		CP_UUID(pool->dp_pool), CP_UUID(uuid));
+		DP_UUID(pool->dp_pool), DP_UUID(uuid));
 
 	/* To the only container service. */
 	ep.ep_grp = NULL;
@@ -126,7 +126,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 		return rc;
 	}
 
-	in = crt_req_get(rpc);
+	in = dtp_req_get(rpc);
 	uuid_copy(in->cci_pool, pool->dp_pool);
 	uuid_copy(in->cci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cci_cont, uuid);
@@ -134,7 +134,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	dc_pool_put(pool);
 
 	sp = daos_ev2sp(ev);
-	crt_req_addref(rpc);
+	dtp_req_addref(rpc);
 	sp->sp_rpc = rpc;
 
 	rc = daos_event_register_comp_cb(ev, cont_create_complete, sp);
@@ -148,8 +148,8 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	return daos_rpc_send(rpc, ev);
 
 out_req_put:
-	crt_req_decref(rpc);
-	crt_req_decref(rpc);
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
 	return rc;
 }
 
@@ -164,7 +164,7 @@ cont_destroy_complete(void *arg, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	out = crt_reply_get(sp->sp_rpc);
+	out = dtp_reply_get(sp->sp_rpc);
 
 	rc = out->cdo_ret;
 	if (rc != 0) {
@@ -175,7 +175,7 @@ cont_destroy_complete(void *arg, daos_event_t *ev, int rc)
 	D_DEBUG(DF_DSMC, "completed destroying container\n");
 
 out:
-	crt_req_decref(sp->sp_rpc);
+	dtp_req_decref(sp->sp_rpc);
 	return rc;
 }
 
@@ -185,8 +185,8 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 {
 	struct cont_destroy_in *in;
 	struct dc_pool	       *pool;
-	crt_endpoint_t		ep;
-	crt_rpc_t	       *rpc;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
 	int			rc;
 
@@ -214,7 +214,7 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	}
 
 	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
-		CP_UUID(pool->dp_pool), CP_UUID(uuid), force);
+		DP_UUID(pool->dp_pool), DP_UUID(uuid), force);
 
 	/* To the only container service. */
 	ep.ep_grp = NULL;
@@ -228,7 +228,7 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 		return rc;
 	}
 
-	in = crt_req_get(rpc);
+	in = dtp_req_get(rpc);
 	uuid_copy(in->cdi_pool, pool->dp_pool);
 	uuid_copy(in->cdi_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cdi_cont, uuid);
@@ -237,7 +237,7 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	dc_pool_put(pool);
 
 	sp = daos_ev2sp(ev);
-	crt_req_addref(rpc);
+	dtp_req_addref(rpc);
 	sp->sp_rpc = rpc;
 
 	rc = daos_event_register_comp_cb(ev, cont_destroy_complete, sp);
@@ -251,25 +251,25 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	return daos_rpc_send(rpc, ev);
 
 out_req_put:
-	crt_req_decref(rpc);
-	crt_req_decref(rpc);
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
 	return rc;
 }
 
 static void
-dsmc_container_free(struct crt_hlink *dlink)
+dsmc_container_free(struct daos_hlink *dlink)
 {
 	struct dsmc_container *dc;
 
 	dc = container_of(dlink, struct dsmc_container, dc_hlink);
 	pthread_rwlock_destroy(&dc->dc_obj_list_lock);
-	D_ASSERT(crt_list_empty(&dc->dc_po_list));
-	D_ASSERT(crt_list_empty(&dc->dc_obj_list));
+	D_ASSERT(daos_list_empty(&dc->dc_po_list));
+	D_ASSERT(daos_list_empty(&dc->dc_obj_list));
 	D_FREE_PTR(dc);
 }
 
 
-static struct crt_hlink_ops dc_h_ops = {
+static struct daos_hlink_ops dc_h_ops = {
 	.hop_free = dsmc_container_free,
 };
 
@@ -283,11 +283,11 @@ dsmc_container_alloc(const uuid_t uuid)
 		return NULL;
 
 	uuid_copy(dc->dc_uuid, uuid);
-	CRT_INIT_LIST_HEAD(&dc->dc_obj_list);
-	CRT_INIT_LIST_HEAD(&dc->dc_po_list);
+	DAOS_INIT_LIST_HEAD(&dc->dc_obj_list);
+	DAOS_INIT_LIST_HEAD(&dc->dc_po_list);
 	pthread_rwlock_init(&dc->dc_obj_list_lock, NULL);
 
-	crt_hhash_hlink_init(&dc->dc_hlink, &dc_h_ops);
+	daos_hhash_hlink_init(&dc->dc_hlink, &dc_h_ops);
 	return dc;
 }
 
@@ -311,7 +311,7 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	out = crt_reply_get(sp->sp_rpc);
+	out = dtp_reply_get(sp->sp_rpc);
 
 	rc = out->coo_ret;
 	if (rc != 0) {
@@ -337,7 +337,7 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	crt_list_add(&cont->dc_po_list, &pool->dp_co_list);
+	daos_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = sp->sp_hdl;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
@@ -345,7 +345,7 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 
 	D_DEBUG(DF_DSMC, DF_CONT": opened: cookie="DF_X64" hdl="DF_UUID
 		" master\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
-		sp->sp_hdlp->cookie, CP_UUID(cont->dc_cont_hdl));
+		sp->sp_hdlp->cookie, DP_UUID(cont->dc_cont_hdl));
 
 	if (arg->coa_info == NULL)
 		D_GOTO(out, rc = 0);
@@ -357,7 +357,7 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 	arg->coa_info->ci_snapshots = NULL;
 
 out:
-	crt_req_decref(sp->sp_rpc);
+	dtp_req_decref(sp->sp_rpc);
 	D_FREE_PTR(arg);
 	dsmc_container_put(cont);
 	dc_pool_put(pool);
@@ -371,8 +371,8 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	struct cont_open_in    *in;
 	struct dc_pool	       *pool;
 	struct dsmc_container  *cont;
-	crt_endpoint_t		ep;
-	crt_rpc_t	       *rpc;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
 	struct cont_open_arg   *arg;
 	int			rc;
@@ -401,7 +401,7 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	cont->dc_capas = flags;
 
 	D_DEBUG(DF_DSMC, DF_CONT": opening: hdl="DF_UUIDF" flags=%x\n",
-		DP_CONT(pool->dp_pool, uuid), CP_UUID(cont->dc_cont_hdl),
+		DP_CONT(pool->dp_pool, uuid), DP_UUID(cont->dc_cont_hdl),
 		flags);
 
 	D_ALLOC_PTR(arg);
@@ -425,7 +425,7 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 		D_GOTO(err_arg, rc);
 	}
 
-	in = crt_req_get(rpc);
+	in = dtp_req_get(rpc);
 	uuid_copy(in->coi_pool, pool->dp_pool);
 	uuid_copy(in->coi_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->coi_cont, uuid);
@@ -433,7 +433,7 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	in->coi_capas = flags;
 
 	sp = daos_ev2sp(ev);
-	crt_req_addref(rpc);
+	dtp_req_addref(rpc);
 	sp->sp_rpc = rpc;
 	sp->sp_hdl = poh;
 	sp->sp_hdlp = coh;
@@ -450,8 +450,8 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	return daos_rpc_send(rpc, ev);
 
 err_rpc:
-	crt_req_decref(rpc);
-	crt_req_decref(rpc);
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
 err_arg:
 	D_FREE_PTR(arg);
 err_cont:
@@ -482,7 +482,7 @@ cont_close_complete(void *data, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	out = crt_reply_get(sp->sp_rpc);
+	out = dtp_reply_get(sp->sp_rpc);
 
 	rc = out->cco_ret;
 	if (rc != 0) {
@@ -492,18 +492,18 @@ cont_close_complete(void *data, daos_event_t *ev, int rc)
 
 	D_DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
 		" master\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
-		sp->sp_hdl.cookie, CP_UUID(cont->dc_cont_hdl));
+		sp->sp_hdl.cookie, DP_UUID(cont->dc_cont_hdl));
 
 	dsmc_container_del_cache(cont);
 
 	/* Remove the container from pool container list */
 	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
-	crt_list_del_init(&cont->dc_po_list);
+	daos_list_del_init(&cont->dc_po_list);
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
 	daos_placement_fini(pool->dp_map);
 out:
-	crt_req_decref(sp->sp_rpc);
+	dtp_req_decref(sp->sp_rpc);
 	dc_pool_put(pool);
 	dsmc_container_put(cont);
 	return rc;
@@ -515,8 +515,8 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 	struct cont_close_in   *in;
 	struct dc_pool	       *pool;
 	struct dsmc_container  *cont;
-	crt_endpoint_t		ep;
-	crt_rpc_t	       *rpc;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
 	struct cont_close_arg  *arg;
 	int			rc;
@@ -527,7 +527,7 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 
 	/* Check if there are not objects opened for this container */
 	pthread_rwlock_rdlock(&cont->dc_obj_list_lock);
-	if (!crt_list_empty(&cont->dc_obj_list)) {
+	if (!daos_list_empty(&cont->dc_obj_list)) {
 		D_ERROR("cannot close container, object not closed.\n");
 		pthread_rwlock_unlock(&cont->dc_obj_list_lock);
 		D_GOTO(err_cont, rc = -DER_BUSY);
@@ -540,14 +540,14 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 
 	D_DEBUG(DF_DSMC, DF_CONT": closing: cookie="DF_X64" hdl="DF_UUID"\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), coh.cookie,
-		CP_UUID(cont->dc_cont_hdl));
+		DP_UUID(cont->dc_cont_hdl));
 
 	if (cont->dc_slave) {
 		dsmc_container_del_cache(cont);
 
 		/* Remove the container from pool container list */
 		pthread_rwlock_wrlock(&pool->dp_co_list_lock);
-		crt_list_del_init(&cont->dc_po_list);
+		daos_list_del_init(&cont->dc_po_list);
 		pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
 		dc_pool_put(pool);
@@ -559,7 +559,7 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 		}
 		D_DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
 			"\n", DP_CONT(pool->dp_pool, cont->dc_uuid), coh.cookie,
-			CP_UUID(cont->dc_cont_hdl));
+			DP_UUID(cont->dc_cont_hdl));
 		return 0;
 	}
 
@@ -589,13 +589,13 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 		D_GOTO(err_arg, rc);
 	}
 
-	in = crt_req_get(rpc);
+	in = dtp_req_get(rpc);
 	uuid_copy(in->cci_pool, pool->dp_pool);
 	uuid_copy(in->cci_cont, cont->dc_uuid);
 	uuid_copy(in->cci_cont_hdl, cont->dc_cont_hdl);
 
 	sp = daos_ev2sp(ev);
-	crt_req_addref(rpc);
+	dtp_req_addref(rpc);
 	sp->sp_rpc = rpc;
 	sp->sp_hdl = coh;
 	sp->sp_arg = arg;
@@ -611,8 +611,8 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 	return daos_rpc_send(rpc, ev);
 
 err_rpc:
-	crt_req_decref(rpc);
-	crt_req_decref(rpc);
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
 err_arg:
 	D_FREE_PTR(arg);
 err_pool:
@@ -630,21 +630,21 @@ dsmc_swap_co_glob(struct dsmc_container_glob *cont_glob)
 {
 	D_ASSERT(cont_glob != NULL);
 
-	C_SWAP32S(&cont_glob->dcg_magic);
+	D_SWAP32S(&cont_glob->dcg_magic);
 	/* skip cont_glob->dcg_padding) */
 	/* skip cont_glob->dcg_pool_hdl (uuid_t) */
 	/* skip cont_glob->dcg_uuid (uuid_t) */
 	/* skip cont_glob->dcg_cont_hdl (uuid_t) */
-	C_SWAP64S(&cont_glob->dcg_capas);
+	D_SWAP64S(&cont_glob->dcg_capas);
 }
 
 int
-dsmc_co_l2g(daos_handle_t coh, crt_iov_t *glob)
+dsmc_co_l2g(daos_handle_t coh, daos_iov_t *glob)
 {
 	struct dc_pool			*pool;
 	struct dsmc_container		*cont;
 	struct dsmc_container_glob	*cont_glob;
-	crt_size_t			 glob_buf_size;
+	daos_size_t			 glob_buf_size;
 	int				 rc = 0;
 
 	D_ASSERT(glob != NULL);
@@ -689,7 +689,7 @@ out:
 }
 
 int
-daos_cont_local2global(daos_handle_t coh, crt_iov_t *glob)
+daos_cont_local2global(daos_handle_t coh, daos_iov_t *glob)
 {
 	int	rc = 0;
 
@@ -704,7 +704,7 @@ daos_cont_local2global(daos_handle_t coh, crt_iov_t *glob)
 			glob->iov_buf_len, glob->iov_len);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	if (dsmc_handle_type(coh) != CRT_HTYPE_CO) {
+	if (dsmc_handle_type(coh) != DAOS_HTYPE_CO) {
 		D_ERROR("Bad type (%d) of coh handle.\n",
 			dsmc_handle_type(coh));
 		D_GOTO(out, rc = -DER_INVAL);
@@ -733,8 +733,8 @@ dc_cont_g2l(daos_handle_t poh, struct dsmc_container_glob *cont_glob,
 
 	if (uuid_compare(pool->dp_pool_hdl, cont_glob->dcg_pool_hdl) != 0) {
 		D_ERROR("pool_hdl mismatch, in pool: "DF_UUID", in cont_glob: "
-			DF_UUID"\n", CP_UUID(pool->dp_pool_hdl),
-			CP_UUID(cont_glob->dcg_pool_hdl));
+			DF_UUID"\n", DP_UUID(pool->dp_pool_hdl),
+			DP_UUID(cont_glob->dcg_pool_hdl));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -763,16 +763,16 @@ dc_cont_g2l(daos_handle_t poh, struct dsmc_container_glob *cont_glob,
 		D_GOTO(out_cont, rc);
 	}
 
-	crt_list_add(&cont->dc_po_list, &pool->dp_co_list);
+	daos_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = poh;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
 	dsmc_container_add_cache(cont, coh);
 
 	D_DEBUG(DF_DSMC, DF_UUID": opened "DF_UUID": cookie="DF_X64" hdl="
-		DF_UUID" slave\n", CP_UUID(pool->dp_pool),
-		CP_UUID(cont->dc_uuid), coh->cookie,
-		CP_UUID(cont->dc_cont_hdl));
+		DF_UUID" slave\n", DP_UUID(pool->dp_pool),
+		DP_UUID(cont->dc_uuid), coh->cookie,
+		DP_UUID(cont->dc_cont_hdl));
 
 out_cont:
 	dsmc_container_put(cont);
@@ -783,12 +783,12 @@ out:
 }
 
 int
-daos_cont_global2local(daos_handle_t poh, crt_iov_t glob, daos_handle_t *coh)
+daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 {
 	struct dsmc_container_glob	 *cont_glob;
 	int				  rc = 0;
 
-	if (dsmc_handle_type(poh) != CRT_HTYPE_POOL) {
+	if (dsmc_handle_type(poh) != DAOS_HTYPE_POOL) {
 		D_ERROR("Bad type (%d) of poh handle.\n",
 			dsmc_handle_type(poh));
 		D_GOTO(out, rc = -DER_INVAL);
@@ -806,7 +806,7 @@ daos_cont_global2local(daos_handle_t poh, crt_iov_t glob, daos_handle_t *coh)
 	}
 
 	cont_glob = (struct dsmc_container_glob *)glob.iov_buf;
-	if (cont_glob->dcg_magic == C_SWAP32(DC_CONT_GLOB_MAGIC)) {
+	if (cont_glob->dcg_magic == D_SWAP32(DC_CONT_GLOB_MAGIC)) {
 		dsmc_swap_co_glob(cont_glob);
 		D_ASSERT(cont_glob->dcg_magic == DC_CONT_GLOB_MAGIC);
 	} else if (cont_glob->dcg_magic != DC_CONT_GLOB_MAGIC) {
@@ -840,9 +840,9 @@ static int
 epoch_op_complete(void *data, daos_event_t *ev, int rc)
 {
 	struct daos_op_sp      *sp = data;
-	crt_rpc_t	       *rpc = sp->sp_rpc;
-	crt_opcode_t		opc = opc_get(rpc->cr_opc);
-	struct epoch_op_out    *out = crt_reply_get(rpc);
+	dtp_rpc_t	       *rpc = sp->sp_rpc;
+	dtp_opcode_t		opc = opc_get(rpc->dr_opc);
+	struct epoch_op_out    *out = dtp_reply_get(rpc);
 	struct epoch_op_arg    *arg = sp->sp_arg;
 
 	if (rc != 0) {
@@ -865,7 +865,7 @@ epoch_op_complete(void *data, daos_event_t *ev, int rc)
 		*arg->eoa_state = out->eoo_epoch_state;
 
 out:
-	crt_req_decref(rpc);
+	dtp_req_decref(rpc);
 	dc_pool_put(arg->eoa_pool);
 	dsmc_container_put(arg->eoa_cont);
 	D_FREE_PTR(arg);
@@ -873,14 +873,14 @@ out:
 }
 
 static int
-epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
+epoch_op(daos_handle_t coh, dtp_opcode_t opc, daos_epoch_t *epoch,
 	 daos_epoch_state_t *state, daos_event_t *ev)
 {
 	struct epoch_op_in     *in;
 	struct dc_pool	       *pool;
 	struct dsmc_container  *cont;
-	crt_endpoint_t		ep;
-	crt_rpc_t	       *rpc;
+	dtp_endpoint_t		ep;
+	dtp_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
 	struct epoch_op_arg    *arg;
 	int			rc;
@@ -918,7 +918,7 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 
 	D_DEBUG(DF_DSMC, DF_CONT": op=%u hdl="DF_UUID" epoch="DF_U64"\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), opc,
-		CP_UUID(cont->dc_cont_hdl), epoch == NULL ? 0 : *epoch);
+		DP_UUID(cont->dc_cont_hdl), epoch == NULL ? 0 : *epoch);
 
 	D_ALLOC_PTR(arg);
 	if (arg == NULL) {
@@ -942,7 +942,7 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		D_GOTO(err_arg, rc);
 	}
 
-	in = crt_req_get(rpc);
+	in = dtp_req_get(rpc);
 	uuid_copy(in->eoi_cont_op_in.cpi_pool, pool->dp_pool);
 	uuid_copy(in->eoi_cont_op_in.cpi_cont, cont->dc_uuid);
 	uuid_copy(in->eoi_cont_op_in.cpi_cont_hdl, cont->dc_cont_hdl);
@@ -950,7 +950,7 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		in->eoi_epoch = *epoch;
 
 	sp = daos_ev2sp(ev);
-	crt_req_addref(rpc);
+	dtp_req_addref(rpc);
 	sp->sp_rpc = rpc;
 	sp->sp_arg = arg;
 
@@ -965,8 +965,8 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	return daos_rpc_send(rpc, ev);
 
 err_rpc:
-	crt_req_decref(rpc);
-	crt_req_decref(rpc);
+	dtp_req_decref(rpc);
+	dtp_req_decref(rpc);
 err_arg:
 	D_FREE_PTR(arg);
 err_pool:
