@@ -40,8 +40,8 @@
 /*
  * RPC operation codes
  *
- * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
- * dtp_req_create(..., opc, ...). See src/include/daos/rpc.h.
+ * These are for daos_rpc::cr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
+ * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
 enum pool_operation {
 	POOL_CONNECT		= 1,
@@ -69,7 +69,7 @@ struct pool_connect_in {
 	uint32_t		pci_uid;
 	uint32_t		pci_gid;
 	uint64_t		pci_capas;
-	dtp_bulk_t		pci_map_bulk;
+	crt_bulk_t		pci_map_bulk;
 };
 
 struct pool_connect_out {
@@ -88,12 +88,12 @@ struct pool_disconnect_out {
 
 struct pool_exclude_in {
 	struct pool_op_in	pei_op;
-	daos_rank_list_t       *pei_targets;
+	crt_rank_list_t       *pei_targets;
 };
 
 struct pool_exclude_out {
 	struct pool_op_out	peo_op;
-	daos_rank_list_t       *peo_targets;	/* that are not found in pool */
+	crt_rank_list_t       *peo_targets;	/* that are not found in pool */
 };
 
 struct pool_tgt_connect_in {
@@ -126,14 +126,14 @@ struct pool_tgt_update_map_out {
 };
 
 int
-pool_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
-		dtp_opcode_t opc, dtp_rpc_t **req);
+pool_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+		crt_opcode_t opc, crt_rpc_t **req);
 
 extern struct daos_rpc pool_rpcs[];
 extern struct daos_rpc pool_srv_rpcs[];
 
 static inline void
-dsm_set_reply_status(dtp_rpc_t *rpc, int status)
+dsm_set_reply_status(crt_rpc_t *rpc, int status)
 {
 	int *ret;
 
@@ -142,20 +142,20 @@ dsm_set_reply_status(dtp_rpc_t *rpc, int status)
 	 * in front of the bulk reply for now
 	 **/
 	D_ASSERT(rpc != NULL);
-	ret = dtp_reply_get(rpc);
+	ret = crt_reply_get(rpc);
 	D_ASSERT(ret != NULL);
 	*ret = status;
 }
 
 static inline int
-dsm_get_reply_status(dtp_rpc_t *rpc)
+dsm_get_reply_status(crt_rpc_t *rpc)
 {
 	int *ret;
 	/* FIXME; The right way to do it might be find the
 	 * status offset and set it, but let's put status
 	 * in front of the bulk reply for now
 	 **/
-	ret = dtp_reply_get(rpc);
+	ret = crt_reply_get(rpc);
 	return *ret;
 }
 

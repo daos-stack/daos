@@ -31,7 +31,7 @@
 #include <daos_srv/vos.h>
 #include <daos_errno.h>
 #include <daos/common.h>
-#include <daos/hash.h>
+#include <crt_util/hash.h>
 #include <sys/stat.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
@@ -53,7 +53,7 @@ pmem_pool2root(PMEMobjpool *ph)
  * Create a Versioning Object Storage Pool (VOSP) and its root object.
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
+vos_pool_create(const char *path, uuid_t uuid, crt_size_t size)
 {
 	int			rc    = 0;
 	PMEMobjpool		*ph;
@@ -63,7 +63,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 		return -DER_INVAL;
 
 	D_DEBUG(DF_VOS2, "Pool Path: %s, size: "DF_U64",UUID: "DF_UUID"\n",
-		path, size, DP_UUID(uuid));
+		path, size, CP_UUID(uuid));
 
 	/**
 	 * Path must be a file with a certain size when size
@@ -154,11 +154,11 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 
 	int			rc    = 0;
 	struct vp_hdl		*vpool;
-	struct daos_uuid	ukey;
+	struct crt_uuid	ukey;
 
 	uuid_copy(ukey.uuid, uuid);
 	D_DEBUG(DF_VOS2, "Destroy path: %s UUID: "DF_UUID"\n",
-		path, DP_UUID(uuid));
+		path, CP_UUID(uuid));
 
 	rc = vos_pool_lookup_handle(&ukey, &vpool);
 	if (rc == 0 && vpool != NULL) {
@@ -192,7 +192,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	struct vp_hdl			*vpool = NULL;
 	struct vos_pool_root		*root  = NULL;
 	struct vos_container_index	*co_idx = NULL;
-	struct daos_uuid		ukey;
+	struct crt_uuid		ukey;
 	struct vos_cookie_index		*ck_index = NULL;
 
 	if (path == NULL) {
@@ -202,7 +202,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	uuid_copy(ukey.uuid, uuid);
 	D_DEBUG(DF_VOS2, "pool %p, path: %s,Open/Copy:"DF_UUID"/"DF_UUID"\n",
-		vpool, path, DP_UUID(uuid), DP_UUID(ukey.uuid));
+		vpool, path, CP_UUID(uuid), CP_UUID(ukey.uuid));
 
 	rc = vos_pool_lookup_handle(&ukey, &vpool);
 	/* If found increments ref-count */
@@ -244,9 +244,9 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	root = vos_pool2root(vpool);
 	if (uuid_compare(uuid, root->vpr_pool_id)) {
 		D_ERROR("UUID mismatch error");
-		D_DEBUG(DF_VOS2, "User UUID:"DF_UUID"\n", DP_UUID(uuid));
+		D_DEBUG(DF_VOS2, "User UUID:"DF_UUID"\n", CP_UUID(uuid));
 		D_DEBUG(DF_VOS2, "Root Pool UUID:"DF_UUID"\n",
-			DP_UUID(root->vpr_pool_id));
+			CP_UUID(root->vpr_pool_id));
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
 

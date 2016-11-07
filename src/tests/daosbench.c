@@ -36,7 +36,7 @@
 #include <assert.h>
 #include <mpi.h>
 
-#include <daos/list.h>
+#include <crt_util/list.h>
 #include <daos.h>
 #include <errno.h>
 #include "suite/daos_test.h"
@@ -75,8 +75,8 @@ uuid_t				cont_uuid;
 daos_cont_info_t		cont_info;
 daos_obj_id_t			oid;
 daos_epoch_t			ghce;
-daos_rank_t			svc;
-daos_rank_list_t		svcl;
+crt_rank_t			svc;
+crt_rank_list_t		svcl;
 void				*buffers;
 void				*dkbuf;
 void				*akbuf;
@@ -114,15 +114,15 @@ struct test {
 };
 
 struct a_ioreq {
-	daos_list_t		list;
+	crt_list_t		list;
 	daos_event_t		ev;
 	daos_dkey_t		dkey;
 	daos_akey_t		akey;
-	daos_iov_t		val_iov;
+	crt_iov_t		val_iov;
 	daos_vec_iod_t		vio;
 	daos_recx_t		rex;
 	daos_epoch_range_t	erange;
-	daos_sg_list_t		sgl;
+	crt_sg_list_t		sgl;
 	daos_csum_buf_t		csum;
 	char			csum_buf[UPDATE_CSUM_SIZE];
 	char			*dkey_buf;
@@ -132,7 +132,7 @@ struct a_ioreq {
 };
 
 /** List to limit AIO operations */
-static	DAOS_LIST_HEAD(aios);
+static	CRT_LIST_HEAD(aios);
 
 /**
  * Global initializations
@@ -201,11 +201,11 @@ ioreq_init(struct a_ioreq *ioreq, struct test *test, int counter)
 
 	/** dkey */
 	ioreq->dkey_buf = dkbuf + test->t_dkey_size * counter;
-	daos_iov_set(&ioreq->dkey, ioreq->dkey_buf,
+	crt_iov_set(&ioreq->dkey, ioreq->dkey_buf,
 		     test->t_dkey_size);
 	/** akey */
 	ioreq->akey_buf = akbuf + test->t_akey_size * counter;
-	daos_iov_set(&ioreq->vio.vd_name, ioreq->akey_buf,
+	crt_iov_set(&ioreq->vio.vd_name, ioreq->akey_buf,
 		     test->t_akey_size);
 
 	ioreq->csum.cs_csum = &ioreq->csum_buf;
@@ -305,7 +305,7 @@ aio_req_init(struct test *test)
 
 		memset(ioreq, 0, sizeof(*ioreq));
 		ioreq_init(ioreq, test, i);
-		daos_list_add(&ioreq->list, &aios);
+		crt_list_add(&ioreq->list, &aios);
 
 		DBENCH_INFO("Allocated AIO %p: buffer %p", ioreq,
 			    ioreq->val_iov.iov_buf);
@@ -324,11 +324,11 @@ aio_req_fini(struct test *test)
 
 	free(events);
 
-	daos_list_for_each_entry_safe(ioreq, tmp, &aios, list) {
+	crt_list_for_each_entry_safe(ioreq, tmp, &aios, list) {
 		DBENCH_INFO("Freeing AIO %p: buffer %p", ioreq,
 			     ioreq->val_iov.iov_buf);
 
-		daos_list_del_init(&ioreq->list);
+		crt_list_del_init(&ioreq->list);
 		daos_event_fini(&ioreq->ev);
 		free(ioreq);
 	}
@@ -366,7 +366,7 @@ aio_req_wait(struct test *test, int fetch_flag)
 			     ioreq->vio.vd_recxs->rx_idx,
 			     ioreq->vio.vd_recxs->rx_nr);
 
-		daos_list_move(&ioreq->list, &aios);
+		crt_list_move(&ioreq->list, &aios);
 		naios++;
 		DBENCH_INFO("Completed AIO %p: buffer %p",
 			    ioreq, ioreq->val_iov.iov_buf);
@@ -477,7 +477,7 @@ enumerate(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 {
 	int	rc;
 
-	daos_iov_set(&req->val_iov, buf, len);
+	crt_iov_set(&req->val_iov, buf, len);
 
 	/** execute fetch operation */
 	rc = daos_obj_list_dkey(oh, epoch, number, kds, &req->sgl, anchor,
@@ -653,8 +653,8 @@ get_next_ioreq(struct test *test)
 
 	while (naios == 0)
 		aio_req_wait(test, 0);
-	ioreq = daos_list_entry(aios.next, struct a_ioreq, list);
-	daos_list_move_tail(&ioreq->list, &aios);
+	ioreq = crt_list_entry(aios.next, struct a_ioreq, list);
+	crt_list_move_tail(&ioreq->list, &aios);
 	naios--;
 
 	return ioreq;
@@ -1327,7 +1327,7 @@ int main(int argc, char *argv[])
 	DBENCH_CHECK(rc, "Event queue creation failed\n");
 
 	if (comm_world_rank == 0) {
-		daos_rank_t		rank  = 0;
+		crt_rank_t		rank  = 0;
 
 		if (strlen(arg.t_pname) == 0)
 			DBENCH_ERR(EINVAL, "'daosPool' must be specified");

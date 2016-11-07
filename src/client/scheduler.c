@@ -47,11 +47,11 @@ daos_sched_init(struct daos_sched *sched, struct daos_event *event)
 	D_CASSERT(sizeof(sched->ds_private) >= sizeof(*dsp));
 
 	memset(sched, 0, sizeof(*sched));
-	DAOS_INIT_LIST_HEAD(&dsp->dsp_init_list);
-	DAOS_INIT_LIST_HEAD(&dsp->dsp_running_list);
-	DAOS_INIT_LIST_HEAD(&dsp->dsp_complete_list);
-	DAOS_INIT_LIST_HEAD(&dsp->dsp_comp_cb_list);
-	DAOS_INIT_LIST_HEAD(&dsp->dsp_dtg_list);
+	CRT_INIT_LIST_HEAD(&dsp->dsp_init_list);
+	CRT_INIT_LIST_HEAD(&dsp->dsp_running_list);
+	CRT_INIT_LIST_HEAD(&dsp->dsp_complete_list);
+	CRT_INIT_LIST_HEAD(&dsp->dsp_comp_cb_list);
+	CRT_INIT_LIST_HEAD(&dsp->dsp_dtg_list);
 	dsp->dsp_refcount = 1;
 	pthread_mutex_init(&dsp->dsp_lock, NULL);
 
@@ -70,22 +70,22 @@ daos_ev2sched(struct daos_event *ev)
 void *
 daos_task2arg(struct daos_task *task)
 {
-	return &daos_task2priv(task)->dtp_arg;
+	return &daos_task2priv(task)->crt_arg;
 }
 
 void *
 daos_task2sp(struct daos_task *task)
 {
-	return &daos_task2priv(task)->dtp_sp;
+	return &daos_task2priv(task)->crt_sp;
 }
 
-dtp_context_t*
+crt_context_t*
 daos_task2ctx(struct daos_task *task)
 {
 	struct daos_sched_private	*sched_priv;
 	struct daos_sched		*sched;
 
-	sched_priv = daos_task2priv(task)->dtp_sched;
+	sched_priv = daos_task2priv(task)->crt_sched;
 
 	sched = daos_priv2sched(sched_priv);
 
@@ -98,7 +98,7 @@ daos_task2sched(struct daos_task *task)
 	struct daos_sched_private	*sched_priv;
 	struct daos_sched		*sched;
 
-	sched_priv = daos_task2priv(task)->dtp_sched;
+	sched_priv = daos_task2priv(task)->crt_sched;
 	sched = daos_priv2sched(sched_priv);
 
 	return sched;
@@ -109,18 +109,18 @@ static void
 daos_sched_fini(struct daos_sched *sched)
 {
 	struct daos_sched_private	*dsp = daos_sched2priv(sched);
-	struct daos_task_private	*dtp;
+	struct daos_task_private	*crt;
 	struct daos_task_private	*tmp;
 
-	D_ASSERT(daos_list_empty(&dsp->dsp_dtg_list));
-	D_ASSERT(daos_list_empty(&dsp->dsp_init_list));
-	D_ASSERT(daos_list_empty(&dsp->dsp_running_list));
+	D_ASSERT(crt_list_empty(&dsp->dsp_dtg_list));
+	D_ASSERT(crt_list_empty(&dsp->dsp_init_list));
+	D_ASSERT(crt_list_empty(&dsp->dsp_running_list));
 
-	daos_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_complete_list,
-				      dtp_list) {
-		struct daos_task *task = daos_priv2task(dtp);
+	crt_list_for_each_entry_safe(crt, tmp, &dsp->dsp_complete_list,
+				      crt_list) {
+		struct daos_task *task = daos_priv2task(crt);
 
-		daos_list_del_init(&dtp->dtp_list);
+		crt_list_del_init(&crt->crt_list);
 		daos_task_fini(task);
 		D_FREE_PTR(task);
 	}
@@ -180,8 +180,8 @@ daos_task_group_init(struct daos_task_group *dtg,
 	dsp = daos_sched2priv(sched);
 
 	memset(dtg, 0, sizeof(*dtg));
-	DAOS_INIT_LIST_HEAD(&dtg->dtg_task_list);
-	DAOS_INIT_LIST_HEAD(&dtg->dtg_list);
+	CRT_INIT_LIST_HEAD(&dtg->dtg_task_list);
+	CRT_INIT_LIST_HEAD(&dtg->dtg_list);
 	dtg->dtg_comp_cb = callback;
 	dtg->dtg_cb_arg = arg;
 	pthread_mutex_init(&dtg->dtg_task_list_lock, NULL);
@@ -189,7 +189,7 @@ daos_task_group_init(struct daos_task_group *dtg,
 	pthread_mutex_lock(&dsp->dsp_lock);
 	/* Make sure the scheduler is not finalized */
 	D_ASSERT(sched->ds_event != NULL);
-	daos_list_add(&dtg->dtg_list, &dsp->dsp_dtg_list);
+	crt_list_add(&dtg->dtg_list, &dsp->dsp_dtg_list);
 	daos_sched_addref_locked(dsp);
 	pthread_mutex_unlock(&dsp->dsp_lock);
 	return 0;
@@ -199,14 +199,14 @@ int
 daos_task_group_add(struct daos_task_group *dtg,
 		    struct daos_task *task)
 {
-	struct daos_task_private *dtp = daos_task2priv(task);
+	struct daos_task_private *crt = daos_task2priv(task);
 
-	D_ASSERT(dtp->dtp_dtg == NULL);
-	D_ASSERT(daos_list_empty(&dtp->dtp_dtg_list));
+	D_ASSERT(crt->crt_dtg == NULL);
+	D_ASSERT(crt_list_empty(&crt->crt_dtg_list));
 	pthread_mutex_lock(&dtg->dtg_task_list_lock);
-	daos_list_add(&dtp->dtp_dtg_list, &dtg->dtg_task_list);
+	crt_list_add(&crt->crt_dtg_list, &dtg->dtg_task_list);
 	pthread_mutex_unlock(&dtg->dtg_task_list_lock);
-	dtp->dtp_dtg = dtg;
+	crt->crt_dtg = dtg;
 
 	return 0;
 }
@@ -226,7 +226,7 @@ daos_sched_register_comp_cb(struct daos_sched *sched,
 	dsc->dsc_arg = arg;
 
 	pthread_mutex_lock(&dsp->dsp_lock);
-	daos_list_add(&dsc->dsc_list,
+	crt_list_add(&dsc->dsc_list,
 		      &dsp->dsp_comp_cb_list);
 	pthread_mutex_unlock(&dsp->dsp_lock);
 	return 0;
@@ -240,9 +240,9 @@ daos_sched_complete_cb(struct daos_sched *sched)
 	struct daos_sched_private	*dsp = daos_sched2priv(sched);
 	int				rc;
 
-	daos_list_for_each_entry_safe(dsc, tmp,
+	crt_list_for_each_entry_safe(dsc, tmp,
 			&dsp->dsp_comp_cb_list, dsc_list) {
-		daos_list_del(&dsc->dsc_list);
+		crt_list_del(&dsc->dsc_list);
 		rc = dsc->dsc_comp_cb(dsc->dsc_arg, sched->ds_result);
 		if (sched->ds_result == 0)
 			sched->ds_result = rc;
@@ -256,21 +256,21 @@ void
 daos_sched_run(struct daos_sched *sched)
 {
 	struct daos_sched_private	*dsp = daos_sched2priv(sched);
-	struct daos_task_private	*dtp;
+	struct daos_task_private	*crt;
 	struct daos_task_private	*tmp;
 	int				rc = 0;
 
 	pthread_mutex_lock(&dsp->dsp_lock);
-	daos_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_init_list,
-				      dtp_list) {
+	crt_list_for_each_entry_safe(crt, tmp, &dsp->dsp_init_list,
+				      crt_list) {
 		/* Move the task to the running list, execute it, then the
 		 * task will be moved to the complete list in the complete
 		 * callback.
 		 **/
-		daos_list_move_tail(&dtp->dtp_list,
+		crt_list_move_tail(&crt->crt_list,
 				    &dsp->dsp_running_list);
-		D_ASSERT(dtp->dtp_func != NULL);
-		rc = dtp->dtp_func(daos_priv2task(dtp));
+		D_ASSERT(crt->crt_func != NULL);
+		rc = crt->crt_func(daos_priv2task(crt));
 		if (sched->ds_result == 0)
 			sched->ds_result = rc;
 	}
@@ -281,8 +281,8 @@ daos_sched_run(struct daos_sched *sched)
 int
 daos_task_complete_cb(struct daos_task *task)
 {
-	struct daos_task_private *dtp = daos_task2priv(task);
-	struct daos_sched_private *dsp = dtp->dtp_sched;
+	struct daos_task_private *crt = daos_task2priv(task);
+	struct daos_sched_private *dsp = crt->crt_sched;
 	struct daos_op_sp *sp = daos_task2sp(task);
 
 	if (sp->sp_callback != NULL) {
@@ -295,31 +295,31 @@ daos_task_complete_cb(struct daos_task *task)
 
 	pthread_mutex_lock(&dsp->dsp_lock);
 	/* Check task group first */
-	if (dtp->dtp_dtg != NULL) {
+	if (crt->crt_dtg != NULL) {
 		struct daos_task_group	*dtg;
 		struct daos_task_group	*tmp;
-		daos_list_t		dtg_comp_list;
+		crt_list_t		dtg_comp_list;
 
-		DAOS_INIT_LIST_HEAD(&dtg_comp_list);
-		daos_list_del_init(&dtp->dtp_dtg_list);
-		if (dtp->dtp_dtg->dtg_result == 0)
-			dtp->dtp_dtg->dtg_result = task->dt_result;
+		CRT_INIT_LIST_HEAD(&dtg_comp_list);
+		crt_list_del_init(&crt->crt_dtg_list);
+		if (crt->crt_dtg->dtg_result == 0)
+			crt->crt_dtg->dtg_result = task->dt_result;
 
-		daos_list_for_each_entry_safe(dtg, tmp,
+		crt_list_for_each_entry_safe(dtg, tmp,
 					 &dsp->dsp_dtg_list, dtg_list) {
-			if (daos_list_empty(&dtg->dtg_task_list))
-				daos_list_move_tail(&dtg->dtg_list,
+			if (crt_list_empty(&dtg->dtg_task_list))
+				crt_list_move_tail(&dtg->dtg_list,
 						    &dtg_comp_list);
 		}
 
-		if (!daos_list_empty(&dtg_comp_list)) {
+		if (!crt_list_empty(&dtg_comp_list)) {
 			pthread_mutex_unlock(&dsp->dsp_lock);
-			daos_list_for_each_entry_safe(dtg, tmp, &dtg_comp_list,
+			crt_list_for_each_entry_safe(dtg, tmp, &dtg_comp_list,
 						      dtg_list) {
 				D_ASSERT(dtg->dtg_comp_cb != NULL);
 				/* It might add new tasks by this callback */
 				dtg->dtg_comp_cb(dtg->dtg_cb_arg);
-				daos_list_del_init(&dtg->dtg_list);
+				crt_list_del_init(&dtg->dtg_list);
 				daos_sched_decref_locked(dsp);
 			}
 			pthread_mutex_lock(&dsp->dsp_lock);
@@ -327,13 +327,13 @@ daos_task_complete_cb(struct daos_task *task)
 	}
 
 	/* Then check sched */
-	daos_list_move_tail(&dtp->dtp_list, &dsp->dsp_complete_list);
+	crt_list_move_tail(&crt->crt_list, &dsp->dsp_complete_list);
 	if (daos_priv2sched(dsp)->ds_result == 0)
 		daos_priv2sched(dsp)->ds_result = task->dt_result;
 
 	/* check if all sub tasks are done, then complete the event */
-	if (daos_list_empty(&dsp->dsp_running_list) &&
-	    daos_list_empty(&dsp->dsp_init_list)) {
+	if (crt_list_empty(&dsp->dsp_running_list) &&
+	    crt_list_empty(&dsp->dsp_init_list)) {
 		struct daos_sched *sched = daos_priv2sched(dsp);
 
 		/* drop reference of daos_sched_init() */
@@ -355,20 +355,20 @@ void
 daos_sched_cancel(struct daos_sched *sched, int ret)
 {
 	struct daos_sched_private	*dsp = daos_sched2priv(sched);
-	struct daos_task_private	*dtp;
+	struct daos_task_private	*crt;
 	struct daos_task_private	*tmp;
-	daos_list_t			list;
+	crt_list_t			list;
 
-	DAOS_INIT_LIST_HEAD(&list);
+	CRT_INIT_LIST_HEAD(&list);
 
 	pthread_mutex_lock(&dsp->dsp_lock);
-	daos_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_init_list,
-				      dtp_list)
-		daos_list_move_tail(&dtp->dtp_list, &list);
+	crt_list_for_each_entry_safe(crt, tmp, &dsp->dsp_init_list,
+				      crt_list)
+		crt_list_move_tail(&crt->crt_list, &list);
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
-	daos_list_for_each_entry_safe(dtp, tmp, &list, dtp_list) {
-		struct daos_task *task = daos_priv2task(dtp);
+	crt_list_for_each_entry_safe(crt, tmp, &list, crt_list) {
+		struct daos_task *task = daos_priv2task(crt);
 
 		if (task->dt_result == 0)
 			task->dt_result = ret;
@@ -384,24 +384,24 @@ daos_task_init(struct daos_task *task,
 	       daos_task_func_t task_func,
 	       struct daos_sched *sched)
 {
-	struct daos_task_private *dtp = daos_task2priv(task);
+	struct daos_task_private *crt = daos_task2priv(task);
 	struct daos_sched_private *dsp = daos_sched2priv(sched);
 
-	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
+	D_CASSERT(sizeof(task->dt_private) >= sizeof(*crt));
 	memset(task, 0, sizeof(*task));
 
 	task->dt_comp_cb = daos_task_complete_cb;
 
-	DAOS_INIT_LIST_HEAD(&dtp->dtp_dtg_list);
-	dtp->dtp_func = task_func;
+	CRT_INIT_LIST_HEAD(&crt->crt_dtg_list);
+	crt->crt_func = task_func;
 
 	task->dt_result = 0;
 
 	pthread_mutex_lock(&dsp->dsp_lock);
 	D_ASSERT(sched->ds_event != NULL);
-	daos_list_add_tail(&dtp->dtp_list, &dsp->dsp_init_list);
+	crt_list_add_tail(&crt->crt_list, &dsp->dsp_init_list);
 	daos_sched_addref_locked(dsp);
-	dtp->dtp_sched = dsp;
+	crt->crt_sched = dsp;
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
 	return 0;
@@ -410,9 +410,9 @@ daos_task_init(struct daos_task *task,
 void
 daos_task_fini(struct daos_task *task)
 {
-	struct daos_task_private *dtp;
+	struct daos_task_private *crt;
 
-	dtp = daos_task2priv(task);
+	crt = daos_task2priv(task);
 
-	D_ASSERT(daos_list_empty(&dtp->dtp_list));
+	D_ASSERT(crt_list_empty(&crt->crt_list));
 }

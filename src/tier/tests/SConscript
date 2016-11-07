@@ -5,7 +5,7 @@ Import('denv')
 denv.Append(CPPPATH = ['#/src/tier', '#/src/server'])
 
 libraries = ['pthread', 'uuid']
-libraries += ['daos_common', 'daos', 'cart', 'daos_tier']
+libraries += ['daos_common', 'daos', 'crt', 'crt_util', 'daos_tier']
 libraries += ['cmocka']
 
 

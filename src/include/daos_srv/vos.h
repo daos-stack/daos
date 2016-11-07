@@ -74,7 +74,7 @@ vos_fini(void);
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t size);
+vos_pool_create(const char *path, uuid_t uuid, crt_size_t size);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
@@ -255,7 +255,7 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	      daos_dkey_t *dkey, unsigned int viod_nr, daos_vec_iod_t *viods,
-	      daos_sg_list_t *sgls);
+	      crt_sg_list_t *sgls);
 
 
 /**
@@ -286,7 +286,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       uuid_t cookie, daos_dkey_t *dkey, unsigned int viod_nr,
-	       daos_vec_iod_t *viods, daos_sg_list_t *sgls);
+	       daos_vec_iod_t *viods, crt_sg_list_t *sgls);
 
 /**
  * Zero-Copy I/O APIs
@@ -392,7 +392,7 @@ vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie,
  */
 int
 vos_obj_zc_vec2sgl(daos_handle_t ioh, unsigned int vec_at,
-		   daos_sg_list_t **sgl_pp);
+		   crt_sg_list_t **sgl_pp);
 
 /**
  * VOS iterator APIs

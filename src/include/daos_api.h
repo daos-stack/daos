@@ -65,7 +65,7 @@ daos_fini(void);
  */
 int
 daos_pool_connect(const uuid_t uuid, const char *grp,
-		  const daos_rank_list_t *svc, unsigned int flags,
+		  const crt_rank_list_t *svc, unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
 
 /**
@@ -110,7 +110,7 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
  *					glob->iov_buf_len.
  */
 int
-daos_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
+daos_pool_local2global(daos_handle_t poh, crt_iov_t *glob);
 
 /**
  * Create a local pool connection for global representation data.
@@ -125,7 +125,7 @@ daos_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
  *			-DER_INVAL	Invalid parameter
  */
 int
-daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
+daos_pool_global2local(crt_iov_t glob, daos_handle_t *poh);
 
 /**
  * Convert a local container handle to global representation data which can be
@@ -148,7 +148,7 @@ daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
  *					glob->iov_buf_len.
  */
 int
-daos_cont_local2global(daos_handle_t coh, daos_iov_t *glob);
+daos_cont_local2global(daos_handle_t coh, crt_iov_t *glob);
 
 /**
  * Create a local container handle for global representation data.
@@ -165,7 +165,7 @@ daos_cont_local2global(daos_handle_t coh, daos_iov_t *glob);
  *			-DER_NO_HDL	Pool handle is nonexistent
  */
 int
-daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
+daos_cont_global2local(daos_handle_t poh, crt_iov_t glob, daos_handle_t *coh);
 
 /**
  * Exclude a set of storage targets from a pool.
@@ -184,7 +184,7 @@ daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
  *			-DER_NO_PERM	Permission denied
  */
 int
-daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev);
+daos_pool_exclude(daos_handle_t poh, crt_rank_list_t *tgts, daos_event_t *ev);
 
 /**
  * Query pool information. User should provide at least one of \a info and
@@ -204,7 +204,7 @@ daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev);
  *			-DER_NO_HDL	Invalid pool handle
  */
 int
-daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
+daos_pool_query(daos_handle_t poh, crt_rank_list_t *tgts,
 		daos_pool_info_t *info, daos_event_t *ev);
 
 /**
@@ -229,8 +229,8 @@ daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
  *			-DER_NONEXIST	No pool on specified targets
  */
 int
-daos_pool_target_query(daos_handle_t poh, daos_rank_list_t *tgts,
-		       daos_rank_list_t *failed, daos_target_info_t *info_list,
+daos_pool_target_query(daos_handle_t poh, crt_rank_list_t *tgts,
+		       crt_rank_list_t *failed, daos_target_info_t *info_list,
 		       daos_event_t *ev);
 
 /**
@@ -427,7 +427,7 @@ daos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch,
  *			Function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_epoch_flush_target(daos_handle_t coh, daos_epoch_t epoch, daos_rank_t tgt,
+daos_epoch_flush_target(daos_handle_t coh, daos_epoch_t epoch, crt_rank_t tgt,
 			daos_epoch_state_t *state, daos_event_t *ev);
 
 /**
@@ -454,7 +454,7 @@ daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
  */
 int
 daos_epoch_discard_target(daos_handle_t coh, daos_epoch_t epoch,
-			  daos_rank_t tgt, daos_epoch_state_t *state,
+			  crt_rank_t tgt, daos_epoch_state_t *state,
 			  daos_event_t *ev);
 
 /**
@@ -698,7 +698,7 @@ daos_obj_id2class(daos_obj_id_t oid)
  */
 typedef struct {
 	/** Optional, affinity target for the object */
-	daos_rank_t		 oa_rank;
+	crt_rank_t		 oa_rank;
 	/** Optional, class attributes of object with private class */
 	daos_oclass_attr_t	*oa_oa;
 } daos_obj_attr_t;
@@ -812,7 +812,7 @@ daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
  */
 int
 daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
-	       daos_rank_list_t *ranks, daos_event_t *ev);
+	       crt_rank_list_t *ranks, daos_event_t *ev);
 
 /**
  * Object I/O API
@@ -884,7 +884,7 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  */
 int
 daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+	       unsigned int nr, daos_vec_iod_t *iods, crt_sg_list_t *sgls,
 	       daos_vec_map_t *maps, daos_event_t *ev);
 
 /**
@@ -934,7 +934,7 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
  */
 int
 daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-		unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+		unsigned int nr, daos_vec_iod_t *iods, crt_sg_list_t *sgls,
 		daos_event_t *ev);
 
 /**
@@ -974,7 +974,7 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
  */
 int
 daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
-		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		   daos_key_desc_t *kds, crt_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev);
 
 /**
@@ -1019,7 +1019,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
  */
 int
 daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-		   uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		   uint32_t *nr, daos_key_desc_t *kds, crt_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev);
 
 #endif /* __DAOS_API_H__ */

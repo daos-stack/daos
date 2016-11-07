@@ -51,13 +51,13 @@ map_ranks_include(enum map_ranks_class class, int status)
 /* Build a rank list of targets with certain status. */
 static int
 map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
-	       daos_rank_list_t *ranks)
+	       crt_rank_list_t *ranks)
 {
 	struct pool_target     *targets;
 	int			ntargets;
 	int			n = 0;
 	int			i;
-	dtp_rank_t	       *rs;
+	crt_rank_t	       *rs;
 
 	ntargets = pool_map_find_target((struct pool_map *)map, PO_COMP_ID_ALL,
 					&targets);
@@ -97,7 +97,7 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 }
 
 static void
-map_ranks_fini(daos_rank_list_t *ranks)
+map_ranks_fini(crt_rank_list_t *ranks)
 {
 	if (ranks->rl_ranks != NULL) {
 		D_ASSERT(ranks->rl_nr.num != 0);
@@ -109,7 +109,7 @@ map_ranks_fini(daos_rank_list_t *ranks)
 }
 
 static int
-group_create_cb(dtp_group_t *grp, void *priv, int status)
+group_create_cb(crt_group_t *grp, void *priv, int status)
 {
 	ABT_eventual *eventual = priv;
 
@@ -123,28 +123,28 @@ group_create_cb(dtp_group_t *grp, void *priv, int status)
 
 int
 ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
-		     dtp_group_t **group)
+		     crt_group_t **group)
 {
-	char			id[DAOS_UUID_STR_SIZE];
-	daos_rank_list_t	ranks;
+	char			id[CRT_UUID_STR_SIZE];
+	crt_rank_list_t	ranks;
 	ABT_eventual		eventual;
-	dtp_group_t	      **g;
+	crt_group_t	      **g;
 	int			rc;
 
-	D_DEBUG(DF_DSMS, DF_UUID"\n", DP_UUID(pool_uuid));
+	D_DEBUG(DF_DSMS, DF_UUID"\n", CP_UUID(pool_uuid));
 
 	uuid_unparse_lower(pool_uuid, id);
 
 	rc = map_ranks_init(map, MAP_RANKS_UP, &ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create rank list: %d\n",
-			DP_UUID(pool_uuid), rc);
+			CP_UUID(pool_uuid), rc);
 		D_GOTO(out, rc);
 	}
 
 	if (ranks.rl_nr.num == 0) {
 		D_ERROR(DF_UUID": failed to find any up targets\n",
-			DP_UUID(pool_uuid));
+			CP_UUID(pool_uuid));
 		D_GOTO(out_ranks, rc = -DER_IO);
 	}
 
@@ -153,7 +153,7 @@ ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 		D_GOTO(out_ranks, rc = dss_abterr2der(rc));
 
 	/* "!populate_now" is not implemented yet. */
-	rc = dtp_group_create(id, &ranks, true /* populate_now */,
+	rc = crt_group_create(id, &ranks, true /* populate_now */,
 			      group_create_cb, &eventual);
 	if (rc != 0)
 		D_GOTO(out_eventual, rc);
@@ -185,19 +185,19 @@ group_destroy_cb(void *args, int status)
 }
 
 int
-ds_pool_group_destroy(dtp_group_t *group)
+ds_pool_group_destroy(crt_group_t *group)
 {
 	ABT_eventual	eventual;
 	int	       *status;
 	int		rc;
 
-	D_DEBUG(DF_DSMS, "%s\n", group->dg_grpid);
+	D_DEBUG(DF_DSMS, "%s\n", group->cg_grpid);
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
-	rc = dtp_group_destroy(group, group_destroy_cb, &eventual);
+	rc = crt_group_destroy(group, group_destroy_cb, &eventual);
 	if (rc != 0)
 		D_GOTO(out_eventual, rc);
 
@@ -216,12 +216,12 @@ out:
 }
 
 int
-ds_pool_bcast_create(dtp_context_t ctx, struct ds_pool *pool,
-		     enum daos_module_id module, dtp_opcode_t opcode,
-		     dtp_rpc_t **rpc)
+ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
+		     enum daos_module_id module, crt_opcode_t opcode,
+		     crt_rpc_t **rpc)
 {
-	daos_rank_list_t	excluded;
-	dtp_opcode_t		opc;
+	crt_rank_list_t	excluded;
+	crt_opcode_t		opc;
 	int			rc;
 
 	opc = DAOS_RPC_OPCODE(opcode, module, 1);
@@ -231,11 +231,11 @@ ds_pool_bcast_create(dtp_context_t ctx, struct ds_pool *pool,
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create rank list: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
+			CP_UUID(pool->sp_uuid), rc);
 		return rc;
 	}
 
-	rc = dtp_corpc_req_create(ctx, pool->sp_group,
+	rc = crt_corpc_req_create(ctx, pool->sp_group,
 				  excluded.rl_nr.num == 0 ? NULL : &excluded,
 				  opc, NULL /* co_bulk_hdl */, NULL /* priv */,
 				  0 /* flags */, 0 /* tree_topo */, rpc);
@@ -251,8 +251,8 @@ ds_pool_bcast_create(dtp_context_t ctx, struct ds_pool *pool,
  * must be at least as large that of "tgts".
  */
 void
-ds_pool_map_exclude_targets(struct pool_map *map, daos_rank_list_t *tgts,
-			    daos_rank_list_t *tgts_failed)
+ds_pool_map_exclude_targets(struct pool_map *map, crt_rank_list_t *tgts,
+			    crt_rank_list_t *tgts_failed)
 {
 	uint32_t	version;
 	int		i;

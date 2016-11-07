@@ -29,9 +29,10 @@
 
 #include <daos_types.h>
 #include <daos_errno.h>
-#include <daos/list.h>
-#include <daos/hash.h>
 #include <daos/transport.h>
+
+#include <crt_util/list.h>
+#include <crt_util/hash.h>
 
 enum daos_ev_flags {
 	/**
@@ -54,7 +55,7 @@ struct daos_task;
 typedef int (*daos_sp_comp_cb_t)(struct daos_task *task, int rc);
 /** Common scratchpad for the operation in flight */
 struct daos_op_sp {
-	dtp_rpc_t	*sp_rpc;
+	crt_rpc_t	*sp_rpc;
 	daos_handle_t	 sp_hdl;
 	daos_handle_t	*sp_hdlp;
 	daos_sp_comp_cb_t sp_callback;
@@ -140,7 +141,7 @@ daos_event_priv_wait();
  *
  * \param ev [IN]	event to retrieve context.
  */
-dtp_context_t
+crt_context_t
 daos_ev2ctx(struct daos_event *ev);
 
 /**

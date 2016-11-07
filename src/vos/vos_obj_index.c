@@ -51,15 +51,15 @@ vo_hkey_size(struct btr_instance *tins)
 }
 
 static void
-vo_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+vo_hkey_gen(struct btr_instance *tins, crt_iov_t *key_iov, void *hkey)
 {
 	D_ASSERT(key_iov->iov_len == sizeof(daos_unit_oid_t));
 	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
 }
 
 static int
-vo_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-	     daos_iov_t *val_iov, struct btr_record *rec)
+vo_rec_alloc(struct btr_instance *tins, crt_iov_t *key_iov,
+	     crt_iov_t *val_iov, struct btr_record *rec)
 {
 	TMMID(struct vos_obj)	vo_rec_mmid;
 	struct vos_obj		*vo_rec;
@@ -73,7 +73,7 @@ vo_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	vo_rec = umem_id2ptr_typed(&tins->ti_umm, vo_rec_mmid);
 	D_ASSERT(key_iov->iov_len == sizeof(daos_unit_oid_t));
 	vo_rec->vo_oid = *(daos_unit_oid_t *)(key_iov->iov_buf);
-	daos_iov_set(val_iov, vo_rec, sizeof(struct vos_obj));
+	crt_iov_set(val_iov, vo_rec, sizeof(struct vos_obj));
 	rec->rec_mmid = umem_id_t2u(vo_rec_mmid);
 	return 0;
 }
@@ -92,21 +92,21 @@ vo_rec_free(struct btr_instance *tins, struct btr_record *rec)
 
 static int
 vo_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	     daos_iov_t *key_iov, daos_iov_t *val_iov)
+	     crt_iov_t *key_iov, crt_iov_t *val_iov)
 {
 	struct vos_obj		*vo_rec = NULL;
 
 	D_ASSERT(val_iov != NULL);
 
 	vo_rec = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
-	daos_iov_set(val_iov, vo_rec, sizeof(struct vos_obj));
+	crt_iov_set(val_iov, vo_rec, sizeof(struct vos_obj));
 
 	return 0;
 }
 
 static int
 vo_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      daos_iov_t *key, daos_iov_t *val)
+	      crt_iov_t *key, crt_iov_t *val)
 {
 	/**
 	 * TODO : Implement update when object metadata is introduced
@@ -132,7 +132,7 @@ vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 		  struct vos_obj **obj)
 {
 	int				rc = 0;
-	daos_iov_t			key_iov, val_iov;
+	crt_iov_t			key_iov, val_iov;
 	struct vos_object_index		*obj_index = NULL;
 
 	D_DEBUG(DF_VOS2, "Lookup obj "DF_UOID" in the OI table.\n",
@@ -144,8 +144,8 @@ vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 		return -DER_NONEXIST;
 	}
 
-	daos_iov_set(&key_iov, &oid, sizeof(daos_unit_oid_t));
-	daos_iov_set(&val_iov, NULL, 0);
+	crt_iov_set(&key_iov, &oid, sizeof(daos_unit_oid_t));
+	crt_iov_set(&val_iov, NULL, 0);
 
 	rc = dbtree_lookup(co_hdl->vc_btr_hdl, &key_iov, &val_iov);
 	if (rc == 0)
@@ -352,14 +352,14 @@ vos_oid_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		   daos_hash_out_t *anchor)
 {
 	struct vos_oid_iter	*oid_iter = vos_iter2oid_iter(iter);
-	daos_iov_t		rec_iov;
+	crt_iov_t		rec_iov;
 	struct vos_obj		*vo_rec;
 	int			rc;
 
 	D_DEBUG(DF_VOS2, "obj-iter oid fetch callback");
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
-	daos_iov_set(&rec_iov, NULL, 0);
+	crt_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oid_iter->oit_hdl, NULL, &rec_iov, anchor);
 	if (rc != 0) {
 		D_ERROR("Error while fetching oid info\n");

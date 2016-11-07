@@ -48,7 +48,7 @@ struct dsmc_pool_glob {
 	struct pool_buf	dpg_map_buf[0];
 };
 
-static inline daos_size_t
+static inline crt_size_t
 dsmc_pool_glob_buf_size(unsigned int pb_nr)
 {
 	return offsetof(struct dsmc_pool_glob, dpg_map_buf) +
@@ -58,22 +58,22 @@ dsmc_pool_glob_buf_size(unsigned int pb_nr)
 static inline int
 dsmc_handle_type(daos_handle_t hdl)
 {
-	return daos_hhash_key_type(hdl.cookie);
+	return crt_hhash_key_type(hdl.cookie);
 }
 
 static inline void
 dsmc_pool_add_cache(struct dc_pool *pool, daos_handle_t *hdl)
 {
 	/* add pool to hash and assign the cookie to hdl */
-	daos_hhash_link_insert(daos_client_hhash, &pool->dp_hlink,
-			       DAOS_HTYPE_POOL);
-	daos_hhash_link_key(&pool->dp_hlink, &hdl->cookie);
+	crt_hhash_link_insert(daos_client_hhash, &pool->dp_hlink,
+			       CRT_HTYPE_POOL);
+	crt_hhash_link_key(&pool->dp_hlink, &hdl->cookie);
 }
 
 static inline void
 dsmc_pool_del_cache(struct dc_pool *pool)
 {
-	daos_hhash_link_delete(daos_client_hhash, &pool->dp_hlink);
+	crt_hhash_link_delete(daos_client_hhash, &pool->dp_hlink);
 }
 
 #endif /* __POOL_CLIENT_INTERNAL_H__ */

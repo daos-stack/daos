@@ -52,7 +52,7 @@ vos_get_obj_cache(void)
  * VOS in-memory structure creation.
  * Handle-hash:
  * -----------
- * Uses in-memory daos_uuid hash to maintain one
+ * Uses in-memory crt_uuid hash to maintain one
  * reference per thread in heap for each pool/container.
  * Calls to pool/container open/close track references
  * through internal refcounting.
@@ -75,7 +75,7 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 		return rc;
 	}
 
-	rc = daos_uhash_create(0, DAOS_HHASH_BITS,
+	rc = crt_uhash_create(0, CRT_HHASH_BITS,
 			       &imem_inst->vis_hr_hash);
 	if (rc) {
 		D_ERROR("Error in creating ref hash: %d\n", rc);
@@ -91,7 +91,7 @@ vos_imem_strts_destroy(struct vos_imem_strts *imem_inst)
 		vos_obj_cache_destroy(imem_inst->vis_ocache);
 
 	if (imem_inst->vis_hr_hash)
-		daos_uhash_destroy(imem_inst->vis_hr_hash);
+		crt_uhash_destroy(imem_inst->vis_hr_hash);
 
 }
 

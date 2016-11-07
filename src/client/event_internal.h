@@ -33,16 +33,16 @@
 #include <daos/common.h>
 #include <daos_event.h>
 #include <daos/event.h>
-#include <daos/list.h>
 #include <daos/scheduler.h>
+#include <crt_util/list.h>
 
 typedef struct daos_eq {
 	/* After event is completed, it will be moved to the eq_comp list */
-	daos_list_t		eq_comp;
+	crt_list_t		eq_comp;
 	int			eq_n_comp;
 
 	/** In flight events will be put to the disp list */
-	daos_list_t		eq_disp;
+	crt_list_t		eq_disp;
 	int			eq_n_disp;
 
 	struct {
@@ -52,7 +52,7 @@ typedef struct daos_eq {
 } daos_eq_t;
 
 struct daos_event_comp_list {
-	daos_list_t	op_comp_list;
+	crt_list_t	op_comp_list;
 	daos_event_comp_cb_t op_comp_cb;
 	void *op_comp_arg;
 };
@@ -60,14 +60,14 @@ struct daos_event_comp_list {
 struct daos_event_callback {
 	daos_event_comp_cb_t	evx_inline_cb;
 	struct daos_op_sp	evx_inline_cb_sp;
-	daos_list_t		evx_comp_list;
+	crt_list_t		evx_comp_list;
 };
 
 struct daos_event_private {
 	daos_handle_t		evx_eqh;
-	daos_list_t		evx_link;
+	crt_list_t		evx_link;
 	/** children list */
-	daos_list_t		evx_child;
+	crt_list_t		evx_child;
 	unsigned int		evx_nchild;
 	unsigned int		evx_nchild_if;
 	unsigned int		evx_nchild_comp;
@@ -77,7 +77,7 @@ struct daos_event_private {
 
 	struct daos_event_private *evx_parent;
 
-	dtp_context_t		evx_ctx;
+	crt_context_t		evx_ctx;
 	struct daos_event_callback evx_callback;
 	struct daos_sched	evx_sched;
 };
@@ -96,16 +96,16 @@ daos_evx2ev(struct daos_event_private *evx)
 
 struct daos_eq_private {
 	/* link chain in the global hash list */
-	struct daos_hlink	eqx_hlink;
+	struct crt_hlink	eqx_hlink;
 	pthread_mutex_t		eqx_lock;
 	unsigned int		eqx_lock_init:1,
 				eqx_finalizing:1;
 
 	/* All of its events are linked here */
-	struct daos_hhash	*eqx_events_hash;
+	struct crt_hhash	*eqx_events_hash;
 
-	/* DTP context associated with this eq */
-	dtp_context_t		 eqx_ctx;
+	/* CRT context associated with this eq */
+	crt_context_t		 eqx_ctx;
 };
 
 static inline struct daos_eq_private *

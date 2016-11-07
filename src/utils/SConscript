@@ -2,12 +2,12 @@
 
 Import('env', 'PREREQS')
 
-libs = ['daos', 'cart', 'daos_common', 'daos_tier', 'uuid']
+libs = ['daos', 'crt', 'crt_util', 'daos_common', 'daos_tier', 'uuid']
 
 denv = env.Clone()
 
 if PREREQS is not None:
-    PREREQS.require(denv, 'ompi')
+    PREREQS.require(denv, 'ompi', 'cart')
 
 dmg = denv.Program('dmg', 'dmg.c', LIBS=libs)
 denv.Install('$PREFIX/bin/', dmg)

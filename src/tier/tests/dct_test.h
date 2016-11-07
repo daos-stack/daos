@@ -41,7 +41,7 @@
 
 
 typedef struct{
-	daos_rank_t	tgt_rank;
+	crt_rank_t	tgt_rank;
 	uint32_t	tgt_ping_val;
 } dct_test_arg_t;
 

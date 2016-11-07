@@ -35,33 +35,15 @@
 #include <uuid/uuid.h>
 
 #include <daos_errno.h>
-/** for some other basic types like daos_iov_t/daos_rank_t/daos_sg_list_t etc */
-#include <daos/transport.h>
+/** for some other basic types like crt_iov_t/crt_rank_t/crt_sg_list_t etc */
+#include <crt_types.h>
 
 /**
  * Generic data type definition
  */
 
-typedef dtp_size_t		daos_size_t;
-typedef dtp_off_t		daos_off_t;
-typedef dtp_iov_t		daos_iov_t;
-typedef dtp_rank_t		daos_rank_t;
-typedef dtp_nr_t		daos_nr_t;
-typedef dtp_rank_list_t		daos_rank_list_t;
-typedef dtp_sg_list_t		daos_sg_list_t;
-
-#define daos_iov_set		dtp_iov_set
-
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
-
-/**
- * NB: hide the dark secret that
- * uuid_t is an array not a structure
- */
-struct daos_uuid {
-	uuid_t	uuid;
-};
 
 /** buffer to store checksum */
 typedef struct {
@@ -330,7 +312,7 @@ enum {
 
 typedef struct {
 	/** input/output number of oids */
-	daos_nr_t	 ol_nr;
+	crt_nr_t	 ol_nr;
 	/** OID buffer */
 	daos_obj_id_t	*ol_oids;
 } daos_oid_list_t;
@@ -426,7 +408,7 @@ typedef struct {
  */
 
 /** opaque key type */
-typedef daos_iov_t daos_key_t;
+typedef crt_iov_t daos_key_t;
 
 /* XXX remove daos_dkey_t and daos_akey_t */
 /** distribution key */
@@ -513,7 +495,7 @@ typedef enum {
  */
 typedef struct {
 	/** key length */
-	daos_size_t	 kd_key_len;
+	crt_size_t	 kd_key_len;
 	/** checksum type */
 	unsigned int	 kd_csum_type;
 	/** checksum length */

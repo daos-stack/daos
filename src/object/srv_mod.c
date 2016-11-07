@@ -44,23 +44,23 @@ obj_mod_fini(void)
 /* Note: the rpc input/output parameters is defined in daos_rpc */
 static struct daos_rpc_handler obj_handlers[] = {
 	{
-		.dr_opc		= DAOS_OBJ_RPC_UPDATE,
+		.cr_opc		= DAOS_OBJ_RPC_UPDATE,
 		.dr_hdlr	= ds_obj_rw_handler,
 	},
 	{
-		.dr_opc		= DAOS_OBJ_RPC_FETCH,
+		.cr_opc		= DAOS_OBJ_RPC_FETCH,
 		.dr_hdlr	= ds_obj_rw_handler,
 	},
 	{
-		.dr_opc		= DAOS_OBJ_DKEY_RPC_ENUMERATE,
+		.cr_opc		= DAOS_OBJ_DKEY_RPC_ENUMERATE,
 		.dr_hdlr	= ds_obj_enum_handler,
 	},
 	{
-		.dr_opc         = DAOS_OBJ_AKEY_RPC_ENUMERATE,
+		.cr_opc         = DAOS_OBJ_AKEY_RPC_ENUMERATE,
 		.dr_hdlr        = ds_obj_enum_handler,
 	},
 	{
-		.dr_opc		= 0
+		.cr_opc		= 0
 	}
 };
 

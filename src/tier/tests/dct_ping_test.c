@@ -58,7 +58,7 @@ setup(void **state)
 	 * we'll have the ability to send pings to speicfic targers
 	 * right now its fixed to rank 0 in API implementation
 	 */
-	arg->tgt_rank = (daos_rank_t) 0;
+	arg->tgt_rank = (crt_rank_t) 0;
 	/*value to ping with, we should get back one higher than it*/
 	arg->tgt_ping_val = 10;
 

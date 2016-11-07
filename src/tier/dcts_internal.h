@@ -35,8 +35,8 @@
 /* dcts_ping.c */
 
 /* ping test handler, more of a self-teaching widget */
-int dcts_hdlr_ping(dtp_rpc_t *rpc);
+int dcts_hdlr_ping(crt_rpc_t *rpc);
 
-int dcts_hdlr_fetch(dtp_rpc_t *rpc);
+int dcts_hdlr_fetch(crt_rpc_t *rpc);
 
 #endif /*__DCTS_INTERNAL_H__*/

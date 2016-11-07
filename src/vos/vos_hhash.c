@@ -29,14 +29,12 @@
  */
 
 #include <daos/common.h>
-#include <daos/hash.h>
-#include <daos/list.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
 #include <vos_hhash.h>
 
 void
-vos_co_uhash_free(struct daos_ulink *ulink)
+vos_co_uhash_free(struct crt_ulink *ulink)
 {
 	struct vc_hdl *co_hdl;
 
@@ -45,7 +43,7 @@ vos_co_uhash_free(struct daos_ulink *ulink)
 }
 
 void
-vos_pool_uhash_free(struct daos_ulink *ulink)
+vos_pool_uhash_free(struct crt_ulink *ulink)
 {
 	struct vp_hdl		*vpool;
 
@@ -58,11 +56,11 @@ vos_pool_uhash_free(struct daos_ulink *ulink)
 	D_FREE_PTR(vpool);
 }
 
-struct daos_ulink_ops   co_hdl_uh_ops = {
+struct crt_ulink_ops   co_hdl_uh_ops = {
 	.uop_free       = vos_co_uhash_free,
 };
 
-struct daos_ulink_ops   vpool_uh_ops = {
+struct crt_ulink_ops   vpool_uh_ops = {
 	.uop_free       = vos_pool_uhash_free,
 };
 
@@ -80,12 +78,12 @@ vos_get_hr_hash()
 void
 vos_pool_handle_init(struct vp_hdl *vpool)
 {
-	daos_uhash_ulink_init(&vpool->vp_uhlink,
+	crt_uhash_ulink_init(&vpool->vp_uhlink,
 			      &vpool_uh_ops);
 }
 
 int
-vos_pool_insert_handle(struct vp_hdl *vpool, struct daos_uuid *key,
+vos_pool_insert_handle(struct vp_hdl *vpool, struct crt_uuid *key,
 		       daos_handle_t *poh)
 {
 	int	rc = 0;
@@ -94,7 +92,7 @@ vos_pool_insert_handle(struct vp_hdl *vpool, struct daos_uuid *key,
 	D_ASSERT(poh != NULL);
 
 	vos_pool_handle_init(vpool);
-	rc = daos_uhash_link_insert(vos_get_hr_hash(), key,
+	rc = crt_uhash_link_insert(vos_get_hr_hash(), key,
 				    &vpool->vp_uhlink);
 
 	if (rc) {
@@ -108,12 +106,12 @@ exit:
 }
 
 int
-vos_pool_lookup_handle(struct daos_uuid *key, struct vp_hdl **vpool)
+vos_pool_lookup_handle(struct crt_uuid *key, struct vp_hdl **vpool)
 {
 	int			rc = 0;
-	struct daos_ulink	*ulink;
+	struct crt_ulink	*ulink;
 
-	ulink = daos_uhash_link_lookup(vos_get_hr_hash(), key);
+	ulink = crt_uhash_link_lookup(vos_get_hr_hash(), key);
 	if (ulink != NULL)
 		*vpool = vos_ulink2poh(ulink);
 	else
@@ -125,13 +123,13 @@ vos_pool_lookup_handle(struct daos_uuid *key, struct vp_hdl **vpool)
 void
 vos_pool_addref_handle(struct vp_hdl *vpool)
 {
-	daos_uhash_link_addref(vos_get_hr_hash(), &vpool->vp_uhlink);
+	crt_uhash_link_addref(vos_get_hr_hash(), &vpool->vp_uhlink);
 }
 
 void
 vos_pool_putref_handle(struct vp_hdl *vpool)
 {
-	daos_uhash_link_putref(vos_get_hr_hash(), &vpool->vp_uhlink);
+	crt_uhash_link_putref(vos_get_hr_hash(), &vpool->vp_uhlink);
 }
 
 int
@@ -139,8 +137,8 @@ vos_pool_release_handle(struct vp_hdl *vpool)
 {
 	int rc = 0;
 
-	daos_uhash_link_putref(vos_get_hr_hash(), &vpool->vp_uhlink);
-	if (daos_uhash_link_last_ref(&vpool->vp_uhlink)) {
+	crt_uhash_link_putref(vos_get_hr_hash(), &vpool->vp_uhlink);
+	if (crt_uhash_link_last_ref(&vpool->vp_uhlink)) {
 		rc = dbtree_close(vpool->vp_ct_hdl);
 		if (rc) {
 			D_ERROR("Closing btree open handle: %d\n", rc);
@@ -152,7 +150,7 @@ vos_pool_release_handle(struct vp_hdl *vpool)
 				rc);
 			return rc;
 		}
-		daos_uhash_link_delete(vos_get_hr_hash(), &vpool->vp_uhlink);
+		crt_uhash_link_delete(vos_get_hr_hash(), &vpool->vp_uhlink);
 	}
 	return rc;
 }
@@ -160,12 +158,12 @@ vos_pool_release_handle(struct vp_hdl *vpool)
 void
 vos_co_handle_init(struct vc_hdl *co_hdl)
 {
-	daos_uhash_ulink_init(&co_hdl->vc_uhlink,
+	crt_uhash_ulink_init(&co_hdl->vc_uhlink,
 			      &co_hdl_uh_ops);
 }
 
 int
-vos_co_insert_handle(struct vc_hdl *co_hdl, struct daos_uuid *key,
+vos_co_insert_handle(struct vc_hdl *co_hdl, struct crt_uuid *key,
 		     daos_handle_t *coh)
 {
 	int	rc = 0;
@@ -173,7 +171,7 @@ vos_co_insert_handle(struct vc_hdl *co_hdl, struct daos_uuid *key,
 	D_ASSERT(co_hdl != NULL && coh != NULL);
 
 	vos_co_handle_init(co_hdl);
-	rc = daos_uhash_link_insert(vos_get_hr_hash(), key,
+	rc = crt_uhash_link_insert(vos_get_hr_hash(), key,
 				    &co_hdl->vc_uhlink);
 	if (rc) {
 		D_ERROR("UHASH table container handle insert failed\n");
@@ -186,12 +184,12 @@ exit:
 }
 
 int
-vos_co_lookup_handle(struct daos_uuid *key, struct vc_hdl **co_hdl)
+vos_co_lookup_handle(struct crt_uuid *key, struct vc_hdl **co_hdl)
 {
 	int			rc = 0;
-	struct daos_ulink	*ulink;
+	struct crt_ulink	*ulink;
 
-	ulink = daos_uhash_link_lookup(vos_get_hr_hash(),
+	ulink = crt_uhash_link_lookup(vos_get_hr_hash(),
 				       key);
 	if (ulink != NULL)
 		*co_hdl = vos_ulink2coh(ulink);
@@ -204,13 +202,13 @@ vos_co_lookup_handle(struct daos_uuid *key, struct vc_hdl **co_hdl)
 void
 vos_co_putref_handle(struct vc_hdl *co_hdl)
 {
-	daos_uhash_link_putref(vos_get_hr_hash(), &co_hdl->vc_uhlink);
+	crt_uhash_link_putref(vos_get_hr_hash(), &co_hdl->vc_uhlink);
 }
 
 void
 vos_co_addref_handle(struct vc_hdl *co_hdl)
 {
-	daos_uhash_link_addref(vos_get_hr_hash(), &co_hdl->vc_uhlink);
+	crt_uhash_link_addref(vos_get_hr_hash(), &co_hdl->vc_uhlink);
 }
 
 int
@@ -218,14 +216,14 @@ vos_co_release_handle(struct vc_hdl *co_hdl)
 {
 	int rc = 0;
 
-	daos_uhash_link_putref(vos_get_hr_hash(), &co_hdl->vc_uhlink);
-	if (daos_uhash_link_last_ref(&co_hdl->vc_uhlink)) {
+	crt_uhash_link_putref(vos_get_hr_hash(), &co_hdl->vc_uhlink);
+	if (crt_uhash_link_last_ref(&co_hdl->vc_uhlink)) {
 		rc = dbtree_close(co_hdl->vc_btr_hdl);
 		if (rc) {
 			D_ERROR("Closing btree open handle: %d\n", rc);
 			return rc;
 		}
-		daos_uhash_link_delete(vos_get_hr_hash(), &co_hdl->vc_uhlink);
+		crt_uhash_link_delete(vos_get_hr_hash(), &co_hdl->vc_uhlink);
 	}
 	return rc;
 }

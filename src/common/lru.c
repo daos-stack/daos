@@ -30,9 +30,10 @@
 
 #include <pthread.h>
 #include <daos/common.h>
-#include <daos/list.h>
-#include <daos/hash.h>
 #include <daos/lru.h>
+
+#include <crt_util/list.h>
+#include <crt_util/hash.h>
 
 /** Define LRU Idle/Busy refs  */
 #define        LRU_IDLE_REF 1
@@ -40,13 +41,13 @@
 
 
 static struct daos_llink*
-lru_hlink2ptr(daos_list_t *blink)
+lru_hlink2ptr(crt_list_t *blink)
 {
 	return container_of(blink, struct daos_llink, ll_hlink);
 }
 
 static struct daos_llink*
-lru_qlink2ptr(daos_list_t *qlink)
+lru_qlink2ptr(crt_list_t *qlink)
 {
 	return container_of(qlink, struct daos_llink, ll_qlink);
 }
@@ -66,7 +67,7 @@ lru_idle2busy(struct daos_lru_cache *lcache,
 		llink->ll_ref);
 
 	if (llink->ll_ref == LRU_BUSY_REF) {
-		daos_list_del(&llink->ll_qlink);
+		crt_list_del(&llink->ll_qlink);
 		lcache->dlc_idle_nr--;
 		lcache->dlc_refs_held++;
 	}
@@ -78,13 +79,13 @@ lru_idle2busy(struct daos_lru_cache *lcache,
 }
 
 static void
-lru_hop_rec_addref(struct dhash_table *lr_htab, daos_list_t *rlink)
+lru_hop_rec_addref(struct dhash_table *lr_htab, crt_list_t *rlink)
 {
 	lru_hlink2ptr(rlink)->ll_ref++;
 }
 
 static bool
-lru_hop_rec_decref(struct dhash_table *lr_htab, daos_list_t *rlink)
+lru_hop_rec_decref(struct dhash_table *lr_htab, crt_list_t *rlink)
 {
 
        struct daos_llink *llink = lru_hlink2ptr(rlink);
@@ -97,7 +98,7 @@ lru_hop_rec_decref(struct dhash_table *lr_htab, daos_list_t *rlink)
 }
 
 static bool
-lru_hop_key_cmp(struct dhash_table *lr_htab, daos_list_t *rlink,
+lru_hop_key_cmp(struct dhash_table *lr_htab, crt_list_t *rlink,
 		const void *key, unsigned int ksize)
 {
 	struct daos_llink *llink = lru_hlink2ptr(rlink);
@@ -105,7 +106,7 @@ lru_hop_key_cmp(struct dhash_table *lr_htab, daos_list_t *rlink,
 }
 
 static void
-lru_hop_rec_free(struct dhash_table *lr_htab, daos_list_t *rlink)
+lru_hop_rec_free(struct dhash_table *lr_htab, crt_list_t *rlink)
 {
 	struct daos_llink *llink = lru_hlink2ptr(rlink);
 
@@ -151,7 +152,7 @@ daos_lru_cache_create(int bits, uint32_t feats,
 
 	lru_cache->dlc_csize = (1 << bits);
 	lru_cache->dlc_ops = ops;
-	DAOS_INIT_LIST_HEAD(&lru_cache->dlc_idle_list);
+	CRT_INIT_LIST_HEAD(&lru_cache->dlc_idle_list);
 	*lcache = lru_cache;
 exit:
 	if (rc != 0 && lru_cache != NULL)
@@ -184,7 +185,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *ref_key,
 {
 	int			rc = 0;
 	struct daos_llink	*qh_link = NULL;
-	daos_list_t		*list_entry = NULL;
+	crt_list_t		*list_entry = NULL;
 
 	D_ASSERT((lcache != NULL) && (ref_key != NULL) && (rk_size > 0));
 	if (lcache->dlc_ops->lop_print_key)
@@ -192,7 +193,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *ref_key,
 
 	if (lcache->dlc_idle_nr) {
 		D_DEBUG(DF_MISC, "LRU checking the head to locate key\n");
-		qh_link = daos_list_entry(lcache->dlc_idle_list.next,
+		qh_link = crt_list_entry(lcache->dlc_idle_list.next,
 					  struct daos_llink, ll_qlink);
 		if (qh_link->ll_ops->lop_cmp_keys(ref_key, rk_size, qh_link)) {
 			D_DEBUG(DF_MISC,
@@ -217,7 +218,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *ref_key,
 		D_DEBUG(DF_MISC, "Inserting into LRU Hash table\n");
 		qh_link->ll_ref = LRU_IDLE_REF;
 		qh_link->ll_ops = lcache->dlc_ops;
-		DAOS_INIT_LIST_HEAD(&qh_link->ll_hlink);
+		CRT_INIT_LIST_HEAD(&qh_link->ll_hlink);
 		rc = dhash_rec_insert(&lcache->dlc_htable, ref_key, rk_size,
 				      &qh_link->ll_hlink, true);
 		if (rc) {
@@ -241,7 +242,7 @@ exit:
 void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
-	daos_list_t		*head;
+	crt_list_t		*head;
 	struct daos_llink	*tlink;
 
 	D_DEBUG(DF_MISC, "Releasing reference from obj cache link: %p\n",
@@ -258,7 +259,7 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 		D_DEBUG(DF_MISC, "Held: %u, Filled: %u, Refcnt: %u\n",
 			lcache->dlc_refs_held, lcache->dlc_idle_nr,
 			llink->ll_ref);
-		daos_list_add(&llink->ll_qlink, &lcache->dlc_idle_list);
+		crt_list_add(&llink->ll_qlink, &lcache->dlc_idle_list);
 		D_ASSERT(lcache->dlc_refs_held > 0);
 		lcache->dlc_refs_held--;
 		lcache->dlc_idle_nr++;
@@ -275,7 +276,7 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 		head = &lcache->dlc_idle_list;
 		/** evict from the tail of the list */
 		tlink = lru_qlink2ptr(head->prev);
-		daos_list_del(&tlink->ll_qlink);
+		crt_list_del(&tlink->ll_qlink);
 		dhash_rec_delete_at(&lcache->dlc_htable,
 				    &tlink->ll_hlink);
 		lcache->dlc_idle_nr--;

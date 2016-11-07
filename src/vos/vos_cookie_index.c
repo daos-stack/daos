@@ -40,24 +40,24 @@
 static int
 vcoi_hkey_size(struct btr_instance *tins)
 {
-	return sizeof(struct daos_uuid);
+	return sizeof(struct crt_uuid);
 }
 
 static void
-vcoi_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+vcoi_hkey_gen(struct btr_instance *tins, crt_iov_t *key_iov, void *hkey)
 {
-	D_ASSERT(key_iov->iov_len == sizeof(struct daos_uuid));
+	D_ASSERT(key_iov->iov_len == sizeof(struct crt_uuid));
 	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
 }
 
 static int
-vcoi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-	       daos_iov_t *val_iov, struct btr_record *rec)
+vcoi_rec_alloc(struct btr_instance *tins, crt_iov_t *key_iov,
+	       crt_iov_t *val_iov, struct btr_record *rec)
 {
 	TMMID(struct vos_cookie_entry)	vce_rec_mmid;
 	struct vos_cookie_entry		*vce_rec = NULL;
 
-	D_ASSERT(key_iov->iov_len == sizeof(struct daos_uuid));
+	D_ASSERT(key_iov->iov_len == sizeof(struct crt_uuid));
 	D_ASSERT(val_iov->iov_len == sizeof(daos_epoch_t));
 
 	vce_rec_mmid = umem_znew_typed(&tins->ti_umm,
@@ -86,7 +86,7 @@ vcoi_rec_free(struct btr_instance *tins, struct btr_record *rec)
 
 static int
 vcoi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	      daos_iov_t *key_iov, daos_iov_t *val_iov)
+	      crt_iov_t *key_iov, crt_iov_t *val_iov)
 {
 	struct vos_cookie_entry		*vce_rec = NULL;
 
@@ -101,7 +101,7 @@ vcoi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 
 static int
 vcoi_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	       daos_iov_t *key_iov, daos_iov_t *val_iov)
+	       crt_iov_t *key_iov, crt_iov_t *val_iov)
 {
 	struct vos_cookie_entry		*vce_rec = NULL;
 
@@ -195,12 +195,12 @@ vos_cookie_find_update(daos_handle_t cih, uuid_t cookie,
 {
 	int			rc = 0;
 	daos_epoch_t		max_epoch = 0;
-	daos_iov_t		key, value;
-	struct daos_uuid	uuid_key;
+	crt_iov_t		key, value;
+	struct crt_uuid	uuid_key;
 
 	uuid_copy(uuid_key.uuid, cookie);
-	daos_iov_set(&key, &uuid_key, sizeof(struct daos_uuid));
-	daos_iov_set(&value, &max_epoch, sizeof(daos_epoch_t));
+	crt_iov_set(&key, &uuid_key, sizeof(struct crt_uuid));
+	crt_iov_set(&value, &max_epoch, sizeof(daos_epoch_t));
 
 	rc = dbtree_lookup(cih, &key, &value);
 	if (!rc) {
@@ -211,7 +211,7 @@ vos_cookie_find_update(daos_handle_t cih, uuid_t cookie,
 		 */
 		D_DEBUG(DF_VOS2,
 			"dbtree lookup found "DF_UUID","DF_U64"\n",
-			DP_UUID(cookie), max_epoch);
+			CP_UUID(cookie), max_epoch);
 		if (max_epoch >= epoch)
 			D_GOTO(exit, rc = 0); /** Nothing to update, exit */
 	}

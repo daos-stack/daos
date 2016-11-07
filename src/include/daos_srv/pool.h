@@ -42,7 +42,7 @@ struct ds_pool {
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
-	dtp_group_t	       *sp_group;
+	crt_group_t	       *sp_group;
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
@@ -55,7 +55,7 @@ void ds_pool_put(struct ds_pool *pool);
  * object.
  */
 struct ds_pool_hdl {
-	daos_list_t		sph_entry;
+	crt_list_t		sph_entry;
 	uuid_t			sph_uuid;	/* of the pool handle */
 	uint64_t		sph_capas;
 	struct ds_pool	       *sph_pool;
@@ -73,7 +73,7 @@ void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
  * object I/Os do not need to access global, parent ds_pool objects.
  */
 struct ds_pool_child {
-	daos_list_t	spc_list;
+	crt_list_t	spc_list;
 	daos_handle_t	spc_hdl;
 	uuid_t		spc_uuid;
 	uint32_t	spc_map_version;
@@ -83,9 +83,9 @@ struct ds_pool_child {
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
 void ds_pool_child_put(struct ds_pool_child *child);
 
-int ds_pool_bcast_create(dtp_context_t ctx, struct ds_pool *pool,
-			 enum daos_module_id module, dtp_opcode_t opcode,
-			 dtp_rpc_t **rpc);
+int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
+			 enum daos_module_id module, crt_opcode_t opcode,
+			 crt_rpc_t **rpc);
 
 /*
  * Metadata pmem pool descriptor
@@ -95,7 +95,7 @@ int ds_pool_bcast_create(dtp_context_t ctx, struct ds_pool *pool,
  * be retired.
  */
 struct ds_pool_mpool {
-	daos_list_t			mp_entry;
+	crt_list_t			mp_entry;
 	uuid_t				mp_uuid;	/* of the DAOS pool */
 	pthread_mutex_t			mp_lock;
 	int				mp_ref;
@@ -160,8 +160,8 @@ int ds_pool_create(const uuid_t pool_uuid, const char *path,
 int ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid,
 		       unsigned int gid, unsigned int mode, int ntargets,
 		       uuid_t target_uuids[], const char *group,
-		       const daos_rank_list_t *target_addrs, int ndomains,
-		       const int *domains, daos_rank_list_t *svc_addrs);
+		       const crt_rank_list_t *target_addrs, int ndomains,
+		       const int *domains, crt_rank_list_t *svc_addrs);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.

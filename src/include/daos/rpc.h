@@ -33,7 +33,7 @@
 #include <daos/event.h>
 #include <daos/transport.h>
 
-/* Opcode registered in dtp will be
+/* Opcode registered in crt will be
  * client/server | mod_id | rpc_version | op_code
  *    {1 bit}	  {7 bits}    {8 bits}    {16 bits}
  */
@@ -54,13 +54,13 @@
 	 (rpc_ver & RPC_VERSION_MASK) << RPC_VERSION_OFFSET |	\
 	 (mod_id & MODID_MASK) << MODID_OFFSET)
 
-extern struct dtp_msg_field DMF_OID;
-extern struct dtp_msg_field DMF_IOVEC;
-extern struct dtp_msg_field DMF_VEC_IOD_ARRAY;
-extern struct dtp_msg_field DMF_EPOCH_STATE;
-extern struct dtp_msg_field DMF_DAOS_HASH_OUT;
-extern struct dtp_msg_field DMF_KEY_DESC_ARRAY;
-extern struct dtp_msg_field DMF_REC_SIZE_ARRAY;
+extern struct crt_msg_field CMF_OID;
+extern struct crt_msg_field CMF_IOVEC;
+extern struct crt_msg_field CMF_VEC_IOD_ARRAY;
+extern struct crt_msg_field CMF_EPOCH_STATE;
+extern struct crt_msg_field CMF_DAOS_HASH_OUT;
+extern struct crt_msg_field CMF_KEY_DESC_ARRAY;
+extern struct crt_msg_field CMF_REC_SIZE_ARRAY;
 
 enum daos_module_id {
 	DAOS_VOS_MODULE		= 0, /** version object store */
@@ -79,31 +79,31 @@ struct daos_rpc {
 	/* Name of the RPC */
 	const char	*dr_name;
 	/* Operation code associated with the RPC */
-	dtp_opcode_t	 dr_opc;
+	crt_opcode_t	 cr_opc;
 	/* RPC version */
 	int		 dr_ver;
 	/* Operation flags, TBD */
 	int		 dr_flags;
 	/* RPC request format */
-	struct dtp_req_format *dr_req_fmt;
+	struct crt_req_format *dr_req_fmt;
 };
 
 struct daos_rpc_handler {
 	/* Operation code */
-	dtp_opcode_t		dr_opc;
+	crt_opcode_t		cr_opc;
 	/* Request handler, only relevant on the server side */
-	dtp_rpc_cb_t		dr_hdlr;
+	crt_rpc_cb_t		dr_hdlr;
 	/* CORPC operations (co_aggregate == NULL for point-to-point RPCs) */
-	struct dtp_corpc_ops	dr_corpc_ops;
+	struct crt_corpc_ops	dr_corpc_ops;
 };
 
 static inline struct daos_rpc_handler *
-daos_rpc_handler_find(struct daos_rpc_handler *handlers, dtp_opcode_t opc)
+daos_rpc_handler_find(struct daos_rpc_handler *handlers, crt_opcode_t opc)
 {
 	struct daos_rpc_handler *handler;
 
-	for (handler = handlers; handler->dr_opc != 0; handler++) {
-		if (handler->dr_opc == opc)
+	for (handler = handlers; handler->cr_opc != 0; handler++) {
+		if (handler->cr_opc == opc)
 			return handler;
 	}
 	return NULL;
@@ -133,28 +133,28 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 		return 0;
 
 	/* walk through the handler list and register each individual RPC */
-	for (rpc = rpcs; rpc->dr_opc != 0; rpc++) {
-		dtp_opcode_t opcode;
+	for (rpc = rpcs; rpc->cr_opc != 0; rpc++) {
+		crt_opcode_t opcode;
 
-		opcode = DAOS_RPC_OPCODE(rpc->dr_opc, mod_id, rpc->dr_ver);
+		opcode = DAOS_RPC_OPCODE(rpc->cr_opc, mod_id, rpc->dr_ver);
 		if (handlers != NULL) {
 			struct daos_rpc_handler *handler;
 
-			handler = daos_rpc_handler_find(handlers, rpc->dr_opc);
+			handler = daos_rpc_handler_find(handlers, rpc->cr_opc);
 			if (handler == NULL) {
 				D_ERROR("failed to find handler for opc %x\n",
-					rpc->dr_opc);
+					rpc->cr_opc);
 				return rc;
 			}
 			if (handler->dr_corpc_ops.co_aggregate == NULL)
-				rc = dtp_rpc_srv_reg(opcode, rpc->dr_req_fmt,
-						     handler->dr_hdlr);
+				rc = crt_rpc_srv_register(opcode,
+					rpc->dr_req_fmt, handler->dr_hdlr);
 			else
-				rc = dtp_corpc_reg(opcode, rpc->dr_req_fmt,
-						   handler->dr_hdlr,
-						   &handler->dr_corpc_ops);
+				rc = crt_corpc_register(opcode, rpc->dr_req_fmt,
+						handler->dr_hdlr,
+						&handler->dr_corpc_ops);
 		} else {
-			rc = dtp_rpc_reg(opcode, rpc->dr_req_fmt);
+			rc = crt_rpc_register(opcode, rpc->dr_req_fmt);
 		}
 		if (rc)
 			return rc;
@@ -172,6 +172,6 @@ daos_rpc_unregister(struct daos_rpc *rpcs)
 	return 0;
 }
 
-int daos_rpc_send(dtp_rpc_t *rpc, daos_event_t *ev);
+int daos_rpc_send(crt_rpc_t *rpc, daos_event_t *ev);
 
 #endif /* __DRPC_API_H__ */

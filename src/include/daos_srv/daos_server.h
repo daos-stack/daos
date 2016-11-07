@@ -117,7 +117,7 @@ void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
 struct dss_module_info {
-	dtp_context_t	dmi_ctx;
+	crt_context_t	dmi_ctx;
 	int		dmi_tid;
 };
 
@@ -183,6 +183,6 @@ dss_abterr2der(int abt_errno)
 	}
 }
 
-int dss_rpc_send(dtp_rpc_t *rpc);
+int dss_rpc_send(crt_rpc_t *rpc);
 
 #endif /* __DSS_API_H__ */

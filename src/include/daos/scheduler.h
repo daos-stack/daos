@@ -31,10 +31,11 @@
 
 #include <daos_types.h>
 #include <daos_errno.h>
-#include <daos/list.h>
-#include <daos/hash.h>
 #include <daos/event.h>
 #include <daos/transport.h>
+
+#include <crt_util/list.h>
+#include <crt_util/hash.h>
 
 typedef int (*daos_task_comp_cb_t)(struct daos_task *);
 typedef int (*daos_task_func_t)(struct daos_task *);
@@ -58,13 +59,13 @@ struct daos_task {
 typedef int (*daos_task_group_cb_t)(void *args);
 struct daos_task_group {
 	/* link to daos_sched */
-	daos_list_t		dtg_list;
+	crt_list_t		dtg_list;
 
 	/* protect the task list */
 	pthread_mutex_t		dtg_task_list_lock;
 
 	/* link to all tasks of the group */
-	daos_list_t		dtg_task_list;
+	crt_list_t		dtg_task_list;
 
 	int			dtg_result;
 	/* completion callback, which is called when all tasks
@@ -78,7 +79,7 @@ struct daos_task_group {
 
 typedef int (*daos_sched_comp_cb_t)(void *args, int rc);
 struct daos_sched_comp {
-	daos_list_t		dsc_list;
+	crt_list_t		dsc_list;
 	daos_sched_comp_cb_t	dsc_comp_cb;
 	void			*dsc_arg;
 };
@@ -111,7 +112,7 @@ daos_task2arg(struct daos_task *task);
 void *
 daos_task2sp(struct daos_task *task);
 
-dtp_context_t *
+crt_context_t *
 daos_task2ctx(struct daos_task *task);
 
 struct daos_sched *

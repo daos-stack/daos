@@ -49,13 +49,13 @@ dct_mod_fini(void)
 /* Note: the rpc input/output parameters is defined in daos_rpc */
 static struct daos_rpc_handler dcts_handlers[] = {
 	{
-		.dr_opc		= DCT_PING,
+		.cr_opc		= DCT_PING,
 		.dr_hdlr	= dcts_hdlr_ping,
 	}, {
-		.dr_opc		= TIER_FETCH,
+		.cr_opc		= TIER_FETCH,
 		.dr_hdlr	= dcts_hdlr_fetch,
 	}, {
-		.dr_opc		= 0
+		.cr_opc		= 0
 	}
 };
 

@@ -27,94 +27,94 @@
 #include <daos/rpc.h>
 #include "dmg_rpc.h"
 
-struct dtp_msg_field *dmg_pool_create_in_fields[] = {
-	&DMF_UUID,		/* pc_pool_uuid */
-	&DMF_STRING,		/* pc_grp */
-	&DMF_STRING,		/* pc_tgt_dev */
-	&DMF_RANK_LIST,		/* pc_tgts */
-	&DMF_DAOS_SIZE,		/* pc_tgt_size */
-	&DMF_UINT32,		/* pc_svc_nr */
-	&DMF_UINT32,		/* pc_mode */
-	&DMF_UINT32,		/* pc_uid */
-	&DMF_UINT32,		/* pc_gid */
+struct crt_msg_field *dmg_pool_create_in_fields[] = {
+	&CMF_UUID,		/* pc_pool_uuid */
+	&CMF_STRING,		/* pc_grp */
+	&CMF_STRING,		/* pc_tgt_dev */
+	&CMF_RANK_LIST,		/* pc_tgts */
+	&CMF_CRT_SIZE,		/* pc_tgt_size */
+	&CMF_UINT32,		/* pc_svc_nr */
+	&CMF_UINT32,		/* pc_mode */
+	&CMF_UINT32,		/* pc_uid */
+	&CMF_UINT32,		/* pc_gid */
 };
 
-struct dtp_msg_field *dmg_pool_create_out_fields[] = {
-	&DMF_RANK_LIST,		/* pc_svc */
-	&DMF_INT,		/* pc_rc */
+struct crt_msg_field *dmg_pool_create_out_fields[] = {
+	&CMF_RANK_LIST,		/* pc_svc */
+	&CMF_INT,		/* pc_rc */
 };
 
-struct dtp_msg_field *dmg_pool_destroy_in_fields[] = {
-	&DMF_UUID,		/* pd_pool_uuid */
-	&DMF_STRING,		/* pd_grp */
-	&DMF_INT		/* pd_force */
+struct crt_msg_field *dmg_pool_destroy_in_fields[] = {
+	&CMF_UUID,		/* pd_pool_uuid */
+	&CMF_STRING,		/* pd_grp */
+	&CMF_INT		/* pd_force */
 };
 
-struct dtp_msg_field *dmg_pool_destroy_out_fields[] = {
-	&DMF_INT		/* pd_rc */
+struct crt_msg_field *dmg_pool_destroy_out_fields[] = {
+	&CMF_INT		/* pd_rc */
 };
 
-struct dtp_msg_field *dmg_tgt_create_in_fields[] = {
-	&DMF_UUID,		/* tc_pool_uuid */
-	&DMF_STRING,		/* tc_tgt_dev */
-	&DMF_DAOS_SIZE		/* tc_tgt_size */
+struct crt_msg_field *dmg_tgt_create_in_fields[] = {
+	&CMF_UUID,		/* tc_pool_uuid */
+	&CMF_STRING,		/* tc_tgt_dev */
+	&CMF_CRT_SIZE		/* tc_tgt_size */
 };
 
-struct dtp_msg_field *dmg_tgt_create_out_fields[] = {
-	&DMF_INT,		/* tc_rc */
-	&DMF_UUID,		/* tc_tgt_uuid */
+struct crt_msg_field *dmg_tgt_create_out_fields[] = {
+	&CMF_INT,		/* tc_rc */
+	&CMF_UUID,		/* tc_tgt_uuid */
 };
 
-struct dtp_msg_field *dmg_tgt_destroy_in_fields[] = {
-	&DMF_UUID		/* td_pool_uuid */
+struct crt_msg_field *dmg_tgt_destroy_in_fields[] = {
+	&CMF_UUID		/* td_pool_uuid */
 };
 
-struct dtp_msg_field *dmg_tgt_destroy_out_fields[] = {
-	&DMF_INT		/* td_rc */
+struct crt_msg_field *dmg_tgt_destroy_out_fields[] = {
+	&CMF_INT		/* td_rc */
 };
 
-struct dtp_req_format DQF_DMG_POOL_CREATE =
-	DEFINE_DTP_REQ_FMT("DMG_POOL_CREATE", dmg_pool_create_in_fields,
+struct crt_req_format DQF_DMG_POOL_CREATE =
+	DEFINE_CRT_REQ_FMT("DMG_POOL_CREATE", dmg_pool_create_in_fields,
 			   dmg_pool_create_out_fields);
 
-struct dtp_req_format DQF_DMG_POOL_DESTROY =
-	DEFINE_DTP_REQ_FMT("DMG_POOL_DESTROY", dmg_pool_destroy_in_fields,
+struct crt_req_format DQF_DMG_POOL_DESTROY =
+	DEFINE_CRT_REQ_FMT("DMG_POOL_DESTROY", dmg_pool_destroy_in_fields,
 			   dmg_pool_destroy_out_fields);
 
-struct dtp_req_format DQF_DMG_TGT_CREATE =
-	DEFINE_DTP_REQ_FMT("DMG_TGT_CREATE", dmg_tgt_create_in_fields,
+struct crt_req_format DQF_DMG_TGT_CREATE =
+	DEFINE_CRT_REQ_FMT("DMG_TGT_CREATE", dmg_tgt_create_in_fields,
 			   dmg_tgt_create_out_fields);
 
-struct dtp_req_format DQF_DMG_TGT_DESTROY =
-	DEFINE_DTP_REQ_FMT("DMG_TGT_DESTROY", dmg_tgt_destroy_in_fields,
+struct crt_req_format DQF_DMG_TGT_DESTROY =
+	DEFINE_CRT_REQ_FMT("DMG_TGT_DESTROY", dmg_tgt_destroy_in_fields,
 			   dmg_tgt_destroy_out_fields);
 
 struct daos_rpc dmg_rpcs[] = {
 	{
 		.dr_name	= "DMG_POOL_CREATE",
-		.dr_opc		= DMG_POOL_CREATE,
+		.cr_opc		= DMG_POOL_CREATE,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_DMG_POOL_CREATE,
 	}, {
 		.dr_name	= "DMG_POOL_DESTROY",
-		.dr_opc		= DMG_POOL_DESTROY,
+		.cr_opc		= DMG_POOL_DESTROY,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_DMG_POOL_DESTROY,
 	}, {
 		.dr_name	= "DMG_TGT_CREATE",
-		.dr_opc		= DMG_TGT_CREATE,
+		.cr_opc		= DMG_TGT_CREATE,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_DMG_TGT_CREATE,
 	}, {
 		.dr_name	= "DMG_TGT_DESTROY",
-		.dr_opc		= DMG_TGT_DESTROY,
+		.cr_opc		= DMG_TGT_DESTROY,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_DMG_TGT_DESTROY,
 	}, {
-		.dr_opc		= 0
+		.cr_opc		= 0
 	}
 };

@@ -44,10 +44,10 @@ create_hdlr(int argc, char *argv[])
 	unsigned int		mode = 0731;
 	unsigned int		uid = geteuid();
 	unsigned int		gid = getegid();
-	daos_size_t		size = 256 << 20;
+	crt_size_t		size = 256 << 20;
 	char		       *group = "daos_server_group";
-	daos_rank_t		ranks[13];
-	daos_rank_list_t	svc;
+	crt_rank_t		ranks[13];
+	crt_rank_list_t	svc;
 	uuid_t			uuid;
 	char			uuid_string[37];
 	int			rc;

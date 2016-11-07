@@ -43,7 +43,7 @@ dct_fetch_cb(void *arg, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	tfo = dtp_reply_get(sp->sp_rpc);
+	tfo = crt_reply_get(sp->sp_rpc);
 	rc = tfo->tfo_ret;
 	if (rc) {
 		D_ERROR("failed to fetch: %d\n", rc);
@@ -52,7 +52,7 @@ dct_fetch_cb(void *arg, daos_event_t *ev, int rc)
 
 	sp->sp_hdl.cookie = 0;
 out:
-	dtp_req_decref(sp->sp_rpc);
+	crt_req_decref(sp->sp_rpc);
 	dc_pool_put(pool);
 	return rc;
 }
@@ -63,8 +63,8 @@ daos_cont_fetch(daos_handle_t poh, const uuid_t cont_id,
 {
 
 	struct tier_fetch_in	*in;
-	dtp_endpoint_t		ep;
-	dtp_rpc_t		*rpc;
+	crt_endpoint_t		ep;
+	crt_rpc_t		*rpc;
 	int			rc;
 	struct daos_op_sp       *sp;
 	struct dc_pool		*pool;
@@ -86,7 +86,7 @@ daos_cont_fetch(daos_handle_t poh, const uuid_t cont_id,
 	rc = dct_req_create(daos_ev2ctx(ev), ep, TIER_FETCH, &rpc);
 
 	/* Grab the input struct of the RPC */
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 
 
 	pool = dc_pool_lookup(poh);
@@ -103,7 +103,7 @@ daos_cont_fetch(daos_handle_t poh, const uuid_t cont_id,
 	 * used to maintain per-call invocation state (I think)
 	 */
 	sp = daos_ev2sp(ev);
-	dtp_req_addref(rpc);
+	crt_req_addref(rpc);
 	sp->sp_rpc = rpc;
 	sp->sp_hdl = poh;
 	sp->sp_arg = pool;
@@ -124,8 +124,8 @@ daos_cont_fetch(daos_handle_t poh, const uuid_t cont_id,
 	return rc;
 
 out_req_put:
-	dtp_req_decref(rpc);
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
 	return rc;
 }
 

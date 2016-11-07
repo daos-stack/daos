@@ -2,6 +2,6 @@
 
 Import('denv')
 
-denv.Program('btree', 'btree.c', LIBS=['daos_common', 'cart'])
-denv.Program('other', 'other.c', LIBS=['daos_common', 'cart'])
-denv.Program('lru', 'lru.c', LIBS=['daos_common', 'cart'])
+denv.Program('btree', 'btree.c', LIBS=['daos_common', 'crt', 'crt_util'])
+denv.Program('other', 'other.c', LIBS=['daos_common', 'crt', 'crt_util'])
+denv.Program('lru', 'lru.c', LIBS=['daos_common', 'crt', 'crt_util'])

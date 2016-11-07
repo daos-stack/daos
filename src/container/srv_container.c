@@ -125,7 +125,7 @@ cont_svc_lookup(const uuid_t pool_uuid, uint64_t id, struct cont_svc **svc)
 
 	/* TODO: Hash table. */
 
-	D_DEBUG(DF_DSMS, DF_UUID"["DF_U64"]: allocating\n", DP_UUID(pool_uuid),
+	D_DEBUG(DF_DSMS, DF_UUID"["DF_U64"]: allocating\n", CP_UUID(pool_uuid),
 		id);
 
 	D_ALLOC_PTR(p);
@@ -148,7 +148,7 @@ static void
 cont_svc_put(struct cont_svc *svc)
 {
 	D_DEBUG(DF_DSMS, DF_UUID"["DF_U64"]: freeing\n",
-		DP_UUID(svc->cs_pool_uuid), svc->cs_id);
+		CP_UUID(svc->cs_pool_uuid), svc->cs_id);
 	dbtree_close(svc->cs_containers);
 	pthread_mutex_destroy(&svc->cs_lock);
 	pthread_rwlock_destroy(&svc->cs_rwlock);
@@ -157,18 +157,18 @@ cont_svc_put(struct cont_svc *svc)
 }
 
 static int
-bcast_create(dtp_context_t ctx, struct cont_svc *svc, dtp_opcode_t opcode,
-	     dtp_rpc_t **rpc)
+bcast_create(crt_context_t ctx, struct cont_svc *svc, crt_opcode_t opcode,
+	     crt_rpc_t **rpc)
 {
 	return ds_pool_bcast_create(ctx, svc->cs_pool, DAOS_CONT_MODULE, opcode,
 				    rpc);
 }
 
 int
-dsms_hdlr_cont_create(dtp_rpc_t *rpc)
+dsms_hdlr_cont_create(crt_rpc_t *rpc)
 {
-	struct cont_create_in  *in = dtp_req_get(rpc);
-	struct cont_create_out *out = dtp_reply_get(rpc);
+	struct cont_create_in  *in = crt_req_get(rpc);
+	struct cont_create_out *out = crt_reply_get(rpc);
 	struct cont_svc	       *svc;
 	struct ds_pool_hdl     *pool_hdl;
 	volatile daos_handle_t	ch = DAOS_HDL_INVAL;
@@ -180,7 +180,7 @@ dsms_hdlr_cont_create(dtp_rpc_t *rpc)
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: pool_hdl="DF_UUID"\n",
 		DP_CONT(in->cci_pool, in->cci_cont), rpc,
-		DP_UUID(in->cci_pool_hdl));
+		CP_UUID(in->cci_pool_hdl));
 
 	/* Verify the pool handle. */
 	pool_hdl = ds_pool_hdl_lookup(in->cci_pool_hdl);
@@ -275,16 +275,16 @@ out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(in->cci_pool, in->cci_cont), rpc, rc);
 	out->cco_ret = rc;
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 static int
-cont_destroy_bcast(dtp_context_t ctx, struct cont_svc *svc,
+cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 		   const uuid_t cont_uuid)
 {
 	struct tgt_cont_destroy_in     *in;
 	struct tgt_cont_destroy_out    *out;
-	dtp_rpc_t		       *rpc;
+	crt_rpc_t		       *rpc;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": bcasting\n",
@@ -294,7 +294,7 @@ cont_destroy_bcast(dtp_context_t ctx, struct cont_svc *svc,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 	uuid_copy(in->tcdi_pool, svc->cs_pool_uuid);
 	uuid_copy(in->tcdi_cont, cont_uuid);
 
@@ -302,14 +302,14 @@ cont_destroy_bcast(dtp_context_t ctx, struct cont_svc *svc,
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	out = dtp_reply_get(rpc);
+	out = crt_reply_get(rpc);
 	rc = out->tcdo_ret;
 	if (rc != 0)
 		D_ERROR(DF_CONT": failed to destroy some targets: %d\n",
 			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
 
 out_rpc:
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
 		DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
@@ -317,10 +317,10 @@ out:
 }
 
 int
-dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
+dsms_hdlr_cont_destroy(crt_rpc_t *rpc)
 {
-	struct cont_destroy_in	       *in = dtp_req_get(rpc);
-	struct cont_destroy_out	       *out = dtp_reply_get(rpc);
+	struct cont_destroy_in	       *in = crt_req_get(rpc);
+	struct cont_destroy_out	       *out = crt_reply_get(rpc);
 	struct cont_svc		       *svc;
 	struct ds_pool_hdl	       *pool_hdl;
 	volatile daos_handle_t		ch;
@@ -333,7 +333,7 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: pool_hdl="DF_UUID
 		" force=%u\n", DP_CONT(in->cdi_pool, in->cdi_cont), rpc,
-		DP_UUID(in->cdi_pool_hdl), in->cdi_force);
+		CP_UUID(in->cdi_pool_hdl), in->cdi_force);
 
 	/* Verify the pool handle. */
 	pool_hdl = ds_pool_hdl_lookup(in->cdi_pool_hdl);
@@ -358,7 +358,7 @@ dsms_hdlr_cont_destroy(dtp_rpc_t *rpc)
 	}
 	ch = h;
 
-	rc = cont_destroy_bcast(rpc->dr_ctx, svc, in->cdi_cont);
+	rc = cont_destroy_bcast(rpc->cr_ctx, svc, in->cdi_cont);
 	if (rc != 0)
 		D_GOTO(out_rwlock, rc);
 
@@ -416,7 +416,7 @@ out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(in->cdi_pool, in->cdi_cont), rpc, rc);
 	out->cdo_ret = rc;
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 static int
@@ -540,24 +540,24 @@ cont_put(struct cont *cont)
 }
 
 static int
-cont_open_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
+cont_open_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 		const uuid_t cont_hdl, uint64_t capas)
 {
 	struct tgt_cont_open_in	       *in;
 	struct tgt_cont_open_out       *out;
-	dtp_rpc_t		       *rpc;
+	crt_rpc_t		       *rpc;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": bcasting: pool_hdl="DF_UUID" cont_hdl="
 		DF_UUID" capas="DF_X64"\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas);
+		CP_UUID(pool_hdl), CP_UUID(cont_hdl), capas);
 
 	rc = bcast_create(ctx, cont->c_svc, DSM_TGT_CONT_OPEN, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 	uuid_copy(in->tcoi_pool, cont->c_svc->cs_pool_uuid);
 	uuid_copy(in->tcoi_pool_hdl, pool_hdl);
 	uuid_copy(in->tcoi_cont, cont->c_uuid);
@@ -568,27 +568,27 @@ cont_open_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	out = dtp_reply_get(rpc);
+	out = crt_reply_get(rpc);
 	rc = out->tcoo_ret;
 	if (rc != 0)
 		D_ERROR(DF_CONT": failed to open some targets: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 
 out_rpc:
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": bcasted: pool_hdl="DF_UUID" cont_hdl="DF_UUID
 		" capas="DF_X64": %d\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas, rc);
+		CP_UUID(pool_hdl), CP_UUID(cont_hdl), capas, rc);
 	return rc;
 }
 
 int
-dsms_hdlr_cont_open(dtp_rpc_t *rpc)
+dsms_hdlr_cont_open(crt_rpc_t *rpc)
 {
-	struct cont_open_in	*in = dtp_req_get(rpc);
-	struct cont_open_out	*out = dtp_reply_get(rpc);
+	struct cont_open_in	*in = crt_req_get(rpc);
+	struct cont_open_out	*out = crt_reply_get(rpc);
 	struct cont_svc		*svc;
 	struct ds_pool_hdl	*pool_hdl;
 	struct cont		*cont;
@@ -605,7 +605,7 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: pool_hdl="DF_UUID
 		" cont_hdl="DF_UUID" capas="DF_X64"\n",
 		DP_CONT(in->coi_pool, in->coi_cont), rpc,
-		DP_UUID(in->coi_pool_hdl), DP_UUID(in->coi_cont_hdl),
+		CP_UUID(in->coi_pool_hdl), CP_UUID(in->coi_cont_hdl),
 		in->coi_capas);
 
 	/* Verify the pool handle. */
@@ -643,7 +643,7 @@ dsms_hdlr_cont_open(dtp_rpc_t *rpc)
 		D_GOTO(out_cont, rc);
 	}
 
-	rc = cont_open_bcast(rpc->dr_ctx, cont, in->coi_pool_hdl,
+	rc = cont_open_bcast(rpc->cr_ctx, cont, in->coi_pool_hdl,
 			     in->coi_cont_hdl, in->coi_capas);
 	if (rc != 0)
 		D_GOTO(out_cont, rc);
@@ -733,52 +733,52 @@ out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(in->coi_pool, in->coi_cont), rpc, rc);
 	out->coo_ret = rc;
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 static int
-cont_close_bcast(dtp_context_t ctx, struct cont *cont, const uuid_t cont_hdl)
+cont_close_bcast(crt_context_t ctx, struct cont *cont, const uuid_t cont_hdl)
 {
 	struct tgt_cont_close_in       *in;
 	struct tgt_cont_close_out      *out;
-	dtp_rpc_t		       *rpc;
+	crt_rpc_t		       *rpc;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": bcasting: cont_hdl="DF_UUID"\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(cont_hdl));
+		CP_UUID(cont_hdl));
 
 	rc = bcast_create(ctx, cont->c_svc, DSM_TGT_CONT_CLOSE, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 	uuid_copy(in->tcci_cont_hdl, cont_hdl);
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	out = dtp_reply_get(rpc);
+	out = crt_reply_get(rpc);
 	rc = out->tcco_ret;
 	if (rc != 0)
 		D_ERROR(DF_CONT": failed to close some targets: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 
 out_rpc:
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": bcasted: cont_hdl="DF_UUID": %d\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(cont_hdl), rc);
+		CP_UUID(cont_hdl), rc);
 	return rc;
 }
 
 int
-dsms_hdlr_cont_close(dtp_rpc_t *rpc)
+dsms_hdlr_cont_close(crt_rpc_t *rpc)
 {
-	struct cont_close_in   *in = dtp_req_get(rpc);
-	struct cont_close_out  *out = dtp_reply_get(rpc);
+	struct cont_close_in   *in = crt_req_get(rpc);
+	struct cont_close_out  *out = crt_reply_get(rpc);
 	struct cont_svc	       *svc;
 	struct cont	       *cont;
 	struct container_hdl	chdl;
@@ -790,7 +790,7 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(in->cci_pool, in->cci_cont), rpc,
-		DP_UUID(in->cci_cont_hdl));
+		CP_UUID(in->cci_cont_hdl));
 
 	rc = cont_svc_lookup(in->cci_pool, 0 /* id */, &svc);
 	if (rc != 0)
@@ -809,13 +809,13 @@ dsms_hdlr_cont_close(dtp_rpc_t *rpc)
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DF_DSMS, DF_CONT": already closed: "DF_UUID"\n",
 				DP_CONT(svc->cs_pool->sp_uuid, cont->c_uuid),
-				DP_UUID(in->cci_cont_hdl));
+				CP_UUID(in->cci_cont_hdl));
 			rc = 0;
 		}
 		D_GOTO(out_cont, rc);
 	}
 
-	rc = cont_close_bcast(rpc->dr_ctx, cont, in->cci_cont_hdl);
+	rc = cont_close_bcast(rpc->cr_ctx, cont, in->cci_cont_hdl);
 	if (rc != 0)
 		D_GOTO(out_cont, rc);
 
@@ -865,7 +865,7 @@ out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(in->cci_pool, in->cci_cont), rpc, rc);
 	out->cco_ret = rc;
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 typedef int (*cont_op_hdlr_t)(struct cont_svc *svc, struct cont *cont,
@@ -1037,10 +1037,10 @@ cont_epoch_commit(struct cont_svc *svc, struct cont *cont,
 }
 
 int
-dsms_hdlr_cont_op(dtp_rpc_t *rpc)
+dsms_hdlr_cont_op(crt_rpc_t *rpc)
 {
-	struct cont_op_in      *in = dtp_req_get(rpc);
-	struct cont_op_out     *out = dtp_reply_get(rpc);
+	struct cont_op_in      *in = crt_req_get(rpc);
+	struct cont_op_out     *out = crt_reply_get(rpc);
 	struct cont_svc	       *svc;
 	struct cont	       *cont;
 	struct container_hdl	hdl;
@@ -1048,8 +1048,8 @@ dsms_hdlr_cont_op(dtp_rpc_t *rpc)
 	int			rc;
 
 	D_DEBUG(DF_DSMS, "pool="DF_UUID" cont="DF_UUID" cont_hdl="DF_UUID
-		" opc=%u\n", DP_UUID(in->cpi_pool), DP_UUID(in->cpi_cont),
-		DP_UUID(in->cpi_cont_hdl), opc_get(rpc->dr_opc));
+		" opc=%u\n", CP_UUID(in->cpi_pool), CP_UUID(in->cpi_cont),
+		CP_UUID(in->cpi_cont_hdl), opc_get(rpc->cr_opc));
 
 	rc = cont_svc_lookup(in->cpi_pool, 0 /* id */, &svc);
 	if (rc != 0)
@@ -1070,19 +1070,19 @@ dsms_hdlr_cont_op(dtp_rpc_t *rpc)
 				DF_UUID"\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid),
-				DP_UUID(in->cpi_cont_hdl));
+				CP_UUID(in->cpi_cont_hdl));
 			rc = -DER_NO_PERM;
 		} else {
 			D_ERROR(DF_CONT": failed to look up container handle "
 				DF_UUID": %d\n",
 				DP_CONT(cont->c_svc->cs_pool_uuid,
 					cont->c_uuid),
-				DP_UUID(in->cpi_cont_hdl), rc);
+				CP_UUID(in->cpi_cont_hdl), rc);
 		}
 		D_GOTO(out_cont, rc);
 	}
 
-	switch (opc_get(rpc->dr_opc)) {
+	switch (opc_get(rpc->cr_opc)) {
 	case DSM_CONT_EPOCH_QUERY:
 		hdlr = cont_epoch_query;
 		break;
@@ -1106,6 +1106,6 @@ out_rwlock:
 out:
 	D_DEBUG(DF_DSMS, "leave: rc=%d\n", rc);
 	out->cpo_ret = rc;
-	rc = dtp_reply_send(rpc);
+	rc = crt_reply_send(rpc);
 	return rc;
 }

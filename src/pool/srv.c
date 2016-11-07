@@ -80,34 +80,34 @@ fini(void)
 /* Note: the rpc input/output parameters is defined in daos_rpc */
 static struct daos_rpc_handler pool_handlers[] = {
 	{
-		.dr_opc		= POOL_CONNECT,
+		.cr_opc		= POOL_CONNECT,
 		.dr_hdlr	= ds_pool_connect_handler
 	}, {
-		.dr_opc		= POOL_DISCONNECT,
+		.cr_opc		= POOL_DISCONNECT,
 		.dr_hdlr	= ds_pool_disconnect_handler
 	}, {
-		.dr_opc		= POOL_EXCLUDE,
+		.cr_opc		= POOL_EXCLUDE,
 		.dr_hdlr	= ds_pool_exclude_handler
 	}, {
-		.dr_opc		= POOL_TGT_CONNECT,
+		.cr_opc		= POOL_TGT_CONNECT,
 		.dr_hdlr	= ds_pool_tgt_connect_handler,
 		.dr_corpc_ops	= {
 			.co_aggregate	= ds_pool_tgt_connect_aggregator
 		}
 	}, {
-		.dr_opc		= POOL_TGT_DISCONNECT,
+		.cr_opc		= POOL_TGT_DISCONNECT,
 		.dr_hdlr	= ds_pool_tgt_disconnect_handler,
 		.dr_corpc_ops	= {
 			.co_aggregate	= ds_pool_tgt_disconnect_aggregator
 		}
 	}, {
-		.dr_opc		= POOL_TGT_UPDATE_MAP,
+		.cr_opc		= POOL_TGT_UPDATE_MAP,
 		.dr_hdlr	= ds_pool_tgt_update_map_handler,
 		.dr_corpc_ops	= {
 			.co_aggregate	= ds_pool_tgt_update_map_aggregator
 		}
 	}, {
-		.dr_opc		= 0
+		.cr_opc		= 0
 	}
 };
 
@@ -121,7 +121,7 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 	if (tls == NULL)
 		return NULL;
 
-	DAOS_INIT_LIST_HEAD(&tls->dt_pool_list);
+	CRT_INIT_LIST_HEAD(&tls->dt_pool_list);
 	return tls;
 }
 
@@ -131,7 +131,7 @@ dsm_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct dsm_tls *tls = data;
 
-	D_ASSERT(daos_list_empty(&tls->dt_pool_list));
+	D_ASSERT(crt_list_empty(&tls->dt_pool_list));
 	D_FREE_PTR(tls);
 }
 

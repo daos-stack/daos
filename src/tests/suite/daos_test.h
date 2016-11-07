@@ -38,10 +38,10 @@
 #include <daos/common.h>
 
 typedef struct {
-	daos_rank_t		ranks[8];
+	crt_rank_t		ranks[8];
 	int			myrank;
 	int			rank_size;
-	daos_rank_list_t	svc;
+	crt_rank_list_t	svc;
 	uuid_t			pool_uuid;
 	uuid_t			co_uuid;
 	unsigned int		mode;
@@ -98,7 +98,7 @@ static inline void
 handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	     int verbose)
 {
-	daos_iov_t	ghdl = { NULL, 0, 0 };
+	crt_iov_t	ghdl = { NULL, 0, 0 };
 	int		rc;
 
 	if (rank == 0) {

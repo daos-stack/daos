@@ -32,7 +32,7 @@
 #include <daos_types.h>
 #include <daos/client.h>
 #include <daos/common.h>
-#include <daos/hash.h>
+#include <crt_util/hash.h>
 
 int dc_pool_init(void);
 void dc_pool_fini(void);
@@ -40,9 +40,9 @@ void dc_pool_fini(void);
 /* Client pool handle */
 struct dc_pool {
 	/* link to daos_client_hhash */
-	struct daos_hlink	dp_hlink;
+	struct crt_hlink	dp_hlink;
 	/* container list of the pool */
-	daos_list_t		dp_co_list;
+	crt_list_t		dp_co_list;
 	/* lock for the container list */
 	pthread_rwlock_t	dp_co_list_lock;
 	/* pool uuid */
@@ -58,12 +58,12 @@ struct dc_pool {
 static inline struct dc_pool *
 dc_pool_lookup(daos_handle_t poh)
 {
-	struct daos_hlink *dlink;
+	struct crt_hlink *dlink;
 
-	if (daos_hhash_key_type(poh.cookie) != DAOS_HTYPE_POOL)
+	if (crt_hhash_key_type(poh.cookie) != CRT_HTYPE_POOL)
 		return NULL;
 
-	dlink = daos_hhash_link_lookup(daos_client_hhash, poh.cookie);
+	dlink = crt_hhash_link_lookup(daos_client_hhash, poh.cookie);
 	if (dlink == NULL)
 		return NULL;
 
@@ -73,7 +73,7 @@ dc_pool_lookup(daos_handle_t poh)
 static inline void
 dc_pool_put(struct dc_pool *pool)
 {
-	daos_hhash_link_putref(daos_client_hhash, &pool->dp_hlink);
+	crt_hhash_link_putref(daos_client_hhash, &pool->dp_hlink);
 }
 
 #endif /* __DAOS_POOL_H__ */

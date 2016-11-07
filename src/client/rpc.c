@@ -24,26 +24,26 @@
 #include <daos/rpc.h>
 
 static int
-daos_rpc_cb(const struct dtp_cb_info *cb_info)
+daos_rpc_cb(const struct crt_cb_info *cb_info)
 {
-	daos_event_t    *ev = (daos_event_t *)cb_info->dci_arg;
+	daos_event_t    *ev = (daos_event_t *)cb_info->cci_arg;
 
-	if (cb_info->dci_rc == -DER_TIMEDOUT)
+	if (cb_info->cci_rc == -DER_TIMEDOUT)
 		/** TODO */
 		;
 
-	daos_event_complete(ev, cb_info->dci_rc);
+	daos_event_complete(ev, cb_info->cci_rc);
 
 	return 0;
 }
 
 int
-daos_rpc_send(dtp_rpc_t *rpc, daos_event_t *ev)
+daos_rpc_send(crt_rpc_t *rpc, daos_event_t *ev)
 {
 	int	rc;
 
 	/* Send request */
-	rc = dtp_req_send(rpc, daos_rpc_cb, ev);
+	rc = crt_req_send(rpc, daos_rpc_cb, ev);
 	if (rc != 0) {
 		/**
 		 * event was started already, let's report the error

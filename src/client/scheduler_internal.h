@@ -35,24 +35,24 @@
 
 struct daos_task_private {
 	/* function for the task */
-	daos_task_func_t	dtp_func;
+	daos_task_func_t	crt_func;
 
 	/* links to scheduler */
-	daos_list_t		dtp_list;
+	crt_list_t		crt_list;
 
 	/* links to task group */
-	daos_list_t		dtp_dtg_list;
+	crt_list_t		crt_dtg_list;
 
 	/* daos_task argument */
 	struct {
-		uint64_t	dtp_arg_space[12];
-	}			dtp_arg;
+		uint64_t	crt_arg_space[12];
+	}			crt_arg;
 
-	struct daos_op_sp	dtp_sp;
+	struct daos_op_sp	crt_sp;
 
-	struct daos_sched_private	*dtp_sched;
-	struct daos_task_group		*dtp_dtg;
-	int			dtp_result;
+	struct daos_sched_private	*crt_sched;
+	struct daos_task_group		*crt_dtg;
+	int			crt_result;
 };
 
 struct daos_sched_private {
@@ -60,23 +60,23 @@ struct daos_sched_private {
 	pthread_mutex_t dsp_lock;
 
 	/* The task will initially being added to init list */
-	daos_list_t	dsp_init_list;
+	crt_list_t	dsp_init_list;
 
 	/* The task will be moved to running list when it is
 	 * being executed
 	 **/
-	daos_list_t	dsp_running_list;
+	crt_list_t	dsp_running_list;
 
 	/* The task will be moved to complete list after the
 	 * complete callback is being executed
 	 **/
-	daos_list_t	dsp_complete_list;
+	crt_list_t	dsp_complete_list;
 
 	/* the list for complete callback */
-	daos_list_t	dsp_comp_cb_list;
+	crt_list_t	dsp_comp_cb_list;
 
 	/* daos task group list */
-	daos_list_t	dsp_dtg_list;
+	crt_list_t	dsp_dtg_list;
 
 	int		dsp_refcount;
 

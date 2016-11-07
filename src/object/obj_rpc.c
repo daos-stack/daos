@@ -28,124 +28,124 @@
 #include <daos/rpc.h>
 #include "obj_rpc.h"
 
-static struct dtp_msg_field *obj_update_in_fields[] = {
-	&DMF_OID,	/* object ID */
-	&DMF_UUID,	/* container handle uuid */
-	&DMF_UINT64,	/* epoch */
-	&DMF_UINT32,	/* map_version */
-	&DMF_UINT32,	/* count of vec_iod and sg */
-	&DMF_IOVEC,	/* dkey */
-	&DMF_VEC_IOD_ARRAY, /* daos_vector */
-	&DMF_SGL_ARRAY, /* sgl_vector */
-	&DMF_BULK_ARRAY,    /* BULK ARRAY */
+static struct crt_msg_field *obj_update_in_fields[] = {
+	&CMF_OID,	/* object ID */
+	&CMF_UUID,	/* container handle uuid */
+	&CMF_UINT64,	/* epoch */
+	&CMF_UINT32,	/* map_version */
+	&CMF_UINT32,	/* count of vec_iod and sg */
+	&CMF_IOVEC,	/* dkey */
+	&CMF_VEC_IOD_ARRAY, /* daos_vector */
+	&CMF_SGL_ARRAY, /* sgl_vector */
+	&CMF_BULK_ARRAY,    /* BULK ARRAY */
 };
 
-static struct dtp_msg_field *obj_fetch_in_fields[] = {
-	&DMF_OID,	/* object ID */
-	&DMF_UUID,	/* container handle uuid */
-	&DMF_UINT64,	/* epoch */
-	&DMF_UINT32,	/* map version */
-	&DMF_UINT32,	/* count of vec_iod and sg */
-	&DMF_IOVEC,	/* dkey */
-	&DMF_VEC_IOD_ARRAY, /* daos_vector */
-	&DMF_SGL_DESC_ARRAY, /* sgl_descriptor vector */
-	&DMF_BULK_ARRAY,    /* BULK ARRAY */
+static struct crt_msg_field *obj_fetch_in_fields[] = {
+	&CMF_OID,	/* object ID */
+	&CMF_UUID,	/* container handle uuid */
+	&CMF_UINT64,	/* epoch */
+	&CMF_UINT32,	/* map version */
+	&CMF_UINT32,	/* count of vec_iod and sg */
+	&CMF_IOVEC,	/* dkey */
+	&CMF_VEC_IOD_ARRAY, /* daos_vector */
+	&CMF_SGL_DESC_ARRAY, /* sgl_descriptor vector */
+	&CMF_BULK_ARRAY,    /* BULK ARRAY */
 };
 
-static struct dtp_msg_field *obj_rw_out_fields[] = {
-	&DMF_INT,	/* status */
-	&DMF_UINT32,	/* map version */
-	&DMF_REC_SIZE_ARRAY, /* actual size of records */
-	&DMF_SGL_ARRAY, /* return buffer */
+static struct crt_msg_field *obj_rw_out_fields[] = {
+	&CMF_INT,	/* status */
+	&CMF_UINT32,	/* map version */
+	&CMF_REC_SIZE_ARRAY, /* actual size of records */
+	&CMF_SGL_ARRAY, /* return buffer */
 };
 
-static struct dtp_msg_field *obj_key_enum_in_fields[] = {
-	&DMF_OID,	/* object ID */
-	&DMF_UUID,	/* container handle uuid */
-	&DMF_UINT64,	/* epoch */
-	&DMF_UINT32,	/* map_version */
-	&DMF_UINT32,	/* number of kds */
-	&DMF_IOVEC,     /* key */
-	&DMF_DAOS_HASH_OUT, /* hash anchor */
-	&DMF_SGL_DESC,	/* sgl_descriptor */
-	&DMF_BULK, /* BULK array for dkey */
+static struct crt_msg_field *obj_key_enum_in_fields[] = {
+	&CMF_OID,	/* object ID */
+	&CMF_UUID,	/* container handle uuid */
+	&CMF_UINT64,	/* epoch */
+	&CMF_UINT32,	/* map_version */
+	&CMF_UINT32,	/* number of kds */
+	&CMF_IOVEC,     /* key */
+	&CMF_DAOS_HASH_OUT, /* hash anchor */
+	&CMF_SGL_DESC,	/* sgl_descriptor */
+	&CMF_BULK, /* BULK array for dkey */
 };
 
-static struct dtp_msg_field *obj_key_enum_out_fields[] = {
-	&DMF_INT,		/* status of the request */
-	&DMF_UINT32,		/* map version */
-	&DMF_DAOS_HASH_OUT,	/* hash anchor */
-	&DMF_KEY_DESC_ARRAY,	/* kds array */
-	&DMF_SGL,		/* SGL buffer */
+static struct crt_msg_field *obj_key_enum_out_fields[] = {
+	&CMF_INT,		/* status of the request */
+	&CMF_UINT32,		/* map version */
+	&CMF_DAOS_HASH_OUT,	/* hash anchor */
+	&CMF_KEY_DESC_ARRAY,	/* kds array */
+	&CMF_SGL,		/* SGL buffer */
 };
 
-static struct dtp_req_format DQF_OBJ_UPDATE =
-	DEFINE_DTP_REQ_FMT("DAOS_OBJ_UPDATE",
+static struct crt_req_format DQF_OBJ_UPDATE =
+	DEFINE_CRT_REQ_FMT("DAOS_OBJ_UPDATE",
 			   obj_update_in_fields,
 			   obj_rw_out_fields);
 
-static struct dtp_req_format DQF_OBJ_FETCH =
-	DEFINE_DTP_REQ_FMT("DAOS_OBJ_FETCH",
+static struct crt_req_format DQF_OBJ_FETCH =
+	DEFINE_CRT_REQ_FMT("DAOS_OBJ_FETCH",
 			   obj_fetch_in_fields,
 			   obj_rw_out_fields);
 
-static struct dtp_req_format DQF_DKEY_ENUMERATE =
-	DEFINE_DTP_REQ_FMT("DAOS_DKEY_ENUM",
+static struct crt_req_format DQF_DKEY_ENUMERATE =
+	DEFINE_CRT_REQ_FMT("DAOS_DKEY_ENUM",
 			   obj_key_enum_in_fields,
 			   obj_key_enum_out_fields);
 
-struct dtp_req_format DQF_AKEY_ENUMERATE =
-	DEFINE_DTP_REQ_FMT("DSR_DKEY_AKEY_ENUMERATE",
+struct crt_req_format DQF_AKEY_ENUMERATE =
+	DEFINE_CRT_REQ_FMT("DSR_DKEY_AKEY_ENUMERATE",
 			   obj_key_enum_in_fields,
 			   obj_key_enum_out_fields);
 
 struct daos_rpc daos_obj_rpcs[] = {
 	{
 		.dr_name	= "DAOS_OBJ_UPDATE",
-		.dr_opc		= DAOS_OBJ_RPC_UPDATE,
+		.cr_opc		= DAOS_OBJ_RPC_UPDATE,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_OBJ_UPDATE,
 	}, {
 		.dr_name	= "DAOS_OBJ_FETCH",
-		.dr_opc		= DAOS_OBJ_RPC_FETCH,
+		.cr_opc		= DAOS_OBJ_RPC_FETCH,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_OBJ_FETCH,
 	}, {
 		.dr_name	= "DAOS_DKEY_ENUM",
-		.dr_opc		= DAOS_OBJ_DKEY_RPC_ENUMERATE,
+		.cr_opc		= DAOS_OBJ_DKEY_RPC_ENUMERATE,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_DKEY_ENUMERATE,
 	}, {
 		.dr_name        = "DAOS_AKEY_ENUM",
-		.dr_opc         = DAOS_OBJ_AKEY_RPC_ENUMERATE,
+		.cr_opc         = DAOS_OBJ_AKEY_RPC_ENUMERATE,
 		.dr_ver         = 1,
 		.dr_flags       = 0,
 		.dr_req_fmt     = &DQF_AKEY_ENUMERATE,
 	}, {
-		.dr_opc		= 0
+		.cr_opc		= 0
 	}
 };
 
 int
-obj_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
-	       dtp_opcode_t opc, dtp_rpc_t **req)
+obj_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+	       crt_opcode_t opc, crt_rpc_t **req)
 {
-	dtp_opcode_t opcode;
+	crt_opcode_t opcode;
 
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE, 1);
 
-	return dtp_req_create(dtp_ctx, tgt_ep, opcode, req);
+	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
 }
 
 void
-obj_reply_set_status(dtp_rpc_t *rpc, int status)
+obj_reply_set_status(crt_rpc_t *rpc, int status)
 {
-	void *reply = dtp_reply_get(rpc);
+	void *reply = crt_reply_get(rpc);
 
-	switch (opc_get(rpc->dr_opc)) {
+	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		((struct obj_rw_out *)reply)->orw_ret = status;
@@ -160,11 +160,11 @@ obj_reply_set_status(dtp_rpc_t *rpc, int status)
 }
 
 int
-obj_reply_get_status(dtp_rpc_t *rpc)
+obj_reply_get_status(crt_rpc_t *rpc)
 {
-	void *reply = dtp_reply_get(rpc);
+	void *reply = crt_reply_get(rpc);
 
-	switch (opc_get(rpc->dr_opc)) {
+	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		return ((struct obj_rw_out *)reply)->orw_ret;
@@ -178,11 +178,11 @@ obj_reply_get_status(dtp_rpc_t *rpc)
 }
 
 void
-obj_reply_map_version_set(dtp_rpc_t *rpc, uint32_t map_version)
+obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 {
-	void *reply = dtp_reply_get(rpc);
+	void *reply = crt_reply_get(rpc);
 
-	switch (opc_get(rpc->dr_opc)) {
+	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		((struct obj_rw_out *)reply)->orw_map_version = map_version;
@@ -198,11 +198,11 @@ obj_reply_map_version_set(dtp_rpc_t *rpc, uint32_t map_version)
 }
 
 uint32_t
-obj_reply_map_version_get(dtp_rpc_t *rpc)
+obj_reply_map_version_get(crt_rpc_t *rpc)
 {
-	void *reply = dtp_reply_get(rpc);
+	void *reply = crt_reply_get(rpc);
 
-	switch (opc_get(rpc->dr_opc)) {
+	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		return ((struct obj_rw_out *)reply)->orw_map_version;

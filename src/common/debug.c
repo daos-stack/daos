@@ -59,19 +59,3 @@ daos_debug_set(unsigned int mask)
 	(void) daos_debug_mask();
 	debug_mask |= mask;
 }
-
-static __thread char thread_uuid_str_buf[DF_UUID_MAX][DAOS_UUID_STR_SIZE];
-static __thread int thread_uuid_str_buf_idx;
-
-char *
-DP_UUID(const void *uuid)
-{
-	char *buf = thread_uuid_str_buf[thread_uuid_str_buf_idx];
-
-	if (uuid == NULL)
-		snprintf(buf, DAOS_UUID_STR_SIZE, "?");
-	else
-		uuid_unparse_lower(uuid, buf);
-	thread_uuid_str_buf_idx = (thread_uuid_str_buf_idx + 1) % DF_UUID_MAX;
-	return buf;
-}

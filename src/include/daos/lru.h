@@ -25,9 +25,11 @@
  */
 #ifndef __DAOS_LRU_H__
 #define __DAOS_LRU_H__
-#include <daos/list.h>
-#include <daos/hash.h>
+
 #include <daos/common.h>
+
+#include <crt_util/list.h>
+#include <crt_util/hash.h>
 
 struct daos_llink;
 struct daos_llink_ops {
@@ -45,9 +47,9 @@ struct daos_llink_ops {
 
 struct daos_llink {
 	/* LRU hash link */
-	daos_list_t		ll_hlink;
+	crt_list_t		ll_hlink;
 	/* LRU queue link */
-	daos_list_t		ll_qlink;
+	crt_list_t		ll_qlink;
 	/* Ref count for this reference */
 	unsigned int		ll_ref;
 	/**
@@ -59,7 +61,7 @@ struct daos_llink {
 
 /**
  * LRU cache implementation using dhash_table
- * and daos_list_t
+ * and crt_list_t
  */
 struct daos_lru_cache {
 	/* Provided cache size */
@@ -69,7 +71,7 @@ struct daos_lru_cache {
 	/* unique references held */
 	uint32_t		dlc_refs_held;
 	/* Queue head, holds idle refs (no refcnt) */
-	daos_list_t		dlc_idle_list;
+	crt_list_t		dlc_idle_list;
 	/* Holds all refs but needs lookup */
 	struct dhash_table	dlc_htable;
 	/* ops to allocate and free reference */

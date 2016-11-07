@@ -43,7 +43,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 
 int
 daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
-	       daos_rank_list_t *failed, daos_handle_t *coh,
+	       crt_rank_list_t *failed, daos_handle_t *coh,
 	       daos_cont_info_t *info, daos_event_t *ev)
 {
 	return 0;

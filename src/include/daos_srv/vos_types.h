@@ -35,9 +35,9 @@ typedef struct {
 	/** # of objects in this pool */
 	unsigned int		pif_nobjs;
 	/** Total space available */
-	daos_size_t		pif_size;
+	crt_size_t		pif_size;
 	/** Current vailable space */
-	daos_size_t		pif_avail;
+	crt_size_t		pif_avail;
 	/** TODO */
 } vos_pool_info_t;
 
@@ -48,7 +48,7 @@ typedef struct {
 	/** number of objects */
 	unsigned int		pci_nobjs;
 	/** used space */
-	daos_size_t		pci_used;
+	crt_size_t		pci_used;
 	/** TODO */
 } vos_co_info_t;
 
@@ -112,7 +112,7 @@ typedef struct {
 		struct {
 			daos_recx_t		ie_recx;
 			/** iovec to return data or ZC address */
-			daos_iov_t		ie_iov;
+			crt_iov_t		ie_iov;
 		};
 	};
 } vos_iter_entry_t;

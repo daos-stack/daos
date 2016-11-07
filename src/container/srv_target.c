@@ -161,13 +161,13 @@ cont_put(struct daos_lru_cache *cache, struct ds_cont *cont)
 /* ds_cont_hdl ****************************************************************/
 
 static inline struct ds_cont_hdl *
-cont_hdl_obj(daos_list_t *rlink)
+cont_hdl_obj(crt_list_t *rlink)
 {
 	return container_of(rlink, struct ds_cont_hdl, sch_entry);
 }
 
 static bool
-cont_hdl_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
+cont_hdl_key_cmp(struct dhash_table *htable, crt_list_t *rlink,
 		 const void *key, unsigned int ksize)
 {
 	struct ds_cont_hdl *hdl = cont_hdl_obj(rlink);
@@ -177,13 +177,13 @@ cont_hdl_key_cmp(struct dhash_table *htable, daos_list_t *rlink,
 }
 
 static void
-cont_hdl_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+cont_hdl_rec_addref(struct dhash_table *htable, crt_list_t *rlink)
 {
 	cont_hdl_obj(rlink)->sch_ref++;
 }
 
 static bool
-cont_hdl_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+cont_hdl_rec_decref(struct dhash_table *htable, crt_list_t *rlink)
 {
 	struct ds_cont_hdl *hdl = cont_hdl_obj(rlink);
 
@@ -192,14 +192,14 @@ cont_hdl_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
 }
 
 static void
-cont_hdl_rec_free(struct dhash_table *htable, daos_list_t *rlink)
+cont_hdl_rec_free(struct dhash_table *htable, crt_list_t *rlink)
 {
 	struct ds_cont_hdl     *hdl = cont_hdl_obj(rlink);
 	struct dsm_tls	       *tls = dsm_tls_get();
 
 	D_DEBUG(DF_DSMS, DF_CONT": freeing "DF_UUID"\n",
 		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
-		DP_UUID(hdl->sch_uuid));
+		CP_UUID(hdl->sch_uuid));
 	D_ASSERT(dhash_rec_unlinked(&hdl->sch_entry));
 	D_ASSERTF(hdl->sch_ref == 0, "%d\n", hdl->sch_ref);
 	cont_put(tls->dt_cont_cache, hdl->sch_cont);
@@ -247,7 +247,7 @@ cont_hdl_delete(struct dhash_table *hash, struct ds_cont_hdl *hdl)
 static struct ds_cont_hdl *
 cont_hdl_lookup_internal(struct dhash_table *hash, const uuid_t uuid)
 {
-	daos_list_t *rlink;
+	crt_list_t *rlink;
 
 	rlink = dhash_rec_find(hash, uuid, sizeof(uuid_t));
 	if (rlink == NULL)
@@ -331,10 +331,10 @@ out:
 }
 
 int
-dsms_hdlr_tgt_cont_destroy(dtp_rpc_t *rpc)
+dsms_hdlr_tgt_cont_destroy(crt_rpc_t *rpc)
 {
-	struct tgt_cont_destroy_in     *in = dtp_req_get(rpc);
-	struct tgt_cont_destroy_out    *out = dtp_reply_get(rpc);
+	struct tgt_cont_destroy_in     *in = crt_req_get(rpc);
+	struct tgt_cont_destroy_out    *out = crt_reply_get(rpc);
 	int				rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
@@ -346,15 +346,15 @@ dsms_hdlr_tgt_cont_destroy(dtp_rpc_t *rpc)
 	out->tcdo_ret = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(in->tcdi_pool, in->tcdi_cont), rpc, out->tcdo_ret, rc);
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 int
-dsms_hdlr_tgt_cont_destroy_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+dsms_hdlr_tgt_cont_destroy_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 				     void *priv)
 {
-	struct tgt_cont_destroy_out    *out_source = dtp_reply_get(source);
-	struct tgt_cont_destroy_out    *out_result = dtp_reply_get(result);
+	struct tgt_cont_destroy_out    *out_source = crt_reply_get(source);
+	struct tgt_cont_destroy_out    *out_result = crt_reply_get(result);
 
 	out_result->tcdo_ret += out_source->tcdo_ret;
 	return 0;
@@ -380,13 +380,13 @@ cont_open_one(void *vin)
 			D_DEBUG(DF_DSMS, DF_CONT": found compatible container "
 				"handle: hdl="DF_UUID" capas="DF_U64"\n",
 				DP_CONT(in->tcoi_pool, in->tcoi_cont),
-				DP_UUID(in->tcoi_cont_hdl), hdl->sch_capas);
+				CP_UUID(in->tcoi_cont_hdl), hdl->sch_capas);
 			rc = 0;
 		} else {
 			D_ERROR(DF_CONT": found conflicting container handle: "
 				"hdl="DF_UUID" capas="DF_U64"\n",
 				DP_CONT(in->tcoi_pool, in->tcoi_cont),
-				DP_UUID(in->tcoi_cont_hdl), hdl->sch_capas);
+				CP_UUID(in->tcoi_cont_hdl), hdl->sch_capas);
 			rc = -DER_EXIST;
 		}
 		cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
@@ -447,31 +447,31 @@ err:
 }
 
 int
-dsms_hdlr_tgt_cont_open(dtp_rpc_t *rpc)
+dsms_hdlr_tgt_cont_open(crt_rpc_t *rpc)
 {
-	struct tgt_cont_open_in	       *in = dtp_req_get(rpc);
-	struct tgt_cont_open_out       *out = dtp_reply_get(rpc);
+	struct tgt_cont_open_in	       *in = crt_req_get(rpc);
+	struct tgt_cont_open_out       *out = crt_reply_get(rpc);
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(in->tcoi_pool, in->tcoi_cont), rpc,
-		DP_UUID(in->tcoi_cont_hdl));
+		CP_UUID(in->tcoi_cont_hdl));
 
 	rc = dss_collective(cont_open_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	out->tcoo_ret = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
-		DP_UUID(in->tcoi_cont), rpc, out->tcoo_ret, rc);
-	return dtp_reply_send(rpc);
+		CP_UUID(in->tcoi_cont), rpc, out->tcoo_ret, rc);
+	return crt_reply_send(rpc);
 }
 
 int
-dsms_hdlr_tgt_cont_open_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+dsms_hdlr_tgt_cont_open_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv)
 {
-	struct tgt_cont_open_out    *out_source = dtp_reply_get(source);
-	struct tgt_cont_open_out    *out_result = dtp_reply_get(result);
+	struct tgt_cont_open_out    *out_source = crt_reply_get(source);
+	struct tgt_cont_open_out    *out_result = crt_reply_get(result);
 
 	out_result->tcoo_ret += out_source->tcoo_ret;
 	return 0;
@@ -497,14 +497,14 @@ cont_close_one(void *vin)
 }
 
 int
-dsms_hdlr_tgt_cont_close(dtp_rpc_t *rpc)
+dsms_hdlr_tgt_cont_close(crt_rpc_t *rpc)
 {
-	struct tgt_cont_close_in       *in = dtp_req_get(rpc);
-	struct tgt_cont_close_out      *out = dtp_reply_get(rpc);
+	struct tgt_cont_close_in       *in = crt_req_get(rpc);
+	struct tgt_cont_close_out      *out = crt_reply_get(rpc);
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(NULL, NULL), rpc, DP_UUID(in->tcci_cont_hdl));
+		DP_CONT(NULL, NULL), rpc, CP_UUID(in->tcci_cont_hdl));
 
 	rc = dss_collective(cont_close_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
@@ -512,15 +512,15 @@ dsms_hdlr_tgt_cont_close(dtp_rpc_t *rpc)
 	out->tcco_ret = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tcco_ret, rc);
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 int
-dsms_hdlr_tgt_cont_close_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+dsms_hdlr_tgt_cont_close_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 				   void *priv)
 {
-	struct tgt_cont_close_out    *out_source = dtp_reply_get(source);
-	struct tgt_cont_close_out    *out_result = dtp_reply_get(result);
+	struct tgt_cont_close_out    *out_source = crt_reply_get(source);
+	struct tgt_cont_close_out    *out_result = crt_reply_get(result);
 
 	out_result->tcco_ret += out_source->tcco_ret;
 	return 0;

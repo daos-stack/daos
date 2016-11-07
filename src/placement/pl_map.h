@@ -43,7 +43,7 @@ struct pl_map {
 	struct pl_map_ops       *pl_ops;
 	/**
 	 * TODO: add members
-	 * daos_list_t          ph_link;
+	 * crt_list_t          ph_link;
 	 */
 };
 

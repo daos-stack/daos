@@ -32,7 +32,7 @@
 #include "event_internal.h"
 #include <daos/transport.h>
 
-static struct daos_hhash *daos_eq_hhash;
+static struct crt_hhash *daos_eq_hhash;
 
 /** thread-private event */
 static __thread daos_event_t	ev_thpriv;
@@ -41,15 +41,15 @@ static __thread bool		ev_thpriv_is_init;
 /** thread-private event queue handle */
 static __thread daos_handle_t	eq_thpriv;
 
-#define EQ_WITH_DTP
+#define EQ_WITH_CRT
 
-#if !defined(EQ_WITH_DTP)
+#if !defined(EQ_WITH_CRT)
 
-#define dtp_init(a)			({0;})
-#define dtp_finalize()			({0;})
-#define dtp_context_create(a, b)	({0;})
-#define dtp_context_destroy(a, b)	({0;})
-#define dtp_progress(ctx, timeout, cb, args)	\
+#define crt_init(a)			({0;})
+#define crt_finalize()			({0;})
+#define crt_context_create(a, b)	({0;})
+#define crt_context_destroy(a, b)	({0;})
+#define crt_progress(ctx, timeout, cb, args)	\
 ({						\
 	int __rc = cb(args);			\
 						\
@@ -68,10 +68,10 @@ static __thread daos_handle_t	eq_thpriv;
 #endif
 
 /*
- * For the moment, we use a global dtp_context_t to create all the RPC requests
+ * For the moment, we use a global crt_context_t to create all the RPC requests
  * this module uses.
  */
-static dtp_context_t daos_eq_ctx;
+static crt_context_t daos_eq_ctx;
 static pthread_mutex_t daos_eq_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int refcount;
 
@@ -86,33 +86,33 @@ daos_eq_lib_init()
 		D_GOTO(unlock, rc = 0);
 	}
 
-	rc = daos_hhash_create(DAOS_HHASH_BITS, &daos_eq_hhash);
+	rc = crt_hhash_create(CRT_HHASH_BITS, &daos_eq_hhash);
 	if (rc != 0) {
 		D_ERROR("failed to create hash for eq: %d\n", rc);
 		D_GOTO(unlock, rc);
 	}
 
-	rc = dtp_init(false /* client-only */);
+	rc = crt_init(NULL, NULL, 0 /* client-only */);
 	if (rc != 0) {
-		D_ERROR("failed to initialize dtp: %d\n", rc);
+		D_ERROR("failed to initialize crt: %d\n", rc);
 		D_GOTO(hash, rc);
 	}
 
 	/* use a global shared context for all eq for now */
-	rc = dtp_context_create(NULL /* arg */, &daos_eq_ctx);
+	rc = crt_context_create(NULL /* arg */, &daos_eq_ctx);
 	if (rc != 0) {
 		D_ERROR("failed to create client context: %d\n", rc);
-		D_GOTO(dtp, rc);
+		D_GOTO(crt, rc);
 	}
 
 	refcount = 1;
 unlock:
 	pthread_mutex_unlock(&daos_eq_lock);
 	return rc;
-dtp:
-	dtp_finalize();
+crt:
+	crt_finalize();
 hash:
-	daos_hhash_destroy(daos_eq_hhash);
+	crt_hhash_destroy(daos_eq_hhash);
 	D_GOTO(unlock, rc);
 }
 
@@ -130,7 +130,7 @@ daos_eq_lib_fini()
 	}
 
 	if (daos_eq_ctx != NULL) {
-		rc = dtp_context_destroy(daos_eq_ctx, 1 /* force */);
+		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
 		if (rc != 0) {
 			D_ERROR("failed to destroy client context: %d\n", rc);
 			D_GOTO(unlock, rc);
@@ -138,14 +138,14 @@ daos_eq_lib_fini()
 		daos_eq_ctx = NULL;
 	}
 
-	rc = dtp_finalize();
+	rc = crt_finalize();
 	if (rc != 0) {
-		D_ERROR("failed to shutdown dtp: %d\n", rc);
+		D_ERROR("failed to shutdown crt: %d\n", rc);
 		D_GOTO(unlock, rc);
 	}
 
 	D_ASSERT(daos_eq_hhash != NULL);
-	daos_hhash_destroy(daos_eq_hhash);
+	crt_hhash_destroy(daos_eq_hhash);
 
 	refcount = 0;
 unlock:
@@ -154,18 +154,18 @@ unlock:
 }
 
 static void
-daos_eq_free(struct daos_hlink *hlink)
+daos_eq_free(struct crt_hlink *hlink)
 {
 	struct daos_eq_private	*eqx;
 	struct daos_eq		*eq;
 
 	eqx = container_of(hlink, struct daos_eq_private, eqx_hlink);
 	eq = daos_eqx2eq(eqx);
-	D_ASSERT(daos_list_empty(&eq->eq_disp));
-	D_ASSERT(daos_list_empty(&eq->eq_comp));
+	D_ASSERT(crt_list_empty(&eq->eq_disp));
+	D_ASSERT(crt_list_empty(&eq->eq_comp));
 	D_ASSERTF(eq->eq_n_comp == 0 && eq->eq_n_disp == 0,
 		  "comp %d disp %d\n", eq->eq_n_comp, eq->eq_n_disp);
-	D_ASSERT(daos_hhash_link_empty(&eqx->eqx_hlink));
+	D_ASSERT(crt_hhash_link_empty(&eqx->eqx_hlink));
 
 	if (eqx->eqx_lock_init)
 		pthread_mutex_destroy(&eqx->eqx_lock);
@@ -173,7 +173,7 @@ daos_eq_free(struct daos_hlink *hlink)
 	D_FREE_PTR(eq);
 }
 
-struct daos_hlink_ops	eq_h_ops = {
+struct crt_hlink_ops	eq_h_ops = {
 	.hop_free	= daos_eq_free,
 };
 
@@ -188,8 +188,8 @@ daos_eq_alloc(void)
 	if (eq == NULL)
 		return NULL;
 
-	DAOS_INIT_LIST_HEAD(&eq->eq_disp);
-	DAOS_INIT_LIST_HEAD(&eq->eq_comp);
+	CRT_INIT_LIST_HEAD(&eq->eq_disp);
+	CRT_INIT_LIST_HEAD(&eq->eq_comp);
 	eq->eq_n_disp = 0;
 	eq->eq_n_comp = 0;
 
@@ -200,7 +200,7 @@ daos_eq_alloc(void)
 		goto out;
 	eqx->eqx_lock_init = 1;
 
-	daos_hhash_hlink_init(&eqx->eqx_hlink, &eq_h_ops);
+	crt_hhash_hlink_init(&eqx->eqx_hlink, &eq_h_ops);
 	return eq;
 out:
 	daos_eq_free(&eqx->eqx_hlink);
@@ -210,9 +210,9 @@ out:
 static struct daos_eq_private *
 daos_eq_lookup(daos_handle_t eqh)
 {
-	struct daos_hlink *hlink;
+	struct crt_hlink *hlink;
 
-	hlink = daos_hhash_link_lookup(daos_eq_hhash, eqh.cookie);
+	hlink = crt_hhash_link_lookup(daos_eq_hhash, eqh.cookie);
 	if (hlink == NULL)
 		return NULL;
 
@@ -223,27 +223,27 @@ static void
 daos_eq_putref(struct daos_eq_private *eqx)
 {
 	D_ASSERT(daos_eq_hhash != NULL);
-	daos_hhash_link_putref(daos_eq_hhash, &eqx->eqx_hlink);
+	crt_hhash_link_putref(daos_eq_hhash, &eqx->eqx_hlink);
 }
 
 static void
 daos_eq_delete(struct daos_eq_private *eqx)
 {
 	D_ASSERT(daos_eq_hhash != NULL);
-	daos_hhash_link_delete(daos_eq_hhash, &eqx->eqx_hlink);
+	crt_hhash_link_delete(daos_eq_hhash, &eqx->eqx_hlink);
 }
 
 static void
 daos_eq_insert(struct daos_eq_private *eqx)
 {
 	D_ASSERT(daos_eq_hhash != NULL);
-	daos_hhash_link_insert(daos_eq_hhash, &eqx->eqx_hlink, DAOS_HTYPE_EQ);
+	crt_hhash_link_insert(daos_eq_hhash, &eqx->eqx_hlink, CRT_HTYPE_EQ);
 }
 
 static void
 daos_eq_handle(struct daos_eq_private *eqx, daos_handle_t *h)
 {
-	daos_hhash_link_key(&eqx->eqx_hlink, &h->cookie);
+	crt_hhash_link_key(&eqx->eqx_hlink, &h->cookie);
 }
 
 static void
@@ -262,12 +262,12 @@ daos_event_launch_locked(struct daos_eq_private *eqx,
 	}
 
 	if (eq != NULL) {
-		daos_list_add_tail(&evx->evx_link, &eq->eq_disp);
+		crt_list_add_tail(&evx->evx_link, &eq->eq_disp);
 		eq->eq_n_disp++;
 	}
 }
 
-dtp_context_t
+crt_context_t
 daos_ev2ctx(struct daos_event *ev)
 {
 	return daos_ev2evx(ev)->evx_ctx;
@@ -304,11 +304,11 @@ daos_event_register_comp_cb(struct daos_event *ev,
 	if (ecl == NULL)
 		return -DER_NOMEM;
 
-	DAOS_INIT_LIST_HEAD(&ecl->op_comp_list);
+	CRT_INIT_LIST_HEAD(&ecl->op_comp_list);
 	ecl->op_comp_arg = arg;
 	ecl->op_comp_cb = cb;
 
-	daos_list_add_tail(&evx->evx_callback.evx_comp_list,
+	crt_list_add_tail(&evx->evx_callback.evx_comp_list,
 			   &ecl->op_comp_list);
 
 	return 0;
@@ -331,10 +331,10 @@ daos_event_complete_cb(struct daos_event_private *evx, int rc)
 			ret = err;
 	}
 
-	daos_list_for_each_entry_safe(ecl, tmp,
+	crt_list_for_each_entry_safe(ecl, tmp,
 				      &evx->evx_callback.evx_comp_list,
 				      op_comp_list) {
-		daos_list_del_init(&ecl->op_comp_list);
+		crt_list_del_init(&ecl->op_comp_list);
 		err = ecl->op_comp_cb(ecl->op_comp_arg, daos_evx2ev(evx), rc);
 		D_FREE_PTR(ecl);
 		if (ret == 0)
@@ -388,8 +388,8 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 	}
 
 	if (eq != NULL) {
-		D_ASSERT(!daos_list_empty(&evx->evx_link));
-		daos_list_move_tail(&evx->evx_link, &eq->eq_comp);
+		D_ASSERT(!crt_list_empty(&evx->evx_link));
+		crt_list_move_tail(&evx->evx_link, &eq->eq_comp);
 		eq->eq_n_comp++;
 		D_ASSERT(eq->eq_n_disp > 0);
 		eq->eq_n_disp--;
@@ -491,8 +491,8 @@ daos_event_test(struct daos_event *ev, int64_t timeout)
 {
 	struct daos_event_private *evx = daos_ev2evx(ev);
 
-	/** pass the timeout to dtp_progress() with a conditional callback */
-	return dtp_progress(evx->evx_ctx, timeout, ev_progress_cb, ev);
+	/** pass the timeout to crt_progress() with a conditional callback */
+	return crt_progress(evx->evx_ctx, timeout, ev_progress_cb, ev);
 }
 
 int
@@ -539,11 +539,11 @@ eq_progress_cb(void *arg)
 	eq = daos_eqx2eq(epa->eqx);
 
 	pthread_mutex_lock(&epa->eqx->eqx_lock);
-	daos_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
+	crt_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
 		D_ASSERT(eq->eq_n_comp > 0);
 		eq->eq_n_comp--;
 
-		daos_list_del_init(&evx->evx_link);
+		crt_list_del_init(&evx->evx_link);
 		D_ASSERT(evx->evx_status == DAOS_EVS_COMPLETED ||
 			 evx->evx_status == DAOS_EVS_ABORT);
 		evx->evx_status = DAOS_EVS_INIT;
@@ -566,13 +566,13 @@ eq_progress_cb(void *arg)
 
 	/* no completion event, eq::eq_comp is empty */
 	if (epa->eqx->eqx_finalizing) { /* no new event is coming */
-		D_ASSERT(daos_list_empty(&eq->eq_disp));
+		D_ASSERT(crt_list_empty(&eq->eq_disp));
 		pthread_mutex_unlock(&epa->eqx->eqx_lock);
 		return -DER_NONEXIST;
 	}
 
 	/* wait only if there's inflight event? */
-	if (epa->wait_inf && daos_list_empty(&eq->eq_disp)) {
+	if (epa->wait_inf && crt_list_empty(&eq->eq_disp)) {
 		pthread_mutex_unlock(&epa->eqx->eqx_lock);
 		return 1;
 	}
@@ -603,14 +603,14 @@ daos_eq_poll(daos_handle_t eqh, int wait_inf, int64_t timeout,
 	epa.wait_inf	= wait_inf;
 	epa.count	= 0;
 
-	/** pass the timeout to dtp_progress() with a conditional callback */
-	rc = dtp_progress(epa.eqx->eqx_ctx, timeout, eq_progress_cb, &epa);
+	/** pass the timeout to crt_progress() with a conditional callback */
+	rc = crt_progress(epa.eqx->eqx_ctx, timeout, eq_progress_cb, &epa);
 
 	/** drop ref grabbed in daos_eq_lookup() */
 	daos_eq_putref(epa.eqx);
 
 	if (rc != 0 && rc != -DER_TIMEDOUT) {
-		D_ERROR("dtp progress failed with %d\n", rc);
+		D_ERROR("crt progress failed with %d\n", rc);
 		return rc;
 	}
 
@@ -646,7 +646,7 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
 	}
 
 	if ((query & DAOS_EQR_COMPLETED) != 0) {
-		daos_list_for_each_entry(evx, &eq->eq_comp, evx_link) {
+		crt_list_for_each_entry(evx, &eq->eq_comp, evx_link) {
 			ev = daos_evx2ev(evx);
 			events[count++] = ev;
 			if (count == n_events)
@@ -655,7 +655,7 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
 	}
 
 	if ((query & DAOS_EQR_DISPATCH) != 0) {
-		daos_list_for_each_entry(evx, &eq->eq_disp, evx_link) {
+		crt_list_for_each_entry(evx, &eq->eq_disp, evx_link) {
 			ev = daos_evx2ev(evx);
 			events[count++] = ev;
 			if (count == n_events)
@@ -695,7 +695,7 @@ daos_event_abort_locked(struct daos_eq_private *eqx,
 
 	daos_event_abort_one(evx);
 	/* abort all children if he has */
-	daos_list_for_each_entry(child, &evx->evx_child, evx_link)
+	crt_list_for_each_entry(child, &evx->evx_child, evx_link)
 		daos_event_abort_one(child);
 
 	/* if aborted event is not a child event, move it to the
@@ -703,8 +703,8 @@ daos_event_abort_locked(struct daos_eq_private *eqx,
 	if (evx->evx_parent == NULL && eqx != NULL) {
 		struct daos_eq *eq = daos_eqx2eq(eqx);
 
-		daos_list_del(&evx->evx_link);
-		daos_list_add(&evx->evx_link, &eq->eq_comp);
+		crt_list_del(&evx->evx_link);
+		crt_list_add(&evx->evx_link, &eq->eq_comp);
 		eq->eq_n_disp--;
 		eq->eq_n_comp++;
 	}
@@ -734,8 +734,8 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	/* If it is not force destroyed, then we need check if
 	 * there are still events linked here */
 	if (((flags & DAOS_EQ_DESTROY_FORCE) == 0) &&
-	    (!daos_list_empty(&eq->eq_disp) ||
-	     !daos_list_empty(&eq->eq_comp))) {
+	    (!crt_list_empty(&eq->eq_disp) ||
+	     !crt_list_empty(&eq->eq_comp))) {
 		rc = -DER_BUSY;
 		goto out;
 	}
@@ -744,15 +744,15 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	eqx->eqx_finalizing = 1;
 
 	/* abort all inflight events */
-	daos_list_for_each_entry_safe(evx, tmp, &eq->eq_disp, evx_link) {
+	crt_list_for_each_entry_safe(evx, tmp, &eq->eq_disp, evx_link) {
 		D_ASSERT(evx->evx_parent == NULL);
 		daos_event_abort_locked(eqx, evx);
 	}
 
-	D_ASSERT(daos_list_empty(&eq->eq_disp));
+	D_ASSERT(crt_list_empty(&eq->eq_disp));
 
-	daos_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
-		daos_list_del(&evx->evx_link);
+	crt_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
+		crt_list_del(&evx->evx_link);
 		D_ASSERT(eq->eq_n_comp > 0);
 		eq->eq_n_comp--;
 	}
@@ -780,8 +780,8 @@ daos_event_destroy(struct daos_event *ev, bool force)
 	if (!force && evp->evx_status == DAOS_EVS_DISPATCH)
 		return -DER_BUSY;
 
-	if (daos_list_empty(&evp->evx_child)) {
-		D_ASSERT(daos_list_empty(&evp->evx_link));
+	if (crt_list_empty(&evp->evx_child)) {
+		D_ASSERT(crt_list_empty(&evp->evx_link));
 		D_FREE_PTR(ev);
 		return rc;
 	}
@@ -802,15 +802,15 @@ daos_event_destroy_children(struct daos_event *ev, bool force)
 	int				 rc = 0;
 
 	/* Destroy all of sub events */
-	daos_list_for_each_entry_safe(sub_evx, tmp, &evp->evx_child,
+	crt_list_for_each_entry_safe(sub_evx, tmp, &evp->evx_child,
 				      evx_link) {
 		struct daos_event *sub_ev = daos_evx2ev(sub_evx);
 		daos_ev_status_t ev_status = sub_evx->evx_status;
 
-		daos_list_del_init(&sub_evx->evx_link);
+		crt_list_del_init(&sub_evx->evx_link);
 		rc = daos_event_destroy(sub_ev, force);
 		if (rc != 0) {
-			daos_list_add(&sub_evx->evx_link,
+			crt_list_add(&sub_evx->evx_link,
 				      &evp->evx_child);
 			break;
 		}
@@ -842,9 +842,9 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 	/* Init the event first */
 	memset(ev, 0, sizeof(*ev));
 	evx->evx_status	= DAOS_EVS_INIT;
-	DAOS_INIT_LIST_HEAD(&evx->evx_child);
-	DAOS_INIT_LIST_HEAD(&evx->evx_link);
-	DAOS_INIT_LIST_HEAD(&evx->evx_callback.evx_comp_list);
+	CRT_INIT_LIST_HEAD(&evx->evx_child);
+	CRT_INIT_LIST_HEAD(&evx->evx_link);
+	CRT_INIT_LIST_HEAD(&evx->evx_callback.evx_comp_list);
 
 	if (parent != NULL) {
 		/* if there is parent */
@@ -862,7 +862,7 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		}
 
 		/* it's user's responsibility to protect this list */
-		daos_list_add_tail(&evx->evx_link, &parent_evx->evx_child);
+		crt_list_add_tail(&evx->evx_link, &parent_evx->evx_child);
 		evx->evx_eqh	= parent_evx->evx_eqh;
 		evx->evx_ctx	= parent_evx->evx_ctx;
 		evx->evx_parent	= parent_evx;
@@ -906,10 +906,10 @@ daos_event_fini(struct daos_event *ev)
 	}
 
 	/* If there are child events */
-	while (!daos_list_empty(&evx->evx_child)) {
+	while (!crt_list_empty(&evx->evx_child)) {
 		struct daos_event_private *tmp;
 
-		tmp = daos_list_entry(evx->evx_child.next,
+		tmp = crt_list_entry(evx->evx_child.next,
 				     struct daos_event_private, evx_link);
 		D_ASSERTF(tmp->evx_status == DAOS_EVS_INIT ||
 			 tmp->evx_status == DAOS_EVS_COMPLETED ||
@@ -925,7 +925,7 @@ daos_event_fini(struct daos_event *ev)
 			goto out;
 		}
 
-		daos_list_del_init(&tmp->evx_link);
+		crt_list_del_init(&tmp->evx_link);
 		rc = daos_event_fini(daos_evx2ev(tmp));
 		if (rc < 0)
 			goto out;
@@ -935,7 +935,7 @@ daos_event_fini(struct daos_event *ev)
 
 	/* If it is a child event, delete it from parent list */
 	if (evx->evx_parent != NULL) {
-		if (daos_list_empty(&evx->evx_link)) {
+		if (crt_list_empty(&evx->evx_link)) {
 			D_ERROR("Event not linked to its parent\n");
 			return -DER_INVAL;
 		}
@@ -946,7 +946,7 @@ daos_event_fini(struct daos_event *ev)
 			return -DER_INVAL;
 		}
 
-		daos_list_del_init(&evx->evx_link);
+		crt_list_del_init(&evx->evx_link);
 		evx->evx_status = DAOS_EVS_INIT;
 		evx->evx_parent = NULL;
 		evx->evx_ctx = NULL;
@@ -956,8 +956,8 @@ daos_event_fini(struct daos_event *ev)
 	D_ASSERT(daos_ev2sched(ev)->ds_event == NULL);
 
 	/* Remove from the evx_link */
-	if (!daos_list_empty(&evx->evx_link)) {
-		daos_list_del(&evx->evx_link);
+	if (!crt_list_empty(&evx->evx_link)) {
+		crt_list_del(&evx->evx_link);
 		if (evx->evx_status == DAOS_EVS_DISPATCH && eq != NULL) {
 			eq->eq_n_disp--;
 		} else if (evx->evx_status == DAOS_EVS_COMPLETED &&
@@ -982,10 +982,10 @@ daos_event_next(struct daos_event *parent,
 	struct daos_event_private	*tmp;
 
 	if (child == NULL) {
-		if (daos_list_empty(&evx->evx_child))
+		if (crt_list_empty(&evx->evx_child))
 			return NULL;
 
-		tmp = daos_list_entry(evx->evx_child.next,
+		tmp = crt_list_entry(evx->evx_child.next,
 				     struct daos_event_private, evx_link);
 		return daos_evx2ev(tmp);
 	}
@@ -994,7 +994,7 @@ daos_event_next(struct daos_event *parent,
 	if (tmp->evx_link.next == &evx->evx_child)
 		return NULL;
 
-	tmp = daos_list_entry(tmp->evx_link.next, struct daos_event_private,
+	tmp = crt_list_entry(tmp->evx_link.next, struct daos_event_private,
 			     evx_link);
 	return daos_evx2ev(tmp);
 }
