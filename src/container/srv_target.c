@@ -299,17 +299,17 @@ ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 static int
 cont_destroy_one(void *vin)
 {
-	struct tgt_cont_destroy_in     *in = vin;
+	struct cont_tgt_destroy_in     *in = vin;
 	struct dsm_tls		       *tls = dsm_tls_get();
 	struct ds_pool_child	       *pool;
 	struct ds_cont		       *cont;
 	int				rc;
 
-	pool = ds_pool_child_lookup(in->tcdi_pool);
+	pool = ds_pool_child_lookup(in->tdi_pool_uuid);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_PERM);
 
-	rc = cont_lookup(tls->dt_cont_cache, in->tcdi_cont, NULL /* arg */,
+	rc = cont_lookup(tls->dt_cont_cache, in->tdi_uuid, NULL /* arg */,
 			 &cont);
 	if (rc == 0) {
 		/* Should evict if idle, but no such interface at the moment. */
@@ -320,9 +320,9 @@ cont_destroy_one(void *vin)
 	}
 
 	D_DEBUG(DF_DSMS, DF_CONT": destroying vos container\n",
-		DP_CONT(pool->spc_uuid, in->tcdi_cont));
+		DP_CONT(pool->spc_uuid, in->tdi_uuid));
 
-	rc = vos_co_destroy(pool->spc_hdl, in->tcdi_cont);
+	rc = vos_co_destroy(pool->spc_hdl, in->tdi_uuid);
 
 out_pool:
 	ds_pool_child_put(pool);
@@ -331,32 +331,32 @@ out:
 }
 
 int
-dsms_hdlr_tgt_cont_destroy(crt_rpc_t *rpc)
+ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 {
-	struct tgt_cont_destroy_in     *in = crt_req_get(rpc);
-	struct tgt_cont_destroy_out    *out = crt_reply_get(rpc);
+	struct cont_tgt_destroy_in     *in = crt_req_get(rpc);
+	struct cont_tgt_destroy_out    *out = crt_reply_get(rpc);
 	int				rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
-		DP_CONT(in->tcdi_pool, in->tcdi_cont), rpc);
+		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
 	rc = dss_collective(cont_destroy_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
-	out->tcdo_ret = (rc == 0 ? 0 : 1);
+	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
-		DP_CONT(in->tcdi_pool, in->tcdi_cont), rpc, out->tcdo_ret, rc);
+		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
+		rc);
 	return crt_reply_send(rpc);
 }
 
 int
-dsms_hdlr_tgt_cont_destroy_aggregate(crt_rpc_t *source, crt_rpc_t *result,
-				     void *priv)
+ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct tgt_cont_destroy_out    *out_source = crt_reply_get(source);
-	struct tgt_cont_destroy_out    *out_result = crt_reply_get(result);
+	struct cont_tgt_destroy_out    *out_source = crt_reply_get(source);
+	struct cont_tgt_destroy_out    *out_result = crt_reply_get(result);
 
-	out_result->tcdo_ret += out_source->tcdo_ret;
+	out_result->tdo_rc += out_source->tdo_rc;
 	return 0;
 }
 
@@ -367,26 +367,25 @@ dsms_hdlr_tgt_cont_destroy_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 static int
 cont_open_one(void *vin)
 {
-	struct tgt_cont_open_in	       *in = vin;
+	struct cont_tgt_open_in	       *in = vin;
 	struct dsm_tls		       *tls = dsm_tls_get();
 	struct ds_cont_hdl	       *hdl;
 	int				vos_co_created = 0;
 	int				rc;
 
-	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash,
-				       in->tcoi_cont_hdl);
+	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, in->toi_hdl);
 	if (hdl != NULL) {
-		if (hdl->sch_capas == in->tcoi_capas) {
+		if (hdl->sch_capas == in->toi_capas) {
 			D_DEBUG(DF_DSMS, DF_CONT": found compatible container "
 				"handle: hdl="DF_UUID" capas="DF_U64"\n",
-				DP_CONT(in->tcoi_pool, in->tcoi_cont),
-				DP_UUID(in->tcoi_cont_hdl), hdl->sch_capas);
+				DP_CONT(in->toi_pool_uuid, in->toi_uuid),
+				DP_UUID(in->toi_hdl), hdl->sch_capas);
 			rc = 0;
 		} else {
 			D_ERROR(DF_CONT": found conflicting container handle: "
 				"hdl="DF_UUID" capas="DF_U64"\n",
-				DP_CONT(in->tcoi_pool, in->tcoi_cont),
-				DP_UUID(in->tcoi_cont_hdl), hdl->sch_capas);
+				DP_CONT(in->toi_pool_uuid, in->toi_uuid),
+				DP_UUID(in->toi_hdl), hdl->sch_capas);
 			rc = -DER_EXIST;
 		}
 		cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
@@ -397,23 +396,23 @@ cont_open_one(void *vin)
 	if (hdl == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	hdl->sch_pool = ds_pool_child_lookup(in->tcoi_pool);
+	hdl->sch_pool = ds_pool_child_lookup(in->toi_pool_uuid);
 	if (hdl->sch_pool == NULL)
 		D_GOTO(err_hdl, rc = -DER_NO_PERM);
 
-	rc = cont_lookup(tls->dt_cont_cache, in->tcoi_cont, hdl->sch_pool,
+	rc = cont_lookup(tls->dt_cont_cache, in->toi_uuid, hdl->sch_pool,
 			  &hdl->sch_cont);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DF_DSMS, DF_CONT": creating new vos container\n",
-			DP_CONT(hdl->sch_pool->spc_uuid, in->tcoi_cont));
+			DP_CONT(hdl->sch_pool->spc_uuid, in->toi_uuid));
 
-		rc = vos_co_create(hdl->sch_pool->spc_hdl, in->tcoi_cont);
+		rc = vos_co_create(hdl->sch_pool->spc_hdl, in->toi_uuid);
 		if (rc != 0)
 			D_GOTO(err_pool, rc);
 
 		vos_co_created = 1;
 
-		rc = cont_lookup(tls->dt_cont_cache, in->tcoi_cont,
+		rc = cont_lookup(tls->dt_cont_cache, in->toi_uuid,
 				  hdl->sch_pool, &hdl->sch_cont);
 		if (rc != 0)
 			D_GOTO(err_vos_co, rc);
@@ -421,8 +420,8 @@ cont_open_one(void *vin)
 		D_GOTO(err_pool, rc);
 	}
 
-	uuid_copy(hdl->sch_uuid, in->tcoi_cont_hdl);
-	hdl->sch_capas = in->tcoi_capas;
+	uuid_copy(hdl->sch_uuid, in->toi_hdl);
+	hdl->sch_capas = in->toi_capas;
 
 	rc = cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
 	if (rc != 0)
@@ -435,8 +434,8 @@ err_cont:
 err_vos_co:
 	if (vos_co_created) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
-			DP_CONT(hdl->sch_pool->spc_uuid, in->tcoi_cont));
-		vos_co_destroy(hdl->sch_pool->spc_hdl, in->tcoi_cont);
+			DP_CONT(hdl->sch_pool->spc_uuid, in->toi_uuid));
+		vos_co_destroy(hdl->sch_pool->spc_hdl, in->toi_uuid);
 	}
 err_pool:
 	ds_pool_child_put(hdl->sch_pool);
@@ -447,33 +446,32 @@ err:
 }
 
 int
-dsms_hdlr_tgt_cont_open(crt_rpc_t *rpc)
+ds_cont_tgt_open_handler(crt_rpc_t *rpc)
 {
-	struct tgt_cont_open_in	       *in = crt_req_get(rpc);
-	struct tgt_cont_open_out       *out = crt_reply_get(rpc);
+	struct cont_tgt_open_in	       *in = crt_req_get(rpc);
+	struct cont_tgt_open_out       *out = crt_reply_get(rpc);
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(in->tcoi_pool, in->tcoi_cont), rpc,
-		DP_UUID(in->tcoi_cont_hdl));
+		DP_CONT(in->toi_pool_uuid, in->toi_uuid), rpc,
+		DP_UUID(in->toi_hdl));
 
 	rc = dss_collective(cont_open_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
-	out->tcoo_ret = (rc == 0 ? 0 : 1);
+	out->too_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
-		DP_UUID(in->tcoi_cont), rpc, out->tcoo_ret, rc);
+		DP_UUID(in->toi_uuid), rpc, out->too_rc, rc);
 	return crt_reply_send(rpc);
 }
 
 int
-dsms_hdlr_tgt_cont_open_aggregate(crt_rpc_t *source, crt_rpc_t *result,
-				  void *priv)
+ds_cont_tgt_open_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct tgt_cont_open_out    *out_source = crt_reply_get(source);
-	struct tgt_cont_open_out    *out_result = crt_reply_get(result);
+	struct cont_tgt_open_out    *out_source = crt_reply_get(source);
+	struct cont_tgt_open_out    *out_result = crt_reply_get(result);
 
-	out_result->tcoo_ret += out_source->tcoo_ret;
+	out_result->too_rc += out_source->too_rc;
 	return 0;
 }
 
@@ -481,12 +479,11 @@ dsms_hdlr_tgt_cont_open_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 static int
 cont_close_one(void *vin)
 {
-	struct tgt_cont_close_in       *in = vin;
+	struct cont_tgt_close_in       *in = vin;
 	struct dsm_tls		       *tls = dsm_tls_get();
 	struct ds_cont_hdl	       *hdl;
 
-	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash,
-				       in->tcci_cont_hdl);
+	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, in->tci_hdl);
 	if (hdl == NULL)
 		return 0;
 
@@ -497,31 +494,30 @@ cont_close_one(void *vin)
 }
 
 int
-dsms_hdlr_tgt_cont_close(crt_rpc_t *rpc)
+ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 {
-	struct tgt_cont_close_in       *in = crt_req_get(rpc);
-	struct tgt_cont_close_out      *out = crt_reply_get(rpc);
+	struct cont_tgt_close_in       *in = crt_req_get(rpc);
+	struct cont_tgt_close_out      *out = crt_reply_get(rpc);
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(NULL, NULL), rpc, DP_UUID(in->tcci_cont_hdl));
+		DP_CONT(NULL, NULL), rpc, DP_UUID(in->tci_hdl));
 
 	rc = dss_collective(cont_close_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
-	out->tcco_ret = (rc == 0 ? 0 : 1);
+	out->tco_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
-		DP_CONT(NULL, NULL), rpc, out->tcco_ret, rc);
+		DP_CONT(NULL, NULL), rpc, out->tco_rc, rc);
 	return crt_reply_send(rpc);
 }
 
 int
-dsms_hdlr_tgt_cont_close_aggregate(crt_rpc_t *source, crt_rpc_t *result,
-				   void *priv)
+ds_cont_tgt_close_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct tgt_cont_close_out    *out_source = crt_reply_get(source);
-	struct tgt_cont_close_out    *out_result = crt_reply_get(result);
+	struct cont_tgt_close_out    *out_source = crt_reply_get(source);
+	struct cont_tgt_close_out    *out_result = crt_reply_get(result);
 
-	out_result->tcco_ret += out_source->tcco_ret;
+	out_result->tco_rc += out_source->tco_rc;
 	return 0;
 }

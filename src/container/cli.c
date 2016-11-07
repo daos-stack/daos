@@ -67,7 +67,7 @@ cont_create_complete(void *arg, daos_event_t *ev, int rc)
 
 	out = crt_reply_get(sp->sp_rpc);
 
-	rc = out->cco_ret;
+	rc = out->cco_op.co_rc;
 	if (rc != 0) {
 		D_ERROR("failed to create container: %d\n", rc);
 		D_GOTO(out, rc);
@@ -110,7 +110,7 @@ dc_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
-	rc = cont_req_create(daos_ev2ctx(ev), ep, DSM_CONT_CREATE, &rpc);
+	rc = cont_req_create(daos_ev2ctx(ev), ep, CONT_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		dc_pool_put(pool);
@@ -118,9 +118,8 @@ dc_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	}
 
 	in = crt_req_get(rpc);
-	uuid_copy(in->cci_pool, pool->dp_pool);
-	uuid_copy(in->cci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cci_cont, uuid);
+	uuid_copy(in->cci_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->cci_op.ci_uuid, uuid);
 
 	dc_pool_put(pool);
 
@@ -157,7 +156,7 @@ cont_destroy_complete(void *arg, daos_event_t *ev, int rc)
 
 	out = crt_reply_get(sp->sp_rpc);
 
-	rc = out->cdo_ret;
+	rc = out->cdo_op.co_rc;
 	if (rc != 0) {
 		D_ERROR("failed to destroy container: %d\n", rc);
 		D_GOTO(out, rc);
@@ -204,7 +203,7 @@ dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
-	rc = cont_req_create(daos_ev2ctx(ev), ep, DSM_CONT_DESTROY, &rpc);
+	rc = cont_req_create(daos_ev2ctx(ev), ep, CONT_DESTROY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		dc_pool_put(pool);
@@ -212,9 +211,8 @@ dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	}
 
 	in = crt_req_get(rpc);
-	uuid_copy(in->cdi_pool, pool->dp_pool);
-	uuid_copy(in->cdi_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cdi_cont, uuid);
+	uuid_copy(in->cdi_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->cdi_op.ci_uuid, uuid);
 	in->cdi_force = force;
 
 	dc_pool_put(pool);
@@ -296,7 +294,7 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 
 	out = crt_reply_get(sp->sp_rpc);
 
-	rc = out->coo_ret;
+	rc = out->coo_op.co_rc;
 	if (rc != 0) {
 		D_ERROR("failed to open container: %d\n", rc);
 		D_GOTO(out, rc);
@@ -307,9 +305,9 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 		pthread_rwlock_unlock(&pool->dp_co_list_lock);
 		D_ERROR("pool connection being invalidated\n");
 		/*
-		 * Instead of sending a DSM_CONT_CLOSE RPC, we leave this new
-		 * container handle on the server side to the
-		 * DSM_POOL_DISCONNECT effort we are racing with.
+		 * Instead of sending a CONT_CLOSE RPC, we leave this new
+		 * container handle on the server side to the POOL_DISCONNECT
+		 * effort we are racing with.
 		 */
 		D_GOTO(out, rc = -DER_NO_HDL);
 	}
@@ -398,17 +396,16 @@ dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
-	rc = cont_req_create(daos_ev2ctx(ev), ep, DSM_CONT_OPEN, &rpc);
+	rc = cont_req_create(daos_ev2ctx(ev), ep, CONT_OPEN, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(err_arg, rc);
 	}
 
 	in = crt_req_get(rpc);
-	uuid_copy(in->coi_pool, pool->dp_pool);
-	uuid_copy(in->coi_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->coi_cont, uuid);
-	uuid_copy(in->coi_cont_hdl, cont->dc_cont_hdl);
+	uuid_copy(in->coi_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->coi_op.ci_uuid, uuid);
+	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
 	in->coi_capas = flags;
 
 	sp = daos_ev2sp(ev);
@@ -463,7 +460,7 @@ cont_close_complete(void *data, daos_event_t *ev, int rc)
 
 	out = crt_reply_get(sp->sp_rpc);
 
-	rc = out->cco_ret;
+	rc = out->cco_op.co_rc;
 	if (rc != 0) {
 		D_ERROR("failed to close container: %d\n", rc);
 		D_GOTO(out, rc);
@@ -558,16 +555,16 @@ dc_cont_close(daos_handle_t coh, daos_event_t *ev)
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
-	rc = cont_req_create(daos_ev2ctx(ev), ep, DSM_CONT_CLOSE, &rpc);
+	rc = cont_req_create(daos_ev2ctx(ev), ep, CONT_CLOSE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(err_arg, rc);
 	}
 
 	in = crt_req_get(rpc);
-	uuid_copy(in->cci_pool, pool->dp_pool);
-	uuid_copy(in->cci_cont, cont->dc_uuid);
-	uuid_copy(in->cci_cont_hdl, cont->dc_cont_hdl);
+	uuid_copy(in->cci_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->cci_op.ci_uuid, cont->dc_uuid);
+	uuid_copy(in->cci_op.ci_hdl, cont->dc_cont_hdl);
 
 	sp = daos_ev2sp(ev);
 	crt_req_addref(rpc);
@@ -816,18 +813,18 @@ struct epoch_op_arg {
 static int
 epoch_op_complete(void *data, daos_event_t *ev, int rc)
 {
-	struct daos_op_sp      *sp = data;
-	crt_rpc_t	       *rpc = sp->sp_rpc;
-	crt_opcode_t		opc = opc_get(rpc->cr_opc);
-	struct epoch_op_out    *out = crt_reply_get(rpc);
-	struct epoch_op_arg    *arg = sp->sp_arg;
+	struct daos_op_sp	       *sp = data;
+	crt_rpc_t		       *rpc = sp->sp_rpc;
+	crt_opcode_t			opc = opc_get(rpc->cr_opc);
+	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
+	struct epoch_op_arg	       *arg = sp->sp_arg;
 
 	if (rc != 0) {
 		D_ERROR("RPC error during epoch operation %u: %d\n", opc, rc);
 		D_GOTO(out, rc);
 	}
 
-	rc = out->eoo_cont_op_out.cpo_ret;
+	rc = out->ceo_op.co_rc;
 	if (rc != 0) {
 		D_ERROR("epoch operation %u failed: %d\n", opc, rc);
 		D_GOTO(out, rc);
@@ -835,11 +832,11 @@ epoch_op_complete(void *data, daos_event_t *ev, int rc)
 
 	D_DEBUG(DF_DSMC, "completed epoch operation %u\n", opc);
 
-	if (opc == DSM_CONT_EPOCH_HOLD)
-		*arg->eoa_epoch = out->eoo_epoch_state.es_lhe;
+	if (opc == CONT_EPOCH_HOLD)
+		*arg->eoa_epoch = out->ceo_epoch_state.es_lhe;
 
 	if (arg->eoa_state != NULL)
-		*arg->eoa_state = out->eoo_epoch_state;
+		*arg->eoa_state = out->ceo_epoch_state;
 
 out:
 	crt_req_decref(rpc);
@@ -853,27 +850,27 @@ static int
 epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	 daos_epoch_state_t *state, daos_event_t *ev)
 {
-	struct epoch_op_in     *in;
-	struct dc_pool	       *pool;
-	struct dsmc_container  *cont;
-	crt_endpoint_t		ep;
-	crt_rpc_t	       *rpc;
-	struct daos_op_sp      *sp;
-	struct epoch_op_arg    *arg;
-	int			rc;
+	struct cont_epoch_op_in	       *in;
+	struct dc_pool		       *pool;
+	struct dsmc_container	       *cont;
+	crt_endpoint_t			ep;
+	crt_rpc_t		       *rpc;
+	struct daos_op_sp	       *sp;
+	struct epoch_op_arg	       *arg;
+	int				rc;
 
 	/* Check incoming arguments. */
 	switch (opc) {
-	case DSM_CONT_EPOCH_QUERY:
+	case CONT_EPOCH_QUERY:
 		D_ASSERT(epoch == NULL);
 		break;
-	case DSM_CONT_EPOCH_HOLD:
+	case CONT_EPOCH_HOLD:
 		if (epoch == NULL)
 			D_GOTO(err, rc = -DER_INVAL);
 		if (*epoch == 0)
 			D_GOTO(err, rc = -DER_EP_RO);
 		break;
-	case DSM_CONT_EPOCH_COMMIT:
+	case CONT_EPOCH_COMMIT:
 		D_ASSERT(epoch != NULL);
 		if (*epoch == 0 || *epoch == DAOS_EPOCH_MAX)
 			D_GOTO(err, rc = -DER_INVAL);
@@ -914,11 +911,11 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	}
 
 	in = crt_req_get(rpc);
-	uuid_copy(in->eoi_cont_op_in.cpi_pool, pool->dp_pool);
-	uuid_copy(in->eoi_cont_op_in.cpi_cont, cont->dc_uuid);
-	uuid_copy(in->eoi_cont_op_in.cpi_cont_hdl, cont->dc_cont_hdl);
-	if (opc != DSM_CONT_EPOCH_QUERY)
-		in->eoi_epoch = *epoch;
+	uuid_copy(in->cei_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->cei_op.ci_uuid, cont->dc_uuid);
+	uuid_copy(in->cei_op.ci_hdl, cont->dc_cont_hdl);
+	if (opc != CONT_EPOCH_QUERY)
+		in->cei_epoch = *epoch;
 
 	sp = daos_ev2sp(ev);
 	crt_req_addref(rpc);
@@ -952,21 +949,21 @@ err:
 int
 dc_epoch_query(daos_handle_t coh, daos_epoch_state_t *state, daos_event_t *ev)
 {
-	return epoch_op(coh, DSM_CONT_EPOCH_QUERY, NULL /* epoch */, state, ev);
+	return epoch_op(coh, CONT_EPOCH_QUERY, NULL /* epoch */, state, ev);
 }
 
 int
 dc_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
 	       daos_epoch_state_t *state, daos_event_t *ev)
 {
-	return epoch_op(coh, DSM_CONT_EPOCH_HOLD, epoch, state, ev);
+	return epoch_op(coh, CONT_EPOCH_HOLD, epoch, state, ev);
 }
 
 int
 dc_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
 		 daos_epoch_state_t *state, daos_event_t *ev)
 {
-	return epoch_op(coh, DSM_CONT_EPOCH_COMMIT, &epoch, state, ev);
+	return epoch_op(coh, CONT_EPOCH_COMMIT, &epoch, state, ev);
 }
 
 /**

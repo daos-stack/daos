@@ -32,193 +32,134 @@
 
 #include <stdint.h>
 #include <uuid/uuid.h>
-#include <daos/event.h>
 #include <daos/rpc.h>
 
 /*
  * RPC operation codes
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
- * crt_req_create(..., opc, ...). See daos_rpc.h.
+ * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-enum dsm_operation {
-	DSM_CONT_CREATE		= 1,
-	DSM_CONT_DESTROY	= 2,
-	DSM_CONT_OPEN		= 3,
-	DSM_CONT_CLOSE		= 4,
-	DSM_CONT_QUERY		= 5,
+enum cont_operation {
+	CONT_CREATE		= 1,
+	CONT_DESTROY		= 2,
+	CONT_OPEN		= 3,
+	CONT_CLOSE		= 4,
+	CONT_QUERY		= 5,
 
-	DSM_CONT_ATTR_LIST	= 10,
-	DSM_CONT_ATTR_SET	= 11,
-	DSM_CONT_ATTR_GET	= 12,
+	CONT_ATTR_LIST		= 10,
+	CONT_ATTR_SET		= 11,
+	CONT_ATTR_GET		= 12,
 
-	DSM_CONT_EPOCH_QUERY	= 20,
-	DSM_CONT_EPOCH_HOLD	= 21,
-	DSM_CONT_EPOCH_SLIP	= 22,
-	DSM_CONT_EPOCH_FLUSH	= 23,
-	DSM_CONT_EPOCH_DISCARD	= 24,
-	DSM_CONT_EPOCH_COMMIT	= 25,
-	DSM_CONT_EPOCH_WAIT	= 26,
+	CONT_EPOCH_QUERY	= 20,
+	CONT_EPOCH_HOLD		= 21,
+	CONT_EPOCH_SLIP		= 22,
+	CONT_EPOCH_FLUSH	= 23,
+	CONT_EPOCH_DISCARD	= 24,
+	CONT_EPOCH_COMMIT	= 25,
+	CONT_EPOCH_WAIT		= 26,
 
-	DSM_CONT_SNAP_LIST	= 30,
-	DSM_CONT_SNAP_CREATE	= 31,
-	DSM_CONT_SNAP_DESTROY	= 32,
+	CONT_SNAP_LIST		= 30,
+	CONT_SNAP_CREATE	= 31,
+	CONT_SNAP_DESTROY	= 32,
 
-	DSM_TGT_CONT_DESTROY	= 44,
-	DSM_TGT_CONT_OPEN	= 45,
-	DSM_TGT_CONT_CLOSE	= 46,
+	CONT_TGT_DESTROY	= 44,
+	CONT_TGT_OPEN		= 45,
+	CONT_TGT_CLOSE		= 46,
 
-	DSM_TGT_EPOCH_FLUSH	= 50,
-	DSM_TGT_EPOCH_DISCARD	= 51,
+	CONT_TGT_EPOCH_FLUSH	= 50,
+	CONT_TGT_EPOCH_DISCARD	= 51
+};
+
+struct cont_op_in {
+	uuid_t	ci_pool_hdl;	/* pool handle UUID */
+	uuid_t	ci_uuid;	/* container UUID */
+	uuid_t	ci_hdl;		/* container handle UUID */
+};
+
+struct cont_op_out {
+	int32_t		co_rc;		/* operation return code */
+	uint32_t	co_map_version;	/* latest pool map version or zero */
 };
 
 struct cont_create_in {
-	uuid_t	cci_pool;
-	uuid_t	cci_pool_hdl;
-	uuid_t	cci_cont;
+	struct cont_op_in	cci_op;	/* .ci_hdl unused */
 };
 
 struct cont_create_out {
-	int32_t	cco_ret;
+	struct cont_op_out	cco_op;
 };
 
 struct cont_destroy_in {
-	uuid_t		cdi_pool;
-	uuid_t		cdi_pool_hdl;
-	uuid_t		cdi_cont;
-	uint32_t	cdi_force;
+	struct cont_op_in	cdi_op;		/* .ci_hdl unused */
+	uint32_t		cdi_force;	/* evict all handles */
 };
 
 struct cont_destroy_out {
-	int32_t	cdo_ret;
+	struct cont_op_out	cdo_op;
 };
 
 struct cont_open_in {
-	uuid_t		coi_pool;
-	uuid_t		coi_pool_hdl;
-	uuid_t		coi_cont;
-	uuid_t		coi_cont_hdl;
-	uint64_t	coi_capas;
+	struct cont_op_in	coi_op;
+	uint64_t		coi_capas;
 };
 
 struct cont_open_out {
-	int32_t			coo_ret;
-	uint32_t		coo_padding;
+	struct cont_op_out	coo_op;
 	daos_epoch_state_t	coo_epoch_state;
 };
 
 struct cont_close_in {
-	uuid_t	cci_pool;
-	uuid_t	cci_cont;
-	uuid_t	cci_cont_hdl;
+	struct cont_op_in	cci_op;
 };
 
 struct cont_close_out {
-	int32_t	cco_ret;
+	struct cont_op_out	cco_op;
 };
 
-struct cont_op_in {
-	uuid_t	cpi_pool;
-	uuid_t	cpi_cont;
-	uuid_t	cpi_cont_hdl;
+struct cont_epoch_op_in {
+	struct cont_op_in	cei_op;
+	daos_epoch_t		cei_epoch;	/* unused for EPOCH_QUERY */
 };
 
-struct cont_op_out {
-	int32_t	cpo_ret;
+struct cont_epoch_op_out {
+	struct cont_op_out	ceo_op;
+	daos_epoch_state_t	ceo_epoch_state;
 };
 
-struct epoch_op_in {
-	struct cont_op_in	eoi_cont_op_in;
-	daos_epoch_t		eoi_epoch;
+struct cont_tgt_destroy_in {
+	uuid_t	tdi_pool_uuid;
+	uuid_t	tdi_uuid;
 };
 
-struct epoch_op_out {
-	struct cont_op_out	eoo_cont_op_out;
-	uint32_t		eoo_padding;
-	daos_epoch_state_t	eoo_epoch_state;
+struct cont_tgt_destroy_out {
+	int32_t tdo_rc;	/* number of errors */
 };
 
-struct tgt_pool_connect_in {
-	uuid_t		tpci_pool;
-	uuid_t		tpci_pool_hdl;
-	uint64_t	tpci_capas;
-	uint32_t	tpci_pool_map_version;
+struct cont_tgt_open_in {
+	uuid_t		toi_pool_uuid;
+	uuid_t		toi_pool_hdl;
+	uuid_t		toi_uuid;
+	uuid_t		toi_hdl;
+	uint64_t	toi_capas;
 };
 
-struct tgt_pool_connect_out {
-	int32_t	tpco_ret;	/* number of errors */
+struct cont_tgt_open_out {
+	int32_t	too_rc;	/* number of errors */
 };
 
-struct tgt_pool_disconnect_in {
-	uuid_t		tpdi_pool;
-	uuid_t		tpdi_pool_hdl;
+struct cont_tgt_close_in {
+	uuid_t	tci_hdl;
 };
 
-struct tgt_pool_disconnect_out {
-	int32_t	tpdo_ret;	/* number of errors */
+struct cont_tgt_close_out {
+	int32_t	tco_rc;	/* number of errors */
 };
 
-struct tgt_cont_destroy_in {
-	uuid_t	tcdi_pool;
-	uuid_t	tcdi_cont;
-};
-
-struct tgt_cont_destroy_out {
-	int32_t tcdo_ret;	/* number of errors */
-};
-
-struct tgt_cont_open_in {
-	uuid_t		tcoi_pool;
-	uuid_t		tcoi_pool_hdl;
-	uuid_t		tcoi_cont;
-	uuid_t		tcoi_cont_hdl;
-	uint64_t	tcoi_capas;
-};
-
-struct tgt_cont_open_out {
-	int32_t	tcoo_ret;	/* number of errors */
-};
-
-struct tgt_cont_close_in {
-	uuid_t	tcci_cont_hdl;
-};
-
-struct tgt_cont_close_out {
-	int32_t	tcco_ret;	/* number of errors */
-};
-
-int
-cont_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
-	       crt_opcode_t opc, crt_rpc_t **req);
+int cont_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+		    crt_opcode_t opc, crt_rpc_t **req);
 
 extern struct daos_rpc cont_rpcs[];
 extern struct daos_rpc cont_srv_rpcs[];
-
-static inline void
-dsm_set_reply_status(crt_rpc_t *rpc, int status)
-{
-	int *ret;
-
-	/* FIXME; The right way to do it might be find the
-	 * status offset and set it, but let's put status
-	 * in front of the bulk reply for now
-	 **/
-	D_ASSERT(rpc != NULL);
-	ret = crt_reply_get(rpc);
-	D_ASSERT(ret != NULL);
-	*ret = status;
-}
-
-static inline int
-dsm_get_reply_status(crt_rpc_t *rpc)
-{
-	int *ret;
-	/* FIXME; The right way to do it might be find the
-	 * status offset and set it, but let's put status
-	 * in front of the bulk reply for now
-	 **/
-	ret = crt_reply_get(rpc);
-	return *ret;
-}
 
 #endif /* __CONTAINER_RPC_H__ */

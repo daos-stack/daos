@@ -57,30 +57,24 @@ dsm_tls_get()
 /*
  * srv_container.c
  */
-int dsms_hdlr_cont_create(crt_rpc_t *rpc);
-int dsms_hdlr_cont_destroy(crt_rpc_t *rpc);
-int dsms_hdlr_cont_open(crt_rpc_t *rpc);
-int dsms_hdlr_cont_close(crt_rpc_t *rpc);
-int dsms_hdlr_cont_op(crt_rpc_t *rpc);
+int ds_cont_create_handler(crt_rpc_t *rpc);
+int ds_cont_destroy_handler(crt_rpc_t *rpc);
+int ds_cont_open_handler(crt_rpc_t *rpc);
+int ds_cont_close_handler(crt_rpc_t *rpc);
+int ds_cont_op_handler(crt_rpc_t *rpc);
 
 /*
  * srv_target.c
  */
-int dsms_hdlr_tgt_pool_connect(crt_rpc_t *rpc);
-int dsms_hdlr_tgt_pool_connect_aggregate(crt_rpc_t *source, crt_rpc_t *result,
-					 void *priv);
-int dsms_hdlr_tgt_pool_disconnect(crt_rpc_t *rpc);
-int dsms_hdlr_tgt_pool_disconnect_aggregate(crt_rpc_t *source,
-					    crt_rpc_t *result, void *priv);
-int dsms_hdlr_tgt_cont_destroy(crt_rpc_t *rpc);
-int dsms_hdlr_tgt_cont_destroy_aggregate(crt_rpc_t *source, crt_rpc_t *result,
-					 void *priv);
-int dsms_hdlr_tgt_cont_open(crt_rpc_t *rpc);
-int dsms_hdlr_tgt_cont_open_aggregate(crt_rpc_t *source, crt_rpc_t *result,
-				      void *priv);
-int dsms_hdlr_tgt_cont_close(crt_rpc_t *rpc);
-int dsms_hdlr_tgt_cont_close_aggregate(crt_rpc_t *source, crt_rpc_t *result,
-				       void *priv);
+int ds_cont_tgt_destroy_handler(crt_rpc_t *rpc);
+int ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				   void *priv);
+int ds_cont_tgt_open_handler(crt_rpc_t *rpc);
+int ds_cont_tgt_open_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				void *priv);
+int ds_cont_tgt_close_handler(crt_rpc_t *rpc);
+int ds_cont_tgt_close_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				 void *priv);
 int ds_cont_cache_create(struct daos_lru_cache **cache);
 void ds_cont_cache_destroy(struct daos_lru_cache *cache);
 int ds_cont_hdl_hash_create(struct dhash_table *hash);

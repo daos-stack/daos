@@ -45,45 +45,45 @@ fini(void)
 }
 
 /* Note: the rpc input/output parameters is defined in daos_rpc */
-static struct daos_rpc_handler dsms_handlers[] = {
+static struct daos_rpc_handler cont_handlers[] = {
 	{
-		.dr_opc		= DSM_CONT_CREATE,
-		.dr_hdlr	= dsms_hdlr_cont_create
+		.dr_opc		= CONT_CREATE,
+		.dr_hdlr	= ds_cont_op_handler
 	}, {
-		.dr_opc		= DSM_CONT_DESTROY,
-		.dr_hdlr	= dsms_hdlr_cont_destroy
+		.dr_opc		= CONT_DESTROY,
+		.dr_hdlr	= ds_cont_op_handler
 	}, {
-		.dr_opc		= DSM_CONT_OPEN,
-		.dr_hdlr	= dsms_hdlr_cont_open
+		.dr_opc		= CONT_OPEN,
+		.dr_hdlr	= ds_cont_op_handler
 	}, {
-		.dr_opc		= DSM_CONT_CLOSE,
-		.dr_hdlr	= dsms_hdlr_cont_close
+		.dr_opc		= CONT_CLOSE,
+		.dr_hdlr	= ds_cont_op_handler
 	}, {
-		.dr_opc		= DSM_CONT_EPOCH_QUERY,
-		.dr_hdlr	= dsms_hdlr_cont_op
+		.dr_opc		= CONT_EPOCH_QUERY,
+		.dr_hdlr	= ds_cont_op_handler
 	}, {
-		.dr_opc		= DSM_CONT_EPOCH_HOLD,
-		.dr_hdlr	= dsms_hdlr_cont_op
+		.dr_opc		= CONT_EPOCH_HOLD,
+		.dr_hdlr	= ds_cont_op_handler
 	}, {
-		.dr_opc		= DSM_CONT_EPOCH_COMMIT,
-		.dr_hdlr	= dsms_hdlr_cont_op
+		.dr_opc		= CONT_EPOCH_COMMIT,
+		.dr_hdlr	= ds_cont_op_handler
 	}, {
-		.dr_opc		= DSM_TGT_CONT_DESTROY,
-		.dr_hdlr	= dsms_hdlr_tgt_cont_destroy,
+		.dr_opc		= CONT_TGT_DESTROY,
+		.dr_hdlr	= ds_cont_tgt_destroy_handler,
 		.dr_corpc_ops	= {
-			.co_aggregate  = dsms_hdlr_tgt_cont_destroy_aggregate
+			.co_aggregate  = ds_cont_tgt_destroy_aggregator
 		}
 	}, {
-		.dr_opc		= DSM_TGT_CONT_OPEN,
-		.dr_hdlr	= dsms_hdlr_tgt_cont_open,
+		.dr_opc		= CONT_TGT_OPEN,
+		.dr_hdlr	= ds_cont_tgt_open_handler,
 		.dr_corpc_ops	= {
-			.co_aggregate  = dsms_hdlr_tgt_cont_open_aggregate
+			.co_aggregate  = ds_cont_tgt_open_aggregator
 		}
 	}, {
-		.dr_opc		= DSM_TGT_CONT_CLOSE,
-		.dr_hdlr	= dsms_hdlr_tgt_cont_close,
+		.dr_opc		= CONT_TGT_CLOSE,
+		.dr_hdlr	= ds_cont_tgt_close_handler,
 		.dr_corpc_ops	= {
-			.co_aggregate  = dsms_hdlr_tgt_cont_close_aggregate
+			.co_aggregate  = ds_cont_tgt_close_aggregator
 		}
 	}, {
 		.dr_opc		= 0
@@ -147,6 +147,6 @@ struct dss_module cont_module =  {
 	.sm_fini	= fini,
 	.sm_cl_rpcs	= cont_rpcs,
 	.sm_srv_rpcs	= cont_srv_rpcs,
-	.sm_handlers	= dsms_handlers,
+	.sm_handlers	= cont_handlers,
 	.sm_key		= &cont_module_key,
 };
