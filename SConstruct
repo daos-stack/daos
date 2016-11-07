@@ -100,9 +100,6 @@ def scons():
                                  'components.py'),
                     prebuild=['ompi'])
     opts.Save(opts_file, env)
-    # Define this now, and then the individual compenents can import this
-    # through PREREQS when they need it.
-    env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
     env.Alias('install', '$PREFIX')
 
     if platform == 'Darwin':
