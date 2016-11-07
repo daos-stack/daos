@@ -35,40 +35,32 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""Build cart src"""
+"""Build self test"""
+
 import os
 
-HEADERS = ['crt_api.h', 'crt_iv.h', 'crt_types.h', 'crt_errno.h']
-HEADERS_UTIL = ['clog.h', 'common.h', 'hash.h', 'list.h', 'heap.h',
-                'sysqueue.h', 'path.h']
+SELF_TEST = 'self_test.c'
+SELF_TEST_SERVICE = 'self_test_service.c'
 
 def scons():
-    """Scons function"""
+    """scons function"""
+    Import('env', 'prereqs')
 
-    Import('env prereqs')
+    tenv = env.Clone()
+    tenv.Append(CPPPATH=['#/src/self_test'])
 
-    # Generic CaRT includes
-    env.Append(CPPPATH=['#/src/include'])
-    for header in HEADERS:
-        env.Install(os.path.join('$PREFIX', 'include'), 'include/%s' % header)
-    for header in HEADERS_UTIL:
-        env.Install(os.path.join('$PREFIX', 'include', 'crt_util'),
-                    'include/crt_util/%s' % header)
+    libraries = ['pthread']
+    tenv.AppendUnique(LIBS=libraries)
 
-    # Generate the common libraries used by everyone
-    SConscript('util/SConscript', exports=["env", "prereqs"])
-    SConscript('crt/SConscript', exports=["env", "prereqs"])
+    tenv.AppendUnique(FLAGS='-pthread')
 
-    # Builders
-    SConscript('test/SConscript', exports=["env", "prereqs"])
+    prereqs.require(tenv, 'cart')
 
-    # Build self test
-    SConscript('self_test/SConscript', exports=["env", "prereqs"])
+    self_test = tenv.Program(SELF_TEST)
+    tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), self_test)
 
-    # Build the unit tests
-    SConscript('utest/SConscript', exports=["env", "prereqs"])
-
-    Default('util', 'crt', 'test', 'self_test')
+    self_test_service = tenv.Program(SELF_TEST_SERVICE)
+    tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), self_test_service)
 
 if __name__ == "SCons.Script":
     scons()
