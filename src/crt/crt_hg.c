@@ -85,7 +85,7 @@ crt_hg_addr_lookup_wait(hg_class_t *hg_class, hg_context_t *hg_context,
 		C_GOTO(done, rc = -CER_HG);
 	}
 
-	end = crt_time_usec(CRT_CONNECT_TIMEOUT_SEC);
+	end = crt_timeus_secdiff(CRT_CONNECT_TIMEOUT_SEC);
 	prog_msec = 1;
 
 	while (1) {
@@ -109,7 +109,7 @@ crt_hg_addr_lookup_wait(hg_class_t *hg_class, hg_context_t *hg_context,
 			break;
 		}
 
-		now = crt_time_usec(0);
+		now = crt_timeus_secdiff(0);
 		if (now >= end) {
 			char		my_host[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 			crt_rank_t	my_rank;

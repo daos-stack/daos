@@ -454,7 +454,7 @@ crt_context_req_track(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	pthread_mutex_lock(&epi->epi_mutex);
 	C_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
-	rpc_priv->crp_ts = crt_time_usec(0);
+	rpc_priv->crp_ts = crt_timeus_secdiff(0);
 	rpc_priv->crp_epi = epi;
 	crt_req_addref(req);
 	if ((epi->epi_req_num - epi->epi_reply_num) >=
@@ -518,7 +518,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 		rpc_priv = crt_list_entry(epi->epi_req_waitq.next,
 					   struct crt_rpc_priv, crp_epi_link);
 		rpc_priv->crp_state = RPC_INITED;
-		rpc_priv->crp_ts = crt_time_usec(0);
+		rpc_priv->crp_ts = crt_timeus_secdiff(0);
 		/* remove from waitq and add to in-flight queue */
 		crt_list_move_tail(&rpc_priv->crp_epi_link, &epi->epi_req_q);
 		epi->epi_req_wait_num--;
@@ -688,7 +688,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 		 */
 		hg_timeout = 0;
 	} else  {
-		now = crt_time_usec(0);
+		now = crt_timeus_secdiff(0);
 		end = now + timeout;
 		/** similiarly, probe more frequently if timeout is large */
 		if (timeout > 1000 * 1000)
@@ -713,7 +713,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 
 		/** check for timeout, if not infinite */
 		if (timeout > 0) {
-			now = crt_time_usec(0);
+			now = crt_timeus_secdiff(0);
 			if (now >= end) {
 				rc = -CER_TIMEDOUT;
 				break;

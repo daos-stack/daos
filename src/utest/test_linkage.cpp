@@ -95,7 +95,8 @@ test_log_linkage(void **state)
 	assert_int_not_equal(fac, -1);
 }
 
-static bool key_cmp(struct chash_table *htable, crt_list_t *rlink,
+static bool
+key_cmp(struct chash_table *htable, crt_list_t *rlink,
 			       const void *key, unsigned int ksize)
 {
 	return true;

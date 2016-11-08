@@ -45,6 +45,7 @@
 #include "crt_util/path.h"
 #include "crt_util/list.h"
 #include "crt_util/sysqueue.h"
+#include <crt_util/heap.h>
 
 static char *__cwd;
 static char *__root;
@@ -812,6 +813,77 @@ test_crt_hlist(void **state)
 	assert(crt_hlist_empty(&head2));
 }
 
+struct test_minheap_node {
+	struct crt_binheap_node		cbh_node;
+	int				key;
+};
+
+static bool
+heap_node_cmp(struct crt_binheap_node *a, struct crt_binheap_node *b)
+{
+	struct test_minheap_node	*nodea, *nodeb;
+
+	nodea = container_of(a, struct test_minheap_node, cbh_node);
+	nodeb = container_of(b, struct test_minheap_node, cbh_node);
+
+	return nodea->key < nodeb->key;
+}
+
+static void
+test_binheap(void **state)
+{
+	struct crt_binheap		*h = NULL;
+	struct test_minheap_node	 n1, n2, n3;
+	struct crt_binheap_node		*n_tmp;
+	uint32_t			 size;
+	int				 rc;
+	struct crt_binheap_ops		 ops = {
+		.hop_enter	= NULL,
+		.hop_exit	= NULL,
+		.hop_compare	= heap_node_cmp,
+	};
+
+	(void)state;
+
+	h = crt_binheap_create(&ops, 0, 0, NULL);
+	assert_non_null(h);
+
+	n1.key = 1;
+	n2.key = 2;
+	n3.key = 3;
+
+	rc = crt_binheap_insert(h, &n1.cbh_node);
+	assert_int_equal(rc, 0);
+	rc = crt_binheap_insert(h, &n2.cbh_node);
+	assert_int_equal(rc, 0);
+	rc = crt_binheap_insert(h, &n3.cbh_node);
+	assert_int_equal(rc, 0);
+
+	n_tmp = crt_binheap_root(h);
+	assert_true(n_tmp == &n1.cbh_node);
+
+	crt_binheap_remove(h, &n1.cbh_node);
+	n_tmp = crt_binheap_root(h);
+	assert_true(n_tmp == &n2.cbh_node);
+
+	n_tmp = crt_binheap_find(h, 0);
+	assert_true(n_tmp == &n2.cbh_node);
+	n_tmp = crt_binheap_find(h, 1);
+	assert_true(n_tmp == &n3.cbh_node);
+	n_tmp = crt_binheap_find(h, 2);
+	assert_true(n_tmp == NULL);
+
+	size = crt_binheap_size(h);
+	assert_true(size == 2);
+
+	n_tmp = crt_binheap_remove_root(h);
+	assert_true(n_tmp == &n2.cbh_node);
+	size = crt_binheap_size(h);
+	assert_true(size == 1);
+
+	crt_binheap_destroy(h);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -827,6 +899,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_list_safe),
 		cmocka_unit_test(test_crt_list),
 		cmocka_unit_test(test_crt_hlist),
+		cmocka_unit_test(test_binheap),
 	};
 
 	return cmocka_run_group_tests(tests, init_tests, fini_tests);

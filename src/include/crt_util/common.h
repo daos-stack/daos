@@ -394,8 +394,8 @@ crt_timediff(struct timespec start, struct timespec end)
 static inline int64_t
 crt_timeleft_ns(const struct timespec *expiration)
 {
-	struct timespec now;
-	int64_t ns;
+	struct timespec		now;
+	int64_t			ns;
 
 	crt_gettime(&now);
 
@@ -405,6 +405,19 @@ crt_timeleft_ns(const struct timespec *expiration)
 		return 0;
 
 	return ns;
+}
+
+/* calculate the number in us after \param sec_diff second */
+static inline uint64_t
+crt_timeus_secdiff(unsigned sec_diff)
+{
+	struct timespec		now;
+	uint64_t		us;
+
+	crt_gettime(&now);
+	us = (now.tv_sec + sec_diff) * 1e6 + now.tv_nsec / 1e3;
+
+	return us;
 }
 
 /* Increment time by ns nanoseconds */

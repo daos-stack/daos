@@ -50,7 +50,7 @@ def scons():
     prereqs.require(denv, 'argobots')
     denv.AppendUnique(LIBS=['uuid'])
 
-    src = ['debug.c', 'clog.c', 'hash.c', 'misc.c', 'path.c']
+    src = ['debug.c', 'clog.c', 'hash.c', 'misc.c', 'path.c', 'heap.c']
     crt_util_targets = denv.SharedObject(src)
     common = denv.SharedLibrary('libcrt_util', crt_util_targets)
     denv.Install('$PREFIX/lib/', common)

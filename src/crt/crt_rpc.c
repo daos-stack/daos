@@ -760,7 +760,7 @@ crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout)
 
 	timeout = timeout ? timeout : CRT_DEFAULT_TIMEOUT;
 	/* Wait the request to be completed in timeout milliseconds */
-	end = crt_time_usec(0) + timeout;
+	end = crt_timeus_secdiff(0) + timeout;
 
 	while (1) {
 		uint64_t interval = 1000; /* microseconds */
@@ -776,7 +776,7 @@ crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout)
 			break;
 		}
 
-		now = crt_time_usec(0);
+		now = crt_timeus_secdiff(0);
 		if (now >= end) {
 			rc = -CER_TIMEDOUT;
 			break;
