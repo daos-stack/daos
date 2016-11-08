@@ -35,11 +35,12 @@ static int
 create_hdlr(int argc, char *argv[])
 {
 	struct option		options[] = {
-		{"gid",		1,	NULL,	'g'},
-		{"group",	1,	NULL,	'G'},
-		{"mode",	1,	NULL,	'm'},
-		{"size",	1,	NULL,	's'},
-		{"uid",		1,	NULL,	'u'}
+		{"gid",		required_argument,	NULL,	'g'},
+		{"group",	required_argument,	NULL,	'G'},
+		{"mode",	required_argument,	NULL,	'm'},
+		{"size",	required_argument,	NULL,	's'},
+		{"uid",		required_argument,	NULL,	'u'},
+		{NULL,		0,			NULL,	0}
 	};
 	unsigned int		mode = 0731;
 	unsigned int		uid = geteuid();
@@ -95,9 +96,10 @@ static int
 destroy_hdlr(int argc, char *argv[])
 {
 	struct option		options[] = {
-		{"force",	0,	NULL,	'f'},
-		{"group",	1,	NULL,	'G'},
-		{"uuid",	1,	NULL,	'U'}
+		{"force",	no_argument,		NULL,	'f'},
+		{"group",	required_argument,	NULL,	'G'},
+		{"uuid",	required_argument,	NULL,	'U'},
+		{NULL,		0,			NULL,	0}
 	};
 	char		       *group = "daos_server_group";
 	uuid_t			uuid;
