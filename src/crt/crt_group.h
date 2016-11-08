@@ -84,7 +84,7 @@ struct crt_grp_priv {
 	/* PSR phy addr address in attached group */
 	crt_phy_addr_t		 gp_psr_phy_addr;
 	/* address lookup cache, only valid for primary group */
-	struct dhash_table     **gp_lookup_cache;
+	struct chash_table     **gp_lookup_cache;
 	uint32_t		 gp_primary:1, /* flag of primary group */
 				 gp_local:1, /* flag of local group, false means
 					      * attached remote group */

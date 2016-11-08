@@ -105,7 +105,7 @@ struct crt_context {
 	struct crt_hg_context	 cc_hg_ctx; /* HG context */
 	void			*cc_pool; /* pool for ES on server stack */
 	/* in-flight endpoint tracking hash table */
-	struct dhash_table	 cc_epi_table;
+	struct chash_table	 cc_epi_table;
 	/* mutex to protect cc_epi_table */
 	pthread_mutex_t		 cc_mutex;
 };

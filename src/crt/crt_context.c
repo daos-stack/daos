@@ -51,7 +51,7 @@ epi_link2ptr(crt_list_t *rlink)
 }
 
 static int
-epi_op_key_get(struct dhash_table *hhtab, crt_list_t *rlink, void **key_pp)
+epi_op_key_get(struct chash_table *hhtab, crt_list_t *rlink, void **key_pp)
 {
 	struct crt_ep_inflight *epi = epi_link2ptr(rlink);
 
@@ -61,7 +61,7 @@ epi_op_key_get(struct dhash_table *hhtab, crt_list_t *rlink, void **key_pp)
 }
 
 static uint32_t
-epi_op_key_hash(struct dhash_table *hhtab, const void *key, unsigned int ksize)
+epi_op_key_hash(struct chash_table *hhtab, const void *key, unsigned int ksize)
 {
 	C_ASSERT(ksize == sizeof(crt_rank_t));
 
@@ -70,7 +70,7 @@ epi_op_key_hash(struct dhash_table *hhtab, const void *key, unsigned int ksize)
 }
 
 static bool
-epi_op_key_cmp(struct dhash_table *hhtab, crt_list_t *rlink,
+epi_op_key_cmp(struct chash_table *hhtab, crt_list_t *rlink,
 	  const void *key, unsigned int ksize)
 {
 	struct crt_ep_inflight *epi = epi_link2ptr(rlink);
@@ -82,13 +82,13 @@ epi_op_key_cmp(struct dhash_table *hhtab, crt_list_t *rlink,
 }
 
 static void
-epi_op_rec_addref(struct dhash_table *hhtab, crt_list_t *rlink)
+epi_op_rec_addref(struct chash_table *hhtab, crt_list_t *rlink)
 {
 	epi_link2ptr(rlink)->epi_ref++;
 }
 
 static bool
-epi_op_rec_decref(struct dhash_table *hhtab, crt_list_t *rlink)
+epi_op_rec_decref(struct chash_table *hhtab, crt_list_t *rlink)
 {
 	struct crt_ep_inflight *epi = epi_link2ptr(rlink);
 
@@ -97,12 +97,12 @@ epi_op_rec_decref(struct dhash_table *hhtab, crt_list_t *rlink)
 }
 
 static void
-epi_op_rec_free(struct dhash_table *hhtab, crt_list_t *rlink)
+epi_op_rec_free(struct chash_table *hhtab, crt_list_t *rlink)
 {
 	crt_epi_destroy(epi_link2ptr(rlink));
 }
 
-static dhash_table_ops_t epi_table_ops = {
+static chash_table_ops_t epi_table_ops = {
 	.hop_key_get		= epi_op_key_get,
 	.hop_key_hash		= epi_op_key_hash,
 	.hop_key_cmp		= epi_op_key_cmp,
@@ -143,10 +143,10 @@ crt_context_init(crt_context_t crt_ctx)
 	CRT_INIT_LIST_HEAD(&ctx->cc_link);
 
 	/* create epi table, use external lock */
-	rc =  dhash_table_create_inplace(DHASH_FT_NOLOCK, CRT_EPI_TABLE_BITS,
+	rc =  chash_table_create_inplace(DHASH_FT_NOLOCK, CRT_EPI_TABLE_BITS,
 			NULL, &epi_table_ops, &ctx->cc_epi_table);
 	if (rc != 0) {
-		C_ERROR("dhash_table_create_inplace failed, rc: %d.\n", rc);
+		C_ERROR("chash_table_create_inplace failed, rc: %d.\n", rc);
 		return rc;
 	}
 
@@ -316,21 +316,21 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	pthread_mutex_lock(&ctx->cc_mutex);
 
-	rc = dhash_table_traverse(&ctx->cc_epi_table, crt_ctx_epi_abort,
+	rc = chash_table_traverse(&ctx->cc_epi_table, crt_ctx_epi_abort,
 				  &force);
 	if (rc != 0) {
 		C_DEBUG("destroy context (idx %d, force %d), "
-			"dhash_table_traverse failed rc: %d.\n",
+			"chash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		pthread_mutex_unlock(&ctx->cc_mutex);
 		C_GOTO(out, rc);
 	}
 
-	rc = dhash_table_destroy_inplace(&ctx->cc_epi_table,
+	rc = chash_table_destroy_inplace(&ctx->cc_epi_table,
 					 true /* force */);
 	if (rc != 0) {
 		C_ERROR("destroy context (idx %d, force %d), "
-			"dhash_table_destroy_inplace failed, rc: %d.\n",
+			"chash_table_destroy_inplace failed, rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		pthread_mutex_unlock(&ctx->cc_mutex);
 		C_GOTO(out, rc);
@@ -366,12 +366,12 @@ crt_ep_abort(crt_endpoint_t ep)
 	crt_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
 		rc = 0;
 		pthread_mutex_lock(&ctx->cc_mutex);
-		rlink = dhash_rec_find(&ctx->cc_epi_table, (void *)&ep.ep_rank,
+		rlink = chash_rec_find(&ctx->cc_epi_table, (void *)&ep.ep_rank,
 				       sizeof(ep.ep_rank));
 		if (rlink != NULL) {
 			force = true;
 			rc = crt_ctx_epi_abort(rlink, &force);
-			dhash_rec_decref(&ctx->cc_epi_table, rlink);
+			chash_rec_decref(&ctx->cc_epi_table, rlink);
 		}
 		pthread_mutex_unlock(&ctx->cc_mutex);
 		if (rc != 0) {
@@ -412,7 +412,7 @@ crt_context_req_track(crt_rpc_t *req)
 
 	/* lookup the crt_ep_inflight (create one if not found) */
 	pthread_mutex_lock(&crt_ctx->cc_mutex);
-	rlink = dhash_rec_find(&crt_ctx->cc_epi_table, (void *)&ep_rank,
+	rlink = chash_rec_find(&crt_ctx->cc_epi_table, (void *)&ep_rank,
 			       sizeof(ep_rank));
 	if (rlink == NULL) {
 		C_ALLOC_PTR(epi);
@@ -436,11 +436,11 @@ crt_context_req_track(crt_rpc_t *req)
 		epi->epi_initialized = 1;
 		pthread_mutex_init(&epi->epi_mutex, NULL);
 
-		rc = dhash_rec_insert(&crt_ctx->cc_epi_table, &ep_rank,
+		rc = chash_rec_insert(&crt_ctx->cc_epi_table, &ep_rank,
 				      sizeof(ep_rank), &epi->epi_link,
 				      true /* exclusive */);
 		if (rc != 0)
-			C_ERROR("dhash_rec_insert failed, rc: %d.\n", rc);
+			C_ERROR("chash_rec_insert failed, rc: %d.\n", rc);
 	} else {
 		epi = epi_link2ptr(rlink);
 		C_ASSERT(epi->epi_ctx == crt_ctx);
@@ -471,7 +471,7 @@ crt_context_req_track(crt_rpc_t *req)
 	}
 	pthread_mutex_unlock(&epi->epi_mutex);
 
-	dhash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
+	chash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
 
 out:
 	return rc;

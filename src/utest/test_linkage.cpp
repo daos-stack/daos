@@ -95,13 +95,13 @@ test_log_linkage(void **state)
 	assert_int_not_equal(fac, -1);
 }
 
-static bool key_cmp(struct dhash_table *htable, crt_list_t *rlink,
+static bool key_cmp(struct chash_table *htable, crt_list_t *rlink,
 			       const void *key, unsigned int ksize)
 {
 	return true;
 }
 
-static dhash_table_ops_t hash_ops = {
+static chash_table_ops_t hash_ops = {
 	hop_key_cmp : key_cmp,
 };
 
@@ -109,16 +109,16 @@ static void
 test_hash_linkage(void **state)
 {
 	int			rc;
-	struct dhash_table	*table;
+	struct chash_table	*table;
 
 	(void)state;
 
-	rc = dhash_table_create(0, 1, NULL, &hash_ops, &table);
+	rc = chash_table_create(0, 1, NULL, &hash_ops, &table);
 
 	assert_int_equal(rc, 0);
 	assert_non_null(table);
 
-	rc = dhash_table_destroy(table, true);
+	rc = chash_table_destroy(table, true);
 	assert_int_equal(rc, 0);
 }
 

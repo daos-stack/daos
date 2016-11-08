@@ -66,7 +66,7 @@ else
         grep -v " U " |  grep -v " w " |  grep -v " crt_" |
         grep -v " D _edata" | grep -v " T _fini" | grep -v " T _init" |
         grep -v " B __bss_start" | grep -v " B _end" |
-        grep -v " T CP_UUID" | grep -v " T dhash_";
+        grep -v " T CP_UUID" | grep -v " T chash_";
     if [ $? -ne 1 ]; then RC=1; fi
 fi
 if [ ${RC} -ne 0 ]

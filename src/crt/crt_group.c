@@ -56,7 +56,7 @@ li_link2ptr(crt_list_t *rlink)
 }
 
 static int
-li_op_key_get(struct dhash_table *hhtab, crt_list_t *rlink, void **key_pp)
+li_op_key_get(struct chash_table *hhtab, crt_list_t *rlink, void **key_pp)
 {
 	struct crt_lookup_item *li = li_link2ptr(rlink);
 
@@ -65,7 +65,7 @@ li_op_key_get(struct dhash_table *hhtab, crt_list_t *rlink, void **key_pp)
 }
 
 static uint32_t
-li_op_key_hash(struct dhash_table *hhtab, const void *key, unsigned int ksize)
+li_op_key_hash(struct chash_table *hhtab, const void *key, unsigned int ksize)
 {
 	C_ASSERT(ksize == sizeof(crt_rank_t));
 
@@ -74,7 +74,7 @@ li_op_key_hash(struct dhash_table *hhtab, const void *key, unsigned int ksize)
 }
 
 static bool
-li_op_key_cmp(struct dhash_table *hhtab, crt_list_t *rlink,
+li_op_key_cmp(struct chash_table *hhtab, crt_list_t *rlink,
 	  const void *key, unsigned int ksize)
 {
 	struct crt_lookup_item *li = li_link2ptr(rlink);
@@ -85,7 +85,7 @@ li_op_key_cmp(struct dhash_table *hhtab, crt_list_t *rlink,
 }
 
 static void
-li_op_rec_addref(struct dhash_table *hhtab, crt_list_t *rlink)
+li_op_rec_addref(struct chash_table *hhtab, crt_list_t *rlink)
 {
 	struct crt_lookup_item *li = li_link2ptr(rlink);
 
@@ -96,7 +96,7 @@ li_op_rec_addref(struct dhash_table *hhtab, crt_list_t *rlink)
 }
 
 static bool
-li_op_rec_decref(struct dhash_table *hhtab, crt_list_t *rlink)
+li_op_rec_decref(struct chash_table *hhtab, crt_list_t *rlink)
 {
 	struct crt_lookup_item *li = li_link2ptr(rlink);
 
@@ -105,12 +105,12 @@ li_op_rec_decref(struct dhash_table *hhtab, crt_list_t *rlink)
 }
 
 static void
-li_op_rec_free(struct dhash_table *hhtab, crt_list_t *rlink)
+li_op_rec_free(struct chash_table *hhtab, crt_list_t *rlink)
 {
 	crt_li_destroy(li_link2ptr(rlink));
 }
 
-static dhash_table_ops_t lookup_table_ops = {
+static chash_table_ops_t lookup_table_ops = {
 	.hop_key_get		= li_op_key_get,
 	.hop_key_hash		= li_op_key_hash,
 	.hop_key_cmp		= li_op_key_cmp,
@@ -154,7 +154,7 @@ crt_li_destroy(struct crt_lookup_item *li)
 static int
 crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 {
-	struct dhash_table	**htables;
+	struct chash_table	**htables;
 	int			  rc, i;
 
 	C_ASSERT(grp_priv != NULL);
@@ -163,15 +163,15 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 		C_GOTO(out, rc = -CER_NO_PERM);
 	}
 
-	C_ALLOC(htables, CRT_SRV_CONTEXT_NUM * sizeof(struct dhash_table *));
+	C_ALLOC(htables, CRT_SRV_CONTEXT_NUM * sizeof(struct chash_table *));
 	if (htables == NULL)
 		C_GOTO(out, rc = -CER_NOMEM);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc = dhash_table_create(DHASH_FT_NOLOCK, CRT_LOOKUP_CACHE_BITS,
+		rc = chash_table_create(DHASH_FT_NOLOCK, CRT_LOOKUP_CACHE_BITS,
 					NULL, &lookup_table_ops, &htables[i]);
 		if (rc != 0) {
-			C_ERROR("dhash_table_create_inplace failed, rc: %d.\n",
+			C_ERROR("chash_table_create_inplace failed, rc: %d.\n",
 				rc);
 			C_GOTO(out, rc);
 		}
@@ -196,16 +196,16 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 		return 0;
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		rc = dhash_table_destroy(grp_priv->gp_lookup_cache[i],
+		rc = chash_table_destroy(grp_priv->gp_lookup_cache[i],
 					 true /* force */);
 		if (rc != 0) {
-			C_ERROR("dhash_table_destroy_inplace failed, rc: %d.\n",
+			C_ERROR("chash_table_destroy_inplace failed, rc: %d.\n",
 				rc);
 			C_GOTO(out, rc);
 		}
 	}
 	C_FREE(grp_priv->gp_lookup_cache,
-	       CRT_SRV_CONTEXT_NUM * sizeof(struct dhash_table *));
+	       CRT_SRV_CONTEXT_NUM * sizeof(struct chash_table *));
 
 out:
 	return rc;
@@ -309,7 +309,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 
 lookup_again:
 	pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
-	rlink = dhash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
+	rlink = chash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
 			       (void *)&rank, sizeof(rank));
 	if (rlink != NULL) {
 		li = li_link2ptr(rlink);
@@ -325,14 +325,14 @@ lookup_again:
 		if (na_addr == NULL) {
 			C_ASSERT(base_addr != NULL);
 			pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-			dhash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx],
+			chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx],
 					 rlink);
 			C_GOTO(out, rc);
 		}
 		if (li->li_tag_addr[tag] != NULL) {
 			*na_addr = li->li_tag_addr[tag];
 			pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-			dhash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx],
+			chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx],
 					 rlink);
 			C_GOTO(out, rc);
 		}
@@ -346,7 +346,7 @@ lookup_again:
 		if (li->li_tag_addr[tag] != NULL) {
 			*na_addr = li->li_tag_addr[tag];
 			pthread_mutex_unlock(&li->li_mutex);
-			dhash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx],
+			chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx],
 					 rlink);
 			C_GOTO(out, rc);
 		}
@@ -357,7 +357,7 @@ lookup_again:
 			*na_addr = li->li_tag_addr[tag];
 		}
 		pthread_mutex_unlock(&li->li_mutex);
-		dhash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
+		chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
 		C_GOTO(out, rc);
 	}
 
@@ -379,22 +379,22 @@ lookup_again:
 	pthread_mutex_init(&li->li_mutex, NULL);
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
-	rlink = dhash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
+	rlink = chash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
 			       (void *)&rank, sizeof(rank));
 	if (rlink != NULL) {
 		/* race condition, goto above path to lookup again */
 		crt_li_destroy(li);
 		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-		dhash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
+		chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
 		goto lookup_again;
 	}
-	rc = dhash_rec_insert(grp_priv->gp_lookup_cache[ctx_idx], &rank,
+	rc = chash_rec_insert(grp_priv->gp_lookup_cache[ctx_idx], &rank,
 			      sizeof(rank), &li->li_link, true /* exclusive */);
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 	if (rc == 0) {
 		goto lookup_again;
 	} else {
-		C_ERROR("dhash_rec_insert failed, rc: %d.\n", rc);
+		C_ERROR("chash_rec_insert failed, rc: %d.\n", rc);
 		pthread_mutex_destroy(&li->li_mutex);
 		C_FREE_PTR(li);
 	}
