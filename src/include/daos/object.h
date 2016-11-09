@@ -24,6 +24,7 @@
 #define __DAOS_OBJECT_H__
 
 #include <daos_types.h>
+#include <daos_api.h>
 
 int dc_obj_init(void);
 void dc_obj_fini(void);
@@ -52,4 +53,39 @@ int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 		       struct daos_obj_md *md);
 
+int
+dc_oclass_register(daos_handle_t coh, daos_oclass_id_t cid,
+		   daos_oclass_attr_t *cattr, daos_event_t *ev);
+int
+dc_oclass_query(daos_handle_t coh, daos_oclass_id_t cid,
+		daos_oclass_attr_t *cattr, daos_event_t *ev);
+int
+dc_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
+	       daos_hash_out_t *anchor, daos_event_t *ev);
+int
+dc_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+	    unsigned int mode, daos_handle_t *oh, daos_event_t *ev);
+int
+dc_obj_close(daos_handle_t oh, daos_event_t *ev);
+int
+dc_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
+int
+dc_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
+	     daos_rank_list_t *ranks, daos_event_t *ev);
+int
+dc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+	     unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+	     daos_vec_map_t *maps, daos_event_t *ev);
+int
+dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+	      unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+	      daos_event_t *ev);
+int
+dc_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
+		 daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		 daos_hash_out_t *anchor, daos_event_t *ev);
+int
+dc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+		 uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		 daos_hash_out_t *anchor, daos_event_t *ev);
 #endif /* __DAOS_OBJECT_H__ */

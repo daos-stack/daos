@@ -130,22 +130,22 @@ daos_oclass_grp_size(struct daos_oclass_attr *oc_attr)
 }
 
 int
-daos_oclass_register(daos_handle_t coh, daos_oclass_id_t cid,
-		    daos_oclass_attr_t *cattr, daos_event_t *ev)
+dc_oclass_register(daos_handle_t coh, daos_oclass_id_t cid,
+		   daos_oclass_attr_t *cattr, daos_event_t *ev)
 {
 	return -DER_NOSYS;
 }
 
 int
-daos_oclass_query(daos_handle_t coh, daos_oclass_id_t cid,
-		 daos_oclass_attr_t *cattr, daos_event_t *ev)
+dc_oclass_query(daos_handle_t coh, daos_oclass_id_t cid,
+		daos_oclass_attr_t *cattr, daos_event_t *ev)
 {
 	return -DER_NOSYS;
 }
 
 int
-daos_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
-		daos_hash_out_t *anchor, daos_event_t *ev)
+dc_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
+	       daos_hash_out_t *anchor, daos_event_t *ev)
 {
 	return -DER_NOSYS;
 }

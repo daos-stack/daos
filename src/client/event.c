@@ -29,7 +29,7 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 
-#include "event_internal.h"
+#include "client_internal.h"
 #include <daos/transport.h>
 
 static struct daos_hhash *daos_eq_hhash;
@@ -37,9 +37,6 @@ static struct daos_hhash *daos_eq_hhash;
 /** thread-private event */
 static __thread daos_event_t	ev_thpriv;
 static __thread bool		ev_thpriv_is_init;
-
-/** thread-private event queue handle */
-static __thread daos_handle_t	eq_thpriv;
 
 #define EQ_WITH_DTP
 
@@ -480,8 +477,10 @@ ev_progress_cb(void *arg)
 	struct daos_event_private *evx = daos_ev2evx(ev);
 
 	if (evx->evx_status == DAOS_EVS_COMPLETED ||
-	    evx->evx_status == DAOS_EVS_ABORT)
+	    evx->evx_status == DAOS_EVS_ABORT) {
+		evx->evx_status = DAOS_EVS_INIT;
 		return 1;
+	}
 
 	return 0;
 }
@@ -1032,14 +1031,8 @@ daos_event_priv_get(daos_event_t **ev)
 
 	D_ASSERT(*ev == NULL);
 
-	if (daos_handle_is_inval(eq_thpriv)) {
-		rc = daos_eq_create(&eq_thpriv);
-		if (rc)
-			return rc;
-	}
-
 	if (!ev_thpriv_is_init) {
-		rc = daos_event_init(&ev_thpriv, eq_thpriv, NULL);
+		rc = daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
 		if (rc)
 			return rc;
 		ev_thpriv_is_init = true;
@@ -1060,9 +1053,12 @@ daos_event_priv_wait()
 {
 	int rc;
 
-	rc = daos_eq_poll(eq_thpriv, 1, -1, 1, NULL);
-	if (rc)
-		return rc;
+	D_ASSERT(ev_thpriv_is_init);
 
-	return ev_thpriv.ev_error;
+	/* Wait the event to complete */
+	rc = daos_event_test(&ev_thpriv, DAOS_EQ_WAIT);
+	if (rc == 0)
+		rc = ev_thpriv.ev_error;
+
+	return rc;
 }

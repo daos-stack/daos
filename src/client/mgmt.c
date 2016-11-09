@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2015, 2016 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,37 +21,54 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#include <daos/rpc.h>
+#include <daos/mgmt.h>
+#include <client_internal.h>
 
-static int
-daos_rpc_cb(const struct dtp_cb_info *cb_info)
+int
+daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
+		 const char *grp, const daos_rank_list_t *tgts, const char *dev,
+		 daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
+		 daos_event_t *ev)
 {
-	daos_event_t    *ev = (daos_event_t *)cb_info->dci_arg;
+	int rc;
 
-	if (cb_info->dci_rc == -DER_TIMEDOUT)
-		/** TODO */
-		;
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc)
+			return rc;
+	}
 
-	daos_event_complete(ev, cb_info->dci_rc);
+	rc = dc_pool_create(mode, uid, gid, grp, tgts, dev, size, svc, uuid,
+			    ev);
+	if (rc)
+		return rc;
 
-	return 0;
+	/** wait for completion if blocking mode */
+	if (daos_event_is_priv(ev))
+		rc = daos_event_priv_wait(ev);
+
+	return rc;
 }
 
 int
-daos_rpc_send(dtp_rpc_t *rpc, daos_event_t *ev)
+daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
+		  daos_event_t *ev)
 {
-	int	rc;
+	int rc;
 
-	/* Send request */
-	rc = dtp_req_send(rpc, daos_rpc_cb, ev);
-	if (rc != 0) {
-		/**
-		 * event was started already, let's report the error
-		 * asynchronously
-		 */
-		daos_event_complete(ev, rc);
-		rc = 0;
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc)
+			return rc;
 	}
+
+	rc = dc_pool_destroy(uuid, grp, force, ev);
+	if (rc)
+		return rc;
+
+	/** wait for completion if blocking mode */
+	if (daos_event_is_priv(ev))
+		rc = daos_event_priv_wait(ev);
 
 	return rc;
 }

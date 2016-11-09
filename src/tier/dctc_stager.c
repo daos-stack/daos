@@ -56,10 +56,11 @@ out:
 	dc_pool_put(pool);
 	return rc;
 }
+
 int
-daos_cont_fetch(daos_handle_t poh, const uuid_t cont_id,
-		     daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
-		     daos_event_t *ev)
+dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
+		   daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
+		   daos_event_t *ev)
 {
 
 	struct tier_fetch_in	*in;
@@ -76,18 +77,11 @@ daos_cont_fetch(daos_handle_t poh, const uuid_t cont_id,
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
-
 	/* Create RPC and allocate memory for the various field-eybops */
 	rc = dct_req_create(daos_ev2ctx(ev), ep, TIER_FETCH, &rpc);
 
 	/* Grab the input struct of the RPC */
 	in = dtp_req_get(rpc);
-
 
 	pool = dc_pool_lookup(poh);
 	if (pool == NULL)
@@ -128,5 +122,3 @@ out_req_put:
 	dtp_req_decref(rpc);
 	return rc;
 }
-
-

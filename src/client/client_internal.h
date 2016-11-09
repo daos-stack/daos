@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * common/event_internal.h
+ * Client internal data structures and routines.
  *
  * Author: Liang Zhen  <liang.zhen@intel.com>
  */
@@ -119,4 +119,26 @@ daos_eqx2eq(struct daos_eq_private *eqx)
 {
 	return container_of(eqx, struct daos_eq, eq_private);
 }
+
+/**
+ * Retrieve the private per-thread event
+ *
+ * \param ev [OUT]	per-thread event.
+ */
+int
+daos_event_priv_get(daos_event_t **ev);
+
+/**
+ * Check whether \a ev is the private per-thread event
+ *
+ * \param ev [IN]	input event to compare with the private event.
+ */
+bool
+daos_event_is_priv(daos_event_t *ev);
+
+/**
+ * Wait for completion of the private event
+ */
+int
+daos_event_priv_wait();
 #endif /* __EVENT_INTERNAL_H__ */

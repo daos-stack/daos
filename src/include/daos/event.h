@@ -114,28 +114,6 @@ int
 daos_event_launch(struct daos_event *ev);
 
 /**
- * Retrieve the private per-thread event
- *
- * \param ev [OUT]	per-thread event.
- */
-int
-daos_event_priv_get(daos_event_t **ev);
-
-/**
- * Check whether \a ev is the private per-thread event
- *
- * \param ev [IN]	input event to compare with the private event.
- */
-bool
-daos_event_is_priv(daos_event_t *ev);
-
-/**
- * Wait for completion of the private event
- */
-int
-daos_event_priv_wait();
-
-/**
  * Return transport context associated with a particular event
  *
  * \param ev [IN]	event to retrieve context.

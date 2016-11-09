@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2015, 2016 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,19 +20,52 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * Tier-related client library items that do not belong in the API.
- */
-#ifndef __DC_TIER_H__
-#define __DC_TIER_H__
 
-#include <daos_types.h>
+#include <daos/tier.h>
+#include "client_internal.h"
 
-int  dc_tier_init(void);
-void dc_tier_fini(void);
-int dc_tier_ping(uint32_t ping_val, daos_event_t *ev);
 int
-dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
-		   daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
-		   daos_event_t *ev);
-#endif /* __DC_TIER_H__ */
+daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
+		     daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
+		     daos_event_t *ev)
+{
+	int rc;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			return rc;
+	}
+
+	rc = dc_tier_fetch_cont(poh, cont_id, fetch_ep, obj_list, ev);
+	if (rc)
+		return rc;
+
+	/** wait for completion if blocking mode */
+	if (daos_event_is_priv(ev))
+		rc = daos_event_priv_wait(ev);
+
+	return rc;
+}
+
+int
+dct_tier_ping(uint32_t ping_val, daos_event_t *ev)
+{
+	int rc;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			return rc;
+	}
+
+	rc = dc_tier_ping(ping_val, ev);
+	if (rc)
+		return rc;
+
+	/** wait for completion if blocking mode */
+	if (daos_event_is_priv(ev))
+		rc = daos_event_priv_wait(ev);
+
+	return rc;
+}

@@ -269,9 +269,9 @@ out:
 }
 
 int
-daos_pool_connect(const uuid_t uuid, const char *grp,
-		  const daos_rank_list_t *tgts, unsigned int flags,
-		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
+dc_pool_connect(const uuid_t uuid, const char *grp,
+		const daos_rank_list_t *tgts, unsigned int flags,
+		daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	dtp_endpoint_t		 ep;
 	dtp_rpc_t		*rpc;
@@ -287,12 +287,6 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 
 	if (uuid_is_null(uuid) || !flags_are_valid(flags) || poh == NULL)
 		return -DER_INVAL;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
 
 	/** allocate and fill in pool connection */
 	pool = pool_alloc();
@@ -409,7 +403,7 @@ out:
 }
 
 int
-daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
+dc_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
 	struct dc_pool			*pool;
 	dtp_endpoint_t			 ep;
@@ -449,11 +443,6 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 		return rc;
 	}
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
 	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
@@ -598,7 +587,7 @@ out:
 }
 
 int
-daos_pool_local2global(daos_handle_t poh, daos_iov_t *glob)
+dc_pool_local2global(daos_handle_t poh, daos_iov_t *glob)
 {
 	int	rc = 0;
 
@@ -671,7 +660,7 @@ out:
 }
 
 int
-daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
+dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 {
 	struct dsmc_pool_glob	 *pool_glob;
 	int			  rc = 0;
@@ -737,7 +726,7 @@ out:
 }
 
 int
-daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
+dc_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
 {
 	struct dc_pool	       *pool;
 	dtp_endpoint_t		ep;
@@ -756,12 +745,6 @@ daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
 	D_DEBUG(DF_DSMC, DF_UUID": excluding %u targets: hdl="DF_UUID
 		" tgts[0]=%u\n", DP_UUID(pool->dp_pool), tgts->rl_nr.num,
 		DP_UUID(pool->dp_pool_hdl), tgts->rl_ranks[0]);
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			D_GOTO(err_pool, rc);
-	}
 
 	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
@@ -917,56 +900,5 @@ err_bulk:
 err_rpc:
 	dtp_req_decref(rpc);
 err:
-	return rc;
-}
-
-static void
-pool_query_cp(struct dc_pool *pool, void *arg, int rc, daos_rank_list_t *tgts,
-	      daos_pool_info_t *info)
-{
-	D_DEBUG(DF_DSMC, DF_UUID": queried: hdl="DF_UUID" rc=%d\n",
-		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl), rc);
-	daos_event_complete(arg, rc);
-}
-
-int
-daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
-		daos_pool_info_t *info, daos_event_t *ev)
-{
-	struct dc_pool *pool;
-	int		rc;
-
-	if (tgts == NULL && info == NULL)
-		return -DER_INVAL;
-
-	pool = dc_pool_lookup(poh);
-	if (pool == NULL)
-		return -DER_NO_HDL;
-
-	D_DEBUG(DF_DSMC, DF_UUID": querying: hdl="DF_UUID"\n",
-		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			D_GOTO(out_pool, rc);
-	}
-
-	rc = daos_event_launch(ev);
-	if (rc != 0)
-		D_GOTO(out_pool, rc);
-
-	rc = dc_pool_query(pool, daos_ev2ctx(ev), tgts, info, pool_query_cp,
-			   ev);
-	if (rc != 0) {
-		daos_event_complete(ev, rc);
-		rc = 0;
-	}
-
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
-
-out_pool:
-	dc_pool_put(pool);
 	return rc;
 }

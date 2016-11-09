@@ -82,7 +82,7 @@ out:
 }
 
 int
-daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
+dc_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 {
 	struct cont_create_in  *in;
 	struct dc_pool	       *pool;
@@ -101,14 +101,6 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX)) {
 		dc_pool_put(pool);
 		return -DER_NO_PERM;
-	}
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0) {
-			dc_pool_put(pool);
-			return rc;
-		}
 	}
 
 	D_DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
@@ -180,8 +172,8 @@ out:
 }
 
 int
-daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
-		  daos_event_t *ev)
+dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
+		daos_event_t *ev)
 {
 	struct cont_destroy_in *in;
 	struct dc_pool	       *pool;
@@ -203,14 +195,6 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	if (!(pool->dp_capas & DAOS_PC_RW) && !(pool->dp_capas & DAOS_PC_EX)) {
 		dc_pool_put(pool);
 		return -DER_NO_PERM;
-	}
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0) {
-			dc_pool_put(pool);
-			return rc;
-		}
 	}
 
 	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
@@ -367,8 +351,8 @@ out:
 }
 
 int
-daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
-	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
+dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
+	     daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
 {
 	struct cont_open_in    *in;
 	struct dc_pool	       *pool;
@@ -388,12 +372,6 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 
 	if ((flags & DAOS_COO_RW) && (pool->dp_capas & DAOS_PC_RO))
 		D_GOTO(err_pool, rc = -DER_NO_PERM);
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			D_GOTO(err_pool, rc);
-	}
 
 	cont = dsmc_container_alloc(uuid);
 	if (cont == NULL)
@@ -514,7 +492,7 @@ out:
 }
 
 int
-daos_cont_close(daos_handle_t coh, daos_event_t *ev)
+dc_cont_close(daos_handle_t coh, daos_event_t *ev)
 {
 	struct cont_close_in   *in;
 	struct dc_pool	       *pool;
@@ -565,12 +543,6 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 			"\n", DP_CONT(pool->dp_pool, cont->dc_uuid), coh.cookie,
 			DP_UUID(cont->dc_cont_hdl));
 		return 0;
-	}
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			D_GOTO(err_pool, rc);
 	}
 
 	D_ALLOC_PTR(arg);
@@ -693,7 +665,7 @@ out:
 }
 
 int
-daos_cont_local2global(daos_handle_t coh, daos_iov_t *glob)
+dc_cont_local2global(daos_handle_t coh, daos_iov_t *glob)
 {
 	int	rc = 0;
 
@@ -789,7 +761,7 @@ out:
 }
 
 int
-daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
+dc_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 {
 	struct dsmc_container_glob	 *cont_glob;
 	int				  rc = 0;
@@ -916,12 +888,6 @@ epoch_op(daos_handle_t coh, dtp_opcode_t opc, daos_epoch_t *epoch,
 	pool = dc_pool_lookup(cont->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			D_GOTO(err_pool, rc);
-	}
-
 	D_DEBUG(DF_DSMC, DF_CONT": op=%u hdl="DF_UUID" epoch="DF_U64"\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), opc,
 		DP_UUID(cont->dc_cont_hdl), epoch == NULL ? 0 : *epoch);
@@ -985,30 +951,23 @@ err:
 }
 
 int
-daos_epoch_query(daos_handle_t coh, daos_epoch_state_t *state, daos_event_t *ev)
+dc_epoch_query(daos_handle_t coh, daos_epoch_state_t *state, daos_event_t *ev)
 {
 	return epoch_op(coh, DSM_CONT_EPOCH_QUERY, NULL /* epoch */, state, ev);
 }
 
 int
-daos_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
+dc_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
 	       daos_epoch_state_t *state, daos_event_t *ev)
 {
 	return epoch_op(coh, DSM_CONT_EPOCH_HOLD, epoch, state, ev);
 }
 
 int
-daos_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
+dc_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
 		 daos_epoch_state_t *state, daos_event_t *ev)
 {
 	return epoch_op(coh, DSM_CONT_EPOCH_COMMIT, &epoch, state, ev);
-}
-
-int
-daos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch,
-		daos_epoch_state_t *state, daos_event_t *ev)
-{
-	return 0;
 }
 
 /**

@@ -24,9 +24,4 @@
 #define __DAOS_CLIENT_H__
 
 extern struct daos_hhash *daos_client_hhash;
-
-int dc_mgmt_init();
-
-int dc_mgmt_fini();
-
 #endif

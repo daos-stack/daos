@@ -89,4 +89,20 @@ int dc_pool_query(struct dc_pool *pool, dtp_context_t ctx,
 		  daos_rank_list_t *tgts, daos_pool_info_t *info,
 		  dc_pool_query_cb_t cb, void *cb_arg);
 
+int
+dc_pool_connect(const uuid_t uuid, const char *grp,
+		const daos_rank_list_t *svc, unsigned int flags,
+		daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
+int
+dc_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
+int
+dc_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
+int
+dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
+int
+dc_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev);
+int
+dc_pool_target_query(daos_handle_t poh, daos_rank_list_t *tgts,
+		     daos_rank_list_t *failed, daos_target_info_t *info_list,
+		     daos_event_t *ev);
 #endif /* __DAOS_POOL_H__ */

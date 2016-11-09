@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2015, 2016 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,19 +20,24 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-/**
- * Tier-related client library items that do not belong in the API.
- */
-#ifndef __DC_TIER_H__
-#define __DC_TIER_H__
 
-#include <daos_types.h>
+#include <daos/container.h>
+#include "client_internal.h"
 
-int  dc_tier_init(void);
-void dc_tier_fini(void);
-int dc_tier_ping(uint32_t ping_val, daos_event_t *ev);
 int
-dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
-		   daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
-		   daos_event_t *ev);
-#endif /* __DC_TIER_H__ */
+daos_snap_list(daos_handle_t coh, daos_epoch_t *buf, int *n, daos_event_t *ev)
+{
+	return -DER_NOSYS;
+}
+
+int
+daos_snap_create(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
+{
+	return -DER_NOSYS;
+}
+
+int
+daos_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev)
+{
+	return -DER_NOSYS;
+}

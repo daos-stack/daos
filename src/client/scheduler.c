@@ -36,7 +36,7 @@
 #include <daos_event.h>
 #include <daos/event.h>
 #include <daos/scheduler.h>
-#include "event_internal.h"
+#include "client_internal.h"
 #include "scheduler_internal.h"
 
 int

@@ -21,12 +21,12 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dsrc: Module Definitions
+ * DAOS Client initialization/shutdown routines
  */
 
 #include <daos/common.h>
-#include <daos/client.h>
 #include <daos/event.h>
+#include <daos/mgmt.h>
 #include <daos/pool.h>
 #include <daos/container.h>
 #include <daos/object.h>

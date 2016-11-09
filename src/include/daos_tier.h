@@ -120,9 +120,9 @@ typedef struct {
  *			-DER_NO_PERM	Permission denied
  */
 int
-daos_cont_fetch(daos_handle_t poh, const uuid_t cont_id,
-		daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
-		daos_event_t *ev);
+daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
+		     daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
+		     daos_event_t *ev);
 
 /**
  * CT Tier Mapping API

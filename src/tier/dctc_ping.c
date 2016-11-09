@@ -46,7 +46,7 @@ dct_ping_cb(void *arg, daos_event_t *ev, int rc)
 }
 
 int
-dct_ping(uint32_t ping_val, daos_event_t *ev)
+dc_tier_ping(uint32_t ping_val, daos_event_t *ev)
 {
 
 	D_DEBUG(DF_MISC, "Entering dct_ping()\n");
@@ -64,16 +64,6 @@ dct_ping(uint32_t ping_val, daos_event_t *ev)
 	ep.ep_grp = NULL;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
-
-	/*
-	 * if we dont have an event provided, we're running synchronously with
-	 * the UNTESTED  private event thingamabob
-	 */
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
 
 	/* Create RPC and allocate memory for the various field-eybops */
 	rc = dct_req_create(daos_ev2ctx(ev), ep, DCT_PING, &rpc);

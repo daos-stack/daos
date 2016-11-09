@@ -21,18 +21,24 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * Tier-related client library items that do not belong in the API.
+ * dc_mgmt: Management Client API
  */
-#ifndef __DC_TIER_H__
-#define __DC_TIER_H__
+
+#ifndef __DAOS_MGMT_H__
+#define __DAOS_MGMT_H__
 
 #include <daos_types.h>
 
-int  dc_tier_init(void);
-void dc_tier_fini(void);
-int dc_tier_ping(uint32_t ping_val, daos_event_t *ev);
+int dc_mgmt_init(void);
+
+int dc_mgmt_fini(void);
+
 int
-dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
-		   daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
-		   daos_event_t *ev);
-#endif /* __DC_TIER_H__ */
+dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
+	       const char *grp, const daos_rank_list_t *tgts, const char *dev,
+	       daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
+	       daos_event_t *ev);
+int
+dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
+		daos_event_t *ev);
+#endif
