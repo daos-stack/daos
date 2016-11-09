@@ -75,7 +75,7 @@ class DvmRunner():
     def stop_process(self):
         """stop orted processes """
         print("TestRunner: stopping orte-dvm process\n")
-        if self.ortedvm.poll is None:
+        if self.ortedvm.poll() is None:
             hosts = ","
             ompi_path = self.info.get_info('OMPI_PREFIX')
             orterun = os.path.join(ompi_path, "bin", "orterun")

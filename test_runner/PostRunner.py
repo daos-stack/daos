@@ -207,7 +207,7 @@ class PostRunner():
                     self.logger.info(
                         "*****************************************************")
                     self.logger.info("%s" % tcdir)
-                if dumpLogs:
-                    self.dump_logs(tcname)
-                else:
-                    self.testcase_logdir(tcname)
+                    if dumpLogs:
+                        self.dump_logs(tcname)
+                    else:
+                        self.testcase_logdir(tcname)
