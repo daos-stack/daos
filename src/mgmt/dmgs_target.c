@@ -304,7 +304,7 @@ out:
  * RPC handler for target creation
  */
 int
-dmgs_hdlr_tgt_create(dtp_rpc_t *tc_req)
+dmgs_hdlr_tgt_create(crt_rpc_t *tc_req)
 {
 	struct dmg_tgt_create_in	*tc_in;
 	struct dmg_tgt_create_out	*tc_out;
@@ -312,9 +312,9 @@ dmgs_hdlr_tgt_create(dtp_rpc_t *tc_req)
 	int				 rc = 0;
 
 	/** incoming request buffer */
-	tc_in = dtp_req_get(tc_req);
+	tc_in = crt_req_get(tc_req);
 	/** reply buffer */
-	tc_out = dtp_reply_get(tc_req);
+	tc_out = crt_reply_get(tc_req);
 	D_ASSERT(tc_in != NULL && tc_out != NULL);
 
 	/** generate path to the target directory */
@@ -345,7 +345,7 @@ dmgs_hdlr_tgt_create(dtp_rpc_t *tc_req)
 	free(path);
 out:
 	tc_out->tc_rc = rc;
-	return dtp_reply_send(tc_req);
+	return crt_reply_send(tc_req);
 }
 
 static int
@@ -387,7 +387,7 @@ out:
  * RPC handler for target destroy
  */
 int
-dmgs_hdlr_tgt_destroy(dtp_rpc_t *td_req)
+dmgs_hdlr_tgt_destroy(crt_rpc_t *td_req)
 {
 	struct dmg_tgt_destroy_in	*td_in;
 	struct dmg_tgt_destroy_out	*td_out;
@@ -395,9 +395,9 @@ dmgs_hdlr_tgt_destroy(dtp_rpc_t *td_req)
 	int				 rc;
 
 	/** incoming request buffer */
-	td_in = dtp_req_get(td_req);
+	td_in = crt_req_get(td_req);
 	/** reply buffer */
-	td_out = dtp_reply_get(td_req);
+	td_out = crt_reply_get(td_req);
 	D_ASSERT(td_in != NULL && td_out != NULL);
 
 	/** generate path to the target directory */
@@ -409,7 +409,7 @@ dmgs_hdlr_tgt_destroy(dtp_rpc_t *td_req)
 	rc = access(path, F_OK);
 	if (rc >= 0) {
 		/** target is still there, destroy it */
-		rc = tgt_destroy(td_req->dr_input, path);
+		rc = tgt_destroy(td_req->cr_input, path);
 	} else if (errno == ENOENT) {
 		char	*zombie;
 
@@ -433,5 +433,5 @@ dmgs_hdlr_tgt_destroy(dtp_rpc_t *td_req)
 	free(path);
 out:
 	td_out->td_rc = rc;
-	return dtp_reply_send(td_req);
+	return crt_reply_send(td_req);
 }

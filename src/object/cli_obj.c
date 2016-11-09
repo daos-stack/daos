@@ -362,7 +362,7 @@ dc_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
 
 int
 dc_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
-	      daos_rank_list_t *ranks, daos_event_t *ev)
+	     daos_rank_list_t *ranks, daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;

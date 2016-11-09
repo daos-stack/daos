@@ -35,24 +35,24 @@
 
 struct daos_task_private {
 	/* function for the task */
-	daos_task_func_t	dtp_func;
+	daos_task_func_t	crt_func;
 
 	/* links to scheduler */
-	daos_list_t		dtp_list;
+	daos_list_t		crt_list;
 
 	/* links to task group */
-	daos_list_t		dtp_dtg_list;
+	daos_list_t		crt_dtg_list;
 
 	/* daos_task argument */
 	struct {
-		uint64_t	dtp_arg_space[12];
-	}			dtp_arg;
+		uint64_t	crt_arg_space[12];
+	}			crt_arg;
 
-	struct daos_op_sp	dtp_sp;
+	struct daos_op_sp	crt_sp;
 
-	struct daos_sched_private	*dtp_sched;
-	struct daos_task_group		*dtp_dtg;
-	int			dtp_result;
+	struct daos_sched_private	*crt_sched;
+	struct daos_task_group		*crt_dtg;
+	int			crt_result;
 };
 
 struct daos_sched_private {

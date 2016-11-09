@@ -27,8 +27,8 @@
 #ifndef __DCT_SRV_H__
 #define __DCT_SRV_H__
 
-#include <daos/transport.h>
+#include <daos/rpc.h>
 
-int dcts_hdlr_ping(dtp_rpc_t *rpc);
+int dcts_hdlr_ping(crt_rpc_t *rpc);
 
 #endif /* __DCT_SRV_H__ */

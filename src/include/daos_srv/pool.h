@@ -42,7 +42,7 @@ struct ds_pool {
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
-	dtp_group_t	       *sp_group;
+	crt_group_t	       *sp_group;
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
@@ -83,9 +83,9 @@ struct ds_pool_child {
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
 void ds_pool_child_put(struct ds_pool_child *child);
 
-int ds_pool_bcast_create(dtp_context_t ctx, struct ds_pool *pool,
-			 enum daos_module_id module, dtp_opcode_t opcode,
-			 dtp_rpc_t **rpc);
+int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
+			 enum daos_module_id module, crt_opcode_t opcode,
+			 crt_rpc_t **rpc);
 
 /*
  * Metadata pmem pool descriptor

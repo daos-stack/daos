@@ -33,35 +33,54 @@
 
 /** uuid_t */
 #include <uuid/uuid.h>
+/** for crt_rank_t & crt_rank_list_t */
+#include <crt_types.h>
 
 #include <daos_errno.h>
-/** for some other basic types like daos_iov_t/daos_rank_t/daos_sg_list_t etc */
-#include <daos/transport.h>
 
 /**
  * Generic data type definition
  */
 
-typedef dtp_size_t		daos_size_t;
-typedef dtp_off_t		daos_off_t;
-typedef dtp_iov_t		daos_iov_t;
-typedef dtp_rank_t		daos_rank_t;
-typedef dtp_nr_t		daos_nr_t;
-typedef dtp_rank_list_t		daos_rank_list_t;
-typedef dtp_sg_list_t		daos_sg_list_t;
+typedef uint64_t	daos_size_t;
+typedef uint64_t	daos_off_t;
 
-#define daos_iov_set		dtp_iov_set
+/** iovec for memory buffer */
+typedef struct {
+	/** buffer address */
+	void		*iov_buf;
+	/** buffer length */
+	daos_size_t	 iov_buf_len;
+	/** data length */
+	daos_size_t	 iov_len;
+} daos_iov_t;
+
+static inline void
+daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
+{
+	iov->iov_buf = buf;
+	iov->iov_len = iov->iov_buf_len = size;
+}
+
+typedef struct {
+	/** input number */
+	uint32_t	num;
+	/** output/returned number */
+	uint32_t	num_out;
+} daos_nr_t;
+
+/** Scatter/gather list for memory buffers */
+typedef struct {
+	daos_nr_t	 sg_nr;
+	daos_iov_t	*sg_iovs;
+} daos_sg_list_t;
+
+/** For short-term compatibility, should eventually be removed */
+#define daos_rank_t		crt_rank_t
+#define daos_rank_list_t	crt_rank_list_t
 
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
-
-/**
- * NB: hide the dark secret that
- * uuid_t is an array not a structure
- */
-struct daos_uuid {
-	uuid_t	uuid;
-};
 
 /** buffer to store checksum */
 typedef struct {
@@ -356,6 +375,17 @@ typedef enum {
 
 #define DAOS_OC_GRP_MAX		(-1)
 
+/**
+ * List of default object class
+ */
+enum {
+	DAOS_OC_UNKNOWN,
+	DAOS_OC_TINY_RW,
+	DAOS_OC_SMALL_RW,
+	DAOS_OC_LARGE_RW,
+	DAOS_OC_REPLICA_RW,
+};
+
 /** Object class attributes */
 typedef struct daos_oclass_attr {
 	/** Object placement schema */
@@ -407,6 +437,17 @@ typedef struct {
 	/** attributes of each listed class, optional */
 	daos_oclass_attr_t	*cl_cattrs;
 } daos_oclass_list_t;
+
+/**
+ * Object attributes (metadata).
+ * \a oa_class and \a oa_oa are mutually exclusive.
+ */
+typedef struct {
+	/** Optional, affinity target for the object */
+	daos_rank_t		 oa_rank;
+	/** Optional, class attributes of object with private class */
+	daos_oclass_attr_t	*oa_oa;
+} daos_obj_attr_t;
 
 /**
  * Record

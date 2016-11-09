@@ -28,7 +28,6 @@
 #include <daos/rpc.h>
 #include <pthread.h>
 #include <daos/common.h>
-#include <daos/transport.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 

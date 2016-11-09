@@ -27,123 +27,123 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
-struct dtp_msg_field *pool_connect_in_fields[] = {
-	&DMF_UUID,	/* op.uuid */
-	&DMF_UUID,	/* op.handle */
-	&DMF_UINT32,	/* uid */
-	&DMF_UINT32,	/* gid */
-	&DMF_UINT64,	/* capas */
-	&DMF_BULK	/* map_bulk */
+struct crt_msg_field *pool_connect_in_fields[] = {
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID,	/* op.handle */
+	&CMF_UINT32,	/* uid */
+	&CMF_UINT32,	/* gid */
+	&CMF_UINT64,	/* capas */
+	&CMF_BULK	/* map_bulk */
 };
 
-struct dtp_msg_field *pool_connect_out_fields[] = {
-	&DMF_INT,	/* op.rc */
-	&DMF_UINT32,	/* op.map_version */
-	&DMF_UINT32,	/* mode */
-	&DMF_UINT32	/* map_buf_size */
+struct crt_msg_field *pool_connect_out_fields[] = {
+	&CMF_INT,	/* op.rc */
+	&CMF_UINT32,	/* op.map_version */
+	&CMF_UINT32,	/* mode */
+	&CMF_UINT32	/* map_buf_size */
 };
 
-struct dtp_msg_field *pool_disconnect_in_fields[] = {
-	&DMF_UUID,	/* op.uuid */
-	&DMF_UUID	/* op.handle */
+struct crt_msg_field *pool_disconnect_in_fields[] = {
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID	/* op.handle */
 };
 
-struct dtp_msg_field *pool_disconnect_out_fields[] = {
-	&DMF_INT,	/* op.rc */
-	&DMF_UINT32	/* op.map_version */
+struct crt_msg_field *pool_disconnect_out_fields[] = {
+	&CMF_INT,	/* op.rc */
+	&CMF_UINT32	/* op.map_version */
 };
 
-struct dtp_msg_field *pool_query_in_fields[] = {
-	&DMF_UUID,	/* op.uuid */
-	&DMF_UUID,	/* op.handle */
-	&DMF_BULK	/* map_bulk */
+struct crt_msg_field *pool_query_in_fields[] = {
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID,	/* op.handle */
+	&CMF_BULK	/* map_bulk */
 };
 
-struct dtp_msg_field *pool_query_out_fields[] = {
-	&DMF_INT,	/* op.rc */
-	&DMF_UINT32,	/* op.map_version */
-	&DMF_UINT32,	/* mode */
-	&DMF_UINT32	/* map_buf_size */
+struct crt_msg_field *pool_query_out_fields[] = {
+	&CMF_INT,	/* op.rc */
+	&CMF_UINT32,	/* op.map_version */
+	&CMF_UINT32,	/* mode */
+	&CMF_UINT32	/* map_buf_size */
 };
 
-struct dtp_msg_field *pool_exclude_in_fields[] = {
-	&DMF_UUID,	/* op.uuid */
-	&DMF_UUID,	/* op.handle */
-	&DMF_RANK_LIST	/* targets */
+struct crt_msg_field *pool_exclude_in_fields[] = {
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID,	/* op.handle */
+	&CMF_RANK_LIST	/* targets */
 };
 
-struct dtp_msg_field *pool_exclude_out_fields[] = {
-	&DMF_INT,	/* op.rc */
-	&DMF_UINT32,	/* op.map_version */
-	&DMF_RANK_LIST	/* targets */
+struct crt_msg_field *pool_exclude_out_fields[] = {
+	&CMF_INT,	/* op.rc */
+	&CMF_UINT32,	/* op.map_version */
+	&CMF_RANK_LIST	/* targets */
 };
 
-struct dtp_msg_field *pool_tgt_connect_in_fields[] = {
-	&DMF_UUID,	/* pool */
-	&DMF_UUID,	/* pool_hdl */
-	&DMF_UINT64,	/* capas */
-	&DMF_UINT32	/* pool_map_version */
+struct crt_msg_field *pool_tgt_connect_in_fields[] = {
+	&CMF_UUID,	/* pool */
+	&CMF_UUID,	/* pool_hdl */
+	&CMF_UINT64,	/* capas */
+	&CMF_UINT32	/* pool_map_version */
 };
 
-struct dtp_msg_field *pool_tgt_connect_out_fields[] = {
-	&DMF_INT	/* ret */
+struct crt_msg_field *pool_tgt_connect_out_fields[] = {
+	&CMF_INT	/* ret */
 };
 
-struct dtp_msg_field *pool_tgt_disconnect_in_fields[] = {
-	&DMF_UUID,	/* pool */
-	&DMF_UUID	/* pool_hdl */
+struct crt_msg_field *pool_tgt_disconnect_in_fields[] = {
+	&CMF_UUID,	/* pool */
+	&CMF_UUID	/* pool_hdl */
 };
 
-struct dtp_msg_field *pool_tgt_disconnect_out_fields[] = {
-	&DMF_INT	/* ret */
+struct crt_msg_field *pool_tgt_disconnect_out_fields[] = {
+	&CMF_INT	/* ret */
 };
 
-struct dtp_msg_field *pool_tgt_update_map_in_fields[] = {
-	&DMF_UUID,	/* pool */
-	&DMF_UINT32	/* map_version */
+struct crt_msg_field *pool_tgt_update_map_in_fields[] = {
+	&CMF_UUID,	/* pool */
+	&CMF_UINT32	/* map_version */
 };
 
-struct dtp_msg_field *pool_tgt_update_map_out_fields[] = {
-	&DMF_INT	/* ret */
+struct crt_msg_field *pool_tgt_update_map_out_fields[] = {
+	&CMF_INT	/* ret */
 };
 
-struct dtp_req_format DQF_POOL_CONNECT =
-	DEFINE_DTP_REQ_FMT("POOL_CONNECT", pool_connect_in_fields,
+struct crt_req_format DQF_POOL_CONNECT =
+	DEFINE_CRT_REQ_FMT("POOL_CONNECT", pool_connect_in_fields,
 			   pool_connect_out_fields);
 
-struct dtp_req_format DQF_POOL_DISCONNECT =
-	DEFINE_DTP_REQ_FMT("POOL_DISCONNECT", pool_disconnect_in_fields,
+struct crt_req_format DQF_POOL_DISCONNECT =
+	DEFINE_CRT_REQ_FMT("POOL_DISCONNECT", pool_disconnect_in_fields,
 			   pool_disconnect_out_fields);
 
-struct dtp_req_format DQF_POOL_QUERY =
-	DEFINE_DTP_REQ_FMT("POOL_QUERY", pool_query_in_fields,
+struct crt_req_format DQF_POOL_QUERY =
+	DEFINE_CRT_REQ_FMT("POOL_QUERY", pool_query_in_fields,
 			   pool_query_out_fields);
 
-struct dtp_req_format DQF_POOL_EXCLUDE =
-	DEFINE_DTP_REQ_FMT("POOL_EXCLUDE", pool_exclude_in_fields,
+struct crt_req_format DQF_POOL_EXCLUDE =
+	DEFINE_CRT_REQ_FMT("POOL_EXCLUDE", pool_exclude_in_fields,
 			   pool_exclude_out_fields);
 
-struct dtp_req_format DQF_POOL_TGT_CONNECT =
-	DEFINE_DTP_REQ_FMT("POOL_TGT_CONNECT", pool_tgt_connect_in_fields,
+struct crt_req_format DQF_POOL_TGT_CONNECT =
+	DEFINE_CRT_REQ_FMT("POOL_TGT_CONNECT", pool_tgt_connect_in_fields,
 			   pool_tgt_connect_out_fields);
 
-struct dtp_req_format DQF_POOL_TGT_DISCONNECT =
-	DEFINE_DTP_REQ_FMT("POOL_TGT_DISCONNECT", pool_tgt_disconnect_in_fields,
+struct crt_req_format DQF_POOL_TGT_DISCONNECT =
+	DEFINE_CRT_REQ_FMT("POOL_TGT_DISCONNECT", pool_tgt_disconnect_in_fields,
 			   pool_tgt_disconnect_out_fields);
 
-struct dtp_req_format DQF_POOL_TGT_UPDATE_MAP =
-	DEFINE_DTP_REQ_FMT("POOL_TGT_UPDATE_MAP", pool_tgt_update_map_in_fields,
+struct crt_req_format DQF_POOL_TGT_UPDATE_MAP =
+	DEFINE_CRT_REQ_FMT("POOL_TGT_UPDATE_MAP", pool_tgt_update_map_in_fields,
 			   pool_tgt_update_map_out_fields);
 
 int
-pool_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
-	       dtp_opcode_t opc, dtp_rpc_t **req)
+pool_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+	       crt_opcode_t opc, crt_rpc_t **req)
 {
-	dtp_opcode_t opcode;
+	crt_opcode_t opcode;
 
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_POOL_MODULE, 1);
 
-	return dtp_req_create(dtp_ctx, tgt_ep, opcode, req);
+	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
 }
 
 struct daos_rpc pool_rpcs[] = {

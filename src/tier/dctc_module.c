@@ -29,7 +29,6 @@
 
 #include <pthread.h>
 #include <daos/rpc.h>
-#include <daos/transport.h>
 #include "dct_rpc.h"
 #include <daos/tier.h>
 
@@ -37,8 +36,8 @@
 /**
  *   Initialize daos client library.
  *
- *   This function will initialize dtp interface and create
- *   a dtp context for the daos_ct client.
+ *   This function will initialize crt interface and create
+ *   a crt context for the daos_ct client.
  */
 int
 dc_tier_init(void)

@@ -31,7 +31,7 @@
 
 #include <daos/btree_class.h>
 #include <daos/pool_map.h>
-#include <daos/transport.h>
+#include <daos/rpc.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
@@ -665,8 +665,8 @@ pool_svc_put(struct pool_svc *svc)
 }
 
 static int
-bcast_create(dtp_context_t ctx, struct pool_svc *svc, dtp_opcode_t opcode,
-	     dtp_rpc_t **rpc)
+bcast_create(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opcode,
+	     crt_rpc_t **rpc)
 {
 	return ds_pool_bcast_create(ctx, svc->ps_pool, DAOS_POOL_MODULE, opcode,
 				    rpc);
@@ -729,12 +729,12 @@ permitted(const struct pool_attr *attr, uint32_t uid, uint32_t gid,
 }
 
 static int
-pool_connect_bcast(dtp_context_t ctx, struct pool_svc *svc,
+pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 		   const uuid_t pool_hdl, uint64_t capas)
 {
 	struct pool_tgt_connect_in     *in;
 	struct pool_tgt_connect_out    *out;
-	dtp_rpc_t		       *rpc;
+	crt_rpc_t		       *rpc;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
@@ -743,7 +743,7 @@ pool_connect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 	uuid_copy(in->tci_uuid, svc->ps_uuid);
 	uuid_copy(in->tci_hdl, pool_hdl);
 	in->tci_capas = capas;
@@ -753,21 +753,21 @@ pool_connect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	out = dtp_reply_get(rpc);
+	out = crt_reply_get(rpc);
 	rc = out->tco_rc;
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to connect to some targets: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
 
 out_rpc:
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
 out:
 	D_DEBUG(DF_DSMS, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
 	return rc;
 }
 
 static int
-bulk_cb(const struct dtp_bulk_cb_info *cb_info)
+bulk_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	ABT_eventual *eventual = cb_info->bci_arg;
 
@@ -782,7 +782,7 @@ bulk_cb(const struct dtp_bulk_cb_info *cb_info)
  * map buffer size.
  */
 static int
-transfer_map_buf(struct pool_svc *svc, dtp_rpc_t *rpc, dtp_bulk_t remote_bulk,
+transfer_map_buf(struct pool_svc *svc, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		 uint32_t *required_buf_size)
 {
 	struct pool_buf	       *map_buf;
@@ -791,9 +791,9 @@ transfer_map_buf(struct pool_svc *svc, dtp_rpc_t *rpc, dtp_bulk_t remote_bulk,
 	daos_size_t		remote_bulk_size;
 	daos_iov_t		map_iov;
 	daos_sg_list_t		map_sgl;
-	dtp_bulk_t		bulk;
-	struct dtp_bulk_desc	map_desc;
-	dtp_bulk_opid_t		map_opid;
+	crt_bulk_t		bulk;
+	struct crt_bulk_desc	map_desc;
+	crt_bulk_opid_t		map_opid;
 	ABT_eventual		eventual;
 	int		       *status;
 	int			rc;
@@ -817,7 +817,7 @@ transfer_map_buf(struct pool_svc *svc, dtp_rpc_t *rpc, dtp_bulk_t remote_bulk,
 	map_buf_size = pool_buf_size(map_buf->pb_nr);
 
 	/* Check if the client bulk buffer is large enough. */
-	rc = dtp_bulk_get_len(remote_bulk, &remote_bulk_size);
+	rc = crt_bulk_get_len(remote_bulk, &remote_bulk_size);
 	if (rc != 0)
 		D_GOTO(out, rc);
 	if (remote_bulk_size < map_buf_size) {
@@ -833,13 +833,14 @@ transfer_map_buf(struct pool_svc *svc, dtp_rpc_t *rpc, dtp_bulk_t remote_bulk,
 	map_sgl.sg_nr.num_out = 0;
 	map_sgl.sg_iovs = &map_iov;
 
-	rc = dtp_bulk_create(rpc->dr_ctx, &map_sgl, DTP_BULK_RO, &bulk);
+	rc = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(&map_sgl),
+			     CRT_BULK_RO, &bulk);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/* Prepare "map_desc" for dtp_bulk_transfer(). */
+	/* Prepare "map_desc" for crt_bulk_transfer(). */
 	map_desc.bd_rpc = rpc;
-	map_desc.bd_bulk_op = DTP_BULK_PUT;
+	map_desc.bd_bulk_op = CRT_BULK_PUT;
 	map_desc.bd_remote_hdl = remote_bulk;
 	map_desc.bd_remote_off = 0;
 	map_desc.bd_local_hdl = bulk;
@@ -850,7 +851,7 @@ transfer_map_buf(struct pool_svc *svc, dtp_rpc_t *rpc, dtp_bulk_t remote_bulk,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out_bulk, rc = dss_abterr2der(rc));
 
-	rc = dtp_bulk_transfer(&map_desc, bulk_cb, &eventual, &map_opid);
+	rc = crt_bulk_transfer(&map_desc, bulk_cb, &eventual, &map_opid);
 	if (rc != 0)
 		D_GOTO(out_eventual, rc);
 
@@ -864,16 +865,16 @@ transfer_map_buf(struct pool_svc *svc, dtp_rpc_t *rpc, dtp_bulk_t remote_bulk,
 out_eventual:
 	ABT_eventual_free(&eventual);
 out_bulk:
-	dtp_bulk_free(bulk);
+	crt_bulk_free(bulk);
 out:
 	return rc;
 }
 
 int
-ds_pool_connect_handler(dtp_rpc_t *rpc)
+ds_pool_connect_handler(crt_rpc_t *rpc)
 {
-	struct pool_connect_in	       *in = dtp_req_get(rpc);
-	struct pool_connect_out	       *out = dtp_reply_get(rpc);
+	struct pool_connect_in	       *in = crt_req_get(rpc);
+	struct pool_connect_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
 	struct pool_attr		attr;
 	struct pool_hdl			hdl;
@@ -937,7 +938,7 @@ ds_pool_connect_handler(dtp_rpc_t *rpc)
 	if (skip_update)
 		D_GOTO(out_map_version, rc = 0);
 
-	rc = pool_connect_bcast(rpc->dr_ctx, svc, in->pci_op.pi_hdl,
+	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
 				in->pci_capas);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
@@ -982,16 +983,16 @@ out:
 	out->pco_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, rc);
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 static int
-pool_disconnect_bcast(dtp_context_t ctx, struct pool_svc *svc,
+pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 		      const uuid_t pool_hdl)
 {
 	struct pool_tgt_disconnect_in  *in;
 	struct pool_tgt_disconnect_out *out;
-	dtp_rpc_t		       *rpc;
+	crt_rpc_t		       *rpc;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
@@ -1000,7 +1001,7 @@ pool_disconnect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 	uuid_copy(in->tdi_uuid, svc->ps_uuid);
 	uuid_copy(in->tdi_hdl, pool_hdl);
 
@@ -1008,24 +1009,24 @@ pool_disconnect_bcast(dtp_context_t ctx, struct pool_svc *svc,
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	out = dtp_reply_get(rpc);
+	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to disconnect from some targets: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
 
 out_rpc:
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
 out:
 	D_DEBUG(DF_DSMS, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
 	return rc;
 }
 
 int
-ds_pool_disconnect_handler(dtp_rpc_t *rpc)
+ds_pool_disconnect_handler(crt_rpc_t *rpc)
 {
-	struct pool_disconnect_in      *pdi = dtp_req_get(rpc);
-	struct pool_disconnect_out     *pdo = dtp_reply_get(rpc);
+	struct pool_disconnect_in      *pdi = crt_req_get(rpc);
+	struct pool_disconnect_out     *pdo = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
 	struct pool_hdl			hdl;
 	uint32_t			nhandles;
@@ -1050,7 +1051,7 @@ ds_pool_disconnect_handler(dtp_rpc_t *rpc)
 		D_GOTO(out_lock, rc);
 	}
 
-	rc = pool_disconnect_bcast(rpc->dr_ctx, svc, pdi->pdi_op.pi_hdl);
+	rc = pool_disconnect_bcast(rpc->cr_ctx, svc, pdi->pdi_op.pi_hdl);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
@@ -1090,14 +1091,14 @@ out:
 	pdo->pdo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, rc);
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 int
-ds_pool_query_handler(dtp_rpc_t *rpc)
+ds_pool_query_handler(crt_rpc_t *rpc)
 {
-	struct pool_query_in   *in = dtp_req_get(rpc);
-	struct pool_query_out  *out = dtp_reply_get(rpc);
+	struct pool_query_in   *in = crt_req_get(rpc);
+	struct pool_query_out  *out = crt_reply_get(rpc);
 	struct pool_svc	       *svc;
 	struct pool_hdl		hdl;
 	struct pool_attr	attr;
@@ -1141,16 +1142,16 @@ out:
 	out->pqo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, rc);
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 static int
-pool_update_map_bcast(dtp_context_t ctx, struct pool_svc *svc,
+pool_update_map_bcast(crt_context_t ctx, struct pool_svc *svc,
 		      uint32_t map_version)
 {
 	struct pool_tgt_update_map_in  *in;
 	struct pool_tgt_update_map_out *out;
-	dtp_rpc_t		       *rpc;
+	crt_rpc_t		       *rpc;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
@@ -1159,7 +1160,7 @@ pool_update_map_bcast(dtp_context_t ctx, struct pool_svc *svc,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 	uuid_copy(in->tui_uuid, svc->ps_uuid);
 	in->tui_map_version = map_version;
 
@@ -1167,14 +1168,14 @@ pool_update_map_bcast(dtp_context_t ctx, struct pool_svc *svc,
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	out = dtp_reply_get(rpc);
+	out = crt_reply_get(rpc);
 	rc = out->tuo_rc;
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to update pool map on some targets: "
 			"%d\n", DP_UUID(svc->ps_uuid), rc);
 
 out_rpc:
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
 out:
 	D_DEBUG(DF_DSMS, DF_UUID": bcasted: %d\n", DP_UUID(svc->ps_uuid), rc);
 	return rc;
@@ -1254,10 +1255,10 @@ out:
 }
 
 int
-ds_pool_exclude_handler(dtp_rpc_t *rpc)
+ds_pool_exclude_handler(crt_rpc_t *rpc)
 {
-	struct pool_exclude_in	       *in = dtp_req_get(rpc);
-	struct pool_exclude_out	       *out = dtp_reply_get(rpc);
+	struct pool_exclude_in	       *in = crt_req_get(rpc);
+	struct pool_exclude_out	       *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
 	struct pool_hdl			hdl;
 	int				rc;
@@ -1313,7 +1314,7 @@ out:
 	out->peo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pei_op.pi_uuid), rpc, rc);
-	rc = dtp_reply_send(rpc);
+	rc = crt_reply_send(rpc);
 	if (out->peo_targets != NULL) {
 		if (out->peo_targets->rl_ranks != NULL)
 			D_FREE(out->peo_targets->rl_ranks,

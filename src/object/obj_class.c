@@ -22,6 +22,7 @@
  */
 
 #include "obj_internal.h"
+#include <daos_api.h>
 
 /** DAOS object class */
 struct daos_obj_class {

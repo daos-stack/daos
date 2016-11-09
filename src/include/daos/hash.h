@@ -25,6 +25,7 @@
 #define __DAOS_HASH_H__
 
 #include <daos/list.h>
+#include <daos/common.h>
 
 #define DHASH_DEBUG	0
 
@@ -220,16 +221,15 @@ struct daos_rlink {
 };
 
 struct daos_hlink {
-	struct daos_rlink	hl_link;
-	uint64_t		hl_key;
+	struct daos_rlink	 hl_link;
+	uint64_t		 hl_key;
 	struct daos_hlink_ops	*hl_ops;
 };
 
 struct daos_ulink {
-	struct daos_rlink	ul_link;
-	struct daos_uuid	ul_uuid;
+	struct daos_rlink	 ul_link;
+	struct daos_uuid	 ul_uuid;
 	struct daos_ulink_ops	*ul_ops;
-
 };
 
 struct daos_hhash;

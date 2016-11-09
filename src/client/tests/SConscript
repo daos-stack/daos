@@ -3,4 +3,4 @@
 Import('denv')
 
 denv.Program('eq_test', Glob('eq_tests.c'),
-	     LIBS=['daos', 'daos_common', 'daos_tier', 'cart', 'pthread'])
+	     LIBS=['daos', 'daos_common', 'daos_tier', 'crt', 'pthread'])

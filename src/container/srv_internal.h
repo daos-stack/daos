@@ -28,7 +28,7 @@
 #define __CONTAINER_SERVER_INTERNAL_H__
 
 #include <daos/lru.h>
-#include <daos/transport.h>
+#include <daos/rpc.h>
 #include <daos_srv/daos_server.h>
 
 /* ds_cont thread local storage structure */
@@ -57,29 +57,29 @@ dsm_tls_get()
 /*
  * srv_container.c
  */
-int dsms_hdlr_cont_create(dtp_rpc_t *rpc);
-int dsms_hdlr_cont_destroy(dtp_rpc_t *rpc);
-int dsms_hdlr_cont_open(dtp_rpc_t *rpc);
-int dsms_hdlr_cont_close(dtp_rpc_t *rpc);
-int dsms_hdlr_cont_op(dtp_rpc_t *rpc);
+int dsms_hdlr_cont_create(crt_rpc_t *rpc);
+int dsms_hdlr_cont_destroy(crt_rpc_t *rpc);
+int dsms_hdlr_cont_open(crt_rpc_t *rpc);
+int dsms_hdlr_cont_close(crt_rpc_t *rpc);
+int dsms_hdlr_cont_op(crt_rpc_t *rpc);
 
 /*
  * srv_target.c
  */
-int dsms_hdlr_tgt_pool_connect(dtp_rpc_t *rpc);
-int dsms_hdlr_tgt_pool_connect_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+int dsms_hdlr_tgt_pool_connect(crt_rpc_t *rpc);
+int dsms_hdlr_tgt_pool_connect_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 					 void *priv);
-int dsms_hdlr_tgt_pool_disconnect(dtp_rpc_t *rpc);
-int dsms_hdlr_tgt_pool_disconnect_aggregate(dtp_rpc_t *source,
-					    dtp_rpc_t *result, void *priv);
-int dsms_hdlr_tgt_cont_destroy(dtp_rpc_t *rpc);
-int dsms_hdlr_tgt_cont_destroy_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+int dsms_hdlr_tgt_pool_disconnect(crt_rpc_t *rpc);
+int dsms_hdlr_tgt_pool_disconnect_aggregate(crt_rpc_t *source,
+					    crt_rpc_t *result, void *priv);
+int dsms_hdlr_tgt_cont_destroy(crt_rpc_t *rpc);
+int dsms_hdlr_tgt_cont_destroy_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 					 void *priv);
-int dsms_hdlr_tgt_cont_open(dtp_rpc_t *rpc);
-int dsms_hdlr_tgt_cont_open_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+int dsms_hdlr_tgt_cont_open(crt_rpc_t *rpc);
+int dsms_hdlr_tgt_cont_open_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
-int dsms_hdlr_tgt_cont_close(dtp_rpc_t *rpc);
-int dsms_hdlr_tgt_cont_close_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+int dsms_hdlr_tgt_cont_close(crt_rpc_t *rpc);
+int dsms_hdlr_tgt_cont_close_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 				       void *priv);
 int ds_cont_cache_create(struct daos_lru_cache **cache);
 void ds_cont_cache_destroy(struct daos_lru_cache *cache);

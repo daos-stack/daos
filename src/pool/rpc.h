@@ -33,13 +33,13 @@
 #include <stdint.h>
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
-#include <daos/transport.h>
+#include <daos_event.h>
 
 /*
  * RPC operation codes
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
- * dtp_req_create(..., opc, ...). See src/include/daos/rpc.h.
+ * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
 enum pool_operation {
 	POOL_CONNECT		= 1,
@@ -67,7 +67,7 @@ struct pool_connect_in {
 	uint32_t		pci_uid;
 	uint32_t		pci_gid;
 	uint64_t		pci_capas;
-	dtp_bulk_t		pci_map_bulk;
+	crt_bulk_t		pci_map_bulk;
 };
 
 struct pool_connect_out {
@@ -86,7 +86,7 @@ struct pool_disconnect_out {
 
 struct pool_query_in {
 	struct pool_op_in	pqi_op;
-	dtp_bulk_t		pqi_map_bulk;
+	crt_bulk_t		pqi_map_bulk;
 };
 
 struct pool_query_out {
@@ -96,13 +96,13 @@ struct pool_query_out {
 };
 
 struct pool_exclude_in {
-	struct pool_op_in	pei_op;
-	daos_rank_list_t       *pei_targets;
+	struct pool_op_in	 pei_op;
+	daos_rank_list_t		*pei_targets;
 };
 
 struct pool_exclude_out {
-	struct pool_op_out	peo_op;
-	daos_rank_list_t       *peo_targets;	/* that are not found in pool */
+	struct pool_op_out	 peo_op;
+	daos_rank_list_t	*peo_targets;	/* that are not found in pool */
 };
 
 struct pool_tgt_connect_in {
@@ -134,8 +134,8 @@ struct pool_tgt_update_map_out {
 	int32_t	tuo_rc;	/* number of errors */
 };
 
-int pool_req_create(dtp_context_t dtp_ctx, dtp_endpoint_t tgt_ep,
-		    dtp_opcode_t opc, dtp_rpc_t **req);
+int pool_req_create(crt_context_t dtp_ctx, crt_endpoint_t tgt_ep,
+		    crt_opcode_t opc, crt_rpc_t **req);
 
 extern struct daos_rpc pool_rpcs[];
 extern struct daos_rpc pool_srv_rpcs[];

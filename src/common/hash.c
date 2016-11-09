@@ -147,13 +147,20 @@ daos_hash_murmur64(const unsigned char *key, unsigned int key_len,
 	key = (const unsigned char *)&addr[i];
 
 	switch (rest) {
-	case 7:	mur ^= (uint64_t)key[6] << 48;
-	case 6:	mur ^= (uint64_t)key[5] << 40;
-	case 5:	mur ^= (uint64_t)key[4] << 32;
-	case 4:	mur ^= (uint64_t)key[3] << 24;
-	case 3:	mur ^= (uint64_t)key[2] << 16;
-	case 2:	mur ^= (uint64_t)key[1] << 8;
-	case 1:	mur ^= (uint64_t)key[0];
+	case 7:
+		mur ^= (uint64_t)key[6] << 48;
+	case 6:
+		mur ^= (uint64_t)key[5] << 40;
+	case 5:
+		mur ^= (uint64_t)key[4] << 32;
+	case 4:
+		mur ^= (uint64_t)key[3] << 24;
+	case 3:
+		mur ^= (uint64_t)key[2] << 16;
+	case 2:
+		mur ^= (uint64_t)key[1] << 8;
+	case 1:
+		mur ^= (uint64_t)key[0];
 		mur *= MUR_PRIME;
 	};
 

@@ -77,7 +77,7 @@ struct daos_event_private {
 
 	struct daos_event_private *evx_parent;
 
-	dtp_context_t		evx_ctx;
+	crt_context_t		evx_ctx;
 	struct daos_event_callback evx_callback;
 	struct daos_sched	evx_sched;
 };
@@ -104,8 +104,8 @@ struct daos_eq_private {
 	/* All of its events are linked here */
 	struct daos_hhash	*eqx_events_hash;
 
-	/* DTP context associated with this eq */
-	dtp_context_t		 eqx_ctx;
+	/* CRT context associated with this eq */
+	crt_context_t		 eqx_ctx;
 };
 
 static inline struct daos_eq_private *

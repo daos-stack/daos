@@ -32,7 +32,7 @@
 #include <daos/event.h>
 #include <daos/scheduler.h>
 #include <daos/placement.h>
-#include <daos_api.h>
+#include <daos_types.h>
 
 /** Client stack object */
 struct dc_object {
@@ -155,7 +155,7 @@ int dc_obj_shard_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 			  struct daos_task *task);
 
 /* srv_obj.c */
-int ds_obj_rw_handler(dtp_rpc_t *rpc);
-int ds_obj_enum_handler(dtp_rpc_t *rpc);
+int ds_obj_rw_handler(crt_rpc_t *rpc);
+int ds_obj_enum_handler(crt_rpc_t *rpc);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

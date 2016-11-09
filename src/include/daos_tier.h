@@ -32,9 +32,6 @@
 #ifndef __DAOS_TIER_H__
 #define __DAOS_TIER_H__
 
-#include <daos_types.h>
-#include <daos_api.h>
-
 /**
  * CT Specific Structs
  */

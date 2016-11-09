@@ -1327,7 +1327,7 @@ int main(int argc, char *argv[])
 	DBENCH_CHECK(rc, "Event queue creation failed\n");
 
 	if (comm_world_rank == 0) {
-		daos_rank_t		rank  = 0;
+		daos_rank_t rank  = 0;
 
 		if (strlen(arg.t_pname) == 0)
 			DBENCH_ERR(EINVAL, "'daosPool' must be specified");

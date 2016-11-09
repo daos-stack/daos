@@ -30,7 +30,6 @@
 #include <daos_tier.h>
 #include <pthread.h>
 #include <daos/rpc.h>
-#include <daos/transport.h>
 #include "dct_rpc.h"
 
 int

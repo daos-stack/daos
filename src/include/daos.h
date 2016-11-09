@@ -20,8 +20,6 @@
 #ifndef __DAOS_H__
 #define __DAOS_H__
 
-#include <uuid/uuid.h>
-
 #include <daos_types.h>
 #include <daos_errno.h>
 #include <daos_event.h>

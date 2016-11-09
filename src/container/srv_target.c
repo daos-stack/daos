@@ -39,7 +39,7 @@
 
 #include <daos_srv/container.h>
 
-#include <daos/transport.h>
+#include <daos/rpc.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/vos.h>
 #include "rpc.h"
@@ -331,10 +331,10 @@ out:
 }
 
 int
-dsms_hdlr_tgt_cont_destroy(dtp_rpc_t *rpc)
+dsms_hdlr_tgt_cont_destroy(crt_rpc_t *rpc)
 {
-	struct tgt_cont_destroy_in     *in = dtp_req_get(rpc);
-	struct tgt_cont_destroy_out    *out = dtp_reply_get(rpc);
+	struct tgt_cont_destroy_in     *in = crt_req_get(rpc);
+	struct tgt_cont_destroy_out    *out = crt_reply_get(rpc);
 	int				rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
@@ -346,15 +346,15 @@ dsms_hdlr_tgt_cont_destroy(dtp_rpc_t *rpc)
 	out->tcdo_ret = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(in->tcdi_pool, in->tcdi_cont), rpc, out->tcdo_ret, rc);
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 int
-dsms_hdlr_tgt_cont_destroy_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+dsms_hdlr_tgt_cont_destroy_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 				     void *priv)
 {
-	struct tgt_cont_destroy_out    *out_source = dtp_reply_get(source);
-	struct tgt_cont_destroy_out    *out_result = dtp_reply_get(result);
+	struct tgt_cont_destroy_out    *out_source = crt_reply_get(source);
+	struct tgt_cont_destroy_out    *out_result = crt_reply_get(result);
 
 	out_result->tcdo_ret += out_source->tcdo_ret;
 	return 0;
@@ -447,10 +447,10 @@ err:
 }
 
 int
-dsms_hdlr_tgt_cont_open(dtp_rpc_t *rpc)
+dsms_hdlr_tgt_cont_open(crt_rpc_t *rpc)
 {
-	struct tgt_cont_open_in	       *in = dtp_req_get(rpc);
-	struct tgt_cont_open_out       *out = dtp_reply_get(rpc);
+	struct tgt_cont_open_in	       *in = crt_req_get(rpc);
+	struct tgt_cont_open_out       *out = crt_reply_get(rpc);
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
@@ -463,15 +463,15 @@ dsms_hdlr_tgt_cont_open(dtp_rpc_t *rpc)
 	out->tcoo_ret = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->tcoi_cont), rpc, out->tcoo_ret, rc);
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 int
-dsms_hdlr_tgt_cont_open_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+dsms_hdlr_tgt_cont_open_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv)
 {
-	struct tgt_cont_open_out    *out_source = dtp_reply_get(source);
-	struct tgt_cont_open_out    *out_result = dtp_reply_get(result);
+	struct tgt_cont_open_out    *out_source = crt_reply_get(source);
+	struct tgt_cont_open_out    *out_result = crt_reply_get(result);
 
 	out_result->tcoo_ret += out_source->tcoo_ret;
 	return 0;
@@ -497,10 +497,10 @@ cont_close_one(void *vin)
 }
 
 int
-dsms_hdlr_tgt_cont_close(dtp_rpc_t *rpc)
+dsms_hdlr_tgt_cont_close(crt_rpc_t *rpc)
 {
-	struct tgt_cont_close_in       *in = dtp_req_get(rpc);
-	struct tgt_cont_close_out      *out = dtp_reply_get(rpc);
+	struct tgt_cont_close_in       *in = crt_req_get(rpc);
+	struct tgt_cont_close_out      *out = crt_reply_get(rpc);
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
@@ -512,15 +512,15 @@ dsms_hdlr_tgt_cont_close(dtp_rpc_t *rpc)
 	out->tcco_ret = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tcco_ret, rc);
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 int
-dsms_hdlr_tgt_cont_close_aggregate(dtp_rpc_t *source, dtp_rpc_t *result,
+dsms_hdlr_tgt_cont_close_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 				   void *priv)
 {
-	struct tgt_cont_close_out    *out_source = dtp_reply_get(source);
-	struct tgt_cont_close_out    *out_result = dtp_reply_get(result);
+	struct tgt_cont_close_out    *out_source = crt_reply_get(source);
+	struct tgt_cont_close_out    *out_result = crt_reply_get(result);
 
 	out_result->tcco_ret += out_source->tcco_ret;
 	return 0;

@@ -27,12 +27,12 @@
 #include <daos_srv/daos_server.h>
 
 static int
-rpc_cb(const struct dtp_cb_info *cb_info)
+rpc_cb(const struct crt_cb_info *cb_info)
 {
-	ABT_eventual *eventual = cb_info->dci_arg;
+	ABT_eventual *eventual = cb_info->cci_arg;
 
-	ABT_eventual_set(*eventual, (void *)&cb_info->dci_rc,
-			 sizeof(cb_info->dci_rc));
+	ABT_eventual_set(*eventual, (void *)&cb_info->cci_rc,
+			 sizeof(cb_info->cci_rc));
 	return 0;
 }
 
@@ -44,7 +44,7 @@ rpc_cb(const struct dtp_cb_info *cb_info)
  * \return		error code
  */
 int
-dss_rpc_send(dtp_rpc_t *rpc)
+dss_rpc_send(crt_rpc_t *rpc)
 {
 	ABT_eventual	eventual;
 	int	       *status;
@@ -54,9 +54,9 @@ dss_rpc_send(dtp_rpc_t *rpc)
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
-	dtp_req_addref(rpc);
+	crt_req_addref(rpc);
 
-	rc = dtp_req_send(rpc, rpc_cb, &eventual);
+	rc = crt_req_send(rpc, rpc_cb, &eventual);
 	if (rc != 0)
 		D_GOTO(out_eventual, rc);
 

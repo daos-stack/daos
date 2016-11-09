@@ -22,7 +22,7 @@
  */
 #include <daos/common.h>
 #include <daos/placement.h>
-#include <daos_api.h>
+#include <daos.h>
 
 #define DOM_NR		8
 #define	TARGET_PER_DOM	4

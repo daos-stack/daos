@@ -28,7 +28,6 @@
  */
 
 #include <daos_types.h>
-#include <daos_api.h>
 #include <daos/container.h>
 
 #include <daos/placement.h>
@@ -66,7 +65,7 @@ cont_create_complete(void *arg, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	out = dtp_reply_get(sp->sp_rpc);
+	out = crt_reply_get(sp->sp_rpc);
 
 	rc = out->cco_ret;
 	if (rc != 0) {
@@ -77,7 +76,7 @@ cont_create_complete(void *arg, daos_event_t *ev, int rc)
 	D_DEBUG(DF_DSMC, "completed creating container\n");
 
 out:
-	dtp_req_decref(sp->sp_rpc);
+	crt_req_decref(sp->sp_rpc);
 	return rc;
 }
 
@@ -86,8 +85,8 @@ dc_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 {
 	struct cont_create_in  *in;
 	struct dc_pool	       *pool;
-	dtp_endpoint_t		ep;
-	dtp_rpc_t	       *rpc;
+	crt_endpoint_t		ep;
+	crt_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
 	int			rc;
 
@@ -118,7 +117,7 @@ dc_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 		return rc;
 	}
 
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 	uuid_copy(in->cci_pool, pool->dp_pool);
 	uuid_copy(in->cci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cci_cont, uuid);
@@ -126,7 +125,7 @@ dc_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	dc_pool_put(pool);
 
 	sp = daos_ev2sp(ev);
-	dtp_req_addref(rpc);
+	crt_req_addref(rpc);
 	sp->sp_rpc = rpc;
 
 	rc = daos_event_register_comp_cb(ev, cont_create_complete, sp);
@@ -140,8 +139,8 @@ dc_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	return daos_rpc_send(rpc, ev);
 
 out_req_put:
-	dtp_req_decref(rpc);
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
 	return rc;
 }
 
@@ -156,7 +155,7 @@ cont_destroy_complete(void *arg, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	out = dtp_reply_get(sp->sp_rpc);
+	out = crt_reply_get(sp->sp_rpc);
 
 	rc = out->cdo_ret;
 	if (rc != 0) {
@@ -167,7 +166,7 @@ cont_destroy_complete(void *arg, daos_event_t *ev, int rc)
 	D_DEBUG(DF_DSMC, "completed destroying container\n");
 
 out:
-	dtp_req_decref(sp->sp_rpc);
+	crt_req_decref(sp->sp_rpc);
 	return rc;
 }
 
@@ -177,8 +176,8 @@ dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 {
 	struct cont_destroy_in *in;
 	struct dc_pool	       *pool;
-	dtp_endpoint_t		ep;
-	dtp_rpc_t	       *rpc;
+	crt_endpoint_t		ep;
+	crt_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
 	int			rc;
 
@@ -212,7 +211,7 @@ dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 		return rc;
 	}
 
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 	uuid_copy(in->cdi_pool, pool->dp_pool);
 	uuid_copy(in->cdi_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cdi_cont, uuid);
@@ -221,7 +220,7 @@ dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	dc_pool_put(pool);
 
 	sp = daos_ev2sp(ev);
-	dtp_req_addref(rpc);
+	crt_req_addref(rpc);
 	sp->sp_rpc = rpc;
 
 	rc = daos_event_register_comp_cb(ev, cont_destroy_complete, sp);
@@ -235,8 +234,8 @@ dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	return daos_rpc_send(rpc, ev);
 
 out_req_put:
-	dtp_req_decref(rpc);
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
 	return rc;
 }
 
@@ -295,7 +294,7 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	out = dtp_reply_get(sp->sp_rpc);
+	out = crt_reply_get(sp->sp_rpc);
 
 	rc = out->coo_ret;
 	if (rc != 0) {
@@ -343,7 +342,7 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 	arg->coa_info->ci_snapshots = NULL;
 
 out:
-	dtp_req_decref(sp->sp_rpc);
+	crt_req_decref(sp->sp_rpc);
 	D_FREE_PTR(arg);
 	dsmc_container_put(cont);
 	dc_pool_put(pool);
@@ -357,8 +356,8 @@ dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	struct cont_open_in    *in;
 	struct dc_pool	       *pool;
 	struct dsmc_container  *cont;
-	dtp_endpoint_t		ep;
-	dtp_rpc_t	       *rpc;
+	crt_endpoint_t		ep;
+	crt_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
 	struct cont_open_arg   *arg;
 	int			rc;
@@ -405,7 +404,7 @@ dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 		D_GOTO(err_arg, rc);
 	}
 
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 	uuid_copy(in->coi_pool, pool->dp_pool);
 	uuid_copy(in->coi_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->coi_cont, uuid);
@@ -413,7 +412,7 @@ dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	in->coi_capas = flags;
 
 	sp = daos_ev2sp(ev);
-	dtp_req_addref(rpc);
+	crt_req_addref(rpc);
 	sp->sp_rpc = rpc;
 	sp->sp_hdl = poh;
 	sp->sp_hdlp = coh;
@@ -430,8 +429,8 @@ dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	return daos_rpc_send(rpc, ev);
 
 err_rpc:
-	dtp_req_decref(rpc);
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
 err_arg:
 	D_FREE_PTR(arg);
 err_cont:
@@ -462,7 +461,7 @@ cont_close_complete(void *data, daos_event_t *ev, int rc)
 		D_GOTO(out, rc);
 	}
 
-	out = dtp_reply_get(sp->sp_rpc);
+	out = crt_reply_get(sp->sp_rpc);
 
 	rc = out->cco_ret;
 	if (rc != 0) {
@@ -485,7 +484,7 @@ cont_close_complete(void *data, daos_event_t *ev, int rc)
 	daos_placement_fini(pool->dp_map);
 	pthread_rwlock_unlock(&pool->dp_map_lock);
 out:
-	dtp_req_decref(sp->sp_rpc);
+	crt_req_decref(sp->sp_rpc);
 	dc_pool_put(pool);
 	dsmc_container_put(cont);
 	return rc;
@@ -497,8 +496,8 @@ dc_cont_close(daos_handle_t coh, daos_event_t *ev)
 	struct cont_close_in   *in;
 	struct dc_pool	       *pool;
 	struct dsmc_container  *cont;
-	dtp_endpoint_t		ep;
-	dtp_rpc_t	       *rpc;
+	crt_endpoint_t		ep;
+	crt_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
 	struct cont_close_arg  *arg;
 	int			rc;
@@ -565,13 +564,13 @@ dc_cont_close(daos_handle_t coh, daos_event_t *ev)
 		D_GOTO(err_arg, rc);
 	}
 
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 	uuid_copy(in->cci_pool, pool->dp_pool);
 	uuid_copy(in->cci_cont, cont->dc_uuid);
 	uuid_copy(in->cci_cont_hdl, cont->dc_cont_hdl);
 
 	sp = daos_ev2sp(ev);
-	dtp_req_addref(rpc);
+	crt_req_addref(rpc);
 	sp->sp_rpc = rpc;
 	sp->sp_hdl = coh;
 	sp->sp_arg = arg;
@@ -587,8 +586,8 @@ dc_cont_close(daos_handle_t coh, daos_event_t *ev)
 	return daos_rpc_send(rpc, ev);
 
 err_rpc:
-	dtp_req_decref(rpc);
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
 err_arg:
 	D_FREE_PTR(arg);
 err_pool:
@@ -818,9 +817,9 @@ static int
 epoch_op_complete(void *data, daos_event_t *ev, int rc)
 {
 	struct daos_op_sp      *sp = data;
-	dtp_rpc_t	       *rpc = sp->sp_rpc;
-	dtp_opcode_t		opc = opc_get(rpc->dr_opc);
-	struct epoch_op_out    *out = dtp_reply_get(rpc);
+	crt_rpc_t	       *rpc = sp->sp_rpc;
+	crt_opcode_t		opc = opc_get(rpc->cr_opc);
+	struct epoch_op_out    *out = crt_reply_get(rpc);
 	struct epoch_op_arg    *arg = sp->sp_arg;
 
 	if (rc != 0) {
@@ -843,7 +842,7 @@ epoch_op_complete(void *data, daos_event_t *ev, int rc)
 		*arg->eoa_state = out->eoo_epoch_state;
 
 out:
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
 	dc_pool_put(arg->eoa_pool);
 	dsmc_container_put(arg->eoa_cont);
 	D_FREE_PTR(arg);
@@ -851,14 +850,14 @@ out:
 }
 
 static int
-epoch_op(daos_handle_t coh, dtp_opcode_t opc, daos_epoch_t *epoch,
+epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	 daos_epoch_state_t *state, daos_event_t *ev)
 {
 	struct epoch_op_in     *in;
 	struct dc_pool	       *pool;
 	struct dsmc_container  *cont;
-	dtp_endpoint_t		ep;
-	dtp_rpc_t	       *rpc;
+	crt_endpoint_t		ep;
+	crt_rpc_t	       *rpc;
 	struct daos_op_sp      *sp;
 	struct epoch_op_arg    *arg;
 	int			rc;
@@ -914,7 +913,7 @@ epoch_op(daos_handle_t coh, dtp_opcode_t opc, daos_epoch_t *epoch,
 		D_GOTO(err_arg, rc);
 	}
 
-	in = dtp_req_get(rpc);
+	in = crt_req_get(rpc);
 	uuid_copy(in->eoi_cont_op_in.cpi_pool, pool->dp_pool);
 	uuid_copy(in->eoi_cont_op_in.cpi_cont, cont->dc_uuid);
 	uuid_copy(in->eoi_cont_op_in.cpi_cont_hdl, cont->dc_cont_hdl);
@@ -922,7 +921,7 @@ epoch_op(daos_handle_t coh, dtp_opcode_t opc, daos_epoch_t *epoch,
 		in->eoi_epoch = *epoch;
 
 	sp = daos_ev2sp(ev);
-	dtp_req_addref(rpc);
+	crt_req_addref(rpc);
 	sp->sp_rpc = rpc;
 	sp->sp_arg = arg;
 
@@ -937,8 +936,8 @@ epoch_op(daos_handle_t coh, dtp_opcode_t opc, daos_epoch_t *epoch,
 	return daos_rpc_send(rpc, ev);
 
 err_rpc:
-	dtp_req_decref(rpc);
-	dtp_req_decref(rpc);
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
 err_arg:
 	D_FREE_PTR(arg);
 err_pool:

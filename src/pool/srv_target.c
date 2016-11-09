@@ -40,7 +40,7 @@
 #include <daos_srv/pool.h>
 
 #include <daos/pool_map.h>
-#include <daos/transport.h>
+#include <daos/rpc.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/vos.h>
 #include "rpc.h"
@@ -430,10 +430,10 @@ ds_pool_hdl_put(struct ds_pool_hdl *hdl)
 }
 
 int
-ds_pool_tgt_connect_handler(dtp_rpc_t *rpc)
+ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 {
-	struct pool_tgt_connect_in     *in = dtp_req_get(rpc);
-	struct pool_tgt_connect_out    *out = dtp_reply_get(rpc);
+	struct pool_tgt_connect_in     *in = crt_req_get(rpc);
+	struct pool_tgt_connect_out    *out = crt_reply_get(rpc);
 	struct ds_pool		       *pool;
 	struct ds_pool_hdl	       *hdl;
 	struct ds_pool_create_arg	arg;
@@ -489,24 +489,24 @@ out:
 	out->tco_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->tci_uuid), rpc, out->tco_rc, rc);
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 int
-ds_pool_tgt_connect_aggregator(dtp_rpc_t *source, dtp_rpc_t *result, void *priv)
+ds_pool_tgt_connect_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct pool_tgt_connect_out    *out_source = dtp_reply_get(source);
-	struct pool_tgt_connect_out    *out_result = dtp_reply_get(result);
+	struct pool_tgt_connect_out    *out_source = crt_reply_get(source);
+	struct pool_tgt_connect_out    *out_result = crt_reply_get(result);
 
 	out_result->tco_rc += out_source->tco_rc;
 	return 0;
 }
 
 int
-ds_pool_tgt_disconnect_handler(dtp_rpc_t *rpc)
+ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 {
-	struct pool_tgt_disconnect_in  *in = dtp_req_get(rpc);
-	struct pool_tgt_disconnect_out *out = dtp_reply_get(rpc);
+	struct pool_tgt_disconnect_in  *in = crt_req_get(rpc);
+	struct pool_tgt_disconnect_out *out = crt_reply_get(rpc);
 	struct ds_pool_hdl	       *hdl;
 	int				rc = 0;
 
@@ -532,15 +532,15 @@ out:
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->tdi_uuid), rpc, out->tdo_rc, rc);
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 int
-ds_pool_tgt_disconnect_aggregator(dtp_rpc_t *source, dtp_rpc_t *result,
+ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 					void *priv)
 {
-	struct pool_tgt_disconnect_out *out_source = dtp_reply_get(source);
-	struct pool_tgt_disconnect_out *out_result = dtp_reply_get(result);
+	struct pool_tgt_disconnect_out *out_source = crt_reply_get(source);
+	struct pool_tgt_disconnect_out *out_result = crt_reply_get(result);
 
 	out_result->tdo_rc += out_source->tdo_rc;
 	return 0;
@@ -571,10 +571,10 @@ update_child_map_version(void *vin)
 }
 
 int
-ds_pool_tgt_update_map_handler(dtp_rpc_t *rpc)
+ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 {
-	struct pool_tgt_update_map_in  *in = dtp_req_get(rpc);
-	struct pool_tgt_update_map_out *out = dtp_reply_get(rpc);
+	struct pool_tgt_update_map_in  *in = crt_req_get(rpc);
+	struct pool_tgt_update_map_out *out = crt_reply_get(rpc);
 	struct ds_pool		       *pool;
 	uint32_t			map_version_old;
 	int				rc = 0;
@@ -602,15 +602,15 @@ out:
 	out->tuo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->tui_uuid), rpc, out->tuo_rc, rc);
-	return dtp_reply_send(rpc);
+	return crt_reply_send(rpc);
 }
 
 int
-ds_pool_tgt_update_map_aggregator(dtp_rpc_t *source, dtp_rpc_t *result,
+ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				  void *priv)
 {
-	struct pool_tgt_update_map_out *out_source = dtp_reply_get(source);
-	struct pool_tgt_update_map_out *out_result = dtp_reply_get(result);
+	struct pool_tgt_update_map_out *out_source = crt_reply_get(source);
+	struct pool_tgt_update_map_out *out_result = crt_reply_get(result);
 
 	out_result->tuo_rc += out_source->tuo_rc;
 	return 0;

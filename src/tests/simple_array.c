@@ -63,7 +63,7 @@ daos_handle_t	eq;
 /** Pool information */
 uuid_t			 pool_uuid;	/* only used on rank 0 */
 daos_rank_t		 svc;		/* only used on rank 0 */
-daos_rank_list_t	 svcl;		/* only used on rank 0 */
+daos_rank_list_t		 svcl;		/* only used on rank 0 */
 daos_handle_t		 poh;		/* shared pool handle */
 
 /** Container information */

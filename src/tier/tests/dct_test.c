@@ -28,7 +28,7 @@
 #include <dct_rpc.h>
 #include <daos.h>
 #include <daos/event.h>
-#include <daos/transport.h>
+#include <daos/rpc.h>
 
 #include "dct_test.h"
 

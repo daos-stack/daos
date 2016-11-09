@@ -34,7 +34,7 @@
 #include <daos/list.h>
 #include <daos/hash.h>
 #include <daos/event.h>
-#include <daos/transport.h>
+#include <daos/rpc.h>
 
 typedef int (*daos_task_comp_cb_t)(struct daos_task *);
 typedef int (*daos_task_func_t)(struct daos_task *);
@@ -111,7 +111,7 @@ daos_task2arg(struct daos_task *task);
 void *
 daos_task2sp(struct daos_task *task);
 
-dtp_context_t *
+crt_context_t *
 daos_task2ctx(struct daos_task *task);
 
 struct daos_sched *

@@ -41,8 +41,17 @@
 #include <byteswap.h>
 
 #include <daos_types.h>
+#include <crt_util/common.h>
 
 #define DAOS_ENV_DEBUG	"DAOS_DEBUG"
+
+/**
+ * NB: hide the dark secret that
+ * uuid_t is an array not a structure
+ */
+struct daos_uuid {
+	uuid_t	uuid;
+};
 
 /**
  * Debugging flags (32 bits, non-overlapping)
@@ -245,33 +254,6 @@ int daos_array_find(void *array, unsigned int len, uint64_t key,
 int  daos_sgl_init(daos_sg_list_t *sgl, unsigned int nr);
 void daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs);
 
-int
-daos_rank_list_dup(daos_rank_list_t **dst, const daos_rank_list_t *src,
-		   bool input);
-void
-daos_rank_list_free(daos_rank_list_t *rank_list);
-void
-daos_rank_list_copy(daos_rank_list_t *dst, daos_rank_list_t *src, bool input);
-void
-daos_rank_list_sort(daos_rank_list_t *rank_list);
-bool
-daos_rank_list_find(daos_rank_list_t *rank_list, daos_rank_t rank, int *idx);
-bool
-daos_rank_list_identical(daos_rank_list_t *rank_list1,
-			 daos_rank_list_t *rank_list2, bool input);
-bool
-daos_rank_in_rank_list(daos_rank_list_t *rank_list, daos_rank_t rank);
-
-struct daos_oper_grp;
-typedef int (*daos_oper_grp_comp_t)(void *args, int rc);
-
-int  daos_oper_grp_create(daos_event_t *ev_up, daos_oper_grp_comp_t comp,
-			  void *args, struct daos_oper_grp **grpp);
-void daos_oper_grp_destroy(struct daos_oper_grp *grp, int rc);
-int  daos_oper_grp_launch(struct daos_oper_grp *grp);
-int  daos_oper_grp_new_ev(struct daos_oper_grp *grp,
-			  struct daos_event **evpp);
-
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
  *  * struct) @type, return pointer to the embedding instance of @type. */
@@ -340,5 +322,15 @@ daos_errno2der(int err)
 
 int
 daos_fail_loc_init();
+
+#define daos_rank_list_dup		crt_rank_list_dup
+#define daos_rank_list_dup_sort_uniq	crt_rank_list_dup_sort_uniq
+#define daos_rank_list_alloc		crt_rank_list_alloc
+#define daos_rank_list_free		crt_rank_list_free
+#define daos_rank_list_copy		crt_rank_list_copy
+#define daos_rank_list_sort		crt_rank_list_sort
+#define daos_rank_list_find		crt_rank_list_find
+#define daos_rank_list_identical	crt_rank_list_identical
+#define daos_rank_in_rank_list		crt_rank_in_rank_list
 
 #endif /* __DAOS_COMMON_H__ */

@@ -57,7 +57,7 @@ map_ranks_init(const struct pool_map *map, enum map_ranks_class class,
 	int			ntargets;
 	int			n = 0;
 	int			i;
-	dtp_rank_t	       *rs;
+	daos_rank_t	       *rs;
 
 	ntargets = pool_map_find_target((struct pool_map *)map, PO_COMP_ID_ALL,
 					&targets);
@@ -109,7 +109,7 @@ map_ranks_fini(daos_rank_list_t *ranks)
 }
 
 static int
-group_create_cb(dtp_group_t *grp, void *priv, int status)
+group_create_cb(crt_group_t *grp, void *priv, int status)
 {
 	ABT_eventual *eventual = priv;
 
@@ -123,12 +123,12 @@ group_create_cb(dtp_group_t *grp, void *priv, int status)
 
 int
 ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
-		     dtp_group_t **group)
+		     crt_group_t **group)
 {
 	char			id[DAOS_UUID_STR_SIZE];
-	daos_rank_list_t	ranks;
+	daos_rank_list_t		ranks;
 	ABT_eventual		eventual;
-	dtp_group_t	      **g;
+	crt_group_t	      **g;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID"\n", DP_UUID(pool_uuid));
@@ -153,7 +153,7 @@ ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 		D_GOTO(out_ranks, rc = dss_abterr2der(rc));
 
 	/* "!populate_now" is not implemented yet. */
-	rc = dtp_group_create(id, &ranks, true /* populate_now */,
+	rc = crt_group_create(id, &ranks, true /* populate_now */,
 			      group_create_cb, &eventual);
 	if (rc != 0)
 		D_GOTO(out_eventual, rc);
@@ -185,19 +185,19 @@ group_destroy_cb(void *args, int status)
 }
 
 int
-ds_pool_group_destroy(dtp_group_t *group)
+ds_pool_group_destroy(crt_group_t *group)
 {
 	ABT_eventual	eventual;
 	int	       *status;
 	int		rc;
 
-	D_DEBUG(DF_DSMS, "%s\n", group->dg_grpid);
+	D_DEBUG(DF_DSMS, "%s\n", group->cg_grpid);
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
-	rc = dtp_group_destroy(group, group_destroy_cb, &eventual);
+	rc = crt_group_destroy(group, group_destroy_cb, &eventual);
 	if (rc != 0)
 		D_GOTO(out_eventual, rc);
 
@@ -216,13 +216,13 @@ out:
 }
 
 int
-ds_pool_bcast_create(dtp_context_t ctx, struct ds_pool *pool,
-		     enum daos_module_id module, dtp_opcode_t opcode,
-		     dtp_rpc_t **rpc)
+ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
+		     enum daos_module_id module, crt_opcode_t opcode,
+		     crt_rpc_t **rpc)
 {
 	daos_rank_list_t	excluded;
-	dtp_opcode_t		opc;
-	int			rc;
+	crt_opcode_t	opc;
+	int		rc;
 
 	opc = DAOS_RPC_OPCODE(opcode, module, 1);
 
@@ -235,7 +235,7 @@ ds_pool_bcast_create(dtp_context_t ctx, struct ds_pool *pool,
 		return rc;
 	}
 
-	rc = dtp_corpc_req_create(ctx, pool->sp_group,
+	rc = crt_corpc_req_create(ctx, pool->sp_group,
 				  excluded.rl_nr.num == 0 ? NULL : &excluded,
 				  opc, NULL /* co_bulk_hdl */, NULL /* priv */,
 				  0 /* flags */, 0 /* tree_topo */, rpc);

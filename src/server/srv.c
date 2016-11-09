@@ -66,7 +66,7 @@ dss_srv_handler_cleanup(void *param)
 	dmi = (struct dss_module_info *)
 	      dss_module_key_get(dtc, &daos_srv_modkey);
 	D_ASSERT(dmi != NULL);
-	rc = dtp_context_destroy(dmi->dmi_ctx, true);
+	rc = crt_context_destroy(dmi->dmi_ctx, true);
 	if (rc)
 		D_ERROR("failed to destroy context: %d\n", rc);
 }
@@ -194,9 +194,9 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
  *
  The handling process would like
  *
- * 1. The service thread creates a private DTP context
+ * 1. The service thread creates a private CRT context
  *
- * 2. Then polls the request from DTP context
+ * 2. Then polls the request from CRT context
  **/
 static void
 dss_srv_handler(void *arg)
@@ -226,9 +226,9 @@ dss_srv_handler(void *arg)
 	D_ASSERT(dmi != NULL);
 
 	/* create private transport context */
-	rc = dtp_context_create(&dthread->dt_pool, &dmi->dmi_ctx);
+	rc = crt_context_create(&dthread->dt_pool, &dmi->dmi_ctx);
 	if (rc != 0) {
-		D_ERROR("Can not create dtp ctxt: rc = %d\n", rc);
+		D_ERROR("Can not create crt ctxt: rc = %d\n", rc);
 		D_GOTO(err_out, rc);
 	}
 
@@ -244,11 +244,11 @@ dss_srv_handler(void *arg)
 	pthread_mutex_unlock(&dthread->dt_lock);
 
 	/* main service loop processing incoming request */
-	rc = dtp_progress(dmi->dmi_ctx, -1, dss_progress_cb, NULL);
+	rc = crt_progress(dmi->dmi_ctx, -1, dss_progress_cb, NULL);
 	D_ERROR("service thread exited from progress with %d\n", rc);
 
 	pthread_cleanup_pop(0);
-	dtp_context_destroy(dmi->dmi_ctx, true);
+	crt_context_destroy(dmi->dmi_ctx, true);
 	return;
 
 err_out:

@@ -21,43 +21,45 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_transport. It it the common header file which be
- * included by all other .c files of dtp.
+ * This file is part of daos. It implements some miscellaneous functions which
+ * not belong to other parts.
  */
 
-#ifndef __DTP_INTERNAL_H__
-#define __DTP_INTERNAL_H__
-
-#include <ctype.h>
-#include <errno.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <stddef.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <uuid/uuid.h>
-/* #include <netinet/in.h> */
-#include <arpa/inet.h>
-#include <ifaddrs.h>
-
 #include <daos/common.h>
-#include <daos/transport.h>
 
-#include <dtp_internal_types.h>
-#include <dtp_internal_fns.h>
-#include <dtp_rpc.h>
+/**
+ * Initialise a scatter/gather list, create an array to store @nr iovecs.
+ */
+int
+daos_sgl_init(daos_sg_list_t *sgl, unsigned int nr)
+{
+	memset(sgl, 0, sizeof(*sgl));
 
-#include <dtp_hg.h>
+	sgl->sg_nr.num = sgl->sg_nr.num_out = nr;
+	D_ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
 
-#include <process_set.h>
+	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
+}
 
-#endif /* __DTP_INTERNAL_H__ */
+/**
+ * Finalise a scatter/gather list, it can also free iovecs if @free_iovs
+ * is true.
+ */
+void
+daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs)
+{
+	int	i;
+
+	if (sgl->sg_iovs == NULL)
+		return;
+
+	for (i = 0; free_iovs && i < sgl->sg_nr.num; i++) {
+		if (sgl->sg_iovs[i].iov_buf != NULL) {
+			D_FREE(sgl->sg_iovs[i].iov_buf,
+			       sgl->sg_iovs[i].iov_buf_len);
+		}
+	}
+
+	D_FREE(sgl->sg_iovs, sgl->sg_nr.num * sizeof(*sgl->sg_iovs));
+	memset(sgl, 0, sizeof(*sgl));
+}

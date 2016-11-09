@@ -30,7 +30,7 @@
  */
 
 #include "client_internal.h"
-#include <daos/transport.h>
+#include <daos/rpc.h>
 
 static struct daos_hhash *daos_eq_hhash;
 
@@ -38,15 +38,15 @@ static struct daos_hhash *daos_eq_hhash;
 static __thread daos_event_t	ev_thpriv;
 static __thread bool		ev_thpriv_is_init;
 
-#define EQ_WITH_DTP
+#define EQ_WITH_CRT
 
-#if !defined(EQ_WITH_DTP)
+#if !defined(EQ_WITH_CRT)
 
-#define dtp_init(a)			({0;})
-#define dtp_finalize()			({0;})
-#define dtp_context_create(a, b)	({0;})
-#define dtp_context_destroy(a, b)	({0;})
-#define dtp_progress(ctx, timeout, cb, args)	\
+#define crt_init(a,b,c)			({0;})
+#define crt_finalize()			({0;})
+#define crt_context_create(a, b)	({0;})
+#define crt_context_destroy(a, b)	({0;})
+#define crt_progress(ctx, timeout, cb, args)	\
 ({						\
 	int __rc = cb(args);			\
 						\
@@ -65,10 +65,10 @@ static __thread bool		ev_thpriv_is_init;
 #endif
 
 /*
- * For the moment, we use a global dtp_context_t to create all the RPC requests
+ * For the moment, we use a global crt_context_t to create all the RPC requests
  * this module uses.
  */
-static dtp_context_t daos_eq_ctx;
+static crt_context_t daos_eq_ctx;
 static pthread_mutex_t daos_eq_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int refcount;
 
@@ -89,25 +89,25 @@ daos_eq_lib_init()
 		D_GOTO(unlock, rc);
 	}
 
-	rc = dtp_init(false /* client-only */);
+	rc = crt_init(NULL, NULL, 0 /* client-only */);
 	if (rc != 0) {
-		D_ERROR("failed to initialize dtp: %d\n", rc);
+		D_ERROR("failed to initialize crt: %d\n", rc);
 		D_GOTO(hash, rc);
 	}
 
 	/* use a global shared context for all eq for now */
-	rc = dtp_context_create(NULL /* arg */, &daos_eq_ctx);
+	rc = crt_context_create(NULL /* arg */, &daos_eq_ctx);
 	if (rc != 0) {
 		D_ERROR("failed to create client context: %d\n", rc);
-		D_GOTO(dtp, rc);
+		D_GOTO(crt, rc);
 	}
 
 	refcount = 1;
 unlock:
 	pthread_mutex_unlock(&daos_eq_lock);
 	return rc;
-dtp:
-	dtp_finalize();
+crt:
+	crt_finalize();
 hash:
 	daos_hhash_destroy(daos_eq_hhash);
 	D_GOTO(unlock, rc);
@@ -127,7 +127,7 @@ daos_eq_lib_fini()
 	}
 
 	if (daos_eq_ctx != NULL) {
-		rc = dtp_context_destroy(daos_eq_ctx, 1 /* force */);
+		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
 		if (rc != 0) {
 			D_ERROR("failed to destroy client context: %d\n", rc);
 			D_GOTO(unlock, rc);
@@ -135,9 +135,9 @@ daos_eq_lib_fini()
 		daos_eq_ctx = NULL;
 	}
 
-	rc = dtp_finalize();
+	rc = crt_finalize();
 	if (rc != 0) {
-		D_ERROR("failed to shutdown dtp: %d\n", rc);
+		D_ERROR("failed to shutdown crt: %d\n", rc);
 		D_GOTO(unlock, rc);
 	}
 
@@ -264,7 +264,7 @@ daos_event_launch_locked(struct daos_eq_private *eqx,
 	}
 }
 
-dtp_context_t
+crt_context_t
 daos_ev2ctx(struct daos_event *ev)
 {
 	return daos_ev2evx(ev)->evx_ctx;
@@ -490,8 +490,8 @@ daos_event_test(struct daos_event *ev, int64_t timeout)
 {
 	struct daos_event_private *evx = daos_ev2evx(ev);
 
-	/** pass the timeout to dtp_progress() with a conditional callback */
-	return dtp_progress(evx->evx_ctx, timeout, ev_progress_cb, ev);
+	/** pass the timeout to crt_progress() with a conditional callback */
+	return crt_progress(evx->evx_ctx, timeout, ev_progress_cb, ev);
 }
 
 int
@@ -602,14 +602,14 @@ daos_eq_poll(daos_handle_t eqh, int wait_inf, int64_t timeout,
 	epa.wait_inf	= wait_inf;
 	epa.count	= 0;
 
-	/** pass the timeout to dtp_progress() with a conditional callback */
-	rc = dtp_progress(epa.eqx->eqx_ctx, timeout, eq_progress_cb, &epa);
+	/** pass the timeout to crt_progress() with a conditional callback */
+	rc = crt_progress(epa.eqx->eqx_ctx, timeout, eq_progress_cb, &epa);
 
 	/** drop ref grabbed in daos_eq_lookup() */
 	daos_eq_putref(epa.eqx);
 
 	if (rc != 0 && rc != -DER_TIMEDOUT) {
-		D_ERROR("dtp progress failed with %d\n", rc);
+		D_ERROR("crt progress failed with %d\n", rc);
 		return rc;
 	}
 

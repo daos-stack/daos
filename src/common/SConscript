@@ -2,8 +2,6 @@
 
 Import('env', 'PREREQS')
 
-SConscript('dtp/SConscript', exports=['env', 'PREREQS'])
-
 env.AppendUnique(LIBPATH=[Dir('.')])
 
 if PREREQS is None:
@@ -12,7 +10,7 @@ if PREREQS is None:
                 env.Append(LIBS=['pmemobj'])
         config.Finish()
 else:
-        PREREQS.require(env, 'nvml', 'argobots')
+        PREREQS.require(env, 'nvml', 'argobots', 'cart')
 
 denv = env.Clone()
 

@@ -29,11 +29,14 @@
 #ifndef __DRPC_API_H__
 #define __DRPC_API_H__
 
+#include <crt_api.h>
+#include <crt_types.h>
+#include <crt_errno.h>
+
 #include <daos/common.h>
 #include <daos/event.h>
-#include <daos/transport.h>
 
-/* Opcode registered in dtp will be
+/* Opcode registered in crt will be
  * client/server | mod_id | rpc_version | op_code
  *    {1 bit}	  {7 bits}    {8 bits}    {16 bits}
  */
@@ -54,13 +57,20 @@
 	 (rpc_ver & RPC_VERSION_MASK) << RPC_VERSION_OFFSET |	\
 	 (mod_id & MODID_MASK) << MODID_OFFSET)
 
-extern struct dtp_msg_field DMF_OID;
-extern struct dtp_msg_field DMF_IOVEC;
-extern struct dtp_msg_field DMF_VEC_IOD_ARRAY;
-extern struct dtp_msg_field DMF_EPOCH_STATE;
-extern struct dtp_msg_field DMF_DAOS_HASH_OUT;
-extern struct dtp_msg_field DMF_KEY_DESC_ARRAY;
-extern struct dtp_msg_field DMF_REC_SIZE_ARRAY;
+/** DAOS-specific RPC format */
+extern struct crt_msg_field DMF_OID;
+extern struct crt_msg_field DMF_IOVEC;
+extern struct crt_msg_field DMF_VEC_IOD_ARRAY;
+extern struct crt_msg_field DMF_EPOCH_STATE;
+extern struct crt_msg_field DMF_HASH_OUT;
+extern struct crt_msg_field DMF_KEY_DESC_ARRAY;
+extern struct crt_msg_field DMF_REC_SIZE_ARRAY;
+extern struct crt_msg_field DMF_SGL;
+extern struct crt_msg_field DMF_SGL_ARRAY;
+extern struct crt_msg_field DMF_SGL_DESC;
+extern struct crt_msg_field DMF_SGL_DESC_ARRAY;
+
+#define DMF_DAOS_SIZE CMF_UINT64
 
 enum daos_module_id {
 	DAOS_VOS_MODULE		= 0, /** version object store */
@@ -79,26 +89,26 @@ struct daos_rpc {
 	/* Name of the RPC */
 	const char	*dr_name;
 	/* Operation code associated with the RPC */
-	dtp_opcode_t	 dr_opc;
+	crt_opcode_t	 dr_opc;
 	/* RPC version */
 	int		 dr_ver;
 	/* Operation flags, TBD */
 	int		 dr_flags;
 	/* RPC request format */
-	struct dtp_req_format *dr_req_fmt;
+	struct crt_req_format *dr_req_fmt;
 };
 
 struct daos_rpc_handler {
 	/* Operation code */
-	dtp_opcode_t		dr_opc;
+	crt_opcode_t		dr_opc;
 	/* Request handler, only relevant on the server side */
-	dtp_rpc_cb_t		dr_hdlr;
+	crt_rpc_cb_t		dr_hdlr;
 	/* CORPC operations (co_aggregate == NULL for point-to-point RPCs) */
-	struct dtp_corpc_ops	dr_corpc_ops;
+	struct crt_corpc_ops	dr_corpc_ops;
 };
 
 static inline struct daos_rpc_handler *
-daos_rpc_handler_find(struct daos_rpc_handler *handlers, dtp_opcode_t opc)
+daos_rpc_handler_find(struct daos_rpc_handler *handlers, crt_opcode_t opc)
 {
 	struct daos_rpc_handler *handler;
 
@@ -134,7 +144,7 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 
 	/* walk through the handler list and register each individual RPC */
 	for (rpc = rpcs; rpc->dr_opc != 0; rpc++) {
-		dtp_opcode_t opcode;
+		crt_opcode_t opcode;
 
 		opcode = DAOS_RPC_OPCODE(rpc->dr_opc, mod_id, rpc->dr_ver);
 		if (handlers != NULL) {
@@ -147,14 +157,15 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 				return rc;
 			}
 			if (handler->dr_corpc_ops.co_aggregate == NULL)
-				rc = dtp_rpc_srv_reg(opcode, rpc->dr_req_fmt,
-						     handler->dr_hdlr);
+				rc = crt_rpc_srv_register(opcode,
+							  rpc->dr_req_fmt,
+							  handler->dr_hdlr);
 			else
-				rc = dtp_corpc_reg(opcode, rpc->dr_req_fmt,
-						   handler->dr_hdlr,
-						   &handler->dr_corpc_ops);
+				rc = crt_corpc_register(opcode, rpc->dr_req_fmt,
+							handler->dr_hdlr,
+							&handler->dr_corpc_ops);
 		} else {
-			rc = dtp_rpc_reg(opcode, rpc->dr_req_fmt);
+			rc = crt_rpc_register(opcode, rpc->dr_req_fmt);
 		}
 		if (rc)
 			return rc;
@@ -172,6 +183,26 @@ daos_rpc_unregister(struct daos_rpc *rpcs)
 	return 0;
 }
 
-int daos_rpc_send(dtp_rpc_t *rpc, daos_event_t *ev);
+static inline crt_sg_list_t *
+daos2crt_sg(daos_sg_list_t *sgl)
+{
+	/** XXX better integration with CaRT required */
+	D_CASSERT(sizeof(daos_sg_list_t) == sizeof(crt_sg_list_t));
+	D_CASSERT(offsetof(daos_sg_list_t, sg_nr) ==
+		  offsetof(crt_sg_list_t, sg_nr));
+	D_CASSERT(offsetof(daos_sg_list_t, sg_iovs) ==
+		  offsetof(crt_sg_list_t, sg_iovs));
+	D_CASSERT(sizeof(daos_nr_t) == sizeof(crt_nr_t));
+	D_CASSERT(sizeof(daos_iov_t) == sizeof(crt_iov_t));
+	D_CASSERT(offsetof(daos_iov_t, iov_buf) ==
+		  offsetof(crt_iov_t, iov_buf));
+	D_CASSERT(offsetof(daos_iov_t, iov_buf_len) ==
+		  offsetof(crt_iov_t, iov_buf_len));
+	D_CASSERT(offsetof(daos_iov_t, iov_len) ==
+		  offsetof(crt_iov_t, iov_len));
+	return (crt_sg_list_t *)sgl;
+}
+
+int daos_rpc_send(crt_rpc_t *rpc, daos_event_t *ev);
 
 #endif /* __DRPC_API_H__ */

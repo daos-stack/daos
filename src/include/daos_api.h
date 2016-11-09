@@ -579,18 +579,7 @@ daos_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  */
 
 /**
- * List of default object class
- */
-enum {
-	DAOS_OC_UNKNOWN,
-	DAOS_OC_TINY_RW,
-	DAOS_OC_SMALL_RW,
-	DAOS_OC_LARGE_RW,
-	DAOS_OC_REPLICA_RW,
-};
-
-/**
- * Register a new object class.
+ * Register a new object class in addition to the default ones (see DAOS_OC_*).
  * An object class cannot be unregistered for the time being.
  *
  * \param coh	[IN]	Container open handle.
@@ -691,17 +680,6 @@ daos_obj_id2class(daos_obj_id_t oid)
 	ocid = (oid.hi << 16) >> (16 + 32);
 	return ocid;
 }
-
-/**
- * Object attributes (metadata).
- * \a oa_class and \a oa_oa are mutually exclusive.
- */
-typedef struct {
-	/** Optional, affinity target for the object */
-	daos_rank_t		 oa_rank;
-	/** Optional, class attributes of object with private class */
-	daos_oclass_attr_t	*oa_oa;
-} daos_obj_attr_t;
 
 /**
  * Declare a new object based on attributes \a oa.
