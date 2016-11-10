@@ -215,7 +215,15 @@ obj_rw_cp(struct daos_task *task, int rc)
 {
 	struct daos_op_sp	*sp = daos_task2sp(task);
 	struct obj_rw_in	*orw;
+	int			opc;
 	int			ret;
+
+	opc = opc_get(sp->sp_rpc->cr_opc);
+	if ((opc == DAOS_OBJ_RPC_FETCH &&
+	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FETCH_TIMEOUT)) ||
+	    (opc == DAOS_OBJ_RPC_UPDATE &&
+	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT)))
+		D_GOTO(out, rc = -DER_TIMEDOUT);
 
 	orw = crt_req_get(sp->sp_rpc);
 	D_ASSERT(orw != NULL);
@@ -225,18 +233,8 @@ obj_rw_cp(struct daos_task *task, int rc)
 	}
 
 	ret = obj_reply_get_status(sp->sp_rpc);
-	if (ret != 0) {
-		if (ret == -DER_STALE &&
-		    orw->orw_map_ver < obj_reply_map_version_get(sp->sp_rpc)) {
-			D_ERROR("update ver %u ---> %u\n", orw->orw_map_ver,
-				obj_reply_map_version_get(sp->sp_rpc));
-			/* XXX Push new tasks to update the map version */
-		} else {
-			D_ERROR("DAOS_OBJ_RPC_UPDATE/FETCH failed, rc: %d\n",
-				ret);
-		}
+	if (ret != 0)
 		D_GOTO(out, rc = ret);
-	}
 
 	if (opc_get(sp->sp_rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		struct obj_rw_out *orwo;
@@ -317,15 +315,23 @@ int
 dc_obj_shard_rpc_cb(const struct crt_cb_info *cb_info)
 {
 	struct daos_task	*task = cb_info->cci_arg;
+	struct daos_op_sp	*sp = daos_task2sp(task);
+	int			rc = cb_info->cci_rc;
 
 	if (cb_info->cci_rc == -DER_TIMEDOUT)
 		/** TODO */
 		;
 
-	if (task->dt_result == 0)
-		task->dt_result = cb_info->cci_rc;
+	if (sp->sp_callback != NULL) {
+		int err;
 
-	task->dt_comp_cb(task);
+		err = sp->sp_callback(task, rc);
+		if (rc == 0)
+			rc = err;
+	}
+
+	daos_task_complete(task, rc);
+
 	return 0;
 }
 

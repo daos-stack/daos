@@ -64,6 +64,13 @@ daos_init(void)
 		D_GOTO(unlock, rc);
 	}
 
+	/* Init fail location */
+	rc = daos_fail_loc_init();
+	if (rc != 0) {
+		D_ERROR("failed to init fail loc: %d\n", rc);
+		D_GOTO(unlock, rc);
+	}
+
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {

@@ -108,45 +108,54 @@ static void
 pool_query_cp(struct dc_pool *pool, void *arg, int rc, daos_rank_list_t *tgts,
 	      daos_pool_info_t *info)
 {
-	daos_event_complete(arg, rc);
+	daos_task_complete(arg, rc);
+}
+
+int
+daos_pool_query_async(daos_handle_t ph, daos_rank_list_t *tgts,
+		      daos_pool_info_t *info, struct daos_task *task)
+{
+	struct dc_pool	*pool;
+	int		rc;
+
+	if (tgts == NULL && info == NULL)
+		return -DER_INVAL;
+
+	pool = dc_pool_lookup(ph);
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	rc = dc_pool_query(pool, daos_task2ctx(task), tgts, info,
+			   pool_query_cp, task);
+
+	dc_pool_put(pool);
+
+	return rc;
 }
 
 int
 daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
 		daos_pool_info_t *info, daos_event_t *ev)
 {
-	struct dc_pool *pool;
-	int		rc;
+	struct daos_task *task;
+	int		  rc;
 
-	if (tgts == NULL && info == NULL)
-		return -DER_INVAL;
-
-	pool = dc_pool_lookup(poh);
-	if (pool == NULL)
-		return -DER_NO_HDL;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			D_GOTO(out_pool, rc);
-	}
+	rc = daos_client_prep_task(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
+		return rc;
 
 	rc = daos_event_launch(ev);
 	if (rc != 0)
-		D_GOTO(out_pool, rc);
+		D_GOTO(out, rc);
 
-	rc = dc_pool_query(pool, daos_ev2ctx(ev), tgts, info, pool_query_cp,
-			   ev);
-	if (rc != 0) {
-		daos_event_complete(ev, rc);
-		rc = 0;
-	}
+	rc = daos_pool_query_async(poh, tgts, info, task);
+out:
+	if (rc != 0)
+		daos_sched_cancel(daos_ev2sched(ev), rc);
 
 	if (daos_event_is_priv(ev))
 		rc = daos_event_priv_wait(ev);
 
-out_pool:
-	dc_pool_put(pool);
 	return rc;
 }
 

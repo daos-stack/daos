@@ -40,7 +40,6 @@ int dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
 
 int dc_cont_hdl2uuid_map_ver(daos_handle_t coh, uuid_t *con_hdl,
 			      uint32_t *ver);
-
 int
 dc_cont_local2global(daos_handle_t coh, daos_iov_t *glob);
 int
@@ -77,4 +76,7 @@ dc_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
 int
 dc_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
 		daos_epoch_state_t *state, daos_event_t *ev);
+
+daos_handle_t
+dc_cont_hdl2pool_hdl(daos_handle_t coh);
 #endif /* __DAOS_CONTAINER_H__ */

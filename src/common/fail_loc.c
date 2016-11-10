@@ -27,7 +27,7 @@
  */
 #include <daos/common.h>
 
-uint32_t daos_fail_loc;
+uint64_t daos_fail_loc;
 
 #define DAOS_FAIL_MASK_MOD	0x0000ff00
 #define DAOS_FAIL_MASK_LOC	(DAOS_FAIL_MASK_MOD | 0x000000ff)
@@ -39,21 +39,21 @@ daos_reset_fail_loc()
 }
 
 int
-daos_fail_check(uint32_t id, uint32_t ret_value)
+daos_fail_check(uint64_t id)
 {
 	if ((daos_fail_loc & DAOS_FAIL_MASK_LOC) ==
 	   (id & DAOS_FAIL_MASK_LOC)) {
-		D_ERROR("**** daos_fail_loc=0x%x, id =0x%x rc = %d***\n",
-			daos_fail_loc, id, ret_value);
+		D_DEBUG(DF_MISC, "**** daos_fail_loc="DF_X64", id ="DF_X64
+			"***\n", daos_fail_loc, id);
 		daos_reset_fail_loc();
-		return ret_value;
+		return 1;
 	}
 
 	return 0;
 }
 
 void
-daos_fail_loc_set(uint32_t id)
+daos_fail_loc_set(uint64_t id)
 {
 	daos_fail_loc = id;
 }
@@ -69,12 +69,12 @@ daos_fail_loc_init()
 		return 0;
 	}
 
-	daos_fail_loc = (uint32_t)strtoul(fail_loc_str, NULL, 0);
+	daos_fail_loc = (uint64_t)strtoull(fail_loc_str, NULL, 0);
 	if (daos_fail_loc == 0)
 		D_ERROR("DAOS_FAIL_LOC_MASK %s might be invalid\n",
 			fail_loc_str);
 	else
-		D_DEBUG(DF_MISC, "daos_fail_loc = 0x%x\n", daos_fail_loc);
+		D_DEBUG(DF_MISC, "daos_fail_loc = "DF_X64"\n", daos_fail_loc);
 
 	return 0;
 }

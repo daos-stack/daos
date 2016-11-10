@@ -36,16 +36,15 @@
 #include <daos/event.h>
 #include <daos/rpc.h>
 
-typedef int (*daos_task_comp_cb_t)(struct daos_task *);
 typedef int (*daos_task_func_t)(struct daos_task *);
+typedef int (*daos_task_comp_cb_t)(struct daos_task *, void *arg);
+typedef int (*daos_task_result_cb_t)(struct daos_task *, void *arg);
 
 /**
  * daos_task is used to track single asynchronous operation.
  **/
 struct daos_task {
 	int			dt_result;
-
-	daos_task_comp_cb_t	dt_comp_cb;
 	/* daos schedule internal */
 	struct {
 		uint64_t	dt_space[60];
@@ -53,57 +52,26 @@ struct daos_task {
 };
 
 /**
- * Track a sub group of tasks (from one scheduler).
- **/
-typedef int (*daos_task_group_cb_t)(void *args);
-struct daos_task_group {
-	/* link to daos_sched */
-	daos_list_t		dtg_list;
-
-	/* protect the task list */
-	pthread_mutex_t		dtg_task_list_lock;
-
-	/* link to all tasks of the group */
-	daos_list_t		dtg_task_list;
-
-	int			dtg_result;
-	/* completion callback, which is called when all tasks
-	 * in dsc_task_list are finished.
-	 **/
-	daos_task_group_cb_t	dtg_comp_cb;
-
-	/* completion callback argument */
-	void			*dtg_cb_arg;
-};
-
-typedef int (*daos_sched_comp_cb_t)(void *args, int rc);
-struct daos_sched_comp {
-	daos_list_t		dsc_list;
-	daos_sched_comp_cb_t	dsc_comp_cb;
-	void			*dsc_arg;
-};
-
-/**
  * Track all of the tasks under a scheduler.
  **/
 struct daos_sched {
+	int		ds_result;
+
 	/* the event associated with the scheduler */
 	daos_event_t	*ds_event;
 
-	/* The result of daos schedule */
-	int		ds_result;
+	/* Linked to the executed list */
+	daos_list_t	ds_list;
 
 	/* daos schedule internal */
 	struct {
-		uint64_t	ds_space[28];
+		uint64_t	ds_space[48];
 	}			ds_private;
 };
+typedef int (*daos_sched_comp_cb_t)(void *args, int rc);
 
 struct daos_sched *
 daos_ev2sched(struct daos_event *ev);
-
-void *
-daos_sched_get_inline_dtg(struct daos_sched *sched);
 
 void *
 daos_task2arg(struct daos_task *task);
@@ -120,27 +88,28 @@ daos_task2sched(struct daos_task *task);
 /**
  * Initialize the daos_task.
  *
+ * The task will be added to the scheduler task list, and
+ * being scheduled later, if dependent task is provided, then
+ * the task will be added to the dep list of the dependent
+ * task, once the dependent task is done, then the task will
+ * be added to the scheduler list.
+ *
  * \param task [input]		daos_task to be initialized.
  * \param task_func [input]	the function to be executed when
  *                              the task is executed.
+ * \param arg [input]		the task_func argument.
+ * \param arg_size [input]	the task_func argument size.
  * \param sched [input]		daos scheduler where the daos
  *                              task will be attached to.
+ * \param dependent [input]	task which this task dependents on
  *
  * \return			0  if initialization succeeds.
  * \return			negative errno if it fails.
  */
 int
 daos_task_init(struct daos_task *task, daos_task_func_t task_func,
-	       struct daos_sched *sched);
-
-/**
- * Finalize the daos_task.
- *
- * \param task [input]		daos_task to be finalized.
- */
-void
-daos_task_fini(struct daos_task *task);
-
+	       void *arg, int arg_size, struct daos_sched *sched,
+	       struct daos_task *dependent);
 
 /**
  *  Initialized the scheduler, if the scheduler is launched after
@@ -178,41 +147,19 @@ daos_sched_register_comp_cb(struct daos_sched *sched,
 			    daos_sched_comp_cb_t comp_cb, void *arg);
 
 /**
- * Initialize daos task group.
+ * register complete callback for the task.
  *
- * daos task group is used to track a group of tasks under one scheduler,
- * The group completion callback will be called when all of its tasks are
- * finished.
+ * \param task [input]		task to be registered complete callback.
+ * \param comp_cb [input]	complete callback.
+ * \param arg [input]		callback argument.
  *
- * \param dtg [input]	daos task group to be initialize.
- * \param sched [input] daos scheduler which the task group belongs to.
- * \param callback [input] callback of the task group, which is called
- *                         when all of its tasks are finished.
- * \param arg [input]	argument for callback.
- *
- * \return		0 if initialization succeeds.
+ * \return		0 if register succeeds.
  * \return		negative errno if it fails.
  */
 int
-daos_task_group_init(struct daos_task_group *dtg,
-		     struct daos_sched *sched,
-		     daos_task_group_cb_t callback,
-		     void *arg);
-
-/**
- * Add task to daos task group.
- *
- * \param dtg [input]	daos task group which task is added to.
- * \param task [input]  daos task to be added.
- *
- * \return		0 if adding succeeds.
- * \return		negative errno if adding fails.
- */
-int
-daos_task_group_add(struct daos_task_group *dtg,
-		    struct daos_task *task);
-
-
+daos_task_register_comp_cb(struct daos_task *task,
+			   daos_task_comp_cb_t comp_cb,
+			   void *arg);
 /**
  * run all of tasks of the scheduler.
  *
@@ -224,11 +171,66 @@ daos_sched_run(struct daos_sched *sched);
 /**
  * cancel all of tasks in the scheduler.
  *
- * Cancel all of tasks and task group of the scheduler.
+ * Cancel all of tasks of the scheduler.
  *
  * \param sched [input] scheduler to be canceled.
  * \param ret   [input] result of the scheduler.
  */
 void
 daos_sched_cancel(struct daos_sched *sched, int ret);
+
+/**
+ * complete daos_task.
+ *
+ * Mark the task to be completed.
+ *
+ * \param task [input]	task to be completed.
+ * \param ret [input]	ret result of the task.
+ **/
+void
+daos_task_complete(struct daos_task *task, int ret);
+
+/**
+ * Add dependent task
+ *
+ * If one task depends on other tasks, only if all of its dependent
+ * tasks finish, then the task can be scheduled.
+ *
+ * param task [in]	task which depends on dep task(@dep).
+ * param dep [in]	dependent task which the task depends on.
+ *
+ * return		0 if adding dependent succeeds.
+ * return		errno if adding dependent fails.
+ **/
+int
+daos_task_add_dependent(struct daos_task *task, struct daos_task *dep);
+
+/**
+ * Process the result tasks.
+ *
+ * After one task finish, if it has dependent task, then this task will
+ * be added to the result task list of its dependent task, in case the
+ * dependent task might check this task result later. This function will
+ * walk through the result task list and call the callback for each task.
+ *
+ * \param task	[in]	task of its result tasks to be called callback.
+ * \param callback [in]	callback to be called for each task.
+ * \param arg [in]	argument of the callback.
+ **/
+void
+daos_task_result_process(struct daos_task *task, daos_task_result_cb_t callback,
+			 void *arg);
+
+/**
+ * Get a buffer from task.
+ *
+ * Get a buffer from task internal buffer pool.
+ *
+ * \param task [in] task to get the buffer.
+ * \param task [in] task buffer size.
+ *
+ * \return	pointer to the buffer.
+ **/
+void *
+daos_task_buf_get(struct daos_task *task, int buf_size);
 #endif

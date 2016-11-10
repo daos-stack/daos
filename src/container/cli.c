@@ -1032,3 +1032,17 @@ dc_cont_hdl2uuid_map_ver(daos_handle_t coh, uuid_t *con_hdl,
 	return rc;
 }
 
+daos_handle_t
+dc_cont_hdl2pool_hdl(daos_handle_t coh)
+{
+	struct dsmc_container	*dc;
+	daos_handle_t ph;
+
+	dc = dsmc_handle2container(coh);
+	if (dc == NULL)
+		return DAOS_HDL_INVAL;
+
+	ph = dc->dc_pool_hdl;
+	dsmc_container_put(dc);
+	return ph;
+}

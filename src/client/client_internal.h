@@ -141,4 +141,12 @@ daos_event_is_priv(daos_event_t *ev);
  */
 int
 daos_event_priv_wait();
+
+int
+daos_pool_query_async(daos_handle_t ph, daos_rank_list_t *tgts,
+		      daos_pool_info_t *info, struct daos_task *task);
+
+int
+daos_client_prep_task(daos_task_comp_cb_t comp_cb, void *arg, int arg_size,
+		      struct daos_task **taskp, daos_event_t **evp);
 #endif /* __EVENT_INTERNAL_H__ */

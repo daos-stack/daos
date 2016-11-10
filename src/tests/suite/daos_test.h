@@ -55,6 +55,7 @@ typedef struct {
 	daos_cont_info_t	co_info;
 	bool			async;
 	bool			hdl_share;
+	uint64_t		fail_loc;
 } test_arg_t;
 
 static inline int

@@ -51,6 +51,7 @@ struct ioreq {
 	daos_recx_t	 rex[IOREQ_SG_VD_NR][IOREQ_VD_NR];
 	daos_epoch_range_t erange[IOREQ_SG_VD_NR][IOREQ_VD_NR];
 	daos_vec_iod_t	 vio[IOREQ_SG_VD_NR];
+	uint64_t	 fail_loc;
 };
 
 #define SEGMENT_SIZE	(10 * 1048576)	/* 10MB */
@@ -68,6 +69,8 @@ ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
 		rc = daos_event_init(&req->ev, arg->eq, NULL);
 		assert_int_equal(rc, 0);
 	}
+
+	daos_fail_loc_set(arg->fail_loc);
 
 	/* init sgl */
 	for (i = 0; i < IOREQ_SG_VD_NR; i++) {
@@ -888,6 +891,26 @@ io_on_stack(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static void
+io_simple_update_timeout(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT;
+
+	io_simple(state);
+}
+
+static void
+io_simple_fetch_timeout(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	arg->fail_loc = DAOS_SHARD_OBJ_FETCH_TIMEOUT;
+
+	io_simple(state);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "DSR200: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
@@ -913,6 +936,10 @@ static const struct CMUnitTest io_tests[] = {
 	  async_disable, NULL},
 	{ "DSR211: i/o parameter on stack", io_on_stack,
 	  async_disable, NULL},
+	{ "DSR212: timeout simple update (async)",
+	  io_simple_update_timeout, async_disable, NULL},
+	{ "DSR213: timeout simple fetch (async)",
+	  io_simple_fetch_timeout, async_disable, NULL},
 };
 
 static int

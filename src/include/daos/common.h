@@ -333,4 +333,16 @@ daos_fail_loc_init();
 #define daos_rank_list_identical	crt_rank_list_identical
 #define daos_rank_in_rank_list		crt_rank_in_rank_list
 
+void
+daos_fail_loc_set(uint64_t id);
+
+int
+daos_fail_check(uint64_t id);
+
+#define DAOS_FAIL_CHECK(id) daos_fail_check(id)
+#define DAOS_OBJ_FAILS			0x0100
+
+#define DAOS_SHARD_OBJ_UPDATE_TIMEOUT	(DAOS_OBJ_FAILS | 0x001)
+#define DAOS_SHARD_OBJ_FETCH_TIMEOUT	(DAOS_OBJ_FAILS | 0x002)
+
 #endif /* __DAOS_COMMON_H__ */

@@ -34,55 +34,77 @@
  */
 
 struct daos_task_private {
+	int			dtp_result;
+
+	/* refcount of the task */
+	int			dtp_refcnt;
+
 	/* function for the task */
-	daos_task_func_t	crt_func;
+	daos_task_func_t	dtp_func;
+	void			*dtp_func_arg;
 
 	/* links to scheduler */
-	daos_list_t		crt_list;
+	daos_list_t		dtp_list;
 
-	/* links to task group */
-	daos_list_t		crt_dtg_list;
+	/* links to tasks which dependent on it */
+	daos_list_t		dtp_dep_list;
 
-	/* daos_task argument */
+	/* daos complete task callback list */
+	daos_list_t		dtp_comp_cb_list;
+
+	/* daos complete task callback list */
+	daos_list_t		dtp_ret_list;
+
+	/* daos_task internal buffer */
 	struct {
-		uint64_t	crt_arg_space[12];
-	}			crt_arg;
+		uint32_t	dtp_buf_space[25];
+		uint32_t	dtp_buf_size;
+	}			dtp_buf;
 
-	struct daos_op_sp	crt_sp;
+	struct daos_op_sp	dtp_sp;
 
-	struct daos_sched_private	*crt_sched;
-	struct daos_task_group		*crt_dtg;
-	int			crt_result;
+	uint32_t		dtp_complete:1;
+	int			dtp_dep_cnt;
+	struct daos_sched_private	*dtp_sched;
+};
+
+struct daos_task_comp_cb {
+	daos_list_t		dtc_list;
+	daos_task_comp_cb_t	dtc_comp_cb;
+	void			*dtc_arg;
 };
 
 struct daos_sched_private {
 	/* lock to protect schedule status and sub task list */
 	pthread_mutex_t dsp_lock;
 
-	/* The task will initially being added to init list */
-	daos_list_t	dsp_init_list;
-
-	/* The task will be moved to running list when it is
-	 * being executed
+	/* The task will be added to init list when it is initially
+	 * added to scheduler.
 	 **/
-	daos_list_t	dsp_running_list;
+	daos_list_t	dsp_init_list;
 
 	/* The task will be moved to complete list after the
 	 * complete callback is being executed
 	 **/
 	daos_list_t	dsp_complete_list;
 
+	/* Both task and comp_cb have been executed */
+	daos_list_t	dsp_fini_list;
 	/* the list for complete callback */
 	daos_list_t	dsp_comp_cb_list;
 
-	/* daos task group list */
-	daos_list_t	dsp_dtg_list;
-
 	int		dsp_refcount;
 
-	struct daos_task_group	dsp_inline_dtg;
-
+	/* number of tasks being executed */
+	int		dsp_inflight;
 };
+
+struct daos_sched_comp {
+	daos_list_t		dsc_list;
+	daos_sched_comp_cb_t	dsc_comp_cb;
+	void			*dsc_arg;
+};
+
 
 static inline struct daos_task_private *
 daos_task2priv(struct daos_task *task)
