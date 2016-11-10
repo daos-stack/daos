@@ -48,7 +48,7 @@ There you will find anything written to stdout and stderr. The output from
 memcheck and callgrind are in the echo_test directory. At the end of a test run,
 the last testRun directory is renamed to testRun_<date stamp>
 
-python3 test_runner srcipts/cart_echo_test.yml
+python3 test_runner scripts/cart_echo_test.yml
 
 To use valgrind memory checking
 set TR_USE_VALGRIND in cart_echo_test.yml to memcheck
