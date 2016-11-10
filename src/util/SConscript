@@ -47,8 +47,7 @@ def scons():
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots')
-    denv.AppendUnique(LIBS=['uuid'])
+    prereqs.require(denv, 'argobots', 'uuid')
 
     src = ['debug.c', 'clog.c', 'hash.c', 'misc.c', 'path.c', 'heap.c']
     crt_util_targets = denv.SharedObject(src)

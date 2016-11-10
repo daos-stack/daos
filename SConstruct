@@ -96,9 +96,11 @@ def scons():
         os.rename('daos_m.conf', opts_file)
 
     prereqs = PreReqComponent(env, opts, arch=platform)
+    prereqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'],
+                   package='libuuid-devel')
     prereqs.preload(os.path.join(Dir('#').abspath, 'scons_local',
                                  'components.py'),
-                    prebuild=['ompi'])
+                    prebuild=['ompi', 'mercury', 'argobots', 'uuid', 'crypto'])
     opts.Save(opts_file, env)
     env.Alias('install', '$PREFIX')
 
