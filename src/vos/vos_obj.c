@@ -38,6 +38,8 @@ struct vos_obj_iter {
 	struct vos_iterator	 it_iter;
 	/** handle of iterator */
 	daos_handle_t		 it_hdl;
+	/** condition of the iterator: epoch logic expression */
+	vos_it_epc_expr_t	 it_epc_expr;
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
 	/** condition of the iterator: attribute key */
@@ -1406,24 +1408,44 @@ recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 		int	rc;
 
 		if (entry->ie_epr.epr_lo == oiter->it_epr.epr_lo)
-			return 0; /* exactly match */
+			return 0; /* matched */
 
-		if (entry->ie_epr.epr_lo < oiter->it_epr.epr_lo) {
-			/* this recx has data for the specified epoch, we can
-			 * use BTR_PROBE_LE to find the closest epoch of this
-			 * recx.
+		switch (oiter->it_epc_expr) {
+		default:
+			return -DER_INVAL;
+
+		case VOS_IT_EPC_GE:
+			if (entry->ie_epr.epr_lo > oiter->it_epr.epr_lo)
+				return 0; /* matched */
+
+			/* this recx may have data for the specified epoch, we
+			 * can use BTR_PROBE_GE to find out.
 			 */
 			entry->ie_epr.epr_lo = oiter->it_epr.epr_lo;
-			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_LE, entry);
-			return rc;
-		}
+			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
+			break;
 
-		/* NB: Nobody can use DAOS_EPOCH_MAX as an epoch of update,
-		 * so using BTR_PROBE_GE & DAOS_EPOCH_MAX can effectively find
-		 * the index of the next recx.
-		 */
-		entry->ie_epr.epr_lo = DAOS_EPOCH_MAX;
-		rc = recx_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
+		case VOS_IT_EPC_LE:
+			if (entry->ie_epr.epr_lo < oiter->it_epr.epr_lo) {
+				/* this recx has data for the specified epoch,
+				 * we can use BTR_PROBE_LE to find the closest
+				 * epoch of this recx.
+				 */
+				entry->ie_epr.epr_lo = oiter->it_epr.epr_lo;
+				rc = recx_iter_probe_fetch(oiter, BTR_PROBE_LE,
+							   entry);
+				return rc;
+			}
+			/* fall through to check the next recx */
+		case VOS_IT_EPC_EQ:
+			/* NB: Nobody can use DAOS_EPOCH_MAX as an epoch of
+			 * update, so using BTR_PROBE_GE & DAOS_EPOCH_MAX can
+			 * effectively find the index of the next recx.
+			 */
+			entry->ie_epr.epr_lo = DAOS_EPOCH_MAX;
+			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
+			break;
+		}
 		if (rc != 0)
 			return rc;
 	}
@@ -1456,11 +1478,11 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 		if (memcmp(anchor, &tmp, sizeof(tmp)) == 0)
 			return 0;
 
-		/* XXX: the original recx has been merged/discarded?
-		 * anyway, returns error for now.
-		 */
 		D_DEBUG(DF_VOS2, "Can't find the provided anchor\n");
-		return -DER_AGAIN;
+		/* the original recx has been merged/discarded, so we need to
+		 * call recx_iter_probe_epr() and check if the current record
+		 * can match the condition.
+		 */
 	}
 
 	rc = recx_iter_probe_epr(oiter, &entry);
@@ -1598,6 +1620,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		break;
 
 	case VOS_ITER_RECX:
+		oiter->it_epc_expr = param->ip_epc_expr;
 		rc = recx_iter_prepare(oiter, &param->ip_dkey, &param->ip_akey);
 		break;
 	}

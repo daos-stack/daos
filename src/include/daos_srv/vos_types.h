@@ -77,6 +77,13 @@ typedef enum {
 	VOS_ITER_RECX,
 } vos_iter_type_t;
 
+/** epoch logic expression for the iterator */
+typedef enum {
+	VOS_IT_EPC_LE		= 0,
+	VOS_IT_EPC_GE,
+	VOS_IT_EPC_EQ,
+} vos_it_epc_expr_t;
+
 /**
  * Parameters for initialising VOS iterator
  */
@@ -86,11 +93,13 @@ typedef struct {
 	/** Optional, object ID for VOS_ITER_DKEY */
 	daos_unit_oid_t		ip_oid;
 	/** distribution key for VOS_ITER_AKEY */
-	daos_dkey_t		ip_dkey;
+	daos_key_t		ip_dkey;
 	/** attribute key for VOS_ITER_DKEY/RECX */
-	daos_akey_t		ip_akey;
+	daos_key_t		ip_akey;
 	/** epoch validity range for the iterator */
 	daos_epoch_range_t	ip_epr;
+	/** epoch logic expression for the iterator */
+	vos_it_epc_expr_t	ip_epc_expr;
 } vos_iter_param_t;
 
 /**

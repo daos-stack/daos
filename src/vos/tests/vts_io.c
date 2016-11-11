@@ -233,6 +233,8 @@ io_recx_iterate(vos_iter_param_t *param, daos_akey_t *akey, int akey_id,
 	int		rc;
 
 	param->ip_akey = *akey;
+	param->ip_epc_expr = VOS_IT_EPC_LE;
+
 	rc = vos_iter_prepare(VOS_ITER_RECX, param, &ih);
 	if (rc != 0) {
 		print_error("Failed to create recx iterator: %d\n", rc);
