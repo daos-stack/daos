@@ -281,9 +281,6 @@ dc_pool_connect(const uuid_t uuid, const char *grp,
 	struct pool_buf		*map_buf;
 	int			 rc;
 
-	/* TODO: Implement these. */
-	D_ASSERT(grp == NULL);
-
 	if (uuid_is_null(uuid) || !flags_are_valid(flags) || poh == NULL)
 		return -DER_INVAL;
 
@@ -716,7 +713,7 @@ pool_exclude_cp(void *arg, daos_event_t *ev, int rc)
 		out->peo_targets == NULL ? 0 : out->peo_targets->rl_nr.num);
 
 	if (out->peo_targets != NULL && out->peo_targets->rl_nr.num > 0)
-		rc = -DER_NONEXIST;
+		rc = -DER_INVAL;
 
 out:
 	crt_req_decref(sp->sp_rpc);
@@ -734,7 +731,7 @@ dc_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
 	struct daos_op_sp      *sp;
 	int			rc;
 
-	if (tgts == NULL)
+	if (tgts == NULL || tgts->rl_nr.num == 0)
 		return -DER_INVAL;
 
 	pool = dc_pool_lookup(poh);

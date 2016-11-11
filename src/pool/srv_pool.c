@@ -1204,7 +1204,9 @@ ds_pool_exclude(struct pool_svc *svc, daos_rank_list_t *tgts,
 	 * before and after.
 	 */
 	map_version_before = pool_map_get_version(map);
-	ds_pool_map_exclude_targets(map, tgts, tgts_failed);
+	rc = ds_pool_map_exclude_targets(map, tgts, tgts_failed);
+	if (rc != 0)
+		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
 
 	D_DEBUG(DF_DSMS, DF_UUID": version=%u->%u failed=%d\n",
@@ -1265,7 +1267,8 @@ ds_pool_exclude_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
-	if (in->pei_targets == NULL || in->pei_targets->rl_nr.num == 0)
+	if (in->pei_targets == NULL || in->pei_targets->rl_nr.num == 0 ||
+	    in->pei_targets->rl_ranks == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID

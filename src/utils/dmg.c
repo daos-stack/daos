@@ -29,6 +29,10 @@
 #include <daos.h>
 #include <daos/common.h>
 
+static const unsigned int	default_mode = 0731;
+static const daos_size_t	default_size = 256 << 20;
+static const char * const	default_group = "daos_server_group";
+
 typedef int (*command_hdlr_t)(int, char *[]);
 
 static int
@@ -42,15 +46,14 @@ create_hdlr(int argc, char *argv[])
 		{"uid",		required_argument,	NULL,	'u'},
 		{NULL,		0,			NULL,	0}
 	};
-	unsigned int		mode = 0731;
+	unsigned int		mode = default_mode;
 	unsigned int		uid = geteuid();
 	unsigned int		gid = getegid();
-	daos_size_t		size = 256 << 20;
-	char		       *group = "daos_server_group";
+	daos_size_t		size = default_size;
+	const char	       *group = default_group;
 	daos_rank_t		ranks[13];
 	daos_rank_list_t	svc;
-	uuid_t			uuid;
-	char			uuid_string[37];
+	uuid_t			pool_uuid;
 	int			rc;
 
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
@@ -80,14 +83,13 @@ create_hdlr(int argc, char *argv[])
 	svc.rl_ranks = ranks;
 
 	rc = daos_pool_create(mode, uid, gid, group, NULL /* tgts */, "pmem",
-			      size, &svc, uuid, NULL /* ev */);
+			      size, &svc, pool_uuid, NULL /* ev */);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: %d\n", rc);
 		return rc;
 	}
 
-	uuid_unparse_lower(uuid, uuid_string);
-	printf("%s\n", uuid_string);
+	printf(DF_UUIDF"\n", DP_UUID(pool_uuid));
 
 	return 0;
 }
@@ -98,13 +100,15 @@ destroy_hdlr(int argc, char *argv[])
 	struct option		options[] = {
 		{"force",	no_argument,		NULL,	'f'},
 		{"group",	required_argument,	NULL,	'G'},
-		{"uuid",	required_argument,	NULL,	'U'},
+		{"pool",	required_argument,	NULL,	'p'},
 		{NULL,		0,			NULL,	0}
 	};
-	char		       *group = "daos_server_group";
-	uuid_t			uuid;
+	const char	       *group = default_group;
+	uuid_t			pool_uuid;
 	int			force = 0;
 	int			rc;
+
+	uuid_clear(pool_uuid);
 
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
@@ -114,8 +118,8 @@ destroy_hdlr(int argc, char *argv[])
 		case 'G':
 			group = optarg;
 			break;
-		case 'U':
-			if (uuid_parse(optarg, uuid) != 0) {
+		case 'p':
+			if (uuid_parse(optarg, pool_uuid) != 0) {
 				D_ERROR("failed to parse pool UUID: %s\n",
 					optarg);
 				return 2;
@@ -126,9 +130,86 @@ destroy_hdlr(int argc, char *argv[])
 		}
 	}
 
-	rc = daos_pool_destroy(uuid, group, force, NULL /* ev */);
+	if (uuid_is_null(pool_uuid)) {
+		D_ERROR("pool UUID required\n");
+		return 2;
+	}
+
+	rc = daos_pool_destroy(pool_uuid, group, force, NULL /* ev */);
 	if (rc != 0) {
 		D_ERROR("failed to destroy pool: %d\n", rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+static int
+exclude_hdlr(int argc, char *argv[])
+{
+	struct option		options[] = {
+		{"group",	required_argument,	NULL,	'G'},
+		{"pool",	required_argument,	NULL,	'p'},
+		{"target",	required_argument,	NULL,	't'},
+		{NULL,		0,			NULL,	0}
+	};
+	const char	       *group = default_group;
+	uuid_t			pool_uuid;
+	daos_rank_t		target = -1;
+	daos_handle_t		pool;
+	daos_rank_list_t	targets;
+	int			rc;
+
+	uuid_clear(pool_uuid);
+
+	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+		switch (rc) {
+		case 'G':
+			group = optarg;
+			break;
+		case 't':
+			target = atoi(optarg);
+			break;
+		case 'p':
+			if (uuid_parse(optarg, pool_uuid) != 0) {
+				D_ERROR("failed to parse pool UUID: %s\n",
+					optarg);
+				return 2;
+			}
+			break;
+		default:
+			return 2;
+		}
+	}
+
+	if (uuid_is_null(pool_uuid)) {
+		D_ERROR("pool UUID required\n");
+		return 2;
+	}
+
+	if (target == -1) {
+		D_ERROR("valid target rank required\n");
+		return 2;
+	}
+
+	rc = daos_pool_connect(pool_uuid, group, NULL /* svc */, DAOS_PC_RW,
+			       &pool, NULL /* info */, NULL /* ev */);
+	if (rc != 0) {
+		D_ERROR("failed to connect to pool: %d\n", rc);
+		return rc;
+	}
+
+	targets.rl_nr.num = 1;
+	targets.rl_nr.num_out = 0;
+	targets.rl_ranks = &target;
+
+	rc = daos_pool_exclude(pool, &targets, NULL /* ev */);
+	if (rc != 0)
+		D_ERROR("failed to exclude target: %d\n", rc);
+
+	rc = daos_pool_disconnect(pool, NULL /* ev */);
+	if (rc != 0) {
+		D_ERROR("failed to disconnect from pool: %d\n", rc);
 		return rc;
 	}
 
@@ -143,19 +224,26 @@ usage: dmg COMMAND [OPTIONS]\n\
 commands:\n\
   create	create a pool\n\
   destroy	destroy a pool\n\
-  help		print this message and exit\n\
+  exclude	exclude a target from a pool\n\
+  help		print this message and exit\n");
+	printf("\
 create options:\n\
-  --gid=GID	pool GID\n\
-  --group=STR	pool server process group\n\
-  --mode=MODE	pool mode\n\
-  --size=BYTES	target size in bytes\n\
-  --uid=UID	pool UID\n\
-  --uuid=UUID	pool UUID\n\
+  --gid=GID	pool GID (getegid()) \n\
+  --group=STR	pool server process group (\"%s\")\n\
+  --mode=MODE	pool mode (%#o)\n\
+  --size=BYTES	target size in bytes ("DF_U64")\n\
+  --uid=UID	pool UID (geteuid())\n", default_group, default_mode,
+	       default_size);
+	printf("\
 destroy options:\n\
   --force	destroy the pool even if there are connections\n\
-  --group=STR	pool server process group\n\
-  --uuid=UUID	pool UUID\n\
-  \n");
+  --group=STR	pool server process group (\"%s\")\n\
+  --pool=UUID	pool UUID\n", default_group);
+	printf("\
+exclude options:\n\
+  --group=STR	pool server process group (\"%s\")\n\
+  --pool=UUID	pool UUID\n\
+  --target=RANK	target rank\n", default_group);
 	return 0;
 }
 
@@ -171,6 +259,8 @@ main(int argc, char *argv[])
 		hdlr = create_hdlr;
 	else if (strcmp(argv[1], "destroy") == 0)
 		hdlr = destroy_hdlr;
+	else if (strcmp(argv[1], "exclude") == 0)
+		hdlr = exclude_hdlr;
 
 	if (hdlr == NULL || hdlr == help_hdlr) {
 		help_hdlr(argc, argv);

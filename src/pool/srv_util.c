@@ -244,39 +244,95 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	return rc;
 }
 
+static int
+map_exclude_create_sanitized_tgts(const daos_rank_list_t *tgts,
+				  daos_rank_list_t **tgts_sanitized,
+				  daos_rank_list_t *tgts_failed)
+{
+	daos_rank_t		me;
+	daos_rank_list_t       *ts;
+	int			i;
+	int			rc;
+
+	rc = crt_group_rank(NULL /* grp */, &me);
+	if (rc != 0)
+		return rc;
+
+	rc = crt_rank_list_dup_sort_uniq(&ts, tgts, true /* input */);
+	if (rc != 0)
+		return rc;
+
+	/* Save the size of this rank list in num_out. */
+	ts->rl_nr.num_out = ts->rl_nr.num;
+
+	if (crt_rank_list_find(ts, me, &i)) {
+		D_DEBUG(DF_DSMS, "removing myself %u\n", me);
+		memmove(ts->rl_ranks + i, ts->rl_ranks + i + 1,
+			ts->rl_nr.num - i - 1);
+		ts->rl_nr.num--;
+
+		if (tgts_failed != NULL) {
+			/* Add me to tgts_failed. */
+			tgts_failed->rl_ranks[tgts_failed->rl_nr.num_out] = me;
+			tgts_failed->rl_nr.num_out++;
+		}
+	}
+
+	*tgts_sanitized = ts;
+	return 0;
+}
+
+static void
+map_exclude_destroy_sanitized_tgts(daos_rank_list_t *tgts)
+{
+	/* Restore the size of this rank list from num_out. */
+	tgts->rl_nr.num = tgts->rl_nr.num_out;
+	crt_rank_list_free(tgts);
+}
+
 /*
  * Exclude "tgts" in "map". A new map version is generated only if actual
- * changes have been made. If "tgts_failed" is not NULL, then targets whose
- * ranks cannot be found in map are added to "tgts_failed", whose rank buffer
- * must be at least as large that of "tgts".
+ * changes have been made. If "tgts_failed" is not NULL, then targets that are
+ * not excluded are added to "tgts_failed", whose rank buffer must be at least
+ * as large that of "tgts".
  */
-void
+int
 ds_pool_map_exclude_targets(struct pool_map *map, daos_rank_list_t *tgts,
 			    daos_rank_list_t *tgts_failed)
 {
-	uint32_t	version;
-	int		i;
-	int		nchanges = 0;
-	int		rc;
+	daos_rank_list_t       *tgts_sanitized;
+	uint32_t		version;
+	int			i;
+	int			nchanges = 0;
+	int			rc;
 
-	if (tgts_failed != NULL) {
-		D_ASSERT(tgts_failed->rl_nr.num >= tgts->rl_nr.num);
+	D_ASSERT(tgts != NULL && tgts->rl_nr.num > 0 && tgts->rl_ranks != NULL);
+	D_ASSERT(tgts_failed == NULL ||
+		 (tgts_failed->rl_nr.num >= tgts->rl_nr.num &&
+		  tgts_failed->rl_ranks != NULL));
+
+	if (tgts_failed != NULL)
 		tgts_failed->rl_nr.num_out = 0;
-	}
+
+	rc = map_exclude_create_sanitized_tgts(tgts, &tgts_sanitized,
+					       tgts_failed);
+	if (rc != 0)
+		return rc;
 
 	version = pool_map_get_version(map) + 1;
 
-	for (i = 0; i < tgts->rl_nr.num; i++) {
-		struct pool_target *target;
+	for (i = 0; i < tgts_sanitized->rl_nr.num; i++) {
+		struct pool_target     *target;
+		daos_rank_t		rank = tgts_sanitized->rl_ranks[i];
 
-		target = pool_map_find_target_by_rank(map, tgts->rl_ranks[i]);
+		target = pool_map_find_target_by_rank(map, rank);
 		if (target == NULL) {
 			D_DEBUG(DF_DSMS, "failed to find rank %u in map %p\n",
-				tgts->rl_ranks[i], map);
+				rank, map);
 			if (tgts_failed != NULL) {
 				int j = tgts_failed->rl_nr.num_out;
 
-				tgts_failed->rl_ranks[j] = tgts->rl_ranks[i];
+				tgts_failed->rl_ranks[j] = rank;
 				tgts_failed->rl_nr.num_out++;
 			}
 			continue;
@@ -304,4 +360,7 @@ ds_pool_map_exclude_targets(struct pool_map *map, daos_rank_list_t *tgts,
 		rc = pool_map_set_version(map, version);
 		D_ASSERTF(rc == 0, "%d\n", rc);
 	}
+
+	map_exclude_destroy_sanitized_tgts(tgts_sanitized);
+	return 0;
 }

@@ -101,7 +101,7 @@ int ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
 int ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 			 crt_group_t **group);
 int ds_pool_group_destroy(crt_group_t *group);
-void ds_pool_map_exclude_targets(struct pool_map *map, daos_rank_list_t *tgts,
-				 daos_rank_list_t *tgts_failed);
+int ds_pool_map_exclude_targets(struct pool_map *map, daos_rank_list_t *tgts,
+				daos_rank_list_t *tgts_failed);
 
 #endif /* __POOL_SERVER_INTERNAL_H__ */
