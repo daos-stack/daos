@@ -56,26 +56,26 @@ daos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch,
 }
 
 int
-daos_epoch_flush_target(daos_handle_t coh, daos_epoch_t epoch, daos_rank_t tgt,
-			daos_epoch_state_t *state, daos_event_t *ev)
-{
-	/** all updates are synchronous for now, no need to do anything */
-	return daos_epoch_query(coh, state, ev);
-}
-
-int
 daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
 		   daos_epoch_state_t *state, daos_event_t *ev)
 {
-	return -DER_NOSYS;
-}
+	int rc;
 
-int
-daos_epoch_discard_target(daos_handle_t coh, daos_epoch_t epoch,
-			  daos_rank_t tgt, daos_epoch_state_t *state,
-			  daos_event_t *ev)
-{
-	return -DER_NOSYS;
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			return rc;
+	}
+
+	rc = dc_epoch_discard(coh, epoch, state, ev);
+	if (rc)
+		return rc;
+
+	/** wait for completion if blocking mode */
+	if (daos_event_is_priv(ev))
+		rc = daos_event_priv_wait(ev);
+
+	return rc;
 }
 
 int

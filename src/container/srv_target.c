@@ -521,3 +521,70 @@ ds_cont_tgt_close_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	out_result->tco_rc += out_source->tco_rc;
 	return 0;
 }
+
+/* Called via dss_collective() to discard an epoch in the VOS pool. */
+static int
+cont_epoch_discard_one(void *vin)
+{
+	struct cont_tgt_epoch_discard_in       *in = vin;
+	struct dsm_tls			       *tls = dsm_tls_get();
+	struct ds_cont_hdl		       *hdl;
+	daos_epoch_range_t			range;
+	int					rc;
+
+	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, in->tii_hdl);
+	if (hdl == NULL)
+		return -DER_NO_PERM;
+
+	range.epr_lo = in->tii_epoch;
+	range.epr_hi = in->tii_epoch;
+
+	rc = vos_epoch_discard(hdl->sch_cont->sc_hdl, &range, in->tii_hdl);
+	if (rc != 0)
+		D_ERROR(DF_CONT": failed to discard epoch "DF_U64": hdl="DF_UUID
+			" rc=%d\n",
+			DP_CONT(hdl->sch_pool->spc_uuid,
+				hdl->sch_cont->sc_uuid), in->tii_epoch,
+			DP_UUID(in->tii_hdl), rc);
+
+	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
+	return rc;
+}
+
+int
+ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc)
+{
+	struct cont_tgt_epoch_discard_in       *in = crt_req_get(rpc);
+	struct cont_tgt_epoch_discard_out      *out = crt_reply_get(rpc);
+	int					rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID" epoch="DF_U64
+		"\n", DP_CONT(NULL, NULL), rpc, DP_UUID(in->tii_hdl),
+		in->tii_epoch);
+
+	if (in->tii_epoch == 0)
+		D_GOTO(out, rc = -DER_EP_RO);
+	else if (in->tii_epoch >= DAOS_EPOCH_MAX)
+		D_GOTO(out, rc = -DER_OVERFLOW);
+
+	rc = dss_collective(cont_epoch_discard_one, in);
+
+out:
+	out->tio_rc = (rc == 0 ? 0 : 1);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
+		DP_CONT(NULL, NULL), rpc, out->tio_rc, rc);
+	return crt_reply_send(rpc);
+}
+
+int
+ds_cont_tgt_epoch_discard_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				     void *priv)
+{
+	struct cont_tgt_epoch_discard_out      *out_source;
+	struct cont_tgt_epoch_discard_out      *out_result;
+
+	out_source = crt_reply_get(source);
+	out_result = crt_reply_get(result);
+	out_result->tio_rc += out_source->tio_rc;
+	return 0;
+}

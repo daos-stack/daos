@@ -532,8 +532,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	struct vos_obj_ref *oref;
 	int		    rc;
 
-	D_DEBUG(DF_VOS2, "Fetch "DF_UOID", desc_nr %d\n",
-		DP_UOID(oid), viod_nr);
+	D_DEBUG(DF_VOS2, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
+		DP_UOID(oid), viod_nr, epoch);
 
 	rc = vos_obj_ref_hold(vos_obj_cache_current(), coh, oid, &oref);
 	if (rc != 0)
@@ -767,8 +767,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	PMEMobjpool		*pop;
 	int			rc;
 
-	D_DEBUG(DF_VOS2, "Update "DF_UOID", desc_nr %d\n",
-		DP_UOID(oid), viod_nr);
+	D_DEBUG(DF_VOS2, "Update "DF_UOID", desc_nr %d, cookie "DF_UUID" epoch "
+		DF_U64"\n", DP_UOID(oid), viod_nr, DP_UUID(cookie), epoch);
 
 	rc = vos_obj_ref_hold(vos_obj_cache_current(), coh, oid, &oref);
 	if (rc != 0)

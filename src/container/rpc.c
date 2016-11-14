@@ -116,6 +116,15 @@ struct crt_msg_field *cont_tgt_close_out_fields[] = {
 	&CMF_INT	/* rc */
 };
 
+struct crt_msg_field *cont_tgt_epoch_discard_in_fields[] = {
+	&CMF_UUID,	/* hdl */
+	&CMF_UINT64	/* epoch */
+};
+
+struct crt_msg_field *cont_tgt_epoch_discard_out_fields[] = {
+	&CMF_INT	/* rc */
+};
+
 struct crt_req_format DQF_CONT_CREATE =
 	DEFINE_CRT_REQ_FMT("CONT_CREATE", cont_create_in_fields,
 			   cont_create_out_fields);
@@ -147,6 +156,11 @@ struct crt_req_format DQF_CONT_TGT_OPEN =
 struct crt_req_format DQF_CONT_TGT_CLOSE =
 	DEFINE_CRT_REQ_FMT("CONT_TGT_CLOSE", cont_tgt_close_in_fields,
 			   cont_tgt_close_out_fields);
+
+struct crt_req_format DQF_CONT_TGT_EPOCH_DISCARD =
+	DEFINE_CRT_REQ_FMT("CONT_TGT_EPOCH_DISCARD",
+			   cont_tgt_epoch_discard_in_fields,
+			   cont_tgt_epoch_discard_out_fields);
 
 int
 cont_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
@@ -197,6 +211,12 @@ struct daos_rpc cont_rpcs[] = {
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_CONT_EPOCH_OP
 	}, {
+		.dr_name	= "CONT_EPOCH_DISCARD",
+		.dr_opc		= CONT_EPOCH_DISCARD,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_EPOCH_OP
+	}, {
 		.dr_name	= "CONT_EPOCH_COMMIT",
 		.dr_opc		= CONT_EPOCH_COMMIT,
 		.dr_ver		= 1,
@@ -226,6 +246,12 @@ struct daos_rpc cont_srv_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_CONT_TGT_CLOSE
+	}, {
+		.dr_name	= "CONT_TGT_EPOCH_DISCARD",
+		.dr_opc		= CONT_TGT_EPOCH_DISCARD,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_TGT_EPOCH_DISCARD
 	}, {
 		.dr_opc		= 0
 	}

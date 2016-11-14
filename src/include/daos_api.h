@@ -417,20 +417,6 @@ daos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch,
 		 daos_epoch_state_t *state, daos_event_t *ev);
 
 /**
- * Flush an epoch of a container handle on a target.
- *
- * \param coh	[IN]	container handle
- * \param epoch	[IN]	epoch to flush
- * \param tgt	[IN]	Target to flush.
- * \param state	[OUT]	Optional, latest epoch state
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_epoch_flush_target(daos_handle_t coh, daos_epoch_t epoch, daos_rank_t tgt,
-			daos_epoch_state_t *state, daos_event_t *ev);
-
-/**
  * Discard an epoch of a container handle.
  *
  * \param coh	[IN]	container handle
@@ -442,20 +428,6 @@ daos_epoch_flush_target(daos_handle_t coh, daos_epoch_t epoch, daos_rank_t tgt,
 int
 daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
 		   daos_epoch_state_t *state, daos_event_t *ev);
-
-/**
- * Discard an epoch of a container handle on a target.
- *
- * \param coh	[IN]	container handle
- * \param epoch	[IN]	epoch to discard
- * \param state	[OUT]	Optional, latest epoch state
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_epoch_discard_target(daos_handle_t coh, daos_epoch_t epoch,
-			  daos_rank_t tgt, daos_epoch_state_t *state,
-			  daos_event_t *ev);
 
 /**
  * Query latest epoch state.

@@ -75,6 +75,9 @@ int ds_cont_tgt_open_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 int ds_cont_tgt_close_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_close_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
+int ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc);
+int ds_cont_tgt_epoch_discard_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+					 void *priv);
 int ds_cont_cache_create(struct daos_lru_cache **cache);
 void ds_cont_cache_destroy(struct daos_lru_cache *cache);
 int ds_cont_hdl_hash_create(struct dhash_table *hash);

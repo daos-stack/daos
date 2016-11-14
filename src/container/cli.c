@@ -870,10 +870,13 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		if (*epoch == 0)
 			D_GOTO(err, rc = -DER_EP_RO);
 		break;
+	case CONT_EPOCH_DISCARD:
 	case CONT_EPOCH_COMMIT:
 		D_ASSERT(epoch != NULL);
-		if (*epoch == 0 || *epoch == DAOS_EPOCH_MAX)
-			D_GOTO(err, rc = -DER_INVAL);
+		if (*epoch == 0)
+			D_GOTO(err, rc = -DER_EP_RO);
+		if (*epoch >= DAOS_EPOCH_MAX)
+			D_GOTO(err, rc = -DER_OVERFLOW);
 		break;
 	}
 
@@ -953,15 +956,22 @@ dc_epoch_query(daos_handle_t coh, daos_epoch_state_t *state, daos_event_t *ev)
 }
 
 int
-dc_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
-	       daos_epoch_state_t *state, daos_event_t *ev)
+dc_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch, daos_epoch_state_t *state,
+	      daos_event_t *ev)
 {
 	return epoch_op(coh, CONT_EPOCH_HOLD, epoch, state, ev);
 }
 
 int
-dc_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
+dc_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
 		 daos_epoch_state_t *state, daos_event_t *ev)
+{
+	return epoch_op(coh, CONT_EPOCH_DISCARD, &epoch, state, ev);
+}
+
+int
+dc_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
+		daos_epoch_state_t *state, daos_event_t *ev)
 {
 	return epoch_op(coh, CONT_EPOCH_COMMIT, &epoch, state, ev);
 }

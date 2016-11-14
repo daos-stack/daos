@@ -755,9 +755,11 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 
 	out = crt_reply_get(rpc);
 	rc = out->tco_rc;
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to connect to some targets: %d\n",
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to connect to %d targets\n",
 			DP_UUID(svc->ps_uuid), rc);
+		rc = -DER_IO;
+	}
 
 out_rpc:
 	crt_req_decref(rpc);
@@ -1011,9 +1013,11 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to disconnect from some targets: %d\n",
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to disconnect from %d targets\n",
 			DP_UUID(svc->ps_uuid), rc);
+		rc = -DER_IO;
+	}
 
 out_rpc:
 	crt_req_decref(rpc);
@@ -1170,9 +1174,11 @@ pool_update_map_bcast(crt_context_t ctx, struct pool_svc *svc,
 
 	out = crt_reply_get(rpc);
 	rc = out->tuo_rc;
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to update pool map on some targets: "
-			"%d\n", DP_UUID(svc->ps_uuid), rc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to update pool map on %d targets\n",
+			DP_UUID(svc->ps_uuid), rc);
+		rc = -DER_IO;
+	}
 
 out_rpc:
 	crt_req_decref(rpc);

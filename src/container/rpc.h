@@ -156,6 +156,15 @@ struct cont_tgt_close_out {
 	int32_t	tco_rc;	/* number of errors */
 };
 
+struct cont_tgt_epoch_discard_in {
+	uuid_t		tii_hdl;
+	daos_epoch_t	tii_epoch;
+};
+
+struct cont_tgt_epoch_discard_out {
+	int32_t	tio_rc;	/* number of errors */
+};
+
 int cont_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
 		    crt_opcode_t opc, crt_rpc_t **req);
 

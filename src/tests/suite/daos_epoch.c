@@ -141,6 +141,10 @@ epoch_hold_commit(void **state)
 	daos_epoch_state_t	 epoch_state;
 	daos_epoch_t		 epoch;
 	daos_epoch_t		 epoch_expected;
+#if 0
+	daos_handle_t		 second_coh;
+	daos_epoch_t		 second_epoch;
+#endif
 	int			 rc;
 
 	assert_int_equal(arg->co_info.ci_epoch_state.es_lhe, DAOS_EPOCH_MAX);
@@ -175,16 +179,37 @@ epoch_hold_commit(void **state)
 	arg->co_info.ci_epoch_state.es_ghpce = epoch;
 	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
 
+#if 0 /* Disable until multiple handles are supported. */
 	print_message("SUBTEST 4: hold an epoch <= GHPCE: shall succeed and "
 		      "end up holding GHPCE + 1.\n");
-	epoch = arg->co_info.ci_epoch_state.es_hce;
-	epoch_expected = arg->co_info.ci_epoch_state.es_ghpce + 1;
+	/*
+	 * Open a second handle and commit to an epoch higher than the previous
+	 * handle's HCE.
+	 */
+	second_epoch = arg->co_info.ci_epoch_state.es_hce + 1000;
+	rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &second_coh,
+			    NULL /* info */, NULL /* ev */);
+	assert_int_equal(rc, 0);
+	rc = daos_epoch_hold(second_coh, &second_epoch, NULL /* state */,
+			     NULL /* ev */);
+	assert_int_equal(rc, 0);
+	assert_int_equal(second_epoch,
+			 arg->co_info.ci_epoch_state.es_hce + 1000);
+	rc = daos_epoch_commit(second_coh, second_epoch, NULL /* state */,
+			       NULL /* ev */);
+	assert_int_equal(rc, 0);
+	/* Attempt to hold an epoch <= GHPCE with the original handle. */
+	epoch = arg->co_info.ci_epoch_state.es_hce + 1;
+	epoch_expected = second_epoch + 1;
 	rc = do_epoch_hold(arg, &epoch, &epoch_state);
 	assert_int_equal(rc, 0);
 	assert_int_equal(epoch, epoch_state.es_lhe);
 	assert_int_equal(epoch, epoch_expected);
 	arg->co_info.ci_epoch_state.es_lhe = epoch;
 	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
+	rc = daos_cont_close(second_coh, NULL /* ev */);
+	assert_int_equal(rc, 0);
+#endif
 
 	print_message("SUBTEST 5: release the hold: shall succeed.\n");
 	epoch = DAOS_EPOCH_MAX;

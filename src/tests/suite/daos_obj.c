@@ -201,7 +201,7 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
 		vio[i].vd_recxs[0].rx_nr = 1;
 
 		/** XXX: to be fixed */
-		vio[i].vd_eprs[0].epr_lo = epoch[i];
+		vio[i].vd_eprs[0].epr_lo = *epoch;
 		vio[i].vd_nr = 1;
 	}
 }
@@ -410,7 +410,7 @@ io_var_akey_size(void **state)
 
 	ioreq_init(&req, oid, arg);
 
-	key = malloc(max_size);
+	key = malloc(max_size + 1);
 	assert_non_null(key);
 	memset(key, 'a', max_size);
 
@@ -455,7 +455,7 @@ io_var_dkey_size(void **state)
 
 	ioreq_init(&req, oid, arg);
 
-	key = malloc(max_size);
+	key = malloc(max_size + 1);
 	assert_non_null(key);
 	memset(key, 'a', max_size);
 
@@ -911,6 +911,114 @@ io_simple_fetch_timeout(void **state)
 	io_simple(state);
 }
 
+static void
+epoch_discard(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	const int	 nakeys = 1;
+	const size_t	 nakeys_strlen = 4 /* "9999" */;
+	const char	 dkey[] = "epoch_discard dkey";
+	const char	*akey_fmt = "epoch_discard akey%d";
+	char		*akey[nakeys];
+	char		*rec[nakeys];
+	daos_size_t	rec_size[nakeys];
+	daos_off_t	offset[nakeys];
+	const char	*val_fmt = "epoch_discard val%d epoch"DF_U64;
+	const size_t	epoch_strlen = 10;
+	char		*val[nakeys];
+	daos_size_t	val_size[nakeys];
+	char		*rec_verify;
+	daos_epoch_state_t epoch_state;
+	daos_epoch_t	epoch;
+	daos_epoch_t	e;
+	int		i;
+	int		rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** Get a hold of an epoch. */
+	if (arg->myrank == 0) {
+		rc = daos_epoch_query(arg->coh, &epoch_state, NULL /* ev */);
+		assert_int_equal(rc, 0);
+		epoch = epoch_state.es_hce + 1;
+		rc = daos_epoch_hold(arg->coh, &epoch, NULL /* state */,
+				     NULL /* ev */);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Bcast(&epoch, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+
+	obj_random(arg, &oid);
+	ioreq_init(&req, oid, arg);
+
+	/** Prepare buffers for a fixed set of d-keys and a-keys. */
+	for (i = 0; i < nakeys; i++) {
+		akey[i] = malloc(strlen(akey_fmt) + nakeys_strlen + 1);
+		assert_non_null(akey[i]);
+		sprintf(akey[i], akey_fmt, i);
+		rec[i] = malloc(strlen(val_fmt) + nakeys_strlen + epoch_strlen +
+				1);
+		assert_non_null(rec[i]);
+		offset[i] = i * 20;
+		val[i] = calloc(64, 1);
+		assert_non_null(val[i]);
+		val_size[i] = 64;
+	}
+
+	/** Write LHE, LHE + 1, and LHE + 2. To same set of d-key and a-keys. */
+	for (e = epoch; e < epoch + 3; e++) {
+		print_message("writing to epoch "DF_U64"\n", e);
+		for (i = 0; i < nakeys; i++) {
+			sprintf(rec[i], val_fmt, i, e);
+			rec_size[i] = strlen(rec[i]);
+			print_message("  a-key[%d] '%s' val '%.*s'\n", i,
+				      akey[i], (int)rec_size[i], rec[i]);
+		}
+		insert(dkey, nakeys, (const char **)akey, offset, (void **)rec,
+		       rec_size, &e, &req);
+	}
+
+	/** Discard LHE + 1. */
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_epoch_discard(arg->coh, epoch + 1, &epoch_state,
+					NULL /* ev */);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** Check the three epochs. */
+	rec_verify = malloc(strlen(val_fmt) + nakeys_strlen + epoch_strlen + 1);
+	for (e = epoch; e < epoch + 3; e++) {
+		print_message("verifying epoch "DF_U64"\n", e);
+		lookup(dkey, nakeys, (const char **)akey, offset,
+		       rec_size, (void **)val, val_size, &e, &req);
+		for (i = 0; i < nakeys; i++) {
+			if (e == epoch + 1)	/* discarded */
+				sprintf(rec_verify, val_fmt, i, e - 1);
+			else			/* intact */
+				sprintf(rec_verify, val_fmt, i, e);
+			assert_int_equal(req.rex[i][0].rx_rsize,
+					 strlen(rec_verify));
+			print_message("  a-key[%d] '%s' val '%.*s'\n", i,
+				      akey[i], (int)req.rex[i][0].rx_rsize,
+				      val[i]);
+			assert_memory_equal(val[i], rec_verify,
+					    req.rex[i][0].rx_rsize);
+		}
+	}
+	free(rec_verify);
+
+	for (i = 0; i < nakeys; i++) {
+		free(val[i]);
+		free(akey[i]);
+		free(rec[i]);
+	}
+	ioreq_fini(&req);
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "DSR200: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
@@ -940,6 +1048,8 @@ static const struct CMUnitTest io_tests[] = {
 	  io_simple_update_timeout, async_disable, NULL},
 	{ "DSR213: timeout simple fetch (async)",
 	  io_simple_fetch_timeout, async_disable, NULL},
+	{ "DSR214: epoch discard", epoch_discard,
+	  async_disable, NULL}
 };
 
 static int
@@ -1001,7 +1111,7 @@ setup(void **state)
 	if (arg->myrank == 0) {
 		/** open container */
 		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
-				    &arg->coh, NULL, NULL);
+				    &arg->coh, &arg->co_info, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)

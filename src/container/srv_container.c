@@ -274,9 +274,11 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
-	if (rc != 0)
-		D_ERROR(DF_CONT": failed to destroy some targets: %d\n",
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to destroy %d targets\n",
 			DP_CONT(svc->cs_pool_uuid, cont_uuid), rc);
+		rc = -DER_IO;
+	}
 
 out_rpc:
 	crt_req_decref(rpc);
@@ -521,9 +523,11 @@ cont_open_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 
 	out = crt_reply_get(rpc);
 	rc = out->too_rc;
-	if (rc != 0)
-		D_ERROR(DF_CONT": failed to open some targets: %d\n",
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to open %d targets\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+		rc = -DER_IO;
+	}
 
 out_rpc:
 	crt_req_decref(rpc);
@@ -683,9 +687,11 @@ cont_close_bcast(crt_context_t ctx, struct cont *cont, const uuid_t cont_hdl)
 
 	out = crt_reply_get(rpc);
 	rc = out->tco_rc;
-	if (rc != 0)
-		D_ERROR(DF_CONT": failed to close some targets: %d\n",
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to close %d targets\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+		rc = -DER_IO;
+	}
 
 out_rpc:
 	crt_req_decref(rpc);
@@ -814,13 +820,18 @@ cont_epoch_hold(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (!(hdl->ch_capas & DAOS_COO_RW))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
-	if (in->cei_epoch == hdl->ch_lhe)
-		D_GOTO(out, rc = 0);
+	if (in->cei_epoch > DAOS_EPOCH_MAX)
+		D_GOTO(out, rc = -DER_OVERFLOW);
+	else if (in->cei_epoch <= hdl->ch_hce)
+		D_GOTO(out, rc = -DER_EP_RO);
 
 	if (in->cei_epoch <= ghpce)
 		hdl->ch_lhe = ghpce + 1;
 	else
 		hdl->ch_lhe = in->cei_epoch;
+
+	if (hdl->ch_lhe == lhe)
+		D_GOTO(out, rc = 0);
 
 	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
 
@@ -861,6 +872,81 @@ out:
 }
 
 static int
+cont_epoch_discard_bcast(crt_context_t ctx, struct cont *cont,
+			 const uuid_t hdl_uuid, daos_epoch_t epoch)
+{
+	struct cont_tgt_epoch_discard_in       *in;
+	struct cont_tgt_epoch_discard_out      *out;
+	crt_rpc_t			       *rpc;
+	int					rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": bcasting\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
+
+	rc = bcast_create(ctx, cont->c_svc, CONT_TGT_EPOCH_DISCARD, &rpc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->tii_hdl, hdl_uuid);
+	in->tii_epoch = epoch;
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = crt_reply_get(rpc);
+	rc = out->tio_rc;
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to discard epoch "DF_U64" for handle "
+			DF_UUID" on %d targets\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch,
+			DP_UUID(hdl_uuid), rc);
+		rc = -DER_IO;
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out:
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+	return rc;
+}
+
+static int
+cont_epoch_discard(struct ds_pool_hdl *pool_hdl, struct cont *cont,
+		   struct container_hdl *hdl, crt_rpc_t *rpc)
+{
+	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
+	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
+	int				rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" epoch="
+		DF_U64"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
+		DP_UUID(in->cei_op.ci_hdl), in->cei_epoch);
+
+	/* Verify the container handle capabilities. */
+	if (!(hdl->ch_capas & DAOS_COO_RW))
+		D_GOTO(out, rc = -DER_NO_PERM);
+
+	if (in->cei_epoch >= DAOS_EPOCH_MAX)
+		D_GOTO(out, rc = -DER_OVERFLOW);
+	else if (in->cei_epoch < hdl->ch_lhe)
+		D_GOTO(out, rc = -DER_EP_RO);
+
+	rc = cont_epoch_discard_bcast(rpc->cr_ctx, cont, in->cei_op.ci_hdl,
+				      in->cei_epoch);
+
+out:
+	epoch_state_set(hdl, &out->ceo_epoch_state);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
+		rc);
+	return rc;
+}
+
+static int
 cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		  struct container_hdl *hdl, crt_rpc_t *rpc)
 {
@@ -880,10 +966,16 @@ cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (!(hdl->ch_capas & DAOS_COO_RW))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
-	if (in->cei_epoch <= hdl->ch_hce)
+	/*
+	 * Try to be idempotent for resent CONT_EPOCH_COMMITs from a handle
+	 * that allows only one epoch operation in flight.
+	 */
+	if (in->cei_epoch == hdl->ch_hce && in->cei_epoch == hdl->ch_lhe - 1)
 		D_GOTO(out, rc = 0);
 
-	if (in->cei_epoch < hdl->ch_lhe)
+	if (in->cei_epoch >= DAOS_EPOCH_MAX)
+		D_GOTO(out, rc = -DER_OVERFLOW);
+	else if (in->cei_epoch < hdl->ch_lhe)
 		D_GOTO(out, rc = -DER_EP_RO);
 
 	hdl->ch_hce = in->cei_epoch;
@@ -963,6 +1055,8 @@ cont_op_with_hdl(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		return cont_epoch_query(pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_HOLD:
 		return cont_epoch_hold(pool_hdl, cont, hdl, rpc);
+	case CONT_EPOCH_DISCARD:
+		return cont_epoch_discard(pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_COMMIT:
 		return cont_epoch_commit(pool_hdl, cont, hdl, rpc);
 	default:
@@ -1031,7 +1125,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	int			rc;
 
 	/* TODO: Implement per-container locking. */
-	if (opc == CONT_EPOCH_QUERY)
+	if (opc == CONT_EPOCH_QUERY || opc == CONT_EPOCH_DISCARD)
 		pthread_rwlock_rdlock(&svc->cs_rwlock);
 	else
 		pthread_rwlock_wrlock(&svc->cs_rwlock);

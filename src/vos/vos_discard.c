@@ -165,7 +165,7 @@ akey_iterate_and_discard(struct vos_obj_ref *oref, vos_iter_param_t *param,
 		 * and probe to the next akey.
 		 */
 		if (vos_subtree_is_empty(toh)) {
-			D_DEBUG(DF_VOS3, "Recx Tree empty delte akey: %s\n",
+			D_DEBUG(DF_VOS3, "Recx Tree empty delete akey: %s\n",
 			       (char *)param->ip_akey.iov_buf);
 
 			rc = delete_and_probe(ih, &anchor);
@@ -281,8 +281,8 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	if (rc)
 		return rc == -DER_NONEXIST ? 0 : rc;
 
-	D_DEBUG(DF_VOS2, "Max epoch: "DF_U64", epoch_low: "DF_U64"\n",
-		max_epoch, epr->epr_lo);
+	D_DEBUG(DF_VOS2, "Max epoch: "DF_U64", epoch_low: "DF_U64", cookie "
+		DF_UUID"\n", max_epoch, epr->epr_lo, DP_UUID(cookie));
 
 	/** If this is the max epoch skip discard */
 	if (max_epoch < epr->epr_lo) {

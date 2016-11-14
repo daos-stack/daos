@@ -72,15 +72,13 @@ ds_sgls_free(daos_sg_list_t *sgls, int nr)
  */
 static void
 ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
-		   uint32_t map_version)
+		   uint32_t map_version, struct ds_cont_hdl *cont_hdl)
 {
 	struct obj_rw_in	*orwi;
-	uuid_t			cookie;
 	int rc;
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
-	uuid_clear(cookie);
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
@@ -112,8 +110,8 @@ ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 	orwi = crt_req_get(rpc);
 	D_ASSERT(orwi != NULL);
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE)
-		rc = vos_obj_zc_update_end(ioh, cookie, &orwi->orw_dkey,
-					   orwi->orw_nr,
+		rc = vos_obj_zc_update_end(ioh, cont_hdl->sch_uuid,
+					   &orwi->orw_dkey, orwi->orw_nr,
 					   orwi->orw_iods.da_arrays,
 					   0);
 	else if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH)
@@ -309,13 +307,10 @@ ds_obj_rw_inline(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl)
 	int			rc;
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE) {
-		uuid_t cookie;
-
-		memset(cookie, 0, sizeof(uuid_t));
 		rc = vos_obj_update(cont_hdl->sch_cont->sc_hdl,
 				    orw->orw_oid, orw->orw_epoch,
-				    cookie, &orw->orw_dkey, orw->orw_nr,
-				    orw->orw_iods.da_arrays, sgls);
+				    cont_hdl->sch_uuid, &orw->orw_dkey,
+				    orw->orw_nr, orw->orw_iods.da_arrays, sgls);
 	} else {
 		struct obj_rw_out *orwo;
 
@@ -363,7 +358,7 @@ int
 ds_obj_rw_handler(crt_rpc_t *rpc)
 {
 	struct obj_rw_in	*orw;
-	struct ds_cont_hdl	*cont_hdl;
+	struct ds_cont_hdl	*cont_hdl = NULL;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
 	daos_sg_list_t		**sgls = NULL;
 	crt_bulk_op_t		bulk_op;
@@ -381,12 +376,12 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	map_version = cont_hdl->sch_pool->spc_map_version;
 	if (orw->orw_map_ver < map_version)
-		D_GOTO(out_tch, rc = -DER_STALE);
+		D_GOTO(out, rc = -DER_STALE);
 
 	/* Inline update/fetch */
 	if (orw->orw_sgls.da_arrays != NULL && orw->orw_sgls.da_count > 0) {
 		rc = ds_obj_rw_inline(rpc, cont_hdl);
-		D_GOTO(out_tch, rc);
+		D_GOTO(out, rc);
 	}
 
 	/* bulk update/fetch */
@@ -398,7 +393,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		if (rc != 0) {
 			D_ERROR(DF_UOID"preparing update fails: %d\n",
 				DP_UOID(orw->orw_oid), rc);
-			D_GOTO(out_tch, rc);
+			D_GOTO(out, rc);
 		}
 
 		bulk_op = CRT_BULK_GET;
@@ -410,29 +405,29 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		if (rc != 0) {
 			D_ERROR(DF_UOID"preparing fetch fails: %d\n",
 				DP_UOID(orw->orw_oid), rc);
-			D_GOTO(out_tch, rc);
+			D_GOTO(out, rc);
 		}
 
 		bulk_op = CRT_BULK_PUT;
 
 		rc = ds_obj_update_sizes_in_reply(rpc);
 		if (rc != 0)
-			D_GOTO(out_tch, rc);
+			D_GOTO(out, rc);
 	}
 
 	D_ALLOC(sgls, orw->orw_nr * sizeof(*sgls));
 	if (sgls == NULL)
-		D_GOTO(out_tch, rc);
+		D_GOTO(out, rc);
 
 	for (i = 0; i < orw->orw_nr; i++)
 		vos_obj_zc_vec2sgl(ioh, i, &sgls[i]);
 
 	rc = ds_bulk_transfer(rpc, orw->orw_bulks.da_arrays,
 			      sgls, ioh, orw->orw_nr, bulk_op);
-out_tch:
-	ds_cont_hdl_put(cont_hdl);
 out:
-	ds_obj_rw_complete(rpc, ioh, rc, map_version);
+	ds_obj_rw_complete(rpc, ioh, rc, map_version, cont_hdl);
+	if (cont_hdl != NULL)
+		ds_cont_hdl_put(cont_hdl);
 
 	return rc;
 }
