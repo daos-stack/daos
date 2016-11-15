@@ -69,7 +69,7 @@ static int
 recx_iterate_and_discard(struct vos_obj_ref *oref, vos_iter_param_t *param,
 			 uuid_t cookie)
 {
-	daos_handle_t	ih = DAOS_HDL_INVAL;
+	daos_handle_t	ih;
 	int		rc = 0;
 
 	rc = vos_iter_prepare(VOS_ITER_RECX, param, &ih);
@@ -95,9 +95,11 @@ recx_iterate_and_discard(struct vos_obj_ref *oref, vos_iter_param_t *param,
 		 * delete and probe to the next recx entry
 		 */
 		if (uuid_compare(f_cookie.uuid, cookie) == 0) {
-			D_DEBUG(DF_VOS3, "Delete recx %u for cookie: %s\n",
+			D_DEBUG(DF_VOS3,
+				"del rid:%u, cookie:"DF_UUIDF", e: "DF_U64"\n",
 			       (unsigned int)ent.ie_recx.rx_idx,
-			       DP_UUID(f_cookie.uuid));
+			       DP_UUID(f_cookie.uuid),
+			       ent.ie_epr.epr_lo);
 
 			rc = delete_and_probe(ih, &anchor);
 			DISCARD_ERR_HANDLE(rc, "recx delete and probe",
@@ -116,7 +118,7 @@ static int
 akey_iterate_and_discard(struct vos_obj_ref *oref, vos_iter_param_t *param,
 			 uuid_t cookie, daos_handle_t vec_toh)
 {
-	daos_handle_t	ih  = DAOS_HDL_INVAL;
+	daos_handle_t	ih;
 	daos_handle_t	toh = DAOS_HDL_INVAL;
 	int		rc  = 0;
 
@@ -185,7 +187,7 @@ static int
 dkey_iterate_and_discard(struct vos_obj_ref *oref, vos_iter_param_t *param,
 			 uuid_t cookie)
 {
-	daos_handle_t	ih	= DAOS_HDL_INVAL;
+	daos_handle_t	ih;
 	daos_handle_t	vec_toh = DAOS_HDL_INVAL;
 	int		rc	= 0;
 
@@ -221,8 +223,11 @@ dkey_iterate_and_discard(struct vos_obj_ref *oref, vos_iter_param_t *param,
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		/** Set current dkey */
+		/** Set next dkey */
 		param->ip_dkey = ent.ie_key;
+
+		/** Reset akey for next dkey  */
+		daos_iov_set(&param->ip_akey, NULL, 0);
 
 		/** Iterate through all akey within this dkey */
 		rc = akey_iterate_and_discard(oref, param, cookie, vec_toh);
@@ -258,12 +263,18 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 		  uuid_t cookie)
 {
 
-	daos_handle_t		ih		= DAOS_HDL_INVAL;
-	daos_handle_t		cih		= vos_coh2cih(coh);
-	daos_epoch_t		max_epoch	= 0;
-	struct vos_obj_ref	*oref		= NULL;
-	int			rc		= 0;
+	daos_handle_t		ih;
+	daos_handle_t		cih	  = vos_coh2cih(coh);
+	daos_epoch_t		max_epoch = 0;
+	struct vos_obj_ref	*oref	  = NULL;
+	int			rc	  = 0;
 	vos_iter_param_t	param;
+
+	if (epr->epr_hi != DAOS_EPOCH_MAX && epr->epr_hi != epr->epr_lo) {
+		D_DEBUG(DF_VOS1, "Cannot support range discard lo="DF_U64
+				 "hi="DF_U64".\n", epr->epr_lo, epr->epr_hi);
+		return -DER_INVAL;
+	}
 
 	rc = vos_cookie_find_update(cih, cookie, epr->epr_lo,
 				    false, &max_epoch);
@@ -276,29 +287,38 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	/** If this is the max epoch skip discard */
 	if (max_epoch < epr->epr_lo) {
 		D_DEBUG(DF_VOS2, "Max Epoch < epr_lo.. skip discard\n");
-		return rc;
+		return 0;
 	}
 
 	D_DEBUG(DF_VOS2, "Epoch discard for epoch range high: %u, low: %u\n",
 		(unsigned int)epr->epr_hi, (unsigned int) epr->epr_lo);
-
 
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl		= coh;
 	param.ip_epr		= *epr;
 
 	/**
-	 * To discard one epoch lo and hi must be the same
-	 * To discard all epoch till MAX hi must be
-	 * DAOS_EPOCH_MAX Eg.,
+	 * Setting appropriate epoch logic expression for recx iterator.
+	 *
+	 *  -- VOS_IT_EPC_EQ gurantees to probe and fetch only
+	 *     records updated in this \a epr::epr_lo.
+	 *
+	 *  -- VOS_IT_EPC_GE on the other hand probes and fetches
+	 *     all records from epr::epr_lo till DAOS_EPOCH_MAX.
+	 *
+	 *  -- probe and fetching of arbitrary ranges not natively
+	 *     supported in iterater, so such ranges are not
+	 *     supported in discard.
+	 *
+	 * Example:
 	 * epr.lo = 1 epr.hi = 1 dicards epoch 1
 	 * epr.lo = 1 epr.hi = DAOS_MAX_EPOCH, discards all
 	 * obj records 1 -> DAOS_MAX_EPOCH
 	 */
 	if (epr->epr_lo == epr->epr_hi)
-		param.ip_epc_expr	= VOS_IT_EPC_EQ;
+		param.ip_epc_expr = VOS_IT_EPC_EQ;
 	else
-		param.ip_epc_expr	= VOS_IT_EPC_GE;
+		param.ip_epc_expr = VOS_IT_EPC_GE;
 
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &ih);
 	if (rc != 0) {
@@ -344,11 +364,16 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 
 			/** Set current valid OID */
 			param.ip_oid = ent.ie_oid;
+
+			/** Reset Akey and dkey for new object */
+			daos_iov_set(&param.ip_dkey, NULL, 0);
+			daos_iov_set(&param.ip_akey, NULL, 0);
+
 			rc = vos_obj_tree_init(oref);
 			if (rc != 0)
 				D_GOTO(exit, rc);
 
-			/** Iterate through all akey within this dkey */
+			/** Iterate through all akey within this dkey **/
 			rc = dkey_iterate_and_discard(oref, &param, cookie);
 			if (rc != 0)
 				D_GOTO(exit, rc);

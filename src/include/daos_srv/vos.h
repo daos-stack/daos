@@ -209,9 +209,17 @@ vos_epoch_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
- * and \a cookie id. The cookie is assigned by the user
- * during each update call to tag updates that have to be
- * grouped together.
+ * and \a cookie id.
+ *
+ * If a single epoch needs to be discarded then \a epr::epr_lo
+ * and \a epr::hi must be set to the same epoch.
+ * If all epochs from a certain epoch needs to be discarded then
+ * \a epr::epr_hi must be set to DAOS_EPOCH_MAX.
+ * Note: \a epr::epr_lo must never be set to DAOS_EPOCH_MAX by
+ * the caller.
+ *
+ * \a cookie is a uuid assigned by the user during each update
+ * call to tag updates that have to be grouped together.
  *
  * \param coh		[IN]	Container open handle
  * \param epr		[IN]	The epoch range to discard

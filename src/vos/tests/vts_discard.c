@@ -102,6 +102,7 @@ io_update(struct io_test_args *arg, daos_epoch_t update_epoch,
 		print_message("akey: %s\n", ioreq->akey_buf);
 		print_message("recx: %u\n",
 			      (unsigned int)ioreq->rex.rx_idx);
+		print_message("epoch: "DF_U64"\n", ioreq->epoch);
 	}
 exit:
 	*io_req = ioreq;
@@ -140,6 +141,7 @@ exit:
 	return rc;
 }
 
+
 static int
 io_fetch(struct io_test_args *arg, daos_epoch_t fetch_epoch,
 	 struct io_req *req, bool verbose)
@@ -170,7 +172,6 @@ exit:
 	return rc;
 }
 
-
 static inline void
 set_key_and_index(char *dkey, char *akey, int *index)
 {
@@ -184,9 +185,13 @@ set_key_and_index(char *dkey, char *akey, int *index)
 		gen_rand_key(akey, UPDATE_AKEY, UPDATE_AKEY_SIZE);
 	}
 
-	if (index != NULL)
-		*index = (daos_hash_string_u32(dkey, UPDATE_DKEY_SIZE)) %
+	if (index != NULL) {
+		char buf[UPDATE_DKEY_SIZE];
+
+		gen_rand_key(buf, UPDATE_DKEY, UPDATE_DKEY_SIZE);
+		*index = (daos_hash_string_u32(buf, UPDATE_DKEY_SIZE)) %
 			 1000000;
+	}
 }
 
 static int
@@ -267,7 +272,7 @@ io_simple_one_key_discard(void **state)
 
 	/** Discard epochs 3 -> INF */
 	range.epr_lo = 3;
-	range.epr_hi = -1;
+	range.epr_hi = DAOS_EPOCH_MAX;
 	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
@@ -291,7 +296,6 @@ io_simple_discard_teardown(void **state)
 	test_args_reset((struct io_test_args *) *state);
 	return 0;
 }
-
 
 static int
 io_multikey_discard_setup(void **state)
@@ -348,7 +352,7 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey,
 	}
 	/** Reset flags here */
 	arg->ta_flags = 0;
-	range.epr_lo = epoch[mid];
+	range.epr_lo = range.epr_hi = epoch[mid];
 	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie[mid].uuid);
 	if (rc != 0)
 		D_GOTO(exit, rc);
@@ -490,7 +494,7 @@ io_test_near_epoch_fetch(void **state)
 }
 
 
-#define TF_DISCARD_KEYS	100000
+#define TF_DISCARD_KEYS	50000
 
 static int
 io_multi_dkey_discard(struct io_test_args *arg, int flags)
@@ -539,6 +543,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	}
 
 	range.epr_lo = epoch1;
+	range.epr_hi = epoch1;
 	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
@@ -635,12 +640,16 @@ io_epoch_range_discard_test(void **state)
 		assert_int_equal(rc, 0);
 	}
 
+
 	range.epr_lo = epochs[TF_DISCARD_KEYS - 10];
+	range.epr_hi = DAOS_EPOCH_MAX;
+
 	D_PRINT("Discard from "DF_U64" to "DF_U64" out of %d epochs\n",
 		epochs[TF_DISCARD_KEYS - 10], epochs[TF_DISCARD_KEYS - 1],
 		TF_DISCARD_KEYS);
 	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
+
 
 	for (i = 0; i < TF_DISCARD_KEYS; i++) {
 		 /** Fall back while fetching from discarded epochs */
@@ -706,6 +715,7 @@ io_multi_akey_discard_test(void **state)
 	}
 
 	range.epr_lo = epoch1;
+	range.epr_hi = epoch1;
 	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
@@ -720,6 +730,87 @@ io_multi_akey_discard_test(void **state)
 		i++;
 	}
 }
+
+static void
+io_multi_recx_overwrite_discard_test(void **state)
+{
+	struct io_test_args	*arg = *state;
+	int			i, j;
+	int			rc = 0;
+	daos_epoch_t		epoch_start, discard_epoch;
+	int			index_start;
+	struct daos_uuid	cookie;
+	daos_epoch_range_t	range;
+	struct vts_counter	cntrs;
+	struct io_req		*search_req;
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_AKEY_SIZE];
+
+
+	arg->ta_flags = 0;
+	cookie = gen_rand_cookie();
+
+	epoch_start = 1234;
+	discard_epoch = 1310;
+	index_start = 1;
+
+	set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
+	/**
+	 * TF_DISCARD_KEYS/100 recx created
+	 * all recx overwrite 100 epochs
+	 * Starting from (epoch_start + 1 -> epoch_start + 100)
+	 *
+	 */
+	j = 1;
+	for (i = 0; i < TF_DISCARD_KEYS; i++) {
+		struct io_req	*req = NULL;
+
+		rc = io_update(arg, epoch_start + j,
+			       &cookie, &dkey_buf[0], &akey_buf[0],
+			       &cntrs, &req,
+			       index_start, UPDATE_VERBOSE);
+		assert_int_equal(rc, 0);
+		daos_list_add_tail(&req->rlist, &arg->req_list);
+		rc = io_fetch(arg, epoch_start + j, req, FETCH_VERBOSE);
+		assert_int_equal(rc, 0);
+
+		if ((i + 1) % 100  == 0) {
+			assert_true(j == 100);
+			/** Update to next recx */
+			index_start = index_start + 100;
+			j = 0;
+		}
+		j++;
+	}
+
+	range.epr_lo = discard_epoch;
+	range.epr_hi = discard_epoch;
+
+	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
+	assert_int_equal(rc, 0);
+
+	/* Check first TF_DISCARD_KEYS entries in object 1 */
+	struct io_req *b_req = NULL;
+
+	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
+
+		/* Save this for verifying check of previous epoch */
+		if (search_req->epoch == discard_epoch - 1)
+			b_req = search_req;
+		if (discard_epoch == search_req->epoch) {
+			assert_true(b_req != NULL);
+			rc = io_fetch(arg, search_req->epoch, b_req,
+				      FETCH_VERBOSE);
+			assert_int_equal(rc, 0);
+			b_req = NULL;
+		} else {
+			rc = io_fetch(arg, search_req->epoch, search_req,
+				      false);
+			assert_int_equal(rc, 0);
+		}
+	}
+}
+
 
 static void
 io_multi_recx_discard_test(void **state)
@@ -766,6 +857,7 @@ io_multi_recx_discard_test(void **state)
 	}
 
 	range.epr_lo = epoch1;
+	range.epr_hi = epoch1;
 	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
@@ -811,6 +903,9 @@ static const struct CMUnitTest discard_tests[] = {
 		io_multikey_discard_teardown},
 	{ "VOS305: VOS multi recx discard test",
 		io_multi_recx_discard_test, io_multikey_discard_setup,
+		io_multikey_discard_teardown},
+	{ "VOS305: VOS multi recx and overwrite discard test",
+		io_multi_recx_overwrite_discard_test, io_multikey_discard_setup,
 		io_multikey_discard_teardown},
 	{ "VOS306: VOS epoch range discard test",
 		io_epoch_range_discard_test, io_multikey_discard_setup,
