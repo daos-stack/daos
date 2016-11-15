@@ -506,7 +506,8 @@ io_var_rec_size(void **state)
 
 	update_buf = malloc(max_size);
 	assert_non_null(update_buf);
-	memset(update_buf, (rand() % 94) + 33, max_size);
+
+	ts_buf_render(update_buf, max_size);
 
 	for (size = 1; size <= max_size; size <<= 1, epoch++) {
 		char dkey[30];
@@ -825,6 +826,68 @@ io_complex(void **state)
 	ioreq_fini(&req);
 }
 
+#define STACK_BUF_LEN	24
+
+static void
+io_on_stack(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	daos_epoch_t	 epoch = 2;
+	daos_iov_t	 dkey;
+	daos_sg_list_t	 sgl;
+	daos_iov_t	 sg_iov;
+	daos_vec_iod_t	 iod;
+	daos_recx_t	 recx;
+	char		 buf_out[STACK_BUF_LEN];
+	char		 buf[STACK_BUF_LEN];
+	int		 rc;
+
+	ts_buf_render(buf, STACK_BUF_LEN);
+
+	/** open object */
+	obj_random(arg, &oid);
+	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	sgl.sg_nr.num		= 1;
+	sgl.sg_nr.num_out	= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	/** init I/O descriptor */
+	daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.vd_kcsum, NULL, 0);
+	iod.vd_nr	= 1;
+	recx.rx_rsize	= 1;
+	recx.rx_idx	= 0;
+	recx.rx_nr	= sizeof(buf);
+	iod.vd_recxs	= &recx;
+	iod.vd_eprs	= NULL;
+	iod.vd_csums	= NULL;
+
+	/** update record */
+	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	/** fetch */
+	memset(buf_out, 0, sizeof(buf_out));
+	daos_iov_set(&sg_iov, buf_out, sizeof(buf_out));
+	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+	/** Verify data consistency */
+	assert_memory_equal(buf, buf_out, sizeof(buf));
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "DSR200: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
@@ -847,6 +910,8 @@ static const struct CMUnitTest io_tests[] = {
 	{ "DSR209: simple punch", punch_simple,
 	  async_disable, NULL},
 	{ "DSR210: complex update/fetch/verify", io_complex,
+	  async_disable, NULL},
+	{ "DSR211: i/o parameter on stack", io_on_stack,
 	  async_disable, NULL},
 };
 

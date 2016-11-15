@@ -30,6 +30,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <setjmp.h>
+#include <time.h>
 #include <cmocka.h>
 
 #include <mpi.h>
@@ -165,4 +166,18 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	free(ghdl.iov_buf);
 
 	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+/* generate a readable random string */
+static inline void
+ts_buf_render(char *buf, unsigned int buf_len)
+{
+	int	nr = 'z' - 'a' + 1;
+	int	i;
+
+	srand(time(NULL));
+	for (i = 0; i < buf_len - 1; i++)
+		buf[i] = 'a' + rand() % nr;
+
+	buf[i] = '\0';
 }

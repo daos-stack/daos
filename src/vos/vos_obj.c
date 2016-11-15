@@ -308,8 +308,7 @@ tree_iter_next(struct vos_obj_iter *oiter)
  * In non-zc mode, This function will consume @iovs. while entering this
  * function, @off_p is buffer offset of iovs[0]; while returning from this
  * function, @off_p should be set to the consumed buffer offset within the
- * last used iov.
- * This parameter is useful only for non-zc mode.
+ * last consumed iov. This parameter is useful only for non-zc mode.
  */
 static int
 vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
@@ -318,7 +317,6 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 	daos_iov_t	*iov;
 	daos_csum_buf_t	 csum;
 	daos_recx_t	 recx_tmp;
-	daos_iov_t	 iov_tmp;
 	int		 iov_cur;
 	int		 i;
 	int		 rc;
@@ -326,11 +324,10 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 
 	daos_csum_set(&csum, NULL, 0); /* no checksum for now */
 	recx_tmp = *recx;
-	recx_tmp.rx_nr = 1;
+	recx_tmp.rx_nr = 1; /* btree has one record per index */
 
-	for (i = iov_cur = 0;; i++) {
-		if (i == recx->rx_nr)
-			break;
+	for (i = iov_cur = 0; i < recx->rx_nr; i++) {
+		daos_iov_t	 iov_tmp; /* scratch iov for non-zc */
 
 		if (iov_cur >= iov_nr) {
 			D_DEBUG(DF_VOS1, "Invalid I/O parameters: %d/%d\n",
@@ -347,7 +344,7 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 
 			iov_tmp = iovs[iov_cur];
 			iov = &iov_tmp;
-			iov->iov_buf += *off_p;
+			iov->iov_buf	 += *off_p;
 			iov->iov_buf_len -= *off_p;
 
 			if (iov->iov_buf_len < recx->rx_rsize) {
@@ -371,21 +368,26 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			return rc;
 		}
 
-		if (i == 0 && recx->rx_rsize == DAOS_REC_ANY)
-			recx->rx_rsize	= recx_tmp.rx_rsize;
+		if (i == 0) { /* the first index within the extent */
+			if (recx->rx_rsize == DAOS_REC_ANY) {
+				/* reader does not known record size */
+				recx->rx_rsize = recx_tmp.rx_rsize;
 
-		if (recx->rx_rsize != recx_tmp.rx_rsize) {
-
-			if (recx_tmp.rx_rsize == 0) {
+			} else if (recx_tmp.rx_rsize == 0) {
 				D_DEBUG(DF_VOS1, "Punched Entry\n");
 				recx->rx_rsize = 0;
-			} else {
-				D_DEBUG(DF_VOS1, "%s %s : "DF_U64"/"DF_U64"\n",
-				"Record sizes of all indices in same ",
-				"extent must be the same",
-				recx->rx_rsize, recx_tmp.rx_rsize);
-				return -DER_IO_INVAL;
 			}
+		}
+
+		if (recx->rx_rsize != recx_tmp.rx_rsize) {
+			/* XXX: It also means we can't support punch a hole in
+			 * an extent for the time being.
+			 */
+			D_DEBUG(DF_VOS1, "%s %s : "DF_U64"/"DF_U64"\n",
+				"Record sizes of all indices in the same ",
+				"extent must be the same.\n",
+				recx->rx_rsize, recx_tmp.rx_rsize);
+			return -DER_IO_INVAL;
 		}
 
 		/* If we store index and epoch in the same btree, then
@@ -402,22 +404,20 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 				memset(iov->iov_buf, 0, iov->iov_len);
 		}
 
-		if (!is_zc)
-			iovs[iov_cur].iov_len = iov->iov_len;
-
-		/* move to the next index */
-		recx_tmp.rx_idx = recx->rx_idx + i + 1;
 		if (is_zc) {
 			iov_cur++;
 
 		} else {
-			if (iov->iov_buf_len > recx->rx_rsize) {
-				*off_p += recx->rx_rsize;
+			iovs[iov_cur].iov_len += iov->iov_len;
+			if (iov->iov_buf_len > iov->iov_len) {
+				*off_p += iov->iov_len;
 			} else {
 				*off_p = 0;
 				iov_cur++;
 			}
 		}
+		/* move to the next index */
+		recx_tmp.rx_idx = recx->rx_idx + i + 1;
 	}
 	return iov_cur;
 }
