@@ -18,7 +18,7 @@ fi
 default_requires=
 
 job_real_name=${JOB_NAME%/*}
-if [ "${job_real_name}" == *${JOB_SUFFIX} ];then
+if [[ "${job_real_name}" == *${JOB_SUFFIX} ]];then
   default_requires="REQUIRES=${TARGET}"
 fi
 
