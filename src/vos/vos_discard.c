@@ -268,7 +268,7 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	rc = vos_cookie_find_update(cih, cookie, epr->epr_lo,
 				    false, &max_epoch);
 	if (rc)
-		return rc;
+		return rc == -DER_NONEXIST ? 0 : rc;
 
 	D_DEBUG(DF_VOS2, "Max epoch: "DF_U64", epoch_low: "DF_U64"\n",
 		max_epoch, epr->epr_lo);

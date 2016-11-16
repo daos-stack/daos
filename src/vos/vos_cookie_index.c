@@ -191,33 +191,35 @@ int
 vos_cookie_find_update(daos_handle_t cih, uuid_t cookie, daos_epoch_t epoch,
 		       bool update_flag, daos_epoch_t *epoch_ret)
 {
-	int			rc = 0;
-	daos_epoch_t		max_epoch = 0;
-	daos_iov_t		key, value;
+	daos_epoch_t		max_epoch;
+	daos_iov_t		key;
+	daos_iov_t		value;
 	struct daos_uuid	uuid_key;
+	int			rc;
 
 	uuid_copy(uuid_key.uuid, cookie);
 	daos_iov_set(&key, &uuid_key, sizeof(struct daos_uuid));
 	daos_iov_set(&value, &max_epoch, sizeof(daos_epoch_t));
 
 	rc = dbtree_lookup(cih, &key, &value);
-	if (rc != 0 && !update_flag)
-		return -DER_NONEXIST;
-	if (!update_flag)
-		D_GOTO(exit, rc);
-
 	if (rc == 0) {
-		D_DEBUG(DF_VOS2, "Cookie already exists\n");
-		/**
-		 * If epoch in tree is greater than max_epoch,
-		 * exit, else update this entry
-		 */
-		D_DEBUG(DF_VOS2,
-			"dbtree lookup found "DF_UUID","DF_U64"\n",
+		D_DEBUG(DF_VOS2, "dbtree lookup found "DF_UUID","DF_U64"\n",
 			DP_UUID(cookie), max_epoch);
-		/** Nothing to update, exit */
-		if (max_epoch >= epoch)
-			D_GOTO(exit, rc = 0);
+
+		if (!update_flag) /* read-only */
+			D_GOTO(exit, rc);
+
+		if (epoch <= max_epoch) /* no need to overwrite */
+			D_GOTO(exit, rc);
+		/* overwrite */
+
+	} else if (rc == -DER_NONEXIST) { /* not found */
+		if (!update_flag)
+			D_GOTO(exit, rc);
+		/* insert */
+
+	} else { /* other failures */
+		D_GOTO(exit, rc);
 	}
 
 	/** if not found or max_epoch < epoch, update */
@@ -226,7 +228,7 @@ vos_cookie_find_update(daos_handle_t cih, uuid_t cookie, daos_epoch_t epoch,
 	if (rc)
 		D_ERROR("Updating the cookie entry\n");
 exit:
-	if (epoch_ret != NULL)
+	if (rc == 0 && epoch_ret != NULL)
 		*epoch_ret = max_epoch;
 	return rc;
 }
