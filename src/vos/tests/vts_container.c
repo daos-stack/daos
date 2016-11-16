@@ -40,7 +40,7 @@
 #include <daos_srv/vos.h>
 
 #define VCT_CONTAINERS	100
-/**
+/*
  * Constants for cookie test
  */
 #define VCT_COOKIES	100
@@ -48,12 +48,12 @@
 
 struct vc_test_args {
 	char			*fname;
-	int			*seq_cnt;
-	enum vts_ops_type	*ops_seq[VCT_CONTAINERS];
 	uuid_t			pool_uuid;
 	daos_handle_t		poh;
+	int			seq_cnt[VCT_CONTAINERS];
+	int			ops_seq[VCT_CONTAINERS][5];
 	daos_handle_t		coh[VCT_CONTAINERS];
-	uuid_t			uuid[VCT_CONTAINERS];
+	struct daos_uuid	uuid[VCT_CONTAINERS];
 	bool			anchor_flag;
 };
 
@@ -68,11 +68,12 @@ co_ops_run(void **state)
 		for (j = 0; j < arg->seq_cnt[i]; j++) {
 			switch (arg->ops_seq[i][j]) {
 			case CREAT:
-				uuid_generate(arg->uuid[i]);
-				ret = vos_co_create(arg->poh, arg->uuid[i]);
+				uuid_generate(arg->uuid[i].uuid);
+				ret = vos_co_create(arg->poh,
+						    arg->uuid[i].uuid);
 				break;
 			case OPEN:
-				ret = vos_co_open(arg->poh, arg->uuid[i],
+				ret = vos_co_open(arg->poh, arg->uuid[i].uuid,
 						  &arg->coh[i]);
 				break;
 			case CLOSE:
@@ -85,9 +86,12 @@ co_ops_run(void **state)
 				assert_int_equal(cinfo.pci_used, 0);
 				break;
 			case DESTROY:
-				ret = vos_co_destroy(arg->poh, arg->uuid[i]);
+				ret = vos_co_destroy(arg->poh,
+						     arg->uuid[i].uuid);
 				assert_int_equal(ret, 0);
-				uuid_clear(arg->uuid[i]);
+				uuid_clear(arg->uuid[i].uuid);
+				if (!uuid_is_null(arg->uuid[i].uuid))
+					printf("UUID clear did not work\n");
 				break;
 			default:
 				fail_msg("Unkown Ops!\n");
@@ -98,32 +102,19 @@ co_ops_run(void **state)
 				assert_int_equal(ret, 0);
 		}
 	}
+	D_PRINT("Finished all create and discards\n");
 }
 
 static int
-co_allocate_params(int ncontainers, int ops,
-		   struct vc_test_args *test_args)
+co_allocate_params(int ops, struct vc_test_args *test_args)
 {
 	int			i;
-	enum vts_ops_type	*tmp_seq = NULL;
 
-	test_args->seq_cnt = (int *)malloc(ncontainers * sizeof(int));
-	assert_ptr_not_equal(test_args->seq_cnt, NULL);
-
-	for (i = 0; i < ncontainers; i++) {
-		tmp_seq = (enum vts_ops_type *)malloc(ops *
-						  sizeof(enum vts_ops_type));
-		assert_ptr_not_equal(tmp_seq, NULL);
-		memset(tmp_seq, 0,
-		       sizeof(ops * sizeof(enum vts_ops_type)));
-		test_args->ops_seq[i] = tmp_seq;
-		tmp_seq = NULL;
+	for (i = 0; i < VCT_CONTAINERS; i++) {
+		test_args->seq_cnt[i] = ops;
+		test_args->coh[i] = DAOS_HDL_INVAL;
+		uuid_clear(test_args->uuid[i].uuid);
 	}
-
-	memset(&test_args->coh, 0,
-	       sizeof(VCT_CONTAINERS * sizeof(daos_handle_t)));
-	memset(&test_args->uuid, 0,
-	       sizeof(VCT_CONTAINERS * sizeof(uuid_t)));
 
 	return 0;
 }
@@ -136,20 +127,13 @@ co_unit_teardown(void **state)
 	int			i, ret = 0;
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
-		if (arg->ops_seq[i]) {
-			free(arg->ops_seq[i]);
-			arg->ops_seq[i] = NULL;
-		}
-		if (!uuid_is_null(arg->uuid[i])) {
-			ret = vos_co_destroy(arg->poh, arg->uuid[i]);
+		if (!uuid_is_null(arg->uuid[i].uuid)) {
+			ret = vos_co_destroy(arg->poh, arg->uuid[i].uuid);
 			assert_int_equal(ret, 0);
-			uuid_clear(arg->uuid[i]);
+			uuid_clear(arg->uuid[i].uuid);
 		}
 	}
-	if (arg->seq_cnt) {
-		free(arg->seq_cnt);
-		arg->seq_cnt = NULL;
-	}
+
 	return ret;
 }
 
@@ -159,11 +143,11 @@ co_ref_count_setup(void **state)
 	struct vc_test_args	*arg = *state;
 	int			i, ret = 0;
 
-	ret = vos_co_create(arg->poh, arg->uuid[0]);
+	ret = vos_co_create(arg->poh, arg->uuid[0].uuid);
 	assert_int_equal(ret, 0);
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
-		ret = vos_co_open(arg->poh, arg->uuid[0], &arg->coh[i]);
+		ret = vos_co_open(arg->poh, arg->uuid[0].uuid, &arg->coh[i]);
 		assert_int_equal(ret, 0);
 	}
 
@@ -177,7 +161,7 @@ co_ref_count_test(void **state)
 	struct vc_test_args	*arg = *state;
 	int			i, ret;
 
-	ret = vos_co_destroy(arg->poh, arg->uuid[0]);
+	ret = vos_co_destroy(arg->poh, arg->uuid[0].uuid);
 	assert_int_equal(ret, -DER_NO_PERM);
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
@@ -185,7 +169,7 @@ co_ref_count_test(void **state)
 		assert_int_equal(ret, 0);
 	}
 
-	ret = vos_co_destroy(arg->poh, arg->uuid[0]);
+	ret = vos_co_destroy(arg->poh, arg->uuid[0].uuid);
 	assert_int_equal(ret, 0);
 }
 
@@ -200,8 +184,7 @@ setup(void **state)
 
 	uuid_generate_time_safe(test_arg->pool_uuid);
 	vts_pool_fallocate(&test_arg->fname);
-	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid,
-			      0);
+	ret = vos_pool_create(test_arg->fname, test_arg->pool_uuid, 0);
 	assert_int_equal(ret, 0);
 	ret = vos_pool_open(test_arg->fname, test_arg->pool_uuid,
 			    &test_arg->poh);
@@ -231,25 +214,16 @@ teardown(void **state)
 	return 0;
 }
 
-static inline void
-co_set_param(enum vts_ops_type seq[], int cnt,
-	     int *seq_cnt, enum vts_ops_type **ops)
-{
-	*seq_cnt = cnt;
-	memcpy(*ops, seq, cnt * sizeof(enum vts_ops_type));
-}
-
 static int
 co_create_tests(void **state)
 {
 	struct vc_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT};
 	int			i;
 
-	co_allocate_params(VCT_CONTAINERS, 1, arg);
+	co_allocate_params(1, arg);
 	for (i = 0; i < VCT_CONTAINERS; i++)
-		co_set_param(tmp, 1, &arg->seq_cnt[i],
-			     &arg->ops_seq[i]);
+		arg->ops_seq[i][0] = CREAT;
+
 	return 0;
 }
 
@@ -257,13 +231,12 @@ static int
 co_iter_tests_setup(void **state)
 {
 	struct vc_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT};
 	int			i;
 
-	co_allocate_params(VCT_CONTAINERS, 1, arg);
+	co_allocate_params(1, arg);
 	for (i = 0; i < VCT_CONTAINERS; i++)
-		co_set_param(tmp, 1, &arg->seq_cnt[i],
-			     &arg->ops_seq[i]);
+		arg->ops_seq[i][0]  = CREAT;
+
 	co_ops_run(state);
 	return 0;
 }
@@ -476,13 +449,16 @@ static int
 co_tests(void **state)
 {
 	struct vc_test_args	*arg = *state;
-	enum vts_ops_type	tmp[] = {CREAT, OPEN, QUERY, CLOSE, DESTROY};
 	int			i;
 
-	co_allocate_params(VCT_CONTAINERS, 5, arg);
-	for (i = 0; i < VCT_CONTAINERS; i++)
-		co_set_param(tmp, 5, &arg->seq_cnt[i],
-			     &arg->ops_seq[i]);
+	co_allocate_params(5, arg);
+	for (i = 0; i < VCT_CONTAINERS; i++) {
+		arg->ops_seq[i][0] = CREAT;
+		arg->ops_seq[i][1] = OPEN;
+		arg->ops_seq[i][2] = QUERY;
+		arg->ops_seq[i][3] = CLOSE;
+		arg->ops_seq[i][4] = DESTROY;
+	}
 	return 0;
 }
 

@@ -71,7 +71,6 @@ POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_object_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_entry);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_epoch_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_irec);
 POBJ_LAYOUT_END(vos_pool_layout);
@@ -130,7 +129,6 @@ struct vos_container {
 	uuid_t				vc_id;
 	vos_co_info_t			vc_info;
 	TMMID(struct vos_object_index)	vc_obtable;
-	TMMID(struct vos_epoch_index)	vc_ehtable;
 };
 
 /**

@@ -82,10 +82,6 @@ struct vc_hdl {
 	 * within container
 	 */
 	struct vos_object_index	*vc_obj_table;
-	/* Direct pointer to VOS epoch index
-	 * within container
-	 */
-	struct vos_epoch_index	*vc_epoch_table;
 	/** Diret pointer to the VOS container */
 	struct vos_container	*vc_co;
 };

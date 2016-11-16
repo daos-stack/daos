@@ -58,7 +58,6 @@ struct vos_co_iter {
 	struct vp_hdl		*cot_phdl;
 };
 
-
 static int
 vc_hkey_size(struct btr_instance *tins)
 {
@@ -86,11 +85,7 @@ vc_rec_free(struct btr_instance *tins, struct btr_record *rec)
 	vc_rec = umem_id2ptr_typed(&tins->ti_umm, vc_cid);
 
 	if (!TMMID_IS_NULL(vc_rec->vc_obtable))
-		umem_free_typed(&tins->ti_umm,
-				vc_rec->vc_obtable);
-	if (!TMMID_IS_NULL(vc_rec->vc_ehtable))
-		umem_free_typed(&tins->ti_umm,
-				vc_rec->vc_ehtable);
+		umem_free_typed(umm, vc_rec->vc_obtable);
 
 	umem_free_typed(umm, vc_cid);
 	return 0;
@@ -107,9 +102,9 @@ vc_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	struct daos_uuid		*u_key = NULL;
 	int				rc = 0;
 
-	D_DEBUG(DF_VOS3, "Allocating entry for container table\n");
+	D_ASSERT(key_iov->iov_len == sizeof(struct daos_uuid));
 	u_key = (struct daos_uuid *)key_iov->iov_buf;
-	D_DEBUG(DF_VOS3, DF_UUID" Allocating record for container\n",
+	D_DEBUG(DF_VOS3, "Allocating record for container: %s\n",
 		DP_UUID(u_key->uuid));
 
 	vc_val_buf = (struct vc_val_buf *)(val_iov->iov_buf);
@@ -117,7 +112,6 @@ vc_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	if (TMMID_IS_NULL(vc_cid))
 		return -DER_NOMEM;
 
-	rec->rec_mmid = umem_id_t2u(vc_cid);
 	vc_rec = umem_id2ptr_typed(&tins->ti_umm, vc_cid);
 	uuid_copy(vc_rec->vc_id, u_key->uuid);
 	vc_val_buf->vc_co = vc_rec;
@@ -127,17 +121,14 @@ vc_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	if (TMMID_IS_NULL(vc_rec->vc_obtable))
 		D_GOTO(exit, rc = -DER_NOMEM);
 
-	vc_rec->vc_ehtable = umem_znew_typed(&tins->ti_umm,
-					     struct vos_epoch_index);
-	if (TMMID_IS_NULL(vc_rec->vc_ehtable))
-		D_GOTO(exit, rc = -DER_NOMEM);
-
 	vc_oi = umem_id2ptr_typed(&tins->ti_umm, vc_rec->vc_obtable);
 	rc = vos_oi_create(vc_val_buf->vc_vpool, vc_oi);
 	if (rc) {
 		D_ERROR("VOS object index create failure\n");
 		D_GOTO(exit, rc);
 	}
+	rec->rec_mmid = umem_id_t2u(vc_cid);
+
 exit:
 	if (rc != 0)
 		vc_rec_free(tins, rec);
@@ -182,18 +173,11 @@ static inline int
 vos_co_tree_lookup(struct vp_hdl *vpool, struct daos_uuid *ukey,
 		   struct vc_val_buf *sbuf)
 {
-	struct vos_container_index	*coi;
-	daos_handle_t			btr_hdl;
 	daos_iov_t			key, value;
-	int				rc;
 
-	coi = vos_pool2coi_table(vpool);
-	rc = dbtree_open_inplace(&coi->ci_btree, &vpool->vp_uma,
-				 &btr_hdl);
-	D_ASSERT(rc == 0);
 	daos_iov_set(&key, ukey, sizeof(struct daos_uuid));
 	daos_iov_set(&value, sbuf, sizeof(struct vc_val_buf));
-	return dbtree_lookup(btr_hdl, &key, &value);
+	return dbtree_lookup(vpool->vp_ct_hdl, &key, &value);
 }
 
 
@@ -300,8 +284,6 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	co_hdl->vc_co		= s_buf.vc_co;
 	co_hdl->vc_obj_table	= umem_id2ptr_typed(&vpool->vp_umm,
 						    s_buf.vc_co->vc_obtable);
-	co_hdl->vc_epoch_table	= umem_id2ptr_typed(&vpool->vp_umm,
-						    s_buf.vc_co->vc_ehtable);
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace(&co_hdl->vc_obj_table->obtable,
@@ -341,7 +323,6 @@ vos_co_close(daos_handle_t coh)
 	}
 
 	vos_obj_cache_evict(vos_obj_cache_current(), co_hdl);
-
 	rc = vos_co_release_handle(co_hdl);
 	if (rc) {
 		D_ERROR("Error in deleting container handle\n");
@@ -370,7 +351,6 @@ vos_co_query(daos_handle_t coh, vos_co_info_t *vc_info)
 	return 0;
 }
 
-
 /**
  * Destroy a container
  */
@@ -384,6 +364,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 	struct vc_val_buf		s_buf;
 	struct vos_object_index		*vc_oi = NULL;
 	struct vc_hdl			*co_hdl = NULL;
+	daos_iov_t			del_key;
 
 	uuid_copy(ukey.uuid, co_uuid);
 	D_DEBUG(DF_VOS3, "Destroying CO ID in container index "DF_UUID"\n",
@@ -409,13 +390,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc);
 	}
 
-	/**
-	 * Need to destroy object index before removing
-	 * container entry
-	 * Outer transaction for all destroy operations
-	 * both oi_destroy and chash_remove have internal
-	 * transaction which will be nested.
-	 */
+	daos_iov_set(&del_key, &ukey, sizeof(struct daos_uuid));
 	TX_BEGIN(vpool->vp_ph) {
 		vc_oi = umem_id2ptr_typed(&vpool->vp_umm,
 					  s_buf.vc_co->vc_obtable);
@@ -425,24 +400,8 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 				rc);
 			pmemobj_tx_abort(EFAULT);
 		}
-		/**
-		 * TODO: Add dbtree_remove when available
-		 * Currently this is a leak in the table
-		 * i.e removing vc_cid.
-		 **/
-		/**
-		 * Temporarily removing PMEM allocations
-		 * XXXX: Remove this once dbtree_delete is added.
-		 */
-		umem_free_typed(&vpool->vp_umm, s_buf.vc_co->vc_obtable);
-		umem_free_typed(&vpool->vp_umm, s_buf.vc_co->vc_ehtable);
-		/**
-		 * Required to eliminate empty records while enumeration
-		 * XXX Remove once dbtree_delete is used.
-		 **/
-		s_buf.vc_co->vc_obtable.oid = UMMID_NULL;
-		s_buf.vc_co->vc_ehtable.oid = UMMID_NULL;
 
+		rc = dbtree_delete(vpool->vp_ct_hdl, &del_key);
 	}  TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_ERROR("Destroying container transaction failed %d\n", rc);
@@ -586,7 +545,6 @@ vos_co_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 	daos_iov_set(&key, &ukey, sizeof(struct daos_uuid));
 	daos_iov_set(&value, &vc_val_buf, sizeof(struct vc_val_buf));
-
 	uuid_clear(it_entry->ie_couuid);
 
 	rc = dbtree_iter_fetch(co_iter->cot_hdl, &key, &value, anchor);
@@ -600,65 +558,13 @@ vos_co_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	return rc;
 }
 
-/**
- * XXX: Remove when dbtree_delete is available
- * Temporary function to check if record is NULL
- * needed until dbtree_delete is implemented
- * to skip zombie records.
- */
-static int
-vos_co_iter_check(struct vos_co_iter *co_iter, daos_hash_out_t *anchor)
-{
-
-	daos_iov_t		key, value;
-	struct daos_uuid	ukey;
-	struct vc_val_buf	vc_val_buf;
-	int			rc = 0;
-
-	daos_iov_set(&key, &ukey, sizeof(struct daos_uuid));
-	daos_iov_set(&value, &vc_val_buf, sizeof(struct vc_val_buf));
-	rc = dbtree_iter_fetch(co_iter->cot_hdl, &key, &value, anchor);
-	if (rc != 0) {
-		D_ERROR("Error while fetching co info: %d\n", rc);
-		D_GOTO(exit, rc);
-	}
-
-	if (TMMID_IS_NULL(vc_val_buf.vc_co->vc_obtable))
-		rc = -DER_NONEXIST;
-exit:
-	return rc;
-}
-
-
 static int
 vos_co_iter_next(struct vos_iterator *iter)
 {
 	struct vos_co_iter	*co_iter = vos_iter2co_iter(iter);
-	int			rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
-	/**
-	 * TODO:
-	 * This section of code currently skips
-	 * zombie records from container tree
-	 * Currently does fetch(es) to verify the presence
-	 * of a valid record, stops when there is a
-	 * valid record or at last node.
-	 * Not needed when we delete the dbtree node
-	 *
-	 * This section of while loop will be replaced
-	 * by
-	 * return  dbtree_iter_probe(...);
-	 */
-	while (1) {
-		rc = dbtree_iter_next(co_iter->cot_hdl);
-		if (rc)
-			break;
-		rc = vos_co_iter_check(co_iter, NULL);
-		if (!rc)
-			break;
-	}
-	return rc;
+	return dbtree_iter_next(co_iter->cot_hdl);
 }
 
 static int
@@ -666,29 +572,12 @@ vos_co_iter_probe(struct vos_iterator *iter, daos_hash_out_t *anchor)
 {
 	struct vos_co_iter	*co_iter = vos_iter2co_iter(iter);
 	dbtree_probe_opc_t	opc;
-	int			rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
 	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
-	rc = dbtree_iter_probe(co_iter->cot_hdl, opc, NULL, anchor);
-	/**
-	 * TODO:
-	 * This section of code currently skips
-	 * zombie records from container tree
-	 * temp solution until dbtree_delete is
-	 * implemented.
-	 */
-
-	if (rc == 0) {
-		rc = vos_co_iter_check(co_iter, NULL);
-		if (rc != 0)
-			rc = vos_co_iter_next(iter);
-	}
-	return rc;
+	return dbtree_iter_probe(co_iter->cot_hdl, opc, NULL, anchor);
 }
-
-
 
 struct vos_iter_ops vos_co_iter_ops = {
 	.iop_prepare = vos_co_iter_prep,
