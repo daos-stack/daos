@@ -190,16 +190,31 @@ struct crt_binheap {
 /**
  * Creates and initializes a binary heap instance.
  *
- * \param ops [IN]	The operations to be used
  * \param feats [IN]	The heap feats bits
  * \param count [IN]	The initial heap capacity in # of nodes
  * \param priv [IN]	An optional private argument
+ * \param ops [IN]	The operations to be used
+ * \param h [IN/OUT]	The 2nd level pointer of created binheap
  *
- * \return		valid pointer of newly created and initialized binary
- *			heap object, or NULL in error case.
+ * \return		zero on success, negative value if error
  */
-struct crt_binheap *crt_binheap_create(struct crt_binheap_ops *ops,
-	uint32_t feats, uint32_t count, void *priv);
+int crt_binheap_create(uint32_t feats, uint32_t count, void *priv,
+		       struct crt_binheap_ops *ops, struct crt_binheap **h);
+
+/**
+ * Creates and initializes a binary heap instance inplace.
+ *
+ * \param feats [IN]	The heap feats bits
+ * \param count [IN]	The initial heap capacity in # of nodes
+ * \param priv [IN]	An optional private argument
+ * \param ops [IN]	The operations to be used
+ * \param h [IN]	The pointer of binheap
+ *
+ * \return		zero on success, negative value if error
+ */
+int crt_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
+			       struct crt_binheap_ops *ops,
+			       struct crt_binheap *h);
 
 /**
  * Releases all resources associated with a binary heap instance.
@@ -210,6 +225,16 @@ struct crt_binheap *crt_binheap_create(struct crt_binheap_ops *ops,
  * \param h [IN]	The binary heap object
  */
 void crt_binheap_destroy(struct crt_binheap *h);
+
+/**
+ * Releases all resources associated with a binary heap instance inplace.
+ *
+ * Deallocates memory for all indirection levels and clear data in binary heap
+ * object as zero.
+ *
+ * \param h [IN]	The binary heap object
+ */
+void crt_binheap_destroy_inplace(struct crt_binheap *h);
 
 /**
  * Obtains a pointer to a heap node, given its index into the binary tree.

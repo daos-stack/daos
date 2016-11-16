@@ -692,9 +692,15 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 
 	if (hg_cbinfo->ret != HG_SUCCESS) {
 		if (hg_cbinfo->ret == HG_CANCELED) {
-			C_DEBUG("request being canceled, opx: 0x%x.\n",
-				opc);
-			rc = -CER_CANCELED;
+			if (rpc_priv->crp_state == RPC_TIMEOUT) {
+				C_DEBUG("timed out rpc_priv %p being canceled, "
+					"opc: 0x%x.\n", rpc_priv, opc);
+				C_GOTO(timeout_abort, rc);
+			} else {
+				C_DEBUG("request being canceled, opc: 0x%x.\n",
+					opc);
+				rc = -CER_CANCELED;
+			}
 		} else {
 			C_ERROR("hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
 			rc = -CER_HG;
@@ -736,9 +742,11 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 			      RPC_CANCELED : RPC_COMPLETED;
 
 out:
+	crt_context_req_untrack(rpc_pub);
+
+timeout_abort:
 	C_FREE_PTR(req_cbinfo);
 
-	crt_context_req_untrack(rpc_pub);
 	/* corresponding to the refcount taken in crt_rpc_priv_init(). */
 	rc = crt_req_decref(rpc_pub);
 	if (rc != 0)

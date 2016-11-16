@@ -123,7 +123,7 @@ crt_epi_destroy(struct crt_ep_inflight *epi)
 	C_ASSERT(epi->epi_req_wait_num == 0);
 
 	C_ASSERT(crt_list_empty(&epi->epi_req_q));
-	C_ASSERT(epi->epi_req_num == epi->epi_reply_num);
+	C_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 	/* crt_list_del_init(&epi->epi_link); */
 	pthread_mutex_destroy(&epi->epi_mutex);
@@ -135,23 +135,37 @@ static int
 crt_context_init(crt_context_t crt_ctx)
 {
 	struct crt_context	*ctx;
-	int			rc;
+	uint32_t		 bh_node_cnt;
+	int			 rc;
 
 	C_ASSERT(crt_ctx != NULL);
 	ctx = crt_ctx;
 
 	CRT_INIT_LIST_HEAD(&ctx->cc_link);
 
+	/* create timeout binheap */
+	bh_node_cnt = CRT_MAX_INFLIGHT_PER_EP_CTX * 64;
+	rc = crt_binheap_create_inplace(CBH_FT_NOLOCK, bh_node_cnt,
+					NULL /* priv */, &crt_timeout_bh_ops,
+					&ctx->cc_bh_timeout);
+	if (rc != 0) {
+		C_ERROR("crt_binheap_create_inplace failed, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+
 	/* create epi table, use external lock */
 	rc =  chash_table_create_inplace(DHASH_FT_NOLOCK, CRT_EPI_TABLE_BITS,
 			NULL, &epi_table_ops, &ctx->cc_epi_table);
 	if (rc != 0) {
 		C_ERROR("chash_table_create_inplace failed, rc: %d.\n", rc);
-		return rc;
+		crt_binheap_destroy_inplace(&ctx->cc_bh_timeout);
+		C_GOTO(out, rc);
 	}
 
 	pthread_mutex_init(&ctx->cc_mutex, NULL);
-	return 0;
+
+out:
+	return rc;
 }
 
 int
@@ -204,6 +218,13 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 {
 	C_ASSERT(rpc_priv != NULL);
 
+	if (rc == -CER_CANCELED)
+		rpc_priv->crp_state = RPC_CANCELED;
+	else if (rc == -CER_TIMEDOUT)
+		rpc_priv->crp_state = RPC_TIMEOUT;
+	else
+		rpc_priv->crp_state = RPC_COMPLETED;
+
 	if (rpc_priv->crp_complete_cb != NULL) {
 		struct crt_cb_info	cbinfo;
 
@@ -212,10 +233,6 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 		cbinfo.cci_rc = rc;
 		if (cbinfo.cci_rc == 0)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_co_rc;
-		if (rc == -CER_CANCELED)
-			rpc_priv->crp_state = RPC_CANCELED;
-		else
-			rpc_priv->crp_state = RPC_COMPLETED;
 		rc = rpc_priv->crp_complete_cb(&cbinfo);
 		if (rc != 0)
 			C_ERROR("req_cbinfo->rsc_cb returned %d.\n", rc);
@@ -338,7 +355,10 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		C_GOTO(out, rc);
 	}
 
+	crt_binheap_destroy_inplace(&ctx->cc_bh_timeout);
+
 	pthread_mutex_unlock(&ctx->cc_mutex);
+	pthread_mutex_destroy(&ctx->cc_mutex);
 
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc == 0) {
@@ -387,6 +407,94 @@ crt_ep_abort(crt_endpoint_t ep)
 	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 
 	return rc;
+}
+
+/* caller should already hold crt_ctx->cc_mutex */
+static int
+crt_req_timeout_track(crt_rpc_t *req)
+{
+	struct crt_context	*crt_ctx;
+	struct crt_rpc_priv	*rpc_priv;
+	int			 rc;
+
+	crt_ctx = (struct crt_context *)req->cr_ctx;
+	C_ASSERT(crt_ctx != NULL);
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+
+	/* add to binheap for timeout tracking */
+	crt_req_addref(req); /* decref in crt_req_timeout_untrack */
+	rc = crt_binheap_insert(&crt_ctx->cc_bh_timeout,
+				&rpc_priv->crp_timeout_bp_node);
+	if (rc == 0) {
+		rpc_priv->crp_in_binheap = 1;
+	} else {
+		C_ERROR("rpc_priv %p (opc 0x%x), crt_binheap_insert "
+			"failed, rc: %d.\n", rpc_priv,
+			rpc_priv->crp_pub.cr_opc, rc);
+		crt_req_decref(req);
+	}
+
+	return rc;
+}
+
+/* caller should already hold crt_ctx->cc_mutex */
+static void
+crt_req_timeout_untrack(crt_rpc_t *req)
+{
+	struct crt_context	*crt_ctx;
+	struct crt_rpc_priv	*rpc_priv;
+
+	crt_ctx = (struct crt_context *)req->cr_ctx;
+	C_ASSERT(crt_ctx != NULL);
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+
+	/* remove from timeout binheap */
+	if (rpc_priv->crp_in_binheap == 1) {
+		rpc_priv->crp_in_binheap = 0;
+		crt_binheap_remove(&crt_ctx->cc_bh_timeout,
+				   &rpc_priv->crp_timeout_bp_node);
+		crt_req_decref(req); /* addref in crt_req_timeout_track */
+	}
+}
+
+static void
+crt_context_timeout_check(struct crt_context *crt_ctx)
+{
+	struct crt_rpc_priv		*rpc_priv, *next;
+	struct crt_binheap_node		*bh_node;
+	crt_list_t			 timeout_list;
+	uint64_t			 ts_now;
+
+	C_ASSERT(crt_ctx != NULL);
+
+	CRT_INIT_LIST_HEAD(&timeout_list);
+	ts_now = crt_timeus_secdiff(0);
+
+	pthread_mutex_lock(&crt_ctx->cc_mutex);
+	while (1) {
+		bh_node = crt_binheap_root(&crt_ctx->cc_bh_timeout);
+		if (bh_node == NULL)
+			break;
+		rpc_priv = container_of(bh_node, struct crt_rpc_priv,
+					crp_timeout_bp_node);
+		if (rpc_priv->crp_timeout_ts > ts_now)
+			break;
+
+		crt_req_timeout_untrack(&rpc_priv->crp_pub);
+
+		crt_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
+		C_ERROR("rpc_priv %p (opc 0x%x) timed out.\n", rpc_priv,
+			rpc_priv->crp_pub.cr_opc);
+	};
+	pthread_mutex_unlock(&crt_ctx->cc_mutex);
+
+	/* handle the timeout RPCs */
+	crt_list_for_each_entry_safe(rpc_priv, next, &timeout_list,
+				     crp_tmp_link) {
+		crt_list_del_init(&rpc_priv->crp_tmp_link);
+		crt_rpc_complete(rpc_priv, -CER_TIMEDOUT);
+		crt_context_req_untrack(&rpc_priv->crp_pub);
+	}
 }
 
 /*
@@ -456,7 +564,7 @@ crt_context_req_track(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	pthread_mutex_lock(&epi->epi_mutex);
 	C_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
-	rpc_priv->crp_ts = crt_timeus_secdiff(0);
+	rpc_priv->crp_timeout_ts = crt_timeus_secdiff(CRT_DEFAULT_TIMEOUT_S);
 	rpc_priv->crp_epi = epi;
 	crt_req_addref(req);
 	if ((epi->epi_req_num - epi->epi_reply_num) >=
@@ -467,10 +575,18 @@ crt_context_req_track(crt_rpc_t *req)
 		rpc_priv->crp_state = RPC_QUEUED;
 		rc = CRT_REQ_TRACK_IN_WAITQ;
 	} else {
+		rc = crt_req_timeout_track(req);
+		if (rc != 0) {
+			C_ERROR("crt_req_timeout_track failed, rc: %d.\n", rc);
+			crt_req_decref(req); /* roll back the addref above */
+			C_GOTO(failed, rc);
+		}
+
 		crt_list_add_tail(&rpc_priv->crp_epi_link, &epi->epi_req_q);
 		epi->epi_req_num++;
 		rc = CRT_REQ_TRACK_IN_INFLIGHQ;
 	}
+failed:
 	pthread_mutex_unlock(&epi->epi_mutex);
 
 	chash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
@@ -484,29 +600,35 @@ crt_context_req_untrack(crt_rpc_t *req)
 {
 	struct crt_rpc_priv	*rpc_priv, *next;
 	struct crt_ep_inflight	*epi;
-	int64_t			credits, inflight;
-	crt_list_t		resend_list;
-	int			rc;
+	struct crt_context	*crt_ctx;
+	int64_t			 credits, inflight;
+	crt_list_t		 submit_list;
+	int			 rc;
 
 	C_ASSERT(req != NULL);
+	crt_ctx = (struct crt_context *)req->cr_ctx;
+	C_ASSERT(crt_ctx != NULL);
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
 	C_ASSERT(rpc_priv->crp_state == RPC_INITED    ||
 		 rpc_priv->crp_state == RPC_COMPLETED ||
+		 rpc_priv->crp_state == RPC_TIMEOUT ||
 		 rpc_priv->crp_state == RPC_CANCELED);
 	epi = rpc_priv->crp_epi;
 	C_ASSERT(epi != NULL);
 
-	CRT_INIT_LIST_HEAD(&resend_list);
+	CRT_INIT_LIST_HEAD(&submit_list);
 
 	pthread_mutex_lock(&epi->epi_mutex);
 	/* remove from inflight queue */
 	crt_list_del_init(&rpc_priv->crp_epi_link);
 	if (rpc_priv->crp_state == RPC_COMPLETED)
 		epi->epi_reply_num++;
-	else /* RPC_CANCELED or RPC_INITED */
+	else /* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
 		epi->epi_req_num--;
 	C_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
+
+	crt_req_timeout_untrack(req);
 
 	/* decref corresponding to addref in crt_context_req_track */
 	crt_req_decref(req);
@@ -520,7 +642,13 @@ crt_context_req_untrack(crt_rpc_t *req)
 		rpc_priv = crt_list_entry(epi->epi_req_waitq.next,
 					   struct crt_rpc_priv, crp_epi_link);
 		rpc_priv->crp_state = RPC_INITED;
-		rpc_priv->crp_ts = crt_timeus_secdiff(0);
+		rpc_priv->crp_timeout_ts =
+			crt_timeus_secdiff(CRT_DEFAULT_TIMEOUT_S);
+
+		rc = crt_req_timeout_track(&rpc_priv->crp_pub);
+		if (rc != 0)
+			C_ERROR("crt_req_timeout_track failed, rc: %d.\n", rc);
+
 		/* remove from waitq and add to in-flight queue */
 		crt_list_move_tail(&rpc_priv->crp_epi_link, &epi->epi_req_q);
 		epi->epi_req_wait_num--;
@@ -529,13 +657,13 @@ crt_context_req_untrack(crt_rpc_t *req)
 		C_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 		/* add to resend list */
-		crt_list_add_tail(&rpc_priv->crp_tmp_link, &resend_list);
+		crt_list_add_tail(&rpc_priv->crp_tmp_link, &submit_list);
 		credits--;
 	}
 	pthread_mutex_unlock(&epi->epi_mutex);
 
 	/* re-submit the rpc req */
-	crt_list_for_each_entry_safe(rpc_priv, next, &resend_list,
+	crt_list_for_each_entry_safe(rpc_priv, next, &submit_list,
 				      crp_tmp_link) {
 		crt_list_del_init(&rpc_priv->crp_tmp_link);
 		rpc_priv->crp_state = RPC_REQ_SENT;
@@ -654,8 +782,9 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	}
 
 	ctx = (struct crt_context *)crt_ctx;
-	if (timeout == 0 || cond_cb == NULL) {
-		/** fast path */
+	if (timeout == 0 || cond_cb == NULL) { /** fast path */
+		crt_context_timeout_check(ctx);
+
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
 		if (rc && rc != -CER_TIMEDOUT) {
 			C_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
@@ -700,6 +829,8 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	}
 
 	while (true) {
+		crt_context_timeout_check(ctx);
+
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
 		if (rc && rc != -CER_TIMEDOUT) {
 			C_ERROR("crt_hg_progress failed with %d\n", rc);

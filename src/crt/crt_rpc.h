@@ -43,11 +43,19 @@
 #ifndef __CRT_RPC_H__
 #define __CRT_RPC_H__
 
+#include <crt_util/heap.h>
+
 #define CRT_RPC_MAGIC			(0xAB0C01EC)
 #define CRT_RPC_VERSION			(0x00000001)
 
+/* default RPC timeout 60 second */
+#define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
+#define CRT_DEFAULT_TIMEOUT_US	(CRT_DEFAULT_TIMEOUT_S * 1e6) /* micro-second */
+
 /* uri lookup RPC timeout 500mS */
 #define CRT_URI_LOOKUP_TIMEOUT		(1000 * 500)
+
+extern struct crt_binheap_ops crt_timeout_bh_ops;
 
 enum crt_rpc_flags_internal {
 	/* flag of collective RPC (bcast) */
@@ -100,6 +108,7 @@ typedef enum {
 	RPC_REPLY_RECVED,
 	RPC_COMPLETED,
 	RPC_CANCELED,
+	RPC_TIMEOUT,
 } crt_rpc_state_t;
 
 struct crt_rpc_priv;
@@ -143,7 +152,10 @@ struct crt_rpc_priv {
 	crt_list_t		crp_tmp_link;
 	/* link to parent RPC crp_opc_info->co_child_rpcs/co_replied_rpcs */
 	crt_list_t		crp_parent_link;
-	uint64_t		crp_ts; /* time stamp */
+	/* binheap node for timeout management, in crt_context::cc_bh_timeout */
+	struct crt_binheap_node	crp_timeout_bp_node;
+	/* time stamp to be timeout, the key of timeout binheap */
+	uint64_t		crp_timeout_ts;
 	crt_cb_t		crp_complete_cb;
 	void			*crp_arg; /* argument for crp_complete_cb */
 	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
@@ -163,7 +175,9 @@ struct crt_rpc_priv {
 				/* flag of collective RPC request */
 				crp_coll:1,
 				/* flag of forwarded rpc for corpc */
-				crp_forward:1;
+				crp_forward:1,
+				/* flag of in timeout binheap */
+				crp_in_binheap:1;
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */

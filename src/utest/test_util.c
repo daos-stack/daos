@@ -845,7 +845,8 @@ test_binheap(void **state)
 
 	(void)state;
 
-	h = crt_binheap_create(&ops, 0, 0, NULL);
+	rc = crt_binheap_create(0, 0, NULL, &ops, &h);
+	assert_int_equal(rc, 0);
 	assert_non_null(h);
 
 	n1.key = 1;

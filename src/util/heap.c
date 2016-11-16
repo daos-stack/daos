@@ -185,20 +185,20 @@ crt_binheap_grow(struct crt_binheap *h)
 	return 0;
 }
 
-struct crt_binheap *
-crt_binheap_create(struct crt_binheap_ops *ops, uint32_t feats, uint32_t count,
-		   void *priv)
+int
+crt_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
+			   struct crt_binheap_ops *ops, struct crt_binheap *h)
 {
-	struct crt_binheap	*h;
+	int	rc;
 
 	if (ops == NULL || ops->hop_compare == NULL) {
 		C_ERROR("invalid parameter, should pass in valid ops table.\n");
-		return NULL;
+		return -CER_INVAL;
 	}
-
-	C_ALLOC_PTR(h);
-	if (h == NULL)
-		return NULL;
+	if (h == NULL) {
+		C_ERROR("invalid parameter of NULL heap pointer.\n");
+		return -CER_INVAL;
+	}
 
 	h->cbh_ops	  = ops;
 	h->cbh_nodes_cnt  = 0;
@@ -207,19 +207,53 @@ crt_binheap_create(struct crt_binheap_ops *ops, uint32_t feats, uint32_t count,
 	h->cbh_feats	  = feats;
 
 	while (h->cbh_hwm < count) { /* preallocate */
-		if (crt_binheap_grow(h) != 0) {
-			crt_binheap_destroy(h);
-			return NULL;
+	rc = crt_binheap_grow(h);
+		if (rc != 0) {
+			C_ERROR("crt_binheap_grow failed, rc: %d.\n", rc);
+			crt_binheap_destroy_inplace(h);
+			return rc;
 		}
 	}
 
 	cbh_lock_init(h);
 
-	return h;
+	return 0;
+}
+
+int
+crt_binheap_create(uint32_t feats, uint32_t count, void *priv,
+		   struct crt_binheap_ops *ops, struct crt_binheap **h)
+{
+	struct crt_binheap	*bh_created;
+	int			 rc;
+
+	if (ops == NULL || ops->hop_compare == NULL) {
+		C_ERROR("invalid parameter, should pass in valid ops table.\n");
+		return -CER_INVAL;
+	}
+	if (h == NULL) {
+		C_ERROR("invalid parameter of NULL heap 2nd level pointer.\n");
+		return -CER_INVAL;
+	}
+
+	C_ALLOC_PTR(bh_created);
+	if (bh_created == NULL)
+		return -CER_NOMEM;
+
+	rc = crt_binheap_create_inplace(feats, count, priv, ops, bh_created);
+	if (rc != 0) {
+		C_ERROR("crt_binheap_create_inplace failed, rc: %d.\n", rc);
+		C_FREE_PTR(bh_created);
+		return rc;
+	}
+
+	*h = bh_created;
+
+	return rc;
 }
 
 void
-crt_binheap_destroy(struct crt_binheap *h)
+crt_binheap_destroy_inplace(struct crt_binheap *h)
 {
 	uint32_t	idx0, idx1, n;
 
@@ -260,6 +294,18 @@ crt_binheap_destroy(struct crt_binheap *h)
 
 	cbh_lock_fini(h);
 
+	memset(h, 0, sizeof(*h));
+}
+
+void
+crt_binheap_destroy(struct crt_binheap *h)
+{
+	if (h == NULL) {
+		C_ERROR("ignore invalid parameter of NULL heap.\n");
+		return;
+	}
+
+	crt_binheap_destroy_inplace(h);
 	C_FREE_PTR(h);
 }
 
@@ -504,16 +550,15 @@ crt_binheap_remove_locked(struct crt_binheap *h, struct crt_binheap_node *e)
 	n--;
 	last = *crt_binheap_pointer(h, n);
 	h->cbh_nodes_cnt = n;
-	if (last == e) {
-		cbh_unlock(h, false /* read-only */);
-		return;
-	}
+	if (last == e)
+		goto out;
 
 	last->chn_idx = cur_idx;
 	*cur_ptr = last;
 	if (!crt_binheap_bubble(h, *cur_ptr))
 		crt_binheap_sink(h, *cur_ptr);
 
+out:
 	e->chn_idx = CBH_POISON;
 	if (h->cbh_ops->hop_exit)
 		h->cbh_ops->hop_exit(h, e);

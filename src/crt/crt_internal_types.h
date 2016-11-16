@@ -50,6 +50,7 @@
 
 #include <crt_util/list.h>
 #include <crt_util/hash.h>
+#include <crt_util/heap.h>
 
 #include <crt_hg.h>
 
@@ -106,6 +107,8 @@ struct crt_context {
 	void			*cc_pool; /* pool for ES on server stack */
 	/* in-flight endpoint tracking hash table */
 	struct chash_table	 cc_epi_table;
+	/* binheap for inflight RPC timeout tracking */
+	struct crt_binheap	 cc_bh_timeout;
 	/* mutex to protect cc_epi_table */
 	pthread_mutex_t		 cc_mutex;
 };

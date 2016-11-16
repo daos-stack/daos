@@ -441,8 +441,6 @@ out:
 	return rc;
 }
 
-#define CRT_DEFAULT_TIMEOUT	(20 * 1000 * 1000) /* Milli-seconds */
-
 static int
 crt_cb_common(const struct crt_cb_info *cb_info)
 {
@@ -476,7 +474,7 @@ crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout)
 	if (complete)
 		return 0;
 
-	timeout = timeout ? timeout : CRT_DEFAULT_TIMEOUT;
+	timeout = timeout ? timeout : CRT_DEFAULT_TIMEOUT_US;
 	/* Wait the request to be completed in timeout milliseconds */
 	end = crt_timeus_secdiff(0) + timeout;
 
@@ -648,3 +646,56 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	return rc;
 }
+
+static int
+timeout_bp_node_enter(struct crt_binheap *h, struct crt_binheap_node *e)
+{
+	struct crt_rpc_priv	*rpc_priv;
+
+	C_ASSERT(h != NULL);
+	C_ASSERT(e != NULL);
+
+	rpc_priv = container_of(e, struct crt_rpc_priv, crp_timeout_bp_node);
+
+	C_DEBUG("rpc_priv %p (opc 0x%x) entering the timeout binheap.\n",
+		rpc_priv, rpc_priv->crp_pub.cr_opc);
+
+	return 0;
+}
+
+static int
+timeout_bp_node_exit(struct crt_binheap *h, struct crt_binheap_node *e)
+{
+	struct crt_rpc_priv	*rpc_priv;
+
+	C_ASSERT(h != NULL);
+	C_ASSERT(e != NULL);
+
+	rpc_priv = container_of(e, struct crt_rpc_priv, crp_timeout_bp_node);
+
+	C_DEBUG("rpc_priv %p (opc 0x%x) exiting the timeout binheap.\n",
+		rpc_priv, rpc_priv->crp_pub.cr_opc);
+
+	return 0;
+}
+
+static bool
+timeout_bp_node_cmp(struct crt_binheap_node *a, struct crt_binheap_node *b)
+{
+	struct crt_rpc_priv	*rpc_priv_a;
+	struct crt_rpc_priv	*rpc_priv_b;
+
+	C_ASSERT(a != NULL);
+	C_ASSERT(b != NULL);
+
+	rpc_priv_a = container_of(a, struct crt_rpc_priv, crp_timeout_bp_node);
+	rpc_priv_b = container_of(b, struct crt_rpc_priv, crp_timeout_bp_node);
+
+	return rpc_priv_a->crp_timeout_ts < rpc_priv_b->crp_timeout_ts;
+}
+
+struct crt_binheap_ops crt_timeout_bh_ops = {
+	.hop_enter	= timeout_bp_node_enter,
+	.hop_exit	= timeout_bp_node_exit,
+	.hop_compare	= timeout_bp_node_cmp
+};
