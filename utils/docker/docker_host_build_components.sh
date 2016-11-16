@@ -32,7 +32,7 @@ docker run --rm -u $USER -v ${PWD}:/work \
 	   ${default_requires} 2>&1 | tee docker_build.log
 
 # Review jobs do not have artifacts to process
-if [ "${job_real_name}" == *${JOB_SUFFIX} ];then
+if [[ "${job_real_name}" == *${JOB_SUFFIX} ]];then
   source ${docker_post_script}
 fi
 
