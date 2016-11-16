@@ -5,6 +5,8 @@ set -uex
 docker_pre_script=`find . -name docker_host_prerun.sh`
 docker_post_script=`find . -name docker_host_postrun.sh`
 
+: ${JOB_SUFFIX:="-update-scratch"}
+
 # Review jobs need to run the pre script once before this script
 # and not re-run it.
 if [[ ! -v DOCKER_IMAGE ]];then
@@ -15,8 +17,8 @@ fi
 
 default_requires=
 
-real_job_name=${JOB_NAME%*/}
-if [ "${real_job_name}" == *${JOB_SUFFIX} ];then
+job_real_name=${JOB_NAME%/*}
+if [ "${job_real_name}" == *${JOB_SUFFIX} ];then
   default_requires="REQUIRES=${TARGET}"
 fi
 
@@ -30,7 +32,7 @@ docker run --rm -u $USER -v ${PWD}:/work \
 	   ${default_requires} 2>&1 | tee docker_build.log
 
 # Review jobs do not have artifacts to process
-if [ "${real_job_name}" == *${JOB_SUFFIX} ];then
+if [ "${job_real_name}" == *${JOB_SUFFIX} ];then
   source ${docker_post_script}
 fi
 
