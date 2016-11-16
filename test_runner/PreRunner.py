@@ -44,14 +44,23 @@ class PreRunner():
             for k in range(0, len(hostkey_list)):
                 self.test_info['defaultENV'][hostkey_list[k]] = host_list[k]
         elif host_config['type'] == 'buildList':
+            numHostKeys = len(hostkey_list)
+            print("host config:" + str(host_config))
             items = ","
             end = host_config['numServers']
-            server_list = items.join(host_list[0:end])
+            if str(end) == "all":
+                server_list = items.join(host_list)
+            else:
+                server_list = items.join(host_list[0:end])
             self.test_info['defaultENV'][hostkey_list[0]] = server_list
-            start = host_config['numServers']
-            end = start + host_config['numClients']
-            client_list = items.join(host_list[start:end])
-            self.test_info['defaultENV'][hostkey_list[1]] = client_list
+            if numHostKeys > 1:
+                start = host_config['numServers']
+                if start == "all":
+                    client_list = items.join(host_list)
+                else:
+                    end = start + host_config['numClients']
+                    client_list = items.join(host_list[start:end])
+                self.test_info['defaultENV'][hostkey_list[1]] = client_list
 
     def set_key_from_info(self):
         """ add to default environment """

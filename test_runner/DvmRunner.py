@@ -70,6 +70,7 @@ class DvmRunner():
         print("TestRunner: orte-dvm process wait 3")
         time.sleep(3)
         print("TestRunner: orte-dvm process started\n")
+        print("TestRunner: orte-dvm pid: " + str(self.ortedvm.pid))
         return not self.ortedvm
 
     def stop_process(self):
@@ -94,7 +95,7 @@ class DvmRunner():
         if self.ortedvm.returncode:
             print("TestRunner: orte-dvm rc: %d\n" % self.ortedvm.returncode)
         with open(self.logfileout, mode='r') as fd:
-            print("STDOUT:\n %s" % fd.read())
+            print("TestRunner: orte-dvm STDOUT:\n %s" % fd.read())
         with open(self.logfilerr, mode='r') as fd:
-            print("STDERR:\n %s" % fd.read())
+            print("TestRunner: orte-dvm STDERR:\n %s" % fd.read())
         os.remove(self.report)

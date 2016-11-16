@@ -117,7 +117,7 @@ class PostRunner():
             topdir = os.path.dirname(newdir)
             dirlist = sorted(os.listdir(topdir), reverse=True)
             for logdir in dirlist:
-                self.dump_logs(logdir)
+                self.dump_logs(os.path.join(topdir, logdir))
 
     def dump_logs(self, newdir):
         """dump the ERROR tag from stdout file"""

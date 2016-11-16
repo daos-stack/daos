@@ -100,7 +100,8 @@ class TestRunner(PreRunner.PreRunner, PostRunner.PostRunner):
                 logdir = os.path.dirname(self.log_dir_base)
                 newname = os.path.join(logdir, newdir)
             os.rename(self.log_dir_base, newname)
-            self.logger.info("TestRunner: test log directory\n %s", newname)
+            self.logger.info("TestRunner: test log directory\n %s", \
+                             os.path.abspath(newname))
             if str(self.test_directives.get('printTestLogPath', "no")).lower() \
                == "yes":
                 self.top_logdir(newname)
