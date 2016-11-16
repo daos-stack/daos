@@ -27,6 +27,27 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
+static int
+proc_cont_tgt_close_rec(crt_proc_t proc, struct cont_tgt_close_rec *rec)
+{
+	int rc;
+
+	rc = crt_proc_uuid_t(proc, &rec->tcr_hdl);
+	if (rc != 0)
+		return -DER_CRT_HG;
+
+	rc = crt_proc_uint64_t(proc, &rec->tcr_hce);
+	if (rc != 0)
+		return -DER_CRT_HG;
+
+	return 0;
+}
+
+struct crt_msg_field DMF_CLOSE_RECS =
+	DEFINE_CRT_MSG("cont_tgt_close_rec[]", CMF_ARRAY_FLAG,
+		       sizeof(struct cont_tgt_close_rec),
+		       proc_cont_tgt_close_rec);
+
 struct crt_msg_field *cont_create_in_fields[] = {
 	&CMF_UUID,	/* op.pool_hdl */
 	&CMF_UUID,	/* op.uuid */
@@ -109,7 +130,7 @@ struct crt_msg_field *cont_tgt_open_out_fields[] = {
 };
 
 struct crt_msg_field *cont_tgt_close_in_fields[] = {
-	&CMF_UUID	/* hdl */
+	&DMF_CLOSE_RECS	/* recs */
 };
 
 struct crt_msg_field *cont_tgt_close_out_fields[] = {

@@ -148,8 +148,13 @@ struct cont_tgt_open_out {
 	int32_t	too_rc;	/* number of errors */
 };
 
+struct cont_tgt_close_rec {
+	uuid_t		tcr_hdl;
+	daos_epoch_t	tcr_hce;
+};
+
 struct cont_tgt_close_in {
-	uuid_t	tci_hdl;
+	struct crt_array	tci_recs;	/* cont_tgt_close_rec[] */
 };
 
 struct cont_tgt_close_out {

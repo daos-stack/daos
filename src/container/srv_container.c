@@ -662,24 +662,28 @@ out:
 	return rc;
 }
 
+/* TODO: Use bulk bcast to support large recs[]. */
 static int
-cont_close_bcast(crt_context_t ctx, struct cont *cont, const uuid_t cont_hdl)
+cont_close_bcast(crt_context_t ctx, struct cont *cont,
+		 struct cont_tgt_close_rec recs[], int nrecs)
 {
 	struct cont_tgt_close_in       *in;
 	struct cont_tgt_close_out      *out;
 	crt_rpc_t		       *rpc;
 	int				rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": bcasting: cont_hdl="DF_UUID"\n",
+	D_DEBUG(DF_DSMS, DF_CONT": bcasting: recs[0].hdl="DF_UUID
+		" recs[0].hce="DF_U64" nrecs=%d\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(cont_hdl));
+		DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce, nrecs);
 
 	rc = bcast_create(ctx, cont->c_svc, CONT_TGT_CLOSE, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	in = crt_req_get(rpc);
-	uuid_copy(in->tci_hdl, cont_hdl);
+	in->tci_recs.da_arrays = recs;
+	in->tci_recs.da_count = nrecs;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -696,18 +700,19 @@ cont_close_bcast(crt_context_t ctx, struct cont *cont, const uuid_t cont_hdl)
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D_DEBUG(DF_DSMS, DF_CONT": bcasted: cont_hdl="DF_UUID": %d\n",
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: hdls[0]="DF_UUID" nhdls=%d: %d\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(cont_hdl), rc);
+		DP_UUID(recs[0].tcr_hdl), nrecs, rc);
 	return rc;
 }
 
 static int
 cont_close(struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
 {
-	struct cont_close_in   *in = crt_req_get(rpc);
-	struct container_hdl	chdl;
-	volatile int		rc;
+	struct cont_close_in	       *in = crt_req_get(rpc);
+	struct container_hdl		chdl;
+	struct cont_tgt_close_rec	rec;
+	volatile int			rc;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
@@ -729,7 +734,10 @@ cont_close(struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	rc = cont_close_bcast(rpc->cr_ctx, cont, in->cci_op.ci_hdl);
+	uuid_copy(rec.tcr_hdl, in->cci_op.ci_hdl);
+	rec.tcr_hce = chdl.ch_hce;
+
+	rc = cont_close_bcast(rpc->cr_ctx, cont, &rec, 1 /* nrecs */);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

@@ -912,6 +912,33 @@ io_simple_fetch_timeout(void **state)
 }
 
 static void
+close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid)
+{
+	int rc;
+
+	print_message("closing object\n");
+	rc = daos_obj_close(req->oh, NULL /* ev */);
+	assert_int_equal(rc, 0);
+
+	print_message("closing container\n");
+	rc = daos_cont_close(arg->coh, NULL /* ev */);
+	assert_int_equal(rc, 0);
+
+	print_message("reopening container\n");
+	if (arg->myrank == 0) {
+		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
+				    &arg->coh, &arg->co_info, NULL /* ev */);
+		assert_int_equal(rc, 0);
+	}
+	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 1);
+
+	print_message("reopening object\n");
+	rc = daos_obj_open(arg->coh, oid, 0 /* epoch */, 0 /* mode */, &req->oh,
+			   NULL /* ev */);
+	assert_int_equal(rc, 0);
+}
+
+static void
 epoch_discard(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -923,18 +950,18 @@ epoch_discard(void **state)
 	const char	*akey_fmt = "epoch_discard akey%d";
 	char		*akey[nakeys];
 	char		*rec[nakeys];
-	daos_size_t	rec_size[nakeys];
-	daos_off_t	offset[nakeys];
+	daos_size_t	 rec_size[nakeys];
+	daos_off_t	 offset[nakeys];
 	const char	*val_fmt = "epoch_discard val%d epoch"DF_U64;
-	const size_t	epoch_strlen = 10;
+	const size_t	 epoch_strlen = 10;
 	char		*val[nakeys];
-	daos_size_t	val_size[nakeys];
+	daos_size_t	 val_size[nakeys];
 	char		*rec_verify;
 	daos_epoch_state_t epoch_state;
-	daos_epoch_t	epoch;
-	daos_epoch_t	e;
-	int		i;
-	int		rc;
+	daos_epoch_t	 epoch;
+	daos_epoch_t	 e;
+	int		 i;
+	int		 rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -982,6 +1009,7 @@ epoch_discard(void **state)
 	/** Discard LHE + 1. */
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
+		print_message("discarding epoch "DF_U64"\n", epoch + 1);
 		rc = daos_epoch_discard(arg->coh, epoch + 1, &epoch_state,
 					NULL /* ev */);
 		assert_int_equal(rc, 0);
@@ -1009,6 +1037,30 @@ epoch_discard(void **state)
 		}
 	}
 	free(rec_verify);
+
+	/** Close and reopen the container and the obj. */
+	MPI_Barrier(MPI_COMM_WORLD);
+	close_reopen_coh_oh(arg, &req, oid);
+
+	/** Verify that the three epochs are empty. */
+	for (e = epoch; e < epoch + 3; e++) {
+		daos_hash_out_t	hash_out;
+		int		found = 0;
+
+		print_message("verifying epoch "DF_U64"\n", e);
+		memset(&hash_out, 0, sizeof(hash_out));
+		while (!daos_hash_is_eof(&hash_out)) {
+			uint32_t	 n = 1;
+			daos_key_desc_t	 kd;
+			char		*buf[64];
+
+			enumerate_dkey(e, &n, &kd, &hash_out, buf, sizeof(buf),
+				       &req);
+			print_message("  n %u\n", n);
+			found += n;
+		}
+		assert_int_equal(found, 0);
+	}
 
 	for (i = 0; i < nakeys; i++) {
 		free(val[i]);

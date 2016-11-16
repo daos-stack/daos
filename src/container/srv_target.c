@@ -475,22 +475,66 @@ ds_cont_tgt_open_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
-/* Called via dss_collective() to close the ds_cont_hdl object. */
+/* Close a single record (i.e., handle). */
+static int
+cont_close_one_rec(struct cont_tgt_close_rec *rec)
+{
+	struct dsm_tls	       *tls = dsm_tls_get();
+	struct ds_cont_hdl     *hdl;
+	daos_epoch_range_t	range;
+	int			rc;
+
+	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, rec->tcr_hdl);
+	if (hdl == NULL) {
+		D_DEBUG(DF_DSMS, DF_CONT": already closed: hdl="DF_UUID" hce="
+			DF_U64"\n", DP_CONT(NULL, NULL), DP_UUID(rec->tcr_hdl),
+			rec->tcr_hce);
+		return 0;
+	}
+
+	D_DEBUG(DF_DSMS, DF_CONT": closing: hdl="DF_UUID" hce="DF_U64"\n",
+		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
+		DP_UUID(rec->tcr_hdl), rec->tcr_hce);
+
+	/* All uncommitted epochs of this handle. */
+	range.epr_lo = rec->tcr_hce + 1;
+	range.epr_hi = DAOS_EPOCH_MAX;
+
+	rc = vos_epoch_discard(hdl->sch_cont->sc_hdl, &range, rec->tcr_hdl);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to discard uncommitted epochs ["DF_U64
+			", "DF_X64"): hdl="DF_UUID" rc=%d\n",
+			DP_CONT(hdl->sch_pool->spc_uuid,
+				hdl->sch_cont->sc_uuid), range.epr_lo,
+			range.epr_hi, DP_UUID(rec->tcr_hdl), rc);
+		D_GOTO(out, rc);
+	}
+
+	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+
+out:
+	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
+	return rc;
+}
+
+/* Called via dss_collective() to close the containers belong to this thread. */
 static int
 cont_close_one(void *vin)
 {
 	struct cont_tgt_close_in       *in = vin;
-	struct dsm_tls		       *tls = dsm_tls_get();
-	struct ds_cont_hdl	       *hdl;
+	struct cont_tgt_close_rec      *recs = in->tci_recs.da_arrays;
+	int				i;
+	int				rc = 0;
 
-	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, in->tci_hdl);
-	if (hdl == NULL)
-		return 0;
+	for (i = 0; i < in->tci_recs.da_count; i++) {
+		int rc_tmp;
 
-	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+		rc_tmp = cont_close_one_rec(&recs[i]);
+		if (rc_tmp != 0 && rc == 0)
+			rc = rc_tmp;
+	}
 
-	cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
-	return 0;
+	return rc;
 }
 
 int
@@ -498,14 +542,23 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 {
 	struct cont_tgt_close_in       *in = crt_req_get(rpc);
 	struct cont_tgt_close_out      *out = crt_reply_get(rpc);
+	struct cont_tgt_close_rec      *recs = in->tci_recs.da_arrays;
 	int				rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: hdl="DF_UUID"\n",
-		DP_CONT(NULL, NULL), rpc, DP_UUID(in->tci_hdl));
+	if (in->tci_recs.da_count == 0)
+		D_GOTO(out, rc = 0);
+
+	if (in->tci_recs.da_arrays == NULL)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: recs[0].hdl="DF_UUID
+		" nres="DF_U64"\n", DP_CONT(NULL, NULL), rpc,
+		DP_UUID(recs[0].tcr_hdl), in->tci_recs.da_count);
 
 	rc = dss_collective(cont_close_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
+out:
 	out->tco_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tco_rc, rc);
