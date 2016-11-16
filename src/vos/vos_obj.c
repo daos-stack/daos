@@ -1445,11 +1445,32 @@ recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 							   entry);
 				return rc;
 			}
-			/* fall through to check the next recx */
-		case VOS_IT_EPC_EQ:
-			/* NB: Nobody can use DAOS_EPOCH_MAX as an epoch of
+			/* No matched epoch from in index, try the next index.
+			 * NB: Nobody can use DAOS_EPOCH_MAX as an epoch of
 			 * update, so using BTR_PROBE_GE & DAOS_EPOCH_MAX can
 			 * effectively find the index of the next recx.
+			 */
+			entry->ie_epr.epr_lo = DAOS_EPOCH_MAX;
+			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
+			break;
+
+		case VOS_IT_EPC_EQ:
+			if (entry->ie_epr.epr_lo < oiter->it_epr.epr_lo) {
+				/* this recx may have data for the specified
+				 * epoch, we try to find it by BTR_PROBE_EQ.
+				 */
+				entry->ie_epr.epr_lo = oiter->it_epr.epr_lo;
+				rc = recx_iter_probe_fetch(oiter, BTR_PROBE_EQ,
+							   entry);
+				if (rc == 0) /* found */
+					return 0;
+
+				if (rc != -DER_NONEXIST) /* real failure */
+					return rc;
+				/* not found, fall through for the next one */
+			}
+			/* No matched epoch in this index, try the next index.
+			 * See the comment for VOS_IT_EPC_LE.
 			 */
 			entry->ie_epr.epr_lo = DAOS_EPOCH_MAX;
 			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
