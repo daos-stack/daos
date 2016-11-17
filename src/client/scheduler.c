@@ -57,8 +57,8 @@ daos_sched_init(struct daos_sched *sched, struct daos_event *event)
 
 	DAOS_INIT_LIST_HEAD(&sched->ds_list);
 	DAOS_INIT_LIST_HEAD(&dsp->dsp_init_list);
+	DAOS_INIT_LIST_HEAD(&dsp->dsp_running_list);
 	DAOS_INIT_LIST_HEAD(&dsp->dsp_complete_list);
-	DAOS_INIT_LIST_HEAD(&dsp->dsp_fini_list);
 	DAOS_INIT_LIST_HEAD(&dsp->dsp_comp_cb_list);
 
 	dsp->dsp_refcount = 1;
@@ -133,16 +133,14 @@ daos_task2sched(struct daos_task *task)
 }
 
 static void
-daos_task_addref_locked(struct daos_task *task)
+daos_task_addref_locked(struct daos_task_private *dtp)
 {
-	daos_task2priv(task)->dtp_refcnt++;
+	dtp->dtp_refcnt++;
 }
 
 static bool
-daos_task_decref_locked(struct daos_task *task)
+daos_task_decref_locked(struct daos_task_private *dtp)
 {
-	struct daos_task_private  *dtp = daos_task2priv(task);
-
 	D_ASSERT(dtp->dtp_refcnt > 0);
 	dtp->dtp_refcnt--;
 	return dtp->dtp_refcnt == 0;
@@ -158,7 +156,7 @@ daos_task_decref(struct daos_task *task)
 	D_ASSERT(dsp != NULL);
 
 	pthread_mutex_lock(&dsp->dsp_lock);
-	zombie = daos_task_decref_locked(task);
+	zombie = daos_task_decref_locked(dtp);
 	pthread_mutex_unlock(&dsp->dsp_lock);
 	if (!zombie)
 		return;
@@ -183,18 +181,11 @@ static void
 daos_sched_fini(struct daos_sched *sched)
 {
 	struct daos_sched_private *dsp = daos_sched2priv(sched);
-	struct daos_task_private *dtp;
-	struct daos_task_private *tmp;
 
 	D_ASSERT(dsp->dsp_inflight == 0);
 	D_ASSERT(daos_list_empty(&dsp->dsp_init_list));
+	D_ASSERT(daos_list_empty(&dsp->dsp_running_list));
 	D_ASSERT(daos_list_empty(&dsp->dsp_complete_list));
-
-	daos_list_for_each_entry_safe(dtp, tmp,
-			&dsp->dsp_fini_list, dtp_list) {
-		daos_list_del(&dtp->dtp_list);
-		daos_task_decref(daos_priv2task(dtp));
-	}
 	pthread_mutex_destroy(&dsp->dsp_lock);
 }
 
@@ -202,15 +193,6 @@ static inline void
 daos_sched_addref_locked(struct daos_sched_private *dsp)
 {
 	dsp->dsp_refcount++;
-}
-
-static inline void
-daos_sched_addref(struct daos_sched_private *dsp)
-{
-	pthread_mutex_lock(&dsp->dsp_lock);
-	D_ASSERT(dsp->dsp_refcount >= 0);
-	daos_sched_addref_locked(dsp);
-	pthread_mutex_unlock(&dsp->dsp_lock);
 }
 
 static void
@@ -275,10 +257,13 @@ static void
 daos_task_complete_locked(struct daos_task_private *dtp,
 			  struct daos_sched_private *dsp)
 {
-	if (!dtp->dtp_complete) {
-		dtp->dtp_complete = 1;
-		daos_list_move_tail(&dtp->dtp_list, &dsp->dsp_complete_list);
-	}
+	if (dtp->dtp_complete)
+		return;
+
+	D_ASSERT(dtp->dtp_running);
+	dtp->dtp_running = 0;
+	dtp->dtp_complete = 1;
+	daos_list_move_tail(&dtp->dtp_list, &dsp->dsp_complete_list);
 }
 
 /* register the callback of the task */
@@ -342,66 +327,48 @@ daos_task_result_process(struct daos_task *task,
 
 /* Process the task in the init list of the scheduler */
 int
-daos_sched_process_init(struct daos_sched_private *dsp, bool cancel)
+daos_sched_process_init(struct daos_sched_private *dsp)
 {
 	struct daos_task_private *dtp;
 	struct daos_task_private *tmp;
-	daos_list_t		 *list;
-	daos_list_t		  exec_list;
-	daos_list_t		  cancel_list;
+	daos_list_t		  list;
 	int			  processed = 0;
 
-	DAOS_INIT_LIST_HEAD(&exec_list);
-	DAOS_INIT_LIST_HEAD(&cancel_list);
-
-	list = cancel ? &cancel_list : &exec_list;
-
+	DAOS_INIT_LIST_HEAD(&list);
 	pthread_mutex_lock(&dsp->dsp_lock);
 	daos_list_for_each_entry_safe(dtp, tmp, &dsp->dsp_init_list,
 				      dtp_list) {
-		/* If dtp_func is NULL, it means the task is already
-		 * scheduled by caller (see those top task created
-		 * in client/object.c), the complection of these
-		 * tasks will be decided by either its dependent
-		 * tasks or task completion callback,
-		 * see daos_task_complete().
-		 **/
-		if ((dtp->dtp_dep_cnt == 0 && dtp->dtp_func != NULL) ||
-		     cancel) {
-			if (dtp->dtp_func != NULL)
-				dsp->dsp_inflight++;
-			daos_list_move_tail(&dtp->dtp_list, list);
+		if (dtp->dtp_dep_cnt == 0 || dsp->dsp_cancelling) {
+			daos_list_move_tail(&dtp->dtp_list, &list);
+			dsp->dsp_inflight++;
 		}
 	}
-
-	while (!daos_list_empty(&cancel_list)) {
-		dtp = daos_list_entry(cancel_list.next,
-				      struct daos_task_private, dtp_list);
-		daos_list_del_init(&dtp->dtp_list);
-
-		dtp->dtp_func = NULL;
-		daos_task_complete_locked(dtp, dsp);
-		processed++;
-	}
-
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
-	while (!daos_list_empty(&exec_list)) {
+	while (!daos_list_empty(&list)) {
 		struct daos_task *task;
-		daos_task_func_t  func;
 		int		  rc;
 
-		dtp = daos_list_entry(exec_list.next,
+		dtp = daos_list_entry(list.next,
 				      struct daos_task_private, dtp_list);
-		daos_list_del_init(&dtp->dtp_list);
 
-		func = dtp->dtp_func;
-		dtp->dtp_func = NULL;
+		pthread_mutex_lock(&dsp->dsp_lock);
+		if (dsp->dsp_cancelling) {
+			daos_task_complete_locked(dtp, dsp);
+		} else {
+			dtp->dtp_running = 1;
+			daos_list_move_tail(&dtp->dtp_list,
+					    &dsp->dsp_running_list);
+		}
+		pthread_mutex_unlock(&dsp->dsp_lock);
 
-		task = daos_priv2task(dtp);
-		rc = func(task);
-		if (task->dt_result == 0)
-			task->dt_result = rc;
+		if (!dsp->dsp_cancelling) {
+			task = daos_priv2task(dtp);
+			D_ASSERT(dtp->dtp_func != NULL);
+			rc = dtp->dtp_func(task);
+			if (task->dt_result == 0)
+				task->dt_result = rc;
+		}
 		processed++;
 	}
 	return processed;
@@ -439,37 +406,35 @@ daos_task_post_process(struct daos_task *task)
 		/* see if the dependent task is ready to be scheduled */
 		D_ASSERT(dtp_tmp->dtp_dep_cnt > 0);
 		dtp_tmp->dtp_dep_cnt--;
-
-		/* If one task is ready, then it has two cases
-		 * 1. if dtp_func is not NULL, then daos_sched_process will
-		 * pick it and run.
-		 * 2. if dtp_func is NULL, then the task will be put
-		 * to the complete list, and waiting to be picked by
-		 * daos_sched_process_complete().
-		 **/
-		if (dtp_tmp->dtp_dep_cnt == 0 && dtp_tmp->dtp_func == NULL) {
-			D_DEBUG(DF_MISC, "mark task %p ready\n", dtp_tmp);
-			daos_task_complete_locked(dtp_tmp, dsp);
+		if (dtp_tmp->dtp_dep_cnt == 0 && !dsp->dsp_cancelling) {
+			/* If the task is already running, let's mark it
+			 * complete.
+			 **/
+			if (dtp_tmp->dtp_running)
+				daos_task_complete_locked(dtp_tmp, dsp);
 		}
 
-		/* let's attach the current task to the dependent task, in
-		 * case the dependent task needs to check the result of
-		 * these tasks.
-		 *
-		 * NB: reuse tlink.
-		 */
-		daos_task_addref_locked(task);
-		tlink->tl_task = task;
-		daos_list_add_tail(&tlink->tl_link, &dtp_tmp->dtp_ret_list);
+		if (!dsp->dsp_cancelling) {
+			/* let's attach the current task to the dependent task,
+			 * in case the dependent task needs to check the result
+			 * of these tasks.
+			 *
+			 * NB: reuse tlink.
+			 */
+			daos_task_addref_locked(dtp);
+			tlink->tl_task = task;
+			daos_list_add_tail(&tlink->tl_link,
+					   &dtp_tmp->dtp_ret_list);
+		} else {
+			D_FREE_PTR(tlink);
+		}
 
 		/* -1 for tlink */
-		daos_task_decref_locked(daos_priv2task(dtp_tmp));
+		daos_task_decref_locked(dtp_tmp);
 	}
 
-	/* move task to the finish list */
 	D_ASSERT(dsp->dsp_inflight > 0);
 	dsp->dsp_inflight--;
-	daos_list_add_tail(&dtp->dtp_list, &dsp->dsp_fini_list);
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
 	if (task->dt_result == 0)
@@ -495,9 +460,10 @@ daos_sched_process_complete(struct daos_sched_private *dsp)
 	daos_list_for_each_entry_safe(dtp, tmp, &comp_list, dtp_list) {
 		struct daos_task *task = daos_priv2task(dtp);
 
-		daos_list_del_init(&dtp->dtp_list);
 		daos_task_complete_callback(task);
 		daos_task_post_process(task);
+		daos_list_del_init(&dtp->dtp_list);
+		daos_task_decref(task);  /* drop final ref */
 		processed++;
 	}
 	return processed;
@@ -530,37 +496,50 @@ daos_sched_check_complete(struct daos_sched_private *dsp)
 	return true;
 }
 
-/* Process tasks of the scheduler */
-static void
-daos_sched_process(struct daos_sched_private *dsp, bool cancel)
+/* Run tasks for this schedule */
+void
+daos_sched_run(struct daos_sched *sched)
 {
+	struct daos_sched_private *dsp = daos_sched2priv(sched);
+
 	while (1) {
 		int	processed = 0;
 		bool	completed;
 
-		processed += daos_sched_process_init(dsp, cancel);
+		processed += daos_sched_process_init(dsp);
 		processed += daos_sched_process_complete(dsp);
 		completed = daos_sched_check_complete(dsp);
 		if (completed || processed == 0)
 			break;
 	};
-}
 
-/* Run tasks for this schedule */
-void
-daos_sched_run(struct daos_sched *sched)
-{
-	daos_sched_process(daos_sched2priv(sched), false);
 }
 
 /* Cancel tasks for this schedule */
 void
 daos_sched_cancel(struct daos_sched *sched, int ret)
 {
+	struct daos_sched_private *dsp = daos_sched2priv(sched);
+
 	if (sched->ds_result == 0)
 		sched->ds_result = ret;
 
-	daos_sched_process(daos_sched2priv(sched), true);
+	pthread_mutex_lock(&dsp->dsp_lock);
+	if (dsp->dsp_cancelling) {
+		pthread_mutex_unlock(&dsp->dsp_lock);
+		return;
+	}
+	dsp->dsp_cancelling = 1;
+	daos_sched_addref_locked(dsp); /* +1 for daos_sched_run */
+	pthread_mutex_unlock(&dsp->dsp_lock);
+
+	/* Wait until all inflight task has been cancelled */
+	while (1) {
+		daos_sched_run(sched);
+		if (dsp->dsp_inflight == 0)
+			break;
+	};
+	daos_sched_decref(dsp);
 }
 
 void
@@ -574,12 +553,20 @@ daos_task_complete(struct daos_task *task, int ret)
 		task->dt_result = ret;
 
 	pthread_mutex_lock(&dsp->dsp_lock);
-	daos_task_complete_locked(dtp, dsp);
+	/* +1 for daos_sched_run() */
+	daos_sched_addref_locked(dsp);
+
+	if (!dsp->dsp_cancelling)
+		daos_task_complete_locked(dtp, dsp);
+	else
+		daos_task_decref_locked(dtp);
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
-	D_DEBUG(DF_MISC, "task %p complete.\n", dtp);
 	/* Let's run sched to process the complete task */
-	daos_sched_run(sched);
+	if (!dsp->dsp_cancelling)
+		daos_sched_run(sched);
+
+	daos_sched_decref(dsp);
 }
 
 /**
@@ -606,7 +593,7 @@ daos_task_add_dependent(struct daos_task *task, struct daos_task *dep)
 
 	pthread_mutex_lock(&dtp->dtp_sched->dsp_lock);
 
-	daos_task_addref_locked(task);
+	daos_task_addref_locked(dtp);
 	tlink->tl_task = task;
 
 	daos_list_add_tail(&tlink->tl_link, &dep_dtp->dtp_dep_list);
@@ -643,15 +630,20 @@ daos_task_init(struct daos_task *task, daos_task_func_t task_func,
 
 	/* Add task to scheduler */
 	pthread_mutex_lock(&dsp->dsp_lock);
-	daos_list_add_tail(&dtp->dtp_list, &dsp->dsp_init_list);
-	daos_sched_addref_locked(dsp);
 	dtp->dtp_sched = dsp;
-	/* If dtp_func == NULL, it means it will not rely on
-	 * daos_sched_process_init() to execute it, i.e. it
-	 * is inflight already.
-	 **/
-	if (dtp->dtp_func == NULL)
+	if (dtp->dtp_func == NULL) {
+		/* If dtp_func == NULL, it means it will not rely on
+		 * daos_sched_process_init() to execute it, i.e. it
+		 * is inflight already, see those tasks created in
+		 * client/object.c
+		 **/
 		dsp->dsp_inflight++;
+		dtp->dtp_running = 1;
+		daos_list_add_tail(&dtp->dtp_list, &dsp->dsp_running_list);
+	} else {
+		daos_list_add_tail(&dtp->dtp_list, &dsp->dsp_init_list);
+	}
+	daos_sched_addref_locked(dsp);
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
 	if (dependent != NULL)

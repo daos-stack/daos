@@ -462,19 +462,25 @@ dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 			break;
 		}
 
-		D_ALLOC_PTR(shard_task);
-		if (shard_task == NULL)
-			D_GOTO(out_put, rc = -DER_NOMEM);
+		if (shards_cnt > 1) {
+			D_ALLOC_PTR(shard_task);
+			if (shard_task == NULL)
+				D_GOTO(out_put, rc = -DER_NOMEM);
 
-		rc = daos_task_init(shard_task, NULL, NULL, 0, sched, NULL);
-		if (rc != 0) {
-			D_FREE_PTR(shard_task);
-			D_GOTO(out_put, rc);
+			rc = daos_task_init(shard_task, NULL, NULL, 0,
+					    sched, NULL);
+			if (rc != 0) {
+				D_FREE_PTR(shard_task);
+				D_GOTO(out_put, rc);
+			}
+
+			rc = daos_task_add_dependent(task, shard_task);
+			if (rc != 0)
+				D_GOTO(out_put, rc);
+		} else {
+			/* Do not create shard task for single shard write */
+			shard_task = task;
 		}
-
-		rc = daos_task_add_dependent(task, shard_task);
-		if (rc != 0)
-			D_GOTO(out_put, rc);
 
 		rc = dc_obj_shard_update(shard_oh, epoch, dkey, nr, iods, sgls,
 					 shard_task);

@@ -310,8 +310,10 @@ daos_obj_comp_cb(struct daos_task *task, void *data)
 	struct daos_task  *rw_task;
 	int		  rc = task->dt_result;
 
-	if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_STALE))
+	if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_STALE)) {
+		sched->ds_result = rc;
 		return rc;
+	}
 
 	D_DEBUG(DF_MISC, "task %p opc %d fails %d let's retry.\n",
 		task, arg->opc, rc);
@@ -445,8 +447,6 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	rc = dc_obj_fetch(oh, epoch, dkey, nr, iods, sgls, maps, task);
 	if (rc != 0)
 		D_GOTO(out, rc);
-
-	daos_sched_run(sched);
 out:
 	if (rc != 0)
 		daos_sched_cancel(sched, rc);
@@ -488,8 +488,6 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	rc = dc_obj_update(oh, epoch, dkey, nr, iods, sgls, task);
 	if (rc != 0)
 		D_GOTO(out, rc);
-
-	daos_sched_run(sched);
 out:
 	if (rc != 0)
 		daos_sched_cancel(sched, rc);
@@ -531,8 +529,6 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	rc = dc_obj_list_dkey(oh, epoch, nr, kds, sgl, anchor, task);
 	if (rc != 0)
 		D_GOTO(out, rc);
-
-	daos_sched_run(sched);
 out:
 	if (rc != 0)
 		daos_sched_cancel(sched, rc);
@@ -575,8 +571,6 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	rc = dc_obj_list_akey(oh, epoch, dkey, nr, kds, sgl, anchor, task);
 	if (rc)
 		return rc;
-
-	daos_sched_run(sched);
 out:
 	if (rc != 0)
 		daos_sched_cancel(sched, rc);

@@ -63,7 +63,8 @@ struct daos_task_private {
 
 	struct daos_op_sp	dtp_sp;
 
-	uint32_t		dtp_complete:1;
+	uint32_t		dtp_complete:1,
+				dtp_running:1;
 	int			dtp_dep_cnt;
 	struct daos_sched_private	*dtp_sched;
 };
@@ -88,8 +89,11 @@ struct daos_sched_private {
 	 **/
 	daos_list_t	dsp_complete_list;
 
-	/* Both task and comp_cb have been executed */
-	daos_list_t	dsp_fini_list;
+	/**
+	 * The task running list.
+	 **/
+	daos_list_t	dsp_running_list;
+
 	/* the list for complete callback */
 	daos_list_t	dsp_comp_cb_list;
 
@@ -97,6 +101,8 @@ struct daos_sched_private {
 
 	/* number of tasks being executed */
 	int		dsp_inflight;
+
+	uint32_t	dsp_cancelling:1;
 };
 
 struct daos_sched_comp {
