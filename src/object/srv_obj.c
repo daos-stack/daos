@@ -463,6 +463,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	daos_iov_t			*iovs = NULL;
 	int				iovs_nr;
 	int				iovs_idx;
+	vos_iter_entry_t		key_ent;
 	vos_iter_param_t		param;
 	daos_key_desc_t			*kds;
 	daos_handle_t			ih;
@@ -545,17 +546,15 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	iovs_idx = 0;
 	key_nr = 0;
 	kds = oeo->oeo_kds.da_arrays;
-	while (1) {
-		vos_iter_entry_t  key_ent;
 
+	while (key_nr < oei->oei_nr && iovs_idx < iovs_nr) {
 		rc = vos_iter_fetch(ih, &key_ent, &oeo->oeo_anchor);
 		if (rc != 0)
-			D_GOTO(next, rc);
+			break;
 
 		D_DEBUG(DF_MISC, "get key %s len "DF_U64
 			"iov_len "DF_U64" buflen "DF_U64"\n",
-			(char *)key_ent.ie_key.iov_buf,
-			key_ent.ie_key.iov_len,
+			(char *)key_ent.ie_key.iov_buf, key_ent.ie_key.iov_len,
 			iovs[iovs_idx].iov_len, iovs[iovs_idx].iov_buf_len);
 
 		/* fill the key to iov if there are enough space */
@@ -576,27 +575,27 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 				iovs[iovs_idx].iov_len +=
 						key_ent.ie_key.iov_len;
 
-				rc = vos_iter_next(ih);
+				/* ignore the returned value, vos_iter_fetch()
+				 * can see the same error again.
+				 */
+				vos_iter_next(ih);
 				break;
 			}
 			iovs_idx++;
 		}
-next:
-		if (key_nr >= oei->oei_nr || iovs_idx >= iovs_nr || rc != 0) {
-			/* it means iteration hit the end */
-			if (rc == -DER_NONEXIST) {
-				daos_hash_set_eof(&oeo->oeo_anchor);
-				rc = 0;
-			} else if (rc == 0) {
-				rc = vos_iter_fetch(ih, &key_ent,
-						    &oeo->oeo_anchor);
-			}
-			break;
-		}
 	}
+
+	if (rc == 0) /* anchor for the next call */
+		rc = vos_iter_fetch(ih, &key_ent, &oeo->oeo_anchor);
+
+	if (rc == -DER_NONEXIST) {
+		daos_hash_set_eof(&oeo->oeo_anchor);
+		rc = 0;
+	}
+
 	vos_iter_finish(ih);
-	if (rc < 0) {
-		D_ERROR("Failed to fetch dkey: %d\n", rc);
+	if (rc != 0) {
+		D_ERROR("Failed to fetch key: %d\n", rc);
 		D_GOTO(out_tch, rc);
 	}
 
@@ -613,8 +612,10 @@ next:
 		oeo->oeo_sgl.sg_nr.num = 0;
 		oeo->oeo_sgl.sg_nr.num_out = 0;
 	} else {
-		oeo->oeo_sgl = sgl;
+		if (iovs_idx < iovs_nr && iovs[iovs_idx].iov_len != 0)
+			iovs_idx++;
 		oeo->oeo_sgl.sg_nr.num = iovs_idx;
+		oeo->oeo_sgl = sgl;
 	}
 out_tch:
 	ds_cont_hdl_put(cont_hdl);

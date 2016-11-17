@@ -87,10 +87,17 @@ struct dc_obj_shard {
 #define ENUM_ANCHOR_SHARD_LENGTH	4
 
 static inline void
-enum_anchor_copy(daos_hash_out_t *dst, daos_hash_out_t *src)
+enum_anchor_copy_hkey(daos_hash_out_t *dst, daos_hash_out_t *src)
 {
 	memcpy(&dst->body[DAOS_HASH_HKEY_START],
 	       &src->body[DAOS_HASH_HKEY_START], DAOS_HASH_HKEY_LENGTH);
+}
+
+static inline void
+enum_anchor_reset_hkey(daos_hash_out_t *hash_out)
+{
+	memset(&hash_out->body[DAOS_HASH_HKEY_START], 0,
+	       DAOS_HASH_HKEY_LENGTH);
 }
 
 static inline uint32_t

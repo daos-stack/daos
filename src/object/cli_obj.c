@@ -501,7 +501,6 @@ out_put:
 struct dc_obj_list_arg {
 	struct dc_object *obj;
 	daos_hash_out_t	 *anchor;
-	uint32_t	 shard;
 };
 
 static int
@@ -510,7 +509,7 @@ dc_obj_list_dkey_cb(struct daos_task *task, void *data)
 	struct dc_obj_list_arg	*arg = data;
 	struct dc_object	*obj = arg->obj;
 	daos_hash_out_t		*anchor = arg->anchor;
-	uint32_t		shard = arg->shard;
+	uint32_t		shard = enum_anchor_get_shard(anchor);
 	int			grp_size;
 	int			rc = task->dt_result;
 
@@ -525,9 +524,11 @@ dc_obj_list_dkey_cb(struct daos_task *task, void *data)
 		enum_anchor_set_shard(anchor, shard);
 	} else if (shard < obj->cob_layout->ol_nr - grp_size) {
 		shard += grp_size;
-		D_DEBUG(DF_SRC, "Enumerate the next shard %d\n", shard);
+		D_DEBUG(DF_SRC, "next shard %d grp %d nr %u\n",
+			shard, grp_size, obj->cob_layout->ol_nr);
 
-		memset(anchor, 0, sizeof(*anchor));
+		enum_anchor_reset_hkey(anchor);
+		enum_anchor_set_tag(anchor, 0);
 		enum_anchor_set_shard(anchor, shard);
 	} else {
 		D_DEBUG(DF_SRC, "Enumerated All shards\n");
@@ -578,7 +579,6 @@ dc_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	if (op == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
 		obj_dkey2shard(obj, key, NULL, &shard);
 		enum_anchor_set_shard(anchor, shard);
-		arg->shard = shard;
 		rc = daos_task_register_comp_cb(task, dc_obj_list_akey_cb,
 						arg);
 		if (rc != 0)

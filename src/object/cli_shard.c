@@ -588,17 +588,8 @@ enumerate_cp(struct daos_task *task, int rc)
 	}
 
 	oeo = crt_reply_get(sp->sp_rpc);
-	if (oeo->oeo_ret < 0) {
-		if (oeo->oeo_ret == -DER_STALE &&
-		    oei->oei_map_ver < obj_reply_map_version_get(sp->sp_rpc)) {
-			D_ERROR("update ver %u ---> %u\n", oei->oei_map_ver,
-				obj_reply_map_version_get(sp->sp_rpc));
-			/* XXX Push new tasks to update the map version */
-		} else {
-			D_ERROR("enumerate failed, rc: %d\n", oeo->oeo_ret);
-		}
+	if (oeo->oeo_ret < 0)
 		D_GOTO(out, rc = oeo->oeo_ret);
-	}
 
 	if (*eaa->eaa_nr < oeo->oeo_kds.da_count) {
 		D_ERROR("DAOS_OBJ_RPC_ENUMERATE return more kds, rc: %d\n",
@@ -610,12 +601,12 @@ enumerate_cp(struct daos_task *task, int rc)
 	memcpy(eaa->eaa_kds, oeo->oeo_kds.da_arrays,
 	       sizeof(*eaa->eaa_kds) * oeo->oeo_kds.da_count);
 
-	enum_anchor_copy(eaa->eaa_anchor, &oeo->oeo_anchor);
+	enum_anchor_copy_hkey(eaa->eaa_anchor, &oeo->oeo_anchor);
 	if (daos_hash_is_eof(&oeo->oeo_anchor) &&
 	    opc_get(sp->sp_rpc->cr_opc) == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
 		tgt_tag = enum_anchor_get_tag(eaa->eaa_anchor);
 		if (tgt_tag < eaa->eaa_obj->do_part_nr - 1) {
-			memset(eaa->eaa_anchor, 0, sizeof(*eaa->eaa_anchor));
+			enum_anchor_reset_hkey(eaa->eaa_anchor);
 			enum_anchor_set_tag(eaa->eaa_anchor, ++tgt_tag);
 		}
 	}
@@ -688,7 +679,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	oei->oei_epoch = epoch;
 	oei->oei_nr = *nr;
 
-	enum_anchor_copy(&oei->oei_anchor, anchor);
+	enum_anchor_copy_hkey(&oei->oei_anchor, anchor);
 	oei->oei_sgl = *sgl;
 	sgl_len = sgls_get_len(sgl, 1);
 	if (sgl_len >= OBJ_BULK_LIMIT) {
