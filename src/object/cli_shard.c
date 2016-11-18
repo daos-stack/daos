@@ -349,11 +349,16 @@ iod_total_len(daos_vec_iod_t *iods, int nr)
 
 		if (iods[i].vd_recxs == NULL)
 			continue;
-
-		for (j = 0; j < iods[i].vd_nr; j++)
-			iod_length += iods[i].vd_recxs[j].rx_rsize;
+		for (j = 0; j < iods[i].vd_nr; j++) {
+			if (iods[i].vd_recxs[j].rx_rsize == DAOS_REC_ANY) {
+				iod_length = 0;
+				goto out;
+			}
+			iod_length += iods[i].vd_recxs[j].rx_rsize
+				      * iods[i].vd_recxs[j].rx_nr;
+		}
 	}
-
+out:
 	return iod_length;
 }
 
@@ -374,7 +379,7 @@ sgls_get_len(daos_sg_list_t *sgls, int nr)
 			continue;
 
 		for (j = 0; j < sgls[i].sg_nr.num; j++)
-			sgls_len += sgls[i].sg_iovs[j].iov_len;
+			sgls_len += sgls[i].sg_iovs[j].iov_buf_len;
 	}
 
 	return sgls_len;
@@ -488,10 +493,10 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	orw->orw_iods.da_count = nr;
 	orw->orw_iods.da_arrays = iods;
 
-	if (opc == DAOS_OBJ_RPC_FETCH)
+	total_len = iod_total_len(iods, nr);
+	/* If it is read, let's try to get the size from sg list */
+	if (total_len == 0 && opc == DAOS_OBJ_RPC_FETCH)
 		total_len = sgls_get_len(sgls, nr);
-	else
-		total_len = iod_total_len(iods, nr);
 
 	if (total_len >= OBJ_BULK_LIMIT) {
 		/* Transfer data by bulk */

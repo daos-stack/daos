@@ -485,7 +485,8 @@ dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		rc = dc_obj_shard_update(shard_oh, epoch, dkey, nr, iods, sgls,
 					 shard_task);
 		if (rc != 0) {
-			D_DEBUG(DF_MISC, "fails on i %d, continue try\n", i);
+			D_DEBUG(DF_MISC, "fails on i %d, continue try rc %d\n",
+				i, rc);
 			continue;
 		}
 		non_update = false;

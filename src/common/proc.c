@@ -507,7 +507,6 @@ daos_proc_sg_desc_list(crt_proc_t proc, daos_sg_list_t *sgl)
 
 	for (i = 0; i < sgl->sg_nr.num; i++) {
 		daos_iov_t	*div;
-		void		*buffer = NULL;
 
 		div = &sgl->sg_iovs[i];
 		rc = crt_proc_uint64_t(proc, &div->iov_len);
@@ -515,10 +514,6 @@ daos_proc_sg_desc_list(crt_proc_t proc, daos_sg_list_t *sgl)
 			return -DER_CRT_HG;
 
 		rc = crt_proc_uint64_t(proc, &div->iov_buf_len);
-		if (rc != 0)
-			return -DER_CRT_HG;
-
-		rc = crt_proc_memcpy(proc, &buffer, sizeof(buffer));
 		if (rc != 0)
 			return -DER_CRT_HG;
 	}
