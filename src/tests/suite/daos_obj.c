@@ -51,7 +51,6 @@ struct ioreq {
 	daos_recx_t	 rex[IOREQ_SG_VD_NR][IOREQ_VD_NR];
 	daos_epoch_range_t erange[IOREQ_SG_VD_NR][IOREQ_VD_NR];
 	daos_vec_iod_t	 vio[IOREQ_SG_VD_NR];
-	uint64_t	 fail_loc;
 };
 
 #define SEGMENT_SIZE	(10 * 1048576)	/* 10MB */
@@ -70,7 +69,9 @@ ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
 		assert_int_equal(rc, 0);
 	}
 
+	arg->expect_result = 0;
 	daos_fail_loc_set(arg->fail_loc);
+	daos_fail_value_set(arg->fail_value);
 
 	/* init sgl */
 	for (i = 0; i < IOREQ_SG_VD_NR; i++) {
@@ -122,6 +123,8 @@ ioreq_fini(struct ioreq *req)
 	rc = daos_obj_close(req->oh, NULL);
 	assert_int_equal(rc, 0);
 
+	req->arg->fail_loc = 0;
+	req->arg->fail_value = 0;
 	if (req->arg->async) {
 		rc = daos_event_fini(&req->ev);
 		assert_int_equal(rc, 0);
@@ -132,26 +135,22 @@ static void
 insert_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 		daos_vec_iod_t *vds, daos_epoch_t epoch, struct ioreq *req)
 {
+	daos_event_t	*evp;
 	int rc;
 
 	/** execute update operation */
 	rc = daos_obj_update(req->oh, epoch, dkey, nr, vds, sgls,
 			     req->arg->async ? &req->ev : NULL);
-	if (!req->arg->async && rc != 0)
-		ioreq_fini(req);
-	assert_int_equal(rc, 0);
-
-	if (req->arg->async) {
-		daos_event_t	*evp;
-
-		/** wait for update completion */
-		rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &req->ev);
-		if (evp->ev_error != 0)
-			ioreq_fini(req);
-		assert_int_equal(evp->ev_error, 0);
+	if (!req->arg->async) {
+		assert_int_equal(rc, req->arg->expect_result);
+		return;
 	}
+
+	/** wait for update completion */
+	rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+	assert_int_equal(rc, 1);
+	assert_ptr_equal(evp, &req->ev);
+	assert_int_equal(evp->ev_error, req->arg->expect_result);
 }
 
 static void
@@ -247,26 +246,22 @@ static void
 lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 		daos_vec_iod_t *vds, daos_epoch_t epoch, struct ioreq *req)
 {
+	daos_event_t	*evp;
 	int rc;
 
 	/** execute fetch operation */
 	rc = daos_obj_fetch(req->oh, epoch, dkey, nr, vds, sgls,
 			    NULL, req->arg->async ? &req->ev : NULL);
-	if (!req->arg->async && rc != 0)
-		ioreq_fini(req);
-	assert_int_equal(rc, 0);
-
-	if (req->arg->async) {
-		daos_event_t	*evp;
-
-		/** wait for fetch completion */
-		rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &req->ev);
-		if (evp->ev_error != 0)
-			ioreq_fini(req);
-		assert_int_equal(evp->ev_error, 0);
+	if (!req->arg->async) {
+		assert_int_equal(rc, req->arg->expect_result);
+		return;
 	}
+
+	/** wait for fetch completion */
+	rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
+	assert_int_equal(rc, 1);
+	assert_ptr_equal(evp, &req->ev);
+	assert_int_equal(evp->ev_error, req->arg->expect_result);
 }
 
 static void
@@ -896,7 +891,8 @@ io_simple_update_timeout(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT;
+	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT | DAOS_FAIL_SOME;
+	arg->fail_value = 2;
 
 	io_simple(state);
 }
@@ -906,7 +902,7 @@ io_simple_fetch_timeout(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->fail_loc = DAOS_SHARD_OBJ_FETCH_TIMEOUT;
+	arg->fail_loc = DAOS_SHARD_OBJ_FETCH_TIMEOUT | DAOS_FAIL_ONCE;
 
 	io_simple(state);
 }
@@ -1071,6 +1067,36 @@ epoch_discard(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+static void
+io_nospace(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	int		buf_size = 1 << 20;
+	char		*large_buf;
+	char		key[10];
+	int		i;
+
+	/** choose random object */
+	obj_random(arg, &oid);
+
+	large_buf = malloc(buf_size);
+	assert_non_null(large_buf);
+	arg->fail_loc = DAOS_OBJ_UPDATE_NOSPACE;
+	ioreq_init(&req, oid, arg);
+	for (i = 0; i < 5; i++) {
+		sprintf(key, "dkey%d", i);
+		/** Insert */
+		arg->expect_result = -DER_NOSPACE;
+		insert_single(key, "akey", 0, "data",
+			      strlen("data") + 1, 0, &req);
+		insert_single(key, "akey", 0, large_buf,
+			      buf_size, 0, &req);
+	}
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "DSR200: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
@@ -1101,7 +1127,8 @@ static const struct CMUnitTest io_tests[] = {
 	{ "DSR213: timeout simple fetch (async)",
 	  io_simple_fetch_timeout, async_disable, NULL},
 	{ "DSR214: epoch discard", epoch_discard,
-	  async_disable, NULL}
+	  async_disable, NULL},
+	{ "DSR215: no space", io_nospace, async_disable, NULL},
 };
 
 static int

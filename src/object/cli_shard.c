@@ -225,6 +225,10 @@ obj_rw_cp(struct daos_task *task, int rc)
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT)))
 		D_GOTO(out, rc = -DER_TIMEDOUT);
 
+	if (opc == DAOS_OBJ_RPC_UPDATE &&
+	    DAOS_FAIL_CHECK(DAOS_OBJ_UPDATE_NOSPACE))
+		D_GOTO(out, rc = -DER_NOSPACE);
+
 	orw = crt_req_get(sp->sp_rpc);
 	D_ASSERT(orw != NULL);
 	if (rc) {
@@ -476,6 +480,9 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	/* If it is read, let's try to get the size from sg list */
 	if (total_len == 0 && opc == DAOS_OBJ_RPC_FETCH)
 		total_len = sgls_buf_len(sgls, nr);
+
+	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FAIL))
+		D_GOTO(out_bulk, rc = -DER_INVAL);
 
 	if (total_len >= OBJ_BULK_LIMIT) {
 		/* Transfer data by bulk */

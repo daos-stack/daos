@@ -56,6 +56,8 @@ typedef struct {
 	bool			async;
 	bool			hdl_share;
 	uint64_t		fail_loc;
+	uint64_t		fail_value;
+	int			expect_result;
 } test_arg_t;
 
 static inline int

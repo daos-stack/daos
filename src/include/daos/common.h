@@ -323,9 +323,6 @@ daos_errno2der(int err)
 	}
 }
 
-int
-daos_fail_loc_init();
-
 #define daos_rank_list_dup		crt_rank_list_dup
 #define daos_rank_list_dup_sort_uniq	crt_rank_list_dup_sort_uniq
 #define daos_rank_list_alloc		crt_rank_list_alloc
@@ -338,14 +335,28 @@ daos_fail_loc_init();
 
 void
 daos_fail_loc_set(uint64_t id);
+void
+daos_fail_value_set(uint64_t val);
 
 int
 daos_fail_check(uint64_t id);
 
+/**
+ * DAOS FAIL Mask
+ *
+ * fail loc 0-24
+ * fail mode 24-32
+ * unused 32-64
+ **/
+
+/* fail mode */
+#define DAOS_FAIL_ONCE		0x1000000
+#define DAOS_FAIL_SOME		0x2000000
+
+#define DAOS_SHARD_OBJ_UPDATE_TIMEOUT	(0x001)
+#define DAOS_SHARD_OBJ_FETCH_TIMEOUT	(0x002)
+#define DAOS_SHARD_OBJ_FAIL		(0x003)
+#define DAOS_OBJ_UPDATE_NOSPACE		(0x004)
+
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
-#define DAOS_OBJ_FAILS			0x0100
-
-#define DAOS_SHARD_OBJ_UPDATE_TIMEOUT	(DAOS_OBJ_FAILS | 0x001)
-#define DAOS_SHARD_OBJ_FETCH_TIMEOUT	(DAOS_OBJ_FAILS | 0x002)
-
 #endif /* __DAOS_COMMON_H__ */
