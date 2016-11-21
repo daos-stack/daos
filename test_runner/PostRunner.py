@@ -26,6 +26,7 @@ test runner class
 
 import os
 import subprocess
+import stat
 
 #pylint: disable=too-many-locals
 
@@ -105,6 +106,18 @@ class PostRunner():
         else:
             self.logger.info("TestRunner: Callgrind no source directory")
         self.logger.info("TestRunner: Callgrind annotate end")
+
+    def check_log_mode(self, topdir):
+        """dump the ERROR tag from stdout file"""
+        mode = stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
+        dirlist = os.listdir(topdir)
+        for newdir in dirlist:
+            dname = os.path.join(topdir, newdir)
+            os.chmod(dname, mode)
+            if os.path.isfile(dname):
+                continue
+            else:
+                self.check_log_mode(dname)
 
     def dump_error_messages(self, testMethodName):
         """dump the ERROR tag from stdout file"""

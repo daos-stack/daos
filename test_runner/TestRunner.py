@@ -73,7 +73,7 @@ class TestRunner(PreRunner.PreRunner, PostRunner.PostRunner):
 
     def dump_subtest_results(self):
         """ dump the test results to the log directory """
-        log_dir = os.path.dirname(self.info.get_config('log_base_path'))
+        log_dir = self.info.get_config('log_base_path')
         if os.path.exists(log_dir):
             name = "%s/subtest_results.yml" % log_dir
             with open(name, 'w') as fd:
@@ -152,7 +152,7 @@ class TestRunner(PreRunner.PreRunner, PostRunner.PostRunner):
         for testrun in self.test_info['execStrategy']:
             self.logger.info("************** run " + \
                              str(testrun['id']) + \
-                             "******************************"
+                             " ******************************"
                             )
             if 'setEnvVars' in testrun:
                 self.setenv(testrun)
@@ -192,6 +192,7 @@ class TestRunner(PreRunner.PreRunner, PostRunner.PostRunner):
             elif use_valgrind == "callgrind":
                 self.callgrind_annotate()
 
+            self.check_log_mode(self.last_testlogdir)
             self.logger.info(
                 "***********************************************************")
             if 'setEnvVars' in testrun:

@@ -21,10 +21,12 @@ class LoggedTestCase(PostRunner.PostRunner):
 if __name__ == "__main__":
 
     findLog = LoggedTestCase()
+    startdir = ""
+    startcheck = ""
     dumplogs = False
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'dl:',
-                                   ['dumplogs', 'logfile='])
+        opts, args = getopt.getopt(sys.argv[1:], 'dl:c:',
+                                   ['dumplogs', 'logfile=', '-checkdir='])
     except getopt.GetoptError:
         sys.exit(2)
 
@@ -33,10 +35,14 @@ if __name__ == "__main__":
             dumplogs = True
         elif opt in ('-l', '--logfile'):
             startdir = arg
+        elif opt in ('-c', '-checkdir'):
+            startcheck = arg
         else:
             continue
 
     if os.path.exists(startdir):
         findLog.top_logdir(startdir, dumplogs)
+    elif os.path.exists(startcheck):
+        findLog.check_log_mode(startcheck)
     else:
         print("Directory not found: %s" % startdir)
