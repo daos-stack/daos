@@ -63,3 +63,51 @@ daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs)
 	D_FREE(sgl->sg_iovs, sgl->sg_nr.num * sizeof(*sgl->sg_iovs));
 	memset(sgl, 0, sizeof(*sgl));
 }
+
+daos_size_t
+daos_sgl_data_len(daos_sg_list_t *sgl)
+{
+	daos_size_t	len;
+	int		i;
+
+	if (sgl->sg_iovs == NULL)
+		return 0;
+
+	for (i = 0, len = 0; i < sgl->sg_nr.num; i++)
+		len += sgl->sg_iovs[i].iov_len;
+
+	return len;
+}
+
+daos_size_t
+daos_sgl_buf_len(daos_sg_list_t *sgl)
+{
+	daos_size_t	len;
+	int		i;
+
+	if (sgl->sg_iovs == NULL)
+		return 0;
+
+	for (i = 0, len = 0; i < sgl->sg_nr.num; i++)
+		len += sgl->sg_iovs[i].iov_buf_len;
+
+	return len;
+}
+
+daos_size_t
+daos_vec_iod_len(daos_vec_iod_t *viod)
+{
+	uint64_t	len;
+	int		i;
+
+	if (viod->vd_recxs == NULL)
+		return 0;
+
+	for (i = 0, len = 0; i < viod->vd_nr; i++) {
+		if (viod->vd_recxs[i].rx_rsize == DAOS_REC_ANY)
+			return -1; /* unknown size */
+
+		len += viod->vd_recxs[i].rx_rsize * viod->vd_recxs[i].rx_nr;
+	}
+	return len;
+}

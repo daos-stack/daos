@@ -253,6 +253,9 @@ int daos_array_find(void *array, unsigned int len, uint64_t key,
 
 int  daos_sgl_init(daos_sg_list_t *sgl, unsigned int nr);
 void daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs);
+daos_size_t daos_sgl_data_len(daos_sg_list_t *sgl);
+daos_size_t daos_sgl_buf_len(daos_sg_list_t *sgl);
+daos_size_t daos_vec_iod_len(daos_vec_iod_t *viod);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually

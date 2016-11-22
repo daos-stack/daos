@@ -335,56 +335,35 @@ dc_obj_shard_rpc_cb(const struct crt_cb_info *cb_info)
 	return 0;
 }
 
-uint64_t
-iod_total_len(daos_vec_iod_t *iods, int nr)
+static uint64_t
+iods_data_len(daos_vec_iod_t *iods, int nr)
 {
 	uint64_t iod_length = 0;
-	int i;
-
-	if (iods == NULL)
-		return 0;
+	int	 i;
 
 	for (i = 0; i < nr; i++) {
-		int j;
+		uint64_t len = daos_vec_iod_len(&iods[i]);
 
-		if (iods[i].vd_recxs == NULL)
-			continue;
-		for (j = 0; j < iods[i].vd_nr; j++) {
-			if (iods[i].vd_recxs[j].rx_rsize == DAOS_REC_ANY) {
-				iod_length = 0;
-				goto out;
-			}
-			iod_length += iods[i].vd_recxs[j].rx_rsize
-				      * iods[i].vd_recxs[j].rx_nr;
-		}
+		if (len == -1) /* unknown */
+			return 0;
+
+		iod_length += len;
 	}
-out:
 	return iod_length;
 }
 
-uint32_t
-sgls_get_len(daos_sg_list_t *sgls, int nr)
+static daos_size_t
+sgls_buf_len(daos_sg_list_t *sgls, int nr)
 {
-	uint32_t sgls_len = 0;
-	int i;
-
-	if (sgls == NULL)
-		return 0;
+	daos_size_t sgls_len = 0;
+	int	    i;
 
 	/* create bulk transfer for daos_sg_list */
-	for (i = 0; i < nr; i++) {
-		int j;
-
-		if (sgls[i].sg_iovs == NULL)
-			continue;
-
-		for (j = 0; j < sgls[i].sg_nr.num; j++)
-			sgls_len += sgls[i].sg_iovs[j].iov_buf_len;
-	}
+	for (i = 0; i < nr; i++)
+		sgls_len += daos_sgl_buf_len(&sgls[i]);
 
 	return sgls_len;
 }
-
 
 static int
 obj_shard_rw_bulk_prep(crt_rpc_t *rpc, unsigned int nr, daos_sg_list_t *sgls,
@@ -493,10 +472,10 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	orw->orw_iods.da_count = nr;
 	orw->orw_iods.da_arrays = iods;
 
-	total_len = iod_total_len(iods, nr);
+	total_len = iods_data_len(iods, nr);
 	/* If it is read, let's try to get the size from sg list */
 	if (total_len == 0 && opc == DAOS_OBJ_RPC_FETCH)
-		total_len = sgls_get_len(sgls, nr);
+		total_len = sgls_buf_len(sgls, nr);
 
 	if (total_len >= OBJ_BULK_LIMIT) {
 		/* Transfer data by bulk */
@@ -681,7 +660,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 
 	enum_anchor_copy_hkey(&oei->oei_anchor, anchor);
 	oei->oei_sgl = *sgl;
-	sgl_len = sgls_get_len(sgl, 1);
+	sgl_len = sgls_buf_len(sgl, 1);
 	if (sgl_len >= OBJ_BULK_LIMIT) {
 		/* Create bulk */
 		rc = crt_bulk_create(daos_task2ctx(task), daos2crt_sg(sgl),

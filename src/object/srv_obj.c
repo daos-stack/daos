@@ -74,8 +74,37 @@ static void
 ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 		   uint32_t map_version, struct ds_cont_hdl *cont_hdl)
 {
-	struct obj_rw_in	*orwi;
-	int rc;
+	int	rc;
+
+	if (!daos_handle_is_inval(ioh)) {
+		struct obj_rw_in *orwi;
+
+		orwi = crt_req_get(rpc);
+		D_ASSERT(orwi != NULL);
+
+		if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE) {
+			rc = vos_obj_zc_update_end(ioh, cont_hdl->sch_uuid,
+						   &orwi->orw_dkey,
+						   orwi->orw_nr,
+						   orwi->orw_iods.da_arrays,
+						   status);
+
+		} else {
+			D_ASSERT(opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH);
+			rc = vos_obj_zc_fetch_end(ioh, &orwi->orw_dkey,
+						  orwi->orw_nr,
+						  orwi->orw_iods.da_arrays,
+						  status);
+		}
+
+		if (rc != 0) {
+			D_ERROR(DF_UOID "%x ZC end failed: %d\n",
+				DP_UOID(orwi->orw_oid), opc_get(rpc->cr_opc),
+				rc);
+			if (status == 0)
+				status = rc;
+		}
+	}
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
@@ -94,35 +123,17 @@ ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 			ds_sgls_free(orwo->orw_sgls.da_arrays,
 				     orwo->orw_sgls.da_count);
 			D_FREE(orwo->orw_sgls.da_arrays,
-			      orwo->orw_sgls.da_count * sizeof(daos_sg_list_t));
+			       orwo->orw_sgls.da_count *
+			       sizeof(daos_sg_list_t));
 			orwo->orw_sgls.da_count = 0;
 		}
+
 		if (orwo->orw_sizes.da_arrays != NULL) {
 			D_FREE(orwo->orw_sizes.da_arrays,
 			       orwo->orw_sizes.da_count * sizeof(uint64_t));
 			orwo->orw_sizes.da_count = 0;
 		}
 	}
-
-	if (daos_handle_is_inval(ioh))
-		return;
-
-	orwi = crt_req_get(rpc);
-	D_ASSERT(orwi != NULL);
-	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE)
-		rc = vos_obj_zc_update_end(ioh, cont_hdl->sch_uuid,
-					   &orwi->orw_dkey, orwi->orw_nr,
-					   orwi->orw_iods.da_arrays,
-					   0);
-	else if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH)
-		rc = vos_obj_zc_fetch_end(ioh, &orwi->orw_dkey,
-					  orwi->orw_nr,
-					  orwi->orw_iods.da_arrays,
-					  0);
-	if (rc != 0)
-		D_ERROR(DF_UOID "%x send reply failed: %d\n",
-			DP_UOID(orwi->orw_oid),
-			opc_get(rpc->cr_opc), rc);
 }
 
 struct ds_bulk_async_args {
@@ -161,9 +172,9 @@ bulk_complete_cb(const struct crt_bulk_cb_info *cb_info)
 }
 
 static int
-ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_t *remote_bulks,
-		 daos_sg_list_t **sgls, daos_handle_t ioh,
-		 int nr, crt_bulk_op_t bulk_op)
+ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
+		 crt_bulk_t *remote_bulks, daos_handle_t ioh,
+		 daos_sg_list_t **sgls, int sgl_nr)
 {
 	crt_bulk_opid_t		bulk_opid;
 	crt_bulk_perm_t		bulk_perm;
@@ -173,23 +184,32 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_t *remote_bulks,
 	int			rc;
 
 	bulk_perm = bulk_op == CRT_BULK_PUT ? CRT_BULK_RO : CRT_BULK_RW;
-	rc = ABT_future_create(nr, NULL, &future);
+	rc = ABT_future_create(sgl_nr, NULL, &future);
 	if (rc != 0)
 		return dss_abterr2der(rc);
 
 	memset(&arg, 0, sizeof(arg));
 	arg.future = future;
-	for (i = 0; i < nr; i++) {
-		struct crt_bulk_desc	bulk_desc;
-		crt_bulk_t		local_bulk_hdl;
-		int			ret = 0;
+	for (i = 0; i < sgl_nr; i++) {
+		daos_sg_list_t		*sgl;
+		struct crt_bulk_desc	 bulk_desc;
+		crt_bulk_t		 local_bulk_hdl;
+		int			 ret = 0;
 
 		if (remote_bulks[i] == NULL) {
 			ABT_future_set(future, &ret);
 			continue;
 		}
 
-		ret = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(sgls[i]),
+		if (sgls != NULL) {
+			sgl = sgls[i];
+		} else {
+			D_ASSERT(!daos_handle_is_inval(ioh));
+			vos_obj_zc_vec2sgl(ioh, i, &sgl);
+			D_ASSERT(sgl != NULL);
+		}
+
+		ret = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(sgl),
 				      bulk_perm, &local_bulk_hdl);
 		if (ret != 0) {
 			D_ERROR("crt_bulk_create i %d failed, rc: %d.\n",
@@ -206,13 +226,13 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_t *remote_bulks,
 
 		crt_req_addref(rpc);
 
-		bulk_desc.bd_rpc = rpc;
-		bulk_desc.bd_bulk_op = bulk_op;
-		bulk_desc.bd_remote_hdl = remote_bulks[i];
-		bulk_desc.bd_local_hdl = local_bulk_hdl;
-		bulk_desc.bd_len = sgls[i]->sg_iovs->iov_len;
-		bulk_desc.bd_remote_off = 0;
-		bulk_desc.bd_local_off = 0;
+		bulk_desc.bd_rpc	= rpc;
+		bulk_desc.bd_bulk_op	= bulk_op;
+		bulk_desc.bd_remote_hdl	= remote_bulks[i];
+		bulk_desc.bd_local_hdl	= local_bulk_hdl;
+		bulk_desc.bd_len	= daos_sgl_data_len(sgl);
+		bulk_desc.bd_remote_off	= 0;
+		bulk_desc.bd_local_off	= 0;
 
 		ret = crt_bulk_transfer(&bulk_desc, bulk_complete_cb,
 					&arg, &bulk_opid);
@@ -360,10 +380,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct obj_rw_in	*orw;
 	struct ds_cont_hdl	*cont_hdl = NULL;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
-	daos_sg_list_t		**sgls = NULL;
 	crt_bulk_op_t		bulk_op;
 	uint32_t		map_version = 0;
-	int			i;
 	int			rc;
 
 	orw = crt_req_get(rpc);
@@ -415,15 +433,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc);
 	}
 
-	D_ALLOC(sgls, orw->orw_nr * sizeof(*sgls));
-	if (sgls == NULL)
-		D_GOTO(out, rc);
-
-	for (i = 0; i < orw->orw_nr; i++)
-		vos_obj_zc_vec2sgl(ioh, i, &sgls[i]);
-
-	rc = ds_bulk_transfer(rpc, orw->orw_bulks.da_arrays,
-			      sgls, ioh, orw->orw_nr, bulk_op);
+	rc = ds_bulk_transfer(rpc, bulk_op, orw->orw_bulks.da_arrays,
+			      ioh, NULL, orw->orw_nr);
 out:
 	ds_obj_rw_complete(rpc, ioh, rc, map_version, cont_hdl);
 	if (cont_hdl != NULL)
@@ -603,8 +614,8 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	if (oei->oei_bulk != NULL) {
 		daos_sg_list_t *sgls = &sgl;
 
-		rc = ds_bulk_transfer(rpc, &oei->oei_bulk, &sgls,
-				      DAOS_HDL_INVAL, 1, CRT_BULK_PUT);
+		rc = ds_bulk_transfer(rpc, CRT_BULK_PUT, &oei->oei_bulk,
+				      DAOS_HDL_INVAL, &sgls, 1);
 		if (rc != 0)
 			D_GOTO(out_tch, rc);
 
