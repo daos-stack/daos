@@ -23,39 +23,12 @@
 /**
  * This file is part of daos
  *
- * tests/suite/io.c
+ * tests/suite/daos_obj.c
  */
 
-#include "daos_test.h"
+#include "daos_iotest.h"
 
-#define UPDATE_CSUM_SIZE	32
-#define IOREQ_VD_NR	5
-#define IOREQ_SG_NR	5
-#define IOREQ_SG_VD_NR	5
-
-struct ioreq {
-	daos_handle_t	 oh;
-
-	test_arg_t	*arg;
-
-	daos_event_t	 ev;
-
-	daos_dkey_t	 dkey;
-
-	daos_iov_t	 val_iov[IOREQ_SG_VD_NR][IOREQ_SG_NR];
-	daos_sg_list_t	 sgl[IOREQ_SG_VD_NR];
-
-	daos_csum_buf_t	 csum;
-	char		 csum_buf[UPDATE_CSUM_SIZE];
-
-	daos_recx_t	 rex[IOREQ_SG_VD_NR][IOREQ_VD_NR];
-	daos_epoch_range_t erange[IOREQ_SG_VD_NR][IOREQ_VD_NR];
-	daos_vec_iod_t	 vio[IOREQ_SG_VD_NR];
-};
-
-#define SEGMENT_SIZE	(10 * 1048576)	/* 10MB */
-
-static void
+void
 ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
 {
 	int rc;
@@ -107,15 +80,14 @@ ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
 		req->vio[i].vd_kcsum.cs_len = 0;
 
 	}
-
-	print_message("open oid=%lu.%lu.%lu\n", oid.lo, oid.mid, oid.hi);
+	D_DEBUG(DF_MISC, "open oid=%lu.%lu.%lu\n", oid.lo, oid.mid, oid.hi);
 
 	/** open the object */
 	rc = daos_obj_open(arg->coh, oid, 0, 0, &req->oh, NULL);
 	assert_int_equal(rc, 0);
 }
 
-static void
+void
 ioreq_fini(struct ioreq *req)
 {
 	int rc;
@@ -226,7 +198,7 @@ insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	insert_internal(&req->dkey, nr, req->sgl, req->vio, *epoch, req);
 }
 
-static void
+void
 insert_single(const char *dkey, const char *akey, uint64_t idx,
 	      void *value, daos_size_t size, daos_epoch_t epoch,
 	      struct ioreq *req)
@@ -286,7 +258,7 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	lookup_internal(&req->dkey, nr, req->sgl, req->vio, *epoch, req);
 }
 
-static void
+void
 lookup_single(const char *dkey, const char *akey, uint64_t idx,
 	      void *val, daos_size_t size, daos_epoch_t epoch,
 	      struct ioreq *req)
@@ -294,16 +266,6 @@ lookup_single(const char *dkey, const char *akey, uint64_t idx,
 	daos_size_t read_size = DAOS_REC_ANY;
 
 	lookup(dkey, 1, &akey, &idx, &read_size, &val, &size, &epoch, req);
-}
-
-static inline void
-obj_random(test_arg_t *arg, daos_obj_id_t *oid)
-{
-	/** choose random object */
-	oid->lo	= rand();
-	oid->mid = rand();
-	oid->hi	= rand();
-	daos_obj_id_generate(oid, DAOS_OC_REPLICA_RW);
 }
 
 /** test overwrite in different epoch */
@@ -567,7 +529,7 @@ io_simple(void **state)
 	ioreq_fini(&req);
 }
 
-static void
+void
 enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	       daos_hash_out_t *anchor, void *buf, daos_size_t len,
 	       struct ioreq *req)
@@ -1046,9 +1008,9 @@ epoch_discard(void **state)
 		print_message("verifying epoch "DF_U64"\n", e);
 		memset(&hash_out, 0, sizeof(hash_out));
 		while (!daos_hash_is_eof(&hash_out)) {
-			uint32_t	 n = 1;
-			daos_key_desc_t	 kd;
-			char		*buf[64];
+			uint32_t		n = 1;
+			daos_key_desc_t		kd;
+			char			*buf[64];
 
 			enumerate_dkey(e, &n, &kd, &hash_out, buf, sizeof(buf),
 				       &req);
@@ -1131,8 +1093,8 @@ static const struct CMUnitTest io_tests[] = {
 	{ "DSR215: no space", io_nospace, async_disable, NULL},
 };
 
-static int
-setup(void **state)
+int
+obj_setup(void **state)
 {
 	test_arg_t	*arg;
 	int		 rc;
@@ -1157,7 +1119,7 @@ setup(void **state)
 	if (arg->myrank == 0) {
 		/** create pool with minimal size */
 		rc = daos_pool_create(0731, geteuid(), getegid(), "srv_grp",
-				      NULL, "pmem", 1024 << 20, &arg->svc,
+				      NULL, "pmem", 768 << 20, &arg->svc,
 				      arg->pool_uuid, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -1177,8 +1139,11 @@ setup(void **state)
 		  MPI_COMM_WORLD);
 
 	/** l2g and g2l the pool handle */
-	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 1);
+	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 0);
 	if (arg->myrank == 0) {
+		print_message("\n\n=====================================\n");
+		print_message("Pool: %s\n", DP_UUID(arg->pool_uuid));
+		print_message("==========================================\n");
 		/** create container */
 		uuid_generate(arg->co_uuid);
 		rc = daos_cont_create(arg->poh, arg->co_uuid, NULL);
@@ -1197,14 +1162,14 @@ setup(void **state)
 		return rc;
 
 	/** l2g and g2l the container handle */
-	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 1);
+	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 0);
 
 	*state = arg;
 	return 0;
 }
 
-static int
-teardown(void **state) {
+int
+obj_teardown(void **state) {
 	test_arg_t	*arg = *state;
 	int		 rc, rc_reduce = 0;
 
@@ -1246,7 +1211,7 @@ run_daos_io_test(int rank, int size)
 	int rc = 0;
 
 	rc = cmocka_run_group_tests_name("DSR io tests", io_tests,
-					 setup, teardown);
+					 obj_setup, obj_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

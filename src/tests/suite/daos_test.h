@@ -22,7 +22,10 @@
  */
 /**
  * This file is part of DAOS
+ * src/tests/suite/daos_test.h
  */
+#ifndef __DAOS_TEST_H
+#define __DAOS_TEST_H
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -32,9 +35,7 @@
 #include <setjmp.h>
 #include <time.h>
 #include <cmocka.h>
-
 #include <mpi.h>
-
 #include <daos.h>
 #include <daos/common.h>
 
@@ -92,6 +93,8 @@ int run_daos_pool_test(int rank, int size);
 int run_daos_cont_test(int rank, int size);
 int run_daos_io_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
+int run_daos_repl_test(int rank, int size,
+		       int akeys, int wsec);
 
 enum {
 	HANDLE_POOL,
@@ -184,3 +187,15 @@ ts_buf_render(char *buf, unsigned int buf_len)
 
 	buf[i] = '\0';
 }
+
+static inline void
+obj_random(test_arg_t *arg, daos_obj_id_t *oid)
+{
+	/** choose random object */
+	oid->lo	= rand();
+	oid->mid = rand();
+	oid->hi	= rand();
+	daos_obj_id_generate(oid, DAOS_OC_REPLICA_RW);
+}
+
+#endif
