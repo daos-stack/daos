@@ -344,7 +344,7 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 		 */
 		oref = NULL;
 
-		rc = vos_iter_fetch(ih, &ent, NULL);
+		rc = vos_iter_fetch(ih, &ent, &anchor);
 		DISCARD_ERR_HANDLE(rc, "oid_iter_fetch", exit);
 
 		D_DEBUG(DF_VOS3, "Object ID: "DF_UOID"\n", DP_UOID(ent.ie_oid));
