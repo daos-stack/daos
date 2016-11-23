@@ -29,6 +29,7 @@
 
 #include <daos_types.h>
 #include <daos/pool.h>
+#include <daos/placement.h>
 
 #include <daos/rpc.h>
 #include "cli_internal.h"
@@ -166,6 +167,12 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 			pool->dp_map == NULL ?
 			0 : pool_map_get_version(pool->dp_map), map_version);
 		map_tmp = pool->dp_map;
+		if (map_tmp != NULL)
+			daos_placement_fini(map_tmp);
+
+		rc = daos_placement_init(map);
+		if (rc != 0)
+			D_GOTO(out_unlock, rc);
 		pool->dp_map = map;
 		map = map_tmp;
 	} else if (map_version < pool_map_get_version(pool->dp_map)) {
@@ -196,17 +203,19 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 				info->pi_ndisabled++;
 			/* TODO: Take care of tgts. */
 		}
+		rc = 0;
 	}
 
+out_unlock:
 	pthread_rwlock_unlock(&pool->dp_map_lock);
 
-	if (info != NULL) {
+	if (info != NULL && rc == 0) {
 		uuid_copy(info->pi_uuid, pool->dp_pool);
 		info->pi_ntargets = map_buf->pb_target_nr;
 		info->pi_mode = mode;
 	}
 
-	return 0;
+	return rc;
 }
 
 struct pool_connect_arg {
@@ -389,6 +398,10 @@ pool_disconnect_cp(void *arg, daos_event_t *ev, int rc)
 	D_DEBUG(DF_DSMC, DF_UUID": disconnected: cookie="DF_X64" hdl="DF_UUID
 		" master\n", DP_UUID(pool->dp_pool), sp->sp_hdl.cookie,
 		DP_UUID(pool->dp_pool_hdl));
+
+	pthread_rwlock_rdlock(&pool->dp_map_lock);
+	daos_placement_fini(pool->dp_map);
+	pthread_rwlock_unlock(&pool->dp_map_lock);
 
 	dsmc_pool_del_cache(pool);
 	sp->sp_hdl.cookie = 0;
@@ -639,6 +652,10 @@ dsmc_pool_g2l(struct dsmc_pool_glob *pool_glob, daos_handle_t *poh)
 		D_ERROR("failed to create local pool map: %d\n", rc);
 		D_GOTO(out, rc);
 	}
+
+	rc = daos_placement_init(pool->dp_map);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	/* add pool to hash */
 	dsmc_pool_add_cache(pool, poh);
@@ -896,5 +913,6 @@ err_bulk:
 err_rpc:
 	crt_req_decref(rpc);
 err:
+	daos_task_complete((struct daos_task *)cb_arg, rc);
 	return rc;
 }

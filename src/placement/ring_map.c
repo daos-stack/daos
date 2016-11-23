@@ -863,17 +863,26 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	plts = ring_oid2ring(rimap, oid)->ri_targets;
 	for (i = 0, k = 0; i < grp_nr; i++) {
 		for (j = 0; j < grp_size; j++, k++) {
-			if (j < tg_nr) {
-				int idx = (begin + j * dist) % tg_nr;
-				int pos = plts[idx].pt_pos;
+			int idx;
+			int pos;
 
-				layout->ol_shards[k]  = shard + k;
-				layout->ol_targets[k] = tgs[pos].ta_comp.co_id;
-			} else {
+			if (j >= tg_nr) {
 				/* If group size is larger than the target
 				 * number, let's disable the further shards
 				 * of the obj on this group.
 				 **/
+				layout->ol_shards[k] = -1;
+				layout->ol_targets[k] = -1;
+				continue;
+			}
+
+			idx = (begin + j * dist) % tg_nr;
+			pos = plts[idx].pt_pos;
+			if (tgs[pos].ta_comp.co_status == PO_COMP_ST_UP ||
+			    tgs[pos].ta_comp.co_status == PO_COMP_ST_UPIN) {
+				layout->ol_shards[k]  = shard + k;
+				layout->ol_targets[k] = tgs[pos].ta_comp.co_id;
+			} else {
 				layout->ol_shards[k] = -1;
 				layout->ol_targets[k] = -1;
 			}

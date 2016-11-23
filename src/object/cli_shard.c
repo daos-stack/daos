@@ -231,8 +231,12 @@ obj_rw_cp(struct daos_task *task, int rc)
 
 	orw = crt_req_get(sp->sp_rpc);
 	D_ASSERT(orw != NULL);
-	if (rc) {
-		D_ERROR("RPC %d failed: %d\n", opc_get(sp->sp_rpc->cr_opc), rc);
+	if (rc != 0) {
+		/* If any failure happens inside Cart, let's reset
+		 * failure to TIMEDOUT, so the upper layer can retry
+		 **/
+		D_ERROR("RPC %d failed: %d\n",
+			opc_get(sp->sp_rpc->cr_opc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -330,7 +334,7 @@ dc_obj_shard_rpc_cb(const struct crt_cb_info *cb_info)
 		int err;
 
 		err = sp->sp_callback(task, rc);
-		if (rc == 0)
+		if (rc == 0 || daos_obj_retry_error(err))
 			rc = err;
 	}
 
@@ -433,17 +437,17 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	/** sanity check input parameters */
 	if (dkey == NULL || dkey->iov_buf == NULL || nr == 0 ||
 	    !obj_shard_io_check(nr, iods, sgls))
-		return -DER_INVAL;
+		D_GOTO(out_task, rc = -DER_INVAL);
 
 	dobj = obj_shard_hdl2ptr(oh);
 	if (dobj == NULL)
-		return -DER_NO_HDL;
+		D_GOTO(out_task, rc = -DER_NO_HDL);
 
 	rc = dc_cont_hdl2uuid_map_ver(dobj->do_co_hdl, &cont_hdl_uuid,
 				      &map_version);
 	if (rc != 0) {
 		obj_shard_decref(dobj);
-		return rc;
+		D_GOTO(out_task, rc);
 	}
 
 	tgt_ep.ep_grp = NULL;
@@ -452,7 +456,7 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &req);
 	if (rc != 0) {
 		obj_shard_decref(dobj);
-		return rc;
+		D_GOTO(out_task, rc);
 	}
 
 	orw = crt_req_get(req);
@@ -515,8 +519,10 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	}
 
 	rc = crt_req_send(req, dc_obj_shard_rpc_cb, task);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("update/fetch rpc failed rc %d\n", rc);
 		D_GOTO(out_bulk, rc);
+	}
 
 	return rc;
 out_bulk:
@@ -524,6 +530,8 @@ out_bulk:
 	if (rwaa != NULL)
 		D_FREE_PTR(rwaa);
 	crt_req_decref(req);
+out_task:
+	daos_task_complete(task, rc);
 	return rc;
 }
 
@@ -568,8 +576,12 @@ enumerate_cp(struct daos_task *task, int rc)
 	D_ASSERT(oei != NULL);
 	eaa = sp->sp_arg;
 	D_ASSERT(eaa != NULL);
-	if (rc) {
-		D_ERROR("RPC error: %d\n", rc);
+	if (rc != 0) {
+		/* If any failure happens inside Cart, let's reset
+		 * failure to TIMEDOUT, so the upper layer can retry
+		 **/
+		D_ERROR("RPC %d failed: %d\n",
+			opc_get(sp->sp_rpc->cr_opc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -631,7 +643,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 
 	dobj = obj_shard_hdl2ptr(oh);
 	if (dobj == NULL)
-		return -DER_NO_HDL;
+		D_GOTO(out_task, rc = -DER_NO_HDL);
 
 	rc = dc_cont_hdl2uuid_map_ver(dobj->do_co_hdl, &cont_hdl_uuid,
 				      &map_version);
@@ -692,8 +704,10 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	sp->sp_callback = enumerate_cp;
 
 	rc = crt_req_send(req, dc_obj_shard_rpc_cb, task);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("enumerate rpc failed rc %d\n", rc);
 		D_GOTO(out_eaa, rc);
+	}
 
 	return rc;
 out_eaa:
@@ -704,5 +718,7 @@ out_req:
 	crt_req_decref(req);
 out_put:
 	obj_shard_decref(dobj);
+out_task:
+	daos_task_complete(task, rc);
 	return rc;
 }

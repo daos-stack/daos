@@ -69,6 +69,8 @@ dc_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 int
 dc_obj_close(daos_handle_t oh, daos_event_t *ev);
 int
+dc_obj_layout_refresh(daos_handle_t oh);
+int
 dc_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
 int
 dc_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
@@ -92,4 +94,12 @@ dc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 
 daos_handle_t
 dc_obj_hdl2cont_hdl(daos_handle_t obj_oh);
+
+static inline bool
+daos_obj_retry_error(int err)
+{
+	return err == -DER_TIMEDOUT || err == -DER_STALE ||
+	       daos_crt_network_error(err);
+}
+
 #endif /* __DAOS_OBJECT_H__ */

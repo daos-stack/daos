@@ -30,7 +30,6 @@
 #include <daos_types.h>
 #include <daos/container.h>
 
-#include <daos/placement.h>
 #include <daos/pool.h>
 #include <daos/rpc.h>
 #include "cli_internal.h"
@@ -312,14 +311,6 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 
-	pthread_rwlock_rdlock(&pool->dp_map_lock);
-	rc = daos_placement_init(pool->dp_map);
-	pthread_rwlock_unlock(&pool->dp_map_lock);
-	if (rc != 0) {
-		pthread_rwlock_unlock(&pool->dp_co_list_lock);
-		D_GOTO(out, rc);
-	}
-
 	daos_list_add(&cont->dc_po_list, &pool->dp_co_list);
 	cont->dc_pool_hdl = sp->sp_hdl;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
@@ -476,10 +467,6 @@ cont_close_complete(void *data, daos_event_t *ev, int rc)
 	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
 	daos_list_del_init(&cont->dc_po_list);
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
-
-	pthread_rwlock_rdlock(&pool->dp_map_lock);
-	daos_placement_fini(pool->dp_map);
-	pthread_rwlock_unlock(&pool->dp_map_lock);
 out:
 	crt_req_decref(sp->sp_rpc);
 	dc_pool_put(pool);
@@ -727,14 +714,6 @@ dc_cont_g2l(daos_handle_t poh, struct dsmc_container_glob *cont_glob,
 		pthread_rwlock_unlock(&pool->dp_co_list_lock);
 		D_ERROR("pool connection being invalidated\n");
 		D_GOTO(out_cont, rc = -DER_NO_HDL);
-	}
-
-	pthread_rwlock_rdlock(&pool->dp_map_lock);
-	rc = daos_placement_init(pool->dp_map);
-	pthread_rwlock_unlock(&pool->dp_map_lock);
-	if (rc != 0) {
-		pthread_rwlock_unlock(&pool->dp_co_list_lock);
-		D_GOTO(out_cont, rc);
 	}
 
 	daos_list_add(&cont->dc_po_list, &pool->dp_co_list);

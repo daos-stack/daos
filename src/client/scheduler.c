@@ -474,25 +474,33 @@ daos_sched_check_complete(struct daos_sched_private *dsp)
 {
 	struct daos_sched *sched;
 	bool		   completed;
+	daos_event_t	  *event;
 
 	/* check if all sub tasks are done, then complete the event */
 	pthread_mutex_lock(&dsp->dsp_lock);
 	completed = (daos_list_empty(&dsp->dsp_init_list) &&
 		     dsp->dsp_inflight == 0);
-	pthread_mutex_unlock(&dsp->dsp_lock);
 
-	if (!completed)
+	if (!completed) {
+		pthread_mutex_unlock(&dsp->dsp_lock);
 		return false;
+	}
 
 	sched = daos_priv2sched(dsp);
-	daos_sched_complete_cb(sched);
-
-	if (sched->ds_event != NULL) {
-		daos_event_complete(sched->ds_event, sched->ds_result);
-		sched->ds_event = NULL;
+	/* ds_event == NULL means the scheduler has been canceled. */
+	if (sched->ds_event == NULL) {
+		pthread_mutex_unlock(&dsp->dsp_lock);
+		return true;
 	}
+	event = sched->ds_event;
+	sched->ds_event = NULL;
+	pthread_mutex_unlock(&dsp->dsp_lock);
+
+	daos_sched_complete_cb(sched);
+	daos_event_complete(event, sched->ds_result);
 	/* drop reference of daos_sched_init() */
 	daos_sched_decref(dsp);
+
 	return true;
 }
 

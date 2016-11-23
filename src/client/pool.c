@@ -119,17 +119,21 @@ daos_pool_query_async(daos_handle_t ph, daos_rank_list_t *tgts,
 	int		rc;
 
 	if (tgts == NULL && info == NULL)
-		return -DER_INVAL;
+		D_GOTO(out_task, rc = -DER_INVAL);
 
 	pool = dc_pool_lookup(ph);
 	if (pool == NULL)
-		return -DER_NO_HDL;
+		D_GOTO(out_task, rc);
 
 	rc = dc_pool_query(pool, daos_task2ctx(task), tgts, info,
 			   pool_query_cp, task);
 
 	dc_pool_put(pool);
 
+	return rc;
+
+out_task:
+	daos_task_complete(task, rc);
 	return rc;
 }
 
@@ -150,9 +154,6 @@ daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
 
 	rc = daos_pool_query_async(poh, tgts, info, task);
 out:
-	if (rc != 0)
-		daos_sched_cancel(daos_ev2sched(ev), rc);
-
 	if (daos_event_is_priv(ev))
 		rc = daos_event_priv_wait(ev);
 

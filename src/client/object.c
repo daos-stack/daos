@@ -258,9 +258,12 @@ daos_obj_akey_list_task(struct daos_task *task)
 }
 
 static int
-pool_query_comp_cb(struct daos_task *task, void *arg)
+pool_query_comp_cb(struct daos_task *task, void *data)
 {
-	daos_pool_info_t *info = arg;
+	struct daos_obj_arg	*arg = daos_task2arg(task);
+	daos_pool_info_t	*info = data;
+
+	dc_obj_layout_refresh(arg->oh);
 
 	D_FREE_PTR(info);
 	return 0;
@@ -310,7 +313,7 @@ daos_obj_comp_cb(struct daos_task *task, void *data)
 	struct daos_task  *rw_task;
 	int		  rc = task->dt_result;
 
-	if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_STALE)) {
+	if (rc == 0 || !daos_obj_retry_error(rc)) {
 		sched->ds_result = rc;
 		return rc;
 	}
@@ -420,7 +423,6 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_vec_map_t *maps, daos_event_t *ev)
 {
-	struct daos_sched *sched;
 	struct daos_obj_arg arg;
 	struct daos_task *task;
 	int rc;
@@ -438,7 +440,6 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	sched = daos_task2sched(task);
 	/* store the argument */
 	rc = daos_event_launch(ev);
 	if (rc != 0)
@@ -448,9 +449,6 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (rc != 0)
 		D_GOTO(out, rc);
 out:
-	if (rc != 0)
-		daos_sched_cancel(sched, rc);
-
 	/** wait for completion if blocking mode */
 	if (daos_event_is_priv(ev))
 		rc = daos_event_priv_wait(ev);
@@ -463,7 +461,6 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 		unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
 		daos_event_t *ev)
 {
-	struct daos_sched	*sched;
 	struct daos_task	*task;
 	struct daos_obj_arg	arg;
 	int			rc;
@@ -480,7 +477,6 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	sched = daos_task2sched(task);
 	rc = daos_event_launch(ev);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -489,9 +485,6 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (rc != 0)
 		D_GOTO(out, rc);
 out:
-	if (rc != 0)
-		daos_sched_cancel(sched, rc);
-
 	/** wait for completion if blocking mode */
 	if (daos_event_is_priv(ev))
 		rc = daos_event_priv_wait(ev);
@@ -504,7 +497,6 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev)
 {
-	struct daos_sched	*sched;
 	struct daos_task	*task;
 	struct daos_obj_list_arg arg;
 	int			rc;
@@ -521,7 +513,6 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	if (rc != 0)
 		return rc;
 
-	sched = daos_task2sched(task);
 	rc = daos_event_launch(ev);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -530,9 +521,6 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	if (rc != 0)
 		D_GOTO(out, rc);
 out:
-	if (rc != 0)
-		daos_sched_cancel(sched, rc);
-
 	/** wait for completion if blocking mode */
 	if (daos_event_is_priv(ev))
 		rc = daos_event_priv_wait(ev);
@@ -545,7 +533,6 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 		   uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev)
 {
-	struct daos_sched	*sched;
 	struct daos_task	*task;
 	struct daos_obj_list_arg arg;
 	int			rc;
@@ -563,18 +550,14 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	sched = daos_task2sched(task);
 	rc = daos_event_launch(ev);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	rc = dc_obj_list_akey(oh, epoch, dkey, nr, kds, sgl, anchor, task);
-	if (rc)
-		return rc;
-out:
 	if (rc != 0)
-		daos_sched_cancel(sched, rc);
-
+		D_GOTO(out, rc);
+out:
 	/** wait for completion if blocking mode */
 	if (daos_event_is_priv(ev))
 		rc = daos_event_priv_wait(ev);
