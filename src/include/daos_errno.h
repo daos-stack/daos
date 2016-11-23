@@ -29,33 +29,33 @@
 
 typedef enum {
 	DER_ERR_BASE		= 2000,
-	/** no permission */
+	/** No permission */
 	DER_NO_PERM		= (DER_ERR_BASE + 1),
-	/** invalid handle */
+	/** Invalid handle */
 	DER_NO_HDL		= (DER_ERR_BASE + 2),
-	/** invalid parameters */
+	/** Invalid parameters */
 	DER_INVAL		= (DER_ERR_BASE + 3),
-	/** entity already exists */
+	/** Entity already exists */
 	DER_EXIST		= (DER_ERR_BASE + 4),
-	/** nonexistent entity */
+	/** Nonexistent entity */
 	DER_NONEXIST		= (DER_ERR_BASE + 5),
-	/** unreachable node */
+	/** Unreachable node */
 	DER_UNREACH		= (DER_ERR_BASE + 6),
-	/** no space on storage target */
+	/** No space on storage target */
 	DER_NOSPACE		= (DER_ERR_BASE + 7),
-	/** unknown object type */
+	/** Unknown object type */
 	DER_NOTYPE		= (DER_ERR_BASE + 8),
-	/** unknown object schema */
+	/** Unknown object schema */
 	DER_NOSCHEMA		= (DER_ERR_BASE + 9),
-	/** object is not local */
+	/** Object is not local */
 	DER_NOLOCAL		= (DER_ERR_BASE + 10),
-	/** already did sth */
+	/** Already did sth */
 	DER_ALREADY		= (DER_ERR_BASE + 11),
 	/** NO memory */
 	DER_NOMEM		= (DER_ERR_BASE + 12),
 	/** Function not implemented */
 	DER_NOSYS		= (DER_ERR_BASE + 13),
-	/** timed out */
+	/** Timed out */
 	DER_TIMEDOUT		= (DER_ERR_BASE + 14),
 	/** Memory free error */
 	DER_FREE_MEM		= (DER_ERR_BASE + 15),
@@ -67,45 +67,43 @@ typedef enum {
 	DER_AGAIN		= (DER_ERR_BASE + 18),
 	/** incompatible protocol */
 	DER_PROTO		= (DER_ERR_BASE + 19),
-	/** un-initialized */
+	/** Un-initialized */
 	DER_UNINIT		= (DER_ERR_BASE + 20),
-	/** target create error */
+	/** Target create error */
 	DER_TGT_CREATE		= (DER_ERR_BASE + 21),
-	/** buffer too short (larger buffer needed) */
+	/** Buffer too short (larger buffer needed) */
 	DER_TRUNC		= (DER_ERR_BASE + 22),
-	/** generic I/O error */
+	/** Generic I/O error */
 	DER_IO			= (DER_ERR_BASE + 23),
-	/** value too large for defined data type */
+	/** Value too large for defined data type */
 	DER_OVERFLOW		= (DER_ERR_BASE + 24),
-	/** operation canceled */
+	/** Operation cancelled */
 	DER_CANCELED		= (DER_ERR_BASE + 25),
 	/** Out-Of-Group or member list */
 	DER_OOG			= (DER_ERR_BASE + 26),
 	/** stale pool map version */
 	DER_STALE		= (DER_ERR_BASE + 27),
-	/** epoch is read-only */
+	/** Epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
-	/** epoch is too old, all data have been recycled */
+	/** Epoch is too old, all data have been recycled */
 	DER_EP_OLD		= (DER_ERR_BASE + 201),
-	/** key is too large */
+	/** Key is too large */
 	DER_KEY2BIG		= (DER_ERR_BASE + 250),
-	/** record is too large */
+	/** Record is too large */
 	DER_REC2BIG		= (DER_ERR_BASE + 251),
 	/** IO buffers can't match object extents */
 	DER_IO_INVAL		= (DER_ERR_BASE + 300),
-	/** event queue is busy */
+	/** Event queue is busy */
 	DER_EQ_BUSY		= (DER_ERR_BASE + 400),
-	/** domain of cluster component can't match */
+	/** Domain of cluster component can't match */
 	DER_DOMAIN		= (DER_ERR_BASE + 500),
-	/** transport layer mercury error */
+	/** Transport layer mercury error */
 	DER_CRT_HG		= (DER_ERR_BASE + 600),
 	/** CRT RPC (opcode) unregister */
 	DER_CRT_UNREG		= (DER_ERR_BASE + 601),
 	/** CRT failed to generate an address string */
 	DER_CRT_ADDRSTR_GEN	= (DER_ERR_BASE + 602),
-	/** CRT MCL layer error */
-	DER_CRT_MCL		= (DER_ERR_BASE + 603),
-	/** unknown error */
+	/** Unknown error */
 	DER_UNKNOWN		= (DER_ERR_BASE + 1000),
 	/** TODO: add more error numbers */
 } daos_errno_t;

@@ -40,15 +40,15 @@
  * Place Holder for caching policy
  */
 typedef struct {
-	/*Choice of eviction alg*/
+	/* Choice of eviction alg */
 	uint32_t	dct_cp_evict;
-	/*Choice of persistence policy*/
+	/* Choice of persistence policy */
 	uint32_t	dct_cp_persist;
-	/*Choice of read ahead policy*/
+	/* Choice of read ahead policy */
 	uint32_t	dct_cp_read_ahead;
-	/*hi-water mark for eviction*/
+	/* hi-water mark for eviction */
 	uint64_t	dct_cp_hi_water;
-	/*lo-water for eviction*/
+	/* lo-water for eviction */
 	uint64_t	dct_cp_lo_water;
 } daos_cache_pol_t;
 
@@ -56,9 +56,9 @@ typedef struct {
  * Type of pool/tier
  */
 typedef enum {
-	/*A regular caching tier*/
+	/* A regular caching tier */
 	DAOS_TR_CACHE,
-	/*A parking tier*/
+	/* A parking tier */
 	DAOS_TR_PARKING,
 } daos_tier_type_t;
 
@@ -66,25 +66,25 @@ typedef enum {
  * Summarize a pool and its policies for caching
  */
 typedef struct {
-	/*What is the primary media of the pool*/
+	/* What is the primary media of the pool */
 	daos_target_type_t	dct_ti_media;
-	/* Describe the caching policy*/
+	/* Describe the caching policy */
 	daos_cache_pol_t	dct_ti_policy;
-	/*What type of tier (currently only cache or parking)*/
+	/* What type of tier (currently only cache or parking) */
 	daos_tier_type_t	dct_ti_type;
-	/*temperature of the tier-pool, used to set up a hierarchy*/
+	/* Temperature of the tier-pool, used to set up a hierarchy */
 	uint32_t		dct_ti_tmpr;
-	/*Open handle affiliated with this pool tier*/
+	/* Open handle affiliated with this pool tier */
 	daos_handle_t		dct_ti_poh;
-	/*UUID of the pool*/
+	/* UUID of the pool */
 	uuid_t			dct_ti_pool_id;
 } daos_tier_info_t;
 
-/*Convenient struct for moving all tier info together*/
+/* Convenient struct for moving all tier info together */
 typedef struct {
-	/* Number of tiers*/
-	daos_nr_t		tl_nr;
-	/*refernce to tier list*/
+	/* Number of tiers */
+	daos_nr_t		 tl_nr;
+	/* Reference to tier list */
 	daos_tier_info_t	*tl_tiers;
 } daos_tier_list_t;
 
@@ -105,15 +105,15 @@ typedef struct {
  * \param obj_list	List of objects to fetch, if NULL, all objects in the
  *			container will be retrieved
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::error in
  *			non-blocking mode:
- *			-0	      Success
- *		      -DER_NO_HDL     Invalid pool handle
- *		      -DER_INVAL      Invalid parameter
- *			-DER_NONEXIST   Container is nonexistent on lower tier
- *			-DER_UNREACH    Network is unreachable
+ *			-0		Success
+ *			-DER_NO_HDL	Invalid pool handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NONEXIST	Container is nonexistent on lower tier
+ *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
  */
 int
@@ -137,14 +137,14 @@ daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
  * \param tier_list
  *		[IN]	list of all tiers for a particular workflow
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *		      Function will run in blocking mode if \a ev is NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::error in
  *			non-blocking mode:
  *			-0		Success
- *			-DER_NO_HDL     Invalid pool handle
- *		      -DER_INVAL      Invalid parameter
- *		      -DER_UNREACH    Network is unreachable
+ *			-DER_NO_HDL	Invalid pool handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
  */
 int
 daos_tier_register(uuid_t local_pl_id, uint32_t local_temp,

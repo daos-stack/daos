@@ -27,17 +27,17 @@
  *
  * - Non-blocking mode
  *   If input event(daos_event_t) of API is not NULL, it will run in
- *   non-blocking mode and return immediately after submitting API request
- *   to underlying stack.
- *   Returned value of API is zero on success, or negative error code only if
- *   there is an invalid parameter or other failure which can be detected
- *   without calling into server stack.
+ *   non-blocking mode and return immediately after submitting API requests
+ *   to the underlying stack.
+ *   The returned value of the API is zero on success, or negative error code
+ *   only if there is an invalid parameter or other failure which can be
+ *   detected without calling into the server stack.
  *   Error codes for all other failures will be returned by event::ev_error.
  *
  * - Blocking mode
- *   If input event of API is NULL, it will run in blocking mode and return
- *   after completing of operation. Error codes for all failure cases should
- *   be returned by return value of API.
+ *   If input event of the API is NULL, it will run in blocking mode and return
+ *   after completing the operation. Error codes for all failure cases should
+ *   be returned by the return value of the API.
  */
 
 #ifndef __DAOS_EVENT_H__
@@ -56,24 +56,24 @@
 #endif
 
 /**
- * create an Event Queue
+ * Create an Event Queue.
  *
- * \param eq [OUT]	returned EQ handle
+ * \param eq [OUT]	Returned EQ handle
  *
- * \return		zero on success, negative value if error
+ * \return		Zero on success, negative value if error
  */
 int
 daos_eq_create(daos_handle_t *eqh);
 
 #define DAOS_EQ_DESTROY_FORCE	1
 /**
- * Destroy an Event Queue, it wait -EBUSY if EQ is not empty.
+ * Destroy an Event Queue, it waits on -EBUSY if EQ is not empty.
  *
  * \param eqh [IN]	EQ to finalize
- * \param ev [IN]	pointer to completion event
- * \param flags [IN]	flags to indicate the behavior of the destroy.
+ * \param ev [IN]	Pointer to completion event
+ * \param flags [IN]	Flags to indicate the behavior of the destroy.
  *
- * \return		zero on success, EBUSY if there's any inflight event
+ * \return		Zero on success, EBUSY if there is any inflight event
  */
 int
 daos_eq_destroy(daos_handle_t eqh, int flags);
@@ -83,15 +83,15 @@ daos_eq_destroy(daos_handle_t eqh, int flags);
  *
  * \param eqh [IN]	EQ handle
  * \param wait_inflight [IN]
- *			wait only if there's inflight event
- * \param timeout [IN]	how long is caller going to wait (micro-second)
+ *			Wait only if there's inflight event
+ * \param timeout [IN]	How long is caller going to wait (micro-second)
  *			if \a timeout > 0,
  *			it can also be DAOS_EQ_NOWAIT, DAOS_EQ_WAIT
- * \param nevents [IN]	size of \a events array, returned number of events
+ * \param nevents [IN]	Size of \a events array, returned number of events
  *			should always be less than or equal to \a nevents
- * \param events [OUT]	pointer to returned events array
+ * \param events [OUT]	Pointer to returned events array
  *
- * \return		>= 0	returned number of events
+ * \return		>= 0	Returned number of events
  *			< 0	negative value if error
  */
 int
@@ -106,16 +106,16 @@ daos_eq_poll(daos_handle_t eqh, int wait_inflight,
  * finalize or free events returned by this function, but it's allowed
  * to call daos_event_abort() to abort inflight operation.
  *
- * Also, status of returned event could be still in changing, for example,
- * returned "inflight" event can be turned to "completed" before acessing.
- * It's user's responsibility to guarantee that returned events would be
- * freed by polling process.
+ * Also, the status of returned event could still be changing, for example,
+ * the returned "inflight" event can be turned to "completed" before accessing.
+ * It is the user's responsibility to guarantee that returned events would be
+ * freed by the polling process.
  *
  * \param eqh [IN]	EQ handle
- * \param mode [IN]	query mode
- * \param nevents [IN]	size of \a events array
- * \param events [OUT]	pointer to returned events array
- * \return		>= 0	returned number of events
+ * \param mode [IN]	Query mode
+ * \param nevents [IN]	Size of \a events array
+ * \param events [OUT]	Pointer to returned events array
+ * \return		>= 0	Returned number of events
  *			 < 0	negative value if error
  */
 int
@@ -125,31 +125,31 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
 /**
  * Initialize a new event for \a eq
  *
- * \param ev [IN]	event to initialize
- * \param eqh [IN]	where the event to be queued on, it's ignored if
+ * \param ev [IN]	Event to initialize
+ * \param eqh [IN]	Where the event to be queued on, it's ignored if
  *			\a parent is specified
  * \param parent [IN]	"parent" event, it can be NULL if no parent event.
  *			If it's not NULL, caller will never see completion
- *			of this event, instead he will only see completion
+ *			of this event, instead, will only see completion
  *			of \a parent when all children of \a parent are
  *			completed.
  *
- * \return		zero on success, negative value if error
+ * \return		Zero on success, negative value if error
  */
 int
 daos_event_init(daos_event_t *ev, daos_handle_t eqh, daos_event_t *parent);
 
 /**
  * Finalize an event. If event has been passed into any DAOS API, it can only
- * be finalized when it's been polled out from EQ, even it's aborted by
+ * be finalized when it's been polled out from EQ, even if it is aborted by
  * calling daos_event_abort().
- * Event will be removed from child-list of parent event if it's initialized
- * with parent. If \a ev itself is a parent event, then this function will
- * finalize all child events and \a ev.
+ * The event will be removed from child-list of the parent event if it is
+ * initialized with parent. If \a ev itself is a parent event, then this
+ * function will finalize all child events and \a ev.
  *
- * \param ev [IN]	event to finialize
+ * \param ev [IN]	Event to finalize
  *
- * \return		zero on success, negative value if error
+ * \return		Zero on success, negative value if error
  */
 int
 daos_event_fini(daos_event_t *ev);
@@ -158,10 +158,10 @@ daos_event_fini(daos_event_t *ev);
  * Get the next child event of \a ev, it will return the first child event
  * if \a child is NULL.
  *
- * \param parent [IN]	parent event
- * \param child [IN]	current child event.
+ * \param parent [IN]	Parent event
+ * \param child [IN]	Current child event.
  *
- * \return		the next child event after \a child, or NULL if it's
+ * \return		The next child event after \a child, or NULL if it's
  *			the last one.
  */
 daos_event_t *
@@ -171,9 +171,9 @@ daos_event_next(daos_event_t *parent, daos_event_t *child);
  * Try to abort operations associated with this event.
  * If \a ev is a parent event, this call will abort all child operations.
  *
- * \param ev [IN]	event (operation) to abort
+ * \param ev [IN]	Event (operation) to abort
  *
- * \return		zero on success, negative value if error
+ * \return		Zero on success, negative value if error
  */
 int
 daos_event_abort(daos_event_t *ev);

@@ -146,26 +146,26 @@ daos_handle_is_inval(daos_handle_t hdl)
 /** Type of storage target */
 typedef enum {
 	DAOS_TP_UNKNOWN,
-	/** rotating disk */
+	/** Rotating disk */
 	DAOS_TP_HDD,
-	/** flash-based */
+	/** Flash-based */
 	DAOS_TP_SSD,
-	/** persistent memory */
+	/** Persistent memory */
 	DAOS_TP_PM,
-	/** volatile memory */
+	/** Volatile memory */
 	DAOS_TP_VM,
 } daos_target_type_t;
 
 /** Current state of the storage target */
 typedef enum {
 	DAOS_TS_UNKNOWN,
-	/* not available */
+	/* Not available */
 	DAOS_TS_DOWN_OUT,
-	/* not available, may need rebuild */
+	/* Not available, may need rebuild */
 	DAOS_TS_DOWN,
-	/* up */
+	/* Up */
 	DAOS_TS_UP,
-	/* up and running */
+	/* Up and running */
 	DAOS_TS_UP_IN,
 } daos_target_state_t;
 
@@ -192,15 +192,15 @@ typedef struct {
  * Storage pool
  */
 typedef struct {
-	/** pool UUID */
+	/** Pool UUID */
 	uuid_t			pi_uuid;
-	/** number of targets */
+	/** Number of targets */
 	uint32_t		pi_ntargets;
-	/** number of deactivated targets */
+	/** Number of deactivated targets */
 	uint32_t		pi_ndisabled;
-	/** mode */
+	/** Mode */
 	unsigned int		pi_mode;
-	/** space usage */
+	/** Space usage */
 	daos_space_t		pi_space;
 } daos_pool_info_t;
 
@@ -229,13 +229,13 @@ typedef struct {
 typedef uint64_t	daos_epoch_t;
 
 typedef struct {
-	/** low bound of the epoch range */
+	/** Low bound of the epoch range */
 	daos_epoch_t	epr_lo;
-	/** high bound of the epoch range */
+	/** High bound of the epoch range */
 	daos_epoch_t	epr_hi;
 } daos_epoch_range_t;
 
-/** highest possible epoch */
+/** Highest possible epoch */
 #define DAOS_EPOCH_MAX	(~0ULL)
 
 /** Epoch State */
@@ -269,7 +269,7 @@ typedef struct {
 	 * mutable.  The LHE of a new container handle with write permission is
 	 * equal to DAOS_EPOCH_MAX, indicating that the container handle does
 	 * not hold any epochs.
-	 * The LHE can be movidied with the epoch hold operation and is
+	 * The LHE can be modified with the epoch hold operation and is
 	 * increased on successful commit.
 	 */
 	daos_epoch_t	es_lhe;
@@ -308,13 +308,13 @@ typedef struct {
 
 /** Container information */
 typedef struct {
-	/** container UUID */
+	/** Container UUID */
 	uuid_t			ci_uuid;
-	/** epoch information (e.g. HCE, LRE & LHE) */
+	/** Epoch information (e.g. HCE, LRE & LHE) */
 	daos_epoch_state_t	ci_epoch_state;
-	/** number of snapshots */
+	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
-	/** epochs of returns snapshots */
+	/** Epochs of returns snapshots */
 	daos_epoch_t	       *ci_snapshots;
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
@@ -335,20 +335,20 @@ typedef struct {
 } daos_obj_id_t;
 
 enum {
-	/** shared read */
+	/** Shared read */
 	DAOS_OO_RO             = (1 << 1),
-	/** shared read & write, no cache for write */
+	/** Shared read & write, no cache for write */
 	DAOS_OO_RW             = (1 << 2),
-	/** exclusive write, data can be cached */
+	/** Exclusive write, data can be cached */
 	DAOS_OO_EXCL           = (1 << 3),
-	/** random I/O */
+	/** Random I/O */
 	DAOS_OO_IO_RAND        = (1 << 4),
-	/** sequential I/O */
+	/** Sequential I/O */
 	DAOS_OO_IO_SEQ         = (1 << 5),
 };
 
 typedef struct {
-	/** input/output number of oids */
+	/** Input/output number of oids */
 	daos_nr_t	 ol_nr;
 	/** OID buffer */
 	daos_obj_id_t	*ol_oids;
@@ -357,20 +357,20 @@ typedef struct {
 typedef uint16_t daos_oclass_id_t;
 
 enum {
-	/** use private class for the object */
+	/** Use private class for the object */
 	DAOS_OCLASS_NONE		= 0,
 };
 
 typedef enum {
-	DAOS_OS_SINGLE,		/**< single stripe object */
-	DAOS_OS_STRIPED,	/**< fix striped object */
-	DAOS_OS_DYN_STRIPED,	/**< dynamically striped object */
-	DAOS_OS_DYN_CHUNKED,	/**< dynamically chunked object */
+	DAOS_OS_SINGLE,		/**< Single stripe object */
+	DAOS_OS_STRIPED,	/**< Fix striped object */
+	DAOS_OS_DYN_STRIPED,	/**< Dynamically striped object */
+	DAOS_OS_DYN_CHUNKED,	/**< Dynamically chunked object */
 } daos_obj_schema_t;
 
 typedef enum {
-	DAOS_RES_EC,		/**< erasure code */
-	DAOS_RES_REPL,		/**< replication */
+	DAOS_RES_EC,		/**< Erasure code */
+	DAOS_RES_REPL,		/**< Replication */
 } daos_obj_resil_t;
 
 #define DAOS_OC_GRP_MAX		(-1)
@@ -402,7 +402,7 @@ typedef struct daos_oclass_attr {
 	/** Initial # redundancy group, unnecessary for some schemas */
 	unsigned int			 ca_grp_nr;
 	union {
-		/** replication attributes */
+		/** Replication attributes */
 		struct daos_repl_attr {
 			/** Method of replicating */
 			unsigned int	 r_method;
@@ -428,13 +428,13 @@ typedef struct daos_oclass_attr {
 
 /** List of object classes, used for class enumeration */
 typedef struct {
-	/** list length, actual buffer size */
+	/** List length, actual buffer size */
 	uint32_t		 cl_llen;
-	/** number of object classes in the list */
+	/** Number of object classes in the list */
 	uint32_t		 cl_cn;
-	/** actual list of class IDs */
+	/** Actual list of class IDs */
 	daos_oclass_id_t	*cl_cids;
-	/** attributes of each listed class, optional */
+	/** Attributes of each listed class, optional */
 	daos_oclass_attr_t	*cl_cattrs;
 } daos_oclass_list_t;
 
@@ -457,10 +457,10 @@ typedef struct {
  * A vector is a dynamic array of records.
  * A record is uniquely identified by the following composite key:
  * - the distribution key (aka dkey) denotes a set of vectors co-located on the
- *   same storage targets. The dkey has an abitrary size.
+ *   same storage targets. The dkey has an arbitrary size.
  * - the attribute key (aka akey) distinguishes individual vectors. Likewise, the
  *   akey has a arbitrary size.
- * - the indice within a vector discrimites individual records. The indice
+ * - the indice within a vector discriminates individual records. The indice
  *   is an integer that ranges from zero to infinity. A range of indices
  *   identifies a contiguous set of records called extent. All records inside an
  *   extent must have the same size.
@@ -470,9 +470,9 @@ typedef struct {
 typedef daos_iov_t daos_key_t;
 
 /* XXX remove daos_dkey_t and daos_akey_t */
-/** distribution key */
+/** Distribution key */
 typedef daos_key_t daos_dkey_t;
-/** attribute key */
+/** Attribute key */
 typedef daos_key_t daos_akey_t;
 
 /**
@@ -481,83 +481,83 @@ typedef daos_key_t daos_akey_t;
  * number of records covered by the extent.
  */
 typedef struct {
-	/** indidivual record size, must be the same for each record of the
+	/** Individual record size, must be the same for each record of the
 	 * extent */
 	uint64_t	rx_rsize;
-	/* indice of the first record in the range */
+	/* Indice of the first record in the range */
 	uint64_t	rx_idx;
-	/* number of records in the range
+	/* Number of records in the range
 	 * If rx_nr is equal to 1, the range identifies a single record of
 	 * indice rx_idx */
 	uint64_t	rx_nr;
 } daos_recx_t;
 
 /**
- * A vector I/O desriptor is a list of extents to update/fetch in a particular
+ * A vector I/O descriptor is a list of extents to update/fetch in a particular
  * vector identified by its akey.
  */
 typedef struct {
-	/** name associated with the vector, effectively akey */
+	/** Name associated with the vector, effectively akey */
 	daos_akey_t		 vd_name;
-	/** name/akey checksum */
+	/** Name/akey checksum */
 	daos_csum_buf_t		 vd_kcsum;
-	/** number of extents in the \a vd_recxs array */
+	/** Number of extents in the \a vd_recxs array */
 	unsigned int		 vd_nr;
-	/** array of extents */
+	/** Array of extents */
 	daos_recx_t		*vd_recxs;
-	/** checksum associated with each extent */
+	/** Checksum associated with each extent */
 	daos_csum_buf_t		*vd_csums;
-	/** epoch range associated with each extent */
+	/** Epoch range associated with each extent */
 	daos_epoch_range_t	*vd_eprs;
 } daos_vec_iod_t;
 
 /**
- * A vector map represents the physical extent mapping inside a vectorfor a
+ * A vector map represents the physical extent mapping inside a vector for a
  * given range of indices.
  */
 typedef struct {
-	/** name associated with the vector, effectively akey */
+	/** Name associated with the vector, effectively akey */
 	daos_akey_t		 vm_name;
-	/** name/akey checksum */
+	/** Name/akey checksum */
 	daos_csum_buf_t		 vm_kcsum;
-	/** first indice of this mapping */
+	/** First indice of this mapping */
 	uint64_t		 vm_start;
-	/** logical number of indices covered by this mapping */
+	/** Logical number of indices covered by this mapping */
 	uint64_t                 vm_len;
-	/** number of extents in the mapping, that's the size of all the
+	/** Number of extents in the mapping, that's the size of all the
 	 * arrays listed below */
 	unsigned int		 vm_nr;
-	/** array of extents */
+	/** Array of extents */
 	daos_recx_t		*vm_recxs;
-	/** checksum associated with each extent */
+	/** Checksum associated with each extent */
 	daos_csum_buf_t		*vm_xcsums;
-	/** epoch range associated with each extent */
+	/** Epoch range associated with each extent */
 	daos_epoch_range_t	*vm_eprs;
 } daos_vec_map_t;
 
 /** record status */
 enum {
-	/** reserved for cache miss */
+	/** Reserved for cache miss */
 	DAOS_REC_MISSING	= -1,
-	/** any record size, it is used by fetch */
+	/** Any record size, it is used by fetch */
 	DAOS_REC_ANY		= 0,
 };
 
 typedef enum {
-	/* hole extent */
+	/* Hole extent */
 	VOS_EXT_HOLE	= (1 << 0),
 } vos_ext_flag_t;
 
 /**
- * Key descritpor used for key enumeration. The actual key and checksum are
+ * Key descriptor used for key enumeration. The actual key and checksum are
  * stored in a separate buffer (i.e. sgl)
  */
 typedef struct {
-	/** key length */
+	/** Key length */
 	daos_size_t	 kd_key_len;
-	/** checksum type */
+	/** Checksum type */
 	unsigned int	 kd_csum_type;
-	/** checksum length */
+	/** Checksum length */
 	unsigned short	 kd_csum_len;
 } daos_key_desc_t;
 
@@ -566,11 +566,11 @@ typedef struct {
  * (a shard of upper level object).
  */
 typedef struct {
-	/** public section, high level object ID */
+	/** Public section, high level object ID */
 	daos_obj_id_t		id_pub;
-	/** private section, object shard index */
+	/** Private section, object shard index */
 	uint32_t		id_shard;
-	/** padding */
+	/** Padding */
 	uint32_t		id_pad_32;
 } daos_unit_oid_t;
 
@@ -580,25 +580,25 @@ typedef struct {
 
 typedef struct daos_event {
 	int			ev_error;
-	/** internal use, please do not modify */
+	/** Internal use, please do not modify */
 	struct {
 		uint64_t	space[70];
 	}			ev_private;
-	/** used for debugging */
+	/** Used for debugging */
 	uint64_t		ev_debug;
 } daos_event_t;
 
-/** wait for completion event forever */
+/** Wait for completion event forever */
 #define DAOS_EQ_WAIT            -1
-/** always return immediately */
+/** Always return immediately */
 #define DAOS_EQ_NOWAIT          0
 
 typedef enum {
-	/** query outstanding completed event */
+	/** Query outstanding completed event */
 	DAOS_EQR_COMPLETED	= (1),
-	/** query # inflight event */
+	/** Query # inflight event */
 	DAOS_EQR_DISPATCH	= (1 << 1),
-	/** query # inflight + completed events in EQ */
+	/** Query # inflight + completed events in EQ */
 	DAOS_EQR_ALL		= (DAOS_EQR_COMPLETED | DAOS_EQR_DISPATCH),
 } daos_eq_query_t;
 

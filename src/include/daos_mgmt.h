@@ -34,24 +34,24 @@
  * Targets are assumed to share the same \a dev and \a size.
  *
  * \param mode	[IN]	Capabilities permitted for the pool. May contain these
- * 			bits:
- * 			  0400	 user DAOS_PC_EX
- * 			  0200	 user DAOS_PC_RW
- * 			  0100	 user DAOS_PC_RO
- * 			  0040	group DAOS_PC_EX
- * 			  0020	group DAOS_PC_RW
- * 			  0010	group DAOS_PC_RO
- * 			  0004	other DAOS_PC_EX
- * 			  0002	other DAOS_PC_RW
- * 			  0001	other DAOS_PC_RO
- * \param uid	[IN]	user owning the pool
- * \param gid	[IN]	group owning the pool
- * \param grp	[IN]	process set name of the DAOS servers managing the pool
+ *			bits:
+ *			  0400	 user DAOS_PC_EX
+ *			  0200	 user DAOS_PC_RW
+ *			  0100	 user DAOS_PC_RO
+ *			  0040	group DAOS_PC_EX
+ *			  0020	group DAOS_PC_RW
+ *			  0010	group DAOS_PC_RO
+ *			  0004	other DAOS_PC_EX
+ *			  0002	other DAOS_PC_RW
+ *			  0001	other DAOS_PC_RO
+ * \param uid	[IN]	User owning the pool
+ * \param gid	[IN]	Group owning the pool
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
  * \param tgts	[IN]	Optional, allocate targets on this list of ranks
  *			If set to NULL, create the pool over all the ranks
  *			available in the service group.
- * \param dev	[IN]	string identifying the target devices to use
- * \param size	[IN]	target sizes (i.e., maximum amounts of storage space
+ * \param dev	[IN]	String identifying the target devices to use
+ * \param size	[IN]	Target sizes (i.e., maximum amounts of storage space
  *			targets can consume) in bytes. Passing 0 will use the
  *			minimal supported target size.
  * \param svc	[IN]	Must be pre-allocated by the caller
@@ -59,7 +59,7 @@
  *			initialized
  * \param uuid	[OUT]	UUID of the pool created
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
  */
 int
 daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
@@ -73,10 +73,10 @@ daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
  * Otherwise, the pool is destroyed when the operation completes.
  *
  * \param uuid	[IN]	UUID of the pool to destroy
- * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param force	[IN]	force destruction even if there are active connections
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
+ * \param force	[IN]	Force destruction even if there are active connections
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
  */
 int
 daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
@@ -91,12 +91,12 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
  * arbitrary targets adding.
  *
  * \param uuid	[IN]	UUID of the pool to extend
- * \param grp	[IN]	process set name of the DAOS servers managing the pool
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
  * \param tgts	[IN]	Optional, only extend the pool to included targets.
  * \param failed
  *		[OUT]	Optional, buffer to store faulty targets on failure.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
  *			non-blocking mode:
