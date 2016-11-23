@@ -178,18 +178,18 @@ set_key_and_index(char *dkey, char *akey, int *index)
 {
 	if (dkey != NULL) {
 		memset(dkey, 0, UPDATE_DKEY_SIZE);
-		gen_rand_key(dkey, UPDATE_DKEY, UPDATE_DKEY_SIZE);
+		dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 	}
 
 	if (akey != NULL) {
 		memset(akey, 0, UPDATE_AKEY_SIZE);
-		gen_rand_key(akey, UPDATE_AKEY, UPDATE_AKEY_SIZE);
+		dts_key_gen(akey, UPDATE_AKEY_SIZE, UPDATE_AKEY);
 	}
 
 	if (index != NULL) {
 		char buf[UPDATE_DKEY_SIZE];
 
-		gen_rand_key(buf, UPDATE_DKEY, UPDATE_DKEY_SIZE);
+		dts_key_gen(buf, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 		*index = (daos_hash_string_u32(buf, UPDATE_DKEY_SIZE)) %
 			 1000000;
 	}
@@ -200,7 +200,7 @@ io_simple_discard_setup(void **state)
 {
 	struct io_test_args	*args = *state;
 
-	args->oid = gen_oid();
+	args->oid = dts_unit_oid_gen(0, 0);
 
 	return 0;
 }
@@ -212,7 +212,7 @@ io_create_object(struct vc_hdl *co_hdl)
 	daos_unit_oid_t		oid;
 	struct vos_obj		*obj;
 
-	oid = gen_oid();
+	oid = dts_unit_oid_gen(0, 0);
 	rc = vos_oi_find_alloc(co_hdl, oid, &obj);
 	return rc;
 }
@@ -304,7 +304,7 @@ io_multikey_discard_setup(void **state)
 	struct io_test_args	*arg = *state;
 
 	DAOS_INIT_LIST_HEAD(&arg->req_list);
-	arg->oid = gen_oid();
+	arg->oid = dts_unit_oid_gen(0, 0);
 	last_oid = arg->oid;
 
 	return 0;
@@ -529,7 +529,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 		assert_int_equal(rc, 0);
 	}
 
-	arg->oid = gen_oid();
+	arg->oid = dts_unit_oid_gen(0, 0);
 	for (i = TF_DISCARD_KEYS; i < TF_DISCARD_KEYS * 2; i++) {
 		struct io_req	*req = NULL;
 

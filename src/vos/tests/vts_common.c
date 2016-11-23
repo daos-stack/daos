@@ -38,6 +38,7 @@
 #include <getopt.h>
 #include <daos_srv/vos.h>
 #include <daos/common.h>
+#include <daos/tests_lib.h>
 #include <errno.h>
 #include <vos_internal.h>
 #include <vts_common.h>
@@ -96,17 +97,6 @@ vts_pool_fallocate(char **fname)
 	ret = posix_fallocate(fd, 0, VPOOL_16M);
 exit:
 	return ret;
-}
-
-inline void
-vts_io_set_oid(daos_unit_oid_t *oid)
-{
-	oid->id_pub.lo = oid_cnt;
-	oid->id_pub.mid = oid_cnt + 1;
-	oid->id_pub.hi = oid_cnt + 2;
-	oid->id_shard = 0;
-	oid->id_pad_32 = 4;
-	oid_cnt++;
 }
 
 int

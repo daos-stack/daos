@@ -272,7 +272,6 @@ lookup_single(const char *dkey, const char *akey, uint64_t idx,
 static void
 io_epoch_overwrite(void **state)
 {
-	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	daos_size_t	 size;
@@ -282,7 +281,7 @@ io_epoch_overwrite(void **state)
 	daos_epoch_t	 e = 0;
 
 	/** choose random object */
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 
 	ioreq_init(&req, oid, (test_arg_t *)*state);
 	size = strlen(ubuf);
@@ -320,9 +319,7 @@ io_var_idx_offset(void **state)
 	struct ioreq	 req;
 	daos_off_t	 offset;
 
-	/** choose random object */
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
-
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 	ioreq_init(&req, oid, arg);
 
 	for (offset = UINT64_MAX; offset > 0; offset >>= 8) {
@@ -362,9 +359,7 @@ io_var_akey_size(void **state)
 	/** akey not supported yet */
 	skip();
 
-	/** choose random object */
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
-
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 	ioreq_init(&req, oid, arg);
 
 	key = malloc(max_size + 1);
@@ -407,9 +402,7 @@ io_var_dkey_size(void **state)
 	const int	 max_size = 1 << 10;
 	char		*key;
 
-	/** choose random object */
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
-
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 	ioreq_init(&req, oid, arg);
 
 	key = malloc(max_size + 1);
@@ -453,9 +446,7 @@ io_var_rec_size(void **state)
 	char		*fetch_buf;
 	char		*update_buf;
 
-	/** choose random object */
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
-
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 	/** random epoch as well */
 	epoch = rand();
 
@@ -467,7 +458,7 @@ io_var_rec_size(void **state)
 	update_buf = malloc(max_size);
 	assert_non_null(update_buf);
 
-	ts_buf_render(update_buf, max_size);
+	dts_buf_render(update_buf, max_size);
 
 	for (size = 1; size <= max_size; size <<= 1, epoch++) {
 		char dkey[30];
@@ -529,11 +520,9 @@ io_simple_internal(void **state, daos_obj_id_t oid)
 static void
 io_simple(void **state)
 {
-	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
-
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 	io_simple_internal(state, oid);
 }
 
@@ -597,7 +586,6 @@ enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 static void
 enumerate_simple(void **state)
 {
-	test_arg_t	*arg = *state;
 	char		*buf;
 	char		*ptr;
 	char		 key[ENUM_KEY_BUF];
@@ -609,8 +597,7 @@ enumerate_simple(void **state)
 	int		 key_nr;
 	int		 i;
 
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
-
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 	ioreq_init(&req, oid, (test_arg_t *)*state);
 
 	/** Insert record*/
@@ -629,7 +616,8 @@ enumerate_simple(void **state)
 	for (number = ENUM_DESC_NR, key_nr = 0; !daos_hash_is_eof(&hash_out);
 	     number = ENUM_DESC_NR) {
 		memset(buf, 0, ENUM_DESC_BUF);
-		enumerate_dkey(0, &number, kds, &hash_out, buf, 512, &req);
+		enumerate_dkey(0, &number, kds, &hash_out, buf, ENUM_DESC_BUF,
+			       &req);
 		if (number == 0)
 			continue; /* loop should break for EOF */
 
@@ -679,7 +667,6 @@ enumerate_simple(void **state)
 static void
 punch_simple(void **state)
 {
-	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	uint32_t	number = 2;
@@ -688,7 +675,7 @@ punch_simple(void **state)
 	char		*buf;
 	int		total_keys = 0;
 
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 	ioreq_init(&req, oid, (test_arg_t *)*state);
 
 	/** Insert record*/
@@ -756,7 +743,7 @@ io_complex(void **state)
 	daos_epoch_t	epoch = 0;
 	int		i;
 
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 	ioreq_init(&req, oid, arg);
 
 	print_message("Insert(e=0)/lookup(e=0)/verify complex kv record\n");
@@ -812,10 +799,10 @@ io_on_stack(void **state)
 	char		 buf[STACK_BUF_LEN];
 	int		 rc;
 
-	ts_buf_render(buf, STACK_BUF_LEN);
+	dts_buf_render(buf, STACK_BUF_LEN);
 
 	/** open object */
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -864,7 +851,7 @@ io_simple_update_timeout(void **state)
 
 	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT | DAOS_FAIL_ONCE;
 
-	obj_random(arg, &oid, DAOS_OC_LARGE_RW);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW);
 	io_simple_internal(state, oid);
 }
 
@@ -876,7 +863,7 @@ io_simple_fetch_timeout(void **state)
 
 	arg->fail_loc = DAOS_SHARD_OBJ_FETCH_TIMEOUT | DAOS_FAIL_ONCE;
 
-	obj_random(arg, &oid, DAOS_OC_LARGE_RW);
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW);
 	io_simple_internal(state, oid);
 }
 
@@ -945,7 +932,7 @@ epoch_discard(void **state)
 	}
 	MPI_Bcast(&epoch, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 	ioreq_init(&req, oid, arg);
 
 	/** Prepare buffers for a fixed set of d-keys and a-keys. */
@@ -1052,7 +1039,7 @@ io_nospace(void **state)
 	int		i;
 
 	/** choose random object */
-	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
 
 	large_buf = malloc(buf_size);
 	assert_non_null(large_buf);

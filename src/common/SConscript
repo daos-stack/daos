@@ -14,8 +14,14 @@ else:
 
 denv = env.Clone()
 
-common = denv.SharedLibrary('libdaos_common', Glob('*.c'))
+common_src  = ['debug.c', 'mem.c', 'fail_loc.c', 'hash.c', 'lru.c', 'misc.c']
+common_src += ['pool_map.c', 'proc.c', 'sort.c', 'btree.c', 'btree_class.c']
+common = denv.SharedLibrary('libdaos_common', common_src)
 denv.Install('$PREFIX/lib/', common)
+
+tests_lib_src = ['tests_lib.c']
+tests_lib = denv.SharedLibrary('libdaos_tests', tests_lib_src)
+denv.Install('$PREFIX/lib/', tests_lib)
 
 denv.Append(CPPPATH = ['#/src/common'])
 SConscript('tests/SConscript', exports='denv')

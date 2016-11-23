@@ -38,6 +38,7 @@
 #include <mpi.h>
 #include <daos.h>
 #include <daos/common.h>
+#include <daos/tests_lib.h>
 
 typedef struct {
 	daos_rank_t		ranks[8];
@@ -173,30 +174,6 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	free(ghdl.iov_buf);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-}
-
-/* generate a readable random string */
-static inline void
-ts_buf_render(char *buf, unsigned int buf_len)
-{
-	int	nr = 'z' - 'a' + 1;
-	int	i;
-
-	srand(time(NULL));
-	for (i = 0; i < buf_len - 1; i++)
-		buf[i] = 'a' + rand() % nr;
-
-	buf[i] = '\0';
-}
-
-static inline void
-obj_random(test_arg_t *arg, daos_obj_id_t *oid, int class_type)
-{
-	/** choose random object */
-	oid->lo	= rand();
-	oid->mid = rand();
-	oid->hi	= rand();
-	daos_obj_id_generate(oid, class_type);
 }
 
 #endif

@@ -33,6 +33,7 @@
 #include <string.h>
 #include <inttypes.h>
 #include <daos/common.h>
+#include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
 
 #define VPOOL_16M 16777216ULL
