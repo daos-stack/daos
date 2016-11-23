@@ -44,19 +44,6 @@
 
 #define CRT_PROC_NULL (NULL)
 
-static inline hg_proc_op_t
-crt_proc_op2hg(crt_proc_op_t proc_op)
-{
-	if (proc_op == CRT_PROC_ENCODE)
-		return HG_ENCODE;
-	else if (proc_op == CRT_PROC_DECODE)
-		return HG_DECODE;
-	else if (proc_op == CRT_PROC_FREE)
-		return HG_FREE;
-	else
-		return -CER_INVAL;
-}
-
 int
 crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 {

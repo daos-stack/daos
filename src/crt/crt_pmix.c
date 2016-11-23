@@ -576,7 +576,7 @@ crt_pmix_notify_fn(size_t registration_id, pmix_status_t status,
 
 	C_DEBUG("got one PMIx notification, source->rank: %d.\n",
 		source->rank);
-	if (source->rank < 0 || source->rank >= pmix_gdata->pg_univ_size) {
+	if (source->rank >= pmix_gdata->pg_univ_size) {
 		C_ERROR("pmix rank %d out of range [0, %d].\n",
 			source->rank, pmix_gdata->pg_univ_size - 1);
 		goto out;

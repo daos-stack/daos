@@ -2003,7 +2003,7 @@ crt_grp_load_attach_info(struct crt_grp_priv *grp_priv)
 			filename, strerror(errno));
 		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
-	if (strncmp(grpname, grpid, CRT_GROUP_ID_MAX_LEN != 0)) {
+	if (strncmp(grpname, grpid, CRT_GROUP_ID_MAX_LEN) != 0) {
 		C_ERROR("grpname %s in file mismatch with grpid %s.\n",
 			grpname, grpid);
 		C_GOTO(out, rc = -CER_INVAL);

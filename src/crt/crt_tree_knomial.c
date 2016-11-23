@@ -53,8 +53,17 @@ knomial_number_2_int(struct knomial_number *n)
 {
 	uint32_t i, index = 0;
 
-	for (i = n->ndigits - 1; i >= 0; i--)
+	if (n->ndigits == 0)
+		return 0;
+
+	C_ASSERT(n->ndigits >= 1);
+	i = n->ndigits - 1;
+	while (1) {
 		index = index * n->ratio + n->digits[i];
+		if (i == 0)
+			break;
+		i--;
+	}
 
 	return index;
 }
