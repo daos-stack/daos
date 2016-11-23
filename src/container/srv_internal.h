@@ -24,8 +24,8 @@
  * ds_cont: Client Server Internal Declarations
  */
 
-#ifndef __CONTAINER_SERVER_INTERNAL_H__
-#define __CONTAINER_SERVER_INTERNAL_H__
+#ifndef __CONTAINER_SRV_INTERNAL_H__
+#define __CONTAINER_SRV_INTERNAL_H__
 
 #include <daos/lru.h>
 #include <daos/rpc.h>
@@ -62,6 +62,8 @@ int ds_cont_destroy_handler(crt_rpc_t *rpc);
 int ds_cont_open_handler(crt_rpc_t *rpc);
 int ds_cont_close_handler(crt_rpc_t *rpc);
 int ds_cont_op_handler(crt_rpc_t *rpc);
+int ds_cont_svc_cache_init(void);
+void ds_cont_svc_cache_fini(void);
 
 /*
  * srv_target.c
@@ -83,4 +85,4 @@ void ds_cont_cache_destroy(struct daos_lru_cache *cache);
 int ds_cont_hdl_hash_create(struct dhash_table *hash);
 void ds_cont_hdl_hash_destroy(struct dhash_table *hash);
 
-#endif /* __CONTAINER_SERVER_INTERNAL_H__ */
+#endif /* __CONTAINER_SRV_INTERNAL_H__ */

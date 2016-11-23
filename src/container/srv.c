@@ -35,12 +35,13 @@
 static int
 init(void)
 {
-	return 0;
+	return ds_cont_svc_cache_init();
 }
 
 static int
 fini(void)
 {
+	ds_cont_svc_cache_fini();
 	return 0;
 }
 

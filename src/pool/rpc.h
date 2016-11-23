@@ -46,6 +46,7 @@ enum pool_operation {
 	POOL_DISCONNECT		= 2,
 	POOL_QUERY		= 3,
 	POOL_EXCLUDE		= 4,
+	POOL_EVICT		= 5,
 
 	POOL_TGT_CONNECT	= 11,
 	POOL_TGT_DISCONNECT	= 12,
@@ -96,13 +97,21 @@ struct pool_query_out {
 };
 
 struct pool_exclude_in {
-	struct pool_op_in	 pei_op;
-	daos_rank_list_t		*pei_targets;
+	struct pool_op_in	pei_op;
+	daos_rank_list_t       *pei_targets;
 };
 
 struct pool_exclude_out {
-	struct pool_op_out	 peo_op;
-	daos_rank_list_t	*peo_targets;	/* that are not found in pool */
+	struct pool_op_out	peo_op;
+	daos_rank_list_t       *peo_targets;	/* that are not found in pool */
+};
+
+struct pool_evict_in {
+	struct pool_op_in	pvi_op;	/* .pi_hdl unused */
+};
+
+struct pool_evict_out {
+	struct pool_op_out	pvo_op;
 };
 
 struct pool_tgt_connect_in {
@@ -117,8 +126,8 @@ struct pool_tgt_connect_out {
 };
 
 struct pool_tgt_disconnect_in {
-	uuid_t		tdi_uuid;	/* pool UUID */
-	uuid_t		tdi_hdl;
+	uuid_t			tdi_uuid;	/* pool UUID */
+	struct crt_array	tdi_hdls;
 };
 
 struct pool_tgt_disconnect_out {

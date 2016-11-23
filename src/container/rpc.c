@@ -43,7 +43,7 @@ proc_cont_tgt_close_rec(crt_proc_t proc, struct cont_tgt_close_rec *rec)
 	return 0;
 }
 
-struct crt_msg_field DMF_CLOSE_RECS =
+static struct crt_msg_field DMF_CLOSE_RECS =
 	DEFINE_CRT_MSG("cont_tgt_close_rec[]", CMF_ARRAY_FLAG,
 		       sizeof(struct cont_tgt_close_rec),
 		       proc_cont_tgt_close_rec);

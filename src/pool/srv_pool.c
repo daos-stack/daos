@@ -32,6 +32,7 @@
 #include <daos/btree_class.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
+#include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/vos.h>
@@ -348,7 +349,15 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t root, uint32_t uid,
 static int
 cont_metadata_init(PMEMobjpool *mp, daos_handle_t root)
 {
-	return dbtree_nv_create_tree(root, CONTAINERS, DBTREE_CLASS_UV,
+	int rc;
+
+	rc = dbtree_nv_create_tree(root, CONTAINERS, DBTREE_CLASS_UV,
+				   0 /* feats */, 16 /* order */, mp,
+				   NULL /* tree_new */);
+	if (rc != 0)
+		return rc;
+
+	return dbtree_nv_create_tree(root, CONTAINER_HDLS, DBTREE_CLASS_UV,
 				     0 /* feats */, 16 /* order */, mp,
 				     NULL /* tree_new */);
 }
@@ -1001,7 +1010,7 @@ out:
 
 static int
 pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
-		      const uuid_t pool_hdl)
+		      uuid_t *pool_hdls, int n_pool_hdls)
 {
 	struct pool_tgt_disconnect_in  *in;
 	struct pool_tgt_disconnect_out *out;
@@ -1016,7 +1025,8 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->tdi_uuid, svc->ps_uuid);
-	uuid_copy(in->tdi_hdl, pool_hdl);
+	in->tdi_hdls.da_arrays = pool_hdls;
+	in->tdi_hdls.da_count = n_pool_hdls;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -1037,6 +1047,70 @@ out:
 	return rc;
 }
 
+static int
+pool_disconnect_hdls(struct pool_svc *svc, uuid_t *hdl_uuids, int n_hdl_uuids,
+		     crt_context_t ctx)
+{
+	uint32_t	nhandles;
+	int		i;
+	int		rc;
+
+	D_ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+
+	D_DEBUG(DF_DSMS, DF_UUID": disconnecting %d hdls: hdl_uuids[0]="DF_UUID
+		"\n", DP_UUID(svc->ps_uuid), n_hdl_uuids,
+		DP_UUID(hdl_uuids[0]));
+
+	/*
+	 * TODO: Send POOL_TGT_CLOSE_CONTS and somehow retry until every
+	 * container service has responded (through ds_pool).
+	 */
+	rc = ds_cont_close_by_pool_hdls(svc->ps_uuid, hdl_uuids, n_hdl_uuids,
+					ctx);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = pool_disconnect_bcast(ctx, svc, hdl_uuids, n_hdl_uuids);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES, &nhandles,
+			      sizeof(nhandles));
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	nhandles -= n_hdl_uuids;
+
+	TX_BEGIN(svc->ps_mpool->mp_pmem) {
+		for (i = 0; i < n_hdl_uuids; i++) {
+			rc = dbtree_uv_delete(svc->ps_handles, hdl_uuids[i]);
+			if (rc != 0)
+				pmemobj_tx_abort(rc);
+		}
+
+		rc = dbtree_nv_update(svc->ps_root, POOL_NHANDLES, &nhandles,
+				      sizeof(nhandles));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+	} TX_ONABORT {
+		rc = pmemobj_tx_errno();
+		if (rc > 0)
+			rc = -DER_NOSPACE;
+	} TX_END
+
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	/* For these pool handles. See ds_pool_connect_handler(). */
+	for (i = 0; i < n_hdl_uuids; i++)
+		pool_svc_put(svc);
+
+out:
+	D_DEBUG(DF_DSMS, DF_UUID": leaving: %d\n", DP_UUID(svc->ps_uuid), rc);
+	return rc;
+}
+
 int
 ds_pool_disconnect_handler(crt_rpc_t *rpc)
 {
@@ -1044,10 +1118,7 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	struct pool_disconnect_out     *pdo = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
 	struct pool_hdl			hdl;
-	uint32_t			nhandles;
 	int				rc;
-
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, DP_UUID(pdi->pdi_op.pi_hdl));
@@ -1066,37 +1137,10 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_lock, rc);
 	}
 
-	rc = pool_disconnect_bcast(rpc->cr_ctx, svc, pdi->pdi_op.pi_hdl);
+	rc = pool_disconnect_hdls(svc, &pdi->pdi_op.pi_hdl, 1 /* n_hdl_uuids */,
+				  rpc->cr_ctx);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
-
-	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES, &nhandles,
-			      sizeof(nhandles));
-	if (rc != 0)
-		D_GOTO(out_lock, rc);
-
-	nhandles--;
-
-	TX_BEGIN(svc->ps_mpool->mp_pmem) {
-		rc = dbtree_uv_delete(svc->ps_handles, pdi->pdi_op.pi_hdl);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		rc = dbtree_nv_update(svc->ps_root, POOL_NHANDLES, &nhandles,
-				      sizeof(nhandles));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = pmemobj_tx_errno();
-		if (rc > 0)
-			rc = -DER_NOSPACE;
-	} TX_END
-
-	if (rc != 0)
-		D_GOTO(out_lock, rc);
-
-	/* For this pool handle. See ds_pool_connect_handler(). */
-	pool_svc_put(svc);
 
 	/* No need to set pdo->pdo_op.po_map_version. */
 out_lock:
@@ -1307,7 +1351,7 @@ ds_pool_exclude_handler(crt_rpc_t *rpc)
 		D_GOTO(out_lock, rc);
 	}
 
-	/* These have be freed after the reply is sent. */
+	/* These have to be freed after the reply is sent. */
 	D_ALLOC_PTR(out->peo_targets);
 	if (out->peo_targets == NULL)
 		D_GOTO(out_map_version, rc = -DER_NOMEM);
@@ -1343,4 +1387,121 @@ out:
 		D_FREE_PTR(out->peo_targets);
 	}
 	return rc;
+}
+
+struct evict_iter_arg {
+	uuid_t *eia_hdl_uuids;
+	size_t	eia_hdl_uuids_size;
+	int	eia_n_hdl_uuids;
+};
+
+static int
+evict_iter_cb(daos_iov_t *key, daos_iov_t *val, void *varg)
+{
+	struct evict_iter_arg  *arg = varg;
+
+	D_ASSERT(arg->eia_hdl_uuids != NULL);
+	D_ASSERT(arg->eia_hdl_uuids_size > sizeof(uuid_t));
+
+	if (key->iov_len != sizeof(uuid_t) ||
+	    val->iov_len != sizeof(struct pool_hdl)) {
+		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
+			key->iov_len, val->iov_len);
+		return -DER_IO;
+	}
+
+	/*
+	 * Make sure arg->eia_hdl_uuids[arg->eia_hdl_uuids_size] have enough
+	 * space for this handle.
+	 */
+	if (sizeof(uuid_t) * (arg->eia_n_hdl_uuids + 1) >
+	    arg->eia_hdl_uuids_size) {
+		uuid_t *hdl_uuids_tmp;
+		size_t	hdl_uuids_size_tmp;
+
+		hdl_uuids_size_tmp = arg->eia_hdl_uuids_size * 2;
+		D_ALLOC(hdl_uuids_tmp, hdl_uuids_size_tmp);
+		if (hdl_uuids_tmp == NULL)
+			return -DER_NOMEM;
+		memcpy(hdl_uuids_tmp, arg->eia_hdl_uuids,
+		       arg->eia_hdl_uuids_size);
+		D_FREE(arg->eia_hdl_uuids, arg->eia_hdl_uuids_size);
+		arg->eia_hdl_uuids = hdl_uuids_tmp;
+		arg->eia_hdl_uuids_size = hdl_uuids_size_tmp;
+	}
+
+	uuid_copy(arg->eia_hdl_uuids[arg->eia_n_hdl_uuids], key->iov_buf);
+	arg->eia_n_hdl_uuids++;
+	return 0;
+}
+
+/*
+ * Callers are responsible for freeing *hdl_uuids if this function returns zero.
+ */
+static int
+find_hdls_to_evict(struct pool_svc *svc, uuid_t **hdl_uuids,
+		   size_t *hdl_uuids_size, int *n_hdl_uuids)
+{
+	struct evict_iter_arg	arg;
+	int			rc;
+
+	arg.eia_hdl_uuids_size = sizeof(uuid_t) * 4;
+	D_ALLOC(arg.eia_hdl_uuids, arg.eia_hdl_uuids_size);
+	if (arg.eia_hdl_uuids == NULL)
+		return -DER_NOMEM;
+	arg.eia_n_hdl_uuids = 0;
+
+	rc = dbtree_iterate(svc->ps_handles, BTR_PROBE_FIRST, evict_iter_cb,
+			    &arg);
+	if (rc != 0) {
+		D_FREE(arg.eia_hdl_uuids, arg.eia_hdl_uuids_size);
+		return rc;
+	}
+
+	*hdl_uuids = arg.eia_hdl_uuids;
+	*hdl_uuids_size = arg.eia_hdl_uuids_size;
+	*n_hdl_uuids = arg.eia_n_hdl_uuids;
+	return 0;
+}
+
+int
+ds_pool_evict_handler(crt_rpc_t *rpc)
+{
+	struct pool_evict_in   *in = crt_req_get(rpc);
+	struct pool_evict_out  *out = crt_reply_get(rpc);
+	struct pool_svc	       *svc;
+	uuid_t		       *hdl_uuids;
+	size_t			hdl_uuids_size;
+	int			n_hdl_uuids;
+	int			rc;
+
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+		DP_UUID(in->pvi_op.pi_uuid), rpc);
+
+	rc = pool_svc_lookup(in->pvi_op.pi_uuid, &svc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	rc = find_hdls_to_evict(svc, &hdl_uuids, &hdl_uuids_size, &n_hdl_uuids);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	if (n_hdl_uuids > 0)
+		rc = pool_disconnect_hdls(svc, hdl_uuids, n_hdl_uuids,
+					  rpc->cr_ctx);
+
+	/* No need to set out->pvo_op.po_map_version. */
+	D_FREE(hdl_uuids, hdl_uuids_size);
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	pool_svc_put(svc);
+out:
+	out->pvo_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->pvi_op.pi_uuid), rpc, rc);
+	return crt_reply_send(rpc);
 }

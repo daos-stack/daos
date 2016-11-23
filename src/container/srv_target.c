@@ -552,8 +552,9 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: recs[0].hdl="DF_UUID
-		" nres="DF_U64"\n", DP_CONT(NULL, NULL), rpc,
-		DP_UUID(recs[0].tcr_hdl), in->tci_recs.da_count);
+		"recs[0].hce="DF_U64" nres="DF_U64"\n", DP_CONT(NULL, NULL),
+		rpc, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce,
+		in->tci_recs.da_count);
 
 	rc = dss_collective(cont_close_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);

@@ -403,6 +403,17 @@ int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 		      daos_iov_t *val, daos_hash_out_t *anchor);
 int dbtree_iter_delete(daos_handle_t ih);
 
+/**
+ * Prototype of dbtree_iterate() callbacks. When a callback returns an rc,
+ *
+ *   - if rc == 0, dbtree_iterate() continues;
+ *   - if rc == 1, dbtree_iterate() stops and returns 0;
+ *   - otherwise, dbtree_iterate() stops and returns rc.
+ */
+typedef int (*dbtree_iterate_cb_t)(daos_iov_t *key, daos_iov_t *val, void *arg);
+int dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
+		   void *arg);
+
 enum {
 	DBTREE_VOS_BEGIN	= 10,
 	DBTREE_VOS_END		= DBTREE_VOS_BEGIN + 9,

@@ -34,8 +34,8 @@
  *       Pool handle tree (UV)
  */
 
-#ifndef __POOL_SERVER_LAYOUT_H__
-#define __POOL_SERVER_LAYOUT_H__
+#ifndef __POOL_SRV_LAYOUT_H__
+#define __POOL_SRV_LAYOUT_H__
 
 #include <stdint.h>
 
@@ -69,4 +69,4 @@ struct pool_hdl {
 	uint64_t	ph_capas;
 };
 
-#endif /* __POOL_SERVER_LAYOUT_H__ */
+#endif /* __POOL_SRV_LAYOUT_H__ */

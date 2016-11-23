@@ -39,6 +39,7 @@ run_all_tests(int rank, int size)
 	nr_failed += run_daos_cont_test(rank, size);
 	nr_failed += run_daos_epoch_test(rank, size);
 	nr_failed += run_daos_io_test(rank, size);
+	nr_failed += run_daos_epoch_recovery_test(rank, size);
 
 	return nr_failed;
 }
@@ -57,6 +58,8 @@ print_usage(int rank)
 	print_message("daos_test -p|--daos_pool_tests\n");
 	print_message("daos_test -c|--daos_container_tests\n");
 	print_message("daos_test -i|--daos_io_tests\n");
+	print_message("daos_test -e|--daos_epoch_tests\n");
+	print_message("daos_test -o|--daos_epoch_recovery_tests\n");
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("daos_test -r|--daos_repl_tests\n");
 	print_message("daos_test -h|--help\n");
@@ -92,6 +95,7 @@ main(int argc, char **argv)
 		{"daos_container_tests", no_argument, 0, 'c'},
 		{"daos_io_tests", no_argument, 0, 'i'},
 		{"daos_epoch_tests", no_argument, 0, 'e'},
+		{"daos_epoch_recovery_tests", no_argument, 0, 'o'},
 		{"daos_degraded_demo", 1, NULL, 'd'},
 		{"daos_degraded_tests", no_argument, 0, 'r'},
 		{"help", no_argument, 0, 'h'},
@@ -156,6 +160,12 @@ main(int argc, char **argv)
 			daos_test_print(rank, "DAOS Epoch tests..");
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_epoch_test(rank, size);
+			break;
+		case 'o':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS Epoch recovery tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_epoch_recovery_test(rank, size);
 			break;
 		case 'a':
 			daos_test_print(rank, "\n\n=================");

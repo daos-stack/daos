@@ -93,6 +93,7 @@ int run_daos_pool_test(int rank, int size);
 int run_daos_cont_test(int rank, int size);
 int run_daos_io_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
+int run_daos_epoch_recovery_test(int rank, int size);
 int run_daos_repl_test(int rank, int size,
 		       int akeys, int wsec);
 

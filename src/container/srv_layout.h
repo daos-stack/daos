@@ -31,32 +31,33 @@
  * layout:
  *
  *   Root tree (NV):
- *     Container index tree (UV):
- *       Container tree (NV):
+ *     Container tree (UV):
+ *       Container attribute tree (NV):
  *         HCE tree (EC)
  *         LRE tree (EC)
  *         LHE tree (EC)
  *         Snapshot tree (EC)
- *         Container handle tree (UV)
- *       ... (more container trees)
+ *       ... (more container attribute trees)
+ *     Container handle tree (UV)
  */
 
-#ifndef __CONTAINER_SERVER_LAYOUT_H__
-#define __CONTAINER_SERVER_LAYOUT_H__
+#ifndef __CONTAINER_SRV_LAYOUT_H__
+#define __CONTAINER_SRV_LAYOUT_H__
 
 #include <stdint.h>
 
-/* Root tree (DBTREE_CLASS_NV): container attributes */
-#define CONTAINERS	"containers"	/* btr_root (container index tree) */
+/* Root tree (DBTREE_CLASS_NV) */
+#define CONTAINERS	"containers"	/* btr_root (container tree) */
+#define CONTAINER_HDLS	"handles"	/* btr_root (container handle tree) */
 
 /*
- * Container index tree (DBTREE_CLASS_UV)
+ * Container tree (DBTREE_CLASS_UV)
  *
- * This maps container UUIDs (uuid_t) to container trees (btr_root).
+ * This maps container UUIDs (uuid_t) to container attribute trees (btr_root).
  */
 
 /*
- * Container tree (DBTREE_CLASS_NV)
+ * Container attribute tree (DBTREE_CLASS_NV)
  *
  * This also stores container attributes of upper layers.
  */
@@ -65,8 +66,6 @@
 #define CONT_LRES	"lres"		/* btr_root (LRE tree) */
 #define CONT_LHES	"lhes"		/* btr_root (LHE tree) */
 #define CONT_SNAPSHOTS	"snapshots"	/* btr_root (snapshot tree) */
-#define CONT_HANDLES	"handles"	/* btr_root (container handle */
-					/* tree) */
 
 /*
  * HCE, LRE, and LHE trees (DBTREE_CLASS_EC)
@@ -85,14 +84,12 @@
 
 /* Container handle tree (DBTREE_CLASS_UV) */
 struct container_hdl {
+	uuid_t		ch_pool_hdl;
+	uuid_t		ch_cont;
 	uint64_t	ch_hce;
 	uint64_t	ch_lre;
 	uint64_t	ch_lhe;
 	uint64_t	ch_capas;
 };
 
-/* container_hdl::ch_flags */
-#define CONT_HDL_RO	1
-#define CONT_HDL_RW	2
-
-#endif /* __CONTAINER_SERVER_LAYOUT_H__ */
+#endif /* __CONTAINER_SRV_LAYOUT_H__ */

@@ -522,27 +522,35 @@ ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_disconnect_in  *in = crt_req_get(rpc);
 	struct pool_tgt_disconnect_out *out = crt_reply_get(rpc);
-	struct ds_pool_hdl	       *hdl;
-	int				rc = 0;
+	uuid_t			       *hdl_uuids = in->tdi_hdls.da_arrays;
+	int				i;
+	int				rc;
 
-	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdl="DF_UUID"\n",
-		DP_UUID(in->tdi_uuid), rpc, DP_UUID(in->tdi_hdl));
-
-	hdl = ds_pool_hdl_lookup(in->tdi_hdl);
-	if (hdl == NULL) {
-		D_DEBUG(DF_DSMS, DF_UUID": handle "DF_UUID" does not exist\n",
-			DP_UUID(in->tdi_uuid), DP_UUID(in->tdi_hdl));
+	if (in->tdi_hdls.da_count == 0)
 		D_GOTO(out, rc = 0);
+
+	if (in->tdi_hdls.da_arrays == NULL)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	D_DEBUG(DF_DSMS, DF_UUID": handling rpc %p: hdls[0]="DF_UUID" nhdls="
+		DF_U64"\n", DP_UUID(in->tdi_uuid), rpc, DP_UUID(hdl_uuids),
+		in->tdi_hdls.da_count);
+
+	for (i = 0; i < in->tdi_hdls.da_count; i++) {
+		struct ds_pool_hdl *hdl;
+
+		hdl = ds_pool_hdl_lookup(hdl_uuids[i]);
+		if (hdl == NULL) {
+			D_DEBUG(DF_DSMS, DF_UUID": handle "DF_UUID
+				" does not exist\n", DP_UUID(in->tdi_uuid),
+				DP_UUID(hdl_uuids[i]));
+			continue;
+		}
+		pool_hdl_delete(hdl);
+		ds_pool_hdl_put(hdl);
 	}
 
-	pool_hdl_delete(hdl);
-
-	/*
-	 * TODO: Release all container handles associated with this pool
-	 * handle.
-	 */
-
-	ds_pool_hdl_put(hdl);
+	rc = 0;
 out:
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",

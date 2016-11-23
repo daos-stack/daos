@@ -452,7 +452,14 @@ cont_close_complete(void *data, daos_event_t *ev, int rc)
 	out = crt_reply_get(sp->sp_rpc);
 
 	rc = out->cco_op.co_rc;
-	if (rc != 0) {
+	if (rc == -DER_NO_PERM) {
+		/* The pool connection cannot be found on the server. */
+		D_DEBUG(DF_DSMS, DF_CONT": already disconnected: hdl="DF_UUID
+			" pool_hdl="DF_UUID"\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid),
+			DP_UUID(cont->dc_cont_hdl), DP_UUID(pool->dp_pool_hdl));
+		rc = 0;
+	} else if (rc != 0) {
 		D_ERROR("failed to close container: %d\n", rc);
 		D_GOTO(out, rc);
 	}

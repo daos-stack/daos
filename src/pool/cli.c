@@ -916,3 +916,76 @@ err:
 	daos_task_complete((struct daos_task *)cb_arg, rc);
 	return rc;
 }
+
+static int
+pool_evict_cp(void *arg, daos_event_t *ev, int rc)
+{
+	struct daos_op_sp      *sp = arg;
+	struct pool_evict_in   *in = crt_req_get(sp->sp_rpc);
+	struct pool_evict_out  *out = crt_reply_get(sp->sp_rpc);
+
+	if (rc != 0) {
+		D_ERROR("RPC error while evicting pool handles: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = out->pvo_op.po_rc;
+	if (rc != 0) {
+		D_ERROR("failed to evict pool handles: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, DF_UUID": evicted\n", DP_UUID(in->pvi_op.pi_uuid));
+
+out:
+	crt_req_decref(sp->sp_rpc);
+	return rc;
+}
+
+int
+dc_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
+{
+	crt_endpoint_t		ep;
+	crt_rpc_t	       *rpc;
+	struct pool_evict_in   *in;
+	struct daos_op_sp      *sp;
+	int			rc;
+
+	if (uuid_is_null(uuid) || grp == NULL || strlen(grp) == 0)
+		return -DER_INVAL;
+
+	D_DEBUG(DF_DSMC, DF_UUID": evicting\n", DP_UUID(uuid));
+
+	ep.ep_grp = NULL;
+	ep.ep_rank = 0;
+	ep.ep_tag = 0;
+
+	rc = pool_req_create(daos_ev2ctx(ev), ep, POOL_EVICT, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
+			DP_UUID(uuid), rc);
+		return rc;
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->pvi_op.pi_uuid, uuid);
+
+	sp = daos_ev2sp(ev);
+	crt_req_addref(rpc);
+	sp->sp_rpc = rpc;
+
+	rc = daos_event_register_comp_cb(ev, pool_evict_cp, sp);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	return daos_rpc_send(rpc, ev);
+
+err_rpc:
+	crt_req_decref(sp->sp_rpc);
+	crt_req_decref(rpc);
+	return rc;
+}

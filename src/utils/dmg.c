@@ -145,6 +145,49 @@ destroy_hdlr(int argc, char *argv[])
 }
 
 static int
+evict_hdlr(int argc, char *argv[])
+{
+	struct option		options[] = {
+		{"group",	required_argument,	NULL,	'G'},
+		{"pool",	required_argument,	NULL,	'p'},
+		{NULL,		0,			NULL,	0}
+	};
+	const char	       *group = default_group;
+	uuid_t			pool_uuid;
+	int			rc;
+
+	uuid_clear(pool_uuid);
+
+	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+		switch (rc) {
+		case 'G':
+			group = optarg;
+			break;
+		case 'p':
+			if (uuid_parse(optarg, pool_uuid) != 0) {
+				D_ERROR("failed to parse pool UUID: %s\n",
+					optarg);
+				return 2;
+			}
+			break;
+		default:
+			return 2;
+		}
+	}
+
+	if (uuid_is_null(pool_uuid)) {
+		D_ERROR("pool UUID required\n");
+		return 2;
+	}
+
+	rc = daos_pool_evict(pool_uuid, group, NULL /* ev */);
+	if (rc != 0)
+		D_ERROR("failed to evict pool connections: %d\n", rc);
+
+	return rc;
+}
+
+static int
 exclude_hdlr(int argc, char *argv[])
 {
 	struct option		options[] = {
@@ -224,6 +267,7 @@ usage: dmg COMMAND [OPTIONS]\n\
 commands:\n\
   create	create a pool\n\
   destroy	destroy a pool\n\
+  evict		evict all pool connections to a pool\n\
   exclude	exclude a target from a pool\n\
   help		print this message and exit\n");
 	printf("\
@@ -237,6 +281,10 @@ create options:\n\
 	printf("\
 destroy options:\n\
   --force	destroy the pool even if there are connections\n\
+  --group=STR	pool server process group (\"%s\")\n\
+  --pool=UUID	pool UUID\n", default_group);
+	printf("\
+evict options:\n\
   --group=STR	pool server process group (\"%s\")\n\
   --pool=UUID	pool UUID\n", default_group);
 	printf("\
@@ -259,6 +307,8 @@ main(int argc, char *argv[])
 		hdlr = create_hdlr;
 	else if (strcmp(argv[1], "destroy") == 0)
 		hdlr = destroy_hdlr;
+	else if (strcmp(argv[1], "evict") == 0)
+		hdlr = evict_hdlr;
 	else if (strcmp(argv[1], "exclude") == 0)
 		hdlr = exclude_hdlr;
 

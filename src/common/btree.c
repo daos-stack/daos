@@ -2792,6 +2792,86 @@ dbtree_iter_delete(daos_handle_t ih)
 	return rc;
 }
 
+/**
+ * Helper function to iterate a dbtree, either from the first record forward
+ * (\a backward == false) or from the last record backward (\a backward ==
+ * true). \a cb will be called with \a arg for each record. See also
+ * dbtree_iterate_cb_t.
+ *
+ * \param toh		[IN]	Tree open handle
+ * \param backward	[IN]	If true, iterate from last to first
+ * \param cb		[IN]	Callback function (see dbtree_iterate_cb_t)
+ * \param arg		[IN]	Callback argument
+ */
+int
+dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
+	       void *arg)
+{
+	daos_handle_t	ih;
+	int		niterated = 0;
+	int		rc;
+
+	rc = dbtree_iter_prepare(toh, 0 /* options */, &ih);
+	if (rc != 0) {
+		D_ERROR("failed to prepare tree iterator: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = dbtree_iter_probe(ih, backward ? BTR_PROBE_LAST : BTR_PROBE_FIRST,
+			       NULL /* key */, NULL /* anchor */);
+	if (rc == -DER_NONEXIST) {
+		D_GOTO(out_iter, rc = 0);
+	} else if (rc != 0) {
+		D_ERROR("failed to initialize iterator: %d\n", rc);
+		D_GOTO(out_iter, rc);
+	}
+
+	for (;;) {
+		daos_iov_t	key;
+		daos_iov_t	val;
+
+		daos_iov_set(&key, NULL /* buf */, 0 /* size */);
+		daos_iov_set(&val, NULL /* buf */, 0 /* size */);
+
+		rc = dbtree_iter_fetch(ih, &key, &val, NULL /* anchor */);
+		if (rc != 0) {
+			D_ERROR("failed to fetch iterator: %d\n", rc);
+			break;
+		}
+
+		/*
+		 * Might want to allow cb() to end the iteration without
+		 * returning an error in the future.
+		 */
+		rc = cb(&key, &val, arg);
+		niterated++;
+		if (rc != 0) {
+			if (rc == 1)
+				/* Stop without errors. */
+				rc = 0;
+			break;
+		}
+
+		if (backward)
+			rc = dbtree_iter_prev(ih);
+		else
+			rc = dbtree_iter_next(ih);
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			break;
+		} else if (rc != 0) {
+			D_ERROR("failed to move iterator: %d\n", rc);
+			break;
+		}
+	}
+
+out_iter:
+	dbtree_iter_finish(ih);
+out:
+	D_DEBUG(DF_MISC, "iterated %d records: %d\n", niterated, rc);
+	return rc;
+}
+
 #define BTR_TYPE_MAX	1024
 
 static struct btr_class btr_class_registered[BTR_TYPE_MAX];

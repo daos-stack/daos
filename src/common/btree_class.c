@@ -30,7 +30,7 @@
 
 #include <string.h>
 
-#define HAVE_DBTREE_DELETE 0	/* dbtree_delete() not yet implemented */
+#define HAVE_DBTREE_DELETE 1	/* dbtree_delete() not yet implemented */
 
 #if !HAVE_DBTREE_DELETE
 

@@ -40,19 +40,33 @@
  * References the ds_pool_mpool descriptor. Identified by a number unique
  * within the pool.
  *
- * TODO: Store and look up this in a hash table.
+ * TODO: After moving to LRU, we are still not evicting cont_svc objects based
+ * on their numbers of container handles yet.
  */
 struct cont_svc {
+	struct daos_llink	cs_entry;
 	uuid_t			cs_pool_uuid;
 	uint64_t		cs_id;
 	struct ds_pool_mpool   *cs_mpool;
 	struct ds_pool	       *cs_pool;
-	pthread_rwlock_t	cs_rwlock;
-	pthread_mutex_t		cs_lock;
-	int			cs_ref;
+	ABT_rwlock		cs_lock;
 	daos_handle_t		cs_root;	/* root tree */
-	daos_handle_t		cs_containers;	/* container index tree */
+	daos_handle_t		cs_containers;	/* container tree */
+	daos_handle_t		cs_hdls;	/* container handle tree */
 };
+
+static struct daos_lru_cache *cont_svc_cache;
+
+struct cont_svc_key {
+	uuid_t		csk_pool_uuid;
+	uint64_t	csk_id;
+};
+
+static inline struct cont_svc *
+cont_svc_obj(struct daos_llink *llink)
+{
+	return container_of(llink, struct cont_svc, cs_entry);
+}
 
 static int
 cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
@@ -67,22 +81,15 @@ cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 
 	uuid_copy(svc->cs_pool_uuid, pool_uuid);
 	svc->cs_id = id;
-	svc->cs_ref = 1;
 
 	rc = ds_pool_mpool_lookup(pool_uuid, &svc->cs_mpool);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
 
-	rc = pthread_rwlock_init(&svc->cs_rwlock, NULL /* attr */);
-	if (rc != 0) {
-		D_ERROR("failed to initialize cs_rwlock: %d\n", rc);
-		D_GOTO(err_mp, rc = -DER_NOMEM);
-	}
-
-	rc = pthread_mutex_init(&svc->cs_lock, NULL /* attr */);
-	if (rc != 0) {
-		D_ERROR("failed to initialize cs_lock: %d\n", rc);
-		D_GOTO(err_rwlock, rc = -DER_NOMEM);
+	rc = ABT_rwlock_create(&svc->cs_lock);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create cs_lock: %d\n", rc);
+		D_GOTO(err_mp, rc = dss_abterr2der(rc));
 	}
 
 	uma.uma_id = UMEM_CLASS_PMEM;
@@ -97,18 +104,25 @@ cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 	rc = dbtree_nv_open_tree(svc->cs_root, CONTAINERS,
 				 svc->cs_mpool->mp_pmem, &svc->cs_containers);
 	if (rc != 0) {
-		D_ERROR("failed to open containers tree: %d\n", rc);
+		D_ERROR("failed to open container tree: %d\n", rc);
 		D_GOTO(err_root, rc);
+	}
+
+	rc = dbtree_nv_open_tree(svc->cs_root, CONTAINER_HDLS,
+				 svc->cs_mpool->mp_pmem, &svc->cs_hdls);
+	if (rc != 0) {
+		D_ERROR("failed to open container handle tree: %d\n", rc);
+		D_GOTO(err_containers, rc);
 	}
 
 	return 0;
 
+err_containers:
+	dbtree_close(svc->cs_containers);
 err_root:
 	dbtree_close(svc->cs_root);
 err_lock:
-	pthread_mutex_destroy(&svc->cs_lock);
-err_rwlock:
-	pthread_rwlock_destroy(&svc->cs_rwlock);
+	ABT_rwlock_free(&svc->cs_lock);
 err_mp:
 	ds_pool_mpool_put(svc->cs_mpool);
 err_pool:
@@ -118,42 +132,104 @@ err:
 }
 
 static int
-cont_svc_lookup(const uuid_t pool_uuid, uint64_t id, struct cont_svc **svc)
+cont_svc_alloc_ref(void *vkey, unsigned int ksize, void *varg,
+		   struct daos_llink **link)
 {
-	struct cont_svc	       *p;
+	struct cont_svc_key    *key = vkey;
+	struct cont_svc	       *svc;
 	int			rc;
 
-	/* TODO: Hash table. */
+	D_ASSERTF(ksize == sizeof(*key), "%u\n", ksize);
 
-	D_DEBUG(DF_DSMS, DF_UUID"["DF_U64"]: allocating\n", DP_UUID(pool_uuid),
-		id);
+	D_DEBUG(DF_DSMS, DF_UUID"["DF_U64"]: creating\n",
+		DP_UUID(key->csk_pool_uuid), key->csk_id);
 
-	D_ALLOC_PTR(p);
-	if (p == NULL) {
+	D_ALLOC_PTR(svc);
+	if (svc == NULL) {
 		D_ERROR("failed to allocate container service descriptor\n");
 		return -DER_NOMEM;
 	}
 
-	rc = cont_svc_init(pool_uuid, id, p);
+	rc = cont_svc_init(key->csk_pool_uuid, key->csk_id, svc);
 	if (rc != 0) {
-		D_FREE_PTR(p);
+		D_FREE_PTR(svc);
 		return rc;
 	}
 
-	*svc = p;
+	*link = &svc->cs_entry;
+	return 0;
+}
+
+static void
+cont_svc_free_ref(struct daos_llink *llink)
+{
+	struct cont_svc	       *svc = cont_svc_obj(llink);
+
+	D_DEBUG(DF_DSMS, DF_UUID"["DF_U64"]: freeing\n",
+		DP_UUID(svc->cs_pool_uuid), svc->cs_id);
+	dbtree_close(svc->cs_hdls);
+	dbtree_close(svc->cs_containers);
+	ABT_rwlock_free(&svc->cs_lock);
+	ds_pool_mpool_put(svc->cs_mpool);
+	D_FREE_PTR(svc);
+}
+
+static bool
+cont_svc_cmp_keys(const void *vkey, unsigned int ksize,
+		  struct daos_llink *llink)
+{
+	const struct cont_svc_key      *key = vkey;
+	struct cont_svc		       *svc = cont_svc_obj(llink);
+
+	return uuid_compare(key->csk_pool_uuid, svc->cs_pool_uuid) == 0 &&
+	       key->csk_id == svc->cs_id;
+}
+
+static struct daos_llink_ops cont_svc_cache_ops = {
+	.lop_alloc_ref	= cont_svc_alloc_ref,
+	.lop_free_ref	= cont_svc_free_ref,
+	.lop_cmp_keys	= cont_svc_cmp_keys
+};
+
+int
+ds_cont_svc_cache_init(void)
+{
+	return daos_lru_cache_create(0 /* bits */, 0 /* feats */,
+				     &cont_svc_cache_ops, &cont_svc_cache);
+}
+
+void
+ds_cont_svc_cache_fini(void)
+{
+	daos_lru_cache_destroy(cont_svc_cache);
+}
+
+static int
+cont_svc_lookup(const uuid_t pool_uuid, uint64_t id, struct cont_svc **svc)
+{
+	struct cont_svc_key	key;
+	struct daos_llink      *llink;
+	int			rc;
+
+	uuid_copy(key.csk_pool_uuid, pool_uuid);
+	key.csk_id = id;
+
+	rc = daos_lru_ref_hold(cont_svc_cache, &key, sizeof(key),
+			       NULL /* args */, &llink);
+	if (rc != 0) {
+		D_ERROR(DF_UUID"["DF_U64"]: failed to look up container "
+			"service: %d\n", DP_UUID(pool_uuid), id, rc);
+		return rc;
+	}
+
+	*svc = cont_svc_obj(llink);
 	return 0;
 }
 
 static void
 cont_svc_put(struct cont_svc *svc)
 {
-	D_DEBUG(DF_DSMS, DF_UUID"["DF_U64"]: freeing\n",
-		DP_UUID(svc->cs_pool_uuid), svc->cs_id);
-	dbtree_close(svc->cs_containers);
-	pthread_mutex_destroy(&svc->cs_lock);
-	pthread_rwlock_destroy(&svc->cs_rwlock);
-	ds_pool_mpool_put(svc->cs_mpool);
-	D_FREE_PTR(svc);
+	daos_lru_ref_release(cont_svc_cache, &svc->cs_entry);
 }
 
 static int
@@ -187,13 +263,16 @@ cont_create(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 		daos_handle_t	h;
 		uint64_t	ghce = 0;
 
-		/* Create the container tree under the container index tree. */
+		/*
+		 * Create the container attribute tree under the container tree.
+		 */
 		rc = dbtree_uv_create_tree(svc->cs_containers,
 					   in->cci_op.ci_uuid, DBTREE_CLASS_NV,
 					   0 /* feats */, 16 /* order */,
 					   svc->cs_mpool->mp_pmem, &h);
 		if (rc != 0) {
-			D_ERROR("failed to create container tree: %d\n", rc);
+			D_ERROR("failed to create container attribute tree: "
+				"%d\n", rc);
 			pmemobj_tx_abort(rc);
 		}
 
@@ -225,13 +304,6 @@ cont_create(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 			pmemobj_tx_abort(rc);
 
 		rc = dbtree_nv_create_tree(ch, CONT_SNAPSHOTS, DBTREE_CLASS_EC,
-					   0 /* feats */, 16 /* order */,
-					   svc->cs_mpool->mp_pmem,
-					   NULL /* tree_new */);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		rc = dbtree_nv_create_tree(ch, CONT_HANDLES, DBTREE_CLASS_UV,
 					   0 /* feats */, 16 /* order */,
 					   svc->cs_mpool->mp_pmem,
 					   NULL /* tree_new */);
@@ -307,7 +379,7 @@ cont_destroy(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 	    !(pool_hdl->sph_capas & DAOS_PC_EX))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
-	/* Open the container tree. */
+	/* Open the container attribute tree. */
 	rc = dbtree_uv_open_tree(svc->cs_containers, in->cdi_op.ci_uuid,
 				 svc->cs_mpool->mp_pmem, &h);
 	if (rc != 0) {
@@ -322,11 +394,6 @@ cont_destroy(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 		D_GOTO(out_ch, rc);
 
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
-		rc = dbtree_nv_destroy_tree(ch, CONT_HANDLES,
-					    svc->cs_mpool->mp_pmem);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
 		rc = dbtree_nv_destroy_tree(ch, CONT_SNAPSHOTS,
 					    svc->cs_mpool->mp_pmem);
 		if (rc != 0)
@@ -355,7 +422,8 @@ cont_destroy(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 
 		rc = dbtree_uv_delete(svc->cs_containers, in->cdi_op.ci_uuid);
 		if (rc != 0) {
-			D_ERROR("failed to delete container tree: %d\n", rc);
+			D_ERROR("failed to delete container attribute tree: "
+				"%d\n", rc);
 			pmemobj_tx_abort(rc);
 		}
 	} TX_ONABORT {
@@ -417,11 +485,10 @@ ec_decrement(daos_handle_t tree, uint64_t epoch)
 struct cont {
 	uuid_t			c_uuid;
 	struct cont_svc	       *c_svc;
-	daos_handle_t		c_cont;		/* container tree */
+	daos_handle_t		c_cont;		/* container attribute tree */
 	daos_handle_t		c_hces;		/* HCE tree */
 	daos_handle_t		c_lres;		/* LRE tree */
 	daos_handle_t		c_lhes;		/* LHE tree */
-	daos_handle_t		c_handles;	/* container handle tree */
 };
 
 static int
@@ -459,16 +526,9 @@ cont_lookup(const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 	if (rc != 0)
 		D_GOTO(err_lres, rc);
 
-	rc = dbtree_nv_open_tree(p->c_cont, CONT_HANDLES,
-				 svc->cs_mpool->mp_pmem, &p->c_handles);
-	if (rc != 0)
-		D_GOTO(err_lhes, rc);
-
 	*cont = p;
 	return 0;
 
-err_lhes:
-	dbtree_close(p->c_lhes);
 err_lres:
 	dbtree_close(p->c_lres);
 err_hces:
@@ -484,7 +544,6 @@ err:
 static void
 cont_put(struct cont *cont)
 {
-	dbtree_close(cont->c_handles);
 	dbtree_close(cont->c_lhes);
 	dbtree_close(cont->c_lres);
 	dbtree_close(cont->c_hces);
@@ -564,7 +623,7 @@ cont_open(struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	/* See if this container handle already exists. */
-	rc = dbtree_uv_lookup(cont->c_handles, in->coi_op.ci_hdl, &chdl,
+	rc = dbtree_uv_lookup(cont->c_svc->cs_hdls, in->coi_op.ci_hdl, &chdl,
 			      sizeof(chdl));
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0 && chdl.ch_capas != in->coi_capas) {
@@ -598,14 +657,16 @@ cont_open(struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
 	 * Check the coo_epoch_state assignments below if any of these rules
 	 * changes.
 	 */
+	uuid_copy(chdl.ch_pool_hdl, pool_hdl->sph_uuid);
+	uuid_copy(chdl.ch_cont, cont->c_uuid);
 	chdl.ch_hce = ghpce == DAOS_EPOCH_MAX ? ghce : ghpce;
 	chdl.ch_lre = chdl.ch_hce;
 	chdl.ch_lhe = DAOS_EPOCH_MAX;
 	chdl.ch_capas = in->coi_capas;
 
 	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
-		rc = dbtree_uv_update(cont->c_handles, in->coi_op.ci_hdl, &chdl,
-				      sizeof(chdl));
+		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->coi_op.ci_hdl,
+				      &chdl, sizeof(chdl));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -664,7 +725,7 @@ out:
 
 /* TODO: Use bulk bcast to support large recs[]. */
 static int
-cont_close_bcast(crt_context_t ctx, struct cont *cont,
+cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
 		 struct cont_tgt_close_rec recs[], int nrecs)
 {
 	struct cont_tgt_close_in       *in;
@@ -674,10 +735,10 @@ cont_close_bcast(crt_context_t ctx, struct cont *cont,
 
 	D_DEBUG(DF_DSMS, DF_CONT": bcasting: recs[0].hdl="DF_UUID
 		" recs[0].hce="DF_U64" nrecs=%d\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce, nrecs);
+		DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[0].tcr_hdl),
+		recs[0].tcr_hce, nrecs);
 
-	rc = bcast_create(ctx, cont->c_svc, CONT_TGT_CLOSE, &rpc);
+	rc = bcast_create(ctx, svc, CONT_TGT_CLOSE, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -693,7 +754,7 @@ cont_close_bcast(crt_context_t ctx, struct cont *cont,
 	rc = out->tco_rc;
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to close %d targets\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+			DP_CONT(svc->cs_pool_uuid, NULL), rc);
 		rc = -DER_IO;
 	}
 
@@ -701,8 +762,94 @@ out_rpc:
 	crt_req_decref(rpc);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": bcasted: hdls[0]="DF_UUID" nhdls=%d: %d\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		DP_UUID(recs[0].tcr_hdl), nrecs, rc);
+		DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[0].tcr_hdl),
+		nrecs, rc);
+	return rc;
+}
+
+/* Close an array of handles, possibly belonging to different containers. */
+static int
+cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
+		int nrecs, crt_context_t ctx)
+{
+	struct container_hdl	chdl;
+	struct cont * volatile	cont = NULL;
+	int			i;
+	volatile int		rc;
+
+	D_ASSERTF(nrecs > 0, "%d\n", nrecs);
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+
+	D_DEBUG(DF_DSMS, DF_CONT": closing %d recs: recs[0].hdl="DF_UUID
+		" recs[0].hce="DF_U64"\n", DP_CONT(svc->cs_pool_uuid, NULL),
+		nrecs, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce);
+
+	rc = cont_close_bcast(ctx, svc, recs, nrecs);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	TX_BEGIN(svc->cs_mpool->mp_pmem) {
+		for (i = 0; i < nrecs; i++) {
+			struct cont *cont_tmp;
+
+			/* Look up the handle. */
+			rc = dbtree_uv_lookup(svc->cs_hdls, recs[i].tcr_hdl,
+					      &chdl, sizeof(chdl));
+			if (rc != 0)
+				pmemobj_tx_abort(rc);
+
+			/* Look up the container. */
+			rc = cont_lookup(svc, chdl.ch_cont, &cont_tmp);
+			if (rc != 0)
+				pmemobj_tx_abort(rc);
+			cont = cont_tmp;
+
+			/* Delete this handle. */
+			rc = dbtree_uv_delete(svc->cs_hdls, recs[i].tcr_hdl);
+			if (rc != 0)
+				pmemobj_tx_abort(rc);
+
+			rc = ec_decrement(cont->c_hces, chdl.ch_hce);
+			if (rc != 0) {
+				D_ERROR(DF_CONT": failed to update hce tree: "
+					"%d\n",
+					DP_CONT(svc->cs_pool_uuid,
+						cont->c_uuid), rc);
+				pmemobj_tx_abort(rc);
+			}
+
+			rc = ec_decrement(cont->c_lres, chdl.ch_lre);
+			if (rc != 0) {
+				D_ERROR(DF_CONT": failed to update lre tree: "
+					"%d\n",
+					DP_CONT(svc->cs_pool_uuid,
+						cont->c_uuid), rc);
+				pmemobj_tx_abort(rc);
+			}
+
+			rc = ec_decrement(cont->c_lhes, chdl.ch_lhe);
+			if (rc != 0) {
+				D_ERROR(DF_CONT": failed to update lhe tree: "
+					"%d\n",
+					DP_CONT(svc->cs_pool_uuid,
+						cont->c_uuid), rc);
+				pmemobj_tx_abort(rc);
+			}
+
+			/* TODO: Update GHCE. */
+			cont_put(cont);
+			cont = NULL;
+		}
+	} TX_ONABORT {
+		if (cont != NULL)
+			cont_put(cont);
+
+		rc = umem_tx_errno(rc);
+	} TX_END
+
+out:
+	D_DEBUG(DF_DSMS, DF_CONT": leaving: %d\n",
+		DP_CONT(svc->cs_pool_uuid, NULL), rc);
 	return rc;
 }
 
@@ -712,16 +859,14 @@ cont_close(struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
 	struct cont_close_in	       *in = crt_req_get(rpc);
 	struct container_hdl		chdl;
 	struct cont_tgt_close_rec	rec;
-	volatile int			rc;
-
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc,
 		DP_UUID(in->cci_op.ci_hdl));
 
 	/* See if this container handle is already closed. */
-	rc = dbtree_uv_lookup(cont->c_handles, in->cci_op.ci_hdl, &chdl,
+	rc = dbtree_uv_lookup(cont->c_svc->cs_hdls, in->cci_op.ci_hdl, &chdl,
 			      sizeof(chdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
@@ -737,48 +882,143 @@ cont_close(struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
 	uuid_copy(rec.tcr_hdl, in->cci_op.ci_hdl);
 	rec.tcr_hce = chdl.ch_hce;
 
-	rc = cont_close_bcast(rpc->cr_ctx, cont, &rec, 1 /* nrecs */);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
-		rc = dbtree_uv_delete(cont->c_handles, in->cci_op.ci_hdl);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		rc = ec_decrement(cont->c_hces, chdl.ch_hce);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update hce tree: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = ec_decrement(cont->c_lres, chdl.ch_lre);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update lre tree: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = ec_decrement(cont->c_lhes, chdl.ch_lhe);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update lhe tree: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		/* TODO: Update GHCE. */
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-	} TX_END
+	rc = cont_close_hdls(cont->c_svc, &rec, 1 /* nrecs */, rpc->cr_ctx);
 
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc,
 		rc);
+	return rc;
+}
+
+struct close_iter_arg {
+	struct cont_tgt_close_rec      *cia_recs;
+	size_t				cia_recs_size;
+	int				cia_nrecs;
+	uuid_t			       *cia_pool_hdls;
+	int				cia_n_pool_hdls;
+};
+
+static int
+shall_close(const uuid_t pool_hdl, uuid_t *pool_hdls, int n_pool_hdls)
+{
+	int i;
+
+	for (i = 0; i < n_pool_hdls; i++) {
+		if (uuid_compare(pool_hdls[i], pool_hdl) == 0)
+			return 1;
+	}
+	return 0;
+}
+
+static int
+close_iter_cb(daos_iov_t *key, daos_iov_t *val, void *varg)
+{
+	struct close_iter_arg  *arg = varg;
+	struct container_hdl   *hdl;
+
+	D_ASSERT(arg->cia_recs != NULL);
+	D_ASSERT(arg->cia_recs_size > sizeof(*arg->cia_recs));
+
+	if (key->iov_len != sizeof(uuid_t) ||
+	    val->iov_len != sizeof(*hdl)) {
+		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
+			key->iov_len, val->iov_len);
+		return -DER_IO;
+	}
+
+	hdl = val->iov_buf;
+
+	if (!shall_close(hdl->ch_pool_hdl, arg->cia_pool_hdls,
+			 arg->cia_n_pool_hdls))
+		return 0;
+
+	/* Make sure arg->cia_recs[] have enough space for this handle. */
+	if (sizeof(*arg->cia_recs) * (arg->cia_nrecs + 1) >
+	    arg->cia_recs_size) {
+		struct cont_tgt_close_rec      *recs_tmp;
+		size_t				recs_size_tmp;
+
+		recs_size_tmp = arg->cia_recs_size * 2;
+		D_ALLOC(recs_tmp, recs_size_tmp);
+		if (recs_tmp == NULL)
+			return -DER_NOMEM;
+		memcpy(recs_tmp, arg->cia_recs,
+		       arg->cia_recs_size);
+		D_FREE(arg->cia_recs, arg->cia_recs_size);
+		arg->cia_recs = recs_tmp;
+		arg->cia_recs_size = recs_size_tmp;
+	}
+
+	uuid_copy(arg->cia_recs[arg->cia_nrecs].tcr_hdl, key->iov_buf);
+	arg->cia_recs[arg->cia_nrecs].tcr_hce = hdl->ch_hce;
+	arg->cia_nrecs++;
+	return 0;
+}
+
+/* Callers are responsible for freeing *recs if this function returns zero. */
+static int
+find_hdls_to_close(struct cont_svc *svc, uuid_t *pool_hdls, int n_pool_hdls,
+		   struct cont_tgt_close_rec **recs, size_t *recs_size,
+		   int *nrecs)
+{
+	struct close_iter_arg	arg;
+	int			rc;
+
+	arg.cia_recs_size = 4096;
+	D_ALLOC(arg.cia_recs, arg.cia_recs_size);
+	if (arg.cia_recs == NULL)
+		return -DER_NOMEM;
+	arg.cia_nrecs = 0;
+	arg.cia_pool_hdls = pool_hdls;
+	arg.cia_n_pool_hdls = n_pool_hdls;
+
+	rc = dbtree_iterate(svc->cs_hdls, BTR_PROBE_FIRST, close_iter_cb, &arg);
+	if (rc != 0) {
+		D_FREE(arg.cia_recs, arg.cia_recs_size);
+		return rc;
+	}
+
+	*recs = arg.cia_recs;
+	*recs_size = arg.cia_recs_size;
+	*nrecs = arg.cia_nrecs;
+	return 0;
+}
+
+/*
+ * Close container handles that are associated with "pool_hdls[n_pool_hdls]"
+ * and managed by local container services.
+ */
+int
+ds_cont_close_by_pool_hdls(const uuid_t pool_uuid, uuid_t *pool_hdls,
+			   int n_pool_hdls, crt_context_t ctx)
+{
+	struct cont_svc		       *svc;
+	struct cont_tgt_close_rec      *recs;
+	size_t				recs_size;
+	int				nrecs;
+	int				rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": closing by %d pool hdls: pool_hdls[0]="
+		DF_UUID"\n", DP_CONT(pool_uuid, NULL), n_pool_hdls,
+		DP_UUID(pool_hdls[0]));
+
+	/* TODO: Do the following for all local container services. */
+	rc = cont_svc_lookup(pool_uuid, 0 /* id */, &svc);
+	if (rc != 0)
+		return rc;
+
+	rc = find_hdls_to_close(svc, pool_hdls, n_pool_hdls, &recs, &recs_size,
+				&nrecs);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	if (nrecs > 0)
+		rc = cont_close_hdls(svc, recs, nrecs, ctx);
+
+	D_FREE(recs, recs_size);
+out_svc:
+	cont_svc_put(svc);
 	return rc;
 }
 
@@ -844,8 +1084,8 @@ cont_epoch_hold(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
 
 	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
-		rc = dbtree_uv_update(cont->c_handles, in->cei_op.ci_hdl, hdl,
-				      sizeof(*hdl));
+		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->cei_op.ci_hdl,
+				      hdl, sizeof(*hdl));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -992,8 +1232,8 @@ cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	D_DEBUG(DF_DSMS, "hce="DF_U64" hce'="DF_U64"\n", hce, hdl->ch_hce);
 
 	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
-		rc = dbtree_uv_update(cont->c_handles, in->cei_op.ci_hdl, hdl,
-				      sizeof(*hdl));
+		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->cei_op.ci_hdl,
+				      hdl, sizeof(*hdl));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -1093,7 +1333,7 @@ cont_op_with_cont(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		break;
 	default:
 		/* Look up the container handle. */
-		rc = dbtree_uv_lookup(cont->c_handles, in->ci_hdl, &hdl,
+		rc = dbtree_uv_lookup(cont->c_svc->cs_hdls, in->ci_hdl, &hdl,
 				      sizeof(hdl));
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
@@ -1134,9 +1374,9 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 
 	/* TODO: Implement per-container locking. */
 	if (opc == CONT_EPOCH_QUERY || opc == CONT_EPOCH_DISCARD)
-		pthread_rwlock_rdlock(&svc->cs_rwlock);
+		ABT_rwlock_rdlock(svc->cs_lock);
 	else
-		pthread_rwlock_wrlock(&svc->cs_rwlock);
+		ABT_rwlock_wrlock(svc->cs_lock);
 
 	switch (opc) {
 	case CONT_CREATE:
@@ -1154,7 +1394,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	}
 
 out_lock:
-	pthread_rwlock_unlock(&svc->cs_rwlock);
+	ABT_rwlock_unlock(svc->cs_lock);
 	return rc;
 }
 

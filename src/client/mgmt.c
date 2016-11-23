@@ -22,6 +22,7 @@
  */
 
 #include <daos/mgmt.h>
+#include <daos/pool.h>
 #include <client_internal.h>
 
 int
@@ -63,6 +64,28 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	}
 
 	rc = dc_pool_destroy(uuid, grp, force, ev);
+	if (rc)
+		return rc;
+
+	/** wait for completion if blocking mode */
+	if (daos_event_is_priv(ev))
+		rc = daos_event_priv_wait(ev);
+
+	return rc;
+}
+
+int
+daos_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
+{
+	int rc;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc)
+			return rc;
+	}
+
+	rc = dc_pool_evict(uuid, grp, ev);
 	if (rc)
 		return rc;
 

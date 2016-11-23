@@ -27,6 +27,10 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
+static struct crt_msg_field DMF_UUIDS =
+	DEFINE_CRT_MSG("uuid_t[]", CMF_ARRAY_FLAG, sizeof(uuid_t),
+		       crt_proc_uuid_t);
+
 struct crt_msg_field *pool_connect_in_fields[] = {
 	&CMF_UUID,	/* op.uuid */
 	&CMF_UUID,	/* op.handle */
@@ -78,6 +82,16 @@ struct crt_msg_field *pool_exclude_out_fields[] = {
 	&CMF_RANK_LIST	/* targets */
 };
 
+struct crt_msg_field *pool_evict_in_fields[] = {
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID	/* op.handle */
+};
+
+struct crt_msg_field *pool_evict_out_fields[] = {
+	&CMF_INT,	/* op.rc */
+	&CMF_UINT32	/* op.map_version */
+};
+
 struct crt_msg_field *pool_tgt_connect_in_fields[] = {
 	&CMF_UUID,	/* pool */
 	&CMF_UUID,	/* pool_hdl */
@@ -86,16 +100,16 @@ struct crt_msg_field *pool_tgt_connect_in_fields[] = {
 };
 
 struct crt_msg_field *pool_tgt_connect_out_fields[] = {
-	&CMF_INT	/* ret */
+	&CMF_INT	/* rc */
 };
 
 struct crt_msg_field *pool_tgt_disconnect_in_fields[] = {
 	&CMF_UUID,	/* pool */
-	&CMF_UUID	/* pool_hdl */
+	&DMF_UUIDS	/* hdls */
 };
 
 struct crt_msg_field *pool_tgt_disconnect_out_fields[] = {
-	&CMF_INT	/* ret */
+	&CMF_INT	/* rc */
 };
 
 struct crt_msg_field *pool_tgt_update_map_in_fields[] = {
@@ -104,7 +118,7 @@ struct crt_msg_field *pool_tgt_update_map_in_fields[] = {
 };
 
 struct crt_msg_field *pool_tgt_update_map_out_fields[] = {
-	&CMF_INT	/* ret */
+	&CMF_INT	/* rc */
 };
 
 struct crt_req_format DQF_POOL_CONNECT =
@@ -122,6 +136,10 @@ struct crt_req_format DQF_POOL_QUERY =
 struct crt_req_format DQF_POOL_EXCLUDE =
 	DEFINE_CRT_REQ_FMT("POOL_EXCLUDE", pool_exclude_in_fields,
 			   pool_exclude_out_fields);
+
+struct crt_req_format DQF_POOL_EVICT =
+	DEFINE_CRT_REQ_FMT("POOL_EVICT", pool_evict_in_fields,
+			   pool_evict_out_fields);
 
 struct crt_req_format DQF_POOL_TGT_CONNECT =
 	DEFINE_CRT_REQ_FMT("POOL_TGT_CONNECT", pool_tgt_connect_in_fields,
@@ -171,6 +189,12 @@ struct daos_rpc pool_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_POOL_EXCLUDE
+	}, {
+		.dr_name	= "POOL_EVICT",
+		.dr_opc		= POOL_EVICT,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_EVICT
 	}, {
 		.dr_opc		= 0
 	}

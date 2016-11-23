@@ -109,4 +109,22 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 int
 daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
 		 daos_rank_list_t *failed, daos_event_t *ev);
+
+/**
+ * Evict all connections to a pool.
+ *
+ * \param uuid	[IN]	UUID of the pool
+ * \param grp	[IN]	process set name of the DAOS servers managing the pool
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NONEXIST	Pool is nonexistent
+ */
+int
+daos_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev);
+
 #endif /* __DAOS_MGMT_H__ */

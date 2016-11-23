@@ -24,8 +24,8 @@
  * ds_pool: Pool Server Internal Declarations
  */
 
-#ifndef __POOL_SERVER_INTERNAL_H__
-#define __POOL_SERVER_INTERNAL_H__
+#ifndef __POOL_SRV_INTERNAL_H__
+#define __POOL_SRV_INTERNAL_H__
 
 #include <daos/list.h>
 #include <daos_srv/daos_server.h>
@@ -70,6 +70,7 @@ int ds_pool_connect_handler(crt_rpc_t *rpc);
 int ds_pool_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_query_handler(crt_rpc_t *rpc);
 int ds_pool_exclude_handler(crt_rpc_t *rpc);
+int ds_pool_evict_handler(crt_rpc_t *rpc);
 
 /*
  * srv_target.c
@@ -105,4 +106,4 @@ int ds_pool_group_destroy(crt_group_t *group);
 int ds_pool_map_exclude_targets(struct pool_map *map, daos_rank_list_t *tgts,
 				daos_rank_list_t *tgts_failed);
 
-#endif /* __POOL_SERVER_INTERNAL_H__ */
+#endif /* __POOL_SRV_INTERNAL_H__ */
