@@ -27,62 +27,89 @@
 #ifndef __DAOS_ERRNO_H__
 #define __DAOS_ERRNO_H__
 
+#include <crt_errno.h>
+
 typedef enum {
-	DER_ERR_BASE		= 2000,
+	/**
+	 * Common error codes
+	 */
 	/** No permission */
-	DER_NO_PERM		= (DER_ERR_BASE + 1),
+	DER_NO_PERM		= CER_NO_PERM,
 	/** Invalid handle */
-	DER_NO_HDL		= (DER_ERR_BASE + 2),
+	DER_NO_HDL		= CER_NO_HDL,
 	/** Invalid parameters */
-	DER_INVAL		= (DER_ERR_BASE + 3),
+	DER_INVAL		= CER_INVAL,
 	/** Entity already exists */
-	DER_EXIST		= (DER_ERR_BASE + 4),
+	DER_EXIST		= CER_EXIST,
 	/** Nonexistent entity */
-	DER_NONEXIST		= (DER_ERR_BASE + 5),
+	DER_NONEXIST		= CER_NONEXIST,
 	/** Unreachable node */
-	DER_UNREACH		= (DER_ERR_BASE + 6),
+	DER_UNREACH		= CER_UNREACH,
 	/** No space on storage target */
-	DER_NOSPACE		= (DER_ERR_BASE + 7),
-	/** Unknown object type */
-	DER_NOTYPE		= (DER_ERR_BASE + 8),
-	/** Unknown object schema */
-	DER_NOSCHEMA		= (DER_ERR_BASE + 9),
-	/** Object is not local */
-	DER_NOLOCAL		= (DER_ERR_BASE + 10),
+	DER_NOSPACE		= CER_NOSPACE,
 	/** Already did sth */
-	DER_ALREADY		= (DER_ERR_BASE + 11),
+	DER_ALREADY		= CER_ALREADY,
 	/** NO memory */
-	DER_NOMEM		= (DER_ERR_BASE + 12),
+	DER_NOMEM		= CER_NOMEM,
 	/** Function not implemented */
-	DER_NOSYS		= (DER_ERR_BASE + 13),
+	DER_NOSYS		= CER_NOSYS,
 	/** Timed out */
-	DER_TIMEDOUT		= (DER_ERR_BASE + 14),
-	/** Memory free error */
-	DER_FREE_MEM		= (DER_ERR_BASE + 15),
-	/** Entry not found */
-	DER_ENOENT		= (DER_ERR_BASE + 16),
+	DER_TIMEDOUT		= CER_TIMEDOUT,
 	/** Busy */
-	DER_BUSY		= (DER_ERR_BASE + 17),
+	DER_BUSY		= CER_BUSY,
 	/** Try again */
-	DER_AGAIN		= (DER_ERR_BASE + 18),
+	DER_AGAIN		= CER_AGAIN,
 	/** incompatible protocol */
-	DER_PROTO		= (DER_ERR_BASE + 19),
+	DER_PROTO		= CER_PROTO,
 	/** Un-initialized */
-	DER_UNINIT		= (DER_ERR_BASE + 20),
-	/** Target create error */
-	DER_TGT_CREATE		= (DER_ERR_BASE + 21),
+	DER_UNINIT		= CER_UNINIT,
 	/** Buffer too short (larger buffer needed) */
-	DER_TRUNC		= (DER_ERR_BASE + 22),
-	/** Generic I/O error */
-	DER_IO			= (DER_ERR_BASE + 23),
+	DER_TRUNC		= CER_TRUNC,
 	/** Value too large for defined data type */
-	DER_OVERFLOW		= (DER_ERR_BASE + 24),
+	DER_OVERFLOW		= CER_OVERFLOW,
 	/** Operation cancelled */
-	DER_CANCELED		= (DER_ERR_BASE + 25),
+	DER_CANCELED		= CER_CANCELED,
 	/** Out-Of-Group or member list */
-	DER_OOG			= (DER_ERR_BASE + 26),
+	DER_OOG			= CER_OOG,
+	/** Transport layer mercury error */
+	DER_CRT_HG		= CER_HG,
+	/** CRT RPC (opcode) unregister */
+	DER_CRT_UNREG		= CER_UNREG,
+	/** CRT failed to generate an address string */
+	DER_CRT_ADDRSTR_GEN	= CER_ADDRSTR_GEN,
+	/** CRT PMIx layer error */
+	DER_CRT_PMIX		= CER_PMIX,
+	/** CRT IV callback - cannot handle locally */
+	DER_IVCB_FORWARD	= CER_IVCB_FORWARD,
+	/** CRT miscellaneous error */
+	DER_MISC		= CER_MISC,
+	/** Bad path name */
+	DER_BADPATH		= CER_BADPATH,
+	/** Not a directory */
+	DER_NOTDIR		= CER_NOTDIR,
+	/** Unknown error */
+	DER_UNKNOWN		= CER_UNKNOWN,
+
+	/**
+	 * DAOS-specific error codes
+	 */
+	DER_ERR_BASE		= 2000,
+	/** Generic I/O error */
+	DER_IO			= (DER_ERR_BASE + 1),
+	/** Memory free error */
+	DER_FREE_MEM		= (DER_ERR_BASE + 2),
+	/** Entry not found */
+	DER_ENOENT		= (DER_ERR_BASE + 3),
+	/** Unknown object type */
+	DER_NOTYPE		= (DER_ERR_BASE + 4),
+	/** Unknown object schema */
+	DER_NOSCHEMA		= (DER_ERR_BASE + 5),
+	/** Object is not local */
+	DER_NOLOCAL		= (DER_ERR_BASE + 6),
 	/** stale pool map version */
-	DER_STALE		= (DER_ERR_BASE + 27),
+	DER_STALE		= (DER_ERR_BASE + 7),
+	/** Target create error */
+	DER_TGT_CREATE		= (DER_ERR_BASE + 100),
 	/** Epoch is read-only */
 	DER_EP_RO		= (DER_ERR_BASE + 200),
 	/** Epoch is too old, all data have been recycled */
@@ -97,15 +124,6 @@ typedef enum {
 	DER_EQ_BUSY		= (DER_ERR_BASE + 400),
 	/** Domain of cluster component can't match */
 	DER_DOMAIN		= (DER_ERR_BASE + 500),
-	/** Transport layer mercury error */
-	DER_CRT_HG		= (DER_ERR_BASE + 600),
-	/** CRT RPC (opcode) unregister */
-	DER_CRT_UNREG		= (DER_ERR_BASE + 601),
-	/** CRT failed to generate an address string */
-	DER_CRT_ADDRSTR_GEN	= (DER_ERR_BASE + 602),
-	/** Unknown error */
-	DER_UNKNOWN		= (DER_ERR_BASE + 1000),
-	/** TODO: add more error numbers */
 } daos_errno_t;
 
 const char *daos_errstr(daos_errno_t errno);
