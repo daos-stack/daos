@@ -40,6 +40,7 @@
 import os
 
 ECHO_SRC = ['crt_echo_cli.c', 'crt_echo_srv.c', 'crt_echo_srv2.c']
+BASIC_SRC = ['crt_basic.c']
 TEST_GROUP_SRC = 'test_group.c'
 def scons():
     """scons function"""
@@ -61,6 +62,11 @@ def scons():
 
     test_group = tenv.Program(TEST_GROUP_SRC)
     tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), test_group)
+
+    benv = tenv.Clone()
+
+    benv.AppendUnique(CFLAGS=['-std=gnu99', '-pedantic'])
+    benv.Program(BASIC_SRC)
 
 if __name__ == "SCons.Script":
     scons()

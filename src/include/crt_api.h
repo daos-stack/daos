@@ -270,7 +270,7 @@ static inline void *
 crt_req_get(crt_rpc_t *rpc)
 {
 	return rpc->cr_input;
-};
+}
 
 /**
  * Return reply buffer
@@ -480,7 +480,7 @@ crt_tree_topo(enum crt_tree_type tree_type, uint32_t branch_ratio)
 
 	return (tree_type << CRT_TREE_TYPE_SHIFT) |
 	       (branch_ratio & ((1U << CRT_TREE_TYPE_SHIFT) - 1));
-};
+}
 
 struct crt_corpc_ops {
 	/*
