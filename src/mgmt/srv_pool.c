@@ -21,50 +21,50 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * dmgs: Pool Methods
+ * ds_mgmt: Pool Methods
  */
 
-#include "dmgs_internal.h"
+#include "srv_internal.h"
 
 #include <daos_srv/pool.h>
 
 struct pc_inprogress {
 	/* uuid as the unique ID of the pool-creating */
-	uuid_t			pc_pool_uuid;
+	uuid_t			 pc_pool_uuid;
 	/* pool_create rpc request */
 	crt_rpc_t		*pc_rpc_req;
 	/* list of tgt_create RPC */
-	daos_list_t		pc_tc_list;
+	daos_list_t		 pc_tc_list;
 	/* number of tgt_create sent */
-	unsigned int		pc_tc_num;
+	unsigned int		 pc_tc_num;
 	/* number of ACKs received of tgt_create */
-	unsigned int		pc_tc_ack_num;
+	unsigned int		 pc_tc_ack_num;
 	/* number of failed tgt_create */
-	unsigned int		pc_tc_fail_num;
+	unsigned int		 pc_tc_fail_num;
 	/* list of tgt_destroy RPC */
-	daos_list_t		pc_td_list;
+	daos_list_t		 pc_td_list;
 	/* number of tgt_destroy sent */
-	unsigned int		pc_td_num;
+	unsigned int		 pc_td_num;
 	/* number of ACKs received of tgt_destroy */
-	unsigned int		pc_td_ack_num;
+	unsigned int		 pc_td_ack_num;
 	/* number of failed tgt_destroy */
-	unsigned int		pc_td_fail_num;
+	unsigned int		 pc_td_fail_num;
 	/* mutex to protect pc_tc_list, pc_td_list */
-	pthread_mutex_t		pc_req_mutex;
+	pthread_mutex_t		 pc_req_mutex;
 	/* array of target UUID, actual size is pc_tc_num */
 	uuid_t			*pc_tgt_uuids;
 };
 
 struct pc_tgt_create {
 	/* link to pc_inprogress::pc_tc_list */
-	daos_list_t		ptc_link;
+	daos_list_t		 ptc_link;
 	/* tgt_create RPC */
 	crt_rpc_t		*ptc_rpc_req;
 };
 
 struct pc_tgt_destroy {
 	/* link to pc_inprogress::pc_td_list */
-	daos_list_t		ptd_link;
+	daos_list_t		 ptd_link;
 	/* tgt_destroy RPC */
 	crt_rpc_t		*ptd_rpc_req;
 };
@@ -72,7 +72,7 @@ struct pc_tgt_destroy {
 static inline int
 pc_add_req_to_inprog(struct pc_inprogress *pc_inprog, crt_rpc_t *pc_req)
 {
-	int		rc;
+	int	rc;
 
 	D_ASSERT(pc_inprog != NULL && pc_req != NULL);
 
@@ -87,7 +87,7 @@ static inline int
 tc_add_req_to_inprog(struct pc_inprogress *pc_inprog, crt_rpc_t *tc_req)
 {
 	struct pc_tgt_create	*tc_req_item;
-	int			rc;
+	int	rc;
 
 	D_ASSERT(pc_inprog != NULL && tc_req != NULL);
 
@@ -114,7 +114,7 @@ static inline int
 td_add_req_to_pc_inprog(struct pc_inprogress *pc_inprog, crt_rpc_t *td_req)
 {
 	struct pc_tgt_destroy	*td_req_item;
-	int			rc;
+	int			 rc;
 
 	D_ASSERT(pc_inprog != NULL && td_req != NULL);
 
@@ -140,9 +140,9 @@ td_add_req_to_pc_inprog(struct pc_inprogress *pc_inprog, crt_rpc_t *td_req)
 static inline int
 pc_inprog_create(struct pc_inprogress **pc_inprog, crt_rpc_t *rpc_req)
 {
-	struct dmg_pool_create_in	*pc_in;
+	struct mgmt_pool_create_in	*pc_in;
 	struct pc_inprogress		*pc_inp_item;
-	int				rc = 0;
+	int				 rc = 0;
 
 	D_ASSERT(pc_inprog != NULL && rpc_req != NULL);
 	pc_in = crt_req_get(rpc_req);
@@ -198,7 +198,7 @@ pc_inprog_destroy(struct pc_inprogress *pc_inprog)
 {
 	struct pc_tgt_create	*tc, *tc_next;
 	struct pc_tgt_destroy	*td, *td_next;
-	int			rc;
+	int			 rc;
 
 	D_ASSERT(pc_inprog != NULL);
 
@@ -237,8 +237,8 @@ pc_inprog_destroy(struct pc_inprogress *pc_inprog)
  * Return true if all parameters are same, false otherwise.
  */
 static inline bool
-pc_input_identical(struct dmg_pool_create_in *pc_in1,
-		 struct dmg_pool_create_in *pc_in2)
+pc_input_identical(struct mgmt_pool_create_in *pc_in1,
+		 struct mgmt_pool_create_in *pc_in2)
 {
 	D_ASSERT(pc_in1 != NULL && pc_in2 != NULL);
 
@@ -262,15 +262,15 @@ static int
 pc_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*td_req;
-	struct dmg_tgt_destroy_in	*td_in;
-	struct dmg_tgt_destroy_out	*td_out;
+	struct mgmt_tgt_destroy_in	*td_in;
+	struct mgmt_tgt_destroy_out	*td_out;
 	struct pc_inprogress		*pc_inprog;
 	struct pc_tgt_destroy		*td, *td_next;
 	crt_rpc_t			*pc_req;
-	struct dmg_pool_create_in	*pc_in;
-	struct dmg_pool_create_out	*pc_out;
-	bool				td_done = false;
-	int				rc = 0;
+	struct mgmt_pool_create_in	*pc_in;
+	struct mgmt_pool_create_out	*pc_out;
+	bool				 td_done = false;
+	int				 rc = 0;
 
 	td_req = cb_info->cci_rpc;
 	td_in = crt_req_get(td_req);
@@ -284,7 +284,7 @@ pc_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 	pc_inprog->pc_td_ack_num++;
 	if (rc != 0 || td_out->td_rc != 0) {
 		pc_inprog->pc_td_fail_num++;
-		D_ERROR("DMG_TGT_DESTROY(to rank: %d) failed, "
+		D_ERROR("MGMT_TGT_DESTROY(to rank: %d) failed, "
 			"cb_info->cci_rc: %d, td_out->td_rc: %d. "
 			"total failed num: %d.\n", td_req->cr_ep.ep_rank, rc,
 			td_out->td_rc, pc_inprog->pc_td_fail_num);
@@ -331,20 +331,20 @@ static int
 tgt_create_cb(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*tc_req;
-	struct dmg_tgt_create_in	*tc_in;
-	struct dmg_tgt_create_out	*tc_out;
+	struct mgmt_tgt_create_in	*tc_in;
+	struct mgmt_tgt_create_out	*tc_out;
 	crt_rpc_t			*td_req;
-	struct dmg_tgt_destroy_in	*td_in;
+	struct mgmt_tgt_destroy_in	*td_in;
 	struct pc_inprogress		*pc_inprog;
 	struct pc_tgt_create		*tc, *tc_next;
-	crt_endpoint_t			svr_ep;
+	crt_endpoint_t			 svr_ep;
 	crt_rpc_t			*pc_req;
-	crt_opcode_t			opc;
-	struct dmg_pool_create_in	*pc_in;
-	struct dmg_pool_create_out	*pc_out;
-	bool				tc_done = false;
-	bool				td_req_sent = false;
-	int				rc = 0;
+	crt_opcode_t			 opc;
+	struct mgmt_pool_create_in	*pc_in;
+	struct mgmt_pool_create_out	*pc_out;
+	bool				 tc_done = false;
+	bool				 td_req_sent = false;
+	int				 rc = 0;
 
 	tc_req = cb_info->cci_rpc;
 	tc_in = crt_req_get(tc_req);
@@ -477,11 +477,11 @@ svc_create_fail:
 		D_FREE_PTR(tc);
 
 		pc_inprog->pc_td_num++;
-		opc = DAOS_RPC_OPCODE(DMG_TGT_DESTROY, DAOS_MGMT_MODULE, 1);
+		opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE, 1);
 		rc = crt_req_create(dss_get_module_info()->dmi_ctx, svr_ep,
 				    opc, &td_req);
 		if (rc != 0) {
-			D_ERROR("crt_req_create(DMG_TGT_DESTROY) failed, "
+			D_ERROR("crt_req_create(MGMT_TGT_DESTROY) failed, "
 				"rc: %d.\n", rc);
 			pc_inprog->pc_td_ack_num++;
 			pc_inprog->pc_td_fail_num++;
@@ -502,7 +502,7 @@ svc_create_fail:
 
 		rc = crt_req_send(td_req, pc_tgt_destroy_cb, pc_inprog);
 		if (rc != 0) {
-			D_ERROR("crt_req_send(DMG_TGT_DESTROY) failed, "
+			D_ERROR("crt_req_send(MGMT_TGT_DESTROY) failed, "
 				"rc: %d.\n", rc);
 			pc_inprog->pc_td_ack_num++;
 			pc_inprog->pc_td_fail_num++;
@@ -535,18 +535,18 @@ out:
 }
 
 int
-dmgs_hdlr_pool_create(crt_rpc_t *rpc_req)
+ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 {
-	struct dmg_pool_create_in	*pc_in;
-	crt_endpoint_t			svr_ep;
-	struct dmg_pool_create_out	*pc_out;
+	struct mgmt_pool_create_in	*pc_in;
+	crt_endpoint_t			 svr_ep;
+	struct mgmt_pool_create_out	*pc_out;
 	struct pc_inprogress		*pc_inprog = NULL;
 	crt_rpc_t			*tc_req;
-	crt_opcode_t			opc;
-	struct dmg_tgt_create_in	*tc_in;
-	bool				tc_req_sent = false;
-	bool				pc_inprog_alloc = false;
-	int				i, rc = 0;
+	crt_opcode_t			 opc;
+	struct mgmt_tgt_create_in	*tc_in;
+	bool				 tc_req_sent = false;
+	bool				 pc_inprog_alloc = false;
+	int				 i, rc = 0;
 
 	pc_in = crt_req_get(rpc_req);
 	pc_out = crt_reply_get(rpc_req);
@@ -579,10 +579,10 @@ dmgs_hdlr_pool_create(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc = -DER_NOMEM);
 	pc_out->pc_svc->rl_nr.num = pc_in->pc_svc_nr;
 
-	/** send DMG_TGT_CREATE RPC to tgts */
+	/** send MGMT_TGT_CREATE RPC to tgts */
 	svr_ep.ep_grp = NULL;
 	svr_ep.ep_tag = 0;
-	opc = DAOS_RPC_OPCODE(DMG_TGT_CREATE, DAOS_MGMT_MODULE, 1);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_CREATE, DAOS_MGMT_MODULE, 1);
 	for (i = 0; i < pc_inprog->pc_tc_num; i++) {
 		if (pc_in->pc_tgts == NULL)
 			svr_ep.ep_rank = i;
@@ -592,7 +592,7 @@ dmgs_hdlr_pool_create(crt_rpc_t *rpc_req)
 		rc = crt_req_create(dss_get_module_info()->dmi_ctx, svr_ep,
 				    opc, &tc_req);
 		if (rc != 0) {
-			D_ERROR("crt_req_create(DMG_TGT_CREATE) failed, "
+			D_ERROR("crt_req_create(MGMT_TGT_CREATE) failed, "
 				"rc: %d.\n", rc);
 			pc_inprog->pc_tc_ack_num = pc_inprog->pc_tc_num - i;
 			pc_inprog->pc_tc_fail_num = pc_inprog->pc_tc_num - i;
@@ -601,7 +601,7 @@ dmgs_hdlr_pool_create(crt_rpc_t *rpc_req)
 		tc_in = crt_req_get(tc_req);
 		D_ASSERT(tc_in != NULL);
 		uuid_copy(tc_in->tc_pool_uuid, pc_in->pc_pool_uuid);
-		/* the pc_in->pc_tgt_dev will be freed when the DMG_POOL_CREATE
+		/* the pc_in->pc_tgt_dev will be freed when the MGMT_POOL_CREATE
 		 * finishes, it is after TGT_CREATE RPC handling so it is safe
 		 * to directly use it here. */
 		tc_in->tc_tgt_dev = pc_in->pc_tgt_dev;
@@ -609,7 +609,7 @@ dmgs_hdlr_pool_create(crt_rpc_t *rpc_req)
 
 		rc = crt_req_send(tc_req, tgt_create_cb, pc_inprog);
 		if (rc != 0) {
-			D_ERROR("crt_req_send(DMG_TGT_CREATE) failed, "
+			D_ERROR("crt_req_send(MGMT_TGT_CREATE) failed, "
 				"rc: %d.\n", rc);
 			pc_inprog->pc_tc_ack_num = pc_inprog->pc_tc_num - i;
 			pc_inprog->pc_tc_fail_num = pc_inprog->pc_tc_num - i;
@@ -636,26 +636,26 @@ out:
 }
 
 struct pd_inprogress {
-	uuid_t			pd_pool_uuid;
+	uuid_t			 pd_pool_uuid;
 	/* pool_destroy rpc request */
 	crt_rpc_t		*pd_rpc_req;
 	/* list of tgt_destroy RPC */
-	daos_list_t		pd_td_list;
+	daos_list_t		 pd_td_list;
 	/* number of tgt_destroy sent */
-	unsigned int		pd_td_num;
+	unsigned int		 pd_td_num;
 	/* number of ACKs received of tgt_destroy */
-	unsigned int		pd_td_ack_num;
+	unsigned int		 pd_td_ack_num;
 	/* number of failed tgt_destroy */
-	unsigned int		pd_td_fail_num;
+	unsigned int		 pd_td_fail_num;
 	/* pool_destroy return code */
-	int			pd_rc;
+	int			 pd_rc;
 	/* mutex to protect pd_td_list */
-	pthread_mutex_t		pd_req_mutex;
+	pthread_mutex_t		 pd_req_mutex;
 };
 
 struct pd_tgt_destroy {
 	/* link to pd_inprogress::pd_td_list */
-	daos_list_t		ptd_link;
+	daos_list_t		 ptd_link;
 	/* tgt_destroy RPC */
 	crt_rpc_t		*ptd_rpc_req;
 };
@@ -678,7 +678,7 @@ static inline int
 td_add_req_to_pd_inprog(struct pd_inprogress *pd_inprog, crt_rpc_t *td_req)
 {
 	struct pd_tgt_destroy	*td_req_item;
-	int			rc;
+	int	rc;
 
 	D_ASSERT(pd_inprog != NULL && td_req != NULL);
 
@@ -704,9 +704,9 @@ td_add_req_to_pd_inprog(struct pd_inprogress *pd_inprog, crt_rpc_t *td_req)
 static inline int
 pd_inprog_create(struct pd_inprogress **pd_inprog, crt_rpc_t *rpc_req)
 {
-	struct dmg_pool_destroy_in	*pd_in;
+	struct mgmt_pool_destroy_in	*pd_in;
 	struct pd_inprogress		*pd_inp_item;
-	int				rc = 0;
+	int				 rc = 0;
 
 	D_ASSERT(pd_inprog != NULL && rpc_req != NULL);
 	pd_in = crt_req_get(rpc_req);
@@ -771,15 +771,15 @@ static int
 pd_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*td_req;
-	struct dmg_tgt_destroy_in	*td_in;
-	struct dmg_tgt_destroy_out	*td_out;
+	struct mgmt_tgt_destroy_in	*td_in;
+	struct mgmt_tgt_destroy_out	*td_out;
 	struct pd_inprogress		*pd_inprog;
 	struct pc_tgt_destroy		*td, *td_next;
 	crt_rpc_t			*pd_req;
-	struct dmg_pool_destroy_in	*pd_in;
-	struct dmg_pool_destroy_out	*pd_out;
-	bool				td_done = false;
-	int				rc = 0;
+	struct mgmt_pool_destroy_in	*pd_in;
+	struct mgmt_pool_destroy_out	*pd_out;
+	bool				 td_done = false;
+	int				 rc = 0;
 
 	td_req = cb_info->cci_rpc;
 	td_in = crt_req_get(td_req);
@@ -792,7 +792,7 @@ pd_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 	pd_inprog->pd_td_ack_num++;
 	if (rc != 0 || td_out->td_rc != 0) {
 		pd_inprog->pd_td_fail_num++;
-		D_ERROR("DMG_TGT_DESTROY(to rank: %d) failed, "
+		D_ERROR("MGMT_TGT_DESTROY(to rank: %d) failed, "
 			"cb_info->cci_rc: %d, td_out->td_rc: %d. "
 			"total failed num: %d.\n", td_req->cr_ep.ep_rank, rc,
 			td_out->td_rc, pd_inprog->pd_td_fail_num);
@@ -845,18 +845,18 @@ out:
 }
 
 int
-dmgs_hdlr_pool_destroy(crt_rpc_t *rpc_req)
+ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 {
-	struct dmg_pool_destroy_in	*pd_in;
-	crt_endpoint_t			svr_ep;
-	struct dmg_pool_destroy_out	*pd_out;
+	struct mgmt_pool_destroy_in	*pd_in;
+	crt_endpoint_t			 svr_ep;
+	struct mgmt_pool_destroy_out	*pd_out;
 	struct pd_inprogress		*pd_inprog = NULL;
 	crt_rpc_t			*td_req;
-	crt_opcode_t			opc;
-	struct dmg_tgt_destroy_in	*td_in;
-	bool				td_req_sent = false;
-	bool				pd_inprog_alloc = false;
-	int				i, rc = 0;
+	crt_opcode_t			 opc;
+	struct mgmt_tgt_destroy_in	*td_in;
+	bool				 td_req_sent = false;
+	bool				 pd_inprog_alloc = false;
+	int				 i, rc = 0;
 
 	pd_in = crt_req_get(rpc_req);
 	pd_out = crt_reply_get(rpc_req);
@@ -878,17 +878,17 @@ dmgs_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 	D_DEBUG(DF_MGMT, "Destroying pool "DF_UUID"\n",
 		DP_UUID(pd_in->pd_pool_uuid));
 
-	/** send DMG_TGT_DESTROY RPC to tgts */
+	/** send MGMT_TGT_DESTROY RPC to tgts */
 	/* TODO query metadata the tgt list of the pool */
 	svr_ep.ep_grp = NULL;
 	svr_ep.ep_tag = 0;
-	opc = DAOS_RPC_OPCODE(DMG_TGT_DESTROY, DAOS_MGMT_MODULE, 1);
+	opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE, 1);
 	for (i = 0; i < pd_inprog->pd_td_num; i++) {
 		svr_ep.ep_rank = i;
 		rc = crt_req_create(dss_get_module_info()->dmi_ctx, svr_ep,
 				    opc, &td_req);
 		if (rc != 0) {
-			D_ERROR("crt_req_create(DMG_TGT_DESTROY) failed, "
+			D_ERROR("crt_req_create(MGMT_TGT_DESTROY) failed, "
 				"rc: %d.\n", rc);
 			pd_inprog->pd_td_ack_num = pd_inprog->pd_td_num - i;
 			pd_inprog->pd_td_fail_num = pd_inprog->pd_td_num - i;
@@ -900,7 +900,7 @@ dmgs_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 		uuid_copy(td_in->td_pool_uuid, pd_in->pd_pool_uuid);
 		rc = crt_req_send(td_req, pd_tgt_destroy_cb, pd_inprog);
 		if (rc != 0) {
-			D_ERROR("crt_req_send(DMG_TGT_DESTROY) failed, "
+			D_ERROR("crt_req_send(MGMT_TGT_DESTROY) failed, "
 				"rc: %d.\n", rc);
 			pd_inprog->pd_td_ack_num = pd_inprog->pd_td_num - i;
 			pd_inprog->pd_td_fail_num = pd_inprog->pd_td_num - i;

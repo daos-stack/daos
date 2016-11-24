@@ -31,32 +31,32 @@
  * library) and can be unloaded/reloaded.
  */
 
-#include "dmgs_internal.h"
+#include "srv_internal.h"
 
-static struct daos_rpc_handler dmgs_handlers[] = {
+static struct daos_rpc_handler ds_mgmt_handlers[] = {
 	{
-		.dr_opc		= DMG_POOL_CREATE,
-		.dr_hdlr	= dmgs_hdlr_pool_create,
+		.dr_opc		= MGMT_POOL_CREATE,
+		.dr_hdlr	= ds_mgmt_hdlr_pool_create,
 	}, {
-		.dr_opc		= DMG_POOL_DESTROY,
-		.dr_hdlr	= dmgs_hdlr_pool_destroy,
+		.dr_opc		= MGMT_POOL_DESTROY,
+		.dr_hdlr	= ds_mgmt_hdlr_pool_destroy,
 	}, {
-		.dr_opc		= DMG_TGT_CREATE,
-		.dr_hdlr	= dmgs_hdlr_tgt_create,
+		.dr_opc		= MGMT_TGT_CREATE,
+		.dr_hdlr	= ds_mgmt_hdlr_tgt_create,
 	}, {
-		.dr_opc		= DMG_TGT_DESTROY,
-		.dr_hdlr	= dmgs_hdlr_tgt_destroy,
+		.dr_opc		= MGMT_TGT_DESTROY,
+		.dr_hdlr	= ds_mgmt_hdlr_tgt_destroy,
 	}, {
 		.dr_opc = 0,
 	}
 };
 
 static int
-dmgs_init()
+ds_mgmt_init()
 {
 	int rc;
 
-	rc = dmgs_tgt_init();
+	rc = ds_mgmt_tgt_init();
 	if (rc)
 		return rc;
 
@@ -65,7 +65,7 @@ dmgs_init()
 }
 
 static int
-dmgs_fini()
+ds_mgmt_fini()
 {
 	D_DEBUG(DF_MGMT, "successfull fini call\n");
 	return 0;
@@ -75,8 +75,8 @@ struct dss_module mgmt_module = {
 	.sm_name	= "mgmt",
 	.sm_mod_id	= DAOS_MGMT_MODULE,
 	.sm_ver		= 1,
-	.sm_init	= dmgs_init,
-	.sm_fini	= dmgs_fini,
-	.sm_cl_rpcs	= dmg_rpcs,
-	.sm_handlers	= dmgs_handlers,
+	.sm_init	= ds_mgmt_init,
+	.sm_fini	= ds_mgmt_fini,
+	.sm_cl_rpcs	= mgmt_rpcs,
+	.sm_handlers	= ds_mgmt_handlers,
 };

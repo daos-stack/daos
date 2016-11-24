@@ -21,13 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dmg: RPC Protocol Definitions
- *
- * This is naturally shared by both dmgc and dmgss.
+ * Management RPC Protocol Definitions
  */
 
-#ifndef __DMG_RPC_H__
-#define __DMG_RPC_H__
+#ifndef __MGMT_RPC_H__
+#define __MGMT_RPC_H__
 
 #include <daos/rpc.h>
 
@@ -37,16 +35,16 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-enum dmg_operation {
-	DMG_POOL_CREATE		= 1,
-	DMG_POOL_DESTROY	= 2,
-	DMG_POOL_EXTEND		= 3,
-	DMG_TGT_CREATE		= 4,
-	DMG_TGT_DESTROY		= 5,
-	DMG_TGT_EXTEND		= 6,
+enum mgmt_operation {
+	MGMT_POOL_CREATE	= 1,
+	MGMT_POOL_DESTROY	= 2,
+	MGMT_POOL_EXTEND	= 3,
+	MGMT_TGT_CREATE		= 4,
+	MGMT_TGT_DESTROY	= 5,
+	MGMT_TGT_EXTEND		= 6,
 };
 
-struct dmg_pool_create_in {
+struct mgmt_pool_create_in {
 	uuid_t			 pc_pool_uuid;
 	crt_string_t		 pc_grp;
 	crt_string_t		 pc_tgt_dev;
@@ -58,40 +56,40 @@ struct dmg_pool_create_in {
 	uint32_t		 pc_gid;
 };
 
-struct dmg_pool_create_out {
+struct mgmt_pool_create_out {
 	daos_rank_list_t	*pc_svc;
 	int			 pc_rc;
 };
 
-struct dmg_pool_destroy_in {
+struct mgmt_pool_destroy_in {
 	uuid_t			pd_pool_uuid;
 	crt_string_t		pd_grp;
 	int			pd_force;
 };
 
-struct dmg_pool_destroy_out {
+struct mgmt_pool_destroy_out {
 	int			pd_rc;
 };
 
-struct dmg_tgt_create_in {
+struct mgmt_tgt_create_in {
 	uuid_t			tc_pool_uuid;
 	crt_string_t		tc_tgt_dev;
 	daos_size_t		tc_tgt_size;
 };
 
-struct dmg_tgt_create_out {
+struct mgmt_tgt_create_out {
 	int			tc_rc;
 	uuid_t			tc_tgt_uuid;
 };
 
-struct dmg_tgt_destroy_in {
+struct mgmt_tgt_destroy_in {
 	uuid_t			td_pool_uuid;
 };
 
-struct dmg_tgt_destroy_out {
+struct mgmt_tgt_destroy_out {
 	int			td_rc;
 };
 
-extern struct daos_rpc dmg_rpcs[];
+extern struct daos_rpc mgmt_rpcs[];
 
-#endif /* __DMG_RPC_H__ */
+#endif /* __MGMT_RPC_H__ */

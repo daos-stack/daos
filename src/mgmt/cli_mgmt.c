@@ -21,11 +21,11 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * dmgc: the DMG client module/library. It exports the DMG API defined
- *       in daos_mgmt.h
+ * DAOS management client library. It exports the mgmt API defined in
+ * daos_mgmt.h
  */
 
-#include "dmg_rpc.h"
+#include "rpc.h"
 
 /**
  * Initialize management interface
@@ -35,7 +35,7 @@ dc_mgmt_init()
 {
 	int rc;
 
-	rc = daos_rpc_register(dmg_rpcs, NULL, DAOS_MGMT_MODULE);
+	rc = daos_rpc_register(mgmt_rpcs, NULL, DAOS_MGMT_MODULE);
 	if (rc != 0)
 		D_ERROR("failed to register rpcs: %d\n", rc);
 
@@ -48,5 +48,5 @@ dc_mgmt_init()
 void
 dc_mgmt_fini()
 {
-	daos_rpc_unregister(dmg_rpcs);
+	daos_rpc_unregister(mgmt_rpcs);
 }

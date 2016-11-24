@@ -6,14 +6,12 @@ env.AppendUnique(LIBPATH=[Dir('.')])
 
 denv = env.Clone()
 
-# dmgs: DMG Server Module
-mgmt_srv = denv.SharedLibrary('mgmt',
-			      ['dmg_rpc.c', 'dmgs_module.c', 'dmgs_pool.c',
-			       'dmgs_target.c'])
+# Management server module
+mgmt_srv = denv.SharedLibrary('mgmt', ['rpc.c', Glob('srv*.c')])
 denv.Install('$PREFIX/lib/daos_srv', mgmt_srv)
 
-# Client library
-dc_mgmt_tgts = denv.SharedObject(['dmg_rpc.c', 'dmgc_module.c', 'dmgc_pool.c'])
+# Management client library
+dc_mgmt_tgts = denv.SharedObject(['rpc.c', Glob('cli*.c')])
 Export('dc_mgmt_tgts')
 
 

@@ -50,7 +50,7 @@ mpool_init(const uuid_t pool_uuid, struct ds_pool_mpool *mp)
 		D_GOTO(err, rc = -DER_NOMEM);
 	}
 
-	rc = dmgs_tgt_file(pool_uuid, DSM_META_FILE, NULL, &path);
+	rc = ds_mgmt_tgt_file(pool_uuid, DSM_META_FILE, NULL, &path);
 	if (rc != 0) {
 		D_ERROR("failed to lookup path: %d\n", rc);
 		D_GOTO(err_lock, rc);

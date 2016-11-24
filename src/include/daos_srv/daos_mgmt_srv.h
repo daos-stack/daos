@@ -27,8 +27,8 @@
  * - provide fault domains
  */
 
-#ifndef __DMG_SRV_H__
-#define __DMG_SRV_H__
+#ifndef __MGMT_SRV_H__
+#define __MGMT_SRV_H__
 
 /**
  * Common file names used by each layer to store persistent data
@@ -41,6 +41,6 @@
  * \a fname and suffixed by \a idx. \a idx can be NULL.
  */
 int
-dmgs_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
-	      char **fpath);
-#endif /* __DMG_SRV_H__ */
+ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
+		 char **fpath);
+#endif /* __MGMT_SRV_H__ */

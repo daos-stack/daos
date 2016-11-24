@@ -21,27 +21,27 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * dmgs: Internal Declarations
+ * ds_mgmt: Internal Declarations
  *
- * This file contains all declarations that are only used by dmgss.
- * All external variables and functions must have a "dmgs_" prefix.
+ * This file contains all declarations that are only used by ds_mgmts.
+ * All external variables and functions must have a "ds_mgmt_" prefix.
  */
 
-#ifndef __DMGS_INTERNAL_H__
-#define __DMGS_INTERNAL_H__
+#ifndef __SRV_MGMT_INTERNAL_H__
+#define __SRV_MGMT_INTERNAL_H__
 
 #include <daos/list.h>
 #include <daos/rpc.h>
 #include <daos/common.h>
 #include <daos_srv/daos_server.h>
-#include "dmg_rpc.h"
+#include "rpc.h"
 
-/** dmgs_pool.c */
-int dmgs_hdlr_pool_create(crt_rpc_t *rpc_req);
-int dmgs_hdlr_pool_destroy(crt_rpc_t *rpc_req);
+/** srv_pool.c */
+int ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
+int ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
 
-/** dmgs_target.c */
-int dmgs_tgt_init(void);
-int dmgs_hdlr_tgt_create(crt_rpc_t *rpc_req);
-int dmgs_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
-#endif /* __DMGS_INTERNAL_H__ */
+/** srv_target.c */
+int ds_mgmt_tgt_init(void);
+int ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
+int ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
+#endif /* __SRV_MGMT_INTERNAL_H__ */

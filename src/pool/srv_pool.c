@@ -204,9 +204,9 @@ err:
 }
 
 /*
- * Called by dmg on every storage node belonging to this pool. "path" is the
- * directory under which the VOS and metadata files shall be. "target_uuid"
- * returns the UUID generated for the target on this storage node.
+ * Called by mgmt module on every storage node belonging to this pool.
+ * "path" is the directory under which the VOS and metadata files shall be.
+ * "target_uuid" returns the UUID generated for the target on this storage node.
  */
 int
 ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
@@ -354,8 +354,8 @@ cont_metadata_init(PMEMobjpool *mp, daos_handle_t root)
 }
 
 /*
- * Called by dmg on a single storage node belonging to this pool after the
- * ds_pool_create() phase completes. "target_uuids" shall be an array of the
+ * Called by mgmt module on a single storage node belonging to this pool after
+ * the ds_pool_create() phase completes. "target_uuids" shall be an array of the
  * target UUIDs returned by the ds_pool_create() calls. "svc_addrs" returns the
  * ranks of the pool services replicas within "group".
  */
@@ -377,7 +377,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
-	rc = dmgs_tgt_file(pool_uuid, DSM_META_FILE, NULL, &path);
+	rc = ds_mgmt_tgt_file(pool_uuid, DSM_META_FILE, NULL, &path);
 	if (rc)
 		D_GOTO(out, rc);
 

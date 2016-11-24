@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * dmgs: Target Methods
+ * Target Methods
  */
 
 #include <sys/stat.h>
@@ -29,7 +29,7 @@
 #include <sys/sysinfo.h>
 #include <ftw.h>
 
-#include "dmgs_internal.h"
+#include "srv_internal.h"
 
 #include <daos_srv/vos.h>
 #include <daos_srv/pool.h>
@@ -96,7 +96,7 @@ subtree_destroy(const char *path)
 }
 
 int
-dmgs_tgt_init(void)
+ds_mgmt_tgt_init(void)
 {
 	mode_t	stored_mode, mode;
 	int	rc;
@@ -174,7 +174,8 @@ path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx,
  * \a fname and suffixed by \a idx. \a idx can be NULL.
  */
 int
-dmgs_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx, char **fpath)
+ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
+		 char **fpath)
 {
 	return path_gen(pool_uuid, STORAGE_PATH, fname, idx, fpath);
 }
@@ -304,10 +305,10 @@ out:
  * RPC handler for target creation
  */
 int
-dmgs_hdlr_tgt_create(crt_rpc_t *tc_req)
+ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 {
-	struct dmg_tgt_create_in	*tc_in;
-	struct dmg_tgt_create_out	*tc_out;
+	struct mgmt_tgt_create_in	*tc_in;
+	struct mgmt_tgt_create_out	*tc_out;
 	char				*path = NULL;
 	int				 rc = 0;
 
@@ -318,7 +319,7 @@ dmgs_hdlr_tgt_create(crt_rpc_t *tc_req)
 	D_ASSERT(tc_in != NULL && tc_out != NULL);
 
 	/** generate path to the target directory */
-	rc = dmgs_tgt_file(tc_in->tc_pool_uuid, NULL, NULL, &path);
+	rc = ds_mgmt_tgt_file(tc_in->tc_pool_uuid, NULL, NULL, &path);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -387,12 +388,12 @@ out:
  * RPC handler for target destroy
  */
 int
-dmgs_hdlr_tgt_destroy(crt_rpc_t *td_req)
+ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 {
-	struct dmg_tgt_destroy_in	*td_in;
-	struct dmg_tgt_destroy_out	*td_out;
+	struct mgmt_tgt_destroy_in	*td_in;
+	struct mgmt_tgt_destroy_out	*td_out;
 	char				*path;
-	int				 rc;
+	int				  rc;
 
 	/** incoming request buffer */
 	td_in = crt_req_get(td_req);
@@ -401,7 +402,7 @@ dmgs_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	D_ASSERT(td_in != NULL && td_out != NULL);
 
 	/** generate path to the target directory */
-	rc = dmgs_tgt_file(td_in->td_pool_uuid, NULL, NULL, &path);
+	rc = ds_mgmt_tgt_file(td_in->td_pool_uuid, NULL, NULL, &path);
 	if (rc)
 		D_GOTO(out, rc);
 

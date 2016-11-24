@@ -21,13 +21,13 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * DMG RPC Protocol Serialization Functions
+ * MGMT RPC Protocol Serialization Functions
  */
 
 #include <daos/rpc.h>
-#include "dmg_rpc.h"
+#include "rpc.h"
 
-struct crt_msg_field *dmg_pool_create_in_fields[] = {
+struct crt_msg_field *mgmt_pool_create_in_fields[] = {
 	&CMF_UUID,		/* pc_pool_uuid */
 	&CMF_STRING,		/* pc_grp */
 	&CMF_STRING,		/* pc_tgt_dev */
@@ -39,81 +39,81 @@ struct crt_msg_field *dmg_pool_create_in_fields[] = {
 	&CMF_UINT32,		/* pc_gid */
 };
 
-struct crt_msg_field *dmg_pool_create_out_fields[] = {
+struct crt_msg_field *mgmt_pool_create_out_fields[] = {
 	&CMF_RANK_LIST,		/* pc_svc */
 	&CMF_INT,		/* pc_rc */
 };
 
-struct crt_msg_field *dmg_pool_destroy_in_fields[] = {
+struct crt_msg_field *mgmt_pool_destroy_in_fields[] = {
 	&CMF_UUID,		/* pd_pool_uuid */
 	&CMF_STRING,		/* pd_grp */
 	&CMF_INT		/* pd_force */
 };
 
-struct crt_msg_field *dmg_pool_destroy_out_fields[] = {
+struct crt_msg_field *mgmt_pool_destroy_out_fields[] = {
 	&CMF_INT		/* pd_rc */
 };
 
-struct crt_msg_field *dmg_tgt_create_in_fields[] = {
+struct crt_msg_field *mgmt_tgt_create_in_fields[] = {
 	&CMF_UUID,		/* tc_pool_uuid */
 	&CMF_STRING,		/* tc_tgt_dev */
 	&DMF_DAOS_SIZE		/* tc_tgt_size */
 };
 
-struct crt_msg_field *dmg_tgt_create_out_fields[] = {
+struct crt_msg_field *mgmt_tgt_create_out_fields[] = {
 	&CMF_INT,		/* tc_rc */
 	&CMF_UUID,		/* tc_tgt_uuid */
 };
 
-struct crt_msg_field *dmg_tgt_destroy_in_fields[] = {
+struct crt_msg_field *mgmt_tgt_destroy_in_fields[] = {
 	&CMF_UUID		/* td_pool_uuid */
 };
 
-struct crt_msg_field *dmg_tgt_destroy_out_fields[] = {
+struct crt_msg_field *mgmt_tgt_destroy_out_fields[] = {
 	&CMF_INT		/* td_rc */
 };
 
-struct crt_req_format DQF_DMG_POOL_CREATE =
-	DEFINE_CRT_REQ_FMT("DMG_POOL_CREATE", dmg_pool_create_in_fields,
-			   dmg_pool_create_out_fields);
+struct crt_req_format DQF_MGMT_POOL_CREATE =
+	DEFINE_CRT_REQ_FMT("MGMT_POOL_CREATE", mgmt_pool_create_in_fields,
+			   mgmt_pool_create_out_fields);
 
-struct crt_req_format DQF_DMG_POOL_DESTROY =
-	DEFINE_CRT_REQ_FMT("DMG_POOL_DESTROY", dmg_pool_destroy_in_fields,
-			   dmg_pool_destroy_out_fields);
+struct crt_req_format DQF_MGMT_POOL_DESTROY =
+	DEFINE_CRT_REQ_FMT("MGMT_POOL_DESTROY", mgmt_pool_destroy_in_fields,
+			   mgmt_pool_destroy_out_fields);
 
-struct crt_req_format DQF_DMG_TGT_CREATE =
-	DEFINE_CRT_REQ_FMT("DMG_TGT_CREATE", dmg_tgt_create_in_fields,
-			   dmg_tgt_create_out_fields);
+struct crt_req_format DQF_MGMT_TGT_CREATE =
+	DEFINE_CRT_REQ_FMT("MGMT_TGT_CREATE", mgmt_tgt_create_in_fields,
+			   mgmt_tgt_create_out_fields);
 
-struct crt_req_format DQF_DMG_TGT_DESTROY =
-	DEFINE_CRT_REQ_FMT("DMG_TGT_DESTROY", dmg_tgt_destroy_in_fields,
-			   dmg_tgt_destroy_out_fields);
+struct crt_req_format DQF_MGMT_TGT_DESTROY =
+	DEFINE_CRT_REQ_FMT("MGMT_TGT_DESTROY", mgmt_tgt_destroy_in_fields,
+			   mgmt_tgt_destroy_out_fields);
 
-struct daos_rpc dmg_rpcs[] = {
+struct daos_rpc mgmt_rpcs[] = {
 	{
-		.dr_name	= "DMG_POOL_CREATE",
-		.dr_opc		= DMG_POOL_CREATE,
+		.dr_name	= "MGMT_POOL_CREATE",
+		.dr_opc		= MGMT_POOL_CREATE,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_DMG_POOL_CREATE,
+		.dr_req_fmt	= &DQF_MGMT_POOL_CREATE,
 	}, {
-		.dr_name	= "DMG_POOL_DESTROY",
-		.dr_opc		= DMG_POOL_DESTROY,
+		.dr_name	= "MGMT_POOL_DESTROY",
+		.dr_opc		= MGMT_POOL_DESTROY,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_DMG_POOL_DESTROY,
+		.dr_req_fmt	= &DQF_MGMT_POOL_DESTROY,
 	}, {
-		.dr_name	= "DMG_TGT_CREATE",
-		.dr_opc		= DMG_TGT_CREATE,
+		.dr_name	= "MGMT_TGT_CREATE",
+		.dr_opc		= MGMT_TGT_CREATE,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_DMG_TGT_CREATE,
+		.dr_req_fmt	= &DQF_MGMT_TGT_CREATE,
 	}, {
-		.dr_name	= "DMG_TGT_DESTROY",
-		.dr_opc		= DMG_TGT_DESTROY,
+		.dr_name	= "MGMT_TGT_DESTROY",
+		.dr_opc		= MGMT_TGT_DESTROY,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_DMG_TGT_DESTROY,
+		.dr_req_fmt	= &DQF_MGMT_TGT_DESTROY,
 	}, {
 		.dr_opc		= 0
 	}

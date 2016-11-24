@@ -108,7 +108,7 @@ pool_child_add_one(void *varg)
 	if (child == NULL)
 		return -DER_NOMEM;
 
-	rc = dmgs_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tid, &path);
+	rc = ds_mgmt_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tid, &path);
 	if (rc != 0) {
 		D_FREE_PTR(child);
 		return rc;

@@ -21,17 +21,17 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * dmgc: Pool Methods
+ * Pool create/destroy methods
  */
 
-#include "dmg_rpc.h"
+#include "rpc.h"
 
 static int
 pool_create_cp(void *arg, daos_event_t *ev, int rc)
 {
 	struct daos_op_sp		*sp = arg;
 	daos_rank_list_t		*svc = sp->sp_arg;
-	struct dmg_pool_create_out	*pc_out;
+	struct mgmt_pool_create_out	*pc_out;
 
 	if (rc) {
 		D_ERROR("RPC error while disconnecting from pool: %d\n", rc);
@@ -41,7 +41,7 @@ pool_create_cp(void *arg, daos_event_t *ev, int rc)
 	pc_out = crt_reply_get(sp->sp_rpc);
 	rc = pc_out->pc_rc;
 	if (rc) {
-		D_ERROR("DMG_POOL_CREATE replied failed, rc: %d\n", rc);
+		D_ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -61,7 +61,7 @@ dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	crt_endpoint_t			 svr_ep;
 	crt_rpc_t			*rpc_req = NULL;
 	crt_opcode_t			 opc;
-	struct dmg_pool_create_in	*pc_in;
+	struct mgmt_pool_create_in	*pc_in;
 	struct daos_op_sp		*sp;
 	int				 rc = 0;
 
@@ -79,10 +79,10 @@ dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	svr_ep.ep_grp = NULL;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
-	opc = DAOS_RPC_OPCODE(DMG_POOL_CREATE, DAOS_MGMT_MODULE, 1);
+	opc = DAOS_RPC_OPCODE(MGMT_POOL_CREATE, DAOS_MGMT_MODULE, 1);
 	rc = crt_req_create(daos_ev2ctx(ev), svr_ep, opc, &rpc_req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(DMG_POOL_CREATE) failed, rc: %d.\n",
+		D_ERROR("crt_req_create(MGMT_POOL_CREATE) failed, rc: %d.\n",
 			rc);
 		D_GOTO(out, rc);
 	}
@@ -134,8 +134,8 @@ out_put_req:
 static int
 pool_destroy_cp(void *arg, daos_event_t *ev, int rc)
 {
-	struct daos_op_sp *sp = arg;
-	struct dmg_pool_destroy_out	*pd_out;
+	struct daos_op_sp		*sp = arg;
+	struct mgmt_pool_destroy_out	*pd_out;
 
 	if (rc) {
 		D_ERROR("RPC error while destroying pool: %d\n", rc);
@@ -145,7 +145,7 @@ pool_destroy_cp(void *arg, daos_event_t *ev, int rc)
 	pd_out = crt_reply_get(sp->sp_rpc);
 	rc = pd_out->pd_rc;
 	if (rc) {
-		D_ERROR("DMG_POOL_DESTROY replied failed, rc: %d\n", rc);
+		D_ERROR("MGMT_POOL_DESTROY replied failed, rc: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -161,7 +161,7 @@ dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	crt_endpoint_t			 svr_ep;
 	crt_rpc_t			*rpc_req = NULL;
 	crt_opcode_t			 opc;
-	struct dmg_pool_destroy_in	*pd_in;
+	struct mgmt_pool_destroy_in	*pd_in;
 	struct daos_op_sp		*sp;
 	int				 rc = 0;
 
@@ -177,10 +177,10 @@ dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	svr_ep.ep_grp = NULL;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
-	opc = DAOS_RPC_OPCODE(DMG_POOL_DESTROY, DAOS_MGMT_MODULE, 1);
+	opc = DAOS_RPC_OPCODE(MGMT_POOL_DESTROY, DAOS_MGMT_MODULE, 1);
 	rc = crt_req_create(daos_ev2ctx(ev), svr_ep, opc, &rpc_req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(DMG_POOL_DESTROY) failed, rc: %d.\n",
+		D_ERROR("crt_req_create(MGMT_POOL_DESTROY) failed, rc: %d.\n",
 			rc);
 		D_GOTO(out, rc);
 	}
