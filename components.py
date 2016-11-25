@@ -53,6 +53,12 @@ REQS.define('event', libs=['event'], package='libevent-devel')
 REQS.define('crypto', libs=['crypto'], headers=['openssl/md5.h'],
             package='openssl-devel')
 
+if REQS.get_env('PLATFORM') == 'darwin':
+    REQS.define('uuid', headers=['uuid/uuid.h'])
+else:
+    REQS.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'],
+                package='libuuid-devel')
+
 CCI_BUILD = ['patch -N -p1 < $PATCH_PREFIX/cci_port_number.patch; ' \
              'if [ $? -gt 1 ]; then false; else true; fi;',
              'patch -N -p1 < $PATCH_PREFIX/cci_ib.patch; ' \
