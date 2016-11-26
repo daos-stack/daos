@@ -24,62 +24,31 @@
  * This file is part of the DAOS server. It implements the DAOS service
  * including:
  * - network setup
- * - start/stop service threads
- * - bind service threads to core/NUMA node
+ * - start/stop execution streams
+ * - bind execution streams to core/NUMA node
  */
-
-#include <pthread.h>
-#include <sched.h>
 
 #include <abt.h>
 #include <daos_errno.h>
 #include <daos/list.h>
 #include "srv_internal.h"
 
-/** Number of started threads or cores used */
-unsigned int	dss_nthreads;
+/** Number of started xstreams or cores used */
+unsigned int	dss_nxstreams;
 
-/** Per-thread configuration data */
-struct dss_thread {
-	pthread_t	dt_id;
-	int		dt_idx;
-	pthread_mutex_t	dt_lock;
-	daos_list_t	dt_list;
-	hwloc_cpuset_t	dt_cpuset;
-	ABT_xstream	dt_xstream;
-	ABT_pool	dt_pool;
-	ABT_sched	dt_sched;
-	int		dt_rc;
+/** Per-xstream configuration data */
+struct dss_xstream {
+	ABT_future	dx_shutdown;
+	daos_list_t	dx_list;
+	hwloc_cpuset_t	dx_cpuset;
+	ABT_xstream	dx_xstream;
+	ABT_pool	dx_pool;
+	ABT_sched	dx_sched;
+	ABT_xstream	dx_progress;
 };
 
-/** List of running service threads */
-static daos_list_t dss_thread_list;
-
-void
-dss_srv_handler_cleanup(void *param)
-{
-	struct dss_thread_local_storage	*dtc;
-	struct dss_module_info		*dmi;
-	int				rc;
-
-	dtc = param;
-	dmi = (struct dss_module_info *)
-	      dss_module_key_get(dtc, &daos_srv_modkey);
-	D_ASSERT(dmi != NULL);
-	rc = crt_context_destroy(dmi->dmi_ctx, true);
-	if (rc)
-		D_ERROR("failed to destroy context: %d\n", rc);
-}
-
-int
-dss_progress_cb(void *arg)
-{
-	/** cancellation point */
-	pthread_testcancel();
-
-	/** no cancel happened, continue running */
-	return 0;
-}
+/** List of running execution streams */
+static daos_list_t dss_xstream_list;
 
 struct sched_data {
     uint32_t event_freq;
@@ -88,8 +57,8 @@ struct sched_data {
 static int
 dss_sched_init(ABT_sched sched, ABT_sched_config config)
 {
-	struct sched_data *p_data;
-	int ret;
+	struct sched_data	*p_data;
+	int			 ret;
 
 	D_ALLOC_PTR(p_data);
 	if (p_data == NULL)
@@ -108,11 +77,11 @@ dss_sched_init(ABT_sched sched, ABT_sched_config config)
 static void
 dss_sched_run(ABT_sched sched)
 {
-	uint32_t work_count = 0;
-	struct sched_data *p_data;
-	ABT_pool pool;
-	ABT_unit unit;
-	int ret;
+	uint32_t		 work_count = 0;
+	struct sched_data	*p_data;
+	ABT_pool		 pool;
+	ABT_unit		 unit;
+	int			 ret;
 
 	ABT_sched_get_data(sched, (void **)&p_data);
 
@@ -162,20 +131,20 @@ dss_sched_free(ABT_sched sched)
 static int
 dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 {
-	ABT_sched_config config;
-	ABT_sched_config_var cv_event_freq = {
-		.idx = 0,
-		.type = ABT_SCHED_CONFIG_INT
+	int			ret;
+	ABT_sched_config	config;
+	ABT_sched_config_var	cv_event_freq = {
+		.idx	= 0,
+		.type	= ABT_SCHED_CONFIG_INT
 	};
 
-	ABT_sched_def sched_def = {
-		.type = ABT_SCHED_TYPE_ULT,
-		.init = dss_sched_init,
-		.run = dss_sched_run,
-		.free = dss_sched_free,
+	ABT_sched_def		sched_def = {
+		.type	= ABT_SCHED_TYPE_ULT,
+		.init	= dss_sched_init,
+		.run	= dss_sched_run,
+		.free	= dss_sched_free,
 		.get_migr_pool = NULL
 	};
-	int ret;
 
 	/* Create a scheduler config */
 	ret = ABT_sched_config_create(&config, cv_event_freq, 10,
@@ -190,209 +159,228 @@ dss_sched_create(ABT_pool *pools, int pool_num, ABT_sched *new_sched)
 	return dss_abterr2der(ret);
 }
 
+int
+dss_progress_cb(void *arg)
+{
+	ABT_future	*shutdown = (ABT_future *)arg;
+	ABT_bool	 state;
+	int		 rc;
+
+	rc = ABT_future_test(*shutdown, &state);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	return state == ABT_TRUE;
+}
+
 /**
  *
- The handling process would like
+ * The handling process would like
  *
- * 1. The service thread creates a private CRT context
+ * 1. The execution stream creates a private CRT context
  *
  * 2. Then polls the request from CRT context
- **/
+ */
 static void
 dss_srv_handler(void *arg)
 {
-	struct dss_thread	*dthread = (struct dss_thread *)arg;
-	struct dss_thread_local_storage *dtc;
-	struct dss_module_info	*dmi;
-	int			 rc;
+	struct dss_xstream		*dx = (struct dss_xstream *)arg;
+	struct dss_thread_local_storage	*dtc;
+	struct dss_module_info		*dmi;
+	int				 rc;
 
-	/* ignore the cancel request until after initialization */
-	pthread_mutex_lock(&dthread->dt_lock);
-	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-
-	rc = hwloc_set_cpubind(dss_topo, dthread->dt_cpuset,
-			       HWLOC_CPUBIND_THREAD);
+	/** set affinity */
+	rc = hwloc_set_cpubind(dss_topo, dx->dx_cpuset, HWLOC_CPUBIND_THREAD);
 	if (rc) {
 		D_ERROR("failed to set affinity: %d\n", errno);
-		D_GOTO(err_out, rc = daos_errno2der(errno));
+		return;
 	}
 
-	/* initialize thread-local storage for this thread */
+	/* initialize xstream-local storage */
 	dtc = dss_tls_init(DAOS_SERVER_TAG);
-	if (dtc == NULL)
-		D_GOTO(err_out, rc = -DER_NOMEM);
+	if (dtc == NULL) {
+		D_ERROR("failed to initialize TLS\n");
+		return;
+	}
 
 	dmi = dss_get_module_info();
 	D_ASSERT(dmi != NULL);
 
-	/* create private transport context */
-	rc = crt_context_create(&dthread->dt_pool, &dmi->dmi_ctx);
-	if (rc != 0) {
-		D_ERROR("Can not create crt ctxt: rc = %d\n", rc);
-		D_GOTO(err_out, rc);
+	/** report xstream index */
+	rc = ABT_xstream_self_rank(&dmi->dmi_tid);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to retrieve xstream rank %d\n", rc);
+		return;
 	}
 
-	/** report thread index */
-	dmi->dmi_tid = dthread->dt_idx;
-
-	/* register clean-up routine called on cancellation point */
-	pthread_cleanup_push(dss_srv_handler_cleanup, (void *)dtc);
-	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-	dthread->dt_id = pthread_self();
-
-	/* wake up caller */
-	pthread_mutex_unlock(&dthread->dt_lock);
+	/* create private transport context */
+	rc = crt_context_create(&dx->dx_pool, &dmi->dmi_ctx);
+	if (rc != 0) {
+		D_ERROR("failed to create crt ctxt: %d\n", rc);
+		return;
+	}
 
 	/* main service loop processing incoming request */
-	rc = crt_progress(dmi->dmi_ctx, -1, dss_progress_cb, NULL);
-	D_ERROR("service thread exited from progress with %d\n", rc);
-
-	pthread_cleanup_pop(0);
+	rc = crt_progress(dmi->dmi_ctx, -1, dss_progress_cb, &dx->dx_shutdown);
+	if (rc != 0)
+		D_ERROR("failed to progress network context: %d\n", rc);
 	crt_context_destroy(dmi->dmi_ctx, true);
-	return;
-
-err_out:
-	dthread->dt_rc = rc;
-	pthread_mutex_unlock(&dthread->dt_lock);
-	return;
-
-
 }
 
-static inline struct dss_thread *
-dss_thread_alloc(int idx, hwloc_cpuset_t cpus)
+static inline struct dss_xstream *
+dss_xstream_alloc(hwloc_cpuset_t cpus)
 {
-	struct dss_thread	*dthread;
+	struct dss_xstream	*dx;
 	int			 rc = 0;
 
-	D_ALLOC_PTR(dthread);
-	if (dthread == NULL) {
-		D_ERROR("Can not allocate dthread.\n");
+	D_ALLOC_PTR(dx);
+	if (dx == NULL) {
+		D_ERROR("Can not allocate execution stream.\n");
 		return NULL;
 	}
 
-	rc = pthread_mutex_init(&dthread->dt_lock, NULL);
-	if (rc) {
-		D_ERROR("failed to init pthread mutex: %d\n", rc);
-		D_GOTO(err_free, rc = daos_errno2der(errno));
+	rc = ABT_future_create(1, NULL, &dx->dx_shutdown);
+	if (rc != 0) {
+		D_ERROR("failed to allocate future\n");
+		D_GOTO(err_free, rc = dss_abterr2der(rc));
 	}
 
-	dthread->dt_cpuset = hwloc_bitmap_dup(cpus);
-	if (dthread->dt_cpuset == NULL) {
+	dx->dx_cpuset = hwloc_bitmap_dup(cpus);
+	if (dx->dx_cpuset == NULL) {
 		D_ERROR("failed to allocate cpuset\n");
-		D_GOTO(err_mutex, rc = -DER_NOMEM);
+		D_GOTO(err_future, rc = -DER_NOMEM);
 	}
 
-	dthread->dt_idx = idx;
-	DAOS_INIT_LIST_HEAD(&dthread->dt_list);
+	dx->dx_xstream	= ABT_XSTREAM_NULL;
+	dx->dx_pool	= ABT_POOL_NULL;
+	dx->dx_sched	= ABT_SCHED_NULL;
+	dx->dx_progress	= ABT_THREAD_NULL;
+	DAOS_INIT_LIST_HEAD(&dx->dx_list);
 
-	return dthread;
+	return dx;
 
-err_mutex:
-	pthread_mutex_destroy(&dthread->dt_lock);
+err_future:
+	ABT_future_free(&dx->dx_shutdown);
 err_free:
-	D_FREE_PTR(dthread);
+	D_FREE_PTR(dx);
 	return NULL;
 }
 
 static inline void
-dss_thread_free(struct dss_thread *dthread)
+dss_xstream_free(struct dss_xstream *dx)
 {
-	hwloc_bitmap_free(dthread->dt_cpuset);
-	pthread_mutex_destroy(&dthread->dt_lock);
-	D_FREE_PTR(dthread);
+	hwloc_bitmap_free(dx->dx_cpuset);
+	D_FREE_PTR(dx);
 }
 
 /**
- * Start \a nr threads, which will evenly distributed all
+ * Start \a nr xstreams, which will evenly distributed all
  * of cores.
  *
- * \param[in] nr	number of threads to be created.
+ * \param[in] nr	number of xstreams to be created.
  *
  * \retval	= 0 if starting succeeds.
  * \retval	negative errno if starting fails.
  */
 static int
-dss_start_one_thread(hwloc_cpuset_t cpus, int idx)
+dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 {
-	struct dss_thread	*dthread;
+	struct dss_xstream	*dx;
 	int			 rc = 0;
 
-	/** allocate & init thread configuration data */
-	dthread = dss_thread_alloc(idx, cpus);
-	if (dthread == NULL)
+	/** allocate & init xstream configuration data */
+	dx = dss_xstream_alloc(cpus);
+	if (dx == NULL)
 		return -DER_NOMEM;
 
+	/** create pool */
 	rc = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPSC,
-				   ABT_TRUE, &dthread->dt_pool);
+				   ABT_TRUE, &dx->dx_pool);
 	if (rc != ABT_SUCCESS)
-		D_GOTO(out_dthread, rc = dss_abterr2der(rc));
+		D_GOTO(out_dxstream, rc = dss_abterr2der(rc));
 
-	rc = dss_sched_create(&dthread->dt_pool, 1, &dthread->dt_sched);
+	rc = dss_sched_create(&dx->dx_pool, 1, &dx->dx_sched);
 	if (rc != 0) {
 		D_ERROR("create scheduler fails: %d\n", rc);
 		D_GOTO(out_pool, rc);
 	}
 
-	rc = ABT_xstream_create(dthread->dt_sched, &dthread->dt_xstream);
+	/** start execution stream, rank must be non-null */
+	rc = ABT_xstream_create_with_rank(dx->dx_sched, idx,
+					  &dx->dx_xstream);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create xstream fails %d\n", rc);
 		D_GOTO(out_sched, rc = dss_abterr2der(rc));
 	}
 
-	rc = ABT_thread_create(dthread->dt_pool, dss_srv_handler,
-			       dthread, ABT_THREAD_ATTR_NULL, NULL);
+	/** start progress ULT */
+	rc = ABT_thread_create(dx->dx_pool, dss_srv_handler,
+			       dx, ABT_THREAD_ATTR_NULL,
+			       &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("create thread failed: %d\n", rc);
-		D_GOTO(out_xthream, rc = dss_abterr2der(rc));
+		D_ERROR("create xstream failed: %d\n", rc);
+		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
 	}
 
-	/** add to the list of started thread */
-	daos_list_add_tail(&dthread->dt_list, &dss_thread_list);
+	/** add to the list of execution streams */
+	daos_list_add_tail(&dx->dx_list, &dss_xstream_list);
 
 	return 0;
-out_xthream:
-	ABT_xstream_join(dthread->dt_xstream);
-	ABT_xstream_free(&dthread->dt_xstream);
-	dss_thread_free(dthread);
+out_xstream:
+	ABT_xstream_join(dx->dx_xstream);
+	ABT_xstream_free(&dx->dx_xstream);
+	dss_xstream_free(dx);
 	return rc;
 out_sched:
-	ABT_sched_free(&dthread->dt_sched);
+	ABT_sched_free(&dx->dx_sched);
 out_pool:
-	ABT_pool_free(&dthread->dt_pool);
-out_dthread:
-	dss_thread_free(dthread);
+	ABT_pool_free(&dx->dx_pool);
+out_dxstream:
+	dss_xstream_free(dx);
 	return rc;
 }
 
 static void
-dss_threads_fini()
+dss_xstreams_fini(bool force)
 {
-	struct dss_thread	*dthread;
-	struct dss_thread	*tmp;
+	struct dss_xstream	*dx;
+	struct dss_xstream	*tmp;
 	int			 rc;
 
-	D_DEBUG(DF_SERVER, "stopping service threads\n");
+	D_DEBUG(DF_SERVER, "Stopping execution streams\n");
 
-	/* wait for each thread to complete */
-	daos_list_for_each_entry_safe(dthread, tmp, &dss_thread_list, dt_list) {
-		daos_list_del(&dthread->dt_list);
-		ABT_xstream_join(&dthread->dt_xstream);
-		ABT_xstream_free(&dthread->dt_xstream);
-		/* housekeeping ... */
-		dss_thread_free(dthread);
+	/** Stop & free progress xstreams */
+	daos_list_for_each_entry(dx, &dss_xstream_list, dx_list)
+		ABT_future_set(dx->dx_shutdown, dx);
+	daos_list_for_each_entry(dx, &dss_xstream_list, dx_list) {
+		ABT_thread_join(dx->dx_progress);
+		ABT_thread_free(&dx->dx_progress);
+		ABT_future_free(&dx->dx_shutdown);
 	}
 
-	/* release thread-local storage */
+	/** Wait for each execution stream to complete */
+	daos_list_for_each_entry(dx, &dss_xstream_list, dx_list) {
+		ABT_xstream_join(dx->dx_xstream);
+		ABT_xstream_free(&dx->dx_xstream);
+	}
+
+	/** housekeeping ... */
+	daos_list_for_each_entry_safe(dx, tmp, &dss_xstream_list, dx_list) {
+		daos_list_del(&dx->dx_list);
+		ABT_sched_free(&dx->dx_sched);
+		dss_xstream_free(dx);
+	}
+
+	/* release local storage */
 	rc = pthread_key_delete(dss_tls_key);
 	if (rc)
 		D_ERROR("failed to delete dtc: %d\n", rc);
 
-	D_DEBUG(DF_SERVER, "service threads stopped\n");
+	D_DEBUG(DF_SERVER, "Execution streams stopped\n");
 }
 
 static int
-dss_threads_init(int nr)
+dss_xstreams_init(int nr)
 {
 	int	rc;
 	int	i;
@@ -404,22 +392,22 @@ dss_threads_init(int nr)
 	ncores = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 
 	if (nr == 0)
-		/* start one thread per core by default */
-		dss_nthreads = ncores;
+		/* start one xstream per core by default */
+		dss_nxstreams = ncores;
 	else
-		dss_nthreads = nr;
+		dss_nxstreams = nr;
 
-	/* initialize thread-local storage */
+	/* initialize xstream-local storage */
 	rc = pthread_key_create(&dss_tls_key, dss_tls_fini);
 	if (rc) {
 		D_ERROR("failed to create dtc: %d\n", rc);
 		return -DER_NOMEM;
 	}
 
-	/* start the service threads */
-	D_DEBUG(DF_SERVER, "%d cores detected, starting %d service threads\n",
-		ncores, dss_nthreads);
-	for (i = 0; i < dss_nthreads; i++) {
+	/* start the execution streams */
+	D_DEBUG(DF_SERVER, "%d cores detected, starting %d execution streams\n",
+		ncores, dss_nxstreams);
+	for (i = 0; i < dss_nxstreams; i++) {
 		hwloc_obj_t	obj;
 
 		obj = hwloc_get_obj_by_depth(dss_topo, depth, i % ncores);
@@ -428,12 +416,13 @@ dss_threads_init(int nr)
 			return -DER_INVAL;
 		}
 
-		rc = dss_start_one_thread(obj->allowed_cpuset, i);
+		/** ABT rank must be >0, so start at 1 */
+		rc = dss_start_one_xstream(obj->allowed_cpuset, i + 1);
 		if (rc)
 			return rc;
 	}
-	D_DEBUG(DF_SERVER, "%d service threads successfully started\n",
-		dss_nthreads);
+	D_DEBUG(DF_SERVER, "%d execution streams successfully started\n",
+		dss_nxstreams);
 
 	return 0;
 }
@@ -444,7 +433,7 @@ dss_threads_init(int nr)
 
 static void *
 dss_srv_tls_init(const struct dss_thread_local_storage *dtls,
-		     struct dss_module_key *key)
+		 struct dss_module_key *key)
 {
 	struct dss_module_info *info;
 
@@ -470,7 +459,7 @@ struct dss_module_key daos_srv_modkey = {
 };
 
 /**
- * Collective operations among all server threads
+ * Collective operations among all server xstreams
  */
 
 struct collective_arg {
@@ -498,25 +487,25 @@ collective_reduce(void **arg)
 	int    *nfailed = arg[0];
 	int	i;
 
-	for (i = 1; i < dss_nthreads + 1; i++)
+	for (i = 1; i < dss_nxstreams + 1; i++)
 		if ((int)(intptr_t)arg[i] != 0)
 			(*nfailed)++;
 }
 
 /**
- * Execute \a func(\a arg) collectively on all server threads. Can only be
+ * Execute \a func(\a arg) collectively on all server xstreams. Can only be
  * called by ULTs. Can only execute tasklet-compatible functions.
  *
  * \param[in] func	function to be executed
  * \param[in] arg	argument to be passed to \a func
- * \return		number of failed threads or error code
+ * \return		number of failed xstreams or error code
  */
 int
 dss_collective(int (*func)(void *), void *arg)
 {
 	ABT_future		future;
 	struct collective_arg	carg;
-	struct dss_thread      *dthread;
+	struct dss_xstream      *dx;
 	int			nfailed = 0;
 	int			rc;
 
@@ -524,7 +513,7 @@ dss_collective(int (*func)(void *), void *arg)
 	 * Use the first, extra element of the value array to store the number
 	 * of failed tasks.
 	 */
-	rc = ABT_future_create(dss_nthreads + 1, collective_reduce, &future);
+	rc = ABT_future_create(dss_nxstreams + 1, collective_reduce, &future);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 	rc = ABT_future_set(future, &nfailed);
@@ -538,8 +527,8 @@ dss_collective(int (*func)(void *), void *arg)
 	 * Create tasklets and store return codes in the value array as
 	 * "void *" pointers.
 	 */
-	daos_list_for_each_entry(dthread, &dss_thread_list, dt_list) {
-		rc = ABT_task_create(dthread->dt_pool, collective_func, &carg,
+	daos_list_for_each_entry(dx, &dss_xstream_list, dx_list) {
+		rc = ABT_task_create(dx->dx_pool, collective_func, &carg,
 				     NULL /* task */);
 		if (rc != ABT_SUCCESS) {
 			rc = dss_abterr2der(rc);
@@ -558,9 +547,9 @@ dss_collective(int (*func)(void *), void *arg)
  */
 
 int
-dss_srv_fini()
+dss_srv_fini(bool force)
 {
-	dss_threads_fini();
+	dss_xstreams_fini(force);
 
 	dss_unregister_key(&daos_srv_modkey);
 
@@ -572,15 +561,15 @@ dss_srv_init(int nr)
 {
 	int	rc;
 
-	DAOS_INIT_LIST_HEAD(&dss_thread_list);
+	DAOS_INIT_LIST_HEAD(&dss_xstream_list);
 
 	/** register global tls accessible to all modules */
 	dss_register_key(&daos_srv_modkey);
 
-	/* start threads */
-	rc = dss_threads_init(nr);
+	/* start xstreams */
+	rc = dss_xstreams_init(nr);
 	if (rc != 0)
-		dss_srv_fini();
+		dss_srv_fini(true);
 
 	return rc;
 }

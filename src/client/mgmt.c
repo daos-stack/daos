@@ -26,6 +26,29 @@
 #include <client_internal.h>
 
 int
+daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
+		  daos_event_t *ev)
+{
+	int rc;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc)
+			return rc;
+	}
+
+	rc = dc_mgmt_svc_rip(grp, rank, force, ev);
+	if (rc)
+		return rc;
+
+	/** wait for completion if blocking mode */
+	if (daos_event_is_priv(ev))
+		rc = daos_event_priv_wait(ev);
+
+	return rc;
+}
+
+int
 daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 		 const char *grp, const daos_rank_list_t *tgts, const char *dev,
 		 daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,

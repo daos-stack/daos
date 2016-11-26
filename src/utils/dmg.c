@@ -260,6 +260,51 @@ exclude_hdlr(int argc, char *argv[])
 }
 
 static int
+kill_hdlr(int argc, char *argv[])
+{
+	struct option		options[] = {
+		{"group",	required_argument,	NULL,	'G'},
+		{"force",	0,			NULL,	'f'},
+		{"rank",	required_argument,	NULL,	'r'},
+		{NULL,		0,			NULL,	0}
+	};
+	const char	       *group = default_group;
+	bool			force = false;
+	daos_rank_t		rank = -1;
+	int			rc;
+
+	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+		switch (rc) {
+		case 'G':
+			group = optarg;
+			break;
+		case 'f':
+			force = true;
+			break;
+		case 'r':
+			rank = atoi(optarg);
+			break;
+		default:
+			return 2;
+		}
+	}
+
+
+	if (rank < 0) {
+		D_ERROR("valid target rank required\n");
+		return 2;
+	}
+
+	rc = daos_mgmt_svc_rip(group, rank, force, NULL);
+	if (rc != 0) {
+		D_ERROR("failed to kill rank: %d\n", rank);
+		return rc;
+	}
+
+	return 0;
+}
+
+static int
 help_hdlr(int argc, char *argv[])
 {
 	printf("\
@@ -269,6 +314,7 @@ commands:\n\
   destroy	destroy a pool\n\
   evict		evict all pool connections to a pool\n\
   exclude	exclude a target from a pool\n\
+  kill		kill remote daos server\n\
   help		print this message and exit\n");
 	printf("\
 create options:\n\
@@ -292,6 +338,11 @@ exclude options:\n\
   --group=STR	pool server process group (\"%s\")\n\
   --pool=UUID	pool UUID\n\
   --target=RANK	target rank\n", default_group);
+	printf("\
+kill options:\n\
+  --group=STR	pool server process group (\"%s\")\n\
+  --force	unclean shutdown\n\
+  --rank=INT	rank of the DAOS server to kill\n", default_group);
 	return 0;
 }
 
@@ -311,6 +362,8 @@ main(int argc, char *argv[])
 		hdlr = evict_hdlr;
 	else if (strcmp(argv[1], "exclude") == 0)
 		hdlr = exclude_hdlr;
+	else if (strcmp(argv[1], "kill") == 0)
+		hdlr = kill_hdlr;
 
 	if (hdlr == NULL || hdlr == help_hdlr) {
 		help_hdlr(argc, argv);

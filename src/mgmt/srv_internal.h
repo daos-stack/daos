@@ -36,6 +36,9 @@
 #include <daos_srv/daos_server.h>
 #include "rpc.h"
 
+/** srv.c */
+int ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
+
 /** srv_pool.c */
 int ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
 int ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);

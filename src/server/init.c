@@ -176,7 +176,7 @@ static void
 server_fini(bool force)
 {
 	D_DEBUG(DF_SERVER, "Service is shutting down\n");
-	dss_srv_fini();
+	dss_srv_fini(force);
 	dss_module_fini(force);
 	crt_finalize();
 	dss_module_unload_all();

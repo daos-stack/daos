@@ -26,6 +26,19 @@
 #include <daos_types.h>
 
 /**
+ * Kill a remote server.
+ *
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank	[IN]	Rank to kill
+ * \param force	[IN]	Abrupt shutdown, no cleanup
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
+		  daos_event_t *ev);
+
+/**
  * Create a pool with \a uuid and \a mode.
  *
  * \a grp and \a tgts pass in the address of each target and the total

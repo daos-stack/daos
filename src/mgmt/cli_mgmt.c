@@ -27,6 +27,78 @@
 
 #include "rpc.h"
 
+static int
+rip_cp(void *arg, daos_event_t *ev, int rc)
+{
+	crt_rpc_t		*rpc = arg;
+	struct mgmt_svc_rip_out	*rip_out;
+
+	if (rc) {
+		D_ERROR("RPC error while killing rank: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rip_out = crt_reply_get(rpc);
+	rc = rip_out->rip_rc;
+	if (rc) {
+		D_ERROR("MGMT_SVC_RIP replied failed, rc: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	crt_req_decref(rpc);
+	return rc;
+}
+
+int
+dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
+		daos_event_t *ev)
+{
+	crt_endpoint_t		 svr_ep;
+	crt_rpc_t		*rpc = NULL;
+	crt_opcode_t		 opc;
+	struct mgmt_svc_rip_in	*rip_in;
+	int			 rc = 0;
+
+	svr_ep.ep_grp = NULL;
+	svr_ep.ep_rank = rank;
+	svr_ep.ep_tag = 0;
+	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE, 1);
+	rc = crt_req_create(daos_ev2ctx(ev), svr_ep, opc, &rpc);
+	if (rc != 0) {
+		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
+			rc);
+		D_GOTO(out, rc);
+	}
+
+	D_ASSERT(rpc != NULL);
+	rip_in = crt_req_get(rpc);
+	D_ASSERT(rip_in != NULL);
+
+	/** fill in request buffer */
+	rip_in->rip_flags = force;
+
+	rc = daos_event_register_comp_cb(ev, rip_cp, rpc);
+	if (rc != 0) {
+		crt_req_decref(rpc);
+		D_GOTO(out, rc);
+	}
+
+	rc = daos_event_launch(ev);
+	if (rc != 0) {
+		crt_req_decref(rpc);
+		D_GOTO(out, rc);
+	}
+
+	crt_req_addref(rpc); /** for rip_cp */
+	D_DEBUG(DF_MGMT, "killing rank %u\n", rank);
+
+	/** send the request */
+	rc = daos_rpc_send(rpc, ev);
+out:
+	return rc;
+}
+
 /**
  * Initialize management interface
  */

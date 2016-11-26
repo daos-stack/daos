@@ -190,13 +190,13 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 	int		 rc = 0;
 
 	/**
-	 * Create one VOS file per thread
+	 * Create one VOS file per execution stream
 	 * 16MB minimum per file
 	 */
-	size = max(tgt_size / dss_nthreads, 1 << 24);
+	size = max(tgt_size / dss_nxstreams, 1 << 24);
 	/** tc_in->tc_tgt_dev is assumed to point at PMEM for now */
 
-	for (i = 0; i < dss_nthreads; i++) {
+	for (i = 1; i <= dss_nxstreams; i++) {
 
 		rc = path_gen(uuid, NEWBORNS, VOS_FILE, &i, &path);
 		if (rc)

@@ -78,11 +78,10 @@ ds_pool_child_put(struct ds_pool_child *child)
 }
 
 void
-ds_pool_child_purge(void)
+ds_pool_child_purge(struct dsm_tls *tls)
 {
 	struct ds_pool_child   *child;
 	struct ds_pool_child   *n;
-	struct dsm_tls	       *tls = dsm_tls_get();
 
 	daos_list_for_each_entry_safe(child, n, &tls->dt_pool_list, spc_list) {
 		D_ASSERTF(child->spc_ref == 1, DF_UUID": %d\n",

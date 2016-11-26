@@ -34,7 +34,7 @@ void dss_module_unload_all(void);
 
 /* srv.c */
 int dss_srv_init(int);
-int dss_srv_fini(void);
+int dss_srv_fini(bool force);
 
 /* tls.c */
 void dss_tls_fini(void *arg);

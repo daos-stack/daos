@@ -27,11 +27,12 @@
  * - storage allocation;
  * - DAOS pool initialization.
  *
- * The storage manager is a first-class server module (like dsm/r server-side
- * library) and can be unloaded/reloaded.
+ * The management server is a first-class server module (like object/pool
+ * server-side library) and can be unloaded/reloaded.
  */
 
 #include "srv_internal.h"
+#include <signal.h>
 
 static struct daos_rpc_handler ds_mgmt_handlers[] = {
 	{
@@ -47,9 +48,48 @@ static struct daos_rpc_handler ds_mgmt_handlers[] = {
 		.dr_opc		= MGMT_TGT_DESTROY,
 		.dr_hdlr	= ds_mgmt_hdlr_tgt_destroy,
 	}, {
+		.dr_opc		= MGMT_SVC_RIP,
+		.dr_hdlr	= ds_mgmt_hdlr_svc_rip,
+	}, {
 		.dr_opc = 0,
 	}
 };
+
+int
+ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
+{
+	struct mgmt_svc_rip_in	*murderer;
+	struct mgmt_svc_rip_out	*obituary;
+	int			 rc;
+	int			 sig;
+	bool			 force;
+
+	murderer = crt_req_get(rpc);
+	if (murderer == NULL)
+		return -DER_PROTO;
+
+	force = (murderer->rip_flags != 0);
+
+	obituary = crt_reply_get(rpc);
+	if (obituary == NULL)
+		return -DER_NOMEM;
+	obituary->rip_rc = 0;
+
+	/** reply before committing a "suicide" ... */
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		/** don't care, i am done */
+		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
+
+	/** ... adieu */
+	if (force)
+		sig = SIGKILL;
+	else
+		sig = SIGTERM;
+	kill(getpid(), sig);
+
+	return rc;
+}
 
 static int
 ds_mgmt_init()

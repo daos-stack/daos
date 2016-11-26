@@ -34,8 +34,8 @@
 #include <pthread.h>
 #include <hwloc.h>
 
-/** Number of started threads or cores used */
-extern unsigned int	dss_nthreads;
+/** Number of execution streams started or cores used */
+extern unsigned int	dss_nxstreams;
 
 /** Server node topoloby */
 extern hwloc_topology_t	dss_topo;

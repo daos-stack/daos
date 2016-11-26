@@ -137,7 +137,7 @@ dsm_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct dsm_tls *tls = data;
 
-	ds_pool_child_purge();
+	ds_pool_child_purge(tls);
 	D_ASSERT(daos_list_empty(&tls->dt_pool_list));
 	D_FREE_PTR(tls);
 }

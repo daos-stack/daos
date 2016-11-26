@@ -42,6 +42,15 @@ enum mgmt_operation {
 	MGMT_TGT_CREATE		= 4,
 	MGMT_TGT_DESTROY	= 5,
 	MGMT_TGT_EXTEND		= 6,
+	MGMT_SVC_RIP		= 7,
+};
+
+struct mgmt_svc_rip_in {
+	uint32_t	rip_flags;
+};
+
+struct mgmt_svc_rip_out {
+	int		rip_rc;
 };
 
 struct mgmt_pool_create_in {

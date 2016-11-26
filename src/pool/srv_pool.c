@@ -297,7 +297,7 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t root, uint32_t uid,
 		map_comp.co_rank = target_addrs->rl_ranks[i];
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
-		map_comp.co_nr = dss_nthreads;
+		map_comp.co_nr = dss_nxstreams;
 
 		rc = pool_buf_attach(map_buf, &map_comp, 1 /* comp_nr */);
 		if (rc != 0) {

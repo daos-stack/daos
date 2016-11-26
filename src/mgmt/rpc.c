@@ -73,6 +73,14 @@ struct crt_msg_field *mgmt_tgt_destroy_out_fields[] = {
 	&CMF_INT		/* td_rc */
 };
 
+struct crt_msg_field *mgmt_svc_rip_in_fields[] = {
+	&CMF_UINT32,		/* rip_flags */
+};
+
+struct crt_msg_field *mgmt_svc_rip_out_fields[] = {
+	&CMF_INT		/* rip_rc */
+};
+
 struct crt_req_format DQF_MGMT_POOL_CREATE =
 	DEFINE_CRT_REQ_FMT("MGMT_POOL_CREATE", mgmt_pool_create_in_fields,
 			   mgmt_pool_create_out_fields);
@@ -88,6 +96,10 @@ struct crt_req_format DQF_MGMT_TGT_CREATE =
 struct crt_req_format DQF_MGMT_TGT_DESTROY =
 	DEFINE_CRT_REQ_FMT("MGMT_TGT_DESTROY", mgmt_tgt_destroy_in_fields,
 			   mgmt_tgt_destroy_out_fields);
+
+struct crt_req_format DQF_MGMT_SVC_RIP =
+	DEFINE_CRT_REQ_FMT("MGMT_SVC_RIP", mgmt_svc_rip_in_fields,
+			   mgmt_svc_rip_out_fields);
 
 struct daos_rpc mgmt_rpcs[] = {
 	{
@@ -114,6 +126,12 @@ struct daos_rpc mgmt_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_MGMT_TGT_DESTROY,
+	}, {
+		.dr_name	= "MGMT_SVC_RIP",
+		.dr_opc		= MGMT_SVC_RIP,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_MGMT_SVC_RIP,
 	}, {
 		.dr_opc		= 0
 	}

@@ -24,14 +24,18 @@
  * dc_mgmt: Management Client API
  */
 
-#ifndef __DAOS_MGMT_H__
-#define __DAOS_MGMT_H__
+#ifndef __DC_MGMT_H__
+#define __DC_MGMT_H__
 
 #include <daos_types.h>
 
 int dc_mgmt_init(void);
 
 int dc_mgmt_fini(void);
+
+int
+dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
+		daos_event_t *ev);
 
 int
 dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
