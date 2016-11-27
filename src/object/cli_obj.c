@@ -366,6 +366,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx)
 
 	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
+	D_ASSERT(obj->cob_layout->ol_nr > 0);
 	idx_first = (idx / grp_size) * grp_size;
 	for (i = 0; i < grp_size; i++) {
 		D_ASSERTF(idx < obj->cob_layout->ol_nr,
@@ -373,10 +374,10 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx)
 			  obj->cob_layout->ol_nr, i);
 		if (obj->cob_layout->ol_shards[idx] != -1)
 			break;
-		if (idx == obj->cob_layout->ol_nr)
-			idx = idx_first;
-		else
+		if (idx < obj->cob_layout->ol_nr - 1)
 			idx++;
+		else
+			idx = idx_first;
 	}
 
 	if (i == grp_size)
