@@ -78,7 +78,7 @@ insert_lookup_with_wait(test_arg_t *arg, void *params1,
 	int			rank, key_nr;
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 	ioreq_init(&req, oid, arg);
 	if (!rank) {
 		print_message("\n\n=============================\n");

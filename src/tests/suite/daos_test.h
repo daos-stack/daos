@@ -190,13 +190,13 @@ ts_buf_render(char *buf, unsigned int buf_len)
 }
 
 static inline void
-obj_random(test_arg_t *arg, daos_obj_id_t *oid)
+obj_random(test_arg_t *arg, daos_obj_id_t *oid, int class_type)
 {
 	/** choose random object */
 	oid->lo	= rand();
 	oid->mid = rand();
 	oid->hi	= rand();
-	daos_obj_id_generate(oid, DAOS_OC_REPLICA_RW);
+	daos_obj_id_generate(oid, class_type);
 }
 
 #endif

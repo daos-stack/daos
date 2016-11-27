@@ -282,7 +282,7 @@ io_epoch_overwrite(void **state)
 	daos_epoch_t	 e = 0;
 
 	/** choose random object */
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 
 	ioreq_init(&req, oid, (test_arg_t *)*state);
 	size = strlen(ubuf);
@@ -321,7 +321,7 @@ io_var_idx_offset(void **state)
 	daos_off_t	 offset;
 
 	/** choose random object */
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 
 	ioreq_init(&req, oid, arg);
 
@@ -363,7 +363,7 @@ io_var_akey_size(void **state)
 	skip();
 
 	/** choose random object */
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 
 	ioreq_init(&req, oid, arg);
 
@@ -408,7 +408,7 @@ io_var_dkey_size(void **state)
 	char		*key;
 
 	/** choose random object */
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 
 	ioreq_init(&req, oid, arg);
 
@@ -454,7 +454,7 @@ io_var_rec_size(void **state)
 	char		*update_buf;
 
 	/** choose random object */
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 
 	/** random epoch as well */
 	epoch = rand();
@@ -495,19 +495,15 @@ io_var_rec_size(void **state)
 	ioreq_fini(&req);
 }
 
-/** very basic update/fetch with data verification */
 static void
-io_simple(void **state)
+io_simple_internal(void **state, daos_obj_id_t oid)
 {
 	test_arg_t	*arg = *state;
-	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	const char	 dkey[] = "test_update dkey";
 	const char	 akey[] = "test_update akey";
 	const char	 rec[]  = "test_update record";
 	char		*buf;
-
-	obj_random(arg, &oid);
 
 	ioreq_init(&req, oid, arg);
 
@@ -527,6 +523,18 @@ io_simple(void **state)
 	assert_memory_equal(buf, rec, strlen(rec));
 	free(buf);
 	ioreq_fini(&req);
+}
+
+/** very basic update/fetch with data verification */
+static void
+io_simple(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
+
+	io_simple_internal(state, oid);
 }
 
 void
@@ -601,7 +609,7 @@ enumerate_simple(void **state)
 	int		 key_nr;
 	int		 i;
 
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 
 	ioreq_init(&req, oid, (test_arg_t *)*state);
 
@@ -680,7 +688,7 @@ punch_simple(void **state)
 	char		*buf;
 	int		total_keys = 0;
 
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 	ioreq_init(&req, oid, (test_arg_t *)*state);
 
 	/** Insert record*/
@@ -748,7 +756,7 @@ io_complex(void **state)
 	daos_epoch_t	epoch = 0;
 	int		i;
 
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 	ioreq_init(&req, oid, arg);
 
 	print_message("Insert(e=0)/lookup(e=0)/verify complex kv record\n");
@@ -807,7 +815,7 @@ io_on_stack(void **state)
 	ts_buf_render(buf, STACK_BUF_LEN);
 
 	/** open object */
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -852,21 +860,24 @@ static void
 io_simple_update_timeout(void **state)
 {
 	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
 
-	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT | DAOS_FAIL_SOME;
-	arg->fail_value = 2;
+	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT | DAOS_FAIL_ONCE;
 
-	io_simple(state);
+	obj_random(arg, &oid, DAOS_OC_LARGE_RW);
+	io_simple_internal(state, oid);
 }
 
 static void
 io_simple_fetch_timeout(void **state)
 {
 	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
 
 	arg->fail_loc = DAOS_SHARD_OBJ_FETCH_TIMEOUT | DAOS_FAIL_ONCE;
 
-	io_simple(state);
+	obj_random(arg, &oid, DAOS_OC_LARGE_RW);
+	io_simple_internal(state, oid);
 }
 
 static void
@@ -934,7 +945,7 @@ epoch_discard(void **state)
 	}
 	MPI_Bcast(&epoch, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 	ioreq_init(&req, oid, arg);
 
 	/** Prepare buffers for a fixed set of d-keys and a-keys. */
@@ -1041,7 +1052,7 @@ io_nospace(void **state)
 	int		i;
 
 	/** choose random object */
-	obj_random(arg, &oid);
+	obj_random(arg, &oid, DAOS_OC_REPLICA_RW);
 
 	large_buf = malloc(buf_size);
 	assert_non_null(large_buf);
