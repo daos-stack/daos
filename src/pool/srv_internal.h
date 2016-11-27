@@ -94,6 +94,7 @@ struct ds_pool_create_arg {
 };
 int ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
 			  struct ds_pool **pool);
+void ds_pool_child_purge(void);
 
 /*
  * srv_util.c

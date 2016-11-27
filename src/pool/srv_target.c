@@ -77,6 +77,21 @@ ds_pool_child_put(struct ds_pool_child *child)
 	}
 }
 
+void
+ds_pool_child_purge(void)
+{
+	struct ds_pool_child   *child;
+	struct ds_pool_child   *n;
+	struct dsm_tls	       *tls = dsm_tls_get();
+
+	daos_list_for_each_entry_safe(child, n, &tls->dt_pool_list, spc_list) {
+		D_ASSERTF(child->spc_ref == 1, DF_UUID": %d\n",
+			  DP_UUID(child->spc_uuid), child->spc_ref);
+		daos_list_del_init(&child->spc_list);
+		ds_pool_child_put(child);
+	}
+}
+
 struct pool_child_lookup_arg {
 	void	       *pla_uuid;
 	uint32_t	pla_map_version;
