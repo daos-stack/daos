@@ -361,20 +361,26 @@ static int
 obj_grp_valid_shard_get(struct dc_object *obj, int idx)
 {
 	int idx_first;
+	int idx_last;
 	int grp_size;
 	int i;
 
 	grp_size = obj_get_grp_size(obj);
 	D_ASSERT(grp_size > 0);
-	D_ASSERT(obj->cob_layout->ol_nr > 0);
+
 	idx_first = (idx / grp_size) * grp_size;
+	idx_last = idx_first + grp_size - 1;
+
+	D_ASSERT(obj->cob_layout->ol_nr > 0);
+	D_ASSERTF(idx_last < obj->cob_layout->ol_nr,
+		  "idx %d, first %d, last %d, shard_nr %d\n",
+		  idx, idx_first, idx_last, obj->cob_layout->ol_nr);
+
 	for (i = 0; i < grp_size; i++) {
-		D_ASSERTF(idx < obj->cob_layout->ol_nr,
-			  "idx %d nr %d, i %d\n", idx,
-			  obj->cob_layout->ol_nr, i);
 		if (obj->cob_layout->ol_shards[idx] != -1)
 			break;
-		if (idx < obj->cob_layout->ol_nr - 1)
+
+		if (idx < idx_last)
 			idx++;
 		else
 			idx = idx_first;
