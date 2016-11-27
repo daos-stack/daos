@@ -1647,7 +1647,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	if (vos_obj_is_new(oiter->it_oref->or_obj)) {
 		D_DEBUG(DF_VOS2, "New object, nothing to iterate\n");
-		return -DER_NONEXIST;
+		D_GOTO(failed, -DER_NONEXIST);
 	}
 
 	rc = vos_obj_tree_init(oiter->it_oref);
