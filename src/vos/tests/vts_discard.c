@@ -135,6 +135,7 @@ io_fetch_empty_buf(struct io_test_args *arg, daos_epoch_t fetch_epoch,
 	if (rc)
 		D_GOTO(exit, rc);
 
+	assert_true(strlen(req->fetch_buf) == 0);
 	if (strlen(req->fetch_buf) == 0)
 		rc = -DER_NONEXIST;
 exit:
@@ -148,6 +149,13 @@ io_fetch(struct io_test_args *arg, daos_epoch_t fetch_epoch,
 {
 	int rc  = 0;
 
+	if (verbose) {
+		print_message("dkey: %s\n", req->dkey_buf);
+		print_message("akey: %s\n", req->akey_buf);
+		print_message("fetch_buf: %s, epoch"DF_U64"\n",
+			      req->fetch_buf, fetch_epoch);
+	}
+
 	memset(req->fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&req->val_iov, &req->fetch_buf, UPDATE_BUF_SIZE);
 	req->rex.rx_rsize = UPDATE_BUF_SIZE;
@@ -158,13 +166,6 @@ io_fetch(struct io_test_args *arg, daos_epoch_t fetch_epoch,
 	if (!rc && req->rex.rx_rsize == 0)
 		return -DER_NONEXIST;
 
-
-	if (verbose) {
-		print_message("dkey: %s\n", req->dkey_buf);
-		print_message("akey: %s\n", req->akey_buf);
-		print_message("fetch_buf: %s, epoch"DF_U64"\n",
-			      req->fetch_buf, fetch_epoch);
-	}
 
 	assert_memory_equal(req->update_buf, req->fetch_buf, UPDATE_BUF_SIZE);
 
@@ -518,7 +519,8 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	for (i = 0; i < TF_DISCARD_KEYS; i++) {
 		struct io_req	*req = NULL;
 
-		set_key_and_index(&dkey_buf[0], &akey_buf[0], &idx);
+		set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
+		idx = i + 1;
 		rc = io_update(arg, epoch1, &cookie, &dkey_buf[0],
 			       &akey_buf[0], &cntrs, &req, idx, UPDATE_VERBOSE);
 		assert_int_equal(rc, 0);
@@ -528,11 +530,11 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	}
 
 	arg->oid = gen_oid();
-
-	for (i = 0; i < TF_DISCARD_KEYS; i++) {
+	for (i = TF_DISCARD_KEYS; i < TF_DISCARD_KEYS * 2; i++) {
 		struct io_req	*req = NULL;
 
-		set_key_and_index(&dkey_buf[0], &akey_buf[0], &idx);
+		set_key_and_index(&dkey_buf[0], &akey_buf[0], NULL);
+		idx = i + 1;
 		rc = io_update(arg, epoch2, &cookie, &dkey_buf[0],
 			       &akey_buf[0], &cntrs, &req,
 			       idx, UPDATE_VERBOSE);
@@ -548,22 +550,22 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	assert_int_equal(rc, 0);
 
 	/** Check if the object does not exist? */
-	struct vos_obj		*obj_res;
+	struct vos_obj		*obj_res = NULL;
 
 	rc = vos_oi_find(vos_hdl2co(arg->ctx.tc_co_hdl),
 			 last_oid, &obj_res);
 	assert_int_equal(rc, -DER_NONEXIST);
+	assert_ptr_equal(obj_res, NULL);
 
 	arg->oid = last_oid;
 
 	/* Check first TF_DISCARD_KEYS entries in object 1 */
-	i = 0;
 	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
-		if (i >= TF_DISCARD_KEYS)
-			break;
-		rc = io_fetch(arg, epoch1, search_req, UPDATE_VERBOSE);
+		if (search_req->epoch == epoch2)
+			continue;
+		rc = io_fetch_empty_buf(arg, search_req->epoch,
+					search_req, FETCH_VERBOSE);
 		assert_int_equal(rc, -DER_NONEXIST);
-		i++;
 	}
 	return 0;
 }

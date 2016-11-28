@@ -884,7 +884,7 @@ io_fetch_wo_object(void **state)
 
 	rex.rx_rsize = DAOS_REC_ANY;
 	rc = io_test_obj_fetch(arg, 1, &dkey, &vio, &sgl, true);
-	assert_int_equal(rc, -2005);
+	assert_int_equal(rc, -DER_NONEXIST);
 
 }
 
@@ -973,7 +973,7 @@ io_fetch_no_exist_dkey(void **state)
 	arg->ta_flags = 0;
 
 	rc = io_update_and_fetch_incorrect_dkey(arg, 1, 1);
-	assert_int_equal(rc, -2005);
+	assert_int_equal(rc, -DER_NONEXIST);
 }
 
 static void
@@ -985,7 +985,7 @@ io_fetch_no_exist_dkey_zc(void **state)
 	arg->ta_flags = TF_ZERO_COPY;
 
 	rc = io_update_and_fetch_incorrect_dkey(arg, 1, 1);
-	assert_int_equal(rc, -2005);
+	assert_int_equal(rc, -DER_NONEXIST);
 }
 
 static void
