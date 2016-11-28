@@ -914,8 +914,8 @@ io_simple_update_timeout(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 
-	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT | DAOS_FAIL_ONCE;
-
+	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT | DAOS_FAIL_SOME;
+	arg->fail_value = 5;
 	oid = dts_oid_gen(DAOS_OC_LARGE_RW);
 	io_simple_internal(state, oid);
 }
@@ -926,7 +926,8 @@ io_simple_fetch_timeout(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 
-	arg->fail_loc = DAOS_SHARD_OBJ_FETCH_TIMEOUT | DAOS_FAIL_ONCE;
+	arg->fail_loc = DAOS_SHARD_OBJ_FETCH_TIMEOUT | DAOS_FAIL_SOME;
+	arg->fail_value = 5;
 
 	oid = dts_oid_gen(DAOS_OC_LARGE_RW);
 	io_simple_internal(state, oid);

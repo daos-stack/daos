@@ -369,6 +369,10 @@ daos_obj_comp_cb(struct daos_task *task, void *data)
 		D_FREE_PTR(rw_task);
 		D_GOTO(out, rc);
 	}
+
+	rc = daos_task_register_comp_cb(rw_task, daos_obj_comp_cb, NULL);
+	if (rc != 0)
+		D_GOTO(out, rc);
 out:
 	return rc;
 }

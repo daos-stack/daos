@@ -406,6 +406,8 @@ daos_task_post_process(struct daos_task *task)
 		/* see if the dependent task is ready to be scheduled */
 		D_ASSERT(dtp_tmp->dtp_dep_cnt > 0);
 		dtp_tmp->dtp_dep_cnt--;
+		D_DEBUG(DF_MISC, "daos task %p dep_cnt %d\n", dtp_tmp,
+			dtp_tmp->dtp_dep_cnt);
 		if (dtp_tmp->dtp_dep_cnt == 0 && !dsp->dsp_cancelling) {
 			/* If the task is already running, let's mark it
 			 * complete.
