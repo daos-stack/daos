@@ -81,6 +81,8 @@ int  pl_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 void pl_map_destroy(struct pl_map *map);
 void pl_map_print(struct pl_map *map);
 struct pl_map *pl_map_find(daos_handle_t coh, daos_obj_id_t oid);
+void pl_map_addref(struct pl_map *map);
+void pl_map_decref(struct pl_map *map);
 
 void pl_obj_layout_free(struct pl_obj_layout *layout);
 int  pl_obj_layout_alloc(unsigned int shard_nr,
@@ -105,5 +107,7 @@ int pl_obj_find_reint(struct pl_map *map,
 
 int  daos_placement_init(struct pool_map *po_map);
 void daos_placement_fini(struct pool_map *po_map);
+int  daos_placement_refresh(struct pool_map *old_map,
+			    struct pool_map *new_map);
 
 #endif /* __DAOS_PLACEMENT_H__ */

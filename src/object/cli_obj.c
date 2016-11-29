@@ -222,6 +222,7 @@ obj_layout_create(struct dc_object *obj)
 	}
 
 	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
+	pl_map_decref(map);
 	if (rc != 0) {
 		D_DEBUG(DF_SRC, "Failed to generate object layout\n");
 		D_GOTO(out, rc);

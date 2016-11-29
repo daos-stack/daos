@@ -35,6 +35,10 @@ struct pl_map_ops;
 
 /** common header of all placement map */
 struct pl_map {
+	/** protect refcount */
+	pthread_spinlock_t	 pl_lock;
+	/** refcount */
+	int			 pl_ref;
 	/** type of placement map */
 	pl_map_type_t		 pl_type;
 	/** pool map version this map is created for */

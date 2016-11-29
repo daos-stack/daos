@@ -166,23 +166,26 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 			DP_UUID(pool->dp_pool),
 			pool->dp_map == NULL ?
 			0 : pool_map_get_version(pool->dp_map), map_version);
-		map_tmp = pool->dp_map;
-		if (map_tmp != NULL)
-			daos_placement_fini(map_tmp);
 
-		rc = daos_placement_init(map);
-		if (rc != 0)
+		if (pool->dp_map != NULL)
+			rc = daos_placement_refresh(pool->dp_map, map);
+		else
+			rc = daos_placement_init(map);
+
+		if (rc != 0) {
+			D_ERROR("Failed to refresh placement map: %d\n", rc);
 			D_GOTO(out_unlock, rc);
+		}
+
+		map_tmp = pool->dp_map;
 		pool->dp_map = map;
 		map = map_tmp;
+
 	} else if (map_version < pool_map_get_version(pool->dp_map)) {
 		D_DEBUG(DF_DSMC, DF_UUID": received older pool map: %u -> %u\n",
 			DP_UUID(pool->dp_pool),
 			pool_map_get_version(pool->dp_map), map_version);
 	}
-
-	if (map != NULL)
-		pool_map_destroy(map);
 
 	/* Scan all targets for info->pi_ndisabled and/or tgts. */
 	if (info != NULL || tgts != NULL) {
@@ -208,6 +211,9 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 
 out_unlock:
 	pthread_rwlock_unlock(&pool->dp_map_lock);
+
+	if (map != NULL)
+		pool_map_destroy(map);
 
 	if (info != NULL && rc == 0) {
 		uuid_copy(info->pi_uuid, pool->dp_pool);

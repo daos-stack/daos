@@ -81,6 +81,8 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 	if (rc != 0)
 		return rc;
 
+	pthread_spin_init(&map->pl_lock, PTHREAD_PROCESS_PRIVATE);
+	map->pl_ref  = 1;
 	map->pl_type = mia->ia_type;
 	map->pl_ops  = dict->pd_ops;
 
@@ -94,9 +96,11 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 void
 pl_map_destroy(struct pl_map *map)
 {
+	D_ASSERT(map->pl_ref == 0);
 	D_ASSERT(map->pl_ops != NULL);
 	D_ASSERT(map->pl_ops->o_destroy != NULL);
 
+	pthread_spin_destroy(&map->pl_lock);
 	map->pl_ops->o_destroy(map);
 }
 
@@ -257,27 +261,79 @@ pl_obj_shard2grp_index(struct daos_obj_shard_md *shard_md,
 	}
 }
 
+void
+pl_map_addref(struct pl_map *map)
+{
+	pthread_spin_lock(&map->pl_lock);
+	map->pl_ref++;
+	pthread_spin_unlock(&map->pl_lock);
+}
+
+void
+pl_map_decref(struct pl_map *map)
+{
+	bool	zombie;
+
+	pthread_spin_lock(&map->pl_lock);
+
+	D_ASSERT(map->pl_ref > 0);
+	map->pl_ref--;
+	zombie = map->pl_ref == 0;
+
+	pthread_spin_unlock(&map->pl_lock);
+
+	if (zombie)
+		pl_map_destroy(map);
+}
+
 /**
  * XXX this should be per-pool.
  */
 struct daos_placement_data {
-	struct pl_map	*pd_pl_map;
-	unsigned int	 pd_ref;
-	pthread_mutex_t	 pd_lock;
+	struct pl_map		*pd_pl_map;
+	unsigned int		 pd_ref;
+	pthread_rwlock_t	 pd_lock;
 };
 
 static struct daos_placement_data placement_data = {
 	.pd_pl_map	= NULL,
 	.pd_ref		= 0,
-	.pd_lock	= PTHREAD_MUTEX_INITIALIZER,
+	.pd_lock	= PTHREAD_RWLOCK_INITIALIZER,
 };
-
-#define DSR_RING_DOMAIN		PO_COMP_TP_RACK
 
 struct pl_map *
 pl_map_find(daos_handle_t coh, daos_obj_id_t oid)
 {
-	return placement_data.pd_pl_map;
+	struct pl_map *map;
+
+	pthread_rwlock_rdlock(&placement_data.pd_lock);
+	map = placement_data.pd_pl_map; /* take the only one */
+	pl_map_addref(map);
+	pthread_rwlock_unlock(&placement_data.pd_lock);
+
+	return map;
+}
+
+#define DSR_RING_DOMAIN		PO_COMP_TP_RACK
+
+static void
+pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
+		 struct pl_map_init_attr *mia)
+{
+	memset(mia, 0, sizeof(*mia));
+	mia->ia_ver = pool_map_get_version(po_map);
+
+	switch (type) {
+	default:
+		D_ASSERTF(0, "Unknown placemet map type: %d.\n", type);
+		break;
+
+	case PL_TYPE_RING:
+		mia->ia_type	     = PL_TYPE_RING;
+		mia->ia_ring.domain  = DSR_RING_DOMAIN;
+		mia->ia_ring.ring_nr = 1;
+		break;
+	}
 }
 
 /**
@@ -290,7 +346,7 @@ daos_placement_init(struct pool_map *po_map)
 	struct pl_map_init_attr	mia;
 	int			rc = 0;
 
-	pthread_mutex_lock(&placement_data.pd_lock);
+	pthread_rwlock_wrlock(&placement_data.pd_lock);
 	if (placement_data.pd_pl_map != NULL) {
 		D_DEBUG(DF_SR, "Placement map has been referenced %d\n",
 			placement_data.pd_ref);
@@ -300,11 +356,7 @@ daos_placement_init(struct pool_map *po_map)
 
 	D_ASSERT(placement_data.pd_ref == 0);
 
-	memset(&mia, 0, sizeof(mia));
-	mia.ia_ver	    = pool_map_get_version(po_map);
-	mia.ia_type	    = PL_TYPE_RING;
-	mia.ia_ring.domain  = DSR_RING_DOMAIN;
-	mia.ia_ring.ring_nr = 1;
+	pl_map_attr_init(po_map, PL_TYPE_RING, &mia);
 
 	rc = pl_map_create(po_map, &mia, &placement_data.pd_pl_map);
 	if (rc != 0)
@@ -312,7 +364,7 @@ daos_placement_init(struct pool_map *po_map)
 
 	placement_data.pd_ref = 1;
  out:
-	pthread_mutex_unlock(&placement_data.pd_lock);
+	pthread_rwlock_unlock(&placement_data.pd_lock);
 	return rc;
 }
 
@@ -320,11 +372,40 @@ daos_placement_init(struct pool_map *po_map)
 void
 daos_placement_fini(struct pool_map *po_map)
 {
-	pthread_mutex_lock(&placement_data.pd_lock);
+	pthread_rwlock_wrlock(&placement_data.pd_lock);
+
 	placement_data.pd_ref--;
 	if (placement_data.pd_ref == 0) {
-		pl_map_destroy(placement_data.pd_pl_map);
+		pl_map_decref(placement_data.pd_pl_map);
 		placement_data.pd_pl_map = NULL;
 	}
-	pthread_mutex_unlock(&placement_data.pd_lock);
+	pthread_rwlock_unlock(&placement_data.pd_lock);
+}
+
+/**
+ * Generate a new placement map for the new pool map @new_map, and release
+ * the placement map for the old version @old_map.
+ */
+int
+daos_placement_refresh(struct pool_map *old_map, struct pool_map *new_map)
+{
+	struct pl_map		*map;
+	struct pl_map_init_attr	 mia;
+	int			 rc;
+
+	pthread_rwlock_wrlock(&placement_data.pd_lock);
+
+	D_ASSERT(placement_data.pd_ref > 0);
+
+	pl_map_attr_init(new_map, PL_TYPE_RING, &mia);
+
+	rc = pl_map_create(new_map, &mia, &map);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	pl_map_decref(placement_data.pd_pl_map);
+	placement_data.pd_pl_map = map;
+ out:
+	pthread_rwlock_unlock(&placement_data.pd_lock);
+	return rc;
 }
