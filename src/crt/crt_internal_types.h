@@ -68,6 +68,9 @@ struct crt_gdata {
 	/* multiple NA addr flag, true for server when using CCI plugin */
 	bool			cg_multi_na;
 
+	/* global timeout value (second) for all RPCs */
+	unsigned		cg_timeout;
+
 	/* CaRT contexts list */
 	crt_list_t		cg_ctx_list;
 	/* actual number of items in CaRT contexts list */

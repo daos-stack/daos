@@ -422,6 +422,27 @@ crt_sgl_fini(crt_sg_list_t *sgl, bool free_iovs)
 	memset(sgl, 0, sizeof(*sgl));
 }
 
+static inline bool
+crt_is_integer_str(char *str)
+{
+	char	*p;
+
+	p = str;
+	if (p == NULL || strlen(p) == 0)
+		return false;
+
+	while (*p != '\0') {
+		if (*p <= '9' && *p >= '0') {
+			p++;
+			continue;
+		} else {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 /**
  * get a bool type environment variables
  *
@@ -442,5 +463,39 @@ void crt_getenv_bool(const char *env, bool *bool_val)
 	if (!env_val)
 		return;
 
+	/* treats any valid non-integer string as true */
+	if (!crt_is_integer_str(env_val))
+		*bool_val = true;
+
 	*bool_val = (atoi(env_val) == 0 ? false : true);
+}
+
+/**
+ * get an integer type environment variables
+ *
+ * \param env	[IN]		name of the environment variable
+ * \param int_val [IN/OUT]	returned value of the ENV. Will not change the
+ *				original value if ENV is not set or set as a
+ *				non-integer value.
+ */
+void crt_getenv_int(const char *env, unsigned *int_val)
+{
+	char		*env_val;
+	unsigned	 value;
+
+	if (env == NULL || int_val == NULL)
+		return;
+
+	env_val = getenv(env);
+	if (!env_val)
+		return;
+
+	if (!crt_is_integer_str(env_val)) {
+		C_ERROR("ENV %s is not integer.\n", env_val);
+		return;
+	}
+
+	value = atoi(env_val);
+	C_DEBUG("crt_getenv_int(), get ENV %s as %d.\n", env, value);
+	*int_val = value;
 }

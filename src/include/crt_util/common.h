@@ -277,6 +277,7 @@ int crt_idx_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank,
 int crt_sgl_init(crt_sg_list_t *sgl, unsigned int nr);
 void crt_sgl_fini(crt_sg_list_t *sgl, bool free_iovs);
 void crt_getenv_bool(const char *env, bool *bool_val);
+void crt_getenv_int(const char *env, unsigned *int_val);
 
 
 #if !defined(container_of)

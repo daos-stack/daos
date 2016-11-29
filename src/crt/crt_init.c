@@ -175,7 +175,8 @@ out:
 /* first step init - for initializing crt_gdata */
 static void data_init()
 {
-	int rc = 0;
+	unsigned	timeout;
+	int		rc = 0;
 
 	C_DEBUG("initializing crt_gdata...\n");
 
@@ -196,6 +197,15 @@ static void data_init()
 	crt_gdata.cg_addr = NULL;
 	crt_gdata.cg_verbs = false;
 	crt_gdata.cg_multi_na = false;
+
+	timeout = 0;
+	crt_getenv_int("CRT_TIMEOUT", &timeout);
+	if (timeout == 0 || timeout > 3600)
+		crt_gdata.cg_timeout = CRT_DEFAULT_TIMEOUT_S;
+	else
+		crt_gdata.cg_timeout = timeout;
+	C_DEBUG("set the global timeout value as %d second.\n",
+		crt_gdata.cg_timeout);
 
 	gdata_init_flag = 1;
 }

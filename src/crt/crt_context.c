@@ -497,6 +497,12 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	}
 }
 
+static inline uint64_t
+crt_get_timeout()
+{
+	return crt_timeus_secdiff(crt_gdata.cg_timeout);
+}
+
 /*
  * Track the rpc request per context
  * return CRT_REQ_TRACK_IN_INFLIGHQ - tacked in crt_ep_inflight::epi_req_q
@@ -564,7 +570,7 @@ crt_context_req_track(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	pthread_mutex_lock(&epi->epi_mutex);
 	C_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
-	rpc_priv->crp_timeout_ts = crt_timeus_secdiff(CRT_DEFAULT_TIMEOUT_S);
+	rpc_priv->crp_timeout_ts = crt_get_timeout();
 	rpc_priv->crp_epi = epi;
 	crt_req_addref(req);
 	if ((epi->epi_req_num - epi->epi_reply_num) >=
@@ -642,8 +648,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 		rpc_priv = crt_list_entry(epi->epi_req_waitq.next,
 					   struct crt_rpc_priv, crp_epi_link);
 		rpc_priv->crp_state = RPC_INITED;
-		rpc_priv->crp_timeout_ts =
-			crt_timeus_secdiff(CRT_DEFAULT_TIMEOUT_S);
+		rpc_priv->crp_timeout_ts = crt_get_timeout();
 
 		rc = crt_req_timeout_track(&rpc_priv->crp_pub);
 		if (rc != 0)
