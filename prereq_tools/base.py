@@ -35,6 +35,7 @@ import subprocess
 import tarfile
 import re
 import copy
+import ConfigParser
 from SCons.Variables import PathVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
@@ -372,6 +373,23 @@ class GitRepoRetriever(object):
 
         self.url = url
         self.has_submodules = has_submodules
+        self.commit_sha = None
+        self.patch = None
+
+    def checkout_commit(self, subdir):
+        """ checkout a certain commit SHA """
+        if self.commit_sha != None:
+            commands = ['git checkout %s' %(self.commit_sha)]
+            if not RUNNER.run_commands(commands, subdir=subdir):
+                raise DownloadFailure(self.url, subdir)
+
+    def apply_patch(self, subdir):
+        """ git-apply a certain hash """
+        if self.patch != None:
+            print "Applying patch %s" %(self.patch)
+            commands = ['git apply %s' %(self.patch)]
+            if not RUNNER.run_commands(commands, subdir=subdir):
+                raise DownloadFailure(self.url, subdir)
 
     def update_submodules(self, subdir):
         """ update the git submodules """
@@ -380,11 +398,17 @@ class GitRepoRetriever(object):
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
-    def get(self, subdir):
+    def get(self, subdir, **kw):
         """Downloads sources from a git repository into subdir"""
         commands = ['git clone %s %s' % (self.url, subdir)]
         if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)
+
+        self.commit_sha = kw.get("commit_sha", None)
+        self.patch = kw.get("patch", None)
+
+        self.checkout_commit(subdir)
+        self.apply_patch(subdir)
         self.update_submodules(subdir)
 
     def update(self, subdir):
@@ -400,7 +424,7 @@ class WebRetriever(object):
     def __init__(self, url):
         self.url = url
 
-    def get(self, subdir):
+    def get(self, subdir, **kw):
         """Downloads and extracts sources from a url into subdir"""
         basename = os.path.basename(self.url)
 
@@ -438,12 +462,13 @@ class PreReqComponent(object):
     to allow compilation from from multiple systems in one source tree
     """
 
-    def __init__(self, env, variables, arch=None):
+    def __init__(self, env, variables, config_file=None, arch=None):
         self.__defined = {}
         self.__required = {}
         self.__env = env
         self.__opts = variables
         self.system_env = env.Clone()
+        self.configs = None
 
         real_env = self.__env['ENV']
 
@@ -516,6 +541,9 @@ class PreReqComponent(object):
         if os.path.exists(local_script):
             SConscript(local_script, exports=['env'])
 
+        if config_file != None:
+            self.configs = ConfigParser.ConfigParser()
+            self.configs.read(config_file)
 
     def get_build_info(self):
         """Retrieve the BuildInfo"""
@@ -822,6 +850,10 @@ class PreReqComponent(object):
         self.__src_path[name] = src_path
         return src_path
 
+    def get_config(self, section, name):
+        """Get commit versions"""
+        if self.configs != None:
+            return self.configs.get(section, '%s_COMMIT' % name.upper())
 
 class _Component(object):
     """A class to define attributes of an external component
@@ -916,7 +948,10 @@ class _Component(object):
         print 'Downloading source for %s' % self.name
         if os.path.exists(self.crc_file):
             os.unlink(self.crc_file)
-        self.retriever.get(self.src_path)
+        commit_sha = self.prereqs.get_config("commit_versions", self.name)
+        patch = self.prereqs.get_config("patch_versions", self.name)
+        self.retriever.get(self.src_path, \
+                    commit_sha=commit_sha, patch=patch)
         self.prereqs.update_src_path(self.name, self.src_path)
 
     def calculate_crc(self):

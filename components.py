@@ -93,8 +93,8 @@ REQS.define('mercury',
                       '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s ' \
                       '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ ' \
                       '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX ' \
-                      '-DBUILD_EXAMPLES=ON ' \
-                      '-DMERCURY_USE_BOOST_PP=ON ' \
+                      '-DBUILD_EXAMPLES=OFF ' \
+                      '-DMERCURY_USE_BOOST_PP=OFF ' \
                       '-DMERCURY_ENABLE_VERBOSE_ERROR=OFF ' \
                       '-DBUILD_TESTING=ON ' \
                       '-DNA_USE_CCI=ON ' \
@@ -105,7 +105,7 @@ REQS.define('mercury',
                       '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE'
                       % (CCI_LIB), 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
-            requires=['openpa', 'boost', 'cci'] + RT,
+            requires=['openpa', 'cci'] + RT,
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
@@ -119,8 +119,9 @@ REQS.define('hwloc', retriever=WEB_RETRIEVER,
             headers=['hwloc.h'],
             libs=['hwloc'])
 
+RETRIEVER = GitRepoRetriever('https://github.com/pmix/master')
 REQS.define('pmix',
-            retriever=GitRepoRetriever('https://github.com/pmix/master'),
+            retriever=RETRIEVER,
             commands=['./autogen.sh',
                       './configure --with-platform=optimized ' \
                       '--prefix=$PMIX_PREFIX ' \
@@ -246,7 +247,7 @@ REQS.define('mcl',
                       "CCI_PREBUILT=$CCI_PREFIX " \
                       "OPENPA_PREBUILT=$OPENPA_PREFIX " \
                       "PREFIX=$MCL_PREFIX install"],
-            headers=["process_set.h", "mcl_log.h", "mcl_event.h"],
+            headers=["process_set.h"],
             libs=["mcl"],
             requires=['ompi', 'mercury'])
 
