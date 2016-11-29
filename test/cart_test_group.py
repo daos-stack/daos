@@ -59,6 +59,7 @@ set TR_USE_VALGRIND in cart_test_group.yml to callgrind
 """
 
 import os
+import time
 import commontestsuite
 
 #pylint: disable=broad-except
@@ -104,8 +105,9 @@ class TestGroup(commontestsuite.CommonTestSuite):
         cmdstr = cmd + \
           "%s-np %s %s%s tests/test_group " % \
           (server, NPROC, self.pass_env, prefix) + \
-          "--name service_group --is_service --holdtime 5"
+          "--name service_group --is_service --holdtime 10"
         proc_srv = self.common_launch_process(testsuite, testmsg, cmdstr)
+        time.sleep(5)
         (cmd, prefix) = self.common_add_prefix_logdir(self.id() + \
           "_client_node", testprocess)
         cmdstr = cmd + \

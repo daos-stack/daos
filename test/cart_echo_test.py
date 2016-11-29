@@ -59,6 +59,7 @@ set TR_USE_VALGRIND in cart_echo_test.yml to callgrind
 """
 
 import os
+import time
 import commontestsuite
 
 #pylint: disable=broad-except
@@ -101,10 +102,11 @@ class TestEcho(commontestsuite.CommonTestSuite):
           "_server_node", testprocess)
         (server, client) = self.common_add_server_client()
         cmdstr = cmd + \
-          "%s-np %s %s%s tests/crt_echo_srv :" % \
+          "%s-np %s %s%s tests/crt_echo_srv" % \
           (server, NPROC, self.pass_env, prefix)
         proc_srv = self.common_launch_process(testsuite, \
           testmsg, cmdstr)
+        time.sleep(2)
         (cmd, prefix) = self.common_add_prefix_logdir(self.id() + \
           "_client_node", testprocess)
         cmdstr = cmd + \
