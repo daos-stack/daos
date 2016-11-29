@@ -83,6 +83,7 @@ pool_evict_discard(void **state)
 
 	rc = daos_cont_close(coh, NULL /* ev */);
 	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
 	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
 	assert_int_equal(rc, 0);
 }
@@ -101,6 +102,8 @@ setup(void **state)
 	arg = malloc(sizeof(test_arg_t));
 	if (arg == NULL)
 		return -1;
+
+	memset(arg, 0, sizeof(*arg));
 
 	rc = daos_eq_create(&arg->eq);
 	if (rc)

@@ -1008,16 +1008,19 @@ ds_cont_close_by_pool_hdls(const uuid_t pool_uuid, uuid_t *pool_hdls,
 	if (rc != 0)
 		return rc;
 
+	ABT_rwlock_wrlock(svc->cs_lock);
+
 	rc = find_hdls_to_close(svc, pool_hdls, n_pool_hdls, &recs, &recs_size,
 				&nrecs);
 	if (rc != 0)
-		D_GOTO(out_svc, rc);
+		D_GOTO(out_lock, rc);
 
 	if (nrecs > 0)
 		rc = cont_close_hdls(svc, recs, nrecs, ctx);
 
 	D_FREE(recs, recs_size);
-out_svc:
+out_lock:
+	ABT_rwlock_unlock(svc->cs_lock);
 	cont_svc_put(svc);
 	return rc;
 }

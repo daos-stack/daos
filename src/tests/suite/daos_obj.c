@@ -1114,6 +1114,8 @@ obj_setup(void **state)
 	if (arg == NULL)
 		return -1;
 
+	memset(arg, 0, sizeof(*arg));
+
 	rc = daos_eq_create(&arg->eq);
 	if (rc)
 		return rc;

@@ -127,7 +127,7 @@ main(int argc, char **argv)
 	char	*subopts = NULL, *value = NULL;
 	int	dkeys = 0, ssec = 0;
 
-	while ((opt = getopt_long(argc, argv, "ampcied:rh",
+	while ((opt = getopt_long(argc, argv, "ampcieod:rh",
 				  long_options, &index)) != -1) {
 		switch (opt) {
 
