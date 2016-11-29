@@ -43,6 +43,8 @@
 #ifndef __CRT_TYPES_H__
 #define __CRT_TYPES_H__
 
+#include <stdint.h>
+
 typedef uint64_t	crt_size_t;
 typedef uint64_t	crt_off_t;
 
@@ -138,7 +140,7 @@ typedef crt_string_t crt_phy_addr_t;
  * expected.
  */
 typedef uint32_t crt_opcode_t;
-#define CRT_OPC_RESERVED_BITS	(0xFFFFU << 16)
+#define CRT_OPC_INTERNAL_BASE	0xFFFF0000UL
 
 /*
  * Check if the opcode is reserved by CRT internally.
@@ -151,7 +153,7 @@ typedef uint32_t crt_opcode_t;
 static inline int
 crt_opcode_reserved(crt_opcode_t opc)
 {
-	return (opc & CRT_OPC_RESERVED_BITS) == CRT_OPC_RESERVED_BITS;
+	return (opc & CRT_OPC_INTERNAL_BASE) == CRT_OPC_INTERNAL_BASE;
 }
 
 typedef void *crt_rpc_input_t;
@@ -236,31 +238,31 @@ struct crt_array {
 	void		*da_arrays;
 };
 
-#define DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, in_size,		\
-				 crt_out, out_size) {		\
-	crf_name :	name,					\
-	crf_idx :	0,					\
-	crf_fields : {						\
-		/* [CRT_IN] = */ {				\
-			crf_count :	in_size,		\
-			crf_msg :	crt_in			\
-		},						\
-		/* [CRT_OUT] = */ {				\
-			crf_count :	out_size,		\
-			crf_msg :	crt_out			\
-		}						\
-	}							\
+#define DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, in_size,			\
+				crt_out, out_size) {			\
+	.crf_name =	(name),						\
+	.crf_idx =	0,						\
+	.crf_fields =	{						\
+		/* [CRT_IN] = */ {					\
+			.crf_count =	(in_size),			\
+			.crf_msg =	(crt_in)			\
+		},							\
+		/* [CRT_OUT] = */ {					\
+			.crf_count =	(out_size),			\
+			.crf_msg =	(crt_out)			\
+		}							\
+	}								\
 }
 
-#define DEFINE_CRT_REQ_FMT(name, crt_in, crt_out)		\
-DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, ARRAY_SIZE(crt_in),	\
-			 crt_out, ARRAY_SIZE(crt_out))
+#define DEFINE_CRT_REQ_FMT(name, crt_in, crt_out)			\
+	DEFINE_CRT_REQ_FMT_ARRAY((name), (crt_in), ARRAY_SIZE(crt_in),	\
+				(crt_out), ARRAY_SIZE(crt_out))
 
-#define DEFINE_CRT_MSG(name, flags, size, proc) {		\
-	cmf_name :	(name),					\
-	cmf_flags :	(flags),				\
-	cmf_size :	(size),					\
-	cmf_proc :	(crt_proc_cb_t)proc			\
+#define DEFINE_CRT_MSG(name, flags, size, proc) {			\
+	.cmf_name =	(name),						\
+	.cmf_flags =	(flags),					\
+	.cmf_size =	(size),						\
+	.cmf_proc =	(crt_proc_cb_t)proc				\
 }
 
 /* Common request format type */

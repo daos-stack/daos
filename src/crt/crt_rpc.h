@@ -190,7 +190,6 @@ struct crt_rpc_priv {
 
 /* CRT internal opcode definitions, must be 0xFFFFxxxx.*/
 enum {
-	CRT_OPC_INTERNAL_BASE	= 0xFFFF0000,
 	CRT_OPC_GRP_CREATE	= CRT_OPC_INTERNAL_BASE + 0x1,
 	CRT_OPC_GRP_DESTROY	= CRT_OPC_INTERNAL_BASE + 0x2,
 
