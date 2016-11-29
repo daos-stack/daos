@@ -366,7 +366,7 @@ dss_xstreams_fini(bool force)
 
 	/** housekeeping ... */
 	daos_list_for_each_entry_safe(dx, tmp, &dss_xstream_list, dx_list) {
-		daos_list_del(&dx->dx_list);
+		daos_list_del_init(&dx->dx_list);
 		ABT_sched_free(&dx->dx_sched);
 		dss_xstream_free(dx);
 	}
@@ -407,7 +407,7 @@ dss_xstreams_init(int nr)
 	/* start the execution streams */
 	D_DEBUG(DF_SERVER, "%d cores detected, starting %d execution streams\n",
 		ncores, dss_nxstreams);
-	for (i = 0; i < dss_nxstreams; i++) {
+	for (i = 1; i <= dss_nxstreams; i++) {
 		hwloc_obj_t	obj;
 
 		obj = hwloc_get_obj_by_depth(dss_topo, depth, i % ncores);
@@ -416,8 +416,8 @@ dss_xstreams_init(int nr)
 			return -DER_INVAL;
 		}
 
-		/** ABT rank must be >0, so start at 1 */
-		rc = dss_start_one_xstream(obj->allowed_cpuset, i + 1);
+		/** ABT rank 0 is reserved for the primary xstream */
+		rc = dss_start_one_xstream(obj->allowed_cpuset, i);
 		if (rc)
 			return rc;
 	}

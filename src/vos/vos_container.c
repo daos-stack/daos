@@ -384,7 +384,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 	struct vc_hdl			*co_hdl = NULL;
 
 	uuid_copy(ukey.uuid, co_uuid);
-	D_DEBUG(DF_VOS3, "Destroying CO ID in container index"DF_UUID"\n",
+	D_DEBUG(DF_VOS3, "Destroying CO ID in container index "DF_UUID"\n",
 		DP_UUID(ukey.uuid));
 
 	vpool = vos_hdl2pool(poh);

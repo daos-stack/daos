@@ -77,7 +77,7 @@ cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 	svc->cs_pool = ds_pool_lookup(pool_uuid);
 	if (svc->cs_pool == NULL)
 		/* Therefore not a single pool handle exists. */
-		D_GOTO(err, rc = -DER_NO_PERM);
+		D_GOTO(err, rc = -DER_NO_HDL);
 
 	uuid_copy(svc->cs_pool_uuid, pool_uuid);
 	svc->cs_id = id;
@@ -248,6 +248,9 @@ cont_create(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 	volatile int		rc;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), rpc);
 
 	/* Verify the pool handle capabilities. */
 	if (!(pool_hdl->sph_capas & DAOS_PC_RW) &&
@@ -1345,7 +1348,7 @@ cont_op_with_cont(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 					DP_CONT(cont->c_svc->cs_pool_uuid,
 						cont->c_uuid),
 					DP_UUID(in->ci_hdl));
-				rc = -DER_NO_PERM;
+				rc = -DER_NO_HDL;
 			} else {
 				D_ERROR(DF_CONT": failed to look up container"
 					"handle "DF_UUID": %d\n",
@@ -1414,7 +1417,7 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 
 	pool_hdl = ds_pool_hdl_lookup(in->ci_pool_hdl);
 	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_PERM);
+		D_GOTO(out, rc = -DER_NO_HDL);
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" opc=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc,

@@ -241,13 +241,13 @@ epoch_hold_commit(void **state)
 }
 
 static const struct CMUnitTest epoch_tests[] = {
-	{ "DSM300: epoch_query",		/* must be first */
+	{ "EPOCH1: epoch_query",		/* must be first */
 	  epoch_query, async_disable, NULL},
-	{ "DSM301: epoch_query (async)",	/* must be second */
+	{ "EPOCH2: epoch_query (async)",	/* must be second */
 	  epoch_query, async_enable, NULL},
-	{ "DSM302: epoch_hold_commit",
+	{ "EPOCH3: epoch_hold_commit",
 	  epoch_hold_commit, async_disable, NULL},
-	{ "DSM303: epoch_hold_commit (async)",
+	{ "EPOCH4: epoch_hold_commit (async)",
 	  epoch_hold_commit, async_enable, NULL},
 };
 

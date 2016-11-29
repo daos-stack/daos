@@ -88,9 +88,10 @@ hdl_share_enable(void **state)
 	return 0;
 }
 
-int run_dmg_pool_test(int rank, int size);
+int run_daos_mgmt_test(int rank, int size);
 int run_daos_pool_test(int rank, int size);
 int run_daos_cont_test(int rank, int size);
+int run_daos_capa_test(int rank, int size);
 int run_daos_io_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
@@ -158,8 +159,7 @@ handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 				      rank, type == HANDLE_POOL ?
 				      "pool" : "container");
 		if (type == HANDLE_POOL) {
-			/* NB: Only pool_global2local are different for
-			 * DSM and DSR */
+			/* NB: Only pool_global2local are different */
 			rc = daos_pool_global2local(ghdl, hdl);
 		} else {
 			rc = daos_cont_global2local(poh, ghdl, hdl);

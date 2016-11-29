@@ -821,13 +821,17 @@ dc_pool_query_cb(const struct crt_cb_info *cb_info)
 	if (rc == -DER_TRUNC)
 		D_ERROR(DF_UUID": pool buffer too small: %d\n",
 			DP_UUID(arg->dqa_pool->dp_pool), rc);
+	if (rc)
+		D_GOTO(out, rc);
 
-	if (rc == 0)
-		rc = process_query_reply(arg->dqa_pool, arg->dqa_map_buf,
-					 out->pqo_op.po_map_version,
-					 out->pqo_mode, arg->dqa_tgts,
-					 arg->dqa_info);
+	rc = out->pqo_op.po_rc;
+	if (rc)
+		D_GOTO(out, rc);
 
+	rc = process_query_reply(arg->dqa_pool, arg->dqa_map_buf,
+				 out->pqo_op.po_map_version,
+				 out->pqo_mode, arg->dqa_tgts, arg->dqa_info);
+out:
 	arg->dqa_cb(arg->dqa_pool, arg->dqa_cb_arg, rc, arg->dqa_tgts,
 		    arg->dqa_info);
 

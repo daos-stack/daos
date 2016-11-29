@@ -34,11 +34,12 @@ run_all_tests(int rank, int size)
 {
 	int nr_failed = 0;
 
-	nr_failed  = run_dmg_pool_test(rank, size);
+	nr_failed  = run_daos_mgmt_test(rank, size);
 	nr_failed += run_daos_pool_test(rank, size);
 	nr_failed += run_daos_cont_test(rank, size);
 	nr_failed += run_daos_epoch_test(rank, size);
 	nr_failed += run_daos_io_test(rank, size);
+	nr_failed += run_daos_capa_test(rank, size);
 	nr_failed += run_daos_epoch_recovery_test(rank, size);
 
 	return nr_failed;
@@ -54,14 +55,15 @@ print_usage(int rank)
 	print_message("Use one of these options(s) for specific test\n");
 	print_message("( NOTE: daos_repl_tests ");
 	print_message("cannot be triggered with all tests)\n\n");
-	print_message("daos_test -m|--dmg_pool_tests\n");
+	print_message("daos_test -m|--mgmt\n");
 	print_message("daos_test -p|--daos_pool_tests\n");
 	print_message("daos_test -c|--daos_container_tests\n");
+	print_message("daos_test -y|--capa\n");
 	print_message("daos_test -i|--daos_io_tests\n");
 	print_message("daos_test -e|--daos_epoch_tests\n");
 	print_message("daos_test -o|--daos_epoch_recovery_tests\n");
-	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("daos_test -r|--daos_repl_tests\n");
+	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("daos_test -h|--help\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 }
@@ -90,9 +92,10 @@ main(int argc, char **argv)
 
 	static struct option long_options[] = {
 		{"daos_all_tests", no_argument, 0, 'a'},
-		{"dmg_pool_tests", no_argument, 0, 'm'},
+		{"mgmt", no_argument, 0, 'm'},
 		{"daos_pool_tests", no_argument, 0, 'p'},
 		{"daos_container_tests", no_argument, 0, 'c'},
+		{"capa", no_argument, 0, 'y'},
 		{"daos_io_tests", no_argument, 0, 'i'},
 		{"daos_epoch_tests", no_argument, 0, 'e'},
 		{"daos_epoch_recovery_tests", no_argument, 0, 'o'},
@@ -127,15 +130,15 @@ main(int argc, char **argv)
 	char	*subopts = NULL, *value = NULL;
 	int	dkeys = 0, ssec = 0;
 
-	while ((opt = getopt_long(argc, argv, "ampcieod:rh",
+	while ((opt = getopt_long(argc, argv, "ampcyieod:rh",
 				  long_options, &index)) != -1) {
 		switch (opt) {
 
 		case 'm':
 			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DMG pool tests..");
+			daos_test_print(rank, "DAOS management tests..");
 			daos_test_print(rank, "=====================");
-			nr_failed = run_dmg_pool_test(rank, size);
+			nr_failed = run_daos_mgmt_test(rank, size);
 			break;
 		case 'p':
 			daos_test_print(rank, "\n\n=================");
@@ -148,6 +151,12 @@ main(int argc, char **argv)
 			daos_test_print(rank, "DAOS container tests..");
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_cont_test(rank, size);
+			break;
+		case 'y':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS capability tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_capa_test(rank, size);
 			break;
 		case 'i':
 			daos_test_print(rank, "\n\n=================");
@@ -233,12 +242,14 @@ exit:
 	if (rc)
 		print_message("daos_fini() failed with %d\n", rc);
 
-	print_message("\n============ Summary %s\n", __FILE__);
-	if (nr_total_failed == 0)
-		print_message("OK - NO TEST FAILURES\n");
-	else
-		print_message("ERROR, %i TEST(S) FAILED\n", nr_total_failed);
-
+	if (!rank) {
+		print_message("\n============ Summary %s\n", __FILE__);
+		if (nr_total_failed == 0)
+			print_message("OK - NO TEST FAILURES\n");
+		else
+			print_message("ERROR, %i TEST(S) FAILED\n",
+				      nr_total_failed);
+	}
 
 	MPI_Finalize();
 

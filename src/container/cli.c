@@ -68,7 +68,7 @@ cont_create_complete(void *arg, daos_event_t *ev, int rc)
 
 	rc = out->cco_op.co_rc;
 	if (rc != 0) {
-		D_ERROR("failed to create container: %d\n", rc);
+		D_DEBUG(DF_DSMC, "failed to create container: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -157,7 +157,7 @@ cont_destroy_complete(void *arg, daos_event_t *ev, int rc)
 
 	rc = out->cdo_op.co_rc;
 	if (rc != 0) {
-		D_ERROR("failed to destroy container: %d\n", rc);
+		D_DEBUG(DF_DSMC, "failed to destroy container: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -295,7 +295,8 @@ cont_open_complete(void *data, daos_event_t *ev, int rc)
 
 	rc = out->coo_op.co_rc;
 	if (rc != 0) {
-		D_ERROR("failed to open container: %d\n", rc);
+		D_DEBUG(DF_DSMC, DF_CONT": failed to open container: %d\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -452,7 +453,7 @@ cont_close_complete(void *data, daos_event_t *ev, int rc)
 	out = crt_reply_get(sp->sp_rpc);
 
 	rc = out->cco_op.co_rc;
-	if (rc == -DER_NO_PERM) {
+	if (rc == -DER_NO_HDL) {
 		/* The pool connection cannot be found on the server. */
 		D_DEBUG(DF_DSMS, DF_CONT": already disconnected: hdl="DF_UUID
 			" pool_hdl="DF_UUID"\n",

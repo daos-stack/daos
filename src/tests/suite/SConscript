@@ -2,8 +2,6 @@
 
 Import('denv')
 
-# denv.Append(CPPPATH = ['#/src/dmg', '#/src/dsm', '#/src/dsr', '#/src/server', '/usr/include/openmpi-x86_64/'])
-
 libraries = ['daos_common', 'daos', 'crt']
 libraries += ['daos_tier', 'uuid', 'mpi']
 libraries += ['cmocka']

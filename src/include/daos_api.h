@@ -250,10 +250,9 @@ daos_pool_target_query(daos_handle_t poh, daos_rank_list_t *tgts,
  *			non-blocking mode:
  *			0		Success
  *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_HDL	Invalid pool handle
  *			-DER_NO_PERM	Permission denied
  *			-DER_UNREACH	network is unreachable
- *			-DER_EXIST	Container uuid exists already
- *			-DER_NONEXIST	Storage target is nonexistent
  */
 int
 daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev);

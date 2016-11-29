@@ -89,7 +89,7 @@ pool_evict_discard(void **state)
 }
 
 static const struct CMUnitTest epoch_recovery_tests[] = {
-	{"DSM401: pool evict discards uncommitted data",
+	{"ERECOV1: pool evict discards uncommitted data",
 	 pool_evict_discard, NULL, NULL}
 };
 

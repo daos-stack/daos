@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of dmg, a simple test case of dmg.
+ * This file is part of daos, basic testing for the management API
  */
 
 #include "daos_test.h"
@@ -94,9 +94,9 @@ pool_create_all(void **state)
 }
 
 static const struct CMUnitTest tests[] = {
-	{ "DMG1: create/destroy pool on all tgts",
+	{ "MGMT1: create/destroy pool on all tgts",
 	  pool_create_all, async_disable, NULL},
-	{ "DMG2: create/destroy pool on all tgts (async)",
+	{ "MGMT2: create/destroy pool on all tgts (async)",
 	  pool_create_all, async_enable, NULL},
 };
 
@@ -138,12 +138,12 @@ teardown(void **state)
 }
 
 int
-run_dmg_pool_test(int rank, int size)
+run_daos_mgmt_test(int rank, int size)
 {
 	int	rc;
 
 	if (rank == 0)
-		rc = cmocka_run_group_tests_name("DMG pool tests", tests,
+		rc = cmocka_run_group_tests_name("Management tests", tests,
 						 setup, teardown);
 
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);

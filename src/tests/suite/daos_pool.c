@@ -236,16 +236,16 @@ disconnect:
 }
 
 static const struct CMUnitTest pool_tests[] = {
-	{ "DSM1: connect to non-existing pool",
+	{ "POOL1: connect to non-existing pool",
 	  pool_connect_nonexist, NULL, NULL},
-	{ "DSM2: connect/disconnect to pool",
+	{ "POOL2: connect/disconnect to pool",
 	  pool_connect, async_disable, NULL},
-	{ "DSM3: connect/disconnect to pool (async)",
+	{ "POOL3: connect/disconnect to pool (async)",
 	  pool_connect, async_enable, NULL},
-	{ "DSM4: pool handle local2global and global2local",
+	{ "POOL4: pool handle local2global and global2local",
 	  pool_connect, hdl_share_enable, NULL},
 	/* Keep this one at the end, as it excludes target rank 1. */
-	{ "DSM5: exclude targets and query pool info",
+	{ "POOL5: exclude targets and query pool info",
 	  pool_exclude, async_disable, NULL}
 };
 
@@ -324,7 +324,7 @@ run_daos_pool_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DSM pool tests", pool_tests,
+	rc = cmocka_run_group_tests_name("Pool tests", pool_tests,
 					 setup, teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

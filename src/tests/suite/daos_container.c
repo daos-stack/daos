@@ -137,11 +137,11 @@ co_create(void **state)
 }
 
 static const struct CMUnitTest co_tests[] = {
-	{ "DSM100: create/open/close/destroy container",
+	{ "CONT1: create/open/close/destroy container",
 	  co_create, async_disable, NULL},
-	{ "DSM101: create/open/close/destroy container (async)",
+	{ "CONT2: create/open/close/destroy container (async)",
 	  co_create, async_enable, NULL},
-	{ "DSM102: container handle local2glocal and global2local",
+	{ "CONT3: container handle local2glocal and global2local",
 	  co_create, hdl_share_enable, NULL},
 };
 
@@ -230,7 +230,7 @@ run_daos_cont_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DSM container tests",
+	rc = cmocka_run_group_tests_name("DAOS container tests",
 					 co_tests, setup, teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;

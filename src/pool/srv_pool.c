@@ -1177,7 +1177,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 			      sizeof(hdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			rc = -DER_NO_PERM;
+			rc = -DER_NO_HDL;
 		D_GOTO(out_lock, rc);
 	}
 
@@ -1347,7 +1347,7 @@ ds_pool_exclude_handler(crt_rpc_t *rpc)
 			      sizeof(hdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			rc = -DER_NO_PERM;
+			rc = -DER_NO_HDL;
 		D_GOTO(out_lock, rc);
 	}
 

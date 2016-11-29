@@ -307,7 +307,7 @@ cont_destroy_one(void *vin)
 
 	pool = ds_pool_child_lookup(in->tdi_pool_uuid);
 	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NO_PERM);
+		D_GOTO(out, rc = -DER_NO_HDL);
 
 	rc = cont_lookup(tls->dt_cont_cache, in->tdi_uuid, NULL /* arg */,
 			 &cont);
@@ -323,6 +323,11 @@ cont_destroy_one(void *vin)
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
 
 	rc = vos_co_destroy(pool->spc_hdl, in->tdi_uuid);
+	if (rc == -DER_NONEXIST)
+		/** VOS container creation is effectively delayed until
+		 * container open time, so it might legitimately not exist if
+		 * the container has never been opened */
+		rc = 0;
 
 out_pool:
 	ds_pool_child_put(pool);
@@ -341,8 +346,6 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
 	rc = dss_collective(cont_destroy_one, in);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
@@ -398,7 +401,7 @@ cont_open_one(void *vin)
 
 	hdl->sch_pool = ds_pool_child_lookup(in->toi_pool_uuid);
 	if (hdl->sch_pool == NULL)
-		D_GOTO(err_hdl, rc = -DER_NO_PERM);
+		D_GOTO(err_hdl, rc = -DER_NO_HDL);
 
 	rc = cont_lookup(tls->dt_cont_cache, in->toi_uuid, hdl->sch_pool,
 			  &hdl->sch_cont);

@@ -1071,37 +1071,37 @@ io_nospace(void **state)
 }
 
 static const struct CMUnitTest io_tests[] = {
-	{ "DSR200: simple update/fetch/verify",
+	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
-	{ "DSR201: simple update/fetch/verify (async)",
+	{ "IO2: simple update/fetch/verify (async)",
 	  io_simple, async_enable, NULL},
-	{ "DSR202: i/o with variable rec size",
+	{ "IO3: i/o with variable rec size",
 	  io_var_rec_size, async_disable, NULL},
-	{ "DSR203: i/o with variable rec size(async)",
+	{ "IO4: i/o with variable rec size(async)",
 	  io_var_rec_size, async_enable, NULL},
-	{ "DSR204: i/o with variable dkey size",
+	{ "IO5: i/o with variable dkey size",
 	  io_var_dkey_size, async_enable, NULL},
-	{ "DSR205: i/o with variable akey size",
+	{ "IO6: i/o with variable akey size",
 	  io_var_akey_size, async_disable, NULL},
-	{ "DSR206: i/o with variable index",
+	{ "IO7: i/o with variable index",
 	  io_var_idx_offset, async_enable, NULL},
-	{ "DSR207: overwrite in different epoch",
+	{ "IO8: overwrite in different epoch",
 	  io_epoch_overwrite, async_enable, NULL},
-	{ "DSR208: simple enumerate", enumerate_simple,
+	{ "IO9: simple enumerate", enumerate_simple,
 	  async_disable, NULL},
-	{ "DSR209: simple punch", punch_simple,
+	{ "IO10: simple punch", punch_simple,
 	  async_disable, NULL},
-	{ "DSR210: complex update/fetch/verify", io_complex,
+	{ "IO11: complex update/fetch/verify", io_complex,
 	  async_disable, NULL},
-	{ "DSR211: i/o parameter on stack", io_on_stack,
+	{ "IO12: i/o parameter on stack", io_on_stack,
 	  async_disable, NULL},
-	{ "DSR212: timeout simple update (async)",
+	{ "IO13: timeout simple update (async)",
 	  io_simple_update_timeout, async_disable, NULL},
-	{ "DSR213: timeout simple fetch (async)",
+	{ "IO14: timeout simple fetch (async)",
 	  io_simple_fetch_timeout, async_disable, NULL},
-	{ "DSR214: epoch discard", epoch_discard,
+	{ "IO15: epoch discard", epoch_discard,
 	  async_disable, NULL},
-	{ "DSR215: no space", io_nospace, async_disable, NULL},
+	{ "IO16: no space", io_nospace, async_disable, NULL},
 };
 
 int
@@ -1223,7 +1223,7 @@ run_daos_io_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DSR io tests", io_tests,
+	rc = cmocka_run_group_tests_name("DAOS I/O tests", io_tests,
 					 obj_setup, obj_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
