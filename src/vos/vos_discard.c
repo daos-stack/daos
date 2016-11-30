@@ -290,8 +290,8 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 		return 0;
 	}
 
-	D_DEBUG(DF_VOS2, "Epoch discard for epoch range high: %u, low: %u\n",
-		(unsigned int)epr->epr_hi, (unsigned int) epr->epr_lo);
+	D_DEBUG(DF_VOS2, "Epoch discard for epoch range high: "DF_U64", low: "
+		DF_U64"\n", epr->epr_hi, epr->epr_lo);
 
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl		= coh;
