@@ -97,6 +97,7 @@ ioreq_fini(struct ioreq *req)
 
 	req->arg->fail_loc = 0;
 	req->arg->fail_value = 0;
+	daos_fail_loc_set(0);
 	if (req->arg->async) {
 		rc = daos_event_fini(&req->ev);
 		assert_int_equal(rc, 0);
@@ -190,12 +191,14 @@ insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	ioreq_akey_set(req, akey, nr);
 
 	/* set sgl */
-	ioreq_sgl_simple_set(req, val, size, nr);
+	if (val != NULL)
+		ioreq_sgl_simple_set(req, val, size, nr);
 
 	/* set iod */
 	ioreq_iod_simple_set(req, size, idx, epoch, nr);
 
-	insert_internal(&req->dkey, nr, req->sgl, req->vio, *epoch, req);
+	insert_internal(&req->dkey, nr, val == NULL ? NULL : req->sgl,
+			req->vio, *epoch, req);
 }
 
 void
@@ -204,14 +207,15 @@ insert_single(const char *dkey, const char *akey, uint64_t idx,
 	      struct ioreq *req)
 {
 	insert(dkey, 1, &akey, &idx, &value, &size, &epoch, req);
-
 }
 
 static void
 punch(const char *dkey, const char *akey, uint64_t idx,
       daos_epoch_t epoch, struct ioreq *req)
 {
-	insert_single(dkey, akey, idx, NULL, 0, epoch, req);
+	daos_size_t size = 0;
+
+	insert(dkey, 1, &akey, &idx, NULL, &size, &epoch, req);
 }
 
 static void
@@ -784,7 +788,7 @@ io_complex(void **state)
 #define STACK_BUF_LEN	24
 
 static void
-io_on_stack(void **state)
+basic_byte_array(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
@@ -837,6 +841,67 @@ io_on_stack(void **state)
 	assert_int_equal(rc, 0);
 	/** Verify data consistency */
 	assert_memory_equal(buf, buf_out, sizeof(buf));
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+}
+
+static void
+fetch_size(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	daos_epoch_t	 epoch = 2;
+	daos_iov_t	 dkey;
+	daos_sg_list_t	 sgl;
+	daos_iov_t	 sg_iov;
+	daos_vec_iod_t	 iod;
+	daos_recx_t	 recx;
+	char		*buf;
+	int		 rc;
+	int		 size = 131071;
+
+	buf = malloc(size);
+	assert_non_null(buf);
+
+	dts_buf_render(buf, size);
+
+	/** open object */
+	oid = dts_oid_gen(DAOS_OC_REPLICA_RW);
+	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	daos_iov_set(&sg_iov, buf, size);
+	sgl.sg_nr.num		= 1;
+	sgl.sg_nr.num_out	= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	/** init I/O descriptor */
+	daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.vd_kcsum, NULL, 0);
+	iod.vd_nr	= 1;
+	recx.rx_rsize	= size;
+	recx.rx_idx	= 0;
+	recx.rx_nr	= 1;
+	iod.vd_recxs	= &recx;
+	iod.vd_eprs	= NULL;
+	iod.vd_csums	= NULL;
+
+	/** update record */
+	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	/** fetch record size */
+	recx.rx_rsize	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(recx.rx_rsize, size);
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
@@ -1080,8 +1145,8 @@ static const struct CMUnitTest io_tests[] = {
 	  async_disable, NULL},
 	{ "IO11: complex update/fetch/verify", io_complex,
 	  async_disable, NULL},
-	{ "IO12: i/o parameter on stack", io_on_stack,
-	  async_disable, NULL},
+	{ "IO12: basic byte array with record size fetching",
+	  basic_byte_array, async_disable, NULL},
 	{ "IO13: timeout simple update (async)",
 	  io_simple_update_timeout, async_disable, NULL},
 	{ "IO14: timeout simple fetch (async)",
@@ -1089,6 +1154,7 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO15: epoch discard", epoch_discard,
 	  async_disable, NULL},
 	{ "IO16: no space", io_nospace, async_disable, NULL},
+	{ "IO17: fetch size with NULL sgl", fetch_size, async_disable, NULL},
 };
 
 int

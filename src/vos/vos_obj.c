@@ -320,7 +320,10 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 	int		 iov_cur;
 	int		 i;
 	int		 rc;
-	bool		 is_zc = iovs[0].iov_buf == NULL;
+	bool		 is_zc = false;
+
+	if (iovs != NULL)
+		is_zc = iovs[0].iov_buf == NULL;
 
 	daos_csum_set(&csum, NULL, 0); /* no checksum for now */
 	recx_tmp = *recx;
@@ -329,7 +332,7 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 	for (i = iov_cur = 0; i < recx->rx_nr; i++) {
 		daos_iov_t	 iov_tmp; /* scratch iov for non-zc */
 
-		if (iov_cur >= iov_nr) {
+		if (iovs != NULL && iov_cur >= iov_nr) {
 			D_DEBUG(DF_VOS1, "Invalid I/O parameters: %d/%d\n",
 				iov_cur, iov_nr);
 			return -DER_IO_INVAL;
@@ -339,7 +342,7 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			D_ASSERT(*off_p == 0);
 			iov = &iovs[iov_cur];
 
-		} else {
+		} else if (iovs != NULL) {
 			D_ASSERT(iovs[iov_cur].iov_buf_len >= *off_p);
 
 			iov_tmp = iovs[iov_cur];
@@ -354,6 +357,9 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 					recx->rx_rsize);
 				return -DER_INVAL;
 			}
+		} else {
+			memset(&iov_tmp, 0, sizeof(daos_iov_t));
+			iov = &iov_tmp;
 		}
 
 		rc = tree_recx_fetch(toh, epr, &recx_tmp, iov, &csum);
@@ -400,14 +406,14 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 				recx_tmp.rx_idx, recx->rx_idx + i);
 			if (is_zc)
 				iov->iov_len = 0;
-			else /* XXX this is not good enough */
+			else if (iovs != NULL) /* XXX this is not good enough */
 				memset(iov->iov_buf, 0, iov->iov_len);
 		}
 
 		if (is_zc) {
 			iov_cur++;
 
-		} else {
+		} else if (iovs != NULL) {
 			iovs[iov_cur].iov_len += iov->iov_len;
 			if (iov->iov_buf_len > iov->iov_len) {
 				*off_p += iov->iov_len;
@@ -438,7 +444,8 @@ vos_vec_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch,
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DF_VOS2, "nonexistent record\n");
 		vos_empty_viod(viod);
-		vos_empty_sgl(sgl);
+		if (sgl != NULL)
+			vos_empty_sgl(sgl);
 		return 0;
 	}
 
@@ -454,7 +461,7 @@ vos_vec_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch,
 		if (viod->vd_eprs != NULL)
 			epr = &viod->vd_eprs[i];
 
-		if (nr >= sgl->sg_nr.num) {
+		if (sgl != NULL && nr >= sgl->sg_nr.num) {
 			/* XXX lazy assumption:
 			 * value of each recx is stored in an individual iov.
 			 */
@@ -465,8 +472,8 @@ vos_vec_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch,
 		}
 
 		rc = vos_recx_fetch(toh, epr, &viod->vd_recxs[i],
-				    &sgl->sg_iovs[nr],
-				    sgl->sg_nr.num - nr, &off);
+				sgl == NULL ? NULL : &sgl->sg_iovs[nr],
+				sgl == NULL ? 0 : sgl->sg_nr.num - nr, &off);
 		if (rc < 0) {
 			D_DEBUG(DF_VOS1,
 				"Failed to fetch index %d: %d\n", i, rc);
@@ -504,7 +511,13 @@ vos_dkey_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_key_t *dkey,
 	for (i = 0; i < viod_nr; i++) {
 		daos_sg_list_t *sgl;
 
-		sgl = zcc != NULL ? &zcc->zc_vec_zbufs[i].zb_sgl : &sgls[i];
+		if (zcc != NULL)
+			sgl = &zcc->zc_vec_zbufs[i].zb_sgl;
+		else if (sgls != NULL)
+			sgl = &sgls[i];
+		else
+			sgl = NULL;
+
 		if (empty) {
 			vos_empty_viod(&viods[i]);
 			vos_empty_sgl(sgl);
@@ -582,7 +595,7 @@ vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 		epr_tmp = *epr;
 		epr_tmp.epr_hi = DAOS_EPOCH_MAX;
 
-		if (iov_cur >= iov_nr) {
+		if (iovs != NULL && iov_cur >= iov_nr) {
 			D_DEBUG(DF_VOS1, "invalid I/O parameters: %d/%d\n",
 				iov_cur, iov_nr);
 			return -DER_IO_INVAL;
@@ -590,10 +603,10 @@ vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 
 		if (is_zc) {
 			D_ASSERT(i == iov_cur);
+			D_ASSERT(iovs != NULL);
 			mmid = recx_mmids[i];
 			iov = &iovs[i];
-
-		} else {
+		} else if (iovs != NULL) {
 			D_ASSERT(iovs[iov_cur].iov_buf_len >= *off_p);
 
 			iov_tmp = iovs[iov_cur];
@@ -609,6 +622,9 @@ vos_recx_update(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 					recx->rx_rsize);
 				return -DER_INVAL;
 			}
+		} else {
+			memset(&iov_tmp, 0, sizeof(iov_tmp));
+			iov = &iov_tmp;
 		}
 
 		rc = tree_recx_update(toh, &epr_tmp, cookie, &recx_tmp, iov,
@@ -684,7 +700,7 @@ vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
 		if (viod->vd_eprs != NULL)
 			epr = &viod->vd_eprs[i];
 
-		if (nr >= sgl->sg_nr.num) {
+		if (sgl != NULL && nr >= sgl->sg_nr.num) {
 			D_DEBUG(DF_VOS1,
 				"mismatched scatter/gather list: %d/%d\n",
 				nr, sgl->sg_nr.num);
@@ -692,8 +708,9 @@ vos_vec_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
 		}
 
 		rc = vos_recx_update(toh, epr, cookie, &viod->vd_recxs[i],
-				     &sgl->sg_iovs[nr], sgl->sg_nr.num - nr,
-				     &off, mmids);
+				sgl == NULL ? NULL : &sgl->sg_iovs[nr],
+				sgl == NULL ? 0 : sgl->sg_nr.num - nr,
+				&off, mmids);
 		if (rc < 0)
 			D_GOTO(failed, rc);
 
@@ -733,8 +750,10 @@ vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, uuid_t cookie,
 			zbuf = &zcc->zc_vec_zbufs[i];
 			sgl  = &zbuf->zb_sgl;
 		} else {
-			D_ASSERT(sgls != NULL);
-			sgl = &sgls[i];
+			if (sgls == NULL)
+				sgl = NULL;
+			else
+				sgl = &sgls[i];
 			zbuf = NULL;
 		}
 

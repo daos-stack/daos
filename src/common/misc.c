@@ -70,7 +70,7 @@ daos_sgl_data_len(daos_sg_list_t *sgl)
 	daos_size_t	len;
 	int		i;
 
-	if (sgl->sg_iovs == NULL)
+	if (sgl == NULL || sgl->sg_iovs == NULL)
 		return 0;
 
 	for (i = 0, len = 0; i < sgl->sg_nr.num; i++)
@@ -85,7 +85,7 @@ daos_sgl_buf_len(daos_sg_list_t *sgl)
 	daos_size_t	len;
 	int		i;
 
-	if (sgl->sg_iovs == NULL)
+	if (sgl == NULL || sgl->sg_iovs == NULL)
 		return 0;
 
 	for (i = 0, len = 0; i < sgl->sg_nr.num; i++)

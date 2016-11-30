@@ -387,12 +387,14 @@ ibtr_rec_fetch_in(struct btr_instance *tins, struct btr_record *rec,
 		}
 	}
 
+	irec->ir_size = iov->iov_len;
+	if (irec->ir_size == 0) /* it is a punch */
+		return 0;
+
 	if (iov->iov_len != rbund->rb_recx->rx_rsize)
 		return -DER_INVAL;
 
-	irec->ir_size = iov->iov_len;
-	if (iov->iov_buf == vos_irec2data(irec) || /* zero copied */
-	    irec->ir_size == 0) /* it is a punch */
+	if (iov->iov_buf == vos_irec2data(irec)) /* zero copied */
 		return 0;
 
 	if (iov->iov_buf != NULL) {

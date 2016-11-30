@@ -335,15 +335,21 @@ ds_obj_rw_inline(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl)
 		struct obj_rw_out *orwo;
 
 		orwo = crt_reply_get(rpc);
-		orwo->orw_sgls.da_count = orw->orw_sgls.da_count;
-		if (orwo->orw_sgls.da_arrays == NULL)
-			D_ALLOC(orwo->orw_sgls.da_arrays,
-				orwo->orw_sgls.da_count * sizeof(*sgls));
+		if (sgls != NULL) {
+			orwo->orw_sgls.da_count = orw->orw_sgls.da_count;
+			if (orwo->orw_sgls.da_arrays == NULL)
+				D_ALLOC(orwo->orw_sgls.da_arrays,
+					orwo->orw_sgls.da_count *
+					sizeof(*sgls));
 
-		rc = ds_sgls_prep(orwo->orw_sgls.da_arrays, sgls,
-				  orw->orw_sgls.da_count);
-		if (rc < 0)
-			D_GOTO(out_sgl, rc);
+			rc = ds_sgls_prep(orwo->orw_sgls.da_arrays, sgls,
+					  orw->orw_sgls.da_count);
+			if (rc < 0)
+				D_GOTO(out_sgl, rc);
+		} else {
+			orwo->orw_sgls.da_count = 0;
+			orwo->orw_sgls.da_arrays = NULL;
+		}
 
 		rc = vos_obj_fetch(cont_hdl->sch_cont->sc_hdl,
 				   orw->orw_oid, orw->orw_epoch,
@@ -397,7 +403,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_STALE);
 
 	/* Inline update/fetch */
-	if (orw->orw_sgls.da_arrays != NULL && orw->orw_sgls.da_count > 0) {
+	if (orw->orw_bulks.da_arrays == NULL && orw->orw_bulks.da_count == 0) {
 		rc = ds_obj_rw_inline(rpc, cont_hdl);
 		D_GOTO(out, rc);
 	}

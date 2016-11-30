@@ -286,7 +286,7 @@ out:
 }
 
 static inline bool
-obj_shard_io_check(unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls)
+obj_shard_io_check(unsigned int nr, daos_vec_iod_t *iods)
 {
 	int i;
 
@@ -366,6 +366,9 @@ sgls_buf_len(daos_sg_list_t *sgls, int nr)
 	daos_size_t sgls_len = 0;
 	int	    i;
 
+	if (sgls == NULL)
+		return 0;
+
 	/* create bulk transfer for daos_sg_list */
 	for (i = 0; i < nr; i++)
 		sgls_len += daos_sgl_buf_len(&sgls[i]);
@@ -436,7 +439,7 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 
 	/** sanity check input parameters */
 	if (dkey == NULL || dkey->iov_buf == NULL || nr == 0 ||
-	    !obj_shard_io_check(nr, iods, sgls))
+	    !obj_shard_io_check(nr, iods))
 		D_GOTO(out_task, rc = -DER_INVAL);
 
 	dobj = obj_shard_hdl2ptr(oh);
@@ -497,8 +500,13 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 		orw->orw_sgls.da_arrays = NULL;
 	} else {
 		/* Transfer data inline */
-		orw->orw_sgls.da_count = nr;
-		orw->orw_sgls.da_arrays = sgls;
+		if (sgls != NULL) {
+			orw->orw_sgls.da_count = nr;
+			orw->orw_sgls.da_arrays = sgls;
+		} else {
+			orw->orw_sgls.da_count = 0;
+			orw->orw_sgls.da_arrays = NULL;
+		}
 		orw->orw_bulks.da_count = 0;
 		orw->orw_bulks.da_arrays = NULL;
 	}
