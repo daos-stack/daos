@@ -811,6 +811,7 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	unsigned int		 grp_size;
 	unsigned int		 grp_nr;
 	unsigned int		 tg_nr;
+	unsigned int		 shard_nr;
 	unsigned int		 shard;
 	unsigned int		 begin;
 	unsigned int		 dist;
@@ -828,6 +829,8 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 
 	grp_size = daos_oclass_grp_size(oc_attr);
 	D_ASSERT(grp_size != 0);
+	if (grp_size == DAOS_OBJ_REPL_MAX)
+		grp_size = rimap->rmp_target_nr;
 
 	grp_dist = grp_size * dist;
 
@@ -851,7 +854,15 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		"obj="DF_OID"/%u begin=%u dist=%u grp_size=%u grp_nr=%d\n",
 		DP_OID(oid), shard, begin, dist, grp_size, grp_nr);
 
-	rc = pl_obj_layout_alloc(grp_size, grp_nr, &layout);
+	D_ASSERT(grp_nr > 0);
+	D_ASSERT(grp_size > 0);
+	D_ASSERT(rimap->rmp_target_nr > 0);
+	if (rimap->rmp_target_nr < grp_size * grp_nr)
+		shard_nr = rimap->rmp_target_nr;
+	else
+		shard_nr = grp_size * grp_nr;
+
+	rc = pl_obj_layout_alloc(shard_nr, &layout);
 	if (rc != 0)
 		return rc;
 
@@ -865,6 +876,9 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		for (j = 0; j < grp_size; j++, k++) {
 			int idx;
 			int pos;
+
+			if (k >= shard_nr)
+				break;
 
 			if (j >= tg_nr) {
 				/* If group size is larger than the target

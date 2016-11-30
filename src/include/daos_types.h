@@ -373,7 +373,8 @@ typedef enum {
 	DAOS_RES_REPL,		/**< Replication */
 } daos_obj_resil_t;
 
-#define DAOS_OC_GRP_MAX		(-1)
+#define DAOS_OBJ_GRP_MAX	(~0)
+#define DAOS_OBJ_REPL_MAX	(~0)
 
 /**
  * List of default object class
@@ -383,7 +384,8 @@ enum {
 	DAOS_OC_TINY_RW,
 	DAOS_OC_SMALL_RW,
 	DAOS_OC_LARGE_RW,
-	DAOS_OC_REPLICA_RW,
+	DAOS_OC_REPL_2_RW,
+	DAOS_OC_REPL_MAX_RW,
 };
 
 /** Object class attributes */

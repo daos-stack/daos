@@ -333,10 +333,14 @@ static int
 obj_get_grp_size(struct dc_object *obj)
 {
 	struct daos_oclass_attr *oc_attr;
+	unsigned int grp_size;
 
 	oc_attr = daos_oclass_attr_find(obj->cob_md.omd_id);
 	D_ASSERT(oc_attr != NULL);
-	return daos_oclass_grp_size(oc_attr);
+	grp_size = daos_oclass_grp_size(oc_attr);
+	if (grp_size == DAOS_OBJ_REPL_MAX)
+		grp_size = obj->cob_layout->ol_nr;
+	return grp_size;
 }
 
 static unsigned int

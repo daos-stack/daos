@@ -65,21 +65,33 @@ static struct daos_obj_class daos_obj_classes[] = {
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
-			.ca_grp_nr		= DAOS_OC_GRP_MAX,
+			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
 			.u.repl			= {
 				.r_num		= 1,
 			},
 		},
 	},
 	{
-		.oc_name	= "replica_rw",
-		.oc_id		= DAOS_OC_REPLICA_RW,
+		.oc_name	= "repl_2_rw",
+		.oc_id		= DAOS_OC_REPL_2_RW,
 		{
 			.ca_schema		= DAOS_OS_STRIPED,
 			.ca_resil		= DAOS_RES_REPL,
-			.ca_grp_nr		= DAOS_OC_GRP_MAX,
+			.ca_grp_nr		= DAOS_OBJ_GRP_MAX,
 			.u.repl			= {
 				.r_num		= 2,
+			},
+		},
+	},
+	{
+		.oc_name	= "repl_max_rw",
+		.oc_id		= DAOS_OC_REPL_MAX_RW,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.u.repl			= {
+				.r_num		= DAOS_OBJ_REPL_MAX,
 			},
 		},
 	},
@@ -115,7 +127,7 @@ daos_oclass_attr_find(daos_obj_id_t oid)
 }
 
 /** Return the redundancy group size of @oc_attr */
-int
+unsigned int
 daos_oclass_grp_size(struct daos_oclass_attr *oc_attr)
 {
 	switch (oc_attr->ca_resil) {
@@ -155,7 +167,7 @@ dc_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
  * Return the number of redundancy groups for the object class @oc_attr with
  * the provided metadata @md
  */
-int
+unsigned int
 daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 {
 	/* NB: @md is unsupported for now */

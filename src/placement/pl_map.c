@@ -185,8 +185,7 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 }
 
 int
-pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
-		    struct pl_obj_layout **layout_pp)
+pl_obj_layout_alloc(unsigned int shard_nr, struct pl_obj_layout **layout_pp)
 {
 	struct pl_obj_layout *layout;
 
@@ -194,9 +193,7 @@ pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
 	if (layout == NULL)
 		return -DER_NOMEM;
 
-	D_ASSERT(grp_nr > 0);
-	D_ASSERT(grp_size > 0);
-	layout->ol_nr = grp_nr * grp_size;
+	layout->ol_nr = shard_nr;
 	D_ALLOC(layout->ol_targets,
 		layout->ol_nr * sizeof(*layout->ol_targets));
 	if (layout->ol_targets == NULL)

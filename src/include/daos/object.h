@@ -50,9 +50,9 @@ struct daos_obj_shard_md {
 };
 
 struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
-int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
-int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
-		       struct daos_obj_md *md);
+unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
+unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
+				struct daos_obj_md *md);
 
 int
 dc_oclass_register(daos_handle_t coh, daos_oclass_id_t cid,

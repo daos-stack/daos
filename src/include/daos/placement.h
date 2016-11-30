@@ -83,7 +83,7 @@ void pl_map_print(struct pl_map *map);
 struct pl_map *pl_map_find(daos_handle_t coh, daos_obj_id_t oid);
 
 void pl_obj_layout_free(struct pl_obj_layout *layout);
-int  pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
+int  pl_obj_layout_alloc(unsigned int shard_nr,
 			 struct pl_obj_layout **layout_pp);
 
 int pl_obj_place(struct pl_map *map,
