@@ -32,5 +32,7 @@
                   -P3 "test_runner/InfoRunner.py" \
                   -P3 "test_runner/CpprDaemonRunner.py" \
                   -P3 "test_runner/DvmRunner.py" \
+                  -P3 "test_runner/MultiRunner.py" \
+                  -P3 "test_runner/NodeRunner.py" \
                   -P3 "test_runner/findTestLogs.py"
 exit $?

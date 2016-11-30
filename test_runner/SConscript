@@ -19,9 +19,11 @@
 # SOFTWARE.
 """install test runner"""
 
-TESTRUNNER = ["__init__.py", "__main__.py", "TestRunner.py", "InfoRunner.py",
-              "DvmRunner.py", "CpprDaemonRunner.py", "PreRunner.py",
-              "PostRunner.py", "findTestLogs.py"]
+TESTRUNNER = ["__init__.py", "__main__.py",  "InfoRunner.py"'
+              "TestRunner.py", "PreRunner.py", "PostRunner.py",
+              "MultiRunner.py", "NodeRunner.py",
+              "DvmRunner.py", "CpprDaemonRunner.py",
+              "findTestLogs.py"]
 
 def scons():
     """Run scons"""

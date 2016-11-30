@@ -25,14 +25,15 @@ if __name__ == "__main__":
     startcheck = ""
     dumplogs = False
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'dl:c:',
-                                   ['dumplogs', 'logfile=', '-checkdir='])
+        opts, args = getopt.getopt(sys.argv[1:], 'd:l:c:',
+                                   ['dumplogs=', 'logfile=', '-checkdir='])
     except getopt.GetoptError:
         sys.exit(2)
 
     for opt, arg in opts:
         if opt in ('-d', '--dumplogs'):
             dumplogs = True
+            startdir = arg
         elif opt in ('-l', '--logfile'):
             startdir = arg
         elif opt in ('-c', '-checkdir'):

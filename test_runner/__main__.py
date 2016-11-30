@@ -59,6 +59,7 @@ from importlib import import_module
 #pylint: disable=import-error
 from TestRunner import TestRunner
 from InfoRunner import InfoRunner
+from MultiRunner import MultiRunner
 
 
 def import_daemon(name, info):
@@ -73,7 +74,7 @@ def import_daemon(name, info):
         print("Module does not exist")
     return _class or None
 
-def testmain(info=None, start=1):
+def testmain(info=None, start=1, testMode=None):
     """ main for test runner """
     daemon = None
     test_list = []
@@ -95,7 +96,10 @@ def testmain(info=None, start=1):
         daemon = import_daemon(use_daemon, info)
         daemon.launch_process()
     # load test object and start the testing
-    tester = TestRunner(info, test_list)
+    if testMode == "littleChief":
+        tester = MultiRunner(info, test_list)
+    else:
+        tester = TestRunner(info, test_list)
     rc = tester.run_testcases()
     if daemon:
         daemon.stop_process()
@@ -144,10 +148,13 @@ def main():
     # setup default evnironment variables and path
     if not info.env_setup():
         exit(1)
-    if config and 'client' in config:
+    testMode = "unitTest"
+    if config and 'test_mode' in config:
+        testMode = config.get('test_mode', "unitTest")
+    if testMode and 'client' in config:
         rc = clientmain(info)
     else:
-        rc = testmain(info, start)
+        rc = testmain(info, start, testMode)
     exit(rc)
 
 if __name__ == "__main__":

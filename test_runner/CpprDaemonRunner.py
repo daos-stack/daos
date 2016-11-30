@@ -61,11 +61,15 @@ class CpprDaemonRunner:
                 "scripts",
                 "run_cppr.sh")
 
-        rc = subprocess.check_call([daemon_exe,
-                                    "-w", w_path,
-                                    "-g", g_path,
-                                    "-H", hostlist,
-                                    "start"])
+        cmdarg = [daemon_exe, "-w", w_path, "-g", g_path, "-H",
+                  hostlist, "start"]
+        log_path = self.info.get_config('log_base_path')
+        fileout = os.path.join(log_path, "cppr-start.out")
+        filerr = os.path.join(log_path, "cppr-start.err")
+        with open(fileout, mode='w+b', buffering=0) as outfile, \
+            open(filerr, mode='w+b', buffering=0) as errfile:
+            rc = subprocess.call(cmdarg, stdout=outfile, stderr=errfile)
+
 
         return rc
 
@@ -73,7 +77,7 @@ class CpprDaemonRunner:
         """
         Kill cppr_daemon on all nodes
         """
-        print("TestRunner: start cppr_daemon process.")
+        print("TestRunner: stopping cppr_daemon process.")
         w_path = os.path.join("/tmp/", pwd.getpwuid(os.getuid()).pw_name)
         g_path = os.path.join(os.path.expanduser("~/"), "tmp")
         hosts = ","
@@ -85,10 +89,13 @@ class CpprDaemonRunner:
                 "scripts",
                 "run_cppr.sh")
 
-        rc = subprocess.check_call([daemon_exe,
-                                    "-w", w_path,
-                                    "-g", g_path,
-                                    "-H", hostlist,
-                                    "stop"])
+        cmdarg = [daemon_exe, "-w", w_path, "-g", g_path, "-H",
+                  hostlist, "stop"]
+        log_path = self.info.get_config('log_base_path')
+        fileout = os.path.join(log_path, "cppr-stop.out")
+        filerr = os.path.join(log_path, "cppr-stop.err")
+        with open(fileout, mode='w+b', buffering=0) as outfile, \
+            open(filerr, mode='w+b', buffering=0) as errfile:
+            rc = subprocess.check_call(cmdarg, stdout=outfile, stderr=errfile)
 
         return rc

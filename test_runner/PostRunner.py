@@ -108,22 +108,23 @@ class PostRunner():
         self.logger.info("TestRunner: Callgrind annotate end")
 
     def check_log_mode(self, topdir):
-        """dump the ERROR tag from stdout file"""
+        """set the directory and file permissions"""
         mode = stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
-        dirlist = os.listdir(topdir)
-        for newdir in dirlist:
-            dname = os.path.join(topdir, newdir)
-            os.chmod(dname, mode)
-            if os.path.isfile(dname):
-                continue
-            else:
-                self.check_log_mode(dname)
+        if os.path.exists(topdir):
+            dirlist = os.listdir(topdir)
+            for newdir in dirlist:
+                dname = os.path.join(topdir, newdir)
+                os.chmod(dname, mode)
+                if os.path.isfile(dname):
+                    continue
+                else:
+                    self.check_log_mode(dname)
 
     def dump_error_messages(self, testMethodName):
         """dump the ERROR tag from stdout file"""
         dirname = testMethodName.split('_', maxsplit=2)
         newdir = os.path.join(self.last_testlogdir, dirname[2])
-        if  os.path.exists(newdir):
+        if os.path.exists(newdir):
             self.dump_logs(newdir)
         else:
             self.logger.info("Directory not found: %s" % newdir)
