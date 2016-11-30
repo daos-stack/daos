@@ -1,11 +1,12 @@
+mchecksum_commit="${PWD}/artifacts/mercury_mchecksum_git_commit"
+kwsys_commit="${PWD}/artifacts/mercury_kwsys_git_commit"
+
 pushd mercury
-  mchecksum_commit1=`git submodule status src/mchecksum`
-  mchecksum_commit=${mchecksum_commit1#?}
-
-  kwsys_commit1=`git submodule status Testing/driver/kwsys`
-  kwsys_commit=${kwsys_commit1#?}
+  pushd src/mchecksum
+    git rev-parse HEAD > ${mchecksum_commit}
+  popd
+  pushd Testing/driver/kwsys
+    git rev-parse HEAD > ${kwsys_commit}
+  popd
 popd
-
-echo ${mchecksum_commit/%\ */} > artifacts/mercury_mchecksum_git_commit
-echo ${kwsys_commit/%\ */} > artifacts/mercury_kwsys_git_commit
 
