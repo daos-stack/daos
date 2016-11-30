@@ -442,6 +442,11 @@ dc_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 		D_DEBUG(DF_DSMC, DF_UUID": disconnecting: cookie="DF_X64" hdl="
 			DF_UUID" slave\n", DP_UUID(pool->dp_pool), poh.cookie,
 			DP_UUID(pool->dp_pool_hdl));
+
+		pthread_rwlock_rdlock(&pool->dp_map_lock);
+		daos_placement_fini(pool->dp_map);
+		pthread_rwlock_unlock(&pool->dp_map_lock);
+
 		dsmc_pool_del_cache(pool);
 		poh.cookie = 0;
 		dc_pool_put(pool);
