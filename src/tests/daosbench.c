@@ -83,9 +83,14 @@ void				*akbuf;
 static daos_handle_t		eq;
 unsigned int			naios;
 static daos_event_t		**events;
-static daos_oclass_id_t		obj_class = DAOS_OC_LARGE_RW;
+static daos_oclass_id_t		obj_class = DAOS_OC_REPL_2_RW;
 bool				t_validate;
 bool				t_pretty_print;
+bool				t_kill_update;
+bool				t_kill_fetch;
+bool				t_kill_enum;
+bool				t_kill_server;
+uint64_t			t_wait;
 
 struct test {
 	/* Test type */
@@ -289,6 +294,75 @@ free_buffers()
 	free(buffers);
 	free(dkbuf);
 	free(akbuf);
+}
+
+static void
+kill_daos_server()
+{
+	daos_pool_info_t		info;
+	daos_rank_t			rank;
+	daos_rank_list_t		targets;
+	int				rc;
+
+	rc = daos_pool_query(poh, NULL, &info, NULL);
+	DBENCH_CHECK(rc, "Error in querying pool\n");
+
+	if (info.pi_ndisabled == 0)
+		rank = 1;
+	else
+		rank = info.pi_ndisabled + 1;
+
+	printf("\nKilling target %d (total of %d of %d already disabled)\n",
+	       rank, info.pi_ndisabled, info.pi_ntargets);
+	fflush(stdout);
+
+	rc  = daos_mgmt_svc_rip(NULL, rank, true, NULL);
+	DBENCH_CHECK(rc, "Error in killing server\n");
+
+	targets.rl_nr.num	= 1;
+	targets.rl_nr.num_out	= 0;
+	targets.rl_ranks	= &rank;
+
+	rc = daos_pool_exclude(poh, &targets, NULL);
+	DBENCH_CHECK(rc, "Error in excluding pool from poolmap\n");
+
+	memset(&info, 0, sizeof(daos_pool_info_t));
+	rc = daos_pool_query(poh, NULL, &info, NULL);
+	DBENCH_CHECK(rc, "Error in query pool\n");
+
+	printf("Target Rank: %d Killed successfully, (%d targets disabled)\n\n",
+	       rank, info.pi_ndisabled);
+	fflush(stdout);
+}
+
+static inline void
+kill_and_sync()
+{
+	double start, end;
+
+	start = MPI_Wtime();
+	if (comm_world_rank == 0)
+		kill_daos_server();
+	MPI_Barrier(MPI_COMM_WORLD);
+	end = MPI_Wtime();
+	/**
+	 *  This is time spent on killing and
+	 *  syncing, this will be deducted from
+	 *  the total time, such that the time spent
+	 *  reported is not squeued
+	 */
+	t_wait += (end - start);
+}
+
+static inline void
+sleep_and_sync()
+{
+	if (comm_world_rank == 0) {
+		printf("Pausing "DF_U64" seconds\n",
+		       t_wait);
+		sleep(t_wait);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 static inline void
@@ -622,7 +696,6 @@ container_open(int rank, char *uuid_str, int create)
 	int	rc = 0;
 
 	assert(create || uuid_str != NULL);
-
 	if (!rank) {
 		if (uuid_str == NULL) {
 			uuid_generate(cont_uuid);
@@ -686,6 +759,12 @@ kv_test_report(struct test *test, int key_type)
 		double d = chrono_read("end") - chrono_read("begin");
 		uint32_t count = (key_type == 2) ? test->t_nindexes :
 				test->t_nkeys;
+
+		/** Subtract pause time from total time */
+		if (t_wait > 0 && (d - t_wait) > 0) {
+			DBENCH_PRINT("Deducting time spent pausing\n");
+			d -= t_wait;
+		}
 
 		printf("%s\n", test->t_type->tt_name);
 		printf("Time: %f seconds (%f ops per second)\n",
@@ -757,6 +836,13 @@ update_async(struct test *test, int key_type, uint64_t value)
 	aio_req_init(test);
 
 	for (i = 0; i < counter; i++) {
+
+		if (i == counter/2 && t_kill_update) {
+			if (t_wait > 0)
+				sleep_and_sync();
+			else
+				kill_and_sync();
+		}
 		ioreq = get_next_ioreq(test);
 		kv_set_dkey(test, ioreq, key_type, i);
 		kv_set_akey(test, ioreq, key_type, i);
@@ -1013,6 +1099,12 @@ kv_multi_akey_fetch_run(struct test *test)
 	chrono_record("begin");
 	aio_req_init(test);
 	for (i = 0; i < test->t_nkeys; i++) {
+		if (i == test->t_nkeys/2 && t_kill_fetch) {
+			if (t_wait > 0)
+				sleep_and_sync();
+			else
+				kill_and_sync();
+		}
 		ioreq = get_next_ioreq(test);
 		ioreq->r_index = i;
 		kv_set_dkey(test, ioreq, 1, i);
@@ -1047,7 +1139,7 @@ kv_dkey_enumerate(struct test *test)
 	int			done = 0;
 	int			key_start, key_end;
 	uint64_t		value = 0xda05da0500000006;
-
+	bool			enum_pause = false;
 
 	kv_test_describe(test, 0);
 
@@ -1082,6 +1174,15 @@ kv_dkey_enumerate(struct test *test)
 
 	/** enumerate records */
 	while (!daos_hash_is_eof(&hash_out)) {
+
+		if (!enum_pause &&
+		    (number >= total_keys / 2) && t_kill_enum) {
+			if (t_wait > 0)
+				sleep_and_sync();
+			else
+				kill_and_sync();
+			enum_pause = true;
+		}
 
 		enumerate(test->t_epoch,
 			  &number, kds, &hash_out, buf, 5*test->t_dkey_size,
@@ -1357,6 +1458,8 @@ Usage: daosbench -t TEST -p $UUID [OPTIONS]\n\
 	--dkey-size=N | -s	buffer size of dkey for this test\n\
 	--steps=N | -e		steps for kv-simul test\n\
 	--container=UUID | -n	container UUID\n\
+	--kill-server	| -u	kill daos-server(default from daosbench) \n\
+	--pause=seconds | -w	pause test for some time\n\
 	--pretty-print | -d	pretty-print-flag. \n\
 	--check-tests | -c	do data verifications. \n\
 	--verbose | -v		verbose flag. \n\
@@ -1390,6 +1493,8 @@ test_init(struct test *test, int argc, char *argv[])
 		{"dpool",		1,	NULL,	'p'},
 		{"pretty-print",	0,	NULL,	'd'},
 		{"steps",		1,	NULL,	'e'},
+		{"kill-server",		1,	NULL,	'u'},
+		{"pause",		1,	NULL,	'w'},
 		{"container",		1,	NULL,	'n'},
 		{NULL,			0,	NULL,	0}
 	};
@@ -1412,12 +1517,18 @@ test_init(struct test *test, int argc, char *argv[])
 	test->t_steps = 2;
 	t_validate = false;
 	t_pretty_print = false;
+	t_kill_server = false;
+	t_kill_update = false;
+	t_kill_fetch  = false;
+	t_kill_enum   = false;
+	t_wait	      = 0;
+
 
 
 	if (comm_world_rank != 0)
 		opterr = 0;
 
-	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:o:p:s:hvcde:rn:",
+	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:o:p:s:hvcde:rn:uw:",
 				 options, NULL)) != -1) {
 		switch (rc) {
 		case 'a':
@@ -1443,6 +1554,12 @@ test_init(struct test *test, int argc, char *argv[])
 			break;
 		case 'o':
 			test->t_id = atoi(optarg);
+			break;
+		case 'w':
+			t_wait = atoi(optarg);
+			break;
+		case 'u':
+			t_kill_server = true;
 			break;
 		case 'c':
 			t_validate = true;
@@ -1523,6 +1640,12 @@ test_init(struct test *test, int argc, char *argv[])
 				"daosbench: inflight aios>32 not allowed\n");
 	}
 
+	if (test->t_container == NULL) {
+		if (comm_world_rank == 0)
+			fprintf(stderr,
+				"daosbench: container connot be NULL\n");
+	}
+
 	if (test->t_steps <= 0) {
 		if (comm_world_rank == 0)
 			fprintf(stderr,
@@ -1538,6 +1661,22 @@ test_init(struct test *test, int argc, char *argv[])
 				"multiple of %u\n",
 				(int)sizeof(struct value_entry));
 		return 2;
+	}
+
+	if (t_wait > 0 && t_kill_server) {
+		if (comm_world_rank == 0)
+			fprintf(stderr,
+				"ERR: Trying to kill implicit & explicit\n");
+		return 2;
+	}
+
+	if (t_wait > 0 || t_kill_server) {
+		if (strstr(test->t_type->tt_name, "update") != NULL)
+			t_kill_update	= true;
+		else if (strstr(test->t_type->tt_name, "fetch") != NULL)
+			t_kill_fetch	= true;
+		else if (strstr(test->t_type->tt_name, "enum") != NULL)
+			t_kill_enum	= true;
 	}
 
 	if (comm_world_rank == 0) {
@@ -1613,6 +1752,7 @@ int main(int argc, char *argv[])
 	rc = MPI_Bcast(&pool_info, sizeof(pool_info), MPI_BYTE, 0,
 		       MPI_COMM_WORLD);
 	DBENCH_CHECK(rc, "broadcast pool_info error\n");
+
 
 	rc = container_open(comm_world_rank, arg.t_container,
 			    0 /* create */);
