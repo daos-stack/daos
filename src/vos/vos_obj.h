@@ -104,6 +104,9 @@ vos_obj_cache_create(int32_t cache_size,
 void
 vos_obj_cache_destroy(struct daos_lru_cache *occ);
 
+/** evict cached objects for the specified container */
+void vos_obj_cache_evict(struct daos_lru_cache *occ, struct vc_hdl *cont);
+
 /**
  * Return object cache for the current thread.
  */

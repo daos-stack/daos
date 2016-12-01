@@ -34,84 +34,45 @@
 #include <daos/hash.h>
 #include <daos/lru.h>
 
-/** Define LRU Idle/Busy refs  */
-#define        LRU_IDLE_REF 1
-#define        LRU_BUSY_REF 2
-
-
 static struct daos_llink*
-lru_hlink2ptr(daos_list_t *blink)
+hash2lru_link(daos_list_t *blink)
 {
 	return container_of(blink, struct daos_llink, ll_hlink);
-}
-
-static struct daos_llink*
-lru_qlink2ptr(daos_list_t *qlink)
-{
-	return container_of(qlink, struct daos_llink, ll_qlink);
-}
-
-static inline void
-lru_idle2busy(struct daos_lru_cache *lcache,
-		    struct daos_llink *llink)
-{
-	/**
-	 * This reference is about to get busy
-	 * lets unlink from idle list and
-	 * increment refcnt
-	 */
-	D_DEBUG(DF_MISC,
-		"Ref to get busy held: %u, filled :%u, refcnt: %u\n",
-		lcache->dlc_refs_held, lcache->dlc_idle_nr,
-		llink->ll_ref);
-
-	if (llink->ll_ref == LRU_BUSY_REF) {
-		daos_list_del(&llink->ll_qlink);
-		lcache->dlc_idle_nr--;
-		lcache->dlc_refs_held++;
-	}
-
-	D_DEBUG(DF_MISC,
-		"Ref got busy held: %u, filled :%u, refcnt: %u\n",
-		lcache->dlc_refs_held, lcache->dlc_idle_nr,
-		llink->ll_ref);
 }
 
 static void
 lru_hop_rec_addref(struct dhash_table *lr_htab, daos_list_t *rlink)
 {
-	lru_hlink2ptr(rlink)->ll_ref++;
+	hash2lru_link(rlink)->ll_ref++;
 }
 
 static bool
 lru_hop_rec_decref(struct dhash_table *lr_htab, daos_list_t *rlink)
 {
 
-       struct daos_llink *llink = lru_hlink2ptr(rlink);
+       struct daos_llink *llink = hash2lru_link(rlink);
 
        D_ASSERT(llink->ll_ref > 0);
        llink->ll_ref--;
-
        /* Delete from hash only if no more references */
-       return lru_hlink2ptr(rlink)->ll_ref == 0;
+       return llink->ll_ref == 0;
 }
 
 static bool
 lru_hop_key_cmp(struct dhash_table *lr_htab, daos_list_t *rlink,
 		const void *key, unsigned int ksize)
 {
-	struct daos_llink *llink = lru_hlink2ptr(rlink);
+	struct daos_llink *llink = hash2lru_link(rlink);
+
 	return llink->ll_ops->lop_cmp_keys(key, ksize, llink);
 }
 
 static void
 lru_hop_rec_free(struct dhash_table *lr_htab, daos_list_t *rlink)
 {
-	struct daos_llink *llink = lru_hlink2ptr(rlink);
+	struct daos_llink *llink = hash2lru_link(rlink);
 
-	if (llink->ll_ops != NULL &&
-	    llink->ll_ops->lop_free_ref != NULL)
-		llink->ll_ops->lop_free_ref(llink);
+	llink->ll_ops->lop_free_ref(llink);
 }
 
 static dhash_table_ops_t lru_ops = {
@@ -133,8 +94,10 @@ daos_lru_cache_create(int bits, uint32_t feats,
 	D_DEBUG(DF_MISC, "Creating a new LRU cache of size (2^%d)\n",
 		bits);
 
-	if (ops == NULL || ops->lop_alloc_ref == NULL ||
-	    ops->lop_free_ref == NULL || ops->lop_cmp_keys == NULL) {
+	if (ops == NULL ||
+	    ops->lop_cmp_keys == NULL ||
+	    ops->lop_alloc_ref == NULL ||
+	    ops->lop_free_ref == NULL) {
 		D_ERROR("Error missing ops/mandatory-ops for LRU cache\n");
 		return -DER_INVAL;
 	}
@@ -149,12 +112,19 @@ daos_lru_cache_create(int bits, uint32_t feats,
 	if (rc)
 		D_GOTO(exit, rc = -DER_NOMEM);
 
-	lru_cache->dlc_csize = (1 << bits);
+	if (bits >= 0)
+		lru_cache->dlc_csize = (1 << bits);
+	else /* disable LRU */
+		lru_cache->dlc_csize = 0;
+
 	lru_cache->dlc_ops = ops;
+
 	DAOS_INIT_LIST_HEAD(&lru_cache->dlc_idle_list);
+	DAOS_INIT_LIST_HEAD(&lru_cache->dlc_busy_list);
+
 	*lcache = lru_cache;
 exit:
-	if (rc != 0 && lru_cache != NULL)
+	if (rc != 0)
 		D_FREE_PTR(lru_cache);
 
 	return rc;
@@ -169,115 +139,186 @@ daos_lru_cache_destroy(struct daos_lru_cache *lcache)
 	 * Cannot destroy if either lcache is NULL or
 	 * if there are busy references.
 	 */
-	D_DEBUG(DF_VOS2, "refs_held :%u\n", lcache->dlc_refs_held);
-	D_ASSERT(lcache && (lcache->dlc_refs_held == 0));
+	D_DEBUG(DF_VOS2, "refs_held :%u\n", lcache->dlc_busy_nr);
+	D_ASSERT(lcache && (lcache->dlc_busy_nr == 0));
 
 	dhash_table_debug(&lcache->dlc_htable);
 	dhash_table_destroy_inplace(&lcache->dlc_htable, true);
 	D_FREE_PTR(lcache);
 }
 
+void
+daos_lru_cache_evict(struct daos_lru_cache *lcache,
+		     daos_lru_cond_cb_t cond, void *args)
+{
+	struct daos_llink *llink;
+	struct daos_llink *tmp;
+	unsigned int	   cntr;
+
+	cntr = 0;
+	daos_list_for_each_entry(llink, &lcache->dlc_busy_list, ll_qlink) {
+		if (cond == NULL || cond(llink, args))
+			/* will be evicted later in daos_lru_ref_release */
+			daos_lru_ref_evict(llink);
+	}
+	D_DEBUG(DF_MISC, "Marked %d busy items as evicted\n", cntr);
+
+	cntr = 0;
+	daos_list_for_each_entry_safe(llink, tmp, &lcache->dlc_idle_list,
+				      ll_qlink) {
+		if (cond == NULL || cond(llink, args)) {
+			daos_list_del_init(&llink->ll_qlink);
+			dhash_rec_delete_at(&lcache->dlc_htable,
+					    &llink->ll_hlink);
+			lcache->dlc_idle_nr--;
+			cntr++;
+		}
+	}
+	D_DEBUG(DF_MISC, "Evicted %d items from idle list\n", cntr);
+}
+
+static struct daos_llink *
+lru_fast_search(struct daos_lru_cache *lcache, daos_list_t *head,
+		void *key, unsigned int key_size)
+{
+	struct daos_llink *llink;
+
+	if (daos_list_empty(head))
+		return NULL;
+
+	llink = daos_list_entry(head->next, struct daos_llink, ll_qlink);
+	if (llink->ll_ops->lop_cmp_keys(key, key_size, llink)) {
+		D_DEBUG(DF_MISC, "Found item on the %s list.\n",
+			head == &lcache->dlc_busy_list ? "busy" : "idle");
+
+		llink->ll_ref++; /* +1 for caller */
+		return llink;
+	}
+	return NULL;
+}
+
+struct daos_llink *
+lru_hash_search(struct daos_lru_cache *lcache, void *key,
+		unsigned int key_size)
+{
+	daos_list_t	*hlink;
+
+	hlink = dhash_rec_find(&lcache->dlc_htable, key, key_size);
+	if (hlink == NULL)
+		return NULL;
+
+	D_DEBUG(DF_MISC, "Found in the cache hash table\n");
+	return hash2lru_link(hlink);
+}
+
+static inline void
+lru_mark_busy(struct daos_lru_cache *lcache, struct daos_llink *llink)
+{
+	/**
+	 * This reference is about to get busy, lets move it from the idle
+	 * list to busy list, and change counters for the cache.
+	 */
+	D_DEBUG(DF_MISC, "Ref to get busy held: %u, filled :%u\n",
+		lcache->dlc_busy_nr, lcache->dlc_idle_nr);
+
+	if (daos_list_empty(&llink->ll_qlink)) { /* new item */
+		daos_list_add(&llink->ll_qlink, &lcache->dlc_busy_list);
+	} else {
+		lcache->dlc_idle_nr--;
+		daos_list_move(&llink->ll_qlink, &lcache->dlc_busy_list);
+	}
+	lcache->dlc_busy_nr++;
+}
+
 int
-daos_lru_ref_hold(struct daos_lru_cache *lcache, void *ref_key,
-		  unsigned int rk_size, void *args,
+daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
+		  unsigned int key_size, void *args,
 		  struct daos_llink **rlink)
 {
-	int			rc = 0;
-	struct daos_llink	*qh_link = NULL;
-	daos_list_t		*list_entry = NULL;
+	struct daos_llink *llink;
+	int		   rc;
 
-	D_ASSERT((lcache != NULL) && (ref_key != NULL) && (rk_size > 0));
+	D_ASSERT(lcache != NULL && key != NULL && key_size > 0);
 	if (lcache->dlc_ops->lop_print_key)
-		lcache->dlc_ops->lop_print_key(ref_key, rk_size);
+		lcache->dlc_ops->lop_print_key(key, key_size);
 
-	if (lcache->dlc_idle_nr) {
-		D_DEBUG(DF_MISC, "LRU checking the head to locate key\n");
-		qh_link = daos_list_entry(lcache->dlc_idle_list.next,
-					  struct daos_llink, ll_qlink);
-		if (qh_link->ll_ops->lop_cmp_keys(ref_key, rk_size, qh_link)) {
-			D_DEBUG(DF_MISC,
-				"Found at the beginning of LRU queue\n");
-			D_ASSERT(qh_link->ll_ref == LRU_IDLE_REF);
-			dhash_rec_addref(&lcache->dlc_htable,
-					 &qh_link->ll_hlink);
-			D_GOTO(make_busy, 0);
-		}
-	}
+	llink = lru_fast_search(lcache, &lcache->dlc_busy_list, key, key_size);
+	if (llink)
+		D_GOTO(found, rc = 0);
 
-	list_entry = dhash_rec_find(&lcache->dlc_htable,
-				    ref_key, rk_size);
-	if (list_entry == NULL) {
-		D_DEBUG(DF_MISC, "Entry not found adding it to LRU\n");
-		/* llink does not exist create one */
-		rc = lcache->dlc_ops->lop_alloc_ref(ref_key, rk_size,
-						    args, &qh_link);
-		if (rc)
-			return rc;
+	llink = lru_fast_search(lcache, &lcache->dlc_idle_list, key, key_size);
+	if (llink)
+		D_GOTO(found, rc = 0);
 
-		D_DEBUG(DF_MISC, "Inserting into LRU Hash table\n");
-		qh_link->ll_ref = LRU_IDLE_REF;
-		qh_link->ll_ops = lcache->dlc_ops;
-		DAOS_INIT_LIST_HEAD(&qh_link->ll_hlink);
-		rc = dhash_rec_insert(&lcache->dlc_htable, ref_key, rk_size,
-				      &qh_link->ll_hlink, true);
-		if (rc) {
-			D_ERROR("Error in inserting into LRU hash\n");
-			return rc;
-		}
-		lcache->dlc_refs_held++;
-		D_GOTO(exit, 0);
-	}
+	llink = lru_hash_search(lcache, key, key_size);
+	if (llink)
+		D_GOTO(found, rc = 0);
 
-	D_DEBUG(DF_MISC, "Key exists in cache, making it busy\n");
-	qh_link = lru_hlink2ptr(list_entry);
+	D_DEBUG(DF_MISC, "Entry not found adding it to LRU\n");
+	/* llink does not exist create one */
+	rc = lcache->dlc_ops->lop_alloc_ref(key, key_size, args, &llink);
+	if (rc)
+		D_GOTO(out, rc);
 
-make_busy:
-	lru_idle2busy(lcache, qh_link);
-exit:
-	*rlink = qh_link;
-	return 0;
+	D_DEBUG(DF_MISC, "Inserting into LRU Hash table\n");
+	llink->ll_evicted = 0;
+	llink->ll_ref	  = 1; /* 1 for caller */
+	llink->ll_ops	  = lcache->dlc_ops;
+	DAOS_INIT_LIST_HEAD(&llink->ll_qlink);
+
+	rc = dhash_rec_insert(&lcache->dlc_htable, key, key_size,
+			      &llink->ll_hlink, true);
+	D_ASSERT(rc == 0);
+found:
+	if (llink->ll_ref == 2) /* 1 for hash, 1 for the first holder */
+		lru_mark_busy(lcache, llink);
+
+	*rlink = llink;
+out:
+	return rc;
 }
 
 void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
-	daos_list_t		*head;
-	struct daos_llink	*tlink;
+	D_ASSERT(lcache != NULL && llink != NULL && llink->ll_ref > 1);
+	D_DEBUG(DF_MISC, "Releasing item %p, ref=%d\n", llink, llink->ll_ref);
 
-	D_DEBUG(DF_MISC, "Releasing reference from obj cache link: %p\n",
-		llink);
-	D_ASSERT((lcache != NULL) && (llink != NULL) &&
-		 (llink->ll_ref > LRU_IDLE_REF));
-	dhash_rec_decref(&lcache->dlc_htable, &llink->ll_hlink);
+	llink->ll_ref--;
+	if (llink->ll_ref == 1) { /* the last refcount */
+		D_DEBUG(DF_MISC, "busy: %u, idle: %u\n",
+			lcache->dlc_busy_nr, lcache->dlc_idle_nr);
 
-	/**
-	 * Move it to LRU cache idle list
-	 */
-	if (llink->ll_ref == LRU_IDLE_REF) {
-		D_DEBUG(DF_MISC, "Moving to the LRU Cache idle list\n");
-		D_DEBUG(DF_MISC, "Held: %u, Filled: %u, Refcnt: %u\n",
-			lcache->dlc_refs_held, lcache->dlc_idle_nr,
-			llink->ll_ref);
-		daos_list_add(&llink->ll_qlink, &lcache->dlc_idle_list);
-		D_ASSERT(lcache->dlc_refs_held > 0);
-		lcache->dlc_refs_held--;
-		lcache->dlc_idle_nr++;
-		D_DEBUG(DF_MISC, "Moved: Held: %u, Filled: %u, Refcnt: %u\n",
-			lcache->dlc_refs_held, lcache->dlc_idle_nr,
-			llink->ll_ref);
+		D_ASSERT(lcache->dlc_busy_nr > 0);
+		lcache->dlc_busy_nr--;
+
+		if (llink->ll_evicted) {
+			D_DEBUG(DF_MISC, "Evict %p from LRU cache\n", llink);
+			daos_list_del_init(&llink->ll_hlink);
+			/* be freed within hash callback */
+			dhash_rec_delete_at(&lcache->dlc_htable,
+					    &llink->ll_hlink);
+		} else {
+			D_DEBUG(DF_MISC, "Moving %p to the idle list\n", llink);
+			lcache->dlc_idle_nr++;
+			daos_list_move(&llink->ll_qlink,
+				       &lcache->dlc_idle_list);
+		}
 	}
 
 	while (lcache->dlc_idle_nr != 0 &&
-	       (lcache->dlc_refs_held + lcache->dlc_idle_nr >=
+	       (lcache->dlc_busy_nr + lcache->dlc_idle_nr >=
 		lcache->dlc_csize)) {
 		D_DEBUG(DF_MISC, "Evicting from object cache :%d, %d\n",
-			lcache->dlc_idle_nr, lcache->dlc_refs_held);
-		head = &lcache->dlc_idle_list;
+			lcache->dlc_idle_nr, lcache->dlc_busy_nr);
+
 		/** evict from the tail of the list */
-		tlink = lru_qlink2ptr(head->prev);
-		daos_list_del(&tlink->ll_qlink);
-		dhash_rec_delete_at(&lcache->dlc_htable,
-				    &tlink->ll_hlink);
+		D_ASSERT(!daos_list_empty(&lcache->dlc_idle_list));
+		llink = container_of(lcache->dlc_idle_list.prev,
+				     struct daos_llink, ll_qlink);
+
+		daos_list_del_init(&llink->ll_qlink);
+		dhash_rec_delete_at(&lcache->dlc_htable, &llink->ll_hlink);
 		lcache->dlc_idle_nr--;
 	}
 	D_DEBUG(DF_MISC, "Done releasing reference\n");

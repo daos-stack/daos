@@ -277,7 +277,7 @@ static struct daos_llink_ops pool_cache_ops = {
 int
 ds_pool_cache_init(void)
 {
-	return daos_lru_cache_create(0 /* bits */, DHASH_FT_NOLOCK /* feats */,
+	return daos_lru_cache_create(-1 /* bits */, DHASH_FT_NOLOCK /* feats */,
 				     &pool_cache_ops, &pool_cache);
 }
 

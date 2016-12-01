@@ -49,7 +49,9 @@ struct daos_llink {
 	/* LRU queue link */
 	daos_list_t		ll_qlink;
 	/* Ref count for this reference */
-	unsigned int		ll_ref;
+	unsigned int		ll_ref:30;
+	/** has been evicted */
+	unsigned int		ll_evicted:1;
 	/**
 	 * ops to allocate and free reference
 	 * for this llink.
@@ -64,12 +66,14 @@ struct daos_llink {
 struct daos_lru_cache {
 	/* Provided cache size */
 	uint32_t		dlc_csize;
-	/* Entries Filled */
+	/* # idle items in the LRU */
 	uint32_t		dlc_idle_nr;
-	/* unique references held */
-	uint32_t		dlc_refs_held;
+	/* # busy items in the LRU (referenced by caller) */
+	uint32_t		dlc_busy_nr;
 	/* Queue head, holds idle refs (no refcnt) */
 	daos_list_t		dlc_idle_list;
+	/** list head of busy items in the LRU */
+	daos_list_t		dlc_busy_list;
 	/* Holds all refs but needs lookup */
 	struct dhash_table	dlc_htable;
 	/* ops to allocate and free reference */
@@ -103,6 +107,20 @@ daos_lru_cache_create(int bits, uint32_t feats,
 void
 daos_lru_cache_destroy(struct daos_lru_cache *lcache);
 
+typedef bool (*daos_lru_cond_cb_t)(struct daos_llink *llink, void *args);
+
+/**
+ * Evit LRU items that can match the condition @cond. All items will be evicted
+ * if @cond is NULL.
+ *
+ * \param lcache	[IN]	DAOS LRU cache
+ * \param cond		[IN]	the condition callback
+ * \param args		[IN]	arguments for the @cond
+ */
+void
+daos_lru_cache_evict(struct daos_lru_cache *lcache,
+		     daos_lru_cond_cb_t cond, void *args);
+
 /**
  * Find a ref in the cache \a lcache and take its reference.
  * if reference is not found add it.
@@ -126,5 +144,16 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key, unsigned int ksize,
  */
 void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink);
+
+/**
+ * Evict the item from LRU after releasing the last refcount on it.
+ *
+ * \param llink		[IN]	DAOS LRU item to be evicted.
+ */
+static inline void
+daos_lru_ref_evict(struct daos_llink *llink)
+{
+	llink->ll_evicted = 1;
+}
 
 #endif

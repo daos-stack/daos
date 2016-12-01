@@ -113,7 +113,7 @@ ds_cont_cache_create(struct daos_lru_cache **cache)
 	 * Since there's currently no way to evict an idle object, we don't
 	 * really cache any idle objects.
 	 */
-	return daos_lru_cache_create(0 /* bits */, DHASH_FT_NOLOCK /* feats */,
+	return daos_lru_cache_create(-1 /* bits */, DHASH_FT_NOLOCK /* feats */,
 				     &cont_cache_ops, cache);
 }
 

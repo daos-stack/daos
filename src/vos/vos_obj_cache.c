@@ -95,6 +95,7 @@ vos_oref_lru_alloc(void *key, unsigned int ksize,
 	oref->or_obj	= lobj;
 	oref->or_oid	= lkey->vlk_obj_id;
 	oref->or_co	= co_hdl;
+	vos_co_addref_handle(co_hdl);
 
 	D_DEBUG(DF_VOS2, "oref create_cb co uuid:"DF_UUID"\n",
 		DP_UUID(co_hdl->vc_id));
@@ -133,6 +134,9 @@ vos_oref_lru_free(struct daos_llink *llink)
 	D_ASSERT(llink);
 
 	oref = container_of(llink, struct vos_obj_ref, or_llink);
+	if (oref->or_co != NULL)
+		vos_co_putref_handle(oref->or_co);
+
 	vos_obj_tree_fini(oref);
 	D_FREE_PTR(oref);
 }
@@ -184,10 +188,30 @@ vos_obj_cache_destroy(struct daos_lru_cache *occ)
 	daos_lru_cache_destroy(occ);
 }
 
+static bool
+obj_cache_evict_cond(struct daos_llink *llink, void *args)
+{
+	struct vc_hdl	   *cont = (struct vc_hdl *)args;
+	struct vos_obj_ref *oref;
+
+	if (cont == NULL)
+		return true;
+
+	oref = container_of(llink, struct vos_obj_ref, or_llink);
+	return oref->or_co == cont;
+}
+
+void
+vos_obj_cache_evict(struct daos_lru_cache *cache, struct vc_hdl *cont)
+{
+	daos_lru_cache_evict(cache, obj_cache_evict_cond, cont);
+}
+
 /**
  * Return object cache for the current thread.
  */
-struct daos_lru_cache *vos_obj_cache_current(void)
+struct daos_lru_cache *
+vos_obj_cache_current(void)
 {
 	return vos_get_obj_cache();
 }

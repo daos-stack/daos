@@ -331,15 +331,17 @@ exit:
 int
 vos_co_close(daos_handle_t coh)
 {
-
-	struct vc_hdl			*co_hdl = NULL;
-	int				rc  = 0;
+	struct vc_hdl	*co_hdl;
+	int		 rc;
 
 	co_hdl = vos_hdl2co(coh);
 	if (co_hdl == NULL) {
 		D_ERROR("Cannot close a NULL handle\n");
 		return -DER_INVAL;
 	}
+
+	vos_obj_cache_evict(vos_obj_cache_current(), co_hdl);
+
 	rc = vos_co_release_handle(co_hdl);
 	if (rc) {
 		D_ERROR("Error in deleting container handle\n");

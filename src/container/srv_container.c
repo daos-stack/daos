@@ -194,7 +194,7 @@ static struct daos_llink_ops cont_svc_cache_ops = {
 int
 ds_cont_svc_cache_init(void)
 {
-	return daos_lru_cache_create(0 /* bits */, 0 /* feats */,
+	return daos_lru_cache_create(-1 /* bits */, 0 /* feats */,
 				     &cont_svc_cache_ops, &cont_svc_cache);
 }
 
