@@ -112,7 +112,7 @@ struct crt_context {
 	struct chash_table	 cc_epi_table;
 	/* binheap for inflight RPC timeout tracking */
 	struct crt_binheap	 cc_bh_timeout;
-	/* mutex to protect cc_epi_table */
+	/* mutex to protect cc_epi_table and timeout binheap */
 	pthread_mutex_t		 cc_mutex;
 };
 

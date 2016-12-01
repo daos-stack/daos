@@ -581,7 +581,9 @@ crt_context_req_track(crt_rpc_t *req)
 		rpc_priv->crp_state = RPC_QUEUED;
 		rc = CRT_REQ_TRACK_IN_WAITQ;
 	} else {
+		pthread_mutex_lock(&crt_ctx->cc_mutex);
 		rc = crt_req_timeout_track(req);
+		pthread_mutex_unlock(&crt_ctx->cc_mutex);
 		if (rc != 0) {
 			C_ERROR("crt_req_timeout_track failed, rc: %d.\n", rc);
 			crt_req_decref(req); /* roll back the addref above */
@@ -634,7 +636,9 @@ crt_context_req_untrack(crt_rpc_t *req)
 		epi->epi_req_num--;
 	C_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
+	pthread_mutex_lock(&crt_ctx->cc_mutex);
 	crt_req_timeout_untrack(req);
+	pthread_mutex_unlock(&crt_ctx->cc_mutex);
 
 	/* decref corresponding to addref in crt_context_req_track */
 	crt_req_decref(req);
@@ -650,7 +654,9 @@ crt_context_req_untrack(crt_rpc_t *req)
 		rpc_priv->crp_state = RPC_INITED;
 		rpc_priv->crp_timeout_ts = crt_get_timeout();
 
+		pthread_mutex_lock(&crt_ctx->cc_mutex);
 		rc = crt_req_timeout_track(&rpc_priv->crp_pub);
+		pthread_mutex_unlock(&crt_ctx->cc_mutex);
 		if (rc != 0)
 			C_ERROR("crt_req_timeout_track failed, rc: %d.\n", rc);
 

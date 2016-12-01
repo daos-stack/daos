@@ -39,6 +39,9 @@
  * This file is part of CaRT.  It tests that header files can be included
  * and invoked from C++ applications
  */
+
+#include <iostream>
+
 #include <stdlib.h>
 #include <pmix.h>
 #include <crt_api.h>
@@ -48,6 +51,22 @@
 #include <crt_util/sysqueue.h>
 #include <crt_util/list.h>
 #include "utest_cmocka.h"
+
+using namespace std;
+
+#define LINKAGE_TEST_OPC (0x8)
+
+struct crt_msg_field *linkage_test_rpc_in[] = {
+	&CMF_UINT32,
+};
+
+struct crt_msg_field *linkage_test_rpc_out[] = {
+	&CMF_UINT32,
+};
+
+struct crt_req_format CRF_TEST_RPC =
+	DEFINE_CRT_REQ_FMT("LINKAGE_TEST_RPC", linkage_test_rpc_in,
+			   linkage_test_rpc_out);
 
 static void
 test_crt_api_linkage(void **state)
@@ -72,8 +91,12 @@ test_crt_api_linkage(void **state)
 	rc = crt_init(bogus_client_group,
 		      bogus_server_group,
 		      0);
-
 	assert_int_equal(rc, 0);
+
+	/* test RPC register */
+	rc = crt_rpc_register(LINKAGE_TEST_OPC, &CRF_TEST_RPC);
+	assert_int_equal(rc, 0);
+
 }
 
 /* Just a compilation test */
@@ -145,6 +168,8 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_common_linkage),
 		cmocka_unit_test(test_log_linkage),
 	};
+
+	cout << "[==========] test linkage ...\n" ;
 
 	return cmocka_run_group_tests(tests, NULL, NULL);
 }
