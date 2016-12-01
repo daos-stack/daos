@@ -227,10 +227,13 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	if (tcx == NULL)
 		return -DER_NOMEM;
 
+	tcx->tc_ref = 1; /* for the caller */
 	rc = btr_class_init(root_mmid, root, tree_class, tree_feats, uma,
 			    &tcx->tc_tins);
-	if (rc != 0)
-		goto failed;
+	if (rc != 0) {
+		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
+		D_GOTO(failed, rc);
+	}
 
 	root = tcx->tc_tins.ti_root;
 	if (root == NULL || root->tr_class == 0) { /* tree creation */
@@ -249,7 +252,6 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	}
 
 	tcx->tc_trace = &tcx->tc_traces[BTR_TRACE_MAX - tcx->tc_depth];
-	tcx->tc_ref = 1;
 	*tcxp = tcx;
 	return 0;
 
