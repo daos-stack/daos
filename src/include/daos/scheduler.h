@@ -161,25 +161,6 @@ daos_task_register_comp_cb(struct daos_task *task,
 			   daos_task_comp_cb_t comp_cb,
 			   void *arg);
 /**
- * run all of tasks of the scheduler.
- *
- * \param sched [input] scheduler whose tasks will be executed.
- */
-void
-daos_sched_run(struct daos_sched *sched);
-
-/**
- * cancel all of tasks in the scheduler.
- *
- * Cancel all of tasks of the scheduler.
- *
- * \param sched [input] scheduler to be canceled.
- * \param ret   [input] result of the scheduler.
- */
-void
-daos_sched_cancel(struct daos_sched *sched, int ret);
-
-/**
  * complete daos_task.
  *
  * Mark the task to be completed.

@@ -144,20 +144,13 @@ daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
 	struct daos_task *task;
 	int		  rc;
 
-	rc = daos_client_prep_task(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
-	rc = daos_event_launch(ev);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	daos_pool_query_async(poh, tgts, info, task);
 
-	rc = daos_pool_query_async(poh, tgts, info, task);
-out:
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
-
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int

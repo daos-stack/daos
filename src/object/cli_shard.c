@@ -526,6 +526,9 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 		sp->sp_arg = rwaa;
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_CRT_ERROR))
+		D_GOTO(out_bulk, rc = -DER_CRT_HG);
+
 	rc = crt_req_send(req, dc_obj_shard_rpc_cb, task);
 	if (rc != 0) {
 		D_ERROR("update/fetch rpc failed rc %d\n", rc);

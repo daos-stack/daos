@@ -507,7 +507,7 @@ daos_sched_check_complete(struct daos_sched_private *dsp)
 }
 
 /* Run tasks for this schedule */
-void
+static void
 daos_sched_run(struct daos_sched *sched)
 {
 	struct daos_sched_private *dsp = daos_sched2priv(sched);
@@ -526,7 +526,7 @@ daos_sched_run(struct daos_sched *sched)
 }
 
 /* Cancel tasks for this schedule */
-void
+static void
 daos_sched_cancel(struct daos_sched *sched, int ret)
 {
 	struct daos_sched_private *dsp = daos_sched2priv(sched);
@@ -661,4 +661,59 @@ daos_task_init(struct daos_task *task, daos_task_func_t task_func,
 		daos_task_add_dependent(task, dependent);
 
 	return 0;
+}
+
+/**
+ * The daos client internal will use daos_task, this function will
+ * initialize the daos task/scheduler from event, and launch
+ * event.
+ */
+int
+daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg,
+		      int arg_size, struct daos_task **taskp,
+		      daos_event_t **evp)
+{
+	daos_event_t *ev = *evp;
+	struct daos_sched *sched;
+	struct daos_task *task = NULL;
+	int rc;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			return rc;
+	}
+
+	sched = daos_ev2sched(ev);
+	rc = daos_sched_init(sched, ev);
+	if (rc != 0)
+		return rc;
+
+	D_ALLOC_PTR(task);
+	if (task == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_task_init(task, NULL, arg, arg_size, sched, NULL);
+	if (rc != 0) {
+		D_FREE_PTR(task);
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (comp_cb != NULL) {
+		rc = daos_task_register_comp_cb(task, comp_cb, NULL);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	*taskp = task;
+	*evp = ev;
+out:
+	if (rc != 0)
+		daos_sched_cancel(sched, rc);
+
+	return rc;
 }

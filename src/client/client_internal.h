@@ -147,6 +147,22 @@ daos_pool_query_async(daos_handle_t ph, daos_rank_list_t *tgts,
 		      daos_pool_info_t *info, struct daos_task *task);
 
 int
-daos_client_prep_task(daos_task_comp_cb_t comp_cb, void *arg, int arg_size,
+daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg, int arg_size,
 		      struct daos_task **taskp, daos_event_t **evp);
+
+/**
+ * Wait for completion if blocking mode. We always return 0 for asynchronous
+ * mode because the application will get the result from event in this case,
+ * besides certain failure might be reset anyway see daos_obj_comp_cb() .
+ */
+static inline int
+daos_client_result_wait(daos_event_t *ev)
+{
+	D_ASSERT(ev != NULL);
+	if (daos_event_is_priv(ev)) /* blocking mode */
+		return daos_event_priv_wait(ev);
+
+	return 0;
+}
+
 #endif /* __EVENT_INTERNAL_H__ */

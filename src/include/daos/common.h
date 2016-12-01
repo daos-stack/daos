@@ -364,6 +364,7 @@ daos_fail_check(uint64_t id);
 #define DAOS_SHARD_OBJ_FETCH_TIMEOUT	(0x002)
 #define DAOS_SHARD_OBJ_FAIL		(0x003)
 #define DAOS_OBJ_UPDATE_NOSPACE		(0x004)
+#define DAOS_SHARD_OBJ_RW_CRT_ERROR		(0x005)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 #endif /* __DAOS_COMMON_H__ */
