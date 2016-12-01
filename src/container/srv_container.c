@@ -1080,8 +1080,6 @@ cont_epoch_hold(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	if (in->cei_epoch > DAOS_EPOCH_MAX)
 		D_GOTO(out, rc = -DER_OVERFLOW);
-	else if (in->cei_epoch <= hdl->ch_hce)
-		D_GOTO(out, rc = -DER_EP_RO);
 
 	if (in->cei_epoch <= ghpce)
 		hdl->ch_lhe = ghpce + 1;

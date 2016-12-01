@@ -253,7 +253,17 @@ epoch_hold_commit(void **state)
 	arg->co_info.ci_epoch_state.es_lhe = epoch;
 	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
 
-	print_message("SUBTEST 6: close and open the container again: shall "
+	print_message("SUBTEST 6: hold on epoch < lhe, shall succeed\n");
+	epoch = 0;
+	rc = do_epoch_hold(arg, arg->coh, &epoch, &epoch_state);
+	assert_int_equal(rc, 0);
+	assert_int_equal(epoch, epoch_state.es_lhe);
+	epoch = 22;
+	rc = do_epoch_hold(arg, arg->coh, &epoch, &epoch_state);
+	assert_int_equal(rc, 0);
+	assert_int_equal(epoch, epoch_state.es_lhe);
+
+	print_message("SUBTEST 7: close and open the container again: shall "
 		      "succeed and report correct GLRE.\n");
 	rc = daos_cont_close(arg->coh, NULL);
 	assert_int_equal(rc, 0);
@@ -324,7 +334,7 @@ epoch_slip(void **argp)
 	info.ci_epoch_state.es_glre = epoch_state.es_glre;
 	assert_epoch_state_equal(&epoch_state, &info.ci_epoch_state);
 
-	print_message("SUBTEST 1: slip to DAOS_EPOCH_MAX - 1 shall get HCE\n");
+	print_message("SUBTEST 3: slip to DAOS_EPOCH_MAX - 1 shall get HCE\n");
 	epoch = DAOS_EPOCH_MAX - 1;
 	assert_true(epoch > info.ci_epoch_state.es_hce);
 	rc = do_epoch_slip(arg, coh, epoch, &epoch_state);

@@ -854,8 +854,6 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	case CONT_EPOCH_HOLD:
 		if (epoch == NULL)
 			D_GOTO(err, rc = -DER_INVAL);
-		if (*epoch == 0)
-			D_GOTO(err, rc = -DER_EP_RO);
 		break;
 	case CONT_EPOCH_SLIP:
 	case CONT_EPOCH_DISCARD:
