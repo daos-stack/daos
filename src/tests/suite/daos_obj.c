@@ -1185,7 +1185,7 @@ obj_setup(void **state)
 	if (arg->myrank == 0) {
 		/** create pool with minimal size */
 		rc = daos_pool_create(0731, geteuid(), getegid(), "srv_grp",
-				      NULL, "pmem", 768 << 20, &arg->svc,
+				      NULL, "pmem", 1024*1024*1024, &arg->svc,
 				      arg->pool_uuid, NULL);
 	}
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -1207,9 +1207,6 @@ obj_setup(void **state)
 	/** l2g and g2l the pool handle */
 	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 0);
 	if (arg->myrank == 0) {
-		print_message("\n\n=====================================\n");
-		print_message("Pool: %s\n", DP_UUID(arg->pool_uuid));
-		print_message("==========================================\n");
 		/** create container */
 		uuid_generate(arg->co_uuid);
 		rc = daos_cont_create(arg->poh, arg->co_uuid, NULL);

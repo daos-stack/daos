@@ -32,36 +32,65 @@
 */
 #include "daos_iotest.h"
 
+int		g_dkeys	  = 1000;
+
 /**
- *  Introduce arbitrary failures in the test
- *  expand this ops structure to support more failures
+ * Enumerator for Kill op for degraded tests
  */
-struct rtp_test_ops {
-	/**
-	 * Induce failure op after updates,
-	 * takes arbitrary args
-	 */
-	void	(*rto_after_update)(void *params);
-	/**
-	 * Indude failure op after lookup,
-	 * takes arbitrary args
-	 */
-	void	(*rto_after_lookup)(void *params);
+enum {
+	UPDATE,
+	LOOKUP,
+	ENUMERATE
 };
 
-int g_dkeys = 1000;
-int sleep_seconds = 1;
-
 static void
-insert_lookup_with_wait(test_arg_t *arg, void *params1,
-			void *params2, struct rtp_test_ops *test_ops)
+kill_daos_server(daos_handle_t poh, daos_handle_t eq)
+{
+	daos_pool_info_t	info;
+	daos_rank_t		rank;
+	daos_rank_list_t	targets;
+	int			rc;
+
+	rc = daos_pool_query(poh, NULL, &info, NULL);
+	assert_int_equal(rc, 0);
+
+	if (info.pi_ndisabled == 0)
+		rank = 1;
+	else
+		rank = info.pi_ndisabled + 1;
+
+	print_message("\tKilling target %d (total of %d with %d already "
+		      "disabled)!\n", rank, info.pi_ntargets,
+		      info.pi_ndisabled);
+
+	/** kill server */
+	rc = daos_mgmt_svc_rip(NULL, rank, true, NULL);
+	assert_int_equal(rc, 0);
+
+	/** exclude from the pool */
+	targets.rl_nr.num = 1;
+	targets.rl_nr.num_out = 0;
+	targets.rl_ranks = &rank;
+	rc = daos_pool_exclude(poh, &targets, NULL);
+	assert_int_equal(rc, 0);
+}
+
+/**
+ * Performs insert, lookup, enum of g_dkeys and allow
+ * custom operations to be introduced in-between updates/lookups/enum
+ *
+ * An intermediate op can be a pause, or querying of pool info or
+ * sending an dmg rpc kill signal
+ */
+static void
+insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 {
 	daos_obj_id_t		oid;
 	struct ioreq		req;
 	int			i;
 	int			g_dkeys_strlen = 6; /* "999999" */
-	const char		*dkey_fmt = "test_update dkey%d";
-	const char		akey[] = "test_update akey";
+	const char		*dkey_fmt = "degraded dkey%d";
+	const char		akey[] = "degraded akey";
 	char			*dkey[g_dkeys], *buf, *ptr;
 	char			*dkey_enum;
 	char			*rec[g_dkeys];
@@ -70,21 +99,40 @@ insert_lookup_with_wait(test_arg_t *arg, void *params1,
 	daos_hash_out_t		hash_out;
 	daos_size_t		rec_size[g_dkeys];
 	daos_off_t		offset[g_dkeys];
-	const char		*val_fmt = "epoch_discard val%d";
+	const char		*val_fmt = "degraded val%d";
 	daos_size_t		val_size[g_dkeys];
 	char			*rec_verify;
 	daos_epoch_t		epoch;
 	uint32_t		number;
 	int			rank, key_nr;
+	int			enum_op = 1;
+	int			size;
+	int			rc;
+	daos_pool_info_t	info;
+	int			enumed = 1;
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
+
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW);
+
 	ioreq_init(&req, oid, arg);
 	if (!rank) {
-		print_message("\n\n=============================\n");
-		print_message("Insert %d keys\n", g_dkeys);
-		print_message("=============================\n");
+		print_message("Using pool: %s\n", DP_UUID(arg->pool_uuid));
+		print_message("Inserting %d keys ...\n", g_dkeys * size);
 	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = daos_pool_query(arg->poh, NULL, &info, NULL);
+	assert_int_equal(rc, 0);
+	if (info.pi_ntargets - info.pi_ndisabled < 2) {
+		if (rank == 0)
+			print_message("Not enough active targets, skipping "
+				      "(%d/%d)\n", info.pi_ntargets,
+				      info.pi_ndisabled);
+		skip();
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (i = 0; i < g_dkeys; i++) {
 		D_ALLOC(dkey[i],
@@ -101,51 +149,60 @@ insert_lookup_with_wait(test_arg_t *arg, void *params1,
 
 	epoch = 100;
 	for (i = 0; i < g_dkeys; i++) {
-		sprintf(rec[i], val_fmt, i);
+				sprintf(rec[i], val_fmt, i);
 		rec_size[i] = strlen(rec[i]);
-		if (!rank)
-			D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
-				dkey[i], (int)rec_size[i], rec[i]);
+		D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
+			dkey[i], (int)rec_size[i], rec[i]);
 		insert_single(dkey[i], akey, offset[i], rec[i],
 			      rec_size[i], epoch, &req);
-	}
 
-	if (arg->myrank == 0) {
-		print_message("\n\n=====================================\n");
-		print_message("Done %d Updates\nSleeping %u seconds\n",
-			      g_dkeys, sleep_seconds);
-		print_message("Please kill server and exclude targets\n");
-		test_ops->rto_after_update(params1);
-		print_message("=====================================\n");
+		if ((i + 1) % (g_dkeys/10) == 0) {
+			MPI_Barrier(MPI_COMM_WORLD);
+			if (rank == 0)
+				print_message("\t%d keys inserted\n",
+					      (i + 1) * size);
+		}
 
+		/** If the number of updates is half-way inject fault */
+		if (op_kill == UPDATE && rank == 0 &&
+		    g_dkeys > 1 && (i == g_dkeys/2))
+			kill_daos_server(arg->poh, arg->eq);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (arg->myrank == 0)
-		print_message("Now looking up %d keys\n", g_dkeys);
+		print_message("insertion done\nNow looking up %d keys ...\n",
+			      g_dkeys * size);
 
 	D_ALLOC(rec_verify, strlen(val_fmt) + g_dkeys_strlen + 1);
+
 	for (i = 0; i < g_dkeys; i++) {
 		sprintf(rec_verify, val_fmt, i);
 		lookup_single(dkey[i], akey, offset[i], val[i],
 			      val_size[i], epoch, &req);
 		assert_int_equal(req.rex[0][0].rx_rsize, strlen(rec_verify));
 		assert_memory_equal(val[i], rec_verify, req.rex[0][0].rx_rsize);
+
+		if ((i + 1) % (g_dkeys/10) == 0) {
+			MPI_Barrier(MPI_COMM_WORLD);
+			if (rank == 0)
+				print_message("\t%d keys looked up\n",
+					      (i + 1) * size);
+		}
+
+		/** If the number of lookup is half-way inject fault */
+		if (op_kill == LOOKUP && rank == 0 &&
+		    g_dkeys > 1 && (i == g_dkeys/2))
+			kill_daos_server(arg->poh, arg->eq);
 	}
 	free(rec_verify);
-
-
-	if (arg->myrank == 0) {
-		print_message("\n\n=====================================\n");
-		test_ops->rto_after_lookup(params2);
-		print_message("=====================================\n");
-	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (arg->myrank == 0)
-		print_message("Now enumerating %d keys\n", g_dkeys);
+		print_message("lookup done\nNow enumerating %d keys ...\n",
+			      g_dkeys * size);
 
 	memset(&hash_out, 0, sizeof(hash_out));
 	D_ALLOC(buf, 512);
@@ -159,23 +216,36 @@ insert_lookup_with_wait(test_arg_t *arg, void *params1,
 		if (number == 0)
 			continue;
 
-		key_nr += number;
 		for (ptr = buf, i = 0; i < number; i++) {
 			snprintf(dkey_enum, kds[i].kd_key_len + 1, ptr);
 			D_DEBUG(DF_MISC, "i %d key %s len %d\n", i, dkey_enum,
 				(int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 		}
+		key_nr += number;
+
+		if (key_nr >= enumed * (g_dkeys/10)) {
+			MPI_Barrier(MPI_COMM_WORLD);
+			if (rank == 0)
+				print_message("\t%d keys enumerated\n",
+					      key_nr * size);
+			enumed++;
+		}
+
+		/** If the number of keys enumerated is half-way inject fault */
+		if (op_kill == ENUMERATE && rank == 0 && enum_op &&
+		    g_dkeys > 1 && (key_nr  >= g_dkeys/2)) {
+			kill_daos_server(arg->poh, arg->eq);
+			enum_op = 0;
+		}
+
 	}
 	assert_int_equal(key_nr, g_dkeys);
 
-	if (arg->myrank == 0) {
-		print_message("\n\n================================\n");
-		print_message("Done %d Enumerations\n\n", g_dkeys);
-		print_message("Test Complete\n");
-		print_message("================================\n");
-	}
+	MPI_Barrier(MPI_COMM_WORLD);
 
+	if (arg->myrank == 0)
+		print_message("enumeration done\n");
 	ioreq_fini(&req);
 
 	for (i = 0; i < g_dkeys; i++) {
@@ -185,58 +255,50 @@ insert_lookup_with_wait(test_arg_t *arg, void *params1,
 	}
 	D_FREE(buf, 512);
 	D_FREE(dkey_enum,  strlen(dkey_fmt) + g_dkeys_strlen + 1);
-
-
 }
 
 static void
-sleep_wait(void *params)
-{
-	int sleep_seconds = *(int *)params;
-
-	print_message("Test Waiting for %d\n", sleep_seconds);
-	sleep(sleep_seconds);
-}
-
-static void
-dpool_query(void *params)
-{
-	int			rc;
-	test_arg_t		*arg = (test_arg_t *)params;
-	daos_pool_info_t	info;
-
-	rc = daos_pool_query(arg->poh, NULL, &info, NULL);
-	assert_int_equal(rc, 0);
-	assert_int_equal(info.pi_ndisabled, 1);
-}
-
-static void
-io_replicated_rw_demo(void **state)
+io_degraded_update_demo(void **state)
 {
 	test_arg_t		*arg = *state;
-	struct rtp_test_ops	ops;
 
-	ops.rto_after_update	= sleep_wait;
-	ops.rto_after_lookup	= dpool_query;
-	insert_lookup_with_wait(arg, &sleep_seconds, arg, &ops);
+	insert_lookup_enum_with_ops(arg, UPDATE);
 }
 
+static void
+io_degraded_lookup_demo(void **state)
+{
+	test_arg_t		*arg = *state;
 
-static const struct CMUnitTest repl_tests[] = {
-	{"DAOS300: simple update/fetch allowing replication - demo",
-		io_replicated_rw_demo, NULL, NULL},
+	insert_lookup_enum_with_ops(arg, LOOKUP);
+}
+
+static void
+io_degraded_enum_demo(void **state)
+{
+	test_arg_t		*arg = *state;
+
+	insert_lookup_enum_with_ops(arg, ENUMERATE);
+}
+
+/** create a new pool/container for each test */
+static const struct CMUnitTest degraded_tests[] = {
+	{"DEG1: Degraded mode during updates",
+	 io_degraded_update_demo, NULL, NULL},
+	{"DEG2: Degraded mode during lookup",
+	 io_degraded_lookup_demo, NULL, NULL},
+	{"DEG3: Degraded mode during enumerate",
+	 io_degraded_enum_demo, NULL, NULL},
 };
 
 int
-run_daos_repl_test(int rank, int size, int keys, int wsec)
+run_daos_degraded_test(int rank, int size)
 {
 	int rc = 0;
 
-	sleep_seconds = wsec;
-	g_dkeys = keys;
-	rc = cmocka_run_group_tests_name("DAOS repl tests", repl_tests,
+	MPI_Barrier(MPI_COMM_WORLD);
+	rc = cmocka_run_group_tests_name("DAOS degraded-mode tests", degraded_tests,
 					 obj_setup, obj_teardown);
-
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

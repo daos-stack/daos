@@ -89,6 +89,11 @@ hdl_share_enable(void **state)
 	return 0;
 }
 
+enum {
+	HANDLE_POOL,
+	HANDLE_CO
+};
+
 int run_daos_mgmt_test(int rank, int size);
 int run_daos_pool_test(int rank, int size);
 int run_daos_cont_test(int rank, int size);
@@ -96,13 +101,7 @@ int run_daos_capa_test(int rank, int size);
 int run_daos_io_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
-int run_daos_repl_test(int rank, int size,
-		       int akeys, int wsec);
-
-enum {
-	HANDLE_POOL,
-	HANDLE_CO
-};
+int run_daos_degraded_test(int rank, int size);
 
 static inline void
 handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,

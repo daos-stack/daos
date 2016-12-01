@@ -63,6 +63,7 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	int			 rc;
 	int			 sig;
 	bool			 force;
+	crt_rank_t		 rank = -1;
 
 	murderer = crt_req_get(rpc);
 	if (murderer == NULL)
@@ -80,6 +81,9 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	if (rc != 0)
 		/** don't care, i am done */
 		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
+
+	crt_group_rank(NULL, &rank);
+	D_PRINT("Service rank %d is being killed ... farewell\n", rank);
 
 	/** ... adieu */
 	if (force)
