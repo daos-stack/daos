@@ -18,6 +18,17 @@ class LoggedTestCase(PostRunner.PostRunner):
     ch = logging.StreamHandler(sys.stdout)
     logger.addHandler(ch)
 
+def usage():
+    """usage message"""
+    print("""
+        python3 test_runner/findTestLogs.py <task> <top directory>
+            task options:
+        ('-d', '--dumplogs'): dump the application std(out|err) logs
+        ('-l', '--logfile'):  print the application std(out|err) logs location
+        ('-c', '--checkdir'): check/change the application std(out|err)
+                              logs permissions
+        """)
+
 if __name__ == "__main__":
 
     findLog = LoggedTestCase()
@@ -26,8 +37,11 @@ if __name__ == "__main__":
     dumplogs = False
     try:
         opts, args = getopt.getopt(sys.argv[1:], 'd:l:c:',
-                                   ['dumplogs=', 'logfile=', '-checkdir='])
-    except getopt.GetoptError:
+                                   ['dumplogs=', 'logfile=', 'checkdir=',
+                                    'help'])
+    except getopt.GetoptError as err:
+        print(err)
+        usage()
         sys.exit(2)
 
     for opt, arg in opts:
@@ -36,8 +50,10 @@ if __name__ == "__main__":
             startdir = arg
         elif opt in ('-l', '--logfile'):
             startdir = arg
-        elif opt in ('-c', '-checkdir'):
+        elif opt in ('-c', '--checkdir'):
             startcheck = arg
+        elif opt in '--help':
+            usage()
         else:
             continue
 

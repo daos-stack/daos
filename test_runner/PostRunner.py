@@ -125,103 +125,66 @@ class PostRunner():
         dirname = testMethodName.split('_', maxsplit=2)
         newdir = os.path.join(self.last_testlogdir, dirname[2])
         if os.path.exists(newdir):
-            self.dump_logs(newdir)
+            self.top_logdir(newdir, dumpLogs=True)
         else:
             self.logger.info("Directory not found: %s" % newdir)
             topdir = os.path.dirname(newdir)
-            dirlist = sorted(os.listdir(topdir), reverse=True)
-            for logdir in dirlist:
-                self.dump_logs(os.path.join(topdir, logdir))
+            self.top_logdir(topdir, dumpLogs=True)
 
-    def dump_logs(self, newdir):
+    def dump_logs(self, rankdir, filelist):
         """dump the ERROR tag from stdout file"""
-        if not os.path.exists(newdir):
-            self.logger.info("Directory not found: %s" % newdir)
-            return
-        dirlist = sorted(os.listdir(newdir), reverse=True)
-        for psdir in dirlist:
-            dname = os.path.join(newdir, psdir)
-            if os.path.isfile(dname):
+        dumpstd = ""
+        for stdfile in filelist:
+            if stdfile == "stdout" or stdfile == "stderr":
+                dumpstd = os.path.abspath(os.path.join(rankdir, stdfile))
+            else:
                 continue
-            rankdirlist = sorted(os.listdir(dname), reverse=True)
-            for rankdir in rankdirlist:
-                dumpstdout = os.path.join(newdir, psdir, rankdir, "stdout")
-                dumpstderr = os.path.join(newdir, psdir, rankdir, "stderr")
+            if os.path.exists(dumpstd):
                 self.logger.info(
                     "****************************************************")
-                self.logger.info("Error info from file\n %s" % dumpstdout)
-                filesize = os.path.getsize(dumpstdout) > 1024
+                self.logger.info("Error info from file\n %s" % dumpstd)
+                filesize = os.path.getsize(dumpstd)
                 if filesize > 1024:
                     self.logger.info(
                         "File too large (%d bytes), showing errors only" % \
                         filesize)
-                    with open(dumpstdout, 'r') as file:
+                    with open(dumpstd, 'r') as file:
                         for line in file:
                             if line.startswith("ERROR:"):
                                 self.logger.info(line)
-                else:
-                    with open(dumpstdout, 'r') as file:
-                        self.logger.info(file.read())
-
-                self.logger.info("Error info from file\n %s" % dumpstderr)
-                if os.path.getsize(dumpstderr) > 0:
-                    with open(dumpstderr, 'r') as file:
+                elif filesize > 0:
+                    with open(dumpstd, 'r') as file:
                         self.logger.info(file.read())
                 else:
                     self.logger.info("--- empty ---\n")
 
-    def testcase_logdir(self, logdir):
+    def testcase_logdir(self, rankdir, filelist):
         """walk the testcase directory and find stdout and stderr files"""
-        # testcase directories
-        dirlist = sorted(os.listdir(logdir), reverse=True)
-        for psdir in dirlist:
-            dname = os.path.join(logdir, psdir)
-            if os.path.isfile(dname):
-                continue
-            rankdirlist = sorted(os.listdir(dname), reverse=True)
-            # rank directories
-            for rankdir in rankdirlist:
-                if os.path.isfile(os.path.join(logdir, psdir, rankdir)):
-                    continue
-                dumpstdout = os.path.join(logdir, psdir, rankdir, "stdout")
-                dumpstderr = os.path.join(logdir, psdir, rankdir, "stderr")
-                self.logger.info(
-                    "*****************************************************")
-                self.logger.info("Log file %s\n %s\n %s" %
-                                 (rankdir, dumpstdout, dumpstderr))
-                self.logger.info(
-                    "*****************************************************")
+        dumpstdout = "No stdout file"
+        dumpstderr = "No stderr file"
+        for stdfile in filelist:
+            if stdfile == "stdout":
+                dumpstdout = os.path.abspath(os.path.join(rankdir, stdfile))
+            elif stdfile == "stderr":
+                dumpstderr = os.path.abspath(os.path.join(rankdir, stdfile))
+        if dumpstdout or dumpstderr:
+            self.logger.info("Log file %s\n %s\n %s" %
+                             (rankdir, dumpstdout, dumpstderr))
+            self.logger.info(
+                "*****************************************************")
 
     def top_logdir(self, newdir, dumpLogs=False):
         """walk the testRun directory and find testcase directories"""
-        # testRun directory
-        dirlist = sorted(os.listdir(newdir), reverse=True)
-        # test loop directories
-        for loopdir in dirlist:
-            loopname = os.path.join(newdir, loopdir)
-            if os.path.isfile(loopname):
-                continue
+        for (dirpath, dirnames, filenames) in os.walk(newdir):
             self.logger.info(
                 "*****************************************************")
-            self.logger.info("%s" % loopdir)
-            iddirlist = sorted(os.listdir(loopname), reverse=True)
-            # test id directories
-            for iddir in iddirlist:
-                idname = os.path.join(loopname, iddir)
-                if os.path.isfile(idname):
-                    continue
-                self.logger.info(
-                    "*****************************************************")
-                self.logger.info("%s" % iddir)
-                tcdirlist = sorted(os.listdir(idname), reverse=True)
-                for tcdir in tcdirlist:
-                    tcname = os.path.join(idname, tcdir)
-                    if os.path.isfile(tcname):
-                        continue
-                    self.logger.info(
-                        "*****************************************************")
-                    self.logger.info("%s" % tcdir)
-                    if dumpLogs:
-                        self.dump_logs(tcname)
-                    else:
-                        self.testcase_logdir(tcname)
+            self.logger.info("directory: " + str(os.path.abspath(dirpath)))
+            if filenames:
+                self.logger.info("files: " + str(filenames))
+            if not dirnames:
+                if dumpLogs:
+                    self.dump_logs(dirpath, filenames)
+                else:
+                    self.testcase_logdir(dirpath, filenames)
+        self.logger.info(
+            "*****************************************************")

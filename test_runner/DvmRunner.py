@@ -67,8 +67,11 @@ class DvmRunner():
                                             stdin=subprocess.DEVNULL,
                                             stdout=outfile,
                                             stderr=errfile)
+        # wait for DVM to start
+        print("TestRunner: orte-dvm process wait")
         time.sleep(10)
-        print("TestRunner: orte-dvm process started pid: " + str(self.ortedvm.pid))
+        print("TestRunner: orte-dvm process started pid: %d \n" %
+              self.ortedvm.pid)
         return not self.ortedvm
 
     def stop_process(self):

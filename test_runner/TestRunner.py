@@ -91,20 +91,29 @@ class TestRunner(PreRunner.PreRunner, PostRunner.PostRunner):
     def rename_output_directory(self):
         """ rename the output directory """
         if os.path.exists(self.log_dir_base):
-            if str(self.test_directives.get('renameTestRun', "yes")).lower() \
-               == "yes":
-                newname = "%s_%s" % \
-                          (self.log_dir_base, datetime.now().isoformat().replace(':', '_'))
+            rename = str(self.test_directives.get('renameTestRun',
+                                                  "yes")).lower()
+            if rename == "no":
+                newname = self.log_dir_base
             else:
-                newdir = str(self.test_directives.get('renameTestRun'))
-                logdir = os.path.dirname(self.log_dir_base)
-                newname = os.path.join(logdir, newdir)
-            os.rename(self.log_dir_base, newname)
-            self.logger.info("TestRunner: test log directory\n %s", \
-                             os.path.abspath(newname))
-            if str(self.test_directives.get('printTestLogPath', "no")).lower() \
-               == "yes":
+                if rename == "yes":
+                    newname = "%s_%s" % \
+                              (self.log_dir_base,
+                               datetime.now().isoformat().replace(':', '.'))
+                else:
+                    newdir = str(self.test_directives.get('renameTestRun'))
+                    logdir = os.path.dirname(self.log_dir_base)
+                    newname = os.path.join(logdir, newdir)
+                os.rename(self.log_dir_base, newname)
+                self.logger.info("TestRunner: test log directory\n %s", \
+                                 os.path.abspath(newname))
+
+            dowhat = str(self.test_directives.get('printTestLogPath',
+                                                  "no")).lower()
+            if dowhat == "yes":
                 self.top_logdir(newname)
+            elif dowhat == "dump":
+                self.top_logdir(newname, dumpLogs=True)
 
     def post_run(self):
         """ post run processing """
@@ -113,9 +122,7 @@ class TestRunner(PreRunner.PreRunner, PostRunner.PostRunner):
         if self.test_info['module'].get('createTmpDir'):
             envName = self.test_info['module']['createTmpDir']
             shutil.rmtree(self.test_info['defaultENV'][envName])
-        if str(self.test_directives.get('renameTestRun', "yes")).lower() \
-           != "no":
-            self.rename_output_directory()
+        self.rename_output_directory()
         self.logger.info("TestRunner: tearDown end\n\n")
 
     @staticmethod
