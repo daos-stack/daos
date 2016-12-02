@@ -94,7 +94,7 @@ REQS.define('mercury',
                       '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ ' \
                       '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX ' \
                       '-DBUILD_EXAMPLES=OFF ' \
-                      '-DMERCURY_USE_BOOST_PP=OFF ' \
+                      '-DMERCURY_USE_BOOST_PP=ON ' \
                       '-DMERCURY_ENABLE_VERBOSE_ERROR=OFF ' \
                       '-DBUILD_TESTING=ON ' \
                       '-DNA_USE_CCI=ON ' \
@@ -105,7 +105,7 @@ REQS.define('mercury',
                       '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE'
                       % (CCI_LIB), 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
-            requires=['openpa', 'cci'] + RT,
+            requires=['openpa', 'cci', 'boost'] + RT,
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
