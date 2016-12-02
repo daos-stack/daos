@@ -292,69 +292,16 @@ static const struct CMUnitTest capa_tests[] = {
 static int
 setup(void **state)
 {
-	test_arg_t	*arg;
-	int		 rc;
-
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		return -1;
-
-	rc = daos_eq_create(&arg->eq);
-	if (rc)
-		return rc;
-
-	arg->svc.rl_nr.num = 8;
-	arg->svc.rl_nr.num_out = 0;
-	arg->svc.rl_ranks = arg->ranks;
-
-	arg->hdl_share = false;
-	uuid_clear(arg->pool_uuid);
-	MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
-	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
-
-	if (arg->myrank == 0) {
-		/** create pool with minimal size */
-		rc = daos_pool_create(0731, geteuid(), getegid(), "srv_grp",
-				      NULL, "pmem", 0, &arg->svc,
-				      arg->pool_uuid, NULL);
-	}
-
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	*state = arg;
-	return 0;
+	return test_setup(state, SETUP_POOL_CREATE, true);
 }
 
-static int
-teardown(void **state) {
-	test_arg_t	*arg = *state;
-	int		 rc;
-
-	MPI_Barrier(MPI_COMM_WORLD);
-
-	if (arg->myrank == 0)
-		rc = daos_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
-
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	rc = daos_eq_destroy(arg->eq, 0);
-	if (rc)
-		return rc;
-
-	D_FREE_PTR(arg);
-	return 0;
-}
 int
 run_daos_capa_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("DAOS capability tests",
-					 capa_tests, setup, teardown);
+	rc = cmocka_run_group_tests_name("DAOS capability tests", capa_tests,
+					 setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

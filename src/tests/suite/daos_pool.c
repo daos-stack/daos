@@ -252,71 +252,7 @@ static const struct CMUnitTest pool_tests[] = {
 static int
 setup(void **state)
 {
-	test_arg_t	*arg;
-	int		 rc = 0;
-
-	arg = malloc(sizeof(test_arg_t));
-	if (arg == NULL)
-		return -1;
-
-	memset(arg, 0, sizeof(*arg));
-
-	rc = daos_eq_create(&arg->eq);
-	if (rc)
-		return rc;
-
-	arg->svc.rl_nr.num = 8;
-	arg->svc.rl_nr.num_out = 0;
-	arg->svc.rl_ranks = arg->ranks;
-	arg->mode = 0731;
-	arg->uid = geteuid();
-	arg->gid = getegid();
-	arg->hdl_share = false;
-	uuid_clear(arg->pool_uuid);
-	MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
-	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
-
-	if (arg->myrank == 0) {
-		/** create pool with minimal size */
-		rc = daos_pool_create(arg->mode, arg->uid, arg->gid, "srv_grp",
-				      NULL, "pmem", 0, &arg->svc,
-				      arg->pool_uuid, NULL);
-		if (rc)
-			print_message("daos_pool_create failed, rc: %d.\n", rc);
-	}
-
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	MPI_Bcast(arg->pool_uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
-
-	*state = arg;
-	return 0;
-}
-
-static int
-teardown(void **state) {
-	test_arg_t	*arg = *state;
-	int		 rc;
-
-	MPI_Barrier(MPI_COMM_WORLD);
-
-	if (arg->myrank == 0) {
-		rc = daos_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
-		if (rc)
-			print_message("daos_pool_destroy failed, rc: %d\n", rc);
-	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	rc = daos_eq_destroy(arg->eq, 0);
-	if (rc)
-		return rc;
-
-	free(arg);
-	return 0;
+	return test_setup(state, SETUP_POOL_CREATE, true);
 }
 
 int
@@ -325,7 +261,7 @@ run_daos_pool_test(int rank, int size)
 	int rc = 0;
 
 	rc = cmocka_run_group_tests_name("Pool tests", pool_tests,
-					 setup, teardown);
+					 setup, test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

@@ -29,6 +29,194 @@
 #include <getopt.h>
 #include "daos_test.h"
 
+int
+test_setup(void **state, unsigned int step, bool multi_rank)
+{
+	test_arg_t	*arg;
+	int		 rc;
+
+	arg = malloc(sizeof(test_arg_t));
+	if (arg == NULL)
+		return -1;
+
+	memset(arg, 0, sizeof(*arg));
+
+	MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
+	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
+	arg->multi_rank = multi_rank;
+
+	arg->svc.rl_nr.num = 8;
+	arg->svc.rl_nr.num_out = 0;
+	arg->svc.rl_ranks = arg->ranks;
+
+	arg->mode = 0731;
+	arg->uid = geteuid();
+	arg->gid = getegid();
+
+	uuid_clear(arg->pool_uuid);
+	uuid_clear(arg->co_uuid);
+
+	arg->hdl_share = false;
+	arg->poh = DAOS_HDL_INVAL;
+	arg->coh = DAOS_HDL_INVAL;
+
+	rc = daos_eq_create(&arg->eq);
+	if (rc)
+		return rc;
+
+	if (step == SETUP_EQ)
+		goto out;
+
+	/** create pool */
+	if (arg->myrank == 0) {
+		rc = daos_pool_create(0731, geteuid(), getegid(), "srv_grp",
+				      NULL, "pmem", 1024*1024*1024, &arg->svc,
+				      arg->pool_uuid, NULL);
+		if (rc)
+			print_message("daos_pool_create failed, rc: %d\n", rc);
+	}
+	/** broadcast pool create result */
+	if (multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		return rc;
+
+	/** broadcast pool UUID */
+	if (multi_rank)
+		MPI_Bcast(arg->pool_uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+	if (step == SETUP_POOL_CREATE)
+		goto out;
+
+	/** connect to pool */
+	if (arg->myrank == 0) {
+		rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+				       &arg->svc, DAOS_PC_RW, &arg->poh,
+				       &arg->pool_info, NULL /* ev */);
+		if (rc)
+			print_message("daos_pool_connect failed, rc: %d\n", rc);
+	}
+	/** broadcast pool connect result */
+	if (multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		return rc;
+
+	/** broadcast pool info */
+	if (multi_rank)
+		MPI_Bcast(&arg->pool_info, sizeof(arg->pool_info), MPI_CHAR, 0,
+			  MPI_COMM_WORLD);
+
+	/** l2g and g2l the pool handle */
+	if (multi_rank)
+		handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 0);
+
+	if (step == SETUP_POOL_CONNECT)
+		goto out;
+
+	/** create container */
+	if (arg->myrank == 0) {
+		uuid_generate(arg->co_uuid);
+		rc = daos_cont_create(arg->poh, arg->co_uuid, NULL);
+		if (rc)
+			print_message("daos_cont_create failed, rc: %d\n", rc);
+	}
+	/** broadcast container create result */
+	if (multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		return rc;
+
+	/** broadcast container UUID */
+	if (multi_rank)
+		MPI_Bcast(arg->co_uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+	/** open container */
+	if (arg->myrank == 0) {
+		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
+				    &arg->coh, &arg->co_info, NULL);
+		if (rc)
+			print_message("daos_cont_open failed, rc: %d\n", rc);
+	}
+	/** broadcast container open result */
+	if (multi_rank)
+		MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		return rc;
+
+	/** l2g and g2l the container handle */
+	if (multi_rank)
+		handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 0);
+
+	if (step == SETUP_CONT_CONNECT)
+		goto out;
+out:
+	*state = arg;
+	return 0;
+}
+
+int
+test_teardown(void **state)
+{
+	test_arg_t	*arg = *state;
+	int		 rc, rc_reduce = 0;
+
+	if (arg->multi_rank)
+		MPI_Barrier(MPI_COMM_WORLD);
+
+	if (!daos_handle_is_inval(arg->coh)) {
+		rc = daos_cont_close(arg->coh, NULL);
+		if (arg->multi_rank) {
+			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
+				      MPI_COMM_WORLD);
+			rc = rc_reduce;
+		}
+		if (rc)
+			return rc;;
+	}
+
+	if (!uuid_is_null(arg->co_uuid)) {
+		if (arg->myrank == 0)
+			rc = daos_cont_destroy(arg->poh, arg->co_uuid, 1, NULL);
+		if (arg->multi_rank)
+			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		if (rc)
+			return rc;
+	}
+
+	if (!daos_handle_is_inval(arg->poh)) {
+		rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
+		if (arg->multi_rank) {
+			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+			rc = rc_reduce;
+		}
+		if (rc)
+			return rc;
+	}
+
+	if (!uuid_is_null(arg->pool_uuid)) {
+		if (arg->myrank == 0) {
+			rc = daos_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
+			if (rc)
+				print_message("daos_pool_destroy failed, rc: %d\n", rc);
+		}
+		if (arg->multi_rank)
+			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+		if (rc)
+			return rc;
+	}
+
+	if (!daos_handle_is_inval(arg->eq)) {
+		rc = daos_eq_destroy(arg->eq, 0);
+		if (rc)
+			return rc;
+	}
+
+	D_FREE_PTR(arg);
+	return 0;
+}
+
+
 static inline int
 run_all_tests(int rank, int size)
 {

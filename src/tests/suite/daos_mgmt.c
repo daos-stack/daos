@@ -101,40 +101,9 @@ static const struct CMUnitTest tests[] = {
 };
 
 static int
-setup(void **state) {
-	test_arg_t	*arg;
-	int		 rc;
-
-	arg = malloc(sizeof(test_arg_t));
-	if (arg == NULL)
-		return -1;
-
-	memset(arg, 0, sizeof(*arg));
-
-	rc = daos_eq_create(&arg->eq);
-	if (rc)
-		return rc;
-
-	arg->svc.rl_nr.num = 8;
-	arg->svc.rl_nr.num_out = 0;
-	arg->svc.rl_ranks = arg->ranks;
-
-	*state = arg;
-	return 0;
-}
-
-static int
-teardown(void **state)
+setup(void **state)
 {
-	test_arg_t	*arg = *state;
-	int		 rc;
-
-	rc = daos_eq_destroy(arg->eq, 0);
-	if (rc)
-		return rc;
-
-	free(arg);
-	return 0;
+	return test_setup(state, SETUP_EQ, false);
 }
 
 int
@@ -144,7 +113,7 @@ run_daos_mgmt_test(int rank, int size)
 
 	if (rank == 0)
 		rc = cmocka_run_group_tests_name("Management tests", tests,
-						 setup, teardown);
+						 setup, test_teardown);
 
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	return rc;

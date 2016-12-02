@@ -41,6 +41,7 @@
 #include <daos/tests_lib.h>
 
 typedef struct {
+	bool			multi_rank;
 	daos_rank_t		ranks[8];
 	int			myrank;
 	int			rank_size;
@@ -61,6 +62,18 @@ typedef struct {
 	uint64_t		fail_value;
 	int			expect_result;
 } test_arg_t;
+
+enum {
+	SETUP_EQ,
+	SETUP_POOL_CREATE,
+	SETUP_POOL_CONNECT,
+	SETUP_CONT_CONNECT,
+};
+
+int
+test_teardown(void **state);
+int
+test_setup(void **state, unsigned int step, bool multi_rank);
 
 static inline int
 async_enable(void **state)

@@ -254,83 +254,7 @@ static const struct CMUnitTest epoch_tests[] = {
 static int
 setup(void **state)
 {
-	test_arg_t	*arg;
-	int		 rc;
-
-	arg = malloc(sizeof(test_arg_t));
-	if (arg == NULL)
-		return -1;
-
-	memset(arg, 0, sizeof(*arg));
-
-	rc = daos_eq_create(&arg->eq);
-	if (rc)
-		return rc;
-
-	arg->svc.rl_nr.num = 8;
-	arg->svc.rl_nr.num_out = 0;
-	arg->svc.rl_ranks = arg->ranks;
-
-	arg->hdl_share = false;
-	uuid_clear(arg->pool_uuid);
-
-	/** create pool with minimal size */
-	rc = daos_pool_create(0731, geteuid(), getegid(), "srv_grp", NULL,
-			      "pmem", 256*1024*1024, &arg->svc,
-			      arg->pool_uuid, NULL);
-	if (rc)
-		return rc;
-
-	/** connect to pool */
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
-			       DAOS_PC_RW, &arg->poh, &arg->pool_info,
-			       NULL /* ev */);
-	if (rc)
-		return rc;
-
-	/** create container */
-	uuid_generate(arg->co_uuid);
-	rc = daos_cont_create(arg->poh, arg->co_uuid, NULL);
-	if (rc)
-		return rc;
-
-	/** open container */
-	rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &arg->coh,
-			    &arg->co_info, NULL);
-	if (rc)
-		return rc;
-
-	*state = arg;
-	return 0;
-}
-
-static int
-teardown(void **state) {
-	test_arg_t	*arg = *state;
-	int		 rc;
-
-	rc = daos_cont_close(arg->coh, NULL);
-	if (rc)
-		return rc;
-
-	rc = daos_cont_destroy(arg->poh, arg->co_uuid, 1, NULL);
-	if (rc)
-		return rc;
-
-	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
-	if (rc)
-		return rc;
-
-	rc = daos_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
-	if (rc)
-		return rc;
-
-	rc = daos_eq_destroy(arg->eq, 0);
-	if (rc)
-		return rc;
-
-	free(arg);
-	return 0;
+	return test_setup(state, SETUP_CONT_CONNECT, false);
 }
 
 int
@@ -339,8 +263,9 @@ run_daos_epoch_test(int rank, int size)
 	int	rc;
 
 	if (rank == 0)
-		rc = cmocka_run_group_tests_name("DSM epoch tests", epoch_tests,
-						 setup, teardown);
+		rc = cmocka_run_group_tests_name("DAOS epoch tests",
+						 epoch_tests, setup,
+						 test_teardown);
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	return rc;
 }
