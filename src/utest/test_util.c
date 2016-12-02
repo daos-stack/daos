@@ -45,7 +45,8 @@
 #include "crt_util/path.h"
 #include "crt_util/list.h"
 #include "crt_util/sysqueue.h"
-#include <crt_util/heap.h>
+#include "crt_util/heap.h"
+#include "crt_util/clog.h"
 
 static char *__cwd;
 static char *__root;
@@ -885,6 +886,50 @@ test_binheap(void **state)
 	crt_binheap_destroy(h);
 }
 
+#define LOG_DEBUG(fac, ...) \
+	crt_log(fac | CLOG_DBG, __VA_ARGS__)
+
+#define LOG_INFO(fac, ...) \
+	crt_log(fac | CLOG_INFO, __VA_ARGS__)
+
+static void
+test_log(void **state)
+{
+	char *logmask;
+	char *allocated_mask = NULL;
+	int rc;
+	int logfac1;
+	int logfac2;
+
+	rc = crt_log_init();
+	assert_int_equal(rc, 0);
+
+	logfac1 = crt_log_allocfacility("T1", "TEST1");
+	assert_int_not_equal(logfac1, 0);
+	logfac2 = crt_log_allocfacility("T2", "TEST2");
+	assert_int_not_equal(logfac2, 0);
+	/* Generally, to use this in a component that uses cart,
+	 * the component would have its own mask that includes
+	 * CRT log facilities.
+	 */
+	logmask = getenv("TEST_LOG_MASK");
+	if (logmask == NULL)
+		logmask = allocated_mask = strdup("ERR,T1=DEBUG");
+	assert_non_null(logmask);
+
+	crt_log_setmasks(logmask, -1);
+
+	if (allocated_mask != NULL)
+		free(allocated_mask);
+
+	LOG_DEBUG(logfac1, "log1 debug test message %d\n", logfac1);
+	LOG_DEBUG(logfac2, "log2 debug test message %d\n", logfac2);
+	LOG_INFO(logfac1, "log1 info test message %d\n", logfac2);
+	LOG_INFO(logfac2, "log2 info test message %d\n", logfac2);
+
+	crt_log_fini();
+}
+
 int
 main(int argc, char **argv)
 {
@@ -901,6 +946,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_crt_list),
 		cmocka_unit_test(test_crt_hlist),
 		cmocka_unit_test(test_binheap),
+		cmocka_unit_test(test_log),
 	};
 
 	return cmocka_run_group_tests(tests, init_tests, fini_tests);

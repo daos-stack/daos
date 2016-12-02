@@ -271,9 +271,9 @@ crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, uint32_t flags)
 				crt_gdata.cg_singleton = true;
 		}
 
-		rc = crt_debug_init();
+		rc = crt_log_init();
 		if (rc != 0) {
-			C_PRINT_ERR("crt_debug_init failed, rc: %d.\n", rc);
+			C_PRINT_ERR("crt_log_init failed, rc: %d.\n", rc);
 			C_GOTO(out, rc);
 		}
 
@@ -438,7 +438,7 @@ crt_finalize(void)
 		gdata_init_once = PTHREAD_ONCE_INIT;
 		gdata_init_flag = 0;
 
-		crt_debug_fini();
+		crt_log_fini();
 	} else {
 		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 	}

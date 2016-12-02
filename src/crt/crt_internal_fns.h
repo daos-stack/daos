@@ -48,10 +48,6 @@
 /** crt_init.c */
 bool crt_initialized();
 
-/** debug.c */
-int crt_debug_init(void);
-void crt_debug_fini(void);
-
 /** crt_register.c */
 int crt_opc_map_create(unsigned int bits);
 void crt_opc_map_destroy(struct crt_opc_map *map);

@@ -48,7 +48,8 @@
 #define CRT_LOG_FILE_ENV	"CRT_LOG_FILE"
 #define CRT_LOG_MASK_ENV	"CRT_LOG_MASK"
 
-bool crt_log_initialized;
+static pthread_mutex_t crt_log_lock = PTHREAD_MUTEX_INITIALIZER;
+static int crt_log_refcount;
 int crt_logfac;
 int crt_mem_logfac;
 int crt_misc_logfac;
@@ -100,11 +101,13 @@ out:
 }
 
 int
-crt_debug_init(void)
+crt_log_init(void)
 {
 	char	*log_file;
 	char	*log_mask;
 	int	 rc = 0;
+
+	pthread_mutex_lock(&crt_log_lock);
 
 	log_file = getenv(CRT_LOG_FILE_ENV);
 	log_mask = getenv(CRT_LOG_MASK_ENV);
@@ -112,29 +115,40 @@ crt_debug_init(void)
 	if (log_file == NULL || strlen(log_file) == 0)
 		log_file = "/dev/stdout";
 
-	crt_log_initialized = false;
+	crt_log_refcount++;
+
+	if (crt_log_refcount > 1) /* Already initialized */
+		C_GOTO(out, rc);
+
 	if (crt_log_open((char *)"CaRT" /* tag */, CLOG_MAX_FAC_HINT,
 		      CLOG_WARN /* default_mask */, CLOG_EMERG/* stderr_mask */,
 		      log_file, CLOG_LOGPID /* flags */) == 0) {
 		rc = setup_clog_facnamemask(log_mask);
 		if (rc != 0)
 			goto out;
-		crt_log_initialized = true;
 	} else {
 		fprintf(stderr, "crt_log_open failed.\n");
 		C_GOTO(out, rc = -CER_UNINIT);
 	}
 
 out:
-	if (rc != 0)
+	if (rc != 0) {
+		crt_log_refcount--;
 		C_PRINT_ERR("crt_debug_init failed, rc: %d.\n", rc);
+	}
+	pthread_mutex_unlock(&crt_log_lock);
 	return rc;
 }
 
-void crt_debug_fini(void)
+void crt_log_fini(void)
 {
-	crt_log_close();
-	crt_log_initialized = false;
+	C_ASSERT(crt_log_refcount > 0);
+
+	pthread_mutex_lock(&crt_log_lock);
+	crt_log_refcount--;
+	if (crt_log_refcount == 0)
+		crt_log_close();
+	pthread_mutex_unlock(&crt_log_lock);
 }
 
 static __thread char thread_uuid_str_buf[CF_UUID_MAX][CRT_UUID_STR_SIZE];

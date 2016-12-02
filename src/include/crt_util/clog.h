@@ -134,6 +134,25 @@ void crt_log(int flags, const char *fmt, ...)
 int crt_log_allocfacility(const char *aname, const char *lname);
 
 /**
+ * Ensure default cart log is initialized.  This routine calls
+ * crt_log_open the first time based on CRT_LOG_MASK and CRT_LOG_FILE
+ * environment variables.   It keeps a reference count so crt_log_fini
+ * must be called by all callers to release the call crt_log_close()
+ *
+ * Without this mechanism, it is difficult to use the cart logging
+ * mechanism from another library because clog doesn't allow multiple
+ * log files.   It's better for things in the same process to share
+ * anyway.
+ */
+int crt_log_init(void);
+
+/**
+ * Remove a reference on the default cart log.  Calls crt_log_close
+ * if the reference count is 0.
+ */
+void crt_log_fini(void);
+
+/**
  * crt_log_close: close off an clog and release any allocated resources.
  */
 void crt_log_close(void);
