@@ -434,13 +434,17 @@ aio_req_wait(struct test *test, int fetch_flag, uint64_t value)
 		if (fetch_flag && t_validate) {
 			kv_set_value(test, valbuf, comm_world_rank,
 				     ioreq->r_index, value);
-			if (memcmp(ioreq->val_iov.iov_buf, valbuf,
+			if (ioreq->val_iov.iov_len != test->t_val_bufsize ||
+			    memcmp(ioreq->val_iov.iov_buf, valbuf,
 				   test->t_val_bufsize)) {
 				kv_print_value(test, ioreq->val_iov.iov_buf);
 				kv_print_value(test, valbuf);
-				DBENCH_ERR(EIO, "lookup dkey: %s \
-					   akey: %s idx :%d", ioreq->dkey_buf,
-					   ioreq->akey_buf, ioreq->r_index);
+				DBENCH_ERR(EIO, "lookup dkey: %s akey: %s "
+					   "idx: %d len: %lu (expect %lu)",
+					   ioreq->dkey_buf, ioreq->akey_buf,
+					   ioreq->r_index,
+					   ioreq->val_iov.iov_len,
+					   test->t_val_bufsize);
 			}
 		}
 	}
@@ -1181,15 +1185,22 @@ kv_simul_rw_step(struct test *test, int rw, int *step)
 			sizeof(kv_simul_meta_step_akey));
 	ioreq_init_value(&ioreq, step, sizeof(*step));
 
-	if (rw == READ)
-		/*
-		 * Read the last committed step number. If the object
-		 * is new, then we shall get zero.
-		 */
+	if (rw == READ) {
 		lookup(0 /* idx */, test->t_epoch, &ioreq, test,
 		       1 /* verify (sync) */);
-	else
+		if (ioreq.val_iov.iov_len == 0) {
+			DBENCH_PRINT("Metadata empty\n");
+			*step = 0;
+		} else if (ioreq.val_iov.iov_len != sizeof(*step)) {
+			DBENCH_ERR(EIO, "Unexpected value size for dkey %s "
+				   "akey %s: %lu",
+				   (char *)ioreq.dkey.iov_buf,
+				   (char *)ioreq.vio.vd_name.iov_buf,
+				   ioreq.val_iov.iov_len);
+		}
+	} else {
 		insert(0 /* idx */, test->t_epoch, &ioreq, 1 /* sync */);
+	}
 
 	ioreq_fini_basic(&ioreq);
 }
@@ -1236,17 +1247,19 @@ kv_simul(struct test *test)
 	MPI_Bcast(&step, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	step++;
 
-	/* If there is a committed step, then verify it first. */
-	if (step - 1 > 0) {
-		DBENCH_PRINT("Verifying step %d (epoch %lu)\n", step - 1,
-			     test->t_epoch);
-		update_verify(test, key_type, value + step - 1);
-	}
-
-	/* Write and verify new steps. */
+	/* Verify and write new steps. */
 	while (step <= test->t_steps) {
+		/* If there is a previous step, then read and verify it. */
+		if (step > 1) {
+			MPI_Barrier(MPI_COMM_WORLD);
+			DBENCH_PRINT("Step %d (epoch %lu): reading and "
+				     "verifying step %d\n", step, test->t_epoch,
+				     step - 1);
+			update_verify(test, key_type, value + step - 1);
+		}
+
 		MPI_Barrier(MPI_COMM_WORLD);
-		DBENCH_PRINT("Writing step %d (epoch %lu)\n", step,
+		DBENCH_PRINT("Step %d (epoch %lu): writing\n", step,
 			     test->t_epoch);
 		update_async(test, key_type, value + step);
 
@@ -1254,18 +1267,19 @@ kv_simul(struct test *test)
 			kv_simul_rw_step(test, WRITE, &step);
 
 		MPI_Barrier(MPI_COMM_WORLD);
-		DBENCH_PRINT("Committing step %d (epoch %lu)\n", step,
+		DBENCH_PRINT("Step %d (epoch %lu): committing\n", step,
 			     test->t_epoch);
 		kv_flush_and_commit(test);
-
-		MPI_Barrier(MPI_COMM_WORLD);
-		DBENCH_PRINT("Verifying step %d (epoch %lu)\n", step,
-			     test->t_epoch);
-		update_verify(test, key_type, value + step);
 
 		test->t_epoch++;
 		step++;
 	}
+
+	/* Read and verify the last step. */
+	MPI_Barrier(MPI_COMM_WORLD);
+	DBENCH_PRINT("Final step (epoch %lu): reading and verifying step %d\n",
+		     test->t_epoch, step - 1);
+	update_verify(test, key_type, value + step - 1);
 
 	object_close(oh);
 }
