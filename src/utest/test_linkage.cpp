@@ -99,13 +99,6 @@ test_crt_api_linkage(void **state)
 
 }
 
-/* Just a compilation test */
-struct crt_msg_field *test_input[] = {
-	&CMF_UINT32,
-	&CMF_STRING,
-	&CMF_BULK,
-};
-
 static void
 test_log_linkage(void **state)
 {
