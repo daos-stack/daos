@@ -35,7 +35,7 @@ static uint64_t obj_id_gen	= 1;
 static uint64_t int_key_gen	= 1;
 
 daos_obj_id_t
-dts_oid_gen(uint16_t oclass)
+dts_oid_gen(uint16_t oclass, unsigned seed)
 {
 	daos_obj_id_t	oid;
 
@@ -46,7 +46,7 @@ dts_oid_gen(uint16_t oclass)
 
 	/* generate an unique and not scary long object ID */
 	oid.lo	= obj_id_gen++;
-	oid.mid	= rand() % 100;
+	oid.mid	= seed;
 	oid.hi	= rand() % 100;
 	daos_obj_id_generate(&oid, oclass);
 
@@ -58,7 +58,7 @@ dts_unit_oid_gen(uint16_t oclass, uint32_t shard)
 {
 	daos_unit_oid_t	uoid;
 
-	uoid.id_pub	= dts_oid_gen(oclass);
+	uoid.id_pub	= dts_oid_gen(oclass, time(NULL));
 	uoid.id_shard	= shard;
 	uoid.id_pad_32	= 0;
 

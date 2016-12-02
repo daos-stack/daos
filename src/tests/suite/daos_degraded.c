@@ -114,7 +114,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, rank);
 
 	ioreq_init(&req, oid, arg);
 	if (!rank) {

@@ -31,7 +31,7 @@ void dts_buf_render(char *buf, unsigned int buf_len);
 void dts_key_gen(char *key, unsigned int key_len, const char *prefix);
 
 /** generate a random and unique object ID */
-daos_obj_id_t dts_oid_gen(uint16_t oclass);
+daos_obj_id_t dts_oid_gen(uint16_t oclass, unsigned seed);
 
 /** generate a random and unique baseline object ID */
 daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint32_t shard);
