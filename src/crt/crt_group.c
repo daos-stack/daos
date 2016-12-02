@@ -91,17 +91,24 @@ li_op_rec_addref(struct chash_table *hhtab, crt_list_t *rlink)
 
 	C_ASSERT(li->li_initialized);
 	pthread_mutex_lock(&li->li_mutex);
-	li_link2ptr(rlink)->li_ref++;
+	li->li_ref++;
 	pthread_mutex_unlock(&li->li_mutex);
 }
 
 static bool
 li_op_rec_decref(struct chash_table *hhtab, crt_list_t *rlink)
 {
+	uint32_t	ref;
+
 	struct crt_lookup_item *li = li_link2ptr(rlink);
 
+	C_ASSERT(li->li_initialized);
+	pthread_mutex_lock(&li->li_mutex);
 	li->li_ref--;
-	return li->li_ref == 0;
+	ref = li->li_ref;
+	pthread_mutex_unlock(&li->li_mutex);
+
+	return ref == 0;
 }
 
 static void
@@ -340,6 +347,8 @@ lookup_again:
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 
 	if (found) {
+		na_addr_t	conn_addr = NULL;
+
 		C_ASSERT(na_addr != NULL);
 		C_ASSERT(li != NULL);
 		pthread_mutex_lock(&li->li_mutex);
@@ -350,13 +359,33 @@ lookup_again:
 					 rlink);
 			C_GOTO(out, rc);
 		}
-		rc = crt_conn_tag(hg_ctx, li->li_base_phy_addr, tag,
-				  &li->li_tag_addr[tag]);
-		if (rc == 0) {
-			C_ASSERT(li->li_tag_addr[tag] != NULL);
-			*na_addr = li->li_tag_addr[tag];
-		}
 		pthread_mutex_unlock(&li->li_mutex);
+
+		rc = crt_conn_tag(hg_ctx, li->li_base_phy_addr, tag,
+				  &conn_addr);
+		if (rc == 0) {
+			C_ASSERT(conn_addr != NULL);
+			pthread_mutex_lock(&li->li_mutex);
+			if (li->li_tag_addr[tag] != NULL) {
+				/* race condition, another thread connected */
+				C_DEBUG("connection race ...\n");
+			} else {
+				li->li_tag_addr[tag] = conn_addr;
+			}
+			*na_addr = li->li_tag_addr[tag];
+			pthread_mutex_unlock(&li->li_mutex);
+		} else {
+			C_ERROR("crt_conn_tag(rank %d tag %d) failed, rc %d.\n",
+				rank, tag, rc);
+			pthread_mutex_lock(&li->li_mutex);
+			if (li->li_tag_addr[tag] != NULL) {
+				/* race condition, another thread connected */
+				C_DEBUG("connection race ...\n");
+				*na_addr = li->li_tag_addr[tag];
+				rc = 0;
+			}
+			pthread_mutex_unlock(&li->li_mutex);
+		}
 		chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
 		C_GOTO(out, rc);
 	}
@@ -390,14 +419,10 @@ lookup_again:
 	}
 	rc = chash_rec_insert(grp_priv->gp_lookup_cache[ctx_idx], &rank,
 			      sizeof(rank), &li->li_link, true /* exclusive */);
+	/* the only possible failure is key conflict and be avoid above */
+	C_ASSERT(rc == 0);
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-	if (rc == 0) {
-		goto lookup_again;
-	} else {
-		C_ERROR("chash_rec_insert failed, rc: %d.\n", rc);
-		pthread_mutex_destroy(&li->li_mutex);
-		C_FREE_PTR(li);
-	}
+	goto lookup_again;
 
 out:
 	return rc;
@@ -1442,7 +1467,12 @@ crt_grp_uri_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank, char **uri)
 	else
 		grp_id = grp_priv->gp_pub.cg_grpid;
 
-	if (grp_priv->gp_local == 0) {
+	/*
+	 * Disable the PSR uri lookup as no fail-over now, for example if PSR
+	 * server rank 1 dead then possibly cause client cannot communicate
+	 * with server rank 2.
+	 */
+	if (/* grp_priv->gp_local == */ 0) {
 		/* attached group, for PSR just return the gp_psr_phy_addr, for
 		 * other rank will send RPC to PSR */
 		if (rank == grp_priv->gp_psr_rank) {
