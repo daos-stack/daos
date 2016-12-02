@@ -203,6 +203,13 @@ btr_context_decref(struct btr_context *tcx)
 		D_FREE_PTR(tcx);
 }
 
+static void
+btr_context_set_depth(struct btr_context *tcx, unsigned int depth)
+{
+	tcx->tc_depth = depth;
+	tcx->tc_trace = &tcx->tc_traces[BTR_TRACE_MAX - depth];
+}
+
 /**
  * Create a btree context (in volatile memory).
  *
@@ -221,6 +228,7 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 		   struct btr_context **tcxp)
 {
 	struct btr_context	*tcx;
+	unsigned int		 depth;
 	int			 rc;
 
 	D_ALLOC_PTR(tcx);
@@ -240,18 +248,19 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 		tcx->tc_class	= tree_class;
 		tcx->tc_feats	= tree_feats;
 		tcx->tc_order	= tree_order;
+		depth		= 0;
 		D_DEBUG(DF_MISC, "Create context for a new tree\n");
 
 	} else {
 		tcx->tc_class	= root->tr_class;
 		tcx->tc_feats	= root->tr_feats;
 		tcx->tc_order	= root->tr_order;
-		tcx->tc_depth	= root->tr_depth;
+		depth		= root->tr_depth;
 		D_DEBUG(DF_MISC, "Load tree context from "TMMID_PF"\n",
 			TMMID_P(root_mmid));
 	}
 
-	tcx->tc_trace = &tcx->tc_traces[BTR_TRACE_MAX - tcx->tc_depth];
+	btr_context_set_depth(tcx, depth);
 	*tcxp = tcx;
 	return 0;
 
@@ -282,14 +291,7 @@ btr_trace_set(struct btr_context *tcx, int level,
 	      TMMID(struct btr_node) nd_mmid, int at)
 {
 	D_ASSERT(at >= 0 && at < tcx->tc_order);
-
-	if (level == -1) { /* add the new root to the trace */
-		level = 0;
-		tcx->tc_trace--;
-		tcx->tc_depth++;
-	}
 	D_ASSERT(tcx->tc_depth > 0);
-
 	D_ASSERT(level >= 0 && level < tcx->tc_depth);
 	D_ASSERT(&tcx->tc_trace[level] < &tcx->tc_traces[BTR_TRACE_MAX]);
 
@@ -737,9 +739,9 @@ btr_root_start(struct btr_context *tcx, struct btr_record *rec)
 
 	root->tr_node = nd_mmid;
 	root->tr_depth = 1;
+	btr_context_set_depth(tcx, root->tr_depth);
 
-	/* add the new root to the backtrace, -1 means it is a new root. */
-	btr_trace_set(tcx, -1, nd_mmid, 0);
+	btr_trace_set(tcx, 0, nd_mmid, 0);
 	return 0;
 }
 
@@ -785,6 +787,8 @@ btr_root_grow(struct btr_context *tcx, TMMID(struct btr_node) mmid_left,
 	nd->tn_child	= mmid_left;
 	nd->tn_keyn	= 1;
 
+	at = !btr_node_is_equal(tcx, mmid_left, tcx->tc_trace->tr_node);
+
 	/* replace the root mmid, increase tree level */
 	if (btr_has_tx(tcx))
 		btr_root_tx_add(tcx); /* XXX check error */
@@ -792,9 +796,8 @@ btr_root_grow(struct btr_context *tcx, TMMID(struct btr_node) mmid_left,
 	root->tr_node = nd_mmid;
 	root->tr_depth++;
 
-	at = !btr_node_is_equal(tcx, mmid_left, tcx->tc_trace->tr_node);
-	/* add the new root to the backtrace, -1 means it is a new root. */
-	btr_trace_set(tcx, -1, nd_mmid, at);
+	btr_context_set_depth(tcx, root->tr_depth);
+	btr_trace_set(tcx, 0, nd_mmid, at);
 	return 0;
 }
 
@@ -1008,6 +1011,12 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 	memset(&tcx->tc_traces[0], 0,
 	       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
 
+	/* depth could be changed by dbtree_delete/dbtree_iter_delete from
+	 * a different btr_context, so we always reinitialize both depth
+	 * and start point of trace for the context.
+	 */
+	btr_context_set_depth(tcx, tcx->tc_tins.ti_root->tr_depth);
+
 	if (btr_root_empty(tcx)) { /* empty tree */
 		D_DEBUG(DF_MISC, "Empty tree\n");
 		return PROBE_RC_NONE;
@@ -1025,10 +1034,6 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 		}
 	}
 
-	/* depth could be changed by dbtree_delete/dbtree_iter_delete from
-	 * a different btr_context.
-	 */
-	tcx->tc_depth = tcx->tc_tins.ti_root->tr_depth;
 	nd_mmid = tcx->tc_tins.ti_root->tr_node;
 	start = end = 0;
 
@@ -2067,9 +2072,10 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace)
 			if (btr_has_tx(tcx))
 				btr_root_tx_add(tcx);
 
-			tcx->tc_depth	= 0;
 			root->tr_depth	= 0;
 			root->tr_node	= BTR_NODE_NULL;
+
+			btr_context_set_depth(tcx, 0);
 			D_DEBUG(DF_MISC, "Tree is empty now.\n");
 		}
 
@@ -2090,14 +2096,15 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace)
 			if (btr_has_tx(tcx))
 				btr_root_tx_add(tcx);
 
-			tcx->tc_depth--;
 			root->tr_depth--;
 			root->tr_node = node->tn_child;
+
+			btr_context_set_depth(tcx, root->tr_depth);
 			btr_node_set(tcx, node->tn_child, BTR_NODE_ROOT);
 			btr_node_free(tcx, trace->tr_node);
 
 			D_DEBUG(DF_MISC, "Shrink tree depth to %d\n",
-				root->tr_depth);
+				tcx->tc_depth);
 		}
 	}
 }
