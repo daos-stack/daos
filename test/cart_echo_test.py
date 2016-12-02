@@ -62,16 +62,9 @@ import os
 import time
 import commontestsuite
 
-#pylint: disable=broad-except
-
 NPROC = "1"
 testsuite = "Test Echo"
 testprocess = "crt_echo"
-
-def setUpModule():
-    """ set up test environment """
-    commontestsuite.commonSetUpModule(testsuite)
-    print("os.environ['CCI_CONFIG'] = %s" % os.environ.get("CCI_CONFIG"))
 
 def tearDownModule():
     """teardown module for test"""
@@ -79,60 +72,44 @@ def tearDownModule():
 
 class TestEcho(commontestsuite.CommonTestSuite):
     """ Execute process set tests """
-    pass_env = " -x PATH -x LD_LIBRARY_PATH -x CCI_CONFIG "
+    pass_env = " -x CCI_CONFIG -x CRT_LOG_MASK "
 
-    def one_node_echo_test(self):
-        """Simple process set test 1"""
+    def test_echo_one_node(self):
+        """Simple process set test one node"""
         testmsg = self.shortDescription()
-        (cmd, prefix) = self.common_add_prefix_logdir(self.id(), testprocess)
+        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
         (server, client) = self.common_add_server_client()
         cmdstr = cmd + \
-          "%s-np %s %s%s tests/crt_echo_srv :" % \
+          "%s-n %s %s%s tests/crt_echo_srv :" % \
           (server, NPROC, self.pass_env, prefix) + \
-          "%s-np %s %s%s tests/crt_echo_cli" % \
+          "%s-n %s %s%s tests/crt_echo_cli" % \
           (client, NPROC, self.pass_env, prefix)
         procrtn = self.common_launch_test(testsuite, testmsg, cmdstr)
-        return procrtn
+        if procrtn:
+            self.fail("Failed, return code %d" % procrtn)
 
-    def two_node_echo_test(self):
-        """Simple process set test 1"""
+    def test_echo_two_nodes(self):
+        """Simple process set test two node"""
+
+        if not os.getenv('TR_USE_URI', ""):
+            self.skipTest('requires two or more nodes.')
+
         testmsg = self.shortDescription()
         self.logger.info("test name: %s", self.id())
-        (cmd, prefix) = self.common_add_prefix_logdir(self.id() + \
-          "_server_node", testprocess)
+        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
         (server, client) = self.common_add_server_client()
         cmdstr = cmd + \
-          "%s-np %s %s%s tests/crt_echo_srv" % \
+          "%s-n %s %s%s tests/crt_echo_srv" % \
           (server, NPROC, self.pass_env, prefix)
         proc_srv = self.common_launch_process(testsuite, \
           testmsg, cmdstr)
         time.sleep(2)
-        (cmd, prefix) = self.common_add_prefix_logdir(self.id() + \
-          "_client_node", testprocess)
+        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
         cmdstr = cmd + \
-          "%s-np %s %s%s tests/crt_echo_cli" % \
+          "%s-n %s %s%s tests/crt_echo_cli" % \
           (client, NPROC, self.pass_env, prefix)
-        procrtn = self.common_launch_test(testsuite, testmsg, cmdstr)
-        procrtn |= self.common_stop_process(testsuite, testmsg, proc_srv)
-        return procrtn
-
-    def test_echo_test(self):
-        """Simple process set test 1"""
-        if os.getenv('TR_USE_URI', ""):
-            self.assertFalse(self.two_node_echo_test())
-        else:
-            self.assertFalse(self.one_node_echo_test())
-
-    def setUp(self):
-        """teardown module for test"""
-        self.logger.info("**************************************************")
-        self.logger.info("TestEcho: begin %s ", self.shortDescription())
-
-    def tearDown(self):
-        """teardown module for test"""
-        self.logger.info("TestEcho: tearDown begin")
-        testmsg = "terminate any crt_echo processes"
-        cmdstr = "pkill crt_echo"
-        self.common_launch_test(testsuite, testmsg, cmdstr)
-        self.logger.info("TestEcho: end  %s", self.shortDescription())
-        self.logger.info("**************************************************")
+        cli_rtn = self.common_launch_test(testsuite, testmsg, cmdstr)
+        srv_rtn = self.common_stop_process(testsuite, testmsg, proc_srv)
+        if cli_rtn or srv_rtn:
+            self.fail("Failed, return codes client %d " % cli_rtn +
+                      "server %d" % srv_rtn)

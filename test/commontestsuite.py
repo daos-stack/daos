@@ -73,14 +73,6 @@ import logging
 
 #pylint: disable=broad-except
 
-NPROC = "1"
-
-def commonSetUpModule(suitetitle):
-    """ set up test environment """
-
-    print("\n%s: module setup begin" % suitetitle)
-    print("%s: module setup end\n\n" % suitetitle)
-
 def commonTearDownModule(suitetitle, testprocess):
     """teardown module for test"""
     print("%s: module tearDown begin" % suitetitle)
@@ -96,7 +88,7 @@ class CommonTestSuite(unittest.TestCase):
 
     def common_launch_test(self, suitetitle, msg, cmdstr):
         """Launch process set test"""
-        self.logger.info("%s: start %s - input string:\n %s\n", \
+        self.logger.info("%s: start %s - input string:\n%s", \
           suitetitle, msg, cmdstr)
         cmdarg = shlex.split(cmdstr)
         start_time = time.time()
@@ -113,7 +105,7 @@ class CommonTestSuite(unittest.TestCase):
 
     def common_launch_process(self, suitetitle, msg, cmdstr):
         """Launch process set """
-        self.logger.info("%s: start process %s - input string:\n %s\n", \
+        self.logger.info("%s: start process %s - input string:\n%s", \
           suitetitle, msg, cmdstr)
         cmdarg = shlex.split(cmdstr)
         if not os.getenv('TR_REDIRECT_OUTPUT',""):
@@ -162,14 +154,15 @@ class CommonTestSuite(unittest.TestCase):
         """create the log directory name"""
         names = fullname.split('.')
         items = names[-1].split('_', maxsplit=2)
-        return "/" + items[2]
+        return items[2]
 
-    def common_add_prefix_logdir(self, testcase_id, testprocess):
+    def common_add_prefix_logdir(self, testprocess):
         """add the log directory to the prefix"""
+        testcase_id = self.id()
         prefix = ""
         ompi_bin = os.getenv('CRT_OMPI_BIN', "")
-        log_path = os.getenv("CRT_TESTLOG", testprocess) + \
-          self.common_logdir_name(testcase_id)
+        log_path = os.path.join(os.getenv("CRT_TESTLOG", testprocess),
+                                self.common_logdir_name(testcase_id))
         os.makedirs(log_path, exist_ok=True)
         use_valgrind = os.getenv('TR_USE_VALGRIND', default="")
         if use_valgrind == 'memcheck':

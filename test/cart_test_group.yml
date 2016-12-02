@@ -11,11 +11,8 @@ module:
     setKeyFromHost: ["CRT_TEST_SERVER", "CRT_TEST_CLIENT"]
     setKeyFromInfo:
         - [CRT_PREFIX, PREFIX, ""]
-        - [CRT_OMPI_PREFIX, OMPI_PREFIX, ""]
         - [CRT_OMPI_BIN, OMPI_PREFIX, "/bin/"]
         - [CCI_CONFIG, PREFIX, "/etc/cci.ini"]
-    createKeyFromInfo:
-        - [LD_LIBRARY_PATH, "/lib", [OMPI_PREFIX, PREFIX]]
     srcDir: "src/lib"
 
 directives:

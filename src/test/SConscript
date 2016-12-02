@@ -54,7 +54,7 @@ def scons():
     libraries = ['crt_util', 'crt', 'pthread']
     tenv.AppendUnique(LIBS=libraries)
 
-    prereqs.require(tenv, 'crypto', 'pmix', 'uuid', 'mercury')
+    prereqs.require(tenv, 'crypto', 'pmix', 'mercury')
 
     # a simple example to use crt_xxx APIs
     for test in ECHO_SRC:
