@@ -34,8 +34,6 @@
  */
 
 struct daos_task_private {
-	int			dtp_result;
-
 	/* refcount of the task */
 	int			dtp_refcnt;
 

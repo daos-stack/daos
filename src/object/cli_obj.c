@@ -521,6 +521,7 @@ out_task:
 	return rc;
 }
 
+#define MAX_TMP_SHARDS	6
 int
 dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	      unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
@@ -530,7 +531,11 @@ dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	struct dc_object	*obj;
 	unsigned int		shard;
 	unsigned int		shards_cnt;
-	bool			non_update = true;
+	struct daos_task	*tmp_tasks[MAX_TMP_SHARDS];
+	struct daos_task	**shard_tasks = NULL;
+	daos_handle_t		tmp_oh[MAX_TMP_SHARDS];
+	daos_handle_t		*shard_ohs = NULL;
+	int			real_shards = 0;
 	int			i;
 	int			rc = 0;
 
@@ -548,12 +553,46 @@ dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		D_GOTO(out_task, rc);
 	}
 
+	/* If there is only 1 shards, then we do not need create
+	 * shard tasks
+	 **/
+	if (shards_cnt == 1) {
+		daos_handle_t shard_oh;
+
+		rc = obj_shard_open(obj, shard, &shard_oh);
+		if (rc != 0) {
+			/* wrong layout, let's refresh */
+			if (rc == -DER_NONEXIST)
+				D_GOTO(out_task, rc = -DER_STALE);
+			D_GOTO(out_task, rc);
+		}
+
+		return dc_obj_shard_update(shard_oh, epoch, dkey, nr,
+					   iods, sgls, task);
+	}
+
+	/* For multiple shards write, it needs create one task
+	 * for each shards
+	 **/
+	if (shards_cnt > MAX_TMP_SHARDS) {
+		D_ALLOC(shard_tasks, sizeof(*shard_tasks) * shards_cnt);
+		if (shard_tasks == NULL)
+			D_GOTO(out_task, rc = -DER_NOMEM);
+		D_ALLOC(shard_ohs, sizeof(*shard_ohs) * shards_cnt);
+		if (shard_ohs == NULL)
+			D_GOTO(out_task, rc = -DER_NOMEM);
+	} else {
+		shard_tasks = tmp_tasks;
+		shard_ohs = tmp_oh;
+	}
+
 	for (i = 0; i < shards_cnt; i++, shard++) {
 		struct daos_task *shard_task;
 		daos_handle_t shard_oh;
 
 		rc = obj_shard_open(obj, shard, &shard_oh);
 		if (rc != 0) {
+			/* skip the failed target */
 			if (rc == -DER_NONEXIST) {
 				rc = 0;
 				continue;
@@ -561,48 +600,67 @@ dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 			break;
 		}
 
-		if (shards_cnt > 1) {
-			D_ALLOC_PTR(shard_task);
-			if (shard_task == NULL) {
-				rc = -DER_NOMEM;
-				break;
-			}
-
-			rc = daos_task_init(shard_task, NULL, NULL, 0,
-					    sched, NULL);
-			if (rc != 0) {
-				D_FREE_PTR(shard_task);
-				break;
-			}
-
-			rc = daos_task_add_dependent(task, shard_task);
-			if (rc != 0)
-				break;
-		} else {
-			/* Do not create shard task for single shard write */
-			shard_task = task;
+		D_ALLOC_PTR(shard_task);
+		if (shard_task == NULL) {
+			rc = -DER_NOMEM;
+			break;
 		}
 
-		rc = dc_obj_shard_update(shard_oh, epoch, dkey, nr, iods, sgls,
-					 shard_task);
+		rc = daos_task_init(shard_task, NULL, NULL, 0,
+				    sched, NULL);
+		if (rc != 0) {
+			D_FREE_PTR(shard_task);
+			break;
+		}
+
+		rc = daos_task_add_dependent(task, shard_task);
+		if (rc != 0)
+			break;
+
+		shard_ohs[real_shards] = shard_oh;
+		shard_tasks[real_shards] = shard_task;
+		real_shards++;
+	}
+
+	/* XXX if there are no avaible targets, it might
+	 * go endless here?
+	 **/
+	if (real_shards == 0 && rc == 0)
+		D_GOTO(out_task, rc = -DER_STALE);
+
+	if (rc != 0) {
+		/* If there are already shard tasks, let's 
+		 * only complete shard tasks, which will
+		 * finally complete the upper layer tasks */
+		if (real_shards > 0) {
+			for (i = 0; i < real_shards; i++)
+				daos_task_complete(shard_tasks[i], rc);
+			D_GOTO(out_free, rc);
+		} else {
+			D_GOTO(out_task, rc);
+		}
+	}
+
+	/* Trigger all shard tasks. */
+	for (i = 0; i < real_shards; i++) {
+		rc = dc_obj_shard_update(shard_ohs[i], epoch, dkey, nr,
+					 iods, sgls, shard_tasks[i]);
 		D_DEBUG(DF_MISC, "update "DF_OID" shard %u : rc %d\n",
 			DP_OID(obj->cob_md.omd_id), shard, rc);
-		non_update = false;
 	}
 
-	/* If no shards being updated, let's set the return value to
-	 * -DER_STALE, so the upper layer will refresh layout and try again.
-	 **/
-	if (non_update) {
-		if (rc == 0)
-			rc = -DER_STALE;
-		D_GOTO(out_task, rc);
-	}
+out_free:
+	if (shard_tasks != NULL && shard_tasks != tmp_tasks)
+		D_FREE(shard_tasks, sizeof(*shard_tasks) * shards_cnt);
+
+	if (shard_ohs != NULL && shard_ohs != tmp_oh)
+		D_FREE(shard_ohs, sizeof(*shard_ohs) * shards_cnt);
 
 	return rc;
+
 out_task:
 	daos_task_complete(task, rc);
-	return rc;
+	goto out_free;
 }
 
 struct dc_obj_list_arg {
