@@ -63,6 +63,8 @@ int dc_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
 		   daos_event_t *ev);
 int dc_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
 		  daos_epoch_state_t *state, daos_event_t *ev);
+int dc_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
+		  daos_epoch_state_t *state, daos_event_t *ev);
 int dc_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
 		     daos_epoch_state_t *state, daos_event_t *ev);
 int dc_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,

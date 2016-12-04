@@ -1036,6 +1036,9 @@ out_lock:
 static void
 epoch_state_set(struct container_hdl *hdl, daos_epoch_state_t *state)
 {
+	D_ASSERTF(hdl->ch_lre <= hdl->ch_hce && hdl->ch_hce < hdl->ch_lhe,
+		  "lre="DF_U64" hce="DF_U64" lhe="DF_U64"\n", hdl->ch_lre,
+		  hdl->ch_hce, hdl->ch_lhe);
 	state->es_hce = hdl->ch_hce;
 	state->es_lre = hdl->ch_lre;
 	state->es_lhe = hdl->ch_lhe;
@@ -1116,6 +1119,77 @@ cont_epoch_hold(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	if (rc != 0)
 		hdl->ch_lhe = lhe;
+
+out:
+	epoch_state_set(hdl, &out->ceo_epoch_state);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
+		rc);
+	return rc;
+}
+
+static int
+cont_epoch_slip(struct ds_pool_hdl *pool_hdl, struct cont *cont,
+		struct container_hdl *hdl, crt_rpc_t *rpc)
+{
+	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
+	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
+	daos_epoch_t			lre = hdl->ch_lre;
+	volatile int			rc;
+
+	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
+		in->cei_epoch);
+
+	if (in->cei_epoch >= DAOS_EPOCH_MAX)
+		D_GOTO(out, rc = -DER_OVERFLOW);
+
+	if (in->cei_epoch < hdl->ch_lre)
+		/*
+		 * Since we don't allow LRE to decrease, let the new LRE be the
+		 * old one.  (This is actually unnecessary; we only have to
+		 * guarantee that the new LRE has not been aggregated away.)
+		 */
+		hdl->ch_lre = hdl->ch_lre;
+	else if (in->cei_epoch <= hdl->ch_hce)
+		hdl->ch_lre = in->cei_epoch;
+	else
+		hdl->ch_lre = hdl->ch_hce;
+
+	if (hdl->ch_lre == lre)
+		D_GOTO(out, rc = 0);
+
+	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
+
+	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
+		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->cei_op.ci_hdl,
+				      hdl, sizeof(*hdl));
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+
+		rc = ec_decrement(cont->c_lres, lre);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to remove original lre: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
+			pmemobj_tx_abort(rc);
+		}
+
+		rc = ec_increment(cont->c_lres, hdl->ch_lre);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to add new lre: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
+			pmemobj_tx_abort(rc);
+		}
+	} TX_ONABORT {
+		rc = umem_tx_errno(rc);
+	} TX_END
+
+	if (rc != 0)
+		hdl->ch_lre = lre;
 
 out:
 	epoch_state_set(hdl, &out->ceo_epoch_state);
@@ -1208,6 +1282,7 @@ cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	daos_epoch_t			hce = hdl->ch_hce;
 	daos_epoch_t			lhe = hdl->ch_lhe;
+	daos_epoch_t			lre = hdl->ch_lre;
 	volatile int			rc;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
@@ -1220,22 +1295,22 @@ cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (!(hdl->ch_capas & DAOS_COO_RW))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
-	/*
-	 * Try to be idempotent for resent CONT_EPOCH_COMMITs from a handle
-	 * that allows only one epoch operation in flight.
-	 */
-	if (in->cei_epoch == hdl->ch_hce && in->cei_epoch == hdl->ch_lhe - 1)
-		D_GOTO(out, rc = 0);
-
 	if (in->cei_epoch >= DAOS_EPOCH_MAX)
 		D_GOTO(out, rc = -DER_OVERFLOW);
+
+	if (in->cei_epoch <= hdl->ch_hce)
+		D_GOTO(out, rc = 0);
 	else if (in->cei_epoch < hdl->ch_lhe)
 		D_GOTO(out, rc = -DER_EP_RO);
 
 	hdl->ch_hce = in->cei_epoch;
 	hdl->ch_lhe = hdl->ch_hce + 1;
+	if (!(hdl->ch_capas & DAOS_COO_NOSLIP))
+		hdl->ch_lre = hdl->ch_hce;
 
 	D_DEBUG(DF_DSMS, "hce="DF_U64" hce'="DF_U64"\n", hce, hdl->ch_hce);
+	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
+	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
 
 	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
 		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->cei_op.ci_hdl,
@@ -1275,6 +1350,22 @@ cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			pmemobj_tx_abort(rc);
 		}
 
+		rc = ec_decrement(cont->c_lres, lre);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to remove original lre: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
+			pmemobj_tx_abort(rc);
+		}
+
+		rc = ec_increment(cont->c_lres, hdl->ch_lre);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to add new lre: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
+			pmemobj_tx_abort(rc);
+		}
+
 		rc = dbtree_nv_update(cont->c_cont, CONT_GHCE, &hdl->ch_hce,
 				      sizeof(hdl->ch_hce));
 		if (rc != 0) {
@@ -1309,6 +1400,8 @@ cont_op_with_hdl(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		return cont_epoch_query(pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_HOLD:
 		return cont_epoch_hold(pool_hdl, cont, hdl, rpc);
+	case CONT_EPOCH_SLIP:
+		return cont_epoch_slip(pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_DISCARD:
 		return cont_epoch_discard(pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_COMMIT:

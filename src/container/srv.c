@@ -66,6 +66,9 @@ static struct daos_rpc_handler cont_handlers[] = {
 		.dr_opc		= CONT_EPOCH_HOLD,
 		.dr_hdlr	= ds_cont_op_handler
 	}, {
+		.dr_opc		= CONT_EPOCH_SLIP,
+		.dr_hdlr	= ds_cont_op_handler
+	}, {
 		.dr_opc		= CONT_EPOCH_DISCARD,
 		.dr_hdlr	= ds_cont_op_handler
 	}, {

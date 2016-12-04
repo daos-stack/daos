@@ -232,6 +232,12 @@ struct daos_rpc cont_rpcs[] = {
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_CONT_EPOCH_OP
 	}, {
+		.dr_name	= "CONT_EPOCH_SLIP",
+		.dr_opc		= CONT_EPOCH_SLIP,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_EPOCH_OP
+	}, {
 		.dr_name	= "CONT_EPOCH_DISCARD",
 		.dr_opc		= CONT_EPOCH_DISCARD,
 		.dr_ver		= 1,

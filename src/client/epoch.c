@@ -105,7 +105,23 @@ int
 daos_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
 		daos_epoch_state_t *state, daos_event_t *ev)
 {
-	return -DER_NOSYS;
+	int rc;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			return rc;
+	}
+
+	rc = dc_epoch_slip(coh, epoch, state, ev);
+	if (rc)
+		return rc;
+
+	/** wait for completion if blocking mode */
+	if (daos_event_is_priv(ev))
+		rc = daos_event_priv_wait(ev);
+
+	return rc;
 }
 
 int
