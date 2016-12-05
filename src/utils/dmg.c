@@ -29,11 +29,63 @@
 #include <daos.h>
 #include <daos/common.h>
 
-static const unsigned int	default_mode = 0731;
-static const daos_size_t	default_size = 256 << 20;
-static const char * const	default_group = "daos_server_group";
+const unsigned int	 default_mode = 0731;
+const char		*default_size = "256M";
+const char		*default_group = "daos_server_group";
 
 typedef int (*command_hdlr_t)(int, char *[]);
+
+daos_size_t
+tobytes(const char *str)
+{
+	daos_size_t	 size;
+	char		*end;
+
+	size = strtoull(str, &end, 0);
+
+	/** no suffix used */
+	if (*end == '\0')
+		return size;
+
+	/** let's be permissive and allow MB, Mb, mb ...*/
+	if (*(end + 1) != '\0' &&
+	    ((*(end + 1) != 'b' && *(end + 1) != 'B') || (*(end + 2) != '\0')))
+		return 0;
+
+	switch (*end) {
+	case 'b':
+	case 'B':
+		break;
+	case 'k':
+	case 'K':
+		size <<= 10;
+		break;
+	case 'm':
+	case 'M':
+		size <<= 20;
+		break;
+	case 'g':
+	case 'G':
+		size <<= 30;
+		break;
+	case 't':
+	case 'T':
+		size <<= 40;
+		break;
+	case 'p':
+	case 'P':
+		size <<= 50;
+		break;
+	case 'e':
+	case 'E':
+		size <<= 60;
+		break;
+	default:
+		return 0;
+	}
+
+	return size;
+}
 
 static int
 create_hdlr(int argc, char *argv[])
@@ -49,7 +101,7 @@ create_hdlr(int argc, char *argv[])
 	unsigned int		mode = default_mode;
 	unsigned int		uid = geteuid();
 	unsigned int		gid = getegid();
-	daos_size_t		size = default_size;
+	daos_size_t		size = tobytes(default_size);
 	const char	       *group = default_group;
 	daos_rank_t		ranks[13];
 	daos_rank_list_t	svc;
@@ -68,7 +120,11 @@ create_hdlr(int argc, char *argv[])
 			mode = strtoul(optarg, NULL /* endptr */, 0 /* base */);
 			break;
 		case 's':
-			size = strtoul(optarg, NULL /* endptr */, 0 /* base */);
+			size = tobytes(optarg);
+			if (size == 0) {
+				D_ERROR("Invalid size: %s\n", optarg);
+				return 2;
+			}
 			break;
 		case 'u':
 			gid = atoi(optarg);
@@ -321,7 +377,8 @@ create options:\n\
   --gid=GID	pool GID (getegid()) \n\
   --group=STR	pool server process group (\"%s\")\n\
   --mode=MODE	pool mode (%#o)\n\
-  --size=BYTES	target size in bytes ("DF_U64")\n\
+  --size=BYTES	target size in bytes (%s)\n\
+		supports K (KB), M (MB), G (GB), T (TB) and P (PB) suffixes\n\
   --uid=UID	pool UID (geteuid())\n", default_group, default_mode,
 	       default_size);
 	printf("\
