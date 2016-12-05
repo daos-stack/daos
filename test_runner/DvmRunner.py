@@ -67,7 +67,7 @@ class DvmRunner():
                                             stdin=subprocess.DEVNULL,
                                             stdout=outfile,
                                             stderr=errfile)
-        time.sleep(3)
+        time.sleep(10)
         print("TestRunner: orte-dvm process started pid: " + str(self.ortedvm.pid))
         return not self.ortedvm
 
