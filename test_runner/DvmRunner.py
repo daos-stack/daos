@@ -44,7 +44,6 @@ class DvmRunner():
     def launch_process(self):
         """Launch otred processes """
         print("TestRunner: start orte-dvm process\n")
-        hosts = ","
         log_path = os.path.dirname(self.info.get_config('log_base_path'))
         if not os.path.exists(log_path):
             os.makedirs(log_path)
@@ -56,33 +55,31 @@ class DvmRunner():
         self.logfilerr = os.path.join(log_path, "orte-dvm.err")
         ompi_path = self.info.get_info('OMPI_PREFIX')
         dvm = os.path.join(ompi_path, "bin", "orte-dvm")
-        hostlist = hosts.join(self.info.get_config('host_list'))
-        cmdstr = "%s --prefix %s --report-uri %s --host %s" % \
-                 (dvm, ompi_path, self.report, hostlist)
+        hostlist = ','.join(self.info.get_config('host_list'))
+        cmdstr = "%s --report-uri %s --host %s" % \
+                 (dvm, self.report, hostlist)
         cmdarg = shlex.split(cmdstr)
+        print("TestRunner: orte-dvm process starting")
+        print("TestRunner: %s" % cmdstr)
         with open(self.logfileout, mode='w+b', buffering=0) as outfile, \
             open(self.logfilerr, mode='w+b', buffering=0) as errfile:
             self.ortedvm = subprocess.Popen(cmdarg,
                                             stdin=subprocess.DEVNULL,
                                             stdout=outfile,
                                             stderr=errfile)
-        # wait for DVM to start
-        print("TestRunner: orte-dvm process wait 3")
         time.sleep(3)
-        print("TestRunner: orte-dvm process started\n")
-        print("TestRunner: orte-dvm pid: " + str(self.ortedvm.pid))
+        print("TestRunner: orte-dvm process started pid: " + str(self.ortedvm.pid))
         return not self.ortedvm
 
     def stop_process(self):
         """stop orted processes """
         print("TestRunner: stopping orte-dvm process\n")
         if self.ortedvm.poll() is None:
-            hosts = ","
             ompi_path = self.info.get_info('OMPI_PREFIX')
             orterun = os.path.join(ompi_path, "bin", "orterun")
-            hostlist = hosts.join(self.info.get_config('host_list'))
-            cmdstr = "%s --terminate --prefix %s --hnp file:%s --host %s" % \
-                     (orterun, ompi_path, self.report, hostlist)
+            hostlist = ','.join(self.info.get_config('host_list'))
+            cmdstr = "%s --terminate --hnp file:%s --host %s" % \
+                     (orterun, self.report, hostlist)
             cmdarg = shlex.split(cmdstr)
             try:
                 subprocess.call(cmdarg, timeout=10)
