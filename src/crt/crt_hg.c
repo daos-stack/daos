@@ -679,6 +679,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	struct crt_rpc_priv		*rpc_priv;
 	crt_opcode_t			opc;
 	hg_return_t			hg_ret = HG_SUCCESS;
+	crt_rpc_state_t			state;
 	int				rc = 0;
 
 	req_cbinfo = (struct crt_hg_send_cbinfo *)hg_cbinfo->arg;
@@ -690,27 +691,32 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	rpc_pub = &rpc_priv->crp_pub;
 	opc = rpc_pub->cr_opc;
 
-	if (hg_cbinfo->ret != HG_SUCCESS) {
-		if (hg_cbinfo->ret == HG_CANCELED) {
-			if (rpc_priv->crp_state == RPC_TIMEOUT) {
-				C_DEBUG("timed out rpc_priv %p being canceled, "
-					"opc: 0x%x.\n", rpc_priv, opc);
-				C_GOTO(timeout_abort, rc);
-			} else {
-				C_DEBUG("request being canceled, opc: 0x%x.\n",
-					opc);
-				rc = -CER_CANCELED;
-			}
+	switch (hg_cbinfo->ret) {
+	case HG_SUCCESS:
+		state = RPC_COMPLETED;
+		break;
+	case HG_CANCELED:
+		if (crt_req_timedout(rpc_pub)) {
+			C_DEBUG("request timedout, opc: 0x%x.\n", opc);
+			rc = -CER_TIMEDOUT;
 		} else {
-			C_ERROR("hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
-			rc = -CER_HG;
-			hg_ret = hg_cbinfo->ret;
+			C_DEBUG("request canceled, opc: 0x%x.\n", opc);
+			rc = -CER_CANCELED;
 		}
+		state = RPC_CANCELED;
+		rpc_priv->crp_state = state;
+		hg_ret = hg_cbinfo->ret;
+		break;
+	default:
+		state = RPC_COMPLETED;
+		rc = -CER_HG;
+		hg_ret = hg_cbinfo->ret;
+		C_DEBUG("hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
+		break;
 	}
 
 	if (req_cbinfo->rsc_cb == NULL) {
-		rpc_priv->crp_state = (hg_cbinfo->ret == HG_CANCELED) ?
-				      RPC_CANCELED : RPC_COMPLETED;
+		rpc_priv->crp_state = state;
 		C_GOTO(out, hg_ret);
 	}
 
@@ -732,19 +738,15 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_cbinfo.cci_arg = req_cbinfo->rsc_arg;
 	crt_cbinfo.cci_rc = rc;
 
-
 	C_ASSERT(req_cbinfo->rsc_cb != NULL);
 	rc = req_cbinfo->rsc_cb(&crt_cbinfo);
 	if (rc != 0)
 		C_ERROR("req_cbinfo->rsc_cb returned %d.\n", rc);
 
-	rpc_priv->crp_state = (hg_cbinfo->ret == HG_CANCELED) ?
-			      RPC_CANCELED : RPC_COMPLETED;
+	rpc_priv->crp_state = state;
 
 out:
 	crt_context_req_untrack(rpc_pub);
-
-timeout_abort:
 	C_FREE_PTR(req_cbinfo);
 
 	/* corresponding to the refcount taken in crt_rpc_priv_init(). */

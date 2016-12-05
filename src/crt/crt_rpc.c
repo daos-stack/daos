@@ -431,6 +431,13 @@ crt_req_abort(crt_rpc_t *req)
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+
+	if (crt_req_aborted(req)) {
+		C_DEBUG("req (rpc_priv %p, opc: 0x%x) aborted, need not "
+			"abort again.\n", rpc_priv, req->cr_opc);
+		C_GOTO(out, rc);
+	}
+
 	rc = crt_hg_req_cancel(rpc_priv);
 	if (rc != 0) {
 		C_ERROR("crt_hg_req_cancel failed, rc: %d, opc: 0x%x.\n",

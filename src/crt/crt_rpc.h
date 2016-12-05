@@ -284,6 +284,25 @@ int crt_internal_rpc_register(void);
 int crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout);
 int crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
 
+static inline bool
+crt_req_timedout(crt_rpc_t *rpc)
+{
+	struct crt_rpc_priv *rpc_priv;
+
+	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	return rpc_priv->crp_state == RPC_REQ_SENT &&
+	       !rpc_priv->crp_in_binheap;
+}
+
+static inline bool
+crt_req_aborted(crt_rpc_t *rpc)
+{
+	struct crt_rpc_priv *rpc_priv;
+
+	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	return rpc_priv->crp_state == RPC_CANCELED;
+}
+
 /* crt_corpc.c */
 int crt_corpc_req_hdlr(crt_rpc_t *req);
 int crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info);

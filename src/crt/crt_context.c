@@ -480,6 +480,8 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		if (rpc_priv->crp_timeout_ts > ts_now)
 			break;
 
+		/* +1 to prevent it from being released in timeout_untrack */
+		crt_req_addref(&rpc_priv->crp_pub);
 		crt_req_timeout_untrack(&rpc_priv->crp_pub);
 
 		crt_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
@@ -492,8 +494,9 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	crt_list_for_each_entry_safe(rpc_priv, next, &timeout_list,
 				     crp_tmp_link) {
 		crt_list_del_init(&rpc_priv->crp_tmp_link);
-		crt_rpc_complete(rpc_priv, -CER_TIMEDOUT);
-		crt_context_req_untrack(&rpc_priv->crp_pub);
+		/* At this point, RPC should always be completed by Mercury */
+		crt_req_abort(&rpc_priv->crp_pub);
+		crt_req_decref(&rpc_priv->crp_pub);
 	}
 }
 
@@ -636,9 +639,11 @@ crt_context_req_untrack(crt_rpc_t *req)
 		epi->epi_req_num--;
 	C_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
-	pthread_mutex_lock(&crt_ctx->cc_mutex);
-	crt_req_timeout_untrack(req);
-	pthread_mutex_unlock(&crt_ctx->cc_mutex);
+	if (!crt_req_timedout(req)) {
+		pthread_mutex_lock(&crt_ctx->cc_mutex);
+		crt_req_timeout_untrack(req);
+		pthread_mutex_unlock(&crt_ctx->cc_mutex);
+	}
 
 	/* decref corresponding to addref in crt_context_req_track */
 	crt_req_decref(req);
