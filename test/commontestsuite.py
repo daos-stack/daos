@@ -56,6 +56,11 @@ set TR_USE_VALGRIND in cart_echo_test.yml to memcheck
 To use valgrind call (callgrind) profiling
 set TR_USE_VALGRIND in cart_echo_test.yml to callgrind
 
+To redirect output to the log file,
+set TR_REDIRECT_OUTPUT in the respective yaml files.
+The test_runner will set it to redirect the output to the log file.
+By default the output is displayed on the screen.
+
 """
 
 import os
@@ -95,9 +100,12 @@ class CommonTestSuite(unittest.TestCase):
           suitetitle, msg, cmdstr)
         cmdarg = shlex.split(cmdstr)
         start_time = time.time()
-        procrtn = subprocess.call(cmdarg, timeout=180,
-                                  stdout=subprocess.DEVNULL,
-                                  stderr=subprocess.DEVNULL)
+        if not os.getenv('TR_REDIRECT_OUTPUT',""):
+            procrtn = subprocess.call(cmdarg, timeout=180)
+        else:
+            procrtn = subprocess.call(cmdarg, timeout=180,
+                                      stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.DEVNULL)
         elapsed = time.time() - start_time
         self.logger.info("%s: %s - return code: %d test duration: %d\n", \
           suitetitle, msg, procrtn, elapsed)
@@ -108,9 +116,12 @@ class CommonTestSuite(unittest.TestCase):
         self.logger.info("%s: start process %s - input string:\n %s\n", \
           suitetitle, msg, cmdstr)
         cmdarg = shlex.split(cmdstr)
-        proc = subprocess.Popen(cmdarg,
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL)
+        if not os.getenv('TR_REDIRECT_OUTPUT',""):
+            proc = subprocess.Popen(cmdarg)
+        else:
+            proc = subprocess.Popen(cmdarg,
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL)
         return proc
 
     def common_stop_process(self, suitetitle, msg, proc):

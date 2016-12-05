@@ -3,6 +3,7 @@ description: "group test module"
 defaultENV:
     OMPI_MCA_rmaps_base_oversubscribe: "1"
     CRT_LOG_MASK: "ERR"
+    TR_REDIRECT_OUTPUT: ""
 
 module:
     name: "cart_test_group"
