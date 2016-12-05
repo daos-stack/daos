@@ -94,7 +94,7 @@ class TestRunner(PreRunner.PreRunner, PostRunner.PostRunner):
             if str(self.test_directives.get('renameTestRun', "yes")).lower() \
                == "yes":
                 newname = "%s_%s" % \
-                          (self.log_dir_base, datetime.now().isoformat())
+                          (self.log_dir_base, datetime.now().isoformat().replace(':', '_'))
             else:
                 newdir = str(self.test_directives.get('renameTestRun'))
                 logdir = os.path.dirname(self.log_dir_base)
