@@ -83,7 +83,7 @@ void				*akbuf;
 static daos_handle_t		eq;
 unsigned int			naios;
 static daos_event_t		**events;
-static daos_oclass_id_t		obj_class = DAOS_OC_REPL_2_RW;
+static daos_oclass_id_t		obj_class;
 bool				t_validate;
 bool				t_pretty_print;
 bool				t_kill_update;
@@ -1048,6 +1048,12 @@ kv_multi_dkey_fetch_run(struct test *test)
 	chrono_record("begin");
 	aio_req_init(test);
 	for (i = 0; i < test->t_nkeys; i++) {
+		if (i == test->t_nkeys/2 && t_kill_fetch) {
+			if (t_wait > 0)
+				sleep_and_sync();
+			else
+				kill_and_sync();
+		}
 		ioreq = get_next_ioreq(test);
 		ioreq->r_index = i;
 		kv_set_dkey(test, ioreq, 0, i);
@@ -1453,6 +1459,8 @@ Usage: daosbench -t TEST -p $UUID [OPTIONS]\n\
 	Options:\n\
 	--test=TEST | -t	Run TEST.\n\
 	--testid=id | -o	Test ID(unique for objectID) \n\
+	--object-class=oc | -j	Object Class options : \n\
+				TINY, SMALL, LARGE, REPL, REPL_MAX \n\
 	--aios=N | -a		Submit N in-flight I/O requests.\n\
 	--dpool=pool | -p	DAOS pool through dmg tool.\n\
 	--keys=N | -k		Number of keys to be created in the test. \n\
@@ -1492,7 +1500,7 @@ test_init(struct test *test, int argc, char *argv[])
 		{"test",		1,	NULL,	't'},
 		{"testid",		1,	NULL,	'o'},
 		{"check-tests",		0,	NULL,	'c'},
-		{"test",		1,	NULL,	't'},
+		{"object-class",	1,	NULL,	'j'},
 		{"dpool",		1,	NULL,	'p'},
 		{"pretty-print",	0,	NULL,	'd'},
 		{"steps",		1,	NULL,	'e'},
@@ -1531,7 +1539,7 @@ test_init(struct test *test, int argc, char *argv[])
 	if (comm_world_rank != 0)
 		opterr = 0;
 
-	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:o:p:s:hvcde:rn:uw:",
+	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:o:p:s:hvcde:rn:uw:j:",
 				 options, NULL)) != -1) {
 		switch (rc) {
 		case 'a':
@@ -1557,6 +1565,25 @@ test_init(struct test *test, int argc, char *argv[])
 			break;
 		case 'o':
 			test->t_id = atoi(optarg);
+			break;
+		case 'j':
+			if (!strcasecmp(optarg, "TINY")) {
+				obj_class = DAOS_OC_TINY_RW;
+			} else if (!strcasecmp(optarg, "SMALL")) {
+				obj_class = DAOS_OC_SMALL_RW;
+			} else if (!strcasecmp(optarg, "LARGE")) {
+				obj_class = DAOS_OC_LARGE_RW;
+			} else if (!strcasecmp(optarg, "REPL")) {
+				obj_class = DAOS_OC_REPL_2_RW;
+			} else if (!strcasecmp(optarg, "REPL_MAX")) {
+				obj_class = DAOS_OC_REPL_MAX_RW;
+			} else {
+				fprintf(stderr,
+					"\ndaosbench: Unknown object class\n");
+				if (comm_world_rank == 0)
+					usage();
+				return 1;
+			}
 			break;
 		case 'w':
 			t_wait = atoi(optarg);
@@ -1670,6 +1697,15 @@ test_init(struct test *test, int argc, char *argv[])
 		if (comm_world_rank == 0)
 			fprintf(stderr,
 				"ERR: Trying to kill implicit & explicit\n");
+		return 2;
+	}
+
+	if (t_kill_server && obj_class != DAOS_OC_REPL_MAX_RW &&
+	    obj_class != DAOS_OC_REPL_2_RW) {
+		if (comm_world_rank == 0)
+			fprintf(stderr,
+				"daosbench: REPL or REPL_MAX obj-class "
+				"required for degraded mode\n");
 		return 2;
 	}
 
