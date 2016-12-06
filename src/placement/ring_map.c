@@ -857,34 +857,35 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	D_ASSERT(grp_nr > 0);
 	D_ASSERT(grp_size > 0);
 	D_ASSERT(rimap->rmp_target_nr > 0);
-	if (rimap->rmp_target_nr < grp_size * grp_nr)
-		shard_nr = rimap->rmp_target_nr;
-	else
-		shard_nr = grp_size * grp_nr;
 
+	/* NB: grp_nr could be more than the actual number of targets in the
+	 * pool, in this case, we just fill in "-1" to those extra shards.
+	 */
+	shard_nr = grp_size * grp_nr;
 	rc = pl_obj_layout_alloc(shard_nr, &layout);
 	if (rc != 0)
 		return rc;
-
-	D_ASSERT(layout->ol_nr > 0);
 
 	tgs   = pool_map_targets(rimap->rmp_poolmap);
 	tg_nr = pool_map_target_nr(rimap->rmp_poolmap);
 
 	plts = ring_oid2ring(rimap, oid)->ri_targets;
+	/* NB: @i is group index, @j is index within group, @k is shard index
+	 * within the layout.
+	 */
 	for (i = 0, k = 0; i < grp_nr; i++) {
 		for (j = 0; j < grp_size; j++, k++) {
 			int idx;
 			int pos;
 
-			if (k >= shard_nr)
-				break;
-
 			if (j >= tg_nr) {
 				/* If group size is larger than the target
 				 * number, let's disable the further shards
 				 * of the obj on this group.
-				 **/
+				 *
+				 * NB: pl_obj_layout_alloc can guarantee this
+				 * is always the last group.
+				 */
 				layout->ol_shards[k] = -1;
 				layout->ol_targets[k] = -1;
 				continue;
