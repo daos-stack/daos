@@ -894,7 +894,6 @@ update_verify(struct test *test, int key_type, uint64_t value)
 	 */
 
 	counter = (key_type == 2) ? test->t_nindexes : test->t_nkeys;
-	test->t_naios = 1;
 
 	valbuf = malloc(test->t_val_bufsize);
 	if (valbuf == NULL)
@@ -1343,6 +1342,8 @@ kv_simul(struct test *test)
 	DBENCH_CHECK(rc, "Failed to open object");
 
 	/* Determine the step number to start from. */
+	DBENCH_PRINT("Reading last committed step number (epoch %lu)\n",
+		     test->t_epoch);
 	if (comm_world_rank == 0)
 		kv_simul_rw_step(test, READ, &step);
 	MPI_Bcast(&step, 1, MPI_INT, 0, MPI_COMM_WORLD);
@@ -1364,6 +1365,8 @@ kv_simul(struct test *test)
 			     test->t_epoch);
 		update_async(test, key_type, value + step);
 
+		DBENCH_PRINT("Step %d (epoch %lu): writing last committed step "
+			     "number\n", step, test->t_epoch);
 		if (comm_world_rank == 0)
 			kv_simul_rw_step(test, WRITE, &step);
 
@@ -1756,9 +1759,11 @@ int main(int argc, char *argv[])
 
 	rc = container_open(comm_world_rank, arg.t_container,
 			    0 /* create */);
-	if (rc == -DER_NONEXIST)
+	if (rc == -DER_NONEXIST) {
+		DBENCH_PRINT("Creating container\n");
 		rc = container_open(comm_world_rank, arg.t_container,
 				    1 /* create */);
+	}
 	DBENCH_CHECK(rc, "Failed to open container\n");
 	handle_share(&coh, HANDLE_CO, comm_world_rank, poh,
 		     verbose ? 1 : 0);
