@@ -1005,29 +1005,17 @@ dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
 }
 
 int
-dc_cont_hdl2uuid_map_ver(daos_handle_t coh, uuid_t *con_hdl,
-			 uint32_t *version)
+dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *uuid)
 {
 	struct dsmc_container	*dc;
-	struct dc_pool	*pool;
-	int rc = 0;
 
 	dc = dsmc_handle2container(coh);
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
-	uuid_copy(*con_hdl, dc->dc_cont_hdl);
-
-	pool = dc_pool_lookup(dc->dc_pool_hdl);
-	D_ASSERT(pool != NULL);
-	D_ASSERT(pool->dp_map != NULL);
-
-	pthread_rwlock_rdlock(&pool->dp_map_lock);
-	*version = pool_map_get_version(pool->dp_map);
-	pthread_rwlock_unlock(&pool->dp_map_lock);
-	dc_pool_put(pool);
+	uuid_copy(*uuid, dc->dc_cont_hdl);
 	dsmc_container_put(dc);
-	return rc;
+	return 0;
 }
 
 daos_handle_t

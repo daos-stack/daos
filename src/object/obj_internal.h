@@ -48,9 +48,12 @@ struct dc_object {
 	unsigned int		 cob_mode;
 	/** refcount on this object */
 	unsigned int		 cob_ref;
+
+	/* protect layout and shard objects handle */
+	pthread_rwlock_t	cob_lock;
 	/** algorithmically generated object layout */
 	struct pl_obj_layout	*cob_layout;
-	/** object handles of underlying DSM objects */
+	/** shard object handles */
 	daos_handle_t		*cob_mohs;
 };
 
@@ -151,16 +154,19 @@ int dc_obj_shard_close(daos_handle_t oh);
 int dc_obj_shard_update(daos_handle_t oh, daos_epoch_t epoch,
 			daos_dkey_t *dkey, unsigned int nr,
 			daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-			struct daos_task *task);
+			unsigned int map_ver, struct daos_task *task);
 int dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		       daos_dkey_t *dkey, unsigned int nr,
 		       daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-		       daos_vec_map_t *maps, struct daos_task *task);
+		       daos_vec_map_t *maps, unsigned int map_ver,
+		       struct daos_task *task);
 int dc_obj_shard_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 			  daos_key_t *key, uint32_t *nr, daos_key_desc_t *kds,
 			  daos_sg_list_t *sgl, daos_hash_out_t *anchor,
-			  struct daos_task *task);
+			  unsigned int map_ver, struct daos_task *task);
 
+struct dc_obj_shard*
+obj_shard_hdl2ptr(daos_handle_t hdl);
 /* srv_obj.c */
 int ds_obj_rw_handler(crt_rpc_t *rpc);
 int ds_obj_enum_handler(crt_rpc_t *rpc);

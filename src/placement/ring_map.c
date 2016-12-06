@@ -869,6 +869,7 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	tgs   = pool_map_targets(rimap->rmp_poolmap);
 	tg_nr = pool_map_target_nr(rimap->rmp_poolmap);
 
+	layout->ol_ver = map->pl_ver;
 	plts = ring_oid2ring(rimap, oid)->ri_targets;
 	/* NB: @i is group index, @j is index within group, @k is shard index
 	 * within the layout.

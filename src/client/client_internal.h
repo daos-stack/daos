@@ -150,6 +150,9 @@ int
 daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg, int arg_size,
 		      struct daos_task **taskp, daos_event_t **evp);
 
+int
+daos_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
+
 /**
  * Wait for completion if blocking mode. We always return 0 for asynchronous
  * mode because the application will get the result from event in this case,

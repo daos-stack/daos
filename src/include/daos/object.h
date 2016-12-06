@@ -78,19 +78,22 @@ dc_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
 int
 dc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	     unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-	     daos_vec_map_t *maps, struct daos_task *task);
+	     daos_vec_map_t *maps, unsigned int map_ver,
+	     struct daos_task *task);
 int
 dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	      unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-	      struct daos_task *task);
+	      unsigned int map_ver, struct daos_task *task);
 int
 dc_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 		 daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		 daos_hash_out_t *anchor, struct daos_task *task);
+		 daos_hash_out_t *anchor, unsigned int map_ver,
+		 struct daos_task *task);
 int
 dc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 		 uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		 daos_hash_out_t *anchor, struct daos_task *task);
+		 daos_hash_out_t *anchor, unsigned int map_ver,
+		 struct daos_task *task);
 
 daos_handle_t
 dc_obj_hdl2cont_hdl(daos_handle_t obj_oh);

@@ -192,6 +192,38 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
 	return rc;
 }
 
+static int
+daos_obj_pool_hdl_get(daos_handle_t oh, daos_handle_t *ph)
+{
+	daos_handle_t	ch;
+
+	ch = dc_obj_hdl2cont_hdl(oh);
+	if (daos_handle_is_inval(ch))
+		return -DER_NO_HDL;
+
+	*ph = dc_cont_hdl2pool_hdl(ch);
+	if (daos_handle_is_inval(*ph))
+		return -DER_NO_HDL;
+
+	return 0;
+}
+
+/* Get pool map version from object handle */
+static int
+daos_obj_pool_map_version_get(daos_handle_t oh, unsigned int *map_ver)
+{
+	daos_handle_t	ph;
+	int rc;
+
+	rc = daos_obj_pool_hdl_get(oh, &ph);
+	if (rc != 0)
+		return rc;
+
+	rc = daos_pool_map_version_get(ph, map_ver);
+
+	return rc;
+}
+
 enum daos_obj_opc {
 	DAOS_OBJ_UPDATE	= 1,
 	DAOS_OBJ_FETCH = 2,
@@ -225,36 +257,69 @@ static int
 daos_obj_fetch_task(struct daos_task *task)
 {
 	struct daos_obj_arg *arg = daos_task2arg(task);
+	unsigned int	map_ver;
+	int		rc;
+
+	rc = daos_obj_pool_map_version_get(arg->oh, &map_ver);
+	if (rc != 0) {
+		daos_task_complete(task, rc);
+		return rc;
+	}
 
 	return dc_obj_fetch(arg->oh, arg->epoch, arg->dkey, arg->nr,
-			    arg->iods, arg->sgls, arg->maps, task);
+			    arg->iods, arg->sgls, arg->maps, map_ver, task);
 }
 
 static int
 daos_obj_update_task(struct daos_task *task)
 {
 	struct daos_obj_arg *arg = daos_task2arg(task);
+	unsigned int	map_ver;
+	int		rc;
+
+	rc = daos_obj_pool_map_version_get(arg->oh, &map_ver);
+	if (rc != 0) {
+		daos_task_complete(task, rc);
+		return rc;
+	}
 
 	return dc_obj_update(arg->oh, arg->epoch, arg->dkey, arg->nr,
-			     arg->iods, arg->sgls, task);
+			     arg->iods, arg->sgls, map_ver, task);
 }
 
 static int
 daos_obj_dkey_list_task(struct daos_task *task)
 {
 	struct daos_obj_list_arg *arg = daos_task2arg(task);
+	unsigned int	map_ver;
+	int		rc;
+
+	rc = daos_obj_pool_map_version_get(arg->oh, &map_ver);
+	if (rc != 0) {
+		daos_task_complete(task, rc);
+		return rc;
+	}
 
 	return dc_obj_list_dkey(arg->oh, arg->epoch, arg->nr, arg->kds,
-				arg->sgl, arg->anchor, task);
+				arg->sgl, arg->anchor, map_ver, task);
 }
 
 static int
 daos_obj_akey_list_task(struct daos_task *task)
 {
 	struct daos_obj_list_arg *arg = daos_task2arg(task);
+	unsigned int	map_ver;
+	int		rc;
+
+	rc = daos_obj_pool_map_version_get(arg->oh, &map_ver);
+	if (rc != 0) {
+		daos_task_complete(task, rc);
+		return rc;
+	}
 
 	return dc_obj_list_akey(arg->oh, arg->epoch, arg->dkey, arg->nr,
-				arg->kds, arg->sgl, arg->anchor, task);
+				arg->kds, arg->sgl, arg->anchor, map_ver,
+				task);
 }
 
 static int
@@ -274,17 +339,12 @@ daos_obj_pool_query_task(struct daos_task *task)
 {
 	struct daos_obj_arg	*arg = daos_task2arg(task);
 	daos_pool_info_t	*info;
-	daos_handle_t		 ch;
 	daos_handle_t		 ph;
 	int			 rc;
 
-	ch = dc_obj_hdl2cont_hdl(arg->oh);
-	if (daos_handle_is_inval(ch))
-		return -DER_NO_HDL;
-
-	ph = dc_cont_hdl2pool_hdl(ch);
-	if (daos_handle_is_inval(ph))
-		return -DER_NO_HDL;
+	rc = daos_obj_pool_hdl_get(arg->oh, &ph);
+	if (rc != 0)
+		return rc;
 
 	D_ALLOC_PTR(info);
 	if (info == NULL)
@@ -299,6 +359,7 @@ daos_obj_pool_query_task(struct daos_task *task)
 	rc = daos_pool_query_async(ph, NULL, info, task);
 	return rc;
 }
+
 
 /**
  * This function will check the result of dc object API
@@ -384,7 +445,12 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 {
 	struct daos_obj_arg arg;
 	struct daos_task *task;
+	unsigned int map_ver;
 	int rc;
+
+	rc = daos_obj_pool_map_version_get(oh, &map_ver);
+	if (rc != 0)
+		return rc;
 
 	arg.opc		= DAOS_OBJ_FETCH;
 	arg.oh		= oh;
@@ -394,12 +460,14 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	arg.iods	= iods;
 	arg.sgls	= sgls;
 	arg.maps	= maps;
+
 	rc = daos_client_task_prep(daos_obj_comp_cb, &arg, sizeof(arg),
 				   &task, &ev);
 	if (rc != 0)
 		return rc;
 
-	dc_obj_fetch(oh, epoch, dkey, nr, iods, sgls, maps, task);
+	dc_obj_fetch(oh, epoch, dkey, nr, iods, sgls, maps, map_ver,
+		     task);
 
 	return daos_client_result_wait(ev);
 }
@@ -411,7 +479,12 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 {
 	struct daos_task	*task;
 	struct daos_obj_arg	arg;
+	unsigned int		map_ver;
 	int			rc;
+
+	rc = daos_obj_pool_map_version_get(oh, &map_ver);
+	if (rc != 0)
+		return rc;
 
 	arg.opc		= DAOS_OBJ_UPDATE;
 	arg.oh		= oh;
@@ -425,7 +498,7 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	dc_obj_update(oh, epoch, dkey, nr, iods, sgls, task);
+	dc_obj_update(oh, epoch, dkey, nr, iods, sgls, map_ver, task);
 
 	return daos_client_result_wait(ev);
 }
@@ -437,7 +510,12 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 {
 	struct daos_task	*task;
 	struct daos_obj_list_arg arg;
+	unsigned int		map_ver;
 	int			rc;
+
+	rc = daos_obj_pool_map_version_get(oh, &map_ver);
+	if (rc != 0)
+		return rc;
 
 	arg.opc		= DAOS_OBJ_DKEY_LIST;
 	arg.oh		= oh;
@@ -451,7 +529,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	if (rc != 0)
 		return rc;
 
-	dc_obj_list_dkey(oh, epoch, nr, kds, sgl, anchor, task);
+	dc_obj_list_dkey(oh, epoch, nr, kds, sgl, anchor, map_ver, task);
 
 	return daos_client_result_wait(ev);
 }
@@ -463,7 +541,12 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 {
 	struct daos_task	*task;
 	struct daos_obj_list_arg arg;
+	unsigned int		map_ver;
 	int			rc;
+
+	rc = daos_obj_pool_map_version_get(oh, &map_ver);
+	if (rc != 0)
+		return rc;
 
 	arg.opc = DAOS_OBJ_AKEY_LIST;
 	arg.oh	= oh;
@@ -478,7 +561,8 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	dc_obj_list_akey(oh, epoch, dkey, nr, kds, sgl, anchor, task);
+	dc_obj_list_akey(oh, epoch, dkey, nr, kds, sgl, anchor, map_ver,
+			 task);
 
 	return daos_client_result_wait(ev);
 }
