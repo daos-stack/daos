@@ -47,8 +47,20 @@ struct dss_xstream {
 	ABT_xstream	dx_progress;
 };
 
-/** List of running execution streams */
-static daos_list_t dss_xstream_list;
+struct dss_xstream_data {
+	/** List of running execution streams */
+	daos_list_t	xd_list;
+	/** Initializing step, it is for cleanup of global states */
+	int		xd_init_step;
+	bool		xd_ult_signal;
+	/** serialize initialization of ULTs */
+	ABT_cond	xd_ult_init;
+	/** barrier for all ULTs to enter handling loop */
+	ABT_cond	xd_ult_barrier;
+	ABT_mutex	xd_mutex;
+};
+
+static struct dss_xstream_data	xstream_data;
 
 struct sched_data {
     uint32_t event_freq;
@@ -220,6 +232,19 @@ dss_srv_handler(void *arg)
 		return;
 	}
 
+	ABT_mutex_lock(xstream_data.xd_mutex);
+	/* initialized everything for the ULT, notify the creater */
+	D_ASSERT(!xstream_data.xd_ult_signal);
+	xstream_data.xd_ult_signal = true;
+	ABT_cond_signal(xstream_data.xd_ult_init);
+
+	/* wait until all xstreams are ready, otherwise it is not safe
+	 * to run lock-free dss_collective, althought this race is not
+	 * realistically possible in the DAOS stack.
+	 */
+	ABT_cond_wait(xstream_data.xd_ult_barrier, xstream_data.xd_mutex);
+	ABT_mutex_unlock(xstream_data.xd_mutex);
+
 	/* main service loop processing incoming request */
 	rc = crt_progress(dmi->dmi_ctx, -1, dss_progress_cb, &dx->dx_shutdown);
 	if (rc != 0)
@@ -322,8 +347,15 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
 	}
 
+	ABT_mutex_lock(xstream_data.xd_mutex);
+
+	if (!xstream_data.xd_ult_signal)
+		ABT_cond_wait(xstream_data.xd_ult_init, xstream_data.xd_mutex);
+	xstream_data.xd_ult_signal = false;
+
 	/** add to the list of execution streams */
-	daos_list_add_tail(&dx->dx_list, &dss_xstream_list);
+	daos_list_add_tail(&dx->dx_list, &xstream_data.xd_list);
+	ABT_mutex_unlock(xstream_data.xd_mutex);
 
 	return 0;
 out_xstream:
@@ -350,22 +382,22 @@ dss_xstreams_fini(bool force)
 	D_DEBUG(DF_SERVER, "Stopping execution streams\n");
 
 	/** Stop & free progress xstreams */
-	daos_list_for_each_entry(dx, &dss_xstream_list, dx_list)
+	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list)
 		ABT_future_set(dx->dx_shutdown, dx);
-	daos_list_for_each_entry(dx, &dss_xstream_list, dx_list) {
+	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
 		ABT_thread_join(dx->dx_progress);
 		ABT_thread_free(&dx->dx_progress);
 		ABT_future_free(&dx->dx_shutdown);
 	}
 
 	/** Wait for each execution stream to complete */
-	daos_list_for_each_entry(dx, &dss_xstream_list, dx_list) {
+	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
 		ABT_xstream_join(dx->dx_xstream);
 		ABT_xstream_free(&dx->dx_xstream);
 	}
 
 	/** housekeeping ... */
-	daos_list_for_each_entry_safe(dx, tmp, &dss_xstream_list, dx_list) {
+	daos_list_for_each_entry_safe(dx, tmp, &xstream_data.xd_list, dx_list) {
 		daos_list_del_init(&dx->dx_list);
 		ABT_sched_free(&dx->dx_sched);
 		dss_xstream_free(dx);
@@ -377,6 +409,20 @@ dss_xstreams_fini(bool force)
 		D_ERROR("failed to delete dtc: %d\n", rc);
 
 	D_DEBUG(DF_SERVER, "Execution streams stopped\n");
+}
+
+static void
+dss_xstreams_open_barrier(void)
+{
+	ABT_mutex_lock(xstream_data.xd_mutex);
+	ABT_cond_broadcast(xstream_data.xd_ult_barrier);
+	ABT_mutex_unlock(xstream_data.xd_mutex);
+}
+
+static bool
+dss_xstreams_empty(void)
+{
+	return daos_list_empty(&xstream_data.xd_list);
 }
 
 static int
@@ -413,18 +459,22 @@ dss_xstreams_init(int nr)
 		obj = hwloc_get_obj_by_depth(dss_topo, depth, i % ncores);
 		if (obj == NULL) {
 			D_ERROR("Null core returned by hwloc\n");
-			return -DER_INVAL;
+			D_GOTO(failed, rc = -DER_INVAL);
 		}
 
 		/** ABT rank 0 is reserved for the primary xstream */
 		rc = dss_start_one_xstream(obj->allowed_cpuset, i);
 		if (rc)
-			return rc;
+			D_GOTO(failed, rc);
 	}
 	D_DEBUG(DF_SERVER, "%d execution streams successfully started\n",
 		dss_nxstreams);
+failed:
+	dss_xstreams_open_barrier();
+	if (dss_xstreams_empty()) /* started nothing */
+		pthread_key_delete(dss_tls_key);
 
-	return 0;
+	return rc;
 }
 
 /**
@@ -527,7 +577,7 @@ dss_collective(int (*func)(void *), void *arg)
 	 * Create tasklets and store return codes in the value array as
 	 * "void *" pointers.
 	 */
-	daos_list_for_each_entry(dx, &dss_xstream_list, dx_list) {
+	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
 		rc = ABT_task_create(dx->dx_pool, collective_func, &carg,
 				     NULL /* task */);
 		if (rc != ABT_SUCCESS) {
@@ -542,17 +592,43 @@ dss_collective(int (*func)(void *), void *arg)
 	return nfailed;
 }
 
+/** initializing steps */
+enum {
+	XD_INIT_NONE,
+	XD_INIT_MUTEX,
+	XD_INIT_ULT_INIT,
+	XD_INIT_ULT_BARRIER,
+	XD_INIT_REG_KEY,
+	XD_INIT_XSTREAMS,
+};
+
 /**
  * Entry point to start up and shutdown the service
  */
-
 int
 dss_srv_fini(bool force)
 {
-	dss_xstreams_fini(force);
-
-	dss_unregister_key(&daos_srv_modkey);
-
+	switch (xstream_data.xd_init_step) {
+	default:
+		D_ASSERT(0);
+	case XD_INIT_XSTREAMS:
+		dss_xstreams_fini(force);
+		/* fall through */
+	case XD_INIT_REG_KEY:
+		dss_unregister_key(&daos_srv_modkey);
+		/* fall through */
+	case XD_INIT_ULT_BARRIER:
+		ABT_cond_free(&xstream_data.xd_ult_barrier);
+		/* fall through */
+	case XD_INIT_ULT_INIT:
+		ABT_cond_free(&xstream_data.xd_ult_init);
+		/* fall through */
+	case XD_INIT_MUTEX:
+		ABT_mutex_free(&xstream_data.xd_mutex);
+		/* fall through */
+	case XD_INIT_NONE:
+		D_DEBUG(DF_SERVER, "Finalized everything\n");
+	}
 	return 0;
 }
 
@@ -561,15 +637,45 @@ dss_srv_init(int nr)
 {
 	int	rc;
 
-	DAOS_INIT_LIST_HEAD(&dss_xstream_list);
+	xstream_data.xd_init_step  = XD_INIT_NONE;
+	xstream_data.xd_ult_signal = false;
+
+	DAOS_INIT_LIST_HEAD(&xstream_data.xd_list);
+	rc = ABT_mutex_create(&xstream_data.xd_mutex);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		D_GOTO(failed, rc);
+	}
+	xstream_data.xd_init_step = XD_INIT_MUTEX;
+
+	rc = ABT_cond_create(&xstream_data.xd_ult_init);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		D_GOTO(failed, rc);
+	}
+	xstream_data.xd_init_step = XD_INIT_ULT_INIT;
+
+	rc = ABT_cond_create(&xstream_data.xd_ult_barrier);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		D_GOTO(failed, rc);
+	}
+	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
 
 	/** register global tls accessible to all modules */
 	dss_register_key(&daos_srv_modkey);
+	xstream_data.xd_init_step = XD_INIT_REG_KEY;
 
 	/* start xstreams */
 	rc = dss_xstreams_init(nr);
-	if (rc != 0)
-		dss_srv_fini(true);
+	if (!dss_xstreams_empty()) /* cleanup if we started something */
+		xstream_data.xd_init_step = XD_INIT_XSTREAMS;
 
+	if (rc != 0)
+		D_GOTO(failed, rc);
+
+	return 0;
+failed:
+	dss_srv_fini(true);
 	return rc;
 }
