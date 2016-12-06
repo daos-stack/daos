@@ -32,62 +32,63 @@
 typedef enum {
 	/**
 	 * Common error codes
+	 * CER_ERR_BASE = 1000
 	 */
-	/** No permission */
+	/** No permission	 (CER_ERR_BASE + 1) */
 	DER_NO_PERM		= CER_NO_PERM,
-	/** Invalid handle */
+	/** Invalid handle	 (CER_ERR_BASE + 2) */
 	DER_NO_HDL		= CER_NO_HDL,
-	/** Invalid parameters */
+	/** Invalid parameters	 (CER_ERR_BASE + 3) */
 	DER_INVAL		= CER_INVAL,
-	/** Entity already exists */
+	/** Entity already exists (CER_ERR_BASE + 4) */
 	DER_EXIST		= CER_EXIST,
-	/** Nonexistent entity */
+	/** Nonexistent entity	 (CER_ERR_BASE + 5) */
 	DER_NONEXIST		= CER_NONEXIST,
-	/** Unreachable node */
+	/** Unreachable node	 (CER_ERR_BASE + 6) */
 	DER_UNREACH		= CER_UNREACH,
-	/** No space on storage target */
+	/** No space on storage target (CER_ERR_BASE + 7) */
 	DER_NOSPACE		= CER_NOSPACE,
-	/** Already did sth */
+	/** Already did sth	 (CER_ERR_BASE + 8) */
 	DER_ALREADY		= CER_ALREADY,
-	/** NO memory */
+	/** NO memory		 (CER_ERR_BASE + 9) */
 	DER_NOMEM		= CER_NOMEM,
-	/** Function not implemented */
+	/** Function not implemented (CER_ERR_BASE + 10) */
 	DER_NOSYS		= CER_NOSYS,
-	/** Timed out */
+	/** Timed out		 (CER_ERR_BASE + 11) */
 	DER_TIMEDOUT		= CER_TIMEDOUT,
-	/** Busy */
+	/** Busy		 (CER_ERR_BASE + 12) */
 	DER_BUSY		= CER_BUSY,
-	/** Try again */
+	/** Try again		 (CER_ERR_BASE + 13) */
 	DER_AGAIN		= CER_AGAIN,
-	/** incompatible protocol */
+	/** incompatible protocol (CER_ERR_BASE + 14) */
 	DER_PROTO		= CER_PROTO,
-	/** Un-initialized */
+	/** Un-initialized	 (CER_ERR_BASE + 15) */
 	DER_UNINIT		= CER_UNINIT,
-	/** Buffer too short (larger buffer needed) */
+	/** Buffer too short, larger buffer needed (CER_ERR_BASE + 16) */
 	DER_TRUNC		= CER_TRUNC,
-	/** Value too large for defined data type */
+	/** Value too large for defined data type (CER_ERR_BASE + 17) */
 	DER_OVERFLOW		= CER_OVERFLOW,
-	/** Operation cancelled */
+	/** Operation cancelled	 (CER_ERR_BASE + 18) */
 	DER_CANCELED		= CER_CANCELED,
-	/** Out-Of-Group or member list */
+	/** Out-Of-Group or member list (CER_ERR_BASE + 19) */
 	DER_OOG			= CER_OOG,
-	/** Transport layer mercury error */
+	/** Transport layer mercury error (CER_ERR_BASE + 20) */
 	DER_CRT_HG		= CER_HG,
-	/** CRT RPC (opcode) unregister */
+	/** CRT RPC (opcode) unregister (CER_ERR_BASE + 21) */
 	DER_CRT_UNREG		= CER_UNREG,
-	/** CRT failed to generate an address string */
+	/** CRT failed to generate an address string (CER_ERR_BASE + 22) */
 	DER_CRT_ADDRSTR_GEN	= CER_ADDRSTR_GEN,
-	/** CRT PMIx layer error */
+	/** CRT PMIx layer error (CER_ERR_BASE + 23) */
 	DER_CRT_PMIX		= CER_PMIX,
-	/** CRT IV callback - cannot handle locally */
+	/** CRT IV callback - cannot handle locally (CER_ERR_BASE + 24) */
 	DER_IVCB_FORWARD	= CER_IVCB_FORWARD,
-	/** CRT miscellaneous error */
+	/** CRT miscellaneous error (CER_ERR_BASE + 25) */
 	DER_MISC		= CER_MISC,
-	/** Bad path name */
+	/** Bad path name	 (CER_ERR_BASE + 26) */
 	DER_BADPATH		= CER_BADPATH,
-	/** Not a directory */
+	/** Not a directory	 (CER_ERR_BASE + 27) */
 	DER_NOTDIR		= CER_NOTDIR,
-	/** Unknown error */
+	/** Unknown error	 (CER_ERR_BASE + 500) */
 	DER_UNKNOWN		= CER_UNKNOWN,
 
 	/**
