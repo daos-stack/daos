@@ -171,6 +171,7 @@ cont_svc_free_ref(struct daos_llink *llink)
 	dbtree_close(svc->cs_containers);
 	ABT_rwlock_free(&svc->cs_lock);
 	ds_pool_mpool_put(svc->cs_mpool);
+	ds_pool_put(svc->cs_pool);
 	D_FREE_PTR(svc);
 }
 
