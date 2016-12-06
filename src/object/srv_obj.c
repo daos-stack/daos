@@ -490,6 +490,8 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	int				key_nr = 0;
 	int				type;
 
+	memset(&sgl, 0, sizeof(sgl));
+
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_AKEY_RPC_ENUMERATE)
 		type = VOS_ITER_AKEY;
 	else
