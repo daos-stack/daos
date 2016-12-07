@@ -152,15 +152,4 @@ void crt_log_fini(void)
 	pthread_mutex_unlock(&crt_log_lock);
 }
 
-static __thread char thread_uuid_str_buf[CF_UUID_MAX][CRT_UUID_STR_SIZE];
-static __thread int thread_uuid_str_buf_idx;
 
-char *
-CP_UUID(const void *uuid)
-{
-	char *buf = thread_uuid_str_buf[thread_uuid_str_buf_idx];
-
-	uuid_unparse_lower(uuid, buf);
-	thread_uuid_str_buf_idx = (thread_uuid_str_buf_idx + 1) % CF_UUID_MAX;
-	return buf;
-}

@@ -44,6 +44,30 @@
 #include <crt_util/list.h>
 #include <crt_util/hash.h>
 
+/*
+ * Each thread has CF_UUID_MAX number of thread-local buffers for UUID strings.
+ * Each debug message can have at most this many CP_UUIDs.
+ *
+ * CF_UUID prints the first eight characters of the string representation.
+ */
+#define CF_UUID_MAX	8
+#define CF_UUID		"%.8s"
+
+#define CRT_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
+
+static __thread char thread_uuid_str_buf[CF_UUID_MAX][CRT_UUID_STR_SIZE];
+static __thread int thread_uuid_str_buf_idx;
+
+static char *
+CP_UUID(const void *uuid)
+{
+	char *buf = thread_uuid_str_buf[thread_uuid_str_buf_idx];
+
+	uuid_unparse_lower(uuid, buf);
+	thread_uuid_str_buf_idx = (thread_uuid_str_buf_idx + 1) % CF_UUID_MAX;
+	return buf;
+}
+
 uint64_t
 crt_hash_mix64(uint64_t key)
 {

@@ -172,29 +172,6 @@ do {									\
 #define CF_U64		"%" PRIu64
 #define CF_X64		"%" PRIx64
 
-#define CF_OID		CF_U64 "." CF_U64 "." CF_U64
-#define CP_OID(o)	(o).hi, (o).mid, (o).lo
-
-#define CF_UOID		CF_OID ".%u"
-#define CP_UOID(uo)	CP_OID((uo).id_pub), (uo).id_shard
-
-/*
- * Each thread has CF_UUID_MAX number of thread-local buffers for UUID strings.
- * Each debug message can have at most this many CP_UUIDs.
- *
- * CF_UUID prints the first eight characters of the string representation,
- * while CF_UUIDF prints the full 36-character string representation. CP_UUID()
- * matches both CF_UUID and CF_UUIDF.
- */
-#define CF_UUID_MAX	8
-#define CF_UUID		"%.8s"
-#define CF_UUIDF	"%s"
-char *CP_UUID(const void *uuid);
-
-/* For prefixes of error messages about a container */
-#define CF_CONT			CF_UUID "/" CF_UUID ": "
-#define CP_CONT(puuid, cuuid)	CP_UUID(puuid), CP_UUID(cuuid)
-
 /* memory allocating macros */
 #define C_ALLOC(ptr, size)						 \
 	do {								 \
@@ -347,8 +324,6 @@ void crt_getenv_int(const char *env, unsigned *int_val);
 #define max_t(type,x,y) \
 	        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
 #endif
-
-#define CRT_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
 
 /* byte swapper */
 #define C_SWAP16(x)	bswap_16(x)
