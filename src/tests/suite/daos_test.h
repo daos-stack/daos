@@ -61,12 +61,15 @@ typedef struct {
 	uint64_t		fail_loc;
 	uint64_t		fail_value;
 	int			expect_result;
+	daos_size_t		size;
+	int			nr;
 } test_arg_t;
 
 enum {
 	SETUP_EQ,
 	SETUP_POOL_CREATE,
 	SETUP_POOL_CONNECT,
+	SETUP_CONT_CREATE,
 	SETUP_CONT_CONNECT,
 };
 
@@ -112,6 +115,7 @@ int run_daos_pool_test(int rank, int size);
 int run_daos_cont_test(int rank, int size);
 int run_daos_capa_test(int rank, int size);
 int run_daos_io_test(int rank, int size);
+int run_daos_array_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);

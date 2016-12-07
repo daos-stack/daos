@@ -395,6 +395,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	cont_hdl = ds_cont_hdl_lookup(orw->orw_co_hdl);
 	if (cont_hdl == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+
+	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE &&
+	    !(cont_hdl->sch_capas & DAOS_COO_RW))
 		D_GOTO(out, rc = -DER_NO_PERM);
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);

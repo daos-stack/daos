@@ -75,6 +75,7 @@ query(void **state)
 	assert_int_equal(rc, 0);
 
 	/** query pool info with valid handle */
+	print_message("querying pool with valid handle ...\n");
 	rc = daos_pool_query(poh, NULL, &info, NULL);
 	assert_int_equal(rc, 0);
 
@@ -82,6 +83,7 @@ query(void **state)
 	poh_invalidate_local(&poh);
 
 	/** query pool info with invalid handle */
+	print_message("querying pool with invalid handle ...\n");
 	rc = daos_pool_query(poh, NULL, &info, NULL);
 	assert_int_equal(rc, -DER_NO_HDL);
 
@@ -110,6 +112,7 @@ create(void **state)
 	assert_int_equal(rc, 0);
 
 	/** create container with read-only handle */
+	print_message("creating container with read-only pool handle ...\n");
 	uuid_generate(uuid);
 	rc = daos_cont_create(poh, uuid, NULL);
 	assert_int_equal(rc, -DER_NO_PERM);
@@ -129,6 +132,7 @@ create(void **state)
 	poh_invalidate_local(&poh);
 
 	/** create container with invalid handle */
+	print_message("creating container with stale pool handle ...\n");
 	uuid_generate(uuid);
 	rc = daos_cont_create(poh, uuid, NULL);
 	assert_int_equal(rc, -DER_NO_HDL);
@@ -166,6 +170,7 @@ destroy(void **state)
 	poh_invalidate_local(&poh);
 
 	/** destroy container with invalid handle */
+	print_message("destroying container with stale pool handle ...\n");
 	rc = daos_cont_destroy(poh, uuid, true, NULL);
 	assert_int_equal(rc, -DER_NO_HDL);
 
@@ -181,6 +186,7 @@ destroy(void **state)
 	assert_int_equal(rc, 0);
 
 	/** destroy container with RO handle */
+	print_message("destroying container with read-only pool handle ...\n");
 	rc = daos_cont_destroy(poh, uuid, true, NULL);
 	assert_int_equal(rc, -DER_NO_PERM);
 
@@ -196,6 +202,8 @@ destroy(void **state)
 	assert_int_equal(rc, 0);
 
 	/** destroy container with valid handle */
+	print_message("really destroying container with valid pool handle "
+		      "...\n");
 	rc = daos_cont_destroy(poh, uuid, true, NULL);
 	assert_int_equal(rc, 0);
 
@@ -211,7 +219,6 @@ open(void **state)
 	test_arg_t		*arg = *state;
 	daos_handle_t		 poh;
 	daos_handle_t		 coh;
-	uuid_t			 uuid;
 	int			 rc;
 
 	if (arg->myrank != 0)
@@ -224,16 +231,12 @@ open(void **state)
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
 
-	/** create container */
-	uuid_generate(uuid);
-	rc = daos_cont_create(poh, uuid, NULL);
-	assert_int_equal(rc, 0);
-
 	/** invalidate pool handle */
 	poh_invalidate_local(&poh);
 
 	/** open container while pool handle has been revoked */
-	rc = daos_cont_open(poh, uuid, DAOS_COO_RW, &coh, NULL, NULL);
+	print_message("opening container with revoked pool handle ...\n");
+	rc = daos_cont_open(poh, arg->co_uuid, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_int_equal(rc, -DER_NO_HDL);
 
 	/** close pool handle */
@@ -248,35 +251,282 @@ open(void **state)
 	assert_int_equal(rc, 0);
 
 	/** open container in read/write mode */
-	rc = daos_cont_open(poh, uuid, DAOS_COO_RW, &coh, NULL, NULL);
+	print_message("opening container RW with RO pool handle ...\n");
+	rc = daos_cont_open(poh, arg->co_uuid, DAOS_COO_RW, &coh, NULL, NULL);
 	assert_int_equal(rc, -DER_NO_PERM);
 
 	/** invalidate pool handle */
 	poh_invalidate_local(&poh);
 
 	/** open container while pool handle has been revoked */
-	rc = daos_cont_open(poh, uuid, DAOS_COO_RO, &coh, NULL, NULL);
+	rc = daos_cont_open(poh, arg->co_uuid, DAOS_COO_RO, &coh, NULL, NULL);
 	assert_int_equal(rc, -DER_NO_HDL);
+
 
 	/** close pool handle */
 	rc = daos_pool_disconnect(poh, NULL);
 	assert_int_equal(rc, 0);
-
-	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
-			       &arg->svc, DAOS_PC_RW, &poh,
-			       NULL /* info */,
-			       NULL /* ev */);
-	assert_int_equal(rc, 0);
-
-	/** destroy container with valid handle */
-	rc = daos_cont_destroy(poh, uuid, true, NULL);
-	assert_int_equal(rc, 0);
-
-	/** close local handle */
-	rc = daos_pool_disconnect(poh, NULL);
-	assert_int_equal(rc, 0);
 }
+
+#define STACK_BUF_LEN	24
+
+/** update/fetch with invalid pool handle */
+static void
+io_invalid_poh(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_handle_t		 poh;
+	daos_handle_t		 coh;
+	daos_obj_id_t		 oid;
+	daos_handle_t		 oh;
+	daos_epoch_t		 epoch = time(NULL);
+	daos_iov_t		 dkey;
+	daos_sg_list_t		 sgl;
+	daos_iov_t		 sg_iov;
+	daos_vec_iod_t		 iod;
+	daos_recx_t		 recx;
+	char			 buf[STACK_BUF_LEN];
+	int			 rc;
+
+	if (arg->rank_size < 2)
+		skip();
+
+	if (arg->myrank == 0) {
+		/** connect to the pool in read-write mode */
+		rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+				       &arg->svc, DAOS_PC_RW, &poh,
+				       NULL /* info */,
+				       NULL /* ev */);
+		assert_int_equal(rc, 0);
+	}
+
+	handle_share(&poh, HANDLE_POOL, arg->myrank, poh, false);
+
+	if (arg->myrank == 1) {
+		/** open container in read/write mode */
+		rc = daos_cont_open(poh, arg->co_uuid, DAOS_COO_RW, &coh, NULL,
+				    NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank != 1) {
+		rc = daos_pool_disconnect(poh, NULL);
+		assert_int_equal(rc, 0);
+		print_message("invalidating pool handle\n");
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 1) {
+		/** open object */
+		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+		rc = daos_obj_open(coh, oid, 0, 0, &oh, NULL);
+		assert_int_equal(rc, 0);
+
+		/** init I/O */
+		daos_iov_set(&dkey, "dkey", strlen("dkey"));
+		daos_iov_set(&sg_iov, buf, sizeof(buf));
+		sgl.sg_nr.num		= 1;
+		sgl.sg_nr.num_out	= 0;
+		sgl.sg_iovs		= &sg_iov;
+		daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
+		daos_csum_set(&iod.vd_kcsum, NULL, 0);
+		iod.vd_nr	= 1;
+		recx.rx_rsize	= 1;
+		recx.rx_idx	= 0;
+		recx.rx_nr	= sizeof(buf);
+		iod.vd_recxs	= &recx;
+		iod.vd_eprs	= NULL;
+		iod.vd_csums	= NULL;
+
+		/** update record */
+		print_message("Updating %d bytes with invalid pool handle ..."
+			      "\n", STACK_BUF_LEN);
+		rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+		assert_int_equal(rc, -DER_NO_HDL);
+		print_message("got -DER_NO_HDL as expected\n");
+
+		/** fetch */
+		print_message("fetching records with invalid pool handle...\n");
+		rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL,
+				    NULL);
+		assert_int_equal(rc, -DER_NO_HDL);
+		print_message("got -DER_NO_HDL as expected\n");
+
+		/** close object */
+		rc = daos_obj_close(oh, NULL);
+		assert_int_equal(rc, 0);
+
+		/** close container handle */
+		rc = daos_cont_close(coh, NULL);
+		assert_int_equal(rc, 0);
+
+		/** close local pool handle */
+		rc = daos_pool_disconnect(poh, NULL);
+		assert_int_equal(rc, 0);
+		print_message("all is fine\n");
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+/** update/fetch with invalid container handle */
+static void
+io_invalid_coh(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_handle_t		 coh;
+	daos_obj_id_t		 oid;
+	daos_handle_t		 oh;
+	daos_epoch_t		 epoch = time(NULL);
+	daos_iov_t		 dkey;
+	daos_sg_list_t		 sgl;
+	daos_iov_t		 sg_iov;
+	daos_vec_iod_t		 iod;
+	daos_recx_t		 recx;
+	char			 buf[STACK_BUF_LEN];
+	int			 rc;
+
+	if (arg->rank_size < 2)
+		skip();
+
+	if (arg->myrank == 0) {
+		/** open container in read/write mode */
+		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &coh,
+				    NULL, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	handle_share(&coh, HANDLE_CO, arg->myrank, arg->poh, false);
+
+	if (arg->myrank != 1) {
+		rc = daos_cont_close(coh, NULL);
+		assert_int_equal(rc, 0);
+		print_message("closing container handle\n");
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 1) {
+		/** open object */
+		oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+		rc = daos_obj_open(coh, oid, 0, 0, &oh, NULL);
+		assert_int_equal(rc, 0);
+
+		/** init I/O */
+		daos_iov_set(&dkey, "dkey", strlen("dkey"));
+		daos_iov_set(&sg_iov, buf, sizeof(buf));
+		sgl.sg_nr.num		= 1;
+		sgl.sg_nr.num_out	= 0;
+		sgl.sg_iovs		= &sg_iov;
+		daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
+		daos_csum_set(&iod.vd_kcsum, NULL, 0);
+		iod.vd_nr	= 1;
+		recx.rx_rsize	= 1;
+		recx.rx_idx	= 0;
+		recx.rx_nr	= sizeof(buf);
+		iod.vd_recxs	= &recx;
+		iod.vd_eprs	= NULL;
+		iod.vd_csums	= NULL;
+
+		/** update record */
+		print_message("Updating records with stale container handle "
+			      "...\n");
+		rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+		assert_int_equal(rc, -DER_NO_HDL);
+		print_message("got -DER_NO_HDL as expected\n");
+
+		/** fetch */
+		print_message("fetching records with stale container handle "
+			      "...\n");
+		rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL,
+				    NULL);
+		assert_int_equal(rc, -DER_NO_HDL);
+		print_message("got -DER_NO_HDL as expected\n");
+
+		/** close object */
+		rc = daos_obj_close(oh, NULL);
+		assert_int_equal(rc, 0);
+
+		/** close container handle */
+		rc = daos_cont_close(coh, NULL);
+		assert_int_equal(rc, 0);
+		print_message("all is fine\n");
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
+/** update with read-only container handle */
+static void
+update_ro(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_handle_t		 coh;
+	daos_obj_id_t		 oid;
+	daos_handle_t		 oh;
+	daos_epoch_t		 epoch = time(NULL);
+	daos_iov_t		 dkey;
+	daos_sg_list_t		 sgl;
+	daos_iov_t		 sg_iov;
+	daos_vec_iod_t		 iod;
+	daos_recx_t		 recx;
+	char			 buf[STACK_BUF_LEN];
+	int			 rc;
+
+	if (arg->rank_size < 2)
+		skip();
+
+	if (arg->myrank == 0) {
+		/** open container in read/write mode */
+		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RO, &coh,
+				    NULL, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	handle_share(&coh, HANDLE_CO, arg->myrank, arg->poh, false);
+
+	/** open object */
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	rc = daos_obj_open(coh, oid, 0, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init I/O */
+	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+	daos_iov_set(&sg_iov, buf, sizeof(buf));
+	sgl.sg_nr.num		= 1;
+	sgl.sg_nr.num_out	= 0;
+	sgl.sg_iovs		= &sg_iov;
+	daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.vd_kcsum, NULL, 0);
+	iod.vd_nr	= 1;
+	recx.rx_rsize	= 1;
+	recx.rx_idx	= 0;
+	recx.rx_nr	= sizeof(buf);
+	iod.vd_recxs	= &recx;
+	iod.vd_eprs	= NULL;
+	iod.vd_csums	= NULL;
+
+	/** update record */
+	print_message("Updating records with read-only container handle ...\n");
+	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, -DER_NO_PERM);
+	print_message("got -DER_NO_PERM as expected\n");
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** close container handle */
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+	print_message("all is fine\n");
+
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 
 static const struct CMUnitTest capa_tests[] = {
 	{ "CAPA1: query pool with invalid pool handle",
@@ -287,12 +537,18 @@ static const struct CMUnitTest capa_tests[] = {
 	  destroy, NULL, NULL},
 	{ "CAPA4: open container with invalid pool handle",
 	  open, NULL, NULL},
+	{ "CAPA5: update/fetch with invalid pool handle",
+	  io_invalid_poh, NULL, NULL},
+	{ "CAPA6: update/fetch with invalid container handle",
+	  io_invalid_coh, NULL, NULL},
+	{ "CAPA7: update with read-only container handle",
+	  update_ro, NULL, NULL},
 };
 
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_POOL_CREATE, true);
+	return test_setup(state, SETUP_CONT_CREATE, true);
 }
 
 int

@@ -292,13 +292,20 @@ static const struct CMUnitTest degraded_tests[] = {
 };
 
 int
+degraded_setup(void **state)
+{
+	return test_setup(state, SETUP_CONT_CONNECT, true);
+}
+
+int
 run_daos_degraded_test(int rank, int size)
 {
 	int rc = 0;
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = cmocka_run_group_tests_name("DAOS degraded-mode tests", degraded_tests,
-					 obj_setup, test_teardown);
+	rc = cmocka_run_group_tests_name("DAOS degraded-mode tests",
+					 degraded_tests, degraded_setup,
+					 test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

@@ -131,6 +131,9 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 	if (multi_rank)
 		MPI_Bcast(arg->co_uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
 
+	if (step == SETUP_CONT_CREATE)
+		goto out;
+
 	/** open container */
 	if (arg->myrank == 0) {
 		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
@@ -227,6 +230,7 @@ run_all_tests(int rank, int size)
 	nr_failed += run_daos_cont_test(rank, size);
 	nr_failed += run_daos_epoch_test(rank, size);
 	nr_failed += run_daos_io_test(rank, size);
+	nr_failed += run_daos_array_test(rank, size);
 	nr_failed += run_daos_capa_test(rank, size);
 	nr_failed += run_daos_epoch_recovery_test(rank, size);
 	/** must be last for now */
@@ -246,8 +250,9 @@ print_usage(int rank)
 	print_message("daos_test -m|--mgmt\n");
 	print_message("daos_test -p|--daos_pool_tests\n");
 	print_message("daos_test -c|--daos_container_tests\n");
-	print_message("daos_test -y|--capa\n");
+	print_message("daos_test -C|--capa\n");
 	print_message("daos_test -i|--daos_io_tests\n");
+	print_message("daos_test -A|--array\n");
 	print_message("daos_test -d|--degraded\n");
 	print_message("daos_test -e|--daos_epoch_tests\n");
 	print_message("daos_test -o|--daos_epoch_recovery_tests\n");
@@ -285,8 +290,9 @@ main(int argc, char **argv)
 		{"mgmt", no_argument, 0, 'm'},
 		{"daos_pool_tests", no_argument, 0, 'p'},
 		{"daos_container_tests", no_argument, 0, 'c'},
-		{"capa", no_argument, 0, 'y'},
+		{"capa", no_argument, 0, 'C'},
 		{"daos_io_tests", no_argument, 0, 'i'},
+		{"array", no_argument, 0, 'A'},
 		{"daos_epoch_tests", no_argument, 0, 'e'},
 		{"daos_epoch_recovery_tests", no_argument, 0, 'o'},
 		{"degraded", no_argument, 0, 'd'},
@@ -305,7 +311,7 @@ main(int argc, char **argv)
 		goto exit;
 	}
 
-	while ((opt = getopt_long(argc, argv, "ampcydieo:h",
+	while ((opt = getopt_long(argc, argv, "ampcCdiAeo:h",
 				  long_options, &index)) != -1) {
 		switch (opt) {
 
@@ -327,7 +333,7 @@ main(int argc, char **argv)
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_cont_test(rank, size);
 			break;
-		case 'y':
+		case 'C':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS capability tests..");
 			daos_test_print(rank, "=================");
@@ -338,6 +344,12 @@ main(int argc, char **argv)
 			daos_test_print(rank, "DAOS IO test..");
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_io_test(rank, size);
+			break;
+		case 'A':
+			daos_test_print(rank, "\n\n=================");
+				daos_test_print(rank, "DAOS Array test..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_array_test(rank, size);
 			break;
 		case 'e':
 			daos_test_print(rank, "\n\n=================");

@@ -799,9 +799,10 @@ basic_byte_array(void **state)
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
 	daos_vec_iod_t	 iod;
-	daos_recx_t	 recx;
+	daos_recx_t	 recx[STACK_BUF_LEN];
 	char		 buf_out[STACK_BUF_LEN];
 	char		 buf[STACK_BUF_LEN];
+	int		 i;
 	int		 rc;
 
 	dts_buf_render(buf, STACK_BUF_LEN);
@@ -823,29 +824,36 @@ basic_byte_array(void **state)
 	/** init I/O descriptor */
 	daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.vd_kcsum, NULL, 0);
-	iod.vd_nr	= 1;
-	recx.rx_rsize	= 1;
-	recx.rx_idx	= 0;
-	recx.rx_nr	= sizeof(buf);
-	iod.vd_recxs	= &recx;
+	for (i = 0; i < STACK_BUF_LEN; i++) {
+		recx[i].rx_rsize = 1;
+		recx[i].rx_idx	 = i;
+		recx[i].rx_nr	 = 1;
+	}
+	iod.vd_nr	= STACK_BUF_LEN;
+	iod.vd_recxs	= recx;
 	iod.vd_eprs	= NULL;
 	iod.vd_csums	= NULL;
 
 	/** update record */
+	print_message("writing %d bytes with one recx per byte\n",
+		      STACK_BUF_LEN);
 	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	/** fetch */
+	print_message("reading data back ...\n");
 	memset(buf_out, 0, sizeof(buf_out));
 	daos_iov_set(&sg_iov, buf_out, sizeof(buf_out));
 	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** Verify data consistency */
+	print_message("validating data ...\n");
 	assert_memory_equal(buf, buf_out, sizeof(buf));
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
+	print_message("all good\n");
 }
 
 static void
@@ -907,6 +915,8 @@ fetch_size(void **state)
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
+
+	free(buf);
 }
 
 static void
@@ -1172,7 +1182,7 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO17: fetch size with NULL sgl", fetch_size, async_disable, NULL},
 	{ "IO18: io crt error", io_simple_update_crt_error,
 	  async_disable, NULL},
-	{ "IO18: io crt error", io_simple_update_crt_error,
+	{ "IO19: io crt error", io_simple_update_crt_error,
 	  async_enable, NULL},
 };
 

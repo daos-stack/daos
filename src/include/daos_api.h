@@ -790,8 +790,8 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  *			ignored.
  *		[OUT]	Checksum of each extent is returned via
  *			\a iods[]::vd_csums[]. If the record size of an
- *			extent is unknown (i.e. set to -1 as input), then the
- *			actual record size will be returned in
+ *			extent is unknown (i.e. set to DAOS_REC_ANY as input),
+ *			then the actual record size will be returned in
  *			\a iods[]::vd_recxs[]::rx_rsize.
  *
  * \param sgls	[IN]	Scatter/gather lists (sgl) to store records. Each vector
