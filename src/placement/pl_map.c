@@ -25,6 +25,7 @@
  *
  * src/placement/pl_map.c
  */
+#define DD_SUBSYS	DD_FAC(placement)
 #include "pl_map.h"
 
 extern struct pl_map_ops	ring_map_ops;

@@ -26,6 +26,7 @@
  * This file contains the server API methods and the RPC handlers that are both
  * related to object.
  */
+#define DD_SUBSYS	DD_FAC(object)
 
 #include <uuid/uuid.h>
 

@@ -23,6 +23,7 @@
 /*
  * MGMT RPC Protocol Serialization Functions
  */
+#define DD_SUBSYS	DD_FAC(mgmt)
 
 #include <daos/rpc.h>
 #include "rpc.h"

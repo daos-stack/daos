@@ -25,6 +25,8 @@
  *
  * src/object/cli_obj.c
  */
+#define DD_SUBSYS	DD_FAC(object)
+
 #include <daos_event.h>
 #include <daos_types.h>
 #include <daos/container.h>

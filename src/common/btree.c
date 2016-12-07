@@ -27,6 +27,7 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
+#define DD_SUBSYS	DD_FAC(tree)
 
 #include <daos_errno.h>
 #include <daos/btree.h>

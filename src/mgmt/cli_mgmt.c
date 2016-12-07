@@ -24,6 +24,7 @@
  * DAOS management client library. It exports the mgmt API defined in
  * daos_mgmt.h
  */
+#define DD_SUBSYS	DD_FAC(mgmt)
 
 #include "rpc.h"
 

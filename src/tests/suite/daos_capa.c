@@ -25,7 +25,7 @@
  *
  * tests/suite/daos_capa.c
  */
-
+#define DD_SUBSYS	DD_FAC(tests)
 #include "daos_test.h"
 
 void

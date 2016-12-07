@@ -39,6 +39,7 @@
  * bumping the epoch number. The transaction manager is responsible for
  * flushing and committing the epoch once all tasks have reported completion.
  */
+#define DD_SUBSYS	DD_FAC(tests)
 
 #include <stdlib.h>
 #include <unistd.h>

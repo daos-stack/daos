@@ -24,6 +24,7 @@
  * This file is part of daos, basic testing for the management API
  */
 
+#define DD_SUBSYS	DD_FAC(tests)
 #include "daos_test.h"
 
 #include <stdlib.h>

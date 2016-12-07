@@ -23,6 +23,7 @@
 /**
  * object client: Module Definitions
  */
+#define DD_SUBSYS	DD_FAC(object)
 
 #include <daos_types.h>
 #include <daos/rpc.h>

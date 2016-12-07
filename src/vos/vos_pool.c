@@ -27,6 +27,7 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
+#define DD_SUBSYS	DD_FAC(vos)
 
 #include <daos_srv/vos.h>
 #include <daos_errno.h>

@@ -26,6 +26,7 @@
  * This module is part of libdaos. It implements the container methods of DAOS
  * API as well as daos/container.h.
  */
+#define DD_SUBSYS	DD_FAC(container)
 
 #include <daos_types.h>
 #include <daos/container.h>

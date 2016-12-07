@@ -26,6 +26,7 @@
  * tests/suite/pool.c
  */
 
+#define DD_SUBSYS	DD_FAC(tests)
 #include "daos_test.h"
 
 /** connect to non-existing pool */

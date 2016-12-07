@@ -25,7 +25,7 @@
  *
  * tests/suite/container.c
  */
-
+#define DD_SUBSYS	DD_FAC(tests)
 #include "daos_test.h"
 
 /** create/destroy container */

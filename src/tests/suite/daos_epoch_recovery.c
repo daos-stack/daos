@@ -26,6 +26,7 @@
  * tests/suite/daos_epoch_recovery.c
  */
 
+#define DD_SUBSYS	DD_FAC(tests)
 #include "daos_test.h"
 
 static void

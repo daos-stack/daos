@@ -26,8 +26,8 @@
  * Author: Liang Zhen  <liang.zhen@intel.com>
  */
 
-#ifndef EVENT_INTERNAL_H
-#define EVENT_INTERNAL_H
+#ifndef __DAOS_CLI_INTERNAL_H__
+#define  __DAOS_CLI_INTERNAL_H__
 
 #include <pthread.h>
 #include <daos/common.h>
@@ -168,4 +168,4 @@ daos_client_result_wait(daos_event_t *ev)
 	return 0;
 }
 
-#endif /* __EVENT_INTERNAL_H__ */
+#endif /* __DAOS_CLI_INTERNAL_H__ */

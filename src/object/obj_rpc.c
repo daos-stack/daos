@@ -23,6 +23,7 @@
 /**
  * DSR: RPC Protocol Serialization Functions
  */
+#define DD_SUBSYS	DD_FAC(object)
 
 #include <daos/event.h>
 #include <daos/rpc.h>

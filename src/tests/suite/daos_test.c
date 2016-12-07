@@ -26,6 +26,7 @@
  * tests/suite/daos_test
  */
 
+#define DD_SUBSYS	DD_FAC(tests)
 #include <getopt.h>
 #include "daos_test.h"
 

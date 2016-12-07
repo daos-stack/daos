@@ -26,6 +26,7 @@
  * This module is part of libdaos. It implements the pool methods of DAOS API
  * as well as daos/pool.h.
  */
+#define DD_SUBSYS	DD_FAC(pool)
 
 #include <daos_types.h>
 #include <daos/pool.h>

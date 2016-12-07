@@ -26,6 +26,7 @@
  * This file contains the server API methods and the RPC handlers that are both
  * related container metadata.
  */
+#define DD_SUBSYS	DD_FAC(container)
 
 #include <daos/btree_class.h>
 #include <daos/rpc.h>

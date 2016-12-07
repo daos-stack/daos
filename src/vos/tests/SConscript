@@ -2,7 +2,7 @@
 
 Import('denv')
 
-libraries  = ['vos', 'daos_common', 'daos_tests', 'crt']
+libraries  = ['vos', 'daos_common', 'daos_tests', 'crt_util', 'crt']
 libraries += ['uuid', 'pthread', 'pmemobj', 'cmocka', 'gomp']
 
 denv.Append(CPPPATH = ['#/src/vos/tests/'])

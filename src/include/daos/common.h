@@ -42,8 +42,7 @@
 
 #include <daos_types.h>
 #include <crt_util/common.h>
-
-#define DAOS_ENV_DEBUG	"DAOS_DEBUG"
+#include <daos/debug.h>
 
 /**
  * NB: hide the dark secret that
@@ -52,90 +51,6 @@
 struct daos_uuid {
 	uuid_t	uuid;
 };
-
-/**
- * Debugging flags (32 bits, non-overlapping)
- */
-enum {
-	DF_UNKNOWN	= (1 << 0),
-	DF_VERB_FUNC	= (1 << 1),
-	DF_VERB_ALL	= (1 << 2),
-	DF_CL		= (1 << 5),
-	DF_CL2		= (1 << 6),
-	DF_CL3		= (1 << 7),
-	DF_PL		= (1 << 8),
-	DF_PL2		= (1 << 9),
-	DF_PL3		= (1 << 10),
-	DF_TP		= (1 << 11),
-	DF_VOS1		= (1 << 12),
-	DF_VOS2		= (1 << 13),
-	DF_VOS3		= (1 << 14),
-	DF_SERVER	= (1 << 15),
-	DF_MGMT		= (1 << 16),
-	DF_DSMC		= (1 << 17),
-	DF_DSMS		= (1 << 18),
-	DF_SR		= (1 << 19),
-	DF_SRC		= (1 << 20),
-	DF_SRS		= (1 << 21),
-	DF_TIER		= (1 << 22),
-	DF_TIERC	= (1 << 23),
-	DF_TIERS	= (1 << 24),
-	DF_MISC		= (1 << 30),
-	DF_MEM		= (1 << 31),
-};
-
-unsigned int daos_debug_mask(void);
-void daos_debug_set(unsigned int mask);
-
-#define D_PRINT(fmt, ...)						\
-do {									\
-	fprintf(stdout, fmt, ## __VA_ARGS__);				\
-	fflush(stdout);							\
-} while (0)
-
-#define D_DEBUG(mask, fmt, ...)						\
-do {									\
-	unsigned int __mask = daos_debug_mask();			\
-	if (!((__mask & (mask)) & ~(DF_VERB_FUNC | DF_VERB_ALL)))	\
-		break;							\
-	if (__mask & DF_VERB_ALL) {					\
-		fprintf(stdout, "%s:%d:%d:%s() " fmt, __FILE__,		\
-			getpid(), __LINE__, __func__, ## __VA_ARGS__);  \
-	} else if (__mask & DF_VERB_FUNC) {				\
-		fprintf(stdout, "%s() " fmt,				\
-			__func__, ## __VA_ARGS__);			\
-	} else {							\
-		fprintf(stdout, fmt, ## __VA_ARGS__);			\
-	}								\
-	fflush(stdout);							\
-} while (0)
-
-#define D_ERROR(fmt, ...)						\
-do {									\
-	fprintf(stderr, "%s:%d:%d:%s() " fmt, __FILE__, getpid(),	\
-		__LINE__, __func__, ## __VA_ARGS__);			\
-	fflush(stderr);							\
-} while (0)
-
-#define D_FATAL(error, fmt, ...)					\
-do {									\
-	fprintf(stderr, "%s:%d:%s() " fmt, __FILE__, __LINE__,		\
-		__func__, ## __VA_ARGS__);				\
-	fflush(stderr);							\
-	exit(error);							\
-} while (0)
-
-#define D_ASSERT(e)	assert(e)
-
-#define D_ASSERTF(cond, fmt, ...)					\
-do {									\
-	if (!(cond))							\
-		D_ERROR(fmt, ## __VA_ARGS__);				\
-	assert(cond);							\
-} while (0)
-
-#define D_CASSERT(cond)							\
-	do {switch (1) {case (cond): case 0: break; } } while (0)
 
 #define DF_U64		"%" PRIu64
 #define DF_X64		"%" PRIx64
@@ -256,6 +171,8 @@ void daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs);
 daos_size_t daos_sgl_data_len(daos_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_len(daos_sg_list_t *sgl);
 daos_size_t daos_vec_iod_len(daos_vec_iod_t *viod);
+
+char *daos_str_trimwhite(char *str);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually

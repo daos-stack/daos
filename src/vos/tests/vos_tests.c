@@ -25,6 +25,7 @@
  * src/vos/tests/vos_tests.c
  * Launcher for all tests
  */
+#define DD_SUBSYS	DD_FAC(tests)
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -77,10 +78,16 @@ main(int argc, char **argv)
 		{"help", no_argument, 0, 'h'},
 	};
 
-	rc = vos_init();
+	rc = daos_debug_init(NULL);
 	if (rc) {
 		print_error("Error initializing VOS instance\n");
 		return rc;
+	}
+
+	rc = vos_init();
+	if (rc) {
+		print_error("Error initializing VOS instance\n");
+		goto exit_0;
 	}
 
 	gc = 0;
@@ -101,7 +108,7 @@ main(int argc, char **argv)
 				break;
 			case 'h':
 				print_usage();
-				goto exit;
+				goto exit_1;
 			case 'a':
 				nr_failed = run_all_tests();
 				break;
@@ -111,7 +118,7 @@ main(int argc, char **argv)
 			default:
 				print_error("Unkown option\n");
 				print_usage();
-				goto exit;
+				goto exit_1;
 			}
 		}
 	}
@@ -121,8 +128,10 @@ main(int argc, char **argv)
 	else
 		print_message("\nSUCCESS! NO TEST FAILURES\n");
 
-exit:
+exit_1:
 	vos_fini();
+exit_0:
+	daos_debug_fini();
 	return rc;
 }
 

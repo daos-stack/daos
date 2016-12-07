@@ -25,6 +25,8 @@
  *
  * common/fail_loc.c to inject failure scenario
  */
+#define DD_SUBSYS	DD_FAC(common)
+
 #include <daos/common.h>
 
 uint64_t daos_fail_loc;

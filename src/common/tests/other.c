@@ -25,6 +25,7 @@
  *
  * src/common/tests/other.c
  */
+#define DD_SUBSYS	DD_FAC(tests)
 
 #include <getopt.h>
 #include <daos/common.h>
@@ -99,6 +100,10 @@ main(int argc, char **argv)
 	int	opc;
 	int	rc = 0;
 
+	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		return rc;
+
 	while ((opc = getopt_long(argc, argv, "s:", opts, NULL)) != -1) {
 		int	num;
 
@@ -114,5 +119,7 @@ main(int argc, char **argv)
 			break;
 		}
 	}
+
+	daos_debug_fini();
 	return rc;
 }

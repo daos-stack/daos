@@ -24,11 +24,11 @@
  * dcts_ping
  * Implements the ping function of dcts_internal.h.
  **/
+#define DD_SUBSYS	DD_FAC(tier)
 
 #include <daos_srv/daos_ct_srv.h>
 #include <daos/rpc.h>
 #include "dct_rpc.h"
-
 
 int
 dcts_hdlr_ping(crt_rpc_t *rpc)

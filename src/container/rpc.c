@@ -23,6 +23,7 @@
 /**
  * dc_cont, ds_cont: RPC Protocol Serialization Functions
  */
+#define DD_SUBSYS	DD_FAC(container)
 
 #include <daos/rpc.h>
 #include "rpc.h"

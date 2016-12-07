@@ -20,6 +20,8 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
+#define DD_SUBSYS	DD_FAC(tests)
+
 #include <daos/common.h>
 #include <daos/placement.h>
 #include <daos.h>
@@ -67,6 +69,10 @@ main(int argc, char **argv)
 	int			 rc;
 	struct pool_component	*comp;
 	daos_obj_id_t		 oid = {1, 3, 5};
+
+	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		return rc;
 
 	comp = &comps[0];
 	/* fake the pool map */
@@ -118,5 +124,7 @@ main(int argc, char **argv)
 
 	pool_map_destroy(po_map);
 	pool_buf_free(buf);
+
+	daos_debug_fini();
 	return 0;
 }

@@ -23,6 +23,7 @@
 /*
  * Pool create/destroy methods
  */
+#define DD_SUBSYS	DD_FAC(mgmt)
 
 #include "rpc.h"
 

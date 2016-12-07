@@ -23,6 +23,7 @@
 /**
  * ds_pool: Pool Server Utilities
  */
+#define DD_SUBSYS	DD_FAC(pool)
 
 #include <daos_srv/pool.h>
 

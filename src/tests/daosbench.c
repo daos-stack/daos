@@ -23,6 +23,8 @@
 /*
  * This is an MPI-based DAOS benchmarking tool.
  */
+#define DD_SUBSYS	DD_FAC(tests)
+
 #include <time.h>
 #include <limits.h>
 #include <sys/types.h>

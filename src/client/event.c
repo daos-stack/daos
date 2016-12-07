@@ -29,6 +29,7 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 
+#define DD_SUBSYS	DD_FAC(client)
 #include "client_internal.h"
 #include <daos/rpc.h>
 

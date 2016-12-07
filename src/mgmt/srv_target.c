@@ -23,6 +23,7 @@
 /*
  * Target Methods
  */
+#define DD_SUBSYS	DD_FAC(mgmt)
 
 #include <sys/stat.h>
 #include <fcntl.h>

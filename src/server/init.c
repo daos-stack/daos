@@ -24,6 +24,7 @@
  * This file is part of the DAOS server. It implements the startup/shutdown
  * routines for the daos_server.
  */
+#define DD_SUBSYS	DD_FAC(server)
 
 #include <signal.h>
 #include <abt.h>
@@ -127,12 +128,13 @@ server_init()
 {
 	int	 rc;
 
-	/** enable DF_SERVER */
-	daos_debug_set(DF_SERVER);
+	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		return rc;
 
 	rc = register_dbtree_classes();
 	if (rc != 0)
-		return rc;
+		D_GOTO(exit_debug_init, rc);
 
 	/** initialize server topology data */
 	hwloc_topology_init(&dss_topo);
@@ -141,7 +143,8 @@ server_init()
 	/* initialize the modular interface */
 	rc = dss_module_init();
 	if (rc)
-		return rc;
+		D_GOTO(exit_debug_init, rc);
+
 	D_DEBUG(DF_SERVER, "Module interface successfully initialized\n");
 
 	/* initialize the network layer */
@@ -169,6 +172,8 @@ exit_mod_loaded:
 	crt_finalize();
 exit_mod_init:
 	dss_module_fini(true);
+exit_debug_init:
+	daos_debug_fini();
 	return rc;
 }
 

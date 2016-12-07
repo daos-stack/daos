@@ -27,6 +27,7 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
+#define DD_SUBSYS	DD_FAC(tests)
 
 #include <vts_io.h>
 #include <vos_hhash.h>

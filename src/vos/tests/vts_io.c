@@ -27,6 +27,8 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venaktesan@intel.com>
  */
+#define DD_SUBSYS	DD_FAC(tests)
+
 #include <vts_io.h>
 
 /* key generator */

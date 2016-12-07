@@ -30,6 +30,7 @@
  * kill servers and update pool map. So would not be started
  * with the regression tests.
 */
+#define DD_SUBSYS	DD_FAC(tests)
 #include "daos_iotest.h"
 
 int		g_dkeys	  = 1000;

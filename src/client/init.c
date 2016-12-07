@@ -23,6 +23,7 @@
 /**
  * DAOS Client initialization/shutdown routines
  */
+#define DD_SUBSYS	DD_FAC(client)
 
 #include <daos/common.h>
 #include <daos/event.h>
@@ -51,10 +52,14 @@ daos_init(void)
 	if (module_initialized)
 		D_GOTO(unlock, rc = -DER_ALREADY);
 
+	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		D_GOTO(unlock, rc);
+
 	rc = daos_hhash_create(DAOS_HHASH_BITS, &daos_client_hhash);
 	if (rc != 0) {
 		D_ERROR("failed to create handle hash table: %d\n", rc);
-		D_GOTO(unlock, rc);
+		D_GOTO(out_debug, rc);
 	}
 
 	/** set up event queue */
@@ -104,6 +109,8 @@ out_eq:
 	daos_eq_lib_fini();
 out_hhash:
 	daos_hhash_destroy(daos_client_hhash);
+out_debug:
+	daos_debug_fini();
 unlock:
 	pthread_mutex_unlock(&module_lock);
 	return rc;
@@ -136,6 +143,7 @@ daos_fini(void)
 	daos_hhash_destroy(daos_client_hhash);
 	daos_client_hhash = NULL;
 
+	daos_debug_fini();
 	module_initialized = false;
 unlock:
 	pthread_mutex_unlock(&module_lock);

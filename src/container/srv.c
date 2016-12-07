@@ -26,6 +26,7 @@
  * This is part of daos_server. It exports the container RPC handlers and
  * Container Server API.
  */
+#define DD_SUBSYS	DD_FAC(container)
 
 #include <daos_srv/daos_server.h>
 #include <daos/rpc.h>

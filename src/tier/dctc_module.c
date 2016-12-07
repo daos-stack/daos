@@ -26,12 +26,12 @@
  * dctc is the DCT client module/library. It exports the DCT API defined in
  * daos_api.h.
  */
+#define DD_SUBSYS	DD_FAC(tier)
 
 #include <pthread.h>
 #include <daos/rpc.h>
 #include "dct_rpc.h"
 #include <daos/tier.h>
-
 
 /**
  *   Initialize daos client library.

@@ -24,6 +24,7 @@
  * This file is part of daos. It implements some miscellaneous functions which
  * not belong to other parts.
  */
+#define DD_SUBSYS	DD_FAC(common)
 
 #include <daos/common.h>
 
@@ -110,4 +111,26 @@ daos_vec_iod_len(daos_vec_iod_t *viod)
 		len += viod->vd_recxs[i].rx_rsize * viod->vd_recxs[i].rx_nr;
 	}
 	return len;
+}
+
+/**
+ * Trim white space inplace for a string, it returns NULL if the string
+ * only has white spaces.
+ */
+char *
+daos_str_trimwhite(char *str)
+{
+	char	*end = str + strlen(str);
+
+	while (isspace(*str))
+		str++;
+
+	if (str == end)
+		return NULL;
+
+	while (isspace(end[-1]))
+		end--;
+
+	*end = 0;
+	return str;
 }

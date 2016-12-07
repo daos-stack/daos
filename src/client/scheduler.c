@@ -30,6 +30,8 @@
  * it will walk through the task list of the scheduler and pick up those
  * ready tasks to executed.
  */
+#define DD_SUBSYS	DD_FAC(client)
+
 #include <stdint.h>
 #include <pthread.h>
 #include <daos/common.h>

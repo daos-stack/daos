@@ -23,6 +23,7 @@
 /**
  * server: RPC Utilities
  */
+#define DD_SUBSYS       DD_FAC(server)
 
 #include <daos_srv/daos_server.h>
 

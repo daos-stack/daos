@@ -25,10 +25,10 @@
  *
  * This file implements dbtree classes for different key and value types.
  */
-
-#include <daos/btree_class.h>
+#define DD_SUBSYS	DD_FAC(tree)
 
 #include <string.h>
+#include <daos/btree_class.h>
 
 enum {
 	BTR_NO_TX,		/**< no transaction support */

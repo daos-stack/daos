@@ -34,6 +34,7 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
+#define DD_SUBSYS	DD_FAC(vos)
 
 #include <stdint.h>
 #include <stdbool.h>

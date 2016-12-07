@@ -27,6 +27,8 @@
  *
  * Author: Liang Zhen  <liang.zhen@intel.com>
  */
+#define DD_SUBSYS	DD_FAC(tests)
+
 #include <pthread.h>
 #include <daos/common.h>
 #include <daos_event.h>
@@ -533,10 +535,14 @@ main(int argc, char **argv)
 {
 	int		rc;
 
+	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		return rc;
+
 	rc = daos_eq_lib_init(NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to initailiz DAOS/event library: %d\n", rc);
-		return rc;
+		goto out_debug;
 	}
 
 	rc = daos_eq_create(&my_eqh);
@@ -565,6 +571,7 @@ failed:
 	daos_eq_destroy(my_eqh, 1);
 out_lib:
 	daos_eq_lib_fini();
-
+out_debug:
+	daos_debug_fini();
 	return rc;
 }

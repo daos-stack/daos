@@ -25,7 +25,7 @@
  *
  * tests/suite/daos_obj.c
  */
-
+#define DD_SUBSYS	DD_FAC(tests)
 #include "daos_iotest.h"
 
 void

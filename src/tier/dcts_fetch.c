@@ -24,11 +24,11 @@
  * dcts_fetch
  * Implements cross-tier fetching of objects and sub-objects (or will soon).
  **/
+#define DD_SUBSYS	DD_FAC(tier)
 
 #include <daos_srv/daos_ct_srv.h>
 #include <daos/rpc.h>
 #include "dct_rpc.h"
-
 
 int
 dcts_hdlr_fetch(crt_rpc_t *rpc)

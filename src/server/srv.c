@@ -27,6 +27,7 @@
  * - start/stop execution streams
  * - bind execution streams to core/NUMA node
  */
+#define DD_SUBSYS       DD_FAC(server)
 
 #include <abt.h>
 #include <daos_errno.h>

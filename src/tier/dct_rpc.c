@@ -23,11 +23,11 @@
 /*
  * dct: RPC Protocol Serialization Functions
  */
+#define DD_SUBSYS	DD_FAC(tier)
+
 #include <daos/rpc.h>
 #include <daos/event.h>
 #include "dct_rpc.h"
-
-
 
 struct crt_msg_field *dct_ping_in_fields[] = {
 	&CMF_INT

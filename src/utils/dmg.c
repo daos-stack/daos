@@ -23,6 +23,7 @@
 /**
  * dmg(8): DAOS Management Utility
  */
+#define DD_SUBSYS	DD_FAC(utils)
 
 #include <getopt.h>
 #include <stdio.h>

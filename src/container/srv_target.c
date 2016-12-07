@@ -36,6 +36,7 @@
  *   Thread-local  ds_pool_child  ds_cont
  *                                ds_cont_hdl
  */
+#define DD_SUBSYS	DD_FAC(container)
 
 #include <daos_srv/container.h>
 

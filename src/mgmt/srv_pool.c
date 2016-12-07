@@ -23,6 +23,7 @@
 /*
  * ds_mgmt: Pool Methods
  */
+#define DD_SUBSYS	DD_FAC(mgmt)
 
 #include "srv_internal.h"
 

@@ -2,7 +2,7 @@
 
 Import('denv')
 
-libraries = ['daos_common', 'daos', 'daos_tests', 'crt']
+libraries = ['daos_common', 'daos', 'daos_tests', 'crt_util', 'crt']
 libraries += ['daos_tier', 'uuid', 'mpi']
 libraries += ['cmocka']
 

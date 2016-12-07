@@ -24,9 +24,9 @@
  * This file is part of the DAOS server. It implements thread-local storage
  * (TLS) for DAOS service threads.
  */
+#define DD_SUBSYS       DD_FAC(server)
 
 #include <pthread.h>
-
 #include "srv_internal.h"
 
 /* The array remember all of registered module keys on one node. */

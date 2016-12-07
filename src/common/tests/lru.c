@@ -1,3 +1,27 @@
+/**
+ * (C) Copyright 2016 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+#define DD_SUBSYS	DD_FAC(tests)
+
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -90,6 +114,9 @@ main(int argc, char **argv)
 	struct daos_llink	*link_ret[3] = {NULL};
 	struct daos_lru_cache	*tcache = NULL;
 
+	rc = daos_debug_init(NULL);
+	if (rc != 0)
+		return rc;
 
 	if (argc < 3) {
 		D_ERROR("<exec><size bits(^2)><num_keys>\n");
@@ -100,12 +127,13 @@ main(int argc, char **argv)
 				   atoi(argv[1]), &uint_ref_llink_ops,
 				   &tcache);
 	if (rc)
-		D_FATAL(rc = EINVAL, "Error in creating lru cache\n");
+		D_ASSERTF(0, "Error in creating lru cache\n");
 
 	num_keys = atoi(argv[2]);
 	D_ALLOC(keys, ((num_keys + 2) * sizeof(uint64_t)));
 	if (keys == NULL)
-		D_FATAL(rc = ENOMEM, "Error in allocating keys_array\n");
+		D_ASSERTF(0, "Error in allocating keys_array\n");
+
 	keys[0] = 0; keys[1] = 1;
 
 	/** Just for testing
@@ -146,5 +174,6 @@ exit:
 	if (keys)
 		D_FREE(keys, ((num_keys+2) * sizeof(int)));
 
+	daos_debug_fini();
 	return rc;
 }

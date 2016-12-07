@@ -23,6 +23,7 @@
 /*
  * dctc_ping: Client portion of ping test
  */
+#define DD_SUBSYS	DD_FAC(tier)
 
 #include <daos_types.h>
 #include <daos_tier.h>

@@ -27,6 +27,7 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
+#define DD_SUBSYS	DD_FAC(common)
 
 #include <daos/common.h>
 #include <daos/mem.h>
