@@ -246,8 +246,11 @@ pool_free_ref(struct daos_llink *llink)
 	D_DEBUG(DF_DSMS, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
 	if (pool->sp_group != NULL) {
-		rc = ds_pool_group_destroy(pool->sp_group);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+		rc = ds_pool_group_destroy(pool->sp_uuid, pool->sp_group);
+		if (rc != 0)
+			D_ERROR(DF_UUID": failed to destroy pool group %s: "
+				"%d\n", DP_UUID(pool->sp_uuid),
+				pool->sp_group->cg_grpid, rc);
 	}
 
 	rc = dss_collective(pool_child_delete_one, pool->sp_uuid);

@@ -125,15 +125,18 @@ int
 ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 		     crt_group_t **group)
 {
+	uuid_t			uuid;
 	char			id[DAOS_UUID_STR_SIZE];
-	daos_rank_list_t		ranks;
+	daos_rank_list_t	ranks;
 	ABT_eventual		eventual;
 	crt_group_t	      **g;
 	int			rc;
 
-	D_DEBUG(DF_DSMS, DF_UUID"\n", DP_UUID(pool_uuid));
+	uuid_generate(uuid);
+	uuid_unparse_lower(uuid, id);
 
-	uuid_unparse_lower(pool_uuid, id);
+	D_DEBUG(DF_DSMS, DF_UUID": creating pool group %s\n",
+		DP_UUID(pool_uuid), id);
 
 	rc = map_ranks_init(map, MAP_RANKS_UP, &ranks);
 	if (rc != 0) {
@@ -152,11 +155,13 @@ ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out_ranks, rc = dss_abterr2der(rc));
 
-	/* "!populate_now" is not implemented yet. */
-	rc = crt_group_create(id, &ranks, true /* populate_now */,
-			      group_create_cb, &eventual);
-	if (rc != 0)
-		D_GOTO(out_eventual, rc);
+	/*
+	 * Always wait for the eventual, as group_create_cb() will be called in
+	 * all cases, possibly by another ULT. "!populate_now" is not
+	 * implemented yet.
+	 */
+	crt_group_create(id, &ranks, true /* populate_now */, group_create_cb,
+			 &eventual);
 
 	rc = ABT_eventual_wait(eventual, (void **)&g);
 	if (rc != ABT_SUCCESS)
@@ -185,30 +190,30 @@ group_destroy_cb(void *args, int status)
 }
 
 int
-ds_pool_group_destroy(crt_group_t *group)
+ds_pool_group_destroy(const uuid_t pool_uuid, crt_group_t *group)
 {
 	ABT_eventual	eventual;
 	int	       *status;
 	int		rc;
 
-	D_DEBUG(DF_DSMS, "%s\n", group->cg_grpid);
+	D_DEBUG(DF_DSMS, DF_UUID": destroying pool group %s\n",
+		DP_UUID(pool_uuid), group->cg_grpid);
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
-	rc = crt_group_destroy(group, group_destroy_cb, &eventual);
-	if (rc != 0)
-		D_GOTO(out_eventual, rc);
+	/*
+	 * Always wait for the eventual, as group_destroy_cb() will be called
+	 * in all cases, possibly by another ULT.
+	 */
+	crt_group_destroy(group, group_destroy_cb, &eventual);
 
 	rc = ABT_eventual_wait(eventual, (void **)&status);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
 
-	if (*status != 0)
-		D_GOTO(out_eventual, rc = *status);
-
-	rc = 0;
+	rc = *status;
 out_eventual:
 	ABT_eventual_free(&eventual);
 out:
