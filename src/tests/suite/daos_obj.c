@@ -29,7 +29,8 @@
 #include "daos_iotest.h"
 
 void
-ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
+ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
+	   test_arg_t *arg)
 {
 	int rc;
 	int i;
@@ -84,7 +85,7 @@ ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
 	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
 	/** open the object */
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &req->oh,
+	rc = daos_obj_open(coh, oid, 0, 0, &req->oh,
 			   req->arg->async ? &req->ev : NULL);
 	assert_int_equal(rc, 0);
 
@@ -186,7 +187,7 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
 	}
 }
 
-static void
+void
 insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
        void **val, daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req)
 {
@@ -248,7 +249,7 @@ lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 	assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 }
 
-static void
+void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
        daos_size_t *read_size, void **val, daos_size_t *size,
        daos_epoch_t *epoch, struct ioreq *req)
@@ -284,6 +285,7 @@ lookup_single(const char *dkey, const char *akey, uint64_t idx,
 static void
 io_epoch_overwrite(void **state)
 {
+	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	daos_size_t	 size;
@@ -293,9 +295,9 @@ io_epoch_overwrite(void **state)
 	daos_epoch_t	 e = 0;
 
 	/** choose random object */
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, ((test_arg_t *)*state)->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
 
-	ioreq_init(&req, oid, (test_arg_t *)*state);
+	ioreq_init(&req, arg->coh, oid, arg);
 	size = strlen(ubuf);
 
 	for (i = 0; i < size; i++)
@@ -332,7 +334,7 @@ io_var_idx_offset(void **state)
 	daos_off_t	 offset;
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
-	ioreq_init(&req, oid, arg);
+	ioreq_init(&req, arg->coh, oid, arg);
 
 	for (offset = UINT64_MAX; offset > 0; offset >>= 8) {
 		char buf[10];
@@ -372,7 +374,7 @@ io_var_akey_size(void **state)
 	skip();
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
-	ioreq_init(&req, oid, arg);
+	ioreq_init(&req, arg->coh, oid, arg);
 
 	key = malloc(max_size + 1);
 	assert_non_null(key);
@@ -415,7 +417,7 @@ io_var_dkey_size(void **state)
 	char		*key;
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
-	ioreq_init(&req, oid, arg);
+	ioreq_init(&req, arg->coh, oid, arg);
 
 	key = malloc(max_size + 1);
 	assert_non_null(key);
@@ -462,7 +464,7 @@ io_var_rec_size(void **state)
 	/** random epoch as well */
 	epoch = rand();
 
-	ioreq_init(&req, oid, arg);
+	ioreq_init(&req, arg->coh, oid, arg);
 
 	fetch_buf = malloc(max_size);
 	assert_non_null(fetch_buf);
@@ -508,7 +510,7 @@ io_simple_internal(void **state, daos_obj_id_t oid)
 	const char	 rec[]  = "test_update record";
 	char		*buf;
 
-	ioreq_init(&req, oid, arg);
+	ioreq_init(&req, arg->coh, oid, arg);
 
 	/** Insert */
 	print_message("Insert(e=0)/lookup(e=0)/verify simple kv record\n");
@@ -596,6 +598,7 @@ enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 static void
 enumerate_simple(void **state)
 {
+	test_arg_t	*arg = *state;
 	char		*buf;
 	char		*ptr;
 	char		 key[ENUM_KEY_BUF];
@@ -607,8 +610,8 @@ enumerate_simple(void **state)
 	int		 key_nr;
 	int		 i;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, ((test_arg_t *)*state)->myrank);
-	ioreq_init(&req, oid, (test_arg_t *)*state);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, arg);
 
 	/** Insert record*/
 	print_message("Insert %d kv record in object "DF_OID"\n", ENUM_KEY_NR,
@@ -678,6 +681,7 @@ enumerate_simple(void **state)
 static void
 punch_simple(void **state)
 {
+	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
 	uint32_t	number = 2;
@@ -686,8 +690,8 @@ punch_simple(void **state)
 	char		*buf;
 	int		total_keys = 0;
 
-	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, ((test_arg_t *)*state)->myrank);
-	ioreq_init(&req, oid, (test_arg_t *)*state);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, arg);
 
 	/** Insert record*/
 	print_message("Insert a few kv record\n");
@@ -755,7 +759,7 @@ io_complex(void **state)
 	int		i;
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
-	ioreq_init(&req, oid, arg);
+	ioreq_init(&req, arg->coh, oid, arg);
 
 	print_message("Insert(e=0)/lookup(e=0)/verify complex kv record\n");
 	for (i = 0; i < 5; i++) {
@@ -1041,7 +1045,7 @@ epoch_discard(void **state)
 	MPI_Bcast(&epoch, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
-	ioreq_init(&req, oid, arg);
+	ioreq_init(&req, arg->coh, oid, arg);
 
 	/** Prepare buffers for a fixed set of d-keys and a-keys. */
 	for (i = 0; i < nakeys; i++) {
@@ -1152,7 +1156,7 @@ io_nospace(void **state)
 	large_buf = malloc(buf_size);
 	assert_non_null(large_buf);
 	arg->fail_loc = DAOS_OBJ_UPDATE_NOSPACE;
-	ioreq_init(&req, oid, arg);
+	ioreq_init(&req, arg->coh, oid, arg);
 	for (i = 0; i < 5; i++) {
 		sprintf(key, "dkey%d", i);
 		/** Insert */

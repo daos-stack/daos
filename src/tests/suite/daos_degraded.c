@@ -117,7 +117,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, rank);
 
-	ioreq_init(&req, oid, arg);
+	ioreq_init(&req, arg->coh, oid, arg);
 	if (!rank) {
 		print_message("Using pool: %s\n", DP_UUID(arg->pool_uuid));
 		print_message("Inserting %d keys ...\n", g_dkeys * size);

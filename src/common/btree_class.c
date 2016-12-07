@@ -36,7 +36,6 @@ enum {
 	BTR_SUPPORT_TX,		/**< can support transaction */
 };
 
-
 static int
 btr_check_tx(struct btr_attr *attr)
 {

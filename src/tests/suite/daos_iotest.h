@@ -53,7 +53,8 @@ struct ioreq {
 #define SEGMENT_SIZE (10 * 1048576) /* 10MB */
 
 void
-ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg);
+ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
+	   test_arg_t *arg);
 
 void
 ioreq_fini(struct ioreq *req);
@@ -72,6 +73,15 @@ void
 enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	       daos_hash_out_t *anchor, void *buf, daos_size_t len,
 	       struct ioreq *req);
+
+void
+insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
+       void **val, daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req);
+
+void
+lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
+       daos_size_t *read_size, void **val, daos_size_t *size,
+       daos_epoch_t *epoch, struct ioreq *req);
 
 int
 obj_setup(void **state);
