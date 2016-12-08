@@ -243,6 +243,7 @@ static int
 cont_create(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 {
 	struct cont_create_in  *in = crt_req_get(rpc);
+	struct btr_root		tmp;
 	volatile daos_handle_t	ch = DAOS_HDL_INVAL;
 	volatile int		rc;
 
@@ -255,6 +256,17 @@ cont_create(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 	if (!(pool_hdl->sph_capas & DAOS_PC_RW) &&
 	    !(pool_hdl->sph_capas & DAOS_PC_EX))
 		D_GOTO(out, rc = -DER_NO_PERM);
+
+	/* Check if a container with this UUID already exists. */
+	rc = dbtree_uv_lookup(svc->cs_containers, in->cci_op.ci_uuid, &tmp,
+			      sizeof(tmp));
+	if (rc != -DER_NONEXIST) {
+		if (rc == 0)
+			D_DEBUG(DF_DSMS, DF_CONT": container already exists\n",
+				DP_CONT(pool_hdl->sph_pool->sp_uuid,
+					in->cci_op.ci_uuid));
+		D_GOTO(out, rc);
+	}
 
 	/*
 	 * Target-side creations (i.e., vos_co_create() calls) are deferred to
