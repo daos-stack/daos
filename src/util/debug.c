@@ -54,7 +54,7 @@ int crt_logfac;
 int crt_mem_logfac;
 int crt_misc_logfac;
 
-#define CLOG_MAX_FAC_HINT	(128)
+#define CLOG_MAX_FAC_HINT	(16)
 
 /**
  * Setup the clog facility names and mask.
@@ -67,13 +67,8 @@ setup_clog_facnamemask(char *masks)
 	int rc;
 
 	/* first add the clog/mem/misc facility */
-	rc = crt_add_log_facility("CLOG", "CLOG");
-	if (rc < 0) {
-		C_PRINT_ERR("crt_add_log_facility CLOG failed.\n");
-		C_GOTO(out, rc = -CER_UNINIT);
-	}
 	crt_mem_logfac = crt_add_log_facility("MEM", "memory");
-	if (rc < 0) {
+	if (crt_mem_logfac < 0) {
 		C_PRINT_ERR("crt_add_log_facility failed, crt_mem_logfac %d.\n",
 			    crt_mem_logfac);
 		C_GOTO(out, rc = -CER_UNINIT);
@@ -101,43 +96,49 @@ out:
 }
 
 int
-crt_log_init(void)
+crt_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
+		 uint64_t def_mask, uint64_t err_mask)
 {
-	char	*log_file;
 	char	*log_mask;
 	int	 rc = 0;
 
 	pthread_mutex_lock(&crt_log_lock);
-
-	log_file = getenv(CRT_LOG_FILE_ENV);
-	log_mask = getenv(CRT_LOG_MASK_ENV);
-
-	if (log_file == NULL || strlen(log_file) == 0)
-		log_file = "/dev/stdout";
-
 	crt_log_refcount++;
-
 	if (crt_log_refcount > 1) /* Already initialized */
 		C_GOTO(out, rc);
 
-	if (crt_log_open((char *)"CaRT" /* tag */, CLOG_MAX_FAC_HINT,
-		      CLOG_WARN /* default_mask */, CLOG_EMERG/* stderr_mask */,
-		      log_file, CLOG_LOGPID /* flags */) == 0) {
-		rc = setup_clog_facnamemask(log_mask);
-		if (rc != 0)
-			goto out;
-	} else {
-		fprintf(stderr, "crt_log_open failed.\n");
+	rc = crt_log_open(log_tag, CLOG_MAX_FAC_HINT, def_mask, err_mask,
+			  log_file, flavor);
+	if (rc != 0) {
+		C_PRINT_ERR("crt_log_open failed: %d\n", rc);
 		C_GOTO(out, rc = -CER_UNINIT);
 	}
 
+	log_mask = getenv(CRT_LOG_MASK_ENV);
+	rc = setup_clog_facnamemask(log_mask);
+	if (rc != 0)
+		C_GOTO(out, rc = -CER_UNINIT);
 out:
 	if (rc != 0) {
-		crt_log_refcount--;
 		C_PRINT_ERR("crt_debug_init failed, rc: %d.\n", rc);
+		crt_log_refcount--;
 	}
 	pthread_mutex_unlock(&crt_log_lock);
 	return rc;
+}
+
+int
+crt_log_init(void)
+{
+	char	*log_file;
+
+	log_file = getenv(CRT_LOG_FILE_ENV);
+	if (log_file == NULL || strlen(log_file) == 0)
+		log_file = "/dev/stdout";
+
+	return crt_log_init_adv("CaRT", log_file,
+				CLOG_FLV_LOGPID | CLOG_FLV_FAC | CLOG_FLV_TAG,
+				CLOG_WARN, CLOG_EMERG);
 }
 
 void crt_log_fini(void)

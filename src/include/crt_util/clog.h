@@ -68,24 +68,32 @@
 #ifndef _CLOG_H_
 #define _CLOG_H_
 
-/* clog flag values */
-#define CLOG_STDERR     0x80000000	/* always log to stderr */
-#define CLOG_LOGPID     0x40000000	/* include pid in log tag */
-#define CLOG_FQDN       0x20000000	/* log fully quallified domain name */
-#define CLOG_STDOUT     0x02000000	/* always log to stdout */
+/* clog open flavor */
+#define CLOG_FLV_LOGPID	(1 << 0)	/* include pid in log tag */
+#define CLOG_FLV_FQDN	(1 << 1)	/* log fully quallified domain name */
+#define CLOG_FLV_FAC	(1 << 2)	/* log facility name */
+#define CLOG_FLV_YEAR	(1 << 3)	/* log year */
+#define CLOG_FLV_TAG	(1 << 4)	/* log tag */
+#define CLOG_FLV_STDOUT	(1 << 5)	/* always log to stdout */
+#define CLOG_FLV_STDERR	(1 << 6)	/* always log to stderr */
 
-#define CLOG_PRIMASK    0x007f0000	/* priority mask */
-#define CLOG_EMERG      0x00700000	/* emergency */
-#define CLOG_ALERT      0x00600000	/* alert */
-#define CLOG_CRIT       0x00500000	/* critical */
-#define CLOG_ERR        0x00400000	/* error */
-#define CLOG_WARN       0x00300000	/* warning */
-#define CLOG_NOTE       0x00200000	/* notice */
-#define CLOG_INFO       0x00100000	/* info */
-#define CLOG_PRISHIFT   20		/* to get non-debug level */
-#define CLOG_DPRISHIFT  16		/* to get debug level */
-#define CLOG_DBG        0x000f0000	/* all debug streams */
-#define CLOG_FACMASK    0x0000ffff	/* facility mask */
+/* per-message log flag values */
+#define CLOG_STDERR     0x20000000	/* always log to stderr */
+#define CLOG_STDOUT     0x10000000	/* always log to stdout */
+
+#define CLOG_PRIMASK    0x07ffff00	/* priority mask */
+#define CLOG_EMERG      0x07000000	/* emergency */
+#define CLOG_ALERT      0x06000000	/* alert */
+#define CLOG_CRIT       0x05000000	/* critical */
+#define CLOG_ERR        0x04000000	/* error */
+#define CLOG_WARN       0x03000000	/* warning */
+#define CLOG_NOTE       0x02000000	/* notice */
+#define CLOG_INFO       0x01000000	/* info */
+
+#define CLOG_PRISHIFT   24		/* to get non-debug level */
+#define CLOG_DPRISHIFT  8		/* to get debug level */
+#define CLOG_DBG        0x00ffff00	/* all debug streams */
+#define CLOG_FACMASK    0x000000ff	/* facility mask */
 
 /* clog_fac: facility name and mask info */
 struct clog_fac {
@@ -147,6 +155,13 @@ int crt_log_allocfacility(const char *aname, const char *lname);
 int crt_log_init(void);
 
 /**
+ * Advanced version of clog initialing function. User can specify log tag,
+ * output log file, the default log mask and the mask for output errors.
+ */
+int crt_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
+		     uint64_t def_mask, uint64_t err_mask);
+
+/**
  * Remove a reference on the default cart log.  Calls crt_log_close
  * if the reference count is 0.
  */
@@ -174,6 +189,14 @@ void crt_log_close(void);
  */
 int crt_log_open(char *tag, int maxfac_hint, int default_mask,
 	      int stderr_mask, char *logfile, int flags);
+
+/**
+ * crt_log_setlogmask: set the logmask for a given facility.
+ *
+ * \param facility [IN]		Facility number
+ * \param mask [IN]		The new mask for the facility
+ */
+int crt_log_setlogmask(int facility, int mask);
 
 /**
  * crt_log_setmasks: set clog masks for a set of facilities to a given level.

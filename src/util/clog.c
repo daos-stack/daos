@@ -163,11 +163,7 @@ static const char *clog_pristr(int pri)
 
 	pri = pri & CLOG_PRIMASK;
 	s = (pri >> CLOG_PRISHIFT) & 7;
-	if (s)
-		return norm[s];
-
-	s = (pri >> CLOG_DPRISHIFT) & 15;
-	return dbg[s];
+	return norm[s];
 }
 
 /**
@@ -319,13 +315,13 @@ static void clog_cleanout(void)
  */
 static void vclog(int flags, const char *fmt, va_list ap)
 {
-#define CLOG_TBSIZ    4096	/* bigger than any line should be */
+#define CLOG_TBSIZ    1024	/* bigger than any line should be */
 	int fac, lvl, msk;
 	char b[CLOG_TBSIZ], *b_nopt1hdr;
 	char facstore[16], *facstr;
 	struct timeval tv;
 	struct tm *tm;
-	unsigned int hlen_pt1, hlen, mlen, tlen, thisflag;
+	unsigned int hlen_pt1, hlen, mlen, tlen;
 	/*
 	 * since we ignore any potential errors in CLOG let's always re-set
 	 * errno to its orginal value
@@ -384,20 +380,32 @@ static void vclog(int flags, const char *fmt, va_list ap)
 	}
 	(void) gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
-	thisflag = (mst.oflags | flags);
+
 	/*
 	 * ok, first, put the header into b[]
 	 */
-	hlen = snprintf(b, sizeof(b),
-			"%04d/%02d/%02d-%02d:%02d:%02d.%02ld %s %s ",
-			tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
-			tm->tm_hour, tm->tm_min, tm->tm_sec,
-			(long int) tv.tv_usec / 10000, mst.uts.nodename,
-			crt_log_xst.tag);
+	hlen = 0;
+	if (mst.oflags & CLOG_FLV_YEAR)
+		hlen = snprintf(b, sizeof(b), "%04d/", tm->tm_year + 1900);
+
+	hlen += snprintf(b + hlen, sizeof(b) - hlen,
+			 "%02d/%02d-%02d:%02d:%02d.%02ld %s ",
+			 tm->tm_mon + 1, tm->tm_mday,
+			 tm->tm_hour, tm->tm_min, tm->tm_sec,
+			 (long int) tv.tv_usec / 10000, mst.uts.nodename);
+
+	if (mst.oflags & CLOG_FLV_TAG)
+		hlen += snprintf(b + hlen, sizeof(b) - hlen,
+				 "%s ", crt_log_xst.tag);
+
 	hlen_pt1 = hlen;	/* save part 1 length */
 	if (hlen < sizeof(b)) {
-		hlen += snprintf(b + hlen, sizeof(b) - hlen, "%-4s %s ",
-				 facstr, clog_pristr(lvl));
+		if (mst.oflags & CLOG_FLV_FAC)
+			hlen += snprintf(b + hlen, sizeof(b) - hlen,
+					 "%-4s ", facstr);
+
+		hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
+				 clog_pristr(lvl));
 	}
 	/*
 	 * we expect there is still room (i.e. at least one byte) for a
@@ -446,18 +454,25 @@ static void vclog(int flags, const char *fmt, va_list ap)
 	 */
 	if (mst.logfd >= 0)
 		(void) write(mst.logfd, b, tlen);
+
+	if (mst.oflags & CLOG_FLV_STDOUT)
+		flags |= CLOG_STDOUT;
+
+	if (mst.oflags & CLOG_FLV_STDERR)
+		flags |= CLOG_STDERR;
+
 	clog_unlock();		/* drop lock here */
 	/*
 	 * log it to stderr and/or stdout.  skip part one of the header
 	 * if the output channel is a tty
 	 */
-	if (thisflag & CLOG_STDERR) {
+	if (flags & CLOG_STDERR) {
 		if (mst.stderr_isatty)
 			fprintf(stderr, "%s", b_nopt1hdr);
 		else
 			fprintf(stderr, "%s", b);
 	}
-	if (thisflag & CLOG_STDOUT) {
+	if (flags & CLOG_STDOUT) {
 		if (mst.stderr_isatty)
 			printf("%s", b_nopt1hdr);
 		else
@@ -552,7 +567,7 @@ crt_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	/* it is now safe to use clog_cleanout() for error handling */
 
 	clog_lock();		/* now locked */
-	if (flags & CLOG_LOGPID)
+	if (flags & CLOG_FLV_LOGPID)
 		snprintf(newtag, tagblen, "%s[%d]", tag, getpid());
 	else
 		snprintf(newtag, tagblen, "%s", tag);
@@ -581,7 +596,7 @@ crt_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	(void) uname(&mst.uts);
 	crt_log_xst.nodename = mst.uts.nodename;	/* expose this */
 	/* chop off the domainname */
-	if ((flags & CLOG_FQDN) == 0) {
+	if ((flags & CLOG_FLV_FQDN) == 0) {
 		for (cp = mst.uts.nodename; *cp && *cp != '.'; cp++)
 			;
 		*cp = 0;

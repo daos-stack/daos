@@ -88,16 +88,19 @@ extern int crt_logfac;
 extern int crt_mem_logfac;
 extern int crt_misc_logfac;
 
+#define CRT_CRIT	(crt_logfac | CLOG_CRIT)
 #define CRT_ERR		(crt_logfac | CLOG_ERR)
 #define CRT_WARN	(crt_logfac | CLOG_WARN)
 #define CRT_INFO	(crt_logfac | CLOG_INFO)
 #define CRT_DBG		(crt_logfac | CLOG_DBG)
 
+#define MEM_CRIT	(crt_mem_logfac | CLOG_CRIT)
 #define MEM_ERR		(crt_mem_logfac | CLOG_ERR)
 #define MEM_WARN	(crt_mem_logfac | CLOG_WARN)
 #define MEM_INFO	(crt_mem_logfac | CLOG_INFO)
 #define MEM_DBG		(crt_mem_logfac | CLOG_DBG)
 
+#define MISC_CRIT	(crt_misc_logfac | CLOG_CRIT)
 #define MISC_ERR	(crt_misc_logfac | CLOG_ERR)
 #define MISC_WARN	(crt_misc_logfac | CLOG_WARN)
 #define MISC_INFO	(crt_misc_logfac | CLOG_INFO)
@@ -150,12 +153,16 @@ crt_add_log_facility(char *aname, char *lname)
 	crt_log(CRT_ERR, "%s:%d %s " fmt, __FILE__, __LINE__, __func__,	\
 		##__VA_ARGS__)
 
+#define C_FATAL(fmt, ...)						\
+	crt_log(CRT_CRIT, "%s:%d %s " fmt, __FILE__, __LINE__, __func__,\
+		##__VA_ARGS__)
+
 #define C_ASSERT(e)	assert(e)
 
 #define C_ASSERTF(cond, fmt, ...)					\
 do {									\
 	if (!(cond))							\
-		C_ERROR(fmt, ## __VA_ARGS__);				\
+		C_FATAL(fmt, ## __VA_ARGS__);				\
 	assert(cond);							\
 } while (0)
 
