@@ -168,6 +168,23 @@ daos_event_t *
 daos_event_next(daos_event_t *parent, daos_event_t *child);
 
 /**
+ * Test completion of an event. If \a ev is a child, the operation will fail.
+ * If the event was initialized in an event queue, and the test completes the
+ * event, the event will be pulled out of the event queue.
+ *
+ * \param ev [IN]	Event (operation) to test.
+ * \param timeout [IN]	How long is caller going to wait (micro-second)
+ *			if \a timeout > 0,
+ *			it can also be DAOS_EQ_NOWAIT, DAOS_EQ_WAIT
+ * \param flag [OUT]	returned state of the event. true if the event is
+ *			finished (completed or aborted), false if in-flight.
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag);
+
+/**
  * Try to abort operations associated with this event.
  * If \a ev is a parent event, this call will abort all child operations.
  *

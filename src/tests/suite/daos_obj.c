@@ -33,6 +33,7 @@ ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
 {
 	int rc;
 	int i;
+	bool ev_flag;
 
 	memset(req, 0, sizeof(*req));
 
@@ -83,8 +84,16 @@ ioreq_init(struct ioreq *req, daos_obj_id_t oid, test_arg_t *arg)
 	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
 	/** open the object */
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &req->oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, 0, 0, &req->oh,
+			   req->arg->async ? &req->ev : NULL);
 	assert_int_equal(rc, 0);
+
+	if (arg->async) {
+		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
+		assert_int_equal(rc, 0);
+		assert_int_equal(ev_flag, true);
+		assert_int_equal(req->ev.ev_error, 0);
+	}
 }
 
 void
@@ -108,7 +117,7 @@ static void
 insert_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 		daos_vec_iod_t *vds, daos_epoch_t epoch, struct ioreq *req)
 {
-	daos_event_t	*evp;
+	bool ev_flag;
 	int rc;
 
 	/** execute update operation */
@@ -119,11 +128,10 @@ insert_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 		return;
 	}
 
-	/** wait for update completion */
-	rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-	assert_int_equal(rc, 1);
-	assert_ptr_equal(evp, &req->ev);
-	assert_int_equal(evp->ev_error, req->arg->expect_result);
+	rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
+	assert_int_equal(rc, 0);
+	assert_int_equal(ev_flag, true);
+	assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 }
 
 static void
@@ -222,7 +230,7 @@ static void
 lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 		daos_vec_iod_t *vds, daos_epoch_t epoch, struct ioreq *req)
 {
-	daos_event_t	*evp;
+	bool ev_flag;
 	int rc;
 
 	/** execute fetch operation */
@@ -234,10 +242,10 @@ lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 	}
 
 	/** wait for fetch completion */
-	rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-	assert_int_equal(rc, 1);
-	assert_ptr_equal(evp, &req->ev);
-	assert_int_equal(evp->ev_error, req->arg->expect_result);
+	rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
+	assert_int_equal(rc, 0);
+	assert_int_equal(ev_flag, true);
+	assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 }
 
 static void
@@ -544,13 +552,12 @@ enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	assert_int_equal(rc, 0);
 
 	if (req->arg->async) {
-		daos_event_t	*evp;
+		bool ev_flag;
 
-		/** wait for fetch completion */
-		rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &req->ev);
-		assert_int_equal(evp->ev_error, 0);
+		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
+		assert_int_equal(rc, 0);
+		assert_int_equal(ev_flag, true);
+		assert_int_equal(req->ev.ev_error, 0);
 	}
 }
 
@@ -570,13 +577,12 @@ enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 	assert_int_equal(rc, 0);
 
 	if (req->arg->async) {
-		daos_event_t    *evp;
+		bool ev_flag;
 
-		/** wait for fetch completion */
-		rc = daos_eq_poll(req->arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
-		assert_int_equal(rc, 1);
-		assert_ptr_equal(evp, &req->ev);
-		assert_int_equal(evp->ev_error, 0);
+		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
+		assert_int_equal(rc, 0);
+		assert_int_equal(ev_flag, true);
+		assert_int_equal(req->ev.ev_error, 0);
 	}
 }
 

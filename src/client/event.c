@@ -471,28 +471,111 @@ daos_event_complete(struct daos_event *ev, int rc)
 		daos_eq_putref(eqx);
 }
 
+struct ev_progress_arg {
+	struct daos_eq_private		*eqx;
+	struct daos_event_private	*evx;
+};
+
 static int
 ev_progress_cb(void *arg)
 {
-	struct daos_event *ev = arg;
-	struct daos_event_private *evx = daos_ev2evx(ev);
+	struct ev_progress_arg		*epa = (struct ev_progress_arg  *)arg;
+	struct daos_event_private       *evx = epa->evx;
+	struct daos_eq_private		*eqx = epa->eqx;
 
-	if (evx->evx_status == DAOS_EVS_COMPLETED ||
-	    evx->evx_status == DAOS_EVS_ABORT) {
+	/** If another thread progressed this, get out now. */
+	if (evx->evx_status == DAOS_EVS_INIT)
+		return 1;
+
+	/** Event is still in-flight */
+	if (evx->evx_status != DAOS_EVS_COMPLETED &&
+	    evx->evx_status != DAOS_EVS_ABORT)
+		return 0;
+
+	/*
+	 * Change status of event to INIT only if event is not in EQ and get
+	 * out.
+	 */
+	if (daos_handle_is_inval(evx->evx_eqh)) {
 		evx->evx_status = DAOS_EVS_INIT;
 		return 1;
 	}
 
-	return 0;
+	/** Grab the lock so we don't race with eq_progress_cb. */
+	pthread_mutex_lock(&eqx->eqx_lock);
+
+	/*
+	 * if the EQ was finalized from under us, just update the event status
+	 * and return.
+	 */
+	if (eqx->eqx_finalizing) {
+		evx->evx_status = DAOS_EVS_INIT;
+		D_ASSERT(daos_list_empty(&evx->evx_link));
+		pthread_mutex_unlock(&epa->eqx->eqx_lock);
+		return 1;
+	}
+
+	/*
+	 * Check again if the event is still in completed/aborted state, then
+	 * remove it from the event queue.
+	 */
+	if (evx->evx_status == DAOS_EVS_COMPLETED ||
+	    evx->evx_status == DAOS_EVS_ABORT) {
+		struct daos_eq *eq = daos_eqx2eq(eqx);
+
+		evx->evx_status = DAOS_EVS_INIT;
+		D_ASSERT(eq->eq_n_comp > 0);
+		eq->eq_n_comp--;
+		daos_list_del_init(&evx->evx_link);
+	}
+
+	D_ASSERT(evx->evx_status == DAOS_EVS_INIT);
+	pthread_mutex_unlock(&eqx->eqx_lock);
+
+	return 1;
 }
 
 int
-daos_event_test(struct daos_event *ev, int64_t timeout)
+daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 {
-	struct daos_event_private *evx = daos_ev2evx(ev);
+	struct ev_progress_arg		epa;
+	struct daos_event_private	*evx = daos_ev2evx(ev);
+	int				rc;
+
+	/** Can't call test on a Child event */
+	if (evx->evx_parent != NULL)
+		return -DER_NO_PERM;
+
+	epa.evx = evx;
+	epa.eqx = NULL;
+
+	if (!daos_handle_is_inval(evx->evx_eqh)) {
+		epa.eqx = daos_eq_lookup(evx->evx_eqh);
+		if (epa.eqx == NULL) {
+			D_ERROR("Can't find eq from handle %"PRIu64"\n",
+				evx->evx_eqh.cookie);
+			return -DER_NONEXIST;
+		}
+	}
 
 	/** pass the timeout to crt_progress() with a conditional callback */
-	return crt_progress(evx->evx_ctx, timeout, ev_progress_cb, ev);
+	rc = crt_progress(evx->evx_ctx, timeout, ev_progress_cb, &epa);
+
+	/** drop ref grabbed in daos_eq_lookup() */
+	if (epa.eqx)
+		daos_eq_putref(epa.eqx);
+
+	if (rc != 0 && rc != -DER_TIMEDOUT) {
+		D_ERROR("crt progress failed with %d\n", rc);
+		return rc;
+	}
+
+	if (evx->evx_status == DAOS_EVS_INIT)
+		*flag = true;
+	else
+		*flag = false;
+
+	return 0;
 }
 
 int
@@ -1052,12 +1135,17 @@ daos_event_is_priv(daos_event_t *ev)
 int
 daos_event_priv_wait()
 {
+	struct ev_progress_arg	epa;
+	struct daos_event_private *evx = daos_ev2evx(&ev_thpriv);
 	int rc;
 
 	D_ASSERT(ev_thpriv_is_init);
 
-	/* Wait the event to complete */
-	rc = daos_event_test(&ev_thpriv, DAOS_EQ_WAIT);
+	epa.evx = evx;
+	epa.eqx = NULL;
+
+	/* Wait on the event to complete */
+	rc = crt_progress(evx->evx_ctx, DAOS_EQ_WAIT, ev_progress_cb, &epa);
 	if (rc == 0)
 		rc = ev_thpriv.ev_error;
 

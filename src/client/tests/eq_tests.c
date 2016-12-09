@@ -97,7 +97,7 @@ eq_test_1()
 
 	D_ERROR("Destroy non-empty EQ\n");
 	rc = daos_eq_destroy(eqh, 0);
-	if (rc != -EBUSY) {
+	if (rc != -DER_BUSY) {
 		D_ERROR("Failed to destroy non-empty EQ: %d\n", rc);
 		goto out;
 	}
@@ -150,11 +150,24 @@ eq_test_2()
 		goto out;
 	}
 
-	D_ERROR("Query EQ with inflight events\n");
+	D_ERROR("Test events / Query EQ with inflight events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
+		bool ev_flag;
+
 		rc = daos_event_launch(events[i]);
 		if (rc != 0) {
 			D_ERROR("Failed to launch event %d: %d\n", i, rc);
+			goto out;
+		}
+
+		rc = daos_event_test(events[i], DAOS_EQ_NOWAIT, &ev_flag);
+		if (rc != 0) {
+			D_ERROR("Test on child event returned %d\n", rc);
+			goto out;
+		}
+		if (ev_flag) {
+			D_ERROR("Event %d should be inflight\n", i);
+			rc = -1;
 			goto out;
 		}
 
@@ -167,9 +180,9 @@ eq_test_2()
 		}
 	}
 
-	D_ERROR("Poll empty EQ with timeout\n");
+	D_ERROR("Poll EQ with timeout\n");
 	rc = daos_eq_poll(my_eqh, 1, 10, EQT_EV_COUNT, eps);
-	if (rc != -ETIMEDOUT) {
+	if (rc != 0) {
 		D_ERROR("Expect to poll zero event: %d\n", rc);
 		goto out;
 	}
@@ -257,6 +270,13 @@ eq_test_3()
 	rc = daos_event_launch(&event);
 	if (rc != 0) {
 		D_ERROR("Launch parent event returned %d\n", rc);
+		goto out_free;
+	}
+
+	D_ERROR("Test on child event - should fail\n");
+	rc = daos_event_test(child_events[0], DAOS_EQ_WAIT, NULL);
+	if (rc != -DER_NO_PERM) {
+		D_ERROR("Test on child event returned %d\n", rc);
 		goto out_free;
 	}
 
@@ -530,6 +550,115 @@ out:
 	return epc_data.epc_error;
 }
 
+static int
+eq_test_5()
+{
+	struct daos_event	*eps[EQT_EV_COUNT + 1] = { 0 };
+	struct daos_event	*events[EQT_EV_COUNT + 1] = { 0 };
+	bool			ev_flag;
+	int			rc;
+	int			i;
+
+	DAOS_TEST_ENTRY("5", "Event Test & Poll");
+
+	for (i = 0; i < EQT_EV_COUNT; i++) {
+		events[i] = malloc(sizeof(*events[i]));
+		if (events[i] == NULL) {
+			rc = -ENOMEM;
+			goto out;
+		}
+		rc = daos_event_init(events[i], my_eqh, NULL);
+		if (rc != 0)
+			goto out;
+	}
+
+	D_ERROR("Launch and test inflight events\n");
+	for (i = 0; i < EQT_EV_COUNT; i++) {
+		rc = daos_event_launch(events[i]);
+		if (rc != 0) {
+			D_ERROR("Failed to launch event %d: %d\n", i, rc);
+			goto out;
+		}
+
+		/** Complete half the events */
+		if (i > EQT_EV_COUNT/2) {
+			daos_event_complete(events[i], 0);
+
+			/** Test completion which polls them out of the EQ */
+			rc = daos_event_test(events[i], DAOS_EQ_NOWAIT,
+					     &ev_flag);
+			if (rc != 0) {
+				D_ERROR("Test on child event returns %d\n", rc);
+				goto out;
+			}
+			if (!ev_flag) {
+				D_ERROR("Event %d should be completed\n", i);
+				rc = -1;
+				goto out;
+			}
+		} else {
+			rc = daos_event_test(events[i], DAOS_EQ_NOWAIT,
+					     &ev_flag);
+			if (rc != 0) {
+				D_ERROR("Test on child event returns %d\n", rc);
+				goto out;
+			}
+			if (ev_flag) {
+				D_ERROR("Event %d should be inflight\n", i);
+				rc = -1;
+				goto out;
+			}
+		}
+	}
+
+	D_ERROR("Poll EQ with 1/2 the events\n");
+	rc = daos_eq_poll(my_eqh, 1, 10, EQT_EV_COUNT/2, eps);
+	if (rc != 0) {
+		D_ERROR("Expect to poll zero event: %d\n", rc);
+		rc = -1;
+		goto out;
+	}
+
+	D_ERROR("Query EQ with completion events\n");
+	for (i = 0; i < EQT_EV_COUNT/2; i++) {
+		daos_event_complete(events[i], 0);
+		rc = daos_eq_query(my_eqh, DAOS_EQR_COMPLETED,
+				   EQT_EV_COUNT, eps);
+		if (rc != i + 1) {
+			D_ERROR("Expect to see %d inflight event, but got %d\n",
+				i + 1, rc);
+			rc = -1;
+			goto out;
+		}
+
+		if (eps[rc - 1] != events[i]) {
+			D_ERROR("Unexpected results from query: %d %p %p\n", i,
+				 eps[rc - 1], &events[i]);
+			rc = -1;
+			goto out;
+		}
+	}
+
+	D_ERROR("Poll EQ with completion events\n");
+	rc = daos_eq_poll(my_eqh, 0, -1, EQT_EV_COUNT, eps);
+	if (rc != EQT_EV_COUNT/2) {
+		D_ERROR("Expect to poll %d event: %d\n",
+			EQT_EV_COUNT, rc);
+		rc = -1;
+		goto out;
+	}
+	rc = 0;
+out:
+	for (i = 0; i < EQT_EV_COUNT; i++) {
+		if (events[i] != NULL) {
+			daos_event_fini(events[i]);
+			free(events[i]);
+		}
+	}
+	DAOS_TEST_EXIT(rc);
+	return rc;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -564,6 +693,10 @@ main(int argc, char **argv)
 		goto failed;
 
 	rc = eq_test_4();
+	if (rc != 0)
+		goto failed;
+
+	rc = eq_test_5();
 	if (rc != 0)
 		goto failed;
 

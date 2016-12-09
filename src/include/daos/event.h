@@ -143,9 +143,6 @@ int
 daos_event_destroy_children(struct daos_event *ev, bool force);
 
 int
-daos_event_test(struct daos_event *ev, int64_t timeout);
-
-int
 daos_event_register_comp_cb(struct daos_event *ev,
 			    daos_event_comp_cb_t cb, void *arg);
 
