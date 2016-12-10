@@ -137,6 +137,8 @@ CRT_ERRNO_BEGIN_ENUM
 	CRT_ERRNO_DECL(CER_NOTATTACH,		(CER_ERR_BASE + 30))
 	/** version mismatch */
 	CRT_ERRNO_DECL(CER_MISMATCH,		(CER_ERR_BASE + 31))
+	/** rank has been evicted */
+	CRT_ERRNO_DECL(CER_EVICTED,		(CER_ERR_BASE + 32))
 	/** unknown error */
 	CRT_ERRNO_DECL(CER_UNKNOWN,		(CER_ERR_BASE + 500))
 	/** TODO: add more error numbers */

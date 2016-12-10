@@ -223,12 +223,15 @@ int crt_hdlr_grp_destroy(crt_rpc_t *rpc_req);
 int crt_hdlr_uri_lookup(crt_rpc_t *rpc_req);
 int crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
 int crt_grp_detach(crt_group_t *attached_grp);
-int crt_grp_uri_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank,
-		       char **uri);
+char *crt_get_tag_uri(const char *base_uri, int tag);
 int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		      struct crt_hg_context *hg_ctx, crt_rank_t rank,
 		      uint32_t tag, crt_phy_addr_t *base_addr,
 		      na_addr_t *na_addr);
+int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
+			  crt_rank_t rank, const char *uri);
+int crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
+			   crt_rank_t rank, int tag, const hg_addr_t hg_addr);
 struct crt_grp_priv *crt_grp_lookup_int_grpid(uint64_t int_grpid);
 int crt_validate_grpid(const crt_group_id_t grpid);
 int crt_grp_init(crt_group_id_t grpid);

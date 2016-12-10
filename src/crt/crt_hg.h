@@ -84,6 +84,14 @@ struct crt_hg_gdata {
 	hg_class_t		*chg_hgcla; /* HG class */
 };
 
+/* addr lookup completion callback */
+typedef int (*crt_hg_addr_lookup_cb_t)(hg_addr_t addr, void *priv);
+
+struct crt_hg_addr_lookup_cb_args {
+	crt_hg_addr_lookup_cb_t	 al_cb;
+	void			*al_priv;
+};
+
 /* crt_hg.c */
 int crt_hg_init(crt_phy_addr_t *addr, bool server);
 int crt_hg_fini();
@@ -96,8 +104,10 @@ int crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
 int crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout);
-int crt_hg_addr_lookup_wait(hg_class_t *hg_class, hg_context_t *hg_context,
-			    const char *name, hg_addr_t *addr);
+int crt_hg_addr_lookup(struct crt_hg_context *hg_ctx, const char *name,
+		       crt_hg_addr_lookup_cb_t complete_cb, void *priv);
+int crt_hg_addr_dup(struct crt_hg_context *hg_ctx, hg_addr_t addr,
+		    hg_addr_t *new_addr);
 
 int crt_rpc_handler_common(hg_handle_t hg_hdl);
 

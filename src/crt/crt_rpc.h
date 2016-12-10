@@ -102,13 +102,15 @@ struct crt_common_hdr {
 };
 
 typedef enum {
-	RPC_INITED = 0x36,
-	RPC_QUEUED, /* queued for flow controlling */
-	RPC_REQ_SENT,
-	RPC_REPLY_RECVED,
-	RPC_COMPLETED,
-	RPC_CANCELED,
-	RPC_TIMEOUT,
+	RPC_STATE_INITED = 0x36,
+	RPC_STATE_QUEUED, /* queued for flow controlling */
+	RPC_STATE_REQ_SENT,
+	RPC_STATE_REPLY_RECVED,
+	RPC_STATE_COMPLETED,
+	RPC_STATE_CANCELED,
+	RPC_STATE_TIMEOUT,
+	RPC_STATE_ADDR_LOOKUP,
+	RPC_STATE_URI_LOOKUP,
 } crt_rpc_state_t;
 
 struct crt_rpc_priv;
@@ -164,8 +166,11 @@ struct crt_rpc_priv {
 
 	crt_rpc_t		crp_pub; /* public part */
 	crt_rpc_state_t		crp_state; /* RPC state */
-	hg_handle_t		crp_hg_hdl;
-	na_addr_t		crp_na_addr;
+	hg_handle_t		crp_hg_hdl; /* HG request handle */
+	na_addr_t		crp_na_addr; /* target na address */
+	crt_phy_addr_t		crp_tgt_uri; /* target uri address */
+	crt_rpc_t		*crp_ul_req; /* uri lookup request */
+
 	/*
 	 * RPC request flag, see enum crt_rpc_flags/crt_rpc_flags_internal,
 	 * match with crp_req_hdr.cch_flags.
@@ -176,6 +181,8 @@ struct crt_rpc_priv {
 				crp_input_got:1,
 				/* flag of collective RPC request */
 				crp_coll:1,
+				/* flag of crp_tgt_uri need to be freed */
+				crp_uri_free:1,
 				/* flag of forwarded rpc for corpc */
 				crp_forward:1,
 				/* flag of in timeout binheap */
@@ -198,7 +205,6 @@ enum {
 	CRT_OPC_GRP_ATTACH			= CRT_OPC_INTERNAL_BASE + 0x100,
 	CRT_OPC_GRP_DETACH			= CRT_OPC_INTERNAL_BASE + 0x101,
 	CRT_OPC_URI_LOOKUP			= CRT_OPC_INTERNAL_BASE + 0x102,
-
 	CRT_OPC_RANK_EVICT			= CRT_OPC_INTERNAL_BASE + 0x103,
 
 	CRT_OPC_SELF_TEST_BOTH_EMPTY		= CRT_OPC_INTERNAL_BASE + 0x200,
@@ -315,6 +321,7 @@ int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
 int crt_internal_rpc_register(void);
 int crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout);
 int crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
+int crt_req_send_internal(struct crt_rpc_priv *rpc_priv);
 
 static inline bool
 crt_req_timedout(crt_rpc_t *rpc)
@@ -322,7 +329,7 @@ crt_req_timedout(crt_rpc_t *rpc)
 	struct crt_rpc_priv *rpc_priv;
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	return rpc_priv->crp_state == RPC_REQ_SENT &&
+	return rpc_priv->crp_state == RPC_STATE_REQ_SENT &&
 	       !rpc_priv->crp_in_binheap;
 }
 
@@ -332,7 +339,7 @@ crt_req_aborted(crt_rpc_t *rpc)
 	struct crt_rpc_priv *rpc_priv;
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	return rpc_priv->crp_state == RPC_CANCELED;
+	return rpc_priv->crp_state == RPC_STATE_CANCELED;
 }
 
 /* crt_corpc.c */

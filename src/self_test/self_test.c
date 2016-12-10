@@ -110,11 +110,18 @@ static void *progress_fn(void *arg)
 static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 			  crt_group_t **srv_grp, pthread_t *tid)
 {
+	crt_rank_t	myrank;
 	int		ret;
 
 	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, 0);
 	if (ret != 0) {
 		C_ERROR("crt_init failed; ret = %d\n", ret);
+		return ret;
+	}
+
+	ret = crt_context_create(NULL, crt_ctx);
+	if (ret != 0) {
+		C_ERROR("crt_context_create failed; ret = %d\n", ret);
 		return ret;
 	}
 
@@ -126,9 +133,9 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	C_ASSERTF(*srv_grp != NULL,
 		  "crt_group_attach succeeded but returned group is NULL\n");
 
-	ret = crt_context_create(NULL, crt_ctx);
+	ret = crt_group_rank(NULL, &myrank);
 	if (ret != 0) {
-		C_ERROR("crt_context_create failed; ret = %d\n", ret);
+		C_ERROR("crt_group_rank failed; ret = %d\n", ret);
 		return ret;
 	}
 

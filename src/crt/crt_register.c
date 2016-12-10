@@ -327,9 +327,8 @@ crt_corpc_register(crt_opcode_t opc, struct crt_req_format *crf,
 		C_ERROR("opc 0x%x reserved.\n", opc);
 		return -CER_INVAL;
 	}
-	if (co_ops == NULL) {
+	if (co_ops == NULL)
 		C_WARN("NULL co_ops to be registered for corpc 0x%x.\n", opc);
-	}
 
 	return crt_rpc_reg_internal(opc, crf, rpc_handler, co_ops);
 }

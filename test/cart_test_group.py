@@ -80,7 +80,8 @@ class TestGroup(commontestsuite.CommonTestSuite):
         procrtn = self.launch_test(testmsg, '1', self.pass_env, \
                                    cli_arg='tests/test_group' + \
                                              ' --name client_group' + \
-                                             ' --attach_to service_group', \
+                                             ' --attach_to service_group' + \
+                                             ' --holdtime 5', \
                                    srv_arg='tests/test_group' + \
                                              ' --name service_group' + \
                                              ' --is_service --holdtime 5 :')
@@ -131,7 +132,8 @@ class TestGroup(commontestsuite.CommonTestSuite):
                                    cli=''.join([' -H ', clients.pop(0)]), \
                                    cli_arg='tests/test_group' + \
                                              ' --name client_group' + \
-                                             ' --attach_to service_group')
+                                             ' --attach_to service_group' + \
+                                             ' --holdtime 5')
 
         # Stop the server.  This will normally run forever because of the hold
         # option, so allow stop_process() to kill it.

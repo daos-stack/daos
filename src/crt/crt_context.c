@@ -219,11 +219,11 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 	C_ASSERT(rpc_priv != NULL);
 
 	if (rc == -CER_CANCELED)
-		rpc_priv->crp_state = RPC_CANCELED;
+		rpc_priv->crp_state = RPC_STATE_CANCELED;
 	else if (rc == -CER_TIMEDOUT)
-		rpc_priv->crp_state = RPC_TIMEOUT;
+		rpc_priv->crp_state = RPC_STATE_TIMEOUT;
 	else
-		rpc_priv->crp_state = RPC_COMPLETED;
+		rpc_priv->crp_state = RPC_STATE_COMPLETED;
 
 	if (rpc_priv->crp_complete_cb != NULL) {
 		struct crt_cb_info	cbinfo;
@@ -285,7 +285,7 @@ crt_ctx_epi_abort(crt_list_t *rlink, void *args)
 		}
 		/* Just remove from wait_q, decrease the wait_num and destroy
 		 * the request. Trigger the possible completion callback. */
-		C_ASSERT(rpc_priv->crp_state == RPC_QUEUED);
+		C_ASSERT(rpc_priv->crp_state == RPC_STATE_QUEUED);
 		crt_list_del_init(&rpc_priv->crp_epi_link);
 		epi->epi_req_wait_num--;
 		crt_rpc_complete(rpc_priv, -CER_CANCELED);
@@ -485,6 +485,47 @@ crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_timeout_rwlock);
 }
 
+static inline void
+crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
+{
+	struct crt_grp_priv		*grp_priv;
+	crt_endpoint_t			*tgt_ep;
+	crt_rpc_t			*ul_req;
+	struct crt_uri_lookup_in	*ul_in;
+
+	tgt_ep = &rpc_priv->crp_pub.cr_ep;
+	if (tgt_ep->ep_grp == NULL)
+		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
+	else
+		grp_priv = container_of(tgt_ep->ep_grp, struct crt_grp_priv,
+					gp_pub);
+
+	switch (rpc_priv->crp_state) {
+	case RPC_STATE_URI_LOOKUP:
+		ul_req = rpc_priv->crp_ul_req;
+		C_ASSERT(ul_req != NULL);
+		ul_in = crt_req_get(ul_req);
+		C_ERROR("rpc opc: 0x%x timedout due to URI_LOOKUP to group %s, "
+			"rank %d through PSR %d timedout.\n",
+			rpc_priv->crp_pub.cr_opc, ul_in->ul_grp_id,
+			ul_in->ul_rank, ul_req->cr_ep.ep_rank);
+		crt_req_abort(ul_req);
+		crt_rpc_complete(rpc_priv, -CER_PROTO);
+		break;
+	case RPC_STATE_ADDR_LOOKUP:
+		C_ERROR("rpc opc: 0x%x timedout due to ADDR_LOOKUP to group %s,"
+			" rank %d, tgt_uri %s timedout.\n",
+			rpc_priv->crp_pub.cr_opc, grp_priv->gp_pub.cg_grpid,
+			tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
+		crt_rpc_complete(rpc_priv, -CER_UNREACH);
+		break;
+	default:
+		/* At this point, RPC should always be completed by Mercury */
+		crt_req_abort(&rpc_priv->crp_pub);
+		break;
+	}
+}
+
 static void
 crt_context_timeout_check(struct crt_context *crt_ctx)
 {
@@ -524,8 +565,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		/* check for and execute RPC timeout callbacks here */
 		crt_exec_timeout_cb(rpc_priv);
 		crt_list_del_init(&rpc_priv->crp_tmp_link);
-		/* At this point, RPC should always be completed by Mercury */
-		crt_req_abort(&rpc_priv->crp_pub);
+		crt_req_timeout_hdlr(rpc_priv);
 		crt_req_decref(&rpc_priv->crp_pub);
 	}
 }
@@ -561,6 +601,10 @@ crt_context_req_track(crt_rpc_t *req)
 	crt_ctx = (struct crt_context *)req->cr_ctx;
 	C_ASSERT(crt_ctx != NULL);
 
+	if (req->cr_opc == CRT_OPC_URI_LOOKUP) {
+		C_DEBUG("bypass tracking for URI_LOOKUP.\n");
+		C_GOTO(out, rc = CRT_REQ_TRACK_IN_INFLIGHQ);
+	}
 	/* TODO use global rank */
 	ep_rank = req->cr_ep.ep_rank;
 
@@ -616,23 +660,25 @@ crt_context_req_track(crt_rpc_t *req)
 		crt_list_add_tail(&rpc_priv->crp_epi_link,
 				   &epi->epi_req_waitq);
 		epi->epi_req_wait_num++;
-		rpc_priv->crp_state = RPC_QUEUED;
+		rpc_priv->crp_state = RPC_STATE_QUEUED;
 		rc = CRT_REQ_TRACK_IN_WAITQ;
 	} else {
 		pthread_mutex_lock(&crt_ctx->cc_mutex);
 		rc = crt_req_timeout_track(req);
 		pthread_mutex_unlock(&crt_ctx->cc_mutex);
-		if (rc != 0) {
-			C_ERROR("crt_req_timeout_track failed, rc: %d.\n", rc);
-			crt_req_decref(req); /* roll back the addref above */
-			C_GOTO(failed, rc);
+		if (rc == 0) {
+			crt_list_add_tail(&rpc_priv->crp_epi_link,
+					  &epi->epi_req_q);
+			epi->epi_req_num++;
+			rc = CRT_REQ_TRACK_IN_INFLIGHQ;
+		} else {
+			C_ERROR("crt_req_timeout_track failed, "
+				"rc: %d.\n", rc);
+			/* roll back the addref above */
+			crt_req_decref(req);
 		}
-
-		crt_list_add_tail(&rpc_priv->crp_epi_link, &epi->epi_req_q);
-		epi->epi_req_num++;
-		rc = CRT_REQ_TRACK_IN_INFLIGHQ;
 	}
-failed:
+
 	pthread_mutex_unlock(&epi->epi_mutex);
 
 	/* reference taken by chash_rec_find or "epi->epi_ref = 1" above */
@@ -659,10 +705,15 @@ crt_context_req_untrack(crt_rpc_t *req)
 	C_ASSERT(crt_ctx != NULL);
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
-	C_ASSERT(rpc_priv->crp_state == RPC_INITED    ||
-		 rpc_priv->crp_state == RPC_COMPLETED ||
-		 rpc_priv->crp_state == RPC_TIMEOUT ||
-		 rpc_priv->crp_state == RPC_CANCELED);
+	if (req->cr_opc == CRT_OPC_URI_LOOKUP) {
+		C_DEBUG("bypass untracking for URI_LOOKUP.\n");
+		return;
+	}
+
+	C_ASSERT(rpc_priv->crp_state == RPC_STATE_INITED    ||
+		 rpc_priv->crp_state == RPC_STATE_COMPLETED ||
+		 rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
+		 rpc_priv->crp_state == RPC_STATE_CANCELED);
 	epi = rpc_priv->crp_epi;
 	C_ASSERT(epi != NULL);
 
@@ -671,7 +722,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 	pthread_mutex_lock(&epi->epi_mutex);
 	/* remove from inflight queue */
 	crt_list_del_init(&rpc_priv->crp_epi_link);
-	if (rpc_priv->crp_state == RPC_COMPLETED)
+	if (rpc_priv->crp_state == RPC_STATE_COMPLETED)
 		epi->epi_reply_num++;
 	else /* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
 		epi->epi_req_num--;
@@ -694,7 +745,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 		C_ASSERT(epi->epi_req_wait_num > 0);
 		rpc_priv = crt_list_entry(epi->epi_req_waitq.next,
 					   struct crt_rpc_priv, crp_epi_link);
-		rpc_priv->crp_state = RPC_INITED;
+		rpc_priv->crp_state = RPC_STATE_INITED;
 		rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
 
 		pthread_mutex_lock(&crt_ctx->cc_mutex);
@@ -720,15 +771,15 @@ crt_context_req_untrack(crt_rpc_t *req)
 	crt_list_for_each_entry_safe(rpc_priv, next, &submit_list,
 				      crp_tmp_link) {
 		crt_list_del_init(&rpc_priv->crp_tmp_link);
-		rpc_priv->crp_state = RPC_REQ_SENT;
-		rc = crt_hg_req_send(rpc_priv);
+
+		rc = crt_req_send_internal(rpc_priv);
 		if (rc == 0)
 			continue;
 
 		crt_req_addref(&rpc_priv->crp_pub);
-		C_ERROR("crt_hg_req_send failed, rc: %d, opc: 0x%x.\n",
+		C_ERROR("crt_req_send_internal failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
-		rpc_priv->crp_state = RPC_INITED;
+		rpc_priv->crp_state = RPC_STATE_INITED;
 		crt_context_req_untrack(&rpc_priv->crp_pub);
 		/* for error case here */
 		crt_rpc_complete(rpc_priv, rc);

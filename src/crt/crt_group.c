@@ -217,82 +217,134 @@ out:
 	return rc;
 }
 
-static int
-crt_conn_tag(struct crt_hg_context *hg_ctx, crt_phy_addr_t base_addr,
-	     uint32_t tag, na_addr_t *na_addr)
+/*
+ * Fill in the base URI of rank in the lookup cache of crt_ctx.
+ */
+int
+crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
+		      crt_rank_t rank, const char *uri)
 {
-	hg_class_t	*hg_class;
-	hg_context_t	*hg_context;
-	hg_addr_t	tmp_addr;
-	uint32_t	ctx_idx;
-	char		*tmp_addrstr;
-	bool		allocated = false;
-	char		*pchar;
-	int		port;
-	int		rc = 0;
+	crt_list_t		*rlink;
+	struct crt_lookup_item	*li;
+	int			 rc = 0;
 
-	if (tag >= CRT_SRV_CONTEXT_NUM) {
-		C_ERROR("invalid tag %d (CRT_SRV_CONTEXT_NUM %d).\n",
-			tag, CRT_SRV_CONTEXT_NUM);
-		C_GOTO(out, rc = -CER_INVAL);
-	}
-
-	C_ASSERT(hg_ctx != NULL);
-	C_ASSERT(base_addr != NULL && strlen(base_addr) > 0);
-	C_ASSERT(na_addr != NULL);
-
-	hg_class = hg_ctx->chc_hgcla;
-	hg_context = hg_ctx->chc_hgctx;
-	C_ASSERT(hg_class != NULL);
-	C_ASSERT(hg_context != NULL);
-
-	ctx_idx = tag;
-	if (ctx_idx == 0) {
-		tmp_addrstr = base_addr;
-	} else {
-		C_ALLOC(tmp_addrstr, CRT_ADDR_STR_MAX_LEN);
-		if (tmp_addrstr == NULL)
+	C_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
+	pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
+	rlink = chash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
+			(void *)&rank, sizeof(rank));
+	if (rlink == NULL) {
+		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+		/* target rank not in cache */
+		C_ALLOC_PTR(li);
+		if (li == NULL)
 			C_GOTO(out, rc = -CER_NOMEM);
-		allocated = true;
-		/* calculate the ctx_idx's listening address and connect */
-		strncpy(tmp_addrstr, base_addr, CRT_ADDR_STR_MAX_LEN);
-		pchar = strrchr(tmp_addrstr, ':');
-		if (pchar == NULL) {
-			C_ERROR("bad format of base_addr %s.\n", tmp_addrstr);
-			C_GOTO(out, rc = -CER_INVAL);
+		CRT_INIT_LIST_HEAD(&li->li_link);
+		li->li_grp_priv = grp_priv;
+		li->li_rank = rank;
+		li->li_base_phy_addr = strndup(uri, CRT_ADDR_STR_MAX_LEN);
+		if (li->li_base_phy_addr == NULL) {
+			C_ERROR("strndup() failed.\n");
+			C_GOTO(out, rc = -CER_NOMEM);
 		}
-		pchar++;
-		port = atoi(pchar);
-		port += ctx_idx;
-		snprintf(pchar, 16, "%d", port);
-		C_DEBUG("base uri(%s), tag(%d) uri(%s).\n",
-			base_addr, tag, tmp_addrstr);
-	}
+		li->li_initialized = 1;
+		li->li_evicted = 0;
+		pthread_mutex_init(&li->li_mutex, NULL);
 
-	rc = crt_hg_addr_lookup_wait(hg_class, hg_context, tmp_addrstr,
-				     &tmp_addr);
-	if (rc == 0) {
-		C_DEBUG("Connect to %s succeed.\n", tmp_addrstr);
-		C_ASSERT(tmp_addr != NULL);
-		*na_addr = tmp_addr;
+		pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+		rc = chash_rec_insert(grp_priv->gp_lookup_cache[ctx_idx], &rank,
+				      sizeof(rank), &li->li_link,
+				      true /* exclusive */);
+		if (rc != 0) {
+			C_DEBUG("entry already exists in lookup table, "
+				"grp_priv %p ctx_idx %d, rank: %d.\n",
+				grp_priv, ctx_idx, rank);
+			crt_li_destroy(li);
+			rc = 0;
+		} else {
+			C_DEBUG("Filling in URI in lookup table. "
+				" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
+				grp_priv, ctx_idx, rank, &li->li_link);
+		}
+		C_GOTO(unlock, rc);
+	}
+	li = crt_li_link2ptr(rlink);
+	C_ASSERT(li->li_grp_priv == grp_priv);
+	C_ASSERT(li->li_rank == rank);
+	C_ASSERT(li->li_initialized != 0);
+	pthread_mutex_lock(&li->li_mutex);
+	if (li->li_base_phy_addr == NULL) {
+		li->li_base_phy_addr = strndup(uri, CRT_ADDR_STR_MAX_LEN);
+		if (li->li_base_phy_addr == NULL) {
+			C_ERROR("strndup() failed.\n");
+			rc = -CER_NOMEM;
+		}
+		C_DEBUG("Filling in URI in lookup table. "
+			" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
+			grp_priv, ctx_idx, rank, &li->li_link);
 	} else {
-		C_ERROR("Could not connect to %s, rc: %d.\n", tmp_addrstr, rc);
-		C_GOTO(out, rc);
+		C_WARN("URI already exists. "
+			" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
+			grp_priv, ctx_idx, rank, &li->li_link);
 	}
+	pthread_mutex_unlock(&li->li_mutex);
+	chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
 
+unlock:
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 out:
-	if (allocated)
-		C_FREE(tmp_addrstr, CRT_ADDR_STR_MAX_LEN);
-	if (rc != 0)
-		C_ERROR("crt_conn_tag (base_addr %s, tag %d) failed, rc: %d.\n",
-			base_addr, tag, rc);
 	return rc;
 }
 
 /*
- * lookup addr cache.
- * if (na_addr == NULL) then means caller only want to lookup the base_addr, or
- * will establish the connection and return the connect addr to na_addr.
+ * Fill in the hg address  of a tag in the lookup cache of crt_ctx. The host
+ * rank where the tag resides in must exist in the cache before calling this
+ * routine.
+ */
+int
+crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
+		       crt_rank_t rank, int tag, const hg_addr_t hg_addr)
+{
+	crt_list_t		*rlink;
+	struct crt_lookup_item	*li;
+	int			 rc = 0;
+
+	C_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
+	pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
+	rlink = chash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
+			       (void *)&rank, sizeof(rank));
+	C_ASSERT(rlink != NULL);
+	li = crt_li_link2ptr(rlink);
+	C_ASSERT(li->li_grp_priv == grp_priv);
+	C_ASSERT(li->li_rank == rank);
+	C_ASSERT(li->li_initialized != 0);
+
+	pthread_mutex_lock(&li->li_mutex);
+	if (li->li_evicted == 1)
+		rc = -CER_EVICTED;
+	if (li->li_tag_addr[tag] == NULL) {
+		li->li_tag_addr[tag] = hg_addr;
+		if (rc != 0)
+			C_ERROR("crt_hg_addr_dup() failed, rc %d.\n", rc);
+	} else {
+		C_WARN("NA address already exits. "
+		       " grp_priv %p ctx_idx %d, rank: %d, tag %d, rlink %p\n",
+		       grp_priv, ctx_idx, rank, tag, &li->li_link);
+	}
+	pthread_mutex_unlock(&li->li_mutex);
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
+
+	return rc;
+}
+
+/*
+ * Lookup the URI and NA address of a (rank, tag) combination in the addr cache.
+ * This function only looks into the address cache. If the requested (rank, tag)
+ * pair doesn't exist in the address cache, *na_addr will be NULL on return, and
+ * an empty record for the requested rank with NULL values will be inserted to
+ * the cache. For input parameters, base_addr and na_addr can not be both NULL.
+ * (na_addr == NULL) means the caller only want to lookup the base_addr.
+ * (base_addr == NULL) means the caller only want to lookup the na_addr.
  */
 int
 crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
@@ -300,7 +352,6 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		  crt_phy_addr_t *base_addr, na_addr_t *na_addr)
 {
 	struct crt_lookup_item	*li;
-	bool			found = false;
 	crt_list_t		*rlink;
 	int			rc = 0;
 
@@ -313,7 +364,6 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		C_ASSERT(hg_ctx != NULL);
 	C_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
-lookup_again:
 	pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
 	rlink = chash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
 			       (void *)&rank, sizeof(rank));
@@ -321,8 +371,6 @@ lookup_again:
 		li = crt_li_link2ptr(rlink);
 		C_ASSERT(li->li_grp_priv == grp_priv);
 		C_ASSERT(li->li_rank == rank);
-		C_ASSERT(li->li_base_phy_addr != NULL &&
-			 strlen(li->li_base_phy_addr) > 0);
 		C_ASSERT(li->li_initialized != 0);
 
 		pthread_mutex_lock(&li->li_mutex);
@@ -336,112 +384,42 @@ lookup_again:
 			C_GOTO(out, rc = -CER_OOG);
 		}
 		pthread_mutex_unlock(&li->li_mutex);
-		found = true;
 		if (base_addr != NULL)
 			*base_addr = li->li_base_phy_addr;
-		if (na_addr == NULL) {
+		if (na_addr == NULL)
 			C_ASSERT(base_addr != NULL);
-			pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-			chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx],
-					 rlink);
-			C_GOTO(out, rc);
-		}
-		if (li->li_tag_addr[tag] != NULL) {
+		else if (li->li_tag_addr[tag] != NULL)
 			*na_addr = li->li_tag_addr[tag];
-			pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-			chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx],
-					 rlink);
-			C_GOTO(out, rc);
-		}
-	}
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-
-	if (found) {
-		na_addr_t	conn_addr = NULL;
-
-		C_ASSERT(na_addr != NULL);
-		C_ASSERT(li != NULL);
-		pthread_mutex_lock(&li->li_mutex);
-		if (li->li_evicted == 1) {
-			pthread_mutex_unlock(&li->li_mutex);
-			chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx],
-					 rlink);
-			C_ERROR("tag %d on rank %d already evicted.\n",
-				tag, rank);
-			C_GOTO(out, rc = -CER_OOG);
-		}
-		if (li->li_tag_addr[tag] != NULL) {
-			*na_addr = li->li_tag_addr[tag];
-			pthread_mutex_unlock(&li->li_mutex);
-			chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx],
-					 rlink);
-			C_GOTO(out, rc);
-		}
-		pthread_mutex_unlock(&li->li_mutex);
-
-		rc = crt_conn_tag(hg_ctx, li->li_base_phy_addr, tag,
-				  &conn_addr);
-		if (rc == 0) {
-			C_ASSERT(conn_addr != NULL);
-			pthread_mutex_lock(&li->li_mutex);
-			if (li->li_tag_addr[tag] != NULL) {
-				/* race condition, another thread connected */
-				C_DEBUG("connection race ...\n");
-			} else {
-				li->li_tag_addr[tag] = conn_addr;
-			}
-			*na_addr = li->li_tag_addr[tag];
-			pthread_mutex_unlock(&li->li_mutex);
-		} else {
-			C_ERROR("crt_conn_tag(rank %d tag %d) failed, rc %d.\n",
-				rank, tag, rc);
-			pthread_mutex_lock(&li->li_mutex);
-			if (li->li_tag_addr[tag] != NULL) {
-				/* race condition, another thread connected */
-				C_DEBUG("connection race ...\n");
-				*na_addr = li->li_tag_addr[tag];
-				rc = 0;
-			}
-			pthread_mutex_unlock(&li->li_mutex);
-		}
+		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 		chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
 		C_GOTO(out, rc);
 	}
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 
-	C_ASSERT(found == false);
+	/* target rank not in cache */
 	C_ALLOC_PTR(li);
 	if (li == NULL)
 		C_GOTO(out, rc = -CER_NOMEM);
 	CRT_INIT_LIST_HEAD(&li->li_link);
 	li->li_grp_priv = grp_priv;
 	li->li_rank = rank;
-	rc = crt_grp_uri_lookup(grp_priv, rank, &li->li_base_phy_addr);
-	if (rc != 0) {
-		C_ERROR("crt_grp_uri_lookup failed, rc: %d.\n", rc);
-		C_FREE_PTR(li);
-		C_GOTO(out, rc);
-	}
-	C_ASSERT(li->li_base_phy_addr != NULL);
+	li->li_base_phy_addr = NULL;
 	li->li_initialized = 1;
 	li->li_evicted = 0;
 	pthread_mutex_init(&li->li_mutex, NULL);
-
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
-	rlink = chash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
-			       (void *)&rank, sizeof(rank));
-	if (rlink != NULL) {
-		/* race condition, goto above path to lookup again */
-		crt_li_destroy(li);
-		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-		chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
-		goto lookup_again;
-	}
 	rc = chash_rec_insert(grp_priv->gp_lookup_cache[ctx_idx], &rank,
 			      sizeof(rank), &li->li_link, true /* exclusive */);
-	/* the only possible failure is key conflict and be avoid above */
-	C_ASSERT(rc == 0);
+	if (rc != 0) {
+		C_DEBUG("entry already exists.\n");
+		crt_li_destroy(li);
+	} else {
+		C_DEBUG("Inserted lookup table entry without base URI. "
+			"grp_priv %p ctx_idx %d, rank: %d, tag: %d, rlink %p\n",
+			grp_priv, ctx_idx, rank, tag, &li->li_link);
+	}
+	/* the only possible failure is key conflict */
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-	goto lookup_again;
 
 out:
 	return rc;
@@ -1536,6 +1514,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	struct crt_hg_context		*hg_ctx;
 	struct crt_uri_lookup_in	*ul_in;
 	struct crt_uri_lookup_out	*ul_out;
+	char				*tmp_uri = NULL;
 	int				rc = 0;
 
 	C_ASSERT(rpc_req != NULL);
@@ -1561,12 +1540,27 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 
 	crt_ctx = (struct crt_context *)rpc_req->cr_ctx;
 	hg_ctx = &crt_ctx->cc_hg_ctx;
+
 	rc = crt_grp_lc_lookup(grp_priv, crt_ctx->cc_idx, hg_ctx,
-			       ul_in->ul_rank, 0 /* tag */,
-			       &ul_out->ul_uri, NULL /* na_addr */);
+			       ul_in->ul_rank, 0, &ul_out->ul_uri, NULL);
+	if (rc != 0) {
+		C_ERROR("crt_grp_lc_lookup(grp %s, rank %d) failed, rc: %d.\n",
+			grp_priv->gp_pub.cg_grpid, ul_in->ul_rank, rc);
+		C_GOTO(out, rc);
+	}
+	if (ul_out->ul_uri != NULL)
+		C_GOTO(out, rc);
+	rc = crt_pmix_uri_lookup(ul_in->ul_grp_id, ul_in->ul_rank,
+				 &tmp_uri);
+	if (rc != 0) {
+		C_ERROR("crt_pmix_uri_lookup() failed, rc %d\n", rc);
+		C_GOTO(out, rc);
+	}
+	ul_out->ul_uri = tmp_uri;
+	rc = crt_grp_lc_uri_insert(grp_priv, crt_ctx->cc_idx, ul_in->ul_rank,
+				   tmp_uri);
 	if (rc != 0)
-		C_ERROR("crt_grp_lc_lookup rank %d failed, rc: %d.\n",
-			ul_in->ul_rank, rc);
+		C_ERROR("crt_grp_lc_uri_insert() failed, rc %d\n", rc);
 
 out:
 	ul_out->ul_rc = rc;
@@ -1574,98 +1568,49 @@ out:
 	if (rc != 0)
 		C_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_req->cr_opc);
+	if (tmp_uri != NULL)
+		free(tmp_uri);
 	return rc;
 }
 
-int
-crt_grp_uri_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank, char **uri)
+/*
+ * Given a base URI and a tag number, return the URI of that tag.
+ */
+char *
+crt_get_tag_uri(const char *base_uri, int tag)
 {
-	crt_rpc_t			*rpc_req = NULL;
-	struct crt_uri_lookup_in	*ul_in;
-	struct crt_uri_lookup_out	*ul_out;
-	struct crt_grp_gdata		*grp_gdata;
-	struct crt_pmix_gdata		*pmix_gdata;
-	crt_context_t			 crt_ctx;
-	crt_endpoint_t			 svr_ep;
-	crt_group_id_t			 grp_id;
-	int				 rc = 0;
+	char		*tag_uri = NULL;
+	char		*pchar;
+	int		 port;
 
-	C_ASSERT(uri != NULL);
+	if (tag >= CRT_SRV_CONTEXT_NUM) {
+		C_ERROR("invalid tag %d (CRT_SRV_CONTEXT_NUM %d).\n",
+			tag, CRT_SRV_CONTEXT_NUM);
+		C_GOTO(out, 0);
+	}
+	C_ALLOC(tag_uri, CRT_ADDR_STR_MAX_LEN);
+	if (tag_uri == NULL)
+		C_GOTO(out, 0);
+	strncpy(tag_uri, base_uri, CRT_ADDR_STR_MAX_LEN);
 
-	grp_gdata = crt_gdata.cg_grp;
-	C_ASSERT(grp_gdata != NULL);
-	pmix_gdata = grp_gdata->gg_pmix;
-	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
-	C_ASSERT(pmix_gdata != NULL);
-
-	if (grp_priv == NULL)
-		grp_id = CRT_DEFAULT_SRV_GRPID;
-	else
-		grp_id = grp_priv->gp_pub.cg_grpid;
-
-	if (grp_priv->gp_local == 0 && !crt_is_service()) {
-		/*
-		 * client-side attached group, for PSR just return the
-		 * gp_psr_phy_addr, for other rank will send RPC to PSR.
-		 */
-		if (rank == grp_priv->gp_psr_rank) {
-			*uri = strndup(grp_priv->gp_psr_phy_addr,
-				       CRT_ADDR_STR_MAX_LEN);
-			if (*uri == NULL) {
-				C_ERROR("strndup gp_psr_phy_addr failed.\n");
-				rc = -CER_NOMEM;
-			}
-			C_GOTO(out, rc);
+	if (tag != 0) {
+		pchar = strrchr(tag_uri, ':');
+		if (pchar == NULL) {
+			C_ERROR("bad format of base_addr %s.\n", tag_uri);
+			free(tag_uri);
+			tag_uri = NULL;
+			C_GOTO(out, 0);
 		}
-		crt_ctx = crt_context_lookup(0);
-		C_ASSERT(crt_ctx != NULL);
-
-		svr_ep.ep_grp = &grp_priv->gp_pub;
-		svr_ep.ep_rank = grp_priv->gp_psr_rank;
-		svr_ep.ep_tag = 0;
-		rc = crt_req_create(crt_ctx, svr_ep, CRT_OPC_URI_LOOKUP,
-				    &rpc_req);
-		if (rc != 0) {
-			C_ERROR("crt_req_create URI_LOOKUP failed, rc: %d.\n",
-				rc);
-			C_GOTO(out, rc);
-		}
-		ul_in = crt_req_get(rpc_req);
-		ul_out = crt_reply_get(rpc_req);
-		C_ASSERT(ul_in != NULL && ul_out != NULL);
-		ul_in->ul_grp_id = grp_id;
-		ul_in->ul_rank = rank;
-
-		crt_req_addref(rpc_req);
-		rc = crt_req_send_sync(rpc_req, CRT_URI_LOOKUP_TIMEOUT);
-		if (rc != 0) {
-			C_ERROR("URI_LOOKUP request failed, rc: %d.\n", rc);
-			crt_req_decref(rpc_req);
-			C_GOTO(out, rc);
-		}
-
-		if (ul_out->ul_rc != 0) {
-			C_ERROR("crt_req_send_sync URI_LOOKUP reply rc: %d.\n",
-				ul_out->ul_rc);
-			rc = ul_out->ul_rc;
-		} else {
-			*uri = strndup(ul_out->ul_uri, CRT_ADDR_STR_MAX_LEN);
-			if (*uri == NULL) {
-				C_ERROR("strndup gp_psr_phy_addr failed.\n");
-				rc = -CER_NOMEM;
-			}
-		}
-		crt_req_decref(rpc_req);
-	} else {
-		/* server side directly lookup through PMIx */
-		rc = crt_pmix_uri_lookup(grp_id, rank, uri);
+		pchar++;
+		port = atoi(pchar);
+		port += tag;
+		snprintf(pchar, 16, "%d", port);
+		C_DEBUG("base uri(%s), tag(%d) uri(%s).\n",
+			base_uri, tag, tag_uri);
 	}
 
 out:
-	if (rc != 0)
-		C_ERROR("crt_grp_uri_lookup(grp_id %s, rank %d) failed, "
-			"rc: %d.\n", grp_id, rank, rc);
-	return rc;
+	return tag_uri;
 }
 
 int
@@ -1811,6 +1756,7 @@ int
 crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
+	struct crt_context	*crt_ctx = NULL;
 	int			 rc = 0;
 
 	C_ASSERT(srv_grpid != NULL);
@@ -1848,6 +1794,16 @@ crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	if (rc != 0) {
 		C_ERROR("crt_grp_lc_create failed, rc: %d.\n", rc);
 		C_GOTO(out, rc);
+	}
+	/* insert PSR's base uri into hash table */
+	crt_list_for_each_entry(crt_ctx, &crt_gdata.cg_ctx_list, cc_link) {
+		rc = crt_grp_lc_uri_insert(grp_priv, crt_ctx->cc_idx,
+					   grp_priv->gp_psr_rank,
+					   grp_priv->gp_psr_phy_addr);
+		if (rc != 0) {
+			C_ERROR("crt_grp_lc_uri_insert() failed, rc %d\n", rc);
+			C_GOTO(out, rc);
+		}
 	}
 
 	*attached_grp = &grp_priv->gp_pub;

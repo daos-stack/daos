@@ -42,10 +42,60 @@
 #include <crt_internal.h>
 #include <abt.h>
 
+
+
+static hg_return_t
+crt_hg_addr_lookup_cb(const struct hg_cb_info *hg_cbinfo)
+{
+	struct crt_hg_addr_lookup_cb_args	*cb_args = NULL;
+	crt_hg_addr_lookup_cb_t			 comp_cb;
+	hg_return_t				 rc = HG_SUCCESS;
+
+	cb_args = (struct crt_hg_addr_lookup_cb_args *)hg_cbinfo->arg;
+	comp_cb = cb_args->al_cb;
+
+	rc = comp_cb(hg_cbinfo->info.lookup.addr, cb_args->al_priv);
+	if (rc != 0)
+		rc = HG_OTHER_ERROR;
+
+	C_FREE_PTR(cb_args);
+
+	return rc;
+}
+
+/*
+ * lookup the NA address of name, fill in the na address in the rpc_priv
+ * structure and in the lookup cache of rpc_priv.
+ */
+int
+crt_hg_addr_lookup(struct crt_hg_context *hg_ctx, const char *name,
+		   crt_hg_addr_lookup_cb_t complete_cb, void *priv)
+{
+	struct crt_hg_addr_lookup_cb_args	*cb_args;
+	int					 rc = 0;
+
+
+	C_ALLOC_PTR(cb_args);
+	if (cb_args == NULL)
+		C_GOTO(out, rc = -CER_NOMEM);
+
+	cb_args->al_cb = complete_cb;
+	cb_args->al_priv = priv;
+	rc = HG_Addr_lookup(hg_ctx->chc_hgctx, crt_hg_addr_lookup_cb,
+			    cb_args, name, HG_OP_ID_IGNORE);
+	if (rc != 0) {
+		C_ERROR("HG_Addr_lookup() failed.\n");
+		rc = -CER_HG;
+	}
+
+out:
+	return rc;
+}
+
 static hg_return_t
 hg_addr_lookup_cb(const struct hg_cb_info *callback_info)
 {
-	hg_addr_t	*addr_ptr = (hg_addr_t *) callback_info->arg;
+	hg_addr_t	*addr_ptr = (hg_addr_t *)callback_info->arg;
 	hg_return_t	ret = HG_SUCCESS;
 
 	if (callback_info->ret != HG_SUCCESS) {
@@ -57,6 +107,21 @@ hg_addr_lookup_cb(const struct hg_cb_info *callback_info)
 	*addr_ptr = callback_info->info.lookup.addr;
 
 	return ret;
+}
+
+int
+crt_hg_addr_dup(struct crt_hg_context *hg_ctx, hg_addr_t addr,
+		hg_addr_t *new_addr)
+{
+	int rc = 0;
+
+	rc = HG_Addr_dup(hg_ctx->chc_hgcla, addr, new_addr);
+	if (rc != 0) {
+		C_ERROR("HG_Addr_free() failed, hg_ret %d.\n", rc);
+		rc = -CER_HG;
+	}
+
+	return rc;
 }
 
 /* connection timeout 10 second */
@@ -597,7 +662,6 @@ int
 crt_hg_req_create(struct crt_hg_context *hg_ctx, int ctx_idx,
 		  crt_endpoint_t tgt_ep, struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_grp_priv	*grp_priv;
 	hg_return_t		hg_ret = HG_SUCCESS;
 	int			rc = 0;
 
@@ -605,19 +669,6 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, int ctx_idx,
 		 hg_ctx->chc_hgctx != NULL);
 	C_ASSERT(rpc_priv != NULL);
 
-	if (tgt_ep.ep_grp == NULL)
-		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
-	else
-		grp_priv = container_of(tgt_ep.ep_grp, struct crt_grp_priv,
-					gp_pub);
-	rc = crt_grp_lc_lookup(grp_priv, ctx_idx, hg_ctx, tgt_ep.ep_rank,
-			       tgt_ep.ep_tag, NULL /* base_addr */,
-			       &rpc_priv->crp_na_addr);
-	if (rc != 0) {
-		C_ERROR("crt_grp_lc_lookup failed, rc: %d, opc: 0x%x.\n",
-			rc, rpc_priv->crp_pub.cr_opc);
-		C_GOTO(out, rc);
-	}
 
 	hg_ret = HG_Create(hg_ctx->chc_hgctx, rpc_priv->crp_na_addr,
 			   CRT_HG_RPCID, &rpc_priv->crp_hg_hdl);
@@ -627,7 +678,6 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, int ctx_idx,
 		rc = -CER_HG;
 	}
 
-out:
 	return rc;
 }
 
@@ -707,7 +757,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 
 	switch (hg_cbinfo->ret) {
 	case HG_SUCCESS:
-		state = RPC_COMPLETED;
+		state = RPC_STATE_COMPLETED;
 		break;
 	case HG_CANCELED:
 		if (crt_req_timedout(rpc_pub)) {
@@ -717,12 +767,12 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 			C_DEBUG("request canceled, opc: 0x%x.\n", opc);
 			rc = -CER_CANCELED;
 		}
-		state = RPC_CANCELED;
+		state = RPC_STATE_CANCELED;
 		rpc_priv->crp_state = state;
 		hg_ret = hg_cbinfo->ret;
 		break;
 	default:
-		state = RPC_COMPLETED;
+		state = RPC_STATE_COMPLETED;
 		rc = -CER_HG;
 		hg_ret = hg_cbinfo->ret;
 		C_DEBUG("hg_cbinfo->ret: %d.\n", hg_cbinfo->ret);
@@ -735,7 +785,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	}
 
 	if (rc == 0) {
-		rpc_priv->crp_state = RPC_REPLY_RECVED;
+		rpc_priv->crp_state = RPC_STATE_REPLY_RECVED;
 		/* HG_Free_output in crt_hg_req_destroy */
 		hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle,
 				       &rpc_pub->cr_output);
@@ -775,9 +825,9 @@ int
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
 	struct crt_hg_send_cbinfo	*cb_info;
-	hg_return_t			hg_ret = HG_SUCCESS;
+	hg_return_t			 hg_ret = HG_SUCCESS;
 	void				*hg_in_struct;
-	int				rc = 0;
+	int				 rc = 0;
 
 	C_ASSERT(rpc_priv != NULL);
 

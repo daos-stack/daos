@@ -98,7 +98,8 @@ class TestGroup(commontestsuite.CommonTestSuite):
                                      srv1, srv1_args)
 
         cli_args = 'tests/test_group' + \
-            ' --name client_group --attach_to service_group_01'
+            ' --name client_group --attach_to service_group_01 ' + \
+            ' --holdtime 6'
 
         cli_rtn = self.launch_test(testmsg, '1', self.pass_env, \
                                    cli=''.join([' -H ', client.pop(0)]), \
