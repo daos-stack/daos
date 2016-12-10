@@ -330,7 +330,8 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 	recx_tmp.rx_nr = 1; /* btree has one record per index */
 
 	for (i = iov_cur = 0; i < recx->rx_nr; i++) {
-		daos_iov_t	 iov_tmp; /* scratch iov for non-zc */
+		daos_iov_t		iov_tmp; /* scratch iov for non-zc */
+		daos_epoch_range_t	l_epr = *epr;
 
 		if (iovs != NULL && iov_cur >= iov_nr) {
 			D_DEBUG(DF_VOS1, "Invalid I/O parameters: %d/%d\n",
@@ -362,7 +363,7 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			iov = &iov_tmp;
 		}
 
-		rc = tree_recx_fetch(toh, epr, &recx_tmp, iov, &csum);
+		rc = tree_recx_fetch(toh, &l_epr, &recx_tmp, iov, &csum);
 		if (rc == -DER_NONEXIST) {
 			recx_tmp.rx_idx++; /* fake a mismatch */
 			rc = 0;
