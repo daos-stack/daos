@@ -22,10 +22,10 @@
  */
 /**
  * This file describes the API for a versioning object store.
- * These APIs will help build a versioned store with
- * key-value and byte-array object types.
+ * These APIs will help build a versioned store with key value objects.
+ * The KV index is composed of a {distribution-key, attribute-key, record}.
  * These APIs provide ways to create, delete, search and enumerate
- * multiversion concurrent key-value and byte-array objects.
+ * such multiversion objects over PMEM.
  */
 
 #ifndef __VOS_API_H__
@@ -35,12 +35,11 @@
 #include <daos_srv/vos_types.h>
 
 /**
- *  Initialize and Finalize Routines
- *  (required for VOS standalone mode)
- */
-/**
  * Initialize the environment for a VOS instance
  * Must be called once before starting a VOS instance
+ *
+ * NB: Required only when using VOS as a standalone
+ * library.
  *
  * \return		Zero on success, negative value if error
  */
@@ -51,6 +50,8 @@ vos_init(void);
  * Finalize the environment for a VOS instance
  * Must be called for clean up at the end of using a vos instance
  *
+ * NB: Needs to be called only when VOS is used as a
+ * standalone library.
  */
 void
 vos_fini(void);
