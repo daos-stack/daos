@@ -3,7 +3,7 @@
 Import('env', 'PREREQS')
 
 libs = ['daos', 'daos_common', 'daos_tier', 'crt_util', 'crt',
-	'mpi', 'uuid', 'cmocka']
+        'mpi', 'uuid', 'cmocka']
 
 denv = env.Clone()
 
@@ -11,7 +11,7 @@ if PREREQS is not None:
     PREREQS.require(denv, 'ompi')
 
 denv.Program('simple_array', 'simple_array.c', LIBS=libs)
-denv.Program('daosbench', 'daosbench.c', LIBS=libs)
-
+daosbench = denv.Program('daosbench', 'daosbench.c', LIBS=libs)
+denv.Install('$PREFIX/bin/', daosbench)
 # tests
 SConscript('suite/SConscript', exports = ['denv'])
