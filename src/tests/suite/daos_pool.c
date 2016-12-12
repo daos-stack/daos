@@ -131,6 +131,53 @@ pool_connect(void **state)
 	print_message("rank %d success\n", arg->myrank);
 }
 
+/** connect exclusively to a pool */
+static void
+pool_connect_exclusively(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_handle_t	 poh;
+	daos_handle_t	 poh_ex;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("SUBTEST 1: other connections already exist; shall get "
+		      "%d\n", -DER_BUSY);
+	print_message("establishing a non-exclusive connection\n");
+	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+			       DAOS_PC_RW, &poh, NULL /* info */,
+			       NULL /* ev */);
+	assert_int_equal(rc, 0);
+	print_message("trying to establish an exclusive connection\n");
+	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+			       DAOS_PC_EX, &poh_ex, NULL /* info */,
+			       NULL /* ev */);
+	assert_int_equal(rc, -DER_BUSY);
+	print_message("disconnecting the non-exclusive connection\n");
+	rc = daos_pool_disconnect(poh, NULL /* ev */);
+	assert_int_equal(rc, 0);
+
+	print_message("SUBTEST 2: no other connections; shall succeed");
+	print_message("establishing an exclusive connection\n");
+	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+			       DAOS_PC_EX, &poh_ex, NULL /* info */,
+			       NULL /* ev */);
+	assert_int_equal(rc, 0);
+
+	print_message("SUBTEST 3: shall prevent other connections (%d)",
+		      -DER_BUSY);
+	print_message("trying to establish a non-exclusive connection\n");
+	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+			       DAOS_PC_RW, &poh, NULL /* info */,
+			       NULL /* ev */);
+	assert_int_equal(rc, -DER_BUSY);
+	print_message("disconnecting the exclusive connection\n");
+	rc = daos_pool_disconnect(poh_ex, NULL /* ev */);
+	assert_int_equal(rc, 0);
+}
+
 /** exclude a target from the pool */
 static void
 pool_exclude(void **state)
@@ -244,8 +291,10 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_connect, async_enable, NULL},
 	{ "POOL4: pool handle local2global and global2local",
 	  pool_connect, hdl_share_enable, NULL},
+	{ "POOL5: exclusive connection",
+	  pool_connect_exclusively, NULL, NULL},
 	/* Keep this one at the end, as it excludes target rank 1. */
-	{ "POOL5: exclude targets and query pool info",
+	{ "POOL6: exclude targets and query pool info",
 	  pool_exclude, async_disable, NULL}
 };
 

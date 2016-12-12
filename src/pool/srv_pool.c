@@ -914,7 +914,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 			skip_update = 1;
 		} else {
 			/* The existing one does not match the new one. */
-			D_ERROR("found conflicting pool handle\n");
+			D_ERROR(DF_UUID": found conflicting pool handle\n",
+				DP_UUID(in->pci_op.pi_uuid));
 			D_GOTO(out_lock, rc = -DER_EXIST);
 		}
 	} else if (rc != -DER_NONEXIST) {
@@ -926,8 +927,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc);
 
 	if (!permitted(&attr, in->pci_uid, in->pci_gid, in->pci_capas)) {
-		D_ERROR("refusing connect attempt for uid %u gid %u "DF_X64"\n",
-			in->pci_uid, in->pci_gid, in->pci_capas);
+		D_ERROR(DF_UUID": refusing connect attempt for uid %u gid %u "
+			DF_X64"\n", DP_UUID(in->pci_op.pi_uuid), in->pci_uid,
+			in->pci_gid, in->pci_capas);
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
@@ -949,6 +951,33 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (skip_update)
 		D_GOTO(out_map_version, rc = 0);
 
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES, &nhandles,
+			      sizeof(nhandles));
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
+
+	/* Take care of exclusive handles. */
+	if (nhandles != 0) {
+		if (in->pci_capas & DAOS_PC_EX) {
+			D_DEBUG(DF_DSMS, DF_UUID": others already connected\n",
+				DP_UUID(in->pci_op.pi_uuid));
+			D_GOTO(out_map_version, rc = -DER_BUSY);
+		} else {
+			/*
+			 * If there is a non-exclusive handle, then all handles
+			 * are non-exclusive.
+			 */
+			rc = dbtree_uv_fetch(svc->ps_handles, BTR_PROBE_FIRST,
+					     NULL /* uuid_in */,
+					     NULL /* uuid_out */, &hdl,
+					     sizeof(hdl));
+			if (rc != 0)
+				D_GOTO(out_map_version, rc);
+			if (hdl.ph_capas & DAOS_PC_EX)
+				D_GOTO(out_map_version, rc = -DER_BUSY);
+		}
+	}
+
 	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
 				in->pci_capas);
 	if (rc != 0) {
@@ -966,11 +995,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	}
 
 	hdl.ph_capas = in->pci_capas;
-
-	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES, &nhandles,
-			      sizeof(nhandles));
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
 	nhandles++;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);

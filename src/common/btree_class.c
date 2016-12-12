@@ -734,6 +734,29 @@ dbtree_uv_lookup(daos_handle_t tree, const uuid_t uuid, void *value,
 }
 
 int
+dbtree_uv_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
+		const uuid_t uuid_in, uuid_t uuid_out, void *value, size_t size)
+{
+	daos_iov_t	key_in;
+	daos_iov_t	key_out;
+	daos_iov_t	val;
+	int		rc;
+
+	daos_iov_set(&key_in, (void *)uuid_in, sizeof(uuid_t));
+	daos_iov_set(&key_out, uuid_out, sizeof(uuid_t));
+	daos_iov_set(&val, value, size);
+
+	rc = dbtree_fetch(tree, opc, &key_in, &key_out, &val);
+	if (rc == -DER_NONEXIST)
+		D_DEBUG(DF_DSMS, "cannot find opc=%d in="DF_UUID"\n", opc,
+			DP_UUID(uuid_in));
+	else if (rc != 0)
+		D_ERROR("failed to fetch opc=%d in="DF_UUID": %d\n", opc,
+			DP_UUID(uuid_in), rc);
+	return rc;
+}
+
+int
 dbtree_uv_delete(daos_handle_t tree, const uuid_t uuid)
 {
 	daos_iov_t	key;

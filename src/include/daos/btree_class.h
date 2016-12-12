@@ -55,6 +55,9 @@ int dbtree_uv_update(daos_handle_t tree, const uuid_t uuid, const void *value,
 		     size_t size);
 int dbtree_uv_lookup(daos_handle_t tree, const uuid_t uuid, void *value,
 		     size_t size);
+int dbtree_uv_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
+		    const uuid_t uuid_in, uuid_t uuid_out, void *value,
+		    size_t size);
 int dbtree_uv_delete(daos_handle_t tree, const uuid_t uuid);
 int dbtree_uv_create_tree(daos_handle_t tree, const uuid_t uuid,
 			  unsigned int class, uint64_t feats,
