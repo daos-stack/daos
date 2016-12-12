@@ -126,7 +126,9 @@ modules_load()
 static int
 server_init()
 {
-	int	 rc;
+	int		rc;
+	crt_rank_t	rank = -1;
+	uint32_t	size = -1;
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -164,6 +166,11 @@ server_init()
 	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
 	D_DEBUG(DF_SERVER, "Service is now running\n");
+
+	crt_group_rank(NULL, &rank);
+	crt_group_size(NULL, &size);
+	D_PRINT("DAOS server (v%s) started on rank %u (out of %u) with %u "
+		"xstream(s)\n", DAOS_VERSION, rank, size, dss_nxstreams);
 
 	return 0;
 

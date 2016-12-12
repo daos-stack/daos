@@ -58,7 +58,7 @@ else:
 env.Alias('install', '$PREFIX')
 config.Finish()
 
-DAOS_VERSION = "0.0.1"
+DAOS_VERSION = "0.0.2"
 Export('DAOS_VERSION')
 
 if env['PLATFORM'] == 'darwin':
@@ -67,7 +67,7 @@ if env['PLATFORM'] == 'darwin':
 
 # Compiler options
 env.Append(CCFLAGS = ['-g', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
-env.Append(CCFLAGS = ['-O2'])
+env.Append(CCFLAGS = ['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
 
 # generate targets in specific build dir to avoid polluting the source code
 VariantDir('build', '.', duplicate=0)
