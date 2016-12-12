@@ -136,6 +136,9 @@ obj_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
 {
 	crt_opcode_t opcode;
 
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_REQ_CREATE_TIMEOUT))
+		return -DER_TIMEDOUT;
+
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_OBJ_MODULE, 1);
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);

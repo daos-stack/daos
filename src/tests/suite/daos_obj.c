@@ -958,6 +958,18 @@ io_simple_update_crt_error(void **state)
 }
 
 static void
+io_simple_update_crt_req_error(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+
+	arg->fail_loc = DAOS_OBJ_REQ_CREATE_TIMEOUT | DAOS_FAIL_ONCE;
+
+	oid = dts_oid_gen(DAOS_OC_LARGE_RW, arg->myrank);
+	io_simple_internal(state, oid);
+}
+
+static void
 close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid)
 {
 	int rc;
@@ -1182,8 +1194,12 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO17: fetch size with NULL sgl", fetch_size, async_disable, NULL},
 	{ "IO18: io crt error", io_simple_update_crt_error,
 	  async_disable, NULL},
-	{ "IO19: io crt error", io_simple_update_crt_error,
+	{ "IO19: io crt error (async)", io_simple_update_crt_error,
 	  async_enable, NULL},
+	{ "IO20: io crt req create timeout (sync)",
+	  io_simple_update_crt_req_error, async_disable, NULL},
+	{ "IO21: io crt req create timeout (async)",
+	  io_simple_update_crt_req_error, async_enable, NULL},
 };
 
 int
