@@ -83,7 +83,6 @@ void				*akbuf;
 static daos_handle_t		eq;
 unsigned int			naios;
 static daos_event_t		**events;
-static daos_oclass_id_t		obj_class;
 bool				t_validate;
 bool				t_pretty_print;
 bool				t_kill_update;
@@ -91,6 +90,7 @@ bool				t_kill_fetch;
 bool				t_kill_enum;
 bool				t_kill_server;
 uint64_t			t_wait;
+daos_oclass_id_t		obj_class = DAOS_OC_LARGE_RW;
 
 struct test {
 	/* Test type */
@@ -1461,6 +1461,7 @@ Usage: daosbench -t TEST -p $UUID [OPTIONS]\n\
 	--testid=id | -o	Test ID(unique for objectID) \n\
 	--object-class=oc | -j	Object Class options : \n\
 				TINY, SMALL, LARGE, REPL, REPL_MAX \n\
+				(default object class : LARGE) \n\
 	--aios=N | -a		Submit N in-flight I/O requests.\n\
 	--dpool=pool | -p	DAOS pool through dmg tool.\n\
 	--keys=N | -k		Number of keys to be created in the test. \n\
