@@ -1,4 +1,4 @@
-# Copyright (C) 2016 Intel Corporation
+# Copyright (C) 2016-2017 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,8 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """install test scripts"""
 
-TESTSCRIPTS = ["cart_echo_test.py", "cart_test_group.py", "commontestsuite.py"]
+TESTSCRIPTS = ["cart_echo_test.py", "cart_test_group.py",
+               "cart_self_test.py", "commontestsuite.py"]
 
 def scons():
     """Run scons"""

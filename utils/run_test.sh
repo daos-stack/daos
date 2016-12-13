@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (C) 2016 Intel Corporation
+# Copyright (C) 2016-2017 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -59,7 +59,7 @@ if [[ "$CART_TEST_MODE" =~ (native|all) ]]; then
   echo "Nothing to do yet, wish we could fail some tests"
   scons utest
   cd ${TESTDIR}
-  python3.4 test_runner scripts/cart_echo_test.yml scripts/cart_test_group.yml
+  python3.4 test_runner scripts/cart_echo_test.yml scripts/cart_test_group.yml scripts/cart_self_test.yml
   cd -
 fi
 
@@ -69,18 +69,30 @@ if [[ "$CART_TEST_MODE" =~ (memcheck|all) ]]; then
   export TR_USE_VALGRIND=memcheck
   cd ${TESTDIR}
   set +e
-  python3.4 test_runner scripts/cart_echo_test.yml scripts/cart_test_group.yml
+  python3.4 test_runner scripts/cart_echo_test.yml scripts/cart_test_group.yml scripts/cart_self_test.yml
   error=$?
   set -e
   TESTLOGS="/testLogs/testRun"
-  TESTECHODIR="cart_echo_test_loop0/cart_echo_test_default"
+
   cd -
   RESULTS="valgrind_results"
   if [[ ! -e ${RESULTS} ]]; then mkdir ${RESULTS}; fi
+
+  # TODO: This looks like it'll copy all valgrind logs, not just the ones from
+  # the current test run.
+  TESTECHODIR="cart_echo_test_loop0/cart_echo_test_default"
   cp -R ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/*/valgrind*.xml ${RESULTS}/.
 
   TESTECHODIR="cart_test_group_loop0/cart_test_group_default"
   cp -R ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/*/valgrind*.xml ${RESULTS}/.
+
+  # Skip this for now - if DVM isn't enabled then the test will be skipped and
+  # there is no easy way to check for that here.
+  TESTECHODIR="cart_self_test_loop0/cart_self_test_default"
+  if [ -d ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/ ]
+  then
+      cp -R ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/*/valgrind*.xml ${RESULTS}/.
+  fi
   if [ $error != 0 ]; then
     exit $error
   fi

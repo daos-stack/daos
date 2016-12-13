@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2016 Intel Corporation
+# Copyright (C) 2016-2017 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -133,6 +133,32 @@ class CommonTestSuite(unittest.TestCase):
 
         if procrtn is None:
             self.logger.info("%s: Again stopping processes :%s", \
+              suitetitle, proc.pid)
+            procrtn = -1
+            try:
+                proc.terminate()
+                proc.wait(2)
+            except ProcessLookupError:
+                pass
+            except Exception:
+                self.logger.info("%s: killing processes :%s", \
+                  suitetitle, proc.pid)
+                proc.kill()
+
+        self.logger.info("%s: %s - return code: %d\n", \
+          suitetitle, msg, procrtn)
+        return procrtn
+
+    def common_stop_process_now(self, suitetitle, msg, proc):
+        """ wait for process to terminate """
+        self.logger.info("%s: %s - terminating processes :%s", \
+          suitetitle, msg, proc.pid)
+
+        proc.poll()
+        procrtn = proc.returncode
+
+        if procrtn is None:
+            self.logger.info("%s: stopping processes :%s", \
               suitetitle, proc.pid)
             procrtn = -1
             try:
