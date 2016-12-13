@@ -48,6 +48,9 @@ static char		modules[MAX_MODULE_OPTIONS + 1];
  */
 static unsigned int	nr_threads;
 
+/** Server crt group ID */
+static char	       *server_group_id;
+
 /** HW topology */
 hwloc_topology_t	dss_topo;
 
@@ -150,7 +153,7 @@ server_init()
 	D_DEBUG(DF_SERVER, "Module interface successfully initialized\n");
 
 	/* initialize the network layer */
-	rc = crt_init(NULL, NULL, CRT_FLAG_BIT_SERVER);
+	rc = crt_init(server_group_id, CRT_FLAG_BIT_SERVER);
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	D_DEBUG(DF_SERVER, "Network successfully initialized\n");
@@ -198,7 +201,8 @@ static void
 usage(char *prog, FILE *out)
 {
 	fprintf(out,
-		"Usage: %s [ -m vos,mgmt,pool,cont,obj,tier ] [-c #cores]\n",
+		"Usage: %s [ -m vos,mgmt,pool,cont,obj,tier ] [-c #cores]"
+		"          [-g server_group_name]\n",
 		prog);
 }
 
@@ -206,16 +210,17 @@ static int
 parse(int argc, char **argv)
 {
 	struct	option opts[] = {
-		{ "modules", required_argument, NULL, 'm' },
-		{ "number of cores to use", required_argument, NULL, 'c' },
-		{ NULL },
+		{ "modules",	required_argument,	NULL,	'm' },
+		{ "cores",	required_argument,	NULL,	'c' },
+		{ "group",	required_argument,	NULL,	'g' },
+		{ NULL,		0,			NULL,	0}
 	};
 	int	rc = 0;
 	int	c;
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:m:", opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "c:m:g:", opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
@@ -223,7 +228,7 @@ parse(int argc, char **argv)
 				usage(argv[0], stderr);
 				break;
 			}
-			sprintf(modules, "%s", optarg);
+			snprintf(modules, sizeof(modules), "%s", optarg);
 			break;
 		case 'c': {
 			unsigned int	 nr;
@@ -237,6 +242,9 @@ parse(int argc, char **argv)
 			nr_threads = nr;
 			break;
 		}
+		case 'g':
+			server_group_id = optarg;
+			break;
 		default:
 			usage(argv[0], stderr);
 			rc = -DER_INVAL;

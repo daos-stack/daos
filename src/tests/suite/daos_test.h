@@ -46,6 +46,7 @@ typedef struct {
 	int			myrank;
 	int			rank_size;
 	daos_rank_list_t	svc;
+	const char	       *group;
 	uuid_t			pool_uuid;
 	uuid_t			co_uuid;
 	unsigned int		mode;

@@ -61,7 +61,7 @@ pool_evict_discard(void **state)
 
 	print_message("evict pool connections, reconnect, and reopen cont\n");
 	if (arg->myrank == 0) {
-		rc = daos_pool_evict(arg->pool_uuid, "srv_grp", NULL /* ev */);
+		rc = daos_pool_evict(arg->pool_uuid, arg->group, NULL /* ev */);
 		assert_int_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -70,9 +70,9 @@ pool_evict_discard(void **state)
 	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
 	assert_int_equal(rc, 0);
 	if (arg->myrank == 0) {
-		rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
-				       &arg->svc, DAOS_PC_RW, &arg->poh,
-				       NULL /* info */, NULL /* ev */);
+		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
+				       DAOS_PC_RW, &arg->poh, NULL /* info */,
+				       NULL /* ev */);
 		assert_int_equal(rc, 0);
 	}
 	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 1);

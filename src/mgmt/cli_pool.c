@@ -49,6 +49,7 @@ pool_create_cp(void *arg, daos_event_t *ev, int rc)
 	/** report list of targets running the metadata service */
 	daos_rank_list_copy(svc, pc_out->pc_svc, false);
 out:
+	daos_group_detach(sp->sp_rpc->cr_ep.ep_grp);
 	crt_req_decref(sp->sp_rpc);
 	return rc;
 }
@@ -66,10 +67,6 @@ dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	struct daos_op_sp		*sp;
 	int				 rc = 0;
 
-	if (grp == NULL || strlen(grp) == 0) {
-		D_ERROR("Invalid parameter of grp (NULL or empty string).\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 	if (dev == NULL || strlen(dev) == 0) {
 		D_ERROR("Invalid parameter of dev (NULL or empty string).\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -77,7 +74,10 @@ dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 
 	uuid_generate(uuid);
 
-	svr_ep.ep_grp = NULL;
+	rc = daos_group_attach(grp, &svr_ep.ep_grp);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_CREATE, DAOS_MGMT_MODULE, 1);
@@ -129,6 +129,7 @@ out_put_req:
 	crt_req_decref(rpc_req);
 	/** dec ref taken for crt_req_create */
 	crt_req_decref(rpc_req);
+	daos_group_detach(svr_ep.ep_grp);
 	D_GOTO(out, rc);
 }
 
@@ -151,6 +152,7 @@ pool_destroy_cp(void *arg, daos_event_t *ev, int rc)
 	}
 
 out:
+	daos_group_detach(sp->sp_rpc->cr_ep.ep_grp);
 	crt_req_decref(sp->sp_rpc);
 	return rc;
 }
@@ -170,12 +172,11 @@ dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
 		D_ERROR("Invalid parameter of uuid (NULL).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	if (grp == NULL || strlen(grp) == 0) {
-		D_ERROR("Invalid parameter of grp (NULL or empty string).\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 
-	svr_ep.ep_grp = NULL;
+	rc = daos_group_attach(grp, &svr_ep.ep_grp);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_DESTROY, DAOS_MGMT_MODULE, 1);
@@ -221,5 +222,6 @@ out_put_req:
 	crt_req_decref(rpc_req);
 	/** dec ref taken for crt_req_create */
 	crt_req_decref(rpc_req);
+	daos_group_detach(svr_ep.ep_grp);
 	D_GOTO(out, rc);
 }

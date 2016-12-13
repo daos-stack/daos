@@ -71,6 +71,7 @@ pool_free(struct daos_hlink *hlink)
 	D_ASSERT(daos_list_empty(&pool->dp_co_list));
 	if (pool->dp_map != NULL)
 		pool_map_destroy(pool->dp_map);
+	daos_group_detach(pool->dp_group);
 	D_FREE_PTR(pool);
 }
 
@@ -269,7 +270,7 @@ pool_connect_cp(void *data, daos_event_t *ev, int rc)
 	}
 
 	/* add pool to hash */
-	dsmc_pool_add_cache(pool, sp->sp_hdlp);
+	dc_pool_add_cache(pool, sp->sp_hdlp);
 
 	D_DEBUG(DF_DSMC, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID
 		" master\n", DP_UUID(pool->dp_pool), sp->sp_hdlp->cookie,
@@ -309,14 +310,15 @@ dc_pool_connect(const uuid_t uuid, const char *grp,
 	uuid_generate(pool->dp_pool_hdl);
 	pool->dp_capas = flags;
 
+	rc = daos_group_attach(grp, &pool->dp_group);
+	if (rc != 0)
+		D_GOTO(out_pool, rc);
+
 	D_DEBUG(DF_DSMC, DF_UUID": connecting: hdl="DF_UUIDF" flags=%x\n",
 		DP_UUID(uuid), DP_UUID(pool->dp_pool_hdl), flags);
 
-	/*
-	 * Currently, rank 0 runs the pool and the (only) container service.
-	 * ep.ep_grp_id and ep.ep_tag are not used at the moment.
-	 */
-	ep.ep_grp = NULL;
+	/* Currently, rank 0 runs the pool and the (only) container service. */
+	ep.ep_grp = pool->dp_group;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
@@ -410,7 +412,7 @@ pool_disconnect_cp(void *arg, daos_event_t *ev, int rc)
 	daos_placement_fini(pool->dp_map);
 	pthread_rwlock_unlock(&pool->dp_map_lock);
 
-	dsmc_pool_del_cache(pool);
+	dc_pool_del_cache(pool);
 	sp->sp_hdl.cookie = 0;
 out:
 	crt_req_decref(sp->sp_rpc);
@@ -454,7 +456,7 @@ dc_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 		daos_placement_fini(pool->dp_map);
 		pthread_rwlock_unlock(&pool->dp_map_lock);
 
-		dsmc_pool_del_cache(pool);
+		dc_pool_del_cache(pool);
 		poh.cookie = 0;
 		dc_pool_put(pool);
 		if (ev != NULL) {
@@ -464,7 +466,7 @@ dc_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 		return rc;
 	}
 
-	ep.ep_grp = NULL;
+	ep.ep_grp = pool->dp_group;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 	rc = pool_req_create(daos_ev2ctx(ev), ep, POOL_DISCONNECT, &rpc);
@@ -507,8 +509,34 @@ out_put_req:
 
 }
 
+#define DC_POOL_GLOB_MAGIC	(0x16da0386)
+
+/* Structure of global buffer for dc_pool */
+struct dc_pool_glob {
+	/* magic number, DC_POOL_GLOB_MAGIC */
+	uint32_t	dpg_magic;
+	uint32_t	dpg_padding;
+	/* pool group_id, uuid, and capas */
+	char		dpg_group_id[CRT_GROUP_ID_MAX_LEN];
+	uuid_t		dpg_pool;
+	uuid_t		dpg_pool_hdl;
+	uint64_t	dpg_capas;
+	/* poolmap version */
+	uint32_t	dpg_map_version;
+	/* number of component of poolbuf, same as pool_buf::pb_nr */
+	uint32_t	dpg_map_pb_nr;
+	struct pool_buf	dpg_map_buf[0];
+};
+
+static inline daos_size_t
+dc_pool_glob_buf_size(unsigned int pb_nr)
+{
+	return offsetof(struct dc_pool_glob, dpg_map_buf) +
+	       pool_buf_size(pb_nr);
+}
+
 static inline void
-dsmc_swap_pool_buf(struct pool_buf *pb)
+swap_pool_buf(struct pool_buf *pb)
 {
 	struct pool_component	*pool_comp;
 	int			 i;
@@ -534,27 +562,28 @@ dsmc_swap_pool_buf(struct pool_buf *pb)
 }
 
 static inline void
-dsmc_swap_pool_glob(struct dsmc_pool_glob *pool_glob)
+swap_pool_glob(struct dc_pool_glob *pool_glob)
 {
 	D_ASSERT(pool_glob != NULL);
 
 	D_SWAP32S(&pool_glob->dpg_magic);
-	/* skip pool_glob->dpg_padding) */
+	/* skip pool_glob->dpg_padding */
+	/* skip pool_glob->dpg_group_id[] */
 	/* skip pool_glob->dpg_pool (uuid_t) */
 	/* skip pool_glob->dpg_pool_hdl (uuid_t) */
 	D_SWAP64S(&pool_glob->dpg_capas);
 	D_SWAP32S(&pool_glob->dpg_map_version);
 	D_SWAP32S(&pool_glob->dpg_map_pb_nr);
-	dsmc_swap_pool_buf(pool_glob->dpg_map_buf);
+	swap_pool_buf(pool_glob->dpg_map_buf);
 }
 
 static int
-dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
+dc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 {
 	struct dc_pool		*pool;
 	struct pool_buf		*map_buf;
 	uint32_t		 map_version;
-	struct dsmc_pool_glob	*pool_glob;
+	struct dc_pool_glob	*pool_glob;
 	daos_size_t		 glob_buf_size;
 	uint32_t		 pb_nr;
 	int			 rc = 0;
@@ -573,7 +602,7 @@ dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 		D_GOTO(out_pool, rc);
 
 	pb_nr = map_buf->pb_nr;
-	glob_buf_size = dsmc_pool_glob_buf_size(pb_nr);
+	glob_buf_size = dc_pool_glob_buf_size(pb_nr);
 	if (glob->iov_buf == NULL) {
 		glob->iov_buf_len = glob_buf_size;
 		D_GOTO(out_map_buf, rc = 0);
@@ -588,8 +617,11 @@ dsmc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	glob->iov_len = glob_buf_size;
 
 	/* init pool global handle */
-	pool_glob = (struct dsmc_pool_glob *)glob->iov_buf;
+	pool_glob = (struct dc_pool_glob *)glob->iov_buf;
 	pool_glob->dpg_magic = DC_POOL_GLOB_MAGIC;
+	strncpy(pool_glob->dpg_group_id, pool->dp_group->cg_grpid,
+		sizeof(pool_glob->dpg_group_id) - 1);
+	pool_glob->dpg_group_id[sizeof(pool_glob->dpg_group_id) - 1] = '\0';
 	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
 	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
 	pool_glob->dpg_capas = pool->dp_capas;
@@ -603,7 +635,7 @@ out_pool:
 	dc_pool_put(pool);
 out:
 	if (rc != 0)
-		D_ERROR("dsmc_pool_l2g failed, rc: %d\n", rc);
+		D_ERROR("dc_pool_l2g failed, rc: %d\n", rc);
 	return rc;
 }
 
@@ -623,20 +655,20 @@ dc_pool_local2global(daos_handle_t poh, daos_iov_t *glob)
 			glob->iov_buf, glob->iov_buf_len, glob->iov_len);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	if (dsmc_handle_type(poh) != DAOS_HTYPE_POOL) {
+	if (daos_hhash_key_type(poh.cookie) != DAOS_HTYPE_POOL) {
 		D_DEBUG(DF_DSMC, "Bad type (%d) of poh handle.\n",
-			dsmc_handle_type(poh));
+			daos_hhash_key_type(poh.cookie));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = dsmc_pool_l2g(poh, glob);
+	rc = dc_pool_l2g(poh, glob);
 
 out:
 	return rc;
 }
 
 static int
-dsmc_pool_g2l(struct dsmc_pool_glob *pool_glob, daos_handle_t *poh)
+dc_pool_g2l(struct dc_pool_glob *pool_glob, daos_handle_t *poh)
 {
 	struct dc_pool		*pool;
 	struct pool_buf		*map_buf;
@@ -658,6 +690,10 @@ dsmc_pool_g2l(struct dsmc_pool_glob *pool_glob, daos_handle_t *poh)
 	/* set slave flag to avoid export it again */
 	pool->dp_slave = 1;
 
+	rc = daos_group_attach(pool_glob->dpg_group_id, &pool->dp_group);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
 	rc = pool_map_create(map_buf, pool_glob->dpg_map_version,
 			     &pool->dp_map);
 	if (rc != 0) {
@@ -670,7 +706,7 @@ dsmc_pool_g2l(struct dsmc_pool_glob *pool_glob, daos_handle_t *poh)
 		D_GOTO(out, rc);
 
 	/* add pool to hash */
-	dsmc_pool_add_cache(pool, poh);
+	dc_pool_add_cache(pool, poh);
 
 	D_DEBUG(DF_DSMC, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID
 		" slave\n", DP_UUID(pool->dp_pool), poh->cookie,
@@ -678,7 +714,7 @@ dsmc_pool_g2l(struct dsmc_pool_glob *pool_glob, daos_handle_t *poh)
 
 out:
 	if (rc != 0)
-		D_ERROR("dsmc_pool_g2l failed, rc: %d.\n", rc);
+		D_ERROR("dc_pool_g2l failed, rc: %d.\n", rc);
 	if (pool != NULL)
 		dc_pool_put(pool);
 	return rc;
@@ -687,7 +723,7 @@ out:
 int
 dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 {
-	struct dsmc_pool_glob	 *pool_glob;
+	struct dc_pool_glob	 *pool_glob;
 	int			  rc = 0;
 
 	if (glob.iov_buf == NULL || glob.iov_buf_len == 0 ||
@@ -702,18 +738,18 @@ dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	pool_glob = (struct dsmc_pool_glob *)glob.iov_buf;
+	pool_glob = (struct dc_pool_glob *)glob.iov_buf;
 	if (pool_glob->dpg_magic == D_SWAP32(DC_POOL_GLOB_MAGIC)) {
-		dsmc_swap_pool_glob(pool_glob);
+		swap_pool_glob(pool_glob);
 		D_ASSERT(pool_glob->dpg_magic == DC_POOL_GLOB_MAGIC);
 	} else if (pool_glob->dpg_magic != DC_POOL_GLOB_MAGIC) {
 		D_ERROR("Bad hgh_magic: 0x%x.\n", pool_glob->dpg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = dsmc_pool_g2l(pool_glob, poh);
+	rc = dc_pool_g2l(pool_glob, poh);
 	if (rc != 0)
-		D_ERROR("dsmc_pool_g2l failed, rc: %d.\n", rc);
+		D_ERROR("dc_pool_g2l failed, rc: %d.\n", rc);
 
 out:
 	return rc;
@@ -771,7 +807,7 @@ dc_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
 		" tgts[0]=%u\n", DP_UUID(pool->dp_pool), tgts->rl_nr.num,
 		DP_UUID(pool->dp_pool_hdl), tgts->rl_ranks[0]);
 
-	ep.ep_grp = NULL;
+	ep.ep_grp = pool->dp_group;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
@@ -885,7 +921,7 @@ dc_pool_query(struct dc_pool *pool, crt_context_t ctx, daos_rank_list_t *tgts,
 	D_DEBUG(DF_DSMC, DF_UUID": querying: hdl="DF_UUID" tgts=%p info=%p\n",
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl), tgts, info);
 
-	ep.ep_grp = NULL;
+	ep.ep_grp = pool->dp_group;
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
@@ -954,6 +990,7 @@ pool_evict_cp(void *arg, daos_event_t *ev, int rc)
 	D_DEBUG(DF_DSMC, DF_UUID": evicted\n", DP_UUID(in->pvi_op.pi_uuid));
 
 out:
+	daos_group_detach(sp->sp_rpc->cr_ep.ep_grp);
 	crt_req_decref(sp->sp_rpc);
 	return rc;
 }
@@ -967,12 +1004,15 @@ dc_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
 	struct daos_op_sp      *sp;
 	int			rc;
 
-	if (uuid_is_null(uuid) || grp == NULL || strlen(grp) == 0)
+	if (uuid_is_null(uuid))
 		return -DER_INVAL;
 
 	D_DEBUG(DF_DSMC, DF_UUID": evicting\n", DP_UUID(uuid));
 
-	ep.ep_grp = NULL;
+	rc = daos_group_attach(grp, &ep.ep_grp);
+	if (rc != 0)
+		return rc;
+
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
@@ -980,7 +1020,7 @@ dc_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
 			DP_UUID(uuid), rc);
-		return rc;
+		D_GOTO(err_group, rc);
 	}
 
 	in = crt_req_get(rpc);
@@ -1003,5 +1043,7 @@ dc_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
 err_rpc:
 	crt_req_decref(sp->sp_rpc);
 	crt_req_decref(rpc);
+err_group:
+	daos_group_detach(ep.ep_grp);
 	return rc;
 }

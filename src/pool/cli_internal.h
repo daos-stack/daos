@@ -28,41 +28,9 @@
 #define __POOL_CLIENT_INTERNAL_H__
 
 #include <daos/client.h>
-#include <daos/pool_map.h>
-
-#define DC_POOL_GLOB_MAGIC	(0x16da0386)
-
-/* Structure of global buffer for dmsc_pool */
-struct dsmc_pool_glob {
-	/* magic number, DC_POOL_GLOB_MAGIC */
-	uint32_t	dpg_magic;
-	uint32_t	dpg_padding;
-	/* pool uuid and capas */
-	uuid_t		dpg_pool;
-	uuid_t		dpg_pool_hdl;
-	uint64_t	dpg_capas;
-	/* poolmap version */
-	uint32_t	dpg_map_version;
-	/* number of component of poolbuf, same as pool_buf::pb_nr */
-	uint32_t	dpg_map_pb_nr;
-	struct pool_buf	dpg_map_buf[0];
-};
-
-static inline daos_size_t
-dsmc_pool_glob_buf_size(unsigned int pb_nr)
-{
-	return offsetof(struct dsmc_pool_glob, dpg_map_buf) +
-	       pool_buf_size(pb_nr);
-}
-
-static inline int
-dsmc_handle_type(daos_handle_t hdl)
-{
-	return daos_hhash_key_type(hdl.cookie);
-}
 
 static inline void
-dsmc_pool_add_cache(struct dc_pool *pool, daos_handle_t *hdl)
+dc_pool_add_cache(struct dc_pool *pool, daos_handle_t *hdl)
 {
 	/* add pool to hash and assign the cookie to hdl */
 	daos_hhash_link_insert(daos_client_hhash, &pool->dp_hlink,
@@ -71,7 +39,7 @@ dsmc_pool_add_cache(struct dc_pool *pool, daos_handle_t *hdl)
 }
 
 static inline void
-dsmc_pool_del_cache(struct dc_pool *pool)
+dc_pool_del_cache(struct dc_pool *pool)
 {
 	daos_hhash_link_delete(daos_client_hhash, &pool->dp_hlink);
 }

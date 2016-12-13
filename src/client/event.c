@@ -90,7 +90,7 @@ daos_eq_lib_init()
 		D_GOTO(unlock, rc);
 	}
 
-	rc = crt_init(NULL, NULL, 0 /* client-only */);
+	rc = crt_init(NULL, 0 /* client-only */);
 	if (rc != 0) {
 		D_ERROR("failed to initialize crt: %d\n", rc);
 		D_GOTO(hash, rc);

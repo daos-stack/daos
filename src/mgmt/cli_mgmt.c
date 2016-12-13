@@ -47,21 +47,24 @@ rip_cp(void *arg, daos_event_t *ev, int rc)
 	}
 
 out:
+	daos_group_detach(rpc->cr_ep.ep_grp);
 	crt_req_decref(rpc);
 	return rc;
 }
 
 int
-dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
-		daos_event_t *ev)
+dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force, daos_event_t *ev)
 {
 	crt_endpoint_t		 svr_ep;
 	crt_rpc_t		*rpc = NULL;
 	crt_opcode_t		 opc;
 	struct mgmt_svc_rip_in	*rip_in;
-	int			 rc = 0;
+	int			 rc;
 
-	svr_ep.ep_grp = NULL;
+	rc = daos_group_attach(grp, &svr_ep.ep_grp);
+	if (rc != 0)
+		return rc;
+
 	svr_ep.ep_rank = rank;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE, 1);
@@ -69,7 +72,7 @@ dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
 			rc);
-		D_GOTO(out, rc);
+		D_GOTO(err_grp, rc);
 	}
 
 	D_ASSERT(rpc != NULL);
@@ -80,23 +83,23 @@ dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 	rip_in->rip_flags = force;
 
 	rc = daos_event_register_comp_cb(ev, rip_cp, rpc);
-	if (rc != 0) {
-		crt_req_decref(rpc);
-		D_GOTO(out, rc);
-	}
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
 
 	rc = daos_event_launch(ev);
-	if (rc != 0) {
-		crt_req_decref(rpc);
-		D_GOTO(out, rc);
-	}
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
 
 	crt_req_addref(rpc); /** for rip_cp */
 	D_DEBUG(DF_MGMT, "killing rank %u\n", rank);
 
 	/** send the request */
-	rc = daos_rpc_send(rpc, ev);
-out:
+	return daos_rpc_send(rpc, ev);
+
+err_rpc:
+	crt_req_decref(rpc);
+err_grp:
+	daos_group_detach(svr_ep.ep_grp);
 	return rc;
 }
 

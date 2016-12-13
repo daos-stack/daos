@@ -47,6 +47,7 @@ struct dc_pool {
 	pthread_rwlock_t	dp_co_list_lock;
 	/* pool uuid */
 	uuid_t			dp_pool;
+	crt_group_t	       *dp_group;
 	uuid_t			dp_pool_hdl;
 	uint64_t		dp_capas;
 	pthread_rwlock_t	dp_map_lock;

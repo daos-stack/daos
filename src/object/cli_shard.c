@@ -26,6 +26,7 @@
 #define DD_SUBSYS	DD_FAC(object)
 
 #include <daos/container.h>
+#include <daos/pool.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include "obj_rpc.h"
@@ -283,6 +284,7 @@ obj_rw_cp(struct daos_task *task, int rc)
 out:
 	obj_shard_rw_bulk_fini(sp->sp_rpc);
 	crt_req_decref(sp->sp_rpc);
+	dc_pool_put((struct dc_pool *)sp->sp_hdlp);
 	return rc;
 }
 
@@ -422,12 +424,25 @@ out:
 	return rc;
 }
 
+static struct dc_pool *
+obj_shard_ptr2pool(struct dc_obj_shard *shard)
+{
+	daos_handle_t poh;
+
+	poh = dc_cont_hdl2pool_hdl(shard->do_co_hdl);
+	if (daos_handle_is_inval(poh))
+		return NULL;
+
+	return dc_pool_lookup(poh);
+}
+
 static int
 obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	     daos_dkey_t *dkey, unsigned int nr, daos_vec_iod_t *iods,
 	     daos_sg_list_t *sgls, unsigned int map_ver, struct daos_task *task)
 {
 	struct dc_obj_shard	*dobj;
+	struct dc_pool		*pool;
 	struct rw_async_arg	*rwaa = NULL;
 	crt_rpc_t		*req;
 	struct obj_rw_in	*orw;
@@ -452,13 +467,19 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 		D_GOTO(out_task, rc);
 	}
 
-	tgt_ep.ep_grp = NULL;
+	pool = obj_shard_ptr2pool(dobj);
+	if (pool == NULL) {
+		obj_shard_decref(dobj);
+		D_GOTO(out_task, rc);
+	}
+
+	tgt_ep.ep_grp = pool->dp_group;
 	tgt_ep.ep_rank = dobj->do_rank;
 	tgt_ep.ep_tag = obj_shard_dkey2tag(dobj, dkey);
 	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &req);
 	if (rc != 0) {
 		obj_shard_decref(dobj);
-		D_GOTO(out_task, rc);
+		D_GOTO(out_pool, rc);
 	}
 
 	orw = crt_req_get(req);
@@ -514,6 +535,7 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	crt_req_addref(req);
 	sp->sp_rpc = req;
 	sp->sp_callback = obj_rw_cp;
+	sp->sp_hdlp = (daos_handle_t *)pool;
 
 	if (opc == DAOS_OBJ_RPC_FETCH && orw->orw_sgls.da_arrays != NULL) {
 		/* remember the sgl to copyout the data inline for fetch */
@@ -540,6 +562,8 @@ out_bulk:
 	if (rwaa != NULL)
 		D_FREE_PTR(rwaa);
 	crt_req_decref(req);
+out_pool:
+	dc_pool_put(pool);
 out_task:
 	daos_task_complete(task, rc);
 	return rc;
@@ -632,6 +656,7 @@ out:
 		crt_bulk_free(oei->oei_bulk);
 
 	crt_req_decref(sp->sp_rpc);
+	dc_pool_put((struct dc_pool *)sp->sp_hdlp);
 	return rc;
 }
 
@@ -643,6 +668,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 		      struct daos_task *task)
 {
 	crt_endpoint_t		tgt_ep;
+	struct dc_pool		*pool;
 	crt_rpc_t		*req;
 	struct dc_obj_shard	*dobj;
 	uuid_t			cont_hdl_uuid;
@@ -660,7 +686,11 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
-	tgt_ep.ep_grp = NULL;
+	pool = obj_shard_ptr2pool(dobj);
+	if (pool == NULL)
+		D_GOTO(out_put, rc);
+
+	tgt_ep.ep_grp = pool->dp_group;
 	tgt_ep.ep_rank = dobj->do_rank;
 	if (opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
 		D_ASSERT(key != NULL);
@@ -671,7 +701,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 
 	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &req);
 	if (rc != 0)
-		D_GOTO(out_put, rc);
+		D_GOTO(out_pool, rc);
 
 	oei = crt_req_get(req);
 	if (key != NULL)
@@ -712,6 +742,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	eaa->eaa_sgl = sgl;
 	sp->sp_arg = eaa;
 	sp->sp_callback = enumerate_cp;
+	sp->sp_hdlp = (daos_handle_t *)pool;
 
 	rc = crt_req_send(req, dc_obj_shard_rpc_cb, task);
 	if (rc != 0) {
@@ -726,6 +757,8 @@ out_bulk:
 	crt_bulk_free(oei->oei_bulk);
 out_req:
 	crt_req_decref(req);
+out_pool:
+	dc_pool_put(pool);
 out_put:
 	obj_shard_decref(dobj);
 out_task:

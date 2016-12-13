@@ -122,6 +122,8 @@ struct test {
 	int			t_steps;
 	/* Container UUID */
 	char			*t_container;
+	/* Server crt group ID */
+	char			*t_group;
 };
 
 struct a_ioreq {
@@ -1465,6 +1467,7 @@ Usage: daosbench -t TEST -p $UUID [OPTIONS]\n\
 				TINY, SMALL, LARGE, REPL, REPL_MAX \n\
 				(default object class : LARGE) \n\
 	--aios=N | -a		Submit N in-flight I/O requests.\n\
+	--group=GROUP | -g	Server group ID\n\
 	--dpool=pool | -p	DAOS pool through dmg tool.\n\
 	--keys=N | -k		Number of keys to be created in the test. \n\
 	--indexes=N | -i	Number of key indexes.\n\
@@ -1510,6 +1513,7 @@ test_init(struct test *test, int argc, char *argv[])
 		{"kill-server",		1,	NULL,	'u'},
 		{"pause",		1,	NULL,	'w'},
 		{"container",		1,	NULL,	'n'},
+		{"group",		1,	NULL,	'g'},
 		{NULL,			0,	NULL,	0}
 	};
 	int	rc;
@@ -1633,6 +1637,9 @@ test_init(struct test *test, int argc, char *argv[])
 			break;
 		case 'n':
 			test->t_container = optarg;
+			break;
+		case 'g':
+			test->t_group = optarg;
 			break;
 		default:
 			return 2;
@@ -1783,8 +1790,8 @@ int main(int argc, char *argv[])
 		svcl.rl_nr.num_out = 0;
 		svcl.rl_ranks = &rank;
 
-		rc = daos_pool_connect(pool_uuid, NULL, &svcl, DAOS_PC_RW,
-				       &poh, &pool_info, NULL);
+		rc = daos_pool_connect(pool_uuid, arg.t_group, &svcl,
+				       DAOS_PC_RW, &poh, &pool_info, NULL);
 		DBENCH_CHECK(rc, "Pool %s connect failed\n",
 			     arg.t_pname);
 	}

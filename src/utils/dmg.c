@@ -32,7 +32,7 @@
 
 const unsigned int	 default_mode = 0731;
 const char		*default_size = "256M";
-const char		*default_group = "daos_server_group";
+const char		*default_group;
 
 typedef int (*command_hdlr_t)(int, char *[]);
 

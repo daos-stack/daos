@@ -30,6 +30,12 @@
 #include <getopt.h>
 #include "daos_test.h"
 
+/** All tests in default order ('d' must be the last one) */
+static const char *all_tests = "mpceiACod";
+
+/** Server crt group ID */
+static const char *server_group;
+
 int
 test_setup(void **state, unsigned int step, bool multi_rank)
 {
@@ -54,6 +60,7 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 	arg->uid = geteuid();
 	arg->gid = getegid();
 
+	arg->group = server_group;
 	uuid_clear(arg->pool_uuid);
 	uuid_clear(arg->co_uuid);
 
@@ -70,7 +77,7 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 
 	/** create pool */
 	if (arg->myrank == 0) {
-		rc = daos_pool_create(0731, geteuid(), getegid(), "srv_grp",
+		rc = daos_pool_create(0731, geteuid(), getegid(), arg->group,
 				      NULL, "pmem", 1024*1024*1024, &arg->svc,
 				      arg->pool_uuid, NULL);
 		if (rc)
@@ -91,9 +98,9 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 
 	/** connect to pool */
 	if (arg->myrank == 0) {
-		rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
-				       &arg->svc, DAOS_PC_RW, &arg->poh,
-				       &arg->pool_info, NULL /* ev */);
+		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
+				       DAOS_PC_RW, &arg->poh, &arg->pool_info,
+				       NULL /* ev */);
 		if (rc)
 			print_message("daos_pool_connect failed, rc: %d\n", rc);
 	}
@@ -200,7 +207,8 @@ test_teardown(void **state)
 
 	if (!uuid_is_null(arg->pool_uuid)) {
 		if (arg->myrank == 0) {
-			rc = daos_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
+			rc = daos_pool_destroy(arg->pool_uuid, arg->group, 1,
+					       NULL);
 			if (rc)
 				print_message("daos_pool_destroy failed, rc: %d\n", rc);
 		}
@@ -218,26 +226,6 @@ test_teardown(void **state)
 
 	D_FREE_PTR(arg);
 	return 0;
-}
-
-
-static inline int
-run_all_tests(int rank, int size)
-{
-	int nr_failed = 0;
-
-	nr_failed  = run_daos_mgmt_test(rank, size);
-	nr_failed += run_daos_pool_test(rank, size);
-	nr_failed += run_daos_cont_test(rank, size);
-	nr_failed += run_daos_epoch_test(rank, size);
-	nr_failed += run_daos_io_test(rank, size);
-	nr_failed += run_daos_array_test(rank, size);
-	nr_failed += run_daos_capa_test(rank, size);
-	nr_failed += run_daos_epoch_recovery_test(rank, size);
-	/** must be last for now */
-	nr_failed += run_daos_degraded_test(rank, size);
-
-	return nr_failed;
 }
 
 static void
@@ -259,6 +247,7 @@ print_usage(int rank)
 	print_message("daos_test -o|--daos_epoch_recovery_tests\n");
 	/** print_message("daos_test -r|--rebuild\n"); */
 	print_message("daos_test -a|--daos_all_tests\n");
+	print_message("daos_test -g|--group GROUP\n");
 	print_message("daos_test -h|--help\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 }
@@ -270,52 +259,16 @@ daos_test_print(int rank, char *message)
 		print_message("%s\n", message);
 }
 
-int
-main(int argc, char **argv)
+static int
+run_specified_tests(const char *tests, int rank, int size)
 {
-	int	nr_failed = 0;
-	int	nr_total_failed = 0;
-	int	opt = 0, index = 0;
-	int	rank;
-	int	size;
-	int	rc;
+	int nr_failed = 0;
 
-	MPI_Init(&argc, &argv);
+	if (strlen(tests) == 0)
+		tests = all_tests;
 
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	MPI_Barrier(MPI_COMM_WORLD);
-
-	static struct option long_options[] = {
-		{"daos_all_tests", no_argument, 0, 'a'},
-		{"mgmt", no_argument, 0, 'm'},
-		{"daos_pool_tests", no_argument, 0, 'p'},
-		{"daos_container_tests", no_argument, 0, 'c'},
-		{"capa", no_argument, 0, 'C'},
-		{"daos_io_tests", no_argument, 0, 'i'},
-		{"array", no_argument, 0, 'A'},
-		{"daos_epoch_tests", no_argument, 0, 'e'},
-		{"daos_epoch_recovery_tests", no_argument, 0, 'o'},
-		{"degraded", no_argument, 0, 'd'},
-		/** {"rebuild", no_argument, 0, 'r'}, */
-		{"help", no_argument, 0, 'h'},
-	};
-
-	rc = daos_init();
-	if (rc) {
-		print_message("daos_init() failed with %d\n", rc);
-		return -1;
-	}
-
-	if (argc < 2) {
-		nr_failed = run_all_tests(rank, size);
-		goto exit;
-	}
-
-	while ((opt = getopt_long(argc, argv, "ampcCdiAeoh",
-				  long_options, &index)) != -1) {
-		switch (opt) {
-
+	while (*tests != '\0') {
+		switch (*tests) {
 		case 'm':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS management tests..");
@@ -370,11 +323,71 @@ main(int argc, char **argv)
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_degraded_test(rank, size);
 			break;
+		default:
+			D_ASSERT(0);
+		}
+
+		tests++;
+	}
+
+	return nr_failed;
+}
+
+int
+main(int argc, char **argv)
+{
+	char	tests[64];
+	int	ntests = 0;
+	int	nr_failed;
+	int	nr_total_failed = 0;
+	int	opt = 0, index = 0;
+	int	rank;
+	int	size;
+	int	rc;
+
+	MPI_Init(&argc, &argv);
+
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	static struct option long_options[] = {
+		{"all",		no_argument,		NULL,	'a'},
+		{"mgmt",	no_argument,		NULL,	'm'},
+		{"pool",	no_argument,		NULL,	'p'},
+		{"cont",	no_argument,		NULL,	'c'},
+		{"capa",	no_argument,		NULL,	'C'},
+		{"io",		no_argument,		NULL,	'i'},
+		{"array",	no_argument,		NULL,	'A'},
+		{"epoch",	no_argument,		NULL,	'e'},
+		{"erecov",	no_argument,		NULL,	'o'},
+		{"degraded",	no_argument,		NULL,	'd'},
+		/** {"rebuild", no_argument, NULL, 'r'}, */
+		{"group",	required_argument,	NULL,	'g'},
+		{"help",	no_argument,		NULL,	'h'}
+	};
+
+	rc = daos_init();
+	if (rc) {
+		print_message("daos_init() failed with %d\n", rc);
+		return -1;
+	}
+
+	memset(tests, 0, sizeof(tests));
+
+	while ((opt = getopt_long(argc, argv, "ampcCdiAeog:h",
+				  long_options, &index)) != -1) {
+		if (strchr(all_tests, opt) != NULL) {
+			tests[ntests] = opt;
+			ntests++;
+			continue;
+		}
+		switch (opt) {
 		case 'a':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "All tests");
-			daos_test_print(rank, "=================");
-			nr_failed = run_all_tests(rank, size);
+			break;
+		case 'g':
+			server_group = optarg;
+			break;
 		case 'h':
 			print_usage(rank);
 			goto exit;
@@ -384,6 +397,8 @@ main(int argc, char **argv)
 			goto exit;
 		}
 	}
+
+	nr_failed = run_specified_tests(tests, rank, size);
 
 exit:
 	MPI_Allreduce(&nr_failed, &nr_total_failed, 1, MPI_INT, MPI_SUM,

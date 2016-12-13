@@ -68,7 +68,7 @@ query(void **state)
 		return;
 
 	/** connect to the pool */
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group,
 			       &arg->svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -105,7 +105,7 @@ create(void **state)
 		return;
 
 	/** connect to the pool in read-only mode */
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group,
 			       &arg->svc, DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -122,7 +122,7 @@ create(void **state)
 	assert_int_equal(rc, 0);
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group,
 			       &arg->svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -155,7 +155,7 @@ destroy(void **state)
 		return;
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group,
 			       &arg->svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -179,7 +179,7 @@ destroy(void **state)
 	assert_int_equal(rc, 0);
 
 	/** connect to the pool in read-only mode */
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group,
 			       &arg->svc, DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -195,7 +195,7 @@ destroy(void **state)
 	assert_int_equal(rc, 0);
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group,
 			       &arg->svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -225,7 +225,7 @@ open(void **state)
 		return;
 
 	/** connect to the pool in read-write mode */
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group,
 			       &arg->svc, DAOS_PC_RW, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -244,7 +244,7 @@ open(void **state)
 	assert_int_equal(rc, 0);
 
 	/** reconnect to the pool in read-only mode */
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group,
 			       &arg->svc, DAOS_PC_RO, &poh,
 			       NULL /* info */,
 			       NULL /* ev */);
@@ -293,7 +293,7 @@ io_invalid_poh(void **state)
 
 	if (arg->myrank == 0) {
 		/** connect to the pool in read-write mode */
-		rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
+		rc = daos_pool_connect(arg->pool_uuid, arg->group,
 				       &arg->svc, DAOS_PC_RW, &poh,
 				       NULL /* info */,
 				       NULL /* ev */);

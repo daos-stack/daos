@@ -42,9 +42,8 @@ pool_connect_nonexist(void **state)
 		return;
 
 	uuid_generate(uuid);
-	rc = daos_pool_connect(uuid, NULL /* grp */, &arg->svc,
-			       DAOS_PC_RW, &poh, NULL /* info */,
-			       NULL /* ev */);
+	rc = daos_pool_connect(uuid, arg->group, &arg->svc, DAOS_PC_RW, &poh,
+			       NULL /* info */, NULL /* ev */);
 	assert_int_equal(rc, -DER_NONEXIST);
 }
 
@@ -71,8 +70,8 @@ pool_connect(void **state)
 		/** connect to pool */
 		print_message("rank 0 connecting to pool %ssynchronously ... ",
 			      arg->async ? "a" : "");
-		rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
-				       &arg->svc, DAOS_PC_RW, &poh, &info,
+		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
+				       DAOS_PC_RW, &poh, &info,
 				      arg->async ? &ev : NULL /* ev */);
 		assert_int_equal(rc, 0);
 
@@ -147,12 +146,12 @@ pool_connect_exclusively(void **state)
 	print_message("SUBTEST 1: other connections already exist; shall get "
 		      "%d\n", -DER_BUSY);
 	print_message("establishing a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
 	print_message("trying to establish an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, -DER_BUSY);
@@ -162,7 +161,7 @@ pool_connect_exclusively(void **state)
 
 	print_message("SUBTEST 2: no other connections; shall succeed");
 	print_message("establishing an exclusive connection\n");
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
@@ -170,7 +169,7 @@ pool_connect_exclusively(void **state)
 	print_message("SUBTEST 3: shall prevent other connections (%d)",
 		      -DER_BUSY);
 	print_message("trying to establish a non-exclusive connection\n");
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */, &arg->svc,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
 			       DAOS_PC_RW, &poh, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, -DER_BUSY);
@@ -203,8 +202,8 @@ pool_exclude(void **state)
 	/** connect to pool */
 	print_message("rank 0 connecting to pool %ssynchronously... ",
 		      arg->async ? "a" : "");
-	rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
-			       &arg->svc, DAOS_PC_RW, &poh, &info,
+	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
+			       DAOS_PC_RW, &poh, &info,
 			       arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 
