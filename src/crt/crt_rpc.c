@@ -707,6 +707,10 @@ crt_req_decref(crt_rpc_t *req)
 	pthread_spin_unlock(&rpc_priv->crp_lock);
 
 	if (destroy == 1) {
+		if (rpc_priv->crp_reply_pending == 1)
+			C_WARN("crt_reply_send not called for opc: 0x%x\n",
+			       req->cr_opc);
+
 		rc = crt_hg_req_destroy(rpc_priv);
 		if (rc != 0)
 			C_ERROR("crt_hg_req_destroy failed, rc: %d, "
@@ -1219,6 +1223,7 @@ crt_reply_send(crt_rpc_t *req)
 				rc, rpc_priv->crp_pub.cr_opc);
 	}
 
+	rpc_priv->crp_reply_pending = 0;
 out:
 	return rc;
 }
@@ -1443,6 +1448,10 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	C_ASSERT(rpc_priv != NULL);
 	crt_ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
+
+	/* Set the reply pending bit unless this is a one-way OPCODE */
+	if (!rpc_priv->crp_opc_info->coi_no_reply)
+		rpc_priv->crp_reply_pending = 1;
 
 	if (crt_ctx->cc_pool != NULL) {
 		rc = ABT_thread_create(*(ABT_pool *)crt_ctx->cc_pool,
