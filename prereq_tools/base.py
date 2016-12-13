@@ -851,15 +851,15 @@ class PreReqComponent(object):
         return src_path
 
     def get_config(self, section, name):
-        """Get commit versions"""
+        """Get commit/patch versions"""
         if self.configs is None:
             return None
         if not self.configs.has_section(section):
             return None
-        option = '%s_COMMIT' % name.upper()
-        if not self.configs.has_option(section, option):
+
+        if not self.configs.has_option(section, name):
             return None
-        return self.configs.get(section, '%s_COMMIT' % name.upper())
+        return self.configs.get(section, name)
 
 class _Component(object):
     """A class to define attributes of an external component
