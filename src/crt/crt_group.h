@@ -62,7 +62,10 @@ struct crt_rank_map {
 	enum crt_rank_status	rm_status; /* health status */
 };
 
-/* fields only valid in primary service groups */
+/*
+ * Fields only valid in primary service groups, protected by
+ * crt_grp_priv::gp_rwlock.
+ */
 struct crt_grp_priv_pri_srv {
 	/*
 	 * Minimum Viable Size for the group. If the number of live ranks is
@@ -71,11 +74,9 @@ struct crt_grp_priv_pri_srv {
 	uint32_t		 ps_mvs;
 	/* flag for ranks subscribed to RAS events */
 	uint32_t		 ps_ras:1,
-	/* 1 means there is eviction request bcast in flight, 0 means no such
-	 * bcast in flight
-	 */
+	/* flag for RAS bcast in progress */
 				 ps_ras_bcast_in_prog:1,
-				 /* flag for RAS related variables */
+	/* flag for RAS related variables */
 				 ps_ras_initialized:1;
 	/*
 	 * index of next failed rank to broadcast. only meaninful on ras nodes
@@ -84,7 +85,8 @@ struct crt_grp_priv_pri_srv {
 	uint32_t		 ps_ras_bcast_idx;
 	/* ranks subscribed to RAS events*/
 	crt_rank_list_t		*ps_ras_ranks;
-	crt_rank_list_t		*ps_failed_ranks; /* failed PMIx ranks */
+	/* failed PMIx ranks */
+	crt_rank_list_t		*ps_failed_ranks;
 };
 
 /* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
@@ -132,9 +134,14 @@ struct crt_grp_priv {
 	struct crt_grp_priv_pri_srv
 				*gp_pri_srv;
 	uint32_t		 gp_primary:1, /* flag of primary group */
-				 gp_local:1, /* flag of local group, false means
-					      * attached remote group */
-				 gp_service:1; /* flag of service group */
+	/* flag of local group, false means attached remote group */
+				 gp_local:1,
+	/* flag of service group */
+				 gp_service:1,
+	/* flag of finalizing/destroying */
+				 gp_finalizing:1;
+	/* group reference count now only used for attach/detach. */
+	uint32_t		 gp_refcount;
 
 	/* rank map array, only needed for local primary group */
 	struct crt_rank_map	*gp_rank_map;
@@ -270,6 +277,71 @@ crt_get_subgrp_id()
 	C_DEBUG("crt_get_subgrp_id get subgrp_id: "CF_X64".\n", subgrp_id);
 
 	return subgrp_id;
+}
+
+static inline void
+crt_grp_priv_addref(struct crt_grp_priv *grp_priv)
+{
+	uint32_t	refcount;
+
+	C_ASSERT(grp_priv != NULL);
+	C_ASSERT(grp_priv->gp_primary == 1);
+
+	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+	refcount = ++grp_priv->gp_refcount;
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+
+	C_DEBUG("service group (%s), refcount increased to %d.\n",
+		grp_priv->gp_pub.cg_grpid, refcount);
+}
+
+/*
+ * Decrease the attach refcount and return the result.
+ * Returns negative value for error case.
+ */
+static inline int
+crt_grp_priv_decref(struct crt_grp_priv *grp_priv, bool force)
+{
+	struct crt_grp_gdata	*grp_gdata;
+	bool			bad_ref = false;
+	int			rc;
+
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+	C_ASSERT(grp_priv != NULL);
+	C_ASSERT(grp_priv->gp_primary == 1);
+
+	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+	if (grp_priv == grp_gdata->gg_srv_pri_grp) {
+		/*
+		 * For default attached primary service group, need one extra
+		 * refcount for crt_primary_grp_fini.
+		 */
+		if ((force && grp_priv->gp_refcount == 0) ||
+		    (!force && grp_priv->gp_refcount <= 1))
+			bad_ref = true;
+	} else {
+		if (grp_priv->gp_refcount == 0)
+			bad_ref = true;
+	}
+	if (bad_ref) {
+		rc = -CER_ALREADY;
+	} else {
+		grp_priv->gp_refcount--;
+		rc = grp_priv->gp_refcount;
+		if (rc == 0)
+			grp_priv->gp_finalizing = 1;
+	}
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+
+	if (rc >= 0)
+		C_DEBUG("service group (%s), refcount decreased to %d.\n",
+			grp_priv->gp_pub.cg_grpid, rc);
+	else
+		C_ERROR("service group (%s), refcount already dropped to 0.\n",
+			grp_priv->gp_pub.cg_grpid);
+
+	return rc;
 }
 
 #endif /* __CRT_GROUP_H__ */

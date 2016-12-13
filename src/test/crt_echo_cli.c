@@ -98,6 +98,7 @@ static void run_client(void)
 {
 	crt_group_t			*pri_local_grp = NULL;
 	crt_group_t			*pri_srv_grp = NULL;
+	crt_group_t			*grp_tier1 = NULL;
 	crt_group_t			*grp_tier2 = NULL;
 	crt_endpoint_t			svr_ep;
 	crt_rpc_t			*rpc_req = NULL;
@@ -130,6 +131,10 @@ static void run_client(void)
 	C_ASSERT(rc == 0 && grp_size_cli > 0);
 	rc = crt_group_size(pri_srv_grp, &grp_size_srv);
 	C_ASSERT(rc == 0 && grp_size_srv > 0);
+	rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &grp_tier1);
+	C_ASSERT(rc == 0 && grp_tier1 != NULL);
+	rc = crt_group_detach(grp_tier1);
+	C_ASSERT(rc == 0);
 
 	printf("I'm rank %d in group %s(size %d), srv_group %s with size %d.\n",
 	       myrank, pri_local_grp->cg_grpid, grp_size_cli,

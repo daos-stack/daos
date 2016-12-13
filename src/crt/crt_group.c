@@ -1450,6 +1450,7 @@ crt_primary_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
 		C_ASSERT(srv_grp != NULL);
 		grp_gdata->gg_srv_pri_grp =
 			container_of(srv_grp, struct crt_grp_priv, gp_pub);
+		crt_grp_priv_addref(grp_gdata->gg_srv_pri_grp);
 	}
 
 out:
@@ -1510,6 +1511,11 @@ crt_primary_grp_fini(void)
 
 		crt_grp_priv_destroy(grp_priv);
 	} else {
+		rc = crt_grp_priv_decref(grp_gdata->gg_srv_pri_grp,
+						true /* force */);
+		if (rc != 0)
+			C_ERROR("crt_grp_priv_decref failed, rc: %d.\n", rc);
+
 		rc = crt_grp_detach(&grp_gdata->gg_srv_pri_grp->gp_pub);
 		if (rc != 0) {
 			C_ERROR("crt_grp_detach the gg_srv_pri_grp failed, "
@@ -1702,13 +1708,19 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	is_service = crt_is_service();
 	pthread_rwlock_rdlock(&grp_gdata->gg_rwlock);
 	if (!is_service) {
-		C_ASSERT(grp_gdata->gg_srv_pri_grp != NULL);
+		grp_priv = grp_gdata->gg_srv_pri_grp;
 		if (crt_grp_id_identical(srv_grpid,
-			grp_gdata->gg_srv_pri_grp->gp_pub.cg_grpid)) {
-			C_ERROR("primary service group (%s) need not explicitly"
-				" attached.\n", srv_grpid);
+					 grp_priv->gp_pub.cg_grpid)) {
+			if (grp_priv->gp_finalizing == 0) {
+				crt_grp_priv_addref(grp_priv);
+				*attached_grp = &grp_priv->gp_pub;
+			} else {
+				C_ERROR("group %s finalizing, canot attach.\n",
+					grp_priv->gp_pub.cg_grpid);
+				rc = -CER_NO_PERM;
+			}
 			pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
-			C_GOTO(out, rc = -CER_ALREADY);
+			C_GOTO(out, rc);
 		};
 	}
 
@@ -1716,10 +1728,17 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 				gp_link) {
 		if (crt_grp_id_identical(srv_grpid,
 					 grp_priv->gp_pub.cg_grpid)) {
-			C_ERROR("service group (%s) already attached.\n",
-				srv_grpid);
+			if (grp_priv->gp_finalizing == 0) {
+				crt_grp_priv_addref(grp_priv);
+				*attached_grp = &grp_priv->gp_pub;
+			} else {
+				C_DEBUG("group %s is finalizing, try attach "
+					"again later.\n",
+					grp_priv->gp_pub.cg_grpid);
+				rc = -CER_AGAIN;
+			}
 			pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
-			C_GOTO(out, rc = -CER_ALREADY);
+			C_GOTO(out, rc);
 		}
 	}
 	pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
@@ -1739,14 +1758,23 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 				gp_link) {
 		if (crt_grp_id_identical(srv_grpid,
 					 grp_priv->gp_pub.cg_grpid)) {
-			C_DEBUG("service group (%s) already attached.\n",
-				srv_grpid);
+			crt_grp_detach(grp_at);
+			if (grp_priv->gp_finalizing == 0) {
+				crt_grp_priv_addref(grp_priv);
+				*attached_grp = &grp_priv->gp_pub;
+			} else {
+				C_DEBUG("group %s is finalizing, try attach "
+					"again later.\n",
+					grp_priv->gp_pub.cg_grpid);
+				rc = -CER_AGAIN;
+			}
 			pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
-			C_GOTO(out, rc = -CER_ALREADY);
+			C_GOTO(out, rc);
 		}
 	}
 
 	grp_priv = container_of(grp_at, struct crt_grp_priv, gp_pub);
+	crt_grp_priv_addref(grp_priv);
 	crt_list_add_tail(&grp_priv->gp_link, &grp_gdata->gg_srv_grps_attached);
 	*attached_grp = grp_at;
 
@@ -1837,12 +1865,15 @@ crt_group_detach(crt_group_t *attached_grp)
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
-	if (grp_priv == grp_gdata->gg_srv_pri_grp) {
-		C_ERROR("Need not detach the primary service group.\n");
-		C_GOTO(out, -CER_INVAL);
+	rc = crt_grp_priv_decref(grp_priv, false /* force */);
+	if (rc < 0) {
+		C_ERROR("crt_grp_priv_decref (group %s) failed, "
+			"rc: %d.\n", grp_priv->gp_pub.cg_grpid, rc);
+	} else if (rc > 0) {
+		rc = 0;
+	} else {
+		rc = crt_grp_detach(attached_grp);
 	}
-
-	rc = crt_grp_detach(attached_grp);
 
 out:
 	return rc;

@@ -65,9 +65,6 @@ extern "C" {
  *				to it when initializing. User can provide a NULL
  *				value in that case CRT_DEFAULT_SRV_GRPID will be
  *				used.
- * \param server [IN]		zero means pure client, otherwise will enable
- *				the server which listens for incoming connection
- *				request.
  * \param flags [IN]		bit flags, /see enum crt_init_flag_bits.
  *
  * \return			zero on success, negative value if error
