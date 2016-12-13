@@ -1,0 +1,123 @@
+diff --git a/components.py b/components.py
+index aa104fa..3436b1b 100644
+--- a/components.py
++++ b/components.py
+@@ -64,8 +64,9 @@ else:
+     CCI_REQUIRED += ['rdmacm']
+ CCI_LIB = 'libcci$SHLIBSUFFIX'
+ 
++CCI_COMMIT = '6ebaf8b008a'
+ CCI_BUILD += ['make', 'make install']
+-RETRIEVER = GitRepoRetriever('https://github.com/CCI/cci')
++RETRIEVER = GitRepoRetriever('https://github.com/CCI/cci', False, CCI_COMMIT)
+ REQS.define('cci',
+             retriever=RETRIEVER,
+             commands=CCI_BUILD,
+@@ -93,8 +94,8 @@ REQS.define('mercury',
+                       '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s ' \
+                       '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ ' \
+                       '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX ' \
+-                      '-DBUILD_EXAMPLES=ON ' \
+-                      '-DMERCURY_USE_BOOST_PP=ON ' \
++                      '-DBUILD_EXAMPLES=OFF ' \
++                      '-DMERCURY_USE_BOOST_PP=OFF ' \
+                       '-DMERCURY_ENABLE_VERBOSE_ERROR=OFF ' \
+                       '-DBUILD_TESTING=ON ' \
+                       '-DNA_USE_CCI=ON ' \
+@@ -105,7 +106,7 @@ REQS.define('mercury',
+                       '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE'
+                       % (CCI_LIB), 'make', 'make install'],
+             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
+-            requires=['openpa', 'boost', 'cci'] + RT,
++            requires=['openpa', 'cci'] + RT,
+             extra_include_path=[os.path.join('include', 'na')],
+             out_of_src_build=True)
+ 
+@@ -119,8 +120,9 @@ REQS.define('hwloc', retriever=WEB_RETRIEVER,
+             headers=['hwloc.h'],
+             libs=['hwloc'])
+ 
++PMIX_COMMIT='1f7cccba5da058a3c972b3c598d7e0ae14ce0179'
+ REQS.define('pmix',
+-            retriever=GitRepoRetriever('https://github.com/pmix/master'),
++            retriever=GitRepoRetriever('https://github.com/pmix/master', False, PMIX_COMMIT),
+             commands=['./autogen.sh',
+                       './configure --with-platform=optimized ' \
+                       '--prefix=$PMIX_PREFIX ' \
+@@ -131,7 +133,8 @@ REQS.define('pmix',
+             headers=['pmix.h'],
+             requires=['hwloc', 'event'])
+ 
+-RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
++OMPI_COMMIT='91e1200c142a272b14a9ab0e1af37dea60efa76a'
++RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi', False, OMPI_COMMIT)
+ REQS.define('ompi',
+             retriever=RETRIEVER,
+             commands=['patch -N -p1 < $PATCH_PREFIX/ompi_version.patch; ' \
+@@ -238,15 +241,9 @@ REQS.define('ofi',
+ RETRIEVER = GitRepoRetriever("http://review.whamcloud.com/daos/mcl", True)
+ REQS.define('mcl',
+             retriever=RETRIEVER,
+-            commands=["scons "
+-                      "PMIX_PREBUILT=$PMIX_PREFIX " \
+-                      "OMPI_PREBUILT=$OMPI_PREFIX " \
+-                      "HWLOC_PREBUILT=$HWLOC_PREFIX " \
+-                      "MERCURY_PREBUILT=$MERCURY_PREFIX " \
+-                      "CCI_PREBUILT=$CCI_PREFIX " \
+-                      "OPENPA_PREBUILT=$OPENPA_PREFIX " \
+-                      "PREFIX=$MCL_PREFIX install"],
+-            headers=["process_set.h", "mcl_log.h", "mcl_event.h"],
++            commands=["scons;",
++                      "./install $MCL_PREFIX"],
++            headers=["process_set.h"],
+             libs=["mcl"],
+             requires=['ompi', 'mercury'])
+ 
+diff --git a/prereq_tools/base.py b/prereq_tools/base.py
+index 59415f6..f93175b 100644
+--- a/prereq_tools/base.py
++++ b/prereq_tools/base.py
+@@ -368,11 +368,31 @@ def define_modify_targets(mode=None):
+ class GitRepoRetriever(object):
+     """Identify a git repository from which to download sources"""
+ 
+-    def __init__(self, url, has_submodules=False):
+-
++    def __init__(self, url, has_submodules=False, 
++		 commit=None, patch=None):
++	
+         self.url = url
+         self.has_submodules = has_submodules
+-
++	self.commit_sha = commit
++	self.patch	= patch
++
++    def checkout_commit(self, subdir):
++	""" checkout a certain commit SHA """
++	if self.commit_sha != None:
++		CHECKOUT = ['git checkout %s' %(self.commit_sha)]
++		commands = CHECKOUT
++		if not RUNNER.run_commands(commands, subdir=subdir):
++			raise DownloadFailure(self.url, subdir)
++
++    def apply_patch(self, subdir):
++	""" git-apply a certain hash """
++	if self.patch != None:
++		print "Applying patch %s" %(self.patch)
++		APPLY = ['git apply %s' %(self.patch)]
++		commands = APPLY
++		if not RUNNER.run_commands(commands, subdir=subdir):
++			raise DownloadFailure(self.url, subdir)
++			
+     def update_submodules(self, subdir):
+         """ update the git submodules """
+         if self.has_submodules:
+@@ -385,6 +405,8 @@ class GitRepoRetriever(object):
+         commands = ['git clone %s %s' % (self.url, subdir)]
+         if not RUNNER.run_commands(commands):
+             raise DownloadFailure(self.url, subdir)
++	self.checkout_commit(subdir)
++	self.apply_patch(subdir)
+         self.update_submodules(subdir)
+ 
+     def update(self, subdir):

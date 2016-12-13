@@ -1,0 +1,27 @@
+From 48229d5d9eaa325e086397c056904014c3a85549 Mon Sep 17 00:00:00 2001
+From: Xuezhao Liu <xuezhao.liu@intel.com>
+Date: Wed, 21 Sep 2016 02:25:25 +0000
+Subject: [PATCH 1/2] ignore kwsys mckesum update
+
+---
+ Testing/driver/kwsys | 2 +-
+ src/mchecksum        | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Testing/driver/kwsys b/Testing/driver/kwsys
+index 669e3a0..b1d560a 160000
+--- a/Testing/driver/kwsys
++++ b/Testing/driver/kwsys
+@@ -1 +1 @@
+-Subproject commit 669e3a069e309eba155faf3a2af85802147a18a7
++Subproject commit b1d560a0b9e6c545f65c170bdbbcf5da35123b58
+diff --git a/src/mchecksum b/src/mchecksum
+index e8e14c6..ad12398 160000
+--- a/src/mchecksum
++++ b/src/mchecksum
+@@ -1 +1 @@
+-Subproject commit e8e14c676fbe03bc5c9b10c85caccae4dcec1f29
++Subproject commit ad1239845c49687a13c89b33d041796e3fa577fa
+-- 
+1.8.3.1
+

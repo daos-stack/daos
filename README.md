@@ -37,18 +37,134 @@ DAOS is open-sourced software licensed under the Apache License Version 2.0. Ple
 
 DAOS requires a C99-capable compiler and the scons build tool to build.
 
-DAOS depends on some third-party libraries:
+DAOS depends on CaRT and some third-party libraries:
+- CaRT (https://github.com/daos-stack/cart)
 - Mercury (https://github.com/mercury-hpc/mercury) and CCI (wget http://cci-forum.com/wp-content/uploads/2015/12/cci-0.3.0.tar.gz) for RPC and underneath communication
   The CCI needs to be patched ("patch -p1 < xxx" to apply all patches in utils/cci), can set the CCI_CONFIG environment variable as your cci config file (an example can be found in "utils/cci/cci.ini")
   The mercury uses openpa (http://git.mcs.anl.gov/radix/openpa.git) for atomic operation.
-- MCL and PMIx (https://github.com/pmix/master) for collective communication
+- PMIx (https://github.com/pmix/master) for collective communication.
   The PMIx uses hwloc library (wget https://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.2.tar.gz).
 - Openmpi runtime environment
   The ompi needs to be compiled with the external PMIx/hwloc used by MCL and PMIx (an example configuration is "./configure --with-pmix=/your_pmix_install_path / --with-hwloc=/your_hwloc_install_path --with-libevent=external").
 - NVML library (https://github.com/pmem/nvml.git) for thread-local persistent memory transaction
 
-Can execute "scons" in top DAOS source directory to build it when all the dependent modules installed.
+If all these dependencies are readily available on your machine.
+    - Can execute "scons" in top DAOS source directory to build it when all the dependent modules installed.
+
+## To build DAOS with all dependecies.
+  Check out latest DAOS from repository
+    # git clone https://github.com/daos-stack/daos.git
+
+  DAOS pre-install dependencies
+    Red Hat Enterprise Linux RPM software packages (or)
+    equivalent for other distros)
+    # yum -y install epel-release
+    # yum -y install boost-devel
+    # yum -y install cmake
+    # yum -y install doxygen
+    # yum -y install gcc-c++
+    # yum -y install libevent-devel.x86_64
+    # yum -y install librdmacm-devel.x86_64
+    # yum -y install libtool-ltdl-devel.x86_64
+    # yum -y install libuuid-devel.x86_64
+    # yum -y install openssl-devel.x86_64
+    # yum -y install pandoc.x86_64
+    # yum -y install scons.noarch
+    # yum install -y libcmocka libcmocka-devel
+
+    Cmocka for tests (if rpm not available install from source)
+    Download Cmocka from https://cmocka.org/files/1.1/cmocka-1.1.0.tar.xz
+    tar xvf cmocka-1.1.0.tar.xz
+    cd cmocka
+    mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug .. && make && sudo make install
+
+    Make sure all these below mentioned auto tools are the appropriate versions.
+        m4 (GNU M4) 1.4.16
+        flex 2.5.37
+        autoconf (GNU Autoconf) 2.69
+        automake (GNU automake) 1.13.4
+        libtool (GNU libtool) 2.4.2
+
+    If not available,
+    Install all auto tools in the same directory and export them
+    to PATH/LD_LIBRARY_PATH
+
+    All patches required for installation avaiable in utils/build/
+
+    Mercury
+    -------
+    - Clone and setup repository
+    # git clone https://github.com/mercury-hpc/mercury.git
+    # cd mercury
+    # git checkout 5ccaf79a1
+    # git checkout -b DAOS
+    # git submodule init
+
+    - Download and apply patches
+    #  git am < 0001-ignore-submodule-updates.patch
+    #  git am < 0002-fix-boost-compiling-issue.patch
+
+    - Update submodules
+    # git submodule update
+
+    Auto build DAOS-M setup
+    ------------------------
+
+    - Enable scons\_local # scons\_local is able to walk through all required
+      dependencies for DAOS
+
+    # cd /PATH/TO/daos_m
+    # git submodule init
+    # git submodule update
+
+   - Patch scons\_local
+     # cd scons_local
+     # patch -p1 < scons_local_components.patch
+
+   - Add user PATH
+    # vim ~/.scons_localrc
+    Put following to ~/.scons_localrc file (Replace /USER/PATH with $PATH)
+    #!/usr/bin/python
+    Import('env')
+    env["ENV"]["PATH"] = "/USER/PATH"
+
+   - Build
+    To build all dependencies automatically, we use scons --build-deps feature.
+    # cd daos_m
+    # scons --build-deps=yes MERCURY_SRC=/path/to/mercury/
+    You can use scons TARGET_PREFIX="PATH/TO/INSTALL" to specify a different
+    install directory location. Default path is: /PATH/TO/DAOS/install/
+    TARGET_PREFIX creates individual folder to each component
+    Create Symbolic link ln -s libdaos.so.0.0.1 libdaos.so
+    Set PATH=PATH_TO_DAOS/install/bin/
+    Set LD_LIBRARY_PATH=/PATH/TO/DAOS/install/lib/
+    Set CPATH=PATH/TO/DAOS/install/include/
+
+    Environment Setup for DAOS:
+    ----------------------------
+
+    export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64
+    export LD_LIBRARY_PATH=/path/to/DAOS/install/lib:/path/to/DAOS/install/lib/daos_srv/:/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
+    export CPATH=/path/to/DAOS/install/include/:$CPATH
+    export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
+    export PATH=/path/to/DAOS/install/bin/:/path/to/DAOS/build/src/dmg/tests:/path/to/DAOS/build/src/dsm/tests:/path/to/DAOS/build/src/dsr/tests:$PATH
+    export CCI_CONFIG=/path/to/cci.ini
+    export CRT_PHY_ADDR_STR="cci+tcp", for infiniband use "cci+verbs"
+
+
+    Start Servers
+    --------------
+
+    orterun -np <num_servers> --report-uri ~/uri.txt ./daos_server
+
+    Start Clients
+    --------------
+
+    orterun -np <num_clients> --ompi-server file:~/uri.txt <client_process> eg., ./daos_test
+
+    NB: The above specified instructions has been verified only with CentOS.
+    Installations in other distros might be similar with some variations.
+    Please contact us in our google groups below, if you run into issues.
 
 ## Contacts
-
 For more information on DAOS, please post to our [Google group](https://groups.google.com/forum/#!forum/daos-users).
