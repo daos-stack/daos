@@ -47,8 +47,6 @@
 #include <stdbool.h>
 #include <uuid/uuid.h>
 
-#include <abt.h>
-
 #include <crt_types.h>
 #include <crt_errno.h>
 #include <crt_iv.h>

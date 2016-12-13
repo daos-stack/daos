@@ -40,6 +40,8 @@
 
 #include <crt_internal.h>
 
+#include <abt.h>
+
 /* CRT internal RPC format definitions */
 
 /* group create */
