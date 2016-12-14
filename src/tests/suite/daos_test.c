@@ -312,7 +312,7 @@ main(int argc, char **argv)
 		goto exit;
 	}
 
-	while ((opt = getopt_long(argc, argv, "ampcCdiAeo:h",
+	while ((opt = getopt_long(argc, argv, "ampcCdiAeoh",
 				  long_options, &index)) != -1) {
 		switch (opt) {
 

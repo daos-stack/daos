@@ -85,8 +85,6 @@ pool_evict_discard(void **state)
 	rc = daos_cont_close(coh, NULL /* ev */);
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
-	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
-	assert_int_equal(rc, 0);
 }
 
 static const struct CMUnitTest epoch_recovery_tests[] = {
@@ -97,81 +95,7 @@ static const struct CMUnitTest epoch_recovery_tests[] = {
 static int
 setup(void **state)
 {
-	test_arg_t	*arg;
-	int		 rc;
-
-	arg = malloc(sizeof(test_arg_t));
-	if (arg == NULL)
-		return -1;
-
-	memset(arg, 0, sizeof(*arg));
-
-	rc = daos_eq_create(&arg->eq);
-	if (rc)
-		return rc;
-
-	arg->svc.rl_nr.num = 8;
-	arg->svc.rl_nr.num_out = 0;
-	arg->svc.rl_ranks = arg->ranks;
-
-	arg->hdl_share = false;
-	uuid_clear(arg->pool_uuid);
-	MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
-	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
-
-	if (arg->myrank == 0) {
-		/** create pool with minimal size */
-		rc = daos_pool_create(0731, geteuid(), getegid(), "srv_grp",
-				      NULL, "pmem", 0, &arg->svc,
-				      arg->pool_uuid, NULL);
-	}
-
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	/** connect to pool */
-	if (arg->myrank == 0) {
-		rc = daos_pool_connect(arg->pool_uuid, NULL /* grp */,
-				       &arg->svc, DAOS_PC_RW, &arg->poh,
-				       NULL /* info */,
-				       NULL /* ev */);
-	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	/** l2g and g2l the pool handle */
-	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 1);
-
-	*state = arg;
-	return 0;
-}
-
-static int
-teardown(void **state) {
-	test_arg_t	*arg = *state;
-	int		 rc;
-
-	MPI_Barrier(MPI_COMM_WORLD);
-
-	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
-	if (rc)
-		return rc;
-
-	if (arg->myrank == 0)
-		rc = daos_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
-
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	rc = daos_eq_destroy(arg->eq, 0);
-	if (rc)
-		return rc;
-
-	free(arg);
-	return 0;
+	return test_setup(state, SETUP_POOL_CONNECT, true);
 }
 
 int
@@ -180,7 +104,8 @@ run_daos_epoch_recovery_test(int rank, int size)
 	int rc = 0;
 
 	rc = cmocka_run_group_tests_name("Epoch recovery tests",
-					 epoch_recovery_tests, setup, teardown);
+					 epoch_recovery_tests, setup,
+					 test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }
