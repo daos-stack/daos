@@ -250,7 +250,6 @@ io_simple_one_key_discard(void **state)
 	io_create_object(vos_hdl2co(arg->ctx.tc_co_hdl));
 	assert_int_equal(rc, 0);
 
-
 	cookie = gen_rand_cookie();
 	for (i = 0; i < 4; i++) {
 		rc = io_simple_update(arg, &cookie, i+1, &req[i]);

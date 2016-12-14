@@ -2906,6 +2906,25 @@ dbtree_iter_delete(daos_handle_t ih)
 }
 
 /**
+ * Is the btree iterator empty or not
+ *
+ * \return	0	Not empty
+ *		1	Empty
+ *		-ve	error code
+ */
+int
+dbtree_iter_empty(daos_handle_t ih)
+{
+	struct btr_context *tcx;
+
+	tcx = btr_hdl2tcx(ih);
+	if (tcx == NULL)
+		return -DER_NO_HDL;
+
+	return tcx->tc_tins.ti_root->tr_depth == 0;
+}
+
+/**
  * Helper function to iterate a dbtree, either from the first record forward
  * (\a backward == false) or from the last record backward (\a backward ==
  * true). \a cb will be called with \a arg for each record. See also

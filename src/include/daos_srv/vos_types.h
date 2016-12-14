@@ -122,6 +122,8 @@ typedef struct {
 			daos_recx_t		ie_recx;
 			/** iovec to return data or ZC address */
 			daos_iov_t		ie_iov;
+			/** update cookie */
+			uuid_t			ie_cookie;
 		};
 	};
 } vos_iter_entry_t;

@@ -219,25 +219,19 @@ io_recx_iterate(vos_iter_param_t *param, daos_akey_t *akey, int akey_id,
 	while (rc == 0) {
 		vos_iter_entry_t  ent;
 
-		if (!cookie_fetch) {
-			rc = vos_iter_fetch(ih, &ent, NULL);
-			if (rc != 0) {
-				print_error("Failed to fetch recx: %d\n", rc);
-				goto out;
-			}
-		} else {
-			struct daos_uuid cookie;
+		rc = vos_iter_fetch(ih, &ent, NULL);
+		if (rc != 0) {
+			print_error("Failed to fetch recx: %d\n", rc);
+			goto out;
+		}
 
-			rc = vos_iter_fetch_cookie(ih, &ent, &cookie, NULL);
-			if (rc != 0) {
-				print_error("Failed to fetch recx: %d\n", rc);
-				goto out;
-			}
-			assert_true(is_found(cookie.uuid));
+		if (cookie_fetch) {
+			assert_true(is_found(ent.ie_cookie));
 			if (print_ent)
 				D_PRINT("Cookie : %s\n",
-					DP_UUID(cookie.uuid));
+					DP_UUID(ent.ie_cookie));
 		}
+
 		nr++;
 		if (print_ent) {
 			if (nr == 1) {

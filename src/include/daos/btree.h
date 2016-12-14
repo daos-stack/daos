@@ -450,6 +450,7 @@ int dbtree_iter_prev(daos_handle_t ih);
 int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 		      daos_iov_t *val, daos_hash_out_t *anchor);
 int dbtree_iter_delete(daos_handle_t ih);
+int dbtree_iter_empty(daos_handle_t ih);
 
 /**
  * Prototype of dbtree_iterate() callbacks. When a callback returns an rc,

@@ -501,4 +501,19 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *entry,
 int
 vos_iter_delete(daos_handle_t ih);
 
+/**
+ * If the iterator has any element. The condition provided to vos_iter_prepare
+ * will not be taken into account, so even if there is no element can match
+ * the iterator condition, but the function still returns false if there is
+ * any other element.
+ *
+ * \param ih	[IN]	Iterator handle
+ *
+ * \return		1 it is empty
+ *			0 it is not empty
+ *			-ve error code
+ */
+int
+vos_iter_empty(daos_handle_t ih);
+
 #endif /* __VOS_API_H */

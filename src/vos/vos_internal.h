@@ -136,10 +136,6 @@ extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_oid_iter_ops;
 extern struct vos_iter_ops vos_co_iter_ops;
 
-int
-vos_iter_fetch_cookie(daos_handle_t ih, vos_iter_entry_t *it_entry,
-		      struct daos_uuid *cookie, daos_hash_out_t *anchor);
-
 static inline struct vos_tls *
 vos_tls_get()
 {
@@ -385,8 +381,6 @@ struct vos_key_bundle {
 	daos_epoch_range_t	*kb_epr;
 	/** index of recx */
 	uint64_t		 kb_idx;
-	/** Cookie ID for this update */
-	uuid_t			 kb_cookie;
 };
 
 /**
@@ -408,8 +402,8 @@ struct vos_rec_bundle {
 	struct btr_root		*rb_btr;
 	/** returned size and nr of recx */
 	daos_recx_t		*rb_recx;
-	/** returned cookie associated with this record */
-	struct daos_uuid	*rb_cookie;
+	/** update cookie of this recx (input for update, output for fetch) */
+	uuid_t			 rb_cookie;
 };
 
 #define VOS_SIZE_ROUND		8
@@ -533,13 +527,6 @@ int vos_obj_tree_init(struct vos_obj_ref *oref);
 int vos_obj_tree_fini(struct vos_obj_ref *oref);
 int vos_obj_tree_register(void);
 
-int
-tree_prepare(struct vos_obj_ref *oref, daos_handle_t parent_toh,
-	     daos_key_t *key, bool read_only, daos_handle_t *toh);
-
-void
-tree_release(daos_handle_t toh);
-
 static inline PMEMobjpool *
 vos_oref2pop(struct vos_obj_ref *oref)
 {
@@ -649,7 +636,17 @@ struct vos_iter_ops {
 			     daos_hash_out_t *anchor);
 	/** Delete the record that the cursor points to */
 	int	(*iop_delete)(struct vos_iterator *iter);
+	/**
+	 * Optional, the iterator has no element.
+	 *
+	 * \return	1 empty
+	 *		0 non-empty
+	 *		-ve error code
+	 */
+	int	(*iop_empty)(struct vos_iterator *iter);
 };
+
+const char *vos_iter_type2name(vos_iter_type_t type);
 
 static  inline struct vos_iterator *
 vos_hdl2iter(daos_handle_t hdl)

@@ -140,7 +140,7 @@ tree_rec_bundle2iov(struct vos_rec_bundle *rbund, daos_iov_t *iov)
  * vector tree	: all akeys under the same dkey
  * recx tree	: all record extents under the same akey
  */
-int
+static int
 tree_prepare(struct vos_obj_ref *oref, daos_handle_t parent_toh,
 	     daos_key_t *key, bool read_only, daos_handle_t *toh)
 {
@@ -198,7 +198,7 @@ tree_prepare(struct vos_obj_ref *oref, daos_handle_t parent_toh,
 }
 
 /** close the record extent tree */
-void
+static void
 tree_release(daos_handle_t toh)
 {
 	int	rc;
@@ -246,13 +246,13 @@ tree_recx_update(daos_handle_t toh, daos_epoch_range_t *epr,
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_idx	= recx->rx_idx;
 	kbund.kb_epr	= epr;
-	uuid_copy(kbund.kb_cookie, cookie);
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_csum	= csum;
 	rbund.rb_iov	= iov;
 	rbund.rb_recx	= recx;
 	rbund.rb_mmid	= mmid;
+	uuid_copy(rbund.rb_cookie, cookie);
 
 	return dbtree_update(toh, &kiov, &riov);
 }
@@ -1361,7 +1361,6 @@ vec_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
  */
 static int recx_iter_fetch(struct vos_obj_iter *oiter,
 			   vos_iter_entry_t *it_entry,
-			   struct daos_uuid *cookie,
 			   daos_hash_out_t *anchor);
 /**
  * Prepare the iterator for the recx tree.
@@ -1422,7 +1421,7 @@ recx_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 		return rc;
 
 	memset(entry, 0, sizeof(*entry));
-	rc = recx_iter_fetch(oiter, entry, NULL, NULL);
+	rc = recx_iter_fetch(oiter, entry, NULL);
 	return rc;
 }
 
@@ -1521,7 +1520,7 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 	kbund.kb_epr = &entry.ie_epr;
 
 	memset(&entry, 0, sizeof(entry));
-	rc = recx_iter_fetch(oiter, &entry, NULL, &tmp);
+	rc = recx_iter_fetch(oiter, &entry, &tmp);
 	if (rc != 0)
 		return rc;
 
@@ -1540,35 +1539,9 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 	return rc;
 }
 
-int
-vos_iter_fetch_cookie(daos_handle_t ih, vos_iter_entry_t *it_entry,
-			   struct daos_uuid *cookie, daos_hash_out_t *anchor)
-{
-
-	struct vos_iterator	*iter = vos_hdl2iter(ih);
-	struct vos_obj_iter	*oiter;
-	int			rc;
-
-	if (iter->it_state == VOS_ITS_NONE) {
-		D_DEBUG(DF_VOS1,
-		       "Please call vos_iter_probe to initialize cursor\n");
-		return -DER_NO_PERM;
-	}
-
-	if (iter->it_state == VOS_ITS_END) {
-		D_DEBUG(DF_VOS1, "The end of iteration\n");
-		return -DER_NONEXIST;
-	}
-
-	oiter = vos_iter2oiter(iter);
-	rc = recx_iter_fetch(oiter, it_entry, cookie, anchor);
-	return rc;
-
-}
-
 static int
 recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
-		struct daos_uuid *cookie, daos_hash_out_t *anchor)
+		daos_hash_out_t *anchor)
 {
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
@@ -1584,13 +1557,14 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	rbund.rb_recx	= &it_entry->ie_recx;
 	rbund.rb_iov	= &it_entry->ie_iov;
 	rbund.rb_csum	= &csum;
-	if (cookie != NULL)
-		rbund.rb_cookie = cookie;
 
 	daos_iov_set(rbund.rb_iov, NULL, 0); /* no data copy */
 	daos_csum_set(rbund.rb_csum, NULL, 0);
 
 	rc = dbtree_iter_fetch(oiter->it_hdl, &kiov, &riov, anchor);
+	if (rc == 0)
+		uuid_copy(it_entry->ie_cookie, rbund.rb_cookie);
+
 	return rc;
 }
 
@@ -1601,7 +1575,7 @@ recx_iter_next(struct vos_obj_iter *oiter)
 	int		 rc;
 
 	memset(&entry, 0, sizeof(entry));
-	rc = recx_iter_fetch(oiter, &entry, NULL, NULL);
+	rc = recx_iter_fetch(oiter, &entry, NULL);
 	if (rc != 0)
 		return rc;
 
@@ -1787,7 +1761,7 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		return vec_iter_fetch(oiter, it_entry, anchor);
 
 	case VOS_ITER_RECX:
-		return recx_iter_fetch(oiter, it_entry, NULL, anchor);
+		return recx_iter_fetch(oiter, it_entry, anchor);
 	}
 }
 
@@ -1806,6 +1780,26 @@ vos_obj_iter_delete(struct vos_iterator *iter)
 		return obj_iter_delete(oiter);
 	}
 }
+
+static int
+vos_obj_iter_empty(struct vos_iterator *iter)
+{
+	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
+
+	switch (iter->it_type) {
+	default:
+		D_ASSERT(0);
+		return -DER_INVAL;
+	case VOS_ITER_DKEY:
+	case VOS_ITER_AKEY:
+	case VOS_ITER_RECX:
+		if (daos_handle_is_inval(oiter->it_hdl))
+			return -DER_NO_HDL;
+
+		return dbtree_iter_empty(oiter->it_hdl);
+	}
+}
+
 struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_prepare	= vos_obj_iter_prep,
 	.iop_finish	= vos_obj_iter_fini,
@@ -1813,6 +1807,7 @@ struct vos_iter_ops	vos_obj_iter_ops = {
 	.iop_next	= vos_obj_iter_next,
 	.iop_fetch	= vos_obj_iter_fetch,
 	.iop_delete	= vos_obj_iter_delete,
+	.iop_empty	= vos_obj_iter_empty,
 };
 /**
  * @} vos_obj_iters

@@ -276,6 +276,11 @@ static struct daos_debug_bit debug_bit_dict[] = {
 		.db_lname	= "management",
 	},
 	{
+		.db_bit		= DB_EPC,
+		.db_name	= "epc",
+		.db_lname	= "epoch",
+	},
+	{
 		.db_name	= NULL,
 	},
 };

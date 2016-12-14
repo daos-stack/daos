@@ -72,6 +72,18 @@ static struct vos_iter_dict vos_iterators[] = {
 	},
 };
 
+const char *
+vos_iter_type2name(vos_iter_type_t type)
+{
+	struct vos_iter_dict	*dict;
+
+	for (dict = &vos_iterators[0]; dict->id_ops != NULL; dict++) {
+		if (dict->id_type == type)
+			break;
+	}
+	return dict->id_name;
+}
+
 static daos_handle_t
 vos_iter2hdl(struct vos_iterator *iter)
 {
@@ -96,7 +108,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 
 	if (dict->id_ops == NULL) {
 		D_DEBUG(DF_VOS1, "Can't find iterator type %d\n", type);
-		return -DER_NONEXIST;
+		return -DER_NOSYS;
 	}
 
 	rc = dict->id_ops->iop_prepare(type, param, &iter);
@@ -213,4 +225,16 @@ vos_iter_delete(daos_handle_t ih)
 		return -DER_NOSYS;
 
 	return iter->it_ops->iop_delete(iter);
+}
+
+int
+vos_iter_empty(daos_handle_t ih)
+{
+	struct vos_iterator *iter = vos_hdl2iter(ih);
+
+	D_ASSERT(iter->it_ops != NULL);
+	if (iter->it_ops->iop_empty == NULL)
+		return -DER_NOSYS;
+
+	return iter->it_ops->iop_empty(iter);
 }

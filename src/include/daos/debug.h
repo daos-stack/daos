@@ -84,6 +84,7 @@ extern unsigned int dd_fac_tests;
 #define DB_MD		(1 << (CLOG_DPRISHIFT + 4)) /* metadata operation */
 #define DB_PL		(1 << (CLOG_DPRISHIFT + 5)) /* placement */
 #define DB_MGMT		(1 << (CLOG_DPRISHIFT + 6)) /* management */
+#define DB_EPC		(1 << (CLOG_DPRISHIFT + 7)) /* epoch etc */
 
 /* should be replaced by more reasonable mask, e.g. (DB_IO | DB_MD | DB_PL) */
 #define DB_DEFAULT	DB_ANY
