@@ -721,9 +721,7 @@ class PreReqComponent(object):
                 if GetOption('help'):
                     continue
                 # checkout and build done previously
-                self.set_environment_only(env,
-                                          self.__defined[comp],
-                                          headers_only)
+                self.__defined[comp].set_environment(env, headers_only)
                 if GetOption('clean'):
                     continue
                 if self.__required[comp]:
@@ -738,15 +736,6 @@ class PreReqComponent(object):
                 changes = True
 
         return changes
-
-    def set_environment_only(self, env, comp, headers_only):
-        """Recursively set the environment for a previously built component"""
-        comp.set_environment(env, headers_only)
-        # Now add the headers only for dependencies
-        for name in comp.requires:
-            self.set_environment_only(env,
-                                      self.__defined[name],
-                                      True)
 
     def get_env(self, var):
         """Get a variable from the construction environment"""
@@ -1105,10 +1094,7 @@ class _Component(object):
         """Build the component, if necessary"""
         # Ensure requirements are met
         changes = False
-        if self.requires:
-            changes = self.prereqs.require(env, *self.requires,
-                                           headers_only=True)
-        envcopy = env.Clone()
+        envcopy = self.prereqs.system_env.Clone()
 
         if GetOption('help'):
             return
@@ -1133,6 +1119,11 @@ class _Component(object):
 
             if not self.prereqs.build_deps:
                 raise BuildRequired(self.name)
+
+            if self.requires:
+                changes = self.prereqs.require(envcopy, *self.requires,
+                                               headers_only=True)
+                self.set_environment(envcopy, False)
 
             if self.has_missing_system_deps(self.prereqs.system_env):
                 raise MissingSystemLibs(self.name)

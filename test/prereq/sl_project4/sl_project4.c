@@ -19,6 +19,7 @@
  * SOFTWARE.
  */
 #include <stdio.h>
+#include <sl_project1.h>
 #include <sl_project2.h>
 #include "sl_project4.h"
 
