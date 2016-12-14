@@ -36,12 +36,12 @@
 #include <daos_srv/pool.h>
 #include <daos_srv/daos_mgmt_srv.h>
 
-/** TODO: Not use harcoded path to storage */
-#define STORAGE_PATH	"/mnt/daos/"
 /** directory for newly created pool, reclaimed on restart */
-#define NEWBORNS	STORAGE_PATH "NEWBORNS/"
+static char		*newborns_path;
+static size_t		 newborns_path_size;
 /** directory for destroyed pool */
-#define ZOMBIES		STORAGE_PATH "ZOMBIES/"
+static char		*zombies_path;
+static size_t		 zombies_path_size;
 
 static inline int
 dir_fsync(const char *path)
@@ -96,44 +96,93 @@ subtree_destroy(const char *path)
 	return rc;
 }
 
+/* Allocate a new string that is the concatenation of "s1" and "s2". */
+char *
+stracat(const char *s1, const char *s2, size_t *size)
+{
+	char   *s3;
+	size_t	l1;
+	size_t	l2;
+	size_t	l3;
+
+	D_ASSERT(s1 != NULL && s2 != NULL);
+
+	l1 = strlen(s1);
+	l2 = strlen(s2);
+	l3 = l1 + l2;
+
+	D_ALLOC(s3, l3 + 1);
+	if (s3 == NULL)
+		return NULL;
+
+	memcpy(s3, s1, l1);		/* copy s1 */
+	memcpy(s3 + l1, s2, l2);	/* copy s2 */
+	s3[l3] = '\0';			/* terminate */
+
+	*size = l3 + 1;
+	return s3;
+}
+
 int
 ds_mgmt_tgt_init(void)
 {
 	mode_t	stored_mode, mode;
 	int	rc;
 
+	/** create the path string */
+	newborns_path = stracat(storage_path, "/NEWBORNS", &newborns_path_size);
+	if (newborns_path == NULL)
+		D_GOTO(err, rc = -DER_NOMEM);
+	zombies_path = stracat(storage_path, "/ZOMBIES", &zombies_path_size);
+	if (zombies_path == NULL)
+		D_GOTO(err_newborns, rc = -DER_NOMEM);
+
 	stored_mode = umask(0);
 	mode = S_IRWXU | S_IRWXG | S_IRWXO;
 	/** create NEWBORNS directory if it does not exist already */
-	rc = mkdir(NEWBORNS, mode);
+	rc = mkdir(newborns_path, mode);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
 		umask(stored_mode);
-		return daos_errno2der(errno);
+		D_GOTO(err_zombies, rc = daos_errno2der(errno));
 	}
 
 	/** create ZOMBIES directory if it does not exist already */
-	rc = mkdir(ZOMBIES, mode);
+	rc = mkdir(zombies_path, mode);
 	if (rc < 0 && errno != EEXIST) {
 		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
 		umask(stored_mode);
-		return daos_errno2der(errno);
+		D_GOTO(err_zombies, rc = daos_errno2der(errno));
 	}
 	umask(stored_mode);
 
 	/** remove leftover from previous runs */
-	rc = subtree_destroy(NEWBORNS);
+	rc = subtree_destroy(newborns_path);
 	if (rc)
 		/** only log error, will try again next time */
 		D_ERROR("failed to cleanup NEWBORNS dir: %d, will try again\n",
 			rc);
 
-	rc = subtree_destroy(ZOMBIES);
+	rc = subtree_destroy(zombies_path);
 	if (rc)
 		/** only log error, will try again next time */
 		D_ERROR("failed to cleanup ZOMBIES dir: %d, will try again\n",
 			rc);
 	return 0;
+
+err_zombies:
+	D_FREE(zombies_path, zombies_path_size);
+err_newborns:
+	D_FREE(newborns_path, newborns_path_size);
+err:
+	return rc;
+}
+
+void
+ds_mgmt_tgt_fini(void)
+{
+	D_FREE(zombies_path, zombies_path_size);
+	D_FREE(newborns_path, newborns_path_size);
 }
 
 static int
@@ -143,8 +192,12 @@ path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx,
 	int	 size;
 	int	 off;
 
-	/** DAOS_UUID_STR_SIZE includes the trailing '\0', +1 for '/' */
-	size = strlen(dir) + DAOS_UUID_STR_SIZE + 1;
+	/** *fpath = dir + "/" + pool_uuid + "/" + fname + idx */
+
+	/** DAOS_UUID_STR_SIZE includes the trailing '\0' */
+	size = strlen(dir) + 1 /* "/" */ + DAOS_UUID_STR_SIZE;
+	if (fname != NULL || idx != NULL)
+		size += 1 /* "/" */;
 	if (fname)
 		size += strlen(fname);
 	if (idx)
@@ -154,14 +207,12 @@ path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx,
 	if (*fpath == NULL)
 		return -DER_NOMEM;
 
-	/**
-	 * generate path to target file:
-	 * /mnt/daos/[PENDING/]{UUID}/{fname}{idx}
-	 */
 	off = sprintf(*fpath, "%s", dir);
+	off += sprintf(*fpath + off, "/");
 	uuid_unparse_lower(pool_uuid, *fpath + off);
 	off += DAOS_UUID_STR_SIZE - 1;
-	off += sprintf(*fpath + off, "/");
+	if (fname != NULL || idx != NULL)
+		off += sprintf(*fpath + off, "/");
 	if (fname)
 		off += sprintf(*fpath + off, fname);
 	if (idx)
@@ -178,7 +229,7 @@ int
 ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
 		 char **fpath)
 {
-	return path_gen(pool_uuid, STORAGE_PATH, fname, idx, fpath);
+	return path_gen(pool_uuid, storage_path, fname, idx, fpath);
 }
 
 static int
@@ -199,7 +250,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 
 	for (i = 1; i <= dss_nxstreams; i++) {
 
-		rc = path_gen(uuid, NEWBORNS, VOS_FILE, &i, &path);
+		rc = path_gen(uuid, newborns_path, VOS_FILE, &i, &path);
 		if (rc)
 			break;
 
@@ -259,7 +310,7 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t size, char *path)
 	/** XXX: many synchronous/blocking operations below */
 
 	/** create the pool directory under NEWBORNS */
-	rc = path_gen(pool_uuid, NEWBORNS, NULL, NULL, &newborn);
+	rc = path_gen(pool_uuid, newborns_path, NULL, NULL, &newborn);
 	if (rc)
 		return rc;
 
@@ -360,7 +411,7 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 	/** XXX: many synchronous/blocking operations below */
 
 	/** move target directory to ZOMBIES */
-	rc = path_gen(pool_uuid, ZOMBIES, NULL, NULL, &zombie);
+	rc = path_gen(pool_uuid, zombies_path, NULL, NULL, &zombie);
 	if (rc)
 		return rc;
 
@@ -420,7 +471,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		 * that said, the previous flush in tgt_destroy() might have
 		 * failed, so flush again.
 		 */
-		rc = path_gen(td_in->td_pool_uuid, ZOMBIES, NULL, NULL,
+		rc = path_gen(td_in->td_pool_uuid, zombies_path, NULL, NULL,
 			      &zombie);
 		if (rc)
 			D_GOTO(out, rc);

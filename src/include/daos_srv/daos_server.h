@@ -41,6 +41,9 @@ extern unsigned int	dss_nxstreams;
 /** Server node topoloby */
 extern hwloc_topology_t	dss_topo;
 
+/** Storage path (hack) */
+extern const char      *storage_path;
+
 /**
  * Stackable Module API
  * Provides a modular interface to load and register server-side code on

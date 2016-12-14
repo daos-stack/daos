@@ -51,6 +51,9 @@ static unsigned int	nr_threads;
 /** Server crt group ID */
 static char	       *server_group_id;
 
+/** Storage path (hack) */
+const char	       *storage_path = "/mnt/daos";
+
 /** HW topology */
 hwloc_topology_t	dss_topo;
 
@@ -213,6 +216,7 @@ parse(int argc, char **argv)
 		{ "modules",	required_argument,	NULL,	'm' },
 		{ "cores",	required_argument,	NULL,	'c' },
 		{ "group",	required_argument,	NULL,	'g' },
+		{ "storage",	required_argument,	NULL,	's' },
 		{ NULL,		0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -220,7 +224,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:m:g:", opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "c:m:g:s:", opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
 			if (strlen(optarg) > MAX_MODULE_OPTIONS) {
@@ -244,6 +248,9 @@ parse(int argc, char **argv)
 		}
 		case 'g':
 			server_group_id = optarg;
+			break;
+		case 's':
+			storage_path = optarg;
 			break;
 		default:
 			usage(argv[0], stderr);

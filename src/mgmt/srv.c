@@ -112,6 +112,7 @@ ds_mgmt_init()
 static int
 ds_mgmt_fini()
 {
+	ds_mgmt_tgt_fini();
 	D_DEBUG(DF_MGMT, "successfull fini call\n");
 	return 0;
 }

@@ -216,7 +216,7 @@ ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 	char	*fpath;
 	int	 rc;
 
-	rc = asprintf(&fpath, "%s%s", path, DSM_META_FILE);
+	rc = asprintf(&fpath, "%s/%s", path, DSM_META_FILE);
 	if (rc < 0)
 		return -DER_NOMEM;
 
