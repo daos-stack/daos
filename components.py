@@ -55,6 +55,8 @@ REQS.define('crypto', libs=['crypto'], headers=['openssl/md5.h'],
 
 CCI_BUILD = ['patch -N -p1 < $PATCH_PREFIX/cci_port_number.patch; ' \
              'if [ $? -gt 1 ]; then false; else true; fi;',
+             'patch -N -p1 < $PATCH_PREFIX/cci_ib.patch; ' \
+             'if [ $? -gt 1 ]; then false; else true; fi;',
              './autogen.pl']
 CCI_REQUIRED = ['ltdl']
 if REQS.get_env('PLATFORM') == 'darwin':
