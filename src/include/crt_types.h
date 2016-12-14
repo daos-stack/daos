@@ -238,31 +238,33 @@ struct crt_array {
 	void		*da_arrays;
 };
 
-#define DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, in_size,		\
-				 crt_out, out_size) {		\
-	crf_name :	(name),					\
-	crf_idx :	0,					\
-	crf_fields : {						\
-		/* [CRT_IN] = */ {				\
-			crf_count :	(in_size),		\
-			crf_msg :	(crt_in)		\
-		},						\
-		/* [CRT_OUT] = */ {				\
-			crf_count :	(out_size),		\
-			crf_msg :	(crt_out)		\
-		}						\
-	}							\
+#define DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, in_size,			\
+				 crt_out, out_size) {			\
+	crf_name :	(name),						\
+	crf_idx :	0,						\
+	crf_fields : {							\
+		/* [CRT_IN] = */ {					\
+			crf_count :	(in_size),			\
+			crf_msg :	(crt_in)			\
+		},							\
+		/* [CRT_OUT] = */ {					\
+			crf_count :	(out_size),			\
+			crf_msg :	(crt_out)			\
+		}							\
+	}								\
 }
 
-#define DEFINE_CRT_REQ_FMT(name, crt_in, crt_out)		\
-DEFINE_CRT_REQ_FMT_ARRAY(name, crt_in, ARRAY_SIZE(crt_in),	\
-			 crt_out, ARRAY_SIZE(crt_out))
+#define DEFINE_CRT_REQ_FMT(name, crt_in, crt_out)			\
+DEFINE_CRT_REQ_FMT_ARRAY((name), (crt_in),				\
+			 ((crt_in) == NULL) ? 0 : ARRAY_SIZE(crt_in),	\
+			 (crt_out),					\
+			 ((crt_out) == NULL) ? 0 : ARRAY_SIZE(crt_out))
 
-#define DEFINE_CRT_MSG(name, flags, size, proc) {		\
-	cmf_name :	(name),					\
-	cmf_flags :	(flags),				\
-	cmf_size :	(size),					\
-	cmf_proc :	(crt_proc_cb_t)(proc)			\
+#define DEFINE_CRT_MSG(name, flags, size, proc) {			\
+	cmf_name :	(name),						\
+	cmf_flags :	(flags),					\
+	cmf_size :	(size),						\
+	cmf_proc :	(crt_proc_cb_t)(proc)				\
 }
 
 /* Common request format type */

@@ -135,9 +135,26 @@ static void run_client(void)
 	       myrank, pri_local_grp->cg_grpid, grp_size_cli,
 	       pri_srv_grp->cg_grpid, grp_size_srv);
 
-	/* ============= test-1 ============ */
+	/*
+	 * ============= test-1 ============
+	 * send NOOP RPC which without any input or output parameter.
+	 */
+	svr_ep.ep_grp = NULL;
+	svr_ep.ep_rank = 0;
+	svr_ep.ep_tag = 0;
+	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_NOOP, &rpc_req);
+	C_ASSERT(rc == 0);
+	gecho.complete = 0;
+	rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
+	assert(rc == 0);
+	/* wait two minutes (in case of manually starting up clients) */
+	rc = client_wait(120, 1000, &gecho.complete);
+	assert(rc == 0);
 
-	/* send checkin RPC to different contexts of server*/
+	/*
+	 * ============= test-2 ============
+	 * send checkin RPC to different contexts of server
+	 */
 	for (i = 0; i <= ECHO_EXTRA_CONTEXT_NUM; i++) {
 		char		*raw_buf;
 		struct timespec	t1, t2;
@@ -190,7 +207,7 @@ static void run_client(void)
 	}
 
 	/*
-	 * ============= test-2 ============
+	 * ============= test-3 ============
 	 * simple bulk transferring
 	 */
 	rpc_req = NULL;
@@ -282,7 +299,7 @@ static void run_client(void)
 	free(iovs);
 	C_FREE(pchar, 256);
 
-	/* ============= test-3 ============ */
+	/* ============= test-4 ============ */
 	/* attach to 2nd tier and send checkin RPC */
 	if (test_multi_tiers == false)
 		goto send_shutdown;

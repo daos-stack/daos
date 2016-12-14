@@ -51,6 +51,7 @@
 #include <pthread.h>
 #include <openssl/md5.h>
 
+#define ECHO_OPC_NOOP       (0xA0)
 #define ECHO_OPC_CHECKIN    (0xA1)
 #define ECHO_OPC_BULK_TEST  (0xA2)
 #define ECHO_OPC_SHUTDOWN   (0x100)
@@ -70,6 +71,16 @@ struct gecho {
 extern struct gecho gecho;
 
 extern struct crt_corpc_ops echo_co_ops;
+
+static inline
+int echo_srv_noop(crt_rpc_t *rpc_req)
+{
+	printf("echo_srver recv'd NOOP RPC, opc: 0x%x.\n",
+		rpc_req->cr_opc);
+	crt_reply_send(rpc_req);
+
+	return 0;
+}
 
 int echo_srv_checkin(crt_rpc_t *rpc);
 int echo_srv_bulk_test(crt_rpc_t *rpc);
@@ -133,6 +144,9 @@ struct crt_echo_bulk_out_reply {
 	int ret;
 };
 
+struct crt_req_format CQF_ECHO_NOOP =
+	DEFINE_CRT_REQ_FMT("ECHO_PING_NOOP", NULL, NULL);
+
 struct crt_req_format CQF_ECHO_PING_CHECK =
 	DEFINE_CRT_REQ_FMT("ECHO_PING_CHECK", echo_ping_checkin,
 			   echo_ping_checkout);
@@ -184,6 +198,8 @@ echo_init(int server, bool tier2)
 	 * the same crt_rpc_srv_register.
 	 */
 	if (server == 0) {
+		rc = crt_rpc_register(ECHO_OPC_NOOP, &CQF_ECHO_NOOP);
+		assert(rc == 0);
 		rc = crt_rpc_register(ECHO_OPC_CHECKIN, &CQF_ECHO_PING_CHECK);
 		assert(rc == 0);
 		rc = crt_rpc_register(ECHO_OPC_BULK_TEST, &CQF_ECHO_BULK_TEST);
@@ -191,6 +207,10 @@ echo_init(int server, bool tier2)
 		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, NULL);
 		assert(rc == 0);
 	} else {
+		rc = crt_rpc_srv_register(ECHO_OPC_NOOP,
+					  &CQF_ECHO_NOOP,
+					  echo_srv_noop);
+		assert(rc == 0);
 		rc = crt_rpc_srv_register(ECHO_OPC_CHECKIN,
 					  &CQF_ECHO_PING_CHECK,
 					  echo_srv_checkin);
@@ -269,8 +289,6 @@ int client_cb_common(const struct crt_cb_info *cb_info)
 
 		printf("%s checkin result - ret: %d, room_no: %d.\n",
 		       e_req->name, e_reply->ret, e_reply->room_no);
-		break;
-	case ECHO_OPC_SHUTDOWN:
 		break;
 	case ECHO_CORPC_EXAMPLE:
 		corpc_reply = crt_reply_get(rpc_req);
