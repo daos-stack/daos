@@ -36,41 +36,20 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __SELF_TEST_H__
-#define __SELF_TEST_H__
+#ifndef __CRT_SELF_TEST_H__
+#define __CRT_SELF_TEST_H__
 
-#include <stdio.h>
-#include <crt_util/common.h>
 #include <crt_api.h>
-#include <string.h>
-
-/* RPC opcodes */
-#define SELF_TEST_PING  (0xA1)
-#define SELF_TEST_SHUTDOWN (0x100)
-
-#define SELF_TEST_MAX_MSG_SIZE (0x40000000)
-#define SELF_TEST_MAX_REPETITIONS (0x40000000)
-#define SELF_TEST_MAX_INFLIGHT (0x40000000)
 
 /* RPC arguments */
-struct st_ping_args {
+struct crt_st_ping_args {
 	crt_iov_t ping_buf;
 };
 
-struct st_ping_res {
+struct crt_st_ping_res {
 	crt_iov_t resp_buf;
 };
 
-struct crt_msg_field *st_ping_input[] = {
-	&CMF_IOVEC,
-};
+int crt_self_test_ping_handler(crt_rpc_t *rpc_req);
 
-struct crt_msg_field *st_ping_output[] = {
-	&CMF_IOVEC,
-};
-
-struct crt_req_format ST_PING_FORMAT = DEFINE_CRT_REQ_FMT("st_ping",
-							st_ping_input,
-							st_ping_output);
-
-#endif /* __SELF_TEST_H__ */
+#endif /* __CRT_SELF_TEST_H__ */

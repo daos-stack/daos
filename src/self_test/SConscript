@@ -40,7 +40,6 @@
 import os
 
 SELF_TEST = 'self_test.c'
-SELF_TEST_SERVICE = 'self_test_service.c'
 
 def scons():
     """scons function"""
@@ -57,9 +56,6 @@ def scons():
 
     self_test = tenv.Program(SELF_TEST)
     tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), self_test)
-
-    self_test_service = tenv.Program(SELF_TEST_SERVICE)
-    tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), self_test_service)
 
 if __name__ == "SCons.Script":
     scons()

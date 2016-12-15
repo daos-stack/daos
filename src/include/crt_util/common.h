@@ -175,7 +175,7 @@ do {									\
 /* memory allocating macros */
 #define C_ALLOC(ptr, size)						 \
 	do {								 \
-		(ptr) = (__typeof__(ptr))calloc(1, size);		 \
+		(ptr) = (__typeof__(ptr))calloc(1, (size));		 \
 		if ((ptr) != NULL) {					 \
 			crt_log(MEM_DBG, "alloc #ptr : %d at %p.\n",	 \
 				(int)(size), ptr);			 \
@@ -209,13 +209,13 @@ crt_c_realloc(void *ptrptr, size_t size)
 # define C_FREE(ptr, size)						\
 	do {								\
 		crt_log(MEM_DBG, "free #ptr : %d at %p.\n",		\
-			(int)(size), ptr);				\
+			(int)(size), (ptr));				\
 		free(ptr);						\
 		(ptr) = NULL;						\
 	} while (0)
 
-#define C_ALLOC_PTR(ptr)        C_ALLOC(ptr, sizeof *(ptr))
-#define C_FREE_PTR(ptr)         C_FREE(ptr, sizeof *(ptr))
+#define C_ALLOC_PTR(ptr)        C_ALLOC((ptr), sizeof *(ptr))
+#define C_FREE_PTR(ptr)         C_FREE((ptr), sizeof *(ptr))
 
 #define C_GOTO(label, rc)       do { ((void)(rc)); goto label; } while (0)
 

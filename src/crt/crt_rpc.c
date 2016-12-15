@@ -108,6 +108,21 @@ static struct crt_req_format CQF_CRT_RANK_EVICT =
 			   crt_rank_evict_in_fields,
 			   crt_rank_evict_out_fields);
 
+/* for self-test service */
+static struct crt_msg_field *crt_st_ping_input[] = {
+	&CMF_IOVEC,
+};
+
+static struct crt_msg_field *crt_st_ping_output[] = {
+	&CMF_IOVEC,
+};
+
+static struct crt_req_format CQF_CRT_SELF_TEST_PING =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_PING",
+			   crt_st_ping_input,
+			   crt_st_ping_output);
+
+
 int crt_rank_evict_corpc_aggregate(crt_rpc_t *source,
 				   crt_rpc_t *result,
 				   void *priv)
@@ -175,7 +190,14 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_req_fmt	= &CQF_CRT_RANK_EVICT,
 		.ir_hdlr	= crt_hdlr_rank_evict,
 		.ir_co_ops	= &crt_rank_evict_co_ops,
-
+	}, {
+		.ir_name	= "CRT_SELF_TEST_PING",
+		.ir_opc		= CRT_OPC_SELF_TEST_PING,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_SELF_TEST_PING,
+		.ir_hdlr	= crt_self_test_ping_handler,
+		.ir_co_ops	= NULL,
 	}, {
 		.ir_opc		= 0
 	}

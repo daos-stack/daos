@@ -35,47 +35,30 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/**
- * This file is part of CaRT. It it the common header file which be included by
- * all other .c files of CaRT.
- */
+#include <crt_internal.h>
 
-#ifndef __CRT_INTERNAL_H__
-#define __CRT_INTERNAL_H__
+int crt_self_test_ping_handler(crt_rpc_t *rpc_req)
+{
+	struct crt_st_ping_res	*res = NULL;
+	struct crt_st_ping_args	*args = NULL;
+	int			ret = 0;
 
-#include <ctype.h>
-#include <errno.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <stddef.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <uuid/uuid.h>
-/* #include <netinet/in.h> */
-#include <arpa/inet.h>
-#include <ifaddrs.h>
+	args = (struct crt_st_ping_args *)crt_req_get(rpc_req);
+	if (args == NULL)
+		C_ERROR("self-test: crt_req_get failed\n");
 
-#include <crt_util/common.h>
-#include <crt_api.h>
+	res = (struct crt_st_ping_res *)crt_reply_get(rpc_req);
+	if (res == NULL)
+		C_ERROR("self-test: could not get ping reply");
+	/*
+	 * TODO: Improve this to allow sending more than a zero-byte response
+	 * Tracked in CORFSHIP-317
+	 */
+	crt_iov_set(&res->resp_buf, args->ping_buf.iov_buf, 0);
 
-#include <crt_internal_types.h>
-#include <crt_internal_fns.h>
-#include <crt_rpc.h>
-#include <crt_group.h>
-#include <crt_tree.h>
-#include <crt_self_test.h>
+	ret = crt_reply_send(rpc_req);
+	if (ret != 0)
+		C_ERROR("self-test: crt_reply_send failed; ret = %d\n", ret);
 
-#include <crt_hg.h>
-#include <crt_pmix.h>
-#include <crt_ras.h>
-
-#endif /* __CRT_INTERNAL_H__ */
+	return 0;
+}

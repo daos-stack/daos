@@ -41,13 +41,61 @@
 #include <getopt.h>
 #include <string.h>
 
-#include "self_test.h"
+#include <crt_api.h>
+#include <crt_util/common.h>
 
-crt_group_t	*srv_grp;
+/*
+ * TODO: DELETE REGION BEGIN
+ * The code between these two DELETE REGION blocks is duplicated from
+ * headers reachable if crt_internal.h is included. Since this application can't
+ * yet include crt_internal (because it is a separate app), these need to be
+ * duplicated here. Everything in this region needs to be deleted when the
+ * self-test client is integrated into CART and replaced with a call to
+ * #include <crt_internal.h>
+ */
+#define CRT_OPC_SELF_TEST_PING 0xFFFF0200UL
+
+/* RPC arguments */
+struct crt_st_ping_args {
+	crt_iov_t ping_buf;
+};
+
+struct crt_st_ping_res {
+	crt_iov_t resp_buf;
+};
+
+/*
+ * The following three structures are duplicated in crt_rpc.c
+ * Eventually they won't be needed here when the self test client is also
+ * integrated into CART
+ */
+static struct crt_msg_field *crt_st_ping_input[] = {
+	&CMF_IOVEC,
+};
+static struct crt_msg_field *crt_st_ping_output[] = {
+	&CMF_IOVEC,
+};
+static struct crt_req_format CQF_CRT_SELF_TEST_PING =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_PING",
+			   crt_st_ping_input,
+			   crt_st_ping_output);
+
+int
+crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *crf,
+		     crt_rpc_cb_t rpc_handler, struct crt_corpc_ops *co_ops);
+/*
+ * TODO: DELETE REGION END
+ */
+
+/* User input maximum values */
+#define SELF_TEST_MAX_MSG_SIZE (0x40000000)
+#define SELF_TEST_MAX_REPETITIONS (0x40000000)
+#define SELF_TEST_MAX_INFLIGHT (0x40000000)
 
 struct st_ping_cb_args {
-	crt_endpoint_t		*dest_ep;
-	crt_context_t		*crt_ctx;
+	crt_endpoint_t		dest_ep;
+	crt_context_t		crt_ctx;
+	crt_group_t		*srv_grp;
 
 	/* Target number of RPCs */
 	int			rep_count;
@@ -80,13 +128,6 @@ struct st_ping_cb_data {
 /* Global shutdown flag, used to terminate the progress thread */
 static int g_shutdown_flag;
 
-static int shutdown_cb(const struct crt_cb_info *cb_info)
-{
-	*((int *)cb_info->cci_arg) = 1;
-
-	return 0;
-}
-
 /* A note about how arguments are passed to this callback:
  *
  * The main test function allocates an arguments array with one slot for each
@@ -105,8 +146,8 @@ static int ping_response_cb(const struct crt_cb_info *cb_info)
 	struct st_ping_cb_data	*cb_data = (struct st_ping_cb_data *)
 					   cb_info->cci_arg;
 	struct st_ping_cb_args	*cb_args = cb_data->cb_args;
-	struct st_ping_res	*res = NULL;
-	struct st_ping_args	*ping_args = NULL;
+	struct crt_st_ping_res	*res = NULL;
+	struct crt_st_ping_args	*ping_args = NULL;
 
 	struct timespec		now;
 	int			local_rep;
@@ -124,7 +165,7 @@ static int ping_response_cb(const struct crt_cb_info *cb_info)
 	 * TODO: This will be used in a future commit to validate RPC
 	 * contents are correct
 	 */
-	res = (struct st_ping_res *)crt_reply_get(ping_rpc);
+	res = (struct crt_st_ping_res *)crt_reply_get(ping_rpc);
 	if (res == NULL) {
 		C_ERROR("could not get ping reply");
 		return -CER_INVAL;
@@ -158,8 +199,8 @@ static int ping_response_cb(const struct crt_cb_info *cb_info)
 	}
 
 	/* Start a new RPC request */
-	ret = crt_req_create(*cb_args->crt_ctx,
-			     *cb_args->dest_ep, SELF_TEST_PING, &new_ping_rpc);
+	ret = crt_req_create(cb_args->crt_ctx, cb_args->dest_ep,
+			     CRT_OPC_SELF_TEST_PING, &new_ping_rpc);
 	if (ret != 0) {
 		C_ERROR("crt_req_create failed; ret = %d\n", ret);
 		return ret;
@@ -168,11 +209,8 @@ static int ping_response_cb(const struct crt_cb_info *cb_info)
 		  "crt_req_create succeeded but RPC is NULL\n");
 
 	/* Set the RPC arguments */
-	ping_args = (struct st_ping_args *)crt_req_get(new_ping_rpc);
-	if (ping_args == NULL) {
-		C_ERROR("crt_req_get failed\n");
-		return -EFAULT;
-	}
+	ping_args = (struct crt_st_ping_args *)crt_req_get(new_ping_rpc);
+	C_ASSERTF(ping_args != NULL, "crt_req_get returned NULL\n");
 	crt_iov_set(&ping_args->ping_buf, cb_args->ping_payload,
 		    cb_args->current_msg_size);
 
@@ -193,9 +231,10 @@ static void *progress_fn(void *arg)
 
 	crt_ctx = (crt_context_t *)arg;
 	C_ASSERT(crt_ctx != NULL);
+	C_ASSERT(*crt_ctx != NULL);
 
 	while (!g_shutdown_flag) {
-		ret = crt_progress(crt_ctx, 1, NULL, NULL);
+		ret = crt_progress(*crt_ctx, 1, NULL, NULL);
 		if (ret != 0 && ret != -CER_TIMEDOUT) {
 			C_ERROR("crt_progress failed; ret = %d\n", ret);
 			break;
@@ -205,11 +244,10 @@ static void *progress_fn(void *arg)
 	pthread_exit(NULL);
 }
 
-static int self_test_init(crt_context_t *crt_ctx, crt_endpoint_t *dest_ep,
-			  pthread_t *tid)
+static int self_test_init(struct st_ping_cb_args *cb_args, pthread_t *tid,
+			  char *dest_name)
 {
 	char		my_group[] = "self_test";
-	char		dest_name[] = "self_test_service";
 	crt_rank_t	myrank;
 	int		ret;
 
@@ -219,28 +257,26 @@ static int self_test_init(crt_context_t *crt_ctx, crt_endpoint_t *dest_ep,
 		return ret;
 	}
 
-	ret = crt_group_attach(dest_name, &srv_grp);
-	if (ret != 0 || srv_grp == NULL) {
-		C_ERROR("crt_group_attach failed; ret = %d, srv_grp = %p.\n",
-			ret, srv_grp);
-		return -CER_MISC;
+	ret = crt_group_attach(dest_name, &cb_args->srv_grp);
+	if (ret != 0) {
+		C_ERROR("crt_group_attach failed; ret = %d, srv_grp = %p\n",
+			ret, cb_args->srv_grp);
+		return ret;
 	}
+	C_ASSERTF(cb_args->srv_grp != NULL,
+		  "crt_group_attach succeeded but returned group is NULL\n");
 
-	ret = crt_context_create(NULL, crt_ctx);
+	ret = crt_context_create(NULL, &cb_args->crt_ctx);
 	if (ret != 0) {
 		C_ERROR("crt_context_create failed; ret = %d\n", ret);
 		return ret;
 	}
 
 	/* Register RPCs */
-	ret = crt_rpc_register(SELF_TEST_PING, &ST_PING_FORMAT);
+	ret = crt_rpc_reg_internal(CRT_OPC_SELF_TEST_PING,
+				   &CQF_CRT_SELF_TEST_PING, NULL, NULL);
 	if (ret != 0) {
 		C_ERROR("ping registration failed; ret = %d\n", ret);
-		return ret;
-	}
-	ret = crt_rpc_register(SELF_TEST_SHUTDOWN, NULL);
-	if (ret != 0) {
-		C_ERROR("shutdown registration failed; ret = %d\n", ret);
 		return ret;
 	}
 
@@ -250,32 +286,38 @@ static int self_test_init(crt_context_t *crt_ctx, crt_endpoint_t *dest_ep,
 		return ret;
 	}
 
-	dest_ep->ep_grp = srv_grp;
-	dest_ep->ep_rank = 0;
-	dest_ep->ep_tag = 0;
+	/*
+	 * TODO: Need to figure out how to address nodes in the general case
+	 * It isn't clear what the correct way is to connect the self test
+	 * client to a self-test enabled CART application. Singleton seems to
+	 * require making all apps allow singleton connections, and the current
+	 * system involves the client having a group. It also isn't clear how
+	 * subgroups will be addressed
+	 */
+	cb_args->dest_ep.ep_grp = cb_args->srv_grp;
+	cb_args->dest_ep.ep_rank = 0;
+	cb_args->dest_ep.ep_tag = 0;
 
 	g_shutdown_flag = 0;
 
-	ret = pthread_create(tid, NULL, progress_fn, *crt_ctx);
+	ret = pthread_create(tid, NULL, progress_fn, &cb_args->crt_ctx);
 	if (ret != 0) {
-		ret = errno;
 		C_ERROR("failed to create progress thread: %s\n",
-			strerror(ret));
-		return ret;
+			strerror(errno));
+		return -CER_MISC;
 	}
 
 	return 0;
 }
 
 static int run_self_test(int msg_sizes[], int num_msg_sizes,
-			 int rep_count, int max_inflight)
+			 int rep_count, int max_inflight,
+			 char *dest_name)
 {
-	crt_context_t		crt_ctx;
-	crt_endpoint_t		dest_ep;
 	pthread_t		tid;
 
 	crt_rpc_t		*ping_rpc = NULL;
-	crt_rpc_t		*shut_rpc = NULL;
+	int			current_msg_size = 0;
 	int			size_idx;
 	int			ret;
 	int			cleanup_ret;
@@ -284,68 +326,50 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 	double			bandwidth;
 	struct timespec		time_start_size, time_stop_size;
 
-	int64_t			*latencies = NULL;
 	struct st_ping_cb_data	*cb_data = NULL;
-	struct st_ping_args	*ping_args = NULL;
+	struct crt_st_ping_args	*ping_args = NULL;
 
 	/* Static arguments (same for each RPC callback function) */
-	struct st_ping_cb_args	cb_args = {0};
+	struct st_ping_cb_args	cb_args = {{0}};
 	/* Private arguments data for all RPC callback functions */
 	struct st_ping_cb_data	*cb_data_alloc = NULL;
 
+	/* Set the callback data which will be the same for all callbacks */
+	cb_args.rep_count = rep_count;
+	pthread_spin_init(&cb_args.rep_idx_lock, PTHREAD_PROCESS_PRIVATE);
+
 	/* Initialize CART */
-	ret = self_test_init(&crt_ctx, &dest_ep, &tid);
+	ret = self_test_init(&cb_args, &tid, dest_name);
 	if (ret != 0) {
 		C_ERROR("self_test_init failed; ret = %d\n", ret);
-		goto cleanup;
+		C_GOTO(cleanup, ret);
 	}
 
 	/* Allocate a buffer for latency measurements */
-	latencies = (int64_t *)malloc(rep_count * sizeof(latencies[0]));
-	if (latencies == NULL) {
-		ret = errno;
-		C_ERROR("Failed to allocate ping payload: %s\n",
-			strerror(ret));
-		goto cleanup;
-	}
+	C_ALLOC(cb_args.latencies, rep_count * sizeof(cb_args.latencies[0]));
+	if (cb_args.latencies == NULL)
+		C_GOTO(cleanup, ret = -CER_NOMEM);
 
 	/* Allocate a buffer for arguments to the callback function */
-	cb_data_alloc = (struct st_ping_cb_data *)
-			malloc(max_inflight * sizeof(struct st_ping_cb_data));
-	if (cb_data_alloc == NULL) {
-		ret = errno;
-		C_ERROR("Failed to callback data: %s\n", strerror(ret));
-		goto cleanup;
-	}
-
-	/* Set the callback data which will be the same for all callbacks */
-	cb_args.crt_ctx = &crt_ctx;
-	cb_args.dest_ep = &dest_ep;
-	cb_args.rep_count = rep_count;
-	cb_args.current_msg_size = 0;
-	cb_args.rep_idx = 0;
-	pthread_spin_init(&cb_args.rep_idx_lock, PTHREAD_PROCESS_PRIVATE);
-	cb_args.done_count = 0;
-	cb_args.ping_payload = NULL;
-	cb_args.latencies = latencies;
+	C_ALLOC(cb_data_alloc, max_inflight * sizeof(struct st_ping_cb_data));
+	if (cb_data_alloc == NULL)
+		C_GOTO(cleanup, ret = -CER_NOMEM);
 
 	for (size_idx = 0; size_idx < num_msg_sizes; size_idx++) {
-		int current_msg_size = msg_sizes[size_idx];
 		int local_rep;
 		int inflight_idx;
 		void *realloced_mem;
+
+		current_msg_size = msg_sizes[size_idx];
 
 		/*
 		 * Use one buffer for all of the ping payload contents
 		 * realloc() used so memory will be reused if size decreases
 		 */
-		realloced_mem = realloc(cb_args.ping_payload, current_msg_size);
-		if (realloced_mem == NULL) {
-			ret = errno;
-			C_ERROR("Failed to allocate ping payload: %s\n",
-				strerror(ret));
-			goto cleanup;
-		}
+		realloced_mem = C_REALLOC(cb_args.ping_payload,
+					  current_msg_size);
+		if (realloced_mem == NULL)
+			C_GOTO(cleanup, ret = -CER_NOMEM);
 		cb_args.ping_payload = (char *)realloced_mem;
 		memset(cb_args.ping_payload, 0, current_msg_size);
 
@@ -354,13 +378,13 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 
 		/* Initialize the latencies to -1 to indicate invalid data */
 		for (local_rep = 0; local_rep < rep_count; local_rep++)
-			latencies[local_rep] = -1;
+			cb_args.latencies[local_rep] = -1;
 
 		/* Record the time right when we start processing this size */
 		ret = crt_gettime(&time_start_size);
 		if (ret != 0) {
 			C_ERROR("crt_gettime failed; ret = %d\n", ret);
-			goto cleanup;
+			C_GOTO(cleanup, ret);
 		}
 
 		/* Restart the RPCs completed counters */
@@ -387,28 +411,25 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 			ret = crt_gettime(&cb_data->sent_time);
 			if (ret != 0) {
 				C_ERROR("crt_gettime failed; ret = %d\n", ret);
-				goto cleanup;
+				C_GOTO(cleanup, ret);
 			}
 
 			/* Start a new RPC request */
-			ret = crt_req_create(crt_ctx, dest_ep, SELF_TEST_PING,
-					     &ping_rpc);
+			ret = crt_req_create(cb_args.crt_ctx, cb_args.dest_ep,
+					     CRT_OPC_SELF_TEST_PING, &ping_rpc);
 			if (ret != 0) {
 				C_ERROR("crt_req_create failed; ret = %d\n",
 					ret);
-				goto cleanup;
+				C_GOTO(cleanup, ret);
 			}
 			C_ASSERTF(ping_rpc != NULL,
 				  "crt_req_create succeeded but RPC is NULL\n");
 
 			/* Set the RPC arguments */
-			ping_args = (struct st_ping_args *)
+			ping_args = (struct crt_st_ping_args *)
 				    crt_req_get(ping_rpc);
-			if (ping_args == NULL) {
-				C_ERROR("crt_req_get failed\n");
-				ret = -EFAULT;
-				goto cleanup;
-			}
+			C_ASSERTF(ping_args != NULL,
+				  "crt_req_get returned NULL\n");
 			crt_iov_set(&ping_args->ping_buf, cb_args.ping_payload,
 				    current_msg_size);
 
@@ -416,7 +437,7 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 			ret = crt_req_send(ping_rpc, ping_response_cb, cb_data);
 			if (ret != 0) {
 				C_ERROR("crt_req_send failed; ret = %d\n", ret);
-				goto cleanup;
+				C_GOTO(cleanup, ret);
 			}
 		}
 
@@ -428,7 +449,7 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 		ret = crt_gettime(&time_stop_size);
 		if (ret != 0) {
 			C_ERROR("crt_gettime failed; ret = %d\n", ret);
-			goto cleanup;
+			C_GOTO(cleanup, ret);
 		}
 
 		/* Compute the throughput and bandwidth for this size */
@@ -448,61 +469,47 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 		for (local_rep = 0;
 		     local_rep < (rep_count < 16 ? rep_count : 16);
 		     local_rep++)
-			printf("\t\t%ld\n", latencies[local_rep]);
+			printf("\t\t%ld\n", cb_args.latencies[local_rep]);
 		printf("\n");
 	}
 
-	/* Close the server and exit */
-	ret = crt_req_create(crt_ctx, dest_ep, SELF_TEST_SHUTDOWN, &shut_rpc);
-	if (ret != 0) {
-		C_ERROR("crt_req_create failed; ret = %d\n", ret);
-		goto cleanup;
-	}
-	ret = crt_req_send(shut_rpc, shutdown_cb, &g_shutdown_flag);
-	if (ret != 0) {
-		C_ERROR("crt_req_send failed; ret = %d\n", ret);
-		goto cleanup;
-	}
+	/* Tell the progress thread to abort and exit */
+	g_shutdown_flag = 1;
 
 	ret = pthread_join(tid, NULL);
 	if (ret)
 		C_ERROR("Could not join progress thread");
 
 cleanup:
-	if (latencies != NULL) {
-		free(latencies);
-		latencies = NULL;
-	}
-	if (cb_data_alloc != NULL) {
-		free(cb_data_alloc);
-		cb_data_alloc = NULL;
-	}
-	if (cb_args.ping_payload != NULL) {
-		free(cb_args.ping_payload);
-		cb_args.ping_payload = NULL;
-	}
+	if (cb_args.latencies != NULL)
+		C_FREE(cb_args.latencies,
+		       rep_count * sizeof(cb_args.latencies[0]));
+	if (cb_data_alloc != NULL)
+		C_FREE(cb_data_alloc,
+		       max_inflight * sizeof(struct st_ping_cb_data));
+	if (cb_args.ping_payload != NULL)
+		C_FREE(cb_args.ping_payload, current_msg_size);
 
-	cleanup_ret = crt_context_destroy(crt_ctx, 0);
-	if (cleanup_ret != 0) {
+	cleanup_ret = crt_context_destroy(cb_args.crt_ctx, 0);
+	if (cleanup_ret != 0)
 		C_ERROR("crt_context_destroy failed; ret = %d\n", cleanup_ret);
-		/* Make sure first error is returned, if applicable */
-		ret = ((ret == 0) ? cleanup_ret : ret);
-	}
+	/* Make sure first error is returned, if applicable */
+	ret = ((ret == 0) ? cleanup_ret : ret);
 
-	if (srv_grp != NULL) {
-		cleanup_ret = crt_group_detach(srv_grp);
+	if (cb_args.srv_grp != NULL) {
+		cleanup_ret = crt_group_detach(cb_args.srv_grp);
 		if (cleanup_ret != 0)
 			C_ERROR("crt_group_detach failed; ret = %d\n",
 				cleanup_ret);
+		/* Make sure first error is returned, if applicable */
 		ret = ((ret == 0) ? cleanup_ret : ret);
 	}
 
 	cleanup_ret = crt_finalize();
-	if (cleanup_ret != 0) {
+	if (cleanup_ret != 0)
 		C_ERROR("crt_finalize failed; ret = %d\n", cleanup_ret);
-		/* Make sure first error is returned, if applicable */
-		ret = ((ret == 0) ? cleanup_ret : ret);
-	}
+	/* Make sure first error is returned, if applicable */
+	ret = ((ret == 0) ? cleanup_ret : ret);
 
 	return ret;
 }
@@ -511,7 +518,12 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 			int rep_count,
 			int max_inflight)
 {
-	printf("Usage: %s [--message-sizes <a,b,c,d,...> [--repetitions-per-size <N>] [--max-inflight-rpcs <N>]\n"
+	printf("Usage: %s --group-name <name> [--message-sizes <a,b,c,d,...>] [--repetitions-per-size <N>] [--max-inflight-rpcs <N>]\n"
+	       "\n"
+	       "Required Arguments\n"
+	       "  --group-name <group_name>\n"
+	       "      Short version: -g\n"
+	       "      The name of the process set to test against\n"
 	       "\n"
 	       "Optional Arguments\n"
 	       "  --message-sizes <a,b,c,d>\n"
@@ -540,6 +552,7 @@ int main(int argc, char *argv[])
 	const int	default_rep_count = 200000;
 	const int	default_max_inflight = 1000;
 
+	char		*dest_name = NULL;
 	const char	tokens[] = " ,.-\t";
 	char		*msg_sizes_str = default_msg_sizes_str;
 	int		rep_count = default_rep_count;
@@ -556,17 +569,21 @@ int main(int argc, char *argv[])
 	/********************* Parse user arguments *********************/
 	while (1) {
 		static struct option long_options[] = {
+			{"group-name", required_argument, 0, 'g'},
 			{"message-sizes", required_argument, 0, 's'},
 			{"repetitions-per-size", required_argument, 0, 'r'},
 			{"max-inflight-rpcs", required_argument, 0, 'i'},
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long_only(argc, argv, "s:n:r:", long_options, NULL);
+		c = getopt_long(argc, argv, "g:s:r:i:", long_options, NULL);
 		if (c == -1)
 			break;
 
 		switch (c) {
+		case 'g':
+			dest_name = optarg;
+			break;
 		case 's':
 			msg_sizes_str = optarg;
 			break;
@@ -593,7 +610,7 @@ int main(int argc, char *argv[])
 			print_usage(argv[0], default_msg_sizes_str,
 				    default_rep_count,
 				    default_max_inflight);
-			return -EINVAL;
+			C_GOTO(cleanup, ret = -CER_INVAL);
 		}
 	}
 
@@ -627,12 +644,9 @@ int main(int argc, char *argv[])
 	}
 
 	/* Allocate a large enough buffer to hold the message sizes list */
-	msg_sizes = (int *)malloc((num_tokens + 1) * sizeof(msg_sizes[0]));
-	if (msg_sizes == NULL) {
-		ret = errno;
-		C_ERROR("Failed to allocate msg_sizes: %s\n", strerror(ret));
-		goto cleanup;
-	}
+	C_ALLOC(msg_sizes, (num_tokens + 1) * sizeof(msg_sizes[0]));
+	if (msg_sizes == NULL)
+		C_GOTO(cleanup, ret = -CER_NOMEM);
 
 	/* Iterate over the user's message sizes and parse / validate them */
 	num_msg_sizes = 0;
@@ -658,8 +672,7 @@ int main(int argc, char *argv[])
 
 	if (num_msg_sizes <= 0) {
 		printf("No valid message sizes given\n");
-		ret = -EINVAL;
-		goto cleanup;
+		C_GOTO(cleanup, ret = -CER_INVAL);
 	}
 
 	/* Shrink the buffer if some of the user's tokens weren't kept */
@@ -667,55 +680,53 @@ int main(int argc, char *argv[])
 		void *realloced_mem;
 
 		/* This should always succeed since the buffer is shrinking.. */
-		realloced_mem = realloc(msg_sizes,
-					num_msg_sizes * sizeof(msg_sizes[0]));
-		if (realloced_mem == NULL) {
-			ret = errno;
-			C_ERROR("Failed to reallocate msg_sizes: %s\n",
-				strerror(ret));
-			goto cleanup;
-		}
+		realloced_mem = C_REALLOC(msg_sizes,
+					  num_msg_sizes * sizeof(msg_sizes[0]));
+		if (realloced_mem == NULL)
+			C_GOTO(cleanup, ret = -CER_NOMEM);
 		msg_sizes = (int *)realloced_mem;
 	}
 
-	/******************** Validate numerical arguments ********************/
+	/******************** Validate arguments ********************/
+	if (dest_name == NULL) {
+		printf("--group-name argument not specified\n");
+		C_GOTO(cleanup, ret = -CER_INVAL);
+	}
 	if ((rep_count <= 0) || (rep_count > SELF_TEST_MAX_REPETITIONS)) {
 		printf("Invalid --repetitions-per-size argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
 		       SELF_TEST_MAX_REPETITIONS, rep_count);
-		ret = -EINVAL;
-		goto cleanup;
+		C_GOTO(cleanup, ret = -CER_INVAL);
 	}
 	if ((max_inflight <= 0) || (max_inflight > SELF_TEST_MAX_INFLIGHT)) {
 		printf("Invalid --max-inflight-rpcs argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
 		       SELF_TEST_MAX_INFLIGHT, max_inflight);
-		ret = -EINVAL;
-		goto cleanup;
+		C_GOTO(cleanup, ret = -CER_INVAL);
 	}
 
 	/********************* Print out parameters *********************/
 	printf("Self Test Parameters:\n"
-	       "  Message sizes:        [");
+	       "  Group name to test against: %s\n"
+	       "  Message sizes:              [", dest_name);
 	for (j = 0; j < num_msg_sizes; j++) {
 		if (j > 0)
 			printf(", ");
 		printf("%d", msg_sizes[j]);
 	}
 	printf("]\n"
-	       "  Repetitions per size: %d\n"
-	       "  Max inflight RPCs:    %d\n\n",
+	       "  Repetitions per size:       %d\n"
+	       "  Max inflight RPCs:          %d\n\n",
 	       rep_count, max_inflight);
 
 	/********************* Run the self test *********************/
-	ret = run_self_test(msg_sizes, num_msg_sizes, rep_count, max_inflight);
+	ret = run_self_test(msg_sizes, num_msg_sizes, rep_count, max_inflight,
+			    dest_name);
 
 	/********************* Clean up *********************/
 cleanup:
-	if (msg_sizes != NULL) {
-		free(msg_sizes);
-		msg_sizes = NULL;
-	}
+	if (msg_sizes != NULL)
+		C_FREE(msg_sizes, num_msg_sizes * sizeof(msg_sizes[0]));
 
 	return ret;
 }
