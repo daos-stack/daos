@@ -38,7 +38,11 @@ if have_scons_local:
         OPTS_FILE = os.path.join(Dir('#').abspath, 'daos_m.conf')
         OPTS = Variables(OPTS_FILE)
 
-        PREREQS = PreReqComponent(env, OPTS)
+        COMMITS_FILE = os.path.join(Dir('#').abspath, 'utils/build.config')
+        if not os.path.exists(COMMITS_FILE):
+            COMMITS_FILE = None
+
+        PREREQS = PreReqComponent(env, OPTS, COMMITS_FILE)
         PREREQS.preload(os.path.join(Dir('#').abspath,
                                      'scons_local',
                              'components.py'))

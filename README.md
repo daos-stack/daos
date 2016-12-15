@@ -70,7 +70,7 @@ If all these dependencies are readily available on your machine.
     # yum -y install openssl-devel.x86_64
     # yum -y install pandoc.x86_64
     # yum -y install scons.noarch
-    # yum install -y libcmocka libcmocka-devel
+    # yum -y install libcmocka libcmocka-devel
 
     Cmocka for tests (if rpm not available install from source)
     Download Cmocka from https://cmocka.org/files/1.1/cmocka-1.1.0.tar.xz
@@ -91,22 +91,6 @@ If all these dependencies are readily available on your machine.
 
     All patches required for installation avaiable in utils/build/
 
-    Mercury
-    -------
-    - Clone and setup repository
-    # git clone https://github.com/mercury-hpc/mercury.git
-    # cd mercury
-    # git checkout 5ccaf79a1
-    # git checkout -b DAOS
-    # git submodule init
-
-    - Download and apply patches
-    #  git am < 0001-ignore-submodule-updates.patch
-    #  git am < 0002-fix-boost-compiling-issue.patch
-
-    - Update submodules
-    # git submodule update
-
     Auto build DAOS-M setup
     ------------------------
 
@@ -116,10 +100,6 @@ If all these dependencies are readily available on your machine.
     # cd /PATH/TO/daos_m
     # git submodule init
     # git submodule update
-
-   - Patch scons\_local
-     # cd scons_local
-     # patch -p1 < scons_local_components.patch
 
    - Add user PATH
     # vim ~/.scons_localrc
@@ -131,7 +111,7 @@ If all these dependencies are readily available on your machine.
    - Build
     To build all dependencies automatically, we use scons --build-deps feature.
     # cd daos_m
-    # scons --build-deps=yes MERCURY_SRC=/path/to/mercury/
+    # scons --build-deps=yes install
     You can use scons TARGET_PREFIX="PATH/TO/INSTALL" to specify a different
     install directory location. Default path is: /PATH/TO/DAOS/install/
     TARGET_PREFIX creates individual folder to each component
