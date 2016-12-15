@@ -1,0 +1,51 @@
+From 0a28690ef1563a54a1f6e1db0b1438ee962ffbcb Mon Sep 17 00:00:00 2001
+From: root <root@boro-32.boro.hpdd.intel.com>
+Date: Mon, 23 May 2016 06:34:31 +0000
+Subject: [PATCH 2/2] fix boost compiling issue
+
+---
+ src/CMakeLists.txt | 28 +++++++++++++++-------------
+ 1 file changed, 15 insertions(+), 13 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index b9e376d..42b085f 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -42,19 +42,21 @@ set(MERCURY_EXT_LIB_DEPENDENCIES ${NA_EXT_LIB_DEPENDENCIES}
+ # External dependencies
+ #------------------------------------------------------------------------------
+ # Boost (for preprocessor macros)
+-option(MERCURY_USE_BOOST_PP "Use BOOST preprocessor macros." OFF)
+-if(MERCURY_USE_BOOST_PP)
+-  find_package(Boost 1.41.0 REQUIRED)
+-  if(Boost_FOUND)
+-    message(STATUS "Boost include directory: ${Boost_INCLUDE_DIRS}")
+-    set(HG_HAS_BOOST 1)
+-    set(MERCURY_EXT_INCLUDE_DEPENDENCIES ${Boost_INCLUDE_DIRS}
+-      ${MERCURY_EXT_INCLUDE_DEPENDENCIES}
+-    )
+-  else()
+-    message(FATAL_ERROR "Could not find Boost, please check Boost_INCLUDE_DIR.")
+-  endif()
+-endif()
++#option(MERCURY_USE_BOOST_PP "Use BOOST preprocessor macros." OFF)
++#if(MERCURY_USE_BOOST_PP)
++#  find_package(Boost 1.41.0 REQUIRED)
++#  if(Boost_FOUND)
++#    message(STATUS "Boost include directory: ${Boost_INCLUDE_DIRS}")
++#    set(HG_HAS_BOOST 1)
++#    set(MERCURY_EXT_INCLUDE_DEPENDENCIES ${Boost_INCLUDE_DIRS}
++#      ${MERCURY_EXT_INCLUDE_DEPENDENCIES}
++#    )
++#  else()
++#    message(FATAL_ERROR "Could not find Boost, please check Boost_INCLUDE_DIR.")
++#  endif()
++#endif()
++
++set(HG_HAS_BOOST 1)
+ 
+ # MChecksum
+ option(MERCURY_USE_CHECKSUMS "Checksum transfers of RPC arguments." ON)
+-- 
+1.8.3.1
+
