@@ -111,10 +111,10 @@ REQS.define('mercury',
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
-# pylint: disable=line-too-long
+URL = \
+'https://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.2.tar.gz'
 WEB_RETRIEVER = \
-    WebRetriever('https://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.2.tar.gz')
-# pylint: enable=line-too-long
+    WebRetriever(URL)
 REQS.define('hwloc', retriever=WEB_RETRIEVER,
             commands=['./configure --prefix=$HWLOC_PREFIX', 'make',
                       'make install'],
@@ -255,8 +255,8 @@ REQS.define('cart',
             libs=["crt", "crt_util"],
             requires=['ompi', 'mercury', 'argobots', 'pmix', 'crypto'])
 
-WEB_RETRIEVER = \
-    WebRetriever('https://github.com/bfroehle/mpi4py/archive/mpi4py-1.3.tar.gz')
+URL = 'https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-1.3.1.tar.gz'
+WEB_RETRIEVER = WebRetriever(URL)
 REQS.define('mpi4py',
             retriever=WEB_RETRIEVER,
             commands=['python setup.py build --mpicc=$OMPI_PREFIX/bin/mpicc',
