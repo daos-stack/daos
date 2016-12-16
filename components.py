@@ -254,3 +254,11 @@ REQS.define('cart',
             headers=["crt_api.h"],
             libs=["crt", "crt_util"],
             requires=['ompi', 'mercury', 'argobots', 'pmix', 'crypto'])
+
+WEB_RETRIEVER = \
+    WebRetriever('https://github.com/bfroehle/mpi4py/archive/mpi4py-1.3.tar.gz')
+REQS.define('mpi4py',
+            retriever=WEB_RETRIEVER,
+            commands=['python setup.py build --mpicc=$OMPI_PREFIX/bin/mpicc',
+                      'python setup.py install --prefix $MPI4PY_PREFIX'],
+            requires=['ompi'])

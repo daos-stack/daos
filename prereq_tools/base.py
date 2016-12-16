@@ -434,7 +434,7 @@ class WebRetriever(object):
 
         commands = ['rm -rf %s' % subdir]
         if not os.path.exists(basename):
-            commands.append('curl -O %s' % self.url)
+            commands.append('curl -L -O %s' % self.url)
 
         if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)
