@@ -33,6 +33,7 @@
 
 #include <pthread.h>
 #include <hwloc.h>
+#include <abt.h>
 
 /** Number of execution streams started or cores used */
 extern unsigned int	dss_nxstreams;

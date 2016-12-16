@@ -31,6 +31,8 @@
 #include <daos/lru.h>
 #include <daos/rpc.h>
 
+#include <abt.h>
+
 /*
  * Pool object
  *
