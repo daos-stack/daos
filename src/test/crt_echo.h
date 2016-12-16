@@ -171,9 +171,9 @@ echo_init(int server, bool tier2)
 	 */
 
 	if (server != 0 && tier2 == true)
-		rc = crt_init(NULL, ECHO_2ND_TIER_GRPID, flags);
+		rc = crt_init(ECHO_2ND_TIER_GRPID, flags);
 	else
-		rc = crt_init(NULL, NULL, flags);
+		rc = crt_init(NULL, flags);
 	assert(rc == 0);
 
 	gecho.server = (server != 0);

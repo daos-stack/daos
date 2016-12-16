@@ -43,6 +43,8 @@
 
 #include "self_test.h"
 
+crt_group_t	*srv_grp;
+
 struct st_ping_cb_args {
 	crt_endpoint_t		*dest_ep;
 	crt_context_t		*crt_ctx;
@@ -211,10 +213,17 @@ static int self_test_init(crt_context_t *crt_ctx, crt_endpoint_t *dest_ep,
 	crt_rank_t	myrank;
 	int		ret;
 
-	ret = crt_init(my_group, dest_name, 0);
+	ret = crt_init(my_group, 0);
 	if (ret != 0) {
 		C_ERROR("crt_init failed; ret = %d\n", ret);
 		return ret;
+	}
+
+	ret = crt_group_attach(dest_name, &srv_grp);
+	if (ret != 0 || srv_grp == NULL) {
+		C_ERROR("crt_group_attach failed; ret = %d, srv_grp = %p.\n",
+			ret, srv_grp);
+		return -CER_MISC;
 	}
 
 	ret = crt_context_create(NULL, crt_ctx);
@@ -241,7 +250,7 @@ static int self_test_init(crt_context_t *crt_ctx, crt_endpoint_t *dest_ep,
 		return ret;
 	}
 
-	dest_ep->ep_grp = 0;
+	dest_ep->ep_grp = srv_grp;
 	dest_ep->ep_rank = 0;
 	dest_ep->ep_tag = 0;
 
@@ -477,6 +486,14 @@ cleanup:
 	if (cleanup_ret != 0) {
 		C_ERROR("crt_context_destroy failed; ret = %d\n", cleanup_ret);
 		/* Make sure first error is returned, if applicable */
+		ret = ((ret == 0) ? cleanup_ret : ret);
+	}
+
+	if (srv_grp != NULL) {
+		cleanup_ret = crt_group_detach(srv_grp);
+		if (cleanup_ret != 0)
+			C_ERROR("crt_group_detach failed; ret = %d\n",
+				cleanup_ret);
 		ret = ((ret == 0) ? cleanup_ret : ret);
 	}
 

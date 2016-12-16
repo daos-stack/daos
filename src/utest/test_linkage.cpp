@@ -73,7 +73,6 @@ test_crt_api_linkage(void **state)
 {
 	int	rc;
 	char	bogus_client_group[32] = {"bogus_cli_group"};
-	char	bogus_server_group[32] = {"bogus_svr_group"};
 
 	(void)state;
 
@@ -83,14 +82,8 @@ test_crt_api_linkage(void **state)
 	/* Lookup group name */
 	expect_pmix_lookup(PMIX_STRING,
 		   cast_ptr_to_largest_integral_type("bogus_cli_group"));
-	expect_pmix_lookup(PMIX_UINT32, 1); /* group size */
-	/* Lookup uri */
-	expect_pmix_lookup(PMIX_STRING,
-		   cast_ptr_to_largest_integral_type("bogus_uri"));
 
-	rc = crt_init(bogus_client_group,
-		      bogus_server_group,
-		      0);
+	rc = crt_init(bogus_client_group, 0);
 	assert_int_equal(rc, 0);
 
 	/* test RPC register */

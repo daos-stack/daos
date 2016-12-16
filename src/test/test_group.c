@@ -184,6 +184,7 @@ int main(int argc, char **argv)
 	pthread_t			 tid;
 	int				 ii;
 	char				 hostname[1024];
+	crt_group_t			*srv_grp = NULL;
 	struct option			 long_options[] = {
 		{"name", required_argument, 0, 'n'},
 		{"attach_to", required_argument, 0, 'a'},
@@ -232,11 +233,14 @@ int main(int argc, char **argv)
 		name_of_group, name_of_target_group);
 	flag = is_service ? CRT_FLAG_BIT_SERVER : 0;
 	if (is_service) {
-		rc = crt_init(NULL, name_of_group, flag);
+		rc = crt_init(name_of_group, flag);
 		C_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 	} else {
-		rc = crt_init(name_of_group, name_of_target_group, flag);
+		rc = crt_init(name_of_group, flag);
 		C_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
+		rc = crt_group_attach(name_of_target_group, &srv_grp);
+		C_ASSERTF(rc == 0, "crt_group_attach failed, rc: %d\n", rc);
+		C_ASSERTF(srv_grp != NULL, "NULL attached srv_grp\n");
 	}
 
 	rc = crt_group_rank(NULL, &myrank);
@@ -275,7 +279,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "size of %s is %d\n", name_of_target_group,
 				target_group_size);
 		for (ii = 0; ii < target_group_size; ii++) {
-			server_ep.ep_grp = NULL;
+			server_ep.ep_grp = srv_grp;
 			server_ep.ep_rank = ii;
 			server_ep.ep_tag = 0;
 			rc = crt_req_create(crt_ctx, server_ep,
@@ -319,7 +323,9 @@ int main(int argc, char **argv)
 	} else if (myrank == 0) {
 		/* client rank 0 tells all servers to shut down */
 		for (ii = 0; ii < target_group_size; ii++) {
+			server_ep.ep_grp = srv_grp;
 			server_ep.ep_rank = ii;
+			server_ep.ep_tag = 0;
 			rc = crt_req_create(crt_ctx, server_ep,
 					ECHO_OPC_SHUTDOWN, &rpc_req);
 			C_ASSERTF(rc == 0 && rpc_req != NULL,
@@ -334,8 +340,12 @@ int main(int argc, char **argv)
 				  rc);
 		}
 	}
-	if (is_service)
+	if (is_service) {
 		crt_fake_event_fini(myrank);
+	} else {
+		rc = crt_group_detach(srv_grp);
+		C_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
+	}
 	rc = crt_context_destroy(crt_ctx, 0);
 	C_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
 	rc = crt_finalize();

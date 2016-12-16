@@ -120,6 +120,9 @@ static void run_client(void)
 	C_ASSERT(pri_local_grp != NULL);
 	pri_srv_grp = crt_group_lookup("non-existent-grp");
 	C_ASSERT(pri_srv_grp == NULL);
+
+	rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &grp_tier1);
+	C_ASSERT(rc == 0 && grp_tier1 != NULL);
 	pri_srv_grp = crt_group_lookup(CRT_DEFAULT_SRV_GRPID);
 	C_ASSERT(pri_srv_grp != NULL);
 
@@ -131,10 +134,6 @@ static void run_client(void)
 	C_ASSERT(rc == 0 && grp_size_cli > 0);
 	rc = crt_group_size(pri_srv_grp, &grp_size_srv);
 	C_ASSERT(rc == 0 && grp_size_srv > 0);
-	rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &grp_tier1);
-	C_ASSERT(rc == 0 && grp_tier1 != NULL);
-	rc = crt_group_detach(grp_tier1);
-	C_ASSERT(rc == 0);
 
 	printf("I'm rank %d in group %s(size %d), srv_group %s with size %d.\n",
 	       myrank, pri_local_grp->cg_grpid, grp_size_cli,
@@ -165,7 +164,7 @@ static void run_client(void)
 		struct timespec	t1, t2;
 		double		time_us;
 
-		svr_ep.ep_grp = NULL;
+		svr_ep.ep_grp = grp_tier1;
 		svr_ep.ep_rank = 0;
 		svr_ep.ep_tag = i;
 
@@ -216,7 +215,7 @@ static void run_client(void)
 	 * simple bulk transferring
 	 */
 	rpc_req = NULL;
-	svr_ep.ep_grp = NULL;
+	svr_ep.ep_grp = grp_tier1;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_BULK_TEST,
@@ -351,7 +350,7 @@ static void run_client(void)
 
 	/* ====================== */
 	/* send an RPC to kill the server */
-	svr_ep.ep_grp = NULL;
+	svr_ep.ep_grp = grp_tier1;
 send_shutdown:
 	printf("client (rank 0) sending shutdown request...\n");
 	gecho.complete = 0;
@@ -386,6 +385,9 @@ send_shutdown:
 	}
 
 out:
+	rc = crt_group_detach(grp_tier1);
+	C_ASSERT(rc == 0);
+
 	printf("client(rank %d) shuting down...\n", myrank);
 }
 

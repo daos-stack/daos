@@ -969,7 +969,7 @@ crt_group_lookup(crt_group_id_t grp_id)
 			goto out;
 	}
 	grp_priv = grp_gdata->gg_srv_pri_grp;
-	if (crt_grp_id_identical(grp_id, grp_priv->gp_pub.cg_grpid))
+	if (grp_priv && crt_grp_id_identical(grp_id, grp_priv->gp_pub.cg_grpid))
 		goto out;
 
 	pthread_rwlock_rdlock(&grp_gdata->gg_rwlock);
@@ -1354,14 +1354,12 @@ out:
 }
 
 static int
-crt_primary_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
+crt_primary_grp_init(crt_group_id_t grpid)
 {
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_pmix_gdata	*pmix_gdata;
 	struct crt_grp_priv	*grp_priv = NULL;
-	crt_group_id_t		 grp_id;
-	crt_group_id_t		 attach_grp_id;
-	crt_group_t		*srv_grp = NULL;
+	crt_group_id_t		 pri_grpid;
 	bool			 is_service;
 	int			 rc = 0;
 
@@ -1372,13 +1370,11 @@ crt_primary_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
 	C_ASSERT(pmix_gdata != NULL);
 
 	is_service = crt_is_service();
-	grp_id = (srv_grpid != NULL) ? srv_grpid : CRT_DEFAULT_SRV_GRPID;
-	attach_grp_id = grp_id;
-	if (!is_service) {
-		grp_id = (cli_grpid != NULL) ? cli_grpid :
-					       CRT_DEFAULT_CLI_GRPID;
-	}
-	rc = crt_grp_priv_create(&grp_priv, grp_id, true /* primary group */,
+	if (is_service)
+		pri_grpid = (grpid != NULL) ? grpid : CRT_DEFAULT_SRV_GRPID;
+	else
+		pri_grpid = (grpid != NULL) ? grpid : CRT_DEFAULT_CLI_GRPID;
+	rc = crt_grp_priv_create(&grp_priv, pri_grpid, true /* primary group */,
 				 NULL /* member_ranks */,
 				 NULL /* grp_create_cb */, NULL /* priv */);
 	if (rc != 0) {
@@ -1441,16 +1437,6 @@ crt_primary_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
 			C_ERROR("crt_grp_ras_init() failed, rc %d.\n", rc);
 	} else {
 		grp_gdata->gg_cli_pri_grp = grp_priv;
-		rc = crt_grp_attach(attach_grp_id, &srv_grp);
-		if (rc != 0) {
-			C_ERROR("failed to attach to %s, rc: %d.\n",
-				CRT_DEFAULT_SRV_GRPID, rc);
-			C_GOTO(out, rc);
-		}
-		C_ASSERT(srv_grp != NULL);
-		grp_gdata->gg_srv_pri_grp =
-			container_of(srv_grp, struct crt_grp_priv, gp_pub);
-		crt_grp_priv_addref(grp_gdata->gg_srv_pri_grp);
 	}
 
 out:
@@ -1508,22 +1494,8 @@ crt_primary_grp_fini(void)
 		rc = crt_grp_lc_destroy(grp_priv);
 		if (rc != 0)
 			C_GOTO(out, rc);
-
-		crt_grp_priv_destroy(grp_priv);
-	} else {
-		rc = crt_grp_priv_decref(grp_gdata->gg_srv_pri_grp,
-						true /* force */);
-		if (rc != 0)
-			C_ERROR("crt_grp_priv_decref failed, rc: %d.\n", rc);
-
-		rc = crt_grp_detach(&grp_gdata->gg_srv_pri_grp->gp_pub);
-		if (rc != 0) {
-			C_ERROR("crt_grp_detach the gg_srv_pri_grp failed, "
-				"rc: %d.\n", rc);
-			C_GOTO(out, rc);
-		}
-		crt_grp_priv_destroy(grp_priv);
 	}
+	crt_grp_priv_destroy(grp_priv);
 
 out:
 	if (rc != 0)
@@ -1709,15 +1681,16 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	pthread_rwlock_rdlock(&grp_gdata->gg_rwlock);
 	if (!is_service) {
 		grp_priv = grp_gdata->gg_srv_pri_grp;
-		if (crt_grp_id_identical(srv_grpid,
-					 grp_priv->gp_pub.cg_grpid)) {
+		if (grp_priv && crt_grp_id_identical(srv_grpid,
+					grp_priv->gp_pub.cg_grpid)) {
 			if (grp_priv->gp_finalizing == 0) {
 				crt_grp_priv_addref(grp_priv);
 				*attached_grp = &grp_priv->gp_pub;
 			} else {
-				C_ERROR("group %s finalizing, canot attach.\n",
+				C_DEBUG("group %s is finalizing, try attach "
+					"again later.\n",
 					grp_priv->gp_pub.cg_grpid);
-				rc = -CER_NO_PERM;
+				rc = -CER_AGAIN;
 			}
 			pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
 			C_GOTO(out, rc);
@@ -1753,7 +1726,34 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 
 	pthread_rwlock_wrlock(&grp_gdata->gg_rwlock);
 
-	/* check possible race condition */
+	if (!is_service) {
+		grp_priv = grp_gdata->gg_srv_pri_grp;
+		if (grp_priv == NULL) {
+			/*
+			 * for client, set gg_srv_pri_grp as first attached
+			 * service group.
+			 */
+			grp_gdata->gg_srv_pri_grp = container_of(grp_at,
+						struct crt_grp_priv, gp_pub);
+			crt_grp_priv_addref(grp_gdata->gg_srv_pri_grp);
+			*attached_grp = grp_at;
+			pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
+			C_GOTO(out, rc);
+		} else if (crt_grp_id_identical(srv_grpid,
+					grp_priv->gp_pub.cg_grpid)) {
+			if (grp_priv->gp_finalizing == 0) {
+				crt_grp_priv_addref(grp_priv);
+				*attached_grp = &grp_priv->gp_pub;
+			} else {
+				C_ERROR("group %s finalizing, canot attach.\n",
+					grp_priv->gp_pub.cg_grpid);
+				rc = -CER_NO_PERM;
+			}
+			pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
+			C_GOTO(out, rc);
+		};
+	}
+
 	crt_list_for_each_entry(grp_priv, &grp_gdata->gg_srv_grps_attached,
 				gp_link) {
 		if (crt_grp_id_identical(srv_grpid,
@@ -1865,10 +1865,10 @@ crt_group_detach(crt_group_t *attached_grp)
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
-	rc = crt_grp_priv_decref(grp_priv, false /* force */);
+	rc = crt_grp_priv_decref(grp_priv);
 	if (rc < 0) {
-		C_ERROR("crt_grp_priv_decref (group %s) failed, "
-			"rc: %d.\n", grp_priv->gp_pub.cg_grpid, rc);
+		C_ERROR("crt_grp_priv_decref (group %s) failed, rc: %d.\n",
+			grp_priv->gp_pub.cg_grpid, rc);
 	} else if (rc > 0) {
 		rc = 0;
 	} else {
@@ -1937,7 +1937,7 @@ out:
 }
 
 int
-crt_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
+crt_grp_init(crt_group_id_t grpid)
 {
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_pmix_gdata	*pmix_gdata;
@@ -1964,7 +1964,7 @@ crt_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid)
 	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
 	C_ASSERT(pmix_gdata != NULL);
 
-	rc = crt_primary_grp_init(cli_grpid, srv_grpid);
+	rc = crt_primary_grp_init(grpid);
 	if (rc != 0) {
 		crt_pmix_fini();
 		C_GOTO(out, rc);

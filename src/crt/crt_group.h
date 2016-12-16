@@ -222,7 +222,7 @@ int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		      uint32_t tag, crt_phy_addr_t *base_addr,
 		      na_addr_t *na_addr);
 struct crt_grp_priv *crt_grp_lookup_int_grpid(uint64_t int_grpid);
-int crt_grp_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid);
+int crt_grp_init(crt_group_id_t grpid);
 int crt_grp_fini(void);
 
 #define CRT_ALLOW_SINGLETON_ENV		"CRT_ALLOW_SINGLETON"
@@ -300,11 +300,10 @@ crt_grp_priv_addref(struct crt_grp_priv *grp_priv)
  * Returns negative value for error case.
  */
 static inline int
-crt_grp_priv_decref(struct crt_grp_priv *grp_priv, bool force)
+crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 {
 	struct crt_grp_gdata	*grp_gdata;
-	bool			bad_ref = false;
-	int			rc;
+	int			 rc;
 
 	grp_gdata = crt_gdata.cg_grp;
 	C_ASSERT(grp_gdata != NULL);
@@ -312,19 +311,7 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv, bool force)
 	C_ASSERT(grp_priv->gp_primary == 1);
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
-	if (grp_priv == grp_gdata->gg_srv_pri_grp) {
-		/*
-		 * For default attached primary service group, need one extra
-		 * refcount for crt_primary_grp_fini.
-		 */
-		if ((force && grp_priv->gp_refcount == 0) ||
-		    (!force && grp_priv->gp_refcount <= 1))
-			bad_ref = true;
-	} else {
-		if (grp_priv->gp_refcount == 0)
-			bad_ref = true;
-	}
-	if (bad_ref) {
+	if (grp_priv->gp_refcount == 0) {
 		rc = -CER_ALREADY;
 	} else {
 		grp_priv->gp_refcount--;

@@ -58,13 +58,10 @@ extern "C" {
 /**
  * Initialize CRT transport layer.
  *
- * \param cli_grpid [IN]	client-side primary group ID, be ignored for
- *				server-side. User can provide a NULL value in
- *				that case CRT_DEFAULT_CLI_GRPID will be used.
- * \param srv_grpid [IN]	server-side primary group ID, client will attach
- *				to it when initializing. User can provide a NULL
- *				value in that case CRT_DEFAULT_SRV_GRPID will be
- *				used.
+ * \param grpid [IN]		primary group ID, user can provide a NULL value
+ *				in that case will use the default group ID,
+ *				CRT_DEFAULT_CLI_GRPID for client and
+ *				CRT_DEFAULT_SRV_GRPID for server.
  * \param flags [IN]		bit flags, /see enum crt_init_flag_bits.
  *
  * \return			zero on success, negative value if error
@@ -74,7 +71,7 @@ extern "C" {
  *	  PMIx_Fence.
  */
 int
-crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, uint32_t flags);
+crt_init(crt_group_id_t grpid, uint32_t flags);
 
 /**
  * Create CRT transport context.
@@ -585,11 +582,14 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 /*
  * Attach to a primary service group.
  *
- * In crt_init(), the client will internally attach to the default service
- * primary group. User can pass crt_endpoint_t::ep_grp pointer as NULL to send
- * RPC to the default service primary group.
- * User can explicitly call this API to attach to other server tier, and set
- * crt_endpoint_t::ep_grp as the returned attached_grp to send RPC to that tier.
+ * By calling this API to attach to service primary group, and set
+ * crt_endpoint_t::ep_grp as the returned attached_grp to send RPC to it.
+ *
+ * For client, the first attached service primary group become its default
+ * service primary group. For server, its default service primary group is
+ * the primary group created in crt_init().
+ * User can pass crt_endpoint_t::ep_grp pointer as NULL to send RPC to the
+ * default service primary group.
  *
  * \param srv_grpid [IN]	Primary service group ID to attach to.
  * \param attached_grp [OUT]	Returned attached group handle pointer.

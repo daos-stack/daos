@@ -115,7 +115,7 @@ int main(void)
 	int		ret;
 	int		cleanup_ret;
 
-	ret = crt_init(NULL, my_group, CRT_FLAG_BIT_SERVER);
+	ret = crt_init(my_group, CRT_FLAG_BIT_SERVER);
 	if (ret != 0) {
 		C_ERROR("crt_init failed; ret = %d\n", ret);
 		goto cleanup;

@@ -211,7 +211,7 @@ static void data_init()
 }
 
 int
-crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, uint32_t flags)
+crt_init(crt_group_id_t grpid, uint32_t flags)
 {
 	crt_phy_addr_t	addr = NULL, addr_env;
 	struct timeval	now;
@@ -220,23 +220,26 @@ crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, uint32_t flags)
 	bool		server, allow_singleton = false;
 	int		rc = 0;
 
-	if (cli_grpid != NULL) {
-		len = strlen(cli_grpid);
+	server = flags & CRT_FLAG_BIT_SERVER;
+
+	if (grpid != NULL) {
+		len = strlen(grpid);
 		if (len == 0 || len > CRT_GROUP_ID_MAX_LEN) {
-			C_PRINT_ERR("invalid cli_grpid length %zu.\n", len);
+			C_PRINT_ERR("invalid grpid length %zu.\n", len);
 			C_GOTO(out, rc = -CER_INVAL);
 		}
-		if (strcmp(cli_grpid, CRT_DEFAULT_SRV_GRPID) == 0) {
-			C_PRINT_ERR("invalid cli_grpid (same as "
-				    "CRT_DEFAULT_SRV_GRPID).\n");
-			C_GOTO(out, rc = -CER_INVAL);
-		}
-	}
-	if (srv_grpid != NULL) {
-		len = strlen(srv_grpid);
-		if (len == 0 || len > CRT_GROUP_ID_MAX_LEN) {
-			C_PRINT_ERR("invalid srv_grpid length %zu.\n", len);
-			C_GOTO(out, rc = -CER_INVAL);
+		if (!server) {
+			if (strcmp(grpid, CRT_DEFAULT_SRV_GRPID) == 0) {
+				C_PRINT_ERR("invalid client grpid (same as "
+					    "CRT_DEFAULT_SRV_GRPID).\n");
+				C_GOTO(out, rc = -CER_INVAL);
+			}
+		} else {
+			if (strcmp(grpid, CRT_DEFAULT_CLI_GRPID) == 0) {
+				C_PRINT_ERR("invalid server grpid (same as "
+					    "CRT_DEFAULT_CLI_GRPID).\n");
+				C_GOTO(out, rc = -CER_INVAL);
+			}
 		}
 	}
 
@@ -249,8 +252,6 @@ crt_init(crt_group_id_t cli_grpid, crt_group_id_t srv_grpid, uint32_t flags)
 		}
 	}
 	C_ASSERT(gdata_init_flag == 1);
-
-	server = flags & CRT_FLAG_BIT_SERVER;
 
 	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
 	if (crt_gdata.cg_inited == 0) {
@@ -332,7 +333,7 @@ do_init:
 		crt_gdata.cg_addr = addr;
 		crt_gdata.cg_addr_len = strlen(addr);
 
-		rc = crt_grp_init(cli_grpid, srv_grpid);
+		rc = crt_grp_init(grpid);
 		if (rc != 0) {
 			C_ERROR("crt_grp_init failed, rc: %d.\n", rc);
 			crt_hg_fini();
