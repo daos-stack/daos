@@ -182,7 +182,7 @@ eq_test_2()
 
 	D_ERROR("Poll EQ with timeout\n");
 	rc = daos_eq_poll(my_eqh, 1, 10, EQT_EV_COUNT, eps);
-	if (rc != 0) {
+	if (rc != -DER_TIMEDOUT) {
 		D_ERROR("Expect to poll zero event: %d\n", rc);
 		goto out;
 	}
@@ -232,44 +232,107 @@ eq_test_3()
 	struct daos_event	*eps[2];
 	struct daos_event	*child_events[EQT_EV_COUNT + 1] = { 0 };
 	struct daos_event	event;
-	int			rc;
+	struct daos_event	child_event;
+	bool			ev_flag;
 	int			i;
+	int			rc;
 
 	DAOS_TEST_ENTRY("3", "parent event");
 
-	D_ERROR("Initialize events with parent\n");
+	D_ERROR("Initialize parent event\n");
 	rc = daos_event_init(&event, my_eqh, NULL);
 	D_ASSERT(rc == 0);
 
+	D_ERROR("Initialize & launch child events");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		child_events[i] = malloc(sizeof(*child_events[i]));
 		if (child_events[i] == NULL) {
 			rc = -ENOMEM;
 			goto out;
 		}
-		rc = daos_event_init(child_events[i], my_eqh, &event);
+
+		rc = daos_event_init(child_events[i], DAOS_HDL_INVAL, &event);
 		if (rc != 0)
-			goto out;
-	}
+			goto out_free;
 
-	D_ERROR("launch parent events\n");
-	/* try to launch parent event, should always fail */
-	rc = daos_event_launch(&event);
-	if (rc != -DER_NO_PERM) {
-		D_ERROR("Launch parent event returned %d\n", rc);
-		goto out_free;
-	}
-
-	D_ERROR("launch child events");
-	for (i = 0; i < EQT_EV_COUNT; i++) {
 		rc = daos_event_launch(child_events[i]);
 		if (rc != 0)
 			goto out_free;
 	}
 
+	D_ERROR("launch parent event\n");
 	rc = daos_event_launch(&event);
 	if (rc != 0) {
 		D_ERROR("Launch parent event returned %d\n", rc);
+		goto out_free;
+	}
+
+	D_ERROR("Add a child event when parent is launched. should fail.\n");
+	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
+	if (rc != -DER_INVAL) {
+		D_ERROR("Add child to inflight parent should fail (%d)\n", rc);
+		goto out_free;
+	}
+
+	D_ERROR("Complete parent before children complete\n");
+	daos_event_complete(&event, 0);
+
+	D_ERROR("Add a child event when parent is complete but not init\n");
+	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
+	if (rc != -DER_INVAL) {
+		D_ERROR("Add child to inflight parent should fail (%d)\n", rc);
+		goto out_free;
+	}
+
+	D_ERROR("Poll EQ, Parent should not be polled out of EQ.\n");
+	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, 2, eps);
+	if (rc != 0) {
+		D_ERROR("Expect to get inflight parent event: %d\n", rc);
+		rc = -1;
+		goto out_free;
+	}
+
+	D_ERROR("Test parent completion - should return false\n");
+	rc = daos_event_test(&event, DAOS_EQ_NOWAIT, &ev_flag);
+	if (rc != 0 || ev_flag != false) {
+		D_ERROR("expect to get inflight parent (%d)\n", rc);
+		rc = -1;
+		goto out_free;
+	}
+
+	for (i = 0; i < EQT_EV_COUNT; i++)
+		daos_event_complete(child_events[i], 0);
+
+	D_ERROR("Poll parent event\n");
+	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, 2, eps);
+	if (rc != 1 || eps[0] != &event) {
+		D_ERROR("Expect to get completion of parent event: %d\n", rc);
+		rc = -1;
+		goto out_free;
+	}
+
+	D_ERROR("re-launch child events\n");
+	for (i = 0; i < EQT_EV_COUNT; i++) {
+		daos_event_fini(child_events[i]);
+
+		rc = daos_event_init(child_events[i], DAOS_HDL_INVAL, &event);
+		if (rc != 0)
+			goto out_free;
+
+		rc = daos_event_launch(child_events[i]);
+		if (rc != 0) {
+			D_ERROR("can't launch child event (%d)\n", rc);
+			goto out_free;
+		}
+
+		if (i >= EQT_EV_COUNT/2)
+			daos_event_complete(child_events[i], 0);
+	}
+
+	D_ERROR("Insert barrier parent event\n");
+	rc = daos_event_parent_barrier(&event);
+	if (rc != 0) {
+		D_ERROR("Parent barrier event returned %d\n", rc);
 		goto out_free;
 	}
 
@@ -280,27 +343,53 @@ eq_test_3()
 		goto out_free;
 	}
 
-	for (i = 0; i < EQT_EV_COUNT; i++)
-		daos_event_complete(child_events[i], 0);
-
-	D_ERROR("Poll parent event\n");
-	rc = daos_eq_poll(my_eqh, 0, 0, 2, eps);
-	if (rc != 1 || eps[0] != &event) {
-		D_ERROR("Expect to get completion of parent event: %d\n", rc);
-		rc = -1;
-		goto out;
+	D_ERROR("Add a child event when parent is not polled. should fail.\n");
+	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
+	if (rc != -DER_INVAL) {
+		D_ERROR("Add child to inflight parent should fail (%d)\n", rc);
+		goto out_free;
 	}
 
+	D_ERROR("Poll EQ, Parent should not be polled out of EQ.\n");
+	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, 2, eps);
+	if (rc != 0) {
+		D_ERROR("Expect to get inflight parent event: %d\n", rc);
+		rc = -1;
+		goto out_free;
+	}
+
+	for (i = 0; i < EQT_EV_COUNT/2; i++)
+		daos_event_complete(child_events[i], 0);
+
+	D_ERROR("wait on parent barrier event\n");
+	rc = daos_event_test(&event, DAOS_EQ_NOWAIT, &ev_flag);
+	if (rc != 0) {
+		D_ERROR("Test on barrier event returned %d\n", rc);
+		goto out_free;
+	}
+	if (!ev_flag) {
+		D_ERROR("Barrier event should be completed\n");
+		rc = -1;
+		goto out_free;
+	}
+
+	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, 2, eps);
+	if (rc != 0) {
+		D_ERROR("EQ should be empty: %d\n", rc);
+		rc = -1;
+		goto out_free;
+	}
+
+	daos_event_fini(&event);
 	rc = 0;
+
 out_free:
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		if (child_events[i] != NULL) {
-			daos_event_fini(child_events[i]);
 			free(child_events[i]);
 		}
 	}
 out:
-	daos_event_fini(&event);
 	DAOS_TEST_EXIT(rc);
 	return rc;
 }

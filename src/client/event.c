@@ -366,8 +366,9 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 		D_ASSERT(parent_evx->evx_nchild_comp <
 			 parent_evx->evx_nchild);
 		parent_evx->evx_nchild_comp++;
+
 		if (parent_evx->evx_nchild_comp < parent_evx->evx_nchild) {
-			/* Not all children completion yet */
+			/* Not all children have completed yet */
 			parent_ev->ev_error = parent_ev->ev_error ?: rc;
 			return 0;
 		}
@@ -376,6 +377,12 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 		if (parent_evx->evx_status == DAOS_EVS_INIT)
 			return 0;
 
+		/* If the parent was completed or aborted, we can return */
+		if (parent_evx->evx_status == DAOS_EVS_COMPLETED ||
+		    parent_evx->evx_status == DAOS_EVS_ABORT)
+			return 0;
+
+		/* If all children have completed, complete the parent */
 		if (parent_evx->evx_status == DAOS_EVS_DISPATCH) {
 			parent_evx->evx_status = DAOS_EVS_COMPLETED;
 			rc = daos_event_complete_cb(parent_evx, 0);
@@ -446,6 +453,19 @@ daos_event_launch(struct daos_event *ev)
 	return rc;
 }
 
+int
+daos_event_parent_barrier(struct daos_event *ev)
+{
+	struct daos_event_private	*evx = daos_ev2evx(ev);
+
+	if (evx->evx_nchild == 0) {
+		D_ERROR("Can't start a parent event with no children\n");
+		return -DER_INVAL;
+	}
+
+	return daos_event_launch(ev);
+}
+
 void
 daos_event_complete(struct daos_event *ev, int rc)
 {
@@ -490,6 +510,10 @@ ev_progress_cb(void *arg)
 	/** Event is still in-flight */
 	if (evx->evx_status != DAOS_EVS_COMPLETED &&
 	    evx->evx_status != DAOS_EVS_ABORT)
+		return 0;
+
+	/** If there are children in flight, then return in-flight */
+	if (evx->evx_nchild_if > 0)
 		return 0;
 
 	/*
@@ -624,6 +648,11 @@ eq_progress_cb(void *arg)
 	pthread_mutex_lock(&epa->eqx->eqx_lock);
 	daos_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
 		D_ASSERT(eq->eq_n_comp > 0);
+
+		/** don't poll out a parent if it has inflight events */
+		if (evx->evx_nchild_if > 0)
+			continue;
+
 		eq->eq_n_comp--;
 
 		daos_list_del_init(&evx->evx_link);
@@ -934,7 +963,8 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		/* Insert it to the parent event list */
 		parent_evx = daos_ev2evx(parent);
 		if (parent_evx->evx_status != DAOS_EVS_INIT) {
-			D_ERROR("Parent event is not initialized: %d\n",
+			D_ERROR("Parent event is not initialized or is already "
+				"running/aborted: %d\n",
 				parent_evx->evx_status);
 			return -DER_INVAL;
 		}
@@ -1008,10 +1038,11 @@ daos_event_fini(struct daos_event *ev)
 			goto out;
 		}
 
-		daos_list_del_init(&tmp->evx_link);
 		rc = daos_event_fini(daos_evx2ev(tmp));
-		if (rc < 0)
+		if (rc < 0) {
+			D_ERROR("Failed to finalize child event (%d)\n", rc);
 			goto out;
+		}
 		tmp->evx_status = DAOS_EVS_INIT;
 		tmp->evx_parent = NULL;
 	}

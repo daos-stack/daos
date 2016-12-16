@@ -132,7 +132,11 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
  *			If it's not NULL, caller will never see completion
  *			of this event, instead, will only see completion
  *			of \a parent when all children of \a parent are
- *			completed.
+ *			completed. The operation associated with the parent
+ *			event may however be launched or completed before its
+ *			children. The parent event completion is meant to be
+ *			just an easy way to combine multiple events completion
+ *			status into 1.
  *
  * \return		Zero on success, negative value if error
  */
@@ -183,6 +187,26 @@ daos_event_next(daos_event_t *parent, daos_event_t *child);
  */
 int
 daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag);
+
+/**
+ * Mark the parent event as a launched barrier, meaning no more child events can
+ * be added before all other child events have completed and the parent event
+ * polled out of the EQ or tested for completion, if it is not in an EQ. The
+ * parent won't be polled out of the EQ or returns done with daos_event_test
+ * until all children have completed.
+ *
+ * Note that if the parent event was launched as part of another daos operation,
+ * this function should not be called anymore and the function the event was
+ * launched with becomes the barrier operation. In that case, the operation
+ * itself can be completed before the children do, but the event won't be marked
+ * as ready before all the children complete.
+ *
+ * \param ev [IN]	Parent event
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+daos_event_parent_barrier(struct daos_event *ev);
 
 /**
  * Try to abort operations associated with this event.
