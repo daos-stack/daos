@@ -48,7 +48,7 @@ def scons():
     tenv = env.Clone()
     tenv.Append(CPPPATH=['#/src/self_test'])
 
-    libraries = ['pthread', 'crt', 'crt_util']
+    libraries = ['pthread', 'm', 'crt', 'crt_util']
     tenv.AppendUnique(LIBS=libraries)
     tenv.AppendUnique(LIBPATH=['#/src/crt'])
     tenv.AppendUnique(RPATH="$PREFIX/lib")

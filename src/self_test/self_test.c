@@ -40,6 +40,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <string.h>
+#include <math.h>
 
 #include <crt_api.h>
 #include <crt_util/common.h>
@@ -310,6 +311,11 @@ static int self_test_init(struct st_ping_cb_args *cb_args, pthread_t *tid,
 	return 0;
 }
 
+static int st_compare_latencies(const void *a, const void *b)
+{
+	return *((int64_t *)a) > *((int64_t *)b);
+}
+
 static int run_self_test(int msg_sizes[], int num_msg_sizes,
 			 int rep_count, int max_inflight,
 			 char *dest_name)
@@ -322,6 +328,8 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 	int			ret;
 	int			cleanup_ret;
 
+	int64_t			latency_avg;
+	double			latency_std_dev;
 	double			throughput;
 	double			bandwidth;
 	struct timespec		time_start_size, time_stop_size;
@@ -335,7 +343,7 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 	struct st_ping_cb_data	*cb_data_alloc = NULL;
 
 	/* Set the callback data which will be the same for all callbacks */
-	cb_args.rep_count = rep_count;
+	cb_args.rep_count = 1; /* First run only sends one message */
 	pthread_spin_init(&cb_args.rep_idx_lock, PTHREAD_PROCESS_PRIVATE);
 
 	/* Initialize CART */
@@ -355,12 +363,21 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 	if (cb_data_alloc == NULL)
 		C_GOTO(cleanup, ret = -CER_NOMEM);
 
-	for (size_idx = 0; size_idx < num_msg_sizes; size_idx++) {
+	/*
+	 * Note this starts at -1, which is a special case for measuring
+	 * the startup latency
+	 */
+	for (size_idx = -1; size_idx < num_msg_sizes; size_idx++) {
 		int local_rep;
 		int inflight_idx;
 		void *realloced_mem;
 
-		current_msg_size = msg_sizes[size_idx];
+		if (size_idx == -1) {
+			current_msg_size = 1;
+		} else {
+			current_msg_size = msg_sizes[size_idx];
+			cb_args.rep_count = rep_count;
+		}
 
 		/*
 		 * Use one buffer for all of the ping payload contents
@@ -377,7 +394,7 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 		cb_args.current_msg_size = current_msg_size;
 
 		/* Initialize the latencies to -1 to indicate invalid data */
-		for (local_rep = 0; local_rep < rep_count; local_rep++)
+		for (local_rep = 0; local_rep < cb_args.rep_count; local_rep++)
 			cb_args.latencies[local_rep] = -1;
 
 		/* Record the time right when we start processing this size */
@@ -396,12 +413,12 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 			/* Get an index for a message that needs to be sent */
 			pthread_spin_lock(&cb_args.rep_idx_lock);
 			local_rep = cb_args.rep_idx;
-			if (cb_args.rep_idx < rep_count)
+			if (cb_args.rep_idx < cb_args.rep_count)
 				cb_args.rep_idx++;
 			pthread_spin_unlock(&cb_args.rep_idx_lock);
 
 			/* Quota met elsewhere, abort */
-			if (local_rep >= rep_count)
+			if (local_rep >= cb_args.rep_count)
 				break;
 
 			/* Set payload data */
@@ -442,7 +459,7 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 		}
 
 		/* Wait until all the RPCs come back */
-		while (cb_args.done_count < rep_count)
+		while (cb_args.done_count < cb_args.rep_count)
 			sched_yield();
 
 		/* Record the time right when we stopped processing this size */
@@ -452,10 +469,18 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 			C_GOTO(cleanup, ret);
 		}
 
+		/* Print out the first message latency separately */
+		if (size_idx == -1) {
+			printf("First RPC latency (size=1) (us): %ld\n\n",
+			       cb_args.latencies[0] / 1000);
+
+			continue;
+		}
+
 		/* Compute the throughput and bandwidth for this size */
-		throughput = rep_count / (crt_timediff_ns(&time_start_size,
-							  &time_stop_size) /
-					  1000000000.0F);
+		throughput = cb_args.rep_count /
+			(crt_timediff_ns(&time_start_size, &time_stop_size) /
+			 1000000000.0F);
 		bandwidth = throughput * current_msg_size;
 
 		/* Print the results for this size */
@@ -464,12 +489,46 @@ static int run_self_test(int msg_sizes[], int num_msg_sizes,
 		printf("\tRPC Bandwidth (MB/sec): %.2f\n",
 		       bandwidth / 1000000.0F);
 		printf("\tRPC Throughput (RPCs/sec): %.0f\n", throughput);
-		printf("\tRPC Latencies (ns) - first %d:\n",
-		       rep_count < 16 ? rep_count : 16);
-		for (local_rep = 0;
-		     local_rep < (rep_count < 16 ? rep_count : 16);
-		     local_rep++)
-			printf("\t\t%ld\n", cb_args.latencies[local_rep]);
+
+		/*
+		 * TODO:
+		 * In the future, probably want to return the latencies here
+		 * before they are sorted
+		 */
+
+		/* Sort the latencies */
+		qsort(cb_args.latencies, cb_args.rep_count,
+		      sizeof(cb_args.latencies[0]), st_compare_latencies);
+
+		/* Compute average and standard deviation*/
+		latency_avg = 0;
+		for (local_rep = 0; local_rep < cb_args.rep_count; local_rep++)
+			latency_avg += cb_args.latencies[local_rep];
+		latency_avg /= cb_args.rep_count;
+
+		latency_std_dev = 0;
+		for (local_rep = 0; local_rep < cb_args.rep_count; local_rep++)
+			latency_std_dev +=
+				pow(cb_args.latencies[local_rep] - latency_avg,
+				    2);
+		latency_std_dev /= cb_args.rep_count;
+		latency_std_dev = sqrt(latency_std_dev);
+
+		/* Print Latency Results */
+		printf("\tRPC Latencies (us):\n"
+		       "\t\tMin    : %ld\n"
+		       "\t\t25th  %%: %ld\n"
+		       "\t\tMedian : %ld\n"
+		       "\t\t75th  %%: %ld\n"
+		       "\t\tMax    : %ld\n"
+		       "\t\tAverage: %ld\n"
+		       "\t\tStd Dev: %.2f\n",
+		       cb_args.latencies[0] / 1000,
+		       cb_args.latencies[cb_args.rep_count / 4] / 1000,
+		       cb_args.latencies[cb_args.rep_count / 2] / 1000,
+		       cb_args.latencies[cb_args.rep_count * 3 / 4] / 1000,
+		       cb_args.latencies[cb_args.rep_count - 1] / 1000,
+		       latency_avg/1000, latency_std_dev/1000);
 		printf("\n");
 	}
 
