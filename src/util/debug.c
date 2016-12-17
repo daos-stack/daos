@@ -56,13 +56,36 @@ int crt_misc_logfac;
 
 #define CLOG_MAX_FAC_HINT	(16)
 
+static void
+crt_log_sync_mask_helper(bool acquire_lock)
+{
+	static int	log_mask_init;
+	static char	*log_mask;
+
+	if (acquire_lock)
+		pthread_mutex_lock(&crt_log_lock);
+	if (!log_mask_init)
+		log_mask = getenv(CRT_LOG_MASK_ENV);
+
+	if (log_mask != NULL)
+		crt_log_setmasks(log_mask, -1);
+
+	if (acquire_lock)
+		pthread_mutex_unlock(&crt_log_lock);
+}
+
+void crt_log_sync_mask(void)
+{
+	crt_log_sync_mask_helper(true);
+}
+
 /**
  * Setup the clog facility names and mask.
  *
  * \param masks [IN]	 masks in crt_log_setmasks() format, or NULL.
  */
 static inline int
-setup_clog_facnamemask(char *masks)
+setup_clog_facnamemask(void)
 {
 	int rc;
 
@@ -87,9 +110,9 @@ setup_clog_facnamemask(char *masks)
 			    crt_logfac);
 		C_GOTO(out, rc = -CER_UNINIT);
 	}
-	/* finally handle any crt_log_setmasks() calls */
-	if (masks != NULL)
-		crt_log_setmasks(masks, -1);
+
+	/* Lock is already held */
+	crt_log_sync_mask_helper(false);
 
 out:
 	return rc;
@@ -99,7 +122,6 @@ int
 crt_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 		 uint64_t def_mask, uint64_t err_mask)
 {
-	char	*log_mask;
 	int	 rc = 0;
 
 	pthread_mutex_lock(&crt_log_lock);
@@ -114,8 +136,7 @@ crt_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 		C_GOTO(out, rc = -CER_UNINIT);
 	}
 
-	log_mask = getenv(CRT_LOG_MASK_ENV);
-	rc = setup_clog_facnamemask(log_mask);
+	rc = setup_clog_facnamemask();
 	if (rc != 0)
 		C_GOTO(out, rc = -CER_UNINIT);
 out:

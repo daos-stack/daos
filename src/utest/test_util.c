@@ -900,6 +900,7 @@ test_log(void **state)
 	int rc;
 	int logfac1;
 	int logfac2;
+	setenv("CRT_LOG_MASK", "T1=DEBUG", 1);
 
 	rc = crt_log_init();
 	assert_int_equal(rc, 0);
@@ -908,10 +909,14 @@ test_log(void **state)
 	assert_int_not_equal(logfac1, 0);
 	logfac2 = crt_log_allocfacility("T2", "TEST2");
 	assert_int_not_equal(logfac2, 0);
-	/* Generally, to use this in a component that uses cart,
-	 * the component would have its own mask that includes
-	 * CRT log facilities.
-	 */
+	LOG_DEBUG(logfac1, "log1 debug should not print\n");
+	/* Sync the cart mask */
+	crt_log_sync_mask();
+
+	LOG_DEBUG(logfac1, "log1 debug should print\n");
+	LOG_DEBUG(logfac2, "log2 debug should not print\n");
+
+	/* Alternatively, a component may have its own mask */
 	logmask = getenv("TEST_LOG_MASK");
 	if (logmask == NULL)
 		logmask = allocated_mask = strdup("ERR,T1=DEBUG");

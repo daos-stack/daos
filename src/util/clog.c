@@ -821,7 +821,14 @@ void crt_log_setmasks(char *mstr, int mlen0)
 			}
 			clog_unlock();
 			if (facno >= crt_log_xst.fac_cnt) {
-				crt_log(CLOG_ERR,
+				/* Sometimes a user wants to allocate a facility
+				 * and then reset the masks using the same
+				 * envirable.   In this case, a facility may be
+				 * unknown.   As such, this should not be logged
+				 * as an error.  To see these messages, either
+				 * use DEBUG or CLOG=DEBUG
+				 */
+				crt_log(CLOG_DBG,
 				     "crt_log_setmasks: unknown facility %.*s",
 				     faclen, fac);
 				continue;

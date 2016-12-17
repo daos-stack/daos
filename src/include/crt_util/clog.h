@@ -172,6 +172,12 @@ void crt_log_fini(void);
  */
 void crt_log_close(void);
 
+/** Reapplies the masks set in CRT_LOG_MASK.   Can be called after adding new
+ *  log facilities to ensure that the mask is set appropriately for the
+ *  previously unknown facilities.
+ */
+void crt_log_sync_mask(void);
+
 /**
  * crt_log_open: open a clog.
  *
