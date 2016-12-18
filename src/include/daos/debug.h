@@ -119,7 +119,7 @@ do {									\
 	if (((mask) < DP_INFO) && DD_SUBSYS == dd_fac_null)		\
 		break;							\
 	crt_log((mask) | DD_SUBSYS,					\
-		"%s:%d %s " fmt, __FILE__, __LINE__, __func__,		\
+		"%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
 		##__VA_ARGS__);						\
 } while (0)
 
