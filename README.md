@@ -1,27 +1,22 @@
-# Distributed Asynchronous Object Store (DAOS)
+# Distributed Asynchronous Object Storage
 
 > :warning: **Warning:** DAOS is under heavy development. Use at your own risk.
 
-The Distributed Asynchronous Object Store (DAOS) provides a new storage paradigm for Exascale computing and Big Data. DAOS is an open-source storage stack designed from the ground up to exploit NVRAM and NVMe storage technologies with integrated fabric. It provides ultra-fine grained I/O by using a persistent memory storage model for byte-granular data & metadata combined with NVMe storage for bulk data, all this with end-to-end OS bypass to guarantee ultra-low latency. The DAOS stack aims at increasing data velocity by several orders of magnitude over conventional storage stacks and providing extreme scalability and resilience.
+## What is DAOS?
 
-The essence of the DAOS storage model is a key-value store interface over which specific data models can be implemented. A DAOS object is effectively a table of records which are addressed through a flexible multi-level key allowing fine-grain control over colocation of related data. Objects are collected into manageable units called containers. DAOS provides scalable distributed transactions across all objects of a container guaranteeing data consistency and automated rollback on failure to I/O middleware libraries and applications. The DAOS transaction mechanism supports complex workflows with native producer/consumer pipeline in which producers are not blocked by concurrent consumers and consumers receive notification on complete atomic updates and see a consistent snapshot of data.
+The Distributed Asynchronous Object Storage (DAOS) stack provides a new storage paradigm for Exascale computing and Big Data. DAOS is an open-source storage stack designed from the ground up to exploit NVRAM and NVMe storage technologies with integrated fabric. It provides ultra-fine grained I/O by using a persistent memory storage model for byte-granular data & metadata combined with NVMe storage for bulk data, all this with end-to-end OS bypass to guarantee ultra-low latency. The DAOS stack aims at increasing data velocity by several orders of magnitude over conventional storage stacks and providing extreme scalability and resilience.
+
+The essence of the DAOS storage model is a key-value store interface over which specific data models can be implemented. A DAOS object is effectively a table of records that are addressed through a flexible multi-level key allowing fine-grain control over colocation of related data. Objects are collected into manageable units called containers. DAOS provides scalable distributed transactions across all objects of a container guaranteeing data consistency and automated rollback on failure to I/O middleware libraries and applications. The DAOS transaction mechanism supports complex workflows with native producer/consumer pipeline in which concurrent consumers do not block producers and consumers receive notification on complete atomic updates and see a consistent snapshot of data..
 
 For both performance and resilience, DAOS objects support multiple distribution and redundancy schemas with fully automated and distributed recovery on storage failure. DAOS uses declustered replication and/or erasure coding over homogeneous shared-nothing servers and provides a lockless consistency model at arbitrary alignment.
 
-Moreover, the DAOS stack abstracts multi-tier storage architecture and offers a unified storage model over which multiple top-level APIs will be developed. This includes domain-specific APIs like HDF5, SCiDB, ADIOS and high-level data models like HDFS, Spark and Graph A. A POSIX namespace encapsulation inside a DAOS container is also under consideration.
-
-Finally, the DAOS stack is proud to leverage the following open source projects:
-- Mercury (https://mercury-hpc.github.io) and CaRT (https://github.com/daos-stack/cart) for network transport
-- Argobots (https://github.com/pmodels/argobots) for thread management
-- NVML (http://pmem.io/nvml/) for persistent memory programming
-- SPDK (http://spdk.io) for NVMe device access and management
-- ISA-L (https://github.com/01org/isa-l) for checksum and erasure code computation
+Finally, the DAOS stack abstracts multi-tier storage architecture and offers a unified storage model over which multiple top-level APIs will be developed. This includes domain-specific APIs like HDF5, SCiDB, ADIOS and high-level data models like HDFS, Spark and Graph A. A POSIX namespace encapsulation inside a DAOS container is also under consideration.
 
 ## Project History
 
-The project started back in 2012 with the Fast Forward Storage & I/O program supported by the U.S. DoE in which a first DAOS prototype was implemented over the Lustre filesystem and ZFS. In 2015, a follow-on program called Extreme Scale Storage and I/O (ESSIO) continued the momentum with the development of a new standalone prototype fully in userspace which is the code base provided in this repository.
+The project started back in 2012 with the Fast Forward Storage & I/O program supported by the U.S. DoE in which a first DAOS prototype was implemented over the Lustre filesystem and ZFS. In 2015, a follow-on program called Extreme Scale Storage and I/O (ESSIO) continued the momentum with the development of a new standalone prototype fully in userspace that is the code base provided in this repository.
 
-## Motivation
+## Motivations
 
 The emergence of data-intensive applications in business, government and academia stretches the existing I/O models beyond limits. Modern I/O workloads feature an increasing proportion of metadata combined with misaligned and fragmented data. Conventional storage stacks deliver poor performance for these workloads by adding a lot of latency and introducing alignment constraints. The advent of affordable large-capacity persistent memory combined with an integrated fabric offers a unique opportunity to redefine the storage paradigm and support modern I/O workloads efficiently.
 
@@ -33,118 +28,124 @@ DAOS is a complete I/O architecture that aggregates persistent memory and NVMe s
 
 DAOS is open-sourced software licensed under the Apache License Version 2.0. Please see the [LICENSE](./LICENSE) & [NOTICE](./NOTICE) files for more information.
 
-## Build
+## Software Requirements
 
-DAOS requires a C99-capable compiler and the scons build tool to build.
+DAOS requires a C99-capable compiler and the scons build tool. In addition, the DAOS stack is proud to leverage the following open source projects:
+- [CaRT](https://github.com/daos-stack/cart) that relies on both [Mercury](https://mercury-hpc.github.io) and [CCI](http://cci-forum.com/wp-content/uploads/2015/12/cci-0.3.0.tar.gz) for lightweight network transport and [PMIx](https://github.com/pmix/master) for process set management. See the CaRT repository for more information on how to build the CaRT library.
+- [NVML](https://github.com/pmem/nvml.git) for persistent memory programming..
+- [Argobots](https://github.com/pmodels/argobots) for thread management.
 
-DAOS depends on CaRT and some third-party libraries:
-- CaRT (https://github.com/daos-stack/cart)
-- Mercury (https://github.com/mercury-hpc/mercury) and CCI (wget http://cci-forum.com/wp-content/uploads/2015/12/cci-0.3.0.tar.gz) for RPC and underneath communication
-  The CCI needs to be patched ("patch -p1 < xxx" to apply all patches in utils/cci), can set the CCI_CONFIG environment variable as your cci config file (an example can be found in "utils/cci/cci.ini")
-  The mercury uses openpa (http://git.mcs.anl.gov/radix/openpa.git) for atomic operation.
-- PMIx (https://github.com/pmix/master) for collective communication.
-  The PMIx uses hwloc library (wget https://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.2.tar.gz).
-- Openmpi runtime environment
-  The ompi needs to be compiled with the external PMIx/hwloc used by MCL and PMIx (an example configuration is "./configure --with-pmix=/your_pmix_install_path / --with-hwloc=/your_hwloc_install_path --with-libevent=external").
-- NVML library (https://github.com/pmem/nvml.git) for thread-local persistent memory transaction
+If all the software dependencies listed above are already satisfied, then just type "scons" in the top source directory to build the DAOS stack. Otherwise, please follow the instructions in the section below to build DAOS with all the dependencies.
 
-If all these dependencies are readily available on your machine.
-    - Can execute "scons" in top DAOS source directory to build it when all the dependent modules installed.
+In the near future, the DAOS stack will also rely on:
+- [SPDK](http://spdk.io) for NVMe device access and management
+- [ISA-L](https://github.com/01org/isa-l) for checksum and erasure code computation
 
-## To build DAOS with all dependecies.
-  Check out latest DAOS from repository
+## Building DAOS
+
+The below instructions have been verified with CentOS. Installations on other Linux distributions might be similar with some variations. Please contact us in our [Google group](https://groups.google.com/forum/#!forum/daos-users) if running into issues.
+
+(a) Pre-install dependencies
+Please install the following Red Hat Enterprise Linux RPM software packages (or) equivalent for other distros:
+
+    # yum -y install scons cmake doxygen gcc-c++
+    # yum -y install epel-release boost-devel libevent-devel librdmacm-devel
+    # yum -y install libtool-ltdl-devel libuuid-devel openssl-devel
+    # yum -y install libcmocka libcmocka-devel pandoc
+
+If no Cmocka RPMs are available, please install from [source](https://cmocka.org/files/1.1/cmocka-1.1.0.tar.xz) as detailed below:
+
+    # tar xvf cmocka-1.1.0.tar.xz
+    # cd cmocka
+    # mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug .. && make && sudo make install
+
+Moreover, please make sure all the auto tools listed below are at the appropriate versions.
+
+    m4 (GNU M4) 1.4.16
+    flex 2.5.37
+    autoconf (GNU Autoconf) 2.69
+    automake (GNU automake) 1.13.4
+    libtool (GNU libtool) 2.4.2
+
+(b) Checking out the DAOS source code
+
     # git clone https://github.com/daos-stack/daos.git
 
-  DAOS pre-install dependencies
-    Red Hat Enterprise Linux RPM software packages (or)
-    equivalent for other distros)
-    # yum -y install epel-release
-    # yum -y install boost-devel
-    # yum -y install cmake
-    # yum -y install doxygen
-    # yum -y install gcc-c++
-    # yum -y install libevent-devel.x86_64
-    # yum -y install librdmacm-devel.x86_64
-    # yum -y install libtool-ltdl-devel.x86_64
-    # yum -y install libuuid-devel.x86_64
-    # yum -y install openssl-devel.x86_64
-    # yum -y install pandoc.x86_64
-    # yum -y install scons.noarch
-    # yum -y install libcmocka libcmocka-devel
+This clones the DAOS git repository (path referred as \${daospath} below). Then initialize the submodules with:
 
-    Cmocka for tests (if rpm not available install from source)
-    Download Cmocka from https://cmocka.org/files/1.1/cmocka-1.1.0.tar.xz
-    tar xvf cmocka-1.1.0.tar.xz
-    cd cmocka
-    mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE=Debug .. && make && sudo make install
-
-    Make sure all these below mentioned auto tools are the appropriate versions.
-        m4 (GNU M4) 1.4.16
-        flex 2.5.37
-        autoconf (GNU Autoconf) 2.69
-        automake (GNU automake) 1.13.4
-        libtool (GNU libtool) 2.4.2
-
-    If not available,
-    Install all auto tools in the same directory and export them
-    to PATH/LD_LIBRARY_PATH
-
-    All patches required for installation avaiable in utils/build/
-
-    Auto build DAOS-M setup
-    ------------------------
-
-    - Enable scons\_local # scons\_local is able to walk through all required
-      dependencies for DAOS
-
-    # cd /PATH/TO/daos_m
+    # cd ${daospath}
     # git submodule init
     # git submodule update
 
-   - Add user PATH
-    # vim ~/.scons_localrc
-    Put following to ~/.scons_localrc file (Replace /USER/PATH with $PATH)
-    #!/usr/bin/python
-    Import('env')
-    env["ENV"]["PATH"] = "/USER/PATH"
+(c) Building all dependencies automatically
 
-   - Build
-    To build all dependencies automatically, we use scons --build-deps feature.
-    # cd daos_m
+Invoke scons with the following parameters:
+
     # scons --build-deps=yes install
-    You can use scons TARGET_PREFIX="PATH/TO/INSTALL" to specify a different
-    install directory location. Default path is: /PATH/TO/DAOS/install/
-    TARGET_PREFIX creates individual folder to each component
-    Create Symbolic link ln -s libdaos.so.0.0.1 libdaos.so
-    Set PATH=PATH_TO_DAOS/install/bin/
-    Set LD_LIBRARY_PATH=/PATH/TO/DAOS/install/lib/
-    Set CPATH=PATH/TO/DAOS/install/include/
 
-    Environment Setup for DAOS:
-    ----------------------------
+By default, all software will be installed under \${daospath}/install. The TARGET\_PREFIX= option can be added to the command line above to specify an alternative installation path.
 
-    export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib64
-    export LD_LIBRARY_PATH=/path/to/DAOS/install/lib:/path/to/DAOS/install/lib/daos_srv/:/usr/local/lib:/usr/local/lib64:$LD_LIBRARY_PATH
-    export CPATH=/path/to/DAOS/install/include/:$CPATH
-    export PATH=/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
-    export PATH=/path/to/DAOS/install/bin/:/path/to/DAOS/build/src/dmg/tests:/path/to/DAOS/build/src/dsm/tests:/path/to/DAOS/build/src/dsr/tests:$PATH
-    export CCI_CONFIG=/path/to/cci.ini
-    export CRT_PHY_ADDR_STR="cci+tcp", for infiniband use "cci+verbs"
+(d) Environment setup
 
+Once built, the environment must be modified to search for binaries, libraries and header files in the installation path. This step is not required if standard locations (e.g. /bin, /sbin, /usr/lib, ...) are used.
 
-    Start Servers
-    --------------
+    LD_LIBRARY_PATH=${daospath}/install/lib:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=${daospath}/install/lib/daos_srv/:$LD_LIBRARY_PATH
+    CPATH=${daospath}/install/include/:$CPATH
+    PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
+    export LD_LIBRARY_PATH CPATH PATH
 
-    orterun -np <num_servers> --report-uri ~/uri.txt ./daos_server
+If required, \${daospath}/install must be replaced with the alternative path specified through TARGET\_PREFIX. The network type to use as well the debug log location can be selected as follows:
 
-    Start Clients
-    --------------
+    CCI_CONFIG=${daospath}/install/etc/cci.ini
+    CRT_PHY_ADDR_STR="cci+tcp", for infiniband use "cci+verbs"
+    DD_LOG=${daosdebugpath}, /tmp/daos.log by default.
+    export CCI_CONFIG CRT_PHY_ADDR_STR DD_LOG
 
-    orterun -np <num_clients> --ompi-server file:~/uri.txt <client_process> eg., ./daos_test
+Additionally, one might want to set the following environment variables to work around an Argobot issue:
 
-    NB: The above specified instructions has been verified only with CentOS.
-    Installations in other distros might be similar with some variations.
-    Please contact us in our google groups below, if you run into issues.
+    ABT_ENV_MAX_NUM_XSTREAMS=100
+    ABT_MAX_NUM_XSTREAMS=100
+    export ABT_ENV_MAX_NUM_XSTREAMS ABT_MAX_NUM_XSTREAMS
+
+## Using DAOS
+
+DAOS uses orterun(1) for scalable process launch. The list of storage nodes can be specified in an host file (referred as \${hostfile}). The DAOS server and the application can be started seperately, but must share an URI file (referred as \${urifile}) to connect to each other. In addition, the DAOS server must be started with the \-\-enable-recovery option to support server failure. See the orterun(1) man page for additional options.
+
+(a) Starting the DAOS server
+
+On each storage node, the DAOS server will use /mnt/daos as the storage backend that must be configured, for the time being, as a tmpfs filesystem. To start the DAOS server, run:
+
+    orterun -np <num_servers> --hostfile ${hostfile} --enable-recovery --report-uri ${urifile} daos_server
+
+By default, the DAOS server will use all the cores available on the storage server. You can limit the number of execution streams with the -c #cores\_to\_use option.
+
+(b) Creating/destroy a DAOS pool
+
+A DAOS pool can be created and destroyed through the DAOS management API (see  daos\_mgmt.h). We also provide an utility called dmg to manage storage pools from the command line.
+
+To create a pool:
+
+    orterun --ompi-server file:${urifile} dmg create --size=xxG
+
+This creates a pool distributed across the DAOS servers with a target size on each server of xxGB. The UUID allocated to the newly created pool is printed to stdout (referred as \${pooluuid}).
+
+To destroy a pool:
+
+    orterun --ompi-server file:${urifile} dmg destroy --pool=${pooluuid}
+
+(c) Building applications or I/O middleware against the DAOS library
+
+Include the daos.h header file in your program and link with -Ldaos. Examples are available under src/tests.
+
+(d) Running applications
+
+    orterun -np <num_clients> --hostfile ${hostfile_cli} --ompi-server file:$urifile ${application} eg., ./daos_test
+
+## Reporting Problems
+
+Please report any bugs through our [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and debug logs that should be compressed. DAOS debug logs are written by default to /tmp/daos.log, this can be modified by specifying a different path through DD\_LOG. Similarly, the debug mask and subsystems are controlled by respectively the DD\_MASK and DD\_SUBSYS environment variables.
 
 ## Contacts
+
 For more information on DAOS, please post to our [Google group](https://groups.google.com/forum/#!forum/daos-users).
