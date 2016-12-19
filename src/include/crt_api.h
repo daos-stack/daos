@@ -911,6 +911,64 @@ crt_proc_crt_rank_list_t(crt_proc_t proc, crt_rank_list_t **data);
 int
 crt_proc_crt_iov_t(crt_proc_t proc, crt_iov_t *data);
 
+/**
+ * Local operation. Delete rank from the local membership list of grp. This
+ * function will fail if the version is lower than the current membership
+ * version.
+ */
+int
+crt_evict_rank(crt_group_t *grp, int version, crt_rank_t rank);
+
+typedef void
+(*crt_event_cb) (crt_rank_t rank, void *args);
+
+/**
+ * This function registers an event handler for a number of events specified by
+ * codes and ncodes. When the external RAS notifies the current process with any
+ * event code in -codes-, event_handler() will be executed.
+ *
+ * Example:
+ * event_handler_01(crt_rank_t rank, void *args)
+ * {
+ *	fprintf("Received event code %d\n", rank);
+ * }
+ *
+ * int main()
+ * {
+ *	int codes[] = {0, 1};
+ *	int ncodes = 2;
+ *
+ *	crt_register_event_handler(codes, ncodes, event_handler_01);
+ *	crt_init();
+ * }
+ *
+ * The example above registers two event codes 0 and 1 to external RAS. When the
+ * external RAS notifies the current process with an event code 0 or 1,
+ * event_handler_01() be executed.
+ *
+ * \param codes [IN]		event codes to monitor
+ * \param ncodes [IN]		number of codes to monitor
+ * \param event_handler [IN]	event handler to register
+ */
+int
+crt_register_event_handler(int codes[], size_t ncodes,
+			      crt_event_cb event_handler);
+
+typedef void
+(*crt_progress_cb) (crt_context_t ctx, void *args);
+
+/**
+ * Register a callback function which will be called inside crt_progress()
+ */
+int
+crt_register_progress_cb(crt_progress_cb cb, void *args);
+
+typedef void
+(*crt_timeout_cb) (crt_context_t ctx, crt_rpc_t *rpc, void *args);
+
+int
+crt_register_timeout_cb(crt_timeout_cb cb, void *args);
+
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_crt_size_t		crt_proc_uint64_t
 #define crt_proc_crt_off_t		crt_proc_uint64_t

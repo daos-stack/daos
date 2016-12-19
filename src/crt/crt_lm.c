@@ -34,38 +34,22 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * This file is part of CaRT. It implements the main fault tolerance module
+ * routines.
  */
-/**
- * This file is part of CaRT. It gives out the data types and function
- * declarations related with PMIx.
- */
 
-#ifndef __CRT_PMIX_H__
-#define __CRT_PMIX_H__
-
-#include "pmix.h"
-
-/* pmix layer global data, be included in struct crt_grp_gdata */
-struct crt_pmix_gdata {
-	/* PMIx proc object */
-	pmix_proc_t		pg_proc;
-	/* universe size */
-	uint32_t		pg_univ_size;
-	/* #apps in this job */
-	uint32_t		pg_num_apps;
-};
+#include <crt_internal.h>
 
 
-int crt_pmix_init(void);
-int crt_pmix_fini(void);
-int crt_pmix_fence(void);
-int crt_pmix_assign_rank(struct crt_grp_priv *grp_priv);
-int crt_pmix_publish_self(struct crt_grp_priv *grp_priv);
-int crt_pmix_uri_lookup(crt_group_id_t srv_grpid, crt_rank_t rank, char **uri);
-int crt_pmix_attach(struct crt_grp_priv *grp_priv);
-void crt_pmix_reg_event_hdlr(struct crt_grp_priv *grp_priv);
-void crt_pmix_dereg_event_hdlr(struct crt_grp_priv *grp_priv);
-void crt_plugin_pmix_init(void);
-void crt_plugin_pmix_fini(void);
+void
+crt_lm_init(void)
+{
+	/* register callbacks to manage the liveness map here */
+}
 
-#endif /* __CRT_PMIX_H__ */
+void
+crt_lm_fini(void)
+{
+	/* un-register callbacks to manage the liveness map here */
+}

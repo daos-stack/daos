@@ -45,6 +45,7 @@
 struct crt_gdata crt_gdata;
 static pthread_once_t gdata_init_once = PTHREAD_ONCE_INIT;
 static volatile int   gdata_init_flag;
+struct crt_plugin_gdata crt_plugin_gdata;
 
 /* internally generate a physical address string */
 static int
@@ -209,6 +210,21 @@ static void data_init()
 
 	gdata_init_flag = 1;
 }
+void
+crt_plugin_init(void)
+{
+	C_ASSERT(crt_plugin_gdata.cpg_inited == 0);
+
+	/** init the lists */
+	CRT_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_prog_cbs);
+	CRT_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_timeout_cbs);
+	CRT_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_event_cbs);
+	pthread_rwlock_init(&crt_plugin_gdata.cpg_prog_rwlock, NULL);
+	pthread_rwlock_init(&crt_plugin_gdata.cpg_timeout_rwlock, NULL);
+	pthread_rwlock_init(&crt_plugin_gdata.cpg_event_rwlock, NULL);
+	crt_plugin_pmix_init();
+	crt_plugin_gdata.cpg_inited = 1;
+}
 
 int
 crt_init(crt_group_id_t grpid, uint32_t flags)
@@ -252,6 +268,8 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 	}
 	C_ASSERT(gdata_init_flag == 1);
 
+	if (crt_plugin_gdata.cpg_inited == 0)
+		crt_plugin_init();
 	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
 	if (crt_gdata.cg_inited == 0) {
 		/* feed a seed for pseudo-random number generator */
@@ -375,6 +393,46 @@ bool
 crt_initialized()
 {
 	return (gdata_init_flag == 1) && (crt_gdata.cg_inited == 1);
+}
+
+void
+crt_plugin_fini(void)
+{
+	crt_list_t			*curr_node;
+	crt_list_t			*tmp_node;
+	struct crt_prog_cb_priv		*prog_cb_priv;
+	struct crt_timeout_cb_priv	*timeout_cb_priv;
+	struct crt_event_cb_priv	*event_cb_priv;
+
+	C_ASSERT(crt_plugin_gdata.cpg_inited == 0);
+
+	crt_list_for_each_safe(curr_node, tmp_node,
+			       &crt_plugin_gdata.cpg_prog_cbs) {
+		crt_list_del(curr_node);
+		prog_cb_priv = container_of(curr_node, struct crt_prog_cb_priv,
+					    cpcp_link);
+		C_FREE_PTR(prog_cb_priv);
+	}
+	crt_list_for_each_safe(curr_node, tmp_node,
+			       &crt_plugin_gdata.cpg_timeout_cbs) {
+		crt_list_del(curr_node);
+		timeout_cb_priv =
+			container_of(curr_node, struct crt_timeout_cb_priv,
+				     ctcp_link);
+		C_FREE_PTR(timeout_cb_priv);
+	}
+	crt_list_for_each_safe(curr_node, tmp_node,
+			       &crt_plugin_gdata.cpg_event_cbs) {
+		crt_list_del(curr_node);
+		event_cb_priv =
+			container_of(curr_node, struct crt_event_cb_priv,
+				     cecp_link);
+		C_FREE_PTR(event_cb_priv);
+	}
+	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_prog_rwlock);
+	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_timeout_rwlock);
+	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_event_rwlock);
+	crt_plugin_pmix_fini();
 }
 
 int

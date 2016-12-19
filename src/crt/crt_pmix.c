@@ -621,3 +621,135 @@ crt_pmix_dereg_event_hdlr(struct crt_grp_priv *grp_priv)
 	PMIx_Deregister_event_handler(grp_priv->gp_errhdlr_ref,
 				      crt_pmix_dereg_cb, NULL);
 }
+
+int
+crt_register_event_cb(crt_status_t codes[], size_t ncodes,
+		      crt_event_cb event_handler, void *args)
+{
+	/* store the event codes, the user event handler function ponter,
+	 * and the user-provided void args to a list of global sturctures.
+	 */
+	struct crt_event_cb_priv	*event_cb_priv = NULL;
+	int				 rc = 0;
+
+
+	C_ALLOC_PTR(event_cb_priv);
+	if (event_cb_priv == NULL)
+		C_GOTO(out, rc = -CER_NOMEM);
+	C_ALLOC(event_cb_priv->cecp_codes,
+		ncodes*sizeof(event_cb_priv->cecp_codes));
+	if (event_cb_priv->cecp_codes == NULL)
+		C_GOTO(err, rc = -CER_NOMEM);
+	memcpy(event_cb_priv->cecp_codes, codes, ncodes*sizeof(*codes));
+	event_cb_priv->cecp_ncodes = ncodes;
+	event_cb_priv->cecp_func = event_handler;
+	event_cb_priv->cecp_args = args;
+	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
+	crt_list_add_tail(&event_cb_priv->cecp_link,
+			  &crt_plugin_gdata.cpg_event_cbs);
+	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+
+err:
+	if (event_cb_priv->cecp_codes != NULL)
+		C_FREE(event_cb_priv->cecp_codes,
+		       ncodes*sizeof(event_cb_priv->cecp_codes));
+	C_FREE_PTR(event_cb_priv);
+out:
+	return rc;
+
+}
+
+static void
+crt_plugin_event_handler_core(size_t evhdlr_registration_id,
+			      pmix_status_t status,
+			      const pmix_proc_t *source,
+			      pmix_info_t info[], size_t ninfo,
+			      pmix_info_t *results, size_t nresults,
+			      pmix_event_notification_cbfunc_fn_t cbfunc,
+			      void *cbdata)
+{
+	/**
+	 * convert source->rank from pmix rank to cart rank
+	 * walk the global list to execute the user callbacks
+	 */
+	struct crt_grp_gdata		*grp_gdata;
+	struct crt_pmix_gdata		*pmix_gdata;
+	struct crt_grp_priv		*grp_priv;
+	crt_event_cb			 cb_func;
+	crt_rank_t			 crt_rank;
+	struct crt_event_cb_priv	*event_cb_priv;
+	void				*args;
+	int				 i;
+
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
+	C_ASSERT(grp_gdata->gg_pmix != NULL);
+	C_ASSERT(grp_gdata->gg_inited == 1);
+	C_ASSERT(grp_gdata->gg_srv_pri_grp != NULL);
+
+	pmix_gdata = grp_gdata->gg_pmix;
+	grp_priv = grp_gdata->gg_srv_pri_grp;
+
+	/* filter source->namespace */
+	if (strncmp(source->nspace, pmix_gdata->pg_proc.nspace,
+		    PMIX_MAX_NSLEN)) {
+		C_DEBUG("PMIx event not relevant to my namespace.\n");
+		return;
+	}
+	if (source->rank >= pmix_gdata->pg_univ_size) {
+		C_ERROR("pmix rank %d out of range [0, %d].\n",
+			source->rank, pmix_gdata->pg_univ_size - 1);
+		return;
+	}
+	/* convert source->rank from pmix rank to cart rank */
+	crt_rank = grp_priv->gp_rank_map[source->rank].rm_rank;
+	/* walk the global list to execute the user callbacks */
+	pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_event_rwlock);
+	crt_list_for_each_entry(event_cb_priv,
+				&crt_plugin_gdata.cpg_event_cbs, cecp_link) {
+		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+		for (i = 0; i < event_cb_priv->cecp_ncodes; i++) {
+			if (event_cb_priv->cecp_codes[i] != status)
+				continue;
+			cb_func = event_cb_priv->cecp_func;
+			args = event_cb_priv->cecp_args;
+			cb_func(crt_rank, args);
+		}
+		pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_event_rwlock);
+	}
+	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+	if (cbfunc)
+		cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
+}
+
+static void
+crt_plugin_pmix_errhdlr_reg_cb(pmix_status_t status, size_t errhdlr_ref,
+			       void *cbdata)
+{
+	C_DEBUG("crt_plugin_pmix_errhdlr_reg_cb() called with status %d, "
+		" ref=%zu.\n", status, errhdlr_ref);
+	crt_plugin_gdata.cpg_pmix_errhdlr_ref = errhdlr_ref;
+}
+
+void
+crt_plugin_pmix_init(void)
+{
+	PMIx_Register_event_handler(NULL, 0, NULL, 0,
+				    crt_plugin_event_handler_core,
+				    crt_plugin_pmix_errhdlr_reg_cb, NULL);
+}
+
+static void
+crt_plugin_pmix_errhdlr_dereg_cb(pmix_status_t status, void *cbdata)
+{
+	C_DEBUG("crt_plugin_pmix_errhdlr_dereg_cb() called with status %d",
+		status);
+}
+
+void
+crt_plugin_pmix_fini(void)
+{
+	PMIx_Deregister_event_handler(crt_plugin_gdata.cpg_pmix_errhdlr_ref,
+				      crt_plugin_pmix_errhdlr_dereg_cb, NULL);
+}

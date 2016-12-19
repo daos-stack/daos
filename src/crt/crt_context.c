@@ -458,6 +458,34 @@ crt_req_timeout_untrack(crt_rpc_t *req)
 }
 
 static void
+crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
+{
+	struct crt_timeout_cb_priv	*timeout_cb_priv;
+	crt_list_t			*curr_node;
+	crt_list_t			*tmp_node;
+
+	if (crt_plugin_gdata.cpg_inited == 0)
+		return;
+	if (rpc_priv == NULL) {
+		C_ERROR("Invalid parameter, rpc_priv == NULL\n");
+		return;
+	}
+	pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+	crt_list_for_each_safe(curr_node, tmp_node,
+			       &crt_plugin_gdata.cpg_timeout_cbs) {
+		timeout_cb_priv =
+			container_of(curr_node, struct crt_timeout_cb_priv,
+				     ctcp_link);
+		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+		timeout_cb_priv->ctcp_func(rpc_priv->crp_pub.cr_ctx,
+					   &rpc_priv->crp_pub,
+					   timeout_cb_priv->ctcp_args);
+		pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+	}
+	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+}
+
+static void
 crt_context_timeout_check(struct crt_context *crt_ctx)
 {
 	struct crt_rpc_priv		*rpc_priv, *next;
@@ -493,6 +521,8 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	/* handle the timeout RPCs */
 	crt_list_for_each_entry_safe(rpc_priv, next, &timeout_list,
 				     crp_tmp_link) {
+		/* check for and execute RPC timeout callbacks here */
+		crt_exec_timeout_cb(rpc_priv);
 		crt_list_del_init(&rpc_priv->crp_tmp_link);
 		/* At this point, RPC should always be completed by Mercury */
 		crt_req_abort(&rpc_priv->crp_pub);
@@ -766,6 +796,33 @@ crt_context_empty(int locked)
 	return rc;
 }
 
+static void
+crt_exec_progress_cb(crt_context_t ctx)
+{
+	struct crt_prog_cb_priv		*crt_prog_cb_priv;
+	crt_list_t			*curr_node;
+	crt_list_t			*tmp_node;
+
+	if (crt_plugin_gdata.cpg_inited == 0)
+		return;
+
+	if (ctx == NULL) {
+		C_ERROR("Invalid parameter.\n");
+		return;
+	}
+	pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_prog_rwlock);
+	crt_list_for_each_safe(curr_node, tmp_node,
+			       &crt_plugin_gdata.cpg_prog_cbs) {
+		crt_prog_cb_priv =
+			container_of(curr_node, struct crt_prog_cb_priv,
+				     cpcp_link);
+		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_prog_rwlock);
+		crt_prog_cb_priv->cpcp_func(ctx, crt_prog_cb_priv->cpcp_args);
+		pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_prog_rwlock);
+	}
+	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_prog_rwlock);
+}
+
 int
 crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	     crt_progress_cond_cb_t cond_cb, void *arg)
@@ -809,8 +866,11 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	ctx = (struct crt_context *)crt_ctx;
 	if (timeout == 0 || cond_cb == NULL) { /** fast path */
 		crt_context_timeout_check(ctx);
-		if (crt_ctx_idx == 0)
+		/* check for and execute progress callbacks here */
+		if (crt_ctx_idx == 0) {
+			crt_exec_progress_cb(crt_ctx);
 			crt_drain_eviction_requests_kickoff(ctx);
+		}
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
 		if (rc && rc != -CER_TIMEDOUT) {
@@ -857,8 +917,12 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 
 	while (true) {
 		crt_context_timeout_check(ctx);
-		if (crt_ctx_idx == 0)
+		/* check for and execute progress callbacks here */
+		if (crt_ctx_idx == 0) {
+			crt_exec_progress_cb(ctx);
 			crt_drain_eviction_requests_kickoff(ctx);
+		}
+
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
 		if (rc && rc != -CER_TIMEDOUT) {
@@ -886,6 +950,58 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 				hg_timeout = end - now;
 		}
 	}
+out:
+	return rc;
+}
+
+/**
+ * to use this function, the user has to:
+ * 1) define a callback function user_cb
+ * 2) call crt_register_progress_cb(user_cb);
+ */
+int
+crt_register_progress_cb(crt_progress_cb cb, void *args)
+{
+	/* save the function pointer and args to a global list */
+	struct crt_prog_cb_priv		*crt_prog_cb_priv = NULL;
+	int				 rc = 0;
+
+	C_ALLOC_PTR(crt_prog_cb_priv);
+	if (crt_prog_cb_priv == NULL)
+		C_GOTO(out, rc = -CER_NOMEM);
+	crt_prog_cb_priv->cpcp_func = cb;
+	crt_prog_cb_priv->cpcp_args = args;
+	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_prog_rwlock);
+	crt_list_add_tail(&crt_prog_cb_priv->cpcp_link,
+			  &crt_plugin_gdata.cpg_prog_cbs);
+	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_prog_rwlock);
+
+out:
+	return rc;
+}
+
+/**
+ * to use this function, the user has to:
+ * 1) define a callback function user_cb
+ * 2) call crt_register_timeout_cb_core(user_cb);
+ */
+int
+crt_register_timeout_cb(crt_timeout_cb cb, void *args)
+{
+	/* TODO: save the function pointer somewhere for retreival later on */
+	struct crt_timeout_cb_priv	*timeout_cb_priv = NULL;
+	int				 rc = 0;
+
+	C_ALLOC_PTR(timeout_cb_priv);
+	if (timeout_cb_priv == NULL)
+		C_GOTO(out, rc = -CER_NOMEM);
+	timeout_cb_priv->ctcp_func = cb;
+	timeout_cb_priv->ctcp_args = args;
+	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+	crt_list_add_tail(&timeout_cb_priv->ctcp_link,
+			  &crt_plugin_gdata.cpg_timeout_cbs);
+	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_timeout_rwlock);
+
 out:
 	return rc;
 }

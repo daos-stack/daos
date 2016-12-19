@@ -93,6 +93,43 @@ struct crt_gdata {
 
 extern struct crt_gdata		crt_gdata;
 
+struct crt_prog_cb_priv {
+	crt_list_t		 cpcp_link;
+	crt_progress_cb		 cpcp_func;
+	void			*cpcp_args;
+};
+
+struct crt_timeout_cb_priv {
+	crt_list_t		 ctcp_link;
+	crt_timeout_cb		 ctcp_func;
+	void			*ctcp_args;
+};
+
+struct crt_event_cb_priv {
+	crt_list_t		 cecp_link;
+	int			*cecp_codes;
+	int			 cecp_ncodes;
+	crt_event_cb		 cecp_func;
+	void			*cecp_args;
+};
+
+/* structure of global fault tolerance data */
+struct crt_plugin_gdata {
+	/* list of progress callbacks */
+	crt_list_t		cpg_prog_cbs;
+	/* list of rpc timeout callbacks */
+	crt_list_t		cpg_timeout_cbs;
+	/* list of event notification callbacks */
+	crt_list_t		cpg_event_cbs;
+	uint32_t		cpg_inited:1; /* all initialized */
+	pthread_rwlock_t	cpg_prog_rwlock;
+	pthread_rwlock_t	cpg_timeout_rwlock;
+	pthread_rwlock_t	cpg_event_rwlock;
+	size_t			cpg_pmix_errhdlr_ref;
+};
+
+extern struct crt_plugin_gdata		crt_plugin_gdata;
+
 /* TODO may use a RPC to query server-side context number */
 #ifndef CRT_SRV_CONTEXT_NUM
 # define CRT_SRV_CONTEXT_NUM		(256)

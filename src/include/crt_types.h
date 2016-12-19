@@ -95,7 +95,7 @@ typedef struct {
 
 typedef char		*crt_string_t;
 typedef const char	*crt_const_string_t;
-
+typedef int		 crt_status_t;
 /*
  * CRT uses a string as the group ID
  * This string can only contain ASCII printable characters between 0x20 and 0x7E

@@ -36,36 +36,33 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * This file is part of CaRT. It gives out the data types and function
- * declarations related with PMIx.
+ * CaRT (Collective and RPC Transport) fault tolerance module management APIs.
  */
 
-#ifndef __CRT_PMIX_H__
-#define __CRT_PMIX_H__
+#ifndef __CRT_LM_H__
+#define __CRT_LM_H__
 
-#include "pmix.h"
+#if defined(__cplusplus)
+extern "C" {
+#endif
 
-/* pmix layer global data, be included in struct crt_grp_gdata */
-struct crt_pmix_gdata {
-	/* PMIx proc object */
-	pmix_proc_t		pg_proc;
-	/* universe size */
-	uint32_t		pg_univ_size;
-	/* #apps in this job */
-	uint32_t		pg_num_apps;
-};
+/**
+ * Enable the fault tolerance module. This function will
+ *	1) turn on cart context progress callbacks
+ *	2) turn on RAS notification event handlers
+ *	3) turn on cart RPC timeout callbacks
+ */
+void
+crt_lm_init(void);
 
+/**
+ * Finilize the fault tolerance module
+ */
+void
+crt_lm_fini(void);
 
-int crt_pmix_init(void);
-int crt_pmix_fini(void);
-int crt_pmix_fence(void);
-int crt_pmix_assign_rank(struct crt_grp_priv *grp_priv);
-int crt_pmix_publish_self(struct crt_grp_priv *grp_priv);
-int crt_pmix_uri_lookup(crt_group_id_t srv_grpid, crt_rank_t rank, char **uri);
-int crt_pmix_attach(struct crt_grp_priv *grp_priv);
-void crt_pmix_reg_event_hdlr(struct crt_grp_priv *grp_priv);
-void crt_pmix_dereg_event_hdlr(struct crt_grp_priv *grp_priv);
-void crt_plugin_pmix_init(void);
-void crt_plugin_pmix_fini(void);
+#if defined(__cplusplus)
+}
+#endif
 
-#endif /* __CRT_PMIX_H__ */
+#endif /* __CRT_LM_H__ */
