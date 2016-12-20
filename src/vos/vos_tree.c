@@ -359,67 +359,46 @@ struct idx_btr_key {
 };
 
 /**
- * Copy record data and its checksum from external buffer into vos_irec.
+ * Set size for the record and returns write buffer address of the record,
+ * so caller can copy/rdma data into it.
  */
 static int
-ibtr_rec_fetch_in(struct btr_instance *tins, struct btr_record *rec,
-		  struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
+irec_update(struct btr_instance *tins, struct btr_record *rec,
+	    struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
 	struct vos_irec		*irec	= vos_rec2irec(tins, rec);
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
 	daos_iov_t		*iov	= rbund->rb_iov;
 	struct idx_btr_key	*ihkey;
 
+	if (iov->iov_len != rbund->rb_recx->rx_rsize)
+		return -DER_IO_INVAL;
+
 	/** Updating the cookie for this update */
 	ihkey = (struct idx_btr_key *)&rec->rec_hkey[0];
 	uuid_copy(ihkey->ih_cookie, rbund->rb_cookie);
 
 	irec->ir_cs_size = csum->cs_len;
-	if (csum->cs_len != 0) {
-		irec->ir_cs_type = csum->cs_type;
-		if (csum->cs_csum != NULL) {
-			memcpy(vos_irec2csum(irec), csum->cs_csum,
-			       csum->cs_len);
-		} else {
-			/* Return the address for rdma? But it is too hard
-			 * to handle rdma failure.
-			 */
-			csum->cs_csum = vos_irec2csum(irec);
-		}
+	irec->ir_cs_type = csum->cs_type;
+	irec->ir_size	 = iov->iov_len;
+
+	if (irec->ir_size == 0) { /* it is a punch */
+		csum->cs_csum = NULL;
+		iov->iov_buf = NULL;
+		return 0;
 	}
 
-	irec->ir_size = iov->iov_len;
-	if (irec->ir_size == 0) /* it is a punch */
-		return 0;
-
-	if (iov->iov_len != rbund->rb_recx->rx_rsize)
-		return -DER_INVAL;
-
-	if (iov->iov_buf == vos_irec2data(irec)) /* zero copied */
-		return 0;
-
-	if (iov->iov_buf != NULL) {
-		/* no zero copy, need to copy data */
-		memcpy(vos_irec2data(irec), iov->iov_buf, iov->iov_len);
-
-	} else {
-		/* Return the address for rdma? But it is too hard to handle
-		 * rdma failure.
-		 */
-		iov->iov_buf = vos_irec2data(irec);
-	}
-
+	csum->cs_csum = vos_irec2csum(irec);
+	iov->iov_buf = vos_irec2data(irec);
 	return 0;
 }
 
 /**
- * Return memory address of data and checksum if BTR_FETCH_ADDR is set in
- * \a options, otherwise copy data and its checksum stored in \a rec into
- * external buffer.
+ * Return memory address of data and checksum of this record.
  */
 static int
-ibtr_rec_fetch_out(struct btr_instance *tins, struct btr_record *rec,
-		   struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
+irec_fetch(struct btr_instance *tins, struct btr_record *rec,
+	   struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
 	struct idx_btr_key *ihkey = (struct idx_btr_key *)&rec->rec_hkey[0];
 	struct vos_irec	   *irec  = vos_rec2irec(tins, rec);
@@ -431,32 +410,19 @@ ibtr_rec_fetch_out(struct btr_instance *tins, struct btr_record *rec,
 		kbund->kb_epr->epr_lo	= ihkey->ih_epoch;
 		kbund->kb_epr->epr_hi	= DAOS_EPOCH_MAX;
 	}
-
-	iov->iov_len	= irec->ir_size;
-	csum->cs_len	= irec->ir_cs_size;
-	csum->cs_type	= irec->ir_cs_type;
-
-	if (recx != NULL) {
-		recx->rx_idx	= ihkey->ih_index;
-		recx->rx_rsize	= irec->ir_size;
-		recx->rx_nr	= 1;
-	}
 	uuid_copy(rbund->rb_cookie, ihkey->ih_cookie);
 
-	if (irec->ir_size == 0)
-		return 0; /* punched record */
-
-	if (iov->iov_buf == NULL) {
-		iov->iov_buf = vos_irec2data(irec);
-		iov->iov_buf_len = irec->ir_size;
-	} else if (iov->iov_buf_len >= iov->iov_len) {
-		memcpy(iov->iov_buf, vos_irec2data(irec), iov->iov_len);
+	/* NB: return record address, caller should copy/rma data for it */
+	iov->iov_len = iov->iov_buf_len = irec->ir_size;
+	if (irec->ir_size != 0) {
+		iov->iov_buf	= vos_irec2data(irec);
+		csum->cs_len	= irec->ir_cs_size;
+		csum->cs_type	= irec->ir_cs_type;
+		csum->cs_csum	= vos_irec2csum(irec);
 	}
-
-	if (csum->cs_csum == NULL)
-		csum->cs_csum = vos_irec2csum(irec);
-	else if (csum->cs_buf_len >= csum->cs_len)
-		memcpy(csum->cs_csum, vos_irec2csum(irec), csum->cs_len);
+	recx->rx_idx	= ihkey->ih_index;
+	recx->rx_rsize	= irec->ir_size;
+	recx->rx_nr	= 1;
 
 	return 0;
 }
@@ -525,9 +491,10 @@ ibtr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 			return -DER_NOMEM;
 	} else {
 		rec->rec_mmid = rbund->rb_mmid;
+		rbund->rb_mmid = UMMID_NULL; /* taken over by btree */
 	}
 
-	rc = ibtr_rec_fetch_in(tins, rec, kbund, rbund);
+	rc = irec_update(tins, rec, kbund, rbund);
 	return rc;
 }
 
@@ -550,7 +517,7 @@ ibtr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	if (key_iov != NULL)
 		kbund = vos_iov2key_bundle(key_iov);
 
-	ibtr_rec_fetch_out(tins, rec, kbund, rbund);
+	irec_fetch(tins, rec, kbund, rbund);
 	return 0;
 }
 
@@ -583,7 +550,7 @@ ibtr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		ihkey->ih_index, ihkey->ih_epoch);
 
 	umem_tx_add(&tins->ti_umm, rec->rec_mmid, vos_irec_size(rbund));
-	return ibtr_rec_fetch_in(tins, rec, kbund, rbund);
+	return irec_update(tins, rec, kbund, rbund);
 }
 
 static btr_ops_t vos_idx_btr_ops = {

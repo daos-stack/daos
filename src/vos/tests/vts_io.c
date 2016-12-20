@@ -841,25 +841,20 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
-	rex.rx_rsize = DAOS_REC_ANY;
+	/* will be set to zero after fetching a nonexistent key */
+	rex.rx_rsize = -1;
 
 	/* Injecting an incorrect dkey for fetch! */
 	dts_key_gen(&dkey_buf[0], UPDATE_DKEY_SIZE, UPDATE_DKEY);
 
 	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &vio, &sgl, true);
-	if (rc)
-		goto exit;
-	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
+	assert_int_equal(rc, 0);
+	assert_int_equal(rex.rx_rsize, 0);
 exit:
 	return rc;
 }
 
-/**
- * NB: this test assumes arg->oid is already created and
- * used to insert in previous tests..
- * If run independently this will be treated as a new object
- * and return success
- */
+/** fetch from a nonexistent object */
 static void
 io_fetch_wo_object(void **state)
 {
@@ -897,9 +892,13 @@ io_fetch_wo_object(void **state)
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
-	rex.rx_rsize = DAOS_REC_ANY;
+	/* should be set to zero after fetching a nonexistent object */
+	rex.rx_rsize = -1;
+	arg->oid = gen_oid();
+
 	rc = io_test_obj_fetch(arg, 1, &dkey, &vio, &sgl, true);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_int_equal(rc, 0);
+	assert_int_equal(rex.rx_rsize, 0);
 }
 
 static int
@@ -981,24 +980,18 @@ static void
 io_fetch_no_exist_dkey(void **state)
 {
 	struct io_test_args	*arg = *state;
-	int			rc;
 
 	arg->ta_flags = 0;
-
-	rc = io_update_and_fetch_incorrect_dkey(arg, 1, 1);
-	assert_int_equal(rc, -DER_NONEXIST);
+	io_update_and_fetch_incorrect_dkey(arg, 1, 1);
 }
 
 static void
 io_fetch_no_exist_dkey_zc(void **state)
 {
 	struct io_test_args	*arg = *state;
-	int			rc;
 
 	arg->ta_flags = TF_ZERO_COPY;
-
-	rc = io_update_and_fetch_incorrect_dkey(arg, 1, 1);
-	assert_int_equal(rc, -DER_NONEXIST);
+	io_update_and_fetch_incorrect_dkey(arg, 1, 1);
 }
 
 static void

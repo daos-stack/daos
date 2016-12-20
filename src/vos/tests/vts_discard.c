@@ -164,9 +164,8 @@ io_fetch(struct io_test_args *arg, daos_epoch_t fetch_epoch,
 			       &req->sgl, false);
 	if (rc)
 		D_GOTO(exit, rc);
-	if (!rc && req->rex.rx_rsize == 0)
+	if (req->rex.rx_rsize == 0)
 		return -DER_NONEXIST;
-
 
 	assert_memory_equal(req->update_buf, req->fetch_buf, UPDATE_BUF_SIZE);
 
@@ -328,7 +327,6 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey,
 	D_ALLOC(reqs,  (num * sizeof(struct io_req *)));
 	D_ALLOC(punch, (num * sizeof(bool)));
 
-
 	for (i = 0; i < num; i++) {
 		struct daos_uuid l_cookie;
 
@@ -343,7 +341,6 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey,
 			uuid_copy(l_cookie.uuid, cookie[mid].uuid);
 		else
 			uuid_copy(l_cookie.uuid, cookie[i].uuid);
-
 
 		rc = io_update(arg, epoch[i], &l_cookie, dkey,
 			       akey, &cntrs, &reqs[i], idx[i],
@@ -439,7 +436,7 @@ io_near_epoch_punch(void **state)
 	int			idx[3], rc = 0;
 	unsigned long		flags[3];
 
-	memset(&flags, '0', 3 * sizeof(unsigned long));
+	memset(&flags, 0, 3 * sizeof(unsigned long));
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &idx[0]);
 	set_near_epoch_tests(&cookie[0], &epoch[0], &idx[0], 3);
 
@@ -461,7 +458,7 @@ io_discard_punch(void **state)
 	int			idx[3], rc = 0;
 	unsigned long		flags[3];
 
-	memset(&flags, '0', 3 * sizeof(unsigned long));
+	memset(&flags, 0, 3 * sizeof(unsigned long));
 	set_key_and_index(&dkey_buf[0], &akey_buf[0], &idx[0]);
 	set_near_epoch_tests(&cookie[0], &epoch[0], &idx[0], 3);
 
@@ -890,7 +887,7 @@ static const struct CMUnitTest discard_tests[] = {
 		io_near_epoch_punch,
 		io_multikey_discard_setup,
 		io_multikey_discard_teardown},
-	{ "VOS302.2: VOS discard punched record test",
+	{ "VOS302.3: VOS discard punched record test",
 		io_discard_punch,
 		io_multikey_discard_setup,
 		io_multikey_discard_teardown},
