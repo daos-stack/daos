@@ -102,6 +102,8 @@ typedef enum {
 	CER_CORPC_INCOMPLETE	= (CER_ERR_BASE + 28),
 	/** no rank is subscribed to RAS */
 	CER_NO_RAS_RANK		= (CER_ERR_BASE + 29),
+	/** service group not attached */
+	CER_NOTATTACH		= (CER_ERR_BASE + 30),
 	/** unknown error */
 	CER_UNKNOWN		= (CER_ERR_BASE + 500),
 	/** TODO: add more error numbers */

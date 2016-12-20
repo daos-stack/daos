@@ -1578,12 +1578,7 @@ crt_grp_uri_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank, char **uri)
 	else
 		grp_id = grp_priv->gp_pub.cg_grpid;
 
-	/*
-	 * Disable the PSR uri lookup as no fail-over now, for example if PSR
-	 * server rank 1 dead then possibly cause client cannot communicate
-	 * with server rank 2.
-	 */
-	if (/* grp_priv->gp_local == */ 0) {
+	if (grp_priv->gp_local == 0) {
 		/* attached group, for PSR just return the gp_psr_phy_addr, for
 		 * other rank will send RPC to PSR */
 		if (rank == grp_priv->gp_psr_rank) {
@@ -1873,6 +1868,11 @@ crt_group_detach(crt_group_t *attached_grp)
 		rc = 0;
 	} else {
 		rc = crt_grp_detach(attached_grp);
+		if (rc == 0 && !crt_is_service() &&
+		    grp_gdata->gg_srv_pri_grp == grp_priv) {
+			grp_gdata->gg_srv_pri_grp = NULL;
+			C_DEBUG("reset grp_gdata->gg_srv_pri_grp as NULL.\n");
+		}
 	}
 
 out:

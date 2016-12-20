@@ -311,6 +311,10 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
 	C_ASSERT(grp_gdata != NULL);
 	if (tgt_ep.ep_grp == NULL) {
 		grp_priv = grp_gdata->gg_srv_pri_grp;
+		if (grp_priv == NULL) {
+			C_ERROR("service group not attached yet.\n");
+			C_GOTO(out, rc = -CER_NOTATTACH);
+		}
 	} else {
 		grp_priv = container_of(tgt_ep.ep_grp, struct crt_grp_priv,
 					gp_pub);
