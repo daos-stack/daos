@@ -600,7 +600,10 @@ crt_context_req_track(crt_rpc_t *req)
 failed:
 	pthread_mutex_unlock(&epi->epi_mutex);
 
+	/* reference taken by chash_rec_find or "epi->epi_ref = 1" above */
+	pthread_mutex_lock(&crt_ctx->cc_mutex);
 	chash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
+	pthread_mutex_unlock(&crt_ctx->cc_mutex);
 
 out:
 	return rc;
