@@ -1343,8 +1343,7 @@ crt_grp_ras_init(struct crt_grp_priv *grp_priv)
 		for (i = 0; i < num_ras_ranks; i++)
 			idx += sprintf(&tmp_str[idx], " %d",
 				       ras_ranks->rl_ranks[i]);
-		tmp_str[idx] = '\n';
-		C_DEBUG("ras rank %d, subscribed ranks:%s", grp_priv->gp_self,
+		C_DEBUG("ras rank %d, subscribed ranks:%s\n", grp_priv->gp_self,
 			tmp_str);
 		C_FREE(tmp_str, width);
 	}
