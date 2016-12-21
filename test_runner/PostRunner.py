@@ -144,13 +144,13 @@ class PostRunner():
                     "****************************************************")
                 self.logger.info("Error info from file\n %s" % dumpstd)
                 filesize = os.path.getsize(dumpstd)
-                if filesize > 1024:
+                if filesize > (12*1024):
                     self.logger.info(
                         "File too large (%d bytes), showing errors only" % \
                         filesize)
                     with open(dumpstd, 'r') as file:
                         for line in file:
-                            if line.startswith("ERROR:"):
+                            if 'ERR' in line:
                                 self.logger.info(line)
                 elif filesize > 0:
                     with open(dumpstd, 'r') as file:
