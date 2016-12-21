@@ -36,29 +36,59 @@ class NodeRunner():
     """Simple node controller """
     node = ""
 
-    def __init__(self, info, node, dir_path, scripts_dir, directives):
+    def __init__(self, info, node, dir_path, scripts_dir, directives,
+                 node_type='all'):
         self.info = info
         self.node = node
+        self.node_type = node_type
         self.dir_path = dir_path
         self.scripts_dir = scripts_dir
         self.test_directives = directives
         self.logger = logging.getLogger("TestRunnerLogger")
-        self.logger.setLevel(logging.DEBUG)
         self.test_config = {}
         self.test_name = ""
         self.state = "init"
         self.proc = None
+        self.procrtn = 0
         self.logfileout = ""
         self.logfileerr = ""
+        self.cmdfileout = ""
+        self.cmdfileerr = ""
 
-    def launch_test(self):
-        """ Launch remote processes """
-        self.logger.info("TestRunner: start remote process %s", self.node)
-        self.logger.debug("conf: " + str(self.test_config))
+    def run_cmd(self, cmd, log_path, node_type='all'):
+        """ Launch remote command """
+        if node_type != self.node_type and node_type != 'all' and \
+           self.node_type != 'all':
+            return
+        node = self.node
+        self.logger.info("TestRunner: start command %s on %s", cmd, node)
+        self.cmdfileout = os.path.join(log_path, ("cmd_%s.out" % node))
+        self.cmdfileerr = os.path.join(log_path, ("cmd_%s.err" % node))
+        cmdstr = "ssh %s \'%s \'" % (node, cmd)
+        cmdarg = shlex.split(cmdstr)
+        with open(self.cmdfileout, mode='a') as outfile, \
+            open(self.cmdfileerr, mode='a') as errfile:
+            outfile.write("============================\n " + str(cmd) + " \n")
+            errfile.write("============================\n " + str(cmd) + " \n")
+            rtn = subprocess.Popen(cmdarg,
+                                   stdout=outfile,
+                                   stderr=errfile)
+
+        self.proc = rtn
+        self.state = "running"
+        self.procrtn = 0
+
+    def launch_test(self, node_type='all'):
+        """ Launch remote test runner """
+        if node_type != self.node_type and node_type != 'all' and \
+           self.node_type != 'all':
+            return
         test_name = self.test_name
+        self.logger.info("TestRunner: start %s on %s", test_name, self.node)
+        self.logger.debug("conf: " + str(self.test_config))
         configfile = test_name + "_config"
         log_path = self.test_config['log_base_path']
-        self.logger.info("config log path: %s", log_path)
+        self.logger.info("log path: %s", log_path)
         test_config = os.path.abspath(os.path.join(log_path, configfile))
         self.logger.debug("writing config: %s", test_config)
         with open(test_config, "w") as config_info:
@@ -66,8 +96,8 @@ class NodeRunner():
 
         test_yml = os.path.join(self.scripts_dir, "%s.yml" % test_name)
         node = self.node
-        self.logfileout = os.path.join(log_path, ("%s.out" % self.test_name))
-        self.logfileerr = os.path.join(log_path, ("%s.err" % self.test_name))
+        self.logfileout = os.path.join(log_path, ("%s.out" % test_name))
+        self.logfileerr = os.path.join(log_path, ("%s.err" % test_name))
         python_vers = self.test_directives.get('usePython', "python3.4")
         cmdstr = "ssh %s \'%s %s/test_runner config=%s %s\'" % \
             (node, python_vers, self.dir_path, test_config, test_yml)
@@ -78,21 +108,22 @@ class NodeRunner():
             rtn = subprocess.Popen(cmdarg,
                                    stdout=outfile,
                                    stderr=errfile)
-        #                           stdin=subprocess.DEVNULL,
 
         self.proc = rtn
         self.state = "running"
+        self.procrtn = 0
 
     def process_state(self):
         """ poll remote processes """
         if self.state is "running":
             if self.proc.poll() is not None:
                 self.state = "done"
+                self.procrtn = self.proc.returncode
         return self.state
 
     def process_rtn(self):
         """ poll remote processes """
-        return self.proc.returncode
+        return self.procrtn
 
     def process_terminate(self):
         """ poll remote processes """
@@ -112,8 +143,17 @@ class NodeRunner():
         with open(self.logfileerr, mode='r') as fd:
             print("STDERR:\n %s" % fd.read())
 
-    def setup_config(self, name, logdir, setFromConfig=None, directives=None):
+    def dump_info(self):
+        """ print info about node """
+        self.logger.info("node: %s  type: %s", self.node, self.node_type)
+
+    def setup_config(self, name, logdir, node_type='all',
+                     setFromConfig=None, directives=None):
         """ setup base config """
+        if node_type != self.node_type and node_type != 'all' and \
+           self.node_type != 'all':
+            self.test_name = ""
+            return
         self.test_name = name
         self.test_config.clear()
 
@@ -126,6 +166,7 @@ class NodeRunner():
         self.test_config['build_path'] = build_path
         self.test_config['log_base_path'] = logdir
         self.test_config['node'] = self.node
+        self.test_config['node_type'] = self.node_type
         if setFromConfig:
             self.test_config['setKeyFromConfig'] = {}
             self.test_config['setKeyFromConfig'].update(setFromConfig)

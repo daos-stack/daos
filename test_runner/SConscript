@@ -20,7 +20,7 @@
 """install test runner"""
 
 TESTRUNNER = ["__init__.py", "__main__.py", "InfoRunner.py",
-              "TestRunner.py", "PreRunner.py", "PostRunner.py",
+              "UnitTestRunner.py", "PreRunner.py", "PostRunner.py",
               "MultiRunner.py", "NodeRunner.py",
               "DvmRunner.py", "CpprDaemonRunner.py",
               "findTestLogs.py"]

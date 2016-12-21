@@ -20,92 +20,25 @@
 # SOFTWARE.
 # -*- coding: utf-8 -*-
 """
-test runner class
+test runner post test run processing class
 
 """
 
 import os
-import subprocess
 import stat
+#pylint: disable=import-error
+import GrindRunner
+#pylint: enable=import-error
 
 #pylint: disable=too-many-locals
 
 
-class PostRunner():
+class PostRunner(GrindRunner.GrindRunner):
     """post test runner"""
     last_testlogdir = ""
     test_info = {}
     info = None
     logger = None
-
-    def valgrind_memcheck(self):
-        """ If memcheck is used to check the results """
-        self.logger.info("TestRunner: valgrind memcheck begin")
-        from xml.etree import ElementTree
-        rtn = 0
-        error_str = ""
-        newdir = self.last_testlogdir
-        if not os.path.exists(newdir):
-            self.logger.info("Directory not found: %s" % newdir)
-            return
-        dirlist = os.listdir(newdir)
-        for psdir in dirlist:
-            dname = os.path.join(newdir, psdir)
-            if os.path.isfile(dname):
-                continue
-            testdirlist = os.listdir(dname)
-            for fname in testdirlist:
-                if str(fname).endswith(".xml"):
-                    with open(os.path.join(dname, fname), "r") as xmlfile:
-                        tree = ElementTree.parse(xmlfile)
-                    error_types = {}
-                    for node in tree.iter('error'):
-                        kind = node.find('./kind')
-                        if not kind.text in error_types:
-                            error_types[kind.text] = 0
-                        error_types[kind.text] += 1
-                    if error_types:
-                        error_str += "test dir: %s  file: %s\n" % (psdir, fname)
-                        for err in error_types:
-                            error_str += "%-3d %s errors\n"%(error_types[err],
-                                                             err)
-        if error_str:
-            self.logger.info("""
-#########################################################
-    memcheck TESTS failed.
-%s
-#########################################################
-""" % error_str)
-            rtn = 1
-        self.logger.info("TestRunner: valgrind memcheck end")
-        return rtn
-
-    def callgrind_annotate(self):
-        """ If callgrind is used pull in the results """
-        self.logger.info("TestRunner: Callgrind annotate begin")
-        module = self.test_info['module']
-        srcdir = module.get('srcDir', "")
-        src_rootdir = self.info.get_info('SRCDIR')
-        if srcdir and src_rootdir:
-            if isinstance(srcdir, str):
-                srcfile = " %s/%s/*.c" % (src_rootdir, srcdir)
-            else:
-                srcfile = ""
-                for item in srcdir:
-                    srcfile += " %s/%s/*.c" % (src_rootdir, item)
-            dirlist = os.listdir(self.last_testlogdir)
-            for infile in dirlist:
-                if os.path.isfile(infile) and infile.find(".out"):
-                    outfile = infile.replace("out", "gp.out")
-                    cmdarg = "callgrind_annotate " + infile + srcfile
-                    self.logger.info(cmdarg)
-                    with open(outfile, 'w') as out:
-                        subprocess.call(cmdarg, timeout=30, shell=True,
-                                        stdout=out,
-                                        stderr=subprocess.STDOUT)
-        else:
-            self.logger.info("TestRunner: Callgrind no source directory")
-        self.logger.info("TestRunner: Callgrind annotate end")
 
     def check_log_mode(self, topdir):
         """set the directory and file permissions"""

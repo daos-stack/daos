@@ -48,6 +48,7 @@ import os
 import sys
 import json
 import time
+import logging
 
 from yaml import load
 try:
@@ -57,7 +58,7 @@ except ImportError:
 
 from importlib import import_module
 #pylint: disable=import-error
-from TestRunner import TestRunner
+from UnitTestRunner import UnitTestRunner
 from InfoRunner import InfoRunner
 from MultiRunner import MultiRunner
 
@@ -99,7 +100,7 @@ def testmain(info=None, start=1, testMode=None):
     if testMode == "littleChief":
         tester = MultiRunner(info, test_list)
     else:
-        tester = TestRunner(info, test_list)
+        tester = UnitTestRunner(info, test_list)
     rc = tester.run_testcases()
     if daemon:
         daemon.stop_process()
@@ -121,6 +122,11 @@ def main():
     rc = 1
     start = 1
     config = {}
+    logger = logging.getLogger("TestRunnerLogger")
+    logger.setLevel(logging.INFO)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
+    logger.addHandler(ch)
 
     if len(sys.argv) > 1:
         if "config" in sys.argv[1]:
@@ -129,7 +135,7 @@ def main():
             with open(config_file[1], "r") as config_fd:
                 config = json.load(config_fd)
     else:
-        print("No config file given")
+        logger.error("No config file given")
 
     if 'build_path' in config:
         testing_dir = os.path.realpath(os.path.join(

@@ -20,7 +20,7 @@
 # SOFTWARE.
 # -*- coding: utf-8 -*-
 """
-test runner class
+multi test runner class
 
 """
 
@@ -32,12 +32,13 @@ test runner class
 import os
 import sys
 import shutil
-import unittest
 import logging
 import time
 from datetime import datetime
+from importlib import import_module
 #pylint: disable=import-error
-import NodeRunner
+import NodeControlRunner
+import TestInfoRunner
 import PostRunner
 #pylint: enable=import-error
 
@@ -51,29 +52,25 @@ except ImportError:
 class MultiRunner(PostRunner.PostRunner):
     """Simple test runner"""
     log_dir_base = ""
-    test_info = {}
     test_list = []
-    node_list = []
     subtest_results = []
     test_directives = {}
     info = None
+    test_info = None
+    nodes = None
+    daemon = None
     logger = None
-    file_hdlr = None
 
     def __init__(self, info, test_list=None):
         self.info = info
         self.test_list = test_list
         self.log_dir_base = self.info.get_config('log_base_path')
         self.logger = logging.getLogger("TestRunnerLogger")
-        self.logger.setLevel(logging.DEBUG)
-        ch = logging.StreamHandler(sys.stdout)
-        self.logger.addHandler(ch)
 
     def dump_subtest_results(self):
         """ dump the test results to the log directory """
-        log_dir = os.path.dirname(self.info.get_config('log_base_path'))
-        if os.path.exists(log_dir):
-            name = "%s/subtest_results.yml" % log_dir
+        if os.path.exists(self.log_dir_base):
+            name = "%s/subtest_results.yml" % self.log_dir_base
             with open(name, 'w') as fd:
                 dump(self.subtest_results, fd, Dumper=Dumper, indent=4,
                      default_flow_style=False)
@@ -95,8 +92,8 @@ class MultiRunner(PostRunner.PostRunner):
                     logdir = os.path.dirname(self.log_dir_base)
                     newname = os.path.join(logdir, newdir)
                 os.rename(self.log_dir_base, newname)
-                self.logger.info("TestRunner: test log directory\n %s", \
-                                 os.path.abspath(newname))
+            self.logger.info("TestRunner: test log directory\n %s", \
+                             os.path.abspath(newname))
 
             dowhat = str(self.test_directives.get('printTestLogPath',
                                                   "no")).lower()
@@ -108,50 +105,12 @@ class MultiRunner(PostRunner.PostRunner):
     def post_run(self):
         """ post run processing """
         self.logger.info("TestRunner: tearDown begin")
+        if self.daemon:
+            self.daemon.stop_process()
+        self.test_info.dump_test_info()
         self.dump_subtest_results()
         self.rename_output_directory()
         self.logger.info("TestRunner: tearDown end\n\n")
-
-    def execute_list(self):
-        """ execute test scripts """
-
-        rtn = 0
-        for node in self.node_list:
-            self.logger.info("************** run " + \
-                             str(node.test_name) + " on " + str(node.node) + \
-                             " ******************************"
-                            )
-            node.launch_test()
-        loop_count = 720
-        running_count = len(self.node_list)
-        self.logger.info("******* started running count " + str(running_count))
-        while running_count and loop_count:
-            time.sleep(1)
-            running_count = len(self.node_list)
-            loop_count = loop_count - 1
-            for node in self.node_list:
-                if node.process_state() is not "running":
-                    running_count = running_count - 1
-        self.logger.info("******* done running count " + str(running_count))
-
-        for node in self.node_list:
-            procrtn = node.process_rtn()
-            if procrtn is not None:
-                rtn |= procrtn
-            else:
-                node.process_terminate()
-                rtn |= 1
-            self.logger.info("***************** Results " + \
-                             "*********************************"
-                            )
-            self.logger.info(str(node.test_name) + " on " + \
-                             str(node.node) + " rtn: " +  str(procrtn)
-                            )
-
-            self.logger.info(
-                "***********************************************************")
-
-        return rtn
 
     def execute_strategy(self):
         """ execute test strategy """
@@ -160,12 +119,11 @@ class MultiRunner(PostRunner.PostRunner):
         setConfigKeys = {}
         configKeys = {}
         rtn = 0
-        info['name'] = self.test_info['module']['name']
-        value = self.log_dir_base + "/" + str(info['name'])
-        start_time = time.time()
+        info['name'] = self.test_info.get_test_info('module', 'name')
         toexit = self.test_directives.get('exitLoopOnError', "yes")
-        for item in self.test_info['execStrategy']:
+        for item in self.test_info.get_test_info('execStrategy'):
             configKeys.clear()
+            setNodeType = item.get('nodeType', "all")
             setConfigKeys = item.get('setConfigKeys', {})
             setTestPhase = item.get('type', "TEST").upper()
             configKeys['TR_TEST_PHASE'] = setTestPhase
@@ -176,15 +134,11 @@ class MultiRunner(PostRunner.PostRunner):
                     configKeys.update(addKeys)
                 loadFromInfo = setConfigKeys.get('loadFromInfo', "")
                 if loadFromInfo:
-                    InfoKeys = self.test_info.get(loadFromInfo)
+                    InfoKeys = self.test_info.get_test_info(loadFromInfo)
                     configKeys.update(InfoKeys)
-            for node in self.node_list:
-                logdir = value + "/" + item['name'] + "_" + node.node
-                os.makedirs(logdir)
-                self.logger.info("setup node " + str(node.node) + " " + \
-                                  str(logdir))
-                node.setup_config(item['name'], logdir, configKeys)
-            rtn = self.execute_list()
+            self.nodes.nodes_config(item['name'], setNodeType, configKeys)
+            start_time = time.time()
+            rtn = self.nodes.execute_list(setNodeType)
             info['duration'] = time.time() - start_time
             info['return_code'] = rtn
             if rtn == 0:
@@ -197,59 +151,43 @@ class MultiRunner(PostRunner.PostRunner):
 
         return info
 
-    def node_strategy(self):
-        """ execute test strategy """
-        self.logger.info("***************** " + \
-                         str(self.test_info['module']['name']) + \
-                         " *********************************"
-                        )
-        path = os.getcwd()
-        scripts = path + "/scripts"
-        host_list = self.info.get_config('host_list')
-        self.logger.info("host_list" + str(host_list))
-        for node in host_list:
-            node_info = NodeRunner.NodeRunner(self.info, node, path, scripts,
-                                              self.test_directives)
-            self.node_list.append(node_info)
-        return self.execute_strategy()
-
-    def load_testcases(self, test_module_name):
-        """ load and check test description file """
-
-        rtn = 0
-        with open(test_module_name, 'r') as fd:
-            self.test_info = load(fd, Loader=Loader)
-
-        if 'description' not in self.test_info:
-            self.logger.error(" No description defined in file: %s", \
-                             test_module_name)
-            rtn = 1
-        if 'module' not in self.test_info:
-            self.logger.error(" No module section defined in file: %s", \
-                             test_module_name)
-            rtn = 1
-        if 'directives' not in self.test_info or \
-           self.test_info['directives'] is None:
-            self.test_info['directives'] = {}
-        if 'execStrategy' not in self.test_info:
-            self.logger.error(" No execStrategy section defined in file: %s",
-                              test_module_name)
-            rtn = 1
-        return rtn
+    def import_daemon(self, logbase):
+        """ import the daemon module and load the class """
+        _class = None
+        name = self.test_info.get_test_info('use_daemon', 'name')
+        logDir = os.path.join(logbase, name)
+        try:
+            os.makedirs(logDir)
+        except OSError:
+            newname = "%s_%s" % (logDir, datetime.now().isoformat())
+            os.rename(logDir, newname)
+            os.makedirs(logDir)
+        try:
+            _module = import_module(name)
+            try:
+                _class = getattr(_module, name)(logDir, self.test_info,
+                                                self.nodes)
+            except AttributeError:
+                print("Class does not exist")
+        except ImportError:
+            print("Module does not exist")
+        return _class
 
     def run_testcases(self):
         """ execute test scripts """
 
+        file_hdlr = None
         sys.path.append("scripts")
         rtn = 0
         self.logger.info(
             "\n*************************************************************")
         test_module_name = self.test_list[0]
-        self.test_info.clear()
-        if self.load_testcases(test_module_name):
+        self.test_info = TestInfoRunner.TestInfoRunner(self.info)
+        if self.test_info.load_testcases(test_module_name):
             return 1
         logdir = os.path.join(self.log_dir_base, \
-                              str(self.test_info['module']['name']))
+                              str(self.test_info.get_test_info(
+                                  'module', 'name')))
         try:
             os.makedirs(logdir)
         except OSError:
@@ -259,11 +197,27 @@ class MultiRunner(PostRunner.PostRunner):
         #value = logdir + "/multi.log"
         file_hdlr = logging.FileHandler(logdir + "/multi.log")
         self.logger.addHandler(file_hdlr)
-        self.test_directives = self.test_info.get('directives', {})
-        rtn_info = self.node_strategy()
-        rtn |= rtn_info['return_code']
-        self.subtest_results.append(rtn_info)
+        file_hdlr.setLevel(logging.DEBUG)
+        self.test_directives = self.test_info.get_test_info('directives', {})
+        self.test_info.add_default_env()
+        #self.setup_default_env()
+        self.logger.info("***************** " + \
+                         str(self.test_info.get_test_info('module', 'name')) + \
+                         " *********************************"
+                        )
+        # FIXME
+        self.nodes = NodeControlRunner.NodeControlRunner(
+            logdir, self.info, self.test_info)
+        self.nodes.nodes_strategy(self.test_directives)
+        if self.test_info.get_test_info('use_daemon'):
+            self.daemon = self.import_daemon(logdir)
+            rtn = self.daemon.launch_process()
+        if not rtn:
+            rtn_info = self.execute_strategy()
+            rtn |= rtn_info['return_code']
+            self.subtest_results.append(rtn_info)
         self.post_run()
+        self.nodes.nodes_dump()
         file_hdlr.close()
         self.logger.removeHandler(file_hdlr)
 
