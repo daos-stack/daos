@@ -191,6 +191,11 @@ class TestRunner(PreRunner.PreRunner, PostRunner.PostRunner):
                     test_object_dict = results_item[0].__dict__
                     self.dump_error_messages(
                         test_object_dict['_testMethodName'])
+                self.logger.info("\nNumber skipped tests: %d",
+                                 len(results.skipped))
+                for results_item in results.skipped:
+                    self.logger.info(results_item[0])
+                    self.logger.info(results_item[1])
 
             use_valgrind = os.getenv('TR_USE_VALGRIND', "")
             if use_valgrind == "memcheck" and \
