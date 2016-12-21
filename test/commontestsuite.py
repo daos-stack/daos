@@ -92,7 +92,7 @@ class CommonTestSuite(unittest.TestCase):
           suitetitle, msg, cmdstr)
         cmdarg = shlex.split(cmdstr)
         start_time = time.time()
-        if not os.getenv('TR_REDIRECT_OUTPUT',""):
+        if not os.getenv('TR_REDIRECT_OUTPUT', ""):
             procrtn = subprocess.call(cmdarg, timeout=180)
         else:
             procrtn = subprocess.call(cmdarg, timeout=180,
@@ -108,7 +108,7 @@ class CommonTestSuite(unittest.TestCase):
         self.logger.info("%s: start process %s - input string:\n%s", \
           suitetitle, msg, cmdstr)
         cmdarg = shlex.split(cmdstr)
-        if not os.getenv('TR_REDIRECT_OUTPUT',""):
+        if not os.getenv('TR_REDIRECT_OUTPUT', ""):
             proc = subprocess.Popen(cmdarg)
         else:
             proc = subprocess.Popen(cmdarg,
