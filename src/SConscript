@@ -15,6 +15,9 @@ for header in HEADERS_SRV:
     env.Install(os.path.join('$PREFIX', 'include', 'daos_srv'),
                 'include/daos_srv/%s' % header)
 
+
+# Add hwloc requires
+PREREQS.require(env, 'hwloc')
 # Generate the common libraries used by everyone
 SConscript('common/SConscript', exports=['env', 'PREREQS'])
 
@@ -30,7 +33,7 @@ SConscript('vos_srv/SConscript', exports=['env', 'PREREQS', 'srv'])
 SConscript('server/SConscript', exports=['env', 'PREREQS'])
 
 # Build each DAOS component
-SConscript('mgmt/SConscript', exports='env')
+SConscript('mgmt/SConscript', exports=['env', 'PREREQS'])
 SConscript('pool/SConscript', exports=['env', 'PREREQS'])
 SConscript('container/SConscript', exports=['env', 'PREREQS'])
 SConscript('placement/SConscript', exports=['env', 'PREREQS'])
