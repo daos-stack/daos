@@ -49,6 +49,9 @@
 #define DD_MASK_ENV		"DD_MASK"
 #define DD_MASK_DEFAULT		"all"
 
+/* other debug tunables */
+#define DD_TUNE_ALLOC		"DD_ALLOC"
+
 /* The environment variable for setting debug level being output to stderr.
  * Options: "info", "note", "warn", "err", "crit", "emerg".
  * Default: "crit", which is used by D_FATAL, D_ASSERT and D_ASSERTF
@@ -73,6 +76,9 @@ extern unsigned int dd_fac_mgmt;
 extern unsigned int dd_fac_utils;
 extern unsigned int dd_fac_tests;
 
+/** other debug tunables */
+extern bool dd_tune_alloc;
+
 /**
  * Debug bits for logic path, now we can only have up to 16 different bits,
  * needs to change CaRT and make it support more bits.
@@ -85,6 +91,7 @@ extern unsigned int dd_fac_tests;
 #define DB_PL		(1 << (CLOG_DPRISHIFT + 5)) /* placement */
 #define DB_MGMT		(1 << (CLOG_DPRISHIFT + 6)) /* management */
 #define DB_EPC		(1 << (CLOG_DPRISHIFT + 7)) /* epoch etc */
+#define DB_TRACE	(1 << (CLOG_DPRISHIFT + 8)) /* function trace */
 
 /* should be replaced by more reasonable mask, e.g. (DB_IO | DB_MD | DB_PL) */
 #define DB_DEFAULT	DB_ANY
@@ -145,6 +152,23 @@ do {									\
 
 #define D_CASSERT(cond)                                                 \
 do {switch (1) {case (cond): case 0: break; } } while (0)
+
+#define D_ENTER			D_DEBUG(DB_TRACE, "Entered\n")
+#define D_EXIT			D_DEBUG(DB_TRACE, "Leaving\n")
+
+#define D_GOTO(label, rc)						\
+do {									\
+	typeof(rc) __rc = (rc);						\
+	D_DEBUG(DB_TRACE, "goto %s: %ld\n", #label, (long)__rc);	\
+	goto label;							\
+} while (0)
+
+#define D_RETURN(rc)							\
+do {									\
+	typeof(rc) __rc = (rc);						\
+	D_DEBUG(DB_TRACE, "return: %ld\n", (long)__rc);			\
+	return __rc;							\
+} while (0)
 
 #define D_PRINT(fmt, ...)                                               \
 do {                                                                    \

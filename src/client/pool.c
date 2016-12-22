@@ -125,7 +125,7 @@ daos_pool_query_async(daos_handle_t ph, daos_rank_list_t *tgts,
 
 	pool = dc_pool_lookup(ph);
 	if (pool == NULL)
-		D_GOTO(out_task, rc);
+		D_GOTO(out_task, rc = -DER_NONEXIST);
 
 	rc = dc_pool_query(pool, daos_task2ctx(task), tgts, info,
 			   pool_query_cp, task);

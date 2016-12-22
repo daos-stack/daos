@@ -50,6 +50,10 @@ static struct daos_debug_data	debug_data = {
 	.dd_logfile		= DD_LOG_DEFAULT,
 };
 
+/** DAOS debug tunables */
+bool dd_tune_alloc = false;	/* disabled */
+
+/** predefined log facilities */
 unsigned int dd_fac_null;
 unsigned int dd_fac_misc;
 unsigned int dd_fac_common;
@@ -400,6 +404,19 @@ debug_fac_load_env(void)
 	free(fac_str);
 }
 
+/** loading misc debug tunables */
+static void
+debug_tunables_load_env(void)
+{
+	char	*tune_alloc;
+
+	tune_alloc = getenv(DD_TUNE_ALLOC);
+	if (tune_alloc == NULL)
+		return;
+
+	dd_tune_alloc = !!atoi(tune_alloc);
+}
+
 static int
 debug_fac_register(struct daos_debug_fac *dfac)
 {
@@ -454,6 +471,7 @@ daos_debug_init(char *logfile)
 	debug_prio_err_load_env();
 	debug_mask_load_env();
 	debug_fac_load_env();
+	debug_tunables_load_env();
 
 	rc = crt_log_init_adv("DAOS", debug_data.dd_logfile, CLOG_FLV_LOGPID,
 			      DP_INFO, debug_data.dd_prio_err);

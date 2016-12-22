@@ -78,31 +78,42 @@ char *DP_UUID(const void *uuid);
 #define DF_CONT			DF_UUID"/"DF_UUID
 #define DP_CONT(puuid, cuuid)	DP_UUID(puuid), DP_UUID(cuuid)
 
+#define DD_ALLOC_PADDING		(dd_tune_alloc ? 4 : 0)
+#define DD_ALLOC_MAGIC			0xdeadbeef
+#define DD_ALLOC_POISON			0x3d
+
 /* memory allocating macros */
-#define D_ALLOC(ptr, size)						 \
-	do {								 \
-		(ptr) = (__typeof__(ptr))calloc(1, size);		 \
-		if ((ptr) != NULL) {					 \
-			D_DEBUG(DF_MEM, "alloc #ptr : %d at %p.\n",	\
-				(int)(size), ptr);			\
-			break;						\
-		}						 \
-		D_ERROR("out of memory (tried to alloc '" #ptr "' = %d)",\
-			(int)(size));					 \
-	} while (0)
+#define D_ALLOC(ptr, size)						\
+do {									\
+	(ptr) = (__typeof__(ptr))calloc(1, (size + DD_ALLOC_PADDING));	\
+	if ((ptr) == NULL) {						\
+		D_ERROR("out of memory (alloc '" #ptr "' = %d)",	\
+			(int)(size));					\
+	}								\
+	D_DEBUG(DB_MEM, "alloc #ptr : %d at %p.\n", (int)(size), ptr);	\
+	if (DD_ALLOC_PADDING != 0) {					\
+		void *__ptr = (void *)(ptr) + size;			\
+		*(unsigned int *)__ptr = DD_ALLOC_MAGIC;		\
+	}								\
+} while (0)
 
 # define D_FREE(ptr, size)						\
-	do {								\
-		D_DEBUG(DF_MEM, "free #ptr : %d at %p.\n",		\
-			(int)(size), ptr);				\
-		free(ptr);						\
-		(ptr) = NULL;						\
-	} while (0)
+do {									\
+	D_DEBUG(DB_MEM, "free #ptr : %d at %p.\n", (int)(size), ptr);	\
+	if (DD_ALLOC_PADDING != 0) {					\
+		void *__ptr = (void *)(ptr) + size;			\
+		D_ASSERT(*(unsigned int *)__ptr == DD_ALLOC_MAGIC);	\
+		if (size <= 2048) {					\
+			memset((void *)(ptr), DD_ALLOC_POISON,		\
+				size + DD_ALLOC_PADDING);		\
+		}							\
+	}								\
+	free(ptr);							\
+	(ptr) = NULL;							\
+} while (0)
 
 #define D_ALLOC_PTR(ptr)        D_ALLOC(ptr, sizeof *(ptr))
 #define D_FREE_PTR(ptr)         D_FREE(ptr, sizeof *(ptr))
-
-#define D_GOTO(label, rc)       do { ((void)(rc)); goto label; } while (0)
 
 #define DAOS_GOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
 #define DAOS_GOLDEN_RATIO_PRIME_32	0x9e370001UL
