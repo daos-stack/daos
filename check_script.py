@@ -147,7 +147,7 @@ def parse_report():
                 pylint.write(line[3:])
                 error_count += 1
             else:
-                pylint.write(line)
+                sys.stdout.write(line)
     pylint.close()
     os.unlink("tmp.log")
     return error_count
