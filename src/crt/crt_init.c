@@ -216,16 +216,15 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 	crt_phy_addr_t	addr = NULL, addr_env;
 	struct timeval	now;
 	unsigned int	seed;
-	size_t		len;
 	bool		server, allow_singleton = false;
 	int		rc = 0;
 
 	server = flags & CRT_FLAG_BIT_SERVER;
 
 	if (grpid != NULL) {
-		len = strlen(grpid);
-		if (len == 0 || len > CRT_GROUP_ID_MAX_LEN) {
-			C_PRINT_ERR("invalid grpid length %zu.\n", len);
+		if (crt_validate_grpid(grpid) != 0) {
+			C_PRINT_ERR("grpid contains invalid characters "
+				    "or is too long\n");
 			C_GOTO(out, rc = -CER_INVAL);
 		}
 		if (!server) {

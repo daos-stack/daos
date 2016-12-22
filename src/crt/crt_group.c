@@ -814,6 +814,33 @@ out:
 	return rc;
 }
 
+/**
+ * Validates an input group id string. Checks both length and for presence of
+ * invalid characters.
+ *
+ * \param grpid [IN]		unique group ID.
+ *
+ * \return			zero if grpid is valid, -CER_INVAL otherwise
+ */
+int
+crt_validate_grpid(const crt_group_id_t grpid) {
+	const char *ptr = grpid;
+	size_t len = strnlen(grpid, CRT_GROUP_ID_MAX_LEN + 1);
+
+	if (len == 0 || len > CRT_GROUP_ID_MAX_LEN)
+		return -CER_INVAL;
+
+	while (*ptr != '\0') {
+		if (*ptr < ' ' || *ptr > '~' || /* non-printable characters */
+		    *ptr == ';' || *ptr == '"' || *ptr == '`' ||
+		    *ptr == 39 || /* single quote */
+		    *ptr == 92) /* backslash */
+			return -CER_INVAL;
+		ptr++;
+	}
+	return 0;
+}
+
 int
 crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 		 bool populate_now, crt_grp_create_cb_t grp_create_cb,
@@ -836,9 +863,8 @@ crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 		C_ERROR("Cannot create subgroup on pure client side.\n");
 		C_GOTO(out, rc = -CER_NO_PERM);
 	}
-	if (grp_id == NULL || strlen(grp_id) == 0 ||
-	    strlen(grp_id) >= CRT_GROUP_ID_MAX_LEN) {
-		C_ERROR("invalid parameter of grp_id.\n");
+	if (crt_validate_grpid(grp_id) != 0) {
+		C_ERROR("grp_id contains invalid characters or is too long\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 	if (member_ranks == NULL || grp_create_cb == NULL) {
@@ -941,7 +967,6 @@ crt_group_lookup(crt_group_id_t grp_id)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
 	struct crt_grp_gdata	*grp_gdata;
-	crt_size_t		 size;
 
 	if (!crt_initialized()) {
 		C_ERROR("CaRT not initialized yet.\n");
@@ -955,10 +980,8 @@ crt_group_lookup(crt_group_id_t grp_id)
 					      grp_gdata->gg_cli_pri_grp;
 		goto out;
 	}
-	size = strlen(grp_id);
-	if (size == 0 || size > CRT_GROUP_ID_MAX_LEN) {
-		C_ERROR("grp_id %s (len %zu, CRT_GROUP_ID_MAX_LEN %d).\n",
-			grp_id, strlen(grp_id), CRT_GROUP_ID_MAX_LEN);
+	if (crt_validate_grpid(grp_id) != 0) {
+		C_ERROR("grp_id contains invalid characters or is too long\n");
 		goto out;
 	}
 
@@ -1104,7 +1127,7 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 		C_GOTO(out, rc = -CER_NO_PERM);
 	}
 	if (grp == NULL) {
-		C_ERROR("invalid paramete of NULL grp.\n");
+		C_ERROR("invalid parameter of NULL grp.\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
@@ -1646,7 +1669,6 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_grp_priv	*grp_priv;
 	crt_group_t		*grp_at = NULL;
-	size_t			 len;
 	bool			 is_service;
 	int			 rc = 0;
 
@@ -1654,9 +1676,9 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 		C_ERROR("invalid parameter, NULL srv_grpid.\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
-	len = strlen(srv_grpid);
-	if (len == 0 || len > CRT_GROUP_ID_MAX_LEN) {
-		C_ERROR("invalid srv_grpid %s (len %zu).\n", srv_grpid, len);
+	if (crt_validate_grpid(srv_grpid) != 0) {
+		C_ERROR("srv_grpid contains invalid characters "
+			"or is too long\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 	if (attached_grp == NULL) {

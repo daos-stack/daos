@@ -96,8 +96,14 @@ typedef struct {
 typedef char		*crt_string_t;
 typedef const char	*crt_const_string_t;
 
-/* CRT uses a string as the group ID */
+/*
+ * CRT uses a string as the group ID
+ * This string can only contain ASCII printable characters between 0x20 and 0x7E
+ * Additionally, this string cannot contain quotation characters ("'`),
+ *   backslashes (\), or semicolons (;)
+ */
 typedef crt_string_t	crt_group_id_t;
+
 /* max length of the group ID string including the trailing '\0' */
 #define CRT_GROUP_ID_MAX_LEN	(64)
 
