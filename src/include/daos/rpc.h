@@ -208,7 +208,7 @@ int daos_rpc_send(crt_rpc_t *rpc, daos_event_t *ev);
 static inline int
 daos_group_attach(const char *group_id, crt_group_t **group)
 {
-	D_DEBUG(DF_DSMC, "attaching to group '%s'\n", group_id);
+	D_DEBUG(DB_NET, "attaching to group '%s'\n", group_id);
 	if (group_id == NULL)
 		group_id = CRT_DEFAULT_SRV_GRPID;
 	return crt_group_attach((char *)group_id, group);
@@ -218,7 +218,7 @@ static inline int
 daos_group_detach(crt_group_t *group)
 {
 	D_ASSERT(group != NULL);
-	D_DEBUG(DF_DSMC, "detaching from group '%s'\n", group->cg_grpid);
+	D_DEBUG(DB_NET, "detaching from group '%s'\n", group->cg_grpid);
 	return crt_group_detach(group);
 }
 

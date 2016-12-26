@@ -425,7 +425,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 			break;
 
 		case BTR_OPC_LOOKUP:
-			D_DEBUG(DF_MISC, "Looking for "DF_U64"\n", key);
+			D_DEBUG(DB_TEST, "Looking for "DF_U64"\n", key);
 
 			daos_iov_set(&val_iov, NULL, 0); /* get address */
 			rc = dbtree_lookup(ik_toh, &key_iov, &val_iov);

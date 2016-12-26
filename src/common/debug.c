@@ -285,6 +285,10 @@ static struct daos_debug_bit debug_bit_dict[] = {
 		.db_lname	= "epoch",
 	},
 	{
+		.db_bit		= DB_TRACE,
+		.db_name	= "trace",
+	},
+	{
 		.db_name	= NULL,
 	},
 };

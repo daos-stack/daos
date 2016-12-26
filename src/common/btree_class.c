@@ -381,7 +381,7 @@ dbtree_nv_update(daos_handle_t tree, const char *name, const void *value,
 	daos_iov_t	val;
 	int		rc;
 
-	D_DEBUG(DF_DSMS, "updating \"%s\":%p+%zu\n", name, value, size);
+	D_DEBUG(DB_TRACE, "updating \"%s\":%p+%zu\n", name, value, size);
 
 	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 	daos_iov_set(&val, (void *)value, size);
@@ -400,7 +400,7 @@ dbtree_nv_lookup(daos_handle_t tree, const char *name, void *value, size_t size)
 	daos_iov_t	val;
 	int		rc;
 
-	D_DEBUG(DF_DSMS, "looking up \"%s\"\n", name);
+	D_DEBUG(DB_TRACE, "looking up \"%s\"\n", name);
 
 	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 	daos_iov_set(&val, value, size);
@@ -408,7 +408,7 @@ dbtree_nv_lookup(daos_handle_t tree, const char *name, void *value, size_t size)
 	rc = dbtree_lookup(tree, &key, &val);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
+			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", name);
 		else
 			D_ERROR("failed to look up \"%s\": %d\n", name, rc);
 		return rc;
@@ -429,14 +429,14 @@ dbtree_nv_lookup_ptr(daos_handle_t tree, const char *name, void **value,
 	daos_iov_t	val;
 	int		rc;
 
-	D_DEBUG(DF_DSMS, "looking up \"%s\" ptr\n", name);
+	D_DEBUG(DB_TRACE, "looking up \"%s\" ptr\n", name);
 
 	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 
 	rc = lookup_ptr(tree, &key, &val);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
+			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", name);
 		else
 			D_ERROR("failed to look up \"%s\": %d\n", name, rc);
 		return rc;
@@ -453,14 +453,14 @@ dbtree_nv_delete(daos_handle_t tree, const char *name)
 	daos_iov_t	key;
 	int		rc;
 
-	D_DEBUG(DF_DSMS, "deleting \"%s\"\n", name);
+	D_DEBUG(DB_TRACE, "deleting \"%s\"\n", name);
 
 	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 
 	rc = dbtree_delete(tree, &key);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
+			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", name);
 		else
 			D_ERROR("failed to delete \"%s\": %d\n", name, rc);
 	}
@@ -503,7 +503,7 @@ dbtree_nv_open_tree(daos_handle_t tree, const char *name,
 	rc = open_tree(tree, &key, NULL, tree_child);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
+			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", name);
 		else
 			D_ERROR("failed to open \"%s\": %d\n", name, rc);
 	}
@@ -523,7 +523,7 @@ dbtree_nv_destroy_tree(daos_handle_t tree, const char *name)
 	rc = destroy_tree(tree, &key);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find \"%s\"\n", name);
+			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", name);
 		else
 			D_ERROR("failed to destroy \"%s\": %d\n", name, rc);
 	}
@@ -722,7 +722,7 @@ dbtree_uv_lookup(daos_handle_t tree, const uuid_t uuid, void *value,
 	rc = dbtree_lookup(tree, &key, &val);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
+			D_DEBUG(DB_TRACE, "cannot find "DF_UUID"\n",
 				DP_UUID(uuid));
 		else
 			D_ERROR("failed to look up "DF_UUID": %d\n",
@@ -748,7 +748,7 @@ dbtree_uv_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 
 	rc = dbtree_fetch(tree, opc, &key_in, &key_out, &val);
 	if (rc == -DER_NONEXIST)
-		D_DEBUG(DF_DSMS, "cannot find opc=%d in="DF_UUID"\n", opc,
+		D_DEBUG(DB_TRACE, "cannot find opc=%d in="DF_UUID"\n", opc,
 			DP_UUID(uuid_in));
 	else if (rc != 0)
 		D_ERROR("failed to fetch opc=%d in="DF_UUID": %d\n", opc,
@@ -767,7 +767,7 @@ dbtree_uv_delete(daos_handle_t tree, const uuid_t uuid)
 	rc = dbtree_delete(tree, &key);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
+			D_DEBUG(DB_TRACE, "cannot find "DF_UUID"\n",
 				DP_UUID(uuid));
 		else
 			D_ERROR("failed to delete "DF_UUID": %d\n",
@@ -812,7 +812,7 @@ dbtree_uv_open_tree(daos_handle_t tree, const uuid_t uuid,
 	rc = open_tree(tree, &key, NULL, tree_child);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
+			D_DEBUG(DB_TRACE, "cannot find "DF_UUID"\n",
 				DP_UUID(uuid));
 		else
 			D_ERROR("failed to open "DF_UUID": %d\n", DP_UUID(uuid),
@@ -834,7 +834,7 @@ dbtree_uv_destroy_tree(daos_handle_t tree, const uuid_t uuid)
 	rc = destroy_tree(tree, &key);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DF_DSMS, "cannot find "DF_UUID"\n",
+			D_DEBUG(DB_TRACE, "cannot find "DF_UUID"\n",
 				DP_UUID(uuid));
 		else
 			D_ERROR("failed to destroy "DF_UUID": %d\n",
@@ -975,7 +975,7 @@ dbtree_ec_update(daos_handle_t tree, uint64_t epoch, const uint64_t *count)
 	daos_iov_t	val;
 	int		rc;
 
-	D_DEBUG(DF_DSMS, "updating "DF_U64":"DF_U64"\n", epoch, *count);
+	D_DEBUG(DB_TRACE, "updating "DF_U64":"DF_U64"\n", epoch, *count);
 
 	daos_iov_set(&key, &epoch, sizeof(epoch));
 	daos_iov_set(&val, (void *)count, sizeof(*count));
@@ -999,7 +999,7 @@ dbtree_ec_lookup(daos_handle_t tree, uint64_t epoch, uint64_t *count)
 
 	rc = dbtree_lookup(tree, &key, &val);
 	if (rc == -DER_NONEXIST)
-		D_DEBUG(DF_DSMS, "cannot find "DF_U64"\n", epoch);
+		D_DEBUG(DB_TRACE, "cannot find "DF_U64"\n", epoch);
 	else if (rc != 0)
 		D_ERROR("failed to look up "DF_U64": %d\n", epoch, rc);
 
@@ -1021,7 +1021,7 @@ dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 
 	rc = dbtree_fetch(tree, opc, &key_in, &key_out, &val);
 	if (rc == -DER_NONEXIST)
-		D_DEBUG(DF_DSMS, "cannot find opc=%d in="DF_U64"\n",
+		D_DEBUG(DB_TRACE, "cannot find opc=%d in="DF_U64"\n",
 			opc, epoch_in == NULL ? -1 : *epoch_in);
 	else if (rc != 0)
 		D_ERROR("failed to fetch opc=%d in="DF_U64": %d\n", opc,
@@ -1035,13 +1035,13 @@ dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
 	daos_iov_t	key;
 	int		rc;
 
-	D_DEBUG(DF_DSMS, "deleting "DF_U64"\n", epoch);
+	D_DEBUG(DB_TRACE, "deleting "DF_U64"\n", epoch);
 
 	daos_iov_set(&key, &epoch, sizeof(epoch));
 
 	rc = dbtree_delete(tree, &key);
 	if (rc == -DER_NONEXIST)
-		D_DEBUG(DF_DSMS, "cannot find "DF_U64"\n", epoch);
+		D_DEBUG(DB_TRACE, "cannot find "DF_U64"\n", epoch);
 	else if (rc != 0)
 		D_ERROR("failed to delete "DF_U64": %d\n", epoch, rc);
 

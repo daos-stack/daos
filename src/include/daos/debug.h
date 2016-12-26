@@ -91,20 +91,16 @@ extern bool dd_tune_alloc;
 #define DB_PL		(1 << (CLOG_DPRISHIFT + 5)) /* placement */
 #define DB_MGMT		(1 << (CLOG_DPRISHIFT + 6)) /* management */
 #define DB_EPC		(1 << (CLOG_DPRISHIFT + 7)) /* epoch etc */
-#define DB_TRACE	(1 << (CLOG_DPRISHIFT + 8)) /* function trace */
+/* function trace, tree/hash/lru operations, a very expensive one */
+#define DB_TRACE	(1 << (CLOG_DPRISHIFT + 8))
+#define DB_TEST		(1 << (CLOG_DPRISHIFT + 15)) /* test programs */
 
 /* should be replaced by more reasonable mask, e.g. (DB_IO | DB_MD | DB_PL) */
-#define DB_DEFAULT	DB_ANY
+#define DB_DEFAULT	(DB_IO | DB_MD | DB_PL)
 #define DB_NULL		0
 
 /** XXX Temporary things, should be replaced by debug bits above */
 #define DF_MEM		DB_MEM
-#define DF_CL		DB_ANY
-#define DF_CL2		DB_ANY
-#define DF_CL3		DB_ANY
-#define DF_PL		DB_ANY
-#define DF_PL2		DB_ANY
-#define DF_PL3		DB_ANY
 #define DF_TP		DB_ANY
 #define DF_VOS1		DB_ANY
 #define DF_VOS2		DB_ANY
