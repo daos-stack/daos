@@ -205,12 +205,14 @@ daos2crt_sg(daos_sg_list_t *sgl)
 
 int daos_rpc_send(crt_rpc_t *rpc, daos_event_t *ev);
 
+#define DAOS_DEFAULT_GROUP_ID "daos_server"
+
 static inline int
 daos_group_attach(const char *group_id, crt_group_t **group)
 {
 	D_DEBUG(DB_NET, "attaching to group '%s'\n", group_id);
 	if (group_id == NULL)
-		group_id = CRT_DEFAULT_SRV_GRPID;
+		group_id = DAOS_DEFAULT_GROUP_ID;
 	return crt_group_attach((char *)group_id, group);
 }
 

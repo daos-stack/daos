@@ -45,7 +45,7 @@ enum {
 };
 
 static void
-kill_daos_server(daos_handle_t poh, daos_handle_t eq)
+kill_daos_server(const char *grp, daos_handle_t poh)
 {
 	daos_pool_info_t	info;
 	daos_rank_t		rank;
@@ -65,7 +65,7 @@ kill_daos_server(daos_handle_t poh, daos_handle_t eq)
 		      info.pi_ndisabled);
 
 	/** kill server */
-	rc = daos_mgmt_svc_rip(NULL, rank, true, NULL);
+	rc = daos_mgmt_svc_rip(grp, rank, true, NULL);
 	assert_int_equal(rc, 0);
 
 	/** exclude from the pool */
@@ -167,7 +167,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of updates is half-way inject fault */
 		if (op_kill == UPDATE && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
-			kill_daos_server(arg->poh, arg->eq);
+			kill_daos_server(arg->group, arg->poh);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -195,7 +195,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of lookup is half-way inject fault */
 		if (op_kill == LOOKUP && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
-			kill_daos_server(arg->poh, arg->eq);
+			kill_daos_server(arg->group, arg->poh);
 	}
 	free(rec_verify);
 
@@ -236,7 +236,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of keys enumerated is half-way inject fault */
 		if (op_kill == ENUMERATE && rank == 0 && enum_op &&
 		    g_dkeys > 1 && (key_nr  >= g_dkeys/2)) {
-			kill_daos_server(arg->poh, arg->eq);
+			kill_daos_server(arg->group, arg->poh);
 			enum_op = 0;
 		}
 

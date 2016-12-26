@@ -301,7 +301,7 @@ free_buffers()
 }
 
 static void
-kill_daos_server()
+kill_daos_server(const char *grp)
 {
 	daos_pool_info_t		info;
 	daos_rank_t			rank;
@@ -320,7 +320,7 @@ kill_daos_server()
 	       rank, info.pi_ndisabled, info.pi_ntargets);
 	fflush(stdout);
 
-	rc  = daos_mgmt_svc_rip(NULL, rank, true, NULL);
+	rc  = daos_mgmt_svc_rip(grp, rank, true, NULL);
 	DBENCH_CHECK(rc, "Error in killing server\n");
 
 	targets.rl_nr.num	= 1;
@@ -340,13 +340,13 @@ kill_daos_server()
 }
 
 static inline void
-kill_and_sync()
+kill_and_sync(const char *grp)
 {
 	double start, end;
 
 	start = MPI_Wtime();
 	if (comm_world_rank == 0)
-		kill_daos_server();
+		kill_daos_server(grp);
 	MPI_Barrier(MPI_COMM_WORLD);
 	end = MPI_Wtime();
 	/**
@@ -845,7 +845,7 @@ update_async(struct test *test, int key_type, uint64_t value)
 			if (t_wait > 0)
 				sleep_and_sync();
 			else
-				kill_and_sync();
+				kill_and_sync(test->t_group);
 		}
 		ioreq = get_next_ioreq(test);
 		kv_set_dkey(test, ioreq, key_type, i);
@@ -1056,7 +1056,7 @@ kv_multi_dkey_fetch_run(struct test *test)
 			if (t_wait > 0)
 				sleep_and_sync();
 			else
-				kill_and_sync();
+				kill_and_sync(test->t_group);
 		}
 		ioreq = get_next_ioreq(test);
 		ioreq->r_index = i;
@@ -1112,7 +1112,7 @@ kv_multi_akey_fetch_run(struct test *test)
 			if (t_wait > 0)
 				sleep_and_sync();
 			else
-				kill_and_sync();
+				kill_and_sync(test->t_group);
 		}
 		ioreq = get_next_ioreq(test);
 		ioreq->r_index = i;
@@ -1189,7 +1189,7 @@ kv_dkey_enumerate(struct test *test)
 			if (t_wait > 0)
 				sleep_and_sync();
 			else
-				kill_and_sync();
+				kill_and_sync(test->t_group);
 			enum_pause = true;
 		}
 

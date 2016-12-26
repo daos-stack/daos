@@ -49,7 +49,7 @@ static char		modules[MAX_MODULE_OPTIONS + 1];
 static unsigned int	nr_threads;
 
 /** Server crt group ID */
-static char	       *server_group_id;
+static char	       *server_group_id = DAOS_DEFAULT_GROUP_ID;
 
 /** Storage path (hack) */
 const char	       *storage_path = "/mnt/daos";
