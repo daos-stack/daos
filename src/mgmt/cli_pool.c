@@ -117,7 +117,7 @@ dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
-	D_DEBUG(DF_MGMT, DF_UUID": creating pool\n", DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(uuid));
 
 	/** send the request */
 	rc = daos_rpc_send(rpc_req, ev);
@@ -210,7 +210,7 @@ dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
-	D_DEBUG(DF_MGMT, DF_UUID": destroying pool\n", DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, DF_UUID": destroying pool\n", DP_UUID(uuid));
 
 	/** send the request */
 	rc = daos_rpc_send(rpc_req, ev);

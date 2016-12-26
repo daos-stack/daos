@@ -408,7 +408,7 @@ daos_task_post_process(struct daos_task *task)
 		/* see if the dependent task is ready to be scheduled */
 		D_ASSERT(dtp_tmp->dtp_dep_cnt > 0);
 		dtp_tmp->dtp_dep_cnt--;
-		D_DEBUG(DF_MISC, "daos task %p dep_cnt %d\n", dtp_tmp,
+		D_DEBUG(DB_TRACE, "daos task %p dep_cnt %d\n", dtp_tmp,
 			dtp_tmp->dtp_dep_cnt);
 		if (dtp_tmp->dtp_dep_cnt == 0 && !dsp->dsp_cancelling) {
 			/* If the task is already running, let's mark it
@@ -601,7 +601,7 @@ daos_task_add_dependent(struct daos_task *task, struct daos_task *dep)
 	if (tlink == NULL)
 		return -DER_NOMEM;
 
-	D_DEBUG(DF_MISC, "Add dependent %p ---> %p\n", dep_dtp, dtp);
+	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep_dtp, dtp);
 
 	pthread_mutex_lock(&dtp->dtp_sched->dsp_lock);
 

@@ -117,7 +117,7 @@ modules_load()
 
 		rc = dss_module_load(mod);
 		if (rc != 0) {
-			D_DEBUG(DF_SERVER, "Failed to load module %s: %d\n",
+			D_ERROR("Failed to load module %s: %d\n",
 				mod, rc);
 			break;
 		}
@@ -153,25 +153,25 @@ server_init()
 	if (rc)
 		D_GOTO(exit_debug_init, rc);
 
-	D_DEBUG(DF_SERVER, "Module interface successfully initialized\n");
+	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
 	rc = crt_init(server_group_id, CRT_FLAG_BIT_SERVER);
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
-	D_DEBUG(DF_SERVER, "Network successfully initialized\n");
+	D_INFO("Network successfully initialized\n");
 
 	/* load modules */
 	rc = modules_load();
 	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
-	D_DEBUG(DF_SERVER, "Module %s successfully loaded\n", modules);
+	D_INFO("Module %s successfully loaded\n", modules);
 
 	/* start up service */
 	rc = dss_srv_init(nr_threads);
 	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
-	D_DEBUG(DF_SERVER, "Service is now running\n");
+	D_INFO("Service is now running\n");
 
 	crt_group_rank(NULL, &rank);
 	crt_group_size(NULL, &size);
@@ -193,7 +193,7 @@ exit_debug_init:
 static void
 server_fini(bool force)
 {
-	D_DEBUG(DF_SERVER, "Service is shutting down\n");
+	D_INFO("Service is shutting down\n");
 	dss_srv_fini(force);
 	dss_module_fini(force);
 	crt_finalize();

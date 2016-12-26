@@ -105,7 +105,7 @@ ds_mgmt_init()
 	if (rc)
 		return rc;
 
-	D_DEBUG(DF_MGMT, "successfull init call\n");
+	D_DEBUG(DB_MGMT, "successfull init call\n");
 	return 0;
 }
 
@@ -113,7 +113,7 @@ static int
 ds_mgmt_fini()
 {
 	ds_mgmt_tgt_fini();
-	D_DEBUG(DF_MGMT, "successfull fini call\n");
+	D_DEBUG(DB_MGMT, "successfull fini call\n");
 	return 0;
 }
 

@@ -91,7 +91,7 @@ dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force, daos_event_t *ev)
 		D_GOTO(err_rpc, rc);
 
 	crt_req_addref(rpc); /** for rip_cp */
-	D_DEBUG(DF_MGMT, "killing rank %u\n", rank);
+	D_DEBUG(DB_MGMT, "killing rank %u\n", rank);
 
 	/** send the request */
 	return daos_rpc_send(rpc, ev);

@@ -83,16 +83,17 @@ extern bool dd_tune_alloc;
  * Debug bits for logic path, now we can only have up to 16 different bits,
  * needs to change CaRT and make it support more bits.
  */
-#define DB_ANY		(1 << (CLOG_DPRISHIFT + 0)) /* wildcard for anything */
-#define DB_MEM		(1 << (CLOG_DPRISHIFT + 1)) /* memory operation */
-#define DB_NET		(1 << (CLOG_DPRISHIFT + 2)) /* network operation */
-#define DB_IO		(1 << (CLOG_DPRISHIFT + 3)) /* object I/O */
-#define DB_MD		(1 << (CLOG_DPRISHIFT + 4)) /* metadata operation */
-#define DB_PL		(1 << (CLOG_DPRISHIFT + 5)) /* placement */
-#define DB_MGMT		(1 << (CLOG_DPRISHIFT + 6)) /* management */
-#define DB_EPC		(1 << (CLOG_DPRISHIFT + 7)) /* epoch etc */
+/* wildcard for unclassed debug messages */
+#define DB_ANY		(1 << (CLOG_DPRISHIFT + 0))
 /* function trace, tree/hash/lru operations, a very expensive one */
-#define DB_TRACE	(1 << (CLOG_DPRISHIFT + 8))
+#define DB_TRACE	(1 << (CLOG_DPRISHIFT + 1))
+#define DB_MEM		(1 << (CLOG_DPRISHIFT + 2)) /* memory operation */
+#define DB_NET		(1 << (CLOG_DPRISHIFT + 3)) /* network operation */
+#define DB_IO		(1 << (CLOG_DPRISHIFT + 4)) /* object I/O */
+#define DB_MD		(1 << (CLOG_DPRISHIFT + 5)) /* metadata operation */
+#define DB_PL		(1 << (CLOG_DPRISHIFT + 6)) /* placement */
+#define DB_MGMT		(1 << (CLOG_DPRISHIFT + 7)) /* pool management */
+#define DB_EPC		(1 << (CLOG_DPRISHIFT + 8)) /* epoch system */
 #define DB_TEST		(1 << (CLOG_DPRISHIFT + 15)) /* test programs */
 
 /* should be replaced by more reasonable mask, e.g. (DB_IO | DB_MD | DB_PL) */
@@ -100,17 +101,11 @@ extern bool dd_tune_alloc;
 #define DB_NULL		0
 
 /** XXX Temporary things, should be replaced by debug bits above */
-#define DF_MEM		DB_MEM
-#define DF_TP		DB_ANY
 #define DF_VOS1		DB_ANY
 #define DF_VOS2		DB_ANY
 #define DF_VOS3		DB_ANY
-#define DF_SERVER	DB_ANY
-#define DF_MGMT		DB_ANY
 #define DF_DSMC		DB_ANY
 #define DF_DSMS		DB_ANY
-#define DF_SR		DB_ANY
-#define DF_SRC		DB_ANY
 #define DF_TIER		DB_ANY
 #define DF_TIERC	DB_ANY
 #define DF_TIERS	DB_ANY

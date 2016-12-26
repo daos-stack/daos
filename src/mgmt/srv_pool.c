@@ -391,7 +391,7 @@ tgt_create_cb(const struct crt_cb_info *cb_info)
 	} else {
 		int idx;
 
-		D_DEBUG(DF_MGMT, DF_UUID": tgt "DF_UUID" created on rank %d\n",
+		D_DEBUG(DB_MGMT, DF_UUID": tgt "DF_UUID" created on rank %d\n",
 			DP_UUID(pc_inprog->pc_pool_uuid),
 			DP_UUID(tc_out->tc_tgt_uuid), tc_req->cr_ep.ep_rank);
 
@@ -424,7 +424,7 @@ tgt_create_cb(const struct crt_cb_info *cb_info)
 		int			doms[pc_inprog->pc_tc_num];
 		int			i;
 
-		D_DEBUG(DF_MGMT, DF_UUID": all tgts created, setting up pool "
+		D_DEBUG(DB_MGMT, DF_UUID": all tgts created, setting up pool "
 			"svc\n", DP_UUID(pc_inprog->pc_pool_uuid));
 
 		for (i = 0; i < pc_inprog->pc_tc_num; i++)
@@ -829,7 +829,7 @@ pd_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 	pd_out->pd_rc = pd_inprog->pd_rc;
 
 	if (pd_out->pd_rc == 0)
-		D_DEBUG(DF_MGMT, "Destroying pool "DF_UUID" succeed.\n",
+		D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID" succeed.\n",
 			DP_UUID(pd_in->pd_pool_uuid));
 	else
 		D_ERROR("Destroying pool "DF_UUID"failed, rc: %d.\n",
@@ -876,7 +876,7 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DF_MGMT, "Destroying pool "DF_UUID"\n",
+	D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"\n",
 		DP_UUID(pd_in->pd_pool_uuid));
 
 	/** send MGMT_TGT_DESTROY RPC to tgts */
@@ -917,7 +917,7 @@ out:
 	if (td_req_sent == false) {
 		D_ASSERT(rc != 0);
 		pd_out->pd_rc = rc;
-		D_DEBUG(DF_MGMT, "Destroying pool "DF_UUID"failed, rc: %d.\n",
+		D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"failed, rc: %d.\n",
 			DP_UUID(pd_in->pd_pool_uuid), rc);
 		rc = crt_reply_send(rpc_req);
 		if (rc != 0)

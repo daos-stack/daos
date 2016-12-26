@@ -380,7 +380,7 @@ daos_obj_comp_cb(struct daos_task *task, void *data)
 		return rc;
 	}
 
-	D_DEBUG(DF_MISC, "task %p opc %d fails %d let's retry.\n",
+	D_DEBUG(DB_IO, "task %p opc %d fails %d let's retry.\n",
 		task, arg->opc, rc);
 	/* Let's reset task result before retry */
 	task->dt_result = 0;

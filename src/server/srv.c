@@ -380,7 +380,7 @@ dss_xstreams_fini(bool force)
 	struct dss_xstream	*tmp;
 	int			 rc;
 
-	D_DEBUG(DF_SERVER, "Stopping execution streams\n");
+	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
 
 	/** Stop & free progress xstreams */
 	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list)
@@ -409,7 +409,7 @@ dss_xstreams_fini(bool force)
 	if (rc)
 		D_ERROR("failed to delete dtc: %d\n", rc);
 
-	D_DEBUG(DF_SERVER, "Execution streams stopped\n");
+	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
 }
 
 static void
@@ -452,7 +452,7 @@ dss_xstreams_init(int nr)
 	}
 
 	/* start the execution streams */
-	D_DEBUG(DF_SERVER, "%d cores detected, starting %d execution streams\n",
+	D_DEBUG(DB_TRACE, "%d cores detected, starting %d execution streams\n",
 		ncores, dss_nxstreams);
 	for (i = 1; i <= dss_nxstreams; i++) {
 		hwloc_obj_t	obj;
@@ -468,7 +468,7 @@ dss_xstreams_init(int nr)
 		if (rc)
 			D_GOTO(failed, rc);
 	}
-	D_DEBUG(DF_SERVER, "%d execution streams successfully started\n",
+	D_DEBUG(DB_TRACE, "%d execution streams successfully started\n",
 		dss_nxstreams);
 failed:
 	dss_xstreams_open_barrier();
@@ -628,7 +628,7 @@ dss_srv_fini(bool force)
 		ABT_mutex_free(&xstream_data.xd_mutex);
 		/* fall through */
 	case XD_INIT_NONE:
-		D_DEBUG(DF_SERVER, "Finalized everything\n");
+		D_DEBUG(DB_TRACE, "Finalized everything\n");
 	}
 	return 0;
 }
