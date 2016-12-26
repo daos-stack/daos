@@ -317,7 +317,7 @@ ring_buf_create(struct pl_ring_map *rimap, struct ring_buf **buf_pp)
 			}
 		}
 
-		D_DEBUG(DF_PL, "Found %d targets for %s[%d]\n",
+		D_DEBUG(DB_PL, "Found %d targets for %s[%d]\n",
 			rdom->rd_target_nr, pool_domain_name(&doms[i]),
 			doms[i].do_comp.co_id);
 
@@ -368,7 +368,7 @@ ring_domain_shuffle(struct ring_domain *rdom, unsigned int seed)
 	int		    nr;
 	int		    i;
 
-	D_DEBUG(DF_PL, "Sort %d targets of %s[%d] by version\n",
+	D_DEBUG(DB_PL, "Sort %d targets of %s[%d] by version\n",
 		rdom->rd_target_nr, pool_comp_name(rdom->rd_comp),
 		rdom->rd_comp->co_id);
 
@@ -417,7 +417,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 		return -DER_NOMEM;
 
 	sorter.rs_domains = buf->rb_domains;
-	D_DEBUG(DF_PL, "Sort domains by version\n");
+	D_DEBUG(DB_PL, "Sort domains by version\n");
 	daos_array_sort(&sorter, buf->rb_domain_nr, false,
 			&ring_domain_ver_sops);
 
@@ -467,7 +467,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 		}
 	}
 
-	D_DEBUG(DF_PL, "Copy scratch buffer\n");
+	D_DEBUG(DB_PL, "Copy scratch buffer\n");
 	memcpy(buf->rb_domains, scratch, buf->rb_domain_nr * sizeof(*scratch));
 	D_FREE(scratch, buf->rb_domain_nr * sizeof(*scratch));
 	return 0;
@@ -487,7 +487,7 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 	int		    j;
 	int		    rc;
 
-	D_DEBUG(DF_PL, "Create ring %d [%d targets] for rimap\n",
+	D_DEBUG(DB_PL, "Create ring %d [%d targets] for rimap\n",
 		index, rimap->rmp_target_nr);
 
 	rc = ring_buf_shuffle(rimap, index + 1, buf);
@@ -592,7 +592,7 @@ ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 			goto out;
 	}
 
-	D_DEBUG(DF_PL, "Built %d rings for placement map\n",
+	D_DEBUG(DB_PL, "Built %d rings for placement map\n",
 		rimap->rmp_ring_nr);
  out:
 	if (buf != NULL)
@@ -624,7 +624,7 @@ ring_map_hash_build(struct pl_ring_map *rimap)
 	int		i;
 	unsigned	tg_per_dom;
 
-	D_DEBUG(DF_PL, "Build consistent hash for ring map\n");
+	D_DEBUG(DB_PL, "Build consistent hash for ring map\n");
 	D_ALLOC(rimap->rmp_target_hashes,
 		rimap->rmp_target_nr * sizeof(*rimap->rmp_target_hashes));
 	if (rimap->rmp_target_hashes == NULL)
@@ -643,7 +643,7 @@ ring_map_hash_build(struct pl_ring_map *rimap)
 
 	range = 1ULL << rimap->rmp_target_hbits;
 
-	D_DEBUG(DF_PL, "domanis %d, targets %d, hash range is 0-0x"DF_X64"\n",
+	D_DEBUG(DB_PL, "domanis %d, targets %d, hash range is 0-0x"DF_X64"\n",
 		rimap->rmp_domain_nr, rimap->rmp_target_nr, range);
 
 	/* create consistent hash for targets */
@@ -679,7 +679,7 @@ ring_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	int		    rc;
 
 	D_ASSERT(mia->ia_ring.ring_nr > 0);
-	D_DEBUG(DF_PL, "Create ring map: domain %s, ring_nr: %d\n",
+	D_DEBUG(DB_PL, "Create ring map: domain %s, ring_nr: %d\n",
 		pool_comp_type2str(mia->ia_ring.domain),
 		mia->ia_ring.ring_nr);
 
@@ -851,7 +851,7 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		begin	+= grp_dist * pl_obj_shard2grp_index(shard_md, oc_attr);
 	}
 
-	D_DEBUG(DF_PL,
+	D_DEBUG(DB_PL,
 		"obj="DF_OID"/%u begin=%u dist=%u grp_size=%u grp_nr=%d\n",
 		DP_OID(oid), shard, begin, dist, grp_size, grp_nr);
 

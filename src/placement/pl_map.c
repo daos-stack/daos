@@ -71,12 +71,12 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 	}
 
 	if (dict->pd_type == PL_TYPE_UNKNOWN) {
-		D_DEBUG(DF_PL,
+		D_DEBUG(DB_PL,
 			"Unknown placement map type %d\n", dict->pd_type);
 		return -EINVAL;
 	}
 
-	D_DEBUG(DF_PL, "Create a %s placement map\n", dict->pd_name);
+	D_DEBUG(DB_PL, "Create a %s placement map\n", dict->pd_name);
 
 	rc = dict->pd_ops->o_create(pool_map, mia, &map);
 	if (rc != 0)
@@ -349,7 +349,7 @@ daos_placement_init(struct pool_map *po_map)
 
 	pthread_rwlock_wrlock(&placement_data.pd_lock);
 	if (placement_data.pd_pl_map != NULL) {
-		D_DEBUG(DF_SR, "Placement map has been referenced %d\n",
+		D_DEBUG(DB_PL, "Placement map has been referenced %d\n",
 			placement_data.pd_ref);
 		placement_data.pd_ref++;
 		goto out;

@@ -375,7 +375,7 @@ out_sgl:
 		}
 	}
 
-	D_DEBUG(DF_MISC, "obj"DF_OID" rw inline rc = %d\n",
+	D_DEBUG(DB_IO, "obj"DF_OID" rw inline rc = %d\n",
 		DP_OID(orw->orw_oid.id_pub), rc);
 
 	return rc;
@@ -576,7 +576,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		if (rc != 0)
 			break;
 
-		D_DEBUG(DF_MISC, "get key %s len "DF_U64
+		D_DEBUG(DB_IO, "get key %s len "DF_U64
 			"iov_len "DF_U64" buflen "DF_U64"\n",
 			(char *)key_ent.ie_key.iov_buf, key_ent.ie_key.iov_len,
 			iovs[iovs_idx].iov_len, iovs[iovs_idx].iov_buf_len);

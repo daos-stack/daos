@@ -166,7 +166,7 @@ obj_shard_open(struct dc_object *obj, unsigned int shard, daos_handle_t *oh,
 	/* XXX could be otherwise for some object classes? */
 	D_ASSERT(layout->ol_shards[shard] == shard);
 
-	D_DEBUG(DF_SRC, "Open object shard %d\n", shard);
+	D_DEBUG(DB_IO, "Open object shard %d\n", shard);
 	if (daos_handle_is_inval(obj->cob_mohs[shard])) {
 		daos_unit_oid_t	 oid;
 
@@ -236,17 +236,17 @@ obj_layout_create(struct dc_object *obj)
 
 	map = pl_map_find(obj->cob_coh, obj->cob_md.omd_id);
 	if (map == NULL) {
-		D_DEBUG(DF_SRC, "Cannot find valid placement map\n");
+		D_DEBUG(DB_PL, "Cannot find valid placement map\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
-		D_DEBUG(DF_SRC, "Failed to generate object layout\n");
+		D_DEBUG(DB_PL, "Failed to generate object layout\n");
 		D_GOTO(out, rc);
 	}
-	D_DEBUG(DF_SRC, "Place object on %d targets\n", layout->ol_nr);
+	D_DEBUG(DB_PL, "Place object on %d targets\n", layout->ol_nr);
 
 	D_ASSERT(obj->cob_layout == NULL);
 	obj->cob_layout = layout;
@@ -557,7 +557,7 @@ dc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		D_GOTO(out_put, rc);
 	}
 
-	D_DEBUG(DF_MISC, "fetch "DF_OID" shard %u\n",
+	D_DEBUG(DB_IO, "fetch "DF_OID" shard %u\n",
 		DP_OID(obj->cob_md.omd_id), shard);
 	rc = dc_obj_shard_fetch(shard_oh, epoch, dkey, nr, iods, sgls,
 				maps, map_ver, task);
@@ -600,7 +600,7 @@ dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		D_GOTO(out_task, rc);
 	}
 
-	D_DEBUG(DF_MISC, "update "DF_OID" start %u cnt %u\n",
+	D_DEBUG(DB_IO, "update "DF_OID" start %u cnt %u\n",
 		DP_OID(obj->cob_md.omd_id), shard, shards_cnt);
 
 	rc = daos_task_register_comp_cb(task, dc_obj_task_cb, obj);
@@ -701,7 +701,7 @@ dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	for (i = 0; i < real_shards; i++) {
 		rc = dc_obj_shard_update(shard_ohs[i], epoch, dkey, nr,
 					 iods, sgls, map_ver, shard_tasks[i]);
-		D_DEBUG(DF_MISC, "update "DF_OID" shard %u : rc %d\n",
+		D_DEBUG(DB_IO, "update "DF_OID" shard %u : rc %d\n",
 			DP_OID(obj->cob_md.omd_id), shard, rc);
 		dc_obj_shard_close(shard_ohs[i]);
 	}
@@ -742,18 +742,18 @@ dc_obj_list_dkey_cb(struct daos_task *task, void *data)
 	D_ASSERT(grp_size > 0);
 
 	if (!daos_hash_is_eof(anchor)) {
-		D_DEBUG(DF_SRC, "More keys in shard %d\n", shard);
+		D_DEBUG(DB_IO, "More keys in shard %d\n", shard);
 		enum_anchor_set_shard(anchor, shard);
 	} else if (shard < obj->cob_layout->ol_nr - grp_size) {
 		shard += grp_size;
-		D_DEBUG(DF_SRC, "next shard %d grp %d nr %u\n",
+		D_DEBUG(DB_IO, "next shard %d grp %d nr %u\n",
 			shard, grp_size, obj->cob_layout->ol_nr);
 
 		enum_anchor_reset_hkey(anchor);
 		enum_anchor_set_tag(anchor, 0);
 		enum_anchor_set_shard(anchor, shard);
 	} else {
-		D_DEBUG(DF_SRC, "Enumerated All shards\n");
+		D_DEBUG(DB_IO, "Enumerated All shards\n");
 	}
 	return rc;
 }
@@ -769,7 +769,7 @@ dc_obj_list_akey_cb(struct daos_task *task, void *data)
 		return rc;
 
 	if (daos_hash_is_eof(anchor))
-		D_DEBUG(DF_SRC, "Enumerated All shards\n");
+		D_DEBUG(DB_IO, "Enumerated All shards\n");
 
 	return 0;
 }
@@ -788,7 +788,7 @@ dc_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	int			rc;
 
 	if (nr == NULL || *nr == 0 || kds == NULL || sgl == NULL) {
-		D_DEBUG(DF_SRC, "Invalid API parameter.\n");
+		D_DEBUG(DB_IO, "Invalid API parameter.\n");
 		D_GOTO(out_task, rc = -DER_INVAL);
 	}
 
@@ -832,7 +832,7 @@ dc_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 				   kds, sgl, anchor, map_ver, task);
 
 	dc_obj_shard_close(shard_oh);
-	D_DEBUG(DF_SRC, "Enumerate keys in shard %d: rc %d\n",
+	D_DEBUG(DB_IO, "Enumerate keys in shard %d: rc %d\n",
 		shard, rc);
 
 	return rc;
