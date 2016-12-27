@@ -25,7 +25,10 @@
  */
 
 #define DD_SUBSYS	DD_FAC(tests)
+
 #include "daos_test.h"
+
+#define MUST(rc) assert_int_equal(rc, 0)
 
 static void
 assert_epoch_state_equal(daos_epoch_state_t *a, daos_epoch_state_t *b)
@@ -38,341 +41,444 @@ assert_epoch_state_equal(daos_epoch_state_t *a, daos_epoch_state_t *b)
 	assert_int_equal(a->es_ghpce, b->es_ghpce);
 }
 
-static void
-epoch_query(void **state)
+static int
+cont_create(test_arg_t *arg, uuid_t uuid)
 {
-	test_arg_t		*arg = *state;
-	daos_epoch_state_t	 epoch_state;
-	daos_event_t		 ev;
-	daos_event_t		*evp;
-	int			 rc;
+	uuid_generate(uuid);
+	print_message("creating container "DF_UUIDF"\n", DP_UUID(uuid));
+	return daos_cont_create(arg->poh, uuid, NULL);
+}
 
-	if (arg->async) {
-		rc = daos_event_init(&ev, arg->eq, NULL);
-		assert_int_equal(rc, 0);
-	}
+static int
+cont_destroy(test_arg_t *arg, const uuid_t uuid)
+{
+	print_message("destroying container "DF_UUID"\n", DP_UUID(uuid));
+	return daos_cont_destroy(arg->poh, uuid, 1, NULL);
+}
+
+static int
+cont_open(test_arg_t *arg, const uuid_t uuid, unsigned int flags,
+	  daos_handle_t *coh)
+{
+	print_message("opening container "DF_UUIDF" (flags=%X)\n",
+		      DP_UUID(uuid), flags);
+	return daos_cont_open(arg->poh, uuid, flags, coh, &arg->co_info, NULL);
+}
+
+static int
+cont_close(test_arg_t *arg, daos_handle_t coh)
+{
+	print_message("closing container\n");
+	return daos_cont_close(coh, NULL);
+}
+
+static int
+epoch_query(test_arg_t *arg, daos_handle_t coh, daos_epoch_state_t *state)
+{
+	daos_event_t	ev;
+	daos_event_t   *evp;
+	int		rc;
 
 	print_message("querying epoch state %ssynchronously ...\n",
 		      arg->async ? "a" : "");
-
-	rc = daos_epoch_query(arg->coh, &epoch_state, arg->async ? &ev : NULL);
-	assert_int_equal(rc, 0);
-
+	if (arg->async)
+		MUST(daos_event_init(&ev, arg->eq, NULL));
+	rc = daos_epoch_query(coh, state, arg->async ? &ev : NULL);
 	if (arg->async) {
+		assert_int_equal(rc, 0);
 		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
 		assert_int_equal(rc, 1);
 		assert_ptr_equal(evp, &ev);
-		assert_int_equal(ev.ev_error, 0);
-
-		rc = daos_event_fini(&ev);
-		assert_int_equal(rc, 0);
+		rc = ev.ev_error;
+		MUST(daos_event_fini(&ev));
 	}
-
-	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
+	return rc;
 }
 
 static int
-do_epoch_hold(test_arg_t *arg, daos_handle_t coh, daos_epoch_t *epoch,
-	      daos_epoch_state_t *state)
+epoch_hold(test_arg_t *arg, daos_handle_t coh, daos_epoch_t *epoch,
+	   daos_epoch_state_t *state)
 {
 	daos_event_t	ev;
 	daos_event_t   *evp;
 	int		rc;
-
-	if (arg->async) {
-		rc = daos_event_init(&ev, arg->eq, NULL);
-		assert_int_equal(rc, 0);
-	}
 
 	print_message("holding epoch "DF_U64" %ssynchronously ...\n", *epoch,
 		      arg->async ? "a" : "");
-
+	if (arg->async)
+		MUST(daos_event_init(&ev, arg->eq, NULL));
 	rc = daos_epoch_hold(coh, epoch, state, arg->async ? &ev : NULL);
-
 	if (arg->async) {
 		assert_int_equal(rc, 0);
-
 		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
 		assert_int_equal(rc, 1);
 		assert_ptr_equal(evp, &ev);
-
 		rc = ev.ev_error;
-
-		assert_int_equal(daos_event_fini(&ev), 0);
+		MUST(daos_event_fini(&ev));
 	}
-
 	return rc;
 }
 
 static int
-do_epoch_slip(test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
-	      daos_epoch_state_t *state)
+epoch_slip(test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
+	   daos_epoch_state_t *state)
 {
 	daos_event_t	ev;
 	daos_event_t   *evp;
 	int		rc;
-
-	if (arg->async) {
-		rc = daos_event_init(&ev, arg->eq, NULL);
-		assert_int_equal(rc, 0);
-	}
 
 	print_message("sliping to epoch "DF_U64" %ssynchronously ...\n", epoch,
 		      arg->async ? "a" : "");
-
+	if (arg->async)
+		MUST(daos_event_init(&ev, arg->eq, NULL));
 	rc = daos_epoch_slip(coh, epoch, state, arg->async ? &ev : NULL);
-
 	if (arg->async) {
 		assert_int_equal(rc, 0);
-
 		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
 		assert_int_equal(rc, 1);
 		assert_ptr_equal(evp, &ev);
-
 		rc = ev.ev_error;
-
-		assert_int_equal(daos_event_fini(&ev), 0);
+		MUST(daos_event_fini(&ev));
 	}
-
 	return rc;
 }
 
 static int
-do_epoch_commit(test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
-		daos_epoch_state_t *state)
+epoch_commit(test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
+	     daos_epoch_state_t *state)
 {
 	daos_event_t	ev;
 	daos_event_t   *evp;
 	int		rc;
 
-	if (arg->async) {
-		rc = daos_event_init(&ev, arg->eq, NULL);
-		assert_int_equal(rc, 0);
-	}
-
 	print_message("committing epoch "DF_U64" %ssynchronously ...\n",
 		      epoch, arg->async ? "a" : "");
-
+	if (arg->async)
+		MUST(daos_event_init(&ev, arg->eq, NULL));
 	rc = daos_epoch_commit(coh, epoch, state, arg->async ? &ev : NULL);
-
 	if (arg->async) {
 		assert_int_equal(rc, 0);
-
 		rc = daos_eq_poll(arg->eq, 1, DAOS_EQ_WAIT, 1, &evp);
 		assert_int_equal(rc, 1);
 		assert_ptr_equal(evp, &ev);
-
 		rc = ev.ev_error;
-
-		assert_int_equal(daos_event_fini(&ev), 0);
+		MUST(daos_event_fini(&ev));
 	}
-
 	return rc;
 }
 
 static void
-epoch_hold_commit(void **state)
+test_epoch_init(void **varg)
 {
-	test_arg_t		*arg = *state;
-	daos_epoch_state_t	 epoch_state;
-	daos_epoch_t		 epoch;
-	daos_epoch_t		 epoch_expected;
-#if 0
-	daos_handle_t		 second_coh;
-	daos_epoch_t		 second_epoch;
-#endif
-	int			 rc;
+	test_arg_t	       *arg = *varg;
+	uuid_t			cont_uuid;
+	daos_handle_t		coh;
+	daos_epoch_state_t     *state = &arg->co_info.ci_epoch_state;
 
-	assert_int_equal(arg->co_info.ci_epoch_state.es_lhe, DAOS_EPOCH_MAX);
-
-	print_message("SUBTEST 1: commit to an unheld epoch: shall get %d\n",
-		      -DER_EP_RO);
-	epoch = arg->co_info.ci_epoch_state.es_hce + 22;
-	rc = do_epoch_commit(arg, arg->coh, epoch, &epoch_state);
-	assert_int_equal(rc, -DER_EP_RO);
-
-	print_message("SUBTEST 2: hold that epoch: shall succeed.\n");
-	epoch_expected = epoch;
-	rc = do_epoch_hold(arg, arg->coh, &epoch, &epoch_state);
-	assert_int_equal(rc, 0);
-	assert_int_equal(epoch, epoch_state.es_lhe);
-	assert_int_equal(epoch, epoch_expected);
-	arg->co_info.ci_epoch_state.es_lhe = epoch;
-	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
-
-	print_message("SUBTEST 3: retry committing to a higher epoch, which is "
-		      "held already by subtest 2: shall succeed.\n");
-	epoch += 22;
-	rc = do_epoch_commit(arg, arg->coh, epoch, &epoch_state);
-	assert_int_equal(rc, 0);
-	assert_int_equal(epoch_state.es_hce, epoch);
-	assert_int_equal(epoch_state.es_lre, epoch);
-	assert_int_equal(epoch_state.es_lhe, epoch + 1);
-	assert_int_equal(epoch_state.es_ghce, epoch);
-	assert_int_equal(epoch_state.es_glre, epoch);
-	assert_int_equal(epoch_state.es_ghpce, epoch);
-	arg->co_info.ci_epoch_state = epoch_state;
-
-#if 0 /* Disable until multiple handles are supported. */
-	print_message("SUBTEST 4: hold an epoch <= GHPCE: shall succeed and "
-		      "end up holding GHPCE + 1.\n");
-	/*
-	 * Open a second handle and commit to an epoch higher than the previous
-	 * handle's HCE.
-	 */
-	second_epoch = arg->co_info.ci_epoch_state.es_hce + 1000;
-	rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &second_coh,
-			    NULL /* info */, NULL /* ev */);
-	assert_int_equal(rc, 0);
-	rc = daos_epoch_hold(second_coh, &second_epoch, NULL /* state */,
-			     NULL /* ev */);
-	assert_int_equal(rc, 0);
-	assert_int_equal(second_epoch,
-			 arg->co_info.ci_epoch_state.es_hce + 1000);
-	rc = daos_epoch_commit(second_coh, second_epoch, NULL /* state */,
-			       NULL /* ev */);
-	assert_int_equal(rc, 0);
-	/* Attempt to hold an epoch <= GHPCE with the original handle. */
-	epoch = arg->co_info.ci_epoch_state.es_hce + 1;
-	epoch_expected = second_epoch + 1;
-	rc = do_epoch_hold(arg, arg->coh, &epoch, &epoch_state);
-	assert_int_equal(rc, 0);
-	assert_int_equal(epoch, epoch_state.es_lhe);
-	assert_int_equal(epoch, epoch_expected);
-	arg->co_info.ci_epoch_state.es_lhe = epoch;
-	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
-	rc = daos_cont_close(second_coh, NULL /* ev */);
-	assert_int_equal(rc, 0);
-#endif
-
-	print_message("SUBTEST 5: release the hold: shall succeed.\n");
-	epoch = DAOS_EPOCH_MAX;
-	rc = do_epoch_hold(arg, arg->coh, &epoch, &epoch_state);
-	assert_int_equal(rc, 0);
-	assert_int_equal(epoch, epoch_state.es_lhe);
-	assert_int_equal(epoch, DAOS_EPOCH_MAX);
-	arg->co_info.ci_epoch_state.es_lhe = epoch;
-	assert_epoch_state_equal(&epoch_state, &arg->co_info.ci_epoch_state);
-
-	print_message("SUBTEST 6: hold on epoch < lhe, shall succeed\n");
-	epoch = 0;
-	rc = do_epoch_hold(arg, arg->coh, &epoch, &epoch_state);
-	assert_int_equal(rc, 0);
-	assert_int_equal(epoch, epoch_state.es_lhe);
-	epoch = 22;
-	rc = do_epoch_hold(arg, arg->coh, &epoch, &epoch_state);
-	assert_int_equal(rc, 0);
-	assert_int_equal(epoch, epoch_state.es_lhe);
-
-	print_message("SUBTEST 7: close and open the container again: shall "
-		      "succeed and report correct GLRE.\n");
-	rc = daos_cont_close(arg->coh, NULL);
-	assert_int_equal(rc, 0);
-	rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW, &arg->coh,
-			    &arg->co_info, NULL);
-	assert_int_equal(rc, 0);
-	assert_int_equal(arg->co_info.ci_epoch_state.es_hce,
-			 epoch_state.es_hce);
-	assert_int_equal(arg->co_info.ci_epoch_state.es_lre,
-			 epoch_state.es_hce);
-	assert_int_equal(arg->co_info.ci_epoch_state.es_lhe, DAOS_EPOCH_MAX);
-	assert_int_equal(arg->co_info.ci_epoch_state.es_ghce,
-			 epoch_state.es_ghce);
-	assert_int_equal(arg->co_info.ci_epoch_state.es_glre,
-			 arg->co_info.ci_epoch_state.es_lre);
-	assert_int_equal(arg->co_info.ci_epoch_state.es_ghpce,
-			 arg->co_info.ci_epoch_state.es_hce);
+	MUST(cont_create(arg, cont_uuid));
+	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
+	assert_int_equal(state->es_hce, state->es_ghce);
+	assert_int_equal(state->es_lre, state->es_ghce);
+	assert_int_equal(state->es_lhe, DAOS_EPOCH_MAX);
+	assert_int_equal(state->es_ghce, 0);
+	assert_int_equal(state->es_glre, 0);
+	assert_int_equal(state->es_ghpce, 0);
+	MUST(cont_close(arg, coh));
+	MUST(cont_destroy(arg, cont_uuid));
 }
 
 static void
-epoch_slip(void **argp)
+test_epoch_query(void **varg)
 {
-	test_arg_t		*arg = *argp;
-	uuid_t			 uuid;
-	daos_handle_t		 coh;
-	daos_cont_info_t	 info;
-	daos_epoch_state_t	 epoch_state;
-	daos_epoch_t		 epoch;
-	int			 rc;
+	test_arg_t	       *arg = *varg;
+	uuid_t			cont_uuid;
+	daos_handle_t		coh;
+	daos_epoch_state_t	state;
 
-	/*
-	 * Without DAOS_COO_NOSLIP, very little can we test about
-	 * daos_epoch_slip().
-	 */
-	uuid_generate(uuid);
-	print_message("creating container "DF_UUIDF" and opening with "
-		      "DAOS_COO_NOSLIP\n", DP_UUID(uuid));
-	rc = daos_cont_create(arg->poh, uuid, NULL);
-	assert_int_equal(rc, 0);
-	rc = daos_cont_open(arg->poh, uuid, DAOS_COO_RW | DAOS_COO_NOSLIP,
-			    &coh, &info, NULL);
-	assert_int_equal(rc, 0);
+	MUST(cont_create(arg, cont_uuid));
+	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
+	MUST(epoch_query(arg, coh, &state));
+	assert_epoch_state_equal(&state, &arg->co_info.ci_epoch_state);
+	MUST(cont_close(arg, coh));
+	MUST(cont_destroy(arg, cont_uuid));
+}
+
+static void
+test_epoch_hold(void **varg)
+{
+	test_arg_t	       *arg = *varg;
+	uuid_t			cont_uuid;
+	daos_handle_t		coh;
+	daos_epoch_t		epoch;
+	daos_epoch_state_t	state;
+	daos_epoch_state_t	state_tmp;
+
+	MUST(cont_create(arg, cont_uuid));
+	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
+
+	print_message("simple hold shall succeed\n");
+	epoch = 10;
+	MUST(epoch_hold(arg, coh, &epoch, &state));
+	assert_int_equal(epoch, 10);
+	/* Only this shall change. */
+	arg->co_info.ci_epoch_state.es_lhe = epoch;
+	assert_epoch_state_equal(&state, &arg->co_info.ci_epoch_state);
+
+	print_message("release some epochs shall succeed\n");
+	epoch = 20;
+	state_tmp = state;
+	MUST(epoch_hold(arg, coh, &epoch, &state));
+	assert_int_equal(epoch, 20);
+	/* Only this shall change. */
+	state_tmp.es_lhe = epoch;
+	assert_epoch_state_equal(&state, &state_tmp);
+
+	print_message("simple release shall succeed\n");
+	epoch = DAOS_EPOCH_MAX;
+	state_tmp = state;
+	MUST(epoch_hold(arg, coh, &epoch, &state));
+	assert_int_equal(epoch, DAOS_EPOCH_MAX);
+	/* Only this shall change. */
+	state_tmp.es_lhe = epoch;
+	assert_epoch_state_equal(&state, &state_tmp);
+
+	MUST(cont_close(arg, coh));
+	MUST(cont_destroy(arg, cont_uuid));
+}
+
+static void
+test_epoch_commit(void **varg)
+{
+	test_arg_t	       *arg = *varg;
+	uuid_t			cont_uuid;
+	daos_handle_t		coh;
+	daos_epoch_t		epoch;
+	daos_epoch_state_t	state;
+	daos_epoch_state_t	state_tmp;
+	int			rc;
+
+	MUST(cont_create(arg, cont_uuid));
+	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh));
 
 	epoch = 10;
-	print_message("holding and committing to epoch "DF_U64"\n", epoch);
-	rc = do_epoch_hold(arg, coh, &epoch, &info.ci_epoch_state);
-	assert_int_equal(rc, 0);
-	rc = do_epoch_commit(arg, coh, epoch, &info.ci_epoch_state);
-	assert_int_equal(rc, 0);
-	assert_int_equal(info.ci_epoch_state.es_hce, epoch);
-	assert_int_equal(info.ci_epoch_state.es_lre, 0);
-	assert_int_equal(info.ci_epoch_state.es_glre, 0);
+	MUST(epoch_hold(arg, coh, &epoch, &state_tmp));
 
-	print_message("SUBTEST 1: slip to 0 shall be no-op\n");
-	epoch = 0;
-	rc = do_epoch_slip(arg, coh, epoch, &epoch_state);
-	assert_int_equal(rc, 0);
-	assert_epoch_state_equal(&epoch_state, &info.ci_epoch_state);
+	print_message("committing an unheld epoch shall get %d\n", -DER_EP_RO);
+	epoch = 9;
+	rc = epoch_commit(arg, coh, epoch, &state);
+	assert_int_equal(rc, -DER_EP_RO);
+	/* The epoch state shall stay the same. */
+	MUST(epoch_query(arg, coh, &state));
+	assert_epoch_state_equal(&state, &state_tmp);
 
-	print_message("SUBTEST 2: slip to (LRE, HCE)\n");
-	epoch = info.ci_epoch_state.es_lre + 1;
-	assert_true(epoch < info.ci_epoch_state.es_hce);
-	rc = do_epoch_slip(arg, coh, epoch, &epoch_state);
-	assert_int_equal(rc, 0);
-	assert_int_equal(epoch_state.es_lre, epoch);
-	assert_int_equal(epoch_state.es_glre, epoch);
-	info.ci_epoch_state.es_lre = epoch_state.es_lre;
-	info.ci_epoch_state.es_glre = epoch_state.es_glre;
-	assert_epoch_state_equal(&epoch_state, &info.ci_epoch_state);
+	print_message("committing a held epoch shall succeed\n");
+	epoch = 10;
+	MUST(epoch_commit(arg, coh, epoch, &state));
+	assert_int_equal(state.es_hce, epoch);
+	assert_int_equal(state.es_lre, epoch);
+	assert_int_equal(state.es_lhe, epoch + 1);
+	assert_int_equal(state.es_ghce, epoch);
+	assert_int_equal(state.es_glre, epoch);
+	assert_int_equal(state.es_ghpce, epoch);
 
-	print_message("SUBTEST 3: slip to DAOS_EPOCH_MAX - 1 shall get HCE\n");
-	epoch = DAOS_EPOCH_MAX - 1;
-	assert_true(epoch > info.ci_epoch_state.es_hce);
-	rc = do_epoch_slip(arg, coh, epoch, &epoch_state);
-	assert_int_equal(rc, 0);
-	assert_int_equal(epoch_state.es_lre, info.ci_epoch_state.es_hce);
-	assert_int_equal(epoch_state.es_glre, info.ci_epoch_state.es_hce);
-	info.ci_epoch_state.es_lre = epoch_state.es_lre;
-	info.ci_epoch_state.es_glre = epoch_state.es_glre;
-	assert_epoch_state_equal(&epoch_state, &info.ci_epoch_state);
+	print_message("committing an already committed epoch shall succeed\n");
+	epoch = 8;
+	state_tmp = state;
+	MUST(epoch_commit(arg, coh, epoch, &state));
+	/* The epoch state shall stay the same. */
+	assert_epoch_state_equal(&state, &state_tmp);
 
-	print_message("closing and destroying container "DF_UUIDF"\n",
-		      DP_UUID(uuid));
-	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
-	rc = daos_cont_destroy(arg->poh, uuid, 1, NULL);
-	assert_int_equal(rc, 0);
+	MUST(cont_close(arg, coh));
+	MUST(cont_destroy(arg, cont_uuid));
+}
+
+static void
+test_epoch_slip(void **argp)
+{
+	test_arg_t	       *arg = *argp;
+	uuid_t			cont_uuid;
+	daos_handle_t		coh;
+	daos_epoch_t		epoch;
+	daos_epoch_state_t	state;
+	daos_epoch_state_t	state_tmp;
+
+	MUST(cont_create(arg, cont_uuid));
+	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP,
+		       &coh));
+
+	epoch = 10;
+	MUST(epoch_hold(arg, coh, &epoch, &state));
+	MUST(epoch_commit(arg, coh, epoch, &state));
+
+	print_message("slip to (LRE, MAX) shall succeed\n");
+	epoch = 5; /* LRE = 0 and GHCE = 10 */
+	assert_true(state.es_lre < epoch && epoch < state.es_hce);
+	state_tmp = state;
+	MUST(epoch_slip(arg, coh, epoch, &state));
+	state_tmp.es_lre = epoch;
+	state_tmp.es_glre = epoch;
+	assert_epoch_state_equal(&state, &state_tmp);
+
+	print_message("slip to [0, LRE] shall be no-op\n");
+	epoch = 3; /* LRE = 5 */;
+	state_tmp = state;
+	MUST(epoch_slip(arg, coh, epoch, &state));
+	assert_epoch_state_equal(&state, &state_tmp);
+
+	MUST(cont_close(arg, coh));
+	MUST(cont_destroy(arg, cont_uuid));
+}
+
+static void
+test_epoch_commit_complex(void **varg)
+{
+	test_arg_t	       *arg = *varg;
+	uuid_t			cont_uuid;
+	daos_handle_t		coh_1;
+	daos_handle_t		coh_2;
+	daos_epoch_t		epoch_1;
+	daos_epoch_t		epoch_2;
+	daos_epoch_state_t	state_1;
+	daos_epoch_state_t	state_2;
+	daos_epoch_state_t	state_tmp;
+
+	MUST(cont_create(arg, cont_uuid));
+	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh_1));
+	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh_2));
+
+	epoch_2 = 20;
+	MUST(epoch_hold(arg, coh_2, &epoch_2, &state_2));
+
+	print_message("GHCE shall increase below coh_2's LHE\n");
+	epoch_1 = 10; /* state_2.es_lhe = 20 */
+	MUST(epoch_hold(arg, coh_1, &epoch_1, &state_1));
+	MUST(epoch_commit(arg, coh_1, epoch_1, &state_1));
+	assert_int_equal(state_1.es_hce, epoch_1);
+	assert_int_equal(state_1.es_lre, epoch_1);
+	assert_int_equal(state_1.es_lhe, epoch_1 + 1);
+	assert_int_equal(state_1.es_ghce, state_1.es_hce);
+	assert_int_equal(state_1.es_glre, state_2.es_lre);
+	assert_int_equal(state_1.es_ghpce, state_1.es_hce);
+
+	print_message("GHCE shall be blocked by coh_2's LHE\n");
+	epoch_1 = 30; /* state_2.es_lhe = 20 */
+	MUST(epoch_commit(arg, coh_1, epoch_1, &state_1));
+	assert_int_equal(state_1.es_hce, epoch_1);
+	assert_int_equal(state_1.es_lre, epoch_1);
+	assert_int_equal(state_1.es_lhe, epoch_1 + 1);
+	assert_int_equal(state_1.es_ghce, state_2.es_lhe - 1);
+	assert_int_equal(state_1.es_glre, state_2.es_lre);
+	assert_int_equal(state_1.es_ghpce, state_1.es_hce);
+
+	print_message("GHCE shall catch up once coh_2 releases some of its "
+		      "held epochs\n");
+	epoch_2 = 25; /* state_2.es_lhe = 20 and state_1.es_hce = 30 */
+	MUST(epoch_commit(arg, coh_2, epoch_2, &state_2));
+	assert_int_equal(state_2.es_hce, epoch_2);
+	assert_int_equal(state_2.es_lre, epoch_2);
+	assert_int_equal(state_2.es_lhe, epoch_2 + 1);
+	assert_int_equal(state_2.es_ghce, state_2.es_hce);
+	assert_int_equal(state_2.es_glre, state_2.es_lre);
+	assert_int_equal(state_2.es_ghpce, state_1.es_hce);
+
+	print_message("GHPCE shall not decrease when coh_1 is closed\n");
+	MUST(cont_close(arg, coh_1));
+	state_tmp = state_2;
+	MUST(epoch_query(arg, coh_2, &state_2));
+	/* The epoch state, especially GHPCE, shall not change. */
+	assert_epoch_state_equal(&state_2, &state_tmp);
+
+	print_message("GHCE shall catch up once coh_2 releases its hold\n");
+	epoch_2 = 27; /* state_2.es_hce = GHCE = 25 and GHPCE = 30 */
+	MUST(epoch_commit(arg, coh_2, epoch_2, &state_2));
+	assert_int_equal(state_2.es_hce, epoch_2);
+	assert_int_equal(state_2.es_lre, epoch_2);
+	assert_int_equal(state_2.es_lhe, epoch_2 + 1);
+	assert_int_equal(state_2.es_ghce, state_2.es_lhe - 1);
+	assert_int_equal(state_2.es_glre, state_2.es_lre);
+	assert_int_equal(state_2.es_ghpce, state_1.es_hce);
+
+	print_message("GHCE shall catch up to GHPCE once coh_2 is closed\n");
+	/* state_2.es_hce = GHCE = 27, state_2.es_lhe = 28, and GHPCE = 30 */
+	MUST(cont_close(arg, coh_2));
+	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh_1));
+	assert_int_equal(arg->co_info.ci_epoch_state.es_ghce, state_2.es_ghpce);
+	MUST(cont_close(arg, coh_1));
+
+	MUST(cont_destroy(arg, cont_uuid));
+}
+
+static void
+test_epoch_hold_complex(void **varg)
+{
+	test_arg_t	       *arg = *varg;
+	uuid_t			cont_uuid;
+	daos_handle_t		coh_1;
+	daos_handle_t		coh_2;
+	daos_epoch_t		epoch_1;
+	daos_epoch_t		epoch_2;
+	daos_epoch_state_t	state_1;
+	daos_epoch_state_t	state_2;
+
+	MUST(cont_create(arg, cont_uuid));
+	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh_1));
+	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW, &coh_2));
+
+	epoch_1 = 10;
+	MUST(epoch_hold(arg, coh_1, &epoch_1, &state_1));
+	MUST(epoch_commit(arg, coh_1, epoch_1, &state_1));
+	assert_int_equal(state_1.es_ghpce, epoch_1);
+
+	print_message("holding zero shall succeed with LHE = GHPCE + 1");
+	epoch_2 = 0; /* GHPCE = 10 */
+	MUST(epoch_hold(arg, coh_2, &epoch_2, &state_2));
+	assert_int_equal(epoch_2, state_1.es_ghpce + 1);
+	assert_int_equal(state_2.es_lhe, state_1.es_ghpce + 1);
+
+	epoch_2 = DAOS_EPOCH_MAX;
+	MUST(epoch_hold(arg, coh_2, &epoch_2, &state_2));
+	assert_int_equal(epoch_2, DAOS_EPOCH_MAX);
+
+	print_message("holding (0, GHPCE] shall succeed with LHE = GHPCE + 1");
+	epoch_2 = 5; /* GHPCE = 10 */
+	MUST(epoch_hold(arg, coh_2, &epoch_2, &state_2));
+	assert_int_equal(epoch_2, state_1.es_ghpce + 1);
+	assert_int_equal(state_2.es_lhe, state_1.es_ghpce + 1);
+
+	MUST(cont_close(arg, coh_2));
+	MUST(cont_close(arg, coh_1));
+	MUST(cont_destroy(arg, cont_uuid));
 }
 
 static const struct CMUnitTest epoch_tests[] = {
-	{ "EPOCH1: epoch_query",		/* must be first */
-	  epoch_query, async_disable, NULL},
-	{ "EPOCH2: epoch_query (async)",	/* must be second */
-	  epoch_query, async_enable, NULL},
-	{ "EPOCH3: epoch_hold_commit",
-	  epoch_hold_commit, async_disable, NULL},
-	{ "EPOCH4: epoch_hold_commit (async)",
-	  epoch_hold_commit, async_enable, NULL},
-	{ "EPOCH5: epoch_slip",
-	  epoch_slip, async_disable, NULL},
-	{ "EPOCH6: epoch_slip (async)",
-	  epoch_slip, async_enable, NULL}
+	{ "EPOCH1: initial state when opening a new container",
+	  test_epoch_init, async_disable, NULL},
+	{ "EPOCH2: epoch_query",
+	  test_epoch_query, async_disable, NULL},
+	{ "EPOCH3: epoch_query (async)",
+	  test_epoch_query, async_enable, NULL},
+	{ "EPOCH4: epoch_hold",
+	  test_epoch_hold, async_disable, NULL},
+	{ "EPOCH5: epoch_hold (async)",
+	  test_epoch_hold, async_enable, NULL},
+	{ "EPOCH6: epoch_commit",
+	  test_epoch_commit, async_disable, NULL},
+	{ "EPOCH7: epoch_commit (async)",
+	  test_epoch_commit, async_enable, NULL},
+	{ "EPOCH8: epoch_slip",
+	  test_epoch_slip, async_disable, NULL},
+	{ "EPOCH9: epoch_slip (async)",
+	  test_epoch_slip, async_enable, NULL},
+	{ "EPOCH10: epoch_commit complex (multiple writers)",
+	  test_epoch_commit_complex, async_disable, NULL},
+	{ "EPOCH11: epoch_hold complex (multiple writers)",
+	  test_epoch_hold_complex, async_disable, NULL}
 };
 
 static int
 setup(void **state)
 {
-	return test_setup(state, SETUP_CONT_CONNECT, false);
+	return test_setup(state, SETUP_POOL_CONNECT, false);
 }
 
 int

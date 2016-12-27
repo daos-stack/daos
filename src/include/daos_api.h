@@ -261,7 +261,8 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev);
  * Open an existing container identified by UUID \a uuid. Upon successful
  * completion, \a coh and \a info, both of which shall be allocated by the
  * caller, return the container handle and the latest container information
- * respectively.
+ * respectively. The resulting container handle has an HCE equal to GHCE, an
+ * LHE equal to DAOS_EPOCH_MAX, and an LRE equal to GHCE.
  *
  * \param poh	[IN]	Pool connection handle.
  * \param uuid	[IN]	UUID to identify container.
@@ -284,7 +285,9 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
 
 /**
- * Close an opened container.
+ * Close a container handle. Upon successful completion, the container handle's
+ * epoch hold (i.e., if LHE < DAOS_EPOCH_MAX) is released, and any uncommitted
+ * updates from the container handle are discarded.
  *
  * \param coh	[IN]	Container open handle.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
@@ -458,10 +461,9 @@ daos_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
 		daos_epoch_state_t *state, daos_event_t *ev);
 
 /**
- * Increase the lowest referenced epoch (LRE) of a container handle.
- * The resulting LRE' is determined like this:
- *
- *	LRE' = min(container HCE, max(LRE, epoch))
+ * Increase the lowest referenced epoch (LRE) of a container handle. If
+ * \a epoch is lower than current LRE, then the epoch state of the container
+ * handle is unchanged.
  *
  * \param coh	[IN]	Container handle
  * \param epoch	[IN]	Epoch to increase LRE to

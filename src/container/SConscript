@@ -7,8 +7,8 @@ denv = env.Clone()
 
 # ds_cont: Container Server
 ds_cont = denv.SharedLibrary('cont',
-			     ['srv.c', 'srv_container.c', 'srv_target.c',
-			      'rpc.c'])
+			     ['srv.c', 'srv_container.c', 'srv_epoch.c',
+			      'srv_target.c', 'rpc.c'])
 denv.Install('$PREFIX/lib/daos_srv', ds_cont)
 
 # dc_cont: Container Client

@@ -62,17 +62,16 @@
  * This also stores container attributes of upper layers.
  */
 #define CONT_GHCE	"ghce"		/* uint64_t */
-#define CONT_HCES	"hces"		/* btr_root (HCE tree) */
+#define CONT_GHPCE	"ghpce"		/* uint64_t */
 #define CONT_LRES	"lres"		/* btr_root (LRE tree) */
 #define CONT_LHES	"lhes"		/* btr_root (LHE tree) */
 #define CONT_SNAPSHOTS	"snapshots"	/* btr_root (snapshot tree) */
 
 /*
- * HCE, LRE, and LHE trees (DBTREE_CLASS_EC)
+ * LRE and LHE trees (DBTREE_CLASS_EC)
  *
  * A key is an epoch number. A value is an epoch_count. These epoch-sorted
- * trees enable us to quickly retrieve the minimum and maximum HCEs, LREs, and
- * LHEs.
+ * trees enable us to quickly retrieve the minimum and maximum LREs and LHEs.
  */
 
 /*

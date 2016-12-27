@@ -35,27 +35,6 @@
 #include "srv_internal.h"
 #include "srv_layout.h"
 
-/*
- * Container service
- *
- * References the ds_pool_mpool descriptor. Identified by a number unique
- * within the pool.
- *
- * TODO: After moving to LRU, we are still not evicting cont_svc objects based
- * on their numbers of container handles yet.
- */
-struct cont_svc {
-	struct daos_llink	cs_entry;
-	uuid_t			cs_pool_uuid;
-	uint64_t		cs_id;
-	struct ds_pool_mpool   *cs_mpool;
-	struct ds_pool	       *cs_pool;
-	ABT_rwlock		cs_lock;
-	daos_handle_t		cs_root;	/* root tree */
-	daos_handle_t		cs_containers;	/* container tree */
-	daos_handle_t		cs_hdls;	/* container handle tree */
-};
-
 static struct daos_lru_cache *cont_svc_cache;
 
 struct cont_svc_key {
@@ -232,9 +211,9 @@ cont_svc_put(struct cont_svc *svc)
 	daos_lru_ref_release(cont_svc_cache, &svc->cs_entry);
 }
 
-static int
-bcast_create(crt_context_t ctx, struct cont_svc *svc, crt_opcode_t opcode,
-	     crt_rpc_t **rpc)
+int
+ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
+		     crt_opcode_t opcode, crt_rpc_t **rpc)
 {
 	return ds_pool_bcast_create(ctx, svc->cs_pool, DAOS_CONT_MODULE, opcode,
 				    rpc);
@@ -277,6 +256,7 @@ cont_create(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
 		daos_handle_t	h;
 		uint64_t	ghce = 0;
+		uint64_t	ghpce = 0;
 
 		/*
 		 * Create the container attribute tree under the container tree.
@@ -296,9 +276,7 @@ cont_create(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_create_tree(ch, CONT_HCES, DBTREE_CLASS_EC,
-					   0 /* feats */, 16 /* order */,
-					   NULL /* tree_new */);
+		rc = dbtree_nv_update(ch, CONT_GHPCE, &ghpce, sizeof(ghpce));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -342,7 +320,7 @@ cont_destroy_bcast(crt_context_t ctx, struct cont_svc *svc,
 	D_DEBUG(DF_DSMS, DF_CONT": bcasting\n",
 		DP_CONT(svc->cs_pool_uuid, cont_uuid));
 
-	rc = bcast_create(ctx, svc, CONT_TGT_DESTROY, &rpc);
+	rc = ds_cont_bcast_create(ctx, svc, CONT_TGT_DESTROY, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -415,10 +393,6 @@ cont_destroy(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_destroy_tree(ch, CONT_HCES);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
 		rc = dbtree_destroy(ch);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
@@ -446,57 +420,6 @@ out:
 }
 
 static int
-ec_increment(daos_handle_t tree, uint64_t epoch)
-{
-	uint64_t	c = 0;
-	uint64_t	c_new;
-	int		rc;
-
-	rc = dbtree_ec_lookup(tree, epoch, &c);
-	if (rc != 0 && rc != -DER_NONEXIST)
-		return rc;
-
-	c_new = c + 1;
-	if (c_new < c)
-		return -DER_OVERFLOW;
-
-	return dbtree_ec_update(tree, epoch, &c_new);
-}
-
-static int
-ec_decrement(daos_handle_t tree, uint64_t epoch)
-{
-	uint64_t	c = 0;
-	uint64_t	c_new;
-	int		rc;
-
-	rc = dbtree_ec_lookup(tree, epoch, &c);
-	if (rc != 0 && rc != -DER_NONEXIST)
-		return rc;
-
-	c_new = c - 1;
-	if (c_new > c)
-		return -DER_OVERFLOW;
-
-	if (c_new == 0)
-		rc = dbtree_ec_delete(tree, epoch);
-	else
-		rc = dbtree_ec_update(tree, epoch, &c_new);
-
-	return rc;
-}
-
-/* Container descriptor */
-struct cont {
-	uuid_t			c_uuid;
-	struct cont_svc	       *c_svc;
-	daos_handle_t		c_cont;		/* container attribute tree */
-	daos_handle_t		c_hces;		/* HCE tree */
-	daos_handle_t		c_lres;		/* LRE tree */
-	daos_handle_t		c_lhes;		/* LHE tree */
-};
-
-static int
 cont_lookup(const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 {
 	struct cont    *p;
@@ -515,13 +438,9 @@ cont_lookup(const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 	if (rc != 0)
 		D_GOTO(err_p, rc);
 
-	rc = dbtree_nv_open_tree(p->c_cont, CONT_HCES, &p->c_hces);
-	if (rc != 0)
-		D_GOTO(err_cont, rc);
-
 	rc = dbtree_nv_open_tree(p->c_cont, CONT_LRES, &p->c_lres);
 	if (rc != 0)
-		D_GOTO(err_hces, rc);
+		D_GOTO(err_cont, rc);
 
 	rc = dbtree_nv_open_tree(p->c_cont, CONT_LHES, &p->c_lhes);
 	if (rc != 0)
@@ -532,8 +451,6 @@ cont_lookup(const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 
 err_lres:
 	dbtree_close(p->c_lres);
-err_hces:
-	dbtree_close(p->c_hces);
 err_cont:
 	dbtree_close(p->c_cont);
 err_p:
@@ -547,7 +464,6 @@ cont_put(struct cont *cont)
 {
 	dbtree_close(cont->c_lhes);
 	dbtree_close(cont->c_lres);
-	dbtree_close(cont->c_hces);
 	dbtree_close(cont->c_cont);
 	D_FREE_PTR(cont);
 }
@@ -566,7 +482,7 @@ cont_open_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 		DP_UUID(pool_hdl), DP_UUID(cont_hdl), capas);
 
-	rc = bcast_create(ctx, cont->c_svc, CONT_TGT_OPEN, &rpc);
+	rc = ds_cont_bcast_create(ctx, cont->c_svc, CONT_TGT_OPEN, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -605,9 +521,6 @@ cont_open(struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
 	struct cont_open_in    *in = crt_req_get(rpc);
 	struct cont_open_out   *out = crt_reply_get(rpc);
 	struct container_hdl	chdl;
-	daos_epoch_t		ghce;
-	daos_epoch_t		glre;
-	daos_epoch_t		ghpce = DAOS_EPOCH_MAX;
 	volatile int		rc;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
@@ -643,79 +556,27 @@ cont_open(struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
 
 	/* TODO: Rollback cont_open_bcast() on errors from now on. */
 
-	/* Get GHPCE. */
-	rc = dbtree_ec_fetch(cont->c_hces, BTR_PROBE_LAST, NULL /* epoch_in */,
-			     &ghpce, NULL /* count */);
-	if (rc != 0 && rc != -DER_NONEXIST)
-		D_GOTO(out, rc);
-
-	/* Get GHCE. */
-	rc = dbtree_nv_lookup(cont->c_cont, CONT_GHCE, &ghce, sizeof(ghce));
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	/*
-	 * Check the coo_epoch_state assignments below if any of these rules
-	 * changes.
-	 */
 	uuid_copy(chdl.ch_pool_hdl, pool_hdl->sph_uuid);
 	uuid_copy(chdl.ch_cont, cont->c_uuid);
-	chdl.ch_hce = ghpce == DAOS_EPOCH_MAX ? ghce : ghpce;
-	chdl.ch_lre = chdl.ch_hce;
-	chdl.ch_lhe = DAOS_EPOCH_MAX;
 	chdl.ch_capas = in->coi_capas;
 
 	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
+		rc = ds_cont_epoch_init_hdl(cont, &chdl, &out->coo_epoch_state);
+		if (rc != 0)
+			pmemobj_tx_abort(rc);
+
 		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->coi_op.ci_hdl,
 				      &chdl, sizeof(chdl));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
-
-		rc = ec_increment(cont->c_hces, chdl.ch_hce);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update hce tree: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = ec_increment(cont->c_lres, chdl.ch_lre);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update lre tree: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = ec_increment(cont->c_lhes, chdl.ch_lhe);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update lhe tree: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 	} TX_END
 
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	/* Calculate GLRE. */
-	rc = dbtree_ec_fetch(cont->c_lres, BTR_PROBE_FIRST, NULL /* epoch_in */,
-			     &glre, NULL /* count */);
 	if (rc != 0) {
-		/* At least there shall be this handle's LRE. */
-		D_ASSERT(rc != -DER_NONEXIST);
+		memset(&out->coo_epoch_state, 0, sizeof(out->coo_epoch_state));
 		D_GOTO(out, rc);
 	}
-
-	out->coo_epoch_state.es_hce = chdl.ch_hce;
-	out->coo_epoch_state.es_lre = chdl.ch_lre;
-	out->coo_epoch_state.es_lhe = chdl.ch_lhe;
-	out->coo_epoch_state.es_ghce = ghce;
-	out->coo_epoch_state.es_glre = glre;
-	out->coo_epoch_state.es_ghpce = chdl.ch_hce;
 
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
@@ -739,7 +600,7 @@ cont_close_bcast(crt_context_t ctx, struct cont_svc *svc,
 		DP_CONT(svc->cs_pool_uuid, NULL), DP_UUID(recs[0].tcr_hdl),
 		recs[0].tcr_hce, nrecs);
 
-	rc = bcast_create(ctx, svc, CONT_TGT_CLOSE, &rpc);
+	rc = ds_cont_bcast_create(ctx, svc, CONT_TGT_CLOSE, &rpc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -805,39 +666,15 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 				pmemobj_tx_abort(rc);
 			cont = cont_tmp;
 
+			rc = ds_cont_epoch_fini_hdl(cont, &chdl);
+			if (rc != 0)
+				pmemobj_tx_abort(rc);
+
 			/* Delete this handle. */
 			rc = dbtree_uv_delete(svc->cs_hdls, recs[i].tcr_hdl);
 			if (rc != 0)
 				pmemobj_tx_abort(rc);
 
-			rc = ec_decrement(cont->c_hces, chdl.ch_hce);
-			if (rc != 0) {
-				D_ERROR(DF_CONT": failed to update hce tree: "
-					"%d\n",
-					DP_CONT(svc->cs_pool_uuid,
-						cont->c_uuid), rc);
-				pmemobj_tx_abort(rc);
-			}
-
-			rc = ec_decrement(cont->c_lres, chdl.ch_lre);
-			if (rc != 0) {
-				D_ERROR(DF_CONT": failed to update lre tree: "
-					"%d\n",
-					DP_CONT(svc->cs_pool_uuid,
-						cont->c_uuid), rc);
-				pmemobj_tx_abort(rc);
-			}
-
-			rc = ec_decrement(cont->c_lhes, chdl.ch_lhe);
-			if (rc != 0) {
-				D_ERROR(DF_CONT": failed to update lhe tree: "
-					"%d\n",
-					DP_CONT(svc->cs_pool_uuid,
-						cont->c_uuid), rc);
-				pmemobj_tx_abort(rc);
-			}
-
-			/* TODO: Update GHCE. */
 			cont_put(cont);
 			cont = NULL;
 		}
@@ -1026,382 +863,21 @@ out_lock:
 	return rc;
 }
 
-/*
- * TODO: Support more than one container handles. E.g., update GHCE if the
- * client is releasing the previous hold.
- */
-
-static void
-epoch_state_set(struct container_hdl *hdl, daos_epoch_state_t *state)
-{
-	D_ASSERTF(hdl->ch_lre <= hdl->ch_hce && hdl->ch_hce < hdl->ch_lhe,
-		  "lre="DF_U64" hce="DF_U64" lhe="DF_U64"\n", hdl->ch_lre,
-		  hdl->ch_hce, hdl->ch_lhe);
-	state->es_hce = hdl->ch_hce;
-	state->es_lre = hdl->ch_lre;
-	state->es_lhe = hdl->ch_lhe;
-	state->es_ghce = hdl->ch_hce;
-	state->es_glre = hdl->ch_lre;
-	state->es_ghpce = hdl->ch_hce;
-}
-
-static int
-cont_epoch_query(struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		 struct container_hdl *hdl, crt_rpc_t *rpc)
-{
-	struct cont_epoch_op_out *out = crt_reply_get(rpc);
-
-	epoch_state_set(hdl, &out->ceo_epoch_state);
-	return 0;
-}
-
-static int
-cont_epoch_hold(struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		struct container_hdl *hdl, crt_rpc_t *rpc)
-{
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
-	daos_epoch_t			lhe = hdl->ch_lhe;
-	daos_epoch_t			ghpce = hdl->ch_hce;
-	volatile int			rc;
-
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
-
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		in->cei_epoch);
-
-	/* Verify the container handle capabilities. */
-	if (!(hdl->ch_capas & DAOS_COO_RW))
-		D_GOTO(out, rc = -DER_NO_PERM);
-
-	if (in->cei_epoch > DAOS_EPOCH_MAX)
-		D_GOTO(out, rc = -DER_OVERFLOW);
-
-	if (in->cei_epoch <= ghpce)
-		hdl->ch_lhe = ghpce + 1;
-	else
-		hdl->ch_lhe = in->cei_epoch;
-
-	if (hdl->ch_lhe == lhe)
-		D_GOTO(out, rc = 0);
-
-	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
-
-	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
-		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->cei_op.ci_hdl,
-				      hdl, sizeof(*hdl));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		rc = ec_decrement(cont->c_lhes, lhe);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to remove original lhe: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = ec_increment(cont->c_lhes, hdl->ch_lhe);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to add new lhe: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-	} TX_END
-
-	if (rc != 0)
-		hdl->ch_lhe = lhe;
-
-out:
-	epoch_state_set(hdl, &out->ceo_epoch_state);
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		rc);
-	return rc;
-}
-
-static int
-cont_epoch_slip(struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		struct container_hdl *hdl, crt_rpc_t *rpc)
-{
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
-	daos_epoch_t			lre = hdl->ch_lre;
-	volatile int			rc;
-
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
-
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		in->cei_epoch);
-
-	if (in->cei_epoch >= DAOS_EPOCH_MAX)
-		D_GOTO(out, rc = -DER_OVERFLOW);
-
-	if (in->cei_epoch < hdl->ch_lre)
-		/*
-		 * Since we don't allow LRE to decrease, let the new LRE be the
-		 * old one.  (This is actually unnecessary; we only have to
-		 * guarantee that the new LRE has not been aggregated away.)
-		 */
-		hdl->ch_lre = hdl->ch_lre;
-	else if (in->cei_epoch <= hdl->ch_hce)
-		hdl->ch_lre = in->cei_epoch;
-	else
-		hdl->ch_lre = hdl->ch_hce;
-
-	if (hdl->ch_lre == lre)
-		D_GOTO(out, rc = 0);
-
-	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
-
-	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
-		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->cei_op.ci_hdl,
-				      hdl, sizeof(*hdl));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		rc = ec_decrement(cont->c_lres, lre);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to remove original lre: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = ec_increment(cont->c_lres, hdl->ch_lre);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to add new lre: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-	} TX_END
-
-	if (rc != 0)
-		hdl->ch_lre = lre;
-
-out:
-	epoch_state_set(hdl, &out->ceo_epoch_state);
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		rc);
-	return rc;
-}
-
-static int
-cont_epoch_discard_bcast(crt_context_t ctx, struct cont *cont,
-			 const uuid_t hdl_uuid, daos_epoch_t epoch)
-{
-	struct cont_tgt_epoch_discard_in       *in;
-	struct cont_tgt_epoch_discard_out      *out;
-	crt_rpc_t			       *rpc;
-	int					rc;
-
-	D_DEBUG(DF_DSMS, DF_CONT": bcasting\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
-
-	rc = bcast_create(ctx, cont->c_svc, CONT_TGT_EPOCH_DISCARD, &rpc);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->tii_hdl, hdl_uuid);
-	in->tii_epoch = epoch;
-
-	rc = dss_rpc_send(rpc);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	out = crt_reply_get(rpc);
-	rc = out->tio_rc;
-	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to discard epoch "DF_U64" for handle "
-			DF_UUID" on %d targets\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch,
-			DP_UUID(hdl_uuid), rc);
-		rc = -DER_IO;
-	}
-
-out_rpc:
-	crt_req_decref(rpc);
-out:
-	D_DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
-	return rc;
-}
-
-static int
-cont_epoch_discard(struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		   struct container_hdl *hdl, crt_rpc_t *rpc)
-{
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
-	int				rc;
-
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" epoch="
-		DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		DP_UUID(in->cei_op.ci_hdl), in->cei_epoch);
-
-	/* Verify the container handle capabilities. */
-	if (!(hdl->ch_capas & DAOS_COO_RW))
-		D_GOTO(out, rc = -DER_NO_PERM);
-
-	if (in->cei_epoch >= DAOS_EPOCH_MAX)
-		D_GOTO(out, rc = -DER_OVERFLOW);
-	else if (in->cei_epoch < hdl->ch_lhe)
-		D_GOTO(out, rc = -DER_EP_RO);
-
-	rc = cont_epoch_discard_bcast(rpc->cr_ctx, cont, in->cei_op.ci_hdl,
-				      in->cei_epoch);
-
-out:
-	epoch_state_set(hdl, &out->ceo_epoch_state);
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		rc);
-	return rc;
-}
-
-static int
-cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		  struct container_hdl *hdl, crt_rpc_t *rpc)
-{
-	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
-	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
-	daos_epoch_t			hce = hdl->ch_hce;
-	daos_epoch_t			lhe = hdl->ch_lhe;
-	daos_epoch_t			lre = hdl->ch_lre;
-	volatile int			rc;
-
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
-
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		in->cei_epoch);
-
-	/* Verify the container handle capabilities. */
-	if (!(hdl->ch_capas & DAOS_COO_RW))
-		D_GOTO(out, rc = -DER_NO_PERM);
-
-	if (in->cei_epoch >= DAOS_EPOCH_MAX)
-		D_GOTO(out, rc = -DER_OVERFLOW);
-
-	if (in->cei_epoch <= hdl->ch_hce)
-		D_GOTO(out, rc = 0);
-	else if (in->cei_epoch < hdl->ch_lhe)
-		D_GOTO(out, rc = -DER_EP_RO);
-
-	hdl->ch_hce = in->cei_epoch;
-	hdl->ch_lhe = hdl->ch_hce + 1;
-	if (!(hdl->ch_capas & DAOS_COO_NOSLIP))
-		hdl->ch_lre = hdl->ch_hce;
-
-	D_DEBUG(DF_DSMS, "hce="DF_U64" hce'="DF_U64"\n", hce, hdl->ch_hce);
-	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
-	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
-
-	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
-		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->cei_op.ci_hdl,
-				      hdl, sizeof(*hdl));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		rc = ec_decrement(cont->c_hces, hce);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to remove original hce: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = ec_increment(cont->c_hces, hdl->ch_hce);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to add new hce: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = ec_decrement(cont->c_lhes, lhe);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to remove original lhe: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = ec_increment(cont->c_lhes, hdl->ch_lhe);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to add new lhe: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = ec_decrement(cont->c_lres, lre);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to remove original lre: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = ec_increment(cont->c_lres, hdl->ch_lre);
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to add new lre: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-
-		rc = dbtree_nv_update(cont->c_cont, CONT_GHCE, &hdl->ch_hce,
-				      sizeof(hdl->ch_hce));
-		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update ghce: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid,
-					cont->c_uuid), rc);
-			pmemobj_tx_abort(rc);
-		}
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-	} TX_END
-
-	if (rc != 0) {
-		hdl->ch_lhe = lhe;
-		hdl->ch_hce = hce;
-	}
-
-out:
-	epoch_state_set(hdl, &out->ceo_epoch_state);
-	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		rc);
-	return rc;
-}
-
 static int
 cont_op_with_hdl(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		 struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_EPOCH_QUERY:
-		return cont_epoch_query(pool_hdl, cont, hdl, rpc);
+		return ds_cont_epoch_query(pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_HOLD:
-		return cont_epoch_hold(pool_hdl, cont, hdl, rpc);
+		return ds_cont_epoch_hold(pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_SLIP:
-		return cont_epoch_slip(pool_hdl, cont, hdl, rpc);
+		return ds_cont_epoch_slip(pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_DISCARD:
-		return cont_epoch_discard(pool_hdl, cont, hdl, rpc);
+		return ds_cont_epoch_discard(pool_hdl, cont, hdl, rpc);
 	case CONT_EPOCH_COMMIT:
-		return cont_epoch_commit(pool_hdl, cont, hdl, rpc);
+		return ds_cont_epoch_commit(pool_hdl, cont, hdl, rpc);
 	default:
 		D_ASSERT(0);
 	}
