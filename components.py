@@ -247,6 +247,9 @@ REQS.define('cart',
             retriever=RETRIEVER,
             commands=["scons "
                       "PMIX_PREBUILT=$PMIX_PREFIX " \
+                      "CCI_PREBUILT=$CCI_PREFIX " \
+                      "OPENPA_PREBUILT=$OPENPA_PREFIX " \
+                      "HWLOC_PREBUILT=$HWLOC_PREFIX " \
                       "ARGOBOTS_PREBUILT=$ARGOBOTS_PREFIX " \
                       "OMPI_PREBUILT=$OMPI_PREFIX " \
                       "MERCURY_PREBUILT=$MERCURY_PREFIX " \
