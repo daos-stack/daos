@@ -38,7 +38,7 @@ except ImportError:
 
 class TestInfoRunner(PreRunner.PreRunner):
     """Simple test runner"""
-    info = {}
+    info = None
     test_info = {}
 
     def __init__(self, info=None):
@@ -61,15 +61,22 @@ class TestInfoRunner(PreRunner.PreRunner):
             self.logger.error(" No module section defined in file: %s", \
                              test_module_name)
             rtn = 1
-        if 'directives' not in self.test_info or \
-           self.test_info['directives'] is None:
-            self.test_info['directives'] = {}
         if 'execStrategy' not in self.test_info:
             self.logger.error(" No execStrategy section defined in file: %s",
                               test_module_name)
             rtn = 1
-        self.test_info['defaultENV'] = {}
+        if 'defaultENV' not in self.test_info or \
+           self.test_info['defaultENV'] is None:
+            self.test_info['defaultENV'] = {}
+        if 'directives' not in self.test_info or \
+           self.test_info['directives'] is None:
+            self.test_info['directives'] = {}
         return rtn
+
+    def post_run(self):
+        """ post testcase run processing """
+        self.remove_tmp_dir()
+        self.dump_test_info()
 
     def dump_test_info(self):
         """ dump the test info to the output directory """
@@ -109,3 +116,19 @@ class TestInfoRunner(PreRunner.PreRunner):
     def set_defaultENV(self, keyname=None, keyvalue=None):
         """ setup the environment """
         self.test_info['defaultENV'][keyname] = keyvalue
+
+    def get_module(self, keyname=None, default=""):
+        """ return information from the module section """
+        if keyname:
+            value = self.test_info['module'].get(keyname, default)
+        else:
+            value = self.test_info['module']
+        return value
+
+    def get_directives(self):
+        """ return the test directives """
+        return self.test_info['directives']
+
+    def get_execStrategy(self):
+        """ return the execStrategy list """
+        return self.test_info['execStrategy']

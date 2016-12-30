@@ -24,103 +24,34 @@ test runner class
 
 """
 
-#pylint: disable=unused-import
-#pylint: disable=too-many-instance-attributes
-#pylint: disable=too-many-locals
-#pylint: disable=too-many-public-methods
 
 import os
-import sys
-import shutil
 import unittest
 import logging
 from time import time
-from datetime import datetime
 #pylint: disable=import-error
-import PreRunner
 import PostRunner
 import GrindRunner
 #pylint: enable=import-error
 
-from yaml import load, dump
-try:
-    from yaml import CLoader as Loader, CDumper as Dumper
-except ImportError:
-    from yaml import Loader, Dumper
 
-
-class UnitTestRunner(PreRunner.PreRunner, PostRunner.PostRunner,
+class UnitTestRunner(PostRunner.PostRunner,
                      GrindRunner.GrindRunner):
     """Simple test runner"""
     log_dir_base = ""
-    loop_name = ""
     last_testlogdir = ""
     loop_number = 0
     test_info = {}
-    test_list = []
     subtest_results = []
     test_directives = {}
     info = None
     logger = None
 
-    def __init__(self, info, test_list=None):
-        self.info = info
-        self.test_list = test_list
-        self.log_dir_base = self.info.get_config('log_base_path')
+    def __init__(self, test_info, log_base_path):
+        self.test_info = test_info
+        self.info = test_info.info
+        self.log_dir_base = log_base_path
         self.logger = logging.getLogger("TestRunnerLogger")
-
-    def dump_subtest_results(self):
-        """ dump the test results to the log directory """
-        if os.path.exists(self.log_dir_base):
-            name = "%s/subtest_results.yml" % self.log_dir_base
-            with open(name, 'w') as fd:
-                dump(self.subtest_results, fd, Dumper=Dumper, indent=4,
-                     default_flow_style=False)
-
-    def dump_test_info(self):
-        """ dump the test info to the output directory """
-        if os.path.exists(self.log_dir_base):
-            name = "%s/%s_test_info.yml" % (self.log_dir_base, self.loop_name)
-            with open(name, 'w') as fd:
-                dump(self.test_info, fd, Dumper=Dumper, indent=4,
-                     default_flow_style=False)
-
-    def rename_output_directory(self):
-        """ rename the output directory """
-        if os.path.exists(self.log_dir_base):
-            rename = str(self.test_directives.get('renameTestRun',
-                                                  "yes")).lower()
-            if rename == "no":
-                newname = self.log_dir_base
-            else:
-                if rename == "yes":
-                    newname = "%s_%s" % \
-                              (self.log_dir_base,
-                               datetime.now().isoformat().replace(':', '.'))
-                else:
-                    newdir = str(self.test_directives.get('renameTestRun'))
-                    logdir = os.path.dirname(self.log_dir_base)
-                    newname = os.path.join(logdir, newdir)
-                os.rename(self.log_dir_base, newname)
-            self.logger.info("TestRunner: test log directory\n %s", \
-                             os.path.abspath(newname))
-
-            dowhat = str(self.test_directives.get('printTestLogPath',
-                                                  "no")).lower()
-            if dowhat == "yes":
-                self.top_logdir(newname)
-            elif dowhat == "dump":
-                self.top_logdir(newname, dumpLogs=True)
-
-    def post_run(self):
-        """ post run processing """
-        self.logger.info("TestRunner: tearDown begin")
-        self.dump_subtest_results()
-        if self.test_info['module'].get('createTmpDir'):
-            envName = self.test_info['module']['createTmpDir']
-            shutil.rmtree(self.test_info['defaultENV'][envName])
-        self.rename_output_directory()
-        self.logger.info("TestRunner: tearDown end\n\n")
 
     def setenv(self, testcase):
         """ setup testcase environment """
@@ -128,14 +59,14 @@ class UnitTestRunner(PreRunner.PreRunner, PostRunner.PostRunner,
         if module_env != None:
             for (key, value) in module_env.items():
                 os.environ[str(key)] = value
-        setTestPhase = testcase.get('type', self.test_info['defaultENV']. \
-                                    get('TR_TEST_PHASE', "TEST")).upper()
+        setTestPhase = testcase.get('type', self.test_info.get_defaultENV(
+            'TR_TEST_PHASE', "TEST")).upper()
         os.environ['TR_TEST_PHASE'] = setTestPhase
 
     def resetenv(self, testcase):
         """ reset testcase environment """
         module_env = testcase.get('setEnvVars')
-        module_default_env = self.test_info['defaultENV']
+        module_default_env = self.test_info.get_test_info('defaultENV')
         if module_env != None:
             for key in module_env.keys():
                 value = module_default_env.get(key, "")
@@ -143,10 +74,11 @@ class UnitTestRunner(PreRunner.PreRunner, PostRunner.PostRunner,
 
     def settestlog(self, testcase_id):
         """ setup testcase environment """
-        test_module = self.test_info['module']
+        test_module = self.test_info.get_module()
+        test_name = test_module['name']
         value = self.log_dir_base + "/" + \
-                self.loop_name + "_loop" + str(self.loop_number) + "/" + \
-                test_module['name'] + "_" + str(testcase_id)
+                test_name + "_loop" + str(self.loop_number) + "/" + \
+                test_name + "_" + str(testcase_id)
         os.environ[test_module['subLogKey']] = value
         self.last_testlogdir = value
 
@@ -154,8 +86,8 @@ class UnitTestRunner(PreRunner.PreRunner, PostRunner.PostRunner,
         """ execute test scripts """
 
         rtn = 0
-        test_module = self.test_info['module']
-        for testrun in self.test_info['execStrategy']:
+        test_module = self.test_info.get_module()
+        for testrun in self.test_info.get_execStrategy():
             self.logger.info("************** run " + \
                              str(testrun['id']) + \
                              " ******************************"
@@ -213,17 +145,18 @@ class UnitTestRunner(PreRunner.PreRunner, PostRunner.PostRunner,
         """ execute test strategy """
 
         file_hdlr = None
-        info = {}
+        results_info = {}
         rtn = 0
-        info['name'] = self.test_info['module']['name']
-        value = self.log_dir_base + "/" + str(info['name']) + ".log"
+        results_info['name'] = self.test_info.get_module('name')
+        value = self.log_dir_base + "/" + str(results_info['name']) + ".log"
         file_hdlr = logging.FileHandler(value)
         file_hdlr.setLevel(logging.DEBUG)
         self.logger.addHandler(file_hdlr)
         self.logger.info("***************** " + \
-                         str(info['name']) + \
+                         str(results_info['name']) + \
                          " *********************************"
                         )
+        self.test_info.setup_default_env()
         loop = str(self.test_directives.get('loop', "no"))
         start_time = time()
         if loop.lower() == "no":
@@ -240,64 +173,13 @@ class UnitTestRunner(PreRunner.PreRunner, PostRunner.PostRunner,
                 toexit = self.test_directives.get('exitLoopOnError', "yes")
                 if rtn and toexit.lower() == "yes":
                     break
-        info['duration'] = time() - start_time
-        info['return_code'] = rtn
+        results_info['duration'] = '{:.2f}'.format(time() - start_time)
+        results_info['return_code'] = rtn
         if rtn == 0:
-            info['status'] = "PASS"
+            results_info['status'] = "PASS"
         else:
-            info['status'] = "FAIL"
-        info['error'] = ""
+            results_info['status'] = "FAIL"
+        results_info['error'] = ""
         file_hdlr.close()
         self.logger.removeHandler(file_hdlr)
-        return info
-
-    def load_testcases(self, test_module_name):
-        """ load and check test description file """
-
-        rtn = 0
-        with open(test_module_name, 'r') as fd:
-            self.test_info = load(fd, Loader=Loader)
-
-        if 'description' not in self.test_info:
-            self.logger.info(" No description defined in file: %s", \
-                             test_module_name)
-            rtn = 1
-        if 'defaultENV' not in self.test_info or \
-           self.test_info['defaultENV'] is None:
-            self.test_info['defaultENV'] = {}
-        if 'module' not in self.test_info:
-            self.logger.info(" No module section defined in file: %s", \
-                             test_module_name)
-            rtn = 1
-        if 'directives' not in self.test_info or \
-           self.test_info['directives'] is None:
-            self.test_info['directives'] = {}
-        if 'execStrategy' not in self.test_info:
-            self.logger.info(" No execStrategy section defined in file: %s",
-                             test_module_name)
-            rtn = 1
-        return rtn
-
-    def run_testcases(self):
-        """ execute test scripts """
-
-        sys.path.append("scripts")
-        rtn = 0
-        self.logger.info(
-            "\n*************************************************************")
-        for test_module_name in self.test_list:
-            self.loop_name = os.path.splitext(
-                os.path.basename(test_module_name))[0]
-            self.test_info.clear()
-            if self.load_testcases(test_module_name):
-                rtn = 1
-                continue
-            self.test_directives = self.test_info.get('directives', {})
-            self.add_default_env()
-            self.setup_default_env()
-            rtn_info = self.execute_strategy()
-            rtn |= rtn_info['return_code']
-            self.subtest_results.append(rtn_info)
-            self.dump_test_info()
-        self.post_run()
-        return rtn
+        return (rtn, results_info)

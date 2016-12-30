@@ -27,7 +27,9 @@
                   -s "test/utest/SConscript" \
                   -s "test_runner/SConscript" \
                   -P3 "test_runner/__main__.py" \
+                  -P3 "test_runner/TestRunner.py" \
                   -P3 "test_runner/UnitTestRunner.py" \
+                  -P3 "test_runner/ScriptsRunner.py" \
                   -P3 "test_runner/PreRunner.py" \
                   -P3 "test_runner/PostRunner.py" \
                   -P3 "test_runner/GrindRunner.py" \
@@ -36,6 +38,7 @@
                   -P3 "test_runner/CpprDaemonRunner.py" \
                   -P3 "test_runner/DvmRunner.py" \
                   -P3 "test_runner/MultiRunner.py" \
+                  -P3 "test_runner/NodeControlRunner.py" \
                   -P3 "test_runner/NodeRunner.py" \
                   -P3 "test_runner/NodeControlRunner.py" \
                   -P3 "test_runner/findTestLogs.py"

@@ -21,8 +21,8 @@
 # -*- coding: utf-8 -*-
 """Module for executing unittest test cases"""
 
-__all__ = ['main', 'InfoRunner', 'UnitTestRunner', 'MultiRunner']
+__all__ = ['main', 'InfoRunner', 'TestRunner', 'MultiRunner']
 
 from .InfoRunner import InfoRunner
-from .UnitTestRunner import UnitTestRunner
+from .TestRunner import TestRunner
 from .MultiRunner import MultiRunner

@@ -24,14 +24,10 @@ multi test runner class
 
 """
 
-#pylint: disable=unused-import
 #pylint: disable=too-many-instance-attributes
-#pylint: disable=too-many-locals
-#pylint: disable=too-many-public-methods
 
 import os
 import sys
-import shutil
 import logging
 import time
 from datetime import datetime
@@ -42,11 +38,11 @@ import TestInfoRunner
 import PostRunner
 #pylint: enable=import-error
 
-from yaml import load, dump
+from yaml import dump
 try:
-    from yaml import CLoader as Loader, CDumper as Dumper
+    from yaml import CDumper as Dumper
 except ImportError:
-    from yaml import Loader, Dumper
+    from yaml import Dumper
 
 
 class MultiRunner(PostRunner.PostRunner):
@@ -139,7 +135,7 @@ class MultiRunner(PostRunner.PostRunner):
             self.nodes.nodes_config(item['name'], setNodeType, configKeys)
             start_time = time.time()
             rtn = self.nodes.execute_list(setNodeType)
-            info['duration'] = time.time() - start_time
+            info['duration'] = '{:.2f}'.format(time.time() - start_time)
             info['return_code'] = rtn
             if rtn == 0:
                 info['status'] = "PASS"
@@ -198,14 +194,13 @@ class MultiRunner(PostRunner.PostRunner):
         file_hdlr = logging.FileHandler(logdir + "/multi.log")
         self.logger.addHandler(file_hdlr)
         file_hdlr.setLevel(logging.DEBUG)
-        self.test_directives = self.test_info.get_test_info('directives', {})
+        self.test_directives = self.test_info.get_test_info('directives', None,
+                                                            {})
         self.test_info.add_default_env()
-        #self.setup_default_env()
         self.logger.info("***************** " + \
                          str(self.test_info.get_test_info('module', 'name')) + \
                          " *********************************"
                         )
-        # FIXME
         self.nodes = NodeControlRunner.NodeControlRunner(
             logdir, self.info, self.test_info)
         self.nodes.nodes_strategy(self.test_directives)

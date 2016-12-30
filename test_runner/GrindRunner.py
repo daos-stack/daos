@@ -33,7 +33,7 @@ import subprocess
 class GrindRunner():
     """post test runner for valgrind"""
     last_testlogdir = ""
-    test_info = {}
+    test_info = None
     info = None
     logger = None
 
@@ -82,7 +82,7 @@ class GrindRunner():
     def callgrind_annotate(self):
         """ If callgrind is used pull in the results """
         self.logger.info("TestRunner: Callgrind annotate begin")
-        module = self.test_info['module']
+        module = self.test_info.get_module()
         srcdir = module.get('srcDir', "")
         src_rootdir = self.info.get_info('SRCDIR')
         if srcdir and src_rootdir:

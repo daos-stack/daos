@@ -25,13 +25,13 @@ test runner class
 """
 
 import os
+import shutil
 import tempfile
 
 
 class PreRunner():
     """setup for test runner"""
     test_info = {}
-    test_directives = {}
     info = None
 
     def set_key_from_host(self):
@@ -107,7 +107,7 @@ class PreRunner():
         """ add to default test directives """
         config_key_list = self.info.get_config('setDirectiveFromConfig')
         for (key, value) in config_key_list.items():
-            self.test_directives[key] = value
+            self.test_info['directives'][key] = value
 
     def create_tmp_dir(self):
         """ add to default environment """
@@ -132,6 +132,12 @@ class PreRunner():
             self.set_directive_from_config()
         if module.get('createTmpDir'):
             self.create_tmp_dir()
+
+    def remove_tmp_dir(self):
+        """ remove tmpdir """
+        if self.test_info['module'].get('createTmpDir'):
+            envName = self.test_info['module']['createTmpDir']
+            shutil.rmtree(self.test_info['defaultENV'][envName])
 
     def setup_default_env(self):
         """ setup default environment """

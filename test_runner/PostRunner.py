@@ -36,8 +36,6 @@ import GrindRunner
 class PostRunner(GrindRunner.GrindRunner):
     """post test runner"""
     last_testlogdir = ""
-    test_info = {}
-    info = None
     logger = None
 
     def check_log_mode(self, topdir):
@@ -77,7 +75,7 @@ class PostRunner(GrindRunner.GrindRunner):
                     "****************************************************")
                 self.logger.info("Error info from file\n %s" % dumpstd)
                 filesize = os.path.getsize(dumpstd)
-                if filesize > (12*1024):
+                if filesize > (12 * 1024):
                     self.logger.info(
                         "File too large (%d bytes), showing errors only" % \
                         filesize)

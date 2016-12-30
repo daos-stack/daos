@@ -58,8 +58,8 @@ except ImportError:
 
 from importlib import import_module
 #pylint: disable=import-error
-from UnitTestRunner import UnitTestRunner
 from InfoRunner import InfoRunner
+from TestRunner import TestRunner
 from MultiRunner import MultiRunner
 
 
@@ -100,7 +100,7 @@ def testmain(info=None, start=1, testMode=None):
     if testMode == "littleChief":
         tester = MultiRunner(info, test_list)
     else:
-        tester = UnitTestRunner(info, test_list)
+        tester = TestRunner(info, test_list)
     rc = tester.run_testcases()
     if daemon:
         daemon.stop_process()
@@ -152,8 +152,9 @@ def main():
     if not os.path.exists(log_base):
         os.makedirs(log_base)
     # setup default evnironment variables and path
-    if not info.env_setup():
-        exit(1)
+    info.env_setup()
+    #if not info.env_setup():
+    #    exit(1)
     testMode = "unitTest"
     if config and 'test_mode' in config:
         testMode = config.get('test_mode', "unitTest")

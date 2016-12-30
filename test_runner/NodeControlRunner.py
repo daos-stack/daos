@@ -20,22 +20,14 @@
 # SOFTWARE.
 # -*- coding: utf-8 -*-
 """
-test runner class
+node control test runner class
 
 """
 
-#pylint: disable=unused-import
-#pylint: disable=too-many-instance-attributes
-#pylint: disable=too-many-locals
-#pylint: disable=too-many-public-methods
 
 import os
-import sys
-import shutil
-import unittest
 import logging
 import time
-from datetime import datetime
 #pylint: disable=import-error
 import NodeRunner
 #pylint: enable=import-error

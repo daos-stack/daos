@@ -59,11 +59,13 @@ class InfoRunner():
         print("TestRunner: setUp env begin")
 
         if not self.load_build_vars():
+            self.info = {}
             return 0
-        ompi_path = os.path.join(self.info['OMPI_PREFIX'], "bin")
         path = os.getenv("PATH")
-        if path.find(ompi_path) < 0:
-            path = ompi_path + ":" + path
+        if 'OMPI_PREFIX' in self.info:
+            ompi_path = os.path.join(self.info['OMPI_PREFIX'], "bin")
+            if path.find(ompi_path) < 0:
+                path = ompi_path + ":" + path
         if 'MCL_PREFIX' in self.info:
             mcl_path = os.path.join(self.info['MCL_PREFIX'], "bin")
             if path.find(mcl_path) < 0:
