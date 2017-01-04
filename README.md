@@ -48,8 +48,8 @@ The below instructions have been verified with CentOS. Installations on other Li
 (a) Pre-install dependencies
 Please install the following Red Hat Enterprise Linux RPM software packages (or) equivalent for other distros:
 
-    # yum -y install scons cmake doxygen gcc-c++
-    # yum -y install epel-release boost-devel libevent-devel librdmacm-devel
+    # yum -y install epel-release scons cmake doxygen gcc-c++
+    # yum -y install boost-devel libevent-devel librdmacm-devel
     # yum -y install libtool-ltdl-devel libuuid-devel openssl-devel
     # yum -y install libcmocka libcmocka-devel pandoc
 
