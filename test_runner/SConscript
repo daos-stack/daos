@@ -19,19 +19,13 @@
 # SOFTWARE.
 """install test runner"""
 
-TESTRUNNER = ["__init__.py", "__main__.py", "InfoRunner.py",
-              "UnitTestRunner.py", "PreRunner.py", "PostRunner.py",
-              "MultiRunner.py", "NodeRunner.py",
-              "DvmRunner.py", "CpprDaemonRunner.py",
-              "findTestLogs.py"]
 
 def scons():
     """Run scons"""
 
     Import('env')
 
-    for script in TESTRUNNER:
-        env.Install("$PREFIX/TESTING/test_runner", script)
+    env.Install("$PREFIX/TESTING/test_runner", Glob("*.py"))
 
 if __name__ == 'SCons.Script':
     scons()
