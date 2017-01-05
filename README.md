@@ -95,7 +95,7 @@ Once built, the environment must be modified to search for binaries, libraries a
     PATH=${daospath}/install/bin/:${daospath}/install/sbin:$PATH
     export LD_LIBRARY_PATH CPATH PATH
 
-If required, \${daospath}/install must be replaced with the alternative path specified through TARGET\_PREFIX. The network type to use as well the debug log location can be selected as follows:
+If required, \${daospath}/install must be replaced with the alternative path specified through PREFIX. The network type to use as well the debug log location can be selected as follows:
 
     CCI_CONFIG=${daospath}/install/etc/cci.ini
     CRT_PHY_ADDR_STR="cci+tcp", for infiniband use "cci+verbs"
@@ -142,9 +142,45 @@ Include the daos.h header file in your program and link with -Ldaos. Examples ar
 
     orterun -np <num_clients> --hostfile ${hostfile_cli} --ompi-server file:$urifile ${application} eg., ./daos_test
 
+## Setup DAOS for Development
+
+Setting up DAOS for development would be simpler by building with TARGET\_PREFIX for all the dependencies and use PREFIX for your custom DAOS installation from your sandbox. Once the submodule has been initialized and updated,
+
+    scons --build-deps=yes PREFIX=$(daos_prefix_path} TARGET_PREFIX=${daos_prefix_path}/opt install
+
+With this type of installation each individual component is built into a different directory. Installing the components into seperate directories allow to upgrade the components individually using --update-prereq={component\_name}. This requires change to the environment configuration from before.
+
+
+    ARGOBOTS=${daos_prefix_path}/opt/argobots
+    CART=${daos_prefix_path}/opt/cart
+    CCI=${daos_prefix_path}/opt/cci
+    HWLOC=${daos_prefix_path}/opt/hwloc
+    MERCURY=${daos_prefix_path}/opt/mercury
+    NVML=${daos_prefix_path}/opt/nvml
+    OMPI=${daos_prefix_path}/opt/ompi
+    OPA=${daos_prefix_path}/opt/openpa
+    PMIX=${daos_prefix_path}/opt/pmix
+
+    PATH=$CART/bin/:$CCI/bin/:$HWLOC/bin/:$PATH
+    PATH=$MERCURY/bin/:$NVML/bin/:$OMPI/bin/:$OPA/bin/:$PMIX/bin/:$PATH
+    PATH=${daos_prefix_path}/bin/:$PATH
+
+    LD_LIBRARY_PATH=/usr/lib64/:$ARGOBOTS/lib/:$CART/lib/:$CCI/lib/:$HWLOC/lib/:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=$MERCURY/lib/:$NVML/lib/:$OMPI/lib/:$OMPI/lib/openmpi/:$OPA/lib/:$PMIX/lib/:$LD_LIBRARY_PATH
+    LD_LIBRARY_PATH=${daos_prefix_path}/lib/:${daos_prefix_path}/lib/daos_srv/:$LD_LIBRARY_PATH
+
+(a) Using prebuilt dependencies
+
+With an installation complete with TARGET_PREFIX, the PREBUILT_PREFIX functionality can be used to reuse prebuilt dependencies.
+On your new sandbox after 'git submodule init and git submodule update'
+
+    scons PREBUILT_PREFIX=${daos_prefix_path}/opt PREFIX=${daos_custom_install} install
+
+With this approach only daos would get built using the prebuilt dependencies in ${daos_prefix_path}/opt and the PREBUILT_PREFIX and PREFIX would get saved for future compilations. So, after the first time, during development, a mere "scons" and "scons install" would suffice for compiling changes to daos source code.
+
 ## Reporting Problems
 
-Please report any bugs through our [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and debug logs that should be compressed. DAOS debug logs are written by default to /tmp/daos.log, this can be modified by specifying a different path through DD\_LOG. Similarly, the debug mask and subsystems are controlled by respectively the DD\_MASK and DD\_SUBSYS environment variables.
+Please report any bugs through our [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and debug logs that should be compressed. DAOS debug logs are written by default to /tmp/daos.log, this can be modified by specifying a different path through DD_LOG. Similarly, the debug mask and subsystems are controlled by respectively the DD_MASK and DD_SUBSYS environment variables.
 
 ## Contacts
 
