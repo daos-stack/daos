@@ -24,6 +24,23 @@
 #ifndef __DAOS_TESTS_LIB_H__
 #define __DAOS_TESTS_LIB_H__
 
+#define HAVE_LIB_READLINE	0
+
+#if HAVE_LIB_READLINE
+# include <readline/history.h>
+# include <readline/readline.h>
+
+#define dts_add_history(s)	add_history(s)
+#else /* HAVE_LIB_READLINE */
+# define dts_add_history(s)	do {} while (0)
+#endif /* HAVE_LIB_READLINE */
+
+/** Read a command line from stdin. */
+char *dts_readline(char *prompt);
+
+/** release a line buffer returned by dts_readline */
+void  dts_freeline(char *line);
+
 /** Fill in readable random bytes into the buffer */
 void dts_buf_render(char *buf, unsigned int buf_len);
 
@@ -35,5 +52,11 @@ daos_obj_id_t dts_oid_gen(uint16_t oclass, unsigned seed);
 
 /** generate a random and unique baseline object ID */
 daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint32_t shard);
+
+/**
+ * Create a random ordered integer array with \a nr elements, value of this
+ * array starts from \a base.
+ */
+int *dts_rand_iarr_alloc(int nr, int base);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

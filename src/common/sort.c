@@ -115,3 +115,20 @@ daos_array_find(void *array, unsigned int len, uint64_t key,
 	}
 	return cur;
 }
+
+void
+daos_array_shuffle(void *array, unsigned int len, daos_sort_ops_t *ops)
+{
+	struct timeval	tv;
+	int		n;
+	int		i;
+
+	gettimeofday(&tv, NULL);
+	srand(tv.tv_usec);
+
+	for (n = len; n > 0; n--) {
+		i = rand() % n;
+		if (i != n - 1)
+			ops->so_swap(array, i, n - 1);
+	}
+}

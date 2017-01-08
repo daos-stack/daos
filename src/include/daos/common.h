@@ -176,6 +176,7 @@ int daos_array_sort(void *array, unsigned int len, bool unique,
 		    daos_sort_ops_t *ops);
 int daos_array_find(void *array, unsigned int len, uint64_t key,
 		    daos_sort_ops_t *ops);
+void daos_array_shuffle(void *arr, unsigned int len, daos_sort_ops_t *ops);
 
 int  daos_sgl_init(daos_sg_list_t *sgl, unsigned int nr);
 void daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs);

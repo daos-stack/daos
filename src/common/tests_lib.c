@@ -94,3 +94,101 @@ dts_buf_render(char *buf, unsigned int buf_len)
 	}
 	buf[i] = '\0';
 }
+
+#define DTS_LINE_SIZE	1024
+
+void
+dts_freeline(char *line)
+{
+#if HAVE_LIB_READLINE
+	free(line);
+#else
+	D_FREE(line, DTS_LINE_SIZE);
+#endif
+}
+
+/**
+ * Read a command line from stdin, save trouble if we don't have libreadline
+ */
+char *
+dts_readline(char *prompt)
+{
+#if HAVE_LIB_READLINE
+	return readline(prompt);
+#else
+	char	*line;
+	char	*cur;
+	bool	 eof;
+
+	D_ALLOC(line, DTS_LINE_SIZE);
+	if (!line)
+		return NULL;
+
+	if (prompt)
+		fprintf(stdout, "%s", prompt);
+
+	cur = line;
+	eof = false;
+	while (1) {
+		int	c;
+
+		c = fgetc(stdin);
+		if (c == EOF) {
+			if (ferror(stdin) || feof(stdin))
+				goto out_free;
+
+			eof = true;
+			break;
+		}
+
+		if (c == '\n')
+			break;
+
+		*cur++ = (char)c;
+		if (cur - line >= DTS_LINE_SIZE) {
+			fprintf(stderr, "line is too long\n");
+			goto out_free;
+		}
+	}
+	*cur = '\0';
+	if (eof && strlen(line) == 0)
+		goto out_free;
+
+	return line;
+ out_free:
+	dts_freeline(line);
+	return NULL;
+#endif
+}
+
+static void
+rand_iarr_swap(void *array, int a, int b)
+{
+	int	*iarray = (int *)array;
+	int	 tmp;
+
+	tmp = iarray[a];
+	iarray[a] = iarray[b];
+	iarray[b] = tmp;
+}
+
+static daos_sort_ops_t rand_iarr_ops = {
+	.so_swap	= rand_iarr_swap,
+};
+
+int *
+dts_rand_iarr_alloc(int nr, int base)
+{
+	int	*array;
+	int	 i;
+
+	array = malloc(nr * sizeof(*array));
+	if (!array)
+		return NULL;
+
+	for (i = 0; i < nr; i++)
+		array[i] = base + i;
+
+	daos_array_shuffle((void *)array, nr, &rand_iarr_ops);
+	return array;
+}
