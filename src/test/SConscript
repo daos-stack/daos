@@ -43,6 +43,8 @@ ECHO_SRC = ['crt_echo_cli.c', 'crt_echo_srv.c', 'crt_echo_srv2.c']
 BASIC_SRC = ['crt_basic.c']
 TEST_GROUP_SRC = 'test_group.c'
 COMMON_SRC = 'fake_events.c'
+IV_TESTS = ['iv_client.c', 'iv_server.c']
+
 def scons():
     """scons function"""
     Import('env', 'prereqs')
@@ -58,6 +60,10 @@ def scons():
 
     # a simple example to use crt_xxx APIs
     for test in ECHO_SRC:
+        target = tenv.Program(test)
+        tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
+
+    for test in IV_TESTS:
         target = tenv.Program(test)
         tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
 

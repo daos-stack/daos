@@ -175,11 +175,66 @@ typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
 typedef int (*crt_iv_on_hash_cb_t)(crt_iv_namespace_t ivns,
 				   crt_iv_key_t *iv_key, crt_rank_t *root);
 
+
+/**
+ * Permission flag passed to crt_iv_on_get_cb_t
+ */
+typedef enum {
+	CRT_IV_PERM_READ = 0x1,
+	CRT_IV_PERM_WRITE = 0x2,
+} crt_iv_perm_t;
+
+/**
+ * Get value function to get buffers for iv_value for the specified iv_key.
+ *
+ * Callback implementation is expected to provide buffers inside of iv_value
+ * parameter with sufficient space to store value for the specified iv_key.
+ *
+ * When called with CRT_IV_PERM_READ permission, returned iv_value
+ * will only be used for reading data out of it.
+ *
+ * When called with CRT_IV_PERM_WRITE permission, returned iv_value
+ * will be used by framework for storage of intermediate values.
+ *
+ * Callback implementation should consider iv_value being 'in use' until
+ * a corresponding crt_iv_on_put_cb_t callback is called.
+ *
+ * \param ivns [IN]		the local handle to the IV namespace
+ * \param iv_key [IN]		key of the IV
+ * \param iv_ver [IN]		Version of iv_key
+ * \param permission [IN]	crt_iv_perm_t flags
+ * \param iv_value [OUT]	Resultant placeholder for iv value buffer
+ *
+ * \return			zero on success, negative value if error
+ */
+typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
+				crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
+				crt_iv_perm_t permission,
+				crt_sg_list_t *iv_value);
+
+/**
+ * Put value function to return buffers retrieved for the specified iv_key
+ * Original buffers in iv_value are to be retreived via
+ * crt_iv_on_get_cb_t call.
+ *
+ * \param ivns [IN]		the local handle to the IV namespace
+ * \param iv_key [IN]		key of the IV
+ * \param iv_ver [IN]		version of the iv_key
+ * \param iv_value [IN]		iv_value buffers to return
+ *
+ * \return			zero on success, negative value if error
+ */
+typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
+				crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
+				crt_sg_list_t *iv_value);
+
 struct crt_iv_ops {
-	crt_iv_on_fetch_cb_t		ivo_on_fetch;
-	crt_iv_on_update_cb_t		ivo_on_update;
-	crt_iv_on_refresh_cb_t		ivo_on_refresh;
-	crt_iv_on_hash_cb_t		ivo_on_hash;
+	crt_iv_on_fetch_cb_t	ivo_on_fetch;
+	crt_iv_on_update_cb_t	ivo_on_update;
+	crt_iv_on_refresh_cb_t	ivo_on_refresh;
+	crt_iv_on_hash_cb_t	ivo_on_hash;
+	crt_iv_on_get_cb_t	ivo_on_get;
+	crt_iv_on_put_cb_t	ivo_on_put;
 };
 
 /**
@@ -286,6 +341,7 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns);
  * \param iv_ver [IN]		version of the IV
  * \param iv_value [IN/OUT]	IV value buffer, input for update, output for
  *				fetch.
+ * \param rc [IN]		Return code of fetch/update/invalidate operation
  * \param cb_arg [IN]		pointer to argument passed to fetch/update/
  *				invalidate.
  *
@@ -294,7 +350,7 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns);
 typedef int (*crt_iv_comp_cb_t)(crt_iv_namespace_t ivns, uint32_t class_id,
 				crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
 				crt_sg_list_t *iv_value,
-				void *cb_args);
+				int rc, void *cb_args);
 
 /**
  * Fetch the value of incast variable.

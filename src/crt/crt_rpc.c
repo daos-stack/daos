@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -177,6 +177,23 @@ struct crt_corpc_ops crt_rank_evict_co_ops = {
 	.co_aggregate = crt_rank_evict_corpc_aggregate,
 };
 
+
+static struct crt_msg_field *crt_iv_fetch_in_fields[] = {
+	&CMF_IOVEC, /* crt_ivns_id */
+	&CMF_IOVEC, /* key */
+	&CMF_BULK, /* iv_value_bulk */
+	&CMF_INT, /* class_id */
+	&CMF_RANK, /* root_rank */
+};
+
+static struct crt_msg_field *crt_iv_fetch_out_fields[] = {
+	&CMF_INT, /* TODO: int for now */
+};
+
+static struct crt_req_format CQF_CRT_IV_FETCH =
+	DEFINE_CRT_REQ_FMT("CRT_IV_FETCH", crt_iv_fetch_in_fields,
+				crt_iv_fetch_out_fields);
+
 struct crt_internal_rpc crt_internal_rpcs[] = {
 	{
 		.ir_name	= "CRT_GRP_CREATE",
@@ -241,6 +258,14 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_flags	= 0,
 		.ir_req_fmt	= &CQF_CRT_SELF_TEST_PING_BOTH_NONEMPTY,
 		.ir_hdlr	= crt_self_test_ping_handler,
+		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_IV_FETCH",
+		.ir_opc		= CRT_OPC_IV_FETCH,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_IV_FETCH,
+		.ir_hdlr	= crt_hdlr_iv_fetch,
 		.ir_co_ops	= NULL,
 	}, {
 		.ir_opc		= 0

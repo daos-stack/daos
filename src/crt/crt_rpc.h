@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -202,6 +202,11 @@ enum {
 	CRT_OPC_SELF_TEST_PING_SEND_EMPTY	= CRT_OPC_INTERNAL_BASE + 0x201,
 	CRT_OPC_SELF_TEST_PING_REPLY_EMPTY	= CRT_OPC_INTERNAL_BASE + 0x202,
 	CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY	= CRT_OPC_INTERNAL_BASE + 0x203,
+
+	CRT_OPC_IV_FETCH			= CRT_OPC_INTERNAL_BASE + 0x300,
+	CRT_OPC_IV_UPDATE			= CRT_OPC_INTERNAL_BASE + 0x301,
+	CRT_OPC_IV_INVALIDATE			= CRT_OPC_INTERNAL_BASE + 0x302,
+	CRT_OPC_IV_REFRESH			= CRT_OPC_INTERNAL_BASE + 0x303,
 };
 
 /* CRT internal RPC definitions */
@@ -313,5 +318,8 @@ crt_req_aborted(crt_rpc_t *rpc)
 int crt_corpc_req_hdlr(crt_rpc_t *req);
 int crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info);
 int crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
+
+/* crt_iv.c */
+int crt_hdlr_iv_fetch(crt_rpc_t *rpc_req);
 
 #endif /* __CRT_RPC_H__ */
