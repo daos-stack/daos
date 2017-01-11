@@ -80,13 +80,17 @@ class TestInfoRunner(PreRunner.PreRunner):
 
     def dump_test_info(self):
         """ dump the test info to the output directory """
-        if os.path.exists(self.log_dir_base):
+        if os.path.exists(os.path.join(self.log_dir_base,
+                                       self.test_info['module']['name'])):
             name = "%s/%s/%s_test_info.yml" % (self.log_dir_base,
                                                self.test_info['module']['name'],
                                                self.test_info['module']['name'])
-            with open(name, 'w') as fd:
-                dump(self.test_info, fd, Dumper=Dumper, indent=4,
-                     default_flow_style=False)
+        else:
+            name = "%s/%s_test_info.yml" % (self.log_dir_base,
+                                            self.test_info['module']['name'])
+        with open(name, 'w') as fd:
+            dump(self.test_info, fd, Dumper=Dumper, indent=4,
+                 default_flow_style=False)
 
     def get_test_info(self, keyname=None, subkey=None, default=""):
         """ setup the environment """

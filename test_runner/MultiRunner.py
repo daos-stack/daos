@@ -47,7 +47,7 @@ except ImportError:
 
 class MultiRunner(PostRunner.PostRunner):
     """Simple test runner"""
-    log_dir_base = ""
+    logdir = ""
     test_list = []
     subtest_results = []
     test_directives = {}
@@ -66,7 +66,7 @@ class MultiRunner(PostRunner.PostRunner):
     def dump_subtest_results(self):
         """ dump the test results to the log directory """
         if os.path.exists(self.log_dir_base):
-            name = "%s/subtest_results.yml" % self.log_dir_base
+            name = os.path.join(self.logdir, "subtest_results.yml")
             with open(name, 'w') as fd:
                 dump(self.subtest_results, fd, Dumper=Dumper, indent=4,
                      default_flow_style=False)
@@ -103,6 +103,10 @@ class MultiRunner(PostRunner.PostRunner):
         self.logger.info("TestRunner: tearDown begin")
         if self.daemon:
             self.daemon.stop_process()
+            logDir = os.path.join(self.logdir,
+                                  str(self.test_info.get_test_info(
+                                      'use_daemon', 'name')))
+            self.check_log_mode(logDir)
         self.test_info.dump_test_info()
         self.dump_subtest_results()
         self.rename_output_directory()
@@ -181,31 +185,30 @@ class MultiRunner(PostRunner.PostRunner):
         self.test_info = TestInfoRunner.TestInfoRunner(self.info)
         if self.test_info.load_testcases(test_module_name):
             return 1
-        logdir = os.path.join(self.log_dir_base, \
-                              str(self.test_info.get_test_info(
-                                  'module', 'name')))
+        module_name = str(self.test_info.get_test_info('module', 'name'))
+        self.logdir = os.path.join(self.log_dir_base, module_name)
         try:
-            os.makedirs(logdir)
+            os.makedirs(self.logdir)
         except OSError:
-            newname = "%s_%s" % (logdir, datetime.now().isoformat())
-            os.rename(logdir, newname)
-            os.makedirs(logdir)
-        #value = logdir + "/multi.log"
-        file_hdlr = logging.FileHandler(logdir + "/multi.log")
+            newname = "%s_%s" % (self.logdir, datetime.now().isoformat())
+            os.rename(self.logdir, newname)
+            os.makedirs(self.logdir)
+        file_hdlr = logging.FileHandler(os.path.join(self.logdir,
+                                                     (module_name + ".log")))
         self.logger.addHandler(file_hdlr)
         file_hdlr.setLevel(logging.DEBUG)
         self.test_directives = self.test_info.get_test_info('directives', None,
                                                             {})
         self.test_info.add_default_env()
         self.logger.info("***************** " + \
-                         str(self.test_info.get_test_info('module', 'name')) + \
+                         module_name + \
                          " *********************************"
                         )
         self.nodes = NodeControlRunner.NodeControlRunner(
-            logdir, self.info, self.test_info)
+            self.logdir, self.info, self.test_info)
         self.nodes.nodes_strategy(self.test_directives)
         if self.test_info.get_test_info('use_daemon'):
-            self.daemon = self.import_daemon(logdir)
+            self.daemon = self.import_daemon(self.logdir)
             rtn = self.daemon.launch_process()
         if not rtn:
             rtn_info = self.execute_strategy()

@@ -115,14 +115,22 @@ class TestRunner(PostRunner.PostRunner):
         for test_module_name in self.test_list:
             if self.test_info.load_testcases(test_module_name):
                 return 1
-            self.logdir = os.path.join(self.log_dir_base, \
-                                  str(self.test_info.get_module('name')))
-            try:
-                os.makedirs(self.logdir)
-            except OSError:
-                newname = "%s_%s" % (self.logdir, datetime.now().isoformat())
-                os.rename(self.logdir, newname)
-                os.makedirs(self.logdir)
+            # NOTE this will need to be fixed if multi runs a list of tests.
+            # All the log files need to be in the directory with a
+            # subtest_results file for mapping to Maloo entries.
+            # 'node' key is set by MultiRunner
+            if self.info.get_config('node'):
+                self.logdir = self.log_dir_base
+            else:
+                self.logdir = os.path.join(self.log_dir_base, \
+                                      str(self.test_info.get_module('name')))
+                try:
+                    os.makedirs(self.logdir)
+                except OSError:
+                    newname = "%s_%s" % (self.logdir,
+                                         datetime.now().isoformat())
+                    os.rename(self.logdir, newname)
+                    os.makedirs(self.logdir)
             testMode = self.test_info.get_test_info('directives', 'testMode')
             if testMode == "scripts":
                 runner = ScriptsRunner(self.test_info, self.logdir)

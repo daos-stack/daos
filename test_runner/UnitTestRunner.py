@@ -145,6 +145,7 @@ class UnitTestRunner(PostRunner.PostRunner,
         """ execute test strategy """
 
         file_hdlr = None
+        results = []
         results_info = {}
         rtn = 0
         results_info['name'] = self.test_info.get_module('name')
@@ -182,4 +183,5 @@ class UnitTestRunner(PostRunner.PostRunner,
         results_info['error'] = ""
         file_hdlr.close()
         self.logger.removeHandler(file_hdlr)
-        return (rtn, results_info)
+        results.append(results_info)
+        return (rtn, results)
