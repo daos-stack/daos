@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,15 +41,51 @@
 
 #include <crt_api.h>
 
+#define CRT_SELF_TEST_MAX_MSG_SIZE (0x40000000)
+
+/*
+ * Logic table for self-test opcodes:
+ *
+ * send_size == 0 && return_size == 0
+ *      opcode: CRT_OPC_SELF_TEST_PING_BOTH_EMPTY
+ *      send struct: NULL
+ *      return struct: NULL
+ *
+ * send_size == 0 && return_size > 0
+ *      opcode: CRT_OPC_SELF_TEST_PING_SEND_EMPTY
+ *      send struct: uint32_t
+ *      return struct: iovec
+ *
+ * send_size > 0 && return_size == 0
+ *      opcode: CRT_OPC_SELF_TEST_PING_REPLY_EMPTY
+ *      send struct: iovec payload
+ *      return struct: NULL
+ *
+ * send_size > 0 && return_size > 0
+ *      opcode: CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY
+ *      send struct: uint32_t reply_size, iovec payload
+ *      return struct: iovec of specified size
+ */
+
 /* RPC arguments */
-struct crt_st_ping_args {
+struct crt_st_ping_send_empty {
+	uint32_t reply_size;
+};
+
+struct crt_st_ping_send_reply_empty {
 	crt_iov_t ping_buf;
 };
 
-struct crt_st_ping_res {
+struct crt_st_ping_send_nonempty {
+	crt_iov_t ping_buf;
+	uint32_t reply_size;
+};
+
+struct crt_st_ping_reply {
 	crt_iov_t resp_buf;
 };
 
+void crt_self_test_init(void);
 int crt_self_test_ping_handler(crt_rpc_t *rpc_req);
 
 #endif /* __CRT_SELF_TEST_H__ */

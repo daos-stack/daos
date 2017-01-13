@@ -359,6 +359,8 @@ do_init:
 			C_GOTO(unlock, rc);
 		}
 
+		crt_self_test_init();
+
 		rc = crt_opc_map_create(CRT_OPC_MAP_BITS);
 		if (rc != 0) {
 			C_ERROR("crt_opc_map_create failed rc: %d.\n", rc);
