@@ -40,30 +40,35 @@
 #include <vos_obj.h>
 
 extern struct dss_module_key vos_module_key;
-static pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /**
- * VOS pool handle (DRAM)
+ * VOS cookie index table
+ * In-memory BTR index to hold all cookies and max epoch updated
  */
-struct vp_hdl {
+struct vos_cookie_itab {
+	struct btr_root		cit_btr;
+};
+
+/**
+ * VOS pool (DRAM)
+ */
+struct vos_pool {
 	/** VOS uuid hash-link with refcnt */
-	struct daos_ulink	vp_uhlink;
+	struct daos_ulink	vp_hlink;
+	/** number of openers */
+	int			vp_opened;
 	/** UUID of vos pool */
 	uuid_t			vp_id;
-	/** Pointer to PMEMobjpool **/
-	PMEMobjpool		*vp_ph;
-	/** Path to PMEM file **/
-	char			*vp_fpath;
-	/** Btree attribute for pool instance **/
+	/** memory attribute of the @vp_umm */
 	struct umem_attr	vp_uma;
-	/** pmem allocation outside btree **/
+	/** memory class instance of the pool */
 	struct umem_instance	vp_umm;
-	/** btr handle for container tree */
-	daos_handle_t		vp_ct_hdl;
-	/** cookie index in-place part of the handle */
-	struct vos_cookie_index	vp_cookie_index;
-	/** btr handle for cookie tree */
-	daos_handle_t		vp_ck_hdl;
+	/** btr handle for the container index table */
+	daos_handle_t		vp_cont_ith;
+	/** cookie index table (DRAM only) */
+	struct vos_cookie_itab	vp_cookie_itab;
+	/** btr handle for the cookie index table */
+	daos_handle_t		vp_cookie_ith;
 };
 
 /**
@@ -73,7 +78,7 @@ struct vc_hdl {
 	/* VOS uuid hash with refcnt */
 	struct daos_ulink	vc_uhlink;
 	/* VOS PMEMobjpool pointer */
-	struct vp_hdl		*vc_phdl;
+	struct vos_pool		*vc_pool;
 	/* Unique UID of VOS container */
 	uuid_t			vc_id;
 	/* DAOS handle for object index btree */
@@ -103,14 +108,6 @@ struct vos_imem_strts {
 struct vos_imem_strts	*vsa_imems_inst;
 
 /**
- * VOS thread local storage structure
- */
-struct vos_tls {
-	/* in-memory structures TLS instance */
-	struct vos_imem_strts	vtl_imems_inst;
-};
-
-/**
  * Reference of a cached object.
  * NB: DRAM data structure.
  */
@@ -136,6 +133,14 @@ extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_oid_iter_ops;
 extern struct vos_iter_ops vos_co_iter_ops;
 
+/**
+ * VOS thread local storage structure
+ */
+struct vos_tls {
+	/* in-memory structures TLS instance */
+	struct vos_imem_strts	vtl_imems_inst;
+};
+
 static inline struct vos_tls *
 vos_tls_get()
 {
@@ -146,6 +151,18 @@ vos_tls_get()
 	tls = (struct vos_tls *)dss_module_key_get(dtc, &vos_module_key);
 	return tls;
 }
+
+static inline struct dhash_table *
+vos_hhash_get(void)
+{
+#ifdef VOS_STANDALONE
+	return vsa_imems_inst->vis_hr_hash;
+#else
+	return vos_tls_get()->vtl_imems_inst.vis_hr_hash;
+#endif
+}
+
+extern pthread_mutex_t vos_pmemobj_lock;
 
 static inline PMEMobjpool *
 vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
@@ -178,24 +195,37 @@ vos_pmemobj_close(PMEMobjpool *pop)
 	pthread_mutex_unlock(&vos_pmemobj_lock);
 }
 
-static inline struct vos_pool_root *
-vos_pool2root(struct vp_hdl *vp)
+static inline struct vos_pool_df *
+vos_pool_pop2df(PMEMobjpool *pop)
 {
-	TOID(struct vos_pool_root)  proot;
+	TOID(struct vos_pool_df) pool_df;
 
-	proot = POBJ_ROOT(vp->vp_ph, struct vos_pool_root);
-	return D_RW(proot);
+	pool_df = POBJ_ROOT(pop, struct vos_pool_df);
+	return D_RW(pool_df);
 }
 
-static inline struct vos_container_index*
-vos_pool2coi_table(struct vp_hdl *vp)
+static inline PMEMobjpool *
+vos_pool_ptr2pop(struct vos_pool *pool)
 {
-	struct vos_container_index *coi;
+	return pool->vp_uma.uma_u.pmem_pool;
+}
 
-	coi =  D_RW(vos_pool2root(vp)->vpr_ci_table);
+static inline struct vos_pool_df *
+vos_pool_ptr2df(struct vos_pool *pool)
+{
+	return vos_pool_pop2df(vos_pool_ptr2pop(pool));
+}
 
-	D_ASSERT(coi != NULL);
-	return coi;
+static inline void
+vos_pool_addref(struct vos_pool *pool)
+{
+	daos_uhash_link_addref(vos_hhash_get(), &pool->vp_hlink);
+}
+
+static inline void
+vos_pool_decref(struct vos_pool *pool)
+{
+	daos_uhash_link_decref(vos_hhash_get(), &pool->vp_hlink);
 }
 
 /**
@@ -265,33 +295,30 @@ vos_ci_create(struct umem_attr *p_umem_attr,
  */
 
 int
-vos_cookie_index_init();
+vos_cookie_itab_init();
 
 /**
- * VOS Cookie index create
- * Create a new DRAM B-Tree for empty container index
- * Called from vos_pool_create
+ * create a VOS Cookie index table.
  *
+ * \param uma		[IN]	universal memory attributes
  * \param cookie_index	[IN]	vos cookie index
- *				(DRAM pointer)
  * \param cookie_handle [OUT]	cookie_btree handle
  *
  * \return		0 on success and negative on
  *			failure
  */
 int
-vos_cookie_index_create(struct vos_cookie_index *cookie_index,
-			daos_handle_t *cookie_handle);
+vos_cookie_itab_create(struct umem_attr *uma, struct vos_cookie_itab *itab,
+		       daos_handle_t *cookie_handle);
 
 
 /**
- * VOS cookie index destroy
  * Destroy the cookie index table
  *
  * \param cih	[IN]	cookie index handle
  */
 int
-vos_cookie_index_destroy(daos_handle_t cih);
+vos_cookie_itab_destroy(daos_handle_t cih);
 
 /**
  * VOS cookie update
@@ -305,8 +332,7 @@ vos_cookie_index_destroy(daos_handle_t cih);
  *			invalid handle
  */
 int
-vos_cookie_update(daos_handle_t cih, uuid_t cookie,
-		  daos_epoch_t epoch);
+vos_cookie_update(daos_handle_t cih, uuid_t cookie, daos_epoch_t epoch);
 
 /**
  * VOS cookie find and update
@@ -340,7 +366,7 @@ vos_oi_init();
  * oid
  * Called from vos_container_create.
  *
- * \param po_hdl	[IN]	Pool Handle
+ * \param pool		[IN]	vos pool
  * \param obj_index	[IN]	vos object index
  *				(pmem direct pointer)
  *
@@ -348,15 +374,14 @@ vos_oi_init();
  *			failure
  */
 int
-vos_oi_create(struct vp_hdl *po_hdl,
-	      struct vos_object_index *obj_index);
+vos_oi_create(struct vos_pool *pool, struct vos_object_index *obj_index);
 
 /**
  * VOS object index destroy
  * Destroy the object index and all its objects
  * Called from vos_container_destroy
  *
- * \param po_hdl	[IN]	Pool Handle
+ * \param pool		[IN]	vos pool
  * \param obj_index	[IN]	vos object index
  *				(pmem direct pointer)
  *
@@ -364,8 +389,7 @@ vos_oi_create(struct vp_hdl *po_hdl,
  *			failure
  */
 int
-vos_oi_destroy(struct vp_hdl *po_hdl,
-	       struct vos_object_index *obj_index);
+vos_oi_destroy(struct vos_pool *pool, struct vos_object_index *obj_index);
 
 /**
  * Data structure which carries the keys, epoch ranges to the multi-nested
@@ -517,8 +541,8 @@ enum {
 	VOS_BTR_OIT		= (VOS_BTR_BEGIN + 3),
 	/** container index table */
 	VOS_BTR_CIT		= (VOS_BTR_BEGIN + 4),
-	/** cookie index table */
-	VOS_BTR_CKT		= (VOS_BTR_BEGIN + 5),
+	/** tree type for cookie index table */
+	VOS_BTR_COOKIE		= (VOS_BTR_BEGIN + 5),
 	/** the last reserved tree class */
 	VOS_BTR_END,
 };
@@ -528,37 +552,37 @@ int vos_obj_tree_fini(struct vos_obj_ref *oref);
 int vos_obj_tree_register(void);
 
 static inline PMEMobjpool *
-vos_oref2pop(struct vos_obj_ref *oref)
+vos_co2pop(struct vc_hdl *co_hdl)
 {
-	return oref->or_co->vc_phdl->vp_ph;
+	return vos_pool_ptr2pop(co_hdl->vc_pool);
 }
 
 static inline PMEMobjpool *
-vos_co2pop(struct vc_hdl *co_hdl)
+vos_oref2pop(struct vos_obj_ref *oref)
 {
-	return co_hdl->vc_phdl->vp_ph;
+	return vos_co2pop(oref->or_co);
 }
 
 static inline daos_handle_t
 vos_oref2cookie_hdl(struct vos_obj_ref *oref)
 {
-	return oref->or_co->vc_phdl->vp_ck_hdl;
+	return oref->or_co->vc_pool->vp_cookie_ith;
 }
 
 static inline struct umem_attr *
 vos_oref2uma(struct vos_obj_ref *oref)
 {
-	return &oref->or_co->vc_phdl->vp_uma;
+	return &oref->or_co->vc_pool->vp_uma;
 }
 
 static inline struct umem_instance *
 vos_oref2umm(struct vos_obj_ref *oref)
 {
-	return &oref->or_co->vc_phdl->vp_umm;
+	return &oref->or_co->vc_pool->vp_umm;
 }
 
 static inline daos_handle_t
-vos_pool2hdl(struct vp_hdl *pool)
+vos_pool2hdl(struct vos_pool *pool)
 {
 	daos_handle_t poh;
 
@@ -566,10 +590,10 @@ vos_pool2hdl(struct vp_hdl *pool)
 	return poh;
 }
 
-static inline struct vp_hdl*
+static inline struct vos_pool*
 vos_hdl2pool(daos_handle_t poh)
 {
-	return (struct vp_hdl *)(poh.cookie);
+	return (struct vos_pool *)(poh.cookie);
 }
 
 static inline daos_handle_t
@@ -592,10 +616,8 @@ vos_coh2cih(daos_handle_t coh)
 {
 	struct vc_hdl *chdl = vos_hdl2co(coh);
 
-	return chdl->vc_phdl->vp_ck_hdl;
+	return chdl->vc_pool->vp_cookie_ith;
 }
-
-
 
 /**
  * iterators

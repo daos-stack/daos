@@ -257,7 +257,7 @@ bool daos_uhash_link_empty(struct daos_ulink *ulink);
 bool daos_uhash_link_last_ref(struct daos_ulink *ulink);
 void daos_uhash_link_addref(struct dhash_table *uhtab,
 			    struct daos_ulink *hlink);
-void daos_uhash_link_putref(struct dhash_table *uhtab,
+void daos_uhash_link_decref(struct dhash_table *uhtab,
 			    struct daos_ulink *hlink);
 void daos_uhash_link_delete(struct dhash_table *uhtab,
 			    struct daos_ulink *hlink);

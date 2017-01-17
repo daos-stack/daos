@@ -152,7 +152,7 @@ vos_mod_init(void)
 		return rc;
 	}
 
-	rc = vos_cookie_index_init();
+	rc = vos_cookie_itab_init();
 	if (rc) {
 		D_ERROR("VOS cookie btree initialization error\n");
 		return rc;

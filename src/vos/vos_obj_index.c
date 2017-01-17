@@ -210,15 +210,14 @@ vos_oi_init()
 }
 
 int
-vos_oi_create(struct vp_hdl *po_hdl,
-	      struct vos_object_index *obj_index)
+vos_oi_create(struct vos_pool *pool, struct vos_object_index *obj_index)
 {
 
 	int				rc = 0;
 	daos_handle_t			btr_hdl;
 	struct btr_root			*oi_root = NULL;
 
-	if (!po_hdl || !obj_index) {
+	if (!pool || !obj_index) {
 		D_ERROR("Invalid handle\n");
 		return -DER_INVAL;
 	}
@@ -233,7 +232,7 @@ vos_oi_create(struct vp_hdl *po_hdl,
 			VOS_BTR_OIT);
 
 		rc = dbtree_create_inplace(VOS_BTR_OIT, 0, OT_BTREE_ORDER,
-					   &po_hdl->vp_uma, &obj_index->obtable,
+					   &pool->vp_uma, &obj_index->obtable,
 					   &btr_hdl);
 		if (rc)
 			D_ERROR("dbtree create failed\n");
@@ -243,14 +242,13 @@ vos_oi_create(struct vp_hdl *po_hdl,
 }
 
 int
-vos_oi_destroy(struct vp_hdl *po_hdl,
-	       struct vos_object_index *obj_index)
+vos_oi_destroy(struct vos_pool *pool, struct vos_object_index *obj_index)
 {
 	int				rc = 0;
 	daos_handle_t			btr_hdl;
 
 
-	if (!po_hdl || !obj_index) {
+	if (!pool || !obj_index) {
 		D_ERROR("Invalid handle\n");
 		return -DER_INVAL;
 	}
@@ -259,8 +257,7 @@ vos_oi_destroy(struct vp_hdl *po_hdl,
 	 * TODO: Check for KVobject oih->or_obj
 	 * if not empty. Destroy it too.
 	 */
-	rc = dbtree_open_inplace(&obj_index->obtable, &po_hdl->vp_uma,
-				 &btr_hdl);
+	rc = dbtree_open_inplace(&obj_index->obtable, &pool->vp_uma, &btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
 		D_GOTO(exit, rc = -DER_NONEXIST);

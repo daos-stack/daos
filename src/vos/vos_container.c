@@ -47,7 +47,7 @@
  */
 struct vc_val_buf {
 	struct vos_container		*vc_co;
-	struct vp_hdl			*vc_vpool;
+	struct vos_pool			*vc_vpool;
 };
 
 /** iterator for co_uuid */
@@ -56,7 +56,7 @@ struct vos_co_iter {
 	/* Handle of iterator */
 	daos_handle_t		cot_hdl;
 	/* Pool handle */
-	struct vp_hdl		*cot_phdl;
+	struct vos_pool		*cot_pool;
 };
 
 static int
@@ -171,14 +171,14 @@ static btr_ops_t vct_ops = {
 };
 
 static inline int
-vos_co_tree_lookup(struct vp_hdl *vpool, struct daos_uuid *ukey,
+vos_co_tree_lookup(struct vos_pool *vpool, struct daos_uuid *ukey,
 		   struct vc_val_buf *sbuf)
 {
 	daos_iov_t			key, value;
 
 	daos_iov_set(&key, ukey, sizeof(struct daos_uuid));
 	daos_iov_set(&value, sbuf, sizeof(struct vc_val_buf));
-	return dbtree_lookup(vpool->vp_ct_hdl, &key, &value);
+	return dbtree_lookup(vpool->vp_cont_ith, &key, &value);
 }
 
 
@@ -190,7 +190,7 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid)
 {
 
 	int				rc = 0;
-	struct vp_hdl			*vpool = NULL;
+	struct vos_pool			*vpool = NULL;
 	struct daos_uuid		ukey;
 	struct vc_val_buf		s_buf;
 
@@ -211,13 +211,13 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid)
 		D_GOTO(exit, rc = -DER_EXIST);
 	}
 
-	TX_BEGIN(vpool->vp_ph) {
+	TX_BEGIN(vos_pool_ptr2pop(vpool)) {
 		daos_iov_t key, value;
 
 		daos_iov_set(&key, &ukey, sizeof(struct daos_uuid));
 		daos_iov_set(&value, &s_buf, sizeof(struct vc_val_buf));
 
-		rc = dbtree_update(vpool->vp_ct_hdl, &key, &value);
+		rc = dbtree_update(vpool->vp_cont_ith, &key, &value);
 		if (rc) {
 			D_ERROR("Creating a container entry: %d\n", rc);
 			pmemobj_tx_abort(ENOMEM);
@@ -239,7 +239,7 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 {
 
 	int				rc = 0;
-	struct vp_hdl			*vpool = NULL;
+	struct vos_pool			*vpool = NULL;
 	struct daos_uuid		ukey;
 	struct vc_val_buf		s_buf;
 	struct vc_hdl			*co_hdl = NULL;
@@ -281,14 +281,14 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	}
 
 	uuid_copy(co_hdl->vc_id, co_uuid);
-	co_hdl->vc_phdl		= vpool;
+	co_hdl->vc_pool		= vpool;
 	co_hdl->vc_co		= s_buf.vc_co;
 	co_hdl->vc_obj_table	= umem_id2ptr_typed(&vpool->vp_umm,
 						    s_buf.vc_co->vc_obtable);
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace(&co_hdl->vc_obj_table->obtable,
-				 &co_hdl->vc_phdl->vp_uma,
+				 &co_hdl->vc_pool->vp_uma,
 				 &co_hdl->vc_btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
@@ -360,7 +360,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 {
 
 	int				rc = 0;
-	struct vp_hdl			*vpool;
+	struct vos_pool			*vpool;
 	struct daos_uuid		ukey;
 	struct vc_val_buf		s_buf;
 	struct vos_object_index		*vc_oi = NULL;
@@ -392,7 +392,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 	}
 
 	daos_iov_set(&del_key, &ukey, sizeof(struct daos_uuid));
-	TX_BEGIN(vpool->vp_ph) {
+	TX_BEGIN(vos_pool_ptr2pop(vpool)) {
 		vc_oi = umem_id2ptr_typed(&vpool->vp_umm,
 					  s_buf.vc_co->vc_obtable);
 		rc = vos_oi_destroy(vpool, vc_oi);
@@ -402,7 +402,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 			pmemobj_tx_abort(EFAULT);
 		}
 
-		rc = dbtree_delete(vpool->vp_ct_hdl, &del_key);
+		rc = dbtree_delete(vpool->vp_cont_ith, &del_key);
 	}  TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_ERROR("Destroying container transaction failed %d\n", rc);
@@ -488,8 +488,8 @@ vos_co_iter_fini(struct vos_iterator *iter)
 			D_ERROR("co_iter_fini failed: %d\n", rc);
 	}
 
-	if (co_iter->cot_phdl != NULL)
-		vos_pool_putref_handle(co_iter->cot_phdl);
+	if (co_iter->cot_pool != NULL)
+		vos_pool_decref(co_iter->cot_pool);
 
 	D_FREE_PTR(co_iter);
 	return rc;
@@ -500,7 +500,7 @@ vos_co_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		 struct vos_iterator **iter_pp)
 {
 	struct vos_co_iter	*co_iter = NULL;
-	struct vp_hdl		*vpool = NULL;
+	struct vos_pool		*vpool = NULL;
 	int			rc = 0;
 
 	if (type != VOS_ITER_COUUID) {
@@ -517,10 +517,10 @@ vos_co_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	if (co_iter == NULL)
 		return -DER_NOMEM;
 
-	co_iter->cot_phdl = vpool;
-	vos_pool_addref_handle(vpool);
+	vos_pool_addref(vpool);
+	co_iter->cot_pool = vpool;
 
-	rc = dbtree_iter_prepare(vpool->vp_ct_hdl, 0, &co_iter->cot_hdl);
+	rc = dbtree_iter_prepare(vpool->vp_cont_ith, 0, &co_iter->cot_hdl);
 	if (rc)
 		D_GOTO(exit, rc);
 

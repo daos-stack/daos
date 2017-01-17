@@ -369,9 +369,10 @@ cookie_table_test(void **state)
 {
 	int				ret = 0;
 	int				i = 0, j = 0, k = 0;
-	struct vos_cookie_index		*index;
+	struct vos_cookie_itab		*itab;
 	struct daos_uuid		*cookie_array;
 	daos_epoch_t			*epochs;
+	struct umem_attr		uma;
 	uint64_t			epoch_ret;
 	daos_handle_t			cookie_hdl;
 	/* static uuid hash for verification */
@@ -379,11 +380,10 @@ cookie_table_test(void **state)
 	struct dhash_table		*uhtab = NULL;
 	struct daos_ulink		*l_ulink = NULL;
 
-	D_ALLOC_PTR(index);
+	D_ALLOC_PTR(itab);
 	D_ALLOC(cookie_array, VCT_COOKIES * sizeof(struct daos_uuid));
 	D_ALLOC(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
 	D_ALLOC(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
-
 
 	ret = daos_uhash_create(0, 8, &uhtab);
 	if (ret != 0)
@@ -393,9 +393,11 @@ cookie_table_test(void **state)
 	for (i = 0; i < VCT_COOKIES; i++)
 		uuid_generate_random(cookie_array[i].uuid);
 
-	ret = vos_cookie_index_create(index, &cookie_hdl);
+	memset(&uma, 0, sizeof(uma));
+	uma.uma_id = UMEM_CLASS_VMEM;
+	ret = vos_cookie_itab_create(&uma, itab, &cookie_hdl);
 	if (ret != 0)
-		print_error("Failed to create cookie index\n");
+		print_error("Failed to create cookie itab\n");
 
 	for (i = 0; i < VCT_EPOCHS; i++) {
 
@@ -437,10 +439,10 @@ cookie_table_test(void **state)
 	}
 	/* Cleanup allocations */
 	daos_uhash_destroy(uhtab);
-	ret = vos_cookie_index_destroy(cookie_hdl);
+	ret = vos_cookie_itab_destroy(cookie_hdl);
 	if (ret != 0)
-		D_ERROR("Cookie index destroy error\n");
-	D_FREE_PTR(index);
+		D_ERROR("Cookie itab destroy error\n");
+	D_FREE_PTR(itab);
 	D_FREE(cookie_array, VCT_COOKIES * sizeof(struct daos_uuid));
 	D_FREE(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
 	D_FREE(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));

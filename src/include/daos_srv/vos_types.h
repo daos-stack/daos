@@ -31,9 +31,7 @@
  */
 typedef struct {
 	/** # of containers in this pool */
-	unsigned int		pif_ncos;
-	/** # of objects in this pool */
-	unsigned int		pif_nobjs;
+	uint64_t		pif_cont_nr;
 	/** Total space available */
 	daos_size_t		pif_size;
 	/** Current vailable space */

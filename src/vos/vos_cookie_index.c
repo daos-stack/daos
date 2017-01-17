@@ -55,20 +55,19 @@ static int
 vcoi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	       daos_iov_t *val_iov, struct btr_record *rec)
 {
-	TMMID(struct vos_cookie_entry)	vce_rec_mmid;
-	struct vos_cookie_entry		*vce_rec = NULL;
+	TMMID(struct vos_cookie_rec_df)	vce_rec_mmid;
+	struct vos_cookie_rec_df	*vce_rec;
 
 	D_ASSERT(key_iov->iov_len == sizeof(struct daos_uuid));
 	D_ASSERT(val_iov->iov_len == sizeof(daos_epoch_t));
 
-	vce_rec_mmid = umem_znew_typed(&tins->ti_umm,
-				       struct vos_cookie_entry);
+	vce_rec_mmid = umem_znew_typed(&tins->ti_umm, struct vos_cookie_rec_df);
 	if (TMMID_IS_NULL(vce_rec_mmid))
 		return -DER_NOMEM;
 
 	vce_rec = umem_id2ptr_typed(&tins->ti_umm, vce_rec_mmid);
-	memcpy(&vce_rec->vce_max_epoch, val_iov->iov_buf,
-	       sizeof(daos_epoch_t));
+
+	memcpy(&vce_rec->cr_max_epoch, val_iov->iov_buf, sizeof(daos_epoch_t));
 	rec->rec_mmid = umem_id_t2u(vce_rec_mmid);
 	return 0;
 }
@@ -76,10 +75,10 @@ vcoi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 static int
 vcoi_rec_free(struct btr_instance *tins, struct btr_record *rec)
 {
-	TMMID(struct vos_cookie_entry)	vce_rec_mmid;
+	TMMID(struct vos_cookie_rec_df)	vce_rec_mmid;
 	struct umem_instance		*umm = &tins->ti_umm;
 
-	vce_rec_mmid = umem_id_u2t(rec->rec_mmid, struct vos_cookie_entry);
+	vce_rec_mmid = umem_id_u2t(rec->rec_mmid, struct vos_cookie_rec_df);
 	umem_free_typed(umm, vce_rec_mmid);
 
 	return 0;
@@ -89,13 +88,12 @@ static int
 vcoi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	      daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
-	struct vos_cookie_entry		*vce_rec = NULL;
+	struct vos_cookie_rec_df *vce_rec;
 
 	D_ASSERT(val_iov != NULL);
 
 	vce_rec = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
-	memcpy(val_iov->iov_buf, &vce_rec->vce_max_epoch,
-	       sizeof(daos_epoch_t));
+	memcpy(val_iov->iov_buf, &vce_rec->cr_max_epoch, sizeof(daos_epoch_t));
 
 	return 0;
 }
@@ -104,12 +102,12 @@ static int
 vcoi_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	       daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
-	struct vos_cookie_entry		*vce_rec = NULL;
+	struct vos_cookie_rec_df *vce_rec;
 
 	D_ASSERT(key_iov != NULL && val_iov != NULL);
 	vce_rec = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 	/** Update the max epoch */
-	vce_rec->vce_max_epoch	= *(daos_epoch_t *)val_iov->iov_buf;
+	vce_rec->cr_max_epoch	= *(daos_epoch_t *)val_iov->iov_buf;
 	return 0;
 }
 
@@ -124,55 +122,41 @@ static btr_ops_t vcoi_ops = {
 
 
 int
-vos_cookie_index_init()
+vos_cookie_itab_init()
 {
 	int	rc;
 
-	D_DEBUG(DF_VOS2, "Registering class for Cookie table Class: %d\n",
-		VOS_BTR_CKT);
+	D_DEBUG(DB_MD, "Registering tree class for cookie table: %d\n",
+		VOS_BTR_COOKIE);
 
-	rc = dbtree_class_register(VOS_BTR_CKT, 0, &vcoi_ops);
+	rc = dbtree_class_register(VOS_BTR_COOKIE, 0, &vcoi_ops);
 	if (rc)
 		D_ERROR("dbtree create failed\n");
 	return rc;
 }
 
 int
-vos_cookie_index_create(struct vos_cookie_index *cookie_index,
-			daos_handle_t *cookie_handle)
+vos_cookie_itab_create(struct umem_attr *uma, struct vos_cookie_itab *itab,
+		       daos_handle_t *cookie_handle)
 {
-	int			rc = 0;
-	struct btr_root		*cookie_index_root = NULL;
+	int	rc;
 
-	if (!cookie_index) {
-		D_ERROR("Cookie index create failed\n");
-		return -DER_INVAL;
-	}
+	D_ASSERT(itab->cit_btr.tr_class == 0);
+	D_DEBUG(DB_MD, "Create cookie tree in-place :%d\n", VOS_BTR_COOKIE);
 
-	cookie_index_root = (struct btr_root *) &(cookie_index->cookie_btr);
-	cookie_index->cookie_btr_attr.uma_id = UMEM_CLASS_VMEM;
-
-	D_ASSERT(cookie_index_root->tr_class == 0);
-	D_DEBUG(DF_VOS2, "Create Cookie Tree in-place :%d\n",
-		VOS_BTR_CKT);
-
-	rc = dbtree_create_inplace(VOS_BTR_CKT, 0, COOKIE_BTREE_ORDER,
-				   &cookie_index->cookie_btr_attr,
-				   &cookie_index->cookie_btr,
-				   cookie_handle);
-
+	rc = dbtree_create_inplace(VOS_BTR_COOKIE, 0, COOKIE_BTREE_ORDER, uma,
+				   &itab->cit_btr, cookie_handle);
 	if (rc) {
-		D_ERROR("dbtree create failed\n");
+		D_ERROR("dbtree create failed: %d\n", rc);
 		D_GOTO(exit, rc);
 	}
-
 exit:
 	return rc;
 
 }
 
 int
-vos_cookie_index_destroy(daos_handle_t cih)
+vos_cookie_itab_destroy(daos_handle_t cih)
 {
 	int			rc  = 0;
 
@@ -204,7 +188,7 @@ vos_cookie_find_update(daos_handle_t cih, uuid_t cookie, daos_epoch_t epoch,
 
 	rc = dbtree_lookup(cih, &key, &value);
 	if (rc == 0) {
-		D_DEBUG(DF_VOS2, "dbtree lookup found "DF_UUID","DF_U64"\n",
+		D_DEBUG(DB_MD, "dbtree lookup found "DF_UUID","DF_U64"\n",
 			DP_UUID(cookie), max_epoch);
 
 		if (!update_flag) /* read-only */

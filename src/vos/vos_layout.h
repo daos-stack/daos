@@ -35,6 +35,8 @@
 
 /**
  * VOS metadata structure declarations
+ * TODO: use df (durable format) as postfix of structures.
+ *
  * opaque structure expanded inside implementation
  * Container table for holding container UUIDs
  * Object table for holding object IDs
@@ -45,8 +47,7 @@ struct vos_container_index;
 struct vos_container;
 struct vos_object_index;
 struct vos_obj;
-struct vos_cookie_index;
-struct vos_cookie_entry;
+struct vos_cookie_rec_df;
 struct vos_epoch_index;
 struct vos_krec;
 struct vos_irec;
@@ -64,13 +65,12 @@ struct vos_irec;
  */
 POBJ_LAYOUT_BEGIN(vos_pool_layout);
 
-POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_root);
+POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_object_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_index);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_entry);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_rec_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_irec);
 POBJ_LAYOUT_END(vos_pool_layout);
@@ -85,40 +85,29 @@ struct vos_container_index {
 };
 
 /**
- * VOS cookie index
- * In-memory BTR index to hold
- * all cookies and max epoch updated
+ * tree record stored in cookie index table
+ * NB: it is actually stored in DRAM for now, but might switch to PMEM in
+ * the future.
  */
-struct vos_cookie_index {
-	struct btr_root		cookie_btr;
-	struct umem_attr	cookie_btr_attr;
+struct vos_cookie_rec_df {
+	/** max updated epoch of a cookie(upper level open handle) */
+	daos_epoch_t		cr_max_epoch;
 };
 
-/**
- *  VOS cookie table
- *  Data structure to store max90
- */
-struct vos_cookie_entry {
-	daos_epoch_t	vce_max_epoch;
-};
-
-
-
-struct vos_pool_root {
+struct vos_pool_df {
 	/* Structs stored in LE or BE representation */
-	uint32_t				vpr_magic;
+	uint32_t				pd_magic;
 	/* Unique PoolID for each VOS pool assigned on creation */
-	uuid_t					vpr_pool_id;
+	uuid_t					pd_id;
 	/* Flags for compatibility features */
-	uint64_t				vpr_compat_flags;
+	uint64_t				pd_compat_flags;
 	/* Flags for incompatibility features */
-	uint64_t				vpr_incompat_flags;
+	uint64_t				pd_incompat_flags;
 	/* Typed PMEMoid pointer for the container index table */
-	TOID(struct vos_container_index)	vpr_ci_table;
+	struct vos_container_index		pd_cont_itab;
 	/* Pool info of objects, containers, space availability */
-	vos_pool_info_t				vpr_pool_info;
+	vos_pool_info_t				pd_pool_info;
 };
-
 
 struct vos_epoch_index {
 	struct btr_root		ehtable;

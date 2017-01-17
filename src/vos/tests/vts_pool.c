@@ -37,6 +37,7 @@
 #include <cmocka.h>
 #include <vts_common.h>
 
+#include <vos_layout.h>
 #include <daos_srv/vos.h>
 
 struct vp_test_args {
@@ -160,11 +161,10 @@ pool_ops_run(void **state)
 			case QUERY:
 				ret = vos_pool_query(arg->poh[j], &pinfo);
 				assert_int_equal(ret, 0);
-				assert_int_equal(pinfo.pif_ncos, 0);
-				assert_int_equal(pinfo.pif_nobjs, 0);
+				assert_int_equal(pinfo.pif_cont_nr, 0);
 				assert_false(pinfo.pif_size != VPOOL_16M);
 				assert_false(pinfo.pif_avail !=
-					     (VPOOL_16M - 80));
+				     (VPOOL_16M - sizeof(struct vos_pool_df)));
 				break;
 			default:
 				fail_msg("Shoudln't be here Unkown ops?\n");

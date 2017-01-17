@@ -44,46 +44,8 @@ vos_ulink2coh(struct daos_ulink *ulink)
 	return container_of(ulink, struct vc_hdl, vc_uhlink);
 }
 
-static inline struct vp_hdl*
-vos_ulink2poh(struct daos_ulink *ulink)
-{
-	D_ASSERT(ulink != NULL);
-	return	container_of(ulink, struct vp_hdl, vp_uhlink);
-}
-
 void
 vos_co_uhash_free(struct daos_ulink *ulink);
-
-void
-vos_pool_uhash_free(struct daos_ulink *ulink);
-
-/**
- * Getting handle has
- * wrapper for TLS and standalone mode
- */
-struct dhash_table *vos_get_hr_hash();
-
-/**
- * Pool UUID hash manipulation
- */
-void
-vos_pool_handle_init(struct vp_hdl *vp_hdl);
-
-int
-vos_pool_insert_handle(struct vp_hdl *vp_hdl, struct daos_uuid *key,
-		       daos_handle_t *poh);
-
-int
-vos_pool_lookup_handle(struct daos_uuid *key, struct vp_hdl **vpool);
-
-void
-vos_pool_addref_handle(struct vp_hdl *vpool);
-
-void
-vos_pool_putref_handle(struct vp_hdl *vpool);
-
-int
-vos_pool_release_handle(struct vp_hdl *vp_hdl);
 
 /**
  * Container UUID hash manipulation
