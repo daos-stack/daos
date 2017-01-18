@@ -381,7 +381,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 	if (rc != -DER_NONEXIST) {
 		D_ERROR("Open reference exists, cannot destroy\n");
 		vos_co_putref_handle(co_hdl);
-		D_GOTO(exit, rc = -DER_NO_PERM);
+		D_GOTO(exit, rc = -DER_BUSY);
 	}
 
 	rc = vos_co_tree_lookup(vpool, &ukey, &s_buf);

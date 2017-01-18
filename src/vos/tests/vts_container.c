@@ -163,7 +163,7 @@ co_ref_count_test(void **state)
 	int			i, ret;
 
 	ret = vos_co_destroy(arg->poh, arg->uuid[0].uuid);
-	assert_int_equal(ret, -DER_NO_PERM);
+	assert_int_equal(ret, -DER_BUSY);
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
 		ret = vos_co_close(arg->coh[i]);

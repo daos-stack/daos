@@ -289,7 +289,7 @@ kbtr_rec_free(struct btr_instance *tins, struct btr_record *rec,
 		umem_attr_get(&tins->ti_umm, &uma);
 		rc = dbtree_open_inplace(&krec->kr_btr, &uma, &toh);
 		if (rc != 0)
-			D_ERROR("Failed to open subtree: %d\b", rc);
+			D_ERROR("Failed to open subtree: %d\n", rc);
 		else
 			dbtree_destroy(toh);
 	}

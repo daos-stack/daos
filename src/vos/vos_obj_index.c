@@ -84,11 +84,26 @@ vo_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	TMMID(struct vos_obj)	vo_rec_mmid;
+	struct vos_obj		*vobj;
+	int			rc = 0;
 
 	vo_rec_mmid = umem_id_u2t(rec->rec_mmid, struct vos_obj);
-	umem_free_typed(umm, vo_rec_mmid);
+	vobj = umem_id2ptr_typed(&tins->ti_umm, vo_rec_mmid);
 
-	return 0;
+	/** Free the KV tree within this object */
+	if (vobj->vo_tree.tr_class != 0) {
+		struct umem_attr uma;
+		daos_handle_t	 toh;
+
+		umem_attr_get(&tins->ti_umm, &uma);
+		rc = dbtree_open_inplace(&vobj->vo_tree, &uma, &toh);
+		if (rc != 0)
+			D_ERROR("Failed to open KV tree: %d\n", rc);
+		else
+			dbtree_destroy(toh);
+	}
+	umem_free_typed(umm, vo_rec_mmid);
+	return rc;
 }
 
 static int
@@ -186,95 +201,6 @@ vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 	return rc;
 }
 
-/*TODO: Implement Remove once we have dbtree delete
- *	Implement Update with SR metadata added
- */
-
-
-/**
- * Internal usage APIs
- * For use from container APIs and init APIs
- */
-int
-vos_oi_init()
-{
-	int	rc;
-
-	D_DEBUG(DF_VOS2, "Registering class for OI table Class: %d\n",
-		VOS_BTR_OIT);
-
-	rc = dbtree_class_register(VOS_BTR_OIT, 0, &voi_ops);
-	if (rc)
-		D_ERROR("dbtree create failed\n");
-	return rc;
-}
-
-int
-vos_oi_create(struct vos_pool *pool, struct vos_object_index *obj_index)
-{
-
-	int				rc = 0;
-	daos_handle_t			btr_hdl;
-	struct btr_root			*oi_root = NULL;
-
-	if (!pool || !obj_index) {
-		D_ERROR("Invalid handle\n");
-		return -DER_INVAL;
-	}
-
-	/**
-	 * Inplace btr_root
-	 */
-	oi_root = (struct btr_root *) &(obj_index->obtable);
-
-	if (!oi_root->tr_class) {
-		D_DEBUG(DF_VOS2, "create OI Tree in-place: %d\n",
-			VOS_BTR_OIT);
-
-		rc = dbtree_create_inplace(VOS_BTR_OIT, 0, OT_BTREE_ORDER,
-					   &pool->vp_uma, &obj_index->obtable,
-					   &btr_hdl);
-		if (rc)
-			D_ERROR("dbtree create failed\n");
-	}
-
-	return rc;
-}
-
-int
-vos_oi_destroy(struct vos_pool *pool, struct vos_object_index *obj_index)
-{
-	int				rc = 0;
-	daos_handle_t			btr_hdl;
-
-
-	if (!pool || !obj_index) {
-		D_ERROR("Invalid handle\n");
-		return -DER_INVAL;
-	}
-
-	/**
-	 * TODO: Check for KVobject oih->or_obj
-	 * if not empty. Destroy it too.
-	 */
-	rc = dbtree_open_inplace(&obj_index->obtable, &pool->vp_uma, &btr_hdl);
-	if (rc) {
-		D_ERROR("No Object handle, Tree open failed\n");
-		D_GOTO(exit, rc = -DER_NONEXIST);
-	}
-
-	/**
-	 * TODO: Check for KVobject oih->or_obj
-	 * if not empty. Destroy it too.
-	 */
-	rc = dbtree_destroy(btr_hdl);
-	if (rc)
-		D_ERROR("OI BTREE destroy failed\n");
-exit:
-	return rc;
-}
-
-
 static struct vos_oid_iter*
 vos_iter2oid_iter(struct vos_iterator *iter)
 {
@@ -365,7 +291,6 @@ vos_oid_iter_next(struct vos_iterator *iter)
 	struct vos_oid_iter	*oid_iter = vos_iter2oid_iter(iter);
 
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
-
 	return dbtree_iter_next(oid_iter->oit_hdl);
 }
 
@@ -402,7 +327,6 @@ vos_oid_iter_delete(struct vos_iterator *iter, void *args)
 	PMEMobjpool		*pop;
 	int			rc = 0;
 
-
 	D_DEBUG(DF_VOS2, "oid-iter delete callback\n");
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 	pop = vos_co2pop(oiter->oit_chdl);
@@ -425,3 +349,74 @@ struct vos_iter_ops vos_oid_iter_ops = {
 	.iop_fetch   =  vos_oid_iter_fetch,
 	.iop_delete  =	vos_oid_iter_delete,
 };
+
+/**
+ * Internal usage APIs
+ * For use from container APIs and init APIs
+ */
+int
+vos_oi_init()
+{
+	int	rc;
+
+	D_DEBUG(DF_VOS2, "Registering class for OI table Class: %d\n",
+		VOS_BTR_OIT);
+
+	rc = dbtree_class_register(VOS_BTR_OIT, 0, &voi_ops);
+	if (rc)
+		D_ERROR("dbtree create failed\n");
+	return rc;
+}
+
+int
+vos_oi_create(struct vos_pool *pool, struct vos_object_index *obj_index)
+{
+
+	int				rc = 0;
+	daos_handle_t			btr_hdl;
+	struct btr_root			*oi_root = NULL;
+
+	if (!pool || !obj_index) {
+		D_ERROR("Invalid handle\n");
+		return -DER_INVAL;
+	}
+
+	/** Inplace btr_root */
+	oi_root = (struct btr_root *) &(obj_index->obtable);
+	if (!oi_root->tr_class) {
+		D_DEBUG(DF_VOS2, "create OI Tree in-place: %d\n",
+			VOS_BTR_OIT);
+
+		rc = dbtree_create_inplace(VOS_BTR_OIT, 0, OT_BTREE_ORDER,
+					   &pool->vp_uma, &obj_index->obtable,
+					   &btr_hdl);
+		if (rc)
+			D_ERROR("dbtree create failed\n");
+		dbtree_close(btr_hdl);
+	}
+	return rc;
+}
+
+int
+vos_oi_destroy(struct vos_pool *pool, struct vos_object_index *obj_index)
+{
+	int				rc = 0;
+	daos_handle_t			btr_hdl;
+
+	if (!pool || !obj_index) {
+		D_ERROR("Invalid handle\n");
+		return -DER_INVAL;
+	}
+
+	rc = dbtree_open_inplace(&obj_index->obtable, &pool->vp_uma, &btr_hdl);
+	if (rc) {
+		D_ERROR("No Object handle, Tree open failed\n");
+		D_GOTO(exit, rc = -DER_NONEXIST);
+	}
+
+	rc = dbtree_destroy(btr_hdl);
+	if (rc)
+		D_ERROR("OI BTREE destroy failed\n");
+exit:
+	return rc;
+}
