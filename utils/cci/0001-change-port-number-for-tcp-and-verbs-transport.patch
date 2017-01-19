@@ -1,4 +1,4 @@
-From 1969f09d61967467a8797c21bee1c3fa5bdfa865 Mon Sep 17 00:00:00 2001
+From 476839de517657c95e44191168031d208479b172 Mon Sep 17 00:00:00 2001
 From: Liu Xuezhao <xuezhao.liu@intel.com>
 Date: Wed, 29 Jun 2016 15:08:19 +0000
 Subject: [PATCH] change port number for tcp and verbs transport
@@ -11,15 +11,15 @@ This patch make the change for tcp and verbs transport.
 
 Signed-off-by: Xuezhao Liu <xuezhao.liu@intel.com>
 ---
- src/plugins/ctp/tcp/ctp_tcp_api.c     |   13 ++++++++++++-
- src/plugins/ctp/verbs/ctp_verbs_api.c |   18 +++++++++++++++++-
+ src/plugins/ctp/tcp/ctp_tcp_api.c     | 13 ++++++++++++-
+ src/plugins/ctp/verbs/ctp_verbs_api.c | 18 +++++++++++++++++-
  2 files changed, 29 insertions(+), 2 deletions(-)
 
 diff --git a/src/plugins/ctp/tcp/ctp_tcp_api.c b/src/plugins/ctp/tcp/ctp_tcp_api.c
-index ecba822..6445cc5 100644
+index a60ff32..5c2aa47 100644
 --- a/src/plugins/ctp/tcp/ctp_tcp_api.c
 +++ b/src/plugins/ctp/tcp/ctp_tcp_api.c
-@@ -623,7 +623,18 @@ static int ctp_tcp_create_endpoint_at(cci_device_t * device,
+@@ -642,7 +642,18 @@ static int ctp_tcp_create_endpoint_at(cci_device_t * device,
  	if (service) {
  		sin.sin_port = htons((uint16_t)strtol(service, NULL, 0));
  	} else if (tdev->port != 0) {
@@ -40,7 +40,7 @@ index ecba822..6445cc5 100644
  
  	ret = bind(sock, (const struct sockaddr *)&sin, sizeof(sin));
 diff --git a/src/plugins/ctp/verbs/ctp_verbs_api.c b/src/plugins/ctp/verbs/ctp_verbs_api.c
-index 5a29ac3..b4ea3a8 100644
+index 06da1f4..2d347c8 100644
 --- a/src/plugins/ctp/verbs/ctp_verbs_api.c
 +++ b/src/plugins/ctp/verbs/ctp_verbs_api.c
 @@ -1179,8 +1179,24 @@ ctp_verbs_create_endpoint_at(cci_device_t * device,
@@ -70,5 +70,5 @@ index 5a29ac3..b4ea3a8 100644
  	ret = rdma_bind_addr(vep->id_rc, (struct sockaddr *)&vep->sin);
  	if (ret == -1) {
 -- 
-1.7.1
+1.8.3.1
 

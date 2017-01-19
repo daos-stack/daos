@@ -78,21 +78,8 @@ if [[ "$CART_TEST_MODE" =~ (memcheck|all) ]]; then
   RESULTS="valgrind_results"
   if [[ ! -e ${RESULTS} ]]; then mkdir ${RESULTS}; fi
 
-  # TODO: This looks like it'll copy all valgrind logs, not just the ones from
-  # the current test run.
-  TESTECHODIR="cart_echo_test_loop0/cart_echo_test_default"
-  cp -R ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/*/valgrind*.xml ${RESULTS}/.
+  find ${TESTDIR} -name valgrind*.xml | xargs cp -t ${RESULTS}
 
-  TESTECHODIR="cart_test_group_loop0/cart_test_group_default"
-  cp -R ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/*/valgrind*.xml ${RESULTS}/.
-
-  # Skip this for now - if DVM isn't enabled then the test will be skipped and
-  # there is no easy way to check for that here.
-  TESTECHODIR="cart_self_test_loop0/cart_self_test_default"
-  if [ -d ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/ ]
-  then
-      cp -R ${TESTDIR}${TESTLOGS}*/${TESTECHODIR}/*/valgrind*.xml ${RESULTS}/.
-  fi
   if [ $error != 0 ]; then
     exit $error
   fi

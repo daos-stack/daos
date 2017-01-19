@@ -584,8 +584,8 @@ crt_hg_unpack_header(struct crt_rpc_priv *rpc_priv, crt_proc_t *proc)
 	ctx = (struct crt_context *)(rpc_priv->crp_pub.cr_ctx);
 	hg_ctx = &ctx->cc_hg_ctx;
 	hg_class = hg_ctx->chc_hgcla;
-	hg_ret = hg_proc_create(hg_class, in_buf, in_buf_size, HG_DECODE,
-				HG_CRC64, &hg_proc);
+	hg_ret = hg_proc_create_set(hg_class, in_buf, in_buf_size, HG_DECODE,
+				    HG_CHECKSUM_DEFAULT, &hg_proc);
 	if (hg_ret != HG_SUCCESS) {
 		C_ERROR("Could not create proc, hg_ret: %d.", hg_ret);
 		C_GOTO(out, rc = -CER_HG);

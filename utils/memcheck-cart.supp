@@ -30,13 +30,6 @@
     fun:PMIx_Lookup
 }
 {
-    Memory leak in PMIx module lookup
-    Memcheck:Leak
-    fun:*alloc
-    ...
-    fun:pdlopen_open*
-}
-{
     Leak from PMIx event handler registration.
     Memcheck:Leak
     fun:*alloc
@@ -72,6 +65,19 @@
     ...
     fun:_dl_open
 }
-
-
-
+{
+   na_cci_finalize leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_dl_close_worker
+   fun:_dl_close
+   fun:_dl_catch_error
+   fun:_dlerror_run
+   fun:dlclose
+   fun:vm_close
+   fun:lt_dlclose
+   fun:cci_plugins_ctp_close
+   fun:cci_finalize
+   fun:na_cci_finalize
+}
