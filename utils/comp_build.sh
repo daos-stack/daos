@@ -272,6 +272,9 @@ if [ -d "$CORAL_ARTIFACTS" ]; then
     setup_dep $dep
   done
   option="PREBUILT_PREFIX=${PREBUILT_AREA}"
+  if [ -n "${BUILD_OPTIONS}" ]; then
+    option="${option} ${BUILD_OPTIONS}"
+  fi
 fi
 
 set -x
