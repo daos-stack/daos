@@ -1514,6 +1514,35 @@ recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 		default:
 			return -DER_INVAL;
 
+		case VOS_IT_EPC_RE:
+			if (entry->ie_epr.epr_lo >= oiter->it_epr.epr_lo &&
+			    entry->ie_epr.epr_lo <= oiter->it_epr.epr_hi)
+				return 0; /** Falls in the range */
+			/**
+			 * This recx may have data for epoch >
+			 * entry->ie_epr.epr_lo
+			 */
+			if (entry->ie_epr.epr_lo < oiter->it_epr.epr_lo)
+				entry->ie_epr.epr_lo = oiter->it_epr.epr_lo;
+			else /** epoch not in this index search next epoch */
+				entry->ie_epr.epr_lo = DAOS_EPOCH_MAX;
+
+			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
+			break;
+
+		case VOS_IT_EPC_RR:
+			if (entry->ie_epr.epr_lo >= oiter->it_epr.epr_lo &&
+			    entry->ie_epr.epr_lo <= oiter->it_epr.epr_hi)
+				return 0; /** Falls in the range */
+
+			if (entry->ie_epr.epr_lo > oiter->it_epr.epr_hi)
+				entry->ie_epr.epr_lo = oiter->it_epr.epr_hi;
+			else /** if ent::epr_lo < oiter::epr_lo */
+				entry->ie_recx.rx_idx -= 1;
+
+			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_LE, entry);
+			break;
+
 		case VOS_IT_EPC_GE:
 			if (entry->ie_epr.epr_lo > oiter->it_epr.epr_lo)
 				return 0; /* matched */
@@ -1582,7 +1611,11 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 	int			opc;
 	int			rc;
 
-	opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
+	if (oiter->it_epc_expr == VOS_IT_EPC_RR)
+		opc = anchor == NULL ? BTR_PROBE_LAST : BTR_PROBE_LE;
+	else
+		opc = anchor == NULL ? BTR_PROBE_FIRST : BTR_PROBE_GE;
+
 	rc = dbtree_iter_probe(oiter->it_hdl, opc, NULL, anchor);
 	if (rc != 0)
 		return rc;
@@ -1600,7 +1633,8 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 			return 0;
 
 		D_DEBUG(DF_VOS2, "Can't find the provided anchor\n");
-		/* the original recx has been merged/discarded, so we need to
+		/**
+		 * the original recx has been merged/discarded, so we need to
 		 * call recx_iter_probe_epr() and check if the current record
 		 * can match the condition.
 		 */
@@ -1644,18 +1678,24 @@ recx_iter_next(struct vos_obj_iter *oiter)
 {
 	vos_iter_entry_t entry;
 	int		 rc;
+	int		 opc;
 
 	memset(&entry, 0, sizeof(entry));
 	rc = recx_iter_fetch(oiter, &entry, NULL);
 	if (rc != 0)
 		return rc;
 
-	/* NB: Nobody should use DAOS_EPOCH_MAX as an epoch of update,
-	 * so using BTR_PROBE_GE & DAOS_EPOCH_MAX can effectively find
-	 * the index of the next recx.
-	 */
-	entry.ie_epr.epr_lo = DAOS_EPOCH_MAX;
-	rc = recx_iter_probe_fetch(oiter, BTR_PROBE_GE, &entry);
+	if (oiter->it_epc_expr == VOS_IT_EPC_RE)
+		entry.ie_epr.epr_lo +=  1;
+	else if (oiter->it_epc_expr == VOS_IT_EPC_RR)
+		entry.ie_epr.epr_lo -=  1;
+	else
+		entry.ie_epr.epr_lo = DAOS_EPOCH_MAX;
+
+	opc = (oiter->it_epc_expr == VOS_IT_EPC_RR) ?
+		BTR_PROBE_LE : BTR_PROBE_GE;
+
+	rc = recx_iter_probe_fetch(oiter, opc, &entry);
 	if (rc != 0)
 		return rc;
 
@@ -1697,9 +1737,6 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	if (param->ip_epr.epr_lo == 0) /* the most recent one */
 		param->ip_epr.epr_lo = DAOS_EPOCH_MAX;
-
-	/* XXX can't support range iteration */
-	param->ip_epr.epr_hi = DAOS_EPOCH_MAX;
 
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)

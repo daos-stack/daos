@@ -145,7 +145,7 @@ inc_cntr_manual(unsigned long op_flags, struct vts_counter *cntrs)
 }
 
 void
-test_args_init(struct io_test_args *args)
+test_args_init(struct io_test_args *args, uint64_t pool_size)
 {
 	int	rc, i;
 
@@ -158,17 +158,17 @@ test_args_init(struct io_test_args *args)
 	for (i = 0; i < NUM_UNIQUE_COOKIES; i++)
 		uuid_generate_random(cookie_dict[i]);
 
-	rc = vts_ctx_init(&args->ctx, VPOOL_1G);
+	rc = vts_ctx_init(&args->ctx, pool_size);
 	assert_int_equal(rc, 0);
 	args->oid = gen_oid();
 	args->cookie_flag = false;
 }
 
 void
-test_args_reset(struct io_test_args *args)
+test_args_reset(struct io_test_args *args, uint64_t pool_size)
 {
 	vts_ctx_fini(&args->ctx);
-	test_args_init(args);
+	test_args_init(args, pool_size);
 }
 
 static struct io_test_args	test_args;
@@ -177,7 +177,7 @@ int
 setup_io(void **state)
 {
 	srand(10);
-	test_args_init(&test_args);
+	test_args_init(&test_args, VPOOL_1G);
 
 	*state = &test_args;
 	return 0;
@@ -195,14 +195,13 @@ teardown_io(void **state)
 
 static int
 io_recx_iterate(vos_iter_param_t *param, daos_akey_t *akey, int akey_id,
-		bool cookie_fetch, bool print_ent)
+		bool cookie_fetch, int *recs, bool print_ent)
 {
 	daos_handle_t	ih;
 	int		nr = 0;
 	int		rc;
 
 	param->ip_akey = *akey;
-	param->ip_epc_expr = VOS_IT_EPC_LE;
 
 	rc = vos_iter_prepare(VOS_ITER_RECX, param, &ih);
 	if (rc != 0) {
@@ -243,6 +242,8 @@ io_recx_iterate(vos_iter_param_t *param, daos_akey_t *akey, int akey_id,
 				(unsigned int)ent.ie_recx.rx_idx,
 				ent.ie_iov.iov_len == 0 ?
 				"[NULL]" : (char *)ent.ie_iov.iov_buf);
+			D_PRINT("\tepoch: "DF_U64"\n",
+				ent.ie_epr.epr_lo);
 		}
 
 		rc = vos_iter_next(ih);
@@ -254,12 +255,13 @@ io_recx_iterate(vos_iter_param_t *param, daos_akey_t *akey, int akey_id,
 	rc = 0;
 out:
 	vos_iter_finish(ih);
+	*recs += nr;
 	return rc;
 }
 
 static int
 io_akey_iterate(vos_iter_param_t *param, daos_dkey_t *dkey, int dkey_id,
-		bool cookie_flag, bool print_ent)
+		bool cookie_flag, int *akeys, int *recs, bool print_ent)
 {
 	daos_handle_t	ih;
 	int		nr = 0;
@@ -293,6 +295,7 @@ io_akey_iterate(vos_iter_param_t *param, daos_dkey_t *dkey, int dkey_id,
 		}
 
 		rc = io_recx_iterate(param, &ent.ie_key, nr, cookie_flag,
+				     recs,
 				     print_ent);
 
 		nr++;
@@ -305,25 +308,33 @@ io_akey_iterate(vos_iter_param_t *param, daos_dkey_t *dkey, int dkey_id,
 	rc = 0;
 out:
 	vos_iter_finish(ih);
+	*akeys += nr;
 	return rc;
 }
 
 static int
-io_obj_iter_test(struct io_test_args *arg)
+io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
+		 vos_it_epc_expr_t expr,
+		 int *num_dkeys, int *num_akeys, int *num_recs,
+		 bool print_ent)
 {
 	char			buf[UPDATE_AKEY_SIZE];
 	vos_iter_param_t	param;
 	daos_handle_t		ih;
 	bool			iter_fa;
 	int			nr = 0;
+	int			akeys = 0, recs = 0;
 	int			rc;
 
 	iter_fa = (arg->ta_flags & TF_FIXED_AKEY);
 
 	memset(&param, 0, sizeof(param));
-	param.ip_hdl	= arg->ctx.tc_co_hdl;
-	param.ip_oid	= arg->oid;
-	param.ip_epr.epr_lo = vts_epoch_gen + 10;
+	param.ip_hdl		= arg->ctx.tc_co_hdl;
+	param.ip_oid		= arg->oid;
+	param.ip_epr		= *epr;
+	param.ip_epc_expr	= expr;
+
+
 	if (iter_fa) {
 		strcpy(&buf[0], UPDATE_AKEY_FIXED);
 		daos_iov_set(&param.ip_akey, &buf[0], strlen(buf));
@@ -358,8 +369,8 @@ io_obj_iter_test(struct io_test_args *arg)
 		}
 
 		rc = io_akey_iterate(&param, &ent.ie_key, nr,
-				     arg->cookie_flag,
-				     VTS_IO_KEYS <= 10);
+				     arg->cookie_flag, &akeys,
+				     &recs, print_ent);
 		if (rc != 0)
 			goto out;
 
@@ -393,18 +404,10 @@ io_obj_iter_test(struct io_test_args *arg)
 		}
 	}
  out:
-	/**
-	 * Check if enumerated keys is equal to the number of
-	 * keys updated
-	 */
-	print_message("Enumerated: %d, total_keys: %lu.\n",
-		      nr, iter_fa ? vts_cntr.cn_fa_dkeys : vts_cntr.cn_dkeys);
-	if (iter_fa)
-		assert_int_equal(nr, vts_cntr.cn_fa_dkeys);
-	else
-		assert_int_equal(nr, vts_cntr.cn_dkeys);
-
 	vos_iter_finish(ih);
+	*num_dkeys = nr;
+	*num_akeys = akeys;
+	*num_recs  = recs;
 	return rc;
 }
 
@@ -558,6 +561,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 			}
 			memcpy(last_akey, akey_buf, UPDATE_AKEY_SIZE);
 		}
+
 
 		daos_iov_set(&dkey, &dkey_buf[0], strlen(dkey_buf));
 		daos_iov_set(&akey, &akey_buf[0], strlen(akey_buf));
@@ -744,23 +748,49 @@ static void
 io_iter_test(void **state)
 {
 	struct io_test_args	*arg = *state;
+	daos_epoch_range_t	epr;
 	int			rc = 0;
+	int			nr, akeys, recs;
 
 	arg->ta_flags = 0;
-	rc = io_obj_iter_test(arg);
+	epr.epr_lo = vts_epoch_gen + 10;
+	epr.epr_hi = DAOS_EPOCH_MAX;
+
+	rc = io_obj_iter_test(arg, &epr, VOS_IT_EPC_GE,
+			      &nr, &akeys, &recs, false);
 	assert_true(rc == 0 || rc == -DER_NONEXIST);
+
+	/**
+	 * Check if enumerated keys is equal to the number of
+	 * keys updated
+	 */
+	print_message("Enumerated: %d, total_keys: %lu.\n",
+		      nr, vts_cntr.cn_dkeys);
+	print_message("Enumerated akeys: %d\n", akeys);
+	assert_int_equal(nr, vts_cntr.cn_dkeys);
 }
 
 static void
 io_iter_test_with_anchor(void **state)
 {
 	struct io_test_args	*arg = *state;
-	int			rc = 0;
+	daos_epoch_range_t	epr;
+	int			nr, rc = 0;
+	int			akeys, recs;
 
 	arg->ta_flags = TF_IT_ANCHOR;
+	epr.epr_lo = vts_epoch_gen + 10;
+	epr.epr_hi = DAOS_EPOCH_MAX;
 	arg->cookie_flag = false;
-	rc = io_obj_iter_test(arg);
+
+	rc = io_obj_iter_test(arg, &epr, VOS_IT_EPC_GE,
+			      &nr, &akeys, &recs, false);
 	assert_true(rc == 0 || rc == -DER_NONEXIST);
+
+	print_message("Enumerated: %d, total_dkeys: %lu.\n",
+		      nr, vts_cntr.cn_dkeys);
+	print_message("Enumerated akeys: %d\n", akeys);
+	assert_int_equal(nr, vts_cntr.cn_dkeys);
 }
 
 #define IOT_FA_DKEYS	100
@@ -770,20 +800,192 @@ io_iter_test_dkey_cond(void **state)
 {
 	struct io_test_args	*arg = *state;
 	int			 i;
-	int			 rc = 0;
-	daos_epoch_t		 epoch = gen_rand_epoch();
+	int			 nr, rc = 0;
+	int			 akeys, recs;
+	daos_epoch_range_t	 epr;
 
 	arg->ta_flags = TF_FIXED_AKEY;
 	arg->cookie_flag = false;
+	epr.epr_lo = gen_rand_epoch();
+	epr.epr_hi = DAOS_EPOCH_MAX;
 
 	for (i = 0; i < IOT_FA_DKEYS; i++) {
-		rc = io_update_and_fetch_dkey(arg, epoch, epoch);
+		rc = io_update_and_fetch_dkey(arg, epr.epr_lo,
+					      epr.epr_lo);
 		assert_int_equal(rc, 0);
 	}
-
-	rc = io_obj_iter_test(arg);
+	epr.epr_lo += 10;
+	rc = io_obj_iter_test(arg, &epr, VOS_IT_EPC_GE,
+			      &nr, &akeys, &recs, false);
 	assert_true(rc == 0 || rc == -DER_NONEXIST);
+
+	print_message("Enumerated: %d, total_keys: %lu.\n",
+		      nr, vts_cntr.cn_fa_dkeys);
+	print_message("Enumerated akeys: %d\n", akeys);
+
+	assert_int_equal(nr, vts_cntr.cn_fa_dkeys);
 }
+
+#define RANGE_ITER_KEYS 10
+
+static int
+io_obj_range_iter_test(struct io_test_args *args, vos_it_epc_expr_t expr)
+{
+	int			i;
+	int			nr, rc;
+	int			akeys, recs;
+	daos_epoch_range_t	epr;
+
+	test_args_reset(args, VPOOL_1G);
+
+	args->ta_flags = 0;
+	epr.epr_lo = gen_rand_epoch();
+	epr.epr_hi = epr.epr_lo + RANGE_ITER_KEYS * 2 - 1;
+	print_message("Updates lo: "DF_U64", hi: "DF_U64"\n",
+		      epr.epr_lo, (epr.epr_lo + (RANGE_ITER_KEYS * 4) - 1));
+	if (expr == VOS_IT_EPC_RR)
+		print_message("Enum range lo:"DF_U64", hi:"DF_U64"\n",
+			      epr.epr_hi, epr.epr_lo);
+	else
+		print_message("Enum range lo:"DF_U64", hi:"DF_U64"\n",
+			      epr.epr_lo, epr.epr_hi);
+
+	for (i = 0; i < RANGE_ITER_KEYS * 4; i += 2) {
+
+		args->ta_flags = 0;
+		rc = io_update_and_fetch_dkey(args, epr.epr_lo + i,
+					      epr.epr_lo + i);
+		if (rc != 0)
+			return rc;
+
+		args->ta_flags |= TF_OVERWRITE;
+		i += 2;
+		rc = io_update_and_fetch_dkey(args, epr.epr_lo + i,
+					      epr.epr_lo + i);
+		if (rc != 0)
+			return rc;
+	}
+
+	rc = io_obj_iter_test(args, &epr, expr,
+			      &nr, &akeys, &recs, true);
+	if (rc == -DER_NONEXIST)
+		rc = 0;
+	if (rc != 0)
+		return rc;
+
+	if (recs != RANGE_ITER_KEYS) {
+		print_message("Enumerated records: %d, total_records: %d.\n",
+			      recs, RANGE_ITER_KEYS);
+		rc = -DER_IO_INVAL;
+	}
+
+	return rc;
+}
+
+static int
+io_obj_recx_range_iteration(struct io_test_args *args, vos_it_epc_expr_t expr)
+{
+	int			i;
+	int			nr, rc;
+	int			akeys, recs;
+	daos_epoch_range_t	epr;
+	daos_epoch_t		epoch;
+	int			total_in_range = 0;
+
+	test_args_reset(args, VPOOL_1G);
+
+	args->ta_flags = 0;
+	epoch = gen_rand_epoch();
+	epr.epr_lo = epoch + RANGE_ITER_KEYS * 2 - 1;
+	epr.epr_hi = epoch + RANGE_ITER_KEYS * 3 - 1;
+	print_message("Updates lo: "DF_U64", hi: "DF_U64"\n",
+		      epoch, (epoch + (RANGE_ITER_KEYS * 4) - 1));
+	if (expr == VOS_IT_EPC_RR)
+		print_message("Enum range lo:"DF_U64", hi:"DF_U64"\n",
+			      epr.epr_hi, epr.epr_lo);
+	else
+		print_message("Enum range lo:"DF_U64", hi:"DF_U64"\n",
+			      epr.epr_lo, epr.epr_hi);
+
+	args->ta_flags = 0;
+	rc = io_update_and_fetch_dkey(args, epr.epr_lo, epr.epr_lo);
+	if (rc != 0)
+		return rc;
+
+	for (i = 1; i < RANGE_ITER_KEYS * 4; i++) {
+
+
+		args->ta_flags |= TF_OVERWRITE;
+		rc = io_update_and_fetch_dkey(args, epoch + i,
+					      epoch + i);
+		if (rc != 0)
+			return rc;
+
+		if ((epoch + i <= epr.epr_hi) &&
+		    (epoch + i >= epr.epr_lo))
+			total_in_range++;
+	}
+
+	rc = io_obj_iter_test(args, &epr, expr,
+			      &nr, &akeys, &recs, true);
+	if (rc == -DER_NONEXIST)
+		rc = 0;
+	if (rc != 0)
+		return rc;
+
+	if (recs != total_in_range) {
+		print_message("Enumerated records: %d, total_records: %d.\n",
+			      recs, total_in_range);
+		rc = -DER_IO_INVAL;
+	}
+	return rc;
+}
+
+static void
+io_obj_forward_iter_test(void **state)
+{
+
+	struct io_test_args	*args = *state;
+	int			rc;
+
+	rc = io_obj_range_iter_test(args, VOS_IT_EPC_RE);
+	assert_int_equal(rc, 0);
+}
+
+static void
+io_obj_reverse_iter_test(void **state)
+{
+
+	struct io_test_args	*args = *state;
+	int			rc;
+
+	rc = io_obj_range_iter_test(args, VOS_IT_EPC_RR);
+	assert_int_equal(rc, 0);
+}
+
+static void
+io_obj_forward_recx_iter_test(void **state)
+{
+
+	struct io_test_args	*args = *state;
+	int			rc;
+
+	rc = io_obj_recx_range_iteration(args, VOS_IT_EPC_RE);
+	assert_int_equal(rc, 0);
+}
+
+
+static void
+io_obj_reverse_recx_iter_test(void **state)
+{
+
+	struct io_test_args	*args = *state;
+	int			rc;
+
+	rc = io_obj_recx_range_iteration(args, VOS_IT_EPC_RR);
+	assert_int_equal(rc, 0);
+}
+
 
 static int
 io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
@@ -1283,7 +1485,7 @@ io_pool_overflow_test(void **state)
 	int			 rc;
 	daos_epoch_t		 epoch;
 
-	test_args_reset(args);
+	test_args_reset(args, VPOOL_1G);
 
 	epoch = gen_rand_epoch();
 	for (i = 0; i < VTS_IO_KEYS; i++) {
@@ -1298,7 +1500,7 @@ io_pool_overflow_test(void **state)
 static int
 io_pool_overflow_teardown(void **state)
 {
-	test_args_reset((struct io_test_args *)*state);
+	test_args_reset((struct io_test_args *)*state, VPOOL_1G);
 	return 0;
 }
 
@@ -1372,6 +1574,15 @@ static const struct CMUnitTest io_tests[] = {
 		io_iter_test_with_anchor, NULL, NULL},
 	{ "VOS240.2: d-key enumeration with condition (akey)",
 		io_iter_test_dkey_cond, NULL, NULL},
+	{ "VOS240.3: KV range Iteration tests (for dkey)",
+		io_obj_forward_iter_test, NULL, NULL},
+	{ "VOS240.4: KV reverse range Iteration tests (for dkey)",
+		io_obj_reverse_iter_test, NULL, NULL},
+	{ "VOS240.5 KV range iteration tests (for recx)",
+		io_obj_forward_recx_iter_test, NULL, NULL},
+	{ "VOS240.6 KV reverse range iteration tests (for recx)",
+		io_obj_reverse_recx_iter_test, NULL, NULL},
+
 	{ "VOS245.0: Object iter test (for oid)",
 		oid_iter_test, oid_iter_test_setup, NULL},
 	{ "VOS245.1: Object iter test with anchor (for oid)",

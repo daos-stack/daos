@@ -293,7 +293,7 @@ io_simple_one_key_discard(void **state)
 static int
 io_simple_discard_teardown(void **state)
 {
-	test_args_reset((struct io_test_args *) *state);
+	test_args_reset((struct io_test_args *) *state, VPOOL_1G);
 	return 0;
 }
 
@@ -597,7 +597,7 @@ io_multikey_discard_teardown(void **state)
 		free(req);
 	}
 
-	test_args_reset((struct io_test_args *) *state);
+	test_args_reset((struct io_test_args *) *state, VPOOL_1G);
 	return 0;
 }
 
@@ -641,18 +641,17 @@ io_epoch_range_discard_test(void **state)
 
 
 	range.epr_lo = epochs[TF_DISCARD_KEYS - 10];
-	range.epr_hi = DAOS_EPOCH_MAX;
+	range.epr_hi = epochs[TF_DISCARD_KEYS - 5];
 
 	D_PRINT("Discard from "DF_U64" to "DF_U64" out of %d epochs\n",
-		epochs[TF_DISCARD_KEYS - 10], epochs[TF_DISCARD_KEYS - 1],
-		TF_DISCARD_KEYS);
+		range.epr_lo, range.epr_hi, TF_DISCARD_KEYS);
 	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
 
 
 	for (i = 0; i < TF_DISCARD_KEYS; i++) {
 		 /** Fall back while fetching from discarded epochs */
-		if (i >= TF_DISCARD_KEYS - 10)
+		if (i >= TF_DISCARD_KEYS - 10 && i <= TF_DISCARD_KEYS - 5)
 			rc = io_fetch(arg, epochs[i], req[TF_DISCARD_KEYS - 11],
 				      false);
 		else

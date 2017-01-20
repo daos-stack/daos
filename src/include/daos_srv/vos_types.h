@@ -79,6 +79,10 @@ typedef enum {
 typedef enum {
 	VOS_IT_EPC_LE		= 0,
 	VOS_IT_EPC_GE,
+	/** RE: Range enumeration */
+	VOS_IT_EPC_RE,
+	/** RR: Reverse Range enum */
+	VOS_IT_EPC_RR,
 	VOS_IT_EPC_EQ,
 } vos_it_epc_expr_t;
 

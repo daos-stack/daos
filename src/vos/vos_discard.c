@@ -246,11 +246,6 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie)
 	D_DEBUG(DB_EPC, "Epoch discard for "DF_UUID" ["DF_U64", "DF_U64"]\n",
 		DP_UUID(cookie), epr->epr_lo, epr->epr_hi);
 
-	if (epr->epr_hi != DAOS_EPOCH_MAX && epr->epr_hi != epr->epr_lo) {
-		D_DEBUG(DB_EPC, "Cannot support epoch range\n");
-		return -DER_INVAL;
-	}
-
 	rc = vos_cookie_find_update(vos_coh2cih(coh), cookie, epr->epr_lo,
 				    false, &max_epoch);
 	if (rc)
@@ -280,17 +275,19 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie)
 	 *  -- VOS_IT_EPC_GE on the other hand probes and fetches
 	 *     all records from epr::epr_lo till DAOS_EPOCH_MAX.
 	 *
-	 *  -- probe and fetching of arbitrary ranges not natively
-	 *     supported in iterater, so such ranges are not
-	 *     supported in discard.
+	 *  -- VOS_IT_EPC_RE provides discard on arbitrary epoch
+	 *     ranges
 	 *
 	 * Example:
 	 * epr.lo = 1 epr.hi = 1 dicards epoch 1
 	 * epr.lo = 1 epr.hi = DAOS_MAX_EPOCH, discards all
 	 * obj records 1 -> DAOS_MAX_EPOCH
+	 * epr.lo = 1 epr.hi = 12 discards within the range
 	 */
 	if (epr->epr_lo == epr->epr_hi)
 		dcx.dc_param.ip_epc_expr = VOS_IT_EPC_EQ;
+	else if (epr->epr_hi < DAOS_EPOCH_MAX)
+		dcx.dc_param.ip_epc_expr = VOS_IT_EPC_RE;
 	else
 		dcx.dc_param.ip_epc_expr = VOS_IT_EPC_GE;
 

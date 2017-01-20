@@ -45,6 +45,7 @@ print_usage()
 	print_message("vos_tests -p|--pool_tests\n");
 	print_message("vos_tests -c|--container_tests\n");
 	print_message("vos_tests -i|--io_tests\n");
+	print_message("vos_tests -d |--discard-tests\n");
 	print_message("vos_tests -a|--all_tests\n");
 	print_message("vos_tests -h|--help\n");
 	print_message("Default <vos_tests> runs all tests\n");

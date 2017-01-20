@@ -116,8 +116,10 @@ daos_unit_oid_t		gen_oid(void);
 void			inc_cntr(unsigned long op_flags);
 void			inc_cntr_manual(unsigned long op_flags,
 					struct vts_counter *cntr);
-void			test_args_init(struct io_test_args *args);
-void			test_args_reset(struct io_test_args *args);
+void			test_args_init(struct io_test_args *args,
+				       uint64_t pool_size);
+void			test_args_reset(struct io_test_args *args,
+					uint64_t pool_size);
 int			io_test_obj_update(struct io_test_args *arg,
 					   int epoch, daos_key_t *dkey,
 					   daos_vec_iod_t *vio,
