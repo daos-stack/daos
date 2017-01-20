@@ -1020,6 +1020,7 @@ class _Component(object):
 
         config = Configure(env)
         for header in self.headers:
+            print "Checking %s" % header
             if not config.CheckHeader(header):
                 config.Finish()
                 return True
@@ -1083,7 +1084,7 @@ class _Component(object):
 
     def check_installed_package(self, env):
         """Check installed targets"""
-        if self.retriever is None and self.has_missing_targets(env):
+        if self.has_missing_targets(env):
             if self.package is None:
                 raise MissingTargets(self.name, self.name)
             else:

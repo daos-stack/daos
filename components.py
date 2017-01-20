@@ -207,7 +207,7 @@ REQS.define('iof',
                       "OMPI_PREBUILT=$OMPI_PREFIX " \
                       "CART_PREBUILT=$CART_PREFIX " \
                       "PREFIX=$IOF_PREFIX install"],
-            headers=['iof_plugin.h'],
+            headers=['cnss_plugin.h'],
             requires=['ompi', 'mercury', 'mcl'])
 
 REQS.define('fuse',
