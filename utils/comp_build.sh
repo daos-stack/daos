@@ -277,7 +277,7 @@ fi
 set -x
 set -e
 rm -f ${B_COMP}-`uname -s`.conf
-if [ -n "${DOCKER_IMAGE}" ]; then
+if [ -z "${DOCKER_IMAGE}" ]; then
 
   if [ -n "${BUILD_OPTIONS}" ]; then
     scons $SET_PREFIX ${option} ${BUILD_OPTIONS} --config=force
