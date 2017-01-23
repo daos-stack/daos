@@ -272,16 +272,18 @@ if [ -d "$CORAL_ARTIFACTS" ]; then
     setup_dep $dep
   done
   option="PREBUILT_PREFIX=${PREBUILT_AREA}"
-  if [ -n "${BUILD_OPTIONS}" ]; then
-    option="${option} ${BUILD_OPTIONS}"
-  fi
 fi
 
 set -x
 set -e
 rm -f ${B_COMP}-`uname -s`.conf
-if [ "${DOCKER_IMAGE}x" == "x" ]; then
-  scons $SET_PREFIX ${option} --config=force
+if [ -n "${DOCKER_IMAGE}" ]; then
+
+  if [ -n "${BUILD_OPTIONS}" ]; then
+    scons $SET_PREFIX ${option} ${BUILD_OPTIONS} --config=force
+  else
+    scons $SET_PREFIX ${option} --config=force
+  fi
   scons install
 
   if [ -n "$CUSTOM_SCRIPT" ]; then
@@ -295,6 +297,10 @@ if [ -n "${B_LINK_PATH}" ]; then
   ln -sfn ${BUILD_NUMBER} ${CORAL_ARTIFACTS}/${JOB_NAME}/latest
 fi
 else
+
+  if [ -n "${BUILD_OPTIONS}" ]; then
+    option="${option} ${BUILD_OPTIONS}"
+  fi
 
   docker_script=`find . -name docker_scons_comp_build.sh`
 
