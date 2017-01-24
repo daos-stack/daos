@@ -42,7 +42,7 @@ class CpprDaemonRunner:
         print("TestRunner: start cppr_daemon process.")
 
         w_path = os.path.join("/tmp/", pwd.getpwuid(os.getuid()).pw_name)
-        self.info.set_config('setKeyFromConfig', "CPPR_PREFIX",
+        self.info.set_config('setKeyFromConfig', "CNSS_PREFIX",
                              os.path.join(w_path, "local"))
         g_path = os.path.join(os.path.expanduser("~/"), "tmp")
         self.info.set_config('setKeyFromConfig', "GLOBAL_PATH",
