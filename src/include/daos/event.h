@@ -76,6 +76,9 @@ daos_eq_lib_fini(void);
 int
 daos_eq_lib_init();
 
+crt_context_t *
+daos_task2ctx(struct daos_task *task);
+
 /**
  * Initialize a new event for \a eqh
  *
@@ -127,6 +130,9 @@ daos_ev2ctx(struct daos_event *ev);
  */
 struct daos_op_sp *
 daos_ev2sp(struct daos_event *ev);
+
+struct daos_sched *
+daos_ev2sched(struct daos_event *ev);
 
 /**
  * Return the EQ handle of the specified event.

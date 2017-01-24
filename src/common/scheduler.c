@@ -23,7 +23,7 @@
 /*
  * This file is part of common DAOS library.
  *
- * common/schedule.c
+ * common/scheduler.c
  *
  * DAOS client will use scheduler/task to manage the asynchronous tasks.
  * Tasks will be attached to one scheduler, when scheduler is executed,
@@ -35,10 +35,7 @@
 #include <stdint.h>
 #include <pthread.h>
 #include <daos/common.h>
-#include <daos_event.h>
-#include <daos/event.h>
 #include <daos/scheduler.h>
-#include "client_internal.h"
 #include "scheduler_internal.h"
 
 struct daos_task_link {
@@ -49,9 +46,11 @@ struct daos_task_link {
 static void daos_sched_decref(struct daos_sched_private *dsp);
 
 int
-daos_sched_init(struct daos_sched *sched, struct daos_event *event)
+daos_sched_init(struct daos_sched *sched, daos_sched_comp_cb_t comp_cb,
+		void *udata)
 {
 	struct daos_sched_private *dsp = daos_sched2priv(sched);
+	int rc;
 
 	D_CASSERT(sizeof(sched->ds_private) >= sizeof(*dsp));
 
@@ -67,16 +66,16 @@ daos_sched_init(struct daos_sched *sched, struct daos_event *event)
 	dsp->dsp_inflight = 0;
 	pthread_mutex_init(&dsp->dsp_lock, NULL);
 
-	sched->ds_event = event;
+	if (comp_cb != NULL) {
+		rc = daos_sched_register_comp_cb(sched, comp_cb, udata);
+		if (rc != 0)
+			return rc;
+	}
+
+	sched->ds_udata = udata;
 	sched->ds_result = 0;
 
 	return 0;
-}
-
-struct daos_sched *
-daos_ev2sched(struct daos_event *ev)
-{
-	return &daos_ev2evx(ev)->evx_sched;
 }
 
 void *
@@ -112,14 +111,6 @@ void *
 daos_task2sp(struct daos_task *task)
 {
 	return &daos_task2priv(task)->dtp_sp;
-}
-
-crt_context_t*
-daos_task2ctx(struct daos_task *task)
-{
-	struct daos_sched *sched = daos_task2sched(task);
-
-	return daos_ev2ctx(sched->ds_event);
 }
 
 struct daos_sched *
@@ -167,7 +158,7 @@ daos_task_decref(struct daos_task *task)
 		struct daos_task_link *result;
 
 		result = daos_list_entry(dtp->dtp_ret_list.next,
-				         struct daos_task_link, tl_link);
+					 struct daos_task_link, tl_link);
 		daos_list_del(&result->tl_link);
 		daos_task_decref(result->tl_task);
 		D_FREE_PTR(result);
@@ -328,7 +319,7 @@ daos_task_result_process(struct daos_task *task,
 }
 
 /* Process the task in the init list of the scheduler */
-int
+static int
 daos_sched_process_init(struct daos_sched_private *dsp)
 {
 	struct daos_task_private *dtp;
@@ -396,7 +387,7 @@ daos_task_post_process(struct daos_task *task)
 
 	/* Check dependent list */
 	pthread_mutex_lock(&dsp->dsp_lock);
-	while(!daos_list_empty(&dtp->dtp_dep_list)) {
+	while (!daos_list_empty(&dtp->dtp_dep_list)) {
 		struct daos_task_link	  *tlink;
 		struct daos_task_private  *dtp_tmp;
 
@@ -478,7 +469,6 @@ daos_sched_check_complete(struct daos_sched_private *dsp)
 {
 	struct daos_sched *sched;
 	bool		   completed;
-	daos_event_t	  *event;
 
 	/* check if all sub tasks are done, then complete the event */
 	pthread_mutex_lock(&dsp->dsp_lock);
@@ -490,18 +480,18 @@ daos_sched_check_complete(struct daos_sched_private *dsp)
 		return false;
 	}
 
-	sched = daos_priv2sched(dsp);
-	/* ds_event == NULL means the scheduler has been canceled. */
-	if (sched->ds_event == NULL) {
+	if (dsp->dsp_completing) {
 		pthread_mutex_unlock(&dsp->dsp_lock);
 		return true;
 	}
-	event = sched->ds_event;
-	sched->ds_event = NULL;
+
+	dsp->dsp_completing = 1;
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
+	sched = daos_priv2sched(dsp);
 	daos_sched_complete_cb(sched);
-	daos_event_complete(event, sched->ds_result);
+	sched->ds_udata = NULL;
+
 	/* drop reference of daos_sched_init() */
 	daos_sched_decref(dsp);
 
@@ -528,7 +518,7 @@ daos_sched_run(struct daos_sched *sched)
 }
 
 /* Cancel tasks for this schedule */
-static void
+void
 daos_sched_cancel(struct daos_sched *sched, int ret)
 {
 	struct daos_sched_private *dsp = daos_sched2priv(sched);
@@ -663,59 +653,4 @@ daos_task_init(struct daos_task *task, daos_task_func_t task_func,
 		daos_task_add_dependent(task, dependent);
 
 	return 0;
-}
-
-/**
- * The daos client internal will use daos_task, this function will
- * initialize the daos task/scheduler from event, and launch
- * event.
- */
-int
-daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg,
-		      int arg_size, struct daos_task **taskp,
-		      daos_event_t **evp)
-{
-	daos_event_t *ev = *evp;
-	struct daos_sched *sched;
-	struct daos_task *task = NULL;
-	int rc;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	sched = daos_ev2sched(ev);
-	rc = daos_sched_init(sched, ev);
-	if (rc != 0)
-		return rc;
-
-	D_ALLOC_PTR(task);
-	if (task == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rc = daos_task_init(task, NULL, arg, arg_size, sched, NULL);
-	if (rc != 0) {
-		D_FREE_PTR(task);
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	if (comp_cb != NULL) {
-		rc = daos_task_register_comp_cb(task, comp_cb, NULL);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
-
-	rc = daos_event_launch(ev);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	*taskp = task;
-	*evp = ev;
-out:
-	if (rc != 0)
-		daos_sched_cancel(sched, rc);
-
-	return rc;
 }

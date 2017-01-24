@@ -100,7 +100,8 @@ struct daos_sched_private {
 	/* number of tasks being executed */
 	int		dsp_inflight;
 
-	uint32_t	dsp_cancelling:1;
+	uint32_t	dsp_cancelling:1,
+			dsp_completing:1;
 };
 
 struct daos_sched_comp {

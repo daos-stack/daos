@@ -1066,9 +1066,6 @@ daos_event_fini(struct daos_event *ev)
 		evx->evx_ctx = NULL;
 	}
 
-	/* Make sure the scheduler has been finished */
-	D_ASSERT(daos_ev2sched(ev)->ds_event == NULL);
-
 	/* Remove from the evx_link */
 	if (!daos_list_empty(&evx->evx_link)) {
 		daos_list_del(&evx->evx_link);
@@ -1179,6 +1176,87 @@ daos_event_priv_wait()
 	rc = crt_progress(evx->evx_ctx, DAOS_EQ_WAIT, ev_progress_cb, &epa);
 	if (rc == 0)
 		rc = ev_thpriv.ev_error;
+
+	return rc;
+}
+
+struct daos_sched *
+daos_ev2sched(struct daos_event *ev)
+{
+	return &daos_ev2evx(ev)->evx_sched;
+}
+
+crt_context_t*
+daos_task2ctx(struct daos_task *task)
+{
+	struct daos_sched		*sched = daos_task2sched(task);
+	daos_event_t			*ev = (daos_event_t *)sched->ds_udata;
+	struct daos_event_private	*evx = daos_ev2evx(ev);
+
+	return evx->evx_ctx;
+}
+
+static int
+sched_comp_cb(void *arg, int rc)
+{
+	daos_event_t *ev = (daos_event_t *)arg;
+
+	daos_event_complete(ev, rc);
+
+	return 0;
+}
+
+/**
+ * The daos client internal will use daos_task, this function will
+ * initialize the daos task/scheduler from event, and launch
+ * event.
+ */
+int
+daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg,
+		      int arg_size, struct daos_task **taskp,
+		      daos_event_t **evp)
+{
+	daos_event_t *ev = *evp;
+	struct daos_sched *sched;
+	struct daos_task *task = NULL;
+	int rc;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			return rc;
+	}
+
+	sched = daos_ev2sched(ev);
+	rc = daos_sched_init(sched, sched_comp_cb, ev);
+	if (rc != 0)
+		return rc;
+
+	D_ALLOC_PTR(task);
+	if (task == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_task_init(task, NULL, arg, arg_size, sched, NULL);
+	if (rc != 0) {
+		D_FREE_PTR(task);
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (comp_cb != NULL) {
+		rc = daos_task_register_comp_cb(task, comp_cb, NULL);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	*taskp = task;
+	*evp = ev;
+out:
+	if (rc != 0)
+		daos_sched_cancel(sched, rc);
 
 	return rc;
 }

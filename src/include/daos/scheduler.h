@@ -33,7 +33,6 @@
 #include <daos_errno.h>
 #include <daos/list.h>
 #include <daos/hash.h>
-#include <daos/event.h>
 #include <daos/rpc.h>
 
 typedef int (*daos_task_func_t)(struct daos_task *);
@@ -57,8 +56,8 @@ struct daos_task {
 struct daos_sched {
 	int		ds_result;
 
-	/* the event associated with the scheduler */
-	daos_event_t	*ds_event;
+	/* user data associated with the scheduler (completion cb data, etc.) */
+	void		*ds_udata;
 
 	/* Linked to the executed list */
 	daos_list_t	ds_list;
@@ -68,19 +67,13 @@ struct daos_sched {
 		uint64_t	ds_space[48];
 	}			ds_private;
 };
-typedef int (*daos_sched_comp_cb_t)(void *args, int rc);
-
-struct daos_sched *
-daos_ev2sched(struct daos_event *ev);
+typedef int (*daos_sched_comp_cb_t)(void *arg, int rc);
 
 void *
 daos_task2arg(struct daos_task *task);
 
 void *
 daos_task2sp(struct daos_task *task);
-
-crt_context_t *
-daos_task2ctx(struct daos_task *task);
 
 struct daos_sched *
 daos_task2sched(struct daos_task *task);
@@ -118,18 +111,29 @@ daos_task_init(struct daos_task *task, daos_task_func_t task_func,
  *  otherwise it needs to call daos_sched_cancel() to finalize
  *  itself.
  *
- * \param shced [input]	scheduler to be initialized.
+ * \param sched [input]		scheduler to be initialized.
+ * \param comp_cb [input]	callback to be called when scheduler is done.
+ * \param udata [input]		pointer to user data to associate with the
+ *				scheduler. This is stored in ds_udata in the
+ *				scheduler struct and passed in to comp_cb as the
+ *				argument when the callback is invoked.
  *
- * \param ev [input]	event associated with the scheduler, which will
- *                      be launched when the scheduler is ready(added
- *                      to the scheduler list), and completed when all
- *                      of tasks of the scheduler are completed.
- *
- * \return	0 if initialization succeeds.
- * \return	negative errno if initialization fails.
+ * \return			0 if initialization succeeds.
+ * \return			negative errno if initialization fails.
  */
 int
-daos_sched_init(struct daos_sched *sched, daos_event_t *ev);
+daos_sched_init(struct daos_sched *sched, daos_sched_comp_cb_t comp_cb,
+		void *udata);
+
+/**
+ * Cancel all tasks in the scheduler.
+ *
+ * \param sched [input]	scheduler to be initialized.
+ * \param ret [input]	result for scheduler completion.
+ *
+ */
+void
+daos_sched_cancel(struct daos_sched *sched, int ret);
 
 /**
  * register complete callback for scheduler.

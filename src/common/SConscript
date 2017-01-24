@@ -16,6 +16,7 @@ denv = env.Clone()
 
 common_src  = ['debug.c', 'mem.c', 'fail_loc.c', 'hash.c', 'lru.c', 'misc.c']
 common_src += ['pool_map.c', 'proc.c', 'sort.c', 'btree.c', 'btree_class.c']
+common_src += ['scheduler.c']
 common = denv.SharedLibrary('libdaos_common', common_src)
 denv.Install('$PREFIX/lib/', common)
 
