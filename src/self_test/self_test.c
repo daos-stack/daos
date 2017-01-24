@@ -105,16 +105,29 @@ struct st_latency {
 	int64_t val;
 	uint32_t rank;
 	uint32_t tag;
+	int cci_rc; /* Return code from the callback */
 };
 
 struct st_endpoint {
 	uint32_t rank;
 	uint32_t tag;
+
+	/*
+	 * If this endpoint is detected as evicted, no more messages should be
+	 * sent to it
+	 */
+	uint8_t evicted;
 };
 
 struct st_msg_sz {
 	uint32_t send_size;
 	uint32_t reply_size;
+};
+
+enum st_fatal_err {
+	ST_SUCCESS = 0,
+	ST_UNREACH = CER_UNREACH,
+	ST_UNKNOWN = CER_UNKNOWN
 };
 
 struct st_ping_cb_args {
@@ -160,6 +173,13 @@ struct st_ping_cb_args {
 	 */
 	uint32_t		 next_endpt_idx;
 
+	/*
+	 * Set to zero initially, marked as nonzero if run_self_test detects
+	 * that the test can no longer proceed. For example, if all endpoints
+	 * have been evicted or the underlying fabric returns unexpected errors
+	 */
+	enum st_fatal_err	 fatal_err;
+
 };
 
 struct st_ping_cb_data {
@@ -168,6 +188,7 @@ struct st_ping_cb_data {
 
 	int			 rep_idx;
 	struct timespec		 sent_time;
+	struct st_endpoint	*endpt;
 };
 
 /* Global shutdown flag, used to terminate the progress thread */
@@ -176,14 +197,29 @@ static int g_shutdown_flag;
 /* Forward Declarations */
 static int ping_response_cb(const struct crt_cb_info *cb_info);
 
-static int send_next_rpc(struct st_ping_cb_data *cb_data, int is_init)
+/*
+ * This function sends an RPC to the next available endpoint.
+ *
+ * If sending fails for any reason, the endpoint is marked as evicted and the
+ * function attempts to send to the next endpoint in the list until none remain.
+ * This function will only return a non-zero value if there are no remaining
+ * endpoints that it is possible to send a message to, or if crt_gettime()
+ * fails.
+ *
+ * skip_inc_complete is a flag that, when set to anything but zero, skips
+ * incrementing the rep_completed_count - this is useful when generating the
+ * initial RPCs
+ */
+static int send_next_rpc(struct st_ping_cb_data *cb_data, int skip_inc_complete)
 {
 	struct st_ping_cb_args	*cb_args = cb_data->cb_args;
 
 	crt_rpc_t		*new_ping_rpc;
 	void			*args = NULL;
 	crt_endpoint_t		 local_endpt = {.ep_grp = cb_args->srv_grp};
+	struct st_endpoint	*endpt_ptr;
 	crt_opcode_t		 opcode;
+	uint32_t		 failed_endpts;
 
 	int			 local_rep;
 	int			 ret;
@@ -191,21 +227,14 @@ static int send_next_rpc(struct st_ping_cb_data *cb_data, int is_init)
 	/******************** LOCK: cb_args_lock ********************/
 	pthread_spin_lock(&cb_args->cb_args_lock);
 
-	/* Only mark completion of an RPC if not doing initial generation */
-	if (is_init == 0)
+	/* Only mark completion of an RPC if requested */
+	if (skip_inc_complete == 0)
 		cb_args->rep_completed_count += 1;
 
 	/* Get an index for a message that still needs to be sent */
 	local_rep = cb_args->rep_idx;
 	if (cb_args->rep_idx < cb_args->rep_count)
 		cb_args->rep_idx += 1;
-
-	/* Get the next endpoint to send a message to */
-	local_endpt.ep_rank = cb_args->endpts[cb_args->next_endpt_idx].rank;
-	local_endpt.ep_tag = cb_args->endpts[cb_args->next_endpt_idx].tag;
-	cb_args->next_endpt_idx++;
-	if (cb_args->next_endpt_idx >= cb_args->num_endpts)
-		cb_args->next_endpt_idx = 0;
 
 	pthread_spin_unlock(&cb_args->cb_args_lock);
 	/******************* UNLOCK: cb_args_lock *******************/
@@ -214,79 +243,153 @@ static int send_next_rpc(struct st_ping_cb_data *cb_data, int is_init)
 	if (local_rep >= cb_args->rep_count)
 		return 0;
 
-	/* Re-use payload data memory, set arguments */
-	cb_data->rep_idx = local_rep;
-
 	/*
-	 * For the repetition we are just now generating, set which rank/tag
-	 * this upcoming latency measurement will be for
+	 * Loop until either:
+	 * - Detect that no more RPCs need to be sent
+	 * - A new RPC message is sent successfully
+	 * - All endpoints are marked as evicted and it is impossible to send
+	 *   another message
+	 * - crt_gettime() fails (which shouldn't happen)
+	 *
+	 * In each of these cases the relevant code will return without needing
+	 * to break the loop
 	 */
-	cb_args->rep_latencies[cb_data->rep_idx].rank = local_endpt.ep_rank;
-	cb_args->rep_latencies[cb_data->rep_idx].tag = local_endpt.ep_tag;
+	while (1) {
+		/******************** LOCK: cb_args_lock ********************/
+		pthread_spin_lock(&cb_args->cb_args_lock);
 
-	/* Set the opcode based on the sizes of the arguments */
-	if (cb_args->current_msg_size.send_size > 0 &&
-	    cb_args->current_msg_size.reply_size > 0)
-		opcode = CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY;
-	else if (cb_args->current_msg_size.send_size > 0 &&
-		 cb_args->current_msg_size.reply_size == 0)
-		opcode = CRT_OPC_SELF_TEST_PING_REPLY_EMPTY;
-	else if (cb_args->current_msg_size.send_size == 0 &&
-		 cb_args->current_msg_size.reply_size > 0)
-		opcode = CRT_OPC_SELF_TEST_PING_SEND_EMPTY;
-	else
-		opcode = CRT_OPC_SELF_TEST_PING_BOTH_EMPTY;
+		/* Get the next non-evicted endpoint to send a message to */
+		failed_endpts = 0;
+		do {
+			if (failed_endpts >= cb_args->num_endpts) {
+				C_ERROR("No non-evicted endpoints remaining\n");
+				cb_args->fatal_err = ST_UNREACH;
+				return -CER_UNREACH;
+			}
+			failed_endpts++;
 
-	/* Start a new RPC request */
-	ret = crt_req_create(cb_args->crt_ctx, local_endpt,
-			     opcode, &new_ping_rpc);
-	if (ret != 0) {
-		C_ERROR("crt_req_create failed; ret = %d\n", ret);
-		return ret;
-	}
-	C_ASSERTF(new_ping_rpc != NULL,
-		  "crt_req_create succeeded but RPC is NULL\n");
+			endpt_ptr = &cb_args->endpts[cb_args->next_endpt_idx];
+			cb_args->next_endpt_idx++;
+			if (cb_args->next_endpt_idx >= cb_args->num_endpts)
+				cb_args->next_endpt_idx = 0;
+		} while (endpt_ptr->evicted != 0);
 
-	/* No arguments to assemble for BOTH_EMPTY RPCs */
-	if (opcode == CRT_OPC_SELF_TEST_PING_BOTH_EMPTY)
-		goto send_rpc;
+		pthread_spin_unlock(&cb_args->cb_args_lock);
+		/******************* UNLOCK: cb_args_lock *******************/
 
-	/* Get the arguments handle */
-	args = crt_req_get(new_ping_rpc);
-	C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
+		local_endpt.ep_rank = endpt_ptr->rank;
+		local_endpt.ep_tag = endpt_ptr->tag;
 
-	if (opcode == CRT_OPC_SELF_TEST_PING_SEND_EMPTY) {
-		struct crt_st_ping_send_empty *typed_args =
-			(struct crt_st_ping_send_empty *)args;
-		typed_args->reply_size = cb_args->current_msg_size.reply_size;
-	} else if (opcode == CRT_OPC_SELF_TEST_PING_REPLY_EMPTY) {
-		struct crt_st_ping_send_reply_empty *typed_args =
-			(struct crt_st_ping_send_reply_empty *)args;
-		crt_iov_set(&typed_args->ping_buf, cb_args->ping_payload,
-			    cb_args->current_msg_size.send_size);
-	} else if (opcode == CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY) {
-		struct crt_st_ping_send_nonempty *typed_args =
-			(struct crt_st_ping_send_nonempty *)args;
-		typed_args->reply_size = cb_args->current_msg_size.reply_size;
-		crt_iov_set(&typed_args->ping_buf, cb_args->ping_payload,
-			    cb_args->current_msg_size.send_size);
-	}
+		/* Re-use payload data memory, set arguments */
+		cb_data->rep_idx = local_rep;
+
+		/*
+		 * For the repetition we are just now generating, set which
+		 * rank/tag this upcoming latency measurement will be for
+		 */
+		cb_args->rep_latencies[cb_data->rep_idx].rank =
+			local_endpt.ep_rank;
+		cb_args->rep_latencies[cb_data->rep_idx].tag =
+			local_endpt.ep_tag;
+
+		/* Set the opcode based on the sizes of the arguments */
+		if (cb_args->current_msg_size.send_size > 0 &&
+		    cb_args->current_msg_size.reply_size > 0)
+			opcode = CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY;
+		else if (cb_args->current_msg_size.send_size > 0 &&
+			 cb_args->current_msg_size.reply_size == 0)
+			opcode = CRT_OPC_SELF_TEST_PING_REPLY_EMPTY;
+		else if (cb_args->current_msg_size.send_size == 0 &&
+			 cb_args->current_msg_size.reply_size > 0)
+			opcode = CRT_OPC_SELF_TEST_PING_SEND_EMPTY;
+		else
+			opcode = CRT_OPC_SELF_TEST_PING_BOTH_EMPTY;
+
+		/* Start a new RPC request */
+		ret = crt_req_create(cb_args->crt_ctx, local_endpt,
+				     opcode, &new_ping_rpc);
+		if (ret != 0) {
+			C_WARN("crt_req_create failed for endpoint=%u:%u;"
+			       " ret = %d\n",
+			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
+
+			goto try_again;
+		}
+
+		C_ASSERTF(new_ping_rpc != NULL,
+			  "crt_req_create succeeded but RPC is NULL\n");
+
+		/* No arguments to assemble for BOTH_EMPTY RPCs */
+		if (opcode == CRT_OPC_SELF_TEST_PING_BOTH_EMPTY)
+			goto send_rpc;
+
+		/* Get the arguments handle */
+		args = crt_req_get(new_ping_rpc);
+		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
+
+		if (opcode == CRT_OPC_SELF_TEST_PING_SEND_EMPTY) {
+			struct crt_st_ping_send_empty *typed_args =
+				(struct crt_st_ping_send_empty *)args;
+			typed_args->reply_size =
+				cb_args->current_msg_size.reply_size;
+		} else if (opcode == CRT_OPC_SELF_TEST_PING_REPLY_EMPTY) {
+			struct crt_st_ping_send_reply_empty *typed_args =
+				(struct crt_st_ping_send_reply_empty *)args;
+			crt_iov_set(&typed_args->ping_buf,
+				    cb_args->ping_payload,
+				    cb_args->current_msg_size.send_size);
+		} else if (opcode == CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY) {
+			struct crt_st_ping_send_nonempty *typed_args =
+				(struct crt_st_ping_send_nonempty *)args;
+			typed_args->reply_size =
+				cb_args->current_msg_size.reply_size;
+			crt_iov_set(&typed_args->ping_buf,
+				    cb_args->ping_payload,
+				    cb_args->current_msg_size.send_size);
+		}
 
 send_rpc:
-	ret = crt_gettime(&cb_data->sent_time);
-	if (ret != 0) {
-		C_ERROR("crt_gettime failed; ret = %d\n", ret);
-		return ret;
-	}
+		/* Give the callback a pointer to this endpoint entry */
+		cb_data->endpt = endpt_ptr;
 
-	/* Send the RPC */
-	ret = crt_req_send(new_ping_rpc, ping_response_cb, cb_data);
-	if (ret != 0) {
-		C_ERROR("crt_req_send failed; ret = %d\n", ret);
-		return ret;
-	}
+		ret = crt_gettime(&cb_data->sent_time);
+		if (ret != 0) {
+			C_ERROR("crt_gettime failed; ret = %d\n", ret);
+			cb_args->fatal_err = ST_UNKNOWN;
+			return ret;
+		}
 
-	return 0;
+		/* Send the RPC */
+		ret = crt_req_send(new_ping_rpc, ping_response_cb, cb_data);
+		if (ret != 0) {
+			C_WARN("crt_req_send failed for endpoint=%u:%u;"
+			       " ret = %d\n",
+			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
+
+			goto try_again;
+		}
+
+		/* RPC sent successfully */
+		return 0;
+
+try_again:
+		/*
+		 * Something must be wrong with this endpoint
+		 * Mark it as evicted and try a different one instead
+		 */
+		C_WARN("Marking endpoint endpoint=%u:%u as evicted\n",
+		       local_endpt.ep_rank, local_endpt.ep_tag);
+
+		/*
+		 * No need to lock cb_args->cb_args_lock here
+		 *
+		 * Lock or no lock the worst that can happen is that
+		 * send_next_rpc() attempts to send another RPC to this endpoint
+		 * and crt_req_send fails and the endpoint gets re-marked as
+		 * evicted
+		 */
+		endpt_ptr->evicted = 1;
+	}
 }
 
 /* A note about how arguments are passed to this callback:
@@ -307,16 +410,26 @@ static int ping_response_cb(const struct crt_cb_info *cb_info)
 
 	struct timespec		 now;
 
-	/* Check for transport errors */
-	if (cb_info->cci_rc != 0)
-		return cb_info->cci_rc;
-
-	/* Got a valid reply - record latency of this call */
+	/* Record latency of this RPC */
 	crt_gettime(&now);
-
-	/* Record latency of this transaction */
 	cb_args->rep_latencies[cb_data->rep_idx].val =
 		crt_timediff_ns(&cb_data->sent_time, &now);
+
+	/* Record return code */
+	cb_args->rep_latencies[cb_data->rep_idx].cci_rc = cb_info->cci_rc;
+
+	/* If this endpoint was evicted during the RPC, mark it as so */
+	if (cb_info->cci_rc == -CER_OOG) {
+		/*
+		 * No need to lock cb_args->cb_args_lock here
+		 *
+		 * Lock or no lock the worst that can happen is that
+		 * send_next_rpc() attempts to send another RPC to this endpoint
+		 * and crt_req_send fails and the endpoint gets re-marked as
+		 * evicted
+		 */
+		cb_data->endpt->evicted = 1;
+	}
 
 	send_next_rpc(cb_data, 0);
 
@@ -451,6 +564,9 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 		int	 local_rep;
 		int	 inflight_idx;
 		void	*realloced_mem;
+		int	 num_failed = 0;
+		int	 num_passed = 0;
+
 
 		if (size_idx == -1) {
 			current_msg_size.send_size = 0;
@@ -493,6 +609,7 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 		cb_args.rep_completed_count = 0;
 		cb_args.rep_idx = 0;
 		cb_args.next_endpt_idx = 0;
+		cb_args.fatal_err = ST_SUCCESS;
 
 		for (inflight_idx = 0; inflight_idx < max_inflight;
 		     inflight_idx++) {
@@ -502,12 +619,30 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 			cb_data->cb_args = &cb_args;
 			cb_data->rep_idx = -1;
 
-			send_next_rpc(cb_data, 1);
+			ret = send_next_rpc(cb_data, 1);
+			if (ret != 0) {
+				C_ERROR("All endpoints marked as evicted while"
+					" generating initial inflight RPCs\n");
+				C_GOTO(cleanup, ret);
+			}
 		}
 
 		/* Wait until all the RPCs come back */
-		while (cb_args.rep_completed_count < cb_args.rep_count)
+		while (cb_args.rep_completed_count < cb_args.rep_count
+		       || cb_args.fatal_err != ST_SUCCESS)
 			sched_yield();
+
+		if (cb_args.fatal_err == ST_UNREACH) {
+			C_ERROR("All endpoints marked as evicted during"
+				" self-test run\n");
+			ret = cb_args.fatal_err;
+			C_GOTO(cleanup, ret);
+		} else if (cb_args.fatal_err != ST_SUCCESS) {
+			C_ERROR("Got fatal error %d while processing RPCs\n",
+				cb_args.fatal_err);
+			ret = cb_args.fatal_err;
+			C_GOTO(cleanup, ret);
+		}
 
 		/* Record the time right when we stopped processing this size */
 		ret = crt_gettime(&time_stop_size);
@@ -517,10 +652,13 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 		}
 
 		/* Print out the first message latency separately */
-		if (size_idx == -1) {
+		if (size_idx == -1 && cb_args.rep_latencies[0].val < 0) {
+			printf("\tFirst RPC (size=(0 0)) failed; ret = %ld\n",
+			       cb_args.rep_latencies[0].val);
+			continue;
+		} else if (size_idx == -1) {
 			printf("First RPC latency (size=(0 0)) (us): %ld\n\n",
 			       cb_args.rep_latencies[0].val / 1000);
-
 			continue;
 		}
 
@@ -543,30 +681,62 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 		/*
 		 * TODO:
 		 * In the future, probably want to return the latencies here
-		 * before they are sorted
+		 * before they are sorted. This will also provide the ability
+		 * to do some analytics on the RPCs that failed before their
+		 * latencies are overwritten
 		 */
+
+		/* Figure out how many repetitions were errors */
+		num_failed = 0;
+		for (local_rep = 0; local_rep < cb_args.rep_count; local_rep++)
+			if (cb_args.rep_latencies[local_rep].cci_rc < 0) {
+				num_failed++;
+
+				/* Since this RPC failed, overwrite its latency
+				 * with -1 so it will sort before any passing
+				 * RPCs. This segments the latencies into two
+				 * sections - from [0:num_failed] will be -1,
+				 * and from [num_failed:] will be succesful RPC
+				 * latencies
+				 */
+				cb_args.rep_latencies[local_rep].val = -1;
+
+			}
+
+		/*
+		 * Compute number successful and exit early if none worked to
+		 * guard against overflow and divide by zero later
+		 */
+		num_passed = cb_args.rep_count - num_failed;
+		if (num_passed == 0) {
+			printf("\tAll RPCs for this message size failed\n");
+			continue;
+		}
 
 		/* Sort the latencies */
 		qsort(cb_args.rep_latencies, cb_args.rep_count,
 		      sizeof(cb_args.rep_latencies[0]), st_compare_latencies);
 
-		/* Compute average and standard deviation*/
+		/* Compute average and standard deviation */
 		latency_avg = 0;
-		for (local_rep = 0; local_rep < cb_args.rep_count; local_rep++)
+		for (local_rep = num_failed; local_rep < cb_args.rep_count;
+		     local_rep++)
 			latency_avg += cb_args.rep_latencies[local_rep].val;
 		latency_avg /= cb_args.rep_count;
 
 		latency_std_dev = 0;
-		for (local_rep = 0; local_rep < cb_args.rep_count; local_rep++)
+		for (local_rep = num_failed; local_rep < cb_args.rep_count;
+		     local_rep++)
 			latency_std_dev +=
 				pow(cb_args.rep_latencies[local_rep].val -
 				    latency_avg,
 				    2);
-		latency_std_dev /= cb_args.rep_count;
+		latency_std_dev /= num_passed;
 		latency_std_dev = sqrt(latency_std_dev);
 
 		/* Print Latency Results */
-		printf("\tRPC Latencies (us):\n"
+		printf("\tRPC Failures: %d\n"
+		       "\tRPC Latencies (us):\n"
 		       "\t\tMin    : %ld\n"
 		       "\t\t25th  %%: %ld\n"
 		       "\t\tMedian : %ld\n"
@@ -574,10 +744,14 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 		       "\t\tMax    : %ld\n"
 		       "\t\tAverage: %ld\n"
 		       "\t\tStd Dev: %.2f\n",
-		       cb_args.rep_latencies[0].val / 1000,
-		       cb_args.rep_latencies[cb_args.rep_count / 4].val / 1000,
-		       cb_args.rep_latencies[cb_args.rep_count / 2].val / 1000,
-		       cb_args.rep_latencies[cb_args.rep_count*3/4].val / 1000,
+		       num_failed,
+		       cb_args.rep_latencies[num_failed].val / 1000,
+		       cb_args.rep_latencies[num_failed + num_passed / 4].val
+				/ 1000,
+		       cb_args.rep_latencies[num_failed + num_passed / 2].val
+				/ 1000,
+		       cb_args.rep_latencies[num_failed + num_passed*3/4].val
+				/ 1000,
 		       cb_args.rep_latencies[cb_args.rep_count - 1].val / 1000,
 		       latency_avg / 1000, latency_std_dev / 1000);
 		printf("\n");
@@ -941,6 +1115,7 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 				do {
 					next_endpoint->rank = rank;
 					next_endpoint->tag = tag;
+					next_endpoint->evicted = 0;
 					next_endpoint++;
 					tag++;
 				} while (tag <= tag_max);
