@@ -27,12 +27,27 @@ mkdir -p ${WORK_TARGET}
 # need to select the docker image.
 # The distro environment variable is set by JENKINS for a matrix build
 case ${distro} in
+  el7.2)
+    DOCKER_IMAGE="centos_7.2.1511_builder"
+    ;;
+  el7.3)
+    DOCKER_IMAGE="centos_7.3.1611_builder"
+    ;;
   el7*)
-    DOCKER_IMAGE="centos_7_2_builder"
+    DOCKER_IMAGE="centos_7.3.1611_builder"
+    ;;
+  sles12sp1)
+    DOCKER_IMAGE="sles_12.1_builder"
+    ;;
+  sles12sp2)
+    DOCKER_IMAGE="sles_12.2_builder"
     ;;
   sles12*)
-    DOCKER_IMAGE="sles12sp1_builder"
-  ;;
+    DOCKER_IMAGE="sles_12.2_builder"
+    ;;
+  ubuntu14.04)
+    DOCKER_IMAGE="ubuntu_14.04.05_builder"
+    ;;
 esac
 export DOCKER_IMAGE
 
