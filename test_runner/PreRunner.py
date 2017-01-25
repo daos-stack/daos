@@ -25,6 +25,7 @@ test runner class
 """
 
 import os
+import sys
 import shutil
 import tempfile
 
@@ -98,16 +99,27 @@ class PreRunner():
                 self.test_info['defaultENV'][k] = new_value
 
     def set_key_from_config(self):
-        """ add to default environment """
+        """ add to default environment
+            setup to pass any keys to other instances of test runner """
         config_key_list = self.info.get_config('setKeyFromConfig')
         for (key, value) in config_key_list.items():
             self.test_info['defaultENV'][key] = value
+            self.test_info['passToConfig'][key] = value
 
     def set_directive_from_config(self):
         """ add to default test directives """
         config_key_list = self.info.get_config('setDirectiveFromConfig')
         for (key, value) in config_key_list.items():
             self.test_info['directives'][key] = value
+
+    def set_python_path(self):
+        """ add PYTHONPATH to the running python """
+        py_path = self.test_info['defaultENV'].get('PYTHONPATH')
+        if py_path:
+            path_items = py_path.split(":")
+            for py_item in path_items:
+                if py_item not in sys.path:
+                    sys.path.insert(1, py_item)
 
     def create_tmp_dir(self):
         """ add to default environment """
@@ -130,6 +142,7 @@ class PreRunner():
             self.set_key_from_config()
         if self.info.get_config('setDirectiveFromConfig'):
             self.set_directive_from_config()
+        self.set_python_path()
         if module.get('createTmpDir'):
             self.create_tmp_dir()
 

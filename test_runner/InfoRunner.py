@@ -66,10 +66,6 @@ class InfoRunner():
             ompi_path = os.path.join(self.info['OMPI_PREFIX'], "bin")
             if path.find(ompi_path) < 0:
                 path = ompi_path + ":" + path
-        if 'MCL_PREFIX' in self.info:
-            mcl_path = os.path.join(self.info['MCL_PREFIX'], "bin")
-            if path.find(mcl_path) < 0:
-                path = mcl_path + ":" + path
         installed_path = self.info['PREFIX']
         test_path = os.path.join(installed_path, "TESTING", "tests")
         if path.find(test_path) < 0:

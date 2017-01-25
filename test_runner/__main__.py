@@ -146,9 +146,15 @@ def main():
     sys.path.append(testing_dir)
     info = InfoRunner(config)
     # setup log base directory name
+    # the log path should end in testRun directory
     if 'log_base_path' not in config:
-        info.set_config('log_base_path', '', "testLogs/testRun")
-    log_base = info.get_config('log_base_path')
+        log_base = "testLogs/testRun"
+        info.set_config('log_base_path', '', log_base)
+    else:
+        log_base = info.get_config('log_base_path')
+        if log_base.find("testRun") < 0:
+            log_base = os.path.join(log_base, "testRun")
+            info.set_config('log_base_path', '', log_base)
     if not os.path.exists(log_base):
         os.makedirs(log_base)
     # setup default evnironment variables and path

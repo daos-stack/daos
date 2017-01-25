@@ -130,6 +130,9 @@ class NodeControlRunner():
     def nodes_config(self, name, node_type, configKeys):
         """ setup the node config file """
 
+        addKeys = self.test_info.get_passToConfig()
+        if addKeys:
+            configKeys.update(addKeys)
         value = self.log_dir_base + "/" + str(name)
         for node in self.node_list:
             logdir = value + "/" + name + "_" + node.node

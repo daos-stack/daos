@@ -50,6 +50,10 @@ class TestInfoRunner(PreRunner.PreRunner):
         """ load and check test description file """
 
         rtn = 0
+        if not os.path.exists(test_module_name):
+            self.logger.error("Description file not found: %s", \
+                             test_module_name)
+            rtn = 1
         with open(test_module_name, 'r') as fd:
             self.test_info = load(fd, Loader=Loader)
 
@@ -71,6 +75,9 @@ class TestInfoRunner(PreRunner.PreRunner):
         if 'directives' not in self.test_info or \
            self.test_info['directives'] is None:
             self.test_info['directives'] = {}
+        if 'passToConfig' not in self.test_info or \
+           self.test_info['passToConfig'] is None:
+            self.test_info['passToConfig'] = {}
         return rtn
 
     def post_run(self):
@@ -104,7 +111,7 @@ class TestInfoRunner(PreRunner.PreRunner):
         return value
 
     def set_test_info(self, keyname=None, subkey=None, keyvalue=None):
-        """ setup the environment """
+        """ set a key in the test info """
         if subkey:
             if keyname not in self.test_info:
                 self.test_info[keyname] = {}
@@ -113,13 +120,28 @@ class TestInfoRunner(PreRunner.PreRunner):
             self.test_info[keyname] = keyvalue
 
     def get_defaultENV(self, keyname=None, default=""):
-        """ setup the environment """
-        value = self.test_info['defaultENV'].get(keyname, default)
+        """ get a environment """
+        if keyname:
+            value = self.test_info['defaultENV'].get(keyname, default)
+        else:
+            value = self.test_info['defaultENV']
         return value
 
     def set_defaultENV(self, keyname=None, keyvalue=None):
         """ setup the environment """
         self.test_info['defaultENV'][keyname] = keyvalue
+
+    def get_passToConfig(self, keyname=None, default=""):
+        """ return information from the passToConfig section """
+        if keyname:
+            value = self.test_info['passToConfig'].get(keyname, default)
+        else:
+            value = self.test_info['passToConfig']
+        return value
+
+    def set_passToConfig(self, keyname=None, keyvalue=None):
+        """ setup the environment """
+        self.test_info['passToConfig'][keyname] = keyvalue
 
     def get_module(self, keyname=None, default=""):
         """ return information from the module section """
