@@ -58,61 +58,54 @@ set TR_USE_VALGRIND in cart_test_group_tiers.yml to callgrind
 
 """
 
-import os
 import time
 import commontestsuite
-
-NPROC = "1"
-testsuite = "Test Group Tiers"
-testprocess = "test_group_tiers"
-
-def tearDownModule():
-    """teardown module for test"""
-    commontestsuite.commonTearDownModule(testsuite, testprocess)
 
 class TestGroup(commontestsuite.CommonTestSuite):
     """ Execute group tests with tiers"""
     pass_env = " -x CCI_CONFIG -x CRT_LOG_MASK "
 
+    def setUp(self):
+        self.get_test_info()
+
     def test_group_three_nodes(self):
         """Simple process group test three nodes"""
 
-        if not os.getenv('TR_USE_URI', ""):
+        #Test requries atleast 2 servers and 1 client.
+        servers = self.get_server_list()
+        if not servers or len(servers) < 2:
+            self.skipTest('requires three or more nodes.')
+
+        client = self.get_client_list()
+        if not client or len(client) < 1:
             self.skipTest('requires three or more nodes.')
 
         testmsg = self.shortDescription()
-        servers = self.common_get_server_list()
-        if not servers or len(servers) < 2:
-            self.skipTest('requires three or more nodes.')
-        clients = self.common_get_client_list()
-        if not clients or len(clients) < 1:
-            self.skipTest('requires three or more nodes.')
 
-        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
-        cmdstr = cmd + \
-          " -H %s -n %s %s%s tests/test_group " % \
-          (servers.pop(0), NPROC, self.pass_env, prefix) + \
-          "--name service_group_02 --is_service --holdtime 10"
-        proc_srv_02 = self.common_launch_process(testsuite, testmsg, cmdstr)
+        srv2 = ''.join([' -H ', servers.pop(0)])
+        srv2_args = 'tests/test_group' + \
+            ' --name service_group_02 --is_service --holdtime 10'
+
+        srv1 = ''.join([' -H ', servers.pop(0)])
+        srv1_args = 'tests/test_group' + \
+            ' --name service_group_01 --attach_to service_group_02 ' + \
+            '--is_service --holdtime 8'
+
+        proc_srv_02 = self.launch_bg(testmsg, '1', self.pass_env, \
+                                     srv2, srv2_args)
         time.sleep(3)
+        proc_srv_01 = self.launch_bg(testmsg, '1', self.pass_env, \
+                                     srv1, srv1_args)
 
-        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
-        cmdstr = cmd + \
-          " -H %s -n %s %s%s tests/test_group " % \
-          (servers.pop(0), NPROC, self.pass_env, prefix) + \
-          "--name service_group_01 --attach_to service_group_02 " + \
-          "--is_service --holdtime 8"
-        proc_srv_01 = self.common_launch_process(testsuite, testmsg, cmdstr)
+        cli_args = 'tests/test_group' + \
+            ' --name client_group --attach_to service_group_01'
 
-        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
-        cmdstr = cmd + \
-          " -H %s -n %s %s%s tests/test_group " % \
-          (clients.pop(), NPROC, self.pass_env, prefix) + \
-          "--name client_group --attach_to service_group_01"
-        cli_rtn = self.common_launch_test(testsuite, testmsg, cmdstr)
+        cli_rtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli=''.join([' -H ', client.pop(0)]), \
+                                   cli_arg=cli_args)
 
-        srv_rtn_02 = self.common_stop_process(testsuite, testmsg, proc_srv_02)
-        srv_rtn_01 = self.common_stop_process(testsuite, testmsg, proc_srv_01)
+        srv_rtn_02 = self.stop_process(testmsg, proc_srv_02)
+        srv_rtn_01 = self.stop_process(testmsg, proc_srv_01)
         if cli_rtn or srv_rtn_02 or srv_rtn_01:
             self.fail("Failed, return codes client %d " % cli_rtn +
                       "server_02 %d" % srv_rtn_02 + "server_01 %d" % srv_rtn_01)

@@ -45,12 +45,12 @@ import os
 import time
 import commontestsuite
 
-testsuite = "Test Group"
-testprocess = "self_test"
-
 class SelfTest(commontestsuite.CommonTestSuite):
     """ Execute self_test tests """
     pass_env = " -x CCI_CONFIG -x CRT_LOG_MASK "
+
+    def setUp(self):
+        self.get_test_info()
 
     def test_self_test(self):
         """Run self test over two nodes"""
@@ -61,41 +61,57 @@ class SelfTest(commontestsuite.CommonTestSuite):
             self.skipTest('requires DVM to run.')
 
         testmsg = self.shortDescription()
-        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
-        (server, client) = self.common_add_server_client()
+
+        servers = self.get_server_list()
+        if not servers:
+            self.skipTest('Server list is empty.')
+
+        client = self.get_client_list()
+        if not client:
+            self.skipTest('Client list is empty.')
 
         # First launch a test_group instance to act as a target for the self
         # test.  This doesn't need to do anything other than be there and
         # remain running for the duration.
-        server_args = "--name target --hold --is_service"
-        server_cmd = "%s -n 1 %s %s %s tests/test_group %s" % \
-        (cmd, server, self.pass_env, prefix, server_args)
+        srv_args = "tests/test_group" + \
+            " --name target --hold --is_service"
+        server = ''.join([' -H ', servers.pop(0)])
+        server_proc = self.launch_bg(testmsg, '1', self.pass_env, \
+                                     server, srv_args)
 
-        server_proc = self.common_launch_process(testsuite, testmsg, server_cmd)
+        if server_proc is None:
+            self.fail("Server launch failed, return code %s" \
+                       % server_proc.returncode)
 
         time.sleep(2)
+
+        # Verify the server is still running.
+        if not self.check_process(server_proc):
+            procrtn = self.stop_process(testmsg, server_proc)
+            self.fail("Server did not launch, return code %s" \
+                       % procrtn)
+        self.logger.info("Server running")
 
         # Now define the self_test options.
         message_sizes = "1,4,16,1024"
         rpcs_in_flight = 16
         repetitions = 100
 
-        client_args = "--group-name target --endpoint 0:0 " + \
+        client_args = "tests/self_test --group-name target --endpoint 0:0 " + \
             "--message-sizes %s --max-inflight-rpcs %d --repetitions %d" % \
             (message_sizes, rpcs_in_flight, repetitions)
-
-        cmdstr = "%s %s-n 1 %s%s tests/self_test --group-name target %s" % \
-          (cmd, client, self.pass_env, prefix, client_args)
 
         # Launch, and wait for the self-test itself.  This is where the actual
         # code gets run.  Launch and keep the return code, but do not check it
         # until after the target has been stopped.
-        procrtn = self.common_launch_test(testsuite, testmsg, cmdstr)
+        procrtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli=''.join([' -H ', client.pop(0)]), \
+                                   cli_arg=client_args)
 
         # Stop the server.  This will normally run forever because of the hold
         # option, so allow stop_process() to kill it but do not check the
         # return code.
-        self.common_stop_process_now(testsuite, testmsg, server_proc)
+        self.stop_process(testmsg, server_proc)
 
         if procrtn:
             self.fail("Self test failed with %d" % procrtn)

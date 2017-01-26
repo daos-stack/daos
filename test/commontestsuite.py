@@ -73,23 +73,68 @@ import logging
 
 #pylint: disable=broad-except
 
-def commonTearDownModule(suitetitle, testprocess):
-    """teardown module for test"""
-    print("%s: module tearDown begin" % suitetitle)
-    testmsg = "terminate any %s processes" % testprocess
-    cmdstr = "pkill %s" % testprocess
-    ctsobj = CommonTestSuite()
-    ctsobj.common_launch_test(suitetitle, testmsg, cmdstr)
-    print("%s: module tearDown end\n\n" % suitetitle)
-
 class CommonTestSuite(unittest.TestCase):
     """Contains the attributes common to the CART tests"""
     logger = logging.getLogger("TestRunnerLogger")
 
-    def common_launch_test(self, suitetitle, msg, cmdstr):
+    testprocess = ""
+    testsuite = ""
+    testTitle = ""
+
+    def get_test_info(self):
+        """Retrieve the information from test id"""
+        self.logger.info("test name: %s", self.id())
+        test_id = self.id()
+        (self.testprocess, self.testsuite, self.testTitle) = test_id.split(".")
+
+    def launch_test(self, testdesc, NPROC, env, **kwargs):
+        """Method creates the Client or Client and Server arguments
+           depending on the test being two_node or one_node respectively.
+           Apart from the positional parameters, the method is invoked with
+           the respective test instance and its related arguments. The
+           processes will be launched in the foreground."""
+        cmdstr = ""
+        server = ""
+
+        # Unpack kwargs; Read the client, server; and resepctive args
+        cli_arg = kwargs.get('cli_arg')
+        srvr_arg = kwargs.get('srv_arg')
+        client = kwargs.get('cli', "")
+
+        (cmd, prefix) = self.add_prefix_logdir()
+        cli_cmdstr = "%s -n %s %s%s %s" % \
+                      (client, NPROC, env, prefix, cli_arg)
+
+        # The one node test passes both Client and Server args.
+        # Otherwise passes only Client args.
+        if not srvr_arg:
+            # Launch the client in the foreground
+            cmdstr = cmd + cli_cmdstr
+        else:
+            srv_cmdstr = " %s -n %s %s%s %s :" % \
+                           (server, NPROC, env, prefix, srvr_arg)
+            # Launch server and client on the same node
+            cmdstr = cmd + srv_cmdstr + cli_cmdstr
+
+        procrtn = self.execute_cmd(testdesc, cmdstr)
+        return procrtn
+
+    def launch_bg(self, testdesc, NPROC, env, *args):
+        """Launch the server in the background"""
+        server, srvr_arg = args
+
+        # Create the input string with server args
+        (cmd, prefix) = self.add_prefix_logdir()
+        cmdstr = cmd + "%s -n %s %s%s %s" % \
+                  (server, NPROC, env, prefix, srvr_arg)
+
+        procrtn = self.call_process(testdesc, cmdstr)
+        return procrtn
+
+    def execute_cmd(self, msg, cmdstr):
         """Launch process set test"""
         self.logger.info("%s: start %s - input string:\n%s", \
-          suitetitle, msg, cmdstr)
+            self.testsuite, msg, cmdstr)
         cmdarg = shlex.split(cmdstr)
         start_time = time.time()
         if not os.getenv('TR_REDIRECT_OUTPUT', ""):
@@ -100,13 +145,13 @@ class CommonTestSuite(unittest.TestCase):
                                       stderr=subprocess.DEVNULL)
         elapsed = time.time() - start_time
         self.logger.info("%s: %s - return code: %d test duration: %d\n", \
-          suitetitle, msg, procrtn, elapsed)
+          self.testsuite, msg, procrtn, elapsed)
         return procrtn
 
-    def common_launch_process(self, suitetitle, msg, cmdstr):
+    def call_process(self, msg, cmdstr):
         """Launch process set """
         self.logger.info("%s: start process %s - input string:\n%s", \
-          suitetitle, msg, cmdstr)
+          self.testsuite, msg, cmdstr)
         cmdarg = shlex.split(cmdstr)
         if not os.getenv('TR_REDIRECT_OUTPUT', ""):
             proc = subprocess.Popen(cmdarg)
@@ -116,10 +161,20 @@ class CommonTestSuite(unittest.TestCase):
                                     stderr=subprocess.DEVNULL)
         return proc
 
-    def common_stop_process(self, suitetitle, msg, proc):
+
+    def check_process(self, proc):
+        """Check if a process is still running"""
+        proc.poll()
+        procrtn = proc.returncode
+        if procrtn is None:
+            return True
+        self.logger.info("Process has exited")
+        return False
+
+    def stop_process(self, msg, proc):
         """ wait for process to terminate """
         self.logger.info("%s: %s - stopping processes :%s", \
-          suitetitle, msg, proc.pid)
+          self.testsuite, msg, proc.pid)
         i = 60
         procrtn = None
         while i:
@@ -133,7 +188,7 @@ class CommonTestSuite(unittest.TestCase):
 
         if procrtn is None:
             self.logger.info("%s: Again stopping processes :%s", \
-              suitetitle, proc.pid)
+              self.testsuite, proc.pid)
             procrtn = -1
             try:
                 proc.terminate()
@@ -142,53 +197,27 @@ class CommonTestSuite(unittest.TestCase):
                 pass
             except Exception:
                 self.logger.info("%s: killing processes :%s", \
-                  suitetitle, proc.pid)
+                  self.testsuite, proc.pid)
                 proc.kill()
 
         self.logger.info("%s: %s - return code: %d\n", \
-          suitetitle, msg, procrtn)
-        return procrtn
-
-    def common_stop_process_now(self, suitetitle, msg, proc):
-        """ wait for process to terminate """
-        self.logger.info("%s: %s - terminating processes :%s", \
-          suitetitle, msg, proc.pid)
-
-        proc.poll()
-        procrtn = proc.returncode
-
-        if procrtn is None:
-            self.logger.info("%s: stopping processes :%s", \
-              suitetitle, proc.pid)
-            procrtn = -1
-            try:
-                proc.terminate()
-                proc.wait(2)
-            except ProcessLookupError:
-                pass
-            except Exception:
-                self.logger.info("%s: killing processes :%s", \
-                  suitetitle, proc.pid)
-                proc.kill()
-
-        self.logger.info("%s: %s - return code: %d\n", \
-          suitetitle, msg, procrtn)
+          self.testsuite, msg, procrtn)
         return procrtn
 
     @staticmethod
-    def common_logdir_name(fullname):
+    def logdir_name(fullname):
         """create the log directory name"""
         names = fullname.split('.')
         items = names[-1].split('_', maxsplit=2)
         return items[2]
 
-    def common_add_prefix_logdir(self, testprocess):
+    def add_prefix_logdir(self):
         """add the log directory to the prefix"""
         testcase_id = self.id()
         prefix = ""
         ompi_bin = os.getenv('CRT_OMPI_BIN', "")
-        log_path = os.path.join(os.getenv("CRT_TESTLOG", testprocess),
-                                self.common_logdir_name(testcase_id))
+        log_path = os.path.join(os.getenv("CRT_TESTLOG", self.testprocess),
+                                self.logdir_name(testcase_id))
         os.makedirs(log_path, exist_ok=True)
         use_valgrind = os.getenv('TR_USE_VALGRIND', default="")
         if use_valgrind == 'memcheck':
@@ -216,35 +245,21 @@ class CommonTestSuite(unittest.TestCase):
         return (cmdstr, prefix)
 
     @staticmethod
-    def common_add_server_client():
-        """create the server and client prefix"""
-        server = os.getenv('CRT_TEST_SERVER')
-        if server:
-            local_server = " -H %s " % server
-        else:
-            local_server = " "
-        client = os.getenv('CRT_TEST_CLIENT')
-        if client:
-            local_client = " -H %s " % client
-        else:
-            local_client = " "
-
-        return (local_server, local_client)
-
-    @staticmethod
-    def common_get_server_list():
-        """obtain the list of server nodes"""
+    def get_server_list():
+        """add prefix to each server and return the list of servers"""
+        server_list = []
         servers = os.getenv('CRT_TEST_SERVER')
         if servers:
-            return servers.split(',')
-        else:
-            return []
+            server_list = servers.split(',')
+
+        return server_list
 
     @staticmethod
-    def common_get_client_list():
-        """obtain the list of client nodes"""
+    def get_client_list():
+        """add prefix to each client and return the list of clients"""
+        client_list = []
         clients = os.getenv('CRT_TEST_CLIENT')
         if clients:
-            return clients.split(',')
-        else:
-            return []
+            client_list = clients.split(',')
+
+        return client_list

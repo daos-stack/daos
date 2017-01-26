@@ -62,31 +62,28 @@ import os
 import time
 import commontestsuite
 
-NPROC = "1"
-testsuite = "Test Group"
-testprocess = "test_group"
-
-def tearDownModule():
-    """teardown module for test"""
-    commontestsuite.commonTearDownModule(testsuite, testprocess)
-
 class TestGroup(commontestsuite.CommonTestSuite):
     """ Execute group tests """
     pass_env = " -x CCI_CONFIG -x CRT_LOG_MASK "
+    servers = []
+    clients = []
+
+    def setUp(self):
+        self.get_test_info()
 
     def test_group_one_node(self):
         """Simple process group test one node"""
         testmsg = self.shortDescription()
-        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
-        (server, client) = self.common_add_server_client()
-        cmdstr = cmd + \
-          "%s-n %s %s%s tests/test_group " % \
-          (server, NPROC, self.pass_env, prefix) + \
-          "--name service_group --is_service --holdtime 5 :" + \
-          "%s-n %s %s%s tests/test_group " % \
-          (client, NPROC, self.pass_env, prefix) + \
-          "--name client_group --attach_to service_group"
-        procrtn = self.common_launch_test(testsuite, testmsg, cmdstr)
+
+        # Launch both the client and target instances on the
+        # same node.
+        procrtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli_arg='tests/test_group' + \
+                                             ' --name client_group' + \
+                                             ' --attach_to service_group', \
+                                   srv_arg='tests/test_group' + \
+                                             ' --name service_group' + \
+                                             ' --is_service --holdtime 5 :')
         if procrtn:
             self.fail("Failed, return code %d" % procrtn)
 
@@ -97,21 +94,49 @@ class TestGroup(commontestsuite.CommonTestSuite):
             self.skipTest('requires two or more nodes.')
 
         testmsg = self.shortDescription()
-        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
-        (server, client) = self.common_add_server_client()
-        cmdstr = cmd + \
-          "%s-n %s %s%s tests/test_group " % \
-          (server, NPROC, self.pass_env, prefix) + \
-          "--name service_group --is_service --holdtime 10"
-        proc_srv = self.common_launch_process(testsuite, testmsg, cmdstr)
+
+        clients = self.get_client_list()
+        if not clients:
+            self.fail("Failed, client list is empty.")
+
+        servers = self.get_server_list()
+        if not servers:
+            self.fail("Failed, server list is empty.")
+
+        srv_args = 'tests/test_group' + \
+            ' --name service_group --is_service --holdtime 10'
+        server = ''.join([' -H ', servers.pop(0)])
+        # Launch a test_group instance to act as a target  in the background.
+        # This will remain running for the duration.
+        proc_srv = self.launch_bg(testmsg, '1', self.pass_env, \
+                                  server, srv_args)
+
+        if proc_srv is None:
+            self.fail("Server launch failed, return code %s" \
+                       % proc_srv.returncode)
+
         time.sleep(5)
-        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
-        cmdstr = cmd + \
-          "%s-n %s %s%s tests/test_group " % \
-          (client, NPROC, self.pass_env, prefix) + \
-          "--name client_group --attach_to service_group"
-        cli_rtn = self.common_launch_test(testsuite, testmsg, cmdstr)
-        srv_rtn = self.common_stop_process(testsuite, testmsg, proc_srv)
+
+        # Verify the server is still running.
+        if not self.check_process(proc_srv):
+            procrtn = self.stop_process(testmsg, proc_srv)
+            self.fail("Server did not launch, return code %s" \
+                       % procrtn)
+        self.logger.info("Server running")
+
+        # Launch, and wait for the test itself.  This is where the actual
+        # code gets run.  Launch and keep the return code, but do not check it
+        # until after the target has been stopped.
+        cli_rtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli=''.join([' -H ', clients.pop(0)]), \
+                                   cli_arg='tests/test_group' + \
+                                             ' --name client_group' + \
+                                             ' --attach_to service_group')
+
+        # Stop the server.  This will normally run forever because of the hold
+        # option, so allow stop_process() to kill it.
+        srv_rtn = self.stop_process(testmsg, proc_srv)
+
         if cli_rtn or srv_rtn:
-            self.fail("Failed, return codes client %d " % cli_rtn +
-                      "server %d" % srv_rtn)
+            self.fail("Failed, return codes client %d " % cli_rtn + \
+                       "server %d" % srv_rtn)

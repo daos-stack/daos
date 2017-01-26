@@ -39,6 +39,9 @@
 set -e
 set -x
 
+# A list of tests to run as a single instance on Jenkins
+JENKINS_TEST_LIST=(scripts/cart_echo_test.yml scripts/cart_test_group.yml)
+
 # Check for symbol names in the library.
 if [ -d "utils" ]; then
   utils/test_cart_lib.sh
@@ -59,7 +62,7 @@ if [[ "$CART_TEST_MODE" =~ (native|all) ]]; then
   echo "Nothing to do yet, wish we could fail some tests"
   scons utest
   cd ${TESTDIR}
-  python3.4 test_runner scripts/cart_echo_test.yml scripts/cart_test_group.yml scripts/cart_self_test.yml
+  python3.4 test_runner "${JENKINS_TEST_LIST[@]}"
   cd -
 fi
 
@@ -68,19 +71,14 @@ if [[ "$CART_TEST_MODE" =~ (memcheck|all) ]]; then
   scons utest --utest-mode=memcheck
   export TR_USE_VALGRIND=memcheck
   cd ${TESTDIR}
-  set +e
-  python3.4 test_runner scripts/cart_echo_test.yml scripts/cart_test_group.yml scripts/cart_self_test.yml
-  error=$?
-  set -e
-  TESTLOGS="/testLogs/testRun"
+  python3.4 test_runner "${JENKINS_TEST_LIST[@]}"
 
   cd -
   RESULTS="valgrind_results"
   if [[ ! -e ${RESULTS} ]]; then mkdir ${RESULTS}; fi
 
-  find ${TESTDIR} -name valgrind*.xml | xargs cp -t ${RESULTS}
+  # Recursive copy to results, including all directories and matching files,
+  # but pruning empty directories from the tree.
+  rsync -rm --include="*/" --include="valgrind*xml" "--exclude=*" ${TESTDIR} ${RESULTS}
 
-  if [ $error != 0 ]; then
-    exit $error
-  fi
 fi

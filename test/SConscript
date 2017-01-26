@@ -36,18 +36,13 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """install test scripts"""
 
-TESTSCRIPTS = ["cart_echo_test.py", "cart_test_group.py",
-               "cart_self_test.py", "commontestsuite.py",
-               "cart_test_group_tiers.py"]
-
 def scons():
     """Run scons"""
 
     Import('env')
 
-    for script in TESTSCRIPTS:
-        env.Install("$PREFIX/TESTING/scripts", script)
-    # move the testing config file (.yml) to the TESTING scrpits directory
+    # move the test files (.py) to the TESTING scrpits directory
+    env.Install("$PREFIX/TESTING/scripts", Glob("*.py"))
     env.Install("$PREFIX/TESTING/scripts", Glob("*.yml"))
 
 if __name__ == 'SCons.Script':

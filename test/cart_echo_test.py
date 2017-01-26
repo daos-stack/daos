@@ -62,29 +62,23 @@ import os
 import time
 import commontestsuite
 
-NPROC = "1"
-testsuite = "Test Echo"
-testprocess = "crt_echo"
-
-def tearDownModule():
-    """teardown module for test"""
-    commontestsuite.commonTearDownModule(testsuite, testprocess)
-
 class TestEcho(commontestsuite.CommonTestSuite):
     """ Execute process set tests """
     pass_env = " -x CCI_CONFIG -x CRT_LOG_MASK "
 
+    def setUp(self):
+        self.get_test_info()
+
     def test_echo_one_node(self):
         """Simple process set test one node"""
         testmsg = self.shortDescription()
-        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
-        (server, client) = self.common_add_server_client()
-        cmdstr = cmd + \
-          "%s-n %s %s%s tests/crt_echo_srv :" % \
-          (server, NPROC, self.pass_env, prefix) + \
-          "%s-n %s %s%s tests/crt_echo_cli" % \
-          (client, NPROC, self.pass_env, prefix)
-        procrtn = self.common_launch_test(testsuite, testmsg, cmdstr)
+
+        # Launch both the client and target instances on the
+        # same node.
+        procrtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli_arg='tests/crt_echo_cli', \
+                                   srv_arg='tests/crt_echo_srv')
+
         if procrtn:
             self.fail("Failed, return code %d" % procrtn)
 
@@ -95,21 +89,45 @@ class TestEcho(commontestsuite.CommonTestSuite):
             self.skipTest('requires two or more nodes.')
 
         testmsg = self.shortDescription()
-        self.logger.info("test name: %s", self.id())
-        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
-        (server, client) = self.common_add_server_client()
-        cmdstr = cmd + \
-          "%s-n %s %s%s tests/crt_echo_srv" % \
-          (server, NPROC, self.pass_env, prefix)
-        proc_srv = self.common_launch_process(testsuite, \
-          testmsg, cmdstr)
+
+        clients = self.get_client_list()
+        if not clients:
+            self.skipTest('Client list is empty.')
+
+        servers = self.get_server_list()
+        if not servers:
+            self.skipTest('Server list is empty.')
+
+        server = ''.join([' -H ', servers.pop(0)])
+        # Launch a crt_echo_srv instance to act as a target in the background.
+        # This will remain running for the duration.
+        proc_srv = self.launch_bg(testmsg, '1', self.pass_env, \
+                                  server, 'tests/crt_echo_srv')
+
+        if proc_srv is None:
+            self.fail("Server launch failed, return code %s" \
+                       % proc_srv.returncode)
+
         time.sleep(2)
-        (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
-        cmdstr = cmd + \
-          "%s-n %s %s%s tests/crt_echo_cli" % \
-          (client, NPROC, self.pass_env, prefix)
-        cli_rtn = self.common_launch_test(testsuite, testmsg, cmdstr)
-        srv_rtn = self.common_stop_process(testsuite, testmsg, proc_srv)
+
+        # Verify the server is still running.
+        if not self.check_process(proc_srv):
+            procrtn = self.stop_process(testmsg, proc_srv)
+            self.fail("Server did not launch, return code %s" \
+                       % procrtn)
+        self.logger.info("Server running")
+
+        # Launch, and wait for the test itself.  This is where the actual
+        # code gets run.  Launch and keep the return code, but do not check it
+        # until after the target has been stopped.
+        cli_rtn = self.launch_test(testmsg, '1', self.pass_env, \
+                                   cli=''.join([' -H ', clients.pop(0)]), \
+                                   cli_arg='tests/crt_echo_cli')
+
+        # Stop the server.  This will normally run forever because of the hold
+        # option, so allow stop_process() to kill it.
+        srv_rtn = self.stop_process(testmsg, proc_srv)
+
         if cli_rtn or srv_rtn:
-            self.fail("Failed, return codes client %d " % cli_rtn +
-                      "server %d" % srv_rtn)
+            self.fail("Failed, return codes client %d " % cli_rtn + \
+                       "server %d" % srv_rtn)
