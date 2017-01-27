@@ -62,7 +62,7 @@ class CpprDaemonRunner:
                 "run_cppr.sh")
 
         cmdarg = [daemon_exe, "-w", w_path, "-g", g_path, "-H",
-                  hostlist, "start"]
+                  hostlist, "-l", "4", "start"]
         log_path = self.info.get_config('log_base_path')
         fileout = os.path.join(log_path, "cppr-start.out")
         filerr = os.path.join(log_path, "cppr-start.err")
