@@ -973,7 +973,86 @@ out:
 	assert_int_equal(nr, vts_cntr.cn_oids);
 	vos_iter_finish(ih);
 	return rc;
+}
 
+static void
+pool_cont_same_uuid(void **state)
+{
+
+	int			ret = 0;
+	uuid_t			pool_uuid, co_uuid;
+	daos_handle_t		poh, coh;
+	char			*fname = "/mnt/daos/vpool.test";
+	daos_iov_t		val_iov;
+	daos_key_t		dkey;
+	daos_key_t		akey;
+	daos_recx_t		rex;
+	char			dkey_buf[UPDATE_DKEY_SIZE];
+	char			akey_buf[UPDATE_AKEY_SIZE];
+	char			update_buf[UPDATE_BUF_SIZE];
+	daos_vec_iod_t		vio;
+	daos_sg_list_t		sgl;
+	uuid_t			cookie;
+	daos_unit_oid_t		oid;
+
+	memset(&vio, 0, sizeof(vio));
+	memset(&rex, 0, sizeof(rex));
+	memset(&sgl, 0, sizeof(sgl));
+
+	uuid_generate(pool_uuid);
+	uuid_copy(co_uuid, pool_uuid);
+
+	ret = vos_pool_create(fname, pool_uuid, 16*1024*1024);
+	assert_int_equal(ret, 0);
+
+	ret = vos_pool_open(fname, pool_uuid, &poh);
+	assert_int_equal(ret, 0);
+
+	ret = vos_co_create(poh, co_uuid);
+	assert_int_equal(ret, 0);
+
+	ret = vos_pool_close(poh);
+	assert_int_equal(ret, 0);
+
+	poh = DAOS_HDL_INVAL;
+	ret = vos_pool_open(fname, pool_uuid, &poh);
+	assert_int_equal(ret, 0);
+
+	ret = vos_co_open(poh, co_uuid, &coh);
+	assert_int_equal(ret, 0);
+
+	dts_key_gen(&dkey_buf[0], UPDATE_DKEY_SIZE, UPDATE_DKEY);
+	dts_key_gen(&dkey_buf[0], UPDATE_AKEY_SIZE, UPDATE_AKEY);
+	daos_iov_set(&dkey, &dkey_buf[0], strlen(dkey_buf));
+	daos_iov_set(&akey, &akey_buf[0], strlen(akey_buf));
+	dts_buf_render(update_buf, UPDATE_BUF_SIZE);
+	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
+	rex.rx_rsize = UPDATE_BUF_SIZE;
+	rex.rx_nr    = 1;
+
+	sgl.sg_nr.num = 1;
+	sgl.sg_iovs = &val_iov;
+
+	vio.vd_name	= akey;
+	vio.vd_recxs	= &rex;
+	vio.vd_nr	= 1;
+
+	uuid_generate(cookie);
+	oid = dts_unit_oid_gen(0, 0);
+	ret = vos_obj_update(coh, oid, 10, cookie, &dkey, 1, &vio, &sgl);
+	assert_int_equal(ret, 0);
+
+	ret = vos_co_close(coh);
+	assert_int_equal(ret, 0);
+
+	ret = vos_co_destroy(poh, co_uuid);
+	assert_int_equal(ret, 0);
+
+	ret = vos_pool_close(poh);
+	assert_int_equal(ret, 0);
+
+	ret = vos_pool_destroy(fname, pool_uuid);
+	assert_int_equal(ret, 0);
 }
 
 static void
@@ -1308,7 +1387,8 @@ static const struct CMUnitTest io_tests[] = {
 		io_fetch_no_exist_dkey, NULL, NULL},
 	{ "VOS282.1: Fetch from non existent dkey with zero-copy",
 		io_fetch_no_exist_dkey_zc, NULL, NULL},
-
+	{ "VOS282.2: Accessing pool, container with same UUID",
+		pool_cont_same_uuid, NULL, NULL},
 	{ "VOS299: Space overflow negative error test",
 		io_pool_overflow_test, NULL, io_pool_overflow_teardown},
 };

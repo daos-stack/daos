@@ -64,6 +64,20 @@ vos_get_obj_cache(void)
  * Created once for standalone mode and once for every
  * TLS instance.
  */
+
+static inline void
+vos_imem_strts_destroy(struct vos_imem_strts *imem_inst)
+{
+	if (imem_inst->vis_ocache)
+		vos_obj_cache_destroy(imem_inst->vis_ocache);
+
+	if (imem_inst->vis_pool_hhash)
+		daos_uhash_destroy(imem_inst->vis_pool_hhash);
+
+	if (imem_inst->vis_cont_hhash)
+		daos_uhash_destroy(imem_inst->vis_cont_hhash);
+}
+
 static inline int
 vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 {
@@ -76,24 +90,24 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 		return rc;
 	}
 
-	rc = daos_uhash_create(0, DAOS_HHASH_BITS,
-			       &imem_inst->vis_hr_hash);
+	rc = daos_uhash_create(0 /* no locking */, VOS_POOL_HHASH_BITS,
+			       &imem_inst->vis_pool_hhash);
 	if (rc) {
-		D_ERROR("Error in creating ref hash: %d\n", rc);
-		return rc;
+		D_ERROR("Error in creating POOL ref hash: %d\n", rc);
+		goto failed;
 	}
+
+	rc = daos_uhash_create(0 /* no locking */, VOS_CONT_HHASH_BITS,
+			       &imem_inst->vis_cont_hhash);
+	if (rc) {
+		D_ERROR("Error in creating CONT ref hash: %d\n", rc);
+		goto failed;
+	}
+
+	return 0;
+failed:
+	vos_imem_strts_destroy(imem_inst);
 	return rc;
-}
-
-static inline void
-vos_imem_strts_destroy(struct vos_imem_strts *imem_inst)
-{
-	if (imem_inst->vis_ocache)
-		vos_obj_cache_destroy(imem_inst->vis_ocache);
-
-	if (imem_inst->vis_hr_hash)
-		daos_uhash_destroy(imem_inst->vis_hr_hash);
-
 }
 
 static void *

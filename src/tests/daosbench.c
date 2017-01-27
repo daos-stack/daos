@@ -776,6 +776,17 @@ kv_test_report(struct test *test, int key_type)
 	}
 }
 
+static void
+metadata_test_report(struct test *test)
+{
+	if (!comm_world_rank) {
+		double d = chrono_read("m_end") - chrono_read("m_begin");
+
+		printf("%s\n", test->t_type->tt_name);
+		printf("Time: %f seconds\n", d);
+	}
+}
+
 
 static void
 kv_test_describe(struct test *test, int key_type)
@@ -1275,6 +1286,36 @@ kv_multi_idx_update_run(struct test *test)
 	kv_test_report(test, 2);
 }
 
+
+/**
+ * Creates or open container at rank 0 and
+ * shares the handle across all other processes
+ */
+static void
+daos_container_create_open(struct test *test)
+{
+	int rc;
+
+	chrono_record("m_begin");
+
+	rc = container_open(comm_world_rank, test->t_container,
+			    0 /* open */);
+	if (rc == -DER_NONEXIST) {
+		DBENCH_PRINT("Creating container\n");
+		rc = container_open(comm_world_rank, test->t_container,
+				    1 /* create */);
+	} else {
+		DBENCH_PRINT("Found container: %s\n", test->t_container);
+	}
+
+	DBENCH_CHECK(rc, "Failed to open container\n");
+	handle_share(&coh, HANDLE_CO, comm_world_rank, poh,
+		     verbose ? 1 : 0);
+
+	chrono_record("m_end");
+	metadata_test_report(test);
+}
+
 static const char kv_simul_meta_dkey[] = "kv_simul";
 static const char kv_simul_meta_step_akey[] = "step";
 
@@ -1398,6 +1439,11 @@ kv_simul(struct test *test)
 	object_close(oh);
 }
 
+static struct test_type test_co_create = {
+	"daos-co-create",
+	daos_container_create_open
+};
+
 static struct test_type	test_type_mdkvar = {
 	"kv-dkey-update",
 	kv_multi_dkey_update_run
@@ -1441,6 +1487,7 @@ static struct test_type	*test_types_available[] = {
 	&test_type_akfetch,
 	&test_type_dkenum,
 	&test_type_simul,
+	&test_co_create,
 	NULL
 };
 
@@ -1802,22 +1849,17 @@ int main(int argc, char *argv[])
 		       MPI_COMM_WORLD);
 	DBENCH_CHECK(rc, "broadcast pool_info error\n");
 
-
-	rc = container_open(comm_world_rank, arg.t_container,
-			    0 /* create */);
-	if (rc == -DER_NONEXIST) {
-		DBENCH_PRINT("Creating container\n");
-		rc = container_open(comm_world_rank, arg.t_container,
-				    1 /* create */);
-	}
-	DBENCH_CHECK(rc, "Failed to open container\n");
-	handle_share(&coh, HANDLE_CO, comm_world_rank, poh,
-		     verbose ? 1 : 0);
-
 	/** Invoke test **/
+	if (strcmp(arg.t_type->tt_name, "daos-co-create") != 0)
+		daos_container_create_open(&arg);
+
 	arg.t_type->tt_run(&arg);
 
-	container_destroy(comm_world_rank);
+	if (strcmp(arg.t_type->tt_name, "daos-co-create") != 0)
+		container_destroy(comm_world_rank);
+	else
+		container_close(comm_world_rank);
+
 	pool_disconnect(comm_world_rank);
 	test_fini(&arg);
 

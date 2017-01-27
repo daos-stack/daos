@@ -65,7 +65,8 @@ vos_co_insert_handle(struct vc_hdl *co_hdl, struct daos_uuid *key,
 	D_ASSERT(co_hdl != NULL && coh != NULL);
 
 	vos_co_handle_init(co_hdl);
-	rc = daos_uhash_link_insert(vos_hhash_get(), key, &co_hdl->vc_uhlink);
+	rc = daos_uhash_link_insert(vos_cont_hhash_get(), key,
+				    &co_hdl->vc_uhlink);
 	if (rc) {
 		D_ERROR("UHASH table container handle insert failed\n");
 		D_GOTO(exit, rc);
@@ -82,7 +83,7 @@ vos_co_lookup_handle(struct daos_uuid *key, struct vc_hdl **co_hdl)
 	int			rc = 0;
 	struct daos_ulink	*ulink;
 
-	ulink = daos_uhash_link_lookup(vos_hhash_get(), key);
+	ulink = daos_uhash_link_lookup(vos_cont_hhash_get(), key);
 	if (ulink != NULL)
 		*co_hdl = vos_ulink2coh(ulink);
 	else
@@ -94,13 +95,13 @@ vos_co_lookup_handle(struct daos_uuid *key, struct vc_hdl **co_hdl)
 void
 vos_co_putref_handle(struct vc_hdl *co_hdl)
 {
-	daos_uhash_link_decref(vos_hhash_get(), &co_hdl->vc_uhlink);
+	daos_uhash_link_decref(vos_cont_hhash_get(), &co_hdl->vc_uhlink);
 }
 
 void
 vos_co_addref_handle(struct vc_hdl *co_hdl)
 {
-	daos_uhash_link_addref(vos_hhash_get(), &co_hdl->vc_uhlink);
+	daos_uhash_link_addref(vos_cont_hhash_get(), &co_hdl->vc_uhlink);
 }
 
 int
@@ -108,14 +109,15 @@ vos_co_release_handle(struct vc_hdl *co_hdl)
 {
 	int rc = 0;
 
-	daos_uhash_link_decref(vos_hhash_get(), &co_hdl->vc_uhlink);
+	daos_uhash_link_decref(vos_cont_hhash_get(), &co_hdl->vc_uhlink);
 	if (daos_uhash_link_last_ref(&co_hdl->vc_uhlink)) {
 		rc = dbtree_close(co_hdl->vc_btr_hdl);
 		if (rc) {
 			D_ERROR("Closing btree open handle: %d\n", rc);
 			return rc;
 		}
-		daos_uhash_link_delete(vos_hhash_get(), &co_hdl->vc_uhlink);
+		daos_uhash_link_delete(vos_cont_hhash_get(),
+				       &co_hdl->vc_uhlink);
 	}
 	return rc;
 }

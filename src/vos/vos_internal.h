@@ -41,6 +41,9 @@
 
 extern struct dss_module_key vos_module_key;
 
+#define VOS_POOL_HHASH_BITS 10 /* Upto 1024 pools */
+#define VOS_CONT_HHASH_BITS 20 /* Upto 1048576 containers */
+
 /**
  * VOS cookie index table
  * In-memory BTR index to hold all cookies and max epoch updated
@@ -97,11 +100,10 @@ struct vos_imem_strts {
 	 * object table
 	 */
 	struct daos_lru_cache	*vis_ocache;
-	/**
-	 * Hash table to refcount VOS handles
-	 * (container/pool, etc.,)
-	 */
-	struct dhash_table	*vis_hr_hash;
+	/** Hash table to refcount VOS handles */
+	/** (container/pool, etc.,) */
+	struct dhash_table	*vis_pool_hhash;
+	struct dhash_table	*vis_cont_hhash;
 };
 
 /* in-memory structures standalone instance */
@@ -133,9 +135,7 @@ extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_oid_iter_ops;
 extern struct vos_iter_ops vos_co_iter_ops;
 
-/**
- * VOS thread local storage structure
- */
+/** VOS thread local storage structure */
 struct vos_tls {
 	/* in-memory structures TLS instance */
 	struct vos_imem_strts	vtl_imems_inst;
@@ -153,12 +153,22 @@ vos_tls_get()
 }
 
 static inline struct dhash_table *
-vos_hhash_get(void)
+vos_pool_hhash_get(void)
 {
 #ifdef VOS_STANDALONE
-	return vsa_imems_inst->vis_hr_hash;
+	return vsa_imems_inst->vis_pool_hhash;
 #else
-	return vos_tls_get()->vtl_imems_inst.vis_hr_hash;
+	return vos_tls_get()->vtl_imems_inst.vis_pool_hhash;
+#endif
+}
+
+static inline struct dhash_table *
+vos_cont_hhash_get(void)
+{
+#ifdef VOS_STANDALONE
+	return vsa_imems_inst->vis_cont_hhash;
+#else
+	return vos_tls_get()->vtl_imems_inst.vis_cont_hhash;
 #endif
 }
 
@@ -219,13 +229,13 @@ vos_pool_ptr2df(struct vos_pool *pool)
 static inline void
 vos_pool_addref(struct vos_pool *pool)
 {
-	daos_uhash_link_addref(vos_hhash_get(), &pool->vp_hlink);
+	daos_uhash_link_addref(vos_pool_hhash_get(), &pool->vp_hlink);
 }
 
 static inline void
 vos_pool_decref(struct vos_pool *pool)
 {
-	daos_uhash_link_decref(vos_hhash_get(), &pool->vp_hlink);
+	daos_uhash_link_decref(vos_pool_hhash_get(), &pool->vp_hlink);
 }
 
 /**
