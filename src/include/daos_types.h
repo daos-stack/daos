@@ -599,16 +599,16 @@ typedef enum {
 	/** Query outstanding completed event */
 	DAOS_EQR_COMPLETED	= (1),
 	/** Query # inflight event */
-	DAOS_EQR_DISPATCH	= (1 << 1),
+	DAOS_EQR_WAITING	= (1 << 1),
 	/** Query # inflight + completed events in EQ */
-	DAOS_EQR_ALL		= (DAOS_EQR_COMPLETED | DAOS_EQR_DISPATCH),
+	DAOS_EQR_ALL		= (DAOS_EQR_COMPLETED | DAOS_EQR_WAITING),
 } daos_eq_query_t;
 
 typedef enum {
-	DAOS_EVS_INIT,
-	DAOS_EVS_DISPATCH,
+	DAOS_EVS_READY,
+	DAOS_EVS_RUNNING,
 	DAOS_EVS_COMPLETED,
-	DAOS_EVS_ABORT,
+	DAOS_EVS_ABORTED,
 } daos_ev_status_t;
 
 struct daos_eq;

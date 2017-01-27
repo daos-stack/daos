@@ -73,7 +73,7 @@ daos_eq_create(daos_handle_t *eqh);
  * \param ev [IN]	Pointer to completion event
  * \param flags [IN]	Flags to indicate the behavior of the destroy.
  *
- * \return		Zero on success, EBUSY if there is any inflight event
+ * \return		Zero on success, EBUSY if there is any launched event
  */
 int
 daos_eq_destroy(daos_handle_t eqh, int flags);
@@ -82,8 +82,9 @@ daos_eq_destroy(daos_handle_t eqh, int flags);
  * Retrieve completion events from an EQ
  *
  * \param eqh [IN]	EQ handle
- * \param wait_inflight [IN]
- *			Wait only if there's inflight event
+ * \param wait_running [IN] Wait only if there are running event. Some events
+ *			maybe initialized but not running. This selects
+ *			whether to wait only on events that are running or all.
  * \param timeout [IN]	How long is caller going to wait (micro-second)
  *			if \a timeout > 0,
  *			it can also be DAOS_EQ_NOWAIT, DAOS_EQ_WAIT
@@ -95,7 +96,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags);
  *			< 0	negative value if error
  */
 int
-daos_eq_poll(daos_handle_t eqh, int wait_inflight,
+daos_eq_poll(daos_handle_t eqh, int wait_running,
 	     int64_t timeout, unsigned int nevents, daos_event_t **events);
 
 /**
@@ -104,10 +105,10 @@ daos_eq_poll(daos_handle_t eqh, int wait_inflight,
  *
  * Events returned by query are still owned by DAOS, it's not allowed to
  * finalize or free events returned by this function, but it's allowed
- * to call daos_event_abort() to abort inflight operation.
+ * to call daos_event_abort() to abort launched operation.
  *
  * Also, the status of returned event could still be changing, for example,
- * the returned "inflight" event can be turned to "completed" before accessing.
+ * the returned "launched" event can be turned to "completed" before accessing.
  * It is the user's responsibility to guarantee that returned events would be
  * freed by the polling process.
  *

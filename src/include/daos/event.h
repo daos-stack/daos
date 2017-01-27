@@ -108,7 +108,7 @@ void
 daos_event_complete(daos_event_t *ev, int rc);
 
 /**
- * Mark the event launched, i.e. move this event to launch list.
+ * Mark the event launched, i.e. move this event to running list.
  *
  * \param ev		[IN]	event to launch.
  */

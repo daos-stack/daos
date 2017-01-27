@@ -41,9 +41,9 @@ typedef struct daos_eq {
 	daos_list_t		eq_comp;
 	int			eq_n_comp;
 
-	/** In flight events will be put to the disp list */
-	daos_list_t		eq_disp;
-	int			eq_n_disp;
+	/** Launched events will be added to the running list */
+	daos_list_t		eq_running;
+	int			eq_n_running;
 
 	struct {
 		uint64_t	space[20];
@@ -69,7 +69,7 @@ struct daos_event_private {
 	/** children list */
 	daos_list_t		evx_child;
 	unsigned int		evx_nchild;
-	unsigned int		evx_nchild_if;
+	unsigned int		evx_nchild_running;
 	unsigned int		evx_nchild_comp;
 
 	unsigned int		evx_flags;

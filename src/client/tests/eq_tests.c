@@ -171,7 +171,7 @@ eq_test_2()
 			goto out;
 		}
 
-		rc = daos_eq_query(my_eqh, DAOS_EQR_DISPATCH, 0, NULL);
+		rc = daos_eq_query(my_eqh, DAOS_EQR_WAITING, 0, NULL);
 		if (rc != i + 1) {
 			D_ERROR("Expect to see %d inflight event, "
 				 "but got %d\n", i + 1, rc);
