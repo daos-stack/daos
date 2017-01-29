@@ -191,7 +191,8 @@ dc_obj_shard_sgl_copy(daos_sg_list_t *dst_sgl, uint32_t dst_nr,
 			return -DER_INVAL;
 		}
 
-		for (j = 0; j < src_sgl[i].sg_nr.num; j++) {
+		dst_sgl[i].sg_nr.num_out = src_sgl[i].sg_nr.num_out;
+		for (j = 0; j < src_sgl[i].sg_nr.num_out; j++) {
 			if (src_sgl[i].sg_iovs[j].iov_len == 0)
 				continue;
 
