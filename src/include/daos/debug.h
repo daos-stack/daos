@@ -40,7 +40,7 @@
 #define DD_LOG_ENV		"DD_LOG"
 #define DD_LOG_DEFAULT		"/tmp/daos.log"
 
-#define	DD_SEP			','
+#define	DD_SEP			", "
 /* The environment variable for enabled debug facilities (subsystems) */
 #define DD_FAC_ENV		"DD_SUBSYS"
 #define DD_FAC_DEFAULT		"all"
@@ -95,6 +95,7 @@ extern bool dd_tune_alloc;
 #define DB_MGMT		(1 << (CLOG_DPRISHIFT + 7)) /* pool management */
 #define DB_EPC		(1 << (CLOG_DPRISHIFT + 8)) /* epoch system */
 #define DB_TEST		(1 << (CLOG_DPRISHIFT + 15)) /* test programs */
+#define DB_ALL		CLOG_DBG		    /* all of masks */
 
 /* should be replaced by more reasonable mask, e.g. (DB_IO | DB_MD | DB_PL) */
 #define DB_DEFAULT	(DB_IO | DB_MD | DB_PL)

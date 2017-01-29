@@ -289,6 +289,10 @@ static struct daos_debug_bit debug_bit_dict[] = {
 		.db_name	= "trace",
 	},
 	{
+		.db_bit		= DB_ALL,
+		.db_name	= "all",
+	},
+	{
 		.db_name	= NULL,
 	},
 };
@@ -327,7 +331,6 @@ debug_mask_load_env(void)
 	char	*mask_env;
 	char	*mask_str;
 	char	*cur;
-	char	*tmp;
 	int	 i;
 
 	mask_env = getenv(DD_MASK_ENV);
@@ -339,24 +342,16 @@ debug_mask_load_env(void)
 		return;
 
 	debug_data.dd_mask = 0;
-	/* enable those bits provided by the env variable */
-	for (cur = tmp = mask_str; cur != NULL && *cur != '\0'; cur = tmp) {
-		tmp = strchr(cur, DD_SEP);
-		if (tmp != NULL) {
-			for (; *tmp == DD_SEP; tmp++)
-				*tmp = 0;
-		}
 
-		cur = daos_str_trimwhite(cur);
-		if (cur == NULL)
-			continue;
-
+	cur = strtok(mask_str, DD_SEP);
+	while (cur != NULL) {
 		for (i = 0; debug_bit_dict[i].db_name; i++) {
 			if (strcasecmp(cur, debug_bit_dict[i].db_name) == 0) {
 				debug_data.dd_mask |= debug_bit_dict[i].db_bit;
 				break;
 			}
 		}
+		cur = strtok(NULL, DD_SEP);
 	}
 	free(mask_str);
 }
@@ -368,7 +363,6 @@ debug_fac_load_env(void)
 	char	*fac_env;
 	char	*fac_str;
 	char	*cur;
-	char	*tmp;
 	int	 i;
 
 	fac_env = getenv(DD_FAC_ENV);
@@ -385,18 +379,8 @@ debug_fac_load_env(void)
 	for (i = 1; debug_fac_dict[i].df_name; i++)
 		debug_fac_dict[i].df_enabled = 0;
 
-	/* then enable those facilities provided by the env variable */
-	for (cur = tmp = fac_str; cur != NULL && *cur != '\0'; cur = tmp) {
-		tmp = strchr(cur, DD_SEP);
-		if (tmp != NULL) {
-			for (; *tmp == DD_SEP; tmp++)
-				*tmp = 0;
-		}
-
-		cur = daos_str_trimwhite(cur);
-		if (cur == NULL)
-			continue;
-
+	cur = strtok(fac_str, DD_SEP);
+	while (cur != NULL) {
 		/* skip 1 because it's NULL and enabled always */
 		for (i = 1; debug_fac_dict[i].df_name; i++) {
 			if (strcasecmp(cur, debug_fac_dict[i].df_name) == 0) {
@@ -404,6 +388,7 @@ debug_fac_load_env(void)
 				break;
 			}
 		}
+		cur = strtok(NULL, DD_SEP);
 	}
 	free(fac_str);
 }
