@@ -104,6 +104,8 @@ typedef enum {
 	CER_NO_RAS_RANK		= (CER_ERR_BASE + 29),
 	/** service group not attached */
 	CER_NOTATTACH		= (CER_ERR_BASE + 30),
+	/** version mismatch */
+	CER_MISMATCH		= (CER_ERR_BASE + 31),
 	/** unknown error */
 	CER_UNKNOWN		= (CER_ERR_BASE + 500),
 	/** TODO: add more error numbers */

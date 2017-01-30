@@ -608,3 +608,59 @@ out:
 			rc, rpc_req->cr_opc);
 	return rc;
 }
+
+int
+crt_evict_rank(crt_group_t *grp, int version, crt_rank_t rank)
+{
+	uint32_t		 old_num;
+	crt_rank_list_t		*new_rank_list;
+	struct crt_grp_priv	*grp_priv = NULL;
+	int			 rc = 0;
+
+	if (grp == NULL) {
+		C_ERROR("Invalid argument: group pointer is NULL\n");
+		return -CER_INVAL;
+	}
+
+	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
+
+	if (rank < 0 || rank >= grp_priv->gp_size) {
+		C_ERROR("Rank out of range. Attempted rank: %d, "
+			"valid range [0, %d].\n", rank, grp_priv->gp_size);
+		return -CER_OOG;
+	}
+
+	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+	if (version <= grp_priv->gp_membs_ver) {
+		C_ERROR("Attemped version should be larger than actual Version."
+			" Actual version: %d, attempted version: "
+			"%d", grp_priv->gp_membs_ver, version);
+		C_GOTO(out, rc = -CER_MISMATCH);
+	}
+
+	old_num = grp_priv->gp_pri_srv->ps_failed_ranks->rl_nr.num;
+	new_rank_list =
+		crt_rank_list_realloc(grp_priv->gp_pri_srv->ps_failed_ranks,
+				      old_num + 1);
+	if (new_rank_list == NULL) {
+		C_ERROR("crt_rank_list_realloc() failed.\n");
+		C_GOTO(out, rc = -CER_NOMEM);
+	}
+	grp_priv->gp_pri_srv->ps_failed_ranks = new_rank_list;
+	grp_priv->gp_pri_srv->ps_failed_ranks->rl_ranks[old_num] = rank;
+	C_ASSERT(grp_priv->gp_pri_srv->ps_failed_ranks->rl_nr.num <
+		 grp_priv->gp_size);
+	grp_priv->gp_membs_ver = version;
+
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	C_DEBUG("rank %d, membership list generation number changed from %d to "
+		"%d.\n", grp_priv->gp_self,
+		grp_priv->gp_membs_ver - 1, grp_priv->gp_membs_ver);
+
+	return rc;
+out:
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+
+	return rc;
+}
+
