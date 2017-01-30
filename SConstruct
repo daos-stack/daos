@@ -95,7 +95,12 @@ def scons():
         print 'Renaming legacy conf file'
         os.rename('daos_m.conf', opts_file)
 
-    prereqs = PreReqComponent(env, opts, arch=platform)
+    config_file = os.path.join(Dir('#').abspath, 'build.config')
+    if not os.path.exists(config_file):
+        config_file = None
+
+    prereqs = PreReqComponent(env, opts,
+                              config_file=config_file, arch=platform)
     prereqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'],
                    package='libuuid-devel')
     prereqs.preload(os.path.join(Dir('#').abspath, 'scons_local',
