@@ -540,6 +540,10 @@ struct crt_msg_field DMF_REC_SIZE_ARRAY =
 	DEFINE_CRT_MSG("daos_rec_size", CMF_ARRAY_FLAG, sizeof(uint64_t),
 			crt_proc_uint64_t);
 
+struct crt_msg_field DMF_NR_ARRAY =
+	DEFINE_CRT_MSG("daos_rec_size", CMF_ARRAY_FLAG, sizeof(uint32_t),
+			crt_proc_uint32_t);
+
 struct crt_msg_field DMF_KEY_DESC_ARRAY =
 	DEFINE_CRT_MSG("daos_key_desc", CMF_ARRAY_FLAG, sizeof(daos_key_desc_t),
 			daos_proc_key_desc);

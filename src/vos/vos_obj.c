@@ -191,6 +191,7 @@ vbuf_zcopy(struct vec_io_buf *vbuf, daos_iov_t *iov)
 	if (vbuf->vb_mmids == NULL) { /* zc-fetch */
 		/* return the data address for rdma in upper level stack */
 		vbuf->vb_sgl.sg_iovs[at] = *iov;
+		vbuf->vb_sgl.sg_nr.num_out++;
 	} /* else: do nothing for zc-update */
 
 	vbuf->vb_iov_at++;
@@ -499,14 +500,27 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 				"Mismatched idx "DF_U64"/"DF_U64", no data\n",
 				recx_tmp.rx_idx, recx->rx_idx + i);
 			recx_tmp.rx_rsize = 0; /* mark it as a hole */
+			iov.iov_len = rsize;
+			iov.iov_buf = NULL;
+			iov.iov_buf_len = 0;
 		}
 
 		if (recx_tmp.rx_rsize == 0) { /* punched or no data */
 			holes++;
 		} else {
-			if (rsize == 0) /* unknown yet, save it */
+			if (rsize == 0) {
+				/* unknown yet, save it */
 				rsize = recx_tmp.rx_rsize;
-
+				/* Check if there holes in the begining */
+				if (holes > 0 && is_zc) {
+					vbuf->vb_sgl.sg_iovs[0].iov_len =
+								holes * rsize;
+					D_DEBUG(DB_IO, "compensate holes %d "
+						"rsize "DF_U64"\n", holes,
+						rsize);
+					holes = 0;
+				}
+			}
 			if (rsize != recx_tmp.rx_rsize) {
 				D_ERROR("Record sizes of all indices must be "
 					"the same: "DF_U64"/"DF_U64"\n",
@@ -528,8 +542,8 @@ vos_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 			vbuf_zcopy(vbuf, &iov);
 			continue;
 		}
-		/* else: non zero-copy */
 
+		/* else: non zero-copy */
 		if (recx_tmp.rx_rsize == 0)
 			continue;
 
@@ -1140,6 +1154,7 @@ vos_rec_zc_update_begin(struct vos_obj_ref *oref, daos_vec_iod_t *viod,
 			irec->ir_cs_type = 0;
 			daos_iov_set(&vbuf->vb_sgl.sg_iovs[nr],
 				     vos_irec2data(irec), recx.rx_rsize);
+			vbuf->vb_sgl.sg_nr.num_out++;
 		}
 	}
 	return 0;

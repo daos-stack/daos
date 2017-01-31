@@ -120,19 +120,16 @@ ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 		orwo = crt_reply_get(rpc);
 		D_ASSERT(orwo != NULL);
 
-		if (orwo->orw_sgls.da_arrays != NULL) {
-			ds_sgls_free(orwo->orw_sgls.da_arrays,
-				     orwo->orw_sgls.da_count);
-			D_FREE(orwo->orw_sgls.da_arrays,
-			       orwo->orw_sgls.da_count *
-			       sizeof(daos_sg_list_t));
-			orwo->orw_sgls.da_count = 0;
-		}
-
 		if (orwo->orw_sizes.da_arrays != NULL) {
 			D_FREE(orwo->orw_sizes.da_arrays,
 			       orwo->orw_sizes.da_count * sizeof(uint64_t));
 			orwo->orw_sizes.da_count = 0;
+		}
+
+		if (orwo->orw_nrs.da_arrays != NULL) {
+			D_FREE(orwo->orw_nrs.da_arrays,
+			       orwo->orw_nrs.da_count * sizeof(uint32_t));
+			orwo->orw_nrs.da_count = 0;
 		}
 	}
 }
@@ -180,6 +177,9 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 	crt_bulk_opid_t		bulk_opid;
 	crt_bulk_perm_t		bulk_perm;
 	ABT_future		future;
+	struct obj_rw_out	*orwo = crt_reply_get(rpc);
+	uint32_t		*nrs = orwo->orw_nrs.da_arrays;
+	uint32_t		nrs_count = orwo->orw_nrs.da_count;
 	struct ds_bulk_async_args arg;
 	int			i;
 	int			rc;
@@ -196,6 +196,8 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		struct crt_bulk_desc	 bulk_desc;
 		crt_bulk_t		 local_bulk_hdl;
 		int			 ret = 0;
+		daos_size_t		offset = 0;
+		unsigned int		idx = 0;
 
 		if (remote_bulks[i] == NULL) {
 			ABT_future_set(future, &ret);
@@ -210,40 +212,82 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			D_ASSERT(sgl != NULL);
 		}
 
-		ret = crt_bulk_create(rpc->cr_ctx, daos2crt_sg(sgl),
-				      bulk_perm, &local_bulk_hdl);
-		if (ret != 0) {
-			D_ERROR("crt_bulk_create i %d failed, rc: %d.\n",
-				i, ret);
-			/**
-			 * Sigh, future can not be abort now, let's
-			 * continue until of all of future compartments
-			 * have been set.
-			 **/
-			ABT_future_set(future, &ret);
-			if (rc == 0)
-				rc = ret;
+		if (nrs != NULL) {
+			D_ASSERT(nrs_count > i);
+			nrs[i] = sgl->sg_nr.num_out;
 		}
 
-		crt_req_addref(rpc);
+		/* Let's walk through the sgl to check if the iov is empty,
+		 * which is usually gotten from punched/empty records (see
+		 * vos_recx_fetch()), and skip these empty iov during bulk
+		 * transfer to avoid touching the input buffer */
+		while (idx < sgl->sg_nr.num_out) {
+			daos_sg_list_t	sgl_sent;
+			daos_size_t	length = 0;
+			unsigned int	start;
 
-		bulk_desc.bd_rpc	= rpc;
-		bulk_desc.bd_bulk_op	= bulk_op;
-		bulk_desc.bd_remote_hdl	= remote_bulks[i];
-		bulk_desc.bd_local_hdl	= local_bulk_hdl;
-		bulk_desc.bd_len	= daos_sgl_data_len(sgl);
-		bulk_desc.bd_remote_off	= 0;
-		bulk_desc.bd_local_off	= 0;
+			/* Skip the punched/empty record, let's also skip the
+			 * them record in the input buffer instead of memset
+			 * it to 0. */
+			while (sgl->sg_iovs[idx].iov_buf == NULL &&
+			       idx < sgl->sg_nr.num_out) {
+				offset += sgl->sg_iovs[idx].iov_len;
+				idx++;
+			}
 
-		ret = crt_bulk_transfer(&bulk_desc, bulk_complete_cb,
-					&arg, &bulk_opid);
-		if (ret < 0) {
-			D_ERROR("crt_bulk_transfer failed, rc: %d.\n", ret);
-			crt_bulk_free(local_bulk_hdl);
-			crt_req_decref(rpc);
-			ABT_future_set(future, &ret);
-			if (rc == 0)
-				rc = ret;
+			if (idx == sgl->sg_nr.num_out)
+				break;
+
+			start = idx;
+			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
+			/* Find the end of the non-empty record */
+			while (sgl->sg_iovs[idx].iov_buf != NULL &&
+			       idx < sgl->sg_nr.num_out) {
+				length += sgl->sg_iovs[idx].iov_len;
+				idx++;
+			}
+
+			sgl_sent.sg_nr.num = idx - start;
+			sgl_sent.sg_nr.num_out = idx - start;
+
+			ret = crt_bulk_create(rpc->cr_ctx,
+					      daos2crt_sg(&sgl_sent),
+					      bulk_perm, &local_bulk_hdl);
+			if (ret != 0) {
+				D_ERROR("crt_bulk_create i %d failed, rc: %d\n",
+					i, ret);
+				/**
+				 * Sigh, future can not be abort now, let's
+				 * continue until of all of future compartments
+				 * have been set.
+				 **/
+				ABT_future_set(future, &ret);
+				if (rc == 0)
+					rc = ret;
+			}
+
+			crt_req_addref(rpc);
+
+			bulk_desc.bd_rpc	= rpc;
+			bulk_desc.bd_bulk_op	= bulk_op;
+			bulk_desc.bd_remote_hdl	= remote_bulks[i];
+			bulk_desc.bd_local_hdl	= local_bulk_hdl;
+			bulk_desc.bd_len	= length;
+			bulk_desc.bd_remote_off	= offset;
+			bulk_desc.bd_local_off	= 0;
+
+			ret = crt_bulk_transfer(&bulk_desc, bulk_complete_cb,
+						&arg, &bulk_opid);
+			if (ret < 0) {
+				D_ERROR("crt_bulk_transfer failed, rc: %d.\n",
+					ret);
+				crt_bulk_free(local_bulk_hdl);
+				crt_req_decref(rpc);
+				ABT_future_set(future, &ret);
+				if (rc == 0)
+					rc = ret;
+			}
+			offset += length;
 		}
 	}
 
@@ -336,45 +380,20 @@ ds_obj_rw_inline(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl)
 		struct obj_rw_out *orwo;
 
 		orwo = crt_reply_get(rpc);
-		if (sgls != NULL) {
-			orwo->orw_sgls.da_count = orw->orw_sgls.da_count;
-			if (orwo->orw_sgls.da_arrays == NULL)
-				D_ALLOC(orwo->orw_sgls.da_arrays,
-					orwo->orw_sgls.da_count *
-					sizeof(*sgls));
-
-			rc = ds_sgls_prep(orwo->orw_sgls.da_arrays, sgls,
-					  orw->orw_sgls.da_count);
-			if (rc < 0)
-				D_GOTO(out_sgl, rc);
-		} else {
-			orwo->orw_sgls.da_count = 0;
-			orwo->orw_sgls.da_arrays = NULL;
-		}
-
 		rc = vos_obj_fetch(cont_hdl->sch_cont->sc_hdl,
 				   orw->orw_oid, orw->orw_epoch,
 				   &orw->orw_dkey, orw->orw_nr,
-				   orw->orw_iods.da_arrays,
-				   orwo->orw_sgls.da_arrays);
+				   orw->orw_iods.da_arrays, sgls);
 		if (rc != 0)
-			D_GOTO(out_sgl, rc);
+			D_GOTO(out, rc);
 
+		orwo->orw_sgls.da_arrays = sgls;
+		orwo->orw_sgls.da_count = orw->orw_sgls.da_count;
 		rc = ds_obj_update_sizes_in_reply(rpc);
 		if (rc != 0)
-			D_GOTO(out_sgl, rc);
-
-out_sgl:
-		if (rc != 0) {
-			ds_sgls_free(orwo->orw_sgls.da_arrays,
-				     orwo->orw_sgls.da_count);
-			D_FREE(orwo->orw_sgls.da_arrays,
-			       orwo->orw_sgls.da_count * sizeof(*sgls));
-			orwo->orw_sgls.da_arrays = NULL;
-			orwo->orw_sgls.da_count = 0;
-		}
+			D_GOTO(out, rc);
 	}
-
+out:
 	D_DEBUG(DB_IO, "obj"DF_OID" rw inline rc = %d\n",
 		DP_OID(orw->orw_oid.id_pub), rc);
 
@@ -427,6 +446,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		bulk_op = CRT_BULK_GET;
 	} else {
+		struct obj_rw_out *orwo = crt_reply_get(rpc);
+
+		D_ASSERT(orwo != NULL);
+
 		rc = vos_obj_zc_fetch_begin(cont_hdl->sch_cont->sc_hdl,
 					    orw->orw_oid, orw->orw_epoch,
 					    &orw->orw_dkey, orw->orw_nr,
@@ -442,6 +465,18 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		rc = ds_obj_update_sizes_in_reply(rpc);
 		if (rc != 0)
 			D_GOTO(out, rc);
+
+		/* no in_line transfer */
+		orwo->orw_sgls.da_count = 0;
+		orwo->orw_sgls.da_arrays = NULL;
+
+		/* return num_out for sgl */
+		orwo->orw_nrs.da_count = orw->orw_nr;
+		D_ALLOC(orwo->orw_nrs.da_arrays,
+			orwo->orw_nrs.da_count * sizeof(uint32_t));
+
+		if (orwo->orw_nrs.da_arrays == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	rc = ds_bulk_transfer(rpc, bulk_op, orw->orw_bulks.da_arrays,

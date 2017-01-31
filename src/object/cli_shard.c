@@ -272,13 +272,36 @@ obj_rw_cp(struct daos_task *task, int rc)
 			}
 		}
 
-		/* inline transfer */
 		if (sp->sp_arg != NULL) {
 			struct rw_async_arg	*arg = sp->sp_arg;
 
-			rc = dc_obj_shard_sgl_copy(arg->rwaa_sgls, arg->rwaa_nr,
-						   orwo->orw_sgls.da_arrays,
-						   orwo->orw_sgls.da_count);
+			if (orwo->orw_sgls.da_count > 0) {
+				/* inline transger */
+				rc = dc_obj_shard_sgl_copy(arg->rwaa_sgls,
+						arg->rwaa_nr,
+						orwo->orw_sgls.da_arrays,
+						orwo->orw_sgls.da_count);
+			} else if (arg->rwaa_sgls != NULL) {
+				/* for bulk transfer, it needs to update
+				 * sg_nr.num_out
+				 **/
+				daos_sg_list_t	*sgls = arg->rwaa_sgls;
+				uint32_t	*nrs;
+				uint32_t	nrs_count;
+				int		i;
+
+				nrs = orwo->orw_nrs.da_arrays;
+				nrs_count = orwo->orw_nrs.da_count;
+				if (nrs_count != arg->rwaa_nr) {
+					D_ERROR("Invalid nrs %u != %u\n",
+						nrs_count, arg->rwaa_nr);
+					D_GOTO(out, rc = -DER_PROTO);
+				}
+
+				/* update sgl_nr */
+				for (i = 0; i < nrs_count; i++)
+					sgls[i].sg_nr.num_out = nrs[i];
+			}
 			D_FREE_PTR(arg);
 		}
 	}
@@ -521,13 +544,11 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 		orw->orw_sgls.da_arrays = NULL;
 	} else {
 		/* Transfer data inline */
-		if (sgls != NULL) {
+		if (sgls != NULL)
 			orw->orw_sgls.da_count = nr;
-			orw->orw_sgls.da_arrays = sgls;
-		} else {
+		else
 			orw->orw_sgls.da_count = 0;
-			orw->orw_sgls.da_arrays = NULL;
-		}
+		orw->orw_sgls.da_arrays = sgls;
 		orw->orw_bulks.da_count = 0;
 		orw->orw_bulks.da_arrays = NULL;
 	}
@@ -538,7 +559,7 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	sp->sp_callback = obj_rw_cp;
 	sp->sp_hdlp = (daos_handle_t *)pool;
 
-	if (opc == DAOS_OBJ_RPC_FETCH && orw->orw_sgls.da_arrays != NULL) {
+	if (opc == DAOS_OBJ_RPC_FETCH) {
 		/* remember the sgl to copyout the data inline for fetch */
 		D_ALLOC_PTR(rwaa);
 		if (rwaa == NULL)

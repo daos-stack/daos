@@ -163,6 +163,7 @@ ioreq_sgl_simple_set(struct ioreq *req, void **value,
 	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
 	for (i = 0; i < nr; i++) {
 		sgl[i].sg_nr.num = 1;
+		sgl[i].sg_nr.num_out = 0;
 		daos_iov_set(&sgl[i].sg_iovs[0], value[i], size[i]);
 	}
 }
@@ -247,6 +248,8 @@ lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 	assert_int_equal(rc, 0);
 	assert_int_equal(ev_flag, true);
 	assert_int_equal(req->ev.ev_error, req->arg->expect_result);
+	/* Only single iov for each sgls during the test */
+	assert_int_equal(sgls->sg_nr.num_out, 1);
 }
 
 void
@@ -371,8 +374,6 @@ io_var_akey_size(void **state)
 	char		*key;
 
 	/** akey not supported yet */
-	skip();
-
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, arg);
 
@@ -392,7 +393,7 @@ io_var_akey_size(void **state)
 
 		/** Lookup */
 		memset(buf, 0, 10);
-		lookup_single("var_dkey_size_d", key, 0, buf,
+		lookup_single("var_akey_size_d", key, 0, buf,
 			      10, 0, &req);
 		assert_int_equal(req.rex[0][0].rx_rsize, strlen("data") + 1);
 
@@ -867,6 +868,104 @@ basic_byte_array(void **state)
 }
 
 static void
+read_empty_records_internal(void **state, unsigned int size)
+{
+	test_arg_t *arg = *state;
+	int buf;
+	int *buf_out;
+	daos_obj_id_t oid;
+	daos_handle_t oh;
+	daos_epoch_t epoch = 2;
+	daos_iov_t dkey;
+	daos_sg_list_t sgl;
+	daos_iov_t sg_iov;
+	daos_vec_iod_t iod;
+	daos_recx_t recx;
+	int rc, i;
+
+	/** open object */
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	daos_iov_set(&dkey, "dkey_empty", strlen("dkey_empty"));
+
+	buf = 2000;
+	/** init scatter/gather */
+	daos_iov_set(&sg_iov, &buf, sizeof(int));
+	sgl.sg_nr.num = 1;
+	sgl.sg_nr.num_out = 0;
+	sgl.sg_iovs = &sg_iov;
+
+	/** init I/O descriptor */
+	daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.vd_kcsum, NULL, 0);
+	iod.vd_nr = 1;
+	recx.rx_rsize = 1;
+	recx.rx_idx = (size/2) * sizeof(int);
+	recx.rx_nr = sizeof(int);
+	iod.vd_recxs = &recx;
+	iod.vd_eprs = NULL;
+	iod.vd_csums = NULL;
+
+	/** update record */
+	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	buf_out = malloc(size * sizeof(*buf_out));
+	assert_non_null(buf_out);
+
+	for (i = 0; i < size; i++)
+		buf_out[i] = 2016;
+
+	/** fetch */
+	daos_iov_set(&sg_iov, buf_out, sizeof(int) * size);
+
+	recx.rx_rsize = 1;
+	recx.rx_idx = 0;
+	recx.rx_nr = sizeof(int) * size;
+	iod.vd_recxs = &recx;
+
+	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	for (i = 0; i < size; i++) {
+		/**
+		 * MSC - we should discuss more if the records with lower
+		 * indices need to be 0
+		 */
+		/*
+		 * if (i < STACK_BUF_LEN/2)
+		 * assert_int_equal(buf_out[i], 0);
+		*/
+		if (i == size/2)
+			assert_int_equal(buf_out[i], buf);
+		else
+			assert_int_equal(buf_out[i], 2016);
+	}
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+	free(buf_out);
+}
+
+static void
+read_empty_records(void **state)
+{
+	/* inline transfer */
+	read_empty_records_internal(state, STACK_BUF_LEN);
+}
+
+static void
+read_large_empty_records(void **state)
+{
+	/* buffer size > 4k for bulk transfer */
+	read_empty_records_internal(state, 8192);
+}
+
+static void
 fetch_size(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -1210,6 +1309,10 @@ static const struct CMUnitTest io_tests[] = {
 	  io_simple_update_crt_req_error, async_disable, NULL},
 	{ "IO21: io crt req create timeout (async)",
 	  io_simple_update_crt_req_error, async_enable, NULL},
+	{ "IO22: Read from unwritten records", read_empty_records,
+	  async_disable, NULL},
+	{ "IO23: Read from large unwritten records", read_large_empty_records,
+	  async_disable, NULL},
 };
 
 int

@@ -69,6 +69,7 @@ extern struct crt_msg_field DMF_SGL;
 extern struct crt_msg_field DMF_SGL_ARRAY;
 extern struct crt_msg_field DMF_SGL_DESC;
 extern struct crt_msg_field DMF_SGL_DESC_ARRAY;
+extern struct crt_msg_field DMF_NR_ARRAY;
 
 #define DMF_DAOS_SIZE CMF_UINT64
 

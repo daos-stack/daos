@@ -29,7 +29,7 @@
 #include <daos/rpc.h>
 #include "obj_rpc.h"
 
-static struct crt_msg_field *obj_update_in_fields[] = {
+static struct crt_msg_field *obj_rw_in_fields[] = {
 	&DMF_OID,	/* object ID */
 	&CMF_UUID,	/* container handle uuid */
 	&CMF_UINT64,	/* epoch */
@@ -41,22 +41,11 @@ static struct crt_msg_field *obj_update_in_fields[] = {
 	&CMF_BULK_ARRAY,    /* BULK ARRAY */
 };
 
-static struct crt_msg_field *obj_fetch_in_fields[] = {
-	&DMF_OID,	/* object ID */
-	&CMF_UUID,	/* container handle uuid */
-	&CMF_UINT64,	/* epoch */
-	&CMF_UINT32,	/* map version */
-	&CMF_UINT32,	/* count of vec_iod and sg */
-	&DMF_IOVEC,	/* dkey */
-	&DMF_VEC_IOD_ARRAY, /* daos_vector */
-	&DMF_SGL_DESC_ARRAY, /* sgl_descriptor vector */
-	&CMF_BULK_ARRAY,    /* BULK ARRAY */
-};
-
 static struct crt_msg_field *obj_rw_out_fields[] = {
 	&CMF_INT,	/* status */
 	&CMF_UINT32,	/* map version */
 	&DMF_REC_SIZE_ARRAY, /* actual size of records */
+	&DMF_NR_ARRAY, /* array of sgl nr */
 	&DMF_SGL_ARRAY, /* return buffer */
 };
 
@@ -82,12 +71,12 @@ static struct crt_msg_field *obj_key_enum_out_fields[] = {
 
 static struct crt_req_format DQF_OBJ_UPDATE =
 	DEFINE_CRT_REQ_FMT("DAOS_OBJ_UPDATE",
-			   obj_update_in_fields,
+			   obj_rw_in_fields,
 			   obj_rw_out_fields);
 
 static struct crt_req_format DQF_OBJ_FETCH =
 	DEFINE_CRT_REQ_FMT("DAOS_OBJ_FETCH",
-			   obj_fetch_in_fields,
+			   obj_rw_in_fields,
 			   obj_rw_out_fields);
 
 static struct crt_req_format DQF_DKEY_ENUMERATE =
