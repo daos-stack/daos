@@ -1652,7 +1652,6 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	struct vos_rec_bundle	rbund;
 	daos_iov_t		kiov;
 	daos_iov_t		riov;
-	daos_csum_buf_t		csum;
 	int			rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
@@ -1661,7 +1660,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_recx	= &it_entry->ie_recx;
 	rbund.rb_iov	= &it_entry->ie_iov;
-	rbund.rb_csum	= &csum;
+	rbund.rb_csum	= &it_entry->ie_csum;
 
 	daos_iov_set(rbund.rb_iov, NULL, 0); /* no data copy */
 	daos_csum_set(rbund.rb_csum, NULL, 0);

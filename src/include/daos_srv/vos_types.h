@@ -87,6 +87,25 @@ typedef enum {
 } vos_it_epc_expr_t;
 
 /**
+ * Parameters for returning anchor
+ * from aggregation/discard
+ */
+typedef struct {
+	/** anchor status mask */
+	unsigned int		pa_mask;
+	/** Anchor for obj */
+	daos_hash_out_t		pa_obj;
+	/** Anchor for dkey */
+	daos_hash_out_t		pa_dkey;
+	/** Anchor for akey */
+	daos_hash_out_t		pa_akey;
+	/** Anchor for recx */
+	daos_hash_out_t		pa_recx;
+	/** Anchor for retained recx (max epoch) */
+	daos_hash_out_t		pa_recx_max;
+} vos_purge_anchor_t;
+
+/**
  * Parameters for initialising VOS iterator
  */
 typedef struct {
@@ -126,6 +145,8 @@ typedef struct {
 			daos_iov_t		ie_iov;
 			/** update cookie */
 			uuid_t			ie_cookie;
+			/** checksum */
+			daos_csum_buf_t		ie_csum;
 		};
 	};
 } vos_iter_entry_t;

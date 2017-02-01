@@ -376,10 +376,11 @@ irec_update(struct btr_instance *tins, struct btr_record *rec,
 	if (iov->iov_len != rbund->rb_recx->rx_rsize)
 		return -DER_IO_INVAL;
 
-	/** Updating the cookie for this update */
 	ihkey = (struct idx_btr_key *)&rec->rec_hkey[0];
+	/** Updating the cookie for this update */
 	uuid_copy(ihkey->ih_cookie, rbund->rb_cookie);
 
+	/** XXX: fix this after CSUM is added to iterator */
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
 	irec->ir_size	 = iov->iov_len;

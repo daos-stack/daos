@@ -362,7 +362,6 @@ main(int argc, char **argv)
 		{"epoch",	no_argument,		NULL,	'e'},
 		{"erecov",	no_argument,		NULL,	'o'},
 		{"degraded",	no_argument,		NULL,	'd'},
-		/** {"rebuild", no_argument, NULL, 'r'}, */
 		{"group",	required_argument,	NULL,	'g'},
 		{"help",	no_argument,		NULL,	'h'}
 	};

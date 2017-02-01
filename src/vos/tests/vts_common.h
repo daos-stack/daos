@@ -99,7 +99,10 @@ int
 run_co_test(void);
 
 int
-run_discard_test(void);
+run_discard_tests(void);
+
+int
+run_aggregate_tests(void);
 
 int
 run_io_test(void);

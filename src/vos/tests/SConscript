@@ -7,6 +7,6 @@ libraries += ['uuid', 'pthread', 'pmemobj', 'cmocka', 'gomp']
 
 denv.Append(CPPPATH = ['#/src/vos/tests/'])
 vos_test_src=['vos_tests.c', 'vts_io.c', 'vts_pool.c', 'vts_container.c',
-              'vts_common.c', 'vts_discard.c']
+              'vts_common.c', 'vts_purge.c']
 vos_tests = denv.Program('vos_tests', vos_test_src, LIBS = libraries)
 denv.Install('$PREFIX/bin/', vos_tests)

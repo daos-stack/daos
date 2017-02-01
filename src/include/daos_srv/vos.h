@@ -200,13 +200,18 @@ vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
  * \a epr::epr_hi, aggregated epochs will be discarded except the last one,
  * which is kept as aggregation result.
  *
- * \param coh	[IN]	Container open handle
- * \param epr	[IN]	The epoch range of aggregation
+ * \param coh	  [IN]		Container open handle
+ * \param oid	  [IN]		Object handle for aggregation
+ * \param epr	  [IN]		The epoch range of aggregation
+ * \param credits [IN/OUT]	credits for probing object tree
+ * \param anchor  [IN/OUT]	anchor returned for preemption.
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_epoch_aggregate(daos_handle_t coh, daos_epoch_range_t *epr);
+vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
+		    daos_epoch_range_t *epr, unsigned int *credits,
+		    vos_purge_anchor_t *anchor);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr

@@ -538,6 +538,11 @@ static inline bool vos_obj_is_zombie(struct vos_obj *obj)
 	return false;
 }
 
+static inline bool vos_recx_is_equal(daos_recx_t *recx1, daos_recx_t *recx2)
+{
+	return !(memcmp(recx1, recx2, sizeof(daos_recx_t)));
+}
+
 enum {
 	/** the first reserved tree class */
 	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
