@@ -23,7 +23,8 @@ Module to launch cppr_daemon on all specified nodes via orterun
 """
 import os
 import subprocess
-import pwd
+import tempfile
+import re
 
 
 class CpprDaemonRunner:
@@ -41,7 +42,9 @@ class CpprDaemonRunner:
         """
         print("TestRunner: start cppr_daemon process.")
 
-        w_path = os.path.join("/tmp/", pwd.getpwuid(os.getuid()).pw_name)
+        w_path = tempfile.mkdtemp()
+        os.environ["CNSS_PREFIX"] = os.path.join(w_path, "local")
+
         self.info.set_config('setKeyFromConfig', "CNSS_PREFIX",
                              os.path.join(w_path, "local"))
         g_path = os.path.join(os.path.expanduser("~/"), "tmp")
@@ -70,7 +73,6 @@ class CpprDaemonRunner:
             open(filerr, mode='w+b', buffering=0) as errfile:
             rc = subprocess.call(cmdarg, stdout=outfile, stderr=errfile)
 
-
         return rc
 
     def stop_process(self):
@@ -78,7 +80,11 @@ class CpprDaemonRunner:
         Kill cppr_daemon on all nodes
         """
         print("TestRunner: stopping cppr_daemon process.")
-        w_path = os.path.join("/tmp/", pwd.getpwuid(os.getuid()).pw_name)
+        w_path = os.getenv('CNSS_PREFIX', "")
+        re.sub('/local', '', w_path)
+        if not w_path:
+            print("CNSS_PREFIX is not set correctly.")
+            raise ValueError
         g_path = os.path.join(os.path.expanduser("~/"), "tmp")
         hosts = ","
         hostlist = hosts.join(self.info.get_config('host_list'))
