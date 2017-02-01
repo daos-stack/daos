@@ -467,7 +467,6 @@ class PreReqComponent(object):
         self.__required = {}
         self.__env = env
         self.__opts = variables
-        self.system_env = env.Clone()
         self.configs = None
 
         real_env = self.__env['ENV']
@@ -504,8 +503,10 @@ class PreReqComponent(object):
             # Overwrite default file locations to allow multiple builds in the
             # same tree.
             env.SConsignFile('.sconsign-%s' % arch)
-            env.Replace(CONFIGUREDIR='#/.scons-temp-%s' % arch,
+            env.Replace(CONFIGUREDIR='#/.sconf-temp-%s' % arch,
                         CONFIGURELOG='#/config-%s.log' % arch)
+
+        self.system_env = env.Clone()
 
         self.__build_dir = os.path.realpath(os.path.join(self.__top_dir,
                                                          build_dir_name))
@@ -673,7 +674,7 @@ class PreReqComponent(object):
         self.__defined[name] = comp
 
     def preload(self, script, **kw):
-        r"""Execute a script to define external components
+        """Execute a script to define external components
 
         Args:
             script -- The script to execute
