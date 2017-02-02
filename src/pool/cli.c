@@ -71,7 +71,8 @@ pool_free(struct daos_hlink *hlink)
 	D_ASSERT(daos_list_empty(&pool->dp_co_list));
 	if (pool->dp_map != NULL)
 		pool_map_destroy(pool->dp_map);
-	daos_group_detach(pool->dp_group);
+	if (pool->dp_group != NULL)
+	    daos_group_detach(pool->dp_group);
 	D_FREE_PTR(pool);
 }
 
