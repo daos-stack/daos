@@ -897,8 +897,8 @@ static void st_parse_range_str(char *const str, char *const validated_str,
 {
 	char *pch;
 	char *pch_sub;
-	char *saveptr_comma;
-	char *saveptr_hyphen;
+	char *saveptr_comma = NULL;
+	char *saveptr_hyphen = NULL;
 	char *validated_cur_ptr = validated_str;
 
 	/* Split into tokens based on commas */

@@ -37,7 +37,8 @@
 """install test scripts"""
 
 TESTSCRIPTS = ["cart_echo_test.py", "cart_test_group.py",
-               "cart_self_test.py", "commontestsuite.py"]
+               "cart_self_test.py", "commontestsuite.py",
+               "cart_test_group_tiers.py"]
 
 def scons():
     """Run scons"""

@@ -4,4 +4,5 @@
 test_list:
   - "scripts/cart_echo_test.yml"
   - "scripts/cart_test_group.yml"
+  - "scripts/cart_test_group_tiers.yml"
   - "scripts/cart_self_test.yml"

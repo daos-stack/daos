@@ -1,0 +1,27 @@
+description: "group test module"
+
+defaultENV:
+    OMPI_MCA_rmaps_base_oversubscribe: "1"
+    CRT_LOG_MASK: "ERR"
+    TR_REDIRECT_OUTPUT: ""
+
+module:
+    name: "cart_test_group_tiers"
+    subLogKey: "CRT_TESTLOG"
+    setKeyFromHost: ["CRT_TEST_SERVER", "CRT_TEST_CLIENT"]
+    setKeyFromInfo:
+        - [CRT_PREFIX, PREFIX, ""]
+        - [CRT_OMPI_BIN, OMPI_PREFIX, "/bin/"]
+        - [CCI_CONFIG, PREFIX, "/etc/cci.ini"]
+    hostConfig:
+        type: buildList
+        numServers: 2
+        numClients: 1
+
+directives:
+    loop: "no"
+
+execStrategy:
+    - id: default
+      setEnvVars:
+

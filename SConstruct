@@ -1,5 +1,5 @@
 #!python
-# Copyright (C) 2016 Intel Corporation
+# Copyright (C) 2016-2017 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -114,7 +114,7 @@ def scons():
         env.Append(SHLIBSUFFIX='.so')
 
     # Compiler options
-    env.Append(CCFLAGS=['-g', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
+    env.Append(CCFLAGS=['-g3', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
     env.Append(CCFLAGS=['-O2'])
 
     # generate targets in specific build dir to avoid polluting the source code
