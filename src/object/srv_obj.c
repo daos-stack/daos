@@ -611,8 +611,9 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		if (rc != 0)
 			break;
 
-		D_DEBUG(DB_IO, "get key %s len "DF_U64
-			"iov_len "DF_U64" buflen "DF_U64"\n",
+
+		D_DEBUG(DB_IO, "get key '%s' len "DF_U64
+			" iov_len "DF_U64" buflen "DF_U64"\n",
 			(char *)key_ent.ie_key.iov_buf, key_ent.ie_key.iov_len,
 			iovs[iovs_idx].iov_len, iovs[iovs_idx].iov_buf_len);
 
@@ -673,8 +674,8 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	} else {
 		if (iovs_idx < iovs_nr && iovs[iovs_idx].iov_len != 0)
 			iovs_idx++;
-		oeo->oeo_sgl.sg_nr.num = iovs_idx;
 		oeo->oeo_sgl = sgl;
+		oeo->oeo_sgl.sg_nr.num_out = iovs_idx;
 	}
 out_tch:
 	ds_cont_hdl_put(cont_hdl);
