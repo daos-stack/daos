@@ -151,7 +151,7 @@ ring_comp_ver_cmp(struct pool_component *comp_a, struct pool_component *comp_b)
 	if (comp_a->co_ver > comp_b->co_ver)
 		return 1;
 
-	if (comp_a->co_ver < comp_a->co_ver)
+	if (comp_a->co_ver < comp_b->co_ver)
 		return -1;
 
 	return 0;

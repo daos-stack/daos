@@ -1,5 +1,7 @@
 .sconsign.dblite
 .sconf_temp
+.build_vars.json
+.build_vars.sh
 /build/
 tags
 daos_m.conf

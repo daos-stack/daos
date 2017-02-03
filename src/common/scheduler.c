@@ -85,7 +85,7 @@ daos_task2arg(struct daos_task *task)
 }
 
 static inline uint32_t
-daos_task_buf_size(size)
+daos_task_buf_size(int size)
 {
 	return (size + 7) & ~0x7;
 }
