@@ -6,7 +6,8 @@ set -uex
 # We can get that from the Jenkins JOB name.
 # This code assumes no folders and a Matrix job.
 job_real_name=${JOB_NAME%/*}
-export TARGET=${job_real_name%-*}
+: ${TARGET:="${job_real_name%-*}"}
+export TARGET
 : ${TARGET_LIST:="${TARGET}"}
 export TARGET_LIST
 : ${REPO_LIST:="${TARGET}"}
@@ -15,7 +16,7 @@ export REPO_LIST
 # Where we want the build to appear to be at in the container
 : ${DIST_MOUNT="/testbin"}
 export DIST_MOUNT
-export DIST_TARGET="${DIST_MOUNT}/${TARGET}/${BUILD_NUMBER}"
+export DIST_TARGET="${DIST_MOUNT}"
 
 
 # Where the build directory actually exists in the workspace
@@ -45,8 +46,8 @@ case ${distro} in
   sles12*)
     DOCKER_IMAGE="sles_12.2_builder"
     ;;
-  ubuntu14.04)
-    DOCKER_IMAGE="ubuntu_14.04.05_builder"
+  ubuntu14*)
+    DOCKER_IMAGE="ubuntu_14.04.5_builder"
     ;;
 esac
 export DOCKER_IMAGE
@@ -56,11 +57,6 @@ export DOCKER_IMAGE
 docker_setup_file="docker_setup.sh"
 rm -f ${docker_setup_file}
 touch ${docker_setup_file}
-
-# Look for any provided by the package
-if [ -e extra_exports.sh ]; then
-  cat extra_exports.sh >> ${docker_setup_file}
-fi
 
 # Allow running on local or Intel Compute Cloud VMs.
 set +e
@@ -77,4 +73,9 @@ printf "export BUILD_NUMBER=${BUILD_NUMBER}\n" >> \
     ${docker_setup_file}
 set -e
 chmod 755 ${docker_setup_file}
+
+# Look for extra container setup for the package
+if [ -e extra_exports.sh ]; then
+  cat extra_exports.sh >> ${docker_setup_file}
+fi
 

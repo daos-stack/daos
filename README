@@ -14,6 +14,10 @@ RUNTIME OPTIONS OVERVIEW
 Overview of runtime options added by prerequisite components
 
 Option                             Description
+
+--build-deps=<yes|no|build-only>   This controls if tarballs will be
+                                   automatically downloaded and built.
+
 --update-prereq=<component>        Tells the prerequisite builder
                                    to attempt to update the repository
                                    for a prerequisite component if
@@ -21,6 +25,7 @@ Option                             Description
                                    directory for changes.   A build is
                                    only triggered if something has
                                    changed since the last build.
+                                   use 'all' to update all components.
 
 PREFIX=<path>                      The installation path of the user's
                                    components.   This should be used
@@ -54,7 +59,7 @@ PREBUILT_PREFIX=<path>[:<path>...] If set, the directories will be
                                    using the definition of the
                                    component.
 
-<COMPONENT>_PREFIX=<path>          If set, the directory will be
+<COMPONENT>_PREBUILT=<path>        If set, the directory will be
                                    used as the already installed
                                    location for the component.
                                    If the location doesn't exist,

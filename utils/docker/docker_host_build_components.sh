@@ -22,14 +22,35 @@ if [[ "${job_real_name}" == *${JOB_SUFFIX} ]];then
   default_requires="REQUIRES=${TARGET}"
 fi
 
-printf "option=\"TARGET_PREFIX=${DIST_TARGET} SRC_PREFIX=../\"\n" >> \
-  ${docker_setup_file}
+set +u
+if [ -n "${PREFIX}" ]; then
+  options="option=\"PREFIX=${PREFIX}"
+else
+  options="option=\"TARGET_PREFIX=${DIST_TARGET}"
+fi
+if [ -n "${PREBUILT_PREFIX}" ]; then
+  options="${options} PREBUILT_PREFIX=${PREBUILT_PREFIX}"
+fi
+set -u
+
+: ${SCONS_OPTIONS:="--build-deps=yes --config=force"}
+
+printf "${options} SRC_PREFIX=/work\"\n" >> ${docker_setup_file}
+
+# Two possible setups:
+# 1. scons_local is submodule of target
+# 2. scons_local is in a subdirectory of workspace
+if [ -d scons_local ];then
+  scons_local_dir="/work/scons_local"
+else
+  scons_local_dir="/work/${TARGET}/scons_local"
+fi
 
 docker run --rm -u $USER -v ${PWD}:/work \
            -v ${WORK_TARGET}:${DIST_MOUNT} \
            -a stderr -a stdout -i coral/${DOCKER_IMAGE} \
-           /work/scons_local/utils/docker/docker_build_components.sh \
-	   ${default_requires} 2>&1 | tee docker_build.log
+           ${scons_local_dir}/utils/docker/docker_build_components.sh \
+          ${default_requires} ${SCONS_OPTIONS} 2>&1 | tee docker_build.log
 
 # Review jobs do not have artifacts to process
 if [[ "${job_real_name}" == *${JOB_SUFFIX} ]];then
@@ -39,7 +60,7 @@ fi
 set +u
 target_post_build=`find . -name ${TARGET}_post_build.sh`
 
-if [ "${target_post_build}x" != "x" ]; then
+if [ -n "${target_post_build}" ]; then
   source ${target_post_build}
 fi
 set -u

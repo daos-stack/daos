@@ -1,9 +1,12 @@
 
-test_results="build/Linux/src/utest/test_output"
+test_results=`find . -name test_output`
 
 case ${distro} in
   sles12*)
     echo "No cmocka package for SLES, unit tests not run!"
+    ;;
+  ubuntu*)
+    echo "No cmocka package for Ubuntu, unit tests not run!"
     ;;
 
   *)

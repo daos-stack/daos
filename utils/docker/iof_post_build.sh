@@ -5,7 +5,9 @@ case ${distro} in
   sles12*)
     echo "No cmocka package for SLES, unit tests not run!"
     ;;
-
+  ubuntu*)
+    echo "No cmocka package for Ubuntu, unit tests not run!"
+    ;;
   *)
     ls ${test_results}
     set +e

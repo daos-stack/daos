@@ -24,7 +24,7 @@ done
 # This could include making a tarball to be imported in a downstream job
 
 for result in ${TARGET_LIST}; do
-  pushd ${WORK_TARGET}/${TARGET}/${BUILD_NUMBER}
+  pushd ${WORK_TARGET}
     mv ${result} ${artifact_dest}
   popd
   pushd artifacts/${result}
