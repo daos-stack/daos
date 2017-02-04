@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -76,9 +76,9 @@ class UnitTestRunner(PostRunner.PostRunner,
         """ setup testcase environment """
         test_module = self.test_info.get_module()
         test_name = test_module['name']
-        value = self.log_dir_base + "/" + \
-                test_name + "_loop" + str(self.loop_number) + "/" + \
-                test_name + "_" + str(testcase_id)
+        value = os.path.join(self.log_dir_base,
+                             ("loop{!s}".format(self.loop_number)),
+                             ("{0}_{1!s}".format(test_name, testcase_id)))
         os.environ[test_module['subLogKey']] = value
         self.last_testlogdir = value
 

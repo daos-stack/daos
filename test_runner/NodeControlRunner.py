@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -62,7 +62,7 @@ class NodeControlRunner():
                              " **************"
                              )
             node.run_cmd(cmdstr, log_path, node_type)
-        loop_count = 720
+        loop_count = 1800
         running_count = len(self.node_list)
         self.logger.debug("******* started running count " + str(running_count))
         while running_count and loop_count:
@@ -162,3 +162,5 @@ class NodeControlRunner():
         """ dump node objects """
         for node in self.node_list:
             node.dump_info()
+            del node
+        del self.node_list[:]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -45,7 +45,7 @@ class DvmRunner():
         """Launch otred processes """
         print("TestRunner: start orte-dvm process\n")
         hosts = ","
-        log_path = os.path.dirname(self.info.get_config('log_base_path'))
+        log_path = self.info.get_config('log_base_path')
         if not os.path.exists(log_path):
             os.makedirs(log_path)
         self.report = os.path.join(log_path, "orted-uri")

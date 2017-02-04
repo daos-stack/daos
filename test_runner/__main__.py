@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -50,6 +50,7 @@ import json
 import time
 import logging
 
+from datetime import datetime
 from yaml import load
 try:
     from yaml import CLoader as Loader
@@ -82,15 +83,15 @@ def testmain(info=None, start=1, testMode=None):
 
     # load test list
     if len(sys.argv) <= start:
-        print("No test files given, using test_list")
-        with open("scripts/test_list.yml", 'r') as fd:
+        testFile = info.get_config('test_list', '', "scripts/test_list.yml")
+        print("no test files given, using %s" % testFile)
+        with open(testFile, 'r') as fd:
             test_load = load(fd, Loader=Loader)
-        test_list = test_load['test_list'].copy()
+        test_list = test_load['test_list']
     else:
         for k in range(start, len(sys.argv)):
             test_list.append(sys.argv[k])
     print("Test list: " + str(test_list))
-
     # load and start daemon if required
     use_daemon = info.get_config("use_daemon", "")
     if use_daemon:
@@ -155,19 +156,22 @@ def main():
         if log_base.find("testRun") < 0:
             log_base = os.path.join(log_base, "testRun")
             info.set_config('log_base_path', '', log_base)
-    if not os.path.exists(log_base):
+    # This key is set by multi runner and the directory should exist
+    if 'node' not in config:
+        if os.path.exists(log_base):
+            newname = "{}_{}".format(log_base, datetime.now().isoformat(). \
+                                     replace(':', '.'))
+            os.rename(log_base, newname)
         os.makedirs(log_base)
     # setup default evnironment variables and path
     info.env_setup()
-    #if not info.env_setup():
-    #    exit(1)
-    testMode = "unitTest"
-    if config and 'test_mode' in config:
-        testMode = config.get('test_mode', "unitTest")
+    # in some cases the description file can override this key
+    testMode = config.get('test_mode', "unitTest")
     if testMode and 'client' in config:
         rc = clientmain(info)
     else:
         rc = testmain(info, start, testMode)
+    print("test log base directory\n {}\n".format(os.path.abspath(log_base)))
     exit(rc)
 
 if __name__ == "__main__":

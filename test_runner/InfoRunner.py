@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -109,15 +109,15 @@ class InfoRunner():
         """ setup the environment """
         self.info[keyname] = keyvalue
 
-    def get_config(self, keyname=None, subkey=None):
+    def get_config(self, keyname=None, subkey=None, default=""):
         """ setup the environment """
         if subkey:
             try:
                 value = self.config[keyname][subkey]
             except KeyError:
-                value = ""
+                value = default
         else:
-            value = self.config.get(keyname, "")
+            value = self.config.get(keyname, default)
         return value
 
     def set_config(self, keyname=None, subkey=None, keyvalue=None):
