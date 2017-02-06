@@ -388,15 +388,16 @@ daos_placement_fini(struct pool_map *po_map)
  * the placement map for the old version @old_map.
  */
 int
-daos_placement_refresh(struct pool_map *old_map, struct pool_map *new_map)
+daos_placement_update(struct pool_map *new_map)
 {
 	struct pl_map		*map;
 	struct pl_map_init_attr	 mia;
 	int			 rc;
 
 	pthread_rwlock_wrlock(&placement_data.pd_lock);
-
-	D_ASSERT(placement_data.pd_ref > 0);
+	if (placement_data.pd_pl_map != NULL &&
+	    placement_data.pd_pl_map->pl_ver > pool_map_get_version(new_map))
+		D_GOTO(out, rc = 0);
 
 	pl_map_attr_init(new_map, PL_TYPE_RING, &mia);
 
@@ -404,7 +405,8 @@ daos_placement_refresh(struct pool_map *old_map, struct pool_map *new_map)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	pl_map_decref(placement_data.pd_pl_map);
+	if (placement_data.pd_pl_map != NULL)
+		pl_map_decref(placement_data.pd_pl_map);
 	placement_data.pd_pl_map = map;
  out:
 	pthread_rwlock_unlock(&placement_data.pd_lock);

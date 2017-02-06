@@ -164,7 +164,8 @@ ds_pool_group_destroy(const uuid_t pool_uuid, crt_group_t *group)
 int
 ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     enum daos_module_id module, crt_opcode_t opcode,
-		     crt_rpc_t **rpc)
+		     crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
+		     daos_rank_list_t *excluded_list)
 {
 	daos_rank_list_t	excluded;
 	crt_opcode_t	opc;
@@ -172,22 +173,26 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 
 	opc = DAOS_RPC_OPCODE(opcode, module, 1);
 
-	ABT_rwlock_rdlock(pool->sp_lock);
-	rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN, &excluded);
-	ABT_rwlock_unlock(pool->sp_lock);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create rank list: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
-		return rc;
+	if (excluded_list == NULL) {
+		ABT_rwlock_rdlock(pool->sp_lock);
+		rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN, &excluded);
+		ABT_rwlock_unlock(pool->sp_lock);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to create rank list: %d\n",
+				DP_UUID(pool->sp_uuid), rc);
+			return rc;
+		}
+		excluded_list = &excluded;
 	}
 
 	rc = crt_corpc_req_create(ctx, pool->sp_group,
-				  excluded.rl_nr.num == 0 ? NULL : &excluded,
-				  opc, NULL /* co_bulk_hdl */, NULL /* priv */,
-				  0 /* flags */,
-				  crt_tree_topo(CRT_TREE_KNOMIAL, 4), rpc);
+			  excluded_list->rl_nr.num == 0 ? NULL : excluded_list,
+			  opc, bulk_hdl/* co_bulk_hdl */, NULL /* priv */,
+			  0 /* flags */, crt_tree_topo(CRT_TREE_KNOMIAL, 4),
+			  rpc);
 
-	map_ranks_fini(&excluded);
+	if (excluded_list == &excluded)
+		map_ranks_fini(&excluded);
 	return rc;
 }
 

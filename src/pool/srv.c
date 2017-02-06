@@ -119,10 +119,10 @@ static struct daos_rpc_handler pool_handlers[] = {
 };
 
 static void *
-dsm_tls_init(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key)
+pool_tls_init(const struct dss_thread_local_storage *dtls,
+	      struct dss_module_key *key)
 {
-	struct dsm_tls *tls;
+	struct pool_tls *tls;
 
 	D_ALLOC_PTR(tls);
 	if (tls == NULL)
@@ -133,21 +133,21 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 }
 
 static void
-dsm_tls_fini(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key, void *data)
+pool_tls_fini(const struct dss_thread_local_storage *dtls,
+	      struct dss_module_key *key, void *data)
 {
-	struct dsm_tls *tls = data;
+	struct pool_tls *tls = data;
 
 	ds_pool_child_purge(tls);
 	D_ASSERT(daos_list_empty(&tls->dt_pool_list));
 	D_FREE_PTR(tls);
 }
 
-struct dss_module_key dsm_module_key = {
+struct dss_module_key pool_module_key = {
 	.dmk_tags = DAOS_SERVER_TAG,
 	.dmk_index = -1,
-	.dmk_init = dsm_tls_init,
-	.dmk_fini = dsm_tls_fini,
+	.dmk_init = pool_tls_init,
+	.dmk_fini = pool_tls_fini,
 };
 
 struct dss_module pool_module =  {
@@ -159,5 +159,5 @@ struct dss_module pool_module =  {
 	.sm_cl_rpcs	= pool_rpcs,
 	.sm_srv_rpcs	= pool_srv_rpcs,
 	.sm_handlers	= pool_handlers,
-	.sm_key		= &dsm_module_key,
+	.sm_key		= &pool_module_key,
 };

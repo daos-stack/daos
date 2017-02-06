@@ -81,6 +81,7 @@ enum daos_module_id {
 	DAOS_CONT_MODULE	= 3, /** container service */
 	DAOS_OBJ_MODULE		= 4, /** object service */
 	DAOS_TIER_MODULE	= 5, /** tiering */
+	DAOS_REBUILD_MODULE	= 6, /** rebuild **/
 	DAOS_MAX_MODULE		= (1 << MOD_ID_BITS) - 1,
 };
 

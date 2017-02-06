@@ -107,7 +107,6 @@ int pl_obj_find_reint(struct pl_map *map,
 
 int  daos_placement_init(struct pool_map *po_map);
 void daos_placement_fini(struct pool_map *po_map);
-int  daos_placement_refresh(struct pool_map *old_map,
-			    struct pool_map *new_map);
+int  daos_placement_update(struct pool_map *new_map);
 
 #endif /* __DAOS_PLACEMENT_H__ */

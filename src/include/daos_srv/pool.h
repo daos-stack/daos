@@ -29,6 +29,7 @@
 
 #include <daos/btree.h>
 #include <daos/lru.h>
+#include <daos/pool_map.h>
 #include <daos/rpc.h>
 
 #include <abt.h>
@@ -80,15 +81,21 @@ struct ds_pool_child {
 	uuid_t		spc_uuid;
 	uint32_t	spc_map_version;
 	int		spc_ref;
+	struct pool_map *spc_map;
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
 void ds_pool_child_put(struct ds_pool_child *child);
 
-int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
-			 enum daos_module_id module, crt_opcode_t opcode,
-			 crt_rpc_t **rpc);
+int
+ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
+		     enum daos_module_id module, crt_opcode_t opcode,
+		     crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
+		     daos_rank_list_t *excluded_list);
+int
+ds_pool_pmap_broadcast(const uuid_t uuid, daos_rank_list_t *tgts_exclude);
 
+struct pool_map *ds_pool_get_pool_map(const uuid_t uuid);
 /*
  * Metadata pmem pool descriptor
  *

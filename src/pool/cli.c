@@ -174,7 +174,7 @@ pool_map_update(struct dc_pool *pool, struct pool_map **map,
 		pool->dp_map == NULL ?
 		0 : pool_map_get_version(pool->dp_map), map_version);
 
-	rc = daos_placement_refresh(pool->dp_map, *map);
+	rc = daos_placement_update(*map);
 	if (rc != 0) {
 		D_ERROR("Failed to refresh placement map: %d\n", rc);
 		return rc;

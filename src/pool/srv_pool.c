@@ -689,7 +689,7 @@ bcast_create(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opcode,
 	     crt_rpc_t **rpc)
 {
 	return ds_pool_bcast_create(ctx, svc->ps_pool, DAOS_POOL_MODULE, opcode,
-				    rpc);
+				    rpc, NULL, NULL);
 }
 
 struct pool_attr {
@@ -1245,16 +1245,36 @@ out:
 
 static int
 pool_update_map_bcast(crt_context_t ctx, struct pool_svc *svc,
-		      uint32_t map_version)
+		      uint32_t map_version, struct pool_buf *map_buf,
+		      daos_rank_list_t *tgts_exclude)
 {
 	struct pool_tgt_update_map_in  *in;
 	struct pool_tgt_update_map_out *out;
 	crt_rpc_t		       *rpc;
+	crt_bulk_t			bulk = NULL;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
 
-	rc = bcast_create(ctx, svc, POOL_TGT_UPDATE_MAP, &rpc);
+	if (map_buf != NULL) {
+		size_t map_buf_size = pool_buf_size(map_buf->pb_nr);
+		daos_sg_list_t	map_sgl;
+		daos_iov_t	map_iov;
+
+		daos_iov_set(&map_iov, map_buf, map_buf_size);
+		map_sgl.sg_nr.num = 1;
+		map_sgl.sg_nr.num_out = 1;
+		map_sgl.sg_iovs = &map_iov;
+
+		rc = crt_bulk_create(ctx, daos2crt_sg(&map_sgl),
+				     CRT_BULK_RO, &bulk);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+
+	rc = ds_pool_bcast_create(ctx, svc->ps_pool, DAOS_POOL_MODULE,
+				  POOL_TGT_UPDATE_MAP, &rpc, bulk,
+				  tgts_exclude);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1348,7 +1368,7 @@ ds_pool_exclude(struct pool_svc *svc, daos_rank_list_t *tgts,
 	 * Ignore the return code as we are more about committing a pool map
 	 * change than its dissemination.
 	 */
-	pool_update_map_bcast(info->dmi_ctx, svc, map_version);
+	pool_update_map_bcast(info->dmi_ctx, svc, map_version, NULL, NULL);
 
 out_map:
 	pool_map_destroy(map);
@@ -1638,3 +1658,37 @@ ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *data)
 
 	return rc;
 }
+
+/**
+ * broadcast the pool map of the pool to all servers.
+ **/
+int
+ds_pool_pmap_broadcast(const uuid_t uuid, daos_rank_list_t *tgts_exclude)
+{
+	struct pool_svc		*svc;
+	struct pool_buf		*map_buf;
+	uint32_t		map_version;
+	int			rc;
+
+	rc = pool_svc_lookup(uuid, &svc);
+	if (rc != 0)
+		return rc;
+
+	rc = read_map_buf(svc->ps_root, &map_buf, &map_version);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to read pool map: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = pool_update_map_bcast(dss_get_module_info()->dmi_ctx, svc,
+				   map_version, map_buf, tgts_exclude);
+
+	D_DEBUG(DB_TRACE, "boradcast pool "DF_UUID" %u/%u/%u/%u  %d\n",
+		DP_UUID(uuid), map_buf->pb_nr, map_buf->pb_domain_nr,
+		map_buf->pb_target_nr, map_buf->pb_csum, rc);
+out:
+	pool_svc_put(svc);
+	return rc;
+}
+

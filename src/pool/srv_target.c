@@ -53,7 +53,7 @@ struct ds_pool_child *
 ds_pool_child_lookup(const uuid_t uuid)
 {
 	struct ds_pool_child   *child;
-	struct dsm_tls	       *tls = dsm_tls_get();
+	struct pool_tls	       *tls = pool_tls_get();
 
 	daos_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
 		if (uuid_compare(uuid, child->spc_uuid) == 0) {
@@ -79,7 +79,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 }
 
 void
-ds_pool_child_purge(struct dsm_tls *tls)
+ds_pool_child_purge(struct pool_tls *tls)
 {
 	struct ds_pool_child   *child;
 	struct ds_pool_child   *n;
@@ -105,7 +105,7 @@ int
 ds_pool_local_open(uuid_t uuid, unsigned int version,
 		   struct ds_pool_child **childp)
 {
-	struct dsm_tls		       *tls = dsm_tls_get();
+	struct pool_tls		       *tls = pool_tls_get();
 	struct ds_pool_child	       *child;
 	struct dss_module_info	       *info = dss_get_module_info();
 	char			       *path;
@@ -173,6 +173,11 @@ ds_pool_local_close(uuid_t uuid)
 	child = ds_pool_child_lookup(uuid);
 	if (child == NULL)
 		return 0;
+
+	if (child->spc_map != NULL) {
+		pool_map_destroy(child->spc_map);
+		child->spc_map = NULL;
+	}
 
 	daos_list_del_init(&child->spc_list);
 	ds_pool_child_put(child);
@@ -598,19 +603,40 @@ ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	return 0;
 }
 
+struct update_map_arg {
+	struct pool_tgt_update_map_in	*in;
+	struct pool_buf			*buf;
+};
 /*
  * Called via dss_collective() to update the pool map version in the
  * ds_pool_child object.
  */
 static int
-update_child_map_version(void *vin)
+update_child_map(void *data)
 {
-	struct pool_tgt_update_map_in  *in = vin;
-	struct ds_pool_child	       *child;
+	struct update_map_arg		*arg = data;
+	struct pool_tgt_update_map_in	*in = arg->in;
+	struct pool_buf			*buf = arg->buf;
+	struct ds_pool_child		*child;
+	int				rc = 0;
 
 	child = ds_pool_child_lookup(in->tui_uuid);
 	if (child == NULL)
 		return -DER_NONEXIST;
+
+	if (buf != NULL) {
+		struct pool_map *map;
+
+		rc = pool_map_create(buf, in->tui_map_version, &map);
+		if (rc != 0) {
+			D_ERROR("failed to create local pool map: %d\n", rc);
+			D_GOTO(out_put, rc);
+		}
+
+		if (child->spc_map != NULL)
+			pool_map_destroy(child->spc_map);
+		child->spc_map = map;
+	}
 
 	D_DEBUG(DF_DSMS, DF_UUID": changing cached map version: %u -> %u\n",
 		DP_UUID(child->spc_uuid), child->spc_map_version,
@@ -618,8 +644,9 @@ update_child_map_version(void *vin)
 
 	child->spc_map_version = in->tui_map_version;
 
+out_put:
 	ds_pool_child_put(child);
-	return 0;
+	return rc;
 }
 
 int
@@ -627,7 +654,10 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_update_map_in  *in = crt_req_get(rpc);
 	struct pool_tgt_update_map_out *out = crt_reply_get(rpc);
+	struct update_map_arg		arg;
 	struct ds_pool		       *pool;
+	struct pool_map			*map = NULL;
+	struct pool_buf			*buf = NULL;
 	uint32_t			map_version_old;
 	int				rc = 0;
 
@@ -638,10 +668,37 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
-	rc = dss_collective(update_child_map_version, in);
+	if (rpc->cr_co_bulk_hdl != NULL) {
+		daos_iov_t	iov;
+		daos_sg_list_t	sgl;
+
+		memset(&iov, 0, sizeof(iov));
+		sgl.sg_nr.num = 1;
+		sgl.sg_nr.num_out = 1;
+		sgl.sg_iovs = &iov;
+		rc = crt_bulk_access(rpc->cr_co_bulk_hdl, daos2crt_sg(&sgl));
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		buf = iov.iov_buf;
+		rc = pool_map_create(buf, in->tui_map_version, &map);
+		if (rc != 0) {
+			D_ERROR("failed to create local pool map: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	arg.in = in;
+	arg.buf = buf;
+	rc = dss_collective(update_child_map, &arg);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	ABT_rwlock_wrlock(pool->sp_lock);
+	if (map != NULL) {
+		if (pool->sp_map != NULL)
+			pool_map_destroy(pool->sp_map);
+		pool->sp_map = map;
+	}
 	map_version_old = pool->sp_map_version;
 	pool->sp_map_version = in->tui_map_version;
 	ABT_rwlock_unlock(pool->sp_lock);
@@ -666,4 +723,19 @@ ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	out_result->tuo_rc += out_source->tuo_rc;
 	return 0;
+}
+
+/**
+ * Get pool map by uuid.
+ **/
+struct pool_map *
+ds_pool_get_pool_map(const uuid_t uuid)
+{
+	struct ds_pool_child *pool;
+	struct pool_map *map;
+
+	pool = ds_pool_child_lookup(uuid);
+	map = pool->spc_map;
+	ds_pool_child_put(pool);
+	return map;
 }

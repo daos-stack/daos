@@ -177,9 +177,6 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 	crt_bulk_opid_t		bulk_opid;
 	crt_bulk_perm_t		bulk_perm;
 	ABT_future		future;
-	struct obj_rw_out	*orwo = crt_reply_get(rpc);
-	uint32_t		*nrs = orwo->orw_nrs.da_arrays;
-	uint32_t		nrs_count = orwo->orw_nrs.da_count;
 	struct ds_bulk_async_args arg;
 	int			i;
 	int			rc;
@@ -212,11 +209,6 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			if (ret)
 				ABT_future_set(future, &ret);
 			D_ASSERT(sgl != NULL);
-		}
-
-		if (nrs != NULL) {
-			D_ASSERT(nrs_count > i);
-			nrs[i] = sgl->sg_nr.num_out;
 		}
 
 		/**
@@ -363,6 +355,49 @@ ds_obj_update_sizes_in_reply(crt_rpc_t *rpc)
 	return 0;
 }
 
+/**
+ * Pack nrs in sgls inside the reply, so the client can update
+ * sgls before it returns to application. Note: this is only
+ * needed for bulk transfer, for inline transfer, it will pack
+ * the complete sgls inside the req/reply, see ds_obj_rw_inline()
+ * and obj_shard_rw().
+ */
+static int
+ds_obj_update_nrs_in_reply(crt_rpc_t *rpc, daos_handle_t ioh)
+{
+	struct obj_rw_in	*orw = crt_req_get(rpc);
+	struct obj_rw_out	*orwo = crt_reply_get(rpc);
+	uint32_t		*nrs;
+	uint32_t		nrs_count = orw->orw_nr;
+	int			i;
+	int			rc = 0;
+
+	if (nrs_count == 0)
+		return 0;
+
+	D_ASSERT(!daos_handle_is_inval(ioh));
+	/* return num_out for sgl */
+	orwo->orw_nrs.da_count = nrs_count;
+	D_ALLOC(orwo->orw_nrs.da_arrays,
+		nrs_count * sizeof(uint32_t));
+
+	if (orwo->orw_nrs.da_arrays == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	nrs = orwo->orw_nrs.da_arrays;
+	for (i = 0; i < nrs_count; i++) {
+		daos_sg_list_t	*sgl;
+
+		rc = vos_obj_zc_sgl_at(ioh, i, &sgl);
+		if (rc)
+			D_GOTO(out, rc);
+		D_ASSERT(sgl != NULL);
+		nrs[i] = sgl->sg_nr.num_out;
+	}
+out:
+	return rc;
+}
+
 static int
 ds_obj_rw_inline(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl)
 {
@@ -494,13 +529,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		orwo->orw_sgls.da_count = 0;
 		orwo->orw_sgls.da_arrays = NULL;
 
-		/* return num_out for sgl */
-		orwo->orw_nrs.da_count = orw->orw_nr;
-		D_ALLOC(orwo->orw_nrs.da_arrays,
-			orwo->orw_nrs.da_count * sizeof(uint32_t));
-
-		if (orwo->orw_nrs.da_arrays == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+		rc = ds_obj_update_nrs_in_reply(rpc, ioh);
+		if (rc != 0)
+			D_GOTO(out, rc);
 	}
 
 	rc = ds_bulk_transfer(rpc, bulk_op, orw->orw_bulks.da_arrays,

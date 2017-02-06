@@ -33,21 +33,21 @@
 /**
  * DSM server thread local storage structure
  */
-struct dsm_tls {
+struct pool_tls {
 	/* in-memory structures TLS instance */
 	struct daos_list_head	dt_pool_list;
 };
 
-extern struct dss_module_key dsm_module_key;
+extern struct dss_module_key pool_module_key;
 
-static inline struct dsm_tls *
-dsm_tls_get()
+static inline struct pool_tls *
+pool_tls_get()
 {
-	struct dsm_tls			*tls;
+	struct pool_tls			*tls;
 	struct dss_thread_local_storage	*dtc;
 
 	dtc = dss_tls_get();
-	tls = (struct dsm_tls *)dss_module_key_get(dtc, &dsm_module_key);
+	tls = (struct pool_tls *)dss_module_key_get(dtc, &pool_module_key);
 	return tls;
 }
 
@@ -95,7 +95,7 @@ struct ds_pool_create_arg {
 };
 int ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
 			  struct ds_pool **pool);
-void ds_pool_child_purge(struct dsm_tls *tls);
+void ds_pool_child_purge(struct pool_tls *tls);
 
 /*
  * srv_util.c

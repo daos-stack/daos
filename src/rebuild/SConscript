@@ -1,3 +1,12 @@
 #!python
 
 Import('env')
+
+env.AppendUnique(LIBPATH=[Dir('.')])
+denv = env.Clone()
+
+# rebuild
+rebuild = denv.SharedLibrary('rebuild',
+			     ['scan.c', 'srv.c', 'rpc.c'])
+denv.Install('$PREFIX/lib/daos_srv', rebuild)
+
