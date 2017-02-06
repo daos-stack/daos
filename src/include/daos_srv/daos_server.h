@@ -140,6 +140,12 @@ dss_get_module_info()
 }
 
 /**
+ * Module facility feature bits
+ * DSS_FAC_LOAD_CLI - the module requires loading client stack.
+ */
+#define DSS_FAC_LOAD_CLI (0x1ULL)
+
+/**
  * Each module should provide a dss_module structure which defines the module
  * interface. The name of the allocated structure must be the library name
  * (without the ".so" extension) suffixed by "module". This symbol will be
@@ -157,6 +163,8 @@ struct dss_module {
 	int			  sm_mod_id;
 	/* Module version */
 	int			  sm_ver;
+	/* Module facility bitmask, can be feature bits like DSS_FAC_LOAD_CLI */
+	uint64_t		  sm_facs;
 	/* key of local thread storage */
 	struct dss_module_key	*sm_key;
 	/* Setup function, invoked just after successful load */

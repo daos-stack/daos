@@ -64,6 +64,7 @@ struct dss_module tier_module =  {
 	.sm_name	= "tier",
 	.sm_mod_id	= DAOS_TIER_MODULE,
 	.sm_ver		= 1,
+	.sm_facs	= DSS_FAC_LOAD_CLI,
 	.sm_init	= dct_mod_init,
 	.sm_fini	= dct_mod_fini,
 	.sm_cl_rpcs	= dct_rpcs,

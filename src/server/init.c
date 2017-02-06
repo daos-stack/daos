@@ -36,6 +36,8 @@
 #include <daos/common.h>
 #include "srv_internal.h"
 
+#include <daos.h> /* for daos_init() */
+
 #define MAX_MODULE_OPTIONS	64
 #define MODULE_LIST		"vos,mgmt,pool,cont,obj,tier"
 
@@ -56,6 +58,9 @@ const char	       *storage_path = "/mnt/daos";
 
 /** HW topology */
 hwloc_topology_t	dss_topo;
+
+/** Module facility bitmask */
+static uint64_t		dss_mod_facs;
 
 /*
  * Register the dbtree classes used by native server-side modules (e.g.,
@@ -89,12 +94,13 @@ register_dbtree_classes(void)
 }
 
 static int
-modules_load()
+modules_load(uint64_t *facs)
 {
-	char	*mod;
-	char	*sep;
-	char	*run;
-	int	 rc = 0;
+	char		*mod;
+	char		*sep;
+	char		*run;
+	uint64_t	 mod_facs;
+	int		 rc = 0;
 
 	sep = strdup(modules);
 	if (sep == NULL)
@@ -115,12 +121,16 @@ modules_load()
 		else if (strcmp(mod, "vos") == 0)
 			mod = "vos_srv";
 
-		rc = dss_module_load(mod);
+		mod_facs = 0;
+		rc = dss_module_load(mod, &mod_facs);
 		if (rc != 0) {
 			D_ERROR("Failed to load module %s: %d\n",
 				mod, rc);
 			break;
 		}
+
+		if (facs != NULL)
+			*facs |= mod_facs;
 
 		mod = strsep(&run, ",");
 	}
@@ -162,7 +172,7 @@ server_init()
 	D_INFO("Network successfully initialized\n");
 
 	/* load modules */
-	rc = modules_load();
+	rc = modules_load(&dss_mod_facs);
 	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
 	D_INFO("Module %s successfully loaded\n", modules);
@@ -173,13 +183,23 @@ server_init()
 		D_GOTO(exit_mod_loaded, rc);
 	D_INFO("Service is now running\n");
 
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
+		rc = daos_init();
+		if (rc) {
+			D_ERROR("daos_init (client) failed, rc: %d.\n", rc);
+			D_GOTO(exit_srv_init, rc);
+		}
+		D_INFO("Client stack enabled\n");
+	}
+
 	crt_group_rank(NULL, &rank);
 	crt_group_size(NULL, &size);
 	D_PRINT("DAOS server (v%s) started on rank %u (out of %u) with %u "
 		"xstream(s)\n", DAOS_VERSION, rank, size, dss_nxstreams);
 
 	return 0;
-
+exit_srv_init:
+	dss_srv_fini(true);
 exit_mod_loaded:
 	dss_module_unload_all();
 	crt_finalize();
@@ -194,6 +214,8 @@ static void
 server_fini(bool force)
 {
 	D_INFO("Service is shutting down\n");
+	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
+		daos_fini();
 	dss_srv_fini(force);
 	dss_module_fini(force);
 	crt_finalize();

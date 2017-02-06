@@ -68,7 +68,7 @@ dss_module_search(const char *modname)
 #define DSS_MODNAME_MAX_LEN	32
 
 int
-dss_module_load(const char *modname)
+dss_module_load(const char *modname, uint64_t *mod_facs)
 {
 	struct loaded_mod	*lmod;
 	struct dss_module	*smod;
@@ -146,6 +146,9 @@ dss_module_load(const char *modname)
 			modname, rc);
 		D_GOTO(err_cl_rpc, rc);
 	}
+
+	if (mod_facs != NULL)
+		*mod_facs = smod->sm_facs;
 
 	/* module successfully loaded, add it to the tracking list */
 	pthread_mutex_lock(&loaded_mod_list_lock);

@@ -30,9 +30,6 @@ srv = True
 VariantDir('vos_srv', 'vos', duplicate=0)
 SConscript('vos_srv/SConscript', exports=['env', 'PREREQS', 'srv'])
 
-# Then the DAOS server executable
-SConscript('server/SConscript', exports=['env', 'PREREQS'])
-
 # Build each DAOS component
 SConscript('mgmt/SConscript', exports=['env', 'PREREQS'])
 SConscript('pool/SConscript', exports=['env', 'PREREQS'])
@@ -46,6 +43,9 @@ SConscript('tier/SConscript', exports='env')
 
 # Build DAOS client library
 SConscript('client/SConscript', exports=['env', 'DAOS_VERSION'])
+
+# Then the DAOS server executable
+SConscript('server/SConscript', exports=['env', 'PREREQS'])
 
 # Build utilities
 SConscript('utils/SConscript', exports=['env', 'PREREQS'])

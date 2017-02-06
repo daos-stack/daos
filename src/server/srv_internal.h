@@ -28,7 +28,7 @@
 /* module.c */
 int dss_module_init(void);
 int dss_module_fini(bool force);
-int dss_module_load(const char *modname);
+int dss_module_load(const char *modname, uint64_t *mod_facs);
 int dss_module_unload(const char *modname);
 void dss_module_unload_all(void);
 
