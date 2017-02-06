@@ -1455,7 +1455,7 @@ struct evict_iter_arg {
 };
 
 static int
-evict_iter_cb(daos_iov_t *key, daos_iov_t *val, void *varg)
+evict_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *varg)
 {
 	struct evict_iter_arg  *arg = varg;
 

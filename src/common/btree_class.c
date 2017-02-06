@@ -616,7 +616,8 @@ uv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		if (key->iov_buf == NULL)
 			key->iov_buf = rec->rec_hkey;
 		else if (key->iov_buf_len >= sizeof(uuid_t))
-			memcpy(key->iov_buf, rec->rec_hkey, sizeof(uuid_t));
+			uuid_copy(*(uuid_t *)key->iov_buf,
+				  *(uuid_t *)rec->rec_hkey);
 
 		key->iov_len = sizeof(uuid_t);
 	}
@@ -683,9 +684,16 @@ uv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 	return buf;
 }
 
+static int
+uv_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
+{
+	return uuid_compare(*(uuid_t *)rec->rec_hkey, *(uuid_t *)hkey);
+}
+
 btr_ops_t dbtree_uv_ops = {
 	.to_hkey_gen	= uv_hkey_gen,
 	.to_hkey_size	= uv_hkey_size,
+	.to_hkey_cmp	= uv_hkey_cmp,
 	.to_rec_alloc	= uv_rec_alloc,
 	.to_rec_free	= uv_rec_free,
 	.to_rec_fetch	= uv_rec_fetch,

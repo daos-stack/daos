@@ -41,7 +41,8 @@
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
 enum pool_operation {
-	REBUILD_OBJECTS_SCAN	= 1
+	REBUILD_OBJECTS_SCAN	= 1,
+	REBUILD_OBJECTS		= 2
 };
 
 struct rebuild_scan_in {
@@ -54,6 +55,15 @@ struct rebuild_scan_in {
 
 struct rebuild_out {
 	int	ro_status;
+};
+
+struct rebuild_objs_in {
+	uint32_t                roi_map_ver;
+	uint32_t                roi_pad;
+	uuid_t			roi_pool_uuid;
+	struct crt_array        roi_oids;
+	struct crt_array        roi_uuids;
+	struct crt_array	roi_shards;
 };
 
 int rebuild_req_create(crt_context_t dtp_ctx, crt_endpoint_t tgt_ep,

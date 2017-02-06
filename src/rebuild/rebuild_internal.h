@@ -28,6 +28,35 @@
 #ifndef __REBUILD_INTERNAL_H__
 #define __REBUILD_INTERNAL_H__
 
-int ds_rebuild_scan_handler(crt_rpc_t *rpc);
+#include <stdint.h>
+#include <uuid/uuid.h>
+#include <daos/rpc.h>
+#include <daos/btree.h>
 
+struct rebuild_tls {
+	struct btr_root rebuild_local_root;
+	daos_handle_t	rebuild_local_root_hdl;
+	uuid_t		rebuild_pool_uuid;
+	uuid_t		rebuild_pool_hdl_uuid;
+	uuid_t		rebuild_cont_hdl_uuid;
+	daos_handle_t	rebuild_pool_hdl;
+	daos_handle_t	rebuild_cont_hdl;
+	unsigned int	rebuild_local_root_init:1,
+			rebuild_task_init:1;
+};
+
+struct rebuild_root {
+	struct btr_root	btr_root;
+	daos_handle_t	root_hdl;
+	unsigned int	count;
+};
+
+extern struct dss_module_key rebuild_module_key;
+static inline struct rebuild_tls *
+rebuild_tls_get()
+{
+	return dss_module_key_get(dss_tls_get(), &rebuild_module_key);
+}
+
+int ds_rebuild_scan_handler(crt_rpc_t *rpc);
 #endif /* __REBUILD_INTERNAL_H_ */

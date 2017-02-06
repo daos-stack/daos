@@ -2995,7 +2995,7 @@ dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 		 * Might want to allow cb() to end the iteration without
 		 * returning an error in the future.
 		 */
-		rc = cb(&key, &val, arg);
+		rc = cb(ih, &key, &val, arg);
 		niterated++;
 		if (rc != 0) {
 			if (rc == 1)

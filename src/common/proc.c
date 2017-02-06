@@ -592,3 +592,11 @@ struct crt_msg_field DMF_EPR_ARRAY =
 struct crt_msg_field DMF_UUID_ARRAY =
 	DEFINE_CRT_MSG("daos_uuid_t", CMF_ARRAY_FLAG, sizeof(uuid_t),
 		       crt_proc_uuid_t);
+
+struct crt_msg_field DMF_OID_ARRAY =
+	DEFINE_CRT_MSG("daos_unit_oid_t", CMF_ARRAY_FLAG,
+		       sizeof(daos_unit_oid_t), daos_proc_unit_oid);
+
+struct crt_msg_field DMF_UINT32_ARRAY =
+	DEFINE_CRT_MSG("daos_uint32", CMF_ARRAY_FLAG, sizeof(uint32_t),
+			crt_proc_uint32_t);

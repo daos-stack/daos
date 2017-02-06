@@ -760,7 +760,7 @@ shall_close(const uuid_t pool_hdl, uuid_t *pool_hdls, int n_pool_hdls)
 }
 
 static int
-close_iter_cb(daos_iov_t *key, daos_iov_t *val, void *varg)
+close_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *varg)
 {
 	struct close_iter_arg  *arg = varg;
 	struct container_hdl   *hdl;

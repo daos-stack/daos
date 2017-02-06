@@ -463,7 +463,8 @@ int dbtree_iter_empty(daos_handle_t ih);
  *   - if rc == 1, dbtree_iterate() stops and returns 0;
  *   - otherwise, dbtree_iterate() stops and returns rc.
  */
-typedef int (*dbtree_iterate_cb_t)(daos_iov_t *key, daos_iov_t *val, void *arg);
+typedef int (*dbtree_iterate_cb_t)(daos_handle_t ih, daos_iov_t *key,
+				   daos_iov_t *val, void *arg);
 int dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 		   void *arg);
 
