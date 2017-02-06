@@ -33,20 +33,21 @@
 /* name-value: hash-ordered keys */
 #define DBTREE_CLASS_NV (DBTREE_DSM_BEGIN + 0)
 extern btr_ops_t dbtree_nv_ops;
-int dbtree_nv_update(daos_handle_t tree, const char *name, const void *value,
-		     size_t size);
-int dbtree_nv_lookup(daos_handle_t tree, const char *name, void *value,
-		     size_t size);
-int dbtree_nv_lookup_ptr(daos_handle_t tree, const char *name, void **value,
-			 size_t *size);
-int dbtree_nv_delete(daos_handle_t tree, const char *name);
-int dbtree_nv_create_tree(daos_handle_t tree, const char *name,
+int dbtree_nv_update(daos_handle_t tree, const void *key, size_t key_size,
+		     const void *value, size_t size);
+int dbtree_nv_lookup(daos_handle_t tree, const void *key, size_t key_size,
+		     void *value, size_t size);
+int dbtree_nv_lookup_ptr(daos_handle_t tree, const void *key, size_t key_size,
+			 void **value, size_t *size);
+int dbtree_nv_delete(daos_handle_t tree, const void *key, size_t key_size);
+int dbtree_nv_create_tree(daos_handle_t tree, const void *key, size_t key_size,
 			  unsigned int class, uint64_t feats,
 			  unsigned int order, daos_handle_t *tree_new);
-int dbtree_nv_open_tree(daos_handle_t tree, const char *name,
+int dbtree_nv_open_tree(daos_handle_t tree, const void *key, size_t key_size,
 			daos_handle_t *tree_child);
-int dbtree_nv_destroy_tree(daos_handle_t tree, const char *name);
-int dbtree_nv_destroy(daos_handle_t tree, const char *name);
+int dbtree_nv_destroy_tree(daos_handle_t tree, const void *key,
+			   size_t key_size);
+int dbtree_nv_destroy(daos_handle_t tree, const void *key, size_t key_size);
 
 /* uuid_t-value: unordered keys */
 #define DBTREE_CLASS_UV (DBTREE_DSM_BEGIN + 1)

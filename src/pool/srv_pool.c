@@ -54,13 +54,13 @@ write_map_buf(daos_handle_t root, struct pool_buf *buf, uint32_t version)
 	D_DEBUG(DF_DSMS, "version=%u ntargets=%u ndomains=%u\n", version,
 		buf->pb_target_nr, buf->pb_domain_nr);
 
-	rc = dbtree_nv_update(root, POOL_MAP_VERSION, &version,
-			      sizeof(version));
+	rc = dbtree_nv_update(root, POOL_MAP_VERSION, strlen(POOL_MAP_VERSION),
+			      &version, sizeof(version));
 	if (rc != 0)
 		return rc;
 
-	return dbtree_nv_update(root, POOL_MAP_BUFFER, buf,
-				pool_buf_size(buf->pb_nr));
+	return dbtree_nv_update(root, POOL_MAP_BUFFER, strlen(POOL_MAP_BUFFER),
+				buf, pool_buf_size(buf->pb_nr));
 }
 
 /*
@@ -76,13 +76,14 @@ read_map_buf(daos_handle_t root, struct pool_buf **map_buf,
 	uint32_t		version;
 	int			rc;
 
-	rc = dbtree_nv_lookup(root, POOL_MAP_VERSION, &version,
-			      sizeof(version));
+	rc = dbtree_nv_lookup(root, POOL_MAP_VERSION, strlen(POOL_MAP_VERSION),
+			      &version, sizeof(version));
 	if (rc != 0)
 		return rc;
 
 	/* Look up the address of the persistent pool map buffer. */
-	rc = dbtree_nv_lookup_ptr(root, POOL_MAP_BUFFER, (void **)&buf,
+	rc = dbtree_nv_lookup_ptr(root, POOL_MAP_BUFFER,
+				  strlen(POOL_MAP_BUFFER), (void **)&buf,
 				  &buf_size);
 	if (rc != 0)
 		return rc;
@@ -309,13 +310,16 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t root, uint32_t uid,
 	}
 
 	TX_BEGIN(mp) {
-		rc = dbtree_nv_update(root, POOL_UID, &uid, sizeof(uid));
+		rc = dbtree_nv_update(root, POOL_UID, strlen(POOL_UID),
+				      &uid, sizeof(uid));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
-		rc = dbtree_nv_update(root, POOL_GID, &gid, sizeof(gid));
+		rc = dbtree_nv_update(root, POOL_GID, strlen(POOL_GID),
+				      &gid, sizeof(gid));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
-		rc = dbtree_nv_update(root, POOL_MODE, &mode, sizeof(mode));
+		rc = dbtree_nv_update(root, POOL_MODE, strlen(POOL_MODE),
+				      &mode, sizeof(mode));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -323,18 +327,21 @@ pool_metadata_init(PMEMobjpool *mp, daos_handle_t root, uint32_t uid,
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 		/* Unused currently. */
-		rc = dbtree_nv_update(root, POOL_MAP_TARGET_UUIDS, uuids,
+		rc = dbtree_nv_update(root, POOL_MAP_TARGET_UUIDS,
+				      strlen(POOL_MAP_TARGET_UUIDS), uuids,
 				      sizeof(uuid_t) * ntargets);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_update(root, POOL_NHANDLES, &nhandles,
-				      sizeof(nhandles));
+		rc = dbtree_nv_update(root, POOL_NHANDLES,
+				      strlen(POOL_NHANDLES),
+				      &nhandles, sizeof(nhandles));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
-		rc = dbtree_nv_create_tree(root, POOL_HANDLES, DBTREE_CLASS_UV,
-					   0 /* feats */, 16 /* order */,
-					   NULL /* tree_new */);
+		rc = dbtree_nv_create_tree(root, POOL_HANDLES,
+					   strlen(POOL_HANDLES),
+					   DBTREE_CLASS_UV, 0 /* feats */,
+					   16 /* order */, NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 	} TX_FINALLY {
@@ -352,13 +359,15 @@ cont_metadata_init(daos_handle_t root)
 {
 	int rc;
 
-	rc = dbtree_nv_create_tree(root, CONTAINERS, DBTREE_CLASS_UV,
-				   0 /* feats */, 16 /* order */,
-				   NULL /* tree_new */);
+	rc = dbtree_nv_create_tree(root, CONTAINERS, strlen(CONTAINERS),
+				   DBTREE_CLASS_UV, 0 /* feats */,
+				   16 /* order */, NULL /* tree_new */);
 	if (rc != 0)
 		return rc;
 
-	return dbtree_nv_create_tree(root, CONTAINER_HDLS, DBTREE_CLASS_UV,
+	return dbtree_nv_create_tree(root, CONTAINER_HDLS,
+				     strlen(CONTAINER_HDLS),
+				     DBTREE_CLASS_UV,
 				     0 /* feats */, 16 /* order */,
 				     NULL /* tree_new */);
 }
@@ -559,15 +568,16 @@ pool_svc_init(const uuid_t uuid, struct pool_svc *svc)
 		D_GOTO(err_lock, rc);
 	}
 
-	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES, &nhandles,
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES,
+			      strlen(POOL_NHANDLES), &nhandles,
 			      sizeof(nhandles));
 	if (rc != 0)
 		D_GOTO(err_root, rc);
 
 	svc->ps_ref += nhandles;
 
-	rc = dbtree_nv_lookup_ptr(svc->ps_root, POOL_HANDLES, (void **)&root,
-				  &size);
+	rc = dbtree_nv_lookup_ptr(svc->ps_root, POOL_HANDLES,
+				  strlen(POOL_HANDLES), (void **)&root, &size);
 	if (rc != 0)
 		D_GOTO(err_root, rc);
 
@@ -693,18 +703,18 @@ pool_attr_read(const struct pool_svc *svc, struct pool_attr *attr)
 {
 	int rc;
 
-	rc = dbtree_nv_lookup(svc->ps_root, POOL_UID, &attr->pa_uid,
-			      sizeof(uint32_t));
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_UID, strlen(POOL_UID),
+			      &attr->pa_uid, sizeof(uint32_t));
 	if (rc != 0)
 		return rc;
 
-	rc = dbtree_nv_lookup(svc->ps_root, POOL_GID, &attr->pa_gid,
-			      sizeof(uint32_t));
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_GID, strlen(POOL_GID),
+			      &attr->pa_gid, sizeof(uint32_t));
 	if (rc != 0)
 		return rc;
 
-	rc = dbtree_nv_lookup(svc->ps_root, POOL_MODE, &attr->pa_mode,
-			      sizeof(uint32_t));
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_MODE, strlen(POOL_MODE),
+			      &attr->pa_mode, sizeof(uint32_t));
 	if (rc != 0)
 		return rc;
 
@@ -952,7 +962,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (skip_update)
 		D_GOTO(out_map_version, rc = 0);
 
-	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES, &nhandles,
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES,
+			      strlen(POOL_NHANDLES), &nhandles,
 			      sizeof(nhandles));
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
@@ -1000,7 +1011,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 	TX_BEGIN(svc->ps_mpool->mp_pmem) {
-		rc = dbtree_nv_update(svc->ps_root, POOL_NHANDLES, &nhandles,
+		rc = dbtree_nv_update(svc->ps_root, POOL_NHANDLES,
+				      strlen(POOL_NHANDLES), &nhandles,
 				      sizeof(nhandles));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
@@ -1100,7 +1112,8 @@ pool_disconnect_hdls(struct pool_svc *svc, uuid_t *hdl_uuids, int n_hdl_uuids,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES, &nhandles,
+	rc = dbtree_nv_lookup(svc->ps_root, POOL_NHANDLES,
+			      strlen(POOL_NHANDLES), &nhandles,
 			      sizeof(nhandles));
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -1114,7 +1127,8 @@ pool_disconnect_hdls(struct pool_svc *svc, uuid_t *hdl_uuids, int n_hdl_uuids,
 				pmemobj_tx_abort(rc);
 		}
 
-		rc = dbtree_nv_update(svc->ps_root, POOL_NHANDLES, &nhandles,
+		rc = dbtree_nv_update(svc->ps_root, POOL_NHANDLES,
+				      strlen(POOL_NHANDLES), &nhandles,
 				      sizeof(nhandles));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);

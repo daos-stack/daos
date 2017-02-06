@@ -81,13 +81,15 @@ cont_svc_init(const uuid_t pool_uuid, int id, struct cont_svc *svc)
 		D_GOTO(err_lock, rc);
 	}
 
-	rc = dbtree_nv_open_tree(svc->cs_root, CONTAINERS, &svc->cs_containers);
+	rc = dbtree_nv_open_tree(svc->cs_root, CONTAINERS, strlen(CONTAINERS),
+				 &svc->cs_containers);
 	if (rc != 0) {
 		D_ERROR("failed to open container tree: %d\n", rc);
 		D_GOTO(err_root, rc);
 	}
 
-	rc = dbtree_nv_open_tree(svc->cs_root, CONTAINER_HDLS, &svc->cs_hdls);
+	rc = dbtree_nv_open_tree(svc->cs_root, CONTAINER_HDLS,
+				 strlen(CONTAINER_HDLS), &svc->cs_hdls);
 	if (rc != 0) {
 		D_ERROR("failed to open container handle tree: %d\n", rc);
 		D_GOTO(err_containers, rc);
@@ -272,29 +274,32 @@ cont_create(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 
 		ch = h;
 
-		rc = dbtree_nv_update(ch, CONT_GHCE, &ghce, sizeof(ghce));
+		rc = dbtree_nv_update(ch, CONT_GHCE, strlen(CONT_GHCE), &ghce,
+				      sizeof(ghce));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_update(ch, CONT_GHPCE, &ghpce, sizeof(ghpce));
+		rc = dbtree_nv_update(ch, CONT_GHPCE, strlen(CONT_GHPCE),
+				      &ghpce, sizeof(ghpce));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_create_tree(ch, CONT_LRES, DBTREE_CLASS_EC,
-					   0 /* feats */, 16 /* order */,
-					   NULL /* tree_new */);
+		rc = dbtree_nv_create_tree(ch, CONT_LRES, strlen(CONT_LHES),
+					   DBTREE_CLASS_EC, 0 /* feats */,
+					   16 /* order */, NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_create_tree(ch, CONT_LHES, DBTREE_CLASS_EC,
-					   0 /* feats */, 16 /* order */,
-					   NULL /* tree_new */);
+		rc = dbtree_nv_create_tree(ch, CONT_LHES, strlen(CONT_LHES),
+					   DBTREE_CLASS_EC, 0 /* feats */,
+					   16 /* order */, NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_create_tree(ch, CONT_SNAPSHOTS, DBTREE_CLASS_EC,
-					   0 /* feats */, 16 /* order */,
-					   NULL /* tree_new */);
+		rc = dbtree_nv_create_tree(ch, CONT_SNAPSHOTS,
+					   strlen(CONT_SNAPSHOTS),
+					   DBTREE_CLASS_EC, 0 /* feats */,
+					   16 /* order */, NULL /* tree_new */);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 	} TX_ONABORT {
@@ -381,15 +386,16 @@ cont_destroy(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc)
 		D_GOTO(out_ch, rc);
 
 	TX_BEGIN(svc->cs_mpool->mp_pmem) {
-		rc = dbtree_nv_destroy_tree(ch, CONT_SNAPSHOTS);
+		rc = dbtree_nv_destroy_tree(ch, CONT_SNAPSHOTS,
+					    strlen(CONT_SNAPSHOTS));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_destroy_tree(ch, CONT_LHES);
+		rc = dbtree_nv_destroy_tree(ch, CONT_LHES, strlen(CONT_LHES));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
-		rc = dbtree_nv_destroy_tree(ch, CONT_LRES);
+		rc = dbtree_nv_destroy_tree(ch, CONT_LRES, strlen(CONT_LRES));
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
 
@@ -438,11 +444,13 @@ cont_lookup(const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 	if (rc != 0)
 		D_GOTO(err_p, rc);
 
-	rc = dbtree_nv_open_tree(p->c_cont, CONT_LRES, &p->c_lres);
+	rc = dbtree_nv_open_tree(p->c_cont, CONT_LRES, strlen(CONT_LRES),
+				 &p->c_lres);
 	if (rc != 0)
 		D_GOTO(err_cont, rc);
 
-	rc = dbtree_nv_open_tree(p->c_cont, CONT_LHES, &p->c_lhes);
+	rc = dbtree_nv_open_tree(p->c_cont, CONT_LHES, strlen(CONT_LHES),
+				 &p->c_lhes);
 	if (rc != 0)
 		D_GOTO(err_lres, rc);
 

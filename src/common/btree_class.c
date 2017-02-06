@@ -195,19 +195,19 @@ struct nv_rec {
 };
 
 static void
-nv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
+nv_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 {
-	const char     *name = key->iov_buf;
-	uint32_t       *hash = hkey;
+	const char	*key = key_iov->iov_buf;
+	size_t		key_size = key_iov->iov_len;
+	uint32_t	*hash = hkey;
 
 	/*
 	 * TODO: This function should be allowed to return an error
 	 * code.
 	 */
-	D_ASSERT(key->iov_len <= key->iov_buf_len);
-	D_ASSERT(memchr(key->iov_buf, '\0', key->iov_len) != NULL);
+	D_ASSERT(key_iov->iov_len <= key_iov->iov_buf_len);
 
-	*hash = daos_hash_string_u32(name, strlen(name));
+	*hash = daos_hash_string_u32(key, key_size);
 }
 
 static int
@@ -221,7 +221,8 @@ nv_key_cmp(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key)
 {
 	struct nv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
-	return strcmp(r->nr_name, (const char *)key->iov_buf);
+	return memcmp((const void *)r->nr_name, (const void *)key->iov_buf,
+		      key->iov_len);
 }
 
 static int
@@ -238,14 +239,11 @@ nv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 	    val->iov_len == 0 || val->iov_buf_len < val->iov_len)
 		D_GOTO(err, rc);
 
-	name_len = strnlen((char *)key->iov_buf, key->iov_len);
-	/* key->iov_buf may not be '\0'-terminated. */
-	if (name_len == key->iov_len)
-		D_GOTO(err, rc);
+	name_len = key->iov_len;
 
 	rc = -DER_NOMEM;
 
-	rid = umem_zalloc(&tins->ti_umm, sizeof(*r) + name_len + 1);
+	rid = umem_zalloc(&tins->ti_umm, sizeof(*r) + name_len);
 	if (UMMID_IS_NULL(rid))
 		D_GOTO(err, rc);
 
@@ -260,7 +258,7 @@ nv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 	value = umem_id2ptr(&tins->ti_umm, r->nr_value);
 	memcpy(value, val->iov_buf, r->nr_value_size);
 
-	r->nr_name_size = name_len + 1;
+	r->nr_name_size = name_len;
 	memcpy(r->nr_name, key->iov_buf, r->nr_name_size);
 
 	rec->rec_mmid = rid;
@@ -373,43 +371,46 @@ btr_ops_t dbtree_nv_ops = {
 };
 
 int
-dbtree_nv_update(daos_handle_t tree, const char *name, const void *value,
-		 size_t size)
+dbtree_nv_update(daos_handle_t tree, const void *key, size_t key_size,
+		 const void *value, size_t size)
 {
-	daos_iov_t	key;
+	daos_iov_t	key_iov;
 	daos_iov_t	val;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, "updating \"%s\":%p+%zu\n", name, value, size);
+	D_DEBUG(DB_TRACE, "updating \"%s\":%p+%zu\n", (char *)key, key,
+		key_size);
 
-	daos_iov_set(&key, (void *)name, strlen(name) + 1);
+	daos_iov_set(&key_iov, (void *)key, key_size);
 	daos_iov_set(&val, (void *)value, size);
 
-	rc = dbtree_update(tree, &key, &val);
+	rc = dbtree_update(tree, &key_iov, &val);
 	if (rc != 0)
-		D_ERROR("failed to update \"%s\": %d\n", name, rc);
+		D_ERROR("failed to update \"%s\": %d\n", (char *)key, rc);
 
 	return rc;
 }
 
 int
-dbtree_nv_lookup(daos_handle_t tree, const char *name, void *value, size_t size)
+dbtree_nv_lookup(daos_handle_t tree, const void *key, size_t key_size,
+		 void *value, size_t size)
 {
-	daos_iov_t	key;
+	daos_iov_t	key_iov;
 	daos_iov_t	val;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, "looking up \"%s\"\n", name);
+	D_DEBUG(DB_TRACE, "looking up \"%s\"\n", (char *)key);
 
-	daos_iov_set(&key, (void *)name, strlen(name) + 1);
+	daos_iov_set(&key_iov, (void *)key, key_size);
 	daos_iov_set(&val, value, size);
 
-	rc = dbtree_lookup(tree, &key, &val);
+	rc = dbtree_lookup(tree, &key_iov, &val);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", name);
+			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", (char *)key);
 		else
-			D_ERROR("failed to look up \"%s\": %d\n", name, rc);
+			D_ERROR("failed to look up \"%s\": %d\n", (char *)key,
+				rc);
 		return rc;
 	}
 
@@ -421,23 +422,24 @@ dbtree_nv_lookup(daos_handle_t tree, const char *name, void *value, size_t size)
  * memory.
  */
 int
-dbtree_nv_lookup_ptr(daos_handle_t tree, const char *name, void **value,
-		     size_t *size)
+dbtree_nv_lookup_ptr(daos_handle_t tree, const void *key, size_t key_size,
+		     void **value, size_t *size)
 {
-	daos_iov_t	key;
+	daos_iov_t	key_iov;
 	daos_iov_t	val;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, "looking up \"%s\" ptr\n", name);
+	D_DEBUG(DB_TRACE, "looking up \"%s\" ptr\n", (char *)key);
 
-	daos_iov_set(&key, (void *)name, strlen(name) + 1);
+	daos_iov_set(&key_iov, (void *)key, key_size);
 
-	rc = lookup_ptr(tree, &key, &val);
+	rc = lookup_ptr(tree, &key_iov, &val);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", name);
+			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", (char *)key);
 		else
-			D_ERROR("failed to look up \"%s\": %d\n", name, rc);
+			D_ERROR("failed to look up \"%s\": %d\n", (char *)key,
+				rc);
 		return rc;
 	}
 
@@ -447,21 +449,22 @@ dbtree_nv_lookup_ptr(daos_handle_t tree, const char *name, void **value,
 }
 
 int
-dbtree_nv_delete(daos_handle_t tree, const char *name)
+dbtree_nv_delete(daos_handle_t tree, const void *key, size_t key_size)
 {
-	daos_iov_t	key;
+	daos_iov_t	key_iov;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, "deleting \"%s\"\n", name);
+	D_DEBUG(DB_TRACE, "deleting \"%s\"\n", (char *)key);
 
-	daos_iov_set(&key, (void *)name, strlen(name) + 1);
+	daos_iov_set(&key_iov, (void *)key, key_size);
 
-	rc = dbtree_delete(tree, &key, NULL);
+	rc = dbtree_delete(tree, &key_iov, NULL);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", name);
+			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", (char *)key);
 		else
-			D_ERROR("failed to delete \"%s\": %d\n", name, rc);
+			D_ERROR("failed to delete \"%s\": %d\n", (char *)key,
+				rc);
 	}
 
 	return rc;
@@ -474,37 +477,37 @@ dbtree_nv_delete(daos_handle_t tree, const char *name)
  * dbtree_create_inplace() unchanged.
  */
 int
-dbtree_nv_create_tree(daos_handle_t tree, const char *name, unsigned int class,
-		      uint64_t feats, unsigned int order,
+dbtree_nv_create_tree(daos_handle_t tree, const void *key, size_t key_size,
+		      unsigned int class, uint64_t feats, unsigned int order,
 		      daos_handle_t *tree_new)
 {
-	daos_iov_t	key;
+	daos_iov_t	key_iov;
 	int		rc;
 
-	daos_iov_set(&key, (void *)name, strlen(name) + 1);
+	daos_iov_set(&key_iov, (void *)key, key_size);
 
-	rc = create_tree(tree, &key, class, feats, order, tree_new);
+	rc = create_tree(tree, &key_iov, class, feats, order, tree_new);
 	if (rc != 0)
-		D_ERROR("failed to create \"%s\": %d\n", name, rc);
+		D_ERROR("failed to create \"%s\": %d\n", (char *)key, rc);
 
 	return rc;
 }
 
 int
-dbtree_nv_open_tree(daos_handle_t tree, const char *name,
+dbtree_nv_open_tree(daos_handle_t tree, const void *key, size_t key_size,
 		    daos_handle_t *tree_child)
 {
-	daos_iov_t	key;
+	daos_iov_t	key_iov;
 	int		rc;
 
-	daos_iov_set(&key, (void *)name, strlen(name) + 1);
+	daos_iov_set(&key_iov, (void *)key, key_size);
 
-	rc = open_tree(tree, &key, NULL, tree_child);
+	rc = open_tree(tree, &key_iov, NULL, tree_child);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", name);
+			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", (char *)key);
 		else
-			D_ERROR("failed to open \"%s\": %d\n", name, rc);
+			D_ERROR("failed to open \"%s\": %d\n", (char *)key, rc);
 	}
 
 	return rc;
@@ -512,19 +515,20 @@ dbtree_nv_open_tree(daos_handle_t tree, const char *name,
 
 /* Destroy a KVS in place as the value for "name". */
 int
-dbtree_nv_destroy_tree(daos_handle_t tree, const char *name)
+dbtree_nv_destroy_tree(daos_handle_t tree, const void *key, size_t key_size)
 {
-	daos_iov_t	key;
+	daos_iov_t	key_iov;
 	int		rc;
 
-	daos_iov_set(&key, (void *)name, strlen(name) + 1);
+	daos_iov_set(&key_iov, (void *)key, key_size);
 
-	rc = destroy_tree(tree, &key);
+	rc = destroy_tree(tree, &key_iov);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
-			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", name);
+			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", (char *)key);
 		else
-			D_ERROR("failed to destroy \"%s\": %d\n", name, rc);
+			D_ERROR("failed to destroy \"%s\": %d\n", (char *)key,
+				rc);
 	}
 
 	return rc;

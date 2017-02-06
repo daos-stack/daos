@@ -159,11 +159,13 @@ read_epoch_attr(struct cont *cont, struct epoch_attr *attr)
 	daos_epoch_t	glhe;
 	int		rc;
 
-	rc = dbtree_nv_lookup(cont->c_cont, CONT_GHCE, &ghce, sizeof(ghce));
+	rc = dbtree_nv_lookup(cont->c_cont, CONT_GHCE, strlen(CONT_GHCE),
+			      &ghce, sizeof(ghce));
 	if (rc != 0)
 		return rc;
 
-	rc = dbtree_nv_lookup(cont->c_cont, CONT_GHPCE, &ghpce, sizeof(ghpce));
+	rc = dbtree_nv_lookup(cont->c_cont, CONT_GHPCE, strlen(CONT_GHPCE),
+			      &ghpce, sizeof(ghpce));
 	if (rc != 0)
 		return rc;
 
@@ -288,7 +290,8 @@ update_ghce(struct cont *cont, struct epoch_attr *attr)
 		return 0;
 	}
 
-	rc = dbtree_nv_update(cont->c_cont, CONT_GHCE, &ghce, sizeof(ghce));
+	rc = dbtree_nv_update(cont->c_cont, CONT_GHCE, strlen(CONT_GHCE),
+			      &ghce, sizeof(ghce));
 	if (rc != 0)
 		D_ERROR(DF_CONT": failed to update ghce: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid,
@@ -740,6 +743,7 @@ ds_cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		if (hdl->ch_hce > attr.ea_ghpce) {
 			attr.ea_ghpce = hdl->ch_hce;
 			rc = dbtree_nv_update(cont->c_cont, CONT_GHPCE,
+					      strlen(CONT_GHPCE),
 					      &attr.ea_ghpce,
 					      sizeof(attr.ea_ghpce));
 			if (rc != 0) {

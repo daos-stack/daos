@@ -270,7 +270,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 			D_ERROR(DF_UUID": failed to allocate vos file %s with "
 				"size: "DF_U64", rc: %d.\n",
 				DP_UUID(uuid), path, size, rc);
-			rc = daos_errno2der(errno);
+			rc = daos_errno2der(rc);
 			break;
 		}
 
