@@ -215,7 +215,7 @@ dc_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	return rc;
 }
 
-static int
+int
 obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md, daos_event_t *ev)
 {
 	/* For predefined object classes, do nothing at here. But for those

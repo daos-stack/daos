@@ -95,6 +95,10 @@ dc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 daos_handle_t
 dc_obj_hdl2cont_hdl(daos_handle_t obj_oh);
 
+int
+obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md,
+	     daos_event_t *ev);
+
 static inline bool
 daos_obj_retry_error(int err)
 {

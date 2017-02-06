@@ -63,4 +63,9 @@ void ds_cont_hdl_put(struct ds_cont_hdl *hdl);
 int ds_cont_close_by_pool_hdls(const uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
 
+typedef int (*cont_iter_cb_t)(uuid_t co_uuid, daos_unit_oid_t, void *arg);
+
+int
+ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
+		 void *arg);
 #endif /* ___DAOS_SRV_CONTAINER_H_ */
