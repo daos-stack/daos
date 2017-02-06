@@ -796,89 +796,129 @@ ring_obj_place_dist(struct pl_ring_map *rimap, daos_obj_id_t oid)
 	return 1;
 }
 
-/** see \a dsr_obj_place */
+/** calculate the ring map for the object */
 static int
-ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
-	       struct daos_obj_shard_md *shard_md,
-	       struct pl_obj_layout **layout_pp)
+ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
+		       struct daos_obj_shard_md *shard_md, unsigned int *begin,
+		       unsigned int *dist, unsigned *shard,
+		       unsigned int *grp_size, unsigned int *grp_nr)
 {
-	struct pl_ring_map	*rimap = pl_map2rimap(map);
-	struct pl_obj_layout	*layout;
-	struct pl_target	*plts;
 	struct daos_oclass_attr	*oc_attr;
-	struct pool_target	*tgs;
-	daos_obj_id_t		 oid;
-	unsigned int		 grp_dist;
-	unsigned int		 grp_size;
-	unsigned int		 grp_nr;
-	unsigned int		 tg_nr;
-	unsigned int		 shard_nr;
-	unsigned int		 shard;
-	unsigned int		 begin;
-	unsigned int		 dist;
-	int			 i;
-	int			 j;
-	int			 k;
-	int			 rc;
+	daos_obj_id_t		oid;
+	unsigned int		grp_dist;
 
 	oid = md->omd_id;
 	oc_attr = daos_oclass_attr_find(oid);
 	D_ASSERT(oc_attr != NULL);
 
-	begin	 = ring_obj_place_begin(rimap, oid);
-	dist	 = ring_obj_place_dist(rimap, oid);
+	*begin	 = ring_obj_place_begin(rimap, oid);
+	*dist	 = ring_obj_place_dist(rimap, oid);
 
-	grp_size = daos_oclass_grp_size(oc_attr);
-	D_ASSERT(grp_size != 0);
-	if (grp_size == DAOS_OBJ_REPL_MAX)
-		grp_size = rimap->rmp_target_nr;
+	*grp_size = daos_oclass_grp_size(oc_attr);
+	D_ASSERT(*grp_size != 0);
+	if (*grp_size == DAOS_OBJ_REPL_MAX)
+		*grp_size = rimap->rmp_target_nr;
 
-	grp_dist = grp_size * dist;
+	grp_dist = *grp_size * *dist;
 
 	if (shard_md == NULL) {
-		unsigned int grp_max = rimap->rmp_target_nr / grp_size;
+		unsigned int grp_max = rimap->rmp_target_nr / *grp_size;
 
 		if (grp_max == 0)
 			grp_max = 1;
 
-		grp_nr	= daos_oclass_grp_nr(oc_attr, md);
-		if (grp_nr > grp_max)
-			grp_nr = grp_max;
-		shard	= 0;
+		*grp_nr	= daos_oclass_grp_nr(oc_attr, md);
+		if (*grp_nr > grp_max)
+			*grp_nr = grp_max;
+		*shard	= 0;
 	} else {
-		grp_nr	= 1;
-		shard	= pl_obj_shard2grp_head(shard_md, oc_attr);
-		begin	+= grp_dist * pl_obj_shard2grp_index(shard_md, oc_attr);
+		*grp_nr	= 1;
+		*shard	= pl_obj_shard2grp_head(shard_md, oc_attr);
+		*begin	+= grp_dist * pl_obj_shard2grp_index(shard_md, oc_attr);
 	}
+
+	D_ASSERT(*grp_nr > 0);
+	D_ASSERT(*grp_size > 0);
 
 	D_DEBUG(DB_PL,
 		"obj="DF_OID"/%u begin=%u dist=%u grp_size=%u grp_nr=%d\n",
-		DP_OID(oid), shard, begin, dist, grp_size, grp_nr);
+		DP_OID(oid), *shard, *begin, *dist, *grp_size, *grp_nr);
 
-	D_ASSERT(grp_nr > 0);
-	D_ASSERT(grp_size > 0);
-	D_ASSERT(rimap->rmp_target_nr > 0);
+	return 0;
+}
 
-	/* NB: grp_nr could be more than the actual number of targets in the
-	 * pool, in this case, we just fill in "-1" to those extra shards.
-	 */
-	shard_nr = grp_size * grp_nr;
-	rc = pl_obj_layout_alloc(shard_nr, &layout);
-	if (rc != 0)
-		return rc;
+/**
+ * Find next rebuild target for the ring, basically it will next closest
+ * lower target in the ring.
+ **/
+static int
+ring_obj_rebuild_tgt_get(struct pl_target *plts, struct pool_target *tgs,
+			 unsigned int start, unsigned int ring_nr,
+			 unsigned int *rebuilt_idx, unsigned int *rebuilt_rank)
+{
+	unsigned int idx;
+
+	D_ASSERT(ring_nr > 0);
+
+	if (start > 0)
+		idx = start - 1;
+	else
+		idx = ring_nr - 1;
+
+	while (idx != start) {
+		unsigned int pos;
+
+		pos = plts[idx].pt_pos;
+		/* XXX also needs to consider the fail domain */
+		if (tgs[pos].ta_comp.co_status == PO_COMP_ST_UP ||
+		    tgs[pos].ta_comp.co_status == PO_COMP_ST_UPIN) {
+			if (rebuilt_rank)
+				*rebuilt_rank = tgs[pos].ta_comp.co_rank;
+
+			if (rebuilt_idx)
+				*rebuilt_idx = idx;
+			return 0;
+		}
+
+		if (idx > 0)
+			idx--;
+		else
+			idx = ring_nr - 1;
+	}
+
+	return -DER_NONEXIST;
+}
+
+static int
+ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
+		     unsigned int begin, unsigned int dist,
+		     unsigned int shard, unsigned int grp_nr,
+		     unsigned int grp_size, struct pl_obj_layout *layout)
+{
+	struct pl_ring_map	*rimap = pl_map2rimap(map);
+	struct pl_target	*plts;
+	struct pool_target	*tgs;
+	unsigned int		tg_nr;
+	unsigned int		grp_dist;
+	unsigned int		i;
+	unsigned int		j;
+	unsigned int		k;
+	int			layout_start = -1;
 
 	tgs   = pool_map_targets(rimap->rmp_poolmap);
 	tg_nr = pool_map_target_nr(rimap->rmp_poolmap);
 
 	layout->ol_ver = map->pl_ver;
-	plts = ring_oid2ring(rimap, oid)->ri_targets;
+	plts = ring_oid2ring(rimap, md->omd_id)->ri_targets;
+	grp_dist = grp_size * dist;
 	/* NB: @i is group index, @j is index within group, @k is shard index
 	 * within the layout.
 	 */
 	for (i = 0, k = 0; i < grp_nr; i++) {
 		for (j = 0; j < grp_size; j++, k++) {
-			int idx;
+			unsigned int idx;
 			int pos;
+			int rc;
 
 			if (j >= tg_nr) {
 				/* If group size is larger than the target
@@ -894,11 +934,31 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 			}
 
 			idx = (begin + j * dist) % tg_nr;
+			if (layout_start == -1)
+				layout_start = idx;
+retry:
 			pos = plts[idx].pt_pos;
 			if (tgs[pos].ta_comp.co_status == PO_COMP_ST_UP ||
 			    tgs[pos].ta_comp.co_status == PO_COMP_ST_UPIN) {
 				layout->ol_shards[k]  = shard + k;
 				layout->ol_targets[k] = tgs[pos].ta_comp.co_id;
+				D_DEBUG(DB_PL, "idx %u pos%u k %u tgt_id %d"
+				        " shard %d rank %d\n",
+					idx, pos, k, layout->ol_targets[k],
+					layout->ol_shards[k],
+					tgs[pos].ta_comp.co_rank);
+
+				if (layout_start > idx)
+					layout_start = idx;
+				continue;
+			}
+
+			/* The target on the origin idx is failed, let's
+			 * try a new idx */
+			rc = ring_obj_rebuild_tgt_get(plts, tgs, layout_start,
+						      tg_nr, &idx, NULL);
+			if (rc == 0) {
+				goto retry;
 			} else {
 				layout->ol_shards[k] = -1;
 				layout->ol_targets[k] = -1;
@@ -906,6 +966,45 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 		}
 		begin += grp_dist;
 	}
+
+	return 0;
+}
+
+/** see \a dsr_obj_place */
+static int
+ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
+	       struct daos_obj_shard_md *shard_md,
+	       struct pl_obj_layout **layout_pp)
+{
+	struct pl_ring_map	*rimap = pl_map2rimap(map);
+	struct pl_obj_layout	*layout;
+	unsigned int		 grp_size;
+	unsigned int		 grp_nr;
+	unsigned int		 shard_nr;
+	unsigned int		 shard;
+	unsigned int		 begin;
+	unsigned int		 dist;
+	int			 rc;
+
+	rc = ring_obj_placement_get(rimap, md, shard_md, &begin, &dist, &shard,
+				    &grp_nr, &grp_size);
+	if (rc)
+		return rc;
+
+	D_ASSERT(rimap->rmp_target_nr > 0);
+
+	shard_nr = grp_size * grp_nr;
+	rc = pl_obj_layout_alloc(shard_nr, &layout);
+	if (rc)
+		return rc;
+
+	rc = ring_obj_layout_fill(map, md, begin, dist, shard, grp_nr,
+				  grp_size, layout);
+	if (rc) {
+		pl_obj_layout_free(layout);
+		return rc;
+	}
+
 	*layout_pp = layout;
 	return 0;
 }
@@ -915,10 +1014,95 @@ int
 ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		      struct daos_obj_shard_md *shard_md,
 		      struct pl_target_grp *tgp_failed,
-		      uint32_t *tgt_rebuild)
+		      uint32_t *tgt_rebuild, uint32_t *shard_rebuild)
 {
-	D_ERROR("Unsupported\n");
-	return -DER_NOSYS;
+	struct pl_ring_map	*rimap = pl_map2rimap(map);
+	struct pool_target	*tgs;
+	struct pl_target	*plts;
+	unsigned int		grp_size;
+	unsigned int		grp_nr;
+	unsigned int		tg_nr;
+	unsigned int		shard;
+	unsigned int		begin;
+	unsigned int		dist;
+	unsigned int		pos;
+	bool			impacted = false;
+	unsigned int		grp_dist;
+	int			layout_start = -1;
+	unsigned int		i;
+	unsigned int		j;
+	int			rc;
+
+	/* If the object version > pool map version, then the object
+	 * might already be rebuilt. */
+	if (md->omd_ver > map->pl_ver) {
+		D_DEBUG(DB_PL, "md version %u pl ver %u\n",
+			md->omd_ver, map->pl_ver);
+		return 0;
+	}
+
+	rc = ring_obj_placement_get(rimap, md, shard_md, &begin, &dist,
+				    &shard, &grp_nr, &grp_size);
+	if (rc)
+		return rc;
+
+	if (grp_size <= 1) {
+		D_DEBUG(DB_PL, "No replicate shard for "DF_OID"\n",
+			DP_OID(md->omd_id));
+		return 0;
+	}
+
+	tgs   = pool_map_targets(rimap->rmp_poolmap);
+	tg_nr = pool_map_target_nr(rimap->rmp_poolmap);
+
+	plts = ring_oid2ring(rimap, md->omd_id)->ri_targets;
+	grp_dist = grp_size * dist;
+	for (i = 0; i < grp_nr; i++) {
+		for (j = 0; j < grp_size; j++) {
+			unsigned int idx;
+
+			if (j >= tg_nr)
+				continue;
+
+			idx = (begin + j * dist) % tg_nr;
+			if (layout_start == -1)
+				layout_start = idx;
+retry:
+			pos = plts[idx].pt_pos;
+			/* Check if the target is in the failed target */
+			D_ASSERT(tgp_failed->tg_target_nr == 1);
+			if (tgs[pos].ta_comp.co_status == PO_COMP_ST_DOWN ||
+			    tgs[pos].ta_comp.co_status == PO_COMP_ST_DOWNOUT ||
+			    tgp_failed->tg_targets[0].pt_pos == pos) {
+				rc = ring_obj_rebuild_tgt_get(plts, tgs,
+						layout_start, tg_nr, &idx,
+						tgt_rebuild);
+				if (rc)
+					D_GOTO(out, rc);
+				/* Found the failed and replacement target */
+				if (tgp_failed->tg_targets[0].pt_pos == pos) {
+					impacted = true;
+					*shard_rebuild = i;
+					D_DEBUG(DB_TRACE, "failed pos %d id %d"
+						" rank %d replacement %d"
+						" rebuild %d\n",
+						pos, tgs[pos].ta_comp.co_id,
+						tgs[pos].ta_comp.co_rank,
+						*tgt_rebuild, *shard_rebuild);
+					D_GOTO(out, rc);
+				} else {
+					/* Otherwise, let's check next
+					 * replacement target in the chain */
+					goto retry;
+				}
+			}
+		}
+		begin += grp_dist;
+	}
+out:
+	if (rc == 0 && impacted)
+		rc = 1;
+	return rc;
 }
 
 /** see \a dsr_obj_find_reint */

@@ -111,6 +111,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 	struct pl_map		*map = NULL;
 	struct daos_obj_md	md;
 	uint32_t		tgt_rebuild;
+	unsigned int		shard_rebuild;
 	int			rc;
 
 	obj_fetch_md(oid.id_pub, &md, NULL);
@@ -123,7 +124,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 	}
 
 	rc = pl_obj_find_rebuild(map, &md, NULL, arg->tgp_failed,
-				 &tgt_rebuild);
+				 &tgt_rebuild, &shard_rebuild);
 	if (rc <= 0) /* No need rebuild */
 		D_GOTO(out, rc);
 

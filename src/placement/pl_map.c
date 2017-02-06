@@ -141,7 +141,8 @@ pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
 int
 pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
-		    struct pl_target_grp *tgp_failed, uint32_t *tgt_rebuild)
+		    struct pl_target_grp *tgp_failed, uint32_t *tgt_rebuild,
+		    uint32_t *shard_rebuild)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
@@ -149,7 +150,7 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, tgp_failed,
-					       tgt_rebuild);
+					       tgt_rebuild, shard_rebuild);
 }
 
 /**
