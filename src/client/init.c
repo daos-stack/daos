@@ -82,7 +82,8 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_obj_update, sizeof(daos_obj_update_t)},
 	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},
 	{dc_obj_list_akey, sizeof(daos_obj_list_akey_t)},
-	{dc_obj_list_rec, sizeof(daos_obj_list_recx_t)}
+	{dc_obj_list_rec, sizeof(daos_obj_list_recx_t)},
+	{dc_obj_single_shard_list_dkey, sizeof(daos_obj_list_dkey_t)}
 };
 
 /**

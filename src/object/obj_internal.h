@@ -86,9 +86,11 @@ struct dc_obj_shard {
  */
 #define ENUM_ANCHOR_TAG_OFF		24
 #define ENUM_ANCHOR_TAG_LENGTH		4
-#define ENUM_ANCHOR_SHARD_OFF		28
-#define ENUM_ANCHOR_SHARD_LENGTH	4
 
+/*
+ * #define ENUM_ANCHOR_SHARD_OFF	28
+ * #define ENUM_ANCHOR_SHARD_LENGTH	4
+ */
 static inline void
 enum_anchor_copy_hkey(daos_hash_out_t *dst, daos_hash_out_t *src)
 {
@@ -124,27 +126,6 @@ enum_anchor_set_tag(daos_hash_out_t *anchor, uint32_t tag)
 {
 	memcpy(&anchor->body[ENUM_ANCHOR_TAG_OFF], &tag,
 	       ENUM_ANCHOR_TAG_LENGTH);
-}
-
-static inline uint32_t
-enum_anchor_get_shard(daos_hash_out_t *anchor)
-{
-	uint32_t tag;
-
-	D_CASSERT(DAOS_HASH_HKEY_START + DAOS_HASH_HKEY_LENGTH +
-		  ENUM_ANCHOR_TAG_LENGTH <= ENUM_ANCHOR_SHARD_OFF);
-
-	memcpy(&tag, &anchor->body[ENUM_ANCHOR_SHARD_OFF],
-	       ENUM_ANCHOR_SHARD_LENGTH);
-
-	return tag;
-}
-
-static inline void
-enum_anchor_set_shard(daos_hash_out_t *anchor, uint32_t shard)
-{
-	memcpy(&anchor->body[ENUM_ANCHOR_SHARD_OFF], &shard,
-	       ENUM_ANCHOR_SHARD_LENGTH);
 }
 
 int dc_obj_shard_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,

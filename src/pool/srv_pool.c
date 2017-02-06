@@ -1656,6 +1656,8 @@ ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *data)
 
 	ds_pool_child_put(child);
 
+	D_DEBUG(DB_TRACE, DF_UUID" iterate pool is done\n",
+		DP_UUID(pool_uuid));
 	return rc;
 }
 
@@ -1691,4 +1693,3 @@ out:
 	pool_svc_put(svc);
 	return rc;
 }
-

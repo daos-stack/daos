@@ -50,22 +50,41 @@ static struct daos_rpc_handler rebuild_handlers[] = {
 		.dr_opc		= REBUILD_OBJECTS_SCAN,
 		.dr_hdlr	= ds_rebuild_scan_handler
 	}, {
+		.dr_opc		= REBUILD_OBJECTS,
+		.dr_hdlr	= ds_rebuild_obj_handler
+	}, {
 		.dr_opc		= 0
 	}
 };
 
 static void *
 rebuild_tls_init(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key)
+		 struct dss_module_key *key)
 {
-	return NULL;
+	struct rebuild_tls *tls;
+
+	D_ALLOC_PTR(tls);
+	return tls;
 }
 
 static void
 rebuild_tls_fini(const struct dss_thread_local_storage *dtls,
 		 struct dss_module_key *key, void *data)
 {
+	struct rebuild_tls *tls = data;
 
+	D_ASSERT(tls->rebuild_local_root_init == 0);
+	D_FREE_PTR(tls);
+}
+
+bool
+is_rebuild_container(uuid_t cont_hdl_uuid)
+{
+	struct rebuild_tls *tls = rebuild_tls_get();
+
+	if (uuid_compare(tls->rebuild_cont_hdl_uuid, cont_hdl_uuid) == 0)
+		return true;
+	return false;
 }
 
 struct dss_module_key rebuild_module_key = {

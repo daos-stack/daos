@@ -939,6 +939,7 @@ out_task:
 struct dc_obj_list_arg {
 	struct dc_object *obj;
 	daos_hash_out_t	 *anchor;
+	unsigned int	 single_shard:1;
 };
 
 /** completion callback for akey/recx enumeration */
@@ -977,8 +978,8 @@ dc_obj_list_dkey_cb(struct daos_task *task, void *data)
 
 	if (!daos_hash_is_eof(anchor)) {
 		D_DEBUG(DB_IO, "More keys in shard %d\n", shard);
-		enum_anchor_set_shard(anchor, shard);
-	} else if (shard < obj->cob_layout->ol_nr - grp_size) {
+	} else if ((shard < obj->cob_layout->ol_nr - grp_size) &&
+		   !arg->single_shard) {
 		shard += grp_size;
 		D_DEBUG(DB_IO, "next shard %d grp %d nr %u\n",
 			shard, grp_size, obj->cob_layout->ol_nr);
@@ -1016,7 +1017,7 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 		     daos_sg_list_t *sgl, daos_recx_t *recxs,
 		     daos_epoch_range_t *eprs, uuid_t *cookies,
 		     daos_hash_out_t *anchor, bool incr_order,
-		     struct daos_task *task)
+		     bool single_shard, struct daos_task *task)
 {
 	struct dc_object	*obj = NULL;
 	unsigned int		map_ver;
@@ -1040,6 +1041,7 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 
 	list_args.obj = obj;
 	list_args.anchor = anchor;
+	list_args.single_shard = single_shard;
 
 	rc = daos_task_register_comp_cb(task, obj_list_opc2comp_cb(op),
 					sizeof(list_args), &list_args);
@@ -1058,6 +1060,7 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 			D_GOTO(out_put, rc = shard);
 
 		enum_anchor_set_shard(anchor, shard);
+
 	} else {
 		shard = obj_dkey2shard(obj, dkey, map_ver);
 		if (shard < 0)
@@ -1103,7 +1106,8 @@ dc_obj_list_dkey(struct daos_task *task)
 	return dc_obj_list_internal(args->oh, DAOS_OBJ_DKEY_RPC_ENUMERATE,
 				    args->epoch, NULL, NULL, DAOS_IOD_NONE,
 				    NULL, args->nr, args->kds, args->sgl,
-				    NULL, NULL, NULL, args->anchor, true, task);
+				    NULL, NULL, NULL, args->anchor, true, false,
+				    task);
 }
 
 int
@@ -1118,7 +1122,7 @@ dc_obj_list_akey(struct daos_task *task)
 				    args->epoch, args->dkey, NULL,
 				    DAOS_IOD_NONE, NULL, args->nr, args->kds,
 				    args->sgl, NULL, NULL, NULL, args->anchor,
-				    true, task);
+				    true, false, task);
 }
 
 int
@@ -1134,5 +1138,19 @@ dc_obj_list_rec(struct daos_task *task)
 				    args->type, args->size, args->nr, NULL,
 				    NULL, args->recxs, args->eprs,
 				    args->cookies, args->anchor,
-				    args->incr_order, task);
+				    args->incr_order, false, task);
+}
+
+int
+dc_obj_single_shard_list_dkey(struct daos_task *task)
+{
+	daos_obj_list_dkey_t	*args;
+
+	args = daos_task_get_args(DAOS_OPC_OBJ_SHARD_LIST_DKEY, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return dc_obj_list_internal(args->oh, DAOS_OBJ_DKEY_RPC_ENUMERATE,
+				    args->epoch, NULL, NULL, DAOS_IOD_NONE,
+				    NULL, args->nr, args->kds, args->sgl, NULL,
+				    NULL, NULL, args->anchor, true, true, task);
 }

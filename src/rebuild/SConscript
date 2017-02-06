@@ -7,6 +7,7 @@ denv = env.Clone()
 
 # rebuild
 rebuild = denv.SharedLibrary('rebuild',
-			     ['scan.c', 'srv.c', 'rpc.c'])
+			     ['scan.c', 'srv.c', 'rpc.c',
+			      'initiator.c', "srv_daos_api.c"])
 denv.Install('$PREFIX/lib/daos_srv', rebuild)
 

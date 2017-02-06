@@ -82,5 +82,27 @@ int dc_obj_update(struct daos_task *task);
 int dc_obj_list_dkey(struct daos_task *task);
 int dc_obj_list_akey(struct daos_task *task);
 int dc_obj_list_rec(struct daos_task *task);
+int dc_obj_single_shard_list_dkey(struct daos_task *task);
+
+#define ENUM_ANCHOR_SHARD_OFF		28
+#define ENUM_ANCHOR_SHARD_LENGTH	4
+
+static inline uint32_t
+enum_anchor_get_shard(daos_hash_out_t *anchor)
+{
+	uint32_t tag;
+
+	memcpy(&tag, &anchor->body[ENUM_ANCHOR_SHARD_OFF],
+	       ENUM_ANCHOR_SHARD_LENGTH);
+
+	return tag;
+}
+
+static inline void
+enum_anchor_set_shard(daos_hash_out_t *anchor, uint32_t shard)
+{
+	memcpy(&anchor->body[ENUM_ANCHOR_SHARD_OFF], &shard,
+	       ENUM_ANCHOR_SHARD_LENGTH);
+}
 
 #endif /* __DAOS_OBJECT_H__ */

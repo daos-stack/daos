@@ -30,6 +30,8 @@
 
 #include <daos/common.h>
 #include <daos/rpc.h>
+#include <daos_event.h>
+#include <daos_task.h>
 
 #include <pthread.h>
 #include <hwloc.h>
@@ -121,8 +123,9 @@ void dss_register_key(struct dss_module_key *key);
 void dss_unregister_key(struct dss_module_key *key);
 
 struct dss_module_info {
-	crt_context_t	dmi_ctx;
-	int		dmi_tid;
+	crt_context_t		dmi_ctx;
+	struct dss_xstream	*dmi_xstream;
+	int			dmi_tid;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
@@ -185,6 +188,9 @@ struct dss_module {
 int dss_create_ult(void (*func)(void *), void *arg, ABT_thread *ult);
 int dss_create_ult_all(void (*func)(void *), void *arg);
 int dss_collective(int (*func)(void *), void *arg);
+int dss_thread_create(void (*func)(void *), void *arg);
+int dss_sync_task(daos_opc_t opc, void *arg,
+		  unsigned int arg_size);
 
 /* Convert Argobots errno to DAOS ones. */
 static inline int

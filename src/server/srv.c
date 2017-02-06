@@ -32,6 +32,9 @@
 #include <abt.h>
 #include <daos_errno.h>
 #include <daos/list.h>
+#include <daos/event.h>
+#include <daos_event.h>
+#include <daos_task.h>
 #include "srv_internal.h"
 
 /** Number of started xstreams or cores used */
@@ -233,6 +236,7 @@ dss_srv_handler(void *arg)
 		return;
 	}
 
+	dmi->dmi_xstream = dx;
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creater */
 	D_ASSERT(!xstream_data.xd_ult_signal);
@@ -646,6 +650,97 @@ dss_collective(int (*func)(void *), void *arg)
 	ABT_future_wait(future);
 	ABT_future_free(&future);
 	return nfailed;
+}
+
+/**
+ * Create a ABT thread in current xestream.
+ */
+int
+dss_thread_create(void (*func)(void *), void *arg)
+{
+	struct dss_xstream *dx;
+	int rc;
+
+	dx = dss_get_module_info()->dmi_xstream;
+
+	rc = ABT_thread_create(dx->dx_pool, func, arg,
+			       ABT_THREAD_ATTR_NULL, NULL);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	return 0;
+}
+
+struct async_result {
+	ABT_future *future;
+	int	   result;
+};
+
+static int
+dss_task_comp_cb(struct daos_task *task, void *arg)
+{
+	struct async_result *cb_arg = arg;
+
+	ABT_future_set(*(cb_arg->future), (void *)(intptr_t)task->dt_result);
+	cb_arg->result = task->dt_result;
+
+	return 0;
+}
+
+/**
+ * Call client side API on the server side asynchronously.
+ */
+int
+dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
+{
+	struct daos_task	*task = NULL;
+	struct daos_sched	sched;
+	struct async_result	sched_cb_arg;
+	ABT_future		future;
+	int rc;
+
+	rc = ABT_future_create(1, NULL, &future);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	sched_cb_arg.future = &future;
+	sched_cb_arg.result = 0;
+
+	/* Prepare the task and scheduler */
+	rc = daos_sched_init(&sched, NULL,
+			     dss_get_module_info()->dmi_ctx);
+	if (rc != 0)
+		D_GOTO(free_future, rc);
+
+	D_ALLOC_PTR(task);
+	if (task == NULL)
+		D_GOTO(free_future, rc = -DER_NOMEM);
+
+	rc = daos_task_create(opc, &sched, arg, 0, NULL, task);
+	if (rc != 0) {
+		D_FREE_PTR(task);
+		D_GOTO(free_future, rc = -DER_NOMEM);
+	}
+
+	rc = daos_task_register_comp_cb(task, dss_task_comp_cb,
+					sizeof(sched_cb_arg), &sched_cb_arg);
+	if (rc != 0) {
+		D_FREE_PTR(task);
+		D_GOTO(free_future, rc = -DER_NOMEM);
+	}
+
+	/* Note: here it will get into the daos_client stack,
+	 * where all of attached tasks will be freed automatically,
+	 * so we only need to free scheduler after this.
+	 */
+	daos_sched_progress(&sched);
+	ABT_future_wait(future);
+
+	rc = sched_cb_arg.result;
+
+free_future:
+	ABT_future_free(&future);
+	return rc;
 }
 
 /** initializing steps */

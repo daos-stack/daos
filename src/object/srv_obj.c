@@ -32,6 +32,7 @@
 
 #include <abt.h>
 #include <daos/rpc.h>
+#include <daos_srv/rebuild.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
@@ -438,16 +439,30 @@ static int
 ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		   struct ds_cont_hdl **hdlp)
 {
-	struct ds_cont_hdl *cont_hdl;
+	struct ds_cont_hdl	*cont_hdl;
 
 	cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
 	if (cont_hdl == NULL)
 		return -DER_NO_HDL;
 
-	if (cont_hdl->sch_cont == NULL ||
-	    uuid_compare(cont_hdl->sch_cont->sc_uuid, cont_uuid) != 0) {
-		D_ERROR("hdl "DF_UUID" cont "DF_UUID"\n",
-			DP_UUID(cont_hdl->sch_uuid), DP_UUID(cont_uuid));
+	if (cont_hdl->sch_cont == NULL) {
+		if (is_rebuild_container(cont_hdl_uuid)) {
+			int rc;
+
+			rc = ds_cont_lookup_or_create(cont_hdl, cont_uuid);
+			if (rc) {
+				ds_cont_hdl_put(cont_hdl);
+				return rc;
+			}
+		} else {
+			return -DER_NO_HDL;
+		}
+	}
+
+	if (uuid_compare(cont_hdl->sch_cont->sc_uuid, cont_uuid) != 0) {
+		D_ERROR(DF_UUID" cont "DF_UUID" %p\n",
+			DP_UUID(cont_hdl->sch_uuid), DP_UUID(cont_uuid),
+			cont_hdl->sch_cont);
 		ds_cont_hdl_put(cont_hdl);
 		return -DER_STALE;
 	}

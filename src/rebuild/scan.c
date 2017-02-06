@@ -388,7 +388,7 @@ ds_rebuild_uuid_tree_create(daos_handle_t toh, uuid_t uuid,
 				      uuid, sizeof(uuid_t), rootp);
 }
 
-static int
+int
 ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 			   daos_unit_oid_t oid, unsigned int shard)
 {
@@ -412,6 +412,7 @@ ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 		cont_root = val_iov.iov_buf;
 	}
 
+	oid.id_shard = shard;
 	/* Finally look up the object under the container tree */
 	daos_iov_set(&key_iov, &oid, sizeof(oid));
 	daos_iov_set(&val_iov, &shard, sizeof(shard));
@@ -626,6 +627,51 @@ rebuild_obj_iter(void *data)
 				arg->arg);
 }
 
+static void
+rebuild_scan_func(void *data)
+{
+	struct rebuild_iter_arg iter_arg;
+	struct rebuild_scan_arg *arg = data;
+	int rc;
+
+	D_ASSERT(arg != NULL);
+	D_ASSERT(arg->tgp_failed != NULL);
+	D_ASSERT(arg->map != NULL);
+	D_ASSERT(!daos_handle_is_inval(arg->rebuild_tree_hdl));
+
+	iter_arg.arg = arg;
+	iter_arg.callback = placement_check;
+	uuid_copy(iter_arg.pool_uuid, arg->pool_uuid);
+
+	rc = dss_collective(rebuild_obj_iter, &iter_arg);
+	if (rc)
+		D_GOTO(free, rc);
+
+	D_DEBUG(DB_TRACE, "rebuild scan collective "DF_UUID" is done\n",
+		DP_UUID(arg->pool_uuid));
+
+	/* walk through the rebuild tree and send the rebuild objects */
+	rc = dbtree_iterate(arg->rebuild_tree_hdl, false, rebuild_tgt_iter_cb,
+			    arg);
+
+	D_DEBUG(DB_TRACE, DF_UUID" send objects to initiator %d\n",
+		DP_UUID(arg->pool_uuid), rc);
+
+free:
+	if (arg->tgp_failed->tg_targets != NULL) {
+		D_FREE(arg->tgp_failed->tg_targets,
+		       arg->tgp_failed->tg_target_nr *
+			       sizeof(*arg->tgp_failed->tg_targets));
+		D_FREE_PTR(arg->tgp_failed);
+	}
+
+	if (!daos_handle_is_inval(arg->rebuild_tree_hdl))
+		dbtree_destroy(arg->rebuild_tree_hdl);
+
+	ABT_mutex_free(&arg->scan_lock);
+	D_FREE_PTR(arg);
+}
+
 /* Scan the local target and generate rebuild object list */
 int
 ds_rebuild_scan_handler(crt_rpc_t *rpc)
@@ -634,7 +680,6 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_out	*ro;
 	struct pool_map		*map = NULL;
 	struct rebuild_scan_arg	*arg = NULL;
-	struct rebuild_iter_arg iter_arg;
 	struct pl_target_grp	*pl_grp = NULL;
 	struct umem_attr        uma;
 	daos_handle_t           root_hdl = DAOS_HDL_INVAL;
@@ -716,19 +761,11 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(free, rc);
 	}
 
-	iter_arg.arg = arg;
-	iter_arg.callback = placement_check;
-	uuid_copy(iter_arg.pool_uuid, rsi->rsi_pool_uuid);
-
-	rc = dss_collective(rebuild_obj_iter, &iter_arg);
-	if (rc)
+	rc = dss_thread_create(rebuild_scan_func, arg);
+	if (rc != 0)
 		D_GOTO(free, rc);
 
-	/* walk through the rebuild tree and send the rebuild objects */
-	rc = dbtree_iterate(root_hdl, false, rebuild_tgt_iter_cb, arg);
-	if (rc)
-		D_GOTO(free, rc);
-
+	D_GOTO(out, rc);
 free:
 	if (arg != NULL) {
 		ABT_mutex_free(&arg->scan_lock);
@@ -744,9 +781,6 @@ free:
 
 	if (!daos_handle_is_inval(root_hdl))
 		dbtree_destroy(root_hdl);
-
-	if (broot != NULL)
-		D_FREE_PTR(broot);
 out:
 	ro = crt_reply_get(rpc);
 	ro->ro_status = rc;
