@@ -475,6 +475,7 @@ static int self_test_init(struct st_ping_cb_args *cb_args, pthread_t *tid,
 			ret, cb_args->srv_grp);
 		return ret;
 	}
+	C_DEBUG("attached to target: %s\n", cb_args->srv_grp->cg_grpid);
 	C_ASSERTF(cb_args->srv_grp != NULL,
 		  "crt_group_attach succeeded but returned group is NULL\n");
 
@@ -537,7 +538,7 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 	ret = self_test_init(&cb_args, &tid, dest_name);
 	if (ret != 0) {
 		C_ERROR("self_test_init failed; ret = %d\n", ret);
-		C_GOTO(cleanup, ret);
+		C_GOTO(cleanup_nothread, ret);
 	}
 
 	/* Allocate a buffer for latency measurements */
@@ -757,6 +758,7 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 		printf("\n");
 	}
 
+cleanup:
 	/* Tell the progress thread to abort and exit */
 	g_shutdown_flag = 1;
 
@@ -764,7 +766,7 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 	if (ret)
 		C_ERROR("Could not join progress thread");
 
-cleanup:
+cleanup_nothread:
 	if (cb_args.rep_latencies != NULL)
 		C_FREE(cb_args.rep_latencies,
 		       rep_count * sizeof(cb_args.rep_latencies[0]));
@@ -774,11 +776,6 @@ cleanup:
 	if (cb_args.ping_payload != NULL)
 		C_FREE(cb_args.ping_payload, current_msg_size.send_size);
 
-	cleanup_ret = crt_context_destroy(cb_args.crt_ctx, 0);
-	if (cleanup_ret != 0)
-		C_ERROR("crt_context_destroy failed; ret = %d\n", cleanup_ret);
-	/* Make sure first error is returned, if applicable */
-	ret = ((ret == 0) ? cleanup_ret : ret);
 
 	if (cb_args.srv_grp != NULL) {
 		cleanup_ret = crt_group_detach(cb_args.srv_grp);
@@ -788,6 +785,12 @@ cleanup:
 		/* Make sure first error is returned, if applicable */
 		ret = ((ret == 0) ? cleanup_ret : ret);
 	}
+
+	cleanup_ret = crt_context_destroy(cb_args.crt_ctx, 0);
+	if (cleanup_ret != 0)
+		C_ERROR("crt_context_destroy failed; ret = %d\n", cleanup_ret);
+	/* Make sure first error is returned, if applicable */
+	ret = ((ret == 0) ? cleanup_ret : ret);
 
 	cleanup_ret = crt_finalize();
 	if (cleanup_ret != 0)
@@ -1174,7 +1177,7 @@ int main(int argc, char *argv[])
 	int			 num_tokens;
 	int			 c;
 	int			 j;
-	int			 ret;
+	int			 ret = 0;
 	struct st_endpoint	*endpts = NULL;
 	uint32_t		 num_endpts = 0;
 
