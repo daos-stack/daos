@@ -53,15 +53,33 @@ docker run --rm -u $USER -v ${PWD}:/work \
           ${default_requires} ${SCONS_OPTIONS} 2>&1 | tee docker_build.log
 
 # Review jobs do not have artifacts to process
+docker_exit_status=0
 if [[ "${job_real_name}" == *${JOB_SUFFIX} ]];then
   source ${docker_post_script}
+  docker_exit_status=$?
 fi
 
 set +u
 target_post_build=`find . -name ${TARGET}_post_build.sh`
-
 if [ -n "${target_post_build}" ]; then
   source ${target_post_build}
+  if [ $? -ne 0 ]; then
+    docker_exit_status=$?
+  fi
 fi
 set -u
+
+set +ue
+if [ -z "${IGNORE_SCONS_ERRORS}" ];then
+   grep -q "scons: done building targets" ./docker_build.log
+   if [ $? -ne 0 ];then
+     docker_exit_status=1
+   fi
+   grep -q "scons: building terminated because of errors" ./docker_build.log
+   if [ $? -eq 0 ];then
+     docker_exit_status=1
+   fi
+fi
+set -xe
+exit ${docker_exit_status}
 
