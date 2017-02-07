@@ -189,8 +189,6 @@ enum crt_rpc_flags {
 
 struct crt_rpc;
 
-typedef int (*crt_req_callback_t)(struct crt_rpc *rpc);
-
 /* Public RPC request/reply, exports to user */
 typedef struct crt_rpc {
 	crt_context_t		cr_ctx; /* CRT context of the RPC */
@@ -290,9 +288,6 @@ extern struct crt_msg_field CMF_BULK_ARRAY;
 extern struct crt_msg_field CMF_IOVEC;
 
 extern struct crt_msg_field *crt_single_out_fields[];
-struct crt_single_out {
-	int	dso_ret;
-};
 
 typedef enum {
 	CRT_BULK_PUT = 0x68,
