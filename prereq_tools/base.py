@@ -1091,6 +1091,16 @@ class _Component(object):
             else:
                 raise MissingTargets(self.name, self.package)
 
+    def check_user_options(self, env, headers_only):
+        """check help and clean options"""
+        if GetOption('help'):
+            if self.requires:
+                self.prereqs.require(env, *self.requires)
+            return True
+
+        self.set_environment(env, headers_only)
+        if GetOption('clean'):
+            return True
 
     def build(self, env, headers_only):
         """Build the component, if necessary"""
@@ -1098,10 +1108,7 @@ class _Component(object):
         changes = False
         envcopy = self.prereqs.system_env.Clone()
 
-        if GetOption('help'):
-            return
-        self.set_environment(env, headers_only)
-        if GetOption('clean'):
+        if self.check_user_options(env, headers_only):
             return
         self.set_environment(envcopy, False)
         if self.prebuilt_path:
