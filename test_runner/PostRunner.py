@@ -51,23 +51,26 @@ class PostRunner(GrindRunner.GrindRunner):
                 else:
                     self.check_log_mode(dname)
 
-    def dump_error_messages(self, testMethodName):
+    def dump_log_files(self, testClassName, testMethodName):
         """dump the ERROR tag from stdout file
 
         This first checks for a method-specific log directory and uses that
         if it exists, or if not then it dumps all subdirectories.
 
         To find a method specific subdirectory it splits the method on '_'
-        and then checks the last segment, or all but the first segment.
+        and then checks the last segment, or uses the testClassName and then
+        all but the first segment of testMethodName
 
-        For a method called 'test_rpc_write' it would check for directories
-        called 'write' or 'rpc_write' in that order.
+        For a class.method called 'MyClass.test_rpc_write' it would check for
+        directories called 'write' or 'myClass/rpc_write' in that order.
         """
         parts = testMethodName.split('_', maxsplit=2)
         shortdir = None
         if len(parts) > 2:
             shortdir = os.path.join(self.last_testlogdir, parts[2])
-        longdir = os.path.join(self.last_testlogdir, testMethodName[5:])
+        longdir = os.path.join(self.last_testlogdir,
+                               testClassName,
+                               testMethodName[5:])
         if shortdir and os.path.exists(shortdir):
             self.top_logdir(shortdir, dumpLogs=True)
         elif os.path.exists(longdir):

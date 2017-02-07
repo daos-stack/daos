@@ -119,8 +119,8 @@ class UnitTestRunner(PostRunner.PostRunner,
                     self.logger.info(results_item[0])
                     self.logger.info(results_item[1])
                     test_object_dict = results_item[0].__dict__
-                    self.dump_error_messages(
-                        test_object_dict['_testMethodName'])
+                    self.dump_log_files(results_item[0].__class__.__name__,
+                                        test_object_dict['_testMethodName'])
                 self.logger.info("\nNumber skipped tests: %d",
                                  len(results.skipped))
                 for results_item in results.skipped:
