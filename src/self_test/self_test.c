@@ -55,10 +55,11 @@
  * self-test client is integrated into CART and replaced with a call to
  * #include <crt_internal.h>
  */
-#define CRT_OPC_SELF_TEST_PING_BOTH_EMPTY	0xFFFF0200U
-#define CRT_OPC_SELF_TEST_PING_SEND_EMPTY	0xFFFF0201U
-#define CRT_OPC_SELF_TEST_PING_REPLY_EMPTY	0xFFFF0202U
-#define CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY	0xFFFF0203U
+#define CRT_OPC_SELF_TEST_BOTH_EMPTY		0xFFFF0200U
+#define CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV	0xFFFF0201U
+#define CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY	0xFFFF0202U
+#define CRT_OPC_SELF_TEST_BOTH_IOV		0xFFFF0203U
+
 #define CRT_SELF_TEST_MAX_MSG_SIZE		0x40000000U
 
 /*
@@ -68,20 +69,20 @@
  * structures to be packed together without any padding between members
  */
 #pragma pack(push, 1)
-struct crt_st_ping_send_empty {
+struct crt_st_send_empty_reply_iov {
 	uint32_t reply_size;
 };
 
-struct crt_st_ping_send_nonempty {
-	crt_iov_t ping_buf;
+struct crt_st_send_iov_reply_iov {
+	crt_iov_t buf;
 	uint32_t reply_size;
 };
 
-struct crt_st_ping_send_reply_empty {
-	crt_iov_t ping_buf;
+struct crt_st_send_iov_reply_empty {
+	crt_iov_t buf;
 };
 
-struct crt_st_ping_reply {
+struct crt_st_reply_iov {
 	crt_iov_t resp_buf;
 };
 /* Pop pragma pack to restore original struct packing behavior */
@@ -130,7 +131,7 @@ enum st_fatal_err {
 	ST_UNKNOWN = CER_UNKNOWN
 };
 
-struct st_ping_cb_args {
+struct st_cb_args {
 	crt_context_t		 crt_ctx;
 	crt_group_t		*srv_grp;
 
@@ -156,7 +157,7 @@ struct st_ping_cb_args {
 	pthread_spinlock_t	 cb_args_lock;
 
 	/* Scratchpad buffer allocated by main loop for callback to use */
-	char			*ping_payload;
+	char			*payload;
 
 	/* Used to measure individial RPC latencies */
 	struct st_latency	*rep_latencies;
@@ -182,9 +183,9 @@ struct st_ping_cb_args {
 
 };
 
-struct st_ping_cb_data {
+struct st_cb_data {
 	/* Static arguments that are the same for all RPCs in this run */
-	struct st_ping_cb_args	*cb_args;
+	struct st_cb_args	*cb_args;
 
 	int			 rep_idx;
 	struct timespec		 sent_time;
@@ -195,7 +196,7 @@ struct st_ping_cb_data {
 static int g_shutdown_flag;
 
 /* Forward Declarations */
-static int ping_response_cb(const struct crt_cb_info *cb_info);
+static int response_cb(const struct crt_cb_info *cb_info);
 
 /*
  * This function sends an RPC to the next available endpoint.
@@ -210,11 +211,11 @@ static int ping_response_cb(const struct crt_cb_info *cb_info);
  * incrementing the rep_completed_count - this is useful when generating the
  * initial RPCs
  */
-static int send_next_rpc(struct st_ping_cb_data *cb_data, int skip_inc_complete)
+static int send_next_rpc(struct st_cb_data *cb_data, int skip_inc_complete)
 {
-	struct st_ping_cb_args	*cb_args = cb_data->cb_args;
+	struct st_cb_args	*cb_args = cb_data->cb_args;
 
-	crt_rpc_t		*new_ping_rpc;
+	crt_rpc_t		*new_rpc;
 	void			*args = NULL;
 	crt_endpoint_t		 local_endpt = {.ep_grp = cb_args->srv_grp};
 	struct st_endpoint	*endpt_ptr;
@@ -295,19 +296,19 @@ static int send_next_rpc(struct st_ping_cb_data *cb_data, int skip_inc_complete)
 		/* Set the opcode based on the sizes of the arguments */
 		if (cb_args->current_msg_size.send_size > 0 &&
 		    cb_args->current_msg_size.reply_size > 0)
-			opcode = CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY;
+			opcode = CRT_OPC_SELF_TEST_BOTH_IOV;
 		else if (cb_args->current_msg_size.send_size > 0 &&
 			 cb_args->current_msg_size.reply_size == 0)
-			opcode = CRT_OPC_SELF_TEST_PING_REPLY_EMPTY;
+			opcode = CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY;
 		else if (cb_args->current_msg_size.send_size == 0 &&
 			 cb_args->current_msg_size.reply_size > 0)
-			opcode = CRT_OPC_SELF_TEST_PING_SEND_EMPTY;
+			opcode = CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV;
 		else
-			opcode = CRT_OPC_SELF_TEST_PING_BOTH_EMPTY;
+			opcode = CRT_OPC_SELF_TEST_BOTH_EMPTY;
 
 		/* Start a new RPC request */
 		ret = crt_req_create(cb_args->crt_ctx, local_endpt,
-				     opcode, &new_ping_rpc);
+				     opcode, &new_rpc);
 		if (ret != 0) {
 			C_WARN("crt_req_create failed for endpoint=%u:%u;"
 			       " ret = %d\n",
@@ -316,35 +317,35 @@ static int send_next_rpc(struct st_ping_cb_data *cb_data, int skip_inc_complete)
 			goto try_again;
 		}
 
-		C_ASSERTF(new_ping_rpc != NULL,
+		C_ASSERTF(new_rpc != NULL,
 			  "crt_req_create succeeded but RPC is NULL\n");
 
 		/* No arguments to assemble for BOTH_EMPTY RPCs */
-		if (opcode == CRT_OPC_SELF_TEST_PING_BOTH_EMPTY)
+		if (opcode == CRT_OPC_SELF_TEST_BOTH_EMPTY)
 			goto send_rpc;
 
 		/* Get the arguments handle */
-		args = crt_req_get(new_ping_rpc);
+		args = crt_req_get(new_rpc);
 		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
 
-		if (opcode == CRT_OPC_SELF_TEST_PING_SEND_EMPTY) {
-			struct crt_st_ping_send_empty *typed_args =
-				(struct crt_st_ping_send_empty *)args;
+		if (opcode == CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV) {
+			struct crt_st_send_empty_reply_iov *typed_args =
+				(struct crt_st_send_empty_reply_iov *)args;
 			typed_args->reply_size =
 				cb_args->current_msg_size.reply_size;
-		} else if (opcode == CRT_OPC_SELF_TEST_PING_REPLY_EMPTY) {
-			struct crt_st_ping_send_reply_empty *typed_args =
-				(struct crt_st_ping_send_reply_empty *)args;
-			crt_iov_set(&typed_args->ping_buf,
-				    cb_args->ping_payload,
+		} else if (opcode == CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY) {
+			struct crt_st_send_iov_reply_empty *typed_args =
+				(struct crt_st_send_iov_reply_empty *)args;
+			crt_iov_set(&typed_args->buf,
+				    cb_args->payload,
 				    cb_args->current_msg_size.send_size);
-		} else if (opcode == CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY) {
-			struct crt_st_ping_send_nonempty *typed_args =
-				(struct crt_st_ping_send_nonempty *)args;
+		} else if (opcode == CRT_OPC_SELF_TEST_BOTH_IOV) {
+			struct crt_st_send_iov_reply_iov *typed_args =
+				(struct crt_st_send_iov_reply_iov *)args;
 			typed_args->reply_size =
 				cb_args->current_msg_size.reply_size;
-			crt_iov_set(&typed_args->ping_buf,
-				    cb_args->ping_payload,
+			crt_iov_set(&typed_args->buf,
+				    cb_args->payload,
 				    cb_args->current_msg_size.send_size);
 		}
 
@@ -360,7 +361,7 @@ send_rpc:
 		}
 
 		/* Send the RPC */
-		ret = crt_req_send(new_ping_rpc, ping_response_cb, cb_data);
+		ret = crt_req_send(new_rpc, response_cb, cb_data);
 		if (ret != 0) {
 			C_WARN("crt_req_send failed for endpoint=%u:%u;"
 			       " ret = %d\n",
@@ -402,11 +403,11 @@ try_again:
  * re-use the previous slot allocated to it as callback data for the RPC it is
  * just now creating.
  */
-static int ping_response_cb(const struct crt_cb_info *cb_info)
+static int response_cb(const struct crt_cb_info *cb_info)
 {
-	struct st_ping_cb_data	*cb_data = (struct st_ping_cb_data *)
+	struct st_cb_data	*cb_data = (struct st_cb_data *)
 					   cb_info->cci_arg;
-	struct st_ping_cb_args	*cb_args = cb_data->cb_args;
+	struct st_cb_args	*cb_args = cb_data->cb_args;
 
 	struct timespec		 now;
 
@@ -456,7 +457,7 @@ static void *progress_fn(void *arg)
 	pthread_exit(NULL);
 }
 
-static int self_test_init(struct st_ping_cb_args *cb_args, pthread_t *tid,
+static int self_test_init(struct st_cb_args *cb_args, pthread_t *tid,
 			  char *dest_name)
 {
 	char		my_group[] = "self_test";
@@ -526,9 +527,9 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 	struct timespec		 time_start_size, time_stop_size;
 
 	/* Static arguments (same for each RPC callback function) */
-	struct st_ping_cb_args	 cb_args = {0};
+	struct st_cb_args	 cb_args = {0};
 	/* Private arguments data for all RPC callback functions */
-	struct st_ping_cb_data	*cb_data_alloc = NULL;
+	struct st_cb_data	*cb_data_alloc = NULL;
 
 	/* Set the callback data which will be the same for all callbacks */
 	cb_args.rep_count = 1; /* First run only sends one message */
@@ -548,7 +549,7 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 		C_GOTO(cleanup, ret = -CER_NOMEM);
 
 	/* Allocate a buffer for arguments to the callback function */
-	C_ALLOC(cb_data_alloc, max_inflight * sizeof(struct st_ping_cb_data));
+	C_ALLOC(cb_data_alloc, max_inflight * sizeof(struct st_cb_data));
 	if (cb_data_alloc == NULL)
 		C_GOTO(cleanup, ret = -CER_NOMEM);
 
@@ -579,16 +580,16 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 
 		if (current_msg_size.send_size != 0) {
 			/*
-			 * Use one buffer for all of the ping payload contents
+			 * Use one buffer for all of the payload contents
 			 * realloc() used so memory will be reused if size
 			 * decreases
 			 */
-			realloced_mem = C_REALLOC(cb_args.ping_payload,
+			realloced_mem = C_REALLOC(cb_args.payload,
 						  current_msg_size.send_size);
 			if (realloced_mem == NULL)
 				C_GOTO(cleanup, ret = -CER_NOMEM);
-			cb_args.ping_payload = (char *)realloced_mem;
-			memset(cb_args.ping_payload, 0,
+			cb_args.payload = (char *)realloced_mem;
+			memset(cb_args.payload, 0,
 			       current_msg_size.send_size);
 		}
 
@@ -614,7 +615,7 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 
 		for (inflight_idx = 0; inflight_idx < max_inflight;
 		     inflight_idx++) {
-			struct st_ping_cb_data *cb_data =
+			struct st_cb_data *cb_data =
 				&cb_data_alloc[inflight_idx];
 
 			cb_data->cb_args = &cb_args;
@@ -772,9 +773,9 @@ cleanup_nothread:
 		       rep_count * sizeof(cb_args.rep_latencies[0]));
 	if (cb_data_alloc != NULL)
 		C_FREE(cb_data_alloc,
-		       max_inflight * sizeof(struct st_ping_cb_data));
-	if (cb_args.ping_payload != NULL)
-		C_FREE(cb_args.ping_payload, current_msg_size.send_size);
+		       max_inflight * sizeof(struct st_cb_data));
+	if (cb_args.payload != NULL)
+		C_FREE(cb_args.payload, current_msg_size.send_size);
 
 
 	if (cb_args.srv_grp != NULL) {
@@ -839,7 +840,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "Optional Arguments\n"
 	       "  --message-sizes <(a b),(c d),...>\n"
 	       "      Short version: -s\n"
-	       "      List of ping size tuples (in bytes) to use for the self test.\n"
+	       "      List of size tuples (in bytes) to use for the self test.\n"
 	       "\n"
 	       "      Note that the ( ) are not strictly necessary\n"
 	       "      Providing a single size (a) is interpreted as an alias for (a a)\n"
@@ -859,7 +860,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "\n"
 	       "  --repetitions-per-size <N>\n"
 	       "      Short version: -r\n"
-	       "      Number of samples per message size. Pings for each particular size\n"
+	       "      Number of samples per message size. RPCs for each particular size\n"
 	       "      will be repeated this many times.\n"
 	       "      Default: %d\n"
 	       "\n"

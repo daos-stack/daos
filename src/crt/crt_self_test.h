@@ -44,48 +44,48 @@
 #define CRT_SELF_TEST_MAX_MSG_SIZE (0x40000000)
 
 /*
- * Logic table for self-test opcodes:
+ * Logic table for self-test message opcodes:
  *
  * send_size == 0 && return_size == 0
- *      opcode: CRT_OPC_SELF_TEST_PING_BOTH_EMPTY
+ *      opcode: CRT_OPC_SELF_TEST_BOTH_EMPTY
  *      send struct: NULL
  *      return struct: NULL
  *
  * send_size == 0 && return_size > 0
- *      opcode: CRT_OPC_SELF_TEST_PING_SEND_EMPTY
+ *      opcode: CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV
  *      send struct: uint32_t
  *      return struct: iovec
  *
  * send_size > 0 && return_size == 0
- *      opcode: CRT_OPC_SELF_TEST_PING_REPLY_EMPTY
+ *      opcode: CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY
  *      send struct: iovec payload
  *      return struct: NULL
  *
  * send_size > 0 && return_size > 0
- *      opcode: CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY
+ *      opcode: CRT_OPC_SELF_TEST_BOTH_IOV
  *      send struct: uint32_t reply_size, iovec payload
  *      return struct: iovec of specified size
  */
 
 /* RPC arguments */
-struct crt_st_ping_send_empty {
+struct crt_st_send_empty_reply_iov {
 	uint32_t reply_size;
 };
 
-struct crt_st_ping_send_reply_empty {
-	crt_iov_t ping_buf;
+struct crt_st_send_iov_reply_empty {
+	crt_iov_t buf;
 };
 
-struct crt_st_ping_send_nonempty {
-	crt_iov_t ping_buf;
+struct crt_st_send_iov_reply_iov {
+	crt_iov_t buf;
 	uint32_t reply_size;
 };
 
-struct crt_st_ping_reply {
+struct crt_st_reply_iov {
 	crt_iov_t resp_buf;
 };
 
 void crt_self_test_init(void);
-int crt_self_test_ping_handler(crt_rpc_t *rpc_req);
+int crt_self_test_msg_handler(crt_rpc_t *rpc_req);
 
 #endif /* __CRT_SELF_TEST_H__ */

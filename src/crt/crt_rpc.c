@@ -109,37 +109,37 @@ static struct crt_req_format CQF_CRT_RANK_EVICT =
 			   crt_rank_evict_out_fields);
 
 /* for self-test service */
-static struct crt_msg_field *crt_st_ping_send_empty_field[] = {
+static struct crt_msg_field *crt_st_send_empty_reply_iov_field[] = {
 	&CMF_UINT32,
 };
 
-static struct crt_msg_field *crt_st_ping_send_nonempty_field[] = {
+static struct crt_msg_field *crt_st_send_iov_reply_iov_field[] = {
 	&CMF_IOVEC,
 	&CMF_UINT32,
 };
 
-static struct crt_msg_field *crt_st_ping_send_reply_empty_field[] = {
+static struct crt_msg_field *crt_st_send_iov_reply_empty_field[] = {
 	&CMF_IOVEC,
 };
 
-static struct crt_msg_field *crt_st_ping_reply_nonempty_field[] = {
+static struct crt_msg_field *crt_st_reply_iov_field[] = {
 	&CMF_IOVEC,
 };
 
-static struct crt_req_format CQF_CRT_SELF_TEST_PING_SEND_EMPTY =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_PING_SEND_EMPTY",
-			   crt_st_ping_send_empty_field,
-			   crt_st_ping_reply_nonempty_field);
+static struct crt_req_format CQF_CRT_SELF_TEST_SEND_EMPTY =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_SEND_EMPTY",
+			   crt_st_send_empty_reply_iov_field,
+			   crt_st_reply_iov_field);
 
-static struct crt_req_format CQF_CRT_SELF_TEST_PING_REPLY_EMPTY =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_PING_REPLY_EMPTY",
-			   crt_st_ping_send_reply_empty_field,
+static struct crt_req_format CQF_CRT_SELF_TEST_REPLY_EMPTY =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_REPLY_EMPTY",
+			   crt_st_send_iov_reply_empty_field,
 			   NULL);
 
-static struct crt_req_format CQF_CRT_SELF_TEST_PING_BOTH_NONEMPTY =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_PING_BOTH_NONEMPTY",
-			   crt_st_ping_send_nonempty_field,
-			   crt_st_ping_reply_nonempty_field);
+static struct crt_req_format CQF_CRT_SELF_TEST_BOTH_IOV =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_BOTH_IOV",
+			   crt_st_send_iov_reply_iov_field,
+			   crt_st_reply_iov_field);
 
 
 
@@ -228,36 +228,36 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_hdlr	= crt_hdlr_rank_evict,
 		.ir_co_ops	= &crt_rank_evict_co_ops,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_PING_BOTH_EMPTY",
-		.ir_opc		= CRT_OPC_SELF_TEST_PING_BOTH_EMPTY,
+		.ir_name	= "CRT_SELF_TEST_BOTH_EMPTY",
+		.ir_opc		= CRT_OPC_SELF_TEST_BOTH_EMPTY,
 		.ir_ver		= 1,
 		.ir_flags	= 0,
 		.ir_req_fmt	= NULL, /* No payload in either direction */
-		.ir_hdlr	= crt_self_test_ping_handler,
+		.ir_hdlr	= crt_self_test_msg_handler,
 		.ir_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_PING_SEND_EMPTY",
-		.ir_opc		= CRT_OPC_SELF_TEST_PING_SEND_EMPTY,
+		.ir_name	= "CRT_SELF_TEST_SEND_EMPTY",
+		.ir_opc		= CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV,
 		.ir_ver		= 1,
 		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_PING_SEND_EMPTY,
-		.ir_hdlr	= crt_self_test_ping_handler,
+		.ir_req_fmt	= &CQF_CRT_SELF_TEST_SEND_EMPTY,
+		.ir_hdlr	= crt_self_test_msg_handler,
 		.ir_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_PING_REPLY_EMPTY",
-		.ir_opc		= CRT_OPC_SELF_TEST_PING_REPLY_EMPTY,
+		.ir_name	= "CRT_SELF_TEST_REPLY_EMPTY",
+		.ir_opc		= CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,
 		.ir_ver		= 1,
 		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_PING_REPLY_EMPTY,
-		.ir_hdlr	= crt_self_test_ping_handler,
+		.ir_req_fmt	= &CQF_CRT_SELF_TEST_REPLY_EMPTY,
+		.ir_hdlr	= crt_self_test_msg_handler,
 		.ir_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_PING_BOTH_NONEMPTY",
-		.ir_opc		= CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY,
+		.ir_name	= "CRT_SELF_TEST_BOTH_IOV",
+		.ir_opc		= CRT_OPC_SELF_TEST_BOTH_IOV,
 		.ir_ver		= 1,
 		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_PING_BOTH_NONEMPTY,
-		.ir_hdlr	= crt_self_test_ping_handler,
+		.ir_req_fmt	= &CQF_CRT_SELF_TEST_BOTH_IOV,
+		.ir_hdlr	= crt_self_test_msg_handler,
 		.ir_co_ops	= NULL,
 	}, {
 		.ir_name	= "CRT_IV_FETCH",

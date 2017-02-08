@@ -51,28 +51,28 @@ void crt_self_test_init(void)
 	pthread_spin_init(&reply_lock, PTHREAD_PROCESS_PRIVATE);
 }
 
-int crt_self_test_ping_handler(crt_rpc_t *rpc_req)
+int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 {
 
 	void				*args = NULL;
-	struct crt_st_ping_reply	*res = NULL;
+	struct crt_st_reply_iov		*res = NULL;
 	uint32_t			 reply_size = 0;
 	int				 ret = 0;
 
-	C_ASSERT(rpc_req->cr_opc == CRT_OPC_SELF_TEST_PING_BOTH_EMPTY ||
-		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_PING_SEND_EMPTY ||
-		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_PING_REPLY_EMPTY ||
-		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY);
+	C_ASSERT(rpc_req->cr_opc == CRT_OPC_SELF_TEST_BOTH_EMPTY ||
+		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV ||
+		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY ||
+		 rpc_req->cr_opc == CRT_OPC_SELF_TEST_BOTH_IOV);
 
 	/* All types except BOTH_EMPTY have some input data */
-	if (rpc_req->cr_opc != CRT_OPC_SELF_TEST_PING_BOTH_EMPTY) {
+	if (rpc_req->cr_opc != CRT_OPC_SELF_TEST_BOTH_EMPTY) {
 		args = crt_req_get(rpc_req);
 		C_ASSERT(args != NULL);
 	}
 
-	if (rpc_req->cr_opc == CRT_OPC_SELF_TEST_PING_SEND_EMPTY ||
-	    rpc_req->cr_opc == CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY) {
-		res = (struct crt_st_ping_reply *)
+	if (rpc_req->cr_opc == CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV ||
+	    rpc_req->cr_opc == CRT_OPC_SELF_TEST_BOTH_IOV) {
+		res = (struct crt_st_reply_iov *)
 		      crt_reply_get(rpc_req);
 		C_ASSERT(res != NULL);
 	}
@@ -82,13 +82,13 @@ int crt_self_test_ping_handler(crt_rpc_t *rpc_req)
 	 * the reply iovec to zero sized, just in case memory allocation fails
 	 * later
 	 */
-	if (rpc_req->cr_opc == CRT_OPC_SELF_TEST_PING_SEND_EMPTY) {
-		struct crt_st_ping_send_empty *typed_args =
-			(struct crt_st_ping_send_empty *)args;
+	if (rpc_req->cr_opc == CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV) {
+		struct crt_st_send_empty_reply_iov *typed_args =
+			(struct crt_st_send_empty_reply_iov *)args;
 
 		reply_size = typed_args->reply_size;
 		crt_iov_set(&res->resp_buf, NULL, 0);
-	} else if (rpc_req->cr_opc == CRT_OPC_SELF_TEST_PING_BOTH_NONEMPTY) {
+	} else if (rpc_req->cr_opc == CRT_OPC_SELF_TEST_BOTH_IOV) {
 		crt_iov_set(&res->resp_buf, NULL, 0);
 	}
 
