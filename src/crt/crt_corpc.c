@@ -714,8 +714,13 @@ bypass_aggregate:
 			C_ERROR("crt_corpc_free_chainded_bulk failed, rc: %d, "
 				"opc: 0x%x.\n", rc,
 				parent_rpc_priv->crp_pub.cr_opc);
+		/*
+		 * reset it to NULL to avoid crt_proc_corpc_hdr->
+		 * crt_proc_crt_bulk_t free the bulk handle again.
+		 */
+		parent_rpc_priv->crp_coreq_hdr.coh_bulk_hdl = NULL;
 	}
-	/* correspond to addref in crt_reply_send */
+	/* correspond to addref in crt_corpc_req_hdlr */
 	crt_req_decref(&parent_rpc_priv->crp_pub);
 
 out:
