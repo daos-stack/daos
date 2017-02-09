@@ -26,13 +26,16 @@
  */
 #define DD_SUBSYS	DD_FAC(mgmt)
 
+#include <daos/mgmt.h>
+#include <daos/event.h>
 #include "rpc.h"
 
 static int
-rip_cp(void *arg, daos_event_t *ev, int rc)
+rip_cp(struct daos_task *task, void *data)
 {
-	crt_rpc_t		*rpc = arg;
+	crt_rpc_t		*rpc = (crt_rpc_t *)data;
 	struct mgmt_svc_rip_out	*rip_out;
+	int                     rc = task->dt_result;
 
 	if (rc) {
 		D_ERROR("RPC error while killing rank: %d\n", rc);
@@ -53,7 +56,8 @@ out:
 }
 
 int
-dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force, daos_event_t *ev)
+dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
+		struct daos_task *task)
 {
 	crt_endpoint_t		 svr_ep;
 	crt_rpc_t		*rpc = NULL;
@@ -68,7 +72,7 @@ dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force, daos_event_t *ev)
 	svr_ep.ep_rank = rank;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE, 1);
-	rc = crt_req_create(daos_ev2ctx(ev), svr_ep, opc, &rpc);
+	rc = crt_req_create(daos_task2ctx(task), svr_ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
 			rc);
@@ -82,11 +86,7 @@ dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force, daos_event_t *ev)
 	/** fill in request buffer */
 	rip_in->rip_flags = force;
 
-	rc = daos_event_register_comp_cb(ev, rip_cp, rpc);
-	if (rc != 0)
-		D_GOTO(err_rpc, rc);
-
-	rc = daos_event_launch(ev);
+	rc = daos_task_register_comp_cb(task, rip_cp, rpc);
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -94,7 +94,7 @@ dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force, daos_event_t *ev)
 	D_DEBUG(DB_MGMT, "killing rank %u\n", rank);
 
 	/** send the request */
-	return daos_rpc_send(rpc, ev);
+	return daos_rpc_send(rpc, task);
 
 err_rpc:
 	crt_req_decref(rpc);

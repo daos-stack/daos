@@ -33,11 +33,6 @@
 #include <daos_errno.h>
 #include <daos/list.h>
 #include <daos/hash.h>
-#include <daos/rpc.h>
-
-typedef int (*daos_task_func_t)(struct daos_task *);
-typedef int (*daos_task_comp_cb_t)(struct daos_task *, void *arg);
-typedef int (*daos_task_result_cb_t)(struct daos_task *, void *arg);
 
 /**
  * daos_task is used to track single asynchronous operation.
@@ -67,7 +62,11 @@ struct daos_sched {
 		uint64_t	ds_space[48];
 	}			ds_private;
 };
-typedef int (*daos_sched_comp_cb_t)(void *arg, int rc);
+
+typedef int (*daos_sched_comp_cb_t)(void *args, int rc);
+typedef int (*daos_task_func_t)(struct daos_task *);
+typedef int (*daos_task_comp_cb_t)(struct daos_task *, void *arg);
+typedef int (*daos_task_result_cb_t)(struct daos_task *, void *arg);
 
 void *
 daos_task2arg(struct daos_task *task);

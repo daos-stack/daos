@@ -30,43 +30,29 @@ daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		     daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
 		     daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_tier_fetch_cont(poh, cont_id, fetch_ep, obj_list, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_tier_fetch_cont(poh, cont_id, fetch_ep, obj_list, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
 dct_tier_ping(uint32_t ping_val, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_tier_ping(ping_val, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_tier_ping(ping_val, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }

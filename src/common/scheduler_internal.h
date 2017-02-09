@@ -59,8 +59,6 @@ struct daos_task_private {
 		uint32_t	dtp_buf_size;
 	}			dtp_buf;
 
-	struct daos_op_sp	dtp_sp;
-
 	uint32_t		dtp_complete:1,
 				dtp_running:1;
 	int			dtp_dep_cnt;

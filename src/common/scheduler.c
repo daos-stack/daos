@@ -107,12 +107,6 @@ daos_task_buf_get(struct daos_task *task, int size)
 	return ptr;
 }
 
-void *
-daos_task2sp(struct daos_task *task)
-{
-	return &daos_task2priv(task)->dtp_sp;
-}
-
 struct daos_sched *
 daos_task2sched(struct daos_task *task)
 {

@@ -31,45 +31,31 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 		  const daos_rank_list_t *svc, unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
-
-	rc = dc_pool_connect(uuid, grp, svc, flags, poh, info, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_pool_connect(uuid, grp, svc, flags, poh, info, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
-
-	rc = dc_pool_disconnect(poh, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_pool_disconnect(poh, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
@@ -87,23 +73,16 @@ daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 int
 daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
-
-	rc = dc_pool_exclude(poh, tgts, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_pool_exclude(poh, tgts, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 static void

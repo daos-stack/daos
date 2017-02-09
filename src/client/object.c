@@ -23,7 +23,7 @@
 #define DD_SUBSYS	DD_FAC(client)
 
 #include <daos/object.h>
-#include <daos/scheduler.h>
+#include <daos/event.h>
 #include <daos/container.h>
 #include "client_internal.h"
 

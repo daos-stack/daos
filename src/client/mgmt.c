@@ -30,23 +30,16 @@ int
 daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 		  daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
-
-	rc = dc_mgmt_svc_rip(grp, rank, force, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_mgmt_svc_rip(grp, rank, force, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
@@ -55,67 +48,45 @@ daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 		 daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
 		 daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
-
-	rc = dc_pool_create(mode, uid, gid, grp, tgts, dev, size, svc, uuid,
-			    ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_pool_create(mode, uid, gid, grp, tgts, dev, size, svc, uuid, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
 daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 		  daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
-
-	rc = dc_pool_destroy(uuid, grp, force, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_pool_destroy(uuid, grp, force, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
 daos_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc)
-			return rc;
-	}
-
-	rc = dc_pool_evict(uuid, grp, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_pool_evict(uuid, grp, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }

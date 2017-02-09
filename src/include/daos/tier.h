@@ -27,12 +27,13 @@
 #define __DC_TIER_H__
 
 #include <daos_types.h>
+#include <daos/scheduler.h>
 
 int  dc_tier_init(void);
 void dc_tier_fini(void);
-int dc_tier_ping(uint32_t ping_val, daos_event_t *ev);
+int dc_tier_ping(uint32_t ping_val, struct daos_task *task);
 int
 dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		   daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
-		   daos_event_t *ev);
+		   struct daos_task *task);
 #endif /* __DC_TIER_H__ */

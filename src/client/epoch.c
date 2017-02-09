@@ -29,23 +29,16 @@ int
 daos_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
 		 daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_epoch_query(coh, state, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_epoch_query(coh, state, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
@@ -60,92 +53,64 @@ int
 daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
 		   daos_epoch_state_t *state, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_epoch_discard(coh, epoch, state, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_epoch_discard(coh, epoch, state, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
 daos_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
 		daos_epoch_state_t *state, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_epoch_hold(coh, epoch, state, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_epoch_hold(coh, epoch, state, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
 daos_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
 		daos_epoch_state_t *state, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_epoch_slip(coh, epoch, state, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_epoch_slip(coh, epoch, state, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
 daos_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
 		  daos_epoch_state_t *state, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_epoch_commit(coh, epoch, state, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_epoch_commit(coh, epoch, state, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int

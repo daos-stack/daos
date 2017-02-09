@@ -31,7 +31,7 @@
 #include <daos_errno.h>
 #include <daos/list.h>
 #include <daos/hash.h>
-#include <daos/rpc.h>
+#include <daos/scheduler.h>
 
 enum daos_ev_flags {
 	/**
@@ -51,17 +51,7 @@ enum daos_ev_flags {
 };
 
 struct daos_task;
-typedef int (*daos_sp_comp_cb_t)(struct daos_task *task, int rc);
-/** Common scratchpad for the operation in flight */
-struct daos_op_sp {
-	crt_rpc_t		*sp_rpc;
-	daos_handle_t		 sp_hdl;
-	daos_handle_t		*sp_hdlp;
-	daos_sp_comp_cb_t	 sp_callback;
-	void			*sp_arg;
-};
 
-typedef int (*daos_event_abort_cb_t)(struct daos_op_sp *, daos_event_t *);
 typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
 
 /**
@@ -123,14 +113,6 @@ daos_event_launch(struct daos_event *ev);
 crt_context_t
 daos_ev2ctx(struct daos_event *ev);
 
-/**
- * Return scratchpad associated with a particular event
- *
- * \param ev [IN]	event to retrieve scratchpad.
- */
-struct daos_op_sp *
-daos_ev2sp(struct daos_event *ev);
-
 struct daos_sched *
 daos_ev2sched(struct daos_event *ev);
 
@@ -151,5 +133,9 @@ daos_event_destroy_children(struct daos_event *ev, bool force);
 int
 daos_event_register_comp_cb(struct daos_event *ev,
 			    daos_event_comp_cb_t cb, void *arg);
+
+int
+daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg, int arg_size,
+		      struct daos_task **taskp, daos_event_t **evp);
 
 #endif /*  __DAOS_EV_INTERNAL_H__ */

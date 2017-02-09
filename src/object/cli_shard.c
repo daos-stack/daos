@@ -164,11 +164,6 @@ obj_shard_rw_bulk_fini(crt_rpc_t *rpc)
 	orw->orw_bulks.da_count = 0;
 }
 
-struct rw_async_arg {
-	daos_sg_list_t *rwaa_sgls;
-	uint32_t       rwaa_nr;
-};
-
 static int
 dc_obj_shard_sgl_copy(daos_sg_list_t *dst_sgl, uint32_t dst_nr,
 		      daos_sg_list_t *src_sgl, uint32_t src_nr)
@@ -213,15 +208,23 @@ dc_obj_shard_sgl_copy(daos_sg_list_t *dst_sgl, uint32_t dst_nr,
 	return 0;
 }
 
+struct rw_args_t {
+	crt_rpc_t	*rpc;
+	daos_handle_t	*hdlp;
+	daos_sg_list_t	*rwaa_sgls;
+	uint32_t	rwaa_nr;
+};
+
 static int
-obj_rw_cp(struct daos_task *task, int rc)
+dc_rw_cb(struct daos_task *task, void *arg)
 {
-	struct daos_op_sp	*sp = daos_task2sp(task);
+	struct rw_args_t	*rw_args = (struct rw_args_t *)arg;
 	struct obj_rw_in	*orw;
 	int			opc;
-	int			ret;
+	int                     ret = task->dt_result;
+	int			rc = 0;
 
-	opc = opc_get(sp->sp_rpc->cr_opc);
+	opc = opc_get(rw_args->rpc->cr_opc);
 	if ((opc == DAOS_OBJ_RPC_FETCH &&
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FETCH_TIMEOUT)) ||
 	    (opc == DAOS_OBJ_RPC_UPDATE &&
@@ -232,22 +235,22 @@ obj_rw_cp(struct daos_task *task, int rc)
 	    DAOS_FAIL_CHECK(DAOS_OBJ_UPDATE_NOSPACE))
 		D_GOTO(out, rc = -DER_NOSPACE);
 
-	orw = crt_req_get(sp->sp_rpc);
+	orw = crt_req_get(rw_args->rpc);
 	D_ASSERT(orw != NULL);
-	if (rc != 0) {
+	if (ret != 0) {
 		/* If any failure happens inside Cart, let's reset
 		 * failure to TIMEDOUT, so the upper layer can retry
 		 **/
 		D_ERROR("RPC %d failed: %d\n",
-			opc_get(sp->sp_rpc->cr_opc), rc);
-		D_GOTO(out, rc);
+			opc_get(rw_args->rpc->cr_opc), ret);
+		D_GOTO(out, ret);
 	}
 
-	ret = obj_reply_get_status(sp->sp_rpc);
-	if (ret != 0)
-		D_GOTO(out, rc = ret);
+	rc = obj_reply_get_status(rw_args->rpc);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
-	if (opc_get(sp->sp_rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
+	if (opc_get(rw_args->rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		struct obj_rw_out *orwo;
 		daos_vec_iod_t	*iods;
 		uint64_t	*sizes;
@@ -255,7 +258,7 @@ obj_rw_cp(struct daos_task *task, int rc)
 		int		k;
 		int		idx = 0;
 
-		orwo = crt_reply_get(sp->sp_rpc);
+		orwo = crt_reply_get(rw_args->rpc);
 		iods = orw->orw_iods.da_arrays;
 		sizes = orwo->orw_sizes.da_arrays;
 
@@ -272,44 +275,42 @@ obj_rw_cp(struct daos_task *task, int rc)
 			}
 		}
 
-		if (sp->sp_arg != NULL) {
-			struct rw_async_arg	*arg = sp->sp_arg;
+		if (orwo->orw_sgls.da_count > 0) {
+			/* inline transfer */
+			rc = dc_obj_shard_sgl_copy(rw_args->rwaa_sgls,
+						   rw_args->rwaa_nr,
+						   orwo->orw_sgls.da_arrays,
+						   orwo->orw_sgls.da_count);
+		} else if (rw_args->rwaa_sgls != NULL) {
+			/* for bulk transfer it needs to update sg_nr.num_out */
+			daos_sg_list_t	*sgls = rw_args->rwaa_sgls;
+			uint32_t	*nrs;
+			uint32_t	nrs_count;
+			int		i;
 
-			if (orwo->orw_sgls.da_count > 0) {
-				/* inline transger */
-				rc = dc_obj_shard_sgl_copy(arg->rwaa_sgls,
-						arg->rwaa_nr,
-						orwo->orw_sgls.da_arrays,
-						orwo->orw_sgls.da_count);
-			} else if (arg->rwaa_sgls != NULL) {
-				/* for bulk transfer, it needs to update
-				 * sg_nr.num_out
-				 **/
-				daos_sg_list_t	*sgls = arg->rwaa_sgls;
-				uint32_t	*nrs;
-				uint32_t	nrs_count;
-				int		i;
-
-				nrs = orwo->orw_nrs.da_arrays;
-				nrs_count = orwo->orw_nrs.da_count;
-				if (nrs_count != arg->rwaa_nr) {
-					D_ERROR("Invalid nrs %u != %u\n",
-						nrs_count, arg->rwaa_nr);
-					D_GOTO(out, rc = -DER_PROTO);
-				}
-
-				/* update sgl_nr */
-				for (i = 0; i < nrs_count; i++)
-					sgls[i].sg_nr.num_out = nrs[i];
+			nrs = orwo->orw_nrs.da_arrays;
+			nrs_count = orwo->orw_nrs.da_count;
+			if (nrs_count != rw_args->rwaa_nr) {
+				D_ERROR("Invalid nrs %u != %u\n", nrs_count,
+					rw_args->rwaa_nr);
+				D_GOTO(out, rc = -DER_PROTO);
 			}
-			D_FREE_PTR(arg);
+
+			/* update sgl_nr */
+			for (i = 0; i < nrs_count; i++)
+				sgls[i].sg_nr.num_out = nrs[i];
 		}
 	}
 out:
-	obj_shard_rw_bulk_fini(sp->sp_rpc);
-	crt_req_decref(sp->sp_rpc);
-	dc_pool_put((struct dc_pool *)sp->sp_hdlp);
-	return rc;
+	obj_shard_rw_bulk_fini(rw_args->rpc);
+	crt_req_decref(rw_args->rpc);
+	dc_pool_put((struct dc_pool *)rw_args->hdlp);
+
+	D_FREE_PTR(rw_args);
+
+	if (ret == 0 || daos_obj_retry_error(rc))
+		ret = rc;
+	return ret;
 }
 
 static inline bool
@@ -344,30 +345,6 @@ obj_shard_dkey2tag(struct dc_obj_shard *dobj, daos_dkey_t *dkey)
 	hash %= dobj->do_part_nr;
 
 	return hash;
-}
-
-int
-dc_obj_shard_rpc_cb(const struct crt_cb_info *cb_info)
-{
-	struct daos_task	*task = cb_info->cci_arg;
-	struct daos_op_sp	*sp = daos_task2sp(task);
-	int			rc = cb_info->cci_rc;
-
-	if (cb_info->cci_rc == -DER_TIMEDOUT)
-		/** TODO */
-		;
-
-	if (sp->sp_callback != NULL) {
-		int err;
-
-		err = sp->sp_callback(task, rc);
-		if (rc == 0 || daos_obj_retry_error(err))
-			rc = err;
-	}
-
-	daos_task_complete(task, rc);
-
-	return 0;
 }
 
 static uint64_t
@@ -467,10 +444,9 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 {
 	struct dc_obj_shard	*dobj;
 	struct dc_pool		*pool;
-	struct rw_async_arg	*rwaa = NULL;
 	crt_rpc_t		*req;
 	struct obj_rw_in	*orw;
-	struct daos_op_sp	*sp;
+	struct rw_args_t	*rw_args = NULL;
 	crt_endpoint_t		tgt_ep;
 	uuid_t			cont_hdl_uuid;
 	daos_size_t		total_len;
@@ -533,13 +509,13 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 		total_len = sgls_buf_len(sgls, nr);
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FAIL))
-		D_GOTO(out_bulk, rc = -DER_INVAL);
+		D_GOTO(out_req, rc = -DER_INVAL);
 
 	if (total_len >= OBJ_BULK_LIMIT) {
 		/* Transfer data by bulk */
 		rc = obj_shard_rw_bulk_prep(req, nr, sgls, task);
 		if (rc != 0)
-			D_GOTO(out_bulk, rc);
+			D_GOTO(out_req, rc);
 		orw->orw_sgls.da_count = 0;
 		orw->orw_sgls.da_arrays = NULL;
 	} else {
@@ -553,36 +529,41 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 		orw->orw_bulks.da_arrays = NULL;
 	}
 
-	sp = daos_task2sp(task);
+	D_ALLOC_PTR(rw_args);
+	if (rw_args == NULL)
+		D_GOTO(out_bulk, rc = -DER_NOMEM);
 	crt_req_addref(req);
-	sp->sp_rpc = req;
-	sp->sp_callback = obj_rw_cp;
-	sp->sp_hdlp = (daos_handle_t *)pool;
+	rw_args->rpc = req;
+	rw_args->hdlp = (daos_handle_t *)pool;
 
 	if (opc == DAOS_OBJ_RPC_FETCH) {
 		/* remember the sgl to copyout the data inline for fetch */
-		D_ALLOC_PTR(rwaa);
-		if (rwaa == NULL)
-			D_GOTO(out_bulk, rc);
-		rwaa->rwaa_nr = nr;
-		rwaa->rwaa_sgls = sgls;
-		sp->sp_arg = rwaa;
+		rw_args->rwaa_nr = nr;
+		rw_args->rwaa_sgls = sgls;
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_CRT_ERROR))
-		D_GOTO(out_bulk, rc = -DER_CRT_HG);
+		D_GOTO(out_args, rc = -DER_CRT_HG);
 
-	rc = crt_req_send(req, dc_obj_shard_rpc_cb, task);
+	rc = daos_task_register_comp_cb(task, dc_rw_cb, rw_args);
+	if (rc != 0)
+		D_GOTO(out_args, rc);
+
+	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
 		D_ERROR("update/fetch rpc failed rc %d\n", rc);
-		D_GOTO(out_bulk, rc);
+		D_GOTO(out_args, rc);
 	}
 
 	return rc;
+
+out_args:
+	D_FREE_PTR(rw_args);
+	crt_req_decref(req);
 out_bulk:
-	obj_shard_rw_bulk_fini(req);
-	if (rwaa != NULL)
-		D_FREE_PTR(rwaa);
+	if (total_len >= OBJ_BULK_LIMIT)
+		obj_shard_rw_bulk_fini(req);
+out_req:
 	crt_req_decref(req);
 out_pool:
 	dc_pool_put(pool);
@@ -612,7 +593,9 @@ dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
 			    sgls, map_ver, task);
 }
 
-struct enum_async_arg {
+struct enum_args_t {
+	crt_rpc_t	*rpc;
+	daos_handle_t	*hdlp;
 	uint32_t	*eaa_nr;
 	daos_key_desc_t *eaa_kds;
 	daos_hash_out_t *eaa_anchor;
@@ -621,65 +604,70 @@ struct enum_async_arg {
 };
 
 static int
-enumerate_cp(struct daos_task *task, int rc)
+dc_enumerate_cb(struct daos_task *task, void *arg)
 {
-	struct daos_op_sp	*sp = daos_task2sp(task);
+	struct enum_args_t	*enum_args = (struct enum_args_t *)arg;
 	struct obj_key_enum_in	*oei;
 	struct obj_key_enum_out	*oeo;
-	struct enum_async_arg	*eaa;
 	int			tgt_tag;
+	int			ret = task->dt_result;
+	int			rc = 0;
 
-	oei = crt_req_get(sp->sp_rpc);
+	oei = crt_req_get(enum_args->rpc);
 	D_ASSERT(oei != NULL);
-	eaa = sp->sp_arg;
-	D_ASSERT(eaa != NULL);
-	if (rc != 0) {
+
+	if (ret != 0) {
 		/* If any failure happens inside Cart, let's reset
 		 * failure to TIMEDOUT, so the upper layer can retry
 		 **/
 		D_ERROR("RPC %d failed: %d\n",
-			opc_get(sp->sp_rpc->cr_opc), rc);
-		D_GOTO(out, rc);
+			opc_get(enum_args->rpc->cr_opc), ret);
+		D_GOTO(out, ret);
 	}
 
-	oeo = crt_reply_get(sp->sp_rpc);
+	oeo = crt_reply_get(enum_args->rpc);
 	if (oeo->oeo_ret < 0)
 		D_GOTO(out, rc = oeo->oeo_ret);
 
-	if (*eaa->eaa_nr < oeo->oeo_kds.da_count) {
+	if (*enum_args->eaa_nr < oeo->oeo_kds.da_count) {
 		D_ERROR("DAOS_OBJ_RPC_ENUMERATE return more kds, rc: %d\n",
 			-DER_PROTO);
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
-	*(eaa->eaa_nr) = oeo->oeo_kds.da_count;
-	memcpy(eaa->eaa_kds, oeo->oeo_kds.da_arrays,
-	       sizeof(*eaa->eaa_kds) * oeo->oeo_kds.da_count);
+	*(enum_args->eaa_nr) = oeo->oeo_kds.da_count;
+	memcpy(enum_args->eaa_kds, oeo->oeo_kds.da_arrays,
+	       sizeof(*enum_args->eaa_kds) * oeo->oeo_kds.da_count);
 
-	enum_anchor_copy_hkey(eaa->eaa_anchor, &oeo->oeo_anchor);
+	enum_anchor_copy_hkey(enum_args->eaa_anchor, &oeo->oeo_anchor);
 	if (daos_hash_is_eof(&oeo->oeo_anchor) &&
-	    opc_get(sp->sp_rpc->cr_opc) == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
-		tgt_tag = enum_anchor_get_tag(eaa->eaa_anchor);
-		if (tgt_tag < eaa->eaa_obj->do_part_nr - 1) {
-			enum_anchor_reset_hkey(eaa->eaa_anchor);
-			enum_anchor_set_tag(eaa->eaa_anchor, ++tgt_tag);
+	    opc_get(enum_args->rpc->cr_opc) == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
+		tgt_tag = enum_anchor_get_tag(enum_args->eaa_anchor);
+		if (tgt_tag < enum_args->eaa_obj->do_part_nr - 1) {
+			enum_anchor_reset_hkey(enum_args->eaa_anchor);
+			enum_anchor_set_tag(enum_args->eaa_anchor, ++tgt_tag);
 		}
 	}
 
 	if (oeo->oeo_sgl.sg_nr.num > 0 && oeo->oeo_sgl.sg_iovs != NULL)
-		rc = dc_obj_shard_sgl_copy(eaa->eaa_sgl, 1, &oeo->oeo_sgl, 1);
-out:
-	if (eaa->eaa_obj != NULL)
-		obj_shard_decref(eaa->eaa_obj);
+		rc = dc_obj_shard_sgl_copy(enum_args->eaa_sgl, 1, &oeo->oeo_sgl,
+					   1);
 
-	D_FREE_PTR(eaa);
+out:
+	if (enum_args->eaa_obj != NULL)
+		obj_shard_decref(enum_args->eaa_obj);
 
 	if (oei->oei_bulk != NULL)
 		crt_bulk_free(oei->oei_bulk);
 
-	crt_req_decref(sp->sp_rpc);
-	dc_pool_put((struct dc_pool *)sp->sp_hdlp);
-	return rc;
+	crt_req_decref(enum_args->rpc);
+	dc_pool_put((struct dc_pool *)enum_args->hdlp);
+
+	D_FREE_PTR(enum_args);
+
+	if (ret == 0 || daos_obj_retry_error(rc))
+		ret = rc;
+	return ret;
 }
 
 int
@@ -695,8 +683,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	struct dc_obj_shard	*dobj;
 	uuid_t			cont_hdl_uuid;
 	struct obj_key_enum_in	*oei;
-	struct enum_async_arg	*eaa;
-	struct daos_op_sp	*sp;
+	struct enum_args_t	*enum_args = NULL;
 	daos_size_t		sgl_len;
 	int			rc;
 
@@ -750,33 +737,36 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 			D_GOTO(out_req, rc);
 	}
 
-	sp = daos_task2sp(task);
-	crt_req_addref(req);
-	sp->sp_rpc = req;
-	D_ALLOC_PTR(eaa);
-	if (eaa == NULL)
+	D_ALLOC_PTR(enum_args);
+	if (enum_args == NULL)
 		D_GOTO(out_bulk, rc = -DER_NOMEM);
+	crt_req_addref(req);
+	enum_args->rpc = req;
+	enum_args->hdlp = (daos_handle_t *)pool;
+	enum_args->eaa_nr = nr;
+	enum_args->eaa_kds = kds;
+	enum_args->eaa_anchor = anchor;
+	enum_args->eaa_obj = dobj;
+	enum_args->eaa_sgl = sgl;
 
-	eaa->eaa_nr = nr;
-	eaa->eaa_kds = kds;
-	eaa->eaa_anchor = anchor;
-	eaa->eaa_obj = dobj;
-	eaa->eaa_sgl = sgl;
-	sp->sp_arg = eaa;
-	sp->sp_callback = enumerate_cp;
-	sp->sp_hdlp = (daos_handle_t *)pool;
+	rc = daos_task_register_comp_cb(task, dc_enumerate_cb, enum_args);
+	if (rc != 0)
+		D_GOTO(out_eaa, rc);
 
-	rc = crt_req_send(req, dc_obj_shard_rpc_cb, task);
+	rc = daos_rpc_send(req, task);
 	if (rc != 0) {
 		D_ERROR("enumerate rpc failed rc %d\n", rc);
 		D_GOTO(out_eaa, rc);
 	}
 
 	return rc;
+
 out_eaa:
-	D_FREE_PTR(eaa);
+	D_FREE_PTR(enum_args);
+	crt_req_decref(req);
 out_bulk:
-	crt_bulk_free(oei->oei_bulk);
+	if (sgl_len >= OBJ_BULK_LIMIT)
+		crt_bulk_free(oei->oei_bulk);
 out_req:
 	crt_req_decref(req);
 out_pool:

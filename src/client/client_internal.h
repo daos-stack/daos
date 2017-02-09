@@ -34,7 +34,6 @@
 #include <daos_event.h>
 #include <daos/event.h>
 #include <daos/list.h>
-#include <daos/scheduler.h>
 
 typedef struct daos_eq {
 	/* After event is completed, it will be moved to the eq_comp list */
@@ -59,7 +58,6 @@ struct daos_event_comp_list {
 
 struct daos_event_callback {
 	daos_event_comp_cb_t	evx_inline_cb;
-	struct daos_op_sp	evx_inline_cb_sp;
 	daos_list_t		evx_comp_list;
 };
 
@@ -145,10 +143,6 @@ daos_event_priv_wait();
 int
 daos_pool_query_async(daos_handle_t ph, daos_rank_list_t *tgts,
 		      daos_pool_info_t *info, struct daos_task *task);
-
-int
-daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg, int arg_size,
-		      struct daos_task **taskp, daos_event_t **evp);
 
 int
 daos_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);

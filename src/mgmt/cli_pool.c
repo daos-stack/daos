@@ -25,21 +25,29 @@
  */
 #define DD_SUBSYS	DD_FAC(mgmt)
 
+#include <daos/mgmt.h>
+#include <daos/event.h>
 #include "rpc.h"
 
+struct pool_create_arg {
+	crt_rpc_t               *rpc;
+	daos_rank_list_t	*svc;
+};
+
 static int
-pool_create_cp(void *arg, daos_event_t *ev, int rc)
+pool_create_cp(struct daos_task *task, void *data)
 {
-	struct daos_op_sp		*sp = arg;
-	daos_rank_list_t		*svc = sp->sp_arg;
+	struct pool_create_arg		*arg = (struct pool_create_arg *)data;
+	daos_rank_list_t		*svc = arg->svc;
 	struct mgmt_pool_create_out	*pc_out;
+	int				rc = task->dt_result;
 
 	if (rc) {
 		D_ERROR("RPC error while disconnecting from pool: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	pc_out = crt_reply_get(sp->sp_rpc);
+	pc_out = crt_reply_get(arg->rpc);
 	rc = pc_out->pc_rc;
 	if (rc) {
 		D_ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
@@ -49,8 +57,9 @@ pool_create_cp(void *arg, daos_event_t *ev, int rc)
 	/** report list of targets running the metadata service */
 	daos_rank_list_copy(svc, pc_out->pc_svc, false);
 out:
-	daos_group_detach(sp->sp_rpc->cr_ep.ep_grp);
-	crt_req_decref(sp->sp_rpc);
+	daos_group_detach(arg->rpc->cr_ep.ep_grp);
+	crt_req_decref(arg->rpc);
+	D_FREE_PTR(arg);
 	return rc;
 }
 
@@ -58,14 +67,14 @@ int
 dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	       const char *grp, const daos_rank_list_t *tgts, const char *dev,
 	       daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
-	       daos_event_t *ev)
+	       struct daos_task *task)
 {
-	crt_endpoint_t			 svr_ep;
+	crt_endpoint_t			svr_ep;
 	crt_rpc_t			*rpc_req = NULL;
-	crt_opcode_t			 opc;
+	crt_opcode_t			opc;
 	struct mgmt_pool_create_in	*pc_in;
-	struct daos_op_sp		*sp;
-	int				 rc = 0;
+	struct pool_create_arg		*arg;
+	int				rc = 0;
 
 	if (dev == NULL || strlen(dev) == 0) {
 		D_ERROR("Invalid parameter of dev (NULL or empty string).\n");
@@ -81,11 +90,11 @@ dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_CREATE, DAOS_MGMT_MODULE, 1);
-	rc = crt_req_create(daos_ev2ctx(ev), svr_ep, opc, &rpc_req);
+	rc = crt_req_create(daos_task2ctx(task), svr_ep, opc, &rpc_req);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_POOL_CREATE) failed, rc: %d.\n",
 			rc);
-		D_GOTO(out, rc);
+		D_GOTO(out_grp, rc);
 	}
 
 	D_ASSERT(rpc_req != NULL);
@@ -103,48 +112,48 @@ dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	pc_in->pc_tgt_size = size;
 	pc_in->pc_svc_nr = svc->rl_nr.num;
 
-	/** fill in scratchpad associated with the event */
-	sp = daos_ev2sp(ev);
-	crt_req_addref(rpc_req); /** for scratchpad */
-	sp->sp_rpc = rpc_req;
-	sp->sp_arg = svc;
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		D_GOTO(out_put_req, rc = -DER_NOMEM);
 
-	rc = daos_event_register_comp_cb(ev, pool_create_cp, sp);
-	if (rc != 0)
-		D_GOTO(out_put_req, rc);
+	crt_req_addref(rpc_req);
+	arg->rpc = rpc_req;
+	arg->svc = svc;
 
-	rc = daos_event_launch(ev);
+	rc = daos_task_register_comp_cb(task, pool_create_cp, arg);
 	if (rc != 0)
-		D_GOTO(out_put_req, rc);
+		D_GOTO(out_arg, rc);
 
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(uuid));
 
 	/** send the request */
-	rc = daos_rpc_send(rpc_req, ev);
-out:
-	return rc;
+	return daos_rpc_send(rpc_req, task);
 
+out_arg:
+	D_FREE_PTR(arg);
+	crt_req_decref(rpc_req);
 out_put_req:
-	/** dec ref taken for scratchpad */
 	crt_req_decref(rpc_req);
-	/** dec ref taken for crt_req_create */
-	crt_req_decref(rpc_req);
+out_grp:
 	daos_group_detach(svr_ep.ep_grp);
-	D_GOTO(out, rc);
+out:
+	daos_task_complete(task, rc);
+	return rc;
 }
 
 static int
-pool_destroy_cp(void *arg, daos_event_t *ev, int rc)
+pool_destroy_cp(struct daos_task *task, void *data)
 {
-	struct daos_op_sp		*sp = arg;
+	crt_rpc_t			*rpc = (crt_rpc_t *)data;
 	struct mgmt_pool_destroy_out	*pd_out;
+	int				rc = task->dt_result;
 
 	if (rc) {
 		D_ERROR("RPC error while destroying pool: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	pd_out = crt_reply_get(sp->sp_rpc);
+	pd_out = crt_reply_get(rpc);
 	rc = pd_out->pd_rc;
 	if (rc) {
 		D_ERROR("MGMT_POOL_DESTROY replied failed, rc: %d\n", rc);
@@ -152,20 +161,19 @@ pool_destroy_cp(void *arg, daos_event_t *ev, int rc)
 	}
 
 out:
-	daos_group_detach(sp->sp_rpc->cr_ep.ep_grp);
-	crt_req_decref(sp->sp_rpc);
+	daos_group_detach(rpc->cr_ep.ep_grp);
+	crt_req_decref(rpc);
 	return rc;
 }
 
 int
 dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
-		daos_event_t *ev)
+		struct daos_task *task)
 {
 	crt_endpoint_t			 svr_ep;
 	crt_rpc_t			*rpc_req = NULL;
 	crt_opcode_t			 opc;
 	struct mgmt_pool_destroy_in	*pd_in;
-	struct daos_op_sp		*sp;
 	int				 rc = 0;
 
 	if (uuid_is_null(uuid)) {
@@ -180,11 +188,11 @@ dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_DESTROY, DAOS_MGMT_MODULE, 1);
-	rc = crt_req_create(daos_ev2ctx(ev), svr_ep, opc, &rpc_req);
+	rc = crt_req_create(daos_task2ctx(task), svr_ep, opc, &rpc_req);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_POOL_DESTROY) failed, rc: %d.\n",
 			rc);
-		D_GOTO(out, rc);
+		D_GOTO(out_group, rc);
 	}
 
 	D_ASSERT(rpc_req != NULL);
@@ -196,32 +204,25 @@ dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	pd_in->pd_grp = (crt_string_t)grp;
 	pd_in->pd_force = (force == 0) ? false : true;
 
-	/** fill in scratchpad associated with the event */
-	sp = daos_ev2sp(ev);
-	crt_req_addref(rpc_req); /** for scratchpad */
-	sp->sp_rpc = rpc_req;
+	crt_req_addref(rpc_req);
 
-	rc = daos_event_register_comp_cb(ev, pool_destroy_cp,
-					 sp);
-	if (rc != 0)
-		D_GOTO(out_put_req, rc);
-
-	rc = daos_event_launch(ev);
+	rc = daos_task_register_comp_cb(task, pool_destroy_cp, rpc_req);
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
 	D_DEBUG(DB_MGMT, DF_UUID": destroying pool\n", DP_UUID(uuid));
 
 	/** send the request */
-	rc = daos_rpc_send(rpc_req, ev);
-out:
-	return rc;
+	return daos_rpc_send(rpc_req, task);
 
 out_put_req:
-	/** dec ref taken for scratchpad */
+	/** dec ref taken for task args */
 	crt_req_decref(rpc_req);
 	/** dec ref taken for crt_req_create */
 	crt_req_decref(rpc_req);
+out_group:
 	daos_group_detach(svr_ep.ep_grp);
-	D_GOTO(out, rc);
+out:
+	daos_task_complete(task, rc);
+	return rc;
 }

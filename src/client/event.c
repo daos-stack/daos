@@ -271,12 +271,6 @@ daos_ev2ctx(struct daos_event *ev)
 	return daos_ev2evx(ev)->evx_ctx;
 }
 
-struct daos_op_sp *
-daos_ev2sp(struct daos_event *ev)
-{
-	return &daos_ev2evx(ev)->evx_callback.evx_inline_cb_sp;
-}
-
 daos_handle_t
 daos_ev2eqh(struct daos_event *ev)
 {
@@ -291,12 +285,6 @@ daos_event_register_comp_cb(struct daos_event *ev,
 {
 	struct daos_event_comp_list	*ecl;
 	struct daos_event_private	*evx = daos_ev2evx(ev);
-
-	if (arg == daos_ev2sp(ev) &&
-	    evx->evx_callback.evx_inline_cb == NULL) {
-		evx->evx_callback.evx_inline_cb = cb;
-		return 0;
-	}
 
 	D_ALLOC_PTR(ecl);
 	if (ecl == NULL)
@@ -319,15 +307,6 @@ daos_event_complete_cb(struct daos_event_private *evx, int rc)
 	struct daos_event_comp_list	*tmp;
 	int				 ret = rc;
 	int				 err;
-
-	if (evx->evx_callback.evx_inline_cb != NULL) {
-		err = evx->evx_callback.evx_inline_cb(
-				&evx->evx_callback.evx_inline_cb_sp,
-				daos_evx2ev(evx), rc);
-		evx->evx_callback.evx_inline_cb = NULL;
-		if (ret == 0)
-			ret = err;
-	}
 
 	daos_list_for_each_entry_safe(ecl, tmp,
 				      &evx->evx_callback.evx_comp_list,
@@ -1235,29 +1214,30 @@ daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg,
 
 	D_ALLOC_PTR(task);
 	if (task == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(err_sched, rc = -DER_NOMEM);
 
 	rc = daos_task_init(task, NULL, arg, arg_size, sched, NULL);
-	if (rc != 0) {
-		D_FREE_PTR(task);
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
+	if (rc != 0)
+		D_GOTO(err_task, rc = -DER_NOMEM);
 
 	if (comp_cb != NULL) {
 		rc = daos_task_register_comp_cb(task, comp_cb, NULL);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D_GOTO(err_task, rc);
 	}
 
 	rc = daos_event_launch(ev);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(err_task, rc);
 
 	*taskp = task;
 	*evp = ev;
-out:
-	if (rc != 0)
-		daos_sched_cancel(sched, rc);
 
+	return rc;
+
+err_task:
+	D_FREE_PTR(task);
+err_sched:
+	daos_sched_cancel(sched, rc);
 	return rc;
 }

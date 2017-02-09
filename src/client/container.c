@@ -40,91 +40,63 @@ daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 int
 daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_cont_create(poh, uuid, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_cont_create(poh, uuid, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
 daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_cont_open(poh, uuid, flags, coh, info, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_cont_open(poh, uuid, flags, coh, info, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
 daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_cont_close(coh, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_cont_close(coh, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int
 daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 		  daos_event_t *ev)
 {
-	int rc;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_cont_destroy(poh, uuid, force, ev);
-	if (rc)
+	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	if (rc != 0)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	dc_cont_destroy(poh, uuid, force, task);
 
-	return rc;
+	return daos_client_result_wait(ev);
 }
 
 int

@@ -29,26 +29,34 @@
 #include <daos_tier.h>
 #include "dct_rpc.h"
 
+struct tier_ping_arg {
+	crt_rpc_t               *rpc;
+};
+
 static int
-dct_ping_cb(void *arg, daos_event_t *ev, int rc)
+dct_ping_cb(struct daos_task *task, void *data)
 {
-	struct daos_op_sp *sp = arg;
-	struct dct_ping_out *out;
+	struct tier_ping_arg	*arg = (struct tier_ping_arg *)data;
+	crt_rpc_t		*rpc = arg->rpc;
+	struct dct_ping_out	*out;
+	int                     rc = task->dt_result;
 
 	D_DEBUG(DF_MISC, "Entering dct_ping_cb\n");
 
 	/* extract the RPC reply */
-	out = crt_reply_get(sp->sp_rpc);
+	out = crt_reply_get(rpc);
 
 	D_DEBUG(DF_MISC, "DCT Ping Return Val %d\n", out->ping_out);
 
 	D_DEBUG(DF_MISC, "Leaving dct_ping_cb()");
 
+	crt_req_decref(rpc);
+	D_FREE_PTR(arg);
 	return rc;
 }
 
 int
-dc_tier_ping(uint32_t ping_val, daos_event_t *ev)
+dc_tier_ping(uint32_t ping_val, struct daos_task *task)
 {
 
 	D_DEBUG(DF_MISC, "Entering dct_ping()\n");
@@ -56,9 +64,8 @@ dc_tier_ping(uint32_t ping_val, daos_event_t *ev)
 	struct dct_ping_in	*in;
 	crt_endpoint_t		ep;
 	crt_rpc_t		*rpc;
+	struct tier_ping_arg	*arg;
 	int			rc;
-	struct daos_op_sp      *sp;
-
 
 	D_DEBUG(DF_MISC, "Ping Val to Issue: %d\n", ping_val);
 
@@ -68,7 +75,9 @@ dc_tier_ping(uint32_t ping_val, daos_event_t *ev)
 	ep.ep_tag = 0;
 
 	/* Create RPC and allocate memory for the various field-eybops */
-	rc = dct_req_create(daos_ev2ctx(ev), ep, DCT_PING, &rpc);
+	rc = dct_req_create(daos_task2ctx(task), ep, DCT_PING, &rpc);
+	if (rc != 0)
+		D_GOTO(out_task, rc);
 
 	/* Grab the input struct of the RPC */
 	in = crt_req_get(rpc);
@@ -76,36 +85,31 @@ dc_tier_ping(uint32_t ping_val, daos_event_t *ev)
 	/* set the value we want to send out */
 	in->ping_in = ping_val;
 
-	/*
-	 * Get the "scratch pad" data affiliated with this RPC
-	 * used to maintain per-call invocation state (I think)
-	 */
-	sp = daos_ev2sp(ev);
 	crt_req_addref(rpc);
-	sp->sp_rpc = rpc;
 
-	rc = daos_event_register_comp_cb(ev, dct_ping_cb, sp);
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		D_GOTO(out_req_put, rc = -DER_NOMEM);
+
+	arg->rpc = rpc;
+
+	rc = daos_task_register_comp_cb(task, dct_ping_cb, arg);
 	if (rc != 0)
-		D_GOTO(out_req_put, rc);
+		D_GOTO(out_arg, rc);
 
-	/* Mark the event as inflight and register our various callbacks */
-	rc = daos_event_launch(ev);
-	if (rc != 0)
-		D_GOTO(out_req_put, rc);
+	/** send the request */
+	rc = daos_rpc_send(rpc, task);
 
-	/*
-	 * If we fail, decrement the ref count....twice? Mimicking pattern seen
-	 * elsewhere
-	 */
-
-	/* And now actually issue the darn RPC */
-	rc = daos_rpc_send(rpc, ev);
 	D_DEBUG(DF_MISC, "leaving dct_ping()\n");
 
 	return rc;
 
+out_arg:
+	D_FREE_PTR(arg);
 out_req_put:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
+out_task:
+	daos_task_complete(task, rc);
 	return rc;
 }

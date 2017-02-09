@@ -33,28 +33,35 @@
 #include <daos/pool.h>
 #include "dct_rpc.h"
 
+struct tier_fetch_arg {
+	crt_rpc_t	*rpc;
+	struct dc_pool	*pool;
+	daos_handle_t	hdl;
+};
+
 static int
-dct_fetch_cb(void *arg, daos_event_t *ev, int rc)
+dct_fetch_cb(struct daos_task *task, void *data)
 {
-	struct daos_op_sp		*sp = arg;
-	struct dc_pool			*pool = (struct dc_pool *)sp->sp_arg;
-	struct tier_fetch_out		*tfo;
+	struct tier_fetch_arg	*arg = (struct tier_fetch_arg *)data;
+	struct dc_pool		*pool = arg->pool;
+	struct tier_fetch_out	*tfo;
+	int			rc = task->dt_result;
 
 	if (rc) {
 		D_ERROR("RPC error while fetching: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	tfo = crt_reply_get(sp->sp_rpc);
+	tfo = crt_reply_get(arg->rpc);
 	rc = tfo->tfo_ret;
 	if (rc) {
 		D_ERROR("failed to fetch: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	sp->sp_hdl.cookie = 0;
+	arg->hdl.cookie = 0;
 out:
-	crt_req_decref(sp->sp_rpc);
+	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
 	return rc;
 }
@@ -62,15 +69,14 @@ out:
 int
 dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		   daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
-		   daos_event_t *ev)
+		   struct daos_task *task)
 {
-
 	struct tier_fetch_in	*in;
 	crt_endpoint_t		ep;
 	crt_rpc_t		*rpc;
-	int			rc;
-	struct daos_op_sp       *sp;
+	struct tier_fetch_arg	*arg;
 	struct dc_pool		*pool;
+	int			rc;
 
 	D_DEBUG(DF_MISC, "Entering daos_fetch_container()\n");
 
@@ -80,7 +86,9 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	ep.ep_tag = 0;
 
 	/* Create RPC and allocate memory for the various field-eybops */
-	rc = dct_req_create(daos_ev2ctx(ev), ep, TIER_FETCH, &rpc);
+	rc = dct_req_create(daos_task2ctx(task), ep, TIER_FETCH, &rpc);
+	if (rc != 0)
+		D_GOTO(out_task, rc);
 
 	/* Grab the input struct of the RPC */
 	in = crt_req_get(rpc);
@@ -94,33 +102,33 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	uuid_copy(in->tfi_pool_hdl, pool->dp_pool_hdl);
 	in->tfi_ep  = fetch_ep;
 
-	/*
-	 * Get the "scratch pad" data affiliated with this RPC
-	 * used to maintain per-call invocation state (I think)
-	 */
-	sp = daos_ev2sp(ev);
 	crt_req_addref(rpc);
-	sp->sp_rpc = rpc;
-	sp->sp_hdl = poh;
-	sp->sp_arg = pool;
 
-	rc = daos_event_register_comp_cb(ev, dct_fetch_cb, sp);
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		D_GOTO(out_req_put, rc = -DER_NOMEM);
+
+	arg->rpc = rpc;
+	arg->hdl = poh;
+	arg->pool = pool;
+
+	rc = daos_task_register_comp_cb(task, dct_fetch_cb, arg);
 	if (rc != 0)
-		D_GOTO(out_req_put, rc);
+		D_GOTO(out_arg, rc);
 
-	/* Mark the event as inflight and register our various callbacks */
-	rc = daos_event_launch(ev);
-	if (rc != 0)
-		D_GOTO(out_req_put, rc);
+	/** send the request */
+	rc = daos_rpc_send(rpc, task);
 
-	/* And now actually issue the darn RPC */
-	rc = daos_rpc_send(rpc, ev);
-	D_DEBUG(DF_MISC, "leaving dct_ping()\n");
+	D_DEBUG(DF_MISC, "leaving dct_fetch()\n");
 
 	return rc;
 
+out_arg:
+	D_FREE_PTR(arg);
 out_req_put:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
+out_task:
+	daos_task_complete(task, rc);
 	return rc;
 }
