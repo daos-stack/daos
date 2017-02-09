@@ -73,7 +73,7 @@ vcoi_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 }
 
 static int
-vcoi_rec_free(struct btr_instance *tins, struct btr_record *rec)
+vcoi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	TMMID(struct vos_cookie_rec_df)	vce_rec_mmid;
 	struct umem_instance		*umm = &tins->ti_umm;

@@ -80,7 +80,7 @@ vo_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 }
 
 static int
-vo_rec_free(struct btr_instance *tins, struct btr_record *rec)
+vo_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
 	TMMID(struct vos_obj)	vo_rec_mmid;
@@ -396,7 +396,7 @@ vos_oid_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 }
 
 static int
-vos_oid_iter_delete(struct vos_iterator *iter)
+vos_oid_iter_delete(struct vos_iterator *iter, void *args)
 {
 	struct vos_oid_iter	*oiter = vos_iter2oid_iter(iter);
 	PMEMobjpool		*pop;
@@ -408,7 +408,7 @@ vos_oid_iter_delete(struct vos_iterator *iter)
 	pop = vos_co2pop(oiter->oit_chdl);
 
 	TX_BEGIN(pop) {
-		rc = dbtree_iter_delete(oiter->oit_hdl);
+		rc = dbtree_iter_delete(oiter->oit_hdl, args);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DF_VOS1, "Failed to delete oid entry: %d\n", rc);

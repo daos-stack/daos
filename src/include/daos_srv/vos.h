@@ -494,13 +494,19 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *entry,
  * Delete the current data entry of the iterator
  *
  * \param ih	[IN]	Iterator handle
+ * \param args	[IN/OUT]
+ *			Optional, Provide additional hints while
+ *			deletion to handle special cases.
+ *			for example return record of this node
+ *			to user instead of deleting.
  *
  * \return		Zero on Success
  *			-DER_NONEXIST if cursor does
  *			not exist. negative value if error
+ *
  */
 int
-vos_iter_delete(daos_handle_t ih);
+vos_iter_delete(daos_handle_t ih, void *args);
 
 /**
  * If the iterator has any element. The condition provided to vos_iter_prepare

@@ -227,9 +227,13 @@ typedef struct {
 	 * \param tins	[IN]	Tree instance which contains the root mmid
 	 *			and memory class etc.
 	 * \param rec	[IN]	The record to be destroyed.
+	 * \param args	[OUT]
+	 *			Optional: opaque buffer for providing arguments
+	 *			to handle special cases for free. for example,
+	 *			to return the freed record to the user
 	 */
 	int		(*to_rec_free)(struct btr_instance *tins,
-				       struct btr_record *rec);
+				       struct btr_record *rec, void *args);
 	/**
 	 * Fetch value or both key & value of a record.
 	 *
@@ -424,7 +428,7 @@ int  dbtree_update(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val);
 int  dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc,
 		  daos_iov_t *key, daos_iov_t *key_out, daos_iov_t *val_out);
 int  dbtree_lookup(daos_handle_t toh, daos_iov_t *key, daos_iov_t *val_out);
-int  dbtree_delete(daos_handle_t toh, daos_iov_t *key);
+int  dbtree_delete(daos_handle_t toh, daos_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
@@ -449,7 +453,7 @@ int dbtree_iter_next(daos_handle_t ih);
 int dbtree_iter_prev(daos_handle_t ih);
 int dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 		      daos_iov_t *val, daos_hash_out_t *anchor);
-int dbtree_iter_delete(daos_handle_t ih);
+int dbtree_iter_delete(daos_handle_t ih, void *args);
 int dbtree_iter_empty(daos_handle_t ih);
 
 /**

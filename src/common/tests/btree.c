@@ -103,7 +103,7 @@ ik_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 }
 
 static int
-ik_rec_free(struct btr_instance *tins, struct btr_record *rec)
+ik_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance *umm = &tins->ti_umm;
 	TMMID(struct ik_rec) irec_mmid;
@@ -112,6 +112,13 @@ ik_rec_free(struct btr_instance *tins, struct btr_record *rec)
 	irec_mmid = umem_id_u2t(rec->rec_mmid, struct ik_rec);
 	irec = umem_id2ptr_typed(umm, irec_mmid);
 
+	if (args != NULL) {
+		umem_id_t *rec_ret = (umem_id_t *) args;
+		 /** Provide the buffer to user */
+		*rec_ret	= rec->rec_mmid;
+		rec->rec_mmid	= UMMID_NULL;
+		return 0;
+	}
 	umem_free(umm, irec->ir_val_mmid);
 	umem_free_typed(umm, irec_mmid);
 
@@ -342,10 +349,40 @@ ik_btr_close_destroy(bool destroy)
 	return rc;
 }
 
+static int
+btr_rec_verify_delete(umem_id_t *rec, daos_iov_t *key)
+{
+	TMMID(struct ik_rec)	irec_mmid;
+	struct umem_instance	umm;
+	struct ik_rec		*irec;
+	int			rc;
+
+	rc = umem_class_init(&ik_uma, &umm);
+	if (rc != 0) {
+		D_ERROR("Failed to instantiate umem while vefify: %d\n", rc);
+		return -1;
+	}
+
+	irec_mmid = umem_id_u2t(*rec, struct ik_rec);
+	irec	  = umem_id2ptr_typed(&umm, irec_mmid);
+
+	if ((sizeof(irec->ir_key) != key->iov_len) ||
+	    (irec->ir_key != *((uint64_t *)key->iov_buf))) {
+		D_ERROR("Preserved record mismatch while delete\n");
+		return -1;
+	}
+
+	umem_free(&umm, irec->ir_val_mmid);
+	umem_free_typed(&umm, irec_mmid);
+
+	return 0;
+}
+
 enum ik_btr_opc {
 	BTR_OPC_UPDATE,
 	BTR_OPC_LOOKUP,
 	BTR_OPC_DELETE,
+	BTR_OPC_DELETE_RETAIN,
 };
 
 static char *
@@ -360,14 +397,17 @@ btr_opc2str(enum ik_btr_opc opc)
 		return "lookup";
 	case BTR_OPC_DELETE:
 		return "delete";
+	case BTR_OPC_DELETE_RETAIN:
+		return "delete and retain";
 	}
 }
 
 static int
 ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 {
-	int	count = 0;
-	int	rc;
+	int		count = 0;
+	umem_id_t	rec_mmid;
+	int		rc;
 
 	if (daos_handle_is_inval(ik_toh)) {
 		D_ERROR("Can't find opened tree\n");
@@ -412,7 +452,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 			break;
 
 		case BTR_OPC_DELETE:
-			rc = dbtree_delete(ik_toh, &key_iov);
+			rc = dbtree_delete(ik_toh, &key_iov, NULL);
 			if (rc != 0) {
 				D_ERROR("Failed to delete "DF_U64"\n", key);
 				return -1;
@@ -420,6 +460,26 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 			if (verbose)
 				D_PRINT("Deleted key "DF_U64"\n", key);
 
+			if (dbtree_is_empty(ik_toh))
+				D_PRINT("Tree is empty now\n");
+			break;
+
+		case BTR_OPC_DELETE_RETAIN:
+			rc = dbtree_delete(ik_toh, &key_iov, &rec_mmid);
+			if (rc != 0) {
+				D_ERROR("Failed to delete "DF_U64"\n", key);
+				return -1;
+			}
+
+			/** Verify and delete rec_mmid here */
+			rc = btr_rec_verify_delete(&rec_mmid, &key_iov);
+			if (rc != 0) {
+				D_ERROR("Failed to verify and delete rec\n");
+				return -1;
+			}
+
+			if (verbose)
+				D_PRINT("Deleted key "DF_U64"\n", key);
 			if (dbtree_is_empty(ik_toh))
 				D_PRINT("Tree is empty now\n");
 			break;
@@ -541,7 +601,7 @@ ik_btr_iterate(char *args)
 		if (d != 0) { /* delete */
 			D_PRINT("Delete "DF_U64": %s\n",
 				key, (char *)val_iov.iov_buf);
-			rc = dbtree_iter_delete(ih);
+			rc = dbtree_iter_delete(ih, NULL);
 			if (rc != 0) {
 				err = "delete";
 				goto failed;
@@ -683,6 +743,7 @@ static struct option btr_ops[] = {
 	{ "update",	required_argument,	NULL,	'u'	},
 	{ "find",	required_argument,	NULL,	'f'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
+	{ "del_retain", required_argument,	NULL,	'r'	},
 	{ "query",	no_argument,		NULL,	'q'	},
 	{ "iterate",	required_argument,	NULL,	'i'	},
 	{ "batch",	required_argument,	NULL,	'b'	},
@@ -706,7 +767,7 @@ main(int argc, char **argv)
 	D_ASSERT(rc == 0);
 
 	optind = 0;
-	while ((rc = getopt_long(argc, argv, "C:Docqu:d:f:i:b:",
+	while ((rc = getopt_long(argc, argv, "C:Docqu:d:r:f:i:b:",
 				 btr_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'C':
@@ -732,6 +793,10 @@ main(int argc, char **argv)
 			break;
 		case 'd':
 			rc = ik_btr_kv_operate(BTR_OPC_DELETE, optarg, true);
+			break;
+		case 'r':
+			rc = ik_btr_kv_operate(BTR_OPC_DELETE_RETAIN, optarg,
+					       true);
 			break;
 		case 'i':
 			rc = ik_btr_iterate(optarg);

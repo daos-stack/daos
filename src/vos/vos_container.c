@@ -73,7 +73,7 @@ vc_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 }
 
 static int
-vc_rec_free(struct btr_instance *tins, struct btr_record *rec)
+vc_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance		*umm = &tins->ti_umm;
 	struct vos_container		*vc_rec = NULL;
@@ -132,7 +132,7 @@ vc_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 exit:
 	if (rc != 0)
-		vc_rec_free(tins, rec);
+		vc_rec_free(tins, rec, NULL);
 
 	return rc;
 }
@@ -402,7 +402,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid)
 			pmemobj_tx_abort(EFAULT);
 		}
 
-		rc = dbtree_delete(vpool->vp_cont_ith, &del_key);
+		rc = dbtree_delete(vpool->vp_cont_ith, &del_key, NULL);
 	}  TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_ERROR("Destroying container transaction failed %d\n", rc);
@@ -580,10 +580,33 @@ vos_co_iter_probe(struct vos_iterator *iter, daos_hash_out_t *anchor)
 	return dbtree_iter_probe(co_iter->cot_hdl, opc, NULL, anchor);
 }
 
+static int
+vos_co_iter_delete(struct vos_iterator *iter, void *args)
+{
+	struct vos_co_iter	*co_iter = vos_iter2co_iter(iter);
+	PMEMobjpool		*pop;
+	int			rc  = 0;
+
+	D_DEBUG(DF_VOS2, "co-iter delete callback\n");
+	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
+	pop = vos_pool_ptr2pop(co_iter->cot_pool);
+
+	TX_BEGIN(pop) {
+		rc = dbtree_iter_delete(co_iter->cot_hdl, args);
+	} TX_ONABORT {
+		rc = umem_tx_errno(rc);
+		D_DEBUG(DF_VOS2, "Failed to delete oid entry: %d\n", rc);
+	} TX_END
+
+	return rc;
+
+}
+
 struct vos_iter_ops vos_co_iter_ops = {
 	.iop_prepare = vos_co_iter_prep,
 	.iop_finish  = vos_co_iter_fini,
 	.iop_probe   = vos_co_iter_probe,
 	.iop_next    = vos_co_iter_next,
 	.iop_fetch   = vos_co_iter_fetch,
+	.iop_delete  = vos_co_iter_delete,
 };

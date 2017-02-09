@@ -150,7 +150,7 @@ destroy_tree(daos_handle_t tree, daos_iov_t *key)
 			dbtree_close(hdl);
 			D_GOTO(out, rc);
 		}
-		rc = dbtree_delete(tree, key);
+		rc = dbtree_delete(tree, key, NULL);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	} else {
@@ -165,7 +165,7 @@ destroy_tree(daos_handle_t tree, daos_iov_t *key)
 
 			hdl_tmp = DAOS_HDL_INVAL;
 
-			rc_tmp = dbtree_delete(tree, key);
+			rc_tmp = dbtree_delete(tree, key, NULL);
 			if (rc_tmp != 0)
 				pmemobj_tx_abort(rc_tmp);
 		} TX_ONABORT {
@@ -273,7 +273,7 @@ err:
 }
 
 static int
-nv_rec_free(struct btr_instance *tins, struct btr_record *rec)
+nv_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct nv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
@@ -456,7 +456,7 @@ dbtree_nv_delete(daos_handle_t tree, const char *name)
 
 	daos_iov_set(&key, (void *)name, strlen(name) + 1);
 
-	rc = dbtree_delete(tree, &key);
+	rc = dbtree_delete(tree, &key, NULL);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DB_TRACE, "cannot find \"%s\"\n", name);
@@ -593,7 +593,7 @@ err:
 }
 
 static int
-uv_rec_free(struct btr_instance *tins, struct btr_record *rec)
+uv_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct uv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 
@@ -763,7 +763,7 @@ dbtree_uv_delete(daos_handle_t tree, const uuid_t uuid)
 
 	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
 
-	rc = dbtree_delete(tree, &key);
+	rc = dbtree_delete(tree, &key, NULL);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D_DEBUG(DB_TRACE, "cannot find "DF_UUID"\n",
@@ -891,7 +891,7 @@ ec_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
 }
 
 static int
-ec_rec_free(struct btr_instance *tins, struct btr_record *rec)
+ec_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	umem_free(&tins->ti_umm, rec->rec_mmid);
 	return 0;
@@ -1038,7 +1038,7 @@ dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
 
 	daos_iov_set(&key, &epoch, sizeof(epoch));
 
-	rc = dbtree_delete(tree, &key);
+	rc = dbtree_delete(tree, &key, NULL);
 	if (rc == -DER_NONEXIST)
 		D_DEBUG(DB_TRACE, "cannot find "DF_U64"\n", epoch);
 	else if (rc != 0)

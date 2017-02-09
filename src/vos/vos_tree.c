@@ -270,7 +270,8 @@ kbtr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 }
 
 static int
-kbtr_rec_free(struct btr_instance *tins, struct btr_record *rec)
+kbtr_rec_free(struct btr_instance *tins, struct btr_record *rec,
+	      void *args)
 {
 	struct vos_krec		*krec;
 	int			 rc = 0;
@@ -279,6 +280,7 @@ kbtr_rec_free(struct btr_instance *tins, struct btr_record *rec)
 		return 0;
 
 	krec = vos_rec2krec(tins, rec);
+
 	/* has subtree? */
 	if (krec->kr_btr.tr_class != 0) {
 		struct umem_attr uma;
@@ -499,10 +501,20 @@ ibtr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 }
 
 static int
-ibtr_rec_free(struct btr_instance *tins, struct btr_record *rec)
+ibtr_rec_free(struct btr_instance *tins, struct btr_record *rec,
+	      void *args)
 {
-	if (!UMMID_IS_NULL(rec->rec_mmid))
+
+	if (UMMID_IS_NULL(rec->rec_mmid))
+		return 0;
+
+	if (args != NULL) {
+		*(umem_id_t *)args = rec->rec_mmid;
+		rec->rec_mmid = UMMID_NULL; /** taken over by user */
+
+	} else {
 		umem_free(&tins->ti_umm, rec->rec_mmid);
+	}
 	return 0;
 }
 

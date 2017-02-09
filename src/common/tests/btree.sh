@@ -32,6 +32,9 @@ $BTR	-C ${IPL}o:$ORDER		\
 	-q				\
 	-f $KEYS			\
 	-d $KEYS			\
+    -u $RECORDS         \
+    -f $KEYS            \
+    -r $KEYS            \
 	-q				\
 	-u $RECORDS			\
 	-q				\

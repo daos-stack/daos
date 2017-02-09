@@ -212,7 +212,7 @@ epoch_discard(struct discard_context *dcx, int *empty_ret)
 			continue;
 		}
 
-		rc = vos_iter_delete(ih);
+		rc = vos_iter_delete(ih, NULL);
 		D_ASSERT(rc == 0 || rc != -DER_NONEXIST);
 		if (rc != 0) {
 			D_DEBUG(DB_EPC, "Failed to delete empty %s: %d\n",

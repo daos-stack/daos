@@ -204,7 +204,7 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 }
 
 int
-vos_iter_delete(daos_handle_t ih)
+vos_iter_delete(daos_handle_t ih, void *args)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 
@@ -224,7 +224,7 @@ vos_iter_delete(daos_handle_t ih)
 	if (iter->it_ops->iop_delete == NULL)
 		return -DER_NOSYS;
 
-	return iter->it_ops->iop_delete(iter);
+	return iter->it_ops->iop_delete(iter, args);
 }
 
 int

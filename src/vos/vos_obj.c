@@ -1662,7 +1662,7 @@ recx_iter_next(struct vos_obj_iter *oiter)
 }
 
 static int
-obj_iter_delete(struct vos_obj_iter *oiter)
+obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 {
 	int		rc = 0;
 	PMEMobjpool	*pop;
@@ -1671,7 +1671,7 @@ obj_iter_delete(struct vos_obj_iter *oiter)
 	pop = vos_oref2pop(oiter->it_oref);
 
 	TX_BEGIN(pop) {
-		rc = dbtree_iter_delete(oiter->it_hdl);
+		rc = dbtree_iter_delete(oiter->it_hdl, args);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DF_VOS1, "Failed to delete iter entry: %d\n", rc);
@@ -1835,7 +1835,7 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 }
 
 static int
-vos_obj_iter_delete(struct vos_iterator *iter)
+vos_obj_iter_delete(struct vos_iterator *iter, void *args)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
@@ -1846,7 +1846,7 @@ vos_obj_iter_delete(struct vos_iterator *iter)
 	case VOS_ITER_DKEY:
 	case VOS_ITER_AKEY:
 	case VOS_ITER_RECX:
-		return obj_iter_delete(oiter);
+		return obj_iter_delete(oiter, args);
 	}
 }
 

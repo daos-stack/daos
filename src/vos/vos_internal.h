@@ -667,7 +667,8 @@ struct vos_iter_ops {
 			     vos_iter_entry_t *it_entry,
 			     daos_hash_out_t *anchor);
 	/** Delete the record that the cursor points to */
-	int	(*iop_delete)(struct vos_iterator *iter);
+	int	(*iop_delete)(struct vos_iterator *iter,
+			      void *args);
 	/**
 	 * Optional, the iterator has no element.
 	 *
