@@ -157,6 +157,7 @@ class MultiRunner(PostRunner.PostRunner):
         _class = None
         name = self.test_info.get_test_info('use_daemon', 'name')
         logDir = os.path.join(logbase, name)
+        self.logger.info("Import daemon: %s", name)
         try:
             os.makedirs(logDir)
         except OSError:
@@ -215,13 +216,19 @@ class MultiRunner(PostRunner.PostRunner):
                 self.logdir, self.info, self.test_info)
             self.nodes.nodes_strategy(self.test_directives)
             rtn_info = None
+            subtest_results = []
             if self.test_info.get_test_info('use_daemon'):
                 self.daemon = self.import_daemon(self.logdir)
                 rtn |= self.daemon.launch_process()
             if not rtn:
                 rtn_info = self.execute_strategy()
                 rtn |= rtn_info['return_code']
-            self.post_run(rtn_info)
+            else:
+                rtn_info = {'duration' : 0, 'return_code' : rtn,
+                            'status' : "FAIL",
+                            'error' : "Daemon start failed"}
+            subtest_results.append(rtn_info)
+            self.post_run(subtest_results)
             file_hdlr.close()
             self.logger.removeHandler(file_hdlr)
             self.nodes.nodes_dump()
