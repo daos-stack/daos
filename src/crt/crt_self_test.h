@@ -41,7 +41,7 @@
 
 #include <crt_api.h>
 
-#define CRT_SELF_TEST_MAX_MSG_SIZE (0x40000000)
+#define CRT_SELF_TEST_MAX_MSG_SIZE	0x40000000
 
 /*
  * Logic table for self-test message opcodes:
@@ -67,25 +67,26 @@
  *      return struct: iovec of specified size
  */
 
-/* RPC arguments */
-struct crt_st_send_empty_reply_iov {
+struct crt_st_session_params {
+	uint32_t send_size;
 	uint32_t reply_size;
+	uint32_t num_buffers;
 };
 
-struct crt_st_send_iov_reply_empty {
+/*
+ * Note that for these non-empty send structures the session_id is always
+ * the first value. This allows the session to be retrieved without knowing
+ * what the rest of the structure contains
+ */
+
+struct crt_st_send_id_iov {
+	int32_t session_id;
 	crt_iov_t buf;
-};
-
-struct crt_st_send_iov_reply_iov {
-	crt_iov_t buf;
-	uint32_t reply_size;
-};
-
-struct crt_st_reply_iov {
-	crt_iov_t resp_buf;
 };
 
 void crt_self_test_init(void);
 int crt_self_test_msg_handler(crt_rpc_t *rpc_req);
+int crt_self_test_open_session_handler(crt_rpc_t *rpc_req);
+int crt_self_test_close_session_handler(crt_rpc_t *rpc_req);
 
 #endif /* __CRT_SELF_TEST_H__ */

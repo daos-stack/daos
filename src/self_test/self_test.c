@@ -59,6 +59,8 @@
 #define CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV	0xFFFF0201U
 #define CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY	0xFFFF0202U
 #define CRT_OPC_SELF_TEST_BOTH_IOV		0xFFFF0203U
+#define CRT_OPC_SELF_TEST_OPEN_SESSION		0xFFFF0210U
+#define CRT_OPC_SELF_TEST_CLOSE_SESSION		0xFFFF0211U
 
 #define CRT_SELF_TEST_MAX_MSG_SIZE		0x40000000U
 
@@ -69,21 +71,14 @@
  * structures to be packed together without any padding between members
  */
 #pragma pack(push, 1)
-struct crt_st_send_empty_reply_iov {
+struct crt_st_session_params {
+	uint32_t send_size;
 	uint32_t reply_size;
+	uint32_t num_buffers;
 };
-
-struct crt_st_send_iov_reply_iov {
+struct crt_st_send_id_iov {
+	int32_t session_id;
 	crt_iov_t buf;
-	uint32_t reply_size;
-};
-
-struct crt_st_send_iov_reply_empty {
-	crt_iov_t buf;
-};
-
-struct crt_st_reply_iov {
-	crt_iov_t resp_buf;
 };
 /* Pop pragma pack to restore original struct packing behavior */
 #pragma pack(pop)
@@ -112,6 +107,9 @@ struct st_latency {
 struct st_endpoint {
 	uint32_t rank;
 	uint32_t tag;
+
+	/* Session ID to use when sending messages to this endpoint */
+	int32_t session_id;
 
 	/*
 	 * If this endpoint is detected as evicted, no more messages should be
@@ -183,12 +181,30 @@ struct st_cb_args {
 
 };
 
+/*
+ * An instance of this structure exists per inflight RPC to serve as the
+ * "private" data for each repetition
+ */
 struct st_cb_data {
-	/* Static arguments that are the same for all RPCs in this run */
+	/*
+	 * A pointer to the "public" data that is the same for all repetitions
+	 * of this run
+	 */
 	struct st_cb_args	*cb_args;
 
 	int			 rep_idx;
 	struct timespec		 sent_time;
+	struct st_endpoint	*endpt;
+
+};
+
+struct st_open_session_cb_data {
+	/*
+	 * A pointer to the "public" data that is the same for all repetitions
+	 * of this run
+	 */
+	struct st_cb_args	*cb_args;
+
 	struct st_endpoint	*endpt;
 };
 
@@ -328,25 +344,21 @@ static int send_next_rpc(struct st_cb_data *cb_data, int skip_inc_complete)
 		args = crt_req_get(new_rpc);
 		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
 
-		if (opcode == CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV) {
-			struct crt_st_send_empty_reply_iov *typed_args =
-				(struct crt_st_send_empty_reply_iov *)args;
-			typed_args->reply_size =
-				cb_args->current_msg_size.reply_size;
-		} else if (opcode == CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY) {
-			struct crt_st_send_iov_reply_empty *typed_args =
-				(struct crt_st_send_iov_reply_empty *)args;
-			crt_iov_set(&typed_args->buf,
-				    cb_args->payload,
-				    cb_args->current_msg_size.send_size);
-		} else if (opcode == CRT_OPC_SELF_TEST_BOTH_IOV) {
-			struct crt_st_send_iov_reply_iov *typed_args =
-				(struct crt_st_send_iov_reply_iov *)args;
-			typed_args->reply_size =
-				cb_args->current_msg_size.reply_size;
-			crt_iov_set(&typed_args->buf,
-				    cb_args->payload,
-				    cb_args->current_msg_size.send_size);
+		/* Session ID is always the first field */
+		*((int32_t *)args) = endpt_ptr->session_id;
+
+		switch (opcode) {
+		case CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY:
+		case CRT_OPC_SELF_TEST_BOTH_IOV:
+			{
+				struct crt_st_send_id_iov *typed_args =
+					(struct crt_st_send_id_iov *)args;
+
+				crt_iov_set(&typed_args->buf,
+					cb_args->payload,
+					cb_args->current_msg_size.send_size);
+			}
+			break;
 		}
 
 send_rpc:
@@ -436,6 +448,233 @@ static int response_cb(const struct crt_cb_info *cb_info)
 
 	return 0;
 }
+
+static int open_session_cb(const struct crt_cb_info *cb_info)
+{
+	struct st_open_session_cb_data	*cb_data =
+		(struct st_open_session_cb_data *)cb_info->cci_arg;
+	struct st_cb_args		*cb_args = cb_data->cb_args;
+	int32_t				*session_id;
+
+	/* Get the session ID from the response message */
+	session_id = (int32_t *)crt_reply_get(cb_info->cci_rpc);
+	C_ASSERT(session_id != NULL);
+
+	/* If this endpoint returned any kind of error, mark it is evicted */
+	if (cb_info->cci_rc != 0) {
+		C_WARN("Got cci_rc = %d while opening session with endpoint"
+		       " %u:%u - removing it from the list of endpoints\n",
+		       cb_info->cci_rc, cb_data->endpt->rank,
+		       cb_data->endpt->tag);
+		/* Nodes with evicted=1 are skipped for the rest of the test */
+		cb_data->endpt->evicted = 1;
+		cb_data->endpt->session_id = -1;
+	} else if (*session_id < 0) {
+		C_WARN("Got invalid session id = %d from endpoint %u:%u -\n"
+		       " removing it from the list of endpoints\n",
+		       *session_id, cb_data->endpt->rank, cb_data->endpt->tag);
+		cb_data->endpt->evicted = 1;
+		cb_data->endpt->session_id = -1;
+	} else {
+		/* Got a valid session_id - associate it with this endpoint */
+		cb_data->endpt->session_id = *session_id;
+	}
+
+	/******************** LOCK: cb_args_lock ********************/
+	pthread_spin_lock(&cb_args->cb_args_lock);
+
+	cb_args->rep_completed_count++;
+
+	pthread_spin_unlock(&cb_args->cb_args_lock);
+	/******************* UNLOCK: cb_args_lock *******************/
+
+	return 0;
+}
+
+static int close_session_cb(const struct crt_cb_info *cb_info)
+{
+	struct st_cb_args	*cb_args = (struct st_cb_args *)
+					   cb_info->cci_arg;
+
+	/******************** LOCK: cb_args_lock ********************/
+	pthread_spin_lock(&cb_args->cb_args_lock);
+
+	cb_args->rep_completed_count++;
+
+	pthread_spin_unlock(&cb_args->cb_args_lock);
+	/******************* UNLOCK: cb_args_lock *******************/
+
+	return 0;
+}
+
+static int open_sessions(struct st_cb_args *cb_args, int max_inflight)
+{
+	struct st_open_session_cb_data	*cb_data_alloc = NULL;
+	int32_t				 num_open_sent = 0;
+	uint32_t			 i;
+	int				 ret;
+
+	/* Sessions are not required for (EMPTY EMPTY) */
+	if (cb_args->current_msg_size.send_size == 0 &&
+	    cb_args->current_msg_size.reply_size == 0) {
+		for (i = 0; i < cb_args->num_endpts; i++)
+			cb_args->endpts[i].session_id = -1;
+		return 0;
+	}
+
+	/* Allocate a buffer for arguments to the callback function */
+	C_ALLOC(cb_data_alloc, cb_args->num_endpts *
+			       sizeof(struct st_open_session_cb_data));
+	if (cb_data_alloc == NULL)
+		return -CER_NOMEM;
+
+	/* Reset the completed counter that tracks how many opens succeeded */
+	cb_args->rep_completed_count = 0;
+
+	/*
+	 * Dispatch an open to every specified endpoint
+	 * If at any point sending to an endpoint fails, mark it as evicted
+	 */
+	for (i = 0; i < cb_args->num_endpts; i++) {
+		crt_endpoint_t			 local_endpt;
+		crt_rpc_t			*new_rpc;
+		struct crt_st_session_params	*args;
+		struct st_open_session_cb_data	*cb_data;
+
+		local_endpt.ep_grp = cb_args->srv_grp;
+		local_endpt.ep_rank = cb_args->endpts[i].rank;
+		local_endpt.ep_tag = cb_args->endpts[i].tag;
+
+		/* Start a new RPC request */
+		ret = crt_req_create(cb_args->crt_ctx, local_endpt,
+				     CRT_OPC_SELF_TEST_OPEN_SESSION,
+				     &new_rpc);
+		if (ret != 0) {
+			C_WARN("crt_req_create failed for endpoint=%u:%u;"
+			       " ret = %d\n",
+			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
+
+			cb_args->endpts[i].session_id = -1;
+			cb_args->endpts[i].evicted = 1;
+
+			continue;
+		}
+		C_ASSERTF(new_rpc != NULL,
+			  "crt_req_create succeeded but RPC is NULL\n");
+
+		args = (struct crt_st_session_params *)crt_req_get(new_rpc);
+		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
+
+		args->send_size = cb_args->current_msg_size.send_size;
+		args->reply_size = cb_args->current_msg_size.reply_size;
+		/* TODO: Probably want to make this user configurable */
+		args->num_buffers = max(1,
+					min(max_inflight / cb_args->num_endpts,
+					    (unsigned int)cb_args->rep_count));
+
+		/* Set callback data */
+		cb_data = &cb_data_alloc[i];
+		cb_data->cb_args = cb_args;
+		cb_data->endpt = &cb_args->endpts[i];
+
+		/* Send the RPC */
+		ret = crt_req_send(new_rpc, open_session_cb, cb_data);
+		if (ret != 0) {
+			C_WARN("crt_req_send failed for endpoint=%u:%u;"
+			       " ret = %d\n",
+			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
+
+			cb_args->endpts[i].session_id = -1;
+			cb_args->endpts[i].evicted = 1;
+
+			continue;
+		}
+
+		/* Successfully sent this open request - increment counter */
+		num_open_sent++;
+	}
+
+	/* Wait until all opens complete */
+	while (cb_args->rep_completed_count < num_open_sent)
+		sched_yield();
+
+	/* Free up the callback buffer */
+	C_FREE(cb_data_alloc, cb_args->num_endpts * sizeof(struct st_cb_data));
+
+	return 0;
+}
+
+static void close_sessions(struct st_cb_args *cb_args)
+{
+	int32_t		num_close_sent = 0;
+	uint32_t	i;
+	int		ret;
+
+	/* Reset the completed counter that tracks how many closes succeeded */
+	cb_args->rep_completed_count = 0;
+
+	/*
+	 * Dispatch a close to every specified endpoint
+	 * If at any point sending to an endpoint fails, mark it as evicted
+	 */
+	for (i = 0; i < cb_args->num_endpts; i++) {
+		crt_endpoint_t	 local_endpt;
+		crt_rpc_t	*new_rpc;
+		int32_t		*args;
+
+		/* Don't bother to close sessions for nodes where open failed */
+		if (cb_args->endpts[i].session_id < 0)
+			continue;
+
+		local_endpt.ep_grp = cb_args->srv_grp;
+		local_endpt.ep_rank = cb_args->endpts[i].rank;
+		local_endpt.ep_tag = cb_args->endpts[i].tag;
+
+		/* Start a new RPC request */
+		ret = crt_req_create(cb_args->crt_ctx, local_endpt,
+				     CRT_OPC_SELF_TEST_CLOSE_SESSION,
+				     &new_rpc);
+		if (ret != 0) {
+			C_WARN("Failed to close session %d on endpoint=%u:%u;"
+			       " crt_req_created failed with ret = %d\n",
+			       cb_args->endpts[i].session_id,
+			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
+
+			/* Mark the node as evicted (likely already done) */
+			cb_args->endpts[i].evicted = 1;
+
+			continue;
+		}
+		C_ASSERTF(new_rpc != NULL,
+			  "crt_req_create succeeded but RPC is NULL\n");
+
+		args = (int32_t *)crt_req_get(new_rpc);
+		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
+
+		*args = cb_args->endpts[i].session_id;
+
+		/* Send the RPC */
+		ret = crt_req_send(new_rpc, close_session_cb, cb_args);
+		if (ret != 0) {
+			C_WARN("crt_req_send failed for endpoint=%u:%u;"
+			       " ret = %d\n",
+			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
+
+			cb_args->endpts[i].session_id = -1;
+			cb_args->endpts[i].evicted = 1;
+
+			continue;
+		}
+
+		/* Successfully sent this close request - increment counter */
+		num_close_sent++;
+	}
+
+	/* Wait until all closes complete */
+	while (cb_args->rep_completed_count < num_close_sent)
+		sched_yield();
+}
+
 
 static void *progress_fn(void *arg)
 {
@@ -569,7 +808,6 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 		int	 num_failed = 0;
 		int	 num_passed = 0;
 
-
 		if (size_idx == -1) {
 			current_msg_size.send_size = 0;
 			current_msg_size.reply_size = 0;
@@ -595,6 +833,11 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 
 		/* Set remaining callback data argument that changes per test */
 		cb_args.current_msg_size = current_msg_size;
+
+		/* Open self-test sessions with every endpoint */
+		ret = open_sessions(&cb_args, max_inflight);
+		if (ret != 0)
+			C_GOTO(cleanup, ret = -CER_NOMEM);
 
 		/* Initialize the latencies to -1 to indicate invalid data */
 		for (local_rep = 0; local_rep < cb_args.rep_count; local_rep++)
@@ -652,6 +895,9 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 			C_ERROR("crt_gettime failed; ret = %d\n", ret);
 			C_GOTO(cleanup, ret);
 		}
+
+		/* Close outstanding self-test sessions with every endpoint */
+		close_sessions(&cb_args);
 
 		/* Print out the first message latency separately */
 		if (size_idx == -1 && cb_args.rep_latencies[0].val < 0) {
@@ -855,6 +1101,11 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "        (x 0) - x-byte io_vec sent to service, empty reply\n"
 	       "        (0 y) - 4-byte size sent to service, y-byte io_vec reply\n"
 	       "        (x y) - 4-byte size + x-byte io_vec sent to service, y-byte io_vec reply\n"
+	       "\n"
+	       "      Note also that any message size with a nonzero reply size will use sessions.\n"
+	       "        A self-test session will be negotiated with the service before sending\n"
+	       "        any traffic, and the session will be closed after testing this size completes.\n"
+	       "        The time to create and tear down these sessions is NOT measured.\n"
 	       "\n"
 	       "      Default: \"%s\"\n"
 	       "\n"
@@ -1162,7 +1413,7 @@ int main(int argc, char *argv[])
 {
 	/* Default parameters */
 	char			 default_msg_sizes_str[] =
-		 "(100000 100000),(10000 0),(0 10000),(0 0)";
+		 "(1000 1000),(1000 0),(0 1000),(0 0)";
 	const int		 default_rep_count = 20000;
 	const int		 default_max_inflight = 1000;
 
@@ -1336,6 +1587,12 @@ int main(int argc, char *argv[])
 		       SELF_TEST_MAX_INFLIGHT, max_inflight);
 		C_GOTO(cleanup, ret = -CER_INVAL);
 	}
+
+	/*
+	 * No reason to have max_inflight bigger than the total number of RPCs
+	 * each session
+	 */
+	max_inflight = max_inflight > rep_count ? rep_count : max_inflight;
 
 	/********************* Print out parameters *********************/
 	printf("Self Test Parameters:\n"
