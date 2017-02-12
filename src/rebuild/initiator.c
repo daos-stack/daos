@@ -37,16 +37,19 @@
 #include <daos/pool.h>
 #include <daos_srv/container.h>
 #include <daos_srv/daos_server.h>
+#include <daos_srv/vos.h>
 #include "rpc.h"
 #include "rebuild_internal.h"
 
-static int
-rebuild_object(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-	       daos_key_t *akey, int akey_num)
-{
-	/* pull date from contributor and update the local object */
-	return 0;
-}
+struct rebuild_obj_arg {
+	daos_unit_oid_t	oid;
+	uuid_t		pool_uuid;
+	uuid_t		cont_uuid;
+	unsigned int	map_ver;
+	daos_epoch_t	epoch;
+	daos_key_t	dkey;
+	struct ds_cont_hdl *srv_cont_hdl;
+};
 
 typedef int (*rebuild_obj_iter_cb_t)(daos_unit_oid_t oid, unsigned int shard,
 				     void *arg);
@@ -60,7 +63,314 @@ struct rebuild_iter_arg {
 	daos_handle_t		cont_hdl;
 };
 
+/* Get nthream idx from idx */
+static inline unsigned int
+rebuild_get_nstream_idx(daos_key_t *dkey)
+{
+	unsigned int nstream;
+	unsigned int hash;
+
+	nstream = dss_get_threads_number();
+
+	hash = daos_hash_murmur64((unsigned char *)dkey->iov_buf,
+				   dkey->iov_len, 5731);
+	hash %= nstream;
+
+	return hash;
+}
+
+#define MAX_BUF_SIZE 2048
+static int
+rebuild_fetch_update_inline(struct rebuild_obj_arg *arg, daos_handle_t oh,
+			    daos_key_t *akey, unsigned int num,
+			    unsigned int type, daos_recx_t *recxs,
+			    daos_epoch_range_t *eprs, uuid_t cookie)
+{
+	daos_iod_t		iod;
+	daos_sg_list_t		sgl;
+	daos_iov_t		iov;
+	char			iov_buf[MAX_BUF_SIZE];
+	int			rc;
+
+	daos_iov_set(&iov, iov_buf, MAX_BUF_SIZE);
+	sgl.sg_nr.num = 1;
+	sgl.sg_iovs = &iov;
+
+	memset(&iod, 0, sizeof(iod));
+	memcpy(&iod.iod_name, akey, sizeof(daos_key_t));
+	iod.iod_recxs = recxs;
+	iod.iod_eprs = eprs;
+	iod.iod_nr = num;
+	iod.iod_type = type;
+
+	rc = ds_obj_fetch(oh, arg->epoch, &arg->dkey, 1, &iod,
+			  &sgl, NULL);
+	if (rc)
+		return rc;
+
+	rc = vos_obj_update(arg->srv_cont_hdl->sch_cont->sc_hdl,
+			    arg->oid, arg->epoch, cookie, &arg->dkey,
+			    1, &iod, &sgl);
+	return rc;
+}
+
+static int
+rebuild_fetch_update_bulk(struct rebuild_obj_arg *arg, daos_handle_t oh,
+			  daos_key_t *akey, unsigned int num, unsigned int type,
+			  daos_size_t size, daos_recx_t *recxs,
+			  daos_epoch_range_t *eprs, uuid_t cookie)
+{
+	daos_iod_t	iod;
+	daos_sg_list_t	*sgl;
+	daos_handle_t	ioh;
+	int		rc;
+
+	memset(&iod, 0, sizeof(iod));
+	memcpy(&iod.iod_name, akey, sizeof(daos_key_t));
+	iod.iod_recxs = recxs;
+	iod.iod_eprs = eprs;
+	iod.iod_nr = num;
+	iod.iod_type = type;
+	iod.iod_size = size;
+
+	rc = vos_obj_zc_update_begin(arg->srv_cont_hdl->sch_cont->sc_hdl,
+				     arg->oid, arg->epoch, &arg->dkey, 1,
+				     &iod, &ioh);
+	if (rc != 0) {
+		D_ERROR(DF_UOID"preparing update fails: %d\n",
+			DP_UOID(arg->oid), rc);
+		return rc;
+	}
+
+	rc = vos_obj_zc_sgl_at(ioh, 0, &sgl);
+	if (rc)
+		D_GOTO(end, rc);
+
+	rc = ds_obj_fetch(oh, arg->epoch, &arg->dkey, 1, &iod, sgl, NULL);
+	if (rc)
+		D_GOTO(end, rc);
+end:
+	vos_obj_zc_update_end(ioh, cookie, &arg->dkey, 1, &iod, rc);
+	return rc;
+}
+
+static int
+rebuild_fetch_update(struct rebuild_obj_arg *arg, daos_handle_t oh,
+		     daos_key_t *akey, unsigned int num, unsigned int type,
+		     daos_size_t size, daos_recx_t *recxs,
+		     daos_epoch_range_t *eprs, uuid_t cookie)
+{
+	daos_size_t	buf_size = 0;
+
+	buf_size = size * num;
+	if (buf_size < MAX_BUF_SIZE)
+		return rebuild_fetch_update_inline(arg, oh, akey, num, type,
+						   recxs, eprs, cookie);
+	else
+		return rebuild_fetch_update_bulk(arg, oh, akey, num, type,
+						 buf_size, recxs, eprs, cookie);
+}
+
+static int
+rebuild_rec(struct rebuild_obj_arg *arg, daos_handle_t oh, daos_key_t *akey,
+	    unsigned int num, unsigned int type, daos_size_t size,
+	    daos_recx_t *recxs, daos_epoch_range_t *eprs, uuid_t *cookies)
+{
+	uuid_t			cookie;
+	int			start;
+	int			i;
+	int			rc = 0;
+
+	start = 0;
+	uuid_copy(cookie, cookies[0]);
+	for (i = 1; i < num; i++) {
+		if (uuid_compare(cookie, cookies[i]) == 0)
+			continue;
+
+		rc = rebuild_fetch_update(arg, oh, akey, i - start,
+					  type, size, &recxs[start],
+					  &eprs[start], cookie);
+		if (rc)
+			break;
+		start = i;
+		uuid_copy(cookie, cookies[start]);
+	}
+
+	if (i > start && rc == 0)
+		rc = rebuild_fetch_update(arg, oh, akey, i - start, type,
+					  size, &recxs[start], &eprs[start],
+					  cookie);
+
+	D_DEBUG(DB_TRACE, "rebuild "DF_UOID" rc %d\n", DP_UOID(arg->oid), rc);
+	return rc;
+}
+
 #define ITER_COUNT	5
+static int
+rebuild_akey(struct rebuild_obj_arg *arg, daos_handle_t oh, int type,
+	     daos_key_t *akey)
+{
+	daos_recx_t		recxs[ITER_COUNT];
+	daos_epoch_range_t	eprs[ITER_COUNT];
+	uuid_t			cookies[ITER_COUNT];
+	daos_hash_out_t		hash;
+	int			rc = 0;
+
+	memset(&hash, 0, sizeof(hash));
+	while (!daos_hash_is_eof(&hash)) {
+		unsigned int	rec_num = ITER_COUNT;
+		daos_size_t	size;
+		int		i;
+
+		rc = ds_obj_list_rec(oh, arg->epoch, &arg->dkey, akey,
+				     type, &size, &rec_num,
+				     recxs, eprs, cookies, &hash, true);
+		if (rc)
+			break;
+		if (rec_num == 0)
+			continue;
+
+		/* Temporary fix to satisfied VOS update */
+		for (i = 0; i < rec_num; i++)
+			eprs[i].epr_hi = DAOS_EPOCH_MAX;
+
+		rc = rebuild_rec(arg, oh, akey, rec_num, type, size, recxs,
+				 eprs, cookies);
+		if (rc)
+			break;
+	}
+	return rc;
+}
+
+static void
+rebuild_dkey_thread(void *data)
+{
+	struct rebuild_obj_arg	*arg = data;
+	struct rebuild_tls	*tls = rebuild_tls_get();
+	daos_iov_t		akey_iov;
+	daos_sg_list_t		akey_sgl;
+	daos_size_t		akey_buf_size = 1024;
+	daos_hash_out_t		hash;
+	unsigned int		i;
+	daos_handle_t		coh;
+	daos_handle_t		oh;
+	int			rc;
+
+	D_ALLOC(akey_iov.iov_buf, akey_buf_size);
+	if (akey_iov.iov_buf == NULL)
+		D_GOTO(free, rc = -DER_NOMEM);
+
+	akey_iov.iov_buf_len = akey_buf_size;
+	akey_sgl.sg_nr.num = 1;
+	akey_sgl.sg_iovs = &akey_iov;
+
+	/* Open client dc handle */
+	rc = dc_cont_local_open(arg->cont_uuid, tls->rebuild_cont_hdl_uuid,
+				0, tls->rebuild_pool_hdl, &coh);
+	if (rc)
+		D_GOTO(free, rc);
+
+	rc = ds_obj_open(coh, arg->oid.id_pub, arg->epoch, DAOS_OO_RW, &oh);
+	if (rc)
+		D_GOTO(cont_close, rc);
+
+	D_ASSERT(arg->srv_cont_hdl == NULL);
+	/* Open server cont handle */
+	rc = ds_cont_local_open(arg->pool_uuid, tls->rebuild_cont_hdl_uuid,
+				arg->cont_uuid, 0, &arg->srv_cont_hdl);
+	if (rc) {
+		D_ERROR("cont open failed %d\n", rc);
+		D_GOTO(obj_close, rc);
+	}
+
+	if (arg->srv_cont_hdl->sch_cont == NULL) {
+		rc = ds_cont_lookup_or_create(arg->srv_cont_hdl,
+					      arg->cont_uuid);
+		if (rc)
+			D_GOTO(srv_put, rc);
+	}
+
+	memset(&hash, 0, sizeof(hash));
+	while (!daos_hash_is_eof(&hash)) {
+		daos_key_desc_t	akey_kds[ITER_COUNT];
+		uint32_t	akey_num = ITER_COUNT;
+		void		*akey_ptr;
+
+		rc = ds_obj_list_akey(oh, arg->epoch, &arg->dkey, &akey_num,
+				      akey_kds, &akey_sgl, &hash);
+		if (rc)
+			break;
+
+		if (akey_num == 0)
+			continue;
+
+		for (akey_ptr = akey_iov.iov_buf, i = 0; i < akey_num;
+		     akey_ptr += akey_kds[i].kd_key_len, i++) {
+			daos_key_t akey;
+
+			akey.iov_buf = akey_ptr;
+			akey.iov_len = akey_kds[i].kd_key_len;
+			akey.iov_buf_len = akey_kds[i].kd_key_len;
+
+			rc = rebuild_akey(arg, oh, DAOS_IOD_ARRAY, &akey);
+			if (rc < 0)
+				break;
+
+			rc = rebuild_akey(arg, oh, DAOS_IOD_SINGLE, &akey);
+			if (rc < 0)
+				break;
+
+		}
+	}
+srv_put:
+	ds_cont_hdl_put(arg->srv_cont_hdl);
+obj_close:
+	ds_obj_close(oh);
+cont_close:
+	dc_cont_local_close(tls->rebuild_pool_hdl, coh);
+free:
+	if (akey_iov.iov_buf != NULL)
+		D_FREE(akey_iov.iov_buf, akey_buf_size);
+	daos_iov_free(&arg->dkey);
+	D_FREE_PTR(arg);
+}
+
+static int
+rebuild_dkey(daos_unit_oid_t oid, daos_epoch_t epoch,
+	     daos_key_t *dkey, struct rebuild_iter_arg *iter_arg)
+{
+	struct rebuild_obj_arg	*arg;
+	unsigned int		tgt;
+	int			rc;
+
+	D_ALLOC_PTR(arg);
+	if (arg == NULL)
+		return -DER_NOMEM;
+
+	rc = daos_iov_copy(&arg->dkey, dkey);
+	if (rc)
+		D_GOTO(free, rc);
+
+	arg->oid = oid;
+	uuid_copy(arg->pool_uuid, iter_arg->pool_uuid);
+	uuid_copy(arg->cont_uuid, iter_arg->cont_uuid);
+	arg->map_ver = iter_arg->map_ver;
+	arg->epoch = epoch;
+	tgt = rebuild_get_nstream_idx(dkey);
+
+	rc = dss_thread_create(rebuild_dkey_thread, arg, tgt);
+	if (rc)
+		D_GOTO(free, rc);
+
+	return rc;
+free:
+	if (arg != NULL) {
+		daos_iov_free(&arg->dkey);
+		D_FREE_PTR(arg);
+	}
+
+	return rc;
+}
 
 /**
  * Iterate akeys/dkeys of the object
@@ -72,93 +382,51 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	daos_hash_out_t		hash_out;
 	daos_handle_t		oh;
 	daos_epoch_t		epoch = 0;
+	daos_sg_list_t		dkey_sgl;
 	daos_iov_t		dkey_iov;
 	daos_size_t		dkey_buf_size = 1024;
-	daos_iov_t		akey_iov;
-	daos_size_t		akey_buf_size = 1024;
 	int			rc;
 
 	D_ALLOC(dkey_iov.iov_buf, dkey_buf_size);
 	if (dkey_iov.iov_buf == NULL)
 		return -DER_NOMEM;
 	dkey_iov.iov_buf_len = dkey_buf_size;
-
-	D_ALLOC(akey_iov.iov_buf, akey_buf_size);
-	if (akey_iov.iov_buf == NULL)
-		D_GOTO(free, rc = -DER_NOMEM);
-	akey_iov.iov_buf_len = akey_buf_size;
+	dkey_sgl.sg_nr.num = 1;
+	dkey_sgl.sg_iovs = &dkey_iov;
 
 	rc = ds_obj_open(arg->cont_hdl, oid.id_pub, epoch, DAOS_OO_RW, &oh);
 	if (rc)
 		D_GOTO(free, rc);
 
+	D_DEBUG(DB_TRACE, "rebuild "DF_UOID" for shard %u\n",
+		DP_UOID(oid), shard);
 	memset(&hash_out, 0, sizeof(hash_out));
 	enum_anchor_set_shard(&hash_out, shard);
 	while (!daos_hash_is_eof(&hash_out)) {
-		uint32_t	num = ITER_COUNT;
 		daos_key_desc_t	kds[ITER_COUNT];
-		daos_sg_list_t	sgl;
-		daos_hash_out_t akey_hash_out;
+		uint32_t	num = ITER_COUNT;
 		void		*ptr;
 		int		i;
 
-		sgl.sg_nr.num = 1;
-		sgl.sg_iovs = &dkey_iov;
-
 		rc = ds_obj_single_shard_list_dkey(oh, epoch, &num, kds,
-						   &sgl, &hash_out);
+						   &dkey_sgl, &hash_out);
 		if (rc)
 			break;
-
 		if (num == 0)
 			continue;
 
 		D_DEBUG(DB_TRACE, "rebuild list dkey %d\n", num);
-		memset(&akey_hash_out, 0, sizeof(akey_hash_out));
-		enum_anchor_set_shard(&akey_hash_out, shard);
 		for (ptr = dkey_iov.iov_buf, i = 0;
-		     i < num && !daos_hash_is_eof(&akey_hash_out); i++) {
+		     i < num; ptr += kds[i].kd_key_len, i++) {
 			daos_key_t dkey;
-			daos_key_t akey[ITER_COUNT];
-			uint32_t   akey_num = ITER_COUNT;
-			daos_key_desc_t akey_kds[ITER_COUNT];
-			daos_sg_list_t	akey_sgl;
-			void		*akey_ptr;
-			int		j;
 
 			dkey.iov_buf = ptr;
 			dkey.iov_len = kds[i].kd_key_len;
 			dkey.iov_buf_len = kds[i].kd_key_len;
 
-			akey_sgl.sg_nr.num = 1;
-			akey_sgl.sg_iovs = &akey_iov;
-
-			rc = ds_obj_list_akey(oh, epoch, &dkey,
-					      &akey_num, akey_kds, &akey_sgl,
-					      &akey_hash_out);
-			if (rc)
-				D_GOTO(free, rc);
-
-			if (akey_num == 0)
-				continue;
-
-			D_DEBUG(DB_TRACE, "rebuild list akey %d dkey %*.s\n",
-				num, (int)dkey.iov_buf_len,
-				(char *)dkey.iov_buf);
-			memset(akey, 0, sizeof(daos_key_t) * ITER_COUNT);
-			for (akey_ptr = akey_iov.iov_buf, j = 0;
-			     j < akey_num; j++) {
-
-				akey[j].iov_buf = akey_ptr;
-				akey[j].iov_len = akey_kds[j].kd_key_len;
-				akey[j].iov_buf_len = akey_kds[j].kd_key_len;
-				akey_ptr += akey_kds[j].kd_key_len;
-			}
-			rc = rebuild_object(oh, epoch, &dkey, akey, akey_num);
+			rc = rebuild_dkey(oid, epoch, &dkey, arg);
 			if (rc < 0)
 				break;
-
-			ptr += kds[i].kd_key_len;
 		}
 	}
 
@@ -166,8 +434,6 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 free:
 	if (dkey_iov.iov_buf != NULL)
 		D_FREE(dkey_iov.iov_buf, dkey_buf_size);
-	if (akey_iov.iov_buf != NULL)
-		D_FREE(akey_iov.iov_buf, akey_buf_size);
 
 	return rc;
 }
@@ -346,7 +612,7 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 		arg->obj_cb = rebuild_obj_iterate_keys;
 		arg->root_hdl = btr_hdl;
 		arg->map_ver = rebuild_in->roi_map_ver;
-		rc = dss_thread_create(rebuild_iterate_object, arg);
+		rc = dss_thread_create(rebuild_iterate_object, arg, -1);
 		if (rc == 0)
 			tls->rebuild_task_init = 1;
 		else

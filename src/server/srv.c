@@ -49,6 +49,7 @@ struct dss_xstream {
 	ABT_pool	dx_pool;
 	ABT_sched	dx_sched;
 	ABT_xstream	dx_progress;
+	unsigned int	dx_idx;
 };
 
 struct dss_xstream_data {
@@ -236,6 +237,7 @@ dss_srv_handler(void *arg)
 		return;
 	}
 
+	dx->dx_idx = dmi->dmi_tid;
 	dmi->dmi_xstream = dx;
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creater */
@@ -656,12 +658,25 @@ dss_collective(int (*func)(void *), void *arg)
  * Create a ABT thread in current xestream.
  */
 int
-dss_thread_create(void (*func)(void *), void *arg)
+dss_thread_create(void (*func)(void *), void *arg, unsigned int idx)
 {
-	struct dss_xstream *dx;
-	int rc;
+	struct dss_xstream	*dx = NULL;
+	int			rc;
 
-	dx = dss_get_module_info()->dmi_xstream;
+	if (idx != (unsigned int)-1) {
+		struct dss_xstream *tmp;
+
+		daos_list_for_each_entry(tmp, &xstream_data.xd_list, dx_list) {
+			if (tmp->dx_idx == idx) {
+				dx = tmp;
+				break;
+			}
+		}
+		if (dx == NULL)
+			return -DER_NONEXIST;
+	} else {
+		dx = dss_get_module_info()->dmi_xstream;
+	}
 
 	rc = ABT_thread_create(dx->dx_pool, func, arg,
 			       ABT_THREAD_ATTR_NULL, NULL);
@@ -741,6 +756,15 @@ dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 free_future:
 	ABT_future_free(&future);
 	return rc;
+}
+
+/**
+ * Get nthreads number.
+ */
+unsigned int
+dss_get_threads_number(void)
+{
+	return dss_nxstreams;
 }
 
 /** initializing steps */

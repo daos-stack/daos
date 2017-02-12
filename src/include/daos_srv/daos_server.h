@@ -188,9 +188,9 @@ struct dss_module {
 int dss_create_ult(void (*func)(void *), void *arg, ABT_thread *ult);
 int dss_create_ult_all(void (*func)(void *), void *arg);
 int dss_collective(int (*func)(void *), void *arg);
-int dss_thread_create(void (*func)(void *), void *arg);
-int dss_sync_task(daos_opc_t opc, void *arg,
-		  unsigned int arg_size);
+int dss_thread_create(void (*func)(void *), void *arg, unsigned int idx);
+int dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size);
+unsigned int dss_get_threads_number(void);
 
 /* Convert Argobots errno to DAOS ones. */
 static inline int

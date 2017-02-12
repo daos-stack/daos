@@ -185,6 +185,8 @@ daos_size_t daos_sgl_buf_len(daos_sg_list_t *sgl);
 daos_size_t daos_iod_len(daos_iod_t *iod);
 
 char *daos_str_trimwhite(char *str);
+int daos_iov_copy(daos_iov_t *dst, daos_iov_t *src);
+void daos_iov_free(daos_iov_t *iov);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually

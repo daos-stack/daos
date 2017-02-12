@@ -140,3 +140,28 @@ daos_str_trimwhite(char *str)
 	*end = 0;
 	return str;
 }
+
+int
+daos_iov_copy(daos_iov_t *dst, daos_iov_t *src)
+{
+	D_ALLOC(dst->iov_buf, src->iov_buf_len);
+	if (dst->iov_buf == NULL)
+		return -DER_NOMEM;
+	dst->iov_buf_len = src->iov_buf_len;
+	memcpy(dst->iov_buf, src->iov_buf, src->iov_len);
+	dst->iov_len = src->iov_len;
+	return 0;
+}
+
+void
+daos_iov_free(daos_iov_t *iov)
+{
+	if (iov->iov_buf == NULL)
+		return;
+	D_ASSERT(iov->iov_buf_len > 0);
+
+	D_FREE(iov->iov_buf, iov->iov_buf_len);
+	iov->iov_buf = NULL;
+	iov->iov_buf_len = 0;
+	iov->iov_len = 0;
+}

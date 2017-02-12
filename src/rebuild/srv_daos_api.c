@@ -162,3 +162,46 @@ ds_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 
 	return dss_sync_task(DAOS_OPC_OBJ_LIST_AKEY, &arg, sizeof(arg));
 }
+
+int
+ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
+	     daos_key_t *dkey, unsigned int nr,
+	     daos_iod_t *iods, daos_sg_list_t *sgls,
+	     daos_iom_t *maps)
+{
+	daos_obj_fetch_t arg;
+
+	arg.oh = oh;
+	arg.epoch = epoch;
+	arg.dkey = dkey;
+	arg.nr = nr;
+	arg.iods = iods;
+	arg.sgls = sgls;
+	arg.maps = maps;
+
+	return dss_sync_task(DAOS_OPC_OBJ_FETCH, &arg, sizeof(arg));
+}
+
+int
+ds_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
+		uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		uuid_t *cookies, daos_hash_out_t *anchor, bool incr)
+{
+	daos_obj_list_recx_t	arg;
+
+	arg.oh = oh;
+	arg.epoch = epoch;
+	arg.dkey = dkey;
+	arg.akey = akey;
+	arg.type = type;
+	arg.size = size;
+	arg.nr = nr;
+	arg.recxs = recxs;
+	arg.eprs = eprs;
+	arg.cookies = cookies;
+	arg.anchor = anchor;
+	arg.incr_order = incr;
+
+	return dss_sync_task(DAOS_OPC_OBJ_LIST_RECX, &arg, sizeof(arg));
+}

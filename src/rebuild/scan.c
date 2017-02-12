@@ -761,7 +761,7 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(free, rc);
 	}
 
-	rc = dss_thread_create(rebuild_scan_func, arg);
+	rc = dss_thread_create(rebuild_scan_func, arg, -1);
 	if (rc != 0)
 		D_GOTO(free, rc);
 
