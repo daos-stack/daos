@@ -462,7 +462,7 @@ typedef struct {
  *   same storage targets. The dkey has an arbitrary size.
  * - the attribute key (aka akey) distinguishes individual vectors. Likewise, the
  *   akey has a arbitrary size.
- * - the indice within a vector discriminates individual records. The indice
+ * - the index within a vector discriminates individual records. The index
  *   is an integer that ranges from zero to infinity. A range of indices
  *   identifies a contiguous set of records called extent. All records inside an
  *   extent must have the same size.
@@ -479,18 +479,18 @@ typedef daos_key_t daos_akey_t;
 
 /**
  * A record extent is a range of contiguous records of the same size inside an
- * array. \a rx_idx is the first array indice of the extent and \a rx_nr is the
+ * array. \a rx_idx is the first array index of the extent and \a rx_nr is the
  * number of records covered by the extent.
  */
 typedef struct {
 	/** Individual record size, must be the same for each record of the
 	 * extent */
 	uint64_t	rx_rsize;
-	/* Indice of the first record in the range */
+	/* Index of the first record in the range */
 	uint64_t	rx_idx;
 	/* Number of records in the range
 	 * If rx_nr is equal to 1, the range identifies a single record of
-	 * indice rx_idx */
+	 * index rx_idx */
 	uint64_t	rx_nr;
 } daos_recx_t;
 
@@ -522,7 +522,7 @@ typedef struct {
 	daos_akey_t		 vm_name;
 	/** Name/akey checksum */
 	daos_csum_buf_t		 vm_kcsum;
-	/** First indice of this mapping */
+	/** First index of this mapping */
 	uint64_t		 vm_start;
 	/** Logical number of indices covered by this mapping */
 	uint64_t                 vm_len;
