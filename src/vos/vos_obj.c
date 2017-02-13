@@ -660,8 +660,10 @@ vos_dkey_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_key_t *dkey,
 		struct vec_io_buf vbuf;
 
 		memset(&vbuf, 0, sizeof(vbuf));
-		if (sgls)
+		if (sgls) {
 			vbuf.vb_sgl = sgls[i];
+			vbuf.vb_sgl.sg_nr.num_out = 0;
+		}
 
 		rc = vos_vec_fetch(oref, epoch, toh, &viods[i],
 				   (sgls || !zcc) ? &vbuf : &zcc->zc_vbufs[i]);
