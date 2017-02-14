@@ -828,9 +828,11 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 	rpc_priv = req_cbinfo->rsc_rpc_priv;
 	opc = rpc_priv->crp_pub.cr_opc;
 	hg_ret = hg_cbinfo->ret;
+	/* Check for the return code here but it's not automatically an error,
+	 * see CART-146 for details
+	 */
 	if (hg_ret != HG_SUCCESS)
-		C_ERROR("crt_hg_reply_send_cb, hg_cbinfo->ret: %d, "
-			"opc: 0x%x.\n", hg_ret, opc);
+		C_WARN("hg_cbinfo->ret: %d, opc: 0x%x.\n", hg_ret, opc);
 
 	/* corresponding to the crt_req_addref in crt_hg_reply_send */
 	rc = crt_req_decref(&rpc_priv->crp_pub);

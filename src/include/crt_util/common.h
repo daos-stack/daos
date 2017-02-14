@@ -142,19 +142,19 @@ crt_add_log_facility(char *aname, char *lname)
  * #define DSR_DEBUG(...) crt_log(DSR_DEBUG, ...)
  */
 #define C_DEBUG(fmt, ...)						\
-	crt_log(CRT_DBG, "%s:%d %s " fmt, __FILE__, __LINE__, __func__,	\
+	crt_log(CRT_DBG, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__, \
 		##__VA_ARGS__)
 
 #define C_WARN(fmt, ...)						\
-	crt_log(CRT_WARN, "%s:%d %s " fmt, __FILE__, __LINE__, __func__,\
+	crt_log(CRT_WARN, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,\
 		##__VA_ARGS__)
 
 #define C_ERROR(fmt, ...)						\
-	crt_log(CRT_ERR, "%s:%d %s " fmt, __FILE__, __LINE__, __func__,	\
+	crt_log(CRT_ERR, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__, \
 		##__VA_ARGS__)
 
 #define C_FATAL(fmt, ...)						\
-	crt_log(CRT_CRIT, "%s:%d %s " fmt, __FILE__, __LINE__, __func__,\
+	crt_log(CRT_CRIT, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,\
 		##__VA_ARGS__)
 
 #define C_ASSERT(e)	assert(e)
