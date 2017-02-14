@@ -104,16 +104,14 @@ daos_task_init(struct daos_task *task, daos_task_func_t task_func,
 	       struct daos_task *dependent);
 
 /**
- *  Initialized the scheduler, if the scheduler is launched after
- *  daos_sched_run(sched), then  it will be finalized after all
- *  tasks has been finished (see daos_task_complete_cb()),
- *  otherwise it needs to call daos_sched_cancel() to finalize
- *  itself.
+ *  Initialize the scheduler with an optional completion callback and pointer to
+ *  user data. Caller is responsible to complete or cancel the scheduler.
  *
  * \param sched [input]		scheduler to be initialized.
- * \param comp_cb [input]	callback to be called when scheduler is done.
- * \param udata [input]		pointer to user data to associate with the
- *				scheduler. This is stored in ds_udata in the
+ * \param comp_cb [input]	Optional callback to be called when scheduler
+ *				is done.
+ * \param udata [input]		Optional pointer to user data to associate with
+ *				the scheduler. This is stored in ds_udata in the
  *				scheduler struct and passed in to comp_cb as the
  *				argument when the callback is invoked.
  *
@@ -125,14 +123,16 @@ daos_sched_init(struct daos_sched *sched, daos_sched_comp_cb_t comp_cb,
 		void *udata);
 
 /**
- * Cancel all tasks in the scheduler.
+ * Wait for all tasks in the scheduler to complete and finalize it.
+ * If another thread is completing the scheduler, this returns immediately.
  *
- * \param sched [input]	scheduler to be initialized.
- * \param ret [input]	result for scheduler completion.
- *
+ * \param sched	[input]	scheduler to be completed.
+ * \param ret	[input]	result for scheduler completion.
+ * \param cancel [input]
+ *			cancel all tasks in scheduler if true.
  */
 void
-daos_sched_cancel(struct daos_sched *sched, int ret);
+daos_sched_complete(struct daos_sched *sched, int ret, bool cancel);
 
 /**
  * register complete callback for scheduler.

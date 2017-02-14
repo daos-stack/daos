@@ -159,7 +159,6 @@ daos_task_decref(struct daos_task *task)
 	}
 
 	D_ASSERT(daos_list_empty(&dtp->dtp_dep_list));
-	daos_sched_decref(dsp);
 
 	D_FREE_PTR(task);
 }
@@ -461,35 +460,15 @@ daos_sched_process_complete(struct daos_sched_private *dsp)
 static bool
 daos_sched_check_complete(struct daos_sched_private *dsp)
 {
-	struct daos_sched *sched;
 	bool		   completed;
 
-	/* check if all sub tasks are done, then complete the event */
+	/* check if all tasks are done */
 	pthread_mutex_lock(&dsp->dsp_lock);
 	completed = (daos_list_empty(&dsp->dsp_init_list) &&
 		     dsp->dsp_inflight == 0);
-
-	if (!completed) {
-		pthread_mutex_unlock(&dsp->dsp_lock);
-		return false;
-	}
-
-	if (dsp->dsp_completing) {
-		pthread_mutex_unlock(&dsp->dsp_lock);
-		return true;
-	}
-
-	dsp->dsp_completing = 1;
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
-	sched = daos_priv2sched(dsp);
-	daos_sched_complete_cb(sched);
-	sched->ds_udata = NULL;
-
-	/* drop reference of daos_sched_init() */
-	daos_sched_decref(dsp);
-
-	return true;
+	return completed;
 }
 
 /* Run tasks for this schedule */
@@ -509,11 +488,12 @@ daos_sched_run(struct daos_sched *sched)
 			break;
 	};
 
+	/* drop reference of daos_sched_init() */
+	daos_sched_decref(dsp);
 }
 
-/* Cancel tasks for this schedule */
 void
-daos_sched_cancel(struct daos_sched *sched, int ret)
+daos_sched_complete(struct daos_sched *sched, int ret, bool cancel)
 {
 	struct daos_sched_private *dsp = daos_sched2priv(sched);
 
@@ -521,20 +501,28 @@ daos_sched_cancel(struct daos_sched *sched, int ret)
 		sched->ds_result = ret;
 
 	pthread_mutex_lock(&dsp->dsp_lock);
-	if (dsp->dsp_cancelling) {
+	if (dsp->dsp_cancelling || dsp->dsp_completing) {
 		pthread_mutex_unlock(&dsp->dsp_lock);
 		return;
 	}
-	dsp->dsp_cancelling = 1;
+
+	if (cancel)
+		dsp->dsp_cancelling = 1;
+	else
+		dsp->dsp_completing = 1;
+
 	daos_sched_addref_locked(dsp); /* +1 for daos_sched_run */
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
-	/* Wait until all inflight task has been cancelled */
+	/* Wait for all in-flight tasks */
 	while (1) {
 		daos_sched_run(sched);
 		if (dsp->dsp_inflight == 0)
 			break;
 	};
+
+	daos_sched_complete_cb(sched);
+	sched->ds_udata = NULL;
 	daos_sched_decref(dsp);
 }
 
@@ -544,24 +532,32 @@ daos_task_complete(struct daos_task *task, int ret)
 	struct daos_task_private	*dtp	= daos_task2priv(task);
 	struct daos_sched_private	*dsp	= dtp->dtp_sched;
 	struct daos_sched		*sched	= daos_task2sched(task);
+	bool				bumped  = false;
 
 	if (task->dt_result == 0)
 		task->dt_result = ret;
 
 	pthread_mutex_lock(&dsp->dsp_lock);
-	/* +1 for daos_sched_run() */
-	daos_sched_addref_locked(dsp);
 
-	if (!dsp->dsp_cancelling)
+	if (!dsp->dsp_cancelling) {
+		/* +1 for daos_sched_run() */
+		daos_sched_addref_locked(dsp);
+		bumped = true; /* track in case another thread cancels */
 		daos_task_complete_locked(dtp, dsp);
-	else
+	} else {
 		daos_task_decref_locked(dtp);
+	}
+
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
 	/* Let's run sched to process the complete task */
 	if (!dsp->dsp_cancelling)
 		daos_sched_run(sched);
+	/** If another thread canceled, make sure we drop the ref count */
+	else if (bumped)
+		daos_sched_decref(dsp);
 
+	/** -1 from daos_task_init() */
 	daos_sched_decref(dsp);
 }
 

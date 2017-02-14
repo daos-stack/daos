@@ -32,7 +32,7 @@ daos_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -56,7 +56,7 @@ daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -72,7 +72,7 @@ daos_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -88,7 +88,7 @@ daos_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -104,7 +104,7 @@ daos_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 

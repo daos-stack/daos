@@ -33,7 +33,7 @@ daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -51,7 +51,7 @@ daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -67,7 +67,7 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -82,7 +82,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 

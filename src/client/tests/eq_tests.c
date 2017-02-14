@@ -41,7 +41,8 @@
  * cases, this daos_eq_internal should not be exposed */
 #include "client_internal.h"
 
-#define EQT_EV_COUNT		10000
+#define EQT_EV_COUNT		1000
+#define EQ_COUNT		5
 #define EQT_SLEEP_INV		2
 
 #define DAOS_TEST_FMT	"-------- %s test_%s: %s\n"
@@ -748,6 +749,221 @@ out:
 	return rc;
 }
 
+static int
+eq_test_6()
+{
+	static daos_handle_t	eqh[EQ_COUNT];
+	struct daos_event	*eps[EQ_COUNT][EQT_EV_COUNT];
+	struct daos_event	*events[EQ_COUNT][EQT_EV_COUNT];
+	bool			ev_flag;
+	int			rc;
+	int			i, j;
+
+	DAOS_TEST_ENTRY("6", "Multiple EQs");
+
+	D_ERROR("Create EQs and initialize events.\n");
+	for (i = 0; i < EQ_COUNT; i++) {
+		rc = daos_eq_create(&eqh[i]);
+		if (rc != 0) {
+			D_ERROR("Failed to create EQ: %d\n", rc);
+			return rc;
+		}
+
+		for (j = 0; j < EQT_EV_COUNT; j++) {
+			events[i][j] = malloc(sizeof(*events[i][j]));
+			if (events[i][j] == NULL) {
+				rc = -ENOMEM;
+				goto out_eq;
+			}
+			rc = daos_event_init(events[i][j], eqh[i], NULL);
+			if (rc != 0)
+				goto out_eq;
+		}
+	}
+
+	D_ERROR("Launch and test inflight events\n");
+	for (j = 0; j < EQT_EV_COUNT; j++) {
+		for (i = 0; i < EQ_COUNT; i++) {
+			rc = daos_event_launch(events[i][j]);
+			if (rc != 0) {
+				D_ERROR("Failed to launch event %d: %d\n", j,
+					rc);
+				goto out_ev;
+			}
+
+			/** Complete half the events */
+			if (i > EQT_EV_COUNT/2) {
+				daos_event_complete(events[i][j], 0);
+
+				/** Test completion */
+				rc = daos_event_test(events[i][j],
+						     DAOS_EQ_NOWAIT, &ev_flag);
+				if (rc != 0) {
+					D_ERROR("Test returns %d\n", rc);
+					goto out_ev;
+				}
+				if (!ev_flag) {
+					D_ERROR("Event should be completed\n");
+					rc = -1;
+					goto out_ev;
+				}
+			} else {
+				rc = daos_event_test(events[i][j],
+						     DAOS_EQ_NOWAIT, &ev_flag);
+				if (rc != 0) {
+					D_ERROR("Test returns %d\n", rc);
+					goto out_ev;
+				}
+				if (ev_flag) {
+					D_ERROR("Event should be inflight\n");
+					rc = -1;
+					goto out_ev;
+				}
+			}
+		}
+	}
+
+	D_ERROR("Poll EQs with 1/2 the events\n");
+	for (i = 0; i < EQ_COUNT; i++) {
+		rc = daos_eq_poll(eqh[i], 1, 10, EQT_EV_COUNT/2, eps[i]);
+		if (rc != 0) {
+			D_ERROR("Expect to poll zero event: %d\n", rc);
+			rc = -1;
+			goto out_ev;
+		}
+	}
+
+	D_ERROR("Complete events\n");
+	for (j = 0; j < EQT_EV_COUNT/2; j++)
+		for (i = 0; i < EQ_COUNT; i++)
+			daos_event_complete(events[i][j], 0);
+
+	D_ERROR("Poll EQ with completion events\n");
+	for (i = 0; i < EQ_COUNT; i++) {
+		rc = daos_eq_poll(eqh[i], 0, -1, EQT_EV_COUNT, eps[i]);
+		if (rc != EQT_EV_COUNT/2) {
+			D_ERROR("Expect to poll %d event: %d\n",
+				EQT_EV_COUNT, rc);
+			rc = -1;
+			goto out_ev;
+		}
+	}
+	rc = 0;
+
+out_ev:
+	for (i = 0; i < EQ_COUNT; i++) {
+		for (j = 0; j < EQT_EV_COUNT; j++) {
+			if (events[i][j] != NULL) {
+				daos_event_fini(events[i][j]);
+				free(events[i][j]);
+			}
+		}
+	}
+out_eq:
+	for (i = 0; i < EQ_COUNT; i++)
+		daos_eq_destroy(eqh[i], 1);
+
+	DAOS_TEST_EXIT(rc);
+	return rc;
+}
+
+static int
+eq_test_7()
+{
+	struct daos_event	*child_events[EQT_EV_COUNT];
+	struct daos_event	*events[EQT_EV_COUNT];
+	bool			ev_flag;
+	int			rc;
+	int			i;
+
+	DAOS_TEST_ENTRY("7", "Events with no EQ");
+
+	D_ERROR("Initialize & launch parent and child events.\n");
+	for (i = 0; i < EQT_EV_COUNT; i++) {
+		events[i] = malloc(sizeof(*events[i]));
+		if (events[i] == NULL)
+			return -ENOMEM;
+		child_events[i] = malloc(sizeof(*child_events[i]));
+		if (child_events[i] == NULL)
+			return -ENOMEM;
+
+		rc = daos_event_init(events[i], DAOS_HDL_INVAL, NULL);
+		if (rc != 0)
+			goto out_free;
+		rc = daos_event_init(child_events[i], DAOS_HDL_INVAL,
+				     events[i]);
+		if (rc != 0)
+			goto out_free;
+
+		rc = daos_event_launch(child_events[i]);
+		if (rc != 0)
+			goto out_free;
+		rc = daos_event_launch(events[i]);
+		if (rc != 0)
+			goto out_free;
+	}
+
+	D_ERROR("Test events\n");
+	for (i = 0; i < EQT_EV_COUNT; i++) {
+		rc = daos_event_test(events[i], DAOS_EQ_NOWAIT, &ev_flag);
+		if (rc != 0) {
+			D_ERROR("Test returns %d\n", rc);
+			goto out_free;
+		}
+		if (ev_flag) {
+			D_ERROR("Event should be inflight\n");
+			rc = -1;
+			goto out_free;
+		}
+	}
+
+	D_ERROR("Complete Child & Parent events\n");
+	for (i = 0; i < EQT_EV_COUNT; i++) {
+		daos_event_complete(child_events[i], 0);
+
+		rc = daos_event_test(events[i], DAOS_EQ_NOWAIT, &ev_flag);
+		if (rc != 0) {
+			D_ERROR("Test returns %d\n", rc);
+			goto out_free;
+		}
+		if (ev_flag) {
+			D_ERROR("Parent Event should still be in inflight\n");
+			rc = -1;
+			goto out_free;
+		}
+
+		daos_event_complete(events[i], 0);
+
+		/** Test completion */
+		rc = daos_event_test(events[i], DAOS_EQ_NOWAIT, &ev_flag);
+		if (rc != 0) {
+			D_ERROR("Test returns %d\n", rc);
+			goto out_free;
+		}
+		if (!ev_flag) {
+			D_ERROR("Event should be completed\n");
+			rc = -1;
+			goto out_free;
+		}
+	}
+
+	rc = 0;
+
+out_free:
+	for (i = 0; i < EQT_EV_COUNT; i++) {
+		if (child_events[i] != NULL) {
+			daos_event_fini(child_events[i]);
+			free(child_events[i]);
+		}
+		if (events[i] != NULL) {
+			daos_event_fini(events[i]);
+			free(events[i]);
+		}
+	}
+	DAOS_TEST_EXIT(rc);
+	return rc;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -786,6 +1002,14 @@ main(int argc, char **argv)
 		goto failed;
 
 	rc = eq_test_5();
+	if (rc != 0)
+		goto failed;
+
+	rc = eq_test_6();
+	if (rc != 0)
+		goto failed;
+
+	rc = eq_test_7();
 	if (rc != 0)
 		goto failed;
 

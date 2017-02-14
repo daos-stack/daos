@@ -34,7 +34,7 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -49,7 +49,7 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -76,7 +76,7 @@ daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -147,7 +147,7 @@ daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
 	struct daos_task *task;
 	int		  rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 

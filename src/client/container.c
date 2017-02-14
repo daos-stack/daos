@@ -43,7 +43,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -59,7 +59,7 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -74,7 +74,7 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -90,7 +90,7 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(NULL, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 

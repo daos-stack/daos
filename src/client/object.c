@@ -373,10 +373,11 @@ daos_obj_comp_cb(struct daos_task *task, void *data)
 	struct daos_obj_arg *arg = daos_task2arg(task);
 	struct daos_task  *pool_task;
 	struct daos_task  *rw_task;
+	daos_event_t *ev = (daos_event_t *)data;
 	int		  rc = task->dt_result;
 
 	if (rc == 0 || !daos_obj_retry_error(rc)) {
-		sched->ds_result = rc;
+		daos_event_complete(ev, rc);
 		return rc;
 	}
 
@@ -432,7 +433,7 @@ daos_obj_comp_cb(struct daos_task *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	rc = daos_task_register_comp_cb(rw_task, daos_obj_comp_cb, NULL);
+	rc = daos_task_register_comp_cb(rw_task, daos_obj_comp_cb, ev);
 	if (rc != 0)
 		D_GOTO(out, rc);
 out:

@@ -31,6 +31,7 @@
 
 #define DD_SUBSYS	DD_FAC(client)
 #include "client_internal.h"
+#include <daos/client.h>
 #include <daos/rpc.h>
 
 static struct daos_hhash *daos_eq_hhash;
@@ -73,6 +74,12 @@ static crt_context_t daos_eq_ctx;
 static pthread_mutex_t daos_eq_lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned int refcount;
 
+/*
+ * Pointer to global scheduler for events not part of an EQ. Events initialized
+ * as part of an EQ will be tracked in that EQ scheduler.
+ */
+static struct daos_sched daos_sched_g;
+
 int
 daos_eq_lib_init()
 {
@@ -103,7 +110,13 @@ daos_eq_lib_init()
 		D_GOTO(crt, rc);
 	}
 
+	/** set up scheduler for non-eq events */
+	rc = daos_sched_init(&daos_sched_g, NULL, daos_eq_ctx);
+	if (rc != 0)
+		D_GOTO(crt, rc);
+
 	refcount = 1;
+
 unlock:
 	pthread_mutex_unlock(&daos_eq_lock);
 	return rc;
@@ -126,6 +139,8 @@ daos_eq_lib_fini()
 		refcount--;
 		D_GOTO(unlock, rc = 0);
 	}
+
+	daos_sched_complete(&daos_sched_g, 0, true);
 
 	if (daos_eq_ctx != NULL) {
 		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
@@ -361,11 +376,14 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 		    parent_evx->evx_status == DAOS_EVS_ABORTED)
 			return 0;
 
-		/* If all children have completed, complete the parent */
-		if (parent_evx->evx_status == DAOS_EVS_RUNNING) {
-			parent_evx->evx_status = DAOS_EVS_COMPLETED;
-			rc = daos_event_complete_cb(parent_evx, 0);
-		}
+		/* If the parent is not a barrier it will complete on its own */
+		if (!parent_evx->is_barrier)
+			return 0;
+
+		/* Complete the barrier parent */
+		D_ASSERT(parent_evx->evx_status == DAOS_EVS_RUNNING);
+		parent_evx->evx_status = DAOS_EVS_COMPLETED;
+		rc = daos_event_complete_cb(parent_evx, rc);
 
 		parent_ev->ev_error = parent_ev->ev_error ?: rc;
 		evx = parent_evx;
@@ -417,7 +435,12 @@ daos_event_launch(struct daos_event *ev)
 	}
 
 	daos_event_launch_locked(eqx, evx);
-	if (evx->evx_nchild > 0 &&
+
+	/*
+	 * If all child events completed before a barrier parent was launched,
+	 * complete the parent.
+	 */
+	if (evx->is_barrier && evx->evx_nchild > 0 &&
 	    evx->evx_nchild == evx->evx_nchild_comp) {
 		D_ASSERT(evx->evx_nchild_running == 0);
 		daos_event_complete_locked(eqx, evx, rc);
@@ -441,6 +464,12 @@ daos_event_parent_barrier(struct daos_event *ev)
 		D_ERROR("Can't start a parent event with no children\n");
 		return -DER_INVAL;
 	}
+
+	/*
+	 * Mark this event as a barrier event to be completed by the last
+	 * completing child.
+	 */
+	evx->is_barrier = 1;
 
 	return daos_event_launch(ev);
 }
@@ -600,6 +629,8 @@ daos_eq_create(daos_handle_t *eqh)
 	daos_eq_insert(eqx);
 	eqx->eqx_ctx = daos_eq_ctx;
 	daos_eq_handle(eqx, eqh);
+
+	rc = daos_sched_init(&eqx->eqx_sched, NULL, daos_eq_ctx);
 
 	daos_eq_putref(eqx);
 	return rc;
@@ -848,6 +879,9 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 		eq->eq_n_comp--;
 	}
 	eqx->eqx_ctx = NULL;
+
+	daos_sched_complete(&eqx->eqx_sched, rc, true);
+
 out:
 	pthread_mutex_unlock(&eqx->eqx_lock);
 	if (rc == 0)
@@ -958,6 +992,7 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		daos_list_add_tail(&evx->evx_link, &parent_evx->evx_child);
 		evx->evx_eqh	= parent_evx->evx_eqh;
 		evx->evx_ctx	= parent_evx->evx_ctx;
+		evx->evx_sched	= parent_evx->evx_sched;
 		evx->evx_parent	= parent_evx;
 		parent_evx->evx_nchild++;
 	} else if (!daos_handle_is_inval(eqh)) {
@@ -970,9 +1005,11 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		}
 		/* inherit transport context from event queue */
 		evx->evx_ctx = eqx->eqx_ctx;
+		evx->evx_sched = &eqx->eqx_sched;
 		daos_eq_putref(eqx);
 	} else {
 		evx->evx_ctx = daos_eq_ctx;
+		evx->evx_sched = &daos_sched_g;
 	}
 
 	return rc;
@@ -1163,33 +1200,22 @@ daos_event_priv_wait()
 struct daos_sched *
 daos_ev2sched(struct daos_event *ev)
 {
-	return &daos_ev2evx(ev)->evx_sched;
+	return daos_ev2evx(ev)->evx_sched;
 }
 
-crt_context_t*
+crt_context_t *
 daos_task2ctx(struct daos_task *task)
 {
-	struct daos_sched		*sched = daos_task2sched(task);
-	daos_event_t			*ev = (daos_event_t *)sched->ds_udata;
-	struct daos_event_private	*evx = daos_ev2evx(ev);
+	struct daos_sched *sched = daos_task2sched(task);
 
-	return evx->evx_ctx;
-}
-
-static int
-sched_comp_cb(void *arg, int rc)
-{
-	daos_event_t *ev = (daos_event_t *)arg;
-
-	daos_event_complete(ev, rc);
-
-	return 0;
+	D_ASSERT(sched->ds_udata != NULL);
+	return (crt_context_t *)sched->ds_udata;
 }
 
 /**
  * The daos client internal will use daos_task, this function will
  * initialize the daos task/scheduler from event, and launch
- * event.
+ * event. This is a convenience function used in the event APIs.
  */
 int
 daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg,
@@ -1197,7 +1223,6 @@ daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg,
 		      daos_event_t **evp)
 {
 	daos_event_t *ev = *evp;
-	struct daos_sched *sched;
 	struct daos_task *task = NULL;
 	int rc;
 
@@ -1207,21 +1232,16 @@ daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg,
 			return rc;
 	}
 
-	sched = daos_ev2sched(ev);
-	rc = daos_sched_init(sched, sched_comp_cb, ev);
-	if (rc != 0)
-		return rc;
-
 	D_ALLOC_PTR(task);
 	if (task == NULL)
-		D_GOTO(err_sched, rc = -DER_NOMEM);
+		return -DER_NOMEM;
 
-	rc = daos_task_init(task, NULL, arg, arg_size, sched, NULL);
+	rc = daos_task_init(task, NULL, arg, arg_size, daos_ev2sched(ev), NULL);
 	if (rc != 0)
 		D_GOTO(err_task, rc = -DER_NOMEM);
 
 	if (comp_cb != NULL) {
-		rc = daos_task_register_comp_cb(task, comp_cb, NULL);
+		rc = daos_task_register_comp_cb(task, comp_cb, ev);
 		if (rc != 0)
 			D_GOTO(err_task, rc);
 	}
@@ -1237,7 +1257,19 @@ daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg,
 
 err_task:
 	D_FREE_PTR(task);
-err_sched:
-	daos_sched_cancel(sched, rc);
+	return rc;
+}
+
+/*
+ * Task completion CB to complete the high level event. This is used by the
+ * event APIs.
+ */
+int
+daos_event_comp_cb(struct daos_task *task, void *data)
+{
+	daos_event_t   *ev = (daos_event_t *)data;
+	int		rc = task->dt_result;
+
+	daos_event_complete(ev, rc);
 	return rc;
 }

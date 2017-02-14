@@ -45,7 +45,7 @@ typedef struct daos_eq {
 	int			eq_n_running;
 
 	struct {
-		uint64_t	space[20];
+		uint64_t	space[72];
 	}			eq_private;
 
 } daos_eq_t;
@@ -69,6 +69,8 @@ struct daos_event_private {
 	unsigned int		evx_nchild;
 	unsigned int		evx_nchild_running;
 	unsigned int		evx_nchild_comp;
+	/** flag to indicate whether event is a barrier event */
+	unsigned int		is_barrier:1;
 
 	unsigned int		evx_flags;
 	daos_ev_status_t	evx_status;
@@ -77,7 +79,8 @@ struct daos_event_private {
 
 	crt_context_t		evx_ctx;
 	struct daos_event_callback evx_callback;
-	struct daos_sched	evx_sched;
+
+	struct daos_sched	*evx_sched;
 };
 
 static inline struct daos_event_private *
@@ -103,7 +106,10 @@ struct daos_eq_private {
 	struct daos_hhash	*eqx_events_hash;
 
 	/* CRT context associated with this eq */
-	crt_context_t		 eqx_ctx;
+	crt_context_t		eqx_ctx;
+
+	/* Scheduler associated with this EQ */
+	struct daos_sched	eqx_sched;
 };
 
 static inline struct daos_eq_private *
@@ -146,6 +152,9 @@ daos_pool_query_async(daos_handle_t ph, daos_rank_list_t *tgts,
 
 int
 daos_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
+
+int
+daos_event_comp_cb(struct daos_task *task, void *data);
 
 /**
  * Wait for completion if blocking mode. We always return 0 for asynchronous

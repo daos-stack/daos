@@ -584,7 +584,7 @@ typedef struct daos_event {
 	int			ev_error;
 	/** Internal use, please do not modify */
 	struct {
-		uint64_t	space[70];
+		uint64_t	space[19];
 	}			ev_private;
 	/** Used for debugging */
 	uint64_t		ev_debug;
