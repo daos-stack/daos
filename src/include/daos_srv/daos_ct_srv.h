@@ -28,7 +28,4 @@
 #define __DCT_SRV_H__
 
 #include <daos/rpc.h>
-
-int dcts_hdlr_ping(crt_rpc_t *rpc);
-
-#endif /* __DCT_SRV_H__ */
+#endif /*__DCTS_INTERNAL_H__*/

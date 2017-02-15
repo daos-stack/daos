@@ -102,7 +102,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		D_GOTO(out, rc);
 	}
 	/* FIXME Harded coded enpoint stuff */
-	ep.ep_grp = &from->ti_group;
+	ep.ep_grp = from->ti_group;
 	ep.ep_rank = from->ti_leader;
 	ep.ep_tag = 0;
 

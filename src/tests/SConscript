@@ -15,3 +15,4 @@ daosbench = denv.Program('daosbench', 'daosbench.c', LIBS=libs)
 denv.Install('$PREFIX/bin/', daosbench)
 # tests
 SConscript('suite/SConscript', exports = ['denv'])
+SConscript('tier/SConscript', exports = ['denv'])

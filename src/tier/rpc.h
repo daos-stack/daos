@@ -51,6 +51,10 @@
 enum tier_operation {
 	TIER_PING		= 1,
 	TIER_FETCH		= 2,
+	TIER_CROSS_CONN		= 3,
+	TIER_UPSTREAM_CONN	= 4,
+	TIER_REGISTER_COLD	= 5,
+	TIER_BCAST_HDL		= 6
 };
 
 struct tier_ping_in {
@@ -64,11 +68,50 @@ struct tier_ping_out {
 struct tier_fetch_in {
 	uuid_t		   tfi_pool;
 	uuid_t		   tfi_co_hdl;
-	daos_epoch_t       tfi_ep;
+	daos_epoch_t	   tfi_ep;
 };
 
 struct tier_fetch_out {
 	int32_t		tfo_ret;
+};
+
+struct tier_upstream_in {
+	uuid_t		ui_warm_id;
+	uuid_t		ui_cold_id;
+	crt_string_t	ui_warm_grp;
+	crt_string_t	ui_cold_grp;
+};
+
+struct tier_upstream_out {
+	int		uo_ret;
+};
+
+struct tier_cross_conn_in {
+	uuid_t		cci_warm_id;
+	crt_string_t	cci_warm_grp;
+};
+
+struct tier_cross_conn_out {
+	int		cco_ret;
+};
+
+struct tier_register_cold_in {
+	uuid_t		rci_colder_id;
+	crt_string_t	rci_colder_grp;
+	crt_string_t	rci_tgt_grp;
+};
+
+struct tier_register_cold_out {
+	int		rco_ret;
+};
+
+struct tier_hdl_bcast_in {
+	daos_iov_t	hbi_pool_hdl;
+	int		hbi_type;
+};
+
+struct tier_hdl_bcast_out {
+	int		hbo_ret;
 };
 
 int

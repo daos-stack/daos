@@ -36,4 +36,20 @@ int
 dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		   daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
 		   struct daos_task *task);
+/**
+ * Inter-tier connect, warm-to-cold
+ * /param warm_id	uuid of the warm pool
+ * /param warm_grp	srv_grp of the warmer tier
+ * /param cold_id	uuid of the colder tier pool
+ * /param cold_grp	srv_grp of the colder tier
+ * /param task		daos task
+ *
+ * /return		integer error code
+ */
+int dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
+		    struct daos_task *task);
+
+int dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
+			  char *tgt_grp, struct daos_task *task);
+
 #endif /* __DC_TIER_H__ */

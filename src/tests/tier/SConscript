@@ -1,0 +1,10 @@
+#!python
+
+Import('denv')
+
+libraries = ['daos_common', 'daos', 'daos_tests', 'crt_util', 'crt']
+libraries += ['daos_tier', 'uuid', 'mpi']
+libraries += ['cmocka']
+
+test = denv.Program('cross_conn_test', Glob('*.c'), LIBS = libraries)
+denv.Install('$PREFIX/bin/', test)

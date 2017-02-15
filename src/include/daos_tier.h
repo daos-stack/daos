@@ -56,16 +56,17 @@ typedef struct {
 	uint64_t	cp_lo_water;
 } daos_cache_pol_t;
 
-/**
- * Type of pool/tier
- */
 typedef enum {
-	/* A regular caching tier */
-	DAOS_TR_CACHE,
-	/* A parking tier */
-	DAOS_TR_PARKING,
+	CACHE,
+	PARKING
 } daos_tier_type_t;
 
+/*Tier Specific Return Codes, consider moving to daos_errno?*/
+typedef enum{
+	NO_COLDER = 1,
+	ALREADY_CONN_WARM = 2,
+	ALREADY_CONN_COLD = 3
+} daos_tier_ret_codes_t;
 /**
  * Summarize a pool and its policies for caching
  */
@@ -85,20 +86,15 @@ typedef struct {
 	/* Group leader for pool */
 	daos_rank_t		ti_leader;
 	/* Group name for pool */
-	crt_group_t		ti_group;
+	crt_group_id_t		ti_group_id;
+	crt_group_t		*ti_group;
 } daos_tier_info_t;
-
-/* Convenient struct for moving all tier info together */
-typedef struct {
-	/* Number of tiers */
-	daos_nr_t		 tl_nr;
-	/* Reference to tier list */
-	daos_tier_info_t	*tl_tiers;
-} daos_tier_list_t;
-
 /**
  * CT (Pre)Fetch API
  */
+
+int
+daos_tier_popchk(daos_handle_t poh, const uuid_t cont_id, daos_event_t *ev);
 
 /**
  * Move an entire containers content at a specified highest committed epoch
@@ -133,34 +129,57 @@ daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
  * CT Tier Mapping API
  */
 
- /**
- * Registers one (or more) pools as tiers
- * \param local_pl_id
- *		[IN]	The ID of the pool that is local. This is used
- *			in figuring out which tiers are warmer
- *			and colder than self.
- * \param local_temp
- *		[IN]	temperature of the local tier, used to figure
- *			out who is warmer and colder than the local tier
- * \param tier_list
- *		[IN]	list of all tiers for a particular workflow
+
+/**
+ *  Wrapped Calls, eventually these should alias higher level DAOS calls
+ */
+
+
+/**
+ * Connect to the DAOS pool identified by UUID \a uuid. Upon a successful
+ * completion, \a poh returns the pool handle, and \a info returns the latest
+ * pool information. The CT version of this call also initiates upstream
+ * connections, i.e. connections from the colder tier to the warmer, and
+ * downstream connections, warm to cold.
+ *
+ * \param uuid	[IN]	UUID to identify a pool.
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
+ * \param svc	[IN]	Optional, indicates potential targets of the pool
+ *			service replicas. If not aware of the ranks of the pool
+ *			service replicas, the caller may pass in NULL.
+ * \param flags [IN]	Connect mode represented by the DAOS_PC_ bits.
+ * \param poh	[OUT]	Returned open handle.
+ * \param info	[OUT]	Returned pool info.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
- * \return		These values will be returned by \a ev::error in
+ * \return		These values will be returned by \a ev::ev_error in
  *			non-blocking mode:
- *			-0		Success
- *			-DER_NO_HDL	Invalid pool handle
+ *			0		Success
  *			-DER_INVAL	Invalid parameter
  *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Pool is nonexistent, this may also mean
+ *					that an intertier connection may have
+ *					failed.
  */
 int
-daos_tier_register(uuid_t local_pl_id, uint32_t local_temp,
-		   daos_tier_list_t tier_list, daos_event_t *ev);
+daos_tier_pool_connect(const uuid_t uuid, const char *grp,
+		       const daos_rank_list_t *svc, unsigned int flags,
+		       daos_handle_t *poh, daos_pool_info_t *info,
+		       daos_event_t *ev);
+
+/*Debug/testing call*/
+int
+daos_tier_register_cold(const uuid_t colder_uuid, const char *colder_grp,
+			const uuid_t tgt_uuid, char *tgt_grp_id,
+			daos_event_t *ev);
+
+
 
 /**
  * PING client call, mostly for testing and playing around
- * TODO add actual docstring if we decide to keep it
+ * TODO add docstring,and group if we decide to keep it
  */
 int
 daos_tier_ping(uint32_t ping_val, daos_event_t *ev);

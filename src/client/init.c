@@ -172,6 +172,7 @@ daos_fini(void)
 	if (!module_initialized)
 		D_GOTO(unlock, rc = -DER_UNINIT);
 
+	dc_tier_fini();
 	rc = daos_eq_lib_fini();
 	if (rc != 0) {
 		D_ERROR("failed to finalize eq: %d\n", rc);
@@ -179,7 +180,6 @@ daos_fini(void)
 	}
 
 	dc_rebuild_fini();
-	dc_tier_fini();
 	dc_obj_fini();
 	dc_cont_fini();
 	dc_pool_fini();

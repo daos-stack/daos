@@ -44,7 +44,7 @@ struct crt_req_format DQF_TIER_PING =
 struct crt_msg_field *tier_fetch_in_fields[] = {
 	&CMF_UUID,	/* pool uuid */
 	&CMF_UUID,	/* Container handle uuid */
-	&CMF_UINT64,    /* epoch */
+	&CMF_UINT64,	/* epoch */
 };
 
 struct crt_msg_field *tier_fetch_out_fields[] = {
@@ -54,6 +54,61 @@ struct crt_msg_field *tier_fetch_out_fields[] = {
 struct crt_req_format DQF_TIER_FETCH =
 	DEFINE_CRT_REQ_FMT("TIER_FETCH", tier_fetch_in_fields,
 			   tier_fetch_out_fields);
+
+struct crt_msg_field *tier_cross_conn_in_fields[] = {
+	&CMF_UUID,	/*cci_warm_id*/
+	&CMF_STRING,	/*cci_warm_grp*/
+};
+
+struct crt_msg_field *tier_cross_conn_out_fields[] = {
+	&CMF_INT,	/*cco_ret*/
+};
+
+struct crt_req_format DQF_TIER_CROSS_CONN =
+	DEFINE_CRT_REQ_FMT("TIER_CROSS_CONN", tier_cross_conn_in_fields,
+			   tier_cross_conn_out_fields);
+
+struct crt_msg_field *tier_upstream_conn_in_fields[] = {
+	&CMF_UUID,	/*ui_warm_id*/
+	&CMF_UUID,	/*ui_cold_id*/
+	&CMF_STRING,	/*ui_warm_grp*/
+	&CMF_STRING,	/*ui_cold_grp*/
+};
+
+struct crt_msg_field *tier_upstream_conn_out_fields[] = {
+	&CMF_INT,	/*uo_ret*/
+};
+
+struct crt_req_format DQF_TIER_UPSTREAM_CONN =
+	DEFINE_CRT_REQ_FMT("TIER_UPSTREAM_CONN", tier_upstream_conn_in_fields,
+			   tier_upstream_conn_out_fields);
+struct crt_msg_field *tier_register_cold_in_fields[] = {
+	&CMF_UUID,	/*rci_cold_id*/
+	&CMF_STRING,	/*rci_cold_grp*/
+	&CMF_STRING	/*tgt_grp*/
+};
+
+struct crt_msg_field *tier_register_cold_out_fields[] = {
+	&CMF_INT	/*rco_ret*/
+};
+
+struct crt_req_format DQF_TIER_REGISTER_COLD =
+	DEFINE_CRT_REQ_FMT("TIER_REGISTER_COLD", tier_register_cold_in_fields,
+			   tier_register_cold_out_fields);
+
+struct crt_msg_field *tier_hdl_bcast_in_fields[]  = {
+	&CMF_IOVEC,	/*hbi_pool_hdl*/
+	&CMF_INT	/*hbi_type*/
+};
+
+struct crt_msg_field *tier_hdl_bcast_out_fields[] = {
+	&CMF_INT	/*hbo_ret*/
+};
+
+struct crt_req_format DQF_TIER_BCAST_HDL =
+	DEFINE_CRT_REQ_FMT("TIER_BCAST_HDL", tier_hdl_bcast_in_fields,
+			   tier_register_cold_out_fields);
+
 int
 tier_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
 	       crt_opcode_t opc, crt_rpc_t **req)
@@ -78,6 +133,30 @@ struct daos_rpc tier_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_TIER_FETCH,
+	}, {
+		.dr_name	= "TIER_CROSS_CONN",
+		.dr_opc		= TIER_CROSS_CONN,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_TIER_CROSS_CONN,
+	}, {
+		.dr_name	= "TIER_UPSTREAM_CONN",
+		.dr_opc		= TIER_UPSTREAM_CONN,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_TIER_UPSTREAM_CONN,
+	}, {
+		.dr_name	= "TIER_REGISTER_COLD",
+		.dr_opc		= TIER_REGISTER_COLD,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_TIER_REGISTER_COLD,
+	}, {
+		.dr_name	= "TIER_BCAST_HDL",
+		.dr_opc		= TIER_BCAST_HDL,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_TIER_BCAST_HDL,
 	}, {
 		.dr_opc		= 0
 	}

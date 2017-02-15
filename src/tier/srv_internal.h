@@ -34,6 +34,17 @@
 #include <daos_types.h>
 #include <daos_srv/vos_types.h>
 
+extern char *colder_grp;
+extern uuid_t colder_id;
+extern daos_handle_t colder_poh;
+extern bool colder_conn_flg;
+
+extern char *warmer_grp;
+extern uuid_t warmer_id;
+extern daos_handle_t warmer_poh;
+extern bool warmer_conn_flg;
+
+
 struct daos_bld_iod_ctx {
 	daos_key_t		dkey;
 	daos_unit_oid_t		oid;
@@ -48,6 +59,25 @@ struct daos_bld_iod_ctx {
 int
 ds_tier_ping_handler(crt_rpc_t *rpc);
 
+
+/* Tier Management Functions
+ * Used to setup and debug inter-tier connections
+ */
+int
+ds_tier_hdlr_cross_conn(crt_rpc_t *rpc);
+
+int
+ds_tier_hdlr_upstream(crt_rpc_t *rpc);
+
+int
+ds_tier_hdlr_register_cold(crt_rpc_t *rpc);
+
+int
+ds_tier_hdlr_hdl_bcast(crt_rpc_t *rpc);
+
+
+
+/*May be redundant with tier register cold, check with john*/
 int
 ds_tier_pool_relate(crt_rpc_t *rpc);
 

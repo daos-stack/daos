@@ -34,6 +34,7 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 #include "srv_internal.h"
+#include <daos_srv/daos_ct_srv.h>
 
 static int
 ds_tier_init(void)
@@ -55,6 +56,18 @@ static struct daos_rpc_handler tier_handlers[] = {
 	}, {
 		.dr_opc		= TIER_FETCH,
 		.dr_hdlr	= ds_tier_fetch_handler,
+	}, {
+		.dr_opc		= TIER_CROSS_CONN,
+		.dr_hdlr	= ds_tier_hdlr_cross_conn,
+	}, {
+		.dr_opc		= TIER_UPSTREAM_CONN,
+		.dr_hdlr	= ds_tier_hdlr_upstream,
+	}, {
+		.dr_opc		= TIER_REGISTER_COLD,
+		.dr_hdlr	= ds_tier_hdlr_register_cold
+	}, {
+		.dr_opc		= TIER_BCAST_HDL,
+		.dr_hdlr	= ds_tier_hdlr_hdl_bcast
 	}, {
 		.dr_opc		= 0
 	}

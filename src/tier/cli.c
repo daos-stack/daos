@@ -63,5 +63,6 @@ void
 dc_tier_fini(void)
 {
 	D_DEBUG(DF_TIER, "Entered dc_tier_fini()\n");
+	tier_teardown();
 	daos_rpc_unregister(tier_rpcs);
 }
