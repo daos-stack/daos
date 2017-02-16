@@ -119,7 +119,7 @@ REQS.define('mercury',
             out_of_src_build=True)
 
 URL = \
-'https://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.2.tar.gz'
+'https://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.5.tar.gz'
 WEB_RETRIEVER = \
     WebRetriever(URL)
 REQS.define('hwloc', retriever=WEB_RETRIEVER,
@@ -193,7 +193,7 @@ REQS.define('argobots',
             libs=['abt'],
             headers=['abt.h'])
 
-RETRIEVER = GitRepoRetriever("http://review.whamcloud.com/coral/cppr",
+RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/coral/cppr",
                              True)
 REQS.define('cppr',
             retriever=RETRIEVER,
@@ -204,9 +204,9 @@ REQS.define('cppr',
                       "PREFIX=$CPPR_PREFIX install"],
             headers=["cppr.h"],
             libs=["cppr"],
-            requires=['ompi', 'mercury'])
+            requires=['ompi', 'mercury', 'cart', 'iof'])
 
-RETRIEVER = GitRepoRetriever("http://review.whamcloud.com/daos/iof",
+RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/daos/iof",
                              True)
 REQS.define('iof',
             retriever=RETRIEVER,
@@ -215,7 +215,7 @@ REQS.define('iof',
                       "CART_PREBUILT=$CART_PREFIX " \
                       "PREFIX=$IOF_PREFIX install"],
             headers=['cnss_plugin.h'],
-            requires=['ompi', 'mercury', 'mcl'])
+            requires=['ompi', 'cart'])
 
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
@@ -237,33 +237,17 @@ REQS.define('ofi',
             libs=['fabric'],
             headers=['rdma/fabric.h'])
 
-RETRIEVER = GitRepoRetriever("http://review.whamcloud.com/daos/mcl", True)
-REQS.define('mcl',
-            retriever=RETRIEVER,
-            commands=["scons "
-                      "PMIX_PREBUILT=$PMIX_PREFIX " \
-                      "OMPI_PREBUILT=$OMPI_PREFIX " \
-                      "MERCURY_PREBUILT=$MERCURY_PREFIX " \
-                      "PREFIX=$MCL_PREFIX install"],
-            headers=["process_set.h"],
-            libs=["mcl"],
-            requires=['ompi', 'mercury'])
-
-RETRIEVER = GitRepoRetriever("http://review.whamcloud.com/daos/cart", True)
+RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/daos/cart", True)
 REQS.define('cart',
             retriever=RETRIEVER,
             commands=["scons "
-                      "PMIX_PREBUILT=$PMIX_PREFIX " \
-                      "CCI_PREBUILT=$CCI_PREFIX " \
-                      "OPENPA_PREBUILT=$OPENPA_PREFIX " \
-                      "HWLOC_PREBUILT=$HWLOC_PREFIX " \
                       "ARGOBOTS_PREBUILT=$ARGOBOTS_PREFIX " \
                       "OMPI_PREBUILT=$OMPI_PREFIX " \
                       "MERCURY_PREBUILT=$MERCURY_PREFIX " \
                       "PREFIX=$CART_PREFIX install"],
             headers=["crt_api.h"],
             libs=["crt", "crt_util"],
-            requires=['ompi', 'mercury', 'argobots', 'pmix', 'crypto'])
+            requires=['ompi', 'mercury', 'argobots', 'crypto'])
 
 URL = 'https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-1.3.1.tar.gz'
 WEB_RETRIEVER = WebRetriever(URL)
