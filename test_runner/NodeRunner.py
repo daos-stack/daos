@@ -128,6 +128,8 @@ class NodeRunner():
     def process_terminate(self):
         """ poll remote processes """
         if self.proc.poll() is None:
+            self.logger.info("Terminate node: %s  type: %s",
+                             self.node, self.node_type)
             self.proc.terminate()
             #try:
             #    self.proc.wait(timeout=1)

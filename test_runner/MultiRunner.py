@@ -225,7 +225,7 @@ class MultiRunner(PostRunner.PostRunner):
                 rtn |= rtn_info['return_code']
             else:
                 rtn_info = {'duration' : 0, 'return_code' : rtn,
-                            'status' : "FAIL",
+                            'status' : "FAIL", 'name' : module_name,
                             'error' : "Daemon start failed"}
             subtest_results.append(rtn_info)
             self.post_run(subtest_results)

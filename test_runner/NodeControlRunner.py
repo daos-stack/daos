@@ -85,6 +85,7 @@ class NodeControlRunner():
                              str(node.node) + " rtn: " +  str(procrtn) + \
                              " **************"
                              )
+        self.logger.debug("execution time remaining: %d", loop_count)
         self.logger.info(
             "***********************************************************")
         return rtn
@@ -99,7 +100,7 @@ class NodeControlRunner():
                         )
         for node in self.node_list:
             node.launch_test(node_type)
-        loop_count = 720
+        loop_count = 1800
         running_count = len(self.node_list)
         self.logger.debug("******* started running count " + str(running_count))
         while running_count and loop_count:
@@ -122,6 +123,7 @@ class NodeControlRunner():
                 self.logger.info(str(node.test_name) + " on " + \
                                  str(node.node) + " rtn: " +  str(procrtn))
 
+        self.logger.info("execution time remaining: %d", loop_count)
         self.logger.info(
             "***********************************************************")
 
