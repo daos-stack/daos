@@ -27,28 +27,28 @@
 
 #include <daos_types.h>
 #include <daos_tier.h>
-#include "dct_rpc.h"
+#include "rpc.h"
 
 struct tier_ping_arg {
 	crt_rpc_t               *rpc;
 };
 
 static int
-dct_ping_cb(struct daos_task *task, void *data)
+tier_ping_cb(struct daos_task *task, void *data)
 {
 	struct tier_ping_arg	*arg = (struct tier_ping_arg *)data;
 	crt_rpc_t		*rpc = arg->rpc;
-	struct dct_ping_out	*out;
+	struct tier_ping_out	*out;
 	int                     rc = task->dt_result;
 
-	D_DEBUG(DF_MISC, "Entering dct_ping_cb\n");
+	D_DEBUG(DF_MISC, "Entering tier_ping_cb\n");
 
 	/* extract the RPC reply */
 	out = crt_reply_get(rpc);
 
 	D_DEBUG(DF_MISC, "DCT Ping Return Val %d\n", out->ping_out);
 
-	D_DEBUG(DF_MISC, "Leaving dct_ping_cb()");
+	D_DEBUG(DF_MISC, "Leaving tier_ping_cb()");
 
 	crt_req_decref(rpc);
 	D_FREE_PTR(arg);
@@ -59,9 +59,9 @@ int
 dc_tier_ping(uint32_t ping_val, struct daos_task *task)
 {
 
-	D_DEBUG(DF_MISC, "Entering dct_ping()\n");
+	D_DEBUG(DF_MISC, "Entering daos_tier_ping()\n");
 
-	struct dct_ping_in	*in;
+	struct tier_ping_in	*in;
 	crt_endpoint_t		ep;
 	crt_rpc_t		*rpc;
 	struct tier_ping_arg	*arg;
@@ -75,7 +75,7 @@ dc_tier_ping(uint32_t ping_val, struct daos_task *task)
 	ep.ep_tag = 0;
 
 	/* Create RPC and allocate memory for the various field-eybops */
-	rc = dct_req_create(daos_task2ctx(task), ep, DCT_PING, &rpc);
+	rc = tier_req_create(daos_task2ctx(task), ep, TIER_PING, &rpc);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
@@ -93,14 +93,14 @@ dc_tier_ping(uint32_t ping_val, struct daos_task *task)
 
 	arg->rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, dct_ping_cb, arg);
+	rc = daos_task_register_comp_cb(task, tier_ping_cb, arg);
 	if (rc != 0)
 		D_GOTO(out_arg, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);
 
-	D_DEBUG(DF_MISC, "leaving dct_ping()\n");
+	D_DEBUG(DF_MISC, "leaving daos_tier_ping()\n");
 
 	return rc;
 

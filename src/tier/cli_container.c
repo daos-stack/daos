@@ -21,52 +21,44 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * dcts: Module Definitions
+ * dctc: Client container operations
  *
- * dcts is the DCT server module/library. It exports the DCT RPC handlers and
- * the DCT server API. This file contains the definitions expected by server;
- * the DCT server API methods are exported directly where they are defined as
- * extern functions.
+ * dctc is the DCT client module/library. It exports the DCT API defined in
+ * daos_tier.h.
  */
 #define DD_SUBSYS	DD_FAC(tier)
 
-#include <daos_srv/daos_server.h>
+#include <daos/tier.h>
+#include <daos_tier.h>
+#include <pthread.h>
 #include <daos/rpc.h>
-#include "dct_rpc.h"
-#include "dcts_internal.h"
+#include "rpc.h"
 
-static int
-dct_mod_init(void)
+int
+dc_tier_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 {
 	return 0;
 }
 
-static int
-dct_mod_fini(void)
+
+int
+dc_tier_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
+	       daos_rank_list_t *failed, daos_handle_t *coh,
+	       daos_cont_info_t *info, daos_event_t *ev)
 {
 	return 0;
 }
 
-/* Note: the rpc input/output parameters is defined in daos_rpc */
-static struct daos_rpc_handler dcts_handlers[] = {
-	{
-		.dr_opc		= DCT_PING,
-		.dr_hdlr	= dcts_hdlr_ping,
-	}, {
-		.dr_opc		= TIER_FETCH,
-		.dr_hdlr	= dcts_hdlr_fetch,
-	}, {
-		.dr_opc		= 0
-	}
-};
+int
+dc_tier__cont_close(daos_handle_t coh, daos_event_t *ev)
+{
+	return 0;
+}
 
-struct dss_module tier_module =  {
-	.sm_name	= "tier",
-	.sm_mod_id	= DAOS_TIER_MODULE,
-	.sm_ver		= 1,
-	.sm_facs	= DSS_FAC_LOAD_CLI,
-	.sm_init	= dct_mod_init,
-	.sm_fini	= dct_mod_fini,
-	.sm_cl_rpcs	= dct_rpcs,
-	.sm_handlers	= dcts_handlers,
-};
+
+int
+dc_tier_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
+		  daos_event_t *ev)
+{
+	return 0;
+}

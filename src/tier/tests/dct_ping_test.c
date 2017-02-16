@@ -29,7 +29,7 @@ static void
 simple_ping_sync(void **state)
 {
 	/*struct dct_test_arg_t *arg = *state;*/
-	dct_ping(10, NULL);
+	daos_ping(10, NULL);
 }
 
 /* This arraydefines the functions that are called for each test.

@@ -21,43 +21,33 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * dctc: Client container operations
- *
- * dctc is the DCT client module/library. It exports the DCT API defined in
- * daos_tier.h.
- */
+ * tier_ping
+ * Implements the ping function of srv_internal.h.
+ **/
 #define DD_SUBSYS	DD_FAC(tier)
 
-#include <daos_tier.h>
-#include <pthread.h>
+#include <daos_srv/daos_ct_srv.h>
 #include <daos/rpc.h>
-#include "dct_rpc.h"
+#include "rpc.h"
 
 int
-daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
+ds_tier_ping_handler(crt_rpc_t *rpc)
 {
-	return 0;
+
+	struct tier_ping_in *in = crt_req_get(rpc);
+	struct tier_ping_out *out = crt_reply_get(rpc);
+	int  rc = 0;
+
+	D_DEBUG(DF_TIERS, "receive, ping %d.\n", rpc->cr_opc);
+
+	out->ping_out = in->ping_in + 1;
+
+	rc = crt_reply_send(rpc);
+
+	D_DEBUG(DF_TIERS, "ping ret val, 1 higher than input: %d\n",
+		out->ping_out);
+
+	return rc;
 }
 
 
-int
-daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
-	       daos_rank_list_t *failed, daos_handle_t *coh,
-	       daos_cont_info_t *info, daos_event_t *ev)
-{
-	return 0;
-}
-
-int
-daos_cont_close(daos_handle_t coh, daos_event_t *ev)
-{
-	return 0;
-}
-
-
-int
-daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
-		  daos_event_t *ev)
-{
-	return 0;
-}

@@ -41,15 +41,15 @@
  */
 typedef struct {
 	/* Choice of eviction alg */
-	uint32_t	dct_cp_evict;
+	uint32_t	cp_evict;
 	/* Choice of persistence policy */
-	uint32_t	dct_cp_persist;
+	uint32_t	cp_persist;
 	/* Choice of read ahead policy */
-	uint32_t	dct_cp_read_ahead;
+	uint32_t	cp_read_ahead;
 	/* hi-water mark for eviction */
-	uint64_t	dct_cp_hi_water;
+	uint64_t	cp_hi_water;
 	/* lo-water for eviction */
-	uint64_t	dct_cp_lo_water;
+	uint64_t	cp_lo_water;
 } daos_cache_pol_t;
 
 /**
@@ -67,17 +67,21 @@ typedef enum {
  */
 typedef struct {
 	/* What is the primary media of the pool */
-	daos_target_type_t	dct_ti_media;
+	daos_target_type_t	ti_media;
 	/* Describe the caching policy */
-	daos_cache_pol_t	dct_ti_policy;
+	daos_cache_pol_t	ti_policy;
 	/* What type of tier (currently only cache or parking) */
-	daos_tier_type_t	dct_ti_type;
+	daos_tier_type_t	ti_type;
 	/* Temperature of the tier-pool, used to set up a hierarchy */
-	uint32_t		dct_ti_tmpr;
+	uint32_t		ti_tmpr;
 	/* Open handle affiliated with this pool tier */
-	daos_handle_t		dct_ti_poh;
+	daos_handle_t		ti_poh;
 	/* UUID of the pool */
-	uuid_t			dct_ti_pool_id;
+	uuid_t			ti_pool_id;
+	/* Group leader for pool */
+	daos_rank_t		ti_leader;
+	/* Group name for pool */
+	crt_group_t		ti_group;
 } daos_tier_info_t;
 
 /* Convenient struct for moving all tier info together */
@@ -155,5 +159,5 @@ daos_tier_register(uuid_t local_pl_id, uint32_t local_temp,
  * TODO add actual docstring if we decide to keep it
  */
 int
-dct_ping(uint32_t ping_val, daos_event_t *ev);
+daos_tier_ping(uint32_t ping_val, daos_event_t *ev);
 #endif /* __DAOS_TIER_H__ */

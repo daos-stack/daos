@@ -31,7 +31,10 @@
 #include <daos_types.h>
 #include <daos_tier.h>
 #include <daos/pool.h>
-#include "dct_rpc.h"
+#include <daos/container.h>
+#include "rpc.h"
+#include "cli_internal.h"
+#include <daos_errno.h>
 
 struct tier_fetch_arg {
 	crt_rpc_t	*rpc;
@@ -40,7 +43,7 @@ struct tier_fetch_arg {
 };
 
 static int
-dct_fetch_cb(struct daos_task *task, void *data)
+tier_fetch_cb(struct daos_task *task, void *data)
 {
 	struct tier_fetch_arg	*arg = (struct tier_fetch_arg *)data;
 	struct dc_pool		*pool = arg->pool;
@@ -72,34 +75,46 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		   struct daos_task *task)
 {
 	struct tier_fetch_in	*in;
-	crt_endpoint_t		ep;
+	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
 	struct tier_fetch_arg	*arg;
 	struct dc_pool		*pool;
-	int			rc;
+	int			rc = 0;
+	daos_tier_info_t	*from;
 
-	D_DEBUG(DF_MISC, "Entering daos_fetch_container()\n");
+	D_DEBUG(DF_MISC, "Entering tier_fetch_cont()\n");
 
+	/* FIXME nuke the global */
+	from = g_tierctx.dtc_colder;
+	if (from == NULL) {
+		D_DEBUG(DF_TIERC, "fetch: have no colder tier\n");
+		D_GOTO(out, -DER_NONEXIST);
+	}
+	/* Create the local recipient container */
+	rc = dc_cont_create(poh, cont_id, NULL);
+	if (rc) {
+		D_DEBUG(DF_TIERC, "fetch: create local container: %d\n", rc);
+		D_GOTO(out, rc);
+	}
 	/* FIXME Harded coded enpoint stuff */
-	ep.ep_grp = NULL;
-	ep.ep_rank = 0;
+	ep.ep_grp = &from->ti_group;
+	ep.ep_rank = from->ti_leader;
 	ep.ep_tag = 0;
 
 	/* Create RPC and allocate memory for the various field-eybops */
-	rc = dct_req_create(daos_task2ctx(task), ep, TIER_FETCH, &rpc);
+	rc = tier_req_create(daos_task2ctx(task), ep, TIER_FETCH, &rpc);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
 	/* Grab the input struct of the RPC */
 	in = crt_req_get(rpc);
 
-	pool = dc_pool_lookup(poh);
+	pool = dc_pool_lookup(from->ti_poh);
 	if (pool == NULL)
-		return -DER_NO_HDL;
+		D_GOTO(out_task, -DER_NO_HDL);
 
 	uuid_copy(in->tfi_co_hdl, cont_id);
-	uuid_copy(in->tfi_pool, pool->dp_pool);
-	uuid_copy(in->tfi_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->tfi_pool, from->ti_pool_id);
 	in->tfi_ep  = fetch_ep;
 
 	crt_req_addref(rpc);
@@ -112,16 +127,14 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	arg->hdl = poh;
 	arg->pool = pool;
 
-	rc = daos_task_register_comp_cb(task, dct_fetch_cb, arg);
+	rc = daos_task_register_comp_cb(task, tier_fetch_cb, arg);
 	if (rc != 0)
 		D_GOTO(out_arg, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);
 
-	D_DEBUG(DF_MISC, "leaving dct_fetch()\n");
-
-	return rc;
+	D_DEBUG(DF_MISC, "leaving tier_fetch_cont()\n");
 
 out_arg:
 	D_FREE_PTR(arg);
@@ -130,5 +143,6 @@ out_req_put:
 	crt_req_decref(rpc);
 out_task:
 	daos_task_complete(task, rc);
+out:
 	return rc;
 }

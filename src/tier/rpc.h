@@ -48,22 +48,21 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-enum dct_operation {
-	DCT_PING		= 1,
+enum tier_operation {
+	TIER_PING		= 1,
 	TIER_FETCH		= 2,
 };
 
-struct dct_ping_in {
+struct tier_ping_in {
 	uint32_t	ping_in;
 };
 
-struct dct_ping_out {
+struct tier_ping_out {
 	uint32_t	ping_out;
 };
 
 struct tier_fetch_in {
 	uuid_t		   tfi_pool;
-	uuid_t		   tfi_pool_hdl;
 	uuid_t		   tfi_co_hdl;
 	daos_epoch_t       tfi_ep;
 };
@@ -73,9 +72,9 @@ struct tier_fetch_out {
 };
 
 int
-dct_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
-	       crt_opcode_t opc, crt_rpc_t **req);
+tier_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+		crt_opcode_t opc, crt_rpc_t **req);
 
 
-extern struct daos_rpc dct_rpcs[];
+extern struct daos_rpc tier_rpcs[];
 #endif /* __DCT_RPC_H__ */

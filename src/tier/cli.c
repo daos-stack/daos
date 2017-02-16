@@ -21,34 +21,47 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * dcts_fetch
- * Implements cross-tier fetching of objects and sub-objects (or will soon).
- **/
+ * cli.c: Module Definitions
+ *
+ * Daos caching/tiering client module/library. It exports the DCT API defined in
+ * daos_api.h.
+ */
 #define DD_SUBSYS	DD_FAC(tier)
 
-#include <daos_srv/daos_ct_srv.h>
+#include <pthread.h>
 #include <daos/rpc.h>
-#include "dct_rpc.h"
+#include "rpc.h"
+#include <daos/tier.h>
+#include "cli_internal.h"
 
+struct dc_tier_context g_tierctx;
+
+/**
+ *   Initialize daos client library.
+ *
+ *   This function will initialize crt interface and create
+ *   a crt context for the daos_ct client.
+ */
 int
-dcts_hdlr_fetch(crt_rpc_t *rpc)
+dc_tier_init(void)
 {
+	int rc = 0;
 
-	struct tier_fetch_in *in = crt_req_get(rpc);
-	struct tier_fetch_out *out = crt_reply_get(rpc);
-	int  rc = 0;
-
-	D_DEBUG(DF_TIERS, "dcts_fetch\n");
-	D_DEBUG(DF_TIERS, "\tpool:"DF_UUIDF"\n", in->tfi_pool);
-	D_DEBUG(DF_TIERS, "\tpool_hdl:"DF_UUIDF"\n", in->tfi_pool_hdl);
-	D_DEBUG(DF_TIERS, "\tcont_id:"DF_UUIDF"\n", in->tfi_co_hdl);
-	D_DEBUG(DF_TIERS, "\tepoch:"DF_U64"\n", in->tfi_ep);
-
-	out->tfo_ret = 0;
-
-	rc = crt_reply_send(rpc);
+	D_DEBUG(DF_TIER, "Entered dc_tier_init()\n");
+	rc = daos_rpc_register(tier_rpcs, NULL, DAOS_TIER_MODULE);
+	if (rc != 0)
+		D_ERROR("rpc register failure: rc = %d\n", rc);
 
 	return rc;
+
 }
 
-
+/**
+ * Finish daos client.
+ */
+void
+dc_tier_fini(void)
+{
+	D_DEBUG(DF_TIER, "Entered dc_tier_fini()\n");
+	daos_rpc_unregister(tier_rpcs);
+}

@@ -27,5 +27,15 @@
 
 #ifndef __DCT_ITERNAL_H__
 #define __DCT_INTERNAL_H__
+#include <daos_tier.h>
+
+struct dc_tier_context {
+	daos_tier_info_t *dtc_this;
+	daos_tier_info_t *dtc_warmer;
+	daos_tier_info_t *dtc_colder;
+};
+
+
+extern struct dc_tier_context g_tierctx;
 
 #endif /* __DCT_INTERNAL_H__ */
