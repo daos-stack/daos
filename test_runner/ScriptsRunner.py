@@ -46,6 +46,8 @@ class ScriptsRunner(PostRunner.PostRunner):
         self.test_info = test_info
         self.info = test_info.info
         self.logdir = log_base_path
+        self.globalTimeout = self.test_info.get_test_info(
+            'directives', 'globalTimeout', '1800')
         self.logger = logging.getLogger("TestRunnerLogger")
 
     def execute_testcase(self, cmd, parms, logname, waittime=1800):
@@ -99,7 +101,8 @@ class ScriptsRunner(PostRunner.PostRunner):
             else:
                 cmdstr = item.get('exe', item['name'])
             parameters = item.get('parameters', "")
-            rtn |= self.execute_testcase(cmdstr, parameters, logname)
+            waittime = int(item.get('waittime', self.globalTimeout))
+            rtn |= self.execute_testcase(cmdstr, parameters, logname, waittime)
 
         return rtn
 
@@ -139,8 +142,9 @@ class ScriptsRunner(PostRunner.PostRunner):
             else:
                 cmdstr = item.get('exe', item['name'])
             parameters = item.get('parameters', "")
+            waittime = int(item.get('waittime', self.globalTimeout))
             start_time = time.time()
-            rc = self.execute_testcase(cmdstr, parameters, log_name)
+            rc = self.execute_testcase(cmdstr, parameters, log_name, waittime)
             rtn |= rc
             info['duration'] = '{:.2f}'.format(time.time() - start_time)
             info['return_code'] = rc
