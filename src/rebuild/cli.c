@@ -1,0 +1,129 @@
+/**
+ * (C) Copyright 2017 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+/**
+ * rebuild: rebuild client
+ *
+ * rebuild client side API.
+ *
+ */
+#define DD_SUBSYS	DD_FAC(rebuild)
+
+#include <daos/rpc.h>
+#include <daos/event.h>
+#include <daos_task.h>
+#include "rpc.h"
+
+/**
+ * Initialize rebuild interface
+ */
+int
+dc_rebuild_init(void)
+{
+	int rc;
+
+	rc = daos_rpc_register(rebuild_cli_rpcs, NULL, DAOS_REBUILD_MODULE);
+	if (rc != 0)
+		D_ERROR("failed to register rebuild RPCs: %d\n", rc);
+
+	return rc;
+}
+
+/**
+ * Finalize rebuild interface
+ */
+void
+dc_rebuild_fini(void)
+{
+	daos_rpc_unregister(rebuild_cli_rpcs);
+}
+
+static int
+dc_rebuild_tgt_cp(struct daos_task *task, void *data)
+{
+	crt_rpc_t		*rpc = *(crt_rpc_t **)data;
+	struct rebuild_tgt_in   *in = crt_req_get(rpc);
+	struct rebuild_out	*out = crt_reply_get(rpc);
+	int			rc;
+
+	rc = out->ro_status;
+	if (rc != 0) {
+		D_ERROR(DF_UUID"failed to rebuild target: %d\n",
+			DP_UUID(in->rti_pool_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DB_TRACE, DF_UUID": rebuild\n", DP_UUID(in->rti_pool_uuid));
+
+out:
+	daos_group_detach(rpc->cr_ep.ep_grp);
+	crt_req_decref(rpc);
+	return rc;
+}
+
+int
+dc_rebuild_tgt(uuid_t pool_uuid, daos_rank_list_t *failed_list,
+	       struct daos_task *task)
+{
+	struct rebuild_tgt_in	*rti;
+	crt_endpoint_t		ep;
+	crt_rpc_t		*rpc;
+	int			rc;
+
+	rc = daos_group_attach(NULL, &ep.ep_grp);
+	if (rc != 0)
+		return rc;
+
+	/* Currently, rank 0 runs the pool and the (only) container service. */
+	ep.ep_rank = 0;
+	ep.ep_tag = 0;
+	rc = rebuild_req_create(daos_task2ctx(task), ep, REBUILD_TGT,
+				&rpc);
+	if (rc != 0)
+		D_GOTO(err_group, rc);
+
+	rti = crt_req_get(rpc);
+	D_ASSERT(rti != NULL);
+
+	uuid_copy(rti->rti_pool_uuid, pool_uuid);
+	rti->rti_failed_tgts = failed_list;
+
+	crt_req_addref(rpc);
+
+	rc = daos_task_register_comp_cb(task, dc_rebuild_tgt_cp, sizeof(rpc),
+					&rpc);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	D_DEBUG(DB_TRACE, "rebuild tgt for "DF_UUID"\n", DP_UUID(pool_uuid));
+	rc = daos_rpc_send(rpc, task);
+	if (rc != 0)
+		D_ERROR("Send rebuild rpc failed: %d\n", rc);
+	return rc;
+err_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+err_group:
+	daos_group_detach(ep.ep_grp);
+	return rc;
+}
+

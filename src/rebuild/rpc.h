@@ -42,7 +42,8 @@
  */
 enum pool_operation {
 	REBUILD_OBJECTS_SCAN	= 1,
-	REBUILD_OBJECTS		= 2
+	REBUILD_OBJECTS		= 2,
+	REBUILD_TGT		= 3,
 };
 
 struct rebuild_scan_in {
@@ -66,9 +67,17 @@ struct rebuild_objs_in {
 	struct crt_array	roi_shards;
 };
 
+struct rebuild_tgt_in {
+	uuid_t		 rti_pool_uuid;
+	daos_rank_list_t *rti_failed_tgts;
+};
+
+
 int rebuild_req_create(crt_context_t dtp_ctx, crt_endpoint_t tgt_ep,
 		       crt_opcode_t opc, crt_rpc_t **req);
 
 extern struct daos_rpc rebuild_rpcs[];
+extern struct daos_rpc rebuild_cli_rpcs[];
+
 
 #endif /* __REBUILD_RPC_H__ */

@@ -51,12 +51,21 @@ static struct crt_msg_field *rebuild_objs_in_fields[] = {
 	&DMF_UINT32_ARRAY, /* obj shards to be rebuilt */
 };
 
+static struct crt_msg_field *rebuild_tgt_in_fields[] = {
+	&CMF_UUID,	/* pool uuid */
+	&CMF_RANK_LIST,	/* failed targets */
+};
+
 struct crt_req_format DQF_REBUILD_OBJECTS_SCAN =
 	DEFINE_CRT_REQ_FMT("REBUILD_OBJECTS_SCAN", rebuild_scan_in_fields,
 			   rebuild_out_fields);
 
 struct crt_req_format DQF_REBUILD_OBJECTS =
 	DEFINE_CRT_REQ_FMT("REBUILD_OBJS", rebuild_objs_in_fields,
+			   rebuild_out_fields);
+
+struct crt_req_format DQF_REBUILD_TGT =
+	DEFINE_CRT_REQ_FMT("REBUILD_TGT", rebuild_tgt_in_fields,
 			   rebuild_out_fields);
 
 int
@@ -69,6 +78,18 @@ rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
 }
+
+struct daos_rpc rebuild_cli_rpcs[] = {
+	{
+		.dr_name	= "REBUILD_TGT",
+		.dr_opc		= REBUILD_TGT,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_REBUILD_TGT,
+	}, {
+		.dr_opc		= 0
+	}
+};
 
 struct daos_rpc rebuild_rpcs[] = {
 	{
@@ -83,9 +104,7 @@ struct daos_rpc rebuild_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_REBUILD_OBJECTS,
-	},
-
- {
+	}, {
 		.dr_opc		= 0
 	}
 };

@@ -48,14 +48,15 @@
  * objects.
  */
 int
-ds_rebuild(crt_context_t ctx, const uuid_t uuid,
-	   daos_rank_list_t *tgts_failed)
+ds_rebuild(const uuid_t uuid, daos_rank_list_t *tgts_failed)
 {
 	struct ds_pool		*pool;
 	crt_rpc_t		*rpc;
 	struct rebuild_scan_in	*rsi;
 	struct rebuild_out	*ro;
 	int			rc;
+
+	D_DEBUG(DB_TRACE, "rebuild "DF_UUID"\n", DP_UUID(uuid));
 
 	/* Broadcast the pool map first */
 	rc = ds_pool_pmap_broadcast(uuid, tgts_failed);
@@ -67,7 +68,8 @@ ds_rebuild(crt_context_t ctx, const uuid_t uuid,
 		return -DER_NO_HDL;
 
 	/* Then send rebuild RPC to all targets of the pool */
-	rc = ds_pool_bcast_create(ctx, pool, DAOS_REBUILD_MODULE,
+	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
+				  pool, DAOS_REBUILD_MODULE,
 				  REBUILD_OBJECTS_SCAN, &rpc, NULL,
 				  tgts_failed);
 	if (rc != 0) {
@@ -793,3 +795,25 @@ out:
 
 	return rc;
 }
+
+int
+ds_rebuild_tgt_handler(crt_rpc_t *rpc)
+{
+	struct rebuild_tgt_in	*rti;
+	struct rebuild_out	*ro;
+	int			rc;
+
+	rti = crt_req_get(rpc);
+	ro = crt_reply_get(rpc);
+
+	rc = ds_rebuild(rti->rti_pool_uuid, rti->rti_failed_tgts);
+
+	ro->ro_status = rc;
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("send reply failed: %d\n", rc);
+
+	return rc;
+}
+

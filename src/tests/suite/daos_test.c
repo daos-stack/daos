@@ -31,7 +31,7 @@
 #include "daos_test.h"
 
 /** All tests in default order ('d' must be the last one) */
-static const char *all_tests = "mpceiACod";
+static const char *all_tests = "mpceiACodr";
 
 /** Server crt group ID */
 static const char *server_group;
@@ -245,7 +245,7 @@ print_usage(int rank)
 	print_message("daos_test -d|--degraded\n");
 	print_message("daos_test -e|--daos_epoch_tests\n");
 	print_message("daos_test -o|--daos_epoch_recovery_tests\n");
-	/** print_message("daos_test -r|--rebuild\n"); */
+	print_message("daos_test -r|--rebuild\n");
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("daos_test -g|--group GROUP\n");
 	print_message("daos_test -h|--help\n");
@@ -323,6 +323,12 @@ run_specified_tests(const char *tests, int rank, int size)
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_degraded_test(rank, size);
 			break;
+		case 'r':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS rebuild tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_rebuild_test(rank, size);
+			break;
 		default:
 			D_ASSERT(0);
 		}
@@ -362,6 +368,7 @@ main(int argc, char **argv)
 		{"epoch",	no_argument,		NULL,	'e'},
 		{"erecov",	no_argument,		NULL,	'o'},
 		{"degraded",	no_argument,		NULL,	'd'},
+		{"rebuild",	no_argument,		NULL,	'r'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"help",	no_argument,		NULL,	'h'}
 	};
@@ -374,7 +381,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "ampcCdiAeog:h",
+	while ((opt = getopt_long(argc, argv, "ampcCdiAeog:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;

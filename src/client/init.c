@@ -33,6 +33,7 @@
 #include <daos/object.h>
 #include <daos/tier.h>
 #include "task_internal.h"
+#include <daos/rebuild.h>
 #include <pthread.h>
 
 /* Shared by pool, container, and object handles. */
@@ -142,9 +143,15 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_obj, rc);
 
+	/** set up rebuild */
+	rc = dc_rebuild_init();
+	if (rc != 0)
+		D_GOTO(out_tier, rc);
+
 	module_initialized = true;
 	D_GOTO(unlock, rc = 0);
-
+out_tier:
+	dc_rebuild_fini();
 out_obj:
 	dc_obj_fini();
 out_co:
@@ -182,6 +189,7 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+	dc_rebuild_fini();
 	dc_tier_fini();
 	dc_obj_fini();
 	dc_cont_fini();

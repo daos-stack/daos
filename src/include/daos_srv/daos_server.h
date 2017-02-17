@@ -222,5 +222,6 @@ int dss_rpc_send(crt_rpc_t *rpc);
 int dss_group_create(crt_group_id_t id, crt_rank_list_t *ranks,
 		     crt_group_t **group);
 int dss_group_destroy(crt_group_t *group);
+int ds_rebuild(const uuid_t uuid, daos_rank_list_t *tgts_failed);
 
 #endif /* __DSS_API_H__ */

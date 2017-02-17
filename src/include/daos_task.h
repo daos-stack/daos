@@ -374,6 +374,11 @@ typedef struct {
 	bool			incr_order;
 } daos_obj_list_recx_t;
 
+typedef struct {
+	uuid_t		 uuid;
+	daos_rank_list_t *list;
+} daos_rebuild_tgt_t;
+
 /**
  * Create an asynchronous task and associate it with a daos client operation.
  * For synchronous operations please use the specific API for that operation.

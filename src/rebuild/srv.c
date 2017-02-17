@@ -53,6 +53,9 @@ static struct daos_rpc_handler rebuild_handlers[] = {
 		.dr_opc		= REBUILD_OBJECTS,
 		.dr_hdlr	= ds_rebuild_obj_handler
 	}, {
+		.dr_opc		= REBUILD_TGT,
+		.dr_hdlr	= ds_rebuild_tgt_handler
+	}, {
 		.dr_opc		= 0
 	}
 };
@@ -100,6 +103,7 @@ struct dss_module rebuild_module =  {
 	.sm_ver		= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,
+	.sm_cl_rpcs	= rebuild_cli_rpcs,
 	.sm_srv_rpcs	= rebuild_rpcs,
 	.sm_handlers	= rebuild_handlers,
 	.sm_key		= &rebuild_module_key,

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2017 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,23 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#ifndef __DAOS_CLIENT_H__
-#define __DAOS_CLIENT_H__
+/**
+ * dc_rebuild: Rebuild Client API
+ *
+ * This consists of dc_rebuild methods that do not belong to DAOS API.
+ */
 
-extern struct daos_hhash *daos_client_hhash;
+#ifndef __DAOS_REBUILD_H__
+#define __DAOS_REBUILD_H__
+
+#include <daos_types.h>
+#include <daos/client.h>
+#include <daos/scheduler.h>
+#include <daos/common.h>
 
 int
-daos_rebuild_tgt(uuid_t pool_uuid, daos_rank_list_t *failed_list,
-		 daos_event_t *ev);
+dc_rebuild_tgt(uuid_t pool_uuid, daos_rank_list_t *failed_list,
+	       struct daos_task *task);
+int dc_rebuild_init(void);
+void dc_rebuild_fini(void);
 #endif
