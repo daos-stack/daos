@@ -180,7 +180,7 @@ class MultiRunner(PostRunner.PostRunner):
 
         file_hdlr = None
         sys.path.append("scripts")
-        rtn = 0
+        run_rtn = 0
         main_file = logging.FileHandler(
             os.path.join(self.log_dir_base, "TestRunner.log"))
         main_file.setLevel(logging.DEBUG)
@@ -189,6 +189,7 @@ class MultiRunner(PostRunner.PostRunner):
             "\n**********************************************************")
         self.test_info = TestInfoRunner.TestInfoRunner(self.info)
         for test_module_name in self.test_list:
+            rtn = 0
             if self.test_info.load_testcases(test_module_name):
                 return 1
             module_name = str(self.test_info.get_test_info('module', 'name'))
@@ -219,7 +220,7 @@ class MultiRunner(PostRunner.PostRunner):
             subtest_results = []
             if self.test_info.get_test_info('use_daemon'):
                 self.daemon = self.import_daemon(self.logdir)
-                rtn |= self.daemon.launch_process()
+                rtn = self.daemon.launch_process()
             if not rtn:
                 rtn_info = self.execute_strategy()
                 rtn |= rtn_info['return_code']
@@ -234,9 +235,10 @@ class MultiRunner(PostRunner.PostRunner):
             self.nodes.nodes_dump()
             del self.nodes
             self.nodes = None
+            run_rtn |= rtn
         self.logger.info(
             "\n*************************************************************")
         main_file.close()
         self.logger.removeHandler(main_file)
 
-        return rtn
+        return run_rtn
