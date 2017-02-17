@@ -75,19 +75,23 @@ class TestGroup(commontestsuite.CommonTestSuite):
     pass_env = " -x CCI_CONFIG -x CRT_LOG_MASK "
 
     def test_group_three_nodes(self):
-        """Simple process group test two node"""
+        """Simple process group test three nodes"""
 
         if not os.getenv('TR_USE_URI', ""):
             self.skipTest('requires three or more nodes.')
 
         testmsg = self.shortDescription()
-        (servers, client) = self.common_add_server_client()
-        service_nodes = servers.split(',')
+        servers = self.common_get_server_list()
+        if not servers or len(servers) < 2:
+            self.skipTest('requires three or more nodes.')
+        clients = self.common_get_client_list()
+        if not clients or len(clients) < 1:
+            self.skipTest('requires three or more nodes.')
 
         (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
         cmdstr = cmd + \
-          "%s -n %s %s%s tests/test_group " % \
-          (service_nodes[0], NPROC, self.pass_env, prefix) + \
+          " -H %s -n %s %s%s tests/test_group " % \
+          (servers.pop(0), NPROC, self.pass_env, prefix) + \
           "--name service_group_02 --is_service --holdtime 10"
         proc_srv_02 = self.common_launch_process(testsuite, testmsg, cmdstr)
         time.sleep(3)
@@ -95,15 +99,15 @@ class TestGroup(commontestsuite.CommonTestSuite):
         (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
         cmdstr = cmd + \
           " -H %s -n %s %s%s tests/test_group " % \
-          (service_nodes[1], NPROC, self.pass_env, prefix) + \
+          (servers.pop(0), NPROC, self.pass_env, prefix) + \
           "--name service_group_01 --attach_to service_group_02 " + \
           "--is_service --holdtime 8"
         proc_srv_01 = self.common_launch_process(testsuite, testmsg, cmdstr)
 
         (cmd, prefix) = self.common_add_prefix_logdir(testprocess)
         cmdstr = cmd + \
-          "%s-n %s %s%s tests/test_group " % \
-          (client, NPROC, self.pass_env, prefix) + \
+          " -H %s -n %s %s%s tests/test_group " % \
+          (clients.pop(), NPROC, self.pass_env, prefix) + \
           "--name client_group --attach_to service_group_01"
         cli_rtn = self.common_launch_test(testsuite, testmsg, cmdstr)
 

@@ -230,3 +230,21 @@ class CommonTestSuite(unittest.TestCase):
             local_client = " "
 
         return (local_server, local_client)
+
+    @staticmethod
+    def common_get_server_list():
+        """obtain the list of server nodes"""
+        servers = os.getenv('CRT_TEST_SERVER')
+        if servers:
+            return servers.split(',')
+        else:
+            return []
+
+    @staticmethod
+    def common_get_client_list():
+        """obtain the list of client nodes"""
+        clients = os.getenv('CRT_TEST_CLIENT')
+        if clients:
+            return clients.split(',')
+        else:
+            return []
