@@ -109,16 +109,11 @@ static struct crt_req_format CQF_CRT_RANK_EVICT =
 			   crt_rank_evict_out_fields);
 
 /* for self-test service */
-static struct crt_msg_field *crt_st_send_empty_reply_iov_field[] = {
+static struct crt_msg_field *crt_st_send_id_field[] = {
 	&CMF_INT,
 };
 
-static struct crt_msg_field *crt_st_send_iov_reply_iov_field[] = {
-	&CMF_INT,
-	&CMF_IOVEC,
-};
-
-static struct crt_msg_field *crt_st_send_iov_reply_empty_field[] = {
+static struct crt_msg_field *crt_st_send_id_iov_field[] = {
 	&CMF_INT,
 	&CMF_IOVEC,
 };
@@ -137,19 +132,19 @@ static struct crt_msg_field *crt_st_session_id_field[] = {
 	&CMF_INT,
 };
 
-static struct crt_req_format CQF_CRT_SELF_TEST_SEND_EMPTY =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_SEND_EMPTY",
-			   crt_st_send_empty_reply_iov_field,
+static struct crt_req_format CQF_CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV",
+			   crt_st_send_id_field,
 			   crt_st_reply_iov_field);
 
-static struct crt_req_format CQF_CRT_SELF_TEST_REPLY_EMPTY =
-	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_REPLY_EMPTY",
-			   crt_st_send_iov_reply_empty_field,
+static struct crt_req_format CQF_CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY",
+			   crt_st_send_id_iov_field,
 			   NULL);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_BOTH_IOV =
 	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_BOTH_IOV",
-			   crt_st_send_iov_reply_iov_field,
+			   crt_st_send_id_iov_field,
 			   crt_st_reply_iov_field);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_OPEN_SESSION =
@@ -256,19 +251,19 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_hdlr	= crt_self_test_msg_handler,
 		.ir_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_SEND_EMPTY",
+		.ir_name	= "CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV",
 		.ir_opc		= CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV,
 		.ir_ver		= 1,
 		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_SEND_EMPTY,
+		.ir_req_fmt	= &CQF_CRT_SELF_TEST_SEND_EMPTY_REPLY_IOV,
 		.ir_hdlr	= crt_self_test_msg_handler,
 		.ir_co_ops	= NULL,
 	}, {
-		.ir_name	= "CRT_SELF_TEST_REPLY_EMPTY",
+		.ir_name	= "CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY",
 		.ir_opc		= CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,
 		.ir_ver		= 1,
 		.ir_flags	= 0,
-		.ir_req_fmt	= &CQF_CRT_SELF_TEST_REPLY_EMPTY,
+		.ir_req_fmt	= &CQF_CRT_SELF_TEST_SEND_IOV_REPLY_EMPTY,
 		.ir_hdlr	= crt_self_test_msg_handler,
 		.ir_co_ops	= NULL,
 	}, {

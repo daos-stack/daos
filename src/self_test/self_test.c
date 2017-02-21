@@ -118,11 +118,6 @@ struct st_endpoint {
 	uint8_t evicted;
 };
 
-struct st_msg_sz {
-	uint32_t send_size;
-	uint32_t reply_size;
-};
-
 enum st_fatal_err {
 	ST_SUCCESS = 0,
 	ST_UNREACH = CER_UNREACH,
@@ -130,55 +125,54 @@ enum st_fatal_err {
 };
 
 struct st_cb_args {
-	crt_context_t		 crt_ctx;
-	crt_group_t		*srv_grp;
+	crt_context_t			 crt_ctx;
+	crt_group_t			*srv_grp;
 
 	/* Target number of RPCs */
-	int			 rep_count;
+	int				 rep_count;
 
 	/* Message size of current RPC workload */
-	struct st_msg_sz	 current_msg_size;
+	struct crt_st_session_params	 test_params;
 
 	/*
 	 * Used to track how many RPCs have been sent so far
 	 * NOTE: Write-protected by cb_args_lock
 	 */
-	int			 rep_idx;
+	int				 rep_idx;
 
 	/*
 	 * Used to track how many RPCs have been handled so far
 	 * NOTE: Write-protected by cb_args_lock
 	 */
-	int			 rep_completed_count;
+	int				 rep_completed_count;
 
 	/* Used to protect counters in this structure across threads */
-	pthread_spinlock_t	 cb_args_lock;
+	pthread_spinlock_t		 cb_args_lock;
 
 	/* Scratchpad buffer allocated by main loop for callback to use */
-	char			*payload;
+	char				*payload;
 
 	/* Used to measure individial RPC latencies */
-	struct st_latency	*rep_latencies;
+	struct st_latency		*rep_latencies;
 
 	/* List of endpoints to test against */
-	struct st_endpoint	*endpts;
+	struct st_endpoint		*endpts;
 
 	/* Number of endpoints in the endpts array */
-	uint32_t		 num_endpts;
+	uint32_t			 num_endpts;
 
 	/*
 	 * Last used endpoint index
 	 * NOTE: Write-protected by cb_args_lock
 	 */
-	uint32_t		 next_endpt_idx;
+	uint32_t			 next_endpt_idx;
 
 	/*
 	 * Set to zero initially, marked as nonzero if run_self_test detects
 	 * that the test can no longer proceed. For example, if all endpoints
 	 * have been evicted or the underlying fabric returns unexpected errors
 	 */
-	enum st_fatal_err	 fatal_err;
-
+	enum st_fatal_err		 fatal_err;
 };
 
 /*
@@ -310,14 +304,14 @@ static int send_next_rpc(struct st_cb_data *cb_data, int skip_inc_complete)
 			local_endpt.ep_tag;
 
 		/* Set the opcode based on the sizes of the arguments */
-		if (cb_args->current_msg_size.send_size > 0 &&
-		    cb_args->current_msg_size.reply_size > 0)
+		if (cb_args->test_params.send_size > 0 &&
+		    cb_args->test_params.reply_size > 0)
 			opcode = CRT_OPC_SELF_TEST_BOTH_IOV;
-		else if (cb_args->current_msg_size.send_size > 0 &&
-			 cb_args->current_msg_size.reply_size == 0)
+		else if (cb_args->test_params.send_size > 0 &&
+			 cb_args->test_params.reply_size == 0)
 			opcode = CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY;
-		else if (cb_args->current_msg_size.send_size == 0 &&
-			 cb_args->current_msg_size.reply_size > 0)
+		else if (cb_args->test_params.send_size == 0 &&
+			 cb_args->test_params.reply_size > 0)
 			opcode = CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV;
 		else
 			opcode = CRT_OPC_SELF_TEST_BOTH_EMPTY;
@@ -355,8 +349,8 @@ static int send_next_rpc(struct st_cb_data *cb_data, int skip_inc_complete)
 					(struct crt_st_send_id_iov *)args;
 
 				crt_iov_set(&typed_args->buf,
-					cb_args->payload,
-					cb_args->current_msg_size.send_size);
+					    cb_args->payload,
+					    cb_args->test_params.send_size);
 			}
 			break;
 		}
@@ -515,8 +509,8 @@ static int open_sessions(struct st_cb_args *cb_args, int max_inflight)
 	int				 ret;
 
 	/* Sessions are not required for (EMPTY EMPTY) */
-	if (cb_args->current_msg_size.send_size == 0 &&
-	    cb_args->current_msg_size.reply_size == 0) {
+	if (cb_args->test_params.send_size == 0 &&
+	    cb_args->test_params.reply_size == 0) {
 		for (i = 0; i < cb_args->num_endpts; i++)
 			cb_args->endpts[i].session_id = -1;
 		return 0;
@@ -565,8 +559,8 @@ static int open_sessions(struct st_cb_args *cb_args, int max_inflight)
 		args = (struct crt_st_session_params *)crt_req_get(new_rpc);
 		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
 
-		args->send_size = cb_args->current_msg_size.send_size;
-		args->reply_size = cb_args->current_msg_size.reply_size;
+		args->send_size = cb_args->test_params.send_size;
+		args->reply_size = cb_args->test_params.reply_size;
 		/* TODO: Probably want to make this user configurable */
 		args->num_buffers = max(1,
 					min(max_inflight / cb_args->num_endpts,
@@ -748,27 +742,28 @@ static int st_compare_latencies(const void *a, const void *b)
 	return ((struct st_latency *)a)->val > ((struct st_latency *)b)->val;
 }
 
-static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
-			 int rep_count, int max_inflight, char *dest_name,
-			 struct st_endpoint *endpts, uint32_t num_endpts)
+static int run_self_test(struct crt_st_session_params all_params[],
+			 int num_msg_sizes, int rep_count, int max_inflight,
+			 char *dest_name, struct st_endpoint *endpts,
+			 uint32_t num_endpts)
 {
-	pthread_t		 tid;
+	pthread_t			 tid;
 
-	struct st_msg_sz	 current_msg_size = {0};
-	int			 size_idx;
-	int			 ret;
-	int			 cleanup_ret;
+	struct crt_st_session_params	 test_params = {0};
+	int				 size_idx;
+	int				 ret;
+	int				 cleanup_ret;
 
-	int64_t			 latency_avg;
-	double			 latency_std_dev;
-	double			 throughput;
-	double			 bandwidth;
-	struct timespec		 time_start_size, time_stop_size;
+	int64_t				 latency_avg;
+	double				 latency_std_dev;
+	double				 throughput;
+	double				 bandwidth;
+	struct timespec			 time_start_size, time_stop_size;
 
 	/* Static arguments (same for each RPC callback function) */
-	struct st_cb_args	 cb_args = {0};
+	struct st_cb_args		 cb_args = {0};
 	/* Private arguments data for all RPC callback functions */
-	struct st_cb_data	*cb_data_alloc = NULL;
+	struct st_cb_data		*cb_data_alloc = NULL;
 
 	/* Set the callback data which will be the same for all callbacks */
 	cb_args.rep_count = 1; /* First run only sends one message */
@@ -809,30 +804,30 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 		int	 num_passed = 0;
 
 		if (size_idx == -1) {
-			current_msg_size.send_size = 0;
-			current_msg_size.reply_size = 0;
+			test_params.send_size = 0;
+			test_params.reply_size = 0;
 		} else {
-			current_msg_size = msg_sizes[size_idx];
+			test_params = all_params[size_idx];
 			cb_args.rep_count = rep_count;
 		}
 
-		if (current_msg_size.send_size != 0) {
+		if (test_params.send_size != 0) {
 			/*
 			 * Use one buffer for all of the payload contents
 			 * realloc() used so memory will be reused if size
 			 * decreases
 			 */
 			realloced_mem = C_REALLOC(cb_args.payload,
-						  current_msg_size.send_size);
+						  test_params.send_size);
 			if (realloced_mem == NULL)
 				C_GOTO(cleanup, ret = -CER_NOMEM);
 			cb_args.payload = (char *)realloced_mem;
 			memset(cb_args.payload, 0,
-			       current_msg_size.send_size);
+			       test_params.send_size);
 		}
 
 		/* Set remaining callback data argument that changes per test */
-		cb_args.current_msg_size = current_msg_size;
+		cb_args.test_params = test_params;
 
 		/* Open self-test sessions with every endpoint */
 		ret = open_sessions(&cb_args, max_inflight);
@@ -914,13 +909,13 @@ static int run_self_test(struct st_msg_sz msg_sizes[], int num_msg_sizes,
 		throughput = cb_args.rep_count /
 			(crt_timediff_ns(&time_start_size, &time_stop_size) /
 			 1000000000.0F);
-		bandwidth = throughput * (current_msg_size.send_size +
-					  current_msg_size.reply_size);
+		bandwidth = throughput * (test_params.send_size +
+					  test_params.reply_size);
 
 		/* Print the results for this size */
 		printf("Results for message size (%d %d)"
 		       " (max_inflight_rpcs = %d)\n",
-		       current_msg_size.send_size, current_msg_size.reply_size,
+		       test_params.send_size, test_params.reply_size,
 		       max_inflight);
 		printf("\tRPC Bandwidth (MB/sec): %.2f\n",
 		       bandwidth / 1000000.0F);
@@ -1021,7 +1016,7 @@ cleanup_nothread:
 		C_FREE(cb_data_alloc,
 		       max_inflight * sizeof(struct st_cb_data));
 	if (cb_args.payload != NULL)
-		C_FREE(cb_args.payload, current_msg_size.send_size);
+		C_FREE(cb_args.payload, test_params.send_size);
 
 
 	if (cb_args.srv_grp != NULL) {
@@ -1412,26 +1407,26 @@ cleanup:
 int main(int argc, char *argv[])
 {
 	/* Default parameters */
-	char			 default_msg_sizes_str[] =
+	char				 default_msg_sizes_str[] =
 		 "(1000 1000),(1000 0),(0 1000),(0 0)";
-	const int		 default_rep_count = 20000;
-	const int		 default_max_inflight = 1000;
+	const int			 default_rep_count = 20000;
+	const int			 default_max_inflight = 1000;
 
-	char			*dest_name = NULL;
-	const char		 tuple_tokens[] = "(),";
-	char			*msg_sizes_str = default_msg_sizes_str;
-	int			 rep_count = default_rep_count;
-	int			 max_inflight = default_max_inflight;
-	struct st_msg_sz	*msg_sizes = NULL;
-	char			*sizes_ptr = NULL;
-	char			*pch = NULL;
-	int			 num_msg_sizes;
-	int			 num_tokens;
-	int			 c;
-	int			 j;
-	int			 ret = 0;
-	struct st_endpoint	*endpts = NULL;
-	uint32_t		 num_endpts = 0;
+	char				*dest_name = NULL;
+	const char			 tuple_tokens[] = "(),";
+	char				*msg_sizes_str = default_msg_sizes_str;
+	int				 rep_count = default_rep_count;
+	int				 max_inflight = default_max_inflight;
+	struct crt_st_session_params	*all_params = NULL;
+	char				*sizes_ptr = NULL;
+	char				*pch = NULL;
+	int				 num_msg_sizes;
+	int				 num_tokens;
+	int				 c;
+	int				 j;
+	int				 ret = 0;
+	struct st_endpoint		*endpts = NULL;
+	uint32_t			 num_endpts = 0;
 
 	/********************* Parse user arguments *********************/
 	while (1) {
@@ -1515,8 +1510,8 @@ int main(int argc, char *argv[])
 	}
 
 	/* Allocate a large enough buffer to hold the message sizes list */
-	C_ALLOC(msg_sizes, (num_tokens + 1) * sizeof(msg_sizes[0]));
-	if (msg_sizes == NULL)
+	C_ALLOC(all_params, (num_tokens + 1) * sizeof(all_params[0]));
+	if (all_params == NULL)
 		C_GOTO(cleanup, ret = -CER_NOMEM);
 
 	/* Iterate over the user's message sizes and parse / validate them */
@@ -1524,21 +1519,22 @@ int main(int argc, char *argv[])
 	pch = strtok(msg_sizes_str, tuple_tokens);
 	while (pch != NULL) {
 		C_ASSERTF(num_msg_sizes <= num_tokens, "Token counting err\n");
-		ret = sscanf(pch, "%d %d", &msg_sizes[num_msg_sizes].send_size,
-			     &msg_sizes[num_msg_sizes].reply_size);
+		ret = sscanf(pch, "%d %d",
+			     &all_params[num_msg_sizes].send_size,
+			     &all_params[num_msg_sizes].reply_size);
 
 		/* If only one size was given, assume send/receive are same */
 		if (ret == 1) {
-			msg_sizes[num_msg_sizes].reply_size =
-				msg_sizes[num_msg_sizes].send_size;
+			all_params[num_msg_sizes].reply_size =
+				all_params[num_msg_sizes].send_size;
 		}
 
-		if ((msg_sizes[num_msg_sizes].send_size >
+		if ((all_params[num_msg_sizes].send_size >
 		     CRT_SELF_TEST_MAX_MSG_SIZE)
-		    || (msg_sizes[num_msg_sizes].reply_size >
+		    || (all_params[num_msg_sizes].reply_size >
 			CRT_SELF_TEST_MAX_MSG_SIZE)
 		    || (ret != 1 && ret != 2)) {
-			printf("Warning: Invalid msg_sizes tuple\n"
+			printf("Warning: Invalid message sizes tuple\n"
 			       "  Expected values in range [0:%u], got '%s'\n",
 			       CRT_SELF_TEST_MAX_MSG_SIZE,
 			       pch);
@@ -1559,11 +1555,12 @@ int main(int argc, char *argv[])
 		void *realloced_mem;
 
 		/* This should always succeed since the buffer is shrinking.. */
-		realloced_mem = C_REALLOC(msg_sizes,
-					  num_msg_sizes * sizeof(msg_sizes[0]));
+		realloced_mem = C_REALLOC(all_params,
+					  num_msg_sizes
+					  * sizeof(all_params[0]));
 		if (realloced_mem == NULL)
 			C_GOTO(cleanup, ret = -CER_NOMEM);
-		msg_sizes = (struct st_msg_sz *)realloced_mem;
+		all_params = (struct crt_st_session_params *)realloced_mem;
 	}
 
 	/******************** Validate arguments ********************/
@@ -1602,8 +1599,8 @@ int main(int argc, char *argv[])
 	for (j = 0; j < num_msg_sizes; j++) {
 		if (j > 0)
 			printf(", ");
-		printf("(%d %d)", msg_sizes[j].send_size,
-		       msg_sizes[j].reply_size);
+		printf("(%d %d)", all_params[j].send_size,
+		       all_params[j].reply_size);
 	}
 	printf("]\n"
 	       "  Repetitions per size:       %d\n"
@@ -1611,13 +1608,14 @@ int main(int argc, char *argv[])
 	       rep_count, max_inflight);
 
 	/********************* Run the self test *********************/
-	ret = run_self_test(msg_sizes, num_msg_sizes, rep_count, max_inflight,
-			    dest_name, endpts, num_endpts);
+	ret = run_self_test(all_params, num_msg_sizes, rep_count,
+			    max_inflight, dest_name, endpts, num_endpts);
 
 	/********************* Clean up *********************/
 cleanup:
-	if (msg_sizes != NULL)
-		C_FREE(msg_sizes, num_msg_sizes * sizeof(msg_sizes[0]));
+	if (all_params != NULL)
+		C_FREE(all_params,
+		       num_msg_sizes * sizeof(all_params[0]));
 
 	return ret;
 }

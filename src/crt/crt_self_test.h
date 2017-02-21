@@ -58,12 +58,12 @@
  *
  * send_size > 0 && return_size == 0
  *      opcode: CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY
- *      send struct: iovec payload
+ *      send struct: int32_t session_id, iovec payload
  *      return struct: NULL
  *
  * send_size > 0 && return_size > 0
  *      opcode: CRT_OPC_SELF_TEST_BOTH_IOV
- *      send struct: uint32_t reply_size, iovec payload
+ *      send struct: int32_t session_id, iovec payload
  *      return struct: iovec of specified size
  */
 
