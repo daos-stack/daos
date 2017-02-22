@@ -427,7 +427,7 @@ typedef struct {
 } crt_iv_sync_t;
 
 /* some common crt_iv_sync_t definitions */
-#define CRT_IV_SYNC_NONE	(crt_iv_sync_t {0, 0})
+#define CRT_IV_SYNC_MODE_NONE	{0, 0}
 #define CRT_IV_SYNC_UPDATE_EAGER					\
 	(crt_iv_sync_t {CRT_IV_SYNC_EVENT_UPDATE,	CRT_IV_SYNC_EAGER})
 #define CRT_IV_SYNC_UPDATE_LAZY						\
@@ -475,6 +475,11 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
  * \param ivns [IN]		the local handle of the IV namespace
  * \param class_id [IN]		IV class ID the IV belong to
  * \param iv_key [IN]		key of the IV
+ * \param iv_ver [IN]		Version of the IV
+ * \param shortcut [IN]		the shotcut hints to optimize the propagation
+ *				of accessing request, \see crt_iv_shortcut_t
+ * \param sync_type [IN]	synchronization type
+ *
  * \param invali_comp_cb [IN]	pointer to invalidate completion callback
  * \param cb_arg [IN]		pointer to argument passed to invali_comp_cb
  *
@@ -482,7 +487,9 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
  */
 int
 crt_iv_invalidate(crt_iv_namespace_t ivns, uint32_t class_id,
-		  crt_iv_key_t *iv_key, crt_iv_comp_cb_t invali_comp_cb,
+		crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
+		crt_iv_shortcut_t shortcut, crt_iv_sync_t sync_type,
+		crt_iv_comp_cb_t invali_comp_cb,
 		  void *cb_arg);
 
 #if defined(__cplusplus)

@@ -40,6 +40,7 @@
  * TODOs:
  * - Randomize size of keys and values
  * - Add RPC to shutdown server & cleanup on shutdown
+ * - Return shared buffer instead of a copy during fetch
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -252,6 +253,8 @@ init_iv_storage(void)
 
 		size = sizeof(struct iv_value_struct);
 		value->sg_iovs[0].iov_buf = malloc(size);
+		assert(value->sg_iovs[0].iov_buf != NULL);
+
 		value->sg_iovs[0].iov_len = size;
 		value->sg_iovs[0].iov_buf_len = size;
 
@@ -385,6 +388,8 @@ add_new_kv_pair(crt_iv_key_t *iv_key, crt_sg_list_t *iv_value,
 
 	for (i = 0; i < entry->value.sg_nr.num; i++) {
 		entry->value.sg_iovs[i].iov_buf = malloc(size);
+		assert(entry->value.sg_iovs[i].iov_buf != NULL);
+
 		entry->value.sg_iovs[i].iov_buf_len = size;
 		entry->value.sg_iovs[i].iov_len = size;
 	}
@@ -565,14 +570,23 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 {
 	struct kv_pair_entry	*entry = NULL;
 	bool			valid;
+	struct iv_key_struct	*key_struct;
+	int			rc;
 
 	DBG_ENTRY();
 	valid = invalidate ? false : true;
 
 	verify_key(iv_key);
-
 	print_key_value("REFRESH called ", iv_key, iv_value);
 	dump_all_keys("ON_REFRESH");
+
+	key_struct = (struct iv_key_struct *)iv_key->iov_buf;
+
+	if (key_struct->rank == my_rank)
+		rc = 0;
+	else
+		rc = -CER_IVCB_FORWARD;
+
 
 	LOCK_KEYS();
 	crt_list_for_each_entry(entry, &kv_pair_head, link) {
@@ -590,7 +604,7 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 			UNLOCK_KEYS();
 			DBG_EXIT();
-			return 0;
+			return rc;
 		}
 	}
 
@@ -600,7 +614,8 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	UNLOCK_KEYS();
 
 	DBG_EXIT();
-	return 0;
+
+	return rc;
 }
 
 static int
@@ -635,12 +650,16 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	if (tmp_iv_value == NULL) {
 
 		tmp_iv_value = malloc(sizeof(crt_sg_list_t));
+		assert(tmp_iv_value != NULL);
 
 		size = sizeof(struct iv_value_struct);
 
 		tmp_iv_value->sg_iovs = malloc(sizeof(crt_iov_t));
+		assert(tmp_iv_value->sg_iovs != NULL);
 
 		tmp_iv_value->sg_iovs[0].iov_buf = malloc(size);
+		assert(tmp_iv_value->sg_iovs[0].iov_buf != NULL);
+
 		tmp_iv_value->sg_iovs[0].iov_len = size;
 		tmp_iv_value->sg_iovs[0].iov_buf_len = size;
 
@@ -793,6 +812,10 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	assert(output != NULL);
 
 	if (fetch_rc != 0) {
+		DBG_PRINT("----------------------------------\n");
+		print_key_value("Fetch failed: ", iv_key, iv_value);
+		DBG_PRINT("----------------------------------\n");
+
 		output->rc = fetch_rc;
 		rc = crt_reply_send(cb_info->rpc);
 		assert(rc == 0);
@@ -895,7 +918,10 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	iv_value.sg_nr.num = 1;
 	iv_value.sg_iovs = malloc(sizeof(crt_iov_t));
 	assert(iv_value.sg_iovs != NULL);
+
 	iv_value.sg_iovs[0].iov_buf = malloc(sizeof(struct iv_value_struct));
+	assert(iv_value.sg_iovs[0].iov_buf != NULL);
+
 	iv_value.sg_iovs[0].iov_buf_len = sizeof(struct iv_value_struct);
 	iv_value.sg_iovs[0].iov_len = sizeof(struct iv_value_struct);
 
@@ -909,6 +935,7 @@ iv_test_update_iv(crt_rpc_t *rpc)
 
 	update_cb_info = malloc(sizeof(struct update_done_cb_info));
 	assert(update_cb_info != NULL);
+
 	update_cb_info->key = key;
 	update_cb_info->rpc = rpc;
 
@@ -948,10 +975,14 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 	assert(iv_value->sg_iovs != NULL);
 
 	iv_value->sg_iovs[0].iov_buf = malloc(sizeof(struct iv_value_struct));
+	assert(iv_value->sg_iovs[0].iov_buf != NULL);
+
 	iv_value->sg_iovs[0].iov_buf_len = sizeof(struct iv_value_struct);
 	iv_value->sg_iovs[0].iov_len = sizeof(struct iv_value_struct);
 
 	cb_info = malloc(sizeof(struct fetch_done_cb_info));
+	assert(cb_info != NULL);
+
 	cb_info->key = key;
 	cb_info->rpc = rpc;
 
@@ -959,8 +990,96 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 	assert(rc == 0);
 
 	rc = crt_iv_fetch(ivns, 0, key, 0, iv_value, 0, fetch_done, cb_info);
+
+	return 0;
+}
+
+struct invalidate_cb_info {
+	crt_iv_key_t	*expect_key;
+	crt_rpc_t	*rpc;
+};
+
+static int
+invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
+	crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver, crt_sg_list_t *iv_value,
+	int invalidate_rc, void *cb_args)
+{
+	struct invalidate_cb_info		*cb_info;
+	struct rpc_test_invalidate_iv_out	*output;
+	struct iv_key_struct			*key_struct;
+	struct iv_key_struct			*expect_key_struct;
+	int					rc;
+
+	DBG_ENTRY();
+
+	cb_info = (struct invalidate_cb_info *)cb_args;
+	assert(cb_info != NULL);
+
+	output = crt_reply_get(cb_info->rpc);
+	assert(output != NULL);
+
+	key_struct = (struct iv_key_struct *)iv_key->iov_buf;
+	expect_key_struct = (struct iv_key_struct *)
+					cb_info->expect_key->iov_buf;
+
+	assert(key_struct->rank == expect_key_struct->rank);
+	assert(key_struct->key_id == expect_key_struct->key_id);
+
+	if (invalidate_rc != 0) {
+		DBG_PRINT("----------------------------------\n");
+		DBG_PRINT("Key = [%d,%d] Failed\n", key_struct->rank,
+			key_struct->key_id);
+		DBG_PRINT("----------------------------------\n");
+	} else {
+		DBG_PRINT("----------------------------------\n");
+		DBG_PRINT("Key = [%d,%d] PASSED\n", key_struct->rank,
+			key_struct->key_id);
+		DBG_PRINT("----------------------------------\n");
+	}
+
+	output->rc = invalidate_rc;
+
+	rc = crt_reply_send(cb_info->rpc);
 	assert(rc == 0);
 
+	rc = crt_req_decref(cb_info->rpc);
+	assert(rc == 0);
+
+	free(cb_info);
+	DBG_EXIT();
+
+	return 0;
+}
+
+int iv_test_invalidate_iv(crt_rpc_t *rpc)
+{
+	struct rpc_test_invalidate_iv_in	*input;
+	struct iv_key_struct			*key_struct;
+	crt_iv_key_t				*key;
+	struct invalidate_cb_info		*cb_info;
+	crt_iv_sync_t				sync = CRT_IV_SYNC_MODE_NONE;
+	int					rc;
+
+	input = crt_req_get(rpc);
+	assert(input != NULL);
+
+	key_struct = (struct iv_key_struct *)input->iov_key.iov_buf;
+
+	key = alloc_key(key_struct->rank, key_struct->key_id);
+	assert(key != NULL);
+
+	rc = crt_req_addref(rpc);
+	assert(rc == 0);
+
+	cb_info = malloc(sizeof(struct invalidate_cb_info));
+	assert(cb_info != NULL);
+
+	cb_info->rpc = rpc;
+	cb_info->expect_key = key;
+
+
+	rc = crt_iv_invalidate(ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE,
+			sync, invalidate_done, cb_info);
 	return 0;
 }
 
@@ -1012,6 +1131,9 @@ int main(int argc, char **argv)
 	assert(rc == 0);
 
 	rc = RPC_REGISTER(RPC_TEST_UPDATE_IV);
+	assert(rc == 0);
+
+	rc = RPC_REGISTER(RPC_TEST_INVALIDATE_IV);
 	assert(rc == 0);
 
 	rc = RPC_REGISTER(RPC_SET_IVNS);

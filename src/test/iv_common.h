@@ -69,6 +69,23 @@ struct crt_msg_field *arg_test_fetch_iv_out[] = {
 	&CMF_UINT64,
 };
 
+/* RCP_TEST_INVALIDATE_IV RPC */
+struct rpc_test_invalidate_iv_in {
+	crt_iov_t iov_key;
+};
+
+struct rpc_test_invalidate_iv_out {
+	int64_t rc;
+};
+
+struct crt_msg_field *arg_test_invalidate_iv_in[] = {
+	&CMF_IOVEC,
+};
+
+struct crt_msg_field *arg_test_invalidate_iv_out[] = {
+	&CMF_UINT64,
+};
+
 /* RPC_TEST_UPDATE_IV RPC */
 struct rpc_test_update_iv_in {
 	crt_iov_t	iov_key;
@@ -130,11 +147,13 @@ struct crt_msg_field *arg_set_ivns_out[] = {
 enum {
 	RPC_TEST_FETCH_IV = 0xB1, /* Client issues fetch call */
 	RPC_TEST_UPDATE_IV = 0xB2, /* Client issues update call */
+	RPC_TEST_INVALIDATE_IV = 0xB3, /* Client issues invalidate call */
 	RPC_SET_IVNS, /* send global ivns */
 } rpc_id_t;
 
 int iv_test_fetch_iv(crt_rpc_t *rpc);
 int iv_test_update_iv(crt_rpc_t *rpc);
+int iv_test_invalidate_iv(crt_rpc_t *rpc);
 
 int iv_set_ivns(crt_rpc_t *rpc);
 
@@ -143,6 +162,10 @@ RPC_DECLARE(RPC_TEST_FETCH_IV,
 
 RPC_DECLARE(RPC_TEST_UPDATE_IV,
 	arg_test_update_iv_in, arg_test_update_iv_out, iv_test_update_iv);
+
+RPC_DECLARE(RPC_TEST_INVALIDATE_IV,
+	arg_test_invalidate_iv_in, arg_test_invalidate_iv_out,
+	iv_test_invalidate_iv);
 
 RPC_DECLARE(RPC_SET_IVNS,
 	arg_set_ivns_in, arg_set_ivns_out, iv_set_ivns);
@@ -195,7 +218,7 @@ int send_rpc_request(crt_context_t crt_ctx, crt_rpc_t *rpc_req, void **output)
 static inline void
 init_hostname(char *hname, int max_size)
 {
-	char	*ptr = NULL;
+	char	*ptr;
 
 	gethostname(hname, max_size);
 	ptr = strchr(hname, '.');

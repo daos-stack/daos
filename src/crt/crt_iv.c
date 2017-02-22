@@ -253,7 +253,6 @@ crt_ivf_in_progress_unset(struct ivf_key_in_progress *entry,
 	return 0;
 }
 
-
 /* Add key to the list of pending requests */
 static int
 crt_ivf_pending_request_add(struct ivf_key_in_progress *entry,
@@ -726,6 +725,8 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 	rc = crt_req_addref(rpc);
 	C_ASSERT(rc == 0);
 
+	memset(&bulk_desc, 0x0, sizeof(struct crt_bulk_desc));
+
 	bulk_desc.bd_rpc = rpc;
 	bulk_desc.bd_bulk_op = CRT_BULK_PUT;
 	bulk_desc.bd_remote_hdl = dest_bulk;
@@ -1173,6 +1174,908 @@ exit:
 	return rc;
 }
 
+/***************************************************************
+ * IV UPDATE codebase
+ **************************************************************/
+struct iv_update_in {
+	/* IV namespace ID */
+	crt_iov_t	ivu_nsid;
+
+	/* IOV for key */
+	crt_iov_t	ivu_key;
+
+	/* IOV for sync */
+	crt_iov_t	ivu_sync_type;
+
+	/* Bulk handle for iv value */
+	crt_bulk_t	ivu_iv_value_bulk;
+
+	/* Root node for IV UPDATE */
+	crt_rank_t	ivu_root_node;
+
+	/* Original node that issued crt_iv_update call */
+	crt_rank_t	ivu_caller_node;
+
+	/* Class ID */
+	uint32_t	ivu_class_id;
+
+	uint32_t	padding;
+
+};
+
+struct iv_update_out {
+	uint64_t		rc;
+};
+
+struct iv_sync_in {
+	/* IV Namespace ID */
+	crt_iov_t	ivs_nsid;
+
+	/* IOV for key */
+	crt_iov_t	ivs_key;
+
+	/* IOV for sync type */
+	crt_iov_t	ivs_sync_type;
+
+	/* IV Class ID */
+	uint32_t	ivs_class_id;
+};
+
+struct iv_sync_out {
+	int	rc;
+};
+
+/* Handler for internal SYNC CORPC */
+int
+crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
+{
+	int				rc = 0;
+	struct iv_sync_in		*input;
+	struct iv_sync_out		*output;
+	struct crt_ivns_internal	*ivns_internal;
+	struct crt_iv_ops		*iv_ops;
+	struct crt_ivns_id		*ivns_id;
+	crt_iv_sync_t			*sync_type;
+	crt_sg_list_t			iv_value;
+	bool				need_put = false;
+
+	/* This is an internal call. All errors are fatal */
+	input = crt_req_get(rpc_req);
+	C_ASSERT(input != NULL);
+
+	output = crt_reply_get(rpc_req);
+	C_ASSERT(output != NULL);
+
+	ivns_id = (struct crt_ivns_id *)input->ivs_nsid.iov_buf;
+	sync_type = (crt_iv_sync_t *)input->ivs_sync_type.iov_buf;
+
+	ivns_internal = crt_ivns_internal_lookup(ivns_id);
+	C_ASSERT(ivns_internal != NULL);
+
+	iv_ops = crt_iv_ops_get(ivns_internal, input->ivs_class_id);
+	C_ASSERT(iv_ops != NULL);
+
+	/* If bulk is not set, we issue invalidate call */
+	if (rpc_req->cr_co_bulk_hdl == CRT_BULK_NULL) {
+		rc = iv_ops->ivo_on_refresh(ivns_internal,
+					&input->ivs_key, 0, NULL, true);
+		C_GOTO(exit, rc);
+	}
+
+	/* If bulk is set, issue sync call based on ivs_event */
+	switch (sync_type->ivs_event) {
+	case CRT_IV_SYNC_EVENT_UPDATE:
+	{
+		crt_sg_list_t tmp_iv;
+
+		rc = iv_ops->ivo_on_get(ivns_internal, &input->ivs_key,
+				0, CRT_IV_PERM_WRITE, &iv_value);
+
+		tmp_iv = iv_value;
+		if (rc != 0) {
+			C_ERROR("ivo_on_get() failed; rc=%d\n", rc);
+			C_GOTO(exit, rc);
+		}
+
+		need_put = true;
+
+		rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
+		if (rc != 0) {
+			C_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
+			C_GOTO(exit, rc);
+		}
+
+		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
+					0, &tmp_iv, false);
+		if (rc != 0) {
+			C_ERROR("ivo_on_refresh() failed; rc=%d\n", rc);
+			C_GOTO(exit, rc);
+		}
+
+		rc = iv_ops->ivo_on_put(ivns_internal, &input->ivs_key, 0,
+				&iv_value);
+		if (rc != 0) {
+			C_ERROR("ivo_on_put() failed; rc=%d\n", rc);
+			C_GOTO(exit, rc);
+		}
+		need_put = false;
+
+		break;
+	}
+
+	case CRT_IV_SYNC_EVENT_NOTIFY:
+		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
+						0, 0, false);
+		if (rc != 0) {
+			C_ERROR("ivo_on_refresh() failed; rc=%d\n", rc);
+			C_GOTO(exit, rc);
+		}
+
+		break;
+
+	default:
+		C_ERROR("Unknown event type 0x%x", sync_type->ivs_event);
+		C_GOTO(exit, rc = -CER_INVAL);
+		break;
+	}
+
+exit:
+	if (need_put)
+		iv_ops->ivo_on_put(ivns_internal, &input->ivs_key, 0,
+				&iv_value);
+
+	output->rc = rc;
+	rc = crt_reply_send(rpc_req);
+
+	return rc;
+}
+
+/* Results aggregate function for sync CORPC */
+int
+crt_iv_sync_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct iv_sync_out *output_source;
+	struct iv_sync_out *output_result;
+
+	output_source = crt_reply_get(source);
+	output_result = crt_reply_get(result);
+
+	/* Only set new rc if so far rc is 0 */
+	if (output_result->rc == 0) {
+		if (output_source->rc != 0)
+			output_result->rc = output_source->rc;
+	}
+
+	return 0;
+}
+
+/* Calback structure for iv sync RPC */
+struct iv_sync_cb_info {
+	/* Local bulk handle to free in callback */
+	crt_bulk_t			isc_bulk_hdl;
+
+	/* Internal IV namespace */
+	struct crt_ivns_internal	*isc_ivns_internal;
+
+	/* Class id assocaited with namespace */
+	uint32_t			isc_class_id;
+
+	/* IV key/value; used for issuing completion callback */
+	crt_iv_key_t			isc_iv_key;
+	crt_sg_list_t			isc_iv_value;
+
+	/* Flag indicating whether to perform callback */
+	bool				isc_do_callback;
+
+	/* Completion callback, arguments for it and rc */
+	crt_iv_comp_cb_t		isc_update_comp_cb;
+	void				*isc_cb_arg;
+	int				isc_update_rc;
+};
+
+/* IV_SYNC response handler */
+static int
+handle_ivsync_response(const struct crt_cb_info *cb_info)
+{
+	struct iv_sync_cb_info *iv_sync;
+
+	iv_sync = (struct iv_sync_cb_info *)cb_info->cci_arg;
+
+	crt_bulk_free(iv_sync->isc_bulk_hdl);
+
+	/* do_callback is set based on sync value specified */
+	if (iv_sync->isc_do_callback) {
+		iv_sync->isc_update_comp_cb(iv_sync->isc_ivns_internal,
+					iv_sync->isc_class_id,
+					&iv_sync->isc_iv_key,
+					NULL,
+					&iv_sync->isc_iv_value,
+					iv_sync->isc_update_rc,
+					iv_sync->isc_cb_arg);
+
+		C_FREE(iv_sync->isc_iv_key.iov_buf,
+			iv_sync->isc_iv_key.iov_buf_len);
+
+	}
+	C_FREE_PTR(iv_sync);
+
+	return 0;
+}
+
+/* Helper function to issue update sync
+ * Important note: iv_key and iv_value are destroyed right after this call,
+ * as such they need to be copied over
+ **/
+static int
+crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
+		crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
+		crt_sg_list_t *iv_value, crt_iv_sync_t sync_type,
+		crt_rank_t src_node, crt_rank_t dst_node,
+		crt_iv_comp_cb_t update_comp_cb, void *cb_arg,
+		int update_rc)
+{
+	crt_rpc_t		*corpc_req;
+	struct iv_sync_in	*input;
+	int			rc = 0;
+	bool			sync = false;
+	struct iv_sync_cb_info	*iv_sync_cb = NULL;
+	struct crt_iv_ops	*iv_ops;
+	crt_bulk_t		local_bulk = CRT_BULK_NULL;
+	crt_rank_list_t		excluded_list;
+	crt_rank_t		excluded_ranks[1]; /* Excluding self */
+
+	/* TODO: An optional feature for future get all ranks between
+	* source node and destination in order to exclude them from
+	* being synchronized (as they already got updated)
+	**/
+#if 0
+	crt_rank_t		cur_rank;
+
+	cur_rank = src_node;
+	while (1) {
+		if (cur_rank == dst_node)
+			break;
+
+		cur_rank = get_ranks_parent(ivns_internal, cur_rank,
+					dst_node);
+	}
+#endif
+
+	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
+
+	switch (sync_type.ivs_mode) {
+	case CRT_IV_SYNC_NONE:
+		C_GOTO(exit, rc = 0);
+
+	case CRT_IV_SYNC_EAGER:
+		sync = true;
+		break;
+
+	case CRT_IV_SYNC_LAZY:
+		sync = false;
+		break;
+
+	default:
+		C_ERROR("Unknown ivs_mode %d\n", sync_type.ivs_mode);
+		C_GOTO(exit, rc = -CER_INVAL);
+	}
+
+	/* Exclude self from corpc */
+	excluded_list.rl_nr.num = 1;
+	excluded_list.rl_ranks = excluded_ranks;
+	excluded_ranks[0] = ivns_internal->cii_local_rank;
+
+	/* Perform refresh on local node */
+	if (sync_type.ivs_event == CRT_IV_SYNC_EVENT_UPDATE)
+		rc = iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
+					iv_value, iv_value ? false : true);
+	else if (sync_type.ivs_event == CRT_IV_SYNC_EVENT_NOTIFY)
+		rc = iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
+					NULL, iv_value ? false : true);
+	else {
+		C_ERROR("Unknown ivs_event %d\n", sync_type.ivs_event);
+		C_GOTO(exit, rc = -CER_INVAL);
+	}
+
+	if (iv_value != NULL) {
+		rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value,
+				CRT_BULK_RO, &local_bulk);
+		if (rc != 0) {
+			C_ERROR("ctt_bulk_create() failed; rc=%d\n", rc);
+			C_GOTO(exit, rc);
+		}
+	} else {
+		local_bulk = CRT_BULK_NULL;
+	}
+
+	rc = crt_corpc_req_create(ivns_internal->cii_ctx,
+				ivns_internal->cii_grp,
+				&excluded_list,
+				CRT_OPC_IV_SYNC,
+				local_bulk, NULL, 0,
+				ivns_internal->cii_gns.gn_tree_topo,
+				&corpc_req);
+	if (rc != 0) {
+		C_ERROR("crt_corpc_req_create() failed; rc=%d\n", rc);
+		C_GOTO(exit, rc);
+	}
+
+	input = crt_req_get(corpc_req);
+	C_ASSERT(input != NULL);
+
+	crt_iov_set(&input->ivs_nsid, &ivns_internal->cii_gns.gn_ivns_id,
+			sizeof(struct crt_ivns_id));
+	crt_iov_set(&input->ivs_key, iv_key->iov_buf, iv_key->iov_buf_len);
+	crt_iov_set(&input->ivs_sync_type, &sync_type, sizeof(crt_iv_sync_t));
+	input->ivs_class_id = class_id;
+
+	C_ALLOC_PTR(iv_sync_cb);
+	if (iv_sync_cb == NULL) {
+		C_ERROR("Failed to allocate iv_sync_cb");
+		C_GOTO(exit, rc = -CER_NOMEM);
+	}
+
+	iv_sync_cb->isc_bulk_hdl = local_bulk;
+	iv_sync_cb->isc_do_callback = sync;
+
+	/* If sync is set, perform callabck from sync reponse handler */
+	if (sync) {
+		iv_sync_cb->isc_update_comp_cb = update_comp_cb;
+		iv_sync_cb->isc_cb_arg = cb_arg;
+		iv_sync_cb->isc_update_rc = update_rc;
+		iv_sync_cb->isc_ivns_internal = ivns_internal;
+		iv_sync_cb->isc_class_id = class_id;
+
+		/* Copy iv_key over as it will get destroyed after this call */
+		C_ALLOC(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf_len);
+		if (iv_sync_cb->isc_iv_key.iov_buf == NULL) {
+			C_ERROR("Failed to allocate isc_iv_key::iov_buf");
+			C_GOTO(exit, rc = -CER_NOMEM);
+		}
+
+		memcpy(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf,
+			iv_key->iov_buf_len);
+
+		iv_sync_cb->isc_iv_key.iov_buf_len = iv_key->iov_buf_len;
+		iv_sync_cb->isc_iv_key.iov_len = iv_key->iov_len;
+
+		/* Copy underlying sg_list as iv_value pointer will not be valid
+		* once this function exits
+		**/
+		if (iv_value)
+			iv_sync_cb->isc_iv_value = *iv_value;
+	}
+
+	rc = crt_req_send(corpc_req, handle_ivsync_response, iv_sync_cb);
+	C_ASSERT(rc == 0);
+
+exit:
+	if (sync == false)
+		update_comp_cb(ivns_internal, class_id, iv_key, NULL, iv_value,
+				update_rc, cb_arg);
+
+	if (rc != 0) {
+		if (local_bulk != CRT_BULK_NULL)
+			crt_bulk_free(local_bulk);
+
+		if (iv_sync_cb) {
+			C_FREE_PTR(iv_sync_cb);
+
+			if (iv_sync_cb->isc_iv_key.iov_buf)
+				C_FREE(iv_sync_cb->isc_iv_key.iov_buf,
+					iv_sync_cb->isc_iv_key.iov_buf_len);
+		}
+	}
+
+	return rc;
+}
+
+struct update_cb_info {
+	/* Update completion callback and argument */
+	crt_iv_comp_cb_t		uci_comp_cb;
+	void				*uci_cb_arg;
+
+	/* RPC of the caller if one exists */
+	crt_rpc_t			*uci_child_rpc;
+
+	/* Internal IV namespace and IV class id */
+	struct crt_ivns_internal	*uci_ivns_internal;
+	uint32_t			uci_class_id;
+
+	/* Local bulk handle and associated iv value */
+	crt_bulk_t			uci_bulk_hdl;
+	crt_sg_list_t			uci_iv_value;
+
+	/* Caller of the crt_iv_update() API */
+	crt_rank_t			uci_caller_rank;
+
+	/* Sync type associated with this update */
+	crt_iv_sync_t			uci_sync_type;
+};
+
+/* IV_UPDATE internal rpc response handler */
+static int
+handle_ivupdate_response(const struct crt_cb_info *cb_info)
+{
+	struct update_cb_info	*iv_info;
+	struct iv_update_in	*input;
+	struct iv_update_out	*output;
+	struct iv_update_out	*child_output;
+	struct crt_iv_ops	*iv_ops;
+	int			rc;
+
+	iv_info = (struct update_cb_info *)cb_info->cci_arg;
+
+	input = crt_req_get(cb_info->cci_rpc);
+	output = crt_reply_get(cb_info->cci_rpc);
+
+	if (iv_info->uci_child_rpc) {
+
+		child_output = crt_reply_get(iv_info->uci_child_rpc);
+
+		/* uci_bulk_hdl will not be set for invalidate call */
+		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL) {
+			iv_ops = crt_iv_ops_get(iv_info->uci_ivns_internal,
+						iv_info->uci_class_id);
+			C_ASSERT(iv_ops != NULL);
+
+			rc = iv_ops->ivo_on_put(iv_info->uci_ivns_internal,
+						&input->ivu_key, 0,
+						&iv_info->uci_iv_value);
+
+			if (rc != 0) {
+				C_ERROR("ivo_on_put() failed; rc=%d\n", rc);
+				child_output->rc = rc;
+			} else {
+				child_output->rc = output->rc;
+			}
+		} else {
+			child_output->rc = output->rc;
+		}
+
+		/* Fatal if reply send fails */
+		rc = crt_reply_send(iv_info->uci_child_rpc);
+		C_ASSERT(rc == 0);
+
+		rc = crt_req_decref(iv_info->uci_child_rpc);
+		C_ASSERT(rc == 0);
+	} else {
+		crt_sg_list_t *tmp_iv_value;
+
+		if (iv_info->uci_bulk_hdl == NULL)
+			tmp_iv_value = NULL;
+		else
+			tmp_iv_value = &iv_info->uci_iv_value;
+
+		crt_ivsync_rpc_issue(iv_info->uci_ivns_internal,
+				iv_info->uci_class_id,
+				&input->ivu_key, 0,
+				tmp_iv_value,
+				iv_info->uci_sync_type,
+				input->ivu_caller_node,
+				input->ivu_root_node,
+				iv_info->uci_comp_cb,
+				iv_info->uci_cb_arg,
+				output->rc);
+	}
+
+	if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
+		crt_bulk_free(iv_info->uci_bulk_hdl);
+
+	C_FREE_PTR(iv_info);
+	return 0;
+}
+
+/* Helper function to issue IV UPDATE RPC*/
+static int
+crt_ivu_rpc_issue(crt_rank_t dest_rank, crt_iv_key_t *iv_key,
+		crt_sg_list_t *iv_value, crt_iv_sync_t *sync_type,
+		crt_rank_t root_rank, struct update_cb_info *cb_info)
+{
+	struct crt_ivns_internal	*ivns_internal;
+	struct iv_update_in		*input;
+	crt_bulk_t			local_bulk = CRT_BULK_NULL;
+	crt_endpoint_t			ep;
+	crt_rpc_t			*rpc;
+	int				rc = 0;
+
+	ivns_internal = cb_info->uci_ivns_internal;
+
+	ep.ep_grp = ivns_internal->cii_grp;
+	ep.ep_rank = dest_rank;
+	ep.ep_tag = 0;
+
+	rc = crt_req_create(ivns_internal->cii_ctx, ep, CRT_OPC_IV_UPDATE,
+			&rpc);
+	if (rc != 0) {
+		C_ERROR("crt_req_create() failed; rc=%d\n", rc);
+		C_GOTO(exit, rc);
+	}
+
+	input = crt_req_get(rpc);
+
+	/* Update with NULL value is invalidate call */
+	if (iv_value) {
+		rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value,
+				CRT_BULK_RW, &local_bulk);
+
+		if (rc != 0) {
+			C_ERROR("crt_bulk_create() failed; rc=%d\n", rc);
+			C_GOTO(exit, rc);
+		}
+	} else {
+		local_bulk = CRT_BULK_NULL;
+	}
+
+	input->ivu_iv_value_bulk = local_bulk;
+	cb_info->uci_bulk_hdl = local_bulk;
+
+	crt_iov_set(&input->ivu_key, iv_key->iov_buf, iv_key->iov_buf_len);
+	input->ivu_class_id = cb_info->uci_class_id;
+	input->ivu_root_node = root_rank;
+	input->ivu_caller_node = cb_info->uci_caller_rank;
+
+	/* iv_value might not be set */
+	if (iv_value)
+		cb_info->uci_iv_value = *iv_value;
+
+
+	crt_iov_set(&input->ivu_nsid, &ivns_internal->cii_gns.gn_ivns_id,
+			sizeof(struct crt_ivns_id));
+
+	crt_iov_set(&input->ivu_sync_type, sync_type, sizeof(crt_iv_sync_t));
+
+	cb_info->uci_sync_type = *sync_type;
+
+	rc = crt_req_send(rpc, handle_ivupdate_response, cb_info);
+	if (rc != 0)
+		C_ERROR("crt_req_send() failed; rc=%d\n", rc);
+
+
+exit:
+	if (rc != 0) {
+		if (local_bulk != CRT_BULK_NULL)
+			crt_bulk_free(local_bulk);
+	}
+
+	return rc;
+}
+
+/* bulk transfer update callback info */
+struct bulk_update_cb_info {
+	/* Input buffer for iv update rpc */
+	struct iv_update_in	*buc_input;
+	/* Local bulk handle to free */
+	crt_bulk_t		buc_bulk_hdl;
+	/* IV value */
+	crt_sg_list_t		buc_iv_value;
+};
+
+static int
+bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
+{
+	struct bulk_update_cb_info	*cb_info;
+	struct crt_ivns_id		*ivns_id;
+	struct crt_ivns_internal	*ivns_internal;
+	struct crt_iv_ops		*iv_ops;
+	struct iv_update_in		*input;
+	struct iv_update_out		*output;
+	struct update_cb_info		*update_cb_info = NULL;
+	int				rc = 0;
+	crt_rank_t			next_rank;
+	int				update_rc;
+	crt_iv_sync_t			*sync_type;
+
+	cb_info = (struct bulk_update_cb_info *)info->bci_arg;
+
+	input = cb_info->buc_input;
+
+	ivns_id = (struct crt_ivns_id *)input->ivu_nsid.iov_buf;
+
+	/* ivns_internal and iv_ops better not be NULL at this point */
+	ivns_internal = crt_ivns_internal_lookup(ivns_id);
+	C_ASSERT(ivns_internal != NULL);
+
+	iv_ops = crt_iv_ops_get(ivns_internal, input->ivu_class_id);
+	C_ASSERT(iv_ops != NULL);
+
+	output = crt_reply_get(info->bci_bulk_desc->bd_rpc);
+	C_ASSERT(output != NULL);
+
+	if (info->bci_rc != 0) {
+		C_ERROR("bulk update transfer failed; rc = %d",
+			info->bci_rc);
+		C_GOTO(send_error, rc = info->bci_rc);
+	}
+
+	update_rc = iv_ops->ivo_on_update(ivns_internal,
+			&input->ivu_key, 0, false, &cb_info->buc_iv_value);
+
+	if (update_rc == -CER_IVCB_FORWARD) {
+		next_rank = crt_iv_parent_get(ivns_internal,
+					input->ivu_root_node);
+
+		C_ALLOC_PTR(update_cb_info);
+		if (update_cb_info == NULL) {
+			C_ERROR("failed to allocate update_cb_info");
+			C_GOTO(send_error, rc = -CER_NOMEM);
+		}
+
+		sync_type = (crt_iv_sync_t *)input->ivu_sync_type.iov_buf;
+
+		update_cb_info->uci_child_rpc = info->bci_bulk_desc->bd_rpc;
+		update_cb_info->uci_ivns_internal = ivns_internal;
+		update_cb_info->uci_class_id = input->ivu_class_id;
+		update_cb_info->uci_caller_rank = input->ivu_caller_node;
+		update_cb_info->uci_sync_type = *sync_type;
+
+		crt_ivu_rpc_issue(next_rank, &input->ivu_key,
+				&cb_info->buc_iv_value, sync_type,
+				input->ivu_root_node, update_cb_info);
+	} else if (update_rc == 0) {
+		rc = iv_ops->ivo_on_put(ivns_internal, &input->ivu_key, 0,
+					&cb_info->buc_iv_value);
+
+		output->rc = rc;
+		rc = crt_reply_send(info->bci_bulk_desc->bd_rpc);
+
+		crt_req_decref(info->bci_bulk_desc->bd_rpc);
+
+	} else {
+		C_GOTO(send_error, rc = update_rc);
+	}
+
+	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+	C_FREE_PTR(cb_info);
+
+	return rc;
+
+send_error:
+	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+	C_FREE_PTR(cb_info);
+
+	output->rc = rc;
+
+	crt_reply_send(info->bci_bulk_desc->bd_rpc);
+	crt_req_decref(info->bci_bulk_desc->bd_rpc);
+
+	return rc;
+}
+
+/* IV UPDATE RPC handler */
+int
+crt_hdlr_iv_update(crt_rpc_t *rpc_req)
+{
+	struct iv_update_in		*input;
+	struct iv_update_out		*output;
+	struct crt_ivns_id		*ivns_id;
+	struct crt_ivns_internal	*ivns_internal;
+	struct crt_iv_ops		*iv_ops;
+	crt_sg_list_t			iv_value;
+	struct crt_bulk_desc		bulk_desc;
+	crt_bulk_t			local_bulk_handle;
+	struct bulk_update_cb_info	*cb_info;
+	crt_iv_sync_t			*sync_type;
+	crt_rank_t			next_rank;
+	struct update_cb_info		*update_cb_info;
+	int				size;
+	int				i;
+	int				rc = 0;
+
+	input = crt_req_get(rpc_req);
+	output = crt_reply_get(rpc_req);
+
+	C_ASSERT(input != NULL);
+	C_ASSERT(output != NULL);
+
+	ivns_id = (struct crt_ivns_id *)input->ivu_nsid.iov_buf;
+	ivns_internal = crt_ivns_internal_lookup(ivns_id);
+
+	if (ivns_internal == NULL) {
+		C_ERROR("Invalid internal ivns\n");
+		C_GOTO(send_error, rc = -CER_INVAL);
+	}
+
+	iv_ops = crt_iv_ops_get(ivns_internal, input->ivu_class_id);
+
+	if (iv_ops == NULL) {
+		C_ERROR("Invalid class id passed\n");
+		C_GOTO(send_error, rc = -CER_INVAL);
+	}
+	if (input->ivu_iv_value_bulk == CRT_BULK_NULL) {
+
+		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivu_key,
+					0, NULL, true);
+
+		if (rc == -CER_IVCB_FORWARD) {
+			next_rank = crt_iv_parent_get(ivns_internal,
+						input->ivu_root_node);
+
+			C_ALLOC_PTR(update_cb_info);
+			if (update_cb_info == NULL) {
+				C_ERROR("failed to allocate update_cb_info");
+				C_GOTO(send_error, rc = -CER_NOMEM);
+			}
+
+			sync_type = (crt_iv_sync_t *)
+					input->ivu_sync_type.iov_buf;
+
+			crt_req_addref(rpc_req);
+
+			update_cb_info->uci_child_rpc = rpc_req;
+			update_cb_info->uci_ivns_internal = ivns_internal;
+			update_cb_info->uci_class_id = input->ivu_class_id;
+			update_cb_info->uci_caller_rank =
+							input->ivu_caller_node;
+
+			update_cb_info->uci_sync_type = *sync_type;
+
+			crt_ivu_rpc_issue(next_rank, &input->ivu_key,
+					NULL, sync_type,
+					input->ivu_root_node, update_cb_info);
+		} else if (rc == 0) {
+			output->rc = rc;
+			rc = crt_reply_send(rpc_req);
+		} else {
+			C_GOTO(send_error, rc);
+		}
+
+		C_GOTO(exit, rc = 0);
+	}
+
+	rc = iv_ops->ivo_on_get(ivns_internal, &input->ivu_key, 0,
+				CRT_IV_PERM_WRITE, &iv_value);
+	if (rc != 0) {
+		C_ERROR("ivo_on_get() failed; rc=%d\n", rc);
+		C_GOTO(send_error, rc);
+	}
+
+	size = 0;
+	for (i = 0; i < iv_value.sg_nr.num; i++)
+		size += iv_value.sg_iovs[i].iov_buf_len;
+
+	rc = crt_bulk_create(rpc_req->cr_ctx, &iv_value, CRT_BULK_RW,
+			&local_bulk_handle);
+	if (rc != 0) {
+		C_ERROR("crt_bulk_create() failed; rc=%d\n", rc);
+		C_GOTO(send_error, rc);
+	}
+
+	bulk_desc.bd_rpc = rpc_req;
+	bulk_desc.bd_bulk_op = CRT_BULK_GET;
+	bulk_desc.bd_remote_hdl = input->ivu_iv_value_bulk;
+	bulk_desc.bd_remote_off = 0;
+	bulk_desc.bd_local_hdl = local_bulk_handle;
+	bulk_desc.bd_local_off = 0;
+	bulk_desc.bd_len = size;
+
+	C_ALLOC_PTR(cb_info);
+	if (cb_info == NULL) {
+		C_ERROR("Failed to allocate memory\n");
+		rc = -CER_NOMEM;
+		crt_bulk_free(local_bulk_handle);
+		C_GOTO(send_error, rc = -CER_NOMEM);
+	}
+
+	cb_info->buc_input = input;
+	cb_info->buc_bulk_hdl = local_bulk_handle;
+	cb_info->buc_iv_value = iv_value;
+
+	crt_req_addref(rpc_req);
+
+	rc = crt_bulk_transfer(&bulk_desc, bulk_update_transfer_done,
+				cb_info, 0);
+	if (rc != 0) {
+		C_ERROR("crt_bulk_transfer() failed; rc=%d\n", rc);
+		crt_bulk_free(local_bulk_handle);
+		crt_req_decref(rpc_req);
+		C_GOTO(send_error, rc);
+	}
+
+exit:
+	return 0;
+
+send_error:
+	output->rc = rc;
+
+	rc = crt_reply_send(rpc_req);
+
+	return rc;
+}
+
+static int
+crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
+	      crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
+	      crt_sg_list_t *iv_value, crt_iv_shortcut_t shortcut,
+	      crt_iv_sync_t sync_type, crt_iv_comp_cb_t update_comp_cb,
+	      void *cb_arg)
+{
+	struct crt_iv_ops		*iv_ops;
+	struct crt_ivns_internal	*ivns_internal;
+	crt_rank_t			root_rank;
+	crt_rank_t			next_node;
+	struct update_cb_info		*cb_info;
+	int				rc = 0;
+
+	ivns_internal = crt_ivns_internal_get(ivns);
+	if (ivns_internal == NULL) {
+		C_ERROR("Invalid ivns specified\n");
+		C_GOTO(exit, rc = -CER_INVAL);
+	}
+
+	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
+	if (iv_ops == NULL) {
+		C_ERROR("Invalid class_id specified\n");
+		C_GOTO(exit, rc = -CER_INVAL);
+	}
+
+	rc = iv_ops->ivo_on_hash(ivns, iv_key, &root_rank);
+	if (rc != 0) {
+		C_ERROR("ivo_on_hash() failed; rc=%d\n", rc);
+		C_GOTO(exit, rc);
+	}
+
+	if (iv_value != NULL) {
+		rc = iv_ops->ivo_on_update(ivns, iv_key, 0,
+			(root_rank == ivns_internal->cii_local_rank),
+			iv_value);
+	} else {
+		rc = iv_ops->ivo_on_refresh(ivns, iv_key, 0, NULL, true);
+	}
+
+	if (rc == 0) {
+		/* issue sync. will call completion callback */
+		rc = crt_ivsync_rpc_issue(ivns_internal, class_id, iv_key,
+				iv_ver, iv_value, sync_type,
+				ivns_internal->cii_local_rank,
+				root_rank, update_comp_cb, cb_arg, rc);
+
+	} else  if (rc == -CER_IVCB_FORWARD) {
+		if (shortcut == CRT_IV_SHORTCUT_TO_ROOT)
+			next_node = root_rank;
+		else if (shortcut == CRT_IV_SHORTCUT_NONE)
+			next_node = crt_iv_parent_get(ivns_internal, root_rank);
+		else {
+			C_ERROR("Unknown shortcut argument %d\n", shortcut);
+			C_GOTO(exit, rc = -CER_INVAL);
+		}
+
+		C_ALLOC_PTR(cb_info);
+
+		if (cb_info == NULL) {
+			C_ERROR("Failed to allocate cb_info\n");
+			C_GOTO(exit, rc = -CER_NOMEM);
+		}
+
+		cb_info->uci_comp_cb = update_comp_cb;
+		cb_info->uci_cb_arg = cb_arg;
+
+		cb_info->uci_child_rpc = NULL;
+		cb_info->uci_ivns_internal = ivns_internal;
+		cb_info->uci_class_id = class_id;
+
+		cb_info->uci_caller_rank = ivns_internal->cii_local_rank;
+
+		rc = crt_ivu_rpc_issue(next_node, iv_key, iv_value,
+					&sync_type, root_rank, cb_info);
+
+		if (rc != 0) {
+			C_ERROR("crt_ivu_rpc_issue() failed; rc=%d\n", rc);
+			C_FREE_PTR(cb_info);
+			C_GOTO(exit, rc);
+		}
+	} else {
+		C_ERROR("ivo_on_update failed with rc = %d\n", rc);
+
+		update_comp_cb(ivns, class_id, iv_key, NULL,
+			iv_value, rc, cb_arg);
+		C_GOTO(exit, rc);
+	}
+
+exit:
+	return rc;
+}
+
 int
 crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
 	      crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
@@ -1180,16 +2083,37 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
 	      crt_iv_sync_t sync_type, crt_iv_comp_cb_t update_comp_cb,
 	      void *cb_arg)
 {
-	C_ERROR("Not implemented call\n");
-	return 0;
+	int rc;
+
+	/* TODO: In future consider allowing updates with NULL value.
+	* Currently calling crt_iv_update_internal with NULL value results in
+	* internal 'invalidate' call being done on the specified key.
+	*
+	* All other checks are performed inside of crt_iv_update_interna.
+	*/
+	if (iv_value == NULL) {
+		C_ERROR("iv_value is NULL\n");
+
+		rc = -CER_INVAL;
+		update_comp_cb(ivns, class_id, iv_key, NULL, iv_value,
+			rc, cb_arg);
+		C_GOTO(exit, rc);
+	}
+
+	rc = crt_iv_update_internal(ivns, class_id, iv_key, iv_ver, iv_value,
+				shortcut, sync_type, update_comp_cb, cb_arg);
+
+exit:
+	return rc;
 }
 
 int
 crt_iv_invalidate(crt_iv_namespace_t ivns, uint32_t class_id,
-		  crt_iv_key_t *iv_key, crt_iv_comp_cb_t invali_comp_cb,
+		crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
+		crt_iv_shortcut_t shortcut, crt_iv_sync_t sync_type,
+		crt_iv_comp_cb_t invali_comp_cb,
 		  void *cb_arg)
 {
-	C_ERROR("Not implemented call\n");
-	return 0;
+	return crt_iv_update_internal(ivns, class_id, iv_key, iv_ver, NULL,
+			shortcut, sync_type, invali_comp_cb, cb_arg);
 }
-

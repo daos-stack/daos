@@ -265,9 +265,51 @@ static struct crt_msg_field *crt_iv_fetch_out_fields[] = {
 	&CMF_INT, /* TODO: int for now */
 };
 
+static struct crt_msg_field *crt_iv_update_in_fields[] = {
+	&CMF_IOVEC, /* crt_ivns_id */
+	&CMF_IOVEC, /* key */
+	&CMF_IOVEC, /* iov_sync_type */
+	&CMF_BULK, /* iv_value_bulk */
+	&CMF_RANK, /* root_node */
+	&CMF_RANK, /* caller_node */
+	&CMF_UINT32, /* class_id */
+	&CMF_UINT32, /* padding */
+};
+
+static struct crt_msg_field *crt_iv_update_out_fields[] = {
+	&CMF_UINT64, /* rc */
+};
+
+
+static struct crt_msg_field *crt_iv_sync_in_fields[] = {
+	&CMF_IOVEC, /* crt_ivns_id */
+	&CMF_IOVEC, /* key */
+	&CMF_IOVEC, /* iov_sync_type */
+	&CMF_BULK, /* iv_value_bulk */
+	&CMF_UINT32, /* class_id */
+};
+
+static struct crt_msg_field *crt_iv_sync_out_fields[] = {
+	&CMF_INT,
+};
+
+static struct crt_corpc_ops crt_iv_sync_co_ops = {
+	.co_aggregate = crt_iv_sync_corpc_aggregate,
+};
+
+
+static struct crt_req_format CQF_CRT_IV_SYNC =
+	DEFINE_CRT_REQ_FMT("CRT_IV_SYNC", crt_iv_sync_in_fields,
+			crt_iv_sync_out_fields);
+
 static struct crt_req_format CQF_CRT_IV_FETCH =
 	DEFINE_CRT_REQ_FMT("CRT_IV_FETCH", crt_iv_fetch_in_fields,
-				crt_iv_fetch_out_fields);
+			crt_iv_fetch_out_fields);
+
+static struct crt_req_format CQF_CRT_IV_UPDATE =
+	DEFINE_CRT_REQ_FMT("CRT_IV_UPDATE", crt_iv_update_in_fields,
+			crt_iv_update_out_fields);
+
 
 struct crt_internal_rpc crt_internal_rpcs[] = {
 	{
@@ -398,6 +440,22 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_req_fmt	= &CQF_CRT_IV_FETCH,
 		.ir_hdlr	= crt_hdlr_iv_fetch,
 		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_IV_UPDATE",
+		.ir_opc		= CRT_OPC_IV_UPDATE,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_IV_UPDATE,
+		.ir_hdlr	= crt_hdlr_iv_update,
+		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_IV_SYNC",
+		.ir_opc		= CRT_OPC_IV_SYNC,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_IV_SYNC,
+		.ir_hdlr	= crt_hdlr_iv_sync,
+		.ir_co_ops	= &crt_iv_sync_co_ops,
 	}, {
 		.ir_opc		= 0
 	}

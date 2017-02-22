@@ -84,6 +84,35 @@ print_usage(const char *err_msg)
 	printf("for which that node is the root\n");
 }
 
+
+static void
+test_iv_invalidate(struct iv_key_struct *key)
+{
+	struct rpc_test_invalidate_iv_in	*input;
+	struct rpc_test_invalidate_iv_out	*output;
+	crt_rpc_t				*rpc_req;
+	int					rc;
+
+	DBG_PRINT("Attempting to invalidate key[%d:%d]\n",
+		key->rank, key->key_id);
+
+	prepare_rpc_request(crt_ctx, RPC_TEST_INVALIDATE_IV, server_ep,
+			(void **)&input, &rpc_req);
+	crt_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
+
+	send_rpc_request(crt_ctx, rpc_req, (void **)&output);
+
+	if (output->rc == 0)
+		DBG_PRINT("Invalidate of key=[%d:%d] PASSED\n", key->rank,
+			key->key_id);
+	else
+		DBG_PRINT("Invalidate of key=[%d:%d] FAILED; rc = %ld\n",
+			key->rank, key->key_id, output->rc);
+
+	rc = crt_req_decref(rpc_req);
+	assert(rc == 0);
+}
+
 static void
 test_iv_fetch(struct iv_key_struct *key)
 {
@@ -267,6 +296,9 @@ int main(int argc, char **argv)
 	rc = RPC_REGISTER(RPC_TEST_UPDATE_IV);
 	assert(rc == 0);
 
+	rc = RPC_REGISTER(RPC_TEST_INVALIDATE_IV);
+	assert(rc == 0);
+
 	server_ep.ep_grp = srv_grp;
 	server_ep.ep_rank = atoi(arg_rank);
 	server_ep.ep_tag = 0;
@@ -280,6 +312,8 @@ int main(int argc, char **argv)
 		test_iv_fetch(&iv_key);
 	else if (cur_op == OP_UPDATE)
 		test_iv_update(&iv_key, arg_value, arg_sync);
+	else if (cur_op == OP_INVALIDATE)
+		test_iv_invalidate(&iv_key);
 
 	else {
 		print_usage("Unsupported opration");

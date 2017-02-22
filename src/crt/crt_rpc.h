@@ -215,6 +215,7 @@ enum {
 	CRT_OPC_IV_UPDATE			= CRT_OPC_INTERNAL_BASE + 0x301,
 	CRT_OPC_IV_INVALIDATE			= CRT_OPC_INTERNAL_BASE + 0x302,
 	CRT_OPC_IV_REFRESH			= CRT_OPC_INTERNAL_BASE + 0x303,
+	CRT_OPC_IV_SYNC				= CRT_OPC_INTERNAL_BASE + 0x304,
 };
 
 /* CRT internal RPC definitions */
@@ -329,5 +330,9 @@ int crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
 
 /* crt_iv.c */
 int crt_hdlr_iv_fetch(crt_rpc_t *rpc_req);
+int crt_hdlr_iv_update(crt_rpc_t *rpc_req);
+int crt_hdlr_iv_sync(crt_rpc_t *rpc_req);
+int crt_iv_sync_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result,
+				void *priv);
 
 #endif /* __CRT_RPC_H__ */
