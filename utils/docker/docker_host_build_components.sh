@@ -48,6 +48,7 @@ fi
 
 docker run --rm -u $USER -v ${PWD}:/work \
            -v ${WORK_TARGET}:${DIST_MOUNT} \
+           --privileged --device /dev/fuse:/dev/fuse:rwm \
            -a stderr -a stdout -i coral/${DOCKER_IMAGE} \
            ${scons_local_dir}/utils/docker/docker_build_components.sh \
           ${default_requires} ${SCONS_OPTIONS} 2>&1 | tee docker_build.log
