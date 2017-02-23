@@ -6,8 +6,6 @@ config-*.log
 /build/
 /_build.external-*/
 .sconsign-*.dblite
-.sconsign.dblite
-/.scons-temp-*/
 /.sconf-temp-*/
 *.tar.gz
 /install/
