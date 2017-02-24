@@ -83,15 +83,10 @@
  *     stack
  */
 
-/*
- * Very simple buffer entries that can be formed into a stack
- *
- * Note that buf is a flat array tacked on to the end of this structure rather
- * than a pointer to separately allocated memory - it's all one big block
- */
+/* Very simple buffer entries that can be formed into a stack or list */
 struct st_buf_entry {
 	struct st_buf_entry *next;
-	char buf[];
+	char *buf;
 };
 
 struct st_session {
@@ -186,7 +181,7 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	C_ASSERT(reply_session_id != NULL);
 
 	/* Allocate a structure for the new session */
-	C_ALLOC(new_session, sizeof(struct st_session));
+	C_ALLOC_PTR(new_session);
 	if (new_session == NULL) {
 		C_ERROR("Failed to allocate new session\n");
 		C_GOTO(send_rpc, *reply_session_id = -1);
@@ -207,8 +202,19 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	for (i = 0; i < args->num_buffers; i++) {
 		struct st_buf_entry *new_entry;
 
-		C_ALLOC(new_entry,
-			sizeof(struct st_buf_entry) + args->reply_size);
+		C_ALLOC_PTR(new_entry);
+		if (new_entry == NULL) {
+			C_ERROR("self-test memory allocation failed for new"
+				" session - num_buffers=%d, reply_size=%d\n",
+				args->num_buffers, args->reply_size);
+			C_GOTO(send_rpc, *reply_session_id = -1);
+		}
+
+		/* No buffer needed if there is no payload */
+		if (args->reply_size == 0)
+			continue;
+
+		C_ALLOC(new_entry->buf, args->reply_size);
 		if (new_entry == NULL) {
 			C_ERROR("self-test memory allocation failed for new"
 				" session - num_buffers=%d, reply_size=%d\n",
@@ -278,13 +284,15 @@ send_rpc:
 		free_entry = new_session->buf_list;
 		while (free_entry != NULL) {
 			new_session->buf_list = free_entry->next;
-			C_FREE(free_entry, sizeof(struct st_buf_entry)
-					   + args->reply_size);
+
+			if (free_entry->buf != NULL)
+				C_FREE(free_entry->buf, args->reply_size);
+			C_FREE_PTR(free_entry);
 
 			free_entry = new_session->buf_list;
 		}
 
-		C_FREE(new_session, sizeof(struct st_session));
+		C_FREE_PTR(new_session);
 	}
 
 	ret = crt_reply_send(rpc_req);

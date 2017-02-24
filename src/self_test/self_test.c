@@ -149,9 +149,6 @@ struct st_cb_args {
 	/* Used to protect counters in this structure across threads */
 	pthread_spinlock_t		 cb_args_lock;
 
-	/* Scratchpad buffer allocated by main loop for callback to use */
-	char				*payload;
-
 	/* Used to measure individial RPC latencies */
 	struct st_latency		*rep_latencies;
 
@@ -190,6 +187,20 @@ struct st_cb_data {
 	struct timespec		 sent_time;
 	struct st_endpoint	*endpt;
 
+	/* Length of the buffer attached to the end of this struct */
+	size_t			 buf_len;
+
+	/*
+	 * Extra space used for the payload of this repetition
+	 *
+	 * Size is determined by whether the reply uses BULK or not:
+	 * if reply is bulk
+	 *   size = max(cb_args->test_params.send_size,
+	 *              cb_args->test_params.reply_size)
+	 * else
+	 *   size = cb_args->test_params.send_size;
+	 */
+	char			*buf;
 };
 
 struct st_open_session_cb_data {
@@ -348,8 +359,10 @@ static int send_next_rpc(struct st_cb_data *cb_data, int skip_inc_complete)
 				struct crt_st_send_id_iov *typed_args =
 					(struct crt_st_send_id_iov *)args;
 
+				C_ASSERT(cb_data->buf_len >=
+					 cb_args->test_params.send_size);
 				crt_iov_set(&typed_args->buf,
-					    cb_args->payload,
+					    cb_data->buf,
 					    cb_args->test_params.send_size);
 			}
 			break;
@@ -559,9 +572,16 @@ static int open_sessions(struct st_cb_args *cb_args, int max_inflight)
 		args = (struct crt_st_session_params *)crt_req_get(new_rpc);
 		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
 
-		args->send_size = cb_args->test_params.send_size;
-		args->reply_size = cb_args->test_params.reply_size;
-		/* TODO: Probably want to make this user configurable */
+		/* Copy lengths & types for send/reply */
+		*args = cb_args->test_params;
+
+		/*
+		 * Set the number of buffers that the service should allocate.
+		 * This is the maximum number of RPCs that the service should
+		 * expect to see at any one time.
+		 *
+		 * TODO: Note this may have to change when randomizing endpoints
+		 */
 		args->num_buffers = max(1,
 					min(max_inflight / cb_args->num_endpts,
 					    (unsigned int)cb_args->rep_count));
@@ -747,23 +767,24 @@ static int run_self_test(struct crt_st_session_params all_params[],
 			 char *dest_name, struct st_endpoint *endpts,
 			 uint32_t num_endpts)
 {
-	pthread_t			 tid;
+	pthread_t			  tid;
 
-	struct crt_st_session_params	 test_params = {0};
-	int				 size_idx;
-	int				 ret;
-	int				 cleanup_ret;
+	struct crt_st_session_params	  test_params = {0};
+	int				  size_idx;
+	int				  alloc_idx;
+	int				  ret;
+	int				  cleanup_ret;
 
-	int64_t				 latency_avg;
-	double				 latency_std_dev;
-	double				 throughput;
-	double				 bandwidth;
-	struct timespec			 time_start_size, time_stop_size;
+	int64_t				  latency_avg;
+	double				  latency_std_dev;
+	double				  throughput;
+	double				  bandwidth;
+	struct timespec			  time_start_size, time_stop_size;
 
 	/* Static arguments (same for each RPC callback function) */
-	struct st_cb_args		 cb_args = {0};
+	struct st_cb_args		  cb_args = {0};
 	/* Private arguments data for all RPC callback functions */
-	struct st_cb_data		*cb_data_alloc = NULL;
+	struct st_cb_data		**cb_data_ptrs = NULL;
 
 	/* Set the callback data which will be the same for all callbacks */
 	cb_args.rep_count = 1; /* First run only sends one message */
@@ -782,9 +803,12 @@ static int run_self_test(struct crt_st_session_params all_params[],
 	if (cb_args.rep_latencies == NULL)
 		C_GOTO(cleanup, ret = -CER_NOMEM);
 
-	/* Allocate a buffer for arguments to the callback function */
-	C_ALLOC(cb_data_alloc, max_inflight * sizeof(struct st_cb_data));
-	if (cb_data_alloc == NULL)
+	/*
+	 * Allocate an array of pointers to keep track of private
+	 * per-inflight-rpc buffers
+	 */
+	C_ALLOC(cb_data_ptrs, max_inflight * sizeof(cb_data_ptrs[0]));
+	if (cb_data_ptrs == NULL)
 		C_GOTO(cleanup, ret = -CER_NOMEM);
 
 	/* Refer to the endpoints passed by the caller */
@@ -799,9 +823,9 @@ static int run_self_test(struct crt_st_session_params all_params[],
 	for (size_idx = -1; size_idx < num_msg_sizes; size_idx++) {
 		int	 local_rep;
 		int	 inflight_idx;
-		void	*realloced_mem;
 		int	 num_failed = 0;
 		int	 num_passed = 0;
+		size_t	 test_buf_len;
 
 		if (size_idx == -1) {
 			test_params.send_size = 0;
@@ -811,19 +835,44 @@ static int run_self_test(struct crt_st_session_params all_params[],
 			cb_args.rep_count = rep_count;
 		}
 
-		if (test_params.send_size != 0) {
+		test_buf_len = test_params.send_size;
+
+		/* Allocate "private" buffers for each inflight RPC */
+		for (alloc_idx = 0; alloc_idx < max_inflight; alloc_idx++) {
+			/* Only allocate nodes once and re-use them */
+			if (cb_data_ptrs[alloc_idx] == NULL) {
+				C_ALLOC_PTR(cb_data_ptrs[alloc_idx]);
+				if (cb_data_ptrs[alloc_idx] == NULL) {
+					C_ERROR("RPC data allocation failed\n");
+					C_GOTO(cleanup, ret = -CER_NOMEM);
+				}
+			}
+
 			/*
-			 * Use one buffer for all of the payload contents
-			 * realloc() used so memory will be reused if size
-			 * decreases
+			 * Free the buffer attached to this RPC instance if
+			 * there is one from the previous size
 			 */
-			realloced_mem = C_REALLOC(cb_args.payload,
-						  test_params.send_size);
-			if (realloced_mem == NULL)
+			if (cb_data_ptrs[alloc_idx]->buf != NULL)
+				C_FREE(cb_data_ptrs[alloc_idx]->buf,
+				       cb_data_ptrs[alloc_idx]->buf_len);
+
+			/* No buffer needed if there is no payload */
+			if (test_buf_len == 0)
+				continue;
+
+			/* Allocate a new data buffer for this inflight RPC */
+			C_ALLOC(cb_data_ptrs[alloc_idx]->buf, test_buf_len);
+			if (cb_data_ptrs[alloc_idx]->buf == NULL) {
+				C_ERROR("RPC data buf allocation failed\n");
 				C_GOTO(cleanup, ret = -CER_NOMEM);
-			cb_args.payload = (char *)realloced_mem;
-			memset(cb_args.payload, 0,
-			       test_params.send_size);
+			}
+
+			/* Fill the buffer with an arbitrary data pattern */
+			memset(cb_data_ptrs[alloc_idx]->buf, 0xC5,
+			       test_buf_len);
+
+			/* Track how big the buffer is for bookkeeping */
+			cb_data_ptrs[alloc_idx]->buf_len = test_buf_len;
 		}
 
 		/* Set remaining callback data argument that changes per test */
@@ -853,8 +902,7 @@ static int run_self_test(struct crt_st_session_params all_params[],
 
 		for (inflight_idx = 0; inflight_idx < max_inflight;
 		     inflight_idx++) {
-			struct st_cb_data *cb_data =
-				&cb_data_alloc[inflight_idx];
+			struct st_cb_data *cb_data = cb_data_ptrs[inflight_idx];
 
 			cb_data->cb_args = &cb_args;
 			cb_data->rep_idx = -1;
@@ -1012,12 +1060,18 @@ cleanup_nothread:
 	if (cb_args.rep_latencies != NULL)
 		C_FREE(cb_args.rep_latencies,
 		       rep_count * sizeof(cb_args.rep_latencies[0]));
-	if (cb_data_alloc != NULL)
-		C_FREE(cb_data_alloc,
-		       max_inflight * sizeof(struct st_cb_data));
-	if (cb_args.payload != NULL)
-		C_FREE(cb_args.payload, test_params.send_size);
+	if (cb_data_ptrs != NULL) {
+		for (alloc_idx = 0; alloc_idx < max_inflight; alloc_idx++) {
+			if (cb_data_ptrs[alloc_idx] != NULL) {
+				if (cb_data_ptrs[alloc_idx]->buf != NULL)
+					C_FREE(cb_data_ptrs[alloc_idx]->buf,
+					      cb_data_ptrs[alloc_idx]->buf_len);
+				C_FREE_PTR(cb_data_ptrs[alloc_idx]);
+			}
+		}
 
+		C_FREE(cb_data_ptrs, max_inflight * sizeof(cb_data_ptrs[0]));
+	}
 
 	if (cb_args.srv_grp != NULL) {
 		cleanup_ret = crt_group_detach(cb_args.srv_grp);
@@ -1113,6 +1167,12 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "  --max-inflight-rpcs <N>\n"
 	       "      Short version: -i\n"
 	       "      Maximum number of RPCs allowed to be executing concurrently.\n"
+	       "\n"
+	       "      Note that at the beginning of each test run, a buffer of size send_size\n"
+	       "        is allocated for each inflight RPC (total max_inflight * send_size).\n"
+	       "        This could be a lot of memory. Also, if the reply uses bulk, the\n"
+	       "        size increases to (max_inflight * max(send_size, reply_size))\n"
+	       "\n"
 	       "      Default: %d\n",
 	       prog_name, CRT_SELF_TEST_MAX_MSG_SIZE, msg_sizes_str, rep_count,
 	       max_inflight);
