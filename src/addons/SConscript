@@ -1,0 +1,17 @@
+#!python
+
+Import('env', 'PREREQS')
+
+env.AppendUnique(LIBPATH=[Dir('.')])
+
+denv = env.Clone()
+
+if PREREQS is not None:
+    PREREQS.require(denv, 'ompi')
+
+array_src = denv.SharedObject('daos_array.c')
+array_lib = denv.SharedLibrary('libdaos_array', array_src)
+denv.Install('$PREFIX/lib/', array_lib)
+
+denv.Append(CPPPATH = ['#/src/addons', '#/src/tests/suite'])
+SConscript('tests/SConscript', exports='denv')

@@ -3,7 +3,7 @@ import os
 
 HEADERS = ['daos.h', 'daos_api.h', 'daos_types.h', 'daos_errno.h',
            'daos_event.h', 'daos_mgmt.h', 'daos_tier.h',
-           'daos_types.h']
+           'daos_types.h', 'daos_array.h']
 HEADERS_SRV = ['vos.h', 'vos_types.h']
 Import('env', 'PREREQS', 'DAOS_VERSION')
 
@@ -50,5 +50,8 @@ SConscript('server/SConscript', exports=['env', 'PREREQS'])
 # Build utilities
 SConscript('utils/SConscript', exports=['env', 'PREREQS'])
 
-# And finally build test
+# Build test
 SConscript('tests/SConscript', exports=['env', 'PREREQS'])
+
+# Build addons
+SConscript('addons/SConscript', exports=['env', 'PREREQS'])

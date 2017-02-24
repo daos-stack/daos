@@ -1,0 +1,12 @@
+#!python
+
+Import('denv')
+
+libraries = ['daos_common', 'daos', 'daos_tests', 'crt_util', 'crt']
+libraries += ['daos_tier', 'uuid', 'mpi', 'daos_array']
+libraries += ['cmocka']
+
+denv.Append(CPPPATH = ['#/src/addons/tests/'])
+
+daos_addons_test = denv.Program('daos_addons_test', Glob('*.c'), LIBS = libraries)
+denv.Install('$PREFIX/bin/', daos_addons_test)
