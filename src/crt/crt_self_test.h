@@ -40,38 +40,107 @@
 #define __CRT_SELF_TEST_H__
 
 #include <crt_api.h>
+#include <crt_internal.h>
+
+/*
+ * List of supported self-test strategies:
+ *
+ * SEND:  EMPTY, IOV, BULK_GET
+ * REPLY: EMPTY, IOV, BULK_PUT
+ *
+ * All 9 combinations of the above are supported. Using 7 unique opcodes.
+ *
+ * Here's a table:
+ *
+ * SEND:     REPLY:    OPCODE:
+ * EMPTY     EMPTY     CRT_OPC_SELF_TEST_BOTH_EMPTY
+ * EMPTY     IOV       CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV
+ * EMPTY     BULK_PUT  CRT_OPC_SELF_TEST_BOTH_BULK
+ * EMPTY     BULK_GET  <invalid>
+ * IOV       EMPTY     CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY
+ * IOV       IOV       CRT_OPC_SELF_TEST_BOTH_IOV
+ * IOV       BULK_PUT  CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK
+ * IOV       BULK_GET  <invalid>
+ * BULK_GET  EMPTY     CRT_OPC_SELF_TEST_BOTH_BULK
+ * BULK_GET  IOV       CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV
+ * BULK_GET  BULK_PUT  CRT_OPC_SELF_TEST_BOTH_BULK
+ * BULK_GET  BULK_GET  <invalid>
+ * BULK_PUT  EMPTY     <invalid>
+ * BULK_PUT  IOV       <invalid>
+ * BULK_PUT  BULK_PUT  <invalid>
+ * BULK_PUT  BULK_GET  <invalid>
+ *
+ * There are only 7 opcodes because three operations involving bulk all have
+ * identical send/reply messages and therefore do not require unique opcodes
+ *
+ * Note that BULK_GET on the sending side means that the client will init a bulk
+ * session and send it to the service which will perform a BULK_GET to transfer
+ * the data. Note that sending a BULK_PUT is not supported because this would
+ * require an extra RPC - the service would first have to init its own buffer
+ * before instructing the client to perform a BULK_PUT.
+ *
+ * Similarly, BULK_PUT on the reply side means that the service will perform a
+ * BULK_PUT before replying to the test RPC. A BULK_GET is not supported for
+ * replies because, again, an extra RPC would be needed to instruct the service
+ * to clean up the bulk session at the end of the transfer.
+ *
+ *
+ * The following data structures are used for the various possible RPCs:
+ * SEND:
+ *    <empty>                                  (NULL)
+ *        CRT_OPC_SELF_TEST_BOTH_EMPTY
+ *    session_id only                          (int32_t)
+ *        CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV
+ *    session_id, iov                          (int32_t, crt_iov_t)
+ *        CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY
+ *        CRT_OPC_SELF_TEST_BOTH_IOV
+ *    session_id, iov, bulk handle             (int32_t, crt_iov_t, crt_bulk_t)
+ *        CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK
+ *    session_id, bulk handle                  (int32_t, crt_bulk_t)
+ *        CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV
+ *        CRT_OPC_SELF_TEST_BOTH_BULK
+ *
+ * REPLY:
+ *    <empty>                                  (NULL)
+ *        CRT_OPC_SELF_TEST_BOTH_EMPTY
+ *        CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY
+ *        CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK
+ *        CRT_OPC_SELF_TEST_BOTH_BULK
+ *    iov                                      (crt_iov_t)
+ *        CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV
+ *        CRT_OPC_SELF_TEST_BOTH_IOV
+ *        CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV
+ */
 
 #define CRT_SELF_TEST_MAX_MSG_SIZE	0x40000000
 
-/*
- * Logic table for self-test message opcodes:
- *
- * send_size == 0 && return_size == 0
- *      opcode: CRT_OPC_SELF_TEST_BOTH_EMPTY
- *      send struct: NULL
- *      return struct: NULL
- *
- * send_size == 0 && return_size > 0
- *      opcode: CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV
- *      send struct: uint32_t
- *      return struct: iovec
- *
- * send_size > 0 && return_size == 0
- *      opcode: CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY
- *      send struct: int32_t session_id, iovec payload
- *      return struct: NULL
- *
- * send_size > 0 && return_size > 0
- *      opcode: CRT_OPC_SELF_TEST_BOTH_IOV
- *      send struct: int32_t session_id, iovec payload
- *      return struct: iovec of specified size
- */
+enum crt_st_msg_type {
+	CRT_SELF_TEST_MSG_TYPE_EMPTY = 0,
+	CRT_SELF_TEST_MSG_TYPE_IOV,
+	CRT_SELF_TEST_MSG_TYPE_BULK_PUT,
+	CRT_SELF_TEST_MSG_TYPE_BULK_GET,
+};
 
 struct crt_st_session_params {
 	uint32_t send_size;
 	uint32_t reply_size;
 	uint32_t num_buffers;
+	union {
+		struct {
+			enum crt_st_msg_type send_type: 2;
+			enum crt_st_msg_type reply_type: 2;
+		};
+		uint32_t flags;
+	};
 };
+
+/*
+ * RPC argument structures
+ *
+ * Push pragma pack=1 onto the stack for pragma pack. This forces these
+ * structures to be packed together without any padding between members
+ */
+#pragma pack(push, 1)
 
 /*
  * Note that for these non-empty send structures the session_id is always
@@ -83,6 +152,45 @@ struct crt_st_send_id_iov {
 	int32_t session_id;
 	crt_iov_t buf;
 };
+
+struct crt_st_send_id_iov_bulk {
+	int32_t session_id;
+	crt_iov_t buf;
+	crt_bulk_t bulk_hdl;
+};
+
+struct crt_st_send_id_bulk {
+	int32_t session_id;
+	crt_bulk_t bulk_hdl;
+};
+/* Pop pragma pack to restore original struct packing behavior */
+#pragma pack(pop)
+
+static inline crt_opcode_t
+crt_st_compute_opcode(enum crt_st_msg_type send_type,
+		      enum crt_st_msg_type reply_type)
+{
+	C_ASSERT(send_type >= 0 && send_type < 4);
+	C_ASSERT(reply_type >= 0 && reply_type < 4);
+	C_ASSERT(send_type != CRT_SELF_TEST_MSG_TYPE_BULK_PUT);
+	C_ASSERT(reply_type != CRT_SELF_TEST_MSG_TYPE_BULK_GET);
+
+	crt_opcode_t opcodes[4][4] = { { CRT_OPC_SELF_TEST_BOTH_EMPTY,
+					 CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV,
+					 CRT_OPC_SELF_TEST_BOTH_BULK,
+					 -1 },
+				       { CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,
+					 CRT_OPC_SELF_TEST_BOTH_IOV,
+					 CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,
+					 -1 },
+				       { -1, -1, -1, -1 },
+				       { CRT_OPC_SELF_TEST_BOTH_BULK,
+					 CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,
+					 CRT_OPC_SELF_TEST_BOTH_BULK,
+					 -1 } };
+
+	return opcodes[send_type][reply_type];
+}
 
 void crt_self_test_init(void);
 int crt_self_test_msg_handler(crt_rpc_t *rpc_req);

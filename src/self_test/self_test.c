@@ -59,10 +59,19 @@
 #define CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV	0xFFFF0201U
 #define CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY	0xFFFF0202U
 #define CRT_OPC_SELF_TEST_BOTH_IOV		0xFFFF0203U
+#define CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV	0xFFFF0204U
+#define CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK	0xFFFF0205U
+#define CRT_OPC_SELF_TEST_BOTH_BULK		0xFFFF0206U
 #define CRT_OPC_SELF_TEST_OPEN_SESSION		0xFFFF0210U
 #define CRT_OPC_SELF_TEST_CLOSE_SESSION		0xFFFF0211U
 
 #define CRT_SELF_TEST_MAX_MSG_SIZE		0x40000000U
+#define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
+
+#define ISBULK(type) (type == CRT_SELF_TEST_MSG_TYPE_BULK_GET || \
+		      type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT)
+
+#define CRT_BULK_NULL            (NULL)
 
 /*
  * RPC argument structures
@@ -71,18 +80,64 @@
  * structures to be packed together without any padding between members
  */
 #pragma pack(push, 1)
+enum crt_st_msg_type {
+	CRT_SELF_TEST_MSG_TYPE_EMPTY = 0,
+	CRT_SELF_TEST_MSG_TYPE_IOV,
+	CRT_SELF_TEST_MSG_TYPE_BULK_PUT,
+	CRT_SELF_TEST_MSG_TYPE_BULK_GET,
+};
 struct crt_st_session_params {
 	uint32_t send_size;
 	uint32_t reply_size;
 	uint32_t num_buffers;
+	union {
+		struct {
+			enum crt_st_msg_type send_type: 2;
+			enum crt_st_msg_type reply_type: 2;
+		};
+		uint32_t flags;
+	};
 };
 struct crt_st_send_id_iov {
 	int32_t session_id;
 	crt_iov_t buf;
 };
+struct crt_st_send_id_iov_bulk {
+	int32_t session_id;
+	crt_iov_t buf;
+	crt_bulk_t bulk_hdl;
+};
+struct crt_st_send_id_bulk {
+	int32_t session_id;
+	crt_bulk_t bulk_hdl;
+};
 /* Pop pragma pack to restore original struct packing behavior */
 #pragma pack(pop)
+static inline crt_opcode_t
+crt_st_compute_opcode(enum crt_st_msg_type send_type,
+		      enum crt_st_msg_type reply_type)
+{
+	C_ASSERT(send_type >= 0 && send_type < 4);
+	C_ASSERT(reply_type >= 0 && reply_type < 4);
+	C_ASSERT(send_type != CRT_SELF_TEST_MSG_TYPE_BULK_PUT);
+	C_ASSERT(reply_type != CRT_SELF_TEST_MSG_TYPE_BULK_GET);
 
+	crt_opcode_t opcodes[4][4] = { { CRT_OPC_SELF_TEST_BOTH_EMPTY,
+					 CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV,
+					 CRT_OPC_SELF_TEST_BOTH_BULK,
+					 -1 },
+				       { CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY,
+					 CRT_OPC_SELF_TEST_BOTH_IOV,
+					 CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,
+					 -1 },
+				       { -1, -1, -1, -1 },
+				       { CRT_OPC_SELF_TEST_BOTH_BULK,
+					 CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,
+					 CRT_OPC_SELF_TEST_BOTH_BULK,
+					 -1 } };
+
+	return opcodes[send_type][reply_type];
+}
 int crt_validate_grpid(const crt_group_id_t grpid);
 int
 crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *crf,
@@ -90,6 +145,11 @@ crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *crf,
 /*
  * TODO: DELETE REGION END
  */
+
+static const char * const crt_st_msg_type_str[] = { "EMPTY",
+						    "IOV",
+						    "BULK_PUT",
+						    "BULK_GET" };
 
 /* User input maximum values */
 #define SELF_TEST_MAX_REPETITIONS (0x40000000)
@@ -186,6 +246,10 @@ struct st_cb_data {
 	int			 rep_idx;
 	struct timespec		 sent_time;
 	struct st_endpoint	*endpt;
+
+	crt_bulk_t		 bulk_hdl;
+	crt_sg_list_t		 sg_list;
+	crt_iov_t		 sg_iov;
 
 	/* Length of the buffer attached to the end of this struct */
 	size_t			 buf_len;
@@ -314,18 +378,12 @@ static int send_next_rpc(struct st_cb_data *cb_data, int skip_inc_complete)
 		cb_args->rep_latencies[cb_data->rep_idx].tag =
 			local_endpt.ep_tag;
 
-		/* Set the opcode based on the sizes of the arguments */
-		if (cb_args->test_params.send_size > 0 &&
-		    cb_args->test_params.reply_size > 0)
-			opcode = CRT_OPC_SELF_TEST_BOTH_IOV;
-		else if (cb_args->test_params.send_size > 0 &&
-			 cb_args->test_params.reply_size == 0)
-			opcode = CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY;
-		else if (cb_args->test_params.send_size == 0 &&
-			 cb_args->test_params.reply_size > 0)
-			opcode = CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV;
-		else
-			opcode = CRT_OPC_SELF_TEST_BOTH_EMPTY;
+		/*
+		 * Determine which opcode (and thus underlying structures)
+		 * should be used for this test message
+		 */
+		opcode = crt_st_compute_opcode(cb_args->test_params.send_type,
+					       cb_args->test_params.reply_type);
 
 		/* Start a new RPC request */
 		ret = crt_req_create(cb_args->crt_ctx, local_endpt,
@@ -364,6 +422,30 @@ static int send_next_rpc(struct st_cb_data *cb_data, int skip_inc_complete)
 				crt_iov_set(&typed_args->buf,
 					    cb_data->buf,
 					    cb_args->test_params.send_size);
+			}
+			break;
+		case CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK:
+			{
+				struct crt_st_send_id_iov_bulk *typed_args =
+					(struct crt_st_send_id_iov_bulk *)args;
+
+				C_ASSERT(cb_data->buf_len >=
+					 cb_args->test_params.send_size);
+				crt_iov_set(&typed_args->buf,
+					    cb_data->buf,
+					    cb_args->test_params.send_size);
+				typed_args->bulk_hdl = cb_data->bulk_hdl;
+				C_ASSERT(typed_args->bulk_hdl != CRT_BULK_NULL);
+			}
+			break;
+		case CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV:
+		case CRT_OPC_SELF_TEST_BOTH_BULK:
+			{
+				struct crt_st_send_id_bulk *typed_args =
+					(struct crt_st_send_id_bulk *)args;
+
+				typed_args->bulk_hdl = cb_data->bulk_hdl;
+				C_ASSERT(typed_args->bulk_hdl != CRT_BULK_NULL);
 			}
 			break;
 		}
@@ -522,8 +604,8 @@ static int open_sessions(struct st_cb_args *cb_args, int max_inflight)
 	int				 ret;
 
 	/* Sessions are not required for (EMPTY EMPTY) */
-	if (cb_args->test_params.send_size == 0 &&
-	    cb_args->test_params.reply_size == 0) {
+	if (cb_args->test_params.send_type == CRT_SELF_TEST_MSG_TYPE_EMPTY &&
+	    cb_args->test_params.reply_type == CRT_SELF_TEST_MSG_TYPE_EMPTY) {
 		for (i = 0; i < cb_args->num_endpts; i++)
 			cb_args->endpts[i].session_id = -1;
 		return 0;
@@ -830,15 +912,28 @@ static int run_self_test(struct crt_st_session_params all_params[],
 		if (size_idx == -1) {
 			test_params.send_size = 0;
 			test_params.reply_size = 0;
+			test_params.send_type = CRT_SELF_TEST_MSG_TYPE_EMPTY;
+			test_params.reply_type = CRT_SELF_TEST_MSG_TYPE_EMPTY;
 		} else {
 			test_params = all_params[size_idx];
 			cb_args.rep_count = rep_count;
 		}
 
-		test_buf_len = test_params.send_size;
+		/*
+		 * Compute the amount of spaced needed for this test run
+		 * Note that if bulk is used for the reply, need to make sure
+		 * this is big enough for the bulk reply to be written to
+		 */
+		if (ISBULK(test_params.reply_type))
+			test_buf_len = max(test_params.send_size,
+					   test_params.reply_size);
+		else
+			test_buf_len = test_params.send_size;
 
 		/* Allocate "private" buffers for each inflight RPC */
 		for (alloc_idx = 0; alloc_idx < max_inflight; alloc_idx++) {
+			struct st_cb_data *cb_data;
+
 			/* Only allocate nodes once and re-use them */
 			if (cb_data_ptrs[alloc_idx] == NULL) {
 				C_ALLOC_PTR(cb_data_ptrs[alloc_idx]);
@@ -846,33 +941,68 @@ static int run_self_test(struct crt_st_session_params all_params[],
 					C_ERROR("RPC data allocation failed\n");
 					C_GOTO(cleanup, ret = -CER_NOMEM);
 				}
+			} else {
+				memset(cb_data_ptrs[alloc_idx], 0,
+				       sizeof(struct st_cb_data));
 			}
+
+			/*
+			 * Now that this pointer can't change, get a shorter
+			 * alias for it
+			 */
+			cb_data = cb_data_ptrs[alloc_idx];
 
 			/*
 			 * Free the buffer attached to this RPC instance if
 			 * there is one from the previous size
 			 */
-			if (cb_data_ptrs[alloc_idx]->buf != NULL)
-				C_FREE(cb_data_ptrs[alloc_idx]->buf,
-				       cb_data_ptrs[alloc_idx]->buf_len);
+			if (cb_data->buf != NULL)
+				C_FREE(cb_data->buf, cb_data->buf_len);
 
 			/* No buffer needed if there is no payload */
 			if (test_buf_len == 0)
 				continue;
 
 			/* Allocate a new data buffer for this inflight RPC */
-			C_ALLOC(cb_data_ptrs[alloc_idx]->buf, test_buf_len);
-			if (cb_data_ptrs[alloc_idx]->buf == NULL) {
+			C_ALLOC(cb_data->buf, test_buf_len);
+			if (cb_data->buf == NULL) {
 				C_ERROR("RPC data buf allocation failed\n");
 				C_GOTO(cleanup, ret = -CER_NOMEM);
 			}
 
 			/* Fill the buffer with an arbitrary data pattern */
-			memset(cb_data_ptrs[alloc_idx]->buf, 0xC5,
-			       test_buf_len);
+			memset(cb_data->buf, 0xC5, test_buf_len);
 
 			/* Track how big the buffer is for bookkeeping */
-			cb_data_ptrs[alloc_idx]->buf_len = test_buf_len;
+			cb_data->buf_len = test_buf_len;
+
+			/*
+			 * Link the sg_list, iov's, and cb_data entries
+			 *
+			 * Note that here the length is the length of the actual
+			 * buffer; this will probably need to be changed when it
+			 * comes time to actually do a bulk transfer
+			 */
+			cb_data->sg_list.sg_iovs = &cb_data->sg_iov;
+			cb_data->sg_list.sg_nr.num = 1;
+			crt_iov_set(&cb_data->sg_iov, cb_data->buf,
+				    test_buf_len);
+
+			/* Create bulk handle if required */
+			if (ISBULK(test_params.send_type) ||
+			    ISBULK(test_params.reply_type)) {
+				crt_bulk_perm_t perms =
+					ISBULK(test_params.reply_type) ?
+						CRT_BULK_RW : CRT_BULK_RO;
+
+				ret = crt_bulk_create(cb_args.crt_ctx,
+						      &cb_data->sg_list,
+						      perms,
+						      &cb_data->bulk_hdl);
+				if (ret != 0)
+					C_GOTO(cleanup, ret);
+				C_ASSERT(cb_data->bulk_hdl != CRT_BULK_NULL);
+			}
 		}
 
 		/* Set remaining callback data argument that changes per test */
@@ -942,6 +1072,18 @@ static int run_self_test(struct crt_st_session_params all_params[],
 		/* Close outstanding self-test sessions with every endpoint */
 		close_sessions(&cb_args);
 
+		/* Free the bulk handles if they were used */
+		for (alloc_idx = 0; alloc_idx < max_inflight; alloc_idx++) {
+			struct st_cb_data *cb_data = cb_data_ptrs[alloc_idx];
+
+			C_ASSERT(cb_data != NULL);
+
+			if (cb_data->bulk_hdl != CRT_BULK_NULL) {
+				crt_bulk_free(cb_data->bulk_hdl);
+				cb_data->bulk_hdl = NULL;
+			}
+		}
+
 		/* Print out the first message latency separately */
 		if (size_idx == -1 && cb_args.rep_latencies[0].val < 0) {
 			printf("\tFirst RPC (size=(0 0)) failed; ret = %ld\n",
@@ -961,9 +1103,12 @@ static int run_self_test(struct crt_st_session_params all_params[],
 					  test_params.reply_size);
 
 		/* Print the results for this size */
-		printf("Results for message size (%d %d)"
+		printf("Results for message size (%d-%s %d-%s)"
 		       " (max_inflight_rpcs = %d)\n",
-		       test_params.send_size, test_params.reply_size,
+		       test_params.send_size,
+		       crt_st_msg_type_str[test_params.send_type],
+		       test_params.reply_size,
+		       crt_st_msg_type_str[test_params.reply_type],
 		       max_inflight);
 		printf("\tRPC Bandwidth (MB/sec): %.2f\n",
 		       bandwidth / 1000000.0F);
@@ -1062,10 +1207,21 @@ cleanup_nothread:
 		       rep_count * sizeof(cb_args.rep_latencies[0]));
 	if (cb_data_ptrs != NULL) {
 		for (alloc_idx = 0; alloc_idx < max_inflight; alloc_idx++) {
-			if (cb_data_ptrs[alloc_idx] != NULL) {
-				if (cb_data_ptrs[alloc_idx]->buf != NULL)
-					C_FREE(cb_data_ptrs[alloc_idx]->buf,
-					      cb_data_ptrs[alloc_idx]->buf_len);
+			struct st_cb_data *cb_data = cb_data_ptrs[alloc_idx];
+
+			if (cb_data != NULL) {
+				if (cb_data->bulk_hdl != CRT_BULK_NULL) {
+					crt_bulk_free(cb_data->bulk_hdl);
+					cb_data->bulk_hdl = NULL;
+				}
+				if (cb_data->buf != NULL)
+					C_FREE(cb_data->buf,
+					      cb_data->buf_len);
+
+				/*
+				 * Free and zero the actual pointer, not
+				 * the local copy
+				 */
 				C_FREE_PTR(cb_data_ptrs[alloc_idx]);
 			}
 		}
@@ -1144,14 +1300,38 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Valid sizes are [0-%d]\n"
 	       "      Performance results will be reported individually for each tuple.\n"
 	       "\n"
-	       "      Note that (0 0),(0 y),(x 0),(x y) where x,y > 0 each correspond to\n"
-	       "        different messages sent internally. These are enumerated as follows:\n"
-	       "        (0 0) - Empty payload sent in both directions\n"
-	       "        (x 0) - x-byte io_vec sent to service, empty reply\n"
-	       "        (0 y) - 4-byte size sent to service, y-byte io_vec reply\n"
-	       "        (x y) - 4-byte size + x-byte io_vec sent to service, y-byte io_vec reply\n"
+	       "      Each size integer can be prepended with a single character to specify\n"
+	       "      the underlying transport mechanism. Available types are:\n"
+	       "        'e' - Empty (no payload)\n"
+	       "        'i' - I/O vector (IOV)\n"
+	       "        'b' - Bulk transfer\n"
+	       "      For example, (b1000) would transfer 1000 bytes via bulk in both directions\n"
+	       "      Similarly, (i100 b1000) would use IOV to send and bulk to reply\n"
+	       "      Only reasonable combinations are permitted (i.e. e1000 is not allowed)\n"
+	       "      If no type specifier is specified, one will be chosen automatically. The simple\n"
+	       "        heuristic is that bulk will be used if a specified size is >= %u\n"
+	       "      BULK_GET will be used on the service side to 'send' data from client\n"
+	       "        to service, and BULK_PUT will be used on the service side to 'reply'\n"
+	       "        (assuming bulk transfers specified)\n"
 	       "\n"
-	       "      Note also that any message size with a nonzero reply size will use sessions.\n"
+	       "      Note that different messages are sent internally via different structures.\n"
+	       "      These are enumerated as follows, with x,y > 0:\n"
+	       "        (0  0)  - Empty payload sent in both directions\n"
+	       "        (ix 0)  - 4-byte session_id + x-byte iov sent, empty reply\n"
+	       "        (0  iy) - 4-byte session_id sent, y-byte iov reply\n"
+	       "        (ix iy) - 4-byte session_id + x-byte iov sent, y-byte iov reply\n"
+	       "        (0  by) - 4-byte session_id + 8-byte bulk handle sent\n"
+	       "                  y-byte BULK_PUT, empty reply\n"
+	       "        (bx 0)  - 4-byte session_id + 8-byte bulk_handle sent\n"
+	       "                  x-byte BULK_GET, empty reply\n"
+	       "        (ix by) - 4-byte session_id + x-byte iov + 8-byte bulk_handle sent\n"
+	       "                  y-byte BULK_PUT, empty reply\n"
+	       "        (bx iy) - 4-byte session_id + 8-byte bulk_handle sent\n"
+	       "                  x-byte BULK_GET, y-byte iov reply\n"
+	       "        (bx by) - 4-byte session_id + 8-byte bulk_handle sent\n"
+	       "                  x-byte BULK_GET, y-byte BULK_PUT, empty reply\n"
+	       "\n"
+	       "      Note also that any message size other than (0 0) will use test sessions.\n"
 	       "        A self-test session will be negotiated with the service before sending\n"
 	       "        any traffic, and the session will be closed after testing this size completes.\n"
 	       "        The time to create and tear down these sessions is NOT measured.\n"
@@ -1174,7 +1354,8 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "        size increases to (max_inflight * max(send_size, reply_size))\n"
 	       "\n"
 	       "      Default: %d\n",
-	       prog_name, CRT_SELF_TEST_MAX_MSG_SIZE, msg_sizes_str, rep_count,
+	       prog_name, CRT_SELF_TEST_MAX_MSG_SIZE,
+	       CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
 	       max_inflight);
 }
 
@@ -1464,12 +1645,161 @@ cleanup:
 
 }
 
+/**
+ * Parse a message size tuple from the user. The input format for this is
+ * described in the usage text - basically one or two unsigned integer sizes,
+ * each optionally prefixed by a character that specifies what underlying IO
+ * type should be used to transfer a payload of that size (empty, iov, bulk).
+ *
+ * \return	0 on successfully filling *test_params, nonzero otherwise
+ */
+int parse_message_sizes_string(const char *pch,
+			       struct crt_st_session_params *test_params)
+{
+	/*
+	 * Note whether a type is specified or not. If no type is
+	 * specified by the user, it will be automatically selected
+	 */
+	int send_type_specified = 0;
+	int reply_type_specified = 0;
+
+	/*
+	 * A simple map between identifier ('e') and type (...EMPTY)
+	 *
+	 * Note that BULK_PUT (for send) or BULK_GET (for reply) are
+	 * not yet implemented. For this reason, only 'b' for bulk is
+	 * accepted as a type here, which will automatically choose
+	 * PUT or GET depending on the direction.
+	 *
+	 * If send/PUT or reply/GET are ever implemented, the map can be
+	 * easily changed to support this.
+	 */
+	const struct {
+		char identifier;
+		enum crt_st_msg_type type;
+	} type_map[] = { {'e', CRT_SELF_TEST_MSG_TYPE_EMPTY},
+			 {'i', CRT_SELF_TEST_MSG_TYPE_IOV},
+			 {'b', CRT_SELF_TEST_MSG_TYPE_BULK_GET} };
+
+	/* Number of types recognized */
+	const int num_types = ARRAY_SIZE(type_map);
+
+	int ret;
+
+	/*
+	 * Advance pch to the next numerical character in the token
+	 * If along the way pch happens to be one of the type
+	 * characters, note down that type and continue hunting for a
+	 * number. In this way, only the last type specifier before the
+	 * number is stored.
+	 */
+	while (*pch != '\0' && (*pch < '0' || *pch > '9')) {
+		int i;
+
+		for (i = 0; i < num_types; i++)
+			if (*pch == type_map[i].identifier) {
+				send_type_specified = 1;
+				test_params->send_type = type_map[i].type;
+			}
+		pch++;
+	}
+	if (*pch == '\0')
+		return -1;
+
+	/* Read the first size */
+	ret = sscanf(pch, "%u", &test_params->send_size);
+	if (ret != 1 || (test_params->send_size > CRT_SELF_TEST_MAX_MSG_SIZE))
+		return -1;
+
+	/* Advance pch to the next non-numeric character */
+	while (*pch != '\0' && *pch >= '0' && *pch <= '9')
+		pch++;
+
+	/*
+	 * Advance pch to the next numerical character in the token
+	 * If along the way pch happens to be one of the type
+	 * characters, note down that type and continue hunting for a
+	 * number. In this way, only the last type specifier before the
+	 * number is stored.
+	 */
+	while (*pch != '\0' && (*pch < '0' || *pch > '9')) {
+		int i;
+
+		for (i = 0; i < num_types; i++)
+			if (*pch == type_map[i].identifier) {
+				reply_type_specified = 1;
+				test_params->reply_type = type_map[i].type;
+			}
+		pch++;
+	}
+	if (*pch != '\0') {
+		/* Read the second size */
+		ret = sscanf(pch, "%u", &test_params->reply_size);
+		if (ret != 1 ||
+		    (test_params->reply_size > CRT_SELF_TEST_MAX_MSG_SIZE))
+			return -1;
+	} else {
+		/* Only one numerical value - that's perfectly valid */
+		test_params->reply_size = test_params->send_size;
+		test_params->reply_type = test_params->send_type;
+		reply_type_specified = send_type_specified;
+	}
+
+	/* If we got here, the send_size and reply_size are valid */
+
+	/***** Automatically assign types if they were not specified *****/
+	if (send_type_specified == 0) {
+		if (test_params->send_size == 0)
+			test_params->send_type = CRT_SELF_TEST_MSG_TYPE_EMPTY;
+		else if (test_params->send_size <
+			  CRT_SELF_TEST_AUTO_BULK_THRESH)
+			test_params->send_type = CRT_SELF_TEST_MSG_TYPE_IOV;
+		else
+			test_params->send_type =
+				CRT_SELF_TEST_MSG_TYPE_BULK_GET;
+	}
+	if (reply_type_specified == 0) {
+		if (test_params->reply_size == 0)
+			test_params->reply_type = CRT_SELF_TEST_MSG_TYPE_EMPTY;
+		else if (test_params->reply_size <
+			  CRT_SELF_TEST_AUTO_BULK_THRESH)
+			test_params->reply_type = CRT_SELF_TEST_MSG_TYPE_IOV;
+		else
+			test_params->reply_type =
+				CRT_SELF_TEST_MSG_TYPE_BULK_PUT;
+	}
+
+	/***** Silently / automatically correct invalid types *****/
+	/* Empty messages always have empty type */
+	if (test_params->send_size == 0)
+		test_params->send_type = CRT_SELF_TEST_MSG_TYPE_EMPTY;
+	if (test_params->reply_size == 0)
+		test_params->reply_type = CRT_SELF_TEST_MSG_TYPE_EMPTY;
+
+	/* All other empty requests with nonzero payload convert to iov */
+	if (test_params->send_size != 0 &&
+	    test_params->send_type == CRT_SELF_TEST_MSG_TYPE_EMPTY)
+		test_params->send_type = CRT_SELF_TEST_MSG_TYPE_IOV;
+	if (test_params->reply_size != 0 &&
+	    test_params->reply_type == CRT_SELF_TEST_MSG_TYPE_EMPTY)
+		test_params->reply_type = CRT_SELF_TEST_MSG_TYPE_IOV;
+
+	/* Bulk requests convert to the type allowed by send/reply */
+	if (test_params->send_type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT)
+		test_params->send_type = CRT_SELF_TEST_MSG_TYPE_BULK_GET;
+	if (test_params->reply_type == CRT_SELF_TEST_MSG_TYPE_BULK_GET)
+		test_params->reply_type = CRT_SELF_TEST_MSG_TYPE_BULK_PUT;
+
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	/* Default parameters */
 	char				 default_msg_sizes_str[] =
-		 "(1000 1000),(1000 0),(0 1000),(0 0)";
-	const int			 default_rep_count = 20000;
+		 "b200000,b200000 0,0 b200000,b200000 i1000,i1000 b200000,"
+		 "i1000,i1000 0,0 i1000,0";
+	const int			 default_rep_count = 10000;
 	const int			 default_max_inflight = 1000;
 
 	char				*dest_name = NULL;
@@ -1579,28 +1909,16 @@ int main(int argc, char *argv[])
 	pch = strtok(msg_sizes_str, tuple_tokens);
 	while (pch != NULL) {
 		C_ASSERTF(num_msg_sizes <= num_tokens, "Token counting err\n");
-		ret = sscanf(pch, "%d %d",
-			     &all_params[num_msg_sizes].send_size,
-			     &all_params[num_msg_sizes].reply_size);
 
-		/* If only one size was given, assume send/receive are same */
-		if (ret == 1) {
-			all_params[num_msg_sizes].reply_size =
-				all_params[num_msg_sizes].send_size;
-		}
-
-		if ((all_params[num_msg_sizes].send_size >
-		     CRT_SELF_TEST_MAX_MSG_SIZE)
-		    || (all_params[num_msg_sizes].reply_size >
-			CRT_SELF_TEST_MAX_MSG_SIZE)
-		    || (ret != 1 && ret != 2)) {
+		ret = parse_message_sizes_string(pch,
+						 &all_params[num_msg_sizes]);
+		if (ret == 0)
+			num_msg_sizes++;
+		else
 			printf("Warning: Invalid message sizes tuple\n"
 			       "  Expected values in range [0:%u], got '%s'\n",
 			       CRT_SELF_TEST_MAX_MSG_SIZE,
 			       pch);
-		} else {
-			num_msg_sizes++;
-		}
 
 		pch = strtok(NULL, tuple_tokens);
 	}
@@ -1659,8 +1977,10 @@ int main(int argc, char *argv[])
 	for (j = 0; j < num_msg_sizes; j++) {
 		if (j > 0)
 			printf(", ");
-		printf("(%d %d)", all_params[j].send_size,
-		       all_params[j].reply_size);
+		printf("(%d-%s %d-%s)", all_params[j].send_size,
+		       crt_st_msg_type_str[all_params[j].send_type],
+		       all_params[j].reply_size,
+		       crt_st_msg_type_str[all_params[j].reply_type]);
 	}
 	printf("]\n"
 	       "  Repetitions per size:       %d\n"

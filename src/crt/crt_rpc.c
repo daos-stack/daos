@@ -118,11 +118,23 @@ static struct crt_msg_field *crt_st_send_id_iov_field[] = {
 	&CMF_IOVEC,
 };
 
+static struct crt_msg_field *crt_st_send_id_iov_bulk_field[] = {
+	&CMF_INT,
+	&CMF_IOVEC,
+	&CMF_BULK,
+};
+
+static struct crt_msg_field *crt_st_send_id_bulk_field[] = {
+	&CMF_INT,
+	&CMF_BULK,
+};
+
 static struct crt_msg_field *crt_st_reply_iov_field[] = {
 	&CMF_IOVEC,
 };
 
 static struct crt_msg_field *crt_st_open_session_params_field[] = {
+	&CMF_UINT32,
 	&CMF_UINT32,
 	&CMF_UINT32,
 	&CMF_UINT32,
@@ -146,6 +158,21 @@ static struct crt_req_format CQF_CRT_SELF_TEST_BOTH_IOV =
 	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_BOTH_IOV",
 			   crt_st_send_id_iov_field,
 			   crt_st_reply_iov_field);
+
+static struct crt_req_format CQF_CRT_SELF_TEST_SEND_IOV_REPLY_BULK =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_SEND_IOV_REPLY_BULK",
+			   crt_st_send_id_iov_bulk_field,
+			   NULL);
+
+static struct crt_req_format CQF_CRT_SELF_TEST_SEND_BULK_REPLY_IOV =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_SEND_BULK_REPLY_IOV",
+			   crt_st_send_id_bulk_field,
+			   crt_st_reply_iov_field);
+
+static struct crt_req_format CQF_CRT_SELF_TEST_BOTH_BULK =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_BOTH_BULK",
+			   crt_st_send_id_bulk_field,
+			   NULL);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_OPEN_SESSION =
 	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_OPEN_SESSION",
@@ -272,6 +299,30 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_ver		= 1,
 		.ir_flags	= 0,
 		.ir_req_fmt	= &CQF_CRT_SELF_TEST_BOTH_IOV,
+		.ir_hdlr	= crt_self_test_msg_handler,
+		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_SELF_TEST_SEND_BULK_REPLY_IOV",
+		.ir_opc		= CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_SELF_TEST_SEND_BULK_REPLY_IOV,
+		.ir_hdlr	= crt_self_test_msg_handler,
+		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_SELF_TEST_SEND_IOV_REPLY_BULK",
+		.ir_opc		= CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_SELF_TEST_SEND_IOV_REPLY_BULK,
+		.ir_hdlr	= crt_self_test_msg_handler,
+		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_SELF_TEST_BOTH_BULK",
+		.ir_opc		= CRT_OPC_SELF_TEST_BOTH_BULK,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_SELF_TEST_BOTH_BULK,
 		.ir_hdlr	= crt_self_test_msg_handler,
 		.ir_co_ops	= NULL,
 	}, {

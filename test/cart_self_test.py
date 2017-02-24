@@ -93,7 +93,9 @@ class SelfTest(commontestsuite.CommonTestSuite):
         self.logger.info("Server running")
 
         # Now define the self_test options.
-        message_sizes = "1,4,16,1024"
+        message_sizes = "b2000,b2000 0,0 b2000,b2000 i1000,i1000 b2000," + \
+            "i1000,i1000 0,0 i1000,1,0"
+
         rpcs_in_flight = 16
         repetitions = 100
 
