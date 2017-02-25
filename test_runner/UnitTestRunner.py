@@ -80,6 +80,10 @@ class UnitTestRunner(PostRunner.PostRunner,
                              ("loop{!s}".format(self.loop_number)),
                              ("{0}_{1!s}".format(test_name, testcase_id)))
         os.environ[test_module['subLogKey']] = value
+        try:
+            os.makedirs(value)
+        except OSError:
+            pass
         self.last_testlogdir = value
 
     def execute_list(self):
@@ -103,8 +107,13 @@ class UnitTestRunner(PostRunner.PostRunner,
                              "*********************************"
                             )
             self.logger.info("Number test run: %s", results.testsRun)
+            self.logger.info("Number skipped tests: %d",
+                             len(results.skipped))
+            for results_item in results.skipped:
+                self.logger.info(results_item[0])
+                self.logger.info(results_item[1])
             if results.wasSuccessful() is True:
-                self.logger.info("Test was successful\n")
+                self.logger.info("\nTest was successful\n")
             else:
                 rtn |= 1
                 self.logger.info("Test failed")
@@ -121,11 +130,6 @@ class UnitTestRunner(PostRunner.PostRunner,
                     test_object_dict = results_item[0].__dict__
                     self.dump_log_files(results_item[0].__class__.__name__,
                                         test_object_dict['_testMethodName'])
-                self.logger.info("\nNumber skipped tests: %d",
-                                 len(results.skipped))
-                for results_item in results.skipped:
-                    self.logger.info(results_item[0])
-                    self.logger.info(results_item[1])
 
             use_valgrind = os.getenv('TR_USE_VALGRIND', "")
             if use_valgrind == "memcheck" and \
@@ -148,7 +152,7 @@ class UnitTestRunner(PostRunner.PostRunner,
         results = []
         results_info = {}
         rtn = 0
-        results_info['name'] = self.test_info.get_module('name')
+        results_info['name'] = self.test_info.get_test_info('testName')
         value = self.log_dir_base + "/" + str(results_info['name']) + ".log"
         file_hdlr = logging.FileHandler(value)
         file_hdlr.setLevel(logging.DEBUG)

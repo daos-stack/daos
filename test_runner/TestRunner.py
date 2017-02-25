@@ -119,7 +119,7 @@ class TestRunner(PostRunner.PostRunner):
                 self.logdir = self.log_dir_base
             else:
                 self.logdir = os.path.join(self.log_dir_base, \
-                                      str(self.test_info.get_module('name')))
+                                  str(self.test_info.get_test_info('testName')))
                 try:
                     os.makedirs(self.logdir)
                 except OSError:
@@ -134,7 +134,7 @@ class TestRunner(PostRunner.PostRunner):
             self.test_info.add_default_env()
             self.logger.info("****************************************\n " + \
                              "TestRunner: " + \
-                             str(self.test_info.get_module('name')) + \
+                             str(self.test_info.get_test_info('testName')) + \
                              "\n***************************************"
                             )
             (rc, rtn_info) = runner.execute_strategy()

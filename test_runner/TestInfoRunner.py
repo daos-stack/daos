@@ -78,6 +78,14 @@ class TestInfoRunner(PreRunner.PreRunner):
         if 'passToConfig' not in self.test_info or \
            self.test_info['passToConfig'] is None:
             self.test_info['passToConfig'] = {}
+        # set test name
+        fileName = os.path.basename(test_module_name).rstrip('.yml')
+        moduleName = self.test_info['module'].get('name', "")
+        if fileName != moduleName:
+            self.test_info['testName'] = \
+                "{!s}_{!s}".format(fileName, moduleName)
+        else:
+            self.test_info['testName'] = moduleName
         return rtn
 
     def post_run(self):
@@ -88,13 +96,13 @@ class TestInfoRunner(PreRunner.PreRunner):
     def dump_test_info(self):
         """ dump the test info to the output directory """
         if os.path.exists(os.path.join(self.log_dir_base,
-                                       self.test_info['module']['name'])):
+                                       self.test_info['testName'])):
             name = "%s/%s/%s_test_info.yml" % (self.log_dir_base,
-                                               self.test_info['module']['name'],
+                                               self.test_info['testName'],
                                                self.test_info['module']['name'])
         else:
             name = "%s/%s_test_info.yml" % (self.log_dir_base,
-                                            self.test_info['module']['name'])
+                                            self.test_info['testName'])
         with open(name, 'w') as fd:
             dump(self.test_info, fd, Dumper=Dumper, indent=4,
                  default_flow_style=False)

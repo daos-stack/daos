@@ -54,7 +54,7 @@ class ScriptsRunner(PostRunner.PostRunner):
         """ Launch test command """
         self.logger.info("TestRunner: start command %s ", cmd)
         testcaseout = os.path.join(self.logdir, logname)
-        cmdstr = "%s %s " % (cmd, parms)
+        cmdstr = "{!s} {!s}".format(cmd, parms)
         rtn = 0
         #cmdarg = shlex.split(cmdstr)
         with open(testcaseout, mode='a') as outfile:

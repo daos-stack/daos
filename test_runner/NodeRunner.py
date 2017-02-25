@@ -30,6 +30,12 @@ import shlex
 import subprocess
 import logging
 import json
+import shutil
+from yaml import load
+try:
+    from yaml import CLoader as Loader
+except ImportError:
+    from yaml import Loader
 
 
 class NodeRunner():
@@ -128,8 +134,6 @@ class NodeRunner():
     def process_terminate(self):
         """ poll remote processes """
         if self.proc.poll() is None:
-            self.logger.info("Terminate node: %s  type: %s",
-                             self.node, self.node_type)
             self.proc.terminate()
             #try:
             #    self.proc.wait(timeout=1)
@@ -138,8 +142,27 @@ class NodeRunner():
 
         return self.proc.returncode
 
+    def match_testName(self):
+        """ match the name of the log log to the testcase """
+        subtest_results_file = os.path.join(self.test_config['log_base_path'],
+                                            "subtest_results.yml")
+        if not os.path.exists(subtest_results_file):
+            return
+        with open(subtest_results_file, 'r') as fd:
+            subtest_results_data = load(fd, Loader=Loader)
+        test = str(subtest_results_data[0]['name'])
+
+        for logfile in [self.logfileout, self.logfileerr]:
+            (path, name) = os.path.split(logfile)
+            namePlus = name.split('.')
+            if test == namePlus[0]:
+                break
+            shutil.move(logfile,
+                        os.path.join(path,
+                                     "{!s}.{!s}".format(test, namePlus[1])))
+
     def dump_files(self):
-        """ Launch reomte processes """
+        """ dump the log files """
         with open(self.logfileout, mode='r') as fd:
             print("STDOUT: %s" % fd.rad())
         with open(self.logfileerr, mode='r') as fd:

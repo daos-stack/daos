@@ -85,7 +85,7 @@ class NodeControlRunner():
                              str(node.node) + " rtn: " +  str(procrtn) + \
                              " **************"
                              )
-        self.logger.debug("execution time remaining: %d", loop_count)
+        self.logger.info("execution time remaining: %d", loop_count)
         self.logger.info(
             "***********************************************************")
         return rtn
@@ -126,6 +126,8 @@ class NodeControlRunner():
         self.logger.info("execution time remaining: %d", loop_count)
         self.logger.info(
             "***********************************************************")
+        for node in self.node_list:
+            node.match_testName()
 
         return rtn
 
