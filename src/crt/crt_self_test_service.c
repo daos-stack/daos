@@ -38,51 +38,8 @@
 #include <pthread.h>
 #include <crt_internal.h>
 
-/*
- * An overview of self-test sessions:
- *
- * Primary role of sessions:
- * - Memory pre-allocated by open and cleaned up by close (no allocations
- *   during the actual test).
- * - In the future, the amount of information passed to self-test can grow
- *   without changing the size of the test RPCs (which instead only require a
- *   session id to convey all that same information)
- * - Provide long-lived bulk handles to re-use across multiple test messages,
- *   reducing their overhead
- *
- * Opening a session before starting a test is required for all messages except
- * those that are completely empty (send and reply size = 0)
- *
- * When a session is opened, a pool of buffers is allocated (with the number of
- * buffers specified by the caller of open). These buffers are then placed in
- * a stack (aka first-in-last-out queue) for that session. When a new test RPC
- * request is received, a free buffer is popped off the stack and used to
- * service that request. After the response is sent, the buffer is re-added at
- * the front of the stack. This keeps a few buffers constantly in use and some
- * completely idle, which increases the likelihood that buffers will already be
- * in cache. Each session has a lock to protect the stack from concurrent
- * modification.
- *
- * Corner cases that have to be handled:
- * - Open session / close session can be called while RPCs are processing
- *   - This implementation uses read-write locks. Many parallel test messages
- *     can grab as many read locks as needed to satisfy the incoming requests.
- *     When an open or close is called, a write lock is placed over the list of
- *     sessions which excludes all the readers temporarily.
- *   - In the event of open - business returns to normal for ongoing test RPCs
- *   - In the event of close - the ongoing RPCs are no longer able to locate
- *     the requested session ID and will fail gracefully
- *
- * - Minimal buffer / lock contention for multiple threads working on RPCs
- *   - No memory allocation / recollection is performed while holding a lock
- *   - Write locks that disrupt all test messages are only required briefly
- *     while adding or removing a session
- *   - Spinlocks are used to take/return available buffers from the per-session
- *     stack
- */
-
-#define ISBULK(type) (type == CRT_SELF_TEST_MSG_TYPE_BULK_GET || \
-		      type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT)
+#define ISBULK(type) ((type) == CRT_SELF_TEST_MSG_TYPE_BULK_GET || \
+		      (type) == CRT_SELF_TEST_MSG_TYPE_BULK_PUT)
 
 /* Very simple buffer entries that can be formed into a stack or list */
 struct st_buf_entry {
@@ -169,12 +126,18 @@ static struct st_session *find_session(int32_t session_id,
 	return NULL;
 }
 
-void crt_self_test_init(void)
+void crt_self_test_service_init(void)
 {
 	int ret;
 
 	ret = pthread_rwlock_init(&g_all_session_lock, NULL);
 	C_ASSERT(ret == 0);
+}
+
+void crt_self_test_init(void)
+{
+	crt_self_test_service_init();
+	crt_self_test_client_init();
 }
 
 int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)

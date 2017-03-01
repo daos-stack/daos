@@ -47,9 +47,11 @@ def scons():
 
     tenv = env.Clone()
     tenv.Append(CPPPATH=['#/src/self_test'])
+    tenv.AppendUnique(CPPPATH=['#/src/crt'])
 
     libraries = ['pthread', 'm', 'crt', 'crt_util']
     tenv.AppendUnique(LIBS=libraries)
+    prereqs.require(tenv, 'mercury', 'pmix', 'argobots')
     tenv.AppendUnique(LIBPATH=['#/src/crt'])
     tenv.AppendUnique(RPATH="$PREFIX/lib")
     tenv.AppendUnique(FLAGS='-pthread')

@@ -133,7 +133,7 @@ static struct crt_msg_field *crt_st_reply_iov_field[] = {
 	&CMF_IOVEC,
 };
 
-static struct crt_msg_field *crt_st_open_session_params_field[] = {
+static struct crt_msg_field *crt_st_open_session_field[] = {
 	&CMF_UINT32,
 	&CMF_UINT32,
 	&CMF_UINT32,
@@ -141,6 +141,29 @@ static struct crt_msg_field *crt_st_open_session_params_field[] = {
 };
 
 static struct crt_msg_field *crt_st_session_id_field[] = {
+	&CMF_INT,
+};
+
+static struct crt_msg_field *crt_st_start_field[] = {
+	&CMF_IOVEC,
+	&CMF_UINT32,
+	&CMF_UINT32,
+	&CMF_UINT32,
+	&CMF_UINT32,
+	&CMF_UINT32,
+};
+
+static struct crt_msg_field *crt_st_start_reply_field[] = {
+	&CMF_INT,
+};
+
+static struct crt_msg_field *crt_st_status_req_field[] = {
+	&CMF_BULK,
+};
+
+static struct crt_msg_field *crt_st_status_req_reply_field[] = {
+	&CMF_UINT64,
+	&CMF_UINT32,
 	&CMF_INT,
 };
 
@@ -176,13 +199,23 @@ static struct crt_req_format CQF_CRT_SELF_TEST_BOTH_BULK =
 
 static struct crt_req_format CQF_CRT_SELF_TEST_OPEN_SESSION =
 	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_OPEN_SESSION",
-			   crt_st_open_session_params_field,
+			   crt_st_open_session_field,
 			   crt_st_session_id_field);
 
 static struct crt_req_format CQF_CRT_SELF_TEST_CLOSE_SESSION =
 	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_CLOSE_SESSION",
 			   crt_st_session_id_field,
 			   NULL);
+
+static struct crt_req_format CQF_CRT_SELF_TEST_START =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_START",
+			   crt_st_start_field,
+			   crt_st_start_reply_field);
+
+static struct crt_req_format CQF_CRT_SELF_TEST_STATUS_REQ =
+	DEFINE_CRT_REQ_FMT("CRT_SELF_TEST_STATUS_REQ",
+			   crt_st_status_req_field,
+			   crt_st_status_req_reply_field);
 
 
 int crt_rank_evict_corpc_aggregate(crt_rpc_t *source,
@@ -340,6 +373,22 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_flags	= 0,
 		.ir_req_fmt	= &CQF_CRT_SELF_TEST_CLOSE_SESSION,
 		.ir_hdlr	= crt_self_test_close_session_handler,
+		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_SELF_TEST_START",
+		.ir_opc		= CRT_OPC_SELF_TEST_START,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_SELF_TEST_START,
+		.ir_hdlr	= crt_self_test_start_handler,
+		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_SELF_TEST_STATUS_REQ",
+		.ir_opc		= CRT_OPC_SELF_TEST_STATUS_REQ,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_SELF_TEST_STATUS_REQ,
+		.ir_hdlr	= crt_self_test_status_req_handler,
 		.ir_co_ops	= NULL,
 	}, {
 		.ir_name	= "CRT_IV_FETCH",

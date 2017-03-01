@@ -112,7 +112,48 @@
  *        CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV
  */
 
-#define CRT_SELF_TEST_MAX_MSG_SIZE	0x40000000
+/*
+ * An overview of self-test sessions:
+ *
+ * Primary role of sessions:
+ * - Memory pre-allocated by open and cleaned up by close (no allocations
+ *   during the actual test).
+ * - In the future, the amount of information passed to self-test can grow
+ *   without changing the size of the test RPCs (which instead only require a
+ *   session id to convey all that same information)
+ * - Provide long-lived bulk handles to re-use across multiple test messages,
+ *   reducing their overhead
+ *
+ * Opening a session before starting a test is required for all messages except
+ * those that are completely empty (send and reply size = 0)
+ *
+ * When a session is opened, a pool of buffers is allocated (with the number of
+ * buffers specified by the caller of open). These buffers are then placed in
+ * a stack (aka first-in-last-out queue) for that session. When a new test RPC
+ * request is received, a free buffer is popped off the stack and used to
+ * service that request. After the response is sent, the buffer is re-added at
+ * the front of the stack. This keeps a few buffers constantly in use and some
+ * completely idle, which increases the likelihood that buffers will already be
+ * in cache. Each session has a lock to protect the stack from concurrent
+ * modification.
+ *
+ * Corner cases that have to be handled:
+ * - Open session / close session can be called while RPCs are processing
+ *   - This implementation uses read-write locks. Many parallel test messages
+ *     can grab as many read locks as needed to satisfy the incoming requests.
+ *     When an open or close is called, a write lock is placed over the list of
+ *     sessions which excludes all the readers temporarily.
+ *   - In the event of open - business returns to normal for ongoing test RPCs
+ *   - In the event of close - the ongoing RPCs are no longer able to locate
+ *     the requested session ID and will fail gracefully
+ *
+ * - Minimal buffer / lock contention for multiple threads working on RPCs
+ *   - No memory allocation / recollection is performed while holding a lock
+ *   - Write locks that disrupt all test messages are only required briefly
+ *     while adding or removing a session
+ *   - Spinlocks are used to take/return available buffers from the per-session
+ *     stack
+ */
 
 enum crt_st_msg_type {
 	CRT_SELF_TEST_MSG_TYPE_EMPTY = 0,
@@ -132,6 +173,20 @@ struct crt_st_session_params {
 		};
 		uint32_t flags;
 	};
+};
+
+enum crt_st_status {
+	/* No test session / data was found */
+	CRT_ST_STATUS_INVAL = -CER_INVAL,
+
+	/* Test found and still busy processing */
+	CRT_ST_STATUS_TEST_IN_PROGRESS = -CER_BUSY,
+
+	/* Test complete and returned data is valid */
+	CRT_ST_STATUS_TEST_COMPLETE = 0,
+
+	/* Test finished unsuccessfully but partial data was returned */
+	CRT_ST_STATUS_TEST_COMPLETE_WITH_ERRORS = 1,
 };
 
 /*
@@ -163,6 +218,39 @@ struct crt_st_send_id_bulk {
 	int32_t session_id;
 	crt_bulk_t bulk_hdl;
 };
+
+struct crt_st_start_params {
+	/*
+	 * Array of rank (uint32_t) and tag (uint32_t) pairs
+	 * num_endpts = endpts.len / 8
+	 */
+	crt_iov_t endpts;
+	uint32_t rep_count;
+	uint32_t max_inflight;
+	uint32_t send_size;
+	uint32_t reply_size;
+	union {
+		struct {
+			enum crt_st_msg_type send_type: 2;
+			enum crt_st_msg_type reply_type: 2;
+		};
+		uint32_t flags;
+	};
+};
+
+struct crt_st_status_req_reply {
+	int64_t test_duration_ns;
+	uint32_t num_remaining;
+	int32_t status;
+};
+
+struct st_latency {
+	int64_t val;
+	uint32_t rank;
+	uint32_t tag;
+	int cci_rc;
+};
+
 /* Pop pragma pack to restore original struct packing behavior */
 #pragma pack(pop)
 
@@ -192,9 +280,13 @@ crt_st_compute_opcode(enum crt_st_msg_type send_type,
 	return opcodes[send_type][reply_type];
 }
 
+void crt_self_test_service_init(void);
+void crt_self_test_client_init(void);
 void crt_self_test_init(void);
 int crt_self_test_msg_handler(crt_rpc_t *rpc_req);
 int crt_self_test_open_session_handler(crt_rpc_t *rpc_req);
 int crt_self_test_close_session_handler(crt_rpc_t *rpc_req);
+int crt_self_test_start_handler(crt_rpc_t *rpc_req);
+int crt_self_test_status_req_handler(crt_rpc_t *rpc_req);
 
 #endif /* __CRT_SELF_TEST_H__ */
