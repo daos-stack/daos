@@ -48,7 +48,7 @@ static volatile int   gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 
 /* internally generate a physical address string */
-static int
+int
 crt_gen_bmi_phyaddr(crt_phy_addr_t *phy_addr)
 {
 	int			socketfd;
@@ -196,7 +196,7 @@ static void data_init()
 	crt_gdata.cg_refcount = 0;
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_addr = NULL;
-	crt_gdata.cg_verbs = false;
+	crt_gdata.cg_na_plugin = CRT_NA_CCI_TCP;
 	crt_gdata.cg_multi_na = false;
 
 	timeout = 0;
@@ -303,33 +303,11 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 			C_DEBUG("EVN %s: %s.\n",
 				CRT_PHY_ADDR_ENV, addr_env);
 		}
-		if (strncmp(addr_env, "bmi+tcp", 7) == 0) {
-			if (strcmp(addr_env, "bmi+tcp") == 0) {
-				rc = crt_gen_bmi_phyaddr(&addr);
-				if (rc == 0) {
-					C_DEBUG("ENV %s (%s), generated "
-						"a BMI phyaddr: %s.\n",
-						CRT_PHY_ADDR_ENV, addr_env,
-						addr);
-				} else {
-					C_ERROR("crt_gen_bmi_phyaddr failed, "
-						"rc: %d.\n", rc);
-					C_GOTO(out, rc);
-				}
-			} else {
-				C_DEBUG("ENV %s found, use addr %s.\n",
-					CRT_PHY_ADDR_ENV, addr_env);
-				addr = strdup(addr_env);
-				if (addr == NULL) {
-					C_ERROR("strdup failed.\n");
-					C_GOTO(out, rc = -CER_NOMEM);
-				}
-			}
-			C_ASSERT(addr != NULL);
-			crt_gdata.cg_multi_na = false;
-		} else if (strncmp(addr_env, "cci+verbs", 9) == 0) {
-			crt_gdata.cg_verbs = true;
-		}
+
+		if (strncmp(addr_env, "cci+verbs", 9) == 0)
+			crt_gdata.cg_na_plugin = CRT_NA_CCI_VERBS;
+		else if (strncmp(addr_env, "ofi+sockets", 11) == 0)
+			crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
 
 do_init:
 		/*

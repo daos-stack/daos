@@ -169,9 +169,9 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
  *
  * \return                      zero on success, negative value if error
  *
- * Notes: the crt_req_create will internally allocate buffers for input and
- *        output parameters (crt_rpc_t::dr_input and crt_rpc_t::dr_output), and
- *        sets the appropriate size (crt_rpc_t::dr_input_size/dr_output_size).
+ * Notes: the crt_req_create will internally allocate zeroed buffers for input
+ *        and output parameters (crt_rpc_t::dr_input/dr_output), and set the
+ *        appropriate size (crt_rpc_t::dr_input_size/dr_output_size).
  *        User needs not to allocate extra input/output buffers. After the
  *        request created, user can directly fill input parameters into
  *        crt_rpc_t::dr_input and send the RPC request.

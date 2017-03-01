@@ -1600,9 +1600,11 @@ crt_grp_uri_lookup(struct crt_grp_priv *grp_priv, crt_rank_t rank, char **uri)
 	else
 		grp_id = grp_priv->gp_pub.cg_grpid;
 
-	if (grp_priv->gp_local == 0) {
-		/* attached group, for PSR just return the gp_psr_phy_addr, for
-		 * other rank will send RPC to PSR */
+	if (grp_priv->gp_local == 0 && !crt_is_service()) {
+		/*
+		 * client-side attached group, for PSR just return the
+		 * gp_psr_phy_addr, for other rank will send RPC to PSR.
+		 */
 		if (rank == grp_priv->gp_psr_rank) {
 			*uri = strndup(grp_priv->gp_psr_phy_addr,
 				       CRT_ADDR_STR_MAX_LEN);

@@ -64,9 +64,9 @@ struct crt_gdata {
 
 	bool			cg_server;
 	bool			cg_singleton; /* true for singleton client */
-	bool			cg_verbs; /* CCI verbs transport flag */
 	/* multiple NA addr flag, true for server when using CCI plugin */
 	bool			cg_multi_na;
+	int			cg_na_plugin; /* NA plugin type */
 
 	/* global timeout value (second) for all RPCs */
 	unsigned		cg_timeout;

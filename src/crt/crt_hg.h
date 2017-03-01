@@ -61,6 +61,13 @@ struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
 
+/** type of NA plugin */
+enum {
+	CRT_NA_CCI_TCP,
+	CRT_NA_CCI_VERBS,
+	CRT_NA_OFI_SOCKETS,
+};
+
 /** HG context */
 struct crt_hg_context {
 	bool			chc_shared_na; /* flag for shared na_class */

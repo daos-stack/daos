@@ -173,16 +173,16 @@ do {									\
 #define CF_X64		"%" PRIx64
 
 /* memory allocating macros */
-#define C_ALLOC(ptr, size)						 \
-	do {								 \
-		(ptr) = (__typeof__(ptr))calloc(1, (size));		 \
-		if ((ptr) != NULL) {					 \
-			crt_log(MEM_DBG, "alloc #ptr : %d at %p.\n",	 \
-				(int)(size), ptr);			 \
-			break;						 \
-		}						 \
-		C_ERROR("out of memory (tried to alloc '" #ptr "' = %d)",\
-			(int)(size));					 \
+#define C_ALLOC(ptr, size)						       \
+	do {								       \
+		(ptr) = (__typeof__(ptr))calloc(1, (size));		       \
+		if ((ptr) != NULL) {					       \
+			crt_log(MEM_DBG, "%s:%d, alloc #ptr : %d at %p.\n",    \
+				__FILE__, __LINE__, (int)(size), ptr);	       \
+			break;						       \
+		}							       \
+		C_ERROR("%s:%d, out of memory(tried to alloc '" #ptr "' = %d)",\
+			__FILE__, __LINE__, (int)(size));		       \
 	} while (0)
 
 static inline void *
@@ -208,8 +208,8 @@ crt_c_realloc(void *ptrptr, size_t size)
 
 # define C_FREE(ptr, size)						\
 	do {								\
-		crt_log(MEM_DBG, "free #ptr : %d at %p.\n",		\
-			(int)(size), (ptr));				\
+		crt_log(MEM_DBG, "%s:%d, free #ptr : %d at %p.\n",	\
+			__FILE__, __LINE__, (int)(size), (ptr));	\
 		free(ptr);						\
 		(ptr) = NULL;						\
 	} while (0)
