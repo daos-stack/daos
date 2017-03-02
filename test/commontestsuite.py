@@ -137,12 +137,30 @@ class CommonTestSuite(unittest.TestCase):
             self.testsuite, msg, cmdstr)
         cmdarg = shlex.split(cmdstr)
         start_time = time.time()
-        if not os.getenv('TR_REDIRECT_OUTPUT', ""):
+        to_redirect = os.getenv('TR_REDIRECT_OUTPUT', "no").lower()
+
+        # If TR_REDIRECT_OUTPUT = "no"; the output is redirected to the screen
+        # else if TR_REDIRECT_OUTPUT = "null"; the ouput goes to devnull
+        # else if TR_REDIRECT_OUTPUT = "yes"; the output goes to a file.
+        if to_redirect == "no":
             procrtn = subprocess.call(cmdarg, timeout=180)
-        else:
+        elif to_redirect == "null":
             procrtn = subprocess.call(cmdarg, timeout=180,
                                       stdout=subprocess.DEVNULL,
                                       stderr=subprocess.DEVNULL)
+        else:
+            log_path = os.path.join(os.getenv("CRT_TESTLOG", "output"))
+            if not os.path.exists(log_path):
+                os.makedirs(log_path)
+            cmdfileout = os.path.join(log_path, "common_launch_test.out")
+            cmdfileerr = os.path.join(log_path, "common_launch_test.err")
+            with open(cmdfileout, mode='a') as outfile, \
+                open(cmdfileerr, mode='a') as errfile:
+                outfile.write("\n============================\n")
+                errfile.write("\n============================\n")
+                procrtn = subprocess.call(cmdarg, timeout=180,
+                                          stdout=outfile,
+                                          stderr=errfile)
         elapsed = time.time() - start_time
         self.logger.info("%s: %s - return code: %d test duration: %d\n", \
           self.testsuite, msg, procrtn, elapsed)
@@ -153,12 +171,30 @@ class CommonTestSuite(unittest.TestCase):
         self.logger.info("%s: start process %s - input string:\n%s", \
           self.testsuite, msg, cmdstr)
         cmdarg = shlex.split(cmdstr)
-        if not os.getenv('TR_REDIRECT_OUTPUT', ""):
+        to_redirect = os.getenv('TR_REDIRECT_OUTPUT', "no").lower()
+
+        # If TR_REDIRECT_OUTPUT = "no"; the output is redirected to the screen
+        # else if TR_REDIRECT_OUTPUT = "null"; the ouput goes to devnull
+        # else if TR_REDIRECT_OUTPUT = "yes"; the output goes to a file.
+        if to_redirect == "no":
             proc = subprocess.Popen(cmdarg)
-        else:
+        elif to_redirect == "null":
             proc = subprocess.Popen(cmdarg,
                                     stdout=subprocess.DEVNULL,
                                     stderr=subprocess.DEVNULL)
+        else:
+            log_path = os.path.join(os.getenv("CRT_TESTLOG", "output"))
+            if not os.path.exists(log_path):
+                os.makedirs(log_path)
+            cmdfileout = os.path.join(log_path, "common_launch_process.out")
+            cmdfileerr = os.path.join(log_path, "common_launch_process.err")
+            with open(cmdfileout, mode='a') as outfile, \
+                open(cmdfileerr, mode='a') as errfile:
+                outfile.write("\n============================\n")
+                errfile.write("\n============================\n")
+                proc = subprocess.Popen(cmdarg,
+                                        stdout=outfile,
+                                        stderr=errfile)
         return proc
 
 
