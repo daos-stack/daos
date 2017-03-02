@@ -65,6 +65,7 @@ class NodeRunner():
         """ Launch remote command """
         if node_type != self.node_type and node_type != 'all' and \
            self.node_type != 'all':
+            self.procrtn = 0
             return
         node = self.node
         self.logger.info("TestRunner: start command %s on %s", cmd, node)
@@ -82,12 +83,13 @@ class NodeRunner():
 
         self.proc = rtn
         self.state = "running"
-        self.procrtn = 0
+        self.procrtn = None
 
     def launch_test(self, node_type='all'):
         """ Launch remote test runner """
         if node_type != self.node_type and node_type != 'all' and \
            self.node_type != 'all':
+            self.procrtn = 0
             return
         test_name = self.test_name
         self.logger.info("TestRunner: start %s on %s", test_name, self.node)
@@ -117,7 +119,7 @@ class NodeRunner():
 
         self.proc = rtn
         self.state = "running"
-        self.procrtn = 0
+        self.procrtn = None
 
     def process_state(self):
         """ poll remote processes """
@@ -135,6 +137,7 @@ class NodeRunner():
         """ poll remote processes """
         if self.proc.poll() is None:
             self.proc.terminate()
+            self.state = "terminate"
             #try:
             #    self.proc.wait(timeout=1)
             #except subprocess.TimeoutExpired:

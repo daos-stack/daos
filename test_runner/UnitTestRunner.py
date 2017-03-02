@@ -43,13 +43,13 @@ class UnitTestRunner(PostRunner.PostRunner,
     loop_number = 0
     test_info = {}
     subtest_results = []
-    test_directives = {}
     info = None
     logger = None
 
     def __init__(self, test_info, log_base_path):
         self.test_info = test_info
         self.info = test_info.info
+        self.test_directives = test_info.get_directives()
         self.log_dir_base = log_base_path
         self.logger = logging.getLogger("TestRunnerLogger")
 

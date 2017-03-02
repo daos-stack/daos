@@ -28,6 +28,7 @@ node control test runner class
 import os
 import logging
 import time
+from datetime import datetime
 #pylint: disable=import-error
 import NodeRunner
 #pylint: enable=import-error
@@ -47,6 +48,7 @@ class NodeControlRunner():
         self.test_info = test_info
         self.log_dir_base = log_base
         self.logger = logging.getLogger("TestRunnerLogger")
+        self.now = "_{}".format(datetime.now().isoformat().replace(':', '.'))
 
     def execute_cmd(self, cmdstr, log_path, node_type, msg=None):
         """ execute test scripts """
@@ -140,7 +142,13 @@ class NodeControlRunner():
         value = self.log_dir_base + "/" + str(name)
         for node in self.node_list:
             logdir = value + "/" + name + "_" + node.node
-            os.makedirs(logdir)
+            try:
+                os.makedirs(logdir)
+            except OSError:
+                newname = "{}{}".format(logdir, self.now)
+                os.rename(logdir, newname)
+                os.makedirs(logdir)
+
             self.logger.debug("setup node " + str(node.node) + " " + \
                               str(logdir))
             node.setup_config(name, logdir, node_type, configKeys)

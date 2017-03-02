@@ -49,8 +49,6 @@ class DvmRunner():
         if not os.path.exists(log_path):
             os.makedirs(log_path)
         self.report = os.path.join(log_path, "orted-uri")
-        # set both names for now.
-        self.info.set_config('setKeyFromConfig', 'TR_USE_URL', self.report)
         self.info.set_config('setKeyFromConfig', 'TR_USE_URI', self.report)
         self.logfileout = os.path.join(log_path, "orte-dvm.out")
         self.logfilerr = os.path.join(log_path, "orte-dvm.err")
@@ -71,7 +69,15 @@ class DvmRunner():
         time.sleep(10)
         print("TestRunner: orte-dvm process started pid: %d \n" %
               self.ortedvm.pid)
-        return not self.ortedvm
+        if self.ortedvm.poll() is None:
+            return 0
+        else:
+            print("TestRunner: orte-dvm failed to start")
+            print("TestRunner: orte-dvm rc: %d\n" % self.ortedvm.returncode)
+            with open(self.logfilerr, mode='r') as fd:
+                print("TestRunner: orte-dvm STDERR:\n %s" % fd.read())
+            os.remove(self.report)
+            return 1
 
     def stop_process(self):
         """stop orted processes """

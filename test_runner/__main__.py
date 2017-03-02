@@ -96,7 +96,9 @@ def testmain(info=None, start=1, testMode=None):
     use_daemon = info.get_config("use_daemon", "")
     if use_daemon:
         daemon = import_daemon(use_daemon, info)
-        daemon.launch_process()
+        rc = daemon.launch_process()
+        if rc:
+            return rc
     # load test object and start the testing
     if testMode == "littleChief":
         tester = MultiRunner(info, test_list)
