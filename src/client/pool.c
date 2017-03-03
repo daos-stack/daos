@@ -85,36 +85,18 @@ daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
 	return daos_client_result_wait(ev);
 }
 
-static void
-pool_query_cp(struct dc_pool *pool, void *arg, int rc, daos_rank_list_t *tgts,
-	      daos_pool_info_t *info)
-{
-	daos_task_complete(arg, rc);
-}
-
 int
 daos_pool_query_async(daos_handle_t ph, daos_rank_list_t *tgts,
 		      daos_pool_info_t *info, struct daos_task *task)
 {
-	struct dc_pool	*pool;
-	int		rc;
+
+	int rc;
 
 	if (tgts == NULL && info == NULL)
-		D_GOTO(out_task, rc = -DER_INVAL);
+		return -DER_INVAL;
 
-	pool = dc_pool_lookup(ph);
-	if (pool == NULL)
-		D_GOTO(out_task, rc = -DER_NONEXIST);
+	rc = dc_pool_query(ph, tgts, info, task);
 
-	rc = dc_pool_query(pool, daos_task2ctx(task), tgts, info,
-			   pool_query_cp, task);
-
-	dc_pool_put(pool);
-
-	return rc;
-
-out_task:
-	daos_task_complete(task, rc);
 	return rc;
 }
 

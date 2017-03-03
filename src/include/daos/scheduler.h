@@ -162,7 +162,7 @@ daos_sched_register_comp_cb(struct daos_sched *sched,
 int
 daos_task_register_comp_cb(struct daos_task *task,
 			   daos_task_comp_cb_t comp_cb,
-			   void *arg);
+			   daos_size_t arg_size, void *arg);
 /**
  * complete daos_task.
  *

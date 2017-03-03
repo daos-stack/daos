@@ -51,7 +51,6 @@ tier_ping_cb(struct daos_task *task, void *data)
 	D_DEBUG(DF_MISC, "Leaving tier_ping_cb()");
 
 	crt_req_decref(rpc);
-	D_FREE_PTR(arg);
 	return rc;
 }
 
@@ -64,7 +63,7 @@ dc_tier_ping(uint32_t ping_val, struct daos_task *task)
 	struct tier_ping_in	*in;
 	crt_endpoint_t		ep;
 	crt_rpc_t		*rpc;
-	struct tier_ping_arg	*arg;
+	struct tier_ping_arg    arg;
 	int			rc;
 
 	D_DEBUG(DF_MISC, "Ping Val to Issue: %d\n", ping_val);
@@ -87,15 +86,11 @@ dc_tier_ping(uint32_t ping_val, struct daos_task *task)
 
 	crt_req_addref(rpc);
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(out_req_put, rc = -DER_NOMEM);
+	arg.rpc = rpc;
 
-	arg->rpc = rpc;
-
-	rc = daos_task_register_comp_cb(task, tier_ping_cb, arg);
+	rc = daos_task_register_comp_cb(task, tier_ping_cb, sizeof(arg), &arg);
 	if (rc != 0)
-		D_GOTO(out_arg, rc);
+		D_GOTO(out_req_put, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);
@@ -104,8 +99,6 @@ dc_tier_ping(uint32_t ping_val, struct daos_task *task)
 
 	return rc;
 
-out_arg:
-	D_FREE_PTR(arg);
 out_req_put:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);

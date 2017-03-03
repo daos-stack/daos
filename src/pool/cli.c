@@ -243,7 +243,7 @@ pool_connect_cp(struct daos_task *task, void *data)
 	struct pool_buf		*map_buf = arg->pca_map_buf;
 	struct pool_connect_in	*pci = crt_req_get(arg->rpc);
 	struct pool_connect_out	*pco = crt_reply_get(arg->rpc);
-	int			rc = task->dt_result;
+	int			 rc = task->dt_result;
 
 	if (rc == -DER_TRUNC) {
 		/* TODO: Reallocate a larger buffer and reconnect. */
@@ -282,7 +282,6 @@ out:
 	crt_req_decref(arg->rpc);
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
 	dc_pool_put(pool);
-	D_FREE_PTR(arg);
 	return rc;
 }
 
@@ -296,9 +295,9 @@ dc_pool_connect(const uuid_t uuid, const char *grp,
 	crt_rpc_t		*rpc;
 	struct pool_connect_in	*pci;
 	struct dc_pool		*pool;
-	struct pool_connect_arg	*arg;
 	struct pool_buf		*map_buf;
-	int			rc;
+	struct pool_connect_arg	 arg;
+	int			 rc;
 
 	if (uuid_is_null(uuid) || !flags_are_valid(flags) || poh == NULL)
 		return -DER_INVAL;
@@ -345,30 +344,25 @@ dc_pool_connect(const uuid_t uuid, const char *grp,
 	if (rc != 0)
 		D_GOTO(out_req, rc);
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(out_bulk, rc = -DER_NOMEM);
-
 	/** Prepare "arg" for pool_connect_cp(). */
-	arg->pca_pool = pool;
-	arg->pca_info = info;
-	arg->pca_map_buf = map_buf;
-	arg->rpc = rpc;
-	arg->hdlp = poh;
+	arg.pca_pool = pool;
+	arg.pca_info = info;
+	arg.pca_map_buf = map_buf;
+	arg.rpc = rpc;
+	arg.hdlp = poh;
 
-	rc = daos_task_register_comp_cb(task, pool_connect_cp, arg);
+	rc = daos_task_register_comp_cb(task, pool_connect_cp,
+					sizeof(arg), &arg);
 	if (rc != 0)
-		D_GOTO(out_arg, rc);
+		D_GOTO(out_bulk, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);
 	if (rc != 0)
-		D_GOTO(out_arg, rc);
+		D_GOTO(out_bulk, rc);
 
 	return rc;
 
-out_arg:
-	D_FREE_PTR(arg);
 out_bulk:
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
 out_req:
@@ -384,7 +378,7 @@ out_task:
 struct pool_disconnect_arg {
 	struct dc_pool		*pool;
 	crt_rpc_t		*rpc;
-	daos_handle_t		hdl;
+	daos_handle_t		 hdl;
 };
 
 static int
@@ -394,7 +388,7 @@ pool_disconnect_cp(struct daos_task *task, void *data)
 		(struct pool_disconnect_arg *)data;
 	struct dc_pool			*pool = arg->pool;
 	struct pool_disconnect_out	*pdo;
-	int				rc = task->dt_result;
+	int				 rc = task->dt_result;
 
 	if (rc) {
 		D_ERROR("RPC error while disconnecting from pool: %d\n", rc);
@@ -422,7 +416,6 @@ pool_disconnect_cp(struct daos_task *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
-	D_FREE_PTR(arg);
 	return rc;
 }
 
@@ -430,11 +423,11 @@ int
 dc_pool_disconnect(daos_handle_t poh, struct daos_task *task)
 {
 	struct dc_pool			*pool;
-	crt_endpoint_t			ep;
+	crt_endpoint_t			 ep;
 	crt_rpc_t			*rpc;
 	struct pool_disconnect_in	*pdi;
-	struct pool_disconnect_arg	*arg;
-	int				rc = 0;
+	struct pool_disconnect_arg	 arg;
+	int				 rc = 0;
 
 	pool = dc_pool_lookup(poh);
 	if (pool == NULL)
@@ -481,30 +474,25 @@ dc_pool_disconnect(daos_handle_t poh, struct daos_task *task)
 	uuid_copy(pdi->pdi_op.pi_uuid, pool->dp_pool);
 	uuid_copy(pdi->pdi_op.pi_hdl, pool->dp_pool_hdl);
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(out_rpc, rc = -DER_NOMEM);
-
-	arg->pool = pool;
-	arg->hdl = poh;
+	arg.pool = pool;
+	arg.hdl = poh;
 	crt_req_addref(rpc);
-	arg->rpc = rpc;
+	arg.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, pool_disconnect_cp, arg);
+	rc = daos_task_register_comp_cb(task, pool_disconnect_cp,
+					sizeof(arg), &arg);
 	if (rc != 0)
-		D_GOTO(out_arg, rc);
+		D_GOTO(out_rpc, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);
 	if (rc != 0)
-		D_GOTO(out_arg, rc);
+		D_GOTO(out_rpc, rc);
 
 	return rc;
 
-out_arg:
-	D_FREE_PTR(arg);
-	crt_req_decref(rpc);
 out_rpc:
+	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 out_pool:
 	dc_pool_put(pool);
@@ -771,7 +759,7 @@ pool_exclude_cp(struct daos_task *task, void *data)
 	struct pool_exclude_arg		*arg = (struct pool_exclude_arg *)data;
 	struct dc_pool			*pool = arg->pool;
 	struct pool_exclude_out		*out = crt_reply_get(arg->rpc);
-	int				rc = task->dt_result;
+	int				 rc = task->dt_result;
 
 	if (rc != 0) {
 		D_ERROR("RPC error while excluding targets: %d\n", rc);
@@ -794,7 +782,6 @@ pool_exclude_cp(struct daos_task *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
-	D_FREE_PTR(arg);
 	return rc;
 }
 
@@ -803,11 +790,11 @@ dc_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts,
 		struct daos_task *task)
 {
 	struct dc_pool		*pool;
-	crt_endpoint_t		ep;
+	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
 	struct pool_exclude_in	*in;
-	struct pool_exclude_arg	*arg;
-	int			rc;
+	struct pool_exclude_arg	 arg;
+	int			 rc;
 
 	if (tgts == NULL || tgts->rl_nr.num == 0)
 		return -DER_INVAL;
@@ -835,27 +822,22 @@ dc_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts,
 	uuid_copy(in->pei_op.pi_hdl, pool->dp_pool_hdl);
 	in->pei_targets = tgts;
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(out_rpc, rc = -DER_NOMEM);
-
-	arg->pool = pool;
+	arg.pool = pool;
 	crt_req_addref(rpc);
-	arg->rpc = rpc;
+	arg.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, pool_exclude_cp, arg);
+	rc = daos_task_register_comp_cb(task, pool_exclude_cp, sizeof(arg),
+					&arg);
 	if (rc != 0)
-		D_GOTO(out_arg, rc);
+		D_GOTO(out_rpc, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);
 	if (rc != 0)
-		D_GOTO(out_arg, rc);
+		D_GOTO(out_rpc, rc);
 
 	return rc;
 
-out_arg:
-	D_FREE_PTR(arg);
 out_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
@@ -866,22 +848,21 @@ out_task:
 	return rc;
 }
 
-struct dc_pool_query_arg {
+struct pool_query_arg {
 	struct dc_pool	       *dqa_pool;
 	daos_rank_list_t       *dqa_tgts;
 	daos_pool_info_t       *dqa_info;
 	struct pool_buf	       *dqa_map_buf;
-	dc_pool_query_cb_t	dqa_cb;
-	void		       *dqa_cb_arg;
+	crt_rpc_t	       *rpc;
 };
 
 static int
-dc_pool_query_cb(const struct crt_cb_info *cb_info)
+pool_query_cb(struct daos_task *task, void *data)
 {
-	struct dc_pool_query_arg       *arg = cb_info->cci_arg;
-	struct pool_query_in	       *in = crt_req_get(cb_info->cci_rpc);
-	struct pool_query_out	       *out = crt_reply_get(cb_info->cci_rpc);
-	int				rc = cb_info->cci_rc;
+	struct pool_query_arg	       *arg = (struct pool_query_arg *)data;
+	struct pool_query_in	       *in = crt_req_get(arg->rpc);
+	struct pool_query_out	       *out = crt_reply_get(arg->rpc);
+	int				rc = task->dt_result;
 
 	D_DEBUG(DF_DSMC, DF_UUID": query rpc done: %d\n",
 		DP_UUID(arg->dqa_pool->dp_pool), rc);
@@ -900,14 +881,12 @@ dc_pool_query_cb(const struct crt_cb_info *cb_info)
 	rc = process_query_reply(arg->dqa_pool, arg->dqa_map_buf,
 				 out->pqo_op.po_map_version,
 				 out->pqo_mode, arg->dqa_tgts, arg->dqa_info);
-out:
-	arg->dqa_cb(arg->dqa_pool, arg->dqa_cb_arg, rc, arg->dqa_tgts,
-		    arg->dqa_info);
 
+out:
+	crt_req_decref(arg->rpc);
 	dc_pool_put(arg->dqa_pool);
 	map_bulk_destroy(in->pqi_map_bulk, arg->dqa_map_buf);
-	D_FREE_PTR(arg);
-	return 0;
+	return rc;
 }
 
 /**
@@ -927,17 +906,23 @@ out:
  * threads/operations.
  */
 int
-dc_pool_query(struct dc_pool *pool, crt_context_t ctx, daos_rank_list_t *tgts,
-	      daos_pool_info_t *info, dc_pool_query_cb_t cb, void *cb_arg)
+dc_pool_query(daos_handle_t poh, daos_rank_list_t *tgts, daos_pool_info_t *info,
+	      struct daos_task *task)
 {
+	struct dc_pool		       *pool;
 	crt_endpoint_t			ep;
 	crt_rpc_t		       *rpc;
 	struct pool_query_in	       *in;
 	struct pool_buf		       *map_buf;
-	struct dc_pool_query_arg       *arg;
+	struct pool_query_arg		arg;
 	int				rc;
 
 	D_ASSERT(tgts == NULL); /* TODO */
+
+	/** Lookup bumps pool ref ,1 */
+	pool = dc_pool_lookup(poh);
+	if (pool == NULL)
+		D_GOTO(out_task, rc = -DER_NO_HDL);
 
 	D_DEBUG(DF_DSMC, DF_UUID": querying: hdl="DF_UUID" tgts=%p info=%p\n",
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl), tgts, info);
@@ -946,57 +931,60 @@ dc_pool_query(struct dc_pool *pool, crt_context_t ctx, daos_rank_list_t *tgts,
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
-	rc = pool_req_create(ctx, ep, POOL_QUERY, &rpc);
+	rc = pool_req_create(daos_task2ctx(task), ep, POOL_QUERY, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool query rpc: %d\n",
 			DP_UUID(pool->dp_pool), rc);
-		D_GOTO(out_task, rc);
+		D_GOTO(out_pool, rc);
 	}
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->pqi_op.pi_uuid, pool->dp_pool);
 	uuid_copy(in->pqi_op.pi_hdl, pool->dp_pool_hdl);
 
-	rc = map_bulk_create(ctx, &in->pqi_map_bulk, &map_buf);
+	/** +1 for args */
+	crt_req_addref(rpc);
+
+	rc = map_bulk_create(daos_task2ctx(task), &in->pqi_map_bulk, &map_buf);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(out_bulk, rc = -DER_NOMEM);
+	arg.dqa_pool = pool;
+	arg.dqa_info = info;
+	arg.dqa_map_buf = map_buf;
+	arg.rpc = rpc;
 
-	dc_pool_get(pool);
-	arg->dqa_pool = pool;
-	arg->dqa_info = info;
-	arg->dqa_map_buf = map_buf;
-	arg->dqa_cb = cb;
-	arg->dqa_cb_arg = cb_arg;
-
-	rc = crt_req_send(rpc, dc_pool_query_cb, arg);
+	rc = daos_task_register_comp_cb(task, pool_query_cb, sizeof(arg),
+					&arg);
 	if (rc != 0)
-		D_GOTO(out_pool, rc);
+		D_GOTO(out_bulk, rc);
 
-	return 0;
+	/** send the request */
+	rc = daos_rpc_send(rpc, task);
+	if (rc != 0)
+		D_GOTO(out_bulk, rc);
 
-out_pool:
-	dc_pool_put(pool);
-	D_FREE_PTR(arg);
+	return rc;
+
 out_bulk:
 	map_bulk_destroy(in->pqi_map_bulk, map_buf);
 out_rpc:
 	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+out_pool:
+	dc_pool_put(pool);
 out_task:
-	daos_task_complete((struct daos_task *)cb_arg, rc);
+	daos_task_complete(task, rc);
 	return rc;
 }
 
 static int
 pool_evict_cp(struct daos_task *task, void *data)
 {
-	crt_rpc_t		*rpc = (crt_rpc_t *)data;
+	crt_rpc_t		*rpc = *((crt_rpc_t **)data);
 	struct pool_evict_in	*in = crt_req_get(rpc);
 	struct pool_evict_out	*out = crt_reply_get(rpc);
-	int			rc = task->dt_result;
+	int			 rc = task->dt_result;
 
 	if (rc != 0) {
 		D_ERROR("RPC error while evicting pool handles: %d\n", rc);
@@ -1020,10 +1008,10 @@ out:
 int
 dc_pool_evict(const uuid_t uuid, const char *grp, struct daos_task *task)
 {
-	crt_endpoint_t		ep;
+	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
 	struct pool_evict_in	*in;
-	int			rc;
+	int			 rc;
 
 	if (uuid_is_null(uuid))
 		D_GOTO(out_task, rc = -DER_INVAL);
@@ -1049,7 +1037,7 @@ dc_pool_evict(const uuid_t uuid, const char *grp, struct daos_task *task)
 
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, pool_evict_cp, rpc);
+	rc = daos_task_register_comp_cb(task, pool_evict_cp, sizeof(rpc), &rpc);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 

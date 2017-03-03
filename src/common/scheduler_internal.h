@@ -65,10 +65,11 @@ struct daos_task_private {
 	struct daos_sched_private	*dtp_sched;
 };
 
-struct daos_task_comp_cb {
+struct daos_task_comp {
 	daos_list_t		dtc_list;
 	daos_task_comp_cb_t	dtc_comp_cb;
-	void			*dtc_arg;
+	daos_size_t		dtc_arg_size;
+	char			dtc_arg[0];
 };
 
 struct daos_sched_private {

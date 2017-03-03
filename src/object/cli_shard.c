@@ -208,18 +208,18 @@ dc_obj_shard_sgl_copy(daos_sg_list_t *dst_sgl, uint32_t dst_nr,
 	return 0;
 }
 
-struct rw_args_t {
+struct obj_rw_args {
 	crt_rpc_t	*rpc;
 	daos_handle_t	*hdlp;
 	daos_sg_list_t	*rwaa_sgls;
-	uint32_t	rwaa_nr;
+	uint32_t	 rwaa_nr;
 };
 
 static int
 dc_rw_cb(struct daos_task *task, void *arg)
 {
-	struct rw_args_t	*rw_args = (struct rw_args_t *)arg;
-	struct obj_rw_in	*orw;
+	struct obj_rw_args     *rw_args = (struct obj_rw_args *)arg;
+	struct obj_rw_in       *orw;
 	int			opc;
 	int                     ret = task->dt_result;
 	int			rc = 0;
@@ -283,8 +283,8 @@ dc_rw_cb(struct daos_task *task, void *arg)
 						   orwo->orw_sgls.da_count);
 		} else if (rw_args->rwaa_sgls != NULL) {
 			/* for bulk transfer it needs to update sg_nr.num_out */
-			daos_sg_list_t	*sgls = rw_args->rwaa_sgls;
-			uint32_t	*nrs;
+			daos_sg_list_t *sgls = rw_args->rwaa_sgls;
+			uint32_t       *nrs;
 			uint32_t	nrs_count;
 			int		i;
 
@@ -305,8 +305,6 @@ out:
 	obj_shard_rw_bulk_fini(rw_args->rpc);
 	crt_req_decref(rw_args->rpc);
 	dc_pool_put((struct dc_pool *)rw_args->hdlp);
-
-	D_FREE_PTR(rw_args);
 
 	if (ret == 0 || daos_obj_retry_error(rc))
 		ret = rc;
@@ -442,11 +440,11 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	     daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 	     daos_sg_list_t *sgls, unsigned int map_ver, struct daos_task *task)
 {
-	struct dc_obj_shard	*dobj;
-	struct dc_pool		*pool;
-	crt_rpc_t		*req;
-	struct obj_rw_in	*orw;
-	struct rw_args_t	*rw_args = NULL;
+	struct dc_obj_shard    *dobj;
+	struct dc_pool	       *pool;
+	crt_rpc_t	       *req;
+	struct obj_rw_in       *orw;
+	struct obj_rw_args	rw_args;
 	crt_endpoint_t		tgt_ep;
 	uuid_t			cont_hdl_uuid;
 	uuid_t			cont_uuid;
@@ -531,23 +529,24 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 		orw->orw_bulks.da_arrays = NULL;
 	}
 
-	D_ALLOC_PTR(rw_args);
-	if (rw_args == NULL)
-		D_GOTO(out_bulk, rc = -DER_NOMEM);
 	crt_req_addref(req);
-	rw_args->rpc = req;
-	rw_args->hdlp = (daos_handle_t *)pool;
+	rw_args.rpc = req;
+	rw_args.hdlp = (daos_handle_t *)pool;
 
 	if (opc == DAOS_OBJ_RPC_FETCH) {
 		/* remember the sgl to copyout the data inline for fetch */
-		rw_args->rwaa_nr = nr;
-		rw_args->rwaa_sgls = sgls;
+		rw_args.rwaa_nr = nr;
+		rw_args.rwaa_sgls = sgls;
+	} else {
+		rw_args.rwaa_nr = 0;
+		rw_args.rwaa_sgls = NULL;
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_CRT_ERROR))
 		D_GOTO(out_args, rc = -DER_CRT_HG);
 
-	rc = daos_task_register_comp_cb(task, dc_rw_cb, rw_args);
+	rc = daos_task_register_comp_cb(task, dc_rw_cb, sizeof(rw_args),
+					&rw_args);
 	if (rc != 0)
 		D_GOTO(out_args, rc);
 
@@ -560,9 +559,7 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	return rc;
 
 out_args:
-	D_FREE_PTR(rw_args);
 	crt_req_decref(req);
-out_bulk:
 	if (total_len >= OBJ_BULK_LIMIT)
 		obj_shard_rw_bulk_fini(req);
 out_req:
@@ -595,7 +592,7 @@ dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
 			    sgls, map_ver, task);
 }
 
-struct enum_args_t {
+struct obj_enum_args {
 	crt_rpc_t		*rpc;
 	daos_handle_t		*hdlp;
 	uint32_t		*eaa_nr;
@@ -608,12 +605,12 @@ struct enum_args_t {
 static int
 dc_enumerate_cb(struct daos_task *task, void *arg)
 {
-	struct enum_args_t	*enum_args = (struct enum_args_t *)arg;
+	struct obj_enum_args	*enum_args = (struct obj_enum_args *)arg;
 	struct obj_key_enum_in	*oei;
 	struct obj_key_enum_out	*oeo;
-	int			tgt_tag;
-	int			ret = task->dt_result;
-	int			rc = 0;
+	int			 tgt_tag;
+	int			 ret = task->dt_result;
+	int			 rc = 0;
 
 	oei = crt_req_get(enum_args->rpc);
 	D_ASSERT(oei != NULL);
@@ -665,8 +662,6 @@ out:
 	crt_req_decref(enum_args->rpc);
 	dc_pool_put((struct dc_pool *)enum_args->hdlp);
 
-	D_FREE_PTR(enum_args);
-
 	if (ret == 0 || daos_obj_retry_error(rc))
 		ret = rc;
 	return ret;
@@ -680,13 +675,13 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 		      struct daos_task *task)
 {
 	crt_endpoint_t		tgt_ep;
-	struct dc_pool		*pool;
-	crt_rpc_t		*req;
-	struct dc_obj_shard	*dobj;
+	struct dc_pool	       *pool;
+	crt_rpc_t	       *req;
+	struct dc_obj_shard    *dobj;
 	uuid_t			cont_hdl_uuid;
 	uuid_t			cont_uuid;
-	struct obj_key_enum_in	*oei;
-	struct enum_args_t	*enum_args = NULL;
+	struct obj_key_enum_in *oei;
+	struct obj_enum_args	enum_args;
 	daos_size_t		sgl_len;
 	int			rc;
 
@@ -741,19 +736,17 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 			D_GOTO(out_req, rc);
 	}
 
-	D_ALLOC_PTR(enum_args);
-	if (enum_args == NULL)
-		D_GOTO(out_bulk, rc = -DER_NOMEM);
 	crt_req_addref(req);
-	enum_args->rpc = req;
-	enum_args->hdlp = (daos_handle_t *)pool;
-	enum_args->eaa_nr = nr;
-	enum_args->eaa_kds = kds;
-	enum_args->eaa_anchor = anchor;
-	enum_args->eaa_obj = dobj;
-	enum_args->eaa_sgl = sgl;
+	enum_args.rpc = req;
+	enum_args.hdlp = (daos_handle_t *)pool;
+	enum_args.eaa_nr = nr;
+	enum_args.eaa_kds = kds;
+	enum_args.eaa_anchor = anchor;
+	enum_args.eaa_obj = dobj;
+	enum_args.eaa_sgl = sgl;
 
-	rc = daos_task_register_comp_cb(task, dc_enumerate_cb, enum_args);
+	rc = daos_task_register_comp_cb(task, dc_enumerate_cb,
+					sizeof(enum_args), &enum_args);
 	if (rc != 0)
 		D_GOTO(out_eaa, rc);
 
@@ -766,9 +759,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	return rc;
 
 out_eaa:
-	D_FREE_PTR(enum_args);
 	crt_req_decref(req);
-out_bulk:
 	if (sgl_len >= OBJ_BULK_LIMIT)
 		crt_bulk_free(oei->oei_bulk);
 out_req:

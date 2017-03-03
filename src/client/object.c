@@ -233,7 +233,7 @@ static int
 pool_query_comp_cb(struct daos_task *task, void *data)
 {
 	struct daos_obj_arg	*arg = daos_task2arg(task);
-	daos_pool_info_t	*info = data;
+	daos_pool_info_t	*info = *((daos_pool_info_t **)data);
 
 	dc_obj_layout_refresh(arg->oh);
 
@@ -257,7 +257,8 @@ daos_obj_pool_query_task(struct daos_task *task)
 	if (info == NULL)
 		return -DER_NOMEM;
 
-	rc = daos_task_register_comp_cb(task, pool_query_comp_cb, info);
+	rc = daos_task_register_comp_cb(task, pool_query_comp_cb, sizeof(info),
+					&info);
 	if (rc != 0) {
 		D_FREE_PTR(info);
 		return rc;
@@ -275,12 +276,12 @@ daos_obj_pool_query_task(struct daos_task *task)
 static int
 daos_obj_comp_cb(struct daos_task *task, void *data)
 {
-	struct daos_sched *sched = daos_task2sched(task);
-	struct daos_obj_arg *arg = daos_task2arg(task);
-	struct daos_task  *pool_task;
-	struct daos_task  *rw_task;
-	daos_event_t *ev = (daos_event_t *)data;
-	int		  rc = task->dt_result;
+	struct daos_sched	*sched = daos_task2sched(task);
+	struct daos_obj_arg	*arg = daos_task2arg(task);
+	struct daos_task	*pool_task;
+	struct daos_task	*rw_task;
+	daos_event_t		*ev = *((daos_event_t **)data);
+	int			rc = task->dt_result;
 
 	if (rc == 0 || !daos_obj_retry_error(rc)) {
 		daos_event_complete(ev, rc);
@@ -339,7 +340,8 @@ daos_obj_comp_cb(struct daos_task *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	rc = daos_task_register_comp_cb(rw_task, daos_obj_comp_cb, ev);
+	rc = daos_task_register_comp_cb(rw_task, daos_obj_comp_cb, sizeof(ev),
+					&ev);
 	if (rc != 0)
 		D_GOTO(out, rc);
 out:

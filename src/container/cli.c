@@ -61,9 +61,9 @@ struct cont_args {
 static int
 cont_create_complete(struct daos_task *task, void *data)
 {
-	struct cont_args	*arg = (struct cont_args *)data;
-	struct dc_pool		*pool = arg->pool;
-	struct cont_create_out	*out;
+	struct cont_args       *arg = (struct cont_args *)data;
+	struct dc_pool	       *pool = arg->pool;
+	struct cont_create_out *out;
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
@@ -84,18 +84,17 @@ cont_create_complete(struct daos_task *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
-	D_FREE_PTR(arg);
 	return rc;
 }
 
 int
 dc_cont_create(daos_handle_t poh, const uuid_t uuid, struct daos_task *task)
 {
-	struct cont_create_in	*in;
-	struct dc_pool		*pool;
+	struct cont_create_in  *in;
+	struct dc_pool	       *pool;
 	crt_endpoint_t		ep;
-	crt_rpc_t		*rpc;
-	struct cont_args	*arg;
+	crt_rpc_t	       *rpc;
+	struct cont_args	arg;
 	int			rc;
 
 	if (uuid_is_null(uuid))
@@ -126,24 +125,19 @@ dc_cont_create(daos_handle_t poh, const uuid_t uuid, struct daos_task *task)
 	uuid_copy(in->cci_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cci_op.ci_uuid, uuid);
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(err_rpc, rc = -DER_NOMEM);
-
-	arg->pool = pool;
-	arg->rpc = rpc;
+	arg.pool = pool;
+	arg.rpc = rpc;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_create_complete, arg);
+	rc = daos_task_register_comp_cb(task, cont_create_complete, sizeof(arg),
+					&arg);
 	if (rc != 0)
-		D_GOTO(err_arg, rc);
+		D_GOTO(err_rpc, rc);
 
 	return daos_rpc_send(rpc, task);
 
-err_arg:
-	D_FREE_PTR(arg);
-	crt_req_decref(rpc);
 err_rpc:
+	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_pool:
 	dc_pool_put(pool);
@@ -158,7 +152,7 @@ cont_destroy_complete(struct daos_task *task, void *data)
 	struct cont_args	*arg = (struct cont_args *)data;
 	struct dc_pool		*pool = arg->pool;
 	struct cont_destroy_out	*out;
-	int			rc = task->dt_result;
+	int			 rc = task->dt_result;
 
 	if (rc != 0) {
 		D_ERROR("RPC error while destroying container: %d\n", rc);
@@ -178,7 +172,6 @@ cont_destroy_complete(struct daos_task *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
-	D_FREE_PTR(arg);
 	return rc;
 }
 
@@ -188,10 +181,10 @@ dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 {
 	struct cont_destroy_in	*in;
 	struct dc_pool		*pool;
-	crt_endpoint_t		ep;
+	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
-	struct cont_args	*arg;
-	int			rc;
+	struct cont_args	 arg;
+	int			 rc;
 
 	/* TODO: Implement "force". */
 	D_ASSERT(force != 0);
@@ -225,24 +218,19 @@ dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	uuid_copy(in->cdi_op.ci_uuid, uuid);
 	in->cdi_force = force;
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(err_rpc, rc = -DER_NOMEM);
-
-	arg->pool = pool;
-	arg->rpc = rpc;
+	arg.pool = pool;
+	arg.rpc = rpc;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_destroy_complete, arg);
+	rc = daos_task_register_comp_cb(task, cont_destroy_complete,
+					sizeof(arg), &arg);
 	if (rc != 0)
-		D_GOTO(err_arg, rc);
+		D_GOTO(err_rpc, rc);
 
 	return daos_rpc_send(rpc, task);
 
-err_arg:
-	D_FREE_PTR(arg);
-	crt_req_decref(rpc);
 err_rpc:
+	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_pool:
 	dc_pool_put(pool);
@@ -291,7 +279,7 @@ struct cont_open_args {
 	struct dc_cont		*coa_cont;
 	daos_cont_info_t	*coa_info;
 	crt_rpc_t		*rpc;
-	daos_handle_t		hdl;
+	daos_handle_t		 hdl;
 	daos_handle_t		*hdlp;
 };
 
@@ -302,7 +290,7 @@ cont_open_complete(struct daos_task *task, void *data)
 	struct cont_open_out	*out;
 	struct dc_pool		*pool = arg->coa_pool;
 	struct dc_cont		*cont = arg->coa_cont;
-	int			rc = task->dt_result;
+	int			 rc = task->dt_result;
 
 	if (rc != 0) {
 		D_ERROR("RPC error while opening container: %d\n", rc);
@@ -351,7 +339,6 @@ cont_open_complete(struct daos_task *task, void *data)
 
 out:
 	crt_req_decref(arg->rpc);
-	D_FREE_PTR(arg);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
 	return rc;
@@ -364,10 +351,10 @@ dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	struct cont_open_in	*in;
 	struct dc_pool		*pool;
 	struct dc_cont		*cont;
-	crt_endpoint_t		ep;
+	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
-	struct cont_open_args	*arg;
-	int			rc;
+	struct cont_open_args	 arg;
+	int			 rc;
 
 	if (uuid_is_null(uuid) || coh == NULL)
 		D_GOTO(err, rc = -DER_INVAL);
@@ -407,29 +394,24 @@ dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
 	in->coi_capas = flags;
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(err_rpc, rc = -DER_NOMEM);
-
-	arg->coa_pool = pool;
-	arg->coa_cont = cont;
-	arg->coa_info = info;
-	arg->rpc = rpc;
-	arg->hdl = poh;
-	arg->hdlp = coh;
+	arg.coa_pool = pool;
+	arg.coa_cont = cont;
+	arg.coa_info = info;
+	arg.rpc = rpc;
+	arg.hdl = poh;
+	arg.hdlp = coh;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_open_complete, arg);
+	rc = daos_task_register_comp_cb(task, cont_open_complete, sizeof(arg),
+					&arg);
 	if (rc != 0)
-		D_GOTO(err_arg, rc);
+		D_GOTO(err_rpc, rc);
 
 	/** send the request */
 	return daos_rpc_send(rpc, task);
 
-err_arg:
-	D_FREE_PTR(arg);
-	crt_req_decref(rpc);
 err_rpc:
+	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_cont:
 	dc_cont_put(cont);
@@ -445,7 +427,7 @@ struct cont_close_args {
 	struct dc_pool	*cca_pool;
 	struct dc_cont	*cca_cont;
 	crt_rpc_t	*rpc;
-	daos_handle_t	hdl;
+	daos_handle_t	 hdl;
 };
 
 static int
@@ -455,7 +437,7 @@ cont_close_complete(struct daos_task *task, void *data)
 	struct cont_close_out	*out;
 	struct dc_pool		*pool = arg->cca_pool;
 	struct dc_cont		*cont = arg->cca_cont;
-	int			rc = task->dt_result;
+	int			 rc = task->dt_result;
 
 	if (rc != 0) {
 		D_ERROR("RPC error while closing container: %d\n", rc);
@@ -492,7 +474,6 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
 	dc_cont_put(cont);
-	D_FREE_PTR(arg);
 	return rc;
 }
 
@@ -504,7 +485,7 @@ dc_cont_close(daos_handle_t coh, struct daos_task *task)
 	struct dc_cont	       *cont;
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
-	struct cont_close_args *arg;
+	struct cont_close_args  arg;
 	int			rc;
 
 	cont = dc_cont_lookup(coh);
@@ -562,27 +543,22 @@ dc_cont_close(daos_handle_t coh, struct daos_task *task)
 	uuid_copy(in->cci_op.ci_uuid, cont->dc_uuid);
 	uuid_copy(in->cci_op.ci_hdl, cont->dc_cont_hdl);
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(err_rpc, rc = -DER_NOMEM);
-
-	arg->cca_pool = pool;
-	arg->cca_cont = cont;
-	arg->rpc = rpc;
-	arg->hdl = coh;
+	arg.cca_pool = pool;
+	arg.cca_cont = cont;
+	arg.rpc = rpc;
+	arg.hdl = coh;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_close_complete, arg);
+	rc = daos_task_register_comp_cb(task, cont_close_complete, sizeof(arg),
+					&arg);
 	if (rc != 0)
-		D_GOTO(err_arg, rc);
+		D_GOTO(err_rpc, rc);
 
 	/** send the request */
 	return daos_rpc_send(rpc, task);
 
-err_arg:
-	D_FREE_PTR(arg);
-	crt_req_decref(rpc);
 err_rpc:
+	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_pool:
 	dc_pool_put(pool);
@@ -711,8 +687,8 @@ static int
 dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	    daos_handle_t *coh)
 {
-	struct dc_pool	*pool;
-	struct dc_cont	*cont;
+	struct dc_pool *pool;
+	struct dc_cont *cont;
 	int		rc = 0;
 
 	D_ASSERT(cont_glob != NULL);
@@ -825,10 +801,10 @@ struct epoch_op_arg {
 static int
 epoch_op_complete(struct daos_task *task, void *data)
 {
-	struct epoch_op_arg		*arg = (struct epoch_op_arg *)data;
-	crt_rpc_t			*rpc = arg->rpc;
+	struct epoch_op_arg	       *arg = (struct epoch_op_arg *)data;
+	crt_rpc_t		       *rpc = arg->rpc;
 	crt_opcode_t			opc = opc_get(rpc->cr_opc);
-	struct cont_epoch_op_out	*out = crt_reply_get(rpc);
+	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	int				rc = task->dt_result;
 
 	if (rc != 0) {
@@ -854,7 +830,6 @@ out:
 	crt_req_decref(rpc);
 	dc_pool_put(arg->eoa_pool);
 	dc_cont_put(arg->eoa_cont);
-	D_FREE_PTR(arg);
 	return rc;
 }
 
@@ -867,7 +842,7 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	struct dc_cont		       *cont;
 	crt_endpoint_t			ep;
 	crt_rpc_t		       *rpc;
-	struct epoch_op_arg	       *arg;
+	struct epoch_op_arg	        arg;
 	int				rc;
 
 	/* Check incoming arguments. */
@@ -917,30 +892,23 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	if (opc != CONT_EPOCH_QUERY)
 		in->cei_epoch = *epoch;
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL) {
-		D_ERROR("failed to allocate epoch op arg");
-		D_GOTO(err_rpc, rc = -DER_NOMEM);
-	}
-
-	arg->eoa_pool = pool;
-	arg->eoa_cont = cont;
-	arg->eoa_epoch = epoch;
-	arg->eoa_state = state;
+	arg.eoa_pool = pool;
+	arg.eoa_cont = cont;
+	arg.eoa_epoch = epoch;
+	arg.eoa_state = state;
 	crt_req_addref(rpc);
-	arg->rpc = rpc;
+	arg.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, epoch_op_complete, arg);
+	rc = daos_task_register_comp_cb(task, epoch_op_complete, sizeof(arg),
+					&arg);
 	if (rc != 0)
-		D_GOTO(err_arg, rc);
+		D_GOTO(err_rpc, rc);
 
 	/** send the request */
 	return daos_rpc_send(rpc, task);
 
-err_arg:
-	D_FREE_PTR(arg);
-	crt_req_decref(rpc);
 err_rpc:
+	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_pool:
 	dc_pool_put(pool);

@@ -33,9 +33,9 @@
 static int
 rip_cp(struct daos_task *task, void *data)
 {
-	crt_rpc_t		*rpc = (crt_rpc_t *)data;
+	crt_rpc_t		*rpc = *((crt_rpc_t **)data);
 	struct mgmt_svc_rip_out	*rip_out;
-	int                     rc = task->dt_result;
+	int                      rc = task->dt_result;
 
 	if (rc) {
 		D_ERROR("RPC error while killing rank: %d\n", rc);
@@ -86,7 +86,7 @@ dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 	/** fill in request buffer */
 	rip_in->rip_flags = force;
 
-	rc = daos_task_register_comp_cb(task, rip_cp, rpc);
+	rc = daos_task_register_comp_cb(task, rip_cp, sizeof(rpc), &rpc);
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 

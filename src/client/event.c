@@ -1241,7 +1241,7 @@ daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg,
 		D_GOTO(err_task, rc = -DER_NOMEM);
 
 	if (comp_cb != NULL) {
-		rc = daos_task_register_comp_cb(task, comp_cb, ev);
+		rc = daos_task_register_comp_cb(task, comp_cb, sizeof(ev), &ev);
 		if (rc != 0)
 			D_GOTO(err_task, rc);
 	}
@@ -1267,7 +1267,7 @@ err_task:
 int
 daos_event_comp_cb(struct daos_task *task, void *data)
 {
-	daos_event_t   *ev = (daos_event_t *)data;
+	daos_event_t   *ev = *((daos_event_t **)data);
 	int		rc = task->dt_result;
 
 	daos_event_complete(ev, rc);

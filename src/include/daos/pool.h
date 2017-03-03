@@ -87,9 +87,8 @@ dc_pool_put(struct dc_pool *pool)
 typedef void (*dc_pool_query_cb_t)(struct dc_pool *pool, void *arg, int rc,
 				   daos_rank_list_t *tgts,
 				   daos_pool_info_t *info);
-int dc_pool_query(struct dc_pool *pool, crt_context_t ctx,
-		  daos_rank_list_t *tgts, daos_pool_info_t *info,
-		  dc_pool_query_cb_t cb, void *cb_arg);
+int dc_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
+		  daos_pool_info_t *info, struct daos_task *task);
 
 int dc_pool_connect(const uuid_t uuid, const char *grp,
 		    const daos_rank_list_t *svc, unsigned int flags,

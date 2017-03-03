@@ -254,18 +254,19 @@ daos_task_complete_locked(struct daos_task_private *dtp,
 
 /* register the callback of the task */
 int
-daos_task_register_comp_cb(struct daos_task *task,
-			   daos_task_comp_cb_t comp_cb, void *arg)
+daos_task_register_comp_cb(struct daos_task *task, daos_task_comp_cb_t comp_cb,
+			   daos_size_t arg_size, void *arg)
 {
 	struct daos_task_private *dtp = daos_task2priv(task);
-	struct daos_task_comp_cb *dtc;
+	struct daos_task_comp *dtc;
 
-	D_ALLOC_PTR(dtc);
+	D_ALLOC(dtc, sizeof(*dtc) + arg_size);
 	if (dtc == NULL)
 		return -DER_NOMEM;
 
+	dtc->dtc_arg_size = arg_size;
 	dtc->dtc_comp_cb = comp_cb;
-	dtc->dtc_arg = arg;
+	memcpy(dtc->dtc_arg, arg, arg_size);
 
 	D_ASSERT(dtp->dtp_sched != NULL);
 
@@ -279,10 +280,10 @@ daos_task_register_comp_cb(struct daos_task *task,
 static int
 daos_task_complete_callback(struct daos_task *task)
 {
-	struct daos_task_private *dtp = daos_task2priv(task);
-	struct daos_task_comp_cb *dtc;
-	struct daos_task_comp_cb *tmp;
-	int rc;
+	struct daos_task_private	*dtp = daos_task2priv(task);
+	struct daos_task_comp		*dtc;
+	struct daos_task_comp		*tmp;
+	int				 rc;
 
 	daos_list_for_each_entry_safe(dtc, tmp,
 			&dtp->dtp_comp_cb_list, dtc_list) {
@@ -290,7 +291,8 @@ daos_task_complete_callback(struct daos_task *task)
 		rc = dtc->dtc_comp_cb(task, dtc->dtc_arg);
 		if (task->dt_result == 0)
 			task->dt_result = rc;
-		D_FREE_PTR(dtc);
+		D_FREE(dtc, offsetof(struct daos_task_comp,
+				     dtc_arg[dtc->dtc_arg_size]));
 	}
 
 	return 0;

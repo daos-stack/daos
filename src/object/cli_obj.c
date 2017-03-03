@@ -536,7 +536,7 @@ dc_obj_update_result(struct daos_task *task, void *arg)
 static int
 dc_obj_task_cb(struct daos_task *task, void *arg)
 {
-	struct dc_object *obj = arg;
+	struct dc_object *obj = *((struct dc_object **)arg);
 	int result = 0;
 
 	daos_task_result_process(task, dc_obj_update_result, &result);
@@ -576,7 +576,8 @@ dc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
-	rc = daos_task_register_comp_cb(task, dc_obj_task_cb, obj);
+	rc = daos_task_register_comp_cb(task, dc_obj_task_cb, sizeof(obj),
+					&obj);
 	if (rc != 0) {
 		dc_obj_shard_close(shard_oh);
 		D_GOTO(out_put, rc);
@@ -633,7 +634,8 @@ dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	D_DEBUG(DB_IO, "update "DF_OID" start %u cnt %u\n",
 		DP_OID(obj->cob_md.omd_id), shard, shards_cnt);
 
-	rc = daos_task_register_comp_cb(task, dc_obj_task_cb, obj);
+	rc = daos_task_register_comp_cb(task, dc_obj_task_cb, sizeof(obj),
+					&obj);
 	if (rc != 0) {
 		obj_decref(obj);
 		D_GOTO(out_task, rc);
@@ -650,7 +652,7 @@ dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 			D_GOTO(out_task, rc);
 
 		rc = dc_obj_shard_update(shard_oh, epoch, dkey, nr,
-					   iods, sgls, map_ver, task);
+					 iods, sgls, map_ver, task);
 		dc_obj_shard_close(shard_oh);
 		return rc;
 	}
@@ -758,9 +760,9 @@ struct dc_obj_list_arg {
 static int
 dc_obj_list_dkey_cb(struct daos_task *task, void *data)
 {
-	struct dc_obj_list_arg	*arg = data;
-	struct dc_object	*obj = arg->obj;
-	daos_hash_out_t		*anchor = arg->anchor;
+	struct dc_obj_list_arg *arg = *((struct dc_obj_list_arg **)data);
+	struct dc_object       *obj = arg->obj;
+	daos_hash_out_t	       *anchor = arg->anchor;
 	uint32_t		shard = enum_anchor_get_shard(anchor);
 	int			grp_size;
 	int			rc = task->dt_result;
@@ -785,21 +787,27 @@ dc_obj_list_dkey_cb(struct daos_task *task, void *data)
 	} else {
 		D_DEBUG(DB_IO, "Enumerated All shards\n");
 	}
+
+	obj_decref(obj);
+
 	return rc;
 }
 
 static int
 dc_obj_list_akey_cb(struct daos_task *task, void *data)
 {
-	struct dc_obj_list_arg *arg = data;
-	daos_hash_out_t *anchor = arg->anchor;
-	int rc = task->dt_result;
+	struct dc_obj_list_arg	*arg = *((struct dc_obj_list_arg **)data);
+	struct dc_object	*obj = arg->obj;
+	daos_hash_out_t		*anchor = arg->anchor;
+	int			rc = task->dt_result;
 
 	if (rc != 0)
 		return rc;
 
 	if (daos_hash_is_eof(anchor))
 		D_DEBUG(DB_IO, "Enumerated All shards\n");
+
+	obj_decref(obj);
 
 	return 0;
 }
@@ -840,7 +848,7 @@ dc_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 
 		enum_anchor_set_shard(anchor, shard);
 		rc = daos_task_register_comp_cb(task, dc_obj_list_akey_cb,
-						arg);
+						sizeof(arg), &arg);
 		if (rc != 0)
 			D_GOTO(out_put, rc);
 	} else {
@@ -850,14 +858,12 @@ dc_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 			D_GOTO(out_put, rc = shard);
 
 		rc = daos_task_register_comp_cb(task, dc_obj_list_dkey_cb,
-						arg);
+						sizeof(arg), &arg);
 		if (rc != 0)
 			D_GOTO(out_put, rc);
 	}
 
-	/* object will be decref by task complete cb,
-	 * i.e.dc_obj_list_dkey_cb().
-	 **/
+	/** object will be decref by task complete cb */
 	rc = obj_shard_open(obj, shard, &shard_oh, map_ver);
 	if (rc != 0)
 		D_GOTO(out_task, rc);

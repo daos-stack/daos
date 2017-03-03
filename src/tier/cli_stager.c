@@ -48,7 +48,7 @@ tier_fetch_cb(struct daos_task *task, void *data)
 	struct tier_fetch_arg	*arg = (struct tier_fetch_arg *)data;
 	struct dc_pool		*pool = arg->pool;
 	struct tier_fetch_out	*tfo;
-	int			rc = task->dt_result;
+	int			 rc = task->dt_result;
 
 	if (rc) {
 		D_ERROR("RPC error while fetching: %d\n", rc);
@@ -77,7 +77,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	struct tier_fetch_in	*in;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
-	struct tier_fetch_arg	*arg;
+	struct tier_fetch_arg	arg;
 	struct dc_pool		*pool;
 	int			rc = 0;
 	daos_tier_info_t	*from;
@@ -119,25 +119,19 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 
 	crt_req_addref(rpc);
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(out_req_put, rc = -DER_NOMEM);
+	arg.rpc = rpc;
+	arg.hdl = poh;
+	arg.pool = pool;
 
-	arg->rpc = rpc;
-	arg->hdl = poh;
-	arg->pool = pool;
-
-	rc = daos_task_register_comp_cb(task, tier_fetch_cb, arg);
+	rc = daos_task_register_comp_cb(task, tier_fetch_cb, sizeof(arg), &arg);
 	if (rc != 0)
-		D_GOTO(out_arg, rc);
+		D_GOTO(out_req_put, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);
 
 	D_DEBUG(DF_MISC, "leaving tier_fetch_cont()\n");
 
-out_arg:
-	D_FREE_PTR(arg);
 out_req_put:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);

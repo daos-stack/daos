@@ -40,7 +40,7 @@ pool_create_cp(struct daos_task *task, void *data)
 	struct pool_create_arg		*arg = (struct pool_create_arg *)data;
 	daos_rank_list_t		*svc = arg->svc;
 	struct mgmt_pool_create_out	*pc_out;
-	int				rc = task->dt_result;
+	int				 rc = task->dt_result;
 
 	if (rc) {
 		D_ERROR("RPC error while disconnecting from pool: %d\n", rc);
@@ -59,7 +59,6 @@ pool_create_cp(struct daos_task *task, void *data)
 out:
 	daos_group_detach(arg->rpc->cr_ep.ep_grp);
 	crt_req_decref(arg->rpc);
-	D_FREE_PTR(arg);
 	return rc;
 }
 
@@ -70,10 +69,10 @@ dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	       struct daos_task *task)
 {
 	crt_endpoint_t			svr_ep;
-	crt_rpc_t			*rpc_req = NULL;
+	crt_rpc_t		       *rpc_req = NULL;
 	crt_opcode_t			opc;
-	struct mgmt_pool_create_in	*pc_in;
-	struct pool_create_arg		*arg;
+	struct mgmt_pool_create_in     *pc_in;
+	struct pool_create_arg		arg;
 	int				rc = 0;
 
 	if (dev == NULL || strlen(dev) == 0) {
@@ -112,27 +111,22 @@ dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	pc_in->pc_tgt_size = size;
 	pc_in->pc_svc_nr = svc->rl_nr.num;
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		D_GOTO(out_put_req, rc = -DER_NOMEM);
-
 	crt_req_addref(rpc_req);
-	arg->rpc = rpc_req;
-	arg->svc = svc;
+	arg.rpc = rpc_req;
+	arg.svc = svc;
 
-	rc = daos_task_register_comp_cb(task, pool_create_cp, arg);
+	rc = daos_task_register_comp_cb(task, pool_create_cp, sizeof(arg),
+					&arg);
 	if (rc != 0)
-		D_GOTO(out_arg, rc);
+		D_GOTO(out_put_req, rc);
 
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(uuid));
 
 	/** send the request */
 	return daos_rpc_send(rpc_req, task);
 
-out_arg:
-	D_FREE_PTR(arg);
-	crt_req_decref(rpc_req);
 out_put_req:
+	crt_req_decref(rpc_req);
 	crt_req_decref(rpc_req);
 out_grp:
 	daos_group_detach(svr_ep.ep_grp);
@@ -144,9 +138,9 @@ out:
 static int
 pool_destroy_cp(struct daos_task *task, void *data)
 {
-	crt_rpc_t			*rpc = (crt_rpc_t *)data;
+	crt_rpc_t			*rpc = *((crt_rpc_t **)data);
 	struct mgmt_pool_destroy_out	*pd_out;
-	int				rc = task->dt_result;
+	int				 rc = task->dt_result;
 
 	if (rc) {
 		D_ERROR("RPC error while destroying pool: %d\n", rc);
@@ -205,8 +199,8 @@ dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	pd_in->pd_force = (force == 0) ? false : true;
 
 	crt_req_addref(rpc_req);
-
-	rc = daos_task_register_comp_cb(task, pool_destroy_cp, rpc_req);
+	rc = daos_task_register_comp_cb(task, pool_destroy_cp, sizeof(rpc_req),
+					&rpc_req);
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
