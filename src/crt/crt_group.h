@@ -63,33 +63,6 @@ struct crt_rank_map {
 	enum crt_rank_status	rm_status; /* health status */
 };
 
-/*
- * Fields only valid in primary service groups, protected by
- * crt_grp_priv::gp_rwlock.
- */
-struct crt_grp_priv_pri_srv {
-	/*
-	 * Minimum Viable Size for the group. If the number of live ranks is
-	 * less than MVS, the group should shut down
-	 */
-	uint32_t		 ps_mvs;
-	/* flag for ranks subscribed to RAS events */
-	uint32_t		 ps_ras:1,
-	/* flag for RAS bcast in progress */
-				 ps_ras_bcast_in_prog:1,
-	/* flag for RAS related variables */
-				 ps_ras_initialized:1;
-	/*
-	 * index of next failed rank to broadcast. only meaninful on ras nodes
-	 * (nodes subscribed to RAS)
-	 */
-	uint32_t		 ps_ras_bcast_idx;
-	/* ranks subscribed to RAS events*/
-	crt_rank_list_t		*ps_ras_ranks;
-	/* failed PMIx ranks */
-	crt_rank_list_t		*ps_failed_ranks;
-};
-
 /* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
 #define CRT_LOOKUP_CACHE_BITS	(4)
 
@@ -106,6 +79,8 @@ struct crt_grp_priv {
 	 * number of the failed rank list gp_pri_srv->ps_failed_ranks
 	 */
 	uint32_t		 gp_membs_ver;
+	/* failed ranks */
+	crt_rank_list_t		*gp_failed_ranks;
 	/* the priv pointer user passed in for crt_group_create */
 	void			*gp_priv;
 	/* CaRT context only for sending sub-grp create/destroy RPCs */
@@ -137,8 +112,6 @@ struct crt_grp_priv {
 	struct chash_table     **gp_lookup_cache;
 	enum crt_grp_status	 gp_status; /* group status */
 	/* set of variables only valid in primary service groups */
-	struct crt_grp_priv_pri_srv
-				*gp_pri_srv;
 	uint32_t		 gp_primary:1, /* flag of primary group */
 	/* flag of local group, false means attached remote group */
 				 gp_local:1,
@@ -236,6 +209,7 @@ struct crt_grp_priv *crt_grp_lookup_int_grpid(uint64_t int_grpid);
 int crt_validate_grpid(const crt_group_id_t grpid);
 int crt_grp_init(crt_group_id_t grpid);
 int crt_grp_fini(void);
+int crt_grp_failed_ranks_dup(crt_group_t *grp, crt_rank_list_t **failed_ranks);
 
 int crt_grp_config_load(struct crt_grp_priv *grp_priv);
 
@@ -340,5 +314,8 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 
 	return rc;
 }
+
+inline bool crt_grp_is_local(crt_group_t *grp);
+struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);
 
 #endif /* __CRT_GROUP_H__ */

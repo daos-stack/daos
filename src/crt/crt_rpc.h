@@ -56,6 +56,8 @@
 #define CRT_URI_LOOKUP_TIMEOUT		(1000 * 500)
 
 extern struct crt_binheap_ops crt_timeout_bh_ops;
+extern int crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
+extern struct crt_corpc_ops crt_rank_evict_co_ops;
 
 enum crt_rpc_flags_internal {
 	/* flag of collective RPC (bcast) */
@@ -207,7 +209,6 @@ enum {
 	CRT_OPC_GRP_ATTACH			= CRT_OPC_INTERNAL_BASE + 0x100,
 	CRT_OPC_GRP_DETACH			= CRT_OPC_INTERNAL_BASE + 0x101,
 	CRT_OPC_URI_LOOKUP			= CRT_OPC_INTERNAL_BASE + 0x102,
-	CRT_OPC_RANK_EVICT			= CRT_OPC_INTERNAL_BASE + 0x103,
 
 	CRT_OPC_SELF_TEST_BOTH_EMPTY		= CRT_OPC_INTERNAL_BASE + 0x200,
 	CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV	= CRT_OPC_INTERNAL_BASE + 0x201,
@@ -228,6 +229,8 @@ enum {
 	CRT_OPC_IV_SYNC				= CRT_OPC_INTERNAL_BASE + 0x304,
 	CRT_OPC_BARRIER_ENTER			= CRT_OPC_INTERNAL_BASE + 0x400,
 	CRT_OPC_BARRIER_EXIT			= CRT_OPC_INTERNAL_BASE + 0x401,
+
+	CRT_OPC_RANK_EVICT			= CRT_OPC_INTERNAL_BASE + 0x500,
 };
 
 /* CRT internal RPC definitions */

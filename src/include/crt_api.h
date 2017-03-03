@@ -1012,12 +1012,15 @@ int
 crt_proc_crt_iov_t(crt_proc_t proc, crt_iov_t *data);
 
 /**
- * Local operation. Delete rank from the local membership list of grp. This
- * function will fail if the version is lower than the current membership
- * version.
+ * Local operation. Evict rank from the local membership list of grp.
+ * \param grp [IN]		Must be a primary service group. Can be local or
+ *				remote.  NULL means the local primary group.
+ * \param rank [IN]		the rank within the \a grp to evict.
+ *
+ * \return			Zero on success, negative on error
  */
 int
-crt_evict_rank(crt_group_t *grp, int version, crt_rank_t rank);
+crt_rank_evict(crt_group_t *grp, crt_rank_t rank);
 
 typedef void
 (*crt_event_cb) (crt_rank_t rank, void *args);
@@ -1051,8 +1054,8 @@ typedef void
  * \param event_handler [IN]	event handler to register
  */
 int
-crt_register_event_handler(int codes[], size_t ncodes,
-			      crt_event_cb event_handler);
+crt_register_event_cb(int codes[], size_t ncodes,
+		      crt_event_cb event_handler, void *args);
 
 typedef void
 (*crt_progress_cb) (crt_context_t ctx, void *args);

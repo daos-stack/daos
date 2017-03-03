@@ -379,8 +379,8 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 			pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 			chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx],
 					 rlink);
-			C_ERROR("tag %d on rank %d already evicted.\n", rank,
-				tag);
+			C_ERROR("tag %d on rank %d already evicted.\n", tag,
+				rank);
 			C_GOTO(out, rc = -CER_OOG);
 		}
 		pthread_mutex_unlock(&li->li_mutex);
@@ -1257,104 +1257,43 @@ out:
 	return rc;
 }
 
-/* compute list of subscribed ranks and sign up for RAS notifications */
+/*
+ * Return the enclosing private struct ptr of grp.
+ */
+struct crt_grp_priv *
+crt_grp_pub2priv(crt_group_t *grp)
+{
+	struct crt_grp_gdata	*grp_gdata;
+	struct crt_grp_priv	*grp_priv;
+
+	C_ASSERT(crt_initialized());
+
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+	if (grp == NULL)
+		grp_priv = crt_is_service() ?
+			grp_gdata->gg_srv_pri_grp : grp_gdata->gg_cli_pri_grp;
+	else
+		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
+
+	return grp_priv;
+}
+
 static int
 crt_grp_ras_init(struct crt_grp_priv *grp_priv)
 {
-	int			 i;
-	crt_rank_t		 rank_rank;
-	uint32_t		 gp_size;
-	uint32_t		 num_ras_ranks;
-	uint32_t		 ps_mvs;
-	int			 rc = 0;
+	int			rc = 0;
 
 	C_ASSERT(grp_priv->gp_service);
 	C_ASSERT(grp_priv->gp_primary);
 	C_ASSERT(grp_priv->gp_local);
-	C_ALLOC_PTR(grp_priv->gp_pri_srv);
-	if (grp_priv->gp_pri_srv == NULL)
-		C_GOTO(out, rc = -CER_NOMEM);
-	gp_size = grp_priv->gp_size;
-	/*
-	 * Compute the default MVS. Based on empirical evidence the MVS obtained
-	 * through the following formula works reasonably well.
-	 */
-	grp_priv->gp_pri_srv->ps_mvs =
-		max((gp_size/2) + 1, min(gp_size - 5, gp_size*0.95));
-	ps_mvs = grp_priv->gp_pri_srv->ps_mvs;
-	/* If the failed ranks are all subscribed ranks and the number of live
-	 * ranks equals the minimum viable size, there should be at least 1 rank
-	 * subscribed to RAS
-	 */
-	num_ras_ranks = gp_size - ps_mvs + 1;
-	C_DEBUG("gp_size %d, gp_mvs %d, num_ras_ranks %d\n", gp_size, ps_mvs,
-		num_ras_ranks);
 	/* create a dummy list to simplify list management */
-	grp_priv->gp_pri_srv->ps_failed_ranks = crt_rank_list_alloc(0);
-	if (grp_priv->gp_pri_srv->ps_failed_ranks == NULL) {
+	grp_priv->gp_failed_ranks = crt_rank_list_alloc(0);
+	if (grp_priv->gp_failed_ranks == NULL) {
 		C_ERROR("crt_rank_list_alloc failed.\n");
-		C_FREE_PTR(grp_priv->gp_pri_srv);
-		C_GOTO(out, rc = -CER_NOMEM);
-	}
-	grp_priv->gp_pri_srv->ps_ras_bcast_idx = 0;
-	grp_priv->gp_pri_srv->ps_ras_ranks =
-		crt_rank_list_alloc(num_ras_ranks);
-	if (grp_priv->gp_pri_srv->ps_ras_ranks == NULL) {
-		crt_rank_list_free(grp_priv->gp_pri_srv->ps_failed_ranks);
-		C_ERROR("crt_rank_list_alloc failed.\n");
-		C_FREE_PTR(grp_priv->gp_pri_srv);
-		C_GOTO(out, rc = -CER_NOMEM);
-	}
-	for (i = 0; i < num_ras_ranks; i++) {
-		/*
-		 * select ras ranks so that they spread out as evenly as
-		 * possible
-		 */
-		rank_rank = (i*grp_priv->gp_size + num_ras_ranks - 1)
-			    / num_ras_ranks;
-		C_ASSERTF(rank_rank < gp_size, "rank_rank %d, gp_size %d\n",
-			  rank_rank, gp_size);
-		/* rank i should sign up for RAS notifications */
-		grp_priv->gp_pri_srv->ps_ras_ranks->rl_ranks[i] = rank_rank;
-		/* sign myself up for RAS notifications */
-		if (grp_priv->gp_self == rank_rank) {
-			grp_priv->gp_pri_srv->ps_ras = 1;
-			crt_pmix_reg_event_hdlr(grp_priv);
-		}
-	}
-	grp_priv->gp_pri_srv->ps_ras_initialized = 1;
-	/*
-	 * for debugging, every ras rank prints out its own knowledge on the
-	 * subscribed ranks
-	 */
-	if (CRT_DBG && grp_priv->gp_pri_srv->ps_ras) {
-		int		 width;
-		char		*tmp_str;
-		uint32_t	 idx;
-		crt_rank_list_t *ras_ranks;
-
-		width = snprintf(NULL, 0, " %d", gp_size);
-		width = width * num_ras_ranks + 1;
-		C_ALLOC(tmp_str, width);
-		if (tmp_str == NULL) {
-			C_ERROR("memory allocation failed.\n");
-			crt_rank_list_free(
-					grp_priv->gp_pri_srv->ps_failed_ranks);
-			crt_rank_list_free(grp_priv->gp_pri_srv->ps_ras_ranks);
-			C_FREE_PTR(grp_priv->gp_pri_srv);
-			C_GOTO(out, rc = -CER_NOMEM);
-		}
-		idx = 0;
-		ras_ranks = grp_priv->gp_pri_srv->ps_ras_ranks;
-		for (i = 0; i < num_ras_ranks; i++)
-			idx += sprintf(&tmp_str[idx], " %d",
-				       ras_ranks->rl_ranks[i]);
-		C_DEBUG("ras rank %d, subscribed ranks:%s\n", grp_priv->gp_self,
-			tmp_str);
-		C_FREE(tmp_str, width);
+		rc = -CER_NOMEM;
 	}
 
-out:
 	return rc;
 }
 
@@ -1462,13 +1401,8 @@ crt_grp_ras_fini(struct crt_grp_priv *grp_priv)
 	C_ASSERT(grp_priv->gp_service);
 	C_ASSERT(grp_priv->gp_primary);
 	C_ASSERT(grp_priv->gp_local);
-	crt_rank_list_free(grp_priv->gp_pri_srv->ps_failed_ranks);
-	crt_rank_list_free(grp_priv->gp_pri_srv->ps_ras_ranks);
-	if (grp_priv->gp_pri_srv->ps_ras)
-		crt_pmix_dereg_event_hdlr(grp_priv);
-	C_FREE_PTR(grp_priv->gp_pri_srv);
+	crt_rank_list_free(grp_priv->gp_failed_ranks);
 }
-
 static int
 crt_primary_grp_fini(void)
 {
@@ -2236,4 +2170,156 @@ out:
 			grpid, rc);
 	}
 	return rc;
+}
+
+/*
+ * mark rank as evicted in every crt_context's address lookup cache.
+ */
+static int
+crt_grp_lc_mark_evicted(struct crt_grp_priv *grp_priv, crt_rank_t rank)
+{
+	int				 ctx_idx;
+	crt_list_t			*rlink;
+	struct crt_lookup_item		*li;
+	struct chash_table		*htable;
+	int				 rc = 0;
+
+	C_ASSERT(grp_priv != NULL);
+	C_ASSERT(rank >= 0 && rank < grp_priv->gp_size);
+
+	for (ctx_idx = 0; ctx_idx < CRT_SRV_CONTEXT_NUM; ctx_idx++) {
+		htable = grp_priv->gp_lookup_cache[ctx_idx];
+		pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
+		rlink = chash_rec_find(htable, (void *) &rank, sizeof(rank));
+		if (rlink == NULL) {
+			pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+			C_ALLOC_PTR(li);
+			if (li == NULL)
+				C_GOTO(out, rc = -CER_NOMEM);
+			CRT_INIT_LIST_HEAD(&li->li_link);
+			li->li_grp_priv = grp_priv;
+			li->li_rank = rank;
+			li->li_base_phy_addr = strdup("evicted");
+			li->li_initialized = 1;
+			li->li_evicted = 1;
+			pthread_mutex_init(&li->li_mutex, NULL);
+			pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+			rc = chash_rec_insert(htable, &rank, sizeof(rank),
+					      &li->li_link, true);
+			if (rc == 0) {
+				pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+				continue;
+			}
+			/* insert failed */
+			crt_li_destroy(li);
+			C_DEBUG("entry already exists, "
+				"group %s, rank %d, context id %d\n",
+				grp_priv->gp_pub.cg_grpid, rank, ctx_idx);
+			rlink = chash_rec_find(htable, (void *) &rank,
+					sizeof(rank));
+			C_ASSERT(rlink != NULL);
+		}
+		li = crt_li_link2ptr(rlink);
+		C_ASSERT(li->li_grp_priv == grp_priv);
+		C_ASSERT(li->li_rank == rank);
+		pthread_mutex_lock(&li->li_mutex);
+		li->li_evicted = 1;
+		pthread_mutex_unlock(&li->li_mutex);
+		chash_rec_decref(htable, rlink);
+		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	}
+
+out:
+	return rc;
+}
+
+int
+crt_rank_evict(crt_group_t *grp, crt_rank_t rank)
+{
+	struct crt_grp_priv	*grp_priv = NULL;
+	int			 rc = 0;
+
+	if (!crt_initialized()) {
+		C_ERROR("CRT not initialized.\n");
+		C_GOTO(out, rc = -CER_UNINIT);
+	}
+	/* local non-service groups can't evict ranks */
+	if (grp == NULL && !crt_is_service()) {
+		C_ERROR("grp must be a service group.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+
+	grp_priv = crt_grp_pub2priv(grp);
+	C_ASSERT(grp_priv != NULL);
+
+	if (grp_priv->gp_primary == 0) {
+		C_ERROR("grp must be a primary group.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+
+	if (rank < 0 || rank >= grp_priv->gp_size) {
+		C_ERROR("Rank out of range. Attempted rank: %d, "
+			"valid range [0, %d).\n", rank, grp_priv->gp_size);
+		C_GOTO(out, rc = -CER_OOG);
+	}
+
+	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
+	if (crt_rank_in_rank_list(grp_priv->gp_failed_ranks, rank, true)) {
+		C_DEBUG("Rank %d already evicted.\n", rank);
+		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+		C_GOTO(out, rc);
+	}
+	rc = crt_rank_list_append(grp_priv->gp_failed_ranks, rank);
+	if (rc != 0) {
+		C_ERROR("crt_rank_list_append() failed, rc: %d\n", rc);
+		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+		C_GOTO(out, rc);
+	}
+	C_ASSERT(grp_priv->gp_failed_ranks->rl_nr.num < grp_priv->gp_size);
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+
+	rc = crt_grp_lc_mark_evicted(grp_priv, rank);
+	if (rc != 0)
+		C_ERROR("crt_grp_lc_mark_evicted() failed, rc: %d.\n", rc);
+
+out:
+	return rc;
+}
+
+int
+crt_grp_failed_ranks_dup(crt_group_t *grp, crt_rank_list_t **failed_ranks)
+{
+	struct crt_grp_priv	*grp_priv;
+	int			 rc = 0;
+
+	C_ASSERT(crt_initialized());
+	C_ASSERT(failed_ranks != NULL);
+
+	grp_priv = crt_grp_pub2priv(grp);
+	C_ASSERT(grp_priv != NULL);
+	if (grp_priv->gp_primary == 0) {
+		C_ERROR("grp should be a primary group.\n");
+		C_GOTO(out, rc = -CER_NO_PERM);
+	}
+	pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
+	rc = crt_rank_list_dup(failed_ranks, grp_priv->gp_failed_ranks, true);
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	if (rc != 0)
+		C_ERROR("crt_rank_list_dup() failed, group: %s, rc: %d\n",
+			grp_priv->gp_pub.cg_grpid, rc);
+
+out:
+	return rc;
+}
+
+inline bool
+crt_grp_is_local(crt_group_t *grp)
+{
+	struct crt_grp_priv	*grp_priv;
+
+	C_ASSERT(crt_initialized());
+	grp_priv = crt_grp_pub2priv(grp);
+	C_ASSERT(grp_priv != NULL);
+
+	return grp_priv->gp_local == 1;
 }

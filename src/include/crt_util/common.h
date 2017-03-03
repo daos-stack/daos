@@ -281,6 +281,8 @@ bool crt_rank_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank,
 			   bool input);
 int crt_idx_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank,
 			 uint32_t *idx, bool input);
+int crt_rank_list_append(crt_rank_list_t *rank_list, crt_rank_t rank);
+int crt_rank_list_dump(crt_rank_list_t *rank_list, crt_string_t name);
 int crt_sgl_init(crt_sg_list_t *sgl, unsigned int nr);
 void crt_sgl_fini(crt_sg_list_t *sgl, bool free_iovs);
 void crt_getenv_bool(const char *env, bool *bool_val);

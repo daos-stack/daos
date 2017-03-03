@@ -46,20 +46,24 @@
 extern "C" {
 #endif
 
+#include <crt_util/common.h>
+
 /**
- * Enable the fault tolerance module. This function will
+ * Enable the fault tolerance module. This function should be called by every
+ * rank in the same group, and should be called after crt_init(). This function
+ * will:
  *	1) turn on cart context progress callbacks
  *	2) turn on RAS notification event handlers
- *	3) turn on cart RPC timeout callbacks
  */
 void
 crt_lm_init(void);
 
 /**
- * Finilize the fault tolerance module
+ * Finilize the fault tolerance module. This function should be called before
+ * crt_finalize().
  */
 void
-crt_lm_fini(void);
+crt_lm_finalize(void);
 
 #if defined(__cplusplus)
 }

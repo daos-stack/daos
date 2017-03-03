@@ -72,6 +72,9 @@ class TestEcho(commontestsuite.CommonTestSuite):
     def test_echo_one_node(self):
         """Simple process set test one node"""
         testmsg = self.shortDescription()
+        clients = self.get_client_list()
+        if clients:
+            self.skipTest('Client list is not empty.')
 
         # Launch both the client and target instances on the
         # same node.

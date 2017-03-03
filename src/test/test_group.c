@@ -46,6 +46,7 @@
 
 #include <crt_util/common.h>
 #include <crt_api.h>
+#include <crt_lm.h>
 #include "crt_fake_events.h"
 
 #define ECHO_OPC_CHECKIN    (0xA1)
@@ -212,6 +213,7 @@ test_group_init(char *local_group_name, char *target_group_name,
 	rc = crt_init(local_group_name, flag);
 	C_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
+	crt_lm_init();
 	rc = crt_group_rank(NULL, &myrank);
 	C_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 	if (is_service) {
@@ -346,6 +348,7 @@ test_group_fini(int is_service)
 	C_DEBUG("destroyed crt_ctx.\n");
 	if (is_service)
 		crt_fake_event_fini(myrank);
+	crt_lm_finalize();
 	rc = crt_finalize();
 	C_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 	C_DEBUG("exiting.\n");

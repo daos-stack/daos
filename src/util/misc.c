@@ -346,7 +346,7 @@ crt_rank_list_del(crt_rank_list_t *rank_list, crt_rank_t rank)
 	}
 	if (!crt_rank_list_find(rank_list, rank, &idx)) {
 		C_DEBUG("Rank %d not in the rank list.\n", rank);
-		C_GOTO(out, rc = -CER_OOG);
+		C_GOTO(out, rc);
 	}
 	new_num = rank_list->rl_nr.num - 1;
 	src = &rank_list->rl_ranks[idx + 1];
@@ -364,6 +364,24 @@ out:
 	return rc;
 }
 
+int
+crt_rank_list_append(crt_rank_list_t *rank_list, crt_rank_t rank)
+{
+	uint32_t		 old_num;
+	crt_rank_list_t		*new_rank_list;
+	int			 rc = 0;
+
+	old_num = rank_list->rl_nr.num;
+	new_rank_list = crt_rank_list_realloc(rank_list, old_num + 1);
+	if (new_rank_list == NULL) {
+		C_ERROR("crt_rank_list_realloc() failed.\n");
+		C_GOTO(out, rc = -CER_NOMEM);
+	}
+	new_rank_list->rl_ranks[old_num] = rank;
+
+out:
+	return rc;
+}
 /*
  * Compare whether or not the two rank lists are identical.
  * This function possibly will change the order of the passed in rank list, it
@@ -444,6 +462,47 @@ crt_idx_in_rank_list(crt_rank_list_t *rank_list, crt_rank_t rank, uint32_t *idx,
 	}
 
 	return found == true ? 0 : -CER_OOG;
+}
+
+/**
+ * Print out the content of a rank_list to stderr.
+ *
+ * \param  rank_list [IN]	the rank list to print
+ * \param  name      [IN]	a name to describe the rank list
+ *
+ * \return			0 on success, a negative value on error
+ */
+int
+crt_rank_list_dump(crt_rank_list_t *rank_list, crt_string_t name)
+{
+	int		 width;
+	char		*tmp_str;
+	int		 i;
+	int		 idx = 0;
+	int		 rc = 0;
+
+	width = strnlen(name, CRT_GROUP_ID_MAX_LEN + 1);
+	if (width > CRT_GROUP_ID_MAX_LEN) {
+		C_ERROR("name parameter too long.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+	width = 0;
+	for (i = 0; i < rank_list->rl_nr.num; i++)
+		width += snprintf(NULL, 0, "%d ", rank_list->rl_ranks[i]);
+	width++;
+	C_ALLOC(tmp_str, width);
+	if (tmp_str == NULL) {
+		C_ERROR("memory allocation failed.\n");
+		C_GOTO(out, rc = -CER_NOMEM);
+	}
+	for (i = 0; i < rank_list->rl_nr.num; i++)
+		idx += sprintf(&tmp_str[idx], "%d ", rank_list->rl_ranks[i]);
+	tmp_str[width - 1] = '\0';
+	C_DEBUG("%s, %d ranks: %s\n", name, rank_list->rl_nr.num, tmp_str);
+	C_FREE(tmp_str, width);
+
+out:
+	return rc;
 }
 
 /**

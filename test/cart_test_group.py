@@ -74,6 +74,9 @@ class TestGroup(commontestsuite.CommonTestSuite):
     def test_group_one_node(self):
         """Simple process group test one node"""
         testmsg = self.shortDescription()
+        clients = self.get_client_list()
+        if clients:
+            self.skipTest('Client list is not empty.')
 
         # Launch both the client and target instances on the
         # same node.
@@ -84,7 +87,7 @@ class TestGroup(commontestsuite.CommonTestSuite):
                                              ' --holdtime 5', \
                                    srv_arg='tests/test_group' + \
                                              ' --name service_group' + \
-                                             ' --is_service --holdtime 5 :')
+                                             ' --is_service --holdtime 5 ')
         if procrtn:
             self.fail("Failed, return code %d" % procrtn)
 
@@ -92,7 +95,7 @@ class TestGroup(commontestsuite.CommonTestSuite):
         """Simple process group test two node"""
 
         if not os.getenv('TR_USE_URI', ""):
-            self.skipTest('requires two or more nodes.')
+            self.skipTest('requires DVM to run.')
 
         testmsg = self.shortDescription()
 

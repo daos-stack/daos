@@ -76,6 +76,5 @@
 
 #include <crt_hg.h>
 #include <crt_pmix.h>
-#include <crt_ras.h>
 
 #endif /* __CRT_INTERNAL_H__ */

@@ -268,8 +268,6 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 	}
 	C_ASSERT(gdata_init_flag == 1);
 
-	if (crt_plugin_gdata.cpg_inited == 0)
-		crt_plugin_init();
 	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
 	if (crt_gdata.cg_inited == 0) {
 		/* feed a seed for pseudo-random number generator */
@@ -291,6 +289,9 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 			C_PRINT_ERR("crt_log_init failed, rc: %d.\n", rc);
 			C_GOTO(out, rc);
 		}
+
+		if (crt_plugin_gdata.cpg_inited == 0)
+			crt_plugin_init();
 
 		addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
 		if (addr_env == NULL) {
@@ -381,7 +382,7 @@ crt_plugin_fini(void)
 	struct crt_timeout_cb_priv	*timeout_cb_priv;
 	struct crt_event_cb_priv	*event_cb_priv;
 
-	C_ASSERT(crt_plugin_gdata.cpg_inited == 0);
+	C_ASSERT(crt_plugin_gdata.cpg_inited == 1);
 
 	crt_list_for_each_safe(curr_node, tmp_node,
 			       &crt_plugin_gdata.cpg_prog_cbs) {
@@ -404,6 +405,9 @@ crt_plugin_fini(void)
 		event_cb_priv =
 			container_of(curr_node, struct crt_event_cb_priv,
 				     cecp_link);
+		C_FREE(event_cb_priv->cecp_codes,
+		       event_cb_priv->cecp_ncodes
+		       *sizeof(*event_cb_priv->cecp_codes));
 		C_FREE_PTR(event_cb_priv);
 	}
 	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_prog_rwlock);
@@ -473,6 +477,8 @@ crt_finalize(void)
 		gdata_init_once = PTHREAD_ONCE_INIT;
 		gdata_init_flag = 0;
 
+		if (crt_plugin_gdata.cpg_inited == 1)
+			crt_plugin_fini();
 		crt_log_fini();
 	} else {
 		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);

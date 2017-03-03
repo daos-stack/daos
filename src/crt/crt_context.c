@@ -923,10 +923,8 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	if (timeout == 0 || cond_cb == NULL) { /** fast path */
 		crt_context_timeout_check(ctx);
 		/* check for and execute progress callbacks here */
-		if (crt_ctx_idx == 0) {
+		if (crt_ctx_idx == 0)
 			crt_exec_progress_cb(crt_ctx);
-			crt_drain_eviction_requests_kickoff(ctx);
-		}
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
 		if (rc && rc != -CER_TIMEDOUT) {
@@ -974,11 +972,8 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	while (true) {
 		crt_context_timeout_check(ctx);
 		/* check for and execute progress callbacks here */
-		if (crt_ctx_idx == 0) {
+		if (crt_ctx_idx == 0)
 			crt_exec_progress_cb(ctx);
-			crt_drain_eviction_requests_kickoff(ctx);
-		}
-
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
 		if (rc && rc != -CER_TIMEDOUT) {

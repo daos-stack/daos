@@ -557,71 +557,6 @@ out:
 	return rc;
 }
 
-/* this function is called by the pmix thread */
-static void
-crt_pmix_notify_fn(size_t registration_id, pmix_status_t status,
-		   const pmix_proc_t *source, pmix_info_t info[], size_t ninfo,
-		   pmix_info_t results[], size_t nresults,
-		   pmix_event_notification_cbfunc_fn_t cbfunc, void *cbdata)
-{
-	struct crt_grp_gdata	*grp_gdata;
-	struct crt_pmix_gdata	*pmix_gdata;
-
-	grp_gdata = crt_gdata.cg_grp;
-	C_ASSERT(grp_gdata != NULL);
-	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
-	C_ASSERT(grp_gdata->gg_pmix != NULL);
-
-	pmix_gdata = grp_gdata->gg_pmix;
-
-	if (!strncmp(source->nspace, pmix_gdata->pg_proc.nspace,
-		     PMIX_MAX_NSLEN))
-		crt_ras_event_hdlr_internal(source->rank);
-	else
-		C_DEBUG("PMIx event not relevant to my namespace.\n");
-	/** let the notifier know we are done */
-	if (cbfunc)
-		cbfunc(PMIX_SUCCESS, NULL, 0, NULL, NULL, cbdata);
-}
-
-static void
-crt_pmix_errhdlr_reg_callbk(pmix_status_t status, size_t errhdlr_ref,
-			    void *cbdata)
-{
-	struct crt_grp_priv	*grp_priv;
-
-	grp_priv = (struct crt_grp_priv *) cbdata;
-	C_ASSERT(grp_priv != NULL);
-
-	C_DEBUG("crt_pmix_errhdlr_reg_callbk called with status %d, ref=%zu.\n",
-		status, errhdlr_ref);
-
-	grp_priv->gp_errhdlr_ref = errhdlr_ref;
-}
-
-void
-crt_pmix_reg_event_hdlr(struct crt_grp_priv *grp_priv)
-{
-	C_ASSERT(grp_priv != NULL);
-
-	PMIx_Register_event_handler(NULL, 0, NULL, 0, crt_pmix_notify_fn,
-				    crt_pmix_errhdlr_reg_callbk, grp_priv);
-}
-
-static void
-crt_pmix_dereg_cb(pmix_status_t status, void *cbdata)
-{
-	C_DEBUG("crt_pmix_dereg_cb with status %d", status);
-}
-
-void
-crt_pmix_dereg_event_hdlr(struct crt_grp_priv *grp_priv)
-{
-	C_ASSERT(grp_priv != NULL);
-	PMIx_Deregister_event_handler(grp_priv->gp_errhdlr_ref,
-				      crt_pmix_dereg_cb, NULL);
-}
-
 int
 crt_register_event_cb(crt_status_t codes[], size_t ncodes,
 		      crt_event_cb event_handler, void *args)
@@ -637,7 +572,7 @@ crt_register_event_cb(crt_status_t codes[], size_t ncodes,
 	if (event_cb_priv == NULL)
 		C_GOTO(out, rc = -CER_NOMEM);
 	C_ALLOC(event_cb_priv->cecp_codes,
-		ncodes*sizeof(event_cb_priv->cecp_codes));
+		ncodes*sizeof(*event_cb_priv->cecp_codes));
 	if (event_cb_priv->cecp_codes == NULL)
 		C_GOTO(err, rc = -CER_NOMEM);
 	memcpy(event_cb_priv->cecp_codes, codes, ncodes*sizeof(*codes));
@@ -648,6 +583,7 @@ crt_register_event_cb(crt_status_t codes[], size_t ncodes,
 	crt_list_add_tail(&event_cb_priv->cecp_link,
 			  &crt_plugin_gdata.cpg_event_cbs);
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+	C_GOTO(out, rc);
 
 err:
 	if (event_cb_priv->cecp_codes != NULL)
@@ -704,6 +640,7 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	}
 	/* convert source->rank from pmix rank to cart rank */
 	crt_rank = grp_priv->gp_rank_map[source->rank].rm_rank;
+	C_DEBUG("received pmix notification about rank %d.\n", crt_rank);
 	/* walk the global list to execute the user callbacks */
 	pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_event_rwlock);
 	crt_list_for_each_entry(event_cb_priv,
@@ -735,6 +672,8 @@ crt_plugin_pmix_errhdlr_reg_cb(pmix_status_t status, size_t errhdlr_ref,
 void
 crt_plugin_pmix_init(void)
 {
+	if (!crt_is_service())
+		return;
 	PMIx_Register_event_handler(NULL, 0, NULL, 0,
 				    crt_plugin_event_handler_core,
 				    crt_plugin_pmix_errhdlr_reg_cb, NULL);
@@ -750,6 +689,8 @@ crt_plugin_pmix_errhdlr_dereg_cb(pmix_status_t status, void *cbdata)
 void
 crt_plugin_pmix_fini(void)
 {
+	if (!crt_is_service())
+		return;
 	PMIx_Deregister_event_handler(crt_plugin_gdata.cpg_pmix_errhdlr_ref,
 				      crt_plugin_pmix_errhdlr_dereg_cb, NULL);
 }

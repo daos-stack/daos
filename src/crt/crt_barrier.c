@@ -97,7 +97,6 @@ crt_barrier_info_destroy(struct crt_grp_priv *grp_priv)
 bool
 crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 {
-	struct crt_grp_priv_pri_srv	*rank_info;
 	struct crt_barrier_info		*info;
 	struct crt_grp_priv		*primary_grp;
 	crt_rank_t			 rank;
@@ -111,8 +110,7 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 	pthread_mutex_lock(&info->bi_lock);
 
 	pthread_rwlock_rdlock(&primary_grp->gp_rwlock);
-	rank_info = primary_grp->gp_pri_srv;
-	if (crt_rank_in_rank_list(rank_info->ps_failed_ranks,
+	if (crt_rank_in_rank_list(grp_priv->gp_failed_ranks,
 				  info->bi_master_pri_rank, true)) {
 		rank = -1;
 		/* Master has failed */
@@ -120,7 +118,7 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 		for (i = info->bi_master_idx + 1;
 		     i < grp_priv->gp_membs->rl_nr.num; i++) {
 			rank = grp_priv->gp_membs->rl_ranks[i];
-			if (!crt_rank_in_rank_list(rank_info->ps_failed_ranks,
+			if (!crt_rank_in_rank_list(grp_priv->gp_failed_ranks,
 						   rank, true))
 				break;
 		}
