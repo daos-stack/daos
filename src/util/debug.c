@@ -152,14 +152,15 @@ int
 crt_log_init(void)
 {
 	char	*log_file;
+	int flags = CLOG_FLV_LOGPID | CLOG_FLV_FAC | CLOG_FLV_TAG;
 
 	log_file = getenv(CRT_LOG_FILE_ENV);
-	if (log_file == NULL || strlen(log_file) == 0)
-		log_file = "/dev/stdout";
+	if (log_file == NULL || strlen(log_file) == 0) {
+		flags |= CLOG_FLV_STDOUT;
+		log_file = NULL;
+	}
 
-	return crt_log_init_adv("CaRT", log_file,
-				CLOG_FLV_LOGPID | CLOG_FLV_FAC | CLOG_FLV_TAG,
-				CLOG_WARN, CLOG_EMERG);
+	return crt_log_init_adv("CaRT", log_file, flags, CLOG_WARN, CLOG_EMERG);
 }
 
 void crt_log_fini(void)
