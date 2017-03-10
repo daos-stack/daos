@@ -24,7 +24,7 @@ fi
 pushd ${scons_local_dir}
 scons $option $*
 
-if [ -n "$SCONS_INSTALL}" ];then
+if [ -n "${SCONS_INSTALL}" ];then
   scons install
 fi
 popd
