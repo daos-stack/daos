@@ -203,7 +203,8 @@ static int status_req_cb(const struct crt_cb_info *cb_info)
 static int run_self_test(struct st_size_params all_params[],
 			 int num_msg_sizes, int rep_count, int max_inflight,
 			 char *dest_name, crt_endpoint_t *master_endpt,
-			 struct st_endpoint *endpts, uint32_t num_endpts)
+			 struct st_endpoint *endpts, uint32_t num_endpts,
+			 int output_megabits)
 {
 	crt_context_t		 crt_ctx;
 	crt_group_t		*srv_grp;
@@ -394,9 +395,10 @@ static int run_self_test(struct st_size_params all_params[],
 		} while (status_req_reply.status !=
 			 CRT_ST_STATUS_TEST_COMPLETE);
 
-		/* Compute the throughput and bandwidth for this size */
+		/* Compute the throughput in RPCs/sec */
 		throughput = rep_count / (status_req_reply.test_duration_ns /
 					  1000000000.0F);
+		/* Compute bandwidth in bytes */
 		bandwidth = throughput * (test_params.send_size +
 					  test_params.reply_size);
 
@@ -408,8 +410,12 @@ static int run_self_test(struct st_size_params all_params[],
 		       test_params.reply_size,
 		       crt_st_msg_type_str[test_params.reply_type],
 		       max_inflight);
-		printf("\tRPC Bandwidth (MB/sec): %.2f\n",
-		       bandwidth / 1000000.0F);
+		if (output_megabits)
+			printf("\tRPC Bandwidth (Mbits/sec): %.2f\n",
+			       bandwidth * 8.0F / 1000000.0F);
+		else
+			printf("\tRPC Bandwidth (MB/sec): %.2f\n",
+			       bandwidth / (1024.0F * 1024.0F));
 		printf("\tRPC Throughput (RPCs/sec): %.0f\n", throughput);
 
 		/*
@@ -650,7 +656,12 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "        This could be a lot of memory. Also, if the reply uses bulk, the\n"
 	       "        size increases to (max_inflight * max(send_size, reply_size))\n"
 	       "\n"
-	       "      Default: %d\n",
+	       "      Default: %d\n"
+	       "\n"
+	       "  --Mbits\n"
+	       "      Short version: -b\n"
+	       "      By default, self-test outputs performance results in MB (#Bytes/1024^2)\n"
+	       "      Specifying --Mbits switches the output to megabits (#bits/1000000)\n",
 	       prog_name, UINT32_MAX,
 	       CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
 	       max_inflight);
@@ -1114,6 +1125,7 @@ int main(int argc, char *argv[])
 	crt_endpoint_t			 master_endpt;
 	crt_endpoint_t			*master_endpt_ptr = NULL;
 	uint32_t			 num_endpts = 0;
+	int				 output_megabits = 0;
 
 	/********************* Parse user arguments *********************/
 	while (1) {
@@ -1124,10 +1136,12 @@ int main(int argc, char *argv[])
 			{"message-sizes", required_argument, 0, 's'},
 			{"repetitions-per-size", required_argument, 0, 'r'},
 			{"max-inflight-rpcs", required_argument, 0, 'i'},
+			{"Mbits", no_argument, 0, 'b'},
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:", long_options, NULL);
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:b",
+				long_options, NULL);
 		if (c == -1)
 			break;
 
@@ -1166,6 +1180,9 @@ int main(int argc, char *argv[])
 				       "  Using default value %d instead\n",
 				       max_inflight);
 			}
+			break;
+		case 'b':
+			output_megabits = 1;
 			break;
 		case '?':
 		default:
@@ -1299,7 +1316,7 @@ int main(int argc, char *argv[])
 	/********************* Run the self test *********************/
 	ret = run_self_test(all_params, num_msg_sizes, rep_count,
 			    max_inflight, dest_name, master_endpt_ptr,
-			    endpts, num_endpts);
+			    endpts, num_endpts, output_megabits);
 
 	/********************* Clean up *********************/
 cleanup:
