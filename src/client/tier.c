@@ -33,7 +33,7 @@ daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 
@@ -48,7 +48,7 @@ daos_tier_ping(uint32_t ping_val, daos_event_t *ev)
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
+	rc = daos_client_task_prep(NULL, 0, &task, &ev);
 	if (rc != 0)
 		return rc;
 

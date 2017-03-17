@@ -29,6 +29,7 @@
 #define DD_SUBSYS	DD_FAC(tier)
 
 #include <daos_types.h>
+#include <daos_api.h>
 #include <daos_tier.h>
 #include <daos/pool.h>
 #include <daos/container.h>
@@ -90,8 +91,12 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		D_DEBUG(DF_TIERC, "fetch: have no colder tier\n");
 		D_GOTO(out, -DER_NONEXIST);
 	}
+	/*
+	 * MSC - Switch this to use a task. This will hang if API call is done
+	 * synchronously.
+	 */
 	/* Create the local recipient container */
-	rc = dc_cont_create(poh, cont_id, NULL);
+	rc = daos_cont_create(poh, cont_id, NULL);
 	if (rc) {
 		D_DEBUG(DF_TIERC, "fetch: create local container: %d\n", rc);
 		D_GOTO(out, rc);

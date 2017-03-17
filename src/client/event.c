@@ -21,15 +21,16 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- * This file is part of common DAOS library.
+ * This file is part of client DAOS library.
  *
- * common/event.c
+ * client/event.c
  *
  * Author: Liang Zhen  <liang.zhen@intel.com>
  * Author: Di Wang  <di.wang@intel.com>
  */
 
 #define DD_SUBSYS	DD_FAC(client)
+
 #include "client_internal.h"
 #include <daos/client.h>
 #include <daos/rpc.h>
@@ -1212,14 +1213,28 @@ daos_task2ctx(struct daos_task *task)
 	return (crt_context_t *)sched->ds_udata;
 }
 
+/*
+ * Task completion CB to complete the high level event. This is used by the
+ * event APIs.
+ */
+static int
+daos_event_comp_cb(struct daos_task *task, void *data)
+{
+	daos_event_t   *ev = *((daos_event_t **)data);
+	int		rc = task->dt_result;
+
+	daos_event_complete(ev, rc);
+
+	return rc;
+}
+
 /**
  * The daos client internal will use daos_task, this function will
  * initialize the daos task/scheduler from event, and launch
  * event. This is a convenience function used in the event APIs.
  */
 int
-daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg,
-		      int arg_size, struct daos_task **taskp,
+daos_client_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 		      daos_event_t **evp)
 {
 	daos_event_t *ev = *evp;
@@ -1236,15 +1251,14 @@ daos_client_task_prep(daos_task_comp_cb_t comp_cb, void *arg,
 	if (task == NULL)
 		return -DER_NOMEM;
 
-	rc = daos_task_init(task, NULL, arg, arg_size, daos_ev2sched(ev), NULL);
+	rc = daos_task_init(task, NULL, arg, arg_size, daos_ev2sched(ev));
 	if (rc != 0)
 		D_GOTO(err_task, rc = -DER_NOMEM);
 
-	if (comp_cb != NULL) {
-		rc = daos_task_register_comp_cb(task, comp_cb, sizeof(ev), &ev);
-		if (rc != 0)
-			D_GOTO(err_task, rc);
-	}
+	rc = daos_task_register_comp_cb(task, daos_event_comp_cb, sizeof(ev),
+					&ev);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
 
 	rc = daos_event_launch(ev);
 	if (rc != 0)
@@ -1260,16 +1274,43 @@ err_task:
 	return rc;
 }
 
-/*
- * Task completion CB to complete the high level event. This is used by the
- * event APIs.
- */
 int
-daos_event_comp_cb(struct daos_task *task, void *data)
+dc_task_prep(daos_opc_t opc, void *arg, int arg_size, struct daos_task **taskp,
+	     daos_event_t **evp)
 {
-	daos_event_t   *ev = *((daos_event_t **)data);
-	int		rc = task->dt_result;
+	daos_event_t *ev = *evp;
+	struct daos_task *task = NULL;
+	int rc;
 
-	daos_event_complete(ev, rc);
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			return rc;
+	}
+
+	D_ALLOC_PTR(task);
+	if (task == NULL)
+		return -DER_NOMEM;
+
+	rc = daos_task_create(opc, daos_ev2sched(ev), arg, 0, NULL, task);
+	if (rc != 0)
+		D_GOTO(err_task, rc = -DER_NOMEM);
+
+	rc = daos_task_register_comp_cb(task, daos_event_comp_cb, sizeof(ev),
+					&ev);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	*taskp = task;
+	*evp = ev;
+
+	return rc;
+
+err_task:
+	D_FREE_PTR(task);
 	return rc;
 }

@@ -27,6 +27,7 @@
 
 #include <daos/mgmt.h>
 #include <daos/event.h>
+#include <daos_task.h>
 #include "rpc.h"
 
 struct pool_create_arg {
@@ -63,26 +64,27 @@ out:
 }
 
 int
-dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
-	       const char *grp, const daos_rank_list_t *tgts, const char *dev,
-	       daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
-	       struct daos_task *task)
+dc_pool_create(struct daos_task *task)
 {
+	daos_pool_create_t		*args;
 	crt_endpoint_t			svr_ep;
 	crt_rpc_t		       *rpc_req = NULL;
 	crt_opcode_t			opc;
 	struct mgmt_pool_create_in     *pc_in;
-	struct pool_create_arg		arg;
+	struct pool_create_arg		create_args;
 	int				rc = 0;
 
-	if (dev == NULL || strlen(dev) == 0) {
+	args = daos_task_get_args(DAOS_OPC_POOL_CREATE, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (args->dev == NULL || strlen(args->dev) == 0) {
 		D_ERROR("Invalid parameter of dev (NULL or empty string).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	uuid_generate(uuid);
+	uuid_generate(args->uuid);
 
-	rc = daos_group_attach(grp, &svr_ep.ep_grp);
+	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -101,26 +103,26 @@ dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	D_ASSERT(pc_in != NULL);
 
 	/** fill in request buffer */
-	uuid_copy(pc_in->pc_pool_uuid, uuid);
-	pc_in->pc_mode = mode;
-	pc_in->pc_uid = uid;
-	pc_in->pc_gid = gid;
-	pc_in->pc_grp = (crt_string_t)grp;
-	pc_in->pc_tgt_dev = (crt_string_t)dev;
-	pc_in->pc_tgts = (daos_rank_list_t *)tgts;
-	pc_in->pc_tgt_size = size;
-	pc_in->pc_svc_nr = svc->rl_nr.num;
+	uuid_copy(pc_in->pc_pool_uuid, args->uuid);
+	pc_in->pc_mode = args->mode;
+	pc_in->pc_uid = args->uid;
+	pc_in->pc_gid = args->gid;
+	pc_in->pc_grp = (crt_string_t)args->grp;
+	pc_in->pc_tgt_dev = (crt_string_t)args->dev;
+	pc_in->pc_tgts = (daos_rank_list_t *)args->tgts;
+	pc_in->pc_tgt_size = args->size;
+	pc_in->pc_svc_nr = args->svc->rl_nr.num;
 
 	crt_req_addref(rpc_req);
-	arg.rpc = rpc_req;
-	arg.svc = svc;
+	create_args.rpc = rpc_req;
+	create_args.svc = args->svc;
 
-	rc = daos_task_register_comp_cb(task, pool_create_cp, sizeof(arg),
-					&arg);
+	rc = daos_task_register_comp_cb(task, pool_create_cp,
+					sizeof(create_args), &create_args);
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
-	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(args->uuid));
 
 	/** send the request */
 	return daos_rpc_send(rpc_req, task);
@@ -161,21 +163,24 @@ out:
 }
 
 int
-dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
-		struct daos_task *task)
+dc_pool_destroy(struct daos_task *task)
 {
+	daos_pool_destroy_t		*args;
 	crt_endpoint_t			 svr_ep;
 	crt_rpc_t			*rpc_req = NULL;
 	crt_opcode_t			 opc;
 	struct mgmt_pool_destroy_in	*pd_in;
 	int				 rc = 0;
 
-	if (uuid_is_null(uuid)) {
+	args = daos_task_get_args(DAOS_OPC_POOL_DESTROY, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (uuid_is_null(args->uuid)) {
 		D_ERROR("Invalid parameter of uuid (NULL).\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = daos_group_attach(grp, &svr_ep.ep_grp);
+	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -194,9 +199,9 @@ dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	D_ASSERT(pd_in != NULL);
 
 	/** fill in request buffer */
-	uuid_copy(pd_in->pd_pool_uuid, uuid);
-	pd_in->pd_grp = (crt_string_t)grp;
-	pd_in->pd_force = (force == 0) ? false : true;
+	uuid_copy(pd_in->pd_pool_uuid, args->uuid);
+	pd_in->pd_grp = (crt_string_t)args->grp;
+	pd_in->pd_force = (args->force == 0) ? false : true;
 
 	crt_req_addref(rpc_req);
 	rc = daos_task_register_comp_cb(task, pool_destroy_cp, sizeof(rpc_req),
@@ -204,7 +209,7 @@ dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
-	D_DEBUG(DB_MGMT, DF_UUID": destroying pool\n", DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, DF_UUID": destroying pool\n", DP_UUID(args->uuid));
 
 	/** send the request */
 	return daos_rpc_send(rpc_req, task);

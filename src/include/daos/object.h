@@ -26,6 +26,7 @@
 #include <daos_types.h>
 #include <daos_api.h>
 #include <daos/scheduler.h>
+#include <daos/common.h>
 
 int dc_obj_init(void);
 void dc_obj_fini(void);
@@ -54,50 +55,6 @@ unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
 
-int
-dc_oclass_register(daos_handle_t coh, daos_oclass_id_t cid,
-		   daos_oclass_attr_t *cattr, daos_event_t *ev);
-int
-dc_oclass_query(daos_handle_t coh, daos_oclass_id_t cid,
-		daos_oclass_attr_t *cattr, daos_event_t *ev);
-int
-dc_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
-	       daos_hash_out_t *anchor, daos_event_t *ev);
-int
-dc_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	    unsigned int mode, daos_handle_t *oh, struct daos_task *task);
-int
-dc_obj_close(daos_handle_t oh, struct daos_task *task);
-int
-dc_obj_layout_refresh(daos_handle_t oh);
-int
-dc_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
-int
-dc_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
-	     daos_rank_list_t *ranks, daos_event_t *ev);
-int
-dc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-	     unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
-	     daos_iom_t *maps, struct daos_task *task);
-int
-dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-	      unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
-	      struct daos_task *task);
-int
-dc_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
-		 daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		 daos_hash_out_t *anchor, struct daos_task *task);
-int
-dc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		 uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		 daos_hash_out_t *anchor, struct daos_task *task);
-int
-dc_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
-		uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		uuid_t *cookies, daos_hash_out_t *anchor, bool incr_order,
-		struct daos_task *task);
-
 daos_handle_t
 dc_obj_hdl2cont_hdl(daos_handle_t obj_oh);
 
@@ -111,5 +68,19 @@ daos_obj_retry_error(int err)
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       daos_crt_network_error(err);
 }
+
+int dc_obj_class_register(struct daos_task *task);
+int dc_obj_class_query(struct daos_task *task);
+int dc_obj_class_list(struct daos_task *task);
+int dc_obj_declare(struct daos_task *task);
+int dc_obj_open(struct daos_task *task);
+int dc_obj_close(struct daos_task *task);
+int dc_obj_punch(struct daos_task *task);
+int dc_obj_query(struct daos_task *task);
+int dc_obj_fetch(struct daos_task *task);
+int dc_obj_update(struct daos_task *task);
+int dc_obj_list_dkey(struct daos_task *task);
+int dc_obj_list_akey(struct daos_task *task);
+int dc_obj_list_rec(struct daos_task *task);
 
 #endif /* __DAOS_OBJECT_H__ */

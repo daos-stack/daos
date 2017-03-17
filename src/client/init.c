@@ -32,6 +32,7 @@
 #include <daos/container.h>
 #include <daos/object.h>
 #include <daos/tier.h>
+#include "task_internal.h"
 #include <pthread.h>
 
 /* Shared by pool, container, and object handles. */
@@ -39,6 +40,50 @@ struct daos_hhash *daos_client_hhash;
 
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool		module_initialized;
+
+const struct daos_task_api dc_funcs[] = {
+	{dc_mgmt_svc_rip, sizeof(daos_svc_rip_t)},
+	{dc_pool_create, sizeof(daos_pool_create_t)},
+	{dc_pool_destroy, sizeof(daos_pool_destroy_t)},
+	{dc_pool_extend, sizeof(daos_pool_extend_t)},
+	{dc_pool_evict, sizeof(daos_pool_evict_t)},
+	{dc_pool_connect, sizeof(daos_pool_connect_t)},
+	{dc_pool_disconnect, sizeof(daos_pool_disconnect_t)},
+	{dc_pool_exclude, sizeof(daos_pool_exclude_t)},
+	{dc_pool_query, sizeof(daos_pool_query_t)},
+	{dc_pool_target_query, sizeof(daos_pool_target_query_t)},
+	{dc_cont_create, sizeof(daos_cont_create_t)},
+	{dc_cont_open, sizeof(daos_cont_open_t)},
+	{dc_cont_close, sizeof(daos_cont_close_t)},
+	{dc_cont_destroy, sizeof(daos_cont_destroy_t)},
+	{dc_cont_query, sizeof(daos_cont_query_t)},
+	{dc_cont_attr_list, sizeof(daos_cont_attr_list_t)},
+	{dc_cont_attr_get, sizeof(daos_cont_attr_get_t)},
+	{dc_cont_attr_set, sizeof(daos_cont_attr_set_t)},
+	{dc_epoch_flush, sizeof(daos_epoch_flush_t)},
+	{dc_epoch_discard, sizeof(daos_epoch_discard_t)},
+	{dc_epoch_query, sizeof(daos_epoch_query_t)},
+	{dc_epoch_hold, sizeof(daos_epoch_hold_t)},
+	{dc_epoch_slip, sizeof(daos_epoch_slip_t)},
+	{dc_epoch_commit, sizeof(daos_epoch_commit_t)},
+	{dc_epoch_wait, sizeof(daos_epoch_wait_t)},
+	{dc_snap_list, sizeof(daos_snap_list_t)},
+	{dc_snap_create, sizeof(daos_snap_create_t)},
+	{dc_snap_destroy, sizeof(daos_snap_destroy_t)},
+	{dc_obj_class_register, sizeof(daos_obj_class_register_t)},
+	{dc_obj_class_query, sizeof(daos_obj_class_query_t)},
+	{dc_obj_class_list, sizeof(daos_obj_class_list_t)},
+	{dc_obj_declare, sizeof(daos_obj_declare_t)},
+	{dc_obj_open, sizeof(daos_obj_open_t)},
+	{dc_obj_close, sizeof(daos_obj_close_t)},
+	{dc_obj_punch, sizeof(daos_obj_punch_t)},
+	{dc_obj_query, sizeof(daos_obj_query_t)},
+	{dc_obj_fetch, sizeof(daos_obj_fetch_t)},
+	{dc_obj_update, sizeof(daos_obj_update_t)},
+	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},
+	{dc_obj_list_akey, sizeof(daos_obj_list_akey_t)},
+	{dc_obj_list_rec, sizeof(daos_obj_list_recx_t)}
+};
 
 /**
  * Initialize DAOS client library.

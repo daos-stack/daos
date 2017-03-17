@@ -576,8 +576,8 @@ daos_snap_destroy(daos_handle_t coh, daos_epoch_t epoch, daos_event_t *ev);
  *			-DER_EXIST	Object class ID already existed
  */
 int
-daos_oclass_register(daos_handle_t coh, daos_oclass_id_t cid,
-		     daos_oclass_attr_t *cattr, daos_event_t *ev);
+daos_obj_class_register(daos_handle_t coh, daos_oclass_id_t cid,
+			daos_oclass_attr_t *cattr, daos_event_t *ev);
 
 /**
  * Query attributes of an object class by its ID.
@@ -597,8 +597,8 @@ daos_oclass_register(daos_handle_t coh, daos_oclass_id_t cid,
  *			-DER_NONEXIST	Nonexistent class ID
  */
 int
-daos_oclass_query(daos_handle_t coh, daos_oclass_id_t cid,
-		  daos_oclass_attr_t *cattr, daos_event_t *ev);
+daos_obj_class_query(daos_handle_t coh, daos_oclass_id_t cid,
+		     daos_oclass_attr_t *cattr, daos_event_t *ev);
 
 /**
  * List existing object classes.
@@ -620,8 +620,8 @@ daos_oclass_query(daos_handle_t coh, daos_oclass_id_t cid,
  *			-DER_UNREACH	Network is unreachable
  */
 int
-daos_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
-		 daos_hash_out_t *anchor, daos_event_t *ev);
+daos_obj_class_list(daos_handle_t coh, daos_oclass_list_t *clist,
+		    daos_hash_out_t *anchor, daos_event_t *ev);
 
 /**
  * Generate a DAOS object ID by encoding the private DAOS bits of the object

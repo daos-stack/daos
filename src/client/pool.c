@@ -25,20 +25,32 @@
 #include <daos/pool.h>
 #include <daos/pool_map.h>
 #include "client_internal.h"
+#include "task_internal.h"
 
 int
 daos_pool_connect(const uuid_t uuid, const char *grp,
 		  const daos_rank_list_t *svc, unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
+	daos_pool_connect_t	args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, POOL_CONNECT);
+
+	args.grp = grp;
+	args.svc = svc;
+	args.flags = flags;
+	args.poh = poh;
+	args.info = info;
+	uuid_copy((unsigned char *)args.uuid, uuid);
+
+	rc = dc_task_prep(DAOS_OPC_POOL_CONNECT, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_pool_connect(uuid, grp, svc, flags, poh, info, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -46,14 +58,20 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
+	daos_pool_disconnect_t	args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, POOL_DISCONNECT);
+
+	args.poh = poh;
+
+	rc = dc_task_prep(DAOS_OPC_POOL_DISCONNECT, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_pool_disconnect(poh, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -73,45 +91,45 @@ daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 int
 daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
 {
+	daos_pool_exclude_t	args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, POOL_EXCLUDE);
+
+	args.poh = poh;
+	args.tgts = tgts;
+
+	rc = dc_task_prep(DAOS_OPC_POOL_EXCLUDE, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_pool_exclude(poh, tgts, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
-}
-
-int
-daos_pool_query_async(daos_handle_t ph, daos_rank_list_t *tgts,
-		      daos_pool_info_t *info, struct daos_task *task)
-{
-
-	int rc;
-
-	if (tgts == NULL && info == NULL)
-		return -DER_INVAL;
-
-	rc = dc_pool_query(ph, tgts, info, task);
-
-	return rc;
 }
 
 int
 daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
 		daos_pool_info_t *info, daos_event_t *ev)
 {
-	struct daos_task *task;
-	int		  rc;
+	daos_pool_query_t	args;
+	struct daos_task	*task;
+	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, POOL_QUERY);
+
+	args.poh = poh;
+	args.tgts = tgts;
+	args.info = info;
+
+	rc = dc_task_prep(DAOS_OPC_POOL_QUERY, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	daos_pool_query_async(poh, tgts, info, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }

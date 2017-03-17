@@ -23,415 +23,189 @@
 #define DD_SUBSYS	DD_FAC(client)
 
 #include <daos/object.h>
-#include <daos/event.h>
-#include <daos/container.h>
 #include "client_internal.h"
+#include "task_internal.h"
 
 int
-daos_oclass_register(daos_handle_t coh, daos_oclass_id_t cid,
+daos_obj_class_register(daos_handle_t coh, daos_oclass_id_t cid,
+			daos_oclass_attr_t *cattr, daos_event_t *ev)
+{
+	D_ERROR("Unsupported API\n");
+	return -DER_NOSYS;
+#if 0
+	daos_obj_class_register_t	arg;
+	struct daos_task		*task;
+	int				rc;
+
+	arg.coh		= coh;
+	arg.cid		= cid;
+	arg.cattr	= cattr;
+
+	rc = dc_task_prep(DAOS_OPC_OBJ_CLASS_REGISTER, &arg, sizeof(arg), &task,
+			  &ev);
+	if (rc)
+		return rc;
+
+	daos_sched_progress(daos_ev2sched(ev));
+
+	return daos_client_result_wait(ev);
+#endif
+}
+
+int
+daos_obj_class_query(daos_handle_t coh, daos_oclass_id_t cid,
 		     daos_oclass_attr_t *cattr, daos_event_t *ev)
 {
-	int rc;
+	D_ERROR("Unsupported API\n");
+	return -DER_NOSYS;
+#if 0
+	daos_obj_class_query_t	arg;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
+	arg.coh		= coh;
+	arg.cid		= cid;
+	arg.cattr	= cattr;
 
-	rc = dc_oclass_register(coh, cid, cattr, ev);
+	rc = dc_task_prep(DAOS_OPC_OBJ_CLASS_QUERY, &arg, sizeof(arg), &task,
+			  &ev);
 	if (rc)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	daos_sched_progress(daos_ev2sched(ev));
 
-	return rc;
+	return daos_client_result_wait(ev);
+#endif
 }
 
 int
-daos_oclass_query(daos_handle_t coh, daos_oclass_id_t cid,
-		  daos_oclass_attr_t *cattr, daos_event_t *ev)
+daos_obj_class_list(daos_handle_t coh, daos_oclass_list_t *clist,
+		    daos_hash_out_t *anchor, daos_event_t *ev)
 {
-	int rc;
+	D_ERROR("Unsupported API\n");
+	return -DER_NOSYS;
+#if 0
+	daos_obj_class_list_t	arg;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
+	arg.coh		= coh;
+	arg.clist	= clist;
+	arg.anchor	= anchor;
 
-	rc = dc_oclass_query(coh, cid, cattr, ev);
+	rc = dc_task_prep(DAOS_OPC_OBJ_CLASS_LIST, &arg, sizeof(arg), &task,
+			  &ev);
 	if (rc)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	daos_sched_progress(daos_ev2sched(ev));
 
-	return rc;
-}
-
-int
-daos_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
-		 daos_hash_out_t *anchor, daos_event_t *ev)
-{
-	int rc;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_oclass_list(coh, clist, anchor, ev);
-	if (rc)
-		return rc;
-
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
-
-	return rc;
+	return daos_client_result_wait(ev);
+#endif
 }
 
 int
 daos_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		 daos_obj_attr_t *oa, daos_event_t *ev)
 {
-	return 0;
-}
+	D_ERROR("Unsupported API\n");
+	return -DER_NOSYS;
+#if 0
+	daos_obj_declare_t	arg;
+	struct daos_task	*task;
+	int			rc;
 
-int
-daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
-{
-	int rc;
+	arg.coh		= coh;
+	arg.oid		= oid;
+	arg.epoch	= epoch;
+	arg.oa		= oa;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_obj_punch(oh, epoch, ev);
+	rc = dc_task_prep(DAOS_OPC_OBJ_DECLARE, &arg, sizeof(arg), &task, &ev);
 	if (rc)
 		return rc;
 
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
+	daos_sched_progress(daos_ev2sched(ev));
 
-	return rc;
+	return daos_client_result_wait(ev);
+#endif
 }
-
-int
-daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
-	       daos_rank_list_t *ranks, daos_event_t *ev)
-{
-	int rc;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_obj_query(oh, epoch, oa, ranks, ev);
-	if (rc)
-		return rc;
-
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
-
-	return rc;
-}
-
-static int
-daos_obj_pool_hdl_get(daos_handle_t oh, daos_handle_t *ph)
-{
-	daos_handle_t	ch;
-
-	ch = dc_obj_hdl2cont_hdl(oh);
-	if (daos_handle_is_inval(ch))
-		return -DER_NO_HDL;
-
-	*ph = dc_cont_hdl2pool_hdl(ch);
-	if (daos_handle_is_inval(*ph))
-		return -DER_NO_HDL;
-
-	return 0;
-}
-
-enum daos_obj_opc {
-	DAOS_OBJ_UPDATE	= 1,
-	DAOS_OBJ_FETCH = 2,
-	DAOS_OBJ_DKEY_LIST = 3,
-	DAOS_OBJ_AKEY_LIST = 4,
-	DAOS_OBJ_REC_LIST = 5,
-};
-
-struct daos_obj_arg {
-	int		opc;
-	daos_handle_t	oh;
-	daos_epoch_t	epoch;
-	daos_key_t	*dkey;
-	unsigned int	nr;
-	daos_iod_t	*iods;
-	daos_sg_list_t	*sgls;
-	daos_iom_t	*maps;
-};
-
-struct daos_obj_list_arg {
-	int		opc;
-	daos_handle_t	oh;
-	daos_epoch_t	epoch;
-	daos_iod_type_t type;
-	uint32_t	*nr;
-	daos_key_desc_t	*kds;
-	daos_key_t	*dkey;
-	daos_key_t	*akey;
-	daos_sg_list_t	*sgl;
-	daos_hash_out_t	*anchor;
-	daos_epoch_range_t *eprs;
-	daos_recx_t	   *recxs;
-	daos_size_t	   *size;
-	uuid_t		   *cookies;
-	bool		incr_order;
-};
-
-static int
-daos_obj_fetch_task(struct daos_task *task)
-{
-	struct daos_obj_arg *arg = daos_task2arg(task);
-
-	return dc_obj_fetch(arg->oh, arg->epoch, arg->dkey, arg->nr,
-			    arg->iods, arg->sgls, arg->maps, task);
-}
-
-static int
-daos_obj_update_task(struct daos_task *task)
-{
-	struct daos_obj_arg *arg = daos_task2arg(task);
-
-	return dc_obj_update(arg->oh, arg->epoch, arg->dkey, arg->nr,
-			     arg->iods, arg->sgls, task);
-}
-
-static int
-daos_obj_dkey_list_task(struct daos_task *task)
-{
-	struct daos_obj_list_arg *arg = daos_task2arg(task);
-
-	return dc_obj_list_dkey(arg->oh, arg->epoch, arg->nr, arg->kds,
-				arg->sgl, arg->anchor, task);
-}
-
-static int
-daos_obj_akey_list_task(struct daos_task *task)
-{
-	struct daos_obj_list_arg *arg = daos_task2arg(task);
-
-	return dc_obj_list_akey(arg->oh, arg->epoch, arg->dkey, arg->nr,
-				arg->kds, arg->sgl, arg->anchor, task);
-}
-
-static int
-daos_obj_rec_list_task(struct daos_task *task)
-{
-	struct daos_obj_list_arg *arg = daos_task2arg(task);
-
-	return dc_obj_list_rec(arg->oh, arg->epoch, arg->dkey, arg->akey,
-			       arg->type, arg->size, arg->nr, arg->recxs,
-			       arg->eprs, NULL, arg->anchor, arg->incr_order,
-			       task);
-}
-
-static int
-pool_query_comp_cb(struct daos_task *task, void *data)
-{
-	struct daos_obj_arg	*arg = daos_task2arg(task);
-	daos_pool_info_t	*info = *((daos_pool_info_t **)data);
-
-	dc_obj_layout_refresh(arg->oh);
-
-	D_FREE_PTR(info);
-	return 0;
-}
-
-static int
-daos_obj_pool_query_task(struct daos_task *task)
-{
-	struct daos_obj_arg	*arg = daos_task2arg(task);
-	daos_pool_info_t	*info;
-	daos_handle_t		 ph;
-	int			 rc;
-
-	rc = daos_obj_pool_hdl_get(arg->oh, &ph);
-	if (rc != 0)
-		return rc;
-
-	D_ALLOC_PTR(info);
-	if (info == NULL)
-		return -DER_NOMEM;
-
-	rc = daos_task_register_comp_cb(task, pool_query_comp_cb, sizeof(info),
-					&info);
-	if (rc != 0) {
-		D_FREE_PTR(info);
-		return rc;
-	}
-
-	rc = daos_pool_query_async(ph, NULL, info, task);
-	return rc;
-}
-
-
-/**
- * This function will check the result of dc object API
- * then decide if it needs retry.
- **/
-static int
-daos_obj_comp_cb(struct daos_task *task, void *data)
-{
-	struct daos_sched	*sched = daos_task2sched(task);
-	struct daos_obj_arg	*arg = daos_task2arg(task);
-	struct daos_task	*pool_task;
-	struct daos_task	*rw_task;
-	daos_event_t		*ev = *((daos_event_t **)data);
-	int			rc = task->dt_result;
-
-	if (rc == 0 || !daos_obj_retry_error(rc)) {
-		daos_event_complete(ev, rc);
-		return rc;
-	}
-
-	D_DEBUG(DB_IO, "task %p opc %d fails %d let's retry.\n",
-		task, arg->opc, rc);
-	/* Let's reset task result before retry */
-	task->dt_result = 0;
-	sched->ds_result = 0;
-
-	/* Add pool map update task */
-	D_ALLOC_PTR(pool_task);
-	if (pool_task == NULL)
-		D_GOTO(out, rc);
-
-	rc = daos_task_init(pool_task, daos_obj_pool_query_task,
-			    arg, sizeof(*arg), sched, NULL);
-	if (rc != 0) {
-		D_FREE_PTR(pool_task);
-		D_GOTO(out, rc);
-	}
-
-	/* add dependent rw task */
-	D_ALLOC_PTR(rw_task);
-	if (rw_task == NULL)
-		D_GOTO(out, rc);
-
-	switch (arg->opc) {
-	case DAOS_OBJ_UPDATE:
-		rc = daos_task_init(rw_task, daos_obj_update_task,
-				    arg, sizeof(struct daos_obj_arg),
-				    sched, pool_task);
-		break;
-	case DAOS_OBJ_FETCH:
-		rc = daos_task_init(rw_task, daos_obj_fetch_task,
-				    arg, sizeof(struct daos_obj_arg),
-				    sched, pool_task);
-		break;
-	case DAOS_OBJ_DKEY_LIST:
-		rc = daos_task_init(rw_task, daos_obj_dkey_list_task,
-				    arg, sizeof(struct daos_obj_list_arg),
-				    sched, pool_task);
-		break;
-	case DAOS_OBJ_AKEY_LIST:
-		rc = daos_task_init(rw_task, daos_obj_akey_list_task,
-				    arg, sizeof(struct daos_obj_list_arg),
-				    sched, pool_task);
-		break;
-	case DAOS_OBJ_REC_LIST:
-		rc = daos_task_init(rw_task, daos_obj_rec_list_task,
-				    arg, sizeof(struct daos_obj_list_arg),
-				    sched, pool_task);
-		break;
-	default:
-		D_ASSERTF(0, "invalid opc %d\n", arg->opc);
-	}
-	if (rc != 0) {
-		D_FREE_PTR(rw_task);
-		D_GOTO(out, rc);
-	}
-
-	rc = daos_task_register_comp_cb(rw_task, daos_obj_comp_cb, sizeof(ev),
-					&ev);
-	if (rc != 0)
-		D_GOTO(out, rc);
-out:
-	return rc;
-}
-
-struct daos_obj_open_close_arg {
-	daos_handle_t	coh;
-	daos_obj_id_t	oid;
-	daos_epoch_t	epoch;
-	unsigned int	mode;
-	daos_handle_t	*oh;
-};
 
 int
 daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	      unsigned int mode, daos_handle_t *oh, daos_event_t *ev)
 {
-	struct daos_obj_open_close_arg	arg;
-	struct daos_task		*task;
-	int				rc;
+	daos_obj_open_t		args;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
+	args.coh	= coh;
+	args.oid	= oid;
+	args.epoch	= epoch;
+	args.mode	= mode;
+	args.oh		= oh;
 
-	arg.coh		= coh;
-	arg.oid		= oid;
-	arg.epoch	= epoch;
-	arg.mode	= mode;
-	arg.oh		= oh;
-	rc = daos_client_task_prep(daos_obj_comp_cb, &arg, sizeof(arg),
-				   &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, OBJ_OPEN);
+
+	rc = dc_task_prep(DAOS_OPC_OBJ_OPEN, &args, sizeof(args), &task, &ev);
+	if (rc)
 		return rc;
 
-	dc_obj_open(coh, oid, epoch, mode, oh, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
-	/** wait for completion if blocking mode */
 	return daos_client_result_wait(ev);
 }
 
 int
 daos_obj_close(daos_handle_t oh, daos_event_t *ev)
 {
-	struct daos_obj_open_close_arg	arg;
-	struct daos_task		*task;
-	int				rc;
+	daos_obj_close_t	args;
+	struct daos_task	*task;
+	int			rc;
 
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
+	args.oh		= oh;
 
-	arg.oh = &oh;
-	rc = daos_client_task_prep(daos_obj_comp_cb, &arg, sizeof(arg),
-				   &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, OBJ_CLOSE);
+
+	rc = dc_task_prep(DAOS_OPC_OBJ_CLOSE, &args, sizeof(args), &task, &ev);
+	if (rc)
 		return rc;
 
-	dc_obj_close(oh, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
+}
+
+int
+daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
+{
+	D_ERROR("Unsupported API\n");
+	return -DER_NOSYS;
+#if 0
+	daos_obj_punch_t	args;
+	struct daos_task	*task;
+	int			rc;
+
+	args.epoch	= epoch;
+	args.oh		= oh;
+
+	DAOS_API_ARG_ASSERT(args, OBJ_PUNCH);
+
+	rc = dc_task_prep(DAOS_OPC_OBJ_PUNCH, &args, sizeof(args), &task, &ev);
+	if (rc)
+		return rc;
+
+	daos_sched_progress(daos_ev2sched(ev));
+
+	return daos_client_result_wait(ev);
+#endif
+}
+
+int
+daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
+	       daos_rank_list_t *ranks, daos_event_t *ev)
+{
+	D_ERROR("Unsupported API\n");
+	return -DER_NOSYS;
 }
 
 int
@@ -439,25 +213,25 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	       unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
 	       daos_iom_t *maps, daos_event_t *ev)
 {
-	struct daos_obj_arg arg;
-	struct daos_task *task;
-	int rc;
+	daos_obj_fetch_t	args;
+	struct daos_task       *task;
+	int			rc;
 
-	arg.opc		= DAOS_OBJ_FETCH;
-	arg.oh		= oh;
-	arg.epoch	= epoch;
-	arg.dkey	= dkey;
-	arg.nr		= nr;
-	arg.iods	= iods;
-	arg.sgls	= sgls;
-	arg.maps	= maps;
+	DAOS_API_ARG_ASSERT(args, OBJ_FETCH);
 
-	rc = daos_client_task_prep(daos_obj_comp_cb, &arg, sizeof(arg),
-				   &task, &ev);
-	if (rc != 0)
+	args.oh		= oh;
+	args.epoch	= epoch;
+	args.dkey	= dkey;
+	args.nr		= nr;
+	args.iods	= iods;
+	args.sgls	= sgls;
+	args.maps	= maps;
+
+	rc = dc_task_prep(DAOS_OPC_OBJ_FETCH, &args, sizeof(args), &task, &ev);
+	if (rc)
 		return rc;
 
-	dc_obj_fetch(oh, epoch, dkey, nr, iods, sgls, maps, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -467,23 +241,24 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
 		daos_event_t *ev)
 {
-	struct daos_task	*task;
-	struct daos_obj_arg	arg;
+	daos_obj_update_t	args;
+	struct daos_task       *task;
 	int			rc;
 
-	arg.opc		= DAOS_OBJ_UPDATE;
-	arg.oh		= oh;
-	arg.epoch	= epoch;
-	arg.dkey	= dkey;
-	arg.nr		= nr;
-	arg.iods	= iods;
-	arg.sgls	= sgls;
-	rc = daos_client_task_prep(daos_obj_comp_cb, &arg, sizeof(arg),
-				   &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, OBJ_UPDATE);
+
+	args.oh		= oh;
+	args.epoch	= epoch;
+	args.dkey	= dkey;
+	args.nr		= nr;
+	args.iods	= iods;
+	args.sgls	= sgls;
+
+	rc = dc_task_prep(DAOS_OPC_OBJ_UPDATE, &args, sizeof(args), &task, &ev);
+	if (rc)
 		return rc;
 
-	dc_obj_update(oh, epoch, dkey, nr, iods, sgls, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -493,23 +268,25 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev)
 {
-	struct daos_task	*task;
-	struct daos_obj_list_arg arg;
+	daos_obj_list_dkey_t	args;
+	struct daos_task       *task;
 	int			rc;
 
-	arg.opc		= DAOS_OBJ_DKEY_LIST;
-	arg.oh		= oh;
-	arg.epoch	= epoch;
-	arg.nr		= nr;
-	arg.kds		= kds;
-	arg.sgl		= sgl;
-	arg.anchor	= anchor;
-	rc = daos_client_task_prep(daos_obj_comp_cb, &arg, sizeof(arg),
-				   &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, OBJ_LIST_DKEY);
+
+	args.oh		= oh;
+	args.epoch	= epoch;
+	args.nr		= nr;
+	args.kds	= kds;
+	args.sgl	= sgl;
+	args.anchor	= anchor;
+
+	rc = dc_task_prep(DAOS_OPC_OBJ_LIST_DKEY, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_obj_list_dkey(oh, epoch, nr, kds, sgl, anchor, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -519,24 +296,26 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		   uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev)
 {
-	struct daos_task	*task;
-	struct daos_obj_list_arg arg;
+	daos_obj_list_akey_t	args;
+	struct daos_task       *task;
 	int			rc;
 
-	arg.opc = DAOS_OBJ_AKEY_LIST;
-	arg.oh	= oh;
-	arg.epoch = epoch;
-	arg.nr = nr;
-	arg.kds = kds;
-	arg.sgl = sgl;
-	arg.dkey = dkey;
-	arg.anchor = anchor;
-	rc = daos_client_task_prep(daos_obj_comp_cb, &arg,
-				   sizeof(arg), &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, OBJ_LIST_AKEY);
+
+	args.oh		= oh;
+	args.epoch	= epoch;
+	args.dkey	= dkey;
+	args.nr		= nr;
+	args.kds	= kds;
+	args.sgl	= sgl;
+	args.anchor	= anchor;
+
+	rc = dc_task_prep(DAOS_OPC_OBJ_LIST_AKEY, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_obj_list_akey(oh, epoch, dkey, nr, kds, sgl, anchor, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -547,29 +326,31 @@ daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		   daos_recx_t *recxs, daos_epoch_range_t *eprs,
 		   daos_hash_out_t *anchor, bool incr_order, daos_event_t *ev)
 {
+	daos_obj_list_recx_t	args;
 	struct daos_task	*task;
-	struct daos_obj_list_arg arg;
 	int			rc;
 
-	arg.opc = DAOS_OBJ_AKEY_LIST;
-	arg.oh	= oh;
-	arg.epoch = epoch;
-	arg.type = DAOS_IOD_ARRAY;
-	arg.nr = nr;
-	arg.dkey = dkey;
-	arg.akey = akey;
-	arg.size = size;
-	arg.recxs = recxs;
-	arg.eprs = eprs;
-	arg.anchor = anchor;
-	arg.incr_order = incr_order;
-	rc = daos_client_task_prep(daos_obj_comp_cb, &arg, sizeof(arg), &task,
-				   &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, OBJ_LIST_RECX);
+
+	args.oh		= oh;
+	args.epoch	= epoch;
+	args.dkey	= dkey;
+	args.akey	= akey;
+	args.type	= DAOS_IOD_ARRAY;
+	args.size	= size;
+	args.nr		= nr;
+	args.recxs	= recxs;
+	args.eprs	= eprs;
+	args.cookies	= NULL;
+	args.anchor	= anchor;
+	args.incr_order = incr_order;
+
+	rc = dc_task_prep(DAOS_OPC_OBJ_LIST_RECX, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_obj_list_rec(oh, epoch, dkey, akey, arg.type, size, nr, recxs, eprs,
-			NULL, anchor, incr_order, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }

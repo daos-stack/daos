@@ -9,7 +9,8 @@ denv = env.Clone()
 if PREREQS is not None:
     PREREQS.require(denv, 'ompi')
 
-array_src = denv.SharedObject('daos_array.c')
+array_src = denv.SharedObject(['dac_array.c'])
+array_src += denv.SharedObject('daos_array.c')
 array_lib = denv.SharedLibrary('libdaos_array', array_src)
 denv.Install('$PREFIX/lib/', array_lib)
 

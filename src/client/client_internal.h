@@ -32,6 +32,7 @@
 #include <pthread.h>
 #include <daos/common.h>
 #include <daos_event.h>
+#include <daos_task.h>
 #include <daos/event.h>
 #include <daos/list.h>
 
@@ -132,40 +133,8 @@ daos_eqx2eq(struct daos_eq_private *eqx)
 int
 daos_event_priv_get(daos_event_t **ev);
 
-/**
- * Check whether \a ev is the private per-thread event
- *
- * \param ev [IN]	input event to compare with the private event.
- */
-bool
-daos_event_is_priv(daos_event_t *ev);
-
-/**
- * Wait for completion of the private event
- */
 int
-daos_event_priv_wait();
-
-int
-daos_pool_query_async(daos_handle_t ph, daos_rank_list_t *tgts,
-		      daos_pool_info_t *info, struct daos_task *task);
-
-int
-daos_event_comp_cb(struct daos_task *task, void *data);
-
-/**
- * Wait for completion if blocking mode. We always return 0 for asynchronous
- * mode because the application will get the result from event in this case,
- * besides certain failure might be reset anyway see daos_obj_comp_cb() .
- */
-static inline int
-daos_client_result_wait(daos_event_t *ev)
-{
-	D_ASSERT(ev != NULL);
-	if (daos_event_is_priv(ev)) /* blocking mode */
-		return daos_event_priv_wait(ev);
-
-	return 0;
-}
+dc_task_prep(daos_opc_t opc, void *arg, int arg_size, struct daos_task **taskp,
+	     daos_event_t **evp);
 
 #endif /* __DAOS_CLI_INTERNAL_H__ */

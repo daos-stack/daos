@@ -24,20 +24,28 @@
 
 #include <daos/mgmt.h>
 #include <daos/pool.h>
-#include <client_internal.h>
+#include "client_internal.h"
+#include "task_internal.h"
 
 int
 daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 		  daos_event_t *ev)
 {
+	daos_svc_rip_t		args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, SVC_RIP);
+
+	args.grp = grp;
+	args.rank = rank;
+	args.force = force;
+
+	rc = dc_task_prep(DAOS_OPC_SVC_RIP, &args, sizeof(args), &task, &ev);
+	if (rc)
 		return rc;
 
-	dc_mgmt_svc_rip(grp, rank, force, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -48,14 +56,28 @@ daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 		 daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
 		 daos_event_t *ev)
 {
+	daos_pool_create_t	args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, POOL_CREATE);
+
+	args.mode = mode;
+	args.uid = uid;
+	args.gid = gid;
+	args.grp = grp;
+	args.tgts = tgts;
+	args.dev = dev;
+	args.size = size;
+	args.svc = svc;
+	args.uuid = uuid;
+
+	rc = dc_task_prep(DAOS_OPC_POOL_CREATE, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_pool_create(mode, uid, gid, grp, tgts, dev, size, svc, uuid, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -64,14 +86,22 @@ int
 daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 		  daos_event_t *ev)
 {
+	daos_pool_destroy_t	args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, POOL_DESTROY);
+
+	args.grp = grp;
+	args.force = force;
+	uuid_copy((unsigned char *)args.uuid, uuid);
+
+	rc = dc_task_prep(DAOS_OPC_POOL_DESTROY, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_pool_destroy(uuid, grp, force, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -79,14 +109,27 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 int
 daos_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
 {
+	daos_pool_evict_t	args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, POOL_EVICT);
+
+	args.grp = grp;
+	uuid_copy((unsigned char *)args.uuid, uuid);
+
+	rc = dc_task_prep(DAOS_OPC_POOL_EVICT, &args, sizeof(args), &task, &ev);
+	if (rc)
 		return rc;
 
-	dc_pool_evict(uuid, grp, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
+}
+
+int
+daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
+		 daos_rank_list_t *failed, daos_event_t *ev)
+{
+	return -DER_NOSYS;
 }

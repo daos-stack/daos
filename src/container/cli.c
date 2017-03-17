@@ -28,6 +28,7 @@
  */
 #define DD_SUBSYS	DD_FAC(container)
 
+#include <daos_task.h>
 #include <daos_types.h>
 #include <daos/container.h>
 #include <daos/pool.h>
@@ -88,8 +89,9 @@ out:
 }
 
 int
-dc_cont_create(daos_handle_t poh, const uuid_t uuid, struct daos_task *task)
+dc_cont_create(struct daos_task *task)
 {
+	daos_cont_create_t     *args;
 	struct cont_create_in  *in;
 	struct dc_pool	       *pool;
 	crt_endpoint_t		ep;
@@ -97,10 +99,13 @@ dc_cont_create(daos_handle_t poh, const uuid_t uuid, struct daos_task *task)
 	struct cont_args	arg;
 	int			rc;
 
-	if (uuid_is_null(uuid))
+	args = daos_task_get_args(DAOS_OPC_CONT_CREATE, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (uuid_is_null(args->uuid))
 		D_GOTO(err_task, rc = -DER_INVAL);
 
-	pool = dc_pool_lookup(poh);
+	pool = dc_pool_lookup(args->poh);
 	if (pool == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
@@ -108,7 +113,7 @@ dc_cont_create(daos_handle_t poh, const uuid_t uuid, struct daos_task *task)
 		D_GOTO(err_pool, rc = -DER_NO_PERM);
 
 	D_DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
-		DP_UUID(pool->dp_pool), DP_UUID(uuid));
+		DP_UUID(pool->dp_pool), DP_UUID(args->uuid));
 
 	/* To the only container service. */
 	ep.ep_grp = pool->dp_group;
@@ -123,7 +128,7 @@ dc_cont_create(daos_handle_t poh, const uuid_t uuid, struct daos_task *task)
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->cci_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cci_op.ci_uuid, uuid);
+	uuid_copy(in->cci_op.ci_uuid, args->uuid);
 
 	arg.pool = pool;
 	arg.rpc = rpc;
@@ -176,9 +181,9 @@ out:
 }
 
 int
-dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
-		struct daos_task *task)
+dc_cont_destroy(struct daos_task *task)
 {
+	daos_cont_destroy_t	*args;
 	struct cont_destroy_in	*in;
 	struct dc_pool		*pool;
 	crt_endpoint_t		 ep;
@@ -186,13 +191,16 @@ dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	struct cont_args	 arg;
 	int			 rc;
 
-	/* TODO: Implement "force". */
-	D_ASSERT(force != 0);
+	args = daos_task_get_args(DAOS_OPC_CONT_DESTROY, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	if (uuid_is_null(uuid))
+	/* TODO: Implement "force". */
+	D_ASSERT(args->force != 0);
+
+	if (uuid_is_null(args->uuid))
 		D_GOTO(err, rc = -DER_INVAL);
 
-	pool = dc_pool_lookup(poh);
+	pool = dc_pool_lookup(args->poh);
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
@@ -200,7 +208,7 @@ dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 		D_GOTO(err_pool, rc = -DER_NO_PERM);
 
 	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
-		DP_UUID(pool->dp_pool), DP_UUID(uuid), force);
+		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
 
 	/* To the only container service. */
 	ep.ep_grp = pool->dp_group;
@@ -215,8 +223,8 @@ dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->cdi_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cdi_op.ci_uuid, uuid);
-	in->cdi_force = force;
+	uuid_copy(in->cdi_op.ci_uuid, args->uuid);
+	in->cdi_force = args->force;
 
 	arg.pool = pool;
 	arg.rpc = rpc;
@@ -415,9 +423,9 @@ out:
 }
 
 int
-dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
-	     daos_handle_t *coh, daos_cont_info_t *info, struct daos_task *task)
+dc_cont_open(struct daos_task *task)
 {
+	daos_cont_open_t	*args;
 	struct cont_open_in	*in;
 	struct dc_pool		*pool;
 	struct dc_cont		*cont;
@@ -426,26 +434,29 @@ dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	struct cont_open_args	 arg;
 	int			 rc;
 
-	if (uuid_is_null(uuid) || coh == NULL)
+	args = daos_task_get_args(DAOS_OPC_CONT_OPEN, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	if (uuid_is_null(args->uuid) || args->coh == NULL)
 		D_GOTO(err, rc = -DER_INVAL);
 
-	pool = dc_pool_lookup(poh);
+	pool = dc_pool_lookup(args->poh);
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	if ((flags & DAOS_COO_RW) && (pool->dp_capas & DAOS_PC_RO))
+	if ((args->flags & DAOS_COO_RW) && (pool->dp_capas & DAOS_PC_RO))
 		D_GOTO(err_pool, rc = -DER_NO_PERM);
 
-	cont = dc_cont_alloc(uuid);
+	cont = dc_cont_alloc(args->uuid);
 	if (cont == NULL)
 		D_GOTO(err_pool, rc = -DER_NOMEM);
 
 	uuid_generate(cont->dc_cont_hdl);
-	cont->dc_capas = flags;
+	cont->dc_capas = args->flags;
 
 	D_DEBUG(DF_DSMC, DF_CONT": opening: hdl="DF_UUIDF" flags=%x\n",
-		DP_CONT(pool->dp_pool, uuid), DP_UUID(cont->dc_cont_hdl),
-		flags);
+		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(cont->dc_cont_hdl),
+		args->flags);
 
 	/* To the only container service. */
 	ep.ep_grp = pool->dp_group;
@@ -460,16 +471,17 @@ dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->coi_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->coi_op.ci_uuid, uuid);
+	uuid_copy(in->coi_op.ci_uuid, args->uuid);
 	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
-	in->coi_capas = flags;
+	in->coi_capas = args->flags;
 
 	arg.coa_pool = pool;
 	arg.coa_cont = cont;
-	arg.coa_info = info;
+	arg.coa_info = args->info;
 	arg.rpc = rpc;
-	arg.hdl = poh;
-	arg.hdlp = coh;
+	arg.hdl = args->poh;
+	arg.hdlp = args->coh;
+
 	crt_req_addref(rpc);
 
 	rc = daos_task_register_comp_cb(task, cont_open_complete, sizeof(arg),
@@ -548,8 +560,10 @@ out:
 }
 
 int
-dc_cont_close(daos_handle_t coh, struct daos_task *task)
+dc_cont_close(struct daos_task *task)
 {
+	daos_cont_close_t      *args;
+	daos_handle_t		coh;
 	struct cont_close_in   *in;
 	struct dc_pool	       *pool;
 	struct dc_cont	       *cont;
@@ -557,6 +571,10 @@ dc_cont_close(daos_handle_t coh, struct daos_task *task)
 	crt_rpc_t	       *rpc;
 	struct cont_close_args  arg;
 	int			rc;
+
+	args = daos_task_get_args(DAOS_OPC_CONT_CLOSE, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	coh = args->coh;
 
 	cont = dc_cont_lookup(coh);
 	if (cont == NULL)
@@ -860,6 +878,48 @@ out:
 	return rc;
 }
 
+int
+dc_cont_attr_get(struct daos_task *task)
+{
+	return -DER_NOSYS;
+}
+
+int
+dc_cont_attr_list(struct daos_task *task)
+{
+	return -DER_NOSYS;
+}
+
+int
+dc_cont_attr_set(struct daos_task *task)
+{
+	return -DER_NOSYS;
+}
+
+int
+dc_cont_query(struct daos_task *task)
+{
+	return -DER_NOSYS;
+}
+
+int
+dc_snap_create(struct daos_task *task)
+{
+	return -DER_NOSYS;
+}
+
+int
+dc_snap_list(struct daos_task *task)
+{
+	return -DER_NOSYS;
+}
+
+int
+dc_snap_destroy(struct daos_task *task)
+{
+	return -DER_NOSYS;
+}
+
 struct epoch_op_arg {
 	struct dc_pool		*eoa_pool;
 	struct dc_cont		*eoa_cont;
@@ -991,38 +1051,74 @@ err:
 }
 
 int
-dc_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
-	       struct daos_task *task)
+dc_epoch_query(struct daos_task *task)
 {
-	return epoch_op(coh, CONT_EPOCH_QUERY, NULL /* epoch */, state, task);
+	daos_epoch_query_t *args;
+
+	args = daos_task_get_args(DAOS_OPC_EPOCH_QUERY, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return epoch_op(args->coh, CONT_EPOCH_QUERY, NULL, args->state, task);
 }
 
 int
-dc_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch, daos_epoch_state_t *state,
-	      struct daos_task *task)
+dc_epoch_hold(struct daos_task *task)
 {
-	return epoch_op(coh, CONT_EPOCH_HOLD, epoch, state, task);
+	daos_epoch_hold_t *args;
+
+	args = daos_task_get_args(DAOS_OPC_EPOCH_HOLD, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return epoch_op(args->coh, CONT_EPOCH_HOLD, args->epoch, args->state,
+			task);
 }
 
 int
-dc_epoch_slip(daos_handle_t coh, daos_epoch_t epoch, daos_epoch_state_t *state,
-	      struct daos_task *task)
+dc_epoch_slip(struct daos_task *task)
 {
-	return epoch_op(coh, CONT_EPOCH_SLIP, &epoch, state, task);
+	daos_epoch_slip_t *args;
+
+	args = daos_task_get_args(DAOS_OPC_EPOCH_SLIP, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return epoch_op(args->coh, CONT_EPOCH_SLIP, &args->epoch, args->state,
+			task);
 }
 
 int
-dc_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
-		 daos_epoch_state_t *state, struct daos_task *task)
+dc_epoch_discard(struct daos_task *task)
 {
-	return epoch_op(coh, CONT_EPOCH_DISCARD, &epoch, state, task);
+	daos_epoch_discard_t *args;
+
+	args = daos_task_get_args(DAOS_OPC_EPOCH_DISCARD, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return epoch_op(args->coh, CONT_EPOCH_DISCARD, &args->epoch,
+			args->state, task);
 }
 
 int
-dc_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
-		daos_epoch_state_t *state, struct daos_task *task)
+dc_epoch_commit(struct daos_task *task)
 {
-	return epoch_op(coh, CONT_EPOCH_COMMIT, &epoch, state, task);
+	daos_epoch_commit_t *args;
+
+	args = daos_task_get_args(DAOS_OPC_EPOCH_COMMIT, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return epoch_op(args->coh, CONT_EPOCH_COMMIT, &args->epoch, args->state,
+			task);
+}
+
+int
+dc_epoch_flush(struct daos_task *task)
+{
+	return -DER_NOSYS;
+}
+
+int
+dc_epoch_wait(struct daos_task *task)
+{
+	return -DER_NOSYS;
 }
 
 /**

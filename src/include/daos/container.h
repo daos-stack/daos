@@ -43,40 +43,28 @@ int dc_cont_local2global(daos_handle_t coh, daos_iov_t *glob);
 int dc_cont_global2local(daos_handle_t poh, daos_iov_t glob,
 			 daos_handle_t *coh);
 
-int dc_cont_create(daos_handle_t poh, const uuid_t uuid,
-		   struct daos_task *task);
-int dc_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
-		    struct daos_task *task);
-int dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
-		 daos_handle_t *coh, daos_cont_info_t *info,
-		 struct daos_task *task);
-int dc_cont_close(daos_handle_t coh, struct daos_task *task);
-int dc_cont_query(daos_handle_t container, daos_cont_info_t *info,
-		  struct daos_task *task);
+int dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
+		       unsigned int flags, daos_handle_t ph,
+		       daos_handle_t *coh);
+int dc_cont_local_close(daos_handle_t ph, daos_handle_t coh);
 
-int dc_cont_attr_list(daos_handle_t coh, char *buf, size_t *size,
-		      struct daos_task *task);
-int dc_cont_attr_get(daos_handle_t coh, int n, const char *const names[],
-		     void *bufs[], size_t *sizes[], struct daos_task *task);
-int dc_cont_attr_set(daos_handle_t coh, int n, const char *const names[],
-		     const void *const values[], const size_t sizes[],
-		     struct daos_task *task);
-int
-dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
-		   unsigned int flags, daos_handle_t ph,
-		   daos_handle_t *coh);
-int
-dc_cont_local_close(daos_handle_t ph, daos_handle_t coh);
-
-int dc_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
-		   struct daos_task *task);
-int dc_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
-		  daos_epoch_state_t *state, struct daos_task *task);
-int dc_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
-		  daos_epoch_state_t *state, struct daos_task *task);
-int dc_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
-		     daos_epoch_state_t *state, struct daos_task *task);
-int dc_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
-		    daos_epoch_state_t *state, struct daos_task *task);
+int dc_cont_create(struct daos_task *task);
+int dc_cont_open(struct daos_task *task);
+int dc_cont_close(struct daos_task *task);
+int dc_cont_destroy(struct daos_task *task);
+int dc_cont_query(struct daos_task *task);
+int dc_cont_attr_list(struct daos_task *task);
+int dc_cont_attr_get(struct daos_task *task);
+int dc_cont_attr_set(struct daos_task *task);
+int dc_epoch_flush(struct daos_task *task);
+int dc_epoch_discard(struct daos_task *task);
+int dc_epoch_query(struct daos_task *task);
+int dc_epoch_hold(struct daos_task *task);
+int dc_epoch_slip(struct daos_task *task);
+int dc_epoch_commit(struct daos_task *task);
+int dc_epoch_wait(struct daos_task *task);
+int dc_snap_list(struct daos_task *task);
+int dc_snap_create(struct daos_task *task);
+int dc_snap_destroy(struct daos_task *task);
 
 #endif /* __DAOS_CONTAINER_H__ */

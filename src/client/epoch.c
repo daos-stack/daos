@@ -22,21 +22,30 @@
  */
 
 #define DD_SUBSYS	DD_FAC(client)
+
 #include <daos/container.h>
 #include "client_internal.h"
+#include "task_internal.h"
 
 int
 daos_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
 		 daos_event_t *ev)
 {
+	daos_epoch_query_t	args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, EPOCH_QUERY);
+
+	args.coh = coh;
+	args.state = state;
+
+	rc = dc_task_prep(DAOS_OPC_EPOCH_QUERY, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_epoch_query(coh, state, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -53,14 +62,22 @@ int
 daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
 		   daos_epoch_state_t *state, daos_event_t *ev)
 {
+	daos_epoch_discard_t	args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, EPOCH_DISCARD);
+
+	args.coh = coh;
+	args.epoch = epoch;
+	args.state = state;
+
+	rc = dc_task_prep(DAOS_OPC_EPOCH_DISCARD, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_epoch_discard(coh, epoch, state, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -69,14 +86,22 @@ int
 daos_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
 		daos_epoch_state_t *state, daos_event_t *ev)
 {
+	daos_epoch_hold_t	args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, EPOCH_HOLD);
+
+	args.coh = coh;
+	args.epoch = epoch;
+	args.state = state;
+
+	rc = dc_task_prep(DAOS_OPC_EPOCH_HOLD, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_epoch_hold(coh, epoch, state, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -85,14 +110,22 @@ int
 daos_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
 		daos_epoch_state_t *state, daos_event_t *ev)
 {
+	daos_epoch_slip_t	args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, EPOCH_SLIP);
+
+	args.coh = coh;
+	args.epoch = epoch;
+	args.state = state;
+
+	rc = dc_task_prep(DAOS_OPC_EPOCH_SLIP, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_epoch_slip(coh, epoch, state, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }
@@ -101,14 +134,22 @@ int
 daos_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
 		  daos_epoch_state_t *state, daos_event_t *ev)
 {
+	daos_epoch_commit_t	args;
 	struct daos_task	*task;
 	int			rc;
 
-	rc = daos_client_task_prep(daos_event_comp_cb, NULL, 0, &task, &ev);
-	if (rc != 0)
+	DAOS_API_ARG_ASSERT(args, EPOCH_COMMIT);
+
+	args.coh = coh;
+	args.epoch = epoch;
+	args.state = state;
+
+	rc = dc_task_prep(DAOS_OPC_EPOCH_COMMIT, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
 		return rc;
 
-	dc_epoch_commit(coh, epoch, state, task);
+	daos_sched_progress(daos_ev2sched(ev));
 
 	return daos_client_result_wait(ev);
 }

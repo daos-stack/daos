@@ -225,22 +225,29 @@ dc_rw_cb(struct daos_task *task, void *arg)
 	int			rc = 0;
 
 	opc = opc_get(rw_args->rpc->cr_opc);
-	if ((opc == DAOS_OBJ_RPC_FETCH &&
-	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FETCH_TIMEOUT)) ||
-	    (opc == DAOS_OBJ_RPC_UPDATE &&
-	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT)))
+	if (opc == DAOS_OBJ_RPC_FETCH &&
+	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FETCH_TIMEOUT)) {
+		D_ERROR("Inducing -DER_TIMEDOUT error on shard I/O fetch\n");
 		D_GOTO(out, rc = -DER_TIMEDOUT);
-
+	}
 	if (opc == DAOS_OBJ_RPC_UPDATE &&
-	    DAOS_FAIL_CHECK(DAOS_OBJ_UPDATE_NOSPACE))
+	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT)) {
+		D_ERROR("Inducing -DER_TIMEDOUT error on shard I/O update\n");
+		D_GOTO(out, rc = -DER_TIMEDOUT);
+	}
+	if (opc == DAOS_OBJ_RPC_UPDATE &&
+	    DAOS_FAIL_CHECK(DAOS_OBJ_UPDATE_NOSPACE)) {
+		D_ERROR("Inducing -DER_NOSPACE error on shard I/O update\n");
 		D_GOTO(out, rc = -DER_NOSPACE);
+	}
 
 	orw = crt_req_get(rw_args->rpc);
 	D_ASSERT(orw != NULL);
 	if (ret != 0) {
-		/* If any failure happens inside Cart, let's reset
-		 * failure to TIMEDOUT, so the upper layer can retry
-		 **/
+		/*
+		 * If any failure happens inside Cart, let's reset failure to
+		 * TIMEDOUT, so the upper layer can retry.
+		 */
 		D_ERROR("RPC %d failed: %d\n",
 			opc_get(rw_args->rpc->cr_opc), ret);
 		D_GOTO(out, ret);

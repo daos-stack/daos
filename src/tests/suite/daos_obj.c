@@ -1123,7 +1123,7 @@ io_simple_update_timeout(void **state)
 	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT | DAOS_FAIL_SOME;
 	arg->fail_value = 5;
 
-	oid = dts_oid_gen(DAOS_OC_LARGE_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
 	io_simple_internal(state, oid);
 }
 
@@ -1136,7 +1136,19 @@ io_simple_fetch_timeout(void **state)
 	arg->fail_loc = DAOS_SHARD_OBJ_FETCH_TIMEOUT | DAOS_FAIL_SOME;
 	arg->fail_value = 5;
 
-	oid = dts_oid_gen(DAOS_OC_LARGE_RW, arg->myrank);
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	io_simple_internal(state, oid);
+}
+
+static void
+io_simple_update_timeout_single(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+
+	arg->fail_loc = DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE | DAOS_FAIL_ONCE;
+
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
 	io_simple_internal(state, oid);
 }
 
@@ -1351,6 +1363,7 @@ io_nospace(void **state)
 		insert_single(key, "akey", 0, large_buf,
 			      buf_size, 0, &req);
 	}
+	free(large_buf);
 	ioreq_fini(&req);
 }
 
@@ -1379,25 +1392,27 @@ static const struct CMUnitTest io_tests[] = {
 	  async_disable, NULL},
 	{ "IO12: basic byte array with record size fetching",
 	  basic_byte_array, async_disable, NULL},
-	{ "IO13: timeout simple update (async)",
+	{ "IO13: timeout simple update",
 	  io_simple_update_timeout, async_disable, NULL},
-	{ "IO14: timeout simple fetch (async)",
+	{ "IO14: timeout simple fetch",
 	  io_simple_fetch_timeout, async_disable, NULL},
-	{ "IO15: epoch discard", epoch_discard,
+	{ "IO15: timeout on 1 shard simple update",
+	  io_simple_update_timeout_single, async_disable, NULL},
+	{ "IO16: epoch discard", epoch_discard,
 	  async_disable, NULL},
-	{ "IO16: no space", io_nospace, async_disable, NULL},
-	{ "IO17: fetch size with NULL sgl", fetch_size, async_disable, NULL},
-	{ "IO18: io crt error", io_simple_update_crt_error,
+	{ "IO17: no space", io_nospace, async_disable, NULL},
+	{ "IO18: fetch size with NULL sgl", fetch_size, async_disable, NULL},
+	{ "IO19: io crt error", io_simple_update_crt_error,
 	  async_disable, NULL},
-	{ "IO19: io crt error (async)", io_simple_update_crt_error,
+	{ "IO20: io crt error (async)", io_simple_update_crt_error,
 	  async_enable, NULL},
-	{ "IO20: io crt req create timeout (sync)",
+	{ "IO21: io crt req create timeout (sync)",
 	  io_simple_update_crt_req_error, async_disable, NULL},
-	{ "IO21: io crt req create timeout (async)",
+	{ "IO22: io crt req create timeout (async)",
 	  io_simple_update_crt_req_error, async_enable, NULL},
-	{ "IO22: Read from unwritten records", read_empty_records,
+	{ "IO23: Read from unwritten records", read_empty_records,
 	  async_disable, NULL},
-	{ "IO23: Read from large unwritten records", read_large_empty_records,
+	{ "IO24: Read from large unwritten records", read_large_empty_records,
 	  async_disable, NULL},
 };
 

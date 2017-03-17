@@ -28,6 +28,7 @@
 
 #include <daos/mgmt.h>
 #include <daos/event.h>
+#include <daos_task.h>
 #include "rpc.h"
 
 static int
@@ -45,20 +46,23 @@ rip_cp(struct daos_task *task, void *data)
 }
 
 int
-dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
-		struct daos_task *task)
+dc_mgmt_svc_rip(struct daos_task *task)
 {
+	daos_svc_rip_t		*args;
 	crt_endpoint_t		 svr_ep;
 	crt_rpc_t		*rpc = NULL;
 	crt_opcode_t		 opc;
 	struct mgmt_svc_rip_in	*rip_in;
 	int			 rc;
 
-	rc = daos_group_attach(grp, &svr_ep.ep_grp);
+	args = daos_task_get_args(DAOS_OPC_SVC_RIP, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
 	if (rc != 0)
 		return rc;
 
-	svr_ep.ep_rank = rank;
+	svr_ep.ep_rank = args->rank;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE, 1);
 	rc = crt_req_create(daos_task2ctx(task), svr_ep, opc, &rpc);
@@ -73,14 +77,14 @@ dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 	D_ASSERT(rip_in != NULL);
 
 	/** fill in request buffer */
-	rip_in->rip_flags = force;
+	rip_in->rip_flags = args->force;
 
 	rc = daos_task_register_comp_cb(task, rip_cp, sizeof(rpc), &rpc);
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
 	crt_req_addref(rpc); /** for rip_cp */
-	D_DEBUG(DB_MGMT, "killing rank %u\n", rank);
+	D_DEBUG(DB_MGMT, "killing rank %u\n", args->rank);
 
 	/** send the request */
 	return daos_rpc_send(rpc, task);
@@ -114,4 +118,9 @@ void
 dc_mgmt_fini()
 {
 	daos_rpc_unregister(mgmt_rpcs);
+}
+
+int dc2_mgmt_svc_rip(struct daos_task *task)
+{
+	return -DER_NOSYS;
 }

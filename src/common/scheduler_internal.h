@@ -47,6 +47,9 @@ struct daos_task_private {
 	/* links to tasks which dependent on it */
 	daos_list_t		dtp_dep_list;
 
+	/* daos prepare task callback list */
+	daos_list_t		dtp_prep_cb_list;
+
 	/* daos complete task callback list */
 	daos_list_t		dtp_comp_cb_list;
 
@@ -55,8 +58,11 @@ struct daos_task_private {
 
 	/* daos_task internal buffer */
 	struct {
-		uint32_t	dtp_buf_space[36];
-		uint32_t	dtp_buf_size;
+		/*
+		 * MSC - We should change that by making the arguments an
+		 * extension of the task struct allocated with the task.
+		 */
+		uint32_t	dtp_buf_space[50];
 	}			dtp_buf;
 
 	uint32_t		dtp_complete:1,
@@ -65,9 +71,9 @@ struct daos_task_private {
 	struct daos_sched_private	*dtp_sched;
 };
 
-struct daos_task_comp {
+struct daos_task_cb {
 	daos_list_t		dtc_list;
-	daos_task_comp_cb_t	dtc_comp_cb;
+	daos_task_cb_t		dtc_cb;
 	daos_size_t		dtc_arg_size;
 	char			dtc_arg[0];
 };

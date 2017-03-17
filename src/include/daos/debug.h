@@ -146,6 +146,14 @@ do {									\
 #define D_CASSERT(cond)                                                 \
 do {switch (1) {case (cond): case 0: break; } } while (0)
 
+#define DAOS_API_ARG_ASSERT(args, name)					\
+do {									\
+	int __opc = DAOS_OPC_##name;					\
+	D_ASSERTF(sizeof(args) == dc_funcs[__opc].arg_size,		\
+		  "Argument size %zu != predefiened arg size %zu\n",	\
+		  sizeof(args), dc_funcs[__opc].arg_size);		\
+} while (0)
+
 #define D_ENTER			D_DEBUG(DB_TRACE, "Entered\n")
 #define D_EXIT			D_DEBUG(DB_TRACE, "Leaving\n")
 

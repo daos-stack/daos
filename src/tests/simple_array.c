@@ -544,7 +544,7 @@ main(int argc, char **argv)
 		ASSERT(rc == 0, "container open failed with %d", rc);
 
 		/** register a default object class */
-		rc = daos_oclass_register(coh, cid, &cattr, NULL);
+		rc = daos_obj_class_register(coh, cid, &cattr, NULL);
 		ASSERT(rc == 0, "class register failed with %d", rc);
 
 		/** declare the object */

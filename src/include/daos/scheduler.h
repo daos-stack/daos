@@ -29,10 +29,7 @@
 #ifndef __DAOS_SCHEDULE_H__
 #define __DAOS_SCHEDULE_H__
 
-#include <daos_types.h>
-#include <daos_errno.h>
 #include <daos/list.h>
-#include <daos/hash.h>
 
 /**
  * daos_task is used to track single asynchronous operation.
@@ -65,8 +62,12 @@ struct daos_sched {
 
 typedef int (*daos_sched_comp_cb_t)(void *args, int rc);
 typedef int (*daos_task_func_t)(struct daos_task *);
+
+/** MSC - deprecate both function defs */
 typedef int (*daos_task_comp_cb_t)(struct daos_task *, void *arg);
 typedef int (*daos_task_result_cb_t)(struct daos_task *, void *arg);
+/** CB type for prepare, completion, and result processing */
+typedef int (*daos_task_cb_t)(struct daos_task *, void *arg);
 
 void *
 daos_task2arg(struct daos_task *task);
@@ -76,32 +77,6 @@ daos_task2sp(struct daos_task *task);
 
 struct daos_sched *
 daos_task2sched(struct daos_task *task);
-
-/**
- * Initialize the daos_task.
- *
- * The task will be added to the scheduler task list, and
- * being scheduled later, if dependent task is provided, then
- * the task will be added to the dep list of the dependent
- * task, once the dependent task is done, then the task will
- * be added to the scheduler list.
- *
- * \param task [input]		daos_task to be initialized.
- * \param task_func [input]	the function to be executed when
- *                              the task is executed.
- * \param arg [input]		the task_func argument.
- * \param arg_size [input]	the task_func argument size.
- * \param sched [input]		daos scheduler where the daos
- *                              task will be attached to.
- * \param dependent [input]	task which this task dependents on
- *
- * \return			0  if initialization succeeds.
- * \return			negative errno if it fails.
- */
-int
-daos_task_init(struct daos_task *task, daos_task_func_t task_func,
-	       void *arg, int arg_size, struct daos_sched *sched,
-	       struct daos_task *dependent);
 
 /**
  *  Initialize the scheduler with an optional completion callback and pointer to
@@ -150,6 +125,55 @@ daos_sched_register_comp_cb(struct daos_sched *sched,
 			    daos_sched_comp_cb_t comp_cb, void *arg);
 
 /**
+ * Make progress on scheduler. Runs tasks that are ready to be executed after
+ * the tasks they depend on were completed. Note that task completion using
+ * daos_task_complete() must be done by the engine user to push progress on
+ * the engine. In DAOS daos_task_complete is called by the completion CB of the
+ * RPC request that is sent to the server.
+ *
+ * \param sched	[IN]	Scheduler to make progress on.
+ *
+ */
+void
+daos_sched_progress(struct daos_sched *sched);
+
+/**
+ * Check completion on all tasks in the scheduler.
+ *
+ * \param sched	[IN]	Schedule to check.
+ *
+ * \return		true if scheduler is empty, false otherwise.
+ */
+bool
+daos_sched_check_complete(struct daos_sched *sched);
+
+/**
+ * Initialize the daos_task.
+ *
+ * The task will be added to the scheduler task list, and
+ * being scheduled later, if dependent task is provided, then
+ * the task will be added to the dep list of the dependent
+ * task, once the dependent task is done, then the task will
+ * be added to the scheduler list.
+ *
+ * \param task [input]		daos_task to be initialized.
+ * \param task_func [input]	the function to be executed when
+ *                              the task is executed.
+ * \param arg [input]		the task_func argument.
+ * \param arg_size [input]	the task_func argument size.
+ * \param sched [input]		daos scheduler where the daos
+ *                              task will be attached to.
+ * \param dependent [input]	task which this task dependents on
+ *
+ * \return			0  if initialization succeeds.
+ * \return			negative errno if it fails.
+ */
+int
+daos_task_init(struct daos_task *task, daos_task_func_t task_func,
+	       void *arg, int arg_size, struct daos_sched *sched);
+
+/**
+ * MSC - deprecate in favor of daos_task_register_cbs.
  * register complete callback for the task.
  *
  * \param task [input]		task to be registered complete callback.
@@ -160,13 +184,11 @@ daos_sched_register_comp_cb(struct daos_sched *sched,
  * \return		negative errno if it fails.
  */
 int
-daos_task_register_comp_cb(struct daos_task *task,
-			   daos_task_comp_cb_t comp_cb,
+daos_task_register_comp_cb(struct daos_task *task, daos_task_cb_t comp_cb,
 			   daos_size_t arg_size, void *arg);
+
 /**
- * complete daos_task.
- *
- * Mark the task to be completed.
+ * Mark task as completed.
  *
  * \param task [input]	task to be completed.
  * \param ret [input]	ret result of the task.
@@ -175,6 +197,7 @@ void
 daos_task_complete(struct daos_task *task, int ret);
 
 /**
+ * MSC - deprecate in favor of daos_task_register_deps
  * Add dependent task
  *
  * If one task depends on other tasks, only if all of its dependent
@@ -190,6 +213,7 @@ int
 daos_task_add_dependent(struct daos_task *task, struct daos_task *dep);
 
 /**
+ * MSC - I think we can move this as an internal function for just DAOS.
  * Process the result tasks.
  *
  * After one task finish, if it has dependent task, then this task will
@@ -206,6 +230,7 @@ daos_task_result_process(struct daos_task *task, daos_task_result_cb_t callback,
 			 void *arg);
 
 /**
+ * MSC - I think this can be deprecated. But not sure yet.
  * Get a buffer from task.
  *
  * Get a buffer from task internal buffer pool.
@@ -217,4 +242,63 @@ daos_task_result_process(struct daos_task *task, daos_task_result_cb_t callback,
  **/
 void *
 daos_task_buf_get(struct daos_task *task, int buf_size);
+
+/**
+ * Register dependency tasks that will be required to be completed before the
+ * the task can be scheduled. The dependency tasks cannot be in progress.
+ *
+ * \param task	[IN]	Task to add dependencies for.
+ * \param num_deps [IN]	Number of tasks in the task array.
+ * \param dep_tasks [IN]
+ *			Task array for all the tasks that are required to
+ *			complete before the task can scheduled.
+ *
+ * \return		0 if success.
+ *			negative errno if it fails.
+ */
+int
+daos_task_register_deps(struct daos_task *task, int num_deps,
+			struct daos_task *dep_tasks[]);
+
+/**
+ * Register prepare and completion callbacks that will be executed right before
+ * the task is scheduled and after it completes respectively.
+ *
+ * \param task	[IN]	Task to add CBs on.
+ * \param prep_cb [IN]	Prepare callback.
+ * \param prep_data_size [IN]
+ *			Size of the user provided prep data to be copied
+ *			internally.
+ * \param prep_data [IN] User data passed to the prepare callback.
+ * \param comp_cb [IN]	Completion callback
+ * \param comp_data_size [IN]
+ *			Size of the user provided comp data to be copied
+ *			internally.
+ * \param comp_data [IN]
+ *			User data passed to the completion callback.
+ *
+ * \return		0 if success.
+ *			negative errno if it fails.
+ */
+int
+daos_task_register_cbs(struct daos_task *task, daos_task_cb_t prep_cb,
+		       void *prep_data, daos_size_t prep_data_size,
+		       daos_task_cb_t comp_cb, void *comp_data,
+		       daos_size_t comp_data_size);
+
+/**
+ * Reinitialize a task and move it into the scheduler's initialize list. The
+ * task must have a body function to be reinserted into the scheduler. If the
+ * task is reintialzed in one of its completion CBs, that callback and the ones
+ * that have already executed will have been removed from the cb list and will
+ * need to be re-registered by the user after re-insertion.
+ *
+ * \param task	[IN]	Task to reinitialize
+ *
+ * \return		0 if success.
+ *			negative errno if it fails.
+ */
+int
+daos_task_reinit(struct daos_task *task);
+
 #endif

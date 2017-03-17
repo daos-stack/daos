@@ -34,16 +34,10 @@ int dc_mgmt_init(void);
 
 void dc_mgmt_fini(void);
 
-int
-dc_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
-		struct daos_task *task);
+int dc_mgmt_svc_rip(struct daos_task *task);
+int dc_pool_create(struct daos_task *task);
+int dc_pool_destroy(struct daos_task *task);
+int dc_pool_evict(struct daos_task *task);
+int dc_pool_extend(struct daos_task *task);
 
-int
-dc_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
-	       const char *grp, const daos_rank_list_t *tgts, const char *dev,
-	       daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
-	       struct daos_task *task);
-int
-dc_pool_destroy(const uuid_t uuid, const char *grp, int force,
-		struct daos_task *task);
 #endif

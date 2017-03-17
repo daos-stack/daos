@@ -38,13 +38,58 @@
 
 #define DTS_OCLASS_DEF		DAOS_OC_REPL_MAX_RW
 
+daos_size_t block_size = 16;
+
+static void simple_array_mgmt(void **state);
 static void contig_mem_contig_arr_io(void **state);
 static void contig_mem_str_arr_io(void **state);
 static void str_mem_str_arr_io(void **state);
 static void read_empty_records(void **state);
 
 static void
-contig_mem_contig_arr_io(void **state)
+simple_array_mgmt(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	daos_handle_t	oh;
+	daos_size_t	cell_size = 0, block_size = 0;
+	daos_size_t	size;
+	int		rc;
+
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	/** create the array */
+	rc = daos_array_create(arg->coh, oid, 0, 4, 16, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_set_size(oh, 0, 265, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_get_size(oh, 0, &size, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_close(oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** open the array */
+	rc = daos_array_open(arg->coh, oid, 0, DAOS_OO_RO, &cell_size,
+			     &block_size, &oh, NULL);
+	assert_int_equal(rc, 0);
+	assert_int_equal(4, cell_size);
+	assert_int_equal(16, block_size);
+
+	rc = daos_array_set_size(oh, 0, 693, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_get_size(oh, 0, &size, NULL);
+	assert_int_equal(rc, 0);
+
+	rc = daos_array_close(oh, NULL);
+	assert_int_equal(rc, 0);
+
+} /* End simple_array_mgmt */
+
+static void
+contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -60,8 +105,9 @@ contig_mem_contig_arr_io(void **state)
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
 
-	/** open the object */
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	/** create the array */
+	rc = daos_array_create(arg->coh, oid, 0, cell_size, block_size, &oh,
+			       NULL);
 	assert_int_equal(rc, 0);
 
 	/** Allocate and set buffer */
@@ -74,7 +120,7 @@ contig_mem_contig_arr_io(void **state)
 
 	/** set array location */
 	ranges.ranges_nr = 1;
-	rg.len = NUM_ELEMS * sizeof(int);
+	rg.len = NUM_ELEMS * sizeof(int) / cell_size;
 	rg.index = arg->myrank * rg.len;
 	ranges.ranges = &rg;
 
@@ -136,17 +182,32 @@ contig_mem_contig_arr_io(void **state)
 	free(rbuf);
 	free(wbuf);
 
-	rc = daos_obj_close(oh, NULL);
+	{
+		daos_size_t array_size;
+
+		rc = daos_array_get_size(oh, 0, &array_size, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {
 		rc = daos_event_fini(&ev);
 		assert_int_equal(rc, 0);
 	}
-} /* End contig_mem_contig_arr_io */
+} /* End contig_mem_contig_arr_io_helper */
 
 static void
-contig_mem_str_arr_io(void **state)
+contig_mem_contig_arr_io(void **state) {
+	print_message("Testing with cell size = 1B\n");
+	contig_mem_contig_arr_io_helper(state, 1);
+	print_message("Testing with cell size = 4B\n");
+	contig_mem_contig_arr_io_helper(state, 4);
+}
+
+static void
+contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -161,14 +222,15 @@ contig_mem_str_arr_io(void **state)
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
 
-	/** open the object */
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	/** create the array */
+	rc = daos_array_create(arg->coh, oid, 0, cell_size, block_size, &oh,
+			       NULL);
 	assert_int_equal(rc, 0);
 
 	/** Allocate and set buffer */
-	wbuf = malloc(NUM_ELEMS*sizeof(int));
+	wbuf = malloc(NUM_ELEMS * sizeof(int));
 	assert_non_null(wbuf);
-	rbuf = malloc(NUM_ELEMS*sizeof(int));
+	rbuf = malloc(NUM_ELEMS * sizeof(int));
 	assert_non_null(rbuf);
 	for (i = 0; i < NUM_ELEMS; i++)
 		wbuf[i] = i+1;
@@ -180,10 +242,9 @@ contig_mem_str_arr_io(void **state)
 	assert_non_null(ranges.ranges);
 
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.ranges[i].len = sizeof(int);
-		ranges.ranges[i].index = i * arg->rank_size * sizeof(int) +
-			arg->myrank * sizeof(int) +
-			i * NUM_ELEMS * sizeof(int);
+		ranges.ranges[i].len = sizeof(int) / cell_size;
+		ranges.ranges[i].index = i * arg->rank_size * 4 +
+			arg->myrank * 4 + i * block_size;
 	}
 
 	/** set memory location */
@@ -244,17 +305,32 @@ contig_mem_str_arr_io(void **state)
 	free(wbuf);
 	free(ranges.ranges);
 
-	rc = daos_obj_close(oh, NULL);
+	{
+		daos_size_t array_size;
+
+		rc = daos_array_get_size(oh, 0, &array_size, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {
 		rc = daos_event_fini(&ev);
 		assert_int_equal(rc, 0);
 	}
-} /* End contig_mem_str_arr_io */
+} /* End contig_mem_str_arr_io_helper */
 
 static void
-str_mem_str_arr_io(void **state)
+contig_mem_str_arr_io(void **state) {
+	print_message("Testing with cell size = 1B\n");
+	contig_mem_str_arr_io_helper(state, 1);
+	print_message("Testing with cell size = 4B\n");
+	contig_mem_str_arr_io_helper(state, 4);
+}
+
+static void
+str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -268,8 +344,9 @@ str_mem_str_arr_io(void **state)
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
 
-	/** open the object */
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	/** create the array */
+	rc = daos_array_create(arg->coh, oid, 0, cell_size, block_size, &oh,
+			       NULL);
 	assert_int_equal(rc, 0);
 
 	/** Allocate and set buffer */
@@ -289,10 +366,9 @@ str_mem_str_arr_io(void **state)
 	assert_non_null(ranges.ranges);
 
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.ranges[i].len = sizeof(int);
-		ranges.ranges[i].index = i * arg->rank_size * sizeof(int) +
-			arg->myrank * sizeof(int) +
-			i * NUM_ELEMS * sizeof(int);
+		ranges.ranges[i].len = sizeof(int) / cell_size;
+		ranges.ranges[i].index = i * arg->rank_size * 4 +
+			arg->myrank * 4 + i * block_size;
 	}
 
 	/** set memory location */
@@ -366,7 +442,14 @@ str_mem_str_arr_io(void **state)
 	free(ranges.ranges);
 	free(sgl.sg_iovs);
 
-	rc = daos_obj_close(oh, NULL);
+	{
+		daos_size_t array_size;
+
+		rc = daos_array_get_size(oh, 0, &array_size, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {
@@ -374,6 +457,14 @@ str_mem_str_arr_io(void **state)
 		assert_int_equal(rc, 0);
 	}
 } /* End str_mem_str_arr_io */
+
+static void
+str_mem_str_arr_io(void **state) {
+	print_message("Testing with cell size = 1B\n");
+	str_mem_str_arr_io_helper(state, 1);
+	print_message("Testing with cell size = 4B\n");
+	str_mem_str_arr_io_helper(state, 4);
+}
 
 static void
 read_empty_records(void **state)
@@ -386,7 +477,6 @@ read_empty_records(void **state)
 	daos_iov_t	iov;
 	int		*wbuf = NULL, *rbuf = NULL;
 	daos_size_t	i;
-	daos_size_t	array_size;
 	daos_event_t	ev;
 	int		rc;
 
@@ -397,14 +487,9 @@ read_empty_records(void **state)
 		assert_int_equal(rc, 0);
 	}
 
-	/** open the object */
-	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
-	assert_int_equal(rc, 0);
-
-	rc = daos_array_set_size(oh, 0, 10485, NULL);
-	assert_int_equal(rc, 0);
-
-	rc = daos_array_get_size(oh, 0, &array_size, NULL);
+	/** create the array */
+	rc = daos_array_create(arg->coh, oid, 0, 1, block_size, &oh,
+			       NULL);
 	assert_int_equal(rc, 0);
 
 	/** Allocate and set buffer */
@@ -485,10 +570,14 @@ read_empty_records(void **state)
 	free(wbuf);
 	free(ranges.ranges);
 
-	rc = daos_array_get_size(oh, 0, &array_size, NULL);
-	assert_int_equal(rc, 0);
+	{
+		daos_size_t array_size;
 
-	rc = daos_obj_close(oh, NULL);
+		rc = daos_array_get_size(oh, 0, &array_size, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
 	if (arg->async) {
@@ -498,6 +587,8 @@ read_empty_records(void **state)
 } /* End read_empty_records */
 
 static const struct CMUnitTest array_io_tests[] = {
+	{"Array I/O: create/open/close (blocking)",
+	 simple_array_mgmt, async_disable, NULL},
 	{"Array I/O: Contiguous memory and array (blocking)",
 	 contig_mem_contig_arr_io, async_disable, NULL},
 	{"Array I/O: Contiguous memory and array (non-blocking)",
@@ -512,8 +603,6 @@ static const struct CMUnitTest array_io_tests[] = {
 	str_mem_str_arr_io, async_enable, NULL},
 	{"Array I/O: Read from Empty array & records (blocking)",
 	 read_empty_records, async_disable, NULL},
-	{"Array I/O: Read from Empty array & records (blocking)",
-	read_empty_records, async_enable, NULL},
 };
 
 static int
@@ -612,7 +701,8 @@ teardown(void **state) {
 		return rc_reduce;
 
 	if (arg->myrank == 0)
-		rc = daos_pool_destroy(arg->pool_uuid, "srv_grp", 1, NULL);
+		rc = daos_pool_destroy(arg->pool_uuid, NULL, 1, NULL);
+
 	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (rc)
 		return rc;

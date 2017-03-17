@@ -85,25 +85,14 @@ dc_pool_put(struct dc_pool *pool)
 	daos_hhash_link_putref(daos_client_hhash, &pool->dp_hlink);
 }
 
-typedef void (*dc_pool_query_cb_t)(struct dc_pool *pool, void *arg, int rc,
-				   daos_rank_list_t *tgts,
-				   daos_pool_info_t *info);
-int dc_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
-		  daos_pool_info_t *info, struct daos_task *task);
-
-int dc_pool_connect(const uuid_t uuid, const char *grp,
-		    const daos_rank_list_t *svc, unsigned int flags,
-		    daos_handle_t *poh, daos_pool_info_t *info,
-		    struct daos_task *task);
-int dc_pool_disconnect(daos_handle_t poh, struct daos_task *task);
 int dc_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
 int dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
-int dc_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts,
-		    struct daos_task *task);
-int dc_pool_target_query(daos_handle_t poh, daos_rank_list_t *tgts,
-			 daos_rank_list_t *failed,
-			 daos_target_info_t *info_list, struct daos_task *task);
-int dc_pool_evict(const uuid_t uuid, const char *grp, struct daos_task *task);
+
+int dc_pool_connect(struct daos_task *task);
+int dc_pool_disconnect(struct daos_task *task);
+int dc_pool_exclude(struct daos_task *task);
+int dc_pool_query(struct daos_task *task);
+int dc_pool_target_query(struct daos_task *task);
 
 int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
