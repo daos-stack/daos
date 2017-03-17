@@ -266,14 +266,14 @@ out:
 
 int
 dc_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	    unsigned int mode, daos_handle_t *oh, daos_event_t *ev)
+	    unsigned int mode, daos_handle_t *oh, struct daos_task *task)
 {
 	struct dc_object	*obj;
-	int			 rc;
+	int			 rc = 0;
 
 	obj = obj_alloc();
 	if (obj == NULL)
-		return -DER_NOMEM;
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	obj->cob_coh  = coh;
 	obj->cob_mode = mode;
@@ -292,30 +292,28 @@ dc_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	obj_hdl_link(obj);
 	*oh = obj_ptr2hdl(obj);
 out:
-	obj_decref(obj);
-	if (rc == 0 && ev != NULL) {
-		daos_event_launch(ev);
-		daos_event_complete(ev, 0);
-	}
+	if (obj != NULL)
+		obj_decref(obj);
+
+	daos_task_complete(task, rc);
 	return rc;
 }
 
 int
-dc_obj_close(daos_handle_t oh, daos_event_t *ev)
+dc_obj_close(daos_handle_t oh, struct daos_task *task)
 {
 	struct dc_object   *obj;
+	int		   rc = 0;
 
 	obj = obj_hdl2ptr(oh);
 	if (obj == NULL)
-		return -DER_NO_HDL;
+		D_GOTO(out, rc = -DER_NO_HDL);
 
 	obj_hdl_unlink(obj);
 	obj_decref(obj);
 
-	if (ev != NULL) {
-		daos_event_launch(ev);
-		daos_event_complete(ev, 0);
-	}
+out:
+	daos_task_complete(task, rc);
 	return 0;
 }
 

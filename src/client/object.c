@@ -104,51 +104,6 @@ daos_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 }
 
 int
-daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	      unsigned int mode, daos_handle_t *oh, daos_event_t *ev)
-{
-	int rc;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_obj_open(coh, oid, epoch, mode, oh, ev);
-	if (rc)
-		return rc;
-
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
-
-	return rc;
-}
-
-int
-daos_obj_close(daos_handle_t oh, daos_event_t *ev)
-{
-	int rc;
-
-	if (ev == NULL) {
-		rc = daos_event_priv_get(&ev);
-		if (rc != 0)
-			return rc;
-	}
-
-	rc = dc_obj_close(oh, ev);
-	if (rc)
-		return rc;
-
-	/** wait for completion if blocking mode */
-	if (daos_event_is_priv(ev))
-		rc = daos_event_priv_wait(ev);
-
-	return rc;
-}
-
-int
 daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
 {
 	int rc;
@@ -438,6 +393,68 @@ daos_obj_comp_cb(struct daos_task *task, void *data)
 		D_GOTO(out, rc);
 out:
 	return rc;
+}
+
+struct daos_obj_open_close_arg {
+	daos_handle_t	coh;
+	daos_obj_id_t	oid;
+	daos_epoch_t	epoch;
+	unsigned int	mode;
+	daos_handle_t	*oh;
+};
+
+int
+daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
+	      unsigned int mode, daos_handle_t *oh, daos_event_t *ev)
+{
+	struct daos_obj_open_close_arg	arg;
+	struct daos_task		*task;
+	int				rc;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			return rc;
+	}
+
+	arg.coh		= coh;
+	arg.oid		= oid;
+	arg.epoch	= epoch;
+	arg.mode	= mode;
+	arg.oh		= oh;
+	rc = daos_client_task_prep(daos_obj_comp_cb, &arg, sizeof(arg),
+				   &task, &ev);
+	if (rc != 0)
+		return rc;
+
+	dc_obj_open(coh, oid, epoch, mode, oh, task);
+
+	/** wait for completion if blocking mode */
+	return daos_client_result_wait(ev);
+}
+
+int
+daos_obj_close(daos_handle_t oh, daos_event_t *ev)
+{
+	struct daos_obj_open_close_arg	arg;
+	struct daos_task		*task;
+	int				rc;
+
+	if (ev == NULL) {
+		rc = daos_event_priv_get(&ev);
+		if (rc != 0)
+			return rc;
+	}
+
+	arg.oh = &oh;
+	rc = daos_client_task_prep(daos_obj_comp_cb, &arg, sizeof(arg),
+				   &task, &ev);
+	if (rc != 0)
+		return rc;
+
+	dc_obj_close(oh, task);
+
+	return daos_client_result_wait(ev);
 }
 
 int

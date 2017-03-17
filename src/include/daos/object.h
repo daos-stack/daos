@@ -65,9 +65,9 @@ dc_oclass_list(daos_handle_t coh, daos_oclass_list_t *clist,
 	       daos_hash_out_t *anchor, daos_event_t *ev);
 int
 dc_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-	    unsigned int mode, daos_handle_t *oh, daos_event_t *ev);
+	    unsigned int mode, daos_handle_t *oh, struct daos_task *task);
 int
-dc_obj_close(daos_handle_t oh, daos_event_t *ev);
+dc_obj_close(daos_handle_t oh, struct daos_task *task);
 int
 dc_obj_layout_refresh(daos_handle_t oh);
 int
