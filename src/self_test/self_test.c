@@ -204,7 +204,7 @@ static int run_self_test(struct st_size_params all_params[],
 			 int num_msg_sizes, int rep_count, int max_inflight,
 			 char *dest_name, crt_endpoint_t *master_endpt,
 			 struct st_endpoint *endpts, uint32_t num_endpts,
-			 int output_megabits)
+			 int output_megabits, int16_t buf_alignment)
 {
 	crt_context_t		 crt_ctx;
 	crt_group_t		*srv_grp;
@@ -299,6 +299,7 @@ static int run_self_test(struct st_size_params all_params[],
 		test_params.reply_size = all_params[size_idx].reply_size;
 		test_params.send_type = all_params[size_idx].send_type;
 		test_params.reply_type = all_params[size_idx].reply_type;
+		test_params.buf_alignment = buf_alignment;
 
 		/* Set group of target endpoint */
 		master_endpt->ep_grp = srv_grp;
@@ -658,13 +659,32 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "\n"
 	       "      Default: %d\n"
 	       "\n"
+	       "  --align <alignment>\n"
+	       "      Short version: -a\n"
+	       "\n"
+	       "      Forces all test buffers to be aligned (or misaligned) as specified.\n"
+	       "\n"
+	       "      The argument specifies what the least-significant byte of all test buffer\n"
+	       "        addresses should be forced to be. For example, if --align 0 is specified,\n"
+	       "        all test buffer addresses will end in 0x00 (thus aligned to 256 bytes).\n"
+	       "        To force misalignment, use something like --align 3. For 64-bit (8-byte)\n"
+	       "        alignment, use something like --align 8 or --align 24 (0x08 and 0x18)\n"
+	       "\n"
+	       "      Alignment should be specified as a decimal value in the range [%d:%d]\n"
+	       "\n"
+	       "      If specified, buffers will be allocated with an extra 256 bytes of\n"
+	       "        alignment padding and the buffer to transfer will start at the point which\n"
+	       "        the least - significant byte of the address matches the requested alignment.\n"
+	       "\n"
+	       "      Default is no alignment - whatever is returned by the allocator is used\n"
+	       "\n"
 	       "  --Mbits\n"
 	       "      Short version: -b\n"
 	       "      By default, self-test outputs performance results in MB (#Bytes/1024^2)\n"
 	       "      Specifying --Mbits switches the output to megabits (#bits/1000000)\n",
 	       prog_name, UINT32_MAX,
 	       CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
-	       max_inflight);
+	       max_inflight, CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MIN);
 }
 
 #define ST_ENDPT_RANK_IDX 0
@@ -1126,6 +1146,8 @@ int main(int argc, char *argv[])
 	crt_endpoint_t			*master_endpt_ptr = NULL;
 	uint32_t			 num_endpts = 0;
 	int				 output_megabits = 0;
+	int16_t				 buf_alignment =
+		CRT_ST_BUF_ALIGN_DEFAULT;
 
 	/********************* Parse user arguments *********************/
 	while (1) {
@@ -1136,11 +1158,12 @@ int main(int argc, char *argv[])
 			{"message-sizes", required_argument, 0, 's'},
 			{"repetitions-per-size", required_argument, 0, 'r'},
 			{"max-inflight-rpcs", required_argument, 0, 'i'},
+			{"align", required_argument, 0, 'a'},
 			{"Mbits", no_argument, 0, 'b'},
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:b",
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:b",
 				long_options, NULL);
 		if (c == -1)
 			break;
@@ -1179,6 +1202,17 @@ int main(int argc, char *argv[])
 				printf("Warning: Invalid max-inflight-rpcs\n"
 				       "  Using default value %d instead\n",
 				       max_inflight);
+			}
+			break;
+		case 'a':
+			ret = sscanf(optarg, "%" SCNd16, &buf_alignment);
+			if (ret != 1 || buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
+			    buf_alignment > CRT_ST_BUF_ALIGN_MAX) {
+				printf("Warning: Invalid align value %d;"
+				       " Expected value in range [%d:%d]\n",
+				       buf_alignment, CRT_ST_BUF_ALIGN_MIN,
+				       CRT_ST_BUF_ALIGN_MAX);
+				buf_alignment = CRT_ST_BUF_ALIGN_DEFAULT;
 			}
 			break;
 		case 'b':
@@ -1308,15 +1342,20 @@ int main(int argc, char *argv[])
 		       all_params[j].reply_size,
 		       crt_st_msg_type_str[all_params[j].reply_type]);
 	}
-	printf("]\n"
-	       "  Repetitions per size:       %d\n"
+	printf("]\n");
+	if (buf_alignment == CRT_ST_BUF_ALIGN_DEFAULT)
+		printf("  Buffer addresses end with:  <Default>\n");
+	else
+		printf("  Buffer addresses end with:  %d\n", buf_alignment);
+	printf("  Repetitions per size:       %d\n"
 	       "  Max inflight RPCs:          %d\n\n",
 	       rep_count, max_inflight);
 
 	/********************* Run the self test *********************/
 	ret = run_self_test(all_params, num_msg_sizes, rep_count,
 			    max_inflight, dest_name, master_endpt_ptr,
-			    endpts, num_endpts, output_megabits);
+			    endpts, num_endpts, output_megabits,
+			    buf_alignment);
 
 	/********************* Clean up *********************/
 cleanup:

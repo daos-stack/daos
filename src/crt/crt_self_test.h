@@ -155,6 +155,11 @@
  *     stack
  */
 
+#define CRT_ST_BUF_ALIGN_DEFAULT (-1)
+#define CRT_ST_BUF_ALIGN_MIN (0)
+/** Maximum alignment must be one less than a power of two */
+#define CRT_ST_BUF_ALIGN_MAX (255)
+
 enum crt_st_msg_type {
 	CRT_SELF_TEST_MSG_TYPE_EMPTY = 0,
 	CRT_SELF_TEST_MSG_TYPE_IOV,
@@ -170,6 +175,7 @@ struct crt_st_session_params {
 		struct {
 			enum crt_st_msg_type send_type: 2;
 			enum crt_st_msg_type reply_type: 2;
+			int16_t buf_alignment: 16;
 		};
 		uint32_t flags;
 	};
@@ -233,6 +239,7 @@ struct crt_st_start_params {
 		struct {
 			enum crt_st_msg_type send_type: 2;
 			enum crt_st_msg_type reply_type: 2;
+			int16_t buf_alignment: 16;
 		};
 		uint32_t flags;
 	};
@@ -278,6 +285,29 @@ crt_st_compute_opcode(enum crt_st_msg_type send_type,
 					 -1 } };
 
 	return opcodes[send_type][reply_type];
+}
+
+static inline void *crt_st_get_aligned_ptr(void *base, int16_t buf_alignment)
+{
+	void *returnptr;
+	uint32_t offset;
+
+	if (buf_alignment == CRT_ST_BUF_ALIGN_DEFAULT)
+		return base;
+
+	C_ASSERT(buf_alignment >= CRT_ST_BUF_ALIGN_MIN &&
+		 buf_alignment <= CRT_ST_BUF_ALIGN_MAX);
+
+	offset = (buf_alignment - (((size_t)base) & CRT_ST_BUF_ALIGN_MAX)) %
+		(CRT_ST_BUF_ALIGN_MAX + 1);
+
+	returnptr = ((char *)base) + offset;
+
+	/* Catch math bugs */
+	C_ASSERT((char *)returnptr <= (((char *)base) + CRT_ST_BUF_ALIGN_MAX));
+	C_ASSERT((((size_t)returnptr) & CRT_ST_BUF_ALIGN_MAX) == buf_alignment);
+
+	return returnptr;
 }
 
 void crt_self_test_service_init(void);

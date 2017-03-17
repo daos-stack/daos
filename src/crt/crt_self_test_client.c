@@ -88,6 +88,7 @@ struct st_g_data {
 	uint32_t			  max_inflight;
 	uint32_t			  send_size;
 	uint32_t			  reply_size;
+	int16_t				  buf_alignment;
 	enum crt_st_msg_type		  send_type;
 	enum crt_st_msg_type		  reply_type;
 
@@ -156,7 +157,7 @@ struct st_cb_args {
 	crt_sg_list_t		 sg_list;
 	crt_iov_t		 sg_iov;
 
-	/* Length of the buf[] array */
+	/* Length of the buf array */
 	size_t			 buf_len;
 
 	/*
@@ -443,7 +444,8 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 				C_ASSERT(cb_args->buf_len >=
 					 g_data->send_size);
 				crt_iov_set(&typed_args->buf,
-					    cb_args->buf,
+					    crt_st_get_aligned_ptr(cb_args->buf,
+						    g_data->buf_alignment),
 					    g_data->send_size);
 			}
 			break;
@@ -455,7 +457,8 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 				C_ASSERT(cb_args->buf_len >=
 					 g_data->send_size);
 				crt_iov_set(&typed_args->buf,
-					    cb_args->buf,
+					    crt_st_get_aligned_ptr(cb_args->buf,
+						    g_data->buf_alignment),
 					    g_data->send_size);
 				typed_args->bulk_hdl = cb_args->bulk_hdl;
 				C_ASSERT(typed_args->bulk_hdl != CRT_BULK_NULL);
@@ -723,6 +726,7 @@ static void open_sessions(void)
 		args->reply_size = g_data->reply_size;
 		args->send_type = g_data->send_type;
 		args->reply_type = g_data->reply_type;
+		args->buf_alignment = g_data->buf_alignment;
 
 		/*
 		 * Set the number of buffers that the service should allocate.
@@ -817,6 +821,7 @@ int crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	int32_t				*reply_status;
 	uint32_t			 alloc_idx;
 	int				 ret;
+	size_t				 alloc_buf_len;
 	size_t				 test_buf_len;
 	uint32_t			 local_rep;
 	uint32_t			 endpt_idx;
@@ -851,6 +856,13 @@ int crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		C_ERROR("Rep count must be greater than zero\n");
 		C_GOTO(send_reply, ret = -CER_INVAL);
 	}
+	if ((args->buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
+	     args->buf_alignment > CRT_ST_BUF_ALIGN_MAX) &&
+	     args->buf_alignment != CRT_ST_BUF_ALIGN_DEFAULT) {
+		C_ERROR("Buf alignment must be in the range [%d:%d]\n",
+			CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MAX);
+		C_GOTO(send_reply, ret = -CER_INVAL);
+	}
 
 	/*
 	 * Allocate a new global tracking structure that is the same for all
@@ -880,6 +892,7 @@ int crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	g_data->send_size = args->send_size;
 	g_data->reply_size = args->reply_size;
 	g_data->send_type = args->send_type;
+	g_data->buf_alignment = args->buf_alignment;
 	g_data->reply_type = args->reply_type;
 	g_data->num_endpts = args->endpts.iov_buf_len / 8;
 	pthread_spin_init(&g_data->ctr_lock, PTHREAD_PROCESS_PRIVATE);
@@ -946,6 +959,18 @@ int crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	else
 		test_buf_len = g_data->send_size;
 
+	/*
+	 * If the user requested that messages be aligned, add additional
+	 * space so that a requested aligned value will always be present
+	 *
+	 * Note that CRT_ST_BUF_ALIGN_MAX is required to be one less than a
+	 * power of two
+	 */
+	if (g_data->buf_alignment != CRT_ST_BUF_ALIGN_DEFAULT)
+		alloc_buf_len = test_buf_len + CRT_ST_BUF_ALIGN_MAX;
+	else
+		alloc_buf_len = test_buf_len;
+
 	/* Allocate "private" buffers for each inflight RPC */
 	for (alloc_idx = 0; alloc_idx < g_data->max_inflight; alloc_idx++) {
 		struct st_cb_args *cb_args;
@@ -974,17 +999,17 @@ int crt_self_test_start_handler(crt_rpc_t *rpc_req)
 			continue;
 
 		/* Allocate a new data buffer for this inflight RPC */
-		C_ALLOC(cb_args->buf, test_buf_len);
+		C_ALLOC(cb_args->buf, alloc_buf_len);
 		if (cb_args->buf == NULL) {
 			C_ERROR("RPC data buf allocation failed\n");
 			C_GOTO(fail_cleanup, ret = -CER_NOMEM);
 		}
 
 		/* Fill the buffer with an arbitrary data pattern */
-		memset(cb_args->buf, 0xC5, test_buf_len);
+		memset(cb_args->buf, 0xC5, alloc_buf_len);
 
 		/* Track how big the buffer is for bookkeeping */
-		cb_args->buf_len = test_buf_len;
+		cb_args->buf_len = alloc_buf_len;
 
 		/*
 		 * Link the sg_list, iov's, and cb_args entries
@@ -995,7 +1020,9 @@ int crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		 */
 		cb_args->sg_list.sg_iovs = &cb_args->sg_iov;
 		cb_args->sg_list.sg_nr.num = 1;
-		crt_iov_set(&cb_args->sg_iov, cb_args->buf,
+		crt_iov_set(&cb_args->sg_iov,
+			    crt_st_get_aligned_ptr(cb_args->buf,
+						   g_data->buf_alignment),
 			    test_buf_len);
 
 		/* Create bulk handle if required */

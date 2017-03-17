@@ -51,6 +51,9 @@ struct st_buf_entry {
 	/* Payload */
 	char			*buf;
 
+	/* Length of the buf array */
+	size_t			 buf_len;
+
 	/* Local bulk handle for this buf - only valid if session uses bulk */
 	crt_bulk_t		 bulk_hdl;
 
@@ -126,6 +129,34 @@ static struct st_session *find_session(int32_t session_id,
 	return NULL;
 }
 
+/*
+ * Frees the session pointed to by the provided pointer, and sets the caller's
+ * pointer to NULL
+ */
+static void free_session(struct st_session **session)
+{
+	struct st_buf_entry *free_entry;
+
+	C_ASSERT(session != NULL);
+	if (*session == NULL)
+		return;
+
+	free_entry = (*session)->buf_list;
+	while (free_entry != NULL) {
+		(*session)->buf_list = free_entry->next;
+
+		if (free_entry->buf != NULL)
+			C_FREE(free_entry->buf, free_entry->buf_len);
+		if (free_entry->bulk_hdl != CRT_BULK_NULL)
+			crt_bulk_free(free_entry->bulk_hdl);
+		C_FREE_PTR(free_entry);
+
+		free_entry = (*session)->buf_list;
+	}
+
+	C_FREE_PTR(*session);
+}
+
 void crt_self_test_service_init(void)
 {
 	int ret;
@@ -148,6 +179,7 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	int32_t				 session_id;
 	uint32_t			 i;
 	int				 ret;
+	size_t				 alloc_buf_len;
 	size_t				 test_buf_len;
 
 	/* Get pointers to the arguments and response buffers */
@@ -191,6 +223,18 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	else
 		test_buf_len = args->reply_size;
 
+	/*
+	 * If the user requested that messages be aligned, add additional
+	 * space so that a requested aligned value will always be present
+	 *
+	 * Note that CRT_ST_BUF_ALIGN_MAX is required to be one less than a
+	 * power of two
+	 */
+	if (args->buf_alignment != CRT_ST_BUF_ALIGN_DEFAULT)
+		alloc_buf_len = test_buf_len + CRT_ST_BUF_ALIGN_MAX;
+	else
+		alloc_buf_len = test_buf_len;
+
 	/* If no buffer is required, don't bother to allocate any */
 	if (test_buf_len == 0)
 		args->num_buffers = 0;
@@ -213,7 +257,7 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 		/* Buffer entry contains a pointer to its session */
 		new_entry->session = new_session;
 
-		C_ALLOC(new_entry->buf, test_buf_len);
+		C_ALLOC(new_entry->buf, alloc_buf_len);
 		if (new_entry == NULL) {
 			C_ERROR("self-test memory allocation failed for new"
 				" session - num_buffers=%d, reply_size=%d\n",
@@ -222,7 +266,10 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 		}
 
 		/* Fill the buffer with an arbitrary data pattern */
-		memset(new_entry->buf, 0xA7, test_buf_len);
+		memset(new_entry->buf, 0xA7, alloc_buf_len);
+
+		/* Track how big the buffer is for bookkeeping */
+		new_entry->buf_len = alloc_buf_len;
 
 		/*
 		 * Set up the scatter-gather list to point to the newly
@@ -234,7 +281,9 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 		 */
 		new_entry->sg_list.sg_iovs = &new_entry->sg_iov;
 		new_entry->sg_list.sg_nr.num = 1;
-		crt_iov_set(&new_entry->sg_iov, new_entry->buf,
+		crt_iov_set(&new_entry->sg_iov,
+			    crt_st_get_aligned_ptr(new_entry->buf,
+						   args->buf_alignment),
 			    test_buf_len);
 
 		/*
@@ -311,24 +360,8 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 
 send_rpc:
 	/* Release any allocated memory if returning an invalid session ID */
-	if (*reply_session_id < 0 && new_session != NULL) {
-		struct st_buf_entry *free_entry;
-
-		free_entry = new_session->buf_list;
-		while (free_entry != NULL) {
-			new_session->buf_list = free_entry->next;
-
-			if (free_entry->buf != NULL)
-				C_FREE(free_entry->buf, args->reply_size);
-			if (free_entry->bulk_hdl != CRT_BULK_NULL)
-				crt_bulk_free(free_entry->bulk_hdl);
-			C_FREE_PTR(free_entry);
-
-			free_entry = new_session->buf_list;
-		}
-
-		C_FREE_PTR(new_session);
-	}
+	if (*reply_session_id < 0 && new_session != NULL)
+		free_session(&new_session);
 
 	ret = crt_reply_send(rpc_req);
 	if (ret != 0)
@@ -342,7 +375,6 @@ int crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 	int32_t			*args;
 	struct st_session	*del_session;
 	struct st_session	**prev;
-	struct st_buf_entry	*free_entry;
 	int32_t			 session_id;
 	int			 ret;
 
@@ -370,20 +402,7 @@ int crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 
 	/* At this point this function has the only reference to del_session */
 
-	free_entry = del_session->buf_list;
-	while (free_entry != NULL) {
-		del_session->buf_list = free_entry->next;
-
-		if (free_entry->bulk_hdl != CRT_BULK_NULL)
-			crt_bulk_free(free_entry->bulk_hdl);
-
-		C_FREE(free_entry, sizeof(struct st_buf_entry)
-				   + del_session->params.reply_size);
-
-		free_entry = del_session->buf_list;
-	}
-
-	C_FREE(del_session, sizeof(struct st_session));
+	free_session(&del_session);
 
 send_rpc:
 
@@ -398,19 +417,29 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 				  struct st_buf_entry *buf_entry,
 				  int do_unlock)
 {
-	crt_iov_t		*res;
-	int			 ret;
+	crt_iov_t			*res;
+	int				 ret;
+	struct st_session		*session = NULL;
+	struct crt_st_session_params	*params = NULL;
+
+	/* Grab some shorter aliases */
+	if (buf_entry != NULL) {
+		session = buf_entry->session;
+		C_ASSERT(session != NULL);
+		params = &session->params;
+	}
 
 	if (buf_entry != NULL &&
-	    buf_entry->session->params.reply_type ==
-			CRT_SELF_TEST_MSG_TYPE_IOV) {
+	    params->reply_type == CRT_SELF_TEST_MSG_TYPE_IOV) {
 		/* Get the IOV reply handle */
 		res = (crt_iov_t *)crt_reply_get(rpc_req);
 		C_ASSERT(res != NULL);
 
 		/* Set the reply buffer */
-		crt_iov_set(res, buf_entry->buf,
-			    buf_entry->session->params.reply_size);
+		crt_iov_set(res,
+			    crt_st_get_aligned_ptr(buf_entry->buf,
+						   params->buf_alignment),
+			    params->reply_size);
 	}
 
 	ret = crt_reply_send(rpc_req);
@@ -423,12 +452,12 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 	 */
 	if (buf_entry != NULL) {
 		/************* LOCK: session->buf_list_lock *************/
-		pthread_spin_lock(&buf_entry->session->buf_list_lock);
+		pthread_spin_lock(&session->buf_list_lock);
 
-		buf_entry->next = buf_entry->session->buf_list;
-		buf_entry->session->buf_list = buf_entry;
+		buf_entry->next = session->buf_list;
+		session->buf_list = buf_entry;
 
-		pthread_spin_unlock(&buf_entry->session->buf_list_lock);
+		pthread_spin_unlock(&session->buf_list_lock);
 		/************ UNLOCK: session->buf_list_lock ************/
 	}
 
