@@ -50,6 +50,7 @@ from SCons.Script import SConscript
 from SCons.Errors import UserError
 # pylint: enable=no-name-in-module
 # pylint: enable=import-error
+from prereq_tools import mocked_tests
 
 
 class NotInitialized(Exception):
@@ -531,6 +532,8 @@ class PreReqComponent(object):
 
         self.add_options()
         self.__setup_unit_test_builders()
+        self.__env.AddMethod(mocked_tests.build_mock_unit_tests,
+                             'BuildMockingUnitTests')
         self.__update = GetOption('update_prereq')
         self.download_deps = False
         self.build_deps = False
