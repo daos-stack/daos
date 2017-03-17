@@ -1068,3 +1068,26 @@ out_task:
 	daos_task_complete(task, rc);
 	return rc;
 }
+
+int
+dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
+{
+	struct dc_pool *pool;
+
+	pool = dc_pool_lookup(ph);
+	if (pool == NULL)
+		return -DER_NO_HDL;
+
+	if (pool->dp_map == NULL) {
+		dc_pool_put(pool);
+		return -DER_NO_HDL;
+	}
+
+	pthread_rwlock_rdlock(&pool->dp_map_lock);
+	*map_ver = pool_map_get_version(pool->dp_map);
+	pthread_rwlock_unlock(&pool->dp_map_lock);
+	dc_pool_put(pool);
+
+	return 0;
+}
+

@@ -151,9 +151,6 @@ daos_pool_query_async(daos_handle_t ph, daos_rank_list_t *tgts,
 		      daos_pool_info_t *info, struct daos_task *task);
 
 int
-daos_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
-
-int
 daos_event_comp_cb(struct daos_task *task, void *data);
 
 /**

@@ -105,4 +105,6 @@ int dc_pool_target_query(daos_handle_t poh, daos_rank_list_t *tgts,
 			 daos_target_info_t *info_list, struct daos_task *task);
 int dc_pool_evict(const uuid_t uuid, const char *grp, struct daos_task *task);
 
+int
+dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
 #endif /* __DAOS_POOL_H__ */

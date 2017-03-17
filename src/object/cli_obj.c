@@ -30,6 +30,7 @@
 #include <daos_event.h>
 #include <daos_types.h>
 #include <daos/container.h>
+#include <daos/pool.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -485,6 +486,27 @@ obj_dkey2update_grp(struct dc_object *obj, daos_key_t *dkey,
 	return 0;
 }
 
+/* Get pool map version from object handle */
+static int
+dc_obj_pool_map_version_get(daos_handle_t oh, unsigned int *map_ver)
+{
+	daos_handle_t	ph;
+	daos_handle_t	ch;
+	int rc;
+
+	ch = dc_obj_hdl2cont_hdl(oh);
+	if (daos_handle_is_inval(ch))
+		return -DER_NO_HDL;
+
+	ph = dc_cont_hdl2pool_hdl(ch);
+	if (daos_handle_is_inval(ph))
+		return -DER_NO_HDL;
+
+	rc = dc_pool_map_version_get(ph, map_ver);
+
+	return rc;
+}
+
 int
 dc_obj_update_result(struct daos_task *task, void *arg)
 {
@@ -530,12 +552,17 @@ dc_obj_task_cb(struct daos_task *task, void *arg)
 int
 dc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	     unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
-	     daos_iom_t *maps, unsigned int map_ver, struct daos_task *task)
+	     daos_iom_t *maps, struct daos_task *task)
 {
 	struct dc_object	*obj;
+	unsigned int		map_ver;
 	int			shard;
 	daos_handle_t		shard_oh;
 	int			rc;
+
+	rc = dc_obj_pool_map_version_get(oh, &map_ver);
+	if (rc)
+		D_GOTO(out_task, rc);
 
 	obj = obj_hdl2ptr(oh);
 	if (obj == NULL)
@@ -574,10 +601,11 @@ out_task:
 int
 dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	      unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
-	      unsigned int map_ver, struct daos_task *task)
+	      struct daos_task *task)
 {
 	struct daos_sched	*sched = daos_task2sched(task);
 	struct dc_object	*obj;
+	unsigned int		map_ver;
 	unsigned int		shard;
 	unsigned int		shards_cnt = 0;
 	struct daos_task	*tmp_tasks[MAX_TMP_SHARDS];
@@ -587,6 +615,10 @@ dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int			real_shards = 0;
 	int			i;
 	int			rc = 0;
+
+	rc = dc_obj_pool_map_version_get(oh, &map_ver);
+	if (rc)
+		D_GOTO(out_task, rc);
 
 	obj = obj_hdl2ptr(oh);
 	if (obj == NULL)
@@ -776,11 +808,11 @@ static int
 dc_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 		daos_key_t *key, uint32_t *nr,
 		daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		daos_hash_out_t *anchor, unsigned int map_ver,
-		struct daos_task *task)
+		daos_hash_out_t *anchor, struct daos_task *task)
 {
 	struct dc_object	*obj = NULL;
 	struct dc_obj_list_arg	*arg;
+	unsigned int		map_ver;
 	daos_handle_t		shard_oh;
 	int			shard;
 	int			rc;
@@ -789,6 +821,10 @@ dc_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 		D_DEBUG(DB_IO, "Invalid API parameter.\n");
 		D_GOTO(out_task, rc = -DER_INVAL);
 	}
+
+	rc = dc_obj_pool_map_version_get(oh, &map_ver);
+	if (rc)
+		D_GOTO(out_task, rc);
 
 	obj = obj_hdl2ptr(oh);
 	if (obj == NULL)
@@ -844,20 +880,18 @@ out_task:
 int
 dc_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 		 daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		 daos_hash_out_t *anchor, unsigned int map_ver,
-		 struct daos_task *task)
+		 daos_hash_out_t *anchor, struct daos_task *task)
 {
 	/* XXX list_dkey might also input akey later */
 	return dc_obj_list_key(oh, DAOS_OBJ_DKEY_RPC_ENUMERATE, epoch, NULL,
-			       nr, kds, sgl, anchor, map_ver, task);
+			       nr, kds, sgl, anchor, task);
 }
 
 int
 dc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		 uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		 daos_hash_out_t *anchor, unsigned int map_ver,
-		 struct daos_task *task)
+		 daos_hash_out_t *anchor, struct daos_task *task)
 {
 	return dc_obj_list_key(oh, DAOS_OBJ_AKEY_RPC_ENUMERATE, epoch, dkey,
-			       nr, kds, sgl, anchor, map_ver, task);
+			       nr, kds, sgl, anchor, task);
 }

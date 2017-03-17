@@ -119,28 +119,6 @@ out_task:
 }
 
 int
-daos_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
-{
-	struct dc_pool *pool;
-
-	pool = dc_pool_lookup(ph);
-	if (pool == NULL)
-		return -DER_NO_HDL;
-
-	if (pool->dp_map == NULL) {
-		dc_pool_put(pool);
-		return -DER_NO_HDL;
-	}
-
-	pthread_rwlock_rdlock(&pool->dp_map_lock);
-	*map_ver = pool_map_get_version(pool->dp_map);
-	pthread_rwlock_unlock(&pool->dp_map_lock);
-	dc_pool_put(pool);
-
-	return 0;
-}
-
-int
 daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
 		daos_pool_info_t *info, daos_event_t *ev)
 {
