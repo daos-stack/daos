@@ -132,6 +132,12 @@ void ds_pool_mpool_put(struct ds_pool_mpool *mpool);
 #define DS_POOL_MPOOL_LAYOUT	"dsms_metadata"
 #define DS_POOL_MPOOL_SIZE	(1 << 26)	/* 64 MB */
 
+int
+ds_pool_local_open(uuid_t uuid, unsigned int version,
+		   struct ds_pool_child **childp);
+int
+ds_pool_local_close(uuid_t uuid);
+
 /*
  * mpool superblock (pmemobj_root)
  *

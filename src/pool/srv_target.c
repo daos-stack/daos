@@ -101,35 +101,38 @@ struct pool_child_lookup_arg {
  * Called via dss_collective() to create and add the ds_pool_child object for
  * one thread. This opens the matching VOS pool.
  */
-static int
-pool_child_add_one(void *varg)
+int
+ds_pool_local_open(uuid_t uuid, unsigned int version,
+		   struct ds_pool_child **childp)
 {
-	struct pool_child_lookup_arg   *arg = varg;
 	struct dsm_tls		       *tls = dsm_tls_get();
 	struct ds_pool_child	       *child;
 	struct dss_module_info	       *info = dss_get_module_info();
 	char			       *path;
 	int				rc;
 
-	child = ds_pool_child_lookup(arg->pla_uuid);
+	child = ds_pool_child_lookup(uuid);
 	if (child != NULL) {
-		ds_pool_child_put(child);
+		if (childp != NULL)
+			*childp = child;
+		else
+			ds_pool_child_put(child);
 		return 0;
 	}
 
-	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(arg->pla_uuid));
+	D_DEBUG(DF_DSMS, DF_UUID": creating\n", DP_UUID(uuid));
 
 	D_ALLOC_PTR(child);
 	if (child == NULL)
 		return -DER_NOMEM;
 
-	rc = ds_mgmt_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tid, &path);
+	rc = ds_mgmt_tgt_file(uuid, VOS_FILE, &info->dmi_tid, &path);
 	if (rc != 0) {
 		D_FREE_PTR(child);
 		return rc;
 	}
 
-	rc = vos_pool_open(path, arg->pla_uuid, &child->spc_hdl);
+	rc = vos_pool_open(path, uuid, &child->spc_hdl);
 
 	free(path);
 
@@ -138,20 +141,32 @@ pool_child_add_one(void *varg)
 		return rc;
 	}
 
-	uuid_copy(child->spc_uuid, arg->pla_uuid);
-	child->spc_map_version = arg->pla_map_version;
+	uuid_copy(child->spc_uuid, uuid);
+	child->spc_map_version = version;
 	child->spc_ref = 1;
 	daos_list_add(&child->spc_list, &tls->dt_pool_list);
+	if (childp != NULL) {
+		child->spc_ref++;
+		*childp = child;
+	}
+
 	return 0;
 }
 
 /*
- * Called via dss_collective() to delete the ds_pool_child object for one
- * thread. If nobody else is referencing this object, then its VOS pool handle
- * is closed and the object itself is freed.
+ * Called via dss_collective() to create and add the ds_pool_child object for
+ * one thread. This opens the matching VOS pool.
  */
 static int
-pool_child_delete_one(void *uuid)
+pool_child_add_one(void *varg)
+{
+	struct pool_child_lookup_arg   *arg = varg;
+
+	return ds_pool_local_open(arg->pla_uuid, arg->pla_map_version, NULL);
+}
+
+int
+ds_pool_local_close(uuid_t uuid)
 {
 	struct ds_pool_child *child;
 
@@ -164,6 +179,17 @@ pool_child_delete_one(void *uuid)
 
 	ds_pool_child_put(child);
 	return 0;
+}
+
+/*
+ * Called via dss_collective() to delete the ds_pool_child object for one
+ * thread. If nobody else is referencing this object, then its VOS pool handle
+ * is closed and the object itself is freed.
+ */
+static int
+pool_child_delete_one(void *uuid)
+{
+	return ds_pool_local_close(uuid);
 }
 
 /* ds_pool ********************************************************************/

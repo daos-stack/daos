@@ -280,6 +280,13 @@ cont_hdl_put_internal(struct dhash_table *hash,
 	dhash_rec_decref(hash, &hdl->sch_entry);
 }
 
+static void
+cont_hdl_get_internal(struct dhash_table *hash,
+		      struct ds_cont_hdl *hdl)
+{
+	dhash_rec_addref(hash, &hdl->sch_entry);
+}
+
 /**
  * Put target container handle.
  *
@@ -291,6 +298,19 @@ ds_cont_hdl_put(struct ds_cont_hdl *hdl)
 	struct dhash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
 
 	cont_hdl_put_internal(hash, hdl);
+}
+
+/**
+ * Get target container handle.
+ *
+ * \param hdl [IN]		container handle to be get.
+ **/
+void
+ds_cont_hdl_get(struct ds_cont_hdl *hdl)
+{
+	struct dhash_table *hash = &dsm_tls_get()->dt_cont_hdl_hash;
+
+	cont_hdl_get_internal(hash, hdl);
 }
 
 /*
@@ -364,6 +384,141 @@ ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
+void
+ds_cont_put(struct ds_cont *cont)
+{
+	struct dsm_tls	*tls = dsm_tls_get();
+
+	cont_put(tls->dt_cont_cache, cont);
+}
+
+/**
+ * server container lookup and create. If the container is created,
+ * it will return 1, otherwise return 0 or error code.
+ **/
+int
+ds_cont_lookup_or_create(struct ds_cont_hdl *hdl, uuid_t cont_uuid)
+{
+	struct dsm_tls	*tls = dsm_tls_get();
+	int rc;
+
+	rc = cont_lookup(tls->dt_cont_cache, cont_uuid, hdl->sch_pool,
+			 &hdl->sch_cont);
+	if (rc != -DER_NONEXIST)
+		return rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": creating new vos container\n",
+		DP_CONT(hdl->sch_pool->spc_uuid, cont_uuid));
+
+	rc = vos_co_create(hdl->sch_pool->spc_hdl, cont_uuid);
+	if (rc != 0)
+		return rc;
+
+	rc = cont_lookup(tls->dt_cont_cache, cont_uuid,
+			 hdl->sch_pool, &hdl->sch_cont);
+	if (rc != 0) {
+		vos_co_destroy(hdl->sch_pool->spc_hdl, cont_uuid);
+		return rc;
+	}
+
+	return 1;
+}
+
+int
+ds_cont_local_close(uuid_t cont_hdl_uuid)
+{
+	struct dsm_tls		*tls = dsm_tls_get();
+	struct ds_cont_hdl	*hdl;
+
+	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, cont_hdl_uuid);
+	if (hdl == NULL)
+		return 0;
+
+	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
+
+	ds_cont_hdl_put(hdl);
+	return 0;
+}
+
+int
+ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
+		       uint64_t capas, struct ds_cont_hdl **cont_hdl)
+{
+	struct dsm_tls		*tls = dsm_tls_get();
+	struct ds_cont_hdl	*hdl;
+	int			vos_co_created = 0;
+	int			rc = 0;
+
+	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, cont_hdl_uuid);
+	if (hdl != NULL) {
+		if (capas != 0) {
+			if (hdl->sch_capas != capas) {
+				D_ERROR(DF_CONT": conflicting container : hdl="
+					DF_UUID" capas="DF_U64"\n",
+					DP_CONT(pool_uuid, cont_uuid),
+					DP_UUID(cont_hdl_uuid), capas);
+				rc = -DER_EXIST;
+			} else {
+				D_DEBUG(DF_DSMS, DF_CONT": found compatible"
+					" container handle: hdl="DF_UUID
+					" capas="DF_U64"\n",
+				      DP_CONT(pool_uuid, cont_uuid),
+				      DP_UUID(cont_hdl_uuid), hdl->sch_capas);
+			}
+		}
+		if (cont_hdl != NULL && rc == 0)
+			*cont_hdl = hdl;
+		else
+			cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
+		return rc;
+	}
+
+	D_ALLOC_PTR(hdl);
+	if (hdl == NULL)
+		D_GOTO(err, rc = -DER_NOMEM);
+
+	hdl->sch_pool = ds_pool_child_lookup(pool_uuid);
+	if (hdl->sch_pool == NULL)
+		D_GOTO(err_hdl, rc = -DER_NO_HDL);
+
+	if (cont_uuid != NULL) {
+		rc = ds_cont_lookup_or_create(hdl, cont_uuid);
+		if (rc == 1) {
+			vos_co_created = 1;
+			rc = 0;
+		} else if (rc != 0) {
+			D_GOTO(err_pool, rc);
+		}
+	}
+	uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
+	hdl->sch_capas = capas;
+
+	rc = cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
+	if (rc != 0)
+		D_GOTO(err_cont, rc);
+
+	if (cont_hdl != NULL) {
+		cont_hdl_get_internal(&tls->dt_cont_hdl_hash, hdl);
+		*cont_hdl = hdl;
+	}
+
+	return 0;
+
+err_cont:
+	cont_put(tls->dt_cont_cache, hdl->sch_cont);
+	if (vos_co_created) {
+		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
+			DP_CONT(hdl->sch_pool->spc_uuid, cont_uuid));
+		vos_co_destroy(hdl->sch_pool->spc_hdl, cont_uuid);
+	}
+err_pool:
+	ds_pool_child_put(hdl->sch_pool);
+err_hdl:
+	D_FREE_PTR(hdl);
+err:
+	return rc;
+}
+
 /*
  * Called via dss_collective() to establish the ds_cont_hdl object as well as
  * the ds_cont object.
@@ -372,81 +527,9 @@ static int
 cont_open_one(void *vin)
 {
 	struct cont_tgt_open_in	       *in = vin;
-	struct dsm_tls		       *tls = dsm_tls_get();
-	struct ds_cont_hdl	       *hdl;
-	int				vos_co_created = 0;
-	int				rc;
 
-	hdl = cont_hdl_lookup_internal(&tls->dt_cont_hdl_hash, in->toi_hdl);
-	if (hdl != NULL) {
-		if (hdl->sch_capas == in->toi_capas) {
-			D_DEBUG(DF_DSMS, DF_CONT": found compatible container "
-				"handle: hdl="DF_UUID" capas="DF_U64"\n",
-				DP_CONT(in->toi_pool_uuid, in->toi_uuid),
-				DP_UUID(in->toi_hdl), hdl->sch_capas);
-			rc = 0;
-		} else {
-			D_ERROR(DF_CONT": found conflicting container handle: "
-				"hdl="DF_UUID" capas="DF_U64"\n",
-				DP_CONT(in->toi_pool_uuid, in->toi_uuid),
-				DP_UUID(in->toi_hdl), hdl->sch_capas);
-			rc = -DER_EXIST;
-		}
-		cont_hdl_put_internal(&tls->dt_cont_hdl_hash, hdl);
-		return rc;
-	}
-
-	D_ALLOC_PTR(hdl);
-	if (hdl == NULL)
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	hdl->sch_pool = ds_pool_child_lookup(in->toi_pool_uuid);
-	if (hdl->sch_pool == NULL)
-		D_GOTO(err_hdl, rc = -DER_NO_HDL);
-
-	rc = cont_lookup(tls->dt_cont_cache, in->toi_uuid, hdl->sch_pool,
-			  &hdl->sch_cont);
-	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DF_DSMS, DF_CONT": creating new vos container\n",
-			DP_CONT(hdl->sch_pool->spc_uuid, in->toi_uuid));
-
-		rc = vos_co_create(hdl->sch_pool->spc_hdl, in->toi_uuid);
-		if (rc != 0)
-			D_GOTO(err_pool, rc);
-
-		vos_co_created = 1;
-
-		rc = cont_lookup(tls->dt_cont_cache, in->toi_uuid,
-				  hdl->sch_pool, &hdl->sch_cont);
-		if (rc != 0)
-			D_GOTO(err_vos_co, rc);
-	} else if (rc != 0) {
-		D_GOTO(err_pool, rc);
-	}
-
-	uuid_copy(hdl->sch_uuid, in->toi_hdl);
-	hdl->sch_capas = in->toi_capas;
-
-	rc = cont_hdl_add(&tls->dt_cont_hdl_hash, hdl);
-	if (rc != 0)
-		D_GOTO(err_cont, rc);
-
-	return 0;
-
-err_cont:
-	cont_put(tls->dt_cont_cache, hdl->sch_cont);
-err_vos_co:
-	if (vos_co_created) {
-		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
-			DP_CONT(hdl->sch_pool->spc_uuid, in->toi_uuid));
-		vos_co_destroy(hdl->sch_pool->spc_hdl, in->toi_uuid);
-	}
-err_pool:
-	ds_pool_child_put(hdl->sch_pool);
-err_hdl:
-	D_FREE_PTR(hdl);
-err:
-	return rc;
+	return ds_cont_local_open(in->toi_pool_uuid, in->toi_hdl,
+				  in->toi_uuid, in->toi_capas, NULL);
 }
 
 int
