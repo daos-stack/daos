@@ -61,6 +61,12 @@ int dc_cont_attr_get(daos_handle_t coh, int n, const char *const names[],
 int dc_cont_attr_set(daos_handle_t coh, int n, const char *const names[],
 		     const void *const values[], const size_t sizes[],
 		     struct daos_task *task);
+int
+dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
+		   unsigned int flags, daos_handle_t ph,
+		   daos_handle_t *coh);
+int
+dc_cont_local_close(daos_handle_t ph, daos_handle_t coh);
 
 int dc_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
 		   struct daos_task *task);

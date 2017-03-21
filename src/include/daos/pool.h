@@ -34,6 +34,7 @@
 #include <daos/common.h>
 #include <daos/hash.h>
 #include <daos/scheduler.h>
+#include <daos/pool_map.h>
 
 int dc_pool_init(void);
 void dc_pool_fini(void);
@@ -106,4 +107,12 @@ int dc_pool_evict(const uuid_t uuid, const char *grp, struct daos_task *task);
 
 int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
+
+int
+dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
+		   unsigned int flags, const char *grp,
+		   struct pool_map *map, daos_handle_t *ph);
+int
+dc_pool_local_close(daos_handle_t ph);
+
 #endif /* __DAOS_POOL_H__ */

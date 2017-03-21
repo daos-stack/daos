@@ -141,6 +141,51 @@ map_bulk_destroy(crt_bulk_t bulk, struct pool_buf *buf)
 	pool_buf_free(buf);
 }
 
+/* Assume dp_map_lock is locked before calling this function */
+static int
+pool_map_update(struct dc_pool *pool, struct pool_map **map,
+		unsigned int map_version)
+{
+	struct pool_map *tmp_map;
+	int rc;
+
+	D_ASSERT(map != NULL);
+	if (pool->dp_map == NULL) {
+		rc = daos_placement_init(*map);
+		if (rc == 0) {
+			D_DEBUG(DF_DSMC, DF_UUID": init pool map: %u\n",
+				DP_UUID(pool->dp_pool),
+				pool_map_get_version(*map));
+			pool->dp_map = *map;
+			*map = NULL;
+		}
+		return rc;
+	}
+
+	if (map_version <= pool_map_get_version(pool->dp_map)) {
+		D_DEBUG(DF_DSMC, DF_UUID": got older pool map: %u -> %u %p\n",
+			DP_UUID(pool->dp_pool),
+			pool_map_get_version(pool->dp_map), map_version, pool);
+		return 0;
+	}
+
+	D_DEBUG(DF_DSMC, DF_UUID": updating pool map: %u -> %u\n",
+		DP_UUID(pool->dp_pool),
+		pool->dp_map == NULL ?
+		0 : pool_map_get_version(pool->dp_map), map_version);
+
+	rc = daos_placement_refresh(pool->dp_map, *map);
+	if (rc != 0) {
+		D_ERROR("Failed to refresh placement map: %d\n", rc);
+		return rc;
+	}
+
+	tmp_map = pool->dp_map;
+	pool->dp_map = *map;
+	*map = tmp_map;
+	return rc;
+}
+
 /*
  * Using "map_buf", "map_version", and "mode", update "pool->dp_map" and fill
  * "tgts" and/or "info" if not NULL.
@@ -151,7 +196,6 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		    daos_pool_info_t *info)
 {
 	struct pool_map	       *map;
-	struct pool_map	       *map_tmp;
 	int			rc;
 
 	rc = pool_map_create(map_buf, map_version, &map);
@@ -161,33 +205,9 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	}
 
 	pthread_rwlock_wrlock(&pool->dp_map_lock);
-
-	if (pool->dp_map == NULL ||
-	    map_version > pool_map_get_version(pool->dp_map)) {
-		D_DEBUG(DF_DSMC, DF_UUID": updating pool map: %u -> %u\n",
-			DP_UUID(pool->dp_pool),
-			pool->dp_map == NULL ?
-			0 : pool_map_get_version(pool->dp_map), map_version);
-
-		if (pool->dp_map != NULL)
-			rc = daos_placement_refresh(pool->dp_map, map);
-		else
-			rc = daos_placement_init(map);
-
-		if (rc != 0) {
-			D_ERROR("Failed to refresh placement map: %d\n", rc);
-			D_GOTO(out_unlock, rc);
-		}
-
-		map_tmp = pool->dp_map;
-		pool->dp_map = map;
-		map = map_tmp;
-
-	} else if (map_version < pool_map_get_version(pool->dp_map)) {
-		D_DEBUG(DF_DSMC, DF_UUID": received older pool map: %u -> %u\n",
-			DP_UUID(pool->dp_pool),
-			pool_map_get_version(pool->dp_map), map_version);
-	}
+	rc = pool_map_update(pool, &map, map_version);
+	if (rc)
+		D_GOTO(out_unlock, rc);
 
 	/* Scan all targets for info->pi_ndisabled and/or tgts. */
 	if (info != NULL || tgts != NULL) {
@@ -282,6 +302,61 @@ out:
 	crt_req_decref(arg->rpc);
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
 	dc_pool_put(pool);
+	return rc;
+}
+
+int
+dc_pool_local_close(daos_handle_t ph)
+{
+	struct dc_pool	*pool;
+
+	pool = dc_pool_lookup(ph);
+	if (pool == NULL)
+		return 0;
+
+	pthread_rwlock_rdlock(&pool->dp_map_lock);
+	daos_placement_fini(pool->dp_map);
+	pthread_rwlock_unlock(&pool->dp_map_lock);
+
+	dc_pool_del_cache(pool);
+	return 0;
+}
+
+int
+dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
+		   unsigned int flags, const char *grp,
+		   struct pool_map *map, daos_handle_t *ph)
+{
+	struct dc_pool	*pool;
+	int		rc = 0;
+
+	pool = dc_pool_lookup(*ph);
+	if (pool != NULL)
+		D_GOTO(out, rc = 0);
+
+	/** allocate and fill in pool connection */
+	pool = pool_alloc();
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_DEBUG(DB_TRACE, "after alloc "DF_UUIDF"\n", DP_UUID(pool_uuid));
+	uuid_copy(pool->dp_pool, pool_uuid);
+	uuid_copy(pool->dp_pool_hdl, pool_hdl_uuid);
+	pool->dp_capas = flags;
+
+	D_DEBUG(DB_TRACE, "before update "DF_UUIDF"\n", DP_UUID(pool_uuid));
+	rc = pool_map_update(pool, &map, pool_map_get_version(map));
+	if (rc)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DF_DSMC, DF_UUID": create: hdl="DF_UUIDF" flags=%x\n",
+		DP_UUID(pool_uuid), DP_UUID(pool->dp_pool_hdl), flags);
+
+	dc_pool_add_cache(pool, ph);
+out:
+	if (pool != NULL)
+		dc_pool_put(pool);
+
 	return rc;
 }
 

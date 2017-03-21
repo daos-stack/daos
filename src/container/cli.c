@@ -345,6 +345,76 @@ out:
 }
 
 int
+dc_cont_local_close(daos_handle_t ph, daos_handle_t coh)
+{
+	struct dc_cont *cont = NULL;
+	struct dc_pool *pool = NULL;
+	int		rc = 0;
+
+	cont = dc_cont_lookup(coh);
+	if (cont == NULL)
+		return 0;
+
+	pool = dc_pool_lookup(ph);
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+
+	dc_cont_del_cache(cont);
+
+	/* Remove the container from pool container list */
+	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
+	daos_list_del_init(&cont->dc_po_list);
+	pthread_rwlock_unlock(&pool->dp_co_list_lock);
+
+out:
+	if (cont != NULL)
+		dc_cont_put(cont);
+	if (pool != NULL)
+		dc_pool_put(pool);
+
+	return rc;
+}
+
+int
+dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
+		   unsigned int flags, daos_handle_t ph,
+		   daos_handle_t *coh)
+{
+	struct dc_cont	*cont;
+	struct dc_pool	*pool = NULL;
+	int		rc = 0;
+
+	cont = dc_cont_lookup(*coh);
+	if (cont != NULL)
+		D_GOTO(out, rc);
+
+	cont = dc_cont_alloc(cont_uuid);
+	if (cont == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	pool = dc_pool_lookup(ph);
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+
+	uuid_copy(cont->dc_cont_hdl, cont_hdl_uuid);
+	cont->dc_capas = flags;
+
+	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
+	daos_list_add(&cont->dc_po_list, &pool->dp_co_list);
+	cont->dc_pool_hdl = ph;
+	pthread_rwlock_unlock(&pool->dp_co_list_lock);
+
+	dc_cont_add_cache(cont, coh);
+out:
+	if (cont != NULL)
+		dc_cont_put(cont);
+	if (pool != NULL)
+		dc_pool_put(pool);
+
+	return rc;
+}
+
+int
 dc_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	     daos_handle_t *coh, daos_cont_info_t *info, struct daos_task *task)
 {
