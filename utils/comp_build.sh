@@ -284,7 +284,8 @@ if [ -z "${DOCKER_IMAGE}" ]; then
   else
     scons $SET_PREFIX ${option} --config=force
   fi
-  scons install
+  : ${INSTALL_OPTIONS:=""}
+  scons ${INSTALL_OPTIONS} install
 
   if [ -n "$CUSTOM_SCRIPT" ]; then
     #custom build step

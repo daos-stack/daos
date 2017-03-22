@@ -39,6 +39,7 @@ import ConfigParser
 from SCons.Variables import PathVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
+from SCons.Script import SetOption
 from SCons.Script import Configure
 from SCons.Script import AddOption
 from SCons.Script import Builder
@@ -239,6 +240,7 @@ class Runner(object):
     """Runs commands in a specified environment"""
     def __init__(self):
         self.env = None
+        self.__dry_run = GetOption('no_exec')
 
     def initialize(self, env):
         """Initialize the environment in the runner"""
@@ -255,10 +257,14 @@ class Runner(object):
         print 'Running commands in %s' % os.getcwd()
         for command in commands:
             command = self.env.subst(command)
-            print 'RUN: %s' % command
-            if subprocess.call(command, shell=True, env=self.env['ENV']) != 0:
-                retval = False
-                break
+            if self.__dry_run:
+                print 'Would RUN: %s' % command
+            else:
+                print 'RUN: %s' % command
+                if subprocess.call(command, shell=True,
+                                   env=self.env['ENV']) != 0:
+                    retval = False
+                    break
         if subdir:
             os.chdir(old)
         return retval
@@ -489,6 +495,11 @@ class PreReqComponent(object):
         self.__parse_build_deps()
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
+        self.__check_only = GetOption('check_only')
+        if self.__check_only:
+            # This is mostly a no_exec request.
+            SetOption('no_exec', True)
+        self.__dry_run = GetOption('no_exec')
 
         RUNNER.initialize(self.__env)
 
@@ -511,7 +522,11 @@ class PreReqComponent(object):
         self.__build_dir = os.path.realpath(os.path.join(self.__top_dir,
                                                          build_dir_name))
         try:
-            os.makedirs(self.__build_dir)
+            if self.__dry_run:
+                print 'Would mkdir -p %s' % self.__build_dir
+            else:
+                os.makedirs(self.__build_dir)
+
         except Exception:
             pass
         self.__prebuilt_path = {}
@@ -574,6 +589,15 @@ class PreReqComponent(object):
                   default='no',
                   help="Automatically download and build sources")
 
+        # We want to be able to check what depenencies are needed with out
+        # doing a build, similar to --dry-run.  We can not use --dry-run
+        # on the command line because it disables running the tests for the
+        # the dependencies.  So we need a new option
+        AddOption('--check-only',
+                  dest='check_only',
+                  action='store_true',
+                  default=False,
+                  help="Check dependencies only, do not download or build.")
 
     def setup_patch_prefix(self):
         """Discovers the location of the patches directory and adds it to
@@ -877,6 +901,8 @@ class _Component(object):
                  **kw
                 ):
 
+        self.__check_only = GetOption('check_only')
+        self.__dry_run = GetOption('no_exec')
         self.targets_found = False
         self.update = update
         self.build_path = None
@@ -917,6 +943,14 @@ class _Component(object):
             return True
         return False
 
+    def _delete_old_file(self, path):
+        if os.path.exists(path):
+            if self.__dry_run:
+                print 'Would unlink %s' % path
+            else:
+                os.unlink(path)
+
+
     def get(self):
         """Download the component sources, if necessary"""
         if self.prebuilt_path:
@@ -930,7 +964,10 @@ class _Component(object):
                 defpath = os.path.join(self.prereqs.get_build_dir(), self.name)
                 #only do this if the source was checked out by this script
                 if self.src_path == defpath:
-                    self.retriever.update(self.src_path)
+                    if self.__dry_run:
+                        print 'Would retrieve %s' % self.src_path
+                    else:
+                        self.retriever.update(self.src_path)
             return
         if not self.retriever:
             print 'Using installed version of %s' % self.name
@@ -942,12 +979,16 @@ class _Component(object):
             raise DownloadRequired(self.name)
 
         print 'Downloading source for %s' % self.name
-        if os.path.exists(self.crc_file):
-            os.unlink(self.crc_file)
+        self._delete_old_file(self.crc_file)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
         patch = self.prereqs.get_config("patch_versions", self.name)
-        self.retriever.get(self.src_path, \
-                    commit_sha=commit_sha, patch=patch)
+        if self.__dry_run:
+            print 'Would retrieve %s commit_sha: %s patch %s' % \
+                (self.src_path, commit_sha, patch)
+        else:
+            self.retriever.get(self.src_path,
+                               commit_sha=commit_sha, patch=patch)
+
         self.prereqs.update_src_path(self.name, self.src_path)
 
     def calculate_crc(self):
@@ -995,23 +1036,38 @@ class _Component(object):
     def has_missing_system_deps(self, env):
         """Check for required system libs"""
 
+        if self.__check_only:
+            # Have to temporarily turn off dry run to allow this check.
+            env.SetOption('no_exec', False)
+
+        if env.GetOption('no_exec'):
+            # Can not override no-check in the command line.
+            print 'Would check for missing system libraries'
+            return True
+
         config = Configure(env)
 
         for lib in self.required_libs:
             if not config.CheckLib(lib):
                 config.Finish()
+                if self.__check_only:
+                    env.SetOption('no_exec', True)
                 return True
 
         try:
             for prog in self.required_progs:
                 if not config.CheckProg(prog):
                     config.Finish()
+                    if self.__check_only:
+                        env.SetOption('no_exec', True)
                     return True
         except AttributeError:
             # This feature is new in scons 2.4
             pass
 
         config.Finish()
+        if self.__check_only:
+            env.SetOption('no_exec', True)
         return False
 
     def has_missing_targets(self, env):
@@ -1019,20 +1075,35 @@ class _Component(object):
         if self.targets_found:
             return False
 
+        if self.__check_only:
+            # Temporarily turn off dry-run.
+            env.SetOption('no_exec', False)
+
+        if env.GetOption('no_exec'):
+            # Can not turn off dry run set by command line.
+            print "Would check for missing build targets"
+            return True
+
         config = Configure(env)
         for header in self.headers:
             print "Checking %s" % header
             if not config.CheckHeader(header):
                 config.Finish()
+                if self.__check_only:
+                    env.SetOption('no_exec', True)
                 return True
 
         for lib in self.libs:
             if not config.CheckLib(lib):
                 config.Finish()
+                if self.__check_only:
+                    env.SetOption('no_exec', True)
                 return True
 
         config.Finish()
         self.targets_found = True
+        if self.__check_only:
+            env.SetOption('no_exec', True)
         return False
 
     def configure(self):
@@ -1056,7 +1127,10 @@ class _Component(object):
                 os.path.join(self.prereqs.get_build_dir(), '%s.build'
                              % self.name)
             try:
-                os.makedirs(self.build_path)
+                if self.__dry_run:
+                    print 'Would mkdir -p %s' % self.build_path
+                else:
+                    os.makedirs(self.build_path)
             except:
                 pass
 
@@ -1086,6 +1160,12 @@ class _Component(object):
     def check_installed_package(self, env):
         """Check installed targets"""
         if self.has_missing_targets(env):
+            if self.__dry_run:
+                if self.package is None:
+                    print 'Missing %s' % self.name
+                else:
+                    print 'Missing package %s %s' % (self.package, self.name)
+                return
             if self.package is None:
                 raise MissingTargets(self.name, self.name)
             else:
@@ -1101,6 +1181,14 @@ class _Component(object):
         self.set_environment(env, headers_only)
         if GetOption('clean'):
             return True
+
+    def _rm_old_dir(self, path):
+        if self.__dry_run:
+            print 'Would empty %s' % path
+        else:
+            os.system("rm -rf %s" % path)
+            os.mkdir(path)
+
 
     def build(self, env, headers_only):
         """Build the component, if necessary"""
@@ -1141,8 +1229,7 @@ class _Component(object):
                 self.get()
             changes = True
             if has_changes and self.out_of_src_build:
-                os.system("rm -rf %s"%self.build_path)
-                os.mkdir(self.build_path)
+                self._rm_old_dir(self.build_path)
             if not RUNNER.run_commands(self.build_commands,
                                        subdir=self.build_path):
                 raise BuildFailure(self.name)
