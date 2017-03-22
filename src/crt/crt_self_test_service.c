@@ -64,7 +64,7 @@ struct st_buf_entry {
 
 struct st_session {
 	/** Session ID. Note that session ID's must be unique */
-	int32_t session_id;
+	int64_t session_id;
 
 	/** Parameters for the session (send size, reply size, etc.) */
 	struct crt_st_session_params	 params;
@@ -96,7 +96,7 @@ static struct st_session *g_session_list;
  */
 static pthread_rwlock_t g_all_session_lock;
 
-static int32_t g_last_session_id;
+static int64_t g_last_session_id;
 
 /**
  * Finds a session in the g_session_list based on its session_id.
@@ -112,7 +112,7 @@ static int32_t g_last_session_id;
  * either the head of the list (g_session_list) or a pointer to the .next
  * element of the preceding st_session in the list
  */
-static struct st_session *find_session(int32_t session_id,
+static struct st_session *find_session(int64_t session_id,
 				       struct st_session ***prev_ptr)
 {
 	struct st_session **prev = &g_session_list;
@@ -175,8 +175,8 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 {
 	struct crt_st_session_params	*args;
 	struct st_session		*new_session = NULL;
-	int32_t				*reply_session_id;
-	int32_t				 session_id;
+	int64_t				*reply_session_id;
+	int64_t				 session_id;
 	uint32_t			 i;
 	int				 ret;
 	size_t				 alloc_buf_len;
@@ -186,7 +186,7 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	args = (struct crt_st_session_params *)crt_req_get(rpc_req);
 	C_ASSERT(args != NULL);
 
-	reply_session_id = (int32_t *)crt_reply_get(rpc_req);
+	reply_session_id = (int64_t *)crt_reply_get(rpc_req);
 	C_ASSERT(reply_session_id != NULL);
 
 	/* Validate session parameters */
@@ -322,8 +322,8 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	 * reaching INT_MAX so that every possible session_id is tried before
 	 * giving up.
 	 *
-	 * This means that until INT_MAX session IDs are issued, only one search
-	 * through the list has to be performed to open a new session
+	 * This means that until INT64_MAX session IDs are issued, only one
+	 * search through the list has to be performed to open a new session
 	 */
 	session_id = g_last_session_id + 1;
 	while (session_id != g_last_session_id) {
@@ -334,7 +334,7 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 			/* No exsiting session - use this session_id */
 			break;
 
-		if (session_id == INT_MAX)
+		if (session_id == INT64_MAX)
 			session_id = 0;
 		else
 			session_id++;
@@ -372,13 +372,13 @@ send_rpc:
 
 int crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 {
-	int32_t			*args;
+	int64_t			*args;
 	struct st_session	*del_session;
 	struct st_session	**prev;
-	int32_t			 session_id;
+	int64_t			 session_id;
 	int			 ret;
 
-	args = (int32_t *)crt_req_get(rpc_req);
+	args = (int64_t *)crt_req_get(rpc_req);
 	C_ASSERT(args != NULL);
 	session_id = *args;
 
@@ -389,7 +389,7 @@ int crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 	/* Find the session if it exists */
 	del_session = find_session(session_id, &prev);
 	if (del_session == NULL) {
-		C_ERROR("Self-test session %d not found\n", session_id);
+		C_ERROR("Self-test session %ld not found\n", session_id);
 		goto send_rpc;
 	}
 
@@ -548,7 +548,7 @@ int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	void			*args;
 	struct st_buf_entry	*buf_entry = NULL;
 	struct st_session	*session;
-	int32_t			 session_id;
+	int64_t			 session_id;
 	int			 ret;
 
 	C_ASSERT(rpc_req->cr_opc == CRT_OPC_SELF_TEST_BOTH_EMPTY ||
@@ -586,7 +586,7 @@ int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	C_ASSERT(args != NULL);
 
 	/* Retrieve the session ID from the beginning of the arguments */
-	session_id = *((int32_t *)args);
+	session_id = *((int64_t *)args);
 
 	/******************** LOCK: g_all_session_lock (r) ********************/
 	ret = pthread_rwlock_rdlock(&g_all_session_lock);
@@ -594,7 +594,7 @@ int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 
 	session = find_session(session_id, NULL);
 	if (session == NULL) {
-		C_ERROR("Unable to locate session_id %d\n", session_id);
+		C_ERROR("Unable to locate session_id %ld\n", session_id);
 		crt_self_test_msg_send_reply(rpc_req, NULL, 1);
 		return 0;
 	}
@@ -629,7 +629,7 @@ int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 
 		/* No buffers available currently, need to wait */
 		if (buf_entry == NULL) {
-			C_WARN("No self-test buffers available for session %d,"
+			C_WARN("No self-test buffers available for session %ld,"
 			       " num allocated = %d."
 			       " This will decrease performance.\n",
 			       session_id, session->params.num_buffers);

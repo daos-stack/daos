@@ -196,32 +196,24 @@ enum crt_st_status {
 };
 
 /*
- * RPC argument structures
- *
- * Push pragma pack=1 onto the stack for pragma pack. This forces these
- * structures to be packed together without any padding between members
- */
-#pragma pack(push, 1)
-
-/*
  * Note that for these non-empty send structures the session_id is always
  * the first value. This allows the session to be retrieved without knowing
  * what the rest of the structure contains
  */
 
 struct crt_st_send_id_iov {
-	int32_t session_id;
+	int64_t session_id;
 	crt_iov_t buf;
 };
 
 struct crt_st_send_id_iov_bulk {
-	int32_t session_id;
+	int64_t session_id;
 	crt_iov_t buf;
 	crt_bulk_t bulk_hdl;
 };
 
 struct crt_st_send_id_bulk {
-	int32_t session_id;
+	int64_t session_id;
 	crt_bulk_t bulk_hdl;
 };
 
@@ -255,11 +247,8 @@ struct st_latency {
 	int64_t val;
 	uint32_t rank;
 	uint32_t tag;
-	int cci_rc;
+	int32_t cci_rc;
 };
-
-/* Pop pragma pack to restore original struct packing behavior */
-#pragma pack(pop)
 
 static inline crt_opcode_t
 crt_st_compute_opcode(enum crt_st_msg_type send_type,

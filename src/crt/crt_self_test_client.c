@@ -62,7 +62,7 @@ struct st_test_endpt {
 	uint32_t tag;
 
 	/* Session ID to use when sending messages to this endpoint */
-	int32_t session_id;
+	int64_t session_id;
 
 	/*
 	 * If this endpoint is detected as evicted, no more messages should be
@@ -237,7 +237,7 @@ static void close_sessions(void)
 	for (i = 0; i < g_data->num_endpts; i++) {
 		crt_endpoint_t	 local_endpt;
 		crt_rpc_t	*new_rpc;
-		int32_t		*args;
+		int64_t		*args;
 
 		/* Don't bother to close sessions for nodes where open failed */
 		if (g_data->endpts[i].session_id < 0) {
@@ -256,7 +256,7 @@ static void close_sessions(void)
 				     CRT_OPC_SELF_TEST_CLOSE_SESSION,
 				     &new_rpc);
 		if (ret != 0) {
-			C_WARN("Failed to close session %d on endpoint=%u:%u;"
+			C_WARN("Failed to close session %ld on endpoint=%u:%u;"
 			       " crt_req_created failed with ret = %d\n",
 			       g_data->endpts[i].session_id,
 			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
@@ -272,7 +272,7 @@ static void close_sessions(void)
 		C_ASSERTF(new_rpc != NULL,
 			  "crt_req_create succeeded but RPC is NULL\n");
 
-		args = (int32_t *)crt_req_get(new_rpc);
+		args = (int64_t *)crt_req_get(new_rpc);
 		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
 
 		*args = g_data->endpts[i].session_id;
@@ -432,7 +432,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
 
 		/* Session ID is always the first field */
-		*((int32_t *)args) = endpt_ptr->session_id;
+		*((int64_t *)args) = endpt_ptr->session_id;
 
 		switch (opcode) {
 		case CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY:
@@ -626,13 +626,13 @@ static int open_session_cb(const struct crt_cb_info *cb_info)
 {
 	struct st_test_endpt	*endpt =
 		(struct st_test_endpt *)cb_info->cci_arg;
-	int32_t			*session_id;
+	int64_t			*session_id;
 
 	C_ASSERT(endpt != NULL);
 	C_ASSERT(g_data != NULL);
 
 	/* Get the session ID from the response message */
-	session_id = (int32_t *)crt_reply_get(cb_info->cci_rpc);
+	session_id = (int64_t *)crt_reply_get(cb_info->cci_rpc);
 	C_ASSERT(session_id != NULL);
 
 	/* If this endpoint returned any kind of error, mark it is evicted */
@@ -644,7 +644,7 @@ static int open_session_cb(const struct crt_cb_info *cb_info)
 		endpt->evicted = 1;
 		endpt->session_id = -1;
 	} else if (*session_id < 0) {
-		C_WARN("Got invalid session id = %d from endpoint %u:%u -\n"
+		C_WARN("Got invalid session id = %ld from endpoint %u:%u -\n"
 		       " removing it from the list of endpoints\n",
 		       *session_id, endpt->rank, endpt->tag);
 		endpt->evicted = 1;

@@ -110,22 +110,22 @@ static struct crt_req_format CQF_CRT_RANK_EVICT =
 
 /* for self-test service */
 static struct crt_msg_field *crt_st_send_id_field[] = {
-	&CMF_INT,
+	&CMF_UINT64,
 };
 
 static struct crt_msg_field *crt_st_send_id_iov_field[] = {
-	&CMF_INT,
+	&CMF_UINT64,
 	&CMF_IOVEC,
 };
 
 static struct crt_msg_field *crt_st_send_id_iov_bulk_field[] = {
-	&CMF_INT,
+	&CMF_UINT64,
 	&CMF_IOVEC,
 	&CMF_BULK,
 };
 
 static struct crt_msg_field *crt_st_send_id_bulk_field[] = {
-	&CMF_INT,
+	&CMF_UINT64,
 	&CMF_BULK,
 };
 
@@ -141,7 +141,7 @@ static struct crt_msg_field *crt_st_open_session_field[] = {
 };
 
 static struct crt_msg_field *crt_st_session_id_field[] = {
-	&CMF_INT,
+	&CMF_UINT64,
 };
 
 static struct crt_msg_field *crt_st_start_field[] = {
