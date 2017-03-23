@@ -1025,7 +1025,7 @@ dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
 }
 
 int
-dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *uuid)
+dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *hdl_uuid, uuid_t *uuid)
 {
 	struct dc_cont *dc;
 
@@ -1033,7 +1033,10 @@ dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *uuid)
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
-	uuid_copy(*uuid, dc->dc_cont_hdl);
+	if (hdl_uuid != NULL)
+		uuid_copy(*hdl_uuid, dc->dc_cont_hdl);
+	if (uuid != NULL)
+		uuid_copy(*uuid, dc->dc_uuid);
 	dc_cont_put(dc);
 	return 0;
 }

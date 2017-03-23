@@ -406,6 +406,30 @@ out:
 	return rc;
 }
 
+static int
+ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
+		   struct ds_cont_hdl **hdlp)
+{
+	struct ds_cont_hdl *cont_hdl;
+
+	cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
+	if (cont_hdl == NULL)
+		return -DER_NO_PERM;
+
+	if (cont_hdl->sch_cont == NULL ||
+	    uuid_compare(cont_hdl->sch_cont->sc_uuid, cont_uuid) != 0) {
+		D_ERROR("hdl "DF_UUID" cont "DF_UUID"\n",
+			DP_UUID(cont_hdl->sch_uuid), DP_UUID(cont_uuid));
+		ds_cont_hdl_put(cont_hdl);
+		return -DER_STALE;
+	}
+
+	D_ASSERT(hdlp != NULL);
+	*hdlp = cont_hdl;
+
+	return 0;
+}
+
 int
 ds_obj_rw_handler(crt_rpc_t *rpc)
 {
@@ -419,9 +443,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	orw = crt_req_get(rpc);
 	D_ASSERT(orw != NULL);
 
-	cont_hdl = ds_cont_hdl_lookup(orw->orw_co_hdl);
-	if (cont_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	rc = ds_check_container(orw->orw_co_hdl, orw->orw_co_uuid,
+				&cont_hdl);
+	if (rc)
+		D_GOTO(out, rc);
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE &&
 	    !(cont_hdl->sch_capas & DAOS_COO_RW))
@@ -545,9 +570,10 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	oei = crt_req_get(rpc);
 	D_ASSERT(oei != NULL);
 
-	cont_hdl = ds_cont_hdl_lookup(oei->oei_co_hdl);
-	if (cont_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_PERM);
+	rc = ds_check_container(oei->oei_co_hdl, oei->oei_co_uuid,
+				&cont_hdl);
+	if (rc)
+		D_GOTO(out, rc);
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	map_version = cont_hdl->sch_pool->spc_map_version;

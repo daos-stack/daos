@@ -449,6 +449,7 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	struct rw_args_t	*rw_args = NULL;
 	crt_endpoint_t		tgt_ep;
 	uuid_t			cont_hdl_uuid;
+	uuid_t			cont_uuid;
 	daos_size_t		total_len;
 	int			rc;
 
@@ -461,7 +462,7 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	if (dobj == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
-	rc = dc_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid);
+	rc = dc_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid, &cont_uuid);
 	if (rc != 0) {
 		obj_shard_decref(dobj);
 		D_GOTO(out_task, rc);
@@ -488,6 +489,7 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	orw->orw_map_ver = map_ver;
 	orw->orw_oid = dobj->do_id;
 	uuid_copy(orw->orw_co_hdl, cont_hdl_uuid);
+	uuid_copy(orw->orw_co_uuid, cont_uuid);
 
 	obj_shard_decref(dobj);
 	dobj = NULL;
@@ -682,6 +684,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	crt_rpc_t		*req;
 	struct dc_obj_shard	*dobj;
 	uuid_t			cont_hdl_uuid;
+	uuid_t			cont_uuid;
 	struct obj_key_enum_in	*oei;
 	struct enum_args_t	*enum_args = NULL;
 	daos_size_t		sgl_len;
@@ -691,7 +694,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	if (dobj == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
-	rc = dc_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid);
+	rc = dc_cont_hdl2uuid(dobj->do_co_hdl, &cont_hdl_uuid, &cont_uuid);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
@@ -721,6 +724,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	D_ASSERT(oei != NULL);
 	oei->oei_oid = dobj->do_id;
 	uuid_copy(oei->oei_co_hdl, cont_hdl_uuid);
+	uuid_copy(oei->oei_co_uuid, cont_uuid);
 
 	oei->oei_map_ver = map_ver;
 	oei->oei_epoch = epoch;

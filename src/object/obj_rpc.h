@@ -55,6 +55,7 @@ enum obj_rpc_opc {
 struct obj_rw_in {
 	daos_unit_oid_t		orw_oid;
 	uuid_t			orw_co_hdl;
+	uuid_t			orw_co_uuid;
 	uint64_t		orw_epoch;
 	uint32_t		orw_map_ver;
 	uint32_t		orw_nr;
@@ -77,6 +78,7 @@ struct obj_rw_out {
 struct obj_key_enum_in {
 	daos_unit_oid_t		oei_oid;
 	uuid_t			oei_co_hdl;
+	uuid_t			oei_co_uuid;
 	uint64_t		oei_epoch;
 	uint32_t		oei_map_ver;
 	uint32_t		oei_nr;

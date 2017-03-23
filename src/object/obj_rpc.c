@@ -32,6 +32,7 @@
 static struct crt_msg_field *obj_rw_in_fields[] = {
 	&DMF_OID,	/* object ID */
 	&CMF_UUID,	/* container handle uuid */
+	&CMF_UUID,	/* container uuid */
 	&CMF_UINT64,	/* epoch */
 	&CMF_UINT32,	/* map_version */
 	&CMF_UINT32,	/* count of iod and sg */
@@ -52,6 +53,7 @@ static struct crt_msg_field *obj_rw_out_fields[] = {
 static struct crt_msg_field *obj_key_enum_in_fields[] = {
 	&DMF_OID,	/* object ID */
 	&CMF_UUID,	/* container handle uuid */
+	&CMF_UUID,	/* container uuid */
 	&CMF_UINT64,	/* epoch */
 	&CMF_UINT32,	/* map_version */
 	&CMF_UINT32,	/* number of kds */
