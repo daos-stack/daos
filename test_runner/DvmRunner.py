@@ -48,6 +48,7 @@ class DvmRunner():
         log_path = self.info.get_config('log_base_path')
         if not os.path.exists(log_path):
             os.makedirs(log_path)
+        os.environ['OMPI_MCA_rmaps_base_oversubscribe'] = "1"
         self.report = os.path.join(log_path, "orted-uri")
         self.info.set_config('setKeyFromConfig', 'TR_USE_URI', self.report)
         self.logfileout = os.path.join(log_path, "orte-dvm.out")
@@ -58,8 +59,12 @@ class DvmRunner():
         cmdstr = "%s --prefix %s --report-uri %s --host %s" % \
                  (dvm, ompi_path, self.report, hostlist)
         cmdarg = shlex.split(cmdstr)
-        with open(self.logfileout, mode='w+b', buffering=0) as outfile, \
-            open(self.logfilerr, mode='w+b', buffering=0) as errfile:
+        with open(self.logfileout, mode='w') as outfile, \
+            open(self.logfilerr, mode='w') as errfile:
+            outfile.write("=======================================\n " + \
+                          " Command: " + str(cmdstr) + \
+                          "\n======================================\n")
+            outfile.flush()
             self.ortedvm = subprocess.Popen(cmdarg,
                                             stdin=subprocess.DEVNULL,
                                             stdout=outfile,

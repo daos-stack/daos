@@ -129,7 +129,7 @@ class NodeControlRunner():
         self.logger.info(
             "***********************************************************")
         for node in self.node_list:
-            node.match_testName()
+            node.match_testName(node_type)
 
         return rtn
 

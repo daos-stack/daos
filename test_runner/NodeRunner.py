@@ -145,8 +145,11 @@ class NodeRunner():
 
         return self.proc.returncode
 
-    def match_testName(self):
-        """ match the name of the log log to the testcase """
+    def match_testName(self, node_type):
+        """ match the name of the log to the testcase """
+        if node_type != self.node_type and node_type != 'all' and \
+           self.node_type != 'all':
+            return
         subtest_results_file = os.path.join(self.test_config['log_base_path'],
                                             "subtest_results.yml")
         if not os.path.exists(subtest_results_file):

@@ -25,15 +25,20 @@ test runner test info class
 """
 
 import os
+import re
 import logging
 #pylint: disable=import-error
 import PreRunner
 #pylint: enable=import-error
+from socket import gethostname
 from yaml import load, dump
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
+
+#pylint: disable=consider-using-enumerate
+#pylint: disable=anomalous-backslash-in-string
 
 
 class TestInfoRunner(PreRunner.PreRunner):
@@ -45,6 +50,8 @@ class TestInfoRunner(PreRunner.PreRunner):
         self.info = info
         self.log_dir_base = self.info.get_config('log_base_path')
         self.logger = logging.getLogger("TestRunnerLogger")
+        self.nodename = self.info.get_config('node', None,
+                                             gethostname().split('.')[0])
 
     def load_testcases(self, test_module_name):
         """ load and check test description file """
@@ -78,8 +85,12 @@ class TestInfoRunner(PreRunner.PreRunner):
         if 'passToConfig' not in self.test_info or \
            self.test_info['passToConfig'] is None:
             self.test_info['passToConfig'] = {}
+        if 'subList' not in self.test_info or \
+           self.test_info['subList'] is None:
+            self.test_info['subList'] = {}
         # set test name
-        fileName = os.path.basename(test_module_name).rstrip('.yml')
+        self.test_info['subList']['nodename'] = self.nodename
+        fileName = os.path.splitext(os.path.basename(test_module_name))[0]
         moduleName = self.test_info['module'].get('name', "")
         if fileName != moduleName:
             self.test_info['testName'] = \
@@ -159,10 +170,57 @@ class TestInfoRunner(PreRunner.PreRunner):
             value = self.test_info['module']
         return value
 
-    def get_directives(self):
+    def set_directives(self, keyname=None, value=None):
+        """ set a test directive """
+        self.test_info['directives'][keyname] = value
+
+    def get_directives(self, keyname=None, default=""):
         """ return the test directives """
-        return self.test_info['directives']
+        if keyname:
+            value = self.test_info['directives'].get(keyname, default)
+        else:
+            value = self.test_info['directives']
+        return value
 
     def get_execStrategy(self):
         """ return the execStrategy list """
         return self.test_info['execStrategy']
+
+    def parameters_one(self, parameters):
+        """ parameters for test strategy """
+        self.logger.debug("parameters substitution  %s", str(parameters))
+        finditems = re.compile('(?<={)\w+')
+        items = finditems.findall(str(parameters))
+        for item in items:
+            subitem = self.get_defaultENV(item)
+            if not subitem:
+                what = self.get_test_info('subList', item).split(':')
+                if len(what) > 1:
+                    if what[0] == 'config':
+                        subitem = self.info.get_config(what[1], "")
+                    else:
+                        subitem = self.get_test_info(what[0], what[1],
+                                                     "notfound")
+                else:
+                    subitem = what[0]
+            if not isinstance(subitem, str):
+                subitem = ','.join(subitem)
+            replace = "{{{!s}}}".format(item)
+            parameters = parameters.replace(replace, str(subitem))
+
+        self.logger.debug("parameters %s", parameters)
+        return parameters
+
+    def setup_parameters(self, item):
+        """ parameters for test strategy """
+        parameters = item.get('parameters', "")
+        if not parameters:
+            return parameters
+        if '{' in parameters:
+            paramList = parameters.split(' ')
+            for index in range(len(paramList)):
+                if '{' in paramList[index]:
+                    paramList[index] = self.parameters_one(paramList[index])
+            return ' '.join(paramList)
+        else:
+            return parameters

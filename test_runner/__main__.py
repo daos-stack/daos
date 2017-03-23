@@ -66,6 +66,7 @@ from MultiRunner import MultiRunner
 
 def import_daemon(name, info):
     """ import the daemon module and load the class """
+    _class = None
     try:
         _module = import_module(name)
         try:
@@ -74,7 +75,7 @@ def import_daemon(name, info):
             print("Class does not exist")
     except ImportError:
         print("Module does not exist")
-    return _class or None
+    return _class
 
 def testmain(info=None, start=1, testMode=None):
     """ main for test runner """
