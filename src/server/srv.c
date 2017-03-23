@@ -534,6 +534,37 @@ dss_create_ult(void (*func)(void *), void *arg, ABT_thread *ult)
 }
 
 /**
+ * Create an ULT on each server xtream to execute a \a func(\a arg)
+ *
+ * \param[in] func	function to be executed
+ * \param[in] arg	argument to be passed to \a func
+ * \return		Success or negative error code
+ *			0
+ *			-DER_NOMEM
+ *			-DER_INVAL
+ */
+int
+dss_create_ult_all(void (*func)(void *), void *arg)
+{
+	struct dss_xstream      *dx;
+	int			rc = 0;
+
+	/*
+	 * Create ULT for each stream in the target
+	 */
+	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
+		rc = ABT_thread_create(dx->dx_pool, func, arg,
+				       ABT_THREAD_ATTR_NULL,
+				       NULL /* new thread */);
+		if (rc != ABT_SUCCESS) {
+			rc = dss_abterr2der(rc);
+			break;
+		}
+	}
+	return rc;
+}
+
+/**
  * Collective operations among all server xstreams
  */
 

@@ -183,6 +183,7 @@ struct dss_module {
 };
 
 int dss_create_ult(void (*func)(void *), void *arg, ABT_thread *ult);
+int dss_create_ult_all(void (*func)(void *), void *arg);
 int dss_collective(int (*func)(void *), void *arg);
 
 /* Convert Argobots errno to DAOS ones. */
