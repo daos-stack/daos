@@ -46,6 +46,7 @@ from SCons.Script import Builder
 from SCons.Script import SConscript
 from build_info import BuildInfo
 
+
 class NotInitialized(Exception):
     """Exception raised when classes used before initialization
     """
@@ -56,6 +57,7 @@ class NotInitialized(Exception):
     def __str__(self):
         """ Exception string """
         return "PreReqComponents was not initialized"
+
 
 class DownloadFailure(Exception):
     """Exception raised when source can't be downloaded
@@ -74,6 +76,7 @@ class DownloadFailure(Exception):
         """ Exception string """
         return "Failed to get %s from %s" % (self.component, self.repo)
 
+
 class ExtractionError(Exception):
     """Exception raised when source couldn't be extracted
 
@@ -89,7 +92,8 @@ class ExtractionError(Exception):
     def __str__(self):
         """ Exception string """
 
-        return "Failed to extract %s" % (self.component)
+        return "Failed to extract %s" % self.component
+
 
 class UnsupportedCompression(Exception):
     """Exception raised when library doesn't support extraction method
@@ -104,7 +108,8 @@ class UnsupportedCompression(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "Don't know how to extract %s"%(self.component)
+        return "Don't know how to extract %s" % self.component
+
 
 class BadScript(Exception):
     """Exception raised when a preload script has errors
@@ -121,9 +126,10 @@ class BadScript(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "Failed to execute %s:\n%s %s\n\nTraceback"%(self.script,
-                                                            self.script,
-                                                            self.trace)
+        return "Failed to execute %s:\n%s %s\n\nTraceback" % (self.script,
+                                                              self.script,
+                                                              self.trace)
+
 
 class MissingDefinition(Exception):
     """Exception raised when component has no definition
@@ -138,7 +144,8 @@ class MissingDefinition(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "No definition for %s"%(self.component)
+        return "No definition for %s" % self.component
+
 
 class MissingPath(Exception):
     """Exception raised when user speficies a path that doesn't exist
@@ -153,7 +160,7 @@ class MissingPath(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "%s specifies a path that doesn't exist"%(self.variable)
+        return "%s specifies a path that doesn't exist" % self.variable
 
 
 class BuildFailure(Exception):
@@ -169,7 +176,8 @@ class BuildFailure(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "%s failed to build"%(self.component)
+        return "%s failed to build" % self.component
+
 
 class MissingTargets(Exception):
     """Exception raised when expected targets missing after component build
@@ -187,9 +195,10 @@ class MissingTargets(Exception):
         """ Exception string """
         if self.package is None:
             return "%s has missing targets after build.  " \
-                   "See config.log for details"%(self.component)
+                   "See config.log for details" % self.component
         return "Package %s is required. " \
-               "Check config.log"%(self.package)
+               "Check config.log" % self.package
+
 
 class MissingSystemLibs(Exception):
     """Exception raised when libraries required for target build are not met
@@ -204,7 +213,8 @@ class MissingSystemLibs(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "%s has unmet dependancies required for build"%(self.component)
+        return "%s has unmet dependancies required for build" % self.component
+
 
 class DownloadRequired(Exception):
     """Exception raised when component is missing but downloads aren't enabled
@@ -219,7 +229,8 @@ class DownloadRequired(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "%s needs to be built, use --build-deps=yes"%(self.component)
+        return "%s needs to be built, use --build-deps=yes" % self.component
+
 
 class BuildRequired(Exception):
     """Exception raised when component is missing but builds aren't enabled
@@ -234,7 +245,8 @@ class BuildRequired(Exception):
 
     def __str__(self):
         """ Exception string """
-        return "%s needs to be built, use --build-deps=yes"%(self.component)
+        return "%s needs to be built, use --build-deps=yes" % self.component
+
 
 class Runner(object):
     """Runs commands in a specified environment"""
@@ -269,7 +281,9 @@ class Runner(object):
             os.chdir(old)
         return retval
 
+
 RUNNER = Runner()
+
 
 def check_test(target, source, env, mode):
     """Check the results of the test"""
@@ -281,7 +295,7 @@ def check_test(target, source, env, mode):
                 error_str = """
 Please see %s for the errors and fix
 the issues causing the TESTS to fail.
-"""%target[0].path
+""" % target[0].path
                 break
         fobj.close()
     if mode == "memcheck" or mode == "helgrind":
@@ -293,14 +307,14 @@ the issues causing the TESTS to fail.
                 error_types = {}
                 for node in tree.iter('error'):
                     kind = node.find('./kind')
-                    if not kind.text in error_types:
+                    if kind.text not in error_types:
                         error_types[kind.text] = 0
                     error_types[kind.text] += 1
                 if error_types:
                     val_str += """
-Valgrind %s check failed.  See %s:"""%(mode, str(fname))
+Valgrind %s check failed.  See %s:""" % (mode, str(fname))
                     for err in error_types:
-                        val_str += "\n%-3d %s errors"%(error_types[err], err)
+                        val_str += "\n%-3d %s errors" % (error_types[err], err)
     if val_str != "":
         print """
 #########################################################%s
@@ -316,16 +330,18 @@ Libraries built successfully but some unit TESTS failed.
 """ % error_str
     return None
 
+
 def define_check_test(mode=None):
     """Define a function to create test checker"""
     return lambda target, source, env: check_test(target, source, env, mode)
+
 
 def run_test(source, target, env, for_signature, mode=None):
     """Create test actions."""
     count = 1
     sup_dir = os.path.dirname(source[0].srcnode().abspath)
-    sup_file = os.path.join(sup_dir, "%s.sup" %  mode)
-    action = ['touch %s'%target[0]]
+    sup_file = os.path.join(sup_dir, "%s.sup" % mode)
+    action = ['touch %s' % target[0]]
     for test in source:
         valgrind_str = ""
         if mode in ["memcheck", "helgrind"]:
@@ -336,18 +352,19 @@ def run_test(source, target, env, for_signature, mode=None):
                            "--child-silent-after-fork=yes " \
                            "%s " % (target[count], sup)
             if mode == "memcheck":
-                #Memory analysis
+                # Memory analysis
                 valgrind_str += "--leak-check=full "
             elif mode == "helgrind":
-                #Thread analysis
+                # Thread analysis
                 valgrind_str += "--tool=helgrind "
         count += 1
-        action.append("%s%s >> %s"%(valgrind_str,
-                                    str(test),
-                                    target[0]))
-    action.append("cat %s"%target[0])
+        action.append("%s%s >> %s" % (valgrind_str,
+                                      str(test),
+                                      target[0]))
+    action.append("cat %s" % target[0])
     action.append(define_check_test(mode=mode))
     return action
+
 
 def modify_targets(target, source, env, mode=None):
     """Emit the target list for the unit test builder"""
@@ -355,9 +372,10 @@ def modify_targets(target, source, env, mode=None):
     if mode == "memcheck" or mode == "helgrind":
         for src in source:
             basename = os.path.basename(str(src))
-            xml = "valgrind-%s-%s.xml"%(mode, basename)
+            xml = "valgrind-%s-%s.xml" % (mode, basename)
             target.append(xml)
     return target, source
+
 
 def define_run_test(mode=None):
     """Define a function to create test actions"""
@@ -367,10 +385,12 @@ def define_run_test(mode=None):
                                                                for_signature,
                                                                mode)
 
+
 def define_modify_targets(mode=None):
     """Define a function to create test targets"""
     return lambda target, source, env: modify_targets(target, source,
                                                       env, mode)
+
 
 class GitRepoRetriever(object):
     """Identify a git repository from which to download sources"""
@@ -384,16 +404,16 @@ class GitRepoRetriever(object):
 
     def checkout_commit(self, subdir):
         """ checkout a certain commit SHA """
-        if self.commit_sha != None:
-            commands = ['git checkout %s' %(self.commit_sha)]
+        if self.commit_sha is not None:
+            commands = ['git checkout %s' % (self.commit_sha)]
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
     def apply_patch(self, subdir):
         """ git-apply a certain hash """
-        if self.patch != None:
-            print "Applying patch %s" %(self.patch)
-            commands = ['git apply %s' %(self.patch)]
+        if self.patch is not None:
+            print "Applying patch %s" % (self.patch)
+            commands = ['git apply %s' % (self.patch)]
             if not RUNNER.run_commands(commands, subdir=subdir):
                 raise DownloadFailure(self.url, subdir)
 
@@ -424,6 +444,7 @@ class GitRepoRetriever(object):
             raise DownloadFailure(self.url, subdir)
         self.update_submodules(subdir)
 
+
 class WebRetriever(object):
     """Identify a location from where to download a source package"""
 
@@ -435,7 +456,7 @@ class WebRetriever(object):
         basename = os.path.basename(self.url)
 
         if os.path.exists(basename) and os.path.exists(subdir):
-            #assume that nothing has changed
+            # assume that nothing has changed
             return
 
         commands = ['rm -rf %s' % subdir]
@@ -459,6 +480,7 @@ class WebRetriever(object):
         """ update the code if the url has changed """
         # Will download the file if the name has changed
         self.get(subdir)
+
 
 class PreReqComponent(object):
     """A class for defining and managing external components required
@@ -508,7 +530,7 @@ class PreReqComponent(object):
         build_dir_name = '_build.external'
         install_dir = os.path.join(self.__top_dir, 'install')
         if arch:
-            build_dir_name = '_build.external-%s'%arch
+            build_dir_name = '_build.external-%s' % arch
             install_dir = os.path.join('install', str(arch))
 
             # Overwrite default file locations to allow multiple builds in the
@@ -557,7 +579,7 @@ class PreReqComponent(object):
         if os.path.exists(local_script):
             SConscript(local_script, exports=['env'])
 
-        if config_file != None:
+        if config_file is not None:
             self.configs = ConfigParser.ConfigParser()
             self.configs.read(config_file)
 
@@ -579,9 +601,10 @@ class PreReqComponent(object):
                   help='Force an update of a prerequisite COMPONENT.  Use '
                        '\'all\' to update all components')
 
-        # There is another case here which isn't handled, we want Jenkins builds
-        # to download tar packages but not git source code.  For now just have a
-        # single flag and set this for the Jenkins builds which need this.
+        # There is another case here which isn't handled, we want Jenkins
+        # builds to download tar packages but not git source code.  For now
+        # just have a single flag and set this for the Jenkins builds which
+        # need this.
         AddOption('--build-deps',
                   dest='build_deps',
                   type='choice',
@@ -589,7 +612,7 @@ class PreReqComponent(object):
                   default='no',
                   help="Automatically download and build sources")
 
-        # We want to be able to check what depenencies are needed with out
+        # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
         # on the command line because it disables running the tests for the
         # the dependencies.  So we need a new option
@@ -623,8 +646,7 @@ class PreReqComponent(object):
         test_run = Builder(generator=define_run_test(mode),
                            emitter=define_modify_targets(mode))
 
-        self.__env.Append(BUILDERS={"RunTests" : test_run})
-
+        self.__env.Append(BUILDERS={"RunTests": test_run})
 
     def __parse_build_deps(self):
         """Parse the build dependances command line flag"""
@@ -667,8 +689,7 @@ class PreReqComponent(object):
 
     def define(self,
                name,
-               **kw
-              ):
+               **kw):
         """Define an external prerequisite component
 
     Args:
@@ -693,8 +714,7 @@ class PreReqComponent(object):
         comp = _Component(self,
                           name,
                           update,
-                          **kw
-                         )
+                          **kw)
         self.__defined[name] = comp
 
     def preload(self, script, **kw):
@@ -712,7 +732,7 @@ class PreReqComponent(object):
             lvars = {}
             sfile = open(script, 'r')
             scomp = compile(sfile.read(), '<string>', 'exec')
-            exec (scomp, gvars, lvars)
+            exec(scomp, gvars, lvars)
         except Exception:
             raise BadScript(script, traceback.format_exc())
 
@@ -726,8 +746,7 @@ class PreReqComponent(object):
     def require(self,
                 env,
                 *comps,
-                **kw
-               ):
+                **kw):
         """Ensure a component is built, if necessary, and add necessary
            libraries and paths to the construction environment.
 
@@ -752,7 +771,7 @@ class PreReqComponent(object):
                 if self.__required[comp]:
                     changes = True
                 continue
-            if not comp in self.__defined:
+            if comp not in self.__defined:
                 raise MissingDefinition(comp)
             self.__required[comp] = False
             self.__defined[comp].configure()
@@ -813,7 +832,7 @@ class PreReqComponent(object):
     def save_component_prefix(self, var, value):
         """Save the component prefix in the environment and
            in build info"""
-        self.replace_env(**{var:value})
+        self.replace_env(**{var: value})
         self.__build_info.update(var, value)
 
     def get_prefixes(self, name, prebuilt_path):
@@ -875,6 +894,7 @@ class PreReqComponent(object):
             return None
         return self.configs.get(section, name)
 
+
 class _Component(object):
     """A class to define attributes of an external component
 
@@ -898,8 +918,7 @@ class _Component(object):
                  prereqs,
                  name,
                  update,
-                 **kw
-                ):
+                 **kw):
 
         self.__check_only = GetOption('check_only')
         self.__dry_run = GetOption('no_exec')
@@ -950,7 +969,6 @@ class _Component(object):
             else:
                 os.unlink(path)
 
-
     def get(self):
         """Download the component sources, if necessary"""
         if self.prebuilt_path:
@@ -962,7 +980,7 @@ class _Component(object):
                 % (self.src_path, self.name)
             if self.update:
                 defpath = os.path.join(self.prereqs.get_build_dir(), self.name)
-                #only do this if the source was checked out by this script
+                # only do this if the source was checked out by this script
                 if self.src_path == defpath:
                     if self.__dry_run:
                         print 'Would retrieve %s' % self.src_path
@@ -1000,7 +1018,7 @@ class _Component(object):
             for fname in files:
                 (_, ext) = os.path.splitext(fname)
 
-                 # not fool proof but may be good enough
+                # not fool proof but may be good enough
 
                 if ext in ['.c',
                            '.h',
@@ -1009,8 +1027,7 @@ class _Component(object):
                            '.hpp',
                            '.ac',
                            '.in',
-                           '.py',
-                          ]:
+                           '.py']:
                     with open(os.path.join(root, fname), 'r') as src:
                         new_crc += hashlib.md5(src.read()).hexdigest()
         return new_crc
@@ -1026,7 +1043,7 @@ class _Component(object):
             pass
         if old_crc == '':
             return True
-        #only do CRC check if the sources have been updated
+        # only do CRC check if the sources have been updated
         if self.update:
             print 'Checking %s sources for changes' % self.name
             if old_crc != self.calculate_crc():
@@ -1189,7 +1206,6 @@ class _Component(object):
             os.system("rm -rf %s" % path)
             os.mkdir(path)
 
-
     def build(self, env, headers_only):
         """Build the component, if necessary"""
         # Ensure requirements are met
@@ -1211,8 +1227,7 @@ class _Component(object):
             self.get()
             has_changes = self.has_changes()
 
-        if changes or has_changes \
-            or self.has_missing_targets(envcopy):
+        if changes or has_changes or self.has_missing_targets(envcopy):
 
             if not self.prereqs.build_deps:
                 raise BuildRequired(self.name)
@@ -1241,6 +1256,7 @@ class _Component(object):
             crcfile.write(new_crc)
         return changes
 
+
 __all__ = ["GitRepoRetriever", "WebRetriever",
            "PreReqComponent", "NotInitialized",
            "DownloadFailure", "ExtractionError",
@@ -1248,5 +1264,4 @@ __all__ = ["GitRepoRetriever", "WebRetriever",
            "MissingPath", "BuildFailure",
            "MissingDefinition", "MissingTargets",
            "MissingSystemLibs", "DownloadRequired",
-           "BuildRequired"
-          ]
+           "BuildRequired"]
