@@ -137,9 +137,28 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	return 0;
 }
 
-static int st_compare_latencies(const void *a, const void *b)
+static int st_compare_latencies_by_vals(const void *a_in, const void *b_in)
 {
-	return ((struct st_latency *)a)->val > ((struct st_latency *)b)->val;
+	struct st_latency *a = (struct st_latency *)a_in;
+	struct st_latency *b = (struct st_latency *)b_in;
+
+	if (a->val != b->val)
+		return a->val > b->val;
+	return a->cci_rc > b->cci_rc;
+}
+
+static int st_compare_latencies_by_ranks(const void *a_in, const void *b_in)
+{
+	struct st_latency *a = (struct st_latency *)a_in;
+	struct st_latency *b = (struct st_latency *)b_in;
+
+	if (a->rank != b->rank)
+		return a->rank > b->rank;
+	if (a->tag != b->tag)
+		return a->tag > b->tag;
+	if (a->val != b->val)
+		return a->val > b->val;
+	return a->cci_rc > b->cci_rc;
 }
 
 static int start_test_cb(const struct crt_cb_info *cb_info)
@@ -200,6 +219,229 @@ static int status_req_cb(const struct crt_cb_info *cb_info)
 	return 0;
 }
 
+/*
+ * Iterates over a list of failing latency measurements and prints out the
+ * count of each type of failure, along with the error string and code
+ *
+ * The input latencies must be sorted by cci_rc to group all same cci_rc values
+ * together into contiguous blocks (-1 -1 -1, -2 -2 -2, etc.)
+ */
+static void print_fail_counts(struct st_latency *latencies,
+			      uint32_t num_latencies,
+			      const char *prefix)
+{
+	uint32_t last_err_idx = 0;
+	uint32_t local_rep = 0;
+
+	/* Function called but no errors to print */
+	if (latencies[0].cci_rc == 0)
+		return;
+
+	while (1) {
+		/*
+		 * Detect when the error code has changed and print the count
+		 * of the last error code block
+		 */
+		if (local_rep >= num_latencies ||
+		    latencies[local_rep].cci_rc == 0 ||
+		    latencies[last_err_idx].cci_rc !=
+		    latencies[local_rep].cci_rc) {
+			printf("%s%u: -%s (%d)\n", prefix,
+			       local_rep - last_err_idx,
+			       crt_errstr(-latencies[last_err_idx].cci_rc),
+			       latencies[last_err_idx].cci_rc);
+			last_err_idx = local_rep;
+		}
+
+		/* Abort upon reaching the end of the list or a non-failure */
+		if (local_rep >= num_latencies ||
+		    latencies[local_rep].cci_rc == 0)
+			break;
+
+		local_rep++;
+	}
+
+}
+
+static void print_results(struct st_latency *latencies,
+			  struct crt_st_start_params *test_params,
+			  int64_t test_duration_ns, int output_megabits)
+{
+	uint32_t	 local_rep;
+	uint32_t	 num_failed = 0;
+	uint32_t	 num_passed = 0;
+	double		 latency_std_dev;
+	int64_t		 latency_avg;
+	double		 throughput;
+	double		 bandwidth;
+
+	/* Check for bugs */
+	C_ASSERT(latencies != NULL);
+	C_ASSERT(test_params != NULL);
+	C_ASSERT(test_params->rep_count != 0);
+	C_ASSERT(test_duration_ns > 0);
+
+	/* Compute the throughput in RPCs/sec */
+	throughput = test_params->rep_count /
+		(test_duration_ns / 1000000000.0F);
+	/* Compute bandwidth in bytes */
+	bandwidth = throughput * (test_params->send_size +
+				  test_params->reply_size);
+
+	/* Print the results for this size */
+	printf("Results for message size (%d-%s %d-%s)"
+	       " (max_inflight_rpcs = %d):\n",
+	       test_params->send_size,
+	       crt_st_msg_type_str[test_params->send_type],
+	       test_params->reply_size,
+	       crt_st_msg_type_str[test_params->reply_type],
+	       test_params->max_inflight);
+	if (output_megabits)
+		printf("\tRPC Bandwidth (Mbits/sec): %.2f\n",
+		       bandwidth * 8.0F / 1000000.0F);
+	else
+		printf("\tRPC Bandwidth (MB/sec): %.2f\n",
+		       bandwidth / (1024.0F * 1024.0F));
+	printf("\tRPC Throughput (RPCs/sec): %.0f\n", throughput);
+
+
+	/* Figure out how many repetitions were errors */
+	num_failed = 0;
+	for (local_rep = 0; local_rep < test_params->rep_count; local_rep++)
+		if (latencies[local_rep].cci_rc < 0) {
+			num_failed++;
+
+			/* Since this RPC failed, overwrite its latency
+			 * with -1 so it will sort before any passing
+			 * RPCs. This segments the latencies into two
+			 * sections - from [0:num_failed] will be -1,
+			 * and from [num_failed:] will be succesful RPC
+			 * latencies
+			 */
+			latencies[local_rep].val = -1;
+		}
+
+	/*
+	 * Compute number successful and exit early if none worked to
+	 * guard against overflow and divide by zero later
+	 */
+	num_passed = test_params->rep_count - num_failed;
+	if (num_passed == 0) {
+		printf("\tAll RPCs for this message size failed\n");
+		return;
+	}
+
+	/*
+	 * Sort the latencies by: (in descending order of precedence)
+	 * - val
+	 * - cci_rc
+	 *
+	 * Note that errors have a val = -1, so they get grouped together
+	 */
+	qsort(latencies, test_params->rep_count,
+	      sizeof(latencies[0]), st_compare_latencies_by_vals);
+
+	/* Compute average and standard deviation of all results */
+	latency_avg = 0;
+	for (local_rep = num_failed; local_rep < test_params->rep_count;
+	     local_rep++)
+		latency_avg += latencies[local_rep].val;
+	latency_avg /= test_params->rep_count;
+
+	latency_std_dev = 0;
+	for (local_rep = num_failed; local_rep < test_params->rep_count;
+	     local_rep++)
+		latency_std_dev +=
+			pow(latencies[local_rep].val - latency_avg,
+			    2);
+	latency_std_dev /= num_passed;
+	latency_std_dev = sqrt(latency_std_dev);
+
+	/* Print latency summary results */
+	printf("\tRPC Latencies (us):\n"
+	       "\t\tMin    : %ld\n"
+	       "\t\t25th  %%: %ld\n"
+	       "\t\tMedian : %ld\n"
+	       "\t\t75th  %%: %ld\n"
+	       "\t\tMax    : %ld\n"
+	       "\t\tAverage: %ld\n"
+	       "\t\tStd Dev: %.2f\n",
+	       latencies[num_failed].val / 1000,
+	       latencies[num_failed + num_passed / 4].val / 1000,
+	       latencies[num_failed + num_passed / 2].val / 1000,
+	       latencies[num_failed + num_passed*3/4].val / 1000,
+	       latencies[test_params->rep_count - 1].val / 1000,
+	       latency_avg / 1000, latency_std_dev / 1000);
+
+	/* Print error summary results */
+	printf("\tRPC Failures: %u\n", num_failed);
+	/* print_fail_counts(&latencies[0], num_failed, "\t\t"); */
+
+	printf("\n");
+
+	/*
+	 * Sort the latencies by: (in descending order of precedence)
+	 * - rank
+	 * - tag
+	 * - val
+	 * - cci_rc
+	 *
+	 * Note that errors have a val = -1, so they get grouped together
+	 */
+	qsort(latencies, test_params->rep_count,
+	      sizeof(latencies[0]), st_compare_latencies_by_ranks);
+
+	printf("\tEndpoint results (rank:tag - Median Latency (us)):\n");
+
+	/* Iterate over each rank / tag pair */
+	local_rep = 0;
+	do {
+		uint32_t rank = latencies[local_rep].rank;
+		uint32_t tag = latencies[local_rep].tag;
+		uint32_t start_idx = local_rep;
+		uint32_t last_idx;
+		uint32_t median_idx;
+
+		/* Compute start, last, and num_failed for this rank/tag */
+		num_failed = 0;
+		while (1) {
+			if (latencies[local_rep].rank != rank ||
+			    latencies[local_rep].tag != tag)
+				break;
+
+			if (latencies[local_rep].cci_rc < 0)
+				num_failed++;
+
+			local_rep++;
+			if (local_rep >= test_params->rep_count)
+				break;
+		}
+		last_idx = local_rep - 1;
+		C_ASSERT(start_idx + num_failed <= last_idx);
+
+		/* Compute median index */
+		median_idx = start_idx + num_failed +
+			(last_idx - start_idx - num_failed) / 2;
+		C_ASSERT(median_idx <= last_idx);
+		C_ASSERT(median_idx >= start_idx + num_failed);
+
+		printf("\t\t%u:%u - ", rank, tag);
+
+		/* At least some messages to this endpoint succeeded */
+		if (start_idx + num_failed < last_idx)
+			printf("%ld", latencies[median_idx].val / 1000);
+
+		printf("\n");
+		if (num_failed > 0)
+			printf("\t\t\tFailures: %u\n", num_failed);
+		print_fail_counts(&latencies[start_idx], num_failed, "\t\t\t");
+
+	} while (local_rep < test_params->rep_count);
+
+	printf("\n");
+
+}
+
 static int run_self_test(struct st_size_params all_params[],
 			 int num_msg_sizes, int rep_count, int max_inflight,
 			 char *dest_name, crt_endpoint_t *master_endpt,
@@ -218,11 +460,6 @@ static int run_self_test(struct st_size_params all_params[],
 	crt_iov_t		 latencies_iov = {0};
 	crt_sg_list_t		 latencies_sg_list = { {0} };
 	crt_bulk_t		 latencies_bulk_hdl = CRT_BULK_NULL;
-
-	int64_t			 latency_avg;
-	double			 latency_std_dev;
-	double			 throughput;
-	double			 bandwidth;
 
 	crt_endpoint_t		 self_endpt;
 
@@ -281,9 +518,6 @@ static int run_self_test(struct st_size_params all_params[],
 	C_ASSERT(latencies_bulk_hdl != CRT_BULK_NULL);
 
 	for (size_idx = 0; size_idx < num_msg_sizes; size_idx++) {
-		int				 local_rep;
-		int				 num_failed = 0;
-		int				 num_passed = 0;
 		int				 reply_status = INT32_MAX;
 		crt_rpc_t			*new_rpc;
 		struct crt_st_start_params	 test_params = { {0} };
@@ -396,29 +630,6 @@ static int run_self_test(struct st_size_params all_params[],
 		} while (status_req_reply.status !=
 			 CRT_ST_STATUS_TEST_COMPLETE);
 
-		/* Compute the throughput in RPCs/sec */
-		throughput = rep_count / (status_req_reply.test_duration_ns /
-					  1000000000.0F);
-		/* Compute bandwidth in bytes */
-		bandwidth = throughput * (test_params.send_size +
-					  test_params.reply_size);
-
-		/* Print the results for this size */
-		printf("Results for message size (%d-%s %d-%s)"
-		       " (max_inflight_rpcs = %d)\n",
-		       test_params.send_size,
-		       crt_st_msg_type_str[test_params.send_type],
-		       test_params.reply_size,
-		       crt_st_msg_type_str[test_params.reply_type],
-		       max_inflight);
-		if (output_megabits)
-			printf("\tRPC Bandwidth (Mbits/sec): %.2f\n",
-			       bandwidth * 8.0F / 1000000.0F);
-		else
-			printf("\tRPC Bandwidth (MB/sec): %.2f\n",
-			       bandwidth / (1024.0F * 1024.0F));
-		printf("\tRPC Throughput (RPCs/sec): %.0f\n", throughput);
-
 		/*
 		 * TODO:
 		 * In the future, probably want to return the latencies here
@@ -427,71 +638,9 @@ static int run_self_test(struct st_size_params all_params[],
 		 * latencies are overwritten
 		 */
 
-		/* Figure out how many repetitions were errors */
-		num_failed = 0;
-		for (local_rep = 0; local_rep < rep_count; local_rep++)
-			if (latencies[local_rep].cci_rc < 0) {
-				num_failed++;
-
-				/* Since this RPC failed, overwrite its latency
-				 * with -1 so it will sort before any passing
-				 * RPCs. This segments the latencies into two
-				 * sections - from [0:num_failed] will be -1,
-				 * and from [num_failed:] will be succesful RPC
-				 * latencies
-				 */
-				latencies[local_rep].val = -1;
-
-			}
-
-		/*
-		 * Compute number successful and exit early if none worked to
-		 * guard against overflow and divide by zero later
-		 */
-		num_passed = rep_count - num_failed;
-		if (num_passed == 0) {
-			printf("\tAll RPCs for this message size failed\n");
-			continue;
-		}
-
-		/* Sort the latencies */
-		qsort(latencies, rep_count,
-		      sizeof(latencies[0]), st_compare_latencies);
-
-		/* Compute average and standard deviation */
-		latency_avg = 0;
-		for (local_rep = num_failed; local_rep < rep_count;
-		     local_rep++)
-			latency_avg += latencies[local_rep].val;
-		latency_avg /= rep_count;
-
-		latency_std_dev = 0;
-		for (local_rep = num_failed; local_rep < rep_count;
-		     local_rep++)
-			latency_std_dev +=
-				pow(latencies[local_rep].val - latency_avg,
-				    2);
-		latency_std_dev /= num_passed;
-		latency_std_dev = sqrt(latency_std_dev);
-
-		/* Print Latency Results */
-		printf("\tRPC Failures: %d\n"
-		       "\tRPC Latencies (us):\n"
-		       "\t\tMin    : %ld\n"
-		       "\t\t25th  %%: %ld\n"
-		       "\t\tMedian : %ld\n"
-		       "\t\t75th  %%: %ld\n"
-		       "\t\tMax    : %ld\n"
-		       "\t\tAverage: %ld\n"
-		       "\t\tStd Dev: %.2f\n",
-		       num_failed,
-		       latencies[num_failed].val / 1000,
-		       latencies[num_failed + num_passed / 4].val / 1000,
-		       latencies[num_failed + num_passed / 2].val / 1000,
-		       latencies[num_failed + num_passed*3/4].val / 1000,
-		       latencies[rep_count - 1].val / 1000,
-		       latency_avg / 1000, latency_std_dev / 1000);
-		printf("\n");
+		print_results(latencies, &test_params,
+			      status_req_reply.test_duration_ns,
+			      output_megabits);
 
 /* Some failure cases require a multilevel break to try the next message size */
 next_size:
