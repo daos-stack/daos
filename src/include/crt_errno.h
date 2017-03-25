@@ -39,78 +39,113 @@
  * CaRT Error numbers
  */
 
-#ifndef __CRT_ERRNO_H__
+#if !defined(__CRT_ERRNO_H__) || defined(CRT_ERRNO_GEN_ERRSTR)
 #define __CRT_ERRNO_H__
 
-typedef enum {
-	CER_ERR_BASE		= 1000,
-	/** no permission */
-	CER_NO_PERM		= (CER_ERR_BASE + 1),
-	/** invalid handle */
-	CER_NO_HDL		= (CER_ERR_BASE + 2),
-	/** invalid parameters */
-	CER_INVAL		= (CER_ERR_BASE + 3),
-	/** entity already exists */
-	CER_EXIST		= (CER_ERR_BASE + 4),
-	/** nonexistent entity */
-	CER_NONEXIST		= (CER_ERR_BASE + 5),
-	/** unreachable node */
-	CER_UNREACH		= (CER_ERR_BASE + 6),
-	/** no space on storage target */
-	CER_NOSPACE		= (CER_ERR_BASE + 7),
-	/** already did sth */
-	CER_ALREADY		= (CER_ERR_BASE + 8),
-	/** NO memory */
-	CER_NOMEM		= (CER_ERR_BASE + 9),
-	/** Function not implemented */
-	CER_NOSYS		= (CER_ERR_BASE + 10),
-	/** timed out */
-	CER_TIMEDOUT		= (CER_ERR_BASE + 11),
-	/** Busy */
-	CER_BUSY		= (CER_ERR_BASE + 12),
-	/** Try again */
-	CER_AGAIN		= (CER_ERR_BASE + 13),
-	/** incompatible protocol */
-	CER_PROTO		= (CER_ERR_BASE + 14),
-	/** not initialized */
-	CER_UNINIT		= (CER_ERR_BASE + 15),
-	/** buffer too short (larger buffer needed) */
-	CER_TRUNC		= (CER_ERR_BASE + 16),
-	/** value too large for defined data type */
-	CER_OVERFLOW		= (CER_ERR_BASE + 17),
-	/** operation canceled */
-	CER_CANCELED		= (CER_ERR_BASE + 18),
-	/** Out-Of-Group or member list */
-	CER_OOG			= (CER_ERR_BASE + 19),
-	/** transport layer mercury error */
-	CER_HG			= (CER_ERR_BASE + 20),
-	/** CRT RPC (opcode) unregister */
-	CER_UNREG		= (CER_ERR_BASE + 21),
-	/** CRT failed to generate an address string */
-	CER_ADDRSTR_GEN		= (CER_ERR_BASE + 22),
-	/** CRT PMIx layer error */
-	CER_PMIX		= (CER_ERR_BASE + 23),
-	/** CRT IV callback - cannot handle locally */
-	CER_IVCB_FORWARD	= (CER_ERR_BASE + 24),
-	/** CRT miscellaneous error */
-	CER_MISC		= (CER_ERR_BASE + 25),
-	/** Bad path name */
-	CER_BADPATH		= (CER_ERR_BASE + 26),
-	/** Not a directory */
-	CER_NOTDIR		= (CER_ERR_BASE + 27),
-	/** corpc failed */
-	CER_CORPC_INCOMPLETE	= (CER_ERR_BASE + 28),
-	/** no rank is subscribed to RAS */
-	CER_NO_RAS_RANK		= (CER_ERR_BASE + 29),
-	/** service group not attached */
-	CER_NOTATTACH		= (CER_ERR_BASE + 30),
-	/** version mismatch */
-	CER_MISMATCH		= (CER_ERR_BASE + 31),
-	/** unknown error */
-	CER_UNKNOWN		= (CER_ERR_BASE + 500),
-	/** TODO: add more error numbers */
-} crt_errno_t;
+/*
+ * This preprocessor machinery implements crt_errstr() automatically (with
+ * the help of crt_errno.c) without duplicating the actual list of values
+ *
+ * If CRT_ERRNO_GEN_ERRSTR is NOT defined (default), this creates:
+ *   typedef enum {
+ *    ...
+ *   } crt_errno_t;
+ *
+ * If CRT_ERRNO_GEN_ERRSTR is defined (when included by crt_errno.c),
+ * this creates:
+ *   const char *crt_errstr(crt_errno_t crt_errno) {
+ *     switch (crt_errno) {
+ *     case (...)
+ *     default:
+ *       return "Unknown crt_errno_t";
+ *     }
+ *   }
+ */
 
-const char *crt_errstr(crt_errno_t errno);
+#ifndef CRT_ERRNO_GEN_ERRSTR
+#define CRT_ERRNO_BEGIN_ENUM typedef enum {
+#define CRT_ERRNO_DECL(name, value) name = value,
+#define CRT_ERRNO_END_ENUM } crt_errno_t;
+#else
+#define CRT_ERRNO_BEGIN_ENUM const char *crt_errstr(crt_errno_t crt_errno) {   \
+	switch (crt_errno) {
+#define CRT_ERRNO_DECL(name, value) case name: return #name;
+#define CRT_ERRNO_END_ENUM default: return "Unknown crt_errno_t"; } }
+#endif
+
+CRT_ERRNO_BEGIN_ENUM
+	CRT_ERRNO_DECL(CER_ERR_BASE,		1000)
+	/** no permission */
+	CRT_ERRNO_DECL(CER_NO_PERM,		(CER_ERR_BASE + 1))
+	/** invalid handle */
+	CRT_ERRNO_DECL(CER_NO_HDL,		(CER_ERR_BASE + 2))
+	/** invalid parameters */
+	CRT_ERRNO_DECL(CER_INVAL,		(CER_ERR_BASE + 3))
+	/** entity already exists */
+	CRT_ERRNO_DECL(CER_EXIST,		(CER_ERR_BASE + 4))
+	/** nonexistent entity */
+	CRT_ERRNO_DECL(CER_NONEXIST,		(CER_ERR_BASE + 5))
+	/** unreachable node */
+	CRT_ERRNO_DECL(CER_UNREACH,		(CER_ERR_BASE + 6))
+	/** no space on storage target */
+	CRT_ERRNO_DECL(CER_NOSPACE,		(CER_ERR_BASE + 7))
+	/** already did sth */
+	CRT_ERRNO_DECL(CER_ALREADY,		(CER_ERR_BASE + 8))
+	/** NO memory */
+	CRT_ERRNO_DECL(CER_NOMEM,		(CER_ERR_BASE + 9))
+	/** Function not implemented */
+	CRT_ERRNO_DECL(CER_NOSYS,		(CER_ERR_BASE + 10))
+	/** timed out */
+	CRT_ERRNO_DECL(CER_TIMEDOUT,		(CER_ERR_BASE + 11))
+	/** Busy */
+	CRT_ERRNO_DECL(CER_BUSY,		(CER_ERR_BASE + 12))
+	/** Try again */
+	CRT_ERRNO_DECL(CER_AGAIN,		(CER_ERR_BASE + 13))
+	/** incompatible protocol */
+	CRT_ERRNO_DECL(CER_PROTO,		(CER_ERR_BASE + 14))
+	/** not initialized */
+	CRT_ERRNO_DECL(CER_UNINIT,		(CER_ERR_BASE + 15))
+	/** buffer too short (larger buffer needed) */
+	CRT_ERRNO_DECL(CER_TRUNC,		(CER_ERR_BASE + 16))
+	/** value too large for defined data type */
+	CRT_ERRNO_DECL(CER_OVERFLOW,		(CER_ERR_BASE + 17))
+	/** operation canceled */
+	CRT_ERRNO_DECL(CER_CANCELED,		(CER_ERR_BASE + 18))
+	/** Out-Of-Group or member list */
+	CRT_ERRNO_DECL(CER_OOG,			(CER_ERR_BASE + 19))
+	/** transport layer mercury error */
+	CRT_ERRNO_DECL(CER_HG,			(CER_ERR_BASE + 20))
+	/** CRT RPC (opcode) unregister */
+	CRT_ERRNO_DECL(CER_UNREG,		(CER_ERR_BASE + 21))
+	/** CRT failed to generate an address string */
+	CRT_ERRNO_DECL(CER_ADDRSTR_GEN,		(CER_ERR_BASE + 22))
+	/** CRT PMIx layer error */
+	CRT_ERRNO_DECL(CER_PMIX,		(CER_ERR_BASE + 23))
+	/** CRT IV callback - cannot handle locally */
+	CRT_ERRNO_DECL(CER_IVCB_FORWARD,	(CER_ERR_BASE + 24))
+	/** CRT miscellaneous error */
+	CRT_ERRNO_DECL(CER_MISC,		(CER_ERR_BASE + 25))
+	/** Bad path name */
+	CRT_ERRNO_DECL(CER_BADPATH,		(CER_ERR_BASE + 26))
+	/** Not a directory */
+	CRT_ERRNO_DECL(CER_NOTDIR,		(CER_ERR_BASE + 27))
+	/** corpc failed */
+	CRT_ERRNO_DECL(CER_CORPC_INCOMPLETE,	(CER_ERR_BASE + 28))
+	/** no rank is subscribed to RAS */
+	CRT_ERRNO_DECL(CER_NO_RAS_RANK,		(CER_ERR_BASE + 29))
+	/** service group not attached */
+	CRT_ERRNO_DECL(CER_NOTATTACH,		(CER_ERR_BASE + 30))
+	/** version mismatch */
+	CRT_ERRNO_DECL(CER_MISMATCH,		(CER_ERR_BASE + 31))
+	/** unknown error */
+	CRT_ERRNO_DECL(CER_UNKNOWN,		(CER_ERR_BASE + 500))
+	/** TODO: add more error numbers */
+CRT_ERRNO_END_ENUM
+
+#undef CRT_ERRNO_BEGIN_ENUM
+#undef CRT_ERRNO_DECL
+#undef CRT_ERRNO_END_ENUM
+
+const char *crt_errstr(crt_errno_t crt_errno);
 
 #endif /*  __CRT_ERRNO_H__ */
