@@ -24,7 +24,7 @@ set -x
 function usage()
 {
   cat << EOF
-Usage: $0 [-c <config_file>] [<custom_build_script>]
+Usage: $0 [<-c|--build-config> <config_file>] [<custom_build_script>]
        <config_file>          A file containing build configuration.
                               Default is build.config (See CONFIG)
        <custom_build_script>> An optional script sourced after a successful
@@ -43,14 +43,15 @@ OVERVIEW
 
 CONFIG
        A build configuration file is required.  The file must have the
-       the following line:
+       the following line in a section headed by [component]:
 
            component=<component>
 
        This specifies the name of the component being built.   There must be
        a corresponding <component>-update-scratch job
 
-       It must also specify each dependence using the following format:
+       It must also specify each dependence using the following format in a
+       section headed by [depends]
 
            depends=<name>:<build_no>
 
@@ -61,6 +62,10 @@ CONFIG
        component.   This build will be used for the component.  If it isn't
        specified, the tool will use the latest successful build to determine
        a version to use.
+
+       It can have a section labeled [commit_versions] which is used
+       to specify the commits to be pulled from the upstream repository
+       for rebuilding components.
 
 DETAILS
        This tool uses the .build_info.sh script that is saved with various
@@ -83,6 +88,21 @@ CUSTOM
        Before sourcing the script, COMP_PREFIX is set to the installation
        directory of the component.
 
+ENVIRONMENT
+       The following environment variables will affect a build.
+
+          BUILD_OPTIONS is a string with options to be added to the scons
+          build step.  export BUILD_OPTIONS=--dry-run.
+
+          INSTALL_OPTIONS is a string with options to be added to the
+          scons install step.  Not currently supported for docker builds
+          started by this script.
+
+       The BUILD_OPTIONS are not passed to the install step.  If you pass
+       a BUILD_OPTION that does not do a build, when the install step runs
+       when it does not see a build, it will also attempt a build unless
+       you also pass the same option to INSTALL_OPTIONS.
+
 EXAMPLE
        Building IOF, cart, mcl, DAOS, and CPPR from the job script:
        This script normalizes the build between various components.  It is no
@@ -99,7 +119,10 @@ EXAMPLE
        of ompi, and 32 of mercury.  To use those versions, it would specify the
        following in the top level build.config file:
 
+           [component]
            component=cppr
+
+           [depends]
            depends=iof:33
            depends=mcl:54
            depends=ompi:111
@@ -203,12 +226,14 @@ fi
 BUILD_CONFIG=`pwd`/build.config
 CUSTOM_SCRIPT=
 CUSTOM_SCRIPT_PASSED=
+CUSTOM_BUILD_CONFIG=
 
 while [ -n "$*" ]; do
   case "$1" in
-    -c)
+    -c|--build-config)
       shift
       BUILD_CONFIG=$(realpath $1)
+      CUSTOM_BUILD_CONFIG="--build-config ${realpath $1}"
       shift
       ;;
     *)
@@ -280,9 +305,10 @@ rm -f ${B_COMP}-`uname -s`.conf
 if [ -z "${DOCKER_IMAGE}" ]; then
 
   if [ -n "${BUILD_OPTIONS}" ]; then
-    scons $SET_PREFIX ${option} ${BUILD_OPTIONS} --config=force
+    scons $SET_PREFIX ${option} ${BUILD_OPTIONS} \
+      ${CUSTOM_BUILD_CONFIG} --config=force
   else
-    scons $SET_PREFIX ${option} --config=force
+    scons $SET_PREFIX ${option} ${CUSTOM_BUILD_CONFIG} --config=force
   fi
   : ${INSTALL_OPTIONS:=""}
   scons ${INSTALL_OPTIONS} install
@@ -301,6 +327,10 @@ else
 
   if [ -n "${BUILD_OPTIONS}" ]; then
     option="${option} ${BUILD_OPTIONS}"
+  fi
+
+  if [ -n "${CUSTOM_BUILD_CONFIG}" ]; then
+    option="${option} ${CUSTOM_BUILD_CONFIG}"
   fi
 
   docker_script=`find . -name docker_scons_comp_build.sh`

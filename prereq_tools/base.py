@@ -36,6 +36,7 @@ import tarfile
 import re
 import copy
 import ConfigParser
+from build_info import BuildInfo
 from SCons.Variables import PathVariable
 from SCons.Script import Dir
 from SCons.Script import GetOption
@@ -44,7 +45,11 @@ from SCons.Script import Configure
 from SCons.Script import AddOption
 from SCons.Script import Builder
 from SCons.Script import SConscript
-from build_info import BuildInfo
+# pylint: disable=no-name-in-module
+# pylint: disable=import-error
+from SCons.Errors import UserError
+# pylint: enable=no-name-in-module
+# pylint: enable=import-error
 
 
 class NotInitialized(Exception):
@@ -252,11 +257,12 @@ class Runner(object):
     """Runs commands in a specified environment"""
     def __init__(self):
         self.env = None
-        self.__dry_run = GetOption('no_exec')
+        self.__dry_run = False
 
     def initialize(self, env):
         """Initialize the environment in the runner"""
         self.env = env
+        self.__dry_run = env.GetOption('no_exec')
 
     def run_commands(self, commands, subdir=None):
         """Runs a set of commands in specified directory"""
@@ -265,12 +271,17 @@ class Runner(object):
         retval = True
         old = os.getcwd()
         if subdir:
-            os.chdir(subdir)
+            if self.__dry_run:
+                print 'Would change dir to %s' % subdir
+            else:
+                os.chdir(subdir)
+
         print 'Running commands in %s' % os.getcwd()
         for command in commands:
             command = self.env.subst(command)
             if self.__dry_run:
                 print 'Would RUN: %s' % command
+                retval = True
             else:
                 print 'RUN: %s' % command
                 if subprocess.call(command, shell=True,
@@ -450,6 +461,10 @@ class WebRetriever(object):
 
     def __init__(self, url):
         self.url = url
+        self.__dry_run = GetOption('check_only')
+        if self.__dry_run:
+            SetOption('no_exec', True)
+        self.__dry_run = GetOption('no_exec')
 
     def get(self, subdir, **kw):
         """Downloads and extracts sources from a url into subdir"""
@@ -467,6 +482,9 @@ class WebRetriever(object):
             raise DownloadFailure(self.url, subdir)
 
         if self.url.endswith('.tar.gz') or self.url.endswith('.tgz'):
+            if self.__dry_run:
+                print 'Would unpack gziped tar file: %s' % basename
+                return
             tfile = tarfile.open(basename, 'r:gz')
             members = tfile.getnames()
             prefix = os.path.commonprefix(members)
@@ -522,6 +540,8 @@ class PreReqComponent(object):
             # This is mostly a no_exec request.
             SetOption('no_exec', True)
         self.__dry_run = GetOption('no_exec')
+        if config_file is None:
+            config_file = GetOption('build_config')
 
         RUNNER.initialize(self.__env)
 
@@ -622,6 +642,13 @@ class PreReqComponent(object):
                   default=False,
                   help="Check dependencies only, do not download or build.")
 
+        # Need to be able to look for an alternate build.config file.
+        AddOption('--build-config',
+                  dest='build_config',
+                  default=os.path.join(Dir('#').abspath,
+                                       'utils', 'build.config'),
+                  help='build config file to use.')
+
     def setup_patch_prefix(self):
         """Discovers the location of the patches directory and adds it to
            the construction environment."""
@@ -685,7 +712,13 @@ class PreReqComponent(object):
         """Add options to the command line"""
         for var in variables:
             self.__opts.Add(var)
-        self.__opts.Update(self.__env)
+        try:
+            self.__opts.Update(self.__env)
+        except UserError:
+            if self.__dry_run:
+                pass
+            else:
+                raise
 
     def define(self,
                name,
@@ -862,7 +895,7 @@ class PreReqComponent(object):
         self.setup_path_var(opt_name)
 
         src_path = self.__env.get(opt_name)
-        if src_path and not os.path.exists(src_path):
+        if src_path and not os.path.exists(src_path) and not self.__dry_run:
             raise MissingPath(opt_name)
 
         if not src_path:
@@ -982,10 +1015,7 @@ class _Component(object):
                 defpath = os.path.join(self.prereqs.get_build_dir(), self.name)
                 # only do this if the source was checked out by this script
                 if self.src_path == defpath:
-                    if self.__dry_run:
-                        print 'Would retrieve %s' % self.src_path
-                    else:
-                        self.retriever.update(self.src_path)
+                    self.retriever.update(self.src_path)
             return
         if not self.retriever:
             print 'Using installed version of %s' % self.name
@@ -1000,12 +1030,7 @@ class _Component(object):
         self._delete_old_file(self.crc_file)
         commit_sha = self.prereqs.get_config("commit_versions", self.name)
         patch = self.prereqs.get_config("patch_versions", self.name)
-        if self.__dry_run:
-            print 'Would retrieve %s commit_sha: %s patch %s' % \
-                (self.src_path, commit_sha, patch)
-        else:
-            self.retriever.get(self.src_path,
-                               commit_sha=commit_sha, patch=patch)
+        self.retriever.get(self.src_path, commit_sha=commit_sha, patch=patch)
 
         self.prereqs.update_src_path(self.name, self.src_path)
 
@@ -1206,14 +1231,44 @@ class _Component(object):
             os.system("rm -rf %s" % path)
             os.mkdir(path)
 
+    def _has_changes(self):
+        has_changes = self.prereqs.build_deps
+
+        if self.src_exists():
+            self.get()
+            has_changes = self.has_changes()
+        return has_changes
+
+    def _check_prereqs_build_deps(self):
+        if not self.prereqs.build_deps:
+            if self.__dry_run:
+                print 'Would do required build of %s' % self.name
+            else:
+                raise BuildRequired(self.name)
+
+    def _update_crc_file(self):
+        new_crc = self.calculate_crc()
+        if self.__dry_run:
+            print 'Would create a new crc file % s' % self.crc_file
+        else:
+            with open(self.crc_file, 'w') as crcfile:
+                crcfile.write(new_crc)
+
     def build(self, env, headers_only):
-        """Build the component, if necessary"""
+        """Build the component, if necessary
+
+        :param env: Scons Environment for building.
+        :type env: environment
+        :param headers_only: If set to True, skip library configuration.
+        :type headers_only: bool
+        :return: True if the component needed building.
+        """
         # Ensure requirements are met
         changes = False
         envcopy = self.prereqs.system_env.Clone()
 
         if self.check_user_options(env, headers_only):
-            return
+            return True
         self.set_environment(envcopy, False)
         if self.prebuilt_path:
             self.check_installed_package(envcopy)
@@ -1221,16 +1276,11 @@ class _Component(object):
 
         # Default to has_changes = True which will cause all deps
         # to be built first time scons is invoked.
-        has_changes = self.prereqs.build_deps
-
-        if self.src_exists():
-            self.get()
-            has_changes = self.has_changes()
+        has_changes = self._has_changes
 
         if changes or has_changes or self.has_missing_targets(envcopy):
 
-            if not self.prereqs.build_deps:
-                raise BuildRequired(self.name)
+            self._check_prereqs_build_deps()
 
             if self.requires:
                 changes = self.prereqs.require(envcopy, *self.requires,
@@ -1249,11 +1299,9 @@ class _Component(object):
                                        subdir=self.build_path):
                 raise BuildFailure(self.name)
 
-        if self.has_missing_targets(envcopy):
+        if self.has_missing_targets(envcopy) and not self.__dry_run:
             raise MissingTargets(self.name, None)
-        new_crc = self.calculate_crc()
-        with open(self.crc_file, 'w') as crcfile:
-            crcfile.write(new_crc)
+        self._update_crc_file()
         return changes
 
 
