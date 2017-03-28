@@ -37,11 +37,9 @@
 #include <daos_srv/daos_mgmt_srv.h>
 
 /** directory for newly created pool, reclaimed on restart */
-static char		*newborns_path;
-static size_t		 newborns_path_size;
+static char *newborns_path;
 /** directory for destroyed pool */
-static char		*zombies_path;
-static size_t		 zombies_path_size;
+static char *zombies_path;
 
 static inline int
 dir_fsync(const char *path)
@@ -96,33 +94,6 @@ subtree_destroy(const char *path)
 	return rc;
 }
 
-/* Allocate a new string that is the concatenation of "s1" and "s2". */
-char *
-stracat(const char *s1, const char *s2, size_t *size)
-{
-	char   *s3;
-	size_t	l1;
-	size_t	l2;
-	size_t	l3;
-
-	D_ASSERT(s1 != NULL && s2 != NULL);
-
-	l1 = strlen(s1);
-	l2 = strlen(s2);
-	l3 = l1 + l2;
-
-	D_ALLOC(s3, l3 + 1);
-	if (s3 == NULL)
-		return NULL;
-
-	memcpy(s3, s1, l1);		/* copy s1 */
-	memcpy(s3 + l1, s2, l2);	/* copy s2 */
-	s3[l3] = '\0';			/* terminate */
-
-	*size = l3 + 1;
-	return s3;
-}
-
 int
 ds_mgmt_tgt_init(void)
 {
@@ -130,11 +101,11 @@ ds_mgmt_tgt_init(void)
 	int	rc;
 
 	/** create the path string */
-	newborns_path = stracat(storage_path, "/NEWBORNS", &newborns_path_size);
-	if (newborns_path == NULL)
+	rc = asprintf(&newborns_path, "%s/NEWBORNS", storage_path);
+	if (rc < 0)
 		D_GOTO(err, rc = -DER_NOMEM);
-	zombies_path = stracat(storage_path, "/ZOMBIES", &zombies_path_size);
-	if (zombies_path == NULL)
+	rc = asprintf(&zombies_path, "%s/ZOMBIES", storage_path);
+	if (rc < 0)
 		D_GOTO(err_newborns, rc = -DER_NOMEM);
 
 	stored_mode = umask(0);
@@ -171,9 +142,9 @@ ds_mgmt_tgt_init(void)
 	return 0;
 
 err_zombies:
-	D_FREE(zombies_path, zombies_path_size);
+	free(zombies_path);
 err_newborns:
-	D_FREE(newborns_path, newborns_path_size);
+	free(newborns_path);
 err:
 	return rc;
 }
@@ -181,8 +152,8 @@ err:
 void
 ds_mgmt_tgt_fini(void)
 {
-	D_FREE(zombies_path, zombies_path_size);
-	D_FREE(newborns_path, newborns_path_size);
+	free(zombies_path);
+	free(newborns_path);
 }
 
 static int
