@@ -510,6 +510,30 @@ struct dss_module_key daos_srv_modkey = {
 };
 
 /**
+ * Create a ULT to execute \a func(\a arg). If \a ult is not NULL, the caller
+ * is responsible for freeing the ULT handle with ABT_thread_free().
+ *
+ * \param[in]	func	function to execute
+ * \param[in]	arg	argument for \a func
+ * \param[out]	ult	ULT handle if not NULL
+ */
+int
+dss_create_ult(void (*func)(void *), void *arg, ABT_thread *ult)
+{
+	ABT_xstream	es;
+	ABT_pool	pool;
+	int		rc;
+
+	/* TODO: Perhaps it is better to get the dss_xstream object directly? */
+	rc = ABT_xstream_self(&es);
+	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	rc = ABT_xstream_get_main_pools(es, 1 /* max_pools */, &pool);
+	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	rc = ABT_thread_create(pool, func, arg, ABT_THREAD_ATTR_NULL, ult);
+	return dss_abterr2der(rc);
+}
+
+/**
  * Collective operations among all server xstreams
  */
 
