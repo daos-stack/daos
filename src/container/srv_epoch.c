@@ -514,6 +514,52 @@ out:
 	return rc;
 }
 
+static int
+cont_epoch_aggregate_bcast(crt_context_t ctx, struct cont *cont,
+			   daos_epoch_range_t *epr)
+{
+	struct cont_tgt_epoch_aggregate_in	*in;
+	struct cont_tgt_epoch_aggregate_out	*out;
+	crt_rpc_t				*rpc;
+	int					rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT" bcast epr: "DF_U64"->"DF_U64 "\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+		epr->epr_lo, epr->epr_hi);
+
+	rc = ds_cont_bcast_create(ctx, cont->c_svc, CONT_TGT_EPOCH_AGGREGATE,
+				  &rpc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	in = crt_req_get(rpc);
+	in->tai_start_epoch = epr->epr_lo;
+	in->tai_end_epoch   = epr->epr_hi;
+	uuid_copy(in->tai_pool_uuid, cont->c_svc->cs_pool_uuid);
+	uuid_copy(in->tai_cont_uuid, cont->c_uuid);
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = crt_reply_get(rpc);
+	rc = out->tao_rc;
+
+	if (rc != 0) {
+		D_ERROR(DF_CONT",agg-bcast,e:"DF_U64"->"DF_U64":%d(targets)\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+			epr->epr_lo, epr->epr_hi, rc);
+		rc = -DER_IO;
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out:
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+	return rc;
+}
+
 int
 ds_cont_epoch_slip(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		   struct container_hdl *hdl, crt_rpc_t *rpc)
@@ -522,6 +568,7 @@ ds_cont_epoch_slip(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	struct epoch_attr		attr;
 	daos_epoch_t			lre = hdl->ch_lre;
+	daos_epoch_t			glre_tmp;
 	volatile int			rc;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
@@ -555,6 +602,7 @@ ds_cont_epoch_slip(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
 
+	glre_tmp = attr.ea_glre;
 	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
 		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->cei_op.ci_hdl,
 				      hdl, sizeof(*hdl));
@@ -582,6 +630,16 @@ ds_cont_epoch_slip(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0) {
 		hdl->ch_lre = lre;
 		D_GOTO(out, rc);
+	}
+
+	/* Broadcast only if GLRE changed */
+	if (attr.ea_glre > glre_tmp) {
+		daos_epoch_range_t	range;
+
+		range.epr_lo = 0;
+		range.epr_hi = in->cei_epoch;
+		/* trigger aggregation bcast here */
+		rc = cont_epoch_aggregate_bcast(rpc->cr_ctx, cont, &range);
 	}
 
 out_state:

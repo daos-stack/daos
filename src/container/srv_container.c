@@ -435,7 +435,7 @@ cont_lookup(const struct cont_svc *svc, const uuid_t uuid, struct cont **cont)
 
 	D_ALLOC_PTR(p);
 	if (p == NULL) {
-		D_ERROR("failed to allocate container descriptor\n");
+		D_ERROR("Failed to allocate container descriptor\n");
 		D_GOTO(err, rc = -DER_NOMEM);
 	}
 

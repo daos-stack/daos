@@ -816,6 +816,37 @@ cont_epoch_discard_one(void *vin)
 }
 
 int
+ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
+{
+	struct cont_tgt_epoch_aggregate_in	*in  = crt_req_get(rpc);
+	struct cont_tgt_epoch_aggregate_out	*out = crt_reply_get(rpc);
+	int					rc = 0;
+
+	D_DEBUG(DF_DSMS,
+	       DF_CONT": handling rpc %p: epr="DF_U64"->"DF_U64"\n",
+	       DP_CONT(NULL, NULL), rpc, in->tai_start_epoch,
+	       in->tai_end_epoch);
+
+	out->tao_rc = (rc == 0 ? 0 : 1);
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
+		DP_CONT(NULL, NULL), rpc, out->tao_rc, rc);
+	return crt_reply_send(rpc);
+}
+
+int
+ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				       void *priv)
+{
+	struct cont_tgt_epoch_aggregate_out      *out_source;
+	struct cont_tgt_epoch_aggregate_out      *out_result;
+
+	out_source = crt_reply_get(source);
+	out_result = crt_reply_get(result);
+	out_result->tao_rc += out_source->tao_rc;
+	return 0;
+}
+
+int
 ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc)
 {
 	struct cont_tgt_epoch_discard_in       *in = crt_req_get(rpc);

@@ -41,35 +41,36 @@
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
 enum cont_operation {
-	CONT_CREATE		= 1,
-	CONT_DESTROY		= 2,
-	CONT_OPEN		= 3,
-	CONT_CLOSE		= 4,
-	CONT_QUERY		= 5,
+	CONT_CREATE		 = 1,
+	CONT_DESTROY		 = 2,
+	CONT_OPEN		 = 3,
+	CONT_CLOSE		 = 4,
+	CONT_QUERY		 = 5,
 
-	CONT_ATTR_LIST		= 10,
-	CONT_ATTR_SET		= 11,
-	CONT_ATTR_GET		= 12,
+	CONT_ATTR_LIST		 = 10,
+	CONT_ATTR_SET		 = 11,
+	CONT_ATTR_GET		 = 12,
 
-	CONT_EPOCH_QUERY	= 20,
-	CONT_EPOCH_HOLD		= 21,
-	CONT_EPOCH_SLIP		= 22,
-	CONT_EPOCH_FLUSH	= 23,
-	CONT_EPOCH_DISCARD	= 24,
-	CONT_EPOCH_COMMIT	= 25,
-	CONT_EPOCH_WAIT		= 26,
+	CONT_EPOCH_QUERY	 = 20,
+	CONT_EPOCH_HOLD		 = 21,
+	CONT_EPOCH_SLIP		 = 22,
+	CONT_EPOCH_FLUSH	 = 23,
+	CONT_EPOCH_DISCARD	 = 24,
+	CONT_EPOCH_COMMIT	 = 25,
+	CONT_EPOCH_WAIT		 = 26,
 
-	CONT_SNAP_LIST		= 30,
-	CONT_SNAP_CREATE	= 31,
-	CONT_SNAP_DESTROY	= 32,
+	CONT_SNAP_LIST		 = 30,
+	CONT_SNAP_CREATE	 = 31,
+	CONT_SNAP_DESTROY	 = 32,
 
-	CONT_TGT_DESTROY	= 44,
-	CONT_TGT_OPEN		= 45,
-	CONT_TGT_CLOSE		= 46,
-	CONT_TGT_QUERY		= 47,
+	CONT_TGT_DESTROY	 = 44,
+	CONT_TGT_OPEN		 = 45,
+	CONT_TGT_CLOSE		 = 46,
+	CONT_TGT_QUERY		 = 47,
 
-	CONT_TGT_EPOCH_FLUSH	= 50,
-	CONT_TGT_EPOCH_DISCARD	= 51
+	CONT_TGT_EPOCH_FLUSH	 = 50,
+	CONT_TGT_EPOCH_DISCARD	 = 51,
+	CONT_TGT_EPOCH_AGGREGATE = 52
 };
 
 struct cont_op_in {
@@ -192,6 +193,17 @@ struct cont_tgt_epoch_discard_in {
 
 struct cont_tgt_epoch_discard_out {
 	int32_t	tio_rc;	/* number of errors */
+};
+
+struct cont_tgt_epoch_aggregate_in {
+	uuid_t			tai_cont_uuid;
+	uuid_t			tai_pool_uuid;
+	daos_epoch_t		tai_start_epoch;
+	daos_epoch_t		tai_end_epoch;
+};
+
+struct cont_tgt_epoch_aggregate_out {
+	int32_t	tao_rc;	/* number of errors */
 };
 
 int cont_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,

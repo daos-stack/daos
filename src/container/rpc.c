@@ -171,6 +171,17 @@ struct crt_msg_field *cont_tgt_epoch_discard_out_fields[] = {
 	&CMF_INT	/* rc */
 };
 
+struct crt_msg_field *cont_tgt_epoch_aggregate_in_fields[] = {
+	&CMF_UUID,	/* container UUID */
+	&CMF_UUID,	/* pool UUID */
+	&CMF_UINT64,	/* start_epoch */
+	&CMF_UINT64	/* end_epoch */
+};
+
+struct crt_msg_field *cont_tgt_epoch_aggregate_out_fields[] = {
+	&CMF_INT	/* rc */
+};
+
 struct crt_req_format DQF_CONT_CREATE =
 	DEFINE_CRT_REQ_FMT("CONT_CREATE", cont_create_in_fields,
 			   cont_create_out_fields);
@@ -215,6 +226,12 @@ struct crt_req_format DQF_CONT_TGT_EPOCH_DISCARD =
 	DEFINE_CRT_REQ_FMT("CONT_TGT_EPOCH_DISCARD",
 			   cont_tgt_epoch_discard_in_fields,
 			   cont_tgt_epoch_discard_out_fields);
+
+struct crt_req_format DQF_CONT_TGT_EPOCH_AGGREGATE =
+	DEFINE_CRT_REQ_FMT("CONT_TGT_EPOCH_AGGREGATE",
+			   cont_tgt_epoch_aggregate_in_fields,
+			   cont_tgt_epoch_aggregate_out_fields);
+
 
 int
 cont_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
@@ -324,6 +341,12 @@ struct daos_rpc cont_srv_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_CONT_TGT_EPOCH_DISCARD
+	}, {
+		.dr_name	= "CONT_TGT_EPOCH_AGGREGATE",
+		.dr_opc		= CONT_TGT_EPOCH_AGGREGATE,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_TGT_EPOCH_AGGREGATE
 	}, {
 		.dr_opc		= 0
 	}
