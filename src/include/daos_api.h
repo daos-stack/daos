@@ -27,6 +27,10 @@
 #ifndef __DAOS_API_H__
 #define __DAOS_API_H__
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 /**
  * Initialize the DAOS library.
  */
@@ -771,38 +775,38 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  */
 
 /**
- * Fetch object records from co-located vectors.
+ * Fetch object records from co-located arrays.
  *
  * \param oh	[IN]	Object open handle.
  *
  * \param epoch	[IN]	Epoch for the fetch. It is ignored if epoch range is
- *			provided for each extent through the vector I/O
- *			descriptor (i.e. through \a iods[]::vd_eprs[]).
+ *			provided for each extent through the I/O descriptor
+ *			\a iods[]::iod_eprs[]).
  *
  * \param dkey	[IN]	Distribution key associated with the fetch operation.
  *
  * \param nr	[IN]	Number of I/O descriptor and scatter/gather lists in
  *			respectively \a iods and \a sgls.
  *
- * \param iods	[IN]	Array of vector I/O descriptors. Each descriptor is
- *			associated with	a given akey and describes the list of
- *			record extents to fetch from the vector.
+ * \param iods	[IN]	Array of I/O descriptors. Each descriptor is associated
+ *			with a given akey and describes the list of record
+ *			extents to fetch from the array.
  *			A different epoch can be passed for each extent via
- *			\a iods[]::vd_eprs[] and in this case, \a epoch will be
+ *			\a iods[]::iod_eprs[] and in this case, \a epoch will be
  *			ignored.
  *		[OUT]	Checksum of each extent is returned via
- *			\a iods[]::vd_csums[]. If the record size of an
+ *			\a iods[]::iod_csums[]. If the record size of an
  *			extent is unknown (i.e. set to DAOS_REC_ANY as input),
  *			then the actual record size will be returned in
- *			\a iods[]::vd_recxs[]::rx_rsize.
+ *			\a iods[]::iod_recxs[]::rx_rsize.
  *
- * \param sgls	[IN]	Scatter/gather lists (sgl) to store records. Each vector
+ * \param sgls	[IN]	Scatter/gather lists (sgl) to store records. Each array
  *			is associated with a separate sgl in \a sgls.
- *			Iovecs in each sgl can be arbitrary as long as their
+ *			I/O descs in each sgl can be arbitrary as long as their
  *			total size is sufficient to fill in all returned data.
  *			For example, extents with records of different sizes can
- *			be adjacently stored in the same iovec of the sgl of the
- *			vector: iovec start offset of an extent is the end
+ *			be adjacently stored in the same iod of the sgl of the
+ *			I/O descriptor start offset of an extent is the end
  *			offset of the previous extent.
  *			For an unfound record, the output length of the
  *			corresponding sgl is set to zero.
@@ -835,41 +839,41 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  *			-DER_EP_OLD	Epoch is too old and has no data
  */
 int
-daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-	       daos_vec_map_t *maps, daos_event_t *ev);
+daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+	       unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
+	       daos_iom_t *maps, daos_event_t *ev);
 
 /**
- * Insert or update object records stored in co-located vectors.
+ * Insert or update object records stored in co-located arrays.
  *
  * \param oh	[IN]	Object open handle.
  *
  * \param epoch	[IN]	Epoch for the update. It is ignored if epoch range is
- *			provided for each extent through the vector I/O
- *			descriptor (i.e. \a iods[]::vd_eprs[]).
+ *			provided for each extent through the I/O descriptor
+ *			\a iods[]::iod_eprs[]).
  *
  * \param dkey	[IN]	Distribution key associated with the update operation.
  *
  * \param nr	[IN]	Number of descriptors and scatter/gather lists in
  *			respectively \a iods and \a sgls.
  *
- * \param iods	[IN]	Array of vector I/O descriptor. Each descriptor is
- *			associated with a vector identified by its akey and
- *			describes the list of record extent to update.
+ * \param iods	[IN]	Array of I/O descriptor. Each descriptor is associated
+ *			with an array identified by its akey and describes the
+ *			list of record extent to update.
  *			A different epoch can be passed for each extent via
- *			\a iods[]::vd_eprs[] and in this case, \a epoch will be
+ *			\a iods[]::iod_eprs[] and in this case, \a epoch will be
  *			ignored.
  *			Checksum of each record extent is stored in
- *			\a iods[]::vd_csums[]. If the record size of an extent
+ *			\a iods[]::iod_csums[]. If the record size of an extent
  *			is zero, then it is effectively a punch	for the
  *			specified index range.
  *
  * \param sgls	[IN]	Scatter/gather list (sgl) to store the input data
- *			records. Each vector I/O descriptor owns a separate sgl
- *			in \a sgls.
+ *			records. Each I/O descriptor owns a separate sgl in
+ *			\a sgls.
  *			Different records of the same extent can either be
- *			stored in separate iovec of the sgl, or contiguously
- *			stored in arbitrary iovecs as long as total buffer size
+ *			stored in separate iod of the sgl, or contiguously
+ *			stored in arbitrary iods as long as total buffer size
  *			can match the total extent size.
  *
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
@@ -885,8 +889,8 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-		unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
 		daos_event_t *ev);
 
 /**
@@ -970,8 +974,12 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
  *					fit into the \a sgl
  */
 int
-daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		   uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev);
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /* __DAOS_API_H__ */

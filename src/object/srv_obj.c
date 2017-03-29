@@ -196,8 +196,8 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		struct crt_bulk_desc	 bulk_desc;
 		crt_bulk_t		 local_bulk_hdl;
 		int			 ret = 0;
-		daos_size_t		offset = 0;
-		unsigned int		idx = 0;
+		daos_size_t		 offset = 0;
+		unsigned int		 idx = 0;
 
 		if (remote_bulks[i] == NULL) {
 			ABT_future_set(future, &ret);
@@ -208,7 +208,9 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			sgl = sgls[i];
 		} else {
 			D_ASSERT(!daos_handle_is_inval(ioh));
-			vos_obj_zc_vec2sgl(ioh, i, &sgl);
+			ret = vos_obj_zc_sgl_at(ioh, i, &sgl);
+			if (ret)
+				ABT_future_set(future, &ret);
 			D_ASSERT(sgl != NULL);
 		}
 
@@ -217,18 +219,22 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			nrs[i] = sgl->sg_nr.num_out;
 		}
 
-		/* Let's walk through the sgl to check if the iov is empty,
+		/**
+		 * Let's walk through the sgl to check if the iov is empty,
 		 * which is usually gotten from punched/empty records (see
 		 * vos_recx_fetch()), and skip these empty iov during bulk
-		 * transfer to avoid touching the input buffer */
+		 * transfer to avoid touching the input buffer.
+		 */
 		while (idx < sgl->sg_nr.num_out) {
 			daos_sg_list_t	sgl_sent;
 			daos_size_t	length = 0;
 			unsigned int	start;
 
-			/* Skip the punched/empty record, let's also skip the
+			/**
+			 * Skip the punched/empty record, let's also skip the
 			 * them record in the input buffer instead of memset
-			 * it to 0. */
+			 * it to 0.
+			 */
 			while (sgl->sg_iovs[idx].iov_buf == NULL &&
 			       idx < sgl->sg_nr.num_out) {
 				offset += sgl->sg_iovs[idx].iov_len;
@@ -332,7 +338,7 @@ ds_obj_update_sizes_in_reply(crt_rpc_t *rpc)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
-	daos_vec_iod_t		*vecs;
+	daos_iod_t		*iods;
 	uint64_t		*sizes;
 	int			size_count = 0;
 	int			idx = 0;
@@ -344,9 +350,9 @@ ds_obj_update_sizes_in_reply(crt_rpc_t *rpc)
 	D_ASSERT(orwo != NULL);
 	D_ASSERT(orw != NULL);
 
-	vecs = orw->orw_iods.da_arrays;
+	iods = orw->orw_iods.da_arrays;
 	for (i = 0; i < orw->orw_iods.da_count; i++)
-		size_count += vecs[i].vd_nr;
+		size_count += iods[i].iod_nr;
 
 	orwo->orw_sizes.da_count = size_count;
 	D_ALLOC(orwo->orw_sizes.da_arrays, size_count * sizeof(uint64_t));
@@ -355,8 +361,8 @@ ds_obj_update_sizes_in_reply(crt_rpc_t *rpc)
 
 	sizes = orwo->orw_sizes.da_arrays;
 	for (i = 0; i < orw->orw_iods.da_count; i++) {
-		for (j = 0; j < vecs[i].vd_nr; j++) {
-			sizes[idx] = vecs[i].vd_recxs[j].rx_rsize;
+		for (j = 0; j < iods[i].iod_nr; j++) {
+			sizes[idx] = iods[i].iod_recxs[j].rx_rsize;
 			idx++;
 		}
 	}

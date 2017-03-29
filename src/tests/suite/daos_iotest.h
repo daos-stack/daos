@@ -31,22 +31,22 @@
 #include "daos_test.h"
 
 #define UPDATE_CSUM_SIZE	32
-#define IOREQ_VD_NR	5
+#define IOREQ_IOD_NR	5
 #define IOREQ_SG_NR	5
-#define IOREQ_SG_VD_NR	5
+#define IOREQ_SG_IOD_NR	5
 
 struct ioreq {
 	daos_handle_t		oh;
 	test_arg_t		*arg;
 	daos_event_t		ev;
-	daos_dkey_t		dkey;
-	daos_iov_t		val_iov[IOREQ_SG_VD_NR][IOREQ_SG_NR];
-	daos_sg_list_t		sgl[IOREQ_SG_VD_NR];
+	daos_key_t		dkey;
+	daos_iov_t		val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
+	daos_sg_list_t		sgl[IOREQ_SG_IOD_NR];
 	daos_csum_buf_t		csum;
 	char			csum_buf[UPDATE_CSUM_SIZE];
-	daos_recx_t		rex[IOREQ_SG_VD_NR][IOREQ_VD_NR];
-	daos_epoch_range_t	erange[IOREQ_SG_VD_NR][IOREQ_VD_NR];
-	daos_vec_iod_t		vio[IOREQ_SG_VD_NR];
+	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
+	daos_epoch_range_t	erange[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
+	daos_iod_t		iod[IOREQ_SG_IOD_NR];
 	uint64_t		fail_loc;
 };
 

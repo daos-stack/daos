@@ -252,7 +252,7 @@ dc_rw_cb(struct daos_task *task, void *arg)
 
 	if (opc_get(rw_args->rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		struct obj_rw_out *orwo;
-		daos_vec_iod_t	*iods;
+		daos_iod_t	*iods;
 		uint64_t	*sizes;
 		int		j;
 		int		k;
@@ -264,13 +264,13 @@ dc_rw_cb(struct daos_task *task, void *arg)
 
 		/* update the sizes in iods */
 		for (j = 0; j < orw->orw_nr; j++) {
-			for (k = 0; k < iods[j].vd_nr; k++) {
+			for (k = 0; k < iods[j].iod_nr; k++) {
 				if (idx == orwo->orw_sizes.da_count) {
 					D_ERROR("Invalid return size %d\n",
 						idx);
 					D_GOTO(out, rc = -DER_PROTO);
 				}
-				iods[j].vd_recxs[k].rx_rsize = sizes[idx];
+				iods[j].iod_recxs[k].rx_rsize = sizes[idx];
 				idx++;
 			}
 		}
@@ -314,13 +314,13 @@ out:
 }
 
 static inline bool
-obj_shard_io_check(unsigned int nr, daos_vec_iod_t *iods)
+obj_shard_io_check(unsigned int nr, daos_iod_t *iods)
 {
 	int i;
 
 	for (i = 0; i < nr; i++) {
-		if (iods[i].vd_name.iov_buf == NULL ||
-		    iods[i].vd_recxs == NULL)
+		if (iods[i].iod_name.iov_buf == NULL ||
+		    iods[i].iod_recxs == NULL)
 			/* XXX checksum & eprs should not be mandatory */
 			return false;
 	}
@@ -331,11 +331,11 @@ obj_shard_io_check(unsigned int nr, daos_vec_iod_t *iods)
 /**
  * XXX: Only use dkey to distribute the data among targets for
  * now, and eventually, it should use dkey + akey, but then
- * it means the I/O vector might needs to be split into
+ * it means the I/O descriptor might needs to be split into
  * mulitple requests in obj_shard_rw()
  */
 static uint32_t
-obj_shard_dkey2tag(struct dc_obj_shard *dobj, daos_dkey_t *dkey)
+obj_shard_dkey2tag(struct dc_obj_shard *dobj, daos_key_t *dkey)
 {
 	uint64_t hash;
 
@@ -348,13 +348,13 @@ obj_shard_dkey2tag(struct dc_obj_shard *dobj, daos_dkey_t *dkey)
 }
 
 static uint64_t
-iods_data_len(daos_vec_iod_t *iods, int nr)
+iods_data_len(daos_iod_t *iods, int nr)
 {
 	uint64_t iod_length = 0;
 	int	 i;
 
 	for (i = 0; i < nr; i++) {
-		uint64_t len = daos_vec_iod_len(&iods[i]);
+		uint64_t len = daos_iod_len(&iods[i]);
 
 		if (len == -1) /* unknown */
 			return 0;
@@ -439,7 +439,7 @@ obj_shard_ptr2pool(struct dc_obj_shard *shard)
 
 static int
 obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
-	     daos_dkey_t *dkey, unsigned int nr, daos_vec_iod_t *iods,
+	     daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
 	     daos_sg_list_t *sgls, unsigned int map_ver, struct daos_task *task)
 {
 	struct dc_obj_shard	*dobj;
@@ -574,8 +574,8 @@ out_task:
 
 int
 dc_obj_shard_update(daos_handle_t oh, daos_epoch_t epoch,
-		    daos_dkey_t *dkey, unsigned int nr,
-		    daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+		    daos_key_t *dkey, unsigned int nr,
+		    daos_iod_t *iods, daos_sg_list_t *sgls,
 		    unsigned int map_ver, struct daos_task *task)
 {
 	return obj_shard_rw(oh, DAOS_OBJ_RPC_UPDATE, epoch, dkey, nr, iods,
@@ -584,9 +584,9 @@ dc_obj_shard_update(daos_handle_t oh, daos_epoch_t epoch,
 
 int
 dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
-		   daos_dkey_t *dkey, unsigned int nr,
-		   daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-		   daos_vec_map_t *maps, unsigned int map_ver,
+		   daos_key_t *dkey, unsigned int nr,
+		   daos_iod_t *iods, daos_sg_list_t *sgls,
+		   daos_iom_t *maps, unsigned int map_ver,
 		   struct daos_task *task)
 {
 	return obj_shard_rw(oh, DAOS_OBJ_RPC_FETCH, epoch, dkey, nr, iods,
@@ -594,13 +594,13 @@ dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
 }
 
 struct enum_args_t {
-	crt_rpc_t	*rpc;
-	daos_handle_t	*hdlp;
-	uint32_t	*eaa_nr;
-	daos_key_desc_t *eaa_kds;
-	daos_hash_out_t *eaa_anchor;
-	struct dc_obj_shard *eaa_obj;
-	daos_sg_list_t	*eaa_sgl;
+	crt_rpc_t		*rpc;
+	daos_handle_t		*hdlp;
+	uint32_t		*eaa_nr;
+	daos_key_desc_t		*eaa_kds;
+	daos_hash_out_t		*eaa_anchor;
+	struct dc_obj_shard	*eaa_obj;
+	daos_sg_list_t		*eaa_sgl;
 };
 
 static int

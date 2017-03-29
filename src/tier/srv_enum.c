@@ -39,12 +39,11 @@ ds_tier_enum_dkeys(daos_handle_t coh, struct tier_enum_params *params,
 
 static int
 ds_tier_enum_akeys(daos_handle_t coh, struct tier_enum_params *params,
-		daos_unit_oid_t oid, daos_dkey_t dkey);
+		daos_unit_oid_t oid, daos_key_t dkey);
 
 static int
 ds_tier_enum_recs(daos_handle_t coh, struct tier_enum_params *params,
-	       daos_unit_oid_t oid, daos_dkey_t dkey,
-	       daos_akey_t akey);
+	       daos_unit_oid_t oid, daos_key_t dkey, daos_key_t akey);
 
 
 int
@@ -157,7 +156,7 @@ out:
 
 static int
 ds_tier_enum_akeys(daos_handle_t coh, struct tier_enum_params *params,
-		daos_unit_oid_t oid, daos_dkey_t dkey)
+		daos_unit_oid_t oid, daos_key_t dkey)
 {
 	vos_iter_param_t vip;
 	int		 rc;
@@ -215,8 +214,7 @@ out:
 
 static int
 ds_tier_enum_recs(daos_handle_t coh, struct tier_enum_params *params,
-		  daos_unit_oid_t oid, daos_dkey_t dkey,
-		  daos_akey_t akey)
+		  daos_unit_oid_t oid, daos_key_t dkey, daos_key_t akey)
 {
 	vos_iter_param_t vip;
 	int		 rc;

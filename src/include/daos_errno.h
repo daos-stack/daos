@@ -27,6 +27,10 @@
 #ifndef __DAOS_ERRNO_H__
 #define __DAOS_ERRNO_H__
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 #include <crt_errno.h>
 
 typedef enum {
@@ -128,5 +132,9 @@ typedef enum {
 } daos_errno_t;
 
 const char *daos_errstr(daos_errno_t errno);
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /*  __DAOS_ERRNO_H__ */

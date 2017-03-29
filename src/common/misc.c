@@ -96,19 +96,19 @@ daos_sgl_buf_len(daos_sg_list_t *sgl)
 }
 
 daos_size_t
-daos_vec_iod_len(daos_vec_iod_t *viod)
+daos_iod_len(daos_iod_t *iod)
 {
 	uint64_t	len;
 	int		i;
 
-	if (viod->vd_recxs == NULL)
+	if (iod->iod_recxs == NULL)
 		return 0;
 
-	for (i = 0, len = 0; i < viod->vd_nr; i++) {
-		if (viod->vd_recxs[i].rx_rsize == DAOS_REC_ANY)
+	for (i = 0, len = 0; i < iod->iod_nr; i++) {
+		if (iod->iod_recxs[i].rx_rsize == DAOS_REC_ANY)
 			return -1; /* unknown size */
 
-		len += viod->vd_recxs[i].rx_rsize * viod->vd_recxs[i].rx_nr;
+		len += iod->iod_recxs[i].rx_rsize * iod->iod_recxs[i].rx_nr;
 	}
 	return len;
 }

@@ -129,9 +129,9 @@ struct test {
 struct a_ioreq {
 	daos_list_t		list;
 	daos_event_t		ev;
-	daos_dkey_t		dkey;
+	daos_key_t		dkey;
 	daos_iov_t		val_iov;
-	daos_vec_iod_t		vio;
+	daos_iod_t		iod;
 	daos_recx_t		rex;
 	daos_epoch_range_t	erange;
 	daos_sg_list_t		sgl;
@@ -216,7 +216,7 @@ alloc_buffers(struct test *test, int nios)
  * this function:
  *
  *   - dkey_buf and dkey (via ioreq_init_dkey())
- *   - akey_buf and vio.vd_name (via ioreq_init_akey())
+ *   - akey_buf and iod.iod_name (via ioreq_init_akey())
  *   - val_iov (via ioreq_init_value())
  *   - rex.rx_rsize and rex.rx_idx
  *   - r_index
@@ -236,10 +236,10 @@ ioreq_init_basic(struct a_ioreq *ioreq)
 
 	ioreq->erange.epr_hi = DAOS_EPOCH_MAX;
 
-	ioreq->vio.vd_nr = 1;
-	ioreq->vio.vd_recxs = &ioreq->rex;
-	ioreq->vio.vd_csums = &ioreq->csum;
-	ioreq->vio.vd_eprs = &ioreq->erange;
+	ioreq->iod.iod_nr = 1;
+	ioreq->iod.iod_recxs = &ioreq->rex;
+	ioreq->iod.iod_csums = &ioreq->csum;
+	ioreq->iod.iod_eprs = &ioreq->erange;
 
 	ioreq->sgl.sg_nr.num = 1;
 	ioreq->sgl.sg_iovs = &ioreq->val_iov;
@@ -265,7 +265,7 @@ static void
 ioreq_init_akey(struct a_ioreq *ioreq, void *buf, size_t size)
 {
 	ioreq->akey_buf = buf;
-	daos_iov_set(&ioreq->vio.vd_name, buf, size);
+	daos_iov_set(&ioreq->iod.iod_name, buf, size);
 }
 
 static void
@@ -501,8 +501,8 @@ aio_req_wait(struct test *test, int fetch_flag, uint64_t value)
 
 		DBENCH_CHECK(ioreq->ev.ev_error,
 			     "Failed to transfer (%lu, %lu)",
-			     ioreq->vio.vd_recxs->rx_idx,
-			     ioreq->vio.vd_recxs->rx_nr);
+			     ioreq->iod.iod_recxs->rx_idx,
+			     ioreq->iod.iod_recxs->rx_nr);
 
 		daos_list_move(&ioreq->list, &aios);
 		naios++;
@@ -614,13 +614,14 @@ insert(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req, int sync)
 
 	DBENCH_INFO("Starting update %p (%d free): dkey '%s' akey '%s' "
 		    "iod <%lu, %lu> sgl <%p, %lu> epoch %lu %s", req, naios,
-		    (char *)req->dkey.iov_buf, (char *)req->vio.vd_name.iov_buf,
-		    req->vio.vd_recxs->rx_idx, req->vio.vd_recxs->rx_nr,
+		    (char *)req->dkey.iov_buf,
+		    (char *)req->iod.iod_name.iov_buf,
+		    req->iod.iod_recxs->rx_idx, req->iod.iod_recxs->rx_nr,
 		    req->sgl.sg_iovs->iov_buf, req->sgl.sg_iovs->iov_buf_len,
 		    epoch, sync ? "sync" : "async");
 
 	/** execute update operation */
-	rc = daos_obj_update(oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
+	rc = daos_obj_update(oh, epoch, &req->dkey, 1, &req->iod, &req->sgl,
 			     sync ? NULL : &req->ev);
 	DBENCH_CHECK(rc, "object update failed\n");
 }
@@ -656,13 +657,14 @@ lookup(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req,
 	DBENCH_INFO("Starting lookup %p (%d free %d busy): dkey '%s' akey '%s' "
 		    "iod <%lu, %lu> sgl <%p, %lu> epoch %lu %s", req, naios,
 		    test->t_naios - naios, (char *)(req->dkey.iov_buf),
-		    (char *)req->vio.vd_name.iov_buf, req->vio.vd_recxs->rx_idx,
-		    req->vio.vd_recxs->rx_nr, req->sgl.sg_iovs->iov_buf,
+		    (char *)req->iod.iod_name.iov_buf,
+		    req->iod.iod_recxs->rx_idx,
+		    req->iod.iod_recxs->rx_nr, req->sgl.sg_iovs->iov_buf,
 		    req->sgl.sg_iovs->iov_buf_len, epoch,
 		    verify ? "sync" : "async");
 
 	/** execute fetch operation */
-	rc = daos_obj_fetch(oh, epoch, &req->dkey, 1, &req->vio, &req->sgl,
+	rc = daos_obj_fetch(oh, epoch, &req->dkey, 1, &req->iod, &req->sgl,
 			    NULL, verify ? NULL : &req->ev);
 	DBENCH_CHECK(rc, "dsr fetch failed\n");
 }
@@ -1346,7 +1348,7 @@ kv_simul_rw_step(struct test *test, int rw, int *step)
 			DBENCH_ERR(EIO, "Unexpected value size for dkey %s "
 				   "akey %s: %lu",
 				   (char *)ioreq.dkey.iov_buf,
-				   (char *)ioreq.vio.vd_name.iov_buf,
+				   (char *)ioreq.iod.iod_name.iov_buf,
 				   ioreq.val_iov.iov_len);
 		}
 	} else {
@@ -1365,7 +1367,7 @@ kv_simul_rw_step(struct test *test, int rw, int *step)
  *   - Steps are numbered from 1 to test->t_steps.
  *   - Each step verifies the data written in last step and overwrites with new
  *     values.
- *   - A kv_simul test may be resumed from a previous run with exactly the same
+ *   - A kv_simul test may be resumed from a preious run with exactly the same
  *     parameters that was interrupted. It resumes from last committed step.
  */
 static void

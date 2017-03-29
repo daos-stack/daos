@@ -34,10 +34,10 @@ static struct crt_msg_field *obj_rw_in_fields[] = {
 	&CMF_UUID,	/* container handle uuid */
 	&CMF_UINT64,	/* epoch */
 	&CMF_UINT32,	/* map_version */
-	&CMF_UINT32,	/* count of vec_iod and sg */
+	&CMF_UINT32,	/* count of iod and sg */
 	&CMF_IOVEC,	/* dkey */
-	&DMF_VEC_IOD_ARRAY, /* daos_vector */
-	&DMF_SGL_ARRAY, /* sgl_vector */
+	&DMF_IOD_ARRAY, /* I/O descriptor array */
+	&DMF_SGL_ARRAY, /* scatter/gather array */
 	&CMF_BULK_ARRAY,    /* BULK ARRAY */
 };
 

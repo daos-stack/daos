@@ -73,17 +73,17 @@ dc_tier_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  */
 
 int
-dc_tier_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-	       daos_vec_map_t *maps, daos_event_t *ev)
+dc_tier_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		  unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
+		  daos_iom_t *maps, daos_event_t *ev)
 {
 	return 0;
 }
 
 int
-dc_tier_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-		unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-		daos_event_t *ev)
+dc_tier_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		   unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
+		   daos_event_t *ev)
 {
 	return 0;
 }
@@ -91,16 +91,16 @@ dc_tier_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 
 int
 dc_tier_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, daos_nr_t *nr,
-		   daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		   daos_hash_out_t *anchor, daos_event_t *ev)
+		      daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		      daos_hash_out_t *anchor, daos_event_t *ev)
 {
 	return 0;
 }
 
 int
-dc_tier_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-		   daos_nr_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		   daos_hash_out_t *anchor, daos_event_t *ev)
+dc_tier_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		      daos_nr_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		      daos_hash_out_t *anchor, daos_event_t *ev)
 {
 	return 0;
 }

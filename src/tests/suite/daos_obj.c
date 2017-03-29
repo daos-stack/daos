@@ -49,7 +49,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	daos_fail_value_set(arg->fail_value);
 
 	/* init sgl */
-	for (i = 0; i < IOREQ_SG_VD_NR; i++) {
+	for (i = 0; i < IOREQ_SG_IOD_NR; i++) {
 		req->sgl[i].sg_nr.num = IOREQ_SG_NR;
 		req->sgl[i].sg_iovs = req->val_iov[i];
 	}
@@ -58,10 +58,10 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	daos_csum_set(&req->csum, &req->csum_buf[0], UPDATE_CSUM_SIZE);
 
 	/* init record extent */
-	for (i = 0; i < IOREQ_SG_VD_NR; i++) {
+	for (i = 0; i < IOREQ_SG_IOD_NR; i++) {
 		int j;
 
-		for (j = 0; j < IOREQ_VD_NR; j++) {
+		for (j = 0; j < IOREQ_IOD_NR; j++) {
 			req->rex[i][j].rx_nr = 1;
 			req->rex[i][j].rx_idx = 0;
 
@@ -70,16 +70,16 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 			req->erange[i][j].epr_hi = DAOS_EPOCH_MAX;
 		}
 
-		/* vector I/O descriptor */
-		req->vio[i].vd_recxs = req->rex[i];
-		req->vio[i].vd_nr = IOREQ_VD_NR;
+		/* I/O descriptor */
+		req->iod[i].iod_recxs = req->rex[i];
+		req->iod[i].iod_nr = IOREQ_IOD_NR;
 
 		/* epoch descriptor */
-		req->vio[i].vd_eprs = req->erange[i];
+		req->iod[i].iod_eprs = req->erange[i];
 
-		req->vio[i].vd_kcsum.cs_csum = NULL;
-		req->vio[i].vd_kcsum.cs_buf_len = 0;
-		req->vio[i].vd_kcsum.cs_len = 0;
+		req->iod[i].iod_kcsum.cs_csum = NULL;
+		req->iod[i].iod_kcsum.cs_buf_len = 0;
+		req->iod[i].iod_kcsum.cs_len = 0;
 
 	}
 	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
@@ -116,13 +116,13 @@ ioreq_fini(struct ioreq *req)
 
 static void
 insert_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
-		daos_vec_iod_t *vds, daos_epoch_t epoch, struct ioreq *req)
+		daos_iod_t *iods, daos_epoch_t epoch, struct ioreq *req)
 {
 	bool ev_flag;
 	int rc;
 
 	/** execute update operation */
-	rc = daos_obj_update(req->oh, epoch, dkey, nr, vds, sgls,
+	rc = daos_obj_update(req->oh, epoch, dkey, nr, iods, sgls,
 			     req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async) {
 		assert_int_equal(rc, req->arg->expect_result);
@@ -146,10 +146,10 @@ ioreq_akey_set(struct ioreq *req, const char **akey, int nr)
 {
 	int i;
 
-	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
+	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 	/** akey */
 	for (i = 0; i < nr; i++)
-		daos_iov_set(&req->vio[i].vd_name, (void *)akey[i],
+		daos_iov_set(&req->iod[i].iod_name, (void *)akey[i],
 			     strlen(akey[i]));
 }
 
@@ -160,7 +160,7 @@ ioreq_sgl_simple_set(struct ioreq *req, void **value,
 	daos_sg_list_t *sgl = req->sgl;
 	int i;
 
-	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
+	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 	for (i = 0; i < nr; i++) {
 		sgl[i].sg_nr.num = 1;
 		sgl[i].sg_nr.num_out = 0;
@@ -172,19 +172,19 @@ static void
 ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
 		     uint64_t *idx, daos_epoch_t *epoch, int nr)
 {
-	daos_vec_iod_t *vio = req->vio;
+	daos_iod_t *iod = req->iod;
 	int i;
 
-	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
+	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 	for (i = 0; i < nr; i++) {
 		/** record extent */
-		vio[i].vd_recxs[0].rx_rsize = size[i];
-		vio[i].vd_recxs[0].rx_idx = idx[i] + i * SEGMENT_SIZE;
-		vio[i].vd_recxs[0].rx_nr = 1;
+		iod[i].iod_recxs[0].rx_rsize = size[i];
+		iod[i].iod_recxs[0].rx_idx = idx[i] + i * SEGMENT_SIZE;
+		iod[i].iod_recxs[0].rx_nr = 1;
 
 		/** XXX: to be fixed */
-		vio[i].vd_eprs[0].epr_lo = *epoch;
-		vio[i].vd_nr = 1;
+		iod[i].iod_eprs[0].epr_lo = *epoch;
+		iod[i].iod_nr = 1;
 	}
 }
 
@@ -192,7 +192,7 @@ void
 insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
        void **val, daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req)
 {
-	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
+	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 
 	/* dkey */
 	ioreq_dkey_set(req, dkey);
@@ -208,7 +208,7 @@ insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	ioreq_iod_simple_set(req, size, idx, epoch, nr);
 
 	insert_internal(&req->dkey, nr, val == NULL ? NULL : req->sgl,
-			req->vio, *epoch, req);
+			req->iod, *epoch, req);
 }
 
 void
@@ -230,13 +230,13 @@ punch(const char *dkey, const char *akey, uint64_t idx,
 
 static void
 lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
-		daos_vec_iod_t *vds, daos_epoch_t epoch, struct ioreq *req)
+		daos_iod_t *iods, daos_epoch_t epoch, struct ioreq *req)
 {
 	bool ev_flag;
 	int rc;
 
 	/** execute fetch operation */
-	rc = daos_obj_fetch(req->oh, epoch, dkey, nr, vds, sgls,
+	rc = daos_obj_fetch(req->oh, epoch, dkey, nr, iods, sgls,
 			    NULL, req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async) {
 		assert_int_equal(rc, req->arg->expect_result);
@@ -257,7 +257,7 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
        daos_size_t *read_size, void **val, daos_size_t *size,
        daos_epoch_t *epoch, struct ioreq *req)
 {
-	assert_in_range(nr, 1, IOREQ_SG_VD_NR);
+	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 
 	/* dkey */
 	ioreq_dkey_set(req, dkey);
@@ -271,7 +271,7 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	/* set iod */
 	ioreq_iod_simple_set(req, read_size, idx, epoch, nr);
 
-	lookup_internal(&req->dkey, nr, req->sgl, req->vio, *epoch, req);
+	lookup_internal(&req->dkey, nr, req->sgl, req->iod, *epoch, req);
 }
 
 void
@@ -809,7 +809,7 @@ basic_byte_array(void **state)
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
-	daos_vec_iod_t	 iod;
+	daos_iod_t	 iod;
 	daos_recx_t	 recx[STACK_BUF_LEN];
 	char		 buf_out[STACK_BUF_LEN];
 	char		 buf[STACK_BUF_LEN];
@@ -833,17 +833,17 @@ basic_byte_array(void **state)
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.vd_kcsum, NULL, 0);
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	for (i = 0; i < STACK_BUF_LEN; i++) {
 		recx[i].rx_rsize = 1;
 		recx[i].rx_idx	 = i;
 		recx[i].rx_nr	 = 1;
 	}
-	iod.vd_nr	= STACK_BUF_LEN;
-	iod.vd_recxs	= recx;
-	iod.vd_eprs	= NULL;
-	iod.vd_csums	= NULL;
+	iod.iod_nr	= STACK_BUF_LEN;
+	iod.iod_recxs	= recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
 
 	/** update record */
 	print_message("writing %d bytes with one recx per byte\n",
@@ -879,7 +879,7 @@ read_empty_records_internal(void **state, unsigned int size)
 	daos_iov_t dkey;
 	daos_sg_list_t sgl;
 	daos_iov_t sg_iov;
-	daos_vec_iod_t iod;
+	daos_iod_t iod;
 	daos_recx_t recx;
 	int rc, i;
 
@@ -899,15 +899,15 @@ read_empty_records_internal(void **state, unsigned int size)
 	sgl.sg_iovs = &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.vd_kcsum, NULL, 0);
-	iod.vd_nr = 1;
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr = 1;
 	recx.rx_rsize = 1;
 	recx.rx_idx = (size/2) * sizeof(int);
 	recx.rx_nr = sizeof(int);
-	iod.vd_recxs = &recx;
-	iod.vd_eprs = NULL;
-	iod.vd_csums = NULL;
+	iod.iod_recxs = &recx;
+	iod.iod_eprs = NULL;
+	iod.iod_csums = NULL;
 
 	/** update record */
 	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
@@ -925,7 +925,7 @@ read_empty_records_internal(void **state, unsigned int size)
 	recx.rx_rsize = 1;
 	recx.rx_idx = 0;
 	recx.rx_nr = sizeof(int) * size;
-	iod.vd_recxs = &recx;
+	iod.iod_recxs = &recx;
 
 	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
@@ -975,7 +975,7 @@ fetch_size(void **state)
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
-	daos_vec_iod_t	 iod;
+	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	char		*buf;
 	int		 rc;
@@ -1001,15 +1001,15 @@ fetch_size(void **state)
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.vd_kcsum, NULL, 0);
-	iod.vd_nr	= 1;
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
 	recx.rx_rsize	= size;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= 1;
-	iod.vd_recxs	= &recx;
-	iod.vd_eprs	= NULL;
-	iod.vd_csums	= NULL;
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
 
 	/** update record */
 	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);

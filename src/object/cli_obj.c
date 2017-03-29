@@ -531,8 +531,8 @@ dc_obj_task_cb(struct daos_task *task, void *arg)
 
 int
 dc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-	     unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-	     daos_vec_map_t *maps, unsigned int map_ver, struct daos_task *task)
+	     unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
+	     daos_iom_t *maps, unsigned int map_ver, struct daos_task *task)
 {
 	struct dc_object	*obj;
 	int			shard;
@@ -575,7 +575,7 @@ out_task:
 #define MAX_TMP_SHARDS	6
 int
 dc_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-	      unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+	      unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
 	      unsigned int map_ver, struct daos_task *task)
 {
 	struct daos_sched	*sched = daos_task2sched(task);

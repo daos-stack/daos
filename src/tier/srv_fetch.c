@@ -58,13 +58,13 @@ struct tier_sgiod_list {
 	int		      dsl_niods;
 };
 
-/* buffer for collection daos_vec_iod_t structs */
+/* buffer for collection daos_iod_t structs */
 struct tier_vec_iod {
 	daos_list_t	      dvi_lh;
-	daos_vec_iod_t	      dvi_viod;
+	daos_iod_t	      dvi_viod;
 };
 
-/* dynamic array of daos_vec_iod_t structs
+/* dynamic array of daos_iod_t structs
  * Each instance of this struct conains the args needed
  * for calling daos_obj_update on the next tier
  */
@@ -72,8 +72,8 @@ struct tier_key_iod {
 	daos_unit_oid_t	     dki_oid;
 	daos_key_t	     dki_dkey;
 	unsigned int	     dki_nr;
-	/* array of daos_vec_iod_t's */
-	daos_vec_iod_t	    *dki_iods;
+	/* array of daos_iod_t's */
+	daos_iod_t	    *dki_iods;
 	/* array of daos_sg_list_t's */
 	daos_sg_list_t      *dki_sgs;
 };
@@ -94,8 +94,8 @@ struct tier_fetch_ctx {
 	int		     dfc_flags;
 	/* working area */
 	daos_unit_oid_t      dfc_oid;
-	daos_dkey_t	     dfc_dkey;
-	daos_akey_t	     dfc_akey;
+	daos_key_t	     dfc_dkey;
+	daos_key_t	     dfc_akey;
 	unsigned int	     dfc_na;
 	unsigned int	     dfc_ne;
 	/* list heads for collecting what to fetch */
@@ -221,14 +221,14 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 		D_GOTO(out, (rc = -DER_NOMEM));
 	DAOS_INIT_LIST_HEAD(&vec->dkl_lh);
 	D_ALLOC(ptmp, sizeof(struct tier_key_iod) +
-		      (sizeof(daos_vec_iod_t) +
+		      (sizeof(daos_iod_t) +
 		       sizeof(daos_sg_list_t)) * nrecs);
 	if (ptmp == NULL) {
 		D_FREE_PTR(vec);
 		D_GOTO(out, (rc = -DER_NOMEM));
 	}
 	vec->dkl_dki   = ptmp;
-	ptmp->dki_iods = (daos_vec_iod_t *)&vec->dkl_dki[2];
+	ptmp->dki_iods = (daos_iod_t *)&vec->dkl_dki[2];
 	ptmp->dki_sgs  = (daos_sg_list_t *)&ptmp->dki_iods[nrecs];
 	ptmp->dki_nr   = 0;
 	tier_cp_oid(&ptmp->dki_oid, &fctx->dfc_oid);
@@ -291,7 +291,7 @@ tier_proc_akey(void *ctx, vos_iter_entry_t *ie)
 		D_GOTO(out, -DER_NOMEM);
 	}
 
-	vio->dvi_viod.vd_recxs = (daos_recx_t *)ptmp;
+	vio->dvi_viod.iod_recxs = (daos_recx_t *)ptmp;
 
 	D_ALLOC(ptmp, sizeof(daos_csum_buf_t) * nrecs);
 	if (ptmp == NULL) {
@@ -299,42 +299,42 @@ tier_proc_akey(void *ctx, vos_iter_entry_t *ie)
 		D_GOTO(out, -DER_NOMEM);
 	}
 
-	vio->dvi_viod.vd_csums = (daos_csum_buf_t *)ptmp;
+	vio->dvi_viod.iod_csums = (daos_csum_buf_t *)ptmp;
 	D_ALLOC(ptmp, sizeof(daos_epoch_range_t) * nrecs);
 	if (ptmp == NULL) {
 		D_FREE_PTR(vio);
 		D_GOTO(out, -DER_NOMEM);
 	}
 
-	vio->dvi_viod.vd_eprs = (daos_epoch_range_t *)ptmp;
+	vio->dvi_viod.iod_eprs = (daos_epoch_range_t *)ptmp;
 
 	DAOS_INIT_LIST_HEAD(&vio->dvi_lh);
 	daos_list_add(&vio->dvi_lh, &fctx->dfc_iods);
 	/* carve up the allocated block */
-	vio->dvi_viod.vd_recxs = (daos_recx_t *)ptmp;
-	vio->dvi_viod.vd_csums
-		= (daos_csum_buf_t *)&vio->dvi_viod.vd_recxs[nrecs];
-	vio->dvi_viod.vd_eprs
-		= (daos_epoch_range_t *)&vio->dvi_viod.vd_csums[nrecs];
+	vio->dvi_viod.iod_recxs = (daos_recx_t *)ptmp;
+	vio->dvi_viod.iod_csums
+		= (daos_csum_buf_t *)&vio->dvi_viod.iod_recxs[nrecs];
+	vio->dvi_viod.iod_eprs
+		= (daos_epoch_range_t *)&vio->dvi_viod.iod_csums[nrecs];
 
-	tier_cp_iov(&vio->dvi_viod.vd_name, &fctx->dfc_akey);
-	tier_csum(&vio->dvi_viod.vd_kcsum, &fctx->dfc_dkey,
-		   sizeof(daos_akey_t));
+	tier_cp_iov(&vio->dvi_viod.iod_name, &fctx->dfc_akey);
+	tier_csum(&vio->dvi_viod.iod_kcsum, &fctx->dfc_dkey,
+		  sizeof(daos_key_t));
 
 	/* pass to copy recxs */
 	daos_list_for_each_safe(iter, tmp, &fctx->dfc_head) {
 		dei = (struct tier_ext_list *)
 		      daos_list_entry(iter, struct tier_ext_list, del_lh);
 		for (j = 0; j < dei->del_nrecs; j++) {
-			daos_vec_iod_t *p = &vio->dvi_viod;
+			daos_iod_t *p = &vio->dvi_viod;
 
-			tier_cp_recx(&p->vd_recxs[p->vd_nr],
+			tier_cp_recx(&p->iod_recxs[p->iod_nr],
 				      &dei->del_recs[j].der_rec);
-			tier_csum(&p->vd_csums[p->vd_nr], &dei->del_recs[j],
+			tier_csum(&p->iod_csums[p->iod_nr], &dei->del_recs[j],
 				   sizeof(daos_recx_t));
-			p->vd_eprs[p->vd_nr].epr_hi = ie->ie_epr.epr_hi;
-			p->vd_eprs[p->vd_nr].epr_lo = ie->ie_epr.epr_lo;
-			p->vd_nr++;
+			p->iod_eprs[p->iod_nr].epr_hi = ie->ie_epr.epr_hi;
+			p->iod_eprs[p->iod_nr].epr_lo = ie->ie_epr.epr_lo;
+			p->iod_nr++;
 
 		}
 		daos_list_del(iter);

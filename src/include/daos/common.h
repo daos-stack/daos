@@ -181,7 +181,7 @@ int  daos_sgl_init(daos_sg_list_t *sgl, unsigned int nr);
 void daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs);
 daos_size_t daos_sgl_data_len(daos_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_len(daos_sg_list_t *sgl);
-daos_size_t daos_vec_iod_len(daos_vec_iod_t *viod);
+daos_size_t daos_iod_len(daos_iod_t *iod);
 
 char *daos_str_trimwhite(char *str);
 

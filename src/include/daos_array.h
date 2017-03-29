@@ -27,6 +27,10 @@
 #ifndef __DAOS_ARRAY_API_H__
 #define __DAOS_ARRAY_API_H__
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 typedef struct {
 	daos_size_t		len;
 	daos_off_t		index;
@@ -116,5 +120,9 @@ daos_array_get_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t *size,
 int
 daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
 		    daos_event_t *ev);
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /* __DAOS_ARRAY_API_H__ */

@@ -238,9 +238,9 @@ struct daos_obj_arg {
 	daos_epoch_t	epoch;
 	daos_key_t	*dkey;
 	unsigned int	nr;
-	daos_vec_iod_t	*iods;
+	daos_iod_t	*iods;
 	daos_sg_list_t	*sgls;
-	daos_vec_map_t	*maps;
+	daos_iom_t	*maps;
 };
 
 struct daos_obj_list_arg {
@@ -249,7 +249,7 @@ struct daos_obj_list_arg {
 	daos_epoch_t	epoch;
 	uint32_t	*nr;
 	daos_key_desc_t	*kds;
-	daos_dkey_t	*dkey;
+	daos_key_t	*dkey;
 	daos_sg_list_t	*sgl;
 	daos_hash_out_t	*anchor;
 };
@@ -441,9 +441,9 @@ out:
 }
 
 int
-daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-	       unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-	       daos_vec_map_t *maps, daos_event_t *ev)
+daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+	       unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
+	       daos_iom_t *maps, daos_event_t *ev)
 {
 	struct daos_obj_arg arg;
 	struct daos_task *task;
@@ -475,8 +475,8 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
 }
 
 int
-daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
-		unsigned int nr, daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		unsigned int nr, daos_iod_t *iods, daos_sg_list_t *sgls,
 		daos_event_t *ev)
 {
 	struct daos_task	*task;
@@ -537,7 +537,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 }
 
 int
-daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_dkey_t *dkey,
+daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		   uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev)
 {

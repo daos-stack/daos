@@ -60,7 +60,7 @@ struct io_params {
 	daos_key_t		dkey;
 	char			*dkey_str;
 	char			*akey_str;
-	daos_vec_iod_t		iod;
+	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
 	daos_event_t		event;
 	struct io_params	*next;
@@ -337,7 +337,7 @@ array_access_kv(daos_handle_t oh, daos_epoch_t epoch,
 	 * the separating ranges also belong to the same dkey.
 	 */
 	while (u < ranges->ranges_nr) {
-		daos_vec_iod_t	*iod, local_iod;
+		daos_iod_t	*iod, local_iod;
 		daos_sg_list_t	*sgl, local_sgl;
 		char		*dkey_str;
 		daos_key_t	*dkey, local_dkey;
@@ -409,12 +409,12 @@ array_access_kv(daos_handle_t oh, daos_epoch_t epoch,
 		daos_iov_set(dkey, (void *)dkey_str, strlen(dkey_str));
 
 		/* set descriptor for KV object */
-		daos_iov_set(&iod->vd_name, (void *)akey, strlen(akey));
-		iod->vd_kcsum = null_csum;
-		iod->vd_nr = 0;
-		iod->vd_csums = NULL;
-		iod->vd_eprs = NULL;
-		iod->vd_recxs = NULL;
+		daos_iov_set(&iod->iod_name, (void *)akey, strlen(akey));
+		iod->iod_kcsum = null_csum;
+		iod->iod_nr = 0;
+		iod->iod_csums = NULL;
+		iod->iod_eprs = NULL;
+		iod->iod_recxs = NULL;
 		i = 0;
 		dkey_records = 0;
 
@@ -426,26 +426,26 @@ array_access_kv(daos_handle_t oh, daos_epoch_t epoch,
 		do {
 			daos_off_t	old_array_i;
 
-			iod->vd_nr++;
+			iod->iod_nr++;
 
 			/** add another element to recxs */
-			iod->vd_recxs = (daos_recx_t *)realloc
-				(iod->vd_recxs, sizeof(daos_recx_t) *
-				 iod->vd_nr);
-			if (iod->vd_recxs == NULL) {
+			iod->iod_recxs = (daos_recx_t *)realloc
+				(iod->iod_recxs, sizeof(daos_recx_t) *
+				 iod->iod_nr);
+			if (iod->iod_recxs == NULL) {
 				D_ERROR("Failed memory allocation\n");
 				return -DER_NOMEM;
 			}
 
 			/** set the record access for this range */
-			iod->vd_recxs[i].rx_rsize = 1;
-			iod->vd_recxs[i].rx_idx = record_i;
-			iod->vd_recxs[i].rx_nr = (num_records > records) ?
+			iod->iod_recxs[i].rx_rsize = 1;
+			iod->iod_recxs[i].rx_idx = record_i;
+			iod->iod_recxs[i].rx_nr = (num_records > records) ?
 				records : num_records;
 #ifdef ARRAY_DEBUG
 			printf("Add %zu to ARRAY IOD (size = %zu index = %d)\n",
-			       u, iod->vd_recxs[i].rx_nr,
-			       (int)iod->vd_recxs[i].rx_idx);
+			       u, iod->iod_recxs[i].rx_nr,
+			       (int)iod->iod_recxs[i].rx_idx);
 #endif
 			/**
 			 * if the current range is bigger than what the dkey can
@@ -590,9 +590,9 @@ array_access_kv(daos_handle_t oh, daos_epoch_t epoch,
 				sgl->sg_iovs = NULL;
 			}
 
-			if (iod->vd_recxs) {
-				free(iod->vd_recxs);
-				iod->vd_recxs = NULL;
+			if (iod->iod_recxs) {
+				free(iod->iod_recxs);
+				iod->iod_recxs = NULL;
 			}
 		}
 	} /* end while */

@@ -245,7 +245,7 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
  * VOS object API
  */
 /**
- * Fetch an array of vectors from the specfied object.
+ * Fetch records from the specified object.
  */
 /**
  * Fetch values for the given keys and their indices.
@@ -258,11 +258,11 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
- *			is provided by \a vios.
+ *			is provided by \a iods.
  * \param dkey	[IN]	Distribution key.
- * \param viod_nr [IN]	Number of vector descriptors in \a viods.
- * \param viods	[IN/OUT]
- *			Array of vector IO descriptors. The returned record
+ * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
+ * \param iods	[IN/OUT]
+ *			Array of I/O descriptors. The returned record
  *			sizes are also stored in this parameter.
  * \param sgls	[OUT]	Scatter/gather list to store the returned record values
  *			or value addresses.
@@ -271,12 +271,12 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr,
  */
 int
 vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	      daos_dkey_t *dkey, unsigned int viod_nr, daos_vec_iod_t *viods,
+	      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
 	      daos_sg_list_t *sgls);
 
 
 /**
- * Update an array of vectors for the specfied object.
+ * Update records for the specfied object.
  * If input buffer is not provided in \a sgl, then this function returns
  * the new allocated addresses to store the records, upper layer can
  * directly write data into these addresses (rdma mode).
@@ -284,13 +284,13 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID
  * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
- *			range is provided by \a vios (kvl::kv_epr).
+ *			range is provided by \a iods (kvl::kv_epr).
  * \param cookie [IN]	Cookie ID to tag this update to identify during
  *			discard. This tag is used to group all updates
  *			that might in future be discarded together.
  * \param dkey	[IN]	Distribution key.
- * \param viod_nr [IN]	Number of vector IO descriptors in \a viods.
- * \param viods [IN]	Array of vector IO descriptors.
+ * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
+ * \param iods [IN]	Array of I/O descriptors.
  * \param sgls	[IN/OUT]
  *			Scatter/gather list to pass in record value buffers,
  *			if caller sets the input buffer size only without
@@ -302,8 +302,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uuid_t cookie, daos_dkey_t *dkey, unsigned int viod_nr,
-	       daos_vec_iod_t *viods, daos_sg_list_t *sgls);
+	       uuid_t cookie, daos_key_t *dkey, unsigned int iod_nr,
+	       daos_iod_t *iods, daos_sg_list_t *sgls);
 
 /**
  * Zero-Copy I/O APIs
@@ -311,7 +311,7 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 /**
  *
  * Find and return zero-copy source buffers for the data of the specified
- * vectors of the given object. The caller can directly use these buffers
+ * arrays of the given object. The caller can directly use these buffers
  * for RMA read.
  *
  * The upper layer must explicitly call \a vos_obj_zc_end to finalise the
@@ -322,11 +322,11 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	Object ID
  * \param epoch	[IN]	Epoch for the fetch. It will be ignored if epoch range
- *			is provided by \a vios.
+ *			is provided by \a iods.
  * \param dkey	[IN]	Distribution key.
- * \param nr	[IN]	Number of vector descriptors in \a vios.
- * \param vios	[IN/OUT]
- *			Array of vector IO descriptors. The returned record
+ * \param nr	[IN]	Number of I/O descriptors in \a ios.
+ * \param iods	[IN/OUT]
+ *			Array of I/O descriptors. The returned record
  *			sizes are also restored in this parameter.
  * \param ioh	[OUT]	The returned handle for the ZC I/O.
  *
@@ -334,16 +334,16 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
-		       daos_epoch_t epoch, daos_dkey_t *dkey, unsigned int nr,
-		       daos_vec_iod_t *vios, daos_handle_t *ioh);
+		       daos_epoch_t epoch, daos_key_t *dkey, unsigned int nr,
+		       daos_iod_t *iods, daos_handle_t *ioh);
 
 /**
  * Finish the zero-copy fetch operation and release the responding resources.
  *
  * \param ioh	[IN]	The ZC I/O handle created by \a vos_obj_zc_fetch_begin
  * \param dkey	[IN]	Distribution key.
- * \param nr	[IN]	Number of vector IO descriptors in \a vios.
- * \param vios	[IN]	Array of vector IO descriptors.
+ * \param nr	[IN]	Number of I/O descriptors in \a iods.
+ * \param iods	[IN]	Array of I/O descriptors.
  * \param err	[IN]	Errno of the current fetch, zero if there is no error.
  *			All updates will be dropped if this function is called
  *			for \a vos_obj_zc_update with a non-zero error code.
@@ -351,11 +351,11 @@ vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_zc_fetch_end(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int nr,
-		     daos_vec_iod_t *vios, int err);
+vos_obj_zc_fetch_end(daos_handle_t ioh, daos_key_t *dkey, unsigned int nr,
+		     daos_iod_t *iods, int err);
 
 /**
- * Prepare zero-copy sink buffers for the specified vectors of the given
+ * Prepare zero-copy sink buffers for the specified arrays of the given
  * object. The caller can directly use thse buffers for RMA write.
  *
  * The upper layer must explicitly call \a vos_obj_zc_fetch_end to finalise the
@@ -364,18 +364,18 @@ vos_obj_zc_fetch_end(daos_handle_t ioh, daos_dkey_t *dkey, unsigned int nr,
  * \param coh	[IN]	Container open handle
  * \param oid	[IN]	object ID
  * \param epoch	[IN]	Epoch for the update. It will be ignored if epoch
- *			range is provided by \a vios (kvl::kv_epr).
+ *			range is provided by \a iods (kvl::kv_epr).
  * \param dkey	[IN]	Distribution key.
- * \param nr	[IN]	Number of vector IO descriptors in \a vios.
- * \param vios	[IN]	Array of vector IO descriptors.
+ * \param nr	[IN]	Number of I/O descriptors in \a iods.
+ * \param iods	[IN]	Array of I/O descriptors.
  * \param ioh	[OUT]	The returned handle for the ZC I/O.
  *
  * \return		Zero on success, negative value if error
  */
 int
 vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
-			daos_epoch_t epoch, daos_dkey_t *dkey,
-			unsigned int nr, daos_vec_iod_t *vios,
+			daos_epoch_t epoch, daos_key_t *dkey,
+			unsigned int nr, daos_iod_t *iods,
 			daos_handle_t *ioh);
 
 /**
@@ -386,8 +386,8 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
  *			discard. This tag is used to group all updates
  *			that might in future be discarded together.
  * \param dkey	[IN]	Distribution key.
- * \param nr	[IN]	Number of vector IO descriptors in \a vios.
- * \param vios	[IN]	Array of vector IO descriptors.
+ * \param nr	[IN]	Number of I/O descriptors in \a iods.
+ * \param iods	[IN]	Array of I/O descriptors.
  * \param err	[IN]	Errno of the current update, zero if there is no error.
  *			All updates will be dropped if this function is called
  *			for \a vos_obj_zc_update with a non-zero error code.
@@ -395,21 +395,18 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie,
-		      daos_dkey_t *dkey, unsigned int nr,
-		      daos_vec_iod_t *vios, int err);
+vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, daos_key_t *dkey,
+		      unsigned int nr, daos_iod_t *iods, int err);
 
 /**
- * Get the zero-copy scatter/gather list for the specified vector.
+ * Get the zero-copy scatter/gather list associated with a given I/O descriptor.
  *
  * \param ioh	[IN]	The ZC I/O handle.
- * \param vec_at [IN]	Index of the vector within @vios while creating the
- *			ZC I/O handle \a ioh.
+ * \param iod	[IN]	Index of the I/O descriptor array.
  * \param sgl_pp [OUT]	The returned scatter/gather list.
  */
 int
-vos_obj_zc_vec2sgl(daos_handle_t ioh, unsigned int vec_at,
-		   daos_sg_list_t **sgl_pp);
+vos_obj_zc_sgl_at(daos_handle_t ioh, unsigned int idx, daos_sg_list_t **sgl_pp);
 
 /**
  * VOS iterator APIs

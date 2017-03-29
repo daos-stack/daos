@@ -27,6 +27,10 @@
 #ifndef DAOS_TYPES_H
 #define DAOS_TYPES_H
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
@@ -456,13 +460,12 @@ typedef struct {
  *
  * A record is an atomic blob of arbitrary length which is always
  * fetched/updated as a whole. The size of a record can change over time.
- * A vector is a dynamic array of records.
  * A record is uniquely identified by the following composite key:
- * - the distribution key (aka dkey) denotes a set of vectors co-located on the
+ * - the distribution key (aka dkey) denotes a set of arrays co-located on the
  *   same storage targets. The dkey has an arbitrary size.
- * - the attribute key (aka akey) distinguishes individual vectors. Likewise, the
+ * - the attribute key (aka akey) distinguishes individual arrays. Likewise, the
  *   akey has a arbitrary size.
- * - the index within a vector discriminates individual records. The index
+ * - the index within an array discriminates individual records. The index
  *   is an integer that ranges from zero to infinity. A range of indices
  *   identifies a contiguous set of records called extent. All records inside an
  *   extent must have the same size.
@@ -471,71 +474,72 @@ typedef struct {
 /** opaque key type */
 typedef daos_iov_t daos_key_t;
 
-/* XXX remove daos_dkey_t and daos_akey_t */
-/** Distribution key */
-typedef daos_key_t daos_dkey_t;
-/** Attribute key */
-typedef daos_key_t daos_akey_t;
-
 /**
  * A record extent is a range of contiguous records of the same size inside an
  * array. \a rx_idx is the first array index of the extent and \a rx_nr is the
  * number of records covered by the extent.
  */
 typedef struct {
-	/** Individual record size, must be the same for each record of the
-	 * extent */
+	/**
+	 * Individual record size, must be the same for each record of the
+	 * extent
+	 */
 	uint64_t	rx_rsize;
-	/* Index of the first record in the range */
+	/** Indice of the first record in the extent */
 	uint64_t	rx_idx;
-	/* Number of records in the range
-	 * If rx_nr is equal to 1, the range identifies a single record of
-	 * index rx_idx */
+	/**
+	 * Number of contiguous records in the extent
+	 * If \a rx_nr is equal to 1, the extent is composed of a single record
+	 * at indice \a rx_idx
+	 */
 	uint64_t	rx_nr;
 } daos_recx_t;
 
 /**
- * A vector I/O descriptor is a list of extents to update/fetch in a particular
- * vector identified by its akey.
+ * An I/O descriptor is a list of extents (effectively records associated with
+ * contiguous array indices) to update/fetch in a particular array identified by
+ * its akey.
  */
 typedef struct {
-	/** Name associated with the vector, effectively akey */
-	daos_akey_t		 vd_name;
-	/** Name/akey checksum */
-	daos_csum_buf_t		 vd_kcsum;
-	/** Number of extents in the \a vd_recxs array */
-	unsigned int		 vd_nr;
-	/** Array of extents */
-	daos_recx_t		*vd_recxs;
+	/** akey associated with the array */
+	daos_key_t		 iod_name;
+	/** akey checksum */
+	daos_csum_buf_t		 iod_kcsum;
+	/** Number of extents in the \a iod_recxs external array */
+	unsigned int		 iod_nr;
+	/** External array of extents */
+	daos_recx_t		*iod_recxs;
 	/** Checksum associated with each extent */
-	daos_csum_buf_t		*vd_csums;
+	daos_csum_buf_t		*iod_csums;
 	/** Epoch range associated with each extent */
-	daos_epoch_range_t	*vd_eprs;
-} daos_vec_iod_t;
+	daos_epoch_range_t	*iod_eprs;
+} daos_iod_t;
 
 /**
- * A vector map represents the physical extent mapping inside a vector for a
+ * A I/O map represents the physical extent mapping inside an array for a
  * given range of indices.
  */
 typedef struct {
-	/** Name associated with the vector, effectively akey */
-	daos_akey_t		 vm_name;
-	/** Name/akey checksum */
-	daos_csum_buf_t		 vm_kcsum;
+	/** akey associated with the array */
+	daos_key_t		 iom_name;
+	/** akey checksum */
+	daos_csum_buf_t		 iom_kcsum;
 	/** First index of this mapping */
-	uint64_t		 vm_start;
+	uint64_t		 iom_start;
 	/** Logical number of indices covered by this mapping */
-	uint64_t                 vm_len;
-	/** Number of extents in the mapping, that's the size of all the
-	 * arrays listed below */
-	unsigned int		 vm_nr;
-	/** Array of extents */
-	daos_recx_t		*vm_recxs;
+	uint64_t                 iom_len;
+	/**
+	 * Number of extents in the mapping, that's the size of all the
+	 * external arrays listed below
+	 */
+	unsigned int		 iom_nr;
+	/** External array of extents */
+	daos_recx_t		*iom_recxs;
 	/** Checksum associated with each extent */
-	daos_csum_buf_t		*vm_xcsums;
+	daos_csum_buf_t		*iom_xcsums;
 	/** Epoch range associated with each extent */
-	daos_epoch_range_t	*vm_eprs;
-} daos_vec_map_t;
+	daos_epoch_range_t	*iom_eprs;
+} daos_iom_t;
 
 /** record status */
 enum {
@@ -612,4 +616,9 @@ typedef enum {
 } daos_ev_status_t;
 
 struct daos_eq;
+
+#if defined(__cplusplus)
+}
+#endif
+
 #endif /* DAOS_TYPES_H */

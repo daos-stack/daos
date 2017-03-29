@@ -40,7 +40,7 @@ byte_array_simple_stack(void **state)
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
-	daos_vec_iod_t	 iod;
+	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	char		 buf_out[STACK_BUF_LEN];
 	char		 buf[STACK_BUF_LEN];
@@ -63,15 +63,15 @@ byte_array_simple_stack(void **state)
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.vd_kcsum, NULL, 0);
-	iod.vd_nr	= 1;
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
 	recx.rx_rsize	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(buf);
-	iod.vd_recxs	= &recx;
-	iod.vd_eprs	= NULL;
-	iod.vd_csums	= NULL;
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
 
 	/** update record */
 	print_message("writing %d bytes in a single recx\n", STACK_BUF_LEN);
@@ -111,7 +111,7 @@ array_simple(void **state)
 	daos_iov_t	 dkey;
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
-	daos_vec_iod_t	 iod;
+	daos_iod_t	 iod;
 	daos_recx_t	 recx;
 	char		*buf;
 	char		*buf_out;
@@ -137,16 +137,16 @@ array_simple(void **state)
 	sgl.sg_iovs		= &sg_iov;
 
 	/** init I/O descriptor */
-	daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.vd_kcsum, NULL, 0);
-	iod.vd_nr	= 1;
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
 	recx.rx_rsize	= arg->size;
 	srand(time(NULL) + arg->size);
 	recx.rx_idx	= rand();
 	recx.rx_nr	= arg->nr;
-	iod.vd_recxs	= &recx;
-	iod.vd_eprs	= NULL;
-	iod.vd_csums	= NULL;
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
 
 	/** update record */
 	print_message("writing %lu records of %lu bytes each at offset %lu\n",

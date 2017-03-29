@@ -283,7 +283,7 @@ io_invalid_poh(void **state)
 	daos_iov_t		 dkey;
 	daos_sg_list_t		 sgl;
 	daos_iov_t		 sg_iov;
-	daos_vec_iod_t		 iod;
+	daos_iod_t		 iod;
 	daos_recx_t		 recx;
 	char			 buf[STACK_BUF_LEN];
 	int			 rc;
@@ -331,15 +331,15 @@ io_invalid_poh(void **state)
 		sgl.sg_nr.num		= 1;
 		sgl.sg_nr.num_out	= 0;
 		sgl.sg_iovs		= &sg_iov;
-		daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
-		daos_csum_set(&iod.vd_kcsum, NULL, 0);
-		iod.vd_nr	= 1;
+		daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+		daos_csum_set(&iod.iod_kcsum, NULL, 0);
+		iod.iod_nr	= 1;
 		recx.rx_rsize	= 1;
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
-		iod.vd_recxs	= &recx;
-		iod.vd_eprs	= NULL;
-		iod.vd_csums	= NULL;
+		iod.iod_recxs	= &recx;
+		iod.iod_eprs	= NULL;
+		iod.iod_csums	= NULL;
 
 		/** update record */
 		print_message("Updating %d bytes with invalid pool handle ..."
@@ -384,7 +384,7 @@ io_invalid_coh(void **state)
 	daos_iov_t		 dkey;
 	daos_sg_list_t		 sgl;
 	daos_iov_t		 sg_iov;
-	daos_vec_iod_t		 iod;
+	daos_iod_t		 iod;
 	daos_recx_t		 recx;
 	char			 buf[STACK_BUF_LEN];
 	int			 rc;
@@ -421,15 +421,15 @@ io_invalid_coh(void **state)
 		sgl.sg_nr.num		= 1;
 		sgl.sg_nr.num_out	= 0;
 		sgl.sg_iovs		= &sg_iov;
-		daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
-		daos_csum_set(&iod.vd_kcsum, NULL, 0);
-		iod.vd_nr	= 1;
+		daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+		daos_csum_set(&iod.iod_kcsum, NULL, 0);
+		iod.iod_nr	= 1;
 		recx.rx_rsize	= 1;
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
-		iod.vd_recxs	= &recx;
-		iod.vd_eprs	= NULL;
-		iod.vd_csums	= NULL;
+		iod.iod_recxs	= &recx;
+		iod.iod_eprs	= NULL;
+		iod.iod_csums	= NULL;
 
 		/** update record */
 		print_message("Updating records with stale container handle "
@@ -471,7 +471,7 @@ update_ro(void **state)
 	daos_iov_t		 dkey;
 	daos_sg_list_t		 sgl;
 	daos_iov_t		 sg_iov;
-	daos_vec_iod_t		 iod;
+	daos_iod_t		 iod;
 	daos_recx_t		 recx;
 	char			 buf[STACK_BUF_LEN];
 	int			 rc;
@@ -499,15 +499,15 @@ update_ro(void **state)
 	sgl.sg_nr.num		= 1;
 	sgl.sg_nr.num_out	= 0;
 	sgl.sg_iovs		= &sg_iov;
-	daos_iov_set(&iod.vd_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.vd_kcsum, NULL, 0);
-	iod.vd_nr	= 1;
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
 	recx.rx_rsize	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(buf);
-	iod.vd_recxs	= &recx;
-	iod.vd_eprs	= NULL;
-	iod.vd_csums	= NULL;
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
 
 	/** update record */
 	print_message("Updating records with read-only container handle ...\n");

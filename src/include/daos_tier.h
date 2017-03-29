@@ -32,6 +32,10 @@
 #ifndef __DAOS_TIER_H__
 #define __DAOS_TIER_H__
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 /**
  * CT Specific Structs
  */
@@ -160,4 +164,9 @@ daos_tier_register(uuid_t local_pl_id, uint32_t local_temp,
  */
 int
 daos_tier_ping(uint32_t ping_val, daos_event_t *ev);
+
+#if defined(__cplusplus)
+}
+#endif
+
 #endif /* __DAOS_TIER_H__ */

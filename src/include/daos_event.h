@@ -43,6 +43,10 @@
 #ifndef __DAOS_EVENT_H__
 #define __DAOS_EVENT_H__
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 #include <daos_types.h>
 #include <daos_errno.h>
 
@@ -219,4 +223,9 @@ daos_event_parent_barrier(struct daos_event *ev);
  */
 int
 daos_event_abort(daos_event_t *ev);
+
+#if defined(__cplusplus)
+}
+#endif
+
 #endif /*  __DAOS_EVENT_H__ */

@@ -59,7 +59,7 @@
 /** DAOS-specific RPC format */
 extern struct crt_msg_field DMF_OID;
 extern struct crt_msg_field DMF_IOVEC;
-extern struct crt_msg_field DMF_VEC_IOD_ARRAY;
+extern struct crt_msg_field DMF_IOD_ARRAY;
 extern struct crt_msg_field DMF_EPOCH_STATE;
 extern struct crt_msg_field DMF_HASH_OUT;
 extern struct crt_msg_field DMF_KEY_DESC_ARRAY;

@@ -152,13 +152,13 @@ int dc_obj_shard_open(daos_handle_t coh, uint32_t tgt, daos_unit_oid_t id,
 int dc_obj_shard_close(daos_handle_t oh);
 
 int dc_obj_shard_update(daos_handle_t oh, daos_epoch_t epoch,
-			daos_dkey_t *dkey, unsigned int nr,
-			daos_vec_iod_t *iods, daos_sg_list_t *sgls,
+			daos_key_t *dkey, unsigned int nr,
+			daos_iod_t *iods, daos_sg_list_t *sgls,
 			unsigned int map_ver, struct daos_task *task);
 int dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
-		       daos_dkey_t *dkey, unsigned int nr,
-		       daos_vec_iod_t *iods, daos_sg_list_t *sgls,
-		       daos_vec_map_t *maps, unsigned int map_ver,
+		       daos_key_t *dkey, unsigned int nr,
+		       daos_iod_t *iods, daos_sg_list_t *sgls,
+		       daos_iom_t *maps, unsigned int map_ver,
 		       struct daos_task *task);
 int dc_obj_shard_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 			  daos_key_t *key, uint32_t *nr, daos_key_desc_t *kds,

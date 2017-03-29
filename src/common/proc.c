@@ -238,19 +238,19 @@ daos_proc_epoch_range(crt_proc_t proc, daos_epoch_range_t *erange)
 
 /**
  * typedef struct {
- *	daos_akey_t		 vd_name;
- *	daos_csum_buf_t		 vd_kcsum;
- *	unsigned int		 vd_nr;
- *	daos_recx_t		*vd_recxs;
- *	daos_csum_buf_t		*vd_csums;
- *	daos_epoch_range_t	*vd_eprs;
- * } daos_vec_iod_t;
+ *	daos_key_t		 iod_name;
+ *	daos_csum_buf_t		 iod_kcsum;
+ *	unsigned int		 iod_nr;
+ *	daos_recx_t		*iod_recxs;
+ *	daos_csum_buf_t		*iod_csums;
+ *	daos_epoch_range_t	*iod_eprs;
+ * } daos_iod_t;
  **/
-#define VD_REC_EXIST	(1 << 0)
-#define VD_CSUM_EXIST	(1 << 1)
-#define VD_EPRS_EXIST	(1 << 2)
+#define IOD_REC_EXIST	(1 << 0)
+#define IOD_CSUM_EXIST	(1 << 1)
+#define IOD_EPRS_EXIST	(1 << 2)
 int
-daos_proc_vec_iod(crt_proc_t proc, daos_vec_iod_t *dvi)
+daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 {
 	crt_proc_op_t	proc_op;
 	int		rc;
@@ -263,20 +263,20 @@ daos_proc_vec_iod(crt_proc_t proc, daos_vec_iod_t *dvi)
 		return -DER_INVAL;
 	}
 
-	rc = daos_proc_iovec(proc, &dvi->vd_name);
+	rc = daos_proc_iovec(proc, &dvi->iod_name);
 	if (rc != 0)
 		return rc;
 
-	rc = daos_proc_csum_buf(proc, &dvi->vd_kcsum);
+	rc = daos_proc_csum_buf(proc, &dvi->iod_kcsum);
 	if (rc != 0)
 		return rc;
 
-	rc = crt_proc_uint32_t(proc, &dvi->vd_nr);
+	rc = crt_proc_uint32_t(proc, &dvi->iod_nr);
 	if (rc != 0)
 		return -DER_CRT_HG;
 
-	if (dvi->vd_nr == 0) {
-		D_ERROR("invalid i/o vector, vd_nr = 0\n");
+	if (dvi->iod_nr == 0) {
+		D_ERROR("invalid I/O descriptor, iod_nr = 0\n");
 		return -DER_CRT_HG;
 	}
 
@@ -285,12 +285,12 @@ daos_proc_vec_iod(crt_proc_t proc, daos_vec_iod_t *dvi)
 		return -DER_CRT_HG;
 
 	if (proc_op == CRT_PROC_ENCODE) {
-		if (dvi->vd_recxs != NULL)
-			existing_flags |= VD_REC_EXIST;
-		if (dvi->vd_csums != NULL)
-			existing_flags |= VD_CSUM_EXIST;
-		if (dvi->vd_eprs != NULL)
-			existing_flags |= VD_EPRS_EXIST;
+		if (dvi->iod_recxs != NULL)
+			existing_flags |= IOD_REC_EXIST;
+		if (dvi->iod_csums != NULL)
+			existing_flags |= IOD_CSUM_EXIST;
+		if (dvi->iod_eprs != NULL)
+			existing_flags |= IOD_EPRS_EXIST;
 	}
 
 	rc = crt_proc_uint32_t(proc, &existing_flags);
@@ -298,31 +298,31 @@ daos_proc_vec_iod(crt_proc_t proc, daos_vec_iod_t *dvi)
 		return -DER_CRT_HG;
 
 	if (proc_op == CRT_PROC_DECODE) {
-		if (existing_flags & VD_REC_EXIST) {
-			D_ALLOC(dvi->vd_recxs,
-				dvi->vd_nr * sizeof(*dvi->vd_recxs));
-			if (dvi->vd_recxs == NULL)
+		if (existing_flags & IOD_REC_EXIST) {
+			D_ALLOC(dvi->iod_recxs,
+				dvi->iod_nr * sizeof(*dvi->iod_recxs));
+			if (dvi->iod_recxs == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
 
-		if (existing_flags & VD_CSUM_EXIST) {
-			D_ALLOC(dvi->vd_csums,
-				dvi->vd_nr * sizeof(*dvi->vd_csums));
-			if (dvi->vd_csums == NULL)
+		if (existing_flags & IOD_CSUM_EXIST) {
+			D_ALLOC(dvi->iod_csums,
+				dvi->iod_nr * sizeof(*dvi->iod_csums));
+			if (dvi->iod_csums == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
 
-		if (existing_flags & VD_EPRS_EXIST) {
-			D_ALLOC(dvi->vd_eprs,
-				dvi->vd_nr * sizeof(*dvi->vd_eprs));
-			if (dvi->vd_eprs == NULL)
+		if (existing_flags & IOD_EPRS_EXIST) {
+			D_ALLOC(dvi->iod_eprs,
+				dvi->iod_nr * sizeof(*dvi->iod_eprs));
+			if (dvi->iod_eprs == NULL)
 				D_GOTO(free, rc = -DER_NOMEM);
 		}
 	}
 
-	if (existing_flags & VD_REC_EXIST) {
-		for (i = 0; i < dvi->vd_nr; i++) {
-			rc = daos_proc_recx(proc, &dvi->vd_recxs[i]);
+	if (existing_flags & IOD_REC_EXIST) {
+		for (i = 0; i < dvi->iod_nr; i++) {
+			rc = daos_proc_recx(proc, &dvi->iod_recxs[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
 					D_GOTO(free, rc);
@@ -331,9 +331,9 @@ daos_proc_vec_iod(crt_proc_t proc, daos_vec_iod_t *dvi)
 		}
 	}
 
-	if (existing_flags & VD_CSUM_EXIST) {
-		for (i = 0; i < dvi->vd_nr; i++) {
-			rc = daos_proc_csum_buf(proc, &dvi->vd_csums[i]);
+	if (existing_flags & IOD_CSUM_EXIST) {
+		for (i = 0; i < dvi->iod_nr; i++) {
+			rc = daos_proc_csum_buf(proc, &dvi->iod_csums[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
 					D_GOTO(free, rc);
@@ -342,9 +342,9 @@ daos_proc_vec_iod(crt_proc_t proc, daos_vec_iod_t *dvi)
 		}
 	}
 
-	if (existing_flags & VD_EPRS_EXIST) {
-		for (i = 0; i < dvi->vd_nr; i++) {
-			rc = daos_proc_epoch_range(proc, &dvi->vd_eprs[i]);
+	if (existing_flags & IOD_EPRS_EXIST) {
+		for (i = 0; i < dvi->iod_nr; i++) {
+			rc = daos_proc_epoch_range(proc, &dvi->iod_eprs[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
 					D_GOTO(free, rc);
@@ -355,15 +355,15 @@ daos_proc_vec_iod(crt_proc_t proc, daos_vec_iod_t *dvi)
 
 	if (proc_op == CRT_PROC_FREE) {
 free:
-		if (dvi->vd_recxs != NULL)
-			D_FREE(dvi->vd_recxs,
-			       dvi->vd_nr * sizeof(*dvi->vd_recxs));
-		if (dvi->vd_csums != NULL)
-			D_FREE(dvi->vd_csums,
-			       dvi->vd_nr * sizeof(*dvi->vd_csums));
-		if (dvi->vd_eprs != NULL)
-			D_FREE(dvi->vd_eprs,
-			       dvi->vd_nr * sizeof(*dvi->vd_eprs));
+		if (dvi->iod_recxs != NULL)
+			D_FREE(dvi->iod_recxs,
+			       dvi->iod_nr * sizeof(*dvi->iod_recxs));
+		if (dvi->iod_csums != NULL)
+			D_FREE(dvi->iod_csums,
+			       dvi->iod_nr * sizeof(*dvi->iod_csums));
+		if (dvi->iod_eprs != NULL)
+			D_FREE(dvi->iod_eprs,
+			       dvi->iod_nr * sizeof(*dvi->iod_eprs));
 	}
 
 	return rc;
@@ -532,9 +532,9 @@ struct crt_msg_field DMF_OID =
 struct crt_msg_field DMF_IOVEC =
 	DEFINE_CRT_MSG("daos_iov", 0, sizeof(daos_iov_t), daos_proc_iovec);
 
-struct crt_msg_field DMF_VEC_IOD_ARRAY =
-	DEFINE_CRT_MSG("daos_vec_iods", CMF_ARRAY_FLAG, sizeof(daos_vec_iod_t),
-			daos_proc_vec_iod);
+struct crt_msg_field DMF_IOD_ARRAY =
+	DEFINE_CRT_MSG("daos_iods", CMF_ARRAY_FLAG, sizeof(daos_iod_t),
+			daos_proc_iod);
 
 struct crt_msg_field DMF_REC_SIZE_ARRAY =
 	DEFINE_CRT_MSG("daos_rec_size", CMF_ARRAY_FLAG, sizeof(uint64_t),

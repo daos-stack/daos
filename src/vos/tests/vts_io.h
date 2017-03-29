@@ -102,7 +102,7 @@ struct io_req {
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
 	struct daos_uuid	cookie;
-	daos_vec_iod_t		vio;
+	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
 	daos_epoch_t		epoch;
 };
@@ -122,13 +122,13 @@ void			test_args_reset(struct io_test_args *args,
 					uint64_t pool_size);
 int			io_test_obj_update(struct io_test_args *arg,
 					   int epoch, daos_key_t *dkey,
-					   daos_vec_iod_t *vio,
+					   daos_iod_t *iod,
 					   daos_sg_list_t *sgl,
 					   struct daos_uuid *cookie,
 					   bool verbose);
 int			io_test_obj_fetch(struct io_test_args *arg,
 					  int epoch, daos_key_t *dkey,
-					  daos_vec_iod_t *vio,
+					  daos_iod_t *iod,
 					  daos_sg_list_t *sgl,
 					  bool verbose);
 int			setup_io(void **state);

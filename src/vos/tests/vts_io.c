@@ -194,7 +194,7 @@ teardown_io(void **state)
 }
 
 static int
-io_recx_iterate(vos_iter_param_t *param, daos_akey_t *akey, int akey_id,
+io_recx_iterate(vos_iter_param_t *param, daos_key_t *akey, int akey_id,
 		bool cookie_fetch, int *recs, bool print_ent)
 {
 	daos_handle_t	ih;
@@ -260,7 +260,7 @@ out:
 }
 
 static int
-io_akey_iterate(vos_iter_param_t *param, daos_dkey_t *dkey, int dkey_id,
+io_akey_iterate(vos_iter_param_t *param, daos_key_t *dkey, int dkey_id,
 		bool cookie_flag, int *akeys, int *recs, bool print_ent)
 {
 	daos_handle_t	ih;
@@ -413,11 +413,11 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 
 int
 io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
-		   daos_vec_iod_t *vio, daos_sg_list_t *sgl,
+		   daos_iod_t *iod, daos_sg_list_t *sgl,
 		   struct daos_uuid *dsm_cookie, bool verbose)
 {
-	daos_sg_list_t		*vec_sgl;
-	daos_iov_t		*vec_iov;
+	daos_sg_list_t		*iod_sgl;
+	daos_iov_t		*iod_iov;
 	daos_iov_t		*srv_iov;
 	daos_handle_t		ioh;
 	unsigned int		off;
@@ -426,7 +426,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
 		rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
-				    dsm_cookie->uuid, dkey, 1, vio,
+				    dsm_cookie->uuid, dkey, 1, iod,
 				    sgl);
 		if (rc != 0 && verbose)
 			print_error("Failed to update: %d\n", rc);
@@ -434,7 +434,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	}
 
 	rc = vos_obj_zc_update_begin(arg->ctx.tc_co_hdl,
-				     arg->oid, epoch, dkey, 1, vio,
+				     arg->oid, epoch, dkey, 1, iod,
 				     &ioh);
 	if (rc != 0) {
 		if (verbose)
@@ -444,18 +444,18 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	srv_iov = &sgl->sg_iovs[0];
 
-	rc = vos_obj_zc_vec2sgl(ioh, 0, &vec_sgl);
+	rc = vos_obj_zc_sgl_at(ioh, 0, &iod_sgl);
 	assert_int_equal(rc, 0);
 
-	for (i = off = 0; i < vec_sgl->sg_nr.num_out; i++) {
-		vec_iov = &vec_sgl->sg_iovs[i];
-		memcpy(vec_iov->iov_buf, srv_iov->iov_buf + off,
-		       vec_iov->iov_len);
-		off += vec_iov->iov_len;
+	for (i = off = 0; i < iod_sgl->sg_nr.num_out; i++) {
+		iod_iov = &iod_sgl->sg_iovs[i];
+		memcpy(iod_iov->iov_buf, srv_iov->iov_buf + off,
+		       iod_iov->iov_len);
+		off += iod_iov->iov_len;
 	}
 	assert_true(srv_iov->iov_len == off);
 
-	rc = vos_obj_zc_update_end(ioh, dsm_cookie->uuid, dkey, 1, vio, 0);
+	rc = vos_obj_zc_update_end(ioh, dsm_cookie->uuid, dkey, 1, iod, 0);
 	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
@@ -464,10 +464,10 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 int
 io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
-		  daos_vec_iod_t *vio, daos_sg_list_t *sgl, bool verbose)
+		  daos_iod_t *iod, daos_sg_list_t *sgl, bool verbose)
 {
-	daos_sg_list_t	*vec_sgl;
-	daos_iov_t	*vec_iov;
+	daos_sg_list_t	*iod_sgl;
+	daos_iov_t	*iod_iov;
 	daos_iov_t	*dst_iov;
 	daos_handle_t	 ioh;
 	unsigned int	 off;
@@ -476,7 +476,7 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
 		rc = vos_obj_fetch(arg->ctx.tc_co_hdl,
-				   arg->oid, epoch, dkey, 1, vio,
+				   arg->oid, epoch, dkey, 1, iod,
 				   sgl);
 		if (rc != 0 && verbose)
 			print_error("Failed to fetch: %d\n", rc);
@@ -484,7 +484,7 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	}
 
 	rc = vos_obj_zc_fetch_begin(arg->ctx.tc_co_hdl,
-				    arg->oid, epoch, dkey, 1, vio,
+				    arg->oid, epoch, dkey, 1, iod,
 				    &ioh);
 	if (rc != 0) {
 		if (verbose)
@@ -494,18 +494,18 @@ io_test_obj_fetch(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	dst_iov = &sgl->sg_iovs[0];
 
-	vos_obj_zc_vec2sgl(ioh, 0, &vec_sgl);
+	vos_obj_zc_sgl_at(ioh, 0, &iod_sgl);
 
-	for (i = off = 0; i < vec_sgl->sg_nr.num_out; i++) {
-		vec_iov = &vec_sgl->sg_iovs[i];
-		memcpy(dst_iov->iov_buf + off, vec_iov->iov_buf,
-		       vec_iov->iov_len);
-		off += vec_iov->iov_len;
+	for (i = off = 0; i < iod_sgl->sg_nr.num_out; i++) {
+		iod_iov = &iod_sgl->sg_iovs[i];
+		memcpy(dst_iov->iov_buf + off, iod_iov->iov_buf,
+		       iod_iov->iov_len);
+		off += iod_iov->iov_len;
 	}
 	dst_iov->iov_len = off;
 	assert_true(dst_iov->iov_buf_len >= dst_iov->iov_len);
 
-	rc = vos_obj_zc_fetch_end(ioh, dkey, 1, vio, 0);
+	rc = vos_obj_zc_fetch_end(ioh, dkey, 1, iod, 0);
 	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
@@ -526,7 +526,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
-	daos_vec_iod_t		vio;
+	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
 	struct daos_uuid	dsm_cookie;
 	unsigned int		recx_size;
@@ -539,7 +539,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 		recx_size = UPDATE_BUF_SIZE;
 		recx_nr   = 1;
 	}
-	memset(&vio, 0, sizeof(vio));
+	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
 
@@ -586,13 +586,13 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
 	rex.rx_idx	%= 1000000;
 
-	vio.vd_name	= akey;
-	vio.vd_recxs	= &rex;
-	vio.vd_nr	= 1;
+	iod.iod_name	= akey;
+	iod.iod_recxs	= &rex;
+	iod.iod_nr	= 1;
 
 	uuid_copy(dsm_cookie.uuid, cookie_dict[(rand() % NUM_UNIQUE_COOKIES)]);
 
-	rc = io_test_obj_update(arg, update_epoch, &dkey, &vio, &sgl,
+	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
 				&dsm_cookie, true);
 	if (rc)
 		goto exit;
@@ -603,7 +603,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
 	rex.rx_rsize = DAOS_REC_ANY;
-	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &vio, &sgl, true);
+	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &iod, &sgl, true);
 	if (rc)
 		goto exit;
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
@@ -1002,11 +1002,11 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
-	daos_vec_iod_t		vio;
+	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
 	struct daos_uuid	dsm_cookie;
 
-	memset(&vio, 0, sizeof(vio));
+	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
 
@@ -1028,12 +1028,12 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
 	rex.rx_idx	%= 1000000;
 
-	vio.vd_name	= akey;
-	vio.vd_recxs	= &rex;
-	vio.vd_nr	= 1;
+	iod.iod_name	= akey;
+	iod.iod_recxs	= &rex;
+	iod.iod_nr	= 1;
 
 	uuid_copy(dsm_cookie.uuid, cookie_dict[rand() % NUM_UNIQUE_COOKIES]);
-	rc = io_test_obj_update(arg, update_epoch, &dkey, &vio, &sgl,
+	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
 				&dsm_cookie, true);
 	if (rc)
 		goto exit;
@@ -1049,7 +1049,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	/* Injecting an incorrect dkey for fetch! */
 	dts_key_gen(&dkey_buf[0], UPDATE_DKEY_SIZE, UPDATE_DKEY);
 
-	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &vio, &sgl, true);
+	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 	assert_int_equal(rex.rx_rsize, 0);
 exit:
@@ -1069,10 +1069,10 @@ io_fetch_wo_object(void **state)
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
-	daos_vec_iod_t		vio;
+	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
 
-	memset(&vio, 0, sizeof(vio));
+	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
 	dts_key_gen(&dkey_buf[0], UPDATE_DKEY_SIZE, UPDATE_DKEY);
@@ -1087,9 +1087,9 @@ io_fetch_wo_object(void **state)
 	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
 	rex.rx_idx	%= 1000000;
 
-	vio.vd_name	= akey;
-	vio.vd_recxs	= &rex;
-	vio.vd_nr	= 1;
+	iod.iod_name	= akey;
+	iod.iod_recxs	= &rex;
+	iod.iod_nr	= 1;
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
@@ -1098,7 +1098,7 @@ io_fetch_wo_object(void **state)
 	rex.rx_rsize = -1;
 	arg->oid = gen_oid();
 
-	rc = io_test_obj_fetch(arg, 1, &dkey, &vio, &sgl, true);
+	rc = io_test_obj_fetch(arg, 1, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
 	assert_int_equal(rex.rx_rsize, 0);
 }
@@ -1192,12 +1192,12 @@ pool_cont_same_uuid(void **state)
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
-	daos_vec_iod_t		vio;
+	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
 	uuid_t			cookie;
 	daos_unit_oid_t		oid;
 
-	memset(&vio, 0, sizeof(vio));
+	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
 
@@ -1235,13 +1235,13 @@ pool_cont_same_uuid(void **state)
 	sgl.sg_nr.num = 1;
 	sgl.sg_iovs = &val_iov;
 
-	vio.vd_name	= akey;
-	vio.vd_recxs	= &rex;
-	vio.vd_nr	= 1;
+	iod.iod_name	= akey;
+	iod.iod_recxs	= &rex;
+	iod.iod_nr	= 1;
 
 	uuid_generate(cookie);
 	oid = dts_unit_oid_gen(0, 0);
-	ret = vos_obj_update(coh, oid, 10, cookie, &dkey, 1, &vio, &sgl);
+	ret = vos_obj_update(coh, oid, 10, cookie, &dkey, 1, &iod, &sgl);
 	assert_int_equal(ret, 0);
 
 	ret = vos_co_close(coh);
@@ -1330,9 +1330,9 @@ io_simple_one_key_cross_container(void **state)
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			update_buf[UPDATE_BUF_SIZE];
 	char			fetch_buf[UPDATE_BUF_SIZE];
-	daos_vec_iod_t		vio;
+	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
-	daos_dkey_t		dkey;
+	daos_key_t		dkey;
 	daos_epoch_t		epoch = gen_rand_epoch();
 	daos_unit_oid_t		l_oid;
 	struct daos_uuid	cookie;
@@ -1351,7 +1351,7 @@ io_simple_one_key_cross_container(void **state)
 		goto failed;
 	}
 
-	memset(&vio, 0, sizeof(vio));
+	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
 	memset(dkey_buf, 0, UPDATE_DKEY_SIZE);
@@ -1374,13 +1374,13 @@ io_simple_one_key_cross_container(void **state)
 	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
 	rex.rx_idx	%= 1000000;
 
-	vio.vd_recxs	= &rex;
-	vio.vd_nr	= 1;
+	iod.iod_recxs	= &rex;
+	iod.iod_nr	= 1;
 
 	l_oid = gen_oid();
 	cookie = gen_rand_cookie();
 	rc  = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
-			     cookie.uuid, &dkey, 1, &vio, &sgl);
+			     cookie.uuid, &dkey, 1, &iod, &sgl);
 	if (rc) {
 		print_error("Failed to update %d\n", rc);
 		goto failed;
@@ -1388,7 +1388,7 @@ io_simple_one_key_cross_container(void **state)
 
 	cookie = gen_rand_cookie();
 	rc = vos_obj_update(arg->addn_co, l_oid, epoch, cookie.uuid,
-			    &dkey, 1, &vio, &sgl);
+			    &dkey, 1, &iod, &sgl);
 	if (rc) {
 		print_error("Failed to update %d\n", rc);
 		goto failed;
@@ -1403,7 +1403,7 @@ io_simple_one_key_cross_container(void **state)
 	 * This should succeed.
 	 */
 	rc = vos_obj_fetch(arg->addn_co, l_oid, epoch,
-			   &dkey, 1, &vio, &sgl);
+			   &dkey, 1, &iod, &sgl);
 	assert_memory_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
@@ -1415,7 +1415,7 @@ io_simple_one_key_cross_container(void **state)
 	 * from second container should throw an error
 	 */
 	rc = vos_obj_fetch(arg->addn_co, arg->oid, epoch,
-			   &dkey, 1, &vio, &sgl);
+			   &dkey, 1, &iod, &sgl);
 	/* This fetch should fail */
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 

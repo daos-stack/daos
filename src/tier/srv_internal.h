@@ -35,7 +35,7 @@
 #include <daos_srv/vos_types.h>
 
 struct daos_bld_iod_ctx {
-	daos_dkey_t		dkey;
+	daos_key_t		dkey;
 	daos_unit_oid_t		oid;
 	daos_handle_t		coh;
 	unsigned int		nr;
@@ -166,15 +166,15 @@ tier_cp_oid(daos_unit_oid_t *p1, daos_unit_oid_t *p2)
 }
 
 static inline void
-tier_cp_vec_iod(daos_vec_iod_t *pd, daos_vec_iod_t *ps)
+tier_cp_vec_iod(daos_iod_t *pd, daos_iod_t *ps)
 {
-	pd->vd_name = ps->vd_name;
-	tier_cp_cksum(&pd->vd_kcsum, &ps->vd_kcsum);
-	pd->vd_nr = ps->vd_nr;
+	pd->iod_name = ps->iod_name;
+	tier_cp_cksum(&pd->iod_kcsum, &ps->iod_kcsum);
+	pd->iod_nr = ps->iod_nr;
 
-	pd->vd_recxs = ps->vd_recxs;
-	pd->vd_csums = ps->vd_csums;
-	pd->vd_eprs  = ps->vd_eprs;
+	pd->iod_recxs = ps->iod_recxs;
+	pd->iod_csums = ps->iod_csums;
+	pd->iod_eprs  = ps->iod_eprs;
 }
 
 #endif /*__DCTS_INTERNAL_H__*/

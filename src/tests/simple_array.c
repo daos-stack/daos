@@ -26,7 +26,7 @@
  * We consider a 1D non-sparse array of ARRAY_SIZE elements. Each element is
  * a fixed-size 64-bit integer and has an index ranging from 0 to ARRAY_SIZE-1.
  * The content of this array is distributed over SHARD_NR shards. Each array
- * shard is associated with a dkey set to the shard ID. A single vector (akey
+ * shard is associated with a dkey set to the shard ID. A single array (akey
  * set to "data") is used in this example to store the shard content.
  * The array is partitioned into fixed-size (i.e. SLICE_SIZE) slices of
  * contiguous elements which are stored on shards in a round-robin fashion.
@@ -101,10 +101,10 @@ daos_oclass_id_t	 cid = 0x1;/* class identifier */
 /** an i/o request in flight */
 struct ioreq {
 	char		dstr[KEY_LEN];
-	daos_dkey_t	dkey;
+	daos_key_t	dkey;
 
 	daos_recx_t	recx;
-	daos_vec_iod_t	iod;
+	daos_iod_t	iod;
 
 	daos_iov_t	iov;
 	daos_sg_list_t	sg;
@@ -181,24 +181,24 @@ ioreqs_init(struct ioreq *reqs) {
 		ASSERT(rc == 0, "event init failed with %d", rc);
 
 		/** initialize dkey */
-		req->dkey = (daos_dkey_t) {
+		req->dkey = (daos_key_t) {
 			.iov_buf	= &req->dstr,
 			.iov_buf_len	= KEY_LEN,
 		};
 
 		/** initialize i/o descriptor */
-		req->iod.vd_name = (daos_akey_t) {
+		req->iod.iod_name = (daos_key_t) {
 			.iov_buf	= astr,
 			.iov_buf_len	= strlen(astr),
 			.iov_len	= strlen(astr),
 		};
-		req->iod.vd_nr	= 1;
+		req->iod.iod_nr	= 1;
 		req->recx = (daos_recx_t) {
 			.rx_rsize	= sizeof(uint64_t),
 			.rx_nr		= SLICE_SIZE,
 
 		};
-		req->iod.vd_recxs	= &req->recx;
+		req->iod.iod_recxs	= &req->recx;
 
 		/** initialize scatter/gather */
 		req->iov = (daos_iov_t) {
@@ -261,16 +261,16 @@ array(void)
 			req->dkey.iov_len = strlen(req->dstr);
 
 			/**
-			 * Index inside the vector to write this slice.
+			 * Index inside the array to write this slice.
 			 * Two options here:
 			 * - use the logical array index, which means that there
-			 *   will be a gap in the vector index between each
+			 *   will be a gap in the array index between each
 			 *   slice.
 			 * - write all slices in contiguous indexes inside the
-			 *   vector.
+			 *   array.
 			 * For simplicity, the former approach is implemented
 			 * in this example which means that the index inside the
-			 * vector/shard matches the logical array index.
+			 * array/shard matches the logical array index.
 			 */
 			req->recx.rx_idx = sid * SLICE_SIZE;
 

@@ -20,6 +20,10 @@
 #ifndef __DAOS_MGMT_H__
 #define __DAOS_MGMT_H__
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 #include <uuid/uuid.h>
 
 #include <daos_event.h>
@@ -139,5 +143,9 @@ daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
  */
 int
 daos_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev);
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif /* __DAOS_MGMT_H__ */

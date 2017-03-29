@@ -54,7 +54,7 @@ io_update(struct io_test_args *arg, daos_epoch_t update_epoch,
 
 	D_ALLOC_PTR(ioreq);
 	uuid_copy(ioreq->cookie.uuid, cookie->uuid);
-	memset(&ioreq->vio, 0, sizeof(ioreq->vio));
+	memset(&ioreq->iod, 0, sizeof(ioreq->iod));
 	memset(&ioreq->rex, 0, sizeof(ioreq->rex));
 	memset(&ioreq->sgl, 0, sizeof(ioreq->sgl));
 
@@ -87,12 +87,12 @@ io_update(struct io_test_args *arg, daos_epoch_t update_epoch,
 
 	ioreq->rex.rx_nr	= 1;
 	ioreq->rex.rx_idx	= idx;
-	ioreq->vio.vd_name	= ioreq->akey;
-	ioreq->vio.vd_recxs	= &ioreq->rex;
-	ioreq->vio.vd_nr	= 1;
+	ioreq->iod.iod_name	= ioreq->akey;
+	ioreq->iod.iod_recxs	= &ioreq->rex;
+	ioreq->iod.iod_nr	= 1;
 	ioreq->epoch		= update_epoch;
 
-	rc = io_test_obj_update(arg, update_epoch, &ioreq->dkey, &ioreq->vio,
+	rc = io_test_obj_update(arg, update_epoch, &ioreq->dkey, &ioreq->iod,
 				&ioreq->sgl, &ioreq->cookie, verbose);
 	if (rc)
 		D_GOTO(exit, rc);
@@ -114,8 +114,8 @@ exit:
 
 /**
  * NB: This version of fetch is for verifying in case of recx and
- * akey discard. This is used because  vec_fetch,
- * do not return -DER_NONEXIST currently
+ * akey discard. This is used because fetch does not return -DER_NONEXIST
+ * currently
  */
 static int
 io_fetch_empty_buf(struct io_test_args *arg, daos_epoch_t fetch_epoch,
@@ -135,7 +135,7 @@ io_fetch_empty_buf(struct io_test_args *arg, daos_epoch_t fetch_epoch,
 	memset(req->fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&req->val_iov, &req->fetch_buf, UPDATE_BUF_SIZE);
 	req->rex.rx_rsize = UPDATE_BUF_SIZE;
-	rc = io_test_obj_fetch(arg, fetch_epoch, &req->dkey, &req->vio,
+	rc = io_test_obj_fetch(arg, fetch_epoch, &req->dkey, &req->iod,
 			       &req->sgl, false);
 	if (rc)
 		D_GOTO(exit, rc);
@@ -165,7 +165,7 @@ io_fetch(struct io_test_args *arg, daos_epoch_t fetch_epoch,
 	memset(req->fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&req->val_iov, &req->fetch_buf, UPDATE_BUF_SIZE);
 	req->rex.rx_rsize = UPDATE_BUF_SIZE;
-	rc = io_test_obj_fetch(arg, fetch_epoch, &req->dkey, &req->vio,
+	rc = io_test_obj_fetch(arg, fetch_epoch, &req->dkey, &req->iod,
 			       &req->sgl, false);
 	if (rc)
 		D_GOTO(exit, rc);
