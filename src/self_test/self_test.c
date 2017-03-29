@@ -65,6 +65,13 @@ struct st_endpoint {
 	uint32_t tag;
 };
 
+struct st_master_endpt {
+	crt_endpoint_t endpt;
+	struct crt_st_status_req_reply reply;
+	int32_t test_failed;
+	int32_t test_completed;
+};
+
 static const char * const crt_st_msg_type_str[] = { "EMPTY",
 						    "IOV",
 						    "BULK_PUT",
@@ -135,6 +142,16 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	}
 
 	return 0;
+}
+
+static int st_compare_endpts(const void *a_in, const void *b_in)
+{
+	struct st_endpoint *a = (struct st_endpoint *)a_in;
+	struct st_endpoint *b = (struct st_endpoint *)b_in;
+
+	if (a->rank != b->rank)
+		return a->rank > b->rank;
+	return a->tag > b->tag;
 }
 
 static int st_compare_latencies_by_vals(const void *a_in, const void *b_in)
@@ -289,13 +306,6 @@ static void print_results(struct st_latency *latencies,
 				  test_params->reply_size);
 
 	/* Print the results for this size */
-	printf("Results for message size (%d-%s %d-%s)"
-	       " (max_inflight_rpcs = %d):\n",
-	       test_params->send_size,
-	       crt_st_msg_type_str[test_params->send_type],
-	       test_params->reply_size,
-	       crt_st_msg_type_str[test_params->reply_type],
-	       test_params->max_inflight);
 	if (output_megabits)
 		printf("\tRPC Bandwidth (Mbits/sec): %.2f\n",
 		       bandwidth * 8.0F / 1000000.0F);
@@ -442,29 +452,285 @@ static void print_results(struct st_latency *latencies,
 
 }
 
+static int test_msg_size(crt_context_t crt_ctx,
+			 struct st_master_endpt *ms_endpts,
+			 uint32_t num_ms_endpts,
+			 struct crt_st_start_params *test_params,
+			 struct st_latency **latencies,
+			 crt_bulk_t *latencies_bulk_hdl, int output_megabits)
+{
+
+	int				 ret;
+	int				 done;
+	uint32_t			 failed_count;
+	uint32_t			 complete_count;
+	crt_rpc_t			*new_rpc;
+	struct crt_st_start_params	*start_args;
+	uint32_t			 m_idx;
+
+	/*
+	 * Launch self-test 1:many sessions on each master endpoint
+	 * as simultaneously as possible (don't wait for acknowledgement)
+	 */
+	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
+		crt_endpoint_t endpt = ms_endpts[m_idx].endpt;
+
+		/* Create and send a new RPC starting the test */
+		ret = crt_req_create(crt_ctx, endpt, CRT_OPC_SELF_TEST_START,
+				     &new_rpc);
+		if (ret != 0) {
+			C_ERROR("Creating start RPC failed to endpoint"
+				" %u:%u; ret = %d\n", endpt.ep_rank,
+				endpt.ep_tag, ret);
+			ms_endpts[m_idx].test_failed = 1;
+			ms_endpts[m_idx].test_completed = 1;
+			continue;
+		}
+
+		start_args = (struct crt_st_start_params *)
+			crt_req_get(new_rpc);
+		C_ASSERTF(start_args != NULL,
+			  "crt_req_get returned NULL\n");
+		memcpy(start_args, test_params, sizeof(*test_params));
+
+		/* Set the launch status to a known impossible value */
+		ms_endpts[m_idx].reply.status = INT32_MAX;
+
+		ret = crt_req_send(new_rpc, start_test_cb,
+				   &ms_endpts[m_idx].reply.status);
+		if (ret != 0) {
+			C_ERROR("Failed to send start RPC to endpoint %u:%u; "
+				"ret = %d\n", endpt.ep_rank, endpt.ep_tag, ret);
+			ms_endpts[m_idx].test_failed = 1;
+			ms_endpts[m_idx].test_completed = 1;
+			continue;
+		}
+	}
+
+	/*
+	 * Wait for each node to report whether or not the test launched
+	 * successfully
+	 */
+	do {
+		/* Flag indicating all test launches have returned a status */
+		done = 1;
+
+		/* Wait a bit for tests to finish launching */
+		sched_yield();
+
+		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
+			if (ms_endpts[m_idx].reply.status == INT32_MAX) {
+				/* No response yet... */
+				done = 0;
+				break;
+			}
+	} while (done != 1);
+
+	/* Print a warning for any 1:many sessions that failed to launch */
+	failed_count = 0;
+	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
+		if (ms_endpts[m_idx].reply.status != 0) {
+			C_ERROR("Failed to launch self-test 1:many session on"
+				" %u:%u; ret = %d\n",
+				ms_endpts[m_idx].endpt.ep_rank,
+				ms_endpts[m_idx].endpt.ep_tag,
+				ms_endpts[m_idx].reply.status);
+			ms_endpts[m_idx].test_failed = 1;
+			ms_endpts[m_idx].test_completed = 1;
+			failed_count++;
+		} else if (ms_endpts[m_idx].test_failed != 0) {
+			ms_endpts[m_idx].test_failed = 1;
+			ms_endpts[m_idx].test_completed = 1;
+			failed_count++;
+		} else {
+			ms_endpts[m_idx].test_failed = 0;
+			ms_endpts[m_idx].test_completed = 0;
+
+		}
+
+
+	/* Check to make sure that at least one 1:many session was started */
+	if (failed_count >= num_ms_endpts) {
+		C_ERROR("Failed to launch any 1:many test sessions\n");
+		return ms_endpts[0].reply.status;
+	}
+
+	/*
+	 * Poll the master nodes until all tests complete
+	 *   (either successfully or by returning an error)
+	 */
+	do {
+		/* Wait a small amount of time for tests to progress */
+		sleep(1);
+
+		/* Send status requests to every non-finished node */
+		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
+			/* Skip endpoints that have finished */
+			if (ms_endpts[m_idx].test_completed != 0)
+				continue;
+
+			/* Set result status to impossible guard value */
+			ms_endpts[m_idx].reply.status = INT32_MAX;
+
+			/* Create a new RPC to check the status */
+			ret = crt_req_create(crt_ctx, ms_endpts[m_idx].endpt,
+					     CRT_OPC_SELF_TEST_STATUS_REQ,
+					     &new_rpc);
+			if (ret != 0) {
+				C_ERROR("Creating status request RPC to"
+					" endpoint %u:%u; ret = %d\n",
+					ms_endpts[m_idx].endpt.ep_rank,
+					ms_endpts[m_idx].endpt.ep_tag,
+					ret);
+				ms_endpts[m_idx].test_failed = 1;
+				ms_endpts[m_idx].test_completed = 1;
+				continue;
+			}
+
+			/*
+			 * Sent data is the bulk handle where results should
+			 * be written
+			 */
+			*((crt_bulk_t *)crt_req_get(new_rpc)) =
+				latencies_bulk_hdl[m_idx];
+
+			/* Send the status request */
+			ret = crt_req_send(new_rpc, status_req_cb,
+					   &ms_endpts[m_idx].reply);
+			if (ret != 0) {
+				C_ERROR("Failed to send status RPC to endpoint"
+					" %u:%u; ret = %d\n",
+					ms_endpts[m_idx].endpt.ep_rank,
+					ms_endpts[m_idx].endpt.ep_tag, ret);
+				ms_endpts[m_idx].test_failed = 1;
+				ms_endpts[m_idx].test_completed = 1;
+				continue;
+			}
+		}
+
+		/* Wait for all status request results to come back */
+		do {
+			/* Flag indicating all status requests have returned */
+			done = 1;
+
+			/* Wait a bit for status requests to be handled */
+			sched_yield();
+
+			for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
+				if (ms_endpts[m_idx].reply.status ==
+				    INT32_MAX &&
+				    ms_endpts[m_idx].test_completed == 0) {
+					/* No response yet... */
+					done = 0;
+					break;
+				}
+		} while (done != 1);
+
+		complete_count = 0;
+		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
+			/* Skip endpoints that have already finished */
+			if (ms_endpts[m_idx].test_completed != 0) {
+				complete_count++;
+				continue;
+			}
+
+			switch (ms_endpts[m_idx].reply.status) {
+			case CRT_ST_STATUS_TEST_IN_PROGRESS:
+				C_DEBUG("Test still processing on %u:%u -"
+					" # RPCs remaining: %u\n",
+					ms_endpts[m_idx].endpt.ep_rank,
+					ms_endpts[m_idx].endpt.ep_tag,
+					ms_endpts[m_idx].reply.num_remaining);
+				break;
+			case CRT_ST_STATUS_TEST_COMPLETE:
+				ms_endpts[m_idx].test_completed = 1;
+				break;
+			default:
+				C_ERROR("Detected test failure on %u:%u -"
+					" ret = %d\n",
+					ms_endpts[m_idx].endpt.ep_rank,
+					ms_endpts[m_idx].endpt.ep_tag,
+					ms_endpts[m_idx].reply.status);
+				ms_endpts[m_idx].test_failed = 1;
+				ms_endpts[m_idx].test_completed = 1;
+				complete_count++;
+			}
+		}
+	} while (complete_count < num_ms_endpts);
+
+	/*
+	 * TODO:
+	 * In the future, probably want to return the latencies here
+	 * before they are processed for display to the user.
+	 */
+
+	/* Print the results for this size */
+	printf("##################################################\n");
+	printf("Results for message size (%d-%s %d-%s)"
+	       " (max_inflight_rpcs = %d):\n\n",
+	       test_params->send_size,
+	       crt_st_msg_type_str[test_params->send_type],
+	       test_params->reply_size,
+	       crt_st_msg_type_str[test_params->reply_type],
+	       test_params->max_inflight);
+
+	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
+		int print_count;
+
+		/* Skip endpoints that failed */
+		if (ms_endpts[m_idx].test_failed != 0)
+			continue;
+
+		/* Print a header for this endpoint and store number of chars */
+		printf("Master Endpoint %u:%u%n\n",
+		       ms_endpts[m_idx].endpt.ep_rank,
+		       ms_endpts[m_idx].endpt.ep_tag,
+		       &print_count);
+
+		/* Print a nice line under the header of the right length */
+		for (; print_count > 0; print_count--)
+			printf("-");
+		printf("\n");
+
+		print_results(latencies[m_idx], test_params,
+			      ms_endpts[m_idx].reply.test_duration_ns,
+			      output_megabits);
+	}
+
+	return 0;
+}
+
 static int run_self_test(struct st_size_params all_params[],
 			 int num_msg_sizes, int rep_count, int max_inflight,
-			 char *dest_name, crt_endpoint_t *master_endpt,
+			 char *dest_name, struct st_endpoint *ms_endpts_in,
+			 uint32_t num_ms_endpts_in,
 			 struct st_endpoint *endpts, uint32_t num_endpts,
 			 int output_megabits, int16_t buf_alignment)
 {
-	crt_context_t		 crt_ctx;
-	crt_group_t		*srv_grp;
-	pthread_t		 tid;
+	crt_context_t		  crt_ctx;
+	crt_group_t		 *srv_grp;
+	pthread_t		  tid;
 
-	int			 size_idx;
-	int			 ret;
-	int			 cleanup_ret;
+	int			  size_idx;
+	uint32_t		  m_idx;
 
-	struct st_latency	*latencies = NULL;
-	crt_iov_t		 latencies_iov = {0};
-	crt_sg_list_t		 latencies_sg_list = { {0} };
-	crt_bulk_t		 latencies_bulk_hdl = CRT_BULK_NULL;
+	int			  ret;
+	int			  cleanup_ret;
 
-	crt_endpoint_t		 self_endpt;
+	struct st_master_endpt	 *ms_endpts;
+	uint32_t		  num_ms_endpts;
+
+	struct st_latency	**latencies = NULL;
+	crt_iov_t		 *latencies_iov = NULL;
+	crt_sg_list_t		 *latencies_sg_list = NULL;
+	crt_bulk_t		 *latencies_bulk_hdl = CRT_BULK_NULL;
+
+	crt_endpoint_t		  self_endpt;
 
 	/* Sanity checks that would indicate bugs */
 	C_ASSERT(endpts != NULL && num_endpts > 0);
+	C_ASSERT((ms_endpts_in == NULL && num_ms_endpts_in == 0) ||
+		 (ms_endpts_in != NULL && num_ms_endpts_in > 0));
 
 	/* Initialize CART */
 	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid);
@@ -473,56 +739,164 @@ static int run_self_test(struct st_size_params all_params[],
 		C_GOTO(cleanup_nothread, ret);
 	}
 
-	/*
-	 * If no master endpoint was specified, use the this command line
-	 * application itself as the master node
-	 */
-	if (master_endpt == NULL) {
-		ret = crt_group_rank(NULL, &self_endpt.ep_rank);
-		if (ret != 0) {
-			C_ERROR("crt_group_rank failed; ret = %d\n", ret);
-			C_GOTO(cleanup, ret);
-		}
-
-		self_endpt.ep_grp = crt_group_lookup(CRT_SELF_TEST_GROUP_NAME);
-		if (self_endpt.ep_grp == NULL) {
-			C_ERROR("crt_group_lookup failed for group %s\n",
-				CRT_SELF_TEST_GROUP_NAME);
-			C_GOTO(cleanup, ret = CER_NONEXIST);
-		}
-
-		self_endpt.ep_tag = 0;
-
-		master_endpt = &self_endpt;
-
-	}
-
-	/* Allocate a buffer for latency results */
-	C_ALLOC(latencies, rep_count * sizeof(*latencies));
-	if (latencies == NULL) {
-		C_ERROR("Failed to allocate latency data storage\n");
-		C_GOTO(cleanup, ret = -CER_NOMEM);
-	}
-	crt_iov_set(&latencies_iov, latencies, rep_count * sizeof(*latencies));
-	latencies_sg_list.sg_iovs = &latencies_iov;
-	latencies_sg_list.sg_nr.num = 1;
-
-	/* Create a bulk descriptor for the test to write back the results */
-	ret = crt_bulk_create(crt_ctx, &latencies_sg_list, CRT_BULK_RW,
-			      &latencies_bulk_hdl);
+	/* Get the group/rank/tag for this application (self_endpt) */
+	ret = crt_group_rank(NULL, &self_endpt.ep_rank);
 	if (ret != 0) {
-		C_ERROR("Failed to allocate latencies bulk handle; ret = %d\n",
-			ret);
+		C_ERROR("crt_group_rank failed; ret = %d\n", ret);
 		C_GOTO(cleanup, ret);
 	}
-	C_ASSERT(latencies_bulk_hdl != CRT_BULK_NULL);
+	self_endpt.ep_grp = crt_group_lookup(CRT_SELF_TEST_GROUP_NAME);
+	if (self_endpt.ep_grp == NULL) {
+		C_ERROR("crt_group_lookup failed for group %s\n",
+			CRT_SELF_TEST_GROUP_NAME);
+		C_GOTO(cleanup, ret = -CER_NONEXIST);
+	}
+	self_endpt.ep_tag = 0;
+
+	/*
+	 * Allocate a new list of unique master endpoints, each with a
+	 * crt_endpoint_t and additional metadata
+	 */
+	if (ms_endpts_in == NULL) {
+		/*
+		 * If no master endpoints were specified, allocate just one and
+		 * set it to self_endpt
+		 */
+		num_ms_endpts = 1;
+		C_ALLOC_PTR(ms_endpts);
+		if (ms_endpts == NULL) {
+			C_ERROR("Allocating ms_endpts failed\n");
+			C_GOTO(cleanup, ret = -CER_NOMEM);
+		}
+		ms_endpts[0].endpt.ep_rank = self_endpt.ep_rank;
+		ms_endpts[0].endpt.ep_tag = self_endpt.ep_tag;
+		/*
+		 * TODO: The commented line below is what should be used, but
+		 * this requires additional changes elsewhere. See CART-187
+		 */
+		/* ms_endpts[0].endpt.ep_grp = self_endpt.ep_grp; */
+		ms_endpts[0].endpt.ep_grp = srv_grp;
+	} else {
+		/*
+		 * If master endpoints were specified, initially allocate enough
+		 * space to hold all of them, but only unique master endpoints
+		 * to the new list
+		 */
+		C_ALLOC(ms_endpts, num_ms_endpts_in * sizeof(*ms_endpts));
+		if (ms_endpts == NULL) {
+			C_ERROR("Allocating ms_endpts failed\n");
+			C_GOTO(cleanup, ret = -CER_NOMEM);
+		}
+
+		/*
+		 * Sort the supplied endpoints to make it faster to identify
+		 * duplicates
+		 */
+		qsort(ms_endpts_in, num_ms_endpts_in,
+		      sizeof(ms_endpts_in[0]), st_compare_endpts);
+
+		/* Add the first element to the new list */
+		ms_endpts[0].endpt.ep_rank = ms_endpts_in[0].rank;
+		ms_endpts[0].endpt.ep_tag = ms_endpts_in[0].tag;
+		/*
+		 * TODO: This isn't right - it should be self_endpt.ep_grp.
+		 * However, this requires changes elsewhere - this is tracked
+		 * by CART-187.
+		 *
+		 * As implemented here, rank 0 tag 0 in the client group will
+		 * be used as the master endpoint by default
+		 */
+		ms_endpts[0].endpt.ep_grp = srv_grp;
+		num_ms_endpts = 1;
+
+		/*
+		 * Add unique elements to the new list
+		 */
+		for (m_idx = 1; m_idx < num_ms_endpts_in; m_idx++)
+			if ((ms_endpts_in[m_idx].rank !=
+			     ms_endpts[num_ms_endpts - 1].endpt.ep_rank) ||
+			    (ms_endpts_in[m_idx].tag !=
+			     ms_endpts[num_ms_endpts - 1].endpt.ep_tag)) {
+				ms_endpts[num_ms_endpts].endpt.ep_rank =
+					ms_endpts_in[m_idx].rank;
+				ms_endpts[num_ms_endpts].endpt.ep_tag =
+					ms_endpts_in[m_idx].tag;
+				ms_endpts[num_ms_endpts].endpt.ep_grp =
+					srv_grp;
+				num_ms_endpts++;
+			}
+
+		/*
+		 * If the counts don't match up, some were duplicates - resize
+		 * the resulting smaller array which contains only unique
+		 * entries
+		 */
+		if (num_ms_endpts != num_ms_endpts_in) {
+			struct st_master_endpt *realloc_ptr =
+				C_REALLOC(ms_endpts, num_ms_endpts *
+						       sizeof(*ms_endpts));
+			if (realloc_ptr == NULL) {
+				C_ERROR("Failed to shrink ms_endpts array\n");
+				C_GOTO(cleanup, ret = -CER_NOMEM);
+			}
+			ms_endpts = realloc_ptr;
+		}
+	}
+
+	/* Allocate latency lists for each 1:many session */
+	C_ALLOC(latencies, num_ms_endpts * sizeof(*latencies));
+	if (latencies == NULL) {
+		C_ERROR("Failed to allocate latency pointers\n");
+		C_GOTO(cleanup, ret = -CER_NOMEM);
+	}
+	C_ALLOC(latencies_iov, num_ms_endpts * sizeof(*latencies_iov));
+	if (latencies_iov == NULL) {
+		C_ERROR("Failed to allocate latency pointers\n");
+		C_GOTO(cleanup, ret = -CER_NOMEM);
+	}
+	C_ALLOC(latencies_sg_list,
+		num_ms_endpts * sizeof(*latencies_sg_list));
+	if (latencies_sg_list == NULL) {
+		C_ERROR("Failed to allocate latency pointers\n");
+		C_GOTO(cleanup, ret = -CER_NOMEM);
+	}
+	C_ALLOC(latencies_bulk_hdl,
+		num_ms_endpts * sizeof(*latencies_bulk_hdl));
+	if (latencies_bulk_hdl == NULL) {
+		C_ERROR("Failed to allocate latency pointers\n");
+		C_GOTO(cleanup, ret = -CER_NOMEM);
+	}
+
+	/*
+	 * For each 1:many session, allocate an array for latency results.
+	 * Map that array to an IOV, and create a bulk handle that will be used
+	 * to transfer latency results back into that buffer
+	 */
+	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
+		C_ALLOC(latencies[m_idx], rep_count * sizeof(**latencies));
+		if (latencies[m_idx] == NULL) {
+			C_ERROR("Failed to allocate latency data storage\n");
+			C_GOTO(cleanup, ret = -CER_NOMEM);
+		}
+		crt_iov_set(&latencies_iov[m_idx], latencies[m_idx],
+			    rep_count * sizeof(**latencies));
+		latencies_sg_list[m_idx].sg_iovs =
+			&latencies_iov[m_idx];
+		latencies_sg_list[m_idx].sg_nr.num = 1;
+
+		ret = crt_bulk_create(crt_ctx, &latencies_sg_list[m_idx],
+				      CRT_BULK_RW,
+				      &latencies_bulk_hdl[m_idx]);
+		if (ret != 0) {
+			C_ERROR("Failed to allocate latencies bulk handle;"
+				" ret = %d\n", ret);
+			C_GOTO(cleanup, ret);
+		}
+		C_ASSERT(latencies_bulk_hdl != CRT_BULK_NULL);
+	}
 
 	for (size_idx = 0; size_idx < num_msg_sizes; size_idx++) {
-		int				 reply_status = INT32_MAX;
-		crt_rpc_t			*new_rpc;
 		struct crt_st_start_params	 test_params = { {0} };
-		struct crt_st_start_params	*start_args;
-		struct crt_st_status_req_reply   status_req_reply;
 
 		/* Set test parameters to send to the test node */
 		crt_iov_set(&test_params.endpts, endpts,
@@ -535,116 +909,19 @@ static int run_self_test(struct st_size_params all_params[],
 		test_params.reply_type = all_params[size_idx].reply_type;
 		test_params.buf_alignment = buf_alignment;
 
-		/* Set group of target endpoint */
-		master_endpt->ep_grp = srv_grp;
-
-		/* Create and send a new RPC starting the test */
-		ret = crt_req_create(crt_ctx, *master_endpt,
-				     CRT_OPC_SELF_TEST_START,
-				     &new_rpc);
+		ret = test_msg_size(crt_ctx, ms_endpts, num_ms_endpts,
+				    &test_params, latencies, latencies_bulk_hdl,
+				    output_megabits);
 		if (ret != 0) {
-			C_ERROR("Creating start RPC failed to endpoint %u:%u;"
-				" ret = %d\n", master_endpt->ep_rank,
-				master_endpt->ep_tag, ret);
+			C_ERROR("Testing message size (%d-%s %d-%s) failed;"
+				" ret = %d\n",
+				test_params.send_size,
+				crt_st_msg_type_str[test_params.send_type],
+				test_params.reply_size,
+				crt_st_msg_type_str[test_params.reply_type],
+				ret);
 			C_GOTO(cleanup, ret);
 		}
-
-		start_args = (struct crt_st_start_params *)crt_req_get(new_rpc);
-		C_ASSERTF(start_args != NULL, "crt_req_get returned NULL\n");
-		memcpy(start_args, &test_params, sizeof(test_params));
-
-		ret = crt_req_send(new_rpc, start_test_cb, &reply_status);
-		if (ret != 0) {
-			C_ERROR("Failed to send start RPC to endpoint %u:%u;"
-				" ret = %d\n", master_endpt->ep_rank,
-				master_endpt->ep_tag, ret);
-			C_GOTO(cleanup, ret);
-		}
-
-		/* Wait for the result to come back */
-		while (reply_status == INT32_MAX)
-			sched_yield();
-
-		/* Make sure the test launched successfully */
-		if (reply_status != 0) {
-			C_ERROR("Unable to start self-test; ret = %d\n",
-				reply_status);
-			C_GOTO(cleanup, ret);
-		}
-
-		/*
-		 * Poll the master node until the test completes
-		 *   (either successfully or by returning an error)
-		 */
-		do {
-			status_req_reply.status = INT32_MAX;
-
-			/* Create and send a new RPC to check the status */
-			ret = crt_req_create(crt_ctx, *master_endpt,
-					     CRT_OPC_SELF_TEST_STATUS_REQ,
-					     &new_rpc);
-			if (ret != 0) {
-				C_ERROR("Creating status request RPC to"
-					" endpoint %u:%u; ret = %d\n",
-					master_endpt->ep_rank,
-					master_endpt->ep_tag, ret);
-				C_GOTO(cleanup, ret);
-			}
-
-			/*
-			 * Sent data is the bulk handle where results should
-			 * be written
-			 */
-			*((crt_bulk_t *)crt_req_get(new_rpc)) =
-				latencies_bulk_hdl;
-
-			ret = crt_req_send(new_rpc, status_req_cb,
-					   &status_req_reply);
-			if (ret != 0) {
-				C_ERROR("Failed to send start RPC to endpoint"
-					"%u:%u; ret = %d\n",
-					master_endpt->ep_rank,
-					master_endpt->ep_tag, ret);
-				C_GOTO(cleanup, ret);
-			}
-
-			/* Wait for the status request result to come back */
-			while (status_req_reply.status == INT32_MAX)
-				sched_yield();
-
-			switch (status_req_reply.status) {
-			case CRT_ST_STATUS_TEST_IN_PROGRESS:
-				C_DEBUG("Test still processing -"
-					" # RPCs remaining: %u\n",
-					status_req_reply.num_remaining);
-				sleep(1);
-				break;
-			case CRT_ST_STATUS_TEST_COMPLETE:
-				break;
-			default:
-				C_ERROR("Detected test failure; ret = %d\n",
-					status_req_reply.status);
-				C_GOTO(next_size,
-				       ret = status_req_reply.status);
-			}
-		} while (status_req_reply.status !=
-			 CRT_ST_STATUS_TEST_COMPLETE);
-
-		/*
-		 * TODO:
-		 * In the future, probably want to return the latencies here
-		 * before they are sorted. This will also provide the ability
-		 * to do some analytics on the RPCs that failed before their
-		 * latencies are overwritten
-		 */
-
-		print_results(latencies, &test_params,
-			      status_req_reply.test_duration_ns,
-			      output_megabits);
-
-/* Some failure cases require a multilevel break to try the next message size */
-next_size:
-		continue;
 	}
 
 cleanup:
@@ -656,13 +933,25 @@ cleanup:
 		C_ERROR("Could not join progress thread");
 
 cleanup_nothread:
-
-	if (latencies_bulk_hdl != CRT_BULK_NULL) {
-		crt_bulk_free(latencies_bulk_hdl);
-		latencies_bulk_hdl = NULL;
+	if (latencies_bulk_hdl != NULL) {
+		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
+			if (latencies_bulk_hdl[m_idx] != CRT_BULK_NULL)
+				crt_bulk_free(latencies_bulk_hdl[m_idx]);
+		C_FREE(latencies_bulk_hdl,
+		       num_ms_endpts * sizeof(*latencies_bulk_hdl));
 	}
-	if (latencies != NULL)
-		C_FREE(latencies, rep_count * sizeof(*latencies));
+	if (latencies_sg_list != NULL)
+		C_FREE(latencies_sg_list,
+		       num_ms_endpts * sizeof(*latencies_sg_list));
+	if (latencies_iov != NULL)
+		C_FREE(latencies_iov, num_ms_endpts * sizeof(*latencies_iov));
+	if (latencies != NULL) {
+		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
+			if (latencies[m_idx] != NULL)
+				C_FREE(latencies[m_idx],
+				       rep_count * sizeof(*latencies));
+		C_FREE(latencies, num_ms_endpts * sizeof(*latencies));
+	}
 
 	if (srv_grp != NULL) {
 		cleanup_ret = crt_group_detach(srv_grp);
@@ -684,7 +973,6 @@ cleanup_nothread:
 		C_ERROR("crt_finalize failed; ret = %d\n", cleanup_ret);
 	/* Make sure first error is returned, if applicable */
 	ret = ((ret == 0) ? cleanup_ret : ret);
-
 	return ret;
 }
 
@@ -774,12 +1062,28 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "\n"
 	       "      Default: \"%s\"\n"
 	       "\n"
-	       "  --master-endpoint <rank:tag>\n"
+	       "  --master-endpoint <ranks:tags>\n"
 	       "      Short version: -m\n"
-	       "      The endpoint that will run the 1:many self-test process and actually\n"
-	       "        send/receive messages from the nodes specified via --endpoint\n"
+	       "      Describes an endpoint (or range of endpoints) that will each run a\n"
+	       "        1:many self-test against the list of endpoints given via the\n"
+	       "        --endpoint argument.\n"
 	       "\n"
-	       "      By default, the master endpoint will be this command-line application itself\n"
+	       "      Specifying multiple --master-endpoint ranks/tags sets up a many:many\n"
+	       "        self-test - the first 'many' is the list of master endpoints, each\n"
+	       "        which executes a separate concurrent test against the second\n"
+	       "        'many' (the list of test endpoints)\n"
+	       "\n"
+	       "      The argument syntax for this option is identical to that for\n"
+	       "        --endpoint. Also, like --endpoint, --master-endpoint can be\n"
+	       "        specified multiple times\n"
+	       "\n"
+	       "      Unlike --endpoint, the list of master endpoints is sorted and\n"
+	       "        any duplicate entries are removed automatically. This is because\n"
+	       "        each instance of self-test can only manage one 1:many test at\n"
+	       "        a time\n"
+	       "\n"
+	       "      If not specified, the default value is to use this command-line\n"
+	       "        application itself to run a 1:many test against the test endpoints\n"
 	       "\n"
 	       "      This client application sends all of the self-test parameters to\n"
 	       "        this master node and instructs it to run a self-test session against\n"
@@ -1291,9 +1595,9 @@ int main(int argc, char *argv[])
 	int				 j;
 	int				 ret = 0;
 	struct st_endpoint		*endpts = NULL;
-	crt_endpoint_t			 master_endpt;
-	crt_endpoint_t			*master_endpt_ptr = NULL;
+	struct st_endpoint		*ms_endpts = NULL;
 	uint32_t			 num_endpts = 0;
+	uint32_t			 num_ms_endpts = 0;
 	int				 output_megabits = 0;
 	int16_t				 buf_alignment =
 		CRT_ST_BUF_ALIGN_DEFAULT;
@@ -1322,12 +1626,8 @@ int main(int argc, char *argv[])
 			dest_name = optarg;
 			break;
 		case 'm':
-			ret = sscanf(optarg, "%u:%u", &master_endpt.ep_rank,
-				     &master_endpt.ep_tag);
-			if (ret != 2)
-				printf("Warning: invalid --master-endpoint\n");
-			else
-				master_endpt_ptr = &master_endpt;
+			parse_endpoint_string(optarg, &ms_endpts,
+					      &num_ms_endpts);
 			break;
 		case 'e':
 			parse_endpoint_string(optarg, &endpts, &num_endpts);
@@ -1452,7 +1752,7 @@ int main(int argc, char *argv[])
 		printf("--group-name argument not specified or is invalid\n");
 		C_GOTO(cleanup, ret = -CER_INVAL);
 	}
-	if (master_endpt_ptr == NULL)
+	if (ms_endpts == NULL)
 		printf("Warning: No --master-endpoint specified; using this"
 		       " command line application as the master endpoint\n");
 	if (endpts == NULL || num_endpts == 0) {
@@ -1502,9 +1802,9 @@ int main(int argc, char *argv[])
 
 	/********************* Run the self test *********************/
 	ret = run_self_test(all_params, num_msg_sizes, rep_count,
-			    max_inflight, dest_name, master_endpt_ptr,
-			    endpts, num_endpts, output_megabits,
-			    buf_alignment);
+			    max_inflight, dest_name, ms_endpts,
+			    num_ms_endpts, endpts, num_endpts,
+			    output_megabits, buf_alignment);
 
 	/********************* Clean up *********************/
 cleanup:
