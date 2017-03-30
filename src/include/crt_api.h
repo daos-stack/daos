@@ -160,7 +160,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	     crt_progress_cond_cb_t cond_cb, void *arg);
 
 /**
- * Create a RPC request.
+ * Create an RPC request.
  *
  * \param crt_ctx [IN]          CRT transport context
  * \param tgt_ep [IN]           RPC target endpoint
@@ -179,7 +179,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
  *        RPC request and the input/output buffers, so user needs not to call
  *        crt_req_destroy (no such API exported) or free the input/output
  *        buffers.
- *        Similarly, on the RPC server-side, when a RPC request received, CRT
+ *        Similarly, on the RPC server-side, when an RPC request received, CRT
  *        internally allocates input/output buffers as well, and internally
  *        frees those buffers when the reply is sent out. So in user's RPC
  *        handler it needs not to allocate extra input/output buffers, and also
@@ -189,6 +189,24 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 int
 crt_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req);
+
+/**
+ * Set the timeout value for an RPC request.
+ *
+ * It is an optional API. If user does not call it, then will depend on
+ * CRT_TIMEOUT ENV as timeout value (see the CRT_TIMEOUT section in README.env).
+ * User can also explicitly set one RPC request's timeout value by calling this
+ * API.
+ *
+ * \param req [IN]              pointer to RPC request
+ * \param timeout_sec [IN]      timeout value in seconds
+ *                              value of zero will be treated as invalid
+ *                              parameter.
+ *
+ * \return                      zero on success, negative value if error
+ */
+int
+crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec);
 
 /**
  * Add reference of the RPC request.
@@ -217,7 +235,7 @@ int
 crt_req_decref(crt_rpc_t *req);
 
 /**
- * Send a RPC request. In the case of sending failure, CRT internally destroy
+ * Send an RPC request. In the case of sending failure, CRT internally destroy
  * the request \a req. In the case of succeed, the \a req will be internally
  * destroyed when the reply received. User needs not call crt_req_decref() to
  * destroy the request in either case.
@@ -238,7 +256,7 @@ int
 crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg);
 
 /**
- * Send a RPC reply.
+ * Send an RPC reply.
  *
  * \param req [IN]              pointer to RPC request
  *
@@ -278,7 +296,7 @@ crt_reply_get(crt_rpc_t *rpc)
 }
 
 /**
- * Abort a RPC request.
+ * Abort an RPC request.
  *
  * \param req [IN]              pointer to RPC request
  *
@@ -302,7 +320,7 @@ int
 crt_ep_abort(crt_endpoint_t ep);
 
 /**
- * Dynamically register a RPC at client-side.
+ * Dynamically register an RPC at client-side.
  *
  * \param opc [IN]              unique opcode for the RPC
  * \param drf [IN]		pointer to the request format, which
@@ -315,7 +333,7 @@ int
 crt_rpc_register(crt_opcode_t opc, struct crt_req_format *drf);
 
 /**
- * Dynamically register a RPC at server-side.
+ * Dynamically register an RPC at server-side.
  *
  * \param opc [IN]              unique opcode for the RPC
  * \param drf [IN]		pointer to the request format, which
@@ -380,7 +398,7 @@ int
 crt_bulk_free(crt_bulk_t bulk_hdl);
 
 /**
- * Start a bulk transferring (inside a RPC handler).
+ * Start a bulk transferring (inside an RPC handler).
  *
  * \param bulk_desc [IN]        pointer to bulk transferring descriptor
  *				it is user's responsibility to allocate and free

@@ -48,7 +48,7 @@
 #define CRT_RPC_MAGIC			(0xAB0C01EC)
 #define CRT_RPC_VERSION			(0x00000001)
 
-/* default RPC timeout 60 second */
+/* default RPC timeout 60 seconds */
 #define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
 #define CRT_DEFAULT_TIMEOUT_US	(CRT_DEFAULT_TIMEOUT_S * 1e6) /* micro-second */
 
@@ -154,6 +154,8 @@ struct crt_rpc_priv {
 	crt_list_t		crp_parent_link;
 	/* binheap node for timeout management, in crt_context::cc_bh_timeout */
 	struct crt_binheap_node	crp_timeout_bp_node;
+	/* the timeout in seconds set by user */
+	uint32_t		crp_timeout_sec;
 	/* time stamp to be timeout, the key of timeout binheap */
 	uint64_t		crp_timeout_ts;
 	crt_cb_t		crp_complete_cb;

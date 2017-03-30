@@ -626,9 +626,27 @@ out:
 }
 
 int
+crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec)
+{
+	struct crt_rpc_priv	*rpc_priv;
+	int			 rc = 0;
+
+	if (req == NULL || timeout_sec == 0) {
+		C_ERROR("invalid parameter (NULL req or zero timeout_sec).\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	rpc_priv->crp_timeout_sec = timeout_sec;
+
+out:
+	return rc;
+}
+
+int
 crt_req_addref(crt_rpc_t *req)
 {
-	struct crt_rpc_priv	*rpc_priv = NULL;
+	struct crt_rpc_priv	*rpc_priv;
 	int			rc = 0;
 
 	if (req == NULL) {
@@ -648,7 +666,7 @@ out:
 int
 crt_req_decref(crt_rpc_t *req)
 {
-	struct crt_rpc_priv	*rpc_priv = NULL;
+	struct crt_rpc_priv	*rpc_priv;
 	int			rc = 0, destroy = 0;
 
 	if (req == NULL) {
