@@ -114,7 +114,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	/* Grab the input struct of the RPC */
 	in = crt_req_get(rpc);
 
-	pool = dc_pool_lookup(from->ti_poh);
+	pool = dc_hdl2pool(from->ti_poh);
 	if (pool == NULL)
 		D_GOTO(out_task, -DER_NO_HDL);
 

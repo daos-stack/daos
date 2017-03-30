@@ -105,7 +105,7 @@ dc_cont_create(struct daos_task *task)
 	if (uuid_is_null(args->uuid))
 		D_GOTO(err_task, rc = -DER_INVAL);
 
-	pool = dc_pool_lookup(args->poh);
+	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
@@ -200,7 +200,7 @@ dc_cont_destroy(struct daos_task *task)
 	if (uuid_is_null(args->uuid))
 		D_GOTO(err, rc = -DER_INVAL);
 
-	pool = dc_pool_lookup(args->poh);
+	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
@@ -248,21 +248,21 @@ err:
 }
 
 static void
-dc_cont_free(struct daos_hlink *dlink)
+dc_cont_free(struct dc_cont *dc)
 {
-	struct dc_cont *dc;
-
-	dc = container_of(dlink, struct dc_cont, dc_hlink);
 	pthread_rwlock_destroy(&dc->dc_obj_list_lock);
 	D_ASSERT(daos_list_empty(&dc->dc_po_list));
 	D_ASSERT(daos_list_empty(&dc->dc_obj_list));
 	D_FREE_PTR(dc);
 }
 
-
-static struct daos_hlink_ops dc_h_ops = {
-	.hop_free = dc_cont_free,
-};
+void
+dc_cont_put(struct dc_cont *dc)
+{
+	D_ASSERT(dc->dc_ref > 0);
+	if (--dc->dc_ref == 0)
+		dc_cont_free(dc);
+}
 
 static struct dc_cont *
 dc_cont_alloc(const uuid_t uuid)
@@ -277,8 +277,8 @@ dc_cont_alloc(const uuid_t uuid)
 	DAOS_INIT_LIST_HEAD(&dc->dc_obj_list);
 	DAOS_INIT_LIST_HEAD(&dc->dc_po_list);
 	pthread_rwlock_init(&dc->dc_obj_list_lock, NULL);
+	dc->dc_ref = 1;
 
-	daos_hhash_hlink_init(&dc->dc_hlink, &dc_h_ops);
 	return dc;
 }
 
@@ -330,7 +330,7 @@ cont_open_complete(struct daos_task *task, void *data)
 	cont->dc_pool_hdl = arg->hdl;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
-	dc_cont_add_cache(cont, arg->hdlp);
+	dc_cont2hdl(cont, arg->hdlp);
 
 	D_DEBUG(DF_DSMC, DF_CONT": opened: cookie="DF_X64" hdl="DF_UUID
 		" master\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
@@ -359,15 +359,15 @@ dc_cont_local_close(daos_handle_t ph, daos_handle_t coh)
 	struct dc_pool *pool = NULL;
 	int		rc = 0;
 
-	cont = dc_cont_lookup(coh);
+	cont = dc_hdl2cont(coh);
 	if (cont == NULL)
 		return 0;
 
-	pool = dc_pool_lookup(ph);
+	pool = dc_hdl2pool(ph);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-	dc_cont_del_cache(cont);
+	dc_cont_put(cont);
 
 	/* Remove the container from pool container list */
 	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
@@ -388,19 +388,22 @@ dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 		   unsigned int flags, daos_handle_t ph,
 		   daos_handle_t *coh)
 {
-	struct dc_cont	*cont;
+	struct dc_cont	*cont = NULL;
 	struct dc_pool	*pool = NULL;
 	int		rc = 0;
 
-	cont = dc_cont_lookup(*coh);
-	if (cont != NULL)
-		D_GOTO(out, rc);
+	if (!daos_handle_is_inval(*coh)) {
+		cont = dc_hdl2cont(*coh);
+		if (cont != NULL)
+			D_GOTO(out, rc);
+	}
 
 	cont = dc_cont_alloc(cont_uuid);
 	if (cont == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	pool = dc_pool_lookup(ph);
+	D_ASSERT(!daos_handle_is_inval(ph));
+	pool = dc_hdl2pool(ph);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
@@ -412,7 +415,7 @@ dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 	cont->dc_pool_hdl = ph;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
-	dc_cont_add_cache(cont, coh);
+	dc_cont2hdl(cont, coh);
 out:
 	if (cont != NULL)
 		dc_cont_put(cont);
@@ -440,7 +443,7 @@ dc_cont_open(struct daos_task *task)
 	if (uuid_is_null(args->uuid) || args->coh == NULL)
 		D_GOTO(err, rc = -DER_INVAL);
 
-	pool = dc_pool_lookup(args->poh);
+	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
@@ -545,7 +548,7 @@ cont_close_complete(struct daos_task *task, void *data)
 		" master\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
 		arg->hdl.cookie, DP_UUID(cont->dc_cont_hdl));
 
-	dc_cont_del_cache(cont);
+	dc_cont_put(cont);
 
 	/* Remove the container from pool container list */
 	pthread_rwlock_wrlock(&pool->dp_co_list_lock);
@@ -576,7 +579,7 @@ dc_cont_close(struct daos_task *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 	coh = args->coh;
 
-	cont = dc_cont_lookup(coh);
+	cont = dc_hdl2cont(coh);
 	if (cont == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
@@ -590,7 +593,7 @@ dc_cont_close(struct daos_task *task)
 	cont->dc_closing = 1;
 	pthread_rwlock_unlock(&cont->dc_obj_list_lock);
 
-	pool = dc_pool_lookup(cont->dc_pool_hdl);
+	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DF_DSMC, DF_CONT": closing: cookie="DF_X64" hdl="DF_UUID"\n",
@@ -598,7 +601,7 @@ dc_cont_close(struct daos_task *task)
 		DP_UUID(cont->dc_cont_hdl));
 
 	if (cont->dc_slave) {
-		dc_cont_del_cache(cont);
+		dc_cont_put(cont);
 
 		/* Remove the container from pool container list */
 		pthread_rwlock_wrlock(&pool->dp_co_list_lock);
@@ -730,11 +733,11 @@ dc_cont_query(struct daos_task *task)
 	if (args->info == NULL)
 		D_GOTO(err, rc = -DER_INVAL);
 
-	cont = dc_cont_lookup(args->coh);
+	cont = dc_hdl2cont(args->coh);
 	if (cont == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	pool = dc_pool_lookup(cont->dc_pool_hdl);
+	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DF_DSMC, DF_CONT": querying: hdl="DF_UUID"\n",
@@ -829,7 +832,7 @@ dc_cont_l2g(daos_handle_t coh, daos_iov_t *glob)
 
 	D_ASSERT(glob != NULL);
 
-	cont = dc_cont_lookup(coh);
+	cont = dc_hdl2cont(coh);
 	if (cont == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
@@ -847,7 +850,7 @@ dc_cont_l2g(daos_handle_t coh, daos_iov_t *glob)
 	}
 	glob->iov_len = glob_buf_size;
 
-	pool = dc_pool_lookup(cont->dc_pool_hdl);
+	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	if (pool == NULL)
 		D_GOTO(out_cont, rc = -DER_NO_HDL);
 
@@ -884,11 +887,6 @@ dc_cont_local2global(daos_handle_t coh, daos_iov_t *glob)
 			glob->iov_buf_len, glob->iov_len);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	if (daos_hhash_key_type(coh.cookie) != DAOS_HTYPE_CO) {
-		D_ERROR("Bad type (%d) of coh handle.\n",
-			daos_hhash_key_type(coh.cookie));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 
 	rc = dc_cont_l2g(coh, glob);
 
@@ -907,7 +905,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	D_ASSERT(cont_glob != NULL);
 	D_ASSERT(coh != NULL);
 
-	pool = dc_pool_lookup(poh);
+	pool = dc_hdl2pool(poh);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
@@ -941,7 +939,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_pool_hdl = poh;
 	pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
-	dc_cont_add_cache(cont, coh);
+	dc_cont2hdl(cont, coh);
 
 	D_DEBUG(DF_DSMC, DF_UUID": opened "DF_UUID": cookie="DF_X64" hdl="
 		DF_UUID" slave\n", DP_UUID(pool->dp_pool),
@@ -1112,11 +1110,11 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		break;
 	}
 
-	cont = dc_cont_lookup(coh);
+	cont = dc_hdl2cont(coh);
 	if (cont == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	pool = dc_pool_lookup(cont->dc_pool_hdl);
+	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
 
 	D_DEBUG(DF_DSMC, DF_CONT": op=%u hdl="DF_UUID" epoch="DF_U64"\n",
@@ -1258,12 +1256,12 @@ dc_cont_tgt_idx2ptr(daos_handle_t coh, uint32_t tgt_idx,
 	struct dc_pool	*pool;
 	int		 n;
 
-	dc = dc_cont_lookup(coh);
+	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
 	/* Get map_tgt so that we can have the rank of the target. */
-	pool = dc_pool_lookup(dc->dc_pool_hdl);
+	pool = dc_hdl2pool(dc->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
 	pthread_rwlock_rdlock(&pool->dp_map_lock);
 	n = pool_map_find_target(pool->dp_map, tgt_idx, tgt);
@@ -1282,7 +1280,7 @@ dc_cont_hdl2uuid(daos_handle_t coh, uuid_t *hdl_uuid, uuid_t *uuid)
 {
 	struct dc_cont *dc;
 
-	dc = dc_cont_lookup(coh);
+	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return -DER_NO_HDL;
 
@@ -1300,7 +1298,7 @@ dc_cont_hdl2pool_hdl(daos_handle_t coh)
 	struct dc_cont	*dc;
 	daos_handle_t	 ph;
 
-	dc = dc_cont_lookup(coh);
+	dc = dc_hdl2cont(coh);
 	if (dc == NULL)
 		return DAOS_HDL_INVAL;
 

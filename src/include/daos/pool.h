@@ -41,8 +41,6 @@ void dc_pool_fini(void);
 
 /* Client pool handle */
 struct dc_pool {
-	/* link to daos_client_hhash */
-	struct daos_hlink	dp_hlink;
 	/* container list of the pool */
 	daos_list_t		dp_co_list;
 	/* lock for the container list */
@@ -54,36 +52,14 @@ struct dc_pool {
 	uint64_t		dp_capas;
 	pthread_rwlock_t	dp_map_lock;
 	struct pool_map	       *dp_map;
+	uint32_t		dp_ref;
 	uint32_t		dp_disconnecting:1,
 				dp_slave:1; /* generated via g2l */
 };
 
-static inline struct dc_pool *
-dc_pool_lookup(daos_handle_t poh)
-{
-	struct daos_hlink *dlink;
-
-	if (daos_hhash_key_type(poh.cookie) != DAOS_HTYPE_POOL)
-		return NULL;
-
-	dlink = daos_hhash_link_lookup(daos_client_hhash, poh.cookie);
-	if (dlink == NULL)
-		return NULL;
-
-	return container_of(dlink, struct dc_pool, dp_hlink);
-}
-
-static inline void
-dc_pool_get(struct dc_pool *pool)
-{
-	daos_hhash_link_getref(daos_client_hhash, &pool->dp_hlink);
-}
-
-static inline void
-dc_pool_put(struct dc_pool *pool)
-{
-	daos_hhash_link_putref(daos_client_hhash, &pool->dp_hlink);
-}
+struct dc_pool *dc_hdl2pool(daos_handle_t hdl);
+void dc_pool_get(struct dc_pool *pool);
+void dc_pool_put(struct dc_pool *pool);
 
 int dc_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
 int dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh);

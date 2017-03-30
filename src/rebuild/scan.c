@@ -556,7 +556,7 @@ rebuild_prepare_one(void *data)
 {
 	struct rebuild_cont_open_arg	*arg = data;
 	struct pool_map			*map;
-	daos_handle_t			ph;
+	daos_handle_t			ph = DAOS_HDL_INVAL;
 	struct rebuild_tls		*tls = rebuild_tls_get();
 	int				rc;
 

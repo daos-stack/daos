@@ -36,9 +36,6 @@
 #include <daos/rebuild.h>
 #include <pthread.h>
 
-/* Shared by pool, container, and object handles. */
-struct daos_hhash *daos_client_hhash;
-
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool		module_initialized;
 
@@ -105,17 +102,11 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(unlock, rc);
 
-	rc = daos_hhash_create(DAOS_HHASH_BITS, &daos_client_hhash);
-	if (rc != 0) {
-		D_ERROR("failed to create handle hash table: %d\n", rc);
-		D_GOTO(out_debug, rc);
-	}
-
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: %d\n", rc);
-		D_GOTO(out_hhash, rc);
+		D_GOTO(out_debug, rc);
 	}
 
 	/** set up management interface */
@@ -162,8 +153,6 @@ out_mgmt:
 	dc_mgmt_fini();
 out_eq:
 	daos_eq_lib_fini();
-out_hhash:
-	daos_hhash_destroy(daos_client_hhash);
 out_debug:
 	daos_debug_fini();
 unlock:
@@ -195,9 +184,6 @@ daos_fini(void)
 	dc_cont_fini();
 	dc_pool_fini();
 	dc_mgmt_fini();
-
-	daos_hhash_destroy(daos_client_hhash);
-	daos_client_hhash = NULL;
 
 	daos_debug_fini();
 	module_initialized = false;

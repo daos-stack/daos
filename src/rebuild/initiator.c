@@ -254,7 +254,7 @@ rebuild_dkey_thread(void *data)
 	daos_size_t		akey_buf_size = 1024;
 	daos_hash_out_t		hash;
 	unsigned int		i;
-	daos_handle_t		coh;
+	daos_handle_t		coh = DAOS_HDL_INVAL;
 	daos_handle_t		oh;
 	int			rc;
 
@@ -489,7 +489,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	struct rebuild_root	*root = val_iov->iov_buf;
 	struct rebuild_iter_arg *arg = data;
 	struct rebuild_tls	*tls = rebuild_tls_get();
-	daos_handle_t		coh;
+	daos_handle_t		coh = DAOS_HDL_INVAL;
 	int rc;
 
 	uuid_copy(arg->cont_uuid, *(uuid_t *)key_iov->iov_buf);

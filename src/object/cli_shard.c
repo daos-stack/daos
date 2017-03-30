@@ -445,7 +445,7 @@ obj_shard_ptr2pool(struct dc_obj_shard *shard)
 	if (daos_handle_is_inval(poh))
 		return NULL;
 
-	return dc_pool_lookup(poh);
+	return dc_hdl2pool(poh);
 }
 
 static int

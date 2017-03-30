@@ -23,8 +23,6 @@
 #ifndef __DAOS_CLIENT_H__
 #define __DAOS_CLIENT_H__
 
-extern struct daos_hhash *daos_client_hhash;
-
 int
 daos_rebuild_tgt(uuid_t pool_uuid, daos_rank_list_t *failed_list,
 		 daos_event_t *ev);
