@@ -56,6 +56,15 @@ static struct daos_rpc_handler rebuild_handlers[] = {
 		.dr_opc		= REBUILD_TGT,
 		.dr_hdlr	= ds_rebuild_tgt_handler
 	}, {
+		.dr_opc		= REBUILD_QUERY,
+		.dr_hdlr	= ds_rebuild_query_handler
+	}, {
+		.dr_opc		= REBUILD_TGT_QUERY,
+		.dr_hdlr	= ds_rebuild_tgt_query_handler,
+		.dr_corpc_ops	= {
+			.co_aggregate	= ds_rebuild_tgt_query_aggregator,
+		}
+	}, {
 		.dr_opc		= 0
 	}
 };
@@ -88,6 +97,14 @@ is_rebuild_container(uuid_t cont_hdl_uuid)
 	if (uuid_compare(tls->rebuild_cont_hdl_uuid, cont_hdl_uuid) == 0)
 		return true;
 	return false;
+}
+
+bool
+is_rebuild_pool(uuid_t pool_hdl)
+{
+	struct rebuild_tls *tls = rebuild_tls_get();
+
+	return !uuid_compare(tls->rebuild_pool_hdl_uuid, pool_hdl);
 }
 
 struct dss_module_key rebuild_module_key = {

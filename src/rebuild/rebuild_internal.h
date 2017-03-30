@@ -41,9 +41,13 @@ struct rebuild_tls {
 	uuid_t		rebuild_cont_hdl_uuid;
 	daos_handle_t	rebuild_pool_hdl;
 	daos_handle_t	rebuild_cont_hdl;
+	int		rebuild_status;
+	int		*rebuild_building;
+	int		rebuild_building_nr;
 
 	unsigned int	rebuild_local_root_init:1,
-			rebuild_task_init:1;
+			rebuild_task_init:1,
+			rebuild_scanning:1;
 };
 
 struct rebuild_root {
@@ -63,9 +67,14 @@ int ds_rebuild_scan_handler(crt_rpc_t *rpc);
 int ds_rebuild_obj_handler(crt_rpc_t *rpc);
 int ds_rebuild_tgt_handler(crt_rpc_t *rpc);
 
-int ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
-			       daos_unit_oid_t oid, unsigned int shard);
+int ds_rebuild_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				    void *priv);
+int ds_rebuild_tgt_query_handler(crt_rpc_t *rpc);
+int ds_rebuild_query_handler(crt_rpc_t *rpc);
 
+int
+ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
+			   daos_unit_oid_t oid, unsigned int shard);
 int ds_obj_open(daos_handle_t coh, daos_obj_id_t oid,
 		daos_epoch_t epoch, unsigned int mode,
 		daos_handle_t *oh);

@@ -44,6 +44,8 @@ enum pool_operation {
 	REBUILD_OBJECTS_SCAN	= 1,
 	REBUILD_OBJECTS		= 2,
 	REBUILD_TGT		= 3,
+	REBUILD_QUERY		= 4,
+	REBUILD_TGT_QUERY	= 5,
 };
 
 struct rebuild_scan_in {
@@ -65,6 +67,25 @@ struct rebuild_objs_in {
 	struct crt_array        roi_oids;
 	struct crt_array        roi_uuids;
 	struct crt_array	roi_shards;
+};
+
+struct rebuild_tgt_query_in {
+	uuid_t		 rtqi_uuid;
+};
+
+struct rebuild_tgt_query_out {
+	int		rtqo_status;
+	uint32_t	rtqo_rebuilding;
+};
+
+struct rebuild_query_in {
+	uuid_t		 rqi_pool_uuid;
+	daos_rank_list_t *rqi_tgts_failed;
+};
+
+struct rebuild_query_out {
+	int	rqo_status;
+	int	rqo_done;
 };
 
 struct rebuild_tgt_in {

@@ -54,10 +54,21 @@ rebuild_runable(test_arg_t *arg)
 }
 
 static int
-rebuild_srv_target(uuid_t pool_uuid, daos_rank_t failed_rank)
+rebuild_srv_target(daos_handle_t poh, uuid_t pool_uuid,
+		   daos_rank_t failed_rank)
 {
 	daos_rank_list_t	ranks;
 	int			rc;
+	int			done = 0;
+	int			status = 0;
+
+
+	/** exclude the target from the pool */
+	ranks.rl_nr.num = 1;
+	ranks.rl_nr.num_out = 0;
+	ranks.rl_ranks = &failed_rank;
+	rc = daos_pool_exclude(poh, &ranks, NULL);
+	assert_int_equal(rc, 0);
 
 	/* Rebuild rank 0 */
 	ranks.rl_nr.num = 1;
@@ -66,11 +77,23 @@ rebuild_srv_target(uuid_t pool_uuid, daos_rank_t failed_rank)
 
 	rc = daos_rebuild_tgt(pool_uuid, &ranks, NULL);
 	assert_int_equal(rc, 0);
-	/* XXX FIXME: instead it should keep checking rebuild
-	 * status and wait
-	 */
-	print_message("sleep 60 sends for rebuild finish.\n");
-	sleep(60);
+	while (!done) {
+		rc = daos_rebuild_query(pool_uuid, &ranks, &done, &status,
+					NULL);
+		if (rc != 0)
+			break;
+		assert_int_equal(status, 0);
+		print_message("wait for rebuild finish.\n");
+		sleep(2);
+	}
+
+	assert_int_equal(rc, 0);
+
+	ranks.rl_nr.num = 1;
+	ranks.rl_nr.num_out = 0;
+	ranks.rl_ranks = &failed_rank;
+	rc = daos_pool_tgt_add(poh, &ranks, NULL);
+	assert_int_equal(rc, 0);
 	return rc;
 }
 
@@ -99,8 +122,8 @@ rebuild_dkeys(void **state)
 			      strlen("data") + 1, 0, &req);
 	}
 
-	/* Rebuild rank 0 */
-	rebuild_srv_target(arg->pool_uuid, 0);
+	/* Rebuild rank 1 */
+	rebuild_srv_target(arg->poh, arg->pool_uuid, 1);
 }
 
 static void
@@ -128,8 +151,8 @@ rebuild_akeys(void **state)
 			      strlen("data") + 1, 0, &req);
 	}
 
-	/* Rebuild rank 0 */
-	rebuild_srv_target(arg->pool_uuid, 0);
+	/* Rebuild rank 1 */
+	rebuild_srv_target(arg->poh, arg->pool_uuid, 1);
 }
 
 static void
@@ -159,8 +182,8 @@ rebuild_indexes(void **state)
 				      strlen("data") + 1, 0, &req);
 	}
 
-	/* Rebuild rank 0 */
-	rebuild_srv_target(arg->pool_uuid, 0);
+	/* Rebuild rank 1 */
+	rebuild_srv_target(arg->poh, arg->pool_uuid, 1);
 }
 
 static void
@@ -196,8 +219,8 @@ rebuild_multiple(void **state)
 		}
 	}
 
-	/* Rebuild rank 0 */
-	rebuild_srv_target(arg->pool_uuid, 0);
+	/* Rebuild rank 1 */
+	rebuild_srv_target(arg->poh, arg->pool_uuid, 1);
 }
 
 static void
@@ -226,8 +249,8 @@ rebuild_large_rec(void **state)
 		insert_single(key, "a_key", 0, buffer, 4097, 0, &req);
 	}
 
-	/* Rebuild rank 0 */
-	rebuild_srv_target(arg->pool_uuid, 0);
+	/* Rebuild rank 1 */
+	rebuild_srv_target(arg->poh, arg->pool_uuid, 1);
 }
 
 static void
@@ -259,8 +282,8 @@ rebuild_objects(void **state)
 		}
 	}
 
-	/* Rebuild rank 0 */
-	rebuild_srv_target(arg->pool_uuid, 0);
+	/* Rebuild rank 1 */
+	rebuild_srv_target(arg->poh, arg->pool_uuid, 1);
 }
 
 /** create a new pool/container for each test */

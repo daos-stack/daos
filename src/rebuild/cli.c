@@ -127,3 +127,82 @@ err_group:
 	return rc;
 }
 
+struct dc_query_cb_arg {
+	crt_rpc_t	*rpc;
+	int		*done;
+	int		*status;
+};
+
+static int
+dc_rebuild_query_cp(struct daos_task *task, void *data)
+{
+	struct dc_query_cb_arg	*arg = data;
+	crt_rpc_t		*rpc = arg->rpc;
+	struct rebuild_query_out *out = crt_reply_get(rpc);
+	int			rc;
+
+	rc = out->rqo_status;
+	*arg->status = rc;
+	if (rc != 0) {
+		D_ERROR("failed to rebuild target: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	*arg->done = out->rqo_done;
+out:
+	daos_group_detach(rpc->cr_ep.ep_grp);
+	crt_req_decref(rpc);
+	return rc;
+}
+
+int
+dc_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_list,
+		 int *done, int *status, struct daos_task *task)
+{
+	struct rebuild_query_in	*rqi;
+	crt_endpoint_t		ep;
+	struct dc_query_cb_arg	arg;
+	crt_rpc_t		*rpc;
+	int			rc;
+
+	rc = daos_group_attach(NULL, &ep.ep_grp);
+	if (rc != 0)
+		D_GOTO(err, rc);
+
+	/* Currently, rank 0 runs the pool and the (only) container service. */
+	ep.ep_rank = 0;
+	ep.ep_tag = 0;
+	rc = rebuild_req_create(daos_task2ctx(task), ep, REBUILD_QUERY,
+				&rpc);
+	if (rc != 0)
+		D_GOTO(err_group, rc);
+
+	rqi = crt_req_get(rpc);
+	D_ASSERT(rqi != NULL);
+
+	uuid_copy(rqi->rqi_pool_uuid, pool_uuid);
+	rqi->rqi_tgts_failed = failed_list;
+
+	crt_req_addref(rpc);
+
+	arg.rpc = rpc;
+	arg.done = done;
+	arg.status = status;
+	rc = daos_task_register_comp_cb(task, dc_rebuild_query_cp,
+					sizeof(arg), &arg);
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	rc = daos_rpc_send(rpc, task);
+	if (rc != 0)
+		D_ERROR("Send rebuild rpc failed: %d\n", rc);
+	return rc;
+err_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+err_group:
+	daos_group_detach(ep.ep_grp);
+err:
+	daos_task_complete(task, rc);
+	return rc;
+}

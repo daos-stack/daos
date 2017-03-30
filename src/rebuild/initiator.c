@@ -48,6 +48,7 @@ struct rebuild_obj_arg {
 	unsigned int	map_ver;
 	daos_epoch_t	epoch;
 	daos_key_t	dkey;
+	int		*rebuild_building;
 	struct ds_cont_hdl *srv_cont_hdl;
 };
 
@@ -68,7 +69,7 @@ static inline unsigned int
 rebuild_get_nstream_idx(daos_key_t *dkey)
 {
 	unsigned int nstream;
-	unsigned int hash;
+	uint64_t hash;
 
 	nstream = dss_get_threads_number();
 
@@ -201,7 +202,8 @@ rebuild_rec(struct rebuild_obj_arg *arg, daos_handle_t oh, daos_key_t *akey,
 					  size, &recxs[start], &eprs[start],
 					  cookie);
 
-	D_DEBUG(DB_TRACE, "rebuild "DF_UOID" rc %d\n", DP_UOID(arg->oid), rc);
+	D_DEBUG(DB_TRACE, "rebuild "DF_UOID" rc %d tag %d\n",
+		DP_UOID(arg->oid), rc, dss_get_module_info()->dmi_tid);
 	return rc;
 }
 
@@ -301,6 +303,9 @@ rebuild_dkey_thread(void *data)
 		if (rc)
 			break;
 
+		D_DEBUG(DB_TRACE, ""DF_UOID" list akey %d for dkey %.*s\n",
+			DP_UOID(arg->oid), akey_num, (int)arg->dkey.iov_len,
+			(char *)arg->dkey.iov_buf);
 		if (akey_num == 0)
 			continue;
 
@@ -332,6 +337,13 @@ free:
 	if (akey_iov.iov_buf != NULL)
 		D_FREE(akey_iov.iov_buf, akey_buf_size);
 	daos_iov_free(&arg->dkey);
+	if (tls->rebuild_status == 0)
+		tls->rebuild_status = rc;
+	(*arg->rebuild_building)--;
+	D_DEBUG(DB_TRACE, "finish rebuild dkey %.*s tag %d rebuilding %p/%d\n",
+		(int)arg->dkey.iov_len, (char *)arg->dkey.iov_buf,
+		dss_get_module_info()->dmi_tid, arg->rebuild_building,
+		*arg->rebuild_building);
 	D_FREE_PTR(arg);
 }
 
@@ -340,6 +352,7 @@ rebuild_dkey(daos_unit_oid_t oid, daos_epoch_t epoch,
 	     daos_key_t *dkey, struct rebuild_iter_arg *iter_arg)
 {
 	struct rebuild_obj_arg	*arg;
+	struct rebuild_tls	*tls = rebuild_tls_get();
 	unsigned int		tgt;
 	int			rc;
 
@@ -357,10 +370,16 @@ rebuild_dkey(daos_unit_oid_t oid, daos_epoch_t epoch,
 	arg->map_ver = iter_arg->map_ver;
 	arg->epoch = epoch;
 	tgt = rebuild_get_nstream_idx(dkey);
-
+	arg->rebuild_building = &tls->rebuild_building[tgt];
+	tls->rebuild_building[tgt]++;
+	D_DEBUG(DB_TRACE, "start rebuild dkey %.*s tag %d rebuilding %p/%d\n",
+		(int)arg->dkey.iov_len, (char *)arg->dkey.iov_buf, tgt,
+		&tls->rebuild_building[tgt], tls->rebuild_building[tgt]);
 	rc = dss_thread_create(rebuild_dkey_thread, arg, tgt);
-	if (rc)
+	if (rc) {
+		tls->rebuild_building[tgt]--;
 		D_GOTO(free, rc);
+	}
 
 	return rc;
 free:
@@ -449,7 +468,8 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 
 	D_ASSERT(arg->obj_cb != NULL);
 	rc = arg->obj_cb(*oid, *shard, arg);
-
+	if (rc)
+		return rc;
 	rc = dbtree_iter_delete(ih, NULL);
 	if (rc)
 		return rc;
@@ -506,10 +526,14 @@ rebuild_iterate_object(void *arg)
 
 	rc = dbtree_iterate(iter_arg->root_hdl, false, rebuild_cont_iter_cb,
 			    iter_arg);
-	if (rc)
+	if (rc) {
 		D_ERROR("dbtree iterate fails %d\n", rc);
+		if (tls->rebuild_status == 0)
+			tls->rebuild_status = rc;
+	}
 
 	tls->rebuild_task_init = 0;
+	tls->rebuild_building[0]--;
 	D_FREE_PTR(iter_arg);
 }
 
@@ -612,11 +636,15 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 		arg->obj_cb = rebuild_obj_iterate_keys;
 		arg->root_hdl = btr_hdl;
 		arg->map_ver = rebuild_in->roi_map_ver;
+		D_ASSERT(tls->rebuild_building != NULL);
+		tls->rebuild_building[0]++;
+		tls->rebuild_task_init = 1;
 		rc = dss_thread_create(rebuild_iterate_object, arg, -1);
-		if (rc == 0)
-			tls->rebuild_task_init = 1;
-		else
+		if (rc) {
+			tls->rebuild_task_init = 0;
+			tls->rebuild_building[0]--;
 			D_FREE_PTR(arg);
+		}
 	}
 
 out:

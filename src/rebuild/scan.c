@@ -560,6 +560,7 @@ rebuild_prepare_one(void *data)
 	struct rebuild_tls		*tls = rebuild_tls_get();
 	int				rc;
 
+	tls->rebuild_scanning = 1;
 	map = ds_pool_get_pool_map(arg->pool_uuid);
 	if (map == NULL)
 		return -DER_INVAL;
@@ -597,6 +598,8 @@ ds_rebuild_prepare(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 {
 	struct rebuild_cont_open_arg arg;
 	struct pool_map		     *map;
+	struct rebuild_tls	     *tls = rebuild_tls_get();
+	unsigned int		     nthreads = dss_get_threads_number();
 	int rc;
 
 	map = ds_pool_get_pool_map(pool_uuid);
@@ -607,6 +610,22 @@ ds_rebuild_prepare(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	rc = daos_placement_update(map);
 	if (rc)
 		return rc;
+
+	if (tls->rebuild_building_nr < nthreads) {
+		if (tls->rebuild_building != NULL)
+			D_FREE(tls->rebuild_building,
+			       tls->rebuild_building_nr *
+			       sizeof(*tls->rebuild_building));
+		D_ALLOC(tls->rebuild_building,
+			nthreads * sizeof(*tls->rebuild_building));
+		if (tls->rebuild_building == NULL)
+			return -DER_NOMEM;
+		tls->rebuild_building_nr = nthreads;
+	} else {
+		memset(tls->rebuild_building, 0,
+		       tls->rebuild_building_nr *
+		       sizeof(*tls->rebuild_building));
+	}
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.pool_hdl_uuid, pool_hdl_uuid);
@@ -631,11 +650,21 @@ rebuild_obj_iter(void *data)
 				arg->arg);
 }
 
+static int
+rebuild_scan_done(void *data)
+{
+	struct rebuild_tls *tls = rebuild_tls_get();
+
+	tls->rebuild_scanning = 0;
+	return 0;
+}
+
 static void
 rebuild_scan_func(void *data)
 {
 	struct rebuild_iter_arg iter_arg;
 	struct rebuild_scan_arg *arg = data;
+	struct rebuild_tls *tls = rebuild_tls_get();
 	int rc;
 
 	D_ASSERT(arg != NULL);
@@ -658,6 +687,13 @@ rebuild_scan_func(void *data)
 	rc = dbtree_iterate(arg->rebuild_tree_hdl, false, rebuild_tgt_iter_cb,
 			    arg);
 
+	dss_collective(rebuild_scan_done, NULL);
+	if (rc) {
+		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
+			DP_UUID(arg->pool_uuid), rc);
+		D_GOTO(free, rc);
+	}
+
 	D_DEBUG(DB_TRACE, DF_UUID" send objects to initiator %d\n",
 		DP_UUID(arg->pool_uuid), rc);
 
@@ -671,6 +707,8 @@ free:
 
 	if (!daos_handle_is_inval(arg->rebuild_tree_hdl))
 		dbtree_destroy(arg->rebuild_tree_hdl);
+	if (tls->rebuild_status == 0 && rc != 0)
+		tls->rebuild_status = rc;
 
 	ABT_mutex_free(&arg->scan_lock);
 	D_FREE_PTR(arg);
@@ -817,3 +855,141 @@ ds_rebuild_tgt_handler(crt_rpc_t *rpc)
 	return rc;
 }
 
+struct rebuild_status {
+	int scanning;
+	int status;
+};
+
+int
+dss_rebuild_check_scanning(void *arg)
+{
+	struct rebuild_tls	*tls = rebuild_tls_get();
+	struct rebuild_status	*status = arg;
+
+	if (tls->rebuild_scanning)
+		status->scanning++;
+	if (tls->rebuild_status != 0 && status->status == 0)
+		status->status = tls->rebuild_status;
+	return 0;
+}
+
+int
+ds_rebuild_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				void *priv)
+{
+	struct rebuild_tgt_query_out    *out_source = crt_reply_get(source);
+	struct rebuild_tgt_query_out    *out_result = crt_reply_get(result);
+
+	out_result->rtqo_rebuilding += out_source->rtqo_rebuilding;
+	if (out_result->rtqo_status == 0 && out_source->rtqo_status != 0)
+		out_result->rtqo_status = out_source->rtqo_status;
+	return 0;
+}
+
+int
+ds_rebuild_tgt_query_handler(crt_rpc_t *rpc)
+{
+	struct rebuild_tls		*tls = rebuild_tls_get();
+	struct rebuild_tgt_query_out	*rtqo;
+	struct rebuild_status		status;
+	int				i;
+	bool				rebuilding = false;
+	int				rc;
+
+	memset(&status, 0, sizeof(status));
+	rtqo = crt_reply_get(rpc);
+	rtqo->rtqo_rebuilding = 0;
+
+	/* First let's checking building */
+	for (i = 0; i < tls->rebuild_building_nr; i++) {
+		if (tls->rebuild_building[i] > 0) {
+			D_DEBUG(DB_TRACE, "thread %d still rebuilding\n", i);
+			rebuilding = true;
+		}
+	}
+
+	/* let's check status on every thread*/
+	rc = dss_collective(dss_rebuild_check_scanning, &status);
+	if (rc)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DB_TRACE, "pool "DF_UUID" scanning %d/%d rebuilding %s\n",
+		DP_UUID(tls->rebuild_pool_uuid), status.scanning,
+		status.status, rebuilding ? "yes" : "no");
+
+	if (!rebuilding && status.scanning > 0)
+		rebuilding = true;
+
+	if (rebuilding)
+		rtqo->rtqo_rebuilding = 1;
+
+	if (status.status != 0)
+		rtqo->rtqo_status = status.status;
+out:
+	if (rtqo->rtqo_status == 0)
+		rtqo->rtqo_status = rc;
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("send reply failed %d\n", rc);
+
+	return rc;
+}
+
+/* query the rebuild status */
+int
+ds_rebuild_query_handler(crt_rpc_t *rpc)
+{
+	struct rebuild_query_in		*rqi;
+	struct rebuild_query_out	*rqo;
+	struct rebuild_tgt_query_in	*rtqi;
+	struct rebuild_tgt_query_out	*rtqo;
+	struct ds_pool		*pool;
+	crt_rpc_t		*tgt_rpc;
+	int			rc;
+
+	rqi = crt_req_get(rpc);
+	rqo = crt_reply_get(rpc);
+
+	rqo->rqo_done = 0;
+	pool = ds_pool_lookup(rqi->rqi_pool_uuid);
+	if (pool == NULL) {
+		D_ERROR("can not find "DF_UUID" rc %d\n",
+			DP_UUID(rqi->rqi_pool_uuid), -DER_NO_HDL);
+		D_GOTO(out, rc = -DER_NO_HDL);
+	}
+
+	/* Then send rebuild RPC to all targets of the pool */
+	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
+				  pool, DAOS_REBUILD_MODULE,
+				  REBUILD_TGT_QUERY, &tgt_rpc, NULL,
+				  rqi->rqi_tgts_failed);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
+
+	rtqi = crt_req_get(tgt_rpc);
+	uuid_copy(rtqi->rtqi_uuid, rqi->rqi_pool_uuid);
+	rc = dss_rpc_send(tgt_rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	rtqo = crt_reply_get(tgt_rpc);
+	D_DEBUG(DB_TRACE, "%p query rebuild status %d\n", rtqo,
+		rtqo->rtqo_rebuilding);
+	if (rtqo->rtqo_rebuilding == 0)
+		rqo->rqo_done = 1;
+
+	if (rtqo->rtqo_status)
+		rqo->rqo_status = rtqo->rtqo_status;
+out_rpc:
+	crt_req_decref(tgt_rpc);
+out_put:
+	ds_pool_put(pool);
+out:
+	if (rqo->rqo_status == 0)
+		rqo->rqo_status = rc;
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("send reply failed: rc %d\n", rc);
+	return rc;
+}

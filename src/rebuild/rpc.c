@@ -56,6 +56,25 @@ static struct crt_msg_field *rebuild_tgt_in_fields[] = {
 	&CMF_RANK_LIST,	/* failed targets */
 };
 
+static struct crt_msg_field *rebuild_tgt_query_in_fields[] = {
+	&CMF_UUID,
+};
+
+static struct crt_msg_field *rebuild_tgt_query_out_fields[] = {
+	&CMF_INT,
+	&CMF_UINT32,
+};
+
+static struct crt_msg_field *rebuild_query_in_fields[] = {
+	&CMF_UUID,
+	&CMF_RANK_LIST,
+};
+
+static struct crt_msg_field *rebuild_query_out_fields[] = {
+	&CMF_INT,
+	&CMF_INT,
+};
+
 struct crt_req_format DQF_REBUILD_OBJECTS_SCAN =
 	DEFINE_CRT_REQ_FMT("REBUILD_OBJECTS_SCAN", rebuild_scan_in_fields,
 			   rebuild_out_fields);
@@ -67,6 +86,14 @@ struct crt_req_format DQF_REBUILD_OBJECTS =
 struct crt_req_format DQF_REBUILD_TGT =
 	DEFINE_CRT_REQ_FMT("REBUILD_TGT", rebuild_tgt_in_fields,
 			   rebuild_out_fields);
+
+struct crt_req_format DQF_REBUILD_TGT_QUERY =
+	DEFINE_CRT_REQ_FMT("REBUILD_TGT_QUERY", rebuild_tgt_query_in_fields,
+			   rebuild_tgt_query_out_fields);
+
+struct crt_req_format DQF_REBUILD_QUERY =
+	DEFINE_CRT_REQ_FMT("REBUILD_QUERY", rebuild_query_in_fields,
+			   rebuild_query_out_fields);
 
 int
 rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
@@ -87,6 +114,12 @@ struct daos_rpc rebuild_cli_rpcs[] = {
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_REBUILD_TGT,
 	}, {
+		.dr_name	= "REBUILD_TGT",
+		.dr_opc		= REBUILD_QUERY,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_REBUILD_QUERY,
+	}, {
 		.dr_opc		= 0
 	}
 };
@@ -104,6 +137,12 @@ struct daos_rpc rebuild_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_REBUILD_OBJECTS,
+	}, {
+		.dr_name	= "REBUILD_OBJECTS",
+		.dr_opc		= REBUILD_TGT_QUERY,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_REBUILD_TGT_QUERY,
 	}, {
 		.dr_opc		= 0
 	}

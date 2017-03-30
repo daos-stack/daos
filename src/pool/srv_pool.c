@@ -37,6 +37,7 @@
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rdb.h>
+#include <daos_srv/rebuild.h>
 #include <daos_srv/vos.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -1417,14 +1418,19 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_rdlock(svc->ps_lock);
 
-	/* Verify the pool handle. */
-	daos_iov_set(&key, in->pqi_op.pi_hdl, sizeof(uuid_t));
-	daos_iov_set(&value, &hdl, sizeof(hdl));
-	rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			rc = -DER_NO_HDL;
-		D_GOTO(out_lock, rc);
+	/* Verify the pool handle. Note: since rebuild will not
+	 * connect the pool, so we only verify the non-rebuild
+	 * pool.
+	 */
+	if (!is_rebuild_pool(in->pqi_op.pi_hdl)) {
+		daos_iov_set(&key, in->pqi_op.pi_hdl, sizeof(uuid_t));
+		daos_iov_set(&value, &hdl, sizeof(hdl));
+		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
+		if (rc != 0) {
+			if (rc == -DER_NONEXIST)
+				rc = -DER_NO_HDL;
+			D_GOTO(out_lock, rc);
+		}
 	}
 
 	rc = pool_attr_read(&tx, svc, &attr);
