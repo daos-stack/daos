@@ -25,7 +25,7 @@ from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
 import os
 
-if not "prereqs" in globals():
+if "prereqs" not in globals():
     from prereq_tools import PreReqComponent
     from SCons.Script import DefaultEnvironment
     from SCons.Script import Variables
@@ -59,9 +59,9 @@ else:
     REQS.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'],
                 package='libuuid-devel')
 
-CCI_BUILD = ['patch -N -p1 < $PATCH_PREFIX/cci_port_number.patch; ' \
+CCI_BUILD = ['patch -N -p1 < $PATCH_PREFIX/cci_port_number.patch; '
              'if [ $? -gt 1 ]; then false; else true; fi;',
-             'patch -N -p1 < $PATCH_PREFIX/cci_ib.patch; ' \
+             'patch -N -p1 < $PATCH_PREFIX/cci_ib.patch; '
              'if [ $? -gt 1 ]; then false; else true; fi;',
              './autogen.pl']
 CCI_REQUIRED = ['ltdl']
@@ -84,8 +84,8 @@ REQS.define('cci',
 
 
 REQS.define('openpa',
-            retriever=GitRepoRetriever( \
-            'http://git.mcs.anl.gov/radix/openpa.git'),
+            retriever=GitRepoRetriever(
+                'http://git.mcs.anl.gov/radix/openpa.git'),
             commands=['$LIBTOOLIZE', './autogen.sh',
                       './configure --prefix=$OPENPA_PREFIX', 'make',
                       'make install'], libs=['opa'])
@@ -95,22 +95,22 @@ RETRIEVER = \
                      True)
 REQS.define('mercury',
             retriever=RETRIEVER,
-            commands=['cmake -DMCHECKSUM_USE_ZLIB=1 ' \
-                      '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a ' \
-                      '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ ' \
-                      '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s ' \
-                      '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ ' \
-                      '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX ' \
-                      '-DBUILD_EXAMPLES=OFF ' \
-                      '-DMERCURY_USE_BOOST_PP=ON ' \
-                      '-DMERCURY_USE_SELF_FORWARD=ON' \
-                      '-DMERCURY_ENABLE_VERBOSE_ERROR=OFF ' \
-                      '-DBUILD_TESTING=ON ' \
-                      '-DNA_USE_CCI=ON ' \
-                      '-DNA_CCI_USE_POLL=ON ' \
-                      '-DBUILD_DOCUMENTATION=OFF ' \
-                      '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC ' \
-                      '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib ' \
+            commands=['cmake -DMCHECKSUM_USE_ZLIB=1 '
+                      '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a '
+                      '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
+                      '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s '
+                      '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ '
+                      '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX '
+                      '-DBUILD_EXAMPLES=OFF '
+                      '-DMERCURY_USE_BOOST_PP=ON '
+                      '-DMERCURY_USE_SELF_FORWARD=ON'
+                      '-DMERCURY_ENABLE_VERBOSE_ERROR=OFF '
+                      '-DBUILD_TESTING=ON '
+                      '-DNA_USE_CCI=ON '
+                      '-DNA_CCI_USE_POLL=ON '
+                      '-DBUILD_DOCUMENTATION=OFF '
+                      '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC '
+                      '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib '
                       '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE'
                       % (CCI_LIB), 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
@@ -118,8 +118,8 @@ REQS.define('mercury',
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
-URL = \
-'https://www.open-mpi.org/software/hwloc/v1.11/downloads/hwloc-1.11.5.tar.gz'
+URL = 'https://www.open-mpi.org/software/hwloc/v1.11' \
+    '/downloads/hwloc-1.11.5.tar.gz'
 WEB_RETRIEVER = \
     WebRetriever(URL)
 REQS.define('hwloc', retriever=WEB_RETRIEVER,
@@ -132,8 +132,8 @@ RETRIEVER = GitRepoRetriever('https://github.com/pmix/master')
 REQS.define('pmix',
             retriever=RETRIEVER,
             commands=['./autogen.sh',
-                      './configure --with-platform=optimized ' \
-                      '--prefix=$PMIX_PREFIX ' \
+                      './configure --with-platform=optimized '
+                      '--prefix=$PMIX_PREFIX '
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make', 'make install'],
             libs=['pmix'],
@@ -144,15 +144,15 @@ REQS.define('pmix',
 RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
 REQS.define('ompi',
             retriever=RETRIEVER,
-            commands=['patch -N -p1 < $PATCH_PREFIX/ompi_version.patch; ' \
+            commands=['patch -N -p1 < $PATCH_PREFIX/ompi_version.patch; '
                       'if [ $? -gt 1 ]; then false; else true; fi;',
                       './autogen.pl --no-oshmem',
-                      './configure --with-platform=optimized ' \
-                      '--enable-orterun-prefix-by-default ' \
-                      '--prefix=$OMPI_PREFIX ' \
-                      '--with-pmix=$PMIX_PREFIX ' \
-                      '--disable-mpi-fortran ' \
-                      '--with-libevent=external ' \
+                      './configure --with-platform=optimized '
+                      '--enable-orterun-prefix-by-default '
+                      '--prefix=$OMPI_PREFIX '
+                      '--with-pmix=$PMIX_PREFIX '
+                      '--disable-mpi-fortran '
+                      '--with-libevent=external '
                       '--with-hwloc=$HWLOC_PREFIX',
                       'make', 'make install'],
             libs=['open-rte'],
@@ -162,13 +162,13 @@ REQS.define('ompi',
 RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
 REQS.define('ompi_pmix',
             retriever=RETRIEVER,
-            commands=['patch -N -p1 < $PATCH_PREFIX/ompi_version.patch; ' \
+            commands=['patch -N -p1 < $PATCH_PREFIX/ompi_version.patch; '
                       'if [ $? -gt 1 ]; then false; else true; fi;',
                       './autogen.pl --no-oshmem',
-                      './configure --with-platform=optimized ' \
-                      '--with-devel-headers ' \
-                      '--enable-orterun-prefix-by-default ' \
-                      '--prefix=$OMPI_PMIX_PREFIX ' \
+                      './configure --with-platform=optimized '
+                      '--with-devel-headers '
+                      '--enable-orterun-prefix-by-default '
+                      '--prefix=$OMPI_PMIX_PREFIX '
                       '--disable-mpi-fortran ',
                       'make', 'make install'],
             libs=['pmix'],
@@ -198,9 +198,9 @@ RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/coral/cppr",
 REQS.define('cppr',
             retriever=RETRIEVER,
             commands=["scons "
-                      "OMPI_PREBUILT=$OMPI_PREFIX " \
-                      "CART_PREBUILT=$CART_PREFIX " \
-                      "IOF_PREBUILT=$IOF_PREFIX " \
+                      "OMPI_PREBUILT=$OMPI_PREFIX "
+                      "CART_PREBUILT=$CART_PREFIX "
+                      "IOF_PREBUILT=$IOF_PREFIX "
                       "PREFIX=$CPPR_PREFIX install"],
             headers=["cppr.h"],
             libs=["cppr"],
@@ -211,8 +211,8 @@ RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/daos/iof",
 REQS.define('iof',
             retriever=RETRIEVER,
             commands=["scons "
-                      "OMPI_PREBUILT=$OMPI_PREFIX " \
-                      "CART_PREBUILT=$CART_PREFIX " \
+                      "OMPI_PREBUILT=$OMPI_PREFIX "
+                      "CART_PREBUILT=$CART_PREFIX "
                       "PREFIX=$IOF_PREFIX install"],
             headers=['cnss_plugin.h'],
             requires=['ompi', 'cart'])
@@ -241,9 +241,9 @@ RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/daos/cart", True)
 REQS.define('cart',
             retriever=RETRIEVER,
             commands=["scons "
-                      "ARGOBOTS_PREBUILT=$ARGOBOTS_PREFIX " \
-                      "OMPI_PREBUILT=$OMPI_PREFIX " \
-                      "MERCURY_PREBUILT=$MERCURY_PREFIX " \
+                      "ARGOBOTS_PREBUILT=$ARGOBOTS_PREFIX "
+                      "OMPI_PREBUILT=$OMPI_PREFIX "
+                      "MERCURY_PREBUILT=$MERCURY_PREFIX "
                       "PREFIX=$CART_PREFIX install"],
             headers=["crt_api.h"],
             libs=["crt", "crt_util"],

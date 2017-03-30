@@ -25,8 +25,10 @@ import os
 import sys
 import argparse
 
+
 class WrapScript(object):
     """Create a wrapper for a scons file and maintain a line mapping"""
+
     def __init__(self, fname):
         old_lineno = 1
         new_lineno = 1
@@ -78,7 +80,7 @@ class WrapScript(object):
                 outfile.write("%sscons_temp_env = DefaultEnvironment()\n"
                               % prefix)
                 outfile.write("%sscons_temp_opts = Variables()\n" % prefix)
-                outfile.write("%s%s = PreReqComponent(scons_temp_env, " \
+                outfile.write("%s%s = PreReqComponent(scons_temp_env, "
                               "scons_temp_opts)\n" % (prefix, variable))
                 outfile.write("%sprint %s\n" % (prefix, variable))
                 variables.remove(variable)
@@ -127,12 +129,13 @@ from SCons.Variables import *
                                             1)
                 match = re.search("^(.*)Module script(.*)$", line)
                 if match:
-                    line = "%sModule %s%s\n"%(match.group(1),
-                                              fname,
-                                              match.group(2))
+                    line = "%sModule %s%s\n" % (match.group(1),
+                                                fname,
+                                                match.group(2))
                 output.write(line)
         output.close()
         os.rename("tmp2.log", "tmp.log")
+
 
 def parse_report():
     """Create the report"""
@@ -151,6 +154,7 @@ def parse_report():
     pylint.close()
     os.unlink("tmp.log")
     return error_count
+
 
 def check_script(fname, *args, **kw):
     """Check a python script for errors"""
@@ -184,7 +188,7 @@ def check_script(fname, *args, **kw):
 
     cmd = "%s %s --rcfile=%s/%s " \
           "--msg-template '{C}: %s:{line}: pylint-{symbol}: {msg}' " \
-          "%s > tmp.log 2>&1"% \
+          "%s > tmp.log 2>&1" % \
           (pylint, " ".join(args), rc_dir, rc_file, pylint_path, tmp_fname)
 
     if os.environ.get("DEBUG_CHECK_SCRIPT", 0):
@@ -195,6 +199,7 @@ def check_script(fname, *args, **kw):
     error_count = parse_report()
     print ""
     return error_count
+
 
 def main():
     """Run the actual code in a function"""
@@ -238,6 +243,7 @@ def main():
 
     if error_count:
         sys.exit(1)
+
 
 if __name__ == '__main__':
     main()

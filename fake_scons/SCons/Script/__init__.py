@@ -23,13 +23,17 @@ import os
 import sys
 import copy
 
+
 class SConscript(object):
     """Fake SConscript"""
+
     def __init__(self, *args, **kw):
         pass
 
+
 class DefaultEnvironment(object):
     """Default environment"""
+
     def __init__(self):
         pass
 
@@ -48,6 +52,7 @@ class DefaultEnvironment(object):
     def CFile(self, *args, **kw):
         """Fake CFile"""
         return []
+
     def Java(self, *args, **kw):
         """Fake Java"""
         return []
@@ -212,8 +217,10 @@ class DefaultEnvironment(object):
         """Fake get"""
         return var
 
+
 class Variables(object):
     """Fake variables"""
+
     def __init__(self, *args, **kw):
         pass
 
@@ -237,6 +244,7 @@ class Variables(object):
         """Fake Save"""
         pass
 
+
 class Configure(object):
     """Fake Configure"""
     def __init__(self, *args, **kw):
@@ -258,6 +266,7 @@ class Configure(object):
         """Fake finish"""
         pass
 
+
 class Dir(object):
     """Fake Dir"""
     def __init__(self, *args, **kw):
@@ -268,66 +277,82 @@ class Dir(object):
         """Fake srcnode"""
         return self
 
+
 def VariantDir(*args, **kw):
     """Fake VariantDir"""
     pass
+
 
 def AddOption(*args, **kw):
     """Fake AddOption"""
     return True
 
+
 def GetOption(*args, **kw):
     """Fake GetOption"""
     return []
 
+
 def SetOption(*args, **kw):
     """Fake SetOption"""
     return True
+
 
 class Help(object):
     """Fake Help"""
     def __init__(self, *args, **kw):
         pass
 
+
 def Glob(*args):
     """Fake Glob"""
     return []
+
 
 def Exit(status):
     """Fake Exit"""
     sys.exit(status)
 
+
 def Import(*args):
     """Fake Import"""
     pass
+
 
 def Export(*args):
     """Fake Export"""
     pass
 
+
 def Default(*args):
     """Fake Default"""
     pass
+
 
 def AlwaysBuild(*args):
     """Fake AlwaysBuild"""
     pass
 
+
 def Command(*args, **kw):
     """Fake Command"""
     return ["fake"]
+
 
 def Builder(*args, **kw):
     """Fake Builder"""
     return ["fake"]
 
+
 def Platform():
     """Fake Platform"""
     return ''
 
+
 def Depends(*args, **kw):
     """Fake Depends"""
     pass
+
 
 COMMAND_LINE_TARGETS = []
 BUILD_TARGETS = []
@@ -355,5 +380,4 @@ __all__ = ['DefaultEnvironment',
            'VariantDir',
            'COMMAND_LINE_TARGETS',
            'BUILD_TARGETS',
-           'DEFAULT_TARGETS',
-          ]
+           'DEFAULT_TARGETS']

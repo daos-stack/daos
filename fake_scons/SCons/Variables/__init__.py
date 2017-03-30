@@ -19,24 +19,31 @@
 # SOFTWARE.
 """Fake Variables class"""
 
+
 class PathVariable(object):
     """Fake PathVariable"""
     PathIsDirCreate = 1
     PathIsDir = 2
     PathAccept = 3
+
     def __init__(self, *args, **kw):
         pass
+
 
 class ListVariable(object):
     """Fake ListVariable"""
+
     def __init__(self, *args, **kw):
         pass
+
 
 class BoolVariable(object):
     """Fake ListVariable"""
+
     def __init__(self, *args, **kw):
         pass
 
+
 __all__ = ['PathVariable',
            'ListVariable',
-           'BoolVariable',]
+           'BoolVariable']
