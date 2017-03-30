@@ -118,6 +118,36 @@ REQS.define('mercury',
             extra_include_path=[os.path.join('include', 'na')],
             out_of_src_build=True)
 
+RETRIEVER = \
+    GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
+                     True, branch='topic_ofi')
+
+REQS.define('mercury_ofi',
+            retriever=RETRIEVER,
+            commands=['cmake -DMCHECKSUM_USE_ZLIB=1 '
+                      '-DOPA_LIBRARY=$OPENPA_PREFIX/lib/libopa.a '
+                      '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
+                      '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s '
+                      '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ '
+                      '-DCMAKE_INSTALL_PREFIX=$MERCURY_OFI_PREFIX '
+                      '-DBUILD_EXAMPLES=OFF '
+                      '-DMERCURY_USE_BOOST_PP=ON '
+                      '-DMERCURY_USE_SELF_FORWARD=ON'
+                      '-DMERCURY_ENABLE_VERBOSE_ERROR=OFF '
+                      '-DBUILD_TESTING=ON '
+                      '-DNA_USE_CCI=ON '
+                      '-DNA_CCI_USE_POLL=ON '
+                      '-DNA_USE_OFI=ON '
+                      '-DBUILD_DOCUMENTATION=OFF '
+                      '-DBUILD_SHARED_LIBS=ON $MERCURY_OFI_SRC '
+                      '-DCMAKE_INSTALL_RPATH=$MERCURY_OFI_PREFIX/lib '
+                      '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE'
+                      % (CCI_LIB), 'make', 'make install'],
+            libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
+            requires=['openpa', 'cci', 'boost', 'ofi'] + RT,
+            extra_include_path=[os.path.join('include', 'na')],
+            out_of_src_build=True)
+
 URL = 'https://www.open-mpi.org/software/hwloc/v1.11' \
     '/downloads/hwloc-1.11.5.tar.gz'
 WEB_RETRIEVER = \
@@ -176,11 +206,13 @@ REQS.define('ompi_pmix',
             required_progs=['g++', 'flex', 'autoreconf', 'aclocal', 'libtool'])
 
 RETRIEVER = GitRepoRetriever("https://github.com/pmem/nvml")
+
 REQS.define('nvml',
             retriever=RETRIEVER,
             commands=["make",
                       "make install prefix=$NVML_PREFIX"],
             libs=["pmemobj"])
+
 
 RETRIEVER = GitRepoRetriever("http://git.mcs.anl.gov/argo/argobots.git", True)
 REQS.define('argobots',

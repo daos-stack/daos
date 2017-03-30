@@ -406,15 +406,15 @@ def define_modify_targets(mode=None):
 class GitRepoRetriever(object):
     """Identify a git repository from which to download sources"""
 
-    def __init__(self, url, has_submodules=False):
+    def __init__(self, url, has_submodules=False, branch=None):
 
         self.url = url
         self.has_submodules = has_submodules
-        self.commit_sha = None
+        self.commit_sha = branch
         self.patch = None
 
     def checkout_commit(self, subdir):
-        """ checkout a certain commit SHA """
+        """ checkout a certain commit SHA or branch """
         if self.commit_sha is not None:
             commands = ['git checkout %s' % (self.commit_sha)]
             if not RUNNER.run_commands(commands, subdir=subdir):
@@ -441,7 +441,7 @@ class GitRepoRetriever(object):
         if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)
 
-        self.commit_sha = kw.get("commit_sha", None)
+        self.commit_sha = kw.get("commit_sha", self.commit_sha)
         self.patch = kw.get("patch", None)
 
         self.checkout_commit(subdir)
@@ -1276,7 +1276,7 @@ class _Component(object):
 
         # Default to has_changes = True which will cause all deps
         # to be built first time scons is invoked.
-        has_changes = self._has_changes
+        has_changes = self._has_changes()
 
         if changes or has_changes or self.has_missing_targets(envcopy):
 
