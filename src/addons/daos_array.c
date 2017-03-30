@@ -66,7 +66,7 @@ struct io_params {
 	struct io_params	*next;
 };
 
-static int
+static bool
 io_extent_same(daos_array_ranges_t *ranges, daos_sg_list_t *sgl);
 
 static int
@@ -143,7 +143,7 @@ daos_array_parse_env_vars(void)
 }
 #endif
 
-static int
+static bool
 io_extent_same(daos_array_ranges_t *ranges, daos_sg_list_t *sgl)
 {
 	daos_size_t ranges_len;
@@ -176,7 +176,7 @@ io_extent_same(daos_array_ranges_t *ranges, daos_sg_list_t *sgl)
 #endif
 	}
 
-	return ((ranges_len == sgl_len) ? 1 : 0);
+	return (ranges_len == sgl_len);
 }
 
 static int
@@ -216,7 +216,7 @@ compute_dkey(daos_off_t array_i, daos_size_t *num_records, daos_off_t *record_i,
 		asprintf(dkey_str, "%zu_%zu", dkey_grp, dkey_num);
 		if (*dkey_str == NULL) {
 			D_ERROR("Failed memory allocation\n");
-			return -1;
+			return -DER_NOMEM;
 		}
 	}
 
@@ -250,7 +250,7 @@ create_sgl(daos_sg_list_t *user_sgl, daos_size_t num_records,
 			(sgl->sg_iovs, sizeof(daos_iov_t) * sgl->sg_nr.num);
 		if (sgl->sg_iovs == NULL) {
 			D_ERROR("Failed memory allocation\n");
-			return -1;
+			return -DER_NOMEM;
 		}
 
 		sgl->sg_iovs[k].iov_buf = user_sgl->sg_iovs[cur_i].iov_buf +
@@ -302,17 +302,16 @@ array_access_kv(daos_handle_t oh, daos_epoch_t epoch,
 
 	if (ranges == NULL) {
 		D_ERROR("NULL ranges passed\n");
-		return -1;
+		return -DER_INVAL;
 	}
 	if (user_sgl == NULL) {
 		D_ERROR("NULL scatter-gather list passed\n");
-		return -1;
+		return -DER_INVAL;
 	}
 
-	rc = io_extent_same(ranges, user_sgl);
-	if (rc != 1) {
+	if (!io_extent_same(ranges, user_sgl)) {
 		D_ERROR("Unequal extents of memory and array descriptors\n");
-		return rc;
+		return -DER_INVAL;
 	}
 
 #if 0
@@ -363,7 +362,7 @@ array_access_kv(daos_handle_t oh, daos_epoch_t epoch,
 				(sizeof(struct io_params));
 			if (params == NULL) {
 				D_ERROR("Failed memory allocation\n");
-				return -1;
+				return -DER_NOMEM;
 			}
 
 			if (num_ios == 0) {
@@ -435,7 +434,7 @@ array_access_kv(daos_handle_t oh, daos_epoch_t epoch,
 				 iod->vd_nr);
 			if (iod->vd_recxs == NULL) {
 				D_ERROR("Failed memory allocation\n");
-				return -1;
+				return -DER_NOMEM;
 			}
 
 			/** set the record access for this range */
@@ -668,7 +667,7 @@ get_highest_dkey(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev,
 	buf = malloc(ENUM_DESC_BUF);
 	if (buf == NULL) {
 		D_ERROR("Failed memory allocation\n");
-		return -1;
+		return -DER_NOMEM;
 	}
 
 	*max_hi = 0;
@@ -809,7 +808,7 @@ daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
 	buf = malloc(ENUM_DESC_BUF);
 	if (buf == NULL) {
 		D_ERROR("Failed memory allocation\n");
-		return -1;
+		return -DER_NOMEM;
 	}
 
 	shrinking = false;
