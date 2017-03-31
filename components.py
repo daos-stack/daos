@@ -141,7 +141,9 @@ REQS.define('mercury_ofi',
                       '-DBUILD_DOCUMENTATION=OFF '
                       '-DBUILD_SHARED_LIBS=ON $MERCURY_OFI_SRC '
                       '-DCMAKE_INSTALL_RPATH=$MERCURY_OFI_PREFIX/lib '
-                      '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE'
+                      '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE '
+                      '-DOFI_INCLUDE_DIR=$OFI_PREFIX/include '
+                      '-DOFI_LIBRARY=$OFI_PREFIX/lib/libfabric.so'
                       % (CCI_LIB), 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
             requires=['openpa', 'cci', 'boost', 'ofi'] + RT,
