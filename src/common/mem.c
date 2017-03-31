@@ -111,7 +111,7 @@ umem_tx_errno(int err)
 	}
 
 	if (err < 0) {
-		if (err < -DER_ERR_BASE)
+		if (err < -DER_ERR_FIRST)
 			return err; /* aborted by DAOS */
 
 		D_ERROR("nvml returned negative errno %d\n", err);

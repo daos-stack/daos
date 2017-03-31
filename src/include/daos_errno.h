@@ -36,8 +36,9 @@ extern "C" {
 typedef enum {
 	/**
 	 * Common error codes
-	 * CER_ERR_BASE = 1000
 	 */
+	/** First DAOS error	 (1000) */
+	DER_ERR_FIRST		= CER_ERR_BASE,
 	/** No permission	 (CER_ERR_BASE + 1) */
 	DER_NO_PERM		= CER_NO_PERM,
 	/** Invalid handle	 (CER_ERR_BASE + 2) */
