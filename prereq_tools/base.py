@@ -441,7 +441,9 @@ class GitRepoRetriever(object):
         if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)
 
-        self.commit_sha = kw.get("commit_sha", self.commit_sha)
+        passed_commit_sha = kw.get("commit_sha", None)
+        if passed_commit_sha is not None:
+            self.commit_sha = passed_commit_sha
         self.patch = kw.get("patch", None)
 
         self.checkout_commit(subdir)
