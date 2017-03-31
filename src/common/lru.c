@@ -295,7 +295,7 @@ daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 
 		if (llink->ll_evicted) {
 			D_DEBUG(DB_TRACE, "Evict %p from LRU cache\n", llink);
-			daos_list_del_init(&llink->ll_hlink);
+			daos_list_del_init(&llink->ll_qlink);
 			/* be freed within hash callback */
 			dhash_rec_delete_at(&lcache->dlc_htable,
 					    &llink->ll_hlink);
