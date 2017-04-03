@@ -217,6 +217,10 @@ class DefaultEnvironment(object):
         """Fake get"""
         return var
 
+    def GetOption(self, *args, **kw):
+        """Fake GetOption"""
+        return []
+
 
 class Variables(object):
     """Fake variables"""
@@ -260,6 +264,10 @@ class Configure(object):
 
     def CheckProg(self, *args, **kw):
         """Fake CheckProg"""
+        return True
+
+    def CheckFlag(self, *args, **kw):
+        """Fake CheckFlag"""
         return True
 
     def Finish(self):
