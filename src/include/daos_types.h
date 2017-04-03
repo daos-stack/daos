@@ -580,6 +580,18 @@ typedef struct {
 	uint32_t		id_pad_32;
 } daos_unit_oid_t;
 
+static inline bool
+daos_obj_id_is_null(daos_obj_id_t oid)
+{
+	return oid.lo == 0 && oid.mid == 0 && oid.hi == 0;
+}
+
+static inline bool
+daos_unit_oid_is_null(daos_unit_oid_t oid)
+{
+	return oid.id_shard == 0 && daos_obj_id_is_null(oid.id_pub);
+}
+
 /**
  * Event and event queue
  */

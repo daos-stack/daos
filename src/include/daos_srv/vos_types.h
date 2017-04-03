@@ -47,6 +47,8 @@ typedef struct {
 	unsigned int		pci_nobjs;
 	/** used space */
 	daos_size_t		pci_used;
+	/** aggregated epoch in this container */
+	daos_epoch_t		pci_purged_epoch;
 	/** TODO */
 } vos_co_info_t;
 
@@ -103,6 +105,8 @@ typedef struct {
 	daos_hash_out_t		pa_recx;
 	/** Anchor for retained recx (max epoch) */
 	daos_hash_out_t		pa_recx_max;
+	/** Save OID for aggregation optimization */
+	daos_unit_oid_t		pa_oid;
 } vos_purge_anchor_t;
 
 /**

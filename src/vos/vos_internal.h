@@ -634,6 +634,17 @@ vos_coh2cih(daos_handle_t coh)
 	return chdl->vc_pool->vp_cookie_ith;
 }
 
+static inline void
+vos_co_set_purged_epoch(daos_handle_t coh, daos_epoch_t update_epoch)
+{
+	struct vc_hdl		*co_hdl;
+	struct vos_container	*vc_co;
+
+	co_hdl	= vos_hdl2co(coh);
+	vc_co	= co_hdl->vc_co;
+	vc_co->vc_info.pci_purged_epoch = update_epoch;
+}
+
 /**
  * iterators
  */

@@ -659,7 +659,7 @@ io_epoch_range_discard_test(void **state)
 
 
 	for (i = 0; i < TF_DISCARD_KEYS; i++) {
-		 /** Fall back while fetching from discarded epochs */
+		/** Fall back while fetching from discarded epochs */
 		if (i >= TF_DISCARD_KEYS - 10 && i <= TF_DISCARD_KEYS - 5)
 			rc = io_fetch(arg, epochs[i], req[TF_DISCARD_KEYS - 11],
 				      false);
@@ -740,6 +740,7 @@ io_multi_akey_discard_test(void **state)
 
 static void
 io_multi_recx_overwrite_discard_test(void **state)
+
 {
 	struct io_test_args	*arg = *state;
 	int			i, j;
@@ -895,6 +896,7 @@ io_multi_dkey_aggregate_test(void **state)
 	int			idx;
 	unsigned int		credits = -1;
 	vos_purge_anchor_t	vp_anchor = {0};
+	bool			finish;
 
 
 	arg->ta_flags = 0;
@@ -918,8 +920,9 @@ io_multi_dkey_aggregate_test(void **state)
 	range.epr_lo = epoch;
 	range.epr_hi = epoch + TF_CREDITS_KEYS - 1;
 	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
-				 &credits, &vp_anchor);
+				 &credits, &vp_anchor, &finish);
 	assert_int_equal(rc, 0);
+	assert_true(finish);
 
 	/** Verifying aggregation */
 	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
@@ -942,6 +945,7 @@ io_multi_akey_aggregate_test(void **state)
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	int			idx;
+	bool			finish;
 	vos_purge_anchor_t	vp_anchor = {0};
 	unsigned int		credits = -1;
 
@@ -966,8 +970,9 @@ io_multi_akey_aggregate_test(void **state)
 	range.epr_lo = epoch;
 	range.epr_hi = epoch + TF_CREDITS_KEYS - 1;
 	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
-				 &credits, &vp_anchor);
+				 &credits, &vp_anchor, &finish);
 	assert_int_equal(rc, 0);
+	assert_true(finish);
 
 	/** Verifying aggregation */
 	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
@@ -991,6 +996,7 @@ io_multi_recx_aggregate_test(void **state)
 	char			akey_buf[UPDATE_AKEY_SIZE];
 	vos_purge_anchor_t	vp_anchor;
 	unsigned int		credits = -1;
+	bool			finish;
 
 	arg->ta_flags = 0;
 	cookie = gen_rand_cookie();
@@ -1016,8 +1022,9 @@ io_multi_recx_aggregate_test(void **state)
 	range.epr_hi = epoch + TF_CREDITS_KEYS/2;
 
 	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
-				 &credits, &vp_anchor);
+				 &credits, &vp_anchor, &finish);
 	assert_int_equal(rc, 0);
+	assert_true(finish);
 
 	/** Verifying aggregation */
 	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
@@ -1039,6 +1046,7 @@ io_recx_overwrite_aggregate(void **state)
 	struct io_req		*search_req;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
+	bool			finish;
 	vos_purge_anchor_t	vp_anchor = {0};
 	unsigned int		credits = -1;
 
@@ -1065,8 +1073,9 @@ io_recx_overwrite_aggregate(void **state)
 	range.epr_hi = epoch + TF_DISCARD_KEYS  - 1;
 
 	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
-				 &credits, &vp_anchor);
+				 &credits, &vp_anchor, &finish);
 	assert_int_equal(rc, 0);
+	assert_true(finish);
 
 	/** Verifying aggregation */
 	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
@@ -1084,15 +1093,15 @@ io_recx_overwrite_aggregate(void **state)
 }
 
 static void
-io_recx_overwrite_credits(void **state)
+io_recx_overwrite(struct io_test_args *arg)
 {
-	struct io_test_args	*arg = *state;
 	int			i, index;
 	int			rc = 0;
 	daos_epoch_t		epoch1, epoch2;
 	struct daos_uuid	cookie;
 	daos_epoch_range_t	range;
 	struct vts_counter	cntrs;
+	bool			finish;
 	struct io_req		*search_req;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
@@ -1100,7 +1109,6 @@ io_recx_overwrite_credits(void **state)
 	int			credits = TF_CREDITS_KEYS + 100;
 	daos_epoch_t		max_epoch;
 
-	arg->ta_flags = 0;
 	cookie = gen_rand_cookie();
 
 	epoch1 = 1000;
@@ -1145,11 +1153,13 @@ io_recx_overwrite_credits(void **state)
 		unsigned int local_credits = 1;
 
 		rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
-					 &local_credits, &vp_anchor);
-
+					 &local_credits, &vp_anchor, &finish);
 		assert_int_equal(rc, 0);
+		if ((arg->ta_flags & TF_REPORT_AGGREGATION) && finish)
+			break;
 		credits -= 1;
 	}
+	assert_true(finish);
 
 	/** Verifying aggregation */
 	daos_list_for_each_entry(search_req, &arg->req_list, rlist) {
@@ -1182,6 +1192,7 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 	daos_list_t		agg_entries;
 	unsigned int		l_credits;
 	vos_purge_anchor_t	vp_anchor;
+	bool			finish;
 
 	arg->ta_flags = 0;
 	cookie = gen_rand_cookie();
@@ -1220,10 +1231,10 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 	if (credits < 0) {
 		l_credits = -1;
 		rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid, &range,
-					 &l_credits, &vp_anchor);
+					 &l_credits, &vp_anchor, &finish);
 		assert_int_equal(rc, 0);
 	} else {
-		int loop = TF_DISCARD_KEYS/credits + 1;
+		int loop = TF_DISCARD_KEYS + 1000;
 
 		print_message("%d credit(s)/iteration in %d iterations\n",
 			      credits, loop);
@@ -1231,10 +1242,32 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 			l_credits = credits;
 			rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, arg->oid,
 						 &range, &l_credits,
-						 &vp_anchor);
+						 &vp_anchor, &finish);
 			assert_int_equal(rc, 0);
 		}
 	}
+	assert_true(finish);
+
+	daos_unit_oid_t		oid_tmp;
+	vos_co_info_t		info;
+	daos_handle_t		coh;
+
+	memset(&oid_tmp, 0, sizeof(daos_unit_oid_t));
+	rc = vos_epoch_aggregate(arg->ctx.tc_co_hdl, oid_tmp,
+				 &range, &l_credits, &vp_anchor, &finish);
+	assert_int_equal(rc, 0);
+
+	rc = vos_co_query(arg->ctx.tc_co_hdl, &info);
+	assert_true(range.epr_hi == info.pci_purged_epoch);
+
+	rc = vos_co_open(arg->ctx.tc_po_hdl, arg->ctx.tc_co_uuid, &coh);
+	assert_int_equal(rc, 0);
+
+	rc = vos_co_query(coh, &info);
+	assert_true(range.epr_hi == info.pci_purged_epoch);
+
+	rc = vos_co_close(coh);
+	assert_int_equal(rc, 0);
 
 	/** Verifying aggregation */
 	/**
@@ -1265,6 +1298,24 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 		daos_list_del_init(&search_req->rlist);
 		free(search_req);
 	}
+}
+
+static void
+io_recx_overwrite_credits(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->ta_flags = 0;
+	io_recx_overwrite(arg);
+}
+
+static void
+io_recx_overwrite_report(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	arg->ta_flags = TF_REPORT_AGGREGATION;
+	io_recx_overwrite(arg);
 }
 
 static void
@@ -1330,6 +1381,9 @@ static const struct CMUnitTest aggregate_tests[] = {
 		io_multikey_discard_teardown},
 	{ "VOS301.2: VOS recx overwrite aggregate with credits",
 		io_recx_overwrite_credits, io_multikey_discard_setup,
+		io_multikey_discard_teardown},
+	{ "VOS301.3: VOS recx overwrite aggregated with completion reporting",
+		io_recx_overwrite_report, io_multikey_discard_setup,
 		io_multikey_discard_teardown},
 	{ "VOS302.1: VOS multi recx overwrite test without credits",
 		io_multi_recx_overwrite_test_without_credits,

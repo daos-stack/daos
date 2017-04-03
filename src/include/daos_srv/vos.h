@@ -205,13 +205,16 @@ vos_epoch_flush(daos_handle_t coh, daos_epoch_t epoch);
  * \param epr	  [IN]		The epoch range of aggregation
  * \param credits [IN/OUT]	credits for probing object tree
  * \param anchor  [IN/OUT]	anchor returned for preemption.
+ * \param finished
+ *		  [OUT]		flag returned to notify completion
+ *				of aggregation to caller.
  *
- * \return		Zero on success, negative value if error
+ * \return			Zero on success, negative value if error
  */
 int
 vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
 		    daos_epoch_range_t *epr, unsigned int *credits,
-		    vos_purge_anchor_t *anchor);
+		    vos_purge_anchor_t *anchor, bool *finished);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr

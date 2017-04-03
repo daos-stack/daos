@@ -64,6 +64,7 @@ enum vts_test_flags {
 	TF_PUNCH		= (1 << 3),
 	TF_REC_EXT		= (1 << 4),
 	TF_FIXED_AKEY		= (1 << 5),
+	TF_REPORT_AGGREGATION	= (1 << 6),
 };
 
 struct io_test_args {

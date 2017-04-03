@@ -1737,9 +1737,6 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	struct vos_obj_iter *oiter;
 	int		     rc;
 
-	if (param->ip_epr.epr_lo == 0) /* the most recent one */
-		param->ip_epr.epr_lo = DAOS_EPOCH_MAX;
-
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
