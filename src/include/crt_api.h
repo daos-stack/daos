@@ -618,6 +618,35 @@ int
 crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
 
 /*
+ * Set an alternative directory to store/retrieve group attach info
+ *
+ * The default location is /tmp.   This allows client and server to
+ * agree on a location where to store the information and to avoid
+ * conflicts with other server groups that may be sharing the nodes
+ *
+ * \param path [IN]	Path where to store attach info
+ *
+ * \return		zero on success, negative value if error
+ */
+int
+crt_set_singleton_attach_path(const char *path);
+
+/*
+ * Dump the attach info for the specified group to a file.   If not
+ * the primary service group, it must be an attached group.
+ *
+ * This must be invoked before any singleton can attach to the specified
+ * group.
+ *
+ * \param grp [IN]		Primary service group attach info to save
+ *                              NULL indicates local primary group
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+crt_save_singleton_attach_info(crt_group_t *grp);
+
+/*
  * Detach a primary service group which was attached previously.
  *
  * \param attached_grp [IN]	attached primary service group handle.

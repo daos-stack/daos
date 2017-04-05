@@ -40,6 +40,7 @@
  */
 
 #include <crt_internal.h>
+#include <sys/stat.h>
 
 /* global CRT group list */
 CRT_LIST_HEAD(crt_grp_list);
@@ -1448,12 +1449,6 @@ crt_primary_grp_init(crt_group_id_t grpid)
 				rc);
 			C_GOTO(out, rc);
 		}
-		rc = crt_grp_save_attach_info(grp_priv);
-		if (rc != 0) {
-			C_ERROR("crt_grp_save_attach_info failed, rc: %d.\n",
-				rc);
-			C_GOTO(out, rc);
-		}
 		rc = crt_grp_ras_init(grp_priv);
 		if (rc != 0)
 			C_ERROR("crt_grp_ras_init() failed, rc %d.\n", rc);
@@ -2044,41 +2039,66 @@ out:
 	return rc;
 }
 
+#define CRT_MAX_ATTACH_PREFIX 256
+static char	crt_attach_prefix[CRT_MAX_ATTACH_PREFIX] = "/tmp";
+
 static inline char *
 crt_grp_attach_info_filename(struct crt_grp_priv *grp_priv)
 {
 	crt_group_id_t	 grpid;
 	char		*filename;
 	int		 rc;
-	char		*prefix;
 
 	C_ASSERT(grp_priv != NULL);
 	grpid = grp_priv->gp_pub.cg_grpid;
 
-	prefix = getenv("CRT_ATTACH_INFO_PREFIX");
-
-	if (!prefix)
-		prefix = getlogin();
-
-	if (!prefix) {
-		C_ERROR("getlogin() failed (%s). Setting prefix to 'none'\n",
-			strerror(errno));
-		prefix = "none";
-	}
-
-	rc = asprintf(&filename, "/tmp/%s_%s.attach_info_tmp", prefix, grpid);
+	rc = asprintf(&filename, "%s/%s.attach_info_tmp", crt_attach_prefix,
+		      grpid);
 	if (rc == -1) {
 		C_ERROR("asprintf %s failed (%s).\n", grpid, strerror(errno));
 		filename = NULL;
-	} else {
+	} else
 		C_ASSERT(filename != NULL);
-	}
 
 	return filename;
 }
 
+int
+crt_set_singleton_attach_path(const char *path)
+{
+	struct stat buf;
+	int rc;
+
+	if (path == NULL) {
+		C_ERROR("path can't be NULL");
+		return -CER_INVAL;
+	}
+
+	if (strlen(path) >= CRT_MAX_ATTACH_PREFIX) {
+		C_ERROR("specified path must be fewer than %d characters",
+			CRT_MAX_ATTACH_PREFIX);
+		return -CER_INVAL;
+	}
+
+	rc = stat(path, &buf);
+	if (rc != 0) {
+		C_ERROR("bad path specified: %s", path);
+		return crt_errno2cer(errno);
+	}
+
+	if (!S_ISDIR(buf.st_mode)) {
+		C_ERROR("not a directory: %s", path);
+		return -CER_NOTDIR;
+	}
+
+	strcpy(crt_attach_prefix, path);
+
+	return 0;
+}
+
 /**
- * Save attach info to file with the name "/tmp/grpid.attach_info".
+ * Save attach info to file with the name
+ * "<singleton_attach_path>/grpid.attach_info".
  * The format of the file is:
  * line 1: the process set name
  * line 2: process set size
@@ -2097,32 +2117,36 @@ crt_grp_attach_info_filename(struct crt_grp_priv *grp_priv)
  * ========================
  */
 int
-crt_grp_save_attach_info(struct crt_grp_priv *grp_priv)
+crt_save_singleton_attach_info(crt_group_t *grp)
 {
-	FILE		*fp = NULL;
-	char		*filename = NULL;
-	bool		allow_singleton = false;
-	crt_group_id_t	grpid;
-	crt_rank_t	rank;
-	int		rc = 0;
+	struct crt_grp_priv	*grp_priv;
+	FILE			*fp = NULL;
+	char			*filename = NULL;
+	crt_group_id_t		grpid;
+	crt_rank_t		rank;
+	int			rc = 0;
+	struct crt_grp_gdata	*grp_gdata;
+
+	if (!crt_initialized()) {
+		C_ERROR("CRT not initialized.\n");
+		C_GOTO(out, rc = -CER_UNINIT);
+	}
+
+	grp_gdata = crt_gdata.cg_grp;
+
+	if (grp == NULL) {
+		/* to lookup local primary group handle */
+		grp_priv = crt_is_service() ? grp_gdata->gg_srv_pri_grp :
+					      grp_gdata->gg_cli_pri_grp;
+	} else
+		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 
 	C_ASSERT(grp_priv != NULL);
-	if (grp_priv->gp_primary == 0 || grp_priv->gp_local == 0) {
-		C_DEBUG("ignore crt_grp_save_attach_info for non-primary or "
-			"non-local group.\n");
-		C_GOTO(out, rc);
-	}
-	if (!crt_is_service() || grp_priv->gp_service == 0) {
+	if (grp_priv->gp_service == 0) {
 		C_DEBUG("ignore crt_grp_save_attach_info for client.\n");
-		C_GOTO(out, rc);
+		C_GOTO(out, rc = -CER_INVAL);
 	}
 
-	crt_getenv_bool(CRT_ALLOW_SINGLETON_ENV, &allow_singleton);
-	if (!allow_singleton) {
-		C_DEBUG("ignore crt_grp_save_attach_info as "
-			"CRT_ALLOW_SINGLETON ENV invalid.\n");
-		C_GOTO(out, rc);
-	}
 	grpid = grp_priv->gp_pub.cg_grpid;
 	filename = crt_grp_attach_info_filename(grp_priv);
 	if (filename == NULL)

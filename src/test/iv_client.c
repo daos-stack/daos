@@ -276,8 +276,6 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	setenv("CRT_ALLOW_SINGLETON", "1", 1);
-
 	rc = crt_init(NULL, CRT_FLAG_BIT_SINGLETON);
 	assert(rc == 0);
 

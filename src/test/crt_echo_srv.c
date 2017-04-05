@@ -218,6 +218,8 @@ int echo_srv_shutdown(crt_rpc_t *rpc_req)
 
 int main(int argc, char *argv[])
 {
+	parse_options(argc, argv);
+
 	echo_init(1, false);
 
 	run_echo_srver();

@@ -232,7 +232,7 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 	crt_phy_addr_t	addr = NULL, addr_env;
 	struct timeval	now;
 	unsigned int	seed;
-	bool		server, allow_singleton = false;
+	bool		server;
 	int		rc = 0;
 
 	server = flags & CRT_FLAG_BIT_SERVER;
@@ -282,10 +282,7 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 			crt_gdata.cg_multi_na = true;
 
 		if (!server) {
-			crt_getenv_bool(CRT_ALLOW_SINGLETON_ENV,
-					&allow_singleton);
-			if ((flags & CRT_FLAG_BIT_SINGLETON) != 0 &&
-			    allow_singleton)
+			if ((flags & CRT_FLAG_BIT_SINGLETON) != 0)
 				crt_gdata.cg_singleton = true;
 		}
 

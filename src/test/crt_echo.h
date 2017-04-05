@@ -45,6 +45,7 @@
 #include <crt_util/common.h>
 #include <crt_api.h>
 
+#include <unistd.h>
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
@@ -66,6 +67,8 @@ struct gecho {
 	crt_context_t	*extra_ctx;
 	int		complete;
 	bool		server;
+	bool		multi_tier_test;
+	bool		singleton_test;
 };
 
 extern struct gecho gecho;
@@ -160,21 +163,73 @@ struct crt_req_format CQF_ECHO_BULK_TEST =
 			   echo_bulk_test_out);
 
 static inline void
+parse_options(int argc, char *argv[])
+{
+	int ch;
+	int rc;
+
+	for (;;) {
+		ch = getopt(argc, argv, "mp:s");
+		if (ch == -1)
+			break;
+		switch (ch) {
+		case 'm':
+			gecho.multi_tier_test = true;
+			break;
+		case 'p':
+			rc = crt_set_singleton_attach_path(optarg);
+			if (rc != 0) {
+				printf("Bad attach prefix: %s\n", optarg);
+				exit(-1);
+			}
+			break;
+		case 's':
+			gecho.singleton_test = true;
+			break;
+		default:
+			printf("Usage: %s [OPTIONS]\n", argv[0]);
+			printf("OPTIONS:\n");
+			printf("	-m		multi tier test\n");
+			printf("	-p <dir>	path to attach file\n");
+			printf("	-s		singleton attach\n");
+			exit(-1);
+		}
+	}
+}
+
+static inline void
 echo_init(int server, bool tier2)
 {
+	crt_group_t	*tier2_grp;
 	uint32_t	flags;
 	int		rc = 0, i;
 
 	flags = (server != 0) ? CRT_FLAG_BIT_SERVER : 0;
-	/*
-	 * flags |= CRT_FLAG_BIT_SINGLETON;
-	 */
+	if (server == 0 && gecho.singleton_test)
+		flags |= CRT_FLAG_BIT_SINGLETON;
 
 	if (server != 0 && tier2 == true)
 		rc = crt_init(ECHO_2ND_TIER_GRPID, flags);
 	else
 		rc = crt_init(NULL, flags);
+
 	assert(rc == 0);
+
+	if (server != 0 && tier2 == false && gecho.singleton_test) {
+		printf("Saving singleton attach info\n");
+		rc = crt_save_singleton_attach_info(NULL);
+		assert(rc == 0);
+
+		if (gecho.multi_tier_test) {
+			/* Test saving attach info for another group */
+			rc = crt_group_attach(ECHO_2ND_TIER_GRPID, &tier2_grp);
+			assert(rc == 0 && tier2_grp != NULL);
+			rc = crt_save_singleton_attach_info(tier2_grp);
+			assert(rc == 0);
+			rc = crt_group_detach(tier2_grp);
+			assert(rc == 0);
+		}
+	}
 
 	gecho.server = (server != 0);
 

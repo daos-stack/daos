@@ -231,8 +231,6 @@ int crt_validate_grpid(const crt_group_id_t grpid);
 int crt_grp_init(crt_group_id_t grpid);
 int crt_grp_fini(void);
 
-#define CRT_ALLOW_SINGLETON_ENV		"CRT_ALLOW_SINGLETON"
-int crt_grp_save_attach_info(struct crt_grp_priv *grp_priv);
 int crt_grp_load_attach_info(struct crt_grp_priv *grp_priv);
 
 /* some simple helpers */

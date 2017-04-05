@@ -41,8 +41,6 @@
 
 #include "crt_echo.h"
 
-bool test_multi_tiers;
-
 struct gecho gecho;
 
 static int client_wait(int num_retries, unsigned int wait_len_ms,
@@ -305,7 +303,7 @@ static void run_client(void)
 
 	/* ============= test-4 ============ */
 	/* attach to 2nd tier and send checkin RPC */
-	if (test_multi_tiers == false)
+	if (gecho.multi_tier_test == false)
 		goto send_shutdown;
 
 	rc = crt_group_attach(ECHO_2ND_TIER_GRPID, &grp_tier2);
@@ -379,7 +377,7 @@ send_shutdown:
 		goto out;
 	}
 
-	if (test_multi_tiers == true) {
+	if (gecho.multi_tier_test == true) {
 		svr_ep.ep_grp = grp_tier2;
 		goto send_shutdown;
 	}
@@ -393,6 +391,8 @@ out:
 
 int main(int argc, char *argv[])
 {
+	parse_options(argc, argv);
+
 	echo_init(0, false);
 
 	run_client();

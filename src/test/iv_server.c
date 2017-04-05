@@ -1122,9 +1122,10 @@ int main(int argc, char **argv)
 
 	init_hostname(hostname, sizeof(hostname));
 
-	setenv("CRT_ALLOW_SINGLETON", "1", 1);
-
 	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
+	assert(rc == 0);
+
+	rc = crt_save_singleton_attach_info(NULL);
 	assert(rc == 0);
 
 	rc = RPC_REGISTER(RPC_TEST_FETCH_IV);
