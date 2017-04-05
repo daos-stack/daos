@@ -31,23 +31,20 @@ case ${distro} in
   el7.2)
     DOCKER_IMAGE="centos_7.2.1511_builder"
     ;;
-  el7.3)
-    DOCKER_IMAGE="centos_7.3.1611_builder"
-    ;;
-  el7*)
+  el7|el7*)
     DOCKER_IMAGE="centos_7.3.1611_builder"
     ;;
   sles12sp1)
     DOCKER_IMAGE="sles_12.1_builder"
     ;;
-  sles12sp2)
-    DOCKER_IMAGE="sles_12.2_builder"
-    ;;
-  sles12*)
+  sles12|sles12*)
     DOCKER_IMAGE="sles_12.2_builder"
     ;;
   ubuntu14*)
     DOCKER_IMAGE="ubuntu_14.04.5_builder"
+    ;;
+  ubuntu16*)
+    DOCKER_IMAGE="ubuntu_16.04_builder"
     ;;
 esac
 export DOCKER_IMAGE
