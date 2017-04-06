@@ -57,7 +57,10 @@ static struct crt_msg_field *obj_key_enum_in_fields[] = {
 	&CMF_UINT64,	/* epoch */
 	&CMF_UINT32,	/* map_version */
 	&CMF_UINT32,	/* number of kds */
-	&DMF_IOVEC,     /* key */
+	&CMF_UINT32,	/* list type SINGLE/ARRAY/NONE */
+	&CMF_UINT32,	/* pad  */
+	&DMF_IOVEC,     /* dkey */
+	&DMF_IOVEC,     /* akey */
 	&DMF_HASH_OUT,	/* hash anchor */
 	&DMF_SGL_DESC,	/* sgl_descriptor */
 	&CMF_BULK,	/* BULK array for dkey */
@@ -67,7 +70,11 @@ static struct crt_msg_field *obj_key_enum_out_fields[] = {
 	&CMF_INT,		/* status of the request */
 	&CMF_UINT32,		/* map version */
 	&DMF_HASH_OUT,		/* hash anchor */
+	&CMF_UINT64,		/* size of the record */
 	&DMF_KEY_DESC_ARRAY,	/* kds array */
+	&DMF_RECX_ARRAY,	/* recx array */
+	&DMF_EPR_ARRAY,		/* epoch range array */
+	&DMF_UUID_ARRAY,	/* cookie array */
 	&DMF_SGL,		/* SGL buffer */
 };
 
@@ -88,6 +95,11 @@ static struct crt_req_format DQF_DKEY_ENUMERATE =
 
 struct crt_req_format DQF_AKEY_ENUMERATE =
 	DEFINE_CRT_REQ_FMT("DSR_DKEY_AKEY_ENUMERATE",
+			   obj_key_enum_in_fields,
+			   obj_key_enum_out_fields);
+
+struct crt_req_format DQF_REC_ENUMERATE =
+	DEFINE_CRT_REQ_FMT("DSR_REC_ENUMERATE",
 			   obj_key_enum_in_fields,
 			   obj_key_enum_out_fields);
 
@@ -116,6 +128,12 @@ struct daos_rpc daos_obj_rpcs[] = {
 		.dr_ver         = 1,
 		.dr_flags       = 0,
 		.dr_req_fmt     = &DQF_AKEY_ENUMERATE,
+	}, {
+		.dr_name        = "DAOS_REC_ENUM",
+		.dr_opc         = DAOS_OBJ_RECX_RPC_ENUMERATE,
+		.dr_ver         = 1,
+		.dr_flags       = 0,
+		.dr_req_fmt     = &DQF_REC_ENUMERATE,
 	}, {
 		.dr_opc		= 0
 	}
@@ -147,6 +165,7 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 		break;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		((struct obj_key_enum_out *)reply)->oeo_ret = status;
 		break;
 	default:
@@ -165,6 +184,7 @@ obj_reply_get_status(crt_rpc_t *rpc)
 		return ((struct obj_rw_out *)reply)->orw_ret;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		return ((struct obj_key_enum_out *)reply)->oeo_ret;
 	default:
 		D_ASSERT(0);
@@ -184,6 +204,7 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 		break;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		((struct obj_key_enum_out *)reply)->oeo_map_version =
 								map_version;
 		break;
@@ -203,10 +224,10 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 		return ((struct obj_rw_out *)reply)->orw_map_version;
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		return ((struct obj_key_enum_out *)reply)->oeo_map_version;
 	default:
 		D_ASSERT(0);
 	}
 	return 0;
 }
-

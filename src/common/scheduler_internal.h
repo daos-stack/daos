@@ -55,7 +55,7 @@ struct daos_task_private {
 
 	/* daos_task internal buffer */
 	struct {
-		uint32_t	dtp_buf_space[25];
+		uint32_t	dtp_buf_space[36];
 		uint32_t	dtp_buf_size;
 	}			dtp_buf;
 

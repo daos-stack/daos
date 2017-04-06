@@ -608,6 +608,10 @@ struct obj_enum_args {
 	daos_hash_out_t		*eaa_anchor;
 	struct dc_obj_shard	*eaa_obj;
 	daos_sg_list_t		*eaa_sgl;
+	daos_epoch_range_t	*eaa_eprs;
+	daos_recx_t		*eaa_recxs;
+	daos_size_t		*eaa_size;
+	uuid_t			*eaa_cookies;
 };
 
 static int
@@ -642,9 +646,32 @@ dc_enumerate_cb(struct daos_task *task, void *arg)
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
-	*(enum_args->eaa_nr) = oeo->oeo_kds.da_count;
-	memcpy(enum_args->eaa_kds, oeo->oeo_kds.da_arrays,
-	       sizeof(*enum_args->eaa_kds) * oeo->oeo_kds.da_count);
+	if (opc_get(enum_args->rpc->cr_opc) == DAOS_OBJ_RECX_RPC_ENUMERATE) {
+		*(enum_args->eaa_nr) = oeo->oeo_eprs.da_count;
+		if (enum_args->eaa_eprs && oeo->oeo_eprs.da_count > 0)
+			memcpy(enum_args->eaa_eprs, oeo->oeo_eprs.da_arrays,
+			       sizeof(*enum_args->eaa_eprs) *
+			       oeo->oeo_eprs.da_count);
+		if (enum_args->eaa_recxs && oeo->oeo_recxs.da_count > 0)
+			memcpy(enum_args->eaa_recxs, oeo->oeo_recxs.da_arrays,
+			       sizeof(*enum_args->eaa_recxs) *
+			       oeo->oeo_recxs.da_count);
+		*enum_args->eaa_size = oeo->oeo_size;
+		if (enum_args->eaa_cookies && oeo->oeo_cookies.da_count > 0) {
+			uuid_t *cookies = oeo->oeo_cookies.da_arrays;
+			int i;
+
+			for (i = 0; i < oeo->oeo_cookies.da_count; i++)
+				uuid_copy(enum_args->eaa_cookies[i],
+					  cookies[i]);
+		}
+	} else {
+		*(enum_args->eaa_nr) = oeo->oeo_kds.da_count;
+		if (enum_args->eaa_kds && oeo->oeo_kds.da_count > 0)
+			memcpy(enum_args->eaa_kds, oeo->oeo_kds.da_arrays,
+			       sizeof(*enum_args->eaa_kds) *
+			       oeo->oeo_kds.da_count);
+	}
 
 	enum_anchor_copy_hkey(enum_args->eaa_anchor, &oeo->oeo_anchor);
 	if (daos_hash_is_eof(&oeo->oeo_anchor) &&
@@ -676,11 +703,14 @@ out:
 }
 
 int
-dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
-		      daos_epoch_t epoch, daos_key_t *key, uint32_t *nr,
-		      daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		      daos_hash_out_t *anchor, unsigned int map_ver,
-		      struct daos_task *task)
+dc_obj_shard_list_internal(daos_handle_t oh, enum obj_rpc_opc opc,
+			   daos_epoch_t epoch, daos_key_t *dkey,
+			   daos_key_t *akey, daos_iod_type_t type,
+			   daos_size_t *size, uint32_t *nr,
+			   daos_key_desc_t *kds, daos_sg_list_t *sgl,
+			   daos_recx_t *recxs, daos_epoch_range_t *eprs,
+			   uuid_t *cookies, daos_hash_out_t *anchor,
+			   unsigned int map_ver, struct daos_task *task)
 {
 	crt_endpoint_t		tgt_ep;
 	struct dc_pool	       *pool;
@@ -688,9 +718,9 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	struct dc_obj_shard    *dobj;
 	uuid_t			cont_hdl_uuid;
 	uuid_t			cont_uuid;
-	struct obj_key_enum_in *oei;
+	struct obj_key_enum_in	*oei;
 	struct obj_enum_args	enum_args;
-	daos_size_t		sgl_len;
+	daos_size_t		sgl_len = 0;
 	int			rc;
 
 	dobj = obj_shard_hdl2ptr(oh);
@@ -707,11 +737,11 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 
 	tgt_ep.ep_grp = pool->dp_group;
 	tgt_ep.ep_rank = dobj->do_rank;
-	if (opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
-		D_ASSERT(key != NULL);
-		tgt_ep.ep_tag = obj_shard_dkey2tag(dobj, key);
-	} else {
+	if (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
 		tgt_ep.ep_tag = enum_anchor_get_tag(anchor);
+	} else {
+		D_ASSERT(dkey != NULL);
+		tgt_ep.ep_tag = obj_shard_dkey2tag(dobj, dkey);
 	}
 
 	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &req);
@@ -719,10 +749,11 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 		D_GOTO(out_pool, rc);
 
 	oei = crt_req_get(req);
-	if (key != NULL)
-		oei->oei_key = *key;
-	else
-		memset(&oei->oei_key, 0, sizeof(oei->oei_key));
+	if (dkey != NULL)
+		oei->oei_dkey = *dkey;
+
+	if (akey != NULL)
+		oei->oei_akey = *akey;
 
 	D_ASSERT(oei != NULL);
 	oei->oei_oid = dobj->do_id;
@@ -732,16 +763,19 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	oei->oei_map_ver = map_ver;
 	oei->oei_epoch = epoch;
 	oei->oei_nr = *nr;
-
+	oei->oei_rec_type = type;
 	enum_anchor_copy_hkey(&oei->oei_anchor, anchor);
-	oei->oei_sgl = *sgl;
-	sgl_len = sgls_buf_len(sgl, 1);
-	if (sgl_len >= OBJ_BULK_LIMIT) {
-		/* Create bulk */
-		rc = crt_bulk_create(daos_task2ctx(task), daos2crt_sg(sgl),
-				     CRT_BULK_RW, &oei->oei_bulk);
-		if (rc < 0)
-			D_GOTO(out_req, rc);
+	if (sgl != NULL) {
+		oei->oei_sgl = *sgl;
+		sgl_len = sgls_buf_len(sgl, 1);
+		if (sgl_len >= OBJ_BULK_LIMIT) {
+			/* Create bulk */
+			rc = crt_bulk_create(daos_task2ctx(task),
+					     daos2crt_sg(sgl), CRT_BULK_RW,
+					     &oei->oei_bulk);
+			if (rc < 0)
+				D_GOTO(out_req, rc);
+		}
 	}
 
 	crt_req_addref(req);
@@ -751,7 +785,11 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 	enum_args.eaa_kds = kds;
 	enum_args.eaa_anchor = anchor;
 	enum_args.eaa_obj = dobj;
+	enum_args.eaa_size = size;
 	enum_args.eaa_sgl = sgl;
+	enum_args.eaa_eprs = eprs;
+	enum_args.eaa_cookies = cookies;
+	enum_args.eaa_recxs = recxs;
 
 	rc = daos_task_register_comp_cb(task, dc_enumerate_cb,
 					sizeof(enum_args), &enum_args);
@@ -768,7 +806,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 
 out_eaa:
 	crt_req_decref(req);
-	if (sgl_len >= OBJ_BULK_LIMIT)
+	if (sgl != NULL && sgl_len >= OBJ_BULK_LIMIT)
 		crt_bulk_free(oei->oei_bulk);
 out_req:
 	crt_req_decref(req);
@@ -780,3 +818,34 @@ out_task:
 	daos_task_complete(task, rc);
 	return rc;
 }
+
+int
+dc_obj_shard_list_rec(daos_handle_t oh, enum obj_rpc_opc opc,
+		      daos_epoch_t epoch, daos_key_t *dkey,
+		      daos_key_t *akey, daos_iod_type_t type,
+		      daos_size_t *size, uint32_t *nr,
+		      daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		      uuid_t *cookies, daos_hash_out_t *anchor,
+		      unsigned int map_ver, bool incr_order,
+		      struct daos_task *task)
+{
+	/* did not handle incr_order yet */
+	return dc_obj_shard_list_internal(oh, opc, epoch, dkey, akey,
+					  type, size, nr, NULL, NULL,
+					  recxs, eprs, cookies, anchor,
+					  map_ver, task);
+}
+
+int
+dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
+		      daos_epoch_t epoch, daos_key_t *key, uint32_t *nr,
+		      daos_key_desc_t *kds, daos_sg_list_t *sgl,
+		      daos_hash_out_t *anchor, unsigned int map_ver,
+		      struct daos_task *task)
+{
+	return dc_obj_shard_list_internal(oh, opc, epoch, key, NULL,
+					  DAOS_IOD_NONE, NULL, nr, kds, sgl,
+					  NULL, NULL, NULL, anchor, map_ver,
+					  task);
+}
+

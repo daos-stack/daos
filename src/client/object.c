@@ -169,6 +169,7 @@ enum daos_obj_opc {
 	DAOS_OBJ_FETCH = 2,
 	DAOS_OBJ_DKEY_LIST = 3,
 	DAOS_OBJ_AKEY_LIST = 4,
+	DAOS_OBJ_REC_LIST = 5,
 };
 
 struct daos_obj_arg {
@@ -186,11 +187,18 @@ struct daos_obj_list_arg {
 	int		opc;
 	daos_handle_t	oh;
 	daos_epoch_t	epoch;
+	daos_iod_type_t type;
 	uint32_t	*nr;
 	daos_key_desc_t	*kds;
 	daos_key_t	*dkey;
+	daos_key_t	*akey;
 	daos_sg_list_t	*sgl;
 	daos_hash_out_t	*anchor;
+	daos_epoch_range_t *eprs;
+	daos_recx_t	   *recxs;
+	daos_size_t	   *size;
+	uuid_t		   *cookies;
+	bool		incr_order;
 };
 
 static int
@@ -227,6 +235,17 @@ daos_obj_akey_list_task(struct daos_task *task)
 
 	return dc_obj_list_akey(arg->oh, arg->epoch, arg->dkey, arg->nr,
 				arg->kds, arg->sgl, arg->anchor, task);
+}
+
+static int
+daos_obj_rec_list_task(struct daos_task *task)
+{
+	struct daos_obj_list_arg *arg = daos_task2arg(task);
+
+	return dc_obj_list_rec(arg->oh, arg->epoch, arg->dkey, arg->akey,
+			       arg->type, arg->size, arg->nr, arg->recxs,
+			       arg->eprs, NULL, arg->anchor, arg->incr_order,
+			       task);
 }
 
 static int
@@ -329,6 +348,11 @@ daos_obj_comp_cb(struct daos_task *task, void *data)
 		break;
 	case DAOS_OBJ_AKEY_LIST:
 		rc = daos_task_init(rw_task, daos_obj_akey_list_task,
+				    arg, sizeof(struct daos_obj_list_arg),
+				    sched, pool_task);
+		break;
+	case DAOS_OBJ_REC_LIST:
+		rc = daos_task_init(rw_task, daos_obj_rec_list_task,
 				    arg, sizeof(struct daos_obj_list_arg),
 				    sched, pool_task);
 		break;
@@ -513,6 +537,39 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		return rc;
 
 	dc_obj_list_akey(oh, epoch, dkey, nr, kds, sgl, anchor, task);
+
+	return daos_client_result_wait(ev);
+}
+
+int
+daos_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		  daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
+		  uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		  daos_hash_out_t *anchor, bool incr_order, daos_event_t *ev)
+{
+	struct daos_task	*task;
+	struct daos_obj_list_arg arg;
+	int			rc;
+
+	arg.opc = DAOS_OBJ_AKEY_LIST;
+	arg.oh	= oh;
+	arg.epoch = epoch;
+	arg.type = type;
+	arg.nr = nr;
+	arg.dkey = dkey;
+	arg.akey = akey;
+	arg.size = size;
+	arg.recxs = recxs;
+	arg.eprs = eprs;
+	arg.anchor = anchor;
+	arg.incr_order = incr_order;
+	rc = daos_client_task_prep(daos_obj_comp_cb, &arg, sizeof(arg), &task,
+				   &ev);
+	if (rc != 0)
+		return rc;
+
+	dc_obj_list_rec(oh, epoch, dkey, akey, type, size, nr, recxs, eprs,
+			NULL, anchor, incr_order, task);
 
 	return daos_client_result_wait(ev);
 }

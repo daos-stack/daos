@@ -144,7 +144,13 @@ ioreq_dkey_set(struct ioreq *req, const char *dkey)
 }
 
 static void
-ioreq_akey_set(struct ioreq *req, const char **akey, int nr)
+ioreq_akey_set(struct ioreq *req, const char *akey)
+{
+	daos_iov_set(&req->akey, (void *)akey, strlen(akey));
+}
+
+static void
+ioreq_io_akey_set(struct ioreq *req, const char **akey, int nr)
 {
 	int i;
 
@@ -203,7 +209,7 @@ insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	ioreq_dkey_set(req, dkey);
 
 	/* akey */
-	ioreq_akey_set(req, akey, nr);
+	ioreq_io_akey_set(req, akey, nr);
 
 	/* set sgl */
 	if (val != NULL)
@@ -268,7 +274,7 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	ioreq_dkey_set(req, dkey);
 
 	/* akey */
-	ioreq_akey_set(req, akey, nr);
+	ioreq_io_akey_set(req, akey, nr);
 
 	/* set sgl */
 	ioreq_sgl_simple_set(req, val, size, nr);
@@ -594,8 +600,35 @@ enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 	}
 }
 
+static void
+enumerate_rec(daos_epoch_t epoch, char *dkey, char *akey, daos_iod_type_t type,
+	      daos_size_t *size, uint32_t *number, daos_recx_t *recxs,
+	      daos_epoch_range_t *eprs, daos_hash_out_t *anchor, bool incr,
+	      struct ioreq *req)
+{
+	int rc;
+
+	ioreq_dkey_set(req, dkey);
+	ioreq_akey_set(req, akey);
+	rc = daos_obj_list_rec(req->oh, epoch, &req->dkey, &req->akey, type,
+			       size, number, recxs, eprs, anchor, incr,
+			       req->arg->async ? &req->ev : NULL);
+	assert_int_equal(rc, 0);
+
+	if (req->arg->async) {
+		bool ev_flag;
+
+		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
+		assert_int_equal(rc, 0);
+		assert_int_equal(ev_flag, true);
+		assert_int_equal(req->ev.ev_error, 0);
+	}
+}
+
 #define ENUM_KEY_BUF	32
 #define ENUM_KEY_NR	1000
+
+#define ENUM_REC_NR	1
 
 #define ENUM_DESC_BUF	512
 #define ENUM_DESC_NR	5
@@ -676,11 +709,41 @@ enumerate_simple(void **state)
 			ptr += kds[i].kd_key_len;
 		}
 	}
+	assert_int_equal(key_nr, ENUM_KEY_NR);
+
+	print_message("Insert %d records under the same key\n", ENUM_REC_NR);
+	for (i = 0; i < ENUM_REC_NR; i++) {
+		insert_single("d_key", "a_rec", i, "data",
+			      strlen("data") + 1, 0, &req);
+	}
+
+	key_nr = 0;
+	memset(&hash_out, 0, sizeof(hash_out));
+	/** enumerate records */
+	for (number = ENUM_DESC_NR, key_nr = 0; !daos_hash_is_eof(&hash_out);
+	     number = ENUM_DESC_NR) {
+		daos_epoch_range_t eprs[5];
+		daos_recx_t recxs[5];
+		daos_size_t	size;
+
+		number = 5;
+		enumerate_rec(0, "d_key", "a_rec", DAOS_IOD_SINGLE, &size,
+			      &number, recxs, eprs, &hash_out, true, &req);
+		if (number == 0)
+			continue; /* loop should break for EOF */
+
+		key_nr += number;
+		for (i = 0; i < number; i++) {
+			print_message("i %d size %d idx %d\n", i, (int)size,
+				      (int)recxs[i].rx_idx);
+			assert_int_equal(size, strlen("data") + 1);
+		}
+	}
 
 	free(buf);
 	/** XXX Verify kds */
 	ioreq_fini(&req);
-	assert_int_equal(key_nr, ENUM_KEY_NR);
+	assert_int_equal(key_nr, ENUM_REC_NR);
 }
 
 /** basic punch test */

@@ -40,6 +40,7 @@ struct ioreq {
 	test_arg_t		*arg;
 	daos_event_t		ev;
 	daos_key_t		dkey;
+	daos_key_t		akey;
 	daos_iov_t		val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
 	daos_sg_list_t		sgl[IOREQ_SG_IOD_NR];
 	daos_csum_buf_t		csum;

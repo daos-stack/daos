@@ -61,6 +61,10 @@ static struct daos_rpc_handler obj_handlers[] = {
 		.dr_hdlr        = ds_obj_enum_handler,
 	},
 	{
+		.dr_opc         = DAOS_OBJ_RECX_RPC_ENUMERATE,
+		.dr_hdlr        = ds_obj_enum_handler,
+	},
+	{
 		.dr_opc		= 0
 	}
 };

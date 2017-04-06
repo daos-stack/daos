@@ -91,6 +91,12 @@ int
 dc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		 uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		 daos_hash_out_t *anchor, struct daos_task *task);
+int
+dc_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
+		uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		uuid_t *cookies, daos_hash_out_t *anchor, bool incr_order,
+		struct daos_task *task);
 
 daos_handle_t
 dc_obj_hdl2cont_hdl(daos_handle_t obj_oh);

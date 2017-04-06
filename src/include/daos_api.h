@@ -1027,9 +1027,7 @@ daos_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		  daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
 		  uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
 		  daos_hash_out_t *anchor, bool incr_order, daos_event_t *ev);
-
 #if defined(__cplusplus)
 }
 #endif
-
 #endif /* __DAOS_API_H__ */

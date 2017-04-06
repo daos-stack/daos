@@ -813,10 +813,13 @@ dc_obj_list_akey_cb(struct daos_task *task, void *data)
 }
 
 static int
-dc_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
-		daos_key_t *key, uint32_t *nr,
-		daos_key_desc_t *kds, daos_sg_list_t *sgl,
-		daos_hash_out_t *anchor, struct daos_task *task)
+dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
+		     daos_key_t *dkey, daos_key_t *akey, daos_iod_type_t type,
+		     daos_size_t *size, uint32_t *nr, daos_key_desc_t *kds,
+		     daos_sg_list_t *sgl, daos_recx_t *recxs,
+		     daos_epoch_range_t *eprs, uuid_t *cookies,
+		     daos_hash_out_t *anchor, bool incr_order,
+		     struct daos_task *task)
 {
 	struct dc_object	*obj = NULL;
 	struct dc_obj_list_arg	*arg;
@@ -825,7 +828,7 @@ dc_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	int			shard;
 	int			rc;
 
-	if (nr == NULL || *nr == 0 || kds == NULL || sgl == NULL) {
+	if (nr == NULL || *nr == 0) {
 		D_DEBUG(DB_IO, "Invalid API parameter.\n");
 		D_GOTO(out_task, rc = -DER_INVAL);
 	}
@@ -841,23 +844,24 @@ dc_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	arg = daos_task_buf_get(task, sizeof(*arg));
 	arg->obj = obj;
 	arg->anchor = anchor;
-	if (op == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
-		shard = obj_dkey2shard(obj, key, map_ver);
-		if (shard < 0)
-			D_GOTO(out_put, rc = shard);
-
-		enum_anchor_set_shard(anchor, shard);
-		rc = daos_task_register_comp_cb(task, dc_obj_list_akey_cb,
-						sizeof(arg), &arg);
-		if (rc != 0)
-			D_GOTO(out_put, rc);
-	} else {
+	if (op == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
 		shard = enum_anchor_get_shard(anchor);
 		shard = obj_grp_valid_shard_get(obj, shard, map_ver);
 		if (shard < 0)
 			D_GOTO(out_put, rc = shard);
 
+		enum_anchor_set_shard(anchor, shard);
 		rc = daos_task_register_comp_cb(task, dc_obj_list_dkey_cb,
+						sizeof(arg), &arg);
+		if (rc != 0)
+			D_GOTO(out_put, rc);
+	} else {
+		shard = obj_dkey2shard(obj, dkey, map_ver);
+		if (shard < 0)
+			D_GOTO(out_put, rc = shard);
+
+		enum_anchor_set_shard(anchor, shard);
+		rc = daos_task_register_comp_cb(task, dc_obj_list_akey_cb,
 						sizeof(arg), &arg);
 		if (rc != 0)
 			D_GOTO(out_put, rc);
@@ -868,8 +872,14 @@ dc_obj_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
-	rc = dc_obj_shard_list_key(shard_oh, op, epoch, key, nr,
-				   kds, sgl, anchor, map_ver, task);
+	if (op == DAOS_OBJ_RECX_RPC_ENUMERATE)
+		rc = dc_obj_shard_list_rec(shard_oh, op, epoch, dkey, akey,
+					   type, size, nr, recxs, eprs,
+					   cookies, anchor, map_ver, incr_order,
+					   task);
+	else
+		rc = dc_obj_shard_list_key(shard_oh, op, epoch, dkey, nr,
+					   kds, sgl, anchor, map_ver, task);
 
 	dc_obj_shard_close(shard_oh);
 	D_DEBUG(DB_IO, "Enumerate keys in shard %d: rc %d\n",
@@ -888,9 +898,9 @@ dc_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 		 daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		 daos_hash_out_t *anchor, struct daos_task *task)
 {
-	/* XXX list_dkey might also input akey later */
-	return dc_obj_list_key(oh, DAOS_OBJ_DKEY_RPC_ENUMERATE, epoch, NULL,
-			       nr, kds, sgl, anchor, task);
+	return dc_obj_list_internal(oh, DAOS_OBJ_DKEY_RPC_ENUMERATE, epoch,
+				    NULL, NULL, DAOS_IOD_NONE, NULL, nr, kds,
+				    sgl, NULL, NULL, NULL, anchor, true, task);
 }
 
 int
@@ -898,6 +908,20 @@ dc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		 uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		 daos_hash_out_t *anchor, struct daos_task *task)
 {
-	return dc_obj_list_key(oh, DAOS_OBJ_AKEY_RPC_ENUMERATE, epoch, dkey,
-			       nr, kds, sgl, anchor, task);
+	return dc_obj_list_internal(oh, DAOS_OBJ_AKEY_RPC_ENUMERATE, epoch,
+				    dkey, NULL, DAOS_IOD_NONE, NULL, nr, kds,
+				    sgl, NULL, NULL, NULL, anchor, true, task);
+}
+
+int
+dc_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
+		uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		uuid_t *cookies, daos_hash_out_t *anchor, bool incr_order,
+		struct daos_task *task)
+{
+	return dc_obj_list_internal(oh, DAOS_OBJ_RECX_RPC_ENUMERATE, epoch,
+				    dkey, akey, type, size, nr, NULL, NULL,
+				    recxs, eprs, cookies, anchor, incr_order,
+				    task);
 }
