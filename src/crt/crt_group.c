@@ -2064,7 +2064,7 @@ crt_grp_attach_info_filename(struct crt_grp_priv *grp_priv)
 }
 
 int
-crt_set_singleton_attach_path(const char *path)
+crt_group_config_path_set(const char *path)
 {
 	struct stat buf;
 	int rc;
@@ -2117,7 +2117,7 @@ crt_set_singleton_attach_path(const char *path)
  * ========================
  */
 int
-crt_save_singleton_attach_info(crt_group_t *grp)
+crt_group_config_save(crt_group_t *grp)
 {
 	struct crt_grp_priv	*grp_priv;
 	FILE			*fp = NULL;
@@ -2143,7 +2143,7 @@ crt_save_singleton_attach_info(crt_group_t *grp)
 
 	C_ASSERT(grp_priv != NULL);
 	if (grp_priv->gp_service == 0) {
-		C_DEBUG("ignore crt_grp_save_attach_info for client.\n");
+		C_DEBUG("ignored for client.\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 

@@ -177,7 +177,7 @@ parse_options(int argc, char *argv[])
 			gecho.multi_tier_test = true;
 			break;
 		case 'p':
-			rc = crt_set_singleton_attach_path(optarg);
+			rc = crt_group_config_path_set(optarg);
 			if (rc != 0) {
 				printf("Bad attach prefix: %s\n", optarg);
 				exit(-1);
@@ -217,14 +217,14 @@ echo_init(int server, bool tier2)
 
 	if (server != 0 && tier2 == false && gecho.singleton_test) {
 		printf("Saving singleton attach info\n");
-		rc = crt_save_singleton_attach_info(NULL);
+		rc = crt_group_config_save(NULL);
 		assert(rc == 0);
 
 		if (gecho.multi_tier_test) {
 			/* Test saving attach info for another group */
 			rc = crt_group_attach(ECHO_2ND_TIER_GRPID, &tier2_grp);
 			assert(rc == 0 && tier2_grp != NULL);
-			rc = crt_save_singleton_attach_info(tier2_grp);
+			rc = crt_group_config_save(tier2_grp);
 			assert(rc == 0);
 			rc = crt_group_detach(tier2_grp);
 			assert(rc == 0);

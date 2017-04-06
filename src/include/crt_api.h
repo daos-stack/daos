@@ -629,7 +629,7 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
  * \return		zero on success, negative value if error
  */
 int
-crt_set_singleton_attach_path(const char *path);
+crt_group_config_path_set(const char *path);
 
 /*
  * Dump the attach info for the specified group to a file.   If not
@@ -644,7 +644,7 @@ crt_set_singleton_attach_path(const char *path);
  * \return			zero on success, negative value if error
  */
 int
-crt_save_singleton_attach_info(crt_group_t *grp);
+crt_group_config_save(crt_group_t *grp);
 
 /*
  * Detach a primary service group which was attached previously.
