@@ -30,7 +30,10 @@ elif [ -n "$WORKSPACE" ]; then
 ${CORAL_ARTIFACTS}/${JOB_NAME}/${BUILD_NUMBER} SRC_PREFIX=../"
 fi
 
-scons $option --config=force --update-prereq=all --build-deps=yes $*
+: ${BUILD_OPTIONS:=""}
+
+scons ${BUILD_OPTIONS} $option --config=force --update-prereq=all \
+  --build-deps=yes $*
 
 if [ -n "$WORKSPACE" ]; then
 if [ -z "$JOB_LOC" ]; then

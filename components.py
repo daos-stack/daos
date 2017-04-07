@@ -101,7 +101,7 @@ REQS.define('mercury_old',
                       '-DOPA_INCLUDE_DIR=$OPENPA_PREFIX/include/ '
                       '-DCCI_LIBRARY=$CCI_PREFIX/lib/%s '
                       '-DCCI_INCLUDE_DIR=$CCI_PREFIX/include/ '
-                      '-DCMAKE_INSTALL_PREFIX=$MERCURY_PREFIX '
+                      '-DCMAKE_INSTALL_PREFIX=$MERCURY_OLD_PREFIX '
                       '-DBUILD_EXAMPLES=OFF '
                       '-DMERCURY_USE_BOOST_PP=ON '
                       '-DMERCURY_USE_SELF_FORWARD=ON'
@@ -110,8 +110,8 @@ REQS.define('mercury_old',
                       '-DNA_USE_CCI=ON '
                       '-DNA_CCI_USE_POLL=ON '
                       '-DBUILD_DOCUMENTATION=OFF '
-                      '-DBUILD_SHARED_LIBS=ON $MERCURY_SRC '
-                      '-DCMAKE_INSTALL_RPATH=$MERCURY_PREFIX/lib '
+                      '-DBUILD_SHARED_LIBS=ON $MERCURY_OLD_SRC '
+                      '-DCMAKE_INSTALL_RPATH=$MERCURY_OLD_PREFIX/lib '
                       '-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE'
                       % (CCI_LIB), 'make', 'make install'],
             libs=['mercury', 'na', 'mercury_util', 'mchecksum'],
@@ -234,6 +234,7 @@ REQS.define('ompi_pmix',
                       '--disable-mpi-fortran ',
                       'make', 'make install'],
             libs=['pmix'],
+            libs_cc='$OMPI_PMIX_PREFIX/bin/mpicc',
             headers=['pmix.h'],
             required_progs=['g++', 'flex', 'autoreconf', 'aclocal', 'libtool'])
 

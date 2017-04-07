@@ -735,6 +735,7 @@ class PreReqComponent(object):
 
     Keyword arguments:
         libs -- A list of libraries to add to dependent components
+        libs_cc -- Optional CC command to test libs with.
         headers -- A list of expected headers
         requires -- A list of names of required component definitions
         required_libs -- A list of system libraries to be checked for
@@ -942,6 +943,7 @@ class _Component(object):
 
     Keyword arguments:
         libs -- A list of libraries to add to dependent components
+        libs_cc -- Optional compiler for testing libs
         headers -- A list of expected headers
         requires -- A list of names of required component definitions
         commands -- A list of commands to run to build the component
@@ -969,6 +971,7 @@ class _Component(object):
         self.component_prefix = None
         self.package = kw.get("package", None)
         self.libs = kw.get("libs", [])
+        self.libs_cc = kw.get("libs_cc", None)
         self.required_libs = kw.get("required_libs", [])
         self.required_progs = kw.get("required_progs", [])
         self.defines = kw.get("defines", [])
@@ -1141,7 +1144,15 @@ class _Component(object):
                 return True
 
         for lib in self.libs:
-            if not config.CheckLib(lib):
+            old_cc = env.subst('$CC')
+            if self.libs_cc:
+                arg_key = "%s_PREFIX" % self.name.upper()
+                args = {arg_key: self.component_prefix}
+                env.Replace(**args)
+                env.Replace(CC=self.libs_cc)
+            result = config.CheckLib(lib)
+            env.Replace(CC=old_cc)
+            if not result:
                 config.Finish()
                 if self.__check_only:
                     env.SetOption('no_exec', True)
