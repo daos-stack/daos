@@ -414,7 +414,7 @@ ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 
 	cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
 	if (cont_hdl == NULL)
-		return -DER_NO_PERM;
+		return -DER_NO_HDL;
 
 	if (cont_hdl->sch_cont == NULL ||
 	    uuid_compare(cont_hdl->sch_cont->sc_uuid, cont_uuid) != 0) {
