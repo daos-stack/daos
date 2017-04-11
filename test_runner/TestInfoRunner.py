@@ -53,7 +53,8 @@ class TestInfoRunner(PreRunner.PreRunner):
         self.nodename = self.info.get_config('node', None,
                                              gethostname().split('.')[0])
 
-    def load_testcases(self, test_module_name):
+    #pylint: disable=too-many-branches
+    def load_testcases(self, test_module_name, topLevel=False):
         """ load and check test description file """
 
         rtn = 0
@@ -92,17 +93,27 @@ class TestInfoRunner(PreRunner.PreRunner):
         self.test_info['subList']['nodename'] = self.nodename
         fileName = os.path.splitext(os.path.basename(test_module_name))[0]
         moduleName = self.test_info['module'].get('name', "")
-        if fileName != moduleName:
+        logBaseName = self.test_info['module'].get('logBaseName', "")
+        if topLevel:
+            self.test_info['testName'] = moduleName
+        elif logBaseName:
+            if logBaseName != moduleName:
+                self.test_info['testName'] = \
+                    "{!s}_{!s}".format(logBaseName, moduleName)
+            else:
+                self.test_info['testName'] = logBaseName
+        elif fileName != moduleName:
             self.test_info['testName'] = \
                 "{!s}_{!s}".format(fileName, moduleName)
         else:
             self.test_info['testName'] = moduleName
         return rtn
+    #pylint: enable=too-many-branches
 
-    def post_run(self):
-        """ post testcase run processing """
+    def cleanup_test_info(self):
+        """ post testcase run cleanup """
         self.remove_tmp_dir()
-        self.dump_test_info()
+        del self.test_info
 
     def dump_test_info(self):
         """ dump the test info to the output directory """
@@ -191,10 +202,13 @@ class TestInfoRunner(PreRunner.PreRunner):
         self.logger.debug("parameters substitution  %s", str(parameters))
         finditems = re.compile('(?<={)\w+')
         items = finditems.findall(str(parameters))
+        #self.logger.error("split %s", str(items))
         for item in items:
+            #self.logger.error("item %s", str(item))
             subitem = self.get_defaultENV(item)
             if not subitem:
                 what = self.get_test_info('subList', item).split(':')
+                #self.logger.error("next %s", str(what))
                 if len(what) > 1:
                     if what[0] == 'config':
                         subitem = self.info.get_config(what[1], "")
@@ -203,17 +217,19 @@ class TestInfoRunner(PreRunner.PreRunner):
                                                      "notfound")
                 else:
                     subitem = what[0]
+            #self.logger.error("subitem type: %s", str(type(subitem)))
             if not isinstance(subitem, str):
                 subitem = ','.join(subitem)
             replace = "{{{!s}}}".format(item)
+            #self.logger.error("replace %s with %s", replace, subitem)
             parameters = parameters.replace(replace, str(subitem))
+            #self.logger.error("what %s", parameters)
 
         self.logger.debug("parameters %s", parameters)
         return parameters
 
-    def setup_parameters(self, item):
+    def setup_parameters(self, parameters):
         """ parameters for test strategy """
-        parameters = item.get('parameters', "")
         if not parameters:
             return parameters
         if '{' in parameters:
@@ -224,3 +240,41 @@ class TestInfoRunner(PreRunner.PreRunner):
             return ' '.join(paramList)
         else:
             return parameters
+
+    def find_item(self, item, where="info"):
+        """ keys for test runner """
+        #self.logger.error("item %s", str(item))
+        what = []
+        what = item.split(':')
+        #self.logger.error("next %s", str(what))
+        if len(what) > 1:
+            if where == "info":
+                subitem = self.get_test_info(what[0], what[1], "notfound")
+            else:
+                subitem = self.info.get_config(what[0], what[1], "")
+            #self.logger.error("return item %s", str(subitem))
+            return {what[1]: subitem}
+        else:
+            if where == "info":
+                self.logger.error("look info %s", str(what))
+                subitem = self.get_test_info(what[0], None, "notfound")
+            else:
+                self.logger.error("look config %s", str(what))
+                subitem = self.info.get_config(what[0], None, "")
+            #self.logger.error("return item %s", str(subitem))
+            return subitem
+
+    def set_configKeys(self, setConfigKeys):
+        """ keys for test runner """
+        configKeys = {}
+        loadFromConfig = setConfigKeys.get('loadFromConfig', "")
+        if loadFromConfig:
+            for item in loadFromConfig:
+                addKeys = self.find_item(item, "config")
+                configKeys.update(addKeys)
+        loadFromInfo = setConfigKeys.get('loadFromInfo', "")
+        if loadFromInfo:
+            for item in loadFromInfo:
+                InfoKeys = self.find_item(item, "info")
+                configKeys.update(InfoKeys)
+        return configKeys

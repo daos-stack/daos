@@ -30,6 +30,7 @@
                   -P3 "test_runner/TestRunner.py" \
                   -P3 "test_runner/UnitTestRunner.py" \
                   -P3 "test_runner/ScriptsRunner.py" \
+                  -P3 "test_runner/PythonRunner.py" \
                   -P3 "test_runner/PreRunner.py" \
                   -P3 "test_runner/PostRunner.py" \
                   -P3 "test_runner/GrindRunner.py" \

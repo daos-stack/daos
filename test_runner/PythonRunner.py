@@ -25,121 +25,82 @@ multi test runner class
 """
 
 
-import os
-import subprocess
 import logging
-from time import time
 #pylint: disable=import-error
 import PostRunner
 #pylint: enable=import-error
+from importlib import import_module
+from time import time
 
 #pylint: disable=too-many-locals
-#pylint: disable=too-many-statements
+#pylint: disable=broad-except
 
-class ScriptsRunner(PostRunner.PostRunner):
+class PythonRunner(PostRunner.PostRunner):
     """Simple test runner"""
-    subtest_results = []
-    info = None
     test_info = None
+    testModule = None
+    lop_number = 0
     logger = None
 
     def __init__(self, test_info, log_base_path):
         self.test_info = test_info
-        self.info = test_info.info
         self.logdir = log_base_path
-        self.logdirbase = log_base_path
-        self.globalTimeout = self.test_info.get_test_info(
-            'directives', 'globalTimeout', '1800')
         self.logger = logging.getLogger("TestRunnerLogger")
 
-    def execute_testcase(self, cmd, parms, logname, waittime=1800):
+    #def execute_testcase(self, cmd, parms, waittime=1800):
+    def execute_testcase(self, cmd, parms):
         """ Launch test command """
         self.logger.info("TestRunner: start command %s ", cmd)
-        testcaseout = os.path.join(self.logdir, logname)
-        cmdstr = "{!s} {!s}".format(cmd, parms)
+        cmdstr = "{!s} {!s} ".format(cmd, parms)
         rtn = 0
-        #cmdarg = shlex.split(cmdstr)
-        with open(testcaseout, mode='a') as outfile:
-            outfile.write("=======================================\n " + \
-                          " Command: " + str(cmdstr) + \
-                          "\n======================================\n")
-            outfile.flush()
-            try:
-                #                      universal_newlines=True,
-                subprocess.check_call(cmdstr, timeout=waittime, shell=True,
-                                      stdin=subprocess.DEVNULL,
-                                      stdout=outfile,
-                                      stderr=subprocess.STDOUT)
-            except subprocess.CalledProcessError as e:
-                rtn = e.returncode
-                outfile.write("=======================================\n " + \
-                              " Command failed: " + str(rtn) + \
-                              "\n======================================\n")
-            except subprocess.TimeoutExpired:
-                rtn = 1
-                outfile.write("=======================================\n " + \
-                              " Command time out" + \
-                              "\n======================================\n")
+        self.logger.info("=======================================\n " + \
+                      " Command: " + str(cmdstr) + \
+                      "\n======================================\n")
+        try:
+            if parms:
+                rtn = getattr(self.testModule, cmd)(parms)
             else:
-                outfile.write("=======================================\n " + \
-                              " Command returned: " + str(rtn) + \
-                              "\n======================================\n")
-            finally:
-                outfile.flush()
+                rtn = getattr(self.testModule, cmd)()
+        except Exception as e:
+            rtn = 1
+            self.logger.info("=======================================\n " + \
+                          " Command failed: " + str(e) + \
+                          "\n======================================\n")
+        else:
+            self.logger.info("=======================================\n " + \
+                          " Command returned: " + str(rtn) + \
+                          "\n======================================\n")
 
         if not isinstance(rtn, int):
             rtn = 0
         return rtn
 
-    def execute_setup(self, test, module, logname):
+    def execute_setup(self, test):
         """ execute test strategy """
         rtn = 0
-        path = module.get('path', "")
         setup_items = self.test_info.get_test_info(test['setup'])
         for item in setup_items:
-            if item.get('type', "exe") == 'shell':
-                cmd = item.get('exe', item['name']) + ".sh"
-                cmdstr = os.path.join(path, cmd)
-            else:
-                cmdstr = self.test_info.setup_parameters(
-                    item.get('exe', item['name']))
-            parameters = self.test_info.setup_parameters(item)
-            waittime = int(item.get('waittime', self.globalTimeout))
-            rtn |= self.execute_testcase(cmdstr, parameters, logname, waittime)
+            cmd = item.get('name')
+            parameters = item.get('parameters', "")
+            rtn |= self.execute_testcase(cmd, parameters)
 
         return rtn
 
     def execute_list(self):
         """ execute each item in the execution strategy list """
-        module = {}
         results = []
         rtn = 0
-        module = self.test_info.get_module()
-        path = module.get('path', "")
-        toexit = self.test_info.get_directives('exitListOnError', "no").lower()
+        toexit = self.test_info.get_test_info('directives',
+                                              'exitLoopOnError', "no").lower()
         for item in self.test_info.get_test_info('execStrategy'):
             rc = 0
             info = {}
             info['name'] = item['name']
-            log_name = "{baseName}.{subTest}.{logType}.{hostName}.log".format(
-                baseName=module.get('logBaseName', module['name']),
-                subTest=info['name'],
-                logType=module.get('logType', "testlog"),
-                hostName=self.test_info.nodename)
-
-            if item.get('setup'):
-                rtn |= self.execute_setup(item, module, log_name)
-            if item.get('type', "exe") == 'shell':
-                cmd = item.get('exe', item['name']) + ".sh"
-                cmdstr = os.path.join(path, cmd)
-            else:
-                cmdstr = self.test_info.setup_parameters(
-                    item.get('exe', item['name']))
-            parameters = self.test_info.setup_parameters(
-                item.get('parameters', ""))
-            waittime = int(item.get('waittime', self.globalTimeout))
+            cmd = item['name']
+            parameters = item.get('parameters', "")
             start_time = time()
-            rc = self.execute_testcase(cmdstr, parameters, log_name, waittime)
+            #??? this call methods
+            rc = self.execute_testcase(cmd, parameters)
             rtn |= rc
             info['duration'] = '{:.2f}'.format(time() - start_time)
             info['return_code'] = rc
@@ -154,12 +115,37 @@ class ScriptsRunner(PostRunner.PostRunner):
 
         return (rtn, results)
 
+    def import_module(self):
+        """ import the test module and load the class """
+        _class = None
+        module = self.test_info.get_module()
+        name = module.get('name')
+        self.logger.info("Import module: %s", name)
+        try:
+            _module = import_module(name)
+            try:
+                print("module: {!s}".format(dir(_module)))
+                print("module type: {!s}".format(type(_module)))
+                className = module.get('className', name)
+                print("class type: {!s}".format(type(
+                    getattr(_module, className))))
+                self.logger.info("load class: %s", className)
+                _class = getattr(_module, className)(self.test_info,
+                                                     self.logdir)
+                print("class: {!s}".format(dir(_class)))
+                print("class type: {!s}".format(type(_class)))
+            except AttributeError as e:
+                self.logger.error("Class does not exist")
+                self.logger.error("%s", str(e))
+        except ImportError:
+            self.logger.error("Module does not exist")
+        return _class
+
     def execute_strategy(self):
         """ execute test strategy """
         results = []
         rtn = 0
         rc = 0
-        #module = self.test_info.get_module()
         testname = self.test_info.get_test_info('testName')
         file_hdlr = logging.FileHandler(self.logdir + "/" + \
                                         str(testname) + ".log")
@@ -169,9 +155,13 @@ class ScriptsRunner(PostRunner.PostRunner):
                          str(testname) + \
                          " *********************************"
                         )
+        #??? load module here
         self.test_info.setup_default_env()
-        loop = str(self.test_info.get_directives('loop', "no"))
+        self.testModule = self.import_module()
+        print("testModule type: {!s}".format(type(self.testModule)))
+        loop = str(self.test_info.get_test_info('directives', 'loop', "no"))
         start_time = time()
+
         if loop.lower() == "no":
             results_info = {}
             info = []
@@ -194,12 +184,12 @@ class ScriptsRunner(PostRunner.PostRunner):
                                  str(" loop %d " % i) +\
                                  "*************************"
                                 )
-                self.logdir = os.path.join(self.logdirbase,
-                                           ("loop{!s}".format(i)))
-                try:
-                    os.makedirs(self.logdir)
-                except OSError:
-                    pass
+                #self.logdir = os.path.join(self.logdirbase,
+                #                           ("loop{!s}".format(i)))
+                #try:
+                #    os.makedirs(self.logdir)
+                #except OSError:
+                #    pass
                 results_info['name'] = "{!s}_loop{!s}".format(testname, i)
                 (rc, info) = self.execute_list()
                 rtn |= rc
@@ -218,4 +208,5 @@ class ScriptsRunner(PostRunner.PostRunner):
 
         file_hdlr.close()
         self.logger.removeHandler(file_hdlr)
+
         return (rtn, results)

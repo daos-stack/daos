@@ -123,19 +123,13 @@ class MultiRunner(PostRunner.PostRunner):
         start_time = time.time()
         for item in self.test_info.get_test_info('execStrategy'):
             configKeys.clear()
-            setNodeType = item.get('nodeType', "all")
             setConfigKeys = item.get('setConfigKeys', {})
+            self.logger.debug("set_configKeys: %s", str(setConfigKeys))
+            if setConfigKeys:
+                configKeys = self.test_info.set_configKeys(setConfigKeys)
+            setNodeType = item.get('nodeType', "all")
             setTestPhase = item.get('type', "TEST").upper()
             configKeys['TR_TEST_PHASE'] = setTestPhase
-            if setConfigKeys:
-                loadFromConfig = setConfigKeys.get('loadFromConfig', "")
-                if loadFromConfig:
-                    addKeys = self.info.get_config(loadFromConfig)
-                    configKeys.update(addKeys)
-                loadFromInfo = setConfigKeys.get('loadFromInfo', "")
-                if loadFromInfo:
-                    InfoKeys = self.test_info.get_test_info(loadFromInfo)
-                    configKeys.update(InfoKeys)
             self.nodes.nodes_config(item['name'], setNodeType, configKeys)
             thisrtn = self.nodes.execute_list(setNodeType)
             rtn |= thisrtn
@@ -175,6 +169,7 @@ class MultiRunner(PostRunner.PostRunner):
             print("Module does not exist")
         return _class
 
+    #pylint: disable=too-many-statements
     def run_testcases(self):
         """ execute test scripts """
 
@@ -190,9 +185,9 @@ class MultiRunner(PostRunner.PostRunner):
         self.test_info = TestInfoRunner.TestInfoRunner(self.info)
         for test_module_name in self.test_list:
             rtn = 0
-            if self.test_info.load_testcases(test_module_name):
+            if self.test_info.load_testcases(test_module_name, True):
                 return 1
-            module_name = str(self.test_info.get_test_info('module', 'name'))
+            module_name = str(self.test_info.get_test_info('testName'))
             self.logdir = os.path.join(self.log_dir_base, module_name)
             try:
                 os.makedirs(self.logdir)
@@ -235,6 +230,8 @@ class MultiRunner(PostRunner.PostRunner):
             self.nodes.nodes_dump()
             del self.nodes
             self.nodes = None
+            del self.test_directives
+            self.test_info.cleanup_test_info()
             run_rtn |= rtn
         self.logger.info(
             "\n*************************************************************")

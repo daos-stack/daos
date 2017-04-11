@@ -34,6 +34,7 @@ import PostRunner
 from TestInfoRunner import TestInfoRunner
 from UnitTestRunner import UnitTestRunner
 from ScriptsRunner import ScriptsRunner
+from PythonRunner import PythonRunner
 
 #pylint: enable=import-error
 
@@ -129,6 +130,8 @@ class TestRunner(PostRunner.PostRunner):
             testMode = self.test_info.get_test_info('directives', 'testMode')
             if testMode == "scripts":
                 runner = ScriptsRunner(self.test_info, self.logdir)
+            elif testMode == "python":
+                runner = PythonRunner(self.test_info, self.logdir)
             else:
                 runner = UnitTestRunner(self.test_info, self.logdir)
             self.test_info.add_default_env()
@@ -140,6 +143,7 @@ class TestRunner(PostRunner.PostRunner):
             (rc, rtn_info) = runner.execute_strategy()
             rtn |= rc
             self.post_testcase(rtn_info)
+            self.test_info.cleanup_test_info()
             del runner
         self.logger.info(
             "\n********************************************************")

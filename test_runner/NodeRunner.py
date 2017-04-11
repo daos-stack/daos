@@ -111,8 +111,12 @@ class NodeRunner():
             (node, python_vers, self.dir_path, test_config, test_yml)
         self.logger.debug("cmd: %s", cmdstr)
         cmdarg = shlex.split(cmdstr)
-        with open(self.logfileout, mode='w+b', buffering=0) as outfile, \
-            open(self.logfileerr, mode='w+b', buffering=0) as errfile:
+        with open(self.logfileout, mode='w') as outfile, \
+            open(self.logfileerr, mode='w') as errfile:
+            outfile.write("=======================================\n " + \
+                          " Command: " + str(cmdstr) + \
+                          "\n======================================\n")
+            outfile.flush()
             rtn = subprocess.Popen(cmdarg,
                                    stdout=outfile,
                                    stderr=errfile)
