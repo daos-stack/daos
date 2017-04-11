@@ -792,7 +792,8 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 		}
 		C_ASSERT(child_rpc != NULL);
 		C_ASSERT(child_rpc->cr_output_size == req->cr_output_size);
-		C_ASSERT(child_rpc->cr_output != NULL);
+		C_ASSERT(child_rpc->cr_output_size == 0 ||
+			 child_rpc->cr_output != NULL);
 		C_ASSERT(child_rpc->cr_input_size == 0);
 		C_ASSERT(child_rpc->cr_input == NULL);
 

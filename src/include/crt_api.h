@@ -705,7 +705,8 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
  *    aggregation needed.
  * 2) Can pass in a NULL drf or rpc_handler if it was registered already, this
  *    routine only overwrite if they are non-NULL.
- * 3) A NULL co_ops will be treated as invalid argument.
+ * 3) A NULL co_ops is allowed for the case that user does not need the corpc
+ *    op table (the aggregating callback).
  *
  * \return			zero on success, negative value if error
  */

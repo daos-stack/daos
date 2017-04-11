@@ -328,8 +328,7 @@ crt_corpc_register(crt_opcode_t opc, struct crt_req_format *crf,
 		return -CER_INVAL;
 	}
 	if (co_ops == NULL) {
-		C_ERROR("invalid parameter NULL co_ops.\n");
-		return -CER_INVAL;
+		C_WARN("NULL co_ops to be registered for corpc 0x%x.\n", opc);
 	}
 
 	return crt_rpc_reg_internal(opc, crf, rpc_handler, co_ops);
