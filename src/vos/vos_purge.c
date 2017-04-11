@@ -872,7 +872,7 @@ vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
 		return rc;
 
 	/** Check if this range is already aggregated */
-	if (vc_info.pci_purged_epoch == epr->epr_hi) {
+	if (vc_info.pci_purged_epoch >= epr->epr_hi) {
 		*finished = true;
 		D_DEBUG(DB_EPC,
 			"Aggregation completion detected from purge_epoch\n");

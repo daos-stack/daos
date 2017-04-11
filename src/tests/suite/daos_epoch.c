@@ -27,8 +27,76 @@
 #define DD_SUBSYS	DD_FAC(tests)
 
 #include "daos_test.h"
+#include "daos_iotest.h"
 
 #define MUST(rc) assert_int_equal(rc, 0)
+
+static void
+io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
+		   daos_epoch_t	start_epoch, int gs_dkeys,
+		   daos_epoch_state_t *state, daos_obj_id_t oid,
+		   bool update, bool verify_empty)
+{
+	struct ioreq		req;
+	int			i, g_dkeys_strlen = 6;
+	const char		akey[] = "slip akey";
+	char			dkey[] = "slip dkey";
+	char			*rec, *val, *rec_verify;
+	const char		*val_fmt = "slip val%d";
+	daos_size_t		val_size, rec_size;
+	daos_epoch_t		epoch;
+
+	if (verify_empty)
+		print_message("Check empty records (epr: "DF_U64","DF_U64")\n",
+			      start_epoch, start_epoch + gs_dkeys - 1);
+	else
+		print_message("Check valid records (epr: "DF_U64","DF_U64")\n",
+			      start_epoch, start_epoch + gs_dkeys - 1);
+
+	ioreq_init(&req, coh, oid, DAOS_IOD_SINGLE, arg);
+	if (update && !arg->myrank)
+		print_message("Inserting %d keys...\n",
+			      gs_dkeys);
+
+	D_ALLOC(rec, strlen(val_fmt) + g_dkeys_strlen + 1);
+	assert_non_null(rec);
+	D_ALLOC(val, 64);
+	assert_non_null(val);
+	val_size = 64;
+	epoch = start_epoch;
+
+	if (update) {
+		for (i = 0; i < gs_dkeys; i++) {
+			memset(rec, 0, (strlen(val_fmt) + g_dkeys_strlen + 1));
+			sprintf(rec, val_fmt, epoch + i);
+			rec_size = strlen(rec);
+			D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
+				dkey, (int)rec_size, rec);
+			insert_single(dkey, akey, 1100, rec, rec_size,
+				      (epoch + i), &req);
+		}
+	}
+
+	D_ALLOC(rec_verify, strlen(val_fmt) + g_dkeys_strlen + 1);
+	for (i = 0; i < gs_dkeys; i++) {
+		memset(rec_verify, 0, (strlen(val_fmt) + g_dkeys_strlen + 1));
+		memset(val, 0, 64);
+		if (!verify_empty) {
+			sprintf(rec_verify, val_fmt, (epoch + i));
+			lookup_single(dkey, akey, 1100, val, val_size,
+				      (epoch + i), &req);
+		} else {
+			lookup_empty_single(dkey, akey, 1100, val, val_size,
+					    (epoch + i), &req);
+		}
+		assert_int_equal(req.iod[0].iod_size, strlen(rec_verify));
+		assert_memory_equal(val, rec_verify, req.iod[0].iod_size);
+	}
+
+	D_FREE(val, 64);
+	D_FREE(rec_verify, (strlen(val_fmt) + g_dkeys_strlen + 1));
+	D_FREE(rec, strlen(val_fmt) + g_dkeys_strlen + 1);
+}
 
 static void
 assert_epoch_state_equal(daos_epoch_state_t *a, daos_epoch_state_t *b)
@@ -75,7 +143,7 @@ cont_close(test_arg_t *arg, daos_handle_t coh)
 static int
 cont_query(test_arg_t *arg, daos_handle_t coh, daos_cont_info_t *info)
 {
-	print_message("querying container\n");
+	print_message(".");
 	return daos_cont_query(coh, info, NULL);
 }
 
@@ -305,37 +373,100 @@ test_epoch_slip(void **argp)
 	test_arg_t	       *arg = *argp;
 	uuid_t			cont_uuid;
 	daos_handle_t		coh;
-	daos_epoch_t		epoch;
+	daos_epoch_t		epoch, epoch_tmp;
 	daos_epoch_state_t	state;
 	daos_epoch_state_t	state_tmp;
 	daos_cont_info_t	info;
-	int			rc;
+	daos_obj_id_t		oid;
 
 	MUST(cont_create(arg, cont_uuid));
 	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP,
 		       &coh));
 
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	print_message("OID: "DF_OID"\n", DP_OID(oid));
+
 	epoch = 10;
 	MUST(epoch_hold(arg, coh, &epoch, &state));
-	MUST(epoch_commit(arg, coh, epoch, &state));
+	io_for_aggregation(arg, coh, epoch, 100, &state, oid,
+			   /* update */ true,
+			   /* verify empty record */ false);
+	MUST(epoch_commit(arg, coh, (epoch + 99),
+			  &state));
+
+	memset(&info, 0, sizeof(daos_cont_info_t));
+	print_message("Verfying aggregated epoch before slip.. ");
+	MUST(cont_query(arg, coh, &info));
+	/** aggregated epoch before aggregation */
+	assert_true(info.ci_min_slipped_epoch == 0);
+	print_message(" "DF_U64"\n", info.ci_min_slipped_epoch);
 
 	print_message("slip to (LRE, MAX) shall succeed\n");
-	epoch = 5; /* LRE = 0 and GHCE = 10 */
+	epoch = 95; /* LRE = 0 and GHCE = 109 */
+	print_message("LRE: "DF_U64", HCE: "DF_U64", epoch: "DF_U64"\n",
+		      state.es_lre, state.es_hce, epoch);
 	assert_true(state.es_lre < epoch && epoch < state.es_hce);
 	state_tmp = state;
 	MUST(epoch_slip(arg, coh, epoch, &state));
 	state_tmp.es_lre = epoch;
 	state_tmp.es_glre = epoch;
 	assert_epoch_state_equal(&state, &state_tmp);
-	rc = cont_query(arg, coh, &info);
-	print_message("rc: %d, min_epoch: " DF_U64"\n",
-		      rc, info.ci_min_slipped_epoch);
+	memset(&info, 0, sizeof(daos_cont_info_t));
+
+	if (arg->overlap) {
+		epoch_tmp = epoch + 15;
+		MUST(epoch_hold(arg, coh, &epoch_tmp, &state));
+		io_for_aggregation(arg, coh, epoch_tmp, 15, &state, oid,
+				   /* update */true,
+				   /* verify empty record */false);
+		MUST(epoch_commit(arg, coh, epoch_tmp, &state));
+		print_message("LRE: "DF_U64", HCE: "DF_U64", epoch: "DF_U64"\n",
+			      state.es_lre, state.es_hce, epoch_tmp);
+
+	}
+
+	/** Wait for aggregation completion */
+	print_message("Waiting for epoch_slip to complete .");
+	while (info.ci_min_slipped_epoch < epoch)
+		MUST(cont_query(arg, coh, &info));
+	print_message(". Done!\n");
+
+	/* completed aggregation */
+	print_message("aggregated epoch: " DF_U64"\n",
+		      info.ci_min_slipped_epoch);
 
 	print_message("slip to [0, LRE] shall be no-op\n");
-	epoch = 3; /* LRE = 5 */;
+	epoch = 15; /* LRE = 95 */;
+
 	state_tmp = state;
 	MUST(epoch_slip(arg, coh, epoch, &state));
 	assert_epoch_state_equal(&state, &state_tmp);
+
+	memset(&info, 0, sizeof(daos_cont_info_t));
+	/** Wait for aggregation completion */
+	print_message("Waiting for epoch_slip to complete .");
+	while (info.ci_min_slipped_epoch < epoch)
+		MUST(cont_query(arg, coh, &info));
+	print_message(". Done!\n");
+
+	/* completed aggregation */
+	print_message("aggregated epoch: " DF_U64"\n",
+		      info.ci_min_slipped_epoch);
+
+	/** empty records from 10 -> 94 */
+	epoch = 10;
+	io_for_aggregation(arg, coh, epoch, 85, &state, oid,
+			   /* update */ false,
+			   /* verify empty record */ true);
+
+	/** no-empty records from 95 - 109/124 */
+	epoch = 95;
+	io_for_aggregation(arg, coh, epoch,
+			   (arg->overlap) ? 30 : 15,
+			   &state, oid,
+			   /* update */false,
+			   /* verify empty record */false);
+
 	MUST(cont_close(arg, coh));
 	MUST(cont_destroy(arg, cont_uuid));
 }
@@ -480,9 +611,11 @@ static const struct CMUnitTest epoch_tests[] = {
 	  test_epoch_slip, async_disable, NULL},
 	{ "EPOCH9: epoch_slip (async)",
 	  test_epoch_slip, async_enable, NULL},
-	{ "EPOCH10: epoch_commit complex (multiple writers)",
+	{ "EPOCH10: epoch_slip (overlap)",
+	  test_epoch_slip, async_overlap, NULL},
+	{ "EPOCH11: epoch_commit complex (multiple writers)",
 	  test_epoch_commit_complex, async_disable, NULL},
-	{ "EPOCH11: epoch_hold complex (multiple writers)",
+	{ "EPOCH12: epoch_hold complex (multiple writers)",
 	  test_epoch_hold_complex, async_disable, NULL}
 };
 

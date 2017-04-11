@@ -61,6 +61,7 @@ typedef struct {
 	bool			hdl_share;
 	uint64_t		fail_loc;
 	uint64_t		fail_value;
+	bool			overlap;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
@@ -84,7 +85,8 @@ async_enable(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->async = true;
+	arg->overlap = false;
+	arg->async   = true;
 	return 0;
 }
 
@@ -93,9 +95,22 @@ async_disable(void **state)
 {
 	test_arg_t	*arg = *state;
 
-	arg->async = false;
+	arg->overlap = false;
+	arg->async   = false;
 	return 0;
 }
+
+static inline int
+async_overlap(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	arg->overlap = true;
+	arg->async   = true;
+	return 0;
+}
+
+
 
 static inline int
 hdl_share_enable(void **state)

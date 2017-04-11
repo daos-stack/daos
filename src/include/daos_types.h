@@ -241,6 +241,7 @@ typedef struct {
 
 /** Highest possible epoch */
 #define DAOS_EPOCH_MAX	(~0ULL)
+#define DAOS_PURGE_CREDITS_MAX 1000
 
 /** Epoch State */
 typedef struct {

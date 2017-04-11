@@ -242,7 +242,8 @@ punch(const char *dkey, const char *akey, uint64_t idx,
 
 static void
 lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
-		daos_iod_t *iods, daos_epoch_t epoch, struct ioreq *req)
+		daos_iod_t *iods, daos_epoch_t epoch, struct ioreq *req,
+		bool empty)
 {
 	bool ev_flag;
 	int rc;
@@ -261,13 +262,14 @@ lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 	assert_int_equal(ev_flag, true);
 	assert_int_equal(req->ev.ev_error, req->arg->expect_result);
 	/* Only single iov for each sgls during the test */
-	assert_int_equal(sgls->sg_nr.num_out, 1);
+	if (!empty)
+		assert_int_equal(sgls->sg_nr.num_out, 1);
 }
 
 void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
-       daos_size_t *read_size, void **val, daos_size_t *size,
-       daos_epoch_t *epoch, struct ioreq *req)
+	daos_size_t *read_size, void **val, daos_size_t *size,
+	daos_epoch_t *epoch, struct ioreq *req, bool empty)
 {
 	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 
@@ -283,7 +285,8 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	/* set iod */
 	ioreq_iod_simple_set(req, read_size, true, idx, epoch, nr);
 
-	lookup_internal(&req->dkey, nr, req->sgl, req->iod, *epoch, req);
+	lookup_internal(&req->dkey, nr, req->sgl, req->iod, *epoch, req,
+			empty);
 }
 
 void
@@ -293,7 +296,19 @@ lookup_single(const char *dkey, const char *akey, uint64_t idx,
 {
 	daos_size_t read_size = DAOS_REC_ANY;
 
-	lookup(dkey, 1, &akey, &idx, &read_size, &val, &size, &epoch, req);
+	lookup(dkey, 1, &akey, &idx, &read_size, &val, &size, &epoch, req,
+	       false);
+}
+
+void
+lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
+		    void *val, daos_size_t size, daos_epoch_t epoch,
+		    struct ioreq *req)
+{
+	daos_size_t read_size = DAOS_REC_ANY;
+
+	lookup(dkey, 1, &akey, &idx, &read_size, &val, &size, &epoch, req,
+	       true);
 }
 
 /** test overwrite in different epoch */
@@ -852,7 +867,7 @@ io_complex(void **state)
 
 	/** Lookup */
 	lookup(dkey, 5, (const char **)akey, offset, rec_size,
-	       (void **)val, val_size, &epoch, &req);
+	       (void **)val, val_size, &epoch, &req, false);
 
 	/** Verify data consistency */
 	for (i = 0; i < 5; i++) {
@@ -1286,7 +1301,8 @@ epoch_discard(void **state)
 	for (e = epoch; e < epoch + 3; e++) {
 		print_message("verifying epoch "DF_U64"\n", e);
 		lookup(dkey, nakeys, (const char **)akey, offset,
-		       rec_size, (void **)val, val_size, &e, &req);
+		       rec_size, (void **)val, val_size, &e, &req,
+		       false);
 		for (i = 0; i < nakeys; i++) {
 			if (e == epoch + 1)	/* discarded */
 				sprintf(rec_verify, val_fmt, i, e - 1);

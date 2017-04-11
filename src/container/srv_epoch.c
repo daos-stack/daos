@@ -615,6 +615,7 @@ ds_cont_epoch_slip(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		rc = ec_increment(cont, EC_LRE, hdl->ch_lre);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);
+
 		rc = ec_find_lowest(cont, EC_LRE, &attr.ea_glre);
 		if (rc != 0)
 			pmemobj_tx_abort(rc);

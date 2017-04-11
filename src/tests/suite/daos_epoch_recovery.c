@@ -84,7 +84,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
 		assert_non_null(rec_verify);
 		print_message("verifying epoch "DF_U64"\n", epoch);
 		lookup(dkey, nakeys, (const char **)akey, offset, rec_size,
-		       (void **)rec, rec_size, &epoch, &req);
+		       (void **)rec, rec_size, &epoch, &req, false);
 		for (i = 0; i < nakeys; i++) {
 			print_message("  akey[%d] '%s' val '%.*s'\n", i,
 				      akey[i], (int)req.iod[i].iod_size,

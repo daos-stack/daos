@@ -90,7 +90,7 @@ struct vc_hdl {
 	 * within container
 	 */
 	struct vos_object_index	*vc_obj_table;
-	/** Diret pointer to the VOS container */
+	/** Direct pointer to the VOS container */
 	struct vos_container	*vc_co;
 };
 

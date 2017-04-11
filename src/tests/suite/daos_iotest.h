@@ -72,6 +72,11 @@ lookup_single(const char *dkey, const char *akey, uint64_t idx,
 	      struct ioreq *req);
 
 void
+lookup_empty_single(const char *dkey, const char *akey, uint64_t idx,
+		    void *val, daos_size_t size, daos_epoch_t epoch,
+		    struct ioreq *req);
+
+void
 enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	       daos_hash_out_t *anchor, void *buf, daos_size_t len,
 	       struct ioreq *req);
@@ -82,8 +87,8 @@ insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
 
 void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
-       daos_size_t *read_size, void **val, daos_size_t *size,
-       daos_epoch_t *epoch, struct ioreq *req);
+	daos_size_t *read_size, void **val, daos_size_t *size,
+	daos_epoch_t *epoch, struct ioreq *req, bool empty);
 
 int
 obj_setup(void **state);
