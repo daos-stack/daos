@@ -401,13 +401,38 @@ vos_oi_create(struct vos_pool *pool, struct vos_object_index *obj_index);
 int
 vos_oi_destroy(struct vos_pool *pool, struct vos_object_index *obj_index);
 
+enum vos_tree_class {
+	/** the first reserved tree class */
+	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
+	/** distribution key tree */
+	VOS_BTR_DKEY		= (VOS_BTR_BEGIN + 0),
+	/** attribute key tree */
+	VOS_BTR_AKEY		= (VOS_BTR_BEGIN + 1),
+	/** index + epoch tree */
+	VOS_BTR_IDX		= (VOS_BTR_BEGIN + 2),
+	/** object index table */
+	VOS_BTR_OIT		= (VOS_BTR_BEGIN + 3),
+	/** container index table */
+	VOS_BTR_CIT		= (VOS_BTR_BEGIN + 4),
+	/** tree type for cookie index table */
+	VOS_BTR_COOKIE		= (VOS_BTR_BEGIN + 5),
+	/** the last reserved tree class */
+	VOS_BTR_END,
+};
+
+int vos_obj_tree_init(struct vos_obj_ref *oref);
+int vos_obj_tree_fini(struct vos_obj_ref *oref);
+int vos_obj_tree_register(void);
+
 /**
  * Data structure which carries the keys, epoch ranges to the multi-nested
  * btree.
  */
 struct vos_key_bundle {
-	/** daos key for the I/O operation */
+	enum vos_tree_class	 kb_tclass;
+	/** daos d-key for the I/O operation */
 	daos_key_t		*kb_dkey;
+	/** daos a-key for the I/O operation */
 	daos_key_t		*kb_akey;
 	/** key for the current tree, could be @kb_dkey or @kb_akey */
 	daos_key_t		*kb_key;
@@ -430,10 +455,12 @@ struct vos_rec_bundle {
 	 * Output : parameter to return value address.
 	 */
 	daos_iov_t		*rb_iov;
-	/** Optional, externally allocated d-key record mmid (rdma vos_krec) */
+	/** Optional, externally allocated buffer mmid */
 	umem_id_t		 rb_mmid;
-	/** returned subtree root */
+	/** returned btree root */
 	struct btr_root		*rb_btr;
+	/** returned evtree root */
+	struct evt_root		*rb_evt;
 	/** returned size and nr of recx */
 	daos_recx_t		*rb_recx;
 	/** update cookie of this recx (input for update, output for fetch) */
@@ -449,40 +476,48 @@ vos_size_round(uint64_t size)
 	return (size + VOS_SIZE_ROUND - 1) & ~(VOS_SIZE_ROUND - 1);
 }
 
-static inline struct vos_krec *
+static inline struct vos_krec_df *
 vos_rec2krec(struct btr_instance *tins, struct btr_record *rec)
 {
-	return (struct vos_krec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	return (struct vos_krec_df *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 }
 
-static inline struct vos_irec *
+static inline struct vos_irec_df *
 vos_rec2irec(struct btr_instance *tins, struct btr_record *rec)
 {
-	return (struct vos_irec *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	return (struct vos_irec_df *)umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
 }
 
 static inline uint64_t
-vos_krec_size(struct vos_rec_bundle *rbund)
+vos_krec_size(enum vos_tree_class tclass, struct vos_rec_bundle *rbund)
 {
 	daos_iov_t	*key;
 	uint64_t	 size;
+	bool		 has_evt = (tclass == VOS_BTR_AKEY);
 
 	key = rbund->rb_iov;
-	size = vos_size_round(rbund->rb_csum->cs_len);
+	size = vos_size_round(rbund->rb_csum->cs_len) + key->iov_len;
+	return size + offsetof(struct vos_krec_df, kr_evt[has_evt]);
+}
 
-	return size + key->iov_len + sizeof(struct vos_krec);
+static inline void *
+vos_krec2payload(struct vos_krec_df *krec)
+{
+	return (void *)&krec->kr_evt[!!(krec->kr_bmap & KREC_BF_EVT)];
 }
 
 static inline char *
-vos_krec2csum(struct vos_krec *krec)
+vos_krec2csum(struct vos_krec_df *krec)
 {
-	return krec->kr_cs_size == 0 ? NULL : &krec->kr_body[0];
+	return krec->kr_cs_size ? vos_krec2payload(krec) : NULL;
 }
 
 static inline char *
-vos_krec2key(struct vos_krec *krec)
+vos_krec2key(struct vos_krec_df *krec)
 {
-	return &krec->kr_body[vos_size_round(krec->kr_cs_size)];
+	char *payload = vos_krec2payload(krec);
+
+	return &payload[vos_size_round(krec->kr_cs_size)];
 }
 
 static inline uint64_t
@@ -492,12 +527,12 @@ vos_irec_size(struct vos_rec_bundle *rbund)
 
 	if (rbund->rb_csum != NULL)
 		size = vos_size_round(rbund->rb_csum->cs_len);
-	return size + sizeof(struct vos_irec) +
+	return size + sizeof(struct vos_irec_df) +
 	       rbund->rb_recx->rx_rsize * rbund->rb_recx->rx_nr;
 }
 
 static inline bool
-vos_irec_size_equal(struct vos_irec *irec, struct vos_rec_bundle *rbund)
+vos_irec_size_equal(struct vos_irec_df *irec, struct vos_rec_bundle *rbund)
 {
 	if (irec->ir_size != rbund->rb_recx->rx_rsize * rbund->rb_recx->rx_nr)
 		return false;
@@ -509,13 +544,13 @@ vos_irec_size_equal(struct vos_irec *irec, struct vos_rec_bundle *rbund)
 }
 
 static inline char *
-vos_irec2csum(struct vos_irec *irec)
+vos_irec2csum(struct vos_irec_df *irec)
 {
 	return irec->ir_cs_size == 0 ? NULL : &irec->ir_body[0];
 }
 
 static inline char *
-vos_irec2data(struct vos_irec *irec)
+vos_irec2data(struct vos_irec_df *irec)
 {
 	return &irec->ir_body[vos_size_round(irec->ir_cs_size)];
 }
@@ -542,29 +577,6 @@ static inline bool vos_recx_is_equal(daos_recx_t *recx1, daos_recx_t *recx2)
 {
 	return !(memcmp(recx1, recx2, sizeof(daos_recx_t)));
 }
-
-enum {
-	/** the first reserved tree class */
-	VOS_BTR_BEGIN		= DBTREE_VOS_BEGIN,
-	/** distribution key tree */
-	VOS_BTR_DKEY		= (VOS_BTR_BEGIN + 0),
-	/** attribute key tree */
-	VOS_BTR_AKEY		= (VOS_BTR_BEGIN + 1),
-	/** index + epoch tree */
-	VOS_BTR_IDX		= (VOS_BTR_BEGIN + 2),
-	/** object index table */
-	VOS_BTR_OIT		= (VOS_BTR_BEGIN + 3),
-	/** container index table */
-	VOS_BTR_CIT		= (VOS_BTR_BEGIN + 4),
-	/** tree type for cookie index table */
-	VOS_BTR_COOKIE		= (VOS_BTR_BEGIN + 5),
-	/** the last reserved tree class */
-	VOS_BTR_END,
-};
-
-int vos_obj_tree_init(struct vos_obj_ref *oref);
-int vos_obj_tree_fini(struct vos_obj_ref *oref);
-int vos_obj_tree_register(void);
 
 static inline PMEMobjpool *
 vos_co2pop(struct vc_hdl *co_hdl)

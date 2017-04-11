@@ -31,6 +31,7 @@
 #define _VOS_LAYOUT_H
 #include <libpmemobj.h>
 #include <daos/btree.h>
+#include <daos_srv/evtree.h>
 #include <daos_srv/vos_types.h>
 
 /**
@@ -49,8 +50,8 @@ struct vos_object_index;
 struct vos_obj;
 struct vos_cookie_rec_df;
 struct vos_epoch_index;
-struct vos_krec;
-struct vos_irec;
+struct vos_krec_df;
+struct vos_irec_df;
 
 /**
  * Typed Layout named using Macros from libpmemobj
@@ -71,8 +72,8 @@ POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_object_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_rec_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_irec);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec_df);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_irec_df);
 POBJ_LAYOUT_END(vos_pool_layout);
 
 
@@ -120,29 +121,38 @@ struct vos_container {
 	TMMID(struct vos_object_index)	vc_obtable;
 };
 
+/** btree (d/a-key) record bit flags */
+enum vos_krec_bf {
+	KREC_BF_EVT			= (1 << 0),
+};
+
 /**
  * Persisted VOS (d)key record, it is referenced by btr_record::rec_mmid
  * of btree VOS_BTR_KEY.
  */
-struct vos_krec {
-	struct btr_root			kr_btr;
-	/** key checksum type */
+struct vos_krec_df {
+	/** record bitmap, e.g. has evtree, see vos_krec_bf */
+	uint8_t				kr_bmap;
+	/** checksum type */
 	uint8_t				kr_cs_type;
 	/** key checksum size (in bytes) */
 	uint8_t				kr_cs_size;
 	/** padding bytes */
-	uint16_t			kr_pad_16;
+	uint8_t				kr_pad_8;
 	/** akey length */
 	uint32_t			kr_size;
-	/** placeholder for the real stuff */
-	char				kr_body[0];
+	/** btree root under the key */
+	struct btr_root			kr_btr;
+	/** evtree root, which is only used by akey */
+	struct evt_root			kr_evt[0];
+	/* Checksum and key are stored after tree root */
 };
 
 /**
  * Persisted VOS index & epoch record, it is referenced by btr_record::rec_mmid
  * of btree VOS_BTR_IDX.
  */
-struct vos_irec {
+struct vos_irec_df {
 	/** reserved for resolving overwrite race */
 	uint64_t			ir_cookie;
 	/** key checksum type */

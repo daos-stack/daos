@@ -34,6 +34,9 @@
 /** hash seed for murmur hash */
 #define VOS_BTR_MUR_SEED	0xC0FFEE
 
+#define VOS_BTR_ORDER		15
+#define VOS_EVT_ORDER		15
+
 /**
  * VOS Btree attributes, for tree registration and tree creation.
  */
@@ -82,15 +85,15 @@ struct key_btr_hkey {
 };
 
 /**
- * Copy a key and its checksum into vos_krec
+ * Copy a key and its checksum into vos_krec_df
  */
 static int
-kbtr_rec_fetch_in(struct btr_instance *tins, struct btr_record *rec,
-		  struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
+kbtr_rec_copy_in(struct btr_instance *tins, struct btr_record *rec,
+		 struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
-	struct vos_krec	*krec	= vos_rec2krec(tins, rec);
-	daos_iov_t	*iov	= rbund->rb_iov;
-	daos_csum_buf_t	*csum	= rbund->rb_csum;
+	struct vos_krec_df *krec = vos_rec2krec(tins, rec);
+	daos_iov_t	   *iov	 = rbund->rb_iov;
+	daos_csum_buf_t	   *csum = rbund->rb_csum;
 
 	krec->kr_cs_size = csum->cs_len;
 	if (krec->kr_cs_size != 0) {
@@ -126,12 +129,12 @@ kbtr_rec_fetch_in(struct btr_instance *tins, struct btr_record *rec,
  * external buffer.
  */
 static int
-kbtr_rec_fetch_out(struct btr_instance *tins, struct btr_record *rec,
-		   struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
+kbtr_rec_copy_out(struct btr_instance *tins, struct btr_record *rec,
+		  struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
-	struct vos_krec	*krec	= vos_rec2krec(tins, rec);
-	daos_iov_t	*iov	= rbund->rb_iov;
-	daos_csum_buf_t	*csum	= rbund->rb_csum;
+	struct vos_krec_df *krec = vos_rec2krec(tins, rec);
+	daos_iov_t	   *iov	 = rbund->rb_iov;
+	daos_csum_buf_t	   *csum = rbund->rb_csum;
 
 	iov->iov_len = krec->kr_size;
 	if (iov->iov_buf == NULL) {
@@ -172,9 +175,9 @@ kbtr_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 
 	key = vos_iov2key_bundle(key_iov)->kb_key;
 
-	khkey->hk_hash2 = 0; /* XXX add the second hash function */
 	khkey->hk_hash1 = daos_hash_murmur64(key->iov_buf, key->iov_len,
-						VOS_BTR_MUR_SEED);
+					     VOS_BTR_MUR_SEED);
+	khkey->hk_hash2 = daos_hash_string_u32(key->iov_buf, key->iov_len);
 }
 
 /** compare the hashed key */
@@ -184,12 +187,16 @@ kbtr_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 	struct key_btr_hkey *khkey1 = (struct key_btr_hkey *)&rec->rec_hkey[0];
 	struct key_btr_hkey *khkey2 = (struct key_btr_hkey *)hkey;
 
-	D_ASSERT(khkey1->hk_hash2 == 0 && khkey2->hk_hash2 == 0);
-
 	if (khkey1->hk_hash1 < khkey2->hk_hash1)
 		return -1;
 
 	if (khkey1->hk_hash1 > khkey2->hk_hash1)
+		return 1;
+
+	if (khkey1->hk_hash2 < khkey2->hk_hash2)
+		return -1;
+
+	if (khkey1->hk_hash2 > khkey2->hk_hash2)
 		return 1;
 
 	return 0;
@@ -201,7 +208,7 @@ kbtr_key_cmp(struct btr_instance *tins, struct btr_record *rec,
 	     daos_iov_t *key_iov)
 {
 	daos_iov_t		*key;
-	struct vos_krec		*krec;
+	struct vos_krec_df	*krec;
 	struct vos_key_bundle	*kbund;
 
 	kbund = vos_iov2key_bundle(key_iov);
@@ -224,74 +231,95 @@ kbtr_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 {
 	struct vos_key_bundle	*kbund;
 	struct vos_rec_bundle	*rbund;
-	struct vos_krec		*krec;
+	struct vos_krec_df	*krec;
 	struct vos_btr_attr	*ta;
 	struct umem_attr	 uma;
-	daos_handle_t		 toh;
+	daos_handle_t		 btr_oh = DAOS_HDL_INVAL;
+	daos_handle_t		 evt_oh = DAOS_HDL_INVAL;
 	int			 rc;
 
 	kbund = vos_iov2key_bundle(key_iov);
 	rbund = vos_iov2rec_bundle(val_iov);
 
-	if (UMMID_IS_NULL(rbund->rb_mmid)) {
-		rec->rec_mmid = umem_alloc(&tins->ti_umm,
-					   vos_krec_size(rbund));
-		if (UMMID_IS_NULL(rec->rec_mmid))
-			return -DER_NOMEM;
-
-		kbtr_rec_fetch_in(tins, rec, kbund, rbund);
-	} else {
-		/* Huh, can't assume upper layer is using valid record format,
-		 * need to do sanity check.
-		 */
-		rec->rec_mmid = rbund->rb_mmid;
-	}
+	rec->rec_mmid = umem_zalloc(&tins->ti_umm,
+				    vos_krec_size(kbund->kb_tclass, rbund));
+	if (UMMID_IS_NULL(rec->rec_mmid))
+		return -DER_NOMEM;
 
 	krec = vos_rec2krec(tins, rec);
-	memset(&krec->kr_btr, 0, sizeof(krec->kr_btr));
 
-	/* find the sub-tree attributes */
+	/* Step-1: find the btree attributes and create btree */
 	ta = vos_obj_sub_tree_attr(tins->ti_root->tr_class);
 	D_ASSERT(ta != NULL);
 
-	D_DEBUG(DF_VOS2, "Create subtree %s\n", ta->ta_name);
+	D_DEBUG(DB_TRACE, "Create dbtree %s\n", ta->ta_name);
 
 	umem_attr_get(&tins->ti_umm, &uma);
-	rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats,
-				   ta->ta_order, &uma, &krec->kr_btr, &toh);
+	rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats, ta->ta_order,
+				   &uma, &krec->kr_btr, &btr_oh);
 	if (rc != 0) {
-		D_DEBUG(DF_VOS1, "Failed to create subtree: %d\n", rc);
+		D_ERROR("Failed to create btree: %d\n", rc);
 		return rc;
 	}
-
 	rbund->rb_btr = &krec->kr_btr;
-	dbtree_close(toh);
+
+	if (kbund->kb_tclass == VOS_BTR_DKEY)
+		D_GOTO(copy_out, rc = 0);
+
+	/* Step-2: find evtree for akey only */
+	D_DEBUG(DB_TRACE, "Create evtree\n");
+
+	rc = evt_create_inplace(EVT_FEAT_DEFAULT, VOS_EVT_ORDER, &uma,
+				&krec->kr_evt[0], &evt_oh);
+	if (rc != 0) {
+		D_ERROR("Failed to create evtree: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rbund->rb_evt = &krec->kr_evt[0];
+	krec->kr_bmap |= KREC_BF_EVT;
+	D_EXIT;
+ copy_out:
+	kbtr_rec_copy_in(tins, rec, kbund, rbund);
+ out:
+	if (!daos_handle_is_inval(btr_oh))
+		dbtree_close(btr_oh);
+
+	if (!daos_handle_is_inval(evt_oh))
+		evt_close(evt_oh);
+
 	return rc;
 }
 
 static int
-kbtr_rec_free(struct btr_instance *tins, struct btr_record *rec,
-	      void *args)
+kbtr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	struct vos_krec		*krec;
-	int			 rc = 0;
+	struct vos_krec_df *krec;
+	struct umem_attr    uma;
+	daos_handle_t	    toh;
+	int		    rc = 0;
 
 	if (UMMID_IS_NULL(rec->rec_mmid))
 		return 0;
 
 	krec = vos_rec2krec(tins, rec);
+	umem_attr_get(&tins->ti_umm, &uma);
 
 	/* has subtree? */
-	if (krec->kr_btr.tr_class != 0) {
-		struct umem_attr uma;
-		daos_handle_t	 toh;
-
-		umem_attr_get(&tins->ti_umm, &uma);
+	if (krec->kr_btr.tr_order) {
 		rc = dbtree_open_inplace(&krec->kr_btr, &uma, &toh);
 		if (rc != 0)
-			D_ERROR("Failed to open subtree: %d\n", rc);
+			D_ERROR("Failed to open btree: %d\n", rc);
 		else
 			dbtree_destroy(toh);
+	}
+
+	if ((krec->kr_bmap & KREC_BF_EVT) && krec->kr_evt[0].tr_order) {
+		rc = evt_open_inplace(&krec->kr_evt[0], &uma, &toh);
+		if (rc != 0)
+			D_ERROR("Failed to open evtree: %d\n", rc);
+		else
+			evt_destroy(toh);
 	}
 	umem_free(&tins->ti_umm, rec->rec_mmid);
 	return rc;
@@ -301,16 +329,19 @@ static int
 kbtr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	       daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
-	struct vos_krec		*krec = vos_rec2krec(tins, rec);
+	struct vos_krec_df	*krec = vos_rec2krec(tins, rec);
 	struct vos_rec_bundle	*rbund;
 
 	rbund = vos_iov2rec_bundle(val_iov);
 	rbund->rb_btr = &krec->kr_btr;
+	if (krec->kr_bmap & KREC_BF_EVT)
+		rbund->rb_evt = &krec->kr_evt[0];
+
 	if (key_iov != NULL) {
 		struct vos_key_bundle	*kbund;
 
 		kbund = vos_iov2key_bundle(key_iov);
-		kbtr_rec_fetch_out(tins, rec, kbund, rbund);
+		kbtr_rec_copy_out(tins, rec, kbund, rbund);
 	}
 	return 0;
 }
@@ -320,7 +351,7 @@ kbtr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
 	struct vos_rec_bundle	*rbund;
-	struct vos_krec		*krec;
+	struct vos_krec_df	*krec;
 
 	/* NB: do nothing at here except return the sub-tree root, because
 	 * the real update happens in the sub-tree (index & epoch tree).
@@ -328,6 +359,9 @@ kbtr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	krec = vos_rec2krec(tins, rec);
 	rbund = vos_iov2rec_bundle(val_iov);
 	rbund->rb_btr = &krec->kr_btr;
+	if (krec->kr_bmap & KREC_BF_EVT)
+		rbund->rb_evt = &krec->kr_evt[0];
+
 	return 0;
 }
 
@@ -368,7 +402,7 @@ static int
 irec_update(struct btr_instance *tins, struct btr_record *rec,
 	    struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
-	struct vos_irec		*irec	= vos_rec2irec(tins, rec);
+	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
 	daos_csum_buf_t		*csum	= rbund->rb_csum;
 	daos_iov_t		*iov	= rbund->rb_iov;
 	struct idx_btr_key	*ihkey;
@@ -404,7 +438,7 @@ irec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	   struct vos_key_bundle *kbund, struct vos_rec_bundle *rbund)
 {
 	struct idx_btr_key *ihkey = (struct idx_btr_key *)&rec->rec_hkey[0];
-	struct vos_irec	   *irec  = vos_rec2irec(tins, rec);
+	struct vos_irec_df *irec  = vos_rec2irec(tins, rec);
 	daos_csum_buf_t	   *csum  = rbund->rb_csum;
 	daos_iov_t	   *iov   = rbund->rb_iov;
 	daos_recx_t	   *recx  = rbund->rb_recx;
@@ -582,21 +616,21 @@ static btr_ops_t vos_idx_btr_ops = {
 static struct vos_btr_attr vos_btr_attrs[] = {
 	{
 		.ta_class	= VOS_BTR_DKEY,
-		.ta_order	= 16,
+		.ta_order	= VOS_BTR_ORDER,
 		.ta_feats	= 0,
 		.ta_name	= "vos_dkey",
 		.ta_ops		= &vos_key_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_AKEY,
-		.ta_order	= 16,
+		.ta_order	= VOS_BTR_ORDER,
 		.ta_feats	= 0,
 		.ta_name	= "vos_akey",
 		.ta_ops		= &vos_key_btr_ops,
 	},
 	{
 		.ta_class	= VOS_BTR_IDX,
-		.ta_order	= 16,
+		.ta_order	= VOS_BTR_ORDER,
 		.ta_feats	= 0,
 		.ta_name	= "vos_idx",
 		.ta_ops		= &vos_idx_btr_ops,

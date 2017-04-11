@@ -261,12 +261,13 @@ tree_rec_bundle2iov(struct vos_rec_bundle *rbund, daos_iov_t *iov)
  * Prepare the record/recx tree, both of them are btree for now, although recx
  * tree could be rtree in the future.
  *
- * array tree	: all akeys under the same dkey
+ * akey tree	: all akeys under the same dkey
  * recx tree	: all record extents under the same akey
  */
 static int
 tree_prepare(struct vos_obj_ref *oref, daos_handle_t parent_toh,
-	     daos_key_t *key, bool read_only, daos_handle_t *toh)
+	     enum vos_tree_class parent_class, daos_key_t *key,
+	     bool read_only, daos_handle_t *toh)
 {
 	daos_csum_buf_t		 csum;
 	struct vos_key_bundle	 kbund;
@@ -276,6 +277,7 @@ tree_prepare(struct vos_obj_ref *oref, daos_handle_t parent_toh,
 	int			 rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
+	kbund.kb_tclass = parent_class;
 	kbund.kb_key	= key;
 
 	tree_rec_bundle2iov(&rbund, &riov);
@@ -344,6 +346,7 @@ tree_recx_fetch(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_idx	= recx->rx_idx;
 	kbund.kb_epr	= epr;
+	kbund.kb_tclass	= VOS_BTR_IDX;
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_iov	= iov;
@@ -371,6 +374,7 @@ tree_recx_update(daos_handle_t toh, daos_epoch_range_t *epr,
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_idx	= recx->rx_idx;
 	kbund.kb_epr	= epr;
+	kbund.kb_tclass	= VOS_BTR_IDX;
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_csum	= csum;
@@ -406,6 +410,8 @@ tree_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	daos_csum_buf_t		csum;
 
 	tree_key_bundle2iov(&kbund, &kiov);
+	kbund.kb_tclass	= VOS_BTR_IDX;
+
 	tree_rec_bundle2iov(&rbund, &riov);
 
 	rbund.rb_iov	= &it_entry->ie_key;
@@ -588,18 +594,19 @@ failed:
 	return rc;
 }
 
-/** fetch a set of record extents from the specified array. */
+/** fetch a set of record extents from the specified akey. */
 static int
-vos_iod_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch,
-	      daos_handle_t iod_toh, daos_iod_t *iod,
-	      struct iod_buf *iobuf)
+vos_akey_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch,
+	       daos_handle_t akey_toh, daos_iod_t *iod,
+	       struct iod_buf *iobuf)
 {
 	daos_epoch_range_t	eprange;
 	daos_handle_t		toh;
 	int			i;
 	int			rc;
 
-	rc = tree_prepare(oref, iod_toh, &iod->iod_name, true, &toh);
+	rc = tree_prepare(oref, akey_toh, VOS_BTR_AKEY, &iod->iod_name,
+			  true, &toh);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DF_VOS2, "nonexistent record\n");
 		vos_empty_sgl(&iobuf->db_sgl);
@@ -643,7 +650,7 @@ vos_dkey_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_key_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	rc = tree_prepare(oref, oref->or_toh, dkey, true, &toh);
+	rc = tree_prepare(oref, oref->or_toh, VOS_BTR_DKEY, dkey, true, &toh);
 	if (rc == -DER_NONEXIST) {
 		for (i = 0; i < iod_nr; i++) {
 			vos_empty_iod(&iods[i]);
@@ -667,9 +674,8 @@ vos_dkey_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_key_t *dkey,
 			iobuf.db_sgl.sg_nr.num_out = 0;
 		}
 
-		rc = vos_iod_fetch(oref, epoch, toh, &iods[i],
-				   (sgls || !zcc) ? &iobuf
-						  : &zcc->zc_iobufs[i]);
+		rc = vos_akey_fetch(oref, epoch, toh, &iods[i],
+			    (sgls || !zcc) ? &iobuf : &zcc->zc_iobufs[i]);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -772,9 +778,9 @@ out:
 
 /** update a set of record extents (recx) under the same akey */
 static int
-vos_iod_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
-	       uuid_t cookie, daos_handle_t iod_toh, daos_iod_t *iod,
-	       struct iod_buf *iobuf)
+vos_akey_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
+	        uuid_t cookie, daos_handle_t akey_toh, daos_iod_t *iod,
+	        struct iod_buf *iobuf)
 {
 	daos_epoch_range_t	 eprange;
 	daos_off_t		 off;
@@ -783,7 +789,8 @@ vos_iod_update(struct vos_obj_ref *oref, daos_epoch_t epoch,
 	int			 nr;
 	int			 rc;
 
-	rc = tree_prepare(oref, iod_toh, &iod->iod_name, false, &toh);
+	rc = tree_prepare(oref, akey_toh, VOS_BTR_AKEY, &iod->iod_name,
+			  false, &toh);
 	if (rc != 0)
 		return rc;
 
@@ -820,7 +827,7 @@ vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, uuid_t cookie,
 	if (rc != 0)
 		return rc;
 
-	rc = tree_prepare(oref, oref->or_toh, dkey, false, &toh);
+	rc = tree_prepare(oref, oref->or_toh, VOS_BTR_DKEY, dkey, false, &toh);
 	if (rc != 0)
 		return rc;
 
@@ -831,9 +838,8 @@ vos_dkey_update(struct vos_obj_ref *oref, daos_epoch_t epoch, uuid_t cookie,
 		if (sgls)
 			iobuf.db_sgl = sgls[i];
 
-		rc = vos_iod_update(oref, epoch, cookie, toh, &iods[i],
-				   (sgls || !zcc) ? &iobuf
-						  : &zcc->zc_iobufs[i]);
+		rc = vos_akey_update(oref, epoch, cookie, toh, &iods[i],
+			   (sgls || !zcc) ? &iobuf : &zcc->zc_iobufs[i]);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -1011,9 +1017,9 @@ vos_zcc_destroy(struct vos_zc_context *zcc, int err)
 }
 
 static int
-vos_iod_zc_fetch_begin(struct vos_obj_ref *oref, daos_epoch_t epoch,
-		       daos_key_t *dkey, unsigned int iod_nr,
-		       daos_iod_t *iods, struct vos_zc_context *zcc)
+vos_akey_zc_fetch_begin(struct vos_obj_ref *oref, daos_epoch_t epoch,
+		        daos_key_t *dkey, unsigned int iod_nr,
+		        daos_iod_t *iods, struct vos_zc_context *zcc)
 {
 	int	i;
 	int	rc;
@@ -1069,8 +1075,8 @@ vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
 	if (rc != 0)
 		return rc;
 
-	rc = vos_iod_zc_fetch_begin(zcc->zc_oref, epoch, dkey, iod_nr,
-				    iods, zcc);
+	rc = vos_akey_zc_fetch_begin(zcc->zc_oref, epoch, dkey, iod_nr,
+				     iods, zcc);
 	if (rc != 0)
 		goto failed;
 
@@ -1142,8 +1148,8 @@ vos_rec_zc_update_begin(struct vos_obj_ref *oref, daos_iod_t *iod,
 		irec_size = vos_recx2irec_size(&recx, NULL);
 
 		for (j = 0; j < iod->iod_recxs[i].rx_nr; j++, nr++) {
-			struct vos_irec	*irec;
-			umem_id_t	 mmid;
+			struct vos_irec_df *irec;
+			umem_id_t	    mmid;
 
 			mmid = umem_alloc(vos_oref2umm(oref), irec_size);
 			if (UMMID_IS_NULL(mmid))
@@ -1153,7 +1159,7 @@ vos_rec_zc_update_begin(struct vos_obj_ref *oref, daos_iod_t *iod,
 			/* return the pmem address, so upper layer stack can do
 			 * RMA update for the record.
 			 */
-			irec = (struct vos_irec *)
+			irec = (struct vos_irec_df *)
 				umem_id2ptr(vos_oref2umm(oref), mmid);
 
 			irec->ir_cs_size = 0;
@@ -1167,8 +1173,8 @@ vos_rec_zc_update_begin(struct vos_obj_ref *oref, daos_iod_t *iod,
 }
 
 static int
-vos_iod_zc_update_begin(struct vos_obj_ref *oref, unsigned int iod_nr,
-			daos_iod_t *iods, struct vos_zc_context *zcc)
+vos_akey_zc_update_begin(struct vos_obj_ref *oref, unsigned int iod_nr,
+			 daos_iod_t *iods, struct vos_zc_context *zcc)
 {
 	int	i;
 	int	rc;
@@ -1206,7 +1212,7 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 	pop = vos_oref2pop(zcc->zc_oref);
 
 	TX_BEGIN(pop) {
-		rc = vos_iod_zc_update_begin(zcc->zc_oref, iod_nr, iods, zcc);
+		rc = vos_akey_zc_update_begin(zcc->zc_oref, iod_nr, iods, zcc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_DEBUG(DF_VOS1, "Failed to update object: %d\n", rc);
@@ -1219,8 +1225,7 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 	*ioh = vos_zcc2ioh(zcc);
 	return 0;
  failed:
-	vos_obj_zc_update_end(vos_zcc2ioh(zcc), 0, dkey, iod_nr,
-			      iods, rc);
+	vos_obj_zc_update_end(vos_zcc2ioh(zcc), 0, dkey, iod_nr, iods, rc);
 	return rc;
 }
 
@@ -1324,8 +1329,8 @@ dkey_iter_probe_cond(struct vos_obj_iter *oiter)
 		if (rc != 0)
 			return rc;
 
-		rc = tree_prepare(oref, oref->or_toh, &entry.ie_key, true,
-				  &toh);
+		rc = tree_prepare(oref, oref->or_toh, VOS_BTR_DKEY,
+				  &entry.ie_key, true, &toh);
 		if (rc != 0) {
 			D_DEBUG(DF_VOS1,
 				"Failed to load the record tree: %d\n", rc);
@@ -1335,7 +1340,8 @@ dkey_iter_probe_cond(struct vos_obj_iter *oiter)
 		/* check if the a-key exists */
 		tree_rec_bundle2iov(&rbund, &riov);
 		tree_key_bundle2iov(&kbund, &kiov);
-		kbund.kb_key = &oiter->it_akey;
+		kbund.kb_key	= &oiter->it_akey;
+		kbund.kb_tclass	= VOS_BTR_AKEY;
 
 		rc = dbtree_lookup(toh, &kiov, &riov);
 		tree_release(toh);
@@ -1386,18 +1392,18 @@ dkey_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 }
 
 /**
- * Iterator for the array tree.
+ * Iterator for the akey tree.
  */
 static int
-array_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
+akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
 {
 	struct vos_obj_ref *oref = oiter->it_oref;
 	daos_handle_t	    toh;
 	int		    rc;
 
-	rc = tree_prepare(oref, oref->or_toh, dkey, true, &toh);
+	rc = tree_prepare(oref, oref->or_toh, VOS_BTR_DKEY, dkey, true, &toh);
 	if (rc != 0) {
-		D_DEBUG(DF_VOS1, "Cannot load the recx tree: %d\n", rc);
+		D_DEBUG(DF_VOS1, "Cannot load the akey tree: %d\n", rc);
 		return rc;
 	}
 
@@ -1408,20 +1414,20 @@ array_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey)
 }
 
 static int
-array_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
+akey_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 {
 	return tree_iter_probe(oiter, anchor);
 }
 
 static int
-array_iter_next(struct vos_obj_iter *oiter)
+akey_iter_next(struct vos_obj_iter *oiter)
 {
 	return tree_iter_next(oiter);
 }
 
 static int
-array_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
-	       daos_hash_out_t *anchor)
+akey_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
+	        daos_hash_out_t *anchor)
 {
 	return tree_iter_fetch(oiter, it_entry, anchor);
 }
@@ -1448,13 +1454,14 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	daos_handle_t	    ak_toh;
 	int		    rc;
 
-	rc = tree_prepare(oref, oref->or_toh, dkey, true, &dk_toh);
+	rc = tree_prepare(oref, oref->or_toh, VOS_BTR_DKEY, dkey, true,
+			  &dk_toh);
 	if (rc != 0) {
 		D_DEBUG(DF_VOS1, "Cannot load the record tree: %d\n", rc);
 		return rc;
 	}
 
-	rc = tree_prepare(oref, dk_toh, akey, true, &ak_toh);
+	rc = tree_prepare(oref, dk_toh, VOS_BTR_AKEY, akey, true, &ak_toh);
 	if (rc != 0) {
 		D_DEBUG(DF_VOS1, "Cannot load the recx tree: %d\n", rc);
 		D_GOTO(failed_0, rc);
@@ -1489,6 +1496,7 @@ recx_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_idx	= entry->ie_recx.rx_idx;
 	kbund.kb_epr	= &entry->ie_epr;
+	kbund.kb_tclass	= VOS_BTR_IDX;
 
 	rc = dbtree_iter_probe(oiter->it_hdl, opc, &kiov, NULL);
 	if (rc != 0)
@@ -1624,7 +1632,8 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 		return rc;
 
 	tree_key_bundle2iov(&kbund, &kiov);
-	kbund.kb_epr = &entry.ie_epr;
+	kbund.kb_epr	= &entry.ie_epr;
+	kbund.kb_tclass	= VOS_BTR_IDX;
 
 	memset(&entry, 0, sizeof(entry));
 	rc = recx_iter_fetch(oiter, &entry, &tmp);
@@ -1659,6 +1668,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 
 	tree_key_bundle2iov(&kbund, &kiov);
 	kbund.kb_epr	= &it_entry->ie_epr;
+	kbund.kb_tclass = VOS_BTR_IDX;
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_recx	= &it_entry->ie_recx;
@@ -1767,7 +1777,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		break;
 
 	case VOS_ITER_AKEY:
-		rc = array_iter_prepare(oiter, &param->ip_dkey);
+		rc = akey_iter_prepare(oiter, &param->ip_dkey);
 		break;
 
 	case VOS_ITER_RECX:
@@ -1822,7 +1832,7 @@ vos_obj_iter_probe(struct vos_iterator *iter, daos_hash_out_t *anchor)
 		return dkey_iter_probe(oiter, anchor);
 
 	case VOS_ITER_AKEY:
-		return array_iter_probe(oiter, anchor);
+		return akey_iter_probe(oiter, anchor);
 
 	case VOS_ITER_RECX:
 		return recx_iter_probe(oiter, anchor);
@@ -1843,7 +1853,7 @@ vos_obj_iter_next(struct vos_iterator *iter)
 		return dkey_iter_next(oiter);
 
 	case VOS_ITER_AKEY:
-		return array_iter_next(oiter);
+		return akey_iter_next(oiter);
 
 	case VOS_ITER_RECX:
 		return recx_iter_next(oiter);
@@ -1865,7 +1875,7 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		return dkey_iter_fetch(oiter, it_entry, anchor);
 
 	case VOS_ITER_AKEY:
-		return array_iter_fetch(oiter, it_entry, anchor);
+		return akey_iter_fetch(oiter, it_entry, anchor);
 
 	case VOS_ITER_RECX:
 		return recx_iter_fetch(oiter, it_entry, anchor);
