@@ -219,7 +219,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 	size = max(tgt_size / dss_nxstreams, 1 << 24);
 	/** tc_in->tc_tgt_dev is assumed to point at PMEM for now */
 
-	for (i = 1; i <= dss_nxstreams; i++) {
+	for (i = 0; i < dss_nxstreams; i++) {
 
 		rc = path_gen(uuid, newborns_path, VOS_FILE, &i, &path);
 		if (rc)

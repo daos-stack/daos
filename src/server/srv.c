@@ -219,17 +219,17 @@ dss_srv_handler(void *arg)
 	dmi = dss_get_module_info();
 	D_ASSERT(dmi != NULL);
 
-	/** report xstream index */
-	rc = ABT_xstream_self_rank(&dmi->dmi_tid);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to retrieve xstream rank %d\n", rc);
-		return;
-	}
-
 	/* create private transport context */
 	rc = crt_context_create(&dx->dx_pool, &dmi->dmi_ctx);
 	if (rc != 0) {
 		D_ERROR("failed to create crt ctxt: %d\n", rc);
+		return;
+	}
+
+	/** Get xtream index from cart */
+	rc = crt_context_idx(dmi->dmi_ctx, &dmi->dmi_tid);
+	if (rc != 0) {
+		D_ERROR("failed to get xtream index: rc %d\n", rc);
 		return;
 	}
 
