@@ -144,6 +144,8 @@ typedef struct {
 		/** oid */
 		daos_unit_oid_t			ie_oid;
 		struct {
+			/** record size */
+			daos_size_t		ie_rsize;
 			daos_recx_t		ie_recx;
 			/** iovec to return data or ZC address */
 			daos_iov_t		ie_iov;

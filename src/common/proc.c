@@ -189,7 +189,6 @@ daos_proc_csum_buf(crt_proc_t proc, daos_csum_buf_t *csum)
 /**
  * daos_recx_t
  * typedef struct {
- *	uint64_t	rx_rsize;
  *	uint64_t	rx_idx;
  *	uint64_t	rx_nr;
  * } daos_recx_t;
@@ -198,10 +197,6 @@ int
 daos_proc_recx(crt_proc_t proc, daos_recx_t *recx)
 {
 	int rc;
-
-	rc = crt_proc_uint64_t(proc, &recx->rx_rsize);
-	if (rc != 0)
-		return -DER_CRT_HG;
 
 	rc = crt_proc_uint64_t(proc, &recx->rx_idx);
 	if (rc != 0)
@@ -240,6 +235,8 @@ daos_proc_epoch_range(crt_proc_t proc, daos_epoch_range_t *erange)
  * typedef struct {
  *	daos_key_t		 iod_name;
  *	daos_csum_buf_t		 iod_kcsum;
+ *	daos_val_type_t		 iod_type;
+ *	daos_size_t		 iod_size;
  *	unsigned int		 iod_nr;
  *	daos_recx_t		*iod_recxs;
  *	daos_csum_buf_t		*iod_csums;
@@ -271,6 +268,14 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 	if (rc != 0)
 		return rc;
 
+	rc = crt_proc_memcpy(proc, &dvi->iod_type, sizeof(daos_iod_type_t));
+	if (rc != 0)
+		return -DER_CRT_HG;
+
+	rc = crt_proc_uint64_t(proc, &dvi->iod_size);
+	if (rc != 0)
+		return -DER_CRT_HG;
+
 	rc = crt_proc_uint32_t(proc, &dvi->iod_nr);
 	if (rc != 0)
 		return -DER_CRT_HG;
@@ -285,7 +290,7 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 		return -DER_CRT_HG;
 
 	if (proc_op == CRT_PROC_ENCODE) {
-		if (dvi->iod_recxs != NULL)
+		if (dvi->iod_type == DAOS_IOD_ARRAY && dvi->iod_recxs != NULL)
 			existing_flags |= IOD_REC_EXIST;
 		if (dvi->iod_csums != NULL)
 			existing_flags |= IOD_CSUM_EXIST;
@@ -417,6 +422,10 @@ daos_proc_key_desc(crt_proc_t proc, daos_key_desc_t *key)
 	int rc;
 
 	rc = crt_proc_uint64_t(proc, &key->kd_key_len);
+	if (rc != 0)
+		return -DER_CRT_HG;
+
+	rc = crt_proc_uint32_t(proc, &key->kd_val_types);
 	if (rc != 0)
 		return -DER_CRT_HG;
 

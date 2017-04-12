@@ -66,12 +66,13 @@ byte_array_simple_stack(void **state)
 	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
-	recx.rx_rsize	= 1;
+	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(buf);
 	iod.iod_recxs	= &recx;
 	iod.iod_eprs	= NULL;
 	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("writing %d bytes in a single recx\n", STACK_BUF_LEN);
@@ -80,10 +81,10 @@ byte_array_simple_stack(void **state)
 
 	/** fetch record size & verify */
 	print_message("fetching record size\n");
-	recx.rx_rsize	= DAOS_REC_ANY;
+	iod.iod_size	= DAOS_REC_ANY;
 	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
-	assert_int_equal(recx.rx_rsize, 1);
+	assert_int_equal(iod.iod_size, 1);
 
 	/** fetch */
 	print_message("reading data back ...\n");
@@ -140,17 +141,18 @@ array_simple(void **state)
 	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
-	recx.rx_rsize	= arg->size;
+	iod.iod_size	= arg->size;
 	srand(time(NULL) + arg->size);
 	recx.rx_idx	= rand();
 	recx.rx_nr	= arg->nr;
 	iod.iod_recxs	= &recx;
 	iod.iod_eprs	= NULL;
 	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("writing %lu records of %lu bytes each at offset %lu\n",
-		      recx.rx_nr, recx.rx_rsize, recx.rx_idx);
+		      recx.rx_nr, iod.iod_size, recx.rx_idx);
 	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
@@ -160,12 +162,12 @@ array_simple(void **state)
 	assert_non_null(buf_out);
 	memset(buf_out, 0, arg->size * arg->nr);
 	daos_iov_set(&sg_iov, buf_out, arg->size * arg->nr);
-	recx.rx_rsize	= DAOS_REC_ANY;
+	iod.iod_size	= DAOS_REC_ANY;
 	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_int_equal(rc, 0);
 	/** verify record size */
 	print_message("validating record size ...\n");
-	assert_int_equal(recx.rx_rsize, arg->size);
+	assert_int_equal(iod.iod_size, arg->size);
 	/** Verify data consistency */
 	print_message("validating data ...\n");
 	assert_memory_equal(buf, buf_out, arg->size * arg->nr);

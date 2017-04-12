@@ -415,6 +415,9 @@ array_access_kv(daos_handle_t oh, daos_epoch_t epoch,
 		iod->iod_csums = NULL;
 		iod->iod_eprs = NULL;
 		iod->iod_recxs = NULL;
+		iod->iod_size = 1;
+		iod->iod_type = DAOS_IOD_ARRAY;
+
 		i = 0;
 		dkey_records = 0;
 
@@ -438,7 +441,6 @@ array_access_kv(daos_handle_t oh, daos_epoch_t epoch,
 			}
 
 			/** set the record access for this range */
-			iod->iod_recxs[i].rx_rsize = 1;
 			iod->iod_recxs[i].rx_idx = record_i;
 			iod->iod_recxs[i].rx_nr = (num_records > records) ?
 				records : num_records;

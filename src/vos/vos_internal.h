@@ -461,8 +461,13 @@ struct vos_rec_bundle {
 	struct btr_root		*rb_btr;
 	/** returned evtree root */
 	struct evt_root		*rb_evt;
-	/** returned size and nr of recx */
+	/** returned record extent */
 	daos_recx_t		*rb_recx;
+	/**
+	 * update : input record size
+	 * fetch  : return size of records
+	 */
+	daos_size_t		 rb_rsize;
 	/** update cookie of this recx (input for update, output for fetch) */
 	uuid_t			 rb_cookie;
 };
@@ -528,13 +533,13 @@ vos_irec_size(struct vos_rec_bundle *rbund)
 	if (rbund->rb_csum != NULL)
 		size = vos_size_round(rbund->rb_csum->cs_len);
 	return size + sizeof(struct vos_irec_df) +
-	       rbund->rb_recx->rx_rsize * rbund->rb_recx->rx_nr;
+	       rbund->rb_rsize * rbund->rb_recx->rx_nr;
 }
 
 static inline bool
 vos_irec_size_equal(struct vos_irec_df *irec, struct vos_rec_bundle *rbund)
 {
-	if (irec->ir_size != rbund->rb_recx->rx_rsize * rbund->rb_recx->rx_nr)
+	if (irec->ir_size != rbund->rb_rsize * rbund->rb_recx->rx_nr)
 		return false;
 
 	if (irec->ir_cs_size != rbund->rb_csum->cs_len)

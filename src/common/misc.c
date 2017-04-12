@@ -101,15 +101,21 @@ daos_iod_len(daos_iod_t *iod)
 	uint64_t	len;
 	int		i;
 
-	if (iod->iod_recxs == NULL)
-		return 0;
+	if (iod->iod_size == DAOS_REC_ANY)
+		return -1; /* unknown size */
 
-	for (i = 0, len = 0; i < iod->iod_nr; i++) {
-		if (iod->iod_recxs[i].rx_rsize == DAOS_REC_ANY)
-			return -1; /* unknown size */
+	len = 0;
 
-		len += iod->iod_recxs[i].rx_rsize * iod->iod_recxs[i].rx_nr;
+	if (iod->iod_type == DAOS_IOD_SINGLE) {
+		len += iod->iod_size;
+	} else {
+		if (iod->iod_recxs == NULL)
+			return 0;
+
+		for (i = 0, len = 0; i < iod->iod_nr; i++)
+			len += iod->iod_size * iod->iod_recxs[i].rx_nr;
 	}
+
 	return len;
 }
 

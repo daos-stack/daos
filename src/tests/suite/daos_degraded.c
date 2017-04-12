@@ -181,8 +181,8 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		sprintf(rec_verify, val_fmt, i);
 		lookup_single(dkey[i], akey, offset[i], val[i],
 			      val_size[i], epoch, &req);
-		assert_int_equal(req.rex[0][0].rx_rsize, strlen(rec_verify));
-		assert_memory_equal(val[i], rec_verify, req.rex[0][0].rx_rsize);
+		assert_int_equal(req.iod[0].iod_size, strlen(rec_verify));
+		assert_memory_equal(val[i], rec_verify, req.iod[0].iod_size);
 
 		if ((i + 1) % (g_dkeys/10) == 0) {
 			MPI_Barrier(MPI_COMM_WORLD);

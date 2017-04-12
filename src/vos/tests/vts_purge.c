@@ -72,14 +72,14 @@ io_update(struct io_test_args *arg, daos_epoch_t update_epoch,
 		memset(ioreq->update_buf, (rand() % 94) + 33, UPDATE_BUF_SIZE);
 		daos_iov_set(&ioreq->val_iov, &ioreq->update_buf[0],
 			     UPDATE_BUF_SIZE);
-		ioreq->rex.rx_rsize	= ioreq->val_iov.iov_len;
+		ioreq->iod.iod_size = ioreq->val_iov.iov_len;
 	} else {
 		daos_iov_set(&ioreq->dkey, dkey, UPDATE_DKEY_SIZE);
 		daos_iov_set(&ioreq->akey, akey, UPDATE_AKEY_SIZE);
 		memset(ioreq->update_buf, 0, UPDATE_BUF_SIZE);
 		daos_iov_set(&ioreq->val_iov, &ioreq->update_buf,
 			     UPDATE_BUF_SIZE);
-		ioreq->rex.rx_rsize = 0;
+		ioreq->iod.iod_size = 0;
 	}
 
 	ioreq->sgl.sg_nr.num = 1;
@@ -90,6 +90,7 @@ io_update(struct io_test_args *arg, daos_epoch_t update_epoch,
 	ioreq->iod.iod_name	= ioreq->akey;
 	ioreq->iod.iod_recxs	= &ioreq->rex;
 	ioreq->iod.iod_nr	= 1;
+	ioreq->iod.iod_type	= DAOS_IOD_ARRAY;
 	ioreq->epoch		= update_epoch;
 
 	rc = io_test_obj_update(arg, update_epoch, &ioreq->dkey, &ioreq->iod,
@@ -134,7 +135,7 @@ io_fetch_empty_buf(struct io_test_args *arg, daos_epoch_t fetch_epoch,
 
 	memset(req->fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&req->val_iov, &req->fetch_buf, UPDATE_BUF_SIZE);
-	req->rex.rx_rsize = UPDATE_BUF_SIZE;
+	req->iod.iod_size = UPDATE_BUF_SIZE;
 	rc = io_test_obj_fetch(arg, fetch_epoch, &req->dkey, &req->iod,
 			       &req->sgl, false);
 	if (rc)
@@ -164,12 +165,12 @@ io_fetch(struct io_test_args *arg, daos_epoch_t fetch_epoch,
 
 	memset(req->fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&req->val_iov, &req->fetch_buf, UPDATE_BUF_SIZE);
-	req->rex.rx_rsize = UPDATE_BUF_SIZE;
+	req->iod.iod_size = UPDATE_BUF_SIZE;
 	rc = io_test_obj_fetch(arg, fetch_epoch, &req->dkey, &req->iod,
 			       &req->sgl, false);
 	if (rc)
 		D_GOTO(exit, rc);
-	if (req->rex.rx_rsize == 0)
+	if (req->iod.iod_size == 0)
 		return -DER_NONEXIST;
 
 	if (verbose)

@@ -136,7 +136,6 @@ tier_cp_iov(daos_iov_t *dst, daos_iov_t *src)
 static inline void
 tier_cp_recx(daos_recx_t *dst, daos_recx_t *src)
 {
-	dst->rx_rsize = src->rx_rsize;
 	dst->rx_idx   = src->rx_idx;
 	dst->rx_nr    = src->rx_nr;
 }
@@ -170,6 +169,8 @@ tier_cp_vec_iod(daos_iod_t *pd, daos_iod_t *ps)
 {
 	pd->iod_name = ps->iod_name;
 	tier_cp_cksum(&pd->iod_kcsum, &ps->iod_kcsum);
+	pd->iod_type = ps->iod_type;
+	pd->iod_size = ps->iod_size;
 	pd->iod_nr = ps->iod_nr;
 
 	pd->iod_recxs = ps->iod_recxs;

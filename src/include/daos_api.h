@@ -798,7 +798,7 @@ daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
  *			\a iods[]::iod_csums[]. If the record size of an
  *			extent is unknown (i.e. set to DAOS_REC_ANY as input),
  *			then the actual record size will be returned in
- *			\a iods[]::iod_recxs[]::rx_rsize.
+ *			\a iods[]::iod_size.
  *
  * \param sgls	[IN]	Scatter/gather lists (sgl) to store records. Each array
  *			is associated with a separate sgl in \a sgls.
@@ -945,15 +945,12 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
  * \param nr	[IN]	number of key descriptors in \a kds
  *		[OUT]	number of returned key descriptors.
  *
- * \param sgl	[IN]	Scatter/gather list to store the dkey list.
- *			All dkeys are written continuously, actual limits can be
- *			found in \a kds.
-  * \param kds	[IN]	preallocated array of \nr key descriptors.
- *		[OUT]	size of each individual key along with checksum type
- *			and size stored just after the key in \a sgl.
+ * \param kds	[IN]	preallocated array of \nr key descriptors.
+ *		[OUT]	size of each individual key along with checksum type,
+ *			size, and type stored just after the key in \a sgl.
  *
- * \param sgl	[IN]	Scatter/gather list to store the dkey list.
- *			All dkeys are written contiguously with their checksum,
+ * \param sgl	[IN]	Scatter/gather list to store the akey list.
+ *			All akeys are written contiguously with their checksum,
  *			actual boundaries can be calculated thanks to \a kds.
  *
  * \param anchor [IN/OUT]
@@ -977,6 +974,59 @@ int
 daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		   uint32_t *nr, daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		   daos_hash_out_t *anchor, daos_event_t *ev);
+
+/**
+ * Record enumeration.
+ *
+ * \param oh	[IN]	Object open handle.
+ *
+ * \param epoch	[IN]	Epoch for the enumeration.
+ *
+ * \param dkey	[IN]	distribution key for the enumeration
+ *
+ * \param akey	[IN]	attribute key for the enumeration
+ *
+ * \param type	[IN]	type of records to enumerate
+ *			(for SINGLE, rexcs is ignored, nr should be 1).
+ *
+ * \param size	[OUT]	record/single-value size
+ *
+ * \param nr	[IN]	number of records in \a recxs
+ *		[OUT]	number of returned recxs.
+ *
+ * \param recxs	[IN]	preallocated array of \nr records.
+ *		[OUT]	returned records.
+ *
+ * \param eprs	[IN]	preallocated array of \nr epoch ranges.
+ *		[OUT]	returned epoch ranges.
+ *
+ * \param anchor [IN/OUT]
+ *			Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ *
+ * \param incr_order [IN]
+ *			If this is set to true, extents will be listed in
+ *			increasing index order, otherwise if false, they are
+ *			listed in decreasing order. Once an anchor is associated
+ *			with an order, further calls with that anchor should use
+ *			the same order setting.
+ *
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ */
+int
+daos_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		  daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
+		  uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		  daos_hash_out_t *anchor, bool incr_order, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

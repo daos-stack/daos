@@ -193,8 +193,8 @@ ioreqs_init(struct ioreq *reqs) {
 			.iov_len	= strlen(astr),
 		};
 		req->iod.iod_nr	= 1;
+		req->iod.iod_size = sizeof(uint64_t);
 		req->recx = (daos_recx_t) {
-			.rx_rsize	= sizeof(uint64_t),
 			.rx_nr		= SLICE_SIZE,
 
 		};

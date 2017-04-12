@@ -480,11 +480,6 @@ typedef daos_iov_t daos_key_t;
  * number of records covered by the extent.
  */
 typedef struct {
-	/**
-	 * Individual record size, must be the same for each record of the
-	 * extent
-	 */
-	uint64_t	rx_rsize;
 	/** Indice of the first record in the extent */
 	uint64_t	rx_idx;
 	/**
@@ -495,19 +490,48 @@ typedef struct {
 	uint64_t	rx_nr;
 } daos_recx_t;
 
+/** Type of the value accessed in an IOD */
+typedef enum {
+	/** is a dkey */
+	DAOS_IOD_NONE	= 0,
+	/** one indivisble value udpate atomically */
+	DAOS_IOD_SINGLE = (1 << 0),
+	/** an array of records where each record is update atomically */
+	DAOS_IOD_ARRAY	= (1 << 1),
+} daos_iod_type_t;
+
 /**
  * An I/O descriptor is a list of extents (effectively records associated with
  * contiguous array indices) to update/fetch in a particular array identified by
  * its akey.
  */
 typedef struct {
-	/** akey associated with the array */
-	daos_key_t		 iod_name;
+	/** akey for this iod */
+	daos_key_t		iod_name;
 	/** akey checksum */
-	daos_csum_buf_t		 iod_kcsum;
-	/** Number of extents in the \a iod_recxs external array */
-	unsigned int		 iod_nr;
-	/** External array of extents */
+	daos_csum_buf_t		iod_kcsum;
+	/*
+	 * Type of the value in an iod can be either a single type that is
+	 * always overwritten when updated, or it can be an array of EQUAL sized
+	 * records where the record is updated atomically. Note than an akey can
+	 * have both type of values, but to access both would require a separate
+	 * iod for each. If \a iod_type == DAOS_IOD_SINGLE, then iod_nr has to
+	 * be 1, and \a iod_size would be the size of the single atomic
+	 * value. The idx is ignored and the rx_nr is also required to be 1.
+	 */
+	daos_iod_type_t		iod_type;
+	/** Size of the single value or the record size of the akey */
+	daos_size_t		iod_size;
+	/*
+	 * Number of entries in the \a iod_recxs, \a iod_csums, and \a iod_eprs
+	 * arrays, should be 1 if single value.
+	 */
+	unsigned int		iod_nr;
+	/*
+	 * Array of extents, where each extent defines the index of the first
+	 * record in the extent and the number of records to access. If the
+	 * type of the iod is single, this is ignored.
+	 */
 	daos_recx_t		*iod_recxs;
 	/** Checksum associated with each extent */
 	daos_csum_buf_t		*iod_csums;
@@ -524,16 +548,20 @@ typedef struct {
 	daos_key_t		 iom_name;
 	/** akey checksum */
 	daos_csum_buf_t		 iom_kcsum;
-	/** First index of this mapping */
+	/** type of akey value (SV or AR)*/
+	daos_iod_type_t		 iom_type;
+	/** First index of this mapping (0 for SV) */
 	uint64_t		 iom_start;
-	/** Logical number of indices covered by this mapping */
+	/** Logical number of indices covered by this mapping (1 for SV) */
 	uint64_t                 iom_len;
+	/** Size of the single value or the record size */
+	daos_size_t		 iom_size;
 	/**
 	 * Number of extents in the mapping, that's the size of all the
-	 * external arrays listed below
+	 * external arrays listed below. 1 for SV.
 	 */
 	unsigned int		 iom_nr;
-	/** External array of extents */
+	/** External array of extents - NULL for SV */
 	daos_recx_t		*iom_recxs;
 	/** Checksum associated with each extent */
 	daos_csum_buf_t		*iom_xcsums;
@@ -560,11 +588,16 @@ typedef enum {
  */
 typedef struct {
 	/** Key length */
-	daos_size_t	 kd_key_len;
+	daos_size_t	kd_key_len;
+	/**
+	 * flag for akey value types: DAOS_IOD_SINGLE, DAOS_IOD_ARRAY, or
+	 * both. Ignored for dkey enumeration.
+	 */
+	uint32_t	kd_val_types;
 	/** Checksum type */
-	unsigned int	 kd_csum_type;
+	unsigned int	kd_csum_type;
 	/** Checksum length */
-	unsigned short	 kd_csum_len;
+	unsigned short	kd_csum_len;
 } daos_key_desc_t;
 
 /**

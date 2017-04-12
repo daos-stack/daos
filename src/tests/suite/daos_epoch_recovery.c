@@ -87,13 +87,13 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
 		       (void **)rec, rec_size, &epoch, &req);
 		for (i = 0; i < nakeys; i++) {
 			print_message("  akey[%d] '%s' val '%.*s'\n", i,
-				      akey[i], (int)req.rex[i][0].rx_rsize,
+				      akey[i], (int)req.iod[i].iod_size,
 				      rec[i]);
 			snprintf(rec_verify, rsize, val_fmt, i, value);
-			assert_int_equal(req.rex[i][0].rx_rsize,
+			assert_int_equal(req.iod[i].iod_size,
 					 rsize);
 			assert_memory_equal(rec[i], rec_verify,
-					    req.rex[i][0].rx_rsize);
+					    req.iod[i].iod_size);
 		}
 		free(rec_verify);
 	}

@@ -568,7 +568,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 
 		dts_buf_render(update_buf, UPDATE_BUF_SIZE);
 		daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
-		rex.rx_rsize = recx_size;
+		iod.iod_size = recx_size;
 		rex.rx_nr    = recx_nr;
 	} else {
 		daos_iov_set(&dkey, &last_dkey[0], UPDATE_DKEY_SIZE);
@@ -577,7 +577,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 		memset(update_buf, 0, UPDATE_BUF_SIZE);
 		daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 		rex.rx_nr    = recx_nr;
-		rex.rx_rsize = 0;
+		iod.iod_size = 0;
 	}
 
 	sgl.sg_nr.num = 1;
@@ -589,6 +589,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	iod.iod_name	= akey;
 	iod.iod_recxs	= &rex;
 	iod.iod_nr	= 1;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	uuid_copy(dsm_cookie.uuid, cookie_dict[(rand() % NUM_UNIQUE_COOKIES)]);
 
@@ -602,7 +603,7 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
-	rex.rx_rsize = DAOS_REC_ANY;
+	iod.iod_size = DAOS_REC_ANY;
 	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &iod, &sgl, true);
 	if (rc)
 		goto exit;
@@ -1019,7 +1020,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 
 	dts_buf_render(update_buf, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
-	rex.rx_rsize	= val_iov.iov_len;
+	iod.iod_size	= val_iov.iov_len;
 
 	sgl.sg_nr.num = 1;
 	sgl.sg_iovs = &val_iov;
@@ -1031,6 +1032,7 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	iod.iod_name	= akey;
 	iod.iod_recxs	= &rex;
 	iod.iod_nr	= 1;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	uuid_copy(dsm_cookie.uuid, cookie_dict[rand() % NUM_UNIQUE_COOKIES]);
 	rc = io_test_obj_update(arg, update_epoch, &dkey, &iod, &sgl,
@@ -1044,14 +1046,14 @@ io_update_and_fetch_incorrect_dkey(struct io_test_args *arg,
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
 	/* will be set to zero after fetching a nonexistent key */
-	rex.rx_rsize = -1;
+	iod.iod_size = -1;
 
 	/* Injecting an incorrect dkey for fetch! */
 	dts_key_gen(&dkey_buf[0], UPDATE_DKEY_SIZE, UPDATE_DKEY);
 
 	rc = io_test_obj_fetch(arg, fetch_epoch, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
-	assert_int_equal(rex.rx_rsize, 0);
+	assert_int_equal(iod.iod_size, 0);
 exit:
 	return rc;
 }
@@ -1090,17 +1092,18 @@ io_fetch_wo_object(void **state)
 	iod.iod_name	= akey;
 	iod.iod_recxs	= &rex;
 	iod.iod_nr	= 1;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
 
 	/* should be set to zero after fetching a nonexistent object */
-	rex.rx_rsize = -1;
+	iod.iod_size = -1;
 	arg->oid = gen_oid();
 
 	rc = io_test_obj_fetch(arg, 1, &dkey, &iod, &sgl, true);
 	assert_int_equal(rc, 0);
-	assert_int_equal(rex.rx_rsize, 0);
+	assert_int_equal(iod.iod_size, 0);
 }
 
 static int
@@ -1229,7 +1232,7 @@ pool_cont_same_uuid(void **state)
 	daos_iov_set(&akey, &akey_buf[0], strlen(akey_buf));
 	dts_buf_render(update_buf, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
-	rex.rx_rsize = UPDATE_BUF_SIZE;
+	iod.iod_size = UPDATE_BUF_SIZE;
 	rex.rx_nr    = 1;
 
 	sgl.sg_nr.num = 1;
@@ -1238,6 +1241,7 @@ pool_cont_same_uuid(void **state)
 	iod.iod_name	= akey;
 	iod.iod_recxs	= &rex;
 	iod.iod_nr	= 1;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	uuid_generate(cookie);
 	oid = dts_unit_oid_gen(0, 0);
@@ -1365,10 +1369,10 @@ io_simple_one_key_cross_container(void **state)
 	daos_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 
 	if (arg->ta_flags & TF_REC_EXT) {
-		rex.rx_rsize = UPDATE_REC_SIZE;
+		iod.iod_size = UPDATE_REC_SIZE;
 		rex.rx_nr    = UPDATE_BUF_SIZE / UPDATE_REC_SIZE;
 	} else {
-		rex.rx_rsize = UPDATE_BUF_SIZE;
+		iod.iod_size = UPDATE_BUF_SIZE;
 		rex.rx_nr    = 1;
 	}
 	rex.rx_idx	= daos_hash_string_u32(dkey_buf, dkey.iov_len);
@@ -1376,6 +1380,7 @@ io_simple_one_key_cross_container(void **state)
 
 	iod.iod_recxs	= &rex;
 	iod.iod_nr	= 1;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	l_oid = gen_oid();
 	cookie = gen_rand_cookie();
@@ -1396,7 +1401,7 @@ io_simple_one_key_cross_container(void **state)
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
-	rex.rx_rsize = DAOS_REC_ANY;
+	iod.iod_size = DAOS_REC_ANY;
 
 	/**
 	 * Fetch from second container with local obj id
@@ -1408,7 +1413,7 @@ io_simple_one_key_cross_container(void **state)
 
 	memset(fetch_buf, 0, UPDATE_BUF_SIZE);
 	daos_iov_set(&val_iov, &fetch_buf[0], UPDATE_BUF_SIZE);
-	rex.rx_rsize = DAOS_REC_ANY;
+	iod.iod_size = DAOS_REC_ANY;
 
 	/**
 	 * Fetch the objiD used in first container

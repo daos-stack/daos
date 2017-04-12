@@ -218,7 +218,7 @@ alloc_buffers(struct test *test, int nios)
  *   - dkey_buf and dkey (via ioreq_init_dkey())
  *   - akey_buf and iod.iod_name (via ioreq_init_akey())
  *   - val_iov (via ioreq_init_value())
- *   - rex.rx_rsize and rex.rx_idx
+ *   - rex.rsize and rex.rx_idx
  *   - r_index
  */
 static void
@@ -607,7 +607,7 @@ insert(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req, int sync)
 	int rc;
 
 	/** record extent */
-	req->rex.rx_rsize = req->val_iov.iov_len;
+	req->iod.iod_size = req->val_iov.iov_len;
 	req->rex.rx_idx = idx;
 
 	req->erange.epr_lo = epoch;
@@ -648,7 +648,7 @@ lookup(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req,
 	int rc;
 
 	/** record extent */
-	req->rex.rx_rsize = req->val_iov.iov_len;
+	req->iod.iod_size = req->val_iov.iov_len;
 	req->rex.rx_idx = idx;
 
 	/** XXX: to be fixed */

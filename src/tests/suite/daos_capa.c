@@ -334,12 +334,13 @@ io_invalid_poh(void **state)
 		daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 		daos_csum_set(&iod.iod_kcsum, NULL, 0);
 		iod.iod_nr	= 1;
-		recx.rx_rsize	= 1;
+		iod.iod_size	= 1;
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
 		iod.iod_recxs	= &recx;
 		iod.iod_eprs	= NULL;
 		iod.iod_csums	= NULL;
+		iod.iod_type	= DAOS_IOD_ARRAY;
 
 		/** update record */
 		print_message("Updating %d bytes with invalid pool handle ..."
@@ -424,12 +425,13 @@ io_invalid_coh(void **state)
 		daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 		daos_csum_set(&iod.iod_kcsum, NULL, 0);
 		iod.iod_nr	= 1;
-		recx.rx_rsize	= 1;
+		iod.iod_size	= 1;
 		recx.rx_idx	= 0;
 		recx.rx_nr	= sizeof(buf);
 		iod.iod_recxs	= &recx;
 		iod.iod_eprs	= NULL;
 		iod.iod_csums	= NULL;
+		iod.iod_type	= DAOS_IOD_ARRAY;
 
 		/** update record */
 		print_message("Updating records with stale container handle "
@@ -502,12 +504,13 @@ update_ro(void **state)
 	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
-	recx.rx_rsize	= 1;
+	iod.iod_size	= 1;
 	recx.rx_idx	= 0;
 	recx.rx_nr	= sizeof(buf);
 	iod.iod_recxs	= &recx;
 	iod.iod_eprs	= NULL;
 	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("Updating records with read-only container handle ...\n");

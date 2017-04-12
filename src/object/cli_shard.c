@@ -254,25 +254,23 @@ dc_rw_cb(struct daos_task *task, void *arg)
 		struct obj_rw_out *orwo;
 		daos_iod_t	*iods;
 		uint64_t	*sizes;
-		int		j;
-		int		k;
-		int		idx = 0;
+		int		 i;
 
 		orwo = crt_reply_get(rw_args->rpc);
 		iods = orw->orw_iods.da_arrays;
 		sizes = orwo->orw_sizes.da_arrays;
 
+		if (orwo->orw_sizes.da_count != orw->orw_nr) {
+			D_ERROR("out:%u != in:%u\n",
+				(unsigned)orwo->orw_sizes.da_count,
+				orw->orw_nr);
+			D_GOTO(out, rc = -DER_PROTO);
+		}
+
 		/* update the sizes in iods */
-		for (j = 0; j < orw->orw_nr; j++) {
-			for (k = 0; k < iods[j].iod_nr; k++) {
-				if (idx == orwo->orw_sizes.da_count) {
-					D_ERROR("Invalid return size %d\n",
-						idx);
-					D_GOTO(out, rc = -DER_PROTO);
-				}
-				iods[j].iod_recxs[k].rx_rsize = sizes[idx];
-				idx++;
-			}
+		for (i = 0; i < orw->orw_nr; i++) {
+			iods[i].iod_size = sizes[i];
+			i++;
 		}
 
 		if (orwo->orw_sgls.da_count > 0) {
@@ -286,7 +284,6 @@ dc_rw_cb(struct daos_task *task, void *arg)
 			daos_sg_list_t *sgls = rw_args->rwaa_sgls;
 			uint32_t       *nrs;
 			uint32_t	nrs_count;
-			int		i;
 
 			nrs = orwo->orw_nrs.da_arrays;
 			nrs_count = orwo->orw_nrs.da_count;
@@ -317,10 +314,21 @@ obj_shard_io_check(unsigned int nr, daos_iod_t *iods)
 	int i;
 
 	for (i = 0; i < nr; i++) {
-		if (iods[i].iod_name.iov_buf == NULL ||
-		    iods[i].iod_recxs == NULL)
+		if (iods[i].iod_name.iov_buf == NULL)
 			/* XXX checksum & eprs should not be mandatory */
 			return false;
+
+		if (iods[i].iod_type == DAOS_IOD_ARRAY &&
+		    iods[i].iod_recxs == NULL) {
+			D_ERROR("ARRAY iod type should have valid iod_recxs\n");
+			return false;
+		}
+
+		if (iods[i].iod_type == DAOS_IOD_SINGLE &&
+		    iods[i].iod_nr != 1) {
+			D_ERROR("SINGLE iod type should have iod_nr == 1\n");
+			return false;
+		}
 	}
 
 	return true;

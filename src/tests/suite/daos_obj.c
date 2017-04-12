@@ -178,13 +178,14 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
 	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 	for (i = 0; i < nr; i++) {
 		/** record extent */
-		iod[i].iod_recxs[0].rx_rsize = size[i];
+		iod[i].iod_size = size[i];
 		iod[i].iod_recxs[0].rx_idx = idx[i] + i * SEGMENT_SIZE;
 		iod[i].iod_recxs[0].rx_nr = 1;
 
 		/** XXX: to be fixed */
 		iod[i].iod_eprs[0].epr_lo = *epoch;
 		iod[i].iod_nr = 1;
+		iod[i].iod_type = DAOS_IOD_ARRAY;
 	}
 }
 
@@ -352,7 +353,7 @@ io_var_idx_offset(void **state)
 		memset(buf, 0, 10);
 		lookup_single("var_idx_off_d", "var_idx_off_a", offset,
 			      buf, 10, 0, &req);
-		assert_int_equal(req.rex[0][0].rx_rsize, strlen(buf) + 1);
+		assert_int_equal(req.iod[0].iod_size, strlen(buf) + 1);
 
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
@@ -395,7 +396,7 @@ io_var_akey_size(void **state)
 		memset(buf, 0, 10);
 		lookup_single("var_akey_size_d", key, 0, buf,
 			      10, 0, &req);
-		assert_int_equal(req.rex[0][0].rx_rsize, strlen("data") + 1);
+		assert_int_equal(req.iod[0].iod_size, strlen("data") + 1);
 
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
@@ -437,7 +438,7 @@ io_var_dkey_size(void **state)
 		/** Lookup */
 		memset(buf, 0, 10);
 		lookup_single(key, "var_dkey_size_a", 0, buf, 10, 0, &req);
-		assert_int_equal(req.rex[0][0].rx_rsize, strlen("data") + 1);
+		assert_int_equal(req.iod[0].iod_size, strlen("data") + 1);
 
 		/** Verify data consistency */
 		assert_string_equal(buf, "data");
@@ -490,7 +491,7 @@ io_var_rec_size(void **state)
 		memset(fetch_buf, 0, max_size);
 		lookup_single(dkey, "var_rec_size_a", 0, fetch_buf,
 			      max_size, epoch, &req);
-		assert_int_equal(req.rex[0][0].rx_rsize, size);
+		assert_int_equal(req.iod[0].iod_size, size);
 
 		/** Verify data consistency */
 		assert_memory_equal(update_buf, fetch_buf, size);
@@ -524,8 +525,8 @@ io_simple_internal(void **state, daos_obj_id_t oid)
 	lookup_single(dkey, akey, 0, buf, 64, 0, &req);
 
 	/** Verify data consistency */
-	print_message("size = %lu\n", req.rex[0][0].rx_rsize);
-	assert_int_equal(req.rex[0][0].rx_rsize, strlen(rec));
+	print_message("size = %lu\n", req.iod[0].iod_size);
+	assert_int_equal(req.iod[0].iod_size, strlen(rec));
 	assert_memory_equal(buf, rec, strlen(rec));
 	free(buf);
 	ioreq_fini(&req);
@@ -787,8 +788,8 @@ io_complex(void **state)
 
 	/** Verify data consistency */
 	for (i = 0; i < 5; i++) {
-		print_message("size = %lu\n", req.rex[i][0].rx_rsize);
-		assert_int_equal(req.rex[i][0].rx_rsize, strlen(rec[i]));
+		print_message("size = %lu\n", req.iod[i].iod_size);
+		assert_int_equal(req.iod[i].iod_size, strlen(rec[i]));
 		assert_memory_equal(val[i], rec[i], strlen(rec[i]));
 		free(val[i]);
 		free(akey[i]);
@@ -836,14 +837,15 @@ basic_byte_array(void **state)
 	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	for (i = 0; i < STACK_BUF_LEN; i++) {
-		recx[i].rx_rsize = 1;
 		recx[i].rx_idx	 = i;
 		recx[i].rx_nr	 = 1;
 	}
+	iod.iod_size	= 1;
 	iod.iod_nr	= STACK_BUF_LEN;
 	iod.iod_recxs	= recx;
 	iod.iod_eprs	= NULL;
 	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	print_message("writing %d bytes with one recx per byte\n",
@@ -901,13 +903,14 @@ read_empty_records_internal(void **state, unsigned int size)
 	/** init I/O descriptor */
 	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
-	iod.iod_nr = 1;
-	recx.rx_rsize = 1;
-	recx.rx_idx = (size/2) * sizeof(int);
-	recx.rx_nr = sizeof(int);
-	iod.iod_recxs = &recx;
-	iod.iod_eprs = NULL;
-	iod.iod_csums = NULL;
+	iod.iod_nr	= 1;
+	iod.iod_size	= 1;
+	recx.rx_idx	= (size/2) * sizeof(int);
+	recx.rx_nr	= sizeof(int);
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	/** update record */
 	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
@@ -922,7 +925,7 @@ read_empty_records_internal(void **state, unsigned int size)
 	/** fetch */
 	daos_iov_set(&sg_iov, buf_out, sizeof(int) * size);
 
-	recx.rx_rsize = 1;
+	iod.iod_size	= 1;
 	recx.rx_idx = 0;
 	recx.rx_nr = sizeof(int) * size;
 	iod.iod_recxs = &recx;
@@ -976,7 +979,6 @@ fetch_size(void **state)
 	daos_sg_list_t	 sgl;
 	daos_iov_t	 sg_iov;
 	daos_iod_t	 iod;
-	daos_recx_t	 recx;
 	char		*buf;
 	int		 rc;
 	int		 size = 131071;
@@ -1004,22 +1006,21 @@ fetch_size(void **state)
 	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
 	daos_csum_set(&iod.iod_kcsum, NULL, 0);
 	iod.iod_nr	= 1;
-	recx.rx_rsize	= size;
-	recx.rx_idx	= 0;
-	recx.rx_nr	= 1;
-	iod.iod_recxs	= &recx;
+	iod.iod_size	= size;
+	iod.iod_recxs	= NULL;
 	iod.iod_eprs	= NULL;
 	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_SINGLE;
 
 	/** update record */
 	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	/** fetch record size */
-	recx.rx_rsize	= DAOS_REC_ANY;
+	iod.iod_size	= DAOS_REC_ANY;
 	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
-	assert_int_equal(recx.rx_rsize, size);
+	assert_int_equal(iod.iod_size, size);
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
@@ -1194,13 +1195,13 @@ epoch_discard(void **state)
 				sprintf(rec_verify, val_fmt, i, e - 1);
 			else			/* intact */
 				sprintf(rec_verify, val_fmt, i, e);
-			assert_int_equal(req.rex[i][0].rx_rsize,
+			assert_int_equal(req.iod[i].iod_size,
 					 strlen(rec_verify));
 			print_message("  a-key[%d] '%s' val '%.*s'\n", i,
-				      akey[i], (int)req.rex[i][0].rx_rsize,
+				      akey[i], (int)req.iod[i].iod_size,
 				      val[i]);
 			assert_memory_equal(val[i], rec_verify,
-					    req.rex[i][0].rx_rsize);
+					    req.iod[i].iod_size);
 		}
 	}
 	free(rec_verify);

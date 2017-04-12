@@ -340,10 +340,8 @@ ds_obj_update_sizes_in_reply(crt_rpc_t *rpc)
 	struct obj_rw_out	*orwo = crt_reply_get(rpc);
 	daos_iod_t		*iods;
 	uint64_t		*sizes;
-	int			size_count = 0;
-	int			idx = 0;
+	int			size_count;
 	int			i;
-	int			j;
 
 	D_ASSERT(opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH);
 
@@ -351,22 +349,17 @@ ds_obj_update_sizes_in_reply(crt_rpc_t *rpc)
 	D_ASSERT(orw != NULL);
 
 	iods = orw->orw_iods.da_arrays;
-	for (i = 0; i < orw->orw_iods.da_count; i++)
-		size_count += iods[i].iod_nr;
+	size_count = orw->orw_iods.da_count;
 
 	orwo->orw_sizes.da_count = size_count;
-	D_ALLOC(orwo->orw_sizes.da_arrays, size_count * sizeof(uint64_t));
-	if (orwo->orw_sizes.da_arrays == NULL)
+	D_ALLOC(sizes, size_count * sizeof(*sizes));
+	if (sizes == NULL)
 		return -DER_NOMEM;
 
-	sizes = orwo->orw_sizes.da_arrays;
-	for (i = 0; i < orw->orw_iods.da_count; i++) {
-		for (j = 0; j < iods[i].iod_nr; j++) {
-			sizes[idx] = iods[i].iod_recxs[j].rx_rsize;
-			idx++;
-		}
-	}
+	for (i = 0; i < orw->orw_iods.da_count; i++)
+		sizes[i] = iods[i].iod_size;
 
+	orwo->orw_sizes.da_arrays = sizes;
 	return 0;
 }
 

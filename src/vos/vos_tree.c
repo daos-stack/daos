@@ -407,7 +407,7 @@ irec_update(struct btr_instance *tins, struct btr_record *rec,
 	daos_iov_t		*iov	= rbund->rb_iov;
 	struct idx_btr_key	*ihkey;
 
-	if (iov->iov_len != rbund->rb_recx->rx_rsize)
+	if (iov->iov_len != rbund->rb_rsize)
 		return -DER_IO_INVAL;
 
 	ihkey = (struct idx_btr_key *)&rec->rec_hkey[0];
@@ -458,8 +458,8 @@ irec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		csum->cs_csum	= vos_irec2csum(irec);
 	}
 	recx->rx_idx	= ihkey->ih_index;
-	recx->rx_rsize	= irec->ir_size;
 	recx->rx_nr	= 1;
+	rbund->rb_rsize	= irec->ir_size;
 
 	return 0;
 }
