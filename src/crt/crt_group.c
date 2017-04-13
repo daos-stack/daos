@@ -1775,9 +1775,9 @@ crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	grp_priv->gp_service = 1;
 
 	if (crt_is_singleton()) {
-		rc = crt_grp_load_attach_info(grp_priv);
+		rc = crt_grp_config_load(grp_priv);
 		if (rc != 0) {
-			C_ERROR("crt_grp_load_attach_info (grpid %s) failed, "
+			C_ERROR("crt_grp_config_load (grpid %s) failed, "
 				"rc: %d.\n", srv_grpid, rc);
 			C_GOTO(out, rc);
 		}
@@ -2062,23 +2062,21 @@ crt_group_config_path_set(const char *path)
 
 /**
  * Save attach info to file with the name
- * "<singleton_attach_path>/grpid.attach_info".
+ * "<singleton_attach_path>/grpid.attach_info_tmp".
  * The format of the file is:
  * line 1: the process set name
  * line 2: process set size
- * line 3: starting from this line, each line contains a rank (uri, pair) like:
- *         0 tcp://192.168.0.1:1234
+ * line 3: <psr_rank> <psr_uri>
  *
  * An example file named service_set.attach_info:
  * ========================
  * service_set
  * 5
- * 0 tcp://192.168.0.1:1234
- * 1 tcp://192.168.0.1:1238
- * 2 tcp://192.168.0.1:1232
- * 3 tcp://192.168.0.1:1231
- * 4 tcp://192.168.0.1:1244
+ * 4 tcp://192.168.0.1:1234
  * ========================
+ *
+ * The psr rank is gp_self if generating config for local set.
+ * Otherwise it is the psr_rank of the remote set.
  */
 int
 crt_group_config_save(crt_group_t *grp)
@@ -2087,9 +2085,11 @@ crt_group_config_save(crt_group_t *grp)
 	FILE			*fp = NULL;
 	char			*filename = NULL;
 	crt_group_id_t		grpid;
-	crt_rank_t		rank;
 	int			rc = 0;
 	struct crt_grp_gdata	*grp_gdata;
+	crt_rank_t		psr_rank;
+	crt_phy_addr_t		psr_addr;
+
 
 	if (!crt_initialized()) {
 		C_ERROR("CRT not initialized.\n");
@@ -2102,8 +2102,13 @@ crt_group_config_save(crt_group_t *grp)
 		/* to lookup local primary group handle */
 		grp_priv = crt_is_service() ? grp_gdata->gg_srv_pri_grp :
 					      grp_gdata->gg_cli_pri_grp;
-	} else
+		psr_rank = grp_priv->gp_self;
+		psr_addr = crt_gdata.cg_addr;
+	} else {
 		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
+		psr_rank = grp_priv->gp_psr_rank;
+		psr_addr = grp_priv->gp_psr_phy_addr;
+	}
 
 	C_ASSERT(grp_priv != NULL);
 	if (grp_priv->gp_service == 0) {
@@ -2134,28 +2139,12 @@ crt_group_config_save(crt_group_t *grp)
 			filename, strerror(errno));
 		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
-	/* save all address URIs in the primary group */
-	for (rank = 0; rank < grp_priv->gp_size; rank++) {
-		crt_phy_addr_t	addr_uri;
 
-		addr_uri = NULL;
-		rc = crt_grp_lc_lookup(grp_priv, 0 /* ctx_idx */,
-				       NULL /* hg_ctx */, rank, 0 /* tag */,
-				       &addr_uri, NULL /* na_addr */);
-		if (rc != 0) {
-			C_ERROR("crt_grp_lc_lookup(grp %s, rank %d) failed, "
-				"rc: %d.\n", grpid, rank, rc);
-			C_GOTO(out, rc);
-		}
-		C_ASSERT(addr_uri != NULL);
-
-		rc = fprintf(fp, "%d %s\n", rank, addr_uri);
-		if (rc < 0) {
-			C_ERROR("write to file %s failed (%s).\n",
-				filename, strerror(errno));
-			C_GOTO(out, rc = crt_errno2cer(errno));
-		}
-		rc = 0;
+	rc = fprintf(fp, "%d %s\n", psr_rank, psr_addr);
+	if (rc < 0) {
+		C_ERROR("write to file %s failed (%s).\n",
+			filename, strerror(errno));
+		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
 
 	if (fclose(fp) != 0) {
@@ -2165,7 +2154,7 @@ crt_group_config_save(crt_group_t *grp)
 		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
 	fp = NULL;
-
+	rc = 0;
 out:
 	if (filename != NULL)
 		free(filename);
@@ -2175,12 +2164,10 @@ out:
 }
 
 int
-crt_grp_load_attach_info(struct crt_grp_priv *grp_priv)
+crt_grp_config_load(struct crt_grp_priv *grp_priv)
 {
 	char		*filename;
 	FILE		*fp = NULL;
-	crt_rank_t	rank;
-	crt_rank_t	psr_rank;
 	crt_group_id_t	grpid, grpname = NULL;
 	crt_phy_addr_t	addr_str = NULL;
 	int		rc = 0;
@@ -2220,21 +2207,21 @@ crt_grp_load_attach_info(struct crt_grp_priv *grp_priv)
 			filename, strerror(errno));
 		C_GOTO(out, rc = crt_errno2cer(errno));
 	}
-	/** pick a random rank between 0 and size - 1 as the PSR */
-	psr_rank = rand() % grp_priv->gp_size;
+
 	C_ALLOC(addr_str, CRT_ADDR_STR_MAX_LEN);
 	if (addr_str == NULL)
 		C_GOTO(out, rc = -CER_NOMEM);
-	for (rank = 0; rank <= psr_rank; rank++) {
-		rc = fscanf(fp, "%d %s", &grp_priv->gp_psr_rank,
-			    (char *)addr_str);
-		if (rc == EOF)
-			break;
-	}
-	rc = 0;
-	C_ASSERT(grp_priv->gp_psr_rank == psr_rank);
-	grp_priv->gp_psr_phy_addr = addr_str;
 
+	/* The generating process chooses the PSR for us */
+	rc = fscanf(fp, "%d %s", &grp_priv->gp_psr_rank, (char *)addr_str);
+	if (rc == EOF) {
+		C_ERROR("read from file %s failed (%s).\n",
+			filename, strerror(errno));
+		C_GOTO(out, rc = crt_errno2cer(errno));
+	}
+
+	grp_priv->gp_psr_phy_addr = addr_str;
+	rc = 0;
 out:
 	if (fp)
 		fclose(fp);
@@ -2245,7 +2232,7 @@ out:
 	if (rc != 0) {
 		if (addr_str != NULL)
 			C_FREE(addr_str, CRT_ADDR_STR_MAX_LEN);
-		C_ERROR("crt_grp_load_attach_info (grpid %s) failed, rc: %d.\n",
+		C_ERROR("crt_grp_config_load (grpid %s) failed, rc: %d.\n",
 			grpid, rc);
 	}
 	return rc;
