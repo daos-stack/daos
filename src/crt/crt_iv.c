@@ -639,7 +639,7 @@ struct crt_ivf_transfer_cb_info {
 	crt_iov_t			*tci_iv_key;
 
 	/* IV value for which fetch was performed */
-	crt_sg_list_t			*tci_iv_value;
+	crt_sg_list_t			tci_iv_value;
 };
 
 /* Completion callback for fetch's bulk transfer */
@@ -679,7 +679,7 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	C_ASSERT(iv_ops != NULL);
 
 	rc = iv_ops->ivo_on_put(cb_info->tci_ivns_internal,
-				cb_info->tci_iv_key, 0, cb_info->tci_iv_value);
+				cb_info->tci_iv_key, 0, &cb_info->tci_iv_value);
 	if (rc != 0)
 		C_ERROR("ivo_on_put() failed; rc = %d\n", rc);
 
@@ -745,7 +745,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 	cb_info->tci_ivns_internal = ivns_internal;
 	cb_info->tci_class_id = class_id;
 	cb_info->tci_iv_key = iv_key;
-	cb_info->tci_iv_value = iv_value;
+	cb_info->tci_iv_value = *iv_value;
 
 	rc = crt_bulk_transfer(&bulk_desc, crt_ivf_bulk_transfer_done_cb,
 				cb_info, &opid);
