@@ -1303,8 +1303,8 @@ out:
 
 /* Callers are expected to hold svc->ps_lock for writing. */
 static int
-ds_pool_exclude(struct pool_svc *svc, daos_rank_list_t *tgts,
-		daos_rank_list_t *tgts_failed)
+ds_pool_tgt_update(struct pool_svc *svc, daos_rank_list_t *tgts,
+		   daos_rank_list_t *tgts_failed, int opc)
 {
 	struct pool_map	       *map;
 	uint32_t		map_version_before;
@@ -1324,7 +1324,7 @@ ds_pool_exclude(struct pool_svc *svc, daos_rank_list_t *tgts,
 	 * before and after.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_exclude_targets(map, tgts, tgts_failed);
+	rc = ds_pool_map_tgts_update(map, tgts, tgts_failed, opc);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -1377,32 +1377,32 @@ out:
 }
 
 int
-ds_pool_exclude_handler(crt_rpc_t *rpc)
+ds_pool_tgt_update_handler(crt_rpc_t *rpc)
 {
-	struct pool_exclude_in	       *in = crt_req_get(rpc);
-	struct pool_exclude_out	       *out = crt_reply_get(rpc);
-	struct pool_svc		       *svc;
+	struct pool_tgt_update_in	*in = crt_req_get(rpc);
+	struct pool_tgt_update_out	*out = crt_reply_get(rpc);
+	struct pool_svc			*svc;
 	struct pool_hdl			hdl;
 	int				rc;
 
 	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
 
-	if (in->pei_targets == NULL || in->pei_targets->rl_nr.num == 0 ||
-	    in->pei_targets->rl_ranks == NULL)
+	if (in->pti_targets == NULL || in->pti_targets->rl_nr.num == 0 ||
+	    in->pti_targets->rl_ranks == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID
-		" ntargets=%u\n", DP_UUID(in->pei_op.pi_uuid), rpc,
-		DP_UUID(in->pei_op.pi_hdl), in->pei_targets->rl_nr.num);
+		" ntargets=%u\n", DP_UUID(in->pti_op.pi_uuid), rpc,
+		DP_UUID(in->pti_op.pi_hdl), in->pti_targets->rl_nr.num);
 
-	rc = pool_svc_lookup(in->pei_op.pi_uuid, &svc);
+	rc = pool_svc_lookup(in->pti_op.pi_uuid, &svc);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
 	/* Verify the pool handle. */
-	rc = dbtree_uv_lookup(svc->ps_handles, in->pei_op.pi_hdl, &hdl,
+	rc = dbtree_uv_lookup(svc->ps_handles, in->pti_op.pi_hdl, &hdl,
 			      sizeof(hdl));
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
@@ -1411,39 +1411,40 @@ ds_pool_exclude_handler(crt_rpc_t *rpc)
 	}
 
 	/* These have to be freed after the reply is sent. */
-	D_ALLOC_PTR(out->peo_targets);
-	if (out->peo_targets == NULL)
+	D_ALLOC_PTR(out->pto_targets);
+	if (out->pto_targets == NULL)
 		D_GOTO(out_map_version, rc = -DER_NOMEM);
-	D_ALLOC(out->peo_targets->rl_ranks,
-		sizeof(*out->peo_targets->rl_ranks) *
-		in->pei_targets->rl_nr.num);
-	if (out->peo_targets->rl_ranks == NULL)
+	D_ALLOC(out->pto_targets->rl_ranks,
+		sizeof(*out->pto_targets->rl_ranks) *
+		in->pti_targets->rl_nr.num);
+	if (out->pto_targets->rl_ranks == NULL)
 		D_GOTO(out_map_version, rc = -DER_NOMEM);
-	out->peo_targets->rl_nr.num = in->pei_targets->rl_nr.num;
+	out->pto_targets->rl_nr.num = in->pti_targets->rl_nr.num;
 
-	rc = ds_pool_exclude(svc, in->pei_targets, out->peo_targets);
+	rc = ds_pool_tgt_update(svc, in->pti_targets, out->pto_targets,
+				opc_get(rpc->cr_opc));
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
 	/* The RPC encoding code only looks at rl_nr.num. */
-	out->peo_targets->rl_nr.num = out->peo_targets->rl_nr.num_out;
+	out->pto_targets->rl_nr.num = out->pto_targets->rl_nr.num_out;
 
 out_map_version:
-	out->peo_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
+	out->pto_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	pool_svc_put(svc);
 out:
-	out->peo_op.po_rc = rc;
+	out->pto_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
-		DP_UUID(in->pei_op.pi_uuid), rpc, rc);
+		DP_UUID(in->pti_op.pi_uuid), rpc, rc);
 	rc = crt_reply_send(rpc);
-	if (out->peo_targets != NULL) {
-		if (out->peo_targets->rl_ranks != NULL)
-			D_FREE(out->peo_targets->rl_ranks,
-			       sizeof(*out->peo_targets->rl_ranks) *
-			       in->pei_targets->rl_nr.num);
-		D_FREE_PTR(out->peo_targets);
+	if (out->pto_targets != NULL) {
+		if (out->pto_targets->rl_ranks != NULL)
+			D_FREE(out->pto_targets->rl_ranks,
+			       sizeof(*out->pto_targets->rl_ranks) *
+			       in->pti_targets->rl_nr.num);
+		D_FREE_PTR(out->pto_targets);
 	}
 	return rc;
 }

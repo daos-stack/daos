@@ -91,7 +91,7 @@ daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 int
 daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
 {
-	daos_pool_exclude_t	args;
+	daos_pool_update_t	args;
 	struct daos_task	*task;
 	int			rc;
 
@@ -99,8 +99,47 @@ daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
 
 	args.poh = poh;
 	args.tgts = tgts;
-
 	rc = dc_task_prep(DAOS_OPC_POOL_EXCLUDE, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
+		return rc;
+
+	daos_sched_progress(daos_ev2sched(ev));
+
+	return daos_client_result_wait(ev);
+}
+
+int
+daos_pool_tgt_add(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev)
+{
+	daos_pool_update_t	args;
+	struct daos_task	*task;
+	int			rc;
+
+	args.poh = poh;
+	args.tgts = tgts;
+
+	rc = dc_task_prep(DAOS_OPC_POOL_ADD, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
+		return rc;
+
+	daos_sched_progress(daos_ev2sched(ev));
+
+	return daos_client_result_wait(ev);
+}
+
+int
+daos_pool_exclude_out(daos_handle_t poh, daos_rank_list_t *tgts,
+		      daos_event_t *ev)
+{
+	daos_pool_update_t	args;
+	struct daos_task	*task;
+	int			rc;
+
+	args.poh = poh;
+	args.tgts = tgts;
+	rc = dc_task_prep(DAOS_OPC_POOL_EXCLUDE_OUT, &args, sizeof(args), &task,
 			  &ev);
 	if (rc)
 		return rc;

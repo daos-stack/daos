@@ -47,6 +47,8 @@ enum pool_operation {
 	POOL_QUERY		= 3,
 	POOL_EXCLUDE		= 4,
 	POOL_EVICT		= 5,
+	POOL_ADD		= 6,
+	POOL_EXCLUDE_OUT	= 7,
 
 	POOL_TGT_CONNECT	= 11,
 	POOL_TGT_DISCONNECT	= 12,
@@ -96,14 +98,14 @@ struct pool_query_out {
 	uint32_t		pqo_map_buf_size;   /* only set on -DER_TRUNC */
 };
 
-struct pool_exclude_in {
-	struct pool_op_in	pei_op;
-	daos_rank_list_t       *pei_targets;
+struct pool_tgt_update_in {
+	struct pool_op_in	pti_op;
+	daos_rank_list_t       *pti_targets;
 };
 
-struct pool_exclude_out {
-	struct pool_op_out	peo_op;
-	daos_rank_list_t       *peo_targets;	/* that are not found in pool */
+struct pool_tgt_update_out {
+	struct pool_op_out	pto_op;
+	daos_rank_list_t       *pto_targets;	/* that are not found in pool */
 };
 
 struct pool_evict_in {

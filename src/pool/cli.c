@@ -830,35 +830,39 @@ out:
 	return rc;
 }
 
-struct pool_exclude_arg {
+struct pool_tgt_update_arg {
 	struct dc_pool		*pool;
 	crt_rpc_t		*rpc;
 };
 
 static int
-pool_exclude_cp(struct daos_task *task, void *data)
+pool_tgt_update_cp(struct daos_task *task, void *data)
 {
-	struct pool_exclude_arg		*arg = (struct pool_exclude_arg *)data;
-	struct dc_pool			*pool = arg->pool;
-	struct pool_exclude_out		*out = crt_reply_get(arg->rpc);
+	struct pool_tgt_update_arg	*arg;
+	struct dc_pool			*pool;
+	struct pool_tgt_update_out	*out;
 	int				 rc = task->dt_result;
+
+	arg = (struct pool_tgt_update_arg *)data;
+	pool = arg->pool;
+	out = crt_reply_get(arg->rpc);
 
 	if (rc != 0) {
 		D_ERROR("RPC error while excluding targets: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	rc = out->peo_op.po_rc;
+	rc = out->pto_op.po_rc;
 	if (rc != 0) {
 		D_ERROR("failed to exclude targets: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DF_DSMC, DF_UUID": excluded: hdl="DF_UUID" failed=%u\n",
+	D_DEBUG(DF_DSMC, DF_UUID": updated: hdl="DF_UUID" failed=%u\n",
 		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl),
-		out->peo_targets == NULL ? 0 : out->peo_targets->rl_nr.num);
+		out->pto_targets == NULL ? 0 : out->pto_targets->rl_nr.num);
 
-	if (out->peo_targets != NULL && out->peo_targets->rl_nr.num > 0)
+	if (out->pto_targets != NULL && out->pto_targets->rl_nr.num > 0)
 		rc = -DER_INVAL;
 
 out:
@@ -867,19 +871,16 @@ out:
 	return rc;
 }
 
-int
-dc_pool_exclude(struct daos_task *task)
+static int
+dc_pool_update_internal(struct daos_task *task, daos_pool_update_t *args,
+			int opc)
 {
-	daos_pool_exclude_t	*args;
 	struct dc_pool		*pool;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
-	struct pool_exclude_in	*in;
-	struct pool_exclude_arg	 exc_args;
+	struct pool_tgt_update_in *in;
+	struct pool_tgt_update_arg update_args;
 	int			 rc;
-
-	args = daos_task_get_args(DAOS_OPC_POOL_EXCLUDE, task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	if (args->tgts == NULL || args->tgts->rl_nr.num == 0)
 		return -DER_INVAL;
@@ -896,23 +897,23 @@ dc_pool_exclude(struct daos_task *task)
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
 
-	rc = pool_req_create(daos_task2ctx(task), ep, POOL_EXCLUDE, &rpc);
+	rc = pool_req_create(daos_task2ctx(task), ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(out_pool, rc);
 	}
 
 	in = crt_req_get(rpc);
-	uuid_copy(in->pei_op.pi_uuid, pool->dp_pool);
-	uuid_copy(in->pei_op.pi_hdl, pool->dp_pool_hdl);
-	in->pei_targets = args->tgts;
+	uuid_copy(in->pti_op.pi_uuid, pool->dp_pool);
+	uuid_copy(in->pti_op.pi_hdl, pool->dp_pool_hdl);
+	in->pti_targets = args->tgts;
 
-	exc_args.pool = pool;
+	update_args.pool = pool;
 	crt_req_addref(rpc);
-	exc_args.rpc = rpc;
+	update_args.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, pool_exclude_cp, sizeof(exc_args),
-					&exc_args);
+	rc = daos_task_register_comp_cb(task, pool_tgt_update_cp,
+					sizeof(update_args), &update_args);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -931,6 +932,39 @@ out_pool:
 out_task:
 	daos_task_complete(task, rc);
 	return rc;
+}
+
+int
+dc_pool_exclude(struct daos_task *task)
+{
+	daos_pool_update_t *args;
+
+	args = daos_task_get_args(DAOS_OPC_POOL_EXCLUDE, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return dc_pool_update_internal(task, args, POOL_EXCLUDE);
+}
+
+int
+dc_pool_add(struct daos_task *task)
+{
+	daos_pool_update_t *args;
+
+	args = daos_task_get_args(DAOS_OPC_POOL_ADD, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return dc_pool_update_internal(task, args, POOL_ADD);
+}
+
+int
+dc_pool_exclude_out(struct daos_task *task)
+{
+	daos_pool_update_t *args;
+
+	args = daos_task_get_args(DAOS_OPC_POOL_EXCLUDE_OUT, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return dc_pool_update_internal(task, args, POOL_EXCLUDE_OUT);
 }
 
 struct pool_query_arg {

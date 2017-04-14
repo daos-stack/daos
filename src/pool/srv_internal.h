@@ -69,7 +69,7 @@ void ds_pool_svc_cache_fini(void);
 int ds_pool_connect_handler(crt_rpc_t *rpc);
 int ds_pool_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_query_handler(crt_rpc_t *rpc);
-int ds_pool_exclude_handler(crt_rpc_t *rpc);
+int ds_pool_tgt_update_handler(crt_rpc_t *rpc);
 int ds_pool_evict_handler(crt_rpc_t *rpc);
 
 /*
@@ -103,7 +103,7 @@ void ds_pool_child_purge(struct pool_tls *tls);
 int ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 			 crt_group_t **group);
 int ds_pool_group_destroy(const uuid_t pool_uuid, crt_group_t *group);
-int ds_pool_map_exclude_targets(struct pool_map *map, daos_rank_list_t *tgts,
-				daos_rank_list_t *tgts_failed);
+int ds_pool_map_tgts_update(struct pool_map *map, daos_rank_list_t *tgts,
+			    daos_rank_list_t *tgts_failed, int opc);
 
 #endif /* __POOL_SRV_INTERNAL_H__ */

@@ -87,12 +87,14 @@ dc_pool_put(struct dc_pool *pool)
 
 int dc_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
 int dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
-
 int dc_pool_connect(struct daos_task *task);
 int dc_pool_disconnect(struct daos_task *task);
-int dc_pool_exclude(struct daos_task *task);
 int dc_pool_query(struct daos_task *task);
 int dc_pool_target_query(struct daos_task *task);
+int dc_pool_exclude(struct daos_task *task);
+int dc_pool_exclude_out(struct daos_task *task);
+int dc_pool_add(struct daos_task *task);
+int dc_pool_evict(struct daos_task *task);
 
 int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
@@ -103,5 +105,51 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		   struct pool_map *map, daos_handle_t *ph);
 int
 dc_pool_local_close(daos_handle_t ph);
+
+/**
+ * Only test program might use these two api for now, so let's
+ * put the definition here temporarily XXX.
+ */ 
+/**
+ * add a set of storage targets from a pool.
+ *
+ * \param poh	[IN]	Pool connection handle.
+ * \param tgts	[IN]	Target rank array to be added from the pool.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid pool handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ */
+int
+daos_pool_tgt_add(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev);
+
+/**
+ * Exclude completely a set of storage targets from a pool. Compared with
+ * daos_pool_exclude(), this API will mark the targets to be DOWNOUT, i.e.
+ * the rebuilding for this target is done, while daos_pool_exclude() only
+ * mark the target to be DOWN, i.e. the rebuilding might not finished yet.
+ *
+ * \param poh	[IN]	Pool connection handle.
+ * \param tgts	[IN]	Target rank array to be excluded from the pool.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid pool handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ */
+int
+daos_pool_exclude_out(daos_handle_t poh, daos_rank_list_t *tgts,
+		      daos_event_t *ev);
 
 #endif /* __DAOS_POOL_H__ */

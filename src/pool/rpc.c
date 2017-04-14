@@ -71,13 +71,13 @@ struct crt_msg_field *pool_query_out_fields[] = {
 	&CMF_UINT32	/* map_buf_size */
 };
 
-struct crt_msg_field *pool_exclude_in_fields[] = {
+struct crt_msg_field *pool_tgt_update_in_fields[] = {
 	&CMF_UUID,	/* op.uuid */
 	&CMF_UUID,	/* op.handle */
 	&CMF_RANK_LIST	/* targets */
 };
 
-struct crt_msg_field *pool_exclude_out_fields[] = {
+struct crt_msg_field *pool_tgt_update_out_fields[] = {
 	&CMF_INT,	/* op.rc */
 	&CMF_UINT32,	/* op.map_version */
 	&CMF_RANK_LIST	/* targets */
@@ -135,8 +135,16 @@ struct crt_req_format DQF_POOL_QUERY =
 			   pool_query_out_fields);
 
 struct crt_req_format DQF_POOL_EXCLUDE =
-	DEFINE_CRT_REQ_FMT("POOL_EXCLUDE", pool_exclude_in_fields,
-			   pool_exclude_out_fields);
+	DEFINE_CRT_REQ_FMT("POOL_EXCLUDE", pool_tgt_update_in_fields,
+			   pool_tgt_update_out_fields);
+
+struct crt_req_format DQF_POOL_EXCLUDE_OUT =
+	DEFINE_CRT_REQ_FMT("POOL_EXCLUDE_OUT", pool_tgt_update_in_fields,
+			   pool_tgt_update_out_fields);
+
+struct crt_req_format DQF_POOL_ADD =
+	DEFINE_CRT_REQ_FMT("POOL_ADD", pool_tgt_update_in_fields,
+			   pool_tgt_update_out_fields);
 
 struct crt_req_format DQF_POOL_EVICT =
 	DEFINE_CRT_REQ_FMT("POOL_EVICT", pool_evict_in_fields,
@@ -196,6 +204,18 @@ struct daos_rpc pool_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_POOL_EVICT
+	}, {
+		.dr_name	= "POOL_ADD",
+		.dr_opc		= POOL_ADD,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_ADD,
+	}, {
+		.dr_name	= "POOL_EXCLUDE_OUT",
+		.dr_opc		= POOL_EXCLUDE_OUT,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_EXCLUDE_OUT,
 	}, {
 		.dr_opc		= 0
 	}

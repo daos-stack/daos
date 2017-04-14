@@ -28,6 +28,7 @@
 #include <daos_srv/pool.h>
 
 #include <daos/pool_map.h>
+#include "rpc.h"
 #include "srv_internal.h"
 
 enum map_ranks_class {
@@ -249,8 +250,8 @@ map_exclude_destroy_sanitized_tgts(daos_rank_list_t *tgts)
  * as large that of "tgts".
  */
 int
-ds_pool_map_exclude_targets(struct pool_map *map, daos_rank_list_t *tgts,
-			    daos_rank_list_t *tgts_failed)
+ds_pool_map_tgts_update(struct pool_map *map, daos_rank_list_t *tgts,
+			daos_rank_list_t *tgts_failed, int opc)
 {
 	daos_rank_list_t       *tgts_sanitized;
 	uint32_t		version;
@@ -295,11 +296,27 @@ ds_pool_map_exclude_targets(struct pool_map *map, daos_rank_list_t *tgts,
 			  target->ta_comp.co_status == PO_COMP_ST_DOWN ||
 			  target->ta_comp.co_status == PO_COMP_ST_DOWNOUT,
 			  "%u\n", target->ta_comp.co_status);
-		if (target->ta_comp.co_status != PO_COMP_ST_DOWN &&
+		if (opc == POOL_EXCLUDE &&
+		    target->ta_comp.co_status != PO_COMP_ST_DOWN &&
 		    target->ta_comp.co_status != PO_COMP_ST_DOWNOUT) {
 			D_DEBUG(DF_DSMS, "changing rank %u to DOWN in map %p\n",
 				target->ta_comp.co_rank, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWN;
+			target->ta_comp.co_fseq = version;
+			nchanges++;
+		} else if (opc == POOL_ADD &&
+			   target->ta_comp.co_status != PO_COMP_ST_UP &&
+			   target->ta_comp.co_status != PO_COMP_ST_UPIN) {
+			D_DEBUG(DF_DSMS, "changing rank %u to UP in map %p\n",
+				target->ta_comp.co_rank, map);
+			target->ta_comp.co_status = PO_COMP_ST_UP;
+			target->ta_comp.co_fseq = version;
+			nchanges++;
+		} else if (opc == POOL_EXCLUDE_OUT &&
+			   target->ta_comp.co_status == PO_COMP_ST_DOWN) {
+			D_DEBUG(DF_DSMS, "changing rank %u to DOWNOUT map %p\n",
+				target->ta_comp.co_rank, map);
+			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
 			target->ta_comp.co_fseq = version;
 			nchanges++;
 		}

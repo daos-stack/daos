@@ -50,6 +50,8 @@ typedef enum {
 	DAOS_OPC_POOL_CONNECT,
 	DAOS_OPC_POOL_DISCONNECT,
 	DAOS_OPC_POOL_EXCLUDE,
+	DAOS_OPC_POOL_EXCLUDE_OUT,
+	DAOS_OPC_POOL_ADD,
 	DAOS_OPC_POOL_QUERY,
 	DAOS_OPC_POOL_TARGET_QUERY,
 
@@ -148,7 +150,7 @@ typedef struct {
 typedef struct {
 	daos_handle_t		poh;
 	daos_rank_list_t	*tgts;
-} daos_pool_exclude_t;
+} daos_pool_update_t;
 
 typedef struct {
 	daos_handle_t		poh;
