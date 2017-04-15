@@ -157,6 +157,105 @@ static void free_session(struct st_session **session)
 	C_FREE_PTR(*session);
 }
 
+static int alloc_buf_entry(struct st_buf_entry **const return_entry,
+		    const struct st_session *session,
+		    crt_context_t crt_ctx)
+{
+	size_t			 alloc_buf_len;
+	size_t			 test_buf_len;
+	struct st_buf_entry	*new_entry;
+	int			 ret;
+
+	/* No returned buffer yet */
+	*return_entry = NULL;
+
+	/*
+	 * Compute the amount of spaced needed for this test run
+	 * Note that if bulk is used for sending, need to make sure this is
+	 * big enough to receive the message AND send the response
+	 */
+	if (ISBULK(session->params.send_type))
+		test_buf_len = max(session->params.send_size,
+				   session->params.reply_size);
+	else
+		test_buf_len = session->params.reply_size;
+
+	/*
+	 * If the user requested that messages be aligned, add additional
+	 * space so that a requested aligned value will always be present
+	 *
+	 * Note that CRT_ST_BUF_ALIGN_MAX is required to be one less than a
+	 * power of two
+	 */
+	if (session->params.buf_alignment != CRT_ST_BUF_ALIGN_DEFAULT)
+		alloc_buf_len = test_buf_len + CRT_ST_BUF_ALIGN_MAX;
+	else
+		alloc_buf_len = test_buf_len;
+
+	/* If no buffer is required, don't bother to allocate any */
+	if (test_buf_len == 0)
+		return 0;
+
+	C_ASSERT(return_entry != NULL);
+	C_ASSERT(alloc_buf_len > 0);
+
+	C_ALLOC_PTR(new_entry);
+	if (new_entry == NULL) {
+		C_ERROR("self-test memory allocation failed for new session -"
+			" alloc_buf_len=%zu\n", alloc_buf_len);
+		return -CER_NOMEM;
+	}
+
+	C_ALLOC(new_entry->buf, alloc_buf_len);
+	if (new_entry == NULL) {
+		C_ERROR("self-test memory allocation failed for new session -"
+			" alloc_buf_len=%zu\n", alloc_buf_len);
+		return -CER_NOMEM;
+	}
+
+	/* Fill the buffer with an arbitrary data pattern */
+	memset(new_entry->buf, 0xA7, alloc_buf_len);
+
+	/* Track how big the buffer is for bookkeeping */
+	new_entry->buf_len = alloc_buf_len;
+
+	/*
+	 * Set up the scatter-gather list to point to the newly
+	 * allocated buffer it is attached to
+	 *
+	 * Note that here the length is the length of the actual
+	 * buffer; this will probably need to be changed when it
+	 * comes time to actually do a bulk transfer
+	 */
+	new_entry->sg_list.sg_iovs = &new_entry->sg_iov;
+	new_entry->sg_list.sg_nr.num = 1;
+	crt_iov_set(&new_entry->sg_iov,
+		    crt_st_get_aligned_ptr(new_entry->buf,
+					   session->params.buf_alignment),
+		    test_buf_len);
+
+	/* If this session will use bulk, initialize a bulk descriptor */
+	if (ISBULK(session->params.send_type)
+	    || ISBULK(session->params.reply_type)) {
+		crt_bulk_perm_t perms = ISBULK(session->params.send_type) ?
+					CRT_BULK_RW : CRT_BULK_RO;
+
+		ret = crt_bulk_create(crt_ctx, &new_entry->sg_list,
+				      perms, &new_entry->bulk_hdl);
+		if (ret != 0) {
+			C_ERROR("crt_bulk_create failed; ret=%d\n", ret);
+			return ret;
+		}
+		C_ASSERT(new_entry->bulk_hdl != CRT_BULK_NULL);
+	}
+
+	/* Buffer entry contains a pointer to its session */
+	new_entry->session = (struct st_session *)session;
+
+	*return_entry = new_entry;
+	return 0;
+}
+
 void crt_self_test_service_init(void)
 {
 	int ret;
@@ -179,8 +278,6 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	int64_t				 session_id;
 	uint32_t			 i;
 	int				 ret;
-	size_t				 alloc_buf_len;
-	size_t				 test_buf_len;
 
 	/* Get pointers to the arguments and response buffers */
 	args = (struct crt_st_session_params *)crt_req_get(rpc_req);
@@ -213,98 +310,23 @@ int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	memcpy(&new_session->params, args, sizeof(new_session->params));
 
 	/*
-	 * Compute the amount of spaced needed for this test run
-	 * Note that if bulk is used for sending, need to make sure this is
-	 * big enough to receive the message AND send the response
-	 */
-	if (ISBULK(args->send_type))
-		test_buf_len = max(args->send_size,
-				   args->reply_size);
-	else
-		test_buf_len = args->reply_size;
-
-	/*
-	 * If the user requested that messages be aligned, add additional
-	 * space so that a requested aligned value will always be present
-	 *
-	 * Note that CRT_ST_BUF_ALIGN_MAX is required to be one less than a
-	 * power of two
-	 */
-	if (args->buf_alignment != CRT_ST_BUF_ALIGN_DEFAULT)
-		alloc_buf_len = test_buf_len + CRT_ST_BUF_ALIGN_MAX;
-	else
-		alloc_buf_len = test_buf_len;
-
-	/* If no buffer is required, don't bother to allocate any */
-	if (test_buf_len == 0)
-		args->num_buffers = 0;
-
-	/*
 	 * Allocate as many descriptors (with accompanying buffers) as
 	 * requested by the caller
 	 */
-	for (i = 0; i < args->num_buffers; i++) {
+	for (i = 0; i < new_session->params.num_buffers; i++) {
 		struct st_buf_entry *new_entry;
 
-		C_ALLOC_PTR(new_entry);
-		if (new_entry == NULL) {
-			C_ERROR("self-test memory allocation failed for new"
-				" session - num_buffers=%d, reply_size=%d\n",
-				args->num_buffers, args->reply_size);
+		/* Allocate the new entry (and bulk handle if applicable) */
+		ret = alloc_buf_entry(&new_entry, new_session, rpc_req->cr_ctx);
+		if (ret != 0) {
+			C_ERROR("Failed to allocate buf_entry; ret=%d\n", ret);
 			C_GOTO(send_rpc, *reply_session_id = -1);
 		}
 
-		/* Buffer entry contains a pointer to its session */
-		new_entry->session = new_session;
-
-		C_ALLOC(new_entry->buf, alloc_buf_len);
+		/* No error code and no buffer allocated means none needed */
 		if (new_entry == NULL) {
-			C_ERROR("self-test memory allocation failed for new"
-				" session - num_buffers=%d, reply_size=%d\n",
-				args->num_buffers, args->reply_size);
-			C_GOTO(send_rpc, *reply_session_id = -1);
-		}
-
-		/* Fill the buffer with an arbitrary data pattern */
-		memset(new_entry->buf, 0xA7, alloc_buf_len);
-
-		/* Track how big the buffer is for bookkeeping */
-		new_entry->buf_len = alloc_buf_len;
-
-		/*
-		 * Set up the scatter-gather list to point to the newly
-		 * allocated buffer it is attached to
-		 *
-		 * Note that here the length is the length of the actual
-		 * buffer; this will probably need to be changed when it
-		 * comes time to actually do a bulk transfer
-		 */
-		new_entry->sg_list.sg_iovs = &new_entry->sg_iov;
-		new_entry->sg_list.sg_nr.num = 1;
-		crt_iov_set(&new_entry->sg_iov,
-			    crt_st_get_aligned_ptr(new_entry->buf,
-						   args->buf_alignment),
-			    test_buf_len);
-
-		/*
-		 * If this session will use bulk, initialize a bulk descriptor
-		 * for this data
-		 */
-		if (ISBULK(args->send_type) || ISBULK(args->reply_type)) {
-			crt_bulk_perm_t perms =
-				ISBULK(args->send_type) ?
-					CRT_BULK_RW : CRT_BULK_RO;
-
-			ret = crt_bulk_create(rpc_req->cr_ctx,
-					      &new_entry->sg_list,
-					      perms,
-					      &new_entry->bulk_hdl);
-			if (ret != 0) {
-				C_ERROR("crt_bulk_create failed; ret=%d\n",
-					ret);
-				C_GOTO(send_rpc, *reply_session_id = -1);
-			}
-			C_ASSERT(new_entry->bulk_hdl != CRT_BULK_NULL);
+			new_session->params.num_buffers = 0;
+			break;
 		}
 
 		/* Push this new entry onto the head of the stack */
@@ -633,7 +655,35 @@ int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 			       " num allocated = %d."
 			       " This will decrease performance.\n",
 			       session_id, session->params.num_buffers);
-			sched_yield();
+
+			/*
+			 * IMPORTANT NOTE
+			 *
+			 * This is only likely to happen when there is only a
+			 * single thread calling crt_progress, and it is
+			 * heavily loaded. In this situation, the application
+			 * is likely to deadlock here without the following
+			 * code because no other threads will call crt_progress
+			 * to potentially free up a buffer to use. Worse, this
+			 * function can't abort without losing this test
+			 * message for no good reason
+			 *
+			 * Instead of deadlocking or dropping a test message,
+			 * the following code allocates a new buffer to use
+			 *
+			 * This is the *only* place self-test performs
+			 * allocation while a test is running
+			 */
+
+			ret = alloc_buf_entry(&buf_entry, session,
+					      rpc_req->cr_ctx);
+			if (ret != 0) {
+				C_ERROR("Failed to allocate buf_entry;"
+					" ret=%d\n", ret);
+				return 0;
+			}
+
+			session->params.num_buffers++;
 		}
 	}
 
