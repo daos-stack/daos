@@ -227,6 +227,40 @@ out:
 	return rc;
 }
 
+static int
+crt_hg_reg_rpcid(hg_class_t *hg_class)
+{
+	int rc;
+
+	rc = crt_hg_reg(hg_class, CRT_HG_RPCID,
+			(crt_proc_cb_t)crt_proc_in_common,
+			(crt_proc_cb_t)crt_proc_out_common,
+			(crt_hg_rpc_cb_t)crt_rpc_handler_common);
+	if (rc != 0) {
+		C_ERROR("crt_hg_reg(rpcid: 0x%x), failed rc: %d.\n",
+			CRT_HG_RPCID, rc);
+		C_GOTO(out, rc = -CER_HG);
+	}
+
+	rc = crt_hg_reg(hg_class, CRT_HG_ONEWAY_RPCID,
+			(crt_proc_cb_t)crt_proc_in_common,
+			(crt_proc_cb_t)crt_proc_out_common,
+			(crt_hg_rpc_cb_t)crt_rpc_handler_common);
+	if (rc != 0) {
+		C_ERROR("crt_hg_reg(rpcid: 0x%x), failed rc: %d.\n",
+			CRT_HG_ONEWAY_RPCID, rc);
+		C_GOTO(out, rc = -CER_HG);
+	}
+	rc = HG_Registered_disable_response(hg_class, CRT_HG_ONEWAY_RPCID,
+					    HG_TRUE);
+	if (rc != 0)
+		C_ERROR("HG_Registered_disable_response(rpcid: 0x%x), "
+			"failed rc: %d.\n", CRT_HG_ONEWAY_RPCID, rc);
+
+out:
+	return rc;
+}
+
 /* be called only in crt_init */
 int
 crt_hg_init(crt_phy_addr_t *addr, bool server)
@@ -284,17 +318,13 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 
 	crt_gdata.cg_hg = hg_gdata;
 
-	/* register the CRT_HG_RPCID */
-	rc = crt_hg_reg(crt_gdata.cg_hg->chg_hgcla, CRT_HG_RPCID,
-			(crt_proc_cb_t)crt_proc_in_common,
-			(crt_proc_cb_t)crt_proc_out_common,
-			(crt_hg_rpc_cb_t)crt_rpc_handler_common);
+	/* register the shared RPCID */
+	rc = crt_hg_reg_rpcid(crt_gdata.cg_hg->chg_hgcla);
 	if (rc != 0) {
-		C_ERROR("crt_hg_reg(rpcid: 0x%x), failed rc: %d.\n",
-			CRT_HG_RPCID, rc);
+		C_ERROR("crt_hg_reg_rpcid failed, rc: %d.\n", rc);
 		HG_Finalize(hg_class);
 		NA_Finalize(na_class);
-		C_GOTO(out, rc = -CER_HG);
+		C_GOTO(out, rc);
 	}
 
 	if (*addr == NULL) {
@@ -442,17 +472,13 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		}
 
 		/* register the shared RPCID to every hg_class */
-		rc = crt_hg_reg(hg_class, CRT_HG_RPCID,
-				(crt_proc_cb_t)crt_proc_in_common,
-				(crt_proc_cb_t)crt_proc_out_common,
-				(crt_hg_rpc_cb_t)crt_rpc_handler_common);
+		rc = crt_hg_reg_rpcid(hg_class);
 		if (rc != 0) {
-			C_ERROR("crt_hg_reg(rpcid: 0x%x), failed rc: %d.\n",
-				CRT_HG_RPCID, rc);
+			C_ERROR("crt_hg_reg_rpcid failed, rc: %d.\n", rc);
 			HG_Context_destroy(hg_context);
 			HG_Finalize(hg_class);
 			NA_Finalize(na_class);
-			C_GOTO(out, rc = -CER_HG);
+			C_GOTO(out, rc);
 		}
 
 		/* register crt_ctx to get it in crt_rpc_handler_common */
@@ -662,16 +688,19 @@ int
 crt_hg_req_create(struct crt_hg_context *hg_ctx, int ctx_idx,
 		  crt_endpoint_t tgt_ep, struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t		hg_ret = HG_SUCCESS;
-	int			rc = 0;
+	hg_id_t		rpcid;
+	hg_return_t	hg_ret = HG_SUCCESS;
+	int		rc = 0;
 
 	C_ASSERT(hg_ctx != NULL && hg_ctx->chc_hgcla != NULL &&
 		 hg_ctx->chc_hgctx != NULL);
 	C_ASSERT(rpc_priv != NULL);
+	C_ASSERT(rpc_priv->crp_opc_info != NULL);
 
-
-	hg_ret = HG_Create(hg_ctx->chc_hgctx, rpc_priv->crp_na_addr,
-			   CRT_HG_RPCID, &rpc_priv->crp_hg_hdl);
+	rpcid = rpc_priv->crp_opc_info->coi_no_reply ? CRT_HG_ONEWAY_RPCID :
+						       CRT_HG_RPCID;
+	hg_ret = HG_Create(hg_ctx->chc_hgctx, rpc_priv->crp_na_addr, rpcid,
+			   &rpc_priv->crp_hg_hdl);
 	if (hg_ret != HG_SUCCESS) {
 		C_ERROR("HG_Create failed, hg_ret: %d, opc: 0x%x.\n",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
@@ -786,15 +815,17 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 
 	if (rc == 0) {
 		rpc_priv->crp_state = RPC_STATE_REPLY_RECVED;
-		/* HG_Free_output in crt_hg_req_destroy */
-		hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle,
-				       &rpc_pub->cr_output);
-		if (hg_ret == HG_SUCCESS) {
-			rpc_priv->crp_output_got = 1;
-		} else {
-			C_ERROR("HG_Get_output failed, hg_ret: %d, opc: "
-				"0x%x.\n", hg_ret, opc);
-			rc = -CER_HG;
+		if (rpc_priv->crp_opc_info->coi_no_reply == 0) {
+			/* HG_Free_output in crt_hg_req_destroy */
+			hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle,
+					       &rpc_pub->cr_output);
+			if (hg_ret == HG_SUCCESS) {
+				rpc_priv->crp_output_got = 1;
+			} else {
+				C_ERROR("HG_Get_output failed, hg_ret: %d, opc:"
+					" 0x%x.\n", hg_ret, opc);
+				rc = -CER_HG;
+			}
 		}
 	}
 
@@ -940,7 +971,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 		/* should success as addref above */
 		rc = crt_req_decref(&rpc_priv->crp_pub);
 		C_ASSERT(rc == 0);
-		rc = -CER_HG;
+		rc = (hg_ret == HG_PROTOCOL_ERROR) ? -CER_PROTO : -CER_HG;
 	}
 
 out:

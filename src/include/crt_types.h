@@ -299,6 +299,9 @@ typedef enum {
 	CRT_BULK_GET,
 } crt_bulk_op_t;
 
+/* CRT RPC feature bits definitions */
+#define CRT_RPC_FEAT_NO_REPLY	(1ULL << 1)
+
 typedef void *crt_bulk_opid_t;
 
 typedef enum {

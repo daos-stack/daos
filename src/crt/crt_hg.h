@@ -55,7 +55,8 @@
 #define CRT_HG_LOWLEVEL_UNPACK	(1)
 
 /** the shared HG RPC ID used for all CRT opc */
-#define CRT_HG_RPCID	(0xDA036868)
+#define CRT_HG_RPCID		(0xDA036868)
+#define CRT_HG_ONEWAY_RPCID	(0xDA036869)
 
 struct crt_rpc_priv;
 struct crt_common_hdr;

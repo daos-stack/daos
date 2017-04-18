@@ -164,6 +164,41 @@ crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc, int locked)
 }
 
 static int
+crt_opc_disable_reply(crt_opcode_t opc, bool disable)
+{
+	struct crt_opc_map	*map;
+	struct crt_opc_info	*info = NULL;
+	unsigned int		hash;
+	bool			found = false;
+	int			rc = 0;
+
+	map = crt_gdata.cg_opc_map;
+	hash = crt_opc_hash(map, opc);
+
+	pthread_rwlock_wrlock(&map->com_rwlock);
+
+	crt_list_for_each_entry(info, &map->com_hash[hash], coi_link) {
+		if (info->coi_opc == opc) {
+			found = true;
+			break;
+		}
+	}
+
+	if (found) {
+		info->coi_no_reply = disable;
+		if (disable)
+			C_DEBUG("opc 0x%x, reply disabled.\n", opc);
+		else
+			C_DEBUG("opc 0x%x, reply enabled.\n", opc);
+	} else {
+		rc = -CER_UNREG;
+	}
+
+	pthread_rwlock_unlock(&map->com_rwlock);
+	return rc;
+}
+
+static int
 crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
 	    struct crt_req_format *crf, crt_size_t input_size,
 	    crt_size_t output_size, crt_rpc_cb_t rpc_cb,
@@ -296,6 +331,10 @@ out:
 int
 crt_rpc_register(crt_opcode_t opc, struct crt_req_format *crf)
 {
+	if (!crt_initialized()) {
+		C_ERROR("CART library not-initialed.\n");
+		return -CER_UNINIT;
+	}
 	if (crt_opcode_reserved(opc)) {
 		C_ERROR("opc 0x%x reserved.\n", opc);
 		return -CER_INVAL;
@@ -307,6 +346,10 @@ int
 crt_rpc_srv_register(crt_opcode_t opc, struct crt_req_format *crf,
 		crt_rpc_cb_t rpc_handler)
 {
+	if (!crt_initialized()) {
+		C_ERROR("CART library not-initialed.\n");
+		return -CER_UNINIT;
+	}
 	if (crt_opcode_reserved(opc)) {
 		C_ERROR("opc 0x%x reserved.\n", opc);
 		return -CER_INVAL;
@@ -323,6 +366,10 @@ int
 crt_corpc_register(crt_opcode_t opc, struct crt_req_format *crf,
 		   crt_rpc_cb_t rpc_handler, struct crt_corpc_ops *co_ops)
 {
+	if (!crt_initialized()) {
+		C_ERROR("CART library not-initialed.\n");
+		return -CER_UNINIT;
+	}
 	if (crt_opcode_reserved(opc)) {
 		C_ERROR("opc 0x%x reserved.\n", opc);
 		return -CER_INVAL;
@@ -331,4 +378,23 @@ crt_corpc_register(crt_opcode_t opc, struct crt_req_format *crf,
 		C_WARN("NULL co_ops to be registered for corpc 0x%x.\n", opc);
 
 	return crt_rpc_reg_internal(opc, crf, rpc_handler, co_ops);
+}
+
+int
+crt_rpc_set_feats(crt_opcode_t opc, uint64_t feats)
+{
+	bool disable_reply;
+
+	if (!crt_initialized()) {
+		C_ERROR("CART library not-initialed.\n");
+		return -CER_UNINIT;
+	}
+	if (crt_opcode_reserved(opc)) {
+		C_ERROR("opc 0x%x reserved.\n", opc);
+		return -CER_INVAL;
+	}
+
+	disable_reply =  feats & CRT_RPC_FEAT_NO_REPLY;
+
+	return crt_opc_disable_reply(opc, disable_reply);
 }

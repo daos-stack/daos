@@ -335,21 +335,48 @@ crt_rpc_register(crt_opcode_t opc, struct crt_req_format *drf);
 /**
  * Dynamically register an RPC at server-side.
  *
- * \param opc [IN]              unique opcode for the RPC
+ * \param opc [IN]		unique opcode for the RPC
  * \param drf [IN]		pointer to the request format, which
- *                              describe the request format and provide
- *                              callback to pack/unpack each items in the
- *                              request.
- * \param rpc_handler [IN]      pointer to RPC handler which will be triggered
- *                              when RPC request opcode associated with rpc_name
- *                              is received. Will return -CER_INVAL if pass in
- *                              NULL rpc_handler.
+ *				describe the request format and provide
+ *				callback to pack/unpack each items in the
+ *				request.
+ * \param rpc_handler [IN]	pointer to RPC handler which will be triggered
+ *				when RPC request opcode associated with rpc_name
+ *				is received. Will return -CER_INVAL if pass in
+ *				NULL rpc_handler.
  *
- * \return                      zero on success, negative value if error
+ * \return			zero on success, negative value if error
  */
 int
 crt_rpc_srv_register(crt_opcode_t opc, struct crt_req_format *drf,
-		crt_rpc_cb_t rpc_handler);
+		     crt_rpc_cb_t rpc_handler);
+
+/**
+ * Set feature bits of a registered RPC.
+ *
+ * Now only one feature bit defined to disable/enable the reply of a RPC.
+ * By default one RPC needs to be replied (by calling crt_reply_send within RPC
+ * handler at target-side) to complete the RPC request at origin-side.
+ * One-way RPC is a special type that the RPC request need not to be replied,
+ * the RPC request is treated as completed after being sent out.
+ *
+ * \param opc [IN]		unique opcode for the RPC
+ * \param feats [IN]		feature bits, now only supports
+ *				CRT_RPC_FEAT_NO_REPLY -
+ *				1 to disable, 0 to re-enable.
+ *
+ * Notes for one-way RPC:
+ * 1) Need not reply for one-way RPC, calling crt_reply_send() will fail with
+ *    -CER_PROTO.
+ * 2) For one-way RPC, user needs to disable the reply on both origin and target
+ *    side, or undefined result is expected.
+ * 3) Corpc musted be replied, disabling the reply of corpc will lead to
+ *    undefined result.
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+crt_rpc_set_feats(crt_opcode_t opc, uint64_t feats);
 
 /******************************************************************************
  * CRT bulk APIs.

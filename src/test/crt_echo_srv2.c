@@ -77,9 +77,6 @@ int echo_srv_shutdown(crt_rpc_t *rpc_req)
 	assert(rpc_req->cr_input == NULL);
 	assert(rpc_req->cr_output == NULL);
 
-	rc = crt_reply_send(rpc_req);
-	printf("tier2 echo_srver done issuing shutdown responses.\n");
-
 	echo_srv.do_shutdown = 1;
 	printf("tier2 echo_srver set shutdown flag.\n");
 

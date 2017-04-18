@@ -261,6 +261,9 @@ echo_init(int server, bool tier2)
 		assert(rc == 0);
 		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, NULL);
 		assert(rc == 0);
+		rc = crt_rpc_set_feats(ECHO_OPC_SHUTDOWN,
+				       CRT_RPC_FEAT_NO_REPLY);
+		assert(rc == 0);
 	} else {
 		rc = crt_rpc_srv_register(ECHO_OPC_NOOP,
 					  &CQF_ECHO_NOOP,
@@ -277,9 +280,13 @@ echo_init(int server, bool tier2)
 		rc = crt_rpc_srv_register(ECHO_OPC_SHUTDOWN, NULL,
 					  echo_srv_shutdown);
 		assert(rc == 0);
+		rc = crt_rpc_set_feats(ECHO_OPC_SHUTDOWN,
+				       CRT_RPC_FEAT_NO_REPLY);
+		assert(rc == 0);
 		rc = crt_corpc_register(ECHO_CORPC_EXAMPLE,
 					&CQF_ECHO_CORPC_EXAMPLE,
 					echo_srv_corpc_example, &echo_co_ops);
+		assert(rc == 0);
 	}
 }
 

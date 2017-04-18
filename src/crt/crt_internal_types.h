@@ -197,7 +197,8 @@ struct crt_opc_info {
 	crt_opcode_t		coi_opc;
 	unsigned int		coi_proc_init:1,
 				coi_rpccb_init:1,
-				coi_coops_init:1;
+				coi_coops_init:1,
+				coi_no_reply:1; /* flag of one-way RPC */
 
 	crt_rpc_cb_t		coi_rpc_cb;
 	struct crt_corpc_ops	*coi_co_ops;
