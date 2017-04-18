@@ -54,6 +54,8 @@ struct pc_inprogress {
 	pthread_mutex_t		 pc_req_mutex;
 	/* array of target UUID, actual size is pc_tc_num */
 	uuid_t			*pc_tgt_uuids;
+	/* eventual for tgt_create/tgt_destroy completion */
+	ABT_eventual		 pc_completion;
 };
 
 struct pc_tgt_create {
@@ -170,6 +172,14 @@ pc_inprog_create(struct pc_inprogress **pc_inprog, crt_rpc_t *rpc_req)
 		D_GOTO(out, rc);
 	}
 
+	rc = ABT_eventual_create(0 /* nbytes */, &pc_inp_item->pc_completion);
+	if (rc != ABT_SUCCESS) {
+		D_FREE(pc_inp_item->pc_tgt_uuids,
+		       sizeof(uuid_t) * pc_inp_item->pc_tc_num);
+		D_FREE_PTR(pc_inp_item);
+		D_GOTO(out, rc = dss_abterr2der(rc));
+	}
+
 	pc_inp_item->pc_tc_ack_num = 0;
 	pc_inp_item->pc_tc_fail_num = 0;
 	DAOS_INIT_LIST_HEAD(&pc_inp_item->pc_td_list);
@@ -181,6 +191,7 @@ pc_inprog_create(struct pc_inprogress **pc_inprog, crt_rpc_t *rpc_req)
 	rc = pc_add_req_to_inprog(pc_inp_item, rpc_req);
 	if (rc != 0) {
 		D_ERROR("pc_add_req_to_inprog failed, rc: %d.\n", rc);
+		ABT_eventual_free(&pc_inp_item->pc_completion);
 		D_FREE(pc_inp_item->pc_tgt_uuids,
 		       sizeof(uuid_t) * pc_inp_item->pc_tc_num);
 		pthread_mutex_destroy(&pc_inp_item->pc_req_mutex);
@@ -229,6 +240,8 @@ pc_inprog_destroy(struct pc_inprogress *pc_inprog)
 
 	pthread_mutex_destroy(&pc_inprog->pc_req_mutex);
 
+	ABT_eventual_free(&pc_inprog->pc_completion);
+
 	D_FREE(pc_inprog->pc_tgt_uuids, sizeof(uuid_t) * pc_inprog->pc_tc_num);
 	D_FREE_PTR(pc_inprog);
 }
@@ -267,9 +280,6 @@ pc_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 	struct mgmt_tgt_destroy_out	*td_out;
 	struct pc_inprogress		*pc_inprog;
 	struct pc_tgt_destroy		*td, *td_next;
-	crt_rpc_t			*pc_req;
-	struct mgmt_pool_create_in	*pc_in;
-	struct mgmt_pool_create_out	*pc_out;
 	bool				 td_done = false;
 	int				 rc = 0;
 
@@ -311,18 +321,8 @@ pc_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 	if (td_done == false)
 		D_GOTO(out, rc = 0);
 
-	/* send reply to the pool_create req */
-	pc_req = pc_inprog->pc_rpc_req;
-	pc_in = crt_req_get(pc_req);
-	pc_out = crt_reply_get(pc_req);
-	pc_out->pc_rc = -DER_TGT_CREATE;
-
-	rc = crt_reply_send(pc_req);
-	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d "
-			"(pc_tgt_dev: %s).\n", rc, pc_in->pc_tgt_dev);
-
-	pc_inprog_destroy(pc_inprog);
+	ABT_eventual_set(pc_inprog->pc_completion, NULL /* value */,
+			 0 /* nbytes */);
 
 out:
 	return rc;
@@ -334,17 +334,11 @@ tgt_create_cb(const struct crt_cb_info *cb_info)
 	crt_rpc_t			*tc_req;
 	struct mgmt_tgt_create_in	*tc_in;
 	struct mgmt_tgt_create_out	*tc_out;
-	crt_rpc_t			*td_req;
-	struct mgmt_tgt_destroy_in	*td_in;
 	struct pc_inprogress		*pc_inprog;
 	struct pc_tgt_create		*tc, *tc_next;
-	crt_endpoint_t			 svr_ep;
 	crt_rpc_t			*pc_req;
-	crt_opcode_t			 opc;
 	struct mgmt_pool_create_in	*pc_in;
-	struct mgmt_pool_create_out	*pc_out;
 	bool				 tc_done = false;
-	bool				 td_req_sent = false;
 	int				 rc = 0;
 
 	tc_req = cb_info->cci_rpc;
@@ -356,7 +350,6 @@ tgt_create_cb(const struct crt_cb_info *cb_info)
 
 	pc_req = pc_inprog->pc_rpc_req;
 	pc_in = crt_req_get(pc_req);
-	pc_out = crt_reply_get(pc_req);
 
 	pthread_mutex_lock(&pc_inprog->pc_req_mutex);
 	pc_inprog->pc_tc_ack_num++;
@@ -418,118 +411,8 @@ tgt_create_cb(const struct crt_cb_info *cb_info)
 	if (!tc_done)
 		D_GOTO(out, rc);
 
-	/* all tgt_create finished */
-	if (pc_inprog->pc_tc_fail_num == 0) {
-		daos_rank_list_t	ranks;
-		int			doms[pc_inprog->pc_tc_num];
-		int			i;
-
-		D_DEBUG(DB_MGMT, DF_UUID": all tgts created, setting up pool "
-			"svc\n", DP_UUID(pc_inprog->pc_pool_uuid));
-
-		for (i = 0; i < pc_inprog->pc_tc_num; i++)
-			doms[i] = 1;
-
-		if (pc_in->pc_tgts == NULL) {
-			ranks.rl_nr.num = pc_inprog->pc_tc_num;
-			D_ALLOC(ranks.rl_ranks,
-				sizeof(*ranks.rl_ranks) * ranks.rl_nr.num);
-			if (ranks.rl_ranks == NULL)
-				D_GOTO(svc_create_fail, rc = -DER_NOMEM);
-			for (i = 0; i < ranks.rl_nr.num; i++)
-				ranks.rl_ranks[i] = i;
-		}
-
-		/**
-		 * TODO: fetch domain list from external source
-		 * Report 1 domain per target for now
-		 */
-		rc = ds_pool_svc_create(pc_inprog->pc_pool_uuid, pc_in->pc_uid,
-					pc_in->pc_gid, pc_in->pc_mode,
-					pc_inprog->pc_tc_num,
-					pc_inprog->pc_tgt_uuids, pc_in->pc_grp,
-					pc_in->pc_tgts ?: &ranks,
-					ARRAY_SIZE(doms), doms, pc_out->pc_svc);
-
-		if (pc_in->pc_tgts == NULL)
-			D_FREE(ranks.rl_ranks,
-			       sizeof(*ranks.rl_ranks) * ranks.rl_nr.num);
-
-		if (rc == 0)
-			D_GOTO(tc_finish, rc = 0);
-
-svc_create_fail:
-		D_ERROR(DF_UUID": pool svc setup failed with %d\n",
-			DP_UUID(pc_inprog->pc_pool_uuid), rc);
-	}
-
-	/* do error handling, send tgt_destroy for succeed tgt_create */
-	svr_ep.ep_grp = NULL;
-	svr_ep.ep_tag = 0;
-	daos_list_for_each_entry_safe(tc, tc_next, &pc_inprog->pc_tc_list,
-				      ptc_link) {
-		daos_list_del_init(&tc->ptc_link);
-
-		tc_req = tc->ptc_rpc_req;
-		tc_in = crt_req_get(tc_req);
-		tc_out = crt_reply_get(tc_req);
-		svr_ep.ep_rank = tc_req->cr_ep.ep_rank;
-
-		D_FREE_PTR(tc);
-
-		pc_inprog->pc_td_num++;
-		opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE, 1);
-		rc = crt_req_create(dss_get_module_info()->dmi_ctx, svr_ep,
-				    opc, &td_req);
-		if (rc != 0) {
-			D_ERROR("crt_req_create(MGMT_TGT_DESTROY) failed, "
-				"rc: %d.\n", rc);
-			pc_inprog->pc_td_ack_num++;
-			pc_inprog->pc_td_fail_num++;
-			/* decref corresponds to the addref in
-			 * tc_add_req_to_inprog */
-			rc = crt_req_decref(tc_req);
-			D_ASSERT(rc == 0);
-			continue;
-		}
-
-		td_in = crt_req_get(td_req);
-		D_ASSERT(td_in != NULL);
-		uuid_copy(td_in->td_pool_uuid, tc_in->tc_pool_uuid);
-
-		/* decref corresponds to the addref in tc_add_req_to_inprog */
-		rc = crt_req_decref(tc_req);
-		D_ASSERT(rc == 0);
-
-		rc = crt_req_send(td_req, pc_tgt_destroy_cb, pc_inprog);
-		if (rc != 0) {
-			D_ERROR("crt_req_send(MGMT_TGT_DESTROY) failed, "
-				"rc: %d.\n", rc);
-			pc_inprog->pc_td_ack_num++;
-			pc_inprog->pc_td_fail_num++;
-			continue;
-		}
-
-		td_req_sent = true;
-		rc = td_add_req_to_pc_inprog(pc_inprog, td_req);
-		D_ASSERT(rc == 0);
-	}
-
-	if (td_req_sent == true)
-		D_GOTO(out, rc = 0);
-	else
-		rc = -DER_TGT_CREATE;
-
-tc_finish:
-	/* send reply to all the pool_create reqs */
-	pc_out->pc_rc = rc;
-
-	rc = crt_reply_send(pc_req);
-	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d "
-			"(pc_tgt_dev: %s).\n", rc, pc_in->pc_tgt_dev);
-
-	pc_inprog_destroy(pc_inprog);
+	ABT_eventual_set(pc_inprog->pc_completion, NULL /* value */,
+			 0 /* nbytes */);
 
 out:
 	return rc;
@@ -545,7 +428,9 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 	crt_rpc_t			*tc_req;
 	crt_opcode_t			 opc;
 	struct mgmt_tgt_create_in	*tc_in;
+	struct pc_tgt_create		*tc, *tc_next;
 	bool				 tc_req_sent = false;
+	bool				 td_req_sent = false;
 	bool				 pc_inprog_alloc = false;
 	int				 i, rc = 0;
 
@@ -622,17 +507,123 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		D_ASSERT(rc == 0);
 	}
 
-out:
-	if (tc_req_sent == false) {
-		D_ASSERT(rc != 0);
-		pc_out->pc_rc = rc;
-		rc = crt_reply_send(rpc_req);
-		if (rc != 0)
-			D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
-		if (pc_inprog_alloc == true)
-			pc_inprog_destroy(pc_inprog);
+	if (tc_req_sent == false)
+		D_GOTO(out, rc);
+
+	ABT_eventual_wait(pc_inprog->pc_completion, NULL /* value */);
+
+	/* all tgt_create finished */
+	if (pc_inprog->pc_tc_fail_num == 0) {
+		daos_rank_list_t	ranks;
+		int			doms[pc_inprog->pc_tc_num];
+
+		D_DEBUG(DB_MGMT, DF_UUID": all tgts created, setting up pool "
+			"svc\n", DP_UUID(pc_inprog->pc_pool_uuid));
+
+		for (i = 0; i < pc_inprog->pc_tc_num; i++)
+			doms[i] = 1;
+
+		if (pc_in->pc_tgts == NULL) {
+			ranks.rl_nr.num = pc_inprog->pc_tc_num;
+			D_ALLOC(ranks.rl_ranks,
+				sizeof(*ranks.rl_ranks) * ranks.rl_nr.num);
+			if (ranks.rl_ranks == NULL)
+				D_GOTO(svc_create_fail, rc = -DER_NOMEM);
+			for (i = 0; i < ranks.rl_nr.num; i++)
+				ranks.rl_ranks[i] = i;
+		}
+
+		/**
+		 * TODO: fetch domain list from external source
+		 * Report 1 domain per target for now
+		 */
+		rc = ds_pool_svc_create(pc_inprog->pc_pool_uuid, pc_in->pc_uid,
+					pc_in->pc_gid, pc_in->pc_mode,
+					pc_inprog->pc_tc_num,
+					pc_inprog->pc_tgt_uuids, pc_in->pc_grp,
+					pc_in->pc_tgts ?: &ranks,
+					ARRAY_SIZE(doms), doms, pc_out->pc_svc);
+
+		if (pc_in->pc_tgts == NULL)
+			D_FREE(ranks.rl_ranks,
+			       sizeof(*ranks.rl_ranks) * ranks.rl_nr.num);
+
+		if (rc == 0)
+			D_GOTO(out, rc = 0);
+
+svc_create_fail:
+		D_ERROR(DF_UUID": pool svc setup failed with %d\n",
+			DP_UUID(pc_inprog->pc_pool_uuid), rc);
 	}
 
+	/* do error handling, send tgt_destroy for succeed tgt_create */
+	ABT_eventual_reset(pc_inprog->pc_completion);
+	svr_ep.ep_grp = NULL;
+	svr_ep.ep_tag = 0;
+	daos_list_for_each_entry_safe(tc, tc_next, &pc_inprog->pc_tc_list,
+				      ptc_link) {
+		crt_rpc_t			*td_req;
+		struct mgmt_tgt_destroy_in	*td_in;
+
+		daos_list_del_init(&tc->ptc_link);
+
+		tc_req = tc->ptc_rpc_req;
+		tc_in = crt_req_get(tc_req);
+		svr_ep.ep_rank = tc_req->cr_ep.ep_rank;
+
+		D_FREE_PTR(tc);
+
+		pc_inprog->pc_td_num++;
+		opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE, 1);
+		rc = crt_req_create(dss_get_module_info()->dmi_ctx, svr_ep,
+				    opc, &td_req);
+		if (rc != 0) {
+			D_ERROR("crt_req_create(MGMT_TGT_DESTROY) failed, "
+				"rc: %d.\n", rc);
+			pc_inprog->pc_td_ack_num++;
+			pc_inprog->pc_td_fail_num++;
+			/* decref corresponds to the addref in
+			 * tc_add_req_to_inprog */
+			rc = crt_req_decref(tc_req);
+			D_ASSERT(rc == 0);
+			continue;
+		}
+
+		td_in = crt_req_get(td_req);
+		D_ASSERT(td_in != NULL);
+		uuid_copy(td_in->td_pool_uuid, tc_in->tc_pool_uuid);
+
+		/* decref corresponds to the addref in tc_add_req_to_inprog */
+		rc = crt_req_decref(tc_req);
+		D_ASSERT(rc == 0);
+
+		rc = crt_req_send(td_req, pc_tgt_destroy_cb, pc_inprog);
+		if (rc != 0) {
+			D_ERROR("crt_req_send(MGMT_TGT_DESTROY) failed, "
+				"rc: %d.\n", rc);
+			pc_inprog->pc_td_ack_num++;
+			pc_inprog->pc_td_fail_num++;
+			continue;
+		}
+
+		td_req_sent = true;
+		rc = td_add_req_to_pc_inprog(pc_inprog, td_req);
+		D_ASSERT(rc == 0);
+	}
+
+	if (td_req_sent == false)
+		D_GOTO(out, rc = -DER_TGT_CREATE);
+
+	ABT_eventual_wait(pc_inprog->pc_completion, NULL /* value */);
+
+out:
+	pc_out->pc_rc = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send failed, rc: %d "
+			"(pc_tgt_dev: %s).\n", rc, pc_in->pc_tgt_dev);
+	if (pc_inprog_alloc == true)
+		pc_inprog_destroy(pc_inprog);
 	return rc;
 }
 
@@ -652,6 +643,8 @@ struct pd_inprogress {
 	int			 pd_rc;
 	/* mutex to protect pd_td_list */
 	pthread_mutex_t		 pd_req_mutex;
+	/* eventual for tgt_destroy completion */
+	ABT_eventual		 pd_completion;
 };
 
 struct pd_tgt_destroy {
@@ -717,6 +710,12 @@ pd_inprog_create(struct pd_inprogress **pd_inprog, crt_rpc_t *rpc_req)
 	if (pd_inp_item == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	rc = ABT_eventual_create(0 /* nbytes */, &pd_inp_item->pd_completion);
+	if (rc != ABT_SUCCESS) {
+		D_FREE_PTR(pd_inp_item);
+		D_GOTO(out, rc = dss_abterr2der(rc));
+	}
+
 	/* init the pd_inprogress item */
 	uuid_copy(pd_inp_item->pd_pool_uuid, pd_in->pd_pool_uuid);
 	DAOS_INIT_LIST_HEAD(&pd_inp_item->pd_td_list);
@@ -776,9 +775,6 @@ pd_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 	struct mgmt_tgt_destroy_out	*td_out;
 	struct pd_inprogress		*pd_inprog;
 	struct pc_tgt_destroy		*td, *td_next;
-	crt_rpc_t			*pd_req;
-	struct mgmt_pool_destroy_in	*pd_in;
-	struct mgmt_pool_destroy_out	*pd_out;
 	bool				 td_done = false;
 	int				 rc = 0;
 
@@ -822,24 +818,8 @@ pd_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 	if (td_done == false)
 		D_GOTO(out, rc = 0);
 
-	/* send reply to the pool_destroy req */
-	pd_req = pd_inprog->pd_rpc_req;
-	pd_in = crt_req_get(pd_req);
-	pd_out = crt_reply_get(pd_req);
-	pd_out->pd_rc = pd_inprog->pd_rc;
-
-	if (pd_out->pd_rc == 0)
-		D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID" succeed.\n",
-			DP_UUID(pd_in->pd_pool_uuid));
-	else
-		D_ERROR("Destroying pool "DF_UUID"failed, rc: %d.\n",
-			DP_UUID(pd_in->pd_pool_uuid), pd_out->pd_rc);
-
-	rc = crt_reply_send(pd_req);
-	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
-
-	pd_inprog_destroy(pd_inprog);
+	ABT_eventual_set(pd_inprog->pd_completion, NULL /* value */,
+			 0 /* nbytes */);
 
 out:
 	return rc;
@@ -913,18 +893,25 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 		D_ASSERT(rc == 0);
 	}
 
-out:
-	if (td_req_sent == false) {
-		D_ASSERT(rc != 0);
-		pd_out->pd_rc = rc;
-		D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID"failed, rc: %d.\n",
-			DP_UUID(pd_in->pd_pool_uuid), rc);
-		rc = crt_reply_send(rpc_req);
-		if (rc != 0)
-			D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
-		if (pd_inprog_alloc == true)
-			pd_inprog_destroy(pd_inprog);
-	}
+	if (td_req_sent == false)
+		D_GOTO(out, rc);
 
+	ABT_eventual_wait(pd_inprog->pd_completion, NULL /* value */);
+
+	if (pd_out->pd_rc == 0)
+		D_DEBUG(DB_MGMT, "Destroying pool "DF_UUID" succeed.\n",
+			DP_UUID(pd_in->pd_pool_uuid));
+	else
+		D_ERROR("Destroying pool "DF_UUID"failed, rc: %d.\n",
+			DP_UUID(pd_in->pd_pool_uuid), pd_out->pd_rc);
+	rc = pd_inprog->pd_rc;
+
+out:
+	pd_out->pd_rc = rc;
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
+	if (pd_inprog_alloc == true)
+		pd_inprog_destroy(pd_inprog);
 	return rc;
 }
