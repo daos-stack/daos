@@ -109,19 +109,6 @@ map_ranks_fini(daos_rank_list_t *ranks)
 	}
 }
 
-static int
-group_create_cb(crt_group_t *grp, void *priv, int status)
-{
-	ABT_eventual *eventual = priv;
-
-	if (status != 0) {
-		D_ERROR("failed to create pool group: %d\n", status);
-		grp = NULL;
-	}
-	ABT_eventual_set(*eventual, &grp, sizeof(grp));
-	return 0;
-}
-
 int
 ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 		     crt_group_t **group)
@@ -129,8 +116,6 @@ ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 	uuid_t			uuid;
 	char			id[DAOS_UUID_STR_SIZE];
 	daos_rank_list_t	ranks;
-	ABT_eventual		eventual;
-	crt_group_t	      **g;
 	int			rc;
 
 	uuid_generate(uuid);
@@ -152,72 +137,27 @@ ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 		D_GOTO(out_ranks, rc = -DER_IO);
 	}
 
-	rc = ABT_eventual_create(sizeof(*g), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_ranks, rc = dss_abterr2der(rc));
+	rc = dss_group_create(id, &ranks, group);
+	if (rc != 0)
+		D_GOTO(out_ranks, rc);
 
-	/*
-	 * Always wait for the eventual, as group_create_cb() will be called in
-	 * all cases, possibly by another ULT. "!populate_now" is not
-	 * implemented yet.
-	 */
-	crt_group_create(id, &ranks, true /* populate_now */, group_create_cb,
-			 &eventual);
-
-	rc = ABT_eventual_wait(eventual, (void **)&g);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-
-	if (*g == NULL)
-		D_GOTO(out_eventual, rc = -DER_IO);
-
-	*group = *g;
-	rc = 0;
-out_eventual:
-	ABT_eventual_free(&eventual);
 out_ranks:
 	map_ranks_fini(&ranks);
 out:
 	return rc;
 }
 
-static int
-group_destroy_cb(void *args, int status)
-{
-	ABT_eventual *eventual = args;
-
-	ABT_eventual_set(*eventual, &status, sizeof(status));
-	return 0;
-}
-
 int
 ds_pool_group_destroy(const uuid_t pool_uuid, crt_group_t *group)
 {
-	ABT_eventual	eventual;
-	int	       *status;
-	int		rc;
+	int rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": destroying pool group %s\n",
 		DP_UUID(pool_uuid), group->cg_grpid);
-
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out, rc = dss_abterr2der(rc));
-
-	/*
-	 * Always wait for the eventual, as group_destroy_cb() will be called
-	 * in all cases, possibly by another ULT.
-	 */
-	crt_group_destroy(group, group_destroy_cb, &eventual);
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-
-	rc = *status;
-out_eventual:
-	ABT_eventual_free(&eventual);
-out:
+	rc = dss_group_destroy(group);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to destroy pool group %s: %d\n",
+			DP_UUID(pool_uuid), group->cg_grpid, rc);
 	return rc;
 }
 

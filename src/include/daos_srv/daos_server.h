@@ -197,5 +197,8 @@ dss_abterr2der(int abt_errno)
 }
 
 int dss_rpc_send(crt_rpc_t *rpc);
+int dss_group_create(crt_group_id_t id, crt_rank_list_t *ranks,
+		     crt_group_t **group);
+int dss_group_destroy(crt_group_t *group);
 
 #endif /* __DSS_API_H__ */
