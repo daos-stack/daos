@@ -47,6 +47,7 @@ struct ioreq {
 	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
 	daos_epoch_range_t	erange[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
 	daos_iod_t		iod[IOREQ_SG_IOD_NR];
+	daos_iod_type_t		iod_type;
 	uint64_t		fail_loc;
 };
 
@@ -54,7 +55,7 @@ struct ioreq {
 
 void
 ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
-	   test_arg_t *arg);
+	   daos_iod_type_t iod_type, test_arg_t *arg);
 
 void
 ioreq_fini(struct ioreq *req);

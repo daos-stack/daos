@@ -52,7 +52,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_epoch_t epoch,
 	daos_size_t	rsize;
 	int		i;
 
-	ioreq_init(&req, coh, oid, arg);
+	ioreq_init(&req, coh, oid, DAOS_IOD_SINGLE, arg);
 
 	rsize = strlen(val_fmt) + nakeys_strlen + strlen(value) + 1;
 
