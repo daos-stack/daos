@@ -187,8 +187,8 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p)
 
 	tmp = strchr(str, EVT_SEP_VAL);
 	if (tmp == NULL) {
-		D_PRINT("Invalid input string %s\n", str);
-		return -1;
+		*val_p = NULL; /* punch */
+		return 0;
 	}
 
 	str = tmp + 1;
@@ -217,13 +217,14 @@ ts_add_rect(char *args)
 	if (rc != 0)
 		return -1;
 
-	D_PRINT("Insert "DF_RECT": val=%s\n", DP_RECT(&rect), val);
+	D_PRINT("Insert "DF_RECT": val=%s\n", DP_RECT(&rect),
+		val ? val : "<NULL>");
 
-	daos_iov_set(&iov, val, strlen(val));
+	daos_iov_set(&iov, val, rect.rc_off_hi - rect.rc_off_lo + 1);
 	sgl.sg_nr.num = 1;
 	sgl.sg_iovs = &iov;
 
-	rc = evt_insert_sgl(ts_toh, &rect, 1, &sgl);
+	rc = evt_insert_sgl(ts_toh, &rect, val ? 1 : 0, &sgl);
 	if (rc != 0)
 		D_FATAL("Add rect failed %d\n", rc);
 
@@ -254,7 +255,8 @@ ts_find_rect(char *args)
 
 	evt_ent_list_for_each(ent, &enlist) {
 		D_PRINT("Find rect "DF_RECT", val=%s\n",
-			DP_RECT(&ent->en_rect), (char *)ent->en_addr);
+			DP_RECT(&ent->en_rect),
+			ent->en_addr ? (char *)ent->en_addr : "<NULL>");
 	}
 
 	evt_ent_list_fini(&enlist);

@@ -171,11 +171,11 @@ struct evt_entry {
 	/** offset within \a en_mmid */
 	daos_off_t			 en_offset;
 	/**
-	 * the input mmid for \a evt_add_vex, or the output mmid for
-	 * \a evt_find_vex
+	 * the input mmid for \a evt_insert, or the output mmid for
+	 * \a evt_find
 	 */
 	umem_id_t			 en_mmid;
-	/** the returned memory address for \a evt_find_vex */
+	/** the returned memory address for \a evt_find */
 	void				*en_addr;
 };
 
@@ -197,6 +197,8 @@ struct evt_entry_list {
 /** iterate over all entries of a ent_list */
 #define evt_ent_list_for_each(ent, el)	\
 	daos_list_for_each_entry(ent, (&(el)->el_list), en_link)
+
+#define evt_ent_list_empty(ent)		daos_list_empty(&ent->en_link)
 
 void evt_ent_list_init(struct evt_entry_list *ent_list);
 void evt_ent_list_fini(struct evt_entry_list *ent_list);
