@@ -177,6 +177,7 @@ int ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid,
 		       uuid_t target_uuids[], const char *group,
 		       const daos_rank_list_t *target_addrs, int ndomains,
 		       const int *domains, daos_rank_list_t *svc_addrs);
+int ds_pool_svc_destroy(const uuid_t pool_uuid);
 
 /*
  * Called by dmg on the pool service leader to list all pool handles of a pool.
@@ -193,11 +194,13 @@ int ds_pool_hdl_list(const uuid_t pool_uuid, uuid_t buf, size_t *size);
 int ds_pool_hdl_evict(const uuid_t pool_uuid, const uuid_t handle_uuid);
 
 typedef int (*pool_iter_cb_t)(daos_handle_t ph, uuid_t co_uuid, void *arg);
-
-int
-ds_pool_cont_iter(daos_handle_t ph, pool_iter_cb_t callback, void *arg);
+int ds_pool_cont_iter(daos_handle_t ph, pool_iter_cb_t callback, void *arg);
 
 typedef int (*obj_iter_cb_t)(uuid_t cont_uuid, daos_unit_oid_t oid, void *arg);
-int
-ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *arg);
+int ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *arg);
+
+char *ds_pool_rdb_path(const uuid_t uuid, const uuid_t pool_uuid);
+int ds_pool_svc_start(const uuid_t uuid);
+void ds_pool_svc_stop(const uuid_t uuid);
+
 #endif /* __DAOS_SRV_POOL_H__ */

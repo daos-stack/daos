@@ -26,45 +26,43 @@
  * This header assembles (hopefully) everything related to the persistent
  * storage layout of pool metadata used by ds_pool.
  *
- * See src/include/daos_srv/pool.h for the overall mpool storage layout. In the
- * "ds_pool root tree", simply called the "root tree" in ds_pool, we have this
- * layout:
+ * In the rdb, we have this layout:
  *
- *     Root tree (NV):
- *       Pool handle tree (UV)
+ *     Root KVS (GENERIC):
+ *       Pool handle KVS (GENERIC)
  */
 
 #ifndef __POOL_SRV_LAYOUT_H__
 #define __POOL_SRV_LAYOUT_H__
 
-#include <stdint.h>
+#include <daos_types.h>
 
 /*
- * Root tree (DBTREE_CLASS_NV): pool attributes
+ * Root KVS (RDB_KVS_GENERIC): pool attributes
  *
  * The pool map is stored in pool_buf format. Because version and target UUID
- * are absent from pool_buf, they have to be stored separately. The target
- * UUIDs are stored in target ID order.
+ * are absent from pool_buf, they have to be stored in ds_pool_attr_map_version
+ * and ds_pool_attr_map_uuids, respectively. The target UUIDs are stored in
+ * target ID order.
  *
- * POOL_MODE stores three sets of the capability bits: user, group, and other.
- * Each set consists of DAOS_PC_NBITS bits, for DAOS_PC_*. Let N be
+ * ds_pool_attr_mode stores three sets of the capability bits: user, group, and
+ * other.  Each set consists of DAOS_PC_NBITS bits, for DAOS_PC_*. Let N be
  * DAOS_PC_NBITS:
  *
- *        Bit: 31      3N    2N      N      0
- *              v       v     v      v      v
- *  POOL_MODE:  [padding][user][group][other]
+ *                 Bit: 31      3N    2N      N      0
+ *                       v       v     v      v      v
+ *   ds_pool_attr_mode:  [padding][user][group][other]
  */
-#define POOL_UID		"pool_uid"		/* uint32_t */
-#define POOL_GID		"pool_gid"		/* uint32_t */
-#define POOL_MODE		"pool_mode"		/* uint32_t */
-#define POOL_MAP_VERSION	"pool_map_version"	/* uint32_t */
-#define POOL_MAP_BUFFER		"pool_map_buffer"	/* pool_buf */
-#define POOL_MAP_TARGET_UUIDS	"pool_map_target_uuids"	/* uuid_t[] */
-#define POOL_NHANDLES		"pool_nhandles"		/* uint32_t */
-#define POOL_HANDLES		"pool_handles"		/* btr_root (pool */
-							/* handle tree) */
+extern daos_iov_t ds_pool_attr_uid;		/* uint32_t */
+extern daos_iov_t ds_pool_attr_gid;		/* uint32_t */
+extern daos_iov_t ds_pool_attr_mode;		/* uint32_t */
+extern daos_iov_t ds_pool_attr_map_version;	/* uint32_t */
+extern daos_iov_t ds_pool_attr_map_buffer;	/* pool_buf */
+extern daos_iov_t ds_pool_attr_map_uuids;	/* uuid_t[] (unused now) */
+extern daos_iov_t ds_pool_attr_nhandles;	/* uint32_t */
+extern daos_iov_t ds_pool_attr_handles;		/* pool handle KVS */
 
-/* Pool handle tree (DBTREE_CLASS_UV) */
+/* Pool handle KVS (RDB_KVS_GENERIC) */
 struct pool_hdl {
 	uint64_t	ph_capas;
 };

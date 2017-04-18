@@ -64,8 +64,8 @@ void ds_pool_mpool_cache_fini(void);
 /*
  * srv_pool.c
  */
-int ds_pool_svc_cache_init(void);
-void ds_pool_svc_cache_fini(void);
+int ds_pool_svc_hash_init(void);
+void ds_pool_svc_hash_fini(void);
 int ds_pool_connect_handler(crt_rpc_t *rpc);
 int ds_pool_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_query_handler(crt_rpc_t *rpc);

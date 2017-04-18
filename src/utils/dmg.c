@@ -104,7 +104,7 @@ create_hdlr(int argc, char *argv[])
 	unsigned int		gid = getegid();
 	daos_size_t		size = tobytes(default_size);
 	const char	       *group = default_group;
-	daos_rank_t		ranks[13];
+	daos_rank_t		ranks[5];
 	daos_rank_list_t	svc;
 	uuid_t			pool_uuid;
 	int			rc;

@@ -27,9 +27,7 @@
 
 #include <daos_srv/pool.h>
 
-#include <daos/btree_class.h>
 #include <daos_srv/daos_mgmt_srv.h>
-#include "srv_layout.h"
 
 static DAOS_LIST_HEAD(mpool_cache);
 static pthread_mutex_t mpool_cache_lock;

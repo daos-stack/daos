@@ -71,7 +71,9 @@ daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
  * \param size	[IN]	Target sizes (i.e., maximum amounts of storage space
  *			targets can consume) in bytes. Passing 0 will use the
  *			minimal supported target size.
- * \param svc	[IN]	Must be pre-allocated by the caller
+ * \param svc	[IN]	Must be pre-allocated by the caller. svc->rl_nr.num
+ *			indicates how many pool service replicas shall be
+ *			created.
  *		[OUT]	Return a list of ranks where the pool service was
  *			initialized
  * \param uuid	[OUT]	UUID of the pool created

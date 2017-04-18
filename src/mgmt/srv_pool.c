@@ -904,8 +904,14 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 	else
 		D_ERROR("Destroying pool "DF_UUID"failed, rc: %d.\n",
 			DP_UUID(pd_in->pd_pool_uuid), pd_out->pd_rc);
-	rc = pd_inprog->pd_rc;
 
+	rc = ds_pool_svc_destroy(pd_in->pd_pool_uuid);
+	if (rc != 0)
+		D_ERROR("Failed to destroy pool service "DF_UUID": %d\n",
+			DP_UUID(pd_in->pd_pool_uuid), rc);
+
+	if (pd_inprog->pd_rc != 0)
+		rc = pd_inprog->pd_rc;
 out:
 	pd_out->pd_rc = rc;
 	rc = crt_reply_send(rpc_req);

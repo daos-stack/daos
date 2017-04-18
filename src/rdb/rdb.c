@@ -30,7 +30,6 @@
 
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_server.h>
-#include <daos_srv/pool.h>
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
@@ -293,6 +292,9 @@ rdb_get_leader(struct rdb *db, crt_rank_t *rank)
 	return 0;
 }
 
+/* I regretted... May move these back to the service level. */
+#include <daos_srv/pool.h>
+
 /**
  * Perform a distributed create, if \a create is true, and start operation on
  * all replicas of a database with \a uuid spanning \a ranks. This method can
@@ -361,11 +363,8 @@ out:
 int
 rdb_start_handler(crt_rpc_t *rpc)
 {
-#if 0
 	struct rdb_start_in    *in = crt_req_get(rpc);
-#endif
 	struct rdb_start_out   *out = crt_reply_get(rpc);
-#if 0
 	char		       *path;
 	int			rc;
 
@@ -395,9 +394,6 @@ out_path:
 	free(path);
 out:
 	out->dao_rc = (rc == 0 ? 0 : 1);
-#else
-	out->dao_rc = 0;
-#endif
 	return crt_reply_send(rpc);
 }
 
@@ -475,13 +471,10 @@ out:
 int
 rdb_stop_handler(crt_rpc_t *rpc)
 {
-#if 0
 	struct rdb_stop_in     *in = crt_req_get(rpc);
-#endif
 	struct rdb_stop_out    *out = crt_reply_get(rpc);
 	int			rc = 0;
 
-#if 0
 	ds_pool_svc_stop(in->doi_uuid);
 
 	if (in->doi_flags & RDB_OF_DESTROY) {
@@ -500,7 +493,6 @@ rdb_stop_handler(crt_rpc_t *rpc)
 	}
 
 out:
-#endif
 	out->doo_rc = (rc == 0 ? 0 : 1);
 	return crt_reply_send(rpc);
 }

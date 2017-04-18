@@ -291,10 +291,17 @@ static const struct CMUnitTest degraded_tests[] = {
 	 io_degraded_enum_demo, NULL, NULL},
 };
 
-int
+static int
 degraded_setup(void **state)
 {
 	return test_setup(state, SETUP_CONT_CONNECT, true);
+}
+
+static int
+degraded_teardown(void **state)
+{
+	print_message("degraded_teardown(): At the moment, the daos_pool_destroy() call may time out, since the client MGMT_POOL_DESTROY RPC has the same timeout as the server RDB_STOP RPC(s) to the killed server(s). (Previously, the same issue affects the daos_pool_disconnect() call.)\n");
+	return test_teardown(state);
 }
 
 int
@@ -305,7 +312,7 @@ run_daos_degraded_test(int rank, int size)
 	MPI_Barrier(MPI_COMM_WORLD);
 	rc = cmocka_run_group_tests_name("DAOS degraded-mode tests",
 					 degraded_tests, degraded_setup,
-					 test_teardown);
+					 degraded_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

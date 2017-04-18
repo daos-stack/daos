@@ -7,8 +7,9 @@ denv = env.Clone()
 
 # ds_pool: Pool Server
 ds_pool = denv.SharedLibrary('pool',
-			     ['srv.c', 'srv_pool.c', 'srv_target.c',
-			      'srv_storage.c', 'srv_util.c', 'rpc.c'])
+			     ['srv.c', 'srv_pool.c', 'srv_layout.c',
+                              'srv_target.c', 'srv_storage.c', 'srv_util.c',
+                              'rpc.c'])
 denv.Install('$PREFIX/lib/daos_srv', ds_pool)
 
 # dc_pool: Pool Client
