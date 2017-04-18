@@ -66,6 +66,7 @@ enum cont_operation {
 	CONT_TGT_DESTROY	= 44,
 	CONT_TGT_OPEN		= 45,
 	CONT_TGT_CLOSE		= 46,
+	CONT_TGT_QUERY		= 47,
 
 	CONT_TGT_EPOCH_FLUSH	= 50,
 	CONT_TGT_EPOCH_DISCARD	= 51
@@ -107,6 +108,18 @@ struct cont_open_in {
 struct cont_open_out {
 	struct cont_op_out	coo_op;
 	daos_epoch_state_t	coo_epoch_state;
+};
+
+struct cont_query_in {
+	struct cont_op_in	cqi_op;
+};
+
+/** Add more items to query when needed */
+struct cont_query_out {
+	struct cont_op_out	cqo_op;
+	/* min slipped epoch at all streams */
+	uint64_t		cqo_min_slipped_epoch;
+	daos_epoch_state_t	cqo_epoch_state;
 };
 
 struct cont_close_in {
@@ -159,6 +172,17 @@ struct cont_tgt_close_in {
 
 struct cont_tgt_close_out {
 	int32_t	tco_rc;	/* number of errors */
+};
+
+struct cont_tgt_query_in {
+	uuid_t		tqi_pool_uuid;
+	uuid_t		tqi_cont_uuid;
+};
+
+struct cont_tgt_query_out {
+	int32_t		tqo_rc;
+	int32_t		tqo_pad32;
+	daos_epoch_t	tqo_min_purged_epoch;
 };
 
 struct cont_tgt_epoch_discard_in {

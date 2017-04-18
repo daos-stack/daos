@@ -663,6 +663,129 @@ ds_cont_tgt_close_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
+struct xstream_cont_query {
+	struct cont_tgt_query_in	*xcq_rpc_in;
+	daos_epoch_t			xcq_purged_epoch;
+};
+
+static int
+cont_query_one(void *vin)
+{
+	struct xstream_cont_query	*pack_args = vin;
+	struct cont_tgt_query_in	*in	   = pack_args->xcq_rpc_in;
+	struct ds_pool_hdl		*pool_hdl;
+	struct ds_pool_child		*pool_child;
+	struct dss_module_info		*info;
+	daos_handle_t			vos_chdl;
+	vos_co_info_t			vos_cinfo;
+	char				*opstr;
+	int				rc;
+
+	info = dss_get_module_info();
+	pool_hdl = ds_pool_hdl_lookup(in->tqi_pool_uuid);
+	if (pool_hdl == NULL)
+		return -DER_NO_HDL;
+
+	pool_child = ds_pool_child_lookup(pool_hdl->sph_pool->sp_uuid);
+	if (pool_child == NULL)
+		D_GOTO(ds_pool_hdl, rc = -DER_NO_HDL);
+
+	opstr = "Opening VOS container open handle\n";
+	rc = vos_co_open(pool_child->spc_hdl, in->tqi_cont_uuid, &vos_chdl);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": Failed %s: %d",
+			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
+			rc);
+		D_GOTO(ds_child, rc);
+	}
+
+	opstr = "Querying VOS container open handle\n";
+	rc = vos_co_query(vos_chdl, &vos_cinfo);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": Failed :%s: %d",
+			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
+			rc);
+		D_GOTO(out, rc);
+	}
+	pack_args[info->dmi_tid].xcq_purged_epoch = vos_cinfo.pci_purged_epoch;
+
+out:
+	vos_co_close(vos_chdl);
+ds_child:
+	ds_pool_child_put(pool_child);
+ds_pool_hdl:
+	ds_pool_hdl_put(pool_hdl);
+	return rc;
+}
+
+static void
+tgt_query_coll_reduce(void *a_args, void *s_args)
+{
+	struct	xstream_cont_query	 *aggregator = a_args;
+	struct  xstream_cont_query	 *stream     = s_args;
+	daos_epoch_t			 *min_epoch;
+
+	min_epoch = &aggregator->xcq_purged_epoch;
+	*min_epoch = MIN(*min_epoch, stream->xcq_purged_epoch);
+}
+
+int
+ds_cont_tgt_query_handler(crt_rpc_t *rpc)
+{
+	int				rc;
+	int				i;
+	struct cont_tgt_query_in	*in  = crt_req_get(rpc);
+	struct cont_tgt_query_out	*out = crt_reply_get(rpc);
+	struct xstream_cont_query	*pack_args;
+	struct dss_coll_aggregator_args	*reduce_args;
+
+	out->tqo_min_purged_epoch  = DAOS_EPOCH_MAX;
+
+	/** on all available streams */
+	D_ALLOC(pack_args, (dss_nxstreams + 1) *
+		sizeof(struct xstream_cont_query));
+	D_ALLOC(reduce_args, (dss_nxstreams + 1) *
+		sizeof(struct dss_coll_aggregator_args));
+
+	pack_args[0].xcq_rpc_in = in;
+	for (i = 0; i < dss_nxstreams + 1; i++) {
+		/** Setup pack_args for all streams */
+		pack_args[i].xcq_purged_epoch = DAOS_EPOCH_MAX;
+		/** arguments for reducing */
+		reduce_args[i].callback	= tgt_query_coll_reduce;
+		reduce_args[i].args	= &pack_args[i];
+	}
+
+	rc = dss_collective_reduce(cont_query_one, pack_args,
+				   reduce_args);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	out->tqo_min_purged_epoch = MIN(out->tqo_min_purged_epoch,
+					pack_args[0].xcq_purged_epoch);
+	out->tqo_rc = (rc == 0 ? 0 : 1);
+
+	D_FREE(pack_args, (dss_nxstreams + 1) *
+	       sizeof(struct xstream_cont_query));
+	D_FREE(reduce_args, (dss_nxstreams + 1) *
+	       sizeof(struct dss_coll_aggregator_args));
+
+	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
+		DP_CONT(NULL, NULL), rpc, out->tqo_rc, rc);
+	return crt_reply_send(rpc);
+}
+
+int
+ds_cont_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct cont_tgt_query_out	*out_source = crt_reply_get(source);
+	struct cont_tgt_query_out	*out_result = crt_reply_get(result);
+
+	out_result->tqo_min_purged_epoch =
+		MIN(out_result->tqo_min_purged_epoch,
+		    out_source->tqo_min_purged_epoch);
+	out_result->tqo_rc += out_source->tqo_rc;
+	return 0;
+}
+
 /* Called via dss_collective() to discard an epoch in the VOS pool. */
 static int
 cont_epoch_discard_one(void *vin)

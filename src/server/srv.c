@@ -573,22 +573,24 @@ dss_create_ult_all(void (*func)(void *), void *arg)
 /**
  * Collective operations among all server xstreams
  */
-
 struct collective_arg {
-	ABT_future	ca_future;
-	int	      (*ca_func)(void *);
+	ABT_future     *ca_future;
+	int	       (*ca_func)(void *);
 	void	       *ca_arg;
+	void	       *ca_aggregator_args;
 };
 
 static void
 collective_func(void *varg)
 {
-	struct collective_arg  *carg = varg;
-	int			rc;
+	struct collective_arg		*carg	= varg;
+	struct dss_coll_aggregator_args	*a_args	= carg->ca_aggregator_args;
+	int				 rc;
 
-	rc = carg->ca_func(carg->ca_arg);
+	/** Update just the rc value */
+	a_args->rc	     = carg->ca_func(carg->ca_arg);
 
-	rc = ABT_future_set(carg->ca_future, (void *)(intptr_t)rc);
+	rc = ABT_future_set(*(carg->ca_future), (void *)a_args);
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 }
 
@@ -596,12 +598,90 @@ collective_func(void *varg)
 static void
 collective_reduce(void **arg)
 {
-	int    *nfailed = arg[0];
-	int	i;
+	struct dss_coll_aggregator_args *aggregator;
+	struct dss_coll_aggregator_args	*stream;
+	int				*nfailed;
+	int				 i;
 
-	for (i = 1; i < dss_nxstreams + 1; i++)
-		if ((int)(intptr_t)arg[i] != 0)
+	aggregator = (struct dss_coll_aggregator_args *)arg[0];
+	nfailed = &aggregator->rc;
+	for (i = 1; i < dss_nxstreams + 1; i++) {
+		stream = (struct dss_coll_aggregator_args *)arg[i];
+		if (stream->rc != 0)
 			(*nfailed)++;
+		/** optional custom aggregator call provided across streams */
+		if (aggregator->callback)
+			aggregator->callback(aggregator->args, stream->args);
+	}
+}
+
+/**
+ * General case:
+ * Execute \a func(\a arg) collectively on all server xstreams. Can only be
+ * called by ULTs. Can only execute tasklet-compatible functions. User specified
+ * reduction functions for aggregation after collective
+ *
+ * \param[in] func		function to be executed
+ * \param[in] f_args		argument to be passed to \a func
+ * \param[in] aggregator_args	pack return code with optional
+ *				additional function and arguments
+ *				for aggregation.
+ * \param[in] future		future to use
+ * \return			number of failed xstreams or error code
+ */
+
+int
+dss_collective_reduce(int (*func)(void *), void *f_args,
+		      struct dss_coll_aggregator_args *aggregator_args)
+{
+	struct collective_arg		*carg;
+	struct dss_xstream		*dx;
+	ABT_future			future;
+	int				rc;
+	int				taskid;
+
+	D_ALLOC(carg, (dss_nxstreams + 1) * sizeof(struct collective_arg));
+
+	/*
+	 * Use the first, extra element of the value array to store the number
+	 * of failed tasks.
+	 */
+	rc = ABT_future_create(dss_nxstreams + 1, collective_reduce,
+			       &future);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	for (taskid = 0; taskid < dss_nxstreams + 1; taskid++) {
+		carg[taskid].ca_future	= &future;
+		carg[taskid].ca_func	= func;
+		carg[taskid].ca_arg	= f_args;
+	}
+
+	aggregator_args[0].rc = 0; /** aggregate all failed here */
+	rc = ABT_future_set(future, (void *)&aggregator_args[0]);
+	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+
+	taskid = 1;
+	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
+		carg[taskid].ca_aggregator_args = &aggregator_args[taskid];
+
+		rc = ABT_task_create(dx->dx_pool, collective_func,
+				     &carg[taskid], NULL);
+
+		if (rc != ABT_SUCCESS) {
+			aggregator_args[0].rc = dss_abterr2der(rc);
+			rc = ABT_future_set(future,
+					    (void *)&aggregator_args[0]);
+			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+		}
+		taskid++;
+	}
+
+	ABT_future_wait(future);
+	ABT_future_free(&future);
+	D_FREE(carg, (dss_nxstreams + 1) * sizeof(struct collective_arg));
+
+	return aggregator_args[0].rc;
 }
 
 /**
@@ -615,43 +695,18 @@ collective_reduce(void **arg)
 int
 dss_collective(int (*func)(void *), void *arg)
 {
-	ABT_future		future;
-	struct collective_arg	carg;
-	struct dss_xstream      *dx;
-	int			nfailed = 0;
-	int			rc;
+	int				rc;
+	struct dss_coll_aggregator_args	*aggregator_args;
 
-	/*
-	 * Use the first, extra element of the value array to store the number
-	 * of failed tasks.
-	 */
-	rc = ABT_future_create(dss_nxstreams + 1, collective_reduce, &future);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-	rc = ABT_future_set(future, &nfailed);
-	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	D_ALLOC(aggregator_args, (dss_nxstreams + 1) *
+		sizeof(struct dss_coll_aggregator_args));
 
-	carg.ca_future = future;
-	carg.ca_func = func;
-	carg.ca_arg = arg;
+	rc = dss_collective_reduce(func, arg, aggregator_args);
 
-	/*
-	 * Create tasklets and store return codes in the value array as
-	 * "void *" pointers.
-	 */
-	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
-		rc = ABT_task_create(dx->dx_pool, collective_func, &carg,
-				     NULL /* task */);
-		if (rc != ABT_SUCCESS) {
-			rc = dss_abterr2der(rc);
-			rc = ABT_future_set(future, (void *)(intptr_t)rc);
-			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-		}
-	}
+	D_FREE(aggregator_args, (dss_nxstreams + 1) *
+	       sizeof(struct dss_coll_aggregator_args));
 
-	ABT_future_wait(future);
-	ABT_future_free(&future);
-	return nfailed;
+	return rc;
 }
 
 /**

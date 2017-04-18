@@ -739,6 +739,80 @@ out:
 	return rc;
 }
 
+static int
+cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
+		 const uuid_t cont_hdl, struct cont_query_out *query_out)
+{
+	struct	cont_tgt_query_in	*in;
+	struct  cont_tgt_query_out	*out;
+	crt_rpc_t			*rpc;
+	int				 rc;
+
+	D_DEBUG(DF_DSMS,
+		DF_CONT"bcasting pool_hld="DF_UUID" cont_hdl ="DF_UUID"\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+		DP_UUID(pool_hdl), DP_UUID(cont_hdl));
+
+	rc = ds_cont_bcast_create(ctx, cont->c_svc, CONT_TGT_QUERY, &rpc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->tqi_pool_uuid, pool_hdl);
+	uuid_copy(in->tqi_cont_uuid, cont->c_uuid);
+	out = crt_reply_get(rpc);
+	out->tqo_min_purged_epoch = DAOS_EPOCH_MAX;
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = crt_reply_get(rpc);
+	rc  = out->tqo_rc;
+	if (rc != 0) {
+		D_DEBUG(DF_DSMS, DF_CONT": failed to query %d targets\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+		D_GOTO(out_rpc, rc = -DER_IO);
+	}
+
+	query_out->cqo_min_slipped_epoch = out->tqo_min_purged_epoch;
+	D_EXIT;
+out_rpc:
+	crt_req_decref(rpc);
+out:
+	return rc;
+}
+
+static int
+cont_query(struct ds_pool_hdl *pool_hdl, struct cont *cont, crt_rpc_t *rpc)
+{
+	struct cont_query_in		*in  = crt_req_get(rpc);
+	struct cont_query_out		*out = crt_reply_get(rpc);
+	struct container_hdl		chdl;
+	int				rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cqi_op.ci_uuid), rpc,
+		DP_UUID(in->cqi_op.ci_hdl));
+
+	rc = dbtree_uv_lookup(cont->c_svc->cs_hdls, in->cqi_op.ci_hdl, &chdl,
+			      sizeof(chdl));
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = cont_query_bcast(rpc->cr_ctx, cont, in->cqi_op.ci_pool_hdl,
+			      in->cqi_op.ci_hdl, out);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = ds_cont_epoch_read_state(cont, &chdl, &out->cqo_epoch_state);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	D_EXIT;
+out:
+	return rc;
+}
+
 struct close_iter_arg {
 	struct cont_tgt_close_rec      *cia_recs;
 	size_t				cia_recs_size;
@@ -912,6 +986,9 @@ cont_op_with_cont(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	case CONT_CLOSE:
 		rc = cont_close(pool_hdl, cont, rpc);
 		break;
+	case CONT_QUERY:
+		rc = cont_query(pool_hdl, cont, rpc);
+		break;
 	default:
 		/* Look up the container handle. */
 		rc = dbtree_uv_lookup(cont->c_svc->cs_hdls, in->ci_hdl, &hdl,
@@ -935,7 +1012,6 @@ cont_op_with_cont(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		}
 		rc = cont_op_with_hdl(pool_hdl, cont, &hdl, rpc);
 	}
-
 out:
 	return rc;
 }
@@ -954,7 +1030,8 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	int			rc;
 
 	/* TODO: Implement per-container locking. */
-	if (opc == CONT_EPOCH_QUERY || opc == CONT_EPOCH_DISCARD)
+	if (opc == CONT_EPOCH_QUERY || opc == CONT_QUERY ||
+	    opc == CONT_EPOCH_DISCARD)
 		ABT_rwlock_rdlock(svc->cs_lock);
 	else
 		ABT_rwlock_wrlock(svc->cs_lock);

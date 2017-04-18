@@ -73,6 +73,13 @@ cont_close(test_arg_t *arg, daos_handle_t coh)
 }
 
 static int
+cont_query(test_arg_t *arg, daos_handle_t coh, daos_cont_info_t *info)
+{
+	print_message("querying container\n");
+	return daos_cont_query(coh, info, NULL);
+}
+
+static int
 epoch_query(test_arg_t *arg, daos_handle_t coh, daos_epoch_state_t *state)
 {
 	daos_event_t	ev;
@@ -301,6 +308,8 @@ test_epoch_slip(void **argp)
 	daos_epoch_t		epoch;
 	daos_epoch_state_t	state;
 	daos_epoch_state_t	state_tmp;
+	daos_cont_info_t	info;
+	int			rc;
 
 	MUST(cont_create(arg, cont_uuid));
 	MUST(cont_open(arg, cont_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP,
@@ -318,13 +327,15 @@ test_epoch_slip(void **argp)
 	state_tmp.es_lre = epoch;
 	state_tmp.es_glre = epoch;
 	assert_epoch_state_equal(&state, &state_tmp);
+	rc = cont_query(arg, coh, &info);
+	print_message("rc: %d, min_epoch: " DF_U64"\n",
+		      rc, info.ci_min_slipped_epoch);
 
 	print_message("slip to [0, LRE] shall be no-op\n");
 	epoch = 3; /* LRE = 5 */;
 	state_tmp = state;
 	MUST(epoch_slip(arg, coh, epoch, &state));
 	assert_epoch_state_equal(&state, &state_tmp);
-
 	MUST(cont_close(arg, coh));
 	MUST(cont_destroy(arg, cont_uuid));
 }

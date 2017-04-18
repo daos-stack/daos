@@ -131,10 +131,26 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 }
 
 int
-daos_cont_query(daos_handle_t container, daos_cont_info_t *info,
+daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 		daos_event_t *ev)
 {
-	return -DER_NOSYS;
+	daos_cont_query_t	args;
+	struct daos_task	*task;
+	int			rc;
+
+	DAOS_API_ARG_ASSERT(args, CONT_QUERY);
+
+	args.coh	= coh;
+	args.info	= info;
+
+	rc = dc_task_prep(DAOS_OPC_CONT_QUERY, &args, sizeof(args), &task,
+			  &ev);
+	if (rc != 0)
+		return rc;
+
+	daos_sched_progress(daos_ev2sched(ev));
+
+	return daos_client_result_wait(ev);
 }
 
 int

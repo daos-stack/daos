@@ -388,6 +388,21 @@ ds_cont_epoch_fini_hdl(struct cont *cont, struct container_hdl *hdl)
 }
 
 int
+ds_cont_epoch_read_state(struct cont *cont, struct container_hdl *hdl,
+			 daos_epoch_state_t *state)
+{
+	struct epoch_attr		attr;
+	int				rc;
+
+	rc = read_epoch_attr(cont, &attr);
+	if (rc != 0)
+		return rc;
+
+	set_epoch_state(&attr, hdl, state);
+	return rc;
+}
+
+int
 ds_cont_epoch_query(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		    struct container_hdl *hdl, crt_rpc_t *rpc)
 {

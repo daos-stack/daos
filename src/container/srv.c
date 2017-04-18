@@ -61,6 +61,9 @@ static struct daos_rpc_handler cont_handlers[] = {
 		.dr_opc		= CONT_CLOSE,
 		.dr_hdlr	= ds_cont_op_handler
 	}, {
+		.dr_opc		= CONT_QUERY,
+		.dr_hdlr	= ds_cont_op_handler
+	}, {
 		.dr_opc		= CONT_EPOCH_QUERY,
 		.dr_hdlr	= ds_cont_op_handler
 	}, {
@@ -92,6 +95,12 @@ static struct daos_rpc_handler cont_handlers[] = {
 		.dr_hdlr	= ds_cont_tgt_close_handler,
 		.dr_corpc_ops	= {
 			.co_aggregate  = ds_cont_tgt_close_aggregator
+		}
+	}, {
+		.dr_opc		= CONT_TGT_QUERY,
+		.dr_hdlr	= ds_cont_tgt_query_handler,
+		.dr_corpc_ops	= {
+			.co_aggregate  = ds_cont_tgt_query_aggregator
 		}
 	}, {
 		.dr_opc		= CONT_TGT_EPOCH_DISCARD,

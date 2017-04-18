@@ -531,7 +531,7 @@ cont_close_complete(struct daos_task *task, void *data)
 	rc = out->cco_op.co_rc;
 	if (rc == -DER_NO_HDL) {
 		/* The pool connection cannot be found on the server. */
-		D_DEBUG(DF_DSMS, DF_CONT": already disconnected: hdl="DF_UUID
+		D_DEBUG(DF_DSMC, DF_CONT": already disconnected: hdl="DF_UUID
 			" pool_hdl="DF_UUID"\n",
 			DP_CONT(pool->dp_pool, cont->dc_uuid),
 			DP_UUID(cont->dc_cont_hdl), DP_UUID(pool->dp_pool_hdl));
@@ -656,6 +656,131 @@ err:
 	daos_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "failed to close container handle "DF_X64": %d\n",
 		coh.cookie, rc);
+	return rc;
+}
+
+struct cont_query_args {
+	struct dc_pool		*cqa_pool;
+	struct dc_cont		*cqa_cont;
+	daos_cont_info_t	*cqa_info;
+	crt_rpc_t		*rpc;
+	daos_handle_t		hdl;
+};
+
+static int
+cont_query_complete(struct daos_task *task, void *data)
+{
+	struct cont_query_args	*arg = (struct cont_query_args *)data;
+	struct cont_query_out	*out;
+	struct dc_pool		*pool = arg->cqa_pool;
+	struct dc_cont		*cont = arg->cqa_cont;
+	int			 rc   = task->dt_result;
+
+	if (rc != 0) {
+		D_ERROR("RPC error while querying container: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	out = crt_reply_get(arg->rpc);
+
+	rc = out->cqo_op.co_rc;
+	if (rc != 0) {
+		D_DEBUG(DF_DSMC, DF_CONT": failed to query container: %d\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+	D_DEBUG(DF_DSMC, DF_CONT": Queried: using hdl="DF_UUID"\n",
+		DP_CONT(pool->dp_pool, cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl));
+
+	if (arg->cqa_info == NULL)
+		D_GOTO(out, rc = 0);
+
+	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
+	arg->cqa_info->ci_epoch_state = out->cqo_epoch_state;
+	arg->cqa_info->ci_min_slipped_epoch = out->cqo_min_slipped_epoch;
+
+	/* TODO */
+	arg->cqa_info->ci_nsnapshots = 0;
+	arg->cqa_info->ci_snapshots = NULL;
+
+out:
+	crt_req_decref(arg->rpc);
+	dc_cont_put(cont);
+	dc_pool_put(pool);
+	return rc;
+}
+
+int
+dc_cont_query(struct daos_task *task)
+{
+	daos_cont_query_t	*args;
+	struct cont_query_in	*in;
+	struct dc_pool		*pool;
+	struct dc_cont		*cont;
+	crt_endpoint_t		 ep;
+	crt_rpc_t		*rpc;
+	struct cont_query_args	 arg;
+	int			 rc;
+
+	args = daos_task_get_args(DAOS_OPC_CONT_QUERY, task);
+	D_ASSERTF(args != NULL, "Task Argumetn OPC does not match DC OPC\n");
+
+	if (args->info == NULL)
+		D_GOTO(err, rc = -DER_INVAL);
+
+	cont = dc_cont_lookup(args->coh);
+	if (cont == NULL)
+		D_GOTO(err, rc = -DER_NO_HDL);
+
+	pool = dc_pool_lookup(cont->dc_pool_hdl);
+	D_ASSERT(pool != NULL);
+
+	D_DEBUG(DF_DSMC, DF_CONT": querying: hdl="DF_UUID"\n",
+		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
+		DP_UUID(cont->dc_cont_hdl));
+
+	/* To the only container service */
+	ep.ep_grp  = pool->dp_group;
+	ep.ep_rank = 0;
+	ep.ep_tag  = 0;
+
+	rc = cont_req_create(daos_task2ctx(task), ep, CONT_QUERY, &rpc);
+	if (rc != 0) {
+		D_ERROR("failed to create rpc: %d\n", rc);
+		D_GOTO(err_cont, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->cqi_op.ci_pool_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->cqi_op.ci_uuid, cont->dc_uuid);
+	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
+
+	arg.cqa_pool = pool;
+	arg.cqa_cont = cont;
+	arg.cqa_info = args->info;
+	arg.rpc	     = rpc;
+	arg.hdl	     = args->coh;
+	crt_req_addref(rpc);
+
+	rc = daos_task_register_comp_cb(task, cont_query_complete, sizeof(arg),
+					&arg);
+
+	if (rc != 0)
+		D_GOTO(err_rpc, rc);
+
+	return daos_rpc_send(rpc, task);
+
+err_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+err_cont:
+	dc_cont_put(cont);
+	dc_pool_put(pool);
+err:
+	daos_task_complete(task, rc);
+	D_DEBUG(DF_DSMC, "Failed to open container: %d\n", rc);
 	return rc;
 }
 
@@ -892,12 +1017,6 @@ dc_cont_attr_list(struct daos_task *task)
 
 int
 dc_cont_attr_set(struct daos_task *task)
-{
-	return -DER_NOSYS;
-}
-
-int
-dc_cont_query(struct daos_task *task)
 {
 	return -DER_NOSYS;
 }

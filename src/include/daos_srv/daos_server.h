@@ -187,6 +187,21 @@ struct dss_module {
 
 int dss_create_ult(void (*func)(void *), void *arg, ABT_thread *ult);
 int dss_create_ult_all(void (*func)(void *), void *arg);
+
+/* Pack return codes with additional argument to reduce */
+struct dss_coll_aggregator_args {
+	int	rc;
+	/** func for reducing */
+	void	(*callback)(void *, void *);
+	/** optional arguments to reduce */
+	void	*args;
+};
+
+/* Generic dss_collective with custom aggregator */
+int
+dss_collective_reduce(int (*func)(void *), void *f_args,
+		      struct dss_coll_aggregator_args *aggregator_args);
+
 int dss_collective(int (*func)(void *), void *arg);
 int dss_thread_create(void (*func)(void *), void *arg, unsigned int idx);
 int dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size);

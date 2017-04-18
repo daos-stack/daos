@@ -320,6 +320,11 @@ typedef struct {
 	uint32_t		ci_nsnapshots;
 	/** Epochs of returns snapshots */
 	daos_epoch_t	       *ci_snapshots;
+	/*
+	 * Min GLRE at all streams -
+	 * verify all streams have completed slipping to GLRE.
+	 */
+	daos_epoch_t		ci_min_slipped_epoch;
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 

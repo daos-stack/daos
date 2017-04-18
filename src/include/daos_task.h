@@ -187,7 +187,7 @@ typedef struct {
 } daos_cont_destroy_t;
 
 typedef struct {
-	daos_handle_t		container;
+	daos_handle_t		coh;
 	daos_cont_info_t	*info;
 } daos_cont_query_t;
 

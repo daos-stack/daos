@@ -96,6 +96,19 @@ struct crt_msg_field *cont_close_out_fields[] = {
 	&CMF_UINT32	/* op.map_version */
 };
 
+struct crt_msg_field *cont_query_in_fields[] = {
+	&CMF_UUID,	/* op.pool_hdl */
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID	/* op.hdl */
+};
+
+struct crt_msg_field *cont_query_out_fields[] = {
+	&CMF_INT,		/* op.rc */
+	&CMF_UINT32,		/* op.map_version */
+	&CMF_UINT64,		/* min slipped epoch */
+	&DMF_EPOCH_STATE	/* epoch state */
+};
+
 struct crt_msg_field *cont_epoch_op_in_fields[] = {
 	&CMF_UUID,	/* op.pool_hdl */
 	&CMF_UUID,	/* op.uuid */
@@ -138,6 +151,17 @@ struct crt_msg_field *cont_tgt_close_out_fields[] = {
 	&CMF_INT	/* rc */
 };
 
+struct crt_msg_field *cont_tgt_query_in_fields[] = {
+	&CMF_UUID,	/* pool_uuid */
+	&CMF_UUID,	/* container uuid */
+};
+
+struct crt_msg_field *cont_tgt_query_out_fields[] = {
+	&CMF_INT,	/* rc */
+	&CMF_INT,	/* padding */
+	&CMF_UINT64	/* min purged epoch */
+};
+
 struct crt_msg_field *cont_tgt_epoch_discard_in_fields[] = {
 	&CMF_UUID,	/* hdl */
 	&CMF_UINT64	/* epoch */
@@ -163,6 +187,10 @@ struct crt_req_format DQF_CONT_CLOSE =
 	DEFINE_CRT_REQ_FMT("CONT_CLOSE", cont_close_in_fields,
 			   cont_close_out_fields);
 
+struct crt_req_format DQF_CONT_QUERY =
+	DEFINE_CRT_REQ_FMT("CONT_QUERY", cont_query_in_fields,
+			   cont_query_out_fields);
+
 struct crt_req_format DQF_CONT_EPOCH_OP =
 	DEFINE_CRT_REQ_FMT("CONT_EPOCH_OP", cont_epoch_op_in_fields,
 			   cont_epoch_op_out_fields);
@@ -178,6 +206,10 @@ struct crt_req_format DQF_CONT_TGT_OPEN =
 struct crt_req_format DQF_CONT_TGT_CLOSE =
 	DEFINE_CRT_REQ_FMT("CONT_TGT_CLOSE", cont_tgt_close_in_fields,
 			   cont_tgt_close_out_fields);
+
+struct crt_req_format DQF_CONT_TGT_QUERY =
+	DEFINE_CRT_REQ_FMT("CONT_TGT_QUERY", cont_tgt_query_in_fields,
+			   cont_tgt_query_out_fields);
 
 struct crt_req_format DQF_CONT_TGT_EPOCH_DISCARD =
 	DEFINE_CRT_REQ_FMT("CONT_TGT_EPOCH_DISCARD",
@@ -220,6 +252,12 @@ struct daos_rpc cont_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_CONT_CLOSE
+	}, {
+		.dr_name	= "CONT_QUERY",
+		.dr_opc		= CONT_QUERY,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_QUERY
 	}, {
 		.dr_name	= "CONT_EPOCH_QUERY",
 		.dr_opc		= CONT_EPOCH_QUERY,
@@ -274,6 +312,12 @@ struct daos_rpc cont_srv_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_CONT_TGT_CLOSE
+	}, {
+		.dr_name	= "CONT_TGT_QUERY",
+		.dr_opc		= CONT_TGT_QUERY,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_CONT_TGT_QUERY
 	}, {
 		.dr_name	= "CONT_TGT_EPOCH_DISCARD",
 		.dr_opc		= CONT_TGT_EPOCH_DISCARD,
