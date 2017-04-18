@@ -82,6 +82,11 @@ enum daos_module_id {
 	DAOS_MAX_MODULE		= (1 << MOD_ID_BITS) - 1,
 };
 
+enum daos_rpc_flags {
+	/** flag of reply disabled */
+	DAOS_RPC_NO_REPLY	= (1U << 1),
+};
+
 /**
  * common RPC format definition for both client and server
  */
@@ -92,7 +97,7 @@ struct daos_rpc {
 	crt_opcode_t	 dr_opc;
 	/* RPC version */
 	int		 dr_ver;
-	/* Operation flags, TBD */
+	/* Operation flags, see \a daos_rpc_flags */
 	int		 dr_flags;
 	/* RPC request format */
 	struct crt_req_format *dr_req_fmt;
@@ -167,6 +172,8 @@ daos_rpc_register(struct daos_rpc *rpcs, struct daos_rpc_handler *handlers,
 		} else {
 			rc = crt_rpc_register(opcode, rpc->dr_req_fmt);
 		}
+		if (rc == 0 && (rpc->dr_flags & DAOS_RPC_NO_REPLY))
+			rc = crt_rpc_set_feats(opcode, CRT_RPC_FEAT_NO_REPLY);
 		if (rc)
 			return rc;
 	}

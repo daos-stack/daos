@@ -60,7 +60,6 @@ int
 ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 {
 	struct mgmt_svc_rip_in	*murderer;
-	struct mgmt_svc_rip_out	*obituary;
 	int			 rc;
 	int			 sig;
 	bool			 force;
@@ -72,19 +71,18 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 
 	force = (murderer->rip_flags != 0);
 
-	obituary = crt_reply_get(rpc);
-	if (obituary == NULL)
-		return -DER_NOMEM;
-	obituary->rip_rc = 0;
-
-	/** reply before committing a "suicide" ... */
-	rc = crt_reply_send(rpc);
-	if (rc != 0)
-		/** don't care, i am done */
-		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
-
 	crt_group_rank(NULL, &rank);
 	D_PRINT("Service rank %d is being killed ... farewell\n", rank);
+
+	/*
+	 * the yield below is to workaround an ofi err msg at client-side -
+	 * fi_cq_readerr got err: 5(Input/output error) ..
+	 */
+	int i;
+	for (i = 0; i < 200; i++) {
+		ABT_thread_yield();
+		usleep(10);
+	}
 
 	/** ... adieu */
 	if (force)

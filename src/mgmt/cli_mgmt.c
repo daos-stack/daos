@@ -34,22 +34,11 @@ static int
 rip_cp(struct daos_task *task, void *data)
 {
 	crt_rpc_t		*rpc = *((crt_rpc_t **)data);
-	struct mgmt_svc_rip_out	*rip_out;
 	int                      rc = task->dt_result;
 
-	if (rc) {
+	if (rc)
 		D_ERROR("RPC error while killing rank: %d\n", rc);
-		D_GOTO(out, rc);
-	}
 
-	rip_out = crt_reply_get(rpc);
-	rc = rip_out->rip_rc;
-	if (rc) {
-		D_ERROR("MGMT_SVC_RIP replied failed, rc: %d\n", rc);
-		D_GOTO(out, rc);
-	}
-
-out:
 	daos_group_detach(rpc->cr_ep.ep_grp);
 	crt_req_decref(rpc);
 	return rc;

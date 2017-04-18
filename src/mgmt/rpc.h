@@ -49,10 +49,6 @@ struct mgmt_svc_rip_in {
 	uint32_t	rip_flags;
 };
 
-struct mgmt_svc_rip_out {
-	int		rip_rc;
-};
-
 struct mgmt_pool_create_in {
 	uuid_t			 pc_pool_uuid;
 	crt_string_t		 pc_grp;
