@@ -218,6 +218,7 @@ io_recx_iterate(vos_iter_param_t *param, daos_key_t *akey, int akey_id,
 	while (rc == 0) {
 		vos_iter_entry_t  ent;
 
+		memset(&ent, 0, sizeof(ent));
 		rc = vos_iter_fetch(ih, &ent, NULL);
 		if (rc != 0) {
 			print_error("Failed to fetch recx: %d\n", rc);
@@ -295,8 +296,7 @@ io_akey_iterate(vos_iter_param_t *param, daos_key_t *dkey, int dkey_id,
 		}
 
 		rc = io_recx_iterate(param, &ent.ie_key, nr, cookie_flag,
-				     recs,
-				     print_ent);
+				     recs, print_ent);
 
 		nr++;
 		rc = vos_iter_next(ih);
@@ -532,16 +532,19 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	unsigned int		recx_size;
 	unsigned int		recx_nr;
 
-	if (arg->ta_flags & TF_REC_EXT) {
-		recx_size = UPDATE_REC_SIZE;
-		recx_nr   = UPDATE_BUF_SIZE / UPDATE_REC_SIZE;
-	} else {
-		recx_size = UPDATE_BUF_SIZE;
-		recx_nr   = 1;
-	}
 	memset(&iod, 0, sizeof(iod));
 	memset(&rex, 0, sizeof(rex));
 	memset(&sgl, 0, sizeof(sgl));
+
+	if (arg->ta_flags & TF_REC_EXT) {
+		iod.iod_type = DAOS_IOD_ARRAY;
+		recx_size = UPDATE_REC_SIZE;
+		recx_nr   = UPDATE_BUF_SIZE / UPDATE_REC_SIZE;
+	} else {
+		iod.iod_type = DAOS_IOD_SINGLE;
+		recx_size = UPDATE_BUF_SIZE;
+		recx_nr   = 1;
+	}
 
 	if (!(arg->ta_flags & TF_PUNCH)) {
 		if (arg->ta_flags & TF_OVERWRITE) {
@@ -589,7 +592,6 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 	iod.iod_name	= akey;
 	iod.iod_recxs	= &rex;
 	iod.iod_nr	= 1;
-	iod.iod_type	= DAOS_IOD_ARRAY;
 
 	uuid_copy(dsm_cookie.uuid, cookie_dict[(rand() % NUM_UNIQUE_COOKIES)]);
 
@@ -913,10 +915,8 @@ io_obj_recx_range_iteration(struct io_test_args *args, vos_it_epc_expr_t expr)
 	if (rc != 0)
 		return rc;
 
+	args->ta_flags |= TF_OVERWRITE;
 	for (i = 1; i < RANGE_ITER_KEYS * 4; i++) {
-
-
-		args->ta_flags |= TF_OVERWRITE;
 		rc = io_update_and_fetch_dkey(args, epoch + i,
 					      epoch + i);
 		if (rc != 0)

@@ -65,6 +65,8 @@ enum vts_test_flags {
 	TF_REC_EXT		= (1 << 4),
 	TF_FIXED_AKEY		= (1 << 5),
 	TF_REPORT_AGGREGATION	= (1 << 6),
+	IF_USE_ARRAY		= (1 << 7),
+	IF_DISABLED		= (1 << 30),
 };
 
 struct io_test_args {

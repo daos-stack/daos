@@ -85,13 +85,14 @@ io_update(struct io_test_args *arg, daos_epoch_t update_epoch,
 	ioreq->sgl.sg_nr.num = 1;
 	ioreq->sgl.sg_iovs = &ioreq->val_iov;
 
+	ioreq->epoch		= update_epoch;
 	ioreq->rex.rx_nr	= 1;
 	ioreq->rex.rx_idx	= idx;
 	ioreq->iod.iod_name	= ioreq->akey;
 	ioreq->iod.iod_recxs	= &ioreq->rex;
 	ioreq->iod.iod_nr	= 1;
-	ioreq->iod.iod_type	= DAOS_IOD_ARRAY;
-	ioreq->epoch		= update_epoch;
+	ioreq->iod.iod_type     = (arg->ta_flags & TF_REC_EXT) ?
+				  DAOS_IOD_ARRAY : DAOS_IOD_SINGLE;
 
 	rc = io_test_obj_update(arg, update_epoch, &ioreq->dkey, &ioreq->iod,
 				&ioreq->sgl, &ioreq->cookie, verbose);
@@ -316,6 +317,16 @@ io_multikey_discard_setup(void **state)
 	arg->oid = dts_unit_oid_gen(0, 0);
 	last_oid = arg->oid;
 
+	return 0;
+}
+
+static int
+io_multi_recx_discard_setup(void **state)
+{
+	struct io_test_args	*arg = *state;
+
+	DAOS_INIT_LIST_HEAD(&arg->req_list);
+	arg->ta_flags = IF_DISABLED;
 	return 0;
 }
 
@@ -755,6 +766,10 @@ io_multi_recx_overwrite_discard_test(void **state)
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
 
+	if (arg->ta_flags & IF_DISABLED) {
+		print_message("unsupported, skip\n");
+		return;
+	}
 
 	arg->ta_flags = 0;
 	cookie = gen_rand_cookie();
@@ -833,6 +848,11 @@ io_multi_recx_discard_test(void **state)
 	struct io_req		*search_req;
 	char			dkey_buf[UPDATE_DKEY_SIZE];
 	char			akey_buf[UPDATE_AKEY_SIZE];
+
+	if (arg->ta_flags & IF_DISABLED) {
+		print_message("unsupported, skip\n");
+		return;
+	}
 
 	arg->ta_flags = 0;
 	cookie = gen_rand_cookie();
@@ -999,6 +1019,10 @@ io_multi_recx_aggregate_test(void **state)
 	unsigned int		credits = -1;
 	bool			finish;
 
+	if (arg->ta_flags & IF_DISABLED) {
+		print_message("unsupported, skip\n");
+		return;
+	}
 	arg->ta_flags = 0;
 	cookie = gen_rand_cookie();
 
@@ -1195,6 +1219,10 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 	vos_purge_anchor_t	vp_anchor;
 	bool			finish;
 
+	if (arg->ta_flags & IF_DISABLED) {
+		print_message("unsupported, skip\n");
+		return;
+	}
 	arg->ta_flags = 0;
 	cookie = gen_rand_cookie();
 	epoch = 1;
@@ -1366,10 +1394,12 @@ static const struct CMUnitTest discard_tests[] = {
 		io_multi_akey_discard_test, io_multikey_discard_setup,
 		io_multikey_discard_teardown},
 	{ "VOS305: VOS multi recx discard test",
-		io_multi_recx_discard_test, io_multikey_discard_setup,
+		io_multi_recx_discard_test,
+		io_multi_recx_discard_setup,
 		io_multikey_discard_teardown},
 	{ "VOS305: VOS multi recx and overwrite discard test",
-		io_multi_recx_overwrite_discard_test, io_multikey_discard_setup,
+		io_multi_recx_overwrite_discard_test,
+		io_multi_recx_discard_setup,
 		io_multikey_discard_teardown},
 	{ "VOS306: VOS epoch range discard test",
 		io_epoch_range_discard_test, io_multikey_discard_setup,
@@ -1377,29 +1407,29 @@ static const struct CMUnitTest discard_tests[] = {
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
-	{ "VOS301.1: VOS recx overwrite aggregate test",
+	{ "VOS401.1: VOS recx overwrite aggregate test",
 		io_recx_overwrite_aggregate, io_multikey_discard_setup,
 		io_multikey_discard_teardown},
-	{ "VOS301.2: VOS recx overwrite aggregate with credits",
+	{ "VOS401.2: VOS recx overwrite aggregate with credits",
 		io_recx_overwrite_credits, io_multikey_discard_setup,
 		io_multikey_discard_teardown},
-	{ "VOS301.3: VOS recx overwrite aggregated with completion reporting",
+	{ "VOS401.3: VOS recx overwrite aggregated with completion reporting",
 		io_recx_overwrite_report, io_multikey_discard_setup,
 		io_multikey_discard_teardown},
-	{ "VOS302.1: VOS multi recx overwrite test without credits",
+	{ "VOS402.1: VOS multi recx overwrite test without credits",
 		io_multi_recx_overwrite_test_without_credits,
-		io_multikey_discard_setup, io_multikey_discard_teardown},
-	{ "VOS302.2: VOS multi recx overwrite test with credits",
+		io_multi_recx_discard_setup, io_multikey_discard_teardown},
+	{ "VOS402.2: VOS multi recx overwrite test with credits",
 		io_multi_recx_overwrite_test_with_credits,
-		io_multikey_discard_setup, io_multikey_discard_teardown},
-	{ "VOS303.1: VOS dkey update aggregate test",
+		io_multi_recx_discard_setup, io_multikey_discard_teardown},
+	{ "VOS403.1: VOS dkey update aggregate test",
 		io_multi_dkey_aggregate_test, io_multikey_discard_setup,
 		io_multikey_discard_teardown},
-	{ "VOS303.2: VOS akey update aggregate test",
+	{ "VOS403.2: VOS akey update aggregate test",
 		io_multi_akey_aggregate_test, io_multikey_discard_setup,
 		io_multikey_discard_teardown},
-	{ "VOS303.3: VOS recx update aggregate test",
-		io_multi_recx_aggregate_test, io_multikey_discard_setup,
+	{ "VOS403.3: VOS recx update aggregate test",
+		io_multi_recx_aggregate_test, io_multi_recx_discard_setup,
 		io_multikey_discard_teardown},
 
 };

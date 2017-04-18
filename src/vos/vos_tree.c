@@ -386,8 +386,6 @@ static btr_ops_t vos_key_btr_ops = {
  */
 
 struct idx_btr_key {
-	/** reserved, record index */
-	uint64_t	ih_index;
 	/** */
 	uint64_t	ih_epoch;
 	/** cookie ID tag for this update */
@@ -441,7 +439,6 @@ irec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_irec_df *irec  = vos_rec2irec(tins, rec);
 	daos_csum_buf_t	   *csum  = rbund->rb_csum;
 	daos_iov_t	   *iov   = rbund->rb_iov;
-	daos_recx_t	   *recx  = rbund->rb_recx;
 
 	if (kbund != NULL) { /* called from iterator */
 		kbund->kb_epr->epr_lo	= ihkey->ih_epoch;
@@ -457,8 +454,6 @@ irec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		csum->cs_type	= irec->ir_cs_type;
 		csum->cs_csum	= vos_irec2csum(irec);
 	}
-	recx->rx_idx	= ihkey->ih_index;
-	recx->rx_nr	= 1;
 	rbund->rb_rsize	= irec->ir_size;
 
 	return 0;
@@ -483,7 +478,6 @@ ibtr_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 	struct vos_key_bundle	*kbund;
 
 	kbund = vos_iov2key_bundle(key_iov);
-	ihkey->ih_index = kbund->kb_idx;
 	ihkey->ih_epoch = kbund->kb_epr->epr_lo;
 }
 
@@ -493,12 +487,6 @@ ibtr_hkey_cmp(struct btr_instance *tins, struct btr_record *rec, void *hkey)
 {
 	struct idx_btr_key *ihkey1 = (struct idx_btr_key *)&rec->rec_hkey[0];
 	struct idx_btr_key *ihkey2 = (struct idx_btr_key *)hkey;
-
-	if (ihkey1->ih_index < ihkey2->ih_index)
-		return -1;
-
-	if (ihkey1->ih_index > ihkey2->ih_index)
-		return 1;
 
 	if (ihkey1->ih_epoch < ihkey2->ih_epoch)
 		return -1;
@@ -593,8 +581,7 @@ ibtr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	}
 
 	ihkey = (struct idx_btr_key *)&rec->rec_hkey[0];
-	D_DEBUG(DF_VOS2, "Overwrite idx "DF_U64", epoch "DF_U64"\n",
-		ihkey->ih_index, ihkey->ih_epoch);
+	D_DEBUG(DB_IO, "Overwrite epoch "DF_U64"\n", ihkey->ih_epoch);
 
 	umem_tx_add(&tins->ti_umm, rec->rec_mmid, vos_irec_size(rbund));
 	return irec_update(tins, rec, kbund, rbund);

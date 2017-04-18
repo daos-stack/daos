@@ -532,14 +532,13 @@ vos_irec_size(struct vos_rec_bundle *rbund)
 
 	if (rbund->rb_csum != NULL)
 		size = vos_size_round(rbund->rb_csum->cs_len);
-	return size + sizeof(struct vos_irec_df) +
-	       rbund->rb_rsize * rbund->rb_recx->rx_nr;
+	return size + sizeof(struct vos_irec_df) + rbund->rb_rsize;
 }
 
 static inline bool
 vos_irec_size_equal(struct vos_irec_df *irec, struct vos_rec_bundle *rbund)
 {
-	if (irec->ir_size != rbund->rb_rsize * rbund->rb_recx->rx_nr)
+	if (irec->ir_size != rbund->rb_rsize)
 		return false;
 
 	if (irec->ir_cs_size != rbund->rb_csum->cs_len)

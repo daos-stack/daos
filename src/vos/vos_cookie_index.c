@@ -188,7 +188,7 @@ vos_cookie_find_update(daos_handle_t cih, uuid_t cookie, daos_epoch_t epoch,
 
 	rc = dbtree_lookup(cih, &key, &value);
 	if (rc == 0) {
-		D_DEBUG(DB_MD, "dbtree lookup found "DF_UUID","DF_U64"\n",
+		D_DEBUG(DB_TRACE, "dbtree lookup found "DF_UUID","DF_U64"\n",
 			DP_UUID(cookie), max_epoch);
 
 		if (!update_flag) /* read-only */

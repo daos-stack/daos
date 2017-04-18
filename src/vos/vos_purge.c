@@ -400,12 +400,11 @@ recx_max_iter_probe(int opc, vos_iter_entry_t *ent, vos_iter_entry_t *ent_max,
 
 	int	rc = 0;
 	char	*opstr;
-	bool	recx_equal, it_reverse_skip;
+	bool	it_reverse_skip;
 
-	recx_equal  = vos_recx_is_equal(&ent->ie_recx, &ent_max->ie_recx);
 	it_reverse_skip = ((epc == VOS_IT_EPC_RR) && (opc & ITR_PROBE_ANCHOR));
 
-	if (recx_equal && ((opc & ITR_NEXT) || it_reverse_skip))
+	if ((opc & ITR_NEXT) || it_reverse_skip)
 		return 0;
 
 	if (opc & ITR_REUSE_ANCHOR) {
