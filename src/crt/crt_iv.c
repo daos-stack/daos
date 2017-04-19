@@ -289,6 +289,7 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 	if (rpc) {
 		/* If there is child to respond to - bulk transfer to it */
 		if (output_rc == 0) {
+			/* Note: function will increment ref count on 'rpc' */
 			rc = crt_ivf_bulk_transfer(iv_info->ifc_ivns_internal,
 						iv_info->ifc_class_id,
 						iv_key, iv_value,
@@ -993,9 +994,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 					input->ifi_root_node),
 				&iv_value);
 	if (rc == 0) {
-		rc = crt_req_addref(rpc_req);
-		C_ASSERT(rc == 0);
-
+		/* Note: Function will increment ref count on 'rpc_req' */
 		rc = crt_ivf_bulk_transfer(ivns_internal,
 					input->ifi_class_id, &input->ifi_key,
 					&iv_value, input->ifi_value_bulk,
