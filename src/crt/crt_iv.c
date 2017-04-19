@@ -637,7 +637,7 @@ struct crt_ivf_transfer_cb_info {
 	uint32_t			tci_class_id;
 
 	/* IV Key for which fetch was performed */
-	crt_iov_t			*tci_iv_key;
+	crt_iov_t			tci_iv_key;
 
 	/* IV value for which fetch was performed */
 	crt_sg_list_t			tci_iv_value;
@@ -662,6 +662,15 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	output = crt_reply_get(rpc);
 	output->ifo_rc = info->bci_rc;
 
+	iv_ops = crt_iv_ops_get(cb_info->tci_ivns_internal,
+				cb_info->tci_class_id);
+	C_ASSERT(iv_ops != NULL);
+
+	rc = iv_ops->ivo_on_put(cb_info->tci_ivns_internal,
+			&cb_info->tci_iv_key, 0, &cb_info->tci_iv_value);
+	if (rc != 0)
+		C_ERROR("ivo_on_put() failed; rc = %d\n", rc);
+
 	/* Keep freeing things even if something fails */
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
@@ -674,15 +683,6 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	rc = crt_req_decref(rpc);
 	if (rc != 0)
 		C_ERROR("crt_req_decref() failed; rc = %d\n", rc);
-
-	iv_ops = crt_iv_ops_get(cb_info->tci_ivns_internal,
-				cb_info->tci_class_id);
-	C_ASSERT(iv_ops != NULL);
-
-	rc = iv_ops->ivo_on_put(cb_info->tci_ivns_internal,
-				cb_info->tci_iv_key, 0, &cb_info->tci_iv_value);
-	if (rc != 0)
-		C_ERROR("ivo_on_put() failed; rc = %d\n", rc);
 
 	C_FREE_PTR(cb_info);
 
@@ -745,7 +745,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 
 	cb_info->tci_ivns_internal = ivns_internal;
 	cb_info->tci_class_id = class_id;
-	cb_info->tci_iv_key = iv_key;
+	cb_info->tci_iv_key = *iv_key;
 	cb_info->tci_iv_value = *iv_value;
 
 	rc = crt_bulk_transfer(&bulk_desc, crt_ivf_bulk_transfer_done_cb,
