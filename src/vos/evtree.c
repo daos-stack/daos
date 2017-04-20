@@ -1198,7 +1198,7 @@ evt_clip_entry(struct evt_context *tcx, struct evt_entry *ent)
 	 * correctness of the tree.
 	 */
 	evt_ent_list_init(&tcx->tc_ent_list);
-	rc = evt_find_ent_list(tcx, EVT_FIND_RECAP, &ent->en_rect,
+	rc = evt_find_ent_list(tcx, EVT_FIND_CAP, &ent->en_rect,
 			       &tcx->tc_ent_list);
 	if (rc != 0)
 		return rc;
