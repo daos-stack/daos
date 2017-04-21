@@ -8,7 +8,7 @@ The proposed architecture leverages and extends the concepts developed under the
 
 This high-level design document is organized as follows:
 
-- <a href="./client/model.md">DAOS Storage Model</a>: Describes the DAOS storage model and architecture. 
+- <a href="./src/client/model.md">DAOS Storage Model</a>: Describes the DAOS storage model and architecture. 
 - DAOS Storage Stack: Presents the storage stack organization and functionality of each layer. 
 - Use Cases: Provides a list of use cases.
 - The remaining sections (Versioning Object Store, Pool Service, Container Service, Key Array Object, POSIX Emulation) focus on the internal design of each stack layer, including data structure and algorithmic choices.
