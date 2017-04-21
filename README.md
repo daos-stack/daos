@@ -49,6 +49,8 @@ DAOS depends on some third-party libraries:
 
 Can execute "scons" in top DAOS source directory to build it when all the dependent modules installed.
 
+## <a href= "doc/HLD.md">Developer Documentation</a>
+
 ## Contacts
 
 For more information on DAOS, please post to our [Google group](https://groups.google.com/forum/#!forum/daos-users).
