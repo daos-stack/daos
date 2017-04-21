@@ -44,7 +44,7 @@ Internally, the VOS maintains an index of container UUIDs that references each c
 The <a href="#7a">figure</a> below shows interactions between the different indexes used inside a VOS pool. VOS objects are not created explicitly, but are created on first write by creating the object metadata and inserting a reference to it in the owning container’s object index. All object updates log the data for each update, which may be a new key value, an array extent or a multilevel KV object. References to these updates are inserted into the object metadata index, the container’s epoch index and also the container cookie index. Note that “punch” of an extent of an array object and of a key in a key value object are also logged as zeroed extents and negative entries respectively, rather than causing relevant array extents or key values to be discarded. This ensures that the full version history of objects remain accessible.
 
 <a id="7a"></a>
-![./client/HLD_Graphics/Fig_008.png](./client/HLD_Graphics/Fig_008.png " Interactions between container index, object index, epoch index and cookie within one VOS pool (vpool)")
+![../client/HLD_Graphics/Fig_008.png](../client/HLD_Graphics/Fig_008.png " Interactions between container index, object index, epoch index and cookie within one VOS pool (vpool)")
 
 When performing lookup on a KV object, the object index is traversed to find the index node with the highest epoch number less than or equal to the requested epoch (near-epoch) that matches the key. If a value or negative entry is found, it is returned. Otherwise a “miss" is returned meaning that this key has never been updated in this VOS. This ensures that the most recent value in the epoch history of the KV is returned irrespective of the time-order in which they were integrated, and that all updates after the requested epoch are ignored.
 
@@ -69,7 +69,7 @@ VOS also maintains an index for container handle cookies. These cookies are crea
 VOS provides a way to list all non-empty objects IDs in a container. The object ID (see Section 3.1.3) consists of 192 bits of which bits 8 - 16 identify the type of object. This can allow enumeration of object IDs for a type of object. Interfaces to enumerate byte array and key value objects are shown in the <a href="#7b">figure</a> below. At all times, the object index hash table holds only object IDs that are non-empty, i.e., if an index tree associated with an object is empty (after an aggregation/discard), the object ID and its associated indexes are removed from the object index hash table.
 
 <a id="7b"></a>
-![./client/HLD_Graphics/Fig_009.png](./client/HLD_Graphics/Fig_009.png "Interfaces for enumeration KV and Byte array objects")
+![../client/HLD_Graphics/Fig_009.png](../client/HLD_Graphics/Fig_009.png "Interfaces for enumeration KV and Byte array objects")
 
 The interfaces shown in the <a href="7b">figure</a> above track the next object ID to extract with the help of an iterator. The same iterator routines would be used within VOS for enumeration of containers, all object types including key value object types and byte array objects. One use case that benefits from this object listing is the re-silvering process of DAOS-SR (discussed in Chapter 8). Additional metadata information associated with the object layout optionally can be stored along with the object ID during writes/updates.
 
@@ -138,7 +138,7 @@ A simple example input for crearting a KV store is listed in the <a href="#7c">T
 
 <a id="7d"></a>
 
-![./client/HLD_Graphics/Fig_011.png](./client/HLD_Graphics/Fig_011.png "Red Black Tree based KV Store with Multi-Key")
+![../client/HLD_Graphics/Fig_011.png](../client/HLD_Graphics/Fig_011.png "Red Black Tree based KV Store with Multi-Key")
 
 The red black tree, like any traditional binary tree, organizes the keys lesser than the root to the left subtree and keys greater than the root to the right subtree. Value pointers are stored along with the keys in each node. On the other hand, a B+ Tree based index stores keys in ascending order at the leaves, which is where the value is stored. The root nodes and internal nodes (color-coded in blue and maroon accordingly) facilitate locating the appropriate leaf node. Each B+ Tree node has multiple slots, where the number of slots is determined from the order. The nodes can have a maximum of order-1 slots. The container handle cookie must be stored with every key in case of red black trees, but in case of B+ Trees having cookies only in leaf nodes would suffice, since cookies are not used in traversing.
 
@@ -177,7 +177,7 @@ The second type of object supported by VOS is a byte-array object. Byte-array ob
 
 <b>Example of extents and epochs in a byte array object</b>
 
-![./client/HLD_Graphics/Fig_012.png](./client/HLD_Graphics/Fig_012.png "Example of extents and epochs in a byte array object")
+![../client/HLD_Graphics/Fig_012.png](../client/HLD_Graphics/Fig_012.png "Example of extents and epochs in a byte array object")
 
 In the <a href="7f">above</a> example, there is significant overlap between different extent ranges. VOS supports nearest-epoch access, which necessitates reading the latest value for any given extent range. For example, in the <a href="#7f">figure</a> above, if there is a read request for extent range 4 - 10 at epoch 10, the resulting read buffer should contain extent 7-10 from epoch 9, extent 5-7 from epoch 8, and extent 4-5 from epoch 1. VOS byte-array objects also support punch over both partial and complete extent ranges.  
 
@@ -208,7 +208,7 @@ For a non-fragmented extent range in a byte-array index tree, read complexity is
 
 <b>Example RB Tree based extent tree Construction for Input from Table <a href="#7g">above</a>. (a) Shows tree after first three inserts and (b) shows the complete tree with additional inserts during overlap</b>
 
-![./client/HLD_Graphics/Fig_013.png](./client/HLD_Graphics/Fig_013.png "Example RB Tree based extent tree Construction for Input from Table 5 3. (a) Shows tree after first three inserts and (b) shows the complete tree with additional inserts during overlap")
+![../client/HLD_Graphics/Fig_013.png](../client/HLD_Graphics/Fig_013.png "Example RB Tree based extent tree Construction for Input from Table 5 3. (a) Shows tree after first three inserts and (b) shows the complete tree with additional inserts during overlap")
 
 Byte-array objects also support enumeration of extents in the form of listing the difference between two epochs for a given object. Extracting extents modified between two epochs requires determining the byte-array object IDs updated between requested epochs. Byte-array objects can leverage the epoch index table for this kind of listing. Epochs are keys in the epoch-index table where value is a list of object IDs. VOS can extract the list of extents associated with the requested object ID, modified between the requested epochs. The VOS API returns the list to the caller, by maintaining an anchor, and deletes the list once the anchor reaches the end of the list in order to reclaim space. With the object IDs and extents, the caller can read each extent from the byte-array extent tree with byte array read operations discussed earlier. 
 
@@ -218,7 +218,7 @@ The approach considered in this design for byte arrays provides support for arbi
 
 <b>Example showing extensive splitting of extent ranges during overwrites</b>
 
-![./client/HLD_Graphics/Fig_014.png](./client/HLD_Graphics/Fig_014.png "Example showing extensive splitting of extent ranges during overwrites")
+![../client/HLD_Graphics/Fig_014.png](../client/HLD_Graphics/Fig_014.png "Example showing extensive splitting of extent ranges during overwrites")
 
 By limiting the splitting to scenarios where incoming requests partially overwrite an extent in a lower epoch, the number of fragments could be contained. This optimization can potentially simplify inserting extent ranges. But with this approach, all extents will not be unique and additional augmenting (with upper bound extent interval, upper bound and lower bound epoch interval value) similar to those used in interval trees might be needed to determine the fastest search path in the tree to locate an extent range. Search path in such a tree must be determined not-only based on the start offset but also the end offset, start epoch and end epoch. the figure <a href="#7j">below</a> shows an augmented version of the tree in the previous<a href="#7i"> Figure</a>(b), with an additional write at {0 – 100} at epoch 12. Because the augmented values in subtrees are based on max values of end offsets, end epochs and min value of start epochs of all nodes in a subtree. The augmented values must be propagated up the tree, on every insert and delete. The additional metadata at each node creates a bounding box representation with {start-offset, end-offset, min-epoch, max-epoch} representing a rectangle. Although the representation of each write can be a rectangle, since the tree is ordered by start offset during insertion, two rectangles which are close together in a 2D space can potentially land in the left and right subtrees. It would be better to represent this tree as a bounding box based spatial tree capable of traversing rectangles rather than points. 
 
@@ -226,7 +226,7 @@ By limiting the splitting to scenarios where incoming requests partially overwri
 
 <b>Augmented tree to address excessive splitting of nodes while minimizing splitting for inserts in future epochs</b>
 
-![./client/HLD_Graphics/Fig_015.png](./client/HLD_Graphics/Fig_015.png "Example of four Storage Nodes, eight DAOS Targets and three DAOS Pools")
+![../client/HLD_Graphics/Fig_015.png](../client/HLD_Graphics/Fig_015.png "Example of four Storage Nodes, eight DAOS Targets and three DAOS Pools")
 
 R-Trees provide a good way to represent dynamically added bounded rectangles. In the case of an epoch-extent tree, rectangles might not be bounded initially as required by R-Trees, but overwrites create bounded rectangles with splitting. So a variant of an R-Tree that can allow splitting of rectangles dynamically would be required to address this problem.
 
@@ -236,7 +236,7 @@ We propose an Extent - Validity trees (EV-Trees) to address this problem. An EV-
 
 <b>Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table <a href="#7g">above</a></b>
 
-![./client/HLD_Graphics/Fig_016.png](./client/HLD_Graphics/Fig_016.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
+![../client/HLD_Graphics/Fig_016.png](../client/HLD_Graphics/Fig_016.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
 
 The figure <a href="7l">below</a> shows the rectangles constructed with splitting and trimming operations of EV-Tree for the example in the previous <a href="#7g">table</a> with an additional write at offset {0 – 100} introduced to consider the case for extensive splitting. The figure <a href="#7k">above</a> shows the EV-Tree construction for the same example. Although it looks similar to R-Tree, unlike R-Trees, EV-Trees makes sure there are no overlapping rectangles in the leaves. This is important to identify unique extents at different epochs and search for extents valid at near-epochs.
 
@@ -244,7 +244,7 @@ The figure <a href="7l">below</a> shows the rectangles constructed with splittin
 
 <b>Tree (order - 4) for the example in Table 6 3 (pictorial representation shown in the figure <a href="#7g">above</a></b>
 
-![./client/HLD_Graphics/Fig_017.png](./client/HLD_Graphics/Fig_017.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
+![../client/HLD_Graphics/Fig_017.png](../client/HLD_Graphics/Fig_017.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
 
 Splitting and trimming of rectangles in EV-trees occur only when there is an overlap of rectangles. If the extent ranges are completely overwritten in the same epoch, the associated data/value of the extent range is replaced or an error is returned. The behavior is determined by request from upper layer like in KV store discussed in the previous section (<a href="#721">Operations Supported with Key Value Stores</a>. In scenarios where extent ranges get completely overwritten at a later epoch, updating the epoch validity of the rectangle at the earlier epoch would suffice. The algorithm splits rectangles only when a part of an extent range in an earlier epoch is overwritten in a later epoch, where only updating validity wouldn’t suffice.
 
@@ -252,7 +252,7 @@ Splitting and trimming of rectangles in EV-trees occur only when there is an ove
 
 <b>Pictorial representation of Split scenarios of rectangles in EV-Tree</a></b>
 
-![./client/HLD_Graphics/Fig_018.png](./client/HLD_Graphics/Fig_018.png "Pictorial representation of Split scenarios of rectangles in EV-Tree")
+![../client/HLD_Graphics/Fig_018.png](../client/HLD_Graphics/Fig_018.png "Pictorial representation of Split scenarios of rectangles in EV-Tree")
 
 In the split scenarios shown <a href="#7m">above</a>, although there are many cases for overlap, we can summarize the split conditions for all required scenarios with the pseudo code shown <a href="#7n">below</a> (Pseudo Code showing Split Conditions for Rectangle). In all other scenarios of overlap apart from the ones detailed in the pseudo code, updating validity of epochs (or trimming) would suffice. Since at anytime a rectangle is added its bound at epoch infinity (264), two rectangles would not overlap such that one rectangle is within the other.
 
@@ -260,7 +260,7 @@ In the split scenarios shown <a href="#7m">above</a>, although there are many ca
 
 <b>Pseudo Code showing Split Conditions for Rectangle</a></b>
 
-![./client/HLD_Graphics/Fig_019.png](./client/HLD_Graphics/Fig_019.png "Pseudo Code showing Split Conditions for Rectangle")
+![../client/HLD_Graphics/Fig_019.png](../client/HLD_Graphics/Fig_019.png "Pseudo Code showing Split Conditions for Rectangle")
 
 Although splitting creates new rectangles, these are created primarily to record unique extent ranges at unique epoch ranges. Also, splitting rectangles does not fragment the associated data/value buffer. A reference counter can be maintained in order to track deleted rectangles associated with a value buffer.  Trimming allows an EV-Tree to keep the epoch-validity ranges of the different extent ranges updated, and does not create additional node slots. The split operation is commutative, (i.e.), irrespective of the order in which the rectangles arrive, the resultant set of split rectangles would remain the same. This is important because VOS data structures are expected to be updated by multiple threads in random order.
 
@@ -285,7 +285,7 @@ In addition to Key-value and Byte-array object, VOS would also offer a document 
 
 <b>Layers of a  Document store. Value of Key Tree form separate atomic/partial value trees</b>
 
-![./client/HLD_Graphics/Fig_020.png](./client/HLD_Graphics/Fig_020.png "Layers of a  Document store. Value of Key Tree form separate atomic/partial value trees")
+![../client/HLD_Graphics/Fig_020.png](../client/HLD_Graphics/Fig_020.png "Layers of a  Document store. Value of Key Tree form separate atomic/partial value trees")
 
 A simple construction of a document store design is shown in the Figure above. In the case of both types of values, the epoch validity of the value tree must be exported to the attribute key tree and the distribution key tree. With this style of construction there is an inherent benefit for enumeration, as the epoch history of the keys is separated from the size of the parent key tree, reducing the size of the tree to be searched.
 
@@ -299,7 +299,7 @@ Epochs provide a way for modifying VOS objects without destroying the history of
 To compact epochs, VOS allows epochs to be aggregated, i.e., the value/extent-data of the latest epoch of any key is always kept over older epochs. This also ensures that merging history does not cause loss of exclusive updates/writes made to an epoch. To rollback history VOS provides the discard operation. 
 
 <a id="7p"></a>
-![./client/HLD_Graphics/Fig_021.png](./client/HLD_Graphics/Fig_021.png "Example of four Storage Nodes, eight DAOS Targets and three DAOS Pools") 
+![../client/HLD_Graphics/Fig_021.png](../client/HLD_Graphics/Fig_021.png "Example of four Storage Nodes, eight DAOS Targets and three DAOS Pools") 
 
 Aggregate and discard operations in VOS accept a range of epochs to be aggregated or discarded. Discard accepts an additional container handle cookie parameter. The cookie identifies the container handle for a process group which facilitates to limit discard to a particular process group.  For example, a discard operation for all epochs in range [10, 15] with a cookie “c”, would discard object ID records associated with the cookie “c”, modified in epochs 10,11,12,13,14,15. The aggregate operation is carried out with the help of the epoch index present in the VOS, while discard uses the cookie index table. 
 
@@ -338,7 +338,7 @@ VOS accesses persistent memory (pmem) with the help of the Non-volatile memory l
 <a id="7q"></a>
 <b>Architecture of NVML on persistent memory using a PM-Aware File System </b>
 
-![./client/HLD_Graphics/Fig_022.png](./client/HLD_Graphics/Fig_022.png "Architecture of NVML on persistent memory using a PM-Aware File System")
+![../client/HLD_Graphics/Fig_022.png](../client/HLD_Graphics/Fig_022.png "Architecture of NVML on persistent memory using a PM-Aware File System")
 
 NVML builds on the Direct Access (DAX)  changes in Linux. NVML offers a collection of libraries amongst which libpmemobj, which offers transaction based persistent memory, handling is the one discussed in this section. Typically a DAX device is mounted on a ext4 file system. Libpmemobj provides API to memory-map a persistent memory file to get direct access from the DAX file system. VOS can create and maintain its data structures using a pmem file and libpmemobj, such that it remains consistent on system failures. This section elaborates on creating a VOS pool and its internal data structures using NVML specifically libpmemobj APIs and constructs.
 
@@ -352,7 +352,7 @@ The root object in NVML facilitates locating the superblock of a Versioning obje
 <a id="7r"></a>
 <b>Code block showing the creation of root object for VOS using NVML pointers</b>
 
-![./client/HLD_Graphics/Fig_023.png](./client/HLD_Graphics/Fig_023.png "Code block showing the creation of root object for VOS using NVML pointers")
+![../client/HLD_Graphics/Fig_023.png](../client/HLD_Graphics/Fig_023.png "Code block showing the creation of root object for VOS using NVML pointers")
  
 
 Pointers in NVML contain the offset from the beginning of the pool rather than the virtual address space and a unique ID of the pool. Internally, NVML uses the pool ID to locate the actual virtual address of the pool stored in a hash table. The actual virtual address of the pointer is determined by looking up the address of the pool, using the pool ID and adding the associated offset to it. NVML represents persistent pointers as PMEMoid, and the pmemobj_direct(PMEMoid oid) converts it to a virtual memory pointer. Although NVML provides a way for accessing persistent memory pointers as void\*, operating on such pointers can be error-prone because there is no type associated with the pmem pointers. NVML addresses this issue with the help of named unions and macros as shown in Figure 6.16. NVML also provides additional macros D_RW and D_RO to convert typed PMEMoid pointers to direct pointers of their associated types, which are equivalents of using pmemobj_direct on the oids and converting the resultant void* pointers to their respective types.  
@@ -363,13 +363,13 @@ The code in the <a href="#7s">figures</a> below show the  TOID macros for defini
 
 <b>Code block showing TOID macros for defining typed pointers in NVML</b>
 
-![./client/HLD_Graphics/Fig_024.png](./client/HLD_Graphics/Fig_024.png "Code block showing TOID macros for defining typed pointers in NVML")
+![../client/HLD_Graphics/Fig_024.png](../client/HLD_Graphics/Fig_024.png "Code block showing TOID macros for defining typed pointers in NVML")
  
 <a id="7t"></a>
 
 <b>Internal Representation of List Entry Macros in NVML</b>
 
-![./client/HLD_Graphics/Fig_025.png](./client/HLD_Graphics/Fig_025.png "Internal Representation of List Entry Macros in NVML")
+![../client/HLD_Graphics/Fig_025.png](../client/HLD_Graphics/Fig_025.png "Internal Representation of List Entry Macros in NVML")
  
 
 <a id="77"></a>
@@ -380,29 +380,29 @@ The code in the <a href="#7s">figures</a> below show the  TOID macros for defini
 **Code Block representing the layout of container index table structures with NVML pointers and ListsCode Block representing the layout of container index table structures with NVML pointers and Lists**
 
 
-![./client/HLD_Graphics/Fig_026.png](./client/HLD_Graphics/Fig_026.png "Code Block representing the layout of container index table structures with NVML pointers and Lists") 
+![../client/HLD_Graphics/Fig_026.png](../client/HLD_Graphics/Fig_026.png "Code Block representing the layout of container index table structures with NVML pointers and Lists") 
 
 The three main index tables for VOS are the container index table, object index table and epoch index table. VOS uses NVML TOID pointers as shown in the previous <a href="#761">section</a>, to construct all the three index tables The NVML library libpmemobj also provides a set of list interfaces to create persistent lists. These persistent lists provide separate chaining for hash buckets in the hash table. Persistent list operations represented with POBJ_LIST_* macros and their internal representation are shown in the <a href="7u">Figure</a> above. Each container created in VOS has its own object index and epoch index tables. The container table is a hash table that hashes the container uuid to a value. The value comprises of the persistent memory pointer to both the object and the epoch index tables, and the lowest and highest epoch of that container.
 
 <a id="7v"></a>
 **Code Block representing the layout of object index and epoch index entry**
 
-![./client/HLD_Graphics/Fig_027.png](./client/HLD_Graphics/Fig_027.png "Code Block representing the layout of object index and epoch index entry")
+![../client/HLD_Graphics/Fig_027.png](../client/HLD_Graphics/Fig_027.png "Code Block representing the layout of object index and epoch index entry")
 
 <a id="7w"></a> 
 **Code Block Representing the layout for B+ Tree in NVML**
 
-![./client/HLD_Graphics/Fig_028.png](./client/HLD_Graphics/Fig_028.png "Code Block representing the layout of object index and epoch index entry")
+![../client/HLD_Graphics/Fig_028.png](../client/HLD_Graphics/Fig_028.png "Code Block representing the layout of object index and epoch index entry")
 
 <a id="7w"></a>
 **Layout definition for VOS over NVML**
 
-![./client/HLD_Graphics/Fig_029.png](./client/HLD_Graphics/Fig_029.png "Layout definition for VOS over NVML")
+![../client/HLD_Graphics/Fig_029.png](../client/HLD_Graphics/Fig_029.png "Layout definition for VOS over NVML")
 
 <a id="7x"></a>
 **Code block representing the pool creation, pool open and root-object creation**
 
-![./client/HLD_Graphics/Fig_030.png](./client/HLD_Graphics/Fig_030.png "Code block representing the pool creation, pool open and root-object creation") 
+![../client/HLD_Graphics/Fig_030.png](../client/HLD_Graphics/Fig_030.png "Code block representing the pool creation, pool open and root-object creation") 
 
 The first <a href="#7u">figure</a> shows the detailed layout of the container index table with NVML pointers and list API. Layouts of object table and epoch table are similar to the container index table shown in this <a href="#7v">figure</a>. Each object table entry would have the object id, PMEM pointer to the tree based index structure (either rb-tree/b+-tree). 
 
@@ -430,13 +430,13 @@ Transactions are required with persistent memory to ensure a consistent state at
 <a id="7y"></a>
 <b>Transaction flow with the different stages using macros</b>
 
-![./client/HLD_Graphics/Fig_036.png](./client/HLD_Graphics/Fig_036.png ">Transaction flow with the different stages using macros")
+![../client/HLD_Graphics/Fig_036.png](../client/HLD_Graphics/Fig_036.png ">Transaction flow with the different stages using macros")
  
 NVML, specifically libpmemobj, provides a set of transactional interfaces to use persistent memory in a fail-safe manner. Libpmemobj transactions allow enclosing a set of operations between start and commit and ensuring a durable and consistent state of the underlying PMEM on transaction commit. In case of a power failure or system crash, libpmemobj guarantees that all uncommitted changes roll back on restart, thereby restoring the consistent state of memory pool from the time when the transaction started.
  
 <b>B+Tree KV tree creation with NVML transactions</b>
 <a id="7z"></a>
-![./client/HLD_Graphics/Fig_037.png](./client/HLD_Graphics/Fig_037.png ">Transaction flow with the different stages using macros")
+![../client/HLD_Graphics/Fig_037.png](../client/HLD_Graphics/Fig_037.png ">Transaction flow with the different stages using macros")
 
 The library libpmemobj offers a set of functions to create and manage transactions. Each transaction goes through a series of stages namely, TX_STAGE_NONE, TX_STAGE_WORK, TX_STAGE_ONABORT, TX_STAGE_FINALLY and TX_STAGE_ONCOMMIT. 
 
@@ -451,7 +451,7 @@ below uses B+ Tree based KV store for usage of adding fields to ensure tracking 
 <b>Simple example using B+ Tree based KV store for usage of adding fields to ensure tracking in undo logs for recovery</b>
 
 <a id="7aa"></a>
-![./client/HLD_Graphics/Fig_038.png](./client/HLD_Graphics/Fig_038.png "Simple example using B+ Tree based KV store for usage of adding fields to ensure tracking in undo logs for recovery")
+![../client/HLD_Graphics/Fig_038.png](../client/HLD_Graphics/Fig_038.png "Simple example using B+ Tree based KV store for usage of adding fields to ensure tracking in undo logs for recovery")
 
 To ensure consistency for all objects modified within a transaction, libpmemobj expects all fields to be explicitly added to the transaction to make it a part of the transaction. This is because the library maintains an undo-log to track objects added to a transaction. This log is persistent and is key to rolling back modifications in case of failure. If a particular object is missing in the undo-log, then libpmemobj does not track modifications made to this object causing a persistent memory leak on failure. The code sample in the <a href="#7aa">Figure</a> above shows a partial implementation for insert into a B+ tree for a KV store. This example is an extension of the layout definition of B+ Trees provided in <a href="#7w">*Layout definition for VOS over NVML\</a>. *A simple 64-bit integer key and a void* value is considered in this example and it is seen that a transaction is started/insert and whenever a particular object is modified, for example the root node in this case, it has to be added to the transaction beforehand. 
 
