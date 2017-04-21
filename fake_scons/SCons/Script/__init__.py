@@ -1,3 +1,4 @@
+
 # Copyright (c) 2016 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -149,6 +150,10 @@ class DefaultEnvironment(object):
         """Fake RPCGenClient"""
         return []
 
+    def Literal(self, *args, **kw):
+        """Fake Literal"""
+        return []
+
     def Library(self, *args, **kw):
         """Fake Library"""
         return []
@@ -275,6 +280,13 @@ class Configure(object):
         pass
 
 
+class Literal(object):
+    """Fake Literal"""
+
+    def __init__(self, *args, **kw):
+        pass
+
+
 class Dir(object):
     """Fake Dir"""
     def __init__(self, *args, **kw):
@@ -373,6 +385,7 @@ __all__ = ['DefaultEnvironment',
            'Configure',
            'GetOption',
            'SetOption',
+           'Literal',
            'Dir',
            'Help',
            'Glob',

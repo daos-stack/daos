@@ -38,7 +38,14 @@ class ListVariable(object):
 
 
 class BoolVariable(object):
-    """Fake ListVariable"""
+    """Fake BoolVariable"""
+
+    def __init__(self, *args, **kw):
+        pass
+
+
+class EnumVariable(object):
+    """Fake EnumVariable"""
 
     def __init__(self, *args, **kw):
         pass
@@ -46,4 +53,5 @@ class BoolVariable(object):
 
 __all__ = ['PathVariable',
            'ListVariable',
-           'BoolVariable']
+           'BoolVariable',
+           'EnumVariable']
