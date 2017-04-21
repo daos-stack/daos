@@ -37,7 +37,7 @@ When the workflow starts, one rank connects to the DAOS pool, then uses local2gl
 We consider the workflow represented in the <a href="#6a">figure</a> below.
 
 <a id="6a"></a>
-![./src/client/HLD_Graphics/Fig_007.png](./src/client/HLD_Graphics/Fig_007.png "Example of a Scientific Workflow")
+![../src/client/HLD_Graphics/Fig_007.png](../src/client/HLD_Graphics/Fig_007.png "Example of a Scientific Workflow")
 
 Each green box represents a different container. All containers are stored in the same DAOS pool represented by the grey box. The simulation reads data from the input container and writes raw timesteps to another container. It also regularly dumps checkpoints to a dedicated ckpt container. The down-sample job reads the raw timesteps and generates sampled timesteps to be analyzed by the post-process which stores analysis data into yet another container.
 
