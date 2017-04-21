@@ -17,12 +17,16 @@ We consider a HPC cluster with hundreds of thousands of compute nodes interconne
 <a id="a"></a>
 ![HLD_Graphics/Fig_001.png](HLD_Graphics/Fig_001.png "Example of four Storage Nodes, eight DAOS Targets and three DAOS Pools")
 
-The <a href="#b">figure </a> below represents the fundamental abstractions of the DAOS storage model. A pool can host multiple transactional object stores called DAOS containers, identified by UUIDs. Each container is a private object address space, which can be atomically modified and snapshotted independently of the other containers sharing the same pool. DAOS objects in a container are identified by a unique object address and have a type (either byte array, KV store or document store, see <a href="#4a">DAOS Object</a> for more details) which is encoded in the object ID (see <a href="#4a">DAOS Container</a>). \Objects can be distributed across any target of the pool for both performance and resilience.
+The <a href="#b">figure </a> below represents the fundamental abstractions of the DAOS storage model. A pool can host multiple transactional object stores called DAOS containers, identified by UUIDs. Each container is a private object address space, which can be atomically modified and snapshotted independently of the other containers sharing the same pool. DAOS objects in a container are identified by a unique object address and have a type (either byte array, KV store or document store, (see <a href="#4a">DAOS Object</a> for more details) which is encoded in the object ID (see <a href="#4a">DAOS Container</a>). Objects can be distributed across any target of the pool for both performance and resilience.
 
 <a id="b"></a>
 ![HLD_Graphics/fig_002](HLD_Graphics/Fig_002.png "Architecture of DAOS Storage Model")
 
-Table 3-1 shows the targeted level of scalability for each DAOS concept. 
+The following <a href="#aa">table</a> shows the targeted level of scalability for each DAOS concept.
+
+<a id="aa"></a>
+
+**DAOS Scalability**
 
 |DAOS Concept|Order of Magnitude|
 |---|---|
