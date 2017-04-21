@@ -12,7 +12,7 @@ This high-level design document is organized as follows:
 - <a href="../src/client/layering.md">DAOS Storage Stack</a>: Presents the storage stack organization and functionality of each layer. 
 - <a href="use_cases.md">Use Cases</a>: Provides a list of use cases.
 - The remaining sections focus on the internal design of each stack layer, including data structure and algorithmic choices:
-   - <a href="./src/vos/vos.md">Versioning Object Store</a>
+   - <a href="../src/vos/vos.md">Versioning Object Store</a>
    - Pool Service
    - Container Service
    - Key Array Object
