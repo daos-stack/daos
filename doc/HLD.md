@@ -15,7 +15,7 @@ This high-level design document is organized as follows:
    - <a href="../src/vos/vos.md">Versioning Object Store</a>
    - Pool Service
    - Container Service
-   - Key Array Object
+   - <a href="../src/object/key_array_object.md">Key Array Object</a>
    - POSIX Emulation
 
 ## Terminology
