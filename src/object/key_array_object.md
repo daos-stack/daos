@@ -1,4 +1,4 @@
-# DAOS-SR
+# Key Array Object (DAOS-SR)
 
 The DAOS-SR is the layer that provides object abstractions with horizontal scalability and resilience. A DAOS-SR objet is distributed to multiple targets and represented by DAOS-M objects on these targets. Each of these DAOS-M objects is called as a shard of this DAOS-SR object. DAOS-M objects for the same DAOS-SR object share the same object ID, they also have another 32 bits as the unique object shard index; in other words, DAOS-M object ID is extension of DAOS-SR object ID, it can guarantee collocated object shards will not have ID conflict.
 
