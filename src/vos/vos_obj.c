@@ -514,7 +514,10 @@ akey_fetch_recx(daos_handle_t toh, daos_epoch_range_t *epr, daos_recx_t *recx,
 		nr = hi - lo + 1;
 
 		if (lo != index) {
-			D_ASSERTF(lo > index, DF_U64"/"DF_U64"\n", lo, index);
+			D_ASSERTF(lo > index,
+				  DF_U64"/"DF_U64", "DF_RECT", "DF_RECT"\n",
+				  lo, index, DP_RECT(&rect),
+				  DP_RECT(&ent->en_rect));
 			holes += lo - index;
 		}
 
@@ -599,7 +602,7 @@ akey_fetch(struct vos_obj_ref *oref, daos_epoch_t epoch, daos_handle_t ak_toh,
 	}
 
 	eprange.epr_lo = epoch;
-	eprange.epr_hi = DAOS_EPOCH_MAX;
+	eprange.epr_hi = epoch;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		rc = akey_fetch_single(toh, &eprange, &iod->iod_size, iobuf);

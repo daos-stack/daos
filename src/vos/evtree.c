@@ -22,104 +22,7 @@
  */
 #define DD_SUBSYS	DD_FAC(vos)
 
-#include <daos_srv/evtree.h>
-
-/**
- * Tree node types.
- * NB: a node can be both root and leaf.
- */
-enum {
-	EVT_NODE_LEAF		= (1 << 0),	/**< leaf node */
-	EVT_NODE_ROOT		= (1 << 1),	/**< root node */
-};
-
-#define EVT_TRACE_MAX                   32
-
-struct evt_trace {
-	/** the current node mmid */
-	TMMID(struct evt_node)		tr_node;
-	/** child position of the searching trace */
-	unsigned int			tr_at;
-	/** reserved for insert, whether the rectangle is included by parent */
-	bool				tr_included;
-};
-
-struct evt_context {
-	/** mapped address of the tree root */
-	struct evt_root			*tc_root;
-	/** memory ID of the tree root */
-	TMMID(struct evt_root)		 tc_root_mmid;
-	/**
-	 * The embedded entry list for entry allocation, it's used by clipping
-	 * of new rectangle during insert.
-	 */
-	struct evt_entry_list		 tc_ent_list;
-	/** reserved: entries being checking for clip */
-	daos_list_t			 tc_ent_clipping;
-	/** reserved: entries ready to be inserted */
-	daos_list_t			 tc_ent_inserting;
-	/** reserved: entries that should be dropped */
-	daos_list_t			 tc_ent_dropping;
-	/** magic number to identify invalid tree open handle */
-	unsigned int			 tc_magic;
-	/** refcount on the context */
-	unsigned int			 tc_ref;
-	/** cached tree order (reduce PMEM access) */
-	unsigned int			 tc_order;
-	/** cached tree depth (reduce PMEM access) */
-	unsigned int			 tc_depth;
-	/** cached tree feature bits (reduce PMEM access) */
-	uint64_t			 tc_feats;
-	/** memory instance (PMEM or DRAM) */
-	struct umem_instance		 tc_umm;
-	/** space to store tree search path */
-	struct evt_trace		 tc_traces[EVT_TRACE_MAX];
-	/** trace root which points to &tc_traces[EVT_TRACE_MAX - depth] */
-	struct evt_trace		*tc_trace;
-	/** customized operation table for different tree policies */
-	struct evt_policy_ops		*tc_ops;
-};
-
-#define EVT_NODE_NULL			TMMID_NULL(struct evt_node)
-#define EVT_ROOT_NULL			TMMID_NULL(struct evt_root)
-
-#define evt_umm(tcx)			(&(tcx)->tc_umm)
-#define evt_mmid2ptr(tcx, mmid)		umem_id2ptr(evt_umm(tcx), mmid)
-#define evt_tmmid2ptr(tcx, tmmid)	umem_id2ptr_typed(evt_umm(tcx), tmmid)
-#define evt_has_tx(tcx)			umem_has_tx(evt_umm(tcx))
-
-enum {
-	/** invalid input */
-	RT_OVERLAP_INVAL	= -1,
-	/** no overlap */
-	RT_OVERLAP_NO		= 0,
-	/** overlapped rectangles */
-	RT_OVERLAP_YES,
-
-	/** NB: Bits below are used by leaf rectangles only */
-
-	/** reserved */
-	RT_OVERLAP_EXPAND,
-	/** change part of the in-tree extent in the same epoch */
-	RT_OVERLAP_INPLACE,
-	/** replace all data of an in-tree extent in the same epoch */
-	RT_OVERLAP_REPLACE,
-	/**
-	 * the current extent fully covers (overwrites) an in-tree extent
-	 * which has lower epoch.
-	 */
-	RT_OVERLAP_CAPPING,
-	/**
-	 * the current extent is fully covered by an in-tree extent which has
-	 * higher epoch.
-	 */
-	RT_OVERLAP_CAPPED,
-
-	/** bits below are used by non-leaf rectangles */
-
-	/** new rectangle is included by the original rectangle */
-	RT_OVERLAP_INCLUDED,
-};
+#include "evt_priv.h"
 
 static struct evt_policy_ops evt_ssof_pol_ops;
 /**
@@ -131,23 +34,6 @@ static struct evt_policy_ops *evt_policies[] = {
 	NULL,
 };
 
-enum evt_find_opc {
-	/** find all rectangles overlapped with the input rectangle */
-	EVT_FIND_ALL,
-	/** find the first rectangle overlapped with the input rectangle */
-	EVT_FIND_FIRST,
-	/**
-	 * find all rectangles that can be capped by the input rectangle,
-	 * it returns error if there is any rectangle overlapping with the
-	 * input one but not capped.
-	 */
-	EVT_FIND_CAP,
-};
-
-static int evt_find_ent_list(struct evt_context *tcx,
-			     enum evt_find_opc find_opc,
-			     struct evt_rect *rect,
-			     struct evt_entry_list *ent_list);
 static struct evt_rect *evt_node_mbr_get(struct evt_context *tcx,
 					 TMMID(struct evt_node) nd_mmid);
 
@@ -188,7 +74,7 @@ evt_rect_overlap(struct evt_rect *rt1, struct evt_rect *rt2, bool leaf)
 	if (leaf) {
 		if (rt1->rc_epc_lo == rt2->rc_epc_lo) {
 			if (evt_rect_equal_width(rt1, rt2))
-				return RT_OVERLAP_REPLACE;
+				return RT_OVERLAP_SAME;
 
 			if (evt_rect_is_wider(rt1, rt2))
 				return RT_OVERLAP_INPLACE;
@@ -350,30 +236,7 @@ evt_ent_list_sort(struct evt_entry_list *ent_list)
 	/* TODO */
 }
 
-/**
- * Magic number for debug
- */
-#define EVT_HDL_ALIVE	0xbabecafe
-#define EVT_HDL_DEAD	0xdeadbeef
-
-static void
-evt_tcx_addref(struct evt_context *tcx)
-{
-	tcx->tc_ref++;
-}
-
-static void
-evt_tcx_decref(struct evt_context *tcx)
-{
-	D_ASSERT(tcx->tc_ref > 0);
-	tcx->tc_ref--;
-	if (tcx->tc_ref == 0) {
-		tcx->tc_magic = EVT_HDL_DEAD;
-		D_FREE_PTR(tcx);
-	}
-}
-
-static daos_handle_t
+daos_handle_t
 evt_tcx2hdl(struct evt_context *tcx)
 {
 	daos_handle_t hdl;
@@ -383,7 +246,7 @@ evt_tcx2hdl(struct evt_context *tcx)
 	return hdl;
 }
 
-static struct evt_context *
+struct evt_context *
 evt_hdl2tcx(daos_handle_t toh)
 {
 	struct evt_context *tcx;
@@ -449,7 +312,7 @@ evt_tcx_reset_trace(struct evt_context *tcx)
  * \param uma		[IN]	Memory attribute for the tree
  * \param tcx_pp	[OUT]	The returned tree context
  */
-static int
+int
 evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
 	       uint64_t feats, unsigned int order, struct umem_attr *uma,
 	       struct evt_context **tcx_pp)
@@ -507,6 +370,21 @@ evt_tcx_create(TMMID(struct evt_root) root_mmid, struct evt_root *root,
  failed:
 	D_DEBUG(DB_TRACE, "Failed to create tree context: %d\n", rc);
 	evt_tcx_decref(tcx);
+	return rc;
+}
+
+int
+evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
+{
+	struct umem_attr uma;
+	int		 rc;
+
+	umem_attr_get(&tcx->tc_umm, &uma);
+	if (!tcx->tc_root || tcx->tc_root->tr_feats == 0)
+		return -DER_INVAL;
+
+	rc = evt_tcx_create(tcx->tc_root_mmid, tcx->tc_root, -1, -1, &uma,
+			    tcx_pp);
 	return rc;
 }
 
@@ -730,7 +608,7 @@ evt_node_is_root(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid)
 }
 
 /** Return the rectangle at the offset of @at */
-static struct evt_rect *
+struct evt_rect *
 evt_node_rect_at(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		 unsigned int at)
 {
@@ -773,7 +651,7 @@ evt_node_rect_update(struct evt_context *tcx, TMMID(struct evt_node) tn_mmid,
 }
 
 /** Return the adress of child mmid at the offset of @at */
-static TMMID(struct evt_node) *
+TMMID(struct evt_node) *
 evt_node_child_at(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		  unsigned int at)
 {
@@ -788,7 +666,7 @@ evt_node_child_at(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 }
 
 /** Return the data pointer at the offset of @at */
-static struct evt_ptr_ref *
+struct evt_ptr_ref *
 evt_node_pref_at(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 		 unsigned int at)
 {
@@ -1603,6 +1481,33 @@ failed:
 	return rc;
 }
 
+/** Fill the entry with the extent at the specified position of \a nd_mmid */
+void
+evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
+	       unsigned int at, daos_off_t offset, struct evt_entry *entry)
+{
+	struct evt_ptr_ref *pref;
+	struct evt_rect	   *rect;
+	void		   *addr;
+
+	pref = evt_node_pref_at(tcx, nd_mmid, at);
+	rect = evt_node_rect_at(tcx, nd_mmid, at);
+
+	entry->en_rect = *rect;
+	entry->en_mmid = umem_id_t2u(pref->pr_ptr_mmid);
+
+	addr = evt_ptr_payload(tcx, pref->pr_ptr_mmid, &entry->en_inob, NULL);
+	if (addr == NULL) { /* punched */
+		entry->en_addr   = NULL;
+		entry->en_offset = 0;
+
+	} else {
+		D_ASSERT(entry->en_inob != 0);
+		entry->en_offset = pref->pr_offset + offset;
+		entry->en_addr   = addr + entry->en_offset * entry->en_inob;
+	}
+}
+
 /**
  * Find all versioned extents which intercept with the input one \a rect.
  * It attaches all found extents and their data pointers on \a ent_list if
@@ -1614,7 +1519,7 @@ failed:
  *				existent extent.
  * \param ent_list	[OUT]	The returned entries for overlapped extents.
  */
-static int
+int
 evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 		  struct evt_rect *rect, struct evt_entry_list *ent_list)
 {
@@ -1647,11 +1552,10 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 			DP_RECT(mbr), TMMID_P(nd_mmid), level, at, leaf);
 
 		for (i = at; i < node->tn_nr; i++) {
-			struct evt_ptr_ref	*pref;
 			struct evt_entry	*ent;
 			struct evt_rect		*rtmp;
-			char			*addr;
 			int			 overlap;
+			daos_off_t		 offset = 0;
 
 			rtmp = evt_node_rect_at(tcx, nd_mmid, i);
 			D_DEBUG(DB_TRACE, " rect[%d]="DF_RECT"\n",
@@ -1671,7 +1575,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 				D_ASSERT(!leaf);
 				/* fall through */
 			case RT_OVERLAP_YES:
-			case RT_OVERLAP_REPLACE:
+			case RT_OVERLAP_SAME:
 			case RT_OVERLAP_INPLACE:
 			case RT_OVERLAP_EXPAND:
 			case RT_OVERLAP_CAPPING:
@@ -1688,70 +1592,69 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 			}
 			D_DEBUG(DB_TRACE, "Found overlapped leaf rect\n");
 
-			if (overlap == RT_OVERLAP_CAPPED) {
-				/* Trying to insert an extent which is fully
-				 * overwriten by an in-tree extent. We just
-				 * modify the high epoch of the current extent
-				 * and continue the scan.
-				 */
-				rect->rc_epc_hi = rtmp->rc_epc_lo - 1;
-				continue;
-			}
+			/* early check */
+			switch (find_opc) {
+			default:
+				D_ASSERTF(0, "%d\n", find_opc);
+			case EVT_FIND_CAP:
+				if (overlap == RT_OVERLAP_CAPPED) {
+					/* Trying to insert an extent which is
+					 * fully overwriten by an in-tree
+					 * extent. We just modify the high
+					 * epoch of the current extent and
+					 * continue the scan.
+					 */
+					rect->rc_epc_hi = rtmp->rc_epc_lo - 1;
+					continue;
+				}
 
-			if (find_opc == EVT_FIND_CAP &&
-			    overlap != RT_OVERLAP_CAPPING &&
-			    overlap != RT_OVERLAP_REPLACE) {
+				if (overlap == RT_OVERLAP_CAPPING ||
+				    overlap == RT_OVERLAP_SAME)
+					break; /* matched */
+
 				D_DEBUG(DB_IO, "Invalid overlap for capping :"
 					DF_RECT" overlaps with "DF_RECT"\n",
 					DP_RECT(rect), DP_RECT(rtmp));
 				D_GOTO(out, rc = -DER_NO_PERM);
+
+			case EVT_FIND_SAME:
+				if (overlap != RT_OVERLAP_SAME)
+					continue;
+				break;
+
+			case EVT_FIND_FIRST:
+			case EVT_FIND_ALL:
+				break;
 			}
 
 			ent = evt_ent_list_alloc(ent_list);
 			if (ent == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
-			pref = evt_node_pref_at(tcx, nd_mmid, i);
-			ent->en_mmid = umem_id_t2u(pref->pr_ptr_mmid);
-			ent->en_rect = *rtmp;
+			if (rect->rc_off_lo > rtmp->rc_off_lo)
+				offset = rect->rc_off_lo - rtmp->rc_off_lo;
 
+			evt_fill_entry(tcx, nd_mmid, i, offset, ent);
 			switch (find_opc) {
 			default:
 				D_ASSERTF(0, "%d\n", find_opc);
 			case EVT_FIND_FIRST:
-				/* store the trace and return for "clip",
-				 * NB: this is not implemented yet.
+			case EVT_FIND_SAME:
+				/* store the trace and return for clip or
+				 * iteration.
+				 * NB: clip is not implemented yet.
 				 */
 				evt_tcx_set_trace(tcx, level, nd_mmid, i);
 				D_GOTO(out, rc = 0);
+
+			case EVT_FIND_ALL:
+				break;
 
 			case EVT_FIND_CAP:
 				/* store the intree rectangle and cap all
 				 * them together.
 				 */
 				ent->en_addr = rtmp;
-				break;
-
-			case EVT_FIND_ALL:
-				/* return the real data addresss as well */
-				addr = evt_ptr_payload(tcx, pref->pr_ptr_mmid,
-						       &ent->en_inob, NULL);
-				if (addr == NULL) { /* punched */
-					ent->en_addr = NULL;
-					ent->en_offset = 0;
-					break;
-				}
-
-				D_ASSERT(ent->en_inob != 0);
-				addr += ent->en_offset * ent->en_inob;
-				ent->en_addr	= addr;
-				ent->en_offset	= pref->pr_offset;
-
-				if (rect->rc_off_lo > rtmp->rc_off_lo) {
-					/* data offset within the extent mmid */
-					ent->en_offset += rect->rc_off_lo -
-							  rtmp->rc_off_lo;
-				}
 				break;
 			}
 		}
@@ -1813,6 +1716,59 @@ evt_find(daos_handle_t toh, struct evt_rect *rect,
 	D_EXIT;
  out:
 	return rc;
+}
+
+/** move the probing trace forward or backward */
+bool
+evt_move_trace(struct evt_context *tcx, bool forward)
+{
+	struct evt_trace	*trace;
+	struct evt_node		*nd;
+	TMMID(struct evt_node)	 nd_mmid;
+
+	if (evt_root_empty(tcx))
+		return false;
+
+	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	while (1) {
+		nd_mmid = trace->tr_node;
+		nd = evt_tmmid2ptr(tcx, nd_mmid);
+
+		/* already reach at the begin or end of this node */
+		if ((trace->tr_at == (nd->tn_nr - 1) && forward) ||
+		    (trace->tr_at == 0 && !forward)) {
+			if (evt_node_is_root(tcx, nd_mmid)) {
+				D_ASSERT(trace == tcx->tc_trace);
+				D_DEBUG(DB_TRACE, "End\n");
+				return false;
+			}
+			/* check its parent */
+			trace--;
+			continue;
+		} /* else: not yet */
+
+		if (forward)
+			trace->tr_at++;
+		else
+			trace->tr_at--;
+		break;
+	}
+
+	/* move to the first/last entry in the subtree */
+	while (trace < &tcx->tc_trace[tcx->tc_depth - 1]) {
+		TMMID(struct evt_node) tmp;
+
+		tmp = *evt_node_child_at(tcx, trace->tr_node, trace->tr_at);
+		nd = evt_tmmid2ptr(tcx, tmp);
+		D_ASSERTF(nd->tn_nr != 0, "%d\n", nd->tn_nr);
+
+		trace++;
+		trace->tr_at = forward ? 0 : nd->tn_nr - 1;
+		trace->tr_node = tmp;
+	}
+
+	D_EXIT;
+	return true;
 }
 
 /**

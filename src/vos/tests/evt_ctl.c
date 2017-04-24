@@ -263,6 +263,61 @@ ts_find_rect(char *args)
 	return rc;
 }
 
+static int
+ts_list_rect(void)
+{
+	daos_handle_t	ih;
+	int		i;
+	int		rc;
+
+	rc = evt_iter_prepare(ts_toh, 0, &ih);
+	if (rc != 0) {
+		D_PRINT("Failed to prepare iterator: %d\n", rc);
+		return -1;
+	}
+
+	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+	if (rc == -DER_NONEXIST)
+		D_GOTO(out, rc = 0);
+
+	if (rc != 0) {
+		D_PRINT("Failed to probe: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	for (i = 0;; i++) {
+		struct evt_entry ent;
+		daos_hash_out_t	 anchor;
+
+		rc = evt_iter_fetch(ih, &ent, &anchor);
+		if (rc == 0) {
+			D_PRINT("%d) "DF_RECT", val=%s\n",
+				i, DP_RECT(&ent.en_rect),
+				ent.en_addr ? (char *)ent.en_addr : "<NULL>");
+
+			if (i % 3 == 0)
+				rc = evt_iter_probe(ih, EVT_ITER_FIND,
+						    &ent.en_rect, NULL);
+			if (i % 3 == 1)
+				rc = evt_iter_probe(ih, EVT_ITER_FIND,
+						    NULL, &anchor);
+		}
+
+		if (rc == -DER_NONEXIST) {
+			D_PRINT("Found %d entries\n", i);
+			D_GOTO(out, rc = 0);
+		}
+
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		rc = evt_iter_next(ih);
+	}
+ out:
+	evt_iter_finish(ih);
+	return 0;
+}
+
 #define TS_VAL_CYCLE	4
 
 static int
@@ -374,6 +429,7 @@ static struct option ts_ops[] = {
 	{ "many_add",	required_argument,	NULL,	'm'	},
 	{ "find",	required_argument,	NULL,	'f'	},
 	{ "delete",	required_argument,	NULL,	'd'	},
+	{ "list",	no_argument,		NULL,	'l'	},
 	{ "debug",	required_argument,	NULL,	'b'	},
 	{ NULL,		0,			NULL,	0	},
 };
@@ -404,6 +460,9 @@ ts_cmd_run(char opc, char *args)
 		break;
 	case 'f':
 		rc = ts_find_rect(args);
+		break;
+	case 'l':
+		rc = ts_list_rect();
 		break;
 	case 'b':
 		rc = ts_tree_debug(args);
@@ -497,7 +556,7 @@ main(int argc, char **argv)
 	}
 
 	optind = 0;
-	while ((rc = getopt_long(argc, argv, "C:a:m:f:d:b:Doc",
+	while ((rc = getopt_long(argc, argv, "C:a:m:f:d:b:Docl",
 				 ts_ops, NULL)) != -1) {
 		rc = ts_cmd_run(rc, optarg);
 		if (rc != 0)

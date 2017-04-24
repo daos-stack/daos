@@ -198,7 +198,7 @@ struct evt_entry_list {
 #define evt_ent_list_for_each(ent, el)	\
 	daos_list_for_each_entry(ent, (&(el)->el_list), en_link)
 
-#define evt_ent_list_empty(ent)		daos_list_empty(&ent->en_link)
+#define evt_ent_list_empty(el)		daos_list_empty(&(el)->el_list)
 
 void evt_ent_list_init(struct evt_entry_list *ent_list);
 void evt_ent_list_fini(struct evt_entry_list *ent_list);
@@ -341,5 +341,73 @@ int evt_find(daos_handle_t toh, struct evt_rect *rect,
  * or all levels if \a debug_level is negative.
  */
 int evt_debug(daos_handle_t toh, int debug_level);
+
+enum {
+	/**
+	 * Use the embedded iterator of the open handle.
+	 * It can reduce memory consumption, but state of iterator can be
+	 * overwritten by other tree operation.
+	 */
+	EVT_ITER_EMBEDDED	= (1 << 0),
+};
+
+/**
+ * Initialise an iterator.
+ *
+ * \param toh		[IN]	Tree open handle
+ * \param options	[IN]	Options for the iterator.
+ *				EVT_ITER_EMBEDDED:
+ *				if this bit is set, then this function will
+ *				return the iterator embedded in the tree open
+ *				handle. It will reduce memory consumption,
+ *				but state of iterator could be overwritten
+ *				by any other tree operation.
+ *
+ * \param ih		[OUT]	Returned iterator handle.
+ */
+int evt_iter_prepare(daos_handle_t toh, unsigned int options,
+		     daos_handle_t *ih);
+/**
+ * Finalise iterator.
+ */
+int evt_iter_finish(daos_handle_t ih);
+
+enum evt_iter_opc {
+	EVT_ITER_FIRST,
+	EVT_ITER_FIND,
+};
+/**
+ * Based on the \a opc, this function can do various things:
+ * - set the cursor of the iterator to the first extent in the evtree.
+ * - find the provided extent or iteration anchor.
+ *
+ * This function must be called after evt_iter_prepare, it can be called
+ * for arbitrary times for the same iterator.
+ *
+ * \param opc	[IN]	Probe opcode, see evt_iter_opc for the details.
+ * \param rect	[IN]	The extent to probe, it will be ignored if opc is
+ *			EVT_PROBE_FIRST.
+ * \param anchor [IN]	The anchor to probe, it will be ignored if \a rect
+ *			is provided.
+ */
+int evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
+		   struct evt_rect *rect, daos_hash_out_t *anchor);
+
+/**
+ * Move the iterator cursor to the next extent in the evtree.
+ *
+ * \param ih	[IN]	Iterator handle.
+ */
+int evt_iter_next(daos_handle_t ih);
+
+/**
+ * Fetch the extent and its data address from the current iterator position.
+ *
+ * \param ih	[IN]	Iterator open handle.
+ * \param entry	[OUT]	The returned extent and its data address.
+ * \param anchor [OUT]	Returned hash anchor.
+ */
+int evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
+		   daos_hash_out_t *anchor);
 
 #endif /* __DAOS_EV_TREE_H__ */

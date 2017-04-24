@@ -177,7 +177,7 @@ ioreq_sgl_simple_set(struct ioreq *req, void **value,
 }
 
 static void
-ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
+ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size, bool lookup,
 		     uint64_t *idx, daos_epoch_t *epoch, int nr)
 {
 	daos_iod_t *iod = req->iod;
@@ -193,8 +193,9 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
 			iod[i].iod_recxs[0].rx_nr = 1;
 		}
 
-		/** XXX: to be fixed */
 		iod[i].iod_eprs[0].epr_lo = *epoch;
+		iod[i].iod_eprs[0].epr_hi = lookup ? *epoch : DAOS_EPOCH_MAX;
+
 		iod[i].iod_nr = 1;
 	}
 }
@@ -216,7 +217,7 @@ insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
 		ioreq_sgl_simple_set(req, val, size, nr);
 
 	/* set iod */
-	ioreq_iod_simple_set(req, size, idx, epoch, nr);
+	ioreq_iod_simple_set(req, size, false, idx, epoch, nr);
 
 	insert_internal(&req->dkey, nr, val == NULL ? NULL : req->sgl,
 			req->iod, *epoch, req);
@@ -280,7 +281,7 @@ lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
 	ioreq_sgl_simple_set(req, val, size, nr);
 
 	/* set iod */
-	ioreq_iod_simple_set(req, read_size, idx, epoch, nr);
+	ioreq_iod_simple_set(req, read_size, true, idx, epoch, nr);
 
 	lookup_internal(&req->dkey, nr, req->sgl, req->iod, *epoch, req);
 }

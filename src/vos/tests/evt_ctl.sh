@@ -1,6 +1,7 @@
 #!/bin/sh
 
-EVT_CTL="./install/bin/evt_ctl"
+DAOS_DIR=${DAOS_DIR:-$(cd $(dirname $0)/../../..; echo $PWD)}
+EVT_CTL=.$DAOS_DIR/build/src/vos/tests/evt_ctl
 
 $EVT_CTL -C o:4				\
 	-a "20-24@2:black"		\
