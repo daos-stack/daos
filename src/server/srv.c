@@ -515,6 +515,24 @@ struct dss_module_key daos_srv_modkey = {
 	.dmk_fini = dss_srv_tls_fini,
 };
 
+static struct dss_xstream *
+dss_xstream_get(int stream_id)
+{
+	struct dss_xstream *dx = NULL;
+	struct dss_xstream *tmp;
+
+	if (stream_id == -1)
+		return dss_get_module_info()->dmi_xstream;
+
+	daos_list_for_each_entry(tmp, &xstream_data.xd_list, dx_list) {
+		if (tmp->dx_idx == stream_id) {
+			dx = tmp;
+			break;
+		}
+	}
+	return dx;
+}
+
 /**
  * Create a ULT to execute \a func(\a arg). If \a ult is not NULL, the caller
  * is responsible for freeing the ULT handle with ABT_thread_free().
@@ -524,18 +542,18 @@ struct dss_module_key daos_srv_modkey = {
  * \param[out]	ult	ULT handle if not NULL
  */
 int
-dss_create_ult(void (*func)(void *), void *arg, ABT_thread *ult)
+dss_ult_create(void (*func)(void *), void *arg, int stream_id, ABT_thread *ult)
 {
-	ABT_xstream	es;
-	ABT_pool	pool;
-	int		rc;
+	struct dss_xstream	*dx;
+	int			rc;
 
-	/* TODO: Perhaps it is better to get the dss_xstream object directly? */
-	rc = ABT_xstream_self(&es);
-	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-	rc = ABT_xstream_get_main_pools(es, 1 /* max_pools */, &pool);
-	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
-	rc = ABT_thread_create(pool, func, arg, ABT_THREAD_ATTR_NULL, ult);
+	dx = dss_xstream_get(stream_id);
+	if (dx == NULL)
+		return -DER_NONEXIST;
+
+	rc = ABT_thread_create(dx->dx_pool, func, arg, ABT_THREAD_ATTR_NULL,
+			       ult);
+
 	return dss_abterr2der(rc);
 }
 
@@ -550,7 +568,7 @@ dss_create_ult(void (*func)(void *), void *arg, ABT_thread *ult)
  *			-DER_INVAL
  */
 int
-dss_create_ult_all(void (*func)(void *), void *arg)
+dss_ult_create_all(void (*func)(void *), void *arg)
 {
 	struct dss_xstream      *dx;
 	int			rc = 0;
@@ -573,25 +591,84 @@ dss_create_ult_all(void (*func)(void *), void *arg)
 /**
  * Collective operations among all server xstreams
  */
+struct dss_future_arg {
+	ABT_future	dfa_future;
+	int		(*dfa_func)(void *);
+	void		*dfa_arg;
+	int		dfa_status;
+};
+
+static void
+dss_ult_create_execute_cb(void *data)
+{
+	struct dss_future_arg	*arg = data;
+	int			rc;
+
+	rc = arg->dfa_func(arg->dfa_arg);
+	arg->dfa_status = rc;
+
+	ABT_future_set(arg->dfa_future, (void *)(intptr_t)rc);
+}
+
+/**
+ * Create a ULT and wait until it has been executed. Note: This is
+ * normally used when it needs to create a ULT on other xstream.
+ *
+ * \param[in]	func	function to execute
+ * \param[in]	arg	argument for \a func
+ * \param[in]	stream_id indicate which xtream the ULT is executed.
+ * \param[out]		error code.
+ */
+int
+dss_ult_create_execute(int (*func)(void *), void *arg, int stream_id)
+{
+	struct dss_future_arg	future_arg;
+	ABT_future		future;
+	int			rc;
+
+	rc = ABT_future_create(1, NULL, &future);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
+	future_arg.dfa_future = future;
+	future_arg.dfa_func = func;
+	future_arg.dfa_arg = arg;
+	future_arg.dfa_status = 0;
+	rc = dss_ult_create(dss_ult_create_execute_cb, &future_arg, stream_id,
+			    NULL);
+	if (rc)
+		D_GOTO(free, rc);
+
+	ABT_future_wait(future);
+free:
+	if (rc == 0)
+		rc = future_arg.dfa_status;
+	ABT_future_free(&future);
+	return rc;
+}
+
 struct collective_arg {
-	ABT_future     *ca_future;
-	int	       (*ca_func)(void *);
-	void	       *ca_arg;
-	void	       *ca_aggregator_args;
+	struct dss_future_arg		ca_future;
+	struct dss_coll_aggregator_args	*ca_aggregator_args;
 };
 
 static void
 collective_func(void *varg)
 {
 	struct collective_arg		*carg	= varg;
+	struct dss_future_arg		*f_arg = &carg->ca_future;
 	struct dss_coll_aggregator_args	*a_args	= carg->ca_aggregator_args;
-	int				 rc;
+	int				task_id;
+	int				rc;
 
 	/** Update just the rc value */
-	a_args->rc	     = carg->ca_func(carg->ca_arg);
+	task_id = dss_get_module_info()->dmi_tid + 1;
+	a_args[task_id].rc = f_arg->dfa_func(f_arg->dfa_arg);
 
-	rc = ABT_future_set(*(carg->ca_future), (void *)a_args);
-	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	rc = ABT_future_set(carg->ca_future.dfa_future,
+			    (void *)&a_args[task_id]);
+	if (rc != ABT_SUCCESS)
+		D_ERROR("future set failure %d\n", rc);
 }
 
 /* Reduce the return codes into the first element. */
@@ -629,18 +706,14 @@ collective_reduce(void **arg)
  * \param[in] future		future to use
  * \return			number of failed xstreams or error code
  */
-
 int
 dss_collective_reduce(int (*func)(void *), void *f_args,
 		      struct dss_coll_aggregator_args *aggregator_args)
 {
-	struct collective_arg		*carg;
+	struct collective_arg		carg;
 	struct dss_xstream		*dx;
 	ABT_future			future;
 	int				rc;
-	int				taskid;
-
-	D_ALLOC(carg, (dss_nxstreams + 1) * sizeof(struct collective_arg));
 
 	/*
 	 * Use the first, extra element of the value array to store the number
@@ -651,22 +724,17 @@ dss_collective_reduce(int (*func)(void *), void *f_args,
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
-	for (taskid = 0; taskid < dss_nxstreams + 1; taskid++) {
-		carg[taskid].ca_future	= &future;
-		carg[taskid].ca_func	= func;
-		carg[taskid].ca_arg	= f_args;
-	}
+	carg.ca_future.dfa_future = future;
+	carg.ca_future.dfa_func	= func;
+	carg.ca_future.dfa_arg	= f_args;
+	carg.ca_future.dfa_status = 0;
+	carg.ca_aggregator_args = aggregator_args;
 
-	aggregator_args[0].rc = 0; /** aggregate all failed here */
 	rc = ABT_future_set(future, (void *)&aggregator_args[0]);
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 
-	taskid = 1;
 	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
-		carg[taskid].ca_aggregator_args = &aggregator_args[taskid];
-
-		rc = ABT_task_create(dx->dx_pool, collective_func,
-				     &carg[taskid], NULL);
+		rc = ABT_task_create(dx->dx_pool, collective_func, &carg, NULL);
 
 		if (rc != ABT_SUCCESS) {
 			aggregator_args[0].rc = dss_abterr2der(rc);
@@ -674,12 +742,10 @@ dss_collective_reduce(int (*func)(void *), void *f_args,
 					    (void *)&aggregator_args[0]);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
-		taskid++;
 	}
 
 	ABT_future_wait(future);
 	ABT_future_free(&future);
-	D_FREE(carg, (dss_nxstreams + 1) * sizeof(struct collective_arg));
 
 	return aggregator_args[0].rc;
 }
@@ -707,38 +773,6 @@ dss_collective(int (*func)(void *), void *arg)
 	       sizeof(struct dss_coll_aggregator_args));
 
 	return rc;
-}
-
-/**
- * Create a ABT thread in current xestream.
- */
-int
-dss_thread_create(void (*func)(void *), void *arg, unsigned int idx)
-{
-	struct dss_xstream	*dx = NULL;
-	int			rc;
-
-	if (idx != (unsigned int)-1) {
-		struct dss_xstream *tmp;
-
-		daos_list_for_each_entry(tmp, &xstream_data.xd_list, dx_list) {
-			if (tmp->dx_idx == idx) {
-				dx = tmp;
-				break;
-			}
-		}
-		if (dx == NULL)
-			return -DER_NONEXIST;
-	} else {
-		dx = dss_get_module_info()->dmi_xstream;
-	}
-
-	rc = ABT_thread_create(dx->dx_pool, func, arg,
-			       ABT_THREAD_ATTR_NULL, NULL);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	return 0;
 }
 
 struct async_result {

@@ -185,8 +185,11 @@ struct dss_module {
 	struct daos_rpc_handler	 *sm_handlers;
 };
 
-int dss_create_ult(void (*func)(void *), void *arg, ABT_thread *ult);
-int dss_create_ult_all(void (*func)(void *), void *arg);
+int dss_ult_create(void (*func)(void *), void *arg,
+		   int stream_id, ABT_thread *ult);
+int dss_ult_create_all(void (*func)(void *), void *arg);
+int dss_ult_create_execute(int (*func)(void *), void *arg,
+			   int stream_id);
 
 /* Pack return codes with additional argument to reduce */
 struct dss_coll_aggregator_args {
@@ -203,7 +206,6 @@ dss_collective_reduce(int (*func)(void *), void *f_args,
 		      struct dss_coll_aggregator_args *aggregator_args);
 
 int dss_collective(int (*func)(void *), void *arg);
-int dss_thread_create(void (*func)(void *), void *arg, unsigned int idx);
 int dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size);
 unsigned int dss_get_threads_number(void);
 

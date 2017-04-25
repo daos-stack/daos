@@ -500,6 +500,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (orw->orw_map_ver < map_version)
 		D_GOTO(out, rc = -DER_STALE);
 
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" tag %d\n", opc_get(rpc->cr_opc),
+		DP_UOID(orw->orw_oid), dss_get_module_info()->dmi_tid);
 	/* Inline update/fetch */
 	if (orw->orw_bulks.da_arrays == NULL && orw->orw_bulks.da_count == 0) {
 		rc = ds_obj_rw_inline(rpc, cont_hdl);
@@ -560,8 +562,7 @@ out:
 }
 
 static void
-ds_eu_complete(crt_rpc_t *rpc, daos_sg_list_t *sgl, int status,
-	       uint32_t map_version)
+ds_eu_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 {
 	struct obj_key_enum_out *oeo;
 	struct obj_key_enum_in *oei;
@@ -578,188 +579,178 @@ ds_eu_complete(crt_rpc_t *rpc, daos_sg_list_t *sgl, int status,
 	oeo = crt_reply_get(rpc);
 	D_ASSERT(oeo != NULL);
 
-	if (oeo->oeo_kds.da_arrays != NULL) {
-		D_ASSERT(oei->oei_nr >= oeo->oeo_kds.da_count);
+	if (oeo->oeo_kds.da_arrays != NULL)
 		D_FREE(oeo->oeo_kds.da_arrays,
 		       oei->oei_nr * sizeof(daos_key_desc_t));
-	}
 
-	if (oeo->oeo_eprs.da_arrays != NULL) {
-		D_ASSERT(oei->oei_nr >= oeo->oeo_eprs.da_count);
+	if (oeo->oeo_eprs.da_arrays != NULL)
 		D_FREE(oeo->oeo_eprs.da_arrays,
 		       oei->oei_nr * sizeof(daos_epoch_range_t));
-	}
 
-	if (oeo->oeo_recxs.da_arrays != NULL) {
-		D_ASSERT(oei->oei_nr >= oeo->oeo_recxs.da_count);
+	if (oeo->oeo_recxs.da_arrays != NULL)
 		D_FREE(oeo->oeo_recxs.da_arrays,
 		       oei->oei_nr * sizeof(daos_recx_t));
-	}
 
-	if (oeo->oeo_cookies.da_arrays != NULL) {
-		D_ASSERT(oei->oei_nr >= oeo->oeo_cookies.da_count);
+	if (oeo->oeo_cookies.da_arrays != NULL)
 		D_FREE(oeo->oeo_cookies.da_arrays,
 		       oei->oei_nr * sizeof(uuid_t));
+
+	if (oeo->oeo_sgl.sg_iovs != NULL) {
+		ds_sgls_free(&oeo->oeo_sgl, 1);
+		oeo->oeo_sgl.sg_iovs = NULL;
 	}
-
-	if (sgl != NULL)
-		ds_sgls_free(sgl, 1);
-
-	oeo->oeo_sgl.sg_iovs = NULL;
 }
 
 int
-fill_key(vos_iter_entry_t *key_ent, daos_key_desc_t *kds,
-	 int *kds_idx, daos_sg_list_t *sgl, int *sgl_idx)
+fill_key(vos_iter_entry_t *key_ent, struct obj_key_enum_in *oei,
+	 struct obj_key_enum_out *oeo, unsigned int *kds_idx,
+	 unsigned int *iovs_idx)
 {
-	daos_iov_t	*iovs = sgl->sg_iovs;
-	int		iovs_nr = sgl->sg_nr.num;
-	int		iovs_idx = *sgl_idx;
-	unsigned int	key_idx = *kds_idx;
-	int		rc = 0;
+	daos_iov_t	*iovs = oeo->oeo_sgl.sg_iovs;
+	daos_key_desc_t	*kds = oeo->oeo_kds.da_arrays;
+	unsigned int	iovs_nr = oeo->oeo_sgl.sg_nr.num;
+	unsigned int	kds_nr = oei->oei_nr;
 
-	while (iovs_idx < iovs_nr) {
-		if (iovs[iovs_idx].iov_len + key_ent->ie_key.iov_len >=
-			    iovs[iovs_idx].iov_buf_len) {
-			iovs_idx++;
+	while (*iovs_idx < iovs_nr) {
+		if (iovs[*iovs_idx].iov_len + key_ent->ie_key.iov_len >=
+			    iovs[*iovs_idx].iov_buf_len) {
+			(*iovs_idx)++;
 			continue;
 		}
 
-		kds[key_idx].kd_key_len = key_ent->ie_key.iov_len;
-		kds[key_idx].kd_csum_len = 0;
-		key_idx++;
+		D_ASSERT(*kds_idx < kds_nr);
+		kds[*kds_idx].kd_key_len = key_ent->ie_key.iov_len;
+		kds[*kds_idx].kd_csum_len = 0;
+		oeo->oeo_kds.da_count++;
+		(*kds_idx)++;
 
-		memcpy(iovs[iovs_idx].iov_buf + iovs[iovs_idx].iov_len,
+		memcpy(iovs[*iovs_idx].iov_buf + iovs[*iovs_idx].iov_len,
 		       key_ent->ie_key.iov_buf, key_ent->ie_key.iov_len);
-		iovs[iovs_idx].iov_len += key_ent->ie_key.iov_len;
+		iovs[*iovs_idx].iov_len += key_ent->ie_key.iov_len;
+
+		if (oeo->oeo_sgl.sg_nr.num_out < *iovs_idx + 1)
+			oeo->oeo_sgl.sg_nr.num_out = *iovs_idx + 1;
 
 		break;
 	}
 
-	if (iovs_idx >= iovs_nr)
-		rc = 1;
+	/* if it reaches the end of iovs and kds, then return 1 to
+	 * break the loop
+	 */
+	if (*iovs_idx >= iovs_nr || *kds_idx >= kds_nr)
+		return 1;
 
-	*kds_idx = key_idx;
-	*sgl_idx = iovs_idx;
-
-	return rc;
+	return 0;
 }
 
 int
-fill_rec(vos_iter_entry_t *key_ent, struct obj_key_enum_out *oeo,
-	 int *idx)
+fill_rec(vos_iter_entry_t *key_ent, struct obj_key_enum_in *oei,
+	 struct obj_key_enum_out *oeo, unsigned int *idx)
 {
 	daos_epoch_range_t *eprs = oeo->oeo_eprs.da_arrays;
 	uuid_t		   *cookies = oeo->oeo_cookies.da_arrays;
 	daos_recx_t	   *recxs = oeo->oeo_recxs.da_arrays;
-	int		   rc = 0;
 
-	D_ASSERT(*idx < oeo->oeo_eprs.da_count);
+	D_ASSERT(*idx < oei->oei_nr);
 	eprs[*idx] = key_ent->ie_epr;
 	uuid_copy(cookies[*idx], key_ent->ie_cookie);
 	recxs[*idx] = key_ent->ie_recx;
 	if (oeo->oeo_size == 0)
 		oeo->oeo_size = key_ent->ie_rsize;
 	else if (oeo->oeo_size != key_ent->ie_rsize)
-		rc = -DER_INVAL;
+		return -DER_INVAL;
 
+	oeo->oeo_eprs.da_count++;
+	oeo->oeo_cookies.da_count++;
+	oeo->oeo_recxs.da_count++;
 	(*idx)++;
 
-	return rc;
+	if (*idx >= oei->oei_nr)
+		return 1;
+
+	return 0;
 }
 
-int
-ds_obj_enum_handler(crt_rpc_t *rpc)
+struct ds_iter_arg {
+	struct obj_key_enum_in *oei;
+	struct obj_key_enum_out *oeo;
+	unsigned int	iovs_idx;
+	unsigned int	map_version;
+	unsigned int	key_nr;
+	int		status;
+};
+
+struct ds_task_arg {
+	unsigned int	opc;
+	union {
+		struct ds_iter_arg iter_arg;
+	} u;
+};
+
+static int
+ds_iter_single_vos(void *data)
 {
-	struct obj_key_enum_in		*oei;
-	struct obj_key_enum_out		*oeo;
-	struct ds_cont_hdl		*cont_hdl;
-	int				iovs_idx;
-	vos_iter_entry_t		key_ent;
-	vos_iter_param_t		param;
-	daos_key_desc_t			*kds;
-	daos_handle_t			ih;
-	daos_sg_list_t			sgl;
-	uint32_t			map_version = 0;
-	int				rc = 0;
-	int				key_nr = 0;
-	int				type;
-
-	memset(&sgl, 0, sizeof(sgl));
-
-	if (opc_get(rpc->cr_opc) == DAOS_OBJ_AKEY_RPC_ENUMERATE)
-		type = VOS_ITER_AKEY;
-	else if (opc_get(rpc->cr_opc) == DAOS_OBJ_DKEY_RPC_ENUMERATE)
-		type = VOS_ITER_DKEY;
-	else
-		type = VOS_ITER_RECX;
-	oei = crt_req_get(rpc);
-	D_ASSERT(oei != NULL);
+	struct ds_task_arg	*arg = data;
+	struct ds_iter_arg	*iter_arg = &arg->u.iter_arg;
+	struct obj_key_enum_in	*oei = iter_arg->oei;
+	struct obj_key_enum_out	*oeo = iter_arg->oeo;
+	struct ds_cont_hdl	*cont_hdl;
+	vos_iter_entry_t	key_ent;
+	vos_iter_param_t	param;
+	daos_handle_t		ih;
+	int			type;
+	int			rc;
 
 	rc = ds_check_container(oei->oei_co_hdl, oei->oei_co_uuid,
 				&cont_hdl);
 	if (rc)
-		D_GOTO(out, rc);
+		return rc;
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
-	map_version = cont_hdl->sch_pool->spc_map_version;
-	if (oei->oei_map_ver < map_version)
-		D_GOTO(out_tch, rc = -DER_STALE);
+	if (iter_arg->map_version == 0)
+		iter_arg->map_version = cont_hdl->sch_pool->spc_map_version;
 
-	oeo = crt_reply_get(rpc);
-	D_ASSERT(oeo != NULL);
+	if (oei->oei_map_ver < iter_arg->map_version) {
+		D_DEBUG(DB_TRACE, "oei map_version %d map_ver %d\n",
+			oei->oei_map_ver, iter_arg->map_version);
+		D_GOTO(out_cont_hdl, rc = -DER_STALE);
+	}
 
+	if (arg->opc == DAOS_OBJ_AKEY_RPC_ENUMERATE) {
+		type = VOS_ITER_AKEY;
+	} else if (arg->opc == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
+		type = VOS_ITER_DKEY;
+	} else {
+		if (oei->oei_rec_type == DAOS_IOD_ARRAY)
+			type = VOS_ITER_RECX;
+		else
+			type = VOS_ITER_SINGLE;
+	}
+
+	/* prepare iterate parameters */
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl	= cont_hdl->sch_cont->sc_hdl;
 	param.ip_oid	= oei->oei_oid;
 	param.ip_epr.epr_lo = oei->oei_epoch;
-	if (type == VOS_ITER_RECX) {
+	if (type == VOS_ITER_RECX || type == VOS_ITER_SINGLE) {
 		if (oei->oei_dkey.iov_len == 0 ||
 		    oei->oei_akey.iov_len == 0)
-			D_GOTO(out_tch, rc = -DER_PROTO);
+			D_GOTO(out_cont_hdl, rc = -DER_PROTO);
 		param.ip_dkey = oei->oei_dkey;
 		param.ip_akey = oei->oei_akey;
-
-		/* prepare eprs */
-		oeo->oeo_eprs.da_count = oei->oei_nr;
-		D_ALLOC(oeo->oeo_eprs.da_arrays,
-			oei->oei_nr * sizeof(daos_epoch_range_t));
-		if (oeo->oeo_eprs.da_arrays == NULL)
-			D_GOTO(out_tch, rc = -DER_NOMEM);
-
-		oeo->oeo_recxs.da_count = oei->oei_nr;
-		D_ALLOC(oeo->oeo_recxs.da_arrays,
-			oei->oei_nr * sizeof(daos_recx_t));
-		if (oeo->oeo_recxs.da_arrays == NULL)
-			D_GOTO(out_tch, rc = -DER_NOMEM);
-
-		oeo->oeo_cookies.da_count = oei->oei_nr;
-		D_ALLOC(oeo->oeo_cookies.da_arrays,
-			oei->oei_nr * sizeof(uuid_t));
-		if (oeo->oeo_cookies.da_arrays == NULL)
-			D_GOTO(out_tch, rc = -DER_NOMEM);
 	} else {
-		/* prepare buffer for enumerate */
-		rc = ds_sgls_prep(&sgl, &oei->oei_sgl, 1);
-		if (rc != 0)
-			D_GOTO(out_tch, rc);
-
 		if (type == VOS_ITER_AKEY) {
 			if (oei->oei_dkey.iov_len == 0)
-				D_GOTO(out_tch, rc = -DER_PROTO);
+				D_GOTO(out_cont_hdl, rc = -DER_PROTO);
 			param.ip_dkey = oei->oei_dkey;
 		} else {
 			if (oei->oei_akey.iov_len > 0)
 				param.ip_akey = oei->oei_akey;
 		}
-
-		/* Prepare key desciptor buffer */
-		oeo->oeo_kds.da_count = oei->oei_nr;
-		D_ALLOC(oeo->oeo_kds.da_arrays,
-			oei->oei_nr * sizeof(daos_key_desc_t));
-		if (oeo->oeo_kds.da_arrays == NULL)
-			D_GOTO(out_tch, rc = -DER_NOMEM);
 	}
+
+	D_DEBUG(DB_TRACE, ""DF_UOID" iterate type %d tag %d\n",
+		DP_UOID(oei->oei_oid), type, dss_get_module_info()->dmi_tid);
 
 	rc = vos_iter_prepare(type, &param, &ih);
 	if (rc != 0) {
@@ -769,38 +760,29 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		} else {
 			D_ERROR("Failed to prepare d-key iterator: %d\n", rc);
 		}
-		D_GOTO(out_empty, rc);
+		D_GOTO(out_cont_hdl, rc);
 	}
 
 	rc = vos_iter_probe(ih, &oei->oei_anchor);
 	if (rc != 0) {
-		if (rc == -DER_NONEXIST) {
+		if (rc == -DER_NONEXIST || rc == -DER_AGAIN) {
 			daos_hash_set_eof(&oeo->oeo_anchor);
 			rc = 0;
 		}
-		vos_iter_finish(ih);
-		D_GOTO(out_empty, rc);
+		D_GOTO(out_iter_fini, rc);
 	}
 
-	oeo->oeo_kds.da_count = oei->oei_nr;
-	D_ALLOC(oeo->oeo_kds.da_arrays,
-		oei->oei_nr * sizeof(daos_key_desc_t));
-	if (oeo->oeo_kds.da_arrays == NULL)
-		D_GOTO(out_tch, rc = -DER_NOMEM);
-
-	iovs_idx = 0;
-	key_nr = 0;
-	kds = oeo->oeo_kds.da_arrays;
-	while (key_nr < oei->oei_nr) {
+	while (iter_arg->key_nr < oei->oei_nr) {
 		rc = vos_iter_fetch(ih, &key_ent, &oeo->oeo_anchor);
 		if (rc != 0)
 			break;
 
 		/* fill the key to iov if there are enough space */
 		if (type == VOS_ITER_AKEY || type == VOS_ITER_DKEY)
-			rc = fill_key(&key_ent, kds, &key_nr, &sgl, &iovs_idx);
+			rc = fill_key(&key_ent, oei, oeo, &iter_arg->key_nr,
+				      &iter_arg->iovs_idx);
 		else
-			rc = fill_rec(&key_ent, oeo, &key_nr);
+			rc = fill_rec(&key_ent, oei, oeo, &iter_arg->key_nr);
 
 		if (rc != 0) {
 			if (rc == 1)
@@ -818,44 +800,124 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		rc = 0;
 	}
 
+out_iter_fini:
 	vos_iter_finish(ih);
-	if (rc != 0) {
-		D_ERROR("Failed to fetch key: %d\n", rc);
-		D_GOTO(out_tch, rc);
+out_cont_hdl:
+	ds_cont_hdl_put(cont_hdl);
+	return rc;
+}
+
+int
+ds_obj_enum_handler(crt_rpc_t *rpc)
+{
+	struct ds_task_arg	task_arg;
+	struct obj_key_enum_in	*oei;
+	struct obj_key_enum_out	*oeo;
+	int			rc = 0;
+	int			tag;
+
+	memset(&task_arg, 0, sizeof(task_arg));
+	oei = crt_req_get(rpc);
+	D_ASSERT(oei != NULL);
+	oeo = crt_reply_get(rpc);
+	D_ASSERT(oeo != NULL);
+	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RECX_RPC_ENUMERATE) {
+		if (oei->oei_dkey.iov_len == 0 ||
+		    oei->oei_akey.iov_len == 0)
+			D_GOTO(out, rc = -DER_PROTO);
+
+		oeo->oeo_eprs.da_count = 0;
+		D_ALLOC(oeo->oeo_eprs.da_arrays,
+			oei->oei_nr * sizeof(daos_epoch_range_t));
+		if (oeo->oeo_eprs.da_arrays == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		oeo->oeo_recxs.da_count = 0;
+		D_ALLOC(oeo->oeo_recxs.da_arrays,
+			oei->oei_nr * sizeof(daos_recx_t));
+		if (oeo->oeo_recxs.da_arrays == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		oeo->oeo_cookies.da_count = 0;
+		D_ALLOC(oeo->oeo_cookies.da_arrays,
+			oei->oei_nr * sizeof(uuid_t));
+		if (oeo->oeo_cookies.da_arrays == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	} else {
+		/* prepare buffer for enumerate */
+		rc = ds_sgls_prep(&oeo->oeo_sgl, &oei->oei_sgl, 1);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		/* Prepare key desciptor buffer */
+		oeo->oeo_kds.da_count = 0;
+		D_ALLOC(oeo->oeo_kds.da_arrays,
+			oei->oei_nr * sizeof(daos_key_desc_t));
+		if (oeo->oeo_kds.da_arrays == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
+	task_arg.opc = opc_get(rpc->cr_opc);
+	task_arg.u.iter_arg.oei = crt_req_get(rpc);
+	task_arg.u.iter_arg.oeo = crt_reply_get(rpc);
+	task_arg.u.iter_arg.iovs_idx = 0;
+	task_arg.u.iter_arg.key_nr = 0;
+	task_arg.u.iter_arg.status = 0;
+	task_arg.u.iter_arg.map_version = 0;
+
+	/* keep trying until the key_buffer is fully filled or
+	 * reaching the end of the stream
+	 */
+	tag = dss_get_module_info()->dmi_tid;
+
+	while (task_arg.u.iter_arg.key_nr < oei->oei_nr &&
+	       tag < dss_get_threads_number()) {
+		if (tag == dss_get_module_info()->dmi_tid ||
+		    opc_get(rpc->cr_opc) != DAOS_OBJ_DKEY_RPC_ENUMERATE)
+			rc = ds_iter_single_vos(&task_arg);
+		else
+			rc = dss_ult_create_execute(ds_iter_single_vos,
+						    &task_arg, tag);
+
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		/* reset hash if needed. Note: Only dkey iteration might
+		 * go multiple tags.
+		 */
+		if (daos_hash_is_eof(&oeo->oeo_anchor)) {
+			if (opc_get(rpc->cr_opc) ==
+			    DAOS_OBJ_DKEY_RPC_ENUMERATE &&
+			    tag < dss_get_threads_number() - 1) {
+				tag++;
+				enum_anchor_reset_hkey(&oeo->oeo_anchor);
+				enum_anchor_reset_hkey(&oei->oei_anchor);
+			} else {
+				break;
+			}
+		}
+	}
+
+	enum_anchor_set_tag(&oeo->oeo_anchor, tag);
 	if (oei->oei_bulk != NULL) {
-		daos_sg_list_t *sgls = &sgl;
+		daos_sg_list_t *sgl = &oeo->oeo_sgl;
 
 		rc = ds_bulk_transfer(rpc, CRT_BULK_PUT, &oei->oei_bulk,
-				      DAOS_HDL_INVAL, &sgls, 1);
-		if (rc != 0)
-			D_GOTO(out_tch, rc);
+				      DAOS_HDL_INVAL, &sgl, 1);
 
+		/* If the keys will be replied by bulk, then let's empty
+		 * the sgl in the reply to avoid confusing
+		 */
+		ds_sgls_free(sgl, 1);
 		oeo->oeo_sgl.sg_iovs = NULL;
 		oeo->oeo_sgl.sg_nr.num = 0;
 		oeo->oeo_sgl.sg_nr.num_out = 0;
-	} else if (sgl.sg_nr.num > 0) {
-		if (iovs_idx < sgl.sg_nr.num &&
-		    sgl.sg_iovs[iovs_idx].iov_len != 0)
-			iovs_idx++;
-		oeo->oeo_sgl = sgl;
-		oeo->oeo_sgl.sg_nr.num_out = iovs_idx;
 	}
 
-out_empty:
-	if (type == VOS_ITER_RECX) {
-		oeo->oeo_eprs.da_count = key_nr;
-		oeo->oeo_cookies.da_count = key_nr;
-		oeo->oeo_recxs.da_count = key_nr;
-		if (key_nr > 0)
-			D_ASSERT(oeo->oeo_size > 0);
-	} else {
-		oeo->oeo_kds.da_count = key_nr;
-	}
-out_tch:
-	ds_cont_hdl_put(cont_hdl);
 out:
-	ds_eu_complete(rpc, &sgl, rc, map_version);
+	if (rc == 0)
+		rc = task_arg.u.iter_arg.status;
+
+	ds_eu_complete(rpc, rc, task_arg.u.iter_arg.map_version);
 	return rc;
 }

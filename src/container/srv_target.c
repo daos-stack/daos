@@ -1022,7 +1022,7 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
 	memcpy(&rpc_in, in, sizeof(*in));
-	rc = dss_create_ult_all(cont_epoch_aggregate_one, &rpc_in);
+	rc = dss_ult_create_all(cont_epoch_aggregate_one, &rpc_in);
 out:
 	out->tao_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",

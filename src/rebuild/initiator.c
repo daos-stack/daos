@@ -375,7 +375,7 @@ rebuild_dkey(daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_TRACE, "start rebuild dkey %.*s tag %d rebuilding %p/%d\n",
 		(int)arg->dkey.iov_len, (char *)arg->dkey.iov_buf, tgt,
 		&tls->rebuild_building[tgt], tls->rebuild_building[tgt]);
-	rc = dss_thread_create(rebuild_dkey_thread, arg, tgt);
+	rc = dss_ult_create(rebuild_dkey_thread, arg, tgt, NULL);
 	if (rc) {
 		tls->rebuild_building[tgt]--;
 		D_GOTO(free, rc);
@@ -639,7 +639,7 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 		D_ASSERT(tls->rebuild_building != NULL);
 		tls->rebuild_building[0]++;
 		tls->rebuild_task_init = 1;
-		rc = dss_thread_create(rebuild_iterate_object, arg, -1);
+		rc = dss_ult_create(rebuild_iterate_object, arg, -1, NULL);
 		if (rc) {
 			tls->rebuild_task_init = 0;
 			tls->rebuild_building[0]--;

@@ -254,8 +254,11 @@ dc_rw_cb(struct daos_task *task, void *arg)
 	}
 
 	rc = obj_reply_get_status(rw_args->rpc);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("rpc %p RPC %d failed: %d\n",
+			rw_args->rpc, opc_get(rw_args->rpc->cr_opc), rc);
 		D_GOTO(out, rc);
+	}
 
 	if (opc_get(rw_args->rpc->cr_opc) == DAOS_OBJ_RPC_FETCH) {
 		struct obj_rw_out *orwo;
@@ -488,6 +491,10 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	tgt_ep.ep_grp = pool->dp_group;
 	tgt_ep.ep_rank = dobj->do_rank;
 	tgt_ep.ep_tag = obj_shard_dkey2tag(dobj, dkey);
+
+	D_DEBUG(DB_TRACE, "%.*s rank %d tag %d\n",
+		(int)dkey->iov_len, (char *)dkey->iov_buf,
+		tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &req);
 	if (rc != 0) {
 		obj_shard_decref(dobj);
@@ -678,15 +685,10 @@ dc_enumerate_cb(struct daos_task *task, void *arg)
 			       oeo->oeo_kds.da_count);
 	}
 
+	/* Update hkey hash and tag */
 	enum_anchor_copy_hkey(enum_args->eaa_anchor, &oeo->oeo_anchor);
-	if (daos_hash_is_eof(&oeo->oeo_anchor) &&
-	    opc_get(enum_args->rpc->cr_opc) == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
-		tgt_tag = enum_anchor_get_tag(enum_args->eaa_anchor);
-		if (tgt_tag < enum_args->eaa_obj->do_part_nr - 1) {
-			enum_anchor_reset_hkey(enum_args->eaa_anchor);
-			enum_anchor_set_tag(enum_args->eaa_anchor, ++tgt_tag);
-		}
-	}
+	tgt_tag = enum_anchor_get_tag(&oeo->oeo_anchor);
+	enum_anchor_set_tag(enum_args->eaa_anchor, tgt_tag);
 
 	if (oeo->oeo_sgl.sg_nr.num > 0 && oeo->oeo_sgl.sg_iovs != NULL)
 		rc = dc_obj_shard_sgl_copy(enum_args->eaa_sgl, 1, &oeo->oeo_sgl,
@@ -748,6 +750,9 @@ dc_obj_shard_list_internal(daos_handle_t oh, enum obj_rpc_opc opc,
 		D_ASSERT(dkey != NULL);
 		tgt_ep.ep_tag = obj_shard_dkey2tag(dobj, dkey);
 	}
+
+	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" rank %d tag %d\n",
+		opc, DP_UOID(dobj->do_id), tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &req);
 	if (rc != 0)

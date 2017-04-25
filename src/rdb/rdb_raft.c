@@ -776,13 +776,13 @@ rdb_raft_start(struct rdb *db, const daos_rank_list_t *replicas)
 	raft_set_election_timeout(db->d_raft, election_timeout);
 	raft_set_request_timeout(db->d_raft, request_timeout);
 
-	rc = dss_create_ult(rdb_applyd, db, &db->d_applyd);
+	rc = dss_ult_create(rdb_applyd, db, -1, &db->d_applyd);
 	if (rc != 0)
 		D_GOTO(err_nodes, rc);
-	rc = dss_create_ult(rdb_recvd, db, &db->d_recvd);
+	rc = dss_ult_create(rdb_recvd, db, -1, &db->d_recvd);
 	if (rc != 0)
 		D_GOTO(err_applyd, rc);
-	rc = dss_create_ult(rdb_timerd, db, &db->d_timerd);
+	rc = dss_ult_create(rdb_timerd, db, -1, &db->d_timerd);
 	if (rc != 0)
 		D_GOTO(err_recvd, rc);
 

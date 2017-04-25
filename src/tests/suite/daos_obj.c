@@ -715,7 +715,7 @@ enumerate_simple(void **state)
 		enumerate_akey(0, "d_key", &number, kds, &hash_out,
 			       buf, ENUM_DESC_BUF, &req);
 		if (number == 0)
-			continue; /* loop should break for EOF */
+			break; /* loop should break for EOF */
 
 		key_nr += number;
 		for (ptr = buf, i = 0; i < number; i++) {
@@ -746,7 +746,7 @@ enumerate_simple(void **state)
 		enumerate_rec(0, "d_key", "a_rec", &size,
 			      &number, recxs, eprs, &hash_out, true, &req);
 		if (number == 0)
-			continue; /* loop should break for EOF */
+			break; /* loop should break for EOF */
 
 		key_nr += number;
 		for (i = 0; i < number; i++) {
