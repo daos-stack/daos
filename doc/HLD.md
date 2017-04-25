@@ -16,7 +16,7 @@ This high-level design document is organized as follows:
    - Pool Service
    - Container Service
    - <a href="../src/object/key_array_object.md">Key Array Object</a>
-   - POSIX Emulation
+   - <a href="../src/addons/posix.md">POSIX Emulation
 
 ## Terminology
 
