@@ -23,7 +23,7 @@
 /**
  * This file is part of daos
  *
- * src/include/daos/daos_btree.h
+ * src/include/daos/btree.h
  */
 
 #ifndef __DAOS_BTREE_H__

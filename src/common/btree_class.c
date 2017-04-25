@@ -1050,3 +1050,317 @@ dbtree_ec_delete(daos_handle_t tree, uint64_t epoch)
 
 	return rc;
 }
+
+/*
+ * DBTREE_CLASS_KV
+ */
+
+struct kv_rec {
+	umem_id_t	kr_value;
+	uint64_t	kr_value_len;	/* length of value */
+	uint64_t	kr_value_cap;	/* capacity of value buffer */
+	uint64_t	kr_key_len;	/* length of key */
+	uint8_t		kr_key[];
+};
+
+static void
+kv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
+{
+	uint64_t *hash = hkey;
+
+	D_ASSERTF(key->iov_len > 0, DF_U64" > 0\n", key->iov_len);
+	D_ASSERTF(key->iov_len <= key->iov_buf_len, DF_U64" <= "DF_U64"\n",
+		  key->iov_len, key->iov_buf_len);
+	*hash = daos_hash_murmur64(key->iov_buf, key->iov_len, 609815U);
+}
+
+static int
+kv_hkey_size(struct btr_instance *tins)
+{
+	return sizeof(uint64_t);
+}
+
+static int
+kv_key_cmp(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key)
+{
+	struct kv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	int		rc;
+
+	rc = memcmp(r->kr_key, key->iov_buf, min(r->kr_key_len, key->iov_len));
+	if (rc == 0)
+		rc = r->kr_key_len - key->iov_len;
+	return rc;
+}
+
+static int
+kv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
+	     struct btr_record *rec)
+{
+	struct kv_rec  *r;
+	umem_id_t	rid;
+	void	       *v;
+	int		rc;
+
+	if (key->iov_len == 0 || key->iov_buf_len < key->iov_len ||
+	    val->iov_buf_len < val->iov_len)
+		D_GOTO(err, rc = -DER_INVAL);
+
+	rid = umem_zalloc(&tins->ti_umm, sizeof(*r) + key->iov_len);
+	if (UMMID_IS_NULL(rid))
+		D_GOTO(err, rc = -DER_NOMEM);
+	r = umem_id2ptr(&tins->ti_umm, rid);
+
+	r->kr_value_len = val->iov_len;
+	r->kr_value_cap = r->kr_value_len;
+	r->kr_value = umem_alloc(&tins->ti_umm, r->kr_value_cap);
+	if (UMMID_IS_NULL(r->kr_value))
+		D_GOTO(err_r, rc = -DER_NOMEM);
+	v = umem_id2ptr(&tins->ti_umm, r->kr_value);
+	memcpy(v, val->iov_buf, r->kr_value_len);
+
+	r->kr_key_len = key->iov_len;
+	memcpy(r->kr_key, key->iov_buf, r->kr_key_len);
+
+	rec->rec_mmid = rid;
+	return 0;
+
+err_r:
+	umem_free(&tins->ti_umm, rid);
+err:
+	return rc;
+}
+
+static int
+kv_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+{
+	struct kv_rec *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+
+	umem_free(&tins->ti_umm, r->kr_value);
+	umem_free(&tins->ti_umm, rec->rec_mmid);
+	return 0;
+}
+
+static int
+kv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key,
+	     daos_iov_t *val)
+{
+	struct kv_rec *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+
+	if (key != NULL) {
+		if (key->iov_buf == NULL)
+			key->iov_buf = r->kr_key;
+		else if (r->kr_key_len <= key->iov_buf_len)
+			memcpy(key->iov_buf, r->kr_key, r->kr_key_len);
+		key->iov_len = r->kr_key_len;
+	}
+	if (val != NULL) {
+		void *v = umem_id2ptr(&tins->ti_umm, r->kr_value);
+
+		if (val->iov_buf == NULL)
+			val->iov_buf = v;
+		else if (r->kr_value_len <= val->iov_buf_len)
+			memcpy(val->iov_buf, v, r->kr_value_len);
+		val->iov_len = r->kr_value_len;
+	}
+	return 0;
+}
+
+static int
+kv_rec_update(struct btr_instance *tins, struct btr_record *rec,
+	      daos_iov_t *key, daos_iov_t *val)
+{
+	struct kv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	void	       *v;
+
+	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (r->kr_value_cap < val->iov_len) {
+		umem_id_t vid;
+
+		vid = umem_alloc(&tins->ti_umm, val->iov_len);
+		if (UMMID_IS_NULL(vid))
+			return -DER_NOMEM;
+		umem_free(&tins->ti_umm, r->kr_value);
+		r->kr_value = vid;
+		r->kr_value_cap = val->iov_len;
+	} else {
+		umem_tx_add(&tins->ti_umm, r->kr_value, val->iov_len);
+	}
+	v = umem_id2ptr(&tins->ti_umm, r->kr_value);
+	memcpy(v, val->iov_buf, val->iov_len);
+	r->kr_value_len = val->iov_len;
+	return 0;
+}
+
+static char *
+kv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
+	      char *buf, int buf_len)
+{
+	struct kv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	void	       *v = umem_id2ptr(&tins->ti_umm, r->kr_value);
+	uint64_t       *hkey = (uint64_t *)rec->rec_hkey;
+
+	if (leaf)
+		snprintf(buf, buf_len, "%p+"DF_U64":%p+"DF_U64"("DF_U64")",
+			 r->kr_key, r->kr_key_len, v, r->kr_value_len,
+			 r->kr_value_cap);
+	else
+		snprintf(buf, buf_len, DF_U64, *hkey);
+	return buf;
+}
+
+btr_ops_t dbtree_kv_ops = {
+	.to_hkey_gen	= kv_hkey_gen,
+	.to_hkey_size	= kv_hkey_size,
+	.to_key_cmp	= kv_key_cmp,
+	.to_rec_alloc	= kv_rec_alloc,
+	.to_rec_free	= kv_rec_free,
+	.to_rec_fetch	= kv_rec_fetch,
+	.to_rec_update	= kv_rec_update,
+	.to_rec_string	= kv_rec_string
+};
+
+/*
+ * DBTREE_CLASS_IV
+ */
+
+struct iv_rec {
+	umem_id_t	ir_value;
+	uint64_t	ir_value_len;	/* length of value */
+	uint64_t	ir_value_cap;	/* capacity of value buffer */
+};
+
+static void
+iv_hkey_gen(struct btr_instance *tins, daos_iov_t *key, void *hkey)
+{
+	D_ASSERTF(key->iov_len == sizeof(uint64_t), DF_U64"\n", key->iov_len);
+	*(uint64_t *)hkey = *(uint64_t *)key->iov_buf;
+}
+
+static int
+iv_hkey_size(struct btr_instance *tins)
+{
+	return sizeof(uint64_t);
+}
+
+static int
+iv_rec_alloc(struct btr_instance *tins, daos_iov_t *key, daos_iov_t *val,
+	     struct btr_record *rec)
+{
+	struct iv_rec  *r;
+	umem_id_t	rid;
+	void	       *v;
+	int		rc;
+
+	if (key->iov_len != sizeof(uint64_t) ||
+	    key->iov_buf_len < key->iov_len || val->iov_buf_len < val->iov_len)
+		D_GOTO(err, rc = -DER_INVAL);
+
+	rid = umem_zalloc(&tins->ti_umm, sizeof(*r));
+	if (UMMID_IS_NULL(rid))
+		D_GOTO(err, rc = -DER_NOMEM);
+	r = umem_id2ptr(&tins->ti_umm, rid);
+
+	r->ir_value_len = val->iov_len;
+	r->ir_value_cap = r->ir_value_len;
+	r->ir_value = umem_alloc(&tins->ti_umm, r->ir_value_cap);
+	if (UMMID_IS_NULL(r->ir_value))
+		D_GOTO(err_r, rc = -DER_NOMEM);
+	v = umem_id2ptr(&tins->ti_umm, r->ir_value);
+	memcpy(v, val->iov_buf, r->ir_value_len);
+
+	rec->rec_mmid = rid;
+	return 0;
+
+err_r:
+	umem_free(&tins->ti_umm, rid);
+err:
+	return rc;
+}
+
+static int
+iv_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+{
+	struct iv_rec *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+
+	umem_free(&tins->ti_umm, r->ir_value);
+	umem_free(&tins->ti_umm, rec->rec_mmid);
+	return 0;
+}
+
+static int
+iv_rec_fetch(struct btr_instance *tins, struct btr_record *rec, daos_iov_t *key,
+	     daos_iov_t *val)
+{
+	if (key != NULL) {
+		if (key->iov_buf == NULL)
+			key->iov_buf = rec->rec_hkey;
+		else if (key->iov_buf_len >= sizeof(uint64_t))
+			memcpy(key->iov_buf, rec->rec_hkey, sizeof(uint64_t));
+		key->iov_len = sizeof(uint64_t);
+	}
+	if (val != NULL) {
+		struct iv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+		void	       *v = umem_id2ptr(&tins->ti_umm, r->ir_value);
+
+		if (val->iov_buf == NULL)
+			val->iov_buf = v;
+		else if (r->ir_value_len <= val->iov_buf_len)
+			memcpy(val->iov_buf, v, r->ir_value_len);
+		val->iov_len = r->ir_value_len;
+	}
+	return 0;
+}
+
+static int
+iv_rec_update(struct btr_instance *tins, struct btr_record *rec,
+	      daos_iov_t *key, daos_iov_t *val)
+{
+	struct iv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	void	       *v;
+
+	D_ASSERTF(key->iov_len == sizeof(uint64_t), DF_U64"\n", key->iov_len);
+	umem_tx_add_ptr(&tins->ti_umm, r, sizeof(*r));
+	if (r->ir_value_cap < val->iov_len) {
+		umem_id_t vid;
+
+		vid = umem_alloc(&tins->ti_umm, val->iov_len);
+		if (UMMID_IS_NULL(vid))
+			return -DER_NOMEM;
+		umem_free(&tins->ti_umm, r->ir_value);
+		r->ir_value = vid;
+		r->ir_value_cap = val->iov_len;
+	} else {
+		umem_tx_add(&tins->ti_umm, r->ir_value, val->iov_len);
+	}
+	v = umem_id2ptr(&tins->ti_umm, r->ir_value);
+	memcpy(v, val->iov_buf, val->iov_len);
+	r->ir_value_len = val->iov_len;
+	return 0;
+}
+
+static char *
+iv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
+	      char *buf, int buf_len)
+{
+	struct iv_rec  *r = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	void	       *v = umem_id2ptr(&tins->ti_umm, r->ir_value);
+	uint64_t	key;
+
+	memcpy(&key, rec->rec_hkey, sizeof(key));
+	if (leaf)
+		snprintf(buf, buf_len, DF_U64":%p+"DF_U64"("DF_U64")", key, v,
+			 r->ir_value_len, r->ir_value_cap);
+	else
+		snprintf(buf, buf_len, DF_U64, key);
+	return buf;
+}
+
+btr_ops_t dbtree_iv_ops = {
+	.to_hkey_gen	= iv_hkey_gen,
+	.to_hkey_size	= iv_hkey_size,
+	.to_rec_alloc	= iv_rec_alloc,
+	.to_rec_free	= iv_rec_free,
+	.to_rec_fetch	= iv_rec_fetch,
+	.to_rec_update	= iv_rec_update,
+	.to_rec_string	= iv_rec_string
+};

@@ -71,6 +71,20 @@ register_dbtree_classes(void)
 {
 	int rc;
 
+	rc = dbtree_class_register(DBTREE_CLASS_KV, 0 /* feats */,
+				   &dbtree_kv_ops);
+	if (rc != 0) {
+		D_ERROR("failed to register DBTREE_CLASS_KV: %d\n", rc);
+		return rc;
+	}
+
+	rc = dbtree_class_register(DBTREE_CLASS_IV, 0 /* feats */,
+				   &dbtree_iv_ops);
+	if (rc != 0) {
+		D_ERROR("failed to register DBTREE_CLASS_IV: %d\n", rc);
+		return rc;
+	}
+
 	rc = dbtree_class_register(DBTREE_CLASS_NV, 0 /* feats */,
 				   &dbtree_nv_ops);
 	if (rc != 0) {

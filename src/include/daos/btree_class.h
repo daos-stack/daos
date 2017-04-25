@@ -78,4 +78,22 @@ int dbtree_ec_fetch(daos_handle_t tree, dbtree_probe_opc_t opc,
 		    uint64_t *count);
 int dbtree_ec_delete(daos_handle_t tree, uint64_t epoch);
 
+/**
+ * Generic key-value pairs
+ *
+ * Each key or value is a variable-length byte stream. Keys are ordered by
+ * their hash values and must be non-empty.
+ */
+#define DBTREE_CLASS_KV (DBTREE_DSM_BEGIN + 3)
+extern btr_ops_t dbtree_kv_ops;
+
+/**
+ * Integer-value pairs
+ *
+ * Each key is a uint64_t integer. Each value is a variable-length byte stream.
+ * Keys are ordered numerically.
+ */
+#define DBTREE_CLASS_IV (DBTREE_DSM_BEGIN + 4)
+extern btr_ops_t dbtree_iv_ops;
+
 #endif /* __DAOS_SRV_BTREE_CLASS_H__ */
