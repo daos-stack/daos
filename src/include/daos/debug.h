@@ -66,6 +66,7 @@ extern unsigned int dd_fac_tree;
 extern unsigned int dd_fac_vos;
 extern unsigned int dd_fac_client;
 extern unsigned int dd_fac_server;
+extern unsigned int dd_fac_rdb;
 extern unsigned int dd_fac_pool;
 extern unsigned int dd_fac_container;
 extern unsigned int dd_fac_object;

@@ -1,0 +1,60 @@
+/**
+ * (C) Copyright 2017 Intel Corporation.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+ * The Government's rights to use, modify, reproduce, release, perform, display,
+ * or disclose this software are subject to the terms of the Apache License as
+ * provided in Contract No. B609815.
+ * Any reproduction of computer software, computer software documentation, or
+ * portions thereof marked with this legend must also reproduce the markings.
+ */
+/**
+ * rdb: Replicated Database
+ */
+
+#ifndef DAOS_SRV_RDB_H
+#define DAOS_SRV_RDB_H
+
+#include <daos_types.h>
+#include <daos/btree_class.h>
+
+/**
+ * Path (opaque)
+ *
+ * A path is a list of keys. An absolute path begins with a special key
+ * (rdb_path_root_key) representing the root KVS.
+ */
+typedef daos_iov_t rdb_path_t;
+
+/**
+ * Root key (opaque)
+ *
+ * A special key representing the root KVS in a path.
+ */
+extern daos_iov_t rdb_path_root_key;
+
+/** Path methods */
+int rdb_path_init(rdb_path_t *path);
+void rdb_path_fini(rdb_path_t *path);
+int rdb_path_clone(const rdb_path_t *path, rdb_path_t *new_path);
+int rdb_path_push(rdb_path_t *path, const daos_iov_t *key);
+
+/** KVS classes */
+enum rdb_kvs_class {
+	RDB_KVS_GENERIC,	/**< hash-ordered byte-stream keys */
+	RDB_KVS_INTEGER		/**< ordered fixed-size integer keys */
+};
+
+#endif /* DAOS_SRV_RDB_H */

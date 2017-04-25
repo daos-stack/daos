@@ -61,6 +61,7 @@ unsigned int dd_fac_tree;
 unsigned int dd_fac_vos;
 unsigned int dd_fac_client;
 unsigned int dd_fac_server;
+unsigned int dd_fac_rdb;
 unsigned int dd_fac_pool;
 unsigned int dd_fac_container;
 unsigned int dd_fac_object;
@@ -124,6 +125,12 @@ static struct daos_debug_fac debug_fac_dict[] = {
 	{
 		.df_name	= "server",
 		.df_idp		= &dd_fac_server,
+		.df_mask	= DB_DEFAULT,
+		.df_enabled	= 1,
+	},
+	{
+		.df_name	= "rdb",
+		.df_idp		= &dd_fac_rdb,
 		.df_mask	= DB_DEFAULT,
 		.df_enabled	= 1,
 	},
