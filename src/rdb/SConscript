@@ -3,6 +3,14 @@ Import('env')
 # raft
 SConscript('raft/SConscript', exports = 'env')
 
+# rdb-specific env
+env = env.Clone()
+env.AppendUnique(CPPPATH = ['#/src/rdb/raft/include'])
+
 # rdb
-rdb = env.SharedLibrary('rdb', ['rdb_util.c', 'rdb_path.c'])
+rdb = env.SharedLibrary('rdb', ['rdb_util.c', 'rdb_path.c', 'rdb_layout.c',
+				'rdb_tree.c'])
 env.Install('$PREFIX/lib/daos_srv', rdb)
+
+# tests
+SConscript('tests/SConscript', exports = 'env')

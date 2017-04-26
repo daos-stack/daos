@@ -27,7 +27,73 @@
 #ifndef RDB_INTERNAL_H
 #define RDB_INTERNAL_H
 
-#include <daos_types.h>
+#include <abt.h>
+#include <raft.h>
+#include <daos/hash.h>
+#include <daos/lru.h>
+#include <daos/rpc.h>
+
+/* rdb.c **********************************************************************/
+
+struct rdb {
+	uuid_t			d_uuid;		/* of database */
+	int			d_ref;
+	struct rdb_cbs	       *d_cbs;
+	void		       *d_arg;		/* for d_cbs callbacks */
+	struct daos_lru_cache  *d_trees;	/* rdb_tree cache */
+	PMEMobjpool	       *d_pmem;
+	daos_handle_t		d_attr;		/* rdb attribute tree */
+	daos_handle_t		d_log;		/* rdb log tree */
+
+	raft_server_t	       *d_raft;
+	ABT_mutex		d_mutex;	/* not useful currently */
+	struct dhash_table	d_results;	/* rdb_raft_result objects */
+	ABT_thread		d_timerd;
+	bool			d_timerd_stop;
+	ABT_thread		d_applyd;
+	bool			d_applyd_stop;
+	uint64_t		d_debut;	/* first entry in a term */
+	uint64_t		d_applied;	/* last applied index */
+	ABT_cond		d_applied_cv;	/* for d_applied updates */
+	ABT_cond		d_committed_cv;	/* for last committed */
+
+	daos_list_t		d_replies;	/* list of crt_rpc_t objects */
+	ABT_thread		d_recvd;
+	bool			d_recvd_stop;
+};
+
+/* Current rank */
+#define DF_RANK "%u"
+static inline crt_rank_t
+DP_RANK(void)
+{
+	crt_rank_t	rank;
+	int		rc;
+
+	rc = crt_group_rank(NULL, &rank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	return rank;
+}
+
+#define DF_DB		DF_UUID"["DF_RANK"]"
+#define DP_DB(db)	DP_UUID(db->d_uuid), DP_RANK()
+
+/* rdb_tree.c *****************************************************************/
+
+/* Tree handle cache entry */
+struct rdb_tree {
+	struct daos_llink	de_entry;	/* in LRU */
+	rdb_path_t		de_path;
+	daos_handle_t		de_hdl;		/* of dbtree */
+	daos_list_t		de_list;	/* for rdb_tx_apply_op() */
+};
+
+int rdb_tree_cache_create(struct daos_lru_cache **cache);
+void rdb_tree_cache_destroy(struct daos_lru_cache *cache);
+int rdb_tree_lookup(struct rdb *db, const daos_iov_t *path,
+		    struct rdb_tree **tree);
+void rdb_tree_put(struct rdb *db, struct rdb_tree *tree);
+void rdb_tree_evict(struct rdb *db, struct rdb_tree *tree);
 
 /* rdb_path.c *****************************************************************/
 

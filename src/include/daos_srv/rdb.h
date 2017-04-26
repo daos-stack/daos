@@ -51,6 +51,19 @@ void rdb_path_fini(rdb_path_t *path);
 int rdb_path_clone(const rdb_path_t *path, rdb_path_t *new_path);
 int rdb_path_push(rdb_path_t *path, const daos_iov_t *key);
 
+/**
+ * Define a daos_iov_t object, named \a prefix + \a name, that represents a
+ * constant string key. See rdb_layout.[ch] for an example of the usage of this
+ * helper macro.
+ */
+#define RDB_STRING_KEY(prefix, name)					\
+static char	prefix ## name ## _buf[] = #name;			\
+daos_iov_t	prefix ## name = {					\
+	.iov_buf	= prefix ## name ## _buf,			\
+	.iov_buf_len	= sizeof(prefix ## name),			\
+	.iov_len	= sizeof(prefix ## name)			\
+}
+
 /** KVS classes */
 enum rdb_kvs_class {
 	RDB_KVS_GENERIC,	/**< hash-ordered byte-stream keys */
