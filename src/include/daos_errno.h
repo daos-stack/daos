@@ -114,6 +114,8 @@ typedef enum {
 	DER_NOLOCAL		= (DER_ERR_BASE + 6),
 	/** stale pool map version */
 	DER_STALE		= (DER_ERR_BASE + 7),
+	/** Not service leader */
+	DER_NOTLEADER		= (DER_ERR_BASE + 8),
 	/** Target create error */
 	DER_TGT_CREATE		= (DER_ERR_BASE + 100),
 	/** Epoch is read-only */

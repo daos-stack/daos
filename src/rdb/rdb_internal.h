@@ -57,7 +57,7 @@ struct rdb {
 	ABT_cond		d_applied_cv;	/* for d_applied updates */
 	ABT_cond		d_committed_cv;	/* for last committed */
 
-	daos_list_t		d_replies;	/* list of crt_rpc_t objects */
+	daos_list_t		d_replies;	/* list of Raft RPCs */
 	ABT_thread		d_recvd;
 	bool			d_recvd_stop;
 };
@@ -78,6 +78,46 @@ DP_RANK(void)
 #define DF_DB		DF_UUID"["DF_RANK"]"
 #define DP_DB(db)	DP_UUID(db->d_uuid), DP_RANK()
 
+extern struct rdb *the_one_rdb_hack;
+
+/* rdb_raft.c *****************************************************************/
+
+/* Per-raft_node_t data */
+struct rdb_raft_node {
+	crt_rank_t	dn_rank;
+};
+
+int rdb_raft_init(daos_handle_t rdb_attr);
+int rdb_raft_start(struct rdb *db, const daos_rank_list_t *replicas);
+void rdb_raft_stop(struct rdb *db);
+int rdb_raft_verify_leadership(struct rdb *db);
+int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,
+			  void *result);
+int rdb_raft_wait_applied(struct rdb *db, uint64_t index);
+int rdb_requestvote_handler(crt_rpc_t *rpc);
+int rdb_appendentries_handler(crt_rpc_t *rpc);
+void rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc);
+
+/* rdb_rpc.c ******************************************************************/
+
+/*
+ * RPC operation codes
+ *
+ * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
+ * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
+ */
+enum rdb_operation {
+	RDB_REQUESTVOTE		= 1,
+	RDB_APPENDENTRIES	= 2
+};
+
+extern struct daos_rpc rdb_srv_rpcs[];
+
+int rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc);
+int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node);
+void rdb_recvd(void *arg);
+
+/* rdb_tx.c *******************************************************************/
 /* rdb_tree.c *****************************************************************/
 
 /* Tree handle cache entry */

@@ -30,6 +30,26 @@
 #include <daos_types.h>
 #include <daos/btree_class.h>
 
+/** Database (opaque) */
+struct rdb;
+
+/** Database callbacks */
+struct rdb_cbs {
+	/**
+	 * Called when this replica becomes the leader of \a term. Must not
+	 * Argobots-block. A replicated service over rdb may want to take the
+	 * chance to start itself on this replica.
+	 */
+	void (*dc_step_up)(struct rdb *db, uint64_t term, void *arg);
+
+	/**
+	 * Called when this replica steps down as the leader of \a term. Must
+	 * not Argobots-block. A replicated service over rdb may want to take
+	 * the chance to stop itself on this replica.
+	 */
+	void (*dc_step_down)(struct rdb *db, uint64_t term, void *arg);
+};
+
 /**
  * Path (opaque)
  *
