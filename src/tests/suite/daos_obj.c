@@ -610,9 +610,9 @@ enumerate_rec(daos_epoch_t epoch, char *dkey, char *akey, daos_iod_type_t type,
 
 	ioreq_dkey_set(req, dkey);
 	ioreq_akey_set(req, akey);
-	rc = daos_obj_list_rec(req->oh, epoch, &req->dkey, &req->akey, type,
-			       size, number, recxs, eprs, anchor, incr,
-			       req->arg->async ? &req->ev : NULL);
+	rc = daos_obj_list_recx(req->oh, epoch, &req->dkey, &req->akey,
+				size, number, recxs, eprs, anchor, incr,
+				req->arg->async ? &req->ev : NULL);
 	assert_int_equal(rc, 0);
 
 	if (req->arg->async) {

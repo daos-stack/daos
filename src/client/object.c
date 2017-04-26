@@ -542,10 +542,10 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 }
 
 int
-daos_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
-		  daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
-		  uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		  daos_hash_out_t *anchor, bool incr_order, daos_event_t *ev)
+daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		   daos_key_t *akey, daos_size_t *size, uint32_t *nr,
+		   daos_recx_t *recxs, daos_epoch_range_t *eprs,
+		   daos_hash_out_t *anchor, bool incr_order, daos_event_t *ev)
 {
 	struct daos_task	*task;
 	struct daos_obj_list_arg arg;
@@ -554,7 +554,7 @@ daos_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	arg.opc = DAOS_OBJ_AKEY_LIST;
 	arg.oh	= oh;
 	arg.epoch = epoch;
-	arg.type = type;
+	arg.type = DAOS_IOD_ARRAY;
 	arg.nr = nr;
 	arg.dkey = dkey;
 	arg.akey = akey;
@@ -568,7 +568,7 @@ daos_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	dc_obj_list_rec(oh, epoch, dkey, akey, type, size, nr, recxs, eprs,
+	dc_obj_list_rec(oh, epoch, dkey, akey, arg.type, size, nr, recxs, eprs,
 			NULL, anchor, incr_order, task);
 
 	return daos_client_result_wait(ev);
