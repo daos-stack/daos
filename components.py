@@ -309,10 +309,11 @@ REQS.define('cart',
                       "ARGOBOTS_PREBUILT=$ARGOBOTS_PREFIX "
                       "OMPI_PREBUILT=$OMPI_PREFIX "
                       "MERCURY_PREBUILT=$MERCURY_PREFIX "
+                      "PMIX_PREBUILT=$PMIX_PREFIX "
                       "PREFIX=$CART_PREFIX install"],
             headers=["crt_api.h"],
             libs=["crt", "crt_util"],
-            requires=['ompi', 'mercury', 'argobots', 'crypto'])
+            requires=['ompi', 'mercury', 'pmix', 'argobots', 'crypto'])
 
 URL = 'https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-1.3.1.tar.gz'
 WEB_RETRIEVER = WebRetriever(URL)
