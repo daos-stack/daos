@@ -268,10 +268,8 @@ dc_rw_cb(struct daos_task *task, void *arg)
 		}
 
 		/* update the sizes in iods */
-		for (i = 0; i < orw->orw_nr; i++) {
+		for (i = 0; i < orw->orw_nr; i++)
 			iods[i].iod_size = sizes[i];
-			i++;
-		}
 
 		if (orwo->orw_sgls.da_count > 0) {
 			/* inline transfer */

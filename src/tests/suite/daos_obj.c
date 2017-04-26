@@ -1033,6 +1033,8 @@ read_large_empty_records(void **state)
 	read_empty_records_internal(state, 8192);
 }
 
+#define NUM_AKEYS 5
+
 static void
 fetch_size(void **state)
 {
@@ -1041,17 +1043,18 @@ fetch_size(void **state)
 	daos_handle_t	 oh;
 	daos_epoch_t	 epoch = 2;
 	daos_iov_t	 dkey;
-	daos_sg_list_t	 sgl;
-	daos_iov_t	 sg_iov;
-	daos_iod_t	 iod;
-	char		*buf;
-	int		 rc;
-	int		 size = 131071;
-
-	buf = malloc(size);
-	assert_non_null(buf);
-
-	dts_buf_render(buf, size);
+	daos_sg_list_t	 sgl[NUM_AKEYS];
+	daos_iov_t	 sg_iov[NUM_AKEYS];
+	daos_iod_t	 iod[NUM_AKEYS];
+	char		*buf[NUM_AKEYS];
+	char		*akey[NUM_AKEYS];
+	const char	*akey_fmt = "akey%d";
+	int		 i, rc;
+	/*
+	 * MSC this causes failure with CCI
+	 * daos_size_t	 size = 131071;
+	 */
+	daos_size_t	 size = 1024;
 
 	/** open object */
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
@@ -1061,37 +1064,53 @@ fetch_size(void **state)
 	/** init dkey */
 	daos_iov_set(&dkey, "dkey", strlen("dkey"));
 
-	/** init scatter/gather */
-	daos_iov_set(&sg_iov, buf, size);
-	sgl.sg_nr.num		= 1;
-	sgl.sg_nr.num_out	= 0;
-	sgl.sg_iovs		= &sg_iov;
+	for (i = 0; i < NUM_AKEYS; i++) {
+		akey[i] = malloc(strlen(akey_fmt) + 1);
+		sprintf(akey[i], akey_fmt, i);
 
-	/** init I/O descriptor */
-	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
-	daos_csum_set(&iod.iod_kcsum, NULL, 0);
-	iod.iod_nr	= 1;
-	iod.iod_size	= size;
-	iod.iod_recxs	= NULL;
-	iod.iod_eprs	= NULL;
-	iod.iod_csums	= NULL;
-	iod.iod_type	= DAOS_IOD_SINGLE;
+		buf[i] = malloc(size);
+		assert_non_null(buf[i]);
+
+		dts_buf_render(buf[i], size);
+
+		/** init scatter/gather */
+		daos_iov_set(&sg_iov[i], buf[i], size * (i+1));
+		sgl[i].sg_nr.num	= 1;
+		sgl[i].sg_nr.num_out	= 0;
+		sgl[i].sg_iovs		= &sg_iov[i];
+
+		/** init I/O descriptor */
+		daos_iov_set(&iod[i].iod_name, akey[i], strlen(akey[i]));
+		daos_csum_set(&iod[i].iod_kcsum, NULL, 0);
+		iod[i].iod_nr		= 1;
+		iod[i].iod_size		= size * (i+1);
+		iod[i].iod_recxs	= NULL;
+		iod[i].iod_eprs		= NULL;
+		iod[i].iod_csums	= NULL;
+		iod[i].iod_type		= DAOS_IOD_SINGLE;
+	}
 
 	/** update record */
-	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, epoch, &dkey, NUM_AKEYS, iod, sgl, NULL);
 	assert_int_equal(rc, 0);
 
 	/** fetch record size */
-	iod.iod_size	= DAOS_REC_ANY;
-	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, NULL, NULL, NULL);
+	for (i = 0; i < NUM_AKEYS; i++)
+		iod[i].iod_size	= DAOS_REC_ANY;
+
+	rc = daos_obj_fetch(oh, epoch, &dkey, NUM_AKEYS, iod, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
-	assert_int_equal(iod.iod_size, size);
+	for (i = 0; i < NUM_AKEYS; i++)
+		assert_int_equal(iod[i].iod_size, size * (i+1));
 
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
-	free(buf);
+	for (i = 0; i < NUM_AKEYS; i++) {
+		free(akey[i]);
+		free(buf[i]);
+	}
 }
 
 static void
