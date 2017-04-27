@@ -38,12 +38,6 @@ from PythonRunner import PythonRunner
 
 #pylint: enable=import-error
 
-from yaml import dump
-try:
-    from yaml import CDumper as Dumper
-except ImportError:
-    from yaml import Dumper
-
 
 class TestRunner(PostRunner.PostRunner):
     """Simple test runner"""
@@ -59,14 +53,6 @@ class TestRunner(PostRunner.PostRunner):
         self.log_dir_base = self.info.get_config('log_base_path')
         self.logger = logging.getLogger("TestRunnerLogger")
         self.now = "_{}".format(datetime.now().isoformat().replace(':', '.'))
-
-    def dump_subtest_results(self, subtest_results):
-        """ dump the test results to the log directory """
-        if os.path.exists(self.logdir):
-            name = "%s/subtest_results.yml" % self.logdir
-            with open(name, 'w') as fd:
-                dump(subtest_results, fd, Dumper=Dumper, indent=4,
-                     default_flow_style=False)
 
     def rename_output_directory(self):
         """ rename the output directory """
@@ -95,8 +81,9 @@ class TestRunner(PostRunner.PostRunner):
     def post_testcase(self, subtest_results):
         """ post testcase run processing """
         self.logger.info("TestRunner: tearDown begin")
+        self.test_logdir(subtest_results)
+        subtest_results.create_test_set_results()
         self.test_info.dump_test_info()
-        self.dump_subtest_results(subtest_results)
         self.rename_output_directory()
         self.logger.info("TestRunner: tearDown end\n\n")
 
@@ -106,7 +93,7 @@ class TestRunner(PostRunner.PostRunner):
         rtn = 0
         sys.path.append("scripts")
         file_hdlr = logging.FileHandler(
-            os.path.join(self.log_dir_base + "TestRunner.log"))
+            os.path.join(self.log_dir_base, "TestRunner.log"))
         file_hdlr.setLevel(logging.DEBUG)
         self.logger.addHandler(file_hdlr)
         self.test_info = TestInfoRunner(self.info)
@@ -144,6 +131,7 @@ class TestRunner(PostRunner.PostRunner):
             rtn |= rc
             self.post_testcase(rtn_info)
             self.test_info.cleanup_test_info()
+            del rtn_info
             del runner
         self.logger.info(
             "\n********************************************************")

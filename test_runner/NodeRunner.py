@@ -30,7 +30,6 @@ import shlex
 import subprocess
 import logging
 import json
-import shutil
 from yaml import load
 try:
     from yaml import CLoader as Loader
@@ -69,8 +68,8 @@ class NodeRunner():
             return
         node = self.node
         self.logger.info("TestRunner: start command %s on %s", cmd, node)
-        self.cmdfileout = os.path.join(log_path, ("cmd_%s.out" % node))
-        self.cmdfileerr = os.path.join(log_path, ("cmd_%s.err" % node))
+        self.cmdfileout = os.path.join(log_path, ("cmd_%s.runout" % node))
+        self.cmdfileerr = os.path.join(log_path, ("cmd_%s.runerr" % node))
         cmdstr = "ssh %s \'%s \'" % (node, cmd)
         cmdarg = shlex.split(cmdstr)
         with open(self.cmdfileout, mode='a') as outfile, \
@@ -104,8 +103,8 @@ class NodeRunner():
 
         test_yml = os.path.join(self.scripts_dir, "%s.yml" % test_name)
         node = self.node
-        self.logfileout = os.path.join(log_path, ("%s.out" % test_name))
-        self.logfileerr = os.path.join(log_path, ("%s.err" % test_name))
+        self.logfileout = os.path.join(log_path, ("%s.runout" % test_name))
+        self.logfileerr = os.path.join(log_path, ("%s.runerr" % test_name))
         python_vers = self.test_directives.get('usePython', "python3.4")
         cmdstr = "ssh %s \'%s %s/test_runner config=%s %s\'" % \
             (node, python_vers, self.dir_path, test_config, test_yml)
@@ -160,16 +159,19 @@ class NodeRunner():
             return
         with open(subtest_results_file, 'r') as fd:
             subtest_results_data = load(fd, Loader=Loader)
-        test = str(subtest_results_data[0]['name'])
+        test_set_name = str(subtest_results_data[0]['name'])
 
         for logfile in [self.logfileout, self.logfileerr]:
             (path, name) = os.path.split(logfile)
             namePlus = name.split('.')
-            if test == namePlus[0]:
-                break
-            shutil.move(logfile,
-                        os.path.join(path,
-                                     "{!s}.{!s}".format(test, namePlus[1])))
+            log_type = "console_{!s}".format(namePlus[1])
+            new_name = os.path.join(path,
+                                    ("{}.{}.{}.{}.log".format(
+                                        test_set_name, test_set_name,
+                                        log_type, self.node
+                                        )))
+            os.rename(logfile, new_name)
+
 
     def dump_files(self):
         """ dump the log files """

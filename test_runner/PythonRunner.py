@@ -25,9 +25,11 @@ multi test runner class
 """
 
 
+import os
 import logging
 #pylint: disable=import-error
 import PostRunner
+import ResultsRunner
 #pylint: enable=import-error
 from importlib import import_module
 from time import time
@@ -86,9 +88,8 @@ class PythonRunner(PostRunner.PostRunner):
 
         return rtn
 
-    def execute_list(self):
+    def execute_list(self, results):
         """ execute each item in the execution strategy list """
-        results = []
         rtn = 0
         toexit = self.test_info.get_test_info('directives',
                                               'exitLoopOnError', "no").lower()
@@ -109,11 +110,11 @@ class PythonRunner(PostRunner.PostRunner):
             else:
                 info['status'] = "FAIL"
             info['error'] = ""
-            results.append(info)
+            results.update_subtest_results(info)
             if rc and toexit == "yes":
                 break
 
-        return (rtn, results)
+        return rtn
 
     def import_module(self):
         """ import the test module and load the class """
@@ -143,12 +144,13 @@ class PythonRunner(PostRunner.PostRunner):
 
     def execute_strategy(self):
         """ execute test strategy """
-        results = []
         rtn = 0
         rc = 0
         testname = self.test_info.get_test_info('testName')
-        file_hdlr = logging.FileHandler(self.logdir + "/" + \
-                                        str(testname) + ".log")
+        logName = os.path.join(self.logdir,
+                               "{!s}.{!s}.test_log.{!s}.log".format(
+                                   testname, testname, self.test_info.nodename))
+        file_hdlr = logging.FileHandler(logName)
         self.logger.addHandler(file_hdlr)
         file_hdlr.setLevel(logging.DEBUG)
         self.logger.info("***************** " + \
@@ -160,26 +162,12 @@ class PythonRunner(PostRunner.PostRunner):
         self.testModule = self.import_module()
         print("testModule type: {!s}".format(type(self.testModule)))
         loop = str(self.test_info.get_test_info('directives', 'loop', "no"))
-        start_time = time()
+        results = ResultsRunner.SubTestResults(self.logdir, testname)
 
         if loop.lower() == "no":
-            results_info = {}
-            info = []
-            results_info['name'] = testname
-            (rtn, info) = self.execute_list()
-            results_info['duration'] = '{:.2f}'.format(time() - start_time)
-            results_info['return_code'] = rtn
-            results_info['SubTests'] = info
-            if rtn == 0:
-                results_info['status'] = "PASS"
-            else:
-                results_info['status'] = "FAIL"
-            results_info['error'] = ""
-            results.append(results_info)
+            rtn = self.execute_list(results)
         else:
             for i in range(int(loop)):
-                results_info = {}
-                info = []
                 self.logger.info("***************" + \
                                  str(" loop %d " % i) +\
                                  "*************************"
@@ -190,22 +178,22 @@ class PythonRunner(PostRunner.PostRunner):
                 #    os.makedirs(self.logdir)
                 #except OSError:
                 #    pass
-                results_info['name'] = "{!s}_loop{!s}".format(testname, i)
-                (rc, info) = self.execute_list()
+                results.add_test_set("{!s}_loop{!s}".format(testname, i))
+                rc = self.execute_list(results)
                 rtn |= rc
-                results_info['SubTests'] = info
-                results_info['duration'] = '{:.2f}'.format(time() - start_time)
-                results_info['return_code'] = rc
                 if rc == 0:
-                    results_info['status'] = "PASS"
+                    status = "PASS"
                 else:
-                    results_info['status'] = "FAIL"
-                results_info['error'] = ""
-                results.append(results_info)
+                    status = "FAIL"
+                results.update_testset_results(status=status)
                 toexit = self.test_info.get_directives('exitLoopOnError', "yes")
                 if rtn and toexit.lower() == "yes":
                     break
-
+        if rtn == 0:
+            status = "PASS"
+        else:
+            status = "FAIL"
+        results.update_testset_zero(status=status)
         file_hdlr.close()
         self.logger.removeHandler(file_hdlr)
 

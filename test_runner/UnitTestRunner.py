@@ -32,6 +32,7 @@ from time import time
 #pylint: disable=import-error
 import PostRunner
 import GrindRunner
+import ResultsRunner
 #pylint: enable=import-error
 
 
@@ -145,47 +146,71 @@ class UnitTestRunner(PostRunner.PostRunner,
 
         return rtn
 
+#pylint: disable=too-many-statements
     def execute_strategy(self):
         """ execute test strategy """
 
         file_hdlr = None
-        results = []
-        results_info = {}
         rtn = 0
-        results_info['name'] = self.test_info.get_test_info('testName')
-        value = self.log_dir_base + "/" + str(results_info['name']) + ".log"
-        file_hdlr = logging.FileHandler(value)
+        testname = self.test_info.get_test_info('testName')
+        testlog = "{!s}.{!s}.test_log.{!s}.log".format(testname, testname,
+                                                       self.test_info.nodename
+                                                      )
+        results = ResultsRunner.SubTestResults(self.log_dir_base, testname)
+        file_hdlr = logging.FileHandler(os.path.join(self.log_dir_base,
+                                                     testlog))
         file_hdlr.setLevel(logging.DEBUG)
         self.logger.addHandler(file_hdlr)
         self.logger.info("***************** " + \
-                         str(results_info['name']) + \
+                         str(testname) + \
                          " *********************************"
                         )
         self.test_info.setup_default_env()
         loop = str(self.test_directives.get('loop', "no"))
         start_time = time()
         if loop.lower() == "no":
+            results_info = {}
             self.loop_number = 0
+            start_time = time()
             rtn = self.execute_list()
+            results_info['name'] = testname
+            results_info['duration'] = '{:.2f}'.format(time() - start_time)
+            results_info['return_code'] = rtn
+            if rtn == 0:
+                results_info['status'] = "PASS"
+            else:
+                results_info['status'] = "FAIL"
+            results_info['error'] = ""
+            results.update_subtest_results(results_info)
         else:
-            for i in range(int(loop)):
+            for i in range(1, int(loop) + 1):
+                results_info = {}
                 self.logger.info("***************" + \
                                  str(" loop %d " % i) +\
                                  "*************************"
                                 )
                 self.loop_number = i
+                results.add_test_set("{!s}_loop{!s}".format(testname, i))
+                start_time = time()
                 rtn |= self.execute_list()
+                results_info['name'] = testname
+                results_info['duration'] = '{:.2f}'.format(time() - start_time)
+                results_info['return_code'] = rtn
+                if rtn == 0:
+                    results_info['status'] = "PASS"
+                else:
+                    results_info['status'] = "FAIL"
+                results_info['error'] = ""
+                results.update_subtest_results(results_info)
+                results.update_testset_results(status=results_info['status'])
                 toexit = self.test_directives.get('exitLoopOnError', "yes")
                 if rtn and toexit.lower() == "yes":
                     break
-        results_info['duration'] = '{:.2f}'.format(time() - start_time)
-        results_info['return_code'] = rtn
         if rtn == 0:
-            results_info['status'] = "PASS"
+            status = "PASS"
         else:
-            results_info['status'] = "FAIL"
-        results_info['error'] = ""
+            status = "FAIL"
+        results.update_testset_zero(status=status)
         file_hdlr.close()
         self.logger.removeHandler(file_hdlr)
-        results.append(results_info)
         return (rtn, results)

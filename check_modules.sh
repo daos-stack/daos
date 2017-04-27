@@ -40,5 +40,6 @@
                   -P3 "test_runner/MultiRunner.py" \
                   -P3 "test_runner/NodeControlRunner.py" \
                   -P3 "test_runner/NodeRunner.py" \
+                  -P3 "test_runner/ResultsRunner.py" \
                   -P3 "test_runner/findTestLogs.py"
 exit $?

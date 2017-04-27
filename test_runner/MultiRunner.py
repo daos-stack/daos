@@ -35,14 +35,9 @@ from importlib import import_module
 #pylint: disable=import-error
 import NodeControlRunner
 import TestInfoRunner
+import ResultsRunner
 import PostRunner
 #pylint: enable=import-error
-
-from yaml import dump
-try:
-    from yaml import CDumper as Dumper
-except ImportError:
-    from yaml import Dumper
 
 
 class MultiRunner(PostRunner.PostRunner):
@@ -54,6 +49,7 @@ class MultiRunner(PostRunner.PostRunner):
     test_info = None
     nodes = None
     daemon = None
+    daemon_results = None
     logger = None
 
     def __init__(self, info, test_list=None):
@@ -62,14 +58,6 @@ class MultiRunner(PostRunner.PostRunner):
         self.log_dir_base = self.info.get_config('log_base_path')
         self.logger = logging.getLogger("TestRunnerLogger")
         self.now = "_{}".format(datetime.now().isoformat().replace(':', '.'))
-
-    def dump_subtest_results(self, subtest_results):
-        """ dump the test results to the log directory """
-        if os.path.exists(self.logdir) and subtest_results:
-            name = os.path.join(self.logdir, "subtest_results.yml")
-            with open(name, 'w') as fd:
-                dump(subtest_results, fd, Dumper=Dumper, indent=4,
-                     default_flow_style=False)
 
     def rename_output_directory(self):
         """ rename the output directory """
@@ -96,18 +84,31 @@ class MultiRunner(PostRunner.PostRunner):
             elif dowhat == "dump":
                 self.top_logdir(newname, dumpLogs=True)
 
+    def stop_daemon(self):
+        """ post run processing """
+        self.logger.info("TestRunner: tearDown daemon begin")
+        self.daemon.stop_process()
+        module_name = str(self.test_info.get_test_info('use_daemon', 'name'))
+        logDir = os.path.join(self.logdir, module_name)
+        self.check_log_mode(logDir)
+        rtn_info = {'duration' : 0, 'return_code' : 0,
+                    'status' : "PASS", 'name' : module_name,
+                    'error' : ""}
+        self.daemon_results.update_subtest_results(rtn_info)
+        self.daemon_results.update_testset_results(status="PASS")
+        self.test_logtopdir(self.daemon_results)
+        self.daemon_results.create_test_set_results()
+        del self.daemon
+        del self.daemon_results
+        self.logger.info("TestRunner: tearDown daemon end\n")
+
     def post_run(self, subtest_results):
         """ post run processing """
         self.logger.info("TestRunner: tearDown begin")
         if self.daemon:
-            self.daemon.stop_process()
-            logDir = os.path.join(self.logdir,
-                                  str(self.test_info.get_test_info(
-                                      'use_daemon', 'name')))
-            self.check_log_mode(logDir)
-            del self.daemon
+            self.stop_daemon()
+        subtest_results.create_test_set_results()
         self.test_info.dump_test_info()
-        self.dump_subtest_results(subtest_results)
         self.rename_output_directory()
         self.logger.info("TestRunner: tearDown end\n\n")
 
@@ -151,6 +152,7 @@ class MultiRunner(PostRunner.PostRunner):
         _class = None
         name = self.test_info.get_test_info('use_daemon', 'name')
         logDir = os.path.join(logbase, name)
+        self.daemon_results = ResultsRunner.SubTestResults(logDir, name)
         self.logger.info("Import daemon: %s", name)
         try:
             os.makedirs(logDir)
@@ -164,9 +166,9 @@ class MultiRunner(PostRunner.PostRunner):
                 _class = getattr(_module, name)(logDir, self.test_info,
                                                 self.nodes)
             except AttributeError:
-                print("Class does not exist")
+                self.logger.error("Class does not exist")
         except ImportError:
-            print("Module does not exist")
+            self.logger.error("Module does not exist")
         return _class
 
     #pylint: disable=too-many-statements
@@ -188,6 +190,8 @@ class MultiRunner(PostRunner.PostRunner):
             if self.test_info.load_testcases(test_module_name, True):
                 return 1
             module_name = str(self.test_info.get_test_info('testName'))
+            results = ResultsRunner.SubTestResults(self.log_dir_base,
+                                                   module_name)
             self.logdir = os.path.join(self.log_dir_base, module_name)
             try:
                 os.makedirs(self.logdir)
@@ -212,19 +216,21 @@ class MultiRunner(PostRunner.PostRunner):
                 self.logdir, self.info, self.test_info)
             self.nodes.nodes_strategy(self.test_directives)
             rtn_info = None
-            subtest_results = []
             if self.test_info.get_test_info('use_daemon'):
                 self.daemon = self.import_daemon(self.logdir)
                 rtn = self.daemon.launch_process()
             if not rtn:
                 rtn_info = self.execute_strategy()
-                rtn |= rtn_info['return_code']
+                rtn |= int(rtn_info['return_code'])
             else:
                 rtn_info = {'duration' : 0, 'return_code' : rtn,
                             'status' : "FAIL", 'name' : module_name,
                             'error' : "Daemon start failed"}
-            subtest_results.append(rtn_info)
-            self.post_run(subtest_results)
+
+            results.update_subtest_results(rtn_info)
+            results.update_testset_results(status=rtn_info['status'])
+
+            self.post_run(results)
             file_hdlr.close()
             self.logger.removeHandler(file_hdlr)
             self.nodes.nodes_dump()

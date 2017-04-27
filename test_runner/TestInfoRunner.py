@@ -110,6 +110,10 @@ class TestInfoRunner(PreRunner.PreRunner):
         return rtn
     #pylint: enable=too-many-branches
 
+    def nodeName(self):
+        """ return the node name """
+        return self.nodename
+
     def cleanup_test_info(self):
         """ post testcase run cleanup """
         self.remove_tmp_dir()
@@ -119,12 +123,19 @@ class TestInfoRunner(PreRunner.PreRunner):
         """ dump the test info to the output directory """
         if os.path.exists(os.path.join(self.log_dir_base,
                                        self.test_info['testName'])):
-            name = "%s/%s/%s_test_info.yml" % (self.log_dir_base,
-                                               self.test_info['testName'],
-                                               self.test_info['module']['name'])
+            name = os.path.join(self.log_dir_base, self.test_info['testName'],
+                                "{!s}.{!s}.test_info_yml.{!s}.log".format(
+                                    self.test_info['testName'],
+                                    self.test_info['testName'],
+                                    self.nodename)
+                               )
         else:
-            name = "%s/%s_test_info.yml" % (self.log_dir_base,
-                                            self.test_info['testName'])
+            name = os.path.join(self.log_dir_base,
+                                "{!s}.{!s}.test_info_yml.{!s}.log".format(
+                                    self.test_info['testName'],
+                                    self.test_info['testName'],
+                                    self.nodename)
+                               )
         with open(name, 'w') as fd:
             dump(self.test_info, fd, Dumper=Dumper, indent=4,
                  default_flow_style=False)
