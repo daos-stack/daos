@@ -15,3 +15,6 @@ rdb = env.SharedLibrary('rdb',
 			 'rdb.c', 'rdb_module.c'],
 			LIBS=['raft'])
 env.Install('$PREFIX/lib/daos_srv', rdb)
+
+# tests
+SConscript('tests/SConscript', exports = 'env')

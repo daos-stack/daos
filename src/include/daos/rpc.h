@@ -86,6 +86,7 @@ enum daos_module_id {
 	DAOS_TIER_MODULE	= 5, /** tiering */
 	DAOS_REBUILD_MODULE	= 6, /** rebuild **/
 	DAOS_RDB_MODULE		= 7, /** rdb */
+	DAOS_RDBT_MODULE	= 8, /** rdb test */
 	DAOS_MAX_MODULE		= (1 << MOD_ID_BITS) - 1,
 };
 
