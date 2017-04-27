@@ -152,6 +152,36 @@ static struct crt_req_format DQF_RDB_APPENDENTRIES =
 	DEFINE_CRT_REQ_FMT("RDB_APPENDENTRIES", rdb_appendentries_in_fields,
 			   rdb_appendentries_out_fields);
 
+static struct crt_msg_field *rdb_start_in_fields[] = {
+	&CMF_UUID,	/* uuid */
+	&CMF_UUID,	/* pool */
+	&CMF_UINT32,	/* flags */
+	&CMF_UINT32,	/* padding */
+	&CMF_UINT64,	/* size */
+	&CMF_RANK_LIST	/* ranks */
+};
+
+static struct crt_msg_field *rdb_start_out_fields[] = {
+	&CMF_INT	/* rc */
+};
+
+static struct crt_req_format DQF_RDB_START =
+	DEFINE_CRT_REQ_FMT("RDB_START", rdb_start_in_fields,
+			   rdb_start_out_fields);
+
+static struct crt_msg_field *rdb_stop_in_fields[] = {
+	&CMF_UUID,	/* uuid */
+	&CMF_UUID,	/* pool */
+	&CMF_UINT32	/* flags */
+};
+
+static struct crt_msg_field *rdb_stop_out_fields[] = {
+	&CMF_INT	/* rc */
+};
+
+static struct crt_req_format DQF_RDB_STOP =
+	DEFINE_CRT_REQ_FMT("RDB_STOP", rdb_stop_in_fields, rdb_stop_out_fields);
+
 struct daos_rpc rdb_srv_rpcs[] = {
 	{
 		.dr_name	= "RDB_REQUESTVOTE",
@@ -165,6 +195,18 @@ struct daos_rpc rdb_srv_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_RDB_APPENDENTRIES
+	}, {
+		.dr_name	= "RDB_START",
+		.dr_opc		= RDB_START,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_RDB_START
+	}, {
+		.dr_name	= "RDB_STOP",
+		.dr_opc		= RDB_STOP,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_RDB_STOP
 	}, {
 	}
 };
@@ -182,6 +224,20 @@ rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
 	ep.ep_rank = rdb_node->dn_rank;
 	ep.ep_tag = 0;
 	return crt_req_create(info->dmi_ctx, ep, opc_full, rpc);
+}
+
+int
+rdb_create_bcast(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
+{
+	struct dss_module_info *info = dss_get_module_info();
+	crt_opcode_t		opc_full;
+
+	opc_full = DAOS_RPC_OPCODE(opc, DAOS_RDB_MODULE, 1);
+	return crt_corpc_req_create(info->dmi_ctx, group,
+				    NULL /* excluded_ranks */, opc_full,
+				    NULL /* co_bulk_hdl */, NULL /* priv */,
+				    0 /* flags */,
+				    crt_tree_topo(CRT_TREE_FLAT, 0), rpc);
 }
 
 struct rdb_raft_rpc_cb_arg {

@@ -35,6 +35,7 @@
  */
 #define	VOS_FILE	"vos-" /* suffixed by thread id */
 #define	DSM_META_FILE	"meta"
+#define RDB_FILE	"rdb-"
 
 /**
  * Generate path to a target file for pool \a pool_uuid with a filename set to

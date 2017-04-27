@@ -235,4 +235,10 @@ int rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs,
 int rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward,
 		   rdb_iterate_cb_t cb, void *arg);
 
+/** Distributed helper methods */
+int rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
+		   const daos_rank_list_t *ranks, bool create, size_t size);
+int rdb_dist_stop(const uuid_t uuid, const uuid_t pool_uuid,
+		  const daos_rank_list_t *ranks, bool destroy);
+
 #endif /* DAOS_SRV_RDB_H */

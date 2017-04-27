@@ -292,3 +292,227 @@ rdb_get_leader(struct rdb *db, crt_rank_t *rank)
 	*rank = dnode->dn_rank;
 	return 0;
 }
+
+/**
+ * Perform a distributed create, if \a create is true, and start operation on
+ * all replicas of a database with \a uuid spanning \a ranks. This method can
+ * be called on any rank. If \a create is false, \a ranks may be NULL, in which
+ * case the RDB_START RPC will be broadcasted in the primary group.
+ *
+ * \param[in]	uuid		database UUID
+ * \param[in]	pool_uuid	pool UUID (for ds_mgmt_tgt_file())
+ * \param[in]	ranks		list of replica ranks
+ * \param[in]	create		create replicas first
+ * \param[in]	size		size of each replica in bytes if \a create
+ */
+int
+rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
+	       const daos_rank_list_t *ranks, bool create, size_t size)
+{
+	crt_group_t	       *group = NULL;
+	crt_rpc_t	       *rpc;
+	struct rdb_start_in    *in;
+	struct rdb_start_out   *out;
+	int			rc;
+
+	D_ASSERT(!create || ranks != NULL);
+
+	if (ranks != NULL) {
+		rc = dss_group_create("rdb_ephemeral_group",
+				      (daos_rank_list_t *)ranks, &group);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+
+	rc = rdb_create_bcast(RDB_START, group, &rpc);
+	if (rc != 0)
+		D_GOTO(out_group, rc);
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->dai_uuid, uuid);
+	uuid_copy(in->dai_pool, pool_uuid);
+	if (create)
+		in->dai_flags |= RDB_AF_CREATE;
+	in->dai_size = size;
+	in->dai_ranks = (daos_rank_list_t *)ranks;
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = crt_reply_get(rpc);
+	rc = out->dao_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to start%s %d replicas\n",
+			DP_UUID(uuid), create ? "/create" : "", rc);
+		rdb_dist_stop(uuid, pool_uuid, ranks, create /* destroy */);
+		rc = -DER_IO;
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out_group:
+	if (group != NULL)
+		dss_group_destroy(group);
+out:
+	return rc;
+}
+
+int
+rdb_start_handler(crt_rpc_t *rpc)
+{
+#if 0
+	struct rdb_start_in    *in = crt_req_get(rpc);
+#endif
+	struct rdb_start_out   *out = crt_reply_get(rpc);
+#if 0
+	char		       *path;
+	int			rc;
+
+	path = ds_pool_rdb_path(in->dai_uuid, in->dai_pool);
+	if (path == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (in->dai_flags & RDB_AF_CREATE) {
+		rc = rdb_create(path, in->dai_uuid, in->dai_size,
+				in->dai_ranks);
+		if (rc != 0 && rc != -DER_EXIST) {
+			D_ERROR(DF_UUID": failed to create replica: %d\n",
+				DP_UUID(in->dai_uuid), rc);
+			D_GOTO(out_path, rc);
+		}
+	}
+
+	rc = ds_pool_svc_start(in->dai_uuid);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to start replica: %d\n",
+			DP_UUID(in->dai_uuid), rc);
+		if (in->dai_flags & RDB_AF_CREATE)
+			rdb_destroy(path);
+	}
+
+out_path:
+	free(path);
+out:
+	out->dao_rc = (rc == 0 ? 0 : 1);
+#else
+	out->dao_rc = 0;
+#endif
+	return crt_reply_send(rpc);
+}
+
+int
+rdb_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct rdb_start_out   *out_source;
+	struct rdb_start_out   *out_result;
+
+	out_source = crt_reply_get(source);
+	out_result = crt_reply_get(result);
+	out_result->dao_rc += out_source->dao_rc;
+	return 0;
+}
+
+/**
+ * Perform a distributed stop, and if \a destroy is true, destroy operation on
+ * all replicas of a database with \a uuid spanning \a ranks. This method can
+ * be called on any rank. \a ranks may be NULL, in which case the RDB_STOP RPC
+ * will be broadcasted in the primary group.
+ *
+ * \param[in]	uuid		database UUID
+ * \param[in]	pool_uuid	pool UUID (for ds_mgmt_tgt_file())
+ * \param[in]	ranks		list of \a ranks->rl_nr.num_out replica ranks
+ * \param[in]	destroy		destroy after close
+ */
+int
+rdb_dist_stop(const uuid_t uuid, const uuid_t pool_uuid,
+	      const daos_rank_list_t *ranks, bool destroy)
+{
+	crt_group_t	       *group = NULL;
+	crt_rpc_t	       *rpc;
+	struct rdb_stop_in     *in;
+	struct rdb_stop_out    *out;
+	int			rc;
+
+	if (ranks != NULL) {
+		rc = dss_group_create("rdb_ephemeral_group",
+				      (daos_rank_list_t *)ranks, &group);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+
+	rc = rdb_create_bcast(RDB_STOP, group, &rpc);
+	if (rc != 0)
+		D_GOTO(out_group, rc);
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->doi_uuid, uuid);
+	uuid_copy(in->doi_pool, pool_uuid);
+	if (destroy)
+		in->doi_flags |= RDB_OF_DESTROY;
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = crt_reply_get(rpc);
+	rc = out->doo_rc;
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to stop%s %d replicas\n",
+			DP_UUID(uuid), destroy ? "/destroy" : "", rc);
+		rc = -DER_IO;
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out_group:
+	if (group != NULL)
+		dss_group_destroy(group);
+out:
+	return rc;
+}
+
+int
+rdb_stop_handler(crt_rpc_t *rpc)
+{
+#if 0
+	struct rdb_stop_in     *in = crt_req_get(rpc);
+#endif
+	struct rdb_stop_out    *out = crt_reply_get(rpc);
+	int			rc = 0;
+
+#if 0
+	ds_pool_svc_stop(in->doi_uuid);
+
+	if (in->doi_flags & RDB_OF_DESTROY) {
+		char *path;
+
+		path = ds_pool_rdb_path(in->doi_uuid, in->doi_pool);
+		if (path == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		rc = rdb_destroy(path);
+		free(path);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		else if (rc != 0)
+			D_ERROR(DF_UUID": failed to destroy replica: %d\n",
+				DP_UUID(in->doi_uuid), rc);
+	}
+
+out:
+#endif
+	out->doo_rc = (rc == 0 ? 0 : 1);
+	return crt_reply_send(rpc);
+}
+
+int
+rdb_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+{
+	struct rdb_stop_out   *out_source;
+	struct rdb_stop_out   *out_result;
+
+	out_source = crt_reply_get(source);
+	out_result = crt_reply_get(result);
+	out_result->doo_rc += out_source->doo_rc;
+	return 0;
+}

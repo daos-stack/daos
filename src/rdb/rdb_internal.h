@@ -78,6 +78,11 @@ DP_RANK(void)
 #define DF_DB		DF_UUID"["DF_RANK"]"
 #define DP_DB(db)	DP_UUID(db->d_uuid), DP_RANK()
 
+int rdb_start_handler(crt_rpc_t *rpc);
+int rdb_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
+int rdb_stop_handler(crt_rpc_t *rpc);
+int rdb_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
+
 extern struct rdb *the_one_rdb_hack;
 
 /* rdb_raft.c *****************************************************************/
@@ -108,13 +113,47 @@ void rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc);
  */
 enum rdb_operation {
 	RDB_REQUESTVOTE		= 1,
-	RDB_APPENDENTRIES	= 2
+	RDB_APPENDENTRIES	= 2,
+	RDB_START		= 3,
+	RDB_STOP		= 4
+};
+
+enum rdb_start_flag {
+	RDB_AF_CREATE	= 1
+};
+
+struct rdb_start_in {
+	uuid_t			dai_uuid;
+	uuid_t			dai_pool;	/* for ds_mgmt_tgt_file() */
+	uint32_t		dai_flags;	/* rdb_start_flag */
+	uint32_t		dai_padding;
+	uint64_t		dai_size;
+	daos_rank_list_t       *dai_ranks;
+};
+
+struct rdb_start_out {
+	int	dao_rc;
+};
+
+enum rdb_stop_flag {
+	RDB_OF_DESTROY	= 1
+};
+
+struct rdb_stop_in {
+	uuid_t		doi_uuid;
+	uuid_t		doi_pool;	/* for ds_mgmt_tgt_file() */
+	uint32_t	doi_flags;	/* rdb_stop_flag */
+};
+
+struct rdb_stop_out {
+	int	doo_rc;
 };
 
 extern struct daos_rpc rdb_srv_rpcs[];
 
 int rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc);
 int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node);
+int rdb_create_bcast(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc);
 void rdb_recvd(void *arg);
 
 /* rdb_tx.c *******************************************************************/
