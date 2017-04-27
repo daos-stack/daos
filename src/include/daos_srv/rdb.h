@@ -127,6 +127,16 @@ struct rdb_cbs {
 	void (*dc_step_down)(struct rdb *db, uint64_t term, void *arg);
 };
 
+/** Database methods */
+int rdb_create(const char *path, const uuid_t uuid, size_t size,
+	       const daos_rank_list_t *ranks);
+int rdb_destroy(const char *path);
+int rdb_start(const char *path, struct rdb_cbs *cbs, void *arg,
+	      struct rdb **dbp);
+void rdb_stop(struct rdb *db);
+bool rdb_is_leader(struct rdb *db, uint64_t *term);
+int rdb_get_leader(struct rdb *db, crt_rank_t *rank);
+
 /**
  * Path (opaque)
  *

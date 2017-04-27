@@ -12,6 +12,6 @@ env.AppendUnique(LIBPATH = ['raft/src'])
 rdb = env.SharedLibrary('rdb',
 			['rdb_util.c', 'rdb_path.c', 'rdb_layout.c',
 			 'rdb_tree.c', 'rdb_rpc.c', 'rdb_raft.c', 'rdb_tx.c',
-			 'rdb_module.c'],
+			 'rdb.c', 'rdb_module.c'],
 			LIBS=['raft'])
 env.Install('$PREFIX/lib/daos_srv', rdb)
