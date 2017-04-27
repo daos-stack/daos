@@ -434,15 +434,6 @@ rdb_raft_verify_leadership(struct rdb *db)
 				     NULL /* result */);
 }
 
-#if 1 /* Just a mock. */
-static int
-rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
-	     void *result, daos_list_t *destroyed)
-{
-	return 0;
-}
-#endif
-
 /* Apply entries up to "index". For now, one NVML TX per entry. */
 static void
 rdb_apply_to(struct rdb *db, uint64_t index)

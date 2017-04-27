@@ -118,6 +118,10 @@ int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node);
 void rdb_recvd(void *arg);
 
 /* rdb_tx.c *******************************************************************/
+
+int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
+		 void *result, daos_list_t *destroyed);
+
 /* rdb_tree.c *****************************************************************/
 
 /* Tree handle cache entry */
