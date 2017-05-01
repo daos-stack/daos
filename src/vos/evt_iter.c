@@ -151,6 +151,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 
 		/* nothing in the tree */
 		iter->it_state = EVT_ITER_FINI;
+		rc = -DER_NONEXIST;
 	} else {
 		iter->it_state = EVT_ITER_READY;
 		evt_ent_list_fini(&entl);

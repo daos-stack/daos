@@ -76,7 +76,7 @@ struct dc_obj_shard {
 /**
  * Temporary solution for packing the tag/shard into the hash out,
  * tag stays at 25-28 bytes of daos_hash_out_t->body; shard stays
- * at 29-32 bytes of daos_hash_out_t->body; and the first 16 bytes
+ * at 29-32 bytes of daos_hash_out_t->body; and the first 24 bytes
  * are hash key, see DAOS_HASH_HKEY_LENGTH.
  */
 
@@ -108,7 +108,7 @@ enum_anchor_get_tag(daos_hash_out_t *anchor)
 {
 	uint32_t tag;
 
-	D_CASSERT(DAOS_HASH_HKEY_START + DAOS_HASH_HKEY_LENGTH <
+	D_CASSERT(DAOS_HASH_HKEY_START + DAOS_HASH_HKEY_LENGTH <=
 		  ENUM_ANCHOR_TAG_OFF);
 	D_CASSERT(DAOS_HASH_HKEY_LENGTH + ENUM_ANCHOR_TAG_LENGTH +
 		  ENUM_ANCHOR_SHARD_LENGTH <= DAOS_HKEY_MAX);
@@ -132,7 +132,7 @@ enum_anchor_get_shard(daos_hash_out_t *anchor)
 	uint32_t tag;
 
 	D_CASSERT(DAOS_HASH_HKEY_START + DAOS_HASH_HKEY_LENGTH +
-		  ENUM_ANCHOR_TAG_LENGTH < ENUM_ANCHOR_SHARD_OFF);
+		  ENUM_ANCHOR_TAG_LENGTH <= ENUM_ANCHOR_SHARD_OFF);
 
 	memcpy(&tag, &anchor->body[ENUM_ANCHOR_SHARD_OFF],
 	       ENUM_ANCHOR_SHARD_LENGTH);

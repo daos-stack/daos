@@ -30,6 +30,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <uuid/uuid.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -53,6 +54,7 @@ static int			ts_order = ORDER_DEF;
 static TMMID(struct evt_root)	ts_root_mmid;
 static struct evt_root		ts_root;
 static daos_handle_t		ts_toh;
+static uuid_t			ts_uuid;
 
 #define EVT_SEP			','
 #define EVT_SEP_VAL		':'
@@ -224,7 +226,7 @@ ts_add_rect(char *args)
 	sgl.sg_nr.num = 1;
 	sgl.sg_iovs = &iov;
 
-	rc = evt_insert_sgl(ts_toh, &rect, val ? 1 : 0, &sgl);
+	rc = evt_insert_sgl(ts_toh, ts_uuid, &rect, val ? 1 : 0, &sgl);
 	if (rc != 0)
 		D_FATAL("Add rect failed %d\n", rc);
 
@@ -398,7 +400,7 @@ ts_many_add(char *args)
 		sgl.sg_nr.num = 1;
 		sgl.sg_iovs = &iov;
 
-		rc = evt_insert_sgl(ts_toh, &rect, 1, &sgl);
+		rc = evt_insert_sgl(ts_toh, ts_uuid, &rect, 1, &sgl);
 		if (rc != 0) {
 			D_FATAL("Add rect %d failed %d\n", i, rc);
 			break;

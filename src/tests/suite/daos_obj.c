@@ -602,7 +602,7 @@ enumerate_akey(daos_epoch_t epoch, char *dkey, uint32_t *number,
 }
 
 static void
-enumerate_rec(daos_epoch_t epoch, char *dkey, char *akey, daos_iod_type_t type,
+enumerate_rec(daos_epoch_t epoch, char *dkey, char *akey,
 	      daos_size_t *size, uint32_t *number, daos_recx_t *recxs,
 	      daos_epoch_range_t *eprs, daos_hash_out_t *anchor, bool incr,
 	      struct ioreq *req)
@@ -629,7 +629,7 @@ enumerate_rec(daos_epoch_t epoch, char *dkey, char *akey, daos_iod_type_t type,
 #define ENUM_KEY_BUF	32
 #define ENUM_KEY_NR	1000
 
-#define ENUM_REC_NR	1
+#define ENUM_REC_NR	1000
 
 #define ENUM_DESC_BUF	512
 #define ENUM_DESC_NR	5
@@ -651,7 +651,7 @@ enumerate_simple(void **state)
 	int		 i;
 
 	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert record*/
 	print_message("Insert %d kv record in object "DF_OID"\n", ENUM_KEY_NR,
@@ -728,7 +728,7 @@ enumerate_simple(void **state)
 		daos_size_t	size;
 
 		number = 5;
-		enumerate_rec(0, "d_key", "a_rec", DAOS_IOD_SINGLE, &size,
+		enumerate_rec(0, "d_key", "a_rec", &size,
 			      &number, recxs, eprs, &hash_out, true, &req);
 		if (number == 0)
 			continue; /* loop should break for EOF */

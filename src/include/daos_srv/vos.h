@@ -433,7 +433,7 @@ vos_obj_zc_sgl_at(daos_handle_t ioh, unsigned int idx, daos_sg_list_t **sgl_pp);
  *					    (NB: a-key is unsupported for now)
  *
  *			- VOS_ITER_RECX	  : param::ip_hdl is container handle,
- *					    param::ip_oid is ID of byte array
+ *			- VOS_ITER_SINGLE   param::ip_oid is ID of byte array
  *					    param::ip_dkey is the distribution
  *					    key of the akeys to be iterated.
  *					    param::ip_akey is the attribute key

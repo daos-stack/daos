@@ -65,8 +65,8 @@ enum {
 	DKEY_ANCHOR		= (1 << 1),
 	/** bitmask position for akey anchor */
 	AKEY_ANCHOR		= (1 << 2),
-	/** bitmask position for recx anchor */
-	RECX_ANCHOR		= (1 << 3),
+	/** bitmask position for single value anchor */
+	SINGV_ANCHOR		= (1 << 3),
 	/** bitmask position for obj scan completion */
 	OBJ_SCAN_COMPLETE	= (1 << 4),
 	/** bitmask position for dkey scan completion */
@@ -96,7 +96,7 @@ purge_ctx_init(struct purge_context *pcx, vos_iter_entry_t *ent)
 
 	switch (pcx->pc_type) {
 	default:
-	case VOS_ITER_RECX:
+	case VOS_ITER_SINGLE:
 		D_ASSERT(0);
 	case VOS_ITER_NONE:
 		pcx->pc_type = VOS_ITER_OBJ;
@@ -122,7 +122,7 @@ purge_ctx_init(struct purge_context *pcx, vos_iter_entry_t *ent)
 
 	case VOS_ITER_AKEY:
 		param->ip_akey = ent->ie_key;
-		pcx->pc_type = VOS_ITER_RECX;
+		pcx->pc_type = VOS_ITER_SINGLE;
 		break;
 
 	}
@@ -155,7 +155,7 @@ purge_ctx_fini(struct purge_context *pcx, int rc)
 		pcx->pc_type = VOS_ITER_DKEY;
 		return;
 
-	case VOS_ITER_RECX:
+	case VOS_ITER_SINGLE:
 		pcx->pc_type = VOS_ITER_AKEY;
 		return;
 	}
@@ -195,7 +195,7 @@ purge_anchor_is_valid(vos_purge_anchor_t *anchor)
 		if (!((OBJ_ANCHOR  & anchor->pa_mask)  ||
 		      (DKEY_ANCHOR & anchor->pa_mask)  ||
 		      (AKEY_ANCHOR & anchor->pa_mask)  ||
-		      (RECX_ANCHOR & anchor->pa_mask)  ||
+		      (SINGV_ANCHOR & anchor->pa_mask)  ||
 		      (OBJ_SCAN_COMPLETE & anchor->pa_mask) ||
 		      (DKEY_SCAN_COMPLETE & anchor->pa_mask) ||
 		      (AKEY_SCAN_COMPLETE & anchor->pa_mask) ||
@@ -238,8 +238,8 @@ purge_ctx_anchor_is_set(struct purge_context *pcx,
 		return DKEY_ANCHOR & vp_anchor->pa_mask;
 	case VOS_ITER_AKEY:
 		return AKEY_ANCHOR & vp_anchor->pa_mask;
-	case VOS_ITER_RECX:
-		return RECX_ANCHOR & vp_anchor->pa_mask;
+	case VOS_ITER_SINGLE:
+		return SINGV_ANCHOR & vp_anchor->pa_mask;
 	}
 }
 
@@ -270,9 +270,9 @@ purge_ctx_anchor_ctl(struct purge_context *pcx, vos_purge_anchor_t *vp_anchor,
 		purge_anchor	= &vp_anchor->pa_akey;
 		bits		= AKEY_ANCHOR;
 		break;
-	case VOS_ITER_RECX:
+	case VOS_ITER_SINGLE:
 		purge_anchor	= &vp_anchor->pa_recx;
-		bits		= RECX_ANCHOR;
+		bits		= SINGV_ANCHOR;
 		break;
 	}
 
@@ -314,7 +314,7 @@ purge_ctx_test_complete(struct purge_context *pcx, bool *finish,
 		if (AKEY_SCAN_COMPLETE & anchor->pa_mask)
 			return true;
 		break;
-	case VOS_ITER_RECX:
+	case VOS_ITER_SINGLE:
 		if (RECX_SCAN_COMPLETE & anchor->pa_mask)
 			return true;
 		break;
@@ -329,7 +329,7 @@ purge_ctx_reset_complete(struct purge_context *pcx,
 	switch (pcx->pc_type) {
 	default:
 		D_ASSERT(0);
-	case VOS_ITER_RECX:
+	case VOS_ITER_SINGLE:
 		break;
 	case VOS_ITER_AKEY:
 		vp_anchor->pa_mask &= ~RECX_SCAN_COMPLETE;
@@ -364,7 +364,7 @@ purge_ctx_set_complete(struct purge_context *pcx, bool *finish,
 		vp_anchor->pa_mask |= AKEY_SCAN_COMPLETE;
 		D_DEBUG(DB_EPC, "Setting AKEY scan completion\n");
 		break;
-	case VOS_ITER_RECX:
+	case VOS_ITER_SINGLE:
 		vp_anchor->pa_mask |= RECX_SCAN_COMPLETE;
 		D_DEBUG(DB_EPC, "Setting RECX scan completion\n");
 		break;
@@ -430,7 +430,7 @@ recx_max_iter_probe(int opc, vos_iter_entry_t *ent, vos_iter_entry_t *ent_max,
 
 	if (rc != 0) {
 		D_ERROR("%s max-iterator failed to %s: %d\n",
-			vos_iter_type2name(VOS_ITER_RECX), opstr, rc);
+			vos_iter_type2name(VOS_ITER_SINGLE), opstr, rc);
 	}
 	return rc;
 }
@@ -452,7 +452,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 	daos_hash_out_t		anchor;
 	vos_iter_entry_t	ent_max;
 	unsigned int		credits = *credits_ret;
-	bool			recx_tree = (pcx->pc_type == VOS_ITER_RECX);
+	bool			val_tree = (pcx->pc_type == VOS_ITER_SINGLE);
 
 
 	D_DEBUG(DB_EPC, "Enter %s iterator with credits: %u\n", pcx_name(pcx),
@@ -488,7 +488,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		return rc;
 	}
 
-	if (recx_tree) {
+	if (val_tree) {
 		/** prepare the max iterator */
 		rc = vos_iter_prepare(pcx->pc_type, &pcx->pc_param, &ih_max);
 		if (rc == -DER_NONEXIST) {
@@ -563,7 +563,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 			D_GOTO(out, rc);
 		}
 
-		if (recx_tree) {
+		if (val_tree) {
 			rc = recx_max_iter_probe(opc, &ent, &ent_max,
 						 vp_anchor, &anchor,
 						 pcx->pc_param.ip_epc_expr,
@@ -584,7 +584,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 			credits--;
 		}
 
-		if (pcx->pc_type == VOS_ITER_RECX) {
+		if (pcx->pc_type == VOS_ITER_SINGLE) {
 			/* Delete the record pointed to by regular iterator */
 			empty = (ent_max.ie_epr.epr_lo != ent.ie_epr.epr_lo);
 			/* Delete the record pinter by max iterator */
@@ -656,7 +656,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		rc = 0;
 	}
 out:
-	if (rc == 0 && recx_tree)
+	if (rc == 0 && val_tree)
 		vos_iter_finish(ih_max);
 
 	*credits_ret = credits;
@@ -733,7 +733,8 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 		}
 
 		found++;
-		if (pcx->pc_type == VOS_ITER_RECX) { /* the last level tree */
+		if (pcx->pc_type == VOS_ITER_SINGLE) {
+			/* the last level tree */
 			empty = !uuid_compare(ent.ie_cookie, pcx->pc_cookie);
 		} else {
 			/* prepare the context for the subtree */

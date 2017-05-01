@@ -107,8 +107,8 @@ typedef struct {
 	char		body[DAOS_HKEY_MAX];
 } daos_hash_out_t;
 
-#define DAOS_HASH_HKEY_START 0
-#define DAOS_HASH_HKEY_LENGTH 16
+#define DAOS_HASH_HKEY_START	0
+#define DAOS_HASH_HKEY_LENGTH	24
 
 static inline void
 daos_hash_set_eof(daos_hash_out_t *hash_out)

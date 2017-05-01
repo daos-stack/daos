@@ -803,7 +803,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 
 	daos_iov_set(&iov, NULL, rsize);
 	if (iobuf->db_zc) {
-		rc = evt_insert(toh, &rect, rsize,
+		rc = evt_insert(toh, cookie, &rect, rsize,
 				iobuf->db_mmids[iobuf->db_at]);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -818,7 +818,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 		 * copy actual data into those buffers after evt_insert_sgl().
 		 * See iobuf_update() for the details.
 		 */
-		rc = evt_insert_sgl(toh, &rect, rsize, &sgl);
+		rc = evt_insert_sgl(toh, cookie, &rect, rsize, &sgl);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -1533,14 +1533,14 @@ akey_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 /**
  * Record extent (recx) iterator
  */
-static int recx_iter_fetch(struct vos_obj_iter *oiter,
+static int singv_iter_fetch(struct vos_obj_iter *oiter,
 			   vos_iter_entry_t *it_entry,
 			   daos_hash_out_t *anchor);
 /**
  * Prepare the iterator for the recx tree.
  */
 static int
-recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
+singv_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 		  daos_key_t *akey)
 {
 	struct vos_obj_ref	*oref = oiter->it_oref;
@@ -1561,7 +1561,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	/* see BTR_ITER_EMBEDDED for the details */
 	rc = dbtree_iter_prepare(ak_toh, BTR_ITER_EMBEDDED, &oiter->it_hdl);
 	if (rc != 0) {
-		D_DEBUG(DF_VOS1, "Cannot prepare recx iterator: %d\n", rc);
+		D_DEBUG(DB_IO, "Cannot prepare singv iterator: %d\n", rc);
 		D_GOTO(failed_2, rc);
 	}
 	D_EXIT;
@@ -1578,8 +1578,8 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
  * return the matched one to @entry.
  */
 static int
-recx_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
-		      vos_iter_entry_t *entry)
+singv_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
+		       vos_iter_entry_t *entry)
 {
 	struct vos_key_bundle	kbund;
 	daos_iov_t		kiov;
@@ -1595,7 +1595,7 @@ recx_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 		return rc;
 
 	memset(entry, 0, sizeof(*entry));
-	rc = recx_iter_fetch(oiter, entry, NULL);
+	rc = singv_iter_fetch(oiter, entry, NULL);
 	return rc;
 }
 
@@ -1605,7 +1605,7 @@ recx_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
  * this function will move on to the next recx and repeat this process.
  */
 static int
-recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
+singv_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 {
 	daos_epoch_range_t *epr_cond = &oiter->it_epr;
 
@@ -1633,7 +1633,7 @@ recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 			else /** epoch not in this index search next epoch */
 				epr->epr_lo = DAOS_EPOCH_MAX;
 
-			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
+			rc = singv_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
 			break;
 
 		case VOS_IT_EPC_RR:
@@ -1645,7 +1645,7 @@ recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 			}
 
 			epr->epr_lo = epr_cond->epr_hi;
-			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_LE, entry);
+			rc = singv_iter_probe_fetch(oiter, BTR_PROBE_LE, entry);
 			break;
 
 		case VOS_IT_EPC_GE:
@@ -1656,7 +1656,7 @@ recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 			 * can use BTR_PROBE_GE to find out.
 			 */
 			epr->epr_lo = epr_cond->epr_lo;
-			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
+			rc = singv_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
 			break;
 
 		case VOS_IT_EPC_LE:
@@ -1666,7 +1666,7 @@ recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 				 * epoch of this recx.
 				 */
 				epr->epr_lo = epr_cond->epr_lo;
-				rc = recx_iter_probe_fetch(oiter, BTR_PROBE_LE,
+				rc = singv_iter_probe_fetch(oiter, BTR_PROBE_LE,
 							   entry);
 				return rc;
 			}
@@ -1676,7 +1676,7 @@ recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 			 * effectively find the index of the next recx.
 			 */
 			epr->epr_lo = DAOS_EPOCH_MAX;
-			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
+			rc = singv_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
 			break;
 
 		case VOS_IT_EPC_EQ:
@@ -1685,7 +1685,7 @@ recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 				 * epoch, we try to find it by BTR_PROBE_EQ.
 				 */
 				epr->epr_lo = epr_cond->epr_lo;
-				rc = recx_iter_probe_fetch(oiter, BTR_PROBE_EQ,
+				rc = singv_iter_probe_fetch(oiter, BTR_PROBE_EQ,
 							   entry);
 				if (rc == 0) /* found */
 					return 0;
@@ -1698,7 +1698,7 @@ recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 			 * See the comment for VOS_IT_EPC_LE.
 			 */
 			epr->epr_lo = DAOS_EPOCH_MAX;
-			rc = recx_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
+			rc = singv_iter_probe_fetch(oiter, BTR_PROBE_GE, entry);
 			break;
 		}
 		if (rc != 0)
@@ -1707,7 +1707,7 @@ recx_iter_probe_epr(struct vos_obj_iter *oiter, vos_iter_entry_t *entry)
 }
 
 static int
-recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
+singv_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 {
 	vos_iter_entry_t	entry;
 	struct vos_key_bundle	kbund;
@@ -1730,7 +1730,7 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 	kbund.kb_tclass	= VOS_BTR_IDX;
 
 	memset(&entry, 0, sizeof(entry));
-	rc = recx_iter_fetch(oiter, &entry, &tmp);
+	rc = singv_iter_fetch(oiter, &entry, &tmp);
 	if (rc != 0)
 		return rc;
 
@@ -1741,17 +1741,17 @@ recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 		D_DEBUG(DF_VOS2, "Can't find the provided anchor\n");
 		/**
 		 * the original recx has been merged/discarded, so we need to
-		 * call recx_iter_probe_epr() and check if the current record
+		 * call singv_iter_probe_epr() and check if the current record
 		 * can match the condition.
 		 */
 	}
 
-	rc = recx_iter_probe_epr(oiter, &entry);
+	rc = singv_iter_probe_epr(oiter, &entry);
 	return rc;
 }
 
 static int
-recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
+singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 		daos_hash_out_t *anchor)
 {
 	struct vos_key_bundle	kbund;
@@ -1781,14 +1781,14 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 }
 
 static int
-recx_iter_next(struct vos_obj_iter *oiter)
+singv_iter_next(struct vos_obj_iter *oiter)
 {
 	vos_iter_entry_t entry;
 	int		 rc;
 	int		 opc;
 
 	memset(&entry, 0, sizeof(entry));
-	rc = recx_iter_fetch(oiter, &entry, NULL);
+	rc = singv_iter_fetch(oiter, &entry, NULL);
 	if (rc != 0)
 		return rc;
 
@@ -1802,31 +1802,95 @@ recx_iter_next(struct vos_obj_iter *oiter)
 	opc = (oiter->it_epc_expr == VOS_IT_EPC_RR) ?
 		BTR_PROBE_LE : BTR_PROBE_GE;
 
-	rc = recx_iter_probe_fetch(oiter, opc, &entry);
+	rc = singv_iter_probe_fetch(oiter, opc, &entry);
 	if (rc != 0)
 		return rc;
 
-	rc = recx_iter_probe_epr(oiter, &entry);
+	rc = singv_iter_probe_epr(oiter, &entry);
+	return rc;
+}
+
+/**
+ * Prepare the iterator for the recx tree.
+ */
+static int
+recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
+		  daos_key_t *akey)
+{
+	struct vos_obj_ref	*oref = oiter->it_oref;
+	daos_handle_t		 dk_toh;
+	daos_handle_t		 ak_toh;
+	int			 rc;
+
+	rc = tree_prepare(oref, oref->or_toh, VOS_BTR_DKEY, dkey, true, false,
+			  &dk_toh);
+	if (rc != 0)
+		D_GOTO(failed_0, rc);
+
+	rc = tree_prepare(oref, dk_toh, VOS_BTR_AKEY, akey, true, true,
+			  &ak_toh);
+	if (rc != 0)
+		D_GOTO(failed_1, rc);
+
+	rc = evt_iter_prepare(ak_toh, EVT_ITER_EMBEDDED, &oiter->it_hdl);
+	if (rc != 0) {
+		D_DEBUG(DB_IO, "Cannot prepare recx iterator : %d\n", rc);
+		D_GOTO(failed_2, rc);
+	}
+	D_EXIT;
+ failed_2:
+	tree_release(ak_toh, true);
+ failed_1:
+	tree_release(dk_toh, false);
+ failed_0:
+	return rc;
+}
+static int
+recx_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
+{
+	int	opc;
+	int	rc;
+
+	opc = anchor ? EVT_ITER_FIND : EVT_ITER_FIRST;
+	rc = evt_iter_probe(oiter->it_hdl, opc, NULL, anchor);
 	return rc;
 }
 
 static int
-obj_iter_delete(struct vos_obj_iter *oiter, void *args)
+recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
+		daos_hash_out_t *anchor)
 {
-	int		rc = 0;
-	PMEMobjpool	*pop;
+	struct evt_rect	 *rect;
+	struct evt_entry  entry;
+	int		  rc;
 
-	D_DEBUG(DF_VOS2, "BTR delete called of obj\n");
-	pop = vos_oref2pop(oiter->it_oref);
+	rc = evt_iter_fetch(oiter->it_hdl, &entry, anchor);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
-	TX_BEGIN(pop) {
-		rc = dbtree_iter_delete(oiter->it_hdl, args);
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-		D_DEBUG(DF_VOS1, "Failed to delete iter entry: %d\n", rc);
-	} TX_END
+	memset(it_entry, 0, sizeof(*it_entry));
 
+	rect = &entry.en_rect;
+	it_entry->ie_epr.epr_lo	 = rect->rc_epc_lo;
+	it_entry->ie_epr.epr_hi	 = rect->rc_epc_hi;
+	it_entry->ie_recx.rx_idx = rect->rc_off_lo;
+	it_entry->ie_recx.rx_nr	 = rect->rc_off_hi - rect->rc_off_lo + 1;
+	it_entry->ie_rsize	 = entry.en_inob;
+	uuid_copy(it_entry->ie_cookie, entry.en_cookie);
+ out:
 	return rc;
+}
+
+static int
+recx_iter_next(struct vos_obj_iter *oiter)
+{
+	return evt_iter_next(oiter->it_hdl);
+}
+
+static int
+recx_iter_fini(struct vos_obj_iter *oiter)
+{
+	return evt_iter_finish(oiter->it_hdl);
 }
 
 /**
@@ -1875,8 +1939,13 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		rc = akey_iter_prepare(oiter, &param->ip_dkey);
 		break;
 
-	case VOS_ITER_RECX:
+	case VOS_ITER_SINGLE:
 		oiter->it_epc_expr = param->ip_epc_expr;
+		rc = singv_iter_prepare(oiter, &param->ip_dkey,
+					&param->ip_akey);
+		break;
+
+	case VOS_ITER_RECX:
 		rc = recx_iter_prepare(oiter, &param->ip_dkey, &param->ip_akey);
 		break;
 	}
@@ -1898,14 +1967,25 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
 	int			 rc;
 
-	if (!daos_handle_is_inval(oiter->it_hdl)) {
-		rc = dbtree_iter_finish(oiter->it_hdl);
-		if (rc) {
-			D_ERROR("obj_iter_fini failed:%d\n", rc);
-			return rc;
-		}
-	}
+	if (daos_handle_is_inval(oiter->it_hdl))
+		D_GOTO(out, rc = -DER_NO_HDL);
 
+	switch (iter->it_type) {
+	default:
+		D_ASSERT(0);
+		break;
+
+	case VOS_ITER_DKEY:
+	case VOS_ITER_AKEY:
+	case VOS_ITER_SINGLE:
+		rc = dbtree_iter_finish(oiter->it_hdl);
+		break;
+
+	case VOS_ITER_RECX:
+		rc = recx_iter_fini(oiter);
+		break;
+	}
+ out:
 	if (oiter->it_oref != NULL)
 		vos_obj_ref_release(vos_obj_cache_current(), oiter->it_oref);
 
@@ -1929,6 +2009,9 @@ vos_obj_iter_probe(struct vos_iterator *iter, daos_hash_out_t *anchor)
 	case VOS_ITER_AKEY:
 		return akey_iter_probe(oiter, anchor);
 
+	case VOS_ITER_SINGLE:
+		return singv_iter_probe(oiter, anchor);
+
 	case VOS_ITER_RECX:
 		return recx_iter_probe(oiter, anchor);
 	}
@@ -1949,6 +2032,9 @@ vos_obj_iter_next(struct vos_iterator *iter)
 
 	case VOS_ITER_AKEY:
 		return akey_iter_next(oiter);
+
+	case VOS_ITER_SINGLE:
+		return singv_iter_next(oiter);
 
 	case VOS_ITER_RECX:
 		return recx_iter_next(oiter);
@@ -1972,9 +2058,31 @@ vos_obj_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	case VOS_ITER_AKEY:
 		return akey_iter_fetch(oiter, it_entry, anchor);
 
+	case VOS_ITER_SINGLE:
+		return singv_iter_fetch(oiter, it_entry, anchor);
+
 	case VOS_ITER_RECX:
 		return recx_iter_fetch(oiter, it_entry, anchor);
 	}
+}
+
+static int
+obj_iter_delete(struct vos_obj_iter *oiter, void *args)
+{
+	int		rc = 0;
+	PMEMobjpool	*pop;
+
+	D_DEBUG(DB_TRACE, "BTR delete called of obj\n");
+	pop = vos_oref2pop(oiter->it_oref);
+
+	TX_BEGIN(pop) {
+		rc = dbtree_iter_delete(oiter->it_hdl, args);
+	} TX_ONABORT {
+		rc = umem_tx_errno(rc);
+		D_ERROR("Failed to delete iter entry: %d\n", rc);
+	} TX_END
+
+	return rc;
 }
 
 static int
@@ -1986,10 +2094,14 @@ vos_obj_iter_delete(struct vos_iterator *iter, void *args)
 	default:
 		D_ASSERT(0);
 		return -DER_INVAL;
+
 	case VOS_ITER_DKEY:
 	case VOS_ITER_AKEY:
-	case VOS_ITER_RECX:
+	case VOS_ITER_SINGLE:
 		return obj_iter_delete(oiter, args);
+
+	case VOS_ITER_RECX:
+		return -DER_NOSYS;
 	}
 }
 
@@ -1998,17 +2110,19 @@ vos_obj_iter_empty(struct vos_iterator *iter)
 {
 	struct vos_obj_iter *oiter = vos_iter2oiter(iter);
 
+	if (daos_handle_is_inval(oiter->it_hdl))
+		return -DER_NO_HDL;
+
 	switch (iter->it_type) {
 	default:
 		D_ASSERT(0);
 		return -DER_INVAL;
 	case VOS_ITER_DKEY:
 	case VOS_ITER_AKEY:
-	case VOS_ITER_RECX:
-		if (daos_handle_is_inval(oiter->it_hdl))
-			return -DER_NO_HDL;
-
+	case VOS_ITER_SINGLE:
 		return dbtree_iter_empty(oiter->it_hdl);
+	case VOS_ITER_RECX:
+		return -DER_NOSYS;
 	}
 }
 

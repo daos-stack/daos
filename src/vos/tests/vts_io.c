@@ -194,16 +194,21 @@ teardown_io(void **state)
 }
 
 static int
-io_recx_iterate(vos_iter_param_t *param, daos_key_t *akey, int akey_id,
-		bool cookie_fetch, int *recs, bool print_ent)
+io_recx_iterate(struct io_test_args *arg, vos_iter_param_t *param,
+		daos_key_t *akey, int akey_id, int *recs, bool print_ent)
 {
 	daos_handle_t	ih;
+	int		itype;
 	int		nr = 0;
 	int		rc;
 
 	param->ip_akey = *akey;
+	if (arg->ta_flags & TF_REC_EXT)
+		itype = VOS_ITER_RECX;
+	else
+		itype = VOS_ITER_SINGLE;
 
-	rc = vos_iter_prepare(VOS_ITER_RECX, param, &ih);
+	rc = vos_iter_prepare(itype, param, &ih);
 	if (rc != 0) {
 		print_error("Failed to create recx iterator: %d\n", rc);
 		goto out;
@@ -225,7 +230,7 @@ io_recx_iterate(vos_iter_param_t *param, daos_key_t *akey, int akey_id,
 			goto out;
 		}
 
-		if (cookie_fetch) {
+		if (arg->cookie_flag) {
 			assert_true(is_found(ent.ie_cookie));
 			if (print_ent)
 				D_PRINT("Cookie : %s\n",
@@ -261,8 +266,9 @@ out:
 }
 
 static int
-io_akey_iterate(vos_iter_param_t *param, daos_key_t *dkey, int dkey_id,
-		bool cookie_flag, int *akeys, int *recs, bool print_ent)
+io_akey_iterate(struct io_test_args *arg, vos_iter_param_t *param,
+		daos_key_t *dkey, int dkey_id, int *akeys, int *recs,
+		bool print_ent)
 {
 	daos_handle_t	ih;
 	int		nr = 0;
@@ -295,7 +301,7 @@ io_akey_iterate(vos_iter_param_t *param, daos_key_t *dkey, int dkey_id,
 				(char *)param->ip_dkey.iov_buf);
 		}
 
-		rc = io_recx_iterate(param, &ent.ie_key, nr, cookie_flag,
+		rc = io_recx_iterate(arg, param, &ent.ie_key, nr,
 				     recs, print_ent);
 
 		nr++;
@@ -368,9 +374,8 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 			goto out;
 		}
 
-		rc = io_akey_iterate(&param, &ent.ie_key, nr,
-				     arg->cookie_flag, &akeys,
-				     &recs, print_ent);
+		rc = io_akey_iterate(arg, &param, &ent.ie_key, nr,
+				     &akeys, &recs, print_ent);
 		if (rc != 0)
 			goto out;
 
@@ -755,7 +760,7 @@ io_iter_test(void **state)
 	int			rc = 0;
 	int			nr, akeys, recs;
 
-	arg->ta_flags = 0;
+	arg->ta_flags = TF_REC_EXT;
 	epr.epr_lo = vts_epoch_gen + 10;
 	epr.epr_hi = DAOS_EPOCH_MAX;
 
@@ -781,7 +786,7 @@ io_iter_test_with_anchor(void **state)
 	int			nr, rc = 0;
 	int			akeys, recs;
 
-	arg->ta_flags = TF_IT_ANCHOR;
+	arg->ta_flags = TF_IT_ANCHOR | TF_REC_EXT;
 	epr.epr_lo = vts_epoch_gen + 10;
 	epr.epr_hi = DAOS_EPOCH_MAX;
 	arg->cookie_flag = false;

@@ -73,6 +73,8 @@ typedef enum {
 	VOS_ITER_DKEY,
 	/** iterate all a-keys */
 	VOS_ITER_AKEY,
+	/** iterate history of a single value */
+	VOS_ITER_SINGLE,
 	/** iterate record extents and epoch validities of these extents */
 	VOS_ITER_RECX,
 } vos_iter_type_t;
