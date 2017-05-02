@@ -7,12 +7,12 @@ The figures below present two different views of the DSM server-side architectur
 <a id="a"></a> 
 **DSM services in a pool (conceptual view)**
 
-![HLD_Graphics/Fig_039.png](HLD_Graphics/Fig_039.png "DSM services in a pool (conceptual view)")
+![../client/HLD_Graphics/Fig_039.png](../client/HLD_Graphics/Fig_039.png "DSM services in a pool (conceptual view)")
  
 <a id="b"></a> 
 **DSM services in a pool (physical view)**
 
-![HLD_Graphics/Fig_040.png](HLD_Graphics/Fig_040.png "DSM services in a pool (physical view)")
+![../client/HLD_Graphics/Fig_040.png](../client/HLD_Graphics/Fig_040.png "DSM services in a pool (physical view)")
 
 This section:
 
@@ -133,7 +133,7 @@ The <a href="#f8.1">figure</a> below shows the modules constituting a service re
 <a id="f8.1"></a>
 **Service replication modules**
 
-![HLD_Graphics/Fig_041.png](HLD_Graphics/Fig_041.png "Service replication modules")
+![../client/HLD_Graphics/Fig_041.png](../client/HLD_Graphics/Fig_041.png "Service replication modules")
 
 <a id="8.3.2"></a>
 ### RPC Handling
