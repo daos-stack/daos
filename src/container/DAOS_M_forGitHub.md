@@ -2,7 +2,7 @@
 
 The DAOS-M layer (DSM) builds the pool and container abstractions that offer target-local objects. DSM consists of three types of services and a client library, which together implement the DSM API used by the DAOS-SR layer to build distributed objects. A major goal of DSM is to provide highly-available pool and container metadata access, enabling the DAOS-SR layer to make progress in the presence of faulty targets.
 
-The figures below present two different views of the DSM server-side architecture. Every storage node is capable of hosting all three types of services. Multiple, different services may run on the same storage node. The client library links directly with caller processes. Library-service and service-service communications use the RPC transport described in section 4.3.
+The figures below present two different views of the DSM server-side architecture. Every storage node is capable of hosting all three types of services. Multiple, different services may run on the same storage node. The client library links directly with caller processes. Library-service and service-service communications use the RPC transport described in <a href="../client/layering.md#58">*Network Transport*</a>.
  
 <a id="a"></a> 
 **DSM services in a pool (conceptual view)**
@@ -51,7 +51,7 @@ All APIs provided by the client library can be asynchronous. (See also Fast Forw
 A pool service maintains pool metadata, including:
 
 - **Pool connections**. Each pool connection is represented by a pool handle identified by a client-generated handle UUID. See POOL_CONNECT below. The terms “pool connection” and “pool handle” are used interchangeably in this document.
-- **Pool map**. This is a versioned data structure recording the set of targets belonging to this pool, the fault domains to which the targets belong, and the status of the targets. Versioning (which is unrelated to epochs) facilitates lazy dissemination of the pool map across clients and targets. See section 8.1.
+- **Pool map**. This is a versioned data structure recording the set of targets belonging to this pool, the fault domains to which the targets belong, and the status of the targets. Versioning (which is unrelated to epochs) facilitates lazy dissemination of the pool map across clients and targets. See <a href="../object/key_array_object.md#10.1">*Pool Map*</a>.
 - **Pool name space**. This provides a pool-wise, flat name space of string-based, user-friendly container names. Looking up a container name in the pool name space gets the corresponding container UUID.
 - **Container index**. This maps a container UUID to the ID of the corresponding container service.
 - **Container service index**. This maps a container service ID to the addresses of the corresponding container service replicas.
@@ -75,13 +75,12 @@ A pool service handles the following RPC procedures. “pool_handle_uuid” is a
 ### Container Service
 
 The container service maintains container metadata, including:
-
-- **Epoch state**. This mainly consists of the container HCE and the maximum aggregated epoch (section 7.8.5).
+- **Epoch state**. This mainly consists of the container HCE and the maximum aggregated epoch (see <a href="#8.8.5">*Aggregation*</a>).
 - **Container handles**. Each container handle is identified by a client-generated handle UUID. The metadata associated with a container handle include its capabilities (e.g., read-only or read-write) and its per-handle epoch state, which consists of its LRE, HCE, and LHE.
 - **Snapshots**. These are simply the epochs that have been snapshotted.
 - **Upper-layer container metadata**. Attributes used by the DAOS-SR layer or layers even higher above.
 
-Note that DSM treats the object index table (sections 3.1.3 and 8.3) as data, rather than metadata, of DSM containers.
+Note that DSM treats the object index table (<a href="../client/model.md#4.1.3">*DAOS Container*</a> and <a href="../object/key_array_object.md#10.3">*Scalable Object Index Table*</a>) as data, rather than metadata, of DSM containers.
 
 A container service handles the following RPC procedures. “container_handle_uuid” is a UUID identifying a container handle. “epoch_state” contains epoch-related information such as the container HCE, the LRE, HCE and LHE of this handle, the number of snapshotted epochs, etc.
 
@@ -181,7 +180,7 @@ In the remainder of this section, the addresses of the replicas belonging to a r
 <a id="8.4"></a>
 ## Pool Creation
 
-Because creating a pool requires special privileges for steps related to storage allocation and fault domain querying, it is handled by the storage management module, as described in sections MAKEREF STORAGE.md4.2.4 and MAKEREF Layering.md5.1. After the target formatting is done, the storage management module calls DSM with the list of targets and their fault domains, to create and initialize a pool service. DSM creates the pool service following the principle described in *<a href="#8.3.3">Service Management</a>*. The list of targets and their fault domains are then converted into the initial version of the pool map and stored in the pool service, along with other initial pool metadata. When returning to the storage management module, DSM reports back the address of the pool service, which will eventually be passed to the application and used to address the POOL_CONNECT RPC(s).
+Because creating a pool requires special privileges for steps related to storage allocation and fault domain querying, it is handled by the storage management module, as described in <a href="../client/layering.md#56">*Integration with System Management*</a> and <a href="/doc/use_cases.md#61">*Storage Management and Workflow Integration*</a>. After the target formatting is done, the storage management module calls DSM with the list of targets and their fault domains, to create and initialize a pool service. DSM creates the pool service following the principle described in *<a href="#8.3.3">Service Management</a>*. The list of targets and their fault domains are then converted into the initial version of the pool map and stored in the pool service, along with other initial pool metadata. When returning to the storage management module, DSM reports back the address of the pool service, which will eventually be passed to the application and used to address the POOL_CONNECT RPC(s).
 
 <a id="8.5"></a>
 ## Pool Connections
@@ -214,7 +213,7 @@ In the case of (1) or (2) above, the client library first sends a POOL_CONTAINER
 <a id="8.8"></a>
 ## Epoch Protocol
 
-The epoch protocol, which involves the client library and all the three types of services, implements the epoch model described in MAKEREF Models.mdTransactional Model - <a id="4.2"></a>section 3.2. This subsection first describes epochs within a single container, and then addresses atomicity across containers in the same pool.
+The epoch protocol, which involves the client library and all the three types of services, implements the epoch model described in <a href="../client/model.md#4.2">*Transactional Model*</a>. This subsection first describes epochs within a single container, and then addresses atomicity across containers in the same pool.
 
 <a id="8.8.1"></a>
 ### Intra-Container Epochs
@@ -223,7 +222,7 @@ The epochs of a container are managed by the matching container service. The con
 
 When a client process opens a container with write capability, the container service assigns a small cookie (i.e., up to 64 bits) to the resulting container handle and sends it along with the container handle to all the targets. The cookie then serves as a container handle identifier that is smaller than the 128-bit container handle UUID, and used only internally on the server side to track write operations belonging to a certain container handle. The container service guarantees that coexistent container handles get unique cookies and that each cookie remains constant throughout the life of its container handle.
 
-On each target, the target service eagerly stores incoming write operations into the matching VOS container. For every write operation, the target service passes the cookie of the matching container handle and the epoch to VOS. If a container handle discards an epoch, VOS helps discard all write operations associated with the cookie of the container handle. When a write operation succeeds, it is immediately visible to conflicting operations in equal or higher epochs. A conflicting write operation with the same epoch will be rejected by VOS unless it has the same cookie and content as the one that is already executed. Applications require their own conflict resolution mechanism when they need to read uncommitted write operations from a different container handle, so that their write operations use a higher epoch than the one they read from, as described in section MAKEREF USECASES <a href="#65">Concurrent Producers</a>5.2.3.
+On each target, the target service eagerly stores incoming write operations into the matching VOS container. For every write operation, the target service passes the cookie of the matching container handle and the epoch to VOS. If a container handle discards an epoch, VOS helps discard all write operations associated with the cookie of the container handle. When a write operation succeeds, it is immediately visible to conflicting operations in equal or higher epochs. A conflicting write operation with the same epoch will be rejected by VOS unless it has the same cookie and content as the one that is already executed. Applications require their own conflict resolution mechanism when they need to read uncommitted write operations from a different container handle, so that their write operations use a higher epoch than the one they read from, as described in <a href="/doc/use_cases.md#61">*Concurrent Producers*</a>.
 
 Before committing an epoch, an application must ensure that a sufficient set of write operations for this epoch have been persisted by the target services. The application and the DAOS-SR layer may decide that losing some write operations is acceptable, depending on the redundancy scheme each of them employs. The flushing of each write operation involves a client-side stage and a server-side stage. On the client side, if the write operation is non-blocking, the application must wait for it to complete by calling the event methods in the client library on appropriate event queues. Then, on the server side, the local NVM transaction corresponding to the write operation must commit successfully. The application ensures this by calling the flush method in the client library, which asks for the whole container to be flushed at this epoch. The DAOS-SR layer responses by sending a CONTAINER_EPOCH_FLUSH request to the container service, which then initiates a collective TARGET_EPOCH_FLUSH request to all target services. The “targets” argument of CONTAINER_EPOCH_FLUSH and the TARGET_EPOCH_FLUSH procedure enables future DAOS-SR implementations to experiment with more selective flushing on the targets that have actually been updated in this epoch.
 
