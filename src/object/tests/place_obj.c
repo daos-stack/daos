@@ -51,7 +51,7 @@ plt_obj_place(daos_obj_id_t oid)
 
 	D_PRINT("Layout of object "DF_OID"\n", DP_OID(oid));
 	for (i = 0; i < layout->ol_nr; i++)
-		D_PRINT("%d ", layout->ol_targets[i]);
+		D_PRINT("%d ", layout->ol_shards[i].po_target);
 
 	D_PRINT("\n");
 

@@ -371,14 +371,13 @@ ds_pool_map_tgts_update(struct pool_map *map, daos_rank_list_t *tgts,
 			D_DEBUG(DF_DSMS, "changing rank %u to UP in map %p\n",
 				target->ta_comp.co_rank, map);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
-			target->ta_comp.co_fseq = version;
+			target->ta_comp.co_ver = version;
 			nchanges++;
 		} else if (opc == POOL_EXCLUDE_OUT &&
 			   target->ta_comp.co_status == PO_COMP_ST_DOWN) {
 			D_DEBUG(DF_DSMS, "changing rank %u to DOWNOUT map %p\n",
 				target->ta_comp.co_rank, map);
 			target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
-			target->ta_comp.co_fseq = version;
 			nchanges++;
 		}
 	}

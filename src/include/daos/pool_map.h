@@ -47,17 +47,17 @@ typedef enum pool_comp_type {
 
 /** pool component states */
 typedef enum pool_comp_state {
-	PO_COMP_ST_UNKNOWN,
+	PO_COMP_ST_UNKNOWN	= 0,
 	/** intermediate state for pool map change */
-	PO_COMP_ST_NEW,
+	PO_COMP_ST_NEW		= 1,
 	/** component is healthy */
-	PO_COMP_ST_UP,
+	PO_COMP_ST_UP		= 1 << 1,
 	/** component is healthy and integrated in storage pool */
-	PO_COMP_ST_UPIN,
+	PO_COMP_ST_UPIN		= 1 << 2,
 	/** component is dead */
-	PO_COMP_ST_DOWN,
+	PO_COMP_ST_DOWN		= 1 << 3,
 	/** component is dead, its data has already been rebuilt */
-	PO_COMP_ST_DOWNOUT,
+	PO_COMP_ST_DOWNOUT	= 1 << 4,
 } pool_comp_state_t;
 
 /** parent class of all all pool components: target, domain */
@@ -162,6 +162,10 @@ struct pool_target *pool_map_find_target_by_rank(struct pool_map *map,
 						 uint32_t rank);
 int pool_map_find_domain(struct pool_map *map, pool_comp_type_t type,
 			 uint32_t id, struct pool_domain **domain_pp);
+
+int pool_map_failed_tgts_get(struct pool_map *map, unsigned int ver,
+			     struct pool_target **tgt_pp,
+			     unsigned int *tgt_cnt);
 
 static inline struct pool_target *
 pool_map_targets(struct pool_map *map)

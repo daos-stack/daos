@@ -69,11 +69,16 @@ struct pl_target_grp {
 	struct pl_target	*tg_targets;
 };
 
+struct pl_obj_shard {
+	uint32_t	po_shard;	/* shard index */
+	uint32_t	po_target;	/* target id */
+	uint32_t	po_rebuilding: 1; /* if the shard is being rebuilt */
+};
+
 struct pl_obj_layout {
 	uint32_t		 ol_ver;
 	uint32_t		 ol_nr;
-	uint32_t		*ol_shards;
-	uint32_t		*ol_targets;
+	struct pl_obj_shard	*ol_shards;
 };
 
 int  pl_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,

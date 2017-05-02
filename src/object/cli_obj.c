@@ -158,14 +158,14 @@ obj_shard_open(struct dc_object *obj, unsigned int shard, daos_handle_t *oh,
 	}
 
 	/* Skip the invalid shards and targets */
-	if (layout->ol_shards[shard] == -1 ||
-	    layout->ol_targets[shard] == -1) {
+	if (layout->ol_shards[shard].po_shard == -1 ||
+	    layout->ol_shards[shard].po_target == -1) {
 		pthread_rwlock_unlock(&obj->cob_lock);
 		return -DER_NONEXIST;
 	}
 
 	/* XXX could be otherwise for some object classes? */
-	D_ASSERT(layout->ol_shards[shard] == shard);
+	D_ASSERT(layout->ol_shards[shard].po_shard == shard);
 
 	D_DEBUG(DB_IO, "Open object shard %d\n", shard);
 	if (daos_handle_is_inval(obj->cob_mohs[shard])) {
@@ -178,7 +178,7 @@ obj_shard_open(struct dc_object *obj, unsigned int shard, daos_handle_t *oh,
 		 * it in sync mode, at least for now.
 		 */
 		rc = dc_obj_shard_open(obj->cob_coh,
-				       layout->ol_targets[shard],
+				       layout->ol_shards[shard].po_target,
 				       oid, obj->cob_mode,
 				       &obj->cob_mohs[shard]);
 	}
@@ -308,7 +308,7 @@ obj_dkey2grp(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 /* Get a valid shard from an object group */
 static int
 obj_grp_valid_shard_get(struct dc_object *obj, int idx,
-			unsigned int map_ver)
+			unsigned int map_ver, uint32_t op)
 {
 	int idx_first;
 	int idx_last;
@@ -333,38 +333,47 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 		return -DER_STALE;
 	}
 
-	for (i = 0; i < grp_size; i++) {
-		if (obj->cob_layout->ol_shards[idx] != -1)
-			break;
+	for (i = 0; i < grp_size; i++,
+	     idx = (idx + 1) % grp_size + idx_first) {
+		/* let's skip the rebuild shard for non-update op */
+		if (op != DAOS_OBJ_RPC_UPDATE &&
+		    obj->cob_layout->ol_shards[idx].po_rebuilding)
+			continue;
 
-		if (idx < idx_last)
-			idx++;
-		else
-			idx = idx_first;
+		if (obj->cob_layout->ol_shards[idx].po_shard != -1)
+			break;
 	}
 	pthread_rwlock_unlock(&obj->cob_lock);
 
-	if (i == grp_size)
-		return -DER_NONEXIST;
+	if (i == grp_size) {
+		if (op == DAOS_OBJ_RPC_UPDATE)
+			return -DER_NONEXIST;
+
+		/* For non-update ops, some of rebuilding shards
+		 * might not be refreshed yet, let's update pool
+		 * map and retry.
+		 */
+		return -DER_STALE;
+	}
 
 	return idx;
 }
 
 static int
 obj_grp_shard_get(struct dc_object *obj, uint32_t grp_idx,
-		  uint64_t hash, unsigned int map_ver)
+		  uint64_t hash, unsigned int map_ver, uint32_t op)
 {
 	int	grp_size;
 	int	idx;
 
 	grp_size = obj_get_grp_size(obj);
 	idx = hash % grp_size + grp_idx * grp_size;
-	return obj_grp_valid_shard_get(obj, idx, map_ver);
+	return obj_grp_valid_shard_get(obj, idx, map_ver, op);
 }
 
 static int
 obj_dkey2shard(struct dc_object *obj, daos_key_t *dkey,
-	       unsigned int map_ver)
+	       unsigned int map_ver, uint32_t op)
 {
 	uint64_t hash;
 	int	 grp_idx;
@@ -376,7 +385,7 @@ obj_dkey2shard(struct dc_object *obj, daos_key_t *dkey,
 	if (grp_idx < 0)
 		return grp_idx;
 
-	return obj_grp_shard_get(obj, grp_idx, hash, map_ver);
+	return obj_grp_shard_get(obj, grp_idx, hash, map_ver, op);
 }
 
 static int
@@ -722,7 +731,7 @@ dc_obj_fetch(struct daos_task *task)
 		D_GOTO(out_task, rc);
 	}
 
-	shard = obj_dkey2shard(obj, args->dkey, map_ver);
+	shard = obj_dkey2shard(obj, args->dkey, map_ver, DAOS_OPC_OBJ_UPDATE);
 	if (shard < 0)
 		D_GOTO(out_task, rc = shard);
 
@@ -1060,14 +1069,14 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 
 	if (op == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
 		shard = enum_anchor_get_shard(anchor);
-		shard = obj_grp_valid_shard_get(obj, shard, map_ver);
+		shard = obj_grp_valid_shard_get(obj, shard, map_ver, op);
 		if (shard < 0)
 			D_GOTO(out_task, rc = shard);
 
 		enum_anchor_set_shard(anchor, shard);
 
 	} else {
-		shard = obj_dkey2shard(obj, dkey, map_ver);
+		shard = obj_dkey2shard(obj, dkey, map_ver, op);
 		if (shard < 0)
 			D_GOTO(out_task, rc = shard);
 

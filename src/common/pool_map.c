@@ -1479,6 +1479,121 @@ pool_map_find_target(struct pool_map *map, uint32_t id,
 }
 
 static void
+fseq_sort_op_swap(void *array, int a, int b)
+{
+	struct pool_component *comps = (struct pool_component *)array;
+	struct pool_component  tmp;
+
+	tmp = comps[a];
+	comps[a] = comps[b];
+	comps[b] = tmp;
+}
+
+static int
+fseq_sort_op_cmp(void *array, int a, int b)
+{
+	struct pool_component *comps = (struct pool_component *)array;
+
+	if (comps[a].co_fseq > comps[b].co_fseq)
+		return 1;
+	if (comps[a].co_fseq < comps[b].co_fseq)
+		return -1;
+	return 0;
+}
+
+static int
+fseq_sort_op_cmp_key(void *array, int i, uint64_t key)
+{
+	struct pool_component *comps = (struct pool_component *)array;
+	uint32_t		fseq = (uint32_t)key;
+
+	if (comps[i].co_fseq > fseq)
+		return 1;
+	if (comps[i].co_fseq < fseq)
+		return -1;
+	return 0;
+}
+
+/** fseq based sort and lookup for components */
+static daos_sort_ops_t fseq_sort_ops = {
+	.so_swap	= fseq_sort_op_swap,
+	.so_cmp		= fseq_sort_op_cmp,
+	.so_cmp_key	= fseq_sort_op_cmp_key,
+};
+
+/* Get targets by status and fseq */
+static int
+pool_map_tgt_get_internal(struct pool_map *map, unsigned int ver,
+			  uint32_t status, struct pool_target **tgt_pp,
+			  unsigned int *tgt_cnt)
+{
+	struct pool_target	*tgts;
+	struct pool_target	*tgts_find;
+	unsigned int		idx = 0;
+	int			cnt = 0;
+	int			i;
+
+	cnt = pool_map_find_target(map, PO_COMP_ID_ALL, &tgts);
+	for (i = 0; i < cnt; i++) {
+		if ((tgts[i].ta_comp.co_status & status) &&
+		    (tgts[i].ta_comp.co_fseq <= ver))
+			(*tgt_cnt)++;
+	}
+
+	if (*tgt_cnt == 0)
+		return 0;
+
+	D_ALLOC(tgts_find, *tgt_cnt * sizeof(struct pool_target));
+	if (*tgt_pp == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < cnt; i++) {
+		if ((tgts[i].ta_comp.co_status & status) &&
+		    (tgts[i].ta_comp.co_fseq <= ver)) {
+			tgts_find[idx] = tgts[i];
+			idx++;
+		}
+	}
+
+	*tgt_pp = tgts_find;
+	return 0;
+}
+
+int
+pool_map_failed_tgts_get(struct pool_map *map, unsigned int ver,
+			 struct pool_target **tgt_pp, unsigned int *tgt_cnt)
+{
+	int rc;
+	int i;
+
+	*tgt_cnt = 0;
+	rc = pool_map_tgt_get_internal(map, ver,
+				       PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				       tgt_pp, tgt_cnt);
+	if (rc || *tgt_cnt == 0) {
+		D_DEBUG(DB_TRACE, "Get failed target rc %d cnt %d\n", rc,
+			*tgt_cnt);
+		return rc;
+	}
+
+	/* Sort the array by fseq */
+	rc = daos_array_sort(*tgt_pp, *tgt_cnt, true, &fseq_sort_ops);
+	if (rc != 0) {
+		D_FREE(*tgt_pp, *tgt_cnt * sizeof(struct pool_target));
+		*tgt_pp = NULL;
+		return rc;
+	}
+
+	for (i = 0; i < *tgt_cnt; i++)
+		D_DEBUG(DB_PL, "i %d f_seq %d rank %d status %d\n",
+			i, (*tgt_pp)[i].ta_comp.co_fseq,
+			(*tgt_pp)[i].ta_comp.co_rank,
+			(*tgt_pp)[i].ta_comp.co_status);
+
+	return rc;
+}
+
+static void
 pool_indent_print(int dep)
 {
 	int	i;

@@ -85,6 +85,18 @@ static struct daos_obj_class daos_obj_classes[] = {
 		},
 	},
 	{
+		.oc_name	= "repl_2_small_rw",
+		.oc_id		= DAOS_OC_REPL_2_SMALL_RW,
+		{
+			.ca_schema		= DAOS_OS_STRIPED,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.u.repl			= {
+				.r_num		= 2,
+			},
+		},
+	},
+	{
 		.oc_name	= "repl_max_rw",
 		.oc_id		= DAOS_OC_REPL_MAX_RW,
 		{

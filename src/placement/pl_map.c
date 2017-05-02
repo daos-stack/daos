@@ -178,11 +178,6 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 void
 pl_obj_layout_free(struct pl_obj_layout *layout)
 {
-	if (layout->ol_targets != NULL) {
-		D_FREE(layout->ol_targets,
-		       layout->ol_nr * sizeof(*layout->ol_targets));
-	}
-
 	if (layout->ol_shards != NULL) {
 		D_FREE(layout->ol_shards,
 		       layout->ol_nr * sizeof(*layout->ol_shards));
@@ -200,11 +195,6 @@ pl_obj_layout_alloc(unsigned int shard_nr, struct pl_obj_layout **layout_pp)
 		return -DER_NOMEM;
 
 	layout->ol_nr = shard_nr;
-	D_ALLOC(layout->ol_targets,
-		layout->ol_nr * sizeof(*layout->ol_targets));
-	if (layout->ol_targets == NULL)
-		goto failed;
-
 	D_ALLOC(layout->ol_shards,
 		layout->ol_nr * sizeof(*layout->ol_shards));
 	if (layout->ol_shards == NULL)
