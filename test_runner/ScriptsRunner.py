@@ -162,10 +162,12 @@ class ScriptsRunner(PostRunner.PostRunner):
         rtn = 0
         rc = 0
         #module = self.test_info.get_module()
+        testsetname = self.test_info.get_test_info('testSetName')
         testname = self.test_info.get_test_info('testName')
         logName = os.path.join(self.logdir,
                                "{!s}.{!s}.test_log.{!s}.log".format(
-                                   testname, testname, self.test_info.nodename))
+                                   testsetname, testname,
+                                   self.test_info.nodename))
         file_hdlr = logging.FileHandler(logName)
         self.logger.addHandler(file_hdlr)
         file_hdlr.setLevel(logging.DEBUG)
@@ -175,7 +177,7 @@ class ScriptsRunner(PostRunner.PostRunner):
                         )
         self.test_info.setup_default_env()
         loop = str(self.test_info.get_directives('loop', "no"))
-        results = ResultsRunner.SubTestResults(self.logdir, testname)
+        results = ResultsRunner.SubTestResults(self.logdir, testsetname)
         if loop.lower() == "no":
             rtn = self.execute_list(results)
         else:
@@ -190,7 +192,7 @@ class ScriptsRunner(PostRunner.PostRunner):
                     os.makedirs(self.logdir)
                 except OSError:
                     pass
-                results.add_test_set("{!s}_loop{!s}".format(testname, i))
+                results.add_test_set("{!s}_loop{!s}".format(testsetname, i))
                 rc = self.execute_list(results)
                 rtn |= rc
                 if rc == 0:

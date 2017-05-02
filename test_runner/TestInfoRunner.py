@@ -107,6 +107,13 @@ class TestInfoRunner(PreRunner.PreRunner):
                 "{!s}_{!s}".format(fileName, moduleName)
         else:
             self.test_info['testName'] = moduleName
+
+        # create test set name for results file
+        if self.info.get_config('node'):
+            self.test_info['testSetName'] = "{!s}_{!s}".format(
+                self.test_info['testName'], self.nodename)
+        else:
+            self.test_info['testSetName'] = self.test_info['testName']
         return rtn
     #pylint: enable=too-many-branches
 
@@ -125,14 +132,14 @@ class TestInfoRunner(PreRunner.PreRunner):
                                        self.test_info['testName'])):
             name = os.path.join(self.log_dir_base, self.test_info['testName'],
                                 "{!s}.{!s}.test_info_yml.{!s}.log".format(
-                                    self.test_info['testName'],
+                                    self.test_info['testSetName'],
                                     self.test_info['testName'],
                                     self.nodename)
                                )
         else:
             name = os.path.join(self.log_dir_base,
                                 "{!s}.{!s}.test_info_yml.{!s}.log".format(
-                                    self.test_info['testName'],
+                                    self.test_info['testSetName'],
                                     self.test_info['testName'],
                                     self.nodename)
                                )

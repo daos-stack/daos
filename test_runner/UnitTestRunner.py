@@ -152,11 +152,12 @@ class UnitTestRunner(PostRunner.PostRunner,
 
         file_hdlr = None
         rtn = 0
+        testsetname = self.test_info.get_test_info('testSetName')
         testname = self.test_info.get_test_info('testName')
-        testlog = "{!s}.{!s}.test_log.{!s}.log".format(testname, testname,
+        testlog = "{!s}.{!s}.test_log.{!s}.log".format(testsetname, testname,
                                                        self.test_info.nodename
                                                       )
-        results = ResultsRunner.SubTestResults(self.log_dir_base, testname)
+        results = ResultsRunner.SubTestResults(self.log_dir_base, testsetname)
         file_hdlr = logging.FileHandler(os.path.join(self.log_dir_base,
                                                      testlog))
         file_hdlr.setLevel(logging.DEBUG)
@@ -190,7 +191,7 @@ class UnitTestRunner(PostRunner.PostRunner,
                                  "*************************"
                                 )
                 self.loop_number = i
-                results.add_test_set("{!s}_loop{!s}".format(testname, i))
+                results.add_test_set("{!s}_loop{!s}".format(testsetname, i))
                 start_time = time()
                 rtn |= self.execute_list()
                 results_info['name'] = testname

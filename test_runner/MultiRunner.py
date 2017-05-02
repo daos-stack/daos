@@ -150,9 +150,11 @@ class MultiRunner(PostRunner.PostRunner):
     def import_daemon(self, logbase):
         """ import the daemon module and load the class """
         _class = None
+        test_set_name = self.test_info.get_test_info('testSetName')
         name = self.test_info.get_test_info('use_daemon', 'name')
         logDir = os.path.join(logbase, name)
-        self.daemon_results = ResultsRunner.SubTestResults(logDir, name)
+        self.daemon_results = ResultsRunner.SubTestResults(logDir,
+                                                           test_set_name)
         self.logger.info("Import daemon: %s", name)
         try:
             os.makedirs(logDir)
@@ -166,9 +168,9 @@ class MultiRunner(PostRunner.PostRunner):
                 _class = getattr(_module, name)(logDir, self.test_info,
                                                 self.nodes)
             except AttributeError:
-                self.logger.error("Class does not exist")
+                self.logger.error("Class does not exist %s", name)
         except ImportError:
-            self.logger.error("Module does not exist")
+            self.logger.error("Module does not exist %s", name)
         return _class
 
     #pylint: disable=too-many-statements
@@ -190,8 +192,9 @@ class MultiRunner(PostRunner.PostRunner):
             if self.test_info.load_testcases(test_module_name, True):
                 return 1
             module_name = str(self.test_info.get_test_info('testName'))
+            test_set_name = str(self.test_info.get_test_info('testSetName'))
             results = ResultsRunner.SubTestResults(self.log_dir_base,
-                                                   module_name)
+                                                   test_set_name)
             self.logdir = os.path.join(self.log_dir_base, module_name)
             try:
                 os.makedirs(self.logdir)

@@ -146,10 +146,12 @@ class PythonRunner(PostRunner.PostRunner):
         """ execute test strategy """
         rtn = 0
         rc = 0
+        testsetname = self.test_info.get_test_info('testSetName')
         testname = self.test_info.get_test_info('testName')
         logName = os.path.join(self.logdir,
                                "{!s}.{!s}.test_log.{!s}.log".format(
-                                   testname, testname, self.test_info.nodename))
+                                   testsetname, testname,
+                                   self.test_info.nodename))
         file_hdlr = logging.FileHandler(logName)
         self.logger.addHandler(file_hdlr)
         file_hdlr.setLevel(logging.DEBUG)
@@ -162,7 +164,7 @@ class PythonRunner(PostRunner.PostRunner):
         self.testModule = self.import_module()
         print("testModule type: {!s}".format(type(self.testModule)))
         loop = str(self.test_info.get_test_info('directives', 'loop', "no"))
-        results = ResultsRunner.SubTestResults(self.logdir, testname)
+        results = ResultsRunner.SubTestResults(self.logdir, testsetname)
 
         if loop.lower() == "no":
             rtn = self.execute_list(results)
@@ -178,7 +180,7 @@ class PythonRunner(PostRunner.PostRunner):
                 #    os.makedirs(self.logdir)
                 #except OSError:
                 #    pass
-                results.add_test_set("{!s}_loop{!s}".format(testname, i))
+                results.add_test_set("{!s}_loop{!s}".format(testsetname, i))
                 rc = self.execute_list(results)
                 rtn |= rc
                 if rc == 0:
