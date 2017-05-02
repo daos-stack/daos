@@ -13,8 +13,8 @@ This high-level design document is organized as follows:
 - <a href="use_cases.md">Use Cases</a>: Provides a list of use cases.
 - The remaining sections focus on the internal design of each stack layer, including data structure and algorithmic choices:
    - <a href="../src/vos/vos.md">Versioning Object Store</a>
-   - Pool Service
-   - Container Service
+   - <a href="../src/container/daos_m.md">Pool Service</a>
+   - <a href="../src/container/daos_m.md">Container Service</a>
    - <a href="../src/object/key_array_object.md">Key Array Object</a>
    - <a href="../src/addons/posix.md">POSIX Emulation
 
