@@ -569,8 +569,8 @@ int
 crt_rpc_handler_common(hg_handle_t hg_hdl)
 {
 	struct crt_context	*crt_ctx;
+	const struct hg_info	*hg_info;
 	struct crt_hg_context	*hg_ctx;
-	struct hg_info		*hg_info;
 	struct crt_rpc_priv	*rpc_priv;
 	crt_rpc_t		*rpc_pub;
 	crt_opcode_t		 opc;
