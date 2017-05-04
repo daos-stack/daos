@@ -801,7 +801,7 @@ static int
 ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		       struct daos_obj_shard_md *shard_md, unsigned int *begin,
 		       unsigned int *dist, unsigned *shard,
-		       unsigned int *grp_size, unsigned int *grp_nr)
+		       unsigned int *grp_nr, unsigned int *grp_size)
 {
 	struct daos_oclass_attr	*oc_attr;
 	daos_obj_id_t		oid;
@@ -853,8 +853,9 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
  **/
 static int
 ring_obj_rebuild_tgt_get(struct pl_target *plts, struct pool_target *tgs,
-			 unsigned int start, unsigned int ring_nr,
-			 unsigned int *rebuilt_idx, unsigned int *rebuilt_rank)
+			 unsigned int start, unsigned int end,
+			 unsigned int ring_nr, unsigned int *rebuilt_idx,
+			 unsigned int *rebuilt_rank)
 {
 	unsigned int idx;
 
@@ -865,7 +866,9 @@ ring_obj_rebuild_tgt_get(struct pl_target *plts, struct pool_target *tgs,
 	else
 		idx = ring_nr - 1;
 
-	while (idx != start) {
+	D_DEBUG(DB_TRACE, "start %d end %d nr %d idx %d\n", start, end,
+		ring_nr, idx);
+	while (idx != end) {
 		unsigned int pos;
 
 		pos = plts[idx].pt_pos;
@@ -903,7 +906,8 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 	unsigned int		i;
 	unsigned int		j;
 	unsigned int		k;
-	int			layout_start = -1;
+	unsigned int		layout_end;
+	unsigned int		layout_start;
 
 	tgs   = pool_map_targets(rimap->rmp_poolmap);
 	tg_nr = pool_map_target_nr(rimap->rmp_poolmap);
@@ -911,9 +915,11 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 	layout->ol_ver = map->pl_ver;
 	plts = ring_oid2ring(rimap, md->omd_id)->ri_targets;
 	grp_dist = grp_size * dist;
+	layout_end = (begin + grp_size * grp_nr - 1) % tg_nr;
 	/* NB: @i is group index, @j is index within group, @k is shard index
 	 * within the layout.
 	 */
+	layout_start = begin % tg_nr;
 	for (i = 0, k = 0; i < grp_nr; i++) {
 		for (j = 0; j < grp_size; j++, k++) {
 			unsigned int idx;
@@ -934,17 +940,16 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 			}
 
 			idx = (begin + j * dist) % tg_nr;
-			if (layout_start == -1)
-				layout_start = idx;
 retry:
 			pos = plts[idx].pt_pos;
 			if (tgs[pos].ta_comp.co_status == PO_COMP_ST_UP ||
 			    tgs[pos].ta_comp.co_status == PO_COMP_ST_UPIN) {
 				layout->ol_shards[k]  = shard + k;
 				layout->ol_targets[k] = tgs[pos].ta_comp.co_id;
-				D_DEBUG(DB_PL, "idx %u pos%u k %u tgt_id %d"
-				        " shard %d rank %d\n",
-					idx, pos, k, layout->ol_targets[k],
+				D_DEBUG(DB_PL, ""DF_OID" idx %u pos%u k %u"
+					" tgt_id %d shard %d rank %d\n",
+					DP_OID(md->omd_id), idx, pos, k,
+					layout->ol_targets[k],
 					layout->ol_shards[k],
 					tgs[pos].ta_comp.co_rank);
 
@@ -956,7 +961,8 @@ retry:
 			/* The target on the origin idx is failed, let's
 			 * try a new idx */
 			rc = ring_obj_rebuild_tgt_get(plts, tgs, layout_start,
-						      tg_nr, &idx, NULL);
+						      layout_end, tg_nr, &idx,
+						      NULL);
 			if (rc == 0) {
 				goto retry;
 			} else {
@@ -1028,7 +1034,8 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	unsigned int		pos;
 	bool			impacted = false;
 	unsigned int		grp_dist;
-	int			layout_start = -1;
+	unsigned int		layout_start;
+	unsigned int		layout_end;
 	unsigned int		i;
 	unsigned int		j;
 	int			rc;
@@ -1057,6 +1064,8 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	plts = ring_oid2ring(rimap, md->omd_id)->ri_targets;
 	grp_dist = grp_size * dist;
+	layout_start = begin % tg_nr;
+	layout_end = (begin + grp_size * grp_nr - 1) % tg_nr;
 	for (i = 0; i < grp_nr; i++) {
 		for (j = 0; j < grp_size; j++) {
 			unsigned int idx;
@@ -1065,8 +1074,6 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 				continue;
 
 			idx = (begin + j * dist) % tg_nr;
-			if (layout_start == -1)
-				layout_start = idx;
 retry:
 			pos = plts[idx].pt_pos;
 			/* Check if the target is in the failed target */
@@ -1075,10 +1082,13 @@ retry:
 			    tgs[pos].ta_comp.co_status == PO_COMP_ST_DOWNOUT ||
 			    tgp_failed->tg_targets[0].pt_pos == pos) {
 				rc = ring_obj_rebuild_tgt_get(plts, tgs,
-						layout_start, tg_nr, &idx,
-						tgt_rebuild);
-				if (rc)
+						layout_start, layout_end, tg_nr,
+						&idx, tgt_rebuild);
+				if (rc) {
+					if (rc == -DER_NONEXIST)
+						rc = 0;
 					D_GOTO(out, rc);
+				}
 				/* Found the failed and replacement target */
 				if (tgp_failed->tg_targets[0].pt_pos == pos) {
 					impacted = true;
@@ -1091,6 +1101,8 @@ retry:
 						*tgt_rebuild, *shard_rebuild);
 					D_GOTO(out, rc);
 				} else {
+					if (layout_start > idx)
+						layout_start = idx;
 					/* Otherwise, let's check next
 					 * replacement target in the chain */
 					goto retry;
