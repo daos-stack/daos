@@ -544,7 +544,8 @@ rdb_raft_init(daos_handle_t rdb_attr)
 
 /* Load an entry. */
 static int
-rdb_raft_log_load_cb(daos_iov_t *key, daos_iov_t *val, void *varg)
+rdb_raft_log_load_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+		     void *varg)
 {
 	raft_server_t	       *raft = varg;
 	struct rdb_raft_entry  *buf = val->iov_buf;
