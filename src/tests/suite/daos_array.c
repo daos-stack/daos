@@ -181,6 +181,103 @@ array_simple(void **state)
 	print_message("all good\n");
 }
 
+#define NUM_RECORDS 24
+
+static void
+array_partial(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	daos_epoch_t	 epoch = 4;
+	daos_iov_t	 dkey;
+	daos_sg_list_t	 sgl;
+	daos_iov_t	 sg_iov;
+	daos_iod_t	 iod;
+	daos_recx_t	 recx;
+	daos_recx_t	 recxs[4];
+	char		*buf;
+	char		*buf_out;
+	int		 rc, i;
+
+	arg->size = 4;
+
+	buf = malloc(arg->size * NUM_RECORDS);
+	assert_non_null(buf);
+
+	dts_buf_render(buf, arg->size * NUM_RECORDS);
+
+	/** open object */
+	oid = dts_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** init dkey */
+	daos_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	daos_iov_set(&sg_iov, buf, arg->size * NUM_RECORDS);
+	sgl.sg_nr.num		= 1;
+	sgl.sg_nr.num_out	= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	/** init I/O descriptor */
+	daos_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	daos_csum_set(&iod.iod_kcsum, NULL, 0);
+	iod.iod_nr	= 1;
+	iod.iod_size	= arg->size;
+	recx.rx_idx	= 0;
+	recx.rx_nr	= NUM_RECORDS;
+	iod.iod_recxs	= &recx;
+	iod.iod_eprs	= NULL;
+	iod.iod_csums	= NULL;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	/** update record */
+	print_message("writing %lu records of %lu bytes each at offset %lu\n",
+		      recx.rx_nr, iod.iod_size, recx.rx_idx);
+	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
+	assert_int_equal(rc, 0);
+
+	/** fetch 1/2 of the records back */
+	print_message("reading 1/2 of the records back ...\n");
+	buf_out = malloc(arg->size * NUM_RECORDS/2);
+	assert_non_null(buf_out);
+	memset(buf_out, 0, arg->size * NUM_RECORDS/2);
+	daos_iov_set(&sg_iov, buf_out, arg->size * NUM_RECORDS/2);
+	iod.iod_size	= arg->size;
+	iod.iod_nr	= 4;
+	for (i = 0; i < 4; i++) {
+		recxs[i].rx_idx	= i*6;
+		recxs[i].rx_nr	= 3;
+	}
+
+	iod.iod_recxs = recxs;
+	rc = daos_obj_fetch(oh, epoch, &dkey, 1, &iod, &sgl, NULL, NULL);
+	print_message("fetch returns %d\n", rc);
+	assert_int_equal(rc, 0);
+	/** verify record size */
+	print_message("validating record size ...\n");
+	assert_int_equal(iod.iod_size, arg->size);
+	/** Verify data consistency */
+	print_message("validating data ...\n");
+
+	for (i = 0; i < 4; i++) {
+		char *tmp1 = buf + i * 6 * arg->size;
+		char *tmp2 = buf_out + i * 3 * arg->size;
+
+		assert_memory_equal(tmp1, tmp2, arg->size * 3);
+	}
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_int_equal(rc, 0);
+
+	free(buf_out);
+	free(buf);
+	print_message("all good\n");
+}
+
 static int
 set_size_uint8(void **state)
 {
@@ -266,6 +363,8 @@ static const struct CMUnitTest array_tests[] = {
 	  array_simple, set_size_131071, NULL},
 	{ "ARRAY7: array of 1MB records",
 	  array_simple, set_size_1mb, NULL},
+	{ "ARRAY8: partial I/O on array",
+	  array_partial, NULL, NULL},
 };
 
 int
