@@ -34,7 +34,6 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 {
 	daos_pool_connect_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	DAOS_API_ARG_ASSERT(args, POOL_CONNECT);
 
@@ -45,13 +44,7 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 	args.info = info;
 	uuid_copy((unsigned char *)args.uuid, uuid);
 
-	rc = dc_task_prep(DAOS_OPC_POOL_CONNECT, &args, sizeof(args), &task,
-			  &ev);
-	if (rc)
-		return rc;
-
-	daos_sched_progress(daos_ev2sched(ev));
-
+	dc_task_prep(DAOS_OPC_POOL_CONNECT, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -60,19 +53,12 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
 	daos_pool_disconnect_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	DAOS_API_ARG_ASSERT(args, POOL_DISCONNECT);
 
 	args.poh = poh;
 
-	rc = dc_task_prep(DAOS_OPC_POOL_DISCONNECT, &args, sizeof(args), &task,
-			  &ev);
-	if (rc)
-		return rc;
-
-	daos_sched_progress(daos_ev2sched(ev));
-
+	dc_task_prep(DAOS_OPC_POOL_DISCONNECT, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -94,7 +80,6 @@ daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
 {
 	daos_pool_query_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	DAOS_API_ARG_ASSERT(args, POOL_QUERY);
 
@@ -102,13 +87,7 @@ daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
 	args.tgts = tgts;
 	args.info = info;
 
-	rc = dc_task_prep(DAOS_OPC_POOL_QUERY, &args, sizeof(args), &task,
-			  &ev);
-	if (rc)
-		return rc;
-
-	daos_sched_progress(daos_ev2sched(ev));
-
+	dc_task_prep(DAOS_OPC_POOL_QUERY, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -125,18 +104,11 @@ daos_pool_svc_stop(daos_handle_t poh, daos_event_t *ev)
 {
 	daos_pool_svc_stop_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	DAOS_API_ARG_ASSERT(args, POOL_SVC_STOP);
 
 	args.poh = poh;
 
-	rc = dc_task_prep(DAOS_OPC_POOL_SVC_STOP, &args, sizeof(args), &task,
-			  &ev);
-	if (rc)
-		return rc;
-
-	daos_sched_progress(daos_ev2sched(ev));
-
+	dc_task_prep(DAOS_OPC_POOL_SVC_STOP, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }

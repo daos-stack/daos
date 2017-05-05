@@ -168,8 +168,8 @@ dc_cont_create(struct daos_task *task)
 	arg.rpc = rpc;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_create_complete, sizeof(arg),
-					&arg);
+	rc = daos_task_register_comp_cb(task, cont_create_complete, &arg,
+					sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -268,8 +268,8 @@ dc_cont_destroy(struct daos_task *task)
 	arg.rpc = rpc;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_destroy_complete,
-					sizeof(arg), &arg);
+	rc = daos_task_register_comp_cb(task, cont_destroy_complete, &arg,
+					sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -534,8 +534,8 @@ dc_cont_open(struct daos_task *task)
 
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_open_complete, sizeof(arg),
-					&arg);
+	rc = daos_task_register_comp_cb(task, cont_open_complete, &arg,
+					sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -690,8 +690,8 @@ dc_cont_close(struct daos_task *task)
 	arg.hdl = coh;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_close_complete, sizeof(arg),
-					&arg);
+	rc = daos_task_register_comp_cb(task, cont_close_complete, &arg,
+					sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -821,9 +821,8 @@ dc_cont_query(struct daos_task *task)
 	arg.hdl	     = args->coh;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_query_complete, sizeof(arg),
-					&arg);
-
+	rc = daos_task_register_comp_cb(task, cont_query_complete, &arg,
+					sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -1203,8 +1202,8 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	crt_req_addref(rpc);
 	arg.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, epoch_op_complete, sizeof(arg),
-					&arg);
+	rc = daos_task_register_comp_cb(task, epoch_op_complete, &arg,
+					sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 

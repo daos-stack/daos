@@ -1068,11 +1068,7 @@ fetch_size(void **state)
 	char		*akey[NUM_AKEYS];
 	const char	*akey_fmt = "akey%d";
 	int		 i, rc;
-	/*
-	 * MSC this causes failure with CCI
-	 * daos_size_t	 size = 131071;
-	 */
-	daos_size_t	 size = 1024;
+	daos_size_t	 size = 131071;
 
 	/** open object */
 	oid = dts_oid_gen(dts_obj_class, arg->myrank);
@@ -1086,10 +1082,10 @@ fetch_size(void **state)
 		akey[i] = malloc(strlen(akey_fmt) + 1);
 		sprintf(akey[i], akey_fmt, i);
 
-		buf[i] = malloc(size);
+		buf[i] = malloc(size * (i+1));
 		assert_non_null(buf[i]);
 
-		dts_buf_render(buf[i], size);
+		dts_buf_render(buf[i], size * (i+1));
 
 		/** init scatter/gather */
 		daos_iov_set(&sg_iov[i], buf[i], size * (i+1));

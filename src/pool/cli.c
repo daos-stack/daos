@@ -532,8 +532,8 @@ dc_pool_connect(struct daos_task *task)
 	con_args.rpc = rpc;
 	con_args.hdlp = args->poh;
 
-	rc = daos_task_register_comp_cb(task, pool_connect_cp,
-					sizeof(con_args), &con_args);
+	rc = daos_task_register_comp_cb(task, pool_connect_cp, &con_args,
+					sizeof(con_args));
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
 
@@ -671,8 +671,8 @@ dc_pool_disconnect(struct daos_task *task)
 	crt_req_addref(rpc);
 	disc_args.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, pool_disconnect_cp,
-					sizeof(disc_args), &disc_args);
+	rc = daos_task_register_comp_cb(task, pool_disconnect_cp, &disc_args,
+					sizeof(disc_args));
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -1066,8 +1066,8 @@ dc_pool_update_internal(struct daos_task *task, daos_pool_update_t *args,
 
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, pool_tgt_update_cp, sizeof(rpc),
-					&rpc);
+	rc = daos_task_register_comp_cb(task, pool_tgt_update_cp, &rpc,
+					sizeof(rpc));
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -1244,8 +1244,8 @@ dc_pool_query(struct daos_task *task)
 	query_args.dqa_map_buf = map_buf;
 	query_args.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, pool_query_cb, sizeof(query_args),
-					&query_args);
+	rc = daos_task_register_comp_cb(task, pool_query_cb, &query_args,
+					sizeof(query_args));
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
 
@@ -1370,7 +1370,7 @@ dc_pool_evict(struct daos_task *task)
 
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, pool_evict_cp, sizeof(rpc), &rpc);
+	rc = daos_task_register_comp_cb(task, pool_evict_cp, &rpc, sizeof(rpc));
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -1503,8 +1503,8 @@ dc_pool_svc_stop(struct daos_task *task)
 	crt_req_addref(rpc);
 	stop_args.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, pool_svc_stop_cb,
-					sizeof(stop_args), &stop_args);
+	rc = daos_task_register_comp_cb(task, pool_svc_stop_cb, &stop_args,
+					sizeof(stop_args));
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 

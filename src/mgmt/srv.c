@@ -60,7 +60,6 @@ int
 ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 {
 	struct mgmt_svc_rip_in	*murderer;
-	int			 rc;
 	int			 sig;
 	bool			 force;
 	crt_rank_t		 rank = -1;
@@ -91,7 +90,7 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 		rank, sig);
 	kill(getpid(), sig);
 
-	return rc;
+	return 0;
 }
 
 static int

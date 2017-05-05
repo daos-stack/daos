@@ -400,7 +400,10 @@ typedef struct {
  * \param dep_tasks [IN]
  *			Array of tasks that new task will wait on completion
  *			before it's scheduled.
- * \params task	[IN]	Task to be created/initalized with the daos op.
+ * \param ready	[IN]	Indicate whether the DAOS op can be immediately called
+ *			(true) or not (false). If set to true, dep_tasks must be
+ *			NULL and user can't register prep callbacks anymore.
+ * \param taskp	[IN]	Pointer to task to be created/initalized with the op.
  *
  * \return		0 if task creation succeeds.
  *			negative errno if it fails.
@@ -408,7 +411,7 @@ typedef struct {
 int
 daos_task_create(daos_opc_t opc, struct daos_sched *sched, void *args,
 		 unsigned int num_deps, struct daos_task *dep_tasks[],
-		 struct daos_task *task);
+		 struct daos_task **taskp);
 
 /**
  * Return a pointer to the DAOS task argument structure. This is called to set

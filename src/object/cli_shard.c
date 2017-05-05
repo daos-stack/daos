@@ -565,8 +565,8 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_CRT_ERROR))
 		D_GOTO(out_args, rc = -DER_CRT_HG);
 
-	rc = daos_task_register_comp_cb(task, dc_rw_cb, sizeof(rw_args),
-					&rw_args);
+	rc = daos_task_register_comp_cb(task, dc_rw_cb, &rw_args,
+					sizeof(rw_args));
 	if (rc != 0)
 		D_GOTO(out_args, rc);
 
@@ -801,8 +801,8 @@ dc_obj_shard_list_internal(daos_handle_t oh, enum obj_rpc_opc opc,
 	enum_args.eaa_cookies = cookies;
 	enum_args.eaa_recxs = recxs;
 
-	rc = daos_task_register_comp_cb(task, dc_enumerate_cb,
-					sizeof(enum_args), &enum_args);
+	rc = daos_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
+					sizeof(enum_args));
 	if (rc != 0)
 		D_GOTO(out_eaa, rc);
 

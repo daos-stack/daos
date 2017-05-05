@@ -79,7 +79,7 @@ dc_mgmt_svc_rip(struct daos_task *task)
 	/** fill in request buffer */
 	rip_in->rip_flags = args->force;
 
-	rc = daos_task_register_comp_cb(task, rip_cp, sizeof(rpc), &rpc);
+	rc = daos_task_register_comp_cb(task, rip_cp, &rpc, sizeof(rpc));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 

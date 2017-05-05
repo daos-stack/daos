@@ -35,7 +35,6 @@ daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 {
 	daos_svc_rip_t		args;
 	struct daos_task	*task;
-	int			rc;
 
 	DAOS_API_ARG_ASSERT(args, SVC_RIP);
 
@@ -43,12 +42,7 @@ daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 	args.rank = rank;
 	args.force = force;
 
-	rc = dc_task_prep(DAOS_OPC_SVC_RIP, &args, sizeof(args), &task, &ev);
-	if (rc)
-		return rc;
-
-	daos_sched_progress(daos_ev2sched(ev));
-
+	dc_task_prep(DAOS_OPC_SVC_RIP, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -60,7 +54,6 @@ daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 {
 	daos_pool_create_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	DAOS_API_ARG_ASSERT(args, POOL_CREATE);
 
@@ -74,13 +67,7 @@ daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	args.svc = svc;
 	args.uuid = uuid;
 
-	rc = dc_task_prep(DAOS_OPC_POOL_CREATE, &args, sizeof(args), &task,
-			  &ev);
-	if (rc)
-		return rc;
-
-	daos_sched_progress(daos_ev2sched(ev));
-
+	dc_task_prep(DAOS_OPC_POOL_CREATE, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -90,7 +77,6 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 {
 	daos_pool_destroy_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	DAOS_API_ARG_ASSERT(args, POOL_DESTROY);
 
@@ -98,13 +84,7 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	args.force = force;
 	uuid_copy((unsigned char *)args.uuid, uuid);
 
-	rc = dc_task_prep(DAOS_OPC_POOL_DESTROY, &args, sizeof(args), &task,
-			  &ev);
-	if (rc)
-		return rc;
-
-	daos_sched_progress(daos_ev2sched(ev));
-
+	dc_task_prep(DAOS_OPC_POOL_DESTROY, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -114,7 +94,6 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
 {
 	daos_pool_evict_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	DAOS_API_ARG_ASSERT(args, POOL_EVICT);
 
@@ -122,12 +101,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
 	args.svc = (daos_rank_list_t *)svc;
 	uuid_copy((unsigned char *)args.uuid, uuid);
 
-	rc = dc_task_prep(DAOS_OPC_POOL_EVICT, &args, sizeof(args), &task, &ev);
-	if (rc)
-		return rc;
-
-	daos_sched_progress(daos_ev2sched(ev));
-
+	dc_task_prep(DAOS_OPC_POOL_EVICT, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -138,20 +112,13 @@ daos_pool_tgt_add(const uuid_t uuid, const char *grp,
 {
 	daos_pool_update_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	uuid_copy((void *)args.uuid, uuid);
 	args.grp = grp;
 	args.svc = (daos_rank_list_t *)svc;
 	args.tgts = tgts;
 
-	rc = dc_task_prep(DAOS_OPC_POOL_ADD, &args, sizeof(args), &task,
-			  &ev);
-	if (rc)
-		return rc;
-
-	daos_sched_progress(daos_ev2sched(ev));
-
+	dc_task_prep(DAOS_OPC_POOL_ADD, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -162,19 +129,14 @@ daos_pool_exclude_out(const uuid_t uuid, const char *grp,
 {
 	daos_pool_update_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	uuid_copy((void *)args.uuid, uuid);
 	args.grp = grp;
 	args.svc = (daos_rank_list_t *)svc;
 	args.tgts = tgts;
-	rc = dc_task_prep(DAOS_OPC_POOL_EXCLUDE_OUT, &args, sizeof(args), &task,
-			  &ev);
-	if (rc)
-		return rc;
 
-	daos_sched_progress(daos_ev2sched(ev));
-
+	dc_task_prep(DAOS_OPC_POOL_EXCLUDE_OUT, &args, sizeof(args), &task,
+		     &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -185,7 +147,6 @@ daos_pool_exclude(const uuid_t uuid, const char *grp,
 {
 	daos_pool_update_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	DAOS_API_ARG_ASSERT(args, POOL_EXCLUDE);
 
@@ -193,13 +154,8 @@ daos_pool_exclude(const uuid_t uuid, const char *grp,
 	args.grp = grp;
 	args.svc = (daos_rank_list_t *)svc;
 	args.tgts = tgts;
-	rc = dc_task_prep(DAOS_OPC_POOL_EXCLUDE, &args, sizeof(args), &task,
-			  &ev);
-	if (rc)
-		return rc;
 
-	daos_sched_progress(daos_ev2sched(ev));
-
+	dc_task_prep(DAOS_OPC_POOL_EXCLUDE, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 

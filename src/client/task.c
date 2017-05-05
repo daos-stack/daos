@@ -34,7 +34,7 @@
 int
 daos_task_create(daos_opc_t opc, struct daos_sched *sched, void *op_args,
 		 unsigned int num_deps, struct daos_task *dep_tasks[],
-		 struct daos_task *task)
+		 struct daos_task **taskp)
 {
 	struct daos_task_args args;
 	int rc;
@@ -50,13 +50,14 @@ daos_task_create(daos_opc_t opc, struct daos_sched *sched, void *op_args,
 	D_ASSERT(sizeof(struct daos_task_args) >=
 		 (dc_funcs[opc].arg_size + sizeof(daos_opc_t)));
 
-	rc = daos_task_init(task, dc_funcs[opc].task_func, &args,
+	rc = daos_task_init(taskp, dc_funcs[opc].task_func, &args,
 			    sizeof(struct daos_task_args), sched);
+
 	if (rc != 0)
 		return rc;
 
-	if (num_deps) {
-		rc = daos_task_register_deps(task, num_deps, dep_tasks);
+	if (num_deps && *taskp) {
+		rc = daos_task_register_deps(*taskp, num_deps, dep_tasks);
 		if (rc != 0)
 			return rc;
 	}

@@ -128,7 +128,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	arg.hdl = poh;
 	arg.pool = pool;
 
-	rc = daos_task_register_comp_cb(task, tier_fetch_cb, sizeof(arg), &arg);
+	rc = daos_task_register_comp_cb(task, tier_fetch_cb, &arg, sizeof(arg));
 	if (rc != 0)
 		D_GOTO(out_req_put, rc);
 

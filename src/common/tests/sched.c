@@ -66,10 +66,15 @@ sched_test_1()
 		D_GOTO(out, rc);
 	}
 
-	D_ALLOC_PTR(task);
-	rc = daos_task_init(task, NULL, NULL, 0, &sched);
+	rc = daos_task_init(&task, NULL, NULL, 0, &sched);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = daos_task_schedule(task, false);
+	if (rc != 0) {
+		printf("Failed to insert task in scheduler: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -98,10 +103,15 @@ sched_test_1()
 		D_GOTO(out, rc);
 	}
 
-	D_ALLOC_PTR(task);
-	rc = daos_task_init(task, NULL, NULL, 0, &sched);
+	rc = daos_task_init(&task, NULL, NULL, 0, &sched);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = daos_task_schedule(task, false);
+	if (rc != 0) {
+		printf("Failed to insert task in scheduler: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -244,9 +254,7 @@ sched_test_2()
 	}
 
 	printf("Init task and complete it in prep callback with a failure\n");
-	D_ALLOC_PTR(task);
-	printf("task %p Allocated\n", task);
-	rc = daos_task_init(task, assert_func, NULL, 0, &sched);
+	rc = daos_task_init(&task, assert_func, NULL, 0, &sched);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D_GOTO(out, rc);
@@ -254,6 +262,12 @@ sched_test_2()
 
 	daos_task_register_cbs(task, prep_fail_cb, NULL, 0, NULL, NULL, 0);
 	daos_task_register_cbs(task, prep_assert_cb, NULL, 0, NULL, NULL, 0);
+
+	rc = daos_task_schedule(task, false);
+	if (rc != 0) {
+		printf("Failed to insert task in scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
 
 	daos_sched_progress(&sched);
 
@@ -267,8 +281,7 @@ sched_test_2()
 	D_ALLOC_PTR(verify_cnt);
 	*verify_cnt = 0;
 
-	D_ALLOC_PTR(task);
-	rc = daos_task_init(task, verify_func, &verify_cnt, sizeof(int *),
+	rc = daos_task_init(&task, verify_func, &verify_cnt, sizeof(int *),
 			    &sched);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
@@ -280,6 +293,12 @@ sched_test_2()
 			       comp1_cb, &verify_cnt, sizeof(verify_cnt));
 	daos_task_register_cbs(task, prep2_cb, &verify_cnt, sizeof(verify_cnt),
 			       comp2_cb, &verify_cnt, sizeof(verify_cnt));
+
+	rc = daos_task_schedule(task, false);
+	if (rc != 0) {
+		printf("Failed to insert task in scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
 
 	daos_sched_progress(&sched);
 
@@ -314,7 +333,7 @@ out:
 	return rc;
 }
 
-#define NUM_REINITS 3000000
+#define REINITS 3000000
 
 static int
 comp_reinit_cb(struct daos_task *task, void *data)
@@ -322,7 +341,7 @@ comp_reinit_cb(struct daos_task *task, void *data)
 	int *verify_cnt = *((int **)data);
 	int rc = task->dt_result;
 
-	if (*verify_cnt == NUM_REINITS)
+	if (*verify_cnt == REINITS)
 		return rc;
 
 	rc = daos_task_reinit(task);
@@ -344,7 +363,7 @@ incr_count_func(struct daos_task *task)
 	daos_task_register_cbs(task, NULL, NULL, 0, comp_reinit_cb, &counter,
 			       sizeof(int *));
 
-	if (*counter % (NUM_REINITS/3) == 0)
+	if (*counter % (REINITS/3) == 0)
 		printf("Reinitialized %d times\n", *counter);
 
 	daos_task_complete(task, 0);
@@ -362,7 +381,7 @@ sched_test_3()
 	bool			flag;
 	int			rc;
 
-	DAOS_TEST_ENTRY("3", "Task Reinitialization");
+	DAOS_TEST_ENTRY("3", "Task Reinitialization in Completion CB");
 
 	printf("Init Scheduler\n");
 	rc = daos_sched_init(&sched, NULL, 0);
@@ -375,11 +394,16 @@ sched_test_3()
 	*counter = 0;
 
 	printf("Init task and add comp cb to re-init it 3M times\n");
-	D_ALLOC_PTR(task);
-	rc = daos_task_init(task, incr_count_func, &counter, sizeof(int *),
+	rc = daos_task_init(&task, incr_count_func, &counter, sizeof(int *),
 			    &sched);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = daos_task_schedule(task, false);
+	if (rc != 0) {
+		printf("Failed to insert task in scheduler: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -393,7 +417,322 @@ sched_test_3()
 	}
 
 	printf("Verify Counter\n");
-	D_ASSERT(*counter == NUM_REINITS);
+	D_ASSERT(*counter == REINITS);
+
+out:
+	if (counter)
+		D_FREE_PTR(counter);
+	DAOS_TEST_EXIT(rc);
+	return rc;
+}
+
+#define NUM_REINITS 128
+
+int
+inc_reinit_func(struct daos_task *task)
+{
+	int *counter = *((int **)daos_task2arg(task));
+	int rc;
+
+	*counter = *counter + 1;
+
+	if (*counter == NUM_REINITS || *counter == NUM_REINITS * 2)
+		return 0;
+
+	rc = daos_task_reinit(task);
+	if (rc != 0) {
+		printf("Failed to reinit task in body function (%d)\n", rc);
+		return -1;
+	}
+
+	return 0;
+}
+
+int
+prep_reinit_cb(struct daos_task *task, void *data)
+{
+	int *verify_cnt = *((int **)data);
+	int rc = task->dt_result;
+
+	if (*verify_cnt != 0) {
+		printf("Prep CB Failed counter verification\n");
+		return -1;
+	}
+
+	rc = daos_task_reinit(task);
+	if (rc != 0) {
+		printf("Failed to reinit task in prep CB (%d)\n", rc);
+		return -1;
+	}
+
+	return 0;
+}
+
+int
+comp_reinit_cb2(struct daos_task *task, void *data)
+{
+	int *verify_cnt = *((int **)data);
+	int rc = task->dt_result;
+
+	printf("VERIFY Counter = %d\n", *verify_cnt);
+
+	if (*verify_cnt != NUM_REINITS && *verify_cnt != NUM_REINITS * 2) {
+		printf("COMP Failed counter verification\n");
+		return -1;
+	}
+
+	if (*verify_cnt == NUM_REINITS) {
+		rc = daos_task_reinit(task);
+		if (rc != 0) {
+			printf("Failed to reinit task in comp CB (%d)\n", rc);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+static int
+sched_test_4()
+{
+	struct daos_sched	sched;
+	struct daos_task	*task;
+	int			*counter = NULL;
+	bool			flag;
+	int			rc;
+
+	DAOS_TEST_ENTRY("4", "Task Reinitialization in Body Function");
+
+	printf("Init Scheduler\n");
+	rc = daos_sched_init(&sched, NULL, 0);
+	if (rc != 0) {
+		printf("Failed to init scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_ALLOC_PTR(counter);
+	*counter = 0;
+
+	printf("Init task and add prep/comp cbs to re-init it\n");
+	rc = daos_task_init(&task, inc_reinit_func, &counter, sizeof(int *),
+			    &sched);
+	if (rc != 0) {
+		printf("Failed to init task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	daos_task_register_cbs(task, prep_reinit_cb, &counter, sizeof(int *),
+			       NULL, NULL, 0);
+	daos_task_register_cbs(task, NULL, NULL, 0, comp_reinit_cb2, &counter,
+			       sizeof(int *));
+
+	rc = daos_task_schedule(task, false);
+	if (rc != 0) {
+		printf("Failed to insert task in scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	/** need to progress twice because of the re-init in the prep */
+	daos_sched_progress(&sched);
+	daos_sched_progress(&sched);
+
+	printf("Complete task - should be reinitialized in comp CB\n");
+	daos_task_complete(task, 0);
+
+	printf("Check scheduler is not empty\n");
+	flag = daos_sched_check_complete(&sched);
+	if (flag) {
+		printf("Scheduler should have 1 in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	daos_sched_progress(&sched);
+	printf("Complete task again\n");
+	daos_task_complete(task, 0);
+
+	printf("Check scheduler is empty\n");
+	flag = daos_sched_check_complete(&sched);
+	if (!flag) {
+		printf("Scheduler should not have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	printf("Verify Counter\n");
+	D_ASSERT(*counter == NUM_REINITS * 2);
+
+out:
+	if (counter)
+		D_FREE_PTR(counter);
+	DAOS_TEST_EXIT(rc);
+	return rc;
+}
+
+#define NUM_DEPS 128
+
+int
+inc_func(struct daos_task *task)
+{
+	int *counter = *((int **)daos_task2arg(task));
+
+	*counter = *counter + 1;
+
+	return 0;
+}
+
+int
+check_func_n(struct daos_task *task)
+{
+	int *verify_cnt = *((int **)daos_task2arg(task));
+
+	if (*verify_cnt != NUM_DEPS) {
+		printf("Failed Task dependencies\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+int
+check_func_1(struct daos_task *task)
+{
+	int *verify_cnt = *((int **)daos_task2arg(task));
+
+	if (*verify_cnt != 1) {
+		printf("Failed Task dependencies\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+static int
+sched_test_5()
+{
+	struct daos_sched	sched;
+	struct daos_task	*task;
+	struct daos_task	*tasks[NUM_DEPS];
+	int			*counter = NULL;
+	bool			flag;
+	int			i, rc;
+
+	DAOS_TEST_ENTRY("5", "Task Dependencies");
+
+	printf("Init Scheduler\n");
+	rc = daos_sched_init(&sched, NULL, 0);
+	if (rc != 0) {
+		printf("Failed to init scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_ALLOC_PTR(counter);
+	*counter = 0;
+
+	printf("Test N -> 1 dependencies\n");
+	rc = daos_task_init(&task, check_func_n, &counter, sizeof(int *),
+			    &sched);
+	if (rc != 0) {
+		printf("Failed to init task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	for (i = 0; i < NUM_DEPS; i++) {
+		rc = daos_task_init(&tasks[i], inc_func, &counter,
+				    sizeof(int *), &sched);
+		if (rc != 0) {
+			printf("Failed to init task: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = daos_task_schedule(tasks[i], false);
+		if (rc != 0) {
+			printf("Failed to insert task in scheduler: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	printf("Register Dependecies\n");
+	rc = daos_task_register_deps(task, NUM_DEPS, tasks);
+	if (rc != 0) {
+		printf("Failed to register task Deps: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = daos_task_schedule(task, false);
+	if (rc != 0) {
+		printf("Failed to insert task in scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	daos_sched_progress(&sched);
+
+	for (i = 0; i < NUM_DEPS; i++)
+		daos_task_complete(tasks[i], 0);
+
+	daos_sched_progress(&sched);
+	daos_task_complete(task, 0);
+
+	printf("Verify Counter\n");
+	D_ASSERT(*counter == NUM_DEPS);
+
+	printf("Check scheduler is empty\n");
+	flag = daos_sched_check_complete(&sched);
+	if (!flag) {
+		printf("Scheduler should not have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	*counter = 0;
+	printf("Test 1 -> N dependencies\n");
+	rc = daos_task_init(&task, inc_func, &counter, sizeof(int *), &sched);
+	if (rc != 0) {
+		printf("Failed to init task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	printf("Init tasks with Dependecies\n");
+	for (i = 0; i < NUM_DEPS; i++) {
+		rc = daos_task_init(&tasks[i], check_func_1, &counter,
+				    sizeof(int *), &sched);
+		if (rc != 0) {
+			printf("Failed to init task: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = daos_task_register_deps(tasks[i], 1, &task);
+		if (rc != 0) {
+			printf("Failed to register task Deps: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = daos_task_schedule(tasks[i], false);
+		if (rc != 0) {
+			printf("Failed to insert task in scheduler: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+	}
+
+	rc = daos_task_schedule(task, false);
+	if (rc != 0) {
+		printf("Failed to insert task in scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	daos_sched_progress(&sched);
+	daos_task_complete(task, 0);
+	daos_sched_progress(&sched);
+
+	for (i = 0; i < NUM_DEPS; i++)
+		daos_task_complete(tasks[i], 0);
+
+	printf("Verify Counter\n");
+	D_ASSERT(*counter == 1);
+
+	printf("Check scheduler is empty\n");
+	flag = daos_sched_check_complete(&sched);
+	if (!flag) {
+		printf("Scheduler should not have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 out:
 	if (counter)
@@ -420,6 +759,14 @@ main(int argc, char **argv)
 		goto out;
 
 	rc = sched_test_3();
+	if (rc != 0)
+		goto out;
+
+	rc = sched_test_4();
+	if (rc != 0)
+		goto out;
+
+	rc = sched_test_5();
 	if (rc != 0)
 		goto out;
 

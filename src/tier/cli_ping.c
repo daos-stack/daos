@@ -88,7 +88,7 @@ dc_tier_ping(uint32_t ping_val, struct daos_task *task)
 
 	arg.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, tier_ping_cb, sizeof(arg), &arg);
+	rc = daos_task_register_comp_cb(task, tier_ping_cb, &arg, sizeof(arg));
 	if (rc != 0)
 		D_GOTO(out_req_put, rc);
 

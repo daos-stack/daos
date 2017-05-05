@@ -164,36 +164,44 @@ daos_sched_check_complete(struct daos_sched *sched);
  * task, once the dependent task is done, then the task will
  * be added to the scheduler list.
  *
- * \param task [input]		daos_task to be initialized.
+ * \param taskp [output]	pointer to daos_task to be allocated and
+ *				initialized. The task is freed internally when
+ *				complete is called.
  * \param task_func [input]	the function to be executed when
  *                              the task is executed.
  * \param arg [input]		the task_func argument.
  * \param arg_size [input]	the task_func argument size.
+ * \paran ready [input]		Indicate whether the func can be immediately
+ *				called. If set to true, the func will be called
+ *				and the task will be inserted in the running
+ *				list of the scheduler.
  * \param sched [input]		daos scheduler where the daos
  *                              task will be attached to.
- * \param dependent [input]	task which this task dependents on
  *
  * \return			0  if initialization succeeds.
  * \return			negative errno if it fails.
  */
 int
-daos_task_init(struct daos_task *task, daos_task_func_t task_func,
-	       void *arg, int arg_size, struct daos_sched *sched);
+daos_task_init(struct daos_task **taskp, daos_task_func_t task_func, void *arg,
+	       int arg_size, struct daos_sched *sched);
+int
+daos_task_schedule(struct daos_task *task, bool ready);
 
 /**
- * MSC - deprecate in favor of daos_task_register_cbs.
  * register complete callback for the task.
  *
  * \param task [input]		task to be registered complete callback.
  * \param comp_cb [input]	complete callback.
  * \param arg [input]		callback argument.
+ * \param top [input]		indicate whether cb to be inserted at top of
+ *				cb stack (true) or buttom (false).
  *
  * \return		0 if register succeeds.
  * \return		negative errno if it fails.
  */
 int
 daos_task_register_comp_cb(struct daos_task *task, daos_task_cb_t comp_cb,
-			   daos_size_t arg_size, void *arg);
+			   void *arg, daos_size_t arg_size);
 
 /**
  * Mark task as completed.

@@ -1248,18 +1248,15 @@ daos_client_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 		rc = daos_event_priv_get(&ev);
 		if (rc != 0)
 			return rc;
+		*evp = ev;
 	}
 
-	D_ALLOC_PTR(task);
-	if (task == NULL)
-		return -DER_NOMEM;
-
-	rc = daos_task_init(task, NULL, arg, arg_size, daos_ev2sched(ev));
+	rc = daos_task_init(&task, NULL, arg, arg_size, daos_ev2sched(ev));
 	if (rc != 0)
-		D_GOTO(err_task, rc = -DER_NOMEM);
+		return rc;
 
-	rc = daos_task_register_comp_cb(task, daos_event_comp_cb, sizeof(ev),
-					&ev);
+	rc = daos_task_register_comp_cb(task, daos_event_comp_cb, &ev,
+					sizeof(ev));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
@@ -1267,8 +1264,11 @@ daos_client_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
+	rc = daos_task_schedule(task, false);
+	if (rc != 0)
+		return rc;
+
 	*taskp = task;
-	*evp = ev;
 
 	return rc;
 
@@ -1289,18 +1289,16 @@ dc_task_prep(daos_opc_t opc, void *arg, int arg_size, struct daos_task **taskp,
 		rc = daos_event_priv_get(&ev);
 		if (rc != 0)
 			return rc;
+		*evp = ev;
 	}
 
-	D_ALLOC_PTR(task);
-	if (task == NULL)
-		return -DER_NOMEM;
-
-	rc = daos_task_create(opc, daos_ev2sched(ev), arg, 0, NULL, task);
+	rc = daos_task_create(opc, daos_ev2sched(ev), arg, 0, NULL, &task);
 	if (rc != 0)
-		D_GOTO(err_task, rc = -DER_NOMEM);
+		return rc;
 
-	rc = daos_task_register_comp_cb(task, daos_event_comp_cb, sizeof(ev),
-					&ev);
+	/** register a comp cb on the task to complete the event */
+	rc = daos_task_register_comp_cb(task, daos_event_comp_cb,
+					&ev, sizeof(ev));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
@@ -1308,8 +1306,11 @@ dc_task_prep(daos_opc_t opc, void *arg, int arg_size, struct daos_task **taskp,
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
+	rc = daos_task_schedule(task, true);
+	if (rc != 0)
+		return rc;
+
 	*taskp = task;
-	*evp = ev;
 
 	return rc;
 

@@ -184,8 +184,8 @@ tier_upstream(uuid_t warm_id, char *warm_grp, uuid_t cold_id,
 	cb_arg->rpc = rpc_req;
 
 	/*Register CB*/
-	rc = daos_task_register_comp_cb(upstream_task, tier_upstream_cb,
-					sizeof(struct upstream_arg), cb_arg);
+	rc = daos_task_register_comp_cb(upstream_task, tier_upstream_cb, cb_arg,
+					sizeof(struct upstream_arg));
 	if (rc) {
 		D_ERROR("Callback registration failed: %d", rc);
 		D_GOTO(out, rc);

@@ -148,8 +148,8 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 	tc_arg->rpc = rpc_req;
 
 	/*Register CB*/
-	rc = daos_task_register_comp_cb(task, dc_tier_conn_cb,
-					sizeof(struct tier_conn_arg), tc_arg);
+	rc = daos_task_register_comp_cb(task, dc_tier_conn_cb, tc_arg,
+					sizeof(struct tier_conn_arg));
 	if (rc) {
 		D_ERROR("Failed to register task callback.\n");
 		D_GOTO(out_decref, rc);
@@ -208,9 +208,8 @@ dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	trc_arg->rpc = rpc_req;
 
 	/*Register CB*/
-	rc = daos_task_register_comp_cb(task, dc_tier_register_cold_cb,
-					sizeof(struct tier_reg_cold_arg),
-					trc_arg);
+	rc = daos_task_register_comp_cb(task, dc_tier_register_cold_cb, trc_arg,
+					sizeof(struct tier_reg_cold_arg));
 	if (rc)
 		D_GOTO(out, rc);
 

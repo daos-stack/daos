@@ -256,8 +256,8 @@ write_md_cb(struct daos_task *task, void *data)
 	update_args->iods = &params->iod;
 	update_args->sgls = &params->sgl;
 
-	rc = daos_task_register_comp_cb(task, free_io_params_cb, sizeof(params),
-					&params);
+	rc = daos_task_register_comp_cb(task, free_io_params_cb, &params,
+					sizeof(params));
 	if (rc != 0)
 		return rc;
 
@@ -273,49 +273,61 @@ dac_array_create(struct daos_task *task)
 	int			rc;
 
 	/** Create task to open object */
-	D_ALLOC_PTR(open_task);
-	if (open_task == NULL)
-		return -DER_NOMEM;
 	open_args.coh = args->coh;
 	open_args.oid = args->oid;
 	open_args.epoch = args->epoch;
 	open_args.mode = DAOS_OO_RW;
 	open_args.oh = args->oh;
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, daos_task2sched(task),
-			      &open_args, 0, NULL, open_task);
+			      &open_args, 0, NULL, &open_task);
 	if (rc != 0) {
 		D_ERROR("Failed to create object_open task\n");
-		D_GOTO(err_put1, rc);
+		return rc;
 	}
 
+	daos_task_schedule(open_task, false);
+
 	/** Create task to write object metadata */
-	D_ALLOC_PTR(update_task);
-	if (update_task == NULL)
-		return -DER_NOMEM;
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, daos_task2sched(task),
-			      NULL, 1, &open_task, update_task);
+			      NULL, 1, &open_task, &update_task);
 	if (rc != 0) {
 		D_ERROR("Failed to create object_update task\n");
 		D_GOTO(err_put1, rc);
 	}
 
 	/** add a prepare CB to set the args for the metadata write */
-	daos_task_register_cbs(update_task, write_md_cb, &args, sizeof(args),
-			       NULL, NULL, 0);
+	rc = daos_task_register_cbs(update_task, write_md_cb, &args,
+				    sizeof(args), NULL, NULL, 0);
+	if (rc != 0) {
+		D_ERROR("Failed to register prep CB\n");
+		D_GOTO(err_put2, rc);
+	}
 
 	/** The upper task completes when the update task completes */
-	daos_task_register_deps(task, 1, &update_task);
+	rc = daos_task_register_deps(task, 1, &update_task);
+	if (rc != 0) {
+		D_ERROR("Failed to register dependency\n");
+		D_GOTO(err_put2, rc);
+	}
 
 	/** CB to generate the array OH */
-	daos_task_register_cbs(task, NULL, NULL, 0, create_handle_cb,
-			       &args, sizeof(args));
+	rc = daos_task_register_cbs(task, NULL, NULL, 0, create_handle_cb,
+				    &args, sizeof(args));
+	if (rc != 0) {
+		D_ERROR("Failed to register completion cb\n");
+		D_GOTO(err_put2, rc);
+	}
+
+	daos_task_schedule(update_task, false);
 
 	daos_sched_progress(daos_task2sched(task));
 
 	return rc;
 
+err_put2:
+	D_FREE_PTR(update_task);
 err_put1:
-	D_FREE_PTR(open_task);
+	daos_task_complete(open_task, rc);
 	return rc;
 }
 
@@ -409,8 +421,8 @@ fetch_md_cb(struct daos_task *task, void *data)
 	fetch_args->iods = &params->iod;
 	fetch_args->sgls = &params->sgl;
 
-	rc = daos_task_register_comp_cb(task, free_io_params_cb, sizeof(params),
-					&params);
+	rc = daos_task_register_comp_cb(task, free_io_params_cb, &params,
+					sizeof(params));
 	if (rc != 0)
 		return rc;
 
@@ -426,48 +438,61 @@ dac_array_open(struct daos_task *task)
 	int			rc;
 
 	/** Open task to open object */
-	D_ALLOC_PTR(open_task);
-	if (open_task == NULL)
-		return -DER_NOMEM;
 	open_args.coh = args->coh;
 	open_args.oid = args->oid;
 	open_args.epoch = args->epoch;
 	open_args.mode = args->mode;
 	open_args.oh = args->oh;
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, daos_task2sched(task),
-			      &open_args, 0, NULL, open_task);
+			      &open_args, 0, NULL, &open_task);
 	if (rc != 0) {
 		D_ERROR("Failed to open object_open task\n");
-		D_GOTO(err_put1, rc);
+		return rc;
 	}
 
+	daos_task_schedule(open_task, false);
+
 	/** Create task to fetch object metadata */
-	D_ALLOC_PTR(fetch_task);
-	if (fetch_task == NULL)
-		return -DER_NOMEM;
 	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, daos_task2sched(task),
-			      NULL, 1, &open_task, fetch_task);
+			      NULL, 1, &open_task, &fetch_task);
 	if (rc != 0) {
 		D_ERROR("Failed to open object_fetch task\n");
 		D_GOTO(err_put1, rc);
 	}
+
 	/** add a prepare CB to set the args for the metadata fetch */
-	daos_task_register_cbs(fetch_task, fetch_md_cb, &args, sizeof(args),
-			       NULL, NULL, 0);
+	rc = daos_task_register_cbs(fetch_task, fetch_md_cb, &args,
+				    sizeof(args), NULL, NULL, 0);
+	if (rc != 0) {
+		D_ERROR("Failed to register prep CB\n");
+		D_GOTO(err_put2, rc);
+	}
 
 	/** The upper task completes when the fetch task completes */
-	daos_task_register_deps(task, 1, &fetch_task);
+	rc = daos_task_register_deps(task, 1, &fetch_task);
+	if (rc != 0) {
+		D_ERROR("Failed to register dependency\n");
+		D_GOTO(err_put2, rc);
+	}
 
 	/** Add a completion CB on the upper task to generate the array OH */
 	daos_task_register_cbs(task, NULL, NULL, 0, open_handle_cb,
 			       &args, sizeof(args));
+	if (rc != 0) {
+		D_ERROR("Failed to register completion cb\n");
+		D_GOTO(err_put2, rc);
+	}
+
+	daos_task_schedule(fetch_task, false);
 
 	daos_sched_progress(daos_task2sched(task));
 
 	return rc;
 
+err_put2:
+	D_FREE_PTR(fetch_task);
 err_put1:
-	D_FREE_PTR(open_task);
+	daos_task_complete(open_task, rc);
 	return rc;
 }
 
@@ -485,29 +510,36 @@ dac_array_close(struct daos_task *task)
 		return -DER_NO_HDL;
 
 	/** Create task to close object */
-	D_ALLOC_PTR(close_task);
-	if (close_task == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
 	close_args.oh = array->daos_oh;
 	rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, daos_task2sched(task),
-			      &close_args, 0, NULL, close_task);
+			      &close_args, 0, NULL, &close_task);
 	if (rc != 0) {
 		D_ERROR("Failed to create object_close task\n");
-		D_FREE_PTR(close_task);
-		D_GOTO(out, rc);
+		return rc;
 	}
 
 	/** The upper task completes when the close task completes */
-	daos_task_register_deps(task, 1, &close_task);
+	rc = daos_task_register_deps(task, 1, &close_task);
+	if (rc != 0) {
+		D_ERROR("Failed to register dependency\n");
+		D_GOTO(err, rc);
+	}
 
 	/** Add a completion CB on the upper task to free the array */
-	daos_task_register_cbs(task, NULL, NULL, 0, free_handle_cb,
-			       &args->oh, sizeof(args->oh));
+	rc = daos_task_register_cbs(task, NULL, NULL, 0, free_handle_cb,
+				    &args->oh, sizeof(args->oh));
+	if (rc != 0) {
+		D_ERROR("Failed to register completion cb\n");
+		D_GOTO(err, rc);
+	}
 
+	daos_task_schedule(close_task, false);
 	daos_sched_progress(daos_task2sched(task));
-
-out:
 	array_decref(array);
+
+	return rc;
+err:
+	D_FREE_PTR(close_task);
 	return rc;
 }
 
@@ -746,7 +778,6 @@ dac_array_io(struct daos_task *task)
 
 		iod = &params->iod;
 		sgl = &params->sgl;
-		D_ALLOC_PTR(params->task);
 		io_task = params->task;
 		dkey = &params->dkey;
 		params->akey_str = strdup("akey_not_used");
@@ -928,7 +959,7 @@ dac_array_io(struct daos_task *task)
 
 			rc = daos_task_create(DAOS_OPC_OBJ_FETCH,
 					      daos_task2sched(task), &io_arg, 0,
-					      NULL, io_task);
+					      NULL, &io_task);
 			if (rc != 0) {
 				D_ERROR("KV Fetch of dkey %s failed (%d)\n",
 					dkey_str, rc);
@@ -946,7 +977,7 @@ dac_array_io(struct daos_task *task)
 
 			rc = daos_task_create(DAOS_OPC_OBJ_UPDATE,
 					      daos_task2sched(task), &io_arg, 0,
-					      NULL, io_task);
+					      NULL, &io_task);
 			if (rc != 0) {
 				D_ERROR("KV Update of dkey %s failed (%d)\n",
 					dkey_str, rc);
@@ -957,11 +988,15 @@ dac_array_io(struct daos_task *task)
 		}
 
 		daos_task_register_deps(task, 1, &io_task);
+
+		rc = daos_task_schedule(io_task, false);
+		if (rc != 0)
+			return rc;
 	} /* end while */
 
 	if (head)
-		daos_task_register_comp_cb(task, free_io_params_cb,
-					   sizeof(head), &head);
+		daos_task_register_comp_cb(task, free_io_params_cb, &head,
+					   sizeof(head));
 
 	array_decref(array);
 	daos_sched_progress(daos_task2sched(task));
@@ -1144,18 +1179,27 @@ dac_array_get_size(struct daos_task *task)
 	enum_args.sgl = &get_size_props->sgl;
 	enum_args.anchor = &get_size_props->anchor;
 
-	D_ALLOC_PTR(enum_task);
-	if (enum_task == NULL)
-		D_GOTO(err_task, rc = -DER_NOMEM);
 	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, daos_task2sched(task),
-			      &enum_args, 0, NULL, enum_task);
+			      &enum_args, 0, NULL, &enum_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	daos_task_register_cbs(enum_task, NULL, NULL, 0, get_array_size_cb,
-			       &get_size_props, sizeof(get_size_props));
+	rc = daos_task_register_cbs(enum_task, NULL, NULL, 0, get_array_size_cb,
+				    &get_size_props, sizeof(get_size_props));
+	if (rc != 0) {
+		D_ERROR("Failed to register completion cb\n");
+		D_GOTO(err_task, rc);
+	}
 
-	daos_task_register_deps(task, 1, &enum_task);
+	rc = daos_task_register_deps(task, 1, &enum_task);
+	if (rc != 0) {
+		D_ERROR("Failed to register dependency\n");
+		D_GOTO(err_task, rc);
+	}
+
+	rc = daos_task_schedule(enum_task, false);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
 
 	daos_sched_progress(daos_task2sched(task));
 
@@ -1281,11 +1325,6 @@ adjust_array_size_cb(struct daos_task *task, void *data)
 		iod = &params->iod;
 		sgl = &params->sgl;
 		dkey = &params->dkey;
-		D_ALLOC_PTR(params->task);
-		if (params->task == NULL) {
-			D_ERROR("Failed memory allocation\n");
-			D_GOTO(err_out, -DER_NOMEM);
-		}
 
 		io_task = params->task;
 		params->akey_str = strdup("akey_not_used");
@@ -1327,18 +1366,26 @@ adjust_array_size_cb(struct daos_task *task, void *data)
 		io_arg.sgls = sgl;
 
 		rc = daos_task_create(DAOS_OPC_OBJ_UPDATE,
-				      daos_task2sched(task), &io_arg, 0,
-				      NULL, io_task);
+				      daos_task2sched(task), &io_arg, 0, NULL,
+				      &io_task);
 		if (rc != 0) {
 			D_ERROR("KV Update of dkey %s failed (%d)\n",
 				params->dkey_str, rc);
 			D_GOTO(err_out, rc);
 		}
 
-		daos_task_register_comp_cb(io_task, free_io_params_cb,
-					   sizeof(params), &params);
+		rc = daos_task_register_comp_cb(io_task, free_io_params_cb,
+						&params, sizeof(params));
+		if (rc != 0)
+			D_GOTO(err_out, rc);
 
-		daos_task_register_deps(props->ptask, 1, &io_task);
+		rc = daos_task_register_deps(props->ptask, 1, &io_task);
+		if (rc != 0)
+			D_GOTO(err_out, rc);
+
+		rc = daos_task_schedule(io_task, false);
+		if (rc != 0)
+			D_GOTO(err_out, rc);
 	}
 
 	return rc;
@@ -1415,21 +1462,29 @@ dac_array_set_size(struct daos_task *task)
 	enum_args.sgl = &set_size_props->sgl;
 	enum_args.anchor = &set_size_props->anchor;
 
-	D_ALLOC_PTR(enum_task);
-	if (enum_task == NULL)
-		D_GOTO(err_task, rc = -DER_NOMEM);
 	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, daos_task2sched(task),
-			      &enum_args, 0, NULL, enum_task);
+			      &enum_args, 0, NULL, &enum_task);
 	if (rc != 0)
 		return rc;
 
-	daos_task_register_cbs(enum_task, NULL, NULL, 0, adjust_array_size_cb,
-			       &set_size_props, sizeof(set_size_props));
+	rc = daos_task_register_cbs(enum_task, NULL, NULL, 0,
+				    adjust_array_size_cb, &set_size_props,
+				    sizeof(set_size_props));
+	if (rc != 0)
+		D_GOTO(err_task, rc);
 
-	daos_task_register_deps(task, 1, &enum_task);
+	rc = daos_task_register_deps(task, 1, &enum_task);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
 
-	daos_task_register_comp_cb(task, free_props_cb, sizeof(set_size_props),
-				   &set_size_props);
+	rc = daos_task_register_comp_cb(task, free_props_cb, &set_size_props,
+					sizeof(set_size_props));
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	rc = daos_task_schedule(enum_task, false);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
 
 	daos_sched_progress(daos_task2sched(task));
 

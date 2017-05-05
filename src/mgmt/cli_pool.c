@@ -121,8 +121,8 @@ dc_pool_create(struct daos_task *task)
 	create_args.rpc = rpc_req;
 	create_args.svc = args->svc;
 
-	rc = daos_task_register_comp_cb(task, pool_create_cp,
-					sizeof(create_args), &create_args);
+	rc = daos_task_register_comp_cb(task, pool_create_cp, &create_args,
+					sizeof(create_args));
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
@@ -208,8 +208,8 @@ dc_pool_destroy(struct daos_task *task)
 	pd_in->pd_force = (args->force == 0) ? false : true;
 
 	crt_req_addref(rpc_req);
-	rc = daos_task_register_comp_cb(task, pool_destroy_cp, sizeof(rpc_req),
-					&rpc_req);
+	rc = daos_task_register_comp_cb(task, pool_destroy_cp, &rpc_req,
+					sizeof(rpc_req));
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 

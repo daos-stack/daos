@@ -134,8 +134,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (i = 0; i < g_dkeys; i++) {
-		D_ALLOC(dkey[i],
-			strlen(dkey_fmt) + g_dkeys_strlen + 1);
+		D_ALLOC(dkey[i], strlen(dkey_fmt) + g_dkeys_strlen + 1);
 		assert_non_null(dkey[i]);
 		sprintf(dkey[i], dkey_fmt, i);
 		D_ALLOC(rec[i], strlen(val_fmt) + g_dkeys_strlen + 1);
@@ -148,7 +147,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 
 	epoch = 100;
 	for (i = 0; i < g_dkeys; i++) {
-				sprintf(rec[i], val_fmt, i);
+		sprintf(rec[i], val_fmt, i);
 		rec_size[i] = strlen(rec[i]);
 		D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
 			dkey[i], (int)rec_size[i], rec[i]);

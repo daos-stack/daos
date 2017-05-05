@@ -823,24 +823,25 @@ dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 	cb_arg.future = &future;
 	cb_arg.result = 0;
 
-	D_ALLOC_PTR(task);
-	if (task == NULL)
-		D_GOTO(free_future, rc = -DER_NOMEM);
-
 	rc = daos_task_create(opc, &dss_get_module_info()->dmi_sched,
-			      arg, 0, NULL, task);
-	if (rc != 0) {
-		D_FREE_PTR(task);
+			      arg, 0, NULL, &task);
+	if (rc != 0)
 		D_GOTO(free_future, rc = -DER_NOMEM);
-	}
 
 	cb_arg.result = &ret;
-	rc = daos_task_register_comp_cb(task, dss_task_comp_cb,
-					sizeof(cb_arg), &cb_arg);
+	rc = daos_task_register_comp_cb(task, dss_task_comp_cb, &cb_arg,
+					sizeof(cb_arg));
 	if (rc != 0) {
 		D_FREE_PTR(task);
 		D_GOTO(free_future, rc = -DER_NOMEM);
 	}
+
+	rc = daos_task_schedule(task, true);
+	if (rc != 0) {
+		D_FREE_PTR(task);
+		D_GOTO(free_future, rc = -DER_NOMEM);
+	}
+
 	ABT_future_wait(future);
 
 	if (rc == 0)

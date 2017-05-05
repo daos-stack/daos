@@ -166,7 +166,8 @@ daos_task_decref(struct daos_task *task)
 
 	/*
 	 * MSC - since we require user to allocate task, maybe we should have
-	 * user also free it.
+	 * user also free it. This now requires task to be on the heap all the
+	 * time.
 	 */
 	D_FREE_PTR(task);
 }
@@ -262,11 +263,16 @@ daos_task_complete_locked(struct daos_task_private *dtp,
 }
 
 static int
-register_cb(struct daos_task *task, bool is_comp, daos_task_cb_t cb, void *arg,
-	    daos_size_t arg_size)
+register_cb(struct daos_task *task, bool is_comp, bool top, daos_task_cb_t cb,
+	    void *arg, daos_size_t arg_size)
 {
 	struct daos_task_private *dtp = daos_task2priv(task);
 	struct daos_task_cb *dtc;
+
+	if (dtp->dtp_complete) {
+		D_ERROR("Can't add a callback for a completed task\n");
+		return -DER_NO_PERM;
+	}
 
 	D_ALLOC(dtc, sizeof(*dtc) + arg_size);
 	if (dtc == NULL)
@@ -279,21 +285,28 @@ register_cb(struct daos_task *task, bool is_comp, daos_task_cb_t cb, void *arg,
 	D_ASSERT(dtp->dtp_sched != NULL);
 
 	pthread_mutex_lock(&dtp->dtp_sched->dsp_lock);
-	if (is_comp)
-		daos_list_add(&dtc->dtc_list, &dtp->dtp_comp_cb_list);
-	else
+	if (is_comp) {
+		if (top)
+			daos_list_add(&dtc->dtc_list, &dtp->dtp_comp_cb_list);
+		else
+			daos_list_add_tail(&dtc->dtc_list,
+					   &dtp->dtp_comp_cb_list);
+	} else {
+		/** MSC - don't see a need for more than 1 prep cb */
+		D_ASSERT(top == false);
 		daos_list_add_tail(&dtc->dtc_list, &dtp->dtp_prep_cb_list);
-
+	}
 	pthread_mutex_unlock(&dtp->dtp_sched->dsp_lock);
+
 	return 0;
 }
 
 int
 daos_task_register_comp_cb(struct daos_task *task, daos_task_cb_t comp_cb,
-			   daos_size_t arg_size, void *arg)
+			   void *arg, daos_size_t arg_size)
 {
 	if (comp_cb)
-		register_cb(task, true, comp_cb, arg, arg_size);
+		register_cb(task, true, true, comp_cb, arg, arg_size);
 
 	return 0;
 }
@@ -305,9 +318,11 @@ daos_task_register_cbs(struct daos_task *task, daos_task_cb_t prep_cb,
 		       daos_size_t comp_data_size)
 {
 	if (prep_cb)
-		register_cb(task, false, prep_cb, prep_data, prep_data_size);
+		register_cb(task, false, false, prep_cb, prep_data,
+			    prep_data_size);
 	if (comp_cb)
-		register_cb(task, true, comp_cb, comp_data, comp_data_size);
+		register_cb(task, true, true, comp_cb, comp_data,
+			    comp_data_size);
 
 	return 0;
 }
@@ -315,7 +330,7 @@ daos_task_register_cbs(struct daos_task *task, daos_task_cb_t prep_cb,
 /*
  * Execute the prep callback(s) of the task.
  */
-static int
+static bool
 daos_task_prep_callback(struct daos_task *task)
 {
 	struct daos_task_private	*dtp = daos_task2priv(task);
@@ -335,9 +350,13 @@ daos_task_prep_callback(struct daos_task *task)
 
 		D_FREE(dtc, offsetof(struct daos_task_cb,
 				     dtc_arg[dtc->dtc_arg_size]));
+
+		/** Task was re-initialized; break */
+		if (!dtp->dtp_running && !dtp->dtp_complete)
+			return false;
 	}
 
-	return 0;
+	return true;
 }
 
 /*
@@ -368,7 +387,7 @@ daos_task_complete_callback(struct daos_task *task)
 				     dtc_arg[dtc->dtc_arg_size]));
 
 		/** Task was re-initialized; break */
-		if (dtp->dtp_running == 0 && dtp->dtp_complete == 0)
+		if (!dtp->dtp_running && !dtp->dtp_complete)
 			return false;
 	}
 
@@ -434,7 +453,11 @@ daos_sched_process_init(struct daos_sched_private *dsp)
 		pthread_mutex_unlock(&dsp->dsp_lock);
 
 		if (!dsp->dsp_cancelling) {
-			daos_task_prep_callback(task);
+			/** if task is reinitialized in prep cb, skip over it */
+			if (!daos_task_prep_callback(task)) {
+				daos_task_decref(task);
+				continue;
+			}
 			D_ASSERT(dtp->dtp_func != NULL);
 			if (!dtp->dtp_complete)
 				dtp->dtp_func(task);
@@ -713,7 +736,6 @@ daos_task_complete(struct daos_task *task, int ret)
 	} else {
 		daos_task_decref_locked(dtp);
 	}
-
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
 	/** update task in scheduler lists. */
@@ -743,6 +765,16 @@ daos_task_add_dependent(struct daos_task *task, struct daos_task *dep)
 		D_ERROR("Two tasks should belong to the same scheduler.\n");
 		return -DER_NO_PERM;
 	}
+
+	if (dtp->dtp_complete) {
+		D_ERROR("Can't add a depedency for a completed task (%p)\n",
+			task);
+		return -DER_NO_PERM;
+	}
+
+	/** if task to depend on has completed already, do nothing */
+	if (dep_dtp->dtp_complete)
+		return 0;
 
 	D_ALLOC_PTR(tlink);
 	if (tlink == NULL)
@@ -776,11 +808,19 @@ daos_task_register_deps(struct daos_task *task, int num_deps,
 }
 
 int
-daos_task_init(struct daos_task *task, daos_task_func_t task_func,
-	       void *arg, int arg_size, struct daos_sched *sched)
+daos_task_init(struct daos_task **taskp, daos_task_func_t task_func, void *arg,
+	       int arg_size, struct daos_sched *sched)
 {
-	struct daos_task_private  *dtp = daos_task2priv(task);
+	struct daos_task *task = NULL;
+	struct daos_task_private *dtp;
 	struct daos_sched_private *dsp = daos_sched2priv(sched);
+	int rc = 0;
+
+	D_ALLOC_PTR(task);
+	if (task == NULL)
+		return -DER_NOMEM;
+
+	dtp = daos_task2priv(task);
 
 	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
 	memset(task, 0, sizeof(*task));
@@ -798,15 +838,33 @@ daos_task_init(struct daos_task *task, daos_task_func_t task_func,
 		D_ASSERT(dtp->dtp_func_arg != NULL);
 		memcpy(dtp->dtp_func_arg, arg, arg_size);
 	}
+	dtp->dtp_sched = dsp;
+
+	*taskp = task;
+	return rc;
+}
+
+int
+daos_task_schedule(struct daos_task *task, bool ready)
+{
+	struct daos_task_private  *dtp = daos_task2priv(task);
+	struct daos_sched_private *dsp = dtp->dtp_sched;
+	int rc = 0;
+
+	if (ready && dtp->dtp_func == NULL)
+		return -DER_INVAL;
 
 	/* Add task to scheduler */
 	pthread_mutex_lock(&dsp->dsp_lock);
-	dtp->dtp_sched = dsp;
-	if (dtp->dtp_func == NULL) {
+	if (dtp->dtp_func == NULL || ready) {
 		/** If task has no body function, mark it as running */
 		dsp->dsp_inflight++;
 		dtp->dtp_running = 1;
 		daos_list_add_tail(&dtp->dtp_list, &dsp->dsp_running_list);
+
+		/** +1 in case task is completed in body function */
+		if (ready)
+			daos_task_addref_locked(dtp);
 	} else {
 		/** Otherwise, scheduler will process it from init list */
 		daos_list_add_tail(&dtp->dtp_list, &dsp->dsp_init_list);
@@ -814,7 +872,18 @@ daos_task_init(struct daos_task *task, daos_task_func_t task_func,
 	daos_sched_addref_locked(dsp);
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
-	return 0;
+	/** if ready to be executed, call the task body function */
+	if (ready) {
+		dtp->dtp_func(task);
+
+		/** If task was completed return the task result */
+		if (dtp->dtp_complete)
+			rc = task->dt_result;
+
+		daos_task_decref(task);
+	}
+
+	return rc;
 }
 
 int

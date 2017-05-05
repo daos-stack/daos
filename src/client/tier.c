@@ -40,7 +40,7 @@ struct xconn_arg {
 
 static int
 tier_task_prep(void *arg, int arg_size, struct daos_task **taskp,
-		      daos_event_t **evp)
+	       daos_event_t **evp)
 {
 	daos_event_t *ev = *evp;
 	struct daos_task *task = NULL;
@@ -52,15 +52,15 @@ tier_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 			return rc;
 	}
 
-	D_ALLOC_PTR(task);
-	if (task == NULL)
-		return -DER_NOMEM;
-
-	rc = daos_task_init(task, NULL, arg, arg_size, daos_ev2sched(ev));
+	rc = daos_task_init(&task, NULL, arg, arg_size, daos_ev2sched(ev));
 	if (rc != 0)
 		D_GOTO(err_task, rc = -DER_NOMEM);
 
 	rc = daos_event_launch(ev);
+	if (rc != 0)
+		D_GOTO(err_task, rc);
+
+	rc = daos_task_schedule(task, false);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
@@ -109,21 +109,20 @@ local_tier_conn_cb(struct daos_task *task, void *data)
 	/*Grab Scheduler of the task*/
 	sched = daos_task2sched(task);
 
-	/*Initate Task, where should this get freed?*/
-	D_ALLOC_PTR(cross_conn_task);
-	if (cross_conn_task == NULL)
-		return -DER_NOMEM;
-
-	rc = daos_task_init(cross_conn_task, NULL, NULL, 0, sched);
+	rc = daos_task_init(&cross_conn_task, NULL, NULL, 0, sched);
 	if (rc != 0)
 		return -DER_NOMEM;
 
 	rc = daos_task_register_comp_cb(cross_conn_task, cross_conn_cb,
-					sizeof(struct xconn_arg), cb_arg);
+					cb_arg, sizeof(struct xconn_arg));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion callback: %d\n", rc);
 		return rc;
 	}
+
+	rc = daos_task_schedule(cross_conn_task, false);
+	if (rc != 0)
+		return rc;
 
 	rc = dc_tier_connect(cb_arg->uuid, cb_arg->grp, cross_conn_task);
 	if (rc != 0) {
@@ -189,7 +188,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	}
 
 	rc = daos_task_register_comp_cb(local_conn_task, local_tier_conn_cb,
-					sizeof(struct xconn_arg), cb_arg);
+					cb_arg, sizeof(struct xconn_arg));
 
 	if (rc) {
 		D_ERROR("Error registering comp cb: %d\n", rc);
