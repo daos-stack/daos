@@ -42,11 +42,11 @@
 #include "rpc.h"
 #include "rebuild_internal.h"
 
-/*
+/**
  * Initiate the rebuild process, i.e. sending rebuild
  * requests to every target to find out the impacted
  * objects.
- **/
+ */
 int
 ds_rebuild(crt_context_t ctx, const uuid_t uuid,
 	   daos_rank_list_t *tgts_failed)
@@ -60,7 +60,7 @@ ds_rebuild(crt_context_t ctx, const uuid_t uuid,
 	/* Broadcast the pool map first */
 	rc = ds_pool_pmap_broadcast(uuid, tgts_failed);
 	if (rc)
-		return rc;
+		D_ERROR("pool map broad cast failed: rc %d\n", rc);
 
 	pool = ds_pool_lookup(uuid);
 	if (pool == NULL)
@@ -70,8 +70,10 @@ ds_rebuild(crt_context_t ctx, const uuid_t uuid,
 	rc = ds_pool_bcast_create(ctx, pool, DAOS_REBUILD_MODULE,
 				  REBUILD_OBJECTS_SCAN, &rpc, NULL,
 				  tgts_failed);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	if (rc != 0) {
+		D_ERROR("pool map broad cast failed: rc %d\n", rc);
+		D_GOTO(out, rc = 0); /* ignore the failure */
+	}
 
 	rsi = crt_req_get(rpc);
 	uuid_generate(rsi->rsi_rebuild_cont_hdl_uuid);

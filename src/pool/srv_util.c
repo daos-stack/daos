@@ -110,6 +110,69 @@ map_ranks_fini(daos_rank_list_t *ranks)
 	}
 }
 
+static int
+map_ranks_merge(daos_rank_list_t *src_ranks, daos_rank_list_t *ranks_merge)
+{
+	daos_rank_t	*rs;
+	int		*indexes;
+	int		num = 0;
+	int		src_num;
+	int		i;
+	int		j;
+	int		rc = 0;
+
+	if (ranks_merge == NULL || src_ranks == NULL)
+		return 0;
+
+	src_num = src_ranks->rl_nr.num;
+	D_ALLOC(indexes, sizeof(*indexes) * ranks_merge->rl_nr.num);
+	if (indexes == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < ranks_merge->rl_nr.num; i++) {
+		bool included = false;
+
+		for (j = 0; j < src_num; j++) {
+			if (src_ranks->rl_ranks[j] ==
+			    ranks_merge->rl_ranks[i]) {
+				included = true;
+				break;
+			}
+		}
+
+		if (!included) {
+			indexes[num] = i;
+			num++;
+		}
+	}
+
+	if (num == 0)
+		D_GOTO(free, rc = 0);
+
+	D_ALLOC(rs, sizeof(*rs) * (num + src_ranks->rl_nr.num));
+	if (rs == NULL)
+		D_GOTO(free, rc = -DER_NOMEM);
+
+	for (i = 0; i < src_num; i++)
+		rs[i] = src_ranks->rl_ranks[i];
+
+	for (i = src_num, j = 0; i < src_num + num; i++, j++) {
+		int idx = indexes[j];
+
+		rs[i] = ranks_merge->rl_ranks[idx];
+	}
+
+	map_ranks_fini(src_ranks);
+
+	src_ranks->rl_nr.num = num + src_num;
+	src_ranks->rl_nr.num_out = num + src_num;
+	src_ranks->rl_ranks = rs;
+
+free:
+	D_FREE(indexes, sizeof(*indexes) * ranks_merge->rl_nr.num);
+	return rc;
+}
+
 int
 ds_pool_group_create(const uuid_t pool_uuid, const struct pool_map *map,
 		     crt_group_t **group)
@@ -169,31 +232,29 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     daos_rank_list_t *excluded_list)
 {
 	daos_rank_list_t	excluded;
-	crt_opcode_t	opc;
-	int		rc;
+	crt_opcode_t		opc;
+	int			rc;
 
-	opc = DAOS_RPC_OPCODE(opcode, module, 1);
-
-	if (excluded_list == NULL) {
-		ABT_rwlock_rdlock(pool->sp_lock);
-		rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN, &excluded);
-		ABT_rwlock_unlock(pool->sp_lock);
-		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to create rank list: %d\n",
-				DP_UUID(pool->sp_uuid), rc);
-			return rc;
-		}
-		excluded_list = &excluded;
+	ABT_rwlock_rdlock(pool->sp_lock);
+	rc = map_ranks_init(pool->sp_map, MAP_RANKS_DOWN, &excluded);
+	ABT_rwlock_unlock(pool->sp_lock);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create rank list: %d\n",
+			DP_UUID(pool->sp_uuid), rc);
+		return rc;
 	}
 
+	if (excluded_list != NULL)
+		map_ranks_merge(&excluded, excluded_list);
+
+	opc = DAOS_RPC_OPCODE(opcode, module, 1);
 	rc = crt_corpc_req_create(ctx, pool->sp_group,
-			  excluded_list->rl_nr.num == 0 ? NULL : excluded_list,
+			  excluded.rl_nr.num == 0 ? NULL : &excluded,
 			  opc, bulk_hdl/* co_bulk_hdl */, NULL /* priv */,
 			  0 /* flags */, crt_tree_topo(CRT_TREE_KNOMIAL, 4),
 			  rpc);
 
-	if (excluded_list == &excluded)
-		map_ranks_fini(&excluded);
+	map_ranks_fini(&excluded);
 	return rc;
 }
 
