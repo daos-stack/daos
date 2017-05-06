@@ -709,25 +709,23 @@ dc_obj_fetch(struct daos_task *task)
 	if (obj == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
-	shard = obj_dkey2shard(obj, args->dkey, map_ver);
-	if (shard < 0)
-		D_GOTO(out_put, rc = shard);
-
 	rc = daos_task_register_comp_cb(task, dc_obj_process_rc_cb, sizeof(obj),
 					&obj);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
-	rc = obj_shard_open(obj, shard, &shard_oh, map_ver);
+	/** Register retry CB */
+	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb, sizeof(oh), &oh);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
-	/** Register retry CB */
-	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb, sizeof(oh), &oh);
-	if (rc != 0) {
-		dc_obj_shard_close(shard_oh);
+	shard = obj_dkey2shard(obj, args->dkey, map_ver);
+	if (shard < 0)
+		D_GOTO(out_put, rc = shard);
+
+	rc = obj_shard_open(obj, shard, &shard_oh, map_ver);
+	if (rc != 0)
 		D_GOTO(out_put, rc);
-	}
 
 	D_DEBUG(DB_IO, "fetch "DF_OID" shard %u\n",
 		DP_OID(obj->cob_md.omd_id), shard);
@@ -832,17 +830,23 @@ dc_obj_update(struct daos_task *task)
 	if (obj == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
+	rc = daos_task_register_comp_cb(task, dc_obj_process_rc_cb, sizeof(obj),
+					&obj);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
+
+	/** Register retry CB */
+	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb,
+					sizeof(args->oh), &args->oh);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
+
 	rc = obj_dkey2update_grp(obj, args->dkey, &shard, &shards_cnt, map_ver);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
 	D_DEBUG(DB_IO, "update "DF_OID" start %u cnt %u\n",
 		DP_OID(obj->cob_md.omd_id), shard, shards_cnt);
-
-	rc = daos_task_register_comp_cb(task, dc_obj_process_rc_cb, sizeof(obj),
-					&obj);
-	if (rc != 0)
-		D_GOTO(out_put, rc);
 
 	/** for one shard, continue with the same task */
 	if (shards_cnt == 1) {
@@ -851,14 +855,6 @@ dc_obj_update(struct daos_task *task)
 		rc = obj_shard_open(obj, shard, &shard_oh, map_ver);
 		if (rc != 0)
 			D_GOTO(out_task, rc);
-
-		/** Register retry CB */
-		rc = daos_task_register_comp_cb(task, dc_obj_retry_cb,
-						sizeof(args->oh), &args->oh);
-		if (rc != 0) {
-			dc_obj_shard_close(shard_oh);
-			D_GOTO(out_task, rc);
-		}
 
 		rc = dc_obj_shard_update(shard_oh, args->epoch, args->dkey,
 					 args->nr, args->iods, args->sgls,
@@ -945,8 +941,9 @@ struct dc_obj_list_arg {
 	daos_hash_out_t	 *anchor;
 };
 
+/** completion callback for akey/recx enumeration */
 static int
-dc_obj_list_akey_cb(struct daos_task *task, void *data)
+dc_obj_list_cb(struct daos_task *task, void *data)
 {
 	struct dc_obj_list_arg *arg = data;
 	daos_hash_out_t *anchor = arg->anchor;
@@ -998,6 +995,20 @@ dc_obj_list_dkey_cb(struct daos_task *task, void *data)
 	return rc;
 }
 
+static daos_task_cb_t
+obj_list_opc2comp_cb(uint32_t opc)
+{
+	switch (opc) {
+	default:
+		D_ASSERT(0);
+	case DAOS_OBJ_DKEY_RPC_ENUMERATE:
+		return dc_obj_list_dkey_cb;
+	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
+	case DAOS_OBJ_RECX_RPC_ENUMERATE:
+		return dc_obj_list_cb;
+	}
+}
+
 static int
 dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 		     daos_key_t *dkey, daos_key_t *akey, daos_iod_type_t type,
@@ -1027,13 +1038,18 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	if (obj == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
-	shard = enum_anchor_get_shard(anchor);
-	shard = obj_grp_valid_shard_get(obj, shard, map_ver);
-	if (shard < 0)
-		D_GOTO(out_put, rc = shard);
-
 	list_args.obj = obj;
 	list_args.anchor = anchor;
+
+	rc = daos_task_register_comp_cb(task, obj_list_opc2comp_cb(op),
+					sizeof(list_args), &list_args);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
+
+	/** Register retry CB */
+	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb, sizeof(oh), &oh);
+	if (rc != 0)
+		D_GOTO(out_put, rc);
 
 	if (op == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
 		shard = enum_anchor_get_shard(anchor);
@@ -1042,33 +1058,18 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 			D_GOTO(out_put, rc = shard);
 
 		enum_anchor_set_shard(anchor, shard);
-		rc = daos_task_register_comp_cb(task, dc_obj_list_dkey_cb,
-						sizeof(list_args), &list_args);
-		if (rc != 0)
-			D_GOTO(out_put, rc);
 	} else {
 		shard = obj_dkey2shard(obj, dkey, map_ver);
 		if (shard < 0)
 			D_GOTO(out_put, rc = shard);
 
 		enum_anchor_set_shard(anchor, shard);
-		rc = daos_task_register_comp_cb(task, dc_obj_list_akey_cb,
-						sizeof(list_args), &list_args);
-		if (rc != 0)
-			D_GOTO(out_put, rc);
 	}
 
 	/** object will be decref by task complete cb */
 	rc = obj_shard_open(obj, shard, &shard_oh, map_ver);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
-
-	/** Register retry CB */
-	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb, sizeof(oh), &oh);
-	if (rc != 0) {
-		dc_obj_shard_close(shard_oh);
-		D_GOTO(out_put, rc);
-	}
 
 	if (op == DAOS_OBJ_RECX_RPC_ENUMERATE)
 		rc = dc_obj_shard_list_rec(shard_oh, op, epoch, dkey, akey,
