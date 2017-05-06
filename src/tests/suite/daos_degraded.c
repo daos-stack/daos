@@ -43,21 +43,22 @@ enum {
 	ENUMERATE
 };
 
-static void
-kill_daos_server(const char *grp, daos_handle_t poh)
+void
+daos_kill_server(const char *grp, daos_handle_t poh, daos_rank_t rank)
 {
 	daos_pool_info_t	info;
-	daos_rank_t		rank;
 	daos_rank_list_t	targets;
 	int			rc;
 
 	rc = daos_pool_query(poh, NULL, &info, NULL);
 	assert_int_equal(rc, 0);
 
-	if (info.pi_ndisabled == 0)
-		rank = 1;
-	else
-		rank = info.pi_ndisabled + 1;
+	if (rank == -1) {
+		if (info.pi_ndisabled == 0)
+			rank = 1;
+		else
+			rank = info.pi_ndisabled + 1;
+	}
 
 	print_message("\tKilling target %d (total of %d with %d already "
 		      "disabled)!\n", rank, info.pi_ntargets,
@@ -166,7 +167,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of updates is half-way inject fault */
 		if (op_kill == UPDATE && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
-			kill_daos_server(arg->group, arg->poh);
+			daos_kill_server(arg->group, arg->poh, -1);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -194,7 +195,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of lookup is half-way inject fault */
 		if (op_kill == LOOKUP && rank == 0 &&
 		    g_dkeys > 1 && (i == g_dkeys/2))
-			kill_daos_server(arg->group, arg->poh);
+			daos_kill_server(arg->group, arg->poh, -1);
 	}
 	free(rec_verify);
 
@@ -235,7 +236,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		/** If the number of keys enumerated is half-way inject fault */
 		if (op_kill == ENUMERATE && rank == 0 && enum_op &&
 		    g_dkeys > 1 && (key_nr  >= g_dkeys/2)) {
-			kill_daos_server(arg->group, arg->poh);
+			daos_kill_server(arg->group, arg->poh, -1);
 			enum_op = 0;
 		}
 

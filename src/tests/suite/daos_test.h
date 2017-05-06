@@ -137,6 +137,9 @@ int run_daos_epoch_recovery_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size);
 
+void
+daos_kill_server(const char *grp, daos_handle_t poh, daos_rank_t rank);
+
 static inline void
 handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	     int verbose)
