@@ -701,6 +701,11 @@ dc_obj_fetch(struct daos_task *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 	oh = args->oh;
 
+	/** Register retry CB */
+	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb, sizeof(oh), &oh);
+	if (rc != 0)
+		D_GOTO(out_task, rc);
+
 	rc = dc_obj_pool_map_version_get(oh, &map_ver);
 	if (rc)
 		D_GOTO(out_task, rc);
@@ -711,11 +716,6 @@ dc_obj_fetch(struct daos_task *task)
 
 	rc = daos_task_register_comp_cb(task, dc_obj_process_rc_cb, sizeof(obj),
 					&obj);
-	if (rc != 0)
-		D_GOTO(out_put, rc);
-
-	/** Register retry CB */
-	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb, sizeof(oh), &oh);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
@@ -822,6 +822,12 @@ dc_obj_update(struct daos_task *task)
 	args = daos_task_get_args(DAOS_OPC_OBJ_UPDATE, task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
+	/** Register retry CB */
+	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb,
+					sizeof(args->oh), &args->oh);
+	if (rc != 0)
+		D_GOTO(out_task, rc);
+
 	rc = dc_obj_pool_map_version_get(args->oh, &map_ver);
 	if (rc)
 		D_GOTO(out_task, rc);
@@ -832,12 +838,6 @@ dc_obj_update(struct daos_task *task)
 
 	rc = daos_task_register_comp_cb(task, dc_obj_process_rc_cb, sizeof(obj),
 					&obj);
-	if (rc != 0)
-		D_GOTO(out_put, rc);
-
-	/** Register retry CB */
-	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb,
-					sizeof(args->oh), &args->oh);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
@@ -1031,6 +1031,11 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 		D_GOTO(out_task, rc = -DER_INVAL);
 	}
 
+	/** Register retry CB */
+	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb, sizeof(oh), &oh);
+	if (rc != 0)
+		D_GOTO(out_task, rc);
+
 	rc = dc_obj_pool_map_version_get(oh, &map_ver);
 	if (rc)
 		D_GOTO(out_task, rc);
@@ -1045,11 +1050,6 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 
 	rc = daos_task_register_comp_cb(task, obj_list_opc2comp_cb(op),
 					sizeof(list_args), &list_args);
-	if (rc != 0)
-		D_GOTO(out_put, rc);
-
-	/** Register retry CB */
-	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb, sizeof(oh), &oh);
 	if (rc != 0)
 		D_GOTO(out_put, rc);
 
