@@ -248,7 +248,7 @@ evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
 	D_ASSERT(pref->pr_offset == 0); /* no clip so far */
 
 	if (entry)
-		evt_fill_entry(tcx, trace->tr_node, trace->tr_at, 0, entry);
+		evt_fill_entry(tcx, trace->tr_node, trace->tr_at, NULL, entry);
 
 	if (anchor) {
 		struct evt_rect rtmp = *rect;

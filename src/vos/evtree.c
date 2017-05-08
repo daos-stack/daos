@@ -1487,18 +1487,40 @@ failed:
 /** Fill the entry with the extent at the specified position of \a nd_mmid */
 void
 evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
-	       unsigned int at, daos_off_t offset, struct evt_entry *entry)
+	       unsigned int at, struct evt_rect *rect_srch,
+	       struct evt_entry *entry)
 {
 	struct evt_ptr_ref *pref;
 	struct evt_ptr	   *ptr;
 	struct evt_rect	   *rect;
 	void		   *addr;
+	daos_off_t	    offset;
+	daos_size_t	    width;
+	daos_size_t	    nr;
 
 	pref = evt_node_pref_at(tcx, nd_mmid, at);
 	rect = evt_node_rect_at(tcx, nd_mmid, at);
 	ptr  = evt_tmmid2ptr(tcx, pref->pr_ptr_mmid);
 
+	offset = 0;
+	width = evt_rect_width(rect);
+
+	if (rect_srch && rect_srch->rc_off_lo > rect->rc_off_lo) {
+		offset = rect_srch->rc_off_lo - rect->rc_off_lo;
+		D_ASSERTF(width > offset, DF_U64"/"DF_U64"\n", width, offset);
+		width -= offset;
+	}
+
+	if (rect_srch && rect_srch->rc_off_hi < rect->rc_off_hi) {
+		nr = rect->rc_off_hi - rect_srch->rc_off_hi;
+		D_ASSERTF(width > nr, DF_U64"/"DF_U64"\n", width, nr);
+		width -= nr;
+	}
+
 	entry->en_rect = *rect;
+	entry->en_rect.rc_off_lo += offset;
+	entry->en_rect.rc_off_hi = entry->en_rect.rc_off_lo + width - 1;
+
 	entry->en_mmid = umem_id_t2u(pref->pr_ptr_mmid);
 	uuid_copy(entry->en_cookie, ptr->pt_cookie);
 
@@ -1561,7 +1583,6 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 			struct evt_entry	*ent;
 			struct evt_rect		*rtmp;
 			int			 overlap;
-			daos_off_t		 offset = 0;
 
 			rtmp = evt_node_rect_at(tcx, nd_mmid, i);
 			D_DEBUG(DB_TRACE, " rect[%d]="DF_RECT"\n",
@@ -1637,10 +1658,7 @@ evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 			if (ent == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 
-			if (rect->rc_off_lo > rtmp->rc_off_lo)
-				offset = rect->rc_off_lo - rtmp->rc_off_lo;
-
-			evt_fill_entry(tcx, nd_mmid, i, offset, ent);
+			evt_fill_entry(tcx, nd_mmid, i, rect, ent);
 			switch (find_opc) {
 			default:
 				D_ASSERTF(0, "%d\n", find_opc);

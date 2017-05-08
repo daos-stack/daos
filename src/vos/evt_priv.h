@@ -193,7 +193,7 @@ TMMID(struct evt_node) *evt_node_child_at(struct evt_context *tcx,
 					  unsigned int at);
 
 void evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
-		    unsigned int at, daos_off_t offset,
+		    unsigned int at, struct evt_rect *rect_srch,
 		    struct evt_entry *entry);
 int evt_find_ent_list(struct evt_context *tcx, enum evt_find_opc find_opc,
 		      struct evt_rect *rect, struct evt_entry_list *ent_list);
