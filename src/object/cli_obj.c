@@ -716,16 +716,19 @@ dc_obj_fetch(struct daos_task *task)
 
 	rc = daos_task_register_comp_cb(task, dc_obj_process_rc_cb, sizeof(obj),
 					&obj);
-	if (rc != 0)
-		D_GOTO(out_put, rc);
+	if (rc != 0) {
+		/* NB: process_rc_cb() will release refcount in other cases */
+		obj_decref(obj);
+		D_GOTO(out_task, rc);
+	}
 
 	shard = obj_dkey2shard(obj, args->dkey, map_ver);
 	if (shard < 0)
-		D_GOTO(out_put, rc = shard);
+		D_GOTO(out_task, rc = shard);
 
 	rc = obj_shard_open(obj, shard, &shard_oh, map_ver);
 	if (rc != 0)
-		D_GOTO(out_put, rc);
+		D_GOTO(out_task, rc);
 
 	D_DEBUG(DB_IO, "fetch "DF_OID" shard %u\n",
 		DP_OID(obj->cob_md.omd_id), shard);
@@ -735,8 +738,6 @@ dc_obj_fetch(struct daos_task *task)
 	dc_obj_shard_close(shard_oh);
 	return rc;
 
-out_put:
-	obj_decref(obj);
 out_task:
 	daos_task_complete(task, rc);
 	return rc;
@@ -838,12 +839,15 @@ dc_obj_update(struct daos_task *task)
 
 	rc = daos_task_register_comp_cb(task, dc_obj_process_rc_cb, sizeof(obj),
 					&obj);
-	if (rc != 0)
-		D_GOTO(out_put, rc);
+	if (rc != 0) {
+		/* NB: process_rc_cb() will release refcount in other cases */
+		obj_decref(obj);
+		D_GOTO(out_task, rc);
+	}
 
 	rc = obj_dkey2update_grp(obj, args->dkey, &shard, &shards_cnt, map_ver);
 	if (rc != 0)
-		D_GOTO(out_put, rc);
+		D_GOTO(out_task, rc);
 
 	D_DEBUG(DB_IO, "update "DF_OID" start %u cnt %u\n",
 		DP_OID(obj->cob_md.omd_id), shard, shards_cnt);
@@ -922,15 +926,13 @@ dc_obj_update(struct daos_task *task)
 			D_GOTO(out_task, rc);
 		}
 	}
-
+	D_EXIT;
 out_free:
 	if (shard_tasks != NULL && shard_tasks != tmp_tasks)
 		D_FREE(shard_tasks, sizeof(*shard_tasks) * shards_cnt);
 
 	return rc;
 
-out_put:
-	obj_decref(obj);
 out_task:
 	daos_task_complete(task, rc);
 	goto out_free;
@@ -1050,21 +1052,24 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 
 	rc = daos_task_register_comp_cb(task, obj_list_opc2comp_cb(op),
 					sizeof(list_args), &list_args);
-	if (rc != 0)
-		D_GOTO(out_put, rc);
+	if (rc != 0) {
+		/* NB: process_rc_cb() will release refcount in other cases */
+		obj_decref(obj);
+		D_GOTO(out_task, rc);
+	}
 
 	if (op == DAOS_OBJ_DKEY_RPC_ENUMERATE) {
 		shard = enum_anchor_get_shard(anchor);
 		shard = obj_grp_valid_shard_get(obj, shard, map_ver);
 		if (shard < 0)
-			D_GOTO(out_put, rc = shard);
+			D_GOTO(out_task, rc = shard);
 
 		enum_anchor_set_shard(anchor, shard);
 
 	} else {
 		shard = obj_dkey2shard(obj, dkey, map_ver);
 		if (shard < 0)
-			D_GOTO(out_put, rc = shard);
+			D_GOTO(out_task, rc = shard);
 
 		enum_anchor_set_shard(anchor, shard);
 	}
@@ -1088,8 +1093,6 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 
 	return rc;
 
-out_put:
-	obj_decref(obj);
 out_task:
 	daos_task_complete(task, rc);
 	return rc;
