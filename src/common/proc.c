@@ -25,6 +25,7 @@
 #include <daos_types.h>
 #include <daos/common.h>
 #include <daos/rpc.h>
+#include <daos/rsvc.h>
 
 /**
  * typedef struct {
@@ -534,6 +535,26 @@ daos_proc_sg_desc_list(crt_proc_t proc, daos_sg_list_t *sgl)
 	return rc;
 }
 
+static int
+daos_proc_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
+{
+	int rc;
+
+	rc = crt_proc_uint32_t(proc, &hint->sh_flags);
+	if (rc != 0)
+		return -DER_CRT_HG;
+
+	rc = crt_proc_uint32_t(proc, &hint->sh_rank);
+	if (rc != 0)
+		return -DER_CRT_HG;
+
+	rc = crt_proc_uint64_t(proc, &hint->sh_term);
+	if (rc != 0)
+		return -DER_CRT_HG;
+
+	return 0;
+}
+
 struct crt_msg_field DMF_OID =
 	DEFINE_CRT_MSG("daos_unit_oid_t", 0,
 			sizeof(daos_unit_oid_t), daos_proc_unit_oid);
@@ -600,3 +621,7 @@ struct crt_msg_field DMF_OID_ARRAY =
 struct crt_msg_field DMF_UINT32_ARRAY =
 	DEFINE_CRT_MSG("daos_uint32", CMF_ARRAY_FLAG, sizeof(uint32_t),
 			crt_proc_uint32_t);
+
+struct crt_msg_field DMF_RSVC_HINT =
+	DEFINE_CRT_MSG("rsvc_hint", 0, sizeof(struct rsvc_hint),
+		       daos_proc_rsvc_hint);
