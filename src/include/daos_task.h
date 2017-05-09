@@ -416,6 +416,26 @@ void *
 daos_task_get_args(daos_opc_t opc, struct daos_task *task);
 
 /**
+ * Return a pointer to the DAOS task private state. If no private state has
+ * been set (via daos_task_get_priv()), NULL is returned.
+ *
+ * \param task	[IN]	Task to retrieve the private state from
+ *
+ * \return		Pointer to the private state
+ */
+void *
+daos_task_get_priv(struct daos_task *task);
+
+/**
+ * Set a pointer to the DAOS task private state.
+ *
+ * \param task	[IN,OUT]	Task to retrieve the private state from
+ * \param priv	[IN]		Pointer to the private state
+ */
+void
+daos_task_set_priv(struct daos_task *task, void *priv);
+
+/**
  * Make progress on the RPC context associated with the scheduler and schedule
  * tasks that are ready. Also check if the scheduler has any tasks.
  *

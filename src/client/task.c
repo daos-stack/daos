@@ -43,6 +43,7 @@ daos_task_create(daos_opc_t opc, struct daos_sched *sched, void *op_args,
 		return -DER_NOSYS;
 
 	args.opc	= opc;
+	args.priv	= NULL;
 	if (op_args)
 		memcpy(&args.op_args, op_args, dc_funcs[opc].arg_size);
 
@@ -76,6 +77,24 @@ daos_task_get_args(daos_opc_t opc, struct daos_task *task)
 	}
 
 	return &task_arg->op_args;
+}
+
+void *
+daos_task_get_priv(struct daos_task *task)
+{
+	struct daos_task_args *task_arg;
+
+	task_arg = daos_task_buf_get(task, sizeof(*task_arg));
+	return task_arg->priv;
+}
+
+void
+daos_task_set_priv(struct daos_task *task, void *priv)
+{
+	struct daos_task_args *task_arg;
+
+	task_arg = daos_task_buf_get(task, sizeof(*task_arg));
+	task_arg->priv = priv;
 }
 
 struct daos_progress_args_t {

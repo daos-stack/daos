@@ -74,6 +74,7 @@ struct daos_task_args {
 		daos_obj_list_akey_t	obj_list_akey;
 		daos_obj_list_recx_t	obj_list_recx;
 	} op_args;
+	void *priv;
 };
 
 struct daos_task_api {
