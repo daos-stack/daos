@@ -53,21 +53,64 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 	int			rc;
 
 	D_ASSERT(db->d_raft == raft);
-	D_DEBUG(DB_ANY, DF_DB": sending raft rv to node %d: term=%d\n",
-		DP_DB(db), raft_node_get_id(node), msg->term);
+	D_DEBUG(DB_ANY, DF_DB": sending rv to node %d: term=%d\n", DP_DB(db),
+		raft_node_get_id(node), msg->term);
 
 	rc = rdb_create_raft_rpc(RDB_REQUESTVOTE, node, &rpc);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to create RV RPC to node %d: %d\n",
+			DP_DB(db), raft_node_get_id(node), rc);
 		return -1;
+	}
 	in = crt_req_get(rpc);
 	*in = *msg;
 
 	rc = rdb_send_raft_rpc(rpc, db, node);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to send RV to node %d: term=%d\n",
-			DP_DB(db), raft_node_get_id(node), msg->term);
+		D_ERROR(DF_DB": failed to send RV RPC to node %d: %d\n",
+			DP_DB(db), raft_node_get_id(node), rc);
 		crt_req_decref(rpc);
 		return -1;
+	}
+	return 0;
+}
+
+static void
+rdb_raft_fini_ae(msg_appendentries_t *ae)
+{
+	if (ae->entries != NULL) {
+		int i;
+
+		for (i = 0; i < ae->n_entries; i++) {
+			msg_entry_t *e = &ae->entries[i];
+
+			if (e->data.buf != NULL)
+				D_FREE(e->data.buf, e->data.len);
+		}
+		D_FREE(ae->entries, sizeof(*ae->entries) * ae->n_entries);
+	}
+}
+
+static int
+rdb_raft_clone_ae(const msg_appendentries_t *ae, msg_appendentries_t *ae_new)
+{
+	int i;
+
+	*ae_new = *ae;
+	D_ALLOC(ae_new->entries, sizeof(*ae_new->entries) * ae_new->n_entries);
+	if (ae_new->entries == NULL)
+		return -DER_NOMEM;
+	for (i = 0; i < ae_new->n_entries; i++) {
+		msg_entry_t    *e = &ae->entries[i];
+		msg_entry_t    *e_new = &ae_new->entries[i];
+
+		*e_new = *e;
+		D_ALLOC(e_new->data.buf, e_new->data.len);
+		if (e_new->data.buf == NULL) {
+			rdb_raft_fini_ae(ae_new);
+			return -DER_NOMEM;
+		}
+		memcpy(e_new->data.buf, e->data.buf, e_new->data.len);
 	}
 	return 0;
 }
@@ -83,23 +126,36 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 	int			rc;
 
 	D_ASSERT(db->d_raft == raft);
-	D_DEBUG(DB_ANY, DF_DB": sending ae to %u: term=%d\n", DP_DB(db),
+	D_DEBUG(DB_ANY, DF_DB": sending ae to node %u: term=%d\n", DP_DB(db),
 		rdb_node->dn_rank, msg->term);
 
 	rc = rdb_create_raft_rpc(RDB_APPENDENTRIES, node, &rpc);
-	if (rc != 0)
-		return -1;
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to create AE RPC to node %d: %d\n",
+			DP_DB(db), raft_node_get_id(node), rc);
+		D_GOTO(err, rc = -1);
+	}
 	in = crt_req_get(rpc);
-	*in = *msg;
+	rc = rdb_raft_clone_ae(msg, in);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to allocate entry array\n", DP_DB(db));
+		D_GOTO(err_rpc, rc = -1);
+	}
 
 	rc = rdb_send_raft_rpc(rpc, db, node);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to send AE to node %d: term=%d\n",
-			DP_DB(db), raft_node_get_id(node), msg->term);
-		crt_req_decref(rpc);
-		return -1;
+		D_ERROR(DF_DB": failed to send AE RPC to node %d: %d\n",
+			DP_DB(db), raft_node_get_id(node), rc);
+		D_GOTO(err_in, rc = -1);
 	}
 	return 0;
+
+err_in:
+	rdb_raft_fini_ae(in);
+err_rpc:
+	crt_req_decref(rpc);
+err:
+	return rc;
 }
 
 static int
@@ -107,9 +163,14 @@ rdb_raft_cb_persist_vote(raft_server_t *raft, void *arg, int vote)
 {
 	struct rdb     *db = arg;
 	daos_iov_t	value;
+	int		rc;
 
 	daos_iov_set(&value, &vote, sizeof(vote));
-	return dbtree_update(db->d_attr, &rdb_attr_vote, &value);
+	rc = dbtree_update(db->d_attr, &rdb_attr_vote, &value);
+	if (rc != 0)
+		D_ERROR(DF_DB": failed to persist vote %d: %d\n", DP_DB(db),
+			vote, rc);
+	return rc;
 }
 
 static int
@@ -117,11 +178,17 @@ rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, int term)
 {
 	struct rdb     *db = arg;
 	daos_iov_t	value;
+	int		rc;
 
 	daos_iov_set(&value, &term, sizeof(term));
-	return dbtree_update(db->d_attr, &rdb_attr_term, &value);
+	rc = dbtree_update(db->d_attr, &rdb_attr_term, &value);
+	if (rc != 0)
+		D_ERROR(DF_DB": failed to persist term %d: %d\n", DP_DB(db),
+			term, rc);
+	return rc;
 }
 
+/* Persistent format of a log entry */
 struct rdb_raft_entry {
 	uint64_t	dre_term;
 	uint64_t	dre_id;
@@ -156,22 +223,32 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entry,
 
 	/* Pack the entry into a buffer. */
 	D_ALLOC(buf, buf_size);
-	if (buf == NULL)
+	if (buf == NULL) {
+		D_ERROR(DF_DB": failed to allocate entry buffer\n", DP_DB(db));
 		return -1;
+	}
 	buf->dre_term = entry->term;
 	buf->dre_id = entry->id;
 	buf->dre_type = entry->type;
 	buf->dre_size = entry->data.len;
-	/* TODO: Eliminate this memcpy() call. */
 	memcpy(buf->dre_bytes, entry->data.buf, entry->data.len);
 
 	/* Persist the buffer. */
 	daos_iov_set(&key, &i, sizeof(i));
 	daos_iov_set(&value, buf, buf_size);
 	rc = dbtree_update(db->d_log, &key, &value);
-	D_FREE(buf, buf_size);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to persist entry buffer: %d\n",
+			DP_DB(db), rc);
+		D_FREE(buf, buf_size);
 		return -1;
+	}
+
+	/*
+	 * Replace the user buffer with ours, as entry will be copied and saved
+	 * by the log module in raft. buf is freed in rdb_raft_cb_log_delete().
+	 */
+	entry->data.buf = buf->dre_bytes;
 	return 0;
 }
 
@@ -182,15 +259,19 @@ rdb_raft_cb_log_delete(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	struct rdb	       *db = arg;
 	uint64_t		i = index;
 	daos_iov_t		key;
-	struct rdb_raft_entry  *e = rdb_raft_entry_buf(entry);
+	struct rdb_raft_entry  *buf = rdb_raft_entry_buf(entry);
 	size_t			size = rdb_raft_entry_buf_size(entry);
 	int			rc;
 
 	daos_iov_set(&key, &i, sizeof(i));
 	rc = dbtree_delete(db->d_log, &key, NULL);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to delete entry: %d\n", DP_DB(db), rc);
 		return -1;
-	D_FREE(e, size);
+	}
+
+	/* Free the buffer allocated by rdb_raft_cb_log_offer(). */
+	D_FREE(buf, size);
 	return 0;
 }
 

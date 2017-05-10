@@ -81,10 +81,8 @@ rdb_proc_msg_entry_t(crt_proc_t proc, void *data)
 			D_FREE(e->data.buf, e->data.len);
 		return -DER_CRT_HG;
 	}
-#if 0 /* TODO: Change raft_recv_appendentries() to leave this buffer alone. */
 	if (proc_op == CRT_PROC_FREE)
 		D_FREE(e->data.buf, e->data.len);
-#endif
 	return 0;
 }
 
