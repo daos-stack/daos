@@ -83,7 +83,7 @@ class TestRunner(PostRunner.PostRunner):
         self.logger.info("TestRunner: tearDown begin")
         self.test_logdir(subtest_results)
         subtest_results.create_test_set_results()
-        self.test_info.dump_test_info()
+        self.test_info.dump_test_info(self.logdir)
         self.rename_output_directory()
         self.logger.info("TestRunner: tearDown end\n\n")
 

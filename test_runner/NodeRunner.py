@@ -20,7 +20,18 @@
 # SOFTWARE.
 # -*- coding: utf-8 -*-
 
-""" execute test runner on a node """
+"""
+execute test runner on a node
+
+This class is used by Multi Runner to execute and control a copy of Test Runner
+on a remote node. The class uses its assigned node type classification to
+determine if it should to execute a request. The information about a request is
+contained test_config map. The information with the test_config will be
+writtern to the log directory for request and becomes the config file supplied
+to Test Runner. The class has methods for controlling the new Test Runner
+process.
+
+"""
 
 #pylint: disable=too-many-instance-attributes
 #pylint: disable=too-many-arguments
@@ -39,7 +50,6 @@ except ImportError:
 
 class NodeRunner():
     """Simple node controller """
-    node = ""
 
     def __init__(self, info, node, dir_path, scripts_dir, directives,
                  node_type='all'):
@@ -57,39 +67,18 @@ class NodeRunner():
         self.procrtn = 0
         self.logfileout = ""
         self.logfileerr = ""
-        self.cmdfileout = ""
-        self.cmdfileerr = ""
 
-    def run_cmd(self, cmd, log_path, node_type='all'):
-        """ Launch remote command """
+    def match_type(self, node_type="all"):
+        """ match the node requested node type to this nodes type """
+        self.procrtn = 0
+        self.state = "done"
         if node_type != self.node_type and node_type != 'all' and \
            self.node_type != 'all':
-            self.procrtn = 0
-            return
-        node = self.node
-        self.logger.info("TestRunner: start command %s on %s", cmd, node)
-        self.cmdfileout = os.path.join(log_path, ("cmd_%s.runout" % node))
-        self.cmdfileerr = os.path.join(log_path, ("cmd_%s.runerr" % node))
-        cmdstr = "ssh %s \'%s \'" % (node, cmd)
-        cmdarg = shlex.split(cmdstr)
-        with open(self.cmdfileout, mode='a') as outfile, \
-            open(self.cmdfileerr, mode='a') as errfile:
-            outfile.write("============================\n " + str(cmd) + " \n")
-            errfile.write("============================\n " + str(cmd) + " \n")
-            rtn = subprocess.Popen(cmdarg,
-                                   stdout=outfile,
-                                   stderr=errfile)
+            return False
+        return True
 
-        self.proc = rtn
-        self.state = "running"
-        self.procrtn = None
-
-    def launch_test(self, node_type='all'):
+    def launch_test(self):
         """ Launch remote test runner """
-        if node_type != self.node_type and node_type != 'all' and \
-           self.node_type != 'all':
-            self.procrtn = 0
-            return
         test_name = self.test_name
         self.logger.info("TestRunner: start %s on %s", test_name, self.node)
         self.logger.debug("conf: " + str(self.test_config))
@@ -112,9 +101,8 @@ class NodeRunner():
         cmdarg = shlex.split(cmdstr)
         with open(self.logfileout, mode='w') as outfile, \
             open(self.logfileerr, mode='w') as errfile:
-            outfile.write("=======================================\n " + \
-                          " Command: " + str(cmdstr) + \
-                          "\n======================================\n")
+            outfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
+                ("=" * 40), cmdstr, ("=" * 40)))
             outfile.flush()
             rtn = subprocess.Popen(cmdarg,
                                    stdout=outfile,
@@ -125,19 +113,19 @@ class NodeRunner():
         self.procrtn = None
 
     def process_state(self):
-        """ poll remote processes """
-        if self.state is "running":
+        """ poll remote processes for state """
+        if self.state == "running":
             if self.proc.poll() is not None:
                 self.state = "done"
                 self.procrtn = self.proc.returncode
         return self.state
 
     def process_rtn(self):
-        """ poll remote processes """
+        """ remote process exeit code """
         return self.procrtn
 
     def process_terminate(self):
-        """ poll remote processes """
+        """ terminate remote processes """
         if self.proc.poll() is None:
             self.proc.terminate()
             self.state = "terminate"
@@ -148,11 +136,8 @@ class NodeRunner():
 
         return self.proc.returncode
 
-    def match_testName(self, node_type):
+    def match_testName(self):
         """ match the name of the log to the testcase """
-        if node_type != self.node_type and node_type != 'all' and \
-           self.node_type != 'all':
-            return
         subtest_results_file = os.path.join(self.test_config['log_base_path'],
                                             "subtest_results.yml")
         if not os.path.exists(subtest_results_file):
@@ -195,7 +180,7 @@ class NodeRunner():
         self.test_config.clear()
 
         copyList = self.test_directives.get('copyHostList', "yes")
-        if copyList is "yes":
+        if copyList == "yes":
             self.test_config['host_list'] = self.info.get_config('host_list')
         build_path = self.info.get_config('build_path')
         if not build_path:

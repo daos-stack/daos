@@ -22,27 +22,30 @@
 """
 test runner post test run processing class
 
-Fill in the Test section of the results.yml file From the provided information.
+checks that all directories and files are accessable.
+Dumps the path to log files if requested
+Dumps the stdout and stderr log files requested by orte requested
+Create the log file names From the provided information.
 
   Tests:
       name: group name
       status: PASS/FAIL
       submission: Tue Dec 01 16:36:46 PDT 2015
       duration: time
+      SubTests:
+        name: group name
+        status: PASS/FAIL
+        submission: Tue Dec 01 16:36:46 PDT 2015
+        duration: time
 
-Next, from the location of the results file, start searching the
-sub-directories for subtest_results.yml file. the contains of this file is
-added to the SubTests list in the Tests section of the results file. For each
-test listed find any logs files in the directory. A log file is any file with
-the format of <test name>.[log,out,err]. if a log file is found it is copied to
-root of the results directory and given a Maloo style name.
+
+from the location of the top log directory, start searching the
+sub-directories for log files. A log file is any file with
+the format of <test name>.[log,out,err]. if a log file is found it is
+given a Maloo style name.
 
 log format name:
-    <group name>.<test name>[_<host name>].<log type>.<host name>.log
-
-if the test are executed on more than one node, the node name is add to the
-subtest name and to the test name of the log file. The host name if found from
-the testing log directory created by test runner.
+    <test set>.<test name>.<information about log file>.<host name>.log
 
 """
 import os
@@ -185,6 +188,7 @@ class PostRunner():
         dirparts = rankdir.split('/')
         rank = os.path.basename(rankdir).replace('.', '_')
         testname = ""
+        testtype = "{!s}_set_{!s}_{!s}".format(dirparts[-3], dirparts[-2], rank)
         # return name list
         found = re.search(r'loop(\d*)', rankdir)
         if found:
@@ -195,41 +199,38 @@ class PostRunner():
         test_set_name = subtest_results.test_set_name(loop=loop)
         testlist = subtest_results.get_subtest_list(loop=loop)
         if len(testlist) == 1:
-            testname = "{!s}.{!s}_set_{!s}_{!s}".format(testlist[0]['name'],
-                                                        dirparts[-3],
-                                                        dirparts[-2],
-                                                        rank)
+            testname = testlist[0]['name']
         else:
             for test in testlist:
                 self.logger.log(0, "TEST LIST: %s", str(test))
                 if test['name'] in rankdir:
-                    testname = "{!s}.{!s}_set_{!s}_{!s}".format(test['name'],
-                                                                dirparts[-3],
-                                                                dirparts[-2],
-                                                                rank)
+                    testname = test['name']
                     break
+        if not testname:
+            testname = self.test_info.get_test_info('testName')
         self.logger.log(0, "TESTSETNAME: %s", test_set_name)
         self.logger.log(0, "TESTNAME: %s", testname)
-        if testname:
-            for stdfile in filelist:
-                #pylint: disable=bad-continuation
-                if stdfile == "stdout":
-                    stdout = os.path.abspath(os.path.join(rankdir, stdfile))
-                    new_name = os.path.abspath(os.path.join(rankdir,
-                                            ("{!s}.{!s}_stdout_log.{!s}.log".
-                                             format(test_set_name, testname,
-                                                    self.test_info.nodeName())
-                                            )))
-                    os.rename(stdout, new_name)
-                elif stdfile == "stderr":
-                    stderr = os.path.abspath(os.path.join(rankdir, stdfile))
-                    new_name = os.path.abspath(os.path.join(rankdir,
-                                            ("{!s}.{!s}_stderr_log.{!s}.log".
-                                             format(test_set_name, testname,
-                                                    self.test_info.nodeName())
-                                            )))
-                    os.rename(stderr, new_name)
-                #pylint: enable=bad-continuation
+        for stdfile in filelist:
+            #pylint: disable=bad-continuation
+            if stdfile == "stdout":
+                stdout = os.path.abspath(os.path.join(rankdir, stdfile))
+                new_name = os.path.abspath(os.path.join(rankdir,
+                                        ("{!s}.{!s}.{!s}_stdout_log.{!s}.log".
+                                         format(test_set_name, testname,
+                                                testtype,
+                                                self.test_info.nodeName())
+                                        )))
+                os.rename(stdout, new_name)
+            elif stdfile == "stderr":
+                stderr = os.path.abspath(os.path.join(rankdir, stdfile))
+                new_name = os.path.abspath(os.path.join(rankdir,
+                                        ("{!s}.{!s}.{!s}_stderr_log.{!s}.log".
+                                         format(test_set_name, testname,
+                                                testtype,
+                                                self.test_info.nodeName())
+                                        )))
+                os.rename(stderr, new_name)
+            #pylint: enable=bad-continuation
 
     def load_subtest_logs(self, subtest_results, dirpath, filelist):
         """walk the testcase directory and find out and err files"""
@@ -253,6 +254,7 @@ class PostRunner():
                 if len(testlist) == 1:
                     testname = testlist[0]['name']
                 else:
+                    testname = self.test_info.get_test_info('testName')
                     for test in testlist:
                         if test['name'] in dirpath:
                             testname = test['name']

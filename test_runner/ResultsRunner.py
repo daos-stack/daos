@@ -1,27 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Fill in the Test section of the results.yml file From the provided information.
+Fill in a subtest_results.yml file From the provided information as
+Test Runner is processing a description file.
 
   Tests:
-      name: group name
+      name: test set
       status: PASS/FAIL
       submission: Tue Dec 01 16:36:46 PDT 2015
+      report_version: 2
       duration: time
-
-Next, from the location of the results file, start searching the
-sub-directories for subtest_results.yml file. the contains of this file is
-added to the SubTests list in the Tests section of the results file. For each
-test listed find any logs files in the directory. A log file is any file with
-the format of <test name>.[log,out,err]. if a log file is found it is copied to
-root of the results directory and given a Maloo style name.
-
-log format name:
-    <group name>.<test name>[_<host name>].<log type>.<host name>.log
-
-if the test are executed on more than one node, the node name is add to the
-subtest name and to the test name of the log file. The host name if found from
-the testing log directory created by test runner.
+      SubTests:
+          name: test name
+          status: PASS/FAIL
+          submission: Tue Dec 01 16:36:46 PDT 2015
+          duration: time
 
 """
 import logging

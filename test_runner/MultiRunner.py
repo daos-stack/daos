@@ -37,6 +37,7 @@ import NodeControlRunner
 import TestInfoRunner
 import ResultsRunner
 import PostRunner
+import TestNodesRunner
 #pylint: enable=import-error
 
 
@@ -108,7 +109,7 @@ class MultiRunner(PostRunner.PostRunner):
         if self.daemon:
             self.stop_daemon()
         subtest_results.create_test_set_results()
-        self.test_info.dump_test_info()
+        self.test_info.dump_test_info(self.logdir)
         self.rename_output_directory()
         self.logger.info("TestRunner: tearDown end\n\n")
 
@@ -128,11 +129,13 @@ class MultiRunner(PostRunner.PostRunner):
             self.logger.debug("set_configKeys: %s", str(setConfigKeys))
             if setConfigKeys:
                 configKeys = self.test_info.set_configKeys(setConfigKeys)
-            setNodeType = item.get('nodeType', "all")
+            useNodeType = item.get('nodeType', "all")
+            useNodes = item.get('useNodes', "all")
             setTestPhase = item.get('type', "TEST").upper()
             configKeys['TR_TEST_PHASE'] = setTestPhase
-            self.nodes.nodes_config(item['name'], setNodeType, configKeys)
-            thisrtn = self.nodes.execute_list(setNodeType)
+            self.nodes.nodes_config(item['name'], useNodeType, configKeys)
+            waittime = int(item.get('waittime', "1800"))
+            thisrtn = self.nodes.execute_list(useNodeType, useNodes, waittime)
             rtn |= thisrtn
             if thisrtn and toexit.lower() == "yes":
                 break
@@ -155,6 +158,8 @@ class MultiRunner(PostRunner.PostRunner):
         logDir = os.path.join(logbase, name)
         self.daemon_results = ResultsRunner.SubTestResults(logDir,
                                                            test_set_name)
+        # create a test node interface object
+        nodes = TestNodesRunner.TestNodesRunner(logDir, self.test_info)
         self.logger.info("Import daemon: %s", name)
         try:
             os.makedirs(logDir)
@@ -165,8 +170,7 @@ class MultiRunner(PostRunner.PostRunner):
         try:
             _module = import_module(name)
             try:
-                _class = getattr(_module, name)(logDir, self.test_info,
-                                                self.nodes)
+                _class = getattr(_module, name)(logDir, self.test_info, nodes)
             except AttributeError:
                 self.logger.error("Class does not exist %s", name)
         except ImportError:
@@ -193,9 +197,8 @@ class MultiRunner(PostRunner.PostRunner):
                 return 1
             module_name = str(self.test_info.get_test_info('testName'))
             test_set_name = str(self.test_info.get_test_info('testSetName'))
-            results = ResultsRunner.SubTestResults(self.log_dir_base,
-                                                   test_set_name)
             self.logdir = os.path.join(self.log_dir_base, module_name)
+            results = ResultsRunner.SubTestResults(self.logdir, test_set_name)
             try:
                 os.makedirs(self.logdir)
             except OSError:
@@ -203,9 +206,10 @@ class MultiRunner(PostRunner.PostRunner):
                 newname = "{}{}".format(self.logdir, self.now)
                 os.rename(self.logdir, newname)
                 os.makedirs(self.logdir)
-            file_hdlr = logging.FileHandler(os.path.join(self.logdir,
-                                                         (module_name + ".log"))
-                                           )
+            log_name = ("{!s}.{!s}.test_log.{!s}.log".
+                        format(test_set_name, module_name,
+                               self.test_info.nodeName()))
+            file_hdlr = logging.FileHandler(os.path.join(self.logdir, log_name))
             self.logger.addHandler(file_hdlr)
             file_hdlr.setLevel(logging.DEBUG)
             self.test_directives = self.test_info.get_test_info('directives',

@@ -22,6 +22,24 @@
 """
 node control test runner class
 
+This class is used by Multi Runner to start a copy of Test Runner on remote
+nodes. The class uses the nodes type classification to determine which nodes
+to execute the request on. The class uses the nodes_strategy method to create
+a node object of each node and assign it to a type.
+
+To execute on a remote node:
+The class uses the nodes_config method to setup the data to be use for the
+config file and define the description file to be executed on each node.
+
+The execute_list method is the main entry point to start the execution. This
+method will create a list or sub-list of node of a type execute on. The method
+will query each node to match the requested type. This list can be broken down
+into a sub-list by the call suppling a comma  separate list on index into the
+list. This list of node is passed to execute_config to start Test Runner on all
+listed node and wait for completion. At the completion of the request, the
+match_name method is called on all nodes to rename the console log file to
+match the test set name of the completed request.
+
 """
 
 
@@ -36,85 +54,33 @@ import NodeRunner
 
 class NodeControlRunner():
     """Simple test runner"""
-    #log_dir_base = ""
     node_list = []
-    info = None
-    test_info = None
-    logger = None
-    file_hdlr = None
 
-    def __init__(self, log_base, info, test_info=None):
+    def __init__(self, log_base, info, test_info):
         self.info = info
         self.test_info = test_info
         self.log_dir_base = log_base
         self.logger = logging.getLogger("TestRunnerLogger")
         self.now = "_{}".format(datetime.now().isoformat().replace(':', '.'))
 
-    def execute_cmd(self, cmdstr, log_path, node_type, msg=None):
+    def execute_config(self, run_node_list, waittime):
         """ execute test scripts """
-
         rtn = 0
-        self.logger.info(
-            "***********************************************************")
-        if msg:
-            self.logger.info("%s", msg)
-        for node in self.node_list:
-            self.logger.debug("************** run commnad on " + \
-                             str(node.node) + " type " + str(node_type) + \
-                             " **************"
-                             )
-            node.run_cmd(cmdstr, log_path, node_type)
-        loop_count = 1800
-        running_count = len(self.node_list)
+        for node in run_node_list:
+            node.launch_test()
+        loop_count = waittime
+        running_count = len(run_node_list)
         self.logger.debug("******* started running count " + str(running_count))
         while running_count and loop_count:
             time.sleep(1)
-            running_count = len(self.node_list)
+            running_count = len(run_node_list)
             loop_count = loop_count - 1
-            for node in self.node_list:
-                if node.process_state() != "running":
-                    running_count = running_count - 1
-        self.logger.debug("******* done running count " + str(running_count))
-
-        for node in self.node_list:
-            procrtn = node.process_rtn()
-            if procrtn is not None:
-                rtn |= procrtn
-            else:
-                node.process_terminate()
-                rtn |= 1
-            self.logger.debug("************** Results " + \
-                             str(node.node) + " rtn: " +  str(procrtn) + \
-                             " **************"
-                             )
-        self.logger.info("execution time remaining: %d", loop_count)
-        self.logger.info(
-            "***********************************************************")
-        return rtn
-
-    def execute_list(self, node_type):
-        """ execute test scripts """
-
-        rtn = 0
-        self.logger.info("********** run Test Runner on node type " + \
-                         str(node_type) + \
-                         " **********"
-                        )
-        for node in self.node_list:
-            node.launch_test(node_type)
-        loop_count = 1800
-        running_count = len(self.node_list)
-        self.logger.debug("******* started running count " + str(running_count))
-        while running_count and loop_count:
-            time.sleep(1)
-            running_count = len(self.node_list)
-            loop_count = loop_count - 1
-            for node in self.node_list:
+            for node in run_node_list:
                 if node.process_state() != "running":
                     running_count = running_count - 1
         self.logger.debug("******* done running count " + str(running_count))
         self.logger.info("********** node Test Runner Results **************")
-        for node in self.node_list:
+        for node in run_node_list:
             procrtn = node.process_rtn()
             if procrtn is not None:
                 rtn |= procrtn
@@ -128,10 +94,36 @@ class NodeControlRunner():
         self.logger.info("execution time remaining: %d", loop_count)
         self.logger.info(
             "***********************************************************")
-        for node in self.node_list:
-            node.match_testName(node_type)
+        for node in run_node_list:
+            node.match_testName()
 
         return rtn
+
+    def execute_list(self, node_type="all", nodes="all", waittime=1800):
+        """ create the execute test list
+            node_type - is a define type of nodes
+            nodes - s a list of indexs into the type list """
+        run_node_list = []
+        self.logger.info("********** run Test Runner on node type " + \
+                         str(node_type) + \
+                         " **********"
+                        )
+        if nodes != "all":
+            node_index_list = nodes.split(",")
+            if node_type == "all":
+                type_list = self.info.get_config('host_list')
+            else:
+                type_list = self.test_info.get_defaultENV(node_type).split(",")
+        for node in self.node_list:
+            if node.match_type(node_type):
+                if nodes == "all":
+                    run_node_list.append(node)
+                else:
+                    for index in node_index_list:
+                        if node.node == type_list[int(index)]:
+                            run_node_list.append(node)
+                            break
+        return self.execute_config(run_node_list, waittime)
 
     def nodes_config(self, name, node_type, configKeys):
         """ setup the node config file """

@@ -127,7 +127,8 @@ def main():
     start = 1
     config = {}
     logger = logging.getLogger("TestRunnerLogger")
-    logger.setLevel(logging.INFO)
+    #logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
     logger.addHandler(ch)

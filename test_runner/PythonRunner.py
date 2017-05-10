@@ -26,6 +26,8 @@ multi test runner class
 
 
 import os
+import sys
+#import traceback
 import logging
 #pylint: disable=import-error
 import PostRunner
@@ -55,23 +57,21 @@ class PythonRunner(PostRunner.PostRunner):
         self.logger.info("TestRunner: start command %s ", cmd)
         cmdstr = "{!s} {!s} ".format(cmd, parms)
         rtn = 0
-        self.logger.info("=======================================\n " + \
-                      " Command: " + str(cmdstr) + \
-                      "\n======================================\n")
+        self.logger.info("%s\n  Method: %s \n%s\n",
+                         ("=" * 40), cmdstr, ("=" * 40))
         try:
             if parms:
                 rtn = getattr(self.testModule, cmd)(parms)
             else:
                 rtn = getattr(self.testModule, cmd)()
         except Exception as e:
+            tb = sys.exc_info()
             rtn = 1
-            self.logger.info("=======================================\n " + \
-                          " Command failed: " + str(e) + \
-                          "\n======================================\n")
+            self.logger.error("%s\n  Method failed: %s \n%s\n",
+                              ("=" * 40), e, ("=" * 40), exc_info=tb)
         else:
-            self.logger.info("=======================================\n " + \
-                          " Command returned: " + str(rtn) + \
-                          "\n======================================\n")
+            self.logger.info("%s\n  Method returned: %s \n%s\n",
+                             ("=" * 40), rtn, ("=" * 40))
 
         if not isinstance(rtn, int):
             rtn = 0
@@ -91,8 +91,7 @@ class PythonRunner(PostRunner.PostRunner):
     def execute_list(self, results):
         """ execute each item in the execution strategy list """
         rtn = 0
-        toexit = self.test_info.get_test_info('directives',
-                                              'exitLoopOnError', "no").lower()
+        toexit = self.test_info.get_directives('exitListOnError', "no").lower()
         for item in self.test_info.get_test_info('execStrategy'):
             rc = 0
             info = {}
@@ -159,7 +158,6 @@ class PythonRunner(PostRunner.PostRunner):
                          str(testname) + \
                          " *********************************"
                         )
-        #??? load module here
         self.test_info.setup_default_env()
         self.testModule = self.import_module()
         print("testModule type: {!s}".format(type(self.testModule)))
@@ -167,6 +165,13 @@ class PythonRunner(PostRunner.PostRunner):
         results = ResultsRunner.SubTestResults(self.logdir, testsetname)
 
         if loop.lower() == "no":
+            # create the log directory for this loop
+            logdir = os.path.join(self.logdir, "loop0")
+            try:
+                os.makedirs(logdir)
+            except OSError:
+                pass
+            self.testModule.useLogDir(logdir)
             rtn = self.execute_list(results)
         else:
             for i in range(int(loop)):
@@ -174,13 +179,13 @@ class PythonRunner(PostRunner.PostRunner):
                                  str(" loop %d " % i) +\
                                  "*************************"
                                 )
-                #self.logdir = os.path.join(self.logdirbase,
-                #                           ("loop{!s}".format(i)))
-                #try:
-                #    os.makedirs(self.logdir)
-                #except OSError:
-                #    pass
+                logdir = os.path.join(self.logdir, ("loop{!s}".format(i)))
+                try:
+                    os.makedirs(logdir)
+                except OSError:
+                    pass
                 results.add_test_set("{!s}_loop{!s}".format(testsetname, i))
+                self.testModule.useLogDir(logdir)
                 rc = self.execute_list(results)
                 rtn |= rc
                 if rc == 0:

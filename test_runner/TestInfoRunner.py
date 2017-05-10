@@ -91,6 +91,9 @@ class TestInfoRunner(PreRunner.PreRunner):
             self.test_info['subList'] = {}
         # set test name
         self.test_info['subList']['nodename'] = self.nodename
+        self.test_info['subList']['hostlist'] = \
+             ",".join(self.info.get_config(keyname='host_list',
+                                           default=[self.nodename]))
         fileName = os.path.splitext(os.path.basename(test_module_name))[0]
         moduleName = self.test_info['module'].get('name', "")
         logBaseName = self.test_info['module'].get('logBaseName', "")
@@ -126,11 +129,10 @@ class TestInfoRunner(PreRunner.PreRunner):
         self.remove_tmp_dir()
         del self.test_info
 
-    def dump_test_info(self):
+    def dump_test_info(self, logdir=""):
         """ dump the test info to the output directory """
-        if os.path.exists(os.path.join(self.log_dir_base,
-                                       self.test_info['testName'])):
-            name = os.path.join(self.log_dir_base, self.test_info['testName'],
+        if logdir and os.path.exists(logdir):
+            name = os.path.join(logdir,
                                 "{!s}.{!s}.test_info_yml.{!s}.log".format(
                                     self.test_info['testSetName'],
                                     self.test_info['testName'],
