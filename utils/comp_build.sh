@@ -218,8 +218,6 @@ function setup_dep()
 : ${JOB_SUFFIX:="-update-scratch"}
 if [ -d "/scratch/jenkins-2/artifacts" ];then
   : ${CORAL_ARTIFACTS:="/scratch/jenkins-2/artifacts"}
-else
-  : ${CORAL_ARTIFACTS:="/scratch/coral/artifacts"}
 fi
 
 

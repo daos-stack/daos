@@ -411,7 +411,8 @@ class GitRepoRetriever(object):
 
         self.url = url
         self.has_submodules = has_submodules
-        self.commit_sha = branch
+        self.branch = branch
+        self.commit_sha = None
         self.patch = None
 
     def checkout_commit(self, subdir):
@@ -442,12 +443,17 @@ class GitRepoRetriever(object):
         if not RUNNER.run_commands(commands):
             raise DownloadFailure(self.url, subdir)
 
+        # If a branch is initialy specified it should be checked out first
+        if self.branch:
+            self.commit_sha = self.branch
+            self.checkout_commit(subdir)
+
         passed_commit_sha = kw.get("commit_sha", None)
         if passed_commit_sha is not None:
             self.commit_sha = passed_commit_sha
-        self.patch = kw.get("patch", None)
+            self.checkout_commit(subdir)
 
-        self.checkout_commit(subdir)
+        self.patch = kw.get("patch", None)
         self.apply_patch(subdir)
         self.update_submodules(subdir)
 
@@ -1093,7 +1099,7 @@ class _Component(object):
         if env.GetOption('no_exec'):
             # Can not override no-check in the command line.
             print 'Would check for missing system libraries'
-            return True
+            return False
 
         config = Configure(env)
 
