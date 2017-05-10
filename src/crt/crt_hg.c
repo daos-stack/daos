@@ -261,15 +261,48 @@ out:
 	return rc;
 }
 
+static int
+crt_ofi_get_info_string(char **string)
+{
+	int	 port;
+	char	*info_string;
+
+	C_ALLOC(info_string, CRT_ADDR_STR_MAX_LEN);
+	if (info_string == NULL) {
+		C_ERROR("cannot allocate memory for info string.\n");
+		return -CER_NOMEM;
+	}
+
+	if (na_ofi_conf.noc_port_cons == NA_TRUE) {
+		if (crt_is_service()) {
+			port = na_ofi_conf.noc_port;
+			na_ofi_conf.noc_port++;
+			snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
+				 "ofi+sockets://%s:%d",
+				 na_ofi_conf.noc_ip_str, port);
+		} else {
+			snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
+				 "ofi+sockets://%s", na_ofi_conf.noc_ip_str);
+		}
+	} else {
+		snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
+			 "ofi+sockets://%s", na_ofi_conf.noc_ip_str);
+	}
+
+	*string = info_string;
+	return 0;
+}
+
 /* be called only in crt_init */
 int
 crt_hg_init(crt_phy_addr_t *addr, bool server)
 {
-	const char		*info_string;
+	char			*info_string = NULL;
+	bool			 info_string_free = false;
 	struct crt_hg_gdata	*hg_gdata;
 	na_class_t		*na_class = NULL;
 	hg_class_t		*hg_class = NULL;
-	int			rc = 0;
+	int			 rc = 0;
 
 	if (crt_initialized()) {
 		C_ERROR("CaRT already initialized.\n");
@@ -280,9 +313,13 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		info_string = *addr;
 		C_ASSERT(strncmp(info_string, "bmi+tcp", 7) == 0);
 	} else {
-		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS)
-			info_string = "ofi+sockets://";
-		else if (crt_gdata.cg_na_plugin == CRT_NA_CCI_VERBS)
+		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS) {
+			rc = crt_ofi_get_info_string(&info_string);
+			if (rc != 0)
+				C_GOTO(out, rc = -CER_INVAL);
+			else
+				info_string_free = true;
+		} else if (crt_gdata.cg_na_plugin == CRT_NA_CCI_VERBS)
 			info_string = "cci+verbs://";
 		else if (crt_gdata.cg_na_plugin == CRT_NA_CCI_TCP)
 			info_string = "cci+tcp://";
@@ -351,6 +388,8 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	C_DEBUG("in crt_hg_init, listen address: %s.\n", *addr);
 
 out:
+	if (info_string_free)
+		C_FREE(info_string, CRT_ADDR_STR_MAX_LEN);
 	return rc;
 }
 
@@ -399,7 +438,8 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	na_class_t		*na_class = NULL;
 	hg_class_t		*hg_class = NULL;
 	hg_context_t		*hg_context = NULL;
-	const char		*info_string;
+	char			*info_string = NULL;
+	bool			 info_string_free = false;
 	hg_return_t		 hg_ret;
 	int			 rc = 0;
 
@@ -429,9 +469,13 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 		crt_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
 
-		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS)
-			info_string = "ofi+sockets://";
-		else if (crt_gdata.cg_na_plugin == CRT_NA_CCI_VERBS)
+		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS) {
+			rc = crt_ofi_get_info_string(&info_string);
+			if (rc != 0)
+				C_GOTO(out, rc = -CER_INVAL);
+			else
+				info_string_free = true;
+		} else if (crt_gdata.cg_na_plugin == CRT_NA_CCI_VERBS)
 			info_string = "cci+verbs://";
 		else if (crt_gdata.cg_na_plugin == CRT_NA_CCI_TCP)
 			info_string = "cci+tcp://";
@@ -506,6 +550,8 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	C_ASSERT(hg_ctx->chc_bulkctx != NULL);
 
 out:
+	if (info_string_free)
+		C_FREE(info_string, CRT_ADDR_STR_MAX_LEN);
 	return rc;
 }
 

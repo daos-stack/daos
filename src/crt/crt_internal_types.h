@@ -207,4 +207,18 @@ struct crt_opc_info {
 	struct crt_req_format	*coi_crf;
 };
 
+struct na_ofi_config {
+	/* flag of using consecutive port number for NA classes */
+	bool		noc_port_cons;
+	int32_t		noc_port;
+	char		*noc_interface;
+	/* IP addr str for the noc_interface */
+	char		noc_ip_str[INET_ADDRSTRLEN];
+};
+
+int na_ofi_config_init(void);
+void na_ofi_config_fini(void);
+
+extern struct na_ofi_config na_ofi_conf;
+
 #endif /* __CRT_INTERNAL_TYPES_H__ */

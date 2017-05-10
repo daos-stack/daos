@@ -302,10 +302,17 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 				CRT_PHY_ADDR_ENV, addr_env);
 		}
 
-		if (strncmp(addr_env, "cci+verbs", 9) == 0)
+		if (strncmp(addr_env, "cci+verbs", 9) == 0) {
 			crt_gdata.cg_na_plugin = CRT_NA_CCI_VERBS;
-		else if (strncmp(addr_env, "ofi+sockets", 11) == 0)
+		} else if (strncmp(addr_env, "ofi+sockets", 11) == 0) {
+			rc = na_ofi_config_init();
+			if (rc != 0) {
+				C_PRINT_ERR("na_ofi_config_init failed, "
+					    "rc: %d.\n", rc);
+				C_GOTO(out, rc);
+			}
 			crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
+		}
 
 do_init:
 		/*
@@ -480,6 +487,9 @@ crt_finalize(void)
 		if (crt_plugin_gdata.cpg_inited == 1)
 			crt_plugin_fini();
 		crt_log_fini();
+
+		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS)
+			na_ofi_config_fini();
 	} else {
 		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 	}
@@ -488,4 +498,130 @@ out:
 	if (rc != 0)
 		C_PRINT_ERR("crt_finalize failed, rc: %d.\n", rc);
 	return rc;
+}
+
+/* global NA OFI plugin configuration */
+struct na_ofi_config na_ofi_conf;
+
+static inline na_bool_t is_integer_str(char *str)
+{
+	char *p;
+
+	p = str;
+	if (p == NULL || strlen(p) == 0)
+		return NA_FALSE;
+
+	while (*p != '\0') {
+		if (*p <= '9' && *p >= '0') {
+			p++;
+			continue;
+		} else {
+			return NA_FALSE;
+		}
+	}
+
+	return NA_TRUE;
+}
+
+int na_ofi_config_init(void)
+{
+	char *port_str;
+	char *interface;
+	int port;
+	struct ifaddrs *if_addrs = NULL;
+	struct ifaddrs *ifa = NULL;
+	void *tmp_ptr;
+	const char *ip_str = NULL;
+	int rc = 0;
+
+	interface = getenv("OFI_INTERFACE");
+	if (interface != NULL && strlen(interface) > 0) {
+		na_ofi_conf.noc_interface = strdup(interface);
+		if (na_ofi_conf.noc_interface == NULL) {
+			C_ERROR("cannot allocate memory for noc_interface.");
+			C_GOTO(out, rc = -CER_NOMEM);
+		}
+	} else {
+		na_ofi_conf.noc_interface = NULL;
+		C_ERROR("ENV OFI_INTERFACE not set.");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+
+	rc = getifaddrs(&if_addrs);
+	if (rc != 0) {
+		C_ERROR("cannot getifaddrs, errno: %d(%s).\n",
+			     errno, strerror(errno));
+		C_GOTO(out, rc = -CER_PROTO);
+	}
+
+	for (ifa = if_addrs; ifa != NULL; ifa = ifa->ifa_next) {
+		if (strcmp(ifa->ifa_name, na_ofi_conf.noc_interface))
+			continue;
+		if (ifa->ifa_addr == NULL)
+			continue;
+		memset(na_ofi_conf.noc_ip_str, 0, INET_ADDRSTRLEN);
+		if (ifa->ifa_addr->sa_family == AF_INET) {
+			/* check it is a valid IPv4 Address */
+			tmp_ptr =
+			&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+			ip_str = inet_ntop(AF_INET, tmp_ptr,
+					   na_ofi_conf.noc_ip_str,
+					   INET_ADDRSTRLEN);
+			if (ip_str == NULL) {
+				C_ERROR("inet_ntop failed, errno: %d(%s).\n",
+					errno, strerror(errno));
+				freeifaddrs(if_addrs);
+				C_GOTO(out, rc = -CER_PROTO);
+			}
+			/*
+			 * C_DEBUG("Get interface %s IPv4 Address %s\n",
+			 * ifa->ifa_name, na_ofi_conf.noc_ip_str);
+			 */
+			break;
+		} else if (ifa->ifa_addr->sa_family == AF_INET6) {
+			/* check it is a valid IPv6 Address */
+			/*
+			 * tmp_ptr =
+			 * &((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr;
+			 * inet_ntop(AF_INET6, tmp_ptr, na_ofi_conf.noc_ip_str,
+			 *           INET6_ADDRSTRLEN);
+			 * C_DEBUG("Get %s IPv6 Address %s\n",
+			 *         ifa->ifa_name, na_ofi_conf.noc_ip_str);
+			 */
+		}
+	}
+	freeifaddrs(if_addrs);
+	if (ip_str == NULL) {
+		C_ERROR("no IP addr found.\n");
+		C_GOTO(out, rc = -CER_PROTO);
+	}
+
+	port_str = getenv("OFI_PORT");
+	if (port_str == NULL || strlen(port_str) == 0) {
+		na_ofi_conf.noc_port_cons = NA_FALSE;
+		na_ofi_conf.noc_port = 0;
+		C_GOTO(out, rc);
+	}
+	if (is_integer_str(port_str) == NA_FALSE) {
+		C_ERROR("OFI_PORT %s invalid.", port_str);
+		na_ofi_config_fini();
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+
+	port = atoi(port_str);
+	na_ofi_conf.noc_port_cons = true;
+	na_ofi_conf.noc_port = port;
+
+out:
+	return rc;
+}
+
+void na_ofi_config_fini(void)
+{
+	if (na_ofi_conf.noc_interface != NULL) {
+		free(na_ofi_conf.noc_interface);
+		na_ofi_conf.noc_interface = NULL;
+	}
+	na_ofi_conf.noc_port_cons = NA_FALSE;
+	na_ofi_conf.noc_port = 0;
 }
