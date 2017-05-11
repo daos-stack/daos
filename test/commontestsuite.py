@@ -156,8 +156,11 @@ class CommonTestSuite(unittest.TestCase):
             cmdfileerr = os.path.join(log_path, "common_launch_test.err")
             with open(cmdfileout, mode='a') as outfile, \
                 open(cmdfileerr, mode='a') as errfile:
-                outfile.write("\n============================\n")
-                errfile.write("\n============================\n")
+                outfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
+                    ("=" * 40), cmdstr, ("=" * 40)))
+                outfile.flush()
+                errfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
+                    ("=" * 40), cmdstr, ("=" * 40)))
                 procrtn = subprocess.call(cmdarg, timeout=180,
                                           stdout=outfile,
                                           stderr=errfile)
@@ -190,8 +193,11 @@ class CommonTestSuite(unittest.TestCase):
             cmdfileerr = os.path.join(log_path, "common_launch_process.err")
             with open(cmdfileout, mode='a') as outfile, \
                 open(cmdfileerr, mode='a') as errfile:
-                outfile.write("\n============================\n")
-                errfile.write("\n============================\n")
+                outfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
+                    ("=" * 40), cmdstr, ("=" * 40)))
+                outfile.flush()
+                errfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
+                    ("=" * 40), cmdstr, ("=" * 40)))
                 proc = subprocess.Popen(cmdarg,
                                         stdout=outfile,
                                         stderr=errfile)
