@@ -539,7 +539,7 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		C_GOTO(out, rc = -CER_HG);
 	}
-	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_co_rc);
+	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_rc);
 	if (hg_ret != HG_SUCCESS) {
 		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		rc = -CER_HG;
@@ -877,6 +877,13 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_reply_hdr);
 		if (rc != 0) {
 			C_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
+			C_GOTO(out, rc);
+		}
+		if (rpc_priv->crp_reply_hdr.cch_rc != 0) {
+			C_ERROR("RPC failed to execute on target. rpc_priv %p,"
+				"opc: 0x%x, error code: %d.\n",
+				rpc_priv, rpc_priv->crp_pub.cr_opc,
+				rpc_priv->crp_reply_hdr.cch_rc);
 			C_GOTO(out, rc);
 		}
 	}

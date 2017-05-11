@@ -344,6 +344,23 @@ typedef void (*crt_rpc_cb_t)(crt_rpc_t *rpc);
  * completion callback for crt_req_send
  *
  * \param cb_info [IN]		pointer to call back info.
+ *				If an error occurred on the server outside the
+ *				user RPC handler, the server will send back a
+ *				CART level error code. This error code is
+ *				available in the completion callback as
+ *				cb_info->cci_rc. Currently supported CART level
+ *				error codes are:
+ *				CER_UNREG	The opcode is not registered or
+ *						registered without an RPC
+ *						handler on the target.
+ *				CER_NOREPLY	The RPC handler on the server
+ *						forgot to call crt_reply_send()
+ *				CER_DOS		There's not enough resource on
+ *						the server to service this
+ *						request. (memory allocation
+ *						error)
+ *				CER_MISC	All other errors outside the
+ *						user RPC handler
  *
  */
 typedef void (*crt_cb_t)(const struct crt_cb_info *cb_info);

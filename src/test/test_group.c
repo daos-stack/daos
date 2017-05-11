@@ -98,7 +98,7 @@ echo_checkin_handler(crt_rpc_t *rpc_req)
 	e_req = crt_req_get(rpc_req);
 	C_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
-	printf("tier1 echo_srver recv'd checkin, opc: 0x%x.\n",
+	printf("tier1 echo_server recv'd checkin, opc: 0x%x.\n",
 		rpc_req->cr_opc);
 	printf("tier1 checkin input - age: %d, name: %s, days: %d.\n",
 		e_req->age, e_req->name, e_req->days);

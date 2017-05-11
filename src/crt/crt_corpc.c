@@ -508,7 +508,7 @@ crt_corpc_fail_parent_rpc(struct crt_rpc_priv *parent_rpc_priv, int failed_rc)
 
 	crt_group_rank(NULL, &myrank);
 
-	parent_rpc_priv->crp_reply_hdr.cch_co_rc = failed_rc;
+	parent_rpc_priv->crp_reply_hdr.cch_rc = failed_rc;
 	C_ERROR("myrank %d, set parent rpc (opc 0x%x) as failed, rc: %d.\n",
 		myrank, parent_rpc_priv->crp_pub.cr_opc, failed_rc);
 }
@@ -591,9 +591,9 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 		co_info->co_rc = rc;
 	}
 	/* propagate failure rc to parent */
-	if (child_rpc_priv->crp_reply_hdr.cch_co_rc != 0)
+	if (child_rpc_priv->crp_reply_hdr.cch_rc != 0)
 		crt_corpc_fail_parent_rpc(parent_rpc_priv,
-			child_rpc_priv->crp_reply_hdr.cch_co_rc);
+			child_rpc_priv->crp_reply_hdr.cch_rc);
 
 	co_ops = opc_info->coi_co_ops;
 	if (co_ops == NULL) {

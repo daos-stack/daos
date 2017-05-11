@@ -139,6 +139,10 @@ CRT_ERRNO_BEGIN_ENUM
 	CRT_ERRNO_DECL(CER_MISMATCH,		(CER_ERR_BASE + 31))
 	/** rank has been evicted */
 	CRT_ERRNO_DECL(CER_EVICTED,		(CER_ERR_BASE + 32))
+	/** user-provided RPC handler didn't send reply back */
+	CRT_ERRNO_DECL(CER_NOREPLY,		(CER_ERR_BASE + 33))
+	/** denial-of-service */
+	CRT_ERRNO_DECL(CER_DOS,			(CER_ERR_BASE + 34))
 	/** unknown error */
 	CRT_ERRNO_DECL(CER_UNKNOWN,		(CER_ERR_BASE + 500))
 	/** TODO: add more error numbers */

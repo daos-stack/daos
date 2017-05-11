@@ -55,6 +55,7 @@ static int client_wait(int num_retries, unsigned int wait_len_ms,
 			C_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
+		sched_yield();
 		if (*complete_flag)
 			return 0;
 	}
@@ -295,6 +296,7 @@ static void run_client(void)
 
 	rc = client_wait(100, 100, &gecho.complete);
 	free(md5_str);
+	fprintf(stderr, "gecho.complete %d\n", gecho.complete);
 	assert(rc == 0);
 	free(iovs[0].iov_buf);
 	free(iovs[1].iov_buf);

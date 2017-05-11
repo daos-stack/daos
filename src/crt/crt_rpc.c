@@ -679,9 +679,15 @@ crt_req_decref(crt_rpc_t *req)
 	pthread_spin_unlock(&rpc_priv->crp_lock);
 
 	if (destroy == 1) {
-		if (rpc_priv->crp_reply_pending == 1)
+		if (rpc_priv->crp_reply_pending == 1) {
 			C_WARN("no reply sent for rpc_priv %p (opc: 0x%x).\n",
 			       rpc_priv, req->cr_opc);
+			/* We have executed the user RPC handler, but the user
+			 * handler forgot to call crt_reply_send(). We send a
+			 * CART level error message to notify the client
+			 */
+			crt_hg_reply_error_send(rpc_priv, -CER_NOREPLY);
+		}
 
 		rc = crt_hg_req_destroy(rpc_priv);
 		if (rc != 0)

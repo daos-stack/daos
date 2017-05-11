@@ -650,8 +650,12 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rc = crt_hg_unpack_header(rpc_priv, &proc);
 	if (rc != 0) {
 		C_ERROR("crt_hg_unpack_header failed, rc: %d.\n", rc);
+		crt_hg_reply_error_send(rpc_priv, -CER_MISC);
+		/** safe to free because relevant portion of rpc_priv is already
+		 * serialized by Mercury. Same for below.
+		 */
 		C_FREE_PTR(rpc_priv);
-		C_GOTO(out, hg_ret = HG_OTHER_ERROR);
+		C_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		is_coll_req = true;
@@ -663,9 +667,15 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
 	if (opc_info == NULL) {
 		C_ERROR("opc: 0x%x, lookup failed.\n", opc);
+		/*
+		 * The RPC is not registered on the server, we don't know how to
+		 * process the RPC request, so we send a CART
+		 * level error message to the client.
+		 */
+		crt_hg_reply_error_send(rpc_priv, -CER_UNREG);
 		C_FREE_PTR(rpc_priv);
 		crt_hg_unpack_cleanup(proc);
-		C_GOTO(out, hg_ret = HG_NO_MATCH);
+		C_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 	C_ASSERT(opc_info->coi_opc == opc);
 	rpc_priv->crp_opc_info = opc_info;
@@ -673,10 +683,16 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, true /* srv_flag */,
 			       false /* forward */);
 	if (rc != 0) {
-		C_ERROR("crt_rpc_priv_init faied, opc: 0x%x, rc: %d.\n",
+		C_ERROR("crt_rpc_priv_init failed, opc: 0x%x, rc: %d.\n",
 			opc, rc);
 		crt_hg_unpack_cleanup(proc);
-		C_GOTO(decref, hg_ret = HG_NOMEM_ERROR);
+		/*
+		 * Failed to allocate resources to process the RPC request. So
+		 * we send a CART level error message back to the client telling
+		 * it that we can't serve the request at this time.
+		 */
+		crt_hg_reply_error_send(rpc_priv, -CER_DOS);
+		C_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
 	C_ASSERT(rpc_priv->crp_srv != 0);
@@ -694,8 +710,9 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 			/* TODO lookup by rpc_priv->crp_req_hdr.cch_grp_id */
 		} else {
 			C_ERROR("_unpack_body failed, rc: %d, opc: 0x%x.\n",
-				hg_ret, rpc_pub->cr_opc);
-			C_GOTO(decref, hg_ret = HG_OTHER_ERROR);
+				rc, rpc_pub->cr_opc);
+			crt_hg_reply_error_send(rpc_priv, -CER_MISC);
+			C_GOTO(decref, hg_ret = HG_SUCCESS);
 		}
 	} else {
 		crt_hg_unpack_cleanup(proc);
@@ -703,9 +720,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 
 	if (opc_info->coi_rpc_cb == NULL) {
 		C_ERROR("NULL crp_hg_hdl, opc: 0x%x.\n", opc);
-		hg_ret = HG_NO_MATCH;
-		rc = -CER_UNREG;
-		C_GOTO(decref, hg_ret = HG_NO_MATCH);
+		crt_hg_reply_error_send(rpc_priv, -CER_UNREG);
+		C_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
 
 	if (!is_coll_req)
@@ -862,6 +878,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 					       &rpc_pub->cr_output);
 			if (hg_ret == HG_SUCCESS) {
 				rpc_priv->crp_output_got = 1;
+				rc = rpc_priv->crp_reply_hdr.cch_rc;
 			} else {
 				C_ERROR("HG_Get_output failed, hg_ret: %d, opc:"
 					" 0x%x.\n", hg_ret, opc);
@@ -1015,6 +1032,29 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 
 out:
 	return rc;
+}
+
+void
+crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
+{
+	void	*hg_out_struct;
+	int	 hg_ret;
+
+
+	C_ASSERT(rpc_priv != NULL);
+	C_ASSERT(error_code != 0);
+
+	hg_out_struct = &rpc_priv->crp_pub.cr_output;
+	rpc_priv->crp_reply_hdr.cch_rc = error_code;
+	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, NULL, NULL, hg_out_struct);
+	if (hg_ret != HG_SUCCESS)
+		C_ERROR("Failed to send CART error code back. "
+			"HG_Respond failed, hg_ret: %d, opc: 0x%x.\n",
+			hg_ret, rpc_priv->crp_pub.cr_opc);
+	else
+		C_DEBUG("Sent CART level error message back to client. "
+			"rpc_priv %p, opc: 0x%x, error_code: %d.\n",
+			rpc_priv, rpc_priv->crp_pub.cr_opc, error_code);
 }
 
 static int

@@ -99,8 +99,8 @@ struct crt_common_hdr {
 	crt_rank_t	cch_rank;
 	/* TODO: maybe used as a tier ID or something else, ignore for now */
 	uint32_t	cch_grp_id;
-	/* used only in crp_reply_hdr to propagate corpc failure back to root */
-	uint32_t	cch_co_rc;
+	/* used in crp_reply_hdr to propagate rpc failure back to sender */
+	uint32_t	cch_rc;
 };
 
 typedef enum {

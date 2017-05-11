@@ -332,7 +332,7 @@ crt_grp_lc_ctx_invalid(struct crt_grp_priv *grp_priv, struct crt_context *ctx)
 {
 	struct chash_table	*lc_cache;
 	int			 ctx_idx;
-	int			 rc;
+	int			 rc = 0;
 
 	C_ASSERT(grp_priv != NULL && grp_priv->gp_primary == 1);
 	C_ASSERT(ctx != NULL);
