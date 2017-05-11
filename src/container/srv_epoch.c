@@ -26,25 +26,29 @@
 
 #define DD_SUBSYS	DD_FAC(container)
 
-#include <daos/btree_class.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/rdb.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+
+/*
+ * Epoch counter (i.e., LRE/LHE KVSs) utilities
+ */
 
 enum ec_type {
 	EC_LRE,
 	EC_LHE
 };
 
-static daos_handle_t
-ec_type2tree(struct cont *cont, enum ec_type type)
+static rdb_path_t *
+ec_type2kvs(struct cont *cont, enum ec_type type)
 {
 	switch (type) {
 	case EC_LRE:
-		return cont->c_lres;
+		return &cont->c_lres;
 	case EC_LHE:
-		return cont->c_lhes;
+		return &cont->c_lhes;
 	default:
 		D_ASSERT(0);
 	}
@@ -64,14 +68,19 @@ ec_type2name(enum ec_type type)
 }
 
 static int
-ec_increment(struct cont *cont, enum ec_type type, uint64_t epoch)
+ec_increment(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
+	     uint64_t epoch)
 {
-	daos_handle_t	tree = ec_type2tree(cont, type);
+	rdb_path_t     *kvs = ec_type2kvs(cont, type);
+	daos_iov_t	key;
+	daos_iov_t	value;
 	uint64_t	c = 0;
 	uint64_t	c_new;
 	int		rc;
 
-	rc = dbtree_ec_lookup(tree, epoch, &c);
+	daos_iov_set(&key, &epoch, sizeof(epoch));
+	daos_iov_set(&value, &c, sizeof(c));
+	rc = rdb_tx_lookup(tx, kvs, &key, &value);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		D_GOTO(out, rc);
 
@@ -79,7 +88,8 @@ ec_increment(struct cont *cont, enum ec_type type, uint64_t epoch)
 	if (c_new < c)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	rc = dbtree_ec_update(tree, epoch, &c_new);
+	daos_iov_set(&value, &c_new, sizeof(c_new));
+	rc = rdb_tx_update(tx, kvs, &key, &value);
 
 out:
 	if (rc != 0)
@@ -90,14 +100,19 @@ out:
 }
 
 static int
-ec_decrement(struct cont *cont, enum ec_type type, uint64_t epoch)
+ec_decrement(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
+	     uint64_t epoch)
 {
-	daos_handle_t	tree = ec_type2tree(cont, type);
+	rdb_path_t     *kvs = ec_type2kvs(cont, type);
+	daos_iov_t	key;
+	daos_iov_t	value;
 	uint64_t	c = 0;
 	uint64_t	c_new;
 	int		rc;
 
-	rc = dbtree_ec_lookup(tree, epoch, &c);
+	daos_iov_set(&key, &epoch, sizeof(epoch));
+	daos_iov_set(&value, &c, sizeof(c));
+	rc = rdb_tx_lookup(tx, kvs, &key, &value);
 	if (rc != 0 && rc != -DER_NONEXIST)
 		D_GOTO(out, rc);
 
@@ -105,10 +120,12 @@ ec_decrement(struct cont *cont, enum ec_type type, uint64_t epoch)
 	if (c_new > c)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	if (c_new == 0)
-		rc = dbtree_ec_delete(tree, epoch);
-	else
-		rc = dbtree_ec_update(tree, epoch, &c_new);
+	if (c_new == 0) {
+		rc = rdb_tx_delete(tx, kvs, &key);
+	} else {
+		daos_iov_set(&value, &c_new, sizeof(c_new));
+		rc = rdb_tx_update(tx, kvs, &key, &value);
+	}
 
 out:
 	if (rc != 0)
@@ -119,15 +136,18 @@ out:
 }
 
 static int
-ec_find_lowest(struct cont *cont, enum ec_type type, daos_epoch_t *epoch)
+ec_find_lowest(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
+	       daos_epoch_t *epoch)
 {
-	daos_handle_t	tree = ec_type2tree(cont, type);
+	rdb_path_t     *kvs = ec_type2kvs(cont, type);
+	daos_iov_t	key;
 	int		rc;
 
-	rc = dbtree_ec_fetch(tree, BTR_PROBE_FIRST, NULL /* epoch_in */, epoch,
-			     NULL /* count */);
+	daos_iov_set(&key, epoch, sizeof(*epoch));
+	rc = rdb_tx_fetch(tx, kvs, BTR_PROBE_FIRST, NULL /* key_in */, &key,
+			  NULL /* value */);
 	if (rc == -DER_NONEXIST)
-		D_DEBUG(DF_DSMS, DF_CONT": %s tree empty: %d\n",
+		D_DEBUG(DF_DSMS, DF_CONT": %s KVS empty: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			ec_type2name(type), rc);
 	else if (rc != 0)
@@ -135,6 +155,101 @@ ec_find_lowest(struct cont *cont, enum ec_type type, daos_epoch_t *epoch)
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
 			ec_type2name(type), rc);
 	return rc;
+}
+
+struct ec_decrement_iter_cb_arg {
+	daos_epoch_t	eda_decremented;
+	bool		eda_found;
+	daos_epoch_t	eda_lowest;
+};
+
+static int
+ec_decrement_iter_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
+		     void *varg)
+{
+	struct ec_decrement_iter_cb_arg	       *arg = varg;
+	uint64_t			       *epoch = key->iov_buf;
+	uint64_t			       *counter = val->iov_buf;
+
+	D_ASSERTF(key->iov_len == sizeof(epoch), DF_U64"\n", key->iov_len);
+	D_ASSERTF(val->iov_len == sizeof(counter), DF_U64"\n", val->iov_len);
+	/*
+	 * If this epoch will be deleted from the KVS, then use the second
+	 * lowest one.
+	 */
+	if (*epoch == arg->eda_decremented && *counter == 1)
+		return 0;
+	arg->eda_found = true;
+	arg->eda_lowest = *epoch;
+	return 1;
+}
+
+/*
+ * Decrement epoch \a dec, if not NULL, increment epoch \a inc, if not NULL,
+ * and then find the lowest epoch, in the \a type KVS. If after the update(s)
+ * the KVS will become empty, then \a emptyp returns true; otherwise, \a lowestp
+ * returns the lowest epoch. This is a little bit tricky because rdb does not
+ * support querying a TX's own uncommitted updates.
+ */
+static int
+ec_update_and_find_lowest(struct rdb_tx *tx, struct cont *cont,
+			  enum ec_type type, const daos_epoch_t *dec,
+			  const daos_epoch_t *inc, bool *emptyp,
+			  daos_epoch_t *lowestp)
+{
+	rdb_path_t     *kvs = ec_type2kvs(cont, type);
+	daos_epoch_t	lowest;
+	bool		empty = false;
+	int		rc;
+
+	/* Decrement and set lowest and empty. */
+	if (dec != NULL) {
+		struct ec_decrement_iter_cb_arg arg;
+
+		rc = ec_decrement(tx, cont, type, *dec);
+		if (rc != 0)
+			return rc;
+
+		arg.eda_decremented = *dec;
+		arg.eda_found = false;
+		arg.eda_lowest = 0;
+		rc = rdb_tx_iterate(tx, kvs, false /* !backward */,
+				    ec_decrement_iter_cb, &arg);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to iterate %s KVS: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid),
+				ec_type2name(type), rc);
+			return rc;
+		}
+		if (arg.eda_found)
+			lowest = arg.eda_lowest;
+		else
+			empty = true;
+	} else {
+		rc = ec_find_lowest(tx, cont, type, &lowest);
+		if (rc == -DER_NONEXIST)
+			empty = true;
+		else if (rc != 0)
+			return rc;
+	}
+
+	/* Increment and set lowest and empty. */
+	if (inc != NULL) {
+		rc = ec_increment(tx, cont, type, *inc);
+		if (rc != 0)
+			return rc;
+
+		if (empty || lowest > *inc)
+			lowest = *inc;
+		empty = false;
+	}
+
+	if (emptyp != NULL)
+		*emptyp = empty;
+	if (lowestp != NULL && !empty)
+		*lowestp = lowest;
+	return 0;
 }
 
 /* Buffer for epoch-related container attributes (global epoch state) */
@@ -151,31 +266,42 @@ struct epoch_attr {
 				attr->ea_glhe
 
 static int
-read_epoch_attr(struct cont *cont, struct epoch_attr *attr)
+read_epoch_attr(struct rdb_tx *tx, struct cont *cont, struct epoch_attr *attr)
 {
+	daos_iov_t	value;
 	daos_epoch_t	ghce;
 	daos_epoch_t	ghpce;
 	daos_epoch_t	glre;
 	daos_epoch_t	glhe;
 	int		rc;
 
-	rc = dbtree_nv_lookup(cont->c_cont, CONT_GHCE, strlen(CONT_GHCE),
-			      &ghce, sizeof(ghce));
-	if (rc != 0)
+	/* GHCE */
+	daos_iov_set(&value, &ghce, sizeof(ghce));
+	rc = rdb_tx_lookup(tx, &cont->c_attrs, &ds_cont_attr_ghce, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup GHCE: %d\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		return rc;
+	}
 
-	rc = dbtree_nv_lookup(cont->c_cont, CONT_GHPCE, strlen(CONT_GHPCE),
-			      &ghpce, sizeof(ghpce));
-	if (rc != 0)
+	/* GHPCE */
+	daos_iov_set(&value, &ghpce, sizeof(ghpce));
+	rc = rdb_tx_lookup(tx, &cont->c_attrs, &ds_cont_attr_ghpce, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup GHPCE: %d\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		return rc;
+	}
 
-	rc = ec_find_lowest(cont, EC_LRE, &glre);
+	/* GLRE */
+	rc = ec_find_lowest(tx, cont, EC_LRE, &glre);
 	if (rc == -DER_NONEXIST)
 		glre = DAOS_EPOCH_MAX;
 	else if (rc != 0)
 		return rc;
 
-	rc = ec_find_lowest(cont, EC_LHE, &glhe);
+	/* GLHE */
+	rc = ec_find_lowest(tx, cont, EC_LHE, &glhe);
 	if (rc == -DER_NONEXIST)
 		glhe = DAOS_EPOCH_MAX;
 	else if (rc != 0)
@@ -269,9 +395,10 @@ set_epoch_state(struct epoch_attr *attr, struct container_hdl *hdl,
  * called unnecessarily by other operations without compromising safety.
  */
 static int
-update_ghce(struct cont *cont, struct epoch_attr *attr)
+update_ghce(struct rdb_tx *tx, struct cont *cont, struct epoch_attr *attr)
 {
 	daos_epoch_t	ghce;
+	daos_iov_t	value;
 	int		rc;
 
 	/*
@@ -290,8 +417,8 @@ update_ghce(struct cont *cont, struct epoch_attr *attr)
 		return 0;
 	}
 
-	rc = dbtree_nv_update(cont->c_cont, CONT_GHCE, strlen(CONT_GHCE),
-			      &ghce, sizeof(ghce));
+	daos_iov_set(&value, &ghce, sizeof(ghce));
+	rc = rdb_tx_update(tx, &cont->c_attrs, &ds_cont_attr_ghce, &value);
 	if (rc != 0)
 		D_ERROR(DF_CONT": failed to update ghce: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid,
@@ -301,17 +428,14 @@ update_ghce(struct cont *cont, struct epoch_attr *attr)
 	return rc;
 }
 
-/* Callers must abort the TX if this function returns an error. */
 int
-ds_cont_epoch_init_hdl(struct cont *cont, struct container_hdl *hdl,
-		       daos_epoch_state_t *state)
+ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont,
+		       struct container_hdl *hdl, daos_epoch_state_t *state)
 {
 	struct epoch_attr	attr;
 	int			rc;
 
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
-
-	rc = read_epoch_attr(cont, &attr);
+	rc = read_epoch_attr(tx, cont, &attr);
 	if (rc != 0)
 		return rc;
 
@@ -322,17 +446,17 @@ ds_cont_epoch_init_hdl(struct cont *cont, struct container_hdl *hdl,
 	hdl->ch_lre = attr.ea_ghce;
 	hdl->ch_lhe = DAOS_EPOCH_MAX;
 
-	rc = ec_increment(cont, EC_LRE, hdl->ch_lre);
-	if (rc != 0)
-		return rc;
-	rc = ec_find_lowest(cont, EC_LRE, &attr.ea_glre);
+	/* Determine the new GLRE and update the LRE KVS. */
+	rc = ec_update_and_find_lowest(tx, cont, EC_LRE, NULL /* dec */,
+				       &hdl->ch_lre /* inc */,
+				       NULL /* emptyp */, &attr.ea_glre);
 	if (rc != 0)
 		return rc;
 
-	rc = ec_increment(cont, EC_LHE, hdl->ch_lhe);
-	if (rc != 0)
-		return rc;
-	rc = ec_find_lowest(cont, EC_LHE, &attr.ea_glhe);
+	/* Determine the new GLHE and update the LHE KVS. */
+	rc = ec_update_and_find_lowest(tx, cont, EC_LHE, NULL /* dec */,
+				       &hdl->ch_lhe /* inc */,
+				       NULL /* emptyp */, &attr.ea_glhe);
 	if (rc != 0)
 		return rc;
 
@@ -343,41 +467,38 @@ ds_cont_epoch_init_hdl(struct cont *cont, struct container_hdl *hdl,
 	return 0;
 }
 
-/* Callers must abort the TX if this function returns an error. */
 int
-ds_cont_epoch_fini_hdl(struct cont *cont, struct container_hdl *hdl)
+ds_cont_epoch_fini_hdl(struct rdb_tx *tx, struct cont *cont,
+		       struct container_hdl *hdl)
 {
 	struct epoch_attr	attr;
+	bool			empty;
 	int			rc;
 
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK);
-
-	rc = read_epoch_attr(cont, &attr);
+	rc = read_epoch_attr(tx, cont, &attr);
 	if (rc != 0)
 		return rc;
 
 	if (check_epoch_invariant(cont, &attr, hdl) != 0)
 		return -DER_IO;
 
-	rc = ec_decrement(cont, EC_LRE, hdl->ch_lre);
+	/* Determine the new GLRE and update the LRE KVS. */
+	rc = ec_update_and_find_lowest(tx, cont, EC_LRE, &hdl->ch_lre /* dec */,
+				       NULL /* inc */, &empty, &attr.ea_glre);
 	if (rc != 0)
 		return rc;
-	rc = ec_find_lowest(cont, EC_LRE, &attr.ea_glre);
-	if (rc == -DER_NONEXIST)
+	if (empty)
 		attr.ea_glre = DAOS_EPOCH_MAX;
-	else if (rc != 0)
-		return rc;
 
-	rc = ec_decrement(cont, EC_LHE, hdl->ch_lhe);
+	/* Determine the new GLHE and update the LHE KVS. */
+	rc = ec_update_and_find_lowest(tx, cont, EC_LHE, &hdl->ch_lhe /* dec */,
+				       NULL /* inc */, &empty, &attr.ea_glhe);
 	if (rc != 0)
 		return rc;
-	rc = ec_find_lowest(cont, EC_LHE, &attr.ea_glhe);
-	if (rc == -DER_NONEXIST)
+	if (empty)
 		attr.ea_glhe = DAOS_EPOCH_MAX;
-	else if (rc != 0)
-		return rc;
 
-	rc = update_ghce(cont, &attr);
+	rc = update_ghce(tx, cont, &attr);
 	if (rc != 0)
 		return rc;
 
@@ -388,29 +509,30 @@ ds_cont_epoch_fini_hdl(struct cont *cont, struct container_hdl *hdl)
 }
 
 int
-ds_cont_epoch_read_state(struct cont *cont, struct container_hdl *hdl,
-			 daos_epoch_state_t *state)
+ds_cont_epoch_read_state(struct rdb_tx *tx, struct cont *cont,
+			 struct container_hdl *hdl, daos_epoch_state_t *state)
 {
-	struct epoch_attr		attr;
-	int				rc;
+	struct epoch_attr	attr;
+	int			rc;
 
-	rc = read_epoch_attr(cont, &attr);
+	rc = read_epoch_attr(tx, cont, &attr);
 	if (rc != 0)
 		return rc;
 
 	set_epoch_state(&attr, hdl, state);
-	return rc;
+	return 0;
 }
 
 int
-ds_cont_epoch_query(struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		    struct container_hdl *hdl, crt_rpc_t *rpc)
+ds_cont_epoch_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		    struct cont *cont, struct container_hdl *hdl,
+		    crt_rpc_t *rpc)
 {
 	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	struct epoch_attr		attr;
 	int				rc;
 
-	rc = read_epoch_attr(cont, &attr);
+	rc = read_epoch_attr(tx, cont, &attr);
 	if (rc != 0)
 		return rc;
 
@@ -422,16 +544,16 @@ ds_cont_epoch_query(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 }
 
 int
-ds_cont_epoch_hold(struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		   struct container_hdl *hdl, crt_rpc_t *rpc)
+ds_cont_epoch_hold(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		   struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
 	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	struct epoch_attr		attr;
 	daos_epoch_t			lhe = hdl->ch_lhe;
-	volatile int			rc;
-
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+	daos_iov_t			key;
+	daos_iov_t			value;
+	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
@@ -444,7 +566,7 @@ ds_cont_epoch_hold(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (in->cei_epoch > DAOS_EPOCH_MAX)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	rc = read_epoch_attr(cont, &attr);
+	rc = read_epoch_attr(tx, cont, &attr);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -469,44 +591,33 @@ ds_cont_epoch_hold(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
 
-	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
-		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->cei_op.ci_hdl,
-				      hdl, sizeof(*hdl));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
+	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
+	daos_iov_set(&value, hdl, sizeof(*hdl));
+	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
+	if (rc != 0)
+		D_GOTO(out_hdl, rc);
 
-		rc = ec_decrement(cont, EC_LHE, lhe);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-		rc = ec_increment(cont, EC_LHE, hdl->ch_lhe);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-		rc = ec_find_lowest(cont, EC_LHE, &attr.ea_glhe);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
+	rc = ec_update_and_find_lowest(tx, cont, EC_LHE, &lhe /* dec */,
+				       &hdl->ch_lhe /* inc */,
+				       NULL /* emptyp */, &attr.ea_glhe);
+	if (rc != 0)
+		D_GOTO(out_hdl, rc);
 
-		/* If we are releasing held epochs, then update GHCE. */
-		if (hdl->ch_lhe > lhe) {
-			rc = update_ghce(cont, &attr);
-			if (rc != 0)
-				pmemobj_tx_abort(rc);
-		}
-
-		if (check_epoch_invariant(cont, &attr, hdl) != 0) {
-			rc = -DER_IO;
-			pmemobj_tx_abort(rc);
-		}
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-	} TX_END
-
-	if (rc != 0) {
-		hdl->ch_lhe = lhe;
-		D_GOTO(out, rc);
+	/* If we are releasing held epochs, then update GHCE. */
+	if (hdl->ch_lhe > lhe) {
+		rc = update_ghce(tx, cont, &attr);
+		if (rc != 0)
+			D_GOTO(out_hdl, rc);
 	}
+
+	if (check_epoch_invariant(cont, &attr, hdl) != 0)
+		D_GOTO(out_hdl, rc = -DER_IO);
 
 out_state:
 	set_epoch_state(&attr, hdl, &out->ceo_epoch_state);
+out_hdl:
+	if (rc != 0)
+		hdl->ch_lhe = lhe;
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
@@ -561,17 +672,17 @@ out:
 }
 
 int
-ds_cont_epoch_slip(struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		   struct container_hdl *hdl, crt_rpc_t *rpc)
+ds_cont_epoch_slip(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		   struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
 	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	struct epoch_attr		attr;
 	daos_epoch_t			lre = hdl->ch_lre;
-	daos_epoch_t			glre_tmp;
-	volatile int			rc;
-
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+	daos_epoch_t			glre;
+	daos_iov_t			key;
+	daos_iov_t			value;
+	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
@@ -580,9 +691,10 @@ ds_cont_epoch_slip(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (in->cei_epoch >= DAOS_EPOCH_MAX)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	rc = read_epoch_attr(cont, &attr);
+	rc = read_epoch_attr(tx, cont, &attr);
 	if (rc != 0)
 		D_GOTO(out, rc);
+	glre = attr.ea_glre;
 
 	if (check_epoch_invariant(cont, &attr, hdl) != 0)
 		D_GOTO(out, rc = -DER_IO);
@@ -602,39 +714,23 @@ ds_cont_epoch_slip(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
 
-	glre_tmp = attr.ea_glre;
-	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
-		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->cei_op.ci_hdl,
-				      hdl, sizeof(*hdl));
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
+	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
+	daos_iov_set(&value, hdl, sizeof(*hdl));
+	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
+	if (rc != 0)
+		D_GOTO(out_hdl, rc);
 
-		rc = ec_decrement(cont, EC_LRE, lre);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-		rc = ec_increment(cont, EC_LRE, hdl->ch_lre);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
+	rc = ec_update_and_find_lowest(tx, cont, EC_LRE, &lre /* dec */,
+				       &hdl->ch_lre /* inc */,
+				       NULL /* emptyp */, &attr.ea_glre);
+	if (rc != 0)
+		D_GOTO(out_hdl, rc);
 
-		rc = ec_find_lowest(cont, EC_LRE, &attr.ea_glre);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		if (check_epoch_invariant(cont, &attr, hdl) != 0) {
-			rc = -DER_IO;
-			pmemobj_tx_abort(rc);
-		}
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-	} TX_END
-
-	if (rc != 0) {
-		hdl->ch_lre = lre;
-		D_GOTO(out, rc);
-	}
+	if (check_epoch_invariant(cont, &attr, hdl) != 0)
+		D_GOTO(out_hdl, rc = -DER_IO);
 
 	/* Broadcast only if GLRE changed */
-	if (attr.ea_glre > glre_tmp) {
+	if (attr.ea_glre > glre) {
 		daos_epoch_range_t	range;
 
 		range.epr_lo = 0;
@@ -645,6 +741,9 @@ ds_cont_epoch_slip(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 out_state:
 	set_epoch_state(&attr, hdl, &out->ceo_epoch_state);
+out_hdl:
+	if (rc != 0)
+		hdl->ch_lre = lre;
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
@@ -696,8 +795,9 @@ out:
 }
 
 int
-ds_cont_epoch_discard(struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		      struct container_hdl *hdl, crt_rpc_t *rpc)
+ds_cont_epoch_discard(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		      struct cont *cont, struct container_hdl *hdl,
+		      crt_rpc_t *rpc)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
 	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
@@ -719,7 +819,7 @@ ds_cont_epoch_discard(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		/* Discarding an unheld epoch is not allowed. */
 		D_GOTO(out, rc = -DER_EP_RO);
 
-	rc = read_epoch_attr(cont, &attr);
+	rc = read_epoch_attr(tx, cont, &attr);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -739,8 +839,9 @@ out:
 }
 
 int
-ds_cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		     struct container_hdl *hdl, crt_rpc_t *rpc)
+ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+		     struct cont *cont, struct container_hdl *hdl,
+		     crt_rpc_t *rpc)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
 	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
@@ -748,9 +849,9 @@ ds_cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	daos_epoch_t			hce = hdl->ch_hce;
 	daos_epoch_t			lhe = hdl->ch_lhe;
 	daos_epoch_t			lre = hdl->ch_lre;
-	volatile int			rc;
-
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
+	daos_iov_t			key;
+	daos_iov_t			value;
+	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
@@ -763,7 +864,7 @@ ds_cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (in->cei_epoch >= DAOS_EPOCH_MAX)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	rc = read_epoch_attr(cont, &attr);
+	rc = read_epoch_attr(tx, cont, &attr);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -786,68 +887,55 @@ ds_cont_epoch_commit(struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	D_DEBUG(DF_DSMS, "lhe="DF_U64" lhe'="DF_U64"\n", lhe, hdl->ch_lhe);
 	D_DEBUG(DF_DSMS, "lre="DF_U64" lre'="DF_U64"\n", lre, hdl->ch_lre);
 
-	TX_BEGIN(cont->c_svc->cs_mpool->mp_pmem) {
-		rc = dbtree_uv_update(cont->c_svc->cs_hdls, in->cei_op.ci_hdl,
-				      hdl, sizeof(*hdl));
+	daos_iov_set(&key, in->cei_op.ci_hdl, sizeof(uuid_t));
+	daos_iov_set(&value, hdl, sizeof(*hdl));
+	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
+	if (rc != 0)
+		D_GOTO(out_hdl, rc);
+
+	rc = ec_update_and_find_lowest(tx, cont, EC_LHE, &lhe /* dec */,
+				       &hdl->ch_lhe /* inc */,
+				       NULL /* emptyp */, &attr.ea_glhe);
+	if (rc != 0)
+		D_GOTO(out_hdl, rc);
+
+	if (!(hdl->ch_capas & DAOS_COO_NOSLIP)) {
+		rc = ec_update_and_find_lowest(tx, cont, EC_LRE, &lre /* dec */,
+					       &hdl->ch_lre /* inc */,
+					       NULL /* emptyp */,
+					       &attr.ea_glre);
 		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		rc = ec_decrement(cont, EC_LHE, lhe);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-		rc = ec_increment(cont, EC_LHE, hdl->ch_lhe);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-		rc = ec_find_lowest(cont, EC_LHE, &attr.ea_glhe);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		if (!(hdl->ch_capas & DAOS_COO_NOSLIP)) {
-			rc = ec_decrement(cont, EC_LRE, lre);
-			if (rc != 0)
-				pmemobj_tx_abort(rc);
-			rc = ec_increment(cont, EC_LRE, hdl->ch_lre);
-			if (rc != 0)
-				pmemobj_tx_abort(rc);
-			rc = ec_find_lowest(cont, EC_LRE, &attr.ea_glre);
-			if (rc != 0)
-				pmemobj_tx_abort(rc);
-		}
-
-		if (hdl->ch_hce > attr.ea_ghpce) {
-			attr.ea_ghpce = hdl->ch_hce;
-			rc = dbtree_nv_update(cont->c_cont, CONT_GHPCE,
-					      strlen(CONT_GHPCE),
-					      &attr.ea_ghpce,
-					      sizeof(attr.ea_ghpce));
-			if (rc != 0) {
-				D_ERROR(DF_CONT": failed to update ghpce: %d\n",
-					DP_CONT(cont->c_svc->cs_pool_uuid,
-						cont->c_uuid), rc);
-				pmemobj_tx_abort(rc);
-			}
-		}
-
-		rc = update_ghce(cont, &attr);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		if (check_epoch_invariant(cont, &attr, hdl) != 0) {
-			rc = -DER_IO;
-			pmemobj_tx_abort(rc);
-		}
-	} TX_ONABORT {
-		rc = umem_tx_errno(rc);
-	} TX_END
-
-	if (rc != 0) {
-		hdl->ch_lhe = lhe;
-		hdl->ch_hce = hce;
-		D_GOTO(out, rc);
+			D_GOTO(out_hdl, rc);
 	}
+
+	if (hdl->ch_hce > attr.ea_ghpce) {
+		attr.ea_ghpce = hdl->ch_hce;
+		daos_iov_set(&value, &attr.ea_ghpce, sizeof(attr.ea_ghpce));
+		rc = rdb_tx_update(tx, &cont->c_attrs, &ds_cont_attr_ghpce,
+				   &value);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to update ghpce: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid,
+					cont->c_uuid), rc);
+			D_GOTO(out_hdl, rc);
+		}
+	}
+
+	rc = update_ghce(tx, cont, &attr);
+	if (rc != 0)
+		D_GOTO(out_hdl, rc);
+
+	if (check_epoch_invariant(cont, &attr, hdl) != 0)
+		D_GOTO(out_hdl, rc = -DER_IO);
 
 out_state:
 	set_epoch_state(&attr, hdl, &out->ceo_epoch_state);
+out_hdl:
+	if (rc != 0) {
+		hdl->ch_lre = lre;
+		hdl->ch_lhe = lhe;
+		hdl->ch_hce = hce;
+	}
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,

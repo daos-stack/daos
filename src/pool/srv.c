@@ -40,13 +40,9 @@ init(void)
 {
 	int rc;
 
-	rc = ds_pool_mpool_cache_init();
-	if (rc != 0)
-		D_GOTO(err, rc);
-
 	rc = ds_pool_svc_hash_init();
 	if (rc != 0)
-		D_GOTO(err_storage, rc);
+		D_GOTO(err, rc);
 
 	rc = ds_pool_cache_init();
 	if (rc != 0)
@@ -62,8 +58,6 @@ err_pool_cache:
 	ds_pool_cache_fini();
 err_pool_svc:
 	ds_pool_svc_hash_fini();
-err_storage:
-	ds_pool_mpool_cache_fini();
 err:
 	return rc;
 }
@@ -74,7 +68,6 @@ fini(void)
 	ds_pool_hdl_hash_fini();
 	ds_pool_cache_fini();
 	ds_pool_svc_hash_fini();
-	ds_pool_mpool_cache_fini();
 	return 0;
 }
 

@@ -52,16 +52,6 @@ pool_tls_get()
 }
 
 /*
- * srv.c
- */
-
-/*
- * srv_storage.c
- */
-int ds_pool_mpool_cache_init(void);
-void ds_pool_mpool_cache_fini(void);
-
-/*
  * srv_pool.c
  */
 int ds_pool_svc_hash_init(void);

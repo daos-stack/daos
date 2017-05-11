@@ -26,62 +26,65 @@
  * This header assembles (hopefully) everything related to the persistent
  * storage layout of container metadata used by ds_cont.
  *
- * See src/include/daos_srv/pool.h for the overall mpool storage layout. In the
- * "ds_cont root tree", simply called the "root tree" in ds_cont, we have this
- * layout:
+ * In the database of the combined pool/container service, we have this layout
+ * for ds_cont:
  *
- *   Root tree (NV):
- *     Container tree (UV):
- *       Container attribute tree (NV):
- *         HCE tree (EC)
- *         LRE tree (EC)
- *         LHE tree (EC)
- *         Snapshot tree (EC)
- *       ... (more container attribute trees)
- *     Container handle tree (UV)
+ *   Root KVS (GENERIC):
+ *     Container KVS (GENERIC):
+ *       Container attribute KVS (GENERIC):
+ *         HCE KVS (INTEGER)
+ *         LRE KVS (INTEGER)
+ *         LHE KVS (INTEGER)
+ *         Snapshot KVS (INTEGER)
+ *       ... (more container attribute KVSs)
+ *     Container handle KVS (GENERIC)
  */
 
 #ifndef __CONTAINER_SRV_LAYOUT_H__
 #define __CONTAINER_SRV_LAYOUT_H__
 
-#include <stdint.h>
+#include <daos_types.h>
 
-/* Root tree (DBTREE_CLASS_NV) */
-#define CONTAINERS	"containers"	/* btr_root (container tree) */
-#define CONTAINER_HDLS	"handles"	/* btr_root (container handle tree) */
+/* Root KVS (RDB_KVS_GENERIC) */
+extern daos_iov_t ds_cont_attr_conts;		/* container KVS */
+extern daos_iov_t ds_cont_attr_cont_handles;	/* container handle KVS */
 
 /*
- * Container tree (DBTREE_CLASS_UV)
+ * Container KVS (RDB_KVS_GENERIC)
  *
- * This maps container UUIDs (uuid_t) to container attribute trees (btr_root).
+ * This maps container UUIDs (uuid_t) to container attribute KVSs.
  */
 
 /*
- * Container attribute tree (DBTREE_CLASS_NV)
+ * Container attribute KVS (RDB_KVS_GENERIC)
  *
  * This also stores container attributes of upper layers.
  */
-#define CONT_GHCE	"ghce"		/* uint64_t */
-#define CONT_GHPCE	"ghpce"		/* uint64_t */
-#define CONT_LRES	"lres"		/* btr_root (LRE tree) */
-#define CONT_LHES	"lhes"		/* btr_root (LHE tree) */
-#define CONT_SNAPSHOTS	"snapshots"	/* btr_root (snapshot tree) */
+extern daos_iov_t ds_cont_attr_ghce;		/* uint64_t */
+extern daos_iov_t ds_cont_attr_ghpce;		/* uint64_t */
+extern daos_iov_t ds_cont_attr_lres;		/* LRE KVS */
+extern daos_iov_t ds_cont_attr_lhes;		/* LHE KVS */
+extern daos_iov_t ds_cont_attr_snapshots;	/* snapshot KVS */
 
 /*
- * LRE and LHE trees (DBTREE_CLASS_EC)
+ * LRE and LHE KVSs (RDB_KVS_INTEGER)
  *
  * A key is an epoch number. A value is an epoch_count. These epoch-sorted
- * trees enable us to quickly retrieve the minimum and maximum LREs and LHEs.
+ * KVSs enable us to quickly retrieve the minimum and maximum LREs and LHEs.
  */
 
 /*
- * Snapshot tree (DBTREE_CLASS_EC)
+ * Snapshot KVS (RDB_KVS_INTEGER)
  *
- * This tree stores an ordered list of snapshotted epochs. The values are
+ * This KVS stores an ordered list of snapshotted epochs. The values are
  * unused and empty.
  */
 
-/* Container handle tree (DBTREE_CLASS_UV) */
+/*
+ * Container handle KVS (RDB_KVS_GENERIC)
+ *
+ * A key is a container handle UUID (uuid_t). A value is a container_hdl object.
+ */
 struct container_hdl {
 	uuid_t		ch_pool_hdl;
 	uuid_t		ch_cont;

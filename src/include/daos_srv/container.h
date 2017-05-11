@@ -30,6 +30,15 @@
 #include <daos_types.h>
 #include <daos_srv/pool.h>
 
+/* For the combined pool/container service */
+#include <daos_srv/rdb.h>
+int ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
+			  const uuid_t pool_uuid);
+int ds_cont_svc_init_bare(struct cont_svc **svcp, const uuid_t pool_uuid,
+			  uint64_t id, struct rdb *db);
+void ds_cont_svc_init(struct cont_svc **svcp);
+void ds_cont_svc_fini(struct cont_svc **svcp);
+
 /*
  * Per-thread container (memory) object
  *

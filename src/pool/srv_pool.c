@@ -31,6 +31,7 @@
 
 #include <daos_srv/pool.h>
 
+#include <fcntl.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos_srv/container.h>
@@ -43,6 +44,8 @@
 #include "srv_internal.h"
 #include "srv_layout.h"
 
+struct cont_svc;
+
 /* Pool service */
 struct pool_svc {
 	daos_list_t		ps_entry;
@@ -52,6 +55,7 @@ struct pool_svc {
 	struct rdb	       *ps_db;
 	rdb_path_t		ps_root;	/* root KVS */
 	rdb_path_t		ps_handles;	/* pool handle KVS */
+	struct cont_svc	       *ps_cont_svc;	/* one combined svc for now */
 	bool			ps_initialized;	/* bare or fully initialized */
 	struct ds_pool	       *ps_pool;
 };
@@ -124,101 +128,6 @@ read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
 }
 
 /*
- * Create the mpool, create the root trees, create the superblock, and return
- * the target UUID.
- */
-static int
-mpool_create(const char *path, const uuid_t pool_uuid, uuid_t target_uuid_p)
-{
-	PMEMobjpool		       *mp;
-	PMEMoid				sb_oid;
-	struct ds_pool_mpool_sb	       *sb;
-	volatile daos_handle_t		pool_root = DAOS_HDL_INVAL;
-	volatile daos_handle_t		cont_root = DAOS_HDL_INVAL;
-	uuid_t				target_uuid;
-	int				rc = 0;
-
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
-
-	D_DEBUG(DF_DSMS, "creating mpool %s\n", path);
-
-	uuid_generate(target_uuid);
-
-	mp = pmemobj_create(path, DS_POOL_MPOOL_LAYOUT, DS_POOL_MPOOL_SIZE,
-			    0666);
-	if (mp == NULL) {
-		D_ERROR("failed to create meta pool in %s: %d\n", path, errno);
-		D_GOTO(err, rc = -DER_NOSPACE);
-	}
-
-	sb_oid = pmemobj_root(mp, sizeof(*sb));
-	if (OID_IS_NULL(sb_oid)) {
-		D_ERROR("failed to allocate root object in %s\n", path);
-		D_GOTO(err_mp, rc = -DER_NOSPACE);
-	}
-
-	sb = pmemobj_direct(sb_oid);
-
-	TX_BEGIN(mp) {
-		struct umem_attr	uma;
-		daos_handle_t		tmp;
-
-		pmemobj_tx_add_range_direct(sb, sizeof(*sb));
-
-		sb->s_magic = DS_POOL_MPOOL_SB_MAGIC;
-		uuid_copy(sb->s_pool_uuid, pool_uuid);
-		uuid_copy(sb->s_target_uuid, target_uuid);
-
-		uma.uma_id = UMEM_CLASS_PMEM;
-		uma.uma_u.pmem_pool = mp;
-
-		/* sb->s_pool_root */
-		rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0 /* feats */,
-					   4 /* order */, &uma,
-					   &sb->s_pool_root, &tmp);
-		if (rc != 0) {
-			D_ERROR("failed to create pool root tree: %d\n", rc);
-			pmemobj_tx_abort(rc);
-		}
-		pool_root = tmp;
-
-		/* sb->s_cont_root */
-		rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0 /* feats */,
-					   4 /* order */, &uma,
-					   &sb->s_cont_root, &tmp);
-		if (rc != 0) {
-			D_ERROR("failed to create container root tree: %d\n",
-				rc);
-			pmemobj_tx_abort(rc);
-		}
-		cont_root = tmp;
-	} TX_ONABORT {
-		rc = pmemobj_tx_errno();
-		if (rc > 0)
-			rc = -DER_NOSPACE;
-	} TX_FINALLY {
-		if (!daos_handle_is_inval(cont_root))
-			dbtree_close(cont_root);
-		if (!daos_handle_is_inval(pool_root))
-			dbtree_close(pool_root);
-	} TX_END
-
-	if (rc != 0)
-		D_GOTO(err_mp, rc);
-
-	uuid_copy(target_uuid_p, target_uuid);
-	pmemobj_close(mp);
-	return 0;
-
-err_mp:
-	pmemobj_close(mp);
-	if (remove(path) != 0)
-		D_ERROR("failed to remove %s: %d\n", path, errno);
-err:
-	return rc;
-}
-
-/*
  * Called by mgmt module on every storage node belonging to this pool.
  * "path" is the directory under which the VOS and metadata files shall be.
  * "target_uuid" returns the UUID generated for the target on this storage node.
@@ -227,18 +136,42 @@ int
 ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 {
 	char	       *fpath;
+	int		fd;
 	int		rc;
 
+	uuid_generate(target_uuid);
+
+	/* Store target_uuid in DSM_META_FILE. */
 	rc = asprintf(&fpath, "%s/%s", path, DSM_META_FILE);
 	if (rc < 0)
 		return -DER_NOMEM;
+	fd = open(fpath, O_WRONLY | O_CREAT | O_EXCL);
+	if (rc < 0) {
+		D_ERROR(DF_UUID": failed to create pool target file %s: %d\n",
+			DP_UUID(pool_uuid), fpath, errno);
+		D_GOTO(err_fpath, rc = daos_errno2der(errno));
+	}
+	rc = fsync(fd);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to fsync pool target file %s: %d\n",
+			DP_UUID(pool_uuid), fpath, errno);
+		D_GOTO(err_fd, rc = daos_errno2der(errno));
+	}
+	rc = close(fd);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to close pool target file %s: %d\n",
+			DP_UUID(pool_uuid), fpath, errno);
+		D_GOTO(err_file, rc = daos_errno2der(errno));
+	}
 
-	rc = mpool_create(fpath, pool_uuid, target_uuid);
+	return 0;
+
+err_fd:
+	close(fd);
+err_file:
+	remove(fpath);
+err_fpath:
 	free(fpath);
-	if (rc != 0)
-		D_GOTO(err, rc);
-	D_EXIT;
-err:
 	return rc;
 }
 
@@ -356,76 +289,6 @@ out_map_buf:
 	return rc;
 }
 
-/* TODO: Call a ds_cont method instead. */
-#include "../container/srv_layout.h"
-static int
-init_cont_metadata(const uuid_t pool_uuid)
-{
-	PMEMobjpool		       *mp;
-	PMEMoid				sb_oid;
-	struct ds_pool_mpool_sb	       *sb;
-	struct umem_attr		uma;
-	daos_handle_t			cont_root;
-	char			       *path;
-	volatile int			rc;
-
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_NONE);
-
-	rc = ds_mgmt_tgt_file(pool_uuid, DSM_META_FILE, NULL, &path);
-	if (rc)
-		D_GOTO(out, rc);
-
-	mp = pmemobj_open(path, DS_POOL_MPOOL_LAYOUT);
-	if (mp == NULL) {
-		D_ERROR("failed to open meta pool %s: %d\n", path, errno);
-		D_GOTO(out_path, rc = -DER_INVAL);
-	}
-
-	sb_oid = pmemobj_root(mp, sizeof(*sb));
-	if (OID_IS_NULL(sb_oid)) {
-		D_ERROR("failed to retrieve root object in %s\n", path);
-		D_GOTO(out_mp, rc = -DER_INVAL);
-	}
-	sb = pmemobj_direct(sb_oid);
-
-	uma.uma_id = UMEM_CLASS_PMEM;
-	uma.uma_u.pmem_pool = mp;
-	rc = dbtree_open_inplace(&sb->s_cont_root, &uma, &cont_root);
-	if (rc != 0) {
-		D_ERROR("failed to open container root tree in %s: %d\n", path,
-			rc);
-		D_GOTO(out_mp, rc);
-	}
-
-	TX_BEGIN(mp) {
-		rc = dbtree_nv_create_tree(cont_root, CONTAINERS,
-					   strlen(CONTAINERS), DBTREE_CLASS_UV,
-					   0 /* feats */, 16 /* order */,
-					   NULL /* tree_new */);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-
-		rc = dbtree_nv_create_tree(cont_root, CONTAINER_HDLS,
-					   strlen(CONTAINER_HDLS),
-					   DBTREE_CLASS_UV, 0 /* feats */,
-					   16 /* order */, NULL /* tree_new */);
-		if (rc != 0)
-			pmemobj_tx_abort(rc);
-	} TX_ONABORT {
-		rc = pmemobj_tx_errno();
-		if (rc > 0)
-			rc = -DER_NOSPACE;
-	} TX_END
-
-	dbtree_close(cont_root);
-out_mp:
-	pmemobj_close(mp);
-out_path:
-	free(path);
-out:
-	return rc;
-}
-
 /*
  * nreplicas inputs how many replicas are wanted, while ranks->rl_nr.num
  * outputs how many replicas are actually selected, which may be less than
@@ -498,11 +361,6 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	D_ASSERTF(ntargets == target_addrs->rl_nr.num, "ntargets=%u num=%u\n",
 		  ntargets, target_addrs->rl_nr.num);
 
-	/* ds_cont hasn't switched to rdb yet; put this out of the TX. */
-	rc = init_cont_metadata(pool_uuid);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
 	rc = select_svc_ranks(svc_addrs->rl_nr.num, ntargets, target_addrs,
 			      ndomains, domains, &ranks);
 	if (rc != 0)
@@ -534,6 +392,10 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	rc = init_pool_metadata(&tx, &svc->ps_root, uid, gid, mode, ntargets,
 				target_uuids, group, target_addrs, ndomains,
 				domains);
+	if (rc != 0)
+		D_GOTO(out_tx, rc);
+
+	rc = ds_cont_init_metadata(&tx, &svc->ps_root, pool_uuid);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
 
@@ -656,8 +518,15 @@ pool_svc_init_bare(struct pool_svc *svc, const uuid_t uuid)
 	if (rc != 0)
 		D_GOTO(err_handles, rc);
 
+	rc = ds_cont_svc_init_bare(&svc->ps_cont_svc, uuid, 0 /* id */,
+				   svc->ps_db);
+	if (rc != 0)
+		D_GOTO(err_db, rc);
+
 	return 0;
 
+err_db:
+	rdb_stop(svc->ps_db);
 err_handles:
 	rdb_path_fini(&svc->ps_handles);
 err_root:
@@ -680,7 +549,7 @@ pool_svc_init(struct pool_svc *svc)
 
 	rc = rdb_tx_begin(svc->ps_db, &tx);
 	if (rc != 0)
-		D_GOTO(err, rc);
+		D_GOTO(err_cont_svc, rc);
 
 	rc = read_map_buf(&tx, &svc->ps_root, &arg.pca_map_buf,
 			  &arg.pca_map_version);
@@ -695,11 +564,15 @@ pool_svc_init(struct pool_svc *svc)
 	if (rc != 0)
 		D_GOTO(err, rc);
 
+	ds_cont_svc_init(&svc->ps_cont_svc);
+
 	svc->ps_initialized = true;
 	return 0;
 
 err_tx:
 	rdb_tx_end(&tx);
+err_cont_svc:
+	ds_cont_svc_fini(&svc->ps_cont_svc);
 err:
 	return rc;
 }
@@ -709,6 +582,7 @@ pool_svc_fini(struct pool_svc *svc)
 {
 	if (svc->ps_pool != NULL)
 		ds_pool_put(svc->ps_pool);
+	ds_cont_svc_fini(&svc->ps_cont_svc);
 	rdb_stop(svc->ps_db);
 	rdb_path_fini(&svc->ps_handles);
 	rdb_path_fini(&svc->ps_root);
@@ -884,6 +758,32 @@ pool_svc_put(struct pool_svc *svc)
 	ABT_mutex_lock(pool_svc_hash_lock);
 	dhash_rec_decref(&pool_svc_hash, &svc->ps_entry);
 	ABT_mutex_unlock(pool_svc_hash_lock);
+}
+
+/**
+ * Look up container service \a pool_uuid.
+ */
+struct cont_svc **
+ds_pool_lookup_cont_svc(const uuid_t pool_uuid)
+{
+	struct pool_svc *pool_svc;
+
+	pool_svc = pool_svc_lookup(pool_uuid);
+	if (pool_svc == NULL)
+		return NULL;
+	return &pool_svc->ps_cont_svc;
+}
+
+/**
+ * Put container service *\a svcp.
+ */
+void
+ds_pool_put_cont_svc(struct cont_svc **svcp)
+{
+	struct pool_svc *pool_svc;
+
+	pool_svc = container_of(svcp, struct pool_svc, ps_cont_svc);
+	pool_svc_put(pool_svc);
 }
 
 static int
@@ -1304,8 +1204,8 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	 * TODO: Send POOL_TGT_CLOSE_CONTS and somehow retry until every
 	 * container service has responded (through ds_pool).
 	 */
-	rc = ds_cont_close_by_pool_hdls(svc->ps_uuid, hdl_uuids,
-					n_hdl_uuids, ctx);
+	rc = ds_cont_close_by_pool_hdls(svc->ps_uuid, hdl_uuids, n_hdl_uuids,
+					ctx);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
