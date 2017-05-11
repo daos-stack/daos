@@ -110,6 +110,8 @@ rdbt_test_path_cb(daos_iov_t *key, void *varg)
 	return 0;
 }
 
+RDB_STRING_KEY(rdbt_key_, foo);
+
 static void
 rdbt_test_path(void)
 {
@@ -124,6 +126,12 @@ rdbt_test_path(void)
 	struct rdbt_test_path_arg	arg = {};
 	int				i;
 	int				rc;
+
+	D_WARN("RDB_STRING_KEY\n");
+	D_ASSERTF(rdbt_key_foo.iov_len == strlen("foo") + 1, DF_U64"\n",
+		  rdbt_key_foo.iov_len);
+	D_ASSERTF(rdbt_key_foo.iov_buf_len == rdbt_key_foo.iov_len, DF_U64"\n",
+		  rdbt_key_foo.iov_buf_len);
 
 	D_WARN("init rdb path\n");
 	MUST(rdb_path_init(&path));

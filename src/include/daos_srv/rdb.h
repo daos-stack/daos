@@ -167,8 +167,8 @@ int rdb_path_push(rdb_path_t *path, const daos_iov_t *key);
 static char	prefix ## name ## _buf[] = #name;			\
 daos_iov_t	prefix ## name = {					\
 	.iov_buf	= prefix ## name ## _buf,			\
-	.iov_buf_len	= sizeof(prefix ## name),			\
-	.iov_len	= sizeof(prefix ## name)			\
+	.iov_buf_len	= sizeof(prefix ## name ## _buf),		\
+	.iov_len	= sizeof(prefix ## name ## _buf)		\
 }
 
 /** KVS classes */
