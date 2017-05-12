@@ -4,6 +4,8 @@ defaultENV:
     OMPI_MCA_rmaps_base_oversubscribe: "1"
     CRT_LOG_MASK: "DEBUG,MEM=ERR"
     TR_REDIRECT_OUTPUT: "no"
+    CRT_PHY_ADDR_STR: "ofi+sockets"
+    OFI_INTERFACE: "eth0"
 
 module:
     name: "cart_self_test"
@@ -13,8 +15,6 @@ module:
         - [CRT_PREFIX, PREFIX, ""]
         - [CRT_OMPI_PREFIX, OMPI_PREFIX, ""]
         - [CRT_OMPI_BIN, OMPI_PREFIX, "/bin/"]
-        - [CCI_CONFIG, PREFIX, "/etc/cci.ini"]
-    srcDir: "src/lib"
 
 directives:
     loop: "no"

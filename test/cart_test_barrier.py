@@ -53,15 +53,30 @@ set TR_USE_VALGRIND in cart_test_barrier.yml to callgrind
 
 """
 
+import os
 import time
 import commontestsuite
 
 class TestBarrier(commontestsuite.CommonTestSuite):
     """ Execute process set tests """
-    pass_env = " -x CCI_CONFIG -x CRT_LOG_MASK "
 
     def setUp(self):
         self.get_test_info()
+        log_mask = os.getenv("CRT_LOG_MASK", "INFO")
+        crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
+        ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
+        baseport = self.generate_port_numbers(ofi_interface)
+        self.pass_env = ' -x CRT_LOG_MASK={!s} -x CRT_PHY_ADDR_STR={!s}' \
+                        ' -x OFI_INTERFACE={!s} -x OFI_PORT={!s}'.format(
+                            log_mask, crt_phy_addr, ofi_interface, baseport)
+
+    def tearDown(self):
+        """tear down the test"""
+        self.logger.info("tearDown begin")
+        os.environ.pop("CRT_PHY_ADDR_STR", "")
+        os.environ.pop("OFI_INTERFACE", "")
+        os.environ.pop("CRT_LOG_MASK", "")
+        self.logger.info("tearDown end\n")
 
     def test_barrier_test(self):
         """Simple barrier test"""

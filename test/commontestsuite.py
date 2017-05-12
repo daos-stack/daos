@@ -65,10 +65,12 @@ By default the output is displayed on the screen.
 
 import os
 import unittest
+import socket
 import subprocess
 import shlex
 import time
 import getpass
+import hashlib
 import logging
 
 #pylint: disable=broad-except
@@ -86,6 +88,40 @@ class CommonTestSuite(unittest.TestCase):
         self.logger.info("test name: %s", self.id())
         test_id = self.id()
         (self.testprocess, self.testsuite, self.testTitle) = test_id.split(".")
+
+    def generate_port_numbers(self, port_name):
+        """
+        Function to generate port numbers
+        """
+        username = getpass.getuser()
+
+        md5hash = hashlib.md5()
+        md5hash.update(str(username).encode('utf-8'))
+        md5hash.update(str(self.testTitle).encode('utf-8'))
+        if port_name == "eth0":
+            base_port = 12000
+        else:
+            base_port = 22000
+
+        # Get a unique value and "reserve" 40 ports
+        for i in range(10):
+            hash_value = (int(md5hash.hexdigest(), 16) % 300) * (40 + i)
+            port_number = base_port + hash_value
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                s.bind(("127.0.0.1", port_number))
+                break
+            except socket.error as e:
+                if e.errno == 98:
+                    self.logger.info("Port is already in use")
+                else:
+                    # something else raised the socket.error exception
+                    self.logger.info(e)
+            s.shutdown()
+            s.close()
+
+        self.logger.info("Setting OFI ports to %s: %s", port_name, port_number)
+        return port_number
 
     def launch_test(self, testdesc, NPROC, env, **kwargs):
         """Method creates the Client or Client and Server arguments
@@ -265,13 +301,13 @@ class CommonTestSuite(unittest.TestCase):
         if use_valgrind == 'memcheck':
             suppressfile = os.path.join(os.getenv('CRT_PREFIX', ".."), "etc", \
                            "memcheck-cart.supp")
-            prefix = "valgrind --xml=yes" + \
+            prefix = " valgrind --xml=yes" + \
                 " --xml-file=" + log_path + "/valgrind.%q{PMIX_ID}.xml" + \
-                "--partial-loads-ok=yes" + \
+                " --partial-loads-ok=yes" + \
                 " --leak-check=yes --gen-suppressions=all" + \
                 " --suppressions=" + suppressfile + " --show-reachable=yes"
         elif use_valgrind == "callgrind":
-            prefix = "valgrind --tool=callgrind --callgrind-out-file=" + \
+            prefix = " valgrind --tool=callgrind --callgrind-out-file=" + \
                      log_path + "/callgrind.%q{PMIX_ID}.out"
 
         if os.getenv('TR_USE_URI', ""):
