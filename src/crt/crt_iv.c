@@ -111,6 +111,7 @@ struct iv_fetch_cb_info {
 	crt_rpc_t			*ifc_child_rpc;
 	crt_bulk_t			ifc_child_bulk;
 
+	crt_iv_key_t			ifc_iv_key;
 	/* IV value */
 	crt_sg_list_t			ifc_iv_value;
 
@@ -133,6 +134,7 @@ struct pending_fetch {
 struct ivf_key_in_progress {
 	crt_iv_key_t	kip_key;
 	crt_list_t	kip_pending_fetch_list;
+	pthread_mutex_t	kip_lock;
 
 	/* Link to crt_ivns_internal::cii_keys_in_progress_list */
 	crt_list_t	kip_link;
@@ -212,7 +214,7 @@ crt_ivf_key_in_progress_find(struct crt_ivns_internal *ivns, crt_iv_key_t *key)
 
 /* Mark key as being in progress */
 static int
-crt_ivf_in_progress_set(struct crt_ivns_internal *ivns,
+crt_ivf_key_in_progress_set(struct crt_ivns_internal *ivns,
 			crt_iv_key_t *key)
 {
 	struct ivf_key_in_progress	*entry;
@@ -224,6 +226,8 @@ crt_ivf_in_progress_set(struct crt_ivns_internal *ivns,
 		C_ERROR("Failed to allocate entry");
 		return -CER_NOMEM;
 	}
+
+	pthread_mutex_init(&entry->kip_lock, 0);
 
 	entry->kip_key.iov_buf = entry->payload;
 	entry->kip_key.iov_buf_len = key->iov_buf_len;
@@ -238,14 +242,15 @@ crt_ivf_in_progress_set(struct crt_ivns_internal *ivns,
 	return rc;
 }
 
-/* Reverse operation of crt_ivf_in_progress_set */
+/* Reverse operation of crt_ivf_key_in_progress_set */
 static int
-crt_ivf_in_progress_unset(struct ivf_key_in_progress *entry,
+crt_ivf_key_in_progress_unset(struct ivf_key_in_progress *entry,
 			crt_iv_key_t *key)
 {
 	if (!entry)
 		return 0;
 
+	pthread_mutex_destroy(&entry->kip_lock);
 	crt_list_del(&entry->kip_link);
 	C_FREE(entry, offsetof(struct ivf_key_in_progress,
 		payload[0]) + key->iov_buf_len);
@@ -335,13 +340,14 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 	struct ivf_key_in_progress	*entry;
 	struct crt_iv_ops		*iv_ops;
 	struct pending_fetch		*pending_fetch, *next;
-	crt_sg_list_t			tmp_value;
 	struct iv_fetch_cb_info		*iv_info;
 	int				rc = 0;
-	bool				need_put = false;
+	bool				put_needed = false;
+	crt_sg_list_t			tmp_iv_value;
 
-	/* TODO: This function executes with lock; consider changing it */
+	pthread_mutex_lock(&ivns_internal->cii_lock);
 	entry = crt_ivf_key_in_progress_find(ivns_internal, key);
+	pthread_mutex_unlock(&ivns_internal->cii_lock);
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	C_ASSERT(iv_ops != NULL);
@@ -350,34 +356,91 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 	if (!entry)
 		C_GOTO(exit, rc);
 
+	pthread_mutex_lock(&entry->kip_lock);
+
 	/* If there is nothing pending - exit */
 	if (crt_list_empty(&entry->kip_pending_fetch_list))
 		C_GOTO(cleanup, rc);
 
-	rc = iv_ops->ivo_on_get(ivns_internal, key, 0,
-				CRT_IV_PERM_READ, &tmp_value);
-
-	if (rc != 0) {
-		C_ERROR("ivo_on_get() returned rc=%d\n", rc);
-		C_GOTO(cleanup, rc);
-	}
-	need_put = true;
-
-	/* TODO: stage2 -- pass root flag */
-	rc = iv_ops->ivo_on_fetch(ivns_internal, key, 0, false,
-				&tmp_value);
-
-	if (rc != 0) {
-		C_ERROR("Unexpected error. Retrying on_fetch failed\n");
-		C_GOTO(cleanup, rc);
-	}
 
 	/* Go through list of all pending fetches and finalize each one */
 	crt_list_for_each_entry_safe(pending_fetch, next,
 				&entry->kip_pending_fetch_list, pf_link) {
 		iv_info = pending_fetch->pf_cb_info;
 
-		crt_ivf_finalize(iv_info, key, &tmp_value, rc_value);
+		/* Pending remote fetch case */
+		if (iv_info->ifc_child_rpc) {
+			rc = iv_ops->ivo_on_put(ivns_internal,
+					&iv_info->ifc_iv_key, 0,
+					&iv_info->ifc_iv_value);
+
+			if (rc == 0)
+				rc = iv_ops->ivo_on_get(ivns_internal,
+					&iv_info->ifc_iv_key, 0,
+					CRT_IV_PERM_READ,
+					&tmp_iv_value);
+
+			put_needed = false;
+			if (rc == 0) {
+				put_needed = true;
+				rc = iv_ops->ivo_on_fetch(ivns_internal,
+					&iv_info->ifc_iv_key, 0, false,
+					&tmp_iv_value);
+			}
+
+			if (rc == 0) {
+				crt_ivf_bulk_transfer(ivns_internal,
+					class_id, &iv_info->ifc_iv_key,
+					&tmp_iv_value,
+					iv_info->ifc_child_bulk,
+					iv_info->ifc_child_rpc);
+			} else {
+				struct iv_fetch_out *output;
+
+				C_ERROR("Failed to process pending request\n");
+
+				output = crt_reply_get(iv_info->ifc_child_rpc);
+
+				output->ifo_rc = rc;
+				crt_reply_send(iv_info->ifc_child_rpc);
+
+				if (put_needed) {
+					iv_ops->ivo_on_put(ivns_internal,
+						&iv_info->ifc_iv_key, 0,
+						&tmp_iv_value);
+				}
+			}
+
+			crt_req_decref(iv_info->ifc_child_rpc);
+
+		} else {
+			/* Pending local fetch case */
+			rc = iv_ops->ivo_on_get(ivns_internal,
+					&iv_info->ifc_iv_key,
+					0, CRT_IV_PERM_READ, &tmp_iv_value);
+
+			put_needed = false;
+
+			if (rc == 0) {
+				put_needed = true;
+
+				rc = iv_ops->ivo_on_fetch(ivns_internal,
+						&iv_info->ifc_iv_key,
+						0, false, &tmp_iv_value);
+			} else {
+				rc_value = rc;
+			}
+
+			iv_info->ifc_comp_cb(ivns_internal, class_id,
+					&iv_info->ifc_iv_key, NULL,
+					&tmp_iv_value, rc_value,
+					iv_info->ifc_comp_cb_arg);
+
+			if (put_needed) {
+				iv_ops->ivo_on_put(ivns_internal,
+					&iv_info->ifc_iv_key, 0, &tmp_iv_value);
+			}
+		}
 
 		crt_list_del(&pending_fetch->pf_link);
 		C_FREE_PTR(pending_fetch->pf_cb_info);
@@ -385,12 +448,8 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 	}
 
 cleanup:
-	crt_list_del_init(&entry->kip_link);
-
-	if (need_put)
-		iv_ops->ivo_on_put(ivns_internal, key, 0, &tmp_value);
-
-	C_FREE_PTR(entry);
+	pthread_mutex_unlock(&entry->kip_lock);
+	crt_ivf_key_in_progress_unset(entry, key);
 exit:
 	return rc;
 }
@@ -803,12 +862,11 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 			output->ifo_rc);
 
 	/* This needs to happen after on_refresh */
-	pthread_mutex_lock(&iv_info->ifc_ivns_internal->cii_lock);
 	crt_ivf_pending_reqs_process(iv_info->ifc_ivns_internal,
 				iv_info->ifc_class_id,
 				&input->ifi_key,
 				output->ifo_rc);
-	pthread_mutex_unlock(&iv_info->ifc_ivns_internal->cii_lock);
+
 
 	C_FREE_PTR(iv_info);
 	return 0;
@@ -835,18 +893,19 @@ crt_ivf_rpc_issue(crt_rank_t dest_node, crt_iv_key_t *iv_key,
 	*/
 	pthread_mutex_lock(&ivns_internal->cii_lock);
 	entry = crt_ivf_key_in_progress_find(ivns_internal, iv_key);
+	pthread_mutex_unlock(&ivns_internal->cii_lock);
 
 	if (entry) {
 		rc = crt_ivf_pending_request_add(entry, cb_info);
-		pthread_mutex_unlock(&ivns_internal->cii_lock);
 		return rc;
 	}
 
-	rc = crt_ivf_in_progress_set(ivns_internal, iv_key);
+	pthread_mutex_lock(&ivns_internal->cii_lock);
+	rc = crt_ivf_key_in_progress_set(ivns_internal, iv_key);
 	pthread_mutex_unlock(&ivns_internal->cii_lock);
 
 	if (rc != 0) {
-		C_ERROR("crt_ivf_in_progress_set() failed; rc = %d\n", rc);
+		C_ERROR("crt_ivf_key_in_progress_set() failed; rc = %d\n", rc);
 		return rc;
 	}
 
@@ -861,7 +920,7 @@ crt_ivf_rpc_issue(crt_rank_t dest_node, crt_iv_key_t *iv_key,
 		entry = crt_ivf_key_in_progress_find(ivns_internal, iv_key);
 
 		if (entry && crt_list_empty(&entry->kip_pending_fetch_list))
-			crt_ivf_in_progress_unset(entry, iv_key);
+			crt_ivf_key_in_progress_unset(entry, iv_key);
 
 		pthread_mutex_unlock(&ivns_internal->cii_lock);
 		return rc;
@@ -902,7 +961,7 @@ exit:
 		entry = crt_ivf_key_in_progress_find(ivns_internal, iv_key);
 
 		if (entry && crt_list_empty(&entry->kip_pending_fetch_list))
-			crt_ivf_in_progress_unset(entry, iv_key);
+			crt_ivf_key_in_progress_unset(entry, iv_key);
 
 		pthread_mutex_unlock(&ivns_internal->cii_lock);
 		crt_bulk_free(local_bulk);
@@ -1044,6 +1103,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		C_ASSERT(rc == 0);
 
 		cb_info->ifc_iv_value = iv_value;
+		cb_info->ifc_iv_key = input->ifi_key;
 
 		cb_info->ifc_ivns_internal = ivns_internal;
 		cb_info->ifc_class_id = input->ifi_class_id;
@@ -1151,13 +1211,14 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		C_ERROR("Failed to allocate callback info\n");
 		C_GOTO(exit, rc = -CER_NOMEM);
 	}
-
+	cb_info->ifc_child_rpc = NULL;
 	cb_info->ifc_bulk_hdl = CRT_BULK_NULL;
 
 	cb_info->ifc_comp_cb = fetch_comp_cb;
 	cb_info->ifc_comp_cb_arg = cb_arg;
 
 	cb_info->ifc_iv_value = *iv_value;
+	cb_info->ifc_iv_key = *iv_key;
 
 	cb_info->ifc_ivns_internal = ivns_internal;
 	cb_info->ifc_class_id = class_id;
