@@ -289,9 +289,10 @@ nv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	/* TODO: What sanity checks are required for key and val? */
 
 	if (key != NULL) {
-		if (key->iov_buf == NULL)
+		if (key->iov_buf == NULL) {
 			key->iov_buf = r->nr_name;
-		else if (r->nr_name_size <= key->iov_buf_len)
+			key->iov_buf_len = r->nr_name_size;
+		} else if (r->nr_name_size <= key->iov_buf_len)
 			memcpy(key->iov_buf, r->nr_name, r->nr_name_size);
 
 		key->iov_len = r->nr_name_size;
@@ -613,12 +614,13 @@ uv_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	/* TODO: What sanity checks are required for key and val? */
 
 	if (key != NULL) {
-		if (key->iov_buf == NULL)
+		if (key->iov_buf == NULL) {
 			key->iov_buf = rec->rec_hkey;
-		else if (key->iov_buf_len >= sizeof(uuid_t))
+			key->iov_buf_len = sizeof(uuid_t);
+		} else if (key->iov_buf_len >= sizeof(uuid_t)) {
 			uuid_copy(*(uuid_t *)key->iov_buf,
 				  *(uuid_t *)rec->rec_hkey);
-
+		}
 		key->iov_len = sizeof(uuid_t);
 	}
 

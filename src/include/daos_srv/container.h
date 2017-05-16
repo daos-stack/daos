@@ -83,6 +83,8 @@ ds_cont_local_close(uuid_t cont_hdl_uuid);
 
 int
 ds_cont_lookup_or_create(struct ds_cont_hdl *hdl, uuid_t cont_uuid);
+int
+ds_cont_lookup(uuid_t pool_uuid, uuid_t cont_uuid, struct ds_cont **ds_cont);
 
 void ds_cont_put(struct ds_cont *cont);
 

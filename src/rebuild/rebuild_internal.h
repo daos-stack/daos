@@ -40,7 +40,6 @@ struct rebuild_tls {
 	uuid_t		rebuild_pool_hdl_uuid;
 	uuid_t		rebuild_cont_hdl_uuid;
 	daos_handle_t	rebuild_pool_hdl;
-	daos_handle_t	rebuild_cont_hdl;
 	int		rebuild_status;
 	int		*rebuild_building;
 	int		rebuild_building_nr;

@@ -449,12 +449,15 @@ ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		if (is_rebuild_container(cont_hdl_uuid)) {
 			int rc;
 
+			D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
+				DP_UUID(cont_hdl_uuid), cont_hdl);
 			rc = ds_cont_lookup_or_create(cont_hdl, cont_uuid);
 			if (rc) {
 				ds_cont_hdl_put(cont_hdl);
 				return rc;
 			}
 		} else {
+			ds_cont_hdl_put(cont_hdl);
 			return -DER_NO_HDL;
 		}
 	}
@@ -497,8 +500,11 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	map_version = cont_hdl->sch_pool->spc_map_version;
-	if (orw->orw_map_ver < map_version)
+	if (orw->orw_map_ver < map_version) {
+		D_ERROR("stale version req %d map_version %d\n",
+			orw->orw_map_ver, map_version);
 		D_GOTO(out, rc = -DER_STALE);
+	}
 
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" tag %d\n", opc_get(rpc->cr_opc),
 		DP_UOID(orw->orw_oid), dss_get_module_info()->dmi_tid);

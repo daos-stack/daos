@@ -133,8 +133,8 @@ ds_rebuild_obj_rpc_cb(const struct crt_cb_info *cb_info)
 }
 
 static int
-rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
-		    daos_iov_t *val_iov, void *data)
+rebuild_obj_fill_buf(daos_handle_t ih, daos_iov_t *key_iov,
+		     daos_iov_t *val_iov, void *data)
 {
 	struct rebuild_send_arg *arg = data;
 	struct rebuild_root	*root = arg->tgt_root;
@@ -154,12 +154,12 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	if (rc != 0)
 		return rc;
 
-
-	D_DEBUG(DB_TRACE, "send obj "DF_UOID" "DF_UUID" count %d\n",
-		DP_UOID(oids[count]), DP_UUID(arg->current_uuid), count);
-
 	D_ASSERT(root->count > 0);
 	root->count--;
+
+	D_DEBUG(DB_TRACE, "send oid/con "DF_UOID"/"DF_UUID" cnt %d left %d\n",
+		DP_UOID(oids[count]), DP_UUID(arg->current_uuid), arg->count,
+		root->count);
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
@@ -182,14 +182,17 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	int rc;
 
 	uuid_copy(arg->current_uuid, *(uuid_t *)key_iov->iov_buf);
-	rc = dbtree_iterate(root->root_hdl, false,
-			    rebuild_obj_iter_cb, data);
-	if (rc < 0)
-		return rc;
 
-	/* Exist the loop, if there are enough objects to be sent */
-	if (arg->count >= REBUILD_SEND_LIMIT)
-		return 1;
+	while (!dbtree_is_empty(root->root_hdl)) {
+		rc = dbtree_iterate(root->root_hdl, false, rebuild_obj_fill_buf,
+				    data);
+		if (rc < 0)
+			return rc;
+
+		/* Exist the loop, if there are enough objects to be sent */
+		if (arg->count >= REBUILD_SEND_LIMIT)
+			return 1;
+	}
 
 	/* Delete the current container tree */
 	rc = dbtree_iter_delete(ih, NULL);
@@ -215,7 +218,7 @@ ds_rebuild_objects_send(struct rebuild_root *root,
 	unsigned int		*shards = NULL;
 	crt_rpc_t		*rpc;
 	crt_endpoint_t		tgt_ep;
-	int			rc;
+	int			rc = 0;
 
 	D_ALLOC_PTR(arg);
 	if (arg == NULL)
@@ -238,11 +241,18 @@ ds_rebuild_objects_send(struct rebuild_root *root,
 	arg->oids = oids;
 	arg->uuids = uuids;
 	arg->shards = shards;
-	ABT_mutex_lock(scan_arg->scan_lock);
-	rc = dbtree_iterate(root->root_hdl, false, rebuild_cont_iter_cb, arg);
-	ABT_mutex_unlock(scan_arg->scan_lock);
-	if (rc < 0)
-		D_GOTO(out, rc);
+
+	while (!dbtree_is_empty(root->root_hdl)) {
+		ABT_mutex_lock(scan_arg->scan_lock);
+		rc = dbtree_iterate(root->root_hdl, false, rebuild_cont_iter_cb,
+				    arg);
+		ABT_mutex_unlock(scan_arg->scan_lock);
+		if (rc < 0)
+			D_GOTO(out, rc);
+
+		if (arg->count >= REBUILD_SEND_LIMIT)
+			break;
+	}
 
 	if (arg->count == 0)
 		D_GOTO(out, rc);
@@ -313,6 +323,11 @@ rebuild_tgt_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	if (rc)
 		return rc;
 
+	/* Some one might insert new record to the tree let's reprobe */
+	rc = dbtree_iter_probe(ih, BTR_PROBE_EQ, key_iov, NULL);
+	if (rc)
+		return rc;
+
 	rc = dbtree_iter_delete(ih, NULL);
 	if (rc)
 		return rc;
@@ -342,6 +357,7 @@ ds_rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
 	if (broot == NULL)
 		return -DER_NOMEM;
 
+	memset(&root, 0, sizeof(root));
 	root.root_hdl = DAOS_HDL_INVAL;
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
@@ -431,8 +447,9 @@ ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 			D_GOTO(out, rc);
 		}
 		cont_root->count++;
-		D_DEBUG(DB_TRACE, "update "DF_UOID" in cont_root %p count %d\n",
-			DP_UOID(oid), cont_root, cont_root->count);
+		D_DEBUG(DB_TRACE, "update "DF_UOID"/"DF_UUID" in cont_root %p"
+			" count %d\n", DP_UOID(oid), DP_UUID(co_uuid),
+			cont_root, cont_root->count);
 		return 1;
 	}
 out:
@@ -472,25 +489,22 @@ ds_rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 
 	rc = ds_rebuild_cont_obj_insert(tgt_root->root_hdl, co_uuid,
 					oid, shard);
-	if (rc <= 0) {
-		ABT_mutex_unlock(arg->scan_lock);
+	ABT_mutex_unlock(arg->scan_lock);
+	if (rc <= 0)
 		D_GOTO(out, rc);
-	}
 
 	if (rc == 1) {
-		/* Check if there are enough objects under the target tree */
+		/* Check if we need send the object list */
 		if (++tgt_root->count >= REBUILD_SEND_LIMIT) {
-			ABT_mutex_unlock(arg->scan_lock);
 			rc = ds_rebuild_objects_send(tgt_root, tgt_id, arg);
 			if (rc < 0)
 				D_GOTO(out, rc);
 		}
-	} else {
-		ABT_mutex_unlock(arg->scan_lock);
+		rc = 0;
 	}
 
-	D_DEBUG(DB_TRACE, "insert "DF_UOID"/"DF_UUID" rebuild tgt %u rc %d\n",
-		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, rc);
+	D_DEBUG(DB_TRACE, "insert "DF_UOID"/"DF_UUID" tgt %u cnt %d rc %d\n",
+		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, tgt_root->count, rc);
 out:
 	return rc;
 }
@@ -683,9 +697,13 @@ rebuild_scan_func(void *data)
 	D_DEBUG(DB_TRACE, "rebuild scan collective "DF_UUID" is done\n",
 		DP_UUID(arg->pool_uuid));
 
-	/* walk through the rebuild tree and send the rebuild objects */
-	rc = dbtree_iterate(arg->rebuild_tree_hdl, false, rebuild_tgt_iter_cb,
-			    arg);
+	while (!dbtree_is_empty(arg->rebuild_tree_hdl)) {
+		/* walk through the rebuild tree and send the rebuild objects */
+		rc = dbtree_iterate(arg->rebuild_tree_hdl, false,
+				    rebuild_tgt_iter_cb, arg);
+		if (rc)
+			D_GOTO(free, rc);
+	}
 
 	dss_collective(rebuild_scan_done, NULL);
 	if (rc) {

@@ -384,12 +384,25 @@ ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
-void
-ds_cont_put(struct ds_cont *cont)
+/**
+ * sert container lookup by pool/container uuid.
+ **/
+int
+ds_cont_lookup(uuid_t pool_uuid, uuid_t cont_uuid, struct ds_cont **ds_cont)
 {
-	struct dsm_tls	*tls = dsm_tls_get();
+	struct dsm_tls		*tls = dsm_tls_get();
+	struct ds_pool_child	*ds_pool;
+	int			rc;
 
-	cont_put(tls->dt_cont_cache, cont);
+	ds_pool = ds_pool_child_lookup(pool_uuid);
+	if (ds_pool == NULL)
+		return -DER_NO_HDL;
+
+	rc = cont_lookup(tls->dt_cont_cache, cont_uuid, ds_pool,
+			 ds_cont);
+	ds_pool_child_put(ds_pool);
+
+	return rc;
 }
 
 /**
@@ -402,6 +415,7 @@ ds_cont_lookup_or_create(struct ds_cont_hdl *hdl, uuid_t cont_uuid)
 	struct dsm_tls	*tls = dsm_tls_get();
 	int rc;
 
+	D_ASSERT(hdl->sch_cont == NULL);
 	rc = cont_lookup(tls->dt_cont_cache, cont_uuid, hdl->sch_pool,
 			 &hdl->sch_cont);
 	if (rc != -DER_NONEXIST)
@@ -440,9 +454,17 @@ ds_cont_local_close(uuid_t cont_hdl_uuid)
 	return 0;
 }
 
+void
+ds_cont_put(struct ds_cont *cont)
+{
+	struct dsm_tls	*tls = dsm_tls_get();
+
+	cont_put(tls->dt_cont_cache, cont);
+}
+
 int
 ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-		       uint64_t capas, struct ds_cont_hdl **cont_hdl)
+		   uint64_t capas, struct ds_cont_hdl **cont_hdl)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
 	struct ds_cont_hdl	*hdl;
