@@ -81,3 +81,15 @@
    fun:cci_finalize
    fun:na_cci_finalize
 }
+{
+   pmix shutdown leak
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:pmix_class_initialize
+   fun:PMIx_Deregister_event_handler
+   fun:crt_grp_ras_fini
+   fun:crt_primary_grp_fini
+   fun:crt_grp_fini
+   fun:crt_finalize
+}
