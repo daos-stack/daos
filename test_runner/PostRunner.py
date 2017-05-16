@@ -239,7 +239,8 @@ class PostRunner():
         for filename in filelist:
             log_file = os.path.join(dirpath, filename)
             item = filename.split('.')
-            if item[-1] == "runout" or item[-1] == "runerr":
+            if item[-1] == "runout" or item[-1] == "runerr" or \
+               item[-1] == "xml":
                 continue
             elif len(item) < 4:
                 log_type = self.log_type(item)
