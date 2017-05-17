@@ -273,20 +273,21 @@ crt_ofi_get_info_string(char **string)
 		return -CER_NOMEM;
 	}
 
-	if (na_ofi_conf.noc_port_cons == NA_TRUE) {
+	if (crt_na_ofi_conf.noc_port_cons == NA_TRUE) {
 		if (crt_is_service()) {
-			port = na_ofi_conf.noc_port;
-			na_ofi_conf.noc_port++;
+			port = crt_na_ofi_conf.noc_port;
+			crt_na_ofi_conf.noc_port++;
 			snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
 				 "ofi+sockets://%s:%d",
-				 na_ofi_conf.noc_ip_str, port);
+				 crt_na_ofi_conf.noc_ip_str, port);
 		} else {
 			snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
-				 "ofi+sockets://%s", na_ofi_conf.noc_ip_str);
+				 "ofi+sockets://%s",
+				 crt_na_ofi_conf.noc_ip_str);
 		}
 	} else {
 		snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
-			 "ofi+sockets://%s", na_ofi_conf.noc_ip_str);
+			 "ofi+sockets://%s", crt_na_ofi_conf.noc_ip_str);
 	}
 
 	*string = info_string;

@@ -216,9 +216,9 @@ struct na_ofi_config {
 	char		noc_ip_str[INET_ADDRSTRLEN];
 };
 
-int na_ofi_config_init(void);
-void na_ofi_config_fini(void);
+int crt_na_ofi_config_init(void);
+void crt_na_ofi_config_fini(void);
 
-extern struct na_ofi_config na_ofi_conf;
+extern struct na_ofi_config crt_na_ofi_conf;
 
 #endif /* __CRT_INTERNAL_TYPES_H__ */

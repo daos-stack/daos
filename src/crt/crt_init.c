@@ -305,9 +305,9 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 		if (strncmp(addr_env, "cci+verbs", 9) == 0) {
 			crt_gdata.cg_na_plugin = CRT_NA_CCI_VERBS;
 		} else if (strncmp(addr_env, "ofi+sockets", 11) == 0) {
-			rc = na_ofi_config_init();
+			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
-				C_PRINT_ERR("na_ofi_config_init failed, "
+				C_PRINT_ERR("crt_na_ofi_config_init failed, "
 					    "rc: %d.\n", rc);
 				C_GOTO(out, rc);
 			}
@@ -489,7 +489,7 @@ crt_finalize(void)
 		crt_log_fini();
 
 		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS)
-			na_ofi_config_fini();
+			crt_na_ofi_config_fini();
 	} else {
 		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 	}
@@ -501,7 +501,7 @@ out:
 }
 
 /* global NA OFI plugin configuration */
-struct na_ofi_config na_ofi_conf;
+struct na_ofi_config crt_na_ofi_conf;
 
 static inline na_bool_t is_integer_str(char *str)
 {
@@ -523,7 +523,7 @@ static inline na_bool_t is_integer_str(char *str)
 	return NA_TRUE;
 }
 
-int na_ofi_config_init(void)
+int crt_na_ofi_config_init(void)
 {
 	char *port_str;
 	char *interface;
@@ -536,13 +536,13 @@ int na_ofi_config_init(void)
 
 	interface = getenv("OFI_INTERFACE");
 	if (interface != NULL && strlen(interface) > 0) {
-		na_ofi_conf.noc_interface = strdup(interface);
-		if (na_ofi_conf.noc_interface == NULL) {
+		crt_na_ofi_conf.noc_interface = strdup(interface);
+		if (crt_na_ofi_conf.noc_interface == NULL) {
 			C_ERROR("cannot allocate memory for noc_interface.");
 			C_GOTO(out, rc = -CER_NOMEM);
 		}
 	} else {
-		na_ofi_conf.noc_interface = NULL;
+		crt_na_ofi_conf.noc_interface = NULL;
 		C_ERROR("ENV OFI_INTERFACE not set.");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
@@ -555,17 +555,17 @@ int na_ofi_config_init(void)
 	}
 
 	for (ifa = if_addrs; ifa != NULL; ifa = ifa->ifa_next) {
-		if (strcmp(ifa->ifa_name, na_ofi_conf.noc_interface))
+		if (strcmp(ifa->ifa_name, crt_na_ofi_conf.noc_interface))
 			continue;
 		if (ifa->ifa_addr == NULL)
 			continue;
-		memset(na_ofi_conf.noc_ip_str, 0, INET_ADDRSTRLEN);
+		memset(crt_na_ofi_conf.noc_ip_str, 0, INET_ADDRSTRLEN);
 		if (ifa->ifa_addr->sa_family == AF_INET) {
 			/* check it is a valid IPv4 Address */
 			tmp_ptr =
 			&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
 			ip_str = inet_ntop(AF_INET, tmp_ptr,
-					   na_ofi_conf.noc_ip_str,
+					   crt_na_ofi_conf.noc_ip_str,
 					   INET_ADDRSTRLEN);
 			if (ip_str == NULL) {
 				C_ERROR("inet_ntop failed, errno: %d(%s).\n",
@@ -598,30 +598,30 @@ int na_ofi_config_init(void)
 
 	port_str = getenv("OFI_PORT");
 	if (port_str == NULL || strlen(port_str) == 0) {
-		na_ofi_conf.noc_port_cons = NA_FALSE;
-		na_ofi_conf.noc_port = 0;
+		crt_na_ofi_conf.noc_port_cons = NA_FALSE;
+		crt_na_ofi_conf.noc_port = 0;
 		C_GOTO(out, rc);
 	}
 	if (is_integer_str(port_str) == NA_FALSE) {
 		C_ERROR("OFI_PORT %s invalid.", port_str);
-		na_ofi_config_fini();
+		crt_na_ofi_config_fini();
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
 	port = atoi(port_str);
-	na_ofi_conf.noc_port_cons = true;
-	na_ofi_conf.noc_port = port;
+	crt_na_ofi_conf.noc_port_cons = true;
+	crt_na_ofi_conf.noc_port = port;
 
 out:
 	return rc;
 }
 
-void na_ofi_config_fini(void)
+void crt_na_ofi_config_fini(void)
 {
-	if (na_ofi_conf.noc_interface != NULL) {
-		free(na_ofi_conf.noc_interface);
-		na_ofi_conf.noc_interface = NULL;
+	if (crt_na_ofi_conf.noc_interface != NULL) {
+		free(crt_na_ofi_conf.noc_interface);
+		crt_na_ofi_conf.noc_interface = NULL;
 	}
-	na_ofi_conf.noc_port_cons = NA_FALSE;
-	na_ofi_conf.noc_port = 0;
+	crt_na_ofi_conf.noc_port_cons = NA_FALSE;
+	crt_na_ofi_conf.noc_port = 0;
 }
