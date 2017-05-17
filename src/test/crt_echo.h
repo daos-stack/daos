@@ -338,6 +338,7 @@ int client_cb_common(const struct crt_cb_info *cb_info)
 	printf("in client_cb_common, opc: 0x%x, cci_rc: %d.\n",
 	       rpc_req->cr_opc, cb_info->cci_rc);
 	*(int *) cb_info->cci_arg = 1;
+	assert(cb_info->cci_rc != -CER_TIMEDOUT);
 
 	switch (cb_info->cci_rpc->cr_opc) {
 	case ECHO_OPC_CHECKIN:
