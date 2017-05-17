@@ -34,6 +34,7 @@
 #include <fcntl.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
+#include <daos/rsvc.h>
 #include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/daos_server.h>
@@ -352,6 +353,7 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 		   daos_rank_list_t *svc_addrs)
 {
 	daos_rank_list_t       *ranks;
+	struct rsvc_client	client;
 	struct dss_module_info *info = dss_get_module_info();
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
@@ -373,15 +375,18 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
+rechoose:
 	/* Create a POOL_CREATE request. */
+	rc = rsvc_client_init(&client, ranks);
+	if (rc != 0)
+		D_GOTO(out_creation, rc);
 	ep.ep_grp = NULL;
-	ep.ep_rank = ranks->rl_ranks[0]; /* until we have leader searching */
-	ep.ep_tag = 0;
+	rsvc_client_choose(&client, &ep);
 	rc = pool_req_create(info->dmi_ctx, ep, POOL_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create POOL_CREATE RPC: %d\n",
 			DP_UUID(pool_uuid), rc);
-		D_GOTO(out_creation, rc);
+		D_GOTO(out_client, rc);
 	}
 	in = crt_req_get(rpc);
 	uuid_copy(in->pri_op.pi_uuid, pool_uuid);
@@ -399,12 +404,15 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 
 	/* Send the POOL_CREATE request. */
 	rc = dss_rpc_send(rpc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to send POOL_CREATE RPC: %d\n",
-			DP_UUID(pool_uuid), rc);
-		D_GOTO(out_rpc, rc);
-	}
 	out = crt_reply_get(rpc);
+	D_ASSERT(out != NULL);
+	rc = rsvc_client_complete_rpc(&client, &ep, rc,
+				      rc == 0 ? out->pro_op.po_rc : -DER_IO,
+				      rc == 0 ? &out->pro_op.po_hint : NULL);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		crt_req_decref(rpc);
+		D_GOTO(rechoose, rc);
+	}
 	rc = out->pro_op.po_rc;
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool: %d\n",
@@ -415,6 +423,8 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	daos_rank_list_copy(svc_addrs, ranks, false /* !input */);
 out_rpc:
 	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&client);
 out_creation:
 	if (rc != 0)
 		rdb_dist_stop(pool_uuid, pool_uuid, ranks, true /* destroy */);
