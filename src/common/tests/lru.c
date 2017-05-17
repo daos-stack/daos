@@ -123,8 +123,8 @@ main(int argc, char **argv)
 		exit(-1);
 	}
 
-	rc = daos_lru_cache_create(DHASH_FT_RWLOCK,
-				   atoi(argv[1]), &uint_ref_llink_ops,
+	rc = daos_lru_cache_create(atoi(argv[1]), DHASH_FT_RWLOCK,
+				   &uint_ref_llink_ops,
 				   &tcache);
 	if (rc)
 		D_ASSERTF(0, "Error in creating lru cache\n");

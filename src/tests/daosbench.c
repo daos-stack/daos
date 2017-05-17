@@ -237,6 +237,7 @@ ioreq_init_basic(struct a_ioreq *ioreq)
 	ioreq->erange.epr_hi = DAOS_EPOCH_MAX;
 
 	ioreq->iod.iod_nr = 1;
+	ioreq->iod.iod_type  = DAOS_IOD_SINGLE;
 	ioreq->iod.iod_recxs = &ioreq->rex;
 	ioreq->iod.iod_csums = &ioreq->csum;
 	ioreq->iod.iod_eprs = &ioreq->erange;
@@ -604,7 +605,7 @@ static void
 insert(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req, int sync)
 {
 
-	int rc;
+	int	rc;
 
 	/** record extent */
 	req->iod.iod_size = req->val_iov.iov_len;
@@ -613,11 +614,12 @@ insert(uint64_t idx, daos_epoch_t epoch, struct a_ioreq *req, int sync)
 	req->erange.epr_lo = epoch;
 
 	DBENCH_INFO("Starting update %p (%d free): dkey '%s' akey '%s' "
-		    "iod <%lu, %lu> sgl <%p, %lu> epoch %lu %s", req, naios,
-		    (char *)req->dkey.iov_buf,
+		    "iod <%lu, %lu> sgl <%p, %lu> epoch %lu %s",
+		    req, naios, (char *)req->dkey.iov_buf,
 		    (char *)req->iod.iod_name.iov_buf,
 		    req->iod.iod_recxs->rx_idx, req->iod.iod_recxs->rx_nr,
-		    req->sgl.sg_iovs->iov_buf, req->sgl.sg_iovs->iov_buf_len,
+		    req->sgl.sg_iovs->iov_buf,
+		    req->sgl.sg_iovs->iov_buf_len,
 		    epoch, sync ? "sync" : "async");
 
 	/** execute update operation */
@@ -702,7 +704,7 @@ container_open(int rank, char *uuid_str, int create)
 	int	rc = 0;
 
 	assert(create || uuid_str != NULL);
-	if (!rank) {
+	if (rank == 0) {
 		if (uuid_str == NULL) {
 			uuid_generate(cont_uuid);
 		} else {
@@ -735,7 +737,7 @@ container_close(int rank)
 	rc = MPI_Barrier(MPI_COMM_WORLD);
 	DBENCH_CHECK(rc, "Failed at barrier in container close\n");
 
-	if (!rank) {
+	if (rank == 0) {
 		rc = daos_cont_close(coh, NULL);
 		DBENCH_CHECK(rc, "Failed to close container\n");
 	}
@@ -745,17 +747,15 @@ container_close(int rank)
 static void
 container_destroy(int rank)
 {
-	container_close(rank);
+	int	rc;
 
-	if (!rank) {
-		int	rc;
+	if (rank != 0)
+		return;
 
-		DBENCH_PRINT("Destroying container\n");
-		rc = daos_cont_destroy(poh, cont_uuid, 1, NULL);
-		DBENCH_CHECK(rc, "Container destroy failed\n");
-	}
+	DBENCH_PRINT("Destroying container\n");
+	rc = daos_cont_destroy(poh, cont_uuid, 1, NULL);
+	DBENCH_CHECK(rc, "Container destroy failed\n");
 }
-
 
 
 static void
@@ -892,7 +892,7 @@ kv_update_async(struct test *test, int key_type, int enum_flag, uint64_t value)
 		DBENCH_CHECK(rc, "Failed to hold epoch\n");
 	}
 
-	rc = object_open(test->t_id, test->t_epoch, enum_flag, 1 /* declare */,
+	rc = object_open(test->t_id, test->t_epoch, enum_flag, 0 /* declare */,
 			 &oh);
 	DBENCH_CHECK(rc, "Failed to open object");
 
@@ -1298,7 +1298,8 @@ daos_container_create_open(struct test *test)
 {
 	int rc;
 
-	chrono_record("m_begin");
+	if (strcmp(test->t_type->tt_name, "daos-co-create") == 0)
+		chrono_record("m_begin");
 
 	rc = container_open(comm_world_rank, test->t_container,
 			    0 /* open */);
@@ -1314,8 +1315,10 @@ daos_container_create_open(struct test *test)
 	handle_share(&coh, HANDLE_CO, comm_world_rank, poh,
 		     verbose ? 1 : 0);
 
-	chrono_record("m_end");
-	metadata_test_report(test);
+	if (strcmp(test->t_type->tt_name, "daos-co-create") == 0) {
+		chrono_record("m_end");
+		metadata_test_report(test);
+	}
 }
 
 static const char kv_simul_meta_dkey[] = "kv_simul";
@@ -1391,7 +1394,7 @@ kv_simul(struct test *test)
 			 0 /* declare */, &oh);
 	if (rc == -DER_NONEXIST)
 		rc = object_open(test->t_id, test->t_epoch, 0 /* enum_flag */,
-				 1 /* declare */, &oh);
+				 0 /* declare */, &oh);
 	DBENCH_CHECK(rc, "Failed to open object");
 
 	/* Determine the step number to start from. */
@@ -1857,10 +1860,8 @@ int main(int argc, char *argv[])
 
 	arg.t_type->tt_run(&arg);
 
-	if (strcmp(arg.t_type->tt_name, "daos-co-create") != 0)
-		container_destroy(comm_world_rank);
-	else
-		container_close(comm_world_rank);
+	container_close(comm_world_rank);
+	container_destroy(comm_world_rank);
 
 	pool_disconnect(comm_world_rank);
 	test_fini(&arg);

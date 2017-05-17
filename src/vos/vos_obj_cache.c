@@ -172,9 +172,8 @@ vos_obj_cache_create(int32_t cache_size,
 	D_DEBUG(DF_VOS2, "Creating an object cache %d\n",
 		(1 << cache_size));
 
-	rc = daos_lru_cache_create(DHASH_FT_NOLOCK,
-				   cache_size, &vos_oref_llink_ops,
-				   occ);
+	rc = daos_lru_cache_create(cache_size, DHASH_FT_NOLOCK,
+				   &vos_oref_llink_ops, occ);
 	if (rc)
 		D_ERROR("Error in creating lru cache\n");
 
