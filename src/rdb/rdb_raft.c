@@ -302,6 +302,122 @@ static raft_cbs_t rdb_raft_cbs = {
 	.log			= rdb_raft_cb_debug
 };
 
+static void
+rdb_raft_queue_event(struct rdb *db, enum rdb_raft_event_type type,
+		     uint64_t term)
+{
+	D_ASSERTF(db->d_nevents >= 0 &&
+		  db->d_nevents <= ARRAY_SIZE(db->d_events),
+		  "%d\n", db->d_nevents);
+
+	if (db->d_nevents > 0) {
+		struct rdb_raft_event *tail = &db->d_events[db->d_nevents - 1];
+
+		switch (type) {
+		case RDB_RAFT_STEP_UP:
+			D_ASSERT(tail->dre_type == RDB_RAFT_STEP_DOWN);
+			D_ASSERTF(tail->dre_term < term, DF_U64" < "DF_U64"\n",
+				  tail->dre_term, term);
+			break;
+		case RDB_RAFT_STEP_DOWN:
+			D_ASSERT(tail->dre_type == RDB_RAFT_STEP_UP);
+			D_ASSERT(tail->dre_term == term);
+			/*
+			 * Since both of the matching events are still pending,
+			 * cancel the UP and don't queue the DOWN, to avoid
+			 * useless callbacks. This leaves us four possible
+			 * states of the queue:
+			 *
+			 *   - empty
+			 *   - UP(t)
+			 *   - DOWN(t)
+			 *   - DOWN(t), UP(t')
+			 *
+			 * where t' > t. The maximal queue size is therefore 2.
+			 */
+			db->d_nevents--;
+			return;
+		default:
+			D_ASSERTF(0, "unknown event type: %d\n", type);
+		}
+	}
+
+	/* Queue this new event. */
+	D_ASSERTF(db->d_nevents < ARRAY_SIZE(db->d_events), "%d\n",
+		  db->d_nevents);
+	db->d_events[db->d_nevents].dre_term = term;
+	db->d_events[db->d_nevents].dre_type = type;
+	db->d_nevents++;
+	ABT_cond_signal(db->d_events_cv);
+}
+
+static void
+rdb_raft_dequeue_event(struct rdb *db, struct rdb_raft_event *event)
+{
+	D_ASSERTF(db->d_nevents > 0 &&
+		  db->d_nevents <= ARRAY_SIZE(db->d_events),
+		  "%d\n", db->d_nevents);
+	*event = db->d_events[0];
+	db->d_nevents--;
+	if (db->d_nevents > 0)
+		memmove(&db->d_events[0], &db->d_events[1],
+			sizeof(db->d_events[0]) * db->d_nevents);
+}
+
+static void
+rdb_raft_process_event(struct rdb *db, struct rdb_raft_event *event)
+{
+	switch (event->dre_type) {
+	case RDB_RAFT_STEP_UP:
+		if (db->d_cbs != NULL && db->d_cbs->dc_step_up != NULL) {
+			int rc;
+
+			rc = db->d_cbs->dc_step_up(db, event->dre_term,
+						   db->d_arg);
+			/* TODO: Step down. */
+			D_ASSERTF(rc == 0, "%d\n", rc);
+		}
+		break;
+	case RDB_RAFT_STEP_DOWN:
+		if (db->d_cbs != NULL && db->d_cbs->dc_step_down != NULL)
+			db->d_cbs->dc_step_down(db, event->dre_term, db->d_arg);
+		break;
+	default:
+		D_ASSERTF(0, "unknown event type: %d\n", event->dre_type);
+	}
+}
+
+/* Daemon ULT for calling event callbacks */
+static void
+rdb_callbackd(void *arg)
+{
+	struct rdb *db = arg;
+
+	D_DEBUG(DB_ANY, DF_DB": callbackd starting\n", DP_DB(db));
+	for (;;) {
+		struct rdb_raft_event	event;
+		bool			stop;
+
+		ABT_mutex_lock(db->d_mutex);
+		for (;;) {
+			stop = db->d_callbackd_stop;
+			if (stop)
+				break;
+			if (db->d_nevents > 0) {
+				rdb_raft_dequeue_event(db, &event);
+				break;
+			}
+			ABT_cond_wait(db->d_events_cv, db->d_mutex);
+		}
+		ABT_mutex_unlock(db->d_mutex);
+		if (stop)
+			break;
+		rdb_raft_process_event(db, &event);
+		ABT_thread_yield();
+	}
+	D_DEBUG(DB_ANY, DF_DB": callbackd stopping\n", DP_DB(db));
+}
+
 /* raft state variables that rdb watches for changes */
 struct rdb_raft_state {
 	bool		drs_leader;
@@ -339,8 +455,7 @@ rdb_raft_step_up(struct rdb *db, uint64_t term)
 	 */
 	rdb_raft_check_state(db, &state);
 	db->d_debut = mresponse.idx;
-	if (db->d_cbs != NULL && db->d_cbs->dc_step_up != NULL)
-		db->d_cbs->dc_step_up(db, term, db->d_arg);
+	rdb_raft_queue_event(db, RDB_RAFT_STEP_UP, term);
 }
 
 static void
@@ -349,8 +464,7 @@ rdb_raft_step_down(struct rdb *db, uint64_t term)
 	D_WARN(DF_DB": no longer leader of term "DF_U64"\n", DP_DB(db),
 	       term);
 	db->d_debut = 0;
-	if (db->d_cbs != NULL && db->d_cbs->dc_step_down != NULL)
-		db->d_cbs->dc_step_down(db, term, db->d_arg);
+	rdb_raft_queue_event(db, RDB_RAFT_STEP_DOWN, term);
 }
 
 /* Save the variables into "state". */
@@ -713,10 +827,14 @@ rdb_raft_start(struct rdb *db, const daos_rank_list_t *replicas)
 	if (rc != ABT_SUCCESS)
 		D_GOTO(err_applied_cv, rc = dss_abterr2der(rc));
 
+	rc = ABT_cond_create(&db->d_events_cv);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(err_committed_cv, rc = dss_abterr2der(rc));
+
 	db->d_raft = raft_new();
 	if (db->d_raft == NULL) {
 		D_ERROR("failed to create raft object\n");
-		D_GOTO(err_committed_cv, rc = -DER_NOMEM);
+		D_GOTO(err_events_cv, rc = -DER_NOMEM);
 	}
 
 	/*
@@ -785,9 +903,17 @@ rdb_raft_start(struct rdb *db, const daos_rank_list_t *replicas)
 	rc = dss_ult_create(rdb_timerd, db, -1, &db->d_timerd);
 	if (rc != 0)
 		D_GOTO(err_recvd, rc);
+	rc = dss_ult_create(rdb_callbackd, db, -1, &db->d_callbackd);
+	if (rc != 0)
+		D_GOTO(err_timerd, rc);
 
 	return 0;
 
+err_timerd:
+	db->d_timerd_stop = true;
+	rc = ABT_thread_join(db->d_timerd);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	ABT_thread_free(db->d_timerd);
 err_recvd:
 	db->d_recvd_stop = true;
 	rc = ABT_thread_join(db->d_recvd);
@@ -815,6 +941,8 @@ err_log:
 	dbtree_close(db->d_log);
 err_raft:
 	raft_free(db->d_raft);
+err_events_cv:
+	ABT_cond_free(&db->d_events_cv);
 err_committed_cv:
 	ABT_cond_free(&db->d_committed_cv);
 err_applied_cv:
@@ -835,11 +963,15 @@ rdb_raft_stop(struct rdb *db)
 	int	i;
 	int	rc;
 
+	db->d_callbackd_stop = true;
 	db->d_recvd_stop = true;
 	db->d_timerd_stop = true;
 	db->d_applyd_stop = true;
 	ABT_cond_broadcast(db->d_applied_cv);
 	ABT_cond_broadcast(db->d_committed_cv);
+	ABT_cond_broadcast(db->d_events_cv);
+	rc = ABT_thread_join(db->d_callbackd);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 	rc = ABT_thread_join(db->d_recvd);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	rc = ABT_thread_join(db->d_timerd);
@@ -868,6 +1000,7 @@ rdb_raft_stop(struct rdb *db)
 	}
 	dbtree_close(db->d_log);
 	raft_free(db->d_raft);
+	ABT_cond_free(&db->d_events_cv);
 	ABT_cond_free(&db->d_committed_cv);
 	ABT_cond_free(&db->d_applied_cv);
 	ABT_mutex_free(&db->d_mutex);

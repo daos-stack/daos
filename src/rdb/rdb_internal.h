@@ -33,6 +33,18 @@
 #include <daos/lru.h>
 #include <daos/rpc.h>
 
+/* rdb_raft.c (parts required by struct rdb) **********************************/
+
+enum rdb_raft_event_type {
+	RDB_RAFT_STEP_UP,
+	RDB_RAFT_STEP_DOWN
+};
+
+struct rdb_raft_event {
+	enum rdb_raft_event_type	dre_type;
+	uint64_t			dre_term;
+};
+
 /* rdb.c **********************************************************************/
 
 struct rdb {
@@ -56,6 +68,11 @@ struct rdb {
 	uint64_t		d_applied;	/* last applied index */
 	ABT_cond		d_applied_cv;	/* for d_applied updates */
 	ABT_cond		d_committed_cv;	/* for last committed */
+	struct rdb_raft_event	d_events[2];	/* queue of rdb_raft_events */
+	int			d_nevents;
+	ABT_thread		d_callbackd;	/* consume d_events */
+	bool			d_callbackd_stop;
+	ABT_cond		d_events_cv;	/* for d_events */
 
 	daos_list_t		d_replies;	/* list of Raft RPCs */
 	ABT_thread		d_recvd;

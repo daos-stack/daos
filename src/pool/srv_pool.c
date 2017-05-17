@@ -436,7 +436,7 @@ ds_pool_svc_destroy(const uuid_t pool_uuid)
 	return rc;
 }
 
-static void
+static int
 pool_svc_step_up(struct rdb *db, uint64_t term, void *arg)
 {
 	struct pool_svc *svc = arg;
@@ -444,6 +444,7 @@ pool_svc_step_up(struct rdb *db, uint64_t term, void *arg)
 	D_WARN(DF_UUID": became pool service leader "DF_U64"\n",
 	       DP_UUID(svc->ps_uuid), term);
 	/* TODO: Call rebuild. */
+	return 0;
 }
 
 static void

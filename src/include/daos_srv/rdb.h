@@ -113,16 +113,17 @@ struct rdb;
 /** Database callbacks */
 struct rdb_cbs {
 	/**
-	 * Called when this replica becomes the leader of \a term. Must not
-	 * Argobots-block. A replicated service over rdb may want to take the
+	 * Called after this replica becomes the leader of \a term. If an error
+	 * is returned, rdb steps down, without calling dc_step_down. (Not
+	 * implemented yet.) A replicated service over rdb may want to take the
 	 * chance to start itself on this replica.
 	 */
-	void (*dc_step_up)(struct rdb *db, uint64_t term, void *arg);
+	int (*dc_step_up)(struct rdb *db, uint64_t term, void *arg);
 
 	/**
-	 * Called when this replica steps down as the leader of \a term. Must
-	 * not Argobots-block. A replicated service over rdb may want to take
-	 * the chance to stop itself on this replica.
+	 * Called after this replica steps down as the leader of \a term. A
+	 * replicated service over rdb may want to take the chance to stop
+	 * itself on this replica.
 	 */
 	void (*dc_step_down)(struct rdb *db, uint64_t term, void *arg);
 };

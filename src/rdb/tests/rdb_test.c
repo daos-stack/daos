@@ -305,13 +305,14 @@ rdbt_module_fini(void)
 	return 0;
 }
 
-static void
+static int
 rdbt_step_up(struct rdb *db, uint64_t term, void *arg)
 {
 	crt_rank_t rank;
 
 	crt_group_rank(NULL, &rank);
 	D_WARN("rank %u became leader of term "DF_U64"\n", rank, term);
+	return 0;
 }
 
 static void
