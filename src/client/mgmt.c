@@ -22,6 +22,8 @@
  */
 #define DD_SUBSYS	DD_FAC(client)
 
+#include <daos_mgmt.h>
+
 #include <daos/mgmt.h>
 #include <daos/pool.h>
 #include "client_internal.h"
@@ -107,7 +109,8 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 }
 
 int
-daos_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
+daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
+		daos_event_t *ev)
 {
 	daos_pool_evict_t	args;
 	struct daos_task	*task;
@@ -116,6 +119,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev)
 	DAOS_API_ARG_ASSERT(args, POOL_EVICT);
 
 	args.grp = grp;
+	args.svc = (daos_rank_list_t *)svc;
 	uuid_copy((unsigned char *)args.uuid, uuid);
 
 	rc = dc_task_prep(DAOS_OPC_POOL_EVICT, &args, sizeof(args), &task, &ev);

@@ -132,6 +132,7 @@ typedef struct {
 typedef struct {
 	const uuid_t		uuid;
 	const char		*grp;
+	daos_rank_list_t	*svc;
 } daos_pool_evict_t;
 
 typedef struct {

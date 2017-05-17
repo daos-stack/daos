@@ -33,6 +33,9 @@
 const unsigned int	 default_mode = 0731;
 const char		*default_size = "256M";
 const char		*default_group;
+const unsigned int	 default_svc_nreplicas = 1;
+
+const int max_svc_nreplicas = 13;
 
 typedef int (*command_hdlr_t)(int, char *[]);
 
@@ -96,6 +99,7 @@ create_hdlr(int argc, char *argv[])
 		{"group",	required_argument,	NULL,	'G'},
 		{"mode",	required_argument,	NULL,	'm'},
 		{"size",	required_argument,	NULL,	's'},
+		{"svc",		required_argument,	NULL,	'v'},
 		{"uid",		required_argument,	NULL,	'u'},
 		{NULL,		0,			NULL,	0}
 	};
@@ -104,10 +108,13 @@ create_hdlr(int argc, char *argv[])
 	unsigned int		gid = getegid();
 	daos_size_t		size = tobytes(default_size);
 	const char	       *group = default_group;
-	daos_rank_t		ranks[5];
+	daos_rank_t		ranks[max_svc_nreplicas];
 	daos_rank_list_t	svc;
 	uuid_t			pool_uuid;
+	int			i;
 	int			rc;
+
+	svc.rl_nr.num = default_svc_nreplicas;
 
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
@@ -130,14 +137,22 @@ create_hdlr(int argc, char *argv[])
 		case 'u':
 			gid = atoi(optarg);
 			break;
+		case 'v':
+			svc.rl_nr.num = atoi(optarg);
+			break;
 		default:
 			return 2;
 		}
 	}
 
-	svc.rl_nr.num = ARRAY_SIZE(ranks);
+	if (svc.rl_nr.num < 1 || svc.rl_nr.num > ARRAY_SIZE(ranks)) {
+		D_ERROR("--svc must be in [1, %lu]\n", ARRAY_SIZE(ranks));
+		return 2;
+	}
 	svc.rl_nr.num_out = 0;
 	svc.rl_ranks = ranks;
+	for (i = 0; i < svc.rl_nr.num; i++)
+		svc.rl_ranks[i] = i;
 
 	rc = daos_pool_create(mode, uid, gid, group, NULL /* tgts */, "pmem",
 			      size, &svc, pool_uuid, NULL /* ev */);
@@ -207,13 +222,18 @@ evict_hdlr(int argc, char *argv[])
 	struct option		options[] = {
 		{"group",	required_argument,	NULL,	'G'},
 		{"pool",	required_argument,	NULL,	'p'},
+		{"svc",		required_argument,	NULL,	'v'},
 		{NULL,		0,			NULL,	0}
 	};
 	const char	       *group = default_group;
 	uuid_t			pool_uuid;
+	daos_rank_t		ranks[max_svc_nreplicas];
+	daos_rank_list_t	svc;
+	int			i;
 	int			rc;
 
 	uuid_clear(pool_uuid);
+	svc.rl_nr.num = default_svc_nreplicas;
 
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
@@ -227,6 +247,9 @@ evict_hdlr(int argc, char *argv[])
 				return 2;
 			}
 			break;
+		case 'v':
+			svc.rl_nr.num = atoi(optarg);
+			break;
 		default:
 			return 2;
 		}
@@ -237,7 +260,16 @@ evict_hdlr(int argc, char *argv[])
 		return 2;
 	}
 
-	rc = daos_pool_evict(pool_uuid, group, NULL /* ev */);
+	if (svc.rl_nr.num < 1 || svc.rl_nr.num > ARRAY_SIZE(ranks)) {
+		D_ERROR("--svc must be in [1, %lu]\n", ARRAY_SIZE(ranks));
+		return 2;
+	}
+	svc.rl_nr.num_out = svc.rl_nr.num;
+	svc.rl_ranks = ranks;
+	for (i = 0; i < svc.rl_nr.num; i++)
+		svc.rl_ranks[i] = i;
+
+	rc = daos_pool_evict(pool_uuid, group, &svc, NULL /* ev */);
 	if (rc != 0)
 		D_ERROR("failed to evict pool connections: %d\n", rc);
 
@@ -250,6 +282,7 @@ exclude_hdlr(int argc, char *argv[])
 	struct option		options[] = {
 		{"group",	required_argument,	NULL,	'G'},
 		{"pool",	required_argument,	NULL,	'p'},
+		{"svc",		required_argument,	NULL,	'v'},
 		{"target",	required_argument,	NULL,	't'},
 		{NULL,		0,			NULL,	0}
 	};
@@ -257,10 +290,14 @@ exclude_hdlr(int argc, char *argv[])
 	uuid_t			pool_uuid;
 	daos_rank_t		target = -1;
 	daos_handle_t		pool;
+	daos_rank_t		ranks[max_svc_nreplicas];
+	daos_rank_list_t	svc;
 	daos_rank_list_t	targets;
+	int			i;
 	int			rc;
 
 	uuid_clear(pool_uuid);
+	svc.rl_nr.num = default_svc_nreplicas;
 
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
@@ -277,6 +314,9 @@ exclude_hdlr(int argc, char *argv[])
 				return 2;
 			}
 			break;
+		case 'v':
+			svc.rl_nr.num = atoi(optarg);
+			break;
 		default:
 			return 2;
 		}
@@ -292,8 +332,17 @@ exclude_hdlr(int argc, char *argv[])
 		return 2;
 	}
 
-	rc = daos_pool_connect(pool_uuid, group, NULL /* svc */, DAOS_PC_RW,
-			       &pool, NULL /* info */, NULL /* ev */);
+	if (svc.rl_nr.num < 1 || svc.rl_nr.num > ARRAY_SIZE(ranks)) {
+		D_ERROR("--svc must be in [1, %lu]\n", ARRAY_SIZE(ranks));
+		return 2;
+	}
+	svc.rl_nr.num_out = svc.rl_nr.num;
+	svc.rl_ranks = ranks;
+	for (i = 0; i < svc.rl_nr.num; i++)
+		svc.rl_ranks[i] = i;
+
+	rc = daos_pool_connect(pool_uuid, group, &svc, DAOS_PC_RW, &pool,
+			       NULL /* info */, NULL /* ev */);
 	if (rc != 0) {
 		D_ERROR("failed to connect to pool: %d\n", rc);
 		return rc;
@@ -380,8 +429,9 @@ create options:\n\
   --mode=MODE	pool mode (%#o)\n\
   --size=BYTES	target size in bytes (%s)\n\
 		supports K (KB), M (MB), G (GB), T (TB) and P (PB) suffixes\n\
+  --svc=N	pool service replicas {0, 1, ..., N-1} (\"%u\")\n\
   --uid=UID	pool UID (geteuid())\n", default_group, default_mode,
-	       default_size);
+	       default_size, default_svc_nreplicas);
 	printf("\
 destroy options:\n\
   --force	destroy the pool even if there are connections\n\
@@ -390,12 +440,15 @@ destroy options:\n\
 	printf("\
 evict options:\n\
   --group=STR	pool server process group (\"%s\")\n\
-  --pool=UUID	pool UUID\n", default_group);
+  --pool=UUID	pool UUID\n\
+  --svc=N	pool service replicas {0, 1, ..., N-1} (\"%u\")\n",
+	       default_group, default_svc_nreplicas);
 	printf("\
 exclude options:\n\
   --group=STR	pool server process group (\"%s\")\n\
   --pool=UUID	pool UUID\n\
-  --target=RANK	target rank\n", default_group);
+  --svc=N	pool service replicas {0, 1, ..., N-1} (\"%u\")\n\
+  --target=RANK	target rank\n", default_group, default_svc_nreplicas);
 	printf("\
 kill options:\n\
   --group=STR	pool server process group (\"%s\")\n\

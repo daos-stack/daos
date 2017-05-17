@@ -64,10 +64,12 @@ static void
 pool_free(struct dc_pool *pool)
 {
 	pthread_rwlock_destroy(&pool->dp_map_lock);
+	pthread_mutex_destroy(&pool->dp_client_lock);
 	pthread_rwlock_destroy(&pool->dp_co_list_lock);
 	D_ASSERT(daos_list_empty(&pool->dp_co_list));
 	if (pool->dp_map != NULL)
 		pool_map_destroy(pool->dp_map);
+	rsvc_client_fini(&pool->dp_client);
 	if (pool->dp_group != NULL)
 	    daos_group_detach(pool->dp_group);
 	D_FREE_PTR(pool);
@@ -119,6 +121,7 @@ pool_alloc(void)
 
 	DAOS_INIT_LIST_HEAD(&pool->dp_co_list);
 	pthread_rwlock_init(&pool->dp_co_list_lock, NULL);
+	pthread_mutex_init(&pool->dp_client_lock, NULL);
 	pthread_rwlock_init(&pool->dp_map_lock, NULL);
 	pool->dp_ref = 1;
 
@@ -263,8 +266,35 @@ out_unlock:
 	return rc;
 }
 
+/*
+ * Returns:
+ *
+ *   < 0			error; end the operation
+ *   RSVC_CLIENT_RECHOOSE	task reinited; return 0 from completion cb
+ *   RSVC_CLIENT_PROCEED	OK; proceed to process the reply
+ */
+static int
+pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
+			      int rc_crt, struct pool_op_out *out,
+			      struct daos_task *task)
+{
+	int rc;
+
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rc = rsvc_client_complete_rpc(&pool->dp_client, ep, rc_crt, out->po_rc,
+				      &out->po_hint);
+	pthread_mutex_unlock(&pool->dp_client_lock);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		task->dt_result = 0;
+		rc = daos_task_reinit(task);
+		if (rc != 0)
+			return rc;
+		return RSVC_CLIENT_RECHOOSE;
+	}
+	return RSVC_CLIENT_PROCEED;
+}
+
 struct pool_connect_arg {
-	struct dc_pool		*pca_pool;
 	daos_pool_info_t	*pca_info;
 	struct pool_buf		*pca_map_buf;
 	crt_rpc_t		*rpc;
@@ -275,18 +305,21 @@ static int
 pool_connect_cp(struct daos_task *task, void *data)
 {
 	struct pool_connect_arg *arg = (struct pool_connect_arg *)data;
-	struct dc_pool		*pool = arg->pca_pool;
+	struct dc_pool		*pool = daos_task_get_priv(task);
 	daos_pool_info_t	*info = arg->pca_info;
 	struct pool_buf		*map_buf = arg->pca_map_buf;
 	struct pool_connect_in	*pci = crt_req_get(arg->rpc);
 	struct pool_connect_out	*pco = crt_reply_get(arg->rpc);
+	bool			 put_pool = true;
 	int			 rc = task->dt_result;
 
-	if (rc == -DER_TRUNC) {
-		/* TODO: Reallocate a larger buffer and reconnect. */
-		D_ERROR("pool map buffer (%ld) < required (%u)\n",
-			pool_buf_size(map_buf->pb_nr), pco->pco_map_buf_size);
+	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
+					   &pco->pco_op, task);
+	if (rc < 0) {
 		D_GOTO(out, rc);
+	} else if (rc == RSVC_CLIENT_RECHOOSE) {
+		put_pool = false;
+		D_GOTO(out, rc = 0);
 	}
 
 	if (rc) {
@@ -295,7 +328,12 @@ pool_connect_cp(struct daos_task *task, void *data)
 	}
 
 	rc = pco->pco_op.po_rc;
-	if (rc) {
+	if (rc == -DER_TRUNC) {
+		/* TODO: Reallocate a larger buffer and reconnect. */
+		D_ERROR("pool map buffer (%ld) < required (%u)\n",
+			pool_buf_size(map_buf->pb_nr), pco->pco_map_buf_size);
+		D_GOTO(out, rc);
+	} else if (rc != 0) {
 		D_ERROR("failed to connect to pool: %d\n", rc);
 		D_GOTO(out, rc);
 	}
@@ -318,7 +356,8 @@ pool_connect_cp(struct daos_task *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	map_bulk_destroy(pci->pci_map_bulk, map_buf);
-	dc_pool_put(pool);
+	if (put_pool)
+		dc_pool_put(pool);
 	return rc;
 }
 
@@ -383,42 +422,50 @@ int
 dc_pool_connect(struct daos_task *task)
 {
 	daos_pool_connect_t	*args;
+	struct dc_pool		*pool;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
 	struct pool_connect_in	*pci;
-	struct dc_pool		*pool;
 	struct pool_buf		*map_buf;
 	struct pool_connect_arg	 con_args;
 	int			 rc;
 
 	args = daos_task_get_args(DAOS_OPC_POOL_CONNECT, task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	pool = daos_task_get_priv(task);
 
-	if (uuid_is_null(args->uuid) || !flags_are_valid(args->flags) ||
-	    args->poh == NULL)
-		return -DER_INVAL;
+	if (pool == NULL) {
+		if (uuid_is_null(args->uuid) || !flags_are_valid(args->flags) ||
+		    args->poh == NULL)
+			D_GOTO(out_task, rc = -DER_INVAL);
 
-	/** allocate and fill in pool connection */
-	pool = pool_alloc();
-	if (pool == NULL)
-		D_GOTO(out_task, rc = -DER_NOMEM);
+		/** allocate and fill in pool connection */
+		pool = pool_alloc();
+		if (pool == NULL)
+			D_GOTO(out_task, rc = -DER_NOMEM);
+		uuid_copy(pool->dp_pool, args->uuid);
+		uuid_generate(pool->dp_pool_hdl);
+		pool->dp_capas = args->flags;
 
-	uuid_copy(pool->dp_pool, args->uuid);
-	uuid_generate(pool->dp_pool_hdl);
-	pool->dp_capas = args->flags;
+		/** attach to the server group and initialize rsvc_client */
+		rc = daos_group_attach(args->grp, &pool->dp_group);
+		if (rc != 0)
+			D_GOTO(out_pool, rc);
+		rc = rsvc_client_init(&pool->dp_client, args->svc);
+		if (rc != 0)
+			D_GOTO(out_pool, rc);
 
-	rc = daos_group_attach(args->grp, &pool->dp_group);
-	if (rc != 0)
-		D_GOTO(out_pool, rc);
+		daos_task_set_priv(task, pool);
+		D_DEBUG(DF_DSMC, DF_UUID": connecting: hdl="DF_UUIDF
+			" flags=%x\n", DP_UUID(args->uuid),
+			DP_UUID(pool->dp_pool_hdl), args->flags);
+	}
 
-	D_DEBUG(DF_DSMC, DF_UUID": connecting: hdl="DF_UUIDF" flags=%x\n",
-		DP_UUID(args->uuid), DP_UUID(pool->dp_pool_hdl), args->flags);
-
-	/** Currently, rank 0 runs the pool and the (only) container service. */
+	/** Choose an endpoint and create an RPC. */
 	ep.ep_grp = pool->dp_group;
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
-
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
 	rc = pool_req_create(daos_task2ctx(task), ep, POOL_CONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
@@ -441,7 +488,6 @@ dc_pool_connect(struct daos_task *task)
 		D_GOTO(out_req, rc);
 
 	/** Prepare "con_args" for pool_connect_cp(). */
-	con_args.pca_pool = pool;
 	con_args.pca_info = args->info;
 	con_args.pca_map_buf = map_buf;
 	con_args.rpc = rpc;
@@ -483,15 +529,21 @@ pool_disconnect_cp(struct daos_task *task, void *data)
 	struct pool_disconnect_arg	*arg =
 		(struct pool_disconnect_arg *)data;
 	struct dc_pool			*pool = arg->pool;
-	struct pool_disconnect_out	*pdo;
+	struct pool_disconnect_out	*pdo = crt_reply_get(arg->rpc);
 	int				 rc = task->dt_result;
+
+	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
+					   &pdo->pdo_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
 
 	if (rc) {
 		D_ERROR("RPC error while disconnecting from pool: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	pdo = crt_reply_get(arg->rpc);
 	rc = pdo->pdo_op.po_rc;
 	if (rc) {
 		D_ERROR("failed to disconnect from pool: %d\n", rc);
@@ -560,8 +612,9 @@ dc_pool_disconnect(struct daos_task *task)
 	}
 
 	ep.ep_grp = pool->dp_group;
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
 	rc = pool_req_create(daos_task2ctx(task), ep, POOL_DISCONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
@@ -619,13 +672,14 @@ struct dc_pool_glob {
 	/* number of component of poolbuf, same as pool_buf::pb_nr */
 	uint32_t	dpg_map_pb_nr;
 	struct pool_buf	dpg_map_buf[0];
+	/* rsvc_client */
 };
 
 static inline daos_size_t
-dc_pool_glob_buf_size(unsigned int pb_nr)
+dc_pool_glob_buf_size(unsigned int pb_nr, size_t client_len)
 {
 	return offsetof(struct dc_pool_glob, dpg_map_buf) +
-	       pool_buf_size(pb_nr);
+	       pool_buf_size(pb_nr) + client_len;
 }
 
 static inline void
@@ -679,6 +733,8 @@ dc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	struct dc_pool_glob	*pool_glob;
 	daos_size_t		 glob_buf_size;
 	uint32_t		 pb_nr;
+	void			*client_buf;
+	size_t			 client_len;
 	int			 rc = 0;
 
 	D_ASSERT(glob != NULL);
@@ -694,18 +750,28 @@ dc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	if (rc != 0)
 		D_GOTO(out_pool, rc);
 
+	pthread_mutex_lock(&pool->dp_client_lock);
+	client_len = rsvc_client_encode(&pool->dp_client, NULL /* buf */);
+	D_ALLOC(client_buf, client_len);
+	if (client_buf == NULL) {
+		pthread_mutex_unlock(&pool->dp_client_lock);
+		D_GOTO(out_map_buf, rc = -DER_NOMEM);
+	}
+	rsvc_client_encode(&pool->dp_client, client_buf);
+	pthread_mutex_unlock(&pool->dp_client_lock);
+
 	pb_nr = map_buf->pb_nr;
-	glob_buf_size = dc_pool_glob_buf_size(pb_nr);
+	glob_buf_size = dc_pool_glob_buf_size(pb_nr, client_len);
 	if (glob->iov_buf == NULL) {
 		glob->iov_buf_len = glob_buf_size;
-		D_GOTO(out_map_buf, rc = 0);
+		D_GOTO(out_client_buf, rc = 0);
 	}
 	if (glob->iov_buf_len < glob_buf_size) {
 		D_ERROR("Larger glob buffer needed ("DF_U64" bytes provided, "
 			""DF_U64" required).\n", glob->iov_buf_len,
 			glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;
-		D_GOTO(out_map_buf, rc = -DER_TRUNC);
+		D_GOTO(out_client_buf, rc = -DER_TRUNC);
 	}
 	glob->iov_len = glob_buf_size;
 
@@ -721,7 +787,11 @@ dc_pool_l2g(daos_handle_t poh, daos_iov_t *glob)
 	pool_glob->dpg_map_version = map_version;
 	pool_glob->dpg_map_pb_nr = pb_nr;
 	memcpy(pool_glob->dpg_map_buf, map_buf, pool_buf_size(pb_nr));
+	memcpy((unsigned char *)pool_glob->dpg_map_buf + pool_buf_size(pb_nr),
+	       client_buf, client_len);
 
+out_client_buf:
+	D_FREE(client_buf, client_len);
 out_map_buf:
 	pool_buf_free(map_buf);
 out_pool:
@@ -756,16 +826,21 @@ out:
 }
 
 static int
-dc_pool_g2l(struct dc_pool_glob *pool_glob, daos_handle_t *poh)
+dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 {
 	struct dc_pool		*pool;
 	struct pool_buf		*map_buf;
+	void			*client_buf;
+	size_t			 client_len;
 	int			 rc = 0;
 
 	D_ASSERT(pool_glob != NULL);
 	D_ASSERT(poh != NULL);
 	map_buf = pool_glob->dpg_map_buf;
 	D_ASSERT(map_buf != NULL);
+	client_len = len - sizeof(*pool_glob) - pool_buf_size(map_buf->pb_nr);
+	client_buf = (unsigned char *)pool_glob + sizeof(*pool_glob) +
+		     pool_buf_size(map_buf->pb_nr);
 
 	/** allocate and fill in pool connection */
 	pool = pool_alloc();
@@ -781,6 +856,10 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, daos_handle_t *poh)
 	rc = daos_group_attach(pool_glob->dpg_group_id, &pool->dp_group);
 	if (rc != 0)
 		D_GOTO(out, rc);
+	rc = rsvc_client_decode(client_buf, client_len, &pool->dp_client);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	D_ASSERTF(rc == client_len, "%d == %zu\n", rc, client_len);
 
 	rc = pool_map_create(map_buf, pool_glob->dpg_map_version,
 			     &pool->dp_map);
@@ -835,7 +914,7 @@ dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = dc_pool_g2l(pool_glob, poh);
+	rc = dc_pool_g2l(pool_glob, glob.iov_len, poh);
 	if (rc != 0)
 		D_ERROR("dc_pool_g2l failed, rc: %d.\n", rc);
 
@@ -851,14 +930,17 @@ struct pool_tgt_update_arg {
 static int
 pool_tgt_update_cp(struct daos_task *task, void *data)
 {
-	struct pool_tgt_update_arg	*arg;
-	struct dc_pool			*pool;
-	struct pool_tgt_update_out	*out;
+	struct pool_tgt_update_arg	*arg = data;
+	struct dc_pool			*pool = arg->pool;
+	struct pool_tgt_update_out	*out = crt_reply_get(arg->rpc);
 	int				 rc = task->dt_result;
 
-	arg = (struct pool_tgt_update_arg *)data;
-	pool = arg->pool;
-	out = crt_reply_get(arg->rpc);
+	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
+					   &out->pto_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("RPC error while excluding targets: %d\n", rc);
@@ -907,9 +989,9 @@ dc_pool_update_internal(struct daos_task *task, daos_pool_update_t *args,
 		DP_UUID(pool->dp_pool_hdl), args->tgts->rl_ranks[0]);
 
 	ep.ep_grp = pool->dp_group;
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
-
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
 	rc = pool_req_create(daos_task2ctx(task), ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
@@ -996,6 +1078,13 @@ pool_query_cb(struct daos_task *task, void *data)
 	struct pool_query_out	       *out = crt_reply_get(arg->rpc);
 	int				rc = task->dt_result;
 
+	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
+					   &out->pqo_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
+
 	D_DEBUG(DF_DSMC, DF_UUID": query rpc done: %d\n",
 		DP_UUID(arg->dqa_pool->dp_pool), rc);
 
@@ -1064,9 +1153,9 @@ dc_pool_query(struct daos_task *task)
 		args->tgts, args->info);
 
 	ep.ep_grp = pool->dp_group;
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
-
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
 	rc = pool_req_create(daos_task2ctx(task), ep, POOL_QUERY, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool query rpc: %d\n",
@@ -1114,13 +1203,31 @@ out_task:
 	return rc;
 }
 
+struct pool_evict_state {
+	struct rsvc_client	client;
+	crt_group_t	       *group;
+};
+
 static int
 pool_evict_cp(struct daos_task *task, void *data)
 {
+	struct pool_evict_state	*state = daos_task_get_priv(task);
 	crt_rpc_t		*rpc = *((crt_rpc_t **)data);
 	struct pool_evict_in	*in = crt_req_get(rpc);
 	struct pool_evict_out	*out = crt_reply_get(rpc);
+	bool			 free_state = true;
 	int			 rc = task->dt_result;
+
+	rc = rsvc_client_complete_rpc(&state->client, &rpc->cr_ep, rc,
+				      out->pvo_op.po_rc, &out->pvo_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		task->dt_result = 0;
+		rc = daos_task_reinit(task);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		free_state = false;
+		D_GOTO(out, rc = 0);
+	}
 
 	if (rc != 0) {
 		D_ERROR("RPC error while evicting pool handles: %d\n", rc);
@@ -1136,14 +1243,19 @@ pool_evict_cp(struct daos_task *task, void *data)
 	D_DEBUG(DF_DSMC, DF_UUID": evicted\n", DP_UUID(in->pvi_op.pi_uuid));
 
 out:
-	daos_group_detach(rpc->cr_ep.ep_grp);
 	crt_req_decref(rpc);
+	if (free_state) {
+		rsvc_client_fini(&state->client);
+		daos_group_detach(state->group);
+		D_FREE_PTR(state);
+	}
 	return rc;
 }
 
 int
 dc_pool_evict(struct daos_task *task)
 {
+	struct pool_evict_state	*state;
 	crt_endpoint_t		 ep;
 	daos_pool_evict_t	*args;
 	crt_rpc_t		*rpc;
@@ -1152,24 +1264,38 @@ dc_pool_evict(struct daos_task *task)
 
 	args = daos_task_get_args(DAOS_OPC_POOL_EVICT, task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	state = daos_task_get_priv(task);
 
-	if (uuid_is_null(args->uuid))
-		D_GOTO(out_task, rc = -DER_INVAL);
+	if (state == NULL) {
+		if (uuid_is_null(args->uuid) || args->svc->rl_nr.num == 0)
+			D_GOTO(out_task, rc = -DER_INVAL);
 
-	D_DEBUG(DF_DSMC, DF_UUID": evicting\n", DP_UUID(args->uuid));
+		D_DEBUG(DF_DSMC, DF_UUID": evicting\n", DP_UUID(args->uuid));
 
-	rc = daos_group_attach(args->grp, &ep.ep_grp);
-	if (rc != 0)
-		D_GOTO(out_task, rc);
+		D_ALLOC_PTR(state);
+		if (state == NULL) {
+			D_ERROR(DF_UUID": failed to allocate state\n",
+				DP_UUID(args->uuid));
+			D_GOTO(out_task, rc = -DER_NOMEM);
+		}
 
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
+		rc = daos_group_attach(args->grp, &state->group);
+		if (rc != 0)
+			D_GOTO(out_state, rc);
+		rc = rsvc_client_init(&state->client, args->svc);
+		if (rc != 0)
+			D_GOTO(out_group, rc);
 
+		daos_task_set_priv(task, state);
+	}
+
+	ep.ep_grp = state->group;
+	rsvc_client_choose(&state->client, &ep);
 	rc = pool_req_create(daos_task2ctx(task), ep, POOL_EVICT, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
 			DP_UUID(args->uuid), rc);
-		D_GOTO(out_group, rc);
+		D_GOTO(out_client, rc);
 	}
 
 	in = crt_req_get(rpc);
@@ -1190,8 +1316,12 @@ dc_pool_evict(struct daos_task *task)
 out_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
+out_client:
+	rsvc_client_fini(&state->client);
 out_group:
-	daos_group_detach(ep.ep_grp);
+	daos_group_detach(state->group);
+out_state:
+	D_FREE_PTR(state);
 out_task:
 	daos_task_complete(task, rc);
 	return rc;

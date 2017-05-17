@@ -31,8 +31,9 @@
 #include <daos_task.h>
 #include <daos_types.h>
 #include <daos/container.h>
-#include <daos/pool.h>
 #include <daos/event.h>
+#include <daos/pool.h>
+#include <daos/rsvc.h>
 #include "cli_internal.h"
 #include "rpc.h"
 
@@ -54,6 +55,34 @@ dc_cont_fini(void)
 	daos_rpc_unregister(cont_rpcs);
 }
 
+/*
+ * Returns:
+ *
+ *   < 0			error; end the operation
+ *   RSVC_CLIENT_RECHOOSE	task reinited; return 0 from completion cb
+ *   RSVC_CLIENT_PROCEED	OK; proceed to process the reply
+ */
+static int
+cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
+			      int rc_crt, struct cont_op_out *out,
+			      struct daos_task *task)
+{
+	int rc;
+
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rc = rsvc_client_complete_rpc(&pool->dp_client, ep, rc_crt, out->co_rc,
+				      &out->co_hint);
+	pthread_mutex_unlock(&pool->dp_client_lock);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		task->dt_result = 0;
+		rc = daos_task_reinit(task);
+		if (rc != 0)
+			return rc;
+		return RSVC_CLIENT_RECHOOSE;
+	}
+	return RSVC_CLIENT_PROCEED;
+}
+
 struct cont_args {
 	struct dc_pool		*pool;
 	crt_rpc_t		*rpc;
@@ -64,15 +93,20 @@ cont_create_complete(struct daos_task *task, void *data)
 {
 	struct cont_args       *arg = (struct cont_args *)data;
 	struct dc_pool	       *pool = arg->pool;
-	struct cont_create_out *out;
+	struct cont_create_out *out = crt_reply_get(arg->rpc);
 	int			rc = task->dt_result;
+
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
+					   &out->cco_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("RPC error while creating container: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-
-	out = crt_reply_get(arg->rpc);
 
 	rc = out->cco_op.co_rc;
 	if (rc != 0) {
@@ -115,11 +149,10 @@ dc_cont_create(struct daos_task *task)
 	D_DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid));
 
-	/* To the only container service. */
 	ep.ep_grp = pool->dp_group;
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
-
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), ep, CONT_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
@@ -156,15 +189,20 @@ cont_destroy_complete(struct daos_task *task, void *data)
 {
 	struct cont_args	*arg = (struct cont_args *)data;
 	struct dc_pool		*pool = arg->pool;
-	struct cont_destroy_out	*out;
+	struct cont_destroy_out	*out = crt_reply_get(arg->rpc);
 	int			 rc = task->dt_result;
+
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
+					   &out->cdo_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("RPC error while destroying container: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-
-	out = crt_reply_get(arg->rpc);
 
 	rc = out->cdo_op.co_rc;
 	if (rc != 0) {
@@ -210,11 +248,10 @@ dc_cont_destroy(struct daos_task *task)
 	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
 		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
 
-	/* To the only container service. */
 	ep.ep_grp = pool->dp_group;
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
-
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), ep, CONT_DESTROY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
@@ -295,17 +332,22 @@ static int
 cont_open_complete(struct daos_task *task, void *data)
 {
 	struct cont_open_args	*arg = (struct cont_open_args *)data;
-	struct cont_open_out	*out;
+	struct cont_open_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->coa_pool;
 	struct dc_cont		*cont = arg->coa_cont;
 	int			 rc = task->dt_result;
+
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
+					   &out->coo_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("RPC error while opening container: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-
-	out = crt_reply_get(arg->rpc);
 
 	rc = out->coo_op.co_rc;
 	if (rc != 0) {
@@ -461,11 +503,10 @@ dc_cont_open(struct daos_task *task)
 		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(cont->dc_cont_hdl),
 		args->flags);
 
-	/* To the only container service. */
 	ep.ep_grp = pool->dp_group;
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
-
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), ep, CONT_OPEN, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
@@ -519,17 +560,22 @@ static int
 cont_close_complete(struct daos_task *task, void *data)
 {
 	struct cont_close_args	*arg = (struct cont_close_args *)data;
-	struct cont_close_out	*out;
+	struct cont_close_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->cca_pool;
 	struct dc_cont		*cont = arg->cca_cont;
 	int			 rc = task->dt_result;
+
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
+					   &out->cco_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("RPC error while closing container: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-
-	out = crt_reply_get(arg->rpc);
 
 	rc = out->cco_op.co_rc;
 	if (rc == -DER_NO_HDL) {
@@ -618,11 +664,10 @@ dc_cont_close(struct daos_task *task)
 		return 0;
 	}
 
-	/* To the only container service. */
 	ep.ep_grp = pool->dp_group;
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
-
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), ep, CONT_CLOSE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
@@ -674,17 +719,22 @@ static int
 cont_query_complete(struct daos_task *task, void *data)
 {
 	struct cont_query_args	*arg = (struct cont_query_args *)data;
-	struct cont_query_out	*out;
+	struct cont_query_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->cqa_pool;
 	struct dc_cont		*cont = arg->cqa_cont;
 	int			 rc   = task->dt_result;
+
+	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
+					   &out->cqo_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
 		D_ERROR("RPC error while querying container: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-
-	out = crt_reply_get(arg->rpc);
 
 	rc = out->cqo_op.co_rc;
 	if (rc != 0) {
@@ -744,11 +794,10 @@ dc_cont_query(struct daos_task *task)
 		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
 		DP_UUID(cont->dc_cont_hdl));
 
-	/* To the only container service */
 	ep.ep_grp  = pool->dp_group;
-	ep.ep_rank = 0;
-	ep.ep_tag  = 0;
-
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), ep, CONT_QUERY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
@@ -1051,6 +1100,13 @@ epoch_op_complete(struct daos_task *task, void *data)
 	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	int				rc = task->dt_result;
 
+	rc = cont_rsvc_client_complete_rpc(arg->eoa_pool, &arg->rpc->cr_ep, rc,
+					   &out->ceo_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
+
 	if (rc != 0) {
 		D_ERROR("RPC error during epoch operation %u: %d\n", opc, rc);
 		D_GOTO(out, rc);
@@ -1118,11 +1174,10 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 		DP_CONT(pool->dp_pool, cont->dc_uuid), opc,
 		DP_UUID(cont->dc_cont_hdl), epoch == NULL ? 0 : *epoch);
 
-	/* To the only container service. */
 	ep.ep_grp = pool->dp_group;
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
-
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
 	rc = cont_req_create(daos_task2ctx(task), ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);

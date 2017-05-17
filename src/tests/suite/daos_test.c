@@ -36,10 +36,14 @@ static const char *all_tests = "mpceiACod";
 /** Server crt group ID */
 static const char *server_group;
 
+/** Pool service replicas: {0, 1, ..., svc_nreplicas - 1} */
+static unsigned int svc_nreplicas = 1;
+
 int
 test_setup(void **state, unsigned int step, bool multi_rank)
 {
 	test_arg_t	*arg;
+	int		 i;
 	int		 rc;
 
 	arg = malloc(sizeof(test_arg_t));
@@ -52,9 +56,11 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
 	arg->multi_rank = multi_rank;
 
-	arg->svc.rl_nr.num = 8;
-	arg->svc.rl_nr.num_out = 0;
+	arg->svc.rl_nr.num = svc_nreplicas;
+	arg->svc.rl_nr.num_out = svc_nreplicas;
 	arg->svc.rl_ranks = arg->ranks;
+	for (i = 0; i < svc_nreplicas; i++)
+		arg->svc.rl_ranks[i] = i;
 
 	arg->mode = 0731;
 	arg->uid = geteuid();
@@ -259,6 +265,7 @@ print_usage(int rank)
 	print_message("daos_test -r|--rebuild\n");
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("daos_test -g|--group GROUP\n");
+	print_message("daos_test -s|--svc NREPLICAS {0, 1, ..., N-1}\n");
 	print_message("daos_test -h|--help\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 }
@@ -381,6 +388,7 @@ main(int argc, char **argv)
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
 		{"group",	required_argument,	NULL,	'g'},
+		{"svc",		required_argument,	NULL,	's'},
 		{"help",	no_argument,		NULL,	'h'}
 	};
 
@@ -408,6 +416,9 @@ main(int argc, char **argv)
 		case 'h':
 			print_usage(rank);
 			goto exit;
+		case 's':
+			svc_nreplicas = atoi(optarg);
+			break;
 		default:
 			daos_test_print(rank, "Unknown Option\n");
 			print_usage(rank);

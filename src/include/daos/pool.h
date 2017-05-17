@@ -33,8 +33,9 @@
 #include <daos/client.h>
 #include <daos/common.h>
 #include <daos/hash.h>
-#include <daos/scheduler.h>
 #include <daos/pool_map.h>
+#include <daos/rsvc.h>
+#include <daos/scheduler.h>
 
 int dc_pool_init(void);
 void dc_pool_fini(void);
@@ -48,6 +49,8 @@ struct dc_pool {
 	/* pool uuid */
 	uuid_t			dp_pool;
 	crt_group_t	       *dp_group;
+	pthread_mutex_t		dp_client_lock;
+	struct rsvc_client	dp_client;
 	uuid_t			dp_pool_hdl;
 	uint64_t		dp_capas;
 	pthread_rwlock_t	dp_map_lock;

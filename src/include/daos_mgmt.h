@@ -134,6 +134,7 @@ daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
  *
  * \param uuid	[IN]	UUID of the pool
  * \param grp	[IN]	process set name of the DAOS servers managing the pool
+ * \param svc	[IN]	list of pool service ranks
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -144,7 +145,8 @@ daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
  *			-DER_NONEXIST	Pool is nonexistent
  */
 int
-daos_pool_evict(const uuid_t uuid, const char *grp, daos_event_t *ev);
+daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
+		daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

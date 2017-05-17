@@ -42,7 +42,7 @@
 
 typedef struct {
 	bool			multi_rank;
-	daos_rank_t		ranks[8];
+	daos_rank_t		ranks[13];
 	int			myrank;
 	int			rank_size;
 	daos_rank_list_t	svc;
