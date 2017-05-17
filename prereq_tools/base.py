@@ -546,6 +546,10 @@ class PreReqComponent(object):
         self.__parse_build_deps()
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
+        pre_path = GetOption('prepend_path')
+        if pre_path:
+            old_path = self.__env['ENV']['PATH']
+            self.__env['ENV']['PATH'] = pre_path + os.pathsep + old_path
         self.__check_only = GetOption('check_only')
         if self.__check_only:
             # This is mostly a no_exec request.
@@ -659,6 +663,13 @@ class PreReqComponent(object):
                   default=os.path.join(Dir('#').abspath,
                                        'utils', 'build.config'),
                   help='build config file to use.')
+
+        # We need to sometimes use alternate tools for building and need
+        # to add them to the PATH in the environment.
+        AddOption('--prepend-path',
+                  dest='prepend_path',
+                  default=None,
+                  help="String to prepend to PATH environment variable.")
 
     def setup_patch_prefix(self):
         """Discovers the location of the patches directory and adds it to
