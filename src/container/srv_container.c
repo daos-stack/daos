@@ -1120,6 +1120,17 @@ out:
 	return rc;
 }
 
+static void
+set_rsvc_hint(struct rdb *db, struct cont_op_out *out)
+{
+	int rc;
+
+	rc = rdb_get_leader(db, &out->co_hint.sh_term, &out->co_hint.sh_rank);
+	if (rc != 0)
+		return;
+	out->co_hint.sh_flags |= RSVC_HINT_VALID;
+}
+
 /* Look up the pool handle and the matching container service. */
 int
 ds_cont_op_handler(crt_rpc_t *rpc)
@@ -1153,6 +1164,7 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	rc = cont_op_with_svc(pool_hdl, svc, rpc);
 
 out_svc:
+	set_rsvc_hint(svc->cs_db, out);
 	cont_svc_put(svc);
 out_pool_hdl:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: hdl="DF_UUID

@@ -44,7 +44,8 @@ struct crt_msg_field *pool_create_in_fields[] = {
 
 struct crt_msg_field *pool_create_out_fields[] = {
 	&CMF_INT,	/* op.rc */
-	&CMF_UINT32	/* op.map_version (unused) */
+	&CMF_UINT32,	/* op.map_version (unused) */
+	&DMF_RSVC_HINT	/* op.hint */
 };
 
 struct crt_msg_field *pool_connect_in_fields[] = {
@@ -59,6 +60,7 @@ struct crt_msg_field *pool_connect_in_fields[] = {
 struct crt_msg_field *pool_connect_out_fields[] = {
 	&CMF_INT,	/* op.rc */
 	&CMF_UINT32,	/* op.map_version */
+	&DMF_RSVC_HINT,	/* op.hint */
 	&CMF_UINT32,	/* mode */
 	&CMF_UINT32	/* map_buf_size */
 };
@@ -70,7 +72,8 @@ struct crt_msg_field *pool_disconnect_in_fields[] = {
 
 struct crt_msg_field *pool_disconnect_out_fields[] = {
 	&CMF_INT,	/* op.rc */
-	&CMF_UINT32	/* op.map_version */
+	&CMF_UINT32,	/* op.map_version */
+	&DMF_RSVC_HINT	/* op.hint */
 };
 
 struct crt_msg_field *pool_query_in_fields[] = {
@@ -82,6 +85,7 @@ struct crt_msg_field *pool_query_in_fields[] = {
 struct crt_msg_field *pool_query_out_fields[] = {
 	&CMF_INT,	/* op.rc */
 	&CMF_UINT32,	/* op.map_version */
+	&DMF_RSVC_HINT,	/* op.hint */
 	&CMF_UINT32,	/* mode */
 	&CMF_UINT32	/* map_buf_size */
 };
@@ -95,6 +99,7 @@ struct crt_msg_field *pool_tgt_update_in_fields[] = {
 struct crt_msg_field *pool_tgt_update_out_fields[] = {
 	&CMF_INT,	/* op.rc */
 	&CMF_UINT32,	/* op.map_version */
+	&DMF_RSVC_HINT,	/* op.hint */
 	&CMF_RANK_LIST	/* targets */
 };
 
@@ -105,7 +110,8 @@ struct crt_msg_field *pool_evict_in_fields[] = {
 
 struct crt_msg_field *pool_evict_out_fields[] = {
 	&CMF_INT,	/* op.rc */
-	&CMF_UINT32	/* op.map_version */
+	&CMF_UINT32,	/* op.map_version */
+	&DMF_RSVC_HINT	/* op.hint */
 };
 
 struct crt_msg_field *pool_tgt_connect_in_fields[] = {

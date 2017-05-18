@@ -270,15 +270,16 @@ rdb_is_leader(struct rdb *db, uint64_t *term)
 }
 
 /**
- * Get a hint of the rank of current leader.
+ * Get a hint of the current leader, if available.
  *
  * \param[in]	db	database
+ * \param[out]	term	term of current leader
  * \param[out]	rank	rank of current leader
  *
  * \retval -DER_NONEXIST	no leader hint available
  */
 int
-rdb_get_leader(struct rdb *db, crt_rank_t *rank)
+rdb_get_leader(struct rdb *db, uint64_t *term, crt_rank_t *rank)
 {
 	raft_node_t	       *node;
 	struct rdb_raft_node   *dnode;
@@ -288,6 +289,7 @@ rdb_get_leader(struct rdb *db, crt_rank_t *rank)
 		return -DER_NONEXIST;
 	dnode = raft_node_get_udata(node);
 	D_ASSERT(dnode != NULL);
+	*term = raft_get_current_term(db->d_raft);
 	*rank = dnode->dn_rank;
 	return 0;
 }

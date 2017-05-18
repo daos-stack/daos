@@ -33,7 +33,7 @@
 #include <stdint.h>
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
-#include <daos_event.h>
+#include <daos/rsvc.h>
 
 /*
  * RPC operation codes
@@ -63,8 +63,9 @@ struct pool_op_in {
 };
 
 struct pool_op_out {
-	int32_t		po_rc;		/* operation return code */
-	uint32_t	po_map_version;	/* latest pool map version or zero */
+	int32_t			po_rc;		/* operation return code */
+	uint32_t		po_map_version;	/* latest map version or zero */
+	struct rsvc_hint	po_hint;	/* leadership info */
 };
 
 struct pool_create_in {

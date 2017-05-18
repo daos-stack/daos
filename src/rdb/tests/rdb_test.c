@@ -215,9 +215,10 @@ rdbt_test_tx(bool update)
 	D_WARN("commit empty tx\n");
 	rc = rdb_tx_begin(rdb_db, &tx);
 	if (rc == -DER_NOTLEADER) {
-		crt_rank_t rank;
+		uint64_t	term;
+		crt_rank_t	rank;
 
-		rc = rdb_get_leader(rdb_db, &rank);
+		rc = rdb_get_leader(rdb_db, &term, &rank);
 		if (rc == 0)
 			D_WARN("not leader; try rank %u\n", rank);
 		else

@@ -57,7 +57,8 @@ struct crt_msg_field *cont_create_in_fields[] = {
 
 struct crt_msg_field *cont_create_out_fields[] = {
 	&CMF_INT,	/* op.rc */
-	&CMF_UINT32	/* op.map_version */
+	&CMF_UINT32,	/* op.map_version */
+	&DMF_RSVC_HINT	/* op.hint */
 };
 
 struct crt_msg_field *cont_destroy_in_fields[] = {
@@ -69,7 +70,8 @@ struct crt_msg_field *cont_destroy_in_fields[] = {
 
 struct crt_msg_field *cont_destroy_out_fields[] = {
 	&CMF_INT,	/* op.rc */
-	&CMF_UINT32	/* op.map_version */
+	&CMF_UINT32,	/* op.map_version */
+	&DMF_RSVC_HINT	/* op.hint */
 };
 
 struct crt_msg_field *cont_open_in_fields[] = {
@@ -82,6 +84,7 @@ struct crt_msg_field *cont_open_in_fields[] = {
 struct crt_msg_field *cont_open_out_fields[] = {
 	&CMF_INT,		/* op.rc */
 	&CMF_UINT32,		/* op.map_version */
+	&DMF_RSVC_HINT,		/* op.hint */
 	&DMF_EPOCH_STATE	/* epoch_state */
 };
 
@@ -93,7 +96,8 @@ struct crt_msg_field *cont_close_in_fields[] = {
 
 struct crt_msg_field *cont_close_out_fields[] = {
 	&CMF_INT,	/* op.rc */
-	&CMF_UINT32	/* op.map_version */
+	&CMF_UINT32,	/* op.map_version */
+	&DMF_RSVC_HINT	/* op.hint */
 };
 
 struct crt_msg_field *cont_query_in_fields[] = {
@@ -105,6 +109,7 @@ struct crt_msg_field *cont_query_in_fields[] = {
 struct crt_msg_field *cont_query_out_fields[] = {
 	&CMF_INT,		/* op.rc */
 	&CMF_UINT32,		/* op.map_version */
+	&DMF_RSVC_HINT,		/* op.hint */
 	&CMF_UINT64,		/* min slipped epoch */
 	&DMF_EPOCH_STATE	/* epoch state */
 };
@@ -119,6 +124,7 @@ struct crt_msg_field *cont_epoch_op_in_fields[] = {
 struct crt_msg_field *cont_epoch_op_out_fields[] = {
 	&CMF_INT,		/* op.rc */
 	&CMF_UINT32,		/* op.map_version */
+	&DMF_RSVC_HINT,		/* op.hint */
 	&DMF_EPOCH_STATE	/* epoch_state */
 };
 

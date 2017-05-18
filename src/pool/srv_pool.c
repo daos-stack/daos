@@ -873,6 +873,17 @@ bcast_create(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opcode,
 				    rpc, NULL, NULL);
 }
 
+static void
+set_rsvc_hint(struct rdb *db, struct pool_op_out *out)
+{
+	int rc;
+
+	rc = rdb_get_leader(db, &out->po_hint.sh_term, &out->po_hint.sh_rank);
+	if (rc != 0)
+		return;
+	out->po_hint.sh_flags |= RSVC_HINT_VALID;
+}
+
 struct pool_attr {
 	uint32_t	pa_uid;
 	uint32_t	pa_gid;
@@ -1008,6 +1019,7 @@ out_tx:
 out_mutex:
 	ABT_mutex_unlock(svc->ps_mutex);
 out_svc:
+	set_rsvc_hint(svc->ps_db, &out->pro_op);
 	pool_svc_put(svc);
 out:
 	out->pro_op.po_rc = rc;
@@ -1329,6 +1341,7 @@ out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
+	set_rsvc_hint(svc->ps_db, &out->pco_op);
 	pool_svc_put(svc);
 out:
 	out->pco_op.po_rc = rc;
@@ -1477,6 +1490,7 @@ out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
+	set_rsvc_hint(svc->ps_db, &pdo->pdo_op);
 	pool_svc_put(svc);
 out:
 	pdo->pdo_op.po_rc = rc;
@@ -1545,6 +1559,7 @@ out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
+	set_rsvc_hint(svc->ps_db, &out->pqo_op);
 	pool_svc_put(svc);
 out:
 	out->pqo_op.po_rc = rc;
@@ -1745,6 +1760,7 @@ out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
+	set_rsvc_hint(svc->ps_db, &out->pto_op);
 	pool_svc_put(svc);
 out:
 	out->pto_op.po_rc = rc;
@@ -1879,6 +1895,7 @@ out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
+	set_rsvc_hint(svc->ps_db, &out->pvo_op);
 	pool_svc_put(svc);
 out:
 	out->pvo_op.po_rc = rc;

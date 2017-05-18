@@ -44,7 +44,7 @@ rdb_tx_leader_check(struct rdb_tx *tx)
 	if (!raft_is_leader(tx->dt_db->d_raft))
 		return -DER_NOTLEADER;
 	if (tx->dt_term != raft_get_current_term(tx->dt_db->d_raft))
-		return -DER_AGAIN;
+		return -DER_NOTLEADER;
 	return 0;
 }
 
