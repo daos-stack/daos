@@ -182,8 +182,11 @@ test_teardown(void **state)
 				      MPI_COMM_WORLD);
 			rc = rc_reduce;
 		}
-		if (rc)
+		if (rc) {
+			print_message("failed to close container "DF_UUIDF
+				      ": %d\n", DP_UUID(arg->co_uuid), rc);
 			return rc;;
+		}
 	}
 
 	if (!uuid_is_null(arg->co_uuid)) {
@@ -191,8 +194,11 @@ test_teardown(void **state)
 			rc = daos_cont_destroy(arg->poh, arg->co_uuid, 1, NULL);
 		if (arg->multi_rank)
 			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-		if (rc)
+		if (rc) {
+			print_message("failed to destroy container "DF_UUIDF
+				      ": %d\n", DP_UUID(arg->co_uuid), rc);
 			return rc;
+		}
 	}
 
 	if (!daos_handle_is_inval(arg->poh)) {
@@ -201,8 +207,11 @@ test_teardown(void **state)
 			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
 			rc = rc_reduce;
 		}
-		if (rc)
+		if (rc) {
+			print_message("failed to disconnect pool "DF_UUIDF
+				      ": %d\n", DP_UUID(arg->pool_uuid), rc);
 			return rc;
+		}
 	}
 
 	if (!uuid_is_null(arg->pool_uuid)) {
@@ -220,8 +229,10 @@ test_teardown(void **state)
 
 	if (!daos_handle_is_inval(arg->eq)) {
 		rc = daos_eq_destroy(arg->eq, 0);
-		if (rc)
+		if (rc) {
+			print_message("failed to destroy eq: %d\n", rc);
 			return rc;
+		}
 	}
 
 	D_FREE_PTR(arg);
