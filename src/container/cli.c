@@ -960,11 +960,6 @@ dc_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 	struct dc_cont_glob	*cont_glob;
 	int			 rc = 0;
 
-	if (daos_hhash_key_type(poh.cookie) != DAOS_HTYPE_POOL) {
-		D_ERROR("Bad type (%d) of poh handle.\n",
-			daos_hhash_key_type(poh.cookie));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
 	if (glob.iov_buf == NULL || glob.iov_buf_len < glob.iov_len ||
 	    glob.iov_len != dc_cont_glob_buf_size()) {
 		D_DEBUG(DF_DSMC, "Invalid parameter of glob, iov_buf %p, "
@@ -972,6 +967,7 @@ dc_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
 	if (coh == NULL) {
 		D_DEBUG(DF_DSMC, "Invalid parameter, NULL coh.\n");
 		D_GOTO(out, rc = -DER_INVAL);
@@ -981,6 +977,7 @@ dc_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh)
 	if (cont_glob->dcg_magic == D_SWAP32(DC_CONT_GLOB_MAGIC)) {
 		swap_co_glob(cont_glob);
 		D_ASSERT(cont_glob->dcg_magic == DC_CONT_GLOB_MAGIC);
+
 	} else if (cont_glob->dcg_magic != DC_CONT_GLOB_MAGIC) {
 		D_ERROR("Bad hgh_magic: 0x%x.\n", cont_glob->dcg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
