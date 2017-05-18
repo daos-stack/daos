@@ -107,8 +107,7 @@ int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
 int crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout);
 int crt_hg_addr_lookup(struct crt_hg_context *hg_ctx, const char *name,
 		       crt_hg_addr_lookup_cb_t complete_cb, void *priv);
-int crt_hg_addr_dup(struct crt_hg_context *hg_ctx, hg_addr_t addr,
-		    hg_addr_t *new_addr);
+int crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr);
 
 int crt_rpc_handler_common(hg_handle_t hg_hdl);
 

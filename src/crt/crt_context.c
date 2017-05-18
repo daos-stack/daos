@@ -330,8 +330,17 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		C_ERROR("invalid parameter (NULL crt_ctx).\n");
 		C_GOTO(out, rc = -CER_INVAL);
 	}
+	if (!crt_initialized()) {
+		C_ERROR("CRT not initialized.\n");
+		C_GOTO(out, rc = -CER_UNINIT);
+	}
 
 	ctx = (struct crt_context *)crt_ctx;
+	rc = crt_grp_ctx_invalid(ctx, false /* locked */);
+	if (rc != 0) {
+		C_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
 
 	pthread_mutex_lock(&ctx->cc_mutex);
 

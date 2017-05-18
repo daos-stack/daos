@@ -205,6 +205,7 @@ int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 			  crt_rank_t rank, const char *uri);
 int crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 			   crt_rank_t rank, int tag, const hg_addr_t hg_addr);
+int crt_grp_ctx_invalid(struct crt_context *ctx, bool locked);
 struct crt_grp_priv *crt_grp_lookup_int_grpid(uint64_t int_grpid);
 int crt_validate_grpid(const crt_group_id_t grpid);
 int crt_grp_init(crt_group_id_t grpid);

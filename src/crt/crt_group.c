@@ -100,7 +100,6 @@ li_op_rec_decref(struct chash_table *hhtab, crt_list_t *rlink)
 	uint32_t			 ref;
 	struct crt_lookup_item		*li = crt_li_link2ptr(rlink);
 
-
 	C_ASSERT(li->li_initialized);
 	pthread_mutex_lock(&li->li_mutex);
 	li->li_ref--;
@@ -128,29 +127,21 @@ static chash_table_ops_t lookup_table_ops = {
 void
 crt_li_destroy(struct crt_lookup_item *li)
 {
-	C_ASSERT(li != NULL);
+	int	i;
 
+	C_ASSERT(li != NULL);
 	C_ASSERT(li->li_ref == 0);
 	C_ASSERT(li->li_initialized == 1);
 
-	C_ASSERT(li->li_base_phy_addr != NULL);
-	free(li->li_base_phy_addr);
-
-	/*
-	struct crt_context	*ctx;
-	hg_return_t		hg_ret;
-	int			i;
+	if (li->li_base_phy_addr != NULL) {
+		free(li->li_base_phy_addr);
+		li->li_base_phy_addr = NULL;
+	}
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
-		if (li->li_tag_addr[i] == NULL)
-			continue;
-		ctx = li->li_grp_priv->gp_ctx;
-		hg_ret = HG_Addr_free(ctx->dc_hg_ctx.chc_hgcla,
-				      li->li_tag_addr[i]);
-		if (hg_ret != HG_SUCCESS)
-			C_ERROR("HG_Addr_free failed, hg_ret: %d.\n", hg_ret);
+		if (li->li_tag_addr[i] != NULL)
+			C_ERROR("tag %d, li_tag_addr not freed.\n", i);
 	}
-	*/
 
 	pthread_mutex_destroy(&li->li_mutex);
 
@@ -295,6 +286,113 @@ out:
 	return rc;
 }
 
+static int
+crt_grp_lc_addr_invalid(crt_list_t *rlink, void *args)
+{
+	struct crt_lookup_item	*li;
+	struct crt_context	*ctx;
+	int			 i;
+	int			 rc = 0;
+
+	C_ASSERT(rlink != NULL);
+	C_ASSERT(args != NULL);
+	li = crt_li_link2ptr(rlink);
+	ctx = (struct crt_context *)args;
+
+	pthread_mutex_lock(&li->li_mutex);
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		if (li->li_tag_addr[i] == NULL)
+			continue;
+		rc = crt_hg_addr_free(&ctx->cc_hg_ctx, li->li_tag_addr[i]);
+		if (rc != 0) {
+			C_ERROR("crt_hg_addr_free failed, ctx_idx %d, tag %d, "
+				"rc: %d.\n", ctx->cc_idx, i, rc);
+			C_GOTO(out, rc);
+		}
+		li->li_tag_addr[i] = NULL;
+	}
+
+	if (li->li_base_phy_addr != NULL) {
+		free(li->li_base_phy_addr);
+		li->li_base_phy_addr = NULL;
+	}
+
+out:
+	pthread_mutex_unlock(&li->li_mutex);
+	return rc;
+}
+
+/*
+ * Invalid all cached hg_addr in group of one context.
+ * It should only be called by crt_context_destroy.
+ */
+static int
+crt_grp_lc_ctx_invalid(struct crt_grp_priv *grp_priv, struct crt_context *ctx)
+{
+	struct chash_table	*lc_cache;
+	int			 ctx_idx;
+	int			 rc;
+
+	C_ASSERT(grp_priv != NULL && grp_priv->gp_primary == 1);
+	C_ASSERT(ctx != NULL);
+	ctx_idx = ctx->cc_idx;
+	C_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
+
+	lc_cache = grp_priv->gp_lookup_cache[ctx_idx];
+	C_ASSERT(lc_cache != NULL);
+	rc = chash_table_traverse(lc_cache, crt_grp_lc_addr_invalid, ctx);
+	if (rc != 0)
+		C_ERROR("chash_table_traverse failed, ctx_idx %d, rc: %d.\n",
+			ctx_idx, rc);
+
+	return rc;
+}
+
+/*
+ * Invalid context for all groups.
+ */
+int
+crt_grp_ctx_invalid(struct crt_context *ctx, bool locked)
+{
+	struct crt_grp_priv	*grp_priv = NULL;
+	struct crt_grp_gdata	*grp_gdata;
+	int			 rc;
+
+	C_ASSERT(crt_initialized());
+	grp_gdata = crt_gdata.cg_grp;
+	C_ASSERT(grp_gdata != NULL);
+	C_ASSERT(ctx != NULL);
+
+	if (!locked)
+		pthread_rwlock_rdlock(&grp_gdata->gg_rwlock);
+	grp_priv = grp_gdata->gg_srv_pri_grp;
+	if (grp_priv != NULL) {
+		rc = crt_grp_lc_ctx_invalid(grp_priv, ctx);
+		if (rc != 0) {
+			C_ERROR("crt_grp_lc_ctx_invalid failed, group %s, "
+				"ctx_idx: %d, rc: %d.\n",
+				grp_priv->gp_pub.cg_grpid, ctx->cc_idx, rc);
+			C_GOTO(out, rc);
+		}
+	}
+
+	crt_list_for_each_entry(grp_priv, &grp_gdata->gg_srv_grps_attached,
+				gp_link) {
+		rc = crt_grp_lc_ctx_invalid(grp_priv, ctx);
+		if (rc != 0) {
+			C_ERROR("crt_grp_lc_ctx_invalid failed, group %s, "
+				"ctx_idx: %d, rc: %d.\n",
+				grp_priv->gp_pub.cg_grpid, ctx->cc_idx, rc);
+			break;
+		}
+	}
+
+out:
+	if (!locked)
+		pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
+	return rc;
+}
+
 /*
  * Fill in the hg address  of a tag in the lookup cache of crt_ctx. The host
  * rank where the tag resides in must exist in the cache before calling this
@@ -323,8 +421,6 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 		rc = -CER_EVICTED;
 	if (li->li_tag_addr[tag] == NULL) {
 		li->li_tag_addr[tag] = hg_addr;
-		if (rc != 0)
-			C_ERROR("crt_hg_addr_dup() failed, rc %d.\n", rc);
 	} else {
 		C_WARN("NA address already exits. "
 		       " grp_priv %p ctx_idx %d, rank: %d, tag %d, rlink %p\n",
@@ -1801,7 +1897,9 @@ crt_grp_detach(crt_group_t *attached_grp)
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_grp_priv	*grp_priv;
 	struct crt_grp_priv	*grp_priv_tmp;
+	struct crt_context	*ctx;
 	bool			 found = false;
+	int			 i;
 	int			 rc = 0;
 
 	C_ASSERT(attached_grp != NULL);
@@ -1810,6 +1908,20 @@ crt_grp_detach(crt_group_t *attached_grp)
 	C_ASSERT(grp_gdata != NULL);
 	grp_priv = container_of(attached_grp, struct crt_grp_priv, gp_pub);
 	C_ASSERT(grp_priv->gp_local == 0 && grp_priv->gp_service == 1);
+
+	pthread_rwlock_rdlock(&crt_gdata.cg_rwlock);
+	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+		ctx = crt_context_lookup(i);
+		if (ctx == NULL)
+			continue;
+		rc = crt_grp_ctx_invalid(ctx, true /* locked */);
+		if (rc != 0) {
+			C_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n", rc);
+			pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
+			C_GOTO(out, rc);
+		}
+	}
+	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 
 	rc = crt_grp_lc_destroy(grp_priv);
 	if (rc != 0) {

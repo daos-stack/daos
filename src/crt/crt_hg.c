@@ -110,18 +110,17 @@ hg_addr_lookup_cb(const struct hg_cb_info *callback_info)
 }
 
 int
-crt_hg_addr_dup(struct crt_hg_context *hg_ctx, hg_addr_t addr,
-		hg_addr_t *new_addr)
+crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr)
 {
-	int rc = 0;
+	hg_return_t	ret = HG_SUCCESS;
 
-	rc = HG_Addr_dup(hg_ctx->chc_hgcla, addr, new_addr);
-	if (rc != 0) {
-		C_ERROR("HG_Addr_free() failed, hg_ret %d.\n", rc);
-		rc = -CER_HG;
+	ret = HG_Addr_free(hg_ctx->chc_hgcla, addr);
+	if (ret != HG_SUCCESS) {
+		C_ERROR("HG_Addr_free() failed, hg_ret %d.\n", ret);
+		return -CER_HG;
 	}
 
-	return rc;
+	return 0;
 }
 
 /* connection timeout 10 second */
