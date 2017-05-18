@@ -39,10 +39,9 @@
 #include "srv_internal.h"
 #include "srv_layout.h"
 
-/* Initialize a container service whose DB is still empty. */
 static int
-cont_svc_init_bare(struct cont_svc **svcp, const uuid_t pool_uuid, uint64_t id,
-		   struct rdb *db)
+cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid, uint64_t id,
+	      struct rdb *db)
 {
 	struct cont_svc	       *svc = *svcp;
 	int			rc;
@@ -96,47 +95,44 @@ err:
 	return rc;
 }
 
-/* Initialize bare svc after its metadata has been initialized in the DB. */
-static void
-cont_svc_init(struct cont_svc *svc)
-{
-	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
-	D_ASSERT(svc->cs_pool != NULL);
-}
-
 static void
 cont_svc_fini(struct cont_svc *svc)
 {
-	if (svc->cs_pool != NULL)
-		ds_pool_put(svc->cs_pool);
 	rdb_path_fini(&svc->cs_hdls);
 	rdb_path_fini(&svc->cs_conts);
 	rdb_path_fini(&svc->cs_root);
 	ABT_rwlock_free(&svc->cs_lock);
 }
 
+static void
+cont_svc_step_up(struct cont_svc *svc)
+{
+	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
+	D_ASSERT(svc->cs_pool != NULL);
+}
+
+static void
+cont_svc_step_down(struct cont_svc *svc)
+{
+	ds_pool_put(svc->cs_pool);
+}
+
 int
-ds_cont_svc_init_bare(struct cont_svc **svcp, const uuid_t pool_uuid,
-		      uint64_t id, struct rdb *db)
+ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid, uint64_t id,
+		 struct rdb *db)
 {
 	int rc;
 
 	D_ALLOC_PTR(*svcp);
 	if (*svcp == NULL)
 		return -DER_NOMEM;
-	rc = cont_svc_init_bare(svcp, pool_uuid, id, db);
+	rc = cont_svc_init(svcp, pool_uuid, id, db);
 	if (rc != 0) {
 		D_FREE_PTR(*svcp);
 		*svcp = NULL;
 		return rc;
 	}
 	return 0;
-}
-
-void
-ds_cont_svc_init(struct cont_svc **svcp)
-{
-	cont_svc_init(*svcp);
 }
 
 void
@@ -147,20 +143,36 @@ ds_cont_svc_fini(struct cont_svc **svcp)
 	*svcp = NULL;
 }
 
-struct cont_svc *
-cont_svc_lookup(const uuid_t pool_uuid, uint64_t id)
+void
+ds_cont_svc_step_up(struct cont_svc *svc)
 {
-	struct cont_svc **svcp;
+	cont_svc_step_up(svc);
+}
+
+void
+ds_cont_svc_step_down(struct cont_svc *svc)
+{
+	cont_svc_step_down(svc);
+}
+
+static int
+cont_svc_lookup(const uuid_t pool_uuid, uint64_t id, struct cont_svc **svcp)
+{
+	struct cont_svc	      **p;
+	int			rc;
 
 	D_ASSERTF(id == 0, DF_U64"\n", id);
-	svcp = ds_pool_lookup_cont_svc(pool_uuid);
-	if (svcp == NULL)
-		D_ERROR(DF_UUID"["DF_U64"]: failed to look up container "
-			"service\n", DP_UUID(pool_uuid), id);
-	else if (*svcp == NULL)
-		D_ERROR(DF_UUID"["DF_U64"]: container service not "
-			"initialized\n", DP_UUID(pool_uuid), id);
-	return *svcp;
+	rc = ds_pool_lookup_cont_svc(pool_uuid, &p);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(p != NULL); /* p == &pool_svc->ps_cont_svc */
+	if (*p == NULL) {
+		D_ERROR(DF_UUID"["DF_U64"]: container service uninitialized\n",
+			DP_UUID(pool_uuid), id);
+		return -DER_NONEXIST;
+	}
+	*svcp = *p;
+	return 0;
 }
 
 static void
@@ -175,6 +187,24 @@ ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 {
 	return ds_pool_bcast_create(ctx, svc->cs_pool, DAOS_CONT_MODULE, opcode,
 				    rpc, NULL, NULL);
+}
+
+void
+ds_cont_wrlock_metadata(struct cont_svc *svc)
+{
+	ABT_rwlock_wrlock(svc->cs_lock);
+}
+
+void
+ds_cont_rdlock_metadata(struct cont_svc *svc)
+{
+	ABT_rwlock_rdlock(svc->cs_lock);
+}
+
+void
+ds_cont_unlock_metadata(struct cont_svc *svc)
+{
+	ABT_rwlock_unlock(svc->cs_lock);
 }
 
 /**
@@ -939,9 +969,11 @@ ds_cont_close_by_pool_hdls(const uuid_t pool_uuid, uuid_t *pool_hdls,
 		DP_UUID(pool_hdls[0]));
 
 	/* TODO: Do the following for all local container services. */
-	svc = cont_svc_lookup(pool_uuid, 0 /* id */);
-	if (svc == NULL)
-		return -DER_NONEXIST;
+	rc = cont_svc_lookup(pool_uuid, 0 /* id */, &svc);
+	if (rc != 0)
+		return rc;
+	if (!ds_pool_is_cont_svc_up(svc->cs_in_pool_svc))
+		D_GOTO(out_svc, rc = -DER_NOTLEADER);
 
 	rc = rdb_tx_begin(svc->cs_db, &tx);
 	if (rc != 0)
@@ -1112,12 +1144,15 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	 * running of this storage node? (Currently, there is only one, with ID
 	 * 0, colocated with the pool service.)
 	 */
-	svc = cont_svc_lookup(pool_hdl->sph_pool->sp_uuid, 0 /* id */);
-	if (svc == NULL)
-		D_GOTO(out_pool_hdl, rc = -DER_NONEXIST);
+	rc = cont_svc_lookup(pool_hdl->sph_pool->sp_uuid, 0 /* id */, &svc);
+	if (rc != 0)
+		D_GOTO(out_pool_hdl, rc);
+	if (!ds_pool_is_cont_svc_up(svc->cs_in_pool_svc))
+		D_GOTO(out_svc, rc = -DER_NOTLEADER);
 
 	rc = cont_op_with_svc(pool_hdl, svc, rpc);
 
+out_svc:
 	cont_svc_put(svc);
 out_pool_hdl:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: hdl="DF_UUID

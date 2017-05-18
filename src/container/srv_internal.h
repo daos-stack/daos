@@ -57,8 +57,6 @@ dsm_tls_get()
 	return tls;
 }
 
-struct pool_svc;
-
 /*
  * Container service
  *

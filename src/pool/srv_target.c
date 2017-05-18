@@ -233,12 +233,8 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 
-	if (arg->pca_map_buf != NULL) {
-		rc = pool_map_create(arg->pca_map_buf, arg->pca_map_version,
-				     &pool->sp_map);
-		if (rc != 0)
-			D_GOTO(err_lock, rc);
-	}
+	if (arg->pca_map != NULL)
+		pool->sp_map = arg->pca_map;
 
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
@@ -259,9 +255,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 err_collective:
 	rc_tmp = dss_collective(pool_child_delete_one, key);
 	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
-	if (arg->pca_map_buf != NULL)
-		pool_map_destroy(pool->sp_map);
-err_lock:
 	ABT_rwlock_free(&pool->sp_lock);
 err_pool:
 	D_FREE_PTR(pool);
@@ -334,8 +327,7 @@ ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
 	struct daos_llink      *llink;
 	int			rc;
 
-	D_ASSERT(arg == NULL || !arg->pca_create_group ||
-		 arg->pca_map_buf != NULL);
+	D_ASSERT(arg == NULL || !arg->pca_create_group || arg->pca_map != NULL);
 
 	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
 			       arg, &llink);
@@ -514,7 +506,7 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 	if (hdl == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	arg.pca_map_buf = NULL;
+	arg.pca_map = NULL;
 	arg.pca_map_version = in->tci_map_version;
 	arg.pca_create_group = 0;
 

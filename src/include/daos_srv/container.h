@@ -32,12 +32,16 @@
 
 /* For the combined pool/container service */
 #include <daos_srv/rdb.h>
+void ds_cont_wrlock_metadata(struct cont_svc *svc);
+void ds_cont_rdlock_metadata(struct cont_svc *svc);
+void ds_cont_unlock_metadata(struct cont_svc *svc);
 int ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 			  const uuid_t pool_uuid);
-int ds_cont_svc_init_bare(struct cont_svc **svcp, const uuid_t pool_uuid,
-			  uint64_t id, struct rdb *db);
-void ds_cont_svc_init(struct cont_svc **svcp);
+int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
+		     uint64_t id, struct rdb *db);
 void ds_cont_svc_fini(struct cont_svc **svcp);
+void ds_cont_svc_step_up(struct cont_svc *svc);
+void ds_cont_svc_step_down(struct cont_svc *svc);
 
 /*
  * Per-thread container (memory) object

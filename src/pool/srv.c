@@ -74,6 +74,9 @@ fini(void)
 /* Note: the rpc input/output parameters is defined in daos_rpc */
 static struct daos_rpc_handler pool_handlers[] = {
 	{
+		.dr_opc		= POOL_CREATE,
+		.dr_hdlr	= ds_pool_create_handler
+	}, {
 		.dr_opc		= POOL_CONNECT,
 		.dr_hdlr	= ds_pool_connect_handler
 	}, {

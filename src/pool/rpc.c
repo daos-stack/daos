@@ -28,9 +28,24 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
-static struct crt_msg_field DMF_UUIDS =
-	DEFINE_CRT_MSG("uuid_t[]", CMF_ARRAY_FLAG, sizeof(uuid_t),
-		       crt_proc_uuid_t);
+struct crt_msg_field *pool_create_in_fields[] = {
+	&CMF_UUID,		/* op.uuid */
+	&CMF_UUID,		/* op.hdl */
+	&CMF_UINT32,		/* uid */
+	&CMF_UINT32,		/* gid */
+	&CMF_UINT32,		/* mode */
+	&CMF_UINT32,		/* ntgts */
+	&DMF_UUID_ARRAY,	/* tgt_uuids */
+	&CMF_RANK_LIST,		/* tgt_ranks */
+	&CMF_UINT32,		/* ndomains */
+	&CMF_UINT32,		/* padding */
+	&DMF_UINT32_ARRAY	/* domains */
+};
+
+struct crt_msg_field *pool_create_out_fields[] = {
+	&CMF_INT,	/* op.rc */
+	&CMF_UINT32	/* op.map_version (unused) */
+};
 
 struct crt_msg_field *pool_connect_in_fields[] = {
 	&CMF_UUID,	/* op.uuid */
@@ -106,7 +121,7 @@ struct crt_msg_field *pool_tgt_connect_out_fields[] = {
 
 struct crt_msg_field *pool_tgt_disconnect_in_fields[] = {
 	&CMF_UUID,	/* pool */
-	&DMF_UUIDS	/* hdls */
+	&DMF_UUID_ARRAY	/* hdls */
 };
 
 struct crt_msg_field *pool_tgt_disconnect_out_fields[] = {
@@ -121,6 +136,10 @@ struct crt_msg_field *pool_tgt_update_map_in_fields[] = {
 struct crt_msg_field *pool_tgt_update_map_out_fields[] = {
 	&CMF_INT	/* rc */
 };
+
+struct crt_req_format DQF_POOL_CREATE =
+	DEFINE_CRT_REQ_FMT("POOL_CREATE", pool_create_in_fields,
+			   pool_create_out_fields);
 
 struct crt_req_format DQF_POOL_CONNECT =
 	DEFINE_CRT_REQ_FMT("POOL_CONNECT", pool_connect_in_fields,
@@ -175,6 +194,12 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
 
 struct daos_rpc pool_rpcs[] = {
 	{
+		.dr_name	= "POOL_CREATE",
+		.dr_opc		= POOL_CREATE,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_CREATE,
+	}, {
 		.dr_name	= "POOL_CONNECT",
 		.dr_opc		= POOL_CONNECT,
 		.dr_ver		= 1,

@@ -140,7 +140,9 @@ char *ds_pool_rdb_path(const uuid_t uuid, const uuid_t pool_uuid);
 int ds_pool_svc_start(const uuid_t uuid);
 void ds_pool_svc_stop(const uuid_t uuid);
 
-struct cont_svc **ds_pool_lookup_cont_svc(const uuid_t pool_uuid);
+struct cont_svc;
+int ds_pool_lookup_cont_svc(const uuid_t pool_uuid, struct cont_svc ***svcpp);
+bool ds_pool_is_cont_svc_up(struct cont_svc **svcp);
 void ds_pool_put_cont_svc(struct cont_svc **svcp);
 
 #endif /* __DAOS_SRV_POOL_H__ */

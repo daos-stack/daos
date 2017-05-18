@@ -42,13 +42,15 @@
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
 enum pool_operation {
-	POOL_CONNECT		= 1,
-	POOL_DISCONNECT		= 2,
-	POOL_QUERY		= 3,
-	POOL_EXCLUDE		= 4,
-	POOL_EVICT		= 5,
-	POOL_ADD		= 6,
-	POOL_EXCLUDE_OUT	= 7,
+	POOL_CREATE		= 1,
+	POOL_DESTROY		= 2,
+	POOL_CONNECT		= 3,
+	POOL_DISCONNECT		= 4,
+	POOL_QUERY		= 5,
+	POOL_EXCLUDE		= 6,
+	POOL_EVICT		= 7,
+	POOL_ADD		= 8,
+	POOL_EXCLUDE_OUT	= 9,
 
 	POOL_TGT_CONNECT	= 11,
 	POOL_TGT_DISCONNECT	= 12,
@@ -63,6 +65,23 @@ struct pool_op_in {
 struct pool_op_out {
 	int32_t		po_rc;		/* operation return code */
 	uint32_t	po_map_version;	/* latest pool map version or zero */
+};
+
+struct pool_create_in {
+	struct pool_op_in	pri_op;		/* .pi_hdl unused */
+	uint32_t		pri_uid;
+	uint32_t		pri_gid;
+	uint32_t		pri_mode;
+	uint32_t		pri_ntgts;
+	struct crt_array	pri_tgt_uuids;	/* [pri_ntgts] */
+	daos_rank_list_t       *pri_tgt_ranks;	/* [pri_ntgts] */
+	uint32_t		pri_ndomains;
+	uint32_t		pri_padding;
+	struct crt_array	pri_domains;	/* [pri_ndomains] */
+};
+
+struct pool_create_out {
+	struct pool_op_out	pro_op;	/* .map_version unused */
 };
 
 struct pool_connect_in {

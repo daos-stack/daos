@@ -56,6 +56,7 @@ pool_tls_get()
  */
 int ds_pool_svc_hash_init(void);
 void ds_pool_svc_hash_fini(void);
+int ds_pool_create_handler(crt_rpc_t *rpc);
 int ds_pool_connect_handler(crt_rpc_t *rpc);
 int ds_pool_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_query_handler(crt_rpc_t *rpc);
@@ -79,7 +80,7 @@ int ds_pool_tgt_update_map_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
 struct ds_pool_create_arg {
-	struct pool_buf	       *pca_map_buf;
+	struct pool_map	       *pca_map;
 	uint32_t		pca_map_version;
 	int			pca_create_group;
 };
