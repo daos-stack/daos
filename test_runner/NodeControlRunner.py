@@ -148,19 +148,21 @@ class NodeControlRunner():
     def nodes_strategy(self, test_directives):
         """ create node objects """
         path = os.getcwd()
-        scripts = path + "/scripts"
-        host_list = self.info.get_config('host_list')
-        self.logger.info("host_list" + str(host_list))
+        scripts = os.path.join(path, "scripts")
         hostKeys = self.test_info.get_test_info('module', 'setKeyFromHost')
-        for node in host_list:
-            node_type = 'all'
-            if hostKeys:
-                for item in hostKeys:
-                    if node in self.test_info.get_defaultENV(item):
-                        node_type = str(item)
-            node_info = NodeRunner.NodeRunner(self.info, node, path, scripts,
-                                              test_directives, node_type)
-            self.node_list.append(node_info)
+        if hostKeys:
+            for item in hostKeys:
+                for node in self.test_info.get_defaultENV(item).split(","):
+                    node_info = NodeRunner.NodeRunner(self.info, node, path,
+                                                      scripts, test_directives,
+                                                      str(item))
+                    self.node_list.append(node_info)
+        else:
+            for node in self.info.get_config('host_list'):
+                node_info = NodeRunner.NodeRunner(self.info, node, path,
+                                                  scripts, test_directives,
+                                                  "all")
+                self.node_list.append(node_info)
 
     def nodes_dump(self):
         """ dump node objects """

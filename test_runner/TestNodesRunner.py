@@ -48,7 +48,7 @@ class TestNodesRunner():
         self.now = "_{}".format(datetime.now().isoformat().replace(':', '.'))
         host_list = self.info.get_config('host_list')
         for node in host_list:
-            node_info = DUTRunner.DUTRunner(self.info, node)
+            node_info = DUTRunner.DUTRunner(self.test_info, node)
             self.node_list.append(node_info)
 
     def execute_list(self, cmdstr, log_path, run_node_list, waittime):
