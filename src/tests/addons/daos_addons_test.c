@@ -21,17 +21,15 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos
+ * This file is part of daos_m
  *
- * tests/suite/daos_test
+ * src/tests/addons/
  */
 
 #define DD_SUBSYS	DD_FAC(tests)
-#include <getopt.h>
-#include "daos_test.h"
 
-/** All tests in default order ('d' must be the last one) */
-static const char *all_tests = "mpceiACoRdr";
+#include <daos_test.h>
+#include "daos_addons_test.h"
 
 /** Server crt group ID */
 static const char *server_group;
@@ -42,7 +40,7 @@ static unsigned int svc_nreplicas = 1;
 static daos_size_t pool_size = (4ULL << 30);
 
 int
-test_setup(void **state, unsigned int step, bool multi_rank)
+setup(void **state, unsigned int step, bool multi_rank)
 {
 	test_arg_t	*arg;
 	int		 i;
@@ -252,7 +250,7 @@ pool_destroy_safe(test_arg_t *arg)
 }
 
 int
-test_teardown(void **state)
+teardown(void **state)
 {
 	test_arg_t	*arg = *state;
 	int		 rc, rc_reduce = 0;
@@ -270,7 +268,7 @@ test_teardown(void **state)
 		if (rc) {
 			print_message("failed to close container "DF_UUIDF
 				      ": %d\n", DP_UUID(arg->co_uuid), rc);
-			return rc;;
+			return rc;
 		}
 	}
 
@@ -330,186 +328,25 @@ test_teardown(void **state)
 	return 0;
 }
 
-static void
-print_usage(int rank)
-{
-	if (rank)
-		return;
-
-	print_message("\n\nDAOS TESTS\n=============================\n");
-	print_message("Use one of these options(s) for specific test\n");
-	print_message("daos_test -m|--mgmt\n");
-	print_message("daos_test -p|--daos_pool_tests\n");
-	print_message("daos_test -c|--daos_container_tests\n");
-	print_message("daos_test -C|--capa\n");
-	print_message("daos_test -i|--daos_io_tests\n");
-	print_message("daos_test -A|--array\n");
-	print_message("daos_test -d|--degraded\n");
-	print_message("daos_test -e|--daos_epoch_tests\n");
-	print_message("daos_test -o|--daos_epoch_recovery_tests\n");
-	print_message("daos_test -r|--rebuild\n");
-	print_message("daos_test -a|--daos_all_tests\n");
-	print_message("daos_test -g|--group GROUP\n");
-	print_message("daos_test -s|--svcn NSVCREPLICAS\n");
-	print_message("daos_test -h|--help\n");
-	print_message("Default <daos_tests> runs all tests\n=============\n");
-}
-
-static int
-run_specified_tests(const char *tests, int rank, int size)
-{
-	int nr_failed = 0;
-
-	if (strlen(tests) == 0)
-		tests = all_tests;
-
-	while (*tests != '\0') {
-		switch (*tests) {
-		case 'm':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS management tests..");
-			daos_test_print(rank, "=====================");
-			nr_failed = run_daos_mgmt_test(rank, size);
-			break;
-		case 'p':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS pool tests..");
-			daos_test_print(rank, "=====================");
-			nr_failed += run_daos_pool_test(rank, size);
-			break;
-		case 'c':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS container tests..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_cont_test(rank, size);
-			break;
-		case 'C':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS capability tests..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_capa_test(rank, size);
-			break;
-		case 'i':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS IO test..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_io_test(rank, size);
-			break;
-		case 'A':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS Array test..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_array_test(rank, size);
-			break;
-		case 'e':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS Epoch tests..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_epoch_test(rank, size);
-			break;
-		case 'o':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS Epoch recovery tests..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_epoch_recovery_test(rank, size);
-			break;
-		case 'R':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS MD replication tests..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_md_replication_test(rank, size);
-			break;
-		case 'd':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS degraded-mode tests..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_degraded_test(rank, size);
-			break;
-		case 'r':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS rebuild tests..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_rebuild_test(rank, size);
-			break;
-		default:
-			D_ASSERT(0);
-		}
-
-		tests++;
-	}
-
-	return nr_failed;
-}
-
 int
 main(int argc, char **argv)
 {
 	test_arg_t	*arg;
-	char		 tests[64];
-	int		 ntests = 0;
-	int		 nr_failed;
-	int		 nr_total_failed = 0;
-	int		 opt = 0, index = 0;
-	int		 rank;
-	int		 size;
-	int		 rc;
+	int	nr_failed = 0;
+	int	nr_total_failed = 0;
+	int	rank;
+	int	size;
+	int	rc;
 
 	MPI_Init(&argc, &argv);
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	MPI_Barrier(MPI_COMM_WORLD);
-
-	static struct option long_options[] = {
-		{"all",		no_argument,		NULL,	'a'},
-		{"mgmt",	no_argument,		NULL,	'm'},
-		{"pool",	no_argument,		NULL,	'p'},
-		{"cont",	no_argument,		NULL,	'c'},
-		{"capa",	no_argument,		NULL,	'C'},
-		{"io",		no_argument,		NULL,	'i'},
-		{"array",	no_argument,		NULL,	'A'},
-		{"epoch",	no_argument,		NULL,	'e'},
-		{"erecov",	no_argument,		NULL,	'o'},
-		{"mdr",		no_argument,		NULL,	'R'},
-		{"degraded",	no_argument,		NULL,	'd'},
-		{"rebuild",	no_argument,		NULL,	'r'},
-		{"group",	required_argument,	NULL,	'g'},
-		{"svcn",	required_argument,	NULL,	's'},
-		{"help",	no_argument,		NULL,	'h'}
-	};
 
 	rc = daos_init();
 	if (rc) {
 		print_message("daos_init() failed with %d\n", rc);
 		return -1;
-	}
-
-	memset(tests, 0, sizeof(tests));
-
-	while ((opt = getopt_long(argc, argv, "ampcCdiAeoRg:s:hr",
-				  long_options, &index)) != -1) {
-		if (strchr(all_tests, opt) != NULL) {
-			tests[ntests] = opt;
-			ntests++;
-			continue;
-		}
-		switch (opt) {
-		case 'a':
-			break;
-		case 'g':
-			server_group = optarg;
-			break;
-		case 'h':
-			print_usage(rank);
-			goto exit;
-		case 's':
-			svc_nreplicas = atoi(optarg);
-			break;
-		default:
-			daos_test_print(rank, "Unknown Option\n");
-			print_usage(rank);
-			goto exit;
-		}
 	}
 
 	if (svc_nreplicas > ARRAY_SIZE(arg->ranks) && rank == 0) {
@@ -518,9 +355,16 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	nr_failed = run_specified_tests(tests, rank, size);
+	daos_test_print(rank, "\n\n=================");
+	daos_test_print(rank, "DAOS ADDONS Array tests..");
+	daos_test_print(rank, "=====================");
+	nr_failed = run_array_test(rank, size);
 
-exit:
+	daos_test_print(rank, "\n\n=================");
+	daos_test_print(rank, "DAOS ADDONS HL tests..");
+	daos_test_print(rank, "=====================");
+	nr_failed += run_hl_test(rank, size);
+
 	MPI_Allreduce(&nr_failed, &nr_total_failed, 1, MPI_INT, MPI_SUM,
 		      MPI_COMM_WORLD);
 

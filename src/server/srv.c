@@ -34,7 +34,6 @@
 #include <daos/list.h>
 #include <daos/event.h>
 #include <daos_event.h>
-#include <daos_task.h>
 #include "srv_internal.h"
 
 /** Number of started xstreams or cores used */

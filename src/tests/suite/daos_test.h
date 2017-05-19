@@ -144,6 +144,13 @@ daos_kill_server(const uuid_t pool_uuid, const char *grp,
 		 daos_rank_t rank);
 
 static inline void
+daos_test_print(int rank, char *message)
+{
+	if (!rank)
+		print_message("%s\n", message);
+}
+
+static inline void
 handle_share(daos_handle_t *hdl, int type, int rank, daos_handle_t poh,
 	     int verbose)
 {

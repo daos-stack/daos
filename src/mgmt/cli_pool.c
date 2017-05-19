@@ -27,7 +27,6 @@
 
 #include <daos/mgmt.h>
 #include <daos/event.h>
-#include <daos_task.h>
 #include "rpc.h"
 
 struct pool_create_arg {

@@ -32,7 +32,6 @@
 #include <pthread.h>
 #include <daos/common.h>
 #include <daos_event.h>
-#include <daos_task.h>
 #include <daos/event.h>
 #include <daos/list.h>
 
@@ -132,9 +131,5 @@ daos_eqx2eq(struct daos_eq_private *eqx)
  */
 int
 daos_event_priv_get(daos_event_t **ev);
-
-int
-dc_task_create(daos_opc_t opc, void *arg, int arg_size,
-	       struct daos_task **taskp, daos_event_t **evp);
 
 #endif /* __DAOS_CLI_INTERNAL_H__ */

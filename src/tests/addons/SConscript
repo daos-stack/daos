@@ -3,7 +3,7 @@
 Import('denv')
 
 libraries = ['daos_common', 'daos', 'daos_tests', 'crt_util', 'crt']
-libraries += ['daos_tier', 'uuid', 'mpi', 'daos_array']
+libraries += ['daos_tier', 'uuid', 'mpi']
 libraries += ['cmocka']
 
 denv.Append(CPPPATH = ['#/src/addons/tests/'])

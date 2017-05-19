@@ -23,12 +23,11 @@
 /**
  * This file is part of daos_m
  *
- * src/addons/tests/array_test.c
+ * src/tests/addons/
  */
 
 #include <daos_test.h>
-#include <daos_array.h>
-
+#include <daos_addons.h>
 #include "daos_addons_test.h"
 
 /** number of elements to write to array */
@@ -592,128 +591,23 @@ static const struct CMUnitTest array_io_tests[] = {
 	{"Array I/O: Contiguous memory and array (blocking)",
 	 contig_mem_contig_arr_io, async_disable, NULL},
 	{"Array I/O: Contiguous memory and array (non-blocking)",
-	contig_mem_contig_arr_io, async_enable, NULL},
+	 contig_mem_contig_arr_io, async_enable, NULL},
 	{"Array I/O: Contiguous memory Strided array (blocking)",
 	 contig_mem_str_arr_io, async_disable, NULL},
 	{"Array I/O: Contiguous memory Strided array (non-blocking)",
-	contig_mem_str_arr_io, async_enable, NULL},
+	 contig_mem_str_arr_io, async_enable, NULL},
 	{"Array I/O: Strided memory and array (blocking)",
 	 str_mem_str_arr_io, async_disable, NULL},
 	{"Array I/O: Strided memory and array (non-blocking)",
-	str_mem_str_arr_io, async_enable, NULL},
+	 str_mem_str_arr_io, async_enable, NULL},
 	{"Array I/O: Read from Empty array & records (blocking)",
 	 read_empty_records, async_disable, NULL},
 };
 
-static int
-setup(void **state)
+int
+array_setup(void **state)
 {
-	test_arg_t	*arg;
-	int		 rc;
-
-	arg = malloc(sizeof(test_arg_t));
-	if (arg == NULL)
-		return -1;
-
-	rc = daos_eq_create(&arg->eq);
-	if (rc)
-		return rc;
-
-	arg->svc.rl_nr.num = 3;
-	arg->svc.rl_nr.num_out = 0;
-	arg->svc.rl_ranks = arg->ranks;
-
-	arg->hdl_share = false;
-	uuid_clear(arg->pool_uuid);
-	MPI_Comm_rank(MPI_COMM_WORLD, &arg->myrank);
-	MPI_Comm_size(MPI_COMM_WORLD, &arg->rank_size);
-
-	if (arg->myrank == 0) {
-		/** create pool with minimal size */
-		rc = daos_pool_create(0731, geteuid(), getegid(), NULL,
-				      NULL, "pmem", 256 << 20, &arg->svc,
-				      arg->pool_uuid, NULL);
-	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	if (arg->myrank == 0) {
-		/** connect to pool */
-		arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
-		rc = daos_pool_connect(arg->pool_uuid, NULL,
-				       &arg->svc, DAOS_PC_RW, &arg->poh,
-				       &arg->pool_info, NULL /* ev */);
-	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-	MPI_Bcast(&arg->pool_info, sizeof(arg->pool_info), MPI_CHAR, 0,
-		  MPI_COMM_WORLD);
-
-	/** l2g and g2l the pool handle */
-	handle_share(&arg->poh, HANDLE_POOL, arg->myrank, arg->poh, 1);
-	if (arg->myrank == 0) {
-		/** create container */
-		uuid_generate(arg->co_uuid);
-		rc = daos_cont_create(arg->poh, arg->co_uuid, NULL);
-	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	if (arg->myrank == 0) {
-		/** open container */
-		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
-				    &arg->coh, NULL, NULL);
-	}
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	/** l2g and g2l the container handle */
-	handle_share(&arg->coh, HANDLE_CO, arg->myrank, arg->poh, 1);
-
-	*state = arg;
-	return 0;
-}
-
-static int
-teardown(void **state) {
-	test_arg_t	*arg = *state;
-	int		 rc, rc_reduce = 0;
-
-	MPI_Barrier(MPI_COMM_WORLD);
-
-	rc = daos_cont_close(arg->coh, NULL);
-	MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-	if (rc_reduce)
-		return rc_reduce;
-
-	if (arg->myrank == 0)
-		rc = daos_cont_destroy(arg->poh, arg->co_uuid, 1, NULL);
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
-	MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
-	if (rc_reduce)
-		return rc_reduce;
-
-	if (arg->myrank == 0)
-		rc = daos_pool_destroy(arg->pool_uuid, NULL, 1, NULL);
-
-	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	if (rc)
-		return rc;
-
-	rc = daos_eq_destroy(arg->eq, 0);
-	if (rc)
-		return rc;
-
-	free(arg);
-	return 0;
+	return setup(state, SETUP_CONT_CONNECT, true);
 }
 
 int
@@ -722,7 +616,7 @@ run_array_test(int rank, int size)
 	int rc = 0;
 
 	rc = cmocka_run_group_tests_name("Array io tests", array_io_tests,
-					 setup, teardown);
+					 array_setup, teardown);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }

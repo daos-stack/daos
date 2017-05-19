@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2017 Intel Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,51 +21,25 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /**
- * This file is part of daos_m
- *
- * src/addons/tests/
+ * Addons task functions.
  */
 
-#include <daos_test.h>
+#ifndef __DAOS_ADDONS_H__
+#define  __DAOS_ADDONS_H__
 
-#include "daos_addons_test.h"
+/* task functions for array operations */
+int dac_array_create(struct daos_task *task);
+int dac_array_open(struct daos_task *task);
+int dac_array_close(struct daos_task *task);
+int dac_array_read(struct daos_task *task);
+int dac_array_write(struct daos_task *task);
+int dac_array_get_size(struct daos_task *task);
+int dac_array_set_size(struct daos_task *task);
 
-int
-main(int argc, char **argv)
-{
-	int	nr_failed = 0;
-	int	nr_total_failed = 0;
-	int	rank;
-	int	size;
-	int	rc;
-
-	MPI_Init(&argc, &argv);
-
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-	rc = daos_init();
-	if (rc) {
-		print_message("daos_init() failed with %d\n", rc);
-		return -1;
-	}
-
-	nr_failed = run_array_test(rank, size);
-
-	MPI_Allreduce(&nr_failed, &nr_total_failed, 1, MPI_INT, MPI_SUM,
-		      MPI_COMM_WORLD);
-
-	rc = daos_fini();
-	if (rc)
-		print_message("daos_fini() failed with %d\n", rc);
-
-	print_message("\n============ Summary %s\n", __FILE__);
-	if (nr_total_failed == 0)
-		print_message("OK - NO TEST FAILURES\n");
-	else
-		print_message("ERROR, %i TEST(S) FAILED\n", nr_total_failed);
-
-	MPI_Finalize();
-
-	return nr_failed;
-}
+/* task function for HL operations */
+int dac_obj_get(struct daos_task *task);
+int dac_obj_put(struct daos_task *task);
+int dac_obj_remove(struct daos_task *task);
+int dac_obj_fetch_multi(struct daos_task *task);
+int dac_obj_update_multi(struct daos_task *task);
+#endif /* __DAOS_ADDONS_H__ */

@@ -28,7 +28,6 @@
  */
 #define DD_SUBSYS	DD_FAC(container)
 
-#include <daos_task.h>
 #include <daos_types.h>
 #include <daos/container.h>
 #include <daos/event.h>

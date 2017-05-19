@@ -284,12 +284,7 @@ set_size_uint8(void **state)
 	test_arg_t	*arg = *state;
 
 	arg->size = sizeof(uint8_t);
-	/** see bug DAOS-210 */
-#if 0
 	arg->nr   = 131071;
-#else
-	arg->nr   = 1 << 10;
-#endif
 
 	return 0;
 }

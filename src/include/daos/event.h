@@ -31,7 +31,7 @@
 #include <daos_errno.h>
 #include <daos/list.h>
 #include <daos/hash.h>
-#include <daos/scheduler.h>
+#include <daos_task.h>
 
 enum daos_ev_flags {
 	/**
@@ -137,6 +137,10 @@ daos_event_register_comp_cb(struct daos_event *ev,
 int
 daos_client_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 		      daos_event_t **evp);
+
+int
+dc_task_create(daos_opc_t opc, void *arg, int arg_size,
+	       struct daos_task **taskp, daos_event_t **evp);
 
 /**
  * Wait for completion of the private event

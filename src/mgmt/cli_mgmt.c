@@ -28,7 +28,6 @@
 
 #include <daos/mgmt.h>
 #include <daos/event.h>
-#include <daos_task.h>
 #include "rpc.h"
 
 static int

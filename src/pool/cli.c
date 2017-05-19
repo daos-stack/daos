@@ -28,7 +28,6 @@
  */
 #define DD_SUBSYS	DD_FAC(pool)
 
-#include <daos_task.h>
 #include <daos_types.h>
 #include <daos/event.h>
 #include <daos/placement.h>

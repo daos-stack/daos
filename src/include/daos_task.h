@@ -32,6 +32,7 @@ extern "C" {
 #endif
 
 #include <daos_types.h>
+#include <daos_addons.h>
 #include <daos_errno.h>
 #include <daos/scheduler.h>
 
@@ -95,6 +96,22 @@ typedef enum {
 	DAOS_OPC_OBJ_LIST_AKEY,
 	DAOS_OPC_OBJ_LIST_RECX,
 	DAOS_OPC_OBJ_SHARD_LIST_DKEY,
+
+	/** Array APIs */
+	DAOS_OPC_ARRAY_CREATE,
+	DAOS_OPC_ARRAY_OPEN,
+	DAOS_OPC_ARRAY_CLOSE,
+	DAOS_OPC_ARRAY_READ,
+	DAOS_OPC_ARRAY_WRITE,
+	DAOS_OPC_ARRAY_GET_SIZE,
+	DAOS_OPC_ARRAY_SET_SIZE,
+
+	/** HL APIs */
+	DAOS_OPC_OBJ_GET,
+	DAOS_OPC_OBJ_PUT,
+	DAOS_OPC_OBJ_REMOVE,
+	DAOS_OPC_OBJ_FETCH_MULTI,
+	DAOS_OPC_OBJ_UPDATE_MULTI,
 
 	DAOS_OPC_MAX
 } daos_opc_t;
@@ -381,6 +398,78 @@ typedef struct {
 	daos_hash_out_t		*anchor;
 	bool			incr_order;
 } daos_obj_list_recx_t;
+
+typedef struct {
+	daos_handle_t	coh;
+	daos_obj_id_t	oid;
+	daos_epoch_t	epoch;
+	daos_size_t	cell_size;
+	daos_size_t	block_size;
+	daos_handle_t	*oh;
+} daos_array_create_t;
+
+typedef struct {
+	daos_handle_t	coh;
+	daos_obj_id_t	oid;
+	daos_epoch_t	epoch;
+	unsigned int	mode;
+	daos_size_t	*cell_size;
+	daos_size_t	*block_size;
+	daos_handle_t	*oh;
+} daos_array_open_t;
+
+typedef struct {
+	daos_handle_t	oh;
+} daos_array_close_t;
+
+typedef struct {
+	daos_handle_t		oh;
+	daos_epoch_t		epoch;
+	daos_array_ranges_t	*ranges;
+	daos_sg_list_t		*sgl;
+	daos_csum_buf_t		*csums;
+} daos_array_io_t;
+
+typedef struct {
+	daos_handle_t           oh;
+	daos_epoch_t            epoch;
+	daos_size_t		*size;
+} daos_array_get_size_t;
+
+typedef struct {
+	daos_handle_t           oh;
+	daos_epoch_t            epoch;
+	daos_size_t		size;
+} daos_array_set_size_t;
+
+typedef struct {
+	daos_handle_t	oh;
+	daos_epoch_t	epoch;
+	const char	*key;
+	daos_size_t	*buf_size;
+	void		*buf;
+} daos_obj_get_t;
+
+typedef struct {
+	daos_handle_t	oh;
+	daos_epoch_t	epoch;
+	const char	*key;
+	daos_size_t	buf_size;
+	const void	*buf;
+} daos_obj_put_t;
+
+typedef struct {
+	daos_handle_t	oh;
+	daos_epoch_t	epoch;
+	const char	*key;
+} daos_obj_remove_t;
+
+typedef struct {
+	daos_handle_t	oh;
+	daos_epoch_t	epoch;
+	unsigned int	num_dkeys;
+	daos_dkey_io_t	*io_array;
+} daos_obj_multi_io_t;
 
 /**
  * Create an asynchronous task and associate it with a daos client operation.

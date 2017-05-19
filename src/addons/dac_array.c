@@ -30,9 +30,10 @@
 
 #include <daos/common.h>
 #include <daos/scheduler.h>
+#include <daos/addons.h>
 #include <daos_api.h>
-#include <daos_array.h>
-#include "array_internal.h"
+#include <daos_addons.h>
+#include <daos_task.h>
 
 /*#define ARRAY_DEBUG */
 
@@ -153,7 +154,7 @@ free_io_params_cb(struct daos_task *task, void *data)
 static int
 create_handle_cb(struct daos_task *task, void *data)
 {
-	struct dac_array_create_t *args = *((struct dac_array_create_t **)data);
+	daos_array_create_t *args = *((daos_array_create_t **)data);
 	struct dac_array	*array;
 	int			rc = task->dt_result;
 
@@ -207,7 +208,7 @@ free_handle_cb(struct daos_task *task, void *data)
 static int
 write_md_cb(struct daos_task *task, void *data)
 {
-	struct dac_array_create_t *args = *((struct dac_array_create_t **)data);
+	daos_array_create_t *args = *((daos_array_create_t **)data);
 	daos_obj_update_t *update_args;
 	struct io_params *params;
 	int rc = task->dt_result;
@@ -267,10 +268,13 @@ write_md_cb(struct daos_task *task, void *data)
 int
 dac_array_create(struct daos_task *task)
 {
-	struct dac_array_create_t *args = daos_task2arg(task);
+	daos_array_create_t	*args;
 	struct daos_task	*open_task, *update_task;
 	daos_obj_open_t		open_args;
 	int			rc;
+
+	args = daos_task_get_args(DAOS_OPC_ARRAY_CREATE, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	/** Create task to open object */
 	open_args.coh = args->coh;
@@ -319,7 +323,6 @@ dac_array_create(struct daos_task *task)
 	}
 
 	daos_task_schedule(update_task, false);
-
 	daos_sched_progress(daos_task2sched(task));
 
 	return rc;
@@ -334,7 +337,7 @@ err_put1:
 static int
 open_handle_cb(struct daos_task *task, void *data)
 {
-	struct dac_array_open_t *args = *((struct dac_array_open_t **)data);
+	daos_array_open_t *args = *((daos_array_open_t **)data);
 	struct dac_array	*array;
 	int			rc = task->dt_result;
 
@@ -372,7 +375,7 @@ open_handle_cb(struct daos_task *task, void *data)
 static int
 fetch_md_cb(struct daos_task *task, void *data)
 {
-	struct dac_array_open_t *args = *((struct dac_array_open_t **)data);
+	daos_array_open_t *args = *((daos_array_open_t **)data);
 	daos_obj_fetch_t *fetch_args;
 	struct io_params *params;
 	int rc = task->dt_result;
@@ -432,10 +435,13 @@ fetch_md_cb(struct daos_task *task, void *data)
 int
 dac_array_open(struct daos_task *task)
 {
-	struct dac_array_open_t *args = daos_task2arg(task);
+	daos_array_open_t	*args;
 	struct daos_task	*open_task, *fetch_task;
 	daos_obj_open_t		open_args;
 	int			rc;
+
+	args = daos_task_get_args(DAOS_OPC_ARRAY_OPEN, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	/** Open task to open object */
 	open_args.coh = args->coh;
@@ -476,8 +482,8 @@ dac_array_open(struct daos_task *task)
 	}
 
 	/** Add a completion CB on the upper task to generate the array OH */
-	daos_task_register_cbs(task, NULL, NULL, 0, open_handle_cb,
-			       &args, sizeof(args));
+	rc = daos_task_register_cbs(task, NULL, NULL, 0, open_handle_cb,
+				    &args, sizeof(args));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion cb\n");
 		D_GOTO(err_put2, rc);
@@ -499,11 +505,14 @@ err_put1:
 int
 dac_array_close(struct daos_task *task)
 {
-	struct dac_array_close_t *args = daos_task2arg(task);
+	daos_array_close_t	*args;
 	struct dac_array	*array;
 	struct daos_task	*close_task;
 	daos_obj_close_t	close_args;
 	int			rc;
+
+	args = daos_task_get_args(DAOS_OPC_ARRAY_CLOSE, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	array = array_hdl2ptr(args->oh);
 	if (array == NULL)
@@ -687,16 +696,13 @@ create_sgl(daos_sg_list_t *user_sgl, daos_size_t cell_size,
 	return 0;
 }
 
-int
-dac_array_io(struct daos_task *task)
+static int
+dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
+	     daos_array_ranges_t *ranges, daos_sg_list_t *user_sgl,
+	     daos_opc_t op_type, struct daos_task *task)
 {
-	struct dac_array_io_t *args = daos_task2arg(task);
 	struct dac_array *array = NULL;
 	daos_handle_t	oh;
-	daos_epoch_t	epoch = args->epoch;
-	daos_array_ranges_t *ranges = args->ranges;
-	daos_sg_list_t	*user_sgl = args->sgl;
-	enum array_op_t	op_type = args->op;
 	daos_off_t	cur_off;/* offset into user buf to track current pos */
 	daos_size_t	cur_i;	/* index into user sgl to track current pos */
 	daos_size_t	records; /* Number of records to access in cur range */
@@ -718,7 +724,7 @@ dac_array_io(struct daos_task *task)
 		D_GOTO(err_task, rc = -DER_INVAL);
 	}
 
-	array = array_hdl2ptr(args->oh);
+	array = array_hdl2ptr(array_oh);
 	if (array == NULL)
 		return -DER_NO_HDL;
 
@@ -948,7 +954,7 @@ dac_array_io(struct daos_task *task)
 		}
 
 		/* issue KV IO to DAOS */
-		if (op_type == D_ARRAY_OP_READ) {
+		if (op_type == DAOS_OPC_ARRAY_READ) {
 			daos_obj_fetch_t io_arg;
 
 			io_arg.oh = oh;
@@ -967,7 +973,7 @@ dac_array_io(struct daos_task *task)
 					dkey_str, rc);
 				return rc;
 			}
-		} else if (op_type == D_ARRAY_OP_WRITE) {
+		} else if (op_type == DAOS_OPC_ARRAY_WRITE) {
 			daos_obj_update_t io_arg;
 
 			io_arg.oh = oh;
@@ -1009,6 +1015,30 @@ err_task:
 		array_decref(array);
 	daos_task_complete(task, rc);
 	return rc;
+}
+
+int
+dac_array_read(struct daos_task *task)
+{
+	daos_array_io_t *args;
+
+	args = daos_task_get_args(DAOS_OPC_ARRAY_READ, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return dac_array_io(args->oh, args->epoch, args->ranges, args->sgl,
+			    DAOS_OPC_ARRAY_READ, task);
+}
+
+int
+dac_array_write(struct daos_task *task)
+{
+	daos_array_io_t *args;
+
+	args = daos_task_get_args(DAOS_OPC_ARRAY_WRITE, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	return dac_array_io(args->oh, args->epoch, args->ranges, args->sgl,
+			    DAOS_OPC_ARRAY_WRITE, task);
 }
 
 #define ENUM_KEY_BUF	32
@@ -1141,15 +1171,16 @@ out:
 int
 dac_array_get_size(struct daos_task *task)
 {
-	struct dac_array_get_size_t *args = daos_task2arg(task);
-	daos_handle_t	oh;
-	struct dac_array *array;
-	daos_epoch_t	epoch = args->epoch;
-	daos_size_t	*size = args->size;
-	daos_obj_list_dkey_t enum_args;
-	struct get_size_props *get_size_props;
-	struct daos_task *enum_task;
-	int		rc;
+	daos_array_get_size_t	*args;
+	daos_handle_t		oh;
+	struct dac_array	*array;
+	daos_obj_list_dkey_t	enum_args;
+	struct get_size_props	*get_size_props;
+	struct daos_task	*enum_task;
+	int			rc;
+
+	args = daos_task_get_args(DAOS_OPC_ARRAY_GET_SIZE, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	array = array_hdl2ptr(args->oh);
 	if (array == NULL)
@@ -1165,7 +1196,7 @@ dac_array_get_size(struct daos_task *task)
 	get_size_props->lo = 0;
 	get_size_props->nr = ENUM_DESC_NR;
 	get_size_props->ptask = task;
-	get_size_props->size = size;
+	get_size_props->size = args->size;
 	get_size_props->array = array;
 	memset(get_size_props->buf, 0, ENUM_DESC_BUF);
 	memset(&get_size_props->anchor, 0, sizeof(get_size_props->anchor));
@@ -1175,7 +1206,7 @@ dac_array_get_size(struct daos_task *task)
 		     ENUM_DESC_BUF);
 
 	enum_args.oh = oh;
-	enum_args.epoch = epoch;
+	enum_args.epoch = args->epoch;
 	enum_args.nr = &get_size_props->nr;
 	enum_args.kds = get_size_props->kds;
 	enum_args.sgl = &get_size_props->sgl;
@@ -1406,18 +1437,19 @@ err_out:
 int
 dac_array_set_size(struct daos_task *task)
 {
-	struct dac_array_set_size_t *args = daos_task2arg(task);
-	daos_handle_t	oh;
-	struct dac_array *array;
-	daos_epoch_t	epoch = args->epoch;
-	daos_size_t	size = args->size;
-	char            *dkey_str = NULL;
-	daos_size_t	num_records;
-	daos_off_t	record_i;
-	daos_obj_list_dkey_t enum_args;
-	struct set_size_props *set_size_props;
-	struct daos_task *enum_task;
-	int		rc, ret;
+	daos_array_set_size_t	*args;
+	daos_handle_t		oh;
+	struct dac_array	*array;
+	char			*dkey_str = NULL;
+	daos_size_t		num_records;
+	daos_off_t		record_i;
+	daos_obj_list_dkey_t	enum_args;
+	struct set_size_props	*set_size_props;
+	struct daos_task	*enum_task;
+	int			rc, ret;
+
+	args = daos_task_get_args(DAOS_OPC_ARRAY_SET_SIZE, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	array = array_hdl2ptr(args->oh);
 	if (array == NULL)
@@ -1425,7 +1457,8 @@ dac_array_set_size(struct daos_task *task)
 
 	oh = array->daos_oh;
 
-	rc = compute_dkey(array, size, &num_records, &record_i, &dkey_str);
+	rc = compute_dkey(array, args->size, &num_records, &record_i,
+			  &dkey_str);
 	if (rc != 0) {
 		D_ERROR("Failed to compute dkey\n");
 		D_GOTO(err_task, rc);
@@ -1458,7 +1491,7 @@ dac_array_set_size(struct daos_task *task)
 		     ENUM_DESC_BUF);
 
 	enum_args.oh = oh;
-	enum_args.epoch = epoch;
+	enum_args.epoch = args->epoch;
 	enum_args.nr = &set_size_props->nr;
 	enum_args.kds = set_size_props->kds;
 	enum_args.sgl = &set_size_props->sgl;

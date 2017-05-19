@@ -208,6 +208,172 @@ int
 daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
 		    daos_event_t *ev);
 
+/**
+ * Insert or update a single object KV pair. The key specified will be mapped to
+ * a dkey in DAOS. The object akey will be the same as the dkey. If a value
+ * existed before it will be overwritten (punched first if not previously an
+ * atomic value) with the new atomic value described by the sgl.
+ *
+ * \param oh	[IN]	Object open handle.
+ *
+ * \param epoch	[IN]	Epoch for the update.
+ *
+ * \param key	[IN]	key associated with the update operation.
+ *
+ * \param buf_size [IN] Size of the buffer to be inserted as an atomic val.
+ *
+ * \param buf	[IN]	pointer to user buffer of the atomic value.
+ *
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_EP_RO	Epoch is read-only
+ */
+int
+daos_obj_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+	     daos_size_t buf_size, const void *buf, daos_event_t *ev);
+
+/**
+ * Fetch value of a key.
+ *
+ * \param oh	[IN]	Object open handle.
+ *
+ * \param epoch	[IN]	Epoch for the read.
+ *
+ * \param key	[IN]	key associated with the update operation.
+ *
+ * \param buf_size [IN/OUT]
+ *			Size of the user buf. if the size is unknown (set to
+ *			DAOS_REC_ANY), the actual size of the value is returned.
+ *
+ * \param buf	[IN]	pointer to user buffer. If NULL, only size is returned.
+ *
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_EP_RO	Epoch is read-only
+ */
+int
+daos_obj_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+	     daos_size_t *buf_size, void *buf, daos_event_t *ev);
+
+/**
+ * Remove a Key and it's value from the KV store
+ *
+ * \param oh	[IN]	Object open handle.
+ *
+ * \param epoch	[IN]	Epoch for the update. It is ignored if epoch range is
+ *			provided for each extent through the vector I/O
+ *			descriptor (i.e. \a iods[]::vd_eprs[]).
+ *
+ * \param key	[IN]	key to be punched/removed.
+ *
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_EP_RO	Epoch is read-only
+ */
+int
+daos_obj_remove(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+		daos_event_t *ev);
+
+typedef struct {
+	daos_key_t	*dkey;
+	unsigned int	nr;
+	daos_iod_t	*iods;
+	daos_sg_list_t	*sgls;
+	daos_iom_t	*maps;
+} daos_dkey_io_t;
+
+/**
+ * Fetch Multiple Dkeys in a single call. Behaves the same as daos_obj_fetch but
+ * for multiple dkeys.
+ *
+ * \param oh	[IN]	Object open handle.
+ *
+ * \param epoch	[IN]	Epoch for the update. It is ignored if epoch range is
+ *			provided for each extent through the vector I/O
+ *			descriptor (i.e. \a iods[]::vd_eprs[]).
+ *
+ * \param num_dkeys
+ *		[IN]	Number of dkeys in \a io_array.
+ *
+ * \param daos_dkey_io_t *io_array [IN\OUT]
+ *			Array of io descriptors for all dkeys, which describes
+ *			another array of iods for akeys within each dkey.
+ *
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_EP_RO	Epoch is read-only
+ */
+int
+daos_obj_fetch_multi(daos_handle_t oh, daos_epoch_t epoch,
+		     unsigned int num_dkeys, daos_dkey_io_t *io_array,
+		     daos_event_t *ev);
+
+/**
+ * Update/Insert/Punch Multiple Dkeys in a single call. Behaves the same as
+ * daos_obj_fetch but for multiple dkeys.
+ *
+ * \param oh	[IN]	Object open handle.
+ *
+ * \param epoch	[IN]	Epoch for the update. It is ignored if epoch range is
+ *			provided for each extent through the vector I/O
+ *			descriptor (i.e. \a iods[]::vd_eprs[]).
+ *
+ * \param num_dkeys
+ *		[IN]	Number of dkeys in \a io_array.
+ *
+ * \param daos_dkey_io_t *io_array [IN\OUT]
+ *			Array of io descriptors for all dkeys, which describes
+ *			another array of iods for akeys within each dkey.
+ *
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_EP_RO	Epoch is read-only
+ */
+int
+daos_obj_update_multi(daos_handle_t oh, daos_epoch_t epoch,
+		      unsigned int num_dkeys, daos_dkey_io_t *io_array,
+		      daos_event_t *ev);
+
 #if defined(__cplusplus)
 }
 #endif

@@ -30,17 +30,16 @@
 
 #include <daos/common.h>
 #include <daos/event.h>
-#include <daos_array.h>
-#include "array_internal.h"
+#include <daos/addons.h>
+#include <daos_addons.h>
 
 int
 daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		  daos_size_t cell_size, daos_size_t block_size,
 		  daos_handle_t *oh, daos_event_t *ev)
 {
-	struct dac_array_create_t	args;
+	daos_array_create_t		args;
 	struct daos_task		*task;
-	int				rc;
 
 	args.coh	= coh;
 	args.oid	= oid;
@@ -49,12 +48,7 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	args.block_size	= block_size;
 	args.oh		= oh;
 
-	rc = daos_client_task_prep(&args, sizeof(args), &task, &ev);
-	if (rc)
-		return rc;
-
-	dac_array_create(task);
-
+	dc_task_create(DAOS_OPC_ARRAY_CREATE, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -63,9 +57,8 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		unsigned int mode, daos_size_t *cell_size,
 		daos_size_t *block_size, daos_handle_t *oh, daos_event_t *ev)
 {
-	struct dac_array_open_t	args;
+	daos_array_open_t		args;
 	struct daos_task		*task;
-	int				rc;
 
 	*cell_size = 0;
 	*block_size = 0;
@@ -78,30 +71,19 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	args.block_size	= block_size;
 	args.oh		= oh;
 
-	rc = daos_client_task_prep(&args, sizeof(args), &task, &ev);
-	if (rc)
-		return rc;
-
-	dac_array_open(task);
-
+	dc_task_create(DAOS_OPC_ARRAY_OPEN, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
 int
 daos_array_close(daos_handle_t oh, daos_event_t *ev)
 {
-	struct dac_array_close_t	args;
+	daos_array_close_t		args;
 	struct daos_task                *task;
-	int                             rc;
 
 	args.oh         = oh;
 
-	rc = daos_client_task_prep(&args, sizeof(args), &task, &ev);
-	if (rc)
-		return rc;
-
-	dac_array_close(task);
-
+	dc_task_create(DAOS_OPC_ARRAY_CLOSE, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -110,23 +92,16 @@ daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
 		daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
 		daos_csum_buf_t *csums, daos_event_t *ev)
 {
-	struct dac_array_io_t	args;
+	daos_array_io_t		args;
 	struct daos_task	*task;
-	int			rc;
 
 	args.oh		= oh;
 	args.epoch	= epoch;
 	args.ranges	= ranges;
 	args.sgl	= sgl;
 	args.csums	= csums;
-	args.op		= D_ARRAY_OP_READ;
 
-	rc = daos_client_task_prep(&args, sizeof(args), &task, &ev);
-	if (rc)
-		return rc;
-
-	dac_array_io(task);
-
+	dc_task_create(DAOS_OPC_ARRAY_READ, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -135,46 +110,32 @@ daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
 		 daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
 		 daos_csum_buf_t *csums, daos_event_t *ev)
 {
-	struct dac_array_io_t	args;
+	daos_array_io_t		args;
 	struct daos_task	*task;
-	int			rc;
 
 	args.oh		= oh;
 	args.epoch	= epoch;
 	args.ranges	= ranges;
 	args.sgl	= sgl;
 	args.csums	= csums;
-	args.op		= D_ARRAY_OP_WRITE;
 
-	rc = daos_client_task_prep(&args, sizeof(args), &task, &ev);
-	if (rc)
-		return rc;
-
-	dac_array_io(task);
-
+	dc_task_create(DAOS_OPC_ARRAY_WRITE, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
-
-
 
 int
 daos_array_get_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t *size,
 		    daos_event_t *ev)
 {
-	struct dac_array_get_size_t args;
+	daos_array_get_size_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	args.oh		= oh;
 	args.epoch	= epoch;
 	args.size	= size;
 
-	rc = daos_client_task_prep(&args, sizeof(args), &task, &ev);
-	if (rc)
-		return rc;
-
-	dac_array_get_size(task);
-
+	dc_task_create(DAOS_OPC_ARRAY_GET_SIZE, &args, sizeof(args), &task,
+		       &ev);
 	return daos_client_result_wait(ev);
 } /* end daos_array_get_size */
 
@@ -182,19 +143,14 @@ int
 daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
 		    daos_event_t *ev)
 {
-	struct dac_array_set_size_t args;
+	daos_array_set_size_t	args;
 	struct daos_task	*task;
-	int			rc;
 
 	args.oh		= oh;
 	args.epoch	= epoch;
 	args.size	= size;
 
-	rc = daos_client_task_prep(&args, sizeof(args), &task, &ev);
-	if (rc)
-		return rc;
-
-	dac_array_set_size(task);
-
+	dc_task_create(DAOS_OPC_ARRAY_SET_SIZE, &args, sizeof(args), &task,
+		       &ev);
 	return daos_client_result_wait(ev);
 } /* end daos_array_set_size */

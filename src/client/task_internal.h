@@ -73,6 +73,17 @@ struct daos_task_args {
 		daos_obj_list_dkey_t	obj_list_dkey;
 		daos_obj_list_akey_t	obj_list_akey;
 		daos_obj_list_recx_t	obj_list_recx;
+		daos_array_create_t	array_create;
+		daos_array_open_t	array_open;
+		daos_array_close_t	array_close;
+		daos_array_io_t		array_io;
+		daos_array_get_size_t	array_get_size;
+		daos_array_set_size_t	array_set_size;
+		daos_obj_get_t		obj_get;
+		daos_obj_put_t		obj_put;
+		daos_obj_remove_t	obj_remove;
+		daos_obj_multi_io_t	obj_fetch_multi;
+		daos_obj_multi_io_t	obj_update_multi;
 	} op_args;
 	void *priv;
 };

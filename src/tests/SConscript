@@ -16,3 +16,5 @@ denv.Install('$PREFIX/bin/', daosbench)
 # tests
 SConscript('suite/SConscript', exports = ['denv'])
 SConscript('tier/SConscript', exports = ['denv'])
+denv.Append(CPPPATH = ['#/src/tests/suite'])
+SConscript('addons/SConscript', exports = ['denv'])

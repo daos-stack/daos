@@ -31,6 +31,7 @@
 #include <daos/pool.h>
 #include <daos/container.h>
 #include <daos/object.h>
+#include <daos/addons.h>
 #include <daos/tier.h>
 #include "task_internal.h"
 #include <pthread.h>
@@ -83,7 +84,19 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},
 	{dc_obj_list_akey, sizeof(daos_obj_list_akey_t)},
 	{dc_obj_list_rec, sizeof(daos_obj_list_recx_t)},
-	{dc_obj_single_shard_list_dkey, sizeof(daos_obj_list_dkey_t)}
+	{dc_obj_single_shard_list_dkey, sizeof(daos_obj_list_dkey_t)},
+	{dac_array_create, sizeof(daos_array_create_t)},
+	{dac_array_open, sizeof(daos_array_open_t)},
+	{dac_array_close, sizeof(daos_array_close_t)},
+	{dac_array_read, sizeof(daos_array_io_t)},
+	{dac_array_write, sizeof(daos_array_io_t)},
+	{dac_array_get_size, sizeof(daos_array_get_size_t)},
+	{dac_array_set_size, sizeof(daos_array_set_size_t)},
+	{dac_obj_get, sizeof(daos_obj_get_t)},
+	{dac_obj_put, sizeof(daos_obj_put_t)},
+	{dac_obj_remove, sizeof(daos_obj_remove_t)},
+	{dac_obj_fetch_multi, sizeof(daos_obj_multi_io_t)},
+	{dac_obj_update_multi, sizeof(daos_obj_multi_io_t)},
 };
 
 /**
