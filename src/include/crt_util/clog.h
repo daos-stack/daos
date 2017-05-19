@@ -214,7 +214,7 @@ int crt_log_setlogmask(int facility, int mask);
  * \param mlen [IN]		length of mstr (if < 0, assume null terminated,
  *				use strlen)
  */
-void crt_log_setmasks(char *mstr, int mlen);
+int crt_log_setmasks(char *mstr, int mlen);
 
 /**
  * crt_log_getmasks: get current mask level as a string (not null terminated).
@@ -229,6 +229,8 @@ void crt_log_setmasks(char *mstr, int mlen);
  * \return bytes returned (may be trunced and non-null terminated if == len)
  */
 int crt_log_getmasks(char *buf, int discard, int len, int unterm);
+
+int crt_log_str2pri(const char *pstr);
 
 #if defined(__cplusplus)
 }

@@ -900,15 +900,21 @@ test_log(void **state)
 	int rc;
 	int logfac1;
 	int logfac2;
-	setenv("CRT_LOG_MASK", "T1=DEBUG", 1);
+	setenv("CRT_LOG_MASK", "CLOG=DEBUG,T1=DEBUG", 1);
+	const char *preset = "D0xF";
+	const char *preset1 = "D0xACF";
+	char retbuf[200];
 
+	memset(retbuf, 0x00, sizeof(retbuf));
 	rc = crt_log_init();
 	assert_int_equal(rc, 0);
 
 	logfac1 = crt_log_allocfacility("T1", "TEST1");
 	assert_int_not_equal(logfac1, 0);
+
 	logfac2 = crt_log_allocfacility("T2", "TEST2");
 	assert_int_not_equal(logfac2, 0);
+
 	LOG_DEBUG(logfac1, "log1 debug should not print\n");
 	/* Sync the cart mask */
 	crt_log_sync_mask();
@@ -919,19 +925,101 @@ test_log(void **state)
 	/* Alternatively, a component may have its own mask */
 	logmask = getenv("TEST_LOG_MASK");
 	if (logmask == NULL)
-		logmask = allocated_mask = strdup("ERR,T1=DEBUG");
+		logmask = allocated_mask = strdup("ERR,T1=DEBUG,CLOG=DEBUG");
 	assert_non_null(logmask);
 
-	crt_log_setmasks(logmask, -1);
-
-	if (allocated_mask != NULL)
+	rc = crt_log_setmasks(logmask, -1);
+	LOG_DEBUG(logfac1, "rc after 1st setmaks is %x\n", rc);
+	rc = crt_log_setmasks(logmask, -1);
+	LOG_DEBUG(logfac1, "rc after 2nd setmasks is %x\n", rc);
+	if (allocated_mask != NULL) {
 		free(allocated_mask);
+		allocated_mask = NULL;
+	}
+
+	crt_log_getmasks(retbuf, 0, 200, 0);
+	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
+	memset(retbuf, 0x00, sizeof(retbuf));
 
 	LOG_DEBUG(logfac1, "log1 debug test message %d\n", logfac1);
 	LOG_DEBUG(logfac2, "log2 debug test message %d\n", logfac2);
 	LOG_INFO(logfac1, "log1 info test message %d\n", logfac2);
 	LOG_INFO(logfac2, "log2 info test message %d\n", logfac2);
 
+	logmask = allocated_mask = strdup("T1=D10");
+	assert_non_null(logmask);
+
+	rc = crt_log_setmasks(logmask, -1);
+	/* should be all f's from earlier */
+	assert_int_equal(rc & CLOG_PRIMASK, (0xFFFF00));
+
+	rc = crt_log_setmasks(logmask, -1);
+	assert_int_equal(rc & CLOG_PRIMASK, (1 << (CLOG_DPRISHIFT + 10)));
+	if (allocated_mask != NULL) {
+		free(allocated_mask);
+		allocated_mask = NULL;
+	}
+
+	/* todo add new test here for the new levels */
+	setenv("CRT_LOG_MASK", "T1=D0", 1);
+	crt_log_sync_mask();
+	logmask = allocated_mask = strdup("T1=D0");
+	assert_non_null(logmask);
+
+	rc = crt_log_setmasks(logmask, -1);
+	assert_int_equal(rc & CLOG_PRIMASK, (1 << (CLOG_DPRISHIFT + 0)));
+	if (allocated_mask != NULL) {
+		free(allocated_mask);
+		allocated_mask = NULL;
+	}
+
+	rc = crt_log_getmasks(retbuf, 0, 200, 0);
+	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
+	memset(retbuf, 0x00, sizeof(retbuf));
+
+
+	setenv("CRT_LOG_MASK", "T1=D4", 1);
+	crt_log_sync_mask();
+
+	rc = crt_log_getmasks(retbuf, 0, 200, 0);
+	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
+	memset(retbuf, 0x00, sizeof(retbuf));
+	logmask = allocated_mask = strdup("T1=D4");
+	assert_non_null(logmask);
+
+	rc = crt_log_setmasks(logmask, -1);
+	assert_int_equal(rc & CLOG_PRIMASK, (1 << (CLOG_DPRISHIFT + 4)));
+	if (allocated_mask != NULL) {
+		free(allocated_mask);
+		allocated_mask = NULL;
+	}
+
+	setenv("CRT_LOG_MASK", "T1=D0xACF", 1);
+	crt_log_sync_mask();
+
+	rc = crt_log_getmasks(retbuf, 0, 200, 0);
+	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
+	memset(retbuf, 0x00, sizeof(retbuf));
+
+	setenv("CRT_LOG_MASK", "T1=D0xACFFF", 1);
+	crt_log_sync_mask();
+
+	rc = crt_log_getmasks(retbuf, 0, 200, 0);
+	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
+	memset(retbuf, 0x00, sizeof(retbuf));
+
+	setenv("CRT_LOG_MASK", "T1=DEBUG", 1);
+	crt_log_sync_mask();
+
+	rc = crt_log_getmasks(retbuf, 0, 200, 0);
+	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
+	memset(retbuf, 0x00, sizeof(retbuf));
+
+	rc = crt_log_str2pri(preset);
+	assert_int_equal(rc, 0xF << CLOG_DPRISHIFT);
+
+	rc = crt_log_str2pri(preset1);
+	assert_int_equal(rc, 0xACF << CLOG_DPRISHIFT);
 	crt_log_fini();
 }
 

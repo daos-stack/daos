@@ -145,11 +145,12 @@ static void vclog(int, const char *, va_list);
 static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
 				     "CRIT", "ALRT", "EMRG"};
 
-static const char * const dbg[] = { "D---", "D3--", "D2--", "D23-",
-				   "D1--", "D13-", "D12-", "D123",
-				   "D0--", "D03-", "D02-", "D023",
-				   "D01-", "D013", "D012", "DBUG"};
+static const char * const dbg[] = { "D0", "D1", "D2", "D3",
+				   "D4", "D5", "D6", "D7",
+				   "D8", "D9", "D10", "D11",
+				   "D12", "D13", "D14", "D15"};
 
+static const char *dbg_bitfield = "D0x";
 /**
  * clog_pristr: convert priority to 4 byte symbolic name.
  *
@@ -492,23 +493,29 @@ static void vclog(int flags, const char *fmt, va_list ap)
  */
 int crt_log_str2pri(const char *pstr)
 {
-	char ptmp[8];
+	char ptmp[11];
 	int lcv;
+
 	/* make sure we have a valid input */
-	if (strlen(pstr) > 5)
+	if (strlen(pstr) > 7) {
+		printf("wrong size! ");
 		return -1;
-	strncpy(ptmp, pstr, 8);	/* because we may overwrite parts of it */
+	}
+	strncpy(ptmp, pstr, 11);  /* because we may overwrite parts of it */
 	/*
 	 * handle some quirks
 	 */
+
+	/* this case allows the user to pass in a bitmask for debug levels */
+	if (strncasecmp(ptmp, dbg_bitfield, 3) == 0)
+		return (strtoul((ptmp + 3), NULL, 16)) << CLOG_DPRISHIFT;
+
 	if (strcasecmp(ptmp, "ERR") == 0)
 		/* has trailing space in the array */
 		return CLOG_ERR;
 	if (strcasecmp(ptmp, "DEBUG") == 0) /* 5 char alternative to 'DBUG' */
 		return CLOG_DBG;
-	if (ptmp[0] == 'D')	/* allow shorthand without the '-' chars */
-		while (strlen(ptmp) < 4)
-			strncat(ptmp, "-", 1);
+
 	/*
 	 * do non-debug first, then debug
 	 */
@@ -517,7 +524,7 @@ int crt_log_str2pri(const char *pstr)
 			return lcv << CLOG_PRISHIFT;
 	for (lcv = 0; lcv < 16; lcv++)
 		if (strcasecmp(ptmp, dbg[lcv]) == 0)
-			return lcv << CLOG_DPRISHIFT;
+			return 1 << (CLOG_DPRISHIFT + lcv);
 	/* bogus! */
 	return -1;
 }
@@ -721,6 +728,9 @@ int crt_log_setlogmask(int facility, int mask)
 			(mask & CLOG_PRIMASK);
 	}
 	clog_unlock();
+	crt_log(CLOG_DBG, "new prino set to fac %d: %x, oldmask=%x\n\n",
+			facility, (mask & CLOG_PRIMASK), oldmask);
+
 	return oldmask;
 }
 
@@ -730,14 +740,14 @@ int crt_log_setlogmask(int facility, int mask)
  * if the "PREFIX=" part is omitted, then the level applies to all defined
  * facilities (e.g. crt_log_setmasks("WARN") sets everything to WARN).
  */
-void crt_log_setmasks(char *mstr, int mlen0)
+int crt_log_setmasks(char *mstr, int mlen0)
 {
 	char *m, *current, *fac, *pri, pbuf[8];
-	int mlen, facno, clen, elen, prilen, prino;
+	int mlen, facno, clen, elen, prilen, prino, rv, tmp;
 	unsigned int faclen;
 	/* not open? */
 	if (!crt_log_xst.tag)
-		return;
+		return -1;
 	m = mstr;
 	mlen = mlen0;
 	if (mlen < 0)
@@ -748,8 +758,10 @@ void crt_log_setmasks(char *mstr, int mlen0)
 		mlen--;
 	}
 	if (mlen <= 0)
-		return;		/* nothing doing */
+		return -1;		/* nothing doing */
 	facno = 0;		/* make sure it gets init'd */
+	rv = 0;
+	tmp = 0;
 	while (m) {
 		/* note current chunk, and advance m to the next one */
 		current = m;
@@ -785,7 +797,7 @@ void crt_log_setmasks(char *mstr, int mlen0)
 				prilen--;
 		/* parse complete! */
 		/* process priority */
-		if (prilen > 5) { /* we know it can't be longer than this */
+		if (prilen > 7) { /* we know it can't be longer than this */
 			prino = -1;
 		} else {
 			memset(pbuf, 0, sizeof(pbuf));
@@ -833,15 +845,23 @@ void crt_log_setmasks(char *mstr, int mlen0)
 				     faclen, fac);
 				continue;
 			}
-		}
-		if (fac)
 			/* apply only to this fac */
-			crt_log_setlogmask(facno, prino);
-		else
+			tmp = crt_log_setlogmask(facno, prino);
+			if (rv != -1)
+				rv = tmp;
+
+		} /* end if(fac) */
+		else {
 			/* apply to all facilities */
-			for (facno = 0; facno < crt_log_xst.fac_cnt; facno++)
-				crt_log_setlogmask(facno, prino);
+			for (facno = 0; facno < crt_log_xst.fac_cnt; facno++) {
+				tmp = crt_log_setlogmask(facno, prino);
+				if (rv != -1)
+					rv = tmp;
+
+			}
+		}
 	}
+	return rv;
 }
 
 /* crt_log_getmasks: get current masks levels */
