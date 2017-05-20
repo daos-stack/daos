@@ -199,14 +199,21 @@ crt_iv_keys_match(crt_iv_key_t *key1, crt_iv_key_t *key2)
 
 /* Check if key is in progress */
 static struct ivf_key_in_progress *
-crt_ivf_key_in_progress_find(struct crt_ivns_internal *ivns, crt_iv_key_t *key)
+crt_ivf_key_in_progress_find(struct crt_ivns_internal *ivns,
+			struct crt_iv_ops *ops, crt_iv_key_t *key)
 {
 	struct ivf_key_in_progress *entry;
 
 	crt_list_for_each_entry(entry, &ivns->cii_keys_in_progress_list,
 				kip_link) {
-		if (crt_iv_keys_match(&entry->kip_key, key) == true)
-			return entry;
+		/* Use keys_match callback if client provided one */
+		if (ops->ivo_keys_match) {
+			if (ops->ivo_keys_match(ivns, &entry->kip_key, key))
+				return entry;
+		} else {
+			if (crt_iv_keys_match(&entry->kip_key, key))
+				return entry;
+		}
 	}
 
 	return NULL;
@@ -345,12 +352,13 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 	bool				put_needed = false;
 	crt_sg_list_t			tmp_iv_value;
 
-	pthread_mutex_lock(&ivns_internal->cii_lock);
-	entry = crt_ivf_key_in_progress_find(ivns_internal, key);
-	pthread_mutex_unlock(&ivns_internal->cii_lock);
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	C_ASSERT(iv_ops != NULL);
+
+	pthread_mutex_lock(&ivns_internal->cii_lock);
+	entry = crt_ivf_key_in_progress_find(ivns_internal, iv_ops, key);
+	pthread_mutex_unlock(&ivns_internal->cii_lock);
 
 	/* Key is not in progress - safe to exit */
 	if (!entry)
@@ -384,7 +392,8 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 			if (rc == 0) {
 				put_needed = true;
 				rc = iv_ops->ivo_on_fetch(ivns_internal,
-					&iv_info->ifc_iv_key, 0, false,
+					&iv_info->ifc_iv_key, 0x0,
+					CRT_IV_FLAG_PENDING_FETCH,
 					&tmp_iv_value);
 			}
 
@@ -880,19 +889,23 @@ crt_ivf_rpc_issue(crt_rank_t dest_node, crt_iv_key_t *iv_key,
 {
 	struct crt_ivns_internal	*ivns_internal;
 	struct iv_fetch_in		*input;
-	crt_bulk_t			local_bulk;
+	crt_bulk_t			local_bulk = CRT_BULK_NULL;
 	crt_endpoint_t			ep;
 	crt_rpc_t			*rpc;
 	struct ivf_key_in_progress	*entry;
 	int				rc = 0;
+	struct crt_iv_ops		*iv_ops;
 
 	ivns_internal = cb_info->ifc_ivns_internal;
+
+	iv_ops = crt_iv_ops_get(ivns_internal, cb_info->ifc_class_id);
+	C_ASSERT(iv_ops != NULL);
 
 	/* If there is already forwarded request in progress, do not
 	* submit another one, instead add it to pending list
 	*/
 	pthread_mutex_lock(&ivns_internal->cii_lock);
-	entry = crt_ivf_key_in_progress_find(ivns_internal, iv_key);
+	entry = crt_ivf_key_in_progress_find(ivns_internal, iv_ops, iv_key);
 	pthread_mutex_unlock(&ivns_internal->cii_lock);
 
 	if (entry) {
@@ -913,17 +926,7 @@ crt_ivf_rpc_issue(crt_rank_t dest_node, crt_iv_key_t *iv_key,
 				&local_bulk);
 	if (rc != 0) {
 		C_ERROR("crt_bulk_create() failed; rc = %d\n", rc);
-
-		pthread_mutex_lock(&ivns_internal->cii_lock);
-
-		/* Only unset if there are no pending fetches for this key */
-		entry = crt_ivf_key_in_progress_find(ivns_internal, iv_key);
-
-		if (entry && crt_list_empty(&entry->kip_pending_fetch_list))
-			crt_ivf_key_in_progress_unset(entry, iv_key);
-
-		pthread_mutex_unlock(&ivns_internal->cii_lock);
-		return rc;
+		C_GOTO(exit, rc);
 	}
 
 	ep.ep_grp = ivns_internal->cii_grp;
@@ -958,13 +961,15 @@ exit:
 		pthread_mutex_lock(&ivns_internal->cii_lock);
 
 		/* Only unset if there are no pending fetches for this key */
-		entry = crt_ivf_key_in_progress_find(ivns_internal, iv_key);
+		entry = crt_ivf_key_in_progress_find(ivns_internal,
+						iv_ops, iv_key);
 
 		if (entry && crt_list_empty(&entry->kip_pending_fetch_list))
 			crt_ivf_key_in_progress_unset(entry, iv_key);
 
 		pthread_mutex_unlock(&ivns_internal->cii_lock);
-		crt_bulk_free(local_bulk);
+		if (local_bulk != CRT_BULK_NULL)
+			crt_bulk_free(local_bulk);
 	}
 
 	return rc;
@@ -1049,9 +1054,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	put_needed = true;
 
 	rc = iv_ops->ivo_on_fetch(ivns_internal, &input->ifi_key, 0,
-				(ivns_internal->cii_local_rank ==
-					input->ifi_root_node),
-				&iv_value);
+				0x0, &iv_value);
 	if (rc == 0) {
 		/* Note: Function will increment ref count on 'rpc_req' */
 		rc = crt_ivf_bulk_transfer(ivns_internal,
@@ -1176,8 +1179,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 
 	rc = iv_ops->ivo_on_fetch(ivns_internal, iv_key, 0,
-				(ivns_internal->cii_local_rank == root_rank),
-				iv_value);
+				0x0, iv_value);
 	if (rc == 0) {
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 				iv_value, rc, cb_arg);

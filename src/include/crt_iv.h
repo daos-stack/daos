@@ -95,15 +95,30 @@ typedef enum {
 typedef crt_iov_t	crt_iv_key_t;
 
 /**
+ * Operation flags passed to callbacks
+ *
+ * Currently only supports CRT_IV_FLAG_PENDING_FETCH flag. This flag will be
+ * set during on_fetch() callback whenever such is called as part of the
+ * aggregation logic. Based on this flag, client has ability to perform
+ * desired optimizations, such as potentially reusing iv_value buffers
+ * previously allocated/reserved.
+ */
+typedef enum {
+	/* Called node is the root for the operation */
+	CRT_IV_FLAG_ROOT = 0x1,
+	/* Fetch was performed as a result of aggregation */
+	CRT_IV_FLAG_PENDING_FETCH = 0x2,
+} crt_iv_flag_t;
+
+/**
  * Incast variable on_fetch callback which will be called when the fetching
  * request propagated to the node.
  *
  * \param ivns [IN]		the local handle of the IV namespace
  * \param iv_key [IN]		key of the IV
  * \param iv_ver [IN/OUT]	version of the IV
- * \param root_flag [IN]	true when on root node or the IV
- *				(TODO really need it? as user can calculate it
- *				 by using on_hash callback).
+ * \param flags [IN]		OR-ed combination of 0 or more crt_iv_flag_t
+ *				flags
  * \param iv_value [OUT]	IV value returned
  *
  * \return			zero on success handled locally,
@@ -113,7 +128,7 @@ typedef crt_iov_t	crt_iv_key_t;
  */
 typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
 				    crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-				    bool root_flag, crt_sg_list_t *iv_value);
+				    uint32_t flags, crt_sg_list_t *iv_value);
 
 /**
  * Incast variable on_update callback which will be called when the updating
@@ -122,9 +137,8 @@ typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
  * \param ivns [IN]		the local handle of the IV namespace
  * \param iv_key [IN]		key of the IV
  * \param iv_ver [IN]		version of the IV
- * \param root_flag [IN]	true when on root node or the IV
- *				(TODO really need it? as user can calculate it
- *				 by using on_hash callback).
+ * \param flags [IN]		OR-ed combination of 0 or more crt_iv_flag_t
+ *				flags
  * \param iv_value [IN]		IV value to be update
  *
  * \return			zero on success handled locally,
@@ -134,7 +148,7 @@ typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
  */
 typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
 				     crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
-				     bool root_flag, crt_sg_list_t *iv_value);
+				     uint32_t flags, crt_sg_list_t *iv_value);
 
 /**
  * Incast variable on_refresh callback which will be called when the
@@ -228,6 +242,24 @@ typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
 				crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
 				crt_sg_list_t *iv_value);
 
+/**
+ * Compares two passed iv keys 'key1' and 'key2' and returns either
+ * true or false. This is an optional callback that clients can implement
+ * if they do not want default 'memcmp' comparison for keys.
+ *
+ * Key comparison is used during fetch aggregation logic. Two requests
+ * going for the same key will be aggregated if keys match.
+ *
+ *
+ * \param ivns [IN]		the local handle to the IV namespace
+ * \param key1 [IN]		first iv key
+ * \param iv_ver [IN]		second iv key
+ *
+ * \return			true if keys match, false otherwise
+ */
+typedef bool (*crt_iv_keys_match_cb_t)(crt_iv_namespace_t ivns,
+				crt_iv_key_t *key1, crt_iv_key_t *key2);
+
 struct crt_iv_ops {
 	crt_iv_on_fetch_cb_t	ivo_on_fetch;
 	crt_iv_on_update_cb_t	ivo_on_update;
@@ -235,6 +267,7 @@ struct crt_iv_ops {
 	crt_iv_on_hash_cb_t	ivo_on_hash;
 	crt_iv_on_get_cb_t	ivo_on_get;
 	crt_iv_on_put_cb_t	ivo_on_put;
+	crt_iv_keys_match_cb_t	ivo_keys_match;
 };
 
 /**

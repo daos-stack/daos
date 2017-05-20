@@ -467,7 +467,7 @@ dump_all_keys(char *msg)
 
 static int
 iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	crt_iv_ver_t *iv_ver, bool root_flag, crt_sg_list_t *iv_value)
+	crt_iv_ver_t *iv_ver, uint32_t flags, crt_sg_list_t *iv_value)
 {
 	struct kv_pair_entry *entry;
 	struct iv_key_struct *key_struct;
@@ -525,7 +525,7 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 static int
 iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	crt_iv_ver_t iv_ver, bool root_flag, crt_sg_list_t *iv_value)
+	crt_iv_ver_t iv_ver, uint32_t flags, crt_sg_list_t *iv_value)
 {
 	struct kv_pair_entry *entry;
 	struct iv_key_struct *key_struct;
