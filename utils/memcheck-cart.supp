@@ -1,11 +1,4 @@
 {
-    4 byte invalid read in PMIx, will remove
-    Memcheck:Addr4
-    fun:register_variable
-    ...
-    fun:PMIx_Init
-}
-{
     Memory leak in PMIx_Init()
     Memcheck:Leak
     fun:*alloc
@@ -37,49 +30,11 @@
     fun:PMIx_Register_event_handler
 }
 {
-    CCI memory leak, NA_Initialize
-    Memcheck:Leak
-    ...
-    fun:cci_init
-}
-{
-   CCI syscall param
-   Memcheck:Cond
-   ...
-   fun:cci_init
-   fun:na_cci_check_protocol
-   fun:NA_Initialize
-}
-{
-    CCI memory leak, NA_Addr_lookup
-    Memcheck:Leak
-    fun:*malloc
-    ...
-    fun:na_cci_addr_lookup
-    fun:NA_Addr_lookup
-}
-{
     dlopen leaks
     Memcheck:Leak
     match-leak-kinds: reachable
     ...
     fun:_dl_open
-}
-{
-   na_cci_finalize leak
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
-   fun:_dl_close_worker
-   fun:_dl_close
-   fun:_dl_catch_error
-   fun:_dlerror_run
-   fun:dlclose
-   fun:vm_close
-   fun:lt_dlclose
-   fun:cci_plugins_ctp_close
-   fun:cci_finalize
-   fun:na_cci_finalize
 }
 {
    pmix shutdown leak
@@ -92,4 +47,34 @@
    fun:crt_primary_grp_fini
    fun:crt_grp_fini
    fun:crt_finalize
+}
+{
+   FI leak 0
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:calloc
+   fun:_dlerror_run
+   fun:dlopen@@GLIBC_2.2.5
+   fun:fi_ini
+   fun:fi_getinfo@@FABRIC_1.1
+   fun:na_ofi_getinfo
+   fun:na_ofi_check_protocol
+   fun:NA_Initialize
+   fun:crt_hg_init
+   fun:crt_init
+}
+{
+   FI leak 1
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:ibv_fork_init
+   fun:fi_ibv_init_info
+   fun:fi_ibv_getinfo
+   fun:fi_getinfo@@FABRIC_1.1
+   fun:na_ofi_getinfo
+   fun:na_ofi_check_protocol
+   fun:NA_Initialize
+   fun:crt_hg_init
+   fun:crt_init
 }
