@@ -304,14 +304,26 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 
 		if (strncmp(addr_env, "cci+verbs", 9) == 0) {
 			crt_gdata.cg_na_plugin = CRT_NA_CCI_VERBS;
-		} else if (strncmp(addr_env, "ofi+sockets", 11) == 0) {
+		} else if (strncmp(addr_env, "ofi+", 4) == 0) {
+			if (strncmp(addr_env, "ofi+sockets", 11) == 0) {
+				crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
+			} else if (strncmp(addr_env, "ofi+verbs", 9) == 0) {
+				crt_gdata.cg_na_plugin = CRT_NA_OFI_VERBS;
+			} else if (strncmp(addr_env, "ofi+psm2", 8) == 0) {
+				crt_gdata.cg_na_plugin = CRT_NA_OFI_PSM2;
+			} else if (strncmp(addr_env, "ofi+gni", 7) == 0) {
+				crt_gdata.cg_na_plugin = CRT_NA_OFI_GNI;
+			} else {
+				C_ERROR("invalid CRT_PHY_ADDR_STR %s.\n",
+					addr_env);
+				C_GOTO(out, rc = -CER_INVAL);
+			}
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
 				C_PRINT_ERR("crt_na_ofi_config_init failed, "
 					    "rc: %d.\n", rc);
 				C_GOTO(out, rc);
 			}
-			crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
 		}
 
 do_init:

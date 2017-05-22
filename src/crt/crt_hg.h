@@ -63,10 +63,15 @@ struct crt_common_hdr;
 struct crt_corpc_hdr;
 
 /** type of NA plugin */
+#define CRT_NA_CCI_OFFSET (0)
+#define CRT_NA_OFI_OFFSET (1U << 16)
 enum {
-	CRT_NA_CCI_TCP,
-	CRT_NA_CCI_VERBS,
-	CRT_NA_OFI_SOCKETS,
+	CRT_NA_CCI_TCP		= CRT_NA_CCI_OFFSET,
+	CRT_NA_CCI_VERBS	= CRT_NA_CCI_OFFSET + 1,
+	CRT_NA_OFI_SOCKETS	= CRT_NA_OFI_OFFSET,
+	CRT_NA_OFI_VERBS	= CRT_NA_OFI_OFFSET + 1,
+	CRT_NA_OFI_GNI		= CRT_NA_OFI_OFFSET + 2,
+	CRT_NA_OFI_PSM2		= CRT_NA_OFI_OFFSET + 3,
 };
 
 /** HG context */

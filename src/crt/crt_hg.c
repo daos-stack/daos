@@ -261,9 +261,10 @@ out:
 }
 
 static int
-crt_ofi_get_info_string(char **string)
+crt_get_info_string(char **string)
 {
 	int	 port;
+	char	*plugin_str;
 	char	*info_string;
 
 	C_ALLOC(info_string, CRT_ADDR_STR_MAX_LEN);
@@ -272,21 +273,51 @@ crt_ofi_get_info_string(char **string)
 		return -CER_NOMEM;
 	}
 
-	if (crt_na_ofi_conf.noc_port_cons == NA_TRUE) {
-		if (crt_is_service()) {
-			port = crt_na_ofi_conf.noc_port;
-			crt_na_ofi_conf.noc_port++;
-			snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
-				 "ofi+sockets://%s:%d",
-				 crt_na_ofi_conf.noc_ip_str, port);
+	switch (crt_gdata.cg_na_plugin) {
+	case CRT_NA_CCI_TCP:
+		snprintf(info_string, CRT_ADDR_STR_MAX_LEN, "%s",
+			 "cci+tcp://");
+		break;
+	case CRT_NA_CCI_VERBS:
+		snprintf(info_string, CRT_ADDR_STR_MAX_LEN, "%s",
+			 "cci+verbs://");
+		break;
+	case CRT_NA_OFI_SOCKETS:
+		plugin_str = "ofi+sockets";
+		break;
+	case CRT_NA_OFI_VERBS:
+		plugin_str = "ofi+socke";
+		break;
+	case CRT_NA_OFI_GNI:
+		plugin_str = "ofi+gni";
+		break;
+	case CRT_NA_OFI_PSM2:
+		plugin_str = "ofi+psm2";
+		break;
+	default:
+		C_ERROR("bad cg_na_plugin %d.\n", crt_gdata.cg_na_plugin);
+		C_FREE(info_string, CRT_ADDR_STR_MAX_LEN);
+		return  -CER_INVAL;
+	};
+
+	if (crt_gdata.cg_na_plugin >= CRT_NA_OFI_OFFSET) {
+		if (crt_na_ofi_conf.noc_port_cons == NA_TRUE) {
+			if (crt_is_service()) {
+				port = crt_na_ofi_conf.noc_port;
+				crt_na_ofi_conf.noc_port++;
+				snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
+					 "%s://%s:%d", plugin_str,
+					 crt_na_ofi_conf.noc_ip_str, port);
+			} else {
+				snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
+					 "%s://%s", plugin_str,
+					 crt_na_ofi_conf.noc_ip_str);
+			}
 		} else {
 			snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
-				 "ofi+sockets://%s",
+				 "%s://%s", plugin_str,
 				 crt_na_ofi_conf.noc_ip_str);
 		}
-	} else {
-		snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
-			 "ofi+sockets://%s", crt_na_ofi_conf.noc_ip_str);
 	}
 
 	*string = info_string;
@@ -313,21 +344,11 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		info_string = *addr;
 		C_ASSERT(strncmp(info_string, "bmi+tcp", 7) == 0);
 	} else {
-		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS) {
-			rc = crt_ofi_get_info_string(&info_string);
-			if (rc != 0)
-				C_GOTO(out, rc = -CER_INVAL);
-			else
-				info_string_free = true;
-		} else if (crt_gdata.cg_na_plugin == CRT_NA_CCI_VERBS)
-			info_string = "cci+verbs://";
-		else if (crt_gdata.cg_na_plugin == CRT_NA_CCI_TCP)
-			info_string = "cci+tcp://";
-		else {
-			C_ERROR("bad cg_na_plugin %d.\n",
-				crt_gdata.cg_na_plugin);
-			C_GOTO(out, rc = -CER_INVAL);
-		}
+		rc = crt_get_info_string(&info_string);
+		if (rc == 0)
+			info_string_free = true;
+		else
+			C_GOTO(out, rc);
 	}
 
 	na_class = NA_Initialize(info_string, server);
@@ -469,21 +490,11 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 		crt_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
 
-		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS) {
-			rc = crt_ofi_get_info_string(&info_string);
-			if (rc != 0)
-				C_GOTO(out, rc = -CER_INVAL);
-			else
-				info_string_free = true;
-		} else if (crt_gdata.cg_na_plugin == CRT_NA_CCI_VERBS)
-			info_string = "cci+verbs://";
-		else if (crt_gdata.cg_na_plugin == CRT_NA_CCI_TCP)
-			info_string = "cci+tcp://";
-		else {
-			C_ERROR("bad cg_na_plugin %d.\n",
-				crt_gdata.cg_na_plugin);
-			C_GOTO(out, rc = -CER_INVAL);
-		}
+		rc = crt_get_info_string(&info_string);
+		if (rc == 0)
+			info_string_free = true;
+		else
+			C_GOTO(out, rc);
 
 		na_class = NA_Initialize(info_string, crt_is_service());
 		if (na_class == NULL) {
