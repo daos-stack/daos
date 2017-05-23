@@ -435,7 +435,9 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 
 				rc = iv_ops->ivo_on_fetch(ivns_internal,
 						&iv_info->ifc_iv_key,
-						0, false, &tmp_iv_value);
+						0x0,
+						CRT_IV_FLAG_PENDING_FETCH,
+						&tmp_iv_value);
 			} else {
 				rc_value = rc;
 			}
