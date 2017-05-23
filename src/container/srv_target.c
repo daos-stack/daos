@@ -198,12 +198,15 @@ cont_hdl_rec_free(struct dhash_table *htable, daos_list_t *rlink)
 	struct ds_cont_hdl     *hdl = cont_hdl_obj(rlink);
 	struct dsm_tls	       *tls = dsm_tls_get();
 
-	D_DEBUG(DF_DSMS, DF_CONT": freeing "DF_UUID"\n",
-		DP_CONT(hdl->sch_pool->spc_uuid, hdl->sch_cont->sc_uuid),
-		DP_UUID(hdl->sch_uuid));
 	D_ASSERT(dhash_rec_unlinked(&hdl->sch_entry));
 	D_ASSERTF(hdl->sch_ref == 0, "%d\n", hdl->sch_ref);
-	cont_put(tls->dt_cont_cache, hdl->sch_cont);
+	D_DEBUG(DF_DSMS, "freeing "DF_UUID"\n", DP_UUID(hdl->sch_uuid));
+	if (hdl->sch_cont != NULL) {
+		D_DEBUG(DF_DSMS, DF_CONT": freeing\n",
+			DP_CONT(hdl->sch_pool->spc_uuid,
+			hdl->sch_cont->sc_uuid));
+		cont_put(tls->dt_cont_cache, hdl->sch_cont);
+	}
 	ds_pool_child_put(hdl->sch_pool);
 	D_FREE_PTR(hdl);
 }

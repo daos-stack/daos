@@ -80,9 +80,9 @@ out:
 	return rc;
 }
 
-int
-dc_rebuild_tgt(uuid_t pool_uuid, daos_rank_list_t *failed_list,
-	       struct daos_task *task)
+static int
+dc_rebuild_tgt_internal(uuid_t pool_uuid, daos_rank_list_t *failed_list,
+			struct daos_task *task, unsigned int opc)
 {
 	struct rebuild_tgt_in	*rti;
 	crt_endpoint_t		ep;
@@ -96,8 +96,7 @@ dc_rebuild_tgt(uuid_t pool_uuid, daos_rank_list_t *failed_list,
 	/* Currently, rank 0 runs the pool and the (only) container service. */
 	ep.ep_rank = 0;
 	ep.ep_tag = 0;
-	rc = rebuild_req_create(daos_task2ctx(task), ep, REBUILD_TGT,
-				&rpc);
+	rc = rebuild_req_create(daos_task2ctx(task), ep, opc, &rpc);
 	if (rc != 0)
 		D_GOTO(err_group, rc);
 
@@ -125,6 +124,22 @@ err_rpc:
 err_group:
 	daos_group_detach(ep.ep_grp);
 	return rc;
+}
+
+int
+dc_rebuild_tgt(uuid_t pool_uuid, daos_rank_list_t *failed_list,
+	       struct daos_task *task)
+{
+	return dc_rebuild_tgt_internal(pool_uuid, failed_list, task,
+				       REBUILD_TGT);
+}
+
+int
+dc_rebuild_tgt_fini(uuid_t pool_uuid, daos_rank_list_t *failed_list,
+		    struct daos_task *task)
+{
+	return dc_rebuild_tgt_internal(pool_uuid, failed_list, task,
+				       REBUILD_FINI);
 }
 
 struct dc_query_cb_arg {

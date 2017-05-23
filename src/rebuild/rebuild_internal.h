@@ -64,12 +64,6 @@ rebuild_tls_get()
 
 int ds_rebuild_scan_handler(crt_rpc_t *rpc);
 int ds_rebuild_obj_handler(crt_rpc_t *rpc);
-int ds_rebuild_tgt_handler(crt_rpc_t *rpc);
-
-int ds_rebuild_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
-				    void *priv);
-int ds_rebuild_tgt_query_handler(crt_rpc_t *rpc);
-int ds_rebuild_query_handler(crt_rpc_t *rpc);
 
 int
 ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,

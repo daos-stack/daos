@@ -42,6 +42,22 @@ daos_rebuild_tgt(uuid_t uuid, daos_rank_list_t *failed_list,
 }
 
 int
+daos_rebuild_fini(uuid_t uuid, daos_rank_list_t *failed_list,
+		  daos_event_t *ev)
+{
+	struct daos_task	*task;
+	int			rc;
+
+	rc = daos_client_task_prep(NULL, 0, &task, &ev);
+	if (rc != 0)
+		return rc;
+
+	dc_rebuild_tgt_fini(uuid, failed_list, task);
+
+	return daos_client_result_wait(ev);
+}
+
+int
 daos_rebuild_query(uuid_t uuid, daos_rank_list_t *failed_list,
 		   int *done, int *status, daos_event_t *ev)
 {

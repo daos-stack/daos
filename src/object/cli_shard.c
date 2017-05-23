@@ -492,8 +492,8 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	tgt_ep.ep_rank = dobj->do_rank;
 	tgt_ep.ep_tag = obj_shard_dkey2tag(dobj, dkey);
 
-	D_DEBUG(DB_TRACE, "%.*s rank %d tag %d\n",
-		(int)dkey->iov_len, (char *)dkey->iov_buf,
+	D_DEBUG(DB_TRACE, "opc %d %.*s rank %d tag %d\n",
+		opc, (int)dkey->iov_len, (char *)dkey->iov_buf,
 		tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &req);
 	if (rc != 0) {

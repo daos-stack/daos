@@ -1757,18 +1757,76 @@ out:
 	return rc;
 }
 
+static int
+ds_pool_update_internal(uuid_t pool_hdl_uuid, uuid_t pool_uuid,
+			daos_rank_list_t *tgts, unsigned int opc,
+			daos_rank_list_t *tgts_out, struct pool_op_out *pto_op)
+{
+	struct pool_svc		*svc;
+	struct rdb_tx		tx;
+	daos_iov_t		key;
+	daos_iov_t		value;
+	struct pool_hdl		hdl;
+	int			rc;
+
+	rc = pool_svc_lookup(pool_uuid, &svc);
+	if (rc != 0)
+		return rc;
+
+	if (!pool_svc_up(svc))
+		D_GOTO(out_svc, rc = -DER_NOTLEADER);
+
+	rc = rdb_tx_begin(svc->ps_db, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
+	ABT_rwlock_wrlock(svc->ps_lock);
+	/* Verify the pool handle. */
+	if (!is_rebuild_pool(pool_hdl_uuid)) {
+		daos_iov_set(&key, pool_hdl_uuid, sizeof(uuid_t));
+		daos_iov_set(&value, &hdl, sizeof(hdl));
+		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
+		if (rc != 0) {
+			if (rc == -DER_NONEXIST)
+				rc = -DER_NO_HDL;
+			D_GOTO(out_lock, rc);
+		}
+	}
+
+	rc = ds_pool_tgt_update(&tx, svc, tgts, tgts_out, opc);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+
+	rc = rdb_tx_commit(&tx);
+	if (rc != 0)
+		D_GOTO(out_lock, rc);
+out_lock:
+	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
+out_svc:
+	if (pto_op != NULL) {
+		pto_op->po_map_version =
+			pool_map_get_version(svc->ps_pool->sp_map);
+		set_rsvc_hint(svc->ps_db, pto_op);
+	}
+	pool_svc_put(svc);
+	return rc;
+}
+
 int
-ds_pool_tgt_update_handler(crt_rpc_t *rpc)
+ds_pool_tgt_exclude_out(uuid_t pool_hdl_uuid, uuid_t pool_uuid,
+			daos_rank_list_t *tgts, daos_rank_list_t *tgts_out)
+{
+	return ds_pool_update_internal(pool_hdl_uuid, pool_uuid, tgts,
+				       POOL_EXCLUDE_OUT, tgts_out, NULL);
+}
+
+int
+ds_pool_update_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_update_in	*in = crt_req_get(rpc);
 	struct pool_tgt_update_out	*out = crt_reply_get(rpc);
-	struct pool_svc			*svc;
-	struct rdb_tx			tx;
-	daos_iov_t			key;
-	daos_iov_t			value;
-	struct pool_hdl			hdl;
 	int				rc;
-
 
 	if (in->pti_targets == NULL || in->pti_targets->rl_nr.num == 0 ||
 	    in->pti_targets->rl_ranks == NULL)
@@ -1778,56 +1836,28 @@ ds_pool_tgt_update_handler(crt_rpc_t *rpc)
 		" ntargets=%u\n", DP_UUID(in->pti_op.pi_uuid), rpc,
 		DP_UUID(in->pti_op.pi_hdl), in->pti_targets->rl_nr.num);
 
-	rc = pool_svc_lookup(in->pti_op.pi_uuid, &svc);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	if (!pool_svc_up(svc))
-		D_GOTO(out_svc, rc = -DER_NOTLEADER);
-
-	rc = rdb_tx_begin(svc->ps_db, &tx);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
-
-	ABT_rwlock_wrlock(svc->ps_lock);
-
-	/* Verify the pool handle. */
-	daos_iov_set(&key, in->pti_op.pi_hdl, sizeof(uuid_t));
-	daos_iov_set(&value, &hdl, sizeof(hdl));
-	rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			rc = -DER_NO_HDL;
-		D_GOTO(out_lock, rc);
-	}
-
 	/* These have to be freed after the reply is sent. */
 	D_ALLOC_PTR(out->pto_targets);
 	if (out->pto_targets == NULL)
-		D_GOTO(out_map_version, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	D_ALLOC(out->pto_targets->rl_ranks,
 		sizeof(*out->pto_targets->rl_ranks) *
 		in->pti_targets->rl_nr.num);
 	if (out->pto_targets->rl_ranks == NULL)
-		D_GOTO(out_map_version, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	out->pto_targets->rl_nr.num = in->pti_targets->rl_nr.num;
 
-	rc = ds_pool_tgt_update(&tx, svc, in->pti_targets, out->pto_targets,
-				opc_get(rpc->cr_opc));
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
+	rc = ds_pool_update_internal(in->pti_op.pi_hdl, in->pti_op.pi_uuid,
+				     in->pti_targets, opc_get(rpc->cr_opc),
+				     out->pto_targets, &out->pto_op);
+	if (rc)
+		D_GOTO(out, rc);
 
 	/* The RPC encoding code only looks at rl_nr.num. */
 	out->pto_targets->rl_nr.num = out->pto_targets->rl_nr.num_out;
-
-	rc = rdb_tx_commit(&tx);
-out_map_version:
-	out->pto_op.po_map_version = pool_map_get_version(svc->ps_pool->sp_map);
-out_lock:
-	ABT_rwlock_unlock(svc->ps_lock);
-	rdb_tx_end(&tx);
-out_svc:
-	set_rsvc_hint(svc->ps_db, &out->pto_op);
-	pool_svc_put(svc);
+	D_EXIT;
 out:
 	out->pto_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",

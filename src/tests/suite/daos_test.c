@@ -31,7 +31,7 @@
 #include "daos_test.h"
 
 /** All tests in default order ('d' must be the last one) */
-static const char *all_tests = "mpceiACod";
+static const char *all_tests = "mpceiACodr";
 
 /** Server crt group ID */
 static const char *server_group;

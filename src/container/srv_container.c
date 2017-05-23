@@ -1213,7 +1213,7 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_h);
 	if (rc != 0) {
 		D_ERROR("prepare obj iterator failed %d\n", rc);
-		D_GOTO(iter_fini, rc);
+		D_GOTO(close, rc);
 	}
 
 	rc = vos_iter_probe(iter_h, NULL);
@@ -1253,5 +1253,7 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 
 iter_fini:
 	vos_iter_finish(iter_h);
+close:
+	vos_co_close(coh);
 	return rc;
 }

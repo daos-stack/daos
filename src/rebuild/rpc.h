@@ -46,6 +46,13 @@ enum pool_operation {
 	REBUILD_TGT		= 3,
 	REBUILD_QUERY		= 4,
 	REBUILD_TGT_QUERY	= 5,
+	REBUILD_FINI		= 6,
+	REBUILD_TGT_FINI	= 7,
+};
+
+struct rebuild_fini_tgt_in {
+	uuid_t		rfti_pool_uuid;
+	uint32_t	rfti_pool_map_ver;
 };
 
 struct rebuild_scan_in {

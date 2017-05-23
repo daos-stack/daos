@@ -38,6 +38,9 @@ int
 dc_rebuild_tgt(uuid_t pool_uuid, daos_rank_list_t *failed_list,
 	       struct daos_task *task);
 int
+dc_rebuild_tgt_fini(uuid_t pool_uuid, daos_rank_list_t *failed_list,
+		    struct daos_task *task);
+int
 dc_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_list,
 		 int *done, int *failed, struct daos_task *task);
 
