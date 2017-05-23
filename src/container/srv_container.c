@@ -323,7 +323,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	attr.dsa_class = RDB_KVS_INTEGER;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_attr_snapshots, &attr);
-
+	D_EXIT;
 out_kvs:
 	rdb_path_fini(&kvs);
 out:
@@ -427,6 +427,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	/* Destroy the container attribute KVS. */
 	rc = rdb_tx_destroy_kvs(tx, &svc->cs_conts, &key);
 
+	D_EXIT;
 out_kvs:
 	rdb_path_fini(&kvs);
 out:
@@ -442,7 +443,15 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 {
 	struct cont    *p;
 	daos_iov_t	key;
+	daos_iov_t	tmp;
 	int		rc;
+
+	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+	daos_iov_set(&tmp, NULL, 0);
+	/* check if the container exists or not */
+	rc = rdb_tx_lookup(tx, &svc->cs_conts, &key, &tmp);
+	if (rc != 0)
+		D_GOTO(err, rc);
 
 	D_ALLOC_PTR(p);
 	if (p == NULL) {
@@ -457,7 +466,7 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 	rc = rdb_path_clone(&svc->cs_conts, &p->c_attrs);
 	if (rc != 0)
 		D_GOTO(err_p, rc);
-	daos_iov_set(&key, (void *)uuid, sizeof(uuid_t));
+
 	rc = rdb_path_push(&p->c_attrs, &key);
 	if (rc != 0)
 		D_GOTO(err_attrs, rc);
@@ -479,6 +488,7 @@ cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc, const uuid_t uuid,
 		D_GOTO(err_lhes, rc);
 
 	*cont = p;
+	D_EXIT;
 	return 0;
 
 err_lhes:
@@ -1112,7 +1122,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		D_GOTO(out_lock, rc);
 
 	rc = rdb_tx_commit(&tx);
-
+	D_EXIT;
 out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
