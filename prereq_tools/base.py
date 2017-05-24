@@ -517,6 +517,8 @@ class PreReqComponent(object):
     to allow compilation from from multiple systems in one source tree
     """
 
+# pylint: disable=too-many-branches
+
     def __init__(self, env, variables, config_file=None, arch=None):
         self.__defined = {}
         self.__required = {}
@@ -546,6 +548,9 @@ class PreReqComponent(object):
         self.__parse_build_deps()
         self.replace_env(LIBTOOLIZE=libtoolize)
         self.__env.Replace(ENV=real_env)
+        warning_level = GetOption('warning_level')
+        if warning_level == 'error':
+            env.Append(CCFLAGS=['-Werror'])
         pre_path = GetOption('prepend_path')
         if pre_path:
             old_path = self.__env['ENV']['PATH']
@@ -618,6 +623,8 @@ class PreReqComponent(object):
             self.configs = ConfigParser.ConfigParser()
             self.configs.read(config_file)
 
+# pylint: enable=too-many-branches
+
     def get_build_info(self):
         """Retrieve the BuildInfo"""
         return self.__build_info
@@ -645,7 +652,8 @@ class PreReqComponent(object):
                   type='choice',
                   choices=['yes', 'no', 'build-only'],
                   default='no',
-                  help="Automatically download and build sources")
+                  help="Automatically download and build sources.  " \
+                       "(yes|no|build-only) [no]")
 
         # We want to be able to check what dependencies are needed with out
         # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -662,7 +670,7 @@ class PreReqComponent(object):
                   dest='build_config',
                   default=os.path.join(Dir('#').abspath,
                                        'utils', 'build.config'),
-                  help='build config file to use.')
+                  help='build config file to use. [%default]')
 
         # We need to sometimes use alternate tools for building and need
         # to add them to the PATH in the environment.
@@ -670,6 +678,15 @@ class PreReqComponent(object):
                   dest='prepend_path',
                   default=None,
                   help="String to prepend to PATH environment variable.")
+
+        # This option sets a hint as to if -Werror should be used.
+        AddOption('--warning-level',
+                  dest='warning_level',
+                  type='choice',
+                  choices=['warning', 'error'],
+                  default='error',
+                  help='Treatment for a compiler warning.  ' \
+                       '(warning|error} [error]')
 
     def setup_patch_prefix(self):
         """Discovers the location of the patches directory and adds it to
@@ -689,7 +706,8 @@ class PreReqComponent(object):
                   type='choice',
                   choices=['native', 'memcheck', 'helgrind'],
                   default='native',
-                  help="Specifies mode for running unit tests")
+                  help="Specifies mode for running unit tests. " \
+                       "(native|memcheck|helgrind) [native]")
 
         mode = GetOption("utest_mode")
         test_run = Builder(generator=define_run_test(mode),
