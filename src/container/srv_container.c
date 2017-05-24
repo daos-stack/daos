@@ -107,6 +107,7 @@ cont_svc_fini(struct cont_svc *svc)
 static void
 cont_svc_step_up(struct cont_svc *svc)
 {
+	D_ASSERT(svc->cs_pool == NULL);
 	svc->cs_pool = ds_pool_lookup(svc->cs_pool_uuid);
 	D_ASSERT(svc->cs_pool != NULL);
 }
@@ -114,7 +115,9 @@ cont_svc_step_up(struct cont_svc *svc)
 static void
 cont_svc_step_down(struct cont_svc *svc)
 {
+	D_ASSERT(svc->cs_pool != NULL);
 	ds_pool_put(svc->cs_pool);
+	svc->cs_pool = NULL;
 }
 
 int

@@ -60,6 +60,7 @@ struct pool_svc {
 	ABT_mutex		ps_mutex;	/* for POOL_CREATE */
 	bool			ps_up;		/* in leader state */
 	bool			ps_empty;	/* DB not initialized yet */
+	bool			ps_stop;
 	uint64_t		ps_term;
 	struct ds_pool	       *ps_pool;
 };
@@ -453,7 +454,10 @@ pool_svc_step_up(struct pool_svc *svc)
 	struct rdb_tx			tx;
 	struct pool_map		       *map;
 	struct ds_pool_create_arg	arg;
+	struct ds_pool		       *pool;
 	int				rc;
+
+	D_DEBUG(DB_MD, DF_UUID": stepping up\n", DP_UUID(svc->ps_uuid));
 
 	/* Read the pool map into map. */
 	rc = rdb_tx_begin(svc->ps_db, &tx);
@@ -471,40 +475,51 @@ pool_svc_step_up(struct pool_svc *svc)
 	}
 
 	/* Create or revalidate svc->ps_pool with map. */
-	svc->ps_pool = ds_pool_lookup(svc->ps_uuid);
-	if (svc->ps_pool == NULL) {
-		arg.pca_map = map;
-		arg.pca_map_version = pool_map_get_version(map);
-		arg.pca_create_group = 1;
-		rc = ds_pool_lookup_create(svc->ps_uuid, &arg, &svc->ps_pool);
-		if (rc != 0) {
-			pool_map_destroy(map);
-			return rc;
-		}
-	} else {
-		struct ds_pool	       *pool = svc->ps_pool;
-		struct pool_map	       *tmp;
-
-		ABT_rwlock_wrlock(pool->sp_lock);
+	D_ASSERT(svc->ps_pool == NULL);
+	arg.pca_map = map;
+	arg.pca_map_version = pool_map_get_version(map);
+	arg.pca_create_group = 1;
+	rc = ds_pool_lookup_create(svc->ps_uuid, &arg, &svc->ps_pool);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		pool_map_destroy(map);
+		return rc;
+	}
+	pool = svc->ps_pool;
+	ABT_rwlock_wrlock(pool->sp_lock);
+	if (pool->sp_map != map) {
+		/* An existing ds_pool; map not used yet. */
 		D_ASSERTF(pool->sp_map_version <= pool_map_get_version(map),
 			  "%u <= %u\n", pool->sp_map_version,
 			  pool_map_get_version(map));
-		if (pool->sp_map != NULL)
-			D_ASSERTF(pool->sp_map_version ==
-				  pool_map_get_version(pool->sp_map),
-				  "%u == %u\n", pool->sp_map_version,
-				  pool_map_get_version(pool->sp_map));
-		svc->ps_pool->sp_map_version = pool_map_get_version(map);
-		tmp = svc->ps_pool->sp_map;
-		svc->ps_pool->sp_map = map;
-		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
-		if (tmp != NULL)
-			pool_map_destroy(tmp);
+		D_ASSERTF(pool->sp_map == NULL ||
+			  pool->sp_map_version ==
+			  pool_map_get_version(pool->sp_map),
+			  "%u == %u\n", pool->sp_map_version,
+			  pool_map_get_version(pool->sp_map));
+		if (pool->sp_map == NULL ||
+		    pool_map_get_version(pool->sp_map) <
+		    pool_map_get_version(map)) {
+			struct pool_map *tmp;
+
+			/* Need to update pool->sp_map. Swap with map. */
+			pool->sp_map_version = pool_map_get_version(map);
+			tmp = pool->sp_map;
+			pool->sp_map = map;
+			map = tmp;
+		}
+		if (map != NULL)
+			pool_map_destroy(map);
 	}
+	ABT_rwlock_unlock(pool->sp_lock);
 
 	ds_cont_svc_step_up(svc->ps_cont_svc);
 
-	/* TODO: Call rebuild. */
+	/*
+	 * TODO: Call rebuild. Step down svc->ps_cont_svc and put svc->ps_pool
+	 * on errors.
+	 */
 
 	return 0;
 }
@@ -512,8 +527,11 @@ pool_svc_step_up(struct pool_svc *svc)
 static void
 pool_svc_step_down(struct pool_svc *svc)
 {
+	D_DEBUG(DB_MD, DF_UUID": stepping down\n", DP_UUID(svc->ps_uuid));
 	ds_cont_svc_step_down(svc->ps_cont_svc);
+	D_ASSERT(svc->ps_pool != NULL);
 	ds_pool_put(svc->ps_pool);
+	svc->ps_pool = NULL;
 }
 
 static int
@@ -522,10 +540,15 @@ pool_svc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 	struct pool_svc	       *svc = arg;
 	int			rc;
 
+	ABT_mutex_lock(svc->ps_mutex);
 	D_WARN(DF_UUID": became pool service leader "DF_U64"\n",
 	       DP_UUID(svc->ps_uuid), term);
+	if (svc->ps_stop) {
+		D_DEBUG(DB_MD, DF_UUID": skipping due to stopping\n",
+			DP_UUID(svc->ps_uuid));
+		D_GOTO(out_mutex, rc = 0);
+	}
 	D_ASSERT(!svc->ps_up);
-	ABT_mutex_lock(svc->ps_mutex);
 
 	rc = pool_svc_step_up(svc);
 	if (rc == 0) {
@@ -552,17 +575,23 @@ pool_svc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 {
 	struct pool_svc *svc = arg;
 
+	ABT_mutex_lock(svc->ps_mutex);
 	D_WARN(DF_UUID": no longer pool service leader "DF_U64"\n",
 	       DP_UUID(svc->ps_uuid), term);
+	if (svc->ps_stop) {
+		D_DEBUG(DB_MD, DF_UUID": skipping due to stopping\n",
+			DP_UUID(svc->ps_uuid));
+		D_GOTO(out_mutex, 0);
+	}
 	D_ASSERT(svc->ps_up);
 	D_ASSERTF(svc->ps_term == term, DF_U64" == "DF_U64"\n", svc->ps_term,
 		  term);
-	ABT_mutex_lock(svc->ps_mutex);
 
 	svc->ps_up = false;
 	if (!svc->ps_empty)
 		pool_svc_step_down(svc);
 
+out_mutex:
 	ABT_mutex_unlock(svc->ps_mutex);
 }
 
@@ -600,6 +629,7 @@ pool_svc_init(struct pool_svc *svc, const uuid_t uuid)
 	svc->ps_ref = 1;
 	svc->ps_up = false;
 	svc->ps_empty = true;
+	svc->ps_stop = false;
 
 	rc = ABT_rwlock_create(&svc->ps_lock);
 	if (rc != ABT_SUCCESS) {
@@ -743,64 +773,6 @@ ds_pool_svc_hash_fini(void)
 	ABT_mutex_free(&pool_svc_hash_lock);
 }
 
-int
-ds_pool_svc_start(const uuid_t uuid)
-{
-	daos_list_t	       *entry;
-	struct pool_svc	       *svc;
-	int			rc;
-
-	ABT_mutex_lock(pool_svc_hash_lock);
-
-	entry = dhash_rec_find(&pool_svc_hash, uuid, sizeof(uuid_t));
-	if (entry != NULL) {
-		svc = pool_svc_obj(entry);
-		D_GOTO(out_ref, rc = 0);
-	}
-
-	D_ALLOC_PTR(svc);
-	if (svc == NULL)
-		D_GOTO(err_lock, rc = -DER_NOMEM);
-
-	rc = pool_svc_init(svc, uuid);
-	if (rc != 0)
-		D_GOTO(err_svc, rc);
-
-	rc = dhash_rec_insert(&pool_svc_hash, uuid, sizeof(uuid_t),
-			      &svc->ps_entry, true /* exclusive */);
-	if (rc != 0)
-		D_GOTO(err_svc_init, rc);
-
-out_ref:
-	dhash_rec_decref(&pool_svc_hash, &svc->ps_entry);
-	ABT_mutex_unlock(pool_svc_hash_lock);
-	D_DEBUG(DF_DSMS, DF_UUID": started pool service\n", DP_UUID(uuid));
-	return 0;
-
-err_svc_init:
-	pool_svc_fini(svc);
-err_svc:
-	D_FREE_PTR(svc);
-err_lock:
-	ABT_mutex_unlock(pool_svc_hash_lock);
-	D_ERROR(DF_UUID": failed to start pool service\n", DP_UUID(uuid));
-	return rc;
-}
-
-void
-ds_pool_svc_stop(const uuid_t uuid)
-{
-	/*
-	 * TODO: If the svc object still has references, and the service is
-	 * immediately restarted, then there will be two svc objects for the
-	 * same service. Mark it as stopping and delete when stopped?
-	 */
-	D_DEBUG(DF_DSMS, DF_UUID": stopping pool service\n", DP_UUID(uuid));
-	ABT_mutex_lock(pool_svc_hash_lock);
-	dhash_rec_delete(&pool_svc_hash, uuid, sizeof(uuid_t));
-	ABT_mutex_unlock(pool_svc_hash_lock);
-}
-
 static int
 pool_svc_lookup(const uuid_t uuid, struct pool_svc **svcp)
 {
@@ -873,6 +845,84 @@ ds_pool_put_cont_svc(struct cont_svc **svcp)
 
 	pool_svc = container_of(svcp, struct pool_svc, ps_cont_svc);
 	pool_svc_put(pool_svc);
+}
+
+int
+ds_pool_svc_start(const uuid_t uuid)
+{
+	daos_list_t	       *entry;
+	struct pool_svc	       *svc;
+	int			rc;
+
+	ABT_mutex_lock(pool_svc_hash_lock);
+
+	entry = dhash_rec_find(&pool_svc_hash, uuid, sizeof(uuid_t));
+	if (entry != NULL) {
+		svc = pool_svc_obj(entry);
+		D_GOTO(out_ref, rc = 0);
+	}
+
+	D_ALLOC_PTR(svc);
+	if (svc == NULL)
+		D_GOTO(err_lock, rc = -DER_NOMEM);
+
+	rc = pool_svc_init(svc, uuid);
+	if (rc != 0)
+		D_GOTO(err_svc, rc);
+
+	rc = dhash_rec_insert(&pool_svc_hash, uuid, sizeof(uuid_t),
+			      &svc->ps_entry, true /* exclusive */);
+	if (rc != 0)
+		D_GOTO(err_svc_init, rc);
+
+out_ref:
+	dhash_rec_decref(&pool_svc_hash, &svc->ps_entry);
+	ABT_mutex_unlock(pool_svc_hash_lock);
+	D_DEBUG(DF_DSMS, DF_UUID": started pool service\n", DP_UUID(uuid));
+	return 0;
+
+err_svc_init:
+	pool_svc_fini(svc);
+err_svc:
+	D_FREE_PTR(svc);
+err_lock:
+	ABT_mutex_unlock(pool_svc_hash_lock);
+	D_ERROR(DF_UUID": failed to start pool service\n", DP_UUID(uuid));
+	return rc;
+}
+
+void
+ds_pool_svc_stop(const uuid_t uuid)
+{
+	daos_list_t	       *entry;
+	struct pool_svc	       *svc;
+
+	ABT_mutex_lock(pool_svc_hash_lock);
+	entry = dhash_rec_find(&pool_svc_hash, uuid, sizeof(uuid_t));
+	ABT_mutex_unlock(pool_svc_hash_lock);
+	if (entry == NULL)
+		return;
+	svc = pool_svc_obj(entry);
+
+	/*
+	 * TODO: If the svc object still has references, and the service is
+	 * immediately restarted, then there will be two svc objects for the
+	 * same service. Mark it as stopping and delete when stopped?
+	 */
+	D_DEBUG(DF_DSMS, DF_UUID": stopping pool service\n", DP_UUID(uuid));
+	ABT_mutex_lock(svc->ps_mutex);
+	svc->ps_stop = true;
+	if (svc->ps_up) {
+		svc->ps_up = false;
+		if (!svc->ps_empty)
+			pool_svc_step_down(svc);
+	}
+	ABT_mutex_unlock(svc->ps_mutex);
+
+	ABT_mutex_lock(pool_svc_hash_lock);
+	dhash_rec_delete(&pool_svc_hash, uuid, sizeof(uuid_t));
+	ABT_mutex_unlock(pool_svc_hash_lock);
+	pool_svc_put(svc);
 }
 
 static int
@@ -959,6 +1009,12 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 
 	/* Simply serialize this whole RPC with pool_svc_step_{up,down}_cb(). */
 	ABT_mutex_lock(svc->ps_mutex);
+
+	if (svc->ps_stop) {
+		D_DEBUG(DB_MD, DF_UUID": pool service already stopping\n",
+			DP_UUID(svc->ps_uuid));
+		D_GOTO(out, rc = -DER_CANCELED);
+	}
 
 	rc = rdb_tx_begin(svc->ps_db, &tx);
 	if (rc != 0)
