@@ -66,6 +66,7 @@ class TestGroup(commontestsuite.CommonTestSuite):
     """ Execute group tests with tiers"""
 
     def setUp(self):
+        """setup the test"""
         self.get_test_info()
         log_mask = os.getenv("CRT_LOG_MASK", "INFO")
         crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")

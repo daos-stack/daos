@@ -74,6 +74,7 @@ import hashlib
 import logging
 
 #pylint: disable=broad-except
+#pylint: disable=too-many-locals
 
 class CommonTestSuite(unittest.TestCase):
     """Contains the attributes common to the CART tests"""
@@ -138,8 +139,8 @@ class CommonTestSuite(unittest.TestCase):
         client = kwargs.get('cli', "")
 
         (cmd, prefix) = self.add_prefix_logdir()
-        cli_cmdstr = "%s -n %s %s%s %s" % \
-                      (client, NPROC, env, prefix, cli_arg)
+        cli_cmdstr = "{!s} -N {!s} {!s}{!s} {!s}".format(
+            client, NPROC, env, prefix, cli_arg)
 
         # The one node test passes both Client and Server args.
         # Otherwise passes only Client args.
@@ -147,8 +148,8 @@ class CommonTestSuite(unittest.TestCase):
             # Launch the client in the foreground
             cmdstr = cmd + cli_cmdstr
         else:
-            srv_cmdstr = " %s -n %s %s%s %s :" % \
-                           (server, NPROC, env, prefix, srvr_arg)
+            srv_cmdstr = " {!s} -N {!s} {!s}{!s} {!s} :".format(
+                server, NPROC, env, prefix, srvr_arg)
             # Launch server and client on the same node
             cmdstr = cmd + srv_cmdstr + cli_cmdstr
 
@@ -161,8 +162,8 @@ class CommonTestSuite(unittest.TestCase):
 
         # Create the input string with server args
         (cmd, prefix) = self.add_prefix_logdir()
-        cmdstr = cmd + "%s -n %s %s%s %s" % \
-                  (server, NPROC, env, prefix, srvr_arg)
+        cmdstr = "{!s} {!s} -N {!s} {!s}{!s} {!s}".format(
+            cmd, server, NPROC, env, prefix, srvr_arg)
 
         procrtn = self.call_process(testdesc, cmdstr)
         return procrtn
