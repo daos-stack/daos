@@ -85,6 +85,8 @@ rebuild_tls_fini(const struct dss_thread_local_storage *dtls,
 struct rebuild_status {
 	int scanning;
 	int status;
+	int rec_count;
+	int obj_count;
 };
 
 int
@@ -97,6 +99,9 @@ dss_rebuild_check_scanning(void *arg)
 		status->scanning++;
 	if (tls->rebuild_status != 0 && status->status == 0)
 		status->status = tls->rebuild_status;
+	status->rec_count += tls->rebuild_rec_count;
+	status->obj_count += tls->rebuild_obj_count;
+
 	return 0;
 }
 
@@ -110,6 +115,10 @@ ds_rebuild_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	out_result->rtqo_rebuilding += out_source->rtqo_rebuilding;
 	if (out_result->rtqo_status == 0 && out_source->rtqo_status != 0)
 		out_result->rtqo_status = out_source->rtqo_status;
+
+	out_result->rtqo_rec_count += out_source->rtqo_rec_count;
+	out_result->rtqo_obj_count += out_source->rtqo_obj_count;
+
 	return 0;
 }
 
@@ -126,6 +135,8 @@ ds_rebuild_tgt_query_handler(crt_rpc_t *rpc)
 	memset(&status, 0, sizeof(status));
 	rtqo = crt_reply_get(rpc);
 	rtqo->rtqo_rebuilding = 0;
+	rtqo->rtqo_rec_count = 0;
+	rtqo->rtqo_obj_count = 0;
 
 	/* First let's checking building */
 	for (i = 0; i < tls->rebuild_building_nr; i++) {
@@ -140,15 +151,19 @@ ds_rebuild_tgt_query_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_TRACE, "pool "DF_UUID" scanning %d/%d rebuilding %s\n",
-		DP_UUID(tls->rebuild_pool_uuid), status.scanning,
-		status.status, rebuilding ? "yes" : "no");
-
 	if (!rebuilding && status.scanning > 0)
 		rebuilding = true;
 
 	if (rebuilding)
 		rtqo->rtqo_rebuilding = 1;
+
+	D_DEBUG(DB_TRACE, "pool "DF_UUID" scanning %d/%d rebuilding %s"
+		"obj_count %d rec_count %d\n",
+		DP_UUID(tls->rebuild_pool_uuid), status.scanning,
+		status.status, rebuilding ? "yes" : "no", status.obj_count,
+		status.rec_count);
+	rtqo->rtqo_rec_count = status.rec_count;
+	rtqo->rtqo_obj_count = status.obj_count;
 
 	if (status.status != 0)
 		rtqo->rtqo_status = status.status;
@@ -201,13 +216,16 @@ ds_rebuild_query_handler(crt_rpc_t *rpc)
 		D_GOTO(out_rpc, rc);
 
 	rtqo = crt_reply_get(tgt_rpc);
-	D_DEBUG(DB_TRACE, "%p query rebuild status %d\n", rtqo,
-		rtqo->rtqo_rebuilding);
+	D_DEBUG(DB_TRACE, "%p query rebuild status %d obj count %d"
+		" rec count %d\n", rtqo, rtqo->rtqo_rebuilding,
+		rtqo->rtqo_obj_count, rtqo->rtqo_rec_count);
 	if (rtqo->rtqo_rebuilding == 0)
 		rqo->rqo_done = 1;
 
 	if (rtqo->rtqo_status)
 		rqo->rqo_status = rtqo->rtqo_status;
+	rqo->rqo_rec_count = rtqo->rtqo_rec_count;
+	rqo->rqo_obj_count = rtqo->rtqo_obj_count;
 out_rpc:
 	crt_req_decref(tgt_rpc);
 out_put:

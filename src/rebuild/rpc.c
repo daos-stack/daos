@@ -63,6 +63,8 @@ static struct crt_msg_field *rebuild_tgt_query_in_fields[] = {
 static struct crt_msg_field *rebuild_tgt_query_out_fields[] = {
 	&CMF_INT,
 	&CMF_UINT32,
+	&CMF_UINT32,
+	&CMF_UINT32,
 };
 
 static struct crt_msg_field *rebuild_query_in_fields[] = {
@@ -73,6 +75,8 @@ static struct crt_msg_field *rebuild_query_in_fields[] = {
 static struct crt_msg_field *rebuild_query_out_fields[] = {
 	&CMF_INT,
 	&CMF_INT,
+	&CMF_UINT32,
+	&CMF_UINT32,
 };
 
 static struct crt_msg_field *rebuild_fini_tgt_in_fields[] = {

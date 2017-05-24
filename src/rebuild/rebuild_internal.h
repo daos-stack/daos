@@ -43,6 +43,8 @@ struct rebuild_tls {
 	int		rebuild_status;
 	int		*rebuild_building;
 	int		rebuild_building_nr;
+	int		rebuild_obj_count;
+	int		rebuild_rec_count;
 
 	unsigned int	rebuild_local_root_init:1,
 			rebuild_task_init:1,

@@ -83,6 +83,8 @@ struct rebuild_tgt_query_in {
 struct rebuild_tgt_query_out {
 	int		rtqo_status;
 	uint32_t	rtqo_rebuilding;
+	uint32_t	rtqo_rec_count;
+	uint32_t	rtqo_obj_count;
 };
 
 struct rebuild_query_in {
@@ -91,8 +93,10 @@ struct rebuild_query_in {
 };
 
 struct rebuild_query_out {
-	int	rqo_status;
-	int	rqo_done;
+	int		rqo_status;
+	uint32_t	rqo_done;
+	uint32_t	rqo_rec_count;
+	uint32_t	rqo_obj_count;
 };
 
 struct rebuild_tgt_in {

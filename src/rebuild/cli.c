@@ -146,6 +146,8 @@ struct dc_query_cb_arg {
 	crt_rpc_t	*rpc;
 	int		*done;
 	int		*status;
+	unsigned int	*rec_count;
+	unsigned int	*obj_count;
 };
 
 static int
@@ -164,6 +166,8 @@ dc_rebuild_query_cp(struct daos_task *task, void *data)
 	}
 
 	*arg->done = out->rqo_done;
+	*arg->rec_count = out->rqo_rec_count;
+	*arg->obj_count = out->rqo_obj_count;
 out:
 	daos_group_detach(rpc->cr_ep.ep_grp);
 	crt_req_decref(rpc);
@@ -172,7 +176,8 @@ out:
 
 int
 dc_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_list,
-		 int *done, int *status, struct daos_task *task)
+		 int *done, int *status, unsigned int *rec_count,
+		 unsigned int *obj_count, struct daos_task *task)
 {
 	struct rebuild_query_in	*rqi;
 	crt_endpoint_t		ep;
@@ -203,6 +208,8 @@ dc_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_list,
 	arg.rpc = rpc;
 	arg.done = done;
 	arg.status = status;
+	arg.rec_count = rec_count;
+	arg.obj_count = obj_count;
 	rc = daos_task_register_comp_cb(task, dc_rebuild_query_cp,
 					sizeof(arg), &arg);
 	if (rc != 0)

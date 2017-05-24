@@ -166,12 +166,17 @@ rebuild_one_target(test_arg_t *arg, daos_rank_t failed_rank, bool concurrent_io)
 
 	if (arg->myrank == 0) {
 		while (!done) {
+			unsigned int rec_count = 0;
+			unsigned int obj_count = 0;
+
 			rc = daos_rebuild_query(arg->pool_uuid, &ranks, &done,
-						&status, NULL);
+						&status, &rec_count, &obj_count,
+						NULL);
 			if (rc != 0)
 				break;
 			assert_int_equal(status, 0);
-			print_message("wait for rebuild finish.\n");
+			print_message("wait for rebuild finish rec %d obj %d\n",
+				      rec_count, obj_count);
 			sleep(2);
 		}
 

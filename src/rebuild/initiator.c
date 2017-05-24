@@ -177,6 +177,7 @@ rebuild_rec(struct rebuild_obj_arg *arg, daos_handle_t oh, daos_key_t *akey,
 	    unsigned int num, unsigned int type, daos_size_t size,
 	    daos_recx_t *recxs, daos_epoch_range_t *eprs, uuid_t *cookies)
 {
+	struct rebuild_tls	*tls = rebuild_tls_get();
 	uuid_t			cookie;
 	int			start;
 	int			i;
@@ -206,6 +207,9 @@ rebuild_rec(struct rebuild_obj_arg *arg, daos_handle_t oh, daos_key_t *akey,
 		" tag %d\n", DP_UOID(arg->oid), (int)arg->dkey.iov_len,
 		(char *)arg->dkey.iov_buf, (int)akey->iov_len,
 		(char *)akey->iov_buf, rc, dss_get_module_info()->dmi_tid);
+
+	tls->rebuild_rec_count += num;
+
 	return rc;
 }
 
@@ -391,6 +395,7 @@ static int
 rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 {
 	struct rebuild_iter_arg	*arg = data;
+	struct rebuild_tls	*tls = rebuild_tls_get();
 	daos_hash_out_t		hash_out;
 	daos_handle_t		oh;
 	daos_epoch_t		epoch = 0;
@@ -446,7 +451,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 free:
 	if (dkey_iov.iov_buf != NULL)
 		D_FREE(dkey_iov.iov_buf, dkey_buf_size);
-
+	tls->rebuild_obj_count++;
 	D_DEBUG(DB_TRACE, "stop rebuild obj "DF_UOID" for shard %u rc %d\n",
 		DP_UOID(oid), shard, rc);
 

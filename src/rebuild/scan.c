@@ -514,6 +514,8 @@ rebuild_prepare_one(void *data)
 	int				rc;
 
 	tls->rebuild_scanning = 1;
+	tls->rebuild_rec_count = 0;
+	tls->rebuild_obj_count = 0;
 	map = ds_pool_get_pool_map(arg->pool_uuid);
 	if (map == NULL)
 		return -DER_INVAL;
