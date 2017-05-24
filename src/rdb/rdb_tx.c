@@ -77,9 +77,9 @@ rdb_tx_begin(struct rdb *db, struct rdb_tx *tx)
 	rc = rdb_raft_verify_leadership(db);
 	if (rc != 0)
 		return rc;
+	rdb_get(db);
 	t.dt_db = db;
 	t.dt_term = raft_get_current_term(db->d_raft);
-	db->d_ref++;
 	*tx = t;
 	return 0;
 }
@@ -120,7 +120,7 @@ rdb_tx_commit(struct rdb_tx *tx)
 void
 rdb_tx_end(struct rdb_tx *tx)
 {
-	tx->dt_db->d_ref--;
+	rdb_put(tx->dt_db);
 	if (tx->dt_entry != NULL)
 		D_FREE(tx->dt_entry, tx->dt_entry_cap);
 }

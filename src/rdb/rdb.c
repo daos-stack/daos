@@ -159,12 +159,20 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	db->d_ref = 1;
 	db->d_cbs = cbs;
 	db->d_arg = arg;
-	db->d_log = DAOS_HDL_INVAL;
-	DAOS_INIT_LIST_HEAD(&db->d_replies);
+
+	rc = ABT_mutex_create(&db->d_mutex);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(err_db, rc = dss_abterr2der(rc));
+
+	rc = ABT_cond_create(&db->d_ref_cv);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create ref CV: %d\n", rc);
+		D_GOTO(err_mutex, rc = dss_abterr2der(rc));
+	}
 
 	rc = rdb_tree_cache_create(&db->d_trees);
 	if (rc != 0)
-		D_GOTO(err_rdb, rc);
+		D_GOTO(err_ref_cv, rc);
 
 	db->d_pmem = pmemobj_open(path, RDB_LAYOUT);
 	if (db->d_pmem == NULL) {
@@ -220,8 +228,8 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	D_ASSERT(the_one_rdb_hack == NULL);
 	the_one_rdb_hack = db;
 	*dbp = db;
-	D_DEBUG(DB_ANY, "started db %s %p with %u replicas\n", path, db,
-		nreplicas);
+	D_DEBUG(DB_ANY, DF_DB": started db %s %p with %u replicas\n", DP_DB(db),
+		path, db, nreplicas);
 	return 0;
 
 err_attr:
@@ -230,29 +238,53 @@ err_pmem:
 	pmemobj_close(db->d_pmem);
 err_trees:
 	rdb_tree_cache_destroy(db->d_trees);
-err_rdb:
+err_ref_cv:
+	ABT_cond_free(&db->d_ref_cv);
+err_mutex:
+	ABT_mutex_free(&db->d_mutex);
+err_db:
 	D_FREE_PTR(db);
 err:
 	return rc;
 }
 
 /**
- * Stop an RDB replica \a db.
+ * Stop an RDB replica \a db. All TXs in \a db must be either ended already or
+ * blocking only in rdb.
  *
  * \param[in]	db	database
  */
 void
 rdb_stop(struct rdb *db)
 {
-	/* TODO: Design a real shutdown procedure. */
-	D_DEBUG(DB_ANY, "stopping db %p\n", db);
+	D_DEBUG(DB_ANY, DF_DB": stopping db %p\n", DP_DB(db), db);
+	D_ASSERT(the_one_rdb_hack != NULL);
+	the_one_rdb_hack = NULL;
 	rdb_raft_stop(db);
 	dbtree_close(db->d_attr);
 	pmemobj_close(db->d_pmem);
 	rdb_tree_cache_destroy(db->d_trees);
+	ABT_cond_free(&db->d_ref_cv);
+	ABT_mutex_free(&db->d_mutex);
 	D_FREE_PTR(db);
-	D_ASSERT(the_one_rdb_hack != NULL);
-	the_one_rdb_hack = NULL;
+}
+
+void
+rdb_get(struct rdb *db)
+{
+	ABT_mutex_lock(db->d_mutex);
+	db->d_ref++;
+	ABT_mutex_unlock(db->d_mutex);
+}
+
+void
+rdb_put(struct rdb *db)
+{
+	ABT_mutex_lock(db->d_mutex);
+	D_ASSERTF(db->d_ref > 0, "%d\n", db->d_ref);
+	db->d_ref--;
+	ABT_cond_broadcast(db->d_ref_cv);
+	ABT_mutex_unlock(db->d_mutex);
 }
 
 /**

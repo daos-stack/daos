@@ -348,7 +348,7 @@ rdb_raft_queue_event(struct rdb *db, enum rdb_raft_event_type type,
 	db->d_events[db->d_nevents].dre_term = term;
 	db->d_events[db->d_nevents].dre_type = type;
 	db->d_nevents++;
-	ABT_cond_signal(db->d_events_cv);
+	ABT_cond_broadcast(db->d_events_cv);
 }
 
 static void
@@ -400,13 +400,13 @@ rdb_callbackd(void *arg)
 
 		ABT_mutex_lock(db->d_mutex);
 		for (;;) {
-			stop = db->d_callbackd_stop;
-			if (stop)
-				break;
+			stop = db->d_stop;
 			if (db->d_nevents > 0) {
 				rdb_raft_dequeue_event(db, &event);
 				break;
 			}
+			if (stop)
+				break;
 			ABT_cond_wait(db->d_events_cv, db->d_mutex);
 		}
 		ABT_mutex_unlock(db->d_mutex);
@@ -679,7 +679,7 @@ rdb_applyd(void *arg)
 		ABT_mutex_lock(db->d_mutex);
 		for (;;) {
 			committed = raft_get_commit_idx(db->d_raft);
-			stop = db->d_applyd_stop;
+			stop = db->d_stop;
 			D_ASSERTF(db->d_applied <= committed,
 				  DF_U64" <= "DF_U64"\n", db->d_applied,
 				  committed);
@@ -721,10 +721,9 @@ rdb_timerd(void *arg)
 
 		t_prev = t;
 		/* Wait for the next beat. */
-		while ((t = ABT_get_wtime()) < t_prev + period &&
-		       !db->d_timerd_stop)
+		while ((t = ABT_get_wtime()) < t_prev + period && !db->d_stop)
 			ABT_thread_yield();
-	} while (!db->d_timerd_stop);
+	} while (!db->d_stop);
 	D_DEBUG(DB_ANY, DF_DB": timerd stopping\n", DP_DB(db));
 }
 
@@ -803,6 +802,9 @@ rdb_raft_start(struct rdb *db, const daos_rank_list_t *replicas)
 	int		request_timeout;
 	int		rc;
 
+	DAOS_INIT_LIST_HEAD(&db->d_requests);
+	DAOS_INIT_LIST_HEAD(&db->d_replies);
+
 	rc = dhash_table_create_inplace(DHASH_FT_NOLOCK, 4 /* bits */,
 					NULL /* priv */,
 					&rdb_raft_result_hash_ops,
@@ -810,18 +812,14 @@ rdb_raft_start(struct rdb *db, const daos_rank_list_t *replicas)
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	rc = ABT_mutex_create(&db->d_mutex);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(err_results, rc = dss_abterr2der(rc));
-
 	daos_iov_set(&value, &db->d_applied, sizeof(db->d_applied));
 	rc = dbtree_lookup(db->d_attr, &rdb_attr_applied, &value);
 	if (rc != 0 && rc != -DER_NONEXIST)
-		D_GOTO(err_mutex, rc);
+		D_GOTO(err_results, rc);
 
 	rc = ABT_cond_create(&db->d_applied_cv);
 	if (rc != ABT_SUCCESS)
-		D_GOTO(err_mutex, rc = dss_abterr2der(rc));
+		D_GOTO(err_results, rc = dss_abterr2der(rc));
 
 	rc = ABT_cond_create(&db->d_committed_cv);
 	if (rc != ABT_SUCCESS)
@@ -831,10 +829,14 @@ rdb_raft_start(struct rdb *db, const daos_rank_list_t *replicas)
 	if (rc != ABT_SUCCESS)
 		D_GOTO(err_committed_cv, rc = dss_abterr2der(rc));
 
+	rc = ABT_cond_create(&db->d_replies_cv);
+	if (rc != ABT_SUCCESS)
+		D_GOTO(err_events_cv, rc = dss_abterr2der(rc));
+
 	db->d_raft = raft_new();
 	if (db->d_raft == NULL) {
 		D_ERROR("failed to create raft object\n");
-		D_GOTO(err_events_cv, rc = -DER_NOMEM);
+		D_GOTO(err_replies_cv, rc = -DER_NOMEM);
 	}
 
 	/*
@@ -910,21 +912,22 @@ rdb_raft_start(struct rdb *db, const daos_rank_list_t *replicas)
 	return 0;
 
 err_timerd:
-	db->d_timerd_stop = true;
+	db->d_stop = true;
 	rc = ABT_thread_join(db->d_timerd);
 	D_ASSERTF(rc == 0, "%d\n", rc);
-	ABT_thread_free(db->d_timerd);
+	ABT_thread_free(&db->d_timerd);
 err_recvd:
-	db->d_recvd_stop = true;
+	db->d_stop = true;
+	ABT_cond_broadcast(db->d_replies_cv);
 	rc = ABT_thread_join(db->d_recvd);
 	D_ASSERTF(rc == 0, "%d\n", rc);
-	ABT_thread_free(db->d_recvd);
+	ABT_thread_free(&db->d_recvd);
 err_applyd:
-	db->d_applyd_stop = true;
-	ABT_cond_signal(db->d_committed_cv);
+	db->d_stop = true;
+	ABT_cond_broadcast(db->d_committed_cv);
 	rc = ABT_thread_join(db->d_applyd);
 	D_ASSERTF(rc == 0, "%d\n", rc);
-	ABT_thread_free(db->d_applyd);
+	ABT_thread_free(&db->d_applyd);
 err_nodes:
 	for (i -= 1; i >= 0; i--) {
 		raft_node_t	       *node;
@@ -941,21 +944,20 @@ err_log:
 	dbtree_close(db->d_log);
 err_raft:
 	raft_free(db->d_raft);
+err_replies_cv:
+	ABT_cond_free(&db->d_replies_cv);
 err_events_cv:
 	ABT_cond_free(&db->d_events_cv);
 err_committed_cv:
 	ABT_cond_free(&db->d_committed_cv);
 err_applied_cv:
 	ABT_cond_free(&db->d_applied_cv);
-err_mutex:
-	ABT_mutex_free(&db->d_mutex);
 err_results:
 	dhash_table_destroy_inplace(&db->d_results, true /* force */);
 err:
 	return rc;
 }
 
-/* TODO: This is nothing more than a hack for the internal demo... */
 void
 rdb_raft_stop(struct rdb *db)
 {
@@ -963,29 +965,49 @@ rdb_raft_stop(struct rdb *db)
 	int	i;
 	int	rc;
 
-	db->d_callbackd_stop = true;
-	db->d_recvd_stop = true;
-	db->d_timerd_stop = true;
-	db->d_applyd_stop = true;
+	ABT_mutex_lock(db->d_mutex);
+
+	/* Stop sending any new RPCs. */
+	db->d_stop = true;
+
+	/* Wake up all daemons and TXs. */
 	ABT_cond_broadcast(db->d_applied_cv);
 	ABT_cond_broadcast(db->d_committed_cv);
 	ABT_cond_broadcast(db->d_events_cv);
-	rc = ABT_thread_join(db->d_callbackd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	rc = ABT_thread_join(db->d_recvd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	rc = ABT_thread_join(db->d_timerd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	rc = ABT_thread_join(db->d_applyd);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	ABT_cond_broadcast(db->d_replies_cv);
 
-	for (i = 0; i < nreplicas; i++) {
-		crt_endpoint_t ep = {NULL, i, 0};
+	/* Abort all in-flight RPCs. */
+	rdb_abort_raft_rpcs(db);
 
-		rc = crt_ep_abort(ep);
-		D_ASSERTF(rc == 0, "%d\n", rc);
+	/* Wait for all extra references to be released. */
+	for (;;) {
+		const int base = 1;
+
+		D_ASSERTF(db->d_ref >= base, "%d >= %d\n", db->d_ref, base);
+		if (db->d_ref == base)
+			break;
+		D_DEBUG(DB_MD, DF_DB": waiting for %d references\n", DP_DB(db),
+			db->d_ref - base);
+		ABT_cond_wait(db->d_ref_cv, db->d_mutex);
 	}
 
+	ABT_mutex_unlock(db->d_mutex);
+
+	/* Join and free all daemons. */
+	rc = ABT_thread_join(db->d_callbackd);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	ABT_thread_free(&db->d_callbackd);
+	rc = ABT_thread_join(db->d_timerd);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	ABT_thread_free(&db->d_timerd);
+	rc = ABT_thread_join(db->d_recvd);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	ABT_thread_free(&db->d_recvd);
+	rc = ABT_thread_join(db->d_applyd);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	ABT_thread_free(&db->d_applyd);
+
+	/* Free the raft. */
 	for (i = 0; i < nreplicas; i++) {
 		raft_node_t	       *node;
 		struct rdb_raft_node   *n;
@@ -998,12 +1020,14 @@ rdb_raft_stop(struct rdb *db)
 		raft_remove_node(db->d_raft, node);
 		D_FREE_PTR(n);
 	}
-	dbtree_close(db->d_log);
 	raft_free(db->d_raft);
+
+	/* Free the rest. */
+	dbtree_close(db->d_log);
+	ABT_cond_free(&db->d_replies_cv);
 	ABT_cond_free(&db->d_events_cv);
 	ABT_cond_free(&db->d_committed_cv);
 	ABT_cond_free(&db->d_applied_cv);
-	ABT_mutex_free(&db->d_mutex);
 	dhash_table_destroy_inplace(&db->d_results, true /* force */);
 }
 
@@ -1017,6 +1041,10 @@ rdb_raft_wait_applied(struct rdb *db, uint64_t index)
 		DP_DB(db), index);
 	ABT_mutex_lock(db->d_mutex);
 	for (;;) {
+		if (db->d_stop) {
+			rc = -DER_CANCELED;
+			break;
+		}
 		if (!raft_is_leader(db->d_raft)) {
 			rc = -DER_NOTLEADER;
 			break;
@@ -1041,12 +1069,18 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	if (db == NULL)
 		/* Drop the RPC. */
 		return -DER_NONEXIST;
+	rdb_get(db);
+	if (db->d_stop) {
+		rdb_put(db);
+		return -DER_CANCELED;
+	}
 	D_DEBUG(DB_ANY, DF_DB": handling raft rv\n", DP_DB(db));
 	node = raft_get_node(db->d_raft, rpc->cr_ep.ep_rank + 1);
 	D_ASSERT(node != NULL);
 	rdb_raft_save_state(db, &state);
 	raft_recv_requestvote(db->d_raft, node, in, out);
 	rdb_raft_check_state(db, &state);
+	rdb_put(db);
 	return crt_reply_send(rpc);
 }
 
@@ -1062,12 +1096,18 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	if (db == NULL)
 		/* Drop the RPC. */
 		return -DER_NONEXIST;
+	rdb_get(db);
+	if (db->d_stop) {
+		rdb_put(db);
+		return -DER_CANCELED;
+	}
 	D_DEBUG(DB_ANY, DF_DB": handling raft ae\n", DP_DB(db));
 	node = raft_get_node(db->d_raft, rpc->cr_ep.ep_rank + 1);
 	D_ASSERT(node != NULL);
 	rdb_raft_save_state(db, &state);
 	raft_recv_appendentries(db->d_raft, node, in, out);
 	rdb_raft_check_state(db, &state);
+	rdb_put(db);
 	return crt_reply_send(rpc);
 }
 

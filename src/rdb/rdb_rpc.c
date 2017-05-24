@@ -238,14 +238,40 @@ rdb_create_bcast(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc)
 				    crt_tree_topo(CRT_TREE_FLAT, 0), rpc);
 }
 
-struct rdb_raft_rpc_cb_arg {
-	daos_list_t	drc_entry;	/* in rdb::d_replies */
+struct rdb_raft_rpc {
+	daos_list_t	drc_entry;	/* in rdb::{d_requests,d_replies} */
 	crt_rpc_t      *drc_rpc;
 	struct rdb     *drc_db;
 	raft_node_t    *drc_node;
 };
 
-/* Daemon ULT for processing RPC responses (see rdb_raft_rpc_cb()) */
+static struct rdb_raft_rpc *
+rdb_alloc_raft_rpc(struct rdb *db, crt_rpc_t *rpc, raft_node_t *node)
+{
+	struct rdb_raft_rpc *rrpc;
+
+	D_ALLOC_PTR(rrpc);
+	if (rrpc == NULL)
+		return NULL;
+	DAOS_INIT_LIST_HEAD(&rrpc->drc_entry);
+	crt_req_addref(rpc);
+	rrpc->drc_rpc = rpc;
+	rdb_get(db);
+	rrpc->drc_db = db;
+	rrpc->drc_node = node;
+	return rrpc;
+}
+
+static void
+rdb_free_raft_rpc(struct rdb_raft_rpc *rrpc)
+{
+	rdb_put(rrpc->drc_db);
+	crt_req_decref(rrpc->drc_rpc);
+	D_ASSERT(daos_list_empty(&rrpc->drc_entry));
+	D_FREE_PTR(rrpc);
+}
+
+/* Daemon ULT for processing RPC replies */
 void
 rdb_recvd(void *arg)
 {
@@ -253,79 +279,120 @@ rdb_recvd(void *arg)
 
 	D_DEBUG(DB_ANY, DF_DB": recvd starting\n", DP_DB(db));
 	for (;;) {
-		struct rdb_raft_rpc_cb_arg     *arg;
-		struct rdb_raft_rpc_cb_arg     *tmp;
+		struct rdb_raft_rpc    *rrpc = NULL;
+		bool			stop;
 
+		ABT_mutex_lock(db->d_mutex);
 		for (;;) {
-			if (!daos_list_empty(&db->d_replies))
+			stop = db->d_stop;
+			if (!daos_list_empty(&db->d_replies)) {
+				rrpc = daos_list_entry(db->d_replies.next,
+						       struct rdb_raft_rpc,
+						       drc_entry);
+				daos_list_del_init(&rrpc->drc_entry);
 				break;
-			if (db->d_recvd_stop)
-				return;
-			ABT_thread_yield();
+			}
+			if (stop)
+				break;
+			ABT_cond_wait(db->d_replies_cv, db->d_mutex);
 		}
-		daos_list_for_each_entry_safe(arg, tmp, &db->d_replies,
-					      drc_entry) {
-			daos_list_del_init(&arg->drc_entry);
-			rdb_raft_process_reply(db, arg->drc_node, arg->drc_rpc);
-			crt_req_decref(arg->drc_rpc);
-			D_FREE_PTR(arg);
+		ABT_mutex_unlock(db->d_mutex);
+		if (rrpc == NULL) {
+			D_ASSERT(stop);
+			/* The queue is empty and we are asked to stop. */
+			break;
 		}
+		/*
+		 * The queue has pending replies. If we are asked to stop, skip
+		 * the processing but still free the RPCs until the queue
+		 * become empty.
+		 */
+		if (!stop)
+			rdb_raft_process_reply(db, rrpc->drc_node,
+					       rrpc->drc_rpc);
+		rdb_free_raft_rpc(rrpc);
+		ABT_thread_yield();
 	}
 	D_DEBUG(DB_ANY, DF_DB": recvd stopping\n", DP_DB(db));
 }
 
-/*
- * This may be called during a crt_req_create() call on the same context! For
- * instance:
- *
- *   rdb_raft_cb_send_requestvote()	// to rank x
- *   rdb_raft_cb_send_requestvote()	// to rank y
- *     rdb_create_raft_rpc()
- *       crt_req_create()
- *         rdb_raft_rpc_cb()		// for rpc to rank x
- *
- * To work around this issue, this callback just append the rpc to
- * rdb::d_replies, which rdb_recvd() consumes and completes the reply handling.
- */
 static int
 rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 {
-	struct rdb_raft_rpc_cb_arg     *arg = cb_info->cci_arg;
-	struct rdb		       *db = arg->drc_db;
-	crt_opcode_t			opc = opc_get(cb_info->cci_rpc->cr_opc);
-	int				rc = cb_info->cci_rc;
+	struct rdb_raft_rpc    *rrpc = cb_info->cci_arg;
+	struct rdb	       *db = rrpc->drc_db;
+	crt_opcode_t		opc = opc_get(cb_info->cci_rpc->cr_opc);
+	int			rc = cb_info->cci_rc;
 
-	if (rc != 0) {
-		/* Drop this RPC, assuming that raft will make a new one. */
-		crt_req_decref(arg->drc_rpc);
-		D_FREE_PTR(arg);
+	ABT_mutex_lock(db->d_mutex);
+	if (rc != 0 || db->d_stop) {
+		if (rc != -DER_CANCELED)
+			D_ERROR(DF_DB": RPC %x to rank %u failed: %d\n",
+				DP_DB(rrpc->drc_db), opc,
+				rrpc->drc_rpc->cr_ep.ep_rank, rc);
+		/*
+		 * Drop this RPC, assuming that raft will make a new one. If we
+		 * are stopping, rdb_recvd() might have already stopped. Hence,
+		 * we shall not add any new items to db->d_replies.
+		 */
+		daos_list_del_init(&rrpc->drc_entry);
+		ABT_mutex_unlock(db->d_mutex);
+		rdb_free_raft_rpc(rrpc);
 		return rc;
 	}
-
-	daos_list_add_tail(&arg->drc_entry, &db->d_replies);
-	D_DEBUG(DB_ANY, DF_DB": queued response %u\n", DP_DB(db), opc);
+	/* Move this RPC to db->d_replies for rdb_recvd(). */
+	daos_list_move_tail(&rrpc->drc_entry, &db->d_replies);
+	ABT_cond_broadcast(db->d_replies_cv);
+	ABT_mutex_unlock(db->d_mutex);
 	return 0;
 }
 
 int
 rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node)
 {
-	struct rdb_raft_rpc_cb_arg     *arg;
-	int				rc;
+	struct rdb_raft_rpc    *rrpc;
+	int			rc;
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
+	rrpc = rdb_alloc_raft_rpc(db, rpc, node);
+	if (rrpc == NULL)
 		return -DER_NOMEM;
-	DAOS_INIT_LIST_HEAD(&arg->drc_entry);
-	crt_req_addref(rpc);
-	arg->drc_rpc = rpc;
-	arg->drc_db = db;
-	arg->drc_node = node;
 
-	rc = crt_req_send(rpc, rdb_raft_rpc_cb, arg);
+	ABT_mutex_lock(db->d_mutex);
+	if (db->d_stop) {
+		ABT_mutex_unlock(db->d_mutex);
+		rdb_free_raft_rpc(rrpc);
+		return -DER_CANCELED;
+	}
+	daos_list_add_tail(&rrpc->drc_entry, &db->d_requests);
+	ABT_mutex_unlock(db->d_mutex);
+
+	rc = crt_req_send(rpc, rdb_raft_rpc_cb, rrpc);
 	if (rc != 0) {
-		crt_req_decref(arg->drc_rpc);
-		D_FREE_PTR(arg);
+		ABT_mutex_lock(db->d_mutex);
+		daos_list_del_init(&rrpc->drc_entry);
+		ABT_mutex_unlock(db->d_mutex);
+		rdb_free_raft_rpc(rrpc);
 	}
 	return rc;
+}
+
+/* Abort all in-flight RPCs. */
+int
+rdb_abort_raft_rpcs(struct rdb *db)
+{
+	struct rdb_raft_rpc    *rrpc;
+	struct rdb_raft_rpc    *tmp;
+	int			rc;
+
+	daos_list_for_each_entry_safe(rrpc, tmp, &db->d_requests, drc_entry) {
+		daos_list_del_init(&rrpc->drc_entry);
+		rc = crt_req_abort(rrpc->drc_rpc);
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to abort %x to rank %u: %d\n",
+				DP_DB(rrpc->drc_db), rrpc->drc_rpc->cr_opc,
+				rrpc->drc_rpc->cr_ep.ep_rank, rc);
+			return rc;
+		}
+	}
+	return 0;
 }

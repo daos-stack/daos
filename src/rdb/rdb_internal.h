@@ -49,34 +49,33 @@ struct rdb_raft_event {
 
 struct rdb {
 	uuid_t			d_uuid;		/* of database */
-	int			d_ref;
-	struct rdb_cbs	       *d_cbs;
+	ABT_mutex		d_mutex;	/* mainly for using CVs */
+	int			d_ref;		/* of callers and RPCs */
+	ABT_cond		d_ref_cv;	/* for d_ref decrements */
+	struct rdb_cbs	       *d_cbs;		/* callers' callbacks */
 	void		       *d_arg;		/* for d_cbs callbacks */
 	struct daos_lru_cache  *d_trees;	/* rdb_tree cache */
 	PMEMobjpool	       *d_pmem;
 	daos_handle_t		d_attr;		/* rdb attribute tree */
-	daos_handle_t		d_log;		/* rdb log tree */
 
 	raft_server_t	       *d_raft;
-	ABT_mutex		d_mutex;	/* not useful currently */
-	struct dhash_table	d_results;	/* rdb_raft_result objects */
-	ABT_thread		d_timerd;
-	bool			d_timerd_stop;
-	ABT_thread		d_applyd;
-	bool			d_applyd_stop;
-	uint64_t		d_debut;	/* first entry in a term */
+	daos_handle_t		d_log;		/* rdb log tree */
 	uint64_t		d_applied;	/* last applied index */
+	uint64_t		d_debut;	/* first entry in a term */
 	ABT_cond		d_applied_cv;	/* for d_applied updates */
-	ABT_cond		d_committed_cv;	/* for last committed */
-	struct rdb_raft_event	d_events[2];	/* queue of rdb_raft_events */
-	int			d_nevents;
-	ABT_thread		d_callbackd;	/* consume d_events */
-	bool			d_callbackd_stop;
-	ABT_cond		d_events_cv;	/* for d_events */
-
-	daos_list_t		d_replies;	/* list of Raft RPCs */
+	ABT_cond		d_committed_cv;	/* for last committed updates */
+	struct dhash_table	d_results;	/* rdb_raft_result hash */
+	daos_list_t		d_requests;	/* RPCs waiting for replies */
+	daos_list_t		d_replies;	/* RPCs received replies */
+	ABT_cond		d_replies_cv;	/* for d_replies enqueues */
+	struct rdb_raft_event	d_events[2];	/* rdb_raft_events queue */
+	int			d_nevents;	/* d_events queue len from 0 */
+	ABT_cond		d_events_cv;	/* for d_events enqueues */
+	bool			d_stop;		/* for rdb_stop() */
+	ABT_thread		d_timerd;
+	ABT_thread		d_applyd;
+	ABT_thread		d_callbackd;
 	ABT_thread		d_recvd;
-	bool			d_recvd_stop;
 };
 
 /* Current rank */
@@ -94,6 +93,9 @@ DP_RANK(void)
 
 #define DF_DB		DF_UUID"["DF_RANK"]"
 #define DP_DB(db)	DP_UUID(db->d_uuid), DP_RANK()
+
+void rdb_get(struct rdb *db);
+void rdb_put(struct rdb *db);
 
 int rdb_start_handler(crt_rpc_t *rpc);
 int rdb_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
@@ -170,6 +172,7 @@ extern struct daos_rpc rdb_srv_rpcs[];
 
 int rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc);
 int rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node);
+int rdb_abort_raft_rpcs(struct rdb *db);
 int rdb_create_bcast(crt_opcode_t opc, crt_group_t *group, crt_rpc_t **rpc);
 void rdb_recvd(void *arg);
 
