@@ -357,6 +357,8 @@ int
 rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node)
 {
 	struct rdb_raft_rpc    *rrpc;
+	int			timeout = raft_get_request_timeout(db->d_raft);
+	const int		timeout_min = 1 /* s */;
 	int			rc;
 
 	rrpc = rdb_alloc_raft_rpc(db, rpc, node);
@@ -371,6 +373,12 @@ rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node)
 	}
 	daos_list_add_tail(&rrpc->drc_entry, &db->d_requests);
 	ABT_mutex_unlock(db->d_mutex);
+
+	timeout /= 1000; /* ms to s */
+	if (timeout < timeout_min)
+		timeout = timeout_min;
+	rc = crt_req_set_timeout(rpc, timeout);
+	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = crt_req_send(rpc, rdb_raft_rpc_cb, rrpc);
 	if (rc != 0) {
