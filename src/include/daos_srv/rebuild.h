@@ -32,4 +32,7 @@ bool
 is_rebuild_container(uuid_t cont_hdl_uuid);
 bool
 is_rebuild_pool(uuid_t pool_hdl_uuid);
+
+int
+ds_rebuild_schedule(const uuid_t uuid, daos_rank_list_t *tgts_failed);
 #endif

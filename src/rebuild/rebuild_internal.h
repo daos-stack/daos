@@ -45,10 +45,13 @@ struct rebuild_tls {
 	int		rebuild_building_nr;
 	int		rebuild_obj_count;
 	int		rebuild_rec_count;
+	daos_list_t	rebuild_task_list;
 
 	unsigned int	rebuild_local_root_init:1,
 			rebuild_task_init:1,
-			rebuild_scanning:1;
+			rebuild_scanning:1,
+			rebuild_initializing:1,
+			rebuild_ult:1;
 };
 
 struct rebuild_root {

@@ -1863,6 +1863,18 @@ out:
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pti_op.pi_uuid), rpc, rc);
 	rc = crt_reply_send(rpc);
+
+	if (opc_get(rpc->cr_opc) == POOL_EXCLUDE) {
+		int ret;
+
+		ret = ds_rebuild_schedule(in->pti_op.pi_uuid, in->pti_targets);
+		if (ret != 0) {
+			D_ERROR("rebuild fails rc %d\n", ret);
+			if (rc == 0)
+				rc = ret;
+		}
+	}
+
 	if (out->pto_targets != NULL) {
 		if (out->pto_targets->rl_ranks != NULL)
 			D_FREE(out->pto_targets->rl_ranks,

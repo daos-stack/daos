@@ -61,17 +61,6 @@ struct rebuild_scan_arg {
 };
 
 static int
-ds_rebuild_obj_rpc_cb(const struct crt_cb_info *cb_info)
-{
-	struct rebuild_send_arg *arg = cb_info->cci_arg;
-
-	D_FREE(arg->oids, sizeof(*arg->oids) * REBUILD_SEND_LIMIT);
-	D_FREE(arg->uuids, sizeof(*arg->uuids) * REBUILD_SEND_LIMIT);
-	D_FREE_PTR(arg);
-	return 0;
-}
-
-static int
 rebuild_obj_fill_buf(daos_handle_t ih, daos_iov_t *key_iov,
 		     daos_iov_t *val_iov, void *data)
 {
@@ -219,12 +208,10 @@ ds_rebuild_objects_send(struct rebuild_root *root,
 	/* Note: if the remote target fails, let's just ignore the
 	 * this object list, because the later rebuild will rebuild
 	 * it again anyway
-	 **/
-	rc = crt_req_send(rpc, ds_rebuild_obj_rpc_cb, arg);
+	 */
+	rc = dss_rpc_send(rpc);
 	if (rc)
 		D_GOTO(out, rc);
-
-	return rc;
 out:
 	if (oids != NULL)
 		D_FREE(oids, sizeof(*oids) * REBUILD_SEND_LIMIT);
