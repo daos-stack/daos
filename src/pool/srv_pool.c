@@ -47,6 +47,13 @@
 
 struct cont_svc;
 
+/* Pool service state in pool_svc::ps_term */
+enum pool_svc_state {
+	POOL_SVC_UP_EMPTY,	/* up but DB newly-created and empty */
+	POOL_SVC_UP,		/* up and ready to serve */
+	POOL_SVC_DOWN		/* down */
+};
+
 /* Pool service */
 struct pool_svc {
 	daos_list_t		ps_entry;
@@ -58,10 +65,9 @@ struct pool_svc {
 	rdb_path_t		ps_handles;	/* pool handle KVS */
 	struct cont_svc	       *ps_cont_svc;	/* one combined svc for now */
 	ABT_mutex		ps_mutex;	/* for POOL_CREATE */
-	bool			ps_up;		/* in leader state */
-	bool			ps_empty;	/* DB not initialized yet */
 	bool			ps_stop;
 	uint64_t		ps_term;
+	enum pool_svc_state	ps_state;
 	struct ds_pool	       *ps_pool;
 };
 
@@ -453,13 +459,17 @@ pool_svc_step_up(struct pool_svc *svc)
 {
 	struct rdb_tx			tx;
 	struct pool_map		       *map;
+	uint32_t			map_version;
 	struct ds_pool_create_arg	arg;
 	struct ds_pool		       *pool;
+	daos_rank_t			rank;
 	int				rc;
 
-	D_DEBUG(DB_MD, DF_UUID": stepping up\n", DP_UUID(svc->ps_uuid));
+	D_ASSERT(svc->ps_state != POOL_SVC_UP);
+	D_DEBUG(DB_MD, DF_UUID": stepping up to "DF_U64"\n",
+		DP_UUID(svc->ps_uuid), svc->ps_term);
 
-	/* Read the pool map into map. */
+	/* Read the pool map into map and map_version. */
 	rc = rdb_tx_begin(svc->ps_db, &tx);
 	if (rc != 0)
 		return rc;
@@ -473,11 +483,12 @@ pool_svc_step_up(struct pool_svc *svc)
 				DP_UUID(svc->ps_uuid));
 		return rc;
 	}
+	map_version = pool_map_get_version(map);
 
-	/* Create or revalidate svc->ps_pool with map. */
+	/* Create or revalidate svc->ps_pool with map and map_version. */
 	D_ASSERT(svc->ps_pool == NULL);
 	arg.pca_map = map;
-	arg.pca_map_version = pool_map_get_version(map);
+	arg.pca_map_version = map_version;
 	arg.pca_create_group = 1;
 	rc = ds_pool_lookup_create(svc->ps_uuid, &arg, &svc->ps_pool);
 	if (rc != 0) {
@@ -490,21 +501,19 @@ pool_svc_step_up(struct pool_svc *svc)
 	ABT_rwlock_wrlock(pool->sp_lock);
 	if (pool->sp_map != map) {
 		/* An existing ds_pool; map not used yet. */
-		D_ASSERTF(pool->sp_map_version <= pool_map_get_version(map),
-			  "%u <= %u\n", pool->sp_map_version,
-			  pool_map_get_version(map));
+		D_ASSERTF(pool->sp_map_version <= map_version, "%u <= %u\n",
+			  pool->sp_map_version, map_version);
 		D_ASSERTF(pool->sp_map == NULL ||
 			  pool->sp_map_version ==
 			  pool_map_get_version(pool->sp_map),
 			  "%u == %u\n", pool->sp_map_version,
 			  pool_map_get_version(pool->sp_map));
 		if (pool->sp_map == NULL ||
-		    pool_map_get_version(pool->sp_map) <
-		    pool_map_get_version(map)) {
+		    pool_map_get_version(pool->sp_map) < map_version) {
 			struct pool_map *tmp;
 
 			/* Need to update pool->sp_map. Swap with map. */
-			pool->sp_map_version = pool_map_get_version(map);
+			pool->sp_map_version = map_version;
 			tmp = pool->sp_map;
 			pool->sp_map = map;
 			map = tmp;
@@ -521,17 +530,32 @@ pool_svc_step_up(struct pool_svc *svc)
 	 * on errors.
 	 */
 
+	rc = crt_group_rank(NULL, &rank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_PRINT(DF_UUID": rank %u became pool service leader "DF_U64"\n",
+		DP_UUID(svc->ps_uuid), rank, svc->ps_term);
 	return 0;
 }
 
 static void
 pool_svc_step_down(struct pool_svc *svc)
 {
-	D_DEBUG(DB_MD, DF_UUID": stepping down\n", DP_UUID(svc->ps_uuid));
+	daos_rank_t	rank;
+	int		rc;
+
+	D_ASSERT(svc->ps_state != POOL_SVC_DOWN);
+	D_DEBUG(DB_MD, DF_UUID": stepping down from "DF_U64"\n",
+		DP_UUID(svc->ps_uuid), svc->ps_term);
+
 	ds_cont_svc_step_down(svc->ps_cont_svc);
 	D_ASSERT(svc->ps_pool != NULL);
 	ds_pool_put(svc->ps_pool);
 	svc->ps_pool = NULL;
+
+	rc = crt_group_rank(NULL, &rank);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	D_PRINT(DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
+		DP_UUID(svc->ps_uuid), rank, svc->ps_term);
 }
 
 static int
@@ -541,30 +565,26 @@ pool_svc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 	int			rc;
 
 	ABT_mutex_lock(svc->ps_mutex);
-	D_WARN(DF_UUID": became pool service leader "DF_U64"\n",
-	       DP_UUID(svc->ps_uuid), term);
 	if (svc->ps_stop) {
-		D_DEBUG(DB_MD, DF_UUID": skipping due to stopping\n",
-			DP_UUID(svc->ps_uuid));
+		D_DEBUG(DB_MD, DF_UUID": skip term "DF_U64" due to stopping\n",
+			DP_UUID(svc->ps_uuid), term);
 		D_GOTO(out_mutex, rc = 0);
 	}
-	D_ASSERT(!svc->ps_up);
+	D_ASSERTF(svc->ps_state == POOL_SVC_DOWN, "%d\n", svc->ps_state);
+	svc->ps_term = term;
 
 	rc = pool_svc_step_up(svc);
-	if (rc == 0) {
-		svc->ps_empty = false;
-	} else if (rc == -DER_NONEXIST) {
-		svc->ps_empty = true;
-		rc = 0;
-	} else {
+	if (rc == -DER_NONEXIST) {
+		svc->ps_state = POOL_SVC_UP_EMPTY;
+		D_GOTO(out_mutex, rc = 0);
+	} else if (rc != 0) {
 		D_ERROR(DF_UUID": failed to step up as leader "DF_U64"\n",
 			DP_UUID(svc->ps_uuid), term);
 		/* TODO: Ask rdb to step down. */
-		D_GOTO(out_mutex, rc);
+		D_GOTO(out_mutex, rc = 0);
 	}
-	svc->ps_up = true;
-	svc->ps_term = term;
 
+	svc->ps_state = POOL_SVC_UP;
 out_mutex:
 	ABT_mutex_unlock(svc->ps_mutex);
 	return rc;
@@ -576,21 +596,19 @@ pool_svc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 	struct pool_svc *svc = arg;
 
 	ABT_mutex_lock(svc->ps_mutex);
-	D_WARN(DF_UUID": no longer pool service leader "DF_U64"\n",
-	       DP_UUID(svc->ps_uuid), term);
 	if (svc->ps_stop) {
-		D_DEBUG(DB_MD, DF_UUID": skipping due to stopping\n",
-			DP_UUID(svc->ps_uuid));
+		D_DEBUG(DB_MD, DF_UUID": skip term "DF_U64" due to stopping\n",
+			DP_UUID(svc->ps_uuid), term);
 		D_GOTO(out_mutex, 0);
 	}
-	D_ASSERT(svc->ps_up);
 	D_ASSERTF(svc->ps_term == term, DF_U64" == "DF_U64"\n", svc->ps_term,
 		  term);
+	D_ASSERT(svc->ps_state != POOL_SVC_DOWN);
 
-	svc->ps_up = false;
-	if (!svc->ps_empty)
+	if (svc->ps_state == POOL_SVC_UP)
 		pool_svc_step_down(svc);
 
+	svc->ps_state = POOL_SVC_DOWN;
 out_mutex:
 	ABT_mutex_unlock(svc->ps_mutex);
 }
@@ -627,9 +645,8 @@ pool_svc_init(struct pool_svc *svc, const uuid_t uuid)
 
 	uuid_copy(svc->ps_uuid, uuid);
 	svc->ps_ref = 1;
-	svc->ps_up = false;
-	svc->ps_empty = true;
 	svc->ps_stop = false;
+	svc->ps_state = POOL_SVC_DOWN;
 
 	rc = ABT_rwlock_create(&svc->ps_lock);
 	if (rc != ABT_SUCCESS) {
@@ -795,7 +812,7 @@ pool_svc_lookup(const uuid_t uuid, struct pool_svc **svcp)
 static inline bool
 pool_svc_up(struct pool_svc *svc)
 {
-	return svc->ps_up && !svc->ps_empty;
+	return svc->ps_state == POOL_SVC_UP;
 }
 
 static void
@@ -912,11 +929,9 @@ ds_pool_svc_stop(const uuid_t uuid)
 	D_DEBUG(DF_DSMS, DF_UUID": stopping pool service\n", DP_UUID(uuid));
 	ABT_mutex_lock(svc->ps_mutex);
 	svc->ps_stop = true;
-	if (svc->ps_up) {
-		svc->ps_up = false;
-		if (!svc->ps_empty)
-			pool_svc_step_down(svc);
-	}
+	if (svc->ps_state == POOL_SVC_UP)
+		pool_svc_step_down(svc);
+	svc->ps_state = POOL_SVC_DOWN;
 	ABT_mutex_unlock(svc->ps_mutex);
 
 	ABT_mutex_lock(pool_svc_hash_lock);
@@ -990,7 +1005,6 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	struct rdb_tx		tx;
 	daos_iov_t		value;
 	struct rdb_kvs_attr	attr;
-	bool			empty;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
@@ -1007,7 +1021,10 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/* Simply serialize this whole RPC with pool_svc_step_{up,down}_cb(). */
+	/*
+	 * Simply serialize this whole RPC with pool_svc_step_{up,down}_cb()
+	 * and ds_pool_svc_stop().
+	 */
 	ABT_mutex_lock(svc->ps_mutex);
 
 	if (svc->ps_stop) {
@@ -1064,14 +1081,14 @@ out_tx:
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 
-	/*
-	 * The DB is no longer empty. If we are up, but the previous
-	 * pool_svc_step_up() call found an empty DB, now we should be able to
-	 * finish stepping up.
-	 */
-	empty = svc->ps_empty;
-	svc->ps_empty = false;
-	if (svc->ps_up && empty) {
+	if (svc->ps_state == POOL_SVC_UP_EMPTY) {
+		/*
+		 * The DB is no longer empty. Since the previous
+		 * pool_svc_step_up_cb() call didn't finish stepping up due to
+		 * an empty DB, and there hasn't been a pool_svc_step_down_cb()
+		 * call yet, we should call pool_svc_step_up() to finish
+		 * stepping up.
+		 */
 		D_DEBUG(DF_DSMS, DF_UUID": trying to finish stepping up\n",
 			DP_UUID(in->pri_op.pi_uuid));
 		rc = pool_svc_step_up(svc);
@@ -1080,6 +1097,7 @@ out_tx:
 			/* TODO: Ask rdb to step down. */
 			D_GOTO(out_svc, rc);
 		}
+		svc->ps_state = POOL_SVC_UP;
 	}
 
 out_mutex:
