@@ -286,7 +286,7 @@ crt_get_info_string(char **string)
 		plugin_str = "ofi+sockets";
 		break;
 	case CRT_NA_OFI_VERBS:
-		plugin_str = "ofi+socke";
+		plugin_str = "ofi+verbs";
 		break;
 	case CRT_NA_OFI_GNI:
 		plugin_str = "ofi+gni";
