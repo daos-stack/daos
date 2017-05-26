@@ -38,10 +38,10 @@
                   -P3 "test_runner/TestInfoRunner.py" \
                   -P3 "test_runner/DvmRunner.py" \
                   -P3 "test_runner/MultiRunner.py" \
+                  -P3 "test_runner/ResultsRunner.py" \
+                  -P3 "test_runner/RemoteTestRunner.py" \
+                  -P3 "test_runner/ControlTestRunner.py" \
                   -P3 "test_runner/NodeControlRunner.py" \
                   -P3 "test_runner/NodeRunner.py" \
-                  -P3 "test_runner/ResultsRunner.py" \
-                  -P3 "test_runner/DUTRunner.py" \
-                  -P3 "test_runner/TestNodesRunner.py" \
                   -P3 "test_runner/findTestLogs.py"
 exit $?

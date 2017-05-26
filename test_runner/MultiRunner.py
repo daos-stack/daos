@@ -33,11 +33,11 @@ import time
 from datetime import datetime
 from importlib import import_module
 #pylint: disable=import-error
-import NodeControlRunner
+import ControlTestRunner
 import TestInfoRunner
 import ResultsRunner
 import PostRunner
-import TestNodesRunner
+import NodeControlRunner
 #pylint: enable=import-error
 
 
@@ -159,7 +159,7 @@ class MultiRunner(PostRunner.PostRunner):
         self.daemon_results = ResultsRunner.SubTestResults(logDir,
                                                            test_set_name)
         # create a test node interface object
-        nodes = TestNodesRunner.TestNodesRunner(logDir, self.test_info)
+        nodes = NodeControlRunner.NodeControlRunner(logDir, self.test_info)
         self.logger.info("Import daemon: %s", name)
         try:
             os.makedirs(logDir)
@@ -219,7 +219,7 @@ class MultiRunner(PostRunner.PostRunner):
                              module_name + \
                              " *********************************"
                             )
-            self.nodes = NodeControlRunner.NodeControlRunner(
+            self.nodes = ControlTestRunner.ControlTestRunner(
                 self.logdir, self.info, self.test_info)
             self.nodes.nodes_strategy(self.test_directives)
             rtn_info = None

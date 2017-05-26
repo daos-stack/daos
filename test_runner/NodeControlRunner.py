@@ -20,30 +20,14 @@
 # SOFTWARE.
 # -*- coding: utf-8 -*-
 """
-node control test runner class
+node control for test suite
 
-This class is used by Multi Runner to start a copy of Test Runner on remote
-nodes. The class uses the nodes type classification to determine which nodes
-to execute the request on. The class uses the nodes_strategy method to create
-a node object of each node and assign it to a type.
-
-To execute on a remote node:
-The class uses the nodes_config method to setup the data to be use for the
-config file and define the description file to be executed on each node.
-
-The execute_list method is the main entry point to start the execution. This
-method will create a list or sub-list of node of a type execute on. The method
-will query each node to match the requested type. This list can be broken down
-into a sub-list by the call suppling a comma  separate list on index into the
-list. This list of node is passed to execute_config to start Test Runner on all
-listed node and wait for completion. At the completion of the request, the
-match_name method is called on all nodes to rename the console log file to
-match the test set name of the completed request.
+A class to execute a command on one or more nodes. The node list can be
+defined by node type or name. This class uses NodeRunner to execute the request.
 
 """
 
 
-import os
 import logging
 import time
 from datetime import datetime
@@ -53,24 +37,31 @@ import NodeRunner
 
 
 class NodeControlRunner():
-    """Simple test runner"""
+    """Simple node interface"""
     node_list = []
 
-    def __init__(self, log_base, info, test_info):
-        self.info = info
+    def __init__(self, log_base, test_info):
         self.test_info = test_info
+        self.info = test_info.info
         self.log_dir_base = log_base
         self.logger = logging.getLogger("TestRunnerLogger")
         self.now = "_{}".format(datetime.now().isoformat().replace(':', '.'))
+        host_list = self.info.get_config('host_list')
+        for node in host_list:
+            node_info = NodeRunner.NodeRunner(self.test_info, node)
+            self.node_list.append(node_info)
 
-    def execute_config(self, run_node_list, waittime):
-        """ execute test scripts """
+    def execute_list(self, cmdstr, log_path, run_node_list, waittime):
+        """ execute command on node list """
+
         rtn = 0
         for node in run_node_list:
-            node.launch_test()
+            self.logger.debug("%s  run commnad on : %s %s",
+                              ("*" * 10), str(node.node), ("*" * 10))
+            node.run_cmd(cmdstr, log_path)
         loop_count = waittime
         running_count = len(run_node_list)
-        self.logger.debug("******* started running count " + str(running_count))
+        self.logger.debug("******* started running count %d", running_count)
         while running_count and loop_count:
             time.sleep(1)
             running_count = len(run_node_list)
@@ -78,8 +69,8 @@ class NodeControlRunner():
             for node in run_node_list:
                 if node.process_state() != "running":
                     running_count = running_count - 1
-        self.logger.debug("******* done running count " + str(running_count))
-        self.logger.info("********** node Test Runner Results **************")
+        self.logger.debug("******* done running count %d", running_count)
+
         for node in run_node_list:
             procrtn = node.process_rtn()
             if procrtn is not None:
@@ -87,82 +78,45 @@ class NodeControlRunner():
             else:
                 node.process_terminate()
                 rtn |= 1
-            if node.test_name:
-                self.logger.info(str(node.test_name) + " on " + \
-                                 str(node.node) + " rtn: " +  str(procrtn))
-
+            self.logger.debug("************** Results " + \
+                             str(node.node) + " rtn: " +  str(procrtn) + \
+                             " **************"
+                             )
         self.logger.info("execution time remaining: %d", loop_count)
-        self.logger.info(
-            "***********************************************************")
-        for node in run_node_list:
-            node.match_testName()
-
+        self.logger.info("%s", ("*" * 40))
         return rtn
 
-    def execute_list(self, node_type="all", nodes="all", waittime=1800):
-        """ create the execute test list
-            node_type - is a define type of nodes
-            nodes - s a list of indexs into the type list """
+    def find_node(self, testnode):
+        """ find node object """
+        for node in self.node_list:
+            if node.node == testnode:
+                return node
+        return None
+
+    #pylint: disable=too-many-arguments
+    def execute_cmd(self, cmdstr, log_path, nodes="all", msg="", waittime=1800):
+        """ create node list and execute command """
+
+        rtn = 0
         run_node_list = []
-        self.logger.info("********** run Test Runner on node type " + \
-                         str(node_type) + \
-                         " **********"
-                        )
-        if nodes != "all":
-            node_index_list = nodes.split(",")
-            if node_type == "all":
-                type_list = self.info.get_config('host_list')
-            else:
-                type_list = self.test_info.get_defaultENV(node_type).split(",")
-        for node in self.node_list:
-            if node.match_type(node_type):
-                if nodes == "all":
-                    run_node_list.append(node)
-                else:
-                    for index in node_index_list:
-                        if node.node == type_list[int(index)]:
-                            run_node_list.append(node)
-                            break
-        return self.execute_config(run_node_list, waittime)
 
-    def nodes_config(self, name, node_type, configKeys):
-        """ setup the node config file """
-
-        addKeys = self.test_info.get_passToConfig()
-        if addKeys:
-            configKeys.update(addKeys)
-        value = self.log_dir_base + "/" + str(name)
-        for node in self.node_list:
-            logdir = value + "/" + name + "_" + node.node
-            try:
-                os.makedirs(logdir)
-            except OSError:
-                newname = "{}{}".format(logdir, self.now)
-                os.rename(logdir, newname)
-                os.makedirs(logdir)
-
-            self.logger.debug("setup node " + str(node.node) + " " + \
-                              str(logdir))
-            node.setup_config(name, logdir, node_type, configKeys)
-
-    def nodes_strategy(self, test_directives):
-        """ create node objects """
-        path = os.getcwd()
-        scripts = os.path.join(path, "scripts")
-        hostKeys = self.test_info.get_test_info('module', 'setKeyFromHost')
-        if hostKeys:
-            for item in hostKeys:
-                for node in self.test_info.get_defaultENV(item).split(","):
-                    node_info = NodeRunner.NodeRunner(self.info, node, path,
-                                                      scripts, test_directives,
-                                                      str(item))
-                    self.node_list.append(node_info)
+        self.logger.info("%s", ("*" * 40))
+        if msg:
+            self.logger.info("%s", msg)
+        if nodes == "all":
+            run_node_list = self.node_list
         else:
-            for node in self.info.get_config('host_list'):
-                node_info = NodeRunner.NodeRunner(self.info, node, path,
-                                                  scripts, test_directives,
-                                                  "all")
-                self.node_list.append(node_info)
+            if nodes[0].isupper():
+                node_list = self.test_info.get_defaultENV(nodes).split(",")
+            else:
+                node_list = nodes.split(",")
+            for node in node_list:
+                run_node_list.append(self.find_node(node))
+
+        rtn = self.execute_list(cmdstr, log_path, run_node_list, waittime)
+        return rtn
+
+    #pylint: enable=too-many-arguments
 
     def nodes_dump(self):
         """ dump node objects """
