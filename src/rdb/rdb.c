@@ -127,8 +127,98 @@ rdb_destroy(const char *path)
 	return 0;
 }
 
-/* Currently, only one rdb is supported. */
-struct rdb *the_one_rdb_hack;
+void
+rdb_get(struct rdb *db)
+{
+	ABT_mutex_lock(db->d_mutex);
+	db->d_ref++;
+	ABT_mutex_unlock(db->d_mutex);
+}
+
+void
+rdb_put(struct rdb *db)
+{
+	ABT_mutex_lock(db->d_mutex);
+	D_ASSERTF(db->d_ref > 0, "%d\n", db->d_ref);
+	db->d_ref--;
+	if (db->d_ref == RDB_BASE_REFS)
+		ABT_cond_broadcast(db->d_ref_cv);
+	ABT_mutex_unlock(db->d_mutex);
+}
+
+static inline struct rdb *
+rdb_obj(daos_list_t *rlink)
+{
+	return container_of(rlink, struct rdb, d_entry);
+}
+
+static bool
+rdb_key_cmp(struct dhash_table *htable, daos_list_t *rlink, const void *key,
+	    unsigned int ksize)
+{
+	struct rdb *db = rdb_obj(rlink);
+
+	D_ASSERTF(ksize == sizeof(uuid_t), "%u\n", ksize);
+	return uuid_compare(db->d_uuid, key) == 0;
+}
+
+static void
+rdb_rec_addref(struct dhash_table *htable, daos_list_t *rlink)
+{
+	rdb_get(rdb_obj(rlink));
+}
+
+static bool
+rdb_rec_decref(struct dhash_table *htable, daos_list_t *rlink)
+{
+	rdb_put(rdb_obj(rlink));
+	return false;
+}
+
+static dhash_table_ops_t rdb_hash_ops = {
+	.hop_key_cmp	= rdb_key_cmp,
+	.hop_rec_addref	= rdb_rec_addref,
+	.hop_rec_decref	= rdb_rec_decref,
+};
+
+static struct dhash_table	rdb_hash;
+static ABT_mutex		rdb_hash_lock;
+
+int
+rdb_hash_init(void)
+{
+	int rc;
+
+	rc = ABT_mutex_create(&rdb_hash_lock);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+	rc = dhash_table_create_inplace(DHASH_FT_NOLOCK, 4 /* bits */,
+					NULL /* priv */, &rdb_hash_ops,
+					&rdb_hash);
+	if (rc != 0)
+		ABT_mutex_free(&rdb_hash_lock);
+	return rc;
+}
+
+void
+rdb_hash_fini(void)
+{
+	dhash_table_destroy_inplace(&rdb_hash, true /* force */);
+	ABT_mutex_free(&rdb_hash_lock);
+}
+
+struct rdb *
+rdb_lookup(const uuid_t uuid)
+{
+	daos_list_t *entry;
+
+	ABT_mutex_lock(rdb_hash_lock);
+	entry = dhash_rec_find(&rdb_hash, uuid, sizeof(uuid_t));
+	ABT_mutex_unlock(rdb_hash_lock);
+	if (entry == NULL)
+		return NULL;
+	return rdb_obj(entry);
+}
 
 /**
  * Start an RDB replica at \a path.
@@ -225,13 +315,23 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	if (rc != 0)
 		D_GOTO(err_attr, rc);
 
-	D_ASSERT(the_one_rdb_hack == NULL);
-	the_one_rdb_hack = db;
+	ABT_mutex_lock(rdb_hash_lock);
+	rc = dhash_rec_insert(&rdb_hash, db->d_uuid, sizeof(uuid_t),
+			      &db->d_entry, true /* exclusive */);
+	ABT_mutex_unlock(rdb_hash_lock);
+	if (rc != 0) {
+		/* We have the NVML pool open. */
+		D_ASSERT(rc != -DER_EXIST);
+		D_GOTO(err_raft, rc);
+	}
+
 	*dbp = db;
 	D_DEBUG(DB_ANY, DF_DB": started db %s %p with %u replicas\n", DP_DB(db),
 		path, db, nreplicas);
 	return 0;
 
+err_raft:
+	rdb_raft_stop(db);
 err_attr:
 	dbtree_close(db->d_attr);
 err_pmem:
@@ -257,9 +357,13 @@ err:
 void
 rdb_stop(struct rdb *db)
 {
+	bool deleted;
+
 	D_DEBUG(DB_ANY, DF_DB": stopping db %p\n", DP_DB(db), db);
-	D_ASSERT(the_one_rdb_hack != NULL);
-	the_one_rdb_hack = NULL;
+	ABT_mutex_lock(rdb_hash_lock);
+	deleted = dhash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
+	ABT_mutex_unlock(rdb_hash_lock);
+	D_ASSERT(deleted);
 	rdb_raft_stop(db);
 	dbtree_close(db->d_attr);
 	pmemobj_close(db->d_pmem);
@@ -267,24 +371,6 @@ rdb_stop(struct rdb *db)
 	ABT_cond_free(&db->d_ref_cv);
 	ABT_mutex_free(&db->d_mutex);
 	D_FREE_PTR(db);
-}
-
-void
-rdb_get(struct rdb *db)
-{
-	ABT_mutex_lock(db->d_mutex);
-	db->d_ref++;
-	ABT_mutex_unlock(db->d_mutex);
-}
-
-void
-rdb_put(struct rdb *db)
-{
-	ABT_mutex_lock(db->d_mutex);
-	D_ASSERTF(db->d_ref > 0, "%d\n", db->d_ref);
-	db->d_ref--;
-	ABT_cond_broadcast(db->d_ref_cv);
-	ABT_mutex_unlock(db->d_mutex);
 }
 
 /**

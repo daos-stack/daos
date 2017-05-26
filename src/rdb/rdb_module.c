@@ -34,12 +34,13 @@
 static int
 rdb_module_init(void)
 {
-	return 0;
+	return rdb_hash_init();
 }
 
 static int
 rdb_module_fini(void)
 {
+	rdb_hash_fini();
 	return 0;
 }
 

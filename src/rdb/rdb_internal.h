@@ -48,6 +48,7 @@ struct rdb_raft_event {
 /* rdb.c **********************************************************************/
 
 struct rdb {
+	daos_list_t		d_entry;	/* in rdb_hash */
 	uuid_t			d_uuid;		/* of database */
 	ABT_mutex		d_mutex;	/* mainly for using CVs */
 	int			d_ref;		/* of callers and RPCs */
@@ -94,15 +95,19 @@ DP_RANK(void)
 #define DF_DB		DF_UUID"["DF_RANK"]"
 #define DP_DB(db)	DP_UUID(db->d_uuid), DP_RANK()
 
+/* Number of "base" references that the rdb_stop() path expects to remain */
+#define RDB_BASE_REFS 1
+
+int rdb_hash_init(void);
+void rdb_hash_fini(void);
 void rdb_get(struct rdb *db);
 void rdb_put(struct rdb *db);
+struct rdb *rdb_lookup(const uuid_t uuid);
 
 int rdb_start_handler(crt_rpc_t *rpc);
 int rdb_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
 int rdb_stop_handler(crt_rpc_t *rpc);
 int rdb_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
-
-extern struct rdb *the_one_rdb_hack;
 
 /* rdb_raft.c *****************************************************************/
 
@@ -135,6 +140,35 @@ enum rdb_operation {
 	RDB_APPENDENTRIES	= 2,
 	RDB_START		= 3,
 	RDB_STOP		= 4
+};
+
+struct rdb_op_in {
+	uuid_t	ri_uuid;
+};
+
+struct rdb_op_out {
+	int32_t		ro_rc;
+	uint32_t	ro_padding;
+};
+
+struct rdb_requestvote_in {
+	struct rdb_op_in	rvi_op;
+	msg_requestvote_t	rvi_msg;
+};
+
+struct rdb_requestvote_out {
+	struct rdb_op_out		rvo_op;
+	msg_requestvote_response_t	rvo_msg;
+};
+
+struct rdb_appendentries_in {
+	struct rdb_op_in	aei_op;
+	msg_appendentries_t	aei_msg;
+};
+
+struct rdb_appendentries_out {
+	struct rdb_op_out		aeo_op;
+	msg_appendentries_response_t	aeo_msg;
 };
 
 enum rdb_start_flag {

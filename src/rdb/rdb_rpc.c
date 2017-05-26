@@ -33,15 +33,18 @@
 #include "rdb_internal.h"
 
 static struct crt_msg_field *rdb_requestvote_in_fields[] = {
-	&CMF_INT,	/* term */
-	&CMF_INT,	/* candidate_id */
-	&CMF_INT,	/* last_log_idx */
-	&CMF_INT	/* last_log_term */
+	&CMF_UUID,	/* op.uuid */
+	&CMF_INT,	/* msg.term */
+	&CMF_INT,	/* msg.candidate_id */
+	&CMF_INT,	/* msg.last_log_idx */
+	&CMF_INT	/* msg.last_log_term */
 };
 
 static struct crt_msg_field *rdb_requestvote_out_fields[] = {
-	&CMF_INT,	/* term */
-	&CMF_INT	/* vote_granted */
+	&CMF_INT,	/* op.rc */
+	&CMF_UINT32,	/* op.padding */
+	&CMF_INT,	/* msg.term */
+	&CMF_INT	/* msg.vote_granted */
 };
 
 static struct crt_req_format DQF_RDB_REQUESTVOTE =
@@ -136,14 +139,17 @@ static struct crt_msg_field DMF_MSG_APPENDENTRIES_T =
 		       rdb_proc_msg_appendentries_t);
 
 static struct crt_msg_field *rdb_appendentries_in_fields[] = {
-	&DMF_MSG_APPENDENTRIES_T
+	&CMF_UUID,			/* op.uuid */
+	&DMF_MSG_APPENDENTRIES_T	/* msg */
 };
 
 static struct crt_msg_field *rdb_appendentries_out_fields[] = {
-	&CMF_INT,	/* term */
-	&CMF_INT,	/* success */
-	&CMF_INT,	/* current_idx */
-	&CMF_INT	/* first_idx */
+	&CMF_INT,	/* op.rc */
+	&CMF_UINT32,	/* op.padding */
+	&CMF_INT,	/* msg.term */
+	&CMF_INT,	/* msg.success */
+	&CMF_INT,	/* msg.current_idx */
+	&CMF_INT	/* msg.first_idx */
 };
 
 static struct crt_req_format DQF_RDB_APPENDENTRIES =

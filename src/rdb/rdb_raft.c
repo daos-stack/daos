@@ -47,10 +47,10 @@ static int
 rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 			     msg_requestvote_t *msg)
 {
-	struct rdb	       *db = arg;
-	crt_rpc_t	       *rpc;
-	msg_requestvote_t      *in;
-	int			rc;
+	struct rdb		       *db = arg;
+	crt_rpc_t		       *rpc;
+	struct rdb_requestvote_in      *in;
+	int				rc;
 
 	D_ASSERT(db->d_raft == raft);
 	D_DEBUG(DB_ANY, DF_DB": sending rv to node %d: term=%d\n", DP_DB(db),
@@ -63,7 +63,8 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 		return -1;
 	}
 	in = crt_req_get(rpc);
-	*in = *msg;
+	uuid_copy(in->rvi_op.ri_uuid, db->d_uuid);
+	in->rvi_msg = *msg;
 
 	rc = rdb_send_raft_rpc(rpc, db, node);
 	if (rc != 0) {
@@ -119,11 +120,11 @@ static int
 rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 			       raft_node_t *node, msg_appendentries_t *msg)
 {
-	struct rdb	       *db = arg;
-	struct rdb_raft_node   *rdb_node = raft_node_get_udata(node);
-	crt_rpc_t	       *rpc;
-	msg_appendentries_t    *in;
-	int			rc;
+	struct rdb		       *db = arg;
+	struct rdb_raft_node	       *rdb_node = raft_node_get_udata(node);
+	crt_rpc_t		       *rpc;
+	struct rdb_appendentries_in    *in;
+	int				rc;
 
 	D_ASSERT(db->d_raft == raft);
 	D_DEBUG(DB_ANY, DF_DB": sending ae to node %u: term=%d\n", DP_DB(db),
@@ -136,7 +137,8 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 		D_GOTO(err, rc = -1);
 	}
 	in = crt_req_get(rpc);
-	rc = rdb_raft_clone_ae(msg, in);
+	uuid_copy(in->aei_op.ri_uuid, db->d_uuid);
+	rc = rdb_raft_clone_ae(msg, &in->aei_msg);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to allocate entry array\n", DP_DB(db));
 		D_GOTO(err_rpc, rc = -1);
@@ -151,7 +153,7 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 	return 0;
 
 err_in:
-	rdb_raft_fini_ae(in);
+	rdb_raft_fini_ae(&in->aei_msg);
 err_rpc:
 	crt_req_decref(rpc);
 err:
@@ -981,13 +983,12 @@ rdb_raft_stop(struct rdb *db)
 
 	/* Wait for all extra references to be released. */
 	for (;;) {
-		const int base = 1;
-
-		D_ASSERTF(db->d_ref >= base, "%d >= %d\n", db->d_ref, base);
-		if (db->d_ref == base)
+		D_ASSERTF(db->d_ref >= RDB_BASE_REFS, "%d >= %d\n", db->d_ref,
+			  RDB_BASE_REFS);
+		if (db->d_ref == RDB_BASE_REFS)
 			break;
 		D_DEBUG(DB_MD, DF_DB": waiting for %d references\n", DP_DB(db),
-			db->d_ref - base);
+			db->d_ref - RDB_BASE_REFS);
 		ABT_cond_wait(db->d_ref_cv, db->d_mutex);
 	}
 
@@ -1060,72 +1061,93 @@ rdb_raft_wait_applied(struct rdb *db, uint64_t index)
 int
 rdb_requestvote_handler(crt_rpc_t *rpc)
 {
-	msg_requestvote_t	       *in = crt_req_get(rpc);
-	msg_requestvote_response_t     *out = crt_reply_get(rpc);
-	struct rdb		       *db = the_one_rdb_hack;
+	struct rdb_requestvote_in      *in = crt_req_get(rpc);
+	struct rdb_requestvote_out     *out = crt_reply_get(rpc);
+	struct rdb		       *db;
 	raft_node_t		       *node;
 	struct rdb_raft_state		state;
+	int				rc;
 
+	db = rdb_lookup(in->rvi_op.ri_uuid);
 	if (db == NULL)
-		/* Drop the RPC. */
-		return -DER_NONEXIST;
-	rdb_get(db);
-	if (db->d_stop) {
-		rdb_put(db);
-		return -DER_CANCELED;
-	}
+		D_GOTO(out, rc = -DER_NONEXIST);
+	if (db->d_stop)
+		D_GOTO(out_db, rc = -DER_CANCELED);
+
 	D_DEBUG(DB_ANY, DF_DB": handling raft rv\n", DP_DB(db));
 	node = raft_get_node(db->d_raft, rpc->cr_ep.ep_rank + 1);
 	D_ASSERT(node != NULL);
 	rdb_raft_save_state(db, &state);
-	raft_recv_requestvote(db->d_raft, node, in, out);
+	raft_recv_requestvote(db->d_raft, node, &in->rvi_msg, &out->rvo_msg);
 	rdb_raft_check_state(db, &state);
+
+	rc = 0;
+out_db:
 	rdb_put(db);
+out:
+	out->rvo_op.ro_rc = rc;
 	return crt_reply_send(rpc);
 }
 
 int
 rdb_appendentries_handler(crt_rpc_t *rpc)
 {
-	msg_appendentries_t	       *in = crt_req_get(rpc);
-	msg_appendentries_response_t   *out = crt_reply_get(rpc);
-	struct rdb		       *db = the_one_rdb_hack;
+	struct rdb_appendentries_in    *in = crt_req_get(rpc);
+	struct rdb_appendentries_out   *out = crt_reply_get(rpc);
+	struct rdb		       *db;
 	raft_node_t		       *node;
 	struct rdb_raft_state		state;
+	int				rc;
 
+	db = rdb_lookup(in->aei_op.ri_uuid);
 	if (db == NULL)
-		/* Drop the RPC. */
-		return -DER_NONEXIST;
-	rdb_get(db);
-	if (db->d_stop) {
-		rdb_put(db);
-		return -DER_CANCELED;
-	}
+		D_GOTO(out, rc = -DER_NONEXIST);
+	if (db->d_stop)
+		D_GOTO(out_db, rc = -DER_CANCELED);
+
 	D_DEBUG(DB_ANY, DF_DB": handling raft ae\n", DP_DB(db));
 	node = raft_get_node(db->d_raft, rpc->cr_ep.ep_rank + 1);
 	D_ASSERT(node != NULL);
 	rdb_raft_save_state(db, &state);
-	raft_recv_appendentries(db->d_raft, node, in, out);
+	raft_recv_appendentries(db->d_raft, node, &in->aei_msg, &out->aeo_msg);
 	rdb_raft_check_state(db, &state);
+
+	rc = 0;
+out_db:
 	rdb_put(db);
+out:
+	out->aeo_op.ro_rc = rc;
 	return crt_reply_send(rpc);
 }
 
 void
 rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 {
-	struct rdb_raft_state	state;
-	crt_opcode_t		opc = opc_get(rpc->cr_opc);
-	void		       *out = crt_reply_get(rpc);
-	int			rc;
+	struct rdb_raft_state		state;
+	crt_opcode_t			opc = opc_get(rpc->cr_opc);
+	void			       *out = crt_reply_get(rpc);
+	struct rdb_requestvote_out     *out_rv;
+	struct rdb_appendentries_out   *out_ae;
+	int				rc;
+
+	rc = ((struct rdb_op_out *)out)->ro_rc;
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_DB": opc %u failed: %d\n", DP_DB(db), opc,
+			rc);
+		return;
+	}
 
 	rdb_raft_save_state(db, &state);
 	switch (opc) {
 	case RDB_REQUESTVOTE:
-		rc = raft_recv_requestvote_response(db->d_raft, node, out);
+		out_rv = out;
+		rc = raft_recv_requestvote_response(db->d_raft, node,
+						    &out_rv->rvo_msg);
 		break;
 	case RDB_APPENDENTRIES:
-		rc = raft_recv_appendentries_response(db->d_raft, node, out);
+		out_ae = out;
+		rc = raft_recv_appendentries_response(db->d_raft, node,
+						      &out_ae->aeo_msg);
 		break;
 	default:
 		D_ASSERTF(0, "unexpected opc: %u\n", opc);
