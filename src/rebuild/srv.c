@@ -353,13 +353,26 @@ rank_list_copy(daos_rank_list_t *dst, daos_rank_list_t *src)
 	return 0;
 }
 
-void ds_rebuild_check(uuid_t pool_uuid, daos_rank_list_t *tgts_failed)
-{
-	struct rebuild_status	status;
-	int			rc;
+#define RBLD_QUERY_INTV	2	/* # seocnds to query rebuild status */
 
-	memset(&status, 0, sizeof(status));
-	while (!status.done) {
+void
+ds_rebuild_check(uuid_t pool_uuid, daos_rank_list_t *tgts_failed)
+{
+	double	then = 0;
+	double	now;
+	int	rc;
+
+	while (1) {
+		struct rebuild_status	status;
+
+		now = ABT_get_wtime();
+		if (now - then < RBLD_QUERY_INTV) {
+			/* Yield to other ULT */
+			ABT_thread_yield();
+			continue;
+		}
+
+		memset(&status, 0, sizeof(status));
 		rc = ds_rebuild_query_internal(pool_uuid, tgts_failed,
 					       &status);
 		D_DEBUG(DB_TRACE, DF_UUID "done/result/obj/rec %d/%d/%d/%d"
@@ -368,9 +381,7 @@ void ds_rebuild_check(uuid_t pool_uuid, daos_rank_list_t *tgts_failed)
 		if (rc || status.done)
 			break;
 
-		/* Yield to other ULT */
-		ABT_thread_yield();
-		memset(&status, 0, sizeof(status));
+		then = now;
 	};
 }
 
