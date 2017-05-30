@@ -55,6 +55,8 @@ rebuild_runable(test_arg_t *arg, unsigned int required_tgts)
 			runable = false;
 		}
 	}
+
+	MPI_Bcast(&runable, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Barrier(MPI_COMM_WORLD);
 	return runable;
 }
