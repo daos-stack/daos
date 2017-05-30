@@ -258,7 +258,8 @@ static inline bool
 daos_crt_network_error(int err)
 {
 	return err == -DER_CRT_HG || err == -DER_CRT_ADDRSTR_GEN ||
-	       err == -DER_CRT_PMIX || err == -DER_CRT_UNREG;
+	       err == -DER_CRT_PMIX || err == -DER_CRT_UNREG ||
+	       err == -DER_UNREACH;
 }
 
 #define daos_rank_list_dup		crt_rank_list_dup
