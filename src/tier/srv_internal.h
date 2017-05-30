@@ -44,6 +44,10 @@ extern uuid_t warmer_id;
 extern daos_handle_t warmer_poh;
 extern bool warmer_conn_flg;
 
+extern char *this_grp;
+extern uuid_t this_id;
+extern daos_handle_t this_poh;
+extern bool this_conn_flg;
 
 struct daos_bld_iod_ctx {
 	daos_key_t		dkey;

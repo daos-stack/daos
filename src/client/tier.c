@@ -32,9 +32,9 @@
 
 
 struct xconn_arg {
-	uuid_t	uuid;
-	char	grp[128];
-	daos_handle_t   *poh;
+	uuid_t		uuid;
+	char		grp[128];
+	daos_handle_t	*poh;
 	daos_event_t	*evp;
 };
 
@@ -42,8 +42,8 @@ static int
 tier_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 	       daos_event_t **evp)
 {
-	daos_event_t *ev = *evp;
-	struct daos_task *task = NULL;
+	daos_event_t		*ev = *evp;
+	struct daos_task	*task = NULL;
 	int rc;
 
 	if (ev == NULL) {
@@ -78,11 +78,10 @@ err_task:
 /*Task Callbacks for cascading and dependent RPCs*/
 static int cross_conn_cb(struct daos_task *task, void *data)
 {
-	/*TODO more meaningful return codes*/
 	struct xconn_arg *cb_arg = (struct xconn_arg *)data;
+	int		      rc = task->dt_result;
 
-	daos_event_complete(cb_arg->evp, 0);
-
+	daos_event_complete(cb_arg->evp, rc);
 	return 0;
 }
 
@@ -102,9 +101,6 @@ local_tier_conn_cb(struct daos_task *task, void *data)
 		D_ERROR("Tier Conn task returned error:%d\n", rc);
 		return rc;
 	}
-
-	D_INFO("local grp:%s\n", cb_arg->grp);
-	*cb_arg->poh = g_tierctx.dtc_this->ti_poh;
 
 	/*Grab Scheduler of the task*/
 	sched = daos_task2sched(task);
@@ -151,8 +147,6 @@ daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	return daos_client_result_wait(ev);
 }
 
-
-/*TODO eventually aliasing magic...*/
 int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 		    const daos_rank_list_t *svc, unsigned int flags,
 		    daos_handle_t *poh, daos_pool_info_t *info,
@@ -162,10 +156,12 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	struct daos_task	*local_conn_task;
 	struct xconn_arg	*cb_arg;
 	daos_tier_info_t	*pt;
-	struct daos_task_args   *dta;
+	struct daos_task_args	*dta;
 
 
-	/*TODO free these guys, but where...*/
+	/*Note CB arg (on task complete) is freed implicitly by scheduler
+	* See daos_task_complete_callback in scheduler.c
+	*/
 	D_ALLOC_PTR(cb_arg);
 	if (cb_arg == NULL)
 		return -DER_NOMEM;
@@ -177,10 +173,8 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	strcpy(cb_arg->grp, grp);
 	cb_arg->evp = ev;
 	cb_arg->poh = poh;
-	D_INFO("local grp:%s\n", cb_arg->grp);
 
 	/*Client prep, plus a manual callback register to  add our CB arg*/
-	/*TODO try manual even completion?*/
 	rc = tier_task_prep(NULL, 0, &local_conn_task, &ev);
 	if (rc) {
 		D_ERROR("Error in client task prep: %d\n", rc);
@@ -199,10 +193,9 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	 * which will trigger the cross connect logic
 	 */
 	pt = tier_lookup(grp);
-	if (pt == NULL) {
-		D_ERROR("Failed to lookup group\n");
-		return -DER_ENOENT;
-	}
+	if (pt == NULL)
+		D_WARN("No client context, connectivity may be limited\n");
+
 
 	dta = daos_task_buf_get(local_conn_task, sizeof(*dta));
 	dta->opc = DAOS_OPC_POOL_CONNECT;
@@ -210,7 +203,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	dta->op_args.pool_connect.grp = grp;
 	dta->op_args.pool_connect.svc = svc;
 	dta->op_args.pool_connect.flags = flags;
-	dta->op_args.pool_connect.poh = &pt->ti_poh;
+	dta->op_args.pool_connect.poh = poh;
 	dta->op_args.pool_connect.info = info;
 
 	rc = dc_pool_connect(local_conn_task);
@@ -234,9 +227,6 @@ daos_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	int rc;
 	struct daos_task	*trc_task;
 
-	tier_setup_this_tier(tgt_uuid, tgt_grp);
-	tier_setup_cold_tier(colder_id, colder_grp);
-
 	rc = daos_client_task_prep(NULL, 0, &trc_task, &ev);
 
 	rc = dc_tier_register_cold(colder_id, colder_grp, tgt_grp, trc_task);
@@ -244,6 +234,28 @@ daos_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 		return rc;
 
 	return daos_client_result_wait(ev);
+}
+
+void
+daos_tier_setup_client_ctx(const uuid_t colder_id, const char *colder_grp,
+			   daos_handle_t *cold_poh, const uuid_t tgt_uuid,
+			   const char *tgt_grp, daos_handle_t *warm_poh)
+{
+	daos_tier_info_t	*pt;
+
+	/*Allocates and sets up tier context stuff*/
+	tier_setup_this_tier(tgt_uuid, tgt_grp);
+	tier_setup_cold_tier(colder_id, colder_grp);
+
+	/*Assign POHs*/
+	pt = tier_lookup(tgt_grp);
+	if (pt != NULL && warm_poh != NULL)
+		pt->ti_poh = *warm_poh;
+
+	pt = tier_lookup(colder_grp);
+	if (pt != NULL && cold_poh != NULL)
+		pt->ti_poh = *cold_poh;
+
 }
 
 int

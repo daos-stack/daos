@@ -63,9 +63,12 @@ typedef enum {
 
 /*Tier Specific Return Codes, consider moving to daos_errno?*/
 typedef enum{
-	NO_COLDER = 1,
-	ALREADY_CONN_WARM = 2,
-	ALREADY_CONN_COLD = 3
+	DER_TIER_BASE		= 3000,
+	NO_COLDER		= DER_TIER_BASE + 1,
+	ALREADY_CONN_WARM	= DER_TIER_BASE + 2,
+	ALREADY_CONN_COLD	= DER_TIER_BASE + 3,
+	HANDLE_BCAST_ERR	= DER_TIER_BASE + 4,
+	COLD_ALREADY_SET	= DER_TIER_BASE + 5,
 } daos_tier_ret_codes_t;
 /**
  * Summarize a pool and its policies for caching
@@ -156,25 +159,31 @@ daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
  * \return		These values will be returned by \a ev::ev_error in
  *			non-blocking mode:
  *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Pool is nonexistent, this may also mean
- *					that an intertier connection may have
- *					failed.
- */
+ *			-DER_INVAL		Invalid parameter
+ *			-DER_UNREACH		Network is unreachable
+ *			-DER_NO_PERM		Permission denied
+ *			-DER_NONEXIST		Pool is nonexistent
+ *			+NO_COLDER		No colder pool is identified
+ *						local connection succeded
+ *			+ALREADY_CONN_COLD	Lower-tier connection already
+ *						exists, local conn success
+ **/
 int
 daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 		       const daos_rank_list_t *svc, unsigned int flags,
 		       daos_handle_t *poh, daos_pool_info_t *info,
 		       daos_event_t *ev);
 
-/*Debug/testing call*/
+/*Debug/testing calls*/
 int
 daos_tier_register_cold(const uuid_t colder_uuid, const char *colder_grp,
 			const uuid_t tgt_uuid, char *tgt_grp_id,
 			daos_event_t *ev);
 
+void
+daos_tier_setup_client_ctx(const uuid_t colder_id, const char *colder_grp,
+			   daos_handle_t *cold_poh, const uuid_t tgt_uuid,
+			   const char *tgt_grp, daos_handle_t *warm_poh);
 
 
 /**

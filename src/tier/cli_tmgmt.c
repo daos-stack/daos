@@ -91,11 +91,9 @@ dc_tier_register_cold_cb(struct daos_task *task, void *data)
 	/*info as its a onetime per run call*/
 	D_INFO("Tier Register Cold CB Complete!!\n");
 
-
 out:
 	crt_req_decref(trc_arg->rpc);
 	return rc;
-
 }
 
 int
@@ -107,8 +105,8 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 	crt_rpc_t			*rpc_req;
 	struct tier_cross_conn_in	*cci_in = NULL;
 	struct tier_conn_arg		*tc_arg = NULL;
-	int			        alen;
-	char			        *warm_grp_cpy;
+	int				alen;
+	char				*warm_grp_cpy;
 
 
 	/*NOTE hardcoding to rank 0 is temp measure.
@@ -131,9 +129,10 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 	cci_in = crt_req_get(rpc_req);
 	D_ASSERT(cci_in != NULL);
 
-	/*Set up arg info affiliated with task*/
-	/*TODO free in CB  causes seg fault....*/
-	/*The alloc is non-std because we need to copy the warm_grp string */
+	/*Set up arg info affiliated with task*
+	* The alloc is non-std because we need to copy the warm_grp string
+	* note this should be freed via callback infrastructure automatically
+	*/
 	alen = sizeof(*tc_arg) + strlen(warm_grp) + 1;
 	D_ALLOC(tc_arg, alen);
 	warm_grp_cpy = (char *)(&tc_arg[1]);
@@ -142,7 +141,6 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 	/*Load up the RPC inputs*/
 	uuid_copy(cci_in->cci_warm_id, warm_id);
 	cci_in->cci_warm_grp = (crt_string_t)warm_grp_cpy;
-
 
 	crt_req_addref(rpc_req); /*Added for the arg*/
 	tc_arg->rpc = rpc_req;
@@ -162,6 +160,8 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 out_decref:
 	/*Decrement ref count since callback never triggers if we got here*/
 	crt_req_decref(rpc_req);
+	/*Free since completion callback will never be triggered*/
+	D_FREE(tc_arg, alen);
 	return rc;
 out_final:
 	return rc;
@@ -176,13 +176,7 @@ dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	crt_rpc_t			*rpc_req = NULL;
 	struct tier_register_cold_in	*rc_in = NULL;
 	struct tier_reg_cold_arg	*trc_arg = NULL;
-#if 0
-	static crt_group_t		*tgt_crt_grp;
 
-	/*TODO.... is this leaky? Where should it be freed?*/
-	D_ALLOC(tgt_crt_grp, sizeof(crt_group_t));
-	daos_group_attach(tgt_grp_id, &tgt_crt_grp);
-#endif
 	tgt.ep_grp = tier_crt_group_lookup(tgt_grp_id);
 	tgt.ep_rank = 0;
 	tgt.ep_tag = 0;
@@ -202,7 +196,9 @@ dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	uuid_copy(rc_in->rci_colder_id, colder_id);
 	rc_in->rci_colder_grp = (crt_string_t)colder_grp;
 
-	/*Set log up arg for task CB*/
+	/*Set log up arg for task CB, this should be automatically freed
+	* by the callback infrastrucure after it completes
+	**/
 	D_ALLOC_PTR(trc_arg);
 	crt_req_addref(rpc_req);
 	trc_arg->rpc = rpc_req;
