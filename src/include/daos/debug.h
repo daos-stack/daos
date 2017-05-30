@@ -43,7 +43,7 @@
 #define	DD_SEP			", "
 /* The environment variable for enabled debug facilities (subsystems) */
 #define DD_FAC_ENV		"DD_SUBSYS"
-#define DD_FAC_DEFAULT		"all"
+#define DD_FAC_ALL		"all"
 
 /* The environment variable for the default debug bit-mask */
 #define DD_MASK_ENV		"DD_MASK"

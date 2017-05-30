@@ -393,6 +393,8 @@ debug_fac_load_env(void)
 			if (strcasecmp(cur, debug_fac_dict[i].df_name) == 0) {
 				debug_fac_dict[i].df_enabled = 1;
 				break;
+			} else if (strcasecmp(cur, DD_FAC_ALL) == 0) {
+				debug_fac_dict[i].df_enabled = 1;
 			}
 		}
 		cur = strtok(NULL, DD_SEP);
