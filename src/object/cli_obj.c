@@ -564,11 +564,6 @@ dc_obj_retry_cb(struct daos_task *task, void *data)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/** Register retry CB */
-	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb, sizeof(*oh), oh);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
 out:
 	return rc;
 }
@@ -771,6 +766,12 @@ dc_obj_shard_task_update(struct daos_task *task)
 	daos_handle_t			shard_oh;
 	unsigned int			shard, shards_cnt;
 	int				rc;
+
+	/** Register retry CB */
+	rc = daos_task_register_comp_cb(task, dc_obj_retry_cb, sizeof(args->oh),
+					args->oh);
+	if (rc != 0)
+		return rc;
 
 	if (args->shard == 0 &&
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE)) {
