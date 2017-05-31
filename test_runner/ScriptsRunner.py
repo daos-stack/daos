@@ -92,6 +92,22 @@ class ScriptsRunner(PostRunner.PostRunner):
             rtn = 0
         return rtn
 
+    def execute_skip(self, results, item):
+        """ skip a test """
+        skip = item['skipIf']
+        if skip == 'noVMs':
+            if 'vm' not in \
+                self.test_info.get_test_info('subList', 'hostlist', ""):
+                return False
+        info = {}
+        info['name'] = item['name']
+        info['duration'] = '0'
+        info['return_code'] = 0
+        info['status'] = "SKIP"
+        info['error'] = ""
+        results.update_subtest_results(info)
+        return True
+
     def execute_setup(self, test, module, logname):
         """ execute test strategy """
         rtn = 0
@@ -123,6 +139,8 @@ class ScriptsRunner(PostRunner.PostRunner):
         for item in self.test_info.get_test_info('execStrategy'):
             rc = 0
             info = {}
+            if 'skipIf' in item and self.execute_skip(results, item):
+                continue
             info['name'] = item['name']
             log_name = "{baseName}.{subTest}.{logType}.{hostName}.log".format(
                 baseName=baseName,
