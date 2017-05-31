@@ -506,6 +506,9 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated)
 	rpc_priv->crp_opc_info = opc_info;
 	*priv_allocated = rpc_priv;
 
+	C_DEBUG("rpc_priv %p (opc: 0x%x), allocated.\n",
+		rpc_priv, rpc_priv->crp_opc_info->coi_opc);
+
 out:
 	return rc;
 }

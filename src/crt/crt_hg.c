@@ -696,6 +696,9 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	C_ASSERT(opc_info->coi_opc == opc);
 	rpc_priv->crp_opc_info = opc_info;
 
+	C_DEBUG("rpc_priv %p (opc: 0x%x), allocated.\n",
+		rpc_priv, rpc_priv->crp_opc_info->coi_opc);
+
 	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, true /* srv_flag */,
 			       false /* forward */);
 	if (rc != 0) {
