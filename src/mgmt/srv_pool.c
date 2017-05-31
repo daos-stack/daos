@@ -42,6 +42,8 @@ struct pc_inprogress {
 	unsigned int		 pc_tc_ack_num;
 	/* number of failed tgt_create */
 	unsigned int		 pc_tc_fail_num;
+	/* failure of the tgt_create */
+	int			 pc_tc_fail;
 	/* list of tgt_destroy RPC */
 	daos_list_t		 pc_td_list;
 	/* number of tgt_destroy sent */
@@ -365,6 +367,9 @@ tgt_create_cb(const struct crt_cb_info *cb_info)
 
 	if (rc != 0 || tc_out->tc_rc != 0) {
 		pc_inprog->pc_tc_fail_num++;
+		if (pc_inprog->pc_tc_fail == 0)
+			pc_inprog->pc_tc_fail = rc != 0 ? rc : tc_out->tc_rc;
+
 		/* Remove failed tgt-create req from tgt-create req list,
 		 * the succeed req remains there as if some other req failed
 		 * need to do the tgt-destroy for error handling. */
@@ -564,6 +569,7 @@ svc_create_fail:
 				      ptc_link) {
 		crt_rpc_t			*td_req;
 		struct mgmt_tgt_destroy_in	*td_in;
+		int				ret;
 
 		daos_list_del_init(&tc->ptc_link);
 
@@ -575,17 +581,17 @@ svc_create_fail:
 
 		pc_inprog->pc_td_num++;
 		opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE, 1);
-		rc = crt_req_create(dss_get_module_info()->dmi_ctx, svr_ep,
+		ret = crt_req_create(dss_get_module_info()->dmi_ctx, svr_ep,
 				    opc, &td_req);
-		if (rc != 0) {
+		if (ret != 0) {
 			D_ERROR("crt_req_create(MGMT_TGT_DESTROY) failed, "
-				"rc: %d.\n", rc);
+				"rc: %d.\n", ret);
 			pc_inprog->pc_td_ack_num++;
 			pc_inprog->pc_td_fail_num++;
 			/* decref corresponds to the addref in
 			 * tc_add_req_to_inprog */
-			rc = crt_req_decref(tc_req);
-			D_ASSERT(rc == 0);
+			ret = crt_req_decref(tc_req);
+			D_ASSERT(ret == 0);
 			continue;
 		}
 
@@ -594,29 +600,31 @@ svc_create_fail:
 		uuid_copy(td_in->td_pool_uuid, tc_in->tc_pool_uuid);
 
 		/* decref corresponds to the addref in tc_add_req_to_inprog */
-		rc = crt_req_decref(tc_req);
-		D_ASSERT(rc == 0);
+		ret = crt_req_decref(tc_req);
+		D_ASSERT(ret == 0);
 
-		rc = crt_req_send(td_req, pc_tgt_destroy_cb, pc_inprog);
-		if (rc != 0) {
+		ret = crt_req_send(td_req, pc_tgt_destroy_cb, pc_inprog);
+		if (ret != 0) {
 			D_ERROR("crt_req_send(MGMT_TGT_DESTROY) failed, "
-				"rc: %d.\n", rc);
+				"rc: %d.\n", ret);
 			pc_inprog->pc_td_ack_num++;
 			pc_inprog->pc_td_fail_num++;
 			continue;
 		}
 
 		td_req_sent = true;
-		rc = td_add_req_to_pc_inprog(pc_inprog, td_req);
-		D_ASSERT(rc == 0);
+		ret = td_add_req_to_pc_inprog(pc_inprog, td_req);
+		D_ASSERT(ret == 0);
 	}
 
 	if (td_req_sent == false)
-		D_GOTO(out, rc = -DER_TGT_CREATE);
+		D_GOTO(out, rc);
 
 	ABT_eventual_wait(pc_inprog->pc_completion, NULL /* value */);
 
 out:
+	if (rc == 0 && pc_inprog != NULL)
+		rc = pc_inprog->pc_tc_fail;
 	pc_out->pc_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
