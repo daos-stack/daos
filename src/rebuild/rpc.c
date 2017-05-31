@@ -53,6 +53,8 @@ static struct crt_msg_field *rebuild_objs_in_fields[] = {
 
 static struct crt_msg_field *rebuild_tgt_in_fields[] = {
 	&CMF_UUID,	/* pool uuid */
+	&CMF_UINT32,	/* pool map version */
+	&CMF_UINT32,	/* 32-bit padding */
 	&CMF_RANK_LIST,	/* failed targets */
 };
 
@@ -82,6 +84,7 @@ static struct crt_msg_field *rebuild_query_out_fields[] = {
 static struct crt_msg_field *rebuild_fini_tgt_in_fields[] = {
 	&CMF_UUID,	/* pool uuid */
 	&CMF_UINT32,	/* pool map version */
+	&CMF_UINT32,	/* 32-bit padding */
 };
 
 struct crt_req_format DQF_REBUILD_OBJECTS_SCAN =

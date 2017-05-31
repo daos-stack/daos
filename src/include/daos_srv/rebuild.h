@@ -28,11 +28,13 @@
 #define __DAOS_SRV_REBUILD_H__
 
 #include <daos_types.h>
-bool
-is_rebuild_container(uuid_t cont_hdl_uuid);
-bool
-is_rebuild_pool(uuid_t pool_hdl_uuid);
 
-int
-ds_rebuild_schedule(const uuid_t uuid, daos_rank_list_t *tgts_failed);
+#define REBUILD_ENV            "DAOS_REBUILD"
+#define REBUILD_ENV_DISABLED   "no"
+
+bool is_rebuild_container(uuid_t cont_hdl_uuid);
+bool is_rebuild_pool(uuid_t pool_hdl_uuid);
+
+int ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
+			daos_rank_list_t *tgts_failed);
 #endif

@@ -53,6 +53,7 @@ enum pool_operation {
 struct rebuild_fini_tgt_in {
 	uuid_t		rfti_pool_uuid;
 	uint32_t	rfti_pool_map_ver;
+	uint32_t	rfti_pad_32;
 };
 
 struct rebuild_scan_in {
@@ -101,6 +102,8 @@ struct rebuild_query_out {
 
 struct rebuild_tgt_in {
 	uuid_t		 rti_pool_uuid;
+	uint32_t	 rti_map_ver;
+	uint32_t	 rti_pad_32;
 	daos_rank_list_t *rti_failed_tgts;
 };
 

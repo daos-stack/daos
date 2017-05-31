@@ -1883,13 +1883,22 @@ out:
 	rc = crt_reply_send(rpc);
 
 	if (opc_get(rpc->cr_opc) == POOL_EXCLUDE) {
-		int ret;
+		char	*env;
+		int	 ret;
 
-		ret = ds_rebuild_schedule(in->pti_op.pi_uuid, in->pti_targets);
-		if (ret != 0) {
-			D_ERROR("rebuild fails rc %d\n", ret);
-			if (rc == 0)
-				rc = ret;
+		env = getenv(REBUILD_ENV);
+		if (env && !strcasecmp(env, REBUILD_ENV_DISABLED)) {
+			D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
+
+		} else { /* enabled by default */
+			ret = ds_rebuild_schedule(in->pti_op.pi_uuid,
+						  out->pto_op.po_map_version,
+						  in->pti_targets);
+			if (ret != 0) {
+				D_ERROR("rebuild fails rc %d\n", ret);
+				if (rc == 0)
+					rc = ret;
+			}
 		}
 	}
 
