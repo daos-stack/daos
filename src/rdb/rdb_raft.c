@@ -682,7 +682,7 @@ rdb_applyd(void *arg)
 		for (;;) {
 			committed = raft_get_commit_idx(db->d_raft);
 			stop = db->d_stop;
-			D_ASSERTF(db->d_applied <= committed,
+			D_ASSERTF(committed == 0 || db->d_applied <= committed,
 				  DF_U64" <= "DF_U64"\n", db->d_applied,
 				  committed);
 			if (db->d_applied < committed)
