@@ -51,6 +51,7 @@ enum pool_operation {
 	POOL_EVICT		= 7,
 	POOL_ADD		= 8,
 	POOL_EXCLUDE_OUT	= 9,
+	POOL_SVC_STOP		= 10,
 
 	POOL_TGT_CONNECT	= 11,
 	POOL_TGT_DISCONNECT	= 12,
@@ -134,6 +135,14 @@ struct pool_evict_in {
 
 struct pool_evict_out {
 	struct pool_op_out	pvo_op;
+};
+
+struct pool_svc_stop_in {
+	struct pool_op_in	psi_op;	/* .pi_hdl unused */
+};
+
+struct pool_svc_stop_out {
+	struct pool_op_out	pso_op;	/* .po_map_version unused */
 };
 
 struct pool_tgt_connect_in {

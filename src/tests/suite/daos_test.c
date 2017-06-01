@@ -31,7 +31,7 @@
 #include "daos_test.h"
 
 /** All tests in default order ('d' must be the last one) */
-static const char *all_tests = "mpceiACodr";
+static const char *all_tests = "mpceiACoRdr";
 
 /** Server crt group ID */
 static const char *server_group;
@@ -83,6 +83,7 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 
 	/** create pool */
 	if (arg->myrank == 0) {
+		print_message("setup: creating pool\n");
 		rc = daos_pool_create(0731, geteuid(), getegid(), arg->group,
 				      NULL, "pmem", 1024*1024*1024, &arg->svc,
 				      arg->pool_uuid, NULL);
@@ -109,6 +110,7 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 
 	/** connect to pool */
 	if (arg->myrank == 0) {
+		print_message("setup: connecting to pool\n");
 		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
 				       DAOS_PC_RW, &arg->poh, &arg->pool_info,
 				       NULL /* ev */);
@@ -135,6 +137,7 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 
 	/** create container */
 	if (arg->myrank == 0) {
+		print_message("setup: creating container\n");
 		uuid_generate(arg->co_uuid);
 		rc = daos_cont_create(arg->poh, arg->co_uuid, NULL);
 		if (rc)
@@ -155,6 +158,7 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 
 	/** open container */
 	if (arg->myrank == 0) {
+		print_message("setup: opening container\n");
 		rc = daos_cont_open(arg->poh, arg->co_uuid, DAOS_COO_RW,
 				    &arg->coh, &arg->co_info, NULL);
 		if (rc)
@@ -324,7 +328,7 @@ run_specified_tests(const char *tests, int rank, int size)
 			break;
 		case 'A':
 			daos_test_print(rank, "\n\n=================");
-				daos_test_print(rank, "DAOS Array test..");
+			daos_test_print(rank, "DAOS Array test..");
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_array_test(rank, size);
 			break;
@@ -339,6 +343,12 @@ run_specified_tests(const char *tests, int rank, int size)
 			daos_test_print(rank, "DAOS Epoch recovery tests..");
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_epoch_recovery_test(rank, size);
+			break;
+		case 'R':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS MD replication tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_md_replication_test(rank, size);
 			break;
 		case 'd':
 			daos_test_print(rank, "\n\n=================");
@@ -391,6 +401,7 @@ main(int argc, char **argv)
 		{"array",	no_argument,		NULL,	'A'},
 		{"epoch",	no_argument,		NULL,	'e'},
 		{"erecov",	no_argument,		NULL,	'o'},
+		{"mdr",		no_argument,		NULL,	'R'},
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
 		{"group",	required_argument,	NULL,	'g'},
@@ -406,7 +417,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "ampcCdiAeog:hr",
+	while ((opt = getopt_long(argc, argv, "ampcCdiAeoRg:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;

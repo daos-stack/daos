@@ -180,3 +180,24 @@ daos_pool_target_query(daos_handle_t poh, daos_rank_list_t *tgts,
 {
 	return -DER_NOSYS;
 }
+
+int
+daos_pool_svc_stop(daos_handle_t poh, daos_event_t *ev)
+{
+	daos_pool_svc_stop_t	args;
+	struct daos_task	*task;
+	int			rc;
+
+	DAOS_API_ARG_ASSERT(args, POOL_SVC_STOP);
+
+	args.poh = poh;
+
+	rc = dc_task_prep(DAOS_OPC_POOL_SVC_STOP, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
+		return rc;
+
+	daos_sched_progress(daos_ev2sched(ev));
+
+	return daos_client_result_wait(ev);
+}

@@ -114,6 +114,17 @@ struct crt_msg_field *pool_evict_out_fields[] = {
 	&DMF_RSVC_HINT	/* op.hint */
 };
 
+struct crt_msg_field *pool_svc_stop_in_fields[] = {
+	&CMF_UUID,	/* op.uuid */
+	&CMF_UUID	/* op.handle */
+};
+
+struct crt_msg_field *pool_svc_stop_out_fields[] = {
+	&CMF_INT,	/* op.rc */
+	&CMF_UINT32,	/* op.map_version */
+	&DMF_RSVC_HINT	/* op.hint */
+};
+
 struct crt_msg_field *pool_tgt_connect_in_fields[] = {
 	&CMF_UUID,	/* pool */
 	&CMF_UUID,	/* pool_hdl */
@@ -174,6 +185,10 @@ struct crt_req_format DQF_POOL_ADD =
 struct crt_req_format DQF_POOL_EVICT =
 	DEFINE_CRT_REQ_FMT("POOL_EVICT", pool_evict_in_fields,
 			   pool_evict_out_fields);
+
+struct crt_req_format DQF_POOL_SVC_STOP =
+	DEFINE_CRT_REQ_FMT("POOL_SVC_STOP", pool_svc_stop_in_fields,
+			   pool_svc_stop_out_fields);
 
 struct crt_req_format DQF_POOL_TGT_CONNECT =
 	DEFINE_CRT_REQ_FMT("POOL_TGT_CONNECT", pool_tgt_connect_in_fields,
@@ -247,6 +262,12 @@ struct daos_rpc pool_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_POOL_EXCLUDE_OUT,
+	}, {
+		.dr_name	= "POOL_SVC_STOP",
+		.dr_opc		= POOL_SVC_STOP,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_POOL_SVC_STOP,
 	}, {
 		.dr_opc		= 0
 	}

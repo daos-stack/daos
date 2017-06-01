@@ -32,6 +32,7 @@
 #include <daos_srv/pool.h>
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/rsvc.h>
@@ -793,13 +794,44 @@ ds_pool_svc_hash_fini(void)
 static int
 pool_svc_lookup(const uuid_t uuid, struct pool_svc **svcp)
 {
-	daos_list_t *entry;
+	daos_list_t    *entry;
+	bool		nonexist = false;
 
 	ABT_mutex_lock(pool_svc_hash_lock);
 	entry = dhash_rec_find(&pool_svc_hash, uuid, sizeof(uuid_t));
+	if (entry == NULL) {
+		char	       *path;
+		struct stat	buf;
+		int		rc;
+
+		/*
+		 * See if the DB exists. If an error prevents us from find that
+		 * out, return -DER_NOTLEADER so that the client tries other
+		 * replicas.
+		 */
+		path = ds_pool_rdb_path(uuid, uuid);
+		if (path == NULL) {
+			D_ERROR(DF_UUID": failed to get rdb path\n",
+				DP_UUID(uuid));
+			D_GOTO(out_lock, -DER_NOMEM);
+		}
+		rc = stat(path, &buf);
+		free(path);
+		if (rc != 0) {
+			if (errno == ENOENT)
+				nonexist = true;
+			else
+				D_ERROR(DF_UUID": failed to stat rdb: %d\n",
+					DP_UUID(uuid), errno);
+			D_GOTO(out_lock, daos_errno2der(errno));
+		}
+	}
+out_lock:
 	ABT_mutex_unlock(pool_svc_hash_lock);
-	if (entry == NULL)
+	if (nonexist)
 		return -DER_NONEXIST;
+	if (entry == NULL)
+		return -DER_NOTLEADER;
 	*svcp = pool_svc_obj(entry);
 	return 0;
 }
@@ -2036,6 +2068,35 @@ out:
 	out->pvo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pvi_op.pi_uuid), rpc, rc);
+	return crt_reply_send(rpc);
+}
+
+int
+ds_pool_svc_stop_handler(crt_rpc_t *rpc)
+{
+	struct pool_svc_stop_in	       *in = crt_req_get(rpc);
+	struct pool_svc_stop_out       *out = crt_reply_get(rpc);
+	struct pool_svc		       *svc;
+	int				rc;
+
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
+		DP_UUID(in->psi_op.pi_uuid), rpc);
+
+	rc = pool_svc_lookup(in->psi_op.pi_uuid, &svc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	if (!pool_svc_up(svc))
+		D_GOTO(out_svc, rc = -DER_NOTLEADER);
+
+	ds_pool_svc_stop(svc->ps_uuid);
+
+out_svc:
+	set_rsvc_hint(svc->ps_db, &out->pso_op);
+	pool_svc_put(svc);
+out:
+	out->pso_op.po_rc = rc;
+	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
+		DP_UUID(in->psi_op.pi_uuid), rpc, rc);
 	return crt_reply_send(rpc);
 }
 

@@ -97,6 +97,9 @@ static struct daos_rpc_handler pool_handlers[] = {
 	},{
 		.dr_opc		= POOL_EXCLUDE_OUT,
 		.dr_hdlr	= ds_pool_update_handler
+	},{
+		.dr_opc		= POOL_SVC_STOP,
+		.dr_hdlr	= ds_pool_svc_stop_handler
 	}, {
 		.dr_opc		= POOL_TGT_CONNECT,
 		.dr_hdlr	= ds_pool_tgt_connect_handler,

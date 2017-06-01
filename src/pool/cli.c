@@ -1360,3 +1360,99 @@ dc_pool_extend(struct daos_task *task)
 {
 	return -DER_NOSYS;
 }
+
+struct pool_svc_stop_arg {
+	struct dc_pool	       *dsa_pool;
+	crt_rpc_t	       *rpc;
+};
+
+static int
+pool_svc_stop_cb(struct daos_task *task, void *data)
+{
+	struct pool_svc_stop_arg       *arg = (struct pool_svc_stop_arg *)data;
+	struct pool_svc_stop_out       *out = crt_reply_get(arg->rpc);
+	int				rc = task->dt_result;
+
+	rc = pool_rsvc_client_complete_rpc(arg->dsa_pool, &arg->rpc->cr_ep, rc,
+					   &out->pso_op, task);
+	if (rc < 0)
+		D_GOTO(out, rc);
+	else if (rc == RSVC_CLIENT_RECHOOSE)
+		D_GOTO(out, rc = 0);
+
+	D_DEBUG(DF_DSMC, DF_UUID": stop rpc done: %d\n",
+		DP_UUID(arg->dsa_pool->dp_pool), rc);
+
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = out->pso_op.po_rc;
+	if (rc)
+		D_GOTO(out, rc);
+
+out:
+	crt_req_decref(arg->rpc);
+	dc_pool_put(arg->dsa_pool);
+	return rc;
+}
+
+int
+dc_pool_svc_stop(struct daos_task *task)
+{
+	daos_pool_svc_stop_t	       *args;
+	struct dc_pool		       *pool;
+	crt_endpoint_t			ep;
+	crt_rpc_t		       *rpc;
+	struct pool_svc_stop_in	       *in;
+	struct pool_svc_stop_arg	stop_args;
+	int				rc;
+
+	args = daos_task_get_args(DAOS_OPC_POOL_SVC_STOP, task);
+	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+
+	pool = dc_hdl2pool(args->poh);
+	if (pool == NULL)
+		D_GOTO(out_task, rc = -DER_NO_HDL);
+
+	D_DEBUG(DF_DSMC, DF_UUID": stopping svc: hdl="DF_UUID" \n",
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
+
+	ep.ep_grp = pool->dp_group;
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
+	rc = pool_req_create(daos_task2ctx(task), ep, POOL_SVC_STOP, &rpc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create POOL_SVC_STOP RPC: %d\n",
+			DP_UUID(pool->dp_pool), rc);
+		D_GOTO(out_pool, rc);
+	}
+
+	in = crt_req_get(rpc);
+	uuid_copy(in->psi_op.pi_uuid, pool->dp_pool);
+	uuid_copy(in->psi_op.pi_hdl, pool->dp_pool_hdl);
+
+	stop_args.dsa_pool = pool;
+	crt_req_addref(rpc);
+	stop_args.rpc = rpc;
+
+	rc = daos_task_register_comp_cb(task, pool_svc_stop_cb,
+					sizeof(stop_args), &stop_args);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	rc = daos_rpc_send(rpc, task);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	return rc;
+
+out_rpc:
+	crt_req_decref(rpc);
+	crt_req_decref(rpc);
+out_pool:
+	dc_pool_put(pool);
+out_task:
+	daos_task_complete(task, rc);
+	return rc;
+}

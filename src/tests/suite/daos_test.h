@@ -134,6 +134,7 @@ int run_daos_io_test(int rank, int size);
 int run_daos_array_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
+int run_daos_md_replication_test(int rank, int size);
 int run_daos_degraded_test(int rank, int size);
 int run_daos_rebuild_test(int rank, int size);
 

@@ -74,6 +74,7 @@ int dc_pool_exclude(struct daos_task *task);
 int dc_pool_exclude_out(struct daos_task *task);
 int dc_pool_add(struct daos_task *task);
 int dc_pool_evict(struct daos_task *task);
+int dc_pool_svc_stop(struct daos_task *task);
 
 int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
@@ -130,5 +131,23 @@ daos_pool_tgt_add(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev);
 int
 daos_pool_exclude_out(daos_handle_t poh, daos_rank_list_t *tgts,
 		      daos_event_t *ev);
+
+/**
+ * Stop the current pool service leader.
+ *
+ * \param poh	[IN]	Pool connection handle
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid pool handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ */
+int
+daos_pool_svc_stop(daos_handle_t poh, daos_event_t *ev);
 
 #endif /* __DAOS_POOL_H__ */

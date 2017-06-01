@@ -52,6 +52,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_pool_add, sizeof(daos_pool_update_t)},
 	{dc_pool_query, sizeof(daos_pool_query_t)},
 	{dc_pool_target_query, sizeof(daos_pool_target_query_t)},
+	{dc_pool_svc_stop, sizeof(daos_pool_svc_stop_t)},
 	{dc_cont_create, sizeof(daos_cont_create_t)},
 	{dc_cont_open, sizeof(daos_cont_open_t)},
 	{dc_cont_close, sizeof(daos_cont_close_t)},

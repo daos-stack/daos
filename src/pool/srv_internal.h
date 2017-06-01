@@ -62,6 +62,7 @@ int ds_pool_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_query_handler(crt_rpc_t *rpc);
 int ds_pool_update_handler(crt_rpc_t *rpc);
 int ds_pool_evict_handler(crt_rpc_t *rpc);
+int ds_pool_svc_stop_handler(crt_rpc_t *rpc);
 
 /*
  * srv_target.c
