@@ -553,8 +553,13 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 			D_FREE(ranks.rl_ranks,
 			       sizeof(*ranks.rl_ranks) * ranks.rl_nr.num);
 
-		if (rc == 0)
+		if (rc == 0) {
+			daos_rank_list_t *svc = pc_out->pc_svc;
+
+			/* CMF_RANK_LIST only processes "num". */
+			svc->rl_nr.num = svc->rl_nr.num_out;
 			D_GOTO(out, rc = 0);
+		}
 
 svc_create_fail:
 		D_ERROR(DF_UUID": pool svc setup failed with %d\n",

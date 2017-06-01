@@ -95,9 +95,14 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 	if (rc)
 		return rc;
 
-	/** broadcast pool UUID */
-	if (multi_rank)
+	/** broadcast pool UUID and svc addresses */
+	if (arg->myrank == 0)
+		arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
+	if (multi_rank) {
 		MPI_Bcast(arg->pool_uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
+		MPI_Bcast(&arg->svc, sizeof(arg->pool_info), MPI_CHAR, 0,
+			  MPI_COMM_WORLD);
+	}
 
 	if (step == SETUP_POOL_CREATE)
 		goto out;
@@ -360,14 +365,15 @@ run_specified_tests(const char *tests, int rank, int size)
 int
 main(int argc, char **argv)
 {
-	char	tests[64];
-	int	ntests = 0;
-	int	nr_failed;
-	int	nr_total_failed = 0;
-	int	opt = 0, index = 0;
-	int	rank;
-	int	size;
-	int	rc;
+	test_arg_t	*arg;
+	char		 tests[64];
+	int		 ntests = 0;
+	int		 nr_failed;
+	int		 nr_total_failed = 0;
+	int		 opt = 0, index = 0;
+	int		 rank;
+	int		 size;
+	int		 rc;
 
 	MPI_Init(&argc, &argv);
 
@@ -424,6 +430,12 @@ main(int argc, char **argv)
 			print_usage(rank);
 			goto exit;
 		}
+	}
+
+	if (svc_nreplicas > ARRAY_SIZE(arg->ranks) && rank == 0) {
+		print_message("at most %zu service replicas allowed\n",
+			      ARRAY_SIZE(arg->ranks));
+		return -1;
 	}
 
 	nr_failed = run_specified_tests(tests, rank, size);

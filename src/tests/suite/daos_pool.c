@@ -27,6 +27,7 @@
  */
 
 #define DD_SUBSYS	DD_FAC(tests)
+
 #include "daos_test.h"
 
 /** connect to non-existing pool */
@@ -159,14 +160,14 @@ pool_connect_exclusively(void **state)
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
 	assert_int_equal(rc, 0);
 
-	print_message("SUBTEST 2: no other connections; shall succeed");
+	print_message("SUBTEST 2: no other connections; shall succeed\n");
 	print_message("establishing an exclusive connection\n");
 	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
 			       DAOS_PC_EX, &poh_ex, NULL /* info */,
 			       NULL /* ev */);
 	assert_int_equal(rc, 0);
 
-	print_message("SUBTEST 3: shall prevent other connections (%d)",
+	print_message("SUBTEST 3: shall prevent other connections (%d)\n",
 		      -DER_BUSY);
 	print_message("trying to establish a non-exclusive connection\n");
 	rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
@@ -217,13 +218,12 @@ pool_exclude(void **state)
 
 	print_message("success\n");
 
-	if (info.pi_ntargets < 2) {
-		print_message("not enough targets; skipping\n");
+	/** exclude last non-svc rank */
+	if (info.pi_ntargets == arg->svc.rl_nr.num) {
+		print_message("not enough non-svc targets; skipping\n");
 		goto disconnect;
 	}
-
-	/** exclude rank 1 */
-	rank = 1;
+	rank = info.pi_ntargets - 1;
 	ranks.rl_nr.num = 1;
 	ranks.rl_nr.num_out = ranks.rl_nr.num;
 	ranks.rl_ranks = &rank;

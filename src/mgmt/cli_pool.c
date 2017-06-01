@@ -55,7 +55,11 @@ pool_create_cp(struct daos_task *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	/** report list of targets running the metadata service */
+	/**
+	 * report list of targets running the metadata service. CMF_RANK_LIST
+	 * only processes "num".
+	 */
+	pc_out->pc_svc->rl_nr.num_out = pc_out->pc_svc->rl_nr.num;
 	daos_rank_list_copy(svc, pc_out->pc_svc, false);
 out:
 	daos_group_detach(arg->rpc->cr_ep.ep_grp);
