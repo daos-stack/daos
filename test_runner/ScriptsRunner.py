@@ -95,7 +95,7 @@ class ScriptsRunner(PostRunner.PostRunner):
     def execute_skip(self, results, item):
         """ skip a test """
         skip = item['skipIf']
-        if skip == 'noVMs':
+        if skip == 'hasVMs':
             if 'vm' not in \
                 self.test_info.get_test_info('subList', 'hostlist', ""):
                 return False
