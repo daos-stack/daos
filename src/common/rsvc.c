@@ -249,8 +249,8 @@ rsvc_client_encode(const struct rsvc_client *client, void *buf)
 	if (p != NULL) {
 		p->scb_magic = rsvc_client_buf_magic;
 		p->scb_nranks = client->sc_ranks->rl_nr.num;
-		p->scb_leader_known = client->sc_leader_known;
-		p->scb_leader_aliveness = client->sc_leader_aliveness ? 1 : 0;
+		p->scb_leader_known = client->sc_leader_known ? 1 : 0;
+		p->scb_leader_aliveness = client->sc_leader_aliveness;
 		p->scb_leader_term = client->sc_leader_term;
 		p->scb_leader_index = client->sc_leader_index;
 		p->scb_next = client->sc_next;
@@ -324,9 +324,8 @@ rsvc_client_decode(void *buf, size_t len, struct rsvc_client *client)
 		return -DER_NOMEM;
 	memcpy(client->sc_ranks->rl_ranks, p->scb_ranks,
 	       sizeof(*p->scb_ranks) * p->scb_nranks);
-	client->sc_leader_known = p->scb_leader_known;
-	client->sc_leader_aliveness = p->scb_leader_aliveness == 0 ? false :
-								     true;
+	client->sc_leader_known = p->scb_leader_known == 0 ? false : true;
+	client->sc_leader_aliveness = p->scb_leader_aliveness;
 	client->sc_leader_term = p->scb_leader_term;
 	client->sc_leader_index = p->scb_leader_index;
 	client->sc_next = p->scb_next;
