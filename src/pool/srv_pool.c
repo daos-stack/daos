@@ -2049,7 +2049,11 @@ ds_pool_cont_iter(daos_handle_t ph, pool_iter_cb_t callback, void *arg)
 
 	rc = vos_iter_probe(iter_h, NULL);
 	if (rc != 0) {
-		D_ERROR("set iterator cursor failed: %d\n", rc);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		else
+			D_ERROR("set iterator cursor failed: %d\n", rc);
+
 		D_GOTO(iter_fini, rc);
 	}
 
