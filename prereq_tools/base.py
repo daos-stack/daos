@@ -53,18 +53,6 @@ from SCons.Errors import UserError
 from prereq_tools import mocked_tests
 
 
-class NotInitialized(Exception):
-    """Exception raised when classes used before initialization
-    """
-
-    def __init__(self):
-        super(NotInitialized, self).__init__()
-
-    def __str__(self):
-        """ Exception string """
-        return "PreReqComponents was not initialized"
-
-
 class DownloadFailure(Exception):
     """Exception raised when source can't be downloaded
 
@@ -268,7 +256,7 @@ class Runner(object):
     def run_commands(self, commands, subdir=None):
         """Runs a set of commands in specified directory"""
         if not self.env:
-            raise NotInitialized()
+            raise Exception("PreReqComponent not initialized")
         retval = True
         old = os.getcwd()
         if subdir:
@@ -1039,6 +1027,7 @@ class _Component(object):
         return False
 
     def _delete_old_file(self, path):
+        """delete the old file"""
         if os.path.exists(path):
             if self.__dry_run:
                 print 'Would unlink %s' % path
@@ -1276,6 +1265,7 @@ class _Component(object):
             return True
 
     def _rm_old_dir(self, path):
+        """remove the old dir"""
         if self.__dry_run:
             print 'Would empty %s' % path
         else:
@@ -1283,6 +1273,7 @@ class _Component(object):
             os.mkdir(path)
 
     def _has_changes(self):
+        """check for changes"""
         has_changes = self.prereqs.build_deps
 
         if self.src_exists():
@@ -1291,6 +1282,7 @@ class _Component(object):
         return has_changes
 
     def _check_prereqs_build_deps(self):
+        """check for build dependencies"""
         if not self.prereqs.build_deps:
             if self.__dry_run:
                 print 'Would do required build of %s' % self.name
@@ -1298,6 +1290,7 @@ class _Component(object):
                 raise BuildRequired(self.name)
 
     def _update_crc_file(self):
+        """update the crc"""
         new_crc = self.calculate_crc()
         if self.__dry_run:
             print 'Would create a new crc file % s' % self.crc_file
@@ -1357,10 +1350,9 @@ class _Component(object):
 
 
 __all__ = ["GitRepoRetriever", "WebRetriever",
-           "PreReqComponent", "NotInitialized",
            "DownloadFailure", "ExtractionError",
            "UnsupportedCompression", "BadScript",
            "MissingPath", "BuildFailure",
            "MissingDefinition", "MissingTargets",
            "MissingSystemLibs", "DownloadRequired",
-           "BuildRequired"]
+           "PreReqComponent", "BuildRequired"]

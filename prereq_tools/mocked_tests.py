@@ -99,6 +99,7 @@ def build_mock_unit_tests(env, src_list=None, **kwargs):
 
 
 def _parse_unit_tests(line, test_functions):
+    """parse unit tests"""
     name = re.match("UNIT_TEST\\(([a-zA-Z0-9_, ]*)\\)", line)
 
     if name is not None:
@@ -109,6 +110,7 @@ def _parse_unit_tests(line, test_functions):
                          names[2].strip()))
 
 def _parse_global_setup(line, global_setups):
+    """parse global setup"""
     name = re.match("GLOBAL_SETUP\\(([a-zA-Z0-9_ ]*)\\)", line)
 
     if name is not None:
@@ -116,12 +118,14 @@ def _parse_global_setup(line, global_setups):
 
 
 def _parse_global_teardowns(line, global_teardowns):
+    """parse global teardowns"""
     name = re.match("GLOBAL_TEARDOWN\\(([a-zA-Z0-9_ ]*)\\)", line)
 
     if name is not None:
         global_teardowns.append(name.group(1))
 
 def _get_source_and_tests(env, source_list):
+    """get source and tests"""
     source_list = set(['cmocka_tests.c'] + source_list)
 
     test_functions = []
@@ -157,7 +161,7 @@ def _get_source_and_tests(env, source_list):
 
 
 def _create_source_files(unit_tests):
-    # Build the cmocka_test.{ch} source file.
+    """Build the cmocka_test.{ch} source file"""
     tests = '\n'.join(['void %s(void **state);' % tf.name
                        for tf in unit_tests.test_functions])
 

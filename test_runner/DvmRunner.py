@@ -76,13 +76,13 @@ class DvmRunner():
               self.ortedvm.pid)
         if self.ortedvm.poll() is None:
             return 0
-        else:
-            print("TestRunner: orte-dvm failed to start")
-            print("TestRunner: orte-dvm rc: %d\n" % self.ortedvm.returncode)
-            with open(self.logfilerr, mode='r') as fd:
-                print("TestRunner: orte-dvm STDERR:\n %s" % fd.read())
-            os.remove(self.report)
-            return 1
+
+        print("TestRunner: orte-dvm failed to start")
+        print("TestRunner: orte-dvm rc: %d\n" % self.ortedvm.returncode)
+        with open(self.logfilerr, mode='r') as fd:
+            print("TestRunner: orte-dvm STDERR:\n %s" % fd.read())
+        os.remove(self.report)
+        return 1
 
     def stop_process(self):
         """stop orted processes """

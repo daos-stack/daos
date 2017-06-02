@@ -258,8 +258,7 @@ class TestInfoRunner(PreRunner.PreRunner):
                 if '{' in paramList[index]:
                     paramList[index] = self.parameters_one(paramList[index])
             return ' '.join(paramList)
-        else:
-            return parameters
+        return parameters
 
     def find_item(self, item, where="info"):
         """ keys for test runner """
