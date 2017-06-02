@@ -32,11 +32,12 @@ import logging
 import time
 from datetime import datetime
 #pylint: disable=import-error
+import OrteRunner
 import NodeRunner
 #pylint: enable=import-error
 
 
-class NodeControlRunner():
+class NodeControlRunner(OrteRunner.OrteRunner):
     """Simple node interface"""
     node_list = []
 

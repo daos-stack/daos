@@ -27,6 +27,11 @@ test runner info class
 import os
 import json
 
+#pylint: disable=too-many-locals
+#pylint: disable=consider-using-enumerate
+#pylint: disable=too-many-branches
+#pylint: disable=too-many-statements
+
 
 class InfoRunner():
     """Simple test runner"""
@@ -61,19 +66,55 @@ class InfoRunner():
         if not self.load_build_vars():
             self.info = {}
             return 0
-        path = os.getenv("PATH")
-        if 'OMPI_PREFIX' in self.info:
-            ompi_path = os.path.join(self.info['OMPI_PREFIX'], "bin")
-            if path.find(ompi_path) < 0:
-                path = ompi_path + ":" + path
+
+        print("------------------------------------------------")
+        ompi_path = os.path.join(self.info['OMPI_PREFIX'], "bin")
+        path = os.getenv("PATH", "")
+        path_list = path.split(":")
+        index_list = []
+        print("TestRunner: original path: %s" % path)
+        for path_index in range(len(path_list)):
+            if path_list[path_index].find("openmpi") > 0:
+                index_list.append(path_index)
+        for index in index_list:
+            path_list.pop(index)
+        if path.find(ompi_path) < 0:
+            path_list.insert(0, ompi_path)
         installed_path = self.info['PREFIX']
         test_path = os.path.join(installed_path, "TESTING", "tests")
         if path.find(test_path) < 0:
-            path = test_path + ":" + path
+            path_list.insert(0, test_path)
         bin_path = os.path.join(installed_path, "bin")
         if path.find(bin_path) < 0:
-            path = bin_path + ":" + path
-        os.environ['PATH'] = path
+            path_list.insert(0, bin_path)
+        newpath = ':'.join(path_list)
+        os.environ['PATH'] = newpath
+        print("TestRunner: new path: %s" % newpath)
+        print("------------------------------------------------")
+        installed_libpath = os.path.join(self.info['PREFIX'], "lib")
+        ompi_libpath = os.path.join(self.info['OMPI_PREFIX'], "lib")
+        libpath = os.getenv("LD_LIBRARY_PATH")
+        if libpath:
+            libpath_list = libpath.split(":")
+            index_list = []
+            print("TestRunner: original libpath: %s" % libpath)
+            for libpath_index in range(len(libpath_list)):
+                if libpath_list[libpath_index].find("openmpi") > 0:
+                    index_list.append(libpath_index)
+            for index in index_list:
+                libpath_list.pop(index)
+            if libpath.find(ompi_libpath) < 0:
+                libpath_list.insert(0, ompi_libpath)
+            if libpath.find(installed_libpath) < 0:
+                libpath_list.insert(0, installed_libpath)
+        else:
+            libpath_list = []
+            libpath_list.append(installed_libpath)
+            libpath_list.append(ompi_libpath)
+        newlibpath = ':'.join(libpath_list)
+        os.environ['LD_LIBRARY_PATH'] = newlibpath
+        print("TestRunner: new libpath: %s" % newlibpath)
+        print("------------------------------------------------\n")
         if os.uname()[0] == "Darwin":
             self.setup_Darwin()
         print("TestRunner: setUp  env end")
