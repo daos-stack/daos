@@ -384,6 +384,8 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		   struct pool_map *map, daos_handle_t *ph)
 {
 	struct dc_pool	*pool;
+	daos_rank_list_t svcl;
+	daos_rank_t	 rank = 0;
 	int		rc = 0;
 
 	if (!daos_handle_is_inval(*ph)) {
@@ -401,6 +403,18 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	uuid_copy(pool->dp_pool, pool_uuid);
 	uuid_copy(pool->dp_pool_hdl, pool_hdl_uuid);
 	pool->dp_capas = flags;
+
+	/** attach to the server group and initialize rsvc_client */
+	rc = daos_group_attach(NULL, &pool->dp_group);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	svcl.rl_nr.num = 1;
+	svcl.rl_nr.num_out = 0;
+	svcl.rl_ranks = &rank;
+	rc = rsvc_client_init(&pool->dp_client, &svcl);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	D_DEBUG(DB_TRACE, "before update "DF_UUIDF"\n", DP_UUID(pool_uuid));
 	rc = pool_map_update(pool, &map, pool_map_get_version(map));

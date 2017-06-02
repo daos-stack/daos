@@ -960,7 +960,7 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	start = begin % plts_nr;
-	end = (begin + (grp_size * grp_nr * dist - 1)) % plts_nr;
+	end = (begin + (grp_size * dist - 1)) % plts_nr;
 	/* Walk through the failed targets */
 	for (i = 0; i < failed_tgts_num; i++) {
 		unsigned int tgt_id = failed_tgts[i].ta_comp.co_id;
@@ -976,11 +976,16 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 		    !layout->ol_shards[idx].po_rebuilding)
 			layout->ol_shards[idx].po_rebuilding = 1;
 
+		D_DEBUG(DB_PL, "tgt id %d idx %d start %d end %d\n",
+			tgt_id, idx, start, end);
 		/* try to find next rebuild target */
 		while (start != end) {
 
 			start = ring_obj_get_rebuild_idx(start, plts_nr, dist);
 			pos = plts[start].pt_pos;
+			D_DEBUG(DB_PL, "try start %d pos %d stat %d fseq %d\n",
+				start, pos, tgs[pos].ta_comp.co_status,
+				tgs[pos].ta_comp.co_fseq);
 			if (tgs[pos].ta_comp.co_status == PO_COMP_ST_UP ||
 			    tgs[pos].ta_comp.co_fseq >
 					failed_tgts[i].ta_comp.co_fseq) {
@@ -1006,6 +1011,7 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 		}
 
 		if (start == end) {
+			D_DEBUG(DB_PL, "no spare targets for shard %d\n", idx);
 			/* Sigh no spare targets */
 			layout->ol_shards[idx].po_shard = -1;
 			layout->ol_shards[idx].po_target = -1;
@@ -1128,7 +1134,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		layout.ol_nr = grp_nr * grp_size;
 	}
 
-	layout_end = (begin + (grp_size * grp_nr * dist - 1)) % plts_nr;
+	layout_end = (begin + (grp_size * dist - 1)) % plts_nr;
 	failed_version = tgp_failed->tg_ver > 0 ? tgp_failed->tg_ver - 1 : 0;
 	rc = ring_obj_layout_fill(map, md, failed_version,
 				  begin, dist, shard, grp_nr, grp_size,

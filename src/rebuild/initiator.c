@@ -275,6 +275,23 @@ rebuild_dkey_thread(void *data)
 	akey_sgl.sg_nr.num = 1;
 	akey_sgl.sg_iovs = &akey_iov;
 
+	if (daos_handle_is_inval(tls->rebuild_pool_hdl)) {
+		daos_handle_t ph = DAOS_HDL_INVAL;
+		struct pool_map *map;
+
+		map = ds_pool_get_pool_map(tls->rebuild_pool_uuid);
+		if (map == NULL)
+			D_GOTO(free, rc = -DER_NONEXIST);
+
+		rc = dc_pool_local_open(tls->rebuild_pool_uuid,
+					tls->rebuild_pool_hdl_uuid,
+					0, NULL, map, &ph);
+		if (rc)
+			D_GOTO(free, rc);
+
+		tls->rebuild_pool_hdl = ph;
+	}
+
 	/* Open client dc handle */
 	rc = dc_cont_local_open(arg->cont_uuid, tls->rebuild_cont_hdl_uuid,
 				0, tls->rebuild_pool_hdl, &coh);
@@ -508,6 +525,25 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	uuid_copy(arg->cont_uuid, *(uuid_t *)key_iov->iov_buf);
 	D_DEBUG(DB_TRACE, "iter cont "DF_UUID"/%"PRIx64" %"PRIx64" start\n",
 		DP_UUID(arg->cont_uuid), ih.cookie, root->root_hdl.cookie);
+
+	/* Create dc_pool locally */
+	if (daos_handle_is_inval(tls->rebuild_pool_hdl)) {
+		daos_handle_t ph = DAOS_HDL_INVAL;
+		struct pool_map *map;
+
+		map = ds_pool_get_pool_map(tls->rebuild_pool_uuid);
+		if (map == NULL)
+			return -DER_NONEXIST;
+
+		rc = dc_pool_local_open(tls->rebuild_pool_uuid,
+					tls->rebuild_pool_hdl_uuid,
+					0, NULL, map, &ph);
+		if (rc)
+			return rc;
+
+		tls->rebuild_pool_hdl = ph;
+	}
+
 	rc = dc_cont_local_open(arg->cont_uuid, tls->rebuild_cont_hdl_uuid,
 				0, tls->rebuild_pool_hdl, &coh);
 	if (rc)

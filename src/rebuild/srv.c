@@ -28,6 +28,7 @@
 #define DD_SUBSYS	DD_FAC(rebuild)
 
 #include <daos/rpc.h>
+#include <daos/pool.h>
 #include <daos_srv/daos_server.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/container.h>
@@ -554,9 +555,14 @@ ds_rebuild_fini_one(void *arg)
 	D_DEBUG(DB_TRACE, "close container/pool "DF_UUID"/"DF_UUID"\n",
 		DP_UUID(tls->rebuild_cont_hdl_uuid),
 		DP_UUID(tls->rebuild_pool_hdl_uuid));
+
+	if (!daos_handle_is_inval(tls->rebuild_pool_hdl)) {
+		dc_pool_local_close(tls->rebuild_pool_hdl);
+		tls->rebuild_pool_hdl = DAOS_HDL_INVAL;
+	}
+
 	ds_cont_local_close(tls->rebuild_cont_hdl_uuid);
 	uuid_clear(tls->rebuild_cont_hdl_uuid);
-
 	ds_pool_local_close(tls->rebuild_pool_hdl_uuid);
 	uuid_clear(tls->rebuild_pool_hdl_uuid);
 

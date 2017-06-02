@@ -496,7 +496,6 @@ rebuild_prepare_one(void *data)
 {
 	struct rebuild_cont_open_arg	*arg = data;
 	struct pool_map			*map;
-	daos_handle_t			ph = DAOS_HDL_INVAL;
 	struct rebuild_tls		*tls = rebuild_tls_get();
 	int				rc;
 
@@ -521,15 +520,7 @@ rebuild_prepare_one(void *data)
 	if (rc)
 		return rc;
 	uuid_copy(tls->rebuild_cont_hdl_uuid, arg->cont_hdl_uuid);
-
-	/* Create dc_pool locally */
-	rc = dc_pool_local_open(arg->pool_uuid, arg->pool_hdl_uuid,
-				0, NULL, map, &ph);
-	if (rc)
-		return rc;
-
 	uuid_copy(tls->rebuild_pool_hdl_uuid, arg->pool_hdl_uuid);
-	tls->rebuild_pool_hdl = ph;
 
 	return rc;
 }
