@@ -199,7 +199,8 @@ pool_child_delete_one(void *uuid)
 
 /* ds_pool ********************************************************************/
 
-static struct daos_lru_cache *pool_cache;
+static struct daos_lru_cache   *pool_cache;
+static ABT_mutex		pool_cache_lock;
 
 static inline struct ds_pool *
 pool_obj(struct daos_llink *llink)
@@ -305,14 +306,25 @@ static struct daos_llink_ops pool_cache_ops = {
 int
 ds_pool_cache_init(void)
 {
-	return daos_lru_cache_create(-1 /* bits */, DHASH_FT_NOLOCK /* feats */,
+	int rc;
+
+	rc = ABT_mutex_create(&pool_cache_lock);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+	rc = daos_lru_cache_create(-1 /* bits */, DHASH_FT_NOLOCK /* feats */,
 				     &pool_cache_ops, &pool_cache);
+	if (rc != 0)
+		ABT_mutex_free(&pool_cache_lock);
+	return rc;
 }
 
 void
 ds_pool_cache_fini(void)
 {
+	ABT_mutex_lock(pool_cache_lock);
 	daos_lru_cache_destroy(pool_cache);
+	ABT_mutex_unlock(pool_cache_lock);
+	ABT_mutex_free(&pool_cache_lock);
 }
 
 /*
@@ -329,8 +341,10 @@ ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
 
 	D_ASSERT(arg == NULL || !arg->pca_create_group || arg->pca_map != NULL);
 
+	ABT_mutex_lock(pool_cache_lock);
 	rc = daos_lru_ref_hold(pool_cache, (void *)uuid, sizeof(uuid_t),
 			       arg, &llink);
+	ABT_mutex_unlock(pool_cache_lock);
 	if (rc != 0) {
 		if (arg == NULL && rc == -DER_NONEXIST)
 			D_DEBUG(DF_DSMS, DF_UUID": pure lookup failed: %d\n",
@@ -361,7 +375,9 @@ ds_pool_lookup(const uuid_t uuid)
 void
 ds_pool_put(struct ds_pool *pool)
 {
+	ABT_mutex_lock(pool_cache_lock);
 	daos_lru_ref_release(pool_cache, &pool->sp_entry);
+	ABT_mutex_unlock(pool_cache_lock);
 }
 
 /* ds_pool_hdl ****************************************************************/
