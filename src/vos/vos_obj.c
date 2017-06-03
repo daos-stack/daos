@@ -27,6 +27,7 @@
  */
 #define DD_SUBSYS	DD_FAC(vos)
 
+#include <daos_types.h>
 #include <daos/btree.h>
 #include <daos_srv/vos.h>
 #include <vos_internal.h>

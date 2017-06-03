@@ -118,6 +118,19 @@ daos_hash_set_eof(daos_hash_out_t *hash_out)
 }
 
 static inline bool
+daos_hash_is_zero(daos_hash_out_t *hash_out)
+{
+	int i;
+
+	for (i = DAOS_HASH_HKEY_START; i < DAOS_HASH_HKEY_LENGTH; i++) {
+		if (hash_out->body[i] != 0)
+			return false;
+	}
+
+	return true;
+}
+
+static inline bool
 daos_hash_is_eof(daos_hash_out_t *hash_out)
 {
 	int i;

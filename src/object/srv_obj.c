@@ -704,6 +704,7 @@ ds_iter_single_vos(void *data)
 	vos_iter_entry_t	key_ent;
 	vos_iter_param_t	param;
 	daos_handle_t		ih;
+	daos_hash_out_t		*probe_hash;
 	int			type;
 	int			rc;
 
@@ -769,7 +770,12 @@ ds_iter_single_vos(void *data)
 		D_GOTO(out_cont_hdl, rc);
 	}
 
-	rc = vos_iter_probe(ih, &oei->oei_anchor);
+	if (daos_hash_is_zero(&oei->oei_anchor))
+		probe_hash = NULL;
+	else
+		probe_hash = &oei->oei_anchor;
+
+	rc = vos_iter_probe(ih, probe_hash);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST || rc == -DER_AGAIN) {
 			daos_hash_set_eof(&oeo->oeo_anchor);

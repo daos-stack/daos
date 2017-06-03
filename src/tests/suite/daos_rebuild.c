@@ -77,29 +77,12 @@ rebuild_test_exclude_tgt(test_arg_t *arg, daos_rank_t rank, bool kill)
 			ranks.rl_ranks = &rank;
 			rc = daos_pool_exclude(arg->poh, &ranks, NULL);
 			assert_int_equal(rc, 0);
+			print_message("exclude rank %d wait 5 seconds\n", rank);
+			sleep(5); /* Sleep 5 for starting rebuild */
 		}
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 }
-
-#if 0
-static void
-rebuild_test_exclude_tgt_out(test_arg_t *arg, daos_rank_t rank)
-{
-	daos_rank_list_t	ranks;
-	int			rc;
-
-	/** exclude the target from the pool */
-	if (arg->myrank == 0) {
-		ranks.rl_nr.num = 1;
-		ranks.rl_nr.num_out = 0;
-		ranks.rl_ranks = &rank;
-		rc = daos_pool_exclude_out(arg->poh, &ranks, NULL);
-		assert_int_equal(rc, 0);
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
-}
-#endif
 
 static void
 rebuild_test_add_tgt(test_arg_t *arg, daos_rank_t rank)
@@ -119,7 +102,7 @@ rebuild_test_add_tgt(test_arg_t *arg, daos_rank_t rank)
 }
 
 static int
-rebuild_one_target(test_arg_t *arg, daos_rank_t failed_rank, bool concurrent_io)
+rebuild_wait(test_arg_t *arg, daos_rank_t failed_rank, bool concurrent_io)
 {
 	daos_rank_list_t	ranks;
 	struct ioreq		req;
@@ -135,13 +118,6 @@ rebuild_one_target(test_arg_t *arg, daos_rank_t failed_rank, bool concurrent_io)
 	ranks.rl_nr.num = 1;
 	ranks.rl_nr.num_out = 1;
 	ranks.rl_ranks = &failed_rank;
-
-	if (arg->myrank == 0) {
-		rc = daos_rebuild_tgt(arg->pool_uuid, &ranks, NULL);
-		assert_int_equal(rc, 0);
-	}
-	MPI_Barrier(MPI_COMM_WORLD);
-
 	if (concurrent_io) {
 		oid = dts_oid_gen(DAOS_OC_REPL_2_SMALL_RW, arg->myrank);
 		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -210,7 +186,7 @@ rebuild_targets(test_arg_t *arg, daos_rank_t *failed_ranks, int rank_nr,
 	/** exclude the target from the pool */
 	for (i = 0; i < rank_nr; i++) {
 		rebuild_test_exclude_tgt(arg, failed_ranks[i], kill);
-		rebuild_one_target(arg, failed_ranks[i], concurrent_io);
+		rebuild_wait(arg, failed_ranks[i], concurrent_io);
 	}
 
 	/* XXX sigh, we do not support restart service after killing yet */
