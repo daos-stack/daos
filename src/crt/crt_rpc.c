@@ -830,13 +830,7 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 					gp_pub);
 
 	psr_ep.ep_grp = tgt_ep->ep_grp;
-	/*
-	 * TODO: always send uri_lookup to target group's rank 0, as for the
-	 * demo rank 0 always alive. Need to select a new one when uri_lookup
-	 * timeout later.
-	 */
-	/* psr_ep.ep_rank = grp_priv->gp_psr_rank; */
-	psr_ep.ep_rank = 0;
+	psr_ep.ep_rank = grp_priv->gp_psr_rank;
 	psr_ep.ep_tag = 0;
 	rc = crt_req_create(rpc_priv->crp_pub.cr_ctx, psr_ep,
 			    CRT_OPC_URI_LOOKUP, &ul_req);

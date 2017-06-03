@@ -539,7 +539,12 @@ crt_pmix_attach(struct crt_grp_priv *grp_priv)
 	C_ASSERT(grp_gdata != NULL);
 	myrank = crt_is_service() ? grp_gdata->gg_srv_pri_grp->gp_self :
 				    grp_gdata->gg_cli_pri_grp->gp_self;
+	/*
+	 * TODO: always select target rank 0 as PSR now as for demo rank 0
+	 * always alive. Need to select a new one when uri_lookup timeout later.
+	 */
 	grp_priv->gp_psr_rank = myrank % grp_priv->gp_size;
+	grp_priv->gp_psr_rank = 0;
 	rc = crt_pmix_uri_lookup(grp_priv->gp_pub.cg_grpid,
 				 grp_priv->gp_psr_rank,
 				 &grp_priv->gp_psr_phy_addr);
