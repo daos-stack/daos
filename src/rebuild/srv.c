@@ -162,7 +162,7 @@ ds_rebuild_tgt_query_handler(crt_rpc_t *rpc)
 	if (rebuilding)
 		rtqo->rtqo_rebuilding = 1;
 
-	D_DEBUG(DB_TRACE, "pool "DF_UUID" scanning %d/%d rebuilding %s"
+	D_DEBUG(DB_TRACE, "pool "DF_UUID" scanning %d/%d rebuilding %s "
 		"obj_count %d rec_count %d\n",
 		DP_UUID(tls->rebuild_pool_uuid), status.scanning,
 		status.status, rebuilding ? "yes" : "no", status.obj_count,

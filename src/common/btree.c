@@ -2402,7 +2402,9 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 	if (rc != 0)
 		goto failed;
 
-	*root_mmidp = tcx->tc_tins.ti_root_mmid;
+	if (root_mmidp)
+		*root_mmidp = tcx->tc_tins.ti_root_mmid;
+
 	*toh = btr_tcx2hdl(tcx);
 	return 0;
  failed:

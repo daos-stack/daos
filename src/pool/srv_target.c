@@ -175,7 +175,7 @@ ds_pool_local_close(uuid_t uuid)
 		return 0;
 
 	if (child->spc_map != NULL) {
-		pool_map_destroy(child->spc_map);
+		pool_map_decref(child->spc_map);
 		child->spc_map = NULL;
 	}
 
@@ -283,7 +283,7 @@ pool_free_ref(struct daos_llink *llink)
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	if (pool->sp_map != NULL)
-		pool_map_destroy(pool->sp_map);
+		pool_map_decref(pool->sp_map);
 
 	ABT_rwlock_free(&pool->sp_lock);
 	D_FREE_PTR(pool);
@@ -642,7 +642,7 @@ update_child_map(void *data)
 		}
 
 		if (child->spc_map != NULL)
-			pool_map_destroy(child->spc_map);
+			pool_map_decref(child->spc_map);
 		child->spc_map = map;
 	}
 
@@ -704,7 +704,7 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 	ABT_rwlock_wrlock(pool->sp_lock);
 	if (map != NULL) {
 		if (pool->sp_map != NULL)
-			pool_map_destroy(pool->sp_map);
+			pool_map_decref(pool->sp_map);
 		pool->sp_map = map;
 	}
 	map_version_old = pool->sp_map_version;
@@ -743,7 +743,11 @@ ds_pool_get_pool_map(const uuid_t uuid)
 	struct pool_map *map;
 
 	pool = ds_pool_child_lookup(uuid);
+	if (!pool)
+		return NULL;
+
 	map = pool->spc_map;
+	pool_map_addref(map);
 	ds_pool_child_put(pool);
 	return map;
 }

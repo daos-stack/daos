@@ -67,11 +67,14 @@ pool_free(struct dc_pool *pool)
 	pthread_mutex_destroy(&pool->dp_client_lock);
 	pthread_rwlock_destroy(&pool->dp_co_list_lock);
 	D_ASSERT(daos_list_empty(&pool->dp_co_list));
+
 	if (pool->dp_map != NULL)
-		pool_map_destroy(pool->dp_map);
+		pool_map_decref(pool->dp_map);
+
 	rsvc_client_fini(&pool->dp_client);
 	if (pool->dp_group != NULL)
-	    daos_group_detach(pool->dp_group);
+		daos_group_detach(pool->dp_group);
+
 	D_FREE_PTR(pool);
 }
 
@@ -163,7 +166,7 @@ map_bulk_destroy(crt_bulk_t bulk, struct pool_buf *buf)
 
 /* Assume dp_map_lock is locked before calling this function */
 static int
-pool_map_update(struct dc_pool *pool, struct pool_map **map,
+pool_map_update(struct dc_pool *pool, struct pool_map *map,
 		unsigned int map_version)
 {
 	struct pool_map *tmp_map;
@@ -171,13 +174,13 @@ pool_map_update(struct dc_pool *pool, struct pool_map **map,
 
 	D_ASSERT(map != NULL);
 	if (pool->dp_map == NULL) {
-		rc = daos_placement_init(*map);
+		rc = daos_placement_init(map);
 		if (rc == 0) {
 			D_DEBUG(DF_DSMC, DF_UUID": init pool map: %u\n",
 				DP_UUID(pool->dp_pool),
-				pool_map_get_version(*map));
-			pool->dp_map = *map;
-			*map = NULL;
+				pool_map_get_version(map));
+			pool_map_addref(map);
+			pool->dp_map = map;
 		}
 		return rc;
 	}
@@ -194,16 +197,18 @@ pool_map_update(struct dc_pool *pool, struct pool_map **map,
 		pool->dp_map == NULL ?
 		0 : pool_map_get_version(pool->dp_map), map_version);
 
-	rc = daos_placement_update(*map);
+	rc = daos_placement_update(map);
 	if (rc != 0) {
 		D_ERROR("Failed to refresh placement map: %d\n", rc);
 		return rc;
 	}
 
 	tmp_map = pool->dp_map;
-	pool->dp_map = *map;
-	*map = tmp_map;
-	return rc;
+	pool_map_addref(map);
+	pool->dp_map = map;
+	pool_map_decref(tmp_map);
+
+	return 0;
 }
 
 /*
@@ -225,7 +230,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	}
 
 	pthread_rwlock_wrlock(&pool->dp_map_lock);
-	rc = pool_map_update(pool, &map, map_version);
+	rc = pool_map_update(pool, map, map_version);
 	if (rc)
 		D_GOTO(out_unlock, rc);
 
@@ -250,12 +255,9 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		}
 		rc = 0;
 	}
-
+	pool_map_decref(map); /* NB: protected by pool::dp_map_lock */
 out_unlock:
 	pthread_rwlock_unlock(&pool->dp_map_lock);
-
-	if (map != NULL)
-		pool_map_destroy(map);
 
 	if (info != NULL && rc == 0) {
 		uuid_copy(info->pi_uuid, pool->dp_pool);
@@ -417,7 +419,7 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		D_GOTO(out, rc);
 
 	D_DEBUG(DB_TRACE, "before update "DF_UUIDF"\n", DP_UUID(pool_uuid));
-	rc = pool_map_update(pool, &map, pool_map_get_version(map));
+	rc = pool_map_update(pool, map, pool_map_get_version(map));
 	if (rc)
 		D_GOTO(out, rc);
 

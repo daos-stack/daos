@@ -73,6 +73,8 @@ struct pool_comp_sorter {
 struct pool_map {
 	/** Current version of pool map */
 	uint32_t		 po_version;
+	/** refcount on the pool map */
+	int			 po_ref;
 	/** # domain layers */
 	unsigned int		 po_domain_layers;
 	/**
@@ -161,6 +163,7 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 #define comp_type_for_each(d)		\
 	for (d = &comp_type_dict[0]; d->td_type != PO_COMP_TP_UNKNOWN; d++)
 
+static void pool_map_destroy(struct pool_map *map);
 static bool pool_map_empty(struct pool_map *map);
 static void pool_tree_count(struct pool_domain *tree,
 			    struct pool_comp_cntr *cntr);
@@ -1366,6 +1369,7 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 		goto failed;
 
 	map->po_version = version;
+	map->po_ref = 1; /* 1 for caller */
 	*mapp = map;
 	return 0;
  failed:
@@ -1379,11 +1383,31 @@ pool_map_create(struct pool_buf *buf, uint32_t version, struct pool_map **mapp)
 /**
  * Destroy a pool map.
  */
-void
+static void
 pool_map_destroy(struct pool_map *map)
 {
 	pool_map_finalise(map);
 	D_FREE_PTR(map);
+}
+
+/** Take a refcount on a pool map */
+void
+pool_map_addref(struct pool_map *map)
+{
+	map->po_ref++;
+}
+
+/**
+ * Release refcount on a pool map, this pool map will be destroyed if it
+ * is the last refcount
+ */
+void
+pool_map_decref(struct pool_map *map)
+{
+	D_ASSERT(map->po_ref > 0);
+	map->po_ref--;
+	if (map->po_ref == 0)
+		pool_map_destroy(map);
 }
 
 /**

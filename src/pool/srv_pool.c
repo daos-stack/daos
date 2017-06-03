@@ -124,7 +124,7 @@ read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
 	return 0;
 }
 
-/* Callers are responsible for destroying the object via pool_map_destroy(). */
+/* Callers are responsible for destroying the object via pool_map_decref(). */
 static int
 read_map(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_map **map)
 {
@@ -495,7 +495,7 @@ pool_svc_step_up(struct pool_svc *svc)
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
-		pool_map_destroy(map);
+		pool_map_decref(map);
 		return rc;
 	}
 	pool = svc->ps_pool;
@@ -520,7 +520,7 @@ pool_svc_step_up(struct pool_svc *svc)
 			map = tmp;
 		}
 		if (map != NULL)
-			pool_map_destroy(map);
+			pool_map_decref(map);
 	}
 	ABT_rwlock_unlock(pool->sp_lock);
 
@@ -1802,7 +1802,7 @@ ds_pool_tgt_update(struct rdb_tx *tx, struct pool_svc *svc,
 	pool_update_map_bcast(info->dmi_ctx, svc, map_version, NULL, NULL);
 
 out_map:
-	pool_map_destroy(map);
+	pool_map_decref(map);
 out:
 	return rc;
 }

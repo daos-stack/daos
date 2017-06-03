@@ -122,7 +122,7 @@ main(int argc, char **argv)
 
 	pl_map_destroy(pl_map);
 
-	pool_map_destroy(po_map);
+	pool_map_decref(po_map);
 	pool_buf_free(buf);
 
 	daos_debug_fini();

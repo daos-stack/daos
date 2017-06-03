@@ -54,9 +54,9 @@ struct rebuild_send_arg {
 
 struct rebuild_scan_arg {
 	daos_handle_t		rebuild_tree_hdl;
-	struct pool_map		*map;
 	struct pl_target_grp	*tgp_failed;
 	uuid_t			pool_uuid;
+	uint32_t		map_ver;
 	ABT_mutex		scan_lock;
 };
 
@@ -196,7 +196,7 @@ ds_rebuild_objects_send(struct rebuild_root *root,
 		D_GOTO(out, rc);
 
 	rebuild_in = crt_req_get(rpc);
-	rebuild_in->roi_map_ver = pool_map_get_version(scan_arg->map);
+	rebuild_in->roi_map_ver = scan_arg->map_ver;
 	rebuild_in->roi_oids.da_count = arg->count;
 	rebuild_in->roi_oids.da_arrays = oids;
 	rebuild_in->roi_uuids.da_count = arg->count;
@@ -509,6 +509,7 @@ rebuild_prepare_one(void *data)
 	/* Create ds_pool locally */
 	rc = ds_pool_local_open(arg->pool_uuid, pool_map_get_version(map),
 				NULL);
+	pool_map_decref(map);
 	if (rc)
 		return rc;
 
@@ -541,6 +542,7 @@ ds_rebuild_prepare(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 
 	/* Initialize the placement */
 	rc = daos_placement_update(map);
+	pool_map_decref(map);
 	if (rc)
 		return rc;
 
@@ -602,7 +604,6 @@ rebuild_scan_func(void *data)
 
 	D_ASSERT(arg != NULL);
 	D_ASSERT(arg->tgp_failed != NULL);
-	D_ASSERT(arg->map != NULL);
 	D_ASSERT(!daos_handle_is_inval(arg->rebuild_tree_hdl));
 
 	iter_arg.arg = arg;
@@ -631,7 +632,7 @@ rebuild_scan_func(void *data)
 		D_GOTO(free, rc);
 	}
 
-	D_DEBUG(DB_TRACE, DF_UUID" send objects to initiator %d\n",
+	D_DEBUG(DB_TRACE, DF_UUID" sent objects to initiator %d\n",
 		DP_UUID(arg->pool_uuid), rc);
 
 free:
@@ -642,8 +643,7 @@ free:
 		D_FREE_PTR(arg->tgp_failed);
 	}
 
-	if (!daos_handle_is_inval(arg->rebuild_tree_hdl))
-		dbtree_destroy(arg->rebuild_tree_hdl);
+	dbtree_destroy(arg->rebuild_tree_hdl);
 	if (tls->rebuild_status == 0 && rc != 0)
 		tls->rebuild_status = rc;
 
@@ -661,8 +661,6 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_scan_arg	*arg = NULL;
 	struct pl_target_grp	*pl_grp = NULL;
 	struct umem_attr        uma;
-	daos_handle_t           root_hdl = DAOS_HDL_INVAL;
-	struct btr_root         *broot = NULL;
 	int			i;
 	int			rc;
 
@@ -692,14 +690,14 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 	 **/
 	D_ALLOC_PTR(pl_grp);
 	if (pl_grp == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+		D_GOTO(out_map, rc = -DER_NOMEM);
 
 	pl_grp->tg_ver = rsi->rsi_pool_map_ver;
 	pl_grp->tg_target_nr = rsi->rsi_tgts_failed->rl_nr.num;
 	D_ALLOC(pl_grp->tg_targets, pl_grp->tg_target_nr *
 		sizeof(*pl_grp->tg_targets));
 	if (pl_grp->tg_targets == NULL)
-		D_GOTO(free, rc = -DER_NOMEM);
+		D_GOTO(out_grp, rc = -DER_NOMEM);
 
 	for (i = 0; i < rsi->rsi_tgts_failed->rl_nr.num; i++) {
 		struct pool_target     *target;
@@ -707,59 +705,57 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 
 		rank = rsi->rsi_tgts_failed->rl_ranks[i];
 		target = pool_map_find_target_by_rank(map, rank);
-		if (target == NULL)
-			continue;
+		if (target == NULL) {
+			D_ERROR("Nonexistent target rank=%d\n", rank);
+			D_GOTO(out_grp, rc = -DER_NONEXIST);
+		}
 		pl_grp->tg_targets[i].pt_pos = target - pool_map_targets(map);
-	}
-
-	/* Create the btree root for global object scan list */
-	D_ALLOC_PTR(broot);
-	if (broot == NULL)
-		D_GOTO(free, rc = -DER_NOMEM);
-
-	memset(&uma, 0, sizeof(uma));
-	uma.uma_id = UMEM_CLASS_VMEM;
-	rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0, 4, &uma,
-				   broot, &root_hdl);
-	if (rc != 0) {
-		D_ERROR("failed to create rebuild tree: %d\n", rc);
-		D_GOTO(free, rc);
 	}
 
 	D_ALLOC_PTR(arg);
 	if (arg == NULL)
-		D_GOTO(free, rc = -DER_NOMEM);
-	arg->rebuild_tree_hdl = root_hdl;
-	arg->map = map;
-	arg->tgp_failed = pl_grp;
+		D_GOTO(out_grp, rc = -DER_NOMEM);
+
+	arg->tgp_failed	= pl_grp;
+	arg->map_ver = pool_map_get_version(map);
+	arg->rebuild_tree_hdl = DAOS_HDL_INVAL;
 	uuid_copy(arg->pool_uuid, rsi->rsi_pool_uuid);
 
 	rc = ABT_mutex_create(&arg->scan_lock);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_GOTO(free, rc);
+		D_GOTO(out_arg, rc);
+	}
+
+	/* Create the btree root for global object scan list */
+	memset(&uma, 0, sizeof(uma));
+	uma.uma_id = UMEM_CLASS_VMEM;
+	rc = dbtree_create(DBTREE_CLASS_NV, 0, 4, &uma, NULL,
+			   &arg->rebuild_tree_hdl);
+	if (rc != 0) {
+		D_ERROR("failed to create rebuild tree: %d\n", rc);
+		D_GOTO(out_arg, rc);
 	}
 
 	rc = dss_ult_create(rebuild_scan_func, arg, -1, NULL);
 	if (rc != 0)
-		D_GOTO(free, rc);
+		D_GOTO(out_arg, rc);
 
-	D_GOTO(out, rc);
-free:
-	if (arg != NULL) {
-		ABT_mutex_free(&arg->scan_lock);
-		D_FREE_PTR(arg);
-	}
-	if (pl_grp != NULL) {
-		if (pl_grp->tg_targets != NULL)
-			D_FREE(pl_grp->tg_targets,
-			       pl_grp->tg_target_nr *
-			       sizeof(*pl_grp->tg_targets));
-		D_FREE_PTR(pl_grp);
-	}
+	D_GOTO(out_map, rc);
+out_arg:
+	if (!daos_handle_is_inval(arg->rebuild_tree_hdl))
+		dbtree_destroy(arg->rebuild_tree_hdl);
 
-	if (!daos_handle_is_inval(root_hdl))
-		dbtree_destroy(root_hdl);
+	ABT_mutex_free(&arg->scan_lock);
+	D_FREE_PTR(arg);
+out_grp:
+	if (pl_grp->tg_targets != NULL) {
+		D_FREE(pl_grp->tg_targets, pl_grp->tg_target_nr *
+					   sizeof(*pl_grp->tg_targets));
+	}
+	D_FREE_PTR(pl_grp);
+out_map:
+	pool_map_decref(map);
 out:
 	ro = crt_reply_get(rpc);
 	ro->ro_status = rc;
