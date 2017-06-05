@@ -53,12 +53,8 @@ daos_kill_server(const char *grp, daos_handle_t poh, daos_rank_t rank)
 	rc = daos_pool_query(poh, NULL, &info, NULL);
 	assert_int_equal(rc, 0);
 
-	if (rank == -1) {
-		if (info.pi_ndisabled == 0)
-			rank = 1;
-		else
-			rank = info.pi_ndisabled + 1;
-	}
+	if (rank == -1)
+		rank = info.pi_ntargets - info.pi_ndisabled - 1;
 
 	print_message("\tKilling target %d (total of %d with %d already "
 		      "disabled)!\n", rank, info.pi_ntargets,

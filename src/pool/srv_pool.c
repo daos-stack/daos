@@ -308,18 +308,33 @@ out_map_buf:
  * daos_rank_list_free(*ranksp).
  */
 static int
-select_svc_ranks(int nreplicas, int ntargets,
-		 const daos_rank_list_t *target_addrs, int ndomains,
-		 const int *domains, daos_rank_list_t **ranksp)
+select_svc_ranks(int nreplicas, const daos_rank_list_t *target_addrs,
+		 int ndomains, const int *domains, daos_rank_list_t **ranksp)
 {
+	int			i_rank_zero;
+	int			selectable;
 	daos_rank_list_t       *ranks;
 	int			i;
+	int			j;
 
 	if (nreplicas <= 0)
 		return -DER_INVAL;
+
+	/* Determine the number of selectable targets. */
+	selectable = target_addrs->rl_nr.num;
+	if (daos_rank_list_find((daos_rank_list_t *)target_addrs, 0 /* rank */,
+				&i_rank_zero)) {
+		/*
+		 * Unless it is the only target available, we don't select rank
+		 * 0 for now to avoid losing orterun stdout.
+		 */
+		if (selectable > 1)
+			selectable -= 1 /* rank 0 */;
+	}
+
 #if 0
-	if (nreplicas > ntargets)
-		nreplicas = ntargets;
+	if (nreplicas > selectable)
+		nreplicas = selectable;
 #else
 	/* Until raft has been stablized. */
 	nreplicas = 1;
@@ -327,9 +342,20 @@ select_svc_ranks(int nreplicas, int ntargets,
 	ranks = daos_rank_list_alloc(nreplicas);
 	if (ranks == NULL)
 		return -DER_NOMEM;
+
 	/* TODO: Choose ranks according to failure domains. */
-	for (i = 0; i < ranks->rl_nr.num_out; i++)
-		ranks->rl_ranks[i] = target_addrs->rl_ranks[i];
+	j = 0;
+	for (i = 0; i < target_addrs->rl_nr.num; i++) {
+		if (j == ranks->rl_nr.num)
+			break;
+		if (i == i_rank_zero)
+			continue;
+		D_DEBUG(DB_MD, "ranks[%d]: %u\n", j, target_addrs->rl_ranks[i]);
+		ranks->rl_ranks[j] = target_addrs->rl_ranks[i];
+		j++;
+	}
+	D_ASSERTF(j == ranks->rl_nr.num, "%d == %u\n", j, ranks->rl_nr.num);
+
 	*ranksp = ranks;
 	return 0;
 }
@@ -372,8 +398,8 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	D_ASSERTF(ntargets == target_addrs->rl_nr.num, "ntargets=%u num=%u\n",
 		  ntargets, target_addrs->rl_nr.num);
 
-	rc = select_svc_ranks(svc_addrs->rl_nr.num, ntargets, target_addrs,
-			      ndomains, domains, &ranks);
+	rc = select_svc_ranks(svc_addrs->rl_nr.num, target_addrs, ndomains,
+			      domains, &ranks);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

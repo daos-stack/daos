@@ -58,6 +58,7 @@ struct rdb {
 	struct daos_lru_cache  *d_trees;	/* rdb_tree cache */
 	PMEMobjpool	       *d_pmem;
 	daos_handle_t		d_attr;		/* rdb attribute tree */
+	daos_rank_list_t       *d_replicas;
 
 	raft_server_t	       *d_raft;
 	daos_handle_t		d_log;		/* rdb log tree */
@@ -117,7 +118,7 @@ struct rdb_raft_node {
 };
 
 int rdb_raft_init(daos_handle_t rdb_attr);
-int rdb_raft_start(struct rdb *db, const daos_rank_list_t *replicas);
+int rdb_raft_start(struct rdb *db);
 void rdb_raft_stop(struct rdb *db);
 int rdb_raft_verify_leadership(struct rdb *db);
 int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,

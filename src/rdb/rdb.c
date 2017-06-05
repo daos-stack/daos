@@ -237,7 +237,6 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	struct umem_attr	uma;
 	daos_iov_t		value;
 	uint8_t			nreplicas;
-	daos_rank_list_t	replicas;
 	int			rc;
 
 	D_ALLOC_PTR(db);
@@ -297,23 +296,19 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	rc = dbtree_lookup(db->d_attr, &rdb_attr_replicas, &value);
 	if (rc != 0)
 		D_GOTO(err_attr, rc);
-	if (value.iov_len != sizeof(*replicas.rl_ranks) * nreplicas) {
+	if (value.iov_len != sizeof(*db->d_replicas->rl_ranks) * nreplicas) {
 		D_ERROR(DF_DB": inconsistent replica list: size="DF_U64
 			" n=%u\n", DP_DB(db), value.iov_len, nreplicas);
 		D_GOTO(err_attr, rc);
 	}
-	D_ALLOC(replicas.rl_ranks, sizeof(*replicas.rl_ranks) * nreplicas);
-	if (replicas.rl_ranks == NULL)
+	db->d_replicas = daos_rank_list_alloc(nreplicas);
+	if (db->d_replicas == NULL)
 		D_GOTO(err_attr, rc);
-	memcpy(replicas.rl_ranks, value.iov_buf, value.iov_len);
-	replicas.rl_nr.num = nreplicas;
-	replicas.rl_nr.num_out = nreplicas;
+	memcpy(db->d_replicas->rl_ranks, value.iov_buf, value.iov_len);
 
-	rc = rdb_raft_start(db, &replicas);
-	D_FREE(replicas.rl_ranks,
-	       sizeof(*replicas.rl_ranks) * replicas.rl_nr.num);
+	rc = rdb_raft_start(db);
 	if (rc != 0)
-		D_GOTO(err_attr, rc);
+		D_GOTO(err_replicas, rc);
 
 	ABT_mutex_lock(rdb_hash_lock);
 	rc = dhash_rec_insert(&rdb_hash, db->d_uuid, sizeof(uuid_t),
@@ -332,6 +327,8 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 
 err_raft:
 	rdb_raft_stop(db);
+err_replicas:
+	daos_rank_list_free(db->d_replicas);
 err_attr:
 	dbtree_close(db->d_attr);
 err_pmem:
@@ -365,6 +362,7 @@ rdb_stop(struct rdb *db)
 	ABT_mutex_unlock(rdb_hash_lock);
 	D_ASSERT(deleted);
 	rdb_raft_stop(db);
+	daos_rank_list_free(db->d_replicas);
 	dbtree_close(db->d_attr);
 	pmemobj_close(db->d_pmem);
 	rdb_tree_cache_destroy(db->d_trees);
@@ -418,8 +416,7 @@ rdb_get_leader(struct rdb *db, uint64_t *term, crt_rank_t *rank)
 /**
  * Perform a distributed create, if \a create is true, and start operation on
  * all replicas of a database with \a uuid spanning \a ranks. This method can
- * be called on any rank. If \a create is false, \a ranks may be NULL, in which
- * case the RDB_START RPC will be broadcasted in the primary group.
+ * be called on any rank. If \a create is false, \a ranks may be NULL.
  *
  * \param[in]	uuid		database UUID
  * \param[in]	pool_uuid	pool UUID (for ds_mgmt_tgt_file())
@@ -431,7 +428,6 @@ int
 rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
 	       const daos_rank_list_t *ranks, bool create, size_t size)
 {
-	crt_group_t	       *group = NULL;
 	crt_rpc_t	       *rpc;
 	struct rdb_start_in    *in;
 	struct rdb_start_out   *out;
@@ -439,17 +435,13 @@ rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
 
 	D_ASSERT(!create || ranks != NULL);
 
-	if (ranks != NULL) {
-		rc = dss_group_create("rdb_ephemeral_group",
-				      (daos_rank_list_t *)ranks, &group);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
-
-	rc = rdb_create_bcast(RDB_START, group, &rpc);
+	/*
+	 * If ranks doesn't include myself, creating a group with ranks will
+	 * fail; bcast to the primary group instead.
+	 */
+	rc = rdb_create_bcast(RDB_START, NULL /* group */, &rpc);
 	if (rc != 0)
-		D_GOTO(out_group, rc);
-
+		D_GOTO(out, rc);
 	in = crt_req_get(rpc);
 	uuid_copy(in->dai_uuid, uuid);
 	uuid_copy(in->dai_pool, pool_uuid);
@@ -473,9 +465,6 @@ rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
 
 out_rpc:
 	crt_req_decref(rpc);
-out_group:
-	if (group != NULL)
-		dss_group_destroy(group);
 out:
 	return rc;
 }
@@ -487,6 +476,20 @@ rdb_start_handler(crt_rpc_t *rpc)
 	struct rdb_start_out   *out = crt_reply_get(rpc);
 	char		       *path;
 	int			rc;
+
+	if (in->dai_flags & RDB_AF_CREATE && in->dai_ranks == NULL)
+		D_GOTO(out, rc = -DER_PROTO);
+
+	if (in->dai_ranks != NULL) {
+		daos_rank_t	rank;
+		int		i;
+
+		/* Do nothing if I'm not one of the replicas. */
+		rc = crt_group_rank(NULL /* grp */, &rank);
+		D_ASSERTF(rc == 0, "%d\n", rc);
+		if (!daos_rank_list_find(in->dai_ranks, rank, &i))
+			D_GOTO(out, rc = 0);
+	}
 
 	path = ds_pool_rdb_path(in->dai_uuid, in->dai_pool);
 	if (path == NULL)
@@ -504,8 +507,9 @@ rdb_start_handler(crt_rpc_t *rpc)
 
 	rc = ds_pool_svc_start(in->dai_uuid);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start replica: %d\n",
-			DP_UUID(in->dai_uuid), rc);
+		if ((in->dai_flags & RDB_AF_CREATE) || rc != -DER_NONEXIST)
+			D_ERROR(DF_UUID": failed to start replica: %d\n",
+				DP_UUID(in->dai_uuid), rc);
 		if (in->dai_flags & RDB_AF_CREATE)
 			rdb_destroy(path);
 	}
@@ -532,8 +536,7 @@ rdb_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 /**
  * Perform a distributed stop, and if \a destroy is true, destroy operation on
  * all replicas of a database with \a uuid spanning \a ranks. This method can
- * be called on any rank. \a ranks may be NULL, in which case the RDB_STOP RPC
- * will be broadcasted in the primary group.
+ * be called on any rank. \a ranks may be NULL.
  *
  * \param[in]	uuid		database UUID
  * \param[in]	pool_uuid	pool UUID (for ds_mgmt_tgt_file())
@@ -544,23 +547,18 @@ int
 rdb_dist_stop(const uuid_t uuid, const uuid_t pool_uuid,
 	      const daos_rank_list_t *ranks, bool destroy)
 {
-	crt_group_t	       *group = NULL;
 	crt_rpc_t	       *rpc;
 	struct rdb_stop_in     *in;
 	struct rdb_stop_out    *out;
 	int			rc;
 
-	if (ranks != NULL) {
-		rc = dss_group_create("rdb_ephemeral_group",
-				      (daos_rank_list_t *)ranks, &group);
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
-
-	rc = rdb_create_bcast(RDB_STOP, group, &rpc);
+	/*
+	 * If ranks doesn't include myself, creating a group with ranks will
+	 * fail; bcast to the primary group instead.
+	 */
+	rc = rdb_create_bcast(RDB_STOP, NULL /* group */, &rpc);
 	if (rc != 0)
-		D_GOTO(out_group, rc);
-
+		D_GOTO(out, rc);
 	in = crt_req_get(rpc);
 	uuid_copy(in->doi_uuid, uuid);
 	uuid_copy(in->doi_pool, pool_uuid);
@@ -581,9 +579,6 @@ rdb_dist_stop(const uuid_t uuid, const uuid_t pool_uuid,
 
 out_rpc:
 	crt_req_decref(rpc);
-out_group:
-	if (group != NULL)
-		dss_group_destroy(group);
 out:
 	return rc;
 }

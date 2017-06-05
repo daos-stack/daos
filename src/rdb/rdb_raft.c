@@ -787,16 +787,17 @@ rdb_raft_log_load(raft_server_t *raft, daos_handle_t log)
 
 /* TODO: Implement a true random algorithm. */
 static int
-rdb_raft_rand(int low, int high, crt_rank_t rank, uint8_t nreplicas)
+rdb_raft_rand(int low, int high, int id, uint8_t nreplicas)
 {
-	return low + (high - low) / nreplicas * rank;
+	return low + (high - low) / nreplicas * id;
 }
 
 int
-rdb_raft_start(struct rdb *db, const daos_rank_list_t *replicas)
+rdb_raft_start(struct rdb *db)
 {
 	daos_iov_t	value;
 	crt_rank_t	self;
+	int		self_id = -1;
 	int		term;
 	int		vote;
 	int		i;
@@ -872,26 +873,34 @@ rdb_raft_start(struct rdb *db, const daos_rank_list_t *replicas)
 	/* Add nodes. */
 	rc = crt_group_rank(NULL, &self);
 	D_ASSERTF(rc == 0, "%d\n", rc);
-	for (i = 0; i < replicas->rl_nr.num; i++) {
+	for (i = 0; i < db->d_replicas->rl_nr.num; i++) {
 		struct rdb_raft_node   *n;
 		raft_node_t	       *node;
-		crt_rank_t		rank = replicas->rl_ranks[i];
+		crt_rank_t		rank = db->d_replicas->rl_ranks[i];
+		bool			is_self = false;
 
 		D_ALLOC_PTR(n);
 		if (n == NULL)
 			D_GOTO(err_nodes, rc = -DER_NOMEM);
 		n->dn_rank = rank;
-		node = raft_add_node(db->d_raft, n, i + 1 /* id */,
-				     rank == self /* is_self */);
+
+		if (rank == self) {
+			is_self = true;
+			self_id = i;
+		}
+
+		node = raft_add_node(db->d_raft, n, i /* id */,
+				     is_self /* is_self */);
 		if (node == NULL) {
-			D_ERROR("failed to add raft node %d\n", i + 1);
+			D_ERROR("failed to add raft node %d\n", i);
 			D_FREE_PTR(n);
 			D_GOTO(err_nodes, rc = -DER_NOMEM);
 		}
 	}
+	D_ASSERT(self_id != -1);
 
-	election_timeout = rdb_raft_rand(8 * 1000, 12 * 1000, self,
-					 replicas->rl_nr.num);
+	election_timeout = rdb_raft_rand(8 * 1000, 12 * 1000, self_id,
+					 db->d_replicas->rl_nr.num);
 	request_timeout = 3 * 1000;
 	D_DEBUG(DB_ANY, DF_DB": election timeout %d ms\n", DP_DB(db),
 		election_timeout);
@@ -935,7 +944,7 @@ err_nodes:
 		raft_node_t	       *node;
 		struct rdb_raft_node   *n;
 
-		node = raft_get_node(db->d_raft, i + 1 /* id */);
+		node = raft_get_node(db->d_raft, i /* id */);
 		D_ASSERT(node != NULL);
 		n = raft_node_get_udata(node);
 		D_ASSERT(n != NULL);
@@ -1013,7 +1022,7 @@ rdb_raft_stop(struct rdb *db)
 		raft_node_t	       *node;
 		struct rdb_raft_node   *n;
 
-		node = raft_get_node(db->d_raft, i + 1 /* id */);
+		node = raft_get_node(db->d_raft, i /* id */);
 		if (node == NULL)
 			continue;
 		n = raft_node_get_udata(node);
@@ -1058,6 +1067,22 @@ rdb_raft_wait_applied(struct rdb *db, uint64_t index)
 	return rc;
 }
 
+static raft_node_t *
+rdb_raft_find_node(struct rdb *db, crt_rank_t rank)
+{
+	int i;
+
+	if (daos_rank_list_find(db->d_replicas, rank, &i)) {
+		raft_node_t *node;
+
+		node = raft_get_node(db->d_raft, i);
+		D_ASSERT(node != NULL);
+		return node;
+	} else {
+		return NULL;
+	}
+}
+
 int
 rdb_requestvote_handler(crt_rpc_t *rpc)
 {
@@ -1075,8 +1100,9 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 		D_GOTO(out_db, rc = -DER_CANCELED);
 
 	D_DEBUG(DB_ANY, DF_DB": handling raft rv\n", DP_DB(db));
-	node = raft_get_node(db->d_raft, rpc->cr_ep.ep_rank + 1);
-	D_ASSERT(node != NULL);
+	node = rdb_raft_find_node(db, rpc->cr_ep.ep_rank);
+	if (node == NULL)
+		D_GOTO(out_db, rc = -DER_UNKNOWN);
 	rdb_raft_save_state(db, &state);
 	raft_recv_requestvote(db->d_raft, node, &in->rvi_msg, &out->rvo_msg);
 	rdb_raft_check_state(db, &state);
@@ -1106,8 +1132,9 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 		D_GOTO(out_db, rc = -DER_CANCELED);
 
 	D_DEBUG(DB_ANY, DF_DB": handling raft ae\n", DP_DB(db));
-	node = raft_get_node(db->d_raft, rpc->cr_ep.ep_rank + 1);
-	D_ASSERT(node != NULL);
+	node = rdb_raft_find_node(db, rpc->cr_ep.ep_rank);
+	if (node == NULL)
+		D_GOTO(out_db, rc = -DER_UNKNOWN);
 	rdb_raft_save_state(db, &state);
 	raft_recv_appendentries(db->d_raft, node, &in->aei_msg, &out->aeo_msg);
 	rdb_raft_check_state(db, &state);
