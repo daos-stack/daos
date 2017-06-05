@@ -787,9 +787,45 @@ rdb_raft_log_load(raft_server_t *raft, daos_handle_t log)
 
 /* TODO: Implement a true random algorithm. */
 static int
-rdb_raft_rand(int low, int high, int id, uint8_t nreplicas)
+rdb_raft_rand(int min, int max, int id, uint8_t nreplicas)
 {
-	return low + (high - low) / nreplicas * id;
+	return min + (max - min) / nreplicas * id;
+}
+
+static int
+rdb_raft_get_election_timeout(daos_rank_t self, uint8_t nreplicas)
+{
+	const char     *s;
+	int		min;
+	int		max;
+
+	s = getenv("RDB_ELECTION_TIMEOUT_MIN");
+	if (s == NULL)
+		min = 8000;
+	else
+		min = atoi(s);
+
+	s = getenv("RDB_ELECTION_TIMEOUT_MAX");
+	if (s == NULL)
+		max = 12000;
+	else
+		max = atoi(s);
+
+	return rdb_raft_rand(min, max, self, nreplicas);
+}
+
+static int
+rdb_raft_get_request_timeout(void)
+{
+	const char     *s;
+	int		t;
+
+	s = getenv("RDB_REQUEST_TIMEOUT");
+	if (s == NULL)
+		t = 3000;
+	else
+		t = atoi(s);
+	return t;
 }
 
 int
@@ -801,6 +837,7 @@ rdb_raft_start(struct rdb *db)
 	int		term;
 	int		vote;
 	int		i;
+	uint8_t		nreplicas = db->d_replicas->rl_nr.num;
 	int		election_timeout;
 	int		request_timeout;
 	int		rc;
@@ -899,11 +936,12 @@ rdb_raft_start(struct rdb *db)
 	}
 	D_ASSERT(self_id != -1);
 
-	election_timeout = rdb_raft_rand(8 * 1000, 12 * 1000, self_id,
-					 db->d_replicas->rl_nr.num);
-	request_timeout = 3 * 1000;
+	election_timeout = rdb_raft_get_election_timeout(self_id, nreplicas);
+	request_timeout = rdb_raft_get_request_timeout();
 	D_DEBUG(DB_ANY, DF_DB": election timeout %d ms\n", DP_DB(db),
 		election_timeout);
+	D_DEBUG(DB_ANY, DF_DB": request timeout %d ms\n", DP_DB(db),
+		request_timeout);
 	raft_set_election_timeout(db->d_raft, election_timeout);
 	raft_set_request_timeout(db->d_raft, request_timeout);
 
