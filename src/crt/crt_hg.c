@@ -932,12 +932,12 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 	hg_ret = HG_Forward(rpc_priv->crp_hg_hdl, crt_hg_req_send_cb, cb_info,
 			    hg_in_struct);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("HG_Forward failed, hg_ret: %d, opc: 0x%x.\n",
-			hg_ret, rpc_priv->crp_pub.cr_opc);
+		C_ERROR("HG_Forward failed, hg_ret: %d, prc_priv: %p, "
+			"opc: 0x%x.\n", hg_ret, rpc_priv,
+			rpc_priv->crp_pub.cr_opc);
 		C_FREE_PTR(cb_info);
 		rc = -CER_HG;
 	}
-
 
 out:
 	return rc;

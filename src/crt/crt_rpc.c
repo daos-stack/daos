@@ -722,10 +722,17 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *priv)
 
 	rpc_priv->crp_na_addr = hg_addr;
 	rc = crt_req_send_internal(rpc_priv);
-	if (rc != 0)
-		C_ERROR("crt_req_send_internal() failed. rc %d.\n", rc);
+	if (rc != 0) {
+		C_ERROR("crt_req_send_internal() failed, rc %d, rpc_priv: %p, "
+			"opc: 0x%x.\n", rc, rpc_priv, rpc_priv->crp_pub.cr_opc);
+		crt_context_req_untrack(&rpc_priv->crp_pub);
+		crt_rpc_complete(rpc_priv, rc);
+		crt_req_decref(&rpc_priv->crp_pub); /* destroy */
+	}
 
 out:
+	/* addref in crt_req_hg_addr_lookup */
+	crt_req_decref(&rpc_priv->crp_pub);
 	return rc;
 }
 
@@ -795,14 +802,20 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	}
 
 	rc = crt_req_send_internal(rpc_priv);
-	if (rc != 0)
+	if (rc != 0) {
 		C_ERROR("crt_req_send_internal() failed, rc %d, opc: 0x%x\n",
 			rc, rpc_priv->crp_pub.cr_opc);
+		crt_context_req_untrack(&rpc_priv->crp_pub);
+		crt_rpc_complete(rpc_priv, rc);
+		crt_req_decref(&rpc_priv->crp_pub); /* destroy */
+	}
 
 out:
 	/* addref in crt_req_uri_lookup_psr */
 	crt_req_decref(rpc_priv->crp_ul_req);
 	rpc_priv->crp_ul_req = NULL;
+	/* addref in crt_req_uri_lookup_psr */
+	crt_req_decref(&rpc_priv->crp_pub);
 	return rc;
 }
 
@@ -839,7 +852,10 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 			rc, rpc_priv->crp_pub.cr_opc);
 		C_GOTO(out, rc);
 	}
-	crt_req_addref(ul_req); /* decref in crt_req_uri_lookup_psr_cb */
+	/* decref in crt_req_uri_lookup_psr_cb */
+	crt_req_addref(ul_req);
+	/* decref in crt_req_uri_lookup_psr_cb */
+	crt_req_addref(&rpc_priv->crp_pub);
 	rpc_priv->crp_ul_req = ul_req;
 	ul_in = crt_req_get(ul_req);
 	ul_out = crt_reply_get(ul_req);
@@ -847,11 +863,14 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 	ul_in->ul_grp_id = grp_priv->gp_pub.cg_grpid;
 	ul_in->ul_rank = rpc_priv->crp_pub.cr_ep.ep_rank;
 	rc = crt_req_send(ul_req, complete_cb, arg);
-	if (rc != 0)
+	if (rc != 0) {
 		C_ERROR("URI_LOOKUP (to group %s rank %d through PSR %d) "
 			"request send failed, rc: %d opc: 0x%x.\n",
 			ul_in->ul_grp_id, ul_in->ul_rank, psr_ep.ep_rank,
 			rc, rpc_priv->crp_pub.cr_opc);
+		crt_req_decref(ul_req); /* rollback addref above */
+		crt_req_decref(&rpc_priv->crp_pub); /* rollback addref above */
+	}
 
 out:
 	return rc;
@@ -984,11 +1003,16 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	int			 rc = 0;
 
 	crt_ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
+	/* decref at crt_req_hg_addr_lookup_cb */
+	crt_req_addref(&rpc_priv->crp_pub);
 	rc = crt_hg_addr_lookup(&crt_ctx->cc_hg_ctx, rpc_priv->crp_tgt_uri,
 				&crt_req_hg_addr_lookup_cb, rpc_priv);
-	if (rc != 0)
+	if (rc != 0) {
 		C_ERROR("crt_addr_lookup() failed, rc %d, opc: 0x%x..\n",
 			rc, rpc_priv->crp_pub.cr_opc);
+		/* rollback above addref */
+		crt_req_decref(&rpc_priv->crp_pub);
+	}
 	return rc;
 }
 
@@ -1017,13 +1041,13 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	rpc_priv->crp_state = RPC_STATE_REQ_SENT;
 	rc = crt_hg_req_send(rpc_priv);
 	if (rc != 0)
-		C_ERROR("crt_hg_req_send failed, rc: %d, "
-			"opc: 0x%x.\n", rc, req->cr_opc);
+		C_ERROR("crt_hg_req_send failed, rc: %d, rpc_priv: %p,"
+			"opc: 0x%x.\n", rc, rpc_priv, req->cr_opc);
 
 out:
 	if (rc != 0)
-		C_ERROR("crt_req_send_immediately failed, rc: %d, "
-			"opc: 0x%x.\n", rc, req->cr_opc);
+		C_ERROR("crt_req_send_immediately failed, rc: %d, rpc_priv: %p,"
+			" opc: 0x%x.\n", rc, rpc_priv, req->cr_opc);
 	return rc;
 }
 
@@ -1142,6 +1166,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 				"rc %d, opc: 0x%x\n",
 				rc, rpc_priv->crp_pub.cr_opc);
 			crt_context_req_untrack(req);
+			crt_rpc_complete(rpc_priv, rc);
 		}
 	} else if (rc == CRT_REQ_TRACK_IN_WAITQ) {
 		/* queued in crt_hg_context::dhc_req_q */
