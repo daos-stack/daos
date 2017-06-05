@@ -114,17 +114,27 @@ class ScriptsRunner(PostRunner.PostRunner):
         path = module.get('path', "")
         setup_items = self.test_info.get_test_info(test['setup'])
         for item in setup_items:
+            rc = 0
             if item.get('type', "exe") == 'shell':
                 cmd = item.get('exe', item['name']) + ".sh"
                 cmdstr = os.path.join(path, cmd)
             else:
                 cmdstr = self.test_info.setup_parameters(
                     item.get('exe', item['name']))
-            parameters = self.test_info.setup_parameters(item)
+            parameters = self.test_info.setup_parameters(
+                item.get('parameters', ""))
             waittime = int(item.get('waittime', self.globalTimeout))
-            rtn |= self.execute_testcase(cmdstr, parameters, logname, waittime)
-
-        return rtn
+            rc = self.execute_testcase(cmdstr, parameters, logname, waittime)
+            rtn |= rc
+            if rc:
+                self.logger.info("TestRunner: setup %s for %s Failed",
+                                 item['name'], test['name'])
+        if rtn and test.get('setupFailsTestcase',
+                            self.test_info.get_directives('setupFailsTestcase',
+                                                          "yes")).lower() == \
+                   "yes":
+            return rtn
+        return 0
 
     def execute_list(self, results):
         """ execute each item in the execution strategy list """
@@ -149,7 +159,19 @@ class ScriptsRunner(PostRunner.PostRunner):
                 hostName=self.test_info.nodename)
 
             if item.get('setup'):
-                rtn |= self.execute_setup(item, module, log_name)
+                start_time = time()
+                rtc = self.execute_setup(item, module, log_name)
+                if rtc:
+                    info['duration'] = '{:.2f}'.format(time() - start_time)
+                    info['return_code'] = rtc
+                    info['status'] = "FAIL"
+                    info['error'] = "testcase setup failed"
+                    rtn |= rtc
+                    results.update_subtest_results(info)
+                    if toexit == "no":
+                        continue
+                    else:
+                        break
             if item.get('type', "exe") == 'shell':
                 cmd = item.get('exe', item['name']) + ".sh"
                 cmdstr = os.path.join(path, cmd)
@@ -199,6 +221,7 @@ class ScriptsRunner(PostRunner.PostRunner):
         if loop.lower() == "no":
             rtn = self.execute_list(results)
         else:
+            toexit = self.test_info.get_directives('exitLoopOnError', "yes")
             for i in range(1, int(loop) + 1):
                 self.logger.info("***************" + \
                                  str(" loop %d " % i) +\
@@ -218,7 +241,6 @@ class ScriptsRunner(PostRunner.PostRunner):
                 else:
                     status = "FAIL"
                 results.update_testset_results(status=status)
-                toexit = self.test_info.get_directives('exitLoopOnError', "yes")
                 if rtn and toexit.lower() == "yes":
                     break
         if rtn == 0:
