@@ -84,11 +84,15 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 	/** create pool */
 	if (arg->myrank == 0) {
 		print_message("setup: creating pool\n");
+
 		rc = daos_pool_create(0731, geteuid(), getegid(), arg->group,
 				      NULL, "pmem", 1024*1024*1024, &arg->svc,
 				      arg->pool_uuid, NULL);
 		if (rc)
 			print_message("daos_pool_create failed, rc: %d\n", rc);
+		else
+			print_message("setup: created pool "DF_UUIDF"\n",
+				       DP_UUID(arg->pool_uuid));
 	}
 	/** broadcast pool create result */
 	if (multi_rank)

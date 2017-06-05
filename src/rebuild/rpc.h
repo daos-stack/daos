@@ -95,10 +95,7 @@ struct rebuild_query_in {
 };
 
 struct rebuild_query_out {
-	int		rqo_status;
-	uint32_t	rqo_done;
-	uint32_t	rqo_rec_count;
-	uint32_t	rqo_obj_count;
+	struct daos_rebuild_status	rqo_st;
 };
 
 struct rebuild_tgt_in {

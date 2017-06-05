@@ -51,8 +51,8 @@ struct rebuild_tls {
 	unsigned int	rebuild_local_root_init:1,
 			rebuild_task_init:1,
 			rebuild_scanning:1,
-			rebuild_initializing:1,
-			rebuild_ult:1;
+			rebuild_initializing:1;
+	unsigned int	rebuild_ver;
 };
 
 struct rebuild_root {

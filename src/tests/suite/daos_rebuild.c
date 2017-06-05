@@ -104,20 +104,14 @@ rebuild_test_add_tgt(test_arg_t *arg, daos_rank_t rank)
 static int
 rebuild_wait(test_arg_t *arg, daos_rank_t failed_rank, bool concurrent_io)
 {
-	daos_rank_list_t	ranks;
 	struct ioreq		req;
 	daos_obj_id_t		oid;
 	int			rc = 0;
-	int			done = 0;
-	int			status = 0;
 	int			i;
 	char			dkey[16];
 	char			buf[10];
 
 	/* Rebuild rank 0 */
-	ranks.rl_nr.num = 1;
-	ranks.rl_nr.num_out = 1;
-	ranks.rl_ranks = &failed_rank;
 	if (concurrent_io) {
 		oid = dts_oid_gen(DAOS_OC_REPL_2_SMALL_RW, arg->myrank);
 		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
@@ -140,18 +134,32 @@ rebuild_wait(test_arg_t *arg, daos_rank_t failed_rank, bool concurrent_io)
 		}
 	}
 
-	while (!done && arg->myrank == 0) {
-		unsigned int rec_count = 0;
-		unsigned int obj_count = 0;
+	while (arg->myrank == 0) {
+		daos_pool_info_t	    pinfo;
+		struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
 
-		rc = daos_rebuild_query(arg->poh, &ranks, &done,
-					&status, &rec_count, &obj_count,
-					NULL);
-		if (rc != 0)
+		memset(&pinfo, 0, sizeof(pinfo));
+		rc = daos_pool_query(arg->poh, NULL, &pinfo, NULL);
+		if (rc != 0) {
+			print_message("query rebuild status failed: %d\n", rc);
 			break;
-		assert_int_equal(status, 0);
-		print_message("wait for rebuild finish rec %d obj %d\n",
-			      rec_count, obj_count);
+		}
+
+		if (rst->rs_version == 0) {
+			print_message("No more rebuild\n");
+			break;
+		}
+
+		assert_int_equal(rst->rs_errno, 0);
+		if (rst->rs_done) {
+			print_message("Rebuild (ver=%d) is done\n",
+				       rst->rs_version);
+			break;
+		}
+
+		print_message("wait for rebuild (ver=%u), "
+			      "already rebuilt obj="DF_U64", rec="DF_U64"\n",
+			      rst->rs_version, rst->rs_obj_nr, rst->rs_rec_nr);
 		sleep(2);
 	}
 

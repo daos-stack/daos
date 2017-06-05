@@ -76,10 +76,12 @@ static struct crt_msg_field *rebuild_query_in_fields[] = {
 };
 
 static struct crt_msg_field *rebuild_query_out_fields[] = {
-	&CMF_INT,
-	&CMF_INT,
-	&CMF_UINT32,
-	&CMF_UINT32,
+	&CMF_UINT32,	/* rebuild_status.st_version */
+	&CMF_UINT32,	/* rebuild_status.st_pad_32 */
+	&CMF_INT,	/* rebuild_status.st_errno */
+	&CMF_INT,	/* rebuild_status.st_done */
+	&CMF_UINT64,	/* rebuild_status.st_obj_nr */
+	&CMF_UINT64,	/* rebuild_status.st_rec_nr */
 };
 
 static struct crt_msg_field *rebuild_fini_tgt_in_fields[] = {

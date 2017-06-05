@@ -159,16 +159,15 @@ dc_rebuild_query_cp(struct daos_task *task, void *data)
 	struct rebuild_query_out *out = crt_reply_get(rpc);
 	int			rc;
 
-	rc = out->rqo_status;
-	*arg->status = rc;
+	*arg->status = rc = out->rqo_st.rs_errno;
 	if (rc != 0) {
 		D_ERROR("failed to rebuild target: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
-	*arg->done = out->rqo_done;
-	*arg->rec_count = out->rqo_rec_count;
-	*arg->obj_count = out->rqo_obj_count;
+	*arg->done = out->rqo_st.rs_done;
+	*arg->rec_count = out->rqo_st.rs_rec_nr;
+	*arg->obj_count = out->rqo_st.rs_obj_nr;
 out:
 	daos_group_detach(rpc->cr_ep.ep_grp);
 	crt_req_decref(rpc);

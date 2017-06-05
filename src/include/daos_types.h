@@ -205,20 +205,39 @@ typedef struct {
 	daos_space_t		ta_space;
 } daos_target_info_t;
 
+struct daos_rebuild_status {
+	/** pool map version in rebuild */
+	uint32_t		rs_version;
+	/** padding bytes */
+	uint32_t		rs_pad_32;
+	/** errno for rebuild failure */
+	int32_t			rs_errno;
+	/**
+	 * rebuild is done or not, it is valid only if @rs_version is non-zero
+	 */
+	int32_t			rs_done;
+	/** # rebuilt objects, it's non-zero only if rs_status is 1 */
+	uint64_t		rs_obj_nr;
+	/** # rebuilt records, it's non-zero only if rs_status is 1 */
+	uint64_t		rs_rec_nr;
+};
+
 /**
  * Storage pool
  */
 typedef struct {
 	/** Pool UUID */
-	uuid_t			pi_uuid;
+	uuid_t				pi_uuid;
 	/** Number of targets */
-	uint32_t		pi_ntargets;
+	uint32_t			pi_ntargets;
 	/** Number of deactivated targets */
-	uint32_t		pi_ndisabled;
+	uint32_t			pi_ndisabled;
 	/** Mode */
-	unsigned int		pi_mode;
+	unsigned int			pi_mode;
 	/** Space usage */
-	daos_space_t		pi_space;
+	daos_space_t			pi_space;
+	/** rebuild status */
+	struct daos_rebuild_status	pi_rebuild_st;
 } daos_pool_info_t;
 
 /**

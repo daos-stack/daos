@@ -117,6 +117,7 @@ struct pool_query_out {
 	struct pool_op_out	pqo_op;
 	uint32_t		pqo_mode;
 	uint32_t		pqo_map_buf_size;   /* only set on -DER_TRUNC */
+	struct daos_rebuild_status pqo_rebuild_st;
 };
 
 struct pool_tgt_update_in {

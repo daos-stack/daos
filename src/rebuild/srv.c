@@ -183,24 +183,23 @@ out:
 	return rc;
 }
 
-struct rebuild_status {
-	unsigned int	result;	/* rebuild result */
-	unsigned int	obj_cnt; /* how many objects being rebuilt */
-	unsigned int	rec_cnt; /* how many records being rebuilt */
-	unsigned int	done:1;	 /* If the rebuild is done */
-};
-
-static int
-ds_rebuild_query_internal(uuid_t pool_uuid, daos_rank_list_t *failed_tgts,
-			  struct rebuild_status *status)
+int
+ds_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_tgts,
+		 struct daos_rebuild_status *status)
 {
-	struct ds_pool	*pool;
-	crt_rpc_t	*tgt_rpc;
+	struct ds_pool			*pool;
+	crt_rpc_t			*tgt_rpc;
 	struct rebuild_tgt_query_in	*rtqi;
 	struct rebuild_tgt_query_out	*rtqo;
-	int		rc;
+	int				 rc;
+	struct rebuild_tls		*tls = rebuild_tls_get();
 
-	status->done = 0;
+	if (tls->rebuild_ver == 0) { /* no rebulid */
+		D_DEBUG(DB_TRACE, "No rebuild in progress\n");
+		memset(status, 0, sizeof(*status));
+		return 0;
+	}
+
 	pool = ds_pool_lookup(pool_uuid);
 	if (pool == NULL) {
 		D_ERROR("can not find "DF_UUID" rc %d\n",
@@ -226,14 +225,17 @@ ds_rebuild_query_internal(uuid_t pool_uuid, daos_rank_list_t *failed_tgts,
 	D_DEBUG(DB_TRACE, "%p query rebuild status %d obj count %d"
 		" rec count %d\n", rtqo, rtqo->rtqo_rebuilding,
 		rtqo->rtqo_obj_count, rtqo->rtqo_rec_count);
-	if (rtqo->rtqo_rebuilding == 0)
-		status->done = 1;
 
-	if (status->result == 0)
-		status->result = rtqo->rtqo_status;
+	memset(status, 0, sizeof(*status));
+	if (rtqo->rtqo_status != 0)
+		status->rs_errno = rtqo->rtqo_status;
+	else if (rtqo->rtqo_rebuilding == 0)
+		status->rs_done = 1;
 
-	status->rec_cnt = rtqo->rtqo_rec_count;
-	status->obj_cnt = rtqo->rtqo_obj_count;
+	/* rebuild_ver could have been changed when yield in bcast */
+	status->rs_version = tls->rebuild_ver;
+	status->rs_rec_nr = rtqo->rtqo_rec_count;
+	status->rs_obj_nr = rtqo->rtqo_obj_count;
 
 out_rpc:
 	crt_req_decref(tgt_rpc);
@@ -248,26 +250,21 @@ ds_rebuild_query_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_query_in		*rqi;
 	struct rebuild_query_out	*rqo;
-	struct rebuild_status		status;
-	int			rc;
+	int				 rc;
 
 	rqi = crt_req_get(rpc);
 	rqo = crt_reply_get(rpc);
 
-	memset(&status, 0, sizeof(status));
-
-	rc = ds_rebuild_query_internal(rqi->rqi_pool_uuid,
-				       rqi->rqi_tgts_failed, &status);
+	rc = ds_rebuild_query(rqi->rqi_pool_uuid, rqi->rqi_tgts_failed,
+			      &rqo->rqo_st);
 	if (rc)
 		D_GOTO(out, rc);
 
-	rqo->rqo_done = status.done;
-	rqo->rqo_status = status.result;
-	rqo->rqo_rec_count = status.rec_cnt;
-	rqo->rqo_obj_count = status.obj_cnt;
+	D_EXIT;
 out:
-	if (rqo->rqo_status == 0)
-		rqo->rqo_status = rc;
+	if (rqo->rqo_st.rs_errno == 0 && rc != 0)
+		rqo->rqo_st.rs_errno = rc;
+
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: rc %d\n", rc);
@@ -348,7 +345,7 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 	int	rc;
 
 	while (1) {
-		struct rebuild_status	status;
+		struct daos_rebuild_status	status;
 
 		now = ABT_get_wtime();
 		if (now - then < RBLD_QUERY_INTV) {
@@ -357,13 +354,15 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 			continue;
 		}
 
-		memset(&status, 0, sizeof(status));
-		rc = ds_rebuild_query_internal(pool_uuid, tgts_failed,
-					       &status);
-		D_DEBUG(DB_TRACE, DF_UUID "done/result/obj/rec %d/%d/%d/%d"
-			" rc %d\n", DP_UUID(pool_uuid), status.done,
-			status.result, status.obj_cnt, status.rec_cnt, rc);
-		if (rc || status.done)
+		rc = ds_rebuild_query(pool_uuid, tgts_failed, &status);
+
+		D_DEBUG(DB_TRACE, DF_UUID
+			"done=%d, errno=%d, obj="DF_U64", rec="DF_U64","
+			"rc=%d\n", DP_UUID(pool_uuid), status.rs_done,
+			status.rs_errno, status.rs_obj_nr,
+			status.rs_rec_nr, rc);
+
+		if (rc || status.rs_done || status.rs_errno)
 			break;
 
 		then = now;
@@ -478,6 +477,8 @@ ds_rebuild_ult(void *arg)
 	daos_list_for_each_entry_safe(task, tmp, &tls->rebuild_task_list,
 				      dst_list) {
 		daos_list_del(&task->dst_list);
+		tls->rebuild_ver = task->dst_map_ver;
+
 		rc = ds_rebuild_one(task->dst_pool_uuid, task->dst_map_ver,
 				    task->dst_tgts_failed, task->dst_svc_list);
 		if (rc != 0)
@@ -490,7 +491,7 @@ ds_rebuild_ult(void *arg)
 		ABT_thread_yield();
 	}
 
-	tls->rebuild_ult = 0;
+	tls->rebuild_ver = 0;
 }
 
 /**
@@ -527,11 +528,11 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 
 	daos_list_add_tail(&task->dst_list, &tls->rebuild_task_list);
 
-	if (!tls->rebuild_ult) {
+	if (tls->rebuild_ver == 0) {
 		rc = dss_ult_create(ds_rebuild_ult, NULL, -1, NULL);
 		if (rc)
 			D_GOTO(free, rc);
-		tls->rebuild_ult = 1;
+		tls->rebuild_ver = map_ver;
 	}
 free:
 	if (rc) {

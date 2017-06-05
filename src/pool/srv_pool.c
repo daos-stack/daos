@@ -1693,6 +1693,10 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	if (!pool_svc_up(svc))
 		D_GOTO(out_svc, rc = -DER_NOTLEADER);
 
+	rc = ds_rebuild_query(in->pqi_op.pi_uuid, NULL, &out->pqo_rebuild_st);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+
 	rc = rdb_tx_begin(svc->ps_db, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);

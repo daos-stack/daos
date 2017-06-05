@@ -1112,6 +1112,9 @@ pool_query_cb(struct daos_task *task, void *data)
 	if (rc)
 		D_GOTO(out, rc);
 
+	memcpy(&arg->dqa_info->pi_rebuild_st, &out->pqo_rebuild_st,
+	       sizeof(out->pqo_rebuild_st));
+
 	rc = process_query_reply(arg->dqa_pool, arg->dqa_map_buf,
 				 out->pqo_op.po_map_version,
 				 out->pqo_mode, arg->dqa_tgts, arg->dqa_info);
