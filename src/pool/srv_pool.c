@@ -1916,7 +1916,6 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	D_ALLOC_PTR(out->pto_targets);
 	if (out->pto_targets == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-
 	D_ALLOC(out->pto_targets->rl_ranks,
 		sizeof(*out->pto_targets->rl_ranks) *
 		in->pti_targets->rl_nr.num);
