@@ -563,8 +563,10 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(&rpc_priv->crp_pub);
 
 		crt_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
-		C_ERROR("rpc_priv %p (opc 0x%x) timed out.\n", rpc_priv,
-			rpc_priv->crp_pub.cr_opc);
+		C_ERROR("rpc_priv %p (opc 0x%x) timed out, tgt rank %d, "
+			"tag %d.\n", rpc_priv, rpc_priv->crp_pub.cr_opc,
+			rpc_priv->crp_pub.cr_ep.ep_rank,
+			rpc_priv->crp_pub.cr_ep.ep_tag);
 	};
 	pthread_mutex_unlock(&crt_ctx->cc_mutex);
 
