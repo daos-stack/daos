@@ -362,8 +362,8 @@ select_svc_ranks(int nreplicas, const daos_rank_list_t *target_addrs,
 
 /**
  * Create a (combined) pool(/container) service. This method shall be called on
- * a single storage node.  "target_uuids" shall be an array of the target UUIDs
- * returned by the ds_pool_create() calls.
+ * a single storage node in the pool. "target_uuids" shall be an array of the
+ * target UUIDs returned by the ds_pool_create() calls.
  *
  * \param[in]		pool_uuid	pool UUID
  * \param[in]		uid		pool UID
@@ -387,6 +387,8 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 		   daos_rank_list_t *svc_addrs)
 {
 	daos_rank_list_t       *ranks;
+	char			id[DAOS_UUID_STR_SIZE];
+	crt_group_t	       *g;
 	struct rsvc_client	client;
 	struct dss_module_info *info = dss_get_module_info();
 	crt_endpoint_t		ep;
@@ -403,11 +405,17 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	D_DEBUG(DB_MD, DF_UUID": creating pool group\n", DP_UUID(pool_uuid));
+	uuid_unparse_lower(pool_uuid, id);
+	rc = dss_group_create(id, (daos_rank_list_t *)target_addrs, &g);
+	if (rc != 0)
+		D_GOTO(out_ranks, rc);
+
 	/* Use the pool UUID as the RDB UUID. */
 	rc = rdb_dist_start(pool_uuid, pool_uuid, ranks, true /* create */,
 			    1 << 27 /* 128 MB */);
 	if (rc != 0)
-		D_GOTO(out_ranks, rc);
+		D_GOTO(out_group, rc);
 
 rechoose:
 	/* Create a POOL_CREATE request. */
@@ -462,6 +470,9 @@ out_client:
 out_creation:
 	if (rc != 0)
 		rdb_dist_stop(pool_uuid, pool_uuid, ranks, true /* destroy */);
+out_group:
+	if (rc != 0)
+		dss_group_destroy(g);
 out_ranks:
 	daos_rank_list_free(ranks);
 out:
@@ -471,14 +482,32 @@ out:
 int
 ds_pool_svc_destroy(const uuid_t pool_uuid)
 {
-	int rc;
+	char		id[DAOS_UUID_STR_SIZE];
+	crt_group_t    *group;
+	int		rc;
 
 	rc = rdb_dist_stop(pool_uuid, pool_uuid, NULL /* ranks */,
 			   true /* destroy */);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to destroy pool service: %d\n",
 			DP_UUID(pool_uuid), rc);
-	return rc;
+		return rc;
+	}
+
+	uuid_unparse_lower(pool_uuid, id);
+	group = crt_group_lookup(id);
+	if (group != NULL) {
+		D_DEBUG(DB_MD, DF_UUID": destroying pool group\n",
+			DP_UUID(pool_uuid));
+		rc = dss_group_destroy(group);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to destroy pool group: %d\n",
+				DP_UUID(pool_uuid), rc);
+			return rc;
+		}
+	}
+
+	return 0;
 }
 
 static int

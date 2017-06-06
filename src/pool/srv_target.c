@@ -244,10 +244,22 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	if (arg->pca_create_group) {
+#if 0
 		D_ASSERT(pool->sp_map != NULL);
 		rc = ds_pool_group_create(key, pool->sp_map, &pool->sp_group);
 		if (rc != 0)
 			D_GOTO(err_collective, rc);
+#else
+		char id[DAOS_UUID_STR_SIZE];
+
+		uuid_unparse_lower(key, id);
+		pool->sp_group = crt_group_lookup(id);
+		if (pool->sp_group == NULL) {
+			D_ERROR(DF_UUID": pool group not found\n",
+				DP_UUID(key));
+			D_GOTO(err_collective, rc = -DER_NONEXIST);
+		}
+#endif
 	}
 
 	*link = &pool->sp_entry;
