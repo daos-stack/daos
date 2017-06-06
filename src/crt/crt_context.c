@@ -724,6 +724,8 @@ crt_context_req_untrack(crt_rpc_t *req)
 	C_ASSERT(rpc_priv->crp_state == RPC_STATE_INITED    ||
 		 rpc_priv->crp_state == RPC_STATE_COMPLETED ||
 		 rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
+		 rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
+		 rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
 		 rpc_priv->crp_state == RPC_STATE_CANCELED);
 	epi = rpc_priv->crp_epi;
 	C_ASSERT(epi != NULL);
