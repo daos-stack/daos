@@ -1045,7 +1045,6 @@ crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
 	struct crt_grp_priv	*grp_priv;
 	d_rank_t		 parent_rank;
 	crt_group_t		*group;
-	d_rank_list_t		*failed_ranks = NULL;
 	int			 rc;
 
 	if (cur_node == root_node)
@@ -1058,19 +1057,10 @@ crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
 	grp_priv = container_of(group, struct crt_grp_priv, gp_pub);
 	D_ASSERT(grp_priv != NULL);
 
-	rc = crt_grp_failed_ranks_dup(group, &failed_ranks);
-
-	if (rc != 0) {
-		D_ERROR("crt_grp_failed_ranks_dup() failed; rc=%d\n", rc);
-		failed_ranks = NULL;
-	}
-
-	rc = crt_tree_get_parent(grp_priv, 0, failed_ranks,
+	rc = crt_tree_get_parent(grp_priv, 0, NULL,
 			ivns_internal->cii_gns.gn_tree_topo, root_node,
 			cur_node, &parent_rank);
 	D_ASSERT(rc == 0);
-
-	d_rank_list_free(failed_ranks);
 
 	D_DEBUG("parent lookup: current=%d, root=%d, parent=%d\n",
 		cur_node, root_node, parent_rank);

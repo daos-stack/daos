@@ -113,6 +113,10 @@ d_init_log_facility(int *fac, const char *aname, const char *lname)
  * similar macros using different subsystem and log-level, for example:
  * #define DSR_DEBUG(...) d_log(DSR_DEBUG, ...)
  */
+#define D_INFO(fmt, ...)						\
+	d_log(DINFO, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
+	     ##__VA_ARGS__)
+
 #define D_DEBUG(fmt, ...)						\
 	d_log(DDBG, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
 	     ##__VA_ARGS__)

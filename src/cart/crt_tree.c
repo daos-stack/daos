@@ -55,16 +55,20 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	int			 rc = 0;
 
 	if (exclude_ranks == NULL || exclude_ranks->rl_nr.num == 0) {
-		grp_rank_list = grp_priv->gp_membs;
-		*grp_size = grp_priv->gp_size;
+		grp_rank_list = grp_priv->gp_live_ranks;
+
+		*grp_size = grp_rank_list->rl_nr.num;
 		D_ASSERT(*grp_size == grp_rank_list->rl_nr.num);
 		*grp_root = root;
 		*grp_self = self;
 		*allocated = false;
 	} else {
-		/* grp_priv->gp_membs/exclude_ranks already sorted and unique */
-		rc = d_rank_list_dup(&grp_rank_list, grp_priv->gp_membs,
+		/* grp_priv->gp_live_ranks/exclude_ranks already sorted
+		 * and unique
+		 */
+		rc = d_rank_list_dup(&grp_rank_list, grp_priv->gp_live_ranks,
 				     true /* input */);
+
 		if (rc != 0) {
 			D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
 			D_GOTO(out, rc);
@@ -110,7 +114,9 @@ out:
 
 #define CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self)	       \
 	do {								       \
-		D_ASSERT(grp_priv != NULL && grp_priv->gp_membs != NULL);      \
+		D_ASSERT(grp_priv != NULL && grp_priv->gp_membs != NULL	       \
+			 && grp_priv->gp_live_ranks != NULL);		       \
+									       \
 		D_ASSERT(root < grp_priv->gp_size && self < grp_priv->gp_size);\
 		D_ASSERT(crt_tree_topo_valid(tree_topo));		       \
 		tree_type = crt_tree_type(tree_topo);			       \
@@ -125,8 +131,9 @@ out:
 /*
  * query number of children.
  *
- * rank number of grp_priv->gp_membs and exclude_ranks are primary rank.
- * grp_root and grp_self are logical rank number within the group.
+ * rank number of grp_priv->gp_membs, grp_priv->gp_live_ranks and exclude_ranks
+ * are primary rank.  grp_root and grp_self are logical rank number within the
+ * group.
  */
 int
 crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
@@ -140,6 +147,8 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	uint32_t		 grp_size;
 	struct crt_topo_ops	*tops;
 	int			 rc = 0;
+
+	pthread_rwlock_rdlock(grp_priv->gp_rwlock_ft);
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (nchildren == NULL) {
@@ -176,6 +185,7 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 			root, self, rc);
 
 out:
+	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
 	if (allocated)
 		d_rank_list_free(grp_rank_list);
 	return rc;
@@ -184,14 +194,15 @@ out:
 /*
  * query children rank list (rank number in primary group).
  *
- * rank number of grp_priv->gp_membs and exclude_ranks are primary rank.
- * grp_root and grp_self are logical rank number within the group.
+ * rank number of grp_priv->gp_membs, grp_priv->gp_live_ranks and exclude_ranks
+ * are primary rank.  grp_root and grp_self are logical rank number within the
+ * group.
  */
 int
 crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		      d_rank_list_t *exclude_ranks, int tree_topo,
 		      d_rank_t root, d_rank_t self,
-		      d_rank_list_t **children_rank_list)
+		      d_rank_list_t **children_rank_list, bool *ver_match)
 {
 	d_rank_list_t		*grp_rank_list = NULL;
 	d_rank_list_t		*result_rank_list = NULL;
@@ -201,7 +212,17 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	uint32_t		 grp_size, nchildren;
 	uint32_t		 *tree_children;
 	struct crt_topo_ops	*tops;
+	struct crt_grp_priv	*default_grp_priv;
 	int			 i, rc = 0;
+
+
+	default_grp_priv = crt_grp_pub2priv(NULL);
+	D_ASSERT(default_grp_priv != NULL);
+
+	pthread_rwlock_rdlock(grp_priv->gp_rwlock_ft);
+	if (ver_match != NULL)
+		*ver_match = (grp_ver == default_grp_priv->gp_membs_ver ?
+			      true : false);
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (children_rank_list == NULL) {
@@ -270,6 +291,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	*children_rank_list = result_rank_list;
 
 out:
+	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
 	if (allocated)
 		d_rank_list_free(grp_rank_list);
 	return rc;
@@ -287,6 +309,8 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	uint32_t		 grp_size, tree_parent;
 	struct crt_topo_ops	*tops;
 	int			 rc = 0;
+
+	pthread_rwlock_rdlock(grp_priv->gp_rwlock_ft);
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (parent_rank == NULL) {
@@ -325,6 +349,7 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	*parent_rank = grp_rank_list->rl_ranks[tree_parent];
 
 out:
+	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
 	if (allocated)
 		d_rank_list_free(grp_rank_list);
 	return rc;

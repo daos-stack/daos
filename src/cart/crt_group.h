@@ -74,8 +74,23 @@ struct crt_grp_priv {
 	 * number within the primary group.
 	 */
 	d_rank_list_t		*gp_membs;
-	/* failed ranks */
+	/*
+	 * the version number of membership list gp_membs, also the version
+	 * number of the failed rank list gp_pri_srv->ps_failed_ranks
+	 */
+	uint32_t		 gp_membs_ver;
+	/*
+	 * member ranks that are still alive, should be unique and sorted, each
+	 * member is the rank number within the primary group.
+	 */
+	d_rank_list_t		*gp_live_ranks;
+	/* failed ranks. a subgroup's list points to its parent's list */
 	d_rank_list_t		*gp_failed_ranks;
+	/*
+	 * protects gp_membs_ver, gp_live_ranks, gp_failed_ranks. Only allocated
+	 * for primary groups, a subgroup references its parent group's lock
+	 */
+	pthread_rwlock_t	*gp_rwlock_ft;
 	/* the priv pointer user passed in for crt_group_create */
 	void			*gp_priv;
 	/* CaRT context only for sending sub-grp create/destroy RPCs */

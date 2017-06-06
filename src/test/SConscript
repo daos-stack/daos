@@ -41,7 +41,8 @@ import os
 
 SIMPLE_TEST_SRC = ['crt_echo_cli.c', 'crt_echo_srv.c', 'crt_echo_srv2.c',
                    'test_crt_barrier.c', 'threaded_client.c',
-                   'threaded_server.c', 'test_pmix.c']
+                   'threaded_server.c', 'test_pmix.c',
+                   'test_corpc_version.c']
 BASIC_SRC = ['crt_basic.c']
 TEST_GROUP_SRC = 'test_group.c'
 COMMON_SRC = 'fake_events.c'

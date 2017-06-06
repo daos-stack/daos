@@ -134,7 +134,7 @@ struct crt_corpc_info {
 	 * RPC being replied and parent RPC not finished, the child RPC is
 	 * queued at co_replied_rpcs.
 	 */
-	d_list_t			 co_replied_rpcs;
+	d_list_t		 co_replied_rpcs;
 	uint32_t		 co_child_num;
 	uint32_t		 co_child_ack_num;
 	uint32_t		 co_child_failed_num;

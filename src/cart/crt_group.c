@@ -669,13 +669,61 @@ out:
 	return rc;
 }
 
+static int
+crt_grp_ras_init(struct crt_grp_priv *grp_priv)
+{
+	int			rc = 0;
+
+	D_ASSERT(grp_priv->gp_service);
+
+	rc = d_rank_list_dup(&grp_priv->gp_live_ranks, grp_priv->gp_membs,
+			     true);
+	if (rc != 0) {
+		D_ERROR("d_rank_list_dup() failed, group: %s, rc: %d\n",
+				grp_priv->gp_pub.cg_grpid, rc);
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (grp_priv->gp_primary) {
+		grp_priv->gp_failed_ranks = d_rank_list_alloc(0);
+		if (grp_priv->gp_failed_ranks == NULL) {
+			D_ERROR("d_rank_list_alloc failed.\n");
+			d_rank_list_free(grp_priv->gp_live_ranks);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		D_ALLOC_PTR(grp_priv->gp_rwlock_ft);
+		if (grp_priv->gp_rwlock_ft == NULL) {
+			d_rank_list_free(grp_priv->gp_live_ranks);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		pthread_rwlock_init(grp_priv->gp_rwlock_ft, NULL);
+	} else {
+		struct crt_grp_priv	*default_grp_priv = NULL;
+
+		default_grp_priv = crt_grp_pub2priv(NULL);
+		D_ASSERT(default_grp_priv != NULL);
+
+		grp_priv->gp_failed_ranks = default_grp_priv->gp_failed_ranks;
+		grp_priv->gp_rwlock_ft = default_grp_priv->gp_rwlock_ft;
+	}
+
+	pthread_rwlock_wrlock(grp_priv->gp_rwlock_ft);
+	d_rank_list_filter(grp_priv->gp_failed_ranks, grp_priv->gp_live_ranks,
+			   true /* input */, true /* exclude */);
+	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
+
+out:
+	return rc;
+}
+
 static inline int
 crt_grp_lookup_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 		      crt_grp_create_cb_t grp_create_cb, void *arg,
 		      struct crt_grp_priv **grp_result)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
-	int			rc = 0;
+	int			 rc = 0;
 
 	D_ASSERT(member_ranks != NULL);
 	D_ASSERT(grp_result != NULL);
@@ -696,6 +744,15 @@ crt_grp_lookup_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(grp_priv != NULL);
+	/* only service groups can have sub groups */
+	grp_priv->gp_service = 1;
+	rc = crt_grp_ras_init(grp_priv);
+	if (rc != 0) {
+		D_ERROR("crt_grp_ras_init() failed, rc: %d.\n", rc);
+		pthread_rwlock_unlock(&crt_grp_list_rwlock);
+		D_GOTO(out, rc);
+	}
+
 	crt_grp_insert_locked(grp_priv);
 	pthread_rwlock_unlock(&crt_grp_list_rwlock);
 
@@ -1108,6 +1165,18 @@ out:
 	return (grp_priv == NULL) ? NULL : &grp_priv->gp_pub;
 }
 
+static void
+crt_grp_ras_fini(struct crt_grp_priv *grp_priv)
+{
+	D_ASSERT(grp_priv->gp_service);
+	if (grp_priv->gp_primary) {
+		d_rank_list_free(grp_priv->gp_failed_ranks);
+		pthread_rwlock_destroy(grp_priv->gp_rwlock_ft);
+		D_FREE(grp_priv->gp_rwlock_ft);
+	}
+	d_rank_list_free(grp_priv->gp_live_ranks);
+}
+
 void
 crt_hdlr_grp_destroy(crt_rpc_t *rpc_req)
 {
@@ -1133,8 +1202,10 @@ crt_hdlr_grp_destroy(crt_rpc_t *rpc_req)
 	rc = crt_group_rank(NULL, &my_rank);
 	D_ASSERT(rc == 0);
 	/* for gd_initiate_rank, destroy the group in gd_rpc_cb */
-	if (my_rank != gd_in->gd_initiate_rank)
+	if (my_rank != gd_in->gd_initiate_rank) {
+		crt_grp_ras_fini(grp_priv);
 		crt_grp_priv_destroy(grp_priv);
+	}
 
 out:
 	crt_group_rank(NULL, &gd_out->gd_rank);
@@ -1184,10 +1255,12 @@ gd_rpc_cb(const struct crt_cb_info *cb_info)
 		grp_priv->gp_destroy_cb(grp_priv->gp_destroy_cb_arg,
 					grp_priv->gp_rc);
 
-	if (grp_priv->gp_rc != 0)
+	if (grp_priv->gp_rc != 0) {
 		D_ERROR("group destroy failed, rc: %d.\n", grp_priv->gp_rc);
-	else
+	} else {
+		crt_grp_ras_fini(grp_priv);
 		crt_grp_priv_destroy(grp_priv);
+	}
 
 out:
 	return;
@@ -1378,20 +1451,28 @@ crt_grp_pub2priv(crt_group_t *grp)
 	return grp_priv;
 }
 
-static int
-crt_grp_ras_init(struct crt_grp_priv *grp_priv)
+int
+crt_group_version(crt_group_t *grp, uint32_t *version)
 {
-	int			rc = 0;
+	struct crt_grp_priv	*grp_priv;
+	int			 rc = 0;
 
-	D_ASSERT(grp_priv->gp_service);
-	D_ASSERT(grp_priv->gp_primary);
-	/* create a dummy list to simplify list management */
-	grp_priv->gp_failed_ranks = d_rank_list_alloc(0);
-	if (grp_priv->gp_failed_ranks == NULL) {
-		D_ERROR("d_rank_list_alloc failed.\n");
-		rc = -DER_NOMEM;
+	if (version == NULL) {
+		D_ERROR("invalid parameter: version pointer is NULL.\n");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+	if (!crt_initialized()) {
+		D_ERROR("CRT not initialized.\n");
+		D_GOTO(out, rc = -DER_UNINIT);
+	}
+	grp_priv = crt_grp_pub2priv(grp);
+	D_ASSERT(grp_priv != NULL);
+	pthread_rwlock_rdlock(grp_priv->gp_rwlock_ft);
+	*version = grp_priv->gp_membs_ver;
+	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
+
+out:
 	return rc;
 }
 
@@ -1492,13 +1573,6 @@ out:
 	return rc;
 }
 
-static void
-crt_grp_ras_fini(struct crt_grp_priv *grp_priv)
-{
-	D_ASSERT(grp_priv->gp_service);
-	D_ASSERT(grp_priv->gp_primary);
-	d_rank_list_free(grp_priv->gp_failed_ranks);
-}
 static int
 crt_primary_grp_fini(void)
 {
@@ -2484,9 +2558,9 @@ crt_rank_evicted(crt_group_t *grp, d_rank_t rank)
 		D_GOTO(out, ret);
 	}
 
-	pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
+	pthread_rwlock_rdlock(grp_priv->gp_rwlock_ft);
 	ret = d_rank_in_rank_list(grp_priv->gp_failed_ranks, rank, true);
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
 
 out:
 	return ret;
@@ -2510,6 +2584,8 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
 	crt_endpoint_t		 tgt_ep;
+	struct crt_grp_priv	*curr_entry = NULL;
+	d_rank_list_t		 tmp_rank_list;
 	int			 rc = 0;
 
 	if (!crt_initialized()) {
@@ -2536,20 +2612,34 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
-	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
-	if (d_rank_in_rank_list(grp_priv->gp_failed_ranks, rank, true)) {
+	pthread_rwlock_wrlock(grp_priv->gp_rwlock_ft);
+	if (!d_rank_in_rank_list(grp_priv->gp_live_ranks, rank, true)) {
 		D_DEBUG("Rank %d already evicted.\n", rank);
-		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+		pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
 		D_GOTO(out, rc = -DER_EVICTED);
 	}
+	D_ASSERTF(!d_rank_in_rank_list(grp_priv->gp_failed_ranks, rank, true),
+		  "failed_ranks list inconsistant.\n");
+
+	tmp_rank_list.rl_nr.num = 1;
+	tmp_rank_list.rl_ranks = &rank;
+
+	d_rank_list_filter(&tmp_rank_list, grp_priv->gp_live_ranks,
+			   true /* input */, true /* exclude */);
+
 	rc = d_rank_list_append(grp_priv->gp_failed_ranks, rank);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_append() failed, rc: %d\n", rc);
-		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+		pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
 		D_GOTO(out_cb, rc);
 	}
-	D_ASSERT(grp_priv->gp_failed_ranks->rl_nr.num < grp_priv->gp_size);
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+
+	grp_priv->gp_membs_ver++;
+	/* remove rank from sub groups */
+	d_list_for_each_entry(curr_entry, &crt_grp_list, gp_link)
+		d_rank_list_filter(&tmp_rank_list, curr_entry->gp_live_ranks,
+				   true /* input */, true /* exclude */);
+	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
 
 	rc = crt_grp_lc_mark_evicted(grp_priv, rank);
 	if (rc != 0) {
@@ -2607,9 +2697,9 @@ crt_grp_failed_ranks_dup(crt_group_t *grp, d_rank_list_t **failed_ranks)
 		D_ERROR("grp should be a primary group.\n");
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
-	pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
+	pthread_rwlock_rdlock(grp_priv->gp_rwlock_ft);
 	rc = d_rank_list_dup(failed_ranks, grp_priv->gp_failed_ranks, true);
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+	pthread_rwlock_unlock(grp_priv->gp_rwlock_ft);
 	if (rc != 0)
 		D_ERROR("d_rank_list_dup() failed, group: %s, rc: %d\n",
 			grp_priv->gp_pub.cg_grpid, rc);

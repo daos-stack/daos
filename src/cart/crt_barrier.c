@@ -110,17 +110,17 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 
 	pthread_mutex_lock(&info->bi_lock);
 
-	pthread_rwlock_rdlock(&primary_grp->gp_rwlock);
-	if (d_rank_in_rank_list(grp_priv->gp_failed_ranks,
-				info->bi_master_pri_rank, true)) {
+	pthread_rwlock_rdlock(primary_grp->gp_rwlock_ft);
+	if (!d_rank_in_rank_list(grp_priv->gp_live_ranks,
+				 info->bi_master_pri_rank, true)) {
 		rank = -1;
 		/* Master has failed */
 		new_master = true;
 		for (i = info->bi_master_idx + 1;
 		     i < grp_priv->gp_membs->rl_nr.num; i++) {
 			rank = grp_priv->gp_membs->rl_ranks[i];
-			if (!d_rank_in_rank_list(grp_priv->gp_failed_ranks,
-						 rank, true))
+			if (d_rank_in_rank_list(grp_priv->gp_live_ranks,
+						rank, true))
 				break;
 		}
 
@@ -134,7 +134,7 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 		info->bi_master_idx = i;
 	}
 
-	pthread_rwlock_unlock(&primary_grp->gp_rwlock);
+	pthread_rwlock_unlock(primary_grp->gp_rwlock_ft);
 	pthread_mutex_unlock(&info->bi_lock);
 
 	return new_master;

@@ -352,7 +352,7 @@ crt_ep_abort(crt_endpoint_t *ep);
  * \param opc [IN]              unique opcode for the RPC
  * \param flags [IN]		feature bits, now only supports
  *				CRT_RPC_FEAT_NO_REPLY - disables reply when set,
- *					re-enables reply when unset.
+ *					re-enables reply when not set.
  *				CRT_RPC_FEAT_NO_TIMEOUT - if it's set, the
  *					elapsed time is reset to 0 on RPC
  *					timeout
@@ -371,7 +371,7 @@ crt_rpc_register(crt_opcode_t opc, uint32_t flags, struct crt_req_format *drf);
  * \param opc [IN]		unique opcode for the RPC
  * \param flags [IN]		feature bits, now only supports
  *				CRT_RPC_FEAT_NO_REPLY - disables reply when set,
- *					re-enables reply when unset.
+ *					re-enables reply when not set.
  *				CRT_RPC_FEAT_NO_TIMEOUT - if it's set, the
  *					elapsed time is reset to 0 on RPC
  *					timeout
@@ -800,6 +800,18 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg);
  */
 int
 crt_group_rank(crt_group_t *grp, d_rank_t *rank);
+
+/**
+ * Query the group membership version
+ *
+ * \param grp [IN]		CRT group handle, NULL means the local
+ *				primary/global group
+ * \param version [OUT]		group membership version
+ *
+ * \return			zero on success, negative value on error
+ */
+int
+crt_group_version(crt_group_t *grp, uint32_t *version);
 
 /**
  * Query number of group members.
