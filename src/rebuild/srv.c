@@ -537,7 +537,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 		return rc;
 	}
 
-	daos_list_add_tail(&tls->rebuild_task_list, &task->dst_list);
+	daos_list_add_tail(&task->dst_list, &tls->rebuild_task_list);
 
 	if (!tls->rebuild_ult) {
 		dss_ult_create(ds_rebuild_ult, NULL, -1, NULL);
