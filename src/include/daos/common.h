@@ -273,6 +273,8 @@ daos_crt_network_error(int err)
 #define daos_rank_in_rank_list		crt_rank_in_rank_list
 #define daos_rank_list_append		crt_rank_list_append
 
+daos_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
+
 void
 daos_fail_loc_set(uint64_t id);
 void

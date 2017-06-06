@@ -77,8 +77,7 @@ uuid_t				cont_uuid;
 daos_cont_info_t		cont_info;
 daos_obj_id_t			oid;
 daos_epoch_t			ghce;
-daos_rank_t			svc;
-daos_rank_list_t		svcl;
+daos_rank_list_t	       *svcl;
 void				*buffers;
 void				*dkbuf;
 void				*akbuf;
@@ -1521,6 +1520,7 @@ Usage: daosbench -t TEST -p $UUID [OPTIONS]\n\
 	--aios=N | -a		Submit N in-flight I/O requests.\n\
 	--group=GROUP | -g	Server group ID\n\
 	--dpool=pool | -p	DAOS pool through dmg tool.\n\
+	--svc=RANKS | -S	Pool service ranks (e.g., 1:2:3:4:5)\n\
 	--keys=N | -k		Number of keys to be created in the test. \n\
 	--indexes=N | -i	Number of key indexes.\n\
 	--value-buf-size=N | -b	value buffer size for this test\n\
@@ -1566,10 +1566,12 @@ test_init(struct test *test, int argc, char *argv[])
 		{"pause",		1,	NULL,	'w'},
 		{"container",		1,	NULL,	'n'},
 		{"group",		1,	NULL,	'g'},
+		{"svc",			1,	NULL,	'S'},
 		{NULL,			0,	NULL,	0}
 	};
-	int	rc;
-	int	first = 1;
+	const char     *svcl_str = NULL;
+	int		rc;
+	int		first = 1;
 
 	/**
 	 * Initializing and setting some default
@@ -1598,7 +1600,7 @@ test_init(struct test *test, int argc, char *argv[])
 	if (comm_world_rank != 0)
 		opterr = 0;
 
-	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:o:p:s:hvcde:rn:uw:j:",
+	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:o:p:s:hvcde:rn:uw:j:S:",
 				 options, NULL)) != -1) {
 		switch (rc) {
 		case 'a':
@@ -1693,6 +1695,9 @@ test_init(struct test *test, int argc, char *argv[])
 		case 'g':
 			test->t_group = optarg;
 			break;
+		case 'S':
+			svcl_str = optarg;
+			break;
 		default:
 			return 2;
 		}
@@ -1780,6 +1785,10 @@ test_init(struct test *test, int argc, char *argv[])
 			t_kill_enum	= true;
 	}
 
+	svcl = daos_rank_list_parse(svcl_str, ":");
+	if (svcl == NULL)
+		return 2;
+
 	if (comm_world_rank == 0) {
 		time_t	t = time(NULL);
 
@@ -1801,6 +1810,7 @@ test_fini(struct test *test)
 		printf("\n");
 		printf("Ended at %s", ctime(&t));
 	}
+	daos_rank_list_free(svcl);
 }
 
 int main(int argc, char *argv[])
@@ -1829,8 +1839,6 @@ int main(int argc, char *argv[])
 	DBENCH_CHECK(rc, "Event queue creation failed\n");
 
 	if (comm_world_rank == 0) {
-		daos_rank_t rank  = 0;
-
 		if (strlen(arg.t_pname) == 0)
 			DBENCH_ERR(EINVAL, "'daosPool' must be specified");
 		DBENCH_INFO("Connecting to Pool: %s",
@@ -1838,11 +1846,7 @@ int main(int argc, char *argv[])
 		rc = uuid_parse(arg.t_pname, pool_uuid);
 		DBENCH_CHECK(rc, "Failed to parsr 'daosPool': %s",
 			     arg.t_pname);
-		svcl.rl_nr.num = 1;
-		svcl.rl_nr.num_out = 0;
-		svcl.rl_ranks = &rank;
-
-		rc = daos_pool_connect(pool_uuid, arg.t_group, &svcl,
+		rc = daos_pool_connect(pool_uuid, arg.t_group, svcl,
 				       DAOS_PC_RW, &poh, &pool_info, NULL);
 		DBENCH_CHECK(rc, "Pool %s connect failed\n",
 			     arg.t_pname);

@@ -63,8 +63,8 @@ daos_handle_t	eq;
 
 /** Pool information */
 uuid_t			 pool_uuid;	/* only used on rank 0 */
-daos_rank_t		 svc;		/* only used on rank 0 */
-daos_rank_list_t		 svcl;		/* only used on rank 0 */
+daos_rank_t		 svc[13];	/* only used on rank 0 */
+daos_rank_list_t	 svcl;		/* only used on rank 0 */
 daos_handle_t		 poh;		/* shared pool handle */
 
 /** Container information */
@@ -142,8 +142,9 @@ pool_create(void)
 	 */
 
 	/** create pool over all the storage targets */
-	svcl.rl_nr.num	= 1;
-	svcl.rl_ranks	= &svc;
+	svcl.rl_nr.num	= 3;
+	ASSERT(sizeof(svc)/sizeof(svc[0]) >= svcl.rl_nr.num);
+	svcl.rl_ranks	= svc;
 	rc = daos_pool_create(0731 /* mode */,
 			      geteuid() /* user owner */,
 			      getegid() /* group owner */,
@@ -155,6 +156,7 @@ pool_create(void)
 			      pool_uuid, /* the uuid of the pool created */
 			      NULL /* event, use blocking call for now */);
 	ASSERT(rc == 0, "pool create failed with %d", rc);
+	svcl.rl_nr.num = svcl.rl_nr.num_out;
 }
 
 void

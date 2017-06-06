@@ -38,15 +38,16 @@ mdr_stop_pool_svc(void **argv)
 	daos_pool_info_t	info;
 	int			rc;
 
-	if (arg->svc.rl_nr.num < 3) {
-		print_message(">= 3 pool service replicas needed; skipping\n");
-		return;
-	}
-
 	print_message("creating pool\n");
 	rc = daos_pool_create(0731, geteuid(), getegid(), arg->group, NULL,
 			      "pmem", 128*1024*1024, &arg->svc, uuid, NULL);
 	assert_int_equal(rc, 0);
+	arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
+
+	if (arg->svc.rl_nr.num < 3) {
+		print_message(">= 3 pool service replicas needed; skipping\n");
+		goto destroy;
+	}
 
 	print_message("connecting to pool\n");
 	rc = daos_pool_connect(uuid, arg->group, &arg->svc,
@@ -67,6 +68,7 @@ mdr_stop_pool_svc(void **argv)
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
 	assert_int_equal(rc, 0);
 
+destroy:
 	print_message("destroying pool\n");
 	rc = daos_pool_destroy(uuid, arg->group, 1, NULL);
 	assert_int_equal(rc, 0);
@@ -84,16 +86,18 @@ mdr_stop_cont_svc(void **argv)
 	daos_epoch_t		epoch;
 	int			rc;
 
-	if (arg->svc.rl_nr.num < 3) {
-		print_message(">= 3 pool service replicas needed; skipping\n");
-		return;
-	}
-
 	print_message("creating pool\n");
 	rc = daos_pool_create(0731, geteuid(), getegid(), arg->group, NULL,
 			      "pmem", 128*1024*1024, &arg->svc, pool_uuid,
 			      NULL);
 	assert_int_equal(rc, 0);
+	arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
+
+	if (arg->svc.rl_nr.num < 3) {
+		print_message(">= 3 pool service replicas needed; skipping\n");
+		goto destroy;
+	}
+
 	print_message("connecting to pool\n");
 	rc = daos_pool_connect(pool_uuid, arg->group, &arg->svc,
 			       DAOS_PC_RW, &poh, NULL, NULL /* ev */);
@@ -133,6 +137,8 @@ mdr_stop_cont_svc(void **argv)
 	print_message("disconnecting from pool\n");
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
 	assert_int_equal(rc, 0);
+
+destroy:
 	print_message("destroying pool\n");
 	rc = daos_pool_destroy(pool_uuid, arg->group, 1, NULL);
 	assert_int_equal(rc, 0);

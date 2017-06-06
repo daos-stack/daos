@@ -36,7 +36,7 @@ static const char *all_tests = "mpceiACoRdr";
 /** Server crt group ID */
 static const char *server_group;
 
-/** Pool service replicas: {0, 1, ..., svc_nreplicas - 1} */
+/** Pool service replicas */
 static unsigned int svc_nreplicas = 1;
 
 int
@@ -278,7 +278,7 @@ print_usage(int rank)
 	print_message("daos_test -r|--rebuild\n");
 	print_message("daos_test -a|--daos_all_tests\n");
 	print_message("daos_test -g|--group GROUP\n");
-	print_message("daos_test -s|--svc NREPLICAS {0, 1, ..., N-1}\n");
+	print_message("daos_test -s|--svcn NSVCREPLICAS\n");
 	print_message("daos_test -h|--help\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 }
@@ -409,7 +409,7 @@ main(int argc, char **argv)
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
 		{"group",	required_argument,	NULL,	'g'},
-		{"svc",		required_argument,	NULL,	's'},
+		{"svcn",	required_argument,	NULL,	's'},
 		{"help",	no_argument,		NULL,	'h'}
 	};
 
@@ -421,7 +421,7 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv, "ampcCdiAeoRg:hr",
+	while ((opt = getopt_long(argc, argv, "ampcCdiAeoRg:s:hr",
 				  long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;

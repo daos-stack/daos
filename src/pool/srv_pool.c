@@ -332,13 +332,8 @@ select_svc_ranks(int nreplicas, const daos_rank_list_t *target_addrs,
 			selectable -= 1 /* rank 0 */;
 	}
 
-#if 0
 	if (nreplicas > selectable)
 		nreplicas = selectable;
-#else
-	/* Until raft has been stablized. */
-	nreplicas = 1;
-#endif
 	ranks = daos_rank_list_alloc(nreplicas);
 	if (ranks == NULL)
 		return -DER_NOMEM;

@@ -165,3 +165,53 @@ daos_iov_free(daos_iov_t *iov)
 	iov->iov_buf_len = 0;
 	iov->iov_len = 0;
 }
+
+daos_rank_list_t *
+daos_rank_list_parse(const char *str, const char *sep)
+{
+	daos_rank_t	       *buf;
+	int			cap = 8;
+	daos_rank_list_t       *ranks;
+	char		       *s;
+	char		       *p;
+	int			n = 0;
+
+	D_ALLOC(buf, sizeof(*buf) * cap);
+	if (buf == NULL)
+		D_GOTO(out, ranks = NULL);
+	s = strdup(str);
+	if (s == NULL)
+		D_GOTO(out_buf, ranks = NULL);
+
+	while ((s = strtok_r(s, sep, &p)) != NULL) {
+		if (n == cap) {
+			daos_rank_t    *buf_new;
+			int		cap_new;
+
+			/* Double the buffer. */
+			cap_new = cap * 2;
+			D_ALLOC(buf_new, sizeof(*buf_new) * cap_new);
+			if (buf_new == NULL)
+				D_GOTO(out_s, ranks = NULL);
+			memcpy(buf_new, buf, sizeof(*buf_new) * n);
+			D_FREE(buf, sizeof(*buf) * cap);
+			buf = buf_new;
+			cap = cap_new;
+		}
+		buf[n] = atoi(s);
+		n++;
+		s = NULL;
+	}
+
+	ranks = daos_rank_list_alloc(n);
+	if (ranks == NULL)
+		D_GOTO(out_s, ranks = NULL);
+	memcpy(ranks->rl_ranks, buf, sizeof(*buf) * n);
+
+out_s:
+	free(s);
+out_buf:
+	D_FREE(buf, sizeof(*buf) * cap);
+out:
+	return ranks;
+}

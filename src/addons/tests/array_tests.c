@@ -619,7 +619,7 @@ setup(void **state)
 	if (rc)
 		return rc;
 
-	arg->svc.rl_nr.num = 8;
+	arg->svc.rl_nr.num = 3;
 	arg->svc.rl_nr.num_out = 0;
 	arg->svc.rl_ranks = arg->ranks;
 
@@ -640,6 +640,7 @@ setup(void **state)
 
 	if (arg->myrank == 0) {
 		/** connect to pool */
+		arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
 		rc = daos_pool_connect(arg->pool_uuid, NULL,
 				       &arg->svc, DAOS_PC_RW, &arg->poh,
 				       &arg->pool_info, NULL /* ev */);

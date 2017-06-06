@@ -62,6 +62,7 @@ pool_create_all(void **state)
 			      0 /* minimal size */, &arg->svc /* svc */, uuid,
 			      arg->async ? &ev : NULL);
 	assert_int_equal(rc, 0);
+	arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
 
 	if (arg->async) {
 		/** wait for container creation */
