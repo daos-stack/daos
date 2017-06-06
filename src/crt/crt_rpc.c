@@ -725,12 +725,14 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *priv)
 	if (rc != 0) {
 		C_ERROR("crt_req_send_internal() failed, rc %d, rpc_priv: %p, "
 			"opc: 0x%x.\n", rc, rpc_priv, rpc_priv->crp_pub.cr_opc);
+		C_GOTO(out, rc);
+	}
+out:
+	if (rc != 0) {
 		crt_context_req_untrack(&rpc_priv->crp_pub);
 		crt_rpc_complete(rpc_priv, rc);
 		crt_req_decref(&rpc_priv->crp_pub); /* destroy */
 	}
-
-out:
 	/* addref in crt_req_hg_addr_lookup */
 	crt_req_decref(&rpc_priv->crp_pub);
 	return rc;
@@ -774,6 +776,9 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	C_ASSERT(rpc_priv->crp_state == RPC_STATE_URI_LOOKUP);
 	C_ASSERT(rpc_priv->crp_ul_req = cb_info->cci_rpc);
 
+	if (cb_info->cci_rc != 0)
+		C_GOTO(out, rc = cb_info->cci_rc);
+
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	rank = tgt_ep->ep_rank;
 	if (tgt_ep->ep_grp == NULL)
@@ -805,12 +810,15 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	if (rc != 0) {
 		C_ERROR("crt_req_send_internal() failed, rc %d, opc: 0x%x\n",
 			rc, rpc_priv->crp_pub.cr_opc);
+		C_GOTO(out, rc);
+	}
+out:
+	if (rc != 0) {
 		crt_context_req_untrack(&rpc_priv->crp_pub);
 		crt_rpc_complete(rpc_priv, rc);
 		crt_req_decref(&rpc_priv->crp_pub); /* destroy */
 	}
 
-out:
 	/* addref in crt_req_uri_lookup_psr */
 	crt_req_decref(rpc_priv->crp_ul_req);
 	rpc_priv->crp_ul_req = NULL;
@@ -982,10 +990,11 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		C_GOTO(out, rc);
 	}
 	rc = crt_req_send_internal(rpc_priv);
-	if (rc != 0)
+	if (rc != 0) {
 		C_ERROR("crt_req_send_internal() failed, rc %d, opc: 0x%x\n",
 			rc, rpc_priv->crp_pub.cr_opc);
-
+		C_GOTO(out, rc);
+	}
 out:
 	if (uri != NULL)
 		free(uri);
@@ -1006,7 +1015,7 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	/* decref at crt_req_hg_addr_lookup_cb */
 	crt_req_addref(&rpc_priv->crp_pub);
 	rc = crt_hg_addr_lookup(&crt_ctx->cc_hg_ctx, rpc_priv->crp_tgt_uri,
-				&crt_req_hg_addr_lookup_cb, rpc_priv);
+				crt_req_hg_addr_lookup_cb, rpc_priv);
 	if (rc != 0) {
 		C_ERROR("crt_addr_lookup() failed, rc %d, opc: 0x%x..\n",
 			rc, rpc_priv->crp_pub.cr_opc);
