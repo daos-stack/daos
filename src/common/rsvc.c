@@ -153,15 +153,28 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	}
 
 	/* Got new leadership info. Cache it. */
-	client->sc_leader_term = hint->sh_term;
 	found = daos_rank_list_find(client->sc_ranks, hint->sh_rank,
 				    &client->sc_leader_index);
-	D_ASSERT(found); /* Must FIXME! */
+	if (!found) {
+		int rc;
+
+		D_DEBUG(DB_MD, "unknown replica from rank %u: hint.term="DF_U64
+			" hint.rank=%u\n", ep->ep_rank, hint->sh_term,
+			hint->sh_rank);
+		/* Append the unknown rank to tolerate user mistakes. */
+		rc = daos_rank_list_append(client->sc_ranks, hint->sh_rank);
+		if (rc != 0) {
+			D_DEBUG(DB_MD, "failed to append new rank: %d\n", rc);
+			return;
+		}
+		client->sc_leader_index = client->sc_ranks->rl_nr.num - 1;
+	}
+	client->sc_leader_term = hint->sh_term;
 	client->sc_leader_known = true;
 	/*
 	 * If from_leader, set the aliveness to 2 so that upon a crt error
 	 * we'll give the leader another try before turning to others. (If node
-	 * failures were more frequently than message losses, then 1 should be
+	 * failures were more frequent than message losses, then 1 should be
 	 * used instead.)
 	 */
 	client->sc_leader_aliveness = from_leader ? 2 : 1;

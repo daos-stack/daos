@@ -271,6 +271,7 @@ daos_crt_network_error(int err)
 #define daos_rank_list_find		crt_rank_list_find
 #define daos_rank_list_identical	crt_rank_list_identical
 #define daos_rank_in_rank_list		crt_rank_in_rank_list
+#define daos_rank_list_append		crt_rank_list_append
 
 void
 daos_fail_loc_set(uint64_t id);
