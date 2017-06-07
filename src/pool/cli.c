@@ -383,11 +383,10 @@ dc_pool_local_close(daos_handle_t ph)
 int
 dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		   unsigned int flags, const char *grp,
-		   struct pool_map *map, daos_handle_t *ph)
+		   struct pool_map *map, daos_rank_list_t *svc_list,
+		   daos_handle_t *ph)
 {
 	struct dc_pool	*pool;
-	daos_rank_list_t svcl;
-	daos_rank_t	 rank = 0;
 	int		rc = 0;
 
 	if (!daos_handle_is_inval(*ph)) {
@@ -411,10 +410,8 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	svcl.rl_nr.num = 1;
-	svcl.rl_nr.num_out = 0;
-	svcl.rl_ranks = &rank;
-	rc = rsvc_client_init(&pool->dp_client, &svcl);
+	D_ASSERT(svc_list != NULL);
+	rc = rsvc_client_init(&pool->dp_client, svc_list);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

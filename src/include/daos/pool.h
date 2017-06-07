@@ -82,7 +82,8 @@ dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
 int
 dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		   unsigned int flags, const char *grp,
-		   struct pool_map *map, daos_handle_t *ph);
+		   struct pool_map *map, daos_rank_list_t *svc_list,
+		   daos_handle_t *ph);
 int
 dc_pool_local_close(daos_handle_t ph);
 

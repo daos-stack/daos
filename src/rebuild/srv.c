@@ -337,25 +337,6 @@ out:
 	return rc;
 }
 
-
-static int
-rank_list_copy(daos_rank_list_t *dst, daos_rank_list_t *src)
-{
-	int i;
-
-	D_ALLOC(dst->rl_ranks, src->rl_nr.num * sizeof(*src->rl_ranks));
-	if (dst->rl_ranks == NULL)
-		return -DER_NOMEM;
-
-	dst->rl_nr.num = src->rl_nr.num;
-	dst->rl_nr.num_out = src->rl_nr.num_out;
-
-	for (i = 0; i < src->rl_nr.num; i++)
-		dst->rl_ranks[i] = src->rl_ranks[i];
-
-	return 0;
-}
-
 #define RBLD_QUERY_INTV	2	/* # seocnds to query rebuild status */
 
 void
@@ -394,7 +375,8 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
  * to find out the impacted objects.
  */
 static int
-ds_rebuild(const uuid_t uuid, uint32_t map_ver, daos_rank_list_t *tgts_failed)
+ds_rebuild(const uuid_t uuid, uint32_t map_ver, daos_rank_list_t *tgts_failed,
+	   daos_rank_list_t *svc_list)
 {
 	struct ds_pool		*pool;
 	crt_rpc_t		*rpc;
@@ -433,6 +415,7 @@ ds_rebuild(const uuid_t uuid, uint32_t map_ver, daos_rank_list_t *tgts_failed)
 		DP_UUID(rsi->rsi_rebuild_cont_hdl_uuid));
 	rsi->rsi_pool_map_ver = map_ver;
 	rsi->rsi_tgts_failed = tgts_failed;
+	rsi->rsi_svc_list = svc_list;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -454,17 +437,18 @@ struct ds_rebuild_task {
 	daos_list_t	dst_list;
 	uuid_t		dst_pool_uuid;
 	uint32_t	dst_map_ver;
-	daos_rank_list_t dst_tgts_failed;
+	daos_rank_list_t *dst_tgts_failed;
+	daos_rank_list_t *dst_svc_list;
 };
 
 static int
 ds_rebuild_one(uuid_t pool_uuid, uint32_t map_ver,
-	       daos_rank_list_t *tgts_failed)
+	       daos_rank_list_t *tgts_failed, daos_rank_list_t *svc_list)
 {
 	int rc;
 	int rc1;
 
-	rc = ds_rebuild(pool_uuid, map_ver, tgts_failed);
+	rc = ds_rebuild(pool_uuid, map_ver, tgts_failed, svc_list);
 	if (rc != 0) {
 		D_ERROR(""DF_UUID" (ver=%u) rebuild failed: rc %d\n",
 			DP_UUID(pool_uuid), map_ver, rc);
@@ -495,15 +479,13 @@ ds_rebuild_ult(void *arg)
 				      dst_list) {
 		daos_list_del(&task->dst_list);
 		rc = ds_rebuild_one(task->dst_pool_uuid, task->dst_map_ver,
-				    &task->dst_tgts_failed);
+				    task->dst_tgts_failed, task->dst_svc_list);
 		if (rc != 0)
 			D_ERROR(""DF_UUID" rebuild failed: rc %d\n",
 				DP_UUID(task->dst_pool_uuid), rc);
-		if (task->dst_tgts_failed.rl_nr.num > 0)
-			D_FREE(task->dst_tgts_failed.rl_ranks,
-			       task->dst_tgts_failed.rl_nr.num *
-			       sizeof(*task->dst_tgts_failed.rl_ranks));
 
+		daos_rank_list_free(task->dst_tgts_failed);
+		daos_rank_list_free(task->dst_svc_list);
 		D_FREE_PTR(task);
 		ABT_thread_yield();
 	}
@@ -517,7 +499,7 @@ ds_rebuild_ult(void *arg)
  */
 int
 ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
-		    daos_rank_list_t *tgts_failed)
+		    daos_rank_list_t *tgts_failed, daos_rank_list_t *svc_list)
 {
 	struct ds_rebuild_task	*task;
 	struct rebuild_tls	*tls = rebuild_tls_get();
@@ -531,7 +513,13 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	uuid_copy(task->dst_pool_uuid, uuid);
 	DAOS_INIT_LIST_HEAD(&task->dst_list);
 
-	rc = rank_list_copy(&task->dst_tgts_failed, tgts_failed);
+	rc = daos_rank_list_dup(&task->dst_tgts_failed, tgts_failed, true);
+	if (rc) {
+		D_FREE_PTR(task);
+		return rc;
+	}
+
+	rc = daos_rank_list_dup(&task->dst_svc_list, svc_list, true);
 	if (rc) {
 		D_FREE_PTR(task);
 		return rc;
@@ -540,11 +528,19 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	daos_list_add_tail(&task->dst_list, &tls->rebuild_task_list);
 
 	if (!tls->rebuild_ult) {
-		dss_ult_create(ds_rebuild_ult, NULL, -1, NULL);
+		rc = dss_ult_create(ds_rebuild_ult, NULL, -1, NULL);
+		if (rc)
+			D_GOTO(free, rc);
 		tls->rebuild_ult = 1;
 	}
-
-	return 0;
+free:
+	if (rc) {
+		daos_list_del(&task->dst_list);
+		daos_rank_list_free(task->dst_tgts_failed);
+		daos_rank_list_free(task->dst_svc_list);
+		D_FREE_PTR(task);
+	}
+	return rc;
 }
 
 static int
@@ -565,7 +561,8 @@ ds_rebuild_fini_one(void *arg)
 	uuid_clear(tls->rebuild_cont_hdl_uuid);
 	ds_pool_local_close(tls->rebuild_pool_hdl_uuid);
 	uuid_clear(tls->rebuild_pool_hdl_uuid);
-
+	daos_rank_list_free(tls->rebuild_svc_list);
+	tls->rebuild_svc_list = NULL;
 	return 0;
 }
 
@@ -594,36 +591,6 @@ out:
 	return rc;
 }
 
-int
-ds_rebuild_handler(crt_rpc_t *rpc)
-{
-	struct rebuild_tgt_in	*rti;
-	struct rebuild_out	*ro;
-	int			rc;
-
-	rti = crt_req_get(rpc);
-	ro = crt_reply_get(rpc);
-
-	if (opc_get(rpc->cr_opc) == REBUILD_TGT) {
-		rc = ds_rebuild_schedule(rti->rti_pool_uuid, rti->rti_map_ver,
-					 rti->rti_failed_tgts);
-
-	} else if (opc_get(rpc->cr_opc) == REBUILD_FINI) {
-		rc = ds_rebuild_fini(rti->rti_pool_uuid, rti->rti_map_ver,
-				     rti->rti_failed_tgts);
-	} else {
-		D_ASSERT(0);
-	}
-
-	ro->ro_status = rc;
-
-	rc = crt_reply_send(rpc);
-	if (rc != 0)
-		D_ERROR("send reply failed: %d\n", rc);
-
-	return rc;
-}
-
 /* Note: the rpc input/output parameters is defined in daos_rpc */
 static struct daos_rpc_handler rebuild_handlers[] = {
 	{
@@ -632,12 +599,6 @@ static struct daos_rpc_handler rebuild_handlers[] = {
 	}, {
 		.dr_opc		= REBUILD_OBJECTS,
 		.dr_hdlr	= ds_rebuild_obj_handler
-	}, {
-		.dr_opc		= REBUILD_TGT,
-		.dr_hdlr	= ds_rebuild_handler
-	}, {
-		.dr_opc		= REBUILD_FINI,
-		.dr_hdlr	= ds_rebuild_handler
 	}, {
 		.dr_opc		= REBUILD_TGT_FINI,
 		.dr_hdlr	= ds_rebuild_tgt_fini_handler

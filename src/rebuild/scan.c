@@ -478,10 +478,11 @@ out:
 	return rc;
 }
 
-struct rebuild_cont_open_arg {
+struct rebuild_prepare_arg {
 	uuid_t	pool_uuid;
 	uuid_t  pool_hdl_uuid;
 	uuid_t	cont_hdl_uuid;
+	daos_rank_list_t *svc_list;
 };
 
 /**
@@ -494,7 +495,7 @@ struct rebuild_cont_open_arg {
 static int
 rebuild_prepare_one(void *data)
 {
-	struct rebuild_cont_open_arg	*arg = data;
+	struct rebuild_prepare_arg	*arg = data;
 	struct pool_map			*map;
 	struct rebuild_tls		*tls = rebuild_tls_get();
 	int				rc;
@@ -522,15 +523,16 @@ rebuild_prepare_one(void *data)
 		return rc;
 	uuid_copy(tls->rebuild_cont_hdl_uuid, arg->cont_hdl_uuid);
 	uuid_copy(tls->rebuild_pool_hdl_uuid, arg->pool_hdl_uuid);
-
+	daos_rank_list_free(tls->rebuild_svc_list);
+	daos_rank_list_dup(&tls->rebuild_svc_list, arg->svc_list, true);
 	return rc;
 }
 
 static int
 ds_rebuild_prepare(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
-		   uuid_t cont_hdl_uuid)
+		   uuid_t cont_hdl_uuid, daos_rank_list_t *svc_list)
 {
-	struct rebuild_cont_open_arg arg;
+	struct rebuild_prepare_arg   arg;
 	struct pool_map		     *map;
 	struct rebuild_tls	     *tls = rebuild_tls_get();
 	unsigned int		     nthreads = dss_get_threads_number();
@@ -565,6 +567,7 @@ ds_rebuild_prepare(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.pool_hdl_uuid, pool_hdl_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
+	arg.svc_list = svc_list;
 	rc = dss_collective(rebuild_prepare_one, &arg);
 
 	return rc;
@@ -673,7 +676,8 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 
 	rc = ds_rebuild_prepare(rsi->rsi_pool_uuid,
 				rsi->rsi_rebuild_pool_hdl_uuid,
-				rsi->rsi_rebuild_cont_hdl_uuid);
+				rsi->rsi_rebuild_cont_hdl_uuid,
+				rsi->rsi_svc_list);
 	if (rc)
 		D_GOTO(out, rc);
 

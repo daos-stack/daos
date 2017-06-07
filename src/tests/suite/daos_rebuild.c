@@ -144,7 +144,7 @@ rebuild_wait(test_arg_t *arg, daos_rank_t failed_rank, bool concurrent_io)
 		unsigned int rec_count = 0;
 		unsigned int obj_count = 0;
 
-		rc = daos_rebuild_query(arg->pool_uuid, &ranks, &done,
+		rc = daos_rebuild_query(arg->poh, &ranks, &done,
 					&status, &rec_count, &obj_count,
 					NULL);
 		if (rc != 0)
@@ -156,8 +156,6 @@ rebuild_wait(test_arg_t *arg, daos_rank_t failed_rank, bool concurrent_io)
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	assert_int_equal(rc, 0);
-
 	if (concurrent_io) {
 		for (i = 0; i < KEY_NR; i++) {
 			memset(buf, 0, 10);
@@ -231,7 +229,7 @@ rebuild_dkeys(void **state)
 	}
 
 	/* Rebuild rank 1 */
-	rebuild_single_target(arg, 1, false);
+	rebuild_single_target(arg, 2, false);
 	ioreq_fini(&req);
 }
 
@@ -261,7 +259,7 @@ rebuild_akeys(void **state)
 	}
 
 	/* Rebuild rank 1 */
-	rebuild_single_target(arg, 1, false);
+	rebuild_single_target(arg, 2, false);
 	ioreq_fini(&req);
 }
 
@@ -293,7 +291,7 @@ rebuild_indexes(void **state)
 	}
 
 	/* Rebuild rank 1 */
-	rebuild_single_target(arg, 1, false);
+	rebuild_single_target(arg, 2, false);
 	ioreq_fini(&req);
 }
 
@@ -331,7 +329,7 @@ rebuild_multiple(void **state)
 	}
 
 	/* Rebuild rank 1 */
-	rebuild_single_target(arg, 1, false);
+	rebuild_single_target(arg, 2, false);
 	ioreq_fini(&req);
 }
 
@@ -362,7 +360,7 @@ rebuild_large_rec(void **state)
 	}
 
 	/* Rebuild rank 1 */
-	rebuild_single_target(arg, 1, false);
+	rebuild_single_target(arg, 2, false);
 	ioreq_fini(&req);
 }
 
@@ -397,7 +395,7 @@ rebuild_objects(void **state)
 	}
 
 	/* Rebuild rank 1 */
-	rebuild_single_target(arg, 1, false);
+	rebuild_single_target(arg, 2, false);
 }
 
 static void
@@ -451,8 +449,8 @@ rebuild_two_failures(void **state)
 		}
 		ioreq_fini(&req);
 	}
-	ranks[0] = 1;
-	ranks[1] = 2;
+	ranks[0] = 2;
+	ranks[1] = 3;
 	rebuild_targets(arg, ranks, 2, true, true);
 
 	/* Verify the data being rebuilt on other target */

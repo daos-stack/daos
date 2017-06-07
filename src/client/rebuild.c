@@ -58,7 +58,7 @@ daos_rebuild_fini(uuid_t uuid, daos_rank_list_t *failed_list,
 }
 
 int
-daos_rebuild_query(uuid_t uuid, daos_rank_list_t *failed_list,
+daos_rebuild_query(daos_handle_t poh, daos_rank_list_t *failed_list,
 		   int *done, int *status, unsigned int *rec_count,
 		   unsigned int *obj_count, daos_event_t *ev)
 {
@@ -69,7 +69,7 @@ daos_rebuild_query(uuid_t uuid, daos_rank_list_t *failed_list,
 	if (rc != 0)
 		return rc;
 
-	dc_rebuild_query(uuid, failed_list, done, status, rec_count,
+	dc_rebuild_query(poh, failed_list, done, status, rec_count,
 			 obj_count, task);
 
 	return daos_client_result_wait(ev);

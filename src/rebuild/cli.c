@@ -30,6 +30,7 @@
 
 #include <daos/rpc.h>
 #include <daos/event.h>
+#include <daos/pool.h>
 #include <daos_task.h>
 #include "rpc.h"
 
@@ -175,23 +176,31 @@ out:
 }
 
 int
-dc_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_list,
+dc_rebuild_query(daos_handle_t poh, daos_rank_list_t *failed_list,
 		 int *done, int *status, unsigned int *rec_count,
 		 unsigned int *obj_count, struct daos_task *task)
 {
 	struct rebuild_query_in	*rqi;
 	crt_endpoint_t		ep;
+	struct dc_pool		*pool;
 	struct dc_query_cb_arg	arg;
 	crt_rpc_t		*rpc;
 	int			rc;
 
+	pool = dc_hdl2pool(poh);
+	if (pool == NULL)
+		D_GOTO(err, rc = -DER_NO_HDL);
+
 	rc = daos_group_attach(NULL, &ep.ep_grp);
 	if (rc != 0)
-		D_GOTO(err, rc);
+		D_GOTO(err_put, rc);
 
 	/* Currently, rank 0 runs the pool and the (only) container service. */
-	ep.ep_rank = 0;
-	ep.ep_tag = 0;
+	pthread_mutex_lock(&pool->dp_client_lock);
+	rsvc_client_choose(&pool->dp_client, &ep);
+	pthread_mutex_unlock(&pool->dp_client_lock);
+
+	D_DEBUG(DB_TRACE, "send rebuild query to rank %d\n", ep.ep_rank);
 	rc = rebuild_req_create(daos_task2ctx(task), ep, REBUILD_QUERY,
 				&rpc);
 	if (rc != 0)
@@ -200,7 +209,7 @@ dc_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_list,
 	rqi = crt_req_get(rpc);
 	D_ASSERT(rqi != NULL);
 
-	uuid_copy(rqi->rqi_pool_uuid, pool_uuid);
+	uuid_copy(rqi->rqi_pool_uuid, pool->dp_pool);
 	rqi->rqi_tgts_failed = failed_list;
 
 	crt_req_addref(rpc);
@@ -218,12 +227,15 @@ dc_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_list,
 	rc = daos_rpc_send(rpc, task);
 	if (rc != 0)
 		D_ERROR("Send rebuild rpc failed: %d\n", rc);
+	dc_pool_put(pool);
 	return rc;
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 err_group:
 	daos_group_detach(ep.ep_grp);
+err_put:
+	dc_pool_put(pool);
 err:
 	daos_task_complete(task, rc);
 	return rc;

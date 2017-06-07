@@ -285,7 +285,8 @@ rebuild_dkey_thread(void *data)
 
 		rc = dc_pool_local_open(tls->rebuild_pool_uuid,
 					tls->rebuild_pool_hdl_uuid,
-					0, NULL, map, &ph);
+					0, NULL, map, tls->rebuild_svc_list,
+					&ph);
 		pool_map_decref(map);
 		if (rc)
 			D_GOTO(free, rc);
@@ -538,7 +539,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 
 		rc = dc_pool_local_open(tls->rebuild_pool_uuid,
 					tls->rebuild_pool_hdl_uuid,
-					0, NULL, map, &ph);
+					0, NULL, map, tls->rebuild_svc_list,
+					&ph);
 		pool_map_decref(map);
 		if (rc)
 			return rc;

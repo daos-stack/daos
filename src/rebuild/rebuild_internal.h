@@ -46,6 +46,7 @@ struct rebuild_tls {
 	int		rebuild_obj_count;
 	int		rebuild_rec_count;
 	daos_list_t	rebuild_task_list;
+	daos_rank_list_t *rebuild_svc_list;
 
 	unsigned int	rebuild_local_root_init:1,
 			rebuild_task_init:1,

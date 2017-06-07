@@ -61,6 +61,7 @@ struct rebuild_scan_in {
 	uuid_t		rsi_rebuild_pool_hdl_uuid;
 	uuid_t		rsi_rebuild_cont_hdl_uuid;
 	daos_rank_list_t *rsi_tgts_failed;
+	daos_rank_list_t *rsi_svc_list;
 	uint32_t	rsi_pool_map_ver;
 };
 

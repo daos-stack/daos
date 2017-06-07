@@ -35,6 +35,7 @@ static struct crt_msg_field *rebuild_scan_in_fields[] = {
 	&CMF_UUID,	/* rebuild pool hdl uuid */
 	&CMF_UUID,	/* rebuild cont hdl uuid */
 	&CMF_RANK_LIST,	/* failed targets */
+	&CMF_RANK_LIST,	/* service list */
 	&CMF_UINT32,	/* pool map version */
 };
 

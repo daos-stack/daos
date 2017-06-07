@@ -41,7 +41,7 @@ int
 dc_rebuild_tgt_fini(uuid_t pool_uuid, daos_rank_list_t *failed_list,
 		    struct daos_task *task);
 int
-dc_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_list,
+dc_rebuild_query(daos_handle_t poh, daos_rank_list_t *failed_list,
 		 int *done, int *failed, unsigned int *rec_count,
 		 unsigned int *obj_count,
 		 struct daos_task *task);

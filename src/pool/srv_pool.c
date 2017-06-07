@@ -1989,7 +1989,7 @@ out:
 			D_ASSERT(replicas != NULL);
 			ret = ds_rebuild_schedule(in->pti_op.pi_uuid,
 						  out->pto_op.po_map_version,
-						  in->pti_targets);
+						  in->pti_targets, replicas);
 			if (ret != 0) {
 				D_ERROR("rebuild fails rc %d\n", ret);
 				if (rc == 0)
