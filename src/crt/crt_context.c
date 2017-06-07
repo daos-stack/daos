@@ -519,7 +519,13 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			rpc_priv->crp_pub.cr_opc, ul_in->ul_grp_id,
 			ul_in->ul_rank, ul_req->cr_ep.ep_rank);
 		crt_req_abort(ul_req);
-		crt_rpc_complete(rpc_priv, -CER_PROTO);
+		/*
+		 * don't crt_rpc_complete rpc_priv here, because crt_req_abort
+		 * above will lead to ul_req's completion callback --
+		 * crt_req_uri_lookup_psr_cb() be called inside there will
+		 * complete this rpc_priv.
+		 */
+		/* crt_rpc_complete(rpc_priv, -CER_PROTO); */
 		break;
 	case RPC_STATE_ADDR_LOOKUP:
 		C_ERROR("rpc opc: 0x%x timedout due to ADDR_LOOKUP to group %s,"
@@ -563,8 +569,10 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(&rpc_priv->crp_pub);
 
 		crt_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
-		C_ERROR("rpc_priv %p (opc 0x%x) timed out, tgt rank %d, "
-			"tag %d.\n", rpc_priv, rpc_priv->crp_pub.cr_opc,
+		C_ERROR("rpc_priv %p (status: %d) (opc 0x%x) timed out, "
+			"tgt rank %d, tag %d.\n",
+			rpc_priv, rpc_priv->crp_state,
+			rpc_priv->crp_pub.cr_opc,
 			rpc_priv->crp_pub.cr_ep.ep_rank,
 			rpc_priv->crp_pub.cr_ep.ep_tag);
 	};

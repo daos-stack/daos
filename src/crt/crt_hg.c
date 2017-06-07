@@ -793,7 +793,7 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 
 	crt_rpc_priv_fini(rpc_priv);
 
-	if (!rpc_priv->crp_coll &&
+	if (!rpc_priv->crp_coll && rpc_priv->crp_hg_hdl != NULL &&
 	    (!CRT_HG_LOWLEVEL_UNPACK || (rpc_priv->crp_input_got == 0))) {
 		/* HACK alert:  Do we need to provide a low-level interface
 		 * for HG_Free_input since we do low level packing.   Without
