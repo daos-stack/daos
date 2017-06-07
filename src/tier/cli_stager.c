@@ -28,6 +28,7 @@
  */
 #define DD_SUBSYS	DD_FAC(tier)
 
+#include <daos/common.h>
 #include <daos_types.h>
 #include <daos_api.h>
 #include <daos_tier.h>
@@ -36,18 +37,25 @@
 #include "rpc.h"
 #include "cli_internal.h"
 #include <daos_errno.h>
+#include <daos_task.h>
+#include "../client/task_internal.h"
 
 struct tier_fetch_arg {
 	crt_rpc_t	*rpc;
 	struct dc_pool	*pool;
-	daos_handle_t	hdl;
+	daos_handle_t	 hdl;
+	struct daos_task *subtask;
+	int		 *prc;
+};
+
+struct tier_fetch_co_cr_arg {
+	int              *prc;
 };
 
 static int
 tier_fetch_cb(struct daos_task *task, void *data)
 {
 	struct tier_fetch_arg	*arg = (struct tier_fetch_arg *)data;
-	struct dc_pool		*pool = arg->pool;
 	struct tier_fetch_out	*tfo;
 	int			 rc = task->dt_result;
 
@@ -64,9 +72,26 @@ tier_fetch_cb(struct daos_task *task, void *data)
 	}
 
 	arg->hdl.cookie = 0;
+
+	if (*arg->prc < 0) {
+		D_ERROR("Failed to create warm tier container: %d\n",
+			*arg->prc);
+		D_GOTO(out, *arg->prc);
+	}
+
+	D_FREE(arg->prc, sizeof(*arg->prc));
 out:
 	crt_req_decref(arg->rpc);
-	dc_pool_put(pool);
+	return rc;
+}
+
+static int
+tier_fetch_cont_create_cb(struct daos_task *task, void *data)
+{
+	struct tier_fetch_co_cr_arg *arg = (struct tier_fetch_co_cr_arg *)data;
+	int			     rc = task->dt_result;
+
+	*arg->prc = rc;
 	return rc;
 }
 
@@ -76,32 +101,64 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		   struct daos_task *task)
 {
 	struct tier_fetch_in	*in;
+	struct daos_sched	*sched;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
 	struct tier_fetch_arg	arg;
-	struct dc_pool		*pool;
 	int			rc = 0;
 	daos_tier_info_t	*from;
+	struct daos_task	*cont_open_task;
+	struct tier_fetch_co_cr_arg co_args;
+	int			*prc;
+	struct daos_task_args   *dta;
 
 	D_DEBUG(DF_MISC, "Entering tier_fetch_cont()\n");
 
-	/* FIXME nuke the global */
 	from = g_tierctx.dtc_colder;
 	if (from == NULL) {
-		D_DEBUG(DF_TIERC, "fetch: have no colder tier\n");
+		D_ERROR(" have no colder tier\n");
 		D_GOTO(out, -DER_NONEXIST);
 	}
-	/*
-	 * MSC - Switch this to use a task. This will hang if API call is done
-	 * synchronously.
-	 */
+	D_ALLOC_PTR(prc);
+	if (prc == NULL) {
+		D_ERROR(" could not allocate rc ptr\n");
+		D_GOTO(out, -DER_NOMEM);
+	}
+
+	sched = daos_task2sched(task);
+	co_args.prc = prc;
+	*prc = 1;
+	rc = daos_task_init(dc_cont_create, NULL, 0, sched, &cont_open_task);
+	if (rc != 0)
+		return rc;
+
+	rc = daos_task_register_comp_cb(cont_open_task,
+					tier_fetch_cont_create_cb,
+					&co_args, sizeof(co_args));
+	if (rc != 0) {
+		D_ERROR("daos_task_register_comp_cb returned %d\n", rc);
+		return rc;
+	}
+	dta = daos_task_buf_get(cont_open_task, sizeof(*dta));
+	dta->opc = DAOS_OPC_CONT_CREATE;
+	dta->priv = NULL;
+
+	dta->op_args.cont_create.poh = poh;
+	uuid_copy((unsigned char *)dta->op_args.cont_create.uuid, cont_id);
+
 	/* Create the local recipient container */
-	rc = daos_cont_create(poh, cont_id, NULL);
+	rc = daos_task_schedule(cont_open_task, true);
 	if (rc) {
-		D_DEBUG(DF_TIERC, "fetch: create local container: %d\n", rc);
+		D_ERROR(" create local container: %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	/* FIXME Harded coded enpoint stuff */
+
+	while (*prc == 1) {
+		bool empty;
+
+		rc = daos_progress(sched, DAOS_EQ_NOWAIT, &empty);
+	}
+
 	ep.ep_grp = from->ti_group;
 	ep.ep_rank = from->ti_leader;
 	ep.ep_tag = 0;
@@ -114,11 +171,8 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	/* Grab the input struct of the RPC */
 	in = crt_req_get(rpc);
 
-	pool = dc_hdl2pool(from->ti_poh);
-	if (pool == NULL)
-		D_GOTO(out_task, -DER_NO_HDL);
 
-	uuid_copy(in->tfi_co_hdl, cont_id);
+	uuid_copy(in->tfi_co_id, cont_id);
 	uuid_copy(in->tfi_pool, from->ti_pool_id);
 	in->tfi_ep  = fetch_ep;
 
@@ -126,16 +180,16 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 
 	arg.rpc = rpc;
 	arg.hdl = poh;
-	arg.pool = pool;
 
+	arg.subtask = cont_open_task;
+	arg.prc  = prc;
 	rc = daos_task_register_comp_cb(task, tier_fetch_cb, &arg, sizeof(arg));
 	if (rc != 0)
 		D_GOTO(out_req_put, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);
-
-	D_DEBUG(DF_MISC, "leaving tier_fetch_cont()\n");
+	return rc;
 
 out_req_put:
 	crt_req_decref(rpc);

@@ -57,22 +57,44 @@ struct daos_bld_iod_ctx {
 	struct daos_list_head   recs;
 };
 
+void
+ds_tier_init_vars(void);
+
+
 /* tier_ping.c */
 
 /* ping test handler, more of a self-teaching widget */
-void ds_tier_ping_handler(crt_rpc_t *rpc);
+void
+ds_tier_ping_handler(crt_rpc_t *rpc);
 
 
 /* Tier Management Functions
  * Used to setup and debug inter-tier connections
  */
-void ds_tier_cross_conn_handler(crt_rpc_t *rpc);
-void ds_tier_upstream_handler(crt_rpc_t *rpc);
-void ds_tier_register_cold_handler(crt_rpc_t *rpc);
-void ds_tier_hdl_bcast_handler(crt_rpc_t *rpc);
+void
+ds_tier_cross_conn_handler(crt_rpc_t *rpc);
+
+void
+ds_tier_upstream_handler(crt_rpc_t *rpc);
+
+void
+ds_tier_register_cold_handler(crt_rpc_t *rpc);
+
+void
+ds_tier_hdl_bcast_handler(crt_rpc_t *rpc);
 
 /*May be redundant with tier register cold, check with john*/
-void ds_tier_fetch_handler(crt_rpc_t *rpc);
+void
+ds_tier_fetch_handler(crt_rpc_t *rpc);
+
+void
+ds_tier_fetch_bcast_handler(crt_rpc_t *rpc);
+
+int
+ds_tier_bcast_create(crt_context_t ctx, const uuid_t pool_id,
+		     crt_opcode_t opcode, crt_rpc_t **rpc);
+
+
 
 typedef int (tier_enum_cbfn_t)(void *, vos_iter_entry_t *);
 
@@ -136,8 +158,11 @@ tier_rangein(daos_epoch_range_t *r, daos_epoch_t t)
 {
 	int rc = 1;
 
-	if ((t < r->epr_lo) || (r->epr_hi < t))
+	if ((t < r->epr_lo) || (r->epr_hi < t)) {
 		rc = 0;
+		D_DEBUG(DF_TIERS, "%lu not in range %lu:%lu\n",
+			t, r->epr_lo, r->epr_hi);
+	}
 	return rc;
 }
 
@@ -170,7 +195,8 @@ tier_cp_cksum(daos_csum_buf_t *dst, daos_csum_buf_t *src)
 static inline void
 tier_csum(daos_csum_buf_t *dst, void *src, daos_size_t len)
 {
-	daos_csum_set(dst, NULL, 0);
+	if (dst != NULL)
+		daos_csum_set(dst, NULL, 0);
 }
 
 static inline void

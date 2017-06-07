@@ -99,12 +99,14 @@ tier_lookup(const char *tier_id)
 {
 	daos_tier_info_t *pt;
 
+	D_DEBUG(DF_TIERS, "%s\n", tier_id);
 	pt = g_tierctx.dtc_this;
 	if (pt && (!strncmp(pt->ti_group_id, tier_id, strlen(pt->ti_group_id))))
 		return pt;
 	pt = g_tierctx.dtc_colder;
 	if (pt && (!strncmp(pt->ti_group_id, tier_id, strlen(pt->ti_group_id))))
 		return pt;
+	D_DEBUG(DF_TIERS, "%s NOT FOUND\n", tier_id);
 	return NULL;
 }
 

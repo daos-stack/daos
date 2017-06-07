@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 /*
- *
+ * Framework for driving VOS enumeration.
  */
 #define DD_SUBSYS       DD_FAC(tier)
 
@@ -52,27 +52,32 @@ ds_tier_enum(daos_handle_t coh, struct tier_enum_params *params)
 	vos_iter_param_t vip;
 	int		 rc;
 	daos_handle_t    hio;
-	daos_hash_out_t  aio;
 	vos_iter_entry_t eo;
 
+	memset(&vip, 0, sizeof(vip));
 	vip.ip_hdl = coh;
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &vip, &hio);
 	if (rc) {
-		D_DEBUG(DF_TIERS, "failed to prepare object iter %d\n", rc);
+		D_ERROR("failed to prepare object iter %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = vos_iter_probe(hio, &aio);
+	rc = vos_iter_probe(hio, NULL);
 	if (rc) {
 		D_DEBUG(DF_TIERS, "failed to probe object iter %d\n", rc);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		else
+			D_ERROR("failed to probe object iter %d\n", rc);
 		D_GOTO(out_iter, rc);
 	}
 	do {
-		rc = vos_iter_fetch(hio, &eo, &aio);
+		eo.ie_epr.epr_lo = 0;
+		eo.ie_epr.epr_hi = DAOS_EPOCH_MAX;
+		rc = vos_iter_fetch(hio, &eo, NULL);
 		if (rc) {
-			D_DEBUG(DF_TIERS, "failed to fetch iter %d\n", rc);
+			D_ERROR("failed to fetch iter %d\n", rc);
 			D_GOTO(out_iter, rc);
 		}
-		/* TODO - check returned epr against tgt epr */
 
 		rc = tier_safecb(params->dep_obj_pre, params->dep_cbctx, &eo);
 		if (rc)
@@ -105,25 +110,29 @@ ds_tier_enum_dkeys(daos_handle_t coh, struct tier_enum_params *params,
 	vos_iter_param_t vip;
 	int		 rc;
 	daos_handle_t    hidk;
-	daos_hash_out_t  aidk;
 	vos_iter_entry_t edk;
 
+	memset(&vip, 0, sizeof(vip));
 	vip.ip_hdl = coh;
 	vip.ip_oid = oid;
 	rc = vos_iter_prepare(VOS_ITER_DKEY, &vip, &hidk);
 	if (rc) {
-		D_DEBUG(DF_TIERS, "failed to prepare dkey iter %d\n", rc);
+		D_ERROR("failed to prepare dkey iter %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = vos_iter_probe(hidk, &aidk);
+	rc = vos_iter_probe(hidk, NULL);
 	if (rc) {
 		D_DEBUG(DF_TIERS, "failed to probe dkey iter %d\n", rc);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 		D_GOTO(out_iter, rc);
 	}
 	do {
-		rc = vos_iter_fetch(hidk, &edk, &aidk);
+		edk.ie_epr.epr_lo = 0;
+		edk.ie_epr.epr_hi = DAOS_EPOCH_MAX;
+		rc = vos_iter_fetch(hidk, &edk, NULL);
 		if (rc) {
-			D_DEBUG(DF_TIERS, "failed to fetch iter %d\n", rc);
+			D_ERROR("failed to fetch iter %d\n", rc);
 			D_GOTO(out_iter, rc);
 		}
 		if (tier_rangein(&edk.ie_epr, params->dep_ev)) {
@@ -161,26 +170,30 @@ ds_tier_enum_akeys(daos_handle_t coh, struct tier_enum_params *params,
 	vos_iter_param_t vip;
 	int		 rc;
 	daos_handle_t    hiak;
-	daos_hash_out_t  aiak;
 	vos_iter_entry_t eak;
 
+	memset(&vip, 0, sizeof(vip));
 	vip.ip_hdl  = coh;
 	vip.ip_oid  = oid;
 	vip.ip_dkey = dkey;
 	rc = vos_iter_prepare(VOS_ITER_AKEY, &vip, &hiak);
 	if (rc) {
-		D_DEBUG(DF_TIERS, "failed to prepare akey iter %d\n", rc);
+		D_ERROR("failed to prepare akey iter %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = vos_iter_probe(hiak, &aiak);
+	rc = vos_iter_probe(hiak, NULL);
 	if (rc) {
-		D_DEBUG(DF_TIERS, "failed to probe akey iter %d\n", rc);
+		D_ERROR("failed to probe akey iter %d\n", rc);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 		D_GOTO(out_iter, rc);
 	}
 	do {
-		rc = vos_iter_fetch(hiak, &eak, &aiak);
+		eak.ie_epr.epr_lo = 0;
+		eak.ie_epr.epr_hi = DAOS_EPOCH_MAX;
+		rc = vos_iter_fetch(hiak, &eak, NULL);
 		if (rc) {
-			D_DEBUG(DF_TIERS, "failed to fetch iter %d\n", rc);
+			D_ERROR("failed to fetch iter %d\n", rc);
 			D_GOTO(out_iter, rc);
 		}
 		if (tier_rangein(&eak.ie_epr, params->dep_ev)) {
@@ -199,7 +212,7 @@ ds_tier_enum_akeys(daos_handle_t coh, struct tier_enum_params *params,
 			rc = tier_safecb(params->dep_akey_post,
 					 params->dep_cbctx, &eak);
 			if (rc) {
-				D_DEBUG(DF_TIERS, "akey cb: nzret(%d)\n", rc);
+				D_ERROR("akey cb: nzret(%d)\n", rc);
 				D_GOTO(out_iter, rc);
 			}
 		}
@@ -219,27 +232,35 @@ ds_tier_enum_recs(daos_handle_t coh, struct tier_enum_params *params,
 	vos_iter_param_t vip;
 	int		 rc;
 	daos_handle_t    hir;
-	daos_hash_out_t  air;
 	vos_iter_entry_t er;
 
+	memset(&vip, 0, sizeof(vip));
 	vip.ip_hdl  = coh;
 	vip.ip_oid  = oid;
 	vip.ip_dkey = dkey;
 	vip.ip_akey = akey;
+
+	vip.ip_epr.epr_lo = 0;
+	vip.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+
 	rc = vos_iter_prepare(VOS_ITER_RECX, &vip, &hir);
 	if (rc) {
-		D_DEBUG(DF_TIERS, "failed to prepare recx iter %d\n", rc);
+		D_ERROR("failed to prepare recx iter %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = vos_iter_probe(hir, &air);
+	rc = vos_iter_probe(hir, NULL);
 	if (rc) {
-		D_DEBUG(DF_TIERS, "failed to probe recx iter %d\n", rc);
+		D_ERROR("failed to probe recx iter %d\n", rc);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
 		D_GOTO(out_iter, rc);
 	}
 	do {
-		rc = vos_iter_fetch(hir, &er, &air);
+		er.ie_epr.epr_lo = 0;
+		er.ie_epr.epr_hi = DAOS_EPOCH_MAX;
+		rc = vos_iter_fetch(hir, &er, NULL);
 		if (rc) {
-			D_DEBUG(DF_TIERS, "failed to fetch iter %d\n", rc);
+			D_ERROR("failed to fetch iter %d\n", rc);
 			D_GOTO(out_iter, rc);
 		}
 		if (tier_rangein(&er.ie_epr, params->dep_ev)) {

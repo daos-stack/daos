@@ -58,6 +58,25 @@ struct upstream_arg {
 	crt_rpc_t	*rpc;
 };
 
+static void
+ds_tier_init_group(daos_rank_list_t *prl, daos_rank_t *pr, uint32_t nr)
+{
+	int j;
+
+	for (j = 0; j < nr; j++)
+		pr[j] = j;
+
+	prl->rl_ranks = pr;
+	prl->rl_nr.num = prl->rl_nr.num_out = nr;
+}
+
+void
+ds_tier_init_vars(void)
+{
+	ds_tier_init_group(&warmer_svc, warmer_ranks, MAX_RANKS);
+	ds_tier_init_group(&colder_svc, colder_ranks, MAX_RANKS);
+}
+
 
 /*Broadcast specified handle to all members of current pool*/
 static int
@@ -65,26 +84,17 @@ poh_bcast(crt_context_t *ctx, const uuid_t pool_id, int hdl_type,
 	  daos_handle_t poh)
 {
 	int rc = 0;
-	struct ds_pool			*srv_pool;
 	struct tier_hdl_bcast_in	*b_in;
 	struct tier_hdl_bcast_out	*b_out;
 	crt_rpc_t			*rpc;
 	daos_iov_t			global_hdl;
 	void				*glob_buf;
 
-	srv_pool = ds_pool_lookup(pool_id);
-	if (srv_pool != NULL) {
-		D_DEBUG(DF_TIERS, "UUID from ds_pool struct:"DF_UUIDF"\n",
-			DP_UUID(srv_pool->sp_uuid));
-	} else {
-		D_ERROR("Return of ds_pool lookup is NULL\n");
-		return -1;
-
+	rc = ds_tier_bcast_create(ctx, pool_id, TIER_BCAST_HDL, &rpc);
+	if (rc) {
+		D_ERROR("ds_tier_bcast_create returned %d\n", rc);
+		D_GOTO(out_nofree, rc);
 	}
-
-	/*Borrowing the pool bcast create call*/
-	ds_pool_bcast_create(ctx, srv_pool, DAOS_TIER_MODULE, TIER_BCAST_HDL,
-			     &rpc, NULL, NULL);
 
 	/*Get global token handle, set it to null so we get the handle size*/
 	global_hdl.iov_buf = NULL;
@@ -113,6 +123,7 @@ poh_bcast(crt_context_t *ctx, const uuid_t pool_id, int hdl_type,
 
 out:
 	D_FREE(glob_buf, global_hdl.iov_buf_len);
+out_nofree:
 	return rc;
 }
 
@@ -454,12 +465,27 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 	struct daos_task		*upstream_task;
 	struct daos_task_args		*dta;
 
-	/*Temp hack*/
-	warmer_svc.rl_ranks = warmer_ranks;
-	warmer_svc.rl_nr.num = MAX_RANKS;
-	warmer_svc.rl_nr.num_out = 0;
-
 	uuid_copy(warmer_id, in->ui_warm_id);
+	if (warmer_grp == NULL) {
+		crt_group_t *grp;
+		uint32_t     grpsz;
+
+		D_ALLOC(warmer_grp, 32);
+		strcpy(warmer_grp, in->ui_warm_grp);
+		grp = crt_group_lookup(warmer_grp);
+		if (grp) {
+			rc = crt_group_size(grp, &grpsz);
+			if (rc != 0)
+				D_ERROR("crt_group_size returned %d\n", rc);
+			else {
+				D_INFO("warmer_svc has %u ranks\n", grpsz);
+				warmer_svc.rl_nr.num_out = grpsz;
+				warmer_svc.rl_nr.num     = grpsz;
+			}
+		} else
+			D_DEBUG(DF_TIERS, "failed to lookup warmer group\n");
+
+	}
 
 	/*Initialize the event queue*/
 	rc = daos_eq_create(&upstream_eqh);
@@ -540,14 +566,29 @@ ds_tier_register_cold_handler(crt_rpc_t *rpc)
 {
 	struct tier_register_cold_in	*in = crt_req_get(rpc);
 	struct tier_register_cold_out	*out = crt_reply_get(rpc);
+	int rc;
 
 	/*Note assumes non-default name of colder group*/
 	if (colder_grp == NULL) {
+		crt_group_t *grp;
+		uint32_t     grpsz;
+
 		uuid_copy(colder_id, in->rci_colder_id);
 		D_ALLOC(colder_grp, 32);
 		strcpy(colder_grp, in->rci_colder_grp);
 		out->rco_ret = 0;
-		D_INFO("Register Colder Tier\n");
+		grp = crt_group_lookup(colder_grp);
+		if (grp) {
+			rc = crt_group_size(grp, &grpsz);
+			if (rc != 0)
+				D_ERROR("crt_group_size returned %d\n", rc);
+			else {
+				D_INFO("colder_svc has %u ranks\n", grpsz);
+				colder_svc.rl_nr.num     = grpsz;
+				colder_svc.rl_nr.num_out = grpsz;
+			}
+		} else
+			D_DEBUG(DF_TIERS, "fail to lookup colder group\n");
 	} else {
 		D_WARN("Colder Group already set to: %s\n", colder_grp);
 		D_WARN("Ignoring Colder Tier Set Request\n");

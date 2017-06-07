@@ -7,7 +7,7 @@ denv = env.Clone()
 
 # generate server module
 ct_srv = denv.SharedLibrary('tier',
-			    ['rpc.c', 'srv.c','srv_ping.c',
+			    ['rpc.c', 'srv.c','srv_ping.c', 'srv_util.c',
 			     'srv_enum.c', 'srv_fetch.c', 'srv_tmgmt.c'])
 
 denv.Install('$PREFIX/lib/daos_srv', ct_srv)

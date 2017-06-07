@@ -35,10 +35,16 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include <daos_srv/daos_ct_srv.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 static int
 ds_tier_init(void)
 {
+	pid_t pid = getpid();
+
+	fprintf(stderr, "Server PID:%d\n", pid);
+	ds_tier_init_vars();
 	return 0;
 }
 
@@ -56,6 +62,9 @@ static struct daos_rpc_handler tier_handlers[] = {
 	}, {
 		.dr_opc		= TIER_FETCH,
 		.dr_hdlr	= ds_tier_fetch_handler,
+	}, {
+		.dr_opc		= TIER_BCAST_FETCH,
+		.dr_hdlr	= ds_tier_fetch_bcast_handler,
 	}, {
 		.dr_opc		= TIER_CROSS_CONN,
 		.dr_hdlr	= ds_tier_cross_conn_handler,

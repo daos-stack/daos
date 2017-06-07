@@ -96,9 +96,6 @@ typedef struct {
  * CT (Pre)Fetch API
  */
 
-int
-daos_tier_popchk(daos_handle_t poh, const uuid_t cont_id, daos_event_t *ev);
-
 /**
  * Move an entire containers content at a specified highest committed epoch
  * HCE to the target pool. This is sourced from the coldest tier of the

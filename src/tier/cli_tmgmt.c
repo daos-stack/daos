@@ -181,9 +181,12 @@ dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	tgt.ep_rank = 0;
 	tgt.ep_tag = 0;
 
+	D_DEBUG(DF_TIERS, "tgt.ep_grp = %p\n", tgt.ep_grp);
+
 	rc = tier_req_create(daos_task2ctx(task), &tgt, TIER_REGISTER_COLD,
 			    &rpc_req);
 
+	D_DEBUG(DF_TIERS, "entering...\n");
 	if (rc != 0)
 		D_GOTO(out, rc);
 

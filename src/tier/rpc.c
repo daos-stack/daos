@@ -55,6 +55,17 @@ struct crt_req_format DQF_TIER_FETCH =
 	DEFINE_CRT_REQ_FMT("TIER_FETCH", tier_fetch_in_fields,
 			   tier_fetch_out_fields);
 
+struct crt_msg_field *tier_bcast_fetch_in_fields[] = {
+	&CMF_UUID,	/* pool id    */
+	&CMF_UUID,	/* cont id    */
+	&CMF_UINT64,	/* epoch      */
+	&CMF_IOVEC	/* global coh */
+};
+
+struct crt_req_format DQF_TIER_BCAST_FETCH =
+	DEFINE_CRT_REQ_FMT("TIER_BCAST_FETCH", tier_bcast_fetch_in_fields,
+			   tier_fetch_out_fields);
+
 struct crt_msg_field *tier_cross_conn_in_fields[] = {
 	&CMF_UUID,	/*cci_warm_id*/
 	&CMF_STRING,	/*cci_warm_grp*/
@@ -133,6 +144,12 @@ struct daos_rpc tier_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_TIER_FETCH,
+	}, {
+		.dr_name	= "TIER_BCAST_FETCH",
+		.dr_opc		= TIER_BCAST_FETCH,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_TIER_BCAST_FETCH,
 	}, {
 		.dr_name	= "TIER_CROSS_CONN",
 		.dr_opc		= TIER_CROSS_CONN,
