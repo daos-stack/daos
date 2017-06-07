@@ -805,9 +805,14 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 		if (rc != 0) {
 			C_ERROR("crt_req_send(opc: 0x%x) failed, tgt_ep: %d, "
 				"rc: %d.\n", req->cr_opc, tgt_ep.ep_rank, rc);
-			corpc_del_child_rpc(rpc_priv, child_rpc_priv);
-			crt_corpc_fail_child_rpc(rpc_priv,
-				co_info->co_child_num - i, rc);
+			/*
+			 * in the case of failure, the crt_corpc_reply_hdlr
+			 * will be called for this child_rpc, so just need
+			 * to fail rest child rpcs
+			 */
+			if (i != (co_info->co_child_num - 1))
+				crt_corpc_fail_child_rpc(rpc_priv,
+					co_info->co_child_num - i - 1, rc);
 			C_GOTO(forward_failed, rc);
 		}
 		child_req_sent =  true;
