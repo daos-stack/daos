@@ -311,7 +311,7 @@ static int
 select_svc_ranks(int nreplicas, const daos_rank_list_t *target_addrs,
 		 int ndomains, const int *domains, daos_rank_list_t **ranksp)
 {
-	int			i_rank_zero;
+	int			i_rank_zero = -1;
 	int			selectable;
 	daos_rank_list_t       *ranks;
 	int			i;
@@ -348,7 +348,8 @@ select_svc_ranks(int nreplicas, const daos_rank_list_t *target_addrs,
 	for (i = 0; i < target_addrs->rl_nr.num; i++) {
 		if (j == ranks->rl_nr.num)
 			break;
-		if (i == i_rank_zero)
+		if (i == i_rank_zero && selectable > 1)
+			/* This is rank 0 and it's not the only rank. */
 			continue;
 		D_DEBUG(DB_MD, "ranks[%d]: %u\n", j, target_addrs->rl_ranks[i]);
 		ranks->rl_ranks[j] = target_addrs->rl_ranks[i];
