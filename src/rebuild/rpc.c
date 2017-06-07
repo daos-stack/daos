@@ -52,13 +52,6 @@ static struct crt_msg_field *rebuild_objs_in_fields[] = {
 	&DMF_UINT32_ARRAY, /* obj shards to be rebuilt */
 };
 
-static struct crt_msg_field *rebuild_tgt_in_fields[] = {
-	&CMF_UUID,	/* pool uuid */
-	&CMF_UINT32,	/* pool map version */
-	&CMF_UINT32,	/* 32-bit padding */
-	&CMF_RANK_LIST,	/* failed targets */
-};
-
 static struct crt_msg_field *rebuild_tgt_query_in_fields[] = {
 	&CMF_UUID,
 };
@@ -68,20 +61,6 @@ static struct crt_msg_field *rebuild_tgt_query_out_fields[] = {
 	&CMF_UINT32,
 	&CMF_UINT32,
 	&CMF_UINT32,
-};
-
-static struct crt_msg_field *rebuild_query_in_fields[] = {
-	&CMF_UUID,
-	&CMF_RANK_LIST,
-};
-
-static struct crt_msg_field *rebuild_query_out_fields[] = {
-	&CMF_UINT32,	/* rebuild_status.st_version */
-	&CMF_UINT32,	/* rebuild_status.st_pad_32 */
-	&CMF_INT,	/* rebuild_status.st_errno */
-	&CMF_INT,	/* rebuild_status.st_done */
-	&CMF_UINT64,	/* rebuild_status.st_obj_nr */
-	&CMF_UINT64,	/* rebuild_status.st_rec_nr */
 };
 
 static struct crt_msg_field *rebuild_fini_tgt_in_fields[] = {
@@ -98,17 +77,9 @@ struct crt_req_format DQF_REBUILD_OBJECTS =
 	DEFINE_CRT_REQ_FMT("REBUILD_OBJS", rebuild_objs_in_fields,
 			   rebuild_out_fields);
 
-struct crt_req_format DQF_REBUILD_TGT =
-	DEFINE_CRT_REQ_FMT("REBUILD_TGT", rebuild_tgt_in_fields,
-			   rebuild_out_fields);
-
 struct crt_req_format DQF_REBUILD_TGT_QUERY =
 	DEFINE_CRT_REQ_FMT("REBUILD_TGT_QUERY", rebuild_tgt_query_in_fields,
 			   rebuild_tgt_query_out_fields);
-
-struct crt_req_format DQF_REBUILD_QUERY =
-	DEFINE_CRT_REQ_FMT("REBUILD_QUERY", rebuild_query_in_fields,
-			   rebuild_query_out_fields);
 
 struct crt_req_format DQF_REBUILD_TGT_FINI =
 	DEFINE_CRT_REQ_FMT("REBUILD_TGT_FINI", rebuild_fini_tgt_in_fields,
@@ -124,30 +95,6 @@ rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
 }
-
-struct daos_rpc rebuild_cli_rpcs[] = {
-	{
-		.dr_name	= "REBUILD_TGT",
-		.dr_opc		= REBUILD_TGT,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_REBUILD_TGT,
-	}, {
-		.dr_name	= "REBUILD_QUERY",
-		.dr_opc		= REBUILD_QUERY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_REBUILD_QUERY,
-	}, {
-		.dr_name	= "REBUILD_FINI",
-		.dr_opc		= REBUILD_FINI,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_REBUILD_TGT,
-	}, {
-		.dr_opc		= 0
-	}
-};
 
 struct daos_rpc rebuild_rpcs[] = {
 	{

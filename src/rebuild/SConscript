@@ -10,7 +10,3 @@ rebuild = denv.SharedLibrary('rebuild',
 			     ['scan.c', 'srv.c', 'rpc.c',
 			      'initiator.c', "srv_daos_api.c"])
 denv.Install('$PREFIX/lib/daos_srv', rebuild)
-
-# dc_rebuild: rebuild Client
-dc_rebuild_tgts = denv.SharedObject(['cli.c', 'rpc.c'])
-Export('dc_rebuild_tgts')

@@ -27,8 +27,6 @@
 #ifndef __POOL_CLIENT_INTERNAL_H__
 #define __POOL_CLIENT_INTERNAL_H__
 
-#include <daos/client.h>
-
 static inline void
 dc_pool2hdl(struct dc_pool *pool, daos_handle_t *hdl)
 {

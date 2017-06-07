@@ -30,7 +30,6 @@
  */
 #define DD_SUBSYS	DD_FAC(tests)
 #include "daos_iotest.h"
-#include <daos/client.h>
 #include <daos/pool.h>
 
 #define KEY_NR	10

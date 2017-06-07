@@ -244,33 +244,6 @@ out_put:
 	return rc;
 }
 
-/* query the rebuild status */
-int
-ds_rebuild_query_handler(crt_rpc_t *rpc)
-{
-	struct rebuild_query_in		*rqi;
-	struct rebuild_query_out	*rqo;
-	int				 rc;
-
-	rqi = crt_req_get(rpc);
-	rqo = crt_reply_get(rpc);
-
-	rc = ds_rebuild_query(rqi->rqi_pool_uuid, rqi->rqi_tgts_failed,
-			      &rqo->rqo_st);
-	if (rc)
-		D_GOTO(out, rc);
-
-	D_EXIT;
-out:
-	if (rqo->rqo_st.rs_errno == 0 && rc != 0)
-		rqo->rqo_st.rs_errno = rc;
-
-	rc = crt_reply_send(rpc);
-	if (rc != 0)
-		D_ERROR("send reply failed: rc %d\n", rc);
-	return rc;
-}
-
 /**
  * Finish the rebuild pool, i.e. disconnect pool, close rebuild container,
  * and Mark the failure target to be DOWNOUT.
@@ -604,9 +577,6 @@ static struct daos_rpc_handler rebuild_handlers[] = {
 		.dr_opc		= REBUILD_TGT_FINI,
 		.dr_hdlr	= ds_rebuild_tgt_fini_handler
 	}, {
-		.dr_opc		= REBUILD_QUERY,
-		.dr_hdlr	= ds_rebuild_query_handler
-	}, {
 		.dr_opc		= REBUILD_TGT_QUERY,
 		.dr_hdlr	= ds_rebuild_tgt_query_handler,
 		.dr_corpc_ops	= {
@@ -630,7 +600,6 @@ struct dss_module rebuild_module =  {
 	.sm_ver		= 1,
 	.sm_init	= init,
 	.sm_fini	= fini,
-	.sm_cl_rpcs	= rebuild_cli_rpcs,
 	.sm_srv_rpcs	= rebuild_rpcs,
 	.sm_handlers	= rebuild_handlers,
 	.sm_key		= &rebuild_module_key,

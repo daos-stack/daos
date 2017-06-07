@@ -32,7 +32,6 @@
 #define DD_SUBSYS	DD_FAC(client)
 
 #include "client_internal.h"
-#include <daos/client.h>
 #include <daos/rpc.h>
 
 static struct daos_hhash *daos_eq_hhash;

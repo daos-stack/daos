@@ -30,7 +30,6 @@
 #define __DAOS_POOL_H__
 
 #include <daos_types.h>
-#include <daos/client.h>
 #include <daos/common.h>
 #include <daos/hash.h>
 #include <daos/pool_map.h>

@@ -27,8 +27,6 @@
 #ifndef __CONTAINER_CLIENT_INTERNAL_H__
 #define __CONTAINER_CLIENT_INTERNAL_H__
 
-#include <daos/client.h>
-
 /* Client container handle */
 struct dc_cont {
 	/* list to pool */
