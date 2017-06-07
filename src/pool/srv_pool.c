@@ -1862,10 +1862,12 @@ out:
 	return rc;
 }
 
+/* Callers are responsible for daos_rank_list_free(*replicasp). */
 static int
 ds_pool_update_internal(uuid_t pool_hdl_uuid, uuid_t pool_uuid,
 			daos_rank_list_t *tgts, unsigned int opc,
-			daos_rank_list_t *tgts_out, struct pool_op_out *pto_op)
+			daos_rank_list_t *tgts_out, struct pool_op_out *pto_op,
+			daos_rank_list_t **replicasp)
 {
 	struct pool_svc		*svc;
 	struct rdb_tx		tx;
@@ -1902,6 +1904,12 @@ ds_pool_update_internal(uuid_t pool_hdl_uuid, uuid_t pool_uuid,
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
+	if (replicasp != NULL) {
+		rc = rdb_get_ranks(svc->ps_db, replicasp);
+		if (rc != 0)
+			D_GOTO(out_lock, rc);
+	}
+
 	rc = rdb_tx_commit(&tx);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
@@ -1923,7 +1931,7 @@ ds_pool_tgt_exclude_out(uuid_t pool_hdl_uuid, uuid_t pool_uuid,
 			daos_rank_list_t *tgts, daos_rank_list_t *tgts_out)
 {
 	return ds_pool_update_internal(pool_hdl_uuid, pool_uuid, tgts,
-				       POOL_EXCLUDE_OUT, tgts_out, NULL);
+				       POOL_EXCLUDE_OUT, tgts_out, NULL, NULL);
 }
 
 int
@@ -1931,6 +1939,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_update_in	*in = crt_req_get(rpc);
 	struct pool_tgt_update_out	*out = crt_reply_get(rpc);
+	daos_rank_list_t		*replicas = NULL;
 	int				rc;
 
 	if (in->pti_targets == NULL || in->pti_targets->rl_nr.num == 0 ||
@@ -1955,7 +1964,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 
 	rc = ds_pool_update_internal(in->pti_op.pi_hdl, in->pti_op.pi_uuid,
 				     in->pti_targets, opc_get(rpc->cr_opc),
-				     out->pto_targets, &out->pto_op);
+				     out->pto_targets, &out->pto_op, &replicas);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1968,7 +1977,7 @@ out:
 		DP_UUID(in->pti_op.pi_uuid), rpc, rc);
 	rc = crt_reply_send(rpc);
 
-	if (opc_get(rpc->cr_opc) == POOL_EXCLUDE) {
+	if (out->pto_op.po_rc == 0 && opc_get(rpc->cr_opc) == POOL_EXCLUDE) {
 		char	*env;
 		int	 ret;
 
@@ -1977,6 +1986,7 @@ out:
 			D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
 
 		} else { /* enabled by default */
+			D_ASSERT(replicas != NULL);
 			ret = ds_rebuild_schedule(in->pti_op.pi_uuid,
 						  out->pto_op.po_map_version,
 						  in->pti_targets);
@@ -1988,6 +1998,8 @@ out:
 		}
 	}
 
+	if (replicas != NULL)
+		daos_rank_list_free(replicas);
 	if (out->pto_targets != NULL) {
 		if (out->pto_targets->rl_ranks != NULL)
 			D_FREE(out->pto_targets->rl_ranks,

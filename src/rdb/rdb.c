@@ -410,6 +410,19 @@ rdb_get_leader(struct rdb *db, uint64_t *term, crt_rank_t *rank)
 	return 0;
 }
 
+/**
+ * Get the list of replica ranks. Callers are responsible for
+ * daos_rank_list_free(*ranksp).
+ *
+ * \param[in]	db	database
+ * \param[out]	ranksp	list of replica ranks
+ */
+int
+rdb_get_ranks(struct rdb *db, daos_rank_list_t **ranksp)
+{
+	return daos_rank_list_dup(ranksp, db->d_replicas, true /* input */);
+}
+
 /* I regretted... May move these back to the service level. */
 #include <daos_srv/pool.h>
 

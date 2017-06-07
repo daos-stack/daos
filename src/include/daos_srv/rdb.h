@@ -137,6 +137,7 @@ int rdb_start(const char *path, struct rdb_cbs *cbs, void *arg,
 void rdb_stop(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, crt_rank_t *rank);
+int rdb_get_ranks(struct rdb *db, daos_rank_list_t **ranksp);
 
 /**
  * Path (opaque)
