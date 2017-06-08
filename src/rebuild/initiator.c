@@ -95,6 +95,7 @@ rebuild_fetch_update_inline(struct rebuild_obj_arg *arg, daos_handle_t oh,
 
 	daos_iov_set(&iov, iov_buf, MAX_BUF_SIZE);
 	sgl.sg_nr.num = 1;
+	sgl.sg_nr.num_out = 1;
 	sgl.sg_iovs = &iov;
 
 	memset(&iod, 0, sizeof(iod));
