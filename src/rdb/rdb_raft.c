@@ -48,13 +48,15 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 			     msg_requestvote_t *msg)
 {
 	struct rdb		       *db = arg;
+	struct rdb_raft_node	       *rdb_node = raft_node_get_udata(node);
 	crt_rpc_t		       *rpc;
 	struct rdb_requestvote_in      *in;
 	int				rc;
 
 	D_ASSERT(db->d_raft == raft);
-	D_DEBUG(DB_ANY, DF_DB": sending rv to node %d: term=%d\n", DP_DB(db),
-		raft_node_get_id(node), msg->term);
+	D_DEBUG(DB_ANY, DF_DB": sending rv to node %d rank %u: term=%d\n",
+		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
+		msg->term);
 
 	rc = rdb_create_raft_rpc(RDB_REQUESTVOTE, node, &rpc);
 	if (rc != 0) {
@@ -127,8 +129,9 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 	int				rc;
 
 	D_ASSERT(db->d_raft == raft);
-	D_DEBUG(DB_ANY, DF_DB": sending ae to node %u: term=%d\n", DP_DB(db),
-		rdb_node->dn_rank, msg->term);
+	D_DEBUG(DB_ANY, DF_DB": sending ae to node %u rank %u: term=%d\n",
+		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
+		msg->term);
 
 	rc = rdb_create_raft_rpc(RDB_APPENDENTRIES, node, &rpc);
 	if (rc != 0) {

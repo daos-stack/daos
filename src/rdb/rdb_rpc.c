@@ -381,13 +381,8 @@ rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node)
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = crt_req_send(rpc, rdb_raft_rpc_cb, rrpc);
-	if (rc != 0) {
-		ABT_mutex_lock(db->d_mutex);
-		daos_list_del_init(&rrpc->drc_entry);
-		ABT_mutex_unlock(db->d_mutex);
-		rdb_free_raft_rpc(rrpc);
-	}
-	return rc;
+	D_ASSERTF(rc == 0, "%d\n", rc);
+	return 0;
 }
 
 /* Abort all in-flight RPCs. */
