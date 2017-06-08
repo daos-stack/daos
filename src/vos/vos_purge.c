@@ -146,6 +146,11 @@ purge_ctx_fini(struct purge_context *pcx, int rc)
 
 	case VOS_ITER_DKEY:
 		D_ASSERT(pcx->pc_obj != NULL);
+
+		/* Evict the object because we might have destroyed the
+		 * cached I/O context, or even released the object.
+		 */
+		vos_obj_ref_evict(pcx->pc_obj);
 		vos_obj_ref_release(vos_obj_cache_current(), pcx->pc_obj);
 		pcx->pc_obj  = NULL;
 		pcx->pc_type = VOS_ITER_OBJ;
@@ -601,14 +606,14 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 			rc = epoch_aggregate(pcx, &empty, &credits, vp_anchor,
 					     NULL);
 			purge_ctx_fini(pcx, rc);
+			if (rc != 0)
+				D_GOTO(out, rc);
 
 			if (!credits) { /* credits used up by subtree return */
 				purge_ctx_anchor_ctl(pcx, vp_anchor, &anchor,
 						     ANCHOR_SET);
 				D_GOTO(out, rc);
 			}
-			if (rc != 0)
-				D_GOTO(out, rc);
 		}
 
 		if (!empty) {
@@ -744,6 +749,7 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 					pcx_name(pcx), rc);
 				D_GOTO(out, rc);
 			}
+
 			/* enter the subtree */
 			rc = epoch_discard(pcx, &empty);
 			/* exit from the context of subtree */

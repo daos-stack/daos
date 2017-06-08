@@ -156,4 +156,15 @@ daos_lru_ref_evict(struct daos_llink *llink)
 	llink->ll_evicted = 1;
 }
 
+/**
+ * Check if a LRU element has been evicted or not
+ *
+ * \param llink		[IN]	DAOS LRU item to check
+ */
+static inline bool
+daos_lru_ref_evicted(struct daos_llink *llink)
+{
+	return llink->ll_evicted;
+}
+
 #endif

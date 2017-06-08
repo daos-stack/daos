@@ -65,7 +65,10 @@ lru_hop_key_cmp(struct dhash_table *lr_htab, daos_list_t *rlink,
 {
 	struct daos_llink *llink = hash2lru_link(rlink);
 
-	return llink->ll_ops->lop_cmp_keys(key, ksize, llink);
+	if (llink->ll_evicted)
+		return false; /* nobody should use it */
+	else
+		return llink->ll_ops->lop_cmp_keys(key, ksize, llink);
 }
 
 static void
@@ -188,6 +191,9 @@ lru_fast_search(struct daos_lru_cache *lcache, daos_list_t *head,
 		return NULL;
 
 	llink = daos_list_entry(head->next, struct daos_llink, ll_qlink);
+	if (llink->ll_evicted)
+		return NULL;
+
 	if (llink->ll_ops->lop_cmp_keys(key, key_size, llink)) {
 		D_DEBUG(DB_TRACE, "Found item on the %s list.\n",
 			head == &lcache->dlc_busy_list ? "busy" : "idle");

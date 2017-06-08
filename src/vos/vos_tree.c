@@ -661,9 +661,14 @@ vos_obj_tree_init(struct vos_obj_ref *oref)
 int
 vos_obj_tree_fini(struct vos_obj_ref *oref)
 {
+	int	rc = 0;
+
 	/* NB: tree is created inplace, so don't need to destroy */
-	return daos_handle_is_inval(oref->or_toh) ?
-	       0 : dbtree_close(oref->or_toh);
+	if (!daos_handle_is_inval(oref->or_toh)) {
+		rc = dbtree_close(oref->or_toh);
+		oref->or_toh = DAOS_HDL_INVAL;
+	}
+	return rc;
 }
 
 /** register all tree classes for VOS. */

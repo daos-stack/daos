@@ -1004,7 +1004,8 @@ vos_zcc_create(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (zcc == NULL)
 		return -DER_NOMEM;
 
-	rc = vos_obj_ref_hold(vos_obj_cache_current(), coh, oid, &zcc->zc_oref);
+	rc = vos_obj_ref_hold(vos_obj_cache_current(), coh, oid,
+			      &zcc->zc_oref);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
@@ -1169,6 +1170,7 @@ vos_obj_zc_fetch_end(daos_handle_t ioh, daos_key_t *dkey, unsigned int iod_nr,
 {
 	struct vos_zc_context	*zcc = vos_ioh2zcc(ioh);
 
+	/* NB: it's OK to use the stale zcc->zc_oref for fetch_end */
 	D_ASSERT(!zcc->zc_is_update);
 	vos_zcc_destroy(zcc, err);
 	return err;
@@ -1336,9 +1338,13 @@ vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, daos_key_t *dkey,
 
 	D_ASSERT(zcc->zc_is_update);
 	if (err != 0)
-		goto out;
+		D_GOTO(out, err);
 
 	D_ASSERT(zcc->zc_oref != NULL);
+	err = vos_obj_ref_revalidate(vos_obj_cache_current(), &zcc->zc_oref);
+	if (err != 0)
+		D_GOTO(out, err);
+
 	pop = vos_oref2pop(zcc->zc_oref);
 
 	TX_BEGIN(pop) {
@@ -1349,6 +1355,8 @@ vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, daos_key_t *dkey,
 		err = umem_tx_errno(err);
 		D_DEBUG(DF_VOS1, "Failed to submit ZC update: %d\n", err);
 	} TX_END
+
+	D_EXIT;
  out:
 	vos_zcc_destroy(zcc, err);
 	return err;

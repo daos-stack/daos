@@ -84,6 +84,19 @@ vos_obj_ref_release(struct daos_lru_cache *occ,
 		    struct vos_obj_ref *oref);
 
 /**
+ * Varify if the object reference is still valid, and refresh it if it's
+ * invalide (evicted)
+ */
+int vos_obj_ref_revalidate(struct daos_lru_cache *occ,
+			   struct vos_obj_ref **oref_p);
+
+/** Evict an object reference from the cache */
+void vos_obj_ref_evict(struct vos_obj_ref *oref);
+
+/** Check if an object reference has been evicted from the cache */
+bool vos_obj_ref_evicted(struct vos_obj_ref *oref);
+
+/**
  * Create an object cache.
  *
  * \param cache_size	[IN]	Cache size

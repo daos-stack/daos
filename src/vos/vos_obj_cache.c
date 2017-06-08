@@ -163,10 +163,8 @@ struct daos_llink_ops vos_oref_llink_ops = {
 };
 
 int
-vos_obj_cache_create(int32_t cache_size,
-		     struct daos_lru_cache **occ)
+vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
 {
-
 	int			rc = 0;
 
 	D_DEBUG(DF_VOS2, "Creating an object cache %d\n",
@@ -217,8 +215,7 @@ vos_obj_cache_current(void)
 }
 
 void
-vos_obj_ref_release(struct daos_lru_cache *occ,
-		    struct vos_obj_ref *oref)
+vos_obj_ref_release(struct daos_lru_cache *occ, struct vos_obj_ref *oref)
 {
 
 	D_ASSERT((occ != NULL) && (oref != NULL));
@@ -262,4 +259,34 @@ vos_obj_ref_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	*oref_p = lref;
 
 	return	rc;
+}
+
+void
+vos_obj_ref_evict(struct vos_obj_ref *oref)
+{
+	daos_lru_ref_evict(&oref->or_llink);
+}
+
+bool
+vos_obj_ref_evicted(struct vos_obj_ref *oref)
+{
+	return daos_lru_ref_evicted(&oref->or_llink);
+}
+
+int
+vos_obj_ref_revalidate(struct daos_lru_cache *occ, struct vos_obj_ref **oref_p)
+{
+	struct vos_obj_ref *oref = *oref_p;
+	int		    rc;
+
+	if (!vos_obj_ref_evicted(oref))
+		return 0;
+
+	rc = vos_obj_ref_hold(occ, vos_co2hdl(oref->or_co), oref->or_oid,
+			      oref_p);
+	if (rc == 0) {
+		D_ASSERT(*oref_p != oref);
+		vos_obj_ref_release(occ, oref);
+	}
+	return rc;
 }
