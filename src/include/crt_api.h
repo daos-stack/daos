@@ -240,13 +240,17 @@ crt_req_decref(crt_rpc_t *req);
  * destroyed when the reply received. User needs not call crt_req_decref() to
  * destroy the request in either case.
  *
- * \param req [IN]              pointer to RPC request
- * \param complete_cb [IN]      completion callback, will be triggered when the
- *                              RPC request's reply arrives, in the context of
- *                              user's calling of crt_progress().
- * \param arg [IN]              arguments for the \a complete_cb
+ * \param req [IN]		pointer to RPC request
+ * \param complete_cb [IN]	optional completion callback, when it is
+ *				provided the completion result (success or
+ *				failure) will be reported by calling it in the
+ *				context of user's calling of crt_progress() or
+ *				crt_req_send().
+ * \param arg [IN]		arguments for the \a complete_cb
  *
- * \return                      zero on success, negative value if error
+ * \return			if \a complete_cb provided (non-NULL), always
+ *				returns zero; or returns zero on success,
+ *				negative value if error.
  *
  * Notes: the crt_rpc_t is exported to user, caller should fill the
  *        crt_rpc_t::dr_input and before sending the RPC request.

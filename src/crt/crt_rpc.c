@@ -1147,8 +1147,20 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 
 	if (req == NULL) {
 		C_ERROR("invalid parameter (NULL req).\n");
-		C_GOTO(out, rc = -CER_INVAL);
+		if (complete_cb != NULL) {
+			struct crt_cb_info	cbinfo;
+
+			cbinfo.cci_rpc = NULL;
+			cbinfo.cci_arg = arg;
+			cbinfo.cci_rc  = -CER_INVAL;
+			complete_cb(&cbinfo);
+
+			return 0;
+		} else {
+			return -CER_INVAL;
+		}
 	}
+
 	if (req->cr_ctx == NULL) {
 		C_ERROR("invalid parameter (NULL req->cr_ctx).\n");
 		C_GOTO(out, rc = -CER_INVAL);
@@ -1175,7 +1187,6 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 				"rc %d, opc: 0x%x\n",
 				rc, rpc_priv->crp_pub.cr_opc);
 			crt_context_req_untrack(req);
-			crt_rpc_complete(rpc_priv, rc);
 		}
 	} else if (rc == CRT_REQ_TRACK_IN_WAITQ) {
 		/* queued in crt_hg_context::dhc_req_q */
@@ -1187,9 +1198,15 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 
 out:
 	/* internally destroy the req when failed */
-	if (rc != 0 && req != NULL)
+	if (rc != 0) {
+		if (!rpc_priv->crp_coll) {
+			crt_rpc_complete(rpc_priv, rc);
+			/* failure already reported through complete cb */
+			if (complete_cb != NULL)
+				rc = 0;
+		}
 		crt_req_decref(req);
-
+	}
 	return rc;
 }
 
