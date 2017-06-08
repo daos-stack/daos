@@ -1864,16 +1864,13 @@ out:
 
 /* Callers are responsible for daos_rank_list_free(*replicasp). */
 static int
-ds_pool_update_internal(uuid_t pool_hdl_uuid, uuid_t pool_uuid,
-			daos_rank_list_t *tgts, unsigned int opc,
-			daos_rank_list_t *tgts_out, struct pool_op_out *pto_op,
+ds_pool_update_internal(uuid_t pool_uuid, daos_rank_list_t *tgts,
+			unsigned int opc, daos_rank_list_t *tgts_out,
+			struct pool_op_out *pto_op,
 			daos_rank_list_t **replicasp)
 {
 	struct pool_svc		*svc;
 	struct rdb_tx		tx;
-	daos_iov_t		key;
-	daos_iov_t		value;
-	struct pool_hdl		hdl;
 	int			rc;
 
 	rc = pool_svc_lookup(pool_uuid, &svc);
@@ -1886,19 +1883,7 @@ ds_pool_update_internal(uuid_t pool_hdl_uuid, uuid_t pool_uuid,
 	rc = rdb_tx_begin(svc->ps_db, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
-
 	ABT_rwlock_wrlock(svc->ps_lock);
-	/* Verify the pool handle. */
-	if (!is_rebuild_pool(pool_hdl_uuid)) {
-		daos_iov_set(&key, pool_hdl_uuid, sizeof(uuid_t));
-		daos_iov_set(&value, &hdl, sizeof(hdl));
-		rc = rdb_tx_lookup(&tx, &svc->ps_handles, &key, &value);
-		if (rc != 0) {
-			if (rc == -DER_NONEXIST)
-				rc = -DER_NO_HDL;
-			D_GOTO(out_lock, rc);
-		}
-	}
 
 	rc = ds_pool_tgt_update(&tx, svc, tgts, tgts_out, opc);
 	if (rc != 0)
@@ -1927,11 +1912,11 @@ out_svc:
 }
 
 int
-ds_pool_tgt_exclude_out(uuid_t pool_hdl_uuid, uuid_t pool_uuid,
-			daos_rank_list_t *tgts, daos_rank_list_t *tgts_out)
+ds_pool_tgt_exclude_out(uuid_t pool_uuid, daos_rank_list_t *tgts,
+			daos_rank_list_t *tgts_out)
 {
-	return ds_pool_update_internal(pool_hdl_uuid, pool_uuid, tgts,
-				       POOL_EXCLUDE_OUT, tgts_out, NULL, NULL);
+	return ds_pool_update_internal(pool_uuid, tgts, POOL_EXCLUDE_OUT,
+				       tgts_out, NULL, NULL);
 }
 
 int
@@ -1946,9 +1931,8 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	    in->pti_targets->rl_ranks == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
 
-	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID
-		" ntargets=%u\n", DP_UUID(in->pti_op.pi_uuid), rpc,
-		DP_UUID(in->pti_op.pi_hdl), in->pti_targets->rl_nr.num);
+	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: ntargets=%u\n",
+		DP_UUID(in->pti_op.pi_uuid), rpc, in->pti_targets->rl_nr.num);
 
 	/* These have to be freed after the reply is sent. */
 	D_ALLOC_PTR(out->pto_targets);
@@ -1962,9 +1946,9 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 
 	out->pto_targets->rl_nr.num = in->pti_targets->rl_nr.num;
 
-	rc = ds_pool_update_internal(in->pti_op.pi_hdl, in->pti_op.pi_uuid,
-				     in->pti_targets, opc_get(rpc->cr_opc),
-				     out->pto_targets, &out->pto_op, &replicas);
+	rc = ds_pool_update_internal(in->pti_op.pi_uuid, in->pti_targets,
+				     opc_get(rpc->cr_opc), out->pto_targets,
+				     &out->pto_op, &replicas);
 	if (rc)
 		D_GOTO(out, rc);
 

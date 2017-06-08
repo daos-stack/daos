@@ -229,7 +229,7 @@ pool_exclude(void **state)
 	ranks.rl_ranks = &rank;
 
 	print_message("rank 0 excluding rank %u... ", rank);
-	rc = daos_pool_exclude(poh, &ranks,
+	rc = daos_pool_exclude(arg->pool_uuid, arg->group, &arg->svc, &ranks,
 			       arg->async ? &ev : NULL /* ev */);
 	assert_int_equal(rc, 0);
 

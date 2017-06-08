@@ -172,25 +172,6 @@ int
 daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
 
 /**
- * Exclude a set of storage targets from a pool.
- *
- * \param poh	[IN]	Pool connection handle.
- * \param tgts	[IN]	Target rank array to be excluded from the pool.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_HDL	Invalid pool handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- */
-int
-daos_pool_exclude(daos_handle_t poh, daos_rank_list_t *tgts, daos_event_t *ev);
-
-/**
  * Query pool information. User should provide at least one of \a info and
  * \a tgts as output buffer.
  *

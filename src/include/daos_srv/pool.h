@@ -101,9 +101,9 @@ ds_pool_local_open(uuid_t uuid, unsigned int version,
 int
 ds_pool_local_close(uuid_t uuid);
 
-int
-ds_pool_tgt_exclude_out(uuid_t pool_hdl_uuid, uuid_t pool_uuid,
-			daos_rank_list_t *tgts, daos_rank_list_t *tgts_out);
+int ds_pool_tgt_exclude_out(uuid_t pool_uuid, daos_rank_list_t *tgts,
+			    daos_rank_list_t *tgts_out);
+
 /*
  * TODO: Make the following internal functions of ds_pool after merging in
  * mgmt.

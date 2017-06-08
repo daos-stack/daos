@@ -132,6 +132,78 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
 }
 
 int
+daos_pool_tgt_add(const uuid_t uuid, const char *grp,
+		  const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		  daos_event_t *ev)
+{
+	daos_pool_update_t	args;
+	struct daos_task	*task;
+	int			rc;
+
+	uuid_copy((void *)args.uuid, uuid);
+	args.grp = grp;
+	args.svc = (daos_rank_list_t *)svc;
+	args.tgts = tgts;
+
+	rc = dc_task_prep(DAOS_OPC_POOL_ADD, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
+		return rc;
+
+	daos_sched_progress(daos_ev2sched(ev));
+
+	return daos_client_result_wait(ev);
+}
+
+int
+daos_pool_exclude_out(const uuid_t uuid, const char *grp,
+		      const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		      daos_event_t *ev)
+{
+	daos_pool_update_t	args;
+	struct daos_task	*task;
+	int			rc;
+
+	uuid_copy((void *)args.uuid, uuid);
+	args.grp = grp;
+	args.svc = (daos_rank_list_t *)svc;
+	args.tgts = tgts;
+	rc = dc_task_prep(DAOS_OPC_POOL_EXCLUDE_OUT, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
+		return rc;
+
+	daos_sched_progress(daos_ev2sched(ev));
+
+	return daos_client_result_wait(ev);
+}
+
+int
+daos_pool_exclude(const uuid_t uuid, const char *grp,
+		  const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		  daos_event_t *ev)
+{
+	daos_pool_update_t	args;
+	struct daos_task	*task;
+	int			rc;
+
+	DAOS_API_ARG_ASSERT(args, POOL_EXCLUDE);
+
+	uuid_copy((void *)args.uuid, uuid);
+	args.grp = grp;
+	args.svc = (daos_rank_list_t *)svc;
+	args.tgts = tgts;
+	rc = dc_task_prep(DAOS_OPC_POOL_EXCLUDE, &args, sizeof(args), &task,
+			  &ev);
+	if (rc)
+		return rc;
+
+	daos_sched_progress(daos_ev2sched(ev));
+
+	return daos_client_result_wait(ev);
+}
+
+int
 daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
 		 daos_rank_list_t *failed, daos_event_t *ev)
 {

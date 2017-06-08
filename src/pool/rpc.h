@@ -121,7 +121,7 @@ struct pool_query_out {
 };
 
 struct pool_tgt_update_in {
-	struct pool_op_in	pti_op;
+	struct pool_op_in	pti_op;		/* .pi_hdl unused */
 	daos_rank_list_t       *pti_targets;
 };
 

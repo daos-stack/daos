@@ -327,7 +327,7 @@ kill_daos_server(const char *grp)
 	targets.rl_nr.num_out	= 0;
 	targets.rl_ranks	= &rank;
 
-	rc = daos_pool_exclude(poh, &targets, NULL);
+	rc = daos_pool_exclude(pool_uuid, grp, svcl, &targets, NULL);
 	DBENCH_CHECK(rc, "Error in excluding pool from poolmap\n");
 
 	memset(&info, 0, sizeof(daos_pool_info_t));

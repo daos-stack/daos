@@ -266,8 +266,7 @@ ds_rebuild_fini(const uuid_t uuid, uint32_t map_ver,
 		return 0;
 
 	/* Mark the target to be DOWNOUT */
-	rc = ds_pool_tgt_exclude_out(tls->rebuild_pool_hdl_uuid,
-				     tls->rebuild_pool_uuid, tgts_failed, NULL);
+	rc = ds_pool_tgt_exclude_out(tls->rebuild_pool_uuid, tgts_failed, NULL);
 	if (rc)
 		return rc;
 

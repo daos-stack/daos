@@ -67,14 +67,16 @@ rebuild_test_exclude_tgt(test_arg_t *arg, daos_rank_t rank, bool kill)
 
 	if (arg->myrank == 0) {
 		if (kill) {
-			daos_kill_server(arg->group, arg->poh, rank);
+			daos_kill_server(arg->pool_uuid, arg->group, &arg->svc,
+					 arg->poh, rank);
 			sleep(5);
 		} else {
 			/** exclude the target from the pool */
 			ranks.rl_nr.num = 1;
 			ranks.rl_nr.num_out = 0;
 			ranks.rl_ranks = &rank;
-			rc = daos_pool_exclude(arg->poh, &ranks, NULL);
+			rc = daos_pool_exclude(arg->pool_uuid, arg->group,
+					       &arg->svc, &ranks, NULL);
 			assert_int_equal(rc, 0);
 			print_message("exclude rank %d wait 5 seconds\n", rank);
 			sleep(5); /* Sleep 5 for starting rebuild */
@@ -94,7 +96,8 @@ rebuild_test_add_tgt(test_arg_t *arg, daos_rank_t rank)
 		ranks.rl_nr.num = 1;
 		ranks.rl_nr.num_out = 0;
 		ranks.rl_ranks = &rank;
-		rc = daos_pool_tgt_add(arg->poh, &ranks, NULL);
+		rc = daos_pool_tgt_add(arg->pool_uuid, arg->group, &arg->svc,
+				       &ranks, NULL);
 		assert_int_equal(rc, 0);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);

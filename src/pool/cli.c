@@ -935,25 +935,31 @@ out:
 	return rc;
 }
 
-struct pool_tgt_update_arg {
-	struct dc_pool		*pool;
-	crt_rpc_t		*rpc;
+struct pool_update_state {
+	struct rsvc_client	client;
+	crt_group_t	       *group;
 };
 
 static int
 pool_tgt_update_cp(struct daos_task *task, void *data)
 {
-	struct pool_tgt_update_arg	*arg = data;
-	struct dc_pool			*pool = arg->pool;
-	struct pool_tgt_update_out	*out = crt_reply_get(arg->rpc);
+	struct pool_update_state	*state = daos_task_get_priv(task);
+	crt_rpc_t			*rpc = *((crt_rpc_t **)data);
+	struct pool_tgt_update_in	*in = crt_req_get(rpc);
+	struct pool_tgt_update_out	*out = crt_reply_get(rpc);
+	bool				 free_state = true;
 	int				 rc = task->dt_result;
 
-	rc = pool_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
-					   &out->pto_op, task);
-	if (rc < 0)
-		D_GOTO(out, rc);
-	else if (rc == RSVC_CLIENT_RECHOOSE)
+	rc = rsvc_client_complete_rpc(&state->client, &rpc->cr_ep, rc,
+				      out->pto_op.po_rc, &out->pto_op.po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE) {
+		task->dt_result = 0;
+		rc = daos_task_reinit(task);
+		if (rc != 0)
+			D_GOTO(out, rc);
+		free_state = false;
 		D_GOTO(out, rc = 0);
+	}
 
 	if (rc != 0) {
 		D_ERROR("RPC error while excluding targets: %d\n", rc);
@@ -967,15 +973,19 @@ pool_tgt_update_cp(struct daos_task *task, void *data)
 	}
 
 	D_DEBUG(DF_DSMC, DF_UUID": updated: hdl="DF_UUID" failed=%u\n",
-		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl),
+		DP_UUID(in->pti_op.pi_uuid), DP_UUID(in->pti_op.pi_hdl),
 		out->pto_targets == NULL ? 0 : out->pto_targets->rl_nr.num);
 
 	if (out->pto_targets != NULL && out->pto_targets->rl_nr.num > 0)
 		rc = -DER_INVAL;
 
 out:
-	crt_req_decref(arg->rpc);
-	dc_pool_put(pool);
+	crt_req_decref(rpc);
+	if (free_state) {
+		rsvc_client_fini(&state->client);
+		daos_group_detach(state->group);
+		D_FREE_PTR(state);
+	}
 	return rc;
 }
 
@@ -983,45 +993,53 @@ static int
 dc_pool_update_internal(struct daos_task *task, daos_pool_update_t *args,
 			int opc)
 {
-	struct dc_pool		*pool;
-	crt_endpoint_t		 ep;
-	crt_rpc_t		*rpc;
-	struct pool_tgt_update_in *in;
-	struct pool_tgt_update_arg update_args;
-	int			 rc;
+	struct pool_update_state	*state = daos_task_get_priv(task);
+	crt_endpoint_t			 ep;
+	crt_rpc_t			*rpc;
+	struct pool_tgt_update_in	*in;
+	int				 rc;
 
-	if (args->tgts == NULL || args->tgts->rl_nr.num == 0)
-		return -DER_INVAL;
+	if (state == NULL) {
+		if (args->tgts == NULL || args->tgts->rl_nr.num == 0)
+			return -DER_INVAL;
 
-	pool = dc_hdl2pool(args->poh);
-	if (pool == NULL)
-		D_GOTO(out_task, rc = -DER_NO_HDL);
+		D_DEBUG(DF_DSMC, DF_UUID": excluding %u targets: tgts[0]=%u\n",
+			DP_UUID(args->uuid), args->tgts->rl_nr.num,
+			args->tgts->rl_ranks[0]);
 
-	D_DEBUG(DF_DSMC, DF_UUID": excluding %u targets: hdl="DF_UUID
-		" tgts[0]=%u\n", DP_UUID(pool->dp_pool), args->tgts->rl_nr.num,
-		DP_UUID(pool->dp_pool_hdl), args->tgts->rl_ranks[0]);
+		D_ALLOC_PTR(state);
+		if (state == NULL) {
+			D_ERROR(DF_UUID": failed to allocate state\n",
+				DP_UUID(args->uuid));
+			D_GOTO(out_task, rc = -DER_NOMEM);
+		}
 
-	ep.ep_grp = pool->dp_group;
-	pthread_mutex_lock(&pool->dp_client_lock);
-	rsvc_client_choose(&pool->dp_client, &ep);
-	pthread_mutex_unlock(&pool->dp_client_lock);
+		rc = daos_group_attach(args->grp, &state->group);
+		if (rc != 0)
+			D_GOTO(out_state, rc);
+		rc = rsvc_client_init(&state->client, args->svc);
+		if (rc != 0)
+			D_GOTO(out_group, rc);
+
+		daos_task_set_priv(task, state);
+	}
+
+	ep.ep_grp = state->group;
+	rsvc_client_choose(&state->client, &ep);
 	rc = pool_req_create(daos_task2ctx(task), ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
-		D_GOTO(out_pool, rc);
+		D_GOTO(out_client, rc);
 	}
 
 	in = crt_req_get(rpc);
-	uuid_copy(in->pti_op.pi_uuid, pool->dp_pool);
-	uuid_copy(in->pti_op.pi_hdl, pool->dp_pool_hdl);
+	uuid_copy(in->pti_op.pi_uuid, args->uuid);
 	in->pti_targets = args->tgts;
 
-	update_args.pool = pool;
 	crt_req_addref(rpc);
-	update_args.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, pool_tgt_update_cp,
-					sizeof(update_args), &update_args);
+	rc = daos_task_register_comp_cb(task, pool_tgt_update_cp, sizeof(rpc),
+					&rpc);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -1035,8 +1053,12 @@ dc_pool_update_internal(struct daos_task *task, daos_pool_update_t *args,
 out_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
-out_pool:
-	dc_pool_put(pool);
+out_client:
+	rsvc_client_fini(&state->client);
+out_group:
+	daos_group_detach(state->group);
+out_state:
+	D_FREE_PTR(state);
 out_task:
 	daos_task_complete(task, rc);
 	return rc;

@@ -221,72 +221,26 @@ destroy_hdlr(int argc, char *argv[])
 	return 0;
 }
 
-static int
-evict_hdlr(int argc, char *argv[])
+enum pool_op {
+	POOL_EVICT,
+	POOL_EXCLUDE,
+	POOL_QUERY
+};
+
+static enum pool_op
+pool_op_parse(const char *str)
 {
-	struct option		options[] = {
-		{"group",	required_argument,	NULL,	'G'},
-		{"pool",	required_argument,	NULL,	'p'},
-		{"svc",		required_argument,	NULL,	'v'},
-		{NULL,		0,			NULL,	0}
-	};
-	const char	       *group = default_group;
-	uuid_t			pool_uuid;
-	const char	       *svc_str = NULL;
-	daos_rank_list_t       *svc;
-	int			rc;
-
-	uuid_clear(pool_uuid);
-
-	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
-		switch (rc) {
-		case 'G':
-			group = optarg;
-			break;
-		case 'p':
-			if (uuid_parse(optarg, pool_uuid) != 0) {
-				fprintf(stderr,
-					"failed to parse pool UUID: %s\n",
-					optarg);
-				return 2;
-			}
-			break;
-		case 'v':
-			svc_str = optarg;
-			break;
-		default:
-			return 2;
-		}
-	}
-
-	if (uuid_is_null(pool_uuid)) {
-		fprintf(stderr, "pool UUID required\n");
-		return 2;
-	}
-
-	if (svc_str == NULL) {
-		fprintf(stderr, "--svc must be specified\n");
-		return 2;
-	}
-	svc = daos_rank_list_parse(svc_str, ":");
-	if (svc == NULL) {
-		fprintf(stderr, "failed to parse service ranks\n");
-		return 2;
-	}
-	if (svc->rl_nr.num == 0) {
-		fprintf(stderr, "--svc mustn't be empty\n");
-		daos_rank_list_free(svc);
-		return 2;
-	}
-
-	rc = daos_pool_evict(pool_uuid, group, svc, NULL /* ev */);
-	daos_rank_list_free(svc);
-	if (rc != 0)
-		fprintf(stderr, "failed to evict pool connections: %d\n", rc);
-
-	return rc;
+	if (strcmp(str, "evict") == 0)
+		return POOL_EVICT;
+	else if (strcmp(str, "exclude") == 0)
+		return POOL_EXCLUDE;
+	else if (strcmp(str, "query") == 0)
+		return POOL_QUERY;
+	assert(0);
+	return -1;
 }
 
+/* For operations that take <pool_uuid, pool_group, pool_svc_ranks>. */
 static int
 pool_op_hdlr(int argc, char *argv[])
 {
@@ -303,12 +257,10 @@ pool_op_hdlr(int argc, char *argv[])
 	daos_handle_t		pool;
 	const char	       *svc_str = NULL;
 	daos_rank_list_t       *svc;
-	bool			do_query;
+	enum pool_op		op = pool_op_parse(argv[1]);
 	int			rc;
 
 	uuid_clear(pool_uuid);
-
-	do_query = (strcmp(argv[1], "query") == 0);
 
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
 		switch (rc) {
@@ -334,16 +286,12 @@ pool_op_hdlr(int argc, char *argv[])
 		}
 	}
 
+	/* Check the pool UUID. */
 	if (uuid_is_null(pool_uuid)) {
 		fprintf(stderr, "pool UUID required\n");
 		return 2;
 	}
-
-	if (target == -1 && !do_query) {
-		fprintf(stderr, "valid target rank required\n");
-		return 2;
-	}
-
+	/* Check the pool service ranks. */
 	if (svc_str == NULL) {
 		fprintf(stderr, "--svc must be specified\n");
 		return 2;
@@ -358,19 +306,51 @@ pool_op_hdlr(int argc, char *argv[])
 		daos_rank_list_free(svc);
 		return 2;
 	}
-
-	rc = daos_pool_connect(pool_uuid, group, svc,
-			       do_query ? DAOS_PC_RO : DAOS_PC_RW,
-			       &pool, NULL /* info */, NULL /* ev */);
-	daos_rank_list_free(svc);
-	if (rc != 0) {
-		fprintf(stderr, "failed to connect to pool: %d\n", rc);
-		return rc;
+	/* Check the target rank for POOL_EXCLUDE. */
+	if (target == -1 && op == POOL_EXCLUDE) {
+		fprintf(stderr, "valid target rank required\n");
+		daos_rank_list_free(svc);
+		return 2;
 	}
 
-	if (do_query) {
-		daos_pool_info_t	    pinfo;
-		struct daos_rebuild_status *rstat = &pinfo.pi_rebuild_st;
+	/* Make a pool connection for operations that need one. */
+	if (op == POOL_QUERY) {
+		rc = daos_pool_connect(pool_uuid, group, svc, DAOS_PC_RO, &pool,
+				       NULL /* info */, NULL /* ev */);
+		daos_rank_list_free(svc);
+		if (rc != 0) {
+			fprintf(stderr, "failed to connect to pool: %d\n", rc);
+			return rc;
+		}
+	}
+
+	/* Do the operation. */
+	if (op == POOL_EVICT) {
+		rc = daos_pool_evict(pool_uuid, group, svc, NULL /* ev */);
+		daos_rank_list_free(svc);
+		if (rc != 0) {
+			fprintf(stderr, "failed to evict pool connections: "
+				"%d\n", rc);
+			return rc;
+		}
+	} else if (op == POOL_EXCLUDE) {
+		daos_rank_list_t targets;
+
+		memset(&targets, 0, sizeof(targets));
+		targets.rl_nr.num = 1;
+		targets.rl_nr.num_out = 0;
+		targets.rl_ranks = &target;
+
+		rc = daos_pool_exclude(pool_uuid, group, svc, &targets,
+				       NULL /* ev */);
+		daos_rank_list_free(svc);
+		if (rc != 0) {
+			fprintf(stderr, "failed to exclude target: %d\n", rc);
+			return rc;
+		}
+	} else if (op == POOL_QUERY) {
+		daos_pool_info_t		pinfo;
+		struct daos_rebuild_status     *rstat = &pinfo.pi_rebuild_st;
 
 		rc = daos_pool_query(pool, NULL, &pinfo, NULL);
 		if (rc != 0) {
@@ -397,23 +377,16 @@ pool_op_hdlr(int argc, char *argv[])
 			D_PRINT("Rebuild failed, rc=%d, status=%d\n",
 				rc, rstat->rs_errno);
 		}
-	} else {
-		daos_rank_list_t	targets;
-
-		memset(&targets, 0, sizeof(targets));
-		targets.rl_nr.num = 1;
-		targets.rl_nr.num_out = 0;
-		targets.rl_ranks = &target;
-
-		rc = daos_pool_exclude(pool, &targets, NULL /* ev */);
-		if (rc != 0)
-			fprintf(stderr, "failed to exclude target: %d\n", rc);
 	}
 
-	rc = daos_pool_disconnect(pool, NULL /* ev */);
-	if (rc != 0) {
-		fprintf(stderr, "failed to disconnect from pool: %d\n", rc);
-		return rc;
+	/* Disconnect from the pool for operations that need a connection. */
+	if (op == POOL_QUERY) {
+		rc = daos_pool_disconnect(pool, NULL /* ev */);
+		if (rc != 0) {
+			fprintf(stderr, "failed to disconnect from pool: %d\n",
+				rc);
+			return rc;
+		}
 	}
 
 	return 0;
@@ -511,8 +484,7 @@ kill options:\n\
 query options:\n\
   --group=STR	pool server process group (\"%s\")\n\
   --pool=UUID	pool UUID\n\
-  --svc=N	pool service replicas {0, 1, ..., N-1} (\"%u\")\n",
-		default_group, default_svc_nreplicas);
+  --svc=RANKS	pool service replicas like 1:2:3\n", default_group);
 	return 0;
 }
 
@@ -529,7 +501,7 @@ main(int argc, char *argv[])
 	else if (strcmp(argv[1], "destroy") == 0)
 		hdlr = destroy_hdlr;
 	else if (strcmp(argv[1], "evict") == 0)
-		hdlr = evict_hdlr;
+		hdlr = pool_op_hdlr;
 	else if (strcmp(argv[1], "exclude") == 0)
 		hdlr = pool_op_hdlr;
 	else if (strcmp(argv[1], "kill") == 0)

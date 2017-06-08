@@ -150,7 +150,9 @@ typedef struct {
 } daos_pool_disconnect_t;
 
 typedef struct {
-	daos_handle_t		poh;
+	const uuid_t		uuid;
+	const char		*grp;
+	daos_rank_list_t	*svc;
 	daos_rank_list_t	*tgts;
 } daos_pool_update_t;
 

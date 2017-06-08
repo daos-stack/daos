@@ -30,19 +30,6 @@ extern "C" {
 #include <daos_types.h>
 
 /**
- * Kill a remote server.
- *
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param rank	[IN]	Rank to kill
- * \param force	[IN]	Abrupt shutdown, no cleanup
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- */
-int
-daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
-		  daos_event_t *ev);
-
-/**
  * Create a pool with \a uuid and \a mode.
  *
  * \a grp and \a tgts pass in the address of each target and the total
@@ -102,6 +89,45 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 		  daos_event_t *ev);
 
 /**
+ * Currently, the following methods are mostly for dmg and tests.
+ */
+
+/**
+ * Kill a remote server.
+ *
+ * \param grp	[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank	[IN]	Rank to kill
+ * \param force	[IN]	Abrupt shutdown, no cleanup
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
+		  daos_event_t *ev);
+
+/**
+ * Exclude a set of storage targets from a pool.
+ *
+ * \param uuid	[IN]	UUID of the pool
+ * \param grp	[IN]	process set name of the DAOS servers managing the pool
+ * \param svc	[IN]	list of pool service ranks
+ * \param tgts	[IN]	Target rank array to be excluded from the pool.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NONEXIST	Pool is nonexistent
+ */
+int
+daos_pool_exclude(const uuid_t uuid, const char *grp,
+		  const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		  daos_event_t *ev);
+
+/**
  * Extend the pool to more targets. If \a tgts is NULL, this function
  * will extend the pool to all the targets in the group, otherwise it will
  * only extend the pool to the included targets.
@@ -147,6 +173,71 @@ daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
 int
 daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
 		daos_event_t *ev);
+
+/**
+ * add a set of storage targets from a pool.
+ *
+ * \param uuid	[IN]	UUID of the pool
+ * \param grp	[IN]	process set name of the DAOS servers managing the pool
+ * \param svc	[IN]	list of pool service ranks
+ * \param tgts	[IN]	Target rank array to be added from the pool.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ */
+int
+daos_pool_tgt_add(const uuid_t uuid, const char *grp,
+		  const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		  daos_event_t *ev);
+
+/**
+ * Exclude completely a set of storage targets from a pool. Compared with
+ * daos_pool_exclude(), this API will mark the targets to be DOWNOUT, i.e.
+ * the rebuilding for this target is done, while daos_pool_exclude() only
+ * mark the target to be DOWN, i.e. the rebuilding might not finished yet.
+ *
+ * \param uuid	[IN]	UUID of the pool
+ * \param grp	[IN]	process set name of the DAOS servers managing the pool
+ * \param svc	[IN]	list of pool service ranks
+ * \param tgts	[IN]	Target rank array to be excluded from the pool.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ */
+int
+daos_pool_exclude_out(const uuid_t uuid, const char *grp,
+		      const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		      daos_event_t *ev);
+
+/**
+ * Stop the current pool service leader.
+ *
+ * \param poh	[IN]	Pool connection handle
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid pool handle
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ */
+int
+daos_pool_svc_stop(daos_handle_t poh, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }
