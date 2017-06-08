@@ -52,14 +52,16 @@ static struct crt_msg_field *crt_grp_create_in_fields[] = {
 };
 
 static struct crt_msg_field *crt_grp_create_out_fields[] = {
-	&CMF_RANK_LIST,		/* gc_failed_ranks */
-	&CMF_RANK,		/* gc_rank */
 	&CMF_INT,		/* gc_rc */
 };
 
 static struct crt_req_format CQF_CRT_GRP_CREATE =
 	DEFINE_CRT_REQ_FMT("CRT_GRP_CREATE", crt_grp_create_in_fields,
 			   crt_grp_create_out_fields);
+
+static struct crt_corpc_ops crt_grp_create_co_ops = {
+	.co_aggregate = crt_grp_create_corpc_aggregate,
+};
 
 /* group destroy */
 static struct crt_msg_field *crt_grp_destroy_in_fields[] = {
@@ -68,14 +70,16 @@ static struct crt_msg_field *crt_grp_destroy_in_fields[] = {
 };
 
 static struct crt_msg_field *crt_grp_destroy_out_fields[] = {
-	&CMF_RANK_LIST,		/* gd_failed_ranks */
-	&CMF_RANK,		/* gd_rank */
 	&CMF_INT,		/* gd_rc */
 };
 
 static struct crt_req_format CQF_CRT_GRP_DESTROY =
 	DEFINE_CRT_REQ_FMT("CRT_GRP_DESTROY", crt_grp_destroy_in_fields,
 			   crt_grp_destroy_out_fields);
+
+static struct crt_corpc_ops crt_grp_destroy_co_ops = {
+	.co_aggregate = crt_grp_destroy_corpc_aggregate,
+};
 
 /* uri lookup */
 static struct crt_msg_field *crt_uri_lookup_in_fields[] = {
@@ -319,7 +323,7 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_flags	= 0,
 		.ir_req_fmt	= &CQF_CRT_GRP_CREATE,
 		.ir_hdlr	= crt_hdlr_grp_create,
-		.ir_co_ops	= NULL,
+		.ir_co_ops	= &crt_grp_create_co_ops,
 	}, {
 		.ir_name	= "CRT_GRP_DESTROY",
 		.ir_opc		= CRT_OPC_GRP_DESTROY,
@@ -327,7 +331,7 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_flags	= 0,
 		.ir_req_fmt	= &CQF_CRT_GRP_DESTROY,
 		.ir_hdlr	= crt_hdlr_grp_destroy,
-		.ir_co_ops	= NULL,
+		.ir_co_ops	= &crt_grp_destroy_co_ops,
 	}, {
 		.ir_name	= "CRT_URI_LOOKUP",
 		.ir_opc		= CRT_OPC_URI_LOOKUP,

@@ -140,16 +140,8 @@ struct crt_grp_priv {
 	/* Barrier information.  Only used in local service groups */
 	struct crt_barrier_info	 gp_barrier_info;
 
-	/* TODO: reuse crt_corpc_info here */
-	/*
-	 * Some temporary info used for group creating/destroying, valid when
-	 * gp_status is CRT_GRP_CREATING or CRT_GRP_DESTROYING.
-	 */
-	struct crt_rpc_priv	*gp_parent_rpc; /* parent RPC, NULL on root */
-	d_list_t		 gp_child_rpcs; /* child RPCs list */
-	uint32_t		 gp_child_num;
-	uint32_t		 gp_child_ack_num;
-	int			 gp_rc; /* temporary recoded return code */
+	/* temporary return code for group creation */
+	int			 gp_rc;
 
 	crt_grp_create_cb_t	 gp_create_cb; /* grp create completion cb */
 	crt_grp_destroy_cb_t	 gp_destroy_cb; /* grp destroy completion cb */
@@ -372,10 +364,13 @@ bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);
 bool crt_grp_is_local(crt_group_t *grp);
 struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);
-int crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank,
-			      const char *uri);
+int crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank, const char *uri);
 bool crt_rank_evicted(crt_group_t *grp, d_rank_t rank);
 int crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank);
 int crt_grp_psr_reload(struct crt_grp_priv *grp_priv);
+int crt_grp_create_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result,
+				   void *priv);
+int crt_grp_destroy_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result,
+				    void *priv);
 
 #endif /* __CRT_GROUP_H__ */

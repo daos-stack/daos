@@ -653,15 +653,10 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 	}
 
 	grp_priv->gp_status = CRT_GRP_CREATING;
-	D_INIT_LIST_HEAD(&grp_priv->gp_child_rpcs);
 	grp_priv->gp_priv = arg;
 
 	if (!primary_grp) {
 		D_ASSERT(grp_priv->gp_membs != NULL);
-		grp_priv->gp_parent_rpc = NULL;
-		/* TODO tree children num */
-		grp_priv->gp_child_num = membs->rl_nr.num;
-		grp_priv->gp_child_ack_num = 0;
 		grp_priv->gp_create_cb = grp_create_cb;
 	}
 
@@ -797,55 +792,6 @@ struct gc_req {
 	crt_rpc_t	*gc_rpc;
 };
 
-static inline int
-gc_add_child_rpc(struct crt_grp_priv *grp_priv, crt_rpc_t *gc_rpc)
-{
-	struct gc_req	*gc_req_item;
-	int		rc = 0;
-
-	D_ASSERT(grp_priv != NULL);
-	D_ASSERT(gc_rpc != NULL);
-
-	D_ALLOC_PTR(gc_req_item);
-	if (gc_req_item == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	D_INIT_LIST_HEAD(&gc_req_item->gc_link);
-	gc_req_item->gc_rpc = gc_rpc;
-
-	RPC_PUB_ADDREF(gc_rpc);
-
-	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
-	d_list_add_tail(&gc_req_item->gc_link, &grp_priv->gp_child_rpcs);
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-
-out:
-	return rc;
-}
-
-static inline void
-gc_del_child_rpc(struct crt_grp_priv *grp_priv, crt_rpc_t *gc_rpc)
-{
-	struct gc_req	*gc, *gc_next;
-
-	D_ASSERT(grp_priv != NULL);
-	D_ASSERT(gc_rpc != NULL);
-
-	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
-	d_list_for_each_entry_safe(gc, gc_next, &grp_priv->gp_child_rpcs,
-				   gc_link) {
-		if (gc->gc_rpc == gc_rpc) {
-			d_list_del_init(&gc->gc_link);
-			/* decref corresponds to the addref in
-			 * gc_add_child_rpc */
-			RPC_PUB_DECREF(gc_rpc);
-			D_FREE_PTR(gc);
-			break;
-		}
-	}
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-}
-
 void
 crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 {
@@ -920,56 +866,20 @@ out:
 			grp_priv->gp_size, grp_priv->gp_self);
 }
 
-static void
-gc_rpc_cb(const struct crt_cb_info *cb_info)
+
+int
+crt_grp_create_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
-	struct crt_grp_priv		*grp_priv;
-	crt_rpc_t			*gc_req;
-	struct crt_grp_create_out	*gc_out;
-	bool				 gc_done = false;
+	struct crt_grp_create_out	*gc_out_source;
+	struct crt_grp_create_out	*gc_out_result;
 
-	gc_req = cb_info->cci_rpc;
-	gc_out = crt_reply_get(gc_req);
-	grp_priv = cb_info->cci_arg;
-	D_ASSERT(grp_priv != NULL);
+	D_ASSERT(source != NULL && result != NULL);
+	gc_out_source = crt_reply_get(source);
+	gc_out_result = crt_reply_get(result);
+	if (gc_out_source->gc_rc != 0)
+		gc_out_result->gc_rc = gc_out_source->gc_rc;
 
-	if (cb_info->cci_rc != 0)
-		D_ERROR("RPC error, rc: %d.\n", cb_info->cci_rc);
-	if (gc_out->gc_rc)
-		D_ERROR("group create failed at rank %d, rc: %d.\n",
-			gc_out->gc_rank, gc_out->gc_rc);
-
-	/* TODO error handling */
-
-	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
-	if (cb_info->cci_rc != 0)
-		grp_priv->gp_rc = cb_info->cci_rc;
-	else if (gc_out->gc_rc != 0)
-		grp_priv->gp_rc = gc_out->gc_rc;
-	grp_priv->gp_child_ack_num++;
-	D_ASSERT(grp_priv->gp_child_ack_num <= grp_priv->gp_child_num);
-	if (grp_priv->gp_child_ack_num == grp_priv->gp_child_num)
-		gc_done = true;
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-
-	gc_del_child_rpc(grp_priv, gc_req);
-
-	if (!gc_done)
-		D_GOTO(out, 0);
-
-	if (grp_priv->gp_create_cb != NULL)
-		grp_priv->gp_create_cb(&grp_priv->gp_pub, grp_priv->gp_priv,
-				       grp_priv->gp_rc);
-
-	if (grp_priv->gp_rc != 0) {
-		D_ERROR("group create failed, rc: %d.\n", grp_priv->gp_rc);
-		crt_grp_priv_decref(grp_priv);
-	} else {
-		grp_priv->gp_status = CRT_GRP_NORMAL;
-	}
-
-out:
-	return;
+	return 0;
 }
 
 /**
@@ -999,19 +909,75 @@ crt_validate_grpid(const crt_group_id_t grpid) {
 	return 0;
 }
 
+static int
+gc_corpc_err_cb(void *arg, int status)
+{
+	struct crt_grp_priv		*grp_priv;
+
+	grp_priv = arg;
+
+	if (grp_priv->gp_create_cb != NULL)
+		grp_priv->gp_create_cb(NULL,
+				       grp_priv->gp_priv, grp_priv->gp_rc);
+	crt_grp_priv_destroy(grp_priv);
+
+	return status;
+}
+
+static void
+grp_create_corpc_cb(const struct crt_cb_info *cb_info)
+{
+	struct crt_grp_priv		*grp_priv;
+	crt_rpc_t			*gc_req;
+	struct crt_grp_create_out	*gc_out;
+	int				 rc = 0;
+
+	gc_req = cb_info->cci_rpc;
+	D_ASSERT(gc_req != NULL);
+	gc_out = crt_reply_get(gc_req);
+	grp_priv = (struct crt_grp_priv *)cb_info->cci_arg;
+	D_ASSERT(gc_out != NULL && grp_priv != NULL);
+	if (cb_info->cci_rc != 0)
+		D_ERROR("RPC error, rc: %d.\n", rc);
+	if (gc_out->gc_rc)
+		D_ERROR("group create failed, rc: %d.\n", gc_out->gc_rc);
+	rc = cb_info->cci_rc;
+	if (rc == 0)
+		rc = gc_out->gc_rc;
+
+	if (rc != 0) {
+		D_ERROR("group create failed, rc: %d.\n", rc);
+		grp_priv->gp_rc = rc;
+		rc = crt_group_destroy(&grp_priv->gp_pub,
+				       gc_corpc_err_cb, grp_priv);
+		if (rc != 0)
+			D_ERROR("crt_group_destroy() failed, rc: %d.\n", rc);
+	} else {
+		grp_priv->gp_status = CRT_GRP_NORMAL;
+		if (grp_priv->gp_create_cb != NULL)
+			grp_priv->gp_create_cb(&grp_priv->gp_pub,
+					       grp_priv->gp_priv, rc);
+	}
+}
+
 int
 crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 		 bool populate_now, crt_grp_create_cb_t grp_create_cb,
 		 void *arg)
 {
-	crt_context_t		 crt_ctx;
-	struct crt_grp_priv	*grp_priv = NULL;
-	bool			 gc_req_sent = false;
-	d_rank_t		 myrank;
-	uint32_t		 grp_size;
-	bool			 in_grp = false;
-	int			 i;
-	int			 rc = 0;
+	crt_context_t			 crt_ctx;
+	struct crt_grp_priv		*grp_priv = NULL;
+	bool				 gc_req_sent = false;
+	struct crt_grp_priv		*default_grp_priv = NULL;
+	d_rank_t			 myrank;
+	uint32_t			 grp_size;
+	crt_rpc_t			*gc_corpc;
+	struct crt_grp_create_in	*gc_in;
+	d_rank_list_t			*excluded_ranks;
+	d_rank_list_t			*default_gp_membs;
+	bool				 in_grp = false;
+	int				 i;
+	int				 rc = 0;
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
@@ -1030,8 +996,11 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 			member_ranks, grp_create_cb);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	crt_group_rank(NULL, &myrank);
-	crt_group_size(NULL, &grp_size);
+
+	default_grp_priv = crt_grp_pub2priv(NULL);
+	myrank = default_grp_priv->gp_self;
+	grp_size = default_grp_priv->gp_size;
+
 	for (i = 0; i < member_ranks->rl_nr.num; i++) {
 		if (member_ranks->rl_ranks[i] >= grp_size) {
 			D_ERROR("invalid arg, member_ranks[%d]: %d exceed "
@@ -1064,48 +1033,46 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 	grp_priv->gp_ctx = crt_ctx;
 
 	/* TODO handle the populate_now == false */
+	/* TODO add another corpc function which takes a inclusion list */
 
-	/* send RPC one by one now */
-	for (i = 0; i < member_ranks->rl_nr.num; i++) {
-		crt_rpc_t			*gc_rpc;
-		struct crt_grp_create_in	*gc_in;
-		crt_endpoint_t			 tgt_ep = {0};
-
-		tgt_ep.ep_rank = member_ranks->rl_ranks[i];
-
-		rc = crt_req_create(crt_ctx, &tgt_ep, CRT_OPC_GRP_CREATE,
-				    &gc_rpc);
-		if (rc != 0) {
-			D_ERROR("crt_req_create(CRT_OPC_GRP_CREATE) failed, "
-				"tgt_ep: %d, rc: %d.\n", tgt_ep.ep_rank, rc);
-			grp_priv->gp_child_ack_num +=
-				grp_priv->gp_child_num - i;
-			grp_priv->gp_rc = rc;
-			D_GOTO(out, rc);
-		}
-
-		gc_in = crt_req_get(gc_rpc);
-		gc_in->gc_grp_id = grp_priv->gp_pub.cg_grpid;
-		gc_in->gc_int_grpid = grp_priv->gp_int_grpid;
-		gc_in->gc_membs = grp_priv->gp_membs;
-		crt_group_rank(NULL, &gc_in->gc_initiate_rank);
-
-		rc = gc_add_child_rpc(grp_priv, gc_rpc);
-		D_ASSERT(rc == 0);
-		rc = crt_req_send(gc_rpc, gc_rpc_cb, grp_priv);
-		if (rc != 0) {
-			D_ERROR("crt_req_send(CRT_OPC_GRP_CREATE) failed, "
-				"tgt_ep: %d, rc: %d.\n", tgt_ep.ep_rank, rc);
-			grp_priv->gp_child_ack_num +=
-				grp_priv->gp_child_num - i;
-			grp_priv->gp_rc = rc;
-			/* roll back above gc_add_child_rpc */
-			gc_del_child_rpc(grp_priv, gc_rpc);
-			D_GOTO(out, rc);
-		}
-
-		gc_req_sent =  true;
+	/* Construct an exclusion list for crt_corpc_req_create(). The exclusion
+	 * list contains all live ranks minus non subgroup members so that the
+	 * RPC is only sent to subgroup members.
+	 */
+	default_gp_membs = default_grp_priv->gp_membs;
+	rc = d_rank_list_dup(&excluded_ranks, default_gp_membs, true);
+	if (rc != 0) {
+		D_ERROR("d_rank_list_dup() failed, rc %d\n", rc);
+		D_GOTO(out, rc);
 	}
+	d_rank_list_filter(member_ranks, excluded_ranks, true /* input */,
+			   true /* exlude */);
+	rc = crt_corpc_req_create(crt_ctx, NULL, excluded_ranks,
+			     CRT_OPC_GRP_CREATE, NULL, NULL, 0,
+			     crt_tree_topo(CRT_TREE_KNOMIAL, 4),
+			     &gc_corpc);
+	d_rank_list_free(excluded_ranks);
+	if (rc != 0) {
+		D_ERROR("crt_corpc_req_create(CRT_OPC_GRP_CREATE) failed, "
+			"rc %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	gc_in = crt_req_get(gc_corpc);
+	D_ASSERT(gc_in != NULL);
+	gc_in->gc_grp_id = grp_id;
+	gc_in->gc_int_grpid = grp_priv->gp_int_grpid;
+	/* grp_priv->gp_membs is a sorted rank list */
+	gc_in->gc_membs = grp_priv->gp_membs;
+	crt_group_rank(NULL, &gc_in->gc_initiate_rank);
+
+	rc = crt_req_send(gc_corpc, grp_create_corpc_cb, grp_priv);
+	if (rc != 0) {
+		D_ERROR("crt_req_send(CRT_OPC_GRP_CREATE) failed, "
+			"rc: %d.\n", rc);
+		D_GOTO(out, rc);
+	}
+	gc_req_sent =  true;
 
 out:
 	if (gc_req_sent == false) {
@@ -1213,6 +1180,8 @@ crt_hdlr_grp_destroy(crt_rpc_t *rpc_req)
 	D_ASSERT(rc == 0);
 	/* for gd_initiate_rank, destroy the group in gd_rpc_cb */
 	if (my_rank != gd_in->gd_initiate_rank) {
+		D_DEBUG("my_rank %d root of bcast %d\n", my_rank,
+				gd_in->gd_initiate_rank);
 		crt_grp_ras_fini(grp_priv);
 		crt_grp_priv_decref(grp_priv);
 	}
@@ -1226,66 +1195,64 @@ out:
 			rc, rpc_req->cr_opc);
 }
 
+int
+crt_grp_destroy_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result,
+				void *priv)
+{
+	struct crt_grp_destroy_out	*gd_out_source;
+	struct crt_grp_destroy_out	*gd_out_result;
+
+	D_ASSERT(source != NULL && result != NULL);
+	gd_out_source = crt_reply_get(source);
+	gd_out_result = crt_reply_get(result);
+	if (gd_out_source->gd_rc != 0)
+		gd_out_result->gd_rc = gd_out_source->gd_rc;
+
+	return 0;
+}
+
 static void
-gd_rpc_cb(const struct crt_cb_info *cb_info)
+grp_destroy_corpc_cb(const struct crt_cb_info *cb_info)
 {
 	struct crt_grp_priv		*grp_priv;
 	crt_rpc_t			*gd_req;
 	struct crt_grp_destroy_out	*gd_out;
-	bool				 gd_done = false;
+	int				 rc;
 
 	gd_req = cb_info->cci_rpc;
 	gd_out = crt_reply_get(gd_req);
 	grp_priv = cb_info->cci_arg;
-	D_ASSERT(grp_priv != NULL);
+	D_ASSERT(gd_out != NULL && grp_priv != NULL);
 
 	if (cb_info->cci_rc != 0)
 		D_ERROR("RPC error, rc: %d.\n", cb_info->cci_rc);
 	if (gd_out->gd_rc)
-		D_ERROR("group create failed at rank %d, rc: %d.\n",
-			gd_out->gd_rank, gd_out->gd_rc);
+		D_ERROR("group create failed, rc: %d.\n", gd_out->gd_rc);
 
-	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
-	if (cb_info->cci_rc != 0)
-		grp_priv->gp_rc = cb_info->cci_rc;
-	else if (gd_out->gd_rc != 0)
-		grp_priv->gp_rc = gd_out->gd_rc;
-	grp_priv->gp_child_ack_num++;
-	D_ASSERT(grp_priv->gp_child_ack_num <= grp_priv->gp_child_num);
-	if (grp_priv->gp_child_ack_num == grp_priv->gp_child_num)
-		gd_done = true;
-	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-
-	gc_del_child_rpc(grp_priv, gd_req);
-
-	if (!gd_done)
-		D_GOTO(out, 0);
+	rc = cb_info->cci_rc;
+	if (rc == 0)
+		rc = gd_out->gd_rc;
 
 	if (grp_priv->gp_destroy_cb != NULL)
-		grp_priv->gp_destroy_cb(grp_priv->gp_destroy_cb_arg,
-					grp_priv->gp_rc);
+		grp_priv->gp_destroy_cb(grp_priv->gp_destroy_cb_arg, rc);
 
-	if (grp_priv->gp_rc != 0) {
-		D_ERROR("group destroy failed, rc: %d.\n", grp_priv->gp_rc);
-	} else {
-		crt_grp_ras_fini(grp_priv);
-		crt_grp_priv_decref(grp_priv);
-	}
+	if (rc != 0)
+		D_ERROR("group destroy failed, rc: %d.\n", rc);
 
-out:
-	return;
+	crt_grp_ras_fini(grp_priv);
+	crt_grp_priv_decref(grp_priv);
 }
 
 int
 crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 		  void *arg)
 {
-	struct crt_grp_priv	*grp_priv = NULL;
-	d_rank_list_t		*member_ranks;
-	crt_context_t		 crt_ctx;
-	bool			 gd_req_sent = false;
-	int			 i;
-	int			 rc = 0;
+	struct crt_grp_priv		*grp_priv = NULL;
+	crt_context_t			 crt_ctx;
+	bool				 gd_req_sent = false;
+	crt_rpc_t			*gd_corpc;
+	struct crt_grp_destroy_in	*gd_in;
+	int				 rc = 0;
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
@@ -1312,12 +1279,8 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 		pthread_rwlock_unlock(&crt_grp_list_rwlock);
 		D_GOTO(out, rc = -DER_BUSY);
 	}
-	D_ASSERT(grp_priv->gp_rc == 0);
-	member_ranks = grp_priv->gp_membs;
-	D_ASSERT(member_ranks != NULL);
+
 	grp_priv->gp_status = CRT_GRP_DESTROYING;
-	grp_priv->gp_child_num = member_ranks->rl_nr.num;
-	grp_priv->gp_child_ack_num = 0;
 	grp_priv->gp_destroy_cb = grp_destroy_cb;
 	grp_priv->gp_destroy_cb_arg = arg;
 	pthread_rwlock_unlock(&crt_grp_list_rwlock);
@@ -1325,40 +1288,27 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 	crt_ctx = grp_priv->gp_ctx;
 	D_ASSERT(crt_ctx != NULL);
 
-	/* send RPC one by one now */
-	for (i = 0; i < member_ranks->rl_nr.num; i++) {
-		crt_rpc_t			*gd_rpc;
-		struct crt_grp_destroy_in	*gd_in;
-		crt_endpoint_t			 tgt_ep = {0};
-
-		tgt_ep.ep_rank = member_ranks->rl_ranks[i];
-		rc = crt_req_create(crt_ctx, &tgt_ep, CRT_OPC_GRP_DESTROY,
-				    &gd_rpc);
-		if (rc != 0) {
-			D_ERROR("crt_req_create(CRT_OPC_GRP_DESTROY) failed, "
-				"tgt_ep: %d, rc: %d.\n", tgt_ep.ep_rank, rc);
-			grp_priv->gp_child_ack_num +=
-				grp_priv->gp_child_num - i;
-			grp_priv->gp_rc = rc;
-			D_GOTO(out, rc);
-		}
-
-		gd_in = crt_req_get(gd_rpc);
-		gd_in->gd_grp_id = grp->cg_grpid;
-		crt_group_rank(NULL, &gd_in->gd_initiate_rank);
-
-		rc = crt_req_send(gd_rpc, gd_rpc_cb, grp_priv);
-		if (rc != 0) {
-			D_ERROR("crt_req_send(CRT_OPC_GRP_DESTROY) failed, "
-				"tgt_ep: %d, rc: %d.\n", tgt_ep.ep_rank, rc);
-			grp_priv->gp_child_ack_num +=
-				grp_priv->gp_child_num - i;
-			grp_priv->gp_rc = rc;
-			D_GOTO(out, rc);
-		}
-
-		gd_req_sent =  true;
+	rc = crt_corpc_req_create(crt_ctx, grp, NULL,
+				  CRT_OPC_GRP_DESTROY, NULL, NULL, 0,
+				  crt_tree_topo(CRT_TREE_KNOMIAL, 4),
+				  &gd_corpc);
+	if (rc != 0) {
+		D_ERROR("crt_corpc_req_create(CRT_OPC_GRP_DESTROY) failed, "
+			"rc: %d.\n", rc);
+		D_GOTO(out, rc);
 	}
+	gd_in = crt_req_get(gd_corpc);
+	gd_in->gd_grp_id = grp->cg_grpid;
+	D_ASSERT(gd_in != NULL);
+	crt_group_rank(NULL, &gd_in->gd_initiate_rank);
+
+	rc = crt_req_send(gd_corpc, grp_destroy_corpc_cb, grp_priv);
+	if (rc != 0) {
+		D_ERROR("crt_req_send(CRT_OPC_GRP_DESTROY) failed, rc: %d\n",
+			rc);
+		D_GOTO(out, rc);
+	}
+	gd_req_sent =  true;
 out:
 	if (gd_req_sent == false) {
 		D_ASSERT(rc != 0);
