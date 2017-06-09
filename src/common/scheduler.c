@@ -687,9 +687,11 @@ daos_task_complete(struct daos_task *task, int ret)
 {
 	struct daos_task_private	*dtp	= daos_task2priv(task);
 	struct daos_sched_private	*dsp	= dtp->dtp_sched;
-	struct daos_sched		*sched	= daos_task2sched(task);
 	bool				bumped  = false;
 	bool				done;
+
+	if (!dtp->dtp_running || dtp->dtp_complete)
+		return;
 
 	if (task->dt_result == 0)
 		task->dt_result = ret;
@@ -714,9 +716,9 @@ daos_task_complete(struct daos_task *task, int ret)
 
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
-	/** Let's run sched to process the completed task */
+	/** update task in scheduler lists. */
 	if (!dsp->dsp_cancelling)
-		daos_sched_run(sched);
+		daos_sched_process_complete(dsp);
 	/** If another thread canceled, make sure we drop the ref count */
 	else if (bumped)
 		daos_sched_decref(dsp);
@@ -843,7 +845,7 @@ daos_task_reinit(struct daos_task *task)
 	}
 
 	if (dtp->dtp_func == NULL) {
-		D_ERROR("Task body function can't NULL.\n");
+		D_ERROR("Task body function can't be NULL.\n");
 		D_GOTO(err_unlock, rc = -DER_INVAL);
 	}
 

@@ -48,7 +48,7 @@ daos_rpc_send(crt_rpc_t *rpc, struct daos_task *task)
 
 	rc = crt_req_send(rpc, daos_rpc_cb, task);
 	if (rc != 0) {
-		daos_task_complete(task, rc);
+		/** task will be completed in CB above */
 		rc = 0;
 	}
 

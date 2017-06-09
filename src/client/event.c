@@ -511,6 +511,8 @@ ev_progress_cb(void *arg)
 	struct daos_event_private       *evx = epa->evx;
 	struct daos_eq_private		*eqx = epa->eqx;
 
+	daos_sched_progress(evx->evx_sched);
+
 	/** If another thread progressed this, get out now. */
 	if (evx->evx_status == DAOS_EVS_READY)
 		return 1;
@@ -654,6 +656,8 @@ eq_progress_cb(void *arg)
 	struct daos_event_private	*tmp;
 
 	eq = daos_eqx2eq(epa->eqx);
+
+	daos_sched_progress(&epa->eqx->eqx_sched);
 
 	pthread_mutex_lock(&epa->eqx->eqx_lock);
 	daos_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {

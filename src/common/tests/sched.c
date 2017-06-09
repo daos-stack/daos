@@ -314,6 +314,94 @@ out:
 	return rc;
 }
 
+#define NUM_REINITS 3000000
+
+static int
+comp_reinit_cb(struct daos_task *task, void *data)
+{
+	int *verify_cnt = *((int **)data);
+	int rc = task->dt_result;
+
+	if (*verify_cnt == NUM_REINITS)
+		return rc;
+
+	rc = daos_task_reinit(task);
+	if (rc != 0) {
+		printf("Failed to reinit task (%d)\n", rc);
+		return -1;
+	}
+
+	return rc;
+}
+
+static int
+incr_count_func(struct daos_task *task)
+{
+	int *counter = *((int **)daos_task2arg(task));
+
+	*counter = *counter + 1;
+
+	daos_task_register_cbs(task, NULL, NULL, 0, comp_reinit_cb, &counter,
+			       sizeof(int *));
+
+	if (*counter % (NUM_REINITS/3) == 0)
+		printf("Reinitialized %d times\n", *counter);
+
+	daos_task_complete(task, 0);
+
+	return 0;
+}
+
+
+static int
+sched_test_3()
+{
+	struct daos_sched	sched;
+	struct daos_task	*task;
+	int			*counter = NULL;
+	bool			flag;
+	int			rc;
+
+	DAOS_TEST_ENTRY("3", "Task Reinitialization");
+
+	printf("Init Scheduler\n");
+	rc = daos_sched_init(&sched, NULL, 0);
+	if (rc != 0) {
+		printf("Failed to init scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_ALLOC_PTR(counter);
+	*counter = 0;
+
+	printf("Init task and add comp cb to re-init it 3M times\n");
+	D_ALLOC_PTR(task);
+	rc = daos_task_init(task, incr_count_func, &counter, sizeof(int *),
+			    &sched);
+	if (rc != 0) {
+		printf("Failed to init task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	daos_sched_progress(&sched);
+
+	printf("Check scheduler is empty\n");
+	flag = daos_sched_check_complete(&sched);
+	if (!flag) {
+		printf("Scheduler should not have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	printf("Verify Counter\n");
+	D_ASSERT(*counter == NUM_REINITS);
+
+out:
+	if (counter)
+		D_FREE_PTR(counter);
+	DAOS_TEST_EXIT(rc);
+	return rc;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -328,6 +416,10 @@ main(int argc, char **argv)
 		goto out;
 
 	rc = sched_test_2();
+	if (rc != 0)
+		goto out;
+
+	rc = sched_test_3();
 	if (rc != 0)
 		goto out;
 
