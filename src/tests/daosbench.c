@@ -91,6 +91,8 @@ bool				t_kill_fetch;
 bool				t_kill_enum;
 bool				t_kill_server;
 uint64_t			t_wait;
+bool				t_update_for_fetch;
+bool				t_keep_container;
 daos_oclass_id_t		obj_class = DAOS_OC_LARGE_RW;
 
 struct test {
@@ -311,10 +313,10 @@ kill_daos_server(const char *grp)
 	rc = daos_pool_query(poh, NULL, &info, NULL);
 	DBENCH_CHECK(rc, "Error in querying pool\n");
 
-	if (info.pi_ndisabled == 0)
-		rank = 1;
-	else
-		rank = info.pi_ndisabled + 1;
+	if (info.pi_ntargets - info.pi_ndisabled <= 1)
+		return;
+	/* choose the last alive one */
+	rank = info.pi_ntargets - 1 - info.pi_ndisabled;
 
 	printf("\nKilling target %d (total of %d of %d already disabled)\n",
 	       rank, info.pi_ndisabled, info.pi_ntargets);
@@ -876,7 +878,8 @@ update_async(struct test *test, int key_type, uint64_t value)
 }
 
 static void
-kv_update_async(struct test *test, int key_type, int enum_flag, uint64_t value)
+kv_update_async(struct test *test, int key_type, int enum_flag, uint64_t value,
+		bool update)
 {
 	int rc;
 
@@ -895,7 +898,8 @@ kv_update_async(struct test *test, int key_type, int enum_flag, uint64_t value)
 			 &oh);
 	DBENCH_CHECK(rc, "Failed to open object");
 
-	update_async(test, key_type, value);
+	if (update)
+		update_async(test, key_type, value);
 }
 
 static void
@@ -908,7 +912,6 @@ update_verify(struct test *test, int key_type, uint64_t value)
 	/**
 	 * Verification can happen synchronously!
 	 */
-
 	counter = (key_type == 2) ? test->t_nindexes : test->t_nkeys;
 
 	valbuf = malloc(test->t_val_bufsize);
@@ -977,7 +980,8 @@ kv_multi_dkey_update_run(struct test *test)
 	       comm_world_size * test->t_nkeys);
 	chrono_record("begin");
 
-	kv_update_async(test, 0, 0, value);
+	kv_update_async(test, 0/* key_type */,
+			0/* enum_flag */, value, true);
 	MPI_Barrier(MPI_COMM_WORLD);
 	DBENCH_INFO("completed %d inserts\n", test->t_nkeys);
 	kv_flush_and_commit(test);
@@ -1012,7 +1016,7 @@ kv_multi_akey_update_run(struct test *test)
 	       comm_world_size * test->t_nkeys);
 	chrono_record("begin");
 
-	kv_update_async(test, 1, 0, value);
+	kv_update_async(test, 1, 0, value, true);
 	MPI_Barrier(MPI_COMM_WORLD);
 	DBENCH_INFO("completed %d inserts\n", test->t_nkeys);
 	kv_flush_and_commit(test);
@@ -1039,18 +1043,28 @@ kv_multi_dkey_fetch_run(struct test *test)
 {
 	int		i;
 	struct a_ioreq	*ioreq;
-	uint64_t	value = 0xda05da0500000004;
+	uint64_t	value	= 0xda05da0500000004;
+	bool		update	= true;
 
 	kv_test_describe(test, 0);
 
-	DBENCH_PRINT("%s: Setup by inserting %d keys....",
-	       test->t_type->tt_name,
-	       comm_world_size * test->t_nkeys);
+	if (t_update_for_fetch) {
+		update = false;
+		value = 0xda05da0500000001;
+	}
+
+	if (update)
+		DBENCH_PRINT("%s: Setup by inserting %d keys....",
+		       test->t_type->tt_name,
+		       comm_world_size * test->t_nkeys);
+
 	MPI_Barrier(MPI_COMM_WORLD);
-	kv_update_async(test, 0, 0, value);
+	kv_update_async(test, 0, 0, value, update);
 	MPI_Barrier(MPI_COMM_WORLD);
-	kv_flush_and_commit(test);
-	DBENCH_PRINT("Done!\n");
+	if (update) {
+		kv_flush_and_commit(test);
+		DBENCH_PRINT("Done!\n");
+	}
 
 	/**
 	 * We need this buffer to collect all async
@@ -1096,17 +1110,26 @@ kv_multi_akey_fetch_run(struct test *test)
 	int		i;
 	struct a_ioreq	*ioreq;
 	uint64_t	value = 0xda05da0500000005;
+	bool		update = true;
 
 	kv_test_describe(test, 1);
 
-	DBENCH_PRINT("%s: Setup by inserting %d keys....",
-	       test->t_type->tt_name,
-	       comm_world_size * test->t_nkeys);
+	if (t_update_for_fetch) {
+		update = false;
+		value = 0xda05da0500000002;
+	}
+
+	if (update)
+		DBENCH_PRINT("%s: Setup by inserting %d keys....",
+			     test->t_type->tt_name,
+			     comm_world_size * test->t_nkeys);
 	MPI_Barrier(MPI_COMM_WORLD);
-	kv_update_async(test, 1, 0, value);
+	kv_update_async(test, 1, 0, value, update);
 	MPI_Barrier(MPI_COMM_WORLD);
-	kv_flush_and_commit(test);
-	DBENCH_PRINT("Done!\n");
+	if (update) {
+		kv_flush_and_commit(test);
+		DBENCH_PRINT("Done!\n");
+	}
 
 	/**
 	 * We need this buffer to collect all async
@@ -1172,7 +1195,7 @@ kv_dkey_enumerate(struct test *test)
 	DBENCH_INFO("Key Range %d -> %d", key_start, key_end);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	kv_update_async(test, 0, 1, value);
+	kv_update_async(test, 0, 1, value, true);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	kv_flush_and_commit(test);
@@ -1268,7 +1291,7 @@ kv_multi_idx_update_run(struct test *test)
 		      comm_world_size * test->t_nkeys);
 
 	chrono_record("begin");
-	kv_update_async(test, 2, 0, value);
+	kv_update_async(test, 2, 0, value, true);
 	DBENCH_INFO("completed %d inserts\n", test->t_nindexes);
 
 	kv_flush_and_commit(test);
@@ -1377,7 +1400,7 @@ kv_simul(struct test *test)
 {
 	int		key_type = 0 /* multiple d-keys */;
 	uint64_t	value = 0xda05da0500000007;
-	int		step;
+	int		step = 0;
 	int		rc;
 
 	/* Get an epoch hold. */
@@ -1528,6 +1551,9 @@ Usage: daosbench -t TEST -p $UUID [OPTIONS]\n\
 	--steps=N | -e		steps for kv-simul test\n\
 	--container=UUID | -n	container UUID\n\
 	--kill-server	| -u	kill daos-server(default from daosbench) \n\
+	--no-update-for-fetch | -f\n\
+				Fetch without setting up with updates\n\
+	--keep-container | -r	Keep container without destroying\n\
 	--pause=seconds | -w	pause test for some time\n\
 	--pretty-print | -d	pretty-print-flag. \n\
 	--check-tests | -c	do data verifications. \n\
@@ -1558,11 +1584,13 @@ test_init(struct test *test, int argc, char *argv[])
 		{"test",		1,	NULL,	't'},
 		{"testid",		1,	NULL,	'o'},
 		{"check-tests",		0,	NULL,	'c'},
+		{"no-update-for-fetch", 0,	NULL,	'f'},
 		{"object-class",	1,	NULL,	'j'},
 		{"dpool",		1,	NULL,	'p'},
 		{"pretty-print",	0,	NULL,	'd'},
 		{"steps",		1,	NULL,	'e'},
-		{"kill-server",		1,	NULL,	'u'},
+		{"kill-server",		0,	NULL,	'u'},
+		{"keep-container",	0,	NULL,	'r'},
 		{"pause",		1,	NULL,	'w'},
 		{"container",		1,	NULL,	'n'},
 		{"group",		1,	NULL,	'g'},
@@ -1587,20 +1615,20 @@ test_init(struct test *test, int argc, char *argv[])
 	test->t_pname = NULL;
 	test->t_id = -1;
 	test->t_steps = 2;
-	t_validate = false;
-	t_pretty_print = false;
-	t_kill_server = false;
-	t_kill_update = false;
-	t_kill_fetch  = false;
-	t_kill_enum   = false;
-	t_wait	      = 0;
-
-
+	t_validate		= false;
+	t_pretty_print		= false;
+	t_kill_server		= false;
+	t_kill_update		= false;
+	t_kill_fetch		= false;
+	t_kill_enum		= false;
+	t_keep_container	= false;
+	t_wait			= 0;
 
 	if (comm_world_rank != 0)
 		opterr = 0;
 
-	while ((rc = getopt_long(argc, argv, "a:k:i:b:t:o:p:s:hvcde:rn:uw:j:S:",
+	while ((rc = getopt_long(argc, argv,
+				 "a:k:i:b:t:o:p:s:hvcde:rnf:uw:j:S:",
 				 options, NULL)) != -1) {
 		switch (rc) {
 		case 'a':
@@ -1651,6 +1679,12 @@ test_init(struct test *test, int argc, char *argv[])
 			break;
 		case 'u':
 			t_kill_server = true;
+			break;
+		case 'r':
+			t_keep_container = true;
+			break;
+		case 'f':
+			t_update_for_fetch = true;
 			break;
 		case 'c':
 			t_validate = true;
@@ -1865,7 +1899,8 @@ int main(int argc, char *argv[])
 	arg.t_type->tt_run(&arg);
 
 	container_close(comm_world_rank);
-	container_destroy(comm_world_rank);
+	if (!t_keep_container)
+		container_destroy(comm_world_rank);
 
 	pool_disconnect(comm_world_rank);
 	test_fini(&arg);
