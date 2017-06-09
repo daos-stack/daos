@@ -249,7 +249,7 @@ crt_req_decref(crt_rpc_t *req);
  * \param arg [IN]		arguments for the \a complete_cb
  *
  * \return			if \a complete_cb provided (non-NULL), always
- *				returns zero; or returns zero on success,
+ *				returns zero; otherwise returns zero on success,
  *				negative value if error.
  *
  * Notes: the crt_rpc_t is exported to user, caller should fill the

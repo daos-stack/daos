@@ -822,8 +822,14 @@ forward_failed:
 	if (am_root && (get_children_failed ||
 		(co_info->co_child_num > 0 && child_req_sent == false) ||
 		(co_info->co_child_num == 0 && co_info->co_root_excluded))) {
-		C_ASSERT(rc != 0);
-		C_ERROR("rpc: 0x%x failed, rc: %d.\n", req->cr_opc, rc);
+		if (co_info->co_child_num == 0 && co_info->co_root_excluded) {
+			C_WARN("rpc: 0x%x, NOOP bcast (no child and "
+			       "root excluded.\n", req->cr_opc);
+			crt_req_decref(&rpc_priv->crp_pub); /* destroy */
+		} else {
+			C_ASSERT(rc != 0);
+			C_ERROR("rpc: 0x%x failed, rc: %d.\n", req->cr_opc, rc);
+		}
 		crt_rpc_complete(rpc_priv, rc);
 		/* roll back the add ref above */
 		crt_req_decref(&rpc_priv->crp_pub);
