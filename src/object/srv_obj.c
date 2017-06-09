@@ -738,14 +738,20 @@ ds_iter_single_vos(void *data)
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl	= cont_hdl->sch_cont->sc_hdl;
 	param.ip_oid	= oei->oei_oid;
-	param.ip_epr.epr_lo = oei->oei_epoch;
+
 	if (type == VOS_ITER_RECX || type == VOS_ITER_SINGLE) {
 		if (oei->oei_dkey.iov_len == 0 ||
 		    oei->oei_akey.iov_len == 0)
 			D_GOTO(out_cont_hdl, rc = -DER_PROTO);
 		param.ip_dkey = oei->oei_dkey;
 		param.ip_akey = oei->oei_akey;
+
+		param.ip_epr.epr_lo = 0;
+		param.ip_epr.epr_hi = oei->oei_epoch;
+		param.ip_epc_expr = VOS_IT_EPC_RE;
 	} else {
+		/* XXX epoch is ignored by key enumeration for the time being */
+		param.ip_epr.epr_lo = oei->oei_epoch;
 		if (type == VOS_ITER_AKEY) {
 			if (oei->oei_dkey.iov_len == 0)
 				D_GOTO(out_cont_hdl, rc = -DER_PROTO);

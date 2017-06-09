@@ -124,6 +124,13 @@ do {									\
 		##__VA_ARGS__);						\
 } while (0)
 
+#define D_CONSOLE(mask, fmt, ...)					\
+do {									\
+	if (((mask) < DP_INFO) && DD_SUBSYS == dd_fac_null)		\
+		break;							\
+	fprintf(stdout, fmt, ##__VA_ARGS__);				\
+} while (0)
+
 /** macros to output logs which are more important than D_DEBUG */
 #define D_INFO(fmt, ...)	D_DEBUG(DP_INFO, fmt, ## __VA_ARGS__)
 #define D_NOTE(fmt, ...)	D_DEBUG(DP_NOTE, fmt, ## __VA_ARGS__)

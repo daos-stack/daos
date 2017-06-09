@@ -327,15 +327,13 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 		}
 
 		rc = ds_rebuild_query(pool_uuid, tgts_failed, &status);
-
-		D_DEBUG(DB_TRACE, DF_UUID
-			"done=%d, errno=%d, obj="DF_U64", rec="DF_U64","
-			"rc=%d\n", DP_UUID(pool_uuid), status.rs_done,
-			status.rs_errno, status.rs_obj_nr,
-			status.rs_rec_nr, rc);
-
-		if (rc || status.rs_done || status.rs_errno)
+		if (rc || status.rs_done || status.rs_errno) {
+			D_CONSOLE(DB_TRACE, "rebuild pool "DF_UUID" obj ="DF_U64
+				  " rec="DF_U64", status %d\n",
+				  DP_UUID(pool_uuid), status.rs_obj_nr,
+				  status.rs_rec_nr, status.rs_errno);
 			break;
+		}
 
 		then = now;
 	};

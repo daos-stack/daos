@@ -431,6 +431,7 @@ rebuild_two_failures(void **state)
 			int	k;
 			int	l;
 
+			req.iod_type = DAOS_IOD_ARRAY;
 			/* small records */
 			sprintf(dkey, "dkey_%d", j);
 			for (k = 0; k < 2; k++) {
@@ -475,6 +476,7 @@ rebuild_two_failures(void **state)
 			int	l;
 
 			/* small records */
+			req.iod_type = DAOS_IOD_ARRAY;
 			sprintf(dkey, "dkey_%d", j);
 			for (k = 0; k < 2; k++) {
 				sprintf(akey, "akey_%d", k);

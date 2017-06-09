@@ -111,7 +111,7 @@ rebuild_fetch_update_inline(struct rebuild_obj_arg *arg, daos_handle_t oh,
 		return rc;
 
 	rc = vos_obj_update(arg->rebuild_cont->sc_hdl,
-			    arg->oid, arg->epoch, cookie, &arg->dkey,
+			    arg->oid, eprs->epr_lo, cookie, &arg->dkey,
 			    1, &iod, &sgl);
 	return rc;
 }
@@ -136,7 +136,7 @@ rebuild_fetch_update_bulk(struct rebuild_obj_arg *arg, daos_handle_t oh,
 	iod.iod_size = size;
 
 	rc = vos_obj_zc_update_begin(arg->rebuild_cont->sc_hdl,
-				     arg->oid, arg->epoch, &arg->dkey, 1,
+				     arg->oid, eprs->epr_lo, &arg->dkey, 1,
 				     &iod, &ioh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
@@ -418,7 +418,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	daos_hash_out_t		hash_out;
 	daos_handle_t		oh;
-	daos_epoch_t		epoch = 0;
+	daos_epoch_t		epoch = DAOS_EPOCH_MAX;
 	daos_sg_list_t		dkey_sgl;
 	daos_iov_t		dkey_iov;
 	daos_size_t		dkey_buf_size = 1024;
