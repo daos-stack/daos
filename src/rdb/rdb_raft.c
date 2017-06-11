@@ -703,12 +703,21 @@ rdb_applyd(void *arg)
 	D_DEBUG(DB_ANY, DF_DB": applyd stopping\n", DP_DB(db));
 }
 
+/* Generate a random double in [0.0, 1.0]. */
+static double
+rdb_raft_rand(void)
+{
+	return (double)rand() / RAND_MAX;
+}
+
 /* Daemon ULT for raft_periodic() */
 static void
 rdb_timerd(void *arg)
 {
 	struct rdb     *db = arg;
-	const double	period = 1;	/* duration between beats (s) */
+	const double	d_min = 0.5;	/* min duration between beats (s) */
+	const double	d_max = 1;	/* max duration between beats (s) */
+	double		d = 0;		/* duration till next beat (s) */
 	double		t;		/* timestamp of beat (s) */
 	double		t_prev;		/* timestamp of previous beat (s) */
 	int		rc;
@@ -717,16 +726,22 @@ rdb_timerd(void *arg)
 	t = ABT_get_wtime();
 	t_prev = t;
 	do {
-		struct rdb_raft_state state;
+		struct rdb_raft_state	state;
+		double			d_prev = t - t_prev;
+
+		if (d_prev - d > 1 /* s */)
+			D_WARN(DF_DB": not scheduled for %f second\n",
+			       DP_DB(db), d_prev - d);
 
 		rdb_raft_save_state(db, &state);
-		rc = raft_periodic(db->d_raft, (t - t_prev) * 1000 /* ms */);
+		rc = raft_periodic(db->d_raft, d_prev * 1000 /* ms */);
 		D_ASSERTF(rc == 0, "%d\n", rc);
 		rdb_raft_check_state(db, &state);
 
 		t_prev = t;
-		/* Wait for the next beat. */
-		while ((t = ABT_get_wtime()) < t_prev + period && !db->d_stop)
+		/* Wait for d in [d_min, d_max] before the next beat. */
+		d = d_min + (d_max - d_min) * rdb_raft_rand();
+		while ((t = ABT_get_wtime()) < t_prev + d && !db->d_stop)
 			ABT_thread_yield();
 	} while (!db->d_stop);
 	D_DEBUG(DB_ANY, DF_DB": timerd stopping\n", DP_DB(db));
@@ -788,33 +803,18 @@ rdb_raft_log_load(raft_server_t *raft, daos_handle_t log)
 			      raft);
 }
 
-/* TODO: Implement a true random algorithm. */
-static int
-rdb_raft_rand(int min, int max, int id, uint8_t nreplicas)
-{
-	return min + (max - min) / nreplicas * id;
-}
-
 static int
 rdb_raft_get_election_timeout(daos_rank_t self, uint8_t nreplicas)
 {
 	const char     *s;
-	int		min;
-	int		max;
+	int		t;
 
-	s = getenv("RDB_ELECTION_TIMEOUT_MIN");
+	s = getenv("RDB_ELECTION_TIMEOUT");
 	if (s == NULL)
-		min = 8000;
+		t = 7000;
 	else
-		min = atoi(s);
-
-	s = getenv("RDB_ELECTION_TIMEOUT_MAX");
-	if (s == NULL)
-		max = 12000;
-	else
-		max = atoi(s);
-
-	return rdb_raft_rand(min, max, self, nreplicas);
+		t = atoi(s);
+	return t;
 }
 
 static int
@@ -1140,7 +1140,8 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	if (db->d_stop)
 		D_GOTO(out_db, rc = -DER_CANCELED);
 
-	D_DEBUG(DB_ANY, DF_DB": handling raft rv\n", DP_DB(db));
+	D_DEBUG(DB_ANY, DF_DB": handling raft rv from rank %u\n", DP_DB(db),
+		rpc->cr_ep.ep_rank);
 	node = rdb_raft_find_node(db, rpc->cr_ep.ep_rank);
 	if (node == NULL)
 		D_GOTO(out_db, rc = -DER_UNKNOWN);
@@ -1172,7 +1173,8 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	if (db->d_stop)
 		D_GOTO(out_db, rc = -DER_CANCELED);
 
-	D_DEBUG(DB_ANY, DF_DB": handling raft ae\n", DP_DB(db));
+	D_DEBUG(DB_ANY, DF_DB": handling raft ae from rank %u\n", DP_DB(db),
+		rpc->cr_ep.ep_rank);
 	node = rdb_raft_find_node(db, rpc->cr_ep.ep_rank);
 	if (node == NULL)
 		D_GOTO(out_db, rc = -DER_UNKNOWN);
