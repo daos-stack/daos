@@ -62,9 +62,6 @@ cont_alloc_ref(void *key, unsigned int ksize, void *varg,
 	struct ds_cont	       *cont;
 	int			rc;
 
-	if (pool == NULL)
-		return -DER_NONEXIST;
-
 	D_DEBUG(DF_DSMS, DF_CONT": creating\n", DP_CONT(pool->spc_uuid, key));
 
 	D_ALLOC_PTR(cont);

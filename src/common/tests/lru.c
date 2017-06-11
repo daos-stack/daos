@@ -91,7 +91,7 @@ test_ref_hold(struct daos_lru_cache *cache,
 	int rc = 0;
 	struct uint_ref *refs;
 
-	rc = daos_lru_ref_hold(cache, key, size, NULL, link);
+	rc = daos_lru_ref_hold(cache, key, size, (void *)1, link);
 	if (rc)
 		D_ERROR("Error in holding reference\n");
 

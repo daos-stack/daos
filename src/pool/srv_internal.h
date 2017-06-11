@@ -80,13 +80,6 @@ int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 int ds_pool_tgt_update_map_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
-struct ds_pool_create_arg {
-	struct pool_map	       *pca_map;
-	uint32_t		pca_map_version;
-	int			pca_create_group;
-};
-int ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
-			  struct ds_pool **pool);
 void ds_pool_child_purge(struct pool_tls *tls);
 
 /*

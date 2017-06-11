@@ -542,7 +542,7 @@ pool_svc_step_up(struct pool_svc *svc)
 	D_ASSERT(svc->ps_pool == NULL);
 	arg.pca_map = map;
 	arg.pca_map_version = map_version;
-	arg.pca_create_group = 1;
+	arg.pca_need_group = 1;
 	rc = ds_pool_lookup_create(svc->ps_uuid, &arg, &svc->ps_pool);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to get ds_pool: %d\n",

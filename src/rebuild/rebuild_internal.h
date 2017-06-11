@@ -33,6 +33,21 @@
 #include <daos/rpc.h>
 #include <daos/btree.h>
 
+struct rebuild_globals {
+	/** pin the pool during the rebuild */
+	struct ds_pool		*rg_pool;
+	/** active rebuild pullers */
+	int			*rg_pullers;
+	/** # active rebuild pullers */
+	int			 rg_puller_nr;
+	uint32_t		 rg_rebuild_ver;
+	daos_list_t		 rg_task_list;
+	ABT_mutex		 rg_lock;
+	ABT_cond		 rg_cond;
+};
+
+extern struct rebuild_globals rebuild_gst;
+
 struct rebuild_tls {
 	struct btr_root rebuild_local_root;
 	daos_handle_t	rebuild_local_root_hdl;
@@ -41,8 +56,6 @@ struct rebuild_tls {
 	uuid_t		rebuild_cont_hdl_uuid;
 	daos_handle_t	rebuild_pool_hdl;
 	int		rebuild_status;
-	int		*rebuild_building;
-	int		rebuild_building_nr;
 	int		rebuild_obj_count;
 	int		rebuild_rec_count;
 	daos_list_t	rebuild_task_list;
@@ -50,9 +63,7 @@ struct rebuild_tls {
 
 	unsigned int	rebuild_local_root_init:1,
 			rebuild_task_init:1,
-			rebuild_scanning:1,
-			rebuild_initializing:1;
-	unsigned int	rebuild_ver;
+			rebuild_scanning:1;
 };
 
 struct rebuild_root {
@@ -67,6 +78,9 @@ rebuild_tls_get()
 {
 	return dss_module_key_get(dss_tls_get(), &rebuild_module_key);
 }
+
+struct pool_map *rebuild_pool_map_get(void);
+void rebuild_pool_map_put(struct pool_map *map);
 
 int ds_rebuild_scan_handler(crt_rpc_t *rpc);
 int ds_rebuild_obj_handler(crt_rpc_t *rpc);
@@ -96,4 +110,5 @@ int ds_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
 		uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
 		uuid_t *cookies, daos_hash_out_t *anchor, bool incr);
+
 #endif /* __REBUILD_INTERNAL_H_ */

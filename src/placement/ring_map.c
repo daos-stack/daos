@@ -687,6 +687,7 @@ ring_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	if (rimap == NULL)
 		return -DER_NOMEM;
 
+	pool_map_addref(poolmap);
 	rimap->rmp_poolmap = poolmap;
 
 	rc = ring_map_build(rimap, mia);
@@ -732,6 +733,9 @@ ring_map_destroy(struct pl_map *map)
 		D_FREE(rimap->rmp_rings,
 		       rimap->rmp_ring_nr * sizeof(*rimap->rmp_rings));
 	}
+	if (rimap->rmp_poolmap)
+		pool_map_decref(rimap->rmp_poolmap);
+
 	D_FREE_PTR(rimap);
 }
 

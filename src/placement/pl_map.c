@@ -387,7 +387,7 @@ daos_placement_update(struct pool_map *new_map)
 
 	pthread_rwlock_wrlock(&placement_data.pd_lock);
 	if (placement_data.pd_pl_map != NULL &&
-	    placement_data.pd_pl_map->pl_ver > pool_map_get_version(new_map))
+	    placement_data.pd_pl_map->pl_ver >= pool_map_get_version(new_map))
 		D_GOTO(out, rc = 0);
 
 	pl_map_attr_init(new_map, PL_TYPE_RING, &mia);

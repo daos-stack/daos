@@ -278,17 +278,12 @@ rebuild_dkey_thread(void *data)
 
 	if (daos_handle_is_inval(tls->rebuild_pool_hdl)) {
 		daos_handle_t ph = DAOS_HDL_INVAL;
-		struct pool_map *map;
-
-		map = ds_pool_get_pool_map(tls->rebuild_pool_uuid);
-		if (map == NULL)
-			D_GOTO(free, rc = -DER_NONEXIST);
+		struct pool_map *map = rebuild_pool_map_get();
 
 		rc = dc_pool_local_open(tls->rebuild_pool_uuid,
-					tls->rebuild_pool_hdl_uuid,
-					0, NULL, map, tls->rebuild_svc_list,
-					&ph);
-		pool_map_decref(map);
+					tls->rebuild_pool_hdl_uuid, 0, NULL,
+					map, tls->rebuild_svc_list, &ph);
+		rebuild_pool_map_put(map);
 		if (rc)
 			D_GOTO(free, rc);
 
@@ -344,7 +339,7 @@ rebuild_dkey_thread(void *data)
 
 		}
 	}
-	
+
 	ds_cont_put(arg->rebuild_cont);
 obj_close:
 	ds_obj_close(oh);
@@ -369,7 +364,6 @@ rebuild_dkey(daos_unit_oid_t oid, daos_epoch_t epoch,
 	     daos_key_t *dkey, struct rebuild_iter_arg *iter_arg)
 {
 	struct rebuild_obj_arg	*arg;
-	struct rebuild_tls	*tls = rebuild_tls_get();
 	unsigned int		tgt;
 	int			rc;
 
@@ -387,14 +381,16 @@ rebuild_dkey(daos_unit_oid_t oid, daos_epoch_t epoch,
 	arg->map_ver = iter_arg->map_ver;
 	arg->epoch = epoch;
 	tgt = rebuild_get_nstream_idx(dkey);
-	arg->rebuild_building = &tls->rebuild_building[tgt];
-	tls->rebuild_building[tgt]++;
+	arg->rebuild_building = &rebuild_gst.rg_pullers[tgt];
+	rebuild_gst.rg_pullers[tgt]++;
+
 	D_DEBUG(DB_TRACE, "start rebuild dkey %.*s tag %d rebuilding %p/%d\n",
 		(int)arg->dkey.iov_len, (char *)arg->dkey.iov_buf, tgt,
-		&tls->rebuild_building[tgt], tls->rebuild_building[tgt]);
+		&rebuild_gst.rg_pullers[tgt], rebuild_gst.rg_pullers[tgt]);
+
 	rc = dss_ult_create(rebuild_dkey_thread, arg, tgt, NULL);
 	if (rc) {
-		tls->rebuild_building[tgt]--;
+		rebuild_gst.rg_pullers[tgt]--;
 		D_GOTO(free, rc);
 	}
 
@@ -532,17 +528,12 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	/* Create dc_pool locally */
 	if (daos_handle_is_inval(tls->rebuild_pool_hdl)) {
 		daos_handle_t ph = DAOS_HDL_INVAL;
-		struct pool_map *map;
-
-		map = ds_pool_get_pool_map(tls->rebuild_pool_uuid);
-		if (map == NULL)
-			return -DER_NONEXIST;
+		struct pool_map *map = rebuild_pool_map_get();
 
 		rc = dc_pool_local_open(tls->rebuild_pool_uuid,
-					tls->rebuild_pool_hdl_uuid,
-					0, NULL, map, tls->rebuild_svc_list,
-					&ph);
-		pool_map_decref(map);
+					tls->rebuild_pool_hdl_uuid, 0, NULL,
+					map, tls->rebuild_svc_list, &ph);
+		rebuild_pool_map_put(map);
 		if (rc)
 			return rc;
 
@@ -592,11 +583,21 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 }
 
 static void
-rebuild_iterate_object(void *arg)
+rebuild_puller(void *arg)
 {
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	struct rebuild_iter_arg	*iter_arg = arg;
 	int			rc;
+
+	if (!rebuild_gst.rg_pool) {
+		ABT_mutex_lock(rebuild_gst.rg_lock);
+		if (!rebuild_gst.rg_pool) {
+			D_DEBUG(DB_TRACE,
+				"Waiting for scanner to initialize pool\n");
+			ABT_cond_wait(rebuild_gst.rg_cond, rebuild_gst.rg_lock);
+		}
+		ABT_mutex_unlock(rebuild_gst.rg_lock);
+	}
 
 	while (!dbtree_is_empty(iter_arg->root_hdl)) {
 		rc = dbtree_iterate(iter_arg->root_hdl, false,
@@ -610,7 +611,7 @@ rebuild_iterate_object(void *arg)
 	}
 
 	tls->rebuild_task_init = 0;
-	tls->rebuild_building[0]--;
+	rebuild_gst.rg_pullers[0]--;
 	D_FREE_PTR(iter_arg);
 }
 
@@ -703,6 +704,7 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 
 	/* Check and create task to iterate the local rebuild tree */
 	tls = rebuild_tls_get();
+
 	if (!tls->rebuild_task_init) {
 		struct rebuild_iter_arg *arg;
 
@@ -714,13 +716,13 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 		arg->obj_cb = rebuild_obj_iterate_keys;
 		arg->root_hdl = btr_hdl;
 		arg->map_ver = rebuild_in->roi_map_ver;
-		D_ASSERT(tls->rebuild_building != NULL);
-		tls->rebuild_building[0]++;
+		D_ASSERT(rebuild_gst.rg_pullers != NULL);
+		rebuild_gst.rg_pullers[0]++;
 		tls->rebuild_task_init = 1;
-		rc = dss_ult_create(rebuild_iterate_object, arg, -1, NULL);
+		rc = dss_ult_create(rebuild_puller, arg, -1, NULL);
 		if (rc) {
 			tls->rebuild_task_init = 0;
-			tls->rebuild_building[0]--;
+			rebuild_gst.rg_pullers[0]--;
 			D_FREE_PTR(arg);
 		}
 	}

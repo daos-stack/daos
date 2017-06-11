@@ -239,7 +239,7 @@ lru_mark_busy(struct daos_lru_cache *lcache, struct daos_llink *llink)
 
 int
 daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
-		  unsigned int key_size, void *args,
+		  unsigned int key_size, void *create_args,
 		  struct daos_llink **rlink)
 {
 	struct daos_llink *llink;
@@ -261,9 +261,12 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	if (llink)
 		D_GOTO(found, rc = 0);
 
+	if (!create_args)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
 	D_DEBUG(DB_TRACE, "Entry not found adding it to LRU\n");
 	/* llink does not exist create one */
-	rc = lcache->dlc_ops->lop_alloc_ref(key, key_size, args, &llink);
+	rc = lcache->dlc_ops->lop_alloc_ref(key, key_size, create_args, &llink);
 	if (rc)
 		D_GOTO(out, rc);
 

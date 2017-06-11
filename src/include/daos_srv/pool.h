@@ -41,11 +41,21 @@ struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;
 	ABT_rwlock		sp_lock;
+	ABT_cond		sp_map_cond;
+	ABT_mutex		sp_map_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	crt_group_t	       *sp_group;
 };
 
+struct ds_pool_create_arg {
+	struct pool_map	       *pca_map;
+	uint32_t		pca_map_version;
+	bool			pca_need_group;
+};
+
+int ds_pool_lookup_create(const uuid_t uuid, struct ds_pool_create_arg *arg,
+			  struct ds_pool **pool);
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
 void ds_pool_put(struct ds_pool *pool);
 
@@ -79,7 +89,6 @@ struct ds_pool_child {
 	uuid_t		spc_uuid;
 	uint32_t	spc_map_version;
 	int		spc_ref;
-	struct pool_map *spc_map;
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
@@ -92,14 +101,6 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     daos_rank_list_t *excluded_list);
 int
 ds_pool_pmap_broadcast(const uuid_t uuid, daos_rank_list_t *tgts_exclude);
-
-struct pool_map *ds_pool_get_pool_map(const uuid_t uuid);
-
-int
-ds_pool_local_open(uuid_t uuid, unsigned int version,
-		   struct ds_pool_child **childp);
-int
-ds_pool_local_close(uuid_t uuid);
 
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, daos_rank_list_t *tgts,
 			    daos_rank_list_t *tgts_out);

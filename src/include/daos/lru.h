@@ -128,13 +128,17 @@ daos_lru_cache_evict(struct daos_lru_cache *lcache,
  * \param lcache	[IN]	DAOS LRU cache
  * \param key		[IN]	Key to take reference of
  * \param ksize		[IN]	Size of the key
- * \param args		[IN]	Additional arguments required
- *				(For use in alloc cb (optional))
+ * \param create_args	[IN]	Optional, arguments required for allocation
+ *				of LRU item.
+ *				If user wants a find-only operation, then NULL
+ *				should be passed in. User can pass in any
+ *				non-zero value as \a create_args if creation
+ *				is required but args is not.
  * \param llink		[OUT]	DAOS LRU link
  */
 int
 daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key, unsigned int ksize,
-		  void *args, struct daos_llink **rlink);
+		  void *create_args, struct daos_llink **rlink);
 
 /**
  * Release a reference from the cache and maintain a idle LRU list

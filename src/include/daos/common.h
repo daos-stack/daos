@@ -304,4 +304,12 @@ daos_fail_check(uint64_t id);
 #define DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE	(0x007)
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
+
+static inline int __is_po2(unsigned long long val)
+{
+	return !(val & (val - 1));
+}
+
+#define IS_PO2(val)	__is_po2((unsigned long long)(val))
+
 #endif /* __DAOS_COMMON_H__ */

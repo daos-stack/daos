@@ -126,9 +126,6 @@ rdb_tree_alloc_ref(void *key, unsigned int ksize, void *varg,
 	void		       *buf;
 	int			rc;
 
-	if (db == NULL)
-		return -DER_NONEXIST;
-
 	D_ALLOC_PTR(tree);
 	if (tree == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
