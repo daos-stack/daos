@@ -413,11 +413,12 @@ ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid, unsigned int gid,
 	if (rc != 0)
 		D_GOTO(out_group, rc);
 
-rechoose:
-	/* Create a POOL_CREATE request. */
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		D_GOTO(out_creation, rc);
+
+rechoose:
+	/* Create a POOL_CREATE request. */
 	ep.ep_grp = NULL;
 	rsvc_client_choose(&client, &ep);
 	rc = pool_req_create(info->dmi_ctx, ep, POOL_CREATE, &rpc);
