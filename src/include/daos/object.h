@@ -69,6 +69,11 @@ daos_obj_retry_error(int err)
 	       daos_crt_network_error(err);
 }
 
+struct pl_obj_layout;
+int
+dc_obj_layout_get(daos_handle_t oh, struct pl_obj_layout **layout,
+		  unsigned int *grp_nr, unsigned int *grp_size);
+
 int dc_obj_class_register(struct daos_task *task);
 int dc_obj_class_query(struct daos_task *task);
 int dc_obj_class_list(struct daos_task *task);

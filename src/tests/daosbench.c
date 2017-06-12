@@ -807,8 +807,8 @@ kv_test_describe(struct test *test, int key_type)
 		printf("---------------\n");
 		printf("Test: %s", test->t_type->tt_name);
 		printf("\n");
-		printf("DAOS pool :%s", test->t_pname);
-		printf("\n");
+		printf("DAOS pool :%s\n", test->t_pname);
+		printf("DAOS container :%s\n", test->t_container);
 		printf("Value buffer size: %"PRIu64,
 		       test->t_val_bufsize);
 		printf("\n");

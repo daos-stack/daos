@@ -29,6 +29,8 @@
 #include <stdio.h>
 #include <daos.h>
 #include <daos/common.h>
+#include <daos/object.h>
+#include <daos/mgmt.h>
 
 const unsigned int	 default_mode = 0731;
 const char		*default_size = "256M";
@@ -437,6 +439,171 @@ kill_hdlr(int argc, char *argv[])
 	return 0;
 }
 
+/* oid str: oid_hi.oid_mid.oid_lo */
+static int
+daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
+{
+	const char *ptr = oid_str;
+
+	/* parse hi */
+	oid->hi = atoll(ptr);
+
+	/* find 1st . to parse mid */
+	ptr = strchr(ptr, '.');
+	if (ptr == NULL)
+		return -1;
+	ptr++;
+
+	oid->mid = atoll(ptr);
+
+	/* find 2nd . to parse lo */
+	ptr = strchr(ptr, '.');
+	if (ptr == NULL)
+		return -1;
+	ptr++;
+
+	oid->lo = atoll(ptr);
+
+	return 0;
+}
+
+static int
+obj_op_hdlr(int argc, char *argv[])
+{
+	struct option		options[] = {
+		{"pool",	required_argument,	NULL,	'p'},
+		{"cont",	required_argument,	NULL,	'c'},
+		{"oid",		required_argument,	NULL,	'o'},
+		{"svc",		required_argument,	NULL,	's'},
+		{NULL,		0,			NULL,	0}
+	};
+	const char	       *group = default_group;
+	uuid_t			pool_uuid;
+	uuid_t			cont_uuid;
+	daos_handle_t		poh;
+	daos_handle_t		coh;
+	const char	       *svc_str = NULL;
+	const char	       *oid_str = NULL;
+	daos_rank_list_t       *svc;
+	daos_obj_id_t		oid;
+	struct daos_obj_layout *layout;
+	int			i;
+	int			j;
+	int			rc;
+	int			ret;
+
+	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
+		switch (rc) {
+		case 'p':
+			if (uuid_parse(optarg, pool_uuid) != 0) {
+				fprintf(stderr,
+					"failed to parse pool UUID: %s\n",
+					optarg);
+				return 2;
+			}
+			break;
+		case 'c':
+			if (uuid_parse(optarg, cont_uuid) != 0) {
+				fprintf(stderr,
+					"failed to parse cont UUID: %s\n",
+					optarg);
+			}
+			break;
+		case 's':
+			svc_str = optarg;
+			break;
+		case 'o':
+			oid_str = optarg;
+			break;
+		default:
+			return 2;
+		}
+	}
+
+	if (uuid_is_null(pool_uuid) || uuid_is_null(cont_uuid)) {
+		fprintf(stderr, "pool and cont UUID required\n");
+		return 2;
+	}
+
+	if (oid_str == NULL) {
+		fprintf(stderr, "--oid must be specified\n");
+		return 2;
+	}
+
+	rc = daos_obj_id_parse(oid_str, &oid);
+	if (rc) {
+		fprintf(stderr, "oid should be oid.hi.oid.mid.oid_lo\n");
+		return rc;
+	}
+
+	if (svc_str == NULL) {
+		fprintf(stderr, "--svc must be specified\n");
+		return 2;
+	}
+	svc = daos_rank_list_parse(svc_str, ":");
+	if (svc == NULL) {
+		fprintf(stderr, "failed to parse service ranks\n");
+		return 2;
+	}
+	if (svc->rl_nr.num == 0) {
+		fprintf(stderr, "--svc mustn't be empty\n");
+		daos_rank_list_free(svc);
+		return 2;
+	}
+
+	rc = daos_pool_connect(pool_uuid, group, svc, DAOS_PC_RO,
+			       &poh, NULL /* info */, NULL /* ev */);
+	daos_rank_list_free(svc);
+	if (rc) {
+		fprintf(stderr, "failed to connect to pool: %d\n", rc);
+		return rc;
+	}
+
+	rc = daos_cont_open(poh, cont_uuid, DAOS_COO_RO, &coh, NULL, NULL);
+	if (rc) {
+		fprintf(stderr, "daos_cont_open failed, rc: %d\n", rc);
+		D_GOTO(disconnect, rc);
+	}
+
+	rc = daos_obj_layout_get(coh, oid, &layout);
+	if (rc) {
+		fprintf(stderr, "daos_cont_open failed, rc: %d\n", rc);
+		D_GOTO(close, rc);
+	}
+
+	/* Print the object layout */
+	fprintf(stdout, "oid: "DF_OID" ver %d grp_nr: %d\n", DP_OID(oid),
+		layout->ol_ver, layout->ol_nr);
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		struct daos_obj_shard *shard;
+
+		shard = layout->ol_shards[i];
+		fprintf(stdout, "grp: %d\n", i);
+		for (j = 0; j < shard->os_replica_nr; j++)
+			fprintf(stdout, "replica %d %d\n", j,
+				shard->os_ranks[j]);
+	}
+
+	daos_obj_layout_free(layout);
+close:
+	ret = daos_cont_close(coh, NULL);
+	if (ret != 0) {
+		fprintf(stderr, "failed to disconnect from pool: %d\n", ret);
+		if (rc == 0)
+			rc = ret;
+	}
+disconnect:
+	ret = daos_pool_disconnect(poh, NULL /* ev */);
+	if (ret != 0) {
+		fprintf(stderr, "failed to disconnect from pool: %d\n", ret);
+		if (rc == 0)
+			rc = ret;
+	}
+
+	return rc;
+}
+
 static int
 help_hdlr(int argc, char *argv[])
 {
@@ -448,6 +615,7 @@ commands:\n\
   evict		evict all pool connections to a pool\n\
   exclude	exclude a target from a pool\n\
   kill		kill remote daos server\n\
+  layout	get object layout\n\
   help		print this message and exit\n");
 	printf("\
 create options:\n\
@@ -485,6 +653,11 @@ query options:\n\
   --group=STR	pool server process group (\"%s\")\n\
   --pool=UUID	pool UUID\n\
   --svc=RANKS	pool service replicas like 1:2:3\n", default_group);
+	printf("\
+query obj layout options: \n\
+  --pool=UUID	pool uuid\n\
+  --cont=UUID	container uuid\n\
+  --oid=oid	object oid.\n");
 	return 0;
 }
 
@@ -508,6 +681,8 @@ main(int argc, char *argv[])
 		hdlr = kill_hdlr;
 	else if (strcmp(argv[1], "query") == 0)
 		hdlr = pool_op_hdlr;
+	else if (strcmp(argv[1], "layout") == 0)
+		hdlr = obj_op_hdlr;
 
 	if (hdlr == NULL || hdlr == help_hdlr) {
 		help_hdlr(argc, argv);

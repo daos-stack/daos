@@ -158,8 +158,9 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 
 	/** create container */
 	if (arg->myrank == 0) {
-		print_message("setup: creating container\n");
 		uuid_generate(arg->co_uuid);
+		print_message("setup: creating container "DF_UUIDF"\n",
+			      DP_UUID(arg->co_uuid));
 		rc = daos_cont_create(arg->poh, arg->co_uuid, NULL);
 		if (rc)
 			print_message("daos_cont_create failed, rc: %d\n", rc);

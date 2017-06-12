@@ -691,6 +691,29 @@ out:
 }
 
 int
+dc_obj_layout_get(daos_handle_t oh, struct pl_obj_layout **layout,
+		  unsigned int *grp_nr, unsigned int *grp_size)
+{
+	struct daos_oclass_attr *oc_attr;
+	struct dc_object *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
+	*layout = obj->cob_layout;
+
+	oc_attr = daos_oclass_attr_find(obj->cob_md.omd_id);
+	D_ASSERT(oc_attr != NULL);
+	*grp_size = daos_oclass_grp_size(oc_attr);
+	*grp_nr = daos_oclass_grp_nr(oc_attr, &obj->cob_md);
+	if (*grp_nr == DAOS_OBJ_GRP_MAX)
+		*grp_nr = obj->cob_layout->ol_nr / *grp_size;
+	obj_decref(obj);
+	return 0;
+}
+
+int
 dc_obj_punch(struct daos_task *task)
 {
 	D_ERROR("Unsupported API\n");
