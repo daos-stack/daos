@@ -1888,26 +1888,25 @@ ds_pool_update_internal(uuid_t pool_uuid, daos_rank_list_t *tgts,
 
 	rc = ds_pool_tgt_update(&tx, svc, tgts, tgts_out, opc);
 	if (rc != 0)
-		D_GOTO(out_lock, rc);
+		D_GOTO(out_map_version, rc);
 
 	if (replicasp != NULL) {
 		rc = rdb_get_ranks(svc->ps_db, replicasp);
 		if (rc != 0)
-			D_GOTO(out_lock, rc);
+			D_GOTO(out_map_version, rc);
 	}
 
 	rc = rdb_tx_commit(&tx);
-	if (rc != 0)
-		D_GOTO(out_lock, rc);
-out_lock:
+
+out_map_version:
+	if (pto_op != NULL)
+		pto_op->po_map_version =
+			pool_map_get_version(svc->ps_pool->sp_map);
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
-	if (pto_op != NULL) {
-		pto_op->po_map_version =
-			pool_map_get_version(svc->ps_pool->sp_map);
+	if (pto_op != NULL)
 		set_rsvc_hint(svc->ps_db, pto_op);
-	}
 	pool_svc_put(svc);
 	return rc;
 }
