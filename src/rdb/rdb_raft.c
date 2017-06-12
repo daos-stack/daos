@@ -709,22 +709,15 @@ rdb_timerd(void *arg)
 {
 	struct rdb     *db = arg;
 	const double	period = 1;	/* duration between beats (s) */
-	double		d;		/* duration before first beat (s) */
 	double		t;		/* timestamp of beat (s) */
 	double		t_prev;		/* timestamp of previous beat (s) */
 	int		rc;
 
-	d = (rand() % ((int)period * 1000 /* ms */)) / 1000.0 /* ms */;
-	D_DEBUG(DB_ANY, DF_DB": timerd starting: d=%f\n", DP_DB(db), d);
-	t_prev = ABT_get_wtime() + d - period;
-	for (;;) {
+	D_DEBUG(DB_ANY, DF_DB": timerd starting\n", DP_DB(db));
+	t = ABT_get_wtime();
+	t_prev = t;
+	do {
 		struct rdb_raft_state state;
-
-		/* Wait for the next beat. */
-		while ((t = ABT_get_wtime()) < t_prev + period && !db->d_stop)
-			ABT_thread_yield();
-		if (db->d_stop)
-			break;
 
 		rdb_raft_save_state(db, &state);
 		rc = raft_periodic(db->d_raft, (t - t_prev) * 1000 /* ms */);
@@ -732,7 +725,10 @@ rdb_timerd(void *arg)
 		rdb_raft_check_state(db, &state);
 
 		t_prev = t;
-	}
+		/* Wait for the next beat. */
+		while ((t = ABT_get_wtime()) < t_prev + period && !db->d_stop)
+			ABT_thread_yield();
+	} while (!db->d_stop);
 	D_DEBUG(DB_ANY, DF_DB": timerd stopping\n", DP_DB(db));
 }
 
@@ -792,18 +788,33 @@ rdb_raft_log_load(raft_server_t *raft, daos_handle_t log)
 			      raft);
 }
 
+/* TODO: Implement a true random algorithm. */
+static int
+rdb_raft_rand(int min, int max, int id, uint8_t nreplicas)
+{
+	return min + (max - min) / nreplicas * id;
+}
+
 static int
 rdb_raft_get_election_timeout(daos_rank_t self, uint8_t nreplicas)
 {
 	const char     *s;
-	int		t;
+	int		min;
+	int		max;
 
-	s = getenv("RDB_ELECTION_TIMEOUT");
+	s = getenv("RDB_ELECTION_TIMEOUT_MIN");
 	if (s == NULL)
-		t = 7000;
+		min = 8000;
 	else
-		t = atoi(s);
-	return t;
+		min = atoi(s);
+
+	s = getenv("RDB_ELECTION_TIMEOUT_MAX");
+	if (s == NULL)
+		max = 12000;
+	else
+		max = atoi(s);
+
+	return rdb_raft_rand(min, max, self, nreplicas);
 }
 
 static int
@@ -1129,8 +1140,7 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	if (db->d_stop)
 		D_GOTO(out_db, rc = -DER_CANCELED);
 
-	D_DEBUG(DB_ANY, DF_DB": handling raft rv from rank %u\n", DP_DB(db),
-		rpc->cr_ep.ep_rank);
+	D_DEBUG(DB_ANY, DF_DB": handling raft rv\n", DP_DB(db));
 	node = rdb_raft_find_node(db, rpc->cr_ep.ep_rank);
 	if (node == NULL)
 		D_GOTO(out_db, rc = -DER_UNKNOWN);
@@ -1162,8 +1172,7 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	if (db->d_stop)
 		D_GOTO(out_db, rc = -DER_CANCELED);
 
-	D_DEBUG(DB_ANY, DF_DB": handling raft ae from rank %u\n", DP_DB(db),
-		rpc->cr_ep.ep_rank);
+	D_DEBUG(DB_ANY, DF_DB": handling raft ae\n", DP_DB(db));
 	node = rdb_raft_find_node(db, rpc->cr_ep.ep_rank);
 	if (node == NULL)
 		D_GOTO(out_db, rc = -DER_UNKNOWN);
