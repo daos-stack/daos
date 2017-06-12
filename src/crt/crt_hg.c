@@ -441,10 +441,8 @@ crt_hg_fini()
 	}
 
 	na_ret = NA_Finalize(na_class);
-	if (na_ret != NA_SUCCESS) {
+	if (na_ret != NA_SUCCESS)
 		C_ERROR("Could not finalize NA class, na_ret: %d.\n", na_ret);
-		C_GOTO(out, rc = -CER_HG);
-	}
 
 	C_FREE_PTR(crt_gdata.cg_hg);
 
