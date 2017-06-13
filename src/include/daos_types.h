@@ -420,18 +420,20 @@ typedef enum {
 
 /**
  * List of default object class
+ * R = replicated (number after R is number of replicas
+ * S = small (1 stripe)
  */
 enum {
 	DAOS_OC_UNKNOWN,
 	DAOS_OC_TINY_RW,
 	DAOS_OC_SMALL_RW,
 	DAOS_OC_LARGE_RW,
-	DAOS_OC_REPL_2_RW,
-	DAOS_OC_REPL_2_SMALL_RW,
-	DAOS_OC_R3S_RW, /* temporary class for testing */
-	DAOS_OC_R3_RW,  /* temporary class for testing */
-	DAOS_OC_R4S_RW, /* temporary class for testing */
-	DAOS_OC_R4_RW,  /* temporary class for testing */
+	DAOS_OC_R2S_RW,
+	DAOS_OC_R2_RW,
+	DAOS_OC_R3S_RW,		/* temporary class for testing */
+	DAOS_OC_R3_RW,		/* temporary class for testing */
+	DAOS_OC_R4S_RW,		/* temporary class for testing */
+	DAOS_OC_R4_RW,		/* temporary class for testing */
 	DAOS_OC_REPL_MAX_RW,
 };
 

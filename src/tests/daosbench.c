@@ -1538,7 +1538,8 @@ Usage: daosbench -t TEST -p $UUID [OPTIONS]\n\
 	--test=TEST | -t	Run TEST.\n\
 	--testid=id | -o	Test ID(unique for objectID) \n\
 	--object-class=oc | -j	Object Class options : \n\
-				TINY, SMALL, LARGE, REPL, REPL_MAX \n\
+				TINY, SMALL, LARGE, REPL_2_RW, \n\
+				R3, R3S, R4, R4S, REPL_MAX \n\
 				(default object class : LARGE) \n\
 	--aios=N | -a		Submit N in-flight I/O requests.\n\
 	--group=GROUP | -g	Server group ID\n\
@@ -1662,8 +1663,18 @@ test_init(struct test *test, int argc, char *argv[])
 				obj_class = DAOS_OC_SMALL_RW;
 			} else if (!strcasecmp(optarg, "LARGE")) {
 				obj_class = DAOS_OC_LARGE_RW;
-			} else if (!strcasecmp(optarg, "REPL")) {
-				obj_class = DAOS_OC_REPL_2_RW;
+			} else if (!strcasecmp(optarg, "R2")) {
+				obj_class = DAOS_OC_R2_RW;
+			} else if (!strcasecmp(optarg, "R2S")) {
+				obj_class = DAOS_OC_R2S_RW;
+			} else if (!strcasecmp(optarg, "R3")) {
+				obj_class = DAOS_OC_R3_RW;
+			} else if (!strcasecmp(optarg, "R3S")) {
+				obj_class = DAOS_OC_R3S_RW;
+			} else if (!strcasecmp(optarg, "R4")) {
+				obj_class = DAOS_OC_R4_RW;
+			} else if (!strcasecmp(optarg, "R4S")) {
+				obj_class = DAOS_OC_R4S_RW;
 			} else if (!strcasecmp(optarg, "REPL_MAX")) {
 				obj_class = DAOS_OC_REPL_MAX_RW;
 			} else {
@@ -1802,7 +1813,7 @@ test_init(struct test *test, int argc, char *argv[])
 	}
 
 	if (t_kill_server && obj_class != DAOS_OC_REPL_MAX_RW &&
-	    obj_class != DAOS_OC_REPL_2_RW) {
+	    obj_class != DAOS_OC_R3_RW) {
 		if (comm_world_rank == 0)
 			fprintf(stderr,
 				"daosbench: REPL or REPL_MAX obj-class "
