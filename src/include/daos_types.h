@@ -428,6 +428,10 @@ enum {
 	DAOS_OC_LARGE_RW,
 	DAOS_OC_REPL_2_RW,
 	DAOS_OC_REPL_2_SMALL_RW,
+	DAOS_OC_R3S_RW, /* temporary class for testing */
+	DAOS_OC_R3_RW,  /* temporary class for testing */
+	DAOS_OC_R4S_RW, /* temporary class for testing */
+	DAOS_OC_R4_RW,  /* temporary class for testing */
 	DAOS_OC_REPL_MAX_RW,
 };
 
