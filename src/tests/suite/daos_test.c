@@ -185,6 +185,55 @@ out:
 	return 0;
 }
 
+
+static int
+pool_destroy_safe(test_arg_t *arg)
+{
+	daos_pool_info_t		 pinfo;
+	daos_handle_t			 poh = arg->poh;
+	bool				 connected = false;
+	int				 rc;
+
+	if (daos_handle_is_inval(poh)) {
+		rc = daos_pool_connect(arg->pool_uuid, arg->group, &arg->svc,
+				       DAOS_PC_RW, &poh, &arg->pool_info,
+				       NULL /* ev */);
+		if (rc != 0) { /* destory straightaway */
+			print_message("failed to connect pool: %d\n", rc);
+			poh = DAOS_HDL_INVAL;
+		} else {
+			connected = true;
+		}
+	}
+
+	while (!daos_handle_is_inval(poh)) {
+		struct daos_rebuild_status *rstat = &pinfo.pi_rebuild_st;
+
+		memset(&pinfo, 0, sizeof(pinfo));
+		rc = daos_pool_query(poh, NULL, &pinfo, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "pool query failed: %d\n", rc);
+			return rc;
+		}
+
+		if (rstat->rs_version != 0) {
+			print_message("waiting for rebuild\n");
+			sleep(1);
+			continue;
+		}
+
+		/* no rebuild */
+		if (connected)
+			daos_pool_disconnect(poh, NULL);
+		break;
+	}
+
+	rc = daos_pool_destroy(arg->pool_uuid, arg->group, 1, NULL);
+	if (rc)
+		print_message("daos_pool_destroy failed, rc: %d\n", rc);
+	return rc;
+}
+
 int
 test_teardown(void **state)
 {
@@ -222,8 +271,10 @@ test_teardown(void **state)
 
 	if (!daos_handle_is_inval(arg->poh)) {
 		rc = daos_pool_disconnect(arg->poh, NULL /* ev */);
+		arg->poh = DAOS_HDL_INVAL;
 		if (arg->multi_rank) {
-			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);
+			MPI_Allreduce(&rc, &rc_reduce, 1, MPI_INT, MPI_MIN,
+				      MPI_COMM_WORLD);
 			rc = rc_reduce;
 		}
 		if (rc) {
@@ -234,12 +285,9 @@ test_teardown(void **state)
 	}
 
 	if (!uuid_is_null(arg->pool_uuid)) {
-		if (arg->myrank == 0) {
-			rc = daos_pool_destroy(arg->pool_uuid, arg->group, 1,
-					       NULL);
-			if (rc)
-				print_message("daos_pool_destroy failed, rc: %d\n", rc);
-		}
+		if (arg->myrank == 0)
+			pool_destroy_safe(arg);
+
 		if (arg->multi_rank)
 			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		if (rc)
