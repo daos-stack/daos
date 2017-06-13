@@ -685,7 +685,8 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(pool->sp_lock);
 	if (pool->sp_map_version < in->tui_map_version ||
-	    (map != NULL && pool->sp_map == NULL)) {
+	    (pool->sp_map_version == in->tui_map_version &&
+	     (map != NULL && pool->sp_map == NULL))) {
 		if (map != NULL) {
 			struct pool_map *tmp = pool->sp_map;
 
@@ -701,9 +702,15 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 		rc = dss_collective(update_child_map, pool);
 		D_ASSERT(rc == 0);
 
+	} else if (map != NULL && pool->sp_map != NULL &&
+		   pool_map_get_version(pool->sp_map) < in->tui_map_version) {
+		struct pool_map *tmp = pool->sp_map;
+
+		pool->sp_map = map;
+		map = tmp;
 	} else {
-		D_WARN("Ignore old map version: cur=%u, input=%u\n",
-			pool->sp_map_version, in->tui_map_version);
+		D_WARN("Ignore old map version: cur=%u, input=%u pool %p\n",
+			pool->sp_map_version, in->tui_map_version, pool);
 	}
 	ABT_rwlock_unlock(pool->sp_lock);
 
