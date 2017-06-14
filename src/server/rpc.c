@@ -169,3 +169,20 @@ out_eventual:
 out:
 	return rc;
 }
+
+/**
+ * Argobots-sleep \a ms milliseconds. If you'd like to sleep more than a
+ * second, then you'd likely need to write your own loop and check a cancel
+ * flag or something similar, so that the sleep can be canceled.
+ *
+ * \param[in]	ms	milliseconds to sleep for
+ */
+void
+dss_sleep(int ms)
+{
+	double t = ABT_get_wtime() + ms / 1000.0;
+
+	do {
+		ABT_thread_yield();
+	} while (ABT_get_wtime() < t);
+}

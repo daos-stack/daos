@@ -450,6 +450,7 @@ rechoose:
 				      rc == 0 ? &out->pro_op.po_hint : NULL);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
+		dss_sleep(1000 /* ms */);
 		D_GOTO(rechoose, rc);
 	}
 	rc = out->pro_op.po_rc;
