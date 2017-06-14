@@ -41,6 +41,24 @@ class InfoRunner():
     def __init__(self, config=None):
         self.config = config
 
+    def dump_build_vars(self):
+        """ dump the build_vars to file """
+
+        rootpath = os.getcwd()
+        print("path: %s" % rootpath)
+        opts_file = rootpath + "/.build_vars.json"
+        if not os.path.exists(opts_file):
+            buildpath = self.config.get('build_path', "")
+            opts_file = buildpath + "/.build_vars.json"
+            if not os.path.exists(opts_file):
+                print("build_vars.json file not found here:\n%s\nor here:\n%s" \
+                      % (rootpath, buildpath))
+            return 0
+        print("use file: %s" % opts_file)
+        with open(opts_file, "w") as info_file:
+            json.dump(self.info, info_file, indent=4, skipkeys=True)
+        return 1
+
     def load_build_vars(self):
         """ load the build_vars file """
 
