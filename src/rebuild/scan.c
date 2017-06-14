@@ -568,7 +568,8 @@ rebuild_scan_leader(void *data)
 	/* global barrier: wait until the pool map is ready */
 	pool = arg->sa_pool;
 	ABT_mutex_lock(pool->sp_map_lock);
-	while (pool->sp_map == NULL || pool->sp_map_version < arg->map_ver) {
+	while (pool->sp_map == NULL || pool->sp_map_version < arg->map_ver ||
+	       pool_map_get_version(pool->sp_map) < arg->map_ver) {
 		D_DEBUG(DB_TRACE, "Waiting for pool=%p, map_ver=%u, cur=%u\n",
 			pool, arg->map_ver, pool->sp_map_version);
 		ABT_cond_wait(pool->sp_map_cond, pool->sp_map_lock);
@@ -683,8 +684,10 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
 
-	D_DEBUG(DB_TRACE, "%d scan rebuild for "DF_UUID"\n",
-		dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid));
+
+	D_DEBUG(DB_TRACE, "%d scan rebuild for "DF_UUID" ver %d\n",
+		dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
+		rsi->rsi_pool_map_ver);
 
 	/* step-1: reset counters */
 	D_ASSERT(rebuild_gst.rg_pullers);
