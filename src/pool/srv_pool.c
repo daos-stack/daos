@@ -557,10 +557,9 @@ pool_svc_step_up(struct pool_svc *svc)
 		D_ASSERTF(pool->sp_map_version <= map_version, "%u <= %u\n",
 			  pool->sp_map_version, map_version);
 		D_ASSERTF(pool->sp_map == NULL ||
-			  pool->sp_map_version ==
-			  pool_map_get_version(pool->sp_map),
-			  "%u == %u\n", pool->sp_map_version,
-			  pool_map_get_version(pool->sp_map));
+			  pool_map_get_version(pool->sp_map) <= map_version,
+			  "%u <= %u\n", pool_map_get_version(pool->sp_map),
+			  map_version);
 		if (pool->sp_map == NULL ||
 		    pool_map_get_version(pool->sp_map) < map_version) {
 			struct pool_map *tmp;
