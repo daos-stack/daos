@@ -1494,17 +1494,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
 				in->pci_capas);
 	if (rc != 0) {
-		/* FIXME: This is a workaround, should be replaced by a real
-		 * solution ASAP.
-		 *
-		 * Note: when some targets fails, before it exclude
-		 * the failed targets, this will not be able to connect
-		 * all of servers. But we can not fail the connection,
-		 * otherwise it can not handle those management request.
-		 */
-		D_ERROR(DF_UUID"broadcast connect to other servers failed\n",
-			DP_UUID(in->pci_op.pi_uuid));
-		rc = 0;
+		D_ERROR(DF_UUID": failed to connect to targets: %d\n",
+			DP_UUID(in->pci_op.pi_uuid), rc);
+		D_GOTO(out_map_version, rc);
 	}
 
 	hdl.ph_capas = in->pci_capas;

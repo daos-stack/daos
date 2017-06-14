@@ -289,7 +289,8 @@ pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 	rc = rsvc_client_complete_rpc(&pool->dp_client, ep, rc_crt, out->po_rc,
 				      &out->po_hint);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	if (rc == RSVC_CLIENT_RECHOOSE) {
+	if (rc == RSVC_CLIENT_RECHOOSE ||
+	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->po_rc))) {
 		task->dt_result = 0;
 		rc = daos_task_reinit(task);
 		if (rc != 0)
@@ -977,7 +978,9 @@ pool_tgt_update_cp(struct daos_task *task, void *data)
 
 	rc = rsvc_client_complete_rpc(&state->client, &rpc->cr_ep, rc,
 				      out->pto_op.po_rc, &out->pto_op.po_hint);
-	if (rc == RSVC_CLIENT_RECHOOSE) {
+	if (rc == RSVC_CLIENT_RECHOOSE ||
+	    (rc == RSVC_CLIENT_PROCEED &&
+	     daos_rpc_retryable_rc(out->pto_op.po_rc))) {
 		task->dt_result = 0;
 		rc = daos_task_reinit(task);
 		if (rc != 0)
@@ -1282,7 +1285,9 @@ pool_evict_cp(struct daos_task *task, void *data)
 
 	rc = rsvc_client_complete_rpc(&state->client, &rpc->cr_ep, rc,
 				      out->pvo_op.po_rc, &out->pvo_op.po_hint);
-	if (rc == RSVC_CLIENT_RECHOOSE) {
+	if (rc == RSVC_CLIENT_RECHOOSE ||
+	    (rc == RSVC_CLIENT_PROCEED &&
+	     daos_rpc_retryable_rc(out->pvo_op.po_rc))) {
 		task->dt_result = 0;
 		rc = daos_task_reinit(task);
 		if (rc != 0)

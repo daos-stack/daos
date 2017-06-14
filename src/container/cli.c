@@ -73,7 +73,8 @@ cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 	rc = rsvc_client_complete_rpc(&pool->dp_client, ep, rc_crt, out->co_rc,
 				      &out->co_hint);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	if (rc == RSVC_CLIENT_RECHOOSE) {
+	if (rc == RSVC_CLIENT_RECHOOSE ||
+	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->co_rc))) {
 		task->dt_result = 0;
 		rc = daos_task_reinit(task);
 		if (rc != 0)
@@ -321,7 +322,6 @@ dc_cont_alloc(const uuid_t uuid)
 
 struct cont_open_args {
 	struct dc_pool		*coa_pool;
-	struct dc_cont		*coa_cont;
 	daos_cont_info_t	*coa_info;
 	crt_rpc_t		*rpc;
 	daos_handle_t		 hdl;
@@ -334,15 +334,18 @@ cont_open_complete(struct daos_task *task, void *data)
 	struct cont_open_args	*arg = (struct cont_open_args *)data;
 	struct cont_open_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->coa_pool;
-	struct dc_cont		*cont = arg->coa_cont;
+	struct dc_cont		*cont = daos_task_get_priv(task);
+	bool			 put_cont = true;
 	int			 rc = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->coo_op, task);
 	if (rc < 0)
 		D_GOTO(out, rc);
-	else if (rc == RSVC_CLIENT_RECHOOSE)
+	else if (rc == RSVC_CLIENT_RECHOOSE) {
+		put_cont = false;
 		D_GOTO(out, rc = 0);
+	}
 
 	if (rc != 0) {
 		D_ERROR("RPC error while opening container: %d\n", rc);
@@ -389,7 +392,8 @@ cont_open_complete(struct daos_task *task, void *data)
 
 out:
 	crt_req_decref(arg->rpc);
-	dc_cont_put(cont);
+	if (put_cont)
+		dc_cont_put(cont);
 	dc_pool_put(pool);
 	return rc;
 }
@@ -481,6 +485,7 @@ dc_cont_open(struct daos_task *task)
 
 	args = daos_task_get_args(DAOS_OPC_CONT_OPEN, task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	cont = daos_task_get_priv(task);
 
 	if (uuid_is_null(args->uuid) || args->coh == NULL)
 		D_GOTO(err, rc = -DER_INVAL);
@@ -492,12 +497,14 @@ dc_cont_open(struct daos_task *task)
 	if ((args->flags & DAOS_COO_RW) && (pool->dp_capas & DAOS_PC_RO))
 		D_GOTO(err_pool, rc = -DER_NO_PERM);
 
-	cont = dc_cont_alloc(args->uuid);
-	if (cont == NULL)
-		D_GOTO(err_pool, rc = -DER_NOMEM);
-
-	uuid_generate(cont->dc_cont_hdl);
-	cont->dc_capas = args->flags;
+	if (cont == NULL) {
+		cont = dc_cont_alloc(args->uuid);
+		if (cont == NULL)
+			D_GOTO(err_pool, rc = -DER_NOMEM);
+		uuid_generate(cont->dc_cont_hdl);
+		cont->dc_capas = args->flags;
+		daos_task_set_priv(task, cont);
+	}
 
 	D_DEBUG(DF_DSMC, DF_CONT": opening: hdl="DF_UUIDF" flags=%x\n",
 		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(cont->dc_cont_hdl),
@@ -520,7 +527,6 @@ dc_cont_open(struct daos_task *task)
 	in->coi_capas = args->flags;
 
 	arg.coa_pool = pool;
-	arg.coa_cont = cont;
 	arg.coa_info = args->info;
 	arg.rpc = rpc;
 	arg.hdl = args->poh;

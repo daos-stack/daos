@@ -226,13 +226,13 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID)) {
 		/* This may happen if the service wasn't found. */
-		D_DEBUG(DB_MD, "\"leader\" reply without hint from rank %u\n",
-			ep->ep_rank);
+		D_DEBUG(DB_MD, "\"leader\" reply without hint from rank %u: "
+			"rc_svc=%d\n", ep->ep_rank, rc_svc);
 		return RSVC_CLIENT_PROCEED;
 	} else {
 		D_DEBUG(DB_MD, "leader reply with hint from rank %u: hint.term="
-			DF_U64" hint.rank=%u\n", ep->ep_rank, hint->sh_term,
-			hint->sh_rank);
+			DF_U64" hint.rank=%u rc_svc=%d\n", ep->ep_rank,
+			hint->sh_term, hint->sh_rank, rc_svc);
 		rsvc_client_process_hint(client, hint, true /* from_leader */,
 					 ep);
 		return RSVC_CLIENT_PROCEED;

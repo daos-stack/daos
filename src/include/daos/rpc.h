@@ -241,4 +241,11 @@ daos_group_detach(crt_group_t *group)
 	return crt_group_detach(group);
 }
 
+/* Currently, this is used on rcs in metadata RPC reply buffers. */
+static inline bool
+daos_rpc_retryable_rc(int rc)
+{
+	return rc == -DER_TIMEDOUT || rc == -DER_CRT_HG;
+}
+
 #endif /* __DRPC_API_H__ */
