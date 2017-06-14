@@ -1139,7 +1139,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	layout_end = (begin + (grp_size * dist - 1)) % plts_nr;
-	failed_version = tgp_failed->tg_ver;
+	failed_version = tgp_failed->tg_ver > 0 ? tgp_failed->tg_ver - 1 : 0;
 	rc = ring_obj_layout_fill(map, md, failed_version,
 				  begin, dist, shard, grp_nr, grp_size,
 				  &layout, &layout_start);
