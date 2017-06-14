@@ -435,14 +435,12 @@ crt_hg_fini()
 	C_ASSERT(hg_class != NULL);
 
 	hg_ret = HG_Finalize(hg_class);
-	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
-	}
+	if (hg_ret != HG_SUCCESS)
+		C_WARN("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
 
 	na_ret = NA_Finalize(na_class);
 	if (na_ret != NA_SUCCESS)
-		C_ERROR("Could not finalize NA class, na_ret: %d.\n", na_ret);
+		C_WARN("Could not finalize NA class, na_ret: %d.\n", na_ret);
 
 	C_FREE_PTR(crt_gdata.cg_hg);
 
@@ -587,14 +585,14 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	if (hg_ctx->chc_shared_na == true)
 		goto out;
 
-	/* the hg_context destroyed, ignore below errors with error logging */
+	/* the hg_context destroyed, ignore below errors with warn msg */
 	hg_ret = HG_Finalize(hg_ctx->chc_hgcla);
 	if (hg_ret != HG_SUCCESS)
-		C_ERROR("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
+		C_WARN("Could not finalize HG class, hg_ret: %d.\n", hg_ret);
 
 	na_ret = NA_Finalize(hg_ctx->chc_nacla);
 	if (na_ret != NA_SUCCESS)
-		C_ERROR("Could not finalize NA class, na_ret: %d.\n", na_ret);
+		C_WARN("Could not finalize NA class, na_ret: %d.\n", na_ret);
 
 out:
 	return rc;

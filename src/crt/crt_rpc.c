@@ -649,6 +649,8 @@ crt_req_addref(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	pthread_spin_lock(&rpc_priv->crp_lock);
 	rpc_priv->crp_refcount++;
+	C_DEBUG("rpc_priv %p (opc: 0x%x), addref to %d.\n",
+		rpc_priv, req->cr_opc, rpc_priv->crp_refcount);
 	pthread_spin_unlock(&rpc_priv->crp_lock);
 
 out:
@@ -671,17 +673,20 @@ crt_req_decref(crt_rpc_t *req)
 	rpc_priv->crp_refcount--;
 	if (rpc_priv->crp_refcount == 0)
 		destroy = 1;
+	C_DEBUG("rpc_priv %p (opc: 0x%x), decref to %d.\n",
+		rpc_priv, req->cr_opc, rpc_priv->crp_refcount);
 	pthread_spin_unlock(&rpc_priv->crp_lock);
 
 	if (destroy == 1) {
 		if (rpc_priv->crp_reply_pending == 1)
-			C_WARN("crt_reply_send not called for opc: 0x%x\n",
-			       req->cr_opc);
+			C_WARN("no reply sent for rpc_priv %p (opc: 0x%x).\n",
+			       rpc_priv, req->cr_opc);
 
 		rc = crt_hg_req_destroy(rpc_priv);
 		if (rc != 0)
 			C_ERROR("crt_hg_req_destroy failed, rc: %d, "
-				"opc: 0x%x.\n", rc, req->cr_opc);
+				"rpc_priv %p(opc: 0x%x).\n",
+				rc, rpc_priv, req->cr_opc);
 	}
 
 out:
@@ -776,8 +781,13 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	C_ASSERT(rpc_priv->crp_state == RPC_STATE_URI_LOOKUP);
 	C_ASSERT(rpc_priv->crp_ul_req = cb_info->cci_rpc);
 
-	if (cb_info->cci_rc != 0)
+	if (cb_info->cci_rc != 0) {
+		C_ERROR("rpc_priv %p(opc: 0x%x), failed cci_rc: %d.\n",
+			container_of(cb_info->cci_rpc, struct crt_rpc_priv,
+				     crp_pub),
+			cb_info->cci_rpc->cr_opc, cb_info->cci_rc);
 		C_GOTO(out, rc = cb_info->cci_rc);
+	}
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	rank = tgt_ep->ep_rank;
