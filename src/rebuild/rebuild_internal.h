@@ -36,14 +36,24 @@
 struct rebuild_globals {
 	/** pin the pool during the rebuild */
 	struct ds_pool		*rg_pool;
-	/** active rebuild pullers */
+	/** active rebuild pullers for each xstream */
 	int			*rg_pullers;
-	/** # active rebuild pullers */
-	int			 rg_puller_nr;
+	/** # xstreams */
+	int			 rg_puller_nxs;
+	/** total number of pullers */
+	int			 rg_puller_total;
+	bool			 rg_leader;
+	bool			 rg_leader_barrier;
 	uint32_t		 rg_rebuild_ver;
+	uint32_t		 rg_bcast_ver;
 	daos_list_t		 rg_task_list;
 	ABT_mutex		 rg_lock;
 	ABT_cond		 rg_cond;
+	uuid_t			 rg_pool_uuid;
+	/* reserved for now, move rebuild_pool_hdl_uuid to here */
+	uuid_t			 rg_poh_uuid;
+	/* reserved for now, move rebuild_cont_hdl_uuid to here */
+	uuid_t			 rg_coh_uuid;
 };
 
 extern struct rebuild_globals rebuild_gst;
@@ -51,7 +61,6 @@ extern struct rebuild_globals rebuild_gst;
 struct rebuild_tls {
 	struct btr_root rebuild_local_root;
 	daos_handle_t	rebuild_local_root_hdl;
-	uuid_t		rebuild_pool_uuid;
 	uuid_t		rebuild_pool_hdl_uuid;
 	uuid_t		rebuild_cont_hdl_uuid;
 	daos_handle_t	rebuild_pool_hdl;

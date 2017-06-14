@@ -54,6 +54,7 @@ struct dc_pool {
 	uint64_t		dp_capas;
 	pthread_rwlock_t	dp_map_lock;
 	struct pool_map	       *dp_map;
+	uint32_t		dp_ver;
 	uint32_t		dp_ref;
 	uint32_t		dp_disconnecting:1,
 				dp_slave:1; /* generated via g2l */
@@ -83,7 +84,7 @@ dc_pool_local_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		   unsigned int flags, const char *grp,
 		   struct pool_map *map, daos_rank_list_t *svc_list,
 		   daos_handle_t *ph);
-int
-dc_pool_local_close(daos_handle_t ph);
+int dc_pool_local_close(daos_handle_t ph);
+int dc_pool_update_map(daos_handle_t ph, struct pool_map *map);
 
 #endif /* __DAOS_POOL_H__ */

@@ -220,6 +220,7 @@ static int
 rebuild_akey(struct rebuild_obj_arg *arg, daos_handle_t oh, int type,
 	     daos_key_t *akey)
 {
+	struct rebuild_tls	*tls = rebuild_tls_get();
 	daos_recx_t		recxs[ITER_COUNT];
 	daos_epoch_range_t	eprs[ITER_COUNT];
 	uuid_t			cookies[ITER_COUNT];
@@ -228,9 +229,14 @@ rebuild_akey(struct rebuild_obj_arg *arg, daos_handle_t oh, int type,
 
 	memset(&hash, 0, sizeof(hash));
 	while (!daos_hash_is_eof(&hash)) {
+		struct pool_map	*map;
 		unsigned int	rec_num = ITER_COUNT;
 		daos_size_t	size;
 		int		i;
+
+		map = rebuild_pool_map_get();
+		dc_pool_update_map(tls->rebuild_pool_hdl, map);
+		rebuild_pool_map_put(map);
 
 		memset(recxs, 0, sizeof(*recxs) * ITER_COUNT);
 		memset(eprs, 0, sizeof(*eprs) * ITER_COUNT);
@@ -281,7 +287,7 @@ rebuild_dkey_thread(void *data)
 		daos_handle_t ph = DAOS_HDL_INVAL;
 		struct pool_map *map = rebuild_pool_map_get();
 
-		rc = dc_pool_local_open(tls->rebuild_pool_uuid,
+		rc = dc_pool_local_open(rebuild_gst.rg_pool_uuid,
 					tls->rebuild_pool_hdl_uuid, 0, NULL,
 					map, tls->rebuild_svc_list, &ph);
 		rebuild_pool_map_put(map);
@@ -351,7 +357,12 @@ free:
 		D_FREE(akey_iov.iov_buf, akey_buf_size);
 	if (tls->rebuild_status == 0)
 		tls->rebuild_status = rc;
+
+	ABT_mutex_lock(rebuild_gst.rg_lock);
 	(*arg->rebuild_building)--;
+	rebuild_gst.rg_puller_total--;
+	ABT_mutex_unlock(rebuild_gst.rg_lock);
+
 	D_DEBUG(DB_TRACE, "finish rebuild dkey %.*s tag %d rebuilding %p/%d\n",
 		(int)arg->dkey.iov_len, (char *)arg->dkey.iov_buf,
 		dss_get_module_info()->dmi_tid, arg->rebuild_building,
@@ -359,6 +370,9 @@ free:
 	daos_iov_free(&arg->dkey);
 	D_FREE_PTR(arg);
 }
+
+#define PULLER_MAX	1024
+#define PULLER_XS_MAX	512
 
 static int
 rebuild_dkey(daos_unit_oid_t oid, daos_epoch_t epoch,
@@ -382,8 +396,33 @@ rebuild_dkey(daos_unit_oid_t oid, daos_epoch_t epoch,
 	arg->map_ver = iter_arg->map_ver;
 	arg->epoch = epoch;
 	tgt = rebuild_get_nstream_idx(dkey);
-	arg->rebuild_building = &rebuild_gst.rg_pullers[tgt];
-	rebuild_gst.rg_pullers[tgt]++;
+
+	while (1) {
+		/* a workaround to flow control ULT */
+		if (rebuild_gst.rg_puller_total > PULLER_MAX ||
+		    rebuild_gst.rg_pullers[tgt] > PULLER_XS_MAX) {
+			ABT_thread_yield();
+			continue;
+		}
+
+		ABT_mutex_lock(rebuild_gst.rg_lock);
+		/* check with lock */
+		if (rebuild_gst.rg_puller_total > PULLER_MAX ||
+		    rebuild_gst.rg_pullers[tgt] > PULLER_XS_MAX) {
+			ABT_mutex_unlock(rebuild_gst.rg_lock);
+			ABT_thread_yield();
+			continue;
+		}
+
+		arg->rebuild_building = &rebuild_gst.rg_pullers[tgt];
+		/* need the lock because we are changing counters of
+		 * another xstream.
+		 */
+		rebuild_gst.rg_pullers[tgt]++;
+		rebuild_gst.rg_puller_total++;
+		ABT_mutex_unlock(rebuild_gst.rg_lock);
+		break;
+	}
 
 	D_DEBUG(DB_TRACE, "start rebuild dkey %.*s tag %d rebuilding %p/%d\n",
 		(int)arg->dkey.iov_len, (char *)arg->dkey.iov_buf, tgt,
@@ -391,7 +430,11 @@ rebuild_dkey(daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = dss_ult_create(rebuild_dkey_thread, arg, tgt, NULL);
 	if (rc) {
+		ABT_mutex_lock(rebuild_gst.rg_lock);
 		rebuild_gst.rg_pullers[tgt]--;
+		rebuild_gst.rg_puller_total--;
+		ABT_mutex_unlock(rebuild_gst.rg_lock);
+
 		D_GOTO(free, rc);
 	}
 
@@ -436,6 +479,8 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 		DP_UOID(oid), shard);
 	memset(&hash_out, 0, sizeof(hash_out));
 	enum_anchor_set_shard(&hash_out, shard);
+
+	tls->rebuild_obj_count++;
 	while (!daos_hash_is_eof(&hash_out)) {
 		daos_key_desc_t	kds[ITER_COUNT];
 		uint32_t	num = ITER_COUNT;
@@ -468,7 +513,6 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 free:
 	if (dkey_iov.iov_buf != NULL)
 		D_FREE(dkey_iov.iov_buf, dkey_buf_size);
-	tls->rebuild_obj_count++;
 	D_DEBUG(DB_TRACE, "stop rebuild obj "DF_UOID" for shard %u rc %d\n",
 		DP_UOID(oid), shard, rc);
 
@@ -531,7 +575,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		daos_handle_t ph = DAOS_HDL_INVAL;
 		struct pool_map *map = rebuild_pool_map_get();
 
-		rc = dc_pool_local_open(tls->rebuild_pool_uuid,
+		rc = dc_pool_local_open(rebuild_gst.rg_pool_uuid,
 					tls->rebuild_pool_hdl_uuid, 0, NULL,
 					map, tls->rebuild_svc_list, &ph);
 		rebuild_pool_map_put(map);
@@ -612,7 +656,12 @@ rebuild_puller(void *arg)
 	}
 
 	tls->rebuild_task_init = 0;
+
+	ABT_mutex_lock(rebuild_gst.rg_lock);
 	rebuild_gst.rg_pullers[0]--;
+	rebuild_gst.rg_puller_total--;
+	ABT_mutex_unlock(rebuild_gst.rg_lock);
+
 	D_FREE_PTR(iter_arg);
 }
 
@@ -630,7 +679,6 @@ ds_rebuild_obj_hdl_get(uuid_t pool_uuid, daos_handle_t *hdl)
 		return 0;
 	}
 
-	uuid_copy(tls->rebuild_pool_uuid, pool_uuid);
 	btr_root = &tls->rebuild_local_root;
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
@@ -717,17 +765,33 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 		arg->obj_cb = rebuild_obj_iterate_keys;
 		arg->root_hdl = btr_hdl;
 		arg->map_ver = rebuild_in->roi_map_ver;
+
 		D_ASSERT(rebuild_gst.rg_pullers != NULL);
+
+		ABT_mutex_lock(rebuild_gst.rg_lock);
+		/* check again in case someone else won the lock before me
+		 * and created the ULT.
+		 */
+		if (tls->rebuild_task_init) {
+			ABT_mutex_unlock(rebuild_gst.rg_lock);
+			D_FREE_PTR(arg);
+			D_GOTO(out, rc = 0);
+		}
+
 		rebuild_gst.rg_pullers[0]++;
-		tls->rebuild_task_init = 1;
+		rebuild_gst.rg_puller_total++;
+
 		rc = dss_ult_create(rebuild_puller, arg, -1, NULL);
 		if (rc) {
 			tls->rebuild_task_init = 0;
 			rebuild_gst.rg_pullers[0]--;
+			rebuild_gst.rg_puller_total--;
+
 			D_FREE_PTR(arg);
 		}
+		ABT_mutex_unlock(rebuild_gst.rg_lock);
 	}
-
+	D_EXIT;
 out:
 	rebuild_out = crt_reply_get(rpc);
 	rebuild_out->ro_status = rc;

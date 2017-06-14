@@ -71,6 +71,8 @@ struct pool_comp_sorter {
 
 /** In memory data structure for pool map */
 struct pool_map {
+	/** protect the refcount */
+	pthread_mutex_t		 po_lock;
 	/** Current version of pool map */
 	uint32_t		 po_version;
 	/** refcount on the pool map */
@@ -878,6 +880,7 @@ pool_map_finalise(struct pool_map *map)
 		pool_tree_free(map->po_tree);
 		map->po_tree = NULL;
 	}
+	pthread_mutex_destroy(&map->po_lock);
 }
 
 /**
@@ -896,6 +899,7 @@ pool_map_initialise(struct pool_map *map, bool activate,
 	int			 rc = 0;
 
 	D_ASSERT(pool_map_empty(map));
+	pthread_mutex_init(&map->po_lock, NULL);
 
 	if (tree[0].do_comp.co_type != PO_COMP_TP_ROOT) {
 		D_DEBUG(DB_MGMT, "Invalid tree format: %s/%d\n",
@@ -1394,7 +1398,9 @@ pool_map_destroy(struct pool_map *map)
 void
 pool_map_addref(struct pool_map *map)
 {
+	pthread_mutex_lock(&map->po_lock);
 	map->po_ref++;
+	pthread_mutex_unlock(&map->po_lock);
 }
 
 /**
@@ -1404,9 +1410,15 @@ pool_map_addref(struct pool_map *map)
 void
 pool_map_decref(struct pool_map *map)
 {
+	bool free;
+
+	pthread_mutex_lock(&map->po_lock);
 	D_ASSERT(map->po_ref > 0);
 	map->po_ref--;
-	if (map->po_ref == 0)
+	free = (map->po_ref == 0);
+	pthread_mutex_unlock(&map->po_lock);
+
+	if (free)
 		pool_map_destroy(map);
 }
 
@@ -1568,7 +1580,7 @@ pool_map_tgt_get_internal(struct pool_map *map, unsigned int ver,
 		return 0;
 
 	D_ALLOC(tgts_find, *tgt_cnt * sizeof(struct pool_target));
-	if (*tgt_pp == NULL)
+	if (tgts_find == NULL)
 		return -DER_NOMEM;
 
 	for (i = 0; i < cnt; i++) {

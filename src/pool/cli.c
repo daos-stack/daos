@@ -174,6 +174,7 @@ pool_map_update(struct dc_pool *pool, struct pool_map *map,
 
 	D_ASSERT(map != NULL);
 	if (pool->dp_map == NULL) {
+		pool->dp_ver = map_version;
 		rc = daos_placement_init(map);
 		if (rc == 0) {
 			D_DEBUG(DF_DSMC, DF_UUID": init pool map: %u\n",
@@ -185,7 +186,8 @@ pool_map_update(struct dc_pool *pool, struct pool_map *map,
 		return rc;
 	}
 
-	if (map_version <= pool_map_get_version(pool->dp_map)) {
+	/* XXX let's force refresh even for the same version... */
+	if (map_version < pool_map_get_version(pool->dp_map)) {
 		D_DEBUG(DF_DSMC, DF_UUID": got older pool map: %u -> %u %p\n",
 			DP_UUID(pool->dp_pool),
 			pool_map_get_version(pool->dp_map), map_version, pool);
@@ -206,6 +208,7 @@ pool_map_update(struct dc_pool *pool, struct pool_map *map,
 	tmp_map = pool->dp_map;
 	pool_map_addref(map);
 	pool->dp_map = map;
+	pool->dp_ver = map_version;
 	pool_map_decref(tmp_map);
 
 	return 0;
@@ -428,6 +431,28 @@ out:
 	if (pool != NULL)
 		dc_pool_put(pool);
 
+	return rc;
+}
+
+int
+dc_pool_update_map(daos_handle_t ph, struct pool_map *map)
+{
+	struct dc_pool	*pool;
+	int		 rc;
+
+	pool = dc_hdl2pool(ph);
+	if (pool == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
+
+	if (pool->dp_ver >= pool_map_get_version(map))
+		D_GOTO(out, rc = 0); /* nothing to do */
+
+	pthread_rwlock_wrlock(&pool->dp_map_lock);
+	rc = pool_map_update(pool, map, pool_map_get_version(map));
+	pthread_rwlock_unlock(&pool->dp_map_lock);
+out:
+	if (pool)
+		dc_pool_put(pool);
 	return rc;
 }
 

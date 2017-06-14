@@ -278,6 +278,12 @@ pl_map_decref(struct pl_map *map)
 		pl_map_destroy(map);
 }
 
+uint32_t
+pl_map_version(struct pl_map *map)
+{
+	return map->pl_ver;
+}
+
 /**
  * XXX this should be per-pool.
  */

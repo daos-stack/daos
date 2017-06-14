@@ -240,7 +240,7 @@ rebuild_dkeys(void **state)
 			      strlen("data") + 1, 0, &req);
 	}
 
-	/* Rebuild rank 1 */
+	/* Rebuild rank 2 */
 	rebuild_single_target(arg, 2, false);
 	ioreq_fini(&req);
 }

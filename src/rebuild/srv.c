@@ -66,7 +66,7 @@ fini(void)
 {
 	if (rebuild_gst.rg_pullers) {
 		D_FREE(rebuild_gst.rg_pullers,
-		       rebuild_gst.rg_puller_nr *
+		       rebuild_gst.rg_puller_nxs *
 		       sizeof(*rebuild_gst.rg_pullers));
 	}
 	ABT_mutex_free(&rebuild_gst.rg_lock);
@@ -112,9 +112,9 @@ rebuild_tls_init(const struct dss_thread_local_storage *dtls,
 	if (!rebuild_gst.rg_pullers) {
 		ABT_mutex_lock(rebuild_gst.rg_lock);
 		if (!rebuild_gst.rg_pullers) {
-			rebuild_gst.rg_puller_nr = dss_get_threads_number();
+			rebuild_gst.rg_puller_nxs = dss_get_threads_number();
 			D_ALLOC(rebuild_gst.rg_pullers,
-				rebuild_gst.rg_puller_nr *
+				rebuild_gst.rg_puller_nxs *
 				sizeof(*rebuild_gst.rg_pullers));
 			if (!rebuild_gst.rg_pullers) {
 				ABT_mutex_unlock(rebuild_gst.rg_lock);
@@ -195,51 +195,56 @@ ds_rebuild_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 int
 ds_rebuild_tgt_query_handler(crt_rpc_t *rpc)
 {
-	struct rebuild_tls		*tls = rebuild_tls_get();
 	struct rebuild_tgt_query_out	*rtqo;
 	struct rebuild_tgt_query_info	status;
 	int				i;
 	bool				rebuilding = false;
 	int				rc;
 
-	memset(&status, 0, sizeof(status));
 	rtqo = crt_reply_get(rpc);
-	rtqo->rtqo_rebuilding = 0;
-	rtqo->rtqo_rec_count = 0;
-	rtqo->rtqo_obj_count = 0;
+	memset(rtqo, 0, sizeof(*rtqo));
+	memset(&status, 0, sizeof(status));
 
 	/* let's check status on every thread*/
+	ABT_mutex_lock(rebuild_gst.rg_lock);
 	rc = dss_collective(dss_rebuild_check_scanning, &status);
-	if (rc)
+	if (rc) {
+		ABT_mutex_unlock(rebuild_gst.rg_lock);
 		D_GOTO(out, rc);
+	}
 
 	if (status.scanning == 0) {
 		/* then check building status*/
-		for (i = 0; i < rebuild_gst.rg_puller_nr; i++) {
-			if (rebuild_gst.rg_pullers[i] > 0) {
-				D_DEBUG(DB_TRACE,
-					"thread %d still rebuilding\n", i);
+		for (i = 0; i < rebuild_gst.rg_puller_nxs; i++) {
+			if (rebuild_gst.rg_pullers[i] == 0)
+				continue;
+
+			D_DEBUG(DB_TRACE,
+				"thread %d rebuilding %d keys, total=%d\n", i,
+				rebuild_gst.rg_pullers[i],
+				rebuild_gst.rg_puller_total);
 				rebuilding = true;
-				break;
-			}
+			break;
 		}
 	} else {
 		rebuilding = true;
 	}
+	ABT_mutex_unlock(rebuild_gst.rg_lock);
 
 	if (rebuilding)
 		rtqo->rtqo_rebuilding = 1;
 
+	if (status.status != 0)
+		rtqo->rtqo_status = status.status;
+
 	D_DEBUG(DB_TRACE, "pool "DF_UUID" scanning %d/%d rebuilding=%s, "
-		"obj_count=%d, rec_count=%d\n",
-		DP_UUID(tls->rebuild_pool_uuid), status.scanning,
+		"obj_count=%d, rec_count=%d, status=%d\n",
+		DP_UUID(rebuild_gst.rg_pool_uuid), status.scanning,
 		status.status, rebuilding ? "yes" : "no", status.obj_count,
-		status.rec_count);
+		status.rec_count, rtqo->rtqo_status);
 	rtqo->rtqo_rec_count = status.rec_count;
 	rtqo->rtqo_obj_count = status.obj_count;
 
-	if (status.status != 0)
-		rtqo->rtqo_status = status.status;
 out:
 	if (rtqo->rtqo_status == 0)
 		rtqo->rtqo_status = rc;
@@ -289,9 +294,10 @@ ds_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_tgts,
 		D_GOTO(out_rpc, rc);
 
 	rtqo = crt_reply_get(tgt_rpc);
-	D_DEBUG(DB_TRACE, "%p query rebuild status %d obj count %d"
-		" rec count %d\n", rtqo, rtqo->rtqo_rebuilding,
-		rtqo->rtqo_obj_count, rtqo->rtqo_rec_count);
+	D_DEBUG(DB_TRACE, "%p query rebuild ver=%u, status=%d, obj_cnt=%d"
+		" rec_cnt=%d\n", rtqo, rebuild_gst.rg_rebuild_ver,
+		rtqo->rtqo_rebuilding, rtqo->rtqo_obj_count,
+		rtqo->rtqo_rec_count);
 
 	memset(status, 0, sizeof(*status));
 	if (rtqo->rtqo_status != 0)
@@ -303,7 +309,7 @@ ds_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_tgts,
 	status->rs_version = rebuild_gst.rg_rebuild_ver;
 	status->rs_rec_nr = rtqo->rtqo_rec_count;
 	status->rs_obj_nr = rtqo->rtqo_obj_count;
-
+	D_EXIT;
 out_rpc:
 	crt_req_decref(tgt_rpc);
 out_put:
@@ -315,47 +321,45 @@ out_put:
  * Finish the rebuild pool, i.e. disconnect pool, close rebuild container,
  * and Mark the failure target to be DOWNOUT.
  */
-int
-ds_rebuild_fini(const uuid_t uuid, uint32_t map_ver,
-		daos_rank_list_t *tgts_failed)
+static int
+ds_rebuild_fini(const uuid_t uuid, daos_rank_list_t *tgts_failed)
 {
-	struct rebuild_tls	*tls = rebuild_tls_get();
 	struct ds_pool		*pool;
 	struct rebuild_fini_tgt_in *rfi;
 	struct rebuild_out	*ro;
 	crt_rpc_t		*rpc;
 	int			rc;
 
-	D_DEBUG(DB_TRACE, "pool rebuild "DF_UUID" (map_ver=%u) finish.\n",
-		DP_UUID(uuid), map_ver);
+	D_ENTER;
+	if (uuid_compare(uuid, rebuild_gst.rg_pool_uuid) != 0)
+		D_GOTO(out, rc = 0); /* even possible? */
 
-	if (uuid_compare(uuid, tls->rebuild_pool_uuid) != 0)
-		return 0;
-
-	/* Mark the target to be DOWNOUT */
 	/* Note: if the leader has been changed, it should still broadcast
 	 * the fini
 	 */
-	rc = ds_pool_tgt_exclude_out(tls->rebuild_pool_uuid, tgts_failed, NULL);
+	D_DEBUG(DB_TRACE, "mark failed targets of "DF_UUID" as DOWNOUT\n",
+		DP_UUID(uuid));
+	rc = ds_pool_tgt_exclude_out(rebuild_gst.rg_pool_uuid,
+				     tgts_failed, NULL);
 	if (rc != 0 && rc != -DER_NOTLEADER)
-		return rc;
+		D_GOTO(out, rc);
 
 	pool = ds_pool_lookup(uuid);
 	if (pool == NULL)
-		return -DER_NO_HDL;
+		D_GOTO(out, rc);
 
-	/* Then send rebuild RPC to all targets of the pool */
+	D_DEBUG(DB_TRACE, "Notify all surviving nodes to finalize rebuild\n");
 	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
 				  pool, DAOS_REBUILD_MODULE,
 				  REBUILD_TGT_FINI, &rpc, NULL, tgts_failed);
 	if (rc != 0) {
 		D_ERROR("pool map broad cast failed: rc %d\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out_pool, rc);
 	}
 
 	rfi = crt_req_get(rpc);
 	uuid_copy(rfi->rfti_pool_uuid, uuid);
-	rfi->rfti_pool_map_ver = map_ver;
+	rfi->rfti_pool_map_ver = pool->sp_map_version;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -366,35 +370,59 @@ ds_rebuild_fini(const uuid_t uuid, uint32_t map_ver,
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to fini pool rebuild: %d\n",
 			DP_UUID(uuid), rc);
+	D_EXIT;
 out_rpc:
 	crt_req_decref(rpc);
-out:
-	ds_pool_put(pool);
-	if (rc == 0)
-		uuid_clear(tls->rebuild_pool_uuid);
+out_pool:
+	D_DEBUG(DB_TRACE, "pool rebuild "DF_UUID" (map_ver=%u) finish.\n",
+		DP_UUID(uuid), pool->sp_map_version);
 
+	ds_pool_put(pool);
+out:
+	/* tgt_fini should have done this for me, but just in case... */
+	uuid_clear(rebuild_gst.rg_pool_uuid);
 	return rc;
 }
 
 #define RBLD_QUERY_INTV	2	/* # seocnds to query rebuild status */
-#define RBLD_FAIL_LIMIT	50
+#define RBLD_FAIL_LIMIT	100
 #define RBLD_SBUF_LEN	256
 
 void
 ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 		 daos_rank_list_t *tgts_failed)
 {
-	double  begin = ABT_get_wtime();
-	double	then = 0;
-	double	now;
-	int	rc;
-	int	i = 2;
-	int	failed = 0;
+	struct ds_pool	*pool;
+	double		 begin = ABT_get_wtime();
+	double		 then = 0;
+	double		 then_print = 0;
+	double		 now;
+	unsigned long	 i = 2;
+	unsigned	 failed = 0;
+	bool		 bcast_yes = true;
+	int		 rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (!pool) {
+		D_CRIT("No leader anymore?\n");
+		return;
+	}
 
 	while (1) {
 		char				*str;
 		char				 sbuf[RBLD_SBUF_LEN];
 		struct daos_rebuild_status	 status;
+
+		/* broadcast new pool map for cascading failure */
+		if (bcast_yes &&
+		    pool->sp_map_version > rebuild_gst.rg_bcast_ver) {
+			D_PRINT("cascading failure, bcast pool map again\n");
+			rc = ds_pool_pmap_broadcast(pool_uuid, NULL);
+			if (rc == 0)
+				rebuild_gst.rg_bcast_ver = pool->sp_map_version;
+			else
+				bcast_yes = false;
+		}
 
 		now = ABT_get_wtime();
 		if (now - then < RBLD_QUERY_INTV) {
@@ -402,20 +430,24 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 			ABT_thread_yield();
 			continue;
 		}
+		bcast_yes = true;
 
+		/* query the current rebuild status */
 		memset(&status, 0, sizeof(status));
 		rc = ds_rebuild_query(pool_uuid, tgts_failed, &status);
 		if (rc != 0 || status.rs_errno != 0) {
 			/* NB: may not be a rebuild failure, e.g. multi-failure
 			 * during rebuild can fail the query bcast.
 			 */
-			D_ERROR("Rebuild query failed (rc=%d, errno=%d)\n",
+			D_DEBUG(DB_TRACE, "Retry query (rc=%d, err=%d)\n",
 				rc, status.rs_errno);
 			failed++;
 			if (failed < RBLD_FAIL_LIMIT) {
 				then = now;
 				continue; /* query later */
 			}
+			D_PRINT("Rebuild query failed (rc=%d, errno=%d)\n",
+				rc, status.rs_errno);
 		} else {
 			failed = 0; /* reset the counter */
 		}
@@ -435,17 +467,21 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 			str, map_ver, status.rs_obj_nr, status.rs_rec_nr,
 			(int)(now - begin));
 
+		D_DEBUG(DB_TRACE, "%s", sbuf);
 		if (failed || status.rs_done) {
 			D_PRINT("%s", sbuf);
 			break;
 		}
 
-		if (IS_PO2(++i))
+		i++;
+		/* print something at least for each 10 secons */
+		if (IS_PO2(i) || now - then_print > 10) {
+			then_print = now;
 			D_PRINT("%s", sbuf);
-		else
-			D_DEBUG(DB_TRACE, "%s", sbuf);
+		}
 		then = now;
 	};
+	ds_pool_put(pool);
 }
 
 /**
@@ -470,6 +506,17 @@ ds_rebuild(const uuid_t uuid, uint32_t map_ver, daos_rank_list_t *tgts_failed,
 		D_ERROR("Can't find the pool, not leader anymore?\n");
 		return -DER_NOTLEADER;
 	}
+
+	ABT_mutex_lock(rebuild_gst.rg_lock);
+	/* because leader already has already got the latest pool map,
+	 * so it might start scan staightaway and send object list to
+	 * other nodes which are not ready yet. So we need a barrier
+	 * to make sure leader will proceed only if everyone else has
+	 * already been aware of the rebuild request and pool map.
+	 */
+	D_ASSERT(!rebuild_gst.rg_leader_barrier);
+	rebuild_gst.rg_leader_barrier = true;
+	ABT_mutex_unlock(rebuild_gst.rg_lock);
 
 	/* Send rebuild RPC to all targets of the pool to initialize rebuild */
 	rc = ds_pool_bcast_create(dss_get_module_info()->dmi_ctx,
@@ -507,8 +554,22 @@ ds_rebuild(const uuid_t uuid, uint32_t map_ver, daos_rank_list_t *tgts_failed,
 	/* Broadcast the pool map for rebuild */
 	rc = ds_pool_pmap_broadcast(uuid, tgts_failed);
 	if (rc) {
-		D_ERROR("pool map broadcast failed: rc %d\n", rc);
+		D_CRIT("pool map broadcast failed: rc %d\n", rc);
 		D_GOTO(out_rpc, rc);
+	}
+
+	/* it's time for the leader to go */
+	ABT_mutex_lock(rebuild_gst.rg_lock);
+	rebuild_gst.rg_leader_barrier = false;
+	ABT_cond_broadcast(rebuild_gst.rg_cond);
+	ABT_mutex_unlock(rebuild_gst.rg_lock);
+
+	if (rebuild_gst.rg_bcast_ver < map_ver) {
+		/* XXX we should not trust this one in case of cascading
+		 * failure, instead ds_pool_pmap_broadcast() should return
+		 * the version
+		 */
+		rebuild_gst.rg_bcast_ver = map_ver;
 	}
 	D_EXIT;
 out_rpc:
@@ -544,7 +605,7 @@ ds_rebuild_one(uuid_t pool_uuid, uint32_t map_ver,
 	ds_rebuild_check(pool_uuid, map_ver, tgts_failed);
 	D_EXIT;
 out:
-	rc1 = ds_rebuild_fini(pool_uuid, map_ver, tgts_failed);
+	rc1 = ds_rebuild_fini(pool_uuid, tgts_failed);
 	if (rc == 0)
 		rc = rc1;
 
@@ -555,12 +616,12 @@ static void
 ds_rebuild_ult(void *arg)
 {
 	struct ds_rebuild_task	*task;
-	struct ds_rebuild_task	*tmp;
 	int			 rc;
 
 	/* rebuild all failures one by one */
-	daos_list_for_each_entry_safe(task, tmp, &rebuild_gst.rg_task_list,
-				      dst_list) {
+	while (!daos_list_empty(&rebuild_gst.rg_task_list)) {
+		task = daos_list_entry(rebuild_gst.rg_task_list.next,
+				       struct ds_rebuild_task, dst_list);
 		daos_list_del(&task->dst_list);
 		rebuild_gst.rg_rebuild_ver = task->dst_map_ver;
 
@@ -577,7 +638,11 @@ ds_rebuild_ult(void *arg)
 		D_FREE_PTR(task);
 		ABT_thread_yield();
 	}
-	rebuild_gst.rg_rebuild_ver = 0;
+
+	rebuild_gst.rg_rebuild_ver	= 0;
+	rebuild_gst.rg_bcast_ver	= 0;
+	rebuild_gst.rg_leader_barrier	= false;
+	rebuild_gst.rg_leader		= false;
 }
 
 /**
@@ -616,6 +681,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 
 	if (rebuild_gst.rg_rebuild_ver == 0) {
 		rebuild_gst.rg_rebuild_ver = map_ver;
+		rebuild_gst.rg_leader = true;
 
 		rc = dss_ult_create(ds_rebuild_ult, NULL, -1, NULL);
 		if (rc) {
@@ -651,7 +717,6 @@ ds_rebuild_fini_one(void *arg)
 	uuid_clear(tls->rebuild_cont_hdl_uuid);
 
 	uuid_clear(tls->rebuild_pool_hdl_uuid);
-	uuid_clear(tls->rebuild_pool_uuid);
 
 	daos_rank_list_free(tls->rebuild_svc_list);
 	tls->rebuild_svc_list = NULL;
@@ -664,11 +729,10 @@ ds_rebuild_tgt_fini_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_fini_tgt_in	*rfi = crt_req_get(rpc);
 	struct rebuild_out		*ro = crt_reply_get(rpc);
-	struct rebuild_tls		*tls = rebuild_tls_get();
 	struct ds_pool			*pool;
 	int				 rc;
 
-	if (uuid_compare(rfi->rfti_pool_uuid, tls->rebuild_pool_uuid) != 0)
+	if (uuid_compare(rfi->rfti_pool_uuid, rebuild_gst.rg_pool_uuid) != 0)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
 	D_DEBUG(DB_TRACE, "Finalize rebuild for "DF_UUID", map_ver=%u\n",
@@ -681,6 +745,8 @@ ds_rebuild_tgt_fini_handler(crt_rpc_t *rpc)
 	pool = rebuild_gst.rg_pool;
 	rebuild_gst.rg_pool = NULL;
 	ABT_mutex_unlock(rebuild_gst.rg_lock);
+
+	uuid_clear(rebuild_gst.rg_pool_uuid);
 
 	D_ASSERT(pool);
 	ds_pool_put(pool);

@@ -88,6 +88,7 @@ void pl_map_print(struct pl_map *map);
 struct pl_map *pl_map_find(daos_handle_t coh, daos_obj_id_t oid);
 void pl_map_addref(struct pl_map *map);
 void pl_map_decref(struct pl_map *map);
+uint32_t pl_map_version(struct pl_map *map);
 
 void pl_obj_layout_free(struct pl_obj_layout *layout);
 int  pl_obj_layout_alloc(unsigned int shard_nr,
