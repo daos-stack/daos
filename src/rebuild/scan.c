@@ -703,7 +703,7 @@ rebuild_scan_leader(void *data)
 out_group:
 	if (tgp->tg_targets != NULL) {
 		D_FREE(tgp->tg_targets,
-		       tgp->tg_target_nr * sizeof(tgp->tg_targets));
+		       tgp->tg_target_nr * sizeof(*tgp->tg_targets));
 	}
 	D_FREE_PTR(tgp);
 out_map:
