@@ -333,8 +333,11 @@ ds_rebuild_fini(const uuid_t uuid, uint32_t map_ver,
 		return 0;
 
 	/* Mark the target to be DOWNOUT */
+	/* Note: if the leader has been changed, it should still broadcast
+	 * the fini
+	 */
 	rc = ds_pool_tgt_exclude_out(tls->rebuild_pool_uuid, tgts_failed, NULL);
-	if (rc)
+	if (rc != 0 && rc != -DER_NOTLEADER)
 		return rc;
 
 	pool = ds_pool_lookup(uuid);
