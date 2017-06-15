@@ -100,6 +100,11 @@ rdb_raft_clone_ae(const msg_appendentries_t *ae, msg_appendentries_t *ae_new)
 	int i;
 
 	*ae_new = *ae;
+	ae_new->entries = NULL;
+	D_ASSERTF(ae_new->n_entries >= 0, "%d\n", ae_new->n_entries);
+	if (ae_new->n_entries == 0)
+		return 0;
+
 	D_ALLOC(ae_new->entries, sizeof(*ae_new->entries) * ae_new->n_entries);
 	if (ae_new->entries == NULL)
 		return -DER_NOMEM;
@@ -108,6 +113,10 @@ rdb_raft_clone_ae(const msg_appendentries_t *ae, msg_appendentries_t *ae_new)
 		msg_entry_t    *e_new = &ae_new->entries[i];
 
 		*e_new = *e;
+		e_new->data.buf = NULL;
+		if (e_new->data.len == 0)
+			continue;
+
 		D_ALLOC(e_new->data.buf, e_new->data.len);
 		if (e_new->data.buf == NULL) {
 			rdb_raft_fini_ae(ae_new);

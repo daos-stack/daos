@@ -74,17 +74,23 @@ rdb_proc_msg_entry_t(crt_proc_t proc, void *data)
 	if (rc != 0)
 		return -DER_CRT_HG;
 	if (proc_op == CRT_PROC_DECODE) {
-		D_ALLOC(e->data.buf, e->data.len);
-		if (e->data.buf == NULL)
-			return -DER_NOMEM;
+		if (e->data.len > 0) {
+			D_ALLOC(e->data.buf, e->data.len);
+			if (e->data.buf == NULL)
+				return -DER_NOMEM;
+		} else {
+			e->data.buf = NULL;
+		}
 	}
-	rc = crt_proc_memcpy(proc, e->data.buf, e->data.len);
-	if (rc != 0) {
-		if (proc_op == CRT_PROC_DECODE)
-			D_FREE(e->data.buf, e->data.len);
-		return -DER_CRT_HG;
+	if (e->data.len > 0) {
+		rc = crt_proc_memcpy(proc, e->data.buf, e->data.len);
+		if (rc != 0) {
+			if (proc_op == CRT_PROC_DECODE)
+				D_FREE(e->data.buf, e->data.len);
+			return -DER_CRT_HG;
+		}
 	}
-	if (proc_op == CRT_PROC_FREE)
+	if (proc_op == CRT_PROC_FREE && e->data.buf != NULL)
 		D_FREE(e->data.buf, e->data.len);
 	return 0;
 }
@@ -116,9 +122,14 @@ rdb_proc_msg_appendentries_t(crt_proc_t proc, void *data)
 	if (rc != 0)
 		return -DER_CRT_HG;
 	if (proc_op == CRT_PROC_DECODE) {
-		D_ALLOC(ae->entries, sizeof(*ae->entries) * ae->n_entries);
-		if (ae->entries == NULL)
-			return -DER_NOMEM;
+		if (ae->n_entries > 0) {
+			D_ALLOC(ae->entries,
+				sizeof(*ae->entries) * ae->n_entries);
+			if (ae->entries == NULL)
+				return -DER_NOMEM;
+		} else {
+			ae->entries = NULL;
+		}
 	}
 	for (i = 0; i < ae->n_entries; i++) {
 		rc = rdb_proc_msg_entry_t(proc, &ae->entries[i]);
@@ -129,7 +140,7 @@ rdb_proc_msg_appendentries_t(crt_proc_t proc, void *data)
 			return -DER_CRT_HG;
 		}
 	}
-	if (proc_op == CRT_PROC_FREE)
+	if (proc_op == CRT_PROC_FREE && ae->entries != NULL)
 		D_FREE(ae->entries, sizeof(*ae->entries) * ae->n_entries);
 	return 0;
 }

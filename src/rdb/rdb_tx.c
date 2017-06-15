@@ -265,6 +265,12 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 	size_t	len;
 	int	rc;
 
+	D_ASSERTF((tx->dt_entry == NULL && tx->dt_entry_cap == 0 &&
+		   tx->dt_entry_len == 0) ||
+		  (tx->dt_entry != NULL && tx->dt_entry_cap > 0 &&
+		   tx->dt_entry_len <= tx->dt_entry_cap),
+		  "entry=%p cap=%zu len=%zu\n", tx->dt_entry, tx->dt_entry_cap,
+		  tx->dt_entry_len);
 	if (op->dto_opc == RDB_TX_CREATE || op->dto_opc == RDB_TX_DESTROY ||
 	    op->dto_opc == RDB_TX_UPDATE || op->dto_opc == RDB_TX_DELETE) {
 		if (op->dto_key.iov_len == 0)
@@ -293,7 +299,8 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 			return -DER_NOMEM;
 		if (tx->dt_entry_len > 0)
 			memcpy(new_buf, tx->dt_entry, tx->dt_entry_len);
-		D_FREE(tx->dt_entry, tx->dt_entry_cap);
+		if (tx->dt_entry != NULL)
+			D_FREE(tx->dt_entry, tx->dt_entry_cap);
 		tx->dt_entry = new_buf;
 		tx->dt_entry_cap = new_size;
 	}
