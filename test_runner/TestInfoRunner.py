@@ -213,6 +213,18 @@ class TestInfoRunner(PreRunner.PreRunner):
             value = self.test_info['directives']
         return value
 
+    def get_subList(self, keyname=None, default=""):
+        """ get a value from subList """
+        if keyname:
+            value = self.test_info['subList'].get(keyname, default)
+        else:
+            value = self.test_info['subList']
+        return value
+
+    def set_subList(self, keyname=None, keyvalue=None):
+        """ add to the subList """
+        self.test_info['subList'][keyname] = keyvalue
+
     def get_execStrategy(self):
         """ return the execStrategy list """
         return self.test_info['execStrategy']

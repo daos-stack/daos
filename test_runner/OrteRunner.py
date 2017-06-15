@@ -58,43 +58,42 @@ class OrteRunner():
     @staticmethod
     def add_cmd(cmd_list, cmd, parameters="", nextCmd=False):
         """add the ommand and parameters to the list
-           Note: entries need to start with a space"""
+           Note: added entries start with a space"""
         if nextCmd:
             cmd_list.append(" :")
         cmd_list.append(" {!s}".format(cmd))
         if parameters:
             cmd_list.append(" {!s}".format(parameters))
-        return cmd_list
 
     @staticmethod
     def add_env_vars(cmd_list, env_vars):
         """add the environment variables to the command list
-           Note: entries need to start with a space"""
+           Note: entries start with a space"""
         for (key, value) in env_vars.items():
             if value:
                 cmd_list.append(" -x {!s}={!s}".format(key, value))
             else:
                 cmd_list.append(" -x {!s}".format(key))
-        return cmd_list
 
     def add_nodes(self, cmd_list, nodes, procs=1):
         """add the node prefix to the command list
-           Note: entries need to start with a space"""
+           Note: entries start with a space"""
         if nodes[0].isupper():
             node_list = self.test_info.get_defaultENV(nodes)
         else:
             node_list = nodes
 
         cmd_list.append(" -H {!s} -N {!s}".format(node_list, procs))
-        return cmd_list
 
     def start_cmd_list(self, log_path, testsuite, prefix):
         """add the log directory to the prefix
-           Note: entries, after the first, need to start with a space"""
+           Note: entries, after the first, start with a space"""
         self.testsuite = testsuite
         self.log_dir_orte = os.path.abspath(log_path)
-        os.makedirs(self.log_dir_orte, exist_ok=True)
-
+        try:
+            os.makedirs(self.log_dir_orte)
+        except OSError:
+            pass
         cmd_list = []
         cmd_list.append("{!s}orterun".format(prefix))
         if self.test_info.get_defaultENV('TR_USE_URI', ""):
