@@ -187,7 +187,8 @@ rebuild_rec(struct rebuild_obj_arg *arg, daos_handle_t oh, daos_key_t *akey,
 	start = 0;
 	uuid_copy(cookie, cookies[0]);
 	for (i = 1; i < num; i++) {
-		if (uuid_compare(cookie, cookies[i]) == 0)
+		if (uuid_compare(cookie, cookies[i]) == 0 &&
+		    type != DAOS_IOD_SINGLE)
 			continue;
 
 		rc = rebuild_fetch_update(arg, oh, akey, i - start,

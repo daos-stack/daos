@@ -777,7 +777,7 @@ dss_collective(int (*func)(void *), void *arg)
 
 struct async_result {
 	ABT_future *future;
-	int	   result;
+	int	   *result;
 };
 
 static int
@@ -785,8 +785,8 @@ dss_task_comp_cb(struct daos_task *task, void *arg)
 {
 	struct async_result *cb_arg = arg;
 
+	*cb_arg->result = task->dt_result;
 	ABT_future_set(*(cb_arg->future), (void *)(intptr_t)task->dt_result);
-	cb_arg->result = task->dt_result;
 
 	return 0;
 }
@@ -801,7 +801,8 @@ dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 	struct daos_sched	sched;
 	struct async_result	sched_cb_arg;
 	ABT_future		future;
-	int rc;
+	int			rc;
+	int			ret;
 
 	rc = ABT_future_create(1, NULL, &future);
 	if (rc != ABT_SUCCESS)
@@ -826,6 +827,7 @@ dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 		D_GOTO(free_future, rc = -DER_NOMEM);
 	}
 
+	sched_cb_arg.result = &ret;
 	rc = daos_task_register_comp_cb(task, dss_task_comp_cb,
 					sizeof(sched_cb_arg), &sched_cb_arg);
 	if (rc != 0) {
@@ -840,8 +842,8 @@ dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 	daos_sched_progress(&sched);
 	ABT_future_wait(future);
 
-	rc = sched_cb_arg.result;
-
+	if (rc == 0)
+		rc = ret;
 free_future:
 	ABT_future_free(&future);
 	return rc;
