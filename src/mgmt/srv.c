@@ -71,9 +71,6 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 
 	force = (murderer->rip_flags != 0);
 
-	crt_group_rank(NULL, &rank);
-	D_PRINT("Service rank %d is being killed ... farewell\n", rank);
-
 	/*
 	 * the yield below is to workaround an ofi err msg at client-side -
 	 * fi_cq_readerr got err: 5(Input/output error) ..
@@ -89,6 +86,9 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 		sig = SIGKILL;
 	else
 		sig = SIGTERM;
+	crt_group_rank(NULL, &rank);
+	D_PRINT("Service rank %d is being killed by signal %d... farewell\n",
+		rank, sig);
 	kill(getpid(), sig);
 
 	return rc;
