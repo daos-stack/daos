@@ -183,6 +183,8 @@ dss_progress_cb(void *arg)
 	ABT_bool	 state;
 	int		 rc;
 
+	daos_sched_progress(&dss_get_module_info()->dmi_sched);
+
 	rc = ABT_future_test(*shutdown, &state);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
@@ -237,6 +239,13 @@ dss_srv_handler(void *arg)
 		return;
 	}
 
+	/* Prepare the scheduler */
+	rc = daos_sched_init(&dmi->dmi_sched, NULL, dmi->dmi_ctx);
+	if (rc != 0) {
+		D_ERROR("failed to init the seduler\n");
+		D_GOTO(destroy, rc);
+	}
+
 	dx->dx_idx = dmi->dmi_tid;
 	dmi->dmi_xstream = dx;
 	ABT_mutex_lock(xstream_data.xd_mutex);
@@ -256,7 +265,11 @@ dss_srv_handler(void *arg)
 	rc = crt_progress(dmi->dmi_ctx, -1, dss_progress_cb, &dx->dx_shutdown);
 	if (rc != 0)
 		D_ERROR("failed to progress network context: %d\n", rc);
+
+	daos_sched_fini(&dmi->dmi_sched);
+destroy:
 	crt_context_destroy(dmi->dmi_ctx, true);
+
 }
 
 static inline struct dss_xstream *
@@ -798,8 +811,7 @@ int
 dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 {
 	struct daos_task	*task = NULL;
-	struct daos_sched	sched;
-	struct async_result	sched_cb_arg;
+	struct async_result	cb_arg;
 	ABT_future		future;
 	int			rc;
 	int			ret;
@@ -808,38 +820,27 @@ dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
-	sched_cb_arg.future = &future;
-	sched_cb_arg.result = 0;
-
-	/* Prepare the task and scheduler */
-	rc = daos_sched_init(&sched, NULL,
-			     dss_get_module_info()->dmi_ctx);
-	if (rc != 0)
-		D_GOTO(free_future, rc);
+	cb_arg.future = &future;
+	cb_arg.result = 0;
 
 	D_ALLOC_PTR(task);
 	if (task == NULL)
 		D_GOTO(free_future, rc = -DER_NOMEM);
 
-	rc = daos_task_create(opc, &sched, arg, 0, NULL, task);
+	rc = daos_task_create(opc, &dss_get_module_info()->dmi_sched,
+			      arg, 0, NULL, task);
 	if (rc != 0) {
 		D_FREE_PTR(task);
 		D_GOTO(free_future, rc = -DER_NOMEM);
 	}
 
-	sched_cb_arg.result = &ret;
+	cb_arg.result = &ret;
 	rc = daos_task_register_comp_cb(task, dss_task_comp_cb,
-					sizeof(sched_cb_arg), &sched_cb_arg);
+					sizeof(cb_arg), &cb_arg);
 	if (rc != 0) {
 		D_FREE_PTR(task);
 		D_GOTO(free_future, rc = -DER_NOMEM);
 	}
-
-	/* Note: here it will get into the daos_client stack,
-	 * where all of attached tasks will be freed automatically,
-	 * so we only need to free scheduler after this.
-	 */
-	daos_sched_progress(&sched);
 	ABT_future_wait(future);
 
 	if (rc == 0)

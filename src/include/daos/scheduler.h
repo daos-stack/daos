@@ -98,6 +98,14 @@ daos_sched_init(struct daos_sched *sched, daos_sched_comp_cb_t comp_cb,
 		void *udata);
 
 /**
+ * Finish the scheduler.
+ *
+ * \param sched [input]		the scheduler to be finished.
+ */
+void
+daos_sched_fini(struct daos_sched *sched);
+
+/**
  * Wait for all tasks in the scheduler to complete and finalize it.
  * If another thread is completing the scheduler, this returns immediately.
  *

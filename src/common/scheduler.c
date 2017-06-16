@@ -171,7 +171,7 @@ daos_task_decref(struct daos_task *task)
 	D_FREE_PTR(task);
 }
 
-static void
+void
 daos_sched_fini(struct daos_sched *sched)
 {
 	struct daos_sched_private *dsp = daos_sched2priv(sched);
