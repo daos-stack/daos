@@ -501,9 +501,13 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	map_version = cont_hdl->sch_pool->spc_map_version;
 	if (orw->orw_map_ver < map_version) {
-		D_ERROR("stale version req %d map_version %d\n",
+		/* XXX Let's only output a warnning here, because
+		 * return -DESTALE might delay write, which might
+		 * cause rebuild missing some data.
+		 * This is just the temporary solution XXX.(DAOS-308).
+		 */
+		D_WARN("stale version req %d map_version %d\n",
 			orw->orw_map_ver, map_version);
-		D_GOTO(out, rc = -DER_STALE);
 	}
 
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" tag %d\n", opc_get(rpc->cr_opc),
