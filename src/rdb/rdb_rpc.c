@@ -316,6 +316,7 @@ rdb_recvd(void *arg)
 		if (!stop)
 			rdb_raft_process_reply(db, rrpc->drc_node,
 					       rrpc->drc_rpc);
+		rdb_raft_free_request(db, rrpc->drc_rpc);
 		rdb_free_raft_rpc(rrpc);
 		ABT_thread_yield();
 	}
@@ -343,6 +344,7 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 		 */
 		daos_list_del_init(&rrpc->drc_entry);
 		ABT_mutex_unlock(db->d_mutex);
+		rdb_raft_free_request(db, rrpc->drc_rpc);
 		rdb_free_raft_rpc(rrpc);
 		return rc;
 	}

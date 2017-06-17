@@ -1220,10 +1220,30 @@ rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 						      &out_ae->aeo_msg);
 		break;
 	default:
-		D_ASSERTF(0, "unexpected opc: %u\n", opc);
+		D_ASSERTF(0, DF_DB": unexpected opc: %u\n", DP_DB(db), opc);
 	}
 	if (rc != 0)
 		D_ERROR(DF_DB": failed to process opc %u response: %d\n",
 			DP_DB(db), opc, rc);
 	rdb_raft_check_state(db, &state);
+}
+
+/* Free any additional memory we allocated for the request. */
+void
+rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc)
+{
+	crt_opcode_t			opc = opc_get(rpc->cr_opc);
+	struct rdb_appendentries_in    *in_ae;
+
+	switch (opc) {
+	case RDB_REQUESTVOTE:
+		/* Nothing to do. */
+		break;
+	case RDB_APPENDENTRIES:
+		in_ae = crt_req_get(rpc);
+		rdb_raft_fini_ae(&in_ae->aei_msg);
+		break;
+	default:
+		D_ASSERTF(0, DF_DB": unexpected opc: %u\n", DP_DB(db), opc);
+	}
 }

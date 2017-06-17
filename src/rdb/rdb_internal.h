@@ -127,6 +127,7 @@ int rdb_raft_wait_applied(struct rdb *db, uint64_t index);
 int rdb_requestvote_handler(crt_rpc_t *rpc);
 int rdb_appendentries_handler(crt_rpc_t *rpc);
 void rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc);
+void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
 
 /* rdb_rpc.c ******************************************************************/
 
