@@ -74,7 +74,7 @@ ds_sgls_free(daos_sg_list_t *sgls, int nr)
  */
 static void
 ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
-		   uint32_t map_version, struct ds_cont_hdl *cont_hdl)
+		   uint32_t map_version, uuid_t cookie)
 {
 	int	rc;
 
@@ -85,7 +85,7 @@ ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 		D_ASSERT(orwi != NULL);
 
 		if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE) {
-			rc = vos_obj_zc_update_end(ioh, cont_hdl->sch_uuid,
+			rc = vos_obj_zc_update_end(ioh, cookie,
 						   &orwi->orw_dkey,
 						   orwi->orw_nr,
 						   orwi->orw_iods.da_arrays,
@@ -400,23 +400,21 @@ out:
 }
 
 static int
-ds_obj_rw_inline(crt_rpc_t *rpc, struct ds_cont_hdl *cont_hdl)
+ds_obj_rw_inline(crt_rpc_t *rpc, struct ds_cont *cont, uuid_t cookie)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	daos_sg_list_t		*sgls = orw->orw_sgls.da_arrays;
 	int			rc;
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE) {
-		rc = vos_obj_update(cont_hdl->sch_cont->sc_hdl,
-				    orw->orw_oid, orw->orw_epoch,
-				    cont_hdl->sch_uuid, &orw->orw_dkey,
-				    orw->orw_nr, orw->orw_iods.da_arrays, sgls);
+		rc = vos_obj_update(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
+				    cookie, &orw->orw_dkey, orw->orw_nr,
+				    orw->orw_iods.da_arrays, sgls);
 	} else {
 		struct obj_rw_out *orwo;
 
 		orwo = crt_reply_get(rpc);
-		rc = vos_obj_fetch(cont_hdl->sch_cont->sc_hdl,
-				   orw->orw_oid, orw->orw_epoch,
+		rc = vos_obj_fetch(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
 				   &orw->orw_dkey, orw->orw_nr,
 				   orw->orw_iods.da_arrays, sgls);
 		if (rc != 0)
@@ -435,45 +433,48 @@ out:
 	return rc;
 }
 
+/**
+ * Lookup and return the container handle, if it is a rebuild handle, which
+ * will never associate a particular container, then the contaier structure
+ * will be returned to \a contp.
+ */
 static int
 ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-		   struct ds_cont_hdl **hdlp)
+		   struct ds_cont_hdl **hdlp, struct ds_cont **contp)
 {
 	struct ds_cont_hdl	*cont_hdl;
+	int			 rc;
 
 	cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
 	if (cont_hdl == NULL)
-		return -DER_NO_HDL;
+		D_GOTO(failed, rc = -DER_NO_HDL);
 
-	if (cont_hdl->sch_cont == NULL) {
-		if (is_rebuild_container(cont_hdl_uuid)) {
-			int rc;
-
-			D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
-				DP_UUID(cont_hdl_uuid), cont_hdl);
-			rc = ds_cont_lookup_or_create(cont_hdl, cont_uuid);
-			if (rc) {
-				ds_cont_hdl_put(cont_hdl);
-				return rc;
-			}
-		} else {
-			ds_cont_hdl_put(cont_hdl);
-			return -DER_NO_HDL;
-		}
+	if (cont_hdl->sch_cont != NULL) { /* a regular container */
+		*contp = cont_hdl->sch_cont;
+		D_GOTO(out, rc = 0);
 	}
 
-	if (uuid_compare(cont_hdl->sch_cont->sc_uuid, cont_uuid) != 0) {
-		D_ERROR(DF_UUID" cont "DF_UUID" %p\n",
-			DP_UUID(cont_hdl->sch_uuid), DP_UUID(cont_uuid),
-			cont_hdl->sch_cont);
+	if (!is_rebuild_container(cont_hdl_uuid)) {
+		D_ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
+			DP_UUID(cont_uuid), cont_hdl->sch_ref);
 		ds_cont_hdl_put(cont_hdl);
-		return -DER_STALE;
+		D_GOTO(failed, rc = -DER_NO_HDL);
 	}
+	/* rebuild handle is a dummy and never attached by a real container */
 
-	D_ASSERT(hdlp != NULL);
+	D_DEBUG(DB_TRACE, DF_UUID"/%p is rebuild cont hdl\n",
+		DP_UUID(cont_hdl_uuid), cont_hdl);
+
+	/* load or create VOS container on demand */
+	rc = ds_cont_lookup(cont_hdl->sch_pool->spc_uuid, cont_uuid, contp);
+	if (rc) {
+		ds_cont_hdl_put(cont_hdl);
+		D_GOTO(failed, rc);
+	}
+out:
 	*hdlp = cont_hdl;
-
-	return 0;
+failed:
+	return rc;
 }
 
 int
@@ -481,6 +482,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 {
 	struct obj_rw_in	*orw;
 	struct ds_cont_hdl	*cont_hdl = NULL;
+	struct ds_cont		*cont = NULL;
 	daos_handle_t		ioh = DAOS_HDL_INVAL;
 	crt_bulk_op_t		bulk_op;
 	uint32_t		map_version = 0;
@@ -490,7 +492,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	D_ASSERT(orw != NULL);
 
 	rc = ds_check_container(orw->orw_co_hdl, orw->orw_co_uuid,
-				&cont_hdl);
+				&cont_hdl, &cont);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -517,13 +519,13 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		DP_UOID(orw->orw_oid), dss_get_module_info()->dmi_tid);
 	/* Inline update/fetch */
 	if (orw->orw_bulks.da_arrays == NULL && orw->orw_bulks.da_count == 0) {
-		rc = ds_obj_rw_inline(rpc, cont_hdl);
+		rc = ds_obj_rw_inline(rpc, cont, cont_hdl->sch_uuid);
 		D_GOTO(out, rc);
 	}
 
 	/* bulk update/fetch */
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE) {
-		rc = vos_obj_zc_update_begin(cont_hdl->sch_cont->sc_hdl,
+		rc = vos_obj_zc_update_begin(cont->sc_hdl,
 					     orw->orw_oid, orw->orw_epoch,
 					     &orw->orw_dkey, orw->orw_nr,
 					     orw->orw_iods.da_arrays, &ioh);
@@ -539,7 +541,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		D_ASSERT(orwo != NULL);
 
-		rc = vos_obj_zc_fetch_begin(cont_hdl->sch_cont->sc_hdl,
+		rc = vos_obj_zc_fetch_begin(cont->sc_hdl,
 					    orw->orw_oid, orw->orw_epoch,
 					    &orw->orw_dkey, orw->orw_nr,
 					    orw->orw_iods.da_arrays, &ioh);
@@ -566,11 +568,15 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	rc = ds_bulk_transfer(rpc, bulk_op, orw->orw_bulks.da_arrays,
 			      ioh, NULL, orw->orw_nr);
+	D_EXIT;
 out:
-	ds_obj_rw_complete(rpc, ioh, rc, map_version, cont_hdl);
-	if (cont_hdl != NULL)
+	ds_obj_rw_complete(rpc, ioh, rc, map_version,
+			   cont_hdl ? cont_hdl->sch_uuid : NULL);
+	if (cont_hdl) {
+		if (!cont_hdl->sch_cont)
+			ds_cont_put(cont); /* -1 for rebuild container */
 		ds_cont_hdl_put(cont_hdl);
-
+	}
 	return rc;
 }
 
@@ -708,6 +714,7 @@ ds_iter_single_vos(void *data)
 	struct obj_key_enum_in	*oei = iter_arg->oei;
 	struct obj_key_enum_out	*oeo = iter_arg->oeo;
 	struct ds_cont_hdl	*cont_hdl;
+	struct ds_cont		*cont;
 	vos_iter_entry_t	key_ent;
 	vos_iter_param_t	param;
 	daos_handle_t		ih;
@@ -716,9 +723,9 @@ ds_iter_single_vos(void *data)
 	int			rc;
 
 	rc = ds_check_container(oei->oei_co_hdl, oei->oei_co_uuid,
-				&cont_hdl);
+				&cont_hdl, &cont);
 	if (rc)
-		return rc;
+		D_GOTO(out, rc);
 
 	D_ASSERT(cont_hdl->sch_pool != NULL);
 	if (iter_arg->map_version == 0)
@@ -743,7 +750,7 @@ ds_iter_single_vos(void *data)
 
 	/* prepare iterate parameters */
 	memset(&param, 0, sizeof(param));
-	param.ip_hdl	= cont_hdl->sch_cont->sc_hdl;
+	param.ip_hdl	= cont->sc_hdl;
 	param.ip_oid	= oei->oei_oid;
 
 	if (type == VOS_ITER_RECX || type == VOS_ITER_SINGLE) {
@@ -824,11 +831,14 @@ ds_iter_single_vos(void *data)
 		daos_hash_set_eof(&oeo->oeo_anchor);
 		rc = 0;
 	}
-
+	D_EXIT;
 out_iter_fini:
 	vos_iter_finish(ih);
 out_cont_hdl:
+	if (!cont_hdl->sch_cont)
+		ds_cont_put(cont); /* -1 for rebuild container */
 	ds_cont_hdl_put(cont_hdl);
+out:
 	return rc;
 }
 

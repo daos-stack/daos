@@ -527,7 +527,9 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	return 0;
 
 err_cont:
-	cont_put(tls->dt_cont_cache, hdl->sch_cont);
+	if (hdl->sch_cont)
+		cont_put(tls->dt_cont_cache, hdl->sch_cont);
+
 	if (vos_co_created) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
 			DP_CONT(hdl->sch_pool->spc_uuid, cont_uuid));
