@@ -201,7 +201,7 @@ cont_op_hdlr(int argc, char *argv[])
 	}
 
 	if (op == CONT_QUERY) {
-		fprintf(stdout, "CONT"DF_UUIDF" GHCE: "DF_U64"\n",
+		fprintf(stdout, "CONT: "DF_UUIDF" GHCE: "DF_U64"\n",
 			DP_UUID(cont_info.ci_uuid),
 			cont_info.ci_epoch_state.es_ghce);
 	}

@@ -91,6 +91,7 @@ bool				t_kill_fetch;
 bool				t_kill_enum;
 bool				t_kill_server;
 uint64_t			t_wait;
+uint64_t			t_pause;
 bool				t_update_for_fetch;
 bool				t_keep_container;
 daos_oclass_id_t		obj_class = DAOS_OC_LARGE_RW;
@@ -1455,6 +1456,12 @@ kv_simul(struct test *test)
 
 		test->t_epoch++;
 		step++;
+		DBENCH_PRINT("Sleep "DF_U64" seconds before the next step\n",
+			     t_pause);
+		sleep(t_pause);
+		DBENCH_PRINT("Done sleeping.. continue with step: %d\n",
+			     step);
+
 	}
 
 	/* Read and verify the last step. */
@@ -1556,6 +1563,7 @@ Usage: daosbench -t TEST -p $UUID [OPTIONS]\n\
 				Fetch without setting up with updates\n\
 	--keep-container | -r	Keep container without destroying\n\
 	--pause=seconds | -w	pause test for some time\n\
+	--wait-for-kill | -l	wait tests to give time to kill\n\
 	--pretty-print | -d	pretty-print-flag. \n\
 	--check-tests | -c	do data verifications. \n\
 	--verbose | -v		verbose flag. \n\
@@ -1593,6 +1601,7 @@ test_init(struct test *test, int argc, char *argv[])
 		{"kill-server",		0,	NULL,	'u'},
 		{"keep-container",	0,	NULL,	'r'},
 		{"pause",		1,	NULL,	'w'},
+		{"wait-for-kill",	1,	NULL,	'l'},
 		{"container",		1,	NULL,	'n'},
 		{"group",		1,	NULL,	'g'},
 		{"svc",			1,	NULL,	'S'},
@@ -1624,6 +1633,7 @@ test_init(struct test *test, int argc, char *argv[])
 	t_kill_enum		= false;
 	t_keep_container	= false;
 	t_wait			= 0;
+	t_pause			= 0;
 
 	if (comm_world_rank != 0)
 		opterr = 0;
@@ -1685,8 +1695,13 @@ test_init(struct test *test, int argc, char *argv[])
 				return 1;
 			}
 			break;
-		case 'w':
+		case 'l':
 			t_wait = atoi(optarg);
+			break;
+		case 'w':
+			t_pause = atoi(optarg);
+			DBENCH_PRINT("kv-simul will pause for "DF_U64"s\n",
+				     t_pause);
 			break;
 		case 'u':
 			t_kill_server = true;
@@ -1785,7 +1800,8 @@ test_init(struct test *test, int argc, char *argv[])
 	if (test->t_container == NULL) {
 		if (comm_world_rank == 0)
 			fprintf(stderr,
-				"daosbench: container connot be NULL\n");
+				"daosbench: container cannot be NULL\n");
+		return 2;
 	}
 
 	if (test->t_steps <= 0) {
