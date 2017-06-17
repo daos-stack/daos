@@ -114,7 +114,7 @@ static struct daos_debug_fac debug_fac_dict[] = {
 		.df_name	= "vos",
 		.df_idp		= &dd_fac_vos,
 		.df_mask	= DB_DEFAULT,
-		.df_enabled	= 1,
+		.df_enabled	= 0,
 	},
 	{
 		.df_name	= "client",
