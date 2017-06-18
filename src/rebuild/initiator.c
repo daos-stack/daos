@@ -778,6 +778,7 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = 0);
 		}
 
+		tls->rebuild_task_init = 1;
 		rebuild_gst.rg_pullers[0]++;
 		rebuild_gst.rg_puller_total++;
 
