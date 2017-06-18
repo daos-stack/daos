@@ -654,12 +654,11 @@ dc_cont_close(struct daos_task *task)
 		daos_list_del_init(&cont->dc_po_list);
 		pthread_rwlock_unlock(&pool->dp_co_list_lock);
 
-		dc_pool_put(pool);
-		dc_cont_put(cont);
-
 		D_DEBUG(DF_DSMC, DF_CONT": closed: cookie="DF_X64" hdl="DF_UUID
 			"\n", DP_CONT(pool->dp_pool, cont->dc_uuid), coh.cookie,
 			DP_UUID(cont->dc_cont_hdl));
+		dc_pool_put(pool);
+		dc_cont_put(cont);
 		daos_task_complete(task, 0);
 		return 0;
 	}
