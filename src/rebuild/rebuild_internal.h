@@ -39,47 +39,36 @@ struct rebuild_globals {
 	/** active rebuild pullers for each xstream */
 	int			*rg_pullers;
 	/** # xstreams */
-	int			 rg_puller_nxs;
+	int			rg_puller_nxs;
 	/** total number of pullers */
-	int			 rg_puller_total;
-	bool			 rg_leader;
-	bool			 rg_leader_barrier;
-	/* rebuild has been aborted, accessed by xstream-0 only */
-	bool			 rg_abort;
+	int			rg_puller_total;
 	/** the current version being rebuilt, only used by leader */
-	uint32_t		 rg_rebuild_ver;
-	/** the last rebuild version, used by all participants  */
-	uint32_t		 rg_last_ver;
-	uint32_t		 rg_bcast_ver;
-	daos_list_t		 rg_task_list;
-	ABT_mutex		 rg_lock;
-	ABT_cond		 rg_cond;
-	uuid_t			 rg_pool_uuid;
-	/* reserved for now, move rebuild_pool_hdl_uuid to here */
-	uuid_t			 rg_poh_uuid;
-	/* reserved for now, move rebuild_cont_hdl_uuid to here */
-	uuid_t			 rg_coh_uuid;
-	/** cached query status */
+	uint32_t		rg_rebuild_ver;
+	/** the current version being rebuilt, only used by leader */
+	uint32_t		rg_last_ver;
+	uint32_t		rg_bcast_ver;
+	daos_list_t		rg_task_list;
+	ABT_mutex		rg_lock;
+	uuid_t			rg_pool_uuid;
 	struct daos_rebuild_status rg_status;
+	struct btr_root		rg_local_root;
+	daos_handle_t		rg_local_root_hdl;
+	uuid_t			rg_pool_hdl_uuid;
+	uuid_t			rg_cont_hdl_uuid;
+	daos_rank_list_t	*rg_svc_list;
+	unsigned int		rg_puller_running:1,
+				rg_abort:1;
 };
 
 extern struct rebuild_globals rebuild_gst;
 
 struct rebuild_tls {
-	struct btr_root rebuild_local_root;
-	daos_handle_t	rebuild_local_root_hdl;
-	uuid_t		rebuild_pool_hdl_uuid;
-	uuid_t		rebuild_cont_hdl_uuid;
 	daos_handle_t	rebuild_pool_hdl;
 	int		rebuild_status;
 	int		rebuild_obj_count;
 	int		rebuild_rec_count;
-	daos_list_t	rebuild_task_list;
-	daos_rank_list_t *rebuild_svc_list;
 
-	unsigned int	rebuild_local_root_init:1,
-			rebuild_task_init:1,
-			rebuild_scanning:1;
+	unsigned int	rebuild_scanning:1;
 };
 
 struct rebuild_root {
@@ -98,9 +87,13 @@ rebuild_tls_get()
 struct pool_map *rebuild_pool_map_get(void);
 void rebuild_pool_map_put(struct pool_map *map);
 
-void ds_rebuild_scan_handler(crt_rpc_t *rpc);
 void ds_rebuild_obj_handler(crt_rpc_t *rpc);
+void ds_rebuild_tgt_prepare_handler(crt_rpc_t *rpc);
+void ds_rebuild_tgt_scan_handler(crt_rpc_t *rpc);
 
+int
+rebuild_globals_init(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
+		     uuid_t cont_hdl_uuid, daos_rank_list_t *svc_list);
 int
 ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 			   daos_unit_oid_t oid, unsigned int shard);

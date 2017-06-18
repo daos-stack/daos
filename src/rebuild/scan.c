@@ -56,8 +56,6 @@ struct rebuild_scan_arg {
 	daos_handle_t		rebuild_tree_hdl;
 	struct pl_target_grp	*tgp_failed;
 	daos_rank_list_t	*failed_ranks;
-	struct ds_pool		*sa_pool;
-	uuid_t			pool_uuid;
 	uint32_t		map_ver;
 	ABT_mutex		scan_lock;
 };
@@ -205,7 +203,7 @@ ds_rebuild_objects_send(struct rebuild_root *root,
 	}
 #endif
 	D_DEBUG(DB_TRACE, "send rebuild objects "DF_UUID" to tgt %d count %d\n",
-		DP_UUID(scan_arg->pool_uuid), tgt_id, arg->count);
+		DP_UUID(rebuild_gst.rg_pool_uuid), tgt_id, arg->count);
 
 	tgt_ep.ep_rank = tgt_id;
 	tgt_ep.ep_tag = 0;
@@ -222,7 +220,7 @@ ds_rebuild_objects_send(struct rebuild_root *root,
 	rebuild_in->roi_uuids.da_arrays = uuids;
 	rebuild_in->roi_shards.da_count = arg->count;
 	rebuild_in->roi_shards.da_arrays = shards;
-	uuid_copy(rebuild_in->roi_pool_uuid, scan_arg->pool_uuid);
+	uuid_copy(rebuild_in->roi_pool_uuid, rebuild_gst.rg_pool_uuid);
 
 	/* Note: if the remote target fails, let's just ignore the
 	 * this object list, because the later rebuild will rebuild
@@ -500,10 +498,10 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 
 	D_DEBUG(DB_PL, "rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
 		" on %d for shard %d\n", DP_UOID(oid), DP_UUID(co_uuid),
-		DP_UUID(arg->pool_uuid), tgt_rebuild, shard_rebuild);
+		DP_UUID(rebuild_gst.rg_pool_uuid), tgt_rebuild, shard_rebuild);
 
 	rc = ds_rebuild_object_insert(arg, tgt_rebuild, shard_rebuild,
-				      arg->pool_uuid, co_uuid, oid);
+				      rebuild_gst.rg_pool_uuid, co_uuid, oid);
 	if (rc)
 		D_GOTO(out, rc);
 out:
@@ -516,47 +514,7 @@ out:
 	return rc;
 }
 
-struct rebuild_prepare_arg {
-	uuid_t	pool_uuid;
-	uuid_t  pool_hdl_uuid;
-	uuid_t	cont_hdl_uuid;
-	daos_rank_list_t *svc_list;
-};
-
-/**
- * To avoid broadcasting during pool_connect and container
- * open for rebuild, let's create a local ds_pool/ds_container
- * and dc_pool/dc_container, so rebuild client will always
- * use the specified pool_hdl/container_hdl uuid during
- * rebuild.
- **/
-static int
-rebuild_prepare_one(void *data)
-{
-	struct rebuild_prepare_arg	*arg = data;
-	struct rebuild_tls		*tls = rebuild_tls_get();
-	int				rc;
-
-	tls->rebuild_scanning = 1;
-	tls->rebuild_rec_count = 0;
-	tls->rebuild_obj_count = 0;
-
-	/* Create ds_container locally */
-	rc = ds_cont_local_open(arg->pool_uuid, arg->cont_hdl_uuid,
-				NULL, 0, NULL);
-	if (rc)
-		return rc;
-
-	uuid_copy(tls->rebuild_cont_hdl_uuid, arg->cont_hdl_uuid);
-	uuid_copy(tls->rebuild_pool_hdl_uuid, arg->pool_hdl_uuid);
-	daos_rank_list_free(tls->rebuild_svc_list);
-	daos_rank_list_dup(&tls->rebuild_svc_list, arg->svc_list, true);
-
-	return 0;
-}
-
 struct rebuild_iter_arg {
-	uuid_t		pool_uuid;
 	cont_iter_cb_t	callback;
 	void		*arg;
 };
@@ -566,7 +524,7 @@ rebuild_scanner(void *data)
 {
 	struct rebuild_iter_arg *arg = data;
 
-	return ds_pool_obj_iter(arg->pool_uuid, arg->callback,
+	return ds_pool_obj_iter(rebuild_gst.rg_pool_uuid, arg->callback,
 				arg->arg);
 }
 
@@ -589,7 +547,6 @@ rebuild_scan_leader(void *data)
 	struct rebuild_tls	  *tls = rebuild_tls_get();
 	struct rebuild_scan_arg	  *arg = data;
 	struct pl_target_grp	  *tgp;
-	struct ds_pool		  *pool;
 	struct pool_map		  *map;
 	struct rebuild_iter_arg    iter_arg;
 	int			   i;
@@ -599,47 +556,14 @@ rebuild_scan_leader(void *data)
 	D_ASSERT(arg->failed_ranks);
 	D_ASSERT(!daos_handle_is_inval(arg->rebuild_tree_hdl));
 
-	/* global barrier: wait until the pool map is ready */
-	pool = arg->sa_pool;
-
-	ABT_rwlock_rdlock(pool->sp_lock);
-	while (pool->sp_map == NULL || pool->sp_map_version < arg->map_ver ||
-	       pool_map_get_version(pool->sp_map) < arg->map_ver) {
-		ABT_rwlock_unlock(pool->sp_lock);
-
-		D_DEBUG(DB_TRACE, "Waiting for pool=%p, map_ver=%u, cur=%u\n",
-			pool, arg->map_ver, pool->sp_map_version);
-		ABT_mutex_lock(pool->sp_map_lock);
-		ABT_cond_wait(pool->sp_map_cond, pool->sp_map_lock);
-		ABT_mutex_unlock(pool->sp_map_lock);
-
-		ABT_rwlock_rdlock(pool->sp_lock);
-	}
-	ABT_rwlock_unlock(pool->sp_lock);
-
-	ABT_mutex_lock(rebuild_gst.rg_lock);
-	while (rebuild_gst.rg_leader && rebuild_gst.rg_leader_barrier) {
-		D_DEBUG(DB_TRACE, "Leader is waiting for other targets\n");
-		ABT_cond_wait(rebuild_gst.rg_cond, rebuild_gst.rg_lock);
-	}
-
-	D_ASSERT(!rebuild_gst.rg_pool);
-	rebuild_gst.rg_pool = pool; /* pin it */
-	pool = NULL;
-
 	/* refresh placement for the server stack */
+	ABT_mutex_lock(rebuild_gst.rg_lock);
 	map = rebuild_pool_map_get();
 	rc = daos_placement_update(map);
 	if (rc != 0) {
 		ABT_mutex_unlock(rebuild_gst.rg_lock);
 		D_GOTO(out_map, rc = -DER_NOMEM);
 	}
-
-	/* local barrier: the puller may have already been started by another
-	 * server, but hte puller should be waiting for the pool being pinned
-	 * and pool map being updated, so this is the place to notify him.
-	 */
-	ABT_cond_broadcast(rebuild_gst.rg_cond);
 	ABT_mutex_unlock(rebuild_gst.rg_lock);
 
 	/* initialize parameters for scanners */
@@ -671,14 +595,13 @@ rebuild_scan_leader(void *data)
 
 	iter_arg.arg = arg;
 	iter_arg.callback = placement_check;
-	uuid_copy(iter_arg.pool_uuid, arg->pool_uuid);
 
 	rc = dss_collective(rebuild_scanner, &iter_arg);
 	if (rc)
 		D_GOTO(out_group, rc);
 
 	D_DEBUG(DB_TRACE, "rebuild scan collective "DF_UUID" is done\n",
-		DP_UUID(arg->pool_uuid));
+		DP_UUID(rebuild_gst.rg_pool_uuid));
 
 	while (!dbtree_is_empty(arg->rebuild_tree_hdl)) {
 		/* walk through the rebuild tree and send the rebuild objects */
@@ -693,12 +616,12 @@ rebuild_scan_leader(void *data)
 	ABT_mutex_unlock(rebuild_gst.rg_lock);
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
-			DP_UUID(arg->pool_uuid), rc);
+			DP_UUID(rebuild_gst.rg_pool_uuid), rc);
 		D_GOTO(out_group, rc);
 	}
 
 	D_DEBUG(DB_TRACE, DF_UUID" sent objects to initiator %d\n",
-		DP_UUID(arg->pool_uuid), rc);
+		DP_UUID(rebuild_gst.rg_pool_uuid), rc);
 	D_EXIT;
 out_group:
 	if (tgp->tg_targets != NULL) {
@@ -713,23 +636,17 @@ out_map:
 	if (tls->rebuild_status == 0 && rc != 0)
 		tls->rebuild_status = rc;
 
-	if (pool)
-		ds_pool_put(pool);
-
 	ABT_mutex_free(&arg->scan_lock);
 	D_FREE_PTR(arg);
 }
 
 /* Scan the local target and generate rebuild object list */
 void
-ds_rebuild_scan_handler(crt_rpc_t *rpc)
+ds_rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in		*rsi;
 	struct rebuild_out		*ro;
 	struct rebuild_scan_arg		*scan_arg;
-	struct ds_pool			*pool;
-	struct rebuild_prepare_arg	 prep_arg;
-	struct ds_pool_create_arg	 pcrt_arg;
 	struct umem_attr		 uma;
 	int				 rc;
 
@@ -740,37 +657,20 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
 		rsi->rsi_pool_map_ver);
 
-	/* step-1: reset counters etc */
-	D_ASSERT(rebuild_gst.rg_pullers);
-	rebuild_gst.rg_last_ver = 0;
-	rebuild_gst.rg_puller_total = 0;
-	memset(rebuild_gst.rg_pullers, 0,
-	       rebuild_gst.rg_puller_nxs * sizeof(*rebuild_gst.rg_pullers));
-	uuid_copy(rebuild_gst.rg_pool_uuid, rsi->rsi_pool_uuid);
-
-	memset(&pcrt_arg, 0, sizeof(pcrt_arg));
-
-	/* step-2: load the pool to be rebuilt */
-	pcrt_arg.pca_map_version = rsi->rsi_pool_map_ver;
-	rc = ds_pool_lookup_create(rsi->rsi_pool_uuid, &pcrt_arg, &pool);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	/* step-3: parameters for scanner */
+	D_ASSERT(uuid_compare(rebuild_gst.rg_pool_uuid,
+			      rsi->rsi_pool_uuid) == 0);
+	/* step-1: parameters for scanner */
 	D_ALLOC_PTR(scan_arg);
 	if (scan_arg == NULL)
-		D_GOTO(out_pool, rc = -DER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
-	scan_arg->sa_pool = pool;
-	scan_arg->map_ver = rsi->rsi_pool_map_ver;
-	uuid_copy(scan_arg->pool_uuid, rsi->rsi_pool_uuid);
 	rc = ABT_mutex_create(&scan_arg->scan_lock);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
 		D_GOTO(out_arg, rc);
 	}
 
-	/* Create the btree root for global object scan list */
+	/* step-2: Create the btree root for global object scan list */
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 	rc = dbtree_create(DBTREE_CLASS_NV, 0, 4, &uma, NULL,
@@ -785,32 +685,21 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out_tree, rc);
 
-	memset(&prep_arg, 0, sizeof(prep_arg));
-	uuid_copy(prep_arg.pool_uuid, rsi->rsi_pool_uuid);
-	uuid_copy(prep_arg.pool_hdl_uuid, rsi->rsi_rebuild_pool_hdl_uuid);
-	uuid_copy(prep_arg.cont_hdl_uuid, rsi->rsi_rebuild_cont_hdl_uuid);
-	prep_arg.svc_list = rsi->rsi_svc_list;
-
-	/* step-4: all xstreams initialize context for build, at this point,
-	 * this server is ready for contributing data for the rebuild, but
-	 * not ready for scanning and pulling so far.
-	 */
-	rc = dss_collective(rebuild_prepare_one, &prep_arg);
-	D_ASSERT(rc == 0); /* XXX */
-
-	/* step-5: start scann leader */
+	scan_arg->map_ver = rsi->rsi_pool_map_ver;
+	/* step-3: start scann leader */
 	rc = dss_ult_create(rebuild_scan_leader, scan_arg, -1, NULL);
-	D_ASSERT(rc == 0); /* XXX */
+	if (rc != 0)
+		D_GOTO(out_f_rankfs, rc);
 
 	D_GOTO(out, rc);
+out_f_rankfs:
+	daos_rank_list_free(scan_arg->failed_ranks);
 out_tree:
 	dbtree_destroy(scan_arg->rebuild_tree_hdl);
 out_lock:
 	ABT_mutex_free(&scan_arg->scan_lock);
 out_arg:
 	D_FREE_PTR(scan_arg);
-out_pool:
-	ds_pool_put(pool);
 out:
 	ro = crt_reply_get(rpc);
 	ro->ro_status = rc;

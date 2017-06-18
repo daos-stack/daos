@@ -30,11 +30,17 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
-static struct crt_msg_field *rebuild_scan_in_fields[] = {
+static struct crt_msg_field *rebuild_prep_in_fields[] = {
 	&CMF_UUID,	/* pool uuid */
 	&CMF_UUID,	/* rebuild pool hdl uuid */
 	&CMF_UUID,	/* rebuild cont hdl uuid */
 	&CMF_RANK_LIST,	/* failed targets */
+	&CMF_RANK_LIST,	/* service list */
+	&CMF_UINT32,	/* pool map version */
+};
+
+static struct crt_msg_field *rebuild_scan_in_fields[] = {
+	&CMF_UUID,	/* pool uuid */
 	&CMF_RANK_LIST,	/* service list */
 	&CMF_UINT32,	/* pool map version */
 };
@@ -69,6 +75,11 @@ static struct crt_msg_field *rebuild_fini_tgt_in_fields[] = {
 	&CMF_UINT32,	/* 32-bit padding */
 };
 
+
+struct crt_req_format DQF_REBUILD_PREPARE =
+	DEFINE_CRT_REQ_FMT("REBUILD_PREPARE", rebuild_prep_in_fields,
+			   rebuild_out_fields);
+
 struct crt_req_format DQF_REBUILD_OBJECTS_SCAN =
 	DEFINE_CRT_REQ_FMT("REBUILD_OBJECTS_SCAN", rebuild_scan_in_fields,
 			   rebuild_out_fields);
@@ -98,6 +109,12 @@ rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
 
 struct daos_rpc rebuild_rpcs[] = {
 	{
+		.dr_name	= "REBUILD_PREPARE",
+		.dr_opc		= REBUILD_PREPARE,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_REBUILD_PREPARE,
+	}, {
 		.dr_name	= "REBUILD_OBJECTS_SCAN",
 		.dr_opc		= REBUILD_OBJECTS_SCAN,
 		.dr_ver		= 1,

@@ -41,10 +41,11 @@
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
 enum pool_operation {
-	REBUILD_OBJECTS_SCAN	= 1,
-	REBUILD_OBJECTS		= 2,
-	REBUILD_TGT_QUERY	= 3,
-	REBUILD_TGT_FINI	= 4,
+	REBUILD_PREPARE		= 1,
+	REBUILD_OBJECTS_SCAN	= 2,
+	REBUILD_OBJECTS		= 3,
+	REBUILD_TGT_QUERY	= 4,
+	REBUILD_TGT_FINI	= 5,
 };
 
 struct rebuild_fini_tgt_in {
@@ -55,11 +56,17 @@ struct rebuild_fini_tgt_in {
 
 struct rebuild_scan_in {
 	uuid_t		rsi_pool_uuid;
-	uuid_t		rsi_rebuild_pool_hdl_uuid;
-	uuid_t		rsi_rebuild_cont_hdl_uuid;
 	daos_rank_list_t *rsi_tgts_failed;
-	daos_rank_list_t *rsi_svc_list;
 	uint32_t	rsi_pool_map_ver;
+};
+
+struct rebuild_prepare_in {
+	uuid_t		rpi_pool_uuid;
+	uuid_t		rpi_rebuild_pool_hdl_uuid;
+	uuid_t		rpi_rebuild_cont_hdl_uuid;
+	daos_rank_list_t *rpi_tgts_failed;
+	daos_rank_list_t *rpi_svc_list;
+	uint32_t	rpi_pool_map_ver;
 };
 
 struct rebuild_out {

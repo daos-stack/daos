@@ -288,8 +288,8 @@ rebuild_dkey_thread(void *data)
 		struct pool_map *map = rebuild_pool_map_get();
 
 		rc = dc_pool_local_open(rebuild_gst.rg_pool_uuid,
-					tls->rebuild_pool_hdl_uuid, 0, NULL,
-					map, tls->rebuild_svc_list, &ph);
+					rebuild_gst.rg_pool_hdl_uuid, 0, NULL,
+					map, rebuild_gst.rg_svc_list, &ph);
 		rebuild_pool_map_put(map);
 		if (rc)
 			D_GOTO(free, rc);
@@ -298,7 +298,7 @@ rebuild_dkey_thread(void *data)
 	}
 
 	/* Open client dc handle */
-	rc = dc_cont_local_open(arg->cont_uuid, tls->rebuild_cont_hdl_uuid,
+	rc = dc_cont_local_open(arg->cont_uuid, rebuild_gst.rg_cont_hdl_uuid,
 				0, tls->rebuild_pool_hdl, &coh);
 	if (rc)
 		D_GOTO(free, rc);
@@ -369,10 +369,10 @@ free:
 	(*arg->rebuild_building)--;
 	rebuild_gst.rg_puller_total--;
 
-	D_DEBUG(DB_TRACE, "finish rebuild dkey %.*s tag %d rebuilding %p/%d\n",
-		(int)arg->dkey.iov_len, (char *)arg->dkey.iov_buf,
+	D_DEBUG(DB_TRACE, "finish rebuild dkey %.*s tag %d rebuilding %p/%d"
+		" rc %d\n", (int)arg->dkey.iov_len, (char *)arg->dkey.iov_buf,
 		dss_get_module_info()->dmi_tid, arg->rebuild_building,
-		*arg->rebuild_building);
+		*arg->rebuild_building, rc);
 
 	ABT_mutex_unlock(rebuild_gst.rg_lock);
 	daos_iov_free(&arg->dkey);
@@ -593,8 +593,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		struct pool_map *map = rebuild_pool_map_get();
 
 		rc = dc_pool_local_open(rebuild_gst.rg_pool_uuid,
-					tls->rebuild_pool_hdl_uuid, 0, NULL,
-					map, tls->rebuild_svc_list, &ph);
+					rebuild_gst.rg_pool_hdl_uuid, 0, NULL,
+					map, rebuild_gst.rg_svc_list, &ph);
 		rebuild_pool_map_put(map);
 		if (rc)
 			return rc;
@@ -602,7 +602,7 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 		tls->rebuild_pool_hdl = ph;
 	}
 
-	rc = dc_cont_local_open(arg->cont_uuid, tls->rebuild_cont_hdl_uuid,
+	rc = dc_cont_local_open(arg->cont_uuid, rebuild_gst.rg_cont_hdl_uuid,
 				0, tls->rebuild_pool_hdl, &coh);
 	if (rc)
 		return rc;
@@ -651,16 +651,6 @@ rebuild_puller(void *arg)
 	struct rebuild_iter_arg	*iter_arg = arg;
 	int			rc;
 
-	if (!rebuild_gst.rg_pool) {
-		ABT_mutex_lock(rebuild_gst.rg_lock);
-		if (!rebuild_gst.rg_pool) {
-			D_DEBUG(DB_TRACE,
-				"Waiting for scanner to initialize pool\n");
-			ABT_cond_wait(rebuild_gst.rg_cond, rebuild_gst.rg_lock);
-		}
-		ABT_mutex_unlock(rebuild_gst.rg_lock);
-	}
-
 	while (!dbtree_is_empty(iter_arg->root_hdl)) {
 		rc = dbtree_iterate(iter_arg->root_hdl, false,
 				    rebuild_cont_iter_cb, iter_arg);
@@ -672,42 +662,34 @@ rebuild_puller(void *arg)
 		}
 	}
 
-	tls->rebuild_task_init = 0;
-
-	ABT_mutex_lock(rebuild_gst.rg_lock);
 	rebuild_gst.rg_pullers[0]--;
 	rebuild_gst.rg_puller_total--;
-	ABT_mutex_unlock(rebuild_gst.rg_lock);
-
 	D_FREE_PTR(iter_arg);
+	rebuild_gst.rg_puller_running = 0;
 }
 
 static int
 ds_rebuild_obj_hdl_get(uuid_t pool_uuid, daos_handle_t *hdl)
 {
-	struct rebuild_tls	*tls;
-	struct btr_root		*btr_root;
 	struct umem_attr	uma;
 	int rc;
 
-	tls = rebuild_tls_get();
-	if (tls->rebuild_local_root_init) {
-		*hdl = tls->rebuild_local_root_hdl;
+	if (!daos_handle_is_inval(rebuild_gst.rg_local_root_hdl)) {
+		*hdl = rebuild_gst.rg_local_root_hdl;
 		return 0;
 	}
 
-	btr_root = &tls->rebuild_local_root;
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 	rc = dbtree_create_inplace(DBTREE_CLASS_NV, 0, 4, &uma,
-				   btr_root, &tls->rebuild_local_root_hdl);
+				   &rebuild_gst.rg_local_root,
+				   &rebuild_gst.rg_local_root_hdl);
 	if (rc != 0) {
 		D_ERROR("failed to create rebuild tree: %d\n", rc);
 		return rc;
 	}
 
-	tls->rebuild_local_root_init = 1;
-	*hdl = tls->rebuild_local_root_hdl;
+	*hdl = rebuild_gst.rg_local_root_hdl;
 	return 0;
 }
 
@@ -715,7 +697,6 @@ ds_rebuild_obj_hdl_get(uuid_t pool_uuid, daos_handle_t *hdl)
 void
 ds_rebuild_obj_handler(crt_rpc_t *rpc)
 {
-	struct rebuild_tls	*tls;
 	struct rebuild_objs_in	*rebuild_in;
 	struct rebuild_out	*rebuild_out;
 	daos_unit_oid_t		*oids;
@@ -769,15 +750,13 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 
 	/* Check and create task to iterate the local rebuild tree */
-	tls = rebuild_tls_get();
-
-	if (!tls->rebuild_task_init) {
+	if (!rebuild_gst.rg_puller_running) {
 		struct rebuild_iter_arg *arg;
 
 		D_ALLOC_PTR(arg);
-		if (arg == NULL)
+		if (arg == NULL) {
 			D_GOTO(out, rc = -DER_NOMEM);
-
+		}
 		uuid_copy(arg->pool_uuid, rebuild_in->roi_pool_uuid);
 		arg->obj_cb = rebuild_obj_iterate_keys;
 		arg->root_hdl = btr_hdl;
@@ -785,29 +764,17 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 
 		D_ASSERT(rebuild_gst.rg_pullers != NULL);
 
-		ABT_mutex_lock(rebuild_gst.rg_lock);
-		/* check again in case someone else won the lock before me
-		 * and created the ULT.
-		 */
-		if (tls->rebuild_task_init) {
-			ABT_mutex_unlock(rebuild_gst.rg_lock);
-			D_FREE_PTR(arg);
-			D_GOTO(out, rc = 0);
-		}
-
-		tls->rebuild_task_init = 1;
 		rebuild_gst.rg_pullers[0]++;
 		rebuild_gst.rg_puller_total++;
-
+		rebuild_gst.rg_puller_running = 1;
 		rc = dss_ult_create(rebuild_puller, arg, -1, NULL);
 		if (rc) {
-			tls->rebuild_task_init = 0;
+			rebuild_gst.rg_puller_running = 0;
 			rebuild_gst.rg_pullers[0]--;
 			rebuild_gst.rg_puller_total--;
 
 			D_FREE_PTR(arg);
 		}
-		ABT_mutex_unlock(rebuild_gst.rg_lock);
 	}
 	D_EXIT;
 out:
