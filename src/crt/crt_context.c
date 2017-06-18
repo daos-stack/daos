@@ -233,6 +233,13 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 		cbinfo.cci_rc = rc;
 		if (cbinfo.cci_rc == 0)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_co_rc;
+		if (cbinfo.cci_rc != 0)
+			C_ERROR("rpc_priv %p (opc: 0x%x, to rank %d tag %d) "
+				"failed, rc: %d.\n", rpc_priv,
+				rpc_priv->crp_pub.cr_opc,
+				rpc_priv->crp_pub.cr_ep.ep_rank,
+				rpc_priv->crp_pub.cr_ep.ep_tag,
+				cbinfo.cci_rc);
 		rc = rpc_priv->crp_complete_cb(&cbinfo);
 		if (rc != 0)
 			C_ERROR("req_cbinfo->rsc_cb returned %d.\n", rc);
