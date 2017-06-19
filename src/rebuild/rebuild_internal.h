@@ -57,6 +57,7 @@ struct rebuild_globals {
 	uuid_t			 rg_poh_uuid;
 	/* reserved for now, move rebuild_cont_hdl_uuid to here */
 	uuid_t			 rg_coh_uuid;
+	unsigned int		 rg_abort:1;
 };
 
 extern struct rebuild_globals rebuild_gst;

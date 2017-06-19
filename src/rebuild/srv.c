@@ -241,8 +241,10 @@ ds_rebuild_tgt_query_handler(crt_rpc_t *rpc)
 	if (rebuilding)
 		rtqo->rtqo_rebuilding = 1;
 
-	if (status.status != 0)
+	if (status.status != 0) {
 		rtqo->rtqo_status = status.status;
+		rebuild_gst.rg_abort = 1;
+	}
 
 	D_DEBUG(DB_TRACE, "pool "DF_UUID" scanning %d/%d rebuilding=%s, "
 		"obj_count=%d, rec_count=%d, status=%d\n",
@@ -407,6 +409,7 @@ out_pool:
 out:
 	/* tgt_fini should have done this for me, but just in case... */
 	uuid_clear(rebuild_gst.rg_pool_uuid);
+	rebuild_gst.rg_abort = 0;
 	return rc;
 }
 
@@ -498,9 +501,10 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 		}
 
 		if (failed)
-			str = "failed";
-		else if (status.rs_done)
-			str = "finalizing";
+			rebuild_gst.rg_abort = 1;
+
+		if (status.rs_done)
+			str = rebuild_gst.rg_abort ? "failed" : "completed";
 		else if (status.rs_obj_nr == 0 && status.rs_rec_nr == 0)
 			str = "scanning";
 		else
@@ -513,7 +517,7 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 			(int)(now - begin));
 
 		D_DEBUG(DB_TRACE, "%s", sbuf);
-		if (failed || status.rs_done) {
+		if (status.rs_done) {
 			D_PRINT("%s", sbuf);
 			break;
 		}
@@ -798,8 +802,10 @@ ds_rebuild_tgt_fini_handler(crt_rpc_t *rpc)
 
 	/* close the rebuild pool/container */
 	rc = dss_collective(ds_rebuild_fini_one, NULL);
+
 	pool = rebuild_gst.rg_pool;
 	rebuild_gst.rg_pool = NULL;
+	rebuild_gst.rg_abort = 0;
 	uuid_clear(rebuild_gst.rg_pool_uuid);
 
 	ABT_mutex_unlock(rebuild_gst.rg_lock);

@@ -465,8 +465,10 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 	unsigned int		shard_rebuild;
 	int			rc;
 
-	obj_fetch_md(oid.id_pub, &md, NULL);
+	if (rebuild_gst.rg_abort)
+		return 1;
 
+	obj_fetch_md(oid.id_pub, &md, NULL);
 	while (1) {
 		struct pool_map *poolmap;
 

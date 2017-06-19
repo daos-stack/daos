@@ -472,6 +472,9 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	daos_size_t		dkey_buf_size = 1024;
 	int			rc;
 
+	if (tls->rebuild_status)
+		return 1;
+
 	D_ALLOC(dkey_iov.iov_buf, dkey_buf_size);
 	if (dkey_iov.iov_buf == NULL)
 		return -DER_NOMEM;
@@ -562,6 +565,9 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, NULL, NULL);
 	if (rc == -DER_NONEXIST)
+		return 1;
+
+	if (rebuild_gst.rg_abort)
 		return 1;
 
 	return rc;
