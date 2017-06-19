@@ -258,8 +258,15 @@ test_teardown(void **state)
 	}
 
 	if (!uuid_is_null(arg->co_uuid)) {
-		if (arg->myrank == 0)
+		while (arg->myrank == 0) {
 			rc = daos_cont_destroy(arg->poh, arg->co_uuid, 1, NULL);
+			if (rc == -DER_BUSY) {
+				print_message("Container is busy, wait\n");
+				sleep(1);
+				continue;
+			}
+			break;
+		}
 		if (arg->multi_rank)
 			MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 		if (rc) {

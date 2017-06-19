@@ -163,6 +163,8 @@ cont_op_hdlr(int argc, char *argv[])
 			fprintf(stderr, "failed to create container: %d\n", rc);
 			return rc;
 		}
+		fprintf(stdout, "Successfully created container "DF_UUIDF"\n",
+			DP_UUID(cont_uuid));
 	}
 
 	if (op != CONT_DESTROY) {
@@ -192,9 +194,10 @@ cont_op_hdlr(int argc, char *argv[])
 				commit_epoch);
 			return rc;
 		}
-
-		fprintf(stdout, "Container "DF_UUIDF" GHCE: "DF_U64"\n",
-			DP_UUID(cont_uuid), state.es_ghce);
+		if (op == CONT_COMMIT) {
+			fprintf(stdout, "Container "DF_UUIDF" GHCE: "DF_U64"\n",
+				DP_UUID(cont_uuid), state.es_ghce);
+		}
 	}
 
 	if (op == CONT_QUERY) {
@@ -218,6 +221,8 @@ cont_op_hdlr(int argc, char *argv[])
 				rc);
 			return rc;
 		}
+		fprintf(stdout, "Successfully destroyed container "DF_UUIDF"\n",
+			DP_UUID(cont_uuid));
 	}
 
 	rc = daos_pool_disconnect(pool, NULL);

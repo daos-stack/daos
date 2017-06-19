@@ -343,7 +343,6 @@ rebuild_dkey_thread(void *data)
 			rc = rebuild_akey(arg, oh, DAOS_IOD_SINGLE, &akey);
 			if (rc < 0)
 				break;
-
 		}
 	}
 
@@ -355,18 +354,27 @@ cont_close:
 free:
 	if (akey_iov.iov_buf != NULL)
 		D_FREE(akey_iov.iov_buf, akey_buf_size);
-	if (tls->rebuild_status == 0)
+
+	/* Ignore nonexistent error because puller could race with user's
+	 * container destroy:
+	 * - puller got the container+oid from a remote scanner
+	 * - user destroyed the container
+	 * - puller try to open container or pulling data (nonexistent)
+	 * This is just a workaround...
+	 */
+	if (tls->rebuild_status == 0 && rc != -DER_NONEXIST)
 		tls->rebuild_status = rc;
 
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	(*arg->rebuild_building)--;
 	rebuild_gst.rg_puller_total--;
-	ABT_mutex_unlock(rebuild_gst.rg_lock);
 
 	D_DEBUG(DB_TRACE, "finish rebuild dkey %.*s tag %d rebuilding %p/%d\n",
 		(int)arg->dkey.iov_len, (char *)arg->dkey.iov_buf,
 		dss_get_module_info()->dmi_tid, arg->rebuild_building,
 		*arg->rebuild_building);
+
+	ABT_mutex_unlock(rebuild_gst.rg_lock);
 	daos_iov_free(&arg->dkey);
 	D_FREE_PTR(arg);
 }
@@ -489,8 +497,11 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 
 		rc = ds_obj_single_shard_list_dkey(oh, epoch, &num, kds,
 						   &dkey_sgl, &hash_out);
-		if (rc)
+		if (rc) {
+			/* container might have been destroyed */
+			rc = (rc == -DER_NONEXIST) ? 0 : rc;
 			break;
+		}
 		if (num == 0)
 			continue;
 

@@ -466,7 +466,7 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 			str = "pulling";
 
 		snprintf(sbuf, RBLD_SBUF_LEN,
-			"Rebuild status=%s (ver=%u, obj="DF_U64", "
+			"Rebuild [%s] (ver=%u, obj="DF_U64", "
 			"rec="DF_U64", duration=%d secs)\n",
 			str, map_ver, status.rs_obj_nr, status.rs_rec_nr,
 			(int)(now - begin));
@@ -629,7 +629,7 @@ ds_rebuild_ult(void *arg)
 		daos_list_del(&task->dst_list);
 		rebuild_gst.rg_rebuild_ver = task->dst_map_ver;
 
-		D_PRINT("Rebuild status=started (ver=%u)\n", task->dst_map_ver);
+		D_PRINT("Rebuild [started] (ver=%u)\n", task->dst_map_ver);
 
 		rc = ds_rebuild_one(task->dst_pool_uuid, task->dst_map_ver,
 				    task->dst_tgts_failed, task->dst_svc_list);
@@ -680,7 +680,7 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 		return rc;
 	}
 
-	D_PRINT("Rebuild status=queued (ver=%u)\n", map_ver);
+	D_PRINT("Rebuild [queued] (ver=%u)\n", map_ver);
 	daos_list_add_tail(&task->dst_list, &rebuild_gst.rg_task_list);
 
 	if (rebuild_gst.rg_rebuild_ver == 0) {
