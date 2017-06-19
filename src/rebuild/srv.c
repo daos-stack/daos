@@ -157,6 +157,7 @@ struct rebuild_tgt_query_info {
 	int status;
 	int rec_count;
 	int obj_count;
+	ABT_mutex lock;
 };
 
 int
@@ -165,12 +166,14 @@ dss_rebuild_check_scanning(void *arg)
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	struct rebuild_tgt_query_info	*status = arg;
 
+	ABT_mutex_lock(status->lock);
 	if (tls->rebuild_scanning)
 		status->scanning++;
 	if (tls->rebuild_status != 0 && status->status == 0)
 		status->status = tls->rebuild_status;
 	status->rec_count += tls->rebuild_rec_count;
 	status->obj_count += tls->rebuild_obj_count;
+	ABT_mutex_unlock(status->lock);
 
 	return 0;
 }
@@ -204,10 +207,11 @@ ds_rebuild_tgt_query_handler(crt_rpc_t *rpc)
 	rtqo = crt_reply_get(rpc);
 	memset(rtqo, 0, sizeof(*rtqo));
 	memset(&status, 0, sizeof(status));
-
+	ABT_mutex_create(&status.lock);
 	/* let's check status on every thread*/
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	rc = dss_collective(dss_rebuild_check_scanning, &status);
+	ABT_mutex_free(&status.lock);
 	if (rc) {
 		ABT_mutex_unlock(rebuild_gst.rg_lock);
 		D_GOTO(out, rc);
