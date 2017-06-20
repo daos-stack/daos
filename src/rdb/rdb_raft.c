@@ -1154,7 +1154,12 @@ out_db:
 	rdb_put(db);
 out:
 	out->rvo_op.ro_rc = rc;
-	return crt_reply_send(rpc);
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to send REQUESTVOTE reply to rank %u: "
+			"%d\n", DP_UUID(in->rvi_op.ri_uuid), rpc->cr_ep.ep_rank,
+			rc);
+	return rc;
 }
 
 int
@@ -1187,7 +1192,12 @@ out_db:
 	rdb_put(db);
 out:
 	out->aeo_op.ro_rc = rc;
-	return crt_reply_send(rpc);
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to send APPENDENTRIES reply to rank "
+			"%u: %d\n", DP_UUID(in->aei_op.ri_uuid),
+			rpc->cr_ep.ep_rank, rc);
+	return rc;
 }
 
 void
