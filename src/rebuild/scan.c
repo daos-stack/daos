@@ -732,8 +732,9 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
 		rsi->rsi_pool_map_ver);
 
-	/* step-1: reset counters */
+	/* step-1: reset counters etc */
 	D_ASSERT(rebuild_gst.rg_pullers);
+	rebuild_gst.rg_last_ver = 0;
 	rebuild_gst.rg_puller_total = 0;
 	memset(rebuild_gst.rg_pullers, 0,
 	       rebuild_gst.rg_puller_nxs * sizeof(*rebuild_gst.rg_pullers));

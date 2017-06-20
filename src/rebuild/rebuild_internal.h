@@ -44,7 +44,10 @@ struct rebuild_globals {
 	int			 rg_puller_total;
 	bool			 rg_leader;
 	bool			 rg_leader_barrier;
+	/** the current version being rebuilt, only used by leader */
 	uint32_t		 rg_rebuild_ver;
+	/** the last rebuild version, used by all participants  */
+	uint32_t		 rg_last_ver;
 	uint32_t		 rg_bcast_ver;
 	daos_list_t		 rg_task_list;
 	ABT_mutex		 rg_lock;
