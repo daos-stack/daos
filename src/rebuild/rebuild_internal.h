@@ -33,15 +33,33 @@
 #include <daos/rpc.h>
 #include <daos/btree.h>
 
+struct rebuild_dkey {
+	daos_key_t	rd_dkey;
+	daos_list_t	rd_list;
+	uuid_t		rd_cont_uuid;
+	daos_unit_oid_t	rd_oid;
+	daos_epoch_t	rd_epoch;
+	uint32_t	rd_map_ver;
+};
+
+struct rebuild_puller {
+	unsigned int	rp_inflight;
+	ABT_thread	rp_ult;
+	ABT_mutex	rp_lock;
+	/** serialize initialization of ULTs */
+	ABT_cond	rp_fini_cond;
+	daos_list_t	rp_dkey_list;
+	unsigned int	rp_ult_running:1;
+};
+
 struct rebuild_globals {
 	/** pin the pool during the rebuild */
 	struct ds_pool		*rg_pool;
 	/** active rebuild pullers for each xstream */
-	int			*rg_pullers;
+	struct rebuild_puller	*rg_pullers;
 	/** # xstreams */
 	int			rg_puller_nxs;
-	/** total number of pullers */
-	int			rg_puller_total;
+
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		rg_rebuild_ver;
 	/** the current version being rebuilt, only used by leader */
@@ -57,7 +75,8 @@ struct rebuild_globals {
 	uuid_t			rg_cont_hdl_uuid;
 	daos_rank_list_t	*rg_svc_list;
 	unsigned int		rg_puller_running:1,
-				rg_abort:1;
+				rg_abort:1,
+				rg_finishing:1;
 };
 
 extern struct rebuild_globals rebuild_gst;

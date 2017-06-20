@@ -58,7 +58,19 @@ init(void)
 static int
 fini(void)
 {
+	int i;
+
 	if (rebuild_gst.rg_pullers) {
+		for (i = 0; i < rebuild_gst.rg_puller_nxs; i++) {
+			struct rebuild_puller *puller;
+
+			puller = &rebuild_gst.rg_pullers[i];
+
+			if (puller->rp_fini_cond)
+				ABT_cond_free(&puller->rp_fini_cond);
+			if (puller->rp_lock)
+				ABT_mutex_free(&puller->rp_lock);
+		}
 		D_FREE(rebuild_gst.rg_pullers,
 		       rebuild_gst.rg_puller_nxs *
 		       sizeof(*rebuild_gst.rg_pullers));
@@ -94,23 +106,42 @@ int
 rebuild_globals_init(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		     uuid_t cont_hdl_uuid, daos_rank_list_t *svc_list)
 {
+	int i;
+
 	/* Initialize per-thread counters */
-	ABT_mutex_lock(rebuild_gst.rg_lock);
 	if (!rebuild_gst.rg_pullers) {
 		rebuild_gst.rg_puller_nxs = dss_get_threads_number();
 		D_ALLOC(rebuild_gst.rg_pullers,
 			rebuild_gst.rg_puller_nxs *
 			sizeof(*rebuild_gst.rg_pullers));
-		if (!rebuild_gst.rg_pullers) {
-			ABT_mutex_unlock(rebuild_gst.rg_lock);
+		if (!rebuild_gst.rg_pullers)
 			return -DER_NOMEM;
+
+		for (i = 0; i < rebuild_gst.rg_puller_nxs; i++) {
+			struct rebuild_puller *puller;
+			int rc;
+
+			puller = &rebuild_gst.rg_pullers[i];
+			DAOS_INIT_LIST_HEAD(&puller->rp_dkey_list);
+			rc = ABT_mutex_create(&puller->rp_lock);
+			if (rc != ABT_SUCCESS)
+				return dss_abterr2der(rc);
+
+			rc = ABT_cond_create(&puller->rp_fini_cond);
+			if (rc != ABT_SUCCESS)
+				return dss_abterr2der(rc);
 		}
 	} else {
-		memset(rebuild_gst.rg_pullers, 0,
-		       rebuild_gst.rg_puller_nxs *
-		       sizeof(*rebuild_gst.rg_pullers));
+		for (i = 0; i < rebuild_gst.rg_puller_nxs; i++) {
+			struct rebuild_puller *puller;
+
+			puller = &rebuild_gst.rg_pullers[i];
+			puller->rp_inflight = 0;
+			puller->rp_ult_running = 0;
+			D_ASSERT(daos_list_empty(&puller->rp_dkey_list));
+			D_ASSERT(puller->rp_ult == NULL);
+		}
 	}
-	ABT_mutex_unlock(rebuild_gst.rg_lock);
 
 	uuid_copy(rebuild_gst.rg_pool_uuid, pool_uuid);
 	uuid_copy(rebuild_gst.rg_pool_hdl_uuid, pool_hdl_uuid);
@@ -216,17 +247,23 @@ ds_rebuild_tgt_query_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	if (status.scanning == 0) {
+	if (status.scanning == 0 && !rebuild_gst.rg_puller_running) {
 		/* then check building status*/
 		for (i = 0; i < rebuild_gst.rg_puller_nxs; i++) {
-			if (rebuild_gst.rg_pullers[i] == 0)
+			struct rebuild_puller *puller;
+
+			puller = &rebuild_gst.rg_pullers[i];
+			ABT_mutex_lock(puller->rp_lock);
+			if (daos_list_empty(&puller->rp_dkey_list) &&
+			    puller->rp_inflight == 0) {
+				ABT_mutex_unlock(puller->rp_lock);
 				continue;
+			}
+			ABT_mutex_unlock(puller->rp_lock);
 
 			D_DEBUG(DB_TRACE,
-				"thread %d rebuilding %d keys, total=%d\n", i,
-				rebuild_gst.rg_pullers[i],
-				rebuild_gst.rg_puller_total);
-				rebuilding = true;
+				"thread %d rebuilding is still busy.\n", i);
+			rebuilding = true;
 			break;
 		}
 	} else {
@@ -835,7 +872,8 @@ ds_rebuild_tgt_fini_handler(crt_rpc_t *rpc)
 	struct rebuild_fini_tgt_in	*rfi = crt_req_get(rpc);
 	struct rebuild_out		*ro = crt_reply_get(rpc);
 	struct ds_pool			*pool;
-	int				 rc;
+	int				i;
+	int				rc;
 
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	if (rebuild_gst.rg_last_ver == rfi->rfti_pool_map_ver) {
@@ -854,6 +892,41 @@ ds_rebuild_tgt_fini_handler(crt_rpc_t *rpc)
 	rebuild_gst.rg_last_ver = rfi->rfti_pool_map_ver;
 	D_DEBUG(DB_TRACE, "Finalize rebuild for "DF_UUID", map_ver=%u\n",
 		rfi->rfti_pool_uuid, rfi->rfti_pool_map_ver);
+
+	rebuild_gst.rg_finishing = 1;
+
+	/* Check each puller */
+	for (i = 0; i < rebuild_gst.rg_puller_nxs; i++) {
+		struct rebuild_puller	*puller;
+		struct rebuild_dkey	*dkey;
+		struct rebuild_dkey	*tmp;
+
+		puller = &rebuild_gst.rg_pullers[i];
+
+		ABT_mutex_lock(puller->rp_lock);
+		if (puller->rp_ult_running)
+			ABT_cond_wait(puller->rp_fini_cond, puller->rp_lock);
+		ABT_mutex_unlock(puller->rp_lock);
+
+		if (puller->rp_ult) {
+			ABT_thread_free(&puller->rp_ult);
+			puller->rp_ult = NULL;
+		}
+
+		/* since the dkey thread has been stopped, so we do not
+		 * need lock here
+		 */
+		daos_list_for_each_entry_safe(dkey, tmp, &puller->rp_dkey_list,
+					      rd_list) {
+			daos_list_del(&dkey->rd_list);
+			D_WARN(DF_UUID" left rebuild dkey %*.s\n",
+			       DP_UUID(rebuild_gst.rg_pool_uuid),
+			       (int)dkey->rd_dkey.iov_len,
+			       (char *)dkey->rd_dkey.iov_buf);
+			daos_iov_free(&dkey->rd_dkey);
+			D_FREE_PTR(dkey);
+		}
+	}
 
 	/* close the rebuild pool/container */
 	rc = dss_collective(ds_rebuild_fini_one, NULL);
@@ -960,7 +1033,7 @@ ds_rebuild_tgt_prepare_handler(crt_rpc_t *rpc)
 	}
 
 	rebuild_gst.rg_last_ver = 0;
-	rebuild_gst.rg_puller_total = 0;
+	rebuild_gst.rg_finishing = 0;
 
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	D_ASSERT(!rebuild_gst.rg_pool);

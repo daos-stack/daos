@@ -41,17 +41,6 @@
 #include "rpc.h"
 #include "rebuild_internal.h"
 
-struct rebuild_obj_arg {
-	daos_unit_oid_t	oid;
-	uuid_t		pool_uuid;
-	uuid_t		cont_uuid;
-	unsigned int	map_ver;
-	daos_epoch_t	epoch;
-	daos_key_t	dkey;
-	int		*rebuild_building;
-	struct ds_cont  *rebuild_cont;
-};
-
 typedef int (*rebuild_obj_iter_cb_t)(daos_unit_oid_t oid, unsigned int shard,
 				     void *arg);
 struct rebuild_iter_arg {
@@ -82,10 +71,11 @@ rebuild_get_nstream_idx(daos_key_t *dkey)
 
 #define MAX_BUF_SIZE 2048
 static int
-rebuild_fetch_update_inline(struct rebuild_obj_arg *arg, daos_handle_t oh,
+rebuild_fetch_update_inline(struct rebuild_dkey *rdkey, daos_handle_t oh,
 			    daos_key_t *akey, unsigned int num,
 			    unsigned int type, daos_recx_t *recxs,
-			    daos_epoch_range_t *eprs, uuid_t cookie)
+			    daos_epoch_range_t *eprs, uuid_t cookie,
+			    struct ds_cont *ds_cont)
 {
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
@@ -105,22 +95,22 @@ rebuild_fetch_update_inline(struct rebuild_obj_arg *arg, daos_handle_t oh,
 	iod.iod_nr = num;
 	iod.iod_type = type;
 
-	rc = ds_obj_fetch(oh, arg->epoch, &arg->dkey, 1, &iod,
+	rc = ds_obj_fetch(oh, rdkey->rd_epoch, &rdkey->rd_dkey, 1, &iod,
 			  &sgl, NULL);
 	if (rc)
 		return rc;
 
-	rc = vos_obj_update(arg->rebuild_cont->sc_hdl,
-			    arg->oid, eprs->epr_lo, cookie, &arg->dkey,
-			    1, &iod, &sgl);
+	rc = vos_obj_update(ds_cont->sc_hdl, rdkey->rd_oid, eprs->epr_lo,
+			    cookie, &rdkey->rd_dkey, 1, &iod, &sgl);
 	return rc;
 }
 
 static int
-rebuild_fetch_update_bulk(struct rebuild_obj_arg *arg, daos_handle_t oh,
+rebuild_fetch_update_bulk(struct rebuild_dkey *rdkey, daos_handle_t oh,
 			  daos_key_t *akey, unsigned int num, unsigned int type,
 			  daos_size_t size, daos_recx_t *recxs,
-			  daos_epoch_range_t *eprs, uuid_t cookie)
+			  daos_epoch_range_t *eprs, uuid_t cookie,
+			  struct ds_cont *ds_cont)
 {
 	daos_iod_t	iod;
 	daos_sg_list_t	*sgl;
@@ -135,12 +125,12 @@ rebuild_fetch_update_bulk(struct rebuild_obj_arg *arg, daos_handle_t oh,
 	iod.iod_type = type;
 	iod.iod_size = size;
 
-	rc = vos_obj_zc_update_begin(arg->rebuild_cont->sc_hdl,
-				     arg->oid, eprs->epr_lo, &arg->dkey, 1,
+	rc = vos_obj_zc_update_begin(ds_cont->sc_hdl, rdkey->rd_oid,
+				     eprs->epr_lo, &rdkey->rd_dkey, 1,
 				     &iod, &ioh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID"preparing update fails: %d\n",
-			DP_UOID(arg->oid), rc);
+			DP_UOID(rdkey->rd_oid), rc);
 		return rc;
 	}
 
@@ -148,35 +138,40 @@ rebuild_fetch_update_bulk(struct rebuild_obj_arg *arg, daos_handle_t oh,
 	if (rc)
 		D_GOTO(end, rc);
 
-	rc = ds_obj_fetch(oh, arg->epoch, &arg->dkey, 1, &iod, sgl, NULL);
+	rc = ds_obj_fetch(oh, rdkey->rd_epoch, &rdkey->rd_dkey, 1, &iod,
+			  sgl, NULL);
 	if (rc)
 		D_GOTO(end, rc);
 end:
-	vos_obj_zc_update_end(ioh, cookie, &arg->dkey, 1, &iod, rc);
+	vos_obj_zc_update_end(ioh, cookie, &rdkey->rd_dkey, 1, &iod, rc);
 	return rc;
 }
 
 static int
-rebuild_fetch_update(struct rebuild_obj_arg *arg, daos_handle_t oh,
+rebuild_fetch_update(struct rebuild_dkey *rdkey, daos_handle_t oh,
 		     daos_key_t *akey, unsigned int num, unsigned int type,
 		     daos_size_t size, daos_recx_t *recxs,
-		     daos_epoch_range_t *eprs, uuid_t cookie)
+		     daos_epoch_range_t *eprs, uuid_t cookie,
+		     struct ds_cont *ds_cont)
 {
 	daos_size_t	buf_size = 0;
 
 	buf_size = size * num;
 	if (buf_size < MAX_BUF_SIZE)
-		return rebuild_fetch_update_inline(arg, oh, akey, num, type,
-						   recxs, eprs, cookie);
+		return rebuild_fetch_update_inline(rdkey, oh, akey, num, type,
+						   recxs, eprs, cookie,
+						   ds_cont);
 	else
-		return rebuild_fetch_update_bulk(arg, oh, akey, num, type,
-						 size, recxs, eprs, cookie);
+		return rebuild_fetch_update_bulk(rdkey, oh, akey, num, type,
+						 size, recxs, eprs, cookie,
+						 ds_cont);
 }
 
 static int
-rebuild_rec(struct rebuild_obj_arg *arg, daos_handle_t oh, daos_key_t *akey,
+rebuild_rec(struct rebuild_dkey *rdkey, daos_handle_t oh, daos_key_t *akey,
 	    unsigned int num, unsigned int type, daos_size_t size,
-	    daos_recx_t *recxs, daos_epoch_range_t *eprs, uuid_t *cookies)
+	    daos_recx_t *recxs, daos_epoch_range_t *eprs, uuid_t *cookies,
+	    struct ds_cont *ds_cont)
 {
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	uuid_t			cookie;
@@ -191,9 +186,9 @@ rebuild_rec(struct rebuild_obj_arg *arg, daos_handle_t oh, daos_key_t *akey,
 		    type != DAOS_IOD_SINGLE)
 			continue;
 
-		rc = rebuild_fetch_update(arg, oh, akey, i - start,
+		rc = rebuild_fetch_update(rdkey, oh, akey, i - start,
 					  type, size, &recxs[start],
-					  &eprs[start], cookie);
+					  &eprs[start], cookie, ds_cont);
 		if (rc)
 			break;
 		start = i;
@@ -201,13 +196,14 @@ rebuild_rec(struct rebuild_obj_arg *arg, daos_handle_t oh, daos_key_t *akey,
 	}
 
 	if (i > start && rc == 0)
-		rc = rebuild_fetch_update(arg, oh, akey, i - start, type,
+		rc = rebuild_fetch_update(rdkey, oh, akey, i - start, type,
 					  size, &recxs[start], &eprs[start],
-					  cookie);
+					  cookie, ds_cont);
 
 	D_DEBUG(DB_TRACE, "rebuild "DF_UOID" dkey %.*s akey %.*s rc %d"
-		" tag %d\n", DP_UOID(arg->oid), (int)arg->dkey.iov_len,
-		(char *)arg->dkey.iov_buf, (int)akey->iov_len,
+		" tag %d\n", DP_UOID(rdkey->rd_oid),
+		(int)rdkey->rd_dkey.iov_len,
+		(char *)rdkey->rd_dkey.iov_buf, (int)akey->iov_len,
 		(char *)akey->iov_buf, rc, dss_get_module_info()->dmi_tid);
 
 	tls->rebuild_rec_count += num;
@@ -217,8 +213,8 @@ rebuild_rec(struct rebuild_obj_arg *arg, daos_handle_t oh, daos_key_t *akey,
 
 #define ITER_COUNT	5
 static int
-rebuild_akey(struct rebuild_obj_arg *arg, daos_handle_t oh, int type,
-	     daos_key_t *akey)
+rebuild_akey(struct rebuild_dkey *rdkey, daos_handle_t oh, int type,
+	     daos_key_t *akey, struct ds_cont *ds_cont)
 {
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	daos_recx_t		recxs[ITER_COUNT];
@@ -241,7 +237,7 @@ rebuild_akey(struct rebuild_obj_arg *arg, daos_handle_t oh, int type,
 		memset(recxs, 0, sizeof(*recxs) * ITER_COUNT);
 		memset(eprs, 0, sizeof(*eprs) * ITER_COUNT);
 		memset(cookies, 0, sizeof(*cookies) * ITER_COUNT);
-		rc = ds_obj_list_rec(oh, arg->epoch, &arg->dkey, akey,
+		rc = ds_obj_list_rec(oh, rdkey->rd_epoch, &rdkey->rd_dkey, akey,
 				     type, &size, &rec_num,
 				     recxs, eprs, cookies, &hash, true);
 		if (rc)
@@ -253,22 +249,22 @@ rebuild_akey(struct rebuild_obj_arg *arg, daos_handle_t oh, int type,
 		for (i = 0; i < rec_num; i++)
 			eprs[i].epr_hi = DAOS_EPOCH_MAX;
 
-		rc = rebuild_rec(arg, oh, akey, rec_num, type, size, recxs,
-				 eprs, cookies);
+		rc = rebuild_rec(rdkey, oh, akey, rec_num, type, size, recxs,
+				 eprs, cookies, ds_cont);
 		if (rc)
 			break;
 	}
 	return rc;
 }
 
-static void
-rebuild_dkey_thread(void *data)
+static int
+rebuild_one_dkey(struct rebuild_dkey *rdkey)
 {
-	struct rebuild_obj_arg	*arg = data;
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	daos_iov_t		akey_iov;
 	daos_sg_list_t		akey_sgl;
 	daos_size_t		akey_buf_size = 1024;
+	struct ds_cont		*rebuild_cont;
 	daos_hash_out_t		hash;
 	unsigned int		i;
 	daos_handle_t		coh = DAOS_HDL_INVAL;
@@ -298,16 +294,19 @@ rebuild_dkey_thread(void *data)
 	}
 
 	/* Open client dc handle */
-	rc = dc_cont_local_open(arg->cont_uuid, rebuild_gst.rg_cont_hdl_uuid,
+	rc = dc_cont_local_open(rdkey->rd_cont_uuid,
+				rebuild_gst.rg_cont_hdl_uuid,
 				0, tls->rebuild_pool_hdl, &coh);
 	if (rc)
 		D_GOTO(free, rc);
 
-	rc = ds_obj_open(coh, arg->oid.id_pub, arg->epoch, DAOS_OO_RW, &oh);
+	rc = ds_obj_open(coh, rdkey->rd_oid.id_pub, rdkey->rd_epoch, DAOS_OO_RW,
+			 &oh);
 	if (rc)
 		D_GOTO(cont_close, rc);
 
-	rc = ds_cont_lookup(arg->pool_uuid, arg->cont_uuid, &arg->rebuild_cont);
+	rc = ds_cont_lookup(rebuild_gst.rg_pool_uuid, rdkey->rd_cont_uuid,
+			    &rebuild_cont);
 	if (rc)
 		D_GOTO(obj_close, rc);
 
@@ -317,14 +316,15 @@ rebuild_dkey_thread(void *data)
 		uint32_t	akey_num = ITER_COUNT;
 		void		*akey_ptr;
 
-		rc = ds_obj_list_akey(oh, arg->epoch, &arg->dkey, &akey_num,
-				      akey_kds, &akey_sgl, &hash);
+		rc = ds_obj_list_akey(oh, rdkey->rd_epoch, &rdkey->rd_dkey,
+				      &akey_num, akey_kds, &akey_sgl, &hash);
 		if (rc)
 			break;
 
 		D_DEBUG(DB_TRACE, ""DF_UOID" list akey %d for dkey %.*s\n",
-			DP_UOID(arg->oid), akey_num, (int)arg->dkey.iov_len,
-			(char *)arg->dkey.iov_buf);
+			DP_UOID(rdkey->rd_oid), akey_num,
+			(int)rdkey->rd_dkey.iov_len,
+			(char *)rdkey->rd_dkey.iov_buf);
 		if (akey_num == 0)
 			continue;
 
@@ -336,17 +336,19 @@ rebuild_dkey_thread(void *data)
 			akey.iov_len = akey_kds[i].kd_key_len;
 			akey.iov_buf_len = akey_kds[i].kd_key_len;
 
-			rc = rebuild_akey(arg, oh, DAOS_IOD_ARRAY, &akey);
+			rc = rebuild_akey(rdkey, oh, DAOS_IOD_ARRAY, &akey,
+					  rebuild_cont);
 			if (rc < 0)
 				break;
 
-			rc = rebuild_akey(arg, oh, DAOS_IOD_SINGLE, &akey);
+			rc = rebuild_akey(rdkey, oh, DAOS_IOD_SINGLE, &akey,
+					  rebuild_cont);
 			if (rc < 0)
 				break;
 		}
 	}
 
-	ds_cont_put(arg->rebuild_cont);
+	ds_cont_put(rebuild_cont);
 obj_close:
 	ds_obj_close(oh);
 cont_close:
@@ -355,102 +357,136 @@ free:
 	if (akey_iov.iov_buf != NULL)
 		D_FREE(akey_iov.iov_buf, akey_buf_size);
 
-	/* Ignore nonexistent error because puller could race with user's
-	 * container destroy:
-	 * - puller got the container+oid from a remote scanner
-	 * - user destroyed the container
-	 * - puller try to open container or pulling data (nonexistent)
-	 * This is just a workaround...
-	 */
-	if (tls->rebuild_status == 0 && rc != -DER_NONEXIST)
-		tls->rebuild_status = rc;
-
-	ABT_mutex_lock(rebuild_gst.rg_lock);
-	(*arg->rebuild_building)--;
-	rebuild_gst.rg_puller_total--;
-
-	D_DEBUG(DB_TRACE, "finish rebuild dkey %.*s tag %d rebuilding %p/%d"
-		" rc %d\n", (int)arg->dkey.iov_len, (char *)arg->dkey.iov_buf,
-		dss_get_module_info()->dmi_tid, arg->rebuild_building,
-		*arg->rebuild_building, rc);
-
-	ABT_mutex_unlock(rebuild_gst.rg_lock);
-	daos_iov_free(&arg->dkey);
-	D_FREE_PTR(arg);
+	return rc;
 }
 
-#define PULLER_MAX	256
-#define PULLER_XS_MAX	32
-
-static int
-rebuild_dkey(daos_unit_oid_t oid, daos_epoch_t epoch,
-	     daos_key_t *dkey, struct rebuild_iter_arg *iter_arg)
+static void
+rebuild_dkey_ult(void *arg)
 {
-	struct rebuild_obj_arg	*arg;
+	struct rebuild_puller	*puller;
+	unsigned int		idx;
+
+	D_ASSERT(rebuild_gst.rg_pullers != NULL);
+	idx = dss_get_module_info()->dmi_tid;
+	puller = &rebuild_gst.rg_pullers[idx];
+	puller->rp_ult_running = 1;
+	while (1) {
+		struct rebuild_dkey	*rdkey;
+		struct rebuild_dkey	*tmp;
+		struct rebuild_tls	*tls = rebuild_tls_get();
+		daos_list_t		dkey_list;
+		int			rc;
+
+		DAOS_INIT_LIST_HEAD(&dkey_list);
+		ABT_mutex_lock(puller->rp_lock);
+		daos_list_for_each_entry_safe(rdkey, tmp, &puller->rp_dkey_list,
+					      rd_list) {
+			daos_list_move(&rdkey->rd_list, &dkey_list);
+			puller->rp_inflight++;
+
+		}
+		ABT_mutex_unlock(puller->rp_lock);
+
+		daos_list_for_each_entry_safe(rdkey, tmp, &dkey_list, rd_list) {
+			daos_list_del(&rdkey->rd_list);
+			rc = rebuild_one_dkey(rdkey);
+			D_DEBUG(DB_TRACE, DF_UOID" rebuild dkey %.*s rc = %d"
+				" tag %d\n", DP_UOID(rdkey->rd_oid),
+				(int)rdkey->rd_dkey.iov_len,
+				(char *)rdkey->rd_dkey.iov_buf, rc, idx);
+
+			D_ASSERT(puller->rp_inflight > 0);
+			puller->rp_inflight--;
+
+			/* Ignore nonexistent error because puller could race
+			 * with user's container destroy:
+			 * - puller got the container+oid from a remote scanner
+			 * - user destroyed the container
+			 * - puller try to open container or pulling data
+			 *   (nonexistent)
+			 * This is just a workaround...
+			 */
+			if (tls->rebuild_status == 0 && rc != -DER_NONEXIST)
+				tls->rebuild_status = rc;
+
+			/* XXX If rebuild fails, Should we add this back to
+			 * dkey list
+			 */
+			daos_iov_free(&rdkey->rd_dkey);
+			D_FREE_PTR(rdkey);
+		}
+
+		/* check if it should exist */
+		ABT_mutex_lock(puller->rp_lock);
+		if (daos_list_empty(&puller->rp_dkey_list) &&
+		    rebuild_gst.rg_finishing) {
+			ABT_mutex_unlock(puller->rp_lock);
+			break;
+		}
+
+		if (rebuild_gst.rg_abort) {
+			ABT_mutex_unlock(puller->rp_lock);
+			break;
+		}
+
+		/* XXX exist if rebuild is aborted */
+		ABT_mutex_unlock(puller->rp_lock);
+		ABT_thread_yield();
+	}
+
+	ABT_mutex_lock(puller->rp_lock);
+	ABT_cond_signal(puller->rp_fini_cond);
+	puller->rp_ult_running = 0;
+	ABT_mutex_unlock(puller->rp_lock);
+}
+
+/**
+ * queue dkey to the rebuild dkey list on each xstream.
+ */
+static int
+rebuild_dkey_queue(daos_unit_oid_t oid, daos_epoch_t epoch,
+		   daos_key_t *dkey, struct rebuild_iter_arg *iter_arg)
+{
+	struct rebuild_puller	*puller;
+	struct rebuild_dkey	*rdkey = NULL;
 	unsigned int		tgt;
 	int			rc;
 
-	D_ALLOC_PTR(arg);
-	if (arg == NULL)
-		return -DER_NOMEM;
-
-	rc = daos_iov_copy(&arg->dkey, dkey);
-	if (rc)
-		D_GOTO(free, rc);
-
-	arg->oid = oid;
-	uuid_copy(arg->pool_uuid, iter_arg->pool_uuid);
-	uuid_copy(arg->cont_uuid, iter_arg->cont_uuid);
-	arg->map_ver = iter_arg->map_ver;
-	arg->epoch = epoch;
 	tgt = rebuild_get_nstream_idx(dkey);
-
-	while (1) {
-		/* a workaround to flow control ULT */
-		if (rebuild_gst.rg_puller_total > PULLER_MAX ||
-		    rebuild_gst.rg_pullers[tgt] > PULLER_XS_MAX) {
-			ABT_thread_yield();
-			continue;
-		}
-
-		ABT_mutex_lock(rebuild_gst.rg_lock);
-		/* check with lock */
-		if (rebuild_gst.rg_puller_total > PULLER_MAX ||
-		    rebuild_gst.rg_pullers[tgt] > PULLER_XS_MAX) {
-			ABT_mutex_unlock(rebuild_gst.rg_lock);
-			ABT_thread_yield();
-			continue;
-		}
-
-		arg->rebuild_building = &rebuild_gst.rg_pullers[tgt];
-		/* need the lock because we are changing counters of
-		 * another xstream.
+	puller = &rebuild_gst.rg_pullers[tgt];
+	if (puller->rp_ult == NULL) {
+		/* Create puller ULT thread, and destroy ULT until
+		 * rebuild finish in rebuild_fini().
 		 */
-		rebuild_gst.rg_pullers[tgt]++;
-		rebuild_gst.rg_puller_total++;
-		ABT_mutex_unlock(rebuild_gst.rg_lock);
-		break;
+		D_ASSERT(puller->rp_ult_running == 0);
+		D_DEBUG(DB_TRACE, "create rebuild dkey ult %d\n", tgt);
+		rc = dss_ult_create(rebuild_dkey_ult, NULL, tgt,
+				    &puller->rp_ult);
+		if (rc)
+			D_GOTO(free, rc);
 	}
 
-	D_DEBUG(DB_TRACE, "start rebuild dkey %.*s tag %d rebuilding %p/%d\n",
-		(int)arg->dkey.iov_len, (char *)arg->dkey.iov_buf, tgt,
-		&rebuild_gst.rg_pullers[tgt], rebuild_gst.rg_pullers[tgt]);
+	D_ALLOC_PTR(rdkey);
+	if (rdkey == NULL)
+		D_GOTO(free, rc = -DER_NOMEM);
 
-	rc = dss_ult_create(rebuild_dkey_thread, arg, tgt, NULL);
-	if (rc) {
-		ABT_mutex_lock(rebuild_gst.rg_lock);
-		rebuild_gst.rg_pullers[tgt]--;
-		rebuild_gst.rg_puller_total--;
-		ABT_mutex_unlock(rebuild_gst.rg_lock);
-
+	DAOS_INIT_LIST_HEAD(&rdkey->rd_list);
+	rc = daos_iov_copy(&rdkey->rd_dkey, dkey);
+	if (rc != 0)
 		D_GOTO(free, rc);
-	}
 
-	return rc;
+	rdkey->rd_oid = oid;
+	uuid_copy(rdkey->rd_cont_uuid, iter_arg->cont_uuid);
+	rdkey->rd_map_ver = iter_arg->map_ver;
+	rdkey->rd_epoch = epoch;
+
+	ABT_mutex_lock(puller->rp_lock);
+	daos_list_add_tail(&rdkey->rd_list, &puller->rp_dkey_list);
+	ABT_mutex_unlock(puller->rp_lock);
 free:
-	if (arg != NULL) {
-		daos_iov_free(&arg->dkey);
-		D_FREE_PTR(arg);
+	if (rc != 0 && rdkey != NULL) {
+		daos_iov_free(&rdkey->rd_dkey);
+		D_FREE_PTR(rdkey);
 	}
 
 	return rc;
@@ -517,7 +553,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 			dkey.iov_len = kds[i].kd_key_len;
 			dkey.iov_buf_len = kds[i].kd_key_len;
 
-			rc = rebuild_dkey(oid, epoch, &dkey, arg);
+			rc = rebuild_dkey_queue(oid, epoch, &dkey, arg);
 			if (rc < 0)
 				break;
 		}
@@ -662,8 +698,6 @@ rebuild_puller(void *arg)
 		}
 	}
 
-	rebuild_gst.rg_pullers[0]--;
-	rebuild_gst.rg_puller_total--;
 	D_FREE_PTR(iter_arg);
 	rebuild_gst.rg_puller_running = 0;
 }
@@ -764,15 +798,10 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 
 		D_ASSERT(rebuild_gst.rg_pullers != NULL);
 
-		rebuild_gst.rg_pullers[0]++;
-		rebuild_gst.rg_puller_total++;
 		rebuild_gst.rg_puller_running = 1;
 		rc = dss_ult_create(rebuild_puller, arg, -1, NULL);
 		if (rc) {
 			rebuild_gst.rg_puller_running = 0;
-			rebuild_gst.rg_pullers[0]--;
-			rebuild_gst.rg_puller_total--;
-
 			D_FREE_PTR(arg);
 		}
 	}
