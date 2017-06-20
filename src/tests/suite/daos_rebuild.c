@@ -32,8 +32,9 @@
 #include "daos_iotest.h"
 #include <daos/pool.h>
 
-#define KEY_NR	10
-#define OBJ_NR	10
+#define KEY_NR		10
+#define OBJ_NR		10
+#define OBJ_CLS		DAOS_OC_R3S_RW
 
 #define MAX_KILLS	2
 
@@ -131,7 +132,7 @@ rebuild_wait(test_arg_t *arg, daos_rank_t failed_rank, bool concurrent_io)
 
 	/* Rebuild rank 0 */
 	if (concurrent_io) {
-		oid = dts_oid_gen(DAOS_OC_R2S_RW, arg->myrank);
+		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
 		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 		/* Let's do I/O at the same time */
 		print_message("insert %d dkey/rebuild_akey during rebuild\n",
@@ -240,7 +241,7 @@ rebuild_dkeys(void **state)
 	if (!rebuild_runable(arg, 3))
 		skip();
 
-	oid = dts_oid_gen(DAOS_OC_R2S_RW, arg->myrank);
+	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -269,7 +270,7 @@ rebuild_akeys(void **state)
 	if (!rebuild_runable(arg, 3))
 		skip();
 
-	oid = dts_oid_gen(DAOS_OC_R2S_RW, arg->myrank);
+	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -299,7 +300,7 @@ rebuild_indexes(void **state)
 	if (!rebuild_runable(arg, 3))
 		skip();
 
-	oid = dts_oid_gen(DAOS_OC_R2S_RW, arg->myrank);
+	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -332,7 +333,7 @@ rebuild_multiple(void **state)
 	if (!rebuild_runable(arg, 3))
 		skip();
 
-	oid = dts_oid_gen(DAOS_OC_R2S_RW, arg->myrank);
+	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -368,7 +369,7 @@ rebuild_large_rec(void **state)
 	if (!rebuild_runable(arg, 3))
 		skip();
 
-	oid = dts_oid_gen(DAOS_OC_R2S_RW, arg->myrank);
+	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	/** Insert 1000 records */
@@ -400,7 +401,7 @@ rebuild_objects(void **state)
 
 	print_message("create %d objects\n", OBJ_NR);
 	for (i = 0; i < OBJ_NR; i++) {
-		oid = dts_oid_gen(DAOS_OC_R2S_RW, arg->myrank);
+		oid = dts_oid_gen(OBJ_CLS, arg->myrank);
 		ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 		/** Insert 1000 records */
@@ -432,7 +433,7 @@ rebuild_two_failures(void **state)
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {
-		oid[i] = dts_oid_gen(DAOS_OC_R2S_RW, arg->myrank);
+		oid[i] = dts_oid_gen(OBJ_CLS, arg->myrank);
 		ioreq_init(&req, arg->coh, oid[i], DAOS_IOD_ARRAY, arg);
 		/* Insert small size records */
 		for (j = 0; j < 5; j++) {
