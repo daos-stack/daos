@@ -1809,12 +1809,15 @@ out:
 	return rc;
 }
 
-/* Callers are expected to hold svc->ps_lock for writing. */
+/* Callers are responsible for daos_rank_list_free(*replicasp). */
 static int
-ds_pool_tgt_update(struct rdb_tx *tx, struct pool_svc *svc,
-		   daos_rank_list_t *tgts, daos_rank_list_t *tgts_failed,
-		   int opc)
+ds_pool_update_internal(uuid_t pool_uuid, daos_rank_list_t *tgts,
+			unsigned int opc, daos_rank_list_t *tgts_out,
+			struct pool_op_out *pto_op,
+			daos_rank_list_t **replicasp)
 {
+	struct pool_svc	       *svc;
+	struct rdb_tx		tx;
 	struct pool_map	       *map;
 	uint32_t		map_version_before;
 	uint32_t		map_version;
@@ -1823,38 +1826,63 @@ ds_pool_tgt_update(struct rdb_tx *tx, struct pool_svc *svc,
 	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
 
-	/* Create a temporary pool map based on the last committed version. */
-	rc = read_map(tx, &svc->ps_root, &map);
+	rc = pool_svc_lookup(pool_uuid, &svc);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		return rc;
+	if (!pool_svc_up(svc))
+		D_GOTO(out_svc, rc = -DER_NOTLEADER);
+
+	rc = rdb_tx_begin(svc->ps_db, &tx);
+	if (rc != 0)
+		D_GOTO(out_svc, rc);
+	ABT_rwlock_wrlock(svc->ps_lock);
+
+	/* Create a temporary pool map based on the last committed version. */
+	rc = read_map(&tx, &svc->ps_root, &map);
+	if (rc != 0)
+		D_GOTO(out_map_version, rc);
 
 	/*
 	 * Attempt to modify the temporary pool map and save its versions
-	 * before and after.
+	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(map, tgts, tgts_failed, opc);
+	rc = ds_pool_map_tgts_update(map, tgts, tgts_out, opc);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
-
 	D_DEBUG(DF_DSMS, DF_UUID": version=%u->%u failed=%d\n",
 		DP_UUID(svc->ps_uuid), map_version_before, map_version,
-		tgts_failed == NULL ? -1 : tgts_failed->rl_nr.num_out);
-
-	/* Any actual pool map changes? */
+		tgts_out == NULL ? -1 : tgts_out->rl_nr.num_out);
 	if (map_version == map_version_before)
 		D_GOTO(out_map, rc = 0);
 
+	/* Write the new pool map. */
 	rc = pool_buf_extract(map, &map_buf);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
-	rc = write_map_buf(tx, &svc->ps_root, map_buf, map_version);
+	rc = write_map_buf(&tx, &svc->ps_root, map_buf, map_version);
 	pool_buf_free(map_buf);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 
-	/* Swap the new pool map with the old one in the cache. */
+	if (replicasp != NULL) {
+		rc = rdb_get_ranks(svc->ps_db, replicasp);
+		if (rc != 0)
+			D_GOTO(out_map, rc);
+	}
+
+	rc = rdb_tx_commit(&tx);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID": failed to commit: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		D_GOTO(out_map, rc);
+	}
+
+	/*
+	 * The new pool map is now committed and can be publicized. Swap the
+	 * new pool map with the old one in the cache.
+	 */
 	ABT_rwlock_wrlock(svc->ps_pool->sp_lock);
 	map_tmp = svc->ps_pool->sp_map;
 	svc->ps_pool->sp_map = map;
@@ -1870,45 +1898,6 @@ ds_pool_tgt_update(struct rdb_tx *tx, struct pool_svc *svc,
 
 out_map:
 	pool_map_decref(map);
-out:
-	return rc;
-}
-
-/* Callers are responsible for daos_rank_list_free(*replicasp). */
-static int
-ds_pool_update_internal(uuid_t pool_uuid, daos_rank_list_t *tgts,
-			unsigned int opc, daos_rank_list_t *tgts_out,
-			struct pool_op_out *pto_op,
-			daos_rank_list_t **replicasp)
-{
-	struct pool_svc		*svc;
-	struct rdb_tx		tx;
-	int			rc;
-
-	rc = pool_svc_lookup(pool_uuid, &svc);
-	if (rc != 0)
-		return rc;
-
-	if (!pool_svc_up(svc))
-		D_GOTO(out_svc, rc = -DER_NOTLEADER);
-
-	rc = rdb_tx_begin(svc->ps_db, &tx);
-	if (rc != 0)
-		D_GOTO(out_svc, rc);
-	ABT_rwlock_wrlock(svc->ps_lock);
-
-	rc = ds_pool_tgt_update(&tx, svc, tgts, tgts_out, opc);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
-	if (replicasp != NULL) {
-		rc = rdb_get_ranks(svc->ps_db, replicasp);
-		if (rc != 0)
-			D_GOTO(out_map_version, rc);
-	}
-
-	rc = rdb_tx_commit(&tx);
-
 out_map_version:
 	if (pto_op != NULL)
 		pto_op->po_map_version =
