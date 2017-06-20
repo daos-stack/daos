@@ -35,10 +35,16 @@
 #define KEY_NR	10
 #define OBJ_NR	10
 
+#define MAX_KILLS	2
+
+static bool detected_ranks;
+static daos_rank_t ranks_to_kill[MAX_KILLS];
+
 static bool
 rebuild_runable(test_arg_t *arg, unsigned int required_tgts)
 {
 	daos_pool_info_t info;
+	int		 i;
 	int		 rc;
 	bool		 runable = true;
 
@@ -53,6 +59,14 @@ rebuild_runable(test_arg_t *arg, unsigned int required_tgts)
 					      "(%d/%d)\n", info.pi_ntargets,
 					      info.pi_ndisabled);
 			runable = false;
+		}
+
+		if (!detected_ranks) {
+			detected_ranks = true;
+			for (i = 0; i < MAX_KILLS; i++) {
+				ranks_to_kill[i] = info.pi_ntargets -
+						   info.pi_ndisabled - i - 1;
+			}
 		}
 	}
 
@@ -240,8 +254,7 @@ rebuild_dkeys(void **state)
 			      strlen("data") + 1, 0, &req);
 	}
 
-	/* Rebuild rank 2 */
-	rebuild_single_target(arg, 2, false);
+	rebuild_single_target(arg, ranks_to_kill[0], false);
 	ioreq_fini(&req);
 }
 
@@ -270,8 +283,7 @@ rebuild_akeys(void **state)
 			      strlen("data") + 1, 0, &req);
 	}
 
-	/* Rebuild rank 1 */
-	rebuild_single_target(arg, 2, false);
+	rebuild_single_target(arg, ranks_to_kill[0], false);
 	ioreq_fini(&req);
 }
 
@@ -303,7 +315,7 @@ rebuild_indexes(void **state)
 	}
 
 	/* Rebuild rank 1 */
-	rebuild_single_target(arg, 2, false);
+	rebuild_single_target(arg, ranks_to_kill[0], false);
 	ioreq_fini(&req);
 }
 
@@ -340,8 +352,7 @@ rebuild_multiple(void **state)
 		}
 	}
 
-	/* Rebuild rank 1 */
-	rebuild_single_target(arg, 2, false);
+	rebuild_single_target(arg, ranks_to_kill[0], false);
 	ioreq_fini(&req);
 }
 
@@ -371,8 +382,7 @@ rebuild_large_rec(void **state)
 		insert_single(key, "a_key", 0, buffer, 5000, 0, &req);
 	}
 
-	/* Rebuild rank 1 */
-	rebuild_single_target(arg, 2, false);
+	rebuild_single_target(arg, ranks_to_kill[0], false);
 	ioreq_fini(&req);
 }
 
@@ -406,8 +416,7 @@ rebuild_objects(void **state)
 		ioreq_fini(&req);
 	}
 
-	/* Rebuild rank 1 */
-	rebuild_single_target(arg, 2, false);
+	rebuild_single_target(arg, ranks_to_kill[0], false);
 }
 
 static void
@@ -416,7 +425,6 @@ rebuild_two_failures(void **state)
 	test_arg_t		*arg = *state;
 	daos_obj_id_t		oid[OBJ_NR];
 	struct ioreq		req;
-	daos_rank_t		ranks[2];
 	int			i;
 	int			j;
 
@@ -462,9 +470,7 @@ rebuild_two_failures(void **state)
 		}
 		ioreq_fini(&req);
 	}
-	ranks[0] = 2;
-	ranks[1] = 3;
-	rebuild_targets(arg, ranks, 2, true, true);
+	rebuild_targets(arg, ranks_to_kill, 2, true, true);
 
 	/* Verify the data being rebuilt on other target */
 	for (i = 0; i < OBJ_NR; i++) {
