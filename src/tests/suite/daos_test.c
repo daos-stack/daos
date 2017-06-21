@@ -39,6 +39,8 @@ static const char *server_group;
 /** Pool service replicas */
 static unsigned int svc_nreplicas = 1;
 
+static daos_size_t pool_size = (4ULL << 30);
+
 int
 test_setup(void **state, unsigned int step, bool multi_rank)
 {
@@ -83,10 +85,22 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 
 	/** create pool */
 	if (arg->myrank == 0) {
-		print_message("setup: creating pool\n");
+		char	*env;
+
+		env = getenv("POOL_SIZE");
+		if (env) {
+			int size_gb;
+
+			size_gb = atoi(env);
+			if (size_gb != 0)
+				pool_size = (daos_size_t)size_gb << 30;
+		}
+
+		print_message("setup: creating pool size="DF_U64" GB\n",
+			      (pool_size >> 30));
 
 		rc = daos_pool_create(0731, geteuid(), getegid(), arg->group,
-				      NULL, "pmem", 1024*1024*1024, &arg->svc,
+				      NULL, "pmem", pool_size, &arg->svc,
 				      arg->pool_uuid, NULL);
 		if (rc)
 			print_message("daos_pool_create failed, rc: %d\n", rc);
@@ -120,6 +134,9 @@ test_setup(void **state, unsigned int step, bool multi_rank)
 				       NULL /* ev */);
 		if (rc)
 			print_message("daos_pool_connect failed, rc: %d\n", rc);
+		else
+			print_message("connected to pool, ntarget=%d\n",
+				      arg->pool_info.pi_ntargets);
 	}
 	/** broadcast pool connect result */
 	if (multi_rank)
@@ -229,7 +246,7 @@ pool_destroy_safe(test_arg_t *arg)
 	}
 
 	rc = daos_pool_destroy(arg->pool_uuid, arg->group, 1, NULL);
-	if (rc)
+	if (rc && rc != -DER_TIMEDOUT)
 		print_message("daos_pool_destroy failed, rc: %d\n", rc);
 	return rc;
 }
