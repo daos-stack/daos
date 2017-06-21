@@ -736,7 +736,6 @@ ds_rebuild_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
 
-
 	D_DEBUG(DB_TRACE, "%d scan rebuild for "DF_UUID" ver %d\n",
 		dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
 		rsi->rsi_pool_map_ver);

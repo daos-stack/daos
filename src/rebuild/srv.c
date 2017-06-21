@@ -266,7 +266,7 @@ out:
 }
 
 int
-ds_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_tgts,
+ds_rebuild_query(uuid_t pool_uuid, bool do_bcast, daos_rank_list_t *failed_tgts,
 		 struct daos_rebuild_status *status)
 {
 	struct ds_pool			*pool;
@@ -275,17 +275,26 @@ ds_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_tgts,
 	struct rebuild_tgt_query_out	*rtqo;
 	int				 rc;
 
-	if (rebuild_gst.rg_rebuild_ver == 0) { /* no rebulid */
+	memset(status, 0, sizeof(*status));
+	status->rs_version = rebuild_gst.rg_rebuild_ver;
+	if (status->rs_version == 0) {
 		D_DEBUG(DB_TRACE, "No rebuild in progress\n");
-		memset(status, 0, sizeof(*status));
-		return 0;
+		D_GOTO(out, rc = 0);
+	}
+
+	if (!do_bcast) { /* just copy the cached information */
+		ABT_mutex_lock(rebuild_gst.rg_lock);
+		memcpy(status, &rebuild_gst.rg_status, sizeof(*status));
+		ABT_mutex_unlock(rebuild_gst.rg_lock);
+
+		D_GOTO(out, rc = 0);
 	}
 
 	pool = ds_pool_lookup(pool_uuid);
 	if (pool == NULL) {
 		D_ERROR("can not find "DF_UUID" rc %d\n",
 			DP_UUID(pool_uuid), -DER_NO_HDL);
-		return -DER_NO_HDL;
+		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 
 	/* Then send rebuild RPC to all targets of the pool */
@@ -314,15 +323,19 @@ ds_rebuild_query(uuid_t pool_uuid, daos_rank_list_t *failed_tgts,
 	else if (rtqo->rtqo_rebuilding == 0)
 		status->rs_done = 1;
 
-	/* rebuild_ver could have been changed when yield in bcast */
-	status->rs_version = rebuild_gst.rg_rebuild_ver;
 	status->rs_rec_nr = rtqo->rtqo_rec_count;
 	status->rs_obj_nr = rtqo->rtqo_obj_count;
+
+	ABT_mutex_lock(rebuild_gst.rg_lock);
+	memcpy(&rebuild_gst.rg_status, status, sizeof(*status));
+	ABT_mutex_unlock(rebuild_gst.rg_lock);
+
 	D_EXIT;
 out_rpc:
 	crt_req_decref(tgt_rpc);
 out_put:
 	ds_pool_put(pool);
+out:
 	return rc;
 }
 
@@ -479,8 +492,8 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 
 		case RB_BCAST_QUERY:
 			/* query the current rebuild status */
-			memset(&status, 0, sizeof(status));
-			rc = ds_rebuild_query(pool_uuid, tgts_failed, &status);
+			rc = ds_rebuild_query(pool_uuid, true, tgts_failed,
+					      &status);
 			if (rc == 0)
 				rc = status.rs_errno;
 
@@ -675,7 +688,14 @@ ds_rebuild_ult(void *arg)
 		task = daos_list_entry(rebuild_gst.rg_task_list.next,
 				       struct ds_rebuild_task, dst_list);
 		daos_list_del(&task->dst_list);
+
+		ABT_mutex_lock(rebuild_gst.rg_lock);
+		memset(&rebuild_gst.rg_status, 0,
+		       sizeof(rebuild_gst.rg_status));
+
+		rebuild_gst.rg_status.rs_version =
 		rebuild_gst.rg_rebuild_ver = task->dst_map_ver;
+		ABT_mutex_unlock(rebuild_gst.rg_lock);
 
 		rc = ds_rebuild_one(task->dst_pool_uuid, task->dst_map_ver,
 				    task->dst_tgts_failed, task->dst_svc_list);

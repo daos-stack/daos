@@ -702,10 +702,11 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 		rc = dss_collective(update_child_map, pool);
 		D_ASSERT(rc == 0);
 
-	} else if (map != NULL && pool->sp_map != NULL &&
+	} else if (pool->sp_map != NULL &&
 		   pool_map_get_version(pool->sp_map) < in->tui_map_version) {
 		struct pool_map *tmp = pool->sp_map;
 
+		/* drop the stale map */
 		pool->sp_map = map;
 		map = tmp;
 	} else {

@@ -44,6 +44,8 @@ struct rebuild_globals {
 	int			 rg_puller_total;
 	bool			 rg_leader;
 	bool			 rg_leader_barrier;
+	/* rebuild has been aborted, accessed by xstream-0 only */
+	bool			 rg_abort;
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		 rg_rebuild_ver;
 	/** the last rebuild version, used by all participants  */
@@ -57,7 +59,8 @@ struct rebuild_globals {
 	uuid_t			 rg_poh_uuid;
 	/* reserved for now, move rebuild_cont_hdl_uuid to here */
 	uuid_t			 rg_coh_uuid;
-	unsigned int		 rg_abort:1;
+	/** cached query status */
+	struct daos_rebuild_status rg_status;
 };
 
 extern struct rebuild_globals rebuild_gst;

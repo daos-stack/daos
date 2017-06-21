@@ -1700,7 +1700,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	if (!pool_svc_up(svc))
 		D_GOTO(out_svc, rc = -DER_NOTLEADER);
 
-	rc = ds_rebuild_query(in->pqi_op.pi_uuid, NULL, &out->pqo_rebuild_st);
+	rc = ds_rebuild_query(in->pqi_op.pi_uuid, false, NULL,
+			      &out->pqo_rebuild_st);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 
