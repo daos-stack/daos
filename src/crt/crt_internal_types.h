@@ -69,7 +69,9 @@ struct crt_gdata {
 	int			cg_na_plugin; /* NA plugin type */
 
 	/* global timeout value (second) for all RPCs */
-	unsigned		cg_timeout;
+	uint32_t		cg_timeout;
+	/* credits limitation for #inflight RPCs per target EP CTX */
+	uint32_t		cg_credit_ep_ctx;
 
 	/* CaRT contexts list */
 	crt_list_t		cg_ctx_list;
@@ -137,7 +139,8 @@ extern struct crt_plugin_gdata		crt_plugin_gdata;
 
 /* (1 << CRT_EPI_TABLE_BITS) is the number of buckets of epi hash table */
 #define CRT_EPI_TABLE_BITS		(3)
-#define CRT_MAX_INFLIGHT_PER_EP_CTX	(32)
+#define CRT_DEFAULT_CREDITS_PER_EP_CTX	(32)
+#define CRT_MAX_CREDITS_PER_EP_CTX	(256)
 
 /* crt_context */
 struct crt_context {

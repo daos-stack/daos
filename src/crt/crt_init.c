@@ -176,7 +176,8 @@ out:
 /* first step init - for initializing crt_gdata */
 static void data_init()
 {
-	unsigned	timeout;
+	uint32_t	timeout;
+	uint32_t	credits;
 	int		rc = 0;
 
 	C_DEBUG("initializing crt_gdata...\n");
@@ -208,8 +209,26 @@ static void data_init()
 	C_DEBUG("set the global timeout value as %d second.\n",
 		crt_gdata.cg_timeout);
 
+	credits = CRT_DEFAULT_CREDITS_PER_EP_CTX;
+	crt_getenv_int("CRT_CREDIT_EP_CTX", &credits);
+	if (credits == 0) {
+		C_DEBUG("CRT_CREDIT_EP_CTX set as 0, flow control disabled.\n");
+	} else if (credits > CRT_MAX_CREDITS_PER_EP_CTX) {
+		C_DEBUG("ENV CRT_CREDIT_EP_CTX's value %d exceed max allowed "
+			"value, use %d for flow control.\n",
+			credits, CRT_MAX_CREDITS_PER_EP_CTX);
+		credits = CRT_MAX_CREDITS_PER_EP_CTX;
+	} else {
+		C_DEBUG("CRT_CREDIT_EP_CTX set as %d for flow control.\n",
+			credits);
+	}
+	crt_gdata.cg_credit_ep_ctx = credits;
+	C_ASSERT(crt_gdata.cg_credit_ep_ctx >= 0 &&
+		 crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
+
 	gdata_init_flag = 1;
 }
+
 void
 crt_plugin_init(void)
 {

@@ -144,7 +144,7 @@ crt_context_init(crt_context_t crt_ctx)
 	CRT_INIT_LIST_HEAD(&ctx->cc_link);
 
 	/* create timeout binheap */
-	bh_node_cnt = CRT_MAX_INFLIGHT_PER_EP_CTX * 64;
+	bh_node_cnt = CRT_DEFAULT_CREDITS_PER_EP_CTX * 64;
 	rc = crt_binheap_create_inplace(CBH_FT_NOLOCK, bh_node_cnt,
 					NULL /* priv */, &crt_timeout_bh_ops,
 					&ctx->cc_bh_timeout);
@@ -679,8 +679,9 @@ crt_context_req_track(crt_rpc_t *req)
 	rpc_priv->crp_timeout_ts = crt_get_timeout(rpc_priv);
 	rpc_priv->crp_epi = epi;
 	crt_req_addref(req);
-	if ((epi->epi_req_num - epi->epi_reply_num) >=
-	    CRT_MAX_INFLIGHT_PER_EP_CTX) {
+	if (crt_gdata.cg_credit_ep_ctx != 0 &&
+	    (epi->epi_req_num - epi->epi_reply_num) >=
+	     crt_gdata.cg_credit_ep_ctx) {
 		crt_list_add_tail(&rpc_priv->crp_epi_link,
 				   &epi->epi_req_waitq);
 		epi->epi_req_wait_num++;
@@ -763,10 +764,16 @@ crt_context_req_untrack(crt_rpc_t *req)
 	/* decref corresponding to addref in crt_context_req_track */
 	crt_req_decref(req);
 
+	/* done if flow control disabled */
+	if (crt_gdata.cg_credit_ep_ctx == 0) {
+		pthread_mutex_unlock(&epi->epi_mutex);
+		return;
+	}
+
 	/* process waitq */
 	inflight = epi->epi_req_num - epi->epi_reply_num;
-	C_ASSERT(inflight >= 0 && inflight <= CRT_MAX_INFLIGHT_PER_EP_CTX);
-	credits = CRT_MAX_INFLIGHT_PER_EP_CTX - inflight;
+	C_ASSERT(inflight >= 0 && inflight <= crt_gdata.cg_credit_ep_ctx);
+	credits = crt_gdata.cg_credit_ep_ctx - inflight;
 	while (credits > 0 && !crt_list_empty(&epi->epi_req_waitq)) {
 		C_ASSERT(epi->epi_req_wait_num > 0);
 		rpc_priv = crt_list_entry(epi->epi_req_waitq.next,
