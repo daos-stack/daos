@@ -646,6 +646,7 @@ ds_rebuild_one(uuid_t pool_uuid, uint32_t map_ver,
 			DP_UUID(pool_uuid), map_ver, rc);
 		D_GOTO(out, rc);
 	}
+	D_PRINT("Rebuild [started] (ver=%u)\n", map_ver);
 
 	/* Wait until rebuild finished */
 	ds_rebuild_check(pool_uuid, map_ver, tgts_failed);
@@ -671,8 +672,6 @@ ds_rebuild_ult(void *arg)
 				       struct ds_rebuild_task, dst_list);
 		daos_list_del(&task->dst_list);
 		rebuild_gst.rg_rebuild_ver = task->dst_map_ver;
-
-		D_PRINT("Rebuild [started] (ver=%u)\n", task->dst_map_ver);
 
 		rc = ds_rebuild_one(task->dst_pool_uuid, task->dst_map_ver,
 				    task->dst_tgts_failed, task->dst_svc_list);

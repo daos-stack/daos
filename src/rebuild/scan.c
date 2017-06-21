@@ -599,14 +599,21 @@ rebuild_scan_leader(void *data)
 
 	/* global barrier: wait until the pool map is ready */
 	pool = arg->sa_pool;
-	ABT_mutex_lock(pool->sp_map_lock);
+
+	ABT_rwlock_rdlock(pool->sp_lock);
 	while (pool->sp_map == NULL || pool->sp_map_version < arg->map_ver ||
 	       pool_map_get_version(pool->sp_map) < arg->map_ver) {
+		ABT_rwlock_unlock(pool->sp_lock);
+
 		D_DEBUG(DB_TRACE, "Waiting for pool=%p, map_ver=%u, cur=%u\n",
 			pool, arg->map_ver, pool->sp_map_version);
+		ABT_mutex_lock(pool->sp_map_lock);
 		ABT_cond_wait(pool->sp_map_cond, pool->sp_map_lock);
+		ABT_mutex_unlock(pool->sp_map_lock);
+
+		ABT_rwlock_rdlock(pool->sp_lock);
 	}
-	ABT_mutex_unlock(pool->sp_map_lock);
+	ABT_rwlock_unlock(pool->sp_lock);
 
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	while (rebuild_gst.rg_leader && rebuild_gst.rg_leader_barrier) {
