@@ -15,11 +15,11 @@ else
   docker_setup_file="docker_setup.sh"
 fi
 
-default_requires=
-
 job_real_name=${JOB_NAME%/*}
 if [[ "${job_real_name}" == *${JOB_SUFFIX} ]];then
-  default_requires="REQUIRES=${TARGET}"
+ : ${DEFAULT_REQUIRES="REQUIRES=${TARGET}"}
+else
+ : ${DEFAULT_REQUIRES=""}
 fi
 
 set +u
@@ -46,16 +46,25 @@ else
   scons_local_dir="/work/${TARGET}/scons_local"
 fi
 
+: ${DOCKER_OPTIONS=""}
+
 docker run --rm -u $USER -v ${PWD}:/work \
            -v ${WORK_TARGET}:${DIST_MOUNT} \
            --privileged --device /dev/fuse:/dev/fuse:rwm \
-           -a stderr -a stdout -i coral/${DOCKER_IMAGE} \
+           -a stderr -a stdout ${DOCKER_OPTIONS} -i coral/${DOCKER_IMAGE} \
            ${scons_local_dir}/utils/docker/docker_build_components.sh \
-          ${default_requires} ${SCONS_OPTIONS} 2>&1 | tee docker_build.log
+          ${DEFAULT_REQUIRES} ${SCONS_OPTIONS} 2>&1 | tee docker_build.log
 
-# Review jobs do not have artifacts to process
 docker_exit_status=0
-if [[ "${job_real_name}" == *${JOB_SUFFIX} ]];then
+# Some jobs used to not need artifacts based on JOB_SUFFIX.
+# Review jobs feeding maloo need artifacts.
+if [[ "${job_real_name}" == *${JOB_SUFFIX} ]]; then
+  : ${NEED_ARTIFACTS="1"}
+else
+  : ${NEED_ARTIFACTS=""}
+fi
+
+if [ -n ${NEED_ARTIFACTS} ]; then
   source ${docker_post_script}
   docker_exit_status=$?
 fi
