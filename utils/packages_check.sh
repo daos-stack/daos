@@ -38,6 +38,26 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+function fuse3_check {
+  local CORAL_ARTIFACTS="/scratch/jenkins-1/artifacts"
+  local f3_tar1="tar -C /opt --strip-components=1 --owner=root -xzf"
+  f3_tar1="${f3_tar1} ${CORAL_ARTIFACTS}/fuse-3_0_bugfix-opt/distro=e17"
+  local f3_tar2="/latest/fuse-3_0_bugfix.tar.gz"
+
+  rm -rf /opt/fuse3
+  mkdir -p /opt/fuse3
+
+  echo ${f3_tar1} ${f3_tar2}
+  ${f3_tar1} ${f3_tar2}
+  ln -s -f /opt/fuse3/bin/fusermount3 /usr/bin/fusermount3
+}
+
+function rm_check {
+ yum -y remove compat-openmpi16
+ yum -y remove openmpi
+ rm -f /etc/profile.d/openmpi.sh
+}
+
 function yum_check {
  yum -y install fuse fuse-devel openssl-devel
  yum -y install python34 python34-devel
@@ -60,14 +80,19 @@ function pip3_check {
     python3 get-pip.py
     cp /usr/bin/pip2 /usr/bin/pip
 
-    pip_additions="virtualenv pyopenssl ndg-httpsclient pyasn1 "
+    pip_additions="pyopenssl ndg-httpsclient pyasn1 "
     pip_additions+="flake8 sphinx pytest pytest-cov gcovr requests pylint "
-    pip_additions+="astroid pyyaml numpy"
+    pip_additions+="netifaces astroid pyyaml numpy GitPython"
     pip3 install -U ${pip_additions}
   else
     echo "pip3 exists."
   fi
 }
 
+if [[  $(whoami) != "root" ]]; then
+    echo "This script needs to be executed as root"
+    exit 1
+fi
+rm_check
 yum_check
 pip3_check
