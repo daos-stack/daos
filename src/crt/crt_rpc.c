@@ -717,15 +717,14 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *priv)
 	crt_ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
 	ctx_idx = crt_ctx->cc_idx;
 
-	rc = crt_grp_lc_addr_insert(grp_priv, ctx_idx, rank, tag, hg_addr);
+	rc = crt_grp_lc_addr_insert(grp_priv, crt_ctx, rank, tag, &hg_addr);
 	if (rc != 0) {
-		C_ERROR("crt_grp_lc_addr_insert() failed. rc %d"
-		       " grp_priv %p ctx_idx %d, rank: %d, tag %d.\n",
-		       rc, grp_priv, ctx_idx, rank, tag);
+		C_ERROR("crt_grp_lc_addr_insert() failed. rc %d "
+			"grp_priv %p ctx_idx %d, rank: %d, tag %d.\n",
+			rc, grp_priv, ctx_idx, rank, tag);
 		C_GOTO(out, rc);
 	}
-
-	rpc_priv->crp_na_addr = hg_addr;
+	rpc_priv->crp_hg_addr = hg_addr;
 	rc = crt_req_send_internal(rpc_priv);
 	if (rc != 0) {
 		C_ERROR("crt_req_send_internal() failed, rc %d, rpc_priv: %p, "
@@ -912,9 +911,9 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 	else
 		grp_priv = container_of(tgt_ep->ep_grp, struct crt_grp_priv,
 					gp_pub);
-	rc = crt_grp_lc_lookup(grp_priv, ctx->cc_idx, &ctx->cc_hg_ctx,
+	rc = crt_grp_lc_lookup(grp_priv, ctx->cc_idx,
 			       tgt_ep->ep_rank, tgt_ep->ep_tag, base_addr,
-			       &rpc_priv->crp_na_addr);
+			       &rpc_priv->crp_hg_addr);
 	if (rc != 0) {
 		C_ERROR("crt_grp_lc_lookup failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
@@ -1042,7 +1041,7 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	int				 rc = 0;
 
 	C_ASSERT(rpc_priv != NULL);
-	C_ASSERT(rpc_priv->crp_na_addr != NULL);
+	C_ASSERT(rpc_priv->crp_hg_addr != NULL);
 
 	req = &rpc_priv->crp_pub;
 	ctx = (struct crt_context *)req->cr_ctx;
@@ -1082,14 +1081,14 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 		rpc_priv->crp_state = RPC_STATE_INITED;
 	case RPC_STATE_INITED:
 		/* lookup local cache  */
-		rpc_priv->crp_na_addr = NULL;
+		rpc_priv->crp_hg_addr = NULL;
 		rc = crt_req_ep_lc_lookup(rpc_priv, &base_addr);
 		if (rc != 0) {
 			C_ERROR("crt_grp_ep_lc_lookup() failed, rc %d, "
 				"opc: 0x%x.\n", rc, req->cr_opc);
 			C_GOTO(out, rc);
 		}
-		if (rpc_priv->crp_na_addr != NULL) {
+		if (rpc_priv->crp_hg_addr != NULL) {
 			/* send the RPC if the local cache has the HG_Addr */
 			rc = crt_req_send_immediately(rpc_priv);
 		} else if (base_addr != NULL) {
@@ -1121,7 +1120,7 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 				"opc: 0x%x\n", rc, req->cr_opc);
 			C_GOTO(out, rc);
 		}
-		if (rpc_priv->crp_na_addr != NULL) {
+		if (rpc_priv->crp_hg_addr != NULL) {
 			rc = crt_req_send_immediately(rpc_priv);
 		} else {
 			/* send addr lookup req */

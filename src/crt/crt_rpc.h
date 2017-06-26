@@ -169,7 +169,7 @@ struct crt_rpc_priv {
 	crt_rpc_t		crp_pub; /* public part */
 	crt_rpc_state_t		crp_state; /* RPC state */
 	hg_handle_t		crp_hg_hdl; /* HG request handle */
-	na_addr_t		crp_na_addr; /* target na address */
+	hg_addr_t		crp_hg_addr; /* target na address */
 	crt_phy_addr_t		crp_tgt_uri; /* target uri address */
 	crt_rpc_t		*crp_ul_req; /* uri lookup request */
 

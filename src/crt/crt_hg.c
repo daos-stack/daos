@@ -640,7 +640,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	if (rpc_priv == NULL)
 		C_GOTO(out, hg_ret = HG_NOMEM_ERROR);
 
-	rpc_priv->crp_na_addr = hg_info->addr;
+	rpc_priv->crp_hg_addr = hg_info->addr;
 	rpc_priv->crp_hg_hdl = hg_hdl;
 	rpc_pub = &rpc_priv->crp_pub;
 	rpc_pub->cr_ctx = crt_ctx;
@@ -739,7 +739,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, int ctx_idx,
 
 	rpcid = rpc_priv->crp_opc_info->coi_no_reply ? CRT_HG_ONEWAY_RPCID :
 						       CRT_HG_RPCID;
-	hg_ret = HG_Create(hg_ctx->chc_hgctx, rpc_priv->crp_na_addr, rpcid,
+	hg_ret = HG_Create(hg_ctx->chc_hgctx, rpc_priv->crp_hg_addr, rpcid,
 			   &rpc_priv->crp_hg_hdl);
 	if (hg_ret != HG_SUCCESS) {
 		C_ERROR("HG_Create failed, hg_ret: %d, opc: 0x%x.\n",
@@ -1335,7 +1335,7 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	rpc_priv = container_of(bulk_desc->bd_rpc, struct crt_rpc_priv,
 				crp_pub);
 	hg_ret = HG_Bulk_transfer(hg_ctx->chc_bulkctx, crt_hg_bulk_transfer_cb,
-			bulk_cbinfo, hg_bulk_op, rpc_priv->crp_na_addr,
+			bulk_cbinfo, hg_bulk_op, rpc_priv->crp_hg_addr,
 			bulk_desc->bd_remote_hdl, bulk_desc->bd_remote_off,
 			bulk_desc->bd_local_hdl, bulk_desc->bd_local_off,
 			bulk_desc->bd_len,

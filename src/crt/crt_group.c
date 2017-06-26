@@ -399,14 +399,17 @@ out:
  * routine.
  */
 int
-crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
-		       crt_rank_t rank, int tag, const hg_addr_t hg_addr)
+crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
+		       struct crt_context *crt_ctx,
+		       crt_rank_t rank, int tag, hg_addr_t *hg_addr)
 {
 	crt_list_t		*rlink;
 	struct crt_lookup_item	*li;
+	int			 ctx_idx;
 	int			 rc = 0;
 
-	C_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
+	C_ASSERT(crt_ctx != NULL);
+	ctx_idx = crt_ctx->cc_idx;
 	pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
 	rlink = chash_rec_find(grp_priv->gp_lookup_cache[ctx_idx],
 			       (void *)&rank, sizeof(rank));
@@ -420,12 +423,20 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 	if (li->li_evicted == 1)
 		rc = -CER_EVICTED;
 	if (li->li_tag_addr[tag] == NULL) {
-		li->li_tag_addr[tag] = hg_addr;
+		li->li_tag_addr[tag] = *hg_addr;
 	} else {
 		C_WARN("NA address already exits. "
 		       " grp_priv %p ctx_idx %d, rank: %d, tag %d, rlink %p\n",
 		       grp_priv, ctx_idx, rank, tag, &li->li_link);
+		rc = crt_hg_addr_free(&crt_ctx->cc_hg_ctx, *hg_addr);
+		if (rc != 0) {
+			C_ERROR("crt_hg_addr_free failed, crt_idx %d, *hg_addr"
+				" 0x%p, rc %d\n", ctx_idx, *hg_addr, rc);
+			C_GOTO(out, rc);
+		}
+		*hg_addr = li->li_tag_addr[tag];
 	}
+out:
 	pthread_mutex_unlock(&li->li_mutex);
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 	chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
@@ -436,16 +447,16 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 /*
  * Lookup the URI and NA address of a (rank, tag) combination in the addr cache.
  * This function only looks into the address cache. If the requested (rank, tag)
- * pair doesn't exist in the address cache, *na_addr will be NULL on return, and
+ * pair doesn't exist in the address cache, *hg_addr will be NULL on return, and
  * an empty record for the requested rank with NULL values will be inserted to
- * the cache. For input parameters, base_addr and na_addr can not be both NULL.
- * (na_addr == NULL) means the caller only want to lookup the base_addr.
- * (base_addr == NULL) means the caller only want to lookup the na_addr.
+ * the cache. For input parameters, base_addr and hg_addr can not be both NULL.
+ * (hg_addr == NULL) means the caller only want to lookup the base_addr.
+ * (base_addr == NULL) means the caller only want to lookup the hg_addr.
  */
 int
 crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
-		  struct crt_hg_context *hg_ctx, crt_rank_t rank, uint32_t tag,
-		  crt_phy_addr_t *base_addr, na_addr_t *na_addr)
+		  crt_rank_t rank, uint32_t tag,
+		  crt_phy_addr_t *base_addr, hg_addr_t *hg_addr)
 {
 	struct crt_lookup_item	*li;
 	crt_list_t		*rlink;
@@ -455,9 +466,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	C_ASSERT(grp_priv->gp_primary != 0);
 	C_ASSERT(rank < grp_priv->gp_size);
 	C_ASSERT(tag < CRT_SRV_CONTEXT_NUM);
-	C_ASSERT(base_addr != NULL || na_addr != NULL);
-	if (na_addr != NULL)
-		C_ASSERT(hg_ctx != NULL);
+	C_ASSERT(base_addr != NULL || hg_addr != NULL);
 	C_ASSERT(ctx_idx >= 0 && ctx_idx < CRT_SRV_CONTEXT_NUM);
 
 	pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
@@ -482,10 +491,10 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 		pthread_mutex_unlock(&li->li_mutex);
 		if (base_addr != NULL)
 			*base_addr = li->li_base_phy_addr;
-		if (na_addr == NULL)
+		if (hg_addr == NULL)
 			C_ASSERT(base_addr != NULL);
 		else if (li->li_tag_addr[tag] != NULL)
-			*na_addr = li->li_tag_addr[tag];
+			*hg_addr = li->li_tag_addr[tag];
 		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 		chash_rec_decref(grp_priv->gp_lookup_cache[ctx_idx], rlink);
 		C_GOTO(out, rc);
@@ -1539,7 +1548,6 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 {
 	struct crt_grp_priv		*grp_priv;
 	struct crt_context		*crt_ctx;
-	struct crt_hg_context		*hg_ctx;
 	struct crt_uri_lookup_in	*ul_in;
 	struct crt_uri_lookup_out	*ul_out;
 	char				*tmp_uri = NULL;
@@ -1567,9 +1575,8 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	}
 
 	crt_ctx = (struct crt_context *)rpc_req->cr_ctx;
-	hg_ctx = &crt_ctx->cc_hg_ctx;
 
-	rc = crt_grp_lc_lookup(grp_priv, crt_ctx->cc_idx, hg_ctx,
+	rc = crt_grp_lc_lookup(grp_priv, crt_ctx->cc_idx,
 			       ul_in->ul_rank, 0, &ul_out->ul_uri, NULL);
 	if (rc != 0) {
 		C_ERROR("crt_grp_lc_lookup(grp %s, rank %d) failed, rc: %d.\n",
