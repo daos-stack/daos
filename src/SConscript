@@ -39,8 +39,7 @@
 import os
 
 HEADERS = ['crt_api.h', 'crt_iv.h', 'crt_types.h', 'crt_errno.h']
-HEADERS_UTIL = ['clog.h', 'common.h', 'hash.h', 'list.h', 'heap.h',
-                'sysqueue.h', 'path.h']
+HEADERS_UTIL = ['clog.h', 'common.h', 'hash.h', 'list.h', 'heap.h', 'path.h']
 
 def scons():
     """Scons function"""

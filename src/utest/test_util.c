@@ -44,7 +44,6 @@
 #include "crt_util/common.h"
 #include "crt_util/path.h"
 #include "crt_util/list.h"
-#include "crt_util/sysqueue.h"
 #include "crt_util/heap.h"
 #include "crt_util/clog.h"
 
@@ -392,146 +391,6 @@ fini_tests(void **state)
 	free(__root);
 
 	return 0;
-}
-
-static STAILQ_HEAD(stq_head, stq_entry) stq_head =
-	STAILQ_HEAD_INITIALIZER(stq_head);
-
-struct stq_entry {
-	STAILQ_ENTRY(stq_entry) entries;
-	int num;
-};
-
-static void
-test_stailq_safe(void **state)
-{
-	int			i;
-	struct stq_entry	*item;
-	struct stq_entry	*temp;
-
-	for (i = 0; i < 10; i++) {
-		item = (struct stq_entry *)malloc(sizeof(struct stq_entry));
-		assert_non_null(item);
-
-		item->num = i;
-		STAILQ_INSERT_TAIL(&stq_head, item, entries);
-	}
-
-	i = 0;
-	STAILQ_FOREACH_SAFE(item, &stq_head, entries, temp) {
-
-		assert_int_equal(i, item->num);
-		STAILQ_REMOVE(&stq_head, item, stq_entry, entries);
-		i++;
-		free(item);
-	}
-
-	assert_int_not_equal(0, STAILQ_EMPTY(&stq_head));
-}
-
-static TAILQ_HEAD(tq_head, tq_entry) tq_head =
-	TAILQ_HEAD_INITIALIZER(tq_head);
-
-struct tq_entry {
-	TAILQ_ENTRY(tq_entry) entries;
-	int num;
-};
-
-static void
-test_tailq_safe(void **state)
-{
-	int			i;
-	struct tq_entry	*item;
-	struct tq_entry	*temp;
-
-	for (i = 0; i < 10; i++) {
-		item = (struct tq_entry *)malloc(sizeof(struct tq_entry));
-		assert_non_null(item);
-
-		item->num = i;
-		TAILQ_INSERT_TAIL(&tq_head, item, entries);
-	}
-
-	i = 0;
-	TAILQ_FOREACH_SAFE(item, &tq_head, entries, temp) {
-
-		assert_int_equal(i, item->num);
-		TAILQ_REMOVE(&tq_head, item, entries);
-		i++;
-		free(item);
-	}
-
-	assert_int_not_equal(0, TAILQ_EMPTY(&tq_head));
-}
-
-static SLIST_HEAD(sl_head, sl_entry) sl_head =
-	SLIST_HEAD_INITIALIZER(sl_head);
-
-struct sl_entry {
-	SLIST_ENTRY(sl_entry) entries;
-	int num;
-};
-
-static void
-test_slist_safe(void **state)
-{
-	int			i;
-	struct sl_entry	*item;
-	struct sl_entry	*temp;
-
-	for (i = 0; i < 10; i++) {
-		item = (struct sl_entry *)malloc(sizeof(struct sl_entry));
-		assert_non_null(item);
-
-		item->num = i;
-		SLIST_INSERT_HEAD(&sl_head, item, entries);
-	}
-
-	i = 9;
-	SLIST_FOREACH_SAFE(item, &sl_head, entries, temp) {
-
-		assert_int_equal(i, item->num);
-		SLIST_REMOVE(&sl_head, item, sl_entry, entries);
-		i--;
-		free(item);
-	}
-
-	assert_int_not_equal(0, SLIST_EMPTY(&sl_head));
-}
-
-static LIST_HEAD(l_head, l_entry) l_head =
-	LIST_HEAD_INITIALIZER(l_head);
-
-struct l_entry {
-	LIST_ENTRY(l_entry) entries;
-	int num;
-};
-
-static void
-test_list_safe(void **state)
-{
-	int			i;
-	struct l_entry	*item;
-	struct l_entry	*temp;
-
-	for (i = 0; i < 10; i++) {
-		item = (struct l_entry *)malloc(sizeof(struct l_entry));
-		assert_non_null(item);
-
-		item->num = i;
-		LIST_INSERT_HEAD(&l_head, item, entries);
-	}
-
-	i = 9;
-	LIST_FOREACH_SAFE(item, &l_head, entries, temp) {
-
-		assert_int_equal(i, item->num);
-		LIST_REMOVE(item, entries);
-		i--;
-		free(item);
-	}
-
-	assert_int_not_equal(0, LIST_EMPTY(&l_head));
 }
 
 struct crt_list_test_entry {
@@ -1032,10 +891,6 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_check_directory),
 		cmocka_unit_test(test_prepend_cwd),
 		cmocka_unit_test(test_normalize_in_place),
-		cmocka_unit_test(test_stailq_safe),
-		cmocka_unit_test(test_tailq_safe),
-		cmocka_unit_test(test_slist_safe),
-		cmocka_unit_test(test_list_safe),
 		cmocka_unit_test(test_crt_list),
 		cmocka_unit_test(test_crt_hlist),
 		cmocka_unit_test(test_binheap),

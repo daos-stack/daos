@@ -48,7 +48,6 @@
 #include <crt_util/clog.h>
 #include <crt_util/hash.h>
 #include <crt_util/common.h>
-#include <crt_util/sysqueue.h>
 #include <crt_util/list.h>
 #include "utest_cmocka.h"
 
