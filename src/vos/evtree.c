@@ -398,8 +398,8 @@ evt_tcx_clone(struct evt_context *tcx, struct evt_context **tcx_pp)
  * \param ptr_mmid_p	[OUT]	The returned memory ID of extent pointer.
  */
 static int
-evt_ptr_create(struct evt_context *tcx, uuid_t cookie, umem_id_t mmid,
-	       uint32_t idx_nob, uint64_t idx_num,
+evt_ptr_create(struct evt_context *tcx, uuid_t cookie, uint32_t pm_ver,
+	       umem_id_t mmid, uint32_t idx_nob, uint64_t idx_num,
 	       TMMID(struct evt_ptr) *ptr_mmid_p)
 {
 	struct evt_ptr		*ptr;
@@ -414,6 +414,7 @@ evt_ptr_create(struct evt_context *tcx, uuid_t cookie, umem_id_t mmid,
 	ptr->pt_inob = idx_nob;
 	ptr->pt_inum = idx_num;
 	uuid_copy(ptr->pt_cookie, cookie);
+	ptr->pt_ver = pm_ver;
 
 	if (UMMID_IS_NULL(mmid) && idx_nob * idx_num > EVT_PTR_PAYLOAD) {
 		mmid = umem_alloc(evt_umm(tcx), idx_nob * idx_num);
@@ -1425,8 +1426,8 @@ evt_insert_ptr(struct evt_context *tcx, struct evt_rect *rect,
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_insert(daos_handle_t toh, uuid_t cookie, struct evt_rect *rect,
-	   uint32_t inob, umem_id_t mmid)
+evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
+	   struct evt_rect *rect, uint32_t inob, umem_id_t mmid)
 {
 	struct evt_context	*tcx;
 	TMMID(struct evt_ptr)	 ptr_mmid;
@@ -1436,8 +1437,8 @@ evt_insert(daos_handle_t toh, uuid_t cookie, struct evt_rect *rect,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = evt_ptr_create(tcx, cookie, mmid, inob, evt_rect_width(rect),
-			    &ptr_mmid);
+	rc = evt_ptr_create(tcx, cookie, pm_ver, mmid, inob,
+			    evt_rect_width(rect), &ptr_mmid);
 	if (rc != 0)
 		return rc;
 
@@ -1458,8 +1459,8 @@ evt_insert(daos_handle_t toh, uuid_t cookie, struct evt_rect *rect,
  * Please check API comment in evtree.h for the details.
  */
 int
-evt_insert_sgl(daos_handle_t toh, uuid_t cookie, struct evt_rect *rect,
-	       uint32_t inob, daos_sg_list_t *sgl)
+evt_insert_sgl(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
+	       struct evt_rect *rect, uint32_t inob, daos_sg_list_t *sgl)
 {
 	struct evt_context	*tcx;
 	TMMID(struct evt_ptr)	 ptr_mmid;
@@ -1470,7 +1471,7 @@ evt_insert_sgl(daos_handle_t toh, uuid_t cookie, struct evt_rect *rect,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = evt_ptr_create(tcx, cookie, UMMID_NULL, inob,
+	rc = evt_ptr_create(tcx, cookie, pm_ver, UMMID_NULL, inob,
 			    evt_rect_width(rect), &ptr_mmid);
 	if (rc != 0)
 		return rc;
@@ -1544,6 +1545,7 @@ evt_fill_entry(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 
 	entry->en_mmid = umem_id_t2u(pref->pr_ptr_mmid);
 	uuid_copy(entry->en_cookie, ptr->pt_cookie);
+	entry->en_ver = ptr->pt_ver;
 
 	addr = evt_ptr_payload(tcx, pref->pr_ptr_mmid, &entry->en_inob, NULL);
 	if (addr == NULL) { /* punched */

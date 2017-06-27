@@ -155,6 +155,8 @@ typedef struct {
 			uuid_t			ie_cookie;
 			/** checksum */
 			daos_csum_buf_t		ie_csum;
+			/** pool map version */
+			uint32_t		ie_ver;
 		};
 	};
 } vos_iter_entry_t;

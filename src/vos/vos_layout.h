@@ -161,8 +161,8 @@ struct vos_irec_df {
 	uint8_t				ir_cs_size;
 	/** padding bytes */
 	uint16_t			ir_pad16;
-	/** padding bytes */
-	uint32_t			ir_pad32;
+	/** pool map version */
+	uint32_t			ir_ver;
 	/** length of value */
 	uint64_t			ir_size;
 	/** placeholder for the real stuff */

@@ -736,7 +736,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 static int
 akey_update_single(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
-		   daos_size_t rsize, struct iod_buf *iobuf)
+		   uint32_t pm_ver, daos_size_t rsize, struct iod_buf *iobuf)
 {
 	struct vos_key_bundle	kbund;
 	struct vos_rec_bundle	rbund;
@@ -768,6 +768,7 @@ akey_update_single(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 	rbund.rb_rsize	= rsize;
 	rbund.rb_mmid	= mmid;
 	uuid_copy(rbund.rb_cookie, cookie);
+	rbund.rb_ver	= pm_ver;
 
 	rc = dbtree_update(toh, &kiov, &riov);
 	if (rc != 0) {
@@ -790,7 +791,8 @@ out:
  */
 static int
 akey_update_recx(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
-		 daos_recx_t *recx, daos_size_t rsize, struct iod_buf *iobuf)
+		 uint32_t pm_ver, daos_recx_t *recx, daos_size_t rsize,
+		 struct iod_buf *iobuf)
 {
 	struct evt_rect	rect;
 	daos_iov_t	iov;
@@ -803,7 +805,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 
 	daos_iov_set(&iov, NULL, rsize);
 	if (iobuf->db_zc) {
-		rc = evt_insert(toh, cookie, &rect, rsize,
+		rc = evt_insert(toh, cookie, pm_ver, &rect, rsize,
 				iobuf->db_mmids[iobuf->db_at]);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -818,7 +820,7 @@ akey_update_recx(daos_handle_t toh, daos_epoch_range_t *epr, uuid_t cookie,
 		 * copy actual data into those buffers after evt_insert_sgl().
 		 * See iobuf_update() for the details.
 		 */
-		rc = evt_insert_sgl(toh, cookie, &rect, rsize, &sgl);
+		rc = evt_insert_sgl(toh, cookie, pm_ver, &rect, rsize, &sgl);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -838,7 +840,8 @@ out:
 /** update a set of record extents (recx) under the same akey */
 static int
 akey_update(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
-	    daos_handle_t ak_toh, daos_iod_t *iod, struct iod_buf *iobuf)
+	    uint32_t pm_ver, daos_handle_t ak_toh, daos_iod_t *iod,
+	    struct iod_buf *iobuf)
 {
 	daos_epoch_range_t	eprange;
 	daos_handle_t		toh;
@@ -857,8 +860,8 @@ akey_update(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 	eprange.epr_hi = DAOS_EPOCH_MAX;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		rc = akey_update_single(toh, &eprange, cookie, iod->iod_size,
-					iobuf);
+		rc = akey_update_single(toh, &eprange, cookie, pm_ver,
+					iod->iod_size, iobuf);
 		D_GOTO(out, rc);
 	} /* else: array */
 
@@ -866,8 +869,8 @@ akey_update(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 		daos_epoch_range_t *epr;
 
 		epr = iod->iod_eprs ? &iod->iod_eprs[i] : &eprange;
-		rc = akey_update_recx(toh, epr, cookie, &iod->iod_recxs[i],
-				      iod->iod_size, iobuf);
+		rc = akey_update_recx(toh, epr, cookie, pm_ver,
+				      &iod->iod_recxs[i], iod->iod_size, iobuf);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -879,8 +882,8 @@ akey_update(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 
 static int
 dkey_update(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
-	    daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
-	    daos_sg_list_t *sgls, struct vos_zc_context *zcc)
+	    uint32_t pm_ver, daos_key_t *dkey, unsigned int iod_nr,
+	    daos_iod_t *iods, daos_sg_list_t *sgls, struct vos_zc_context *zcc)
 {
 	daos_handle_t	ak_toh;
 	daos_handle_t	ck_toh;
@@ -910,7 +913,7 @@ dkey_update(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
 				iobuf->db_sgl = sgls[i];
 		}
 
-		rc = akey_update(obj, epoch, cookie, ak_toh, &iods[i],
+		rc = akey_update(obj, epoch, cookie, pm_ver, ak_toh, &iods[i],
 				 iobuf);
 		if (rc != 0)
 			D_GOTO(out, rc);
@@ -934,8 +937,8 @@ dkey_update(struct vos_object *obj, daos_epoch_t epoch, uuid_t cookie,
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uuid_t cookie, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, daos_sg_list_t *sgls)
+	       uuid_t cookie, uint32_t pm_ver, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods, daos_sg_list_t *sgls)
 {
 	struct vos_object	*obj;
 	PMEMobjpool		*pop;
@@ -950,7 +953,7 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	pop = vos_obj2pop(obj);
 	TX_BEGIN(pop) {
-		rc = dkey_update(obj, epoch, cookie, dkey, iod_nr, iods,
+		rc = dkey_update(obj, epoch, cookie, pm_ver, dkey, iod_nr, iods,
 				 sgls, NULL);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
@@ -1319,7 +1322,7 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 	*ioh = vos_zcc2ioh(zcc);
 	return 0;
  failed:
-	vos_obj_zc_update_end(vos_zcc2ioh(zcc), 0, dkey, iod_nr, iods, rc);
+	vos_obj_zc_update_end(vos_zcc2ioh(zcc), 0, 0, dkey, iod_nr, iods, rc);
 	return rc;
 }
 
@@ -1328,8 +1331,9 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
  * resources.
  */
 int
-vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, daos_key_t *dkey,
-		      unsigned int iod_nr, daos_iod_t *iods, int err)
+vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
+		      daos_key_t *dkey, unsigned int iod_nr, daos_iod_t *iods,
+		      int err)
 {
 	struct vos_zc_context	*zcc = vos_ioh2zcc(ioh);
 	PMEMobjpool		*pop;
@@ -1348,7 +1352,7 @@ vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, daos_key_t *dkey,
 	TX_BEGIN(pop) {
 		D_DEBUG(DF_VOS1, "Submit ZC update\n");
 		err = dkey_update(zcc->zc_obj, zcc->zc_epoch, cookie,
-				  dkey, iod_nr, iods, NULL, zcc);
+				  pm_ver, dkey, iod_nr, iods, NULL, zcc);
 	} TX_ONABORT {
 		err = umem_tx_errno(err);
 		D_DEBUG(DF_VOS1, "Failed to submit ZC update: %d\n", err);
@@ -1783,6 +1787,7 @@ singv_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	if (rc == 0) {
 		uuid_copy(it_entry->ie_cookie, rbund.rb_cookie);
 		it_entry->ie_rsize = rbund.rb_rsize;
+		it_entry->ie_ver = rbund.rb_ver;
 	}
 	return rc;
 }
@@ -1884,6 +1889,7 @@ recx_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *it_entry,
 	it_entry->ie_recx.rx_nr	 = rect->rc_off_hi - rect->rc_off_lo + 1;
 	it_entry->ie_rsize	 = entry.en_inob;
 	uuid_copy(it_entry->ie_cookie, entry.en_cookie);
+	it_entry->ie_ver	= entry.en_ver;
  out:
 	return rc;
 }

@@ -624,6 +624,7 @@ struct obj_enum_args {
 	daos_recx_t		*eaa_recxs;
 	daos_size_t		*eaa_size;
 	uuid_t			*eaa_cookies;
+	uint32_t		*eaa_versions;
 };
 
 static int
@@ -677,6 +678,10 @@ dc_enumerate_cb(struct daos_task *task, void *arg)
 				uuid_copy(enum_args->eaa_cookies[i],
 					  cookies[i]);
 		}
+		if (enum_args->eaa_versions && oeo->oeo_vers.da_count > 0)
+			memcpy(enum_args->eaa_versions, oeo->oeo_vers.da_arrays,
+			       sizeof(*enum_args->eaa_versions) *
+			       oeo->oeo_vers.da_count);
 	} else {
 		*(enum_args->eaa_nr) = oeo->oeo_kds.da_count;
 		if (enum_args->eaa_kds && oeo->oeo_kds.da_count > 0)
@@ -716,8 +721,9 @@ dc_obj_shard_list_internal(daos_handle_t oh, enum obj_rpc_opc opc,
 			   daos_size_t *size, uint32_t *nr,
 			   daos_key_desc_t *kds, daos_sg_list_t *sgl,
 			   daos_recx_t *recxs, daos_epoch_range_t *eprs,
-			   uuid_t *cookies, daos_hash_out_t *anchor,
-			   unsigned int map_ver, struct daos_task *task)
+			   uuid_t *cookies, uint32_t *versions,
+			   daos_hash_out_t *anchor, unsigned int map_ver,
+			   struct daos_task *task)
 {
 	crt_endpoint_t		tgt_ep;
 	struct dc_pool	       *pool;
@@ -799,6 +805,7 @@ dc_obj_shard_list_internal(daos_handle_t oh, enum obj_rpc_opc opc,
 	enum_args.eaa_sgl = sgl;
 	enum_args.eaa_eprs = eprs;
 	enum_args.eaa_cookies = cookies;
+	enum_args.eaa_versions = versions;
 	enum_args.eaa_recxs = recxs;
 
 	rc = daos_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
@@ -835,15 +842,15 @@ dc_obj_shard_list_rec(daos_handle_t oh, enum obj_rpc_opc opc,
 		      daos_key_t *akey, daos_iod_type_t type,
 		      daos_size_t *size, uint32_t *nr,
 		      daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		      uuid_t *cookies, daos_hash_out_t *anchor,
-		      unsigned int map_ver, bool incr_order,
-		      struct daos_task *task)
+		      uuid_t *cookies, uint32_t *versions,
+		      daos_hash_out_t *anchor, unsigned int map_ver,
+		      bool incr_order, struct daos_task *task)
 {
 	/* did not handle incr_order yet */
 	return dc_obj_shard_list_internal(oh, opc, epoch, dkey, akey,
 					  type, size, nr, NULL, NULL,
-					  recxs, eprs, cookies, anchor,
-					  map_ver, task);
+					  recxs, eprs, cookies, versions,
+					  anchor, map_ver, task);
 }
 
 int
@@ -855,7 +862,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 {
 	return dc_obj_shard_list_internal(oh, opc, epoch, key, NULL,
 					  DAOS_IOD_NONE, NULL, nr, kds, sgl,
-					  NULL, NULL, NULL, anchor, map_ver,
-					  task);
+					  NULL, NULL, NULL, NULL, anchor,
+					  map_ver, task);
 }
 

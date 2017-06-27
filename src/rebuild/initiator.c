@@ -75,7 +75,7 @@ rebuild_fetch_update_inline(struct rebuild_dkey *rdkey, daos_handle_t oh,
 			    daos_key_t *akey, unsigned int num,
 			    unsigned int type, daos_recx_t *recxs,
 			    daos_epoch_range_t *eprs, uuid_t cookie,
-			    struct ds_cont *ds_cont)
+			    uint32_t version, struct ds_cont *ds_cont)
 {
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
@@ -101,7 +101,7 @@ rebuild_fetch_update_inline(struct rebuild_dkey *rdkey, daos_handle_t oh,
 		return rc;
 
 	rc = vos_obj_update(ds_cont->sc_hdl, rdkey->rd_oid, eprs->epr_lo,
-			    cookie, &rdkey->rd_dkey, 1, &iod, &sgl);
+			    cookie, version, &rdkey->rd_dkey, 1, &iod, &sgl);
 	return rc;
 }
 
@@ -110,7 +110,7 @@ rebuild_fetch_update_bulk(struct rebuild_dkey *rdkey, daos_handle_t oh,
 			  daos_key_t *akey, unsigned int num, unsigned int type,
 			  daos_size_t size, daos_recx_t *recxs,
 			  daos_epoch_range_t *eprs, uuid_t cookie,
-			  struct ds_cont *ds_cont)
+			  uint32_t version, struct ds_cont *ds_cont)
 {
 	daos_iod_t	iod;
 	daos_sg_list_t	*sgl;
@@ -143,7 +143,8 @@ rebuild_fetch_update_bulk(struct rebuild_dkey *rdkey, daos_handle_t oh,
 	if (rc)
 		D_GOTO(end, rc);
 end:
-	vos_obj_zc_update_end(ioh, cookie, &rdkey->rd_dkey, 1, &iod, rc);
+	vos_obj_zc_update_end(ioh, cookie, version,
+			      &rdkey->rd_dkey, 1, &iod, rc);
 	return rc;
 }
 
@@ -151,7 +152,7 @@ static int
 rebuild_fetch_update(struct rebuild_dkey *rdkey, daos_handle_t oh,
 		     daos_key_t *akey, unsigned int num, unsigned int type,
 		     daos_size_t size, daos_recx_t *recxs,
-		     daos_epoch_range_t *eprs, uuid_t cookie,
+		     daos_epoch_range_t *eprs, uuid_t cookie, uint32_t version,
 		     struct ds_cont *ds_cont)
 {
 	daos_size_t	buf_size = 0;
@@ -159,54 +160,87 @@ rebuild_fetch_update(struct rebuild_dkey *rdkey, daos_handle_t oh,
 	buf_size = size * num;
 	if (buf_size < MAX_BUF_SIZE)
 		return rebuild_fetch_update_inline(rdkey, oh, akey, num, type,
-						   recxs, eprs, cookie,
+						   recxs, eprs, cookie, version,
 						   ds_cont);
 	else
 		return rebuild_fetch_update_bulk(rdkey, oh, akey, num, type,
 						 size, recxs, eprs, cookie,
-						 ds_cont);
+						 version, ds_cont);
 }
 
 static int
 rebuild_rec(struct rebuild_dkey *rdkey, daos_handle_t oh, daos_key_t *akey,
 	    unsigned int num, unsigned int type, daos_size_t size,
 	    daos_recx_t *recxs, daos_epoch_range_t *eprs, uuid_t *cookies,
-	    struct ds_cont *ds_cont)
+	    uint32_t *versions, struct ds_cont *ds_cont)
 {
 	struct rebuild_tls	*tls = rebuild_tls_get();
 	uuid_t			cookie;
 	int			start;
 	int			i;
 	int			rc = 0;
+	int			cnt = 0;
+	int			total = 0;
+	int			version = 0;
 
 	start = 0;
-	uuid_copy(cookie, cookies[0]);
-	for (i = 1; i < num; i++) {
-		if (uuid_compare(cookie, cookies[i]) == 0 &&
-		    type != DAOS_IOD_SINGLE)
+	for (i = 0; i < num; i++) {
+		/* check if the record needs to be rebuilt.*/
+		if (versions[i] >= rebuild_gst.rg_rebuild_ver) {
+			D_DEBUG(DB_TRACE, "i %d rec ver %d rebuild ver %d "
+				"does not needs to be rebuilt\n",
+				i, versions[i], rebuild_gst.rg_rebuild_ver);
+			if (cnt > 0)
+				goto rebuild_rec;
+			else
+				goto next;
+		} else {
+			cnt++;
+		}
+rebuild_rec:
+		if (i == 0) {
+			uuid_copy(cookie, cookies[0]);
+			version = versions[0];
 			continue;
+		} else {
+			/* Sigh vos_obj_update only suppport single
+			 * cookie & version.
+			 */
+			if (uuid_compare(cookie, cookies[i]) == 0 &&
+			    version == versions[i] &&
+			    type != DAOS_IOD_SINGLE)
+				continue;
+		}
 
-		rc = rebuild_fetch_update(rdkey, oh, akey, i - start,
+		rc = rebuild_fetch_update(rdkey, oh, akey, cnt,
 					  type, size, &recxs[start],
-					  &eprs[start], cookie, ds_cont);
+					  &eprs[start], cookie, version,
+					  ds_cont);
 		if (rc)
 			break;
+		total += cnt;
+		cnt = 0;
+next:
 		start = i;
 		uuid_copy(cookie, cookies[start]);
 	}
 
-	if (i > start && rc == 0)
-		rc = rebuild_fetch_update(rdkey, oh, akey, i - start, type,
+	if (cnt > 0 && rc == 0) {
+		rc = rebuild_fetch_update(rdkey, oh, akey, cnt, type,
 					  size, &recxs[start], &eprs[start],
-					  cookie, ds_cont);
+					  cookie, version, ds_cont);
+		if (rc == 0)
+			total += cnt;
+	}
 
-	D_DEBUG(DB_TRACE, "rebuild "DF_UOID" dkey %.*s akey %.*s rc %d"
-		" tag %d\n", DP_UOID(rdkey->rd_oid),
-		(int)rdkey->rd_dkey.iov_len,
+	D_DEBUG(DB_TRACE, "rebuild "DF_UOID" ver %d dkey %.*s akey %.*s rc %d"
+		" total %d tag %d\n", DP_UOID(rdkey->rd_oid),
+		rebuild_gst.rg_rebuild_ver, (int)rdkey->rd_dkey.iov_len,
 		(char *)rdkey->rd_dkey.iov_buf, (int)akey->iov_len,
-		(char *)akey->iov_buf, rc, dss_get_module_info()->dmi_tid);
+		(char *)akey->iov_buf, rc, total,
+		dss_get_module_info()->dmi_tid);
 
-	tls->rebuild_rec_count += num;
+	tls->rebuild_rec_count += total;
 
 	return rc;
 }
@@ -220,6 +254,7 @@ rebuild_akey(struct rebuild_dkey *rdkey, daos_handle_t oh, int type,
 	daos_recx_t		recxs[ITER_COUNT];
 	daos_epoch_range_t	eprs[ITER_COUNT];
 	uuid_t			cookies[ITER_COUNT];
+	uint32_t		versions[ITER_COUNT];
 	daos_hash_out_t		hash;
 	int			rc = 0;
 
@@ -237,9 +272,10 @@ rebuild_akey(struct rebuild_dkey *rdkey, daos_handle_t oh, int type,
 		memset(recxs, 0, sizeof(*recxs) * ITER_COUNT);
 		memset(eprs, 0, sizeof(*eprs) * ITER_COUNT);
 		memset(cookies, 0, sizeof(*cookies) * ITER_COUNT);
+		memset(versions, 0, sizeof(*versions) * ITER_COUNT);
 		rc = ds_obj_list_rec(oh, rdkey->rd_epoch, &rdkey->rd_dkey, akey,
-				     type, &size, &rec_num,
-				     recxs, eprs, cookies, &hash, true);
+				     type, &size, &rec_num, recxs, eprs,
+				     cookies, versions, &hash, true);
 		if (rc)
 			break;
 		if (rec_num == 0)
@@ -250,7 +286,7 @@ rebuild_akey(struct rebuild_dkey *rdkey, daos_handle_t oh, int type,
 			eprs[i].epr_hi = DAOS_EPOCH_MAX;
 
 		rc = rebuild_rec(rdkey, oh, akey, rec_num, type, size, recxs,
-				 eprs, cookies, ds_cont);
+				 eprs, cookies, versions, ds_cont);
 		if (rc)
 			break;
 	}

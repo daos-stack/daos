@@ -431,7 +431,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 
 	if (!(arg->ta_flags & TF_ZERO_COPY)) {
 		rc = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
-				    dsm_cookie->uuid, dkey, 1, iod,
+				    dsm_cookie->uuid, 0, dkey, 1, iod,
 				    sgl);
 		if (rc != 0 && verbose)
 			print_error("Failed to update: %d\n", rc);
@@ -460,7 +460,7 @@ io_test_obj_update(struct io_test_args *arg, int epoch, daos_key_t *dkey,
 	}
 	assert_true(srv_iov->iov_len == off);
 
-	rc = vos_obj_zc_update_end(ioh, dsm_cookie->uuid, dkey, 1, iod, 0);
+	rc = vos_obj_zc_update_end(ioh, dsm_cookie->uuid, 0, dkey, 1, iod, 0);
 	if (rc != 0 && verbose)
 		print_error("Failed to submit ZC update: %d\n", rc);
 
@@ -1247,7 +1247,7 @@ pool_cont_same_uuid(void **state)
 
 	uuid_generate(cookie);
 	oid = dts_unit_oid_gen(0, 0);
-	ret = vos_obj_update(coh, oid, 10, cookie, &dkey, 1, &iod, &sgl);
+	ret = vos_obj_update(coh, oid, 10, cookie, 0, &dkey, 1, &iod, &sgl);
 	assert_int_equal(ret, 0);
 
 	ret = vos_cont_close(coh);
@@ -1388,7 +1388,7 @@ io_simple_one_key_cross_container(void **state)
 	l_oid = gen_oid();
 	cookie = gen_rand_cookie();
 	rc  = vos_obj_update(arg->ctx.tc_co_hdl, arg->oid, epoch,
-			     cookie.uuid, &dkey, 1, &iod, &sgl);
+			     cookie.uuid, 0, &dkey, 1, &iod, &sgl);
 	if (rc) {
 		print_error("Failed to update %d\n", rc);
 		goto failed;
@@ -1396,7 +1396,7 @@ io_simple_one_key_cross_container(void **state)
 
 	cookie = gen_rand_cookie();
 	rc = vos_obj_update(arg->addn_co, l_oid, epoch, cookie.uuid,
-			    &dkey, 1, &iod, &sgl);
+			    0, &dkey, 1, &iod, &sgl);
 	if (rc) {
 		print_error("Failed to update %d\n", rc);
 		goto failed;

@@ -291,6 +291,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param cookie [IN]	Cookie ID to tag this update to identify during
  *			discard. This tag is used to group all updates
  *			that might in future be discarded together.
+ * \param pm_ver [IN]   Pool map version for this update, which will be
+ *			used during rebuild.
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
  * \param iods [IN]	Array of I/O descriptors.
@@ -305,8 +307,8 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  */
 int
 vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       uuid_t cookie, daos_key_t *dkey, unsigned int iod_nr,
-	       daos_iod_t *iods, daos_sg_list_t *sgls);
+	       uuid_t cookie, uint32_t pm_ver, daos_key_t *dkey,
+	       unsigned int iod_nr, daos_iod_t *iods, daos_sg_list_t *sgls);
 
 /**
  * Zero-Copy I/O APIs
@@ -388,6 +390,8 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
  * \param cookie [IN]	Cookie ID to tag this update to identify during
  *			discard. This tag is used to group all updates
  *			that might in future be discarded together.
+ * \param pm_ver [IN]   Pool map version for this update, which will be
+ *			used during rebuild.
  * \param dkey	[IN]	Distribution key.
  * \param nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
@@ -398,8 +402,9 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
  * \return		Zero on success, negative value if error
  */
 int
-vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, daos_key_t *dkey,
-		      unsigned int nr, daos_iod_t *iods, int err);
+vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
+		      daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
+		      int err);
 
 /**
  * Get the zero-copy scatter/gather list associated with a given I/O descriptor.

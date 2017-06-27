@@ -271,6 +271,7 @@ daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	args.recxs	= recxs;
 	args.eprs	= eprs;
 	args.cookies	= NULL;
+	args.versions	= NULL;
 	args.anchor	= anchor;
 	args.incr_order = incr_order;
 

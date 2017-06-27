@@ -69,7 +69,9 @@ struct evt_ptr {
 	uint32_t			pt_inob;
 	/** # evt_ptr_ref points to me */
 	uint32_t			pt_ref;
-	uint64_t			pt_pad_64;
+	/** Pool map version for the record */
+	uint32_t			pt_ver;
+	uint32_t			pt_pad_32;
 	/** embedded payload for tiny extent */
 	char				pt_payload[EVT_PTR_PAYLOAD];
 };
@@ -170,6 +172,8 @@ struct evt_entry {
 	struct evt_rect			 en_rect;
 	/** cookie to insert this extent */
 	uuid_t				 en_cookie;
+	/** pool map version */
+	uint32_t			 en_ver;
 	/** number of bytes per index */
 	uint32_t			 en_inob;
 	/** offset within \a en_mmid */
@@ -314,8 +318,8 @@ int evt_destroy(daos_handle_t toh);
  * \param inob		[IN]	Number of bytes per index in \a rect
  * \param mmid		[IN]	Memory ID of the input data.
  */
-int evt_insert(daos_handle_t toh, uuid_t cookie, struct evt_rect *rect,
-	       uint32_t inob, umem_id_t mmid);
+int evt_insert(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
+	       struct evt_rect *rect, uint32_t inob, umem_id_t mmid);
 
 /**
  * Insert a new extented version \a rect into a opened tree, and copy data in
@@ -326,8 +330,8 @@ int evt_insert(daos_handle_t toh, uuid_t cookie, struct evt_rect *rect,
  * \param inob		[IN]	Number of bytes per index in \a rect
  * \param sgl		[IN]	Scatter/gather list to copy in
  */
-int evt_insert_sgl(daos_handle_t toh, uuid_t cookie, struct evt_rect *rect,
-		   uint32_t inob, daos_sg_list_t *sgl);
+int evt_insert_sgl(daos_handle_t toh, uuid_t cookie, uint32_t pm_ver,
+		   struct evt_rect *rect, uint32_t inob, daos_sg_list_t *sgl);
 
 /**
  * Search the tree and return all versioned extents which overlap with \a rect

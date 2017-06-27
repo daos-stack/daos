@@ -416,6 +416,7 @@ irec_update(struct btr_instance *tins, struct btr_record *rec,
 	irec->ir_cs_size = csum->cs_len;
 	irec->ir_cs_type = csum->cs_type;
 	irec->ir_size	 = iov->iov_len;
+	irec->ir_ver	 = rbund->rb_ver;
 
 	if (irec->ir_size == 0) { /* it is a punch */
 		csum->cs_csum = NULL;
@@ -455,7 +456,7 @@ irec_fetch(struct btr_instance *tins, struct btr_record *rec,
 		csum->cs_csum	= vos_irec2csum(irec);
 	}
 	rbund->rb_rsize	= irec->ir_size;
-
+	rbund->rb_ver	= irec->ir_ver;
 	return 0;
 }
 

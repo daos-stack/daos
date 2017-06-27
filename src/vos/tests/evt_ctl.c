@@ -226,7 +226,7 @@ ts_add_rect(char *args)
 	sgl.sg_nr.num = 1;
 	sgl.sg_iovs = &iov;
 
-	rc = evt_insert_sgl(ts_toh, ts_uuid, &rect, val ? 1 : 0, &sgl);
+	rc = evt_insert_sgl(ts_toh, ts_uuid, 0, &rect, val ? 1 : 0, &sgl);
 	if (rc != 0)
 		D_FATAL("Add rect failed %d\n", rc);
 
@@ -400,7 +400,7 @@ ts_many_add(char *args)
 		sgl.sg_nr.num = 1;
 		sgl.sg_iovs = &iov;
 
-		rc = evt_insert_sgl(ts_toh, ts_uuid, &rect, 1, &sgl);
+		rc = evt_insert_sgl(ts_toh, ts_uuid, 0, &rect, 1, &sgl);
 		if (rc != 0) {
 			D_FATAL("Add rect %d failed %d\n", i, rc);
 			break;

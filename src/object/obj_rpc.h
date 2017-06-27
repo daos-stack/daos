@@ -101,6 +101,7 @@ struct obj_key_enum_out {
 	struct crt_array	oeo_recxs;
 	struct crt_array	oeo_eprs;
 	struct crt_array	oeo_cookies;
+	struct crt_array	oeo_vers;
 	daos_sg_list_t		oeo_sgl;
 };
 

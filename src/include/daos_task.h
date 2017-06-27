@@ -396,6 +396,7 @@ typedef struct {
 	daos_epoch_range_t	*eprs;
 	uuid_t			*cookies;
 	daos_hash_out_t		*anchor;
+	uint32_t		*versions;
 	bool			incr_order;
 } daos_obj_list_recx_t;
 

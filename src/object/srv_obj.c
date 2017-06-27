@@ -85,7 +85,7 @@ ds_obj_rw_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
 		D_ASSERT(orwi != NULL);
 
 		if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE) {
-			rc = vos_obj_zc_update_end(ioh, cookie,
+			rc = vos_obj_zc_update_end(ioh, cookie, map_version,
 						   &orwi->orw_dkey,
 						   orwi->orw_nr,
 						   orwi->orw_iods.da_arrays,
@@ -400,7 +400,8 @@ out:
 }
 
 static int
-ds_obj_rw_inline(crt_rpc_t *rpc, struct ds_cont *cont, uuid_t cookie)
+ds_obj_rw_inline(crt_rpc_t *rpc, struct ds_cont *cont, uuid_t cookie,
+		 uint32_t pm_ver)
 {
 	struct obj_rw_in	*orw = crt_req_get(rpc);
 	daos_sg_list_t		*sgls = orw->orw_sgls.da_arrays;
@@ -408,7 +409,7 @@ ds_obj_rw_inline(crt_rpc_t *rpc, struct ds_cont *cont, uuid_t cookie)
 
 	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_UPDATE) {
 		rc = vos_obj_update(cont->sc_hdl, orw->orw_oid, orw->orw_epoch,
-				    cookie, &orw->orw_dkey, orw->orw_nr,
+				    cookie, pm_ver, &orw->orw_dkey, orw->orw_nr,
 				    orw->orw_iods.da_arrays, sgls);
 	} else {
 		struct obj_rw_out *orwo;
@@ -519,7 +520,8 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		DP_UOID(orw->orw_oid), dss_get_module_info()->dmi_tid);
 	/* Inline update/fetch */
 	if (orw->orw_bulks.da_arrays == NULL && orw->orw_bulks.da_count == 0) {
-		rc = ds_obj_rw_inline(rpc, cont, cont_hdl->sch_uuid);
+		rc = ds_obj_rw_inline(rpc, cont, cont_hdl->sch_uuid,
+				      map_version);
 		D_GOTO(out, rc);
 	}
 
@@ -613,6 +615,10 @@ ds_eu_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 		D_FREE(oeo->oeo_cookies.da_arrays,
 		       oei->oei_nr * sizeof(uuid_t));
 
+	if (oeo->oeo_vers.da_arrays != NULL)
+		D_FREE(oeo->oeo_vers.da_arrays,
+		       oei->oei_nr * sizeof(uint32_t));
+
 	if (oeo->oeo_sgl.sg_iovs != NULL) {
 		ds_sgls_free(&oeo->oeo_sgl, 1);
 		oeo->oeo_sgl.sg_iovs = NULL;
@@ -668,11 +674,14 @@ fill_rec(vos_iter_entry_t *key_ent, struct obj_key_enum_in *oei,
 	daos_epoch_range_t *eprs = oeo->oeo_eprs.da_arrays;
 	uuid_t		   *cookies = oeo->oeo_cookies.da_arrays;
 	daos_recx_t	   *recxs = oeo->oeo_recxs.da_arrays;
+	uint32_t	   *vers = oeo->oeo_vers.da_arrays;
 
 	D_ASSERT(*idx < oei->oei_nr);
 	eprs[*idx] = key_ent->ie_epr;
 	uuid_copy(cookies[*idx], key_ent->ie_cookie);
 	recxs[*idx] = key_ent->ie_recx;
+	vers[*idx] = key_ent->ie_ver;
+
 	if (oeo->oeo_size == 0)
 		oeo->oeo_size = key_ent->ie_rsize;
 	else if (oeo->oeo_size != key_ent->ie_rsize)
@@ -681,6 +690,7 @@ fill_rec(vos_iter_entry_t *key_ent, struct obj_key_enum_in *oei,
 	oeo->oeo_eprs.da_count++;
 	oeo->oeo_cookies.da_count++;
 	oeo->oeo_recxs.da_count++;
+	oeo->oeo_vers.da_count++;
 	(*idx)++;
 
 	if (*idx >= oei->oei_nr)
@@ -876,6 +886,12 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		D_ALLOC(oeo->oeo_cookies.da_arrays,
 			oei->oei_nr * sizeof(uuid_t));
 		if (oeo->oeo_cookies.da_arrays == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		oeo->oeo_vers.da_count = 0;
+		D_ALLOC(oeo->oeo_vers.da_arrays,
+			oei->oei_nr * sizeof(uint32_t));
+		if (oeo->oeo_vers.da_arrays == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	} else {
 		/* prepare buffer for enumerate */

@@ -468,6 +468,8 @@ struct vos_rec_bundle {
 	daos_size_t		 rb_rsize;
 	/** update cookie of this recx (input for update, output for fetch) */
 	uuid_t			 rb_cookie;
+	/** pool map version */
+	uint32_t		rb_ver;
 };
 
 #define VOS_SIZE_ROUND		8

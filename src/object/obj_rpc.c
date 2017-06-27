@@ -75,6 +75,7 @@ static struct crt_msg_field *obj_key_enum_out_fields[] = {
 	&DMF_RECX_ARRAY,	/* recx array */
 	&DMF_EPR_ARRAY,		/* epoch range array */
 	&DMF_UUID_ARRAY,	/* cookie array */
+	&DMF_UINT32_ARRAY,	/* vers array */
 	&DMF_SGL,		/* SGL buffer */
 };
 

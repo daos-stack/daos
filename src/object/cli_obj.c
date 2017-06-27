@@ -1039,8 +1039,8 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 		     daos_size_t *size, uint32_t *nr, daos_key_desc_t *kds,
 		     daos_sg_list_t *sgl, daos_recx_t *recxs,
 		     daos_epoch_range_t *eprs, uuid_t *cookies,
-		     daos_hash_out_t *anchor, bool incr_order,
-		     bool single_shard, struct daos_task *task)
+		     uint32_t *versions, daos_hash_out_t *anchor,
+		     bool incr_order, bool single_shard, struct daos_task *task)
 {
 	struct dc_object	*obj = NULL;
 	unsigned int		map_ver;
@@ -1102,8 +1102,8 @@ dc_obj_list_internal(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 	if (op == DAOS_OBJ_RECX_RPC_ENUMERATE)
 		rc = dc_obj_shard_list_rec(shard_oh, op, epoch, dkey, akey,
 					   type, size, nr, recxs, eprs,
-					   cookies, anchor, map_ver, incr_order,
-					   task);
+					   cookies, versions, anchor, map_ver,
+					   incr_order, task);
 	else
 		rc = dc_obj_shard_list_key(shard_oh, op, epoch, dkey, nr,
 					   kds, sgl, anchor, map_ver, task);
@@ -1129,8 +1129,8 @@ dc_obj_list_dkey(struct daos_task *task)
 	return dc_obj_list_internal(args->oh, DAOS_OBJ_DKEY_RPC_ENUMERATE,
 				    args->epoch, NULL, NULL, DAOS_IOD_NONE,
 				    NULL, args->nr, args->kds, args->sgl,
-				    NULL, NULL, NULL, args->anchor, true, false,
-				    task);
+				    NULL, NULL, NULL, NULL, args->anchor,
+				    true, false, task);
 }
 
 int
@@ -1144,8 +1144,8 @@ dc_obj_list_akey(struct daos_task *task)
 	return dc_obj_list_internal(args->oh, DAOS_OBJ_AKEY_RPC_ENUMERATE,
 				    args->epoch, args->dkey, NULL,
 				    DAOS_IOD_NONE, NULL, args->nr, args->kds,
-				    args->sgl, NULL, NULL, NULL, args->anchor,
-				    true, false, task);
+				    args->sgl, NULL, NULL, NULL, NULL,
+				    args->anchor, true, false, task);
 }
 
 int
@@ -1160,7 +1160,7 @@ dc_obj_list_rec(struct daos_task *task)
 				    args->epoch, args->dkey, args->akey,
 				    args->type, args->size, args->nr, NULL,
 				    NULL, args->recxs, args->eprs,
-				    args->cookies, args->anchor,
+				    args->cookies, args->versions, args->anchor,
 				    args->incr_order, false, task);
 }
 
@@ -1175,5 +1175,6 @@ dc_obj_single_shard_list_dkey(struct daos_task *task)
 	return dc_obj_list_internal(args->oh, DAOS_OBJ_DKEY_RPC_ENUMERATE,
 				    args->epoch, NULL, NULL, DAOS_IOD_NONE,
 				    NULL, args->nr, args->kds, args->sgl, NULL,
-				    NULL, NULL, args->anchor, true, true, task);
+				    NULL, NULL, NULL, args->anchor, true, true,
+				    task);
 }

@@ -104,7 +104,8 @@ rebuild_pool_map_put(struct pool_map *map)
 /* Initialize rebuild global structure */
 int
 rebuild_globals_init(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
-		     uuid_t cont_hdl_uuid, daos_rank_list_t *svc_list)
+		     uuid_t cont_hdl_uuid, daos_rank_list_t *svc_list,
+		     uint32_t pm_ver)
 {
 	int i;
 
@@ -148,6 +149,7 @@ rebuild_globals_init(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 	uuid_copy(rebuild_gst.rg_cont_hdl_uuid, cont_hdl_uuid);
 	daos_rank_list_dup(&rebuild_gst.rg_svc_list, svc_list, true);
 	rebuild_gst.rg_puller_running = 0;
+	rebuild_gst.rg_rebuild_ver = pm_ver;
 	return 0;
 }
 
@@ -343,10 +345,10 @@ ds_rebuild_query(uuid_t pool_uuid, bool do_bcast, daos_rank_list_t *failed_tgts,
 		D_GOTO(out_rpc, rc);
 
 	rtqo = crt_reply_get(tgt_rpc);
-	D_DEBUG(DB_TRACE, "%p query rebuild ver=%u, status=%d, obj_cnt=%d"
-		" rec_cnt=%d\n", rtqo, rebuild_gst.rg_rebuild_ver,
+	D_DEBUG(DB_TRACE, "%p query rebuild ver=%u, pulling=%d, obj_cnt=%d"
+		" rec_cnt=%d status %d\n", rtqo, rebuild_gst.rg_rebuild_ver,
 		rtqo->rtqo_rebuilding, rtqo->rtqo_obj_count,
-		rtqo->rtqo_rec_count);
+		rtqo->rtqo_rec_count, rtqo->rtqo_status);
 
 	memset(status, 0, sizeof(*status));
 	if (rtqo->rtqo_status != 0)
@@ -473,11 +475,10 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 	struct ds_pool	*pool;
 	double		 begin = ABT_get_wtime();
 	double		 last_print = 0;
-	double		 last_bcast = 0;
+	double		 last_query = 0;
 	double		 now;
 	unsigned long	 i = 2;
 	unsigned	 failed = 0;
-	int		 bcast;
 	int		 rc;
 
 	pool = ds_pool_lookup(pool_uuid);
@@ -486,61 +487,33 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 		return;
 	}
 
-	bcast = RB_BCAST_QUERY;
 	while (1) {
 		char				*str;
 		char				 sbuf[RBLD_SBUF_LEN];
 		struct daos_rebuild_status	 status;
 
 		now = ABT_get_wtime();
-		if (now - last_bcast < RBLD_BCAST_INTV) {
+		if (now - last_query < RBLD_BCAST_INTV) {
 			/* Yield to other ULTs */
 			ABT_thread_yield();
 			continue;
 		}
 
-		if (pool->sp_map_version > rebuild_gst.rg_bcast_ver) {
-			/* cascading failure might bump the version again,
-			 * in this case, we'd better notify rebuild targets
-			 * about the new pool map so they don't pull from
-			 * newly dead nodes.
-			 */
-			bcast = RB_BCAST_MAP;
-		}
+		/* query the current rebuild status */
+		rc = ds_rebuild_query(pool_uuid, true, tgts_failed,
+				      &status);
+		if (rc == 0)
+			rc = status.rs_errno;
 
-		/* broadcast new pool map for cascading failure */
-		switch (bcast) {
-		case RB_BCAST_MAP:
-			D_PRINT("cascading failure, bcast pool map\n");
-			rc = ds_pool_pmap_broadcast(pool_uuid, NULL);
-			if (rc != 0) {
-				failed++;
-				break;
-			}
-			rebuild_gst.rg_bcast_ver = pool->sp_map_version;
-			bcast = RB_BCAST_QUERY; /* the next step, query */
+		if (rc != 0)
+			failed++;
+		else
 			failed = 0;
-			continue;
-
-		case RB_BCAST_QUERY:
-			/* query the current rebuild status */
-			rc = ds_rebuild_query(pool_uuid, true, tgts_failed,
-					      &status);
-			if (rc == 0)
-				rc = status.rs_errno;
-
-			if (rc != 0)
-				failed++;
-			else
-				failed = 0;
-			break;
-		}
-		last_bcast = now;
+		last_query = now;
 
 		if (failed && failed < RBLD_BCAST_RETRY_MAX) {
 			D_DEBUG(DB_TRACE,
-				"Retry bcast %s for the %d times (errno=%d)\n",
-				bcast == RB_BCAST_MAP ? "map" : "query",
+				"Retry query for the %d times (errno=%d)\n",
 				failed, rc);
 			continue;
 		}
@@ -576,7 +549,6 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 	};
 	ds_pool_put(pool);
 }
-
 
 /* To notify all targets to prepare the rebuild */
 static int
@@ -773,8 +745,7 @@ ds_rebuild_ult(void *arg)
 		memset(&rebuild_gst.rg_status, 0,
 		       sizeof(rebuild_gst.rg_status));
 
-		rebuild_gst.rg_status.rs_version =
-		rebuild_gst.rg_rebuild_ver = task->dst_map_ver;
+		rebuild_gst.rg_status.rs_version = task->dst_map_ver;
 		ABT_mutex_unlock(rebuild_gst.rg_lock);
 
 		rc = ds_rebuild_one(task->dst_pool_uuid, task->dst_map_ver,
@@ -790,8 +761,7 @@ ds_rebuild_ult(void *arg)
 	}
 
 	memset(&rebuild_gst.rg_status, 0, sizeof(rebuild_gst.rg_status));
-	rebuild_gst.rg_rebuild_ver	= 0;
-	rebuild_gst.rg_bcast_ver	= 0;
+	rebuild_gst.rg_rebuild_running = 0;
 }
 
 /**
@@ -828,12 +798,11 @@ ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
 	D_PRINT("Rebuild [queued] (ver=%u)\n", map_ver);
 	daos_list_add_tail(&task->dst_list, &rebuild_gst.rg_task_list);
 
-	if (rebuild_gst.rg_rebuild_ver == 0) {
-		rebuild_gst.rg_rebuild_ver = map_ver;
-
+	if (rebuild_gst.rg_rebuild_running == 0) {
+		rebuild_gst.rg_rebuild_running = 1;
 		rc = dss_ult_create(ds_rebuild_ult, NULL, -1, NULL);
 		if (rc) {
-			rebuild_gst.rg_rebuild_ver = 0;
+			rebuild_gst.rg_rebuild_running = 0;
 			D_GOTO(free, rc);
 		}
 	}
@@ -1006,13 +975,13 @@ ds_rebuild_tgt_prepare_handler(crt_rpc_t *rpc)
 	rpi = crt_req_get(rpc);
 	D_ASSERT(rpi != NULL);
 
-	D_DEBUG(DB_TRACE, "prepare rebuild for "DF_UUID"\n",
-		DP_UUID(rpi->rpi_pool_uuid));
+	D_DEBUG(DB_TRACE, "prepare rebuild for "DF_UUID"/%d\n",
+		DP_UUID(rpi->rpi_pool_uuid), rpi->rpi_pool_map_ver);
 
 	rc = rebuild_globals_init(rpi->rpi_pool_uuid,
 				  rpi->rpi_rebuild_pool_hdl_uuid,
 				  rpi->rpi_rebuild_cont_hdl_uuid,
-				  rpi->rpi_svc_list);
+				  rpi->rpi_svc_list, rpi->rpi_pool_map_ver);
 	if (rc)
 		D_GOTO(out, rc);
 

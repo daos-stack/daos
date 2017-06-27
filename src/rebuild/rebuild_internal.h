@@ -64,7 +64,6 @@ struct rebuild_globals {
 	uint32_t		rg_rebuild_ver;
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		rg_last_ver;
-	uint32_t		rg_bcast_ver;
 	daos_list_t		rg_task_list;
 	ABT_mutex		rg_lock;
 	uuid_t			rg_pool_uuid;
@@ -76,7 +75,8 @@ struct rebuild_globals {
 	daos_rank_list_t	*rg_svc_list;
 	unsigned int		rg_puller_running:1,
 				rg_abort:1,
-				rg_finishing:1;
+				rg_finishing:1,
+				rg_rebuild_running:1;
 };
 
 extern struct rebuild_globals rebuild_gst;
@@ -111,9 +111,6 @@ void ds_rebuild_tgt_prepare_handler(crt_rpc_t *rpc);
 void ds_rebuild_tgt_scan_handler(crt_rpc_t *rpc);
 
 int
-rebuild_globals_init(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
-		     uuid_t cont_hdl_uuid, daos_rank_list_t *svc_list);
-int
 ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 			   daos_unit_oid_t oid, unsigned int shard);
 int ds_obj_open(daos_handle_t coh, daos_obj_id_t oid,
@@ -137,6 +134,7 @@ int ds_obj_fetch(daos_handle_t oh, daos_epoch_t epoch,
 int ds_obj_list_rec(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		daos_key_t *akey, daos_iod_type_t type, daos_size_t *size,
 		uint32_t *nr, daos_recx_t *recxs, daos_epoch_range_t *eprs,
-		uuid_t *cookies, daos_hash_out_t *anchor, bool incr);
+		uuid_t *cookies, uint32_t *versions, daos_hash_out_t *anchor,
+		bool incr);
 
 #endif /* __REBUILD_INTERNAL_H_ */
