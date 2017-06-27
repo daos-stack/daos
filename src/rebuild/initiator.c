@@ -379,8 +379,8 @@ free:
 	D_FREE_PTR(arg);
 }
 
-#define PULLER_MAX	1024
-#define PULLER_XS_MAX	512
+#define PULLER_MAX	256
+#define PULLER_XS_MAX	32
 
 static int
 rebuild_dkey(daos_unit_oid_t oid, daos_epoch_t epoch,
