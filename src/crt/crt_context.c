@@ -240,9 +240,7 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 				rpc_priv->crp_pub.cr_ep.ep_rank,
 				rpc_priv->crp_pub.cr_ep.ep_tag,
 				cbinfo.cci_rc);
-		rc = rpc_priv->crp_complete_cb(&cbinfo);
-		if (rc != 0)
-			C_ERROR("req_cbinfo->rsc_cb returned %d.\n", rc);
+		rpc_priv->crp_complete_cb(&cbinfo);
 	}
 }
 

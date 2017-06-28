@@ -349,7 +349,7 @@ crt_req_aborted(crt_rpc_t *rpc)
 
 /* crt_corpc.c */
 int crt_corpc_req_hdlr(crt_rpc_t *req);
-int crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info);
+void crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info);
 int crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
 
 /* crt_iv.c */

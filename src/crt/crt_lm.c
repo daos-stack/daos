@@ -110,7 +110,7 @@ lm_am_i_ras_mgr(struct lm_grp_srv_t *lm_grp_srv)
  * further pending updates or simply clears the broadcast in flight flag is
  * there is no more work to do.
  */
-static int
+static void
 evict_corpc_cb(const struct crt_cb_info *cb_info)
 {
 	uint32_t			 num;
@@ -140,7 +140,7 @@ evict_corpc_cb(const struct crt_cb_info *cb_info)
 	rc = cb_info->cci_rc;
 	if (rc != 0) {
 		C_ERROR("RPC error, rc: %d.\n", rc);
-		C_GOTO(out, rc = -CER_CORPC_INCOMPLETE);
+		C_GOTO(out, rc);
 	}
 	reply_result = crt_reply_get(cb_info->cci_rpc);
 	/* retry if the previous bcast has failed */
@@ -151,7 +151,7 @@ evict_corpc_cb(const struct crt_cb_info *cb_info)
 		evict_in = crt_req_get(cb_info->cci_rpc);
 		crt_rank = evict_in->clei_rank;
 		lm_bcast_eviction_event(crt_ctx, lm_grp_srv, crt_rank);
-		C_GOTO(out, rc = -CER_CORPC_INCOMPLETE);
+		C_GOTO(out, rc);
 	}
 
 	/* exit if no more entries to bcast */
@@ -175,7 +175,7 @@ evict_corpc_cb(const struct crt_cb_info *cb_info)
 		C_ERROR("lm_bcast_eviction_event() failed, rc: %d\n", rc);
 
 out:
-	return rc;
+	return;
 }
 
 /*

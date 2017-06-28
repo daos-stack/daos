@@ -887,9 +887,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_cbinfo.cci_rc = rc;
 
 	C_ASSERT(req_cbinfo->rsc_cb != NULL);
-	rc = req_cbinfo->rsc_cb(&crt_cbinfo);
-	if (rc != 0)
-		C_ERROR("req_cbinfo->rsc_cb returned %d.\n", rc);
+	req_cbinfo->rsc_cb(&crt_cbinfo);
 
 	rpc_priv->crp_state = state;
 

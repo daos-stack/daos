@@ -173,7 +173,7 @@ struct st_cb_args {
 };
 
 /********************* Forward Declarations *********************/
-static int test_rpc_cb(const struct crt_cb_info *cb_info);
+static void test_rpc_cb(const struct crt_cb_info *cb_info);
 
 /********************* Global data *********************/
 /* Data structure with all information about an ongoing test from this client */
@@ -194,7 +194,8 @@ void crt_self_test_client_init(void)
 	C_ASSERT(ret == 0);
 }
 
-static int close_session_cb(const struct crt_cb_info *cb_info)
+static void
+close_session_cb(const struct crt_cb_info *cb_info)
 {
 	struct st_test_endpt	*endpt =
 		(struct st_test_endpt *)cb_info->cci_arg;
@@ -211,8 +212,6 @@ static int close_session_cb(const struct crt_cb_info *cb_info)
 
 	if (g_data->num_inflight == 0)
 		g_data->test_complete = 1;
-
-	return 0;
 }
 
 static void close_sessions(void)
@@ -557,7 +556,8 @@ abort:
  * re-use the previous slot allocated to it as callback data for the RPC it is
  * just now creating.
  */
-static int test_rpc_cb(const struct crt_cb_info *cb_info)
+static void
+test_rpc_cb(const struct crt_cb_info *cb_info)
 {
 	struct st_cb_args	*cb_args = (struct st_cb_args *)
 					   cb_info->cci_arg;
@@ -591,8 +591,6 @@ static int test_rpc_cb(const struct crt_cb_info *cb_info)
 	}
 
 	send_next_rpc(cb_args, 0);
-
-	return 0;
 }
 
 static void launch_test_rpcs(void)
@@ -622,7 +620,8 @@ static void launch_test_rpcs(void)
 		send_next_rpc(g_data->cb_args_ptrs[inflight_idx], 1);
 }
 
-static int open_session_cb(const struct crt_cb_info *cb_info)
+static void
+open_session_cb(const struct crt_cb_info *cb_info)
 {
 	struct st_test_endpt	*endpt =
 		(struct st_test_endpt *)cb_info->cci_arg;
@@ -659,8 +658,6 @@ static int open_session_cb(const struct crt_cb_info *cb_info)
 
 	if (g_data->num_inflight == 0)
 		launch_test_rpcs();
-
-	return 0;
 }
 
 static void open_sessions(void)

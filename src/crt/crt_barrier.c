@@ -373,7 +373,7 @@ handle_error:
 		b_complete(&cb_info);
 }
 
-static int
+static void
 barrier_exit_cb(const struct crt_cb_info *cb_info)
 {
 	struct crt_grp_priv		*grp_priv;
@@ -402,7 +402,7 @@ barrier_exit_cb(const struct crt_cb_info *cb_info)
 		/* Resend the exit message */
 		send_barrier_msg(grp_priv, in->b_num, barrier_exit_cb,
 				 CRT_OPC_BARRIER_EXIT);
-		return 0;
+		return;
 	}
 	C_DEBUG("Exit phase complete for %d\n", in->b_num);
 
@@ -443,11 +443,9 @@ barrier_exit_cb(const struct crt_cb_info *cb_info)
 		send_barrier_msg(grp_priv, b_num, barrier_exit_cb,
 				 CRT_OPC_BARRIER_EXIT);
 	}
-
-	return 0;
 }
 
-static int
+static void
 barrier_enter_cb(const struct crt_cb_info *cb_info)
 {
 	struct crt_grp_priv	*grp_priv;
@@ -475,7 +473,7 @@ barrier_enter_cb(const struct crt_cb_info *cb_info)
 		/* Resend the enter message */
 		send_barrier_msg(grp_priv, in->b_num, barrier_enter_cb,
 				 CRT_OPC_BARRIER_ENTER);
-		return 0;
+		return;
 	}
 
 	C_DEBUG("Enter phase complete for %d\n", in->b_num);
@@ -497,8 +495,6 @@ barrier_enter_cb(const struct crt_cb_info *cb_info)
 	if (send_exit)
 		send_barrier_msg(grp_priv, in->b_num, barrier_exit_cb,
 				 CRT_OPC_BARRIER_EXIT);
-
-	return 0;
 }
 
 int

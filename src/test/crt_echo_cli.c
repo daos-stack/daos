@@ -66,7 +66,8 @@ struct bulk_test_cli_cbinfo {
 	int		*complete_flag;
 };
 
-static int bulk_test_req_cb(const struct crt_cb_info *cb_info)
+static void
+bulk_test_req_cb(const struct crt_cb_info *cb_info)
 {
 	struct bulk_test_cli_cbinfo	*bulk_test_cbinfo;
 	crt_rpc_t			*rpc_req;
@@ -89,7 +90,6 @@ static int bulk_test_req_cb(const struct crt_cb_info *cb_info)
 	*(bulk_test_cbinfo->complete_flag) = 1;
 
 	free(bulk_test_cbinfo);
-	return 0;
 }
 
 static void run_client(void)

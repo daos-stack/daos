@@ -170,7 +170,8 @@ RPC_DECLARE(RPC_TEST_INVALIDATE_IV,
 RPC_DECLARE(RPC_SET_IVNS,
 	arg_set_ivns_in, arg_set_ivns_out, iv_set_ivns);
 
-int rpc_handle_reply(const struct crt_cb_info *info)
+void
+rpc_handle_reply(const struct crt_cb_info *info)
 {
 	int *done;
 	crt_rpc_t *rpc_req = NULL;
@@ -180,9 +181,6 @@ int rpc_handle_reply(const struct crt_cb_info *info)
 
 	done = (int *)info->cci_arg;
 	*done = 1;
-
-	return 0;
-
 }
 
 int prepare_rpc_request(crt_context_t crt_ctx, int rpc_id,

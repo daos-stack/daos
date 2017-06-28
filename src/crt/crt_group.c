@@ -837,7 +837,7 @@ out:
 			grp_priv->gp_size, grp_priv->gp_self);
 }
 
-static int
+static void
 gc_rpc_cb(const struct crt_cb_info *cb_info)
 {
 	struct crt_grp_priv		*grp_priv;
@@ -890,7 +890,7 @@ gc_rpc_cb(const struct crt_cb_info *cb_info)
 	}
 
 out:
-	return rc;
+	return;
 }
 
 /**
@@ -1133,7 +1133,7 @@ out:
 			rc, rpc_req->cr_opc);
 }
 
-static int
+static void
 gd_rpc_cb(const struct crt_cb_info *cb_info)
 {
 	struct crt_grp_priv		*grp_priv;
@@ -1182,7 +1182,7 @@ gd_rpc_cb(const struct crt_cb_info *cb_info)
 		crt_grp_priv_destroy(grp_priv);
 
 out:
-	return rc;
+	return;
 }
 
 int

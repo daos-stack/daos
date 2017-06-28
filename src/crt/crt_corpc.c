@@ -547,7 +547,7 @@ crt_corpc_fail_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 		crt_rpc_complete(parent_rpc_priv, co_info->co_rc);
 }
 
-int
+void
 crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 {
 	struct crt_rpc_priv	*parent_rpc_priv;
@@ -715,7 +715,7 @@ bypass_aggregate:
 	crt_req_decref(&parent_rpc_priv->crp_pub);
 
 out:
-	return rc;
+	return;
 }
 
 int

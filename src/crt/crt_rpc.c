@@ -765,7 +765,7 @@ crt_req_get_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 	return rc;
 }
 
-static int
+static void
 crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 {
 	crt_rank_t			 rank;
@@ -834,7 +834,6 @@ out:
 	rpc_priv->crp_ul_req = NULL;
 	/* addref in crt_req_uri_lookup_psr */
 	crt_req_decref(&rpc_priv->crp_pub);
-	return rc;
 }
 
 /*
@@ -1240,10 +1239,7 @@ crt_reply_send(crt_rpc_t *req)
 		cb_info.cci_rc = 0;
 		cb_info.cci_arg = rpc_priv;
 
-		rc = crt_corpc_reply_hdlr(&cb_info);
-		if (rc != 0)
-			C_ERROR("crt_corpc_reply_hdlr failed, rc: %d, "
-				"opc: 0x%x.\n", rc, rpc_priv->crp_pub.cr_opc);
+		crt_corpc_reply_hdlr(&cb_info);
 	} else {
 		rc = crt_hg_reply_send(rpc_priv);
 		if (rc != 0)
@@ -1285,11 +1281,10 @@ out:
 	return rc;
 }
 
-static int
+static void
 crt_cb_common(const struct crt_cb_info *cb_info)
 {
 	*(int *)cb_info->cci_arg = 1;
-	return 0;
 }
 
 /**

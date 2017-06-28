@@ -116,7 +116,8 @@ echo_checkin_handler(crt_rpc_t *rpc_req)
 	       e_reply->ret, e_reply->room_no);
 }
 
-int client_cb_common(const struct crt_cb_info *cb_info)
+void
+client_cb_common(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t				*rpc_req;
 	struct crt_echo_checkin_req		*rpc_req_input;
@@ -130,10 +131,10 @@ int client_cb_common(const struct crt_cb_info *cb_info)
 	case ECHO_OPC_CHECKIN:
 		rpc_req_input = crt_req_get(rpc_req);
 		if (rpc_req_input == NULL)
-			return -CER_INVAL;
+			return;
 		rpc_req_output = crt_reply_get(rpc_req);
 		if (rpc_req_output == NULL)
-			return -CER_INVAL;
+			return;
 		printf("%s checkin result - ret: %d, room_no: %d.\n",
 		       rpc_req_input->name, rpc_req_output->ret,
 		       rpc_req_output->room_no);
@@ -145,8 +146,6 @@ int client_cb_common(const struct crt_cb_info *cb_info)
 	default:
 		break;
 	}
-
-	return 0;
 }
 
 static void *progress_thread(void *arg)

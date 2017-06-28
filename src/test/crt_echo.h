@@ -323,7 +323,8 @@ echo_md5_to_string(unsigned char *md5, crt_string_t md5_str)
 	}
 }
 
-int client_cb_common(const struct crt_cb_info *cb_info)
+void
+client_cb_common(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t		*rpc_req;
 	struct crt_echo_checkin_req *e_req;
@@ -342,11 +343,11 @@ int client_cb_common(const struct crt_cb_info *cb_info)
 	case ECHO_OPC_CHECKIN:
 		e_req = crt_req_get(rpc_req);
 		if (e_req == NULL)
-			return -CER_INVAL;
+			return;
 
 		e_reply = crt_reply_get(rpc_req);
 		if (e_reply == NULL)
-			return -CER_INVAL;
+			return;
 
 		printf("%s checkin result - ret: %d, room_no: %d.\n",
 		       e_req->name, e_reply->ret, e_reply->room_no);
@@ -359,8 +360,6 @@ int client_cb_common(const struct crt_cb_info *cb_info)
 	default:
 		break;
 	}
-
-	return 0;
 }
 
 #endif /* __CRT_ECHO_H__ */

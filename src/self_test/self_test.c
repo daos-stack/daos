@@ -185,7 +185,8 @@ static int st_compare_latencies_by_ranks(const void *a_in, const void *b_in)
 	return a->cci_rc > b->cci_rc;
 }
 
-static int start_test_cb(const struct crt_cb_info *cb_info)
+static void
+start_test_cb(const struct crt_cb_info *cb_info)
 {
 	/* Result returned to main thread */
 	int32_t *return_status = (int32_t *)cb_info->cci_arg;
@@ -196,7 +197,7 @@ static int start_test_cb(const struct crt_cb_info *cb_info)
 	/* Check the status of the RPC transport itself */
 	if (cb_info->cci_rc != 0) {
 		*return_status = cb_info->cci_rc;
-		return 0;
+		return;
 	}
 
 	/* Get the status from the payload */
@@ -205,11 +206,10 @@ static int start_test_cb(const struct crt_cb_info *cb_info)
 
 	/* Return whatever result we got to the main thread */
 	*return_status = *reply_status;
-
-	return 0;
 }
 
-static int status_req_cb(const struct crt_cb_info *cb_info)
+static void
+status_req_cb(const struct crt_cb_info *cb_info)
 {
 	/* Result returned to main thread */
 	struct crt_st_status_req_reply   *return_status =
@@ -221,7 +221,7 @@ static int status_req_cb(const struct crt_cb_info *cb_info)
 	/* Check the status of the RPC transport itself */
 	if (cb_info->cci_rc != 0) {
 		return_status->status = cb_info->cci_rc;
-		return 0;
+		return;
 	}
 
 	/* Get the status from the payload */
@@ -239,8 +239,6 @@ static int status_req_cb(const struct crt_cb_info *cb_info)
 	return_status->test_duration_ns = reply_status->test_duration_ns;
 	return_status->num_remaining = reply_status->num_remaining;
 	return_status->status = reply_status->status;
-
-	return 0;
 }
 
 /*

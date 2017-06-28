@@ -839,7 +839,7 @@ exit:
 }
 
 /* Fetch response handler */
-static int
+static void
 handle_ivfetch_response(const struct crt_cb_info *cb_info)
 {
 	struct iv_fetch_cb_info		*iv_info;
@@ -880,7 +880,6 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 
 
 	C_FREE_PTR(iv_info);
-	return 0;
 }
 
 /* Helper function to issue internal iv_fetch RPC */
@@ -1434,7 +1433,7 @@ struct iv_sync_cb_info {
 };
 
 /* IV_SYNC response handler */
-static int
+static void
 handle_ivsync_response(const struct crt_cb_info *cb_info)
 {
 	struct iv_sync_cb_info *iv_sync;
@@ -1458,8 +1457,6 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 
 	}
 	C_FREE_PTR(iv_sync);
-
-	return 0;
 }
 
 /* Helper function to issue update sync
@@ -1654,7 +1651,7 @@ struct update_cb_info {
 };
 
 /* IV_UPDATE internal rpc response handler */
-static int
+static void
 handle_ivupdate_response(const struct crt_cb_info *cb_info)
 {
 	struct update_cb_info	*iv_info;
@@ -1723,7 +1720,6 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		crt_bulk_free(iv_info->uci_bulk_hdl);
 
 	C_FREE_PTR(iv_info);
-	return 0;
 }
 
 /* Helper function to issue IV UPDATE RPC*/

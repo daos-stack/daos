@@ -345,14 +345,8 @@ typedef void (*crt_rpc_cb_t)(crt_rpc_t *rpc);
  *
  * \param cb_info [IN]		pointer to call back info.
  *
- * \return			zero means success.
- *				in the case of RPC request timed out, user
- *				register complete_cb will be called (with
- *				cb_info->cci_rc set as -CER_TIMEDOUT).
- *				complete_cb returns -CER_AGAIN means resending
- *				the RPC request.
  */
-typedef int (*crt_cb_t)(const struct crt_cb_info *cb_info);
+typedef void (*crt_cb_t)(const struct crt_cb_info *cb_info);
 
 struct crt_barrier_cb_info {
 	void	*bci_arg;  /* optional argument passed by user */
