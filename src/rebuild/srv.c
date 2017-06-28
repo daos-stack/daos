@@ -325,6 +325,7 @@ ds_rebuild_query(uuid_t pool_uuid, bool do_bcast, daos_rank_list_t *failed_tgts,
 
 	status->rs_rec_nr = rtqo->rtqo_rec_count;
 	status->rs_obj_nr = rtqo->rtqo_obj_count;
+	status->rs_version = rebuild_gst.rg_rebuild_ver;
 
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	memcpy(&rebuild_gst.rg_status, status, sizeof(*status));
@@ -709,6 +710,7 @@ ds_rebuild_ult(void *arg)
 		ABT_thread_yield();
 	}
 
+	memset(&rebuild_gst.rg_status, 0, sizeof(rebuild_gst.rg_status));
 	rebuild_gst.rg_rebuild_ver	= 0;
 	rebuild_gst.rg_bcast_ver	= 0;
 	rebuild_gst.rg_leader_barrier	= false;
