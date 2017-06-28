@@ -81,7 +81,10 @@ class DvmRunner():
         print("TestRunner: orte-dvm rc: %d\n" % self.ortedvm.returncode)
         with open(self.logfilerr, mode='r') as fd:
             print("TestRunner: orte-dvm STDERR:\n %s" % fd.read())
-        os.remove(self.report)
+        try:
+            os.remove(self.report)
+        except OSError as e:
+            print("TestRunner: orte-dvm error:\n %s" % e)
         return 1
 
     def stop_process(self):
