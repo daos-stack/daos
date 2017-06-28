@@ -1486,10 +1486,7 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 				       crt_handle_rpc, rpc_priv,
 				       ABT_THREAD_ATTR_NULL, NULL);
 	} else {
-		rc = rpc_priv->crp_opc_info->coi_rpc_cb(&rpc_priv->crp_pub);
-		if (rc != 0)
-			C_ERROR("coi_rpc_cb failed, rc: %d, opc: 0x%x.\n",
-				rc, rpc_priv->crp_pub.cr_opc);
+		rpc_priv->crp_opc_info->coi_rpc_cb(&rpc_priv->crp_pub);
 	}
 
 	return rc;

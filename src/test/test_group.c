@@ -87,7 +87,8 @@ struct crt_req_format CQF_ECHO_PING_CHECK =
 	DEFINE_CRT_REQ_FMT("ECHO_PING_CHECK", echo_ping_checkin,
 			   echo_ping_checkout);
 
-int echo_checkin_handler(crt_rpc_t *rpc_req)
+void
+echo_checkin_handler(crt_rpc_t *rpc_req)
 {
 	struct crt_echo_checkin_req	*e_req;
 	struct crt_echo_checkin_reply	*e_reply;
@@ -113,8 +114,6 @@ int echo_checkin_handler(crt_rpc_t *rpc_req)
 
 	printf("tier1 echo_srver sent checkin reply, ret: %d, room_no: %d.\n",
 	       e_reply->ret, e_reply->room_no);
-
-	return rc;
 }
 
 int client_cb_common(const struct crt_cb_info *cb_info)
@@ -176,23 +175,19 @@ static void *progress_thread(void *arg)
 	pthread_exit(NULL);
 }
 
-int echo_shutdown_handler(crt_rpc_t *rpc_req)
+void echo_shutdown_handler(crt_rpc_t *rpc_req)
 {
-	int		rc = 0;
-
 	printf("tier1 echo_srver received shutdown request, opc: 0x%x.\n",
 	       rpc_req->cr_opc);
 
 	C_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	C_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
-	rc = crt_reply_send(rpc_req);
+	crt_reply_send(rpc_req);
 	printf("tier1 echo_srver done issuing shutdown responses.\n");
 
 	g_shutdown = 1;
 	printf("tier1 echo_srver set shutdown flag.\n");
-
-	return rc;
 }
 
 void

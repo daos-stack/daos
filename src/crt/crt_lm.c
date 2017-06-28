@@ -373,7 +373,7 @@ out:
 	return;
 }
 
-int
+void
 crt_hdlr_rank_evict(crt_rpc_t *rpc_req)
 {
 	struct crt_lm_evict_in		*in_data;
@@ -426,7 +426,6 @@ out:
 	if (rc != 0)
 		C_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_req->cr_opc);
-	return rc;
 }
 
 static void

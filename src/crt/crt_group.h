@@ -191,9 +191,9 @@ struct crt_grp_gdata {
 	pthread_rwlock_t	 gg_rwlock;
 };
 
-int crt_hdlr_grp_create(crt_rpc_t *rpc_req);
-int crt_hdlr_grp_destroy(crt_rpc_t *rpc_req);
-int crt_hdlr_uri_lookup(crt_rpc_t *rpc_req);
+void crt_hdlr_grp_create(crt_rpc_t *rpc_req);
+void crt_hdlr_grp_destroy(crt_rpc_t *rpc_req);
+void crt_hdlr_uri_lookup(crt_rpc_t *rpc_req);
 int crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
 int crt_grp_detach(crt_group_t *attached_grp);
 char *crt_get_tag_uri(const char *base_uri, int tag);

@@ -162,12 +162,12 @@ out:
 }
 
 int g_roomno = 1082;
-int echo_srv_checkin(crt_rpc_t *rpc_req)
+void
+echo_srv_checkin(crt_rpc_t *rpc_req)
 {
 	struct crt_echo_checkin_req	*e_req;
 	struct crt_echo_checkin_reply	*e_reply;
 	char				*raw_buf;
-	int rc = 0;
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
@@ -189,18 +189,15 @@ int echo_srv_checkin(crt_rpc_t *rpc_req)
 	e_reply->ret = 0;
 	e_reply->room_no = g_roomno++;
 
-	rc = crt_reply_send(rpc_req);
+	crt_reply_send(rpc_req);
 
 	printf("tier1 echo_srver sent checkin reply, ret: %d, room_no: %d.\n",
 	       e_reply->ret, e_reply->room_no);
-
-	return rc;
 }
 
-int echo_srv_shutdown(crt_rpc_t *rpc_req)
+void
+echo_srv_shutdown(crt_rpc_t *rpc_req)
 {
-	int rc = 0;
-
 	printf("tier1 echo_srver received shutdown request, opc: 0x%x.\n",
 	       rpc_req->cr_opc);
 
@@ -209,8 +206,6 @@ int echo_srv_shutdown(crt_rpc_t *rpc_req)
 
 	echo_srv.do_shutdown = 1;
 	printf("tier1 echo_srver set shutdown flag.\n");
-
-	return rc;
 }
 
 int main(int argc, char *argv[])

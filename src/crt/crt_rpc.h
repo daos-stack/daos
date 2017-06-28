@@ -56,7 +56,7 @@
 #define CRT_URI_LOOKUP_TIMEOUT		(1000 * 500)
 
 extern struct crt_binheap_ops crt_timeout_bh_ops;
-extern int crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
+void crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
 extern struct crt_corpc_ops crt_rank_evict_co_ops;
 
 enum crt_rpc_flags_internal {
@@ -353,9 +353,9 @@ int crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info);
 int crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
 
 /* crt_iv.c */
-int crt_hdlr_iv_fetch(crt_rpc_t *rpc_req);
-int crt_hdlr_iv_update(crt_rpc_t *rpc_req);
-int crt_hdlr_iv_sync(crt_rpc_t *rpc_req);
+void crt_hdlr_iv_fetch(crt_rpc_t *rpc_req);
+void crt_hdlr_iv_update(crt_rpc_t *rpc_req);
+void crt_hdlr_iv_sync(crt_rpc_t *rpc_req);
 int crt_iv_sync_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 				void *priv);
 

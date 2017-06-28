@@ -302,10 +302,10 @@ static inline void *crt_st_get_aligned_ptr(void *base, int16_t buf_alignment)
 void crt_self_test_service_init(void);
 void crt_self_test_client_init(void);
 void crt_self_test_init(void);
-int crt_self_test_msg_handler(crt_rpc_t *rpc_req);
-int crt_self_test_open_session_handler(crt_rpc_t *rpc_req);
-int crt_self_test_close_session_handler(crt_rpc_t *rpc_req);
-int crt_self_test_start_handler(crt_rpc_t *rpc_req);
-int crt_self_test_status_req_handler(crt_rpc_t *rpc_req);
+void crt_self_test_msg_handler(crt_rpc_t *rpc_req);
+void crt_self_test_open_session_handler(crt_rpc_t *rpc_req);
+void crt_self_test_close_session_handler(crt_rpc_t *rpc_req);
+void crt_self_test_start_handler(crt_rpc_t *rpc_req);
+void crt_self_test_status_req_handler(crt_rpc_t *rpc_req);
 
 #endif /* __CRT_SELF_TEST_H__ */

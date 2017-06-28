@@ -142,7 +142,7 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 /* Callback for enter broadcast
  * All non-master ranks execute this callback
  */
-int
+void
 crt_hdlr_barrier_enter(crt_rpc_t *rpc_req)
 {
 	struct crt_barrier_in		*in;
@@ -185,7 +185,7 @@ crt_hdlr_barrier_enter(crt_rpc_t *rpc_req)
 		/* decref in crt_barrier */
 		crt_req_addref(rpc_req);
 		pthread_mutex_unlock(&barrier_info->bi_lock);
-		return 0;
+		return;
 	}
 
 	/* Local node already arrived.   Send a reply.  This could happen
@@ -205,14 +205,12 @@ send_reply:
 	if (rc != 0)
 		C_ERROR("Could not send reply for barrier broadcast,rc = %d\n",
 			rc);
-
-	return rc;
 }
 
 /* Callback for exit broadcast signalling that all ranks have arrived
  * All non-master ranks execute this callback
  */
-int
+void
 crt_hdlr_barrier_exit(crt_rpc_t *rpc_req)
 {
 	crt_barrier_cb_t		complete_cb = NULL;
@@ -277,8 +275,6 @@ send_reply:
 	if (rc != 0)
 		C_ERROR("Could not send reply for barrier broadcast,rc = %d\n",
 			rc);
-
-	return rc;
 }
 
 int

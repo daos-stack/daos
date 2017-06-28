@@ -815,7 +815,8 @@ static void free_g_data(void)
 		C_FREE_PTR(g_data);
 }
 
-int crt_self_test_start_handler(crt_rpc_t *rpc_req)
+void
+crt_self_test_start_handler(crt_rpc_t *rpc_req)
 {
 	struct crt_st_start_params	*args;
 	int32_t				*reply_status;
@@ -1068,8 +1069,6 @@ send_reply:
 
 	pthread_mutex_unlock(&g_data_lock);
 	/******************* UNLOCK: g_data_lock *******************/
-
-	return 0;
 }
 
 static int status_req_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
@@ -1106,7 +1105,8 @@ static int status_req_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	return 0;
 }
 
-int crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
+void
+crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 {
 	crt_bulk_t			*bulk_hdl_in;
 	struct crt_st_status_req_reply	*res;
@@ -1186,7 +1186,7 @@ int crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 			C_GOTO(send_rpc, res->status = ret);
 		}
 
-		return 0;
+		return;
 	} else if (g_data != NULL) {
 		/*
 		 * Test still going - try to return some status info
@@ -1211,6 +1211,4 @@ send_rpc:
 
 	pthread_mutex_unlock(&g_data_lock);
 	/******************* UNLOCK: g_data_lock *******************/
-
-	return 0;
 }

@@ -338,7 +338,7 @@ struct crt_bulk_cb_info {
 };
 
 /* server-side RPC handler */
-typedef int (*crt_rpc_cb_t)(crt_rpc_t *rpc);
+typedef void (*crt_rpc_cb_t)(crt_rpc_t *rpc);
 
 /**
  * completion callback for crt_req_send

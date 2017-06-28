@@ -762,7 +762,7 @@ gc_del_child_rpc(struct crt_grp_priv *grp_priv, crt_rpc_t *gc_rpc)
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 }
 
-int
+void
 crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 {
 	struct crt_grp_priv		*grp_priv = NULL;
@@ -835,7 +835,6 @@ out:
 			CF_X64", gp_size %d, gp_self %d.\n", pri_rank,
 			grp_priv->gp_pub.cg_grpid, grp_priv->gp_int_grpid,
 			grp_priv->gp_size, grp_priv->gp_self);
-	return rc;
 }
 
 static int
@@ -1096,7 +1095,7 @@ out:
 	return (grp_priv == NULL) ? NULL : &grp_priv->gp_pub;
 }
 
-int
+void
 crt_hdlr_grp_destroy(crt_rpc_t *rpc_req)
 {
 	struct crt_grp_priv		*grp_priv = NULL;
@@ -1132,7 +1131,6 @@ out:
 	if (rc != 0)
 		C_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_req->cr_opc);
-	return rc;
 }
 
 static int
@@ -1536,7 +1534,7 @@ out:
 	return rc;
 }
 
-int
+void
 crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 {
 	struct crt_grp_priv		*grp_priv;
@@ -1600,7 +1598,6 @@ out:
 			rc, rpc_req->cr_opc);
 	if (tmp_uri != NULL)
 		free(tmp_uri);
-	return rc;
 }
 
 /*

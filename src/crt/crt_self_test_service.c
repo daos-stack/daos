@@ -270,7 +270,8 @@ void crt_self_test_init(void)
 	crt_self_test_client_init();
 }
 
-int crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
+void
+crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 {
 	struct crt_st_session_params	*args;
 	struct st_session		*new_session = NULL;
@@ -388,11 +389,10 @@ send_rpc:
 	ret = crt_reply_send(rpc_req);
 	if (ret != 0)
 		C_ERROR("self-test: crt_reply_send failed; ret = %d\n", ret);
-
-	return 0;
 }
 
-int crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
+void
+crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 {
 	int64_t			*args;
 	struct st_session	*del_session;
@@ -431,8 +431,6 @@ send_rpc:
 	ret = crt_reply_send(rpc_req);
 	if (ret != 0)
 		C_ERROR("self-test: crt_reply_send failed; ret = %d\n", ret);
-
-	return 0;
 }
 
 void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
@@ -565,7 +563,8 @@ int crt_self_test_msg_bulk_get_cb(const struct crt_bulk_cb_info *cb_info)
 	return 0;
 }
 
-int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
+void
+crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 {
 	void			*args;
 	struct st_buf_entry	*buf_entry = NULL;
@@ -595,7 +594,7 @@ int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	if (rpc_req->cr_opc == CRT_OPC_SELF_TEST_BOTH_EMPTY ||
 	    rpc_req->cr_opc == CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY) {
 		crt_self_test_msg_send_reply(rpc_req, NULL, 0);
-		return 0;
+		return;
 	}
 
 	/*
@@ -618,7 +617,7 @@ int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	if (session == NULL) {
 		C_ERROR("Unable to locate session_id %ld\n", session_id);
 		crt_self_test_msg_send_reply(rpc_req, NULL, 1);
-		return 0;
+		return;
 	}
 
 	/* Now that we have the session, do a little more validation */
@@ -626,14 +625,14 @@ int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	    session->params.reply_type == CRT_SELF_TEST_MSG_TYPE_BULK_GET) {
 		C_ERROR("Only bulk send/GET reply/PUT are supported\n");
 		crt_self_test_msg_send_reply(rpc_req, NULL, 1);
-		return 0;
+		return;
 	}
 	if (rpc_req->cr_opc !=
 		crt_st_compute_opcode(session->params.send_type,
 				      session->params.reply_type)) {
 		C_ERROR("Opcode / self-test session params mismatch\n");
 		crt_self_test_msg_send_reply(rpc_req, NULL, 1);
-		return 0;
+		return;
 	}
 
 	/* Retrieve the next available buffer from the stack for this session */
@@ -680,7 +679,7 @@ int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 			if (ret != 0) {
 				C_ERROR("Failed to allocate buf_entry;"
 					" ret=%d\n", ret);
-				return 0;
+				return;
 			}
 
 			session->params.num_buffers++;
@@ -711,7 +710,7 @@ int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 			C_ERROR("self-test service BULK_GET failed; ret=%d\n",
 				ret);
 			crt_self_test_msg_send_reply(rpc_req, NULL, 1);
-			return 0;
+			return;
 		}
 	} else if (session->params.reply_type ==
 		   CRT_SELF_TEST_MSG_TYPE_BULK_PUT) {
@@ -740,12 +739,10 @@ int crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 			C_ERROR("self-test service BULK_GET failed; ret=%d\n",
 				ret);
 			crt_self_test_msg_send_reply(rpc_req, NULL, 1);
-			return 0;
+			return;
 		}
 	} else {
 		crt_self_test_msg_send_reply(rpc_req, buf_entry, 1);
-		return 0;
+		return;
 	}
-
-	return 0;
 }

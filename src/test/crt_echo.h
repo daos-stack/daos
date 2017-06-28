@@ -76,19 +76,17 @@ extern struct gecho gecho;
 extern struct crt_corpc_ops echo_co_ops;
 
 static inline
-int echo_srv_noop(crt_rpc_t *rpc_req)
+void echo_srv_noop(crt_rpc_t *rpc_req)
 {
 	printf("echo_srver recv'd NOOP RPC, opc: 0x%x.\n",
 		rpc_req->cr_opc);
 	crt_reply_send(rpc_req);
-
-	return 0;
 }
 
-int echo_srv_checkin(crt_rpc_t *rpc);
-int echo_srv_bulk_test(crt_rpc_t *rpc);
-int echo_srv_shutdown(crt_rpc_t *rpc);
-int echo_srv_corpc_example(crt_rpc_t *rpc);
+void echo_srv_checkin(crt_rpc_t *rpc);
+void echo_srv_bulk_test(crt_rpc_t *rpc);
+void echo_srv_shutdown(crt_rpc_t *rpc);
+void echo_srv_corpc_example(crt_rpc_t *rpc);
 
 struct crt_msg_field *echo_ping_checkin[] = {
 	&CMF_UINT32,

@@ -1016,7 +1016,7 @@ crt_iv_parent_get(struct crt_ivns_internal *ivns_internal,
 }
 
 /* Internal handler for CRT_OPC_IV_FETCH RPC call*/
-int
+void
 crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 {
 	struct iv_fetch_in		*input;
@@ -1128,7 +1128,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		C_GOTO(send_error, rc);
 	}
 
-	return 0;
+	return;
 
 send_error:
 	if (put_needed)
@@ -1137,8 +1137,6 @@ send_error:
 	output->ifo_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	C_ASSERT(rc == 0);
-
-	return 0;
 }
 
 int
@@ -1290,7 +1288,7 @@ struct iv_sync_out {
 };
 
 /* Handler for internal SYNC CORPC */
-int
+void
 crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 {
 	int				rc = 0;
@@ -1389,9 +1387,7 @@ exit:
 				&iv_value);
 
 	output->rc = rc;
-	rc = crt_reply_send(rpc_req);
-
-	return rc;
+	crt_reply_send(rpc_req);
 }
 
 /* Results aggregate function for sync CORPC */
@@ -1907,7 +1903,7 @@ send_error:
 }
 
 /* IV UPDATE RPC handler */
-int
+void
 crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 {
 	struct iv_update_in		*input;
@@ -2037,14 +2033,12 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	}
 
 exit:
-	return 0;
+	return;
 
 send_error:
 	output->rc = rc;
 
-	rc = crt_reply_send(rpc_req);
-
-	return rc;
+	crt_reply_send(rpc_req);
 }
 
 static int

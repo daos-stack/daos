@@ -106,7 +106,8 @@ int grp_destroy_cb(void *arg, int status)
 	return 0;
 }
 
-int echo_srv_corpc_example(crt_rpc_t *rpc_req)
+void
+echo_srv_corpc_example(crt_rpc_t *rpc_req)
 {
 	struct crt_echo_corpc_example_req *req;
 	struct crt_echo_corpc_example_reply *reply;
@@ -124,8 +125,6 @@ int echo_srv_corpc_example(crt_rpc_t *rpc_req)
 
 	printf("echo_srv_corpc_example, rank %d got msg %s, reply %d, rc %d.\n",
 	       my_rank, req->co_msg, reply->co_result, rc);
-
-	return rc;
 }
 
 int corpc_example_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *priv)
@@ -233,7 +232,8 @@ out:
 	return 0;
 }
 
-int echo_srv_bulk_test(crt_rpc_t *rpc_req)
+void
+echo_srv_bulk_test(crt_rpc_t *rpc_req)
 {
 	crt_bulk_t			local_bulk_hdl;
 	crt_sg_list_t			sgl;
@@ -289,8 +289,6 @@ int echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	 */
 	rc = crt_bulk_transfer(&bulk_desc, bulk_test_cb, iovs, NULL);
 	assert(rc == 0);
-
-	return rc;
 }
 
 #endif /* __CRT_ECHO_SRV_H__ */
