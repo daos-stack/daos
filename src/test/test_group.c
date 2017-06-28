@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2016-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -76,7 +76,8 @@ struct test_group_t {
 	int		 tg_roomno;
 };
 
-struct test_group_t test = { .tg_ctx_num = 1, .tg_roomno = 1082 };
+struct test_group_t test = { .tg_hold_time = 0, .tg_ctx_num = 1,
+			     .tg_roomno = 1082 };
 
 struct crt_msg_field *echo_ping_checkin[] = {
 	&CMF_UINT32,

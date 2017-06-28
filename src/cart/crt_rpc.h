@@ -239,6 +239,7 @@ enum {
 
 	CRT_OPC_RANK_EVICT			= CRT_OPC_INTERNAL_BASE + 0x500,
 	CRT_OPC_MEMB_SAMPLE			= CRT_OPC_INTERNAL_BASE + 0x501,
+	CRT_OPC_CTL_LS				= CRT_OPC_INTERNAL_BASE + 0x502,
 };
 
 /* CRT internal RPC definitions */
@@ -292,6 +293,17 @@ struct crt_barrier_in {
 
 struct crt_barrier_out {
 	int			b_rc;
+};
+
+struct crt_ctl_ep_ls_in {
+	crt_group_id_t		cel_grp_id;
+	d_rank_t		cel_rank;
+};
+
+struct crt_ctl_ep_ls_out {
+	d_iov_t			cel_addr_str;
+	int			cel_ctx_num;
+	int			cel_rc;
 };
 
 /* CRT internal RPC format definitions */

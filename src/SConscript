@@ -65,6 +65,9 @@ def scons():
     # Build self test
     SConscript('self_test/SConscript')
 
+    # Build cart_ctl
+    SConscript('ctl/SConscript')
+
     # Build the unit tests
     SConscript('utest/SConscript')
 

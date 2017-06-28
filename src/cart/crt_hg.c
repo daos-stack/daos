@@ -444,6 +444,34 @@ out:
 	return rc;
 }
 
+int
+crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size)
+{
+	hg_addr_t	self_addr;
+	hg_return_t	hg_ret;
+	int		rc = 0;
+
+	D_ASSERT(hg_class != NULL);
+	D_ASSERT(str_size != NULL);
+
+	hg_ret = HG_Addr_self(hg_class, &self_addr);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Addr_self failed, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -DER_HG);
+	}
+
+	hg_ret = HG_Addr_to_string(hg_class, addr_str, str_size, self_addr);
+	if (hg_ret != HG_SUCCESS) {
+		D_ERROR("HG_Addr_to_string failed, hg_ret: %d.\n",
+			hg_ret);
+		rc = -DER_HG;
+	}
+	HG_Addr_free(hg_class, self_addr);
+
+out:
+	return rc;
+}
+
 static int
 crt_hg_reg_rpcid(hg_class_t *hg_class)
 {

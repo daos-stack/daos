@@ -55,6 +55,7 @@
 #include "crt_group.h"
 #include "crt_tree.h"
 #include "crt_self_test.h"
+#include "crt_ctl.h"
 
 #include "crt_pmix.h"
 #include "crt_lm.h"

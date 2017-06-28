@@ -1,4 +1,4 @@
-/* Copyright (C) 2017 Intel Corporation
+/* Copyright (C) 2017-2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,6 +48,7 @@ DECLARE_FAC(hg);
 DECLARE_FAC(pmix);
 DECLARE_FAC(self_test);
 DECLARE_FAC(iv);
+DECLARE_FAC(ctl);
 
 #define D_INIT_LOG_FAC(name, aname, lname)				\
 	d_init_log_facility(&d_##name##_logfac, aname, lname)

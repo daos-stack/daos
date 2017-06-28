@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Intel Corporation
+/* Copyright (C) 2018 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,23 +35,13 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+/**
+ * This file is part of CaRT. It's the header for crt_ctl.c.
+ */
 
-#ifndef __CRT_DEBUG_H__
-#define __CRT_DEBUG_H__
+#ifndef __CRT_CTL_H__
+#define __CRT_CTL_H__
 
-#define DD_FAC(name)	(d_##name##_logfac)
+void crt_hdlr_ctl_ls(crt_rpc_t *rpc_req);
 
-extern int DD_FAC(rpc);
-extern int DD_FAC(bulk);
-extern int DD_FAC(corpc);
-extern int DD_FAC(grp);
-extern int DD_FAC(lm);
-extern int DD_FAC(hg);
-extern int DD_FAC(pmix);
-extern int DD_FAC(self_test);
-extern int DD_FAC(iv);
-extern int DD_FAC(ctl);
-
-int crt_setup_log_fac(void);
-
-#endif /* __CRT_DEBUG_H__ */
+#endif /* __CRT_CTL_H__ */

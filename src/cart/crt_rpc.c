@@ -315,6 +315,23 @@ static struct crt_req_format CQF_CRT_LM_MEMB_SAMPLE =
 			   crt_lm_memb_sample_in_fields,
 			   crt_lm_memb_sample_out_fields);
 
+struct crt_msg_field *crt_ctl_ls_in_fields[] = {
+	&CMF_GRP_ID,
+	&CMF_RANK,
+	&CMF_UINT32,	/* request type */
+};
+
+struct crt_msg_field *crt_ctl_ls_out_fields[] = {
+	&CMF_IOVEC,		/* concatenated addr str */
+	&CMF_INT,		/* num of contexts */
+	&CMF_INT,		/* return value */
+};
+
+static struct crt_req_format CQF_CRT_CTL_LS =
+	DEFINE_CRT_REQ_FMT("CRT_CTL_LS",
+			    crt_ctl_ls_in_fields,
+			    crt_ctl_ls_out_fields);
+
 struct crt_internal_rpc crt_internal_rpcs[] = {
 	{
 		.ir_name	= "CRT_GRP_CREATE",
@@ -483,6 +500,14 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_flags	= 0,
 		.ir_req_fmt	= &CQF_CRT_LM_MEMB_SAMPLE,
 		.ir_hdlr	= crt_hdlr_memb_sample,
+		.ir_co_ops	= NULL,
+	}, {
+		.ir_name	= "CRT_CTL_LS",
+		.ir_opc		= CRT_OPC_CTL_LS,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_CTL_LS,
+		.ir_hdlr	= crt_hdlr_ctl_ls,
 		.ir_co_ops	= NULL,
 	}, {
 		.ir_opc		= 0

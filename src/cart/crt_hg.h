@@ -149,6 +149,7 @@ int crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout);
 int crt_hg_addr_lookup(struct crt_hg_context *hg_ctx, const char *name,
 		       crt_hg_addr_lookup_cb_t complete_cb, void *arg);
 int crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr);
+int crt_hg_get_addr(hg_class_t *hg_class, char *addr_str, size_t *str_size);
 
 int crt_rpc_handler_common(hg_handle_t hg_hdl);
 
