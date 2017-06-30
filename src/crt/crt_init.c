@@ -237,22 +237,29 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 
 	server = flags & CRT_FLAG_BIT_SERVER;
 
+	/* crt_log_init is reference counted */
+	rc = crt_log_init();
+	if (rc != 0) {
+		C_PRINT_ERR("crt_log_init failed, rc: %d.\n", rc);
+		return rc;
+	}
+
 	if (grpid != NULL) {
 		if (crt_validate_grpid(grpid) != 0) {
-			C_PRINT_ERR("grpid contains invalid characters "
-				    "or is too long\n");
+			C_ERROR("grpid contains invalid characters "
+				"or is too long\n");
 			C_GOTO(out, rc = -CER_INVAL);
 		}
 		if (!server) {
 			if (strcmp(grpid, CRT_DEFAULT_SRV_GRPID) == 0) {
-				C_PRINT_ERR("invalid client grpid (same as "
-					    "CRT_DEFAULT_SRV_GRPID).\n");
+				C_ERROR("invalid client grpid (same as "
+					"CRT_DEFAULT_SRV_GRPID).\n");
 				C_GOTO(out, rc = -CER_INVAL);
 			}
 		} else {
 			if (strcmp(grpid, CRT_DEFAULT_CLI_GRPID) == 0) {
-				C_PRINT_ERR("invalid server grpid (same as "
-					    "CRT_DEFAULT_CLI_GRPID).\n");
+				C_ERROR("invalid server grpid (same as "
+					"CRT_DEFAULT_CLI_GRPID).\n");
 				C_GOTO(out, rc = -CER_INVAL);
 			}
 		}
@@ -261,8 +268,8 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 	if (gdata_init_flag == 0) {
 		rc = pthread_once(&gdata_init_once, data_init);
 		if (rc != 0) {
-			C_PRINT_ERR("crt_init failed, rc(%d) - %s.\n",
-				    rc, strerror(rc));
+			C_ERROR("crt_init failed, rc(%d) - %s.\n",
+				rc, strerror(rc));
 			C_GOTO(out, rc = -rc);
 		}
 	}
@@ -282,12 +289,6 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 		if (!server) {
 			if ((flags & CRT_FLAG_BIT_SINGLETON) != 0)
 				crt_gdata.cg_singleton = true;
-		}
-
-		rc = crt_log_init();
-		if (rc != 0) {
-			C_PRINT_ERR("crt_log_init failed, rc: %d.\n", rc);
-			C_GOTO(out, rc);
 		}
 
 		if (crt_plugin_gdata.cpg_inited == 0)
@@ -320,8 +321,8 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 			}
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
-				C_PRINT_ERR("crt_na_ofi_config_init failed, "
-					    "rc: %d.\n", rc);
+				C_ERROR("crt_na_ofi_config_init failed, "
+					"rc: %d.\n", rc);
 				C_GOTO(out, rc);
 			}
 		}
@@ -381,8 +382,10 @@ do_init:
 unlock:
 	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 out:
-	if (rc != 0)
-		C_PRINT_ERR("crt_init failed, rc: %d.\n", rc);
+	if (rc != 0) {
+		C_ERROR("crt_init failed, rc: %d.\n", rc);
+		crt_log_fini();
+	}
 	return rc;
 }
 
@@ -498,8 +501,6 @@ crt_finalize(void)
 
 		if (crt_plugin_gdata.cpg_inited == 1)
 			crt_plugin_fini();
-		crt_log_fini();
-
 		if (crt_gdata.cg_na_plugin == CRT_NA_OFI_SOCKETS)
 			crt_na_ofi_config_fini();
 	} else {
@@ -508,7 +509,11 @@ crt_finalize(void)
 
 out:
 	if (rc != 0)
-		C_PRINT_ERR("crt_finalize failed, rc: %d.\n", rc);
+		C_ERROR("crt_finalize failed, rc: %d.\n", rc);
+
+	/* crt_log_fini is reference counted */
+	crt_log_fini();
+
 	return rc;
 }
 
