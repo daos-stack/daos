@@ -501,15 +501,6 @@ corpc_del_child_rpc_locked(struct crt_rpc_priv *parent_rpc_priv,
 }
 
 static inline void
-corpc_del_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
-		    struct crt_rpc_priv *child_rpc_priv)
-{
-	pthread_spin_lock(&parent_rpc_priv->crp_lock);
-	corpc_del_child_rpc_locked(parent_rpc_priv, child_rpc_priv);
-	pthread_spin_unlock(&parent_rpc_priv->crp_lock);
-}
-
-static inline void
 crt_corpc_fail_parent_rpc(struct crt_rpc_priv *parent_rpc_priv, int failed_rc)
 {
 	crt_rank_t	 myrank;

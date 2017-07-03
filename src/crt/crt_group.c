@@ -2369,7 +2369,7 @@ crt_rank_evict(crt_group_t *grp, crt_rank_t rank)
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
-	if (rank < 0 || rank >= grp_priv->gp_size) {
+	if (rank >= grp_priv->gp_size) {
 		C_ERROR("Rank out of range. Attempted rank: %d, "
 			"valid range [0, %d).\n", rank, grp_priv->gp_size);
 		C_GOTO(out, rc = -CER_OOG);

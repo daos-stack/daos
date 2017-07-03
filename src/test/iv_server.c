@@ -414,7 +414,7 @@ print_key_value(char *hdr, crt_iv_key_t *iv_key, crt_sg_list_t *iv_value)
 
 	printf("[%s:%d:SERV]\t", hostname, my_rank);
 
-	printf(hdr);
+	printf("%s", hdr);
 
 	if (iv_key == NULL) {
 		printf("key=NULL");
