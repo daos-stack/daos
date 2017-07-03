@@ -134,9 +134,6 @@ int ds_pool_hdl_list(const uuid_t pool_uuid, uuid_t buf, size_t *size);
  */
 int ds_pool_hdl_evict(const uuid_t pool_uuid, const uuid_t handle_uuid);
 
-typedef int (*pool_iter_cb_t)(daos_handle_t ph, uuid_t co_uuid, void *arg);
-int ds_pool_cont_iter(daos_handle_t ph, pool_iter_cb_t callback, void *arg);
-
 typedef int (*obj_iter_cb_t)(uuid_t cont_uuid, daos_unit_oid_t oid, void *arg);
 int ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *arg);
 

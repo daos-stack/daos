@@ -1068,3 +1068,71 @@ ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	out_result->tao_rc += out_source->tao_rc;
 	return 0;
 }
+
+/* iterate all of objects of the container. */
+int
+ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
+		 cont_iter_cb_t callback, void *arg)
+{
+	vos_iter_param_t param;
+	daos_handle_t	 iter_h;
+	daos_handle_t	 coh;
+	int		 rc;
+
+	rc = vos_cont_open(ph, co_uuid, &coh);
+	if (rc != 0) {
+		D_ERROR("Open container "DF_UUID" failed: rc = %d\n",
+			DP_UUID(co_uuid), rc);
+		return rc;
+	}
+
+	memset(&param, 0, sizeof(param));
+	param.ip_hdl = coh;
+
+	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_h);
+	if (rc != 0) {
+		D_ERROR("prepare obj iterator failed %d\n", rc);
+		D_GOTO(close, rc);
+	}
+
+	rc = vos_iter_probe(iter_h, NULL);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		else
+			D_ERROR("set iterator cursor failed: %d\n", rc);
+		D_GOTO(iter_fini, rc);
+	}
+
+	while (1) {
+		vos_iter_entry_t ent;
+
+		rc = vos_iter_fetch(iter_h, &ent, NULL);
+		if (rc != 0) {
+			/* reach to the end of the container */
+			if (rc == -DER_NONEXIST)
+				rc = 0;
+			else
+				D_ERROR("Fetch obj failed: %d\n", rc);
+			break;
+		}
+
+		rc = callback(co_uuid, ent.ie_oid, arg);
+		if (rc) {
+			if (rc > 0)
+				rc = 0;
+			break;
+		}
+
+		D_DEBUG(DB_ANY, "iter "DF_UOID" rc: %d\n",
+			DP_UOID(ent.ie_oid), rc);
+
+		vos_iter_next(iter_h);
+	}
+
+iter_fini:
+	vos_iter_finish(iter_h);
+close:
+	vos_cont_close(coh);
+	return rc;
+}

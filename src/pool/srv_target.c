@@ -42,6 +42,7 @@
 
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
+#include <daos_srv/container.h>
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/vos.h>
 #include "rpc.h"
@@ -737,4 +738,106 @@ ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	out_result->tuo_rc += out_source->tuo_rc;
 	return 0;
+}
+
+typedef int (*pool_iter_cb_t)(daos_handle_t ph, uuid_t co_uuid, void *arg);
+
+/* iterate all of the container of the pool. */
+static int
+ds_pool_cont_iter(daos_handle_t ph, pool_iter_cb_t callback, void *arg)
+{
+	vos_iter_param_t param;
+	daos_handle_t	 iter_h;
+	int		 rc;
+
+	memset(&param, 0, sizeof(param));
+	param.ip_hdl = ph;
+
+	rc = vos_iter_prepare(VOS_ITER_COUUID, &param, &iter_h);
+	if (rc != 0) {
+		D_ERROR("prepare co iterator failed %d\n", rc);
+		return rc;
+	}
+
+	rc = vos_iter_probe(iter_h, NULL);
+	if (rc != 0) {
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		else
+			D_ERROR("set iterator cursor failed: %d\n", rc);
+
+		D_GOTO(iter_fini, rc);
+	}
+
+	while (1) {
+		vos_iter_entry_t ent;
+
+		rc = vos_iter_fetch(iter_h, &ent, NULL);
+		if (rc != 0) {
+			/* reach to the end of the pool */
+			if (rc == -DER_NONEXIST)
+				rc = 0;
+			else
+				D_ERROR("Fetch co failed: %d\n", rc);
+			break;
+		}
+
+		if (!uuid_is_null(ent.ie_couuid)) {
+			rc = callback(ph, ent.ie_couuid, arg);
+			if (rc) {
+				if (rc > 0)
+					rc = 0;
+				break;
+			}
+		}
+		vos_iter_next(iter_h);
+	}
+
+iter_fini:
+	vos_iter_finish(iter_h);
+	return rc;
+}
+
+struct obj_iter_arg {
+	cont_iter_cb_t	callback;
+	void		*arg;
+};
+
+static int
+cont_obj_iter_cb(uuid_t cont_uuid, daos_unit_oid_t oid, void *data)
+{
+	struct obj_iter_arg *arg = data;
+
+	return arg->callback(cont_uuid, oid, arg->arg);
+}
+
+static int
+pool_obj_iter_cb(daos_handle_t ph, uuid_t co_uuid, void *data)
+{
+	return ds_cont_obj_iter(ph, co_uuid, cont_obj_iter_cb, data);
+}
+
+/**
+ * Iterate all of the objects in the pool.
+ **/
+int
+ds_pool_obj_iter(uuid_t pool_uuid, obj_iter_cb_t callback, void *data)
+{
+	struct obj_iter_arg	arg;
+	struct ds_pool_child	*child;
+	int			rc;
+
+	child = ds_pool_child_lookup(pool_uuid);
+	if (child == NULL)
+		return -DER_NONEXIST;
+
+	arg.callback = callback;
+	arg.arg = data;
+	rc = ds_pool_cont_iter(child->spc_hdl, pool_obj_iter_cb, &arg);
+
+	ds_pool_child_put(child);
+
+	D_DEBUG(DB_TRACE, DF_UUID" iterate pool is done\n",
+		DP_UUID(pool_uuid));
+	return rc;
 }
