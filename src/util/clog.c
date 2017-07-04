@@ -454,7 +454,11 @@ static void vclog(int flags, const char *fmt, va_list ap)
 	 * log it to the log file
 	 */
 	if (mst.logfd >= 0)
-		(void) write(mst.logfd, b, tlen);
+		if (write(mst.logfd, b, tlen) < 0) {
+			fprintf(stderr, "%s:%d, write failed %d(%s).\n",
+				__func__, __LINE__, errno, strerror(errno));
+			errno = save_errno;
+		}
 
 	if (mst.oflags & CLOG_FLV_STDOUT)
 		flags |= CLOG_STDOUT;
