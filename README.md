@@ -184,6 +184,8 @@ With this approach only daos would get built using the prebuilt dependencies in 
 
 Please report any bugs through our [issue tracker](https://jira.hpdd.intel.com/projects/DAOS) with a test case to reproduce the issue (when applicable) and debug logs that should be compressed. DAOS debug logs are written by default to /tmp/daos.log, this can be modified by specifying a different path through DD_LOG. Similarly, the debug mask and subsystems are controlled by respectively the DD_MASK and DD_SUBSYS environment variables.
 
+## <a href= "doc/HLD.md">Developer Documentation</a>
+
 ## Contacts
 
 For more information on DAOS, please post to our [Google group](https://groups.google.com/forum/#!forum/daos-users).
