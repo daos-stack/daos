@@ -2,6 +2,8 @@
 
 [![Build Status](https://travis-ci.org/daos-stack/daos.svg?branch=master)](https://travis-ci.org/daos-stack/daos)
 
+[![Build Status](https://travis-ci.org/daos-stack/daos.svg?branch=master)](https://travis-ci.org/daos-stack/daos)
+
 > :warning: **Warning:** DAOS is under heavy development. Use at your own risk.
 
 ## What is DAOS?
