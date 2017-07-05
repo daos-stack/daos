@@ -808,8 +808,8 @@ daos_task_register_deps(struct daos_task *task, int num_deps,
 }
 
 int
-daos_task_init(struct daos_task **taskp, daos_task_func_t task_func, void *arg,
-	       int arg_size, struct daos_sched *sched)
+daos_task_init(daos_task_func_t task_func, void *arg, int arg_size,
+	       struct daos_sched *sched, struct daos_task **taskp)
 {
 	struct daos_task *task = NULL;
 	struct daos_task_private *dtp;

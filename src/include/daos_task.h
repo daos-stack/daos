@@ -403,7 +403,7 @@ typedef struct {
  * \param ready	[IN]	Indicate whether the DAOS op can be immediately called
  *			(true) or not (false). If set to true, dep_tasks must be
  *			NULL and user can't register prep callbacks anymore.
- * \param taskp	[IN]	Pointer to task to be created/initalized with the op.
+ * \param taskp	[OUT]	Pointer to task to be created/initalized with the op.
  *
  * \return		0 if task creation succeeds.
  *			negative errno if it fails.

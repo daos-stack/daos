@@ -164,9 +164,6 @@ daos_sched_check_complete(struct daos_sched *sched);
  * task, once the dependent task is done, then the task will
  * be added to the scheduler list.
  *
- * \param taskp [output]	pointer to daos_task to be allocated and
- *				initialized. The task is freed internally when
- *				complete is called.
  * \param task_func [input]	the function to be executed when
  *                              the task is executed.
  * \param arg [input]		the task_func argument.
@@ -177,15 +174,29 @@ daos_sched_check_complete(struct daos_sched *sched);
  *				list of the scheduler.
  * \param sched [input]		daos scheduler where the daos
  *                              task will be attached to.
+ * \param taskp [output]	pointer to daos_task to be allocated and
+ *				initialized. The task is freed internally when
+ *				complete is called.
  *
  * \return			0  if initialization succeeds.
  * \return			negative errno if it fails.
  */
 int
-daos_task_init(struct daos_task **taskp, daos_task_func_t task_func, void *arg,
-	       int arg_size, struct daos_sched *sched);
-int
-daos_task_schedule(struct daos_task *task, bool ready);
+daos_task_init(daos_task_func_t task_func, void *arg, int arg_size,
+	       struct daos_sched *sched, struct daos_task **taskp);
+
+/**
+ * Add task to scheduler it was initialized with. If task body function should
+ * be called immediately as part of this function, ready should be set to true;
+ * otherwise if false task would be in the scheduler init list and progressed
+ * when the scheduler is progressed.
+ *
+ * \param task [input]		task to be scheduled.
+ * \param ready [input]		flag to indicate whether task should be launched
+ *
+ * \return			0 if success negative errno if fail.
+ */
+int daos_task_schedule(struct daos_task *task, bool ready);
 
 /**
  * register complete callback for the task.

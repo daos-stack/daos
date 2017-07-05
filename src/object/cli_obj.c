@@ -498,8 +498,8 @@ pool_query_comp_cb(struct daos_task *task, void *data)
 }
 
 static int
-dc_obj_pool_query(struct daos_task **taskp, struct daos_sched *sched,
-		  daos_handle_t *oh)
+dc_obj_pool_query(struct daos_sched *sched, daos_handle_t *oh,
+		  struct daos_task **taskp)
 {
 	daos_pool_query_t	args;
 	daos_handle_t		ph;
@@ -522,8 +522,10 @@ dc_obj_pool_query(struct daos_task **taskp, struct daos_sched *sched,
 
 	rc = daos_task_register_comp_cb(*taskp, pool_query_comp_cb, oh,
 					sizeof(*oh));
-	if (rc != 0)
+	if (rc != 0) {
+		D_FREE_PTR(*taskp);
 		D_GOTO(err, rc);
+	}
 
 	return rc;
 
@@ -551,30 +553,32 @@ dc_obj_retry_cb(struct daos_task *task, void *data)
 	task->dt_result = 0;
 
 	/* Add pool map update task */
-	rc = dc_obj_pool_query(&pool_task, sched, oh);
-	if (rc != 0) {
-		D_FREE_PTR(pool_task);
+	rc = dc_obj_pool_query(sched, oh, &pool_task);
+	if (rc != 0)
 		D_GOTO(out, rc);
-	}
 
 	rc = daos_task_reinit(task);
 	if (rc != 0) {
 		D_ERROR("Failed to re-init task (%p)\n", task);
-		D_GOTO(out, rc);
+		D_GOTO(err, rc);
 	}
 
 	rc = daos_task_register_deps(task, 1, &pool_task);
 	if (rc != 0) {
 		D_ERROR("Failed to add dependency on pool query task (%p)\n",
 			pool_task);
-		D_GOTO(out, rc);
+		D_GOTO(err, rc);
 	}
 
 	rc = daos_task_schedule(pool_task, true);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D_GOTO(err, rc);
+
 out:
 	return rc;
+err:
+	D_FREE_PTR(pool_task);
+	goto out;
 }
 
 int
@@ -908,8 +912,8 @@ dc_obj_update(struct daos_task *task)
 		shard_arg.sgls = args->sgls;
 		shard_arg.map_ver = map_ver;
 		shard_arg.shard = shard;
-		rc = daos_task_init(&shard_task, dc_obj_shard_task_update,
-				    &shard_arg, sizeof(shard_arg), sched);
+		rc = daos_task_init(dc_obj_shard_task_update, &shard_arg,
+				    sizeof(shard_arg), sched, &shard_task);
 		if (rc != 0)
 			break;
 

@@ -1251,7 +1251,7 @@ daos_client_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 		*evp = ev;
 	}
 
-	rc = daos_task_init(&task, NULL, arg, arg_size, daos_ev2sched(ev));
+	rc = daos_task_init(NULL, arg, arg_size, daos_ev2sched(ev), &task);
 	if (rc != 0)
 		return rc;
 
@@ -1278,8 +1278,8 @@ err_task:
 }
 
 int
-dc_task_prep(daos_opc_t opc, void *arg, int arg_size, struct daos_task **taskp,
-	     daos_event_t **evp)
+dc_task_create(daos_opc_t opc, void *arg, int arg_size,
+	       struct daos_task **taskp, daos_event_t **evp)
 {
 	daos_event_t *ev = *evp;
 	struct daos_task *task = NULL;

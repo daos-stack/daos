@@ -52,7 +52,7 @@ tier_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 			return rc;
 	}
 
-	rc = daos_task_init(&task, NULL, arg, arg_size, daos_ev2sched(ev));
+	rc = daos_task_init(NULL, arg, arg_size, daos_ev2sched(ev), &task);
 	if (rc != 0)
 		D_GOTO(err_task, rc = -DER_NOMEM);
 
@@ -109,7 +109,7 @@ local_tier_conn_cb(struct daos_task *task, void *data)
 	/*Grab Scheduler of the task*/
 	sched = daos_task2sched(task);
 
-	rc = daos_task_init(&cross_conn_task, NULL, NULL, 0, sched);
+	rc = daos_task_init(NULL, NULL, 0, sched, &cross_conn_task);
 	if (rc != 0)
 		return -DER_NOMEM;
 

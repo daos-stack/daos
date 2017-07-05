@@ -42,7 +42,7 @@ daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 	args.rank = rank;
 	args.force = force;
 
-	dc_task_prep(DAOS_OPC_SVC_RIP, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_SVC_RIP, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -67,7 +67,7 @@ daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 	args.svc = svc;
 	args.uuid = uuid;
 
-	dc_task_prep(DAOS_OPC_POOL_CREATE, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_POOL_CREATE, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -84,7 +84,7 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 	args.force = force;
 	uuid_copy((unsigned char *)args.uuid, uuid);
 
-	dc_task_prep(DAOS_OPC_POOL_DESTROY, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_POOL_DESTROY, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -101,7 +101,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
 	args.svc = (daos_rank_list_t *)svc;
 	uuid_copy((unsigned char *)args.uuid, uuid);
 
-	dc_task_prep(DAOS_OPC_POOL_EVICT, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_POOL_EVICT, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -118,7 +118,7 @@ daos_pool_tgt_add(const uuid_t uuid, const char *grp,
 	args.svc = (daos_rank_list_t *)svc;
 	args.tgts = tgts;
 
-	dc_task_prep(DAOS_OPC_POOL_ADD, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_POOL_ADD, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -135,8 +135,8 @@ daos_pool_exclude_out(const uuid_t uuid, const char *grp,
 	args.svc = (daos_rank_list_t *)svc;
 	args.tgts = tgts;
 
-	dc_task_prep(DAOS_OPC_POOL_EXCLUDE_OUT, &args, sizeof(args), &task,
-		     &ev);
+	dc_task_create(DAOS_OPC_POOL_EXCLUDE_OUT, &args, sizeof(args), &task,
+		       &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -155,7 +155,7 @@ daos_pool_exclude(const uuid_t uuid, const char *grp,
 	args.svc = (daos_rank_list_t *)svc;
 	args.tgts = tgts;
 
-	dc_task_prep(DAOS_OPC_POOL_EXCLUDE, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_POOL_EXCLUDE, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 

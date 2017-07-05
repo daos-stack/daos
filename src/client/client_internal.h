@@ -134,7 +134,7 @@ int
 daos_event_priv_get(daos_event_t **ev);
 
 int
-dc_task_prep(daos_opc_t opc, void *arg, int arg_size, struct daos_task **taskp,
-	     daos_event_t **evp);
+dc_task_create(daos_opc_t opc, void *arg, int arg_size,
+	       struct daos_task **taskp, daos_event_t **evp);
 
 #endif /* __DAOS_CLI_INTERNAL_H__ */

@@ -40,8 +40,8 @@ daos_obj_class_register(daos_handle_t coh, daos_oclass_id_t cid,
 	arg.cid		= cid;
 	arg.cattr	= cattr;
 
-	dc_task_prep(DAOS_OPC_OBJ_CLASS_REGISTER, &arg, sizeof(arg), &task,
-		     &ev);
+	dc_task_create(DAOS_OPC_OBJ_CLASS_REGISTER, &arg, sizeof(arg), &task,
+		       &ev);
 	return daos_client_result_wait(ev);
 #endif
 }
@@ -60,7 +60,7 @@ daos_obj_class_query(daos_handle_t coh, daos_oclass_id_t cid,
 	arg.cid		= cid;
 	arg.cattr	= cattr;
 
-	dc_task_prep(DAOS_OPC_OBJ_CLASS_QUERY, &arg, sizeof(arg), &task, &ev);
+	dc_task_create(DAOS_OPC_OBJ_CLASS_QUERY, &arg, sizeof(arg), &task, &ev);
 	return daos_client_result_wait(ev);
 #endif
 }
@@ -79,7 +79,7 @@ daos_obj_class_list(daos_handle_t coh, daos_oclass_list_t *clist,
 	arg.clist	= clist;
 	arg.anchor	= anchor;
 
-	dc_task_prep(DAOS_OPC_OBJ_CLASS_LIST, &arg, sizeof(arg), &task, &ev);
+	dc_task_create(DAOS_OPC_OBJ_CLASS_LIST, &arg, sizeof(arg), &task, &ev);
 	return daos_client_result_wait(ev);
 #endif
 }
@@ -99,7 +99,7 @@ daos_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 	arg.epoch	= epoch;
 	arg.oa		= oa;
 
-	dc_task_prep(DAOS_OPC_OBJ_DECLARE, &arg, sizeof(arg), &task, &ev);
+	dc_task_create(DAOS_OPC_OBJ_DECLARE, &arg, sizeof(arg), &task, &ev);
 	return daos_client_result_wait(ev);
 #endif
 }
@@ -119,7 +119,7 @@ daos_obj_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 
 	DAOS_API_ARG_ASSERT(args, OBJ_OPEN);
 
-	dc_task_prep(DAOS_OPC_OBJ_OPEN, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_OBJ_OPEN, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -133,7 +133,7 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev)
 
 	DAOS_API_ARG_ASSERT(args, OBJ_CLOSE);
 
-	dc_task_prep(DAOS_OPC_OBJ_CLOSE, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_OBJ_CLOSE, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -151,7 +151,7 @@ daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
 
 	DAOS_API_ARG_ASSERT(args, OBJ_PUNCH);
 
-	dc_task_prep(DAOS_OPC_OBJ_PUNCH, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_OBJ_PUNCH, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 #endif
 }
@@ -182,7 +182,7 @@ daos_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	args.sgls	= sgls;
 	args.maps	= maps;
 
-	dc_task_prep(DAOS_OPC_OBJ_FETCH, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_OBJ_FETCH, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -203,7 +203,7 @@ daos_obj_update(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	args.iods	= iods;
 	args.sgls	= sgls;
 
-	dc_task_prep(DAOS_OPC_OBJ_UPDATE, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_OBJ_UPDATE, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -224,7 +224,7 @@ daos_obj_list_dkey(daos_handle_t oh, daos_epoch_t epoch, uint32_t *nr,
 	args.sgl	= sgl;
 	args.anchor	= anchor;
 
-	dc_task_prep(DAOS_OPC_OBJ_LIST_DKEY, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_OBJ_LIST_DKEY, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -246,7 +246,7 @@ daos_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	args.sgl	= sgl;
 	args.anchor	= anchor;
 
-	dc_task_prep(DAOS_OPC_OBJ_LIST_AKEY, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_OBJ_LIST_AKEY, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -274,6 +274,6 @@ daos_obj_list_recx(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	args.anchor	= anchor;
 	args.incr_order = incr_order;
 
-	dc_task_prep(DAOS_OPC_OBJ_LIST_RECX, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_OBJ_LIST_RECX, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }

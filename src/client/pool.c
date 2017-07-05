@@ -44,7 +44,7 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 	args.info = info;
 	uuid_copy((unsigned char *)args.uuid, uuid);
 
-	dc_task_prep(DAOS_OPC_POOL_CONNECT, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_POOL_CONNECT, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -58,7 +58,8 @@ daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 
 	args.poh = poh;
 
-	dc_task_prep(DAOS_OPC_POOL_DISCONNECT, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_POOL_DISCONNECT, &args, sizeof(args), &task,
+		       &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -87,7 +88,7 @@ daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
 	args.tgts = tgts;
 	args.info = info;
 
-	dc_task_prep(DAOS_OPC_POOL_QUERY, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_POOL_QUERY, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -109,6 +110,6 @@ daos_pool_svc_stop(daos_handle_t poh, daos_event_t *ev)
 
 	args.poh = poh;
 
-	dc_task_prep(DAOS_OPC_POOL_SVC_STOP, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_POOL_SVC_STOP, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }

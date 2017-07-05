@@ -66,7 +66,7 @@ sched_test_1()
 		D_GOTO(out, rc);
 	}
 
-	rc = daos_task_init(&task, NULL, NULL, 0, &sched);
+	rc = daos_task_init(NULL, NULL, 0, &sched, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D_GOTO(out, rc);
@@ -103,7 +103,7 @@ sched_test_1()
 		D_GOTO(out, rc);
 	}
 
-	rc = daos_task_init(&task, NULL, NULL, 0, &sched);
+	rc = daos_task_init(NULL, NULL, 0, &sched, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D_GOTO(out, rc);
@@ -254,7 +254,7 @@ sched_test_2()
 	}
 
 	printf("Init task and complete it in prep callback with a failure\n");
-	rc = daos_task_init(&task, assert_func, NULL, 0, &sched);
+	rc = daos_task_init(assert_func, NULL, 0, &sched, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D_GOTO(out, rc);
@@ -281,8 +281,8 @@ sched_test_2()
 	D_ALLOC_PTR(verify_cnt);
 	*verify_cnt = 0;
 
-	rc = daos_task_init(&task, verify_func, &verify_cnt, sizeof(int *),
-			    &sched);
+	rc = daos_task_init(verify_func, &verify_cnt, sizeof(int *), &sched,
+			    &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D_GOTO(out, rc);
@@ -394,8 +394,8 @@ sched_test_3()
 	*counter = 0;
 
 	printf("Init task and add comp cb to re-init it 3M times\n");
-	rc = daos_task_init(&task, incr_count_func, &counter, sizeof(int *),
-			    &sched);
+	rc = daos_task_init(incr_count_func, &counter, sizeof(int *), &sched,
+			    &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D_GOTO(out, rc);
@@ -514,8 +514,8 @@ sched_test_4()
 	*counter = 0;
 
 	printf("Init task and add prep/comp cbs to re-init it\n");
-	rc = daos_task_init(&task, inc_reinit_func, &counter, sizeof(int *),
-			    &sched);
+	rc = daos_task_init(inc_reinit_func, &counter, sizeof(int *), &sched,
+			    &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D_GOTO(out, rc);
@@ -628,16 +628,16 @@ sched_test_5()
 	*counter = 0;
 
 	printf("Test N -> 1 dependencies\n");
-	rc = daos_task_init(&task, check_func_n, &counter, sizeof(int *),
-			    &sched);
+	rc = daos_task_init(check_func_n, &counter, sizeof(int *), &sched,
+			    &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D_GOTO(out, rc);
 	}
 
 	for (i = 0; i < NUM_DEPS; i++) {
-		rc = daos_task_init(&tasks[i], inc_func, &counter,
-				    sizeof(int *), &sched);
+		rc = daos_task_init(inc_func, &counter, sizeof(int *), &sched,
+				    &tasks[i]);
 		if (rc != 0) {
 			printf("Failed to init task: %d\n", rc);
 			D_GOTO(out, rc);
@@ -683,7 +683,7 @@ sched_test_5()
 
 	*counter = 0;
 	printf("Test 1 -> N dependencies\n");
-	rc = daos_task_init(&task, inc_func, &counter, sizeof(int *), &sched);
+	rc = daos_task_init(inc_func, &counter, sizeof(int *), &sched, &task);
 	if (rc != 0) {
 		printf("Failed to init task: %d\n", rc);
 		D_GOTO(out, rc);
@@ -691,8 +691,8 @@ sched_test_5()
 
 	printf("Init tasks with Dependecies\n");
 	for (i = 0; i < NUM_DEPS; i++) {
-		rc = daos_task_init(&tasks[i], check_func_1, &counter,
-				    sizeof(int *), &sched);
+		rc = daos_task_init(check_func_1, &counter, sizeof(int *),
+				    &sched, &tasks[i]);
 		if (rc != 0) {
 			printf("Failed to init task: %d\n", rc);
 			D_GOTO(out, rc);

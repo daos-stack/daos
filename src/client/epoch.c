@@ -39,7 +39,7 @@ daos_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
 	args.coh = coh;
 	args.state = state;
 
-	dc_task_prep(DAOS_OPC_EPOCH_QUERY, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_EPOCH_QUERY, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -64,7 +64,7 @@ daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
 	args.epoch = epoch;
 	args.state = state;
 
-	dc_task_prep(DAOS_OPC_EPOCH_DISCARD, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_EPOCH_DISCARD, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -81,7 +81,7 @@ daos_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
 	args.epoch = epoch;
 	args.state = state;
 
-	dc_task_prep(DAOS_OPC_EPOCH_HOLD, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_EPOCH_HOLD, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -98,7 +98,7 @@ daos_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
 	args.epoch = epoch;
 	args.state = state;
 
-	dc_task_prep(DAOS_OPC_EPOCH_SLIP, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_EPOCH_SLIP, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -115,7 +115,7 @@ daos_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
 	args.epoch = epoch;
 	args.state = state;
 
-	dc_task_prep(DAOS_OPC_EPOCH_COMMIT, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_EPOCH_COMMIT, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 

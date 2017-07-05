@@ -50,8 +50,8 @@ daos_task_create(daos_opc_t opc, struct daos_sched *sched, void *op_args,
 	D_ASSERT(sizeof(struct daos_task_args) >=
 		 (dc_funcs[opc].arg_size + sizeof(daos_opc_t)));
 
-	rc = daos_task_init(taskp, dc_funcs[opc].task_func, &args,
-			    sizeof(struct daos_task_args), sched);
+	rc = daos_task_init(dc_funcs[opc].task_func, &args,
+			    sizeof(struct daos_task_args), sched, taskp);
 
 	if (rc != 0)
 		return rc;

@@ -50,7 +50,7 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 	args.poh = poh;
 	uuid_copy((unsigned char *)args.uuid, uuid);
 
-	dc_task_prep(DAOS_OPC_CONT_CREATE, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_CONT_CREATE, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -69,7 +69,7 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	args.info	= info;
 	uuid_copy((unsigned char *)args.uuid, uuid);
 
-	dc_task_prep(DAOS_OPC_CONT_OPEN, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_CONT_OPEN, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -83,7 +83,7 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 
 	DAOS_API_ARG_ASSERT(args, CONT_CLOSE);
 
-	dc_task_prep(DAOS_OPC_CONT_CLOSE, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_CONT_CLOSE, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -100,7 +100,7 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	args.force	= force;
 	uuid_copy((unsigned char *)args.uuid, uuid);
 
-	dc_task_prep(DAOS_OPC_CONT_DESTROY, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_CONT_DESTROY, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
@@ -116,7 +116,7 @@ daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 	args.coh	= coh;
 	args.info	= info;
 
-	dc_task_prep(DAOS_OPC_CONT_QUERY, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_CONT_QUERY, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
