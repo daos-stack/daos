@@ -1,6 +1,5 @@
 language: c
 dist: trusty
-sudo: false
 compiler:
 - clang
 - gcc
