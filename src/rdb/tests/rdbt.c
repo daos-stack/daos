@@ -65,13 +65,12 @@ test options:\n\
 	return 0;
 }
 
-static int
+static void
 rpc_cb(const struct crt_cb_info *cb_info)
 {
 	int *rc = cb_info->cci_arg;
 
 	*rc = cb_info->cci_rc;
-	return 0;
 }
 
 static crt_rpc_t *

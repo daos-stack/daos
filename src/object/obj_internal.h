@@ -156,7 +156,7 @@ int dc_obj_shard_list_rec(daos_handle_t oh, uint32_t op,
 struct dc_obj_shard*
 obj_shard_hdl2ptr(daos_handle_t hdl);
 /* srv_obj.c */
-int ds_obj_rw_handler(crt_rpc_t *rpc);
-int ds_obj_enum_handler(crt_rpc_t *rpc);
+void ds_obj_rw_handler(crt_rpc_t *rpc);
+void ds_obj_enum_handler(crt_rpc_t *rpc);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

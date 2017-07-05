@@ -500,7 +500,7 @@ ds_pool_hdl_put(struct ds_pool_hdl *hdl)
 	dhash_rec_decref(pool_hdl_hash, &hdl->sph_entry);
 }
 
-int
+void
 ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_connect_in     *in = crt_req_get(rpc);
@@ -560,7 +560,7 @@ out:
 	out->tco_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->tci_uuid), rpc, out->tco_rc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 int
@@ -573,7 +573,7 @@ ds_pool_tgt_connect_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
-int
+void
 ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_disconnect_in  *in = crt_req_get(rpc);
@@ -611,7 +611,7 @@ out:
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->tdi_uuid), rpc, out->tdo_rc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 int
@@ -644,7 +644,7 @@ update_child_map(void *data)
 	return 0;
 }
 
-int
+void
 ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_update_map_in  *in = crt_req_get(rpc);
@@ -725,7 +725,7 @@ out:
 	out->tuo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->tui_uuid), rpc, out->tuo_rc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 int

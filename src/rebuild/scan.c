@@ -721,7 +721,7 @@ out_map:
 }
 
 /* Scan the local target and generate rebuild object list */
-int
+void
 ds_rebuild_scan_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in		*rsi;
@@ -818,6 +818,4 @@ out:
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: %d\n", rc);
-
-	return rc;
 }

@@ -105,9 +105,9 @@ void rdb_get(struct rdb *db);
 void rdb_put(struct rdb *db);
 struct rdb *rdb_lookup(const uuid_t uuid);
 
-int rdb_start_handler(crt_rpc_t *rpc);
+void rdb_start_handler(crt_rpc_t *rpc);
 int rdb_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
-int rdb_stop_handler(crt_rpc_t *rpc);
+void rdb_stop_handler(crt_rpc_t *rpc);
 int rdb_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
 
 /* rdb_raft.c *****************************************************************/
@@ -124,8 +124,8 @@ int rdb_raft_verify_leadership(struct rdb *db);
 int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,
 			  void *result);
 int rdb_raft_wait_applied(struct rdb *db, uint64_t index);
-int rdb_requestvote_handler(crt_rpc_t *rpc);
-int rdb_appendentries_handler(crt_rpc_t *rpc);
+void rdb_requestvote_handler(crt_rpc_t *rpc);
+void rdb_appendentries_handler(crt_rpc_t *rpc);
 void rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc);
 void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
 

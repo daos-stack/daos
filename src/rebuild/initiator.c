@@ -712,7 +712,7 @@ ds_rebuild_obj_hdl_get(uuid_t pool_uuid, daos_handle_t *hdl)
 }
 
 /* Got the object list from scanner and rebuild the objects */
-int
+void
 ds_rebuild_obj_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_tls	*tls;
@@ -813,5 +813,5 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 out:
 	rebuild_out = crt_reply_get(rpc);
 	rebuild_out->ro_status = rc;
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }

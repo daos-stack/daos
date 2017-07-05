@@ -1145,7 +1145,7 @@ set_rsvc_hint(struct rdb *db, struct cont_op_out *out)
 }
 
 /* Look up the pool handle and the matching container service. */
-int
+void
 ds_cont_op_handler(crt_rpc_t *rpc)
 {
 	struct cont_op_in      *in = crt_req_get(rpc);
@@ -1187,7 +1187,9 @@ out_pool_hdl:
 	ds_pool_hdl_put(pool_hdl);
 out:
 	out->co_rc = rc;
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
+
+	return;
 }
 
 /* iterate all of objects of the container. */

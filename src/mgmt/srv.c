@@ -56,7 +56,7 @@ static struct daos_rpc_handler ds_mgmt_handlers[] = {
 	}
 };
 
-int
+void
 ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 {
 	struct mgmt_svc_rip_in	*murderer;
@@ -66,7 +66,7 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 
 	murderer = crt_req_get(rpc);
 	if (murderer == NULL)
-		return -DER_PROTO;
+		return;
 
 	force = (murderer->rip_flags != 0);
 
@@ -89,8 +89,6 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	D_PRINT("Service rank %d is being killed by signal %d... farewell\n",
 		rank, sig);
 	kill(getpid(), sig);
-
-	return 0;
 }
 
 static int

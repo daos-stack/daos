@@ -1133,7 +1133,7 @@ rdb_raft_find_node(struct rdb *db, crt_rank_t rank)
 	}
 }
 
-int
+void
 rdb_requestvote_handler(crt_rpc_t *rpc)
 {
 	struct rdb_requestvote_in      *in = crt_req_get(rpc);
@@ -1168,10 +1168,9 @@ out:
 		D_ERROR(DF_UUID": failed to send REQUESTVOTE reply to rank %u: "
 			"%d\n", DP_UUID(in->rvi_op.ri_uuid), rpc->cr_ep.ep_rank,
 			rc);
-	return rc;
 }
 
-int
+void
 rdb_appendentries_handler(crt_rpc_t *rpc)
 {
 	struct rdb_appendentries_in    *in = crt_req_get(rpc);
@@ -1206,7 +1205,6 @@ out:
 		D_ERROR(DF_UUID": failed to send APPENDENTRIES reply to rank "
 			"%u: %d\n", DP_UUID(in->aei_op.ri_uuid),
 			rpc->cr_ep.ep_rank, rc);
-	return rc;
 }
 
 void

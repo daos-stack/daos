@@ -330,7 +330,7 @@ static struct rdb_cbs rdbt_rdb_cbs = {
 	.dc_step_down	= rdbt_step_down
 };
 
-static int
+static void
 rdbt_init_handler(crt_rpc_t *rpc)
 {
 	struct rdbt_init_in    *in = crt_req_get(rpc);
@@ -361,10 +361,10 @@ rdbt_init_handler(crt_rpc_t *rpc)
 	MUST(rdb_create(rdb_file_path, in->tii_uuid, 1 << 25, &ranks));
 	MUST(rdb_start(rdb_file_path, &rdbt_rdb_cbs, NULL /* arg */, &rdb_db));
 out:
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
-static int
+static void
 rdbt_fini_handler(crt_rpc_t *rpc)
 {
 	crt_rank_t rank;
@@ -374,10 +374,10 @@ rdbt_fini_handler(crt_rpc_t *rpc)
 	rdb_stop(rdb_db);
 	MUST(rdb_destroy(rdb_file_path));
 	D_FREE(rdb_file_path, strlen(rdb_file_path) + 1);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
-static int
+static void
 rdbt_test_handler(crt_rpc_t *rpc)
 {
 	struct rdbt_test_in    *in = crt_req_get(rpc);
@@ -390,7 +390,7 @@ rdbt_test_handler(crt_rpc_t *rpc)
 	rdbt_test_util();
 	rdbt_test_path();
 	rdbt_test_tx(in->tti_update);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 static struct daos_rpc_handler rdbt_handlers[] = {

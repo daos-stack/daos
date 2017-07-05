@@ -90,7 +90,7 @@ struct cont {
 /*
  * srv_container.c
  */
-int ds_cont_op_handler(crt_rpc_t *rpc);
+void ds_cont_op_handler(crt_rpc_t *rpc);
 int ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 			 crt_opcode_t opcode, crt_rpc_t **rpc);
 
@@ -124,22 +124,22 @@ int ds_cont_epoch_read_state(struct rdb_tx *tx, struct cont *cont,
 /*
  * srv_target.c
  */
-int ds_cont_tgt_destroy_handler(crt_rpc_t *rpc);
+void ds_cont_tgt_destroy_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				   void *priv);
-int ds_cont_tgt_open_handler(crt_rpc_t *rpc);
+void ds_cont_tgt_open_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_open_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				void *priv);
-int ds_cont_tgt_close_handler(crt_rpc_t *rpc);
+void ds_cont_tgt_close_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_close_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
-int ds_cont_tgt_query_handler(crt_rpc_t *rpc);
+void ds_cont_tgt_query_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				 void *priv);
-int ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc);
+void ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_epoch_discard_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 					 void *priv);
-int ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc);
+void ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc);
 int ds_cont_tgt_epoch_aggregate_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 					   void *priv);
 int ds_cont_cache_create(struct daos_lru_cache **cache);

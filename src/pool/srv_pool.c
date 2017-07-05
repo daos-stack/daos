@@ -1099,7 +1099,7 @@ pool_attr_read(struct rdb_tx *tx, const struct pool_svc *svc,
  * We use this RPC to not only create the pool metadata but also initialize the
  * pool/container service DB.
  */
-int
+void
 ds_pool_create_handler(crt_rpc_t *rpc)
 {
 	struct pool_create_in  *in = crt_req_get(rpc);
@@ -1212,7 +1212,7 @@ out:
 	out->pro_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pri_op.pi_uuid), rpc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 static int
@@ -1384,7 +1384,7 @@ out:
 	return rc;
 }
 
-int
+void
 ds_pool_connect_handler(crt_rpc_t *rpc)
 {
 	struct pool_connect_in	       *in = crt_req_get(rpc);
@@ -1526,7 +1526,7 @@ out:
 	out->pco_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 static int
@@ -1622,7 +1622,7 @@ out:
 	return rc;
 }
 
-int
+void
 ds_pool_disconnect_handler(crt_rpc_t *rpc)
 {
 	struct pool_disconnect_in      *pdi = crt_req_get(rpc);
@@ -1675,10 +1675,10 @@ out:
 	pdo->pdo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
-int
+void
 ds_pool_query_handler(crt_rpc_t *rpc)
 {
 	struct pool_query_in   *in = crt_req_get(rpc);
@@ -1749,7 +1749,7 @@ out:
 	out->pqo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 static int
@@ -1920,7 +1920,7 @@ ds_pool_tgt_exclude_out(uuid_t pool_uuid, daos_rank_list_t *tgts,
 				       tgts_out, NULL, NULL);
 }
 
-int
+void
 ds_pool_update_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_update_in	*in = crt_req_get(rpc);
@@ -1992,7 +1992,6 @@ out:
 			       in->pti_targets->rl_nr.num);
 		D_FREE_PTR(out->pto_targets);
 	}
-	return rc;
 }
 
 struct evict_iter_arg {
@@ -2070,7 +2069,7 @@ find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 	return 0;
 }
 
-int
+void
 ds_pool_evict_handler(crt_rpc_t *rpc)
 {
 	struct pool_evict_in   *in = crt_req_get(rpc);
@@ -2119,10 +2118,10 @@ out:
 	out->pvo_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->pvi_op.pi_uuid), rpc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
-int
+void
 ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 {
 	struct pool_svc_stop_in	       *in = crt_req_get(rpc);
@@ -2148,7 +2147,7 @@ out:
 	out->pso_op.po_rc = rc;
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
 		DP_UUID(in->psi_op.pi_uuid), rpc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 /* iterate all of the container of the pool. */

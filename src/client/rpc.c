@@ -26,7 +26,7 @@
 #include <daos/scheduler.h>
 #include <daos/event.h>
 
-static int
+static void
 daos_rpc_cb(const struct crt_cb_info *cb_info)
 {
 	struct daos_task	*task = cb_info->cci_arg;
@@ -37,8 +37,6 @@ daos_rpc_cb(const struct crt_cb_info *cb_info)
 		;
 
 	daos_task_complete(task, rc);
-
-	return 0;
 }
 
 int

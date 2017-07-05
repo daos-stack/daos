@@ -327,7 +327,7 @@ out:
 /**
  * RPC handler for target creation
  */
-int
+void
 ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 {
 	struct mgmt_tgt_create_in	*tc_in;
@@ -369,7 +369,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	free(path);
 out:
 	tc_out->tc_rc = rc;
-	return crt_reply_send(tc_req);
+	crt_reply_send(tc_req);
 }
 
 static int
@@ -410,7 +410,7 @@ out:
 /**
  * RPC handler for target destroy
  */
-int
+void
 ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 {
 	struct mgmt_tgt_destroy_in	*td_in;
@@ -457,5 +457,5 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	free(path);
 out:
 	td_out->td_rc = rc;
-	return crt_reply_send(td_req);
+	crt_reply_send(td_req);
 }

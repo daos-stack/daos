@@ -56,36 +56,19 @@ struct daos_bld_iod_ctx {
 /* tier_ping.c */
 
 /* ping test handler, more of a self-teaching widget */
-int
-ds_tier_ping_handler(crt_rpc_t *rpc);
+void ds_tier_ping_handler(crt_rpc_t *rpc);
 
 
 /* Tier Management Functions
  * Used to setup and debug inter-tier connections
  */
-int
-ds_tier_hdlr_cross_conn(crt_rpc_t *rpc);
-
-int
-ds_tier_hdlr_upstream(crt_rpc_t *rpc);
-
-int
-ds_tier_hdlr_register_cold(crt_rpc_t *rpc);
-
-int
-ds_tier_hdlr_hdl_bcast(crt_rpc_t *rpc);
-
-
+void ds_tier_cross_conn_handler(crt_rpc_t *rpc);
+void ds_tier_upstream_handler(crt_rpc_t *rpc);
+void ds_tier_register_cold_handler(crt_rpc_t *rpc);
+void ds_tier_hdl_bcast_handler(crt_rpc_t *rpc);
 
 /*May be redundant with tier register cold, check with john*/
-int
-ds_tier_pool_relate(crt_rpc_t *rpc);
-
-int
-ds_tier_pool_unrelate(crt_rpc_t *rpc);
-
-int
-ds_tier_fetch_handler(crt_rpc_t *rpc);
+void ds_tier_fetch_handler(crt_rpc_t *rpc);
 
 typedef int (tier_enum_cbfn_t)(void *, vos_iter_entry_t *);
 

@@ -482,7 +482,7 @@ out:
 	return rc;
 }
 
-int
+void
 rdb_start_handler(crt_rpc_t *rpc)
 {
 	struct rdb_start_in    *in = crt_req_get(rpc);
@@ -531,7 +531,7 @@ out_path:
 	free(path);
 out:
 	out->dao_rc = (rc == 0 ? 0 : 1);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 int
@@ -596,7 +596,7 @@ out:
 	return rc;
 }
 
-int
+void
 rdb_stop_handler(crt_rpc_t *rpc)
 {
 	struct rdb_stop_in     *in = crt_req_get(rpc);
@@ -622,7 +622,7 @@ rdb_stop_handler(crt_rpc_t *rpc)
 
 out:
 	out->doo_rc = (rc == 0 ? 0 : 1);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 int

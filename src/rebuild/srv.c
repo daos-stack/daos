@@ -198,7 +198,7 @@ ds_rebuild_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	return 0;
 }
 
-int
+void
 ds_rebuild_tgt_query_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_tgt_query_out	*rtqo;
@@ -261,8 +261,6 @@ out:
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed %d\n", rc);
-
-	return rc;
 }
 
 int
@@ -796,7 +794,7 @@ ds_rebuild_fini_one(void *arg)
 	return 0;
 }
 
-int
+void
 ds_rebuild_tgt_fini_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_fini_tgt_in	*rfi = crt_req_get(rpc);
@@ -839,8 +837,6 @@ out:
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed %d\n", rc);
-
-	return rc;
 }
 
 /* Note: the rpc input/output parameters is defined in daos_rpc */

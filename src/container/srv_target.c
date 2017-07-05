@@ -356,7 +356,7 @@ out:
 	return rc;
 }
 
-int
+void
 ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 {
 	struct cont_tgt_destroy_in     *in = crt_req_get(rpc);
@@ -371,7 +371,7 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
 		rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 int
@@ -556,7 +556,7 @@ cont_open_one(void *vin)
 				  in->toi_uuid, in->toi_capas, NULL);
 }
 
-int
+void
 ds_cont_tgt_open_handler(crt_rpc_t *rpc)
 {
 	struct cont_tgt_open_in	       *in = crt_req_get(rpc);
@@ -573,7 +573,7 @@ ds_cont_tgt_open_handler(crt_rpc_t *rpc)
 	out->too_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
 		DP_UUID(in->toi_uuid), rpc, out->too_rc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 int
@@ -648,7 +648,7 @@ cont_close_one(void *vin)
 	return rc;
 }
 
-int
+void
 ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 {
 	struct cont_tgt_close_in       *in = crt_req_get(rpc);
@@ -674,7 +674,7 @@ out:
 	out->tco_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tco_rc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 int
@@ -753,7 +753,7 @@ tgt_query_coll_reduce(void *a_args, void *s_args)
 	*min_epoch = MIN(*min_epoch, stream->xcq_purged_epoch);
 }
 
-int
+void
 ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 {
 	int				rc;
@@ -794,7 +794,7 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tqo_rc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 int
@@ -839,7 +839,7 @@ cont_epoch_discard_one(void *vin)
 	return rc;
 }
 
-int
+void
 ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc)
 {
 	struct cont_tgt_epoch_discard_in       *in = crt_req_get(rpc);
@@ -861,7 +861,7 @@ out:
 	out->tio_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tio_rc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 int
@@ -1028,7 +1028,7 @@ pool_child:
 	ds_pool_child_put(pool_child);
 }
 
-int
+void
 ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 {
 	struct cont_tgt_epoch_aggregate_in	*in  = crt_req_get(rpc);
@@ -1051,7 +1051,7 @@ out:
 	out->tao_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tao_rc, rc);
-	return crt_reply_send(rpc);
+	crt_reply_send(rpc);
 }
 
 int

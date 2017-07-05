@@ -130,13 +130,12 @@ tier_hdlr_fetch_one(void *vin)
 	return rc;
 }
 
-int
+void
 ds_tier_fetch_handler(crt_rpc_t *rpc)
 {
 
 	struct tier_fetch_in  *in = crt_req_get(rpc);
 	struct tier_fetch_out *out = crt_reply_get(rpc);
-	int		       rc = 0;
 
 	D_DEBUG(DF_TIERS, "ds_tier_fetch_handler\n");
 	D_DEBUG(DF_TIERS, "\tpool:"DF_UUIDF"\n", in->tfi_pool);
@@ -144,8 +143,7 @@ ds_tier_fetch_handler(crt_rpc_t *rpc)
 	D_DEBUG(DF_TIERS, "\tepoch:"DF_U64"\n", in->tfi_ep);
 
 	out->tfo_ret = dss_collective(tier_hdlr_fetch_one, in);
-	rc = crt_reply_send(rpc);
-	return rc;
+	crt_reply_send(rpc);
 }
 
 

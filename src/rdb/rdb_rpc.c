@@ -335,7 +335,7 @@ rdb_recvd(void *arg)
 	D_DEBUG(DB_ANY, DF_DB": recvd stopping\n", DP_DB(db));
 }
 
-static int
+static void
 rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 {
 	struct rdb_raft_rpc    *rrpc = cb_info->cci_arg;
@@ -360,13 +360,12 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 		ABT_mutex_unlock(db->d_mutex);
 		rdb_raft_free_request(db, rrpc->drc_rpc);
 		rdb_free_raft_rpc(rrpc);
-		return rc;
+		return;
 	}
 	/* Move this RPC to db->d_replies for rdb_recvd(). */
 	daos_list_move_tail(&rrpc->drc_entry, &db->d_replies);
 	ABT_cond_broadcast(db->d_replies_cv);
 	ABT_mutex_unlock(db->d_mutex);
-	return 0;
 }
 
 int

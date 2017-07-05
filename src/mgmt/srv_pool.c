@@ -274,7 +274,7 @@ pc_input_identical(struct mgmt_pool_create_in *pc_in1,
 	return true;
 }
 
-static int
+static void
 pc_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*td_req;
@@ -327,10 +327,10 @@ pc_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 			 0 /* nbytes */);
 
 out:
-	return rc;
+	return;
 }
 
-static int
+static void
 tgt_create_cb(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*tc_req;
@@ -420,10 +420,10 @@ tgt_create_cb(const struct crt_cb_info *cb_info)
 			 0 /* nbytes */);
 
 out:
-	return rc;
+	return;
 }
 
-int
+void
 ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 {
 	struct mgmt_pool_create_in	*pc_in;
@@ -637,7 +637,6 @@ out:
 			"(pc_tgt_dev: %s).\n", rc, pc_in->pc_tgt_dev);
 	if (pc_inprog_alloc == true)
 		pc_inprog_destroy(pc_inprog);
-	return rc;
 }
 
 struct pd_inprogress {
@@ -780,7 +779,7 @@ pd_inprog_destroy(struct pd_inprogress *pd_inprog)
 	D_FREE_PTR(pd_inprog);
 }
 
-static int
+static void
 pd_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 {
 	crt_rpc_t			*td_req;
@@ -835,10 +834,10 @@ pd_tgt_destroy_cb(const struct crt_cb_info *cb_info)
 			 0 /* nbytes */);
 
 out:
-	return rc;
+	return;
 }
 
-int
+void
 ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 {
 	struct mgmt_pool_destroy_in	*pd_in;
@@ -933,5 +932,4 @@ out:
 		D_ERROR("crt_reply_send failed, rc: %d.\n", rc);
 	if (pd_inprog_alloc == true)
 		pd_inprog_destroy(pd_inprog);
-	return rc;
 }

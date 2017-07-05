@@ -56,13 +56,13 @@ pool_tls_get()
  */
 int ds_pool_svc_hash_init(void);
 void ds_pool_svc_hash_fini(void);
-int ds_pool_create_handler(crt_rpc_t *rpc);
-int ds_pool_connect_handler(crt_rpc_t *rpc);
-int ds_pool_disconnect_handler(crt_rpc_t *rpc);
-int ds_pool_query_handler(crt_rpc_t *rpc);
-int ds_pool_update_handler(crt_rpc_t *rpc);
-int ds_pool_evict_handler(crt_rpc_t *rpc);
-int ds_pool_svc_stop_handler(crt_rpc_t *rpc);
+void ds_pool_create_handler(crt_rpc_t *rpc);
+void ds_pool_connect_handler(crt_rpc_t *rpc);
+void ds_pool_disconnect_handler(crt_rpc_t *rpc);
+void ds_pool_query_handler(crt_rpc_t *rpc);
+void ds_pool_update_handler(crt_rpc_t *rpc);
+void ds_pool_evict_handler(crt_rpc_t *rpc);
+void ds_pool_svc_stop_handler(crt_rpc_t *rpc);
 
 /*
  * srv_target.c
@@ -71,13 +71,13 @@ int ds_pool_cache_init(void);
 void ds_pool_cache_fini(void);
 int ds_pool_hdl_hash_init(void);
 void ds_pool_hdl_hash_fini(void);
-int ds_pool_tgt_connect_handler(crt_rpc_t *rpc);
+void ds_pool_tgt_connect_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_connect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				   void *priv);
-int ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
+void ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
-int ds_pool_tgt_update_map_handler(crt_rpc_t *rpc);
+void ds_pool_tgt_update_map_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_update_map_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);
 void ds_pool_child_purge(struct pool_tls *tls);

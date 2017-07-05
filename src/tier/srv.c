@@ -58,16 +58,16 @@ static struct daos_rpc_handler tier_handlers[] = {
 		.dr_hdlr	= ds_tier_fetch_handler,
 	}, {
 		.dr_opc		= TIER_CROSS_CONN,
-		.dr_hdlr	= ds_tier_hdlr_cross_conn,
+		.dr_hdlr	= ds_tier_cross_conn_handler,
 	}, {
 		.dr_opc		= TIER_UPSTREAM_CONN,
-		.dr_hdlr	= ds_tier_hdlr_upstream,
+		.dr_hdlr	= ds_tier_upstream_handler,
 	}, {
 		.dr_opc		= TIER_REGISTER_COLD,
-		.dr_hdlr	= ds_tier_hdlr_register_cold
+		.dr_hdlr	= ds_tier_register_cold_handler,
 	}, {
 		.dr_opc		= TIER_BCAST_HDL,
-		.dr_hdlr	= ds_tier_hdlr_hdl_bcast
+		.dr_hdlr	= ds_tier_hdl_bcast_handler,
 	}, {
 		.dr_opc		= 0
 	}

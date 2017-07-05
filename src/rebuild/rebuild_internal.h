@@ -98,8 +98,8 @@ rebuild_tls_get()
 struct pool_map *rebuild_pool_map_get(void);
 void rebuild_pool_map_put(struct pool_map *map);
 
-int ds_rebuild_scan_handler(crt_rpc_t *rpc);
-int ds_rebuild_obj_handler(crt_rpc_t *rpc);
+void ds_rebuild_scan_handler(crt_rpc_t *rpc);
+void ds_rebuild_obj_handler(crt_rpc_t *rpc);
 
 int
 ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,

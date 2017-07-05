@@ -37,15 +37,15 @@
 #include "rpc.h"
 
 /** srv.c */
-int ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
+void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
 
 /** srv_pool.c */
-int ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
-int ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
+void ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req);
+void ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req);
 
 /** srv_target.c */
 int ds_mgmt_tgt_init(void);
 void ds_mgmt_tgt_fini(void);
-int ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
-int ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
+void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
+void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
 #endif /* __SRV_MGMT_INTERNAL_H__ */

@@ -204,9 +204,8 @@ no_cleanup_err:
 
 }
 
-
-int
-ds_tier_hdlr_cross_conn(crt_rpc_t *rpc)
+void
+ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 {
 	struct tier_cross_conn_in	*in = crt_req_get(rpc);
 	struct tier_cross_conn_out	*out = crt_reply_get(rpc);
@@ -352,17 +351,16 @@ out:
 	D_DEBUG(DF_TIERS, "Leaving ds_ct_hdlr_cross_conn...\n");
 	if (self_srv_grp != NULL)
 		D_FREE(self_srv_grp, buf_len);
-	return rc;
+	return;
 /* Used for when no connection is being set up
  * e.g. no colder tier, or already exists, return code already set in RPC
  */
 no_conn_out:
-	rc = crt_reply_send(rpc);
-	return rc;
+	crt_reply_send(rpc);
 }
 
-int
-ds_tier_hdlr_upstream(crt_rpc_t *rpc)
+void
+ds_tier_upstream_handler(crt_rpc_t *rpc)
 {
 	struct tier_upstream_in		*in = crt_req_get(rpc);
 	struct tier_upstream_out	*out = crt_reply_get(rpc);
@@ -440,16 +438,14 @@ ds_tier_hdlr_upstream(crt_rpc_t *rpc)
 
 out:
 	out->uo_ret = rc;
-	rc = crt_reply_send(rpc);
-	return rc;
+	crt_reply_send(rpc);
 }
 
-int
-ds_tier_hdlr_register_cold(crt_rpc_t *rpc)
+void
+ds_tier_register_cold_handler(crt_rpc_t *rpc)
 {
 	struct tier_register_cold_in	*in = crt_req_get(rpc);
 	struct tier_register_cold_out	*out = crt_reply_get(rpc);
-	int rc = 0;
 
 	/*Note assumes non-default name of colder group*/
 	if (colder_grp == NULL) {
@@ -464,13 +460,11 @@ ds_tier_hdlr_register_cold(crt_rpc_t *rpc)
 	out->rco_ret = 0;
 
 	D_INFO("Registered Colder Handle!\n");
-	rc = crt_reply_send(rpc);
-
-	return rc;
+	crt_reply_send(rpc);
 }
 
-int
-ds_tier_hdlr_hdl_bcast(crt_rpc_t *rpc) {
+void
+ds_tier_hdl_bcast_handler(crt_rpc_t *rpc) {
 
 	struct tier_hdl_bcast_out *out;
 	struct tier_hdl_bcast_in  *in;
@@ -493,6 +487,4 @@ ds_tier_hdlr_hdl_bcast(crt_rpc_t *rpc) {
 	out = crt_reply_get(rpc);
 	out->hbo_ret = 0;
 	crt_reply_send(rpc);
-
-	return 0;
 }

@@ -477,7 +477,7 @@ failed:
 	return rc;
 }
 
-int
+void
 ds_obj_rw_handler(crt_rpc_t *rpc)
 {
 	struct obj_rw_in	*orw;
@@ -577,7 +577,6 @@ out:
 			ds_cont_put(cont); /* -1 for rebuild container */
 		ds_cont_hdl_put(cont_hdl);
 	}
-	return rc;
 }
 
 static void
@@ -842,7 +841,7 @@ out:
 	return rc;
 }
 
-int
+void
 ds_obj_enum_handler(crt_rpc_t *rpc)
 {
 	struct ds_task_arg	task_arg;
@@ -954,5 +953,4 @@ out:
 		rc = task_arg.u.iter_arg.status;
 
 	ds_eu_complete(rpc, rc, task_arg.u.iter_arg.map_version);
-	return rc;
 }
