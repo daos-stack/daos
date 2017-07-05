@@ -1,6 +1,9 @@
 language: c
 dist: trusty
-compiler: clang
+sudo: false
+compiler:
+- clang
+- gcc
 before_install:
 - sudo apt-get -qq update
 - sudo apt-get install -y pandoc uuid-dev libcmocka-dev doxygen
