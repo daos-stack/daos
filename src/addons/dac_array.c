@@ -616,8 +616,10 @@ compute_dkey(struct dac_array *array, daos_off_t array_idx,
 	*num_records = ((grp_iter + 1) * array->block_size) - *record_i;
 
 	if (dkey_str) {
-		asprintf(dkey_str, "%zu_%zu", dkey_grp, dkey_num);
-		if (*dkey_str == NULL) {
+		int ret;
+
+		ret = asprintf(dkey_str, "%zu_%zu", dkey_grp, dkey_num);
+		if (ret < 0 || *dkey_str == NULL) {
 			D_ERROR("Failed memory allocation\n");
 			return -DER_NOMEM;
 		}
@@ -1046,7 +1048,7 @@ get_array_size_cb(struct daos_task *task, void *data)
 		uint32_t hi, lo;
 		int ret;
 
-		snprintf(props->key, args->kds[i].kd_key_len + 1, ptr);
+		snprintf(props->key, args->kds[i].kd_key_len + 1, "%s", ptr);
 #ifdef ARRAY_DEBUG
 		printf("%d: key %s len %d\n", i, props->key,
 		       (int)args->kds[i].kd_key_len);
@@ -1262,7 +1264,7 @@ adjust_array_size_cb(struct daos_task *task, void *data)
 		uint32_t hi, lo;
 		int ret;
 
-		snprintf(props->key, args->kds[j].kd_key_len + 1, ptr);
+		snprintf(props->key, args->kds[j].kd_key_len + 1, "%s", ptr);
 #ifdef ARRAY_DEBUG
 		printf("%d: key %s len %d\n", j, props->key,
 		       (int)args->kds[j].kd_key_len);
@@ -1331,8 +1333,8 @@ adjust_array_size_cb(struct daos_task *task, void *data)
 		params->next = NULL;
 		params->user_sgl_used = false;
 
-		asprintf(&params->dkey_str, "%u_%u", props->hi, props->lo);
-		if (params->dkey_str == NULL) {
+		rc = asprintf(&params->dkey_str, "%u_%u", props->hi, props->lo);
+		if (rc < 0 || params->dkey_str == NULL) {
 			D_ERROR("Failed memory allocation\n");
 			D_GOTO(err_out, -DER_NOMEM);
 		}
