@@ -211,8 +211,6 @@ struct crt_opc_info {
 };
 
 struct na_ofi_config {
-	/* flag of using consecutive port number for NA classes */
-	bool		noc_port_cons;
 	int32_t		noc_port;
 	char		*noc_interface;
 	/* IP addr str for the noc_interface */

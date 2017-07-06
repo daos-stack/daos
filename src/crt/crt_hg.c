@@ -301,23 +301,10 @@ crt_get_info_string(char **string)
 	};
 
 	if (crt_gdata.cg_na_plugin >= CRT_NA_OFI_OFFSET) {
-		if (crt_na_ofi_conf.noc_port_cons == NA_TRUE) {
-			if (crt_is_service()) {
-				port = crt_na_ofi_conf.noc_port;
-				crt_na_ofi_conf.noc_port++;
-				snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
-					 "%s://%s:%d", plugin_str,
-					 crt_na_ofi_conf.noc_ip_str, port);
-			} else {
-				snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
-					 "%s://%s", plugin_str,
-					 crt_na_ofi_conf.noc_ip_str);
-			}
-		} else {
-			snprintf(info_string, CRT_ADDR_STR_MAX_LEN,
-				 "%s://%s", plugin_str,
-				 crt_na_ofi_conf.noc_ip_str);
-		}
+		port = crt_na_ofi_conf.noc_port;
+		crt_na_ofi_conf.noc_port++;
+		snprintf(info_string, CRT_ADDR_STR_MAX_LEN, "%s://%s:%d",
+			 plugin_str, crt_na_ofi_conf.noc_ip_str, port);
 	}
 
 	*string = info_string;

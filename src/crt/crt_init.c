@@ -47,132 +47,6 @@ static pthread_once_t gdata_init_once = PTHREAD_ONCE_INIT;
 static volatile int   gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 
-/* internally generate a physical address string */
-int
-crt_gen_bmi_phyaddr(crt_phy_addr_t *phy_addr)
-{
-	int			socketfd;
-	struct sockaddr_in	tmp_socket;
-	char			*addrstr;
-	char			tmp_addrstr[CRT_ADDR_STR_MAX_LEN];
-	struct ifaddrs		*if_addrs = NULL;
-	struct ifaddrs		*ifa;
-	void			*tmp_ptr;
-	char			ip_str[INET_ADDRSTRLEN];
-	const char		*ip_str_p = NULL;
-	socklen_t		slen = sizeof(struct sockaddr);
-	int			rc;
-
-	C_ASSERT(phy_addr != NULL);
-
-	/*
-	 * step 1 - get the IP address (cannot get it through socket, always get
-	 * 0.0.0.0 by inet_ntoa(tmp_socket.sin_addr).)
-	 * Using the IP as listening address is better than using hostname
-	 * because:
-	 * 1) for the case there are multiple NICs on one host,
-	 * 2) mercury is much slow when listening on hostname (not sure why).
-	 */
-	rc = getifaddrs(&if_addrs);
-	if (rc != 0) {
-		C_ERROR("cannot getifaddrs, errno: %d(%s).\n",
-			errno, strerror(errno));
-		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
-	}
-	C_ASSERT(if_addrs != NULL);
-
-	/* TODO may from a config file to select one appropriate IP address */
-	for (ifa = if_addrs; ifa != NULL; ifa = ifa->ifa_next) {
-		if (ifa->ifa_addr == NULL)
-			continue;
-		memset(ip_str, 0, INET_ADDRSTRLEN);
-		if (ifa->ifa_addr->sa_family == AF_INET) {
-			/* check it is a valid IPv4 Address */
-			tmp_ptr =
-			&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
-			ip_str_p = inet_ntop(AF_INET, tmp_ptr, ip_str,
-					     INET_ADDRSTRLEN);
-			if (ip_str_p == NULL) {
-				C_ERROR("inet_ntop failed, errno: %d(%s).\n",
-					errno, strerror(errno));
-				freeifaddrs(if_addrs);
-				C_GOTO(out, rc = -CER_ADDRSTR_GEN);
-			}
-			if (strcmp(ip_str_p, "127.0.0.1") == 0) {
-				/* C_DEBUG("bypass 127.0.0.1.\n"); */
-				continue;
-			}
-			C_DEBUG("Get %s IPv4 Address %s\n",
-				ifa->ifa_name, ip_str);
-			break;
-		} else if (ifa->ifa_addr->sa_family == AF_INET6) {
-			/* check it is a valid IPv6 Address */
-			/*
-			 * tmp_ptr =
-			 * &((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr;
-			 * inet_ntop(AF_INET6, tmp_ptr, ip_str,
-			 *           INET6_ADDRSTRLEN);
-			 * C_DEBUG("Get %s IPv6 Address %s\n",
-			 *         ifa->ifa_name, ip_str);
-			 */
-		}
-	}
-	freeifaddrs(if_addrs);
-	if (ip_str_p == NULL) {
-		C_ERROR("no IP addr found.\n");
-		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
-	}
-
-	/* step 2 - get one available port number */
-	socketfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (socketfd == -1) {
-		C_ERROR("cannot create socket, errno: %d(%s).\n",
-			errno, strerror(errno));
-		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
-	}
-	tmp_socket.sin_family = AF_INET;
-	tmp_socket.sin_addr.s_addr = INADDR_ANY;
-	tmp_socket.sin_port = 0;
-
-	rc = bind(socketfd, (const struct sockaddr *)&tmp_socket,
-		  sizeof(tmp_socket));
-	if (rc != 0) {
-		C_ERROR("cannot bind socket, errno: %d(%s).\n",
-			errno, strerror(errno));
-		close(socketfd);
-		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
-	}
-
-	rc = getsockname(socketfd, (struct sockaddr *)&tmp_socket, &slen);
-	if (rc != 0) {
-		C_ERROR("cannot create getsockname, errno: %d(%s).\n",
-			errno, strerror(errno));
-		close(socketfd);
-		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
-	}
-	rc = close(socketfd);
-	if (rc != 0) {
-		C_ERROR("cannot close socket, errno: %d(%s).\n",
-			errno, strerror(errno));
-		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
-	}
-
-	snprintf(tmp_addrstr, CRT_ADDR_STR_MAX_LEN, "bmi+tcp://%s:%d", ip_str,
-		 ntohs(tmp_socket.sin_port));
-	addrstr = strndup(tmp_addrstr, CRT_ADDR_STR_MAX_LEN);
-	if (addrstr != NULL) {
-		C_DEBUG("generated phyaddr: %s.\n", addrstr);
-		*phy_addr = addrstr;
-	} else {
-		C_ERROR("strndup failed.\n");
-		rc = -CER_NOMEM;
-	}
-
-out:
-	return rc;
-}
-
-
 /* first step init - for initializing crt_gdata */
 static void data_init()
 {
@@ -559,6 +433,55 @@ static inline na_bool_t is_integer_str(char *str)
 	return NA_TRUE;
 }
 
+static inline int
+crt_get_port(int *port)
+{
+	int			socketfd;
+	struct sockaddr_in	tmp_socket;
+	socklen_t		slen = sizeof(struct sockaddr);
+	int			rc;
+
+	socketfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (socketfd == -1) {
+		C_ERROR("cannot create socket, errno: %d(%s).\n",
+			errno, strerror(errno));
+		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
+	}
+	tmp_socket.sin_family = AF_INET;
+	tmp_socket.sin_addr.s_addr = INADDR_ANY;
+	tmp_socket.sin_port = 0;
+
+	rc = bind(socketfd, (const struct sockaddr *)&tmp_socket,
+		  sizeof(tmp_socket));
+	if (rc != 0) {
+		C_ERROR("cannot bind socket, errno: %d(%s).\n",
+			errno, strerror(errno));
+		close(socketfd);
+		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
+	}
+
+	rc = getsockname(socketfd, (struct sockaddr *)&tmp_socket, &slen);
+	if (rc != 0) {
+		C_ERROR("cannot create getsockname, errno: %d(%s).\n",
+			errno, strerror(errno));
+		close(socketfd);
+		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
+	}
+	rc = close(socketfd);
+	if (rc != 0) {
+		C_ERROR("cannot close socket, errno: %d(%s).\n",
+			errno, strerror(errno));
+		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
+	}
+
+	C_ASSERT(port != NULL);
+	*port = ntohs(tmp_socket.sin_port);
+	C_DEBUG("get a port: %d.\n", *port);
+
+out:
+	return rc;
+}
+
 int crt_na_ofi_config_init(void)
 {
 	char *port_str;
@@ -632,20 +555,21 @@ int crt_na_ofi_config_init(void)
 		C_GOTO(out, rc = -CER_PROTO);
 	}
 
-	port_str = getenv("OFI_PORT");
-	if (port_str == NULL || strlen(port_str) == 0) {
-		crt_na_ofi_conf.noc_port_cons = NA_FALSE;
-		crt_na_ofi_conf.noc_port = 0;
+	rc = crt_get_port(&port);
+	if (rc != 0) {
+		C_ERROR("crt_get_port failed, rc: %d.\n", rc);
 		C_GOTO(out, rc);
 	}
-	if (is_integer_str(port_str) == NA_FALSE) {
-		C_ERROR("OFI_PORT %s invalid.", port_str);
-		crt_na_ofi_config_fini();
-		C_GOTO(out, rc = -CER_INVAL);
-	}
 
-	port = atoi(port_str);
-	crt_na_ofi_conf.noc_port_cons = true;
+	port_str = getenv("OFI_PORT");
+	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
+		if (!is_integer_str(port_str)) {
+			C_DEBUG("ignore invalid OFI_PORT %s.", port_str);
+		} else {
+			port = atoi(port_str);
+			C_DEBUG("OFI_PORT %d, use it as service port.\n", port);
+		}
+	}
 	crt_na_ofi_conf.noc_port = port;
 
 out:
@@ -658,6 +582,5 @@ void crt_na_ofi_config_fini(void)
 		free(crt_na_ofi_conf.noc_interface);
 		crt_na_ofi_conf.noc_interface = NULL;
 	}
-	crt_na_ofi_conf.noc_port_cons = NA_FALSE;
 	crt_na_ofi_conf.noc_port = 0;
 }
