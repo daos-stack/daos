@@ -1814,7 +1814,7 @@ out:
 static int
 ds_pool_update_internal(uuid_t pool_uuid, daos_rank_list_t *tgts,
 			unsigned int opc, daos_rank_list_t *tgts_out,
-			struct pool_op_out *pto_op,
+			struct pool_op_out *pto_op, bool *updated,
 			daos_rank_list_t **replicasp)
 {
 	struct pool_svc	       *svc;
@@ -1838,10 +1838,16 @@ ds_pool_update_internal(uuid_t pool_uuid, daos_rank_list_t *tgts,
 		D_GOTO(out_svc, rc);
 	ABT_rwlock_wrlock(svc->ps_lock);
 
+	if (replicasp != NULL) {
+		rc = rdb_get_ranks(svc->ps_db, replicasp);
+		if (rc != 0)
+			D_GOTO(out_map_version, rc);
+	}
+
 	/* Create a temporary pool map based on the last committed version. */
 	rc = read_map(&tx, &svc->ps_root, &map);
 	if (rc != 0)
-		D_GOTO(out_map_version, rc);
+		D_GOTO(out_replicas, rc);
 
 	/*
 	 * Attempt to modify the temporary pool map and save its versions
@@ -1852,11 +1858,15 @@ ds_pool_update_internal(uuid_t pool_uuid, daos_rank_list_t *tgts,
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
+
 	D_DEBUG(DF_DSMS, DF_UUID": version=%u->%u failed=%d\n",
 		DP_UUID(svc->ps_uuid), map_version_before, map_version,
 		tgts_out == NULL ? -1 : tgts_out->rl_nr.num_out);
-	if (map_version == map_version_before)
+	if (map_version == map_version_before) {
+		if (updated)
+			*updated = false;
 		D_GOTO(out_map, rc = 0);
+	}
 
 	/* Write the new pool map. */
 	rc = pool_buf_extract(map, &map_buf);
@@ -1866,12 +1876,6 @@ ds_pool_update_internal(uuid_t pool_uuid, daos_rank_list_t *tgts,
 	pool_buf_free(map_buf);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
-
-	if (replicasp != NULL) {
-		rc = rdb_get_ranks(svc->ps_db, replicasp);
-		if (rc != 0)
-			D_GOTO(out_map, rc);
-	}
 
 	rc = rdb_tx_commit(&tx);
 	if (rc != 0) {
@@ -1891,14 +1895,19 @@ ds_pool_update_internal(uuid_t pool_uuid, daos_rank_list_t *tgts,
 	svc->ps_pool->sp_map_version = map_version;
 	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 
+	if (updated)
+		*updated = true;
 	/*
 	 * Ignore the return code as we are more about committing a pool map
 	 * change than its dissemination.
 	 */
 	pool_update_map_bcast(info->dmi_ctx, svc, map_version, NULL, NULL);
-
+	D_EXIT;
 out_map:
 	pool_map_decref(map);
+out_replicas:
+	if (rc)
+		daos_rank_list_free(*replicasp);
 out_map_version:
 	if (pto_op != NULL)
 		pto_op->po_map_version =
@@ -1917,7 +1926,7 @@ ds_pool_tgt_exclude_out(uuid_t pool_uuid, daos_rank_list_t *tgts,
 			daos_rank_list_t *tgts_out)
 {
 	return ds_pool_update_internal(pool_uuid, tgts, POOL_EXCLUDE_OUT,
-				       tgts_out, NULL, NULL);
+				       tgts_out, NULL, NULL, NULL);
 }
 
 void
@@ -1926,6 +1935,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	struct pool_tgt_update_in	*in = crt_req_get(rpc);
 	struct pool_tgt_update_out	*out = crt_reply_get(rpc);
 	daos_rank_list_t		*replicas = NULL;
+	bool				updated;
 	int				rc;
 
 	if (in->pti_targets == NULL || in->pti_targets->rl_nr.num == 0 ||
@@ -1949,7 +1959,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 
 	rc = ds_pool_update_internal(in->pti_op.pi_uuid, in->pti_targets,
 				     opc_get(rpc->cr_opc), out->pto_targets,
-				     &out->pto_op, &replicas);
+				     &out->pto_op, &updated, &replicas);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1962,7 +1972,8 @@ out:
 		DP_UUID(in->pti_op.pi_uuid), rpc, rc);
 	rc = crt_reply_send(rpc);
 
-	if (out->pto_op.po_rc == 0 && opc_get(rpc->cr_opc) == POOL_EXCLUDE) {
+	if (out->pto_op.po_rc == 0 && updated &&
+	    opc_get(rpc->cr_opc) == POOL_EXCLUDE) {
 		char	*env;
 		int	 ret;
 
