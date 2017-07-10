@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -67,6 +67,7 @@
 
 #ifndef _CLOG_H_
 #define _CLOG_H_
+#include <stdarg.h>
 
 /* clog open flavor */
 #define CLOG_FLV_LOGPID	(1 << 0)	/* include pid in log tag */
@@ -114,6 +115,18 @@ struct crt_log_xstate {
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
+/**
+ * crt_vlog: clog a message using stdarg list
+ *
+ * A log line cannot be larger than CLOG_TBSZ (4096), if it is larger it will be
+ * (silently) truncated].
+ *
+ * \param flags [IN]		facility+level+misc flags
+ * \param fmt [IN]		printf-style format string
+ * @param ap [IN]		stdarg list
+ */
+void crt_vclog(int flags, const char *fmt, va_list ap);
 
 /**
  * crt_log: clog a message.

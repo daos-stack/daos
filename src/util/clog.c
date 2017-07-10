@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -72,7 +72,6 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <netdb.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -139,7 +138,6 @@ static const char *default_fac0name = "CLOG";
 
 static const char *clog_pristr(int);
 static int clog_setnfac(int);
-static void vclog(int, const char *, va_list);
 
 /* static arrays for converting between pri's and strings */
 static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
@@ -304,17 +302,17 @@ static void clog_cleanout(void)
 }
 
 /**
- * vclog: core log function, front-ended by crt_tog
+ * crt_vclog: core log function, front-ended by crt_log
  * we vsnprintf the message into a holding buffer to format it.  then we
  * send it to all target output logs.  the holding buffer is set to
  * CLOG_TBSIZ, if the message is too long it will be silently truncated.
- * caller should not hold clog_lock, vclog will grab it as needed.
+ * caller should not hold clog_lock, crt_vclog will grab it as needed.
  *
  * @param flags the flags (mainly fac+pri) for this log message
  * @param fmt the printf(3) format to use
  * @param ap the stdargs va_list to use for the printf format
  */
-static void vclog(int flags, const char *fmt, va_list ap)
+void crt_vclog(int flags, const char *fmt, va_list ap)
 {
 #define CLOG_TBSIZ    1024	/* bigger than any line should be */
 	int fac, lvl, msk;
@@ -732,8 +730,6 @@ int crt_log_setlogmask(int facility, int mask)
 			(mask & CLOG_PRIMASK);
 	}
 	clog_unlock();
-	crt_log(CLOG_DBG, "new prino set to fac %d: %x, oldmask=%x\n\n",
-			facility, (mask & CLOG_PRIMASK), oldmask);
 
 	return oldmask;
 }
@@ -920,6 +916,6 @@ void crt_log(int flags, const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	vclog(flags, fmt, ap);
+	crt_vclog(flags, fmt, ap);
 	va_end(ap);
 }
