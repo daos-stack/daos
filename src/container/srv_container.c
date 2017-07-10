@@ -279,8 +279,9 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 	/*
-	 * Target-side creations (i.e., vos_co_create() calls) are deferred to
-	 * the time when the container is first successfully opened.
+	 * Target-side creations (i.e., vos_cont_create() calls) are
+	 * deferred to the time when the container is first successfully
+	 * opened.
 	 */
 
 	/* Create the container attribute KVS under the container KVS. */
@@ -1202,7 +1203,7 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 	daos_handle_t	 coh;
 	int		 rc;
 
-	rc = vos_co_open(ph, co_uuid, &coh);
+	rc = vos_cont_open(ph, co_uuid, &coh);
 	if (rc != 0) {
 		D_ERROR("Open container "DF_UUID" failed: rc = %d\n",
 			DP_UUID(co_uuid), rc);
@@ -1256,6 +1257,6 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 iter_fini:
 	vos_iter_finish(iter_h);
 close:
-	vos_co_close(coh);
+	vos_cont_close(coh);
 	return rc;
 }

@@ -642,19 +642,19 @@ io_oi_test(void **state)
 {
 	struct io_test_args	*arg = *state;
 	struct vos_obj		*obj[2];
-	struct vc_hdl		*co_hdl;
+	struct vos_container	*cont;
 	daos_unit_oid_t		oid;
 	int			rc = 0;
 
 	oid = gen_oid();
 
-	co_hdl = vos_hdl2co(arg->ctx.tc_co_hdl);
-	assert_ptr_not_equal(co_hdl, NULL);
+	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	assert_ptr_not_equal(cont, NULL);
 
-	rc = vos_oi_find_alloc(co_hdl, oid, &obj[0]);
+	rc = vos_oi_find_alloc(cont, oid, &obj[0]);
 	assert_int_equal(rc, 0);
 
-	rc = vos_oi_find_alloc(co_hdl, oid, &obj[1]);
+	rc = vos_oi_find_alloc(cont, oid, &obj[1]);
 	assert_int_equal(rc, 0);
 }
 
@@ -1218,7 +1218,7 @@ pool_cont_same_uuid(void **state)
 	ret = vos_pool_open(fname, pool_uuid, &poh);
 	assert_int_equal(ret, 0);
 
-	ret = vos_co_create(poh, co_uuid);
+	ret = vos_cont_create(poh, co_uuid);
 	assert_int_equal(ret, 0);
 
 	ret = vos_pool_close(poh);
@@ -1228,7 +1228,7 @@ pool_cont_same_uuid(void **state)
 	ret = vos_pool_open(fname, pool_uuid, &poh);
 	assert_int_equal(ret, 0);
 
-	ret = vos_co_open(poh, co_uuid, &coh);
+	ret = vos_cont_open(poh, co_uuid, &coh);
 	assert_int_equal(ret, 0);
 
 	dts_key_gen(&dkey_buf[0], UPDATE_DKEY_SIZE, UPDATE_DKEY);
@@ -1253,10 +1253,10 @@ pool_cont_same_uuid(void **state)
 	ret = vos_obj_update(coh, oid, 10, cookie, &dkey, 1, &iod, &sgl);
 	assert_int_equal(ret, 0);
 
-	ret = vos_co_close(coh);
+	ret = vos_cont_close(coh);
 	assert_int_equal(ret, 0);
 
-	ret = vos_co_destroy(poh, co_uuid);
+	ret = vos_cont_destroy(poh, co_uuid);
 	assert_int_equal(ret, 0);
 
 	ret = vos_pool_close(poh);
@@ -1348,13 +1348,14 @@ io_simple_one_key_cross_container(void **state)
 
 	/* Creating an additional container */
 	uuid_generate_time_safe(arg->addn_co_uuid);
-	rc = vos_co_create(arg->ctx.tc_po_hdl, arg->addn_co_uuid);
+	rc = vos_cont_create(arg->ctx.tc_po_hdl, arg->addn_co_uuid);
 	if (rc) {
 		print_error("vos container creation error: %d\n", rc);
 		return;
 	}
 
-	rc = vos_co_open(arg->ctx.tc_po_hdl, arg->addn_co_uuid, &arg->addn_co);
+	rc = vos_cont_open(arg->ctx.tc_po_hdl, arg->addn_co_uuid,
+			   &arg->addn_co);
 	if (rc) {
 		print_error("vos container open error: %d\n", rc);
 		goto failed;
@@ -1430,10 +1431,10 @@ io_simple_one_key_cross_container(void **state)
 	assert_memory_not_equal(update_buf, fetch_buf, UPDATE_BUF_SIZE);
 
 failed:
-	rc = vos_co_close(arg->addn_co);
+	rc = vos_cont_close(arg->addn_co);
 	assert_int_equal(rc, 0);
 
-	rc = vos_co_destroy(arg->ctx.tc_po_hdl, arg->addn_co_uuid);
+	rc = vos_cont_destroy(arg->ctx.tc_po_hdl, arg->addn_co_uuid);
 	assert_int_equal(rc, 0);
 }
 
@@ -1519,18 +1520,18 @@ oid_iter_test_setup(void **state)
 {
 	struct io_test_args	*arg = *state;
 	struct vos_obj		*lobj;
-	struct vc_hdl		*co_hdl;
+	struct vos_container	*cont;
 	daos_unit_oid_t		 oids[VTS_IO_OIDS];
 	int			 i;
 	int			 rc;
 
-	co_hdl = vos_hdl2co(arg->ctx.tc_co_hdl);
-	assert_ptr_not_equal(co_hdl, NULL);
+	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
+	assert_ptr_not_equal(cont, NULL);
 
 	for (i = 0; i < VTS_IO_OIDS; i++) {
 		oids[i] = gen_oid();
 
-		rc = vos_oi_find_alloc(co_hdl, oids[i], &lobj);
+		rc = vos_oi_find_alloc(cont, oids[i], &lobj);
 		assert_int_equal(rc, 0);
 	}
 	return 0;

@@ -34,15 +34,14 @@
 #include <daos_types.h>
 #include <vos_internal.h>
 #include <vos_obj.h>
-#include <vos_hhash.h>
 
 /** iterator for oid */
 struct vos_oid_iter {
 	struct vos_iterator	oit_iter;
 	/* Handle of iterator */
 	daos_handle_t		oit_hdl;
-	/* Container handle */
-	struct vc_hdl		*oit_chdl;
+	/* Reference to the container */
+	struct vos_container	*oit_cont;
 };
 
 static int
@@ -62,20 +61,20 @@ static int
 vo_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	     daos_iov_t *val_iov, struct btr_record *rec)
 {
-	TMMID(struct vos_obj)	vo_rec_mmid;
 	struct vos_obj		*vo_rec;
+	TMMID(struct vos_obj)	 obj_mmid;
 
 	/* Allocate a PMEM value of type vos_obj */
-	vo_rec_mmid = umem_znew_typed(&tins->ti_umm, struct vos_obj);
+	obj_mmid = umem_znew_typed(&tins->ti_umm, struct vos_obj);
 
-	if (TMMID_IS_NULL(vo_rec_mmid))
+	if (TMMID_IS_NULL(obj_mmid))
 		return -DER_NOMEM;
 
-	vo_rec = umem_id2ptr_typed(&tins->ti_umm, vo_rec_mmid);
+	vo_rec = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
 	D_ASSERT(key_iov->iov_len == sizeof(daos_unit_oid_t));
 	vo_rec->vo_oid = *(daos_unit_oid_t *)(key_iov->iov_buf);
 	daos_iov_set(val_iov, vo_rec, sizeof(struct vos_obj));
-	rec->rec_mmid = umem_id_t2u(vo_rec_mmid);
+	rec->rec_mmid = umem_id_t2u(obj_mmid);
 	return 0;
 }
 
@@ -83,12 +82,12 @@ static int
 vo_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
-	TMMID(struct vos_obj)	vo_rec_mmid;
 	struct vos_obj		*vobj;
-	int			rc = 0;
+	TMMID(struct vos_obj)	 obj_mmid;
+	int			 rc = 0;
 
-	vo_rec_mmid = umem_id_u2t(rec->rec_mmid, struct vos_obj);
-	vobj = umem_id2ptr_typed(&tins->ti_umm, vo_rec_mmid);
+	obj_mmid = umem_id_u2t(rec->rec_mmid, struct vos_obj);
+	vobj = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
 
 	/** Free the KV tree within this object */
 	if (vobj->vo_tree.tr_class != 0) {
@@ -102,7 +101,7 @@ vo_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		else
 			dbtree_destroy(toh);
 	}
-	umem_free_typed(umm, vo_rec_mmid);
+	umem_free_typed(umm, obj_mmid);
 	return rc;
 }
 
@@ -143,14 +142,14 @@ static btr_ops_t voi_ops = {
  * For testing obj index deletion
  */
 int
-vos_oi_find(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
+vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	    struct vos_obj **obj)
 {
 	int				rc = 0;
 	daos_iov_t			key_iov, val_iov;
 	struct vos_object_index		*obj_index = NULL;
 
-	obj_index = co_hdl->vc_obj_table;
+	obj_index = cont->vc_obj_table;
 	if (!obj_index) {
 		D_ERROR("Object index cannot be empty\n");
 		return -DER_NONEXIST;
@@ -159,7 +158,7 @@ vos_oi_find(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 	daos_iov_set(&key_iov, &oid, sizeof(daos_unit_oid_t));
 	daos_iov_set(&val_iov, NULL, 0);
 
-	rc = dbtree_lookup(co_hdl->vc_btr_hdl, &key_iov, &val_iov);
+	rc = dbtree_lookup(cont->vc_btr_hdl, &key_iov, &val_iov);
 	if (rc == 0)
 		*obj = val_iov.iov_buf;
 
@@ -171,7 +170,7 @@ vos_oi_find(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
  * Find the object by OID and return it, or create an object for the oid.
  */
 int
-vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
+vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		  struct vos_obj **obj)
 {
 	int				rc = 0;
@@ -183,7 +182,7 @@ vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 	daos_iov_set(&key_iov, &oid, sizeof(daos_unit_oid_t));
 	daos_iov_set(&val_iov, NULL, 0);
 
-	rc = vos_oi_find(co_hdl, oid, obj);
+	rc = vos_oi_find(cont, oid, obj);
 	if (rc == 0)
 		return rc;
 
@@ -191,7 +190,7 @@ vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
 	D_DEBUG(DF_VOS1, "Object"DF_UOID" not found adding it..\n",
 		DP_UOID(oid));
 
-	rc = dbtree_update(co_hdl->vc_btr_hdl, &key_iov, &val_iov);
+	rc = dbtree_update(cont->vc_btr_hdl, &key_iov, &val_iov);
 	if (rc) {
 		D_ERROR("Failed to update Key for Object index\n");
 		return rc;
@@ -230,8 +229,8 @@ vos_oid_iter_fini(struct vos_iterator *iter)
 			D_ERROR("oid_iter_fini failed:%d\n", rc);
 	}
 
-	if (oid_iter->oit_chdl != NULL)
-		vos_co_putref_handle(oid_iter->oit_chdl);
+	if (oid_iter->oit_cont != NULL)
+		vos_cont_decref(oid_iter->oit_cont);
 
 	D_FREE_PTR(oid_iter);
 	return rc;
@@ -242,7 +241,7 @@ vos_oid_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		  struct vos_iterator **iter_pp)
 {
 	struct vos_oid_iter	*oid_iter = NULL;
-	struct vc_hdl		*co_hdl = NULL;
+	struct vos_container	*cont = NULL;
 	int			rc = 0;
 
 	if (type != VOS_ITER_OBJ) {
@@ -251,18 +250,18 @@ vos_oid_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		return -DER_INVAL;
 	}
 
-	co_hdl = vos_hdl2co(param->ip_hdl);
-	if (co_hdl == NULL)
+	cont = vos_hdl2cont(param->ip_hdl);
+	if (cont == NULL)
 		return -DER_INVAL;
 
 	D_ALLOC_PTR(oid_iter);
 	if (oid_iter == NULL)
 		return -DER_NOMEM;
 
-	oid_iter->oit_chdl = co_hdl;
-	vos_co_addref_handle(co_hdl);
+	oid_iter->oit_cont = cont;
+	vos_cont_addref(cont);
 
-	rc = dbtree_iter_prepare(co_hdl->vc_btr_hdl, 0, &oid_iter->oit_hdl);
+	rc = dbtree_iter_prepare(cont->vc_btr_hdl, 0, &oid_iter->oit_hdl);
 	if (rc)
 		D_GOTO(exit, rc);
 
@@ -329,7 +328,7 @@ vos_oid_iter_delete(struct vos_iterator *iter, void *args)
 
 	D_DEBUG(DF_VOS2, "oid-iter delete callback\n");
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
-	pop = vos_co2pop(oiter->oit_chdl);
+	pop = vos_cont2pop(oiter->oit_cont);
 
 	TX_BEGIN(pop) {
 		rc = dbtree_iter_delete(oiter->oit_hdl, args);

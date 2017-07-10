@@ -32,7 +32,6 @@
 #include <daos/rpc.h>
 #include <daos_srv/daos_server.h>
 #include <vos_internal.h>
-#include <vos_hhash.h>
 #include <daos/lru.h>
 
 static pthread_mutex_t	mutex = PTHREAD_MUTEX_INITIALIZER;

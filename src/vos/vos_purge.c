@@ -843,10 +843,10 @@ vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
 	int			rc = 0;
 	struct purge_context	pcx;
 	vos_iter_entry_t	oid_entry;
-	vos_co_info_t		vc_info;
+	vos_cont_info_t		vc_info;
 
 	if (daos_unit_oid_is_null(oid)) {
-		vos_co_set_purged_epoch(coh, epr->epr_hi);
+		vos_cont_set_purged_epoch(coh, epr->epr_hi);
 		*finished = true;
 		D_DEBUG(DB_EPC, "Setting the epoch in container\n");
 		return 0;
@@ -873,7 +873,7 @@ vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
 		return 0;
 	}
 
-	rc = vos_co_query(coh, &vc_info);
+	rc = vos_cont_query(coh, &vc_info);
 	if (rc != 0)
 		return rc;
 

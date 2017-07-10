@@ -30,7 +30,6 @@
 #define DD_SUBSYS	DD_FAC(tests)
 
 #include <vts_io.h>
-#include <vos_hhash.h>
 
 /**
  * Stores the last key and can be used for
@@ -217,14 +216,14 @@ io_simple_discard_setup(void **state)
 }
 
 static inline int
-io_create_object(struct vc_hdl *co_hdl)
+io_create_object(struct vos_container *cont)
 {
 	int			rc = 0;
 	daos_unit_oid_t		oid;
 	struct vos_obj		*obj;
 
 	oid = dts_unit_oid_gen(0, 0);
-	rc = vos_oi_find_alloc(co_hdl, oid, &obj);
+	rc = vos_oi_find_alloc(cont, oid, &obj);
 	return rc;
 }
 
@@ -255,9 +254,9 @@ io_simple_one_key_discard(void **state)
 
 	arg->ta_flags = 0;
 	/* create two objects. these need to be ignored */
-	rc = io_create_object(vos_hdl2co(arg->ctx.tc_co_hdl));
+	rc = io_create_object(vos_hdl2cont(arg->ctx.tc_co_hdl));
 	assert_int_equal(rc, 0);
-	io_create_object(vos_hdl2co(arg->ctx.tc_co_hdl));
+	io_create_object(vos_hdl2cont(arg->ctx.tc_co_hdl));
 	assert_int_equal(rc, 0);
 
 	cookie = gen_rand_cookie();
@@ -570,8 +569,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	/** Check if the object does not exist? */
 	struct vos_obj		*obj_res = NULL;
 
-	rc = vos_oi_find(vos_hdl2co(arg->ctx.tc_co_hdl),
-			 last_oid, &obj_res);
+	rc = vos_oi_find(vos_hdl2cont(arg->ctx.tc_co_hdl), last_oid, &obj_res);
 	assert_int_equal(rc, -DER_NONEXIST);
 	assert_ptr_equal(obj_res, NULL);
 
@@ -1278,7 +1276,7 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 	assert_true(finish);
 
 	daos_unit_oid_t		oid_tmp;
-	vos_co_info_t		info;
+	vos_cont_info_t		info;
 	daos_handle_t		coh;
 
 	memset(&oid_tmp, 0, sizeof(daos_unit_oid_t));
@@ -1286,16 +1284,16 @@ io_multi_recx_overwrite_test(struct io_test_args *arg, int credits)
 				 &range, &l_credits, &vp_anchor, &finish);
 	assert_int_equal(rc, 0);
 
-	rc = vos_co_query(arg->ctx.tc_co_hdl, &info);
+	rc = vos_cont_query(arg->ctx.tc_co_hdl, &info);
 	assert_true(range.epr_hi == info.pci_purged_epoch);
 
-	rc = vos_co_open(arg->ctx.tc_po_hdl, arg->ctx.tc_co_uuid, &coh);
+	rc = vos_cont_open(arg->ctx.tc_po_hdl, arg->ctx.tc_co_uuid, &coh);
 	assert_int_equal(rc, 0);
 
-	rc = vos_co_query(coh, &info);
+	rc = vos_cont_query(coh, &info);
 	assert_true(range.epr_hi == info.pci_purged_epoch);
 
-	rc = vos_co_close(coh);
+	rc = vos_cont_close(coh);
 	assert_int_equal(rc, 0);
 
 	/** Verifying aggregation */

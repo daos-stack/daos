@@ -34,7 +34,6 @@
 #include <daos_types.h>
 #include <vos_internal.h>
 #include <vos_obj.h>
-#include <vos_hhash.h>
 
 #define COOKIE_BTREE_ORDER 20
 

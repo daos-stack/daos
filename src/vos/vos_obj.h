@@ -58,7 +58,7 @@ struct vos_object_index {
 struct vos_obj_ref;
 
 /* Internal container handle structure */
-struct vc_hdl;
+struct vos_container;
 
 /**
  * Find an object in the cache \a occ and take its reference. If the object is
@@ -80,8 +80,7 @@ vos_obj_ref_hold(struct daos_lru_cache *occ, daos_handle_t coh,
  * \param oref	[IN]	Reference to be released.
  */
 void
-vos_obj_ref_release(struct daos_lru_cache *occ,
-		    struct vos_obj_ref *oref);
+vos_obj_ref_release(struct daos_lru_cache *occ, struct vos_obj_ref *oref);
 
 /**
  * Varify if the object reference is still valid, and refresh it if it's
@@ -103,8 +102,7 @@ bool vos_obj_ref_evicted(struct vos_obj_ref *oref);
  * \param occ_p		[OUT]	Newly created cache.
  */
 int
-vos_obj_cache_create(int32_t cache_size,
-		     struct daos_lru_cache **occ_p);
+vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ_p);
 
 /**
  * Destroy an object cache, and release all cached object references.
@@ -115,7 +113,8 @@ void
 vos_obj_cache_destroy(struct daos_lru_cache *occ);
 
 /** evict cached objects for the specified container */
-void vos_obj_cache_evict(struct daos_lru_cache *occ, struct vc_hdl *cont);
+void vos_obj_cache_evict(struct daos_lru_cache *occ,
+			 struct vos_container *cont);
 
 /**
  * Return object cache for the current thread.
@@ -157,7 +156,7 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  *			failure
  */
 int
-vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
+vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		  struct vos_obj **obj);
 
 /**
@@ -173,7 +172,7 @@ vos_oi_find_alloc(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
  *			failure
  */
 int
-vos_oi_find(struct vc_hdl *co_hdl, daos_unit_oid_t oid,
+vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	    struct vos_obj **obj);
 
 #endif

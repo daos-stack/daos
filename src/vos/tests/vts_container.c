@@ -63,31 +63,32 @@ co_ops_run(void **state)
 {
 	int			ret = 0, i, j;
 	struct vc_test_args	*arg = *state;
-	vos_co_info_t		cinfo;
+	vos_cont_info_t		cinfo;
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
 		for (j = 0; j < arg->seq_cnt[i]; j++) {
 			switch (arg->ops_seq[i][j]) {
 			case CREAT:
 				uuid_generate(arg->uuid[i].uuid);
-				ret = vos_co_create(arg->poh,
+				ret = vos_cont_create(arg->poh,
 						    arg->uuid[i].uuid);
 				break;
 			case OPEN:
-				ret = vos_co_open(arg->poh, arg->uuid[i].uuid,
-						  &arg->coh[i]);
+				ret = vos_cont_open(arg->poh,
+						    arg->uuid[i].uuid,
+						    &arg->coh[i]);
 				break;
 			case CLOSE:
-				ret = vos_co_close(arg->coh[i]);
+				ret = vos_cont_close(arg->coh[i]);
 				break;
 			case QUERY:
-				ret = vos_co_query(arg->coh[i], &cinfo);
+				ret = vos_cont_query(arg->coh[i], &cinfo);
 				assert_int_equal(ret, 0);
 				assert_int_equal(cinfo.pci_nobjs, 0);
 				assert_int_equal(cinfo.pci_used, 0);
 				break;
 			case DESTROY:
-				ret = vos_co_destroy(arg->poh,
+				ret = vos_cont_destroy(arg->poh,
 						     arg->uuid[i].uuid);
 				assert_int_equal(ret, 0);
 				uuid_clear(arg->uuid[i].uuid);
@@ -129,7 +130,7 @@ co_unit_teardown(void **state)
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
 		if (!uuid_is_null(arg->uuid[i].uuid)) {
-			ret = vos_co_destroy(arg->poh, arg->uuid[i].uuid);
+			ret = vos_cont_destroy(arg->poh, arg->uuid[i].uuid);
 			assert_int_equal(ret, 0);
 			uuid_clear(arg->uuid[i].uuid);
 		}
@@ -144,11 +145,12 @@ co_ref_count_setup(void **state)
 	struct vc_test_args	*arg = *state;
 	int			i, ret = 0;
 
-	ret = vos_co_create(arg->poh, arg->uuid[0].uuid);
+	ret = vos_cont_create(arg->poh, arg->uuid[0].uuid);
 	assert_int_equal(ret, 0);
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
-		ret = vos_co_open(arg->poh, arg->uuid[0].uuid, &arg->coh[i]);
+		ret = vos_cont_open(arg->poh, arg->uuid[0].uuid,
+				    &arg->coh[i]);
 		assert_int_equal(ret, 0);
 	}
 
@@ -162,15 +164,15 @@ co_ref_count_test(void **state)
 	struct vc_test_args	*arg = *state;
 	int			i, ret;
 
-	ret = vos_co_destroy(arg->poh, arg->uuid[0].uuid);
+	ret = vos_cont_destroy(arg->poh, arg->uuid[0].uuid);
 	assert_int_equal(ret, -DER_BUSY);
 
 	for (i = 0; i < VCT_CONTAINERS; i++) {
-		ret = vos_co_close(arg->coh[i]);
+		ret = vos_cont_close(arg->coh[i]);
 		assert_int_equal(ret, 0);
 	}
 
-	ret = vos_co_destroy(arg->poh, arg->uuid[0].uuid);
+	ret = vos_cont_destroy(arg->poh, arg->uuid[0].uuid);
 	assert_int_equal(ret, 0);
 }
 

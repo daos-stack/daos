@@ -134,15 +134,15 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	}
 	tcx->tc_step = TCX_PO_OPEN;
 
-	rc = vos_co_create(tcx->tc_po_hdl, tcx->tc_co_uuid);
+	rc = vos_cont_create(tcx->tc_po_hdl, tcx->tc_co_uuid);
 	if (rc) {
 		print_error("vos container creation error: %d\n", rc);
 		goto failed;
 	}
 	tcx->tc_step = TCX_CO_CREATE;
 
-	rc = vos_co_open(tcx->tc_po_hdl, tcx->tc_co_uuid,
-			 &tcx->tc_co_hdl);
+	rc = vos_cont_open(tcx->tc_po_hdl, tcx->tc_co_uuid,
+			   &tcx->tc_co_hdl);
 	if (rc) {
 		print_error("vos container open error: %d\n", rc);
 		goto failed;
@@ -168,11 +168,11 @@ vts_ctx_fini(struct vos_test_ctx *tcx)
 
 	case TCX_READY:
 	case TCX_CO_OPEN:
-		rc = vos_co_close(tcx->tc_co_hdl);
+		rc = vos_cont_close(tcx->tc_co_hdl);
 		assert_int_equal(rc, 0);
 		/* fallthrough */
 	case TCX_CO_CREATE:
-		rc = vos_co_destroy(tcx->tc_po_hdl, tcx->tc_co_uuid);
+		rc = vos_cont_destroy(tcx->tc_po_hdl, tcx->tc_co_uuid);
 		assert_int_equal(rc, 0);
 		/* fallthrough */
 	case TCX_PO_OPEN:

@@ -70,7 +70,7 @@ cont_alloc_ref(void *key, unsigned int ksize, void *varg,
 
 	uuid_copy(cont->sc_uuid, key);
 
-	rc = vos_co_open(pool->spc_hdl, key, &cont->sc_hdl);
+	rc = vos_cont_open(pool->spc_hdl, key, &cont->sc_hdl);
 	if (rc != 0) {
 		D_FREE_PTR(cont);
 		return rc;
@@ -86,7 +86,7 @@ cont_free_ref(struct daos_llink *llink)
 	struct ds_cont *cont = cont_obj(llink);
 
 	D_DEBUG(DF_DSMS, DF_CONT": freeing\n", DP_CONT(NULL, cont->sc_uuid));
-	vos_co_close(cont->sc_hdl);
+	vos_cont_close(cont->sc_hdl);
 	D_FREE_PTR(cont);
 }
 
@@ -343,7 +343,7 @@ cont_destroy_one(void *vin)
 	D_DEBUG(DF_DSMS, DF_CONT": destroying vos container\n",
 		DP_CONT(pool->spc_uuid, in->tdi_uuid));
 
-	rc = vos_co_destroy(pool->spc_hdl, in->tdi_uuid);
+	rc = vos_cont_destroy(pool->spc_hdl, in->tdi_uuid);
 	if (rc == -DER_NONEXIST)
 		/** VOS container creation is effectively delayed until
 		 * container open time, so it might legitimately not exist if
@@ -424,14 +424,14 @@ ds_cont_lookup_or_create(struct ds_cont_hdl *hdl, uuid_t cont_uuid)
 	D_DEBUG(DF_DSMS, DF_CONT": creating new vos container\n",
 		DP_CONT(hdl->sch_pool->spc_uuid, cont_uuid));
 
-	rc = vos_co_create(hdl->sch_pool->spc_hdl, cont_uuid);
+	rc = vos_cont_create(hdl->sch_pool->spc_hdl, cont_uuid);
 	if (rc != 0)
 		return rc;
 
 	rc = cont_lookup(tls->dt_cont_cache, cont_uuid,
 			 hdl->sch_pool, &hdl->sch_cont);
 	if (rc != 0) {
-		vos_co_destroy(hdl->sch_pool->spc_hdl, cont_uuid);
+		vos_cont_destroy(hdl->sch_pool->spc_hdl, cont_uuid);
 		return rc;
 	}
 
@@ -533,7 +533,7 @@ err_cont:
 	if (vos_co_created) {
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
 			DP_CONT(hdl->sch_pool->spc_uuid, cont_uuid));
-		vos_co_destroy(hdl->sch_pool->spc_hdl, cont_uuid);
+		vos_cont_destroy(hdl->sch_pool->spc_hdl, cont_uuid);
 	}
 err_pool:
 	ds_pool_child_put(hdl->sch_pool);
@@ -701,7 +701,7 @@ cont_query_one(void *vin)
 	struct ds_pool_child		*pool_child;
 	struct dss_module_info		*info;
 	daos_handle_t			vos_chdl;
-	vos_co_info_t			vos_cinfo;
+	vos_cont_info_t			vos_cinfo;
 	char				*opstr;
 	int				rc;
 
@@ -715,7 +715,8 @@ cont_query_one(void *vin)
 		D_GOTO(ds_pool_hdl, rc = -DER_NO_HDL);
 
 	opstr = "Opening VOS container open handle\n";
-	rc = vos_co_open(pool_child->spc_hdl, in->tqi_cont_uuid, &vos_chdl);
+	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid,
+			   &vos_chdl);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": Failed %s: %d",
 			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
@@ -724,7 +725,7 @@ cont_query_one(void *vin)
 	}
 
 	opstr = "Querying VOS container open handle\n";
-	rc = vos_co_query(vos_chdl, &vos_cinfo);
+	rc = vos_cont_query(vos_chdl, &vos_cinfo);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": Failed :%s: %d",
 			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
@@ -734,7 +735,7 @@ cont_query_one(void *vin)
 	pack_args[info->dmi_tid].xcq_purged_epoch = vos_cinfo.pci_purged_epoch;
 
 out:
-	vos_co_close(vos_chdl);
+	vos_cont_close(vos_chdl);
 ds_child:
 	ds_pool_child_put(pool_child);
 ds_pool_hdl:
@@ -926,7 +927,8 @@ cont_epoch_aggregate_one(void *vin)
 	}
 
 	opstr = "opening vos container handle\n";
-	rc = vos_co_open(pool_child->spc_hdl, in->tai_cont_uuid, &vos_chdl);
+	rc = vos_cont_open(pool_child->spc_hdl, in->tai_cont_uuid,
+			   &vos_chdl);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": Failed %s : %d",
 			DP_CONT(in->tai_pool_uuid,
@@ -1023,7 +1025,7 @@ cont_epoch_aggregate_one(void *vin)
 out:
 	vos_iter_finish(iter_hdl);
 cont_close:
-	vos_co_close(vos_chdl);
+	vos_cont_close(vos_chdl);
 pool_child:
 	ds_pool_child_put(pool_child);
 }

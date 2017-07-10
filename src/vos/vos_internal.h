@@ -75,9 +75,9 @@ struct vos_pool {
 };
 
 /**
- * VOS container handle (DRAM)
+ * VOS container (DRAM)
  */
-struct vc_hdl {
+struct vos_container {
 	/* VOS uuid hash with refcnt */
 	struct daos_ulink	vc_uhlink;
 	/* VOS PMEMobjpool pointer */
@@ -91,7 +91,7 @@ struct vc_hdl {
 	 */
 	struct vos_object_index	*vc_obj_table;
 	/** Direct pointer to the VOS container */
-	struct vos_container	*vc_co;
+	struct vos_cont_df	*vc_cont_df;
 };
 
 struct vos_imem_strts {
@@ -127,13 +127,13 @@ struct vos_obj_ref {
 	/** Persistent memory ID for the object */
 	struct vos_obj			*or_obj;
 	/** Container Handle - Convenience */
-	struct vc_hdl			*or_co;
+	struct vos_container		*or_cont;
 };
 
 /** Iterator ops for objects and OIDs */
 extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_oid_iter_ops;
-extern struct vos_iter_ops vos_co_iter_ops;
+extern struct vos_iter_ops vos_cont_iter_ops;
 
 /** VOS thread local storage structure */
 struct vos_tls {
@@ -583,33 +583,33 @@ static inline bool vos_recx_is_equal(daos_recx_t *recx1, daos_recx_t *recx2)
 }
 
 static inline PMEMobjpool *
-vos_co2pop(struct vc_hdl *co_hdl)
+vos_cont2pop(struct vos_container *cont)
 {
-	return vos_pool_ptr2pop(co_hdl->vc_pool);
+	return vos_pool_ptr2pop(cont->vc_pool);
 }
 
 static inline PMEMobjpool *
 vos_oref2pop(struct vos_obj_ref *oref)
 {
-	return vos_co2pop(oref->or_co);
+	return vos_cont2pop(oref->or_cont);
 }
 
 static inline daos_handle_t
 vos_oref2cookie_hdl(struct vos_obj_ref *oref)
 {
-	return oref->or_co->vc_pool->vp_cookie_ith;
+	return oref->or_cont->vc_pool->vp_cookie_ith;
 }
 
 static inline struct umem_attr *
 vos_oref2uma(struct vos_obj_ref *oref)
 {
-	return &oref->or_co->vc_pool->vp_uma;
+	return &oref->or_cont->vc_pool->vp_uma;
 }
 
 static inline struct umem_instance *
 vos_oref2umm(struct vos_obj_ref *oref)
 {
-	return &oref->or_co->vc_pool->vp_umm;
+	return &oref->or_cont->vc_pool->vp_umm;
 }
 
 static inline daos_handle_t
@@ -628,7 +628,7 @@ vos_hdl2pool(daos_handle_t poh)
 }
 
 static inline daos_handle_t
-vos_co2hdl(struct vc_hdl *co)
+vos_cont2hdl(struct vos_container *co)
 {
 	daos_handle_t coh;
 
@@ -636,29 +636,32 @@ vos_co2hdl(struct vc_hdl *co)
 	return coh;
 }
 
-static inline struct vc_hdl*
-vos_hdl2co(daos_handle_t coh)
+static inline struct vos_container *
+vos_hdl2cont(daos_handle_t coh)
 {
-	return (struct vc_hdl *)(coh.cookie);
+	return (struct vos_container *)(coh.cookie);
 }
 
 static inline daos_handle_t
 vos_coh2cih(daos_handle_t coh)
 {
-	struct vc_hdl *chdl = vos_hdl2co(coh);
+	struct vos_container *chdl = vos_hdl2cont(coh);
 
 	return chdl->vc_pool->vp_cookie_ith;
 }
 
-static inline void
-vos_co_set_purged_epoch(daos_handle_t coh, daos_epoch_t update_epoch)
-{
-	struct vc_hdl		*co_hdl;
-	struct vos_container	*vc_co;
+void vos_cont_addref(struct vos_container *cont);
+void vos_cont_decref(struct vos_container *cont);
 
-	co_hdl	= vos_hdl2co(coh);
-	vc_co	= co_hdl->vc_co;
-	vc_co->vc_info.pci_purged_epoch = update_epoch;
+static inline void
+vos_cont_set_purged_epoch(daos_handle_t coh, daos_epoch_t update_epoch)
+{
+	struct vos_container	*cont;
+	struct vos_cont_df	*cont_df;
+
+	cont	= vos_hdl2cont(coh);
+	cont_df	= cont->vc_cont_df;
+	cont_df->cd_info.pci_purged_epoch = update_epoch;
 }
 
 /**

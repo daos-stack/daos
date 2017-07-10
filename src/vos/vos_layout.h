@@ -45,7 +45,7 @@
  * EV-Tree for Byte array stores
  */
 struct vos_container_index;
-struct vos_container;
+struct vos_cont_df;
 struct vos_object_index;
 struct vos_obj;
 struct vos_cookie_rec_df;
@@ -68,7 +68,7 @@ POBJ_LAYOUT_BEGIN(vos_pool_layout);
 
 POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container_index);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_object_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_rec_df);
@@ -115,10 +115,10 @@ struct vos_epoch_index {
 };
 
 /* VOS Container Value */
-struct vos_container {
-	uuid_t				vc_id;
-	vos_co_info_t			vc_info;
-	TMMID(struct vos_object_index)	vc_obtable;
+struct vos_cont_df {
+	uuid_t				cd_id;
+	vos_cont_info_t			cd_info;
+	TMMID(struct vos_object_index)	cd_obtable;
 };
 
 /** btree (d/a-key) record bit flags */

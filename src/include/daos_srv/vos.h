@@ -134,7 +134,7 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo);
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_create(daos_handle_t poh, uuid_t co_uuid);
+vos_cont_create(daos_handle_t poh, uuid_t co_uuid);
 
 /**
  * Destroy a container
@@ -146,7 +146,7 @@ vos_co_create(daos_handle_t poh, uuid_t co_uuid);
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_destroy(daos_handle_t poh, uuid_t co_uuid);
+vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid);
 
 /**
  * Open a container within a VOSP
@@ -160,7 +160,7 @@ vos_co_destroy(daos_handle_t poh, uuid_t co_uuid);
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh);
+vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh);
 
 /**
  * Release container open handle
@@ -170,7 +170,7 @@ vos_co_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh);
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_close(daos_handle_t coh);
+vos_cont_close(daos_handle_t coh);
 
 /**
  * Query container information.
@@ -181,7 +181,7 @@ vos_co_close(daos_handle_t coh);
  * \return		Zero on success, negative value if error
  */
 int
-vos_co_query(daos_handle_t coh, vos_co_info_t *cinfo);
+vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
 
 /**
  * Flush changes in the specified epoch to storage

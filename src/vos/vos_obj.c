@@ -31,7 +31,6 @@
 #include <daos/btree.h>
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
-#include <vos_hhash.h>
 #include "vos_internal.h"
 
 /** iterator for dkey/akey/recx */

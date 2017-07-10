@@ -36,7 +36,6 @@
 #include <sys/stat.h>
 #include <vos_layout.h>
 #include <vos_internal.h>
-#include <vos_hhash.h>
 #include <errno.h>
 #include <unistd.h>
 #include <string.h>

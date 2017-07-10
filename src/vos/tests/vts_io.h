@@ -43,7 +43,6 @@
 #include <daos_srv/vos.h>
 #include <vos_obj.h>
 #include <vos_internal.h>
-#include <vos_hhash.h>
 
 #define UPDATE_DKEY_SIZE	32
 #define UPDATE_DKEY		"dkey"

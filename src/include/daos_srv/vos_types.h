@@ -50,7 +50,7 @@ typedef struct {
 	/** aggregated epoch in this container */
 	daos_epoch_t		pci_purged_epoch;
 	/** TODO */
-} vos_co_info_t;
+} vos_cont_info_t;
 
 /**
  * object shard metadata stored in VOS
