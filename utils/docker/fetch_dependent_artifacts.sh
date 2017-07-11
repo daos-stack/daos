@@ -35,6 +35,10 @@
 #                 "argobots-cart_devel mpi4py-cart_devel mercury-cart_devel"
 #                 "cart-review-child fuse-iof_devel"
 #
+# DEPEND_COMPS    The dependent components list.  By default this will be
+#                 built from the build.config file.  This is used if the
+#                 build.config file is missing commit hashes for a component.
+#
 # WORK_TARGET     The base directory to unpack the tarball artifacts to.
 #                 Each artifact will be extracted into its own directory.
 #                 Default is "dist_target"
@@ -159,7 +163,6 @@ function fetch_job_artifacts {
           cp ${artifact}/${git_file} ${DEPEND_INFO}
           dest_filename=`basename ${git_file}`
           if [[ $dest_filename == *"_git_commit" ]]; then
-            echo ${dest_name}_git_hash
             test_git=${dest_name}_git_hash
             set +u
             test_hash=${!test_git}
@@ -226,6 +229,8 @@ if [[ ${depend_names} =~ openpa ]]; then
 fi
 # bmi not being built so ignore
 depend_names=${depend_names// bmi/}
+: ${DEPEND_COMPS:="${depend_names}"}
+export DEPEND_COMPS
 
 test_distro="arch=x86_64,distro=el7"
 wanted_distro="arch=${arch},distro=${distro}"
@@ -235,13 +240,12 @@ rm -f commit_not_found
 set +u
 # First look to see if specific jobs should be searched
 # for artifacts.
-echo -${DEPEND_JOBS}-
 if [ -n "${DEPEND_JOBS}" ]; then
   for depend_job in ${DEPEND_JOBS}; do
     test_name="${depend_job%-*}"
     test_job_key=${test_name}_git_hash
     wanted_commit=${!test_job_key}
-    if [ -n ${wanted_commit} ]; then
+    if [ -n "${wanted_commit}" ]; then
       artifact_base="${CORAL_ARTIFACTS}/${depend_job}"
       artifact_test_base="${artifact_base}/${test_distro}"
       artifact_test=${artifact_test_base}/${wanted_commit}
@@ -259,9 +263,11 @@ if [ -n "${DEPEND_JOBS}" ]; then
 fi
 
 # Did we find all the artifacts?
-for test_name in ${depend_names}; do
+for test_name in ${DEPEND_COMPS}; do
   test_job_key=${test_name}_git_hash
+  set +u
   wanted_commit=${!test_job_key}
+  set -u
 
   if [ -z "${wanted_commit}" ]; then
      echo "Something is broken"
@@ -269,8 +275,8 @@ for test_name in ${depend_names}; do
   fi
 
   if [ ! -d "${WORK_TARGET}/${test_name}" ]; then
-    # Look first for $test_name-$TARGET_$job_suffix
-    test_job_name="${test_name}-${TARGET}_${job_suffix}"
+    # Look first for $test_name-$job_suffix
+    test_job_name="${test_name}-${job_suffix}"
     artifact_base="${CORAL_ARTIFACTS}/${test_job_name}"
     artifact_test_base="${artifact_base}/${test_distro}"
     artifact_test=${artifact_test_base}/${wanted_commit}
@@ -290,7 +296,7 @@ for test_name in ${depend_names}; do
   fi
 
   artifact_distro="${artifact_base}/${wanted_distro}"
-  if [ -n ${artifact_no} ]; then
+  if [ -n "${artifact_no}" ]; then
     artifact="${artifact_distro}/${artifact_no}"
     fetch_job_artifacts ${artifact}
   fi
