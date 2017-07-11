@@ -125,3 +125,20 @@ class NodeControlRunner(OrteRunner.OrteRunner):
             node.dump_info()
             del node
         del self.node_list[:]
+
+    #pylint: disable=too-many-arguments
+    def paramiko_execute_remote_cmd(self, node, cmd, args, wait, timeout):
+        """
+        Pass through to NodeRunner:execute_cmd()
+        """
+        run_node = self.find_node(node)
+        return run_node.execute_cmd(cmd, args, self.log_dir_base,
+                                    wait=wait, timeout=timeout)
+    #pylint: enable=too-many-arguments
+
+    def paramiko_wait_for_exit(self, node, retval, timeout):
+        """
+        Pass through to NodeRunner:wait_for_exit()
+        """
+        run_node = self.find_node(node)
+        return run_node.wait_for_exit(retval, timeout)

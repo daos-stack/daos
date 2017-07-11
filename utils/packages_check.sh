@@ -80,7 +80,7 @@ function pip3_check {
     python3 get-pip.py
     cp /usr/bin/pip2 /usr/bin/pip
 
-    pip_additions="pyopenssl ndg-httpsclient pyasn1 "
+    pip_additions="pyopenssl ndg-httpsclient pyasn1 paramiko"
     pip_additions+="flake8 sphinx pytest pytest-cov gcovr requests pylint "
     pip_additions+="netifaces astroid pyyaml numpy GitPython"
     pip3 install -U ${pip_additions}

@@ -29,9 +29,28 @@ import os
 import shlex
 import subprocess
 import logging
+import time
+import pwd
+#pylint: disable=import-error
+import paramiko
+#pylint: enable=import-error
 
 
-class NodeRunner():
+#pylint: disable=too-few-public-methods
+class RetVal:
+    """
+    Placeholder standard return value class
+    """
+    def __init__(self, stdout, stderr, running, retcode):
+        self.running = running
+        self.data = None
+        self.retcode = retcode
+        self.stdout = stdout
+        self.stderr = stderr
+#pylint: enable=too-few-public-methods
+
+
+class NodeRunner:
     """Simple node controller """
 
     def __init__(self, info, node, node_type='all'):
@@ -44,6 +63,7 @@ class NodeRunner():
         self.procrtn = 0
         self.cmdfileout = ""
         self.cmdfileerr = ""
+        self.username = pwd.getpwuid(os.getuid()).pw_name
 
     def run_cmd(self, cmd, log_path):
         """ Launch remote command """
@@ -84,3 +104,58 @@ class NodeRunner():
         if self.proc.poll() is None:
             self.proc.terminate()
             self.state = "terminate"
+
+    def execute_cmd(self, cmd, args, log_path, wait=True, timeout=15):
+        """
+        Run specified cmd+args on self.node
+        """
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        print("Hostname is {0}".format(self.node))
+        client.connect(self.node, allow_agent=False, look_for_keys=True,
+                       timeout=timeout)
+
+        self.cmdfileout = os.path.join(log_path, ("cmd_%s.out" % self.node))
+        self.cmdfileerr = os.path.join(log_path, ("cmd_%s.err" % self.node))
+
+        # execute command, hacky extra arg ensures grabbing correct rc
+        cmdstr = "{!s} {!s};exit $?".format(cmd, args)
+        print("command: {!s}".format(cmdstr))
+        if wait:
+            dummy_stdin, stdout, stderr = client.exec_command(cmdstr,
+                                                              timeout=timeout)
+            retval = RetVal(stdout, stderr, True, -1)
+            print("return code: {!s}".
+                  format(stdout.channel.recv_exit_status()))
+            retval.retcode = stdout.channel.recv_exit_status()
+            retval.data = stdout.read()
+            with open(self.cmdfileout, mode='a') as outfile:
+                outfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
+                    ("=" * 40), cmdstr, ("=" * 40)))
+                outfile.write(retval.data)
+            retval.running = False
+        else:
+            dummy_stdin, stdout, stderr = client.exec_command(cmdstr)
+            retval = RetVal(stdout, stderr, True, -1)
+        return retval
+
+    def wait_for_exit(self, retval, timeout=15):
+        """
+        Wait for async process called in execute_cmd to exit
+        """
+        t_end = time.time() + timeout
+        while time.time() < t_end:
+            if retval.stdout.channel.exit_status_ready():
+                break
+            time.sleep(1)
+        if time.time() >= t_end:  # we timed out, process never exited
+            with open(self.cmdfileout, mode='a') as errfile:
+                errfile.write("Command did not complete within timeout.")
+            retval.retcode = -1
+        else:
+            retval.retcode = retval.stdout.channel.recv_exit_status()
+            retval.data = retval.stdout.read()
+            with open(self.cmdfileout, mode='a') as outfile:
+                outfile.write(retval.data)
+        retval.running = False
+        return retval
