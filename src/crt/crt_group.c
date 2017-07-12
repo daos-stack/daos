@@ -1008,7 +1008,7 @@ crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 
 		gc_in = crt_req_get(gc_rpc);
 		C_ASSERT(gc_in != NULL);
-		gc_in->gc_grp_id = grp_id;
+		gc_in->gc_grp_id = grp_priv->gp_pub.cg_grpid;
 		gc_in->gc_int_grpid = grp_priv->gp_int_grpid;
 		gc_in->gc_membs = member_ranks;
 		crt_group_rank(NULL, &gc_in->gc_initiate_rank);
