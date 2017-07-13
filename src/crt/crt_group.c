@@ -1010,7 +1010,7 @@ crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 		C_ASSERT(gc_in != NULL);
 		gc_in->gc_grp_id = grp_priv->gp_pub.cg_grpid;
 		gc_in->gc_int_grpid = grp_priv->gp_int_grpid;
-		gc_in->gc_membs = member_ranks;
+		gc_in->gc_membs = grp_priv->gp_membs;
 		crt_group_rank(NULL, &gc_in->gc_initiate_rank);
 
 		rc = crt_req_send(gc_rpc, gc_rpc_cb, grp_priv);
@@ -1190,7 +1190,7 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 		  void *args)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
-	crt_rank_list_t	*member_ranks;
+	crt_rank_list_t		*member_ranks;
 	crt_context_t		 crt_ctx;
 	bool			 gd_req_sent = false;
 	int			 i;
