@@ -302,20 +302,20 @@ static void clog_cleanout(void)
 }
 
 /**
- * crt_vclog: core log function, front-ended by crt_log
+ * crt_vlog: core log function, front-ended by crt_log
  * we vsnprintf the message into a holding buffer to format it.  then we
  * send it to all target output logs.  the holding buffer is set to
  * CLOG_TBSIZ, if the message is too long it will be silently truncated.
- * caller should not hold clog_lock, crt_vclog will grab it as needed.
+ * caller should not hold clog_lock, crt_vlog will grab it as needed.
  *
- * @param flags the flags (mainly fac+pri) for this log message
+ * @param flags returned by crt_log_check
  * @param fmt the printf(3) format to use
  * @param ap the stdargs va_list to use for the printf format
  */
-void crt_vclog(int flags, const char *fmt, va_list ap)
+void crt_vlog(int flags, const char *fmt, va_list ap)
 {
 #define CLOG_TBSIZ    1024	/* bigger than any line should be */
-	int fac, lvl, msk;
+	int fac, lvl;
 	char b[CLOG_TBSIZ], *b_nopt1hdr;
 	char facstore[16], *facstr;
 	struct timeval tv;
@@ -326,47 +326,24 @@ void crt_vclog(int flags, const char *fmt, va_list ap)
 	 * errno to its orginal value
 	 */
 	int save_errno = errno;
-	/*
-	 * make sure the clog is open
-	 */
-	if (!crt_log_xst.tag)
+
+	if (flags == 0)
 		return;
-	/*
-	 * first, see if we can ignore the log messages because it is
-	 * masked out.  if debug messages are masked out, then we just
-	 * directly compare levels.  if debug messages are not masked,
-	 * then we allow all non-debug messages and for debug messages we
-	 * check to make sure the proper bit is on.  [apps that don't use
-	 * the debug bits just log with CLOG_DBG which has them all set]
-	 */
+
 	fac = flags & CLOG_FACMASK;
 	lvl = flags & CLOG_PRIMASK;
-	/* convert unknown facilities to default so we don't drop log msg */
+
+	/* Check the facility so we don't crash.   We will just log the message
+	 * in this case but it really is indicative of a usage error as user
+	 * didn't pass sanitized flags to this routine
+	 */
 	if (fac >= crt_log_xst.fac_cnt)
 		fac = 0;
-	msk = crt_log_xst.clog_facs[fac].fac_mask;
-	if (lvl >= CLOG_INFO) {	/* normal clog message */
-		if (lvl < msk) {
-			errno = save_errno;
-			return;	/* skip it */
-		}
-		if (mst.stderr_mask != 0 && lvl >= mst.stderr_mask)
-			flags |= CLOG_STDERR;
-	} else {		/* debug clog message */
-		/*
-		 * note: if (msk >= CLOG_INFO), then all the mask's debug bits
-		 * are zero (meaning debugging messages are masked out).  thus,
-		 * for messages with the debug level we only have to do a bit
-		 * test.
-		 */
-		if ((lvl & msk) == 0) {	/* do we want this type of debug msg? */
-			errno = save_errno;
-			return;	/* no! */
-		}
-		if ((lvl & mst.stderr_mask) != 0)
-			/* same thing for stderr_mask */
-			flags |= CLOG_STDERR;
-	}
+
+	/* Assumes stderr mask isn't used for debug messages */
+	if (mst.stderr_mask != 0 && lvl >= mst.stderr_mask)
+		flags |= CLOG_STDERR;
+
 	/*
 	 * we must log it, start computing the parts of the log we'll need.
 	 */
@@ -909,13 +886,4 @@ int crt_log_getmasks(char *buf, int discard, int len, int unterm)
 		clog_bput(&bp, &skipcnt, &resid, &total, NULL);
 	/* buf == NULL means probe for length ... */
 	return ((buf == NULL) ? total : len - resid);
-}
-
-void crt_log(int flags, const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	crt_vclog(flags, fmt, ap);
-	va_end(ap);
 }

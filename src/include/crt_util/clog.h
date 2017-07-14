@@ -116,8 +116,67 @@ struct crt_log_xstate {
 extern "C" {
 #endif
 
+extern struct crt_log_xstate crt_log_xst;
+
 /**
- * crt_vlog: clog a message using stdarg list
+ * crt_log_check: clog a message using stdarg list without checking filtering
+ *
+ * \param flags [IN]		facility+level+misc flags
+ * @return flags to pass to crt_vlog, 0 indicates no log
+ */
+static inline int crt_log_check(int flags)
+{
+	int fac = flags & CLOG_FACMASK;
+	int lvl = flags & CLOG_PRIMASK;
+	int msk;
+
+	if (!crt_log_xst.tag) /* Log isn't open */
+		return 0;
+
+	/* Use default facility if it is malformed */
+	if (fac >= crt_log_xst.fac_cnt)
+		fac = 0;
+
+	/*
+	 * first, see if we can ignore the log messages because it is
+	 * masked out.  if debug messages are masked out, then we just
+	 * directly compare levels.  if debug messages are not masked,
+	 * then we allow all non-debug messages and for debug messages we
+	 * check to make sure the proper bit is on.  [apps that don't use
+	 * the debug bits just log with CLOG_DBG which has them all set]
+	 */
+	msk = crt_log_xst.clog_facs[fac].fac_mask;
+	if (lvl >= CLOG_INFO) {
+		if (lvl < msk)
+			return 0; /* Skip it */
+	} else { /* debug clog message */
+		/*
+		 * note: if (msk >= CLOG_INFO), then all the mask's debug bits
+		 * are zero (meaning debugging messages are masked out).  thus,
+		 * for messages with the debug level we only have to do a bit
+		 * test.
+		 */
+		if ((lvl & msk) == 0)	/* do we want this type of debug msg? */
+			return 0; /* Skip it */
+	}
+
+	return lvl | fac;
+}
+
+/**
+ * crt_vlog: log a message using stdarg list without checking flags
+ *
+ * A log line cannot be larger than CLOG_TBSZ (4096), if it is larger it will be
+ * (silently) truncated].
+ *
+ * \param flags [IN]		flags returned from crt_log_check
+ * \param fmt [IN]		printf-style format string
+ * @param ap [IN]		stdarg list
+ */
+void crt_vlog(int flags, const char *fmt, va_list ap);
+
+/**
+ * crt_log: clog a message if type specified by flags is enabled
  *
  * A log line cannot be larger than CLOG_TBSZ (4096), if it is larger it will be
  * (silently) truncated].
@@ -126,20 +185,21 @@ extern "C" {
  * \param fmt [IN]		printf-style format string
  * @param ap [IN]		stdarg list
  */
-void crt_vclog(int flags, const char *fmt, va_list ap);
-
-/**
- * crt_log: clog a message.
- *
- * A log line cannot be larger than CLOG_TBSZ (4096), if it is larger it will be
- * (silently) truncated].
- *
- * \param flags [IN]		facility+level+misc flags
- * \param fmt [IN]		printf-style format string
- * @param ... [IN]		printf-style args
- */
-void crt_log(int flags, const char *fmt, ...)
+static inline void crt_log(int flags, const char *fmt, ...)
 	__attribute__ ((__format__(__printf__, 2, 3)));
+static inline void crt_log(int flags, const char *fmt, ...)
+{
+	va_list ap;
+
+	flags = crt_log_check(flags);
+
+	if (flags == 0)
+		return;
+
+	va_start(ap, fmt);
+	crt_vlog(flags, fmt, ap);
+	va_end(ap);
+}
 
 /**
  * crt_log_allocfacility: allocate a new facility with the given name
