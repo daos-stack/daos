@@ -248,7 +248,9 @@ if [ -n "${DEPEND_JOBS}" ]; then
   for depend_job in ${DEPEND_JOBS}; do
     test_name="${depend_job%-*}"
     test_job_key=${test_name}_git_hash
+    set +u
     wanted_commit=${!test_job_key}
+    set -u
     if [ -n "${wanted_commit}" ]; then
       artifact_base="${CORAL_ARTIFACTS}/${depend_job}"
       artifact_test_base="${artifact_base}/${test_distro}"
