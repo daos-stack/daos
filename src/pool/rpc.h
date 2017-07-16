@@ -151,6 +151,10 @@ struct pool_tgt_connect_in {
 	uuid_t		tci_hdl;
 	uint64_t	tci_capas;
 	uint32_t	tci_map_version;
+	uint32_t	tci_iv_ns_id;
+	uint32_t	tci_master_rank;
+	uint32_t	tci_pad;
+	daos_iov_t	tci_iv_ctxt;
 };
 
 struct pool_tgt_connect_out {
@@ -160,6 +164,7 @@ struct pool_tgt_connect_out {
 struct pool_tgt_disconnect_in {
 	uuid_t			tdi_uuid;	/* pool UUID */
 	struct crt_array	tdi_hdls;
+	uint32_t		tdi_iv_ns_id;
 };
 
 struct pool_tgt_disconnect_out {

@@ -186,6 +186,10 @@ server_init()
 		D__GOTO(exit_mod_init, rc);
 	D__INFO("Network successfully initialized\n");
 
+	rc = ds_iv_init();
+	if (rc)
+		D_GOTO(exit_crt_init, rc);
+
 	/* load modules */
 	rc = modules_load(&dss_mod_facs);
 	if (rc)
@@ -218,6 +222,8 @@ exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
 	dss_module_unload_all();
+	ds_iv_fini();
+exit_crt_init:
 	crt_finalize();
 exit_mod_init:
 	dss_module_fini(true);
@@ -234,6 +240,7 @@ server_fini(bool force)
 		daos_fini();
 	dss_srv_fini(force);
 	dss_module_fini(force);
+	ds_iv_fini();
 	crt_finalize();
 	dss_module_unload_all();
 }

@@ -559,6 +559,7 @@ rebuild_scan_leader(void *data)
 	/* refresh placement for the server stack */
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	map = rebuild_pool_map_get();
+	D_ASSERT(map != NULL);
 	rc = pl_map_update(rebuild_gst.rg_pool_uuid, map);
 	if (rc != 0) {
 		ABT_mutex_unlock(rebuild_gst.rg_lock);
@@ -659,6 +660,11 @@ ds_rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 	D__ASSERT(uuid_compare(rebuild_gst.rg_pool_uuid,
 			      rsi->rsi_pool_uuid) == 0);
+
+	rc = ds_pool_tgt_map_update(rebuild_gst.rg_pool);
+	if (rc)
+		D_GOTO(out, rc);
+
 	/* step-1: parameters for scanner */
 	D__ALLOC_PTR(scan_arg);
 	if (scan_arg == NULL)

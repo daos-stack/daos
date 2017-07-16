@@ -50,16 +50,7 @@ extern "C" {
 typedef uint64_t	daos_size_t;
 typedef uint64_t	daos_off_t;
 
-/** iovec for memory buffer */
-typedef struct {
-	/** buffer address */
-	void		*iov_buf;
-	/** buffer length */
-	daos_size_t	 iov_buf_len;
-	/** data length */
-	daos_size_t	 iov_len;
-} daos_iov_t;
-
+#define daos_iov_t	d_iov_t
 static inline void
 daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
 {
@@ -67,18 +58,9 @@ daos_iov_set(daos_iov_t *iov, void *buf, daos_size_t size)
 	iov->iov_len = iov->iov_buf_len = size;
 }
 
-typedef struct {
-	/** input number */
-	uint32_t	num;
-	/** output/returned number */
-	uint32_t	num_out;
-} daos_nr_t;
-
+#define daos_nr_t	d_nr_t
 /** Scatter/gather list for memory buffers */
-typedef struct {
-	daos_nr_t	 sg_nr;
-	daos_iov_t	*sg_iovs;
-} daos_sg_list_t;
+#define daos_sg_list_t d_sg_list_t
 
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32

@@ -557,6 +557,13 @@ ds_pool_tgt_connect_handler(crt_rpc_t *rpc)
 		D__GOTO(out, rc);
 	}
 
+	rc = ds_iv_ns_attach(rpc->cr_ctx, in->tci_iv_ns_id,
+			     in->tci_master_rank, &in->tci_iv_ctxt,
+			     &pool->sp_iv_ns);
+	if (rc != 0) {
+		D_ERROR("attach iv ns failed rc %d\n", rc);
+		D_GOTO(out, rc);
+	}
 out:
 	out->tco_rc = (rc == 0 ? 0 : 1);
 	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d (%d)\n",
@@ -603,6 +610,9 @@ ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 				DP_UUID(hdl_uuids[i]));
 			continue;
 		}
+
+		if (hdl->sph_pool != NULL)
+			ds_iv_ns_destroy(hdl->sph_pool->sp_iv_ns);
 		pool_hdl_delete(hdl);
 		ds_pool_hdl_put(hdl);
 	}
@@ -624,6 +634,44 @@ ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 
 	out_result->tdo_rc += out_source->tdo_rc;
 	return 0;
+}
+
+int
+ds_pool_tgt_map_update(struct ds_pool *pool)
+{
+	struct pool_map *map;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	struct pool_buf	*buf;
+	int		rc;
+
+	memset(&sgl, 0, sizeof(sgl));
+	memset(&iov, 0, sizeof(iov));
+	sgl.sg_nr.num = 1;
+	sgl.sg_iovs = &iov;
+	rc = ds_iv_fetch(pool->sp_iv_ns, IV_POOL_MAP, &sgl);
+	if (rc)
+		D_GOTO(out, rc);
+
+	buf = iov.iov_buf;
+	rc = pool_map_create(buf, pool->sp_map_version, &map);
+	if (rc != 0) {
+		D_ERROR(DF_UUID"failed to create pool map: %d\n",
+			DP_UUID(pool->sp_uuid), rc);
+		D_GOTO(out, rc);
+	}
+
+	if (pool->sp_map == NULL) {
+		pool->sp_map = map;
+	} else if (pool_map_get_version(pool->sp_map) <
+		   pool_map_get_version(map)) {
+		pool_map_decref(pool->sp_map);
+		pool->sp_map = map;
+	} else {
+		pool_map_decref(map);
+	}
+out:
+	return rc;
 }
 
 /*

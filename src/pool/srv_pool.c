@@ -41,6 +41,7 @@
 #include <daos_srv/daos_server.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rebuild.h>
+#include <cart/iv.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
@@ -1369,14 +1370,20 @@ permitted(const struct pool_attr *attr, uint32_t uid, uint32_t gid,
 
 static int
 pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
-		   const uuid_t pool_hdl, uint64_t capas)
+		   const uuid_t pool_hdl, uint64_t capas,
+		   daos_iov_t *global_ns)
 {
 	struct pool_tgt_connect_in     *in;
 	struct pool_tgt_connect_out    *out;
+	d_rank_t		       rank;
 	crt_rpc_t		       *rpc;
 	int				rc;
 
 	D__DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
+
+	rc = crt_group_rank(NULL, &rank);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	rc = bcast_create(ctx, svc, POOL_TGT_CONNECT, &rpc);
 	if (rc != 0)
@@ -1387,6 +1394,11 @@ pool_connect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	uuid_copy(in->tci_hdl, pool_hdl);
 	in->tci_capas = capas;
 	in->tci_map_version = pool_map_get_version(svc->ps_pool->sp_map);
+	in->tci_iv_ns_id = ds_iv_ns_id_get(svc->ps_pool->sp_iv_ns);
+	in->tci_iv_ctxt.iov_buf = global_ns->iov_buf;
+	in->tci_iv_ctxt.iov_buf_len = global_ns->iov_buf_len;
+	in->tci_iv_ctxt.iov_len = global_ns->iov_len;
+	in->tci_master_rank = rank;
 
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
@@ -1522,6 +1534,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	daos_iov_t			value;
 	struct pool_attr		attr;
 	struct pool_hdl			hdl;
+	daos_iov_t			iv_iov;
+	unsigned int			iv_ns_id;
 	uint32_t			nhandles;
 	int				skip_update = 0;
 	int				rc;
@@ -1534,9 +1548,15 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D__GOTO(out, rc);
 
+	D_ASSERT(svc->ps_pool != NULL);
+	rc = ds_iv_ns_create(rpc->cr_ctx, &iv_ns_id, &iv_iov,
+			     &svc->ps_pool->sp_iv_ns);
+	if (rc)
+		D_GOTO(out_svc, rc);
+
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
-		D__GOTO(out_svc, rc);
+		D__GOTO(out_iv, rc);
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
@@ -1618,7 +1638,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	}
 
 	rc = pool_connect_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
-				in->pci_capas);
+				in->pci_capas, &iv_iov);
 	if (rc != 0) {
 		D__ERROR(DF_UUID": failed to connect to targets: %d\n",
 			DP_UUID(in->pci_op.pi_uuid), rc);
@@ -1645,6 +1665,9 @@ out_map_version:
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
+out_iv:
+	if (rc != 0)
+		ds_iv_ns_destroy(svc->ps_pool->sp_iv_ns);
 out_svc:
 	ds_pool_set_hint(svc->ps_db, &out->pco_op.po_hint);
 	pool_svc_put_leader(svc);
@@ -1674,7 +1697,7 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	uuid_copy(in->tdi_uuid, svc->ps_uuid);
 	in->tdi_hdls.da_arrays = pool_hdls;
 	in->tdi_hdls.da_count = n_pool_hdls;
-
+	in->tdi_iv_ns_id = ds_iv_ns_id_get(svc->ps_pool->sp_iv_ns);
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		D__GOTO(out_rpc, rc);
@@ -1877,9 +1900,8 @@ out:
 }
 
 static int
-pool_update_map_bcast(crt_context_t ctx, struct pool_svc *svc,
-		      uint32_t map_version, struct pool_buf *map_buf,
-		      d_rank_list_t *tgts_exclude)
+pool_map_ver_update_bcast(crt_context_t ctx, struct pool_svc *svc,
+			  uint32_t map_version, d_rank_list_t *tgts_exclude)
 {
 	struct pool_tgt_update_map_in  *in;
 	struct pool_tgt_update_map_out *out;
@@ -1888,22 +1910,6 @@ pool_update_map_bcast(crt_context_t ctx, struct pool_svc *svc,
 	int				rc;
 
 	D__DEBUG(DF_DSMS, DF_UUID": bcasting\n", DP_UUID(svc->ps_uuid));
-
-	if (map_buf != NULL) {
-		size_t map_buf_size = pool_buf_size(map_buf->pb_nr);
-		daos_sg_list_t	map_sgl;
-		daos_iov_t	map_iov;
-
-		daos_iov_set(&map_iov, map_buf, map_buf_size);
-		map_sgl.sg_nr.num = 1;
-		map_sgl.sg_nr.num_out = 1;
-		map_sgl.sg_iovs = &map_iov;
-
-		rc = crt_bulk_create(ctx, daos2crt_sg(&map_sgl),
-				     CRT_BULK_RO, &bulk);
-		if (rc != 0)
-			D__GOTO(out, rc);
-	}
 
 	rc = ds_pool_bcast_create(ctx, svc->ps_pool, DAOS_POOL_MODULE,
 				  POOL_TGT_UPDATE_MAP, &rpc, bulk,
@@ -2024,7 +2030,7 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 	 * Ignore the return code as we are more about committing a pool map
 	 * change than its dissemination.
 	 */
-	pool_update_map_bcast(info->dmi_ctx, svc, map_version, NULL, NULL);
+	pool_map_ver_update_bcast(info->dmi_ctx, svc, map_version, NULL);
 	D_EXIT;
 out_map:
 	pool_map_decref(map);
@@ -2285,16 +2291,18 @@ out:
 }
 
 /**
- * broadcast the pool map of the pool to all servers.
+ * update pool map to all servers.
  **/
 int
-ds_pool_pmap_broadcast(const uuid_t uuid, d_rank_list_t *tgts_exclude)
+ds_pool_map_update(const uuid_t uuid, d_rank_list_t *tgts_exclude)
 {
-	struct pool_svc		*svc;
-	struct rdb_tx		tx;
-	struct pool_buf		*map_buf;
-	uint32_t		map_version;
-	int			rc;
+	struct pool_svc	*svc;
+	struct rdb_tx	tx;
+	struct pool_buf	*map_buf;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	uint32_t	map_version;
+	int		rc;
 
 	rc = pool_svc_lookup_leader(uuid, &svc, NULL /* hint */);
 	if (rc != 0)
@@ -2312,12 +2320,19 @@ ds_pool_pmap_broadcast(const uuid_t uuid, d_rank_list_t *tgts_exclude)
 		D__GOTO(out_lock, rc);
 	}
 
-	rc = pool_update_map_bcast(dss_get_module_info()->dmi_ctx, svc,
-				   map_version, map_buf, tgts_exclude);
+	D_ASSERT(map_buf != NULL);
+	iov.iov_buf = map_buf;
+	iov.iov_len = pool_buf_size(map_buf->pb_nr);
+	iov.iov_buf_len = pool_buf_size(map_buf->pb_nr);
 
-	D__DEBUG(DB_TRACE, "boradcast pool "DF_UUID" %u/%u/%u/%u  %d\n",
-		DP_UUID(uuid), map_buf->pb_nr, map_buf->pb_domain_nr,
-		map_buf->pb_target_nr, map_buf->pb_csum, rc);
+	sgl.sg_nr.num = 1;
+	sgl.sg_nr.num_out = 0;
+	sgl.sg_iovs = &iov;
+	rc = ds_iv_update(svc->ps_pool->sp_iv_ns, IV_POOL_MAP, &sgl,
+			  CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_LAZY);
+	D__DEBUG(DB_TRACE, "publish pool "DF_UUID" %u/%u/%u/%u  %d\n",
+		 DP_UUID(uuid), map_buf->pb_nr, map_buf->pb_domain_nr,
+		 map_buf->pb_target_nr, map_buf->pb_csum, rc);
 
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
@@ -2327,3 +2342,4 @@ out_svc:
 out:
 	return rc;
 }
+

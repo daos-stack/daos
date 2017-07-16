@@ -91,4 +91,9 @@ int ds_pool_group_destroy(const uuid_t pool_uuid, crt_group_t *group);
 int ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 			    d_rank_list_t *tgts_failed, int opc);
 
+/*
+ * srv_iv.c
+ */
+int ds_pool_iv_init(void);
+int ds_pool_iv_fini(void);
 #endif /* __POOL_SRV_INTERNAL_H__ */

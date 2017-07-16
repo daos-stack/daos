@@ -46,6 +46,7 @@ struct ds_pool {
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
 	crt_group_t	       *sp_group;
+	struct ds_iv_ns		*sp_iv_ns;
 };
 
 struct ds_pool_create_arg {
@@ -100,7 +101,9 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
 		     d_rank_list_t *excluded_list);
 int
-ds_pool_pmap_broadcast(const uuid_t uuid, d_rank_list_t *tgts_exclude);
+ds_pool_map_update(const uuid_t uuid, d_rank_list_t *tgts_exclude);
+
+int ds_pool_tgt_map_update(struct ds_pool *pool);
 
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, d_rank_list_t *tgts,
 			    d_rank_list_t *tgts_out);

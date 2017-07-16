@@ -32,7 +32,7 @@
  * Initialise a scatter/gather list, create an array to store @nr iovecs.
  */
 int
-daos_sgl_init(daos_sg_list_t *sgl, unsigned int nr)
+daos_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 {
 	memset(sgl, 0, sizeof(*sgl));
 
@@ -47,7 +47,7 @@ daos_sgl_init(daos_sg_list_t *sgl, unsigned int nr)
  * is true.
  */
 void
-daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs)
+daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 {
 	int	i;
 
@@ -65,8 +65,27 @@ daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs)
 	memset(sgl, 0, sizeof(*sgl));
 }
 
+int
+daos_sgl_copy(d_sg_list_t *dst, d_sg_list_t *src)
+{
+	int rc;
+
+	if (dst->sg_iovs == NULL) {
+		rc = daos_sgl_init(dst, src->sg_nr.num);
+		if (rc)
+			return rc;
+	}
+
+	D_ASSERT(dst->sg_nr.num <= src->sg_nr.num);
+
+	memcpy(dst->sg_iovs, src->sg_iovs,
+	       dst->sg_nr.num * sizeof(*dst->sg_iovs));
+
+	return 0;
+}
+
 daos_size_t
-daos_sgl_data_len(daos_sg_list_t *sgl)
+daos_sgl_data_len(d_sg_list_t *sgl)
 {
 	daos_size_t	len;
 	int		i;
@@ -81,7 +100,7 @@ daos_sgl_data_len(daos_sg_list_t *sgl)
 }
 
 daos_size_t
-daos_sgl_buf_len(daos_sg_list_t *sgl)
+daos_sgl_buf_len(d_sg_list_t *sgl)
 {
 	daos_size_t	len;
 	int		i;

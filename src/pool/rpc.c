@@ -135,7 +135,11 @@ struct crt_msg_field *pool_tgt_connect_in_fields[] = {
 	&CMF_UUID,	/* pool */
 	&CMF_UUID,	/* pool_hdl */
 	&CMF_UINT64,	/* capas */
-	&CMF_UINT32	/* pool_map_version */
+	&CMF_UINT32,	/* pool_map_version */
+	&CMF_UINT32,	/* iv class id */
+	&CMF_UINT32,	/* master rank */
+	&CMF_UINT32,	/* padding */
+	&CMF_IOVEC	/* iv context */
 };
 
 struct crt_msg_field *pool_tgt_connect_out_fields[] = {

@@ -83,15 +83,14 @@ struct pool_map *
 rebuild_pool_map_get(void)
 {
 	struct ds_pool  *pool = rebuild_gst.rg_pool;
-	struct pool_map *map;
+	struct pool_map *map = NULL;
 
 	D__ASSERT(pool);
-
+	D__ASSERT(pool->sp_map != NULL);
 	ABT_rwlock_rdlock(pool->sp_lock);
 	map = pool->sp_map;
 	pool_map_addref(map);
 	ABT_rwlock_unlock(pool->sp_lock);
-
 	return map;
 }
 
@@ -675,7 +674,7 @@ ds_rebuild(const uuid_t pool_uuid, uint32_t map_ver,
 	}
 
 	/* Broadcast the pool map for rebuild */
-	rc = ds_pool_pmap_broadcast(pool_uuid, tgts_failed);
+	rc = ds_pool_map_update(pool_uuid, tgts_failed);
 	if (rc) {
 		D__ERROR("pool map broadcast failed: rc %d\n", rc);
 		D__GOTO(out, rc);

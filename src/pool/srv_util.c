@@ -351,6 +351,7 @@ ds_pool_map_tgts_update(struct pool_map *map, d_rank_list_t *tgts,
 				target->ta_comp.co_rank, map);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
 			target->ta_comp.co_ver = version;
+			target->ta_comp.co_fseq = 0;
 			nchanges++;
 		} else if (opc == POOL_EXCLUDE_OUT &&
 			   target->ta_comp.co_status == PO_COMP_ST_DOWN) {

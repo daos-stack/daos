@@ -52,8 +52,12 @@ init(void)
 	if (rc != 0)
 		D__GOTO(err_pool_cache, rc);
 
+	rc = ds_pool_iv_init();
+	if (rc)
+		D_GOTO(err_hdl_hash, rc);
 	return 0;
-
+err_hdl_hash:
+	ds_pool_hdl_hash_fini();
 err_pool_cache:
 	ds_pool_cache_fini();
 err_pool_svc:
@@ -68,6 +72,7 @@ fini(void)
 	ds_pool_hdl_hash_fini();
 	ds_pool_cache_fini();
 	ds_pool_svc_hash_fini();
+	ds_pool_iv_fini();
 	return 0;
 }
 

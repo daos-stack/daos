@@ -40,4 +40,8 @@ int dss_srv_fini(bool force);
 void dss_tls_fini(void *arg);
 struct dss_thread_local_storage *dss_tls_init(int tag);
 
+/* server_iv.c */
+int ds_iv_init(void);
+int ds_iv_fini(void);
+
 #endif /* __DAOS_SRV_INTERNAL__ */

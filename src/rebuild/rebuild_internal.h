@@ -62,7 +62,7 @@ struct rebuild_globals {
 
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		rg_rebuild_ver;
-	/** the current version being rebuilt, only used by leader */
+	/** the last version being rebuilt, only used by leader */
 	uint32_t		rg_last_ver;
 	daos_list_t		rg_task_list;
 	ABT_mutex		rg_lock;
