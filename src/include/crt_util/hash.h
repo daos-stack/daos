@@ -260,6 +260,7 @@ void crt_hhash_link_insert(struct crt_hhash *hhash,
 			    struct crt_hlink *hlink, int type);
 struct crt_hlink *crt_hhash_link_lookup(struct crt_hhash *hhash,
 					  uint64_t key);
+void crt_hhash_link_getref(struct crt_hhash *hhash, struct crt_hlink *hlink);
 void crt_hhash_link_putref(struct crt_hhash *hhash, struct crt_hlink *hlink);
 bool crt_hhash_link_delete(struct crt_hhash *hhash, struct crt_hlink *hlink);
 bool crt_hhash_link_empty(struct crt_hlink *hlink);

@@ -1008,6 +1008,12 @@ crt_hhash_link_delete(struct crt_hhash *hhtab, struct crt_hlink *hlink)
 }
 
 void
+crt_hhash_link_addref(struct crt_hhash *hhtab, struct crt_hlink *hlink)
+{
+	chash_rec_addref(&hhtab->ch_htable, &hlink->hl_link.rl_link);
+}
+
+void
 crt_hhash_link_putref(struct crt_hhash *hhtab, struct crt_hlink *hlink)
 {
 	chash_rec_decref(&hhtab->ch_htable, &hlink->hl_link.rl_link);
