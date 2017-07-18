@@ -47,7 +47,7 @@
 struct vos_container_index;
 struct vos_cont_df;
 struct vos_object_index;
-struct vos_obj;
+struct vos_obj_df;
 struct vos_cookie_rec_df;
 struct vos_epoch_index;
 struct vos_krec_df;
@@ -70,7 +70,7 @@ POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container_index);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_object_index);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_rec_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_irec_df);
@@ -173,8 +173,8 @@ struct vos_irec_df {
  * VOS object, assume all objects are KV store...
  * NB: PMEM data structure.
  */
-struct vos_obj {
-	daos_unit_oid_t			vo_oid;
+struct vos_obj_df {
+	daos_unit_oid_t			vo_id;
 	/** VOS object btree root */
 	struct btr_root			vo_tree;
 };

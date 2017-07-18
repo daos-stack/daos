@@ -48,132 +48,118 @@
  * VOS LRU key must consist of
  * Object ID and container UUID
  */
-struct vos_lru_key {
+struct obj_lru_key {
 	/* Container UUID */
-	uuid_t		vlk_co_uuid;
+	uuid_t		olk_co_uuid;
 	/* Object ID */
-	daos_unit_oid_t	vlk_obj_id;
+	daos_unit_oid_t	olk_obj_id;
 };
 
-
-int
-vos_oref_lru_alloc(void *key, unsigned int ksize,
-		   void *args, struct daos_llink **link)
+static int
+obj_lop_alloc(void *key, unsigned int ksize, void *args,
+	      struct daos_llink **llink_p)
 {
-	int			rc = 0;
-	struct vos_obj_ref	*oref;
-	struct vos_obj		*lobj;
-	struct vos_lru_key	*lkey;
+	struct vos_object	*obj;
+	struct vos_obj_df	*obj_df;
+	struct obj_lru_key	*lkey;
 	struct vos_container	*cont;
-
-	D_DEBUG(DF_VOS2, "lru alloc callback for vos_obj_cache\n");
+	int			 rc;
 
 	cont = (struct vos_container *)args;
 	D_ASSERT(cont != NULL);
 
-	lkey = (struct vos_lru_key *) key;
+	lkey = (struct obj_lru_key *)key;
 	D_ASSERT(lkey != NULL);
+
+	D_DEBUG(DF_VOS2, "cont="DF_UUID", obj="DF_UOID"\n",
+		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_obj_id));
 
 	/**
 	 * Call back called by LRU cache as the reference
 	 * was not found in DRAM cache
 	 * Looking it up in PMEM Object Index
 	 */
-	rc = vos_oi_find_alloc(cont, lkey->vlk_obj_id, &lobj);
-	if (rc) {
-		D_ERROR("Error looking up container handle\n");
-		return rc;
-	}
+	rc = vos_oi_find_alloc(cont, lkey->olk_obj_id, &obj_df);
+	if (rc)
+		D_GOTO(failed, rc);
 
-	D_ALLOC_PTR(oref);
-	if (!oref)
-		return -DER_NOMEM;
+	D_ALLOC_PTR(obj);
+	if (!obj)
+		D_GOTO(failed, rc = -DER_NOMEM);
 	/**
-	 *  Saving a copy of oid to avoid looking up in
-	 *  vos_obj is a direct pointer to pmem data structure
+	 * Saving a copy of oid to avoid looking up in vos_obj_df, which
+	 * is a direct pointer to pmem data structure
 	 */
-	oref->or_obj	= lobj;
-	oref->or_oid	= lkey->vlk_obj_id;
-	oref->or_cont	= cont;
+	obj->obj_df	= obj_df;
+	obj->obj_id	= lkey->olk_obj_id;
+	obj->obj_cont	= cont;
 	vos_cont_addref(cont);
 
-	D_DEBUG(DF_VOS2, "oref create_cb co uuid:"DF_UUID"\n",
-		DP_UUID(cont->vc_id));
-	D_DEBUG(DF_VOS2, "Object Hold of obj_id: "DF_UOID"\n",
-		DP_UOID(lkey->vlk_obj_id));
-
-	*link = &oref->or_llink;
-	return 0;
+	*llink_p = &obj->obj_llink;
+failed:
+	return rc;
 }
 
-bool
-vos_oref_cmp_keys(const void *key, unsigned int ksize,
-		  struct daos_llink *llink)
+static bool
+obj_lop_cmp_key(const void *key, unsigned int ksize, struct daos_llink *llink)
 {
-	struct vos_obj_ref	*oref;
-	struct vos_lru_key	*hkey = (struct vos_lru_key *) key;
+	struct vos_object	*obj;
+	struct obj_lru_key	*hkey = (struct obj_lru_key *) key;
 
 	D_DEBUG(DF_VOS3, "LRU compare keys\n");
 	D_ASSERT(llink);
-	D_ASSERT(ksize == sizeof(struct vos_lru_key));
+	D_ASSERT(ksize == sizeof(struct obj_lru_key));
 
-	oref = container_of(llink, struct vos_obj_ref, or_llink);
+	obj = container_of(llink, struct vos_object, obj_llink);
 
-	return !(memcmp(&hkey->vlk_obj_id, &oref->or_oid,
+	return !(memcmp(&hkey->olk_obj_id, &obj->obj_id,
 			sizeof(daos_unit_oid_t)) ||
-		 uuid_compare(hkey->vlk_co_uuid, oref->or_cont->vc_id));
+		 uuid_compare(hkey->olk_co_uuid, obj->obj_cont->vc_id));
 }
 
-void
-vos_oref_lru_free(struct daos_llink *llink)
+static void
+obj_lop_free(struct daos_llink *llink)
 {
-	struct vos_obj_ref	*oref;
+	struct vos_object	*obj;
 
 	D_DEBUG(DF_VOS3, "lru free callback for vos_obj_cache\n");
 	D_ASSERT(llink);
 
-	oref = container_of(llink, struct vos_obj_ref, or_llink);
-	if (oref->or_cont != NULL)
-		vos_cont_decref(oref->or_cont);
+	obj = container_of(llink, struct vos_object, obj_llink);
+	if (obj->obj_cont != NULL)
+		vos_cont_decref(obj->obj_cont);
 
-	vos_obj_tree_fini(oref);
-	D_FREE_PTR(oref);
+	vos_obj_tree_fini(obj);
+	D_FREE_PTR(obj);
 }
 
-void
-vos_oref_lru_printkey(void *key, unsigned int ksize)
+static void
+obj_lop_print_key(void *key, unsigned int ksize)
 {
-	struct vos_lru_key	*lkey;
+	struct obj_lru_key	*lkey = (struct obj_lru_key *)key;
 
-	lkey = (struct vos_lru_key *) key;
 	D_ASSERT(lkey != NULL);
-	D_DEBUG(DF_VOS2, "Container uuid:"DF_UUID"\n",
-		DP_UUID(lkey->vlk_co_uuid));
-	D_DEBUG(DF_VOS2, "Object id: "DF_UOID"\n",
-		DP_UOID(lkey->vlk_obj_id));
+	D_DEBUG(DF_VOS2, "cont="DF_UUID", obj="DF_UOID"\n",
+		DP_UUID(lkey->olk_co_uuid), DP_UOID(lkey->olk_obj_id));
 }
 
-struct daos_llink_ops vos_oref_llink_ops = {
-	.lop_free_ref	=  vos_oref_lru_free,
-	.lop_alloc_ref	=  vos_oref_lru_alloc,
-	.lop_cmp_keys	=  vos_oref_cmp_keys,
-	.lop_print_key	=  vos_oref_lru_printkey,
+static struct daos_llink_ops obj_lru_ops = {
+	.lop_free_ref	=  obj_lop_free,
+	.lop_alloc_ref	=  obj_lop_alloc,
+	.lop_cmp_keys	=  obj_lop_cmp_key,
+	.lop_print_key	=  obj_lop_print_key,
 };
 
 int
 vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
 {
-	int			rc = 0;
+	int	rc;
 
-	D_DEBUG(DF_VOS2, "Creating an object cache %d\n",
-		(1 << cache_size));
-
+	D_DEBUG(DF_VOS2, "Creating an object cache %d\n", (1 << cache_size));
 	rc = daos_lru_cache_create(cache_size, DHASH_FT_NOLOCK,
-				   &vos_oref_llink_ops, occ);
+				   &obj_lru_ops, occ);
 	if (rc)
-		D_ERROR("Error in creating lru cache\n");
-
-	D_DEBUG(DF_VOS2, "Succesful in creating object cache\n");
+		D_ERROR("Error in creating lru cache: %d\n", rc);
 	return rc;
 }
 
@@ -187,14 +173,14 @@ vos_obj_cache_destroy(struct daos_lru_cache *occ)
 static bool
 obj_cache_evict_cond(struct daos_llink *llink, void *args)
 {
-	struct vos_container	   *cont = (struct vos_container *)args;
-	struct vos_obj_ref *oref;
+	struct vos_container	*cont = (struct vos_container *)args;
+	struct vos_object	*obj;
 
 	if (cont == NULL)
 		return true;
 
-	oref = container_of(llink, struct vos_obj_ref, or_llink);
-	return oref->or_cont == cont;
+	obj = container_of(llink, struct vos_object, obj_llink);
+	return obj->obj_cont == cont;
 }
 
 void
@@ -213,77 +199,70 @@ vos_obj_cache_current(void)
 }
 
 void
-vos_obj_ref_release(struct daos_lru_cache *occ, struct vos_obj_ref *oref)
+vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj)
 {
 
-	D_ASSERT((occ != NULL) && (oref != NULL));
-	daos_lru_ref_release(occ, &oref->or_llink);
+	D_ASSERT((occ != NULL) && (obj != NULL));
+	daos_lru_ref_release(occ, &obj->obj_llink);
 }
 
 int
-vos_obj_ref_hold(struct daos_lru_cache *occ, daos_handle_t coh,
-		 daos_unit_oid_t oid, struct vos_obj_ref **oref_p)
+vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
+	     daos_unit_oid_t oid, struct vos_object **obj_p)
 {
 
-	int			rc = 0;
-	struct vos_obj_ref	*lref = NULL;
-	struct vos_lru_key	lkey;
+	struct vos_object	*obj = NULL;
 	struct daos_llink	*lret = NULL;
 	struct vos_container	*cont;
+	struct obj_lru_key	 lkey;
+	int			 rc;
 
 	D_ASSERT(occ != NULL);
-	D_DEBUG(DF_VOS2, "Object Hold of obj_id: "DF_UOID"\n",
-		DP_UOID(oid));
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
+	D_DEBUG(DF_VOS2, "Try to hold cont="DF_UUID", obj="DF_UOID"\n",
+		DP_UUID(cont->vc_id), DP_UOID(oid));
+
 	/* Create the key for obj cache */
-	uuid_copy(lkey.vlk_co_uuid, cont->vc_id);
-	lkey.vlk_obj_id = oid;
+	uuid_copy(lkey.olk_co_uuid, cont->vc_id);
+	lkey.olk_obj_id = oid;
 
 	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), cont, &lret);
-	if (rc) {
-		D_ERROR("Error in Holding reference for obj"DF_UOID"\n",
-			DP_UOID(oid));
-		return	rc;
-	}
+	if (rc)
+		D_GOTO(failed, rc);
 
-	lref = container_of(lret, struct vos_obj_ref, or_llink);
-	D_DEBUG(DF_VOS2, "Object "DF_UOID" ref hold successful\n",
-		DP_UOID(oid));
-	D_DEBUG(DF_VOS2, "Container UUID:"DF_UUID"\n",
-		DP_UUID(lref->or_cont->vc_id));
-	*oref_p = lref;
-
+	obj = container_of(lret, struct vos_object, obj_llink);
+	*obj_p = obj;
+failed:
 	return	rc;
 }
 
 void
-vos_obj_ref_evict(struct vos_obj_ref *oref)
+vos_obj_evict(struct vos_object *obj)
 {
-	daos_lru_ref_evict(&oref->or_llink);
+	daos_lru_ref_evict(&obj->obj_llink);
 }
 
 bool
-vos_obj_ref_evicted(struct vos_obj_ref *oref)
+vos_obj_evicted(struct vos_object *obj)
 {
-	return daos_lru_ref_evicted(&oref->or_llink);
+	return daos_lru_ref_evicted(&obj->obj_llink);
 }
 
 int
-vos_obj_ref_revalidate(struct daos_lru_cache *occ, struct vos_obj_ref **oref_p)
+vos_obj_revalidate(struct daos_lru_cache *occ, struct vos_object **obj_p)
 {
-	struct vos_obj_ref *oref = *oref_p;
-	int		    rc;
+	struct vos_object *obj = *obj_p;
+	int		   rc;
 
-	if (!vos_obj_ref_evicted(oref))
+	if (!vos_obj_evicted(obj))
 		return 0;
 
-	rc = vos_obj_ref_hold(occ, vos_cont2hdl(oref->or_cont), oref->or_oid,
-			      oref_p);
+	rc = vos_obj_hold(occ, vos_cont2hdl(obj->obj_cont), obj->obj_id, obj_p);
 	if (rc == 0) {
-		D_ASSERT(*oref_p != oref);
-		vos_obj_ref_release(occ, oref);
+		D_ASSERT(*obj_p != obj);
+		vos_obj_release(occ, obj);
 	}
 	return rc;
 }

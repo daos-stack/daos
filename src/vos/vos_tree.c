@@ -634,39 +634,38 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 
 /** initialize tree for an object */
 int
-vos_obj_tree_init(struct vos_obj_ref *oref)
+vos_obj_tree_init(struct vos_object *obj)
 {
 	struct vos_btr_attr *ta = &vos_btr_attrs[0];
-	struct vos_obj	    *obj;
 	int		     rc;
 
-	if (!daos_handle_is_inval(oref->or_toh))
+	if (!daos_handle_is_inval(obj->obj_toh))
 		return 0;
 
-	obj = oref->or_obj;
 	if (vos_obj_is_new(obj)) {
 		D_DEBUG(DF_VOS2, "Create btree for object\n");
 		rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats,
-					   ta->ta_order, vos_oref2uma(oref),
-					   &obj->vo_tree, &oref->or_toh);
+					   ta->ta_order, vos_obj2uma(obj),
+					   &obj->obj_df->vo_tree,
+					   &obj->obj_toh);
 	} else {
 		D_DEBUG(DF_VOS2, "Open btree for object\n");
-		rc = dbtree_open_inplace(&obj->vo_tree, vos_oref2uma(oref),
-					 &oref->or_toh);
+		rc = dbtree_open_inplace(&obj->obj_df->vo_tree,
+					 vos_obj2uma(obj), &obj->obj_toh);
 	}
 	return rc;
 }
 
 /** close btree for an object */
 int
-vos_obj_tree_fini(struct vos_obj_ref *oref)
+vos_obj_tree_fini(struct vos_object *obj)
 {
 	int	rc = 0;
 
 	/* NB: tree is created inplace, so don't need to destroy */
-	if (!daos_handle_is_inval(oref->or_toh)) {
-		rc = dbtree_close(oref->or_toh);
-		oref->or_toh = DAOS_HDL_INVAL;
+	if (!daos_handle_is_inval(obj->obj_toh)) {
+		rc = dbtree_close(obj->obj_toh);
+		obj->obj_toh = DAOS_HDL_INVAL;
 	}
 	return rc;
 }

@@ -113,21 +113,19 @@ struct vos_imem_strts	*vsa_imems_inst;
  * Reference of a cached object.
  * NB: DRAM data structure.
  */
-struct vos_obj_ref {
+struct vos_object {
 	/** llink for daos lru cache */
-	struct daos_llink		or_llink;
+	struct daos_llink		obj_llink;
 	/** Key for searching, object ID within a container */
-	daos_unit_oid_t			or_oid;
-	/** VOS object reference Key size */
-	unsigned int			or_ksize;
+	daos_unit_oid_t			obj_id;
 	/** dkey tree open handle of the object */
-	daos_handle_t			or_toh;
+	daos_handle_t			obj_toh;
 	/** btree iterator handle */
-	daos_handle_t			or_ih;
+	daos_handle_t			obj_ih;
 	/** Persistent memory ID for the object */
-	struct vos_obj			*or_obj;
+	struct vos_obj_df		*obj_df;
 	/** Container Handle - Convenience */
-	struct vos_container		*or_cont;
+	struct vos_container		*obj_cont;
 };
 
 /** Iterator ops for objects and OIDs */
@@ -420,8 +418,8 @@ enum vos_tree_class {
 	VOS_BTR_END,
 };
 
-int vos_obj_tree_init(struct vos_obj_ref *oref);
-int vos_obj_tree_fini(struct vos_obj_ref *oref);
+int vos_obj_tree_init(struct vos_object *obj);
+int vos_obj_tree_fini(struct vos_object *obj);
 int vos_obj_tree_register(void);
 
 /**
@@ -560,21 +558,15 @@ vos_irec2data(struct vos_irec_df *irec)
 }
 
 static inline bool
-vos_obj_is_new(struct vos_obj *obj)
+vos_obj_is_new(struct vos_object *obj)
 {
-	return obj->vo_tree.tr_class == 0;
+	return obj->obj_df->vo_tree.tr_class == 0;
 }
 
 static inline bool
 vos_subtree_is_empty(daos_handle_t toh)
 {
 	return dbtree_is_empty(toh) == 1;
-}
-
-static inline bool vos_obj_is_zombie(struct vos_obj *obj)
-{
-	/* TODO */
-	return false;
 }
 
 static inline bool vos_recx_is_equal(daos_recx_t *recx1, daos_recx_t *recx2)
@@ -589,27 +581,27 @@ vos_cont2pop(struct vos_container *cont)
 }
 
 static inline PMEMobjpool *
-vos_oref2pop(struct vos_obj_ref *oref)
+vos_obj2pop(struct vos_object *obj)
 {
-	return vos_cont2pop(oref->or_cont);
+	return vos_cont2pop(obj->obj_cont);
 }
 
 static inline daos_handle_t
-vos_oref2cookie_hdl(struct vos_obj_ref *oref)
+vos_obj2cookie_hdl(struct vos_object *obj)
 {
-	return oref->or_cont->vc_pool->vp_cookie_ith;
+	return obj->obj_cont->vc_pool->vp_cookie_ith;
 }
 
 static inline struct umem_attr *
-vos_oref2uma(struct vos_obj_ref *oref)
+vos_obj2uma(struct vos_object *obj)
 {
-	return &oref->or_cont->vc_pool->vp_uma;
+	return &obj->obj_cont->vc_pool->vp_uma;
 }
 
 static inline struct umem_instance *
-vos_oref2umm(struct vos_obj_ref *oref)
+vos_obj2umm(struct vos_object *obj)
 {
-	return &oref->or_cont->vc_pool->vp_umm;
+	return &obj->obj_cont->vc_pool->vp_umm;
 }
 
 static inline daos_handle_t

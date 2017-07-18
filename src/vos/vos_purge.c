@@ -35,7 +35,7 @@
 /** context of epoch purge (aggregate/discard)*/
 struct purge_context {
 	/** reference on the object to be checked */
-	struct vos_obj_ref	*pc_obj;
+	struct vos_object	*pc_obj;
 	/** PMEM pool for transactions */
 	PMEMobjpool		*pc_pop;
 	/** the current iterator type */
@@ -103,14 +103,14 @@ purge_ctx_init(struct purge_context *pcx, vos_iter_entry_t *ent)
 		break;
 
 	case VOS_ITER_OBJ:
-		rc = vos_obj_ref_hold(vos_obj_cache_current(), param->ip_hdl,
-				      ent->ie_oid, &pcx->pc_obj);
+		rc = vos_obj_hold(vos_obj_cache_current(), param->ip_hdl,
+				  ent->ie_oid, &pcx->pc_obj);
 		if (rc != 0)
 			break;
 		param->ip_oid = ent->ie_oid;
 		daos_iov_set(&param->ip_dkey, NULL, 0);
 		daos_iov_set(&param->ip_akey, NULL, 0);
-		pcx->pc_pop  = vos_oref2pop(pcx->pc_obj);
+		pcx->pc_pop  = vos_obj2pop(pcx->pc_obj);
 		pcx->pc_type = VOS_ITER_DKEY;
 		break;
 
@@ -150,8 +150,8 @@ purge_ctx_fini(struct purge_context *pcx, int rc)
 		/* Evict the object because we might have destroyed the
 		 * cached I/O context, or even released the object.
 		 */
-		vos_obj_ref_evict(pcx->pc_obj);
-		vos_obj_ref_release(vos_obj_cache_current(), pcx->pc_obj);
+		vos_obj_evict(pcx->pc_obj);
+		vos_obj_release(vos_obj_cache_current(), pcx->pc_obj);
 		pcx->pc_obj  = NULL;
 		pcx->pc_type = VOS_ITER_OBJ;
 		return;

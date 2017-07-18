@@ -61,19 +61,19 @@ static int
 vo_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	     daos_iov_t *val_iov, struct btr_record *rec)
 {
-	struct vos_obj		*vo_rec;
-	TMMID(struct vos_obj)	 obj_mmid;
+	struct vos_obj_df	 *vo_rec;
+	TMMID(struct vos_obj_df)  obj_mmid;
 
-	/* Allocate a PMEM value of type vos_obj */
-	obj_mmid = umem_znew_typed(&tins->ti_umm, struct vos_obj);
+	/* Allocate a PMEM value of type vos_obj_df */
+	obj_mmid = umem_znew_typed(&tins->ti_umm, struct vos_obj_df);
 
 	if (TMMID_IS_NULL(obj_mmid))
 		return -DER_NOMEM;
 
 	vo_rec = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
 	D_ASSERT(key_iov->iov_len == sizeof(daos_unit_oid_t));
-	vo_rec->vo_oid = *(daos_unit_oid_t *)(key_iov->iov_buf);
-	daos_iov_set(val_iov, vo_rec, sizeof(struct vos_obj));
+	vo_rec->vo_id = *(daos_unit_oid_t *)(key_iov->iov_buf);
+	daos_iov_set(val_iov, vo_rec, sizeof(struct vos_obj_df));
 	rec->rec_mmid = umem_id_t2u(obj_mmid);
 	return 0;
 }
@@ -81,12 +81,12 @@ vo_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 static int
 vo_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
-	struct umem_instance	*umm = &tins->ti_umm;
-	struct vos_obj		*vobj;
-	TMMID(struct vos_obj)	 obj_mmid;
-	int			 rc = 0;
+	struct umem_instance	 *umm = &tins->ti_umm;
+	struct vos_obj_df	 *vobj;
+	TMMID(struct vos_obj_df)  obj_mmid;
+	int			  rc = 0;
 
-	obj_mmid = umem_id_u2t(rec->rec_mmid, struct vos_obj);
+	obj_mmid = umem_id_u2t(rec->rec_mmid, struct vos_obj_df);
 	vobj = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
 
 	/** Free the KV tree within this object */
@@ -109,12 +109,12 @@ static int
 vo_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	     daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
-	struct vos_obj		*vo_rec = NULL;
+	struct vos_obj_df	*vo_rec = NULL;
 
 	D_ASSERT(val_iov != NULL);
 
 	vo_rec = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
-	daos_iov_set(val_iov, vo_rec, sizeof(struct vos_obj));
+	daos_iov_set(val_iov, vo_rec, sizeof(struct vos_obj_df));
 
 	return 0;
 }
@@ -143,7 +143,7 @@ static btr_ops_t voi_ops = {
  */
 int
 vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
-	    struct vos_obj **obj)
+	    struct vos_obj_df **obj)
 {
 	int				rc = 0;
 	daos_iov_t			key_iov, val_iov;
@@ -171,7 +171,7 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
  */
 int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
-		  struct vos_obj **obj)
+		  struct vos_obj_df **obj)
 {
 	int				rc = 0;
 	daos_iov_t			key_iov, val_iov;
@@ -298,9 +298,9 @@ vos_oid_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		   daos_hash_out_t *anchor)
 {
 	struct vos_oid_iter	*oid_iter = vos_iter2oid_iter(iter);
-	daos_iov_t		rec_iov;
-	struct vos_obj		*vo_rec;
-	int			rc;
+	struct vos_obj_df	*vo_rec;
+	daos_iov_t		 rec_iov;
+	int			 rc;
 
 	D_DEBUG(DF_VOS2, "obj-iter oid fetch callback\n");
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
@@ -312,9 +312,9 @@ vos_oid_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		return rc;
 	}
 
-	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj));
-	vo_rec = (struct vos_obj *)rec_iov.iov_buf;
-	it_entry->ie_oid = vo_rec->vo_oid;
+	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
+	vo_rec = (struct vos_obj_df *)rec_iov.iov_buf;
+	it_entry->ie_oid = vo_rec->vo_id;
 
 	return 0;
 }

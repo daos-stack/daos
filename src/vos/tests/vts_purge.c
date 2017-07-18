@@ -220,7 +220,7 @@ io_create_object(struct vos_container *cont)
 {
 	int			rc = 0;
 	daos_unit_oid_t		oid;
-	struct vos_obj		*obj;
+	struct vos_obj_df	*obj;
 
 	oid = dts_unit_oid_gen(0, 0);
 	rc = vos_oi_find_alloc(cont, oid, &obj);
@@ -567,7 +567,7 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	assert_int_equal(rc, 0);
 
 	/** Check if the object does not exist? */
-	struct vos_obj		*obj_res = NULL;
+	struct vos_obj_df	*obj_res = NULL;
 
 	rc = vos_oi_find(vos_hdl2cont(arg->ctx.tc_co_hdl), last_oid, &obj_res);
 	assert_int_equal(rc, -DER_NONEXIST);
