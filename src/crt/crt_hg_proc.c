@@ -39,6 +39,7 @@
  * This file is part of CaRT. It implements the main input/output
  * parameter serialization/de-serialization routines (proc functions).
  */
+#define C_LOGFAC	CD_FAC(hg)
 
 #include <crt_internal.h>
 

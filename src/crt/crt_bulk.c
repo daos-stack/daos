@@ -38,6 +38,7 @@
 /**
  * This file is part of CaRT. It implements the CaRT bulk related APIs.
  */
+#define C_LOGFAC	CD_FAC(bulk)
 
 #include <crt_internal.h>
 

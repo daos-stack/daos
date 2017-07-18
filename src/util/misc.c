@@ -127,8 +127,8 @@ crt_rank_list_dup_sort_uniq(crt_rank_list_t **dst, const crt_rank_list_t *src,
 			for (j = i; j < rank_num; j++)
 				rank_list->rl_ranks[j - 1] =
 					rank_list->rl_ranks[j];
-			crt_log(MISC_DBG, "%s:%d, rank_list %p, removed "
-				"identical rank[%d](%d).\n", __FILE__, __LINE__,
+			C_DEBUG("%s:%d, rank_list %p, removed identical "
+				"rank[%d](%d).\n", __FILE__, __LINE__,
 				rank_list, i, rank_tmp);
 		}
 		rank_tmp = rank_list->rl_ranks[i];
@@ -138,7 +138,7 @@ crt_rank_list_dup_sort_uniq(crt_rank_list_t **dst, const crt_rank_list_t *src,
 			rank_list->rl_nr.num -= identical_num;
 		else
 			rank_list->rl_nr.num_out -= identical_num;
-		crt_log(MISC_DBG, "%s:%d, rank_list %p, removed %d ranks.\n",
+		C_DEBUG("%s:%d, rank_list %p, removed %d ranks.\n",
 			__FILE__, __LINE__, rank_list, identical_num);
 	}
 
@@ -181,7 +181,7 @@ crt_rank_list_filter(crt_rank_list_t *src_set, crt_rank_list_t *dst_set,
 		for (j = i; j < rank_num - 1; j++)
 			dst_set->rl_ranks[j] =
 				dst_set->rl_ranks[j + 1];
-		crt_log(MISC_DBG, "%s:%d, rank_list %p, filter rank[%d](%d).\n",
+		C_DEBUG("%s:%d, rank_list %p, filter rank[%d](%d).\n",
 			__FILE__, __LINE__, dst_set, i, rank);
 		/* as dst_set moved one item ahead */
 		i--;
@@ -191,7 +191,7 @@ crt_rank_list_filter(crt_rank_list_t *src_set, crt_rank_list_t *dst_set,
 			dst_set->rl_nr.num -= filter_num;
 		else
 			dst_set->rl_nr.num_out -= filter_num;
-		crt_log(MISC_DBG, "%s:%d, rank_list %p, filter %d ranks.\n",
+		C_DEBUG("%s:%d, rank_list %p, filter %d ranks.\n",
 			__FILE__, __LINE__, dst_set, filter_num);
 	}
 }
@@ -265,8 +265,8 @@ void
 crt_rank_list_copy(crt_rank_list_t *dst, crt_rank_list_t *src, bool input)
 {
 	if (dst == NULL || src == NULL) {
-		crt_log(MISC_DBG, "crt_rank_list_copy do nothing, dst: %p, "
-			"src: %p.\n", dst, src);
+		C_DEBUG("crt_rank_list_copy do nothing, dst: %p, src: %p.\n",
+			dst, src);
 		return;
 	}
 

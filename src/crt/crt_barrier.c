@@ -38,6 +38,7 @@
 /**
  * This file is part of CaRT. It implements the barrier APIs.
  */
+#define C_LOGFAC	CD_FAC(grp)
 
 #include <crt_internal.h>
 

@@ -322,9 +322,8 @@ ch_rec_insert(struct chash_table *htable, unsigned idx, crt_list_t *rlink)
 		bucket->hb_dep++;
 		if (bucket->hb_dep > htable->ht_dep_max) {
 			htable->ht_dep_max = bucket->hb_dep;
-			crt_log(MISC_DBG, "Max depth %d/%d/%d\n",
-				htable->ht_dep_max, htable->ht_nr,
-				htable->ht_nr_max);
+			C_DEBUG("Max depth %d/%d/%d\n", htable->ht_dep_max,
+				htable->ht_nr, htable->ht_nr_max);
 		}
 	}
 #endif
@@ -750,7 +749,7 @@ chash_table_destroy_inplace(struct chash_table *htable, bool force)
 	for (i = 0; i < nr; i++) {
 		while (!crt_list_empty(&buckets[i].hb_head)) {
 			if (!force) {
-				crt_log(MISC_DBG, "Warning, non-empty hash\n");
+				C_DEBUG("Warning, non-empty hash\n");
 				return -CER_BUSY;
 			}
 			chash_rec_delete_at(htable, buckets[i].hb_head.next);
@@ -789,7 +788,7 @@ void
 chash_table_debug(struct chash_table *htable)
 {
 #if DHASH_DEBUG
-	crt_log(MISC_DBG, "max nr: %d, cur nr: %d, max_dep: %d\n",
+	C_DEBUG("max nr: %d, cur nr: %d, max_dep: %d\n",
 		htable->ht_nr_max, htable->ht_nr, htable->ht_dep_max);
 #endif
 }
@@ -1056,7 +1055,7 @@ uh_op_key_hash(struct chash_table *uhtab, const void *key, unsigned int ksize)
 	struct crt_uuid *lkey = (struct crt_uuid *)key;
 
 	C_ASSERT(ksize == sizeof(struct crt_uuid));
-	crt_log(MISC_DBG, "uuid_key: "CF_UUID"\n", CP_UUID(lkey->uuid));
+	C_DEBUG("uuid_key: "CF_UUID"\n", CP_UUID(lkey->uuid));
 
 	return (unsigned int)(crt_hash_string_u32((const char *)lkey->uuid,
 						   sizeof(uuid_t)));
@@ -1070,7 +1069,7 @@ uh_op_key_cmp(struct chash_table *uhtab, crt_list_t *link, const void *key,
 	struct crt_uuid  *lkey = (struct crt_uuid *)key;
 
 	C_ASSERT(ksize == sizeof(struct crt_uuid));
-	crt_log(MISC_DBG, "Link key, Key:"CF_UUID","CF_UUID"\n",
+	C_DEBUG("Link key, Key:"CF_UUID","CF_UUID"\n",
 		CP_UUID(lkey->uuid),
 		CP_UUID(ulink->ul_uuid.uuid));
 

@@ -38,6 +38,7 @@
  * This file is part of CaRT. It implements the main fault tolerance module
  * routines.
  */
+#define C_LOGFAC	CD_FAC(lm)
 
 #include <crt_internal.h>
 

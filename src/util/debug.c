@@ -50,11 +50,16 @@
 
 static pthread_mutex_t crt_log_lock = PTHREAD_MUTEX_INITIALIZER;
 static int crt_log_refcount;
-int crt_logfac;
-int crt_mem_logfac;
-int crt_misc_logfac;
 
-#define CLOG_MAX_FAC_HINT	(16)
+int crt_misc_logfac;
+int crt_mem_logfac;
+int crt_rpc_logfac;
+int crt_bulk_logfac;
+int crt_corpc_logfac;
+int crt_grp_logfac;
+int crt_lm_logfac;
+int crt_hg_logfac;
+int crt_pmix_logfac;
 
 static void
 crt_log_sync_mask_helper(bool acquire_lock)
@@ -79,43 +84,41 @@ void crt_log_sync_mask(void)
 	crt_log_sync_mask_helper(true);
 }
 
+#define CRT_ADD_LOG_FAC(name, aname, lname)				       \
+	do {								       \
+		crt_##name##_logfac = crt_add_log_facility(aname, lname);      \
+		if (crt_##name##_logfac < 0) {				       \
+			C_PRINT_ERR("crt_add_log_facility failed, "	       \
+				    "crt_##name##__logfac: %d.\n",	       \
+				    crt_##name##_logfac);		       \
+			return -CER_UNINIT;				       \
+		}							       \
+	} while (0)
+
 /**
  * Setup the clog facility names and mask.
  *
  * \param masks [IN]	 masks in crt_log_setmasks() format, or NULL.
  */
+
 static inline int
 setup_clog_facnamemask(void)
 {
-	int rc;
-
-	/* first add the clog/mem/misc facility */
-	crt_mem_logfac = crt_add_log_facility("MEM", "memory");
-	if (crt_mem_logfac < 0) {
-		C_PRINT_ERR("crt_add_log_facility failed, crt_mem_logfac %d.\n",
-			    crt_mem_logfac);
-		C_GOTO(out, rc = -CER_UNINIT);
-	}
-	crt_misc_logfac = crt_add_log_facility("MISC", "miscellaneous");
-	if (crt_misc_logfac < 0) {
-		C_PRINT_ERR("crt_add_log_facility failed,crt_misc_logfac %d.\n",
-			    crt_misc_logfac);
-		C_GOTO(out, rc = -CER_UNINIT);
-	}
-	rc = 0;
-	/* add CRT specific log facility */
-	crt_logfac = crt_add_log_facility("CRT", "CaRT");
-	if (crt_logfac < 0) {
-		C_PRINT_ERR("crt_add_log_facility failed, crt_logfac %d.\n",
-			    crt_logfac);
-		C_GOTO(out, rc = -CER_UNINIT);
-	}
+	/* add crt internally used the log facilities */
+	CRT_ADD_LOG_FAC(misc, "MISC", "misc");
+	CRT_ADD_LOG_FAC(mem, "MEM", "memory");
+	CRT_ADD_LOG_FAC(rpc, "RPC", "rpc");
+	CRT_ADD_LOG_FAC(bulk, "BULK", "bulk");
+	CRT_ADD_LOG_FAC(corpc, "CORPC", "corpc");
+	CRT_ADD_LOG_FAC(grp, "GRP", "group");
+	CRT_ADD_LOG_FAC(lm, "LM", "livenessmap");
+	CRT_ADD_LOG_FAC(hg, "HG", "mercury");
+	CRT_ADD_LOG_FAC(pmix, "PMIX", "pmix");
 
 	/* Lock is already held */
 	crt_log_sync_mask_helper(false);
 
-out:
-	return rc;
+	return 0;
 }
 
 int
@@ -129,8 +132,7 @@ crt_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 	if (crt_log_refcount > 1) /* Already initialized */
 		C_GOTO(out, rc);
 
-	rc = crt_log_open(log_tag, CLOG_MAX_FAC_HINT, def_mask, err_mask,
-			  log_file, flavor);
+	rc = crt_log_open(log_tag, 0, def_mask, err_mask, log_file, flavor);
 	if (rc != 0) {
 		C_PRINT_ERR("crt_log_open failed: %d\n", rc);
 		C_GOTO(out, rc = -CER_UNINIT);

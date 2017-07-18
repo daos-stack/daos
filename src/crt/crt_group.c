@@ -38,6 +38,7 @@
 /**
  * This file is part of CaRT. It implements the main group APIs.
  */
+#define C_LOGFAC	CD_FAC(grp)
 
 #include <crt_internal.h>
 #include <sys/stat.h>
@@ -356,7 +357,7 @@ crt_grp_ctx_invalid(struct crt_context *ctx, bool locked)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
 	struct crt_grp_gdata	*grp_gdata;
-	int			 rc;
+	int			 rc = 0;
 
 	C_ASSERT(crt_initialized());
 	grp_gdata = crt_gdata.cg_grp;

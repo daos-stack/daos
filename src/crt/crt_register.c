@@ -39,6 +39,7 @@
  * This file is part of CaRT. It implements the RPC register related APIs and
  * internal handling.
  */
+#define C_LOGFAC	CD_FAC(rpc)
 
 #include <crt_internal.h>
 

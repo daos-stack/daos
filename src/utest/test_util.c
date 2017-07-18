@@ -762,7 +762,7 @@ test_log(void **state)
 	setenv("CRT_LOG_MASK", "CLOG=DEBUG,T1=DEBUG", 1);
 	const char *preset = "D0xF";
 	const char *preset1 = "D0xACF";
-	char retbuf[200];
+	char retbuf[1024];
 
 	memset(retbuf, 0x00, sizeof(retbuf));
 	rc = crt_log_init();
@@ -796,7 +796,7 @@ test_log(void **state)
 		allocated_mask = NULL;
 	}
 
-	crt_log_getmasks(retbuf, 0, 200, 0);
+	crt_log_getmasks(retbuf, 0, 1024, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
 

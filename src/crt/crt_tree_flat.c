@@ -39,6 +39,7 @@
  * This file is part of CaRT. It gives out the flat tree topo related
  * function implementation.
  */
+#define C_LOGFAC	CD_FAC(grp)
 
 #include <crt_internal.h>
 

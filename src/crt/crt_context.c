@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,8 @@
 /**
  * This file is part of CaRT. It implements the CaRT context related APIs.
  */
+#define C_LOGFAC	CD_FAC(rpc)
+
 #include <abt.h>
 #include <crt_internal.h>
 

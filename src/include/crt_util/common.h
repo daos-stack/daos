@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,6 +54,8 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <byteswap.h>
+#include <crt_api.h>
+#include <crt_util/debug.h>
 #ifdef __APPLE__
 #include <mach/clock.h>
 #include <mach/mach.h>
@@ -81,98 +83,14 @@ static inline int _crt_gettime(struct timespec *ts)
 #define _crt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
 #endif
 
-#include <crt_api.h>
-#include <crt_util/clog.h>
-
-extern int crt_logfac;
-extern int crt_mem_logfac;
-extern int crt_misc_logfac;
-
-#define CRT_CRIT	(crt_logfac | CLOG_CRIT)
-#define CRT_ERR		(crt_logfac | CLOG_ERR)
-#define CRT_WARN	(crt_logfac | CLOG_WARN)
-#define CRT_INFO	(crt_logfac | CLOG_INFO)
-#define CRT_DBG		(crt_logfac | CLOG_DBG)
-
-#define MEM_CRIT	(crt_mem_logfac | CLOG_CRIT)
-#define MEM_ERR		(crt_mem_logfac | CLOG_ERR)
-#define MEM_WARN	(crt_mem_logfac | CLOG_WARN)
-#define MEM_INFO	(crt_mem_logfac | CLOG_INFO)
-#define MEM_DBG		(crt_mem_logfac | CLOG_DBG)
-
-#define MISC_CRIT	(crt_misc_logfac | CLOG_CRIT)
-#define MISC_ERR	(crt_misc_logfac | CLOG_ERR)
-#define MISC_WARN	(crt_misc_logfac | CLOG_WARN)
-#define MISC_INFO	(crt_misc_logfac | CLOG_INFO)
-#define MISC_DBG	(crt_misc_logfac | CLOG_DBG)
-
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-/*
- * Add a new log facility.
- *
- * \param aname [IN]	abbr. name for the facility, for example DSR.
- * \param lname [IN]	long name for the facility, for example CRT_SR.
- *
- * \return		new positive facility number on success, -1 on error.
- */
-static inline int
-crt_add_log_facility(char *aname, char *lname)
-{
-	return crt_log_allocfacility(aname, lname);
-}
-
-/*
- * C_PRINT_ERR must be used for any error logging before clog is enabled or
- * after it is disabled
- */
-#define C_PRINT_ERR(fmt, ...)                                          \
-	do {                                                           \
-		fprintf(stderr, "%s:%d:%d:%s() " fmt, __FILE__,        \
-			getpid(), __LINE__, __func__, ## __VA_ARGS__); \
-		fflush(stderr);                                        \
-	} while (0)
-
-
-/*
- * C_DEBUG/C_ERROR etc can-only be used when clog enabled. User can define other
- * similar macros using different subsystem and log-level, for example:
- * #define DSR_DEBUG(...) crt_log(DSR_DEBUG, ...)
- */
-#define C_DEBUG(fmt, ...)						\
-	crt_log(CRT_DBG, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__, \
-		##__VA_ARGS__)
-
-#define C_WARN(fmt, ...)						\
-	crt_log(CRT_WARN, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,\
-		##__VA_ARGS__)
-
-#define C_ERROR(fmt, ...)						\
-	crt_log(CRT_ERR, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__, \
-		##__VA_ARGS__)
-
-#define C_FATAL(fmt, ...)						\
-	crt_log(CRT_CRIT, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,\
-		##__VA_ARGS__)
-
-#define C_ASSERT(e)	assert(e)
-
-#define C_ASSERTF(cond, fmt, ...)					\
-do {									\
-	if (!(cond))							\
-		C_FATAL(fmt, ## __VA_ARGS__);				\
-	assert(cond);							\
-} while (0)
-
-#define C_CASSERT(cond)							\
-	do {switch (1) {case (cond): case 0: break; } } while (0)
-
-#define CF_U64		"%" PRIu64
-#define CF_X64		"%" PRIx64
-
 /* memory allocating macros */
+
+#define MEM_DBG		(crt_mem_logfac | CLOG_DBG)
+
 #define C_ALLOC(ptr, size)						       \
 	do {								       \
 		(ptr) = (__typeof__(ptr))calloc(1, (size));		       \

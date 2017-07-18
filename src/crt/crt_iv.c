@@ -48,6 +48,8 @@
  * - Support of endian-agnostic ivns_internal
  * - Optimize group lookup by using internal group id
  **/
+#define C_LOGFAC	CD_FAC(corpc)
+
 #include <crt_internal.h>
 #include <crt_iv.h>
 
