@@ -203,10 +203,15 @@ struct dss_coll_aggregator_args {
 
 /* Generic dss_collective with custom aggregator */
 int
-dss_collective_reduce(int (*func)(void *), void *f_args,
-		      struct dss_coll_aggregator_args *aggregator_args);
+dss_task_collective_reduce(int (*func)(void *), void *f_args,
+			   struct dss_coll_aggregator_args *aggregator_args);
+int
+dss_thread_collective_reduce(int (*func)(void *), void *f_args,
+			     struct dss_coll_aggregator_args *aggregator_args);
 
-int dss_collective(int (*func)(void *), void *arg);
+int dss_task_collective(int (*func)(void *), void *arg);
+int dss_thread_collective(int (*func)(void *), void *arg);
+
 int dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size);
 unsigned int dss_get_threads_number(void);
 

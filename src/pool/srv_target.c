@@ -232,7 +232,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
 
-	rc = dss_collective(pool_child_add_one, &collective_arg);
+	rc = dss_task_collective(pool_child_add_one, &collective_arg);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	if (arg->pca_need_group) {
@@ -258,7 +258,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	return 0;
 
 err_collective:
-	rc_tmp = dss_collective(pool_child_delete_one, key);
+	rc_tmp = dss_task_collective(pool_child_delete_one, key);
 	D_ASSERTF(rc_tmp == 0, "%d\n", rc_tmp);
 	ABT_mutex_free(&pool->sp_map_lock);
 err_cond:
@@ -291,7 +291,7 @@ pool_free_ref(struct daos_llink *llink)
 #endif
 	}
 
-	rc = dss_collective(pool_child_delete_one, pool->sp_uuid);
+	rc = dss_task_collective(pool_child_delete_one, pool->sp_uuid);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	if (pool->sp_map != NULL)
@@ -699,7 +699,7 @@ ds_pool_tgt_update_map_handler(crt_rpc_t *rpc)
 			in->tui_map_version);
 
 		pool->sp_map_version = in->tui_map_version;
-		rc = dss_collective(update_child_map, pool);
+		rc = dss_task_collective(update_child_map, pool);
 		D_ASSERT(rc == 0);
 
 	} else if (pool->sp_map != NULL &&

@@ -705,23 +705,10 @@ collective_reduce(void **arg)
 	}
 }
 
-/**
- * General case:
- * Execute \a func(\a arg) collectively on all server xstreams. Can only be
- * called by ULTs. Can only execute tasklet-compatible functions. User specified
- * reduction functions for aggregation after collective
- *
- * \param[in] func		function to be executed
- * \param[in] f_args		argument to be passed to \a func
- * \param[in] aggregator_args	pack return code with optional
- *				additional function and arguments
- *				for aggregation.
- * \param[in] future		future to use
- * \return			number of failed xstreams or error code
- */
-int
-dss_collective_reduce(int (*func)(void *), void *f_args,
-		      struct dss_coll_aggregator_args *aggregator_args)
+static int
+dss_collective_reduce_internal(int (*func)(void *), void *f_args,
+			       struct dss_coll_aggregator_args *aggregator_args,
+			       bool create_ult)
 {
 	struct collective_arg		carg;
 	struct dss_xstream		*dx;
@@ -747,7 +734,13 @@ dss_collective_reduce(int (*func)(void *), void *f_args,
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 
 	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
-		rc = ABT_task_create(dx->dx_pool, collective_func, &carg, NULL);
+		if (create_ult)
+			rc = ABT_thread_create(dx->dx_pool, collective_func,
+					       &carg, ABT_THREAD_ATTR_NULL,
+					       NULL);
+		else
+			rc = ABT_task_create(dx->dx_pool, collective_func,
+					     &carg, NULL);
 
 		if (rc != ABT_SUCCESS) {
 			aggregator_args[0].rc = dss_abterr2der(rc);
@@ -764,6 +757,68 @@ dss_collective_reduce(int (*func)(void *), void *f_args,
 }
 
 /**
+ * General case:
+ * Execute \a task(\a arg) collectively on all server xstreams. Can only be
+ * called by ULTs. Can only execute tasklet-compatible functions. User specified
+ * reduction functions for aggregation after collective
+ *
+ * \param[in] func		function to be executed
+ * \param[in] f_args		argument to be passed to \a func
+ * \param[in] aggregator_args	pack return code with optional
+ *				additional function and arguments
+ *				for aggregation.
+ * \return			number of failed xstreams or error code
+ */
+int
+dss_task_collective_reduce(int (*func)(void *), void *f_args,
+			   struct dss_coll_aggregator_args *aggregator_args)
+{
+	return dss_collective_reduce_internal(func, f_args, aggregator_args,
+					      false);
+}
+
+/**
+ * General case:
+ * Execute \a ULT(\a arg) collectively on all server xstreams. Can only be
+ * called by ULTs. Can only execute tasklet-compatible functions. User specified
+ * reduction functions for aggregation after collective
+ *
+ * \param[in] func		function to be executed
+ * \param[in] f_args		argument to be passed to \a func
+ * \param[in] aggregator_args	pack return code with optional
+ *				additional function and arguments
+ *				for aggregation.
+ * \return			number of failed xstreams or error code
+ */
+int
+dss_thread_collective_reduce(int (*func)(void *), void *f_args,
+			     struct dss_coll_aggregator_args *aggregator_args)
+{
+	return dss_collective_reduce_internal(func, f_args, aggregator_args,
+					      true);
+}
+
+static int
+dss_collective_internal(int (*func)(void *), void *arg, bool thread)
+{
+	struct dss_coll_aggregator_args	*aggregator_args;
+	int				rc;
+
+	D_ALLOC(aggregator_args, (dss_nxstreams + 1) *
+		sizeof(struct dss_coll_aggregator_args));
+
+	if (thread)
+		rc = dss_thread_collective_reduce(func, arg, aggregator_args);
+	else
+		rc = dss_task_collective_reduce(func, arg, aggregator_args);
+
+	D_FREE(aggregator_args, (dss_nxstreams + 1) *
+	       sizeof(struct dss_coll_aggregator_args));
+
+	return rc;
+}
+
+/**
  * Execute \a func(\a arg) collectively on all server xstreams. Can only be
  * called by ULTs. Can only execute tasklet-compatible functions.
  *
@@ -772,20 +827,24 @@ dss_collective_reduce(int (*func)(void *), void *f_args,
  * \return		number of failed xstreams or error code
  */
 int
-dss_collective(int (*func)(void *), void *arg)
+dss_task_collective(int (*func)(void *), void *arg)
 {
-	int				rc;
-	struct dss_coll_aggregator_args	*aggregator_args;
+	return dss_collective_internal(func, arg, false);
+}
 
-	D_ALLOC(aggregator_args, (dss_nxstreams + 1) *
-		sizeof(struct dss_coll_aggregator_args));
+/**
+ * Execute \a func(\a arg) collectively on all server xstreams. Can only be
+ * called by ULTs. Can only execute tasklet-compatible functions.
+ *
+ * \param[in] func	function to be executed
+ * \param[in] arg	argument to be passed to \a func
+ * \return		number of failed xstreams or error code
+ */
 
-	rc = dss_collective_reduce(func, arg, aggregator_args);
-
-	D_FREE(aggregator_args, (dss_nxstreams + 1) *
-	       sizeof(struct dss_coll_aggregator_args));
-
-	return rc;
+int
+dss_thread_collective(int (*func)(void *), void *arg)
+{
+	return dss_collective_internal(func, arg, true);
 }
 
 struct async_result {

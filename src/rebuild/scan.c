@@ -596,7 +596,7 @@ rebuild_scan_leader(void *data)
 	iter_arg.arg = arg;
 	iter_arg.callback = placement_check;
 
-	rc = dss_collective(rebuild_scanner, &iter_arg);
+	rc = dss_thread_collective(rebuild_scanner, &iter_arg);
 	if (rc)
 		D_GOTO(out_group, rc);
 
@@ -612,7 +612,7 @@ rebuild_scan_leader(void *data)
 	}
 
 	ABT_mutex_lock(rebuild_gst.rg_lock);
-	rc = dss_collective(rebuild_scan_done, NULL);
+	rc = dss_task_collective(rebuild_scan_done, NULL);
 	ABT_mutex_unlock(rebuild_gst.rg_lock);
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",

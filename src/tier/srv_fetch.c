@@ -142,7 +142,7 @@ ds_tier_fetch_handler(crt_rpc_t *rpc)
 	D_DEBUG(DF_TIERS, "\tcont_id:"DF_UUIDF"\n", in->tfi_co_hdl);
 	D_DEBUG(DF_TIERS, "\tepoch:"DF_U64"\n", in->tfi_ep);
 
-	out->tfo_ret = dss_collective(tier_hdlr_fetch_one, in);
+	out->tfo_ret = dss_task_collective(tier_hdlr_fetch_one, in);
 	crt_reply_send(rpc);
 }
 

@@ -240,7 +240,7 @@ ds_rebuild_tgt_query_handler(crt_rpc_t *rpc)
 	ABT_mutex_create(&status.lock);
 	/* let's check status on every thread*/
 	ABT_mutex_lock(rebuild_gst.rg_lock);
-	rc = dss_collective(dss_rebuild_check_scanning, &status);
+	rc = dss_task_collective(dss_rebuild_check_scanning, &status);
 	ABT_mutex_free(&status.lock);
 	if (rc) {
 		ABT_mutex_unlock(rebuild_gst.rg_lock);
@@ -929,7 +929,7 @@ ds_rebuild_tgt_fini_handler(crt_rpc_t *rpc)
 	}
 
 	/* close the rebuild pool/container */
-	rc = dss_collective(ds_rebuild_fini_one, NULL);
+	rc = dss_task_collective(ds_rebuild_fini_one, NULL);
 
 	pool = rebuild_gst.rg_pool;
 	rebuild_gst.rg_pool = NULL;
@@ -1026,7 +1026,7 @@ ds_rebuild_tgt_prepare_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = dss_collective(rebuild_prepare_one, NULL);
+	rc = dss_task_collective(rebuild_prepare_one, NULL);
 	if (rc) {
 		ds_pool_put(pool);
 		D_GOTO(out, rc);

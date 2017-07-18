@@ -366,7 +366,7 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
-	rc = dss_collective(cont_destroy_one, in);
+	rc = dss_task_collective(cont_destroy_one, in);
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc,
@@ -567,7 +567,7 @@ ds_cont_tgt_open_handler(crt_rpc_t *rpc)
 		DP_CONT(in->toi_pool_uuid, in->toi_uuid), rpc,
 		DP_UUID(in->toi_hdl));
 
-	rc = dss_collective(cont_open_one, in);
+	rc = dss_task_collective(cont_open_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 	out->too_rc = (rc == 0 ? 0 : 1);
@@ -667,7 +667,7 @@ ds_cont_tgt_close_handler(crt_rpc_t *rpc)
 		rpc, DP_UUID(recs[0].tcr_hdl), recs[0].tcr_hce,
 		in->tci_recs.da_count);
 
-	rc = dss_collective(cont_close_one, in);
+	rc = dss_task_collective(cont_close_one, in);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 
 out:
@@ -781,8 +781,8 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 		reduce_args[i].args	= &pack_args[i];
 	}
 
-	rc = dss_collective_reduce(cont_query_one, pack_args,
-				   reduce_args);
+	rc = dss_task_collective_reduce(cont_query_one, pack_args,
+					reduce_args);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	out->tqo_min_purged_epoch = MIN(out->tqo_min_purged_epoch,
 					pack_args[0].xcq_purged_epoch);
@@ -856,7 +856,7 @@ ds_cont_tgt_epoch_discard_handler(crt_rpc_t *rpc)
 	else if (in->tii_epoch >= DAOS_EPOCH_MAX)
 		D_GOTO(out, rc = -DER_OVERFLOW);
 
-	rc = dss_collective(cont_epoch_discard_one, in);
+	rc = dss_task_collective(cont_epoch_discard_one, in);
 
 out:
 	out->tio_rc = (rc == 0 ? 0 : 1);
