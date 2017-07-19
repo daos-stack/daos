@@ -695,11 +695,14 @@ struct xstream_cont_query {
 static int
 cont_query_one(void *vin)
 {
-	struct xstream_cont_query	*pack_args = vin;
+	struct dss_coll_stream_args	*reduce	   = vin;
+	struct dss_stream_arg_type	*streams   = reduce->csa_streams;
+	struct dss_module_info		*info	   = dss_get_module_info();
+	int				tid	   = info->dmi_tid;
+	struct xstream_cont_query	*pack_args = streams[tid].st_arg;
 	struct cont_tgt_query_in	*in	   = pack_args->xcq_rpc_in;
 	struct ds_pool_hdl		*pool_hdl;
 	struct ds_pool_child		*pool_child;
-	struct dss_module_info		*info;
 	daos_handle_t			vos_chdl;
 	vos_cont_info_t			vos_cinfo;
 	char				*opstr;
@@ -732,7 +735,7 @@ cont_query_one(void *vin)
 			rc);
 		D_GOTO(out, rc);
 	}
-	pack_args[info->dmi_tid].xcq_purged_epoch = vos_cinfo.pci_purged_epoch;
+	pack_args->xcq_purged_epoch = vos_cinfo.pci_purged_epoch;
 
 out:
 	vos_cont_close(vos_chdl);
@@ -744,7 +747,7 @@ ds_pool_hdl:
 }
 
 static void
-tgt_query_coll_reduce(void *a_args, void *s_args)
+ds_cont_query_coll_reduce(void *a_args, void *s_args)
 {
 	struct	xstream_cont_query	 *aggregator = a_args;
 	struct  xstream_cont_query	 *stream     = s_args;
@@ -754,44 +757,57 @@ tgt_query_coll_reduce(void *a_args, void *s_args)
 	*min_epoch = MIN(*min_epoch, stream->xcq_purged_epoch);
 }
 
+static void
+ds_cont_query_stream_alloc(struct dss_stream_arg_type *args,
+			   void *a_arg)
+{
+	struct xstream_cont_query	*rarg = a_arg;
+
+	D_ALLOC(args->st_arg, sizeof(struct xstream_cont_query));
+	memcpy(args->st_arg, rarg, sizeof(struct xstream_cont_query));
+}
+
+static void
+ds_cont_query_stream_free(struct dss_stream_arg_type *c_args)
+{
+	D_ASSERT(c_args->st_arg != NULL);
+	D_FREE(c_args->st_arg, sizeof(struct xstream_cont_query));
+}
+
 void
 ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 {
 	int				rc;
-	int				i;
 	struct cont_tgt_query_in	*in  = crt_req_get(rpc);
 	struct cont_tgt_query_out	*out = crt_reply_get(rpc);
-	struct xstream_cont_query	*pack_args;
-	struct dss_coll_aggregator_args	*reduce_args;
+	struct dss_coll_ops		coll_ops;
+	struct dss_coll_args		coll_args;
+	struct xstream_cont_query	pack_args;
 
 	out->tqo_min_purged_epoch  = DAOS_EPOCH_MAX;
 
 	/** on all available streams */
-	D_ALLOC(pack_args, (dss_nxstreams + 1) *
-		sizeof(struct xstream_cont_query));
-	D_ALLOC(reduce_args, (dss_nxstreams + 1) *
-		sizeof(struct dss_coll_aggregator_args));
 
-	pack_args[0].xcq_rpc_in = in;
-	for (i = 0; i < dss_nxstreams + 1; i++) {
-		/** Setup pack_args for all streams */
-		pack_args[i].xcq_purged_epoch = DAOS_EPOCH_MAX;
-		/** arguments for reducing */
-		reduce_args[i].callback	= tgt_query_coll_reduce;
-		reduce_args[i].args	= &pack_args[i];
-	}
+	coll_ops.co_func		= cont_query_one;
+	coll_ops.co_reduce		= ds_cont_query_coll_reduce;
+	coll_ops.co_reduce_arg_alloc	= ds_cont_query_stream_alloc;
+	coll_ops.co_reduce_arg_free	= ds_cont_query_stream_free;
 
-	rc = dss_task_collective_reduce(cont_query_one, pack_args,
-					reduce_args);
+	/** packing arguments for aggregator args */
+	pack_args.xcq_rpc_in		= in;
+	pack_args.xcq_purged_epoch	= DAOS_EPOCH_MAX;
+
+	/** setting aggregator args */
+	coll_args.ca_aggregator		= &pack_args;
+	coll_args.ca_func_args		= &coll_args.ca_stream_args;
+
+
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args);
+
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	out->tqo_min_purged_epoch = MIN(out->tqo_min_purged_epoch,
-					pack_args[0].xcq_purged_epoch);
+					pack_args.xcq_purged_epoch);
 	out->tqo_rc = (rc == 0 ? 0 : 1);
-
-	D_FREE(pack_args, (dss_nxstreams + 1) *
-	       sizeof(struct xstream_cont_query));
-	D_FREE(reduce_args, (dss_nxstreams + 1) *
-	       sizeof(struct dss_coll_aggregator_args));
 
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tqo_rc, rc);
@@ -898,12 +914,12 @@ static int
 cont_epoch_aggregate_one(void *vin)
 {
 	struct cont_tgt_epoch_aggregate_in	*in  = vin;
+	unsigned int				credits;
 	vos_iter_param_t			param;
 	struct ds_pool_child			*pool_child;
 	daos_handle_t				iter_hdl;
 	daos_handle_t				vos_chdl;
 	daos_epoch_range_t			range;
-	unsigned int				credits;
 	char					*purge_credits;
 	char					*opstr;
 	int					aggregated;
@@ -911,11 +927,17 @@ cont_epoch_aggregate_one(void *vin)
 	int					rc;
 	bool					finish;
 
+	credits	= DAOS_PURGE_CREDITS_MAX;
 	purge_credits = getenv("DAOS_PURGE_CREDITS");
-	if (purge_credits != NULL)
-		credits	= atoi(purge_credits);
-	else
-		credits = DAOS_PURGE_CREDITS_MAX;
+	if (purge_credits != NULL) {
+		char		*end;
+		unsigned long	tmp_credits;
+
+		errno		= 0;
+		tmp_credits	= strtoul(purge_credits, &end, 0);
+		if (*end == '\0' && errno == 0)
+			credits = (unsigned int) tmp_credits;
+	}
 
 	pool_child = ds_pool_child_lookup(in->tai_pool_uuid);
 	if (pool_child == NULL) {

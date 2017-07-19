@@ -193,21 +193,74 @@ int dss_ult_create_execute(int (*func)(void *), void *arg,
 			   int stream_id);
 
 /* Pack return codes with additional argument to reduce */
-struct dss_coll_aggregator_args {
-	int	rc;
-	/** func for reducing */
-	void	(*callback)(void *, void *);
-	/** optional arguments to reduce */
-	void	*args;
+struct dss_stream_arg_type {
+	/** return value */
+	int		st_rc;
+	/** collective arguments for streams */
+	void		*st_coll_args;
+	/** optional reduce args for aggregation */
+	void		*st_arg;
+};
+
+struct dss_coll_stream_args {
+	struct dss_stream_arg_type *csa_streams;
+};
+
+struct dss_coll_ops {
+	/**
+	 * Function to be invoked by dss_collective
+	 *
+	 * \param f_args		[IN]	Arguments for function
+	 */
+	int				(*co_func)(void *f_args);
+
+	/**
+	 * Callback for reducing after dss_collective (optional)
+	 *
+	 * \param a_args		[IN/OUT]
+	 *					Aggregator arguments for
+	 *					reducing results
+	 * \param s_args		[IN]	Reduce arguments for this
+	 *					current stream
+	 */
+	void				(*co_reduce)(void *a_args,
+						     void *s_args);
+
+	/**
+	 * Alloc function for allocating reduce arguments (optional)
+	 *
+	 * \param args			[IN/OUT] coll_args for this streams
+	 * \param aggregator_args	[IN]	 aggregator args for
+	 *					 initializatuin
+	 */
+	void				(*co_reduce_arg_alloc)
+					(struct dss_stream_arg_type *args,
+					 void *a_args);
+	/**
+	 * Free the allocated reduce arguments
+	 * (Mandatory if co_rarg_alloc was provided)
+	 *
+	 * \param args			[IN]	coll_args for this stream
+	 */
+	void				(*co_reduce_arg_free)
+					(struct dss_stream_arg_type *args);
+};
+
+struct dss_coll_args {
+	/** Arguments for dss_collective func (Mandatory) */
+	void				*ca_func_args;
+	void				*ca_aggregator;
+	/** Stream arguments for all streams */
+	struct dss_coll_stream_args	ca_stream_args;
 };
 
 /* Generic dss_collective with custom aggregator */
 int
-dss_task_collective_reduce(int (*func)(void *), void *f_args,
-			   struct dss_coll_aggregator_args *aggregator_args);
+dss_task_collective_reduce(struct dss_coll_ops *ops,
+			   struct dss_coll_args *coll_args);
 int
-dss_thread_collective_reduce(int (*func)(void *), void *f_args,
-			     struct dss_coll_aggregator_args *aggregator_args);
+dss_thread_collective_reduce(struct dss_coll_ops *ops,
+			     struct dss_coll_args *coll_args);
 
 int dss_task_collective(int (*func)(void *), void *arg);
 int dss_thread_collective(int (*func)(void *), void *arg);

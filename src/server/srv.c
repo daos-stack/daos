@@ -600,6 +600,12 @@ dss_ult_create_all(void (*func)(void *), void *arg)
 	return rc;
 }
 
+struct aggregator_arg_type {
+	struct dss_stream_arg_type	at_args;
+	void				(*at_reduce)(void *a_args,
+						     void *s_args);
+};
+
 /**
  * Collective operations among all server xstreams
  */
@@ -661,24 +667,20 @@ free:
 
 struct collective_arg {
 	struct dss_future_arg		ca_future;
-	struct dss_coll_aggregator_args	*ca_aggregator_args;
 };
 
 static void
 collective_func(void *varg)
 {
-	struct collective_arg		*carg	= varg;
-	struct dss_future_arg		*f_arg = &carg->ca_future;
-	struct dss_coll_aggregator_args	*a_args	= carg->ca_aggregator_args;
-	int				task_id;
+	struct dss_stream_arg_type	*a_args	= varg;
+	struct collective_arg		*carg	= a_args->st_coll_args;
+	struct dss_future_arg		*f_arg	= &carg->ca_future;
 	int				rc;
 
 	/** Update just the rc value */
-	task_id = dss_get_module_info()->dmi_tid + 1;
-	a_args[task_id].rc = f_arg->dfa_func(f_arg->dfa_arg);
+	a_args->st_rc = f_arg->dfa_func(f_arg->dfa_arg);
 
-	rc = ABT_future_set(carg->ca_future.dfa_future,
-			    (void *)&a_args[task_id]);
+	rc = ABT_future_set(f_arg->dfa_future, (void *)a_args);
 	if (rc != ABT_SUCCESS)
 		D_ERROR("future set failure %d\n", rc);
 }
@@ -687,32 +689,52 @@ collective_func(void *varg)
 static void
 collective_reduce(void **arg)
 {
-	struct dss_coll_aggregator_args *aggregator;
-	struct dss_coll_aggregator_args	*stream;
+	struct aggregator_arg_type	*aggregator;
+	struct dss_stream_arg_type	*stream;
 	int				*nfailed;
 	int				 i;
 
-	aggregator = (struct dss_coll_aggregator_args *)arg[0];
-	nfailed = &aggregator->rc;
+	aggregator = (struct aggregator_arg_type *)arg[0];
+	nfailed = &aggregator->at_args.st_rc;
+
 	for (i = 1; i < dss_nxstreams + 1; i++) {
-		stream = (struct dss_coll_aggregator_args *)arg[i];
-		if (stream->rc != 0)
+		stream = (struct dss_stream_arg_type *)arg[i];
+		if (stream->st_rc != 0)
 			(*nfailed)++;
 		/** optional custom aggregator call provided across streams */
-		if (aggregator->callback)
-			aggregator->callback(aggregator->args, stream->args);
+		if (aggregator->at_reduce)
+			aggregator->at_reduce(aggregator->at_args.st_arg,
+					      stream->st_arg);
 	}
 }
 
 static int
-dss_collective_reduce_internal(int (*func)(void *), void *f_args,
-			       struct dss_coll_aggregator_args *aggregator_args,
-			       bool create_ult)
+dss_collective_reduce_internal(struct dss_coll_ops *ops,
+			       struct dss_coll_args *args, bool create_ult)
 {
 	struct collective_arg		carg;
+	struct dss_coll_stream_args	*stream_args;
+	struct dss_stream_arg_type	*stream;
+	struct aggregator_arg_type	aggregator;
 	struct dss_xstream		*dx;
 	ABT_future			future;
 	int				rc;
+	int				tid;
+
+	if (ops == NULL || args == NULL || ops->co_func == NULL) {
+		D_DEBUG(DB_MD, "mandatory args mising dss_collective_reduce");
+		return -DER_INVAL;
+	}
+
+	if (ops->co_reduce_arg_alloc != NULL &&
+	    ops->co_reduce_arg_free == NULL) {
+		D_DEBUG(DB_MD, "Free callback missing for reduce args\n");
+		return -DER_INVAL;
+	}
+
+	stream_args   = &args->ca_stream_args;
+	D_ALLOC(stream_args->csa_streams,
+		(dss_nxstreams) * sizeof(struct dss_stream_arg_type));
 
 	/*
 	 * Use the first, extra element of the value array to store the number
@@ -724,35 +746,59 @@ dss_collective_reduce_internal(int (*func)(void *), void *f_args,
 		return dss_abterr2der(rc);
 
 	carg.ca_future.dfa_future = future;
-	carg.ca_future.dfa_func	= func;
-	carg.ca_future.dfa_arg	= f_args;
+	carg.ca_future.dfa_func	= ops->co_func;
+	carg.ca_future.dfa_arg	= args->ca_func_args;
 	carg.ca_future.dfa_status = 0;
-	carg.ca_aggregator_args = aggregator_args;
 
-	rc = ABT_future_set(future, (void *)&aggregator_args[0]);
+	memset(&aggregator, 0, sizeof(aggregator));
+	if (ops->co_reduce) {
+		aggregator.at_args.st_arg = args->ca_aggregator;
+		aggregator.at_reduce	  = ops->co_reduce;
+	}
+
+	if (ops->co_reduce_arg_alloc)
+		for (tid = 0; tid < dss_nxstreams; tid++) {
+			stream = &stream_args->csa_streams[tid];
+			ops->co_reduce_arg_alloc(stream,
+						 aggregator.at_args.st_arg);
+		}
+
+	rc = ABT_future_set(future, (void *)&aggregator);
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 
+	tid = 0;
 	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
+		stream			= &stream_args->csa_streams[tid];
+		stream->st_coll_args	= &carg;
+
 		if (create_ult)
 			rc = ABT_thread_create(dx->dx_pool, collective_func,
-					       &carg, ABT_THREAD_ATTR_NULL,
+					       stream, ABT_THREAD_ATTR_NULL,
 					       NULL);
 		else
 			rc = ABT_task_create(dx->dx_pool, collective_func,
-					     &carg, NULL);
+					     stream, NULL);
 
 		if (rc != ABT_SUCCESS) {
-			aggregator_args[0].rc = dss_abterr2der(rc);
+			aggregator.at_args.st_rc = dss_abterr2der(rc);
 			rc = ABT_future_set(future,
-					    (void *)&aggregator_args[0]);
+					    (void *)&aggregator);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
+		tid++;
 	}
 
 	ABT_future_wait(future);
 	ABT_future_free(&future);
 
-	return aggregator_args[0].rc;
+	if (ops->co_reduce_arg_free)
+		for (tid = 0; tid < dss_nxstreams; tid++)
+			ops->co_reduce_arg_free(&stream_args->csa_streams[tid]);
+
+	D_FREE(args->ca_stream_args.csa_streams,
+	       (dss_nxstreams) * sizeof(struct dss_stream_arg_type));
+
+	return aggregator.at_args.st_rc;
 }
 
 /**
@@ -761,19 +807,19 @@ dss_collective_reduce_internal(int (*func)(void *), void *f_args,
  * called by ULTs. Can only execute tasklet-compatible functions. User specified
  * reduction functions for aggregation after collective
  *
- * \param[in] func		function to be executed
- * \param[in] f_args		argument to be passed to \a func
- * \param[in] aggregator_args	pack return code with optional
- *				additional function and arguments
- *				for aggregation.
+ * \param[in] ops		All dss_collective ops to work on streams
+ *				include \a func(\a arg) for collective on all
+ *				server xstreams.
+ * \param[in] args		All arguments required for dss_collective
+ *				including func args.
+ *
  * \return			number of failed xstreams or error code
  */
 int
-dss_task_collective_reduce(int (*func)(void *), void *f_args,
-			   struct dss_coll_aggregator_args *aggregator_args)
+dss_task_collective_reduce(struct dss_coll_ops *ops,
+			   struct dss_coll_args *args)
 {
-	return dss_collective_reduce_internal(func, f_args, aggregator_args,
-					      false);
+	return dss_collective_reduce_internal(ops, args, false);
 }
 
 /**
@@ -782,37 +828,39 @@ dss_task_collective_reduce(int (*func)(void *), void *f_args,
  * called by ULTs. Can only execute tasklet-compatible functions. User specified
  * reduction functions for aggregation after collective
  *
- * \param[in] func		function to be executed
- * \param[in] f_args		argument to be passed to \a func
- * \param[in] aggregator_args	pack return code with optional
- *				additional function and arguments
- *				for aggregation.
+ * \param[in] ops		All dss_collective ops to work on streams
+ *				include \a func(\a arg) for collective on all
+ *				server xstreams.
+ * \param[in] args		All arguments required for dss_collective
+ *				including func args.
+ *
  * \return			number of failed xstreams or error code
  */
 int
-dss_thread_collective_reduce(int (*func)(void *), void *f_args,
-			     struct dss_coll_aggregator_args *aggregator_args)
+dss_thread_collective_reduce(struct dss_coll_ops *ops,
+			     struct dss_coll_args *args)
 {
-	return dss_collective_reduce_internal(func, f_args, aggregator_args,
-					      true);
+	return dss_collective_reduce_internal(ops, args, true);
 }
 
 static int
 dss_collective_internal(int (*func)(void *), void *arg, bool thread)
 {
-	struct dss_coll_aggregator_args	*aggregator_args;
 	int				rc;
+	struct dss_coll_ops		coll_ops;
+	struct dss_coll_args		coll_args;
 
-	D_ALLOC(aggregator_args, (dss_nxstreams + 1) *
-		sizeof(struct dss_coll_aggregator_args));
+
+	memset(&coll_ops, 0, sizeof(coll_ops));
+	memset(&coll_args, 0, sizeof(coll_args));
+
+	coll_ops.co_func	= func;
+	coll_args.ca_func_args	= arg;
 
 	if (thread)
-		rc = dss_thread_collective_reduce(func, arg, aggregator_args);
+		rc = dss_thread_collective_reduce(&coll_ops, &coll_args);
 	else
-		rc = dss_task_collective_reduce(func, arg, aggregator_args);
-
-	D_FREE(aggregator_args, (dss_nxstreams + 1) *
-	       sizeof(struct dss_coll_aggregator_args));
+		rc = dss_task_collective_reduce(&coll_ops, &coll_args);
 
 	return rc;
 }
