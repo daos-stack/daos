@@ -894,8 +894,7 @@ set_container_purged_epoch(daos_handle_t vos_chdl,
 			    NULL, &finish);
 }
 
-
-void
+static int
 cont_epoch_aggregate_one(void *vin)
 {
 	struct cont_tgt_epoch_aggregate_in	*in  = vin;
@@ -923,7 +922,7 @@ cont_epoch_aggregate_one(void *vin)
 		D_ERROR(DF_CONT": pool child is NULL\n",
 			DP_CONT(in->tai_pool_uuid,
 				in->tai_cont_uuid));
-		return;
+		return -DER_NO_HDL;
 	}
 
 	opstr = "opening vos container handle\n";
@@ -1028,32 +1027,39 @@ cont_close:
 	vos_cont_close(vos_chdl);
 pool_child:
 	ds_pool_child_put(pool_child);
+	return rc;
 }
 
 void
 ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 {
-	struct cont_tgt_epoch_aggregate_in	*in  = crt_req_get(rpc);
-	struct cont_tgt_epoch_aggregate_out	*out = crt_reply_get(rpc);
-	struct cont_tgt_epoch_aggregate_in	rpc_in;
+	struct cont_tgt_epoch_aggregate_in     *in = crt_req_get(rpc);
+	struct cont_tgt_epoch_aggregate_out    *out = crt_reply_get(rpc);
 	int					rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": handling rpc %p: epr="DF_U64"->"DF_U64"\n",
-		DP_CONT(NULL, NULL), rpc, in->tai_start_epoch,
-		in->tai_end_epoch);
+		DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid), rpc,
+		in->tai_start_epoch, in->tai_end_epoch);
 
 	if (in->tai_end_epoch == 0)
-		D_GOTO(out, rc = -DER_EP_RO);
+		rc = -DER_EP_RO;
 	else if (in->tai_end_epoch >= DAOS_EPOCH_MAX)
-		D_GOTO(out, rc = -DER_OVERFLOW);
+		rc = -DER_OVERFLOW;
 
-	memcpy(&rpc_in, in, sizeof(*in));
-	rc = dss_ult_create_all(cont_epoch_aggregate_one, &rpc_in);
-out:
+	/* Reply without waiting for the aggregation ULTs to finish. */
 	out->tao_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d (%d)\n",
 		DP_CONT(NULL, NULL), rpc, out->tao_rc, rc);
 	crt_reply_send(rpc);
+
+	if (out->tao_rc != 0)
+		return;
+
+	rc = dss_thread_collective(cont_epoch_aggregate_one, in);
+	if (rc != 0)
+		D_ERROR(DF_CONT": failed to aggregate "DF_U64"->"DF_U64": %d\n",
+			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
+			in->tai_start_epoch, in->tai_end_epoch, rc);
 }
 
 int
