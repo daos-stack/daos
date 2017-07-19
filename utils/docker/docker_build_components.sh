@@ -21,6 +21,7 @@ else
   scons_local_dir="scons_local"
 fi
 
+set -e
 pushd ${scons_local_dir}
 scons $option $*
 
@@ -29,10 +30,8 @@ if [ -n "${SCONS_INSTALL}" ];then
 fi
 popd
 
-set +e
 if [ -n "${CUSTOM_BUILD_STEP}" ];then
   print_status "Running custom build step"
   source ${CUSTOM_BUILD_STEP}
 fi
-set -e
 

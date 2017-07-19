@@ -10,4 +10,5 @@ if [ ${rc} == 0 ]; then
   # Fail this build.
   exit 1
 fi
+grep "All tests passed" ${test_results}
 
