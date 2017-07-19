@@ -893,7 +893,7 @@ crt_ivf_rpc_issue(crt_rank_t dest_node, crt_iv_key_t *iv_key,
 	struct crt_ivns_internal	*ivns_internal;
 	struct iv_fetch_in		*input;
 	crt_bulk_t			local_bulk = CRT_BULK_NULL;
-	crt_endpoint_t			ep;
+	crt_endpoint_t			ep = {0};
 	crt_rpc_t			*rpc;
 	struct ivf_key_in_progress	*entry;
 	int				rc = 0;
@@ -934,9 +934,9 @@ crt_ivf_rpc_issue(crt_rank_t dest_node, crt_iv_key_t *iv_key,
 
 	ep.ep_grp = ivns_internal->cii_grp;
 	ep.ep_rank = dest_node;
-	ep.ep_tag = 0;
 
-	rc = crt_req_create(ivns_internal->cii_ctx, ep, CRT_OPC_IV_FETCH, &rpc);
+	rc = crt_req_create(ivns_internal->cii_ctx, &ep, CRT_OPC_IV_FETCH,
+			    &rpc);
 	if (rc != 0) {
 		C_ERROR("crt_req_create() failed; rc = %d\n", rc);
 		C_GOTO(exit, rc);
@@ -1733,7 +1733,7 @@ crt_ivu_rpc_issue(crt_rank_t dest_rank, crt_iv_key_t *iv_key,
 	struct crt_ivns_internal	*ivns_internal;
 	struct iv_update_in		*input;
 	crt_bulk_t			local_bulk = CRT_BULK_NULL;
-	crt_endpoint_t			ep;
+	crt_endpoint_t			ep = {0};
 	crt_rpc_t			*rpc;
 	int				rc = 0;
 
@@ -1741,10 +1741,9 @@ crt_ivu_rpc_issue(crt_rank_t dest_rank, crt_iv_key_t *iv_key,
 
 	ep.ep_grp = ivns_internal->cii_grp;
 	ep.ep_rank = dest_rank;
-	ep.ep_tag = 0;
 
-	rc = crt_req_create(ivns_internal->cii_ctx, ep, CRT_OPC_IV_UPDATE,
-			&rpc);
+	rc = crt_req_create(ivns_internal->cii_ctx, &ep, CRT_OPC_IV_UPDATE,
+			    &rpc);
 	if (rc != 0) {
 		C_ERROR("crt_req_create() failed; rc=%d\n", rc);
 		C_GOTO(exit, rc);

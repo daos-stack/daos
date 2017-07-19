@@ -245,7 +245,7 @@ run_test_group(char *local_group_name, char *target_group_name, int is_service)
 	crt_group_t			*target_group = NULL;
 	crt_rpc_t			*rpc_req = NULL;
 	struct crt_echo_checkin_req	*rpc_req_input;
-	crt_endpoint_t			 server_ep;
+	crt_endpoint_t			 server_ep = {0};
 	char				 *buffer;
 	int				 ii;
 	int				 complete;
@@ -274,9 +274,8 @@ run_test_group(char *local_group_name, char *target_group_name, int is_service)
 	for (ii = 0; ii < target_group_size; ii++) {
 		server_ep.ep_grp = srv_grp;
 		server_ep.ep_rank = ii;
-		server_ep.ep_tag = 0;
-		rc = crt_req_create(crt_ctx, server_ep,
-				ECHO_OPC_CHECKIN, &rpc_req);
+		rc = crt_req_create(crt_ctx, &server_ep, ECHO_OPC_CHECKIN,
+				    &rpc_req);
 		C_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
 			  " rc: %d rpc_req: %p\n", rc, rpc_req);
 
@@ -304,7 +303,7 @@ void
 test_group_fini(int is_service)
 {
 	int				 ii;
-	crt_endpoint_t			 server_ep;
+	crt_endpoint_t			 server_ep = {0};
 	crt_rpc_t			*rpc_req = NULL;
 	int				 complete;
 	int				 rc = 0;
@@ -314,9 +313,8 @@ test_group_fini(int is_service)
 		for (ii = 0; ii < target_group_size; ii++) {
 			server_ep.ep_grp = srv_grp;
 			server_ep.ep_rank = ii;
-			server_ep.ep_tag = 0;
-			rc = crt_req_create(crt_ctx, server_ep,
-					ECHO_OPC_SHUTDOWN, &rpc_req);
+			rc = crt_req_create(crt_ctx, &server_ep,
+					    ECHO_OPC_SHUTDOWN, &rpc_req);
 			C_ASSERTF(rc == 0 && rpc_req != NULL,
 				  "crt_req_create() failed. "
 				  "rc: %d, rpc_req: %p\n", rc, rpc_req);

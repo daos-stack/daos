@@ -96,8 +96,8 @@ test_iv_invalidate(struct iv_key_struct *key)
 	DBG_PRINT("Attempting to invalidate key[%d:%d]\n",
 		key->rank, key->key_id);
 
-	prepare_rpc_request(crt_ctx, RPC_TEST_INVALIDATE_IV, server_ep,
-			(void **)&input, &rpc_req);
+	prepare_rpc_request(crt_ctx, RPC_TEST_INVALIDATE_IV, &server_ep,
+			    (void **)&input, &rpc_req);
 	crt_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
 
 	send_rpc_request(crt_ctx, rpc_req, (void **)&output);
@@ -123,8 +123,8 @@ test_iv_fetch(struct iv_key_struct *key)
 
 	DBG_PRINT("Attempting fetch for key[%d:%d]\n", key->rank, key->key_id);
 
-	prepare_rpc_request(crt_ctx, RPC_TEST_FETCH_IV, server_ep,
-				(void **)&input, &rpc_req);
+	prepare_rpc_request(crt_ctx, RPC_TEST_FETCH_IV, &server_ep,
+			    (void **)&input, &rpc_req);
 	crt_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
 
 	send_rpc_request(crt_ctx, rpc_req, (void **)&output);
@@ -172,8 +172,8 @@ test_iv_update(struct iv_key_struct *key, char *str_value, char *arg_sync)
 		return -1;
 	}
 
-	prepare_rpc_request(crt_ctx, RPC_TEST_UPDATE_IV, server_ep,
-				(void **)&input, &rpc_req);
+	prepare_rpc_request(crt_ctx, RPC_TEST_UPDATE_IV, &server_ep,
+			    (void **)&input, &rpc_req);
 	crt_iov_set(&input->iov_key, key, sizeof(struct iv_key_struct));
 	crt_iov_set(&input->iov_sync, &sync, sizeof(crt_iv_sync_t));
 	input->str_value = str_value;

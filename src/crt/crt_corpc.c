@@ -768,12 +768,11 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 	/* firstly forward RPC to children if any */
 	for (i = 0; i < co_info->co_child_num; i++) {
 		crt_rpc_t	*child_rpc;
-		crt_endpoint_t	 tgt_ep;
+		crt_endpoint_t	 tgt_ep = {0};
 
-		tgt_ep.ep_grp = NULL;
 		tgt_ep.ep_rank = children_rank_list->rl_ranks[i];
-		tgt_ep.ep_tag = 0;
-		rc = crt_req_create_internal(req->cr_ctx, tgt_ep, req->cr_opc,
+
+		rc = crt_req_create_internal(req->cr_ctx, &tgt_ep, req->cr_opc,
 					     true /* forward */, &child_rpc);
 		if (rc != 0) {
 			C_ERROR("crt_req_create(opc: 0x%x) failed, tgt_ep: %d, "

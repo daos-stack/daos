@@ -287,7 +287,7 @@ rpc_err_rpc_issue()
 		server_ep.ep_grp = rpc_err.re_target_group;
 		server_ep.ep_rank = i;
 		server_ep.ep_tag = 0;
-		rc = crt_req_create(rpc_err.re_crt_ctx, server_ep,
+		rc = crt_req_create(rpc_err.re_crt_ctx, &server_ep,
 				    RPC_ERR_OPC_NOREPLY,
 				    &rpc_req);
 		C_ASSERTF(rc == 0 && rpc_req != NULL,
@@ -320,7 +320,7 @@ shutdown_cmd_issue()
 		server_ep.ep_grp = rpc_err.re_target_group;
 		server_ep.ep_rank = i;
 		server_ep.ep_tag = 0;
-		rc = crt_req_create(rpc_err.re_crt_ctx, server_ep,
+		rc = crt_req_create(rpc_err.re_crt_ctx, &server_ep,
 				    RPC_ERR_OPC_SHUTDOWN,
 				    &rpc_req);
 		C_ASSERTF(rc == 0 && rpc_req != NULL,

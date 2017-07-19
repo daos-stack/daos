@@ -478,15 +478,15 @@ static int test_msg_size(crt_context_t crt_ctx,
 	 * as simultaneously as possible (don't wait for acknowledgement)
 	 */
 	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
-		crt_endpoint_t endpt = ms_endpts[m_idx].endpt;
+		crt_endpoint_t *endpt = &ms_endpts[m_idx].endpt;
 
 		/* Create and send a new RPC starting the test */
 		ret = crt_req_create(crt_ctx, endpt, CRT_OPC_SELF_TEST_START,
 				     &new_rpc);
 		if (ret != 0) {
 			C_ERROR("Creating start RPC failed to endpoint"
-				" %u:%u; ret = %d\n", endpt.ep_rank,
-				endpt.ep_tag, ret);
+				" %u:%u; ret = %d\n", endpt->ep_rank,
+				endpt->ep_tag, ret);
 			ms_endpts[m_idx].test_failed = 1;
 			ms_endpts[m_idx].test_completed = 1;
 			continue;
@@ -505,7 +505,8 @@ static int test_msg_size(crt_context_t crt_ctx,
 				   &ms_endpts[m_idx].reply.status);
 		if (ret != 0) {
 			C_ERROR("Failed to send start RPC to endpoint %u:%u; "
-				"ret = %d\n", endpt.ep_rank, endpt.ep_tag, ret);
+				"ret = %d\n", endpt->ep_rank, endpt->ep_tag,
+				ret);
 			ms_endpts[m_idx].test_failed = 1;
 			ms_endpts[m_idx].test_completed = 1;
 			continue;
@@ -578,7 +579,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 			ms_endpts[m_idx].reply.status = INT32_MAX;
 
 			/* Create a new RPC to check the status */
-			ret = crt_req_create(crt_ctx, ms_endpts[m_idx].endpt,
+			ret = crt_req_create(crt_ctx, &ms_endpts[m_idx].endpt,
 					     CRT_OPC_SELF_TEST_STATUS_REQ,
 					     &new_rpc);
 			if (ret != 0) {

@@ -530,7 +530,7 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 }
 
 int
-crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 			crt_opcode_t opc, bool forward, crt_rpc_t **req)
 {
 	struct crt_rpc_priv	*rpc_priv = NULL;
@@ -546,7 +546,9 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
 	}
 	C_ASSERT(rpc_priv != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
-	rpc_pub->cr_ep = tgt_ep;
+	rpc_pub->cr_ep.ep_rank = tgt_ep->ep_rank;
+	rpc_pub->cr_ep.ep_tag = tgt_ep->ep_tag;
+	rpc_pub->cr_ep.ep_grp = tgt_ep->ep_grp;
 
 	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */,
 			       forward);
@@ -565,7 +567,7 @@ out:
 }
 
 int
-crt_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
+crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req)
 {
 	struct crt_grp_gdata	*grp_gdata;
@@ -582,26 +584,26 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
 	}
 	grp_gdata = crt_gdata.cg_grp;
 	C_ASSERT(grp_gdata != NULL);
-	if (tgt_ep.ep_grp == NULL) {
+	if (tgt_ep->ep_grp == NULL) {
 		grp_priv = grp_gdata->gg_srv_pri_grp;
 		if (grp_priv == NULL) {
 			C_ERROR("service group not attached yet.\n");
 			C_GOTO(out, rc = -CER_NOTATTACH);
 		}
 	} else {
-		grp_priv = container_of(tgt_ep.ep_grp, struct crt_grp_priv,
+		grp_priv = container_of(tgt_ep->ep_grp, struct crt_grp_priv,
 					gp_pub);
 		if (grp_priv->gp_primary == 0 || grp_priv->gp_service == 0) {
-			C_ERROR("bad parameter tgt_ep.ep_grp: %p (gp_primary: "
+			C_ERROR("bad parameter tgt_ep->ep_grp: %p (gp_primary: "
 				"%d, gp_service: %d, gp_local: %d.\n",
-				tgt_ep.ep_grp, grp_priv->gp_primary,
+				tgt_ep->ep_grp, grp_priv->gp_primary,
 				grp_priv->gp_service, grp_priv->gp_local);
 			C_GOTO(out, rc = -CER_INVAL);
 		}
 	}
-	if (tgt_ep.ep_rank >= grp_priv->gp_size) {
+	if (tgt_ep->ep_rank >= grp_priv->gp_size) {
 		C_ERROR("invalid parameter, rank %d, group_size: %d.\n",
-			tgt_ep.ep_rank, grp_priv->gp_size);
+			tgt_ep->ep_rank, grp_priv->gp_size);
 		C_GOTO(out, rc = -CER_INVAL);
 	}
 
@@ -852,7 +854,7 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 {
 	crt_rpc_t			*ul_req;
 	crt_endpoint_t			*tgt_ep;
-	crt_endpoint_t			 psr_ep;
+	crt_endpoint_t			 psr_ep = {0};
 	struct crt_grp_priv		*grp_priv;
 	struct crt_uri_lookup_in	*ul_in;
 	struct crt_uri_lookup_out	*ul_out;
@@ -867,8 +869,8 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 
 	psr_ep.ep_grp = tgt_ep->ep_grp;
 	psr_ep.ep_rank = grp_priv->gp_psr_rank;
-	psr_ep.ep_tag = 0;
-	rc = crt_req_create(rpc_priv->crp_pub.cr_ctx, psr_ep,
+
+	rc = crt_req_create(rpc_priv->crp_pub.cr_ctx, &psr_ep,
 			    CRT_OPC_URI_LOOKUP, &ul_req);
 	if (rc != 0) {
 		C_ERROR("crt_req_create URI_LOOKUP failed, rc: %d opc: 0x%x.\n",
@@ -1052,8 +1054,7 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 
 	req = &rpc_priv->crp_pub;
 	ctx = (struct crt_context *)req->cr_ctx;
-	rc = crt_hg_req_create(&ctx->cc_hg_ctx, ctx->cc_idx, req->cr_ep,
-			       rpc_priv);
+	rc = crt_hg_req_create(&ctx->cc_hg_ctx, rpc_priv);
 	if (rc != 0) {
 		C_ERROR("crt_hg_req_create failed, rc: %d, opc: 0x%x.\n",
 			rc, req->cr_opc);

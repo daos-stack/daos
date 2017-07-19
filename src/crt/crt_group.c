@@ -1000,12 +1000,11 @@ crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
 	for (i = 0; i < member_ranks->rl_nr.num; i++) {
 		crt_rpc_t			*gc_rpc;
 		struct crt_grp_create_in	*gc_in;
-		crt_endpoint_t			 tgt_ep;
+		crt_endpoint_t			 tgt_ep = {0};
 
-		tgt_ep.ep_grp = NULL;
 		tgt_ep.ep_rank = member_ranks->rl_ranks[i];
-		tgt_ep.ep_tag = 0;
-		rc = crt_req_create(crt_ctx, tgt_ep, CRT_OPC_GRP_CREATE,
+
+		rc = crt_req_create(crt_ctx, &tgt_ep, CRT_OPC_GRP_CREATE,
 				    &gc_rpc);
 		if (rc != 0) {
 			C_ERROR("crt_req_create(CRT_OPC_GRP_CREATE) failed, "
@@ -1248,12 +1247,10 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 	for (i = 0; i < member_ranks->rl_nr.num; i++) {
 		crt_rpc_t			*gd_rpc;
 		struct crt_grp_destroy_in	*gd_in;
-		crt_endpoint_t			 tgt_ep;
+		crt_endpoint_t			 tgt_ep = {0};
 
-		tgt_ep.ep_grp = NULL;
 		tgt_ep.ep_rank = member_ranks->rl_ranks[i];
-		tgt_ep.ep_tag = 0;
-		rc = crt_req_create(crt_ctx, tgt_ep, CRT_OPC_GRP_DESTROY,
+		rc = crt_req_create(crt_ctx, &tgt_ep, CRT_OPC_GRP_DESTROY,
 				    &gd_rpc);
 		if (rc != 0) {
 			C_ERROR("crt_req_create(CRT_OPC_GRP_DESTROY) failed, "
@@ -1575,8 +1572,14 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		C_GOTO(out, rc = 0);
 	}
 
-	crt_ctx = (struct crt_context *)rpc_req->cr_ctx;
+	crt_ctx = rpc_req->cr_ctx;
 
+	if (ul_in->ul_rank >= grp_priv->gp_size) {
+		C_WARN("Lookup of invalid rank %d in group %s (%d)\n",
+		       ul_in->ul_rank, grp_priv->gp_pub.cg_grpid,
+		       grp_priv->gp_size);
+		C_GOTO(out, rc = -CER_INVAL);
+	}
 	rc = crt_grp_lc_lookup(grp_priv, crt_ctx->cc_idx,
 			       ul_in->ul_rank, 0, &ul_out->ul_uri, NULL);
 	if (rc != 0) {

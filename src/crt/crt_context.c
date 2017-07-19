@@ -392,7 +392,7 @@ out:
 }
 
 int
-crt_ep_abort(crt_endpoint_t ep)
+crt_ep_abort(crt_endpoint_t *ep)
 {
 	struct crt_context	*ctx = NULL;
 	crt_list_t		*rlink;
@@ -404,8 +404,8 @@ crt_ep_abort(crt_endpoint_t ep)
 	crt_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
 		rc = 0;
 		pthread_mutex_lock(&ctx->cc_mutex);
-		rlink = chash_rec_find(&ctx->cc_epi_table, (void *)&ep.ep_rank,
-				       sizeof(ep.ep_rank));
+		rlink = chash_rec_find(&ctx->cc_epi_table, (void *)&ep->ep_rank,
+				       sizeof(ep->ep_rank));
 		if (rlink != NULL) {
 			force = true;
 			rc = crt_ctx_epi_abort(rlink, &force);
@@ -415,7 +415,7 @@ crt_ep_abort(crt_endpoint_t ep)
 		if (rc != 0) {
 			C_ERROR("context (idx %d), ep_abort (rank %d), "
 				"failed rc: %d.\n",
-				ctx->cc_idx, ep.ep_rank, rc);
+				ctx->cc_idx, ep->ep_rank, rc);
 			break;
 		}
 	}

@@ -711,7 +711,7 @@ init_iv(void)
 {
 	struct crt_iv_class	iv_class;
 	crt_iov_t		g_ivns;
-	crt_endpoint_t		server_ep;
+	crt_endpoint_t		server_ep = {0};
 	struct rpc_set_ivns_in	*input;
 	struct rpc_set_ivns_out	*output;
 	int			rc;
@@ -732,12 +732,10 @@ init_iv(void)
 
 		for (rank = 1; rank < group_size; rank++) {
 
-			server_ep.ep_grp = NULL;
 			server_ep.ep_rank = rank;
-			server_ep.ep_tag = 0;
 
 			rc = prepare_rpc_request(main_ctx, RPC_SET_IVNS,
-					server_ep, (void *)&input, &rpc);
+					&server_ep, (void *)&input, &rpc);
 			assert(rc == 0);
 
 			input->global_ivns_iov.iov_buf = g_ivns.iov_buf;

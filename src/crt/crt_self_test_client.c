@@ -236,7 +236,7 @@ static void close_sessions(void)
 	 * If at any point sending to an endpoint fails, mark it as evicted
 	 */
 	for (i = 0; i < g_data->num_endpts; i++) {
-		crt_endpoint_t	 local_endpt;
+		crt_endpoint_t	 local_endpt = {0};
 		crt_rpc_t	*new_rpc;
 		int64_t		*args;
 
@@ -253,7 +253,7 @@ static void close_sessions(void)
 		local_endpt.ep_tag = g_data->endpts[i].tag;
 
 		/* Start a new RPC request */
-		ret = crt_req_create(g_data->crt_ctx, local_endpt,
+		ret = crt_req_create(g_data->crt_ctx, &local_endpt,
 				     CRT_OPC_SELF_TEST_CLOSE_SESSION,
 				     &new_rpc);
 		if (ret != 0) {
@@ -320,7 +320,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 {
 	crt_rpc_t		*new_rpc;
 	void			*args = NULL;
-	crt_endpoint_t		 local_endpt;
+	crt_endpoint_t		 local_endpt = {0};
 	struct st_test_endpt	*endpt_ptr;
 	crt_opcode_t		 opcode;
 	uint32_t		 failed_endpts;
@@ -411,7 +411,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 					       g_data->reply_type);
 
 		/* Start a new RPC request */
-		ret = crt_req_create(g_data->crt_ctx, local_endpt,
+		ret = crt_req_create(g_data->crt_ctx, &local_endpt,
 				     opcode, &new_rpc);
 		if (ret != 0) {
 			C_WARN("crt_req_create failed for endpoint=%u:%u;"
@@ -691,7 +691,7 @@ static void open_sessions(void)
 	 * If at any point sending to an endpoint fails, mark it as evicted
 	 */
 	for (i = 0; i < g_data->num_endpts; i++) {
-		crt_endpoint_t			 local_endpt;
+		crt_endpoint_t			 local_endpt = {0};
 		crt_rpc_t			*new_rpc;
 		struct crt_st_session_params	*args;
 
@@ -700,7 +700,7 @@ static void open_sessions(void)
 		local_endpt.ep_tag = g_data->endpts[i].tag;
 
 		/* Start a new RPC request */
-		ret = crt_req_create(g_data->crt_ctx, local_endpt,
+		ret = crt_req_create(g_data->crt_ctx, &local_endpt,
 				     CRT_OPC_SELF_TEST_OPEN_SESSION,
 				     &new_rpc);
 		if (ret != 0) {

@@ -184,7 +184,7 @@ rpc_handle_reply(const struct crt_cb_info *info)
 }
 
 int prepare_rpc_request(crt_context_t crt_ctx, int rpc_id,
-		crt_endpoint_t server_ep,  void **input, crt_rpc_t **rpc_req)
+		crt_endpoint_t *server_ep,  void **input, crt_rpc_t **rpc_req)
 {
 	int rc;
 

@@ -43,7 +43,7 @@
 
 static int run_echo_srver(void)
 {
-	crt_endpoint_t		svr_ep;
+	crt_endpoint_t		svr_ep = {0};
 	crt_rpc_t		*rpc_req = NULL;
 	char			*pchar;
 	crt_rank_t		myrank;
@@ -72,7 +72,7 @@ static int run_echo_srver(void)
 	svr_ep.ep_grp = NULL;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
-	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
+	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 
 	C_ALLOC(pchar, 256);

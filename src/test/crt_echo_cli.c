@@ -99,7 +99,7 @@ static void run_client(void)
 	crt_group_t			*pri_srv_grp = NULL;
 	crt_group_t			*grp_tier1 = NULL;
 	crt_group_t			*grp_tier2 = NULL;
-	crt_endpoint_t			svr_ep;
+	crt_endpoint_t			svr_ep = {0};
 	crt_rpc_t			*rpc_req = NULL;
 	crt_sg_list_t			sgl, sgl_query;
 	crt_iov_t			*iovs = NULL, iovs_query[2];
@@ -145,7 +145,7 @@ static void run_client(void)
 	svr_ep.ep_grp = NULL;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
-	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_NOOP, &rpc_req);
+	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_NOOP, &rpc_req);
 	C_ASSERT(rc == 0);
 	gecho.complete = 0;
 	rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
@@ -169,7 +169,7 @@ static void run_client(void)
 
 		rc = crt_gettime(&t1);
 		assert(rc == 0);
-		rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_CHECKIN,
+		rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_CHECKIN,
 				    &rpc_req);
 		assert(rc == 0 && rpc_req != NULL);
 		rc = crt_gettime(&t2);
@@ -217,7 +217,7 @@ static void run_client(void)
 	svr_ep.ep_grp = grp_tier1;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
-	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_BULK_TEST,
+	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_BULK_TEST,
 			    &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 
@@ -315,7 +315,7 @@ static void run_client(void)
 		svr_ep.ep_grp = grp_tier2;
 		svr_ep.ep_rank = 0;
 		svr_ep.ep_tag = i;
-		rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_CHECKIN,
+		rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_CHECKIN,
 				    &rpc_req);
 		assert(rc == 0 && rpc_req != NULL);
 
@@ -361,7 +361,8 @@ send_shutdown:
 	rpc_req = NULL;
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
-	rc = crt_req_create(gecho.crt_ctx, svr_ep, ECHO_OPC_SHUTDOWN, &rpc_req);
+	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_SHUTDOWN,
+			    &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 
 	assert(rpc_req->cr_input == NULL);

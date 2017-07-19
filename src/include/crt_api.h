@@ -187,7 +187,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
  *        crt_reply_send.
  */
 int
-crt_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep, crt_opcode_t opc,
+crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req);
 
 /**
@@ -321,7 +321,7 @@ crt_req_abort(crt_rpc_t *req);
  * \return			zero on success, negative value if error
  */
 int
-crt_ep_abort(crt_endpoint_t ep);
+crt_ep_abort(crt_endpoint_t *ep);
 
 /**
  * Dynamically register an RPC at client-side.

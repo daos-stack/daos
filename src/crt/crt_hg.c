@@ -758,8 +758,7 @@ out:
 }
 
 int
-crt_hg_req_create(struct crt_hg_context *hg_ctx, int ctx_idx,
-		  crt_endpoint_t tgt_ep, struct crt_rpc_priv *rpc_priv)
+crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 {
 	hg_id_t		rpcid;
 	hg_return_t	hg_ret = HG_SUCCESS;
