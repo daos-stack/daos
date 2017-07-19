@@ -904,7 +904,7 @@ gc_rpc_cb(const struct crt_cb_info *cb_info)
 	gc_in = crt_req_get(gc_req);
 	gc_out = crt_reply_get(gc_req);
 	rc = cb_info->cci_rc;
-	grp_priv = (struct crt_grp_priv *)cb_info->cci_arg;
+	grp_priv = cb_info->cci_arg;
 	D_ASSERT(grp_priv != NULL && gc_in != NULL && gc_out != NULL);
 
 	crt_group_rank(NULL, &my_rank);
@@ -1199,7 +1199,7 @@ gd_rpc_cb(const struct crt_cb_info *cb_info)
 	gd_in = crt_req_get(gd_req);
 	gd_out = crt_reply_get(gd_req);
 	rc = cb_info->cci_rc;
-	grp_priv = (struct crt_grp_priv *)cb_info->cci_arg;
+	grp_priv = cb_info->cci_arg;
 	D_ASSERT(grp_priv != NULL && gd_in != NULL && gd_out != NULL);
 
 	crt_group_rank(NULL, &my_rank);

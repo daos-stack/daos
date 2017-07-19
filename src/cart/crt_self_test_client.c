@@ -199,8 +199,7 @@ void crt_self_test_client_init(void)
 static void
 close_session_cb(const struct crt_cb_info *cb_info)
 {
-	struct st_test_endpt	*endpt =
-		(struct st_test_endpt *)cb_info->cci_arg;
+	struct st_test_endpt	*endpt = cb_info->cci_arg;
 
 	D_ASSERT(endpt != NULL);
 	D_ASSERT(g_data != NULL);
@@ -559,8 +558,7 @@ abort:
 static void
 test_rpc_cb(const struct crt_cb_info *cb_info)
 {
-	struct st_cb_args	*cb_args = (struct st_cb_args *)
-					   cb_info->cci_arg;
+	struct st_cb_args	*cb_args = cb_info->cci_arg;
 	struct timespec		 now;
 
 	D_ASSERT(cb_args != NULL);
@@ -623,8 +621,7 @@ static void launch_test_rpcs(void)
 static void
 open_session_cb(const struct crt_cb_info *cb_info)
 {
-	struct st_test_endpt	*endpt =
-		(struct st_test_endpt *)cb_info->cci_arg;
+	struct st_test_endpt	*endpt = cb_info->cci_arg;
 	int64_t			*session_id;
 
 	D_ASSERT(endpt != NULL);

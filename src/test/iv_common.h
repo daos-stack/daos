@@ -179,7 +179,7 @@ rpc_handle_reply(const struct crt_cb_info *info)
 	rpc_req = info->cci_rpc;
 	crt_req_addref(rpc_req);
 
-	done = (int *)info->cci_arg;
+	done = info->cci_arg;
 	*done = 1;
 }
 

@@ -858,19 +858,12 @@ exit:
 static void
 handle_ivfetch_response(const struct crt_cb_info *cb_info)
 {
-	struct iv_fetch_cb_info		*iv_info;
-	struct iv_fetch_out		*output;
-	struct iv_fetch_in		*input;
+	struct iv_fetch_cb_info		*iv_info = cb_info->cci_arg;
+	crt_rpc_t			*rpc = cb_info->cci_rpc;
+	struct iv_fetch_in		*input = crt_req_get(rpc);
+	struct iv_fetch_out		*output = crt_reply_get(rpc);
 	struct crt_iv_ops		*iv_ops;
-	crt_rpc_t			*rpc;
 	int				rc;
-
-	iv_info = (struct iv_fetch_cb_info *)cb_info->cci_arg;
-
-	rpc = cb_info->cci_rpc;
-	output = crt_reply_get(rpc);
-	input = crt_req_get(rpc);
-	D_ASSERT(output != NULL);
 
 	if (cb_info->cci_rc == 0x0)
 		rc = output->ifo_rc;
@@ -1499,9 +1492,7 @@ struct iv_sync_cb_info {
 static void
 handle_ivsync_response(const struct crt_cb_info *cb_info)
 {
-	struct iv_sync_cb_info *iv_sync;
-
-	iv_sync = (struct iv_sync_cb_info *)cb_info->cci_arg;
+	struct iv_sync_cb_info *iv_sync = cb_info->cci_arg;
 
 	crt_bulk_free(iv_sync->isc_bulk_hdl);
 
@@ -1719,17 +1710,12 @@ struct update_cb_info {
 static void
 handle_ivupdate_response(const struct crt_cb_info *cb_info)
 {
-	struct update_cb_info	*iv_info;
-	struct iv_update_in	*input;
-	struct iv_update_out	*output;
+	struct update_cb_info	*iv_info = cb_info->cci_arg;
+	struct iv_update_in	*input = crt_req_get(cb_info->cci_rpc);
+	struct iv_update_out	*output = crt_reply_get(cb_info->cci_rpc);
 	struct iv_update_out	*child_output;
 	struct crt_iv_ops	*iv_ops;
 	int			rc;
-
-	iv_info = (struct update_cb_info *)cb_info->cci_arg;
-
-	input = crt_req_get(cb_info->cci_rpc);
-	output = crt_reply_get(cb_info->cci_rpc);
 
 	if (iv_info->uci_child_rpc) {
 

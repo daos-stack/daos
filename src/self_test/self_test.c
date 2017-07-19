@@ -204,7 +204,7 @@ static void
 start_test_cb(const struct crt_cb_info *cb_info)
 {
 	/* Result returned to main thread */
-	int32_t *return_status = (int32_t *)cb_info->cci_arg;
+	int32_t *return_status = cb_info->cci_arg;
 
 	/* Status retrieved from the RPC result payload */
 	int32_t *reply_status;

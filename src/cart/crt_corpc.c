@@ -558,7 +558,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 	int			 rc = 0;
 
 	child_req = cb_info->cci_rpc;
-	parent_rpc_priv = (struct crt_rpc_priv *)cb_info->cci_arg;
+	parent_rpc_priv = cb_info->cci_arg;
 	D_ASSERT(child_req != NULL && parent_rpc_priv != NULL);
 	child_rpc_priv = container_of(child_req, struct crt_rpc_priv, crp_pub);
 	co_info = parent_rpc_priv->crp_corpc_info;

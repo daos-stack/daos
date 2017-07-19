@@ -861,7 +861,7 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	char				*uri = NULL;
 	int				 rc = 0;
 
-	rpc_priv = (struct crt_rpc_priv *)cb_info->cci_arg;
+	rpc_priv = cb_info->cci_arg;
 	D_ASSERT(rpc_priv->crp_state == RPC_STATE_URI_LOOKUP);
 	D_ASSERT(rpc_priv->crp_ul_req = cb_info->cci_rpc);
 
