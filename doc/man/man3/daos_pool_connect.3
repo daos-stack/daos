@@ -1,0 +1,88 @@
+.\" (C) Copyright 2017 Intel Corporation.
+.\"
+.\" Licensed under the Apache License, Version 2.0 (the "License");
+.\" you may not use this file except in compliance with the License.
+.\" You may obtain a copy of the License at
+.\"
+.\"    http://www.apache.org/licenses/LICENSE-2.0
+.\"
+.\" Unless required by applicable law or agreed to in writing, software
+.\" distributed under the License is distributed on an "AS IS" BASIS,
+.\" WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+.\" See the License for the specific language governing permissions and
+.\" limitations under the License.
+.\"
+.\" GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
+.\" The Government's rights to use, modify, reproduce, release, perform, display,
+.\" or disclose this software are subject to the terms of the Apache License as
+.\" provided in Contract No. B609815.
+.\" Any reproduction of computer software, computer software documentation, or
+.\" portions thereof marked with this legend must also reproduce the markings.
+.\"
+.TH daos_pool_connect 3 2017-07-20 "0.0.1" "DAOS Client API"
+.SH NAME
+daos_pool_connect \- open a DAOS pool
+.SH SYNOPSIS
+.nf
+.B #include "daos.h"
+.B #include "daos_api.h"
+.sp
+.BI "int daos_pool_connect(const uuid_t "uuid ", const char * "grp ",
+.BI " 	                   const daos_rank_list_t * "svc ",
+.BI "                      unsigned int "flags ", daos_handle_t * "poh ",
+.BI "	                   daos_pool_info_t * "info ", daos_event_t * "ev);
+.fi
+.SH DESCRIPTION
+The function
+.BR daos_pool_connect ()
+makes a pool available to the calling process.  The pool must already exist;
+the caller identifies it by supplying its
+.I uuid
+identifier.  The
+.I grp
+parameter identifies the group of servers that manage the pool and are
+physically attached to the underlying pool storage.  The
+.I svc
+parameter I really don't get why this is supplied to connect.
+.I flags
+determines the type of access the process will have to the pool, such as
+read, read/write, etc.  The DAOS_PC_* bit flags are used to set these values.
+Upon success,
+.I poh
+is set to a handle that is used in subsequent calls that take the pool as a
+parameter.  The
+.I info
+parameter contains details about the pool.  The
+.I ev
+parameter determines whether the call is synchronous or asynchronous.  If the
+caller supplies NULL, the call will block until complete.  If an event
+structure is supplied the call will return immediately and the event is
+used to track the completion status.
+.SH RETURN VALUE
+The function
+.BR daos_pool_connect ()
+returns zero on success or an error number upon error.
+.SH ERRORS
+.TP
+.B DER_INVAL
+One or more of the caller supplied method parameters is invalid.
+.TP
+.B DER_NONEXIST
+The caller suppied pool handle does not reference a valid pool.
+.TP
+.B DER_NO_PERM
+The caller does not have permission to perform this operation.
+.TP
+.B DER_UNREACH
+The network is unqqreachable
+.SH CONFORMING TO
+TBD
+.SH SEE ALSO
+.BR daos_pool_disconnect (3)
+.SH COLOPHON
+This page is part of release 0.0.1 of the Distributed Asynchronous
+Object Storage (DAOS) exascale storage project. The project git reposity
+can be found at:
+\%https://github.com/daos-stack/daos.git
+Bugs can be reported at:
+\%https://jira.hpdd.intel.com/projects/DAOS/.
