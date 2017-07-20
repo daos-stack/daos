@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -120,6 +120,7 @@ typedef enum {
  * \param flags [IN]		OR-ed combination of 0 or more crt_iv_flag_t
  *				flags
  * \param iv_value [OUT]	IV value returned
+ * \param priv [IN]		private user data
  *
  * \return			zero on success handled locally,
  *				-CER_IVCB_FORWARD when cannot handle locally and
@@ -128,7 +129,8 @@ typedef enum {
  */
 typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
 				    crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-				    uint32_t flags, crt_sg_list_t *iv_value);
+				    uint32_t flags, crt_sg_list_t *iv_value,
+				    void *priv);
 
 /**
  * Incast variable on_update callback which will be called when the updating
@@ -162,6 +164,7 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  * \param iv_value [IN]		IV value to be refresh
  * \param invalidate [IN]       true for invalidate the IV in which case the
  *				iv_ver and iv_value can be ignored.
+ * \param priv [IN]		private user data
  *
  * \return			zero on success handled locally,
  *				-CER_IVCB_FORWARD when cannot handle locally and
@@ -170,7 +173,8 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  */
 typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
 				      crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
-				      crt_sg_list_t *iv_value, bool invalidate);
+				      crt_sg_list_t *iv_value, bool invalidate,
+				      void *priv);
 
 /**
  * The hash function to hash one IV's key to a crt_rank_t result which is to be
@@ -218,13 +222,15 @@ typedef enum {
  * \param iv_ver [IN]		Version of iv_key
  * \param permission [IN]	crt_iv_perm_t flags
  * \param iv_value [OUT]	Resultant placeholder for iv value buffer
+ * \param priv [OUT]		Pointer to the private data
  *
  * \return			zero on success, negative value if error
  */
 typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
 				crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
 				crt_iv_perm_t permission,
-				crt_sg_list_t *iv_value);
+				crt_sg_list_t *iv_value,
+				void **priv);
 
 /**
  * Put value function to return buffers retrieved for the specified iv_key
@@ -232,15 +238,14 @@ typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
  * crt_iv_on_get_cb_t call.
  *
  * \param ivns [IN]		the local handle to the IV namespace
- * \param iv_key [IN]		key of the IV
- * \param iv_ver [IN]		version of the iv_key
  * \param iv_value [IN]		iv_value buffers to return
+ * \param priv [IN]		private user data
  *
  * \return			zero on success, negative value if error
  */
 typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
-				crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
-				crt_sg_list_t *iv_value);
+				crt_sg_list_t *iv_value,
+				void *priv);
 
 /**
  * Compares two passed iv keys 'key1' and 'key2' and returns either
@@ -405,8 +410,6 @@ typedef int (*crt_iv_comp_cb_t)(crt_iv_namespace_t ivns, uint32_t class_id,
  *				version.
  *				The actual version will be returned through this
  *				parameter in fetch_comp_cb.
- * \param iv_value [OUT]	IV value, buffer provided by caller, result data
- *				available in fetch_comp_cb.
  * \param shortcut [IN]		the shortcut hints to optimize the propagation
  *				of accessing request, \see crt_iv_shortcut_t
  * \param fetch_comp_cb [IN]	pointer to fetch completion callback
@@ -417,7 +420,7 @@ typedef int (*crt_iv_comp_cb_t)(crt_iv_namespace_t ivns, uint32_t class_id,
 int
 crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	    crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-	    crt_sg_list_t *iv_value, crt_iv_shortcut_t shortcut,
+	    crt_iv_shortcut_t shortcut,
 	    crt_iv_comp_cb_t fetch_comp_cb, void *cb_arg);
 
 /**

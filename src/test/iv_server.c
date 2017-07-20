@@ -161,6 +161,8 @@ init_work_contexts(void)
 
 #define NUM_LOCAL_IVS 10
 
+static uint32_t test_user_priv = 0xDEAD1337;
+
 /* TODO: Change to hash table instead of list */
 static CRT_LIST_HEAD(kv_pair_head);
 
@@ -467,12 +469,15 @@ dump_all_keys(char *msg)
 
 static int
 iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	crt_iv_ver_t *iv_ver, uint32_t flags, crt_sg_list_t *iv_value)
+	crt_iv_ver_t *iv_ver, uint32_t flags, crt_sg_list_t *iv_value,
+	void *user_priv)
 {
 	struct kv_pair_entry *entry;
 	struct iv_key_struct *key_struct;
 
 	DBG_ENTRY();
+
+	assert(user_priv == &test_user_priv);
 
 	verify_key(iv_key);
 	assert(iv_value != NULL);
@@ -566,7 +571,8 @@ iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 static int
 iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	crt_iv_ver_t iv_ver, crt_sg_list_t *iv_value, bool invalidate)
+	crt_iv_ver_t iv_ver, crt_sg_list_t *iv_value, bool invalidate,
+	void *user_priv)
 {
 	struct kv_pair_entry	*entry = NULL;
 	bool			valid;
@@ -634,64 +640,50 @@ iv_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, crt_rank_t *root)
 	return 0;
 }
 
-/* TODO: later change tmp_iv_value to be per-key */
-static crt_sg_list_t *tmp_iv_value;
 
 static int
 iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		crt_iv_ver_t iv_ver, crt_iv_perm_t permission,
-		crt_sg_list_t *iv_value)
+		crt_sg_list_t *iv_value, void **user_priv)
 {
 	int size;
 
 	DBG_ENTRY();
 	dump_all_keys("ON_GETVALUE");
 
-	if (tmp_iv_value == NULL) {
+	*user_priv = &test_user_priv;
 
-		tmp_iv_value = malloc(sizeof(crt_sg_list_t));
-		assert(tmp_iv_value != NULL);
+	size = sizeof(struct iv_value_struct);
 
-		size = sizeof(struct iv_value_struct);
+	iv_value->sg_iovs = malloc(sizeof(crt_iov_t));
+	assert(iv_value->sg_iovs != NULL);
 
-		tmp_iv_value->sg_iovs = malloc(sizeof(crt_iov_t));
-		assert(tmp_iv_value->sg_iovs != NULL);
+	iv_value->sg_iovs[0].iov_buf = malloc(size);
+	assert(iv_value->sg_iovs[0].iov_buf != NULL);
 
-		tmp_iv_value->sg_iovs[0].iov_buf = malloc(size);
-		assert(tmp_iv_value->sg_iovs[0].iov_buf != NULL);
+	iv_value->sg_iovs[0].iov_len = size;
+	iv_value->sg_iovs[0].iov_buf_len = size;
 
-		tmp_iv_value->sg_iovs[0].iov_len = size;
-		tmp_iv_value->sg_iovs[0].iov_buf_len = size;
-
-		tmp_iv_value->sg_nr.num = 1;
-	} else {
-		DBG_PRINT("IV_GET_VALUE called before it was released\n");
-		C_ASSERT(0);
-	}
-
-	*iv_value = *tmp_iv_value;
+	iv_value->sg_nr.num = 1;
 
 	DBG_EXIT();
 	return 0;
 }
 
 static int
-iv_on_put(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-		crt_iv_ver_t iv_ver, crt_sg_list_t *iv_value)
+iv_on_put(crt_iv_namespace_t ivns, crt_sg_list_t *iv_value,
+	void *user_priv)
 {
 	DBG_ENTRY();
 
-	if (tmp_iv_value == 0) {
-		DBG_PRINT("IV_PUT_VALUE called without acquired\n");
-		C_ASSERT(0);
-	}
+	assert(user_priv == &test_user_priv);
 
-	free(tmp_iv_value->sg_iovs);
-	free(tmp_iv_value);
-	tmp_iv_value = NULL;
+	free(iv_value->sg_iovs[0].iov_buf);
+	free(iv_value->sg_iovs);
 
 	dump_all_keys("ON_PUTVALUE");
 	DBG_EXIT();
+
 	return 0;
 }
 
@@ -851,6 +843,7 @@ fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	assert(rc == 0);
 
 	free(cb_info);
+	free(iv_key->iov_buf);
 	return 0;
 }
 
@@ -952,7 +945,6 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 {
 	struct rpc_test_fetch_iv_in	*input;
 	crt_iv_key_t			*key;
-	crt_sg_list_t			*iv_value;
 	struct fetch_done_cb_info	*cb_info;
 	int				rc;
 	struct iv_key_struct		*key_struct;
@@ -965,19 +957,6 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 	key = alloc_key(key_struct->rank, key_struct->key_id);
 	assert(key != NULL);
 
-	iv_value = malloc(sizeof(crt_sg_list_t));
-	assert(iv_value != NULL);
-
-	iv_value->sg_nr.num = 1;
-	iv_value->sg_iovs = malloc(sizeof(crt_iov_t));
-	assert(iv_value->sg_iovs != NULL);
-
-	iv_value->sg_iovs[0].iov_buf = malloc(sizeof(struct iv_value_struct));
-	assert(iv_value->sg_iovs[0].iov_buf != NULL);
-
-	iv_value->sg_iovs[0].iov_buf_len = sizeof(struct iv_value_struct);
-	iv_value->sg_iovs[0].iov_len = sizeof(struct iv_value_struct);
-
 	cb_info = malloc(sizeof(struct fetch_done_cb_info));
 	assert(cb_info != NULL);
 
@@ -987,7 +966,7 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 	rc = crt_req_addref(rpc);
 	assert(rc == 0);
 
-	rc = crt_iv_fetch(ivns, 0, key, 0, iv_value, 0, fetch_done, cb_info);
+	rc = crt_iv_fetch(ivns, 0, key, 0, 0, fetch_done, cb_info);
 
 	return 0;
 }
