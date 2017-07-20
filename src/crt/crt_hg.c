@@ -43,8 +43,6 @@
 #include <crt_internal.h>
 #include <abt.h>
 
-
-
 static hg_return_t
 crt_hg_addr_lookup_cb(const struct hg_cb_info *hg_cbinfo)
 {
@@ -312,6 +310,18 @@ crt_get_info_string(char **string)
 	return 0;
 }
 
+static int
+crt_hg_log(FILE *stream, const char *fmt, ...)
+{
+	va_list		ap;
+
+	va_start(ap, fmt);
+	crt_vlog((intptr_t)stream, fmt, ap);
+	va_end(ap);
+
+	return 0;
+}
+
 /* be called only in crt_init */
 int
 crt_hg_init(crt_phy_addr_t *addr, bool server)
@@ -327,6 +337,12 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		C_ERROR("CaRT already initialized.\n");
 		C_GOTO(out, rc = -CER_ALREADY);
 	}
+
+	/* import HG log */
+	hg_log_set_func(crt_hg_log);
+	hg_log_set_stream_debug((FILE *)(intptr_t)CRT_DBG);
+	hg_log_set_stream_warning((FILE *)(intptr_t)CRT_WARN);
+	hg_log_set_stream_error((FILE *)(intptr_t)CRT_ERR);
 
 	if (*addr != NULL) {
 		info_string = *addr;
