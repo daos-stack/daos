@@ -190,10 +190,27 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
  *        handler it needs not to allocate extra input/output buffers, and also
  *        needs not to free input/output buffers in the completion callback of
  *        crt_reply_send.
+ *        tgt_ep may be NULL, in which case crt_req_set_endpoint() must be
+ *        called for this req before crt_req_send().
  */
 int
 crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req);
+
+/**
+ * Set the endpoint for an RPC request.
+ *
+ * This is an optional function, it must be called before req_send() if an
+ * endpoint was not provided to crt_req_create() however it will fail if there
+ * is already an endpoint associated with the request.
+ *
+ * \param req [IN]              pointer to RPC request
+ * \param tgt_ep [IN]           RPC target endpoint
+ *
+ * \return                      zero on success, negative value if error
+ */
+int
+crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep);
 
 /**
  * Set the timeout value for an RPC request.

@@ -584,9 +584,12 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 	}
 	D_ASSERT(rpc_priv != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
-	rpc_pub->cr_ep.ep_rank = tgt_ep->ep_rank;
-	rpc_pub->cr_ep.ep_tag = tgt_ep->ep_tag;
-	rpc_pub->cr_ep.ep_grp = tgt_ep->ep_grp;
+	if (tgt_ep != NULL) {
+		rpc_pub->cr_ep.ep_rank = tgt_ep->ep_rank;
+		rpc_pub->cr_ep.ep_tag = tgt_ep->ep_tag;
+		rpc_pub->cr_ep.ep_grp = tgt_ep->ep_grp;
+		rpc_priv->crp_have_ep = 1;
+	}
 
 	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */);
 
@@ -598,26 +601,13 @@ out:
 	return rc;
 }
 
-int
-crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
-	       crt_rpc_t **req)
+static int check_ep(crt_endpoint_t *tgt_ep)
 {
-	struct crt_grp_gdata	*grp_gdata;
 	struct crt_grp_priv	*grp_priv;
-	int			 rc = 0;
+	int rc = 0;
 
-	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
-		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-	if (!crt_initialized()) {
-		D_ERROR("CRT not initialized.\n");
-		D_GOTO(out, rc = -DER_UNINIT);
-	}
-	grp_gdata = crt_gdata.cg_grp;
-	D_ASSERT(grp_gdata != NULL);
 	if (tgt_ep->ep_grp == NULL) {
-		grp_priv = grp_gdata->gg_srv_pri_grp;
+		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
 		if (grp_priv == NULL) {
 			D_ERROR("service group not attached yet.\n");
 			D_GOTO(out, rc = -DER_NOTATTACH);
@@ -639,6 +629,30 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
+out:
+	return rc;
+}
+
+int
+crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
+	       crt_rpc_t **req)
+{
+	int rc = 0;
+
+	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
+		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	if (!crt_initialized()) {
+		D_ERROR("CRT not initialized.\n");
+		D_GOTO(out, rc = -DER_UNINIT);
+	}
+	if (tgt_ep != NULL) {
+		rc = check_ep(tgt_ep);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+
 	rc = crt_req_create_internal(crt_ctx, tgt_ep, opc, false /* forward */,
 				     req);
 	if (rc != 0) {
@@ -647,6 +661,39 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(*req != NULL);
+
+out:
+	return rc;
+}
+
+int
+crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
+{
+	struct crt_rpc_priv	*rpc_priv;
+	int			 rc = 0;
+
+	if (req == NULL || tgt_ep == NULL) {
+		D_ERROR("invalid parameter (NULL req or tgt_ep).\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+	if (rpc_priv->crp_have_ep == 1) {
+		D_ERROR("target endpoint already set.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = check_ep(tgt_ep);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	req->cr_ep.ep_rank = tgt_ep->ep_rank;
+	req->cr_ep.ep_tag = tgt_ep->ep_tag;
+	req->cr_ep.ep_grp = tgt_ep->ep_grp;
+	rpc_priv->crp_have_ep = 1;
+
+	D_DEBUG("rpc_priv %p ep modified %u.%u.\n",
+		rpc_priv, req->cr_ep.ep_rank, req->cr_ep.ep_tag);
 
 out:
 	return rc;
@@ -1252,6 +1299,12 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 			D_ERROR("crt_corpc_req_hdlr failed, "
 				"rc: %d,opc: 0x%x.\n", rc, req->cr_opc);
 		D_GOTO(out, rc);
+	} else {
+		if (!rpc_priv->crp_have_ep) {
+			D_WARN("target endpoint not set "
+				"rpc: %p, opc: 0x%x.\n", rpc_priv, req->cr_opc);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
 	}
 
 	D_DEBUG("rpc_priv %p submitted.\n", rpc_priv);

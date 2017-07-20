@@ -190,7 +190,9 @@ struct crt_rpc_priv {
 				/* flag of in timeout binheap */
 				crp_in_binheap:1,
 				/* set if a call to crt_req_reply pending */
-				crp_reply_pending:1;
+				crp_reply_pending:1,
+				/* set to 1 if target ep is set */
+				crp_have_ep:1;
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
