@@ -1381,6 +1381,48 @@ io_nospace(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+write_record_multiple_times(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	char		 buf[10];
+	char		 large_update_buf[4096];
+	char		 large_fetch_buf[4096];
+
+	oid = dts_oid_gen(0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/** write twice */
+	insert_single("dkey", "akey", 0, "data", strlen("data") + 1, 0,
+		      &req);
+	insert_single("dkey", "akey", 0, "data", strlen("data") + 1, 0,
+		      &req);
+	/** Lookup */
+	memset(buf, 0, 10);
+	lookup_single("dkey", "akey", 0, buf, 10, 0, &req);
+	assert_int_equal(req.iod[0].iod_size, strlen(buf) + 1);
+	/** Verify data consistency */
+	assert_string_equal(buf, "data");
+
+	dts_buf_render(large_update_buf, 4096);
+	/** write twice */
+	insert_single("dkey_large", "akey_large", 0, large_update_buf, 4096, 0,
+		      &req);
+	insert_single("dkey_large", "akey_large", 0, large_update_buf, 4096, 0,
+		      &req);
+
+	memset(large_fetch_buf, 0, 4096);
+	lookup_single("dkey_large", "akey_large", 0, large_fetch_buf, 4096, 0,
+		      &req);
+
+	assert_int_equal(req.iod[0].iod_size, 4096);
+	assert_memory_equal(large_update_buf, large_fetch_buf, 4096);
+
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
@@ -1427,6 +1469,8 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO23: Read from unwritten records", read_empty_records,
 	  async_disable, NULL},
 	{ "IO24: Read from large unwritten records", read_large_empty_records,
+	  async_disable, NULL},
+	{ "IO25: written records repeatly", write_record_multiple_times,
 	  async_disable, NULL},
 };
 

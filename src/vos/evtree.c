@@ -1109,6 +1109,7 @@ evt_clip_entry(struct evt_context *tcx, struct evt_entry *ent)
 		D_DEBUG(DB_TRACE, "Replacing "DF_RECT"\n", DP_RECT(rt1));
 		evt_ptr_copy(tcx, umem_id_u2t(entmp->en_mmid, struct evt_ptr),
 			     umem_id_u2t(ent->en_mmid, struct evt_ptr));
+		ent->en_mmid = entmp->en_mmid;
 		replaced = true;
 	}
 	evt_ent_list_fini(&tcx->tc_ent_list);
@@ -1376,7 +1377,7 @@ failed:
  */
 static int
 evt_insert_ptr(struct evt_context *tcx, struct evt_rect *rect,
-	       TMMID(struct evt_ptr) ptr_mmid)
+	       TMMID(struct evt_ptr) ptr_mmid, TMMID(struct evt_ptr) *out_mmid)
 {
 	struct evt_entry ent;
 	int		 rc;
@@ -1401,6 +1402,9 @@ evt_insert_ptr(struct evt_context *tcx, struct evt_rect *rect,
 	rc = evt_clip_entry(tcx, &ent);
 	if (rc != 0)
 		D_GOTO(failed, rc);
+
+	if (out_mmid)
+		*out_mmid = umem_id_u2t(ent.en_mmid, struct evt_ptr);
 
 	D_ASSERT(daos_list_empty(&tcx->tc_ent_clipping));
 	/* Phase-2: Inserting */
@@ -1437,7 +1441,7 @@ evt_insert(daos_handle_t toh, uuid_t cookie, struct evt_rect *rect,
 	if (rc != 0)
 		return rc;
 
-	rc = evt_insert_ptr(tcx, rect, ptr_mmid);
+	rc = evt_insert_ptr(tcx, rect, ptr_mmid, NULL);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
@@ -1459,6 +1463,7 @@ evt_insert_sgl(daos_handle_t toh, uuid_t cookie, struct evt_rect *rect,
 {
 	struct evt_context	*tcx;
 	TMMID(struct evt_ptr)	 ptr_mmid;
+	TMMID(struct evt_ptr)	 out_mmid;
 	int			 rc;
 
 	tcx = evt_hdl2tcx(toh);
@@ -1474,9 +1479,25 @@ evt_insert_sgl(daos_handle_t toh, uuid_t cookie, struct evt_rect *rect,
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	rc = evt_insert_ptr(tcx, rect, ptr_mmid);
+	rc = evt_insert_ptr(tcx, rect, ptr_mmid, &out_mmid);
 	if (rc != 0)
 		D_GOTO(failed, rc);
+
+	if (!umem_id_equal_typed(evt_umm(tcx), ptr_mmid, out_mmid)) {
+		struct evt_ptr	*ptr = evt_tmmid2ptr(tcx, ptr_mmid);
+
+		if (UMMID_IS_NULL(ptr->pt_mmid)) {
+			if (sgl->sg_iovs[0].iov_buf ==
+				evt_ptr_payload(tcx, ptr_mmid, NULL, NULL)) {
+				memset(&sgl->sg_iovs[0], 0,
+				       sizeof(sgl->sg_iovs[0]));
+				rc = evt_ptr_copy_sgl(tcx, out_mmid, sgl);
+				if (rc)
+					D_GOTO(failed, rc);
+			}
+		}
+		evt_ptr_free(tcx, ptr_mmid, false);
+	}
 
 	D_RETURN(0);
 failed:
