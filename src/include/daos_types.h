@@ -32,6 +32,7 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
 
@@ -115,6 +116,7 @@ daos_hash_set_eof(daos_hash_out_t *hash_out)
 {
 	memset(&hash_out->body[DAOS_HASH_HKEY_START], -1,
 	       DAOS_HASH_HKEY_LENGTH);
+
 }
 
 static inline bool

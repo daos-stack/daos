@@ -973,7 +973,7 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
-	rc = daos_eq_lib_init(NULL);
+	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("Failed to initailiz DAOS/event library: %d\n", rc);
 		goto out_debug;

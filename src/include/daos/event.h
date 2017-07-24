@@ -166,7 +166,7 @@ daos_client_result_wait(daos_event_t *ev)
 {
 	D_ASSERT(ev != NULL);
 	if (daos_event_is_priv(ev)) /* blocking mode */
-		return daos_event_priv_wait(ev);
+		return daos_event_priv_wait();
 
 	return 0;
 }

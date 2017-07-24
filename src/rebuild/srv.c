@@ -479,7 +479,6 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 	double		 now;
 	unsigned long	 i = 2;
 	unsigned	 failed = 0;
-	int		 rc;
 
 	pool = ds_pool_lookup(pool_uuid);
 	if (!pool) {
@@ -488,6 +487,7 @@ ds_rebuild_check(uuid_t pool_uuid, uint32_t map_ver,
 	}
 
 	while (1) {
+		int				 rc;
 		char				*str;
 		char				 sbuf[RBLD_SBUF_LEN];
 		struct daos_rebuild_status	 status;
