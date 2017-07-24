@@ -153,7 +153,7 @@ dc_cont_create(struct daos_task *task)
 	pthread_mutex_lock(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	rc = cont_req_create(daos_task2ctx(task), ep, CONT_CREATE, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(err_pool, rc);
@@ -252,7 +252,7 @@ dc_cont_destroy(struct daos_task *task)
 	pthread_mutex_lock(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	rc = cont_req_create(daos_task2ctx(task), ep, CONT_DESTROY, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_DESTROY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(err_pool, rc);
@@ -513,7 +513,7 @@ dc_cont_open(struct daos_task *task)
 	pthread_mutex_lock(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	rc = cont_req_create(daos_task2ctx(task), ep, CONT_OPEN, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OPEN, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(err_cont, rc);
@@ -672,7 +672,7 @@ dc_cont_close(struct daos_task *task)
 	pthread_mutex_lock(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	rc = cont_req_create(daos_task2ctx(task), ep, CONT_CLOSE, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(err_pool, rc);
@@ -802,7 +802,7 @@ dc_cont_query(struct daos_task *task)
 	pthread_mutex_lock(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	rc = cont_req_create(daos_task2ctx(task), ep, CONT_QUERY, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(err_cont, rc);
@@ -1181,7 +1181,7 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	pthread_mutex_lock(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	rc = cont_req_create(daos_task2ctx(task), ep, opc, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(err_pool, rc);

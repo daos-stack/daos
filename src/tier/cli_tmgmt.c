@@ -101,7 +101,7 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 		struct daos_task *task)
 {
 	int				rc;
-	crt_endpoint_t			warm_tgt_ep;
+	crt_endpoint_t			warm_tgt_ep = {0};
 	crt_rpc_t			*rpc_req;
 	struct tier_cross_conn_in	*cci_in = NULL;
 	struct tier_conn_arg		*tc_arg = NULL;
@@ -115,7 +115,7 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 	warm_tgt_ep.ep_rank = 0;
 	warm_tgt_ep.ep_tag = 1;
 
-	rc = tier_req_create(daos_task2ctx(task), warm_tgt_ep, TIER_CROSS_CONN,
+	rc = tier_req_create(daos_task2ctx(task), &warm_tgt_ep, TIER_CROSS_CONN,
 			    &rpc_req);
 
 	if (rc != 0) {
@@ -181,7 +181,7 @@ dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	tgt.ep_rank = 0;
 	tgt.ep_tag = 0;
 
-	rc = tier_req_create(daos_task2ctx(task), tgt, TIER_REGISTER_COLD,
+	rc = tier_req_create(daos_task2ctx(task), &tgt, TIER_REGISTER_COLD,
 			    &rpc_req);
 
 	if (rc != 0)

@@ -94,7 +94,7 @@ struct rebuild_tgt_query_out {
 };
 
 
-int rebuild_req_create(crt_context_t dtp_ctx, crt_endpoint_t tgt_ep,
+int rebuild_req_create(crt_context_t dtp_ctx, crt_endpoint_t *tgt_ep,
 		       crt_opcode_t opc, crt_rpc_t **req);
 
 extern struct daos_rpc rebuild_rpcs[];

@@ -504,7 +504,7 @@ dc_pool_connect(struct daos_task *task)
 	pthread_mutex_lock(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	rc = pool_req_create(daos_task2ctx(task), ep, POOL_CONNECT, &rpc);
+	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_CONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(out_pool, rc);
@@ -653,7 +653,7 @@ dc_pool_disconnect(struct daos_task *task)
 	pthread_mutex_lock(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	rc = pool_req_create(daos_task2ctx(task), ep, POOL_DISCONNECT, &rpc);
+	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_DISCONNECT, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(out_pool, rc);
@@ -1053,7 +1053,7 @@ dc_pool_update_internal(struct daos_task *task, daos_pool_update_t *args,
 
 	ep.ep_grp = state->group;
 	rsvc_client_choose(&state->client, &ep);
-	rc = pool_req_create(daos_task2ctx(task), ep, opc, &rpc);
+	rc = pool_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: %d\n", rc);
 		D_GOTO(out_client, rc);
@@ -1220,7 +1220,7 @@ dc_pool_query(struct daos_task *task)
 	pthread_mutex_lock(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	rc = pool_req_create(daos_task2ctx(task), ep, POOL_QUERY, &rpc);
+	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_QUERY, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool query rpc: %d\n",
 			DP_UUID(pool->dp_pool), rc);
@@ -1357,7 +1357,7 @@ dc_pool_evict(struct daos_task *task)
 
 	ep.ep_grp = state->group;
 	rsvc_client_choose(&state->client, &ep);
-	rc = pool_req_create(daos_task2ctx(task), ep, POOL_EVICT, &rpc);
+	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_EVICT, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
 			DP_UUID(args->uuid), rc);
@@ -1487,7 +1487,7 @@ dc_pool_svc_stop(struct daos_task *task)
 	pthread_mutex_lock(&pool->dp_client_lock);
 	rsvc_client_choose(&pool->dp_client, &ep);
 	pthread_mutex_unlock(&pool->dp_client_lock);
-	rc = pool_req_create(daos_task2ctx(task), ep, POOL_SVC_STOP, &rpc);
+	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_SVC_STOP, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create POOL_SVC_STOP RPC: %d\n",
 			DP_UUID(pool->dp_pool), rc);

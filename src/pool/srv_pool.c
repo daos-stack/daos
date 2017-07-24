@@ -440,7 +440,7 @@ rechoose:
 	/* Create a POOL_CREATE request. */
 	ep.ep_grp = NULL;
 	rsvc_client_choose(&client, &ep);
-	rc = pool_req_create(info->dmi_ctx, ep, POOL_CREATE, &rpc);
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_CREATE, &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create POOL_CREATE RPC: %d\n",
 			DP_UUID(pool_uuid), rc);

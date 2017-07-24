@@ -480,7 +480,7 @@ ds_mgmt_hdlr_pool_create(crt_rpc_t *rpc_req)
 		else
 			svr_ep.ep_rank = pc_in->pc_tgts->rl_ranks[i];
 
-		rc = crt_req_create(dss_get_module_info()->dmi_ctx, svr_ep,
+		rc = crt_req_create(dss_get_module_info()->dmi_ctx, &svr_ep,
 				    opc, &tc_req);
 		if (rc != 0) {
 			D_ERROR("crt_req_create(MGMT_TGT_CREATE) failed, "
@@ -586,8 +586,8 @@ svc_create_fail:
 
 		pc_inprog->pc_td_num++;
 		opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE, 1);
-		ret = crt_req_create(dss_get_module_info()->dmi_ctx, svr_ep,
-				    opc, &td_req);
+		ret = crt_req_create(dss_get_module_info()->dmi_ctx, &svr_ep,
+				     opc, &td_req);
 		if (ret != 0) {
 			D_ERROR("crt_req_create(MGMT_TGT_DESTROY) failed, "
 				"rc: %d.\n", ret);
@@ -885,7 +885,7 @@ ds_mgmt_hdlr_pool_destroy(crt_rpc_t *rpc_req)
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_DESTROY, DAOS_MGMT_MODULE, 1);
 	for (i = 0; i < pd_inprog->pd_td_num; i++) {
 		svr_ep.ep_rank = i;
-		rc = crt_req_create(dss_get_module_info()->dmi_ctx, svr_ep,
+		rc = crt_req_create(dss_get_module_info()->dmi_ctx, &svr_ep,
 				    opc, &td_req);
 		if (rc != 0) {
 			D_ERROR("crt_req_create(MGMT_TGT_DESTROY) failed, "

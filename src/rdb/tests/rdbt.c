@@ -84,7 +84,7 @@ create_rpc(crt_opcode_t opc, crt_group_t *group, crt_rank_t rank)
 	ep.ep_grp = group;
 	ep.ep_rank = rank;
 	ep.ep_tag = 0;
-	rc = crt_req_create(context, ep, opcode, &rpc);
+	rc = crt_req_create(context, &ep, opcode, &rpc);
 	D_ASSERTF(rc == 0, "%d\n", rc);
 	return rpc;
 }

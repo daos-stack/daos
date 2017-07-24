@@ -495,7 +495,7 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	D_DEBUG(DB_TRACE, "opc %d %.*s rank %d tag %d\n",
 		opc, (int)dkey->iov_len, (char *)dkey->iov_buf,
 		tgt_ep.ep_rank, tgt_ep.ep_tag);
-	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &req);
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0) {
 		obj_shard_decref(dobj);
 		D_GOTO(out_pool, rc);
@@ -760,7 +760,7 @@ dc_obj_shard_list_internal(daos_handle_t oh, enum obj_rpc_opc opc,
 	D_DEBUG(DB_TRACE, "opc %d "DF_UOID" rank %d tag %d\n",
 		opc, DP_UOID(dobj->do_id), tgt_ep.ep_rank, tgt_ep.ep_tag);
 
-	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &req);
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)
 		D_GOTO(out_pool, rc);
 

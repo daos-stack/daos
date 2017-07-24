@@ -107,7 +107,7 @@ struct obj_key_enum_out {
 
 extern struct daos_rpc daos_obj_rpcs[];
 
-int obj_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+int obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 		   crt_opcode_t opc, crt_rpc_t **req);
 void obj_reply_set_status(crt_rpc_t *rpc, int status);
 int obj_reply_get_status(crt_rpc_t *rpc);

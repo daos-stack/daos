@@ -74,7 +74,7 @@ dc_tier_ping(uint32_t ping_val, struct daos_task *task)
 	ep.ep_tag = 0;
 
 	/* Create RPC and allocate memory for the various field-eybops */
-	rc = tier_req_create(daos_task2ctx(task), ep, TIER_PING, &rpc);
+	rc = tier_req_create(daos_task2ctx(task), &ep, TIER_PING, &rpc);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 

@@ -209,7 +209,7 @@ struct crt_req_format DQF_POOL_TGT_UPDATE_MAP =
 			   pool_tgt_update_map_out_fields);
 
 int
-pool_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 	       crt_opcode_t opc, crt_rpc_t **req)
 {
 	crt_opcode_t opcode;

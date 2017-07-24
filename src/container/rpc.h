@@ -208,7 +208,7 @@ struct cont_tgt_epoch_aggregate_out {
 	int32_t	tao_rc;	/* number of errors */
 };
 
-int cont_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+int cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 		    crt_opcode_t opc, crt_rpc_t **req);
 
 extern struct daos_rpc cont_rpcs[];

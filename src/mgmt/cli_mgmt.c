@@ -64,7 +64,7 @@ dc_mgmt_svc_rip(struct daos_task *task)
 	svr_ep.ep_rank = args->rank;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE, 1);
-	rc = crt_req_create(daos_task2ctx(task), svr_ep, opc, &rpc);
+	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
 			rc);

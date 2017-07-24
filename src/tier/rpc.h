@@ -115,7 +115,7 @@ struct tier_hdl_bcast_out {
 };
 
 int
-tier_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+tier_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 		crt_opcode_t opc, crt_rpc_t **req);
 
 

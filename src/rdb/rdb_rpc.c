@@ -238,7 +238,7 @@ rdb_create_raft_rpc(crt_opcode_t opc, raft_node_t *node, crt_rpc_t **rpc)
 	ep.ep_grp = NULL;
 	ep.ep_rank = rdb_node->dn_rank;
 	ep.ep_tag = 0;
-	return crt_req_create(info->dmi_ctx, ep, opc_full, rpc);
+	return crt_req_create(info->dmi_ctx, &ep, opc_full, rpc);
 }
 
 int

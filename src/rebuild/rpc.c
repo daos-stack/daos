@@ -97,7 +97,7 @@ struct crt_req_format DQF_REBUILD_TGT_FINI =
 			   rebuild_out_fields);
 
 int
-rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t tgt_ep,
+rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 		   crt_opcode_t opc, crt_rpc_t **req)
 {
 	crt_opcode_t opcode;

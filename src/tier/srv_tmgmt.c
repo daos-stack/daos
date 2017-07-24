@@ -169,7 +169,7 @@ tier_upstream(uuid_t warm_id, char *warm_grp, uuid_t cold_id,
 	cold_tgt.ep_rank = 0;
 	cold_tgt.ep_tag = 0;
 
-	rc = tier_req_create(daos_task2ctx(upstream_task), cold_tgt,
+	rc = tier_req_create(daos_task2ctx(upstream_task), &cold_tgt,
 			    TIER_UPSTREAM_CONN, &rpc_req);
 
 	if (rc != 0) {

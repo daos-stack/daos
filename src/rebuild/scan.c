@@ -145,7 +145,7 @@ ds_rebuild_objects_send(struct rebuild_root *root,
 	uuid_t			*uuids = NULL;
 	unsigned int		*shards = NULL;
 	crt_rpc_t		*rpc;
-	crt_endpoint_t		tgt_ep;
+	crt_endpoint_t		tgt_ep = {0};
 	int			rc = 0;
 
 	D_ALLOC_PTR(arg);
@@ -207,7 +207,7 @@ ds_rebuild_objects_send(struct rebuild_root *root,
 
 	tgt_ep.ep_rank = tgt_id;
 	tgt_ep.ep_tag = 0;
-	rc = rebuild_req_create(dss_get_module_info()->dmi_ctx, tgt_ep,
+	rc = rebuild_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				REBUILD_OBJECTS, &rpc);
 	if (rc)
 		D_GOTO(out, rc);

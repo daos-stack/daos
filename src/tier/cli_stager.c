@@ -107,7 +107,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	ep.ep_tag = 0;
 
 	/* Create RPC and allocate memory for the various field-eybops */
-	rc = tier_req_create(daos_task2ctx(task), ep, TIER_FETCH, &rpc);
+	rc = tier_req_create(daos_task2ctx(task), &ep, TIER_FETCH, &rpc);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
