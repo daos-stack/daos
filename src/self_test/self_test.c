@@ -86,6 +86,7 @@ static const char * const crt_st_msg_type_str[] = { "EMPTY",
 /* Global shutdown flag, used to terminate the progress thread */
 static int g_shutdown_flag;
 
+static int is_singleton;
 
 static void *progress_fn(void *arg)
 {
@@ -108,15 +109,26 @@ static void *progress_fn(void *arg)
 }
 
 static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
-			  crt_group_t **srv_grp, pthread_t *tid)
+			  crt_group_t **srv_grp, pthread_t *tid,
+			  char *attach_info_path)
 {
 	crt_rank_t	myrank;
+	uint32_t	init_flags = 0;
 	int		ret;
 
-	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, 0);
+	if (is_singleton)
+		init_flags |= CRT_FLAG_BIT_SINGLETON;
+
+	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, init_flags);
 	if (ret != 0) {
 		C_ERROR("crt_init failed; ret = %d\n", ret);
 		return ret;
+	}
+
+	if (attach_info_path) {
+		ret = crt_group_config_path_set(attach_info_path);
+		C_ASSERTF(ret == 0,
+			  "crt_group_config_path_set failed, rc = %d\n", ret);
 	}
 
 	ret = crt_context_create(NULL, crt_ctx);
@@ -711,7 +723,8 @@ static int run_self_test(struct st_size_params all_params[],
 			 char *dest_name, struct st_endpoint *ms_endpts_in,
 			 uint32_t num_ms_endpts_in,
 			 struct st_endpoint *endpts, uint32_t num_endpts,
-			 int output_megabits, int16_t buf_alignment)
+			 int output_megabits, int16_t buf_alignment,
+			 char *attach_info_path)
 {
 	crt_context_t		  crt_ctx;
 	crt_group_t		 *srv_grp;
@@ -739,7 +752,8 @@ static int run_self_test(struct st_size_params all_params[],
 		 (ms_endpts_in != NULL && num_ms_endpts_in > 0));
 
 	/* Initialize CART */
-	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid);
+	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid,
+			     attach_info_path);
 	if (ret != 0) {
 		C_ERROR("self_test_init failed; ret = %d\n", ret);
 		C_GOTO(cleanup_nothread, ret);
@@ -1140,7 +1154,17 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "  --Mbits\n"
 	       "      Short version: -b\n"
 	       "      By default, self-test outputs performance results in MB (#Bytes/1024^2)\n"
-	       "      Specifying --Mbits switches the output to megabits (#bits/1000000)\n",
+	       "      Specifying --Mbits switches the output to megabits (#bits/1000000)\n"
+	       "  --singleton\n"
+	       "      Short version: -t\n"
+	       "      If specified, self_test will launch as a singleton process (with no orterun).\n"
+	       "  --path  /path/to/attach_info_file/directory/n"
+	       "      Short version: -p  prefix\n"
+	       "      This option implies --singleton is set.\n"
+	       "        If specified, self_test will use the address information in:\n"
+	       "        /tmp/group_name.attach_info_tmp, if prefix is specified, self_test will use\n"
+	       "        the address information in: prefix/group_name.attach_info_tmp.\n"
+	       "        Note the = sign in the option.\n",
 	       prog_name, UINT32_MAX,
 	       CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
 	       max_inflight, CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MIN);
@@ -1607,6 +1631,7 @@ int main(int argc, char *argv[])
 	int				 output_megabits = 0;
 	int16_t				 buf_alignment =
 		CRT_ST_BUF_ALIGN_DEFAULT;
+	char				*attach_info_path = NULL;
 
 	ret = crt_log_init();
 	if (ret != 0) {
@@ -1624,10 +1649,12 @@ int main(int argc, char *argv[])
 			{"max-inflight-rpcs", required_argument, 0, 'i'},
 			{"align", required_argument, 0, 'a'},
 			{"Mbits", no_argument, 0, 'b'},
+			{"singleton", no_argument, 0, 't'},
+			{"path", required_argument, 0, 'p'},
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:b",
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:btp:",
 				long_options, NULL);
 		if (c == -1)
 			break;
@@ -1677,6 +1704,13 @@ int main(int argc, char *argv[])
 			break;
 		case 'b':
 			output_megabits = 1;
+			break;
+		case 't':
+			is_singleton = 1;
+			break;
+		case 'p':
+			is_singleton = 1;
+			attach_info_path = optarg;
 			break;
 		case '?':
 		default:
@@ -1815,7 +1849,7 @@ int main(int argc, char *argv[])
 	ret = run_self_test(all_params, num_msg_sizes, rep_count,
 			    max_inflight, dest_name, ms_endpts,
 			    num_ms_endpts, endpts, num_endpts,
-			    output_megabits, buf_alignment);
+			    output_megabits, buf_alignment, attach_info_path);
 
 	/********************* Clean up *********************/
 cleanup:
