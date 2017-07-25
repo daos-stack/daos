@@ -56,6 +56,7 @@ set TR_USE_VALGRIND in cart_test_barrier.yml to callgrind
 import os
 import time
 import commontestsuite
+from socket import gethostname
 
 class TestBarrier(commontestsuite.CommonTestSuite):
     """ Execute process set tests """
@@ -77,6 +78,7 @@ class TestBarrier(commontestsuite.CommonTestSuite):
         os.environ.pop("CRT_PHY_ADDR_STR", "")
         os.environ.pop("OFI_INTERFACE", "")
         os.environ.pop("CRT_LOG_MASK", "")
+        os.environ.pop("CRT_TEST_SERVER", "")
         self.logger.info("tearDown end\n")
 
     def test_barrier_test(self):
@@ -84,11 +86,12 @@ class TestBarrier(commontestsuite.CommonTestSuite):
         testmsg = self.shortDescription()
 
         servers = self.get_server_list()
-        if not servers:
-            self.skipTest('Server list is empty.')
-
-        all_servers = ','.join(servers)
-        hosts = ''.join([' -H ', all_servers])
+        #run test even if server list is not provided.
+        if servers:
+            all_servers = ','.join(servers)
+            hosts = ''.join([' -H ', all_servers])
+        else:
+            hosts = ''.join([' -H ', gethostname().split('.')[0]])
 
         # Launch a test_crt_barrier in the background.
         # This will remain running for the duration.
