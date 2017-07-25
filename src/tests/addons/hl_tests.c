@@ -75,8 +75,8 @@ simple_put_get(void **state)
 		char key[10];
 
 		sprintf(key, key_fmt, i);
-		rc = daos_obj_put(oh, epoch, key, buf_size, buf,
-				  arg->async ? &ev : NULL);
+		rc = daos_kv_put(oh, epoch, key, buf_size, buf,
+				 arg->async ? &ev : NULL);
 
 		if (arg->async) {
 			bool ev_flag;
@@ -95,8 +95,8 @@ simple_put_get(void **state)
 		int value = NUM_KEYS;
 
 		sprintf(key, key_fmt, NUM_KEYS-1);
-		rc = daos_obj_put(oh, epoch, key, sizeof(int), &value,
-				  arg->async ? &ev : NULL);
+		rc = daos_kv_put(oh, epoch, key, sizeof(int), &value,
+				 arg->async ? &ev : NULL);
 
 		if (arg->async) {
 			bool ev_flag;
@@ -118,8 +118,8 @@ simple_put_get(void **state)
 		sprintf(key, key_fmt, i);
 
 		size = DAOS_REC_ANY;
-		rc = daos_obj_get(oh, epoch, key, &size, NULL,
-				  arg->async ? &ev : NULL);
+		rc = daos_kv_get(oh, epoch, key, &size, NULL,
+				 arg->async ? &ev : NULL);
 		if (arg->async) {
 			bool ev_flag;
 
@@ -134,8 +134,8 @@ simple_put_get(void **state)
 		else
 			assert_int_equal(size, sizeof(int));
 
-		rc = daos_obj_get(oh, epoch, key, &size, buf_out,
-				  arg->async ? &ev : NULL);
+		rc = daos_kv_get(oh, epoch, key, &size, buf_out,
+				 arg->async ? &ev : NULL);
 		if (arg->async) {
 			bool ev_flag;
 
@@ -202,10 +202,10 @@ simple_multi_io(void **state)
 	recx.rx_nr	= buf_size;
 
 	for (i = 0; i < NUM_KEYS; i++) {
-		io_array[i].iods = malloc(sizeof(daos_iod_t));
-		io_array[i].sgls = malloc(sizeof(daos_sg_list_t));
-		io_array[i].dkey = malloc(sizeof(daos_key_t));
-		io_array[i].nr = 1;
+		io_array[i].ioa_iods = malloc(sizeof(daos_iod_t));
+		io_array[i].ioa_sgls = malloc(sizeof(daos_sg_list_t));
+		io_array[i].ioa_dkey = malloc(sizeof(daos_key_t));
+		io_array[i].ioa_nr = 1;
 
 		buf[i] = malloc(buf_size);
 		assert_non_null(buf[i]);
@@ -216,22 +216,22 @@ simple_multi_io(void **state)
 
 		/** init dkey */
 		asprintf(&keys[i], key_fmt, i);
-		daos_iov_set(io_array[i].dkey, keys[i], strlen(keys[i]));
+		daos_iov_set(io_array[i].ioa_dkey, keys[i], strlen(keys[i]));
 		/** init scatter/gather */
 		daos_iov_set(&sg_iov[i], buf[i], buf_size);
-		io_array[i].sgls[0].sg_nr.num		= 1;
-		io_array[i].sgls[0].sg_nr.num_out	= 0;
-		io_array[i].sgls[0].sg_iovs		= &sg_iov[i];
+		io_array[i].ioa_sgls[0].sg_nr.num		= 1;
+		io_array[i].ioa_sgls[0].sg_nr.num_out	= 0;
+		io_array[i].ioa_sgls[0].sg_iovs		= &sg_iov[i];
 		/** init I/O descriptor */
-		daos_iov_set(&io_array[i].iods[0].iod_name, "akey",
+		daos_iov_set(&io_array[i].ioa_iods[0].iod_name, "akey",
 			     strlen("akey"));
-		daos_csum_set(&io_array[i].iods[0].iod_kcsum, NULL, 0);
-		io_array[i].iods[0].iod_nr	= 1;
-		io_array[i].iods[0].iod_size	= 1;
-		io_array[i].iods[0].iod_recxs	= &recx;
-		io_array[i].iods[0].iod_eprs	= NULL;
-		io_array[i].iods[0].iod_csums	= NULL;
-		io_array[i].iods[0].iod_type	= DAOS_IOD_ARRAY;
+		daos_csum_set(&io_array[i].ioa_iods[0].iod_kcsum, NULL, 0);
+		io_array[i].ioa_iods[0].iod_nr	= 1;
+		io_array[i].ioa_iods[0].iod_size	= 1;
+		io_array[i].ioa_iods[0].iod_recxs	= &recx;
+		io_array[i].ioa_iods[0].iod_eprs	= NULL;
+		io_array[i].ioa_iods[0].iod_csums	= NULL;
+		io_array[i].ioa_iods[0].iod_type	= DAOS_IOD_ARRAY;
 	}
 
 	rc = daos_obj_update_multi(oh, epoch, NUM_KEYS, io_array,
@@ -248,9 +248,9 @@ simple_multi_io(void **state)
 	for (i = 0; i < NUM_KEYS; i++) {
 		/** init scatter/gather */
 		daos_iov_set(&sg_iov[i], buf_out[i], buf_size);
-		io_array[i].sgls[0].sg_nr.num		= 1;
-		io_array[i].sgls[0].sg_nr.num_out	= 0;
-		io_array[i].sgls[0].sg_iovs		= &sg_iov[i];
+		io_array[i].ioa_sgls[0].sg_nr.num		= 1;
+		io_array[i].ioa_sgls[0].sg_nr.num_out	= 0;
+		io_array[i].ioa_sgls[0].sg_iovs		= &sg_iov[i];
 	}
 
 	rc = daos_obj_fetch_multi(oh, epoch, NUM_KEYS, io_array,
@@ -265,16 +265,16 @@ simple_multi_io(void **state)
 	}
 
 	for (i = 0; i < NUM_KEYS; i++) {
-		assert_int_equal(io_array[i].iods[0].iod_size, 1);
+		assert_int_equal(io_array[i].ioa_iods[0].iod_size, 1);
 		assert_memory_equal(buf_out[i], buf[i], buf_size);
 	}
 
 	rc = daos_obj_close(oh, NULL);
 	assert_int_equal(rc, 0);
 	for (i = 0; i < NUM_KEYS; i++) {
-		free(io_array[i].iods);
-		free(io_array[i].dkey);
-		free(io_array[i].sgls);
+		free(io_array[i].ioa_iods);
+		free(io_array[i].ioa_dkey);
+		free(io_array[i].ioa_sgls);
 		free(buf_out[i]);
 		free(buf[i]);
 	}

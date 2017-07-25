@@ -34,10 +34,10 @@
 #include <daos_addons.h>
 
 int
-daos_obj_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
-	     daos_size_t buf_size, const void *buf, daos_event_t *ev)
+daos_kv_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+	    daos_size_t buf_size, const void *buf, daos_event_t *ev)
 {
-	daos_obj_put_t		args;
+	daos_kv_put_t		args;
 	struct daos_task	*task;
 
 	args.oh		= oh;
@@ -46,15 +46,15 @@ daos_obj_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 	args.buf_size	= buf_size;
 	args.buf	= buf;
 
-	dc_task_create(DAOS_OPC_OBJ_PUT, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_KV_PUT, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
 int
-daos_obj_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
-	     daos_size_t *buf_size, void *buf, daos_event_t *ev)
+daos_kv_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+	    daos_size_t *buf_size, void *buf, daos_event_t *ev)
 {
-	daos_obj_get_t		args;
+	daos_kv_get_t		args;
 	struct daos_task	*task;
 
 	args.oh		= oh;
@@ -63,13 +63,13 @@ daos_obj_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 	args.buf_size	= buf_size;
 	args.buf	= buf;
 
-	dc_task_create(DAOS_OPC_OBJ_GET, &args, sizeof(args), &task, &ev);
+	dc_task_create(DAOS_OPC_KV_GET, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
 }
 
 int
-daos_obj_remove(daos_handle_t oh, daos_epoch_t epoch, const char *key,
-		daos_event_t *ev)
+daos_kv_remove(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+	       daos_event_t *ev)
 {
 	D_ERROR("Unsupported API\n");
 	return -DER_NOSYS;

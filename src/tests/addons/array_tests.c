@@ -118,10 +118,10 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 		wbuf[i] = i+1;
 
 	/** set array location */
-	ranges.ranges_nr = 1;
-	rg.len = NUM_ELEMS * sizeof(int) / cell_size;
-	rg.index = arg->myrank * rg.len;
-	ranges.ranges = &rg;
+	ranges.arr_nr = 1;
+	rg.rg_len = NUM_ELEMS * sizeof(int) / cell_size;
+	rg.rg_idx = arg->myrank * rg.rg_len;
+	ranges.arr_rgs = &rg;
 
 	/** set memory location */
 	sgl.sg_nr.num = 1;
@@ -235,14 +235,14 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		wbuf[i] = i+1;
 
 	/** set array location */
-	ranges.ranges_nr = NUM_ELEMS;
-	ranges.ranges = (daos_range_t *)malloc(sizeof(daos_range_t) *
+	ranges.arr_nr = NUM_ELEMS;
+	ranges.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) *
 					       NUM_ELEMS);
-	assert_non_null(ranges.ranges);
+	assert_non_null(ranges.arr_rgs);
 
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.ranges[i].len = sizeof(int) / cell_size;
-		ranges.ranges[i].index = i * arg->rank_size * 4 +
+		ranges.arr_rgs[i].rg_len = sizeof(int) / cell_size;
+		ranges.arr_rgs[i].rg_idx = i * arg->rank_size * 4 +
 			arg->myrank * 4 + i * block_size;
 	}
 
@@ -302,7 +302,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	free(rbuf);
 	free(wbuf);
-	free(ranges.ranges);
+	free(ranges.arr_rgs);
 
 	{
 		daos_size_t array_size;
@@ -359,14 +359,14 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	}
 
 	/** set array location */
-	ranges.ranges_nr = NUM_ELEMS;
-	ranges.ranges = (daos_range_t *)malloc(sizeof(daos_range_t) *
+	ranges.arr_nr = NUM_ELEMS;
+	ranges.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) *
 					       NUM_ELEMS);
-	assert_non_null(ranges.ranges);
+	assert_non_null(ranges.arr_rgs);
 
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.ranges[i].len = sizeof(int) / cell_size;
-		ranges.ranges[i].index = i * arg->rank_size * 4 +
+		ranges.arr_rgs[i].rg_len = sizeof(int) / cell_size;
+		ranges.arr_rgs[i].rg_idx = i * arg->rank_size * 4 +
 			arg->myrank * 4 + i * block_size;
 	}
 
@@ -438,7 +438,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		free(rbuf[i]);
 		free(wbuf[i]);
 	}
-	free(ranges.ranges);
+	free(ranges.arr_rgs);
 	free(sgl.sg_iovs);
 
 	{
@@ -507,15 +507,15 @@ read_empty_records(void **state)
 	sgl.sg_iovs = &iov;
 
 	/** set array location */
-	ranges.ranges_nr = NUM_ELEMS;
-	ranges.ranges = (daos_range_t *)malloc(sizeof(daos_range_t) *
+	ranges.arr_nr = NUM_ELEMS;
+	ranges.arr_rgs = (daos_range_t *)malloc(sizeof(daos_range_t) *
 					       NUM_ELEMS);
-	assert_non_null(ranges.ranges);
+	assert_non_null(ranges.arr_rgs);
 
 	/** Read from empty array */
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.ranges[i].len = sizeof(int);
-		ranges.ranges[i].index = i * arg->rank_size * sizeof(int) +
+		ranges.arr_rgs[i].rg_len = sizeof(int);
+		ranges.arr_rgs[i].rg_idx = i * arg->rank_size * sizeof(int) +
 			arg->myrank * sizeof(int);
 	}
 	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
@@ -536,8 +536,8 @@ read_empty_records(void **state)
 
 	/** Write segmented */
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.ranges[i].len = sizeof(int);
-		ranges.ranges[i].index = i * arg->rank_size * sizeof(int) +
+		ranges.arr_rgs[i].rg_len = sizeof(int);
+		ranges.arr_rgs[i].rg_idx = i * arg->rank_size * sizeof(int) +
 			arg->myrank * sizeof(int) +
 			i * NUM_ELEMS * sizeof(int);
 	}
@@ -548,8 +548,8 @@ read_empty_records(void **state)
 
 	/** Read from empty records */
 	for (i = 0; i < NUM_ELEMS; i++) {
-		ranges.ranges[i].len = sizeof(int);
-		ranges.ranges[i].index = i * sizeof(int) +
+		ranges.arr_rgs[i].rg_len = sizeof(int);
+		ranges.arr_rgs[i].rg_idx = i * sizeof(int) +
 			arg->myrank * sizeof(int);
 	}
 	daos_iov_set(&iov, rbuf, NUM_ELEMS * sizeof(int));
@@ -567,7 +567,7 @@ read_empty_records(void **state)
 
 	free(rbuf);
 	free(wbuf);
-	free(ranges.ranges);
+	free(ranges.arr_rgs);
 
 	{
 		daos_size_t array_size;

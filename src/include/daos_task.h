@@ -107,9 +107,9 @@ typedef enum {
 	DAOS_OPC_ARRAY_SET_SIZE,
 
 	/** HL APIs */
-	DAOS_OPC_OBJ_GET,
-	DAOS_OPC_OBJ_PUT,
-	DAOS_OPC_OBJ_REMOVE,
+	DAOS_OPC_KV_GET,
+	DAOS_OPC_KV_PUT,
+	DAOS_OPC_KV_REMOVE,
 	DAOS_OPC_OBJ_FETCH_MULTI,
 	DAOS_OPC_OBJ_UPDATE_MULTI,
 
@@ -449,7 +449,7 @@ typedef struct {
 	const char	*key;
 	daos_size_t	*buf_size;
 	void		*buf;
-} daos_obj_get_t;
+} daos_kv_get_t;
 
 typedef struct {
 	daos_handle_t	oh;
@@ -457,13 +457,13 @@ typedef struct {
 	const char	*key;
 	daos_size_t	buf_size;
 	const void	*buf;
-} daos_obj_put_t;
+} daos_kv_put_t;
 
 typedef struct {
 	daos_handle_t	oh;
 	daos_epoch_t	epoch;
 	const char	*key;
-} daos_obj_remove_t;
+} daos_kv_remove_t;
 
 typedef struct {
 	daos_handle_t	oh;

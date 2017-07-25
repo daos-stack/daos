@@ -37,9 +37,9 @@ int dac_array_get_size(struct daos_task *task);
 int dac_array_set_size(struct daos_task *task);
 
 /* task function for HL operations */
-int dac_obj_get(struct daos_task *task);
-int dac_obj_put(struct daos_task *task);
-int dac_obj_remove(struct daos_task *task);
+int dac_kv_get(struct daos_task *task);
+int dac_kv_put(struct daos_task *task);
+int dac_kv_remove(struct daos_task *task);
 int dac_obj_fetch_multi(struct daos_task *task);
 int dac_obj_update_multi(struct daos_task *task);
 #endif /* __DAOS_ADDONS_H__ */

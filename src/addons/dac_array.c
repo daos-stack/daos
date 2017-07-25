@@ -123,6 +123,7 @@ static int
 free_io_params_cb(struct daos_task *task, void *data)
 {
 	struct io_params *io_list = *((struct io_params **)data);
+	int rc = task->dt_result;
 
 	while (io_list) {
 		struct io_params *current = io_list;
@@ -148,7 +149,7 @@ free_io_params_cb(struct daos_task *task, void *data)
 		D_FREE_PTR(current);
 	}
 
-	return 0;
+	return rc;
 }
 
 static int
@@ -159,18 +160,14 @@ create_handle_cb(struct daos_task *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		/** attempt to close the OH */
-		daos_obj_close(*args->oh, NULL);
-		return rc;
+		D_ERROR("Failed to create array obj (%d)\n", rc);
+		D_GOTO(err_obj, rc);
 	}
 
 	/** Create an array OH from the DAOS one */
 	array = array_alloc();
-	if (array == NULL) {
-		D_ERROR("Failed memory allocation\n");
-		daos_obj_close(*args->oh, NULL);
-		return -DER_NOMEM;
-	}
+	if (array == NULL)
+		D_GOTO(err_obj, rc = -DER_NOMEM);
 
 	array->daos_oh = *args->oh;
 	array->cell_size = args->cell_size;
@@ -181,6 +178,17 @@ create_handle_cb(struct daos_task *task, void *data)
 	*args->oh = array_ptr2hdl(array);
 
 	return 0;
+
+err_obj:
+	{
+		daos_obj_close_t close_args;
+		struct daos_task *close_task;
+
+		close_args.oh = *args->oh;
+		daos_task_create(DAOS_OPC_OBJ_CLOSE, daos_task2sched(task),
+				 &close_args, 0, NULL, &close_task);
+		return rc;
+	}
 }
 
 static int
@@ -213,8 +221,10 @@ write_md_cb(struct daos_task *task, void *data)
 	struct io_params *params;
 	int rc = task->dt_result;
 
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("Failed to open object (%d)\n", rc);
 		return rc;
+	}
 
 	D_ALLOC_PTR(params);
 	if (params == NULL) {
@@ -341,25 +351,19 @@ open_handle_cb(struct daos_task *task, void *data)
 	struct dac_array	*array;
 	int			rc = task->dt_result;
 
-	if (rc != 0) {
-		/** attempt to close the OH */
-		daos_obj_close(*args->oh, NULL);
-		return rc;
-	}
+	if (rc != 0)
+		D_GOTO(err_obj, rc);
 
 	/** If no cell and block size, this isn't an array obj. */
 	if (*args->cell_size == 0 || *args->block_size == 0) {
-		daos_obj_close(*args->oh, NULL);
-		return -DER_NO_PERM;
+		D_ERROR("Failed to retrieve array metadata\n");
+		D_GOTO(err_obj, rc = -DER_NO_PERM);
 	}
 
 	/** Create an array OH from the DAOS one */
 	array = array_alloc();
-	if (array == NULL) {
-		D_ERROR("Failed memory allocation\n");
-		daos_obj_close(*args->oh, NULL);
-		return -DER_NOMEM;
-	}
+	if (array == NULL)
+		D_GOTO(err_obj, rc = -DER_NOMEM);
 
 	array->daos_oh = *args->oh;
 	array->cell_size = *args->cell_size;
@@ -370,6 +374,17 @@ open_handle_cb(struct daos_task *task, void *data)
 	*args->oh = array_ptr2hdl(array);
 
 	return 0;
+
+err_obj:
+	{
+		daos_obj_close_t close_args;
+		struct daos_task *close_task;
+
+		close_args.oh = *args->oh;
+		daos_task_create(DAOS_OPC_OBJ_CLOSE, daos_task2sched(task),
+				 &close_args, 0, NULL, &close_task);
+		return rc;
+	}
 }
 
 static int
@@ -563,13 +578,14 @@ io_extent_same(daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
 	ranges_len = 0;
 #ifdef ARRAY_DEBUG
 	printf("USER ARRAY RANGE -----------------------\n");
-	printf("ranges_nr = %zu\n", ranges->ranges_nr);
+	printf("ranges_nr = %zu\n", ranges->arr_nr);
 #endif
-	for (u = 0 ; u < ranges->ranges_nr ; u++) {
-		ranges_len += ranges->ranges[u].len;
+	for (u = 0 ; u < ranges->arr_nr ; u++) {
+		ranges_len += ranges->arr_rgs[u].rg_len;
 #ifdef ARRAY_DEBUG
 		printf("%zu: length %zu, index %d\n",
-			u, ranges->ranges[u].len, (int)ranges->ranges[u].index);
+			u, ranges->arr_rgs[u].rg_len,
+		       (int)ranges->arr_rgs[u].rg_idx);
 #endif
 	}
 #ifdef ARRAY_DEBUG
@@ -739,8 +755,8 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 	cur_i = 0;
 	u = 0;
 	num_ios = 0;
-	records = ranges->ranges[0].len;
-	array_idx = ranges->ranges[0].index;
+	records = ranges->arr_rgs[0].rg_len;
+	array_idx = ranges->arr_rgs[0].rg_idx;
 	daos_csum_set(&null_csum, NULL, 0);
 
 	head = NULL;
@@ -751,7 +767,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 	 * are not increasing in offset, they probably won't be combined unless
 	 * the separating ranges also belong to the same dkey.
 	 */
-	while (u < ranges->ranges_nr) {
+	while (u < ranges->arr_nr) {
 		daos_iod_t	*iod;
 		daos_sg_list_t	*sgl;
 		char		*dkey_str;
@@ -761,11 +777,11 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		struct io_params *params = NULL;
 		daos_size_t	i;
 
-		if (ranges->ranges[u].len == 0) {
+		if (ranges->arr_rgs[u].rg_len == 0) {
 			u++;
-			if (u < ranges->ranges_nr) {
-				records = ranges->ranges[u].len;
-				array_idx = ranges->ranges[u].index;
+			if (u < ranges->arr_nr) {
+				records = ranges->arr_rgs[u].rg_len;
+				array_idx = ranges->arr_rgs[u].rg_idx;
 			}
 			continue;
 		}
@@ -874,12 +890,12 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			dkey_records += records;
 
 			/** if there are no more ranges to write, then break */
-			if (ranges->ranges_nr <= u)
+			if (ranges->arr_nr <= u)
 				break;
 
 			old_array_idx = array_idx;
-			records = ranges->ranges[u].len;
-			array_idx = ranges->ranges[u].index;
+			records = ranges->arr_rgs[u].rg_len;
+			array_idx = ranges->arr_rgs[u].rg_idx;
 
 			/**
 			 * Boundary case where number of records align with the
@@ -925,8 +941,8 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		 * if the user sgl maps directly to the array range, no need to
 		 * partition it.
 		 */
-		if (1 == ranges->ranges_nr && 1 == user_sgl->sg_nr.num &&
-		    dkey_records == ranges->ranges[0].len) {
+		if (1 == ranges->arr_nr && 1 == user_sgl->sg_nr.num &&
+		    dkey_records == ranges->arr_rgs[0].rg_len) {
 			sgl = user_sgl;
 			params->user_sgl_used = true;
 		}

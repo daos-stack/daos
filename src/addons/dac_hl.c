@@ -68,15 +68,15 @@ set_size_cb(struct daos_task *task, void *data)
 }
 
 int
-dac_obj_put(struct daos_task *task)
+dac_kv_put(struct daos_task *task)
 {
-	daos_obj_put_t		*args;
+	daos_kv_put_t		*args;
 	daos_obj_update_t	update_args;
 	struct daos_task	*update_task;
 	struct io_params	*params;
 	int			rc;
 
-	args = daos_task_get_args(DAOS_OPC_OBJ_PUT, task);
+	args = daos_task_get_args(DAOS_OPC_KV_PUT, task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	D_ALLOC_PTR(params);
@@ -143,9 +143,9 @@ err_task:
 }
 
 int
-dac_obj_get(struct daos_task *task)
+dac_kv_get(struct daos_task *task)
 {
-	daos_obj_get_t		*args;
+	daos_kv_get_t		*args;
 	daos_obj_fetch_t	fetch_args;
 	struct daos_task	*fetch_task;
 	struct io_params	*params;
@@ -153,7 +153,7 @@ dac_obj_get(struct daos_task *task)
 	daos_size_t		*buf_size;
 	int			rc;
 
-	args = daos_task_get_args(DAOS_OPC_OBJ_GET, task);
+	args = daos_task_get_args(DAOS_OPC_KV_GET, task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	buf = args->buf;
@@ -238,7 +238,7 @@ err_task:
 }
 
 int
-dac_obj_remove(struct daos_task *task)
+dac_kv_remove(struct daos_task *task)
 {
 	return -DER_NOSYS;
 }
@@ -264,11 +264,11 @@ dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
 
 		args.oh		= oh;
 		args.epoch	= epoch;
-		args.dkey	= io_array[i].dkey;
-		args.nr		= io_array[i].nr;
-		args.iods	= io_array[i].iods;
-		args.sgls	= io_array[i].sgls;
-		args.maps	= io_array[i].maps;
+		args.dkey	= io_array[i].ioa_dkey;
+		args.nr		= io_array[i].ioa_nr;
+		args.iods	= io_array[i].ioa_iods;
+		args.sgls	= io_array[i].ioa_sgls;
+		args.maps	= io_array[i].ioa_maps;
 
 		rc = daos_task_create(d_opc, daos_task2sched(task),
 				      &args, 0, NULL, &io_tasks[i]);

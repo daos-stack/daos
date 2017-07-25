@@ -32,16 +32,16 @@ extern "C" {
 #endif
 
 typedef struct {
-	daos_size_t		len;
-	daos_off_t		index;
+	daos_size_t		rg_len;
+	daos_off_t		rg_idx;
 } daos_range_t;
 
 /** describe ranges of an array object to access */
 typedef struct {
 	/** Number of ranges to access */
-	daos_size_t		ranges_nr;
+	daos_size_t		arr_nr;
 	/** Array of index/len pairs */
-	daos_range_t	       *ranges;
+	daos_range_t	       *arr_rgs;
 } daos_array_ranges_t;
 
 /**
@@ -237,8 +237,8 @@ daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_obj_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
-	     daos_size_t buf_size, const void *buf, daos_event_t *ev);
+daos_kv_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+	    daos_size_t buf_size, const void *buf, daos_event_t *ev);
 
 /**
  * Fetch value of a key.
@@ -268,8 +268,8 @@ daos_obj_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_obj_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
-	     daos_size_t *buf_size, void *buf, daos_event_t *ev);
+daos_kv_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+	    daos_size_t *buf_size, void *buf, daos_event_t *ev);
 
 /**
  * Remove a Key and it's value from the KV store
@@ -295,15 +295,15 @@ daos_obj_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
  *			-DER_EP_RO	Epoch is read-only
  */
 int
-daos_obj_remove(daos_handle_t oh, daos_epoch_t epoch, const char *key,
-		daos_event_t *ev);
+daos_kv_remove(daos_handle_t oh, daos_epoch_t epoch, const char *key,
+	       daos_event_t *ev);
 
 typedef struct {
-	daos_key_t	*dkey;
-	unsigned int	nr;
-	daos_iod_t	*iods;
-	daos_sg_list_t	*sgls;
-	daos_iom_t	*maps;
+	daos_key_t	*ioa_dkey;
+	unsigned int	ioa_nr;
+	daos_iod_t	*ioa_iods;
+	daos_sg_list_t	*ioa_sgls;
+	daos_iom_t	*ioa_maps;
 } daos_dkey_io_t;
 
 /**
