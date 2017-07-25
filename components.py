@@ -24,6 +24,7 @@
 from prereq_tools import GitRepoRetriever
 from prereq_tools import WebRetriever
 import os
+import platform
 
 if "prereqs" not in globals():
     from prereq_tools import PreReqComponent
@@ -252,12 +253,25 @@ REQS.define('ompi_pmix',
 
 RETRIEVER = GitRepoRetriever("https://github.com/pmem/nvml")
 
+# Check if this is an ARM platform
+PROCESSOR = platform.processor()
+ARM_LIST = ["ARMv7", "armeabi", "aarch64", "arm64"]
+ARM_PLATFORM = None
+for i in xrange(1, len(ARM_LIST)):
+    if PROCESSOR.lower() == ARM_LIST[i].lower():
+        ARM_PLATFORM = True
+        break
+
+NVML_BUILD = ["make", "make install prefix=$NVML_PREFIX"]
+if ARM_PLATFORM is True:
+    NVML_BUILD = ["git am < $PATCH_PREFIX/arm-support-nvml.patch",
+                  "make \"EXTRA_CFLAGS=-DAARCH64\" \"BUILD_AARCH64=y\" "
+                  " \"DEBUG=0\" install prefix=$NVML_PREFIX"]
+
 REQS.define('nvml',
             retriever=RETRIEVER,
-            commands=["make",
-                      "make install prefix=$NVML_PREFIX"],
+            commands=NVML_BUILD,
             libs=["pmemobj"])
-
 
 RETRIEVER = GitRepoRetriever("http://git.mcs.anl.gov/argo/argobots.git", True)
 REQS.define('argobots',
