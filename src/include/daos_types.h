@@ -136,7 +136,7 @@ daos_hash_is_eof(daos_hash_out_t *hash_out)
 	int i;
 
 	for (i = DAOS_HASH_HKEY_START; i < DAOS_HASH_HKEY_LENGTH; i++) {
-		if (hash_out->body[i] != -1)
+		if (hash_out->body[i] != (char)-1)
 			return false;
 	}
 
