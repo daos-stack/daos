@@ -1608,6 +1608,11 @@ int main(int argc, char *argv[])
 	int16_t				 buf_alignment =
 		CRT_ST_BUF_ALIGN_DEFAULT;
 
+	ret = crt_log_init();
+	if (ret != 0) {
+		fprintf(stderr, "crt_log_init() failed. rc: %d\n", ret);
+		return ret;
+	}
 	/********************* Parse user arguments *********************/
 	while (1) {
 		static struct option long_options[] = {
@@ -1817,6 +1822,7 @@ cleanup:
 	if (all_params != NULL)
 		C_FREE(all_params,
 		       num_msg_sizes * sizeof(all_params[0]));
+	crt_log_fini();
 
 	return ret;
 }
