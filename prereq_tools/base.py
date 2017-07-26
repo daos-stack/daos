@@ -888,8 +888,12 @@ class PreReqComponent(object):
         return prebuilt
 
     def get_defined_components(self):
-        """Get a list of all defined components"""
+        """Get a list of all defined component names"""
         return copy.copy(self.__defined.keys())
+
+    def get_defined(self):
+        """Get a dictionary of defined components"""
+        return copy.copy(self.__defined)
 
     def save_component_prefix(self, var, value):
         """Save the component prefix in the environment and
