@@ -57,12 +57,15 @@ static int g_shutdown;
 /* for client process: received shutdown confirmation from server */
 static int g_complete;
 
-pthread_t			 tid;
-crt_context_t			 crt_ctx;
-crt_rank_t			 myrank;
-int				 should_attach;
-uint32_t			 target_group_size;
-crt_group_t			*srv_grp;
+#define TEST_CTX_MAX_NUM	 (72)
+static unsigned int		 ctx_num = 1;
+static int			 thread_id[TEST_CTX_MAX_NUM]; /* logical tid */
+static pthread_t		 tid[TEST_CTX_MAX_NUM];
+static crt_context_t		 crt_ctx[TEST_CTX_MAX_NUM];
+static crt_rank_t		 myrank;
+static int			 should_attach;
+static uint32_t			 target_group_size;
+static crt_group_t		*srv_grp;
 
 int g_roomno = 1082;
 struct crt_msg_field *echo_ping_checkin[] = {
@@ -150,19 +153,29 @@ client_cb_common(const struct crt_cb_info *cb_info)
 
 static void *progress_thread(void *arg)
 {
-	int			rc;
-	crt_context_t		crt_ctx;
+	crt_context_t	ctx;
+	pthread_t	current_thread = pthread_self();
+	int		num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+	cpu_set_t	cpuset;
+	int		t_idx;
+	int		rc;
 
-	crt_ctx = (crt_context_t) arg;
+	t_idx = *(int *)arg;
+	CPU_ZERO(&cpuset);
+	CPU_SET(t_idx % num_cores, &cpuset);
+	pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+
+	fprintf(stderr, "progress thread %d running on core %d...\n",
+		t_idx, sched_getcpu());
+
+	ctx = (crt_context_t)crt_ctx[t_idx];
 	/* progress loop */
 	do {
-		rc = crt_progress(crt_ctx, 1, NULL, NULL);
+		rc = crt_progress(ctx, 0, NULL, NULL);
 		if (rc != 0 && rc != -CER_TIMEDOUT) {
 			C_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
-
-
 		if (g_shutdown == 1 && g_complete == 1)
 			break;
 	} while (1);
@@ -193,13 +206,9 @@ void
 test_group_init(char *local_group_name, char *target_group_name,
 		int is_service)
 {
-	char				 hostname[1024];
-	uint32_t			 flag;
-	int				 rc = 0;
-
-	gethostname(hostname, sizeof(hostname));
-	fprintf(stderr, "Running on %s\n", hostname);
-
+	uint32_t	flag;
+	int		i;
+	int		rc = 0;
 
 	fprintf(stderr, "local group: %s remote group: %s\n",
 		local_group_name, target_group_name);
@@ -216,8 +225,6 @@ test_group_init(char *local_group_name, char *target_group_name,
 			  rc);
 	}
 
-	rc = crt_context_create(NULL, &crt_ctx);
-	C_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 	/* register RPCs */
 	if (is_service) {
 		rc = crt_rpc_srv_register(ECHO_OPC_CHECKIN,
@@ -234,8 +241,15 @@ test_group_init(char *local_group_name, char *target_group_name,
 		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, NULL);
 		C_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
 	}
-	rc = pthread_create(&tid, NULL, progress_thread, crt_ctx);
-	C_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
+
+	for (i = 0; i < ctx_num; i++) {
+		thread_id[i] = i;
+		rc = crt_context_create(NULL, &crt_ctx[i]);
+		C_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
+		rc = pthread_create(&tid[i], NULL, progress_thread,
+				    &thread_id[i]);
+		C_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
+	}
 	g_complete = 1;
 }
 
@@ -274,7 +288,7 @@ run_test_group(char *local_group_name, char *target_group_name, int is_service)
 	for (ii = 0; ii < target_group_size; ii++) {
 		server_ep.ep_grp = srv_grp;
 		server_ep.ep_rank = ii;
-		rc = crt_req_create(crt_ctx, &server_ep, ECHO_OPC_CHECKIN,
+		rc = crt_req_create(crt_ctx[0], &server_ep, ECHO_OPC_CHECKIN,
 				    &rpc_req);
 		C_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
 			  " rc: %d rpc_req: %p\n", rc, rpc_req);
@@ -313,7 +327,7 @@ test_group_fini(int is_service)
 		for (ii = 0; ii < target_group_size; ii++) {
 			server_ep.ep_grp = srv_grp;
 			server_ep.ep_rank = ii;
-			rc = crt_req_create(crt_ctx, &server_ep,
+			rc = crt_req_create(crt_ctx[0], &server_ep,
 					    ECHO_OPC_SHUTDOWN, &rpc_req);
 			C_ASSERTF(rc == 0 && rpc_req != NULL,
 				  "crt_req_create() failed. "
@@ -331,13 +345,17 @@ test_group_fini(int is_service)
 	if (!is_service)
 		g_shutdown = 1;
 
-	rc = pthread_join(tid, NULL);
-	if (rc != 0)
-		fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
-	C_DEBUG("joined progress thread.\n");
-	rc = crt_context_destroy(crt_ctx, 0);
-	C_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
-	C_DEBUG("destroyed crt_ctx.\n");
+	for (ii = 0; ii < ctx_num; ii++) {
+		rc = pthread_join(tid[ii], NULL);
+		if (rc != 0)
+			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
+		C_DEBUG("joined progress thread.\n");
+		rc = crt_context_destroy(crt_ctx[ii], 0);
+		C_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n",
+			  rc);
+		C_DEBUG("destroyed crt_ctx.\n");
+	}
+
 	if (is_service)
 		crt_fake_event_fini(myrank);
 	crt_lm_finalize();
@@ -362,11 +380,12 @@ int main(int argc, char **argv)
 		{"holdtime", required_argument, 0, 'h'},
 		{"hold", no_argument, &hold, 1},
 		{"is_service", no_argument, &is_service, 1},
+		{"ctx_num", required_argument, 0, 'c'},
 		{0, 0, 0, 0}
 	};
 
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:", long_options,
+		rc = getopt_long(argc, argv, "n:a:c:h:", long_options,
 				&option_index);
 		if (rc == -1)
 			break;
@@ -381,6 +400,22 @@ int main(int argc, char **argv)
 			target_group_name = optarg;
 			should_attach = 1;
 			break;
+		case 'c': {
+			unsigned int	nr;
+			char		*end;
+
+			nr = strtoul(optarg, &end, 10);
+			if (end == optarg || nr == 0 || nr > TEST_CTX_MAX_NUM) {
+				fprintf(stderr, "invalid ctx_num %d exceed "
+					"[%d, %d], using 1 for test.\n", nr,
+					1, TEST_CTX_MAX_NUM);
+			} else {
+				ctx_num = nr;
+				fprintf(stderr, "will create %d contexts.\n",
+					nr);
+			}
+			break;
+		}
 		case 'h':
 			hold = 1;
 			hold_time = atoi(optarg);
