@@ -314,9 +314,14 @@ static int
 crt_hg_log(FILE *stream, const char *fmt, ...)
 {
 	va_list		ap;
+	int		flags;
+
+	flags = crt_log_check((intptr_t)stream);
+	if (flags == 0)
+		return 0;
 
 	va_start(ap, fmt);
-	crt_vlog((intptr_t)stream, fmt, ap);
+	crt_vlog(flags, fmt, ap);
 	va_end(ap);
 
 	return 0;
