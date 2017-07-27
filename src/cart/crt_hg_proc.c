@@ -551,11 +551,11 @@ out:
 
 /* For unpacking only the common header to know about the CRT opc */
 int
-crt_hg_unpack_header(struct crt_rpc_priv *rpc_priv, crt_proc_t *proc)
+crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
+		     crt_proc_t *proc)
 {
 	int	rc = 0;
 
-#if CRT_HG_LOWLEVEL_UNPACK
 	/*
 	 * Use some low level HG APIs to unpack header first and then unpack the
 	 * body, avoid unpacking two times (which needs to lookup, create the
@@ -567,14 +567,12 @@ crt_hg_unpack_header(struct crt_rpc_priv *rpc_priv, crt_proc_t *proc)
 	void			*in_buf;
 	hg_size_t		in_buf_size;
 	hg_return_t		hg_ret = HG_SUCCESS;
-	hg_handle_t		handle;
 	hg_class_t		*hg_class;
 	struct crt_context	*ctx;
 	struct crt_hg_context	*hg_ctx;
 	hg_proc_t		hg_proc = HG_PROC_NULL;
 
 	/* Get input buffer */
-	handle = rpc_priv->crp_hg_hdl;
 	hg_ret = HG_Core_get_input(handle, &in_buf, &in_buf_size);
 	if (hg_ret != HG_SUCCESS) {
 		C_ERROR("Could not get input buffer, hg_ret: %d.", hg_ret);
@@ -582,7 +580,7 @@ crt_hg_unpack_header(struct crt_rpc_priv *rpc_priv, crt_proc_t *proc)
 	}
 
 	/* Create a new decoding proc */
-	ctx = (struct crt_context *)(rpc_priv->crp_pub.cr_ctx);
+	ctx = rpc_priv->crp_pub.cr_ctx;
 	hg_ctx = &ctx->cc_hg_ctx;
 	hg_class = hg_ctx->chc_hgcla;
 	hg_ret = hg_proc_create_set(hg_class, in_buf, in_buf_size, HG_DECODE,
@@ -611,42 +609,44 @@ crt_hg_unpack_header(struct crt_rpc_priv *rpc_priv, crt_proc_t *proc)
 
 out:
 	return rc;
-#else
-	/*
-	 * In the case that if mercury does not export the HG_Core_xxx APIs,
-	 * we can only use the HG_Get_input to unpack the header which indeed
-	 * will cause the unpacking twice as later we still need to unpack the
-	 * body.
-	 *
-	 * Notes: as here we only unpack CRT common header and not finish
-	 * the HG_Get_input() procedure, so for mercury need to turn off the
-	 * checksum compiling option (-DMERCURY_USE_CHECKSUMS=OFF), or mercury
-	 * will report checksum mismatch in the call of HG_Get_input.
-	 */
-	void		*hg_in_struct;
-	hg_return_t	hg_ret = HG_SUCCESS;
+}
 
-	C_ASSERT(rpc_priv != NULL && proc != NULL);
-	C_ASSERT(rpc_priv->crp_pub.cr_input == NULL);
+/* Copy the RPC header from one descriptor to another */
+void
+crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
+{
+	out->crp_hg_addr = in->crp_hg_addr;
+	out->crp_hg_hdl = in->crp_hg_hdl;
+	out->crp_pub.cr_ctx = in->crp_pub.cr_ctx;
+	out->crp_flags = in->crp_flags;
 
-	hg_in_struct = &rpc_priv->crp_pub.cr_input;
-	hg_ret = HG_Get_input(rpc_priv->crp_hg_hdl, hg_in_struct);
-	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("HG_Get_input failed, hg_ret: %d.\n", hg_ret);
-		rc = -CER_HG;
-	}
+	out->crp_req_hdr.cch_magic = in->crp_req_hdr.cch_magic;
+	out->crp_req_hdr.cch_version = in->crp_req_hdr.cch_version;
+	out->crp_req_hdr.cch_opc = in->crp_req_hdr.cch_opc;
+	out->crp_req_hdr.cch_cksum = in->crp_req_hdr.cch_cksum;
+	out->crp_req_hdr.cch_flags = in->crp_req_hdr.cch_flags;
+	out->crp_req_hdr.cch_rank = in->crp_req_hdr.cch_rank;
+	out->crp_req_hdr.cch_grp_id = in->crp_req_hdr.cch_grp_id;
+	out->crp_req_hdr.cch_rc = in->crp_req_hdr.cch_rc;
 
-	return rc;
-#endif
+	if (!(out->crp_flags & CRT_RPC_FLAG_COLL))
+		return;
+
+	out->crp_coreq_hdr.coh_int_grpid = in->crp_coreq_hdr.coh_int_grpid;
+	out->crp_coreq_hdr.coh_bulk_hdl = in->crp_coreq_hdr.coh_bulk_hdl;
+	out->crp_coreq_hdr.coh_excluded_ranks = in->crp_coreq_hdr.coh_excluded_ranks;
+	out->crp_coreq_hdr.coh_inline_ranks = in->crp_coreq_hdr.coh_inline_ranks;
+	out->crp_coreq_hdr.coh_grp_ver = in->crp_coreq_hdr.coh_grp_ver;
+	out->crp_coreq_hdr.coh_tree_topo = in->crp_coreq_hdr.coh_tree_topo;
+	out->crp_coreq_hdr.coh_root = in->crp_coreq_hdr.coh_root;
+	out->crp_coreq_hdr.coh_padding = in->crp_coreq_hdr.coh_padding;
 }
 
 void
 crt_hg_unpack_cleanup(crt_proc_t proc)
 {
-#if CRT_HG_LOWLEVEL_UNPACK
 	if (proc != HG_PROC_NULL)
 		hg_proc_free(proc);
-#endif
 }
 
 int
@@ -753,7 +753,6 @@ crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 {
 	int	rc = 0;
 
-#if CRT_HG_LOWLEVEL_UNPACK
 	hg_return_t	hg_ret;
 
 	C_ASSERT(rpc_priv != NULL && proc != HG_PROC_NULL);
@@ -775,21 +774,6 @@ crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 	}
 out:
 	crt_hg_unpack_cleanup(proc);
-
-#else
-	void		*hg_in_struct;
-	hg_return_t	hg_ret = HG_SUCCESS;
-
-	C_ASSERT(rpc_priv != NULL);
-	C_ASSERT(rpc_priv->crp_pub.cr_input != NULL);
-
-	hg_in_struct = &rpc_priv->crp_pub.cr_input;
-	hg_ret = HG_Get_input(rpc_priv->crp_hg_hdl, hg_in_struct);
-	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("HG_Get_input failed, hg_ret: %d.\n", hg_ret);
-		rc = -CER_HG;
-	}
-#endif
 	return rc;
 }
 

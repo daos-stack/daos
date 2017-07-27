@@ -207,6 +207,13 @@ struct crt_opc_info {
 	struct crt_corpc_ops	*coi_co_ops;
 	crt_size_t		coi_input_size;
 	crt_size_t		coi_output_size;
+
+	/* Sizes/offset used when buffers are part of the same allocation
+	 * as the rpc descriptor.
+	 */
+	crt_size_t		coi_rpc_size;
+	crt_off_t		coi_input_offset;
+	crt_off_t		coi_output_offset;
 	struct crt_req_format	*coi_crf;
 };
 

@@ -115,8 +115,6 @@ typedef enum {
 	RPC_STATE_URI_LOOKUP,
 } crt_rpc_state_t;
 
-struct crt_rpc_priv;
-
 /* corpc info to track the tree topo and child RPCs info */
 struct crt_corpc_info {
 	struct crt_grp_priv	*co_grp_priv;
@@ -317,10 +315,11 @@ crt_common_hdr_init(struct crt_common_hdr *hdr, crt_opcode_t opc)
 }
 
 /* crt_rpc.c */
-int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated);
+int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
+		       bool forward);
 void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
-int crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
-		       crt_opcode_t opc, bool srv_flag, bool forward);
+void crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
+		       crt_opcode_t opc, bool srv_flag);
 void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
 int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 			    crt_opcode_t opc, bool forward, crt_rpc_t **req);

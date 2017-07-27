@@ -248,7 +248,8 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
 					info->coi_coops_init = 1;
 				info->coi_co_ops = co_ops;
 			}
-			C_GOTO(out, rc = 0);
+			new_info = info;
+			C_GOTO(set, rc = 0);
 		}
 		if (info->coi_opc > opc)
 			break;
@@ -273,6 +274,21 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
 		new_info->coi_coops_init = 1;
 	}
 	crt_list_add_tail(&new_info->coi_link, &info->coi_link);
+
+set:
+	/* Calculate the size required for the RPC.
+	 *
+	 * If crp_forward is enabled memory is only allocated for output buffer,
+	 * not input so put the output buffer first and allocate input_offset
+	 * bytes only if forward is set.
+	 */
+	new_info->coi_output_offset = C_ALIGNUP(sizeof(struct crt_rpc_priv),
+					64);
+	new_info->coi_input_offset = C_ALIGNUP(new_info->coi_output_offset +
+						new_info->coi_output_size, 64);
+	new_info->coi_rpc_size = sizeof(struct crt_rpc_priv) +
+		new_info->coi_input_offset +
+		new_info->coi_input_size;
 
 out:
 	if (locked == 0)

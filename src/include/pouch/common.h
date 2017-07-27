@@ -218,6 +218,8 @@ void crt_getenv_int(const char *env, unsigned *int_val);
 # define offsetof(typ, memb)	((long)((char *)&(((typ *)0)->memb)))
 #endif
 
+#define C_ALIGNUP(x, a) (((x) + (a - 1)) & ~(a - 1))
+
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif

@@ -366,7 +366,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		}
 	}
 
-	rc = crt_rpc_priv_alloc(opc, &rpc_priv);
+	rc = crt_rpc_priv_alloc(opc, &rpc_priv, false /* forward */);
 	if (rc != 0) {
 		C_ERROR("crt_rpc_priv_alloc, rc: %d, opc: 0x%x.\n", rc, opc);
 		C_GOTO(out, rc);
@@ -374,13 +374,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 
 	C_ASSERT(rpc_priv != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */,
-			       false /* forward */);
-	if (rc != 0) {
-		C_ERROR("crt_rpc_priv_init failed, opc: 0x%x, rc: %d.\n",
-			opc, rc);
-		C_GOTO(out, rc);
-	}
+	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */);
 
 	/* grp_root is logical rank number in this group */
 	grp_root = grp_priv->gp_self;
@@ -447,8 +441,8 @@ corpc_add_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 
 	/*
 	 * child RPC inherit input buffers from parent RPC, in crt_rpc_priv_init
-	 * use rpc_priv->crp_forward flag to indicate it needs not to free the
-	 * cr_input. see crt_rpc_inout_buff_fini.
+	 * use rpc_priv->crp_forward flag to indicate it cr_input is not part of
+	 * the rpc allocation.  see crt_rpc_inout_buff_fini.
 	 */
 	child_rpc->cr_input_size = parent_rpc->cr_input_size;
 	child_rpc->cr_input = parent_rpc->cr_input;

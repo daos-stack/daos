@@ -484,7 +484,8 @@ crt_internal_rpc_register(void)
 }
 
 int
-crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated)
+crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
+		   bool forward)
 {
 	struct crt_rpc_priv	*rpc_priv;
 	struct crt_opc_info	*opc_info;
@@ -500,11 +501,15 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated)
 	C_ASSERT(opc_info->coi_input_size <= CRT_MAX_INPUT_SIZE &&
 		 opc_info->coi_output_size <= CRT_MAX_OUTPUT_SIZE);
 
-	C_ALLOC_PTR(rpc_priv);
+	if (forward)
+		C_ALLOC(rpc_priv, opc_info->coi_input_offset);
+	else
+		C_ALLOC(rpc_priv, opc_info->coi_rpc_size);
 	if (rpc_priv == NULL)
 		C_GOTO(out, rc = -CER_NOMEM);
 
 	rpc_priv->crp_opc_info = opc_info;
+	rpc_priv->crp_forward = forward;
 	*priv_allocated = rpc_priv;
 
 	C_DEBUG("rpc_priv %p (opc: 0x%x), allocated.\n",
@@ -530,7 +535,11 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 		C_FREE(rpc_priv->crp_tgt_uri, CRT_ADDR_STR_MAX_LEN);
 
 	pthread_spin_destroy(&rpc_priv->crp_lock);
-	C_FREE_PTR(rpc_priv);
+
+	if (rpc_priv->crp_forward)
+		C_FREE(rpc_priv, rpc_priv->crp_opc_info->coi_input_offset);
+	else
+		C_FREE(rpc_priv, rpc_priv->crp_opc_info->coi_rpc_size);
 }
 
 int
@@ -543,7 +552,7 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 	C_ASSERT(crt_ctx != CRT_CONTEXT_NULL && req != NULL);
 
-	rc = crt_rpc_priv_alloc(opc, &rpc_priv);
+	rc = crt_rpc_priv_alloc(opc, &rpc_priv, forward);
 	if (rc != 0) {
 		C_ERROR("crt_rpc_priv_alloc, rc: %d, opc: 0x%x.\n", rc, opc);
 		C_GOTO(out, rc);
@@ -554,13 +563,7 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 	rpc_pub->cr_ep.ep_tag = tgt_ep->ep_tag;
 	rpc_pub->cr_ep.ep_grp = tgt_ep->ep_grp;
 
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */,
-			       forward);
-	if (rc != 0) {
-		C_ERROR("crt_rpc_priv_init failed, opc: 0x%x, rc: %d.\n",
-			opc, rc);
-		C_GOTO(out, rc);
-	}
+	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, false /* srv_flag */);
 
 	*req = rpc_pub;
 
@@ -1390,30 +1393,26 @@ crt_rpc_inout_buff_fini(struct crt_rpc_priv *rpc_priv)
 
 	if (rpc_pub->cr_input != NULL) {
 		C_ASSERT(rpc_pub->cr_input_size != 0);
-		if (!rpc_priv->crp_forward)
-			C_FREE(rpc_pub->cr_input, rpc_pub->cr_input_size);
 		rpc_pub->cr_input_size = 0;
+		rpc_pub->cr_input = NULL;
 	}
 
 	if (rpc_pub->cr_output != NULL) {
-		C_ASSERT(rpc_pub->cr_output_size != 0);
-		C_FREE(rpc_pub->cr_output, rpc_pub->cr_output_size);
 		rpc_pub->cr_output_size = 0;
+		rpc_pub->cr_output = NULL;
 	}
 }
 
-static int
+static void
 crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 {
 	crt_rpc_t		*rpc_pub;
 	struct crt_opc_info	*opc_info;
-	int			rc = 0;
 
 	C_ASSERT(rpc_priv != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
 	C_ASSERT(rpc_pub->cr_input == NULL);
 	C_ASSERT(rpc_pub->cr_output == NULL);
-	rpc_priv = container_of(rpc_pub, struct crt_rpc_priv, crp_pub);
 	opc_info = rpc_priv->crp_opc_info;
 	C_ASSERT(opc_info != NULL);
 
@@ -1423,36 +1422,21 @@ crt_rpc_inout_buff_init(struct crt_rpc_priv *rpc_priv)
 	 * See crt_corpc_req_hdlr().
 	 */
 	if (opc_info->coi_input_size > 0 && !rpc_priv->crp_forward) {
-		C_ALLOC(rpc_pub->cr_input, opc_info->coi_input_size);
-		if (rpc_pub->cr_input == NULL) {
-			C_ERROR("cannot allocate memory(size "CF_U64") for "
-				"cr_input.\n", opc_info->coi_input_size);
-			C_GOTO(out, rc = -CER_NOMEM);
-		}
+		rpc_pub->cr_input = ((void *)rpc_priv) +
+			opc_info->coi_input_offset;
 		rpc_pub->cr_input_size = opc_info->coi_input_size;
 	}
 	if (opc_info->coi_output_size > 0) {
-		C_ALLOC(rpc_pub->cr_output, opc_info->coi_output_size);
-		if (rpc_pub->cr_output == NULL) {
-			C_ERROR("cannot allocate memory(size "CF_U64") for "
-				"cr_putput.\n", opc_info->coi_input_size);
-			C_GOTO(out, rc = -CER_NOMEM);
-		}
+		rpc_pub->cr_output = ((void *)rpc_priv) +
+			opc_info->coi_output_offset;
 		rpc_pub->cr_output_size = opc_info->coi_output_size;
 	}
-
-out:
-	if (rc < 0)
-		crt_rpc_inout_buff_fini(rpc_priv);
-	return rc;
 }
 
-int
+void
 crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
-		  crt_opcode_t opc, bool srv_flag, bool forward)
+		  crt_opcode_t opc, bool srv_flag)
 {
-	int	rc = 0;
-
 	C_ASSERT(rpc_priv != NULL);
 	CRT_INIT_LIST_HEAD(&rpc_priv->crp_epi_link);
 	CRT_INIT_LIST_HEAD(&rpc_priv->crp_tmp_link);
@@ -1466,7 +1450,6 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	rpc_priv->crp_state = RPC_STATE_INITED;
 	rpc_priv->crp_hdl_reuse = NULL;
 	rpc_priv->crp_srv = srv_flag;
-	rpc_priv->crp_forward = forward;
 	/* initialize as 1, so user can cal crt_req_decref to destroy new req */
 	rpc_priv->crp_refcount = 1;
 	pthread_spin_init(&rpc_priv->crp_lock, PTHREAD_PROCESS_PRIVATE);
@@ -1474,12 +1457,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	rpc_priv->crp_pub.cr_opc = opc;
 	rpc_priv->crp_pub.cr_ctx = crt_ctx;
 
-	rc = crt_rpc_inout_buff_init(rpc_priv);
-	if (rc != 0)
-		C_ERROR("crt_rpc_inout_buff_init failed, opc: 0x%x, rc: %d.\n",
-			rpc_priv->crp_pub.cr_opc, rc);
-
-	return rc;
+	crt_rpc_inout_buff_init(rpc_priv);
 }
 
 void

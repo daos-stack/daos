@@ -52,9 +52,6 @@
 #include <na.h>
 #include <na_error.h>
 
-/** change to 0 to disable the low-level unpack */
-#define CRT_HG_LOWLEVEL_UNPACK	(1)
-
 /** the shared HG RPC ID used for all CRT opc */
 #define CRT_HG_RPCID		(0xDA036868)
 #define CRT_HG_ONEWAY_RPCID	(0xDA036869)
@@ -145,7 +142,9 @@ int crt_rpc_handler_common(hg_handle_t hg_hdl);
 /* crt_hg_proc.c */
 int crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr);
 int crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr);
-int crt_hg_unpack_header(struct crt_rpc_priv *rpc_priv, crt_proc_t *proc);
+int crt_hg_unpack_header(hg_handle_t hg_hdl, struct crt_rpc_priv *rpc_priv,
+			 crt_proc_t *proc);
+void crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out);
 void crt_hg_unpack_cleanup(crt_proc_t proc);
 int crt_proc_internal(struct crf_field *drf, crt_proc_t proc, void *data);
 int crt_proc_input(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
