@@ -820,6 +820,7 @@ int crt_log_setmasks(char *mstr, int mlen0)
 				crt_log(CLOG_DBG,
 				     "crt_log_setmasks: unknown facility %.*s",
 				     faclen, fac);
+				rv = -1;
 				continue;
 			}
 			/* apply only to this fac */
