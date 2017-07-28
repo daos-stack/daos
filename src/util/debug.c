@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -60,6 +60,7 @@ int crt_grp_logfac;
 int crt_lm_logfac;
 int crt_hg_logfac;
 int crt_pmix_logfac;
+int crt_self_test_logfac;
 
 static void
 crt_log_sync_mask_helper(bool acquire_lock)
@@ -114,6 +115,7 @@ setup_clog_facnamemask(void)
 	CRT_ADD_LOG_FAC(lm, "LM", "livenessmap");
 	CRT_ADD_LOG_FAC(hg, "HG", "mercury");
 	CRT_ADD_LOG_FAC(pmix, "PMIX", "pmix");
+	CRT_ADD_LOG_FAC(self_test, "ST", "self_test");
 
 	/* Lock is already held */
 	crt_log_sync_mask_helper(false);

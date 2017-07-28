@@ -35,7 +35,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#define C_LOGFAC	CD_FAC(rpc)
+#define C_LOGFAC	CD_FAC(self_test)
 
 #include <pthread.h>
 #include <crt_internal.h>

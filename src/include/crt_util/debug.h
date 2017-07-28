@@ -50,6 +50,7 @@ extern int crt_grp_logfac;
 extern int crt_lm_logfac;
 extern int crt_hg_logfac;
 extern int crt_pmix_logfac;
+extern int crt_self_test_logfac;
 
 #define CD_FAC(name)	(crt_##name##_logfac)
 
