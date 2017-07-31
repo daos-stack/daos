@@ -1336,7 +1336,7 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 	crt_iv_sync_t			*sync_type;
 	crt_sg_list_t			iv_value;
 	bool				need_put = false;
-	void				*user_priv;
+	void				*user_priv = NULL;
 
 	/* This is an internal call. All errors are fatal */
 	input = crt_req_get(rpc_req);
