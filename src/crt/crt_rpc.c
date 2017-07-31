@@ -131,6 +131,7 @@ static struct crt_msg_field *crt_st_session_id_field[] = {
 };
 
 static struct crt_msg_field *crt_st_start_field[] = {
+	&CMF_GRP_ID,
 	&CMF_IOVEC,
 	&CMF_UINT32,
 	&CMF_UINT32,
@@ -952,6 +953,25 @@ out:
 	return rc;
 }
 
+static bool
+crt_req_is_self(struct crt_rpc_priv *rpc_priv)
+{
+	struct crt_grp_priv	*grp_priv_self;
+	crt_endpoint_t		*tgt_ep;
+	bool			 same_group;
+	bool			 same_rank;
+
+	C_ASSERT(rpc_priv != NULL);
+	grp_priv_self = crt_grp_pub2priv(NULL);
+	tgt_ep = &rpc_priv->crp_pub.cr_ep;
+	same_group = (tgt_ep->ep_grp == NULL) ||
+		     crt_grp_id_identical(tgt_ep->ep_grp->cg_grpid,
+					  grp_priv_self->gp_pub.cg_grpid);
+	same_rank = tgt_ep->ep_rank == grp_priv_self->gp_self;
+
+	return (same_group && same_rank);
+}
+
 /*
  * the case where we don't have the URI of the target rank
  */
@@ -988,14 +1008,23 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		C_GOTO(out, rc);
 	}
 
-	/* this is a local group, lookup through PMIx */
 	rank = tgt_ep->ep_rank;
 	crt_ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
-	grp_id = grp_priv->gp_pub.cg_grpid;
-	rc = crt_pmix_uri_lookup(grp_id, rank, &uri);
-	if (rc != 0) {
-		C_ERROR("crt_pmix_uri_lookup() failed, rc %d.\n", rc);
-		C_GOTO(out, rc);
+	if (crt_req_is_self(rpc_priv)) {
+		/* rpc is sent to self */
+		uri = strndup(crt_gdata.cg_addr, CRT_ADDR_STR_MAX_LEN);
+		if (uri == NULL) {
+			C_ERROR("strndup failed.\n");
+			C_GOTO(out, rc = -CER_NOMEM);
+		}
+	} else {
+		/* this is a local group, lookup through PMIx */
+		grp_id = grp_priv->gp_pub.cg_grpid;
+		rc = crt_pmix_uri_lookup(grp_id, rank, &uri);
+		if (rc != 0) {
+			C_ERROR("crt_pmix_uri_lookup() failed, rc %d.\n", rc);
+			C_GOTO(out, rc);
+		}
 	}
 	rc = crt_grp_lc_uri_insert(grp_priv, crt_ctx->cc_idx, rank, uri);
 	if (rc != 0) {

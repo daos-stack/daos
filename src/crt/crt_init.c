@@ -179,10 +179,8 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 		if (server == true)
 			crt_gdata.cg_multi_na = true;
 
-		if (!server) {
-			if ((flags & CRT_FLAG_BIT_SINGLETON) != 0)
-				crt_gdata.cg_singleton = true;
-		}
+		if ((flags & CRT_FLAG_BIT_SINGLETON) != 0)
+			crt_gdata.cg_singleton = true;
 
 		if (crt_plugin_gdata.cpg_inited == 0)
 			crt_plugin_init();

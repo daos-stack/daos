@@ -886,7 +886,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 
 	/* Initialize the global callback data */
 	g_data->crt_ctx = rpc_req->cr_ctx;
-	g_data->srv_grp = rpc_req->cr_ep.ep_grp;
+	g_data->srv_grp = crt_group_lookup(args->srv_grp);
 	g_data->rep_count = args->rep_count;
 	g_data->max_inflight = args->max_inflight;
 	g_data->send_size = args->send_size;

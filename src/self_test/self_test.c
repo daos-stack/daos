@@ -110,7 +110,7 @@ static void *progress_fn(void *arg)
 
 static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 			  crt_group_t **srv_grp, pthread_t *tid,
-			  char *attach_info_path)
+			  char *attach_info_path, bool listen)
 {
 	crt_rank_t	myrank;
 	uint32_t	init_flags = 0;
@@ -118,7 +118,8 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 	if (is_singleton)
 		init_flags |= CRT_FLAG_BIT_SINGLETON;
-
+	if (listen)
+		init_flags |= CRT_FLAG_BIT_SERVER;
 	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, init_flags);
 	if (ret != 0) {
 		C_ERROR("crt_init failed; ret = %d\n", ret);
@@ -509,6 +510,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 		C_ASSERTF(start_args != NULL,
 			  "crt_req_get returned NULL\n");
 		memcpy(start_args, test_params, sizeof(*test_params));
+		start_args->srv_grp = test_params->srv_grp;
 
 		/* Set the launch status to a known impossible value */
 		ms_endpts[m_idx].reply.status = INT32_MAX;
@@ -743,6 +745,7 @@ static int run_self_test(struct st_size_params all_params[],
 	crt_iov_t		 *latencies_iov = NULL;
 	crt_sg_list_t		 *latencies_sg_list = NULL;
 	crt_bulk_t		 *latencies_bulk_hdl = CRT_BULK_NULL;
+	bool			  listen = false;
 
 	crt_endpoint_t		  self_endpt;
 
@@ -751,9 +754,12 @@ static int run_self_test(struct st_size_params all_params[],
 	C_ASSERT((ms_endpts_in == NULL && num_ms_endpts_in == 0) ||
 		 (ms_endpts_in != NULL && num_ms_endpts_in > 0));
 
+	/* will send TEST_START RPC to self, so listen for incoming requests */
+	if (ms_endpts_in == NULL)
+		listen = true;
 	/* Initialize CART */
 	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid,
-			     attach_info_path);
+			     attach_info_path, listen /* run as server */);
 	if (ret != 0) {
 		C_ERROR("self_test_init failed; ret = %d\n", ret);
 		C_GOTO(cleanup_nothread, ret);
@@ -790,12 +796,7 @@ static int run_self_test(struct st_size_params all_params[],
 		}
 		ms_endpts[0].endpt.ep_rank = self_endpt.ep_rank;
 		ms_endpts[0].endpt.ep_tag = self_endpt.ep_tag;
-		/*
-		 * TODO: The commented line below is what should be used, but
-		 * this requires additional changes elsewhere. See CART-187
-		 */
-		/* ms_endpts[0].endpt.ep_grp = self_endpt.ep_grp; */
-		ms_endpts[0].endpt.ep_grp = srv_grp;
+		ms_endpts[0].endpt.ep_grp = self_endpt.ep_grp;
 	} else {
 		/*
 		 * If master endpoints were specified, initially allocate enough
@@ -916,7 +917,7 @@ static int run_self_test(struct st_size_params all_params[],
 	}
 
 	for (size_idx = 0; size_idx < num_msg_sizes; size_idx++) {
-		struct crt_st_start_params	 test_params = { {0} };
+		struct crt_st_start_params	 test_params = { 0 };
 
 		/* Set test parameters to send to the test node */
 		crt_iov_set(&test_params.endpts, endpts,
@@ -928,6 +929,7 @@ static int run_self_test(struct st_size_params all_params[],
 		test_params.send_type = all_params[size_idx].send_type;
 		test_params.reply_type = all_params[size_idx].reply_type;
 		test_params.buf_alignment = buf_alignment;
+		test_params.srv_grp = dest_name;
 
 		ret = test_msg_size(crt_ctx, ms_endpts, num_ms_endpts,
 				    &test_params, latencies, latencies_bulk_hdl,

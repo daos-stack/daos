@@ -531,7 +531,7 @@ out:
 	return rc;
 }
 
-static inline bool
+inline bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2)
 {
 	C_ASSERT(grp_id_1 != NULL && strlen(grp_id_1) > 0 &&

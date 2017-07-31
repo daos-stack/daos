@@ -218,6 +218,7 @@ struct crt_st_send_id_bulk {
 };
 
 struct crt_st_start_params {
+	crt_group_id_t srv_grp;
 	/*
 	 * Array of rank (uint32_t) and tag (uint32_t) pairs
 	 * num_endpts = endpts.len / 8
