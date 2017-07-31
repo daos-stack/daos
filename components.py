@@ -219,7 +219,7 @@ REQS.define('ompi',
                       'make', 'make install'],
             libs=['open-rte'],
             required_progs=['g++', 'flex'],
-            requires=['pmix', 'event'])
+            requires=['pmix', 'hwloc', 'event'])
 
 RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
 REQS.define('ompi_pmix',
