@@ -371,7 +371,7 @@ cookie_table_test(void **state)
 {
 	int				ret = 0;
 	int				i = 0, j = 0, k = 0;
-	struct vos_cookie_itab		*itab;
+	struct vos_cookie_table		*itab;
 	struct daos_uuid		*cookie_array;
 	daos_epoch_t			*epochs;
 	struct umem_attr		uma;
@@ -397,7 +397,7 @@ cookie_table_test(void **state)
 
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
-	ret = vos_cookie_itab_create(&uma, itab, &cookie_hdl);
+	ret = vos_cookie_tab_create(&uma, itab, &cookie_hdl);
 	if (ret != 0)
 		print_error("Failed to create cookie itab\n");
 
@@ -441,7 +441,7 @@ cookie_table_test(void **state)
 	}
 	/* Cleanup allocations */
 	daos_uhash_destroy(uhtab);
-	ret = vos_cookie_itab_destroy(cookie_hdl);
+	ret = vos_cookie_tab_destroy(cookie_hdl);
 	if (ret != 0)
 		D_ERROR("Cookie itab destroy error\n");
 	D_FREE_PTR(itab);

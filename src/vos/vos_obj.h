@@ -41,17 +41,6 @@
 #define LRU_CACHE_BITS 16
 
 /**
- * VOS object index
- * in-place btree for object table
- * can have other parameters in future
- * like object statistics associated with
- * it.
- */
-struct vos_object_index {
-	struct btr_root	obtable;
-};
-
-/**
  * Reference of a cached object.
  * NB: DRAM data structure.
  */

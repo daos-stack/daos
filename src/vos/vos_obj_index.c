@@ -45,23 +45,23 @@ struct vos_oid_iter {
 };
 
 static int
-vo_hkey_size(struct btr_instance *tins)
+obj_df_hkey_size(struct btr_instance *tins)
 {
 	return sizeof(daos_unit_oid_t);
 }
 
 static void
-vo_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
+obj_df_hkey_gen(struct btr_instance *tins, daos_iov_t *key_iov, void *hkey)
 {
 	D_ASSERT(key_iov->iov_len == sizeof(daos_unit_oid_t));
 	memcpy(hkey, key_iov->iov_buf, key_iov->iov_len);
 }
 
 static int
-vo_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
-	     daos_iov_t *val_iov, struct btr_record *rec)
+obj_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
+		 daos_iov_t *val_iov, struct btr_record *rec)
 {
-	struct vos_obj_df	 *vo_rec;
+	struct vos_obj_df	 *obj_df;
 	TMMID(struct vos_obj_df)  obj_mmid;
 
 	/* Allocate a PMEM value of type vos_obj_df */
@@ -70,16 +70,17 @@ vo_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	if (TMMID_IS_NULL(obj_mmid))
 		return -DER_NOMEM;
 
-	vo_rec = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
+	obj_df = umem_id2ptr_typed(&tins->ti_umm, obj_mmid);
+
 	D_ASSERT(key_iov->iov_len == sizeof(daos_unit_oid_t));
-	vo_rec->vo_id = *(daos_unit_oid_t *)(key_iov->iov_buf);
-	daos_iov_set(val_iov, vo_rec, sizeof(struct vos_obj_df));
+	obj_df->vo_id = *(daos_unit_oid_t *)(key_iov->iov_buf);
+	daos_iov_set(val_iov, obj_df, sizeof(struct vos_obj_df));
 	rec->rec_mmid = umem_id_t2u(obj_mmid);
 	return 0;
 }
 
 static int
-vo_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+obj_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance	 *umm = &tins->ti_umm;
 	struct vos_obj_df	 *vobj;
@@ -106,22 +107,22 @@ vo_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 }
 
 static int
-vo_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
-	     daos_iov_t *key_iov, daos_iov_t *val_iov)
+obj_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
+		 daos_iov_t *key_iov, daos_iov_t *val_iov)
 {
-	struct vos_obj_df	*vo_rec = NULL;
+	struct vos_obj_df	*obj_df = NULL;
 
 	D_ASSERT(val_iov != NULL);
 
-	vo_rec = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
-	daos_iov_set(val_iov, vo_rec, sizeof(struct vos_obj_df));
+	obj_df = umem_id2ptr(&tins->ti_umm, rec->rec_mmid);
+	daos_iov_set(val_iov, obj_df, sizeof(struct vos_obj_df));
 
 	return 0;
 }
 
 static int
-vo_rec_update(struct btr_instance *tins, struct btr_record *rec,
-	      daos_iov_t *key, daos_iov_t *val)
+obj_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
+		  daos_iov_t *key, daos_iov_t *val)
 {
 	/**
 	 * TODO : Implement update when object metadata is introduced
@@ -130,12 +131,12 @@ vo_rec_update(struct btr_instance *tins, struct btr_record *rec,
 }
 
 static btr_ops_t voi_ops = {
-	.to_hkey_size	= vo_hkey_size,
-	.to_hkey_gen	= vo_hkey_gen,
-	.to_rec_alloc	= vo_rec_alloc,
-	.to_rec_free	= vo_rec_free,
-	.to_rec_fetch	= vo_rec_fetch,
-	.to_rec_update	= vo_rec_update,
+	.to_hkey_size	= obj_df_hkey_size,
+	.to_hkey_gen	= obj_df_hkey_gen,
+	.to_rec_alloc	= obj_df_rec_alloc,
+	.to_rec_free	= obj_df_rec_free,
+	.to_rec_fetch	= obj_df_rec_fetch,
+	.to_rec_update	= obj_df_rec_update,
 };
 
 /**
@@ -147,10 +148,8 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 {
 	int				rc = 0;
 	daos_iov_t			key_iov, val_iov;
-	struct vos_object_index		*obj_index = NULL;
 
-	obj_index = cont->vc_obj_table;
-	if (!obj_index) {
+	if (!cont->vc_otab_df) {
 		D_ERROR("Object index cannot be empty\n");
 		return -DER_NONEXIST;
 	}
@@ -298,7 +297,7 @@ vos_oid_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		   daos_hash_out_t *anchor)
 {
 	struct vos_oid_iter	*oid_iter = vos_iter2oid_iter(iter);
-	struct vos_obj_df	*vo_rec;
+	struct vos_obj_df	*obj_df;
 	daos_iov_t		 rec_iov;
 	int			 rc;
 
@@ -313,8 +312,8 @@ vos_oid_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	}
 
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
-	vo_rec = (struct vos_obj_df *)rec_iov.iov_buf;
-	it_entry->ie_oid = vo_rec->vo_id;
+	obj_df = (struct vos_obj_df *)rec_iov.iov_buf;
+	it_entry->ie_oid = obj_df->vo_id;
 
 	return 0;
 }
@@ -354,41 +353,41 @@ struct vos_iter_ops vos_oid_iter_ops = {
  * For use from container APIs and init APIs
  */
 int
-vos_oi_init()
+vos_obj_tab_register()
 {
 	int	rc;
 
-	D_DEBUG(DF_VOS2, "Registering class for OI table Class: %d\n",
-		VOS_BTR_OIT);
+	D_DEBUG(DB_DF, "Registering class for OI table Class: %d\n",
+		VOS_BTR_OBJ_TABLE);
 
-	rc = dbtree_class_register(VOS_BTR_OIT, 0, &voi_ops);
+	rc = dbtree_class_register(VOS_BTR_OBJ_TABLE, 0, &voi_ops);
 	if (rc)
 		D_ERROR("dbtree create failed\n");
 	return rc;
 }
 
 int
-vos_oi_create(struct vos_pool *pool, struct vos_object_index *obj_index)
+vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 {
 
 	int				rc = 0;
 	daos_handle_t			btr_hdl;
 	struct btr_root			*oi_root = NULL;
 
-	if (!pool || !obj_index) {
+	if (!pool || !otab_df) {
 		D_ERROR("Invalid handle\n");
 		return -DER_INVAL;
 	}
 
 	/** Inplace btr_root */
-	oi_root = (struct btr_root *) &(obj_index->obtable);
+	oi_root = (struct btr_root *) &(otab_df->obt_btr);
 	if (!oi_root->tr_class) {
-		D_DEBUG(DF_VOS2, "create OI Tree in-place: %d\n",
-			VOS_BTR_OIT);
+		D_DEBUG(DB_DF, "create OI Tree in-place: %d\n",
+			VOS_BTR_OBJ_TABLE);
 
-		rc = dbtree_create_inplace(VOS_BTR_OIT, 0, OT_BTREE_ORDER,
-					   &pool->vp_uma, &obj_index->obtable,
-					   &btr_hdl);
+		rc = dbtree_create_inplace(VOS_BTR_OBJ_TABLE, 0,
+					   OT_BTREE_ORDER, &pool->vp_uma,
+					   &otab_df->obt_btr, &btr_hdl);
 		if (rc)
 			D_ERROR("dbtree create failed\n");
 		dbtree_close(btr_hdl);
@@ -397,17 +396,17 @@ vos_oi_create(struct vos_pool *pool, struct vos_object_index *obj_index)
 }
 
 int
-vos_oi_destroy(struct vos_pool *pool, struct vos_object_index *obj_index)
+vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df)
 {
 	int				rc = 0;
 	daos_handle_t			btr_hdl;
 
-	if (!pool || !obj_index) {
+	if (!pool || !otab_df) {
 		D_ERROR("Invalid handle\n");
 		return -DER_INVAL;
 	}
 
-	rc = dbtree_open_inplace(&obj_index->obtable, &pool->vp_uma, &btr_hdl);
+	rc = dbtree_open_inplace(&otab_df->obt_btr, &pool->vp_uma, &btr_hdl);
 	if (rc) {
 		D_ERROR("No Object handle, Tree open failed\n");
 		D_GOTO(exit, rc = -DER_NONEXIST);

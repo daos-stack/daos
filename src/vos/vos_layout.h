@@ -44,9 +44,9 @@
  * B-Tree for Key Value stores
  * EV-Tree for Byte array stores
  */
-struct vos_container_index;
+struct vos_cont_table_df;
 struct vos_cont_df;
-struct vos_object_index;
+struct vos_obj_table_df;
 struct vos_obj_df;
 struct vos_cookie_rec_df;
 struct vos_epoch_index;
@@ -67,9 +67,9 @@ struct vos_irec_df;
 POBJ_LAYOUT_BEGIN(vos_pool_layout);
 
 POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_container_index);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_table_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cont_df);
-POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_object_index);
+POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_table_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_obj_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_cookie_rec_df);
 POBJ_LAYOUT_TOID(vos_pool_layout, struct vos_krec_df);
@@ -78,11 +78,11 @@ POBJ_LAYOUT_END(vos_pool_layout);
 
 
 /**
- * VOS container index
+ * VOS container table
  * PMEM container index in each pool
  */
-struct vos_container_index {
-	struct btr_root		ci_btree;
+struct vos_cont_table_df {
+	struct btr_root		ctb_btree;
 };
 
 /**
@@ -105,7 +105,7 @@ struct vos_pool_df {
 	/* Flags for incompatibility features */
 	uint64_t				pd_incompat_flags;
 	/* Typed PMEMoid pointer for the container index table */
-	struct vos_container_index		pd_cont_itab;
+	struct vos_cont_table_df		pd_ctab_df;
 	/* Pool info of objects, containers, space availability */
 	vos_pool_info_t				pd_pool_info;
 };
@@ -114,11 +114,19 @@ struct vos_epoch_index {
 	struct btr_root		ehtable;
 };
 
+/**
+ * VOS object table
+ * It is just a in-place btree for the time being.
+ */
+struct vos_obj_table_df {
+	struct btr_root			obt_btr;
+};
+
 /* VOS Container Value */
 struct vos_cont_df {
 	uuid_t				cd_id;
 	vos_cont_info_t			cd_info;
-	TMMID(struct vos_object_index)	cd_obtable;
+	struct vos_obj_table_df		cd_otab_df;
 };
 
 /** btree (d/a-key) record bit flags */

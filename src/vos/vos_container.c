@@ -65,16 +65,11 @@ static int
 cont_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct umem_instance	*umm = &tins->ti_umm;
-	struct vos_cont_df	*cont_df = NULL;
 
 	TMMID(struct vos_cont_df) cont_mmid = umem_id_u2t(rec->rec_mmid,
 							  struct vos_cont_df);
 	if (TMMID_IS_NULL(cont_mmid))
 		return -DER_NONEXIST;
-
-	cont_df = umem_id2ptr_typed(&tins->ti_umm, cont_mmid);
-	if (!TMMID_IS_NULL(cont_df->cd_obtable))
-		umem_free_typed(umm, cont_df->cd_obtable);
 
 	umem_free_typed(umm, cont_mmid);
 	return 0;
@@ -85,8 +80,7 @@ cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	     daos_iov_t *val_iov, struct btr_record *rec)
 {
 	TMMID(struct vos_cont_df)	cont_mmid;
-	struct vos_cont_df		*cont_df = NULL;
-	struct vos_object_index		*vc_oi = NULL;
+	struct vos_cont_df		*cont_df;
 	struct cont_df_args		*args = NULL;
 	struct daos_uuid		*ukey = NULL;
 	int				rc = 0;
@@ -105,13 +99,7 @@ cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 	uuid_copy(cont_df->cd_id, ukey->uuid);
 	args->ca_cont_df = cont_df;
 
-	cont_df->cd_obtable = umem_znew_typed(&tins->ti_umm,
-					      struct vos_object_index);
-	if (TMMID_IS_NULL(cont_df->cd_obtable))
-		D_GOTO(exit, rc = -DER_NOMEM);
-
-	vc_oi = umem_id2ptr_typed(&tins->ti_umm, cont_df->cd_obtable);
-	rc = vos_oi_create(args->ca_pool, vc_oi);
+	rc = vos_obj_tab_create(args->ca_pool, &cont_df->cd_otab_df);
 	if (rc) {
 		D_ERROR("VOS object index create failure\n");
 		D_GOTO(exit, rc);
@@ -165,7 +153,7 @@ cont_df_lookup(struct vos_pool *vpool, struct daos_uuid *ukey,
 
 	daos_iov_set(&key, ukey, sizeof(struct daos_uuid));
 	daos_iov_set(&value, args, sizeof(struct cont_df_args));
-	return dbtree_lookup(vpool->vp_cont_ith, &key, &value);
+	return dbtree_lookup(vpool->vp_cont_th, &key, &value);
 }
 
 /**
@@ -274,7 +262,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 		daos_iov_set(&key, &ukey, sizeof(ukey));
 		daos_iov_set(&value, &args, sizeof(args));
 
-		rc = dbtree_update(vpool->vp_cont_ith, &key, &value);
+		rc = dbtree_update(vpool->vp_cont_th, &key, &value);
 		if (rc) {
 			D_ERROR("Creating a container entry: %d\n", rc);
 			pmemobj_tx_abort(ENOMEM);
@@ -338,13 +326,12 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	}
 
 	uuid_copy(cont->vc_id, co_uuid);
-	cont->vc_pool	   = vpool;
-	cont->vc_cont_df   = args.ca_cont_df;
-	cont->vc_obj_table = umem_id2ptr_typed(&vpool->vp_umm,
-					       args.ca_cont_df->cd_obtable);
+	cont->vc_pool	 = vpool;
+	cont->vc_cont_df = args.ca_cont_df;
+	cont->vc_otab_df = &args.ca_cont_df->cd_otab_df;
 
 	/* Cache this btr object ID in container handle */
-	rc = dbtree_open_inplace(&cont->vc_obj_table->obtable,
+	rc = dbtree_open_inplace(&cont->vc_otab_df->obt_btr,
 				 &cont->vc_pool->vp_uma,
 				 &cont->vc_btr_hdl);
 	if (rc) {
@@ -412,7 +399,6 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 {
 
 	struct vos_pool			*vpool;
-	struct vos_object_index		*vc_oi = NULL;
 	struct vos_container		*cont = NULL;
 	struct cont_df_args		 args;
 	struct daos_uuid		 uuid;
@@ -445,9 +431,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	TX_BEGIN(vos_pool_ptr2pop(vpool)) {
 		daos_iov_t	iov;
 
-		vc_oi = umem_id2ptr_typed(&vpool->vp_umm,
-					  args.ca_cont_df->cd_obtable);
-		rc = vos_oi_destroy(vpool, vc_oi);
+		rc = vos_obj_tab_destroy(vpool, &args.ca_cont_df->cd_otab_df);
 		if (rc) {
 			D_ERROR("OI destroy failed with error : %d\n",
 				rc);
@@ -455,7 +439,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 		}
 
 		daos_iov_set(&iov, &uuid, sizeof(struct daos_uuid));
-		rc = dbtree_delete(vpool->vp_cont_ith, &iov, NULL);
+		rc = dbtree_delete(vpool->vp_cont_th, &iov, NULL);
 	}  TX_ONABORT {
 		rc = umem_tx_errno(rc);
 		D_ERROR("Destroying container transaction failed %d\n", rc);
@@ -483,42 +467,32 @@ vos_cont_decref(struct vos_container *cont)
  */
 
 int
-vos_ci_init()
+vos_cont_tab_register()
 {
 	int	rc;
 
-	D_DEBUG(DF_VOS2, "Registering Container table class: %d\n",
-		VOS_BTR_CIT);
+	D_DEBUG(DB_DF, "Registering Container table class: %d\n",
+		VOS_BTR_CONT_TABLE);
 
-	rc = dbtree_class_register(VOS_BTR_CIT, 0, &vct_ops);
+	rc = dbtree_class_register(VOS_BTR_CONT_TABLE, 0, &vct_ops);
 	if (rc)
 		D_ERROR("dbtree create failed\n");
 	return rc;
 }
 
 int
-vos_ci_create(struct umem_attr *p_umem_attr,
-	      struct vos_container_index *co_index)
+vos_cont_tab_create(struct umem_attr *p_umem_attr,
+		    struct vos_cont_table_df *ctab_df)
 {
 
 	int			rc = 0;
-	struct btr_root		*ci_root = NULL;
 	daos_handle_t		btr_hdl;
 
-	if (!co_index) {
-		D_ERROR("Container_index create failed\n");
-		return -DER_INVAL;
-	}
+	D_ASSERT(ctab_df->ctb_btree.tr_class == 0);
+	D_DEBUG(DB_DF, "Create container table, type=%d\n", VOS_BTR_CONT_TABLE);
 
-	ci_root = (struct btr_root *) &(co_index->ci_btree);
-
-	D_ASSERT(ci_root->tr_class == 0);
-	D_DEBUG(DF_VOS2, "Create CI Tree in-place: %d\n",
-		VOS_BTR_CIT);
-	rc = dbtree_create_inplace(VOS_BTR_CIT, 0, CT_BTREE_ORDER,
-				   p_umem_attr,
-				   &co_index->ci_btree,
-				   &btr_hdl);
+	rc = dbtree_create_inplace(VOS_BTR_CONT_TABLE, 0, CT_BTREE_ORDER,
+				   p_umem_attr, &ctab_df->ctb_btree, &btr_hdl);
 	if (rc) {
 		D_ERROR("DBtree create failed\n");
 		D_GOTO(exit, rc);
@@ -595,7 +569,7 @@ cont_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	vos_pool_addref(vpool);
 	co_iter->cot_pool = vpool;
 
-	rc = dbtree_iter_prepare(vpool->vp_cont_ith, 0, &co_iter->cot_hdl);
+	rc = dbtree_iter_prepare(vpool->vp_cont_th, 0, &co_iter->cot_hdl);
 	if (rc)
 		D_GOTO(exit, rc);
 

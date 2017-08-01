@@ -56,11 +56,11 @@ pool_hop_free(struct daos_ulink *hlink)
 
 	D_ASSERT(pool->vp_opened == 0);
 
-	if (!daos_handle_is_inval(pool->vp_cookie_ith))
-		vos_cookie_itab_destroy(pool->vp_cookie_ith);
+	if (!daos_handle_is_inval(pool->vp_cookie_th))
+		vos_cookie_tab_destroy(pool->vp_cookie_th);
 
-	if (!daos_handle_is_inval(pool->vp_cont_ith))
-		dbtree_close(pool->vp_cont_ith);
+	if (!daos_handle_is_inval(pool->vp_cont_th))
+		dbtree_close(pool->vp_cont_th);
 
 	if (pool->vp_uma.uma_u.pmem_pool)
 		vos_pmemobj_close(pool->vp_uma.uma_u.pmem_pool);
@@ -90,8 +90,8 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 	/* Create a cookie index table in DRAM */
-	rc = vos_cookie_itab_create(&uma, &pool->vp_cookie_itab,
-				    &pool->vp_cookie_ith);
+	rc = vos_cookie_tab_create(&uma, &pool->vp_cookie_tab,
+				    &pool->vp_cookie_th);
 	if (rc != 0) {
 		D_ERROR("Cookie tree create failed: %d\n", rc);
 		D_GOTO(failed, rc);
@@ -192,7 +192,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 		uma.uma_id = UMEM_CLASS_PMEM;
 		uma.uma_u.pmem_pool = ph;
 
-		rc = vos_ci_create(&uma, &pool_df->pd_cont_itab);
+		rc = vos_cont_tab_create(&uma, &pool_df->pd_ctab_df);
 		if (rc != 0)
 			pmemobj_tx_abort(EFAULT);
 
@@ -314,9 +314,9 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		D_GOTO(failed, rc = -DER_IO);
 	}
 
-	/* Cache co-tree btree hdl */
-	rc = dbtree_open_inplace(&pool_df->pd_cont_itab.ci_btree,
-				 &pool->vp_uma, &pool->vp_cont_ith);
+	/* Cache container table btree hdl */
+	rc = dbtree_open_inplace(&pool_df->pd_ctab_df.ctb_btree,
+				 &pool->vp_uma, &pool->vp_cont_th);
 	if (rc) {
 		D_ERROR("Container Tree open failed\n");
 		D_GOTO(failed, rc);

@@ -799,6 +799,7 @@ out:
 int
 vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie)
 {
+	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct purge_context	pcx;
 	daos_epoch_t		max_epoch;
 	int			rc;
@@ -806,8 +807,8 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie)
 	D_DEBUG(DB_EPC, "Epoch discard for "DF_UUID" ["DF_U64", "DF_U64"]\n",
 		DP_UUID(cookie), epr->epr_lo, epr->epr_hi);
 
-	rc = vos_cookie_find_update(vos_coh2cih(coh), cookie, epr->epr_lo,
-				    false, &max_epoch);
+	rc = vos_cookie_find_update(cont->vc_pool->vp_cookie_th, cookie,
+				    epr->epr_lo, false, &max_epoch);
 	if (rc)
 		return rc == -DER_NONEXIST ? 0 : rc;
 

@@ -45,10 +45,10 @@ extern struct dss_module_key vos_module_key;
 #define VOS_CONT_HHASH_BITS 20 /* Upto 1048576 containers */
 
 /**
- * VOS cookie index table
- * In-memory BTR index to hold all cookies and max epoch updated
+ * VOS cookie table
+ * In-memory btree to hold all cookies and max epoch updated
  */
-struct vos_cookie_itab {
+struct vos_cookie_table {
 	struct btr_root		cit_btr;
 };
 
@@ -66,12 +66,12 @@ struct vos_pool {
 	struct umem_attr	vp_uma;
 	/** memory class instance of the pool */
 	struct umem_instance	vp_umm;
-	/** btr handle for the container index table */
-	daos_handle_t		vp_cont_ith;
-	/** cookie index table (DRAM only) */
-	struct vos_cookie_itab	vp_cookie_itab;
-	/** btr handle for the cookie index table */
-	daos_handle_t		vp_cookie_ith;
+	/** btr handle for the container table */
+	daos_handle_t		vp_cont_th;
+	/** cookie table (DRAM only) */
+	struct vos_cookie_table	vp_cookie_tab;
+	/** btr handle for the cookie table \a vp_cookie_tab */
+	daos_handle_t		vp_cookie_th;
 };
 
 /**
@@ -89,7 +89,7 @@ struct vos_container {
 	/* Direct pointer to VOS object index
 	 * within container
 	 */
-	struct vos_object_index	*vc_obj_table;
+	struct vos_obj_table_df	*vc_otab_df;
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
 };
@@ -268,31 +268,27 @@ PMEMobjpool *vos_coh2pop(daos_handle_t coh);
 struct daos_lru_cache *vos_get_obj_cache(void);
 
 /**
- * VOS container index class register for btree
- * to be called withing vos_init()
+ * Register btree class for container table, it is called within vos_init()
  *
  * \return		0 on success and negative on
  *			failure
  */
 int
-vos_ci_init();
+vos_cont_tab_register();
 
 /**
- * VOS Container index create
- * Create a new B-tree for empty container index
+ * Create a container table
  * Called from vos_pool_create.
  *
  * \param p_umem_attr	[IN]	Pool umem attributes
- * \param co_index	[IN]	vos container index
- *				(pmem direct pointer)
+ * \param ctab_df	[IN]	vos container table in pmem
  *
  * \return		0 on success and negative on
  *			failure
  */
 int
-vos_ci_create(struct umem_attr *p_umem_attr,
-	      struct vos_container_index *co_index);
-
+vos_cont_tab_create(struct umem_attr *p_umem_attr,
+		    struct vos_cont_table_df *ctab_df);
 
 /**
  * VOS cookie index class register for btree
@@ -303,7 +299,7 @@ vos_ci_create(struct umem_attr *p_umem_attr,
  */
 
 int
-vos_cookie_itab_init();
+vos_cookie_tab_register();
 
 /**
  * create a VOS Cookie index table.
@@ -316,22 +312,22 @@ vos_cookie_itab_init();
  *			failure
  */
 int
-vos_cookie_itab_create(struct umem_attr *uma, struct vos_cookie_itab *itab,
+vos_cookie_tab_create(struct umem_attr *uma, struct vos_cookie_table *ctab,
 		       daos_handle_t *cookie_handle);
 
 
 /**
  * Destroy the cookie index table
  *
- * \param cih	[IN]	cookie index handle
+ * \param th	[IN]	cookie index handle
  */
 int
-vos_cookie_itab_destroy(daos_handle_t cih);
+vos_cookie_tab_destroy(daos_handle_t th);
 
 /**
  * VOS cookie update
  *
- * \param cih		[IN]	cookie index handle
+ * \param th		[IN]	cookie index handle
  * \param cookie	[IN]	cookie
  * \param epoch		[IN]	epoch
  *
@@ -340,7 +336,7 @@ vos_cookie_itab_destroy(daos_handle_t cih);
  *			invalid handle
  */
 int
-vos_cookie_update(daos_handle_t cih, uuid_t cookie, daos_epoch_t epoch);
+vos_cookie_update(daos_handle_t th, uuid_t cookie, daos_epoch_t epoch);
 
 /**
  * VOS cookie find and update
@@ -348,14 +344,14 @@ vos_cookie_update(daos_handle_t cih, uuid_t cookie, daos_epoch_t epoch);
  * max_epoch, if not found add the entry
  * if less than max_epoch do nothing
  *
- * \param cih		[IN]	cookie index handle
+ * \param th		[IN]	cookie index handle
  * \param cookie	[IN]	cookie
  * \param epoch		[IN]	epoch to update
  * \param update_flag	[IN]	flag to update/lookup
  * \param epoch_ret	[OUT]	max_epoch returned
  */
 int
-vos_cookie_find_update(daos_handle_t cih, uuid_t cookie, daos_epoch_t epoch,
+vos_cookie_find_update(daos_handle_t th, uuid_t cookie, daos_epoch_t epoch,
 		       bool update_flag, daos_epoch_t *epoch_ret);
 
 /**
@@ -366,7 +362,7 @@ vos_cookie_find_update(daos_handle_t cih, uuid_t cookie, daos_epoch_t epoch,
  *			failure
  */
 int
-vos_oi_init();
+vos_obj_tab_register();
 
 /**
  * VOS object index create
@@ -375,14 +371,13 @@ vos_oi_init();
  * Called from vos_container_create.
  *
  * \param pool		[IN]	vos pool
- * \param obj_index	[IN]	vos object index
- *				(pmem direct pointer)
+ * \param otab_df	[IN]	vos object index (pmem data structure)
  *
  * \return		0 on success and negative on
  *			failure
  */
 int
-vos_oi_create(struct vos_pool *pool, struct vos_object_index *obj_index);
+vos_obj_tab_create(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
 
 /**
  * VOS object index destroy
@@ -390,14 +385,13 @@ vos_oi_create(struct vos_pool *pool, struct vos_object_index *obj_index);
  * Called from vos_container_destroy
  *
  * \param pool		[IN]	vos pool
- * \param obj_index	[IN]	vos object index
- *				(pmem direct pointer)
+ * \param otab_df	[IN]	vos object index (pmem data structure)
  *
  * \return		0 on success and negative on
  *			failure
  */
 int
-vos_oi_destroy(struct vos_pool *pool, struct vos_object_index *obj_index);
+vos_obj_tab_destroy(struct vos_pool *pool, struct vos_obj_table_df *otab_df);
 
 enum vos_tree_class {
 	/** the first reserved tree class */
@@ -409,9 +403,9 @@ enum vos_tree_class {
 	/** index + epoch tree */
 	VOS_BTR_IDX		= (VOS_BTR_BEGIN + 2),
 	/** object index table */
-	VOS_BTR_OIT		= (VOS_BTR_BEGIN + 3),
+	VOS_BTR_OBJ_TABLE	= (VOS_BTR_BEGIN + 3),
 	/** container index table */
-	VOS_BTR_CIT		= (VOS_BTR_BEGIN + 4),
+	VOS_BTR_CONT_TABLE	= (VOS_BTR_BEGIN + 4),
 	/** tree type for cookie index table */
 	VOS_BTR_COOKIE		= (VOS_BTR_BEGIN + 5),
 	/** the last reserved tree class */
@@ -591,7 +585,7 @@ vos_obj2pop(struct vos_object *obj)
 static inline daos_handle_t
 vos_obj2cookie_hdl(struct vos_object *obj)
 {
-	return obj->obj_cont->vc_pool->vp_cookie_ith;
+	return obj->obj_cont->vc_pool->vp_cookie_th;
 }
 
 static inline struct umem_attr *
@@ -634,14 +628,6 @@ static inline struct vos_container *
 vos_hdl2cont(daos_handle_t coh)
 {
 	return (struct vos_container *)(coh.cookie);
-}
-
-static inline daos_handle_t
-vos_coh2cih(daos_handle_t coh)
-{
-	struct vos_container *chdl = vos_hdl2cont(coh);
-
-	return chdl->vc_pool->vp_cookie_ith;
 }
 
 void vos_cont_addref(struct vos_container *cont);
@@ -715,10 +701,6 @@ vos_hdl2iter(daos_handle_t hdl)
 {
 	return (struct vos_iterator *)hdl.cookie;
 }
-
-/** Pack a key bundle into an iovec */
-void
-tree_key_bundle2iov(struct vos_key_bundle *kbund, daos_iov_t *iov);
 
 struct vos_obj_iter*
 vos_hdl2oiter(daos_handle_t hdl);

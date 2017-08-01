@@ -149,7 +149,7 @@ vos_mod_init(void)
 {
 	int rc = 0;
 
-	rc = vos_ci_init();
+	rc = vos_cont_tab_register();
 	if (rc) {
 		D_ERROR("VOS CI btree initialization error\n");
 		return rc;
@@ -159,13 +159,13 @@ vos_mod_init(void)
 	 * Registering the class for OI btree
 	 * and KV btree
 	 */
-	rc = vos_oi_init();
+	rc = vos_obj_tab_register();
 	if (rc) {
 		D_ERROR("VOS OI btree initialization error\n");
 		return rc;
 	}
 
-	rc = vos_cookie_itab_init();
+	rc = vos_cookie_tab_register();
 	if (rc) {
 		D_ERROR("VOS cookie btree initialization error\n");
 		return rc;

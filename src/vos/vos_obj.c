@@ -285,7 +285,7 @@ vos_hdl2oiter(daos_handle_t hdl)
  * store a bundle of parameters into a iovec, which is going to be passed
  * into dbtree operations as a compound key.
  */
-void
+static void
 tree_key_bundle2iov(struct vos_key_bundle *kbund, daos_iov_t *iov)
 {
 	memset(kbund, 0, sizeof(*kbund));

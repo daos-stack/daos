@@ -95,6 +95,7 @@ extern bool dd_tune_alloc;
 #define DB_PL		(1 << (CLOG_DPRISHIFT + 6)) /* placement */
 #define DB_MGMT		(1 << (CLOG_DPRISHIFT + 7)) /* pool management */
 #define DB_EPC		(1 << (CLOG_DPRISHIFT + 8)) /* epoch system */
+#define DB_DF		(1 << (CLOG_DPRISHIFT + 9)) /* durable format */
 #define DB_TEST		(1 << (CLOG_DPRISHIFT + 15)) /* test programs */
 #define DB_ALL		CLOG_DBG		    /* all of masks */
 
