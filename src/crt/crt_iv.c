@@ -859,6 +859,7 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	struct iv_fetch_in		*input;
 	struct crt_iv_ops		*iv_ops;
 	crt_rpc_t			*rpc;
+	int				rc;
 
 	iv_info = (struct iv_fetch_cb_info *)cb_info->cci_arg;
 
@@ -867,10 +868,15 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	input = crt_req_get(rpc);
 	C_ASSERT(output != NULL);
 
+	if (cb_info->cci_rc == 0x0)
+		rc = output->ifo_rc;
+	else
+		rc = cb_info->cci_rc;
+
 	iv_ops = crt_iv_ops_get(iv_info->ifc_ivns_internal,
 				input->ifi_class_id);
 
-	if (output->ifo_rc == 0)
+	if (rc == 0)
 		iv_ops->ivo_on_refresh(iv_info->ifc_ivns_internal,
 				&input->ifi_key,
 				0, /* TODO: iv_ver */
@@ -883,13 +889,13 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 
 	/* Finalize fetch operation */
 	crt_ivf_finalize(iv_info, &input->ifi_key, &iv_info->ifc_iv_value,
-			output->ifo_rc);
+			rc);
 
 	/* This needs to happen after on_refresh */
 	crt_ivf_pending_reqs_process(iv_info->ifc_ivns_internal,
 				iv_info->ifc_class_id,
 				&input->ifi_key,
-				output->ifo_rc);
+				rc);
 
 
 	C_FREE_PTR(iv_info);
