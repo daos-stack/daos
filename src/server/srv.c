@@ -894,11 +894,10 @@ dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 		D_GOTO(free_future, rc = -DER_NOMEM);
 	}
 
+	/* task will be freed inside scheduler */
 	rc = daos_task_schedule(task, true);
-	if (rc != 0) {
-		D_FREE_PTR(task);
+	if (rc != 0)
 		D_GOTO(free_future, rc = -DER_NOMEM);
-	}
 
 	ABT_future_wait(future);
 
