@@ -313,6 +313,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 	int idx_first;
 	int idx_last;
 	int grp_size;
+	bool rebuilding = false;
 	int i;
 
 	grp_size = obj_get_grp_size(obj);
@@ -337,8 +338,10 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 	     idx = (idx + 1) % grp_size + idx_first) {
 		/* let's skip the rebuild shard for non-update op */
 		if (op != DAOS_OBJ_RPC_UPDATE &&
-		    obj->cob_layout->ol_shards[idx].po_rebuilding)
+		    obj->cob_layout->ol_shards[idx].po_rebuilding) {
+			rebuilding = true;
 			continue;
+		}
 
 		if (obj->cob_layout->ol_shards[idx].po_shard != -1)
 			break;
@@ -346,7 +349,7 @@ obj_grp_valid_shard_get(struct dc_object *obj, int idx,
 	pthread_rwlock_unlock(&obj->cob_lock);
 
 	if (i == grp_size) {
-		if (op == DAOS_OBJ_RPC_UPDATE)
+		if (op == DAOS_OBJ_RPC_UPDATE || !rebuilding)
 			return -DER_NONEXIST;
 
 		/* For non-update ops, some of rebuilding shards

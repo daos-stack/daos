@@ -573,7 +573,10 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 		rc = ds_obj_single_shard_list_dkey(oh, epoch, &num, kds,
 						   &dkey_sgl, &hash_out);
 		if (rc) {
-			/* container might have been destroyed */
+			/* container might have been destroyed. Or there is
+			 * no spare target left for this object see
+			 * obj_grp_valid_shard_get()
+			 */
 			rc = (rc == -DER_NONEXIST) ? 0 : rc;
 			break;
 		}
