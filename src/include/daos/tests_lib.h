@@ -59,4 +59,13 @@ daos_unit_oid_t dts_unit_oid_gen(uint16_t oclass, uint32_t shard);
  */
 int *dts_rand_iarr_alloc(int nr, int base);
 
+static inline double
+dts_time_now(void)
+{
+	struct timeval	tv;
+
+	gettimeofday(&tv, NULL);
+	return (tv.tv_sec + tv.tv_usec / 1000000.0);
+}
+
 #endif /* __DAOS_TESTS_LIB_H__ */

@@ -47,3 +47,8 @@ $BTR	-C ${IPL}o:$ORDER		\
 	-o				\
 	-b $BAT_NUM			\
 	-D
+
+echo "B+tree performance test..."
+$BTR	-C ${IPL}o:$ORDER		\
+	-p $BAT_NUM			\
+	-D

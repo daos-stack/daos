@@ -35,6 +35,7 @@
 #include <getopt.h>
 
 #include <daos/btree.h>
+#include <daos/tests_lib.h>
 
 /**
  * An example for integer key btree.
@@ -460,7 +461,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 			if (verbose)
 				D_PRINT("Deleted key "DF_U64"\n", key);
 
-			if (dbtree_is_empty(ik_toh))
+			if (dbtree_is_empty(ik_toh) && verbose)
 				D_PRINT("Tree is empty now\n");
 			break;
 
@@ -480,7 +481,7 @@ ik_btr_kv_operate(enum ik_btr_opc opc, char *str, bool verbose)
 
 			if (verbose)
 				D_PRINT("Deleted key "DF_U64"\n", key);
-			if (dbtree_is_empty(ik_toh))
+			if (dbtree_is_empty(ik_toh) && verbose)
 				D_PRINT("Tree is empty now\n");
 			break;
 
@@ -735,6 +736,77 @@ ik_btr_batch_oper(unsigned int key_nr)
 	return 0;
 }
 
+static int
+ik_btr_perf(unsigned int key_nr)
+{
+	unsigned int	*arr;
+	char		 buf[64];
+	int		 i;
+	int		 rc;
+	double		 then;
+	double		 now;
+
+	if (key_nr == 0 || key_nr > (1U << 28)) {
+		D_PRINT("Invalid key number: %d\n", key_nr);
+		return -1;
+	}
+
+	D_PRINT("Btree performanc test, order=%u, keys=%u\n", ik_order, key_nr);
+
+	arr = malloc(key_nr * sizeof(*arr));
+	D_ASSERT(arr != NULL);
+
+	/* step-1: Insert performance */
+	ik_btr_gen_keys(arr, key_nr);
+	then = dts_time_now();
+
+	for (i = 0; i < key_nr; i++) {
+		sprintf(buf, "%d:%d", arr[i], arr[i]);
+
+		rc = ik_btr_kv_operate(BTR_OPC_UPDATE, buf, false);
+		if (rc != 0) {
+			D_PRINT("update failed: %d\n", rc);
+			return -1;
+		}
+	}
+	now = dts_time_now();
+	D_PRINT("insert = %10.2f/sec\n", key_nr / (now - then));
+
+	/* step-2: lookup performance */
+	ik_btr_gen_keys(arr, key_nr);
+	then = dts_time_now();
+
+	for (i = 0; i < key_nr; i++) {
+		sprintf(buf, "%d", arr[i]);
+
+		rc = ik_btr_kv_operate(BTR_OPC_LOOKUP, buf, false);
+		if (rc != 0) {
+			D_PRINT("lookup failed: %d\n", rc);
+			return -1;
+		}
+	}
+	now = dts_time_now();
+	D_PRINT("lookup = %10.2f/sec\n", key_nr / (now - then));
+
+	/* step-3: delete performance */
+	ik_btr_gen_keys(arr, key_nr);
+	then = dts_time_now();
+
+	for (i = 0; i < key_nr; i++) {
+		sprintf(buf, "%d", arr[i]);
+
+		rc = ik_btr_kv_operate(BTR_OPC_DELETE, buf, false);
+		if (rc != 0) {
+			D_PRINT("delete failed: %d\n", rc);
+			return -1;
+		}
+	}
+	now = dts_time_now();
+	D_PRINT("delete = %10.2f/sec\n", key_nr / (now - then));
+
+	return 0;
+}
+
 static struct option btr_ops[] = {
 	{ "create",	required_argument,	NULL,	'C'	},
 	{ "destroy",	no_argument,		NULL,	'D'	},
@@ -747,6 +819,7 @@ static struct option btr_ops[] = {
 	{ "query",	no_argument,		NULL,	'q'	},
 	{ "iterate",	required_argument,	NULL,	'i'	},
 	{ "batch",	required_argument,	NULL,	'b'	},
+	{ "perf",	required_argument,	NULL,	'p'	},
 	{ NULL,		0,			NULL,	0	},
 };
 
@@ -767,7 +840,7 @@ main(int argc, char **argv)
 	D_ASSERT(rc == 0);
 
 	optind = 0;
-	while ((rc = getopt_long(argc, argv, "C:Docqu:d:r:f:i:b:",
+	while ((rc = getopt_long(argc, argv, "C:Docqu:d:r:f:i:b:p:",
 				 btr_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'C':
@@ -803,6 +876,9 @@ main(int argc, char **argv)
 			break;
 		case 'b':
 			rc = ik_btr_batch_oper(atoi(optarg));
+			break;
+		case 'p':
+			rc = ik_btr_perf(atoi(optarg));
 			break;
 		default:
 			D_PRINT("Unsupported command %c\n", rc);
