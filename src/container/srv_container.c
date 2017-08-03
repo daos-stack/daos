@@ -669,7 +669,8 @@ out:
 }
 
 static int
-cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc, const uuid_t uuid)
+cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc,
+		   crt_context_t ctx, const uuid_t uuid)
 {
 	daos_iov_t		key;
 	daos_iov_t		value;
@@ -688,7 +689,7 @@ cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc, const uuid_t uuid)
 	if (rc != 0)
 		return rc;
 
-	rc = ds_cont_epoch_fini_hdl(tx, cont, &chdl);
+	rc = ds_cont_epoch_fini_hdl(tx, cont, ctx, &chdl);
 	cont_put(cont);
 	cont = NULL;
 	if (rc != 0)
@@ -731,7 +732,7 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		rc = rdb_tx_begin(svc->cs_db, &tx);
 		if (rc != 0)
 			break;
-		rc = cont_close_one_hdl(&tx, svc, recs[i].tcr_hdl);
+		rc = cont_close_one_hdl(&tx, svc, ctx, recs[i].tcr_hdl);
 		if (rc != 0) {
 			rdb_tx_end(&tx);
 			break;
@@ -789,7 +790,7 @@ cont_close(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = cont_close_one_hdl(tx, cont->c_svc, rec.tcr_hdl);
+	rc = cont_close_one_hdl(tx, cont->c_svc, rpc->cr_ctx, rec.tcr_hdl);
 
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: %d\n",

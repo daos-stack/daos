@@ -266,7 +266,54 @@ struct epoch_attr {
 				attr->ea_glhe
 
 static int
-read_epoch_attr(struct rdb_tx *tx, struct cont *cont, struct epoch_attr *attr)
+epoch_aggregate_bcast(crt_context_t ctx, struct cont *cont,
+			      daos_epoch_range_t *epr)
+{
+	struct cont_tgt_epoch_aggregate_in	*in;
+	struct cont_tgt_epoch_aggregate_out	*out;
+	crt_rpc_t				*rpc;
+	int					rc;
+
+	D_DEBUG(DF_DSMS, DF_CONT" bcast epr: "DF_U64"->"DF_U64 "\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+		epr->epr_lo, epr->epr_hi);
+
+	rc = ds_cont_bcast_create(ctx, cont->c_svc, CONT_TGT_EPOCH_AGGREGATE,
+				  &rpc);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	in = crt_req_get(rpc);
+	in->tai_start_epoch = epr->epr_lo;
+	in->tai_end_epoch   = epr->epr_hi;
+	uuid_copy(in->tai_pool_uuid, cont->c_svc->cs_pool_uuid);
+	uuid_copy(in->tai_cont_uuid, cont->c_uuid);
+
+	rc = dss_rpc_send(rpc);
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
+
+	out = crt_reply_get(rpc);
+	rc = out->tao_rc;
+
+	if (rc != 0) {
+		D_ERROR(DF_CONT",agg-bcast,e:"DF_U64"->"DF_U64":%d(targets)\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+			epr->epr_lo, epr->epr_hi, rc);
+		rc = -DER_IO;
+	}
+
+out_rpc:
+	crt_req_decref(rpc);
+out:
+	D_DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+	return rc;
+}
+
+static int
+read_epoch_attr(struct rdb_tx *tx, struct cont *cont,
+			struct epoch_attr *attr)
 {
 	daos_iov_t	value;
 	daos_epoch_t	ghce;
@@ -313,6 +360,28 @@ read_epoch_attr(struct rdb_tx *tx, struct cont *cont, struct epoch_attr *attr)
 	attr->ea_glhe = glhe;
 	return 0;
 }
+
+static int
+trigger_aggregation(daos_epoch_t glre, daos_epoch_t glre_curr,
+		    daos_epoch_t ghce, struct cont *cont, crt_context_t ctx)
+{
+	/** Trigger aggregation bcast here */
+	/** Broadcast only if GLRE changed */
+	if (glre_curr > glre) {
+		daos_epoch_range_t	range;
+		int			rc;
+
+		/** Always trigger aggregation until glre - 1 */
+		/** XXX this will change while introducing snapshots **/
+		range.epr_lo	= 0;
+		range.epr_hi	= MIN(glre_curr, ghce);
+		rc = epoch_aggregate_bcast(ctx, cont, &range);
+		return rc;
+	}
+	return 0;
+}
+
+
 
 /* Return 0 if the check passes, 1 otherwise. */
 static inline int
@@ -469,15 +538,24 @@ ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont,
 
 int
 ds_cont_epoch_fini_hdl(struct rdb_tx *tx, struct cont *cont,
-		       struct container_hdl *hdl)
+		       crt_context_t ctx, struct container_hdl *hdl)
 {
 	struct epoch_attr	attr;
+	daos_epoch_t		glre;
 	bool			empty;
+	char			*islip;
+	bool			slip_flag;
 	int			rc;
 
 	rc = read_epoch_attr(tx, cont, &attr);
 	if (rc != 0)
 		return rc;
+
+	slip_flag = false;
+	islip = getenv("DAOS_IMPLICIT_PURGE");
+	if (islip != NULL)
+		slip_flag = true;
+	glre = attr.ea_glre;
 
 	if (check_epoch_invariant(cont, &attr, hdl) != 0)
 		return -DER_IO;
@@ -504,6 +582,11 @@ ds_cont_epoch_fini_hdl(struct rdb_tx *tx, struct cont *cont,
 
 	if (check_global_epoch_invariant(cont, &attr) != 0)
 		return -DER_IO;
+
+	/** once we have an aggregation daemon, mask this error message */
+	if (slip_flag)
+		rc = trigger_aggregation(glre, attr.ea_glre, attr.ea_ghce,
+					 cont, ctx);
 
 	return rc;
 }
@@ -625,52 +708,6 @@ out:
 	return rc;
 }
 
-static int
-cont_epoch_aggregate_bcast(crt_context_t ctx, struct cont *cont,
-			   daos_epoch_range_t *epr)
-{
-	struct cont_tgt_epoch_aggregate_in	*in;
-	struct cont_tgt_epoch_aggregate_out	*out;
-	crt_rpc_t				*rpc;
-	int					rc;
-
-	D_DEBUG(DF_DSMS, DF_CONT" bcast epr: "DF_U64"->"DF_U64 "\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-		epr->epr_lo, epr->epr_hi);
-
-	rc = ds_cont_bcast_create(ctx, cont->c_svc, CONT_TGT_EPOCH_AGGREGATE,
-				  &rpc);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	in = crt_req_get(rpc);
-	in->tai_start_epoch = epr->epr_lo;
-	in->tai_end_epoch   = epr->epr_hi;
-	uuid_copy(in->tai_pool_uuid, cont->c_svc->cs_pool_uuid);
-	uuid_copy(in->tai_cont_uuid, cont->c_uuid);
-
-	rc = dss_rpc_send(rpc);
-	if (rc != 0)
-		D_GOTO(out_rpc, rc);
-
-	out = crt_reply_get(rpc);
-	rc = out->tao_rc;
-
-	if (rc != 0) {
-		D_ERROR(DF_CONT",agg-bcast,e:"DF_U64"->"DF_U64":%d(targets)\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-			epr->epr_lo, epr->epr_hi, rc);
-		rc = -DER_IO;
-	}
-
-out_rpc:
-	crt_req_decref(rpc);
-out:
-	D_DEBUG(DF_DSMS, DF_CONT": bcasted: %d\n",
-		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
-	return rc;
-}
-
 int
 ds_cont_epoch_slip(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		   struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
@@ -729,16 +766,13 @@ ds_cont_epoch_slip(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (check_epoch_invariant(cont, &attr, hdl) != 0)
 		D_GOTO(out_hdl, rc = -DER_IO);
 
-	/* Broadcast only if GLRE changed */
-	if (attr.ea_glre > glre) {
-		daos_epoch_range_t	range;
-
-		range.epr_lo = 0;
-		range.epr_hi = in->cei_epoch;
-		/* trigger aggregation bcast here */
-		rc = cont_epoch_aggregate_bcast(rpc->cr_ctx, cont, &range);
-	}
-
+	/** XXX
+	 * Once we have an aggregation daemon,
+	 * we need to mask the return value, we need not
+	 * fail if aggregation bcast fails
+	 */
+	rc = trigger_aggregation(glre, attr.ea_glre, attr.ea_ghce,
+				 cont, rpc->cr_ctx);
 out_state:
 	set_epoch_state(&attr, hdl, &out->ceo_epoch_state);
 out_hdl:
@@ -849,13 +883,21 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	daos_epoch_t			hce = hdl->ch_hce;
 	daos_epoch_t			lhe = hdl->ch_lhe;
 	daos_epoch_t			lre = hdl->ch_lre;
+	daos_epoch_t			glre = 0;
 	daos_iov_t			key;
 	daos_iov_t			value;
+	char				*islip;
+	bool				slip_flag;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
 		in->cei_epoch);
+
+	slip_flag = false;
+	islip	  = getenv("DAOS_IMPLICIT_PURGE");
+	if (islip != NULL)
+		slip_flag = true;
 
 	/* Verify the container handle capabilities. */
 	if (!(hdl->ch_capas & DAOS_COO_RW))
@@ -867,6 +909,9 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = read_epoch_attr(tx, cont, &attr);
 	if (rc != 0)
 		D_GOTO(out, rc);
+
+	if (slip_flag)
+		glre = attr.ea_glre;
 
 	if (check_epoch_invariant(cont, &attr, hdl) != 0)
 		D_GOTO(out, rc = -DER_IO);
@@ -927,6 +972,16 @@ ds_cont_epoch_commit(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 
 	if (check_epoch_invariant(cont, &attr, hdl) != 0)
 		D_GOTO(out_hdl, rc = -DER_IO);
+
+	if (slip_flag) {
+		rc = trigger_aggregation(glre, attr.ea_glre, attr.ea_ghce,
+					 cont, rpc->cr_ctx);
+		if (rc != 0) {
+			D_ERROR("Trigger aggregation from commit failed %d\n",
+				rc);
+			D_GOTO(out_hdl, rc);
+		}
+	}
 
 out_state:
 	set_epoch_state(&attr, hdl, &out->ceo_epoch_state);

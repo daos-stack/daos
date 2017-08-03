@@ -927,17 +927,10 @@ cont_epoch_aggregate_one(void *vin)
 	int					rc;
 	bool					finish;
 
-	credits	= DAOS_PURGE_CREDITS_MAX;
 	purge_credits = getenv("DAOS_PURGE_CREDITS");
-	if (purge_credits != NULL) {
-		char		*end;
-		unsigned long	tmp_credits;
-
-		errno		= 0;
-		tmp_credits	= strtoul(purge_credits, &end, 0);
-		if (*end == '\0' && errno == 0)
-			credits = (unsigned int) tmp_credits;
-	}
+	credits = daos_env2uint(purge_credits);
+	if (credits == 0)
+		credits = DAOS_PURGE_CREDITS_MAX;
 
 	pool_child = ds_pool_child_lookup(in->tai_pool_uuid);
 	if (pool_child == NULL) {
