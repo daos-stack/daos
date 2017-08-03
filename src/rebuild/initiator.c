@@ -201,7 +201,8 @@ rebuild_rec:
 		if (i == 0) {
 			uuid_copy(cookie, cookies[0]);
 			version = versions[0];
-			continue;
+			if (type != DAOS_IOD_SINGLE)
+				continue;
 		} else {
 			/* Sigh vos_obj_update only suppport single
 			 * cookie & version.

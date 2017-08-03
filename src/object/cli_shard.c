@@ -334,7 +334,8 @@ obj_shard_io_check(unsigned int nr, daos_iod_t *iods)
 
 		if (iods[i].iod_type == DAOS_IOD_SINGLE &&
 		    iods[i].iod_nr != 1) {
-			D_ERROR("SINGLE iod type should have iod_nr == 1\n");
+			D_ERROR("SINGLE iod type iod_nr %d != 1\n",
+				iods[i].iod_nr);
 			return false;
 		}
 	}
