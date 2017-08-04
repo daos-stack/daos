@@ -92,8 +92,10 @@ class TestInfoRunner(PreRunner.PreRunner):
         # set test name
         self.test_info['subList']['nodename'] = self.nodename
         self.test_info['subList']['hostlist'] = \
-             ",".join(self.info.get_config(keyname='host_list',
-                                           default=[self.nodename]))
+            self.info.get_config('hostlist', None,
+                                 ",".join(self.info.get_config(
+                                     keyname='host_list',
+                                     default=[self.nodename])))
         fileName = os.path.splitext(os.path.basename(test_module_name))[0]
         moduleName = self.test_info['module'].get('name', "")
         logBaseName = self.test_info['module'].get('logBaseName', "")

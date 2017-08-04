@@ -48,6 +48,7 @@ class NodeControlRunner(OrteRunner.OrteRunner):
         self.logger = logging.getLogger("TestRunnerLogger")
         self.now = "_{}".format(datetime.now().isoformat().replace(':', '.'))
         host_list = self.info.get_config('host_list')
+        host_list = self.test_info.get_subList('hostlist').split(',')
         for node in host_list:
             node_info = NodeRunner.NodeRunner(self.test_info, node)
             self.node_list.append(node_info)

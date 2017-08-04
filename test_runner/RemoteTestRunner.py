@@ -189,6 +189,8 @@ class RemoteTestRunner():
         self.test_config['log_base_path'] = logdir
         self.test_config['node'] = self.node
         self.test_config['node_type'] = self.node_type
+        self.test_config['hostlist'] = \
+            ",".join(self.info.get_config(keyname='host_list'))
         if setFromConfig:
             self.test_config['setKeyFromConfig'] = {}
             self.test_config['setKeyFromConfig'].update(setFromConfig)
