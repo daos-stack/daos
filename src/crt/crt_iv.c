@@ -327,11 +327,11 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 
 			rc = crt_reply_send(rpc);
 			C_ASSERT(rc == 0);
-
-			/* addref done in crt_hdlr_iv_fetch */
-			rc = crt_req_decref(rpc);
-			C_ASSERT(rc == 0);
 		}
+
+		/* addref done in crt_hdlr_iv_fetch */
+		rc = crt_req_decref(rpc);
+		C_ASSERT(rc == 0);
 	} else {
 		iv_info->ifc_comp_cb(iv_info->ifc_ivns_internal,
 					iv_info->ifc_class_id,
@@ -411,6 +411,7 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 					iv_info->ifc_child_bulk,
 					iv_info->ifc_child_rpc,
 					iv_info->ifc_user_priv);
+
 			} else {
 				struct iv_fetch_out *output;
 
@@ -428,6 +429,7 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 				}
 			}
 
+			/* addref done in crt_hdlr_iv_fetch */
 			crt_req_decref(iv_info->ifc_child_rpc);
 
 		} else {
@@ -777,7 +779,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 			crt_sg_list_t *iv_value, crt_bulk_t dest_bulk,
 			crt_rpc_t *rpc, void *user_priv)
 {
-	struct crt_ivf_transfer_cb_info	*cb_info;
+	struct crt_ivf_transfer_cb_info	*cb_info = NULL;
 	struct crt_bulk_desc		bulk_desc;
 	crt_bulk_opid_t			opid;
 	crt_bulk_t			bulk_hdl;
@@ -804,6 +806,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 	for (i = 0; i < iv_value->sg_nr.num; i++)
 		size += iv_value->sg_iovs[i].iov_buf_len;
 
+	/* crt_req_decref done in crt_ivf_bulk_transfer_done_cb */
 	rc = crt_req_addref(rpc);
 	C_ASSERT(rc == 0);
 
@@ -821,7 +824,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 
 	if (cb_info == NULL) {
 		C_ERROR("Failed to allocate memory for cb_info\n");
-		C_GOTO(exit, rc = -CER_NOMEM);
+		C_GOTO(cleanup, rc = -CER_NOMEM);
 	}
 
 	cb_info->tci_ivns_internal = ivns_internal;
@@ -832,10 +835,12 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 
 	rc = crt_bulk_transfer(&bulk_desc, crt_ivf_bulk_transfer_done_cb,
 				cb_info, &opid);
-	if (rc != 0) {
-		C_ERROR("crt_bulk_transfer() failed with rc=%d\n", rc);
 
-		output->ifo_rc = -1;
+cleanup:
+	if (rc != 0) {
+		C_ERROR("Bulk transfer failed; rc=%d\n", rc);
+
+		output->ifo_rc = rc;
 		rc = crt_reply_send(rpc);
 		C_ASSERT(rc == 0);
 
@@ -843,7 +848,8 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 		C_ASSERT(rc == 0);
 
 		crt_bulk_free(bulk_hdl);
-		C_FREE_PTR(cb_info);
+		if (cb_info)
+			C_FREE_PTR(cb_info);
 	}
 
 exit:
@@ -1123,6 +1129,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		cb_info->ifc_child_rpc = rpc_req;
 		cb_info->ifc_child_bulk = input->ifi_value_bulk,
 
+		/* crt_req_decref done in crt_ivf_finalize */
 		rc = crt_req_addref(rpc_req);
 		C_ASSERT(rc == 0);
 
