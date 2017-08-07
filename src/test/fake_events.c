@@ -46,7 +46,7 @@
 #include <stdio.h>
 #include <poll.h>
 
-#include <crt_util/common.h>
+#include <pouch/common.h>
 #include "crt_fake_events.h"
 
 static pthread_t	fake_event_tid;

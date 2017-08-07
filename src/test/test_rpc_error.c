@@ -47,8 +47,8 @@
 #include <getopt.h>
 #include <semaphore.h>
 
-#include <crt_util/common.h>
-#include <crt_api.h>
+#include <pouch/common.h>
+#include <cart/api.h>
 
 #define RPC_ERR_OPC_NOREPLY		(0xA1)
 #define RPC_ERR_OPC_SHUTDOWN		(0x100)

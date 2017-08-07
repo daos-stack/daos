@@ -1,4 +1,4 @@
-# Copyright (C) 2016 Intel Corporation
+# Copyright (C) 2016-2017 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -37,17 +37,17 @@
 """Unit tests"""
 import os
 
-TEST_SRC = ['test_linkage.cpp', 'test_util.c']
+TEST_SRC = ['test_linkage.cpp', 'test_pouch.c']
 WRAPPERS = {'test_linkage.cpp':['PMIx_Init', 'PMIx_Get',
                                 'PMIx_Publish', 'PMIx_Lookup',
                                 'PMIx_Fence', 'PMIx_Unpublish',
                                 'PMIx_Register_event_handler']}
-LIBPATH = [Dir('../crt'), Dir('../util')]
+LIBPATH = [Dir('../cart'), Dir('../pouch')]
 
 def scons():
     """Scons function"""
 
-    Import('prereqs env crt_targets crt_util_targets')
+    Import('prereqs env crt_targets pouch_targets')
 
     # Run config in a new environment so the environment isn't polluted
     # causing tests to be rebuilt when utest target is used
@@ -88,7 +88,7 @@ def scons():
                                     source=testobj + \
                                     wrap_obj + \
                                     crt_targets + \
-                                    crt_util_targets,
+                                    pouch_targets,
                                     LINKFLAGS=flags)
         tests.append(testprog)
 

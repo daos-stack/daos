@@ -1,5 +1,5 @@
 #!python
-# Copyright (C) 2016 Intel Corporation
+# Copyright (C) 2016-2017 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -47,12 +47,12 @@ def scons():
 
     tenv = env.Clone()
     tenv.Append(CPPPATH=['#/src/self_test'])
-    tenv.AppendUnique(CPPPATH=['#/src/crt'])
+    tenv.AppendUnique(CPPPATH=['#/src/cart'])
 
-    libraries = ['pthread', 'm', 'crt', 'crt_util']
+    libraries = ['pthread', 'm', 'cart', 'pouch']
     tenv.AppendUnique(LIBS=libraries)
     prereqs.require(tenv, 'mercury', 'pmix', 'argobots')
-    tenv.AppendUnique(LIBPATH=['#/src/crt'])
+    tenv.AppendUnique(LIBPATH=['#/src/cart'])
     tenv.AppendUnique(RPATH="$PREFIX/lib")
     tenv.AppendUnique(FLAGS='-pthread')
 

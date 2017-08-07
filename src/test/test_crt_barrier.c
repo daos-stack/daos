@@ -38,8 +38,8 @@
  * This file is a simple test of the crt_barrier API
  */
 #include <pthread.h>
-#include <crt_api.h>
-#include <crt_util/common.h>
+#include <cart/api.h>
+#include <pouch/common.h>
 
 #define NUM_BARRIERS 20
 

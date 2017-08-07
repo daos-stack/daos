@@ -38,9 +38,9 @@
 """Build cart src"""
 import os
 
-HEADERS = ['crt_api.h', 'crt_iv.h', 'crt_types.h', 'crt_errno.h']
-HEADERS_UTIL = ['clog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
-                'heap.h', 'path.h']
+HEADERS = ['api.h', 'iv.h', 'types.h', 'errno.h', 'lm.h']
+HEADERS_POUCH = ['clog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
+                 'heap.h', 'path.h']
 
 def scons():
     """Scons function"""
@@ -48,16 +48,17 @@ def scons():
     Import('env prereqs')
 
     # Generic CaRT includes
-    env.Append(CPPPATH=['#/src/include'])
+    env.Append(CPPPATH=['$PREFIX/include'])
     for header in HEADERS:
-        env.Install(os.path.join('$PREFIX', 'include'), 'include/%s' % header)
-    for header in HEADERS_UTIL:
-        env.Install(os.path.join('$PREFIX', 'include', 'crt_util'),
-                    'include/crt_util/%s' % header)
+        env.Install(os.path.join('$PREFIX', 'include', 'cart'),
+                    os.path.join('include', 'cart', header))
+    for header in HEADERS_POUCH:
+        env.Install(os.path.join('$PREFIX', 'include', 'pouch'),
+                    os.path.join('include', 'pouch', header))
 
     # Generate the common libraries used by everyone
-    SConscript('util/SConscript', exports=["env", "prereqs"])
-    SConscript('crt/SConscript', exports=["env", "prereqs"])
+    SConscript('pouch/SConscript', exports=["env", "prereqs"])
+    SConscript('cart/SConscript', exports=["env", "prereqs"])
 
     # Builders
     SConscript('test/SConscript', exports=["env", "prereqs"])
@@ -68,7 +69,7 @@ def scons():
     # Build the unit tests
     SConscript('utest/SConscript', exports=["env", "prereqs"])
 
-    Default('util', 'crt', 'test', 'self_test')
+    Default('pouch', 'cart', 'test', 'self_test')
 
 if __name__ == "SCons.Script":
     scons()

@@ -1,5 +1,5 @@
-#!/bin/sh
-# Copyright (C) 2016 Intel Corporation
+#!python
+# Copyright (C) 2016-2017 Intel Corporation
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -35,24 +35,30 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""Build cart src"""
 
-if [ ! -d "scons_local" ];then
-  cd ..
-fi
+def scons():
+    """Scons function"""
+    Import('env', 'prereqs')
 
-flist="-s SConstruct -s src/SConscript -s src/cart/SConscript"
-flist+=" -s src/pouch/SConscript -s src/utest/SConscript"
-flist+=" -s src/test/SConscript -s test/SConscript"
-flist+=" -s src/utest/SConscript"
+    env.AppendUnique(LIBPATH=[Dir('.')])
 
-for f in test/*.py ; do
-  [[ -f "$f" ]] || continue
-  flist+=" -P3 $f"
-done
+    denv = env.Clone()
 
-./scons_local/check_python.sh $flist
+    libraries = ['pouch']
 
-if [ $? -ne 0 ]; then
-  exit 1
-fi
-exit 0
+    denv.Append(CPPPATH=['#/src/cart'])
+    denv.AppendUnique(LIBS=libraries)
+    prereqs.require(denv, 'mercury', 'pmix', 'argobots')
+    denv.AppendUnique(RPATH=['$PREFIX/lib'])
+
+    crt_targets = denv.SharedObject(Glob('*.c'))
+    crt = denv.SharedLibrary('libcart', crt_targets)
+    denv.Install('$PREFIX/lib/', crt)
+
+    Default(crt)
+
+    Export('crt_targets')
+
+if __name__ == "SCons.Script":
+    scons()

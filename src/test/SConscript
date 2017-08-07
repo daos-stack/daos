@@ -52,10 +52,10 @@ def scons():
     Import('env', 'prereqs')
 
     tenv = env.Clone()
-    tenv.Append(CPPPATH=['#/src/test', '#/src/crt'])
+    tenv.Append(CPPPATH=['#/src/test', '#/src/cart'])
     tenv.AppendUnique(RPATH="$PREFIX/lib")
 
-    libraries = ['crt_util', 'crt', 'pthread']
+    libraries = ['pouch', 'cart', 'pthread']
     tenv.AppendUnique(LIBS=libraries)
 
     prereqs.require(tenv, 'crypto', 'pmix', 'mercury')

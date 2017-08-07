@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,8 +42,8 @@
 #ifndef __CRT_ECHO_H__
 #define __CRT_ECHO_H__
 
-#include <crt_util/common.h>
-#include <crt_api.h>
+#include <pouch/common.h>
+#include <cart/api.h>
 
 #include <unistd.h>
 #include <stdio.h>

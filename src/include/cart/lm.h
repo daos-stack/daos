@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,15 +36,37 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * This is a compile test to ensure that cart can be compiled with -pedantic
+ * CaRT (Collective and RPC Transport) fault tolerance module management APIs.
  */
-#include <cart/api.h>
-#include <cart/iv.h>
-#include <cart/errno.h>
-#include <cart/types.h>
 
-int main(void)
-{
+#ifndef __CRT_LM_H__
+#define __CRT_LM_H__
 
-	return 0;
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
+#include <pouch/common.h>
+
+/**
+ * Enable the fault tolerance module. This function should be called by every
+ * rank in the same group, and should be called after crt_init(). This function
+ * will:
+ *	1) turn on cart context progress callbacks
+ *	2) turn on RAS notification event handlers
+ */
+void
+crt_lm_init(void);
+
+/**
+ * Finilize the fault tolerance module. This function should be called before
+ * crt_finalize().
+ */
+void
+crt_lm_finalize(void);
+
+#if defined(__cplusplus)
 }
+#endif
+
+#endif /* __CRT_LM_H__ */

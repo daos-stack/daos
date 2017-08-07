@@ -1,4 +1,4 @@
-/* Copyright (C) 2016 Intel Corporation
+/* Copyright (C) 2016-2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,15 +36,10 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * This is a compile test to ensure that cart can be compiled with -pedantic
+ * This file is part of CaRT.
  */
-#include <cart/api.h>
-#include <cart/iv.h>
 #include <cart/errno.h>
-#include <cart/types.h>
 
-int main(void)
-{
+#define CRT_ERRNO_GEN_ERRSTR
 
-	return 0;
-}
+#include <cart/errno.h>
