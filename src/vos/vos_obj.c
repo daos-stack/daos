@@ -944,7 +944,7 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	PMEMobjpool		*pop;
 	int			rc;
 
-	D_DEBUG(DF_VOS2, "Update "DF_UOID", desc_nr %d, cookie "DF_UUID" epoch "
+	D_DEBUG(DB_IO, "Update "DF_UOID", desc_nr %d, cookie "DF_UUID" epoch "
 		DF_U64"\n", DP_UOID(oid), iod_nr, DP_UUID(cookie), epoch);
 
 	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, &obj);
@@ -1080,7 +1080,7 @@ vos_zcc_destroy(struct vos_zc_context *zcc, int err)
 
 			} TX_ONABORT {
 				err = umem_tx_errno(err);
-				D_DEBUG(DF_VOS1,
+				D_DEBUG(DB_IO,
 					"Failed to free zcbuf: %d\n", err);
 			} TX_END
 		}
@@ -1153,7 +1153,7 @@ vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
 	if (rc != 0)
 		goto failed;
 
-	D_DEBUG(DF_VOS2, "Prepared zcbufs for fetching %d iods\n", iod_nr);
+	D_DEBUG(DB_IO, "Prepared zcbufs for fetching %d iods\n", iod_nr);
 	*ioh = vos_zcc2ioh(zcc);
 	return 0;
  failed:
@@ -1312,13 +1312,13 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 					  zcc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D_DEBUG(DF_VOS1, "Failed to update object: %d\n", rc);
+		D_DEBUG(DB_IO, "Failed to update object: %d\n", rc);
 	} TX_END
 
 	if (rc != 0)
 		goto failed;
 
-	D_DEBUG(DF_VOS2, "Prepared zcbufs for updating %d arrays\n", iod_nr);
+	D_DEBUG(DB_IO, "Prepared zcbufs for updating %d arrays\n", iod_nr);
 	*ioh = vos_zcc2ioh(zcc);
 	return 0;
  failed:
@@ -1350,12 +1350,12 @@ vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
 	pop = vos_obj2pop(zcc->zc_obj);
 
 	TX_BEGIN(pop) {
-		D_DEBUG(DF_VOS1, "Submit ZC update\n");
+		D_DEBUG(DB_IO, "Submit ZC update\n");
 		err = dkey_update(zcc->zc_obj, zcc->zc_epoch, cookie,
 				  pm_ver, dkey, iod_nr, iods, NULL, zcc);
 	} TX_ONABORT {
 		err = umem_tx_errno(err);
-		D_DEBUG(DF_VOS1, "Failed to submit ZC update: %d\n", err);
+		D_DEBUG(DB_IO, "Failed to submit ZC update: %d\n", err);
 	} TX_END
 
 	D_EXIT;
@@ -1372,7 +1372,7 @@ vos_obj_zc_sgl_at(daos_handle_t ioh, unsigned int idx, daos_sg_list_t **sgl_pp)
 	D_ASSERT(zcc->zc_iobufs != NULL);
 	if (idx >= zcc->zc_iod_nr) {
 		*sgl_pp = NULL;
-		D_DEBUG(DF_VOS1, "Invalid iod index %d/%d.\n",
+		D_DEBUG(DB_IO, "Invalid iod index %d/%d.\n",
 			idx, zcc->zc_iod_nr);
 		return -DER_NONEXIST;
 	}
@@ -1749,7 +1749,7 @@ singv_iter_probe(struct vos_obj_iter *oiter, daos_hash_out_t *anchor)
 		if (memcmp(anchor, &tmp, sizeof(tmp)) == 0)
 			return 0;
 
-		D_DEBUG(DF_VOS2, "Can't find the provided anchor\n");
+		D_DEBUG(DB_IO, "Can't find the provided anchor\n");
 		/**
 		 * the original recx has been merged/discarded, so we need to
 		 * call singv_iter_probe_epr() and check if the current record
@@ -1930,7 +1930,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		D_GOTO(failed, rc);
 
 	if (vos_obj_is_new(oiter->it_obj)) {
-		D_DEBUG(DF_VOS2, "New object, nothing to iterate\n");
+		D_DEBUG(DB_IO, "New object, nothing to iterate\n");
 		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 

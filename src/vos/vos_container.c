@@ -87,8 +87,7 @@ cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 
 	D_ASSERT(key_iov->iov_len == sizeof(struct daos_uuid));
 	ukey = (struct daos_uuid *)key_iov->iov_buf;
-	D_DEBUG(DF_VOS3, "Allocating record for container: %s\n",
-		DP_UUID(ukey->uuid));
+	D_DEBUG(DB_DF, "Allocating container uuid=%s\n", DP_UUID(ukey->uuid));
 
 	args = (struct cont_df_args *)(val_iov->iov_buf);
 	cont_mmid = umem_znew_typed(&tins->ti_umm, struct vos_cont_df);
@@ -105,7 +104,7 @@ cont_df_rec_alloc(struct btr_instance *tins, daos_iov_t *key_iov,
 		D_GOTO(exit, rc);
 	}
 	rec->rec_mmid = umem_id_t2u(cont_mmid);
-
+	D_EXIT;
 exit:
 	if (rc != 0)
 		cont_df_rec_free(tins, rec, NULL);
@@ -132,7 +131,7 @@ static int
 cont_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		   daos_iov_t *key, daos_iov_t *val)
 {
-	D_DEBUG(DF_VOS3, "Record exists already. Nothing to do\n");
+	D_DEBUG(DB_DF, "Record exists already. Nothing to do\n");
 	return 0;
 }
 
@@ -245,7 +244,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DF_VOS3, "looking up co_id in container index\n");
+	D_DEBUG(DB_TRACE, "looking up co_id in container index\n");
 	uuid_copy(ukey.uuid, co_uuid);
 	args.ca_pool = vpool;
 
@@ -289,10 +288,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	struct cont_df_args		args;
 	struct vos_container		*cont = NULL;
 
-	D_DEBUG(DF_VOS2, "Open container "DF_UUID"\n", DP_UUID(co_uuid));
-	D_DEBUG(DF_VOS2, "Checking if container handle exists for "DF_UUID"\n",
-		DP_UUID(co_uuid));
-	D_DEBUG(DF_VOS3, "looking up co_id in container index\n");
+	D_DEBUG(DB_TRACE, "Open container "DF_UUID"\n", DP_UUID(co_uuid));
 
 	vpool = vos_hdl2pool(poh);
 	if (vpool == NULL) {
@@ -307,14 +303,14 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	 */
 	rc = cont_lookup(&ukey, &cont);
 	if (rc == 0) {
-		D_DEBUG(DF_VOS2, "Found handle in DRAM UUID hash\n");
+		D_DEBUG(DB_TRACE, "Found handle in DRAM UUID hash\n");
 		*coh = vos_cont2hdl(cont);
 		D_GOTO(exit, rc);
 	}
 
 	rc = cont_df_lookup(vpool, &ukey, &args);
 	if (rc) {
-		D_DEBUG(DF_VOS3, DF_UUID" container does not exist\n",
+		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
 			DP_UUID(co_uuid));
 		D_GOTO(exit, rc);
 	}
@@ -405,7 +401,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	int				 rc;
 
 	uuid_copy(uuid.uuid, co_uuid);
-	D_DEBUG(DF_VOS3, "Destroying CO ID in container index "DF_UUID"\n",
+	D_DEBUG(DB_TRACE, "Destroying CO ID in container index "DF_UUID"\n",
 		DP_UUID(uuid.uuid));
 
 	vpool = vos_hdl2pool(poh);
@@ -423,7 +419,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 
 	rc = cont_df_lookup(vpool, &uuid, &args);
 	if (rc) {
-		D_DEBUG(DF_VOS3, DF_UUID" container does not exist\n",
+		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
 			DP_UUID(co_uuid));
 		D_GOTO(exit, rc);
 	}
@@ -590,7 +586,6 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	struct cont_df_args	args;
 	int			rc;
 
-	D_DEBUG(DF_VOS2, "Container iter co uuid fetch callback\n");
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 
 	daos_iov_set(&key, &ukey, sizeof(struct daos_uuid));
@@ -605,6 +600,7 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	D_ASSERT(value.iov_len == sizeof(struct cont_df_args));
 	uuid_copy(it_entry->ie_couuid, args.ca_cont_df->cd_id);
 
+	D_EXIT;
 	return rc;
 }
 
@@ -636,7 +632,6 @@ cont_iter_delete(struct vos_iterator *iter, void *args)
 	PMEMobjpool		*pop;
 	int			rc  = 0;
 
-	D_DEBUG(DF_VOS2, "co-iter delete callback\n");
 	D_ASSERT(iter->it_type == VOS_ITER_COUUID);
 	pop = vos_pool_ptr2pop(co_iter->cot_pool);
 
@@ -644,9 +639,10 @@ cont_iter_delete(struct vos_iterator *iter, void *args)
 		rc = dbtree_iter_delete(co_iter->cot_hdl, args);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D_DEBUG(DF_VOS2, "Failed to delete oid entry: %d\n", rc);
+		D_ERROR("Failed to delete oid entry: %d\n", rc);
 	} TX_END
 
+	D_EXIT;
 	return rc;
 }
 

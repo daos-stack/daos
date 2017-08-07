@@ -104,9 +104,6 @@ extern bool dd_tune_alloc;
 #define DB_NULL		0
 
 /** XXX Temporary things, should be replaced by debug bits above */
-#define DF_VOS1		DB_ANY
-#define DF_VOS2		DB_ANY
-#define DF_VOS3		DB_ANY
 #define DF_DSMC		DB_ANY
 #define DF_DSMS		DB_ANY
 #define DF_TIER		DB_ANY

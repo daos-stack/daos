@@ -71,7 +71,7 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	lkey = (struct obj_lru_key *)key;
 	D_ASSERT(lkey != NULL);
 
-	D_DEBUG(DF_VOS2, "cont="DF_UUID", obj="DF_UOID"\n",
+	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_obj_id));
 
 	/**
@@ -106,7 +106,7 @@ obj_lop_cmp_key(const void *key, unsigned int ksize, struct daos_llink *llink)
 	struct vos_object	*obj;
 	struct obj_lru_key	*hkey = (struct obj_lru_key *) key;
 
-	D_DEBUG(DF_VOS3, "LRU compare keys\n");
+	D_DEBUG(DB_TRACE, "LRU compare keys\n");
 	D_ASSERT(llink);
 	D_ASSERT(ksize == sizeof(struct obj_lru_key));
 
@@ -122,7 +122,7 @@ obj_lop_free(struct daos_llink *llink)
 {
 	struct vos_object	*obj;
 
-	D_DEBUG(DF_VOS3, "lru free callback for vos_obj_cache\n");
+	D_DEBUG(DB_TRACE, "lru free callback for vos_obj_cache\n");
 	D_ASSERT(llink);
 
 	obj = container_of(llink, struct vos_object, obj_llink);
@@ -139,7 +139,7 @@ obj_lop_print_key(void *key, unsigned int ksize)
 	struct obj_lru_key	*lkey = (struct obj_lru_key *)key;
 
 	D_ASSERT(lkey != NULL);
-	D_DEBUG(DF_VOS2, "cont="DF_UUID", obj="DF_UOID"\n",
+	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(lkey->olk_co_uuid), DP_UOID(lkey->olk_obj_id));
 }
 
@@ -155,7 +155,7 @@ vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
 {
 	int	rc;
 
-	D_DEBUG(DF_VOS2, "Creating an object cache %d\n", (1 << cache_size));
+	D_DEBUG(DB_TRACE, "Creating an object cache %d\n", (1 << cache_size));
 	rc = daos_lru_cache_create(cache_size, DHASH_FT_NOLOCK,
 				   &obj_lru_ops, occ);
 	if (rc)
@@ -221,7 +221,7 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	D_DEBUG(DF_VOS2, "Try to hold cont="DF_UUID", obj="DF_UOID"\n",
+	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(cont->vc_id), DP_UOID(oid));
 
 	/* Create the key for obj cache */

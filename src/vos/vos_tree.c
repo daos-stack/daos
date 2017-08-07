@@ -644,13 +644,13 @@ vos_obj_tree_init(struct vos_object *obj)
 		return 0;
 
 	if (vos_obj_is_new(obj)) {
-		D_DEBUG(DF_VOS2, "Create btree for object\n");
+		D_DEBUG(DB_DF, "Create btree for object\n");
 		rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats,
 					   ta->ta_order, vos_obj2uma(obj),
 					   &obj->obj_df->vo_tree,
 					   &obj->obj_toh);
 	} else {
-		D_DEBUG(DF_VOS2, "Open btree for object\n");
+		D_DEBUG(DB_DF, "Open btree for object\n");
 		rc = dbtree_open_inplace(&obj->obj_df->vo_tree,
 					 vos_obj2uma(obj), &obj->obj_toh);
 	}
@@ -685,7 +685,7 @@ vos_obj_tree_register(void)
 			D_ERROR("Failed to register %s: %d\n", ta->ta_name, rc);
 			break;
 		}
-		D_DEBUG(DF_VOS2, "Register tree type %s\n", ta->ta_name);
+		D_DEBUG(DB_TRACE, "Register tree type %s\n", ta->ta_name);
 	}
 	return rc;
 }
@@ -714,7 +714,7 @@ vos_obj_sub_tree_attr(unsigned tree_class)
 	for (i = 0;; i++) {
 		struct vos_btr_attr *ta = &vos_btr_attrs[i];
 
-		D_DEBUG(DF_VOS2, "ta->ta_class: %d, tree_class: %d\n",
+		D_DEBUG(DB_TRACE, "ta->ta_class: %d, tree_class: %d\n",
 			ta->ta_class, tree_class);
 
 		if (ta->ta_class == tree_class)

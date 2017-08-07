@@ -1146,7 +1146,8 @@ io_oid_iter_test(struct io_test_args *arg)
 			goto out;
 		}
 
-		D_DEBUG(DF_VOS3, "Object ID: "DF_UOID"\n", DP_UOID(ent.ie_oid));
+		D_DEBUG(DB_TRACE, "Object ID: "DF_UOID"\n",
+			DP_UOID(ent.ie_oid));
 		nr++;
 
 		rc = vos_iter_next(ih);

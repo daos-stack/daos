@@ -175,7 +175,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	int				rc = 0;
 	daos_iov_t			key_iov, val_iov;
 
-	D_DEBUG(DF_VOS2, "Lookup obj "DF_UOID" in the OI table.\n",
+	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
 		DP_UOID(oid));
 
 	daos_iov_set(&key_iov, &oid, sizeof(daos_unit_oid_t));
@@ -186,7 +186,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		return rc;
 
 	/* Object ID not found insert it to the OI tree */
-	D_DEBUG(DF_VOS1, "Object"DF_UOID" not found adding it..\n",
+	D_DEBUG(DB_TRACE, "Object"DF_UOID" not found adding it..\n",
 		DP_UOID(oid));
 
 	rc = dbtree_update(cont->vc_btr_hdl, &key_iov, &val_iov);
@@ -301,7 +301,6 @@ vos_oid_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	daos_iov_t		 rec_iov;
 	int			 rc;
 
-	D_DEBUG(DF_VOS2, "obj-iter oid fetch callback\n");
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
 	daos_iov_set(&rec_iov, NULL, 0);
@@ -314,7 +313,7 @@ vos_oid_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	D_ASSERT(rec_iov.iov_len == sizeof(struct vos_obj_df));
 	obj_df = (struct vos_obj_df *)rec_iov.iov_buf;
 	it_entry->ie_oid = obj_df->vo_id;
-
+	D_EXIT;
 	return 0;
 }
 
@@ -325,7 +324,6 @@ vos_oid_iter_delete(struct vos_iterator *iter, void *args)
 	PMEMobjpool		*pop;
 	int			rc = 0;
 
-	D_DEBUG(DF_VOS2, "oid-iter delete callback\n");
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 	pop = vos_cont2pop(oiter->oit_cont);
 
@@ -333,8 +331,9 @@ vos_oid_iter_delete(struct vos_iterator *iter, void *args)
 		rc = dbtree_iter_delete(oiter->oit_hdl, args);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D_DEBUG(DF_VOS1, "Failed to delete oid entry: %d\n", rc);
+		D_ERROR("Failed to delete oid entry: %d\n", rc);
 	} TX_END
+	D_EXIT;
 
 	return rc;
 }
