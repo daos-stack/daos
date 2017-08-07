@@ -104,13 +104,20 @@ class CommonTestSuite(unittest.TestCase):
         else:
             base_port = 22000
 
+        avail_socket = None
+
         # Get a unique value and "reserve" 40 ports
+        # This only tests the availability of the 1st port in the range but
+        # it is assumed that if the first port is free the others likely
+        # are as well.
         for i in range(10):
             hash_value = (int(md5hash.hexdigest(), 16) % 300) * (40 + i)
             port_number = base_port + hash_value
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 s.bind(("127.0.0.1", port_number))
+                s.close()
+                avail_socket = port_number
                 break
             except socket.error as e:
                 if e.errno == 98:
@@ -118,11 +125,12 @@ class CommonTestSuite(unittest.TestCase):
                 else:
                     # something else raised the socket.error exception
                     self.logger.info(e)
-            s.shutdown()
             s.close()
 
-        self.logger.info("Setting OFI ports to %s: %s", port_name, port_number)
-        return port_number
+        self.logger.info("Setting OFI ports to %s: %s", port_name, avail_socket)
+
+        assert avail_socket != None
+        return avail_socket
 
     def launch_test(self, testdesc, NPROC, env, **kwargs):
         """Method creates the Client or Client and Server arguments
