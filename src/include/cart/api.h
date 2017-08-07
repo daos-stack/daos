@@ -36,7 +36,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * CaRT (Collective and RPC Transport) APIs.
+ * CaRT (Collective and RPC Transport) API. All functions in this API can be
+ * called on both the server side and client side unless stated otherwise.
  */
 
 #ifndef __CRT_API_H__
@@ -56,7 +57,9 @@ extern "C" {
 #endif
 
 /**
- * Initialize CRT transport layer.
+ * Initialize CRT transport layer. Must be called on both the server side and
+ * the client side. This function is reference counted, it can be called
+ * multiple times. Each call must be paired with a corresponding crt_finalize().
  *
  * \param grpid [IN]		primary group ID, user can provide a NULL value
  *				in that case will use the default group ID,
@@ -74,7 +77,8 @@ int
 crt_init(crt_group_id_t grpid, uint32_t flags);
 
 /**
- * Create CRT transport context.
+ * Create CRT transport context. Must be destroyed by crt_context_destroy()
+ * before calling crt_finalize().
  *
  * \param arg [IN]		input argument, now the only usage is passing
  *				argobots pool pointer. If user does not use
@@ -127,7 +131,8 @@ int
 crt_context_num(int *ctx_num);
 
 /**
- * Finalize CRT transport layer.
+ * Finalize CRT transport layer. Must be called on both the server side and
+ * client side before exit. This function is reference counted.
  *
  * \return                      zero on success, negative value if error
  *
@@ -177,8 +182,8 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
  *        crt_rpc_t::dr_input and send the RPC request.
  *        When the RPC request finishes executing, CRT internally frees the
  *        RPC request and the input/output buffers, so user needs not to call
- *        crt_req_destroy (no such API exported) or free the input/output
- *        buffers.
+ *        crt_req_destroy (no such function exported) or free the
+ *        input/output buffers.
  *        Similarly, on the RPC server-side, when an RPC request received, CRT
  *        internally allocates input/output buffers as well, and internally
  *        frees those buffers when the reply is sent out. So in user's RPC
@@ -193,10 +198,10 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 /**
  * Set the timeout value for an RPC request.
  *
- * It is an optional API. If user does not call it, then will depend on
+ * It is an optional function. If user does not call it, then will depend on
  * CRT_TIMEOUT ENV as timeout value (see the CRT_TIMEOUT section in README.env).
  * User can also explicitly set one RPC request's timeout value by calling this
- * API.
+ * function.
  *
  * \param req [IN]              pointer to RPC request
  * \param timeout_sec [IN]      timeout value in seconds
@@ -213,9 +218,10 @@ crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec);
  *
  * The typical usage is that user needs to do some asynchronous operations in
  * RPC handler and does not want to block in RPC handler, then it can call this
- * API to hold a reference and return. Later when that asynchronous operation is
- * done, it can release the reference (/see crt_req_decref). CRT internally
- * frees the resource of the RPC request when its reference drops to zero.
+ * function to hold a reference and return. Later when that asynchronous
+ * operation is done, it can release the reference (/see crt_req_decref). CRT
+ * internally frees the resource of the RPC request when its reference drops to
+ * zero.
  *
  * \param req [IN]              pointer to RPC request
  *
@@ -260,7 +266,7 @@ int
 crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg);
 
 /**
- * Send an RPC reply.
+ * Send an RPC reply. Only to be called on the server side.
  *
  * \param req [IN]              pointer to RPC request
  *
@@ -501,7 +507,7 @@ enum crt_tree_type {
 #define CRT_TREE_MIN_RATIO	(2)
 
 /*
- * Calculate the tree topology.
+ * Calculate the tree topology. Can only be called on the server side.
  *
  * \param tree_type [IN]	tree type
  * \param branch_ratio [IN]	branch ratio, be ignored for CRT_TREE_FLAT.
@@ -565,7 +571,8 @@ typedef int (*crt_grp_create_cb_t)(crt_group_t *grp, void *priv, int status);
 typedef int (*crt_grp_destroy_cb_t)(void *args, int status);
 
 /*
- * Create CRT sub-group (a subset of the primary group).
+ * Create CRT sub-group (a subset of the primary group). Can only be called on
+ * the server side.
  *
  * \param grp_id [IN]		unique group ID.
  * \param member_ranks [IN]	rank list of members for the group.
@@ -615,8 +622,9 @@ crt_group_t *
 crt_group_lookup(crt_group_id_t grp_id);
 
 /*
- * Destroy a CRT group. Can either call this API or pass a special flag -
- * CRT_RPC_FLAG_GRP_DESTROY to a broadcast RPC to destroy the group.
+ * Destroy a CRT group. Can either call this function or pass a special flag -
+ * CRT_RPC_FLAG_GRP_DESTROY to a broadcast RPC to destroy the group. Can only be
+ * called on the server side.
  *
  * \param grp [IN]		group handle to be destroyed.
  * \param grp_destroy_cb [IN]	optional completion callback.
@@ -631,7 +639,7 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 /*
  * Attach to a primary service group.
  *
- * By calling this API to attach to service primary group, and set
+ * By calling this function to attach to service primary group, and set
  * crt_endpoint_t::ep_grp as the returned attached_grp to send RPC to it.
  *
  * For client, the first attached service primary group become its default
@@ -689,6 +697,7 @@ crt_group_detach(crt_group_t *attached_grp);
 
 /*
  * Create collective RPC request. Can reuse the crt_req_send to broadcast it.
+ * Can only be called on the server side.
  *
  * \param crt_ctx [IN]		CRT context
  * \param grp [IN]		CRT group for the collective RPC
@@ -719,7 +728,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		     int tree_topo, crt_rpc_t **req);
 
 /**
- * Dynamically register a collective RPC.
+ * Dynamically register a collective RPC. Can only be called on the server side.
  *
  * \param opc [IN]		unique opcode for the RPC
  * \param drf [IN]		pointer to the request format, which
@@ -747,7 +756,8 @@ crt_corpc_register(crt_opcode_t opc, struct crt_req_format *drf,
 
 /**
  * Start execution of the next available barrier.  If this function
- * returns an error, no internal state is changed.
+ * returns an error, no internal state is changed. Can only be called on the
+ * server side.
  *
  * \param grp [IN]		CRT group handle [for future use].   Only the
  *                              primary service group is presently supported
