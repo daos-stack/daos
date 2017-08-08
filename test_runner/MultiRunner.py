@@ -88,15 +88,19 @@ class MultiRunner(PostRunner.PostRunner):
     def stop_daemon(self):
         """ post run processing """
         self.logger.info("TestRunner: tearDown daemon begin")
-        self.daemon.stop_process()
+        rc = self.daemon.stop_process()
+        if rc == 0:
+            rtnstr = "PASS"
+        else:
+            rtnstr = "FAIL"
         module_name = str(self.test_info.get_test_info('use_daemon', 'name'))
         logDir = os.path.join(self.logdir, module_name)
         self.check_log_mode(logDir)
-        rtn_info = {'duration' : 0, 'return_code' : 0,
-                    'status' : "PASS", 'name' : module_name,
+        rtn_info = {'duration' : 0, 'return_code' : rc,
+                    'status' : rtnstr, 'name' : module_name,
                     'error' : ""}
         self.daemon_results.update_subtest_results(rtn_info)
-        self.daemon_results.update_testset_results(status="PASS")
+        self.daemon_results.update_testset_results(status=rtnstr)
         self.test_logtopdir(self.daemon_results)
         self.daemon_results.create_test_set_results()
         del self.daemon
