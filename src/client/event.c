@@ -78,7 +78,7 @@ static unsigned int refcount;
  * Pointer to global scheduler for events not part of an EQ. Events initialized
  * as part of an EQ will be tracked in that EQ scheduler.
  */
-static struct daos_sched daos_sched_g;
+static tse_sched_t daos_sched_g;
 
 int
 daos_eq_lib_init()
@@ -111,7 +111,7 @@ daos_eq_lib_init()
 	}
 
 	/** set up scheduler for non-eq events */
-	rc = daos_sched_init(&daos_sched_g, NULL, daos_eq_ctx);
+	rc = tse_sched_init(&daos_sched_g, NULL, daos_eq_ctx);
 	if (rc != 0)
 		D_GOTO(crt, rc);
 
@@ -140,7 +140,7 @@ daos_eq_lib_fini()
 		D_GOTO(unlock, rc = 0);
 	}
 
-	daos_sched_complete(&daos_sched_g, 0, true);
+	tse_sched_complete(&daos_sched_g, 0, true);
 
 	if (daos_eq_ctx != NULL) {
 		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
@@ -511,7 +511,7 @@ ev_progress_cb(void *arg)
 	struct daos_event_private       *evx = epa->evx;
 	struct daos_eq_private		*eqx = epa->eqx;
 
-	daos_sched_progress(evx->evx_sched);
+	tse_sched_progress(evx->evx_sched);
 
 	/** If another thread progressed this, get out now. */
 	if (evx->evx_status == DAOS_EVS_READY)
@@ -632,7 +632,7 @@ daos_eq_create(daos_handle_t *eqh)
 	eqx->eqx_ctx = daos_eq_ctx;
 	daos_eq_handle(eqx, eqh);
 
-	rc = daos_sched_init(&eqx->eqx_sched, NULL, daos_eq_ctx);
+	rc = tse_sched_init(&eqx->eqx_sched, NULL, daos_eq_ctx);
 
 	daos_eq_putref(eqx);
 	return rc;
@@ -657,7 +657,7 @@ eq_progress_cb(void *arg)
 
 	eq = daos_eqx2eq(epa->eqx);
 
-	daos_sched_progress(&epa->eqx->eqx_sched);
+	tse_sched_progress(&epa->eqx->eqx_sched);
 
 	pthread_mutex_lock(&epa->eqx->eqx_lock);
 	daos_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
@@ -884,7 +884,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	}
 	eqx->eqx_ctx = NULL;
 
-	daos_sched_complete(&eqx->eqx_sched, rc, true);
+	tse_sched_complete(&eqx->eqx_sched, rc, true);
 
 out:
 	pthread_mutex_unlock(&eqx->eqx_lock);
@@ -1201,16 +1201,16 @@ daos_event_priv_wait()
 	return rc;
 }
 
-struct daos_sched *
+tse_sched_t *
 daos_ev2sched(struct daos_event *ev)
 {
 	return daos_ev2evx(ev)->evx_sched;
 }
 
 crt_context_t *
-daos_task2ctx(struct daos_task *task)
+daos_task2ctx(tse_task_t *task)
 {
-	struct daos_sched *sched = daos_task2sched(task);
+	tse_sched_t *sched = tse_task2sched(task);
 
 	D_ASSERT(sched->ds_udata != NULL);
 	return (crt_context_t *)sched->ds_udata;
@@ -1221,7 +1221,7 @@ daos_task2ctx(struct daos_task *task)
  * event APIs.
  */
 static int
-daos_event_comp_cb(struct daos_task *task, void *data)
+daos_event_comp_cb(tse_task_t *task, void *data)
 {
 	daos_event_t   *ev = *((daos_event_t **)data);
 	int		rc = task->dt_result;
@@ -1232,16 +1232,16 @@ daos_event_comp_cb(struct daos_task *task, void *data)
 }
 
 /**
- * The daos client internal will use daos_task, this function will
+ * The daos client internal will use tse_task, this function will
  * initialize the daos task/scheduler from event, and launch
  * event. This is a convenience function used in the event APIs.
  */
 int
-daos_client_task_prep(void *arg, int arg_size, struct daos_task **taskp,
+daos_client_task_prep(void *arg, int arg_size, tse_task_t **taskp,
 		      daos_event_t **evp)
 {
 	daos_event_t *ev = *evp;
-	struct daos_task *task = NULL;
+	tse_task_t *task = NULL;
 	int rc;
 
 	if (ev == NULL) {
@@ -1251,12 +1251,12 @@ daos_client_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 		*evp = ev;
 	}
 
-	rc = daos_task_init(NULL, arg, arg_size, daos_ev2sched(ev), &task);
+	rc = tse_task_init(NULL, arg, arg_size, daos_ev2sched(ev), &task);
 	if (rc != 0)
 		return rc;
 
-	rc = daos_task_register_comp_cb(task, daos_event_comp_cb, &ev,
-					sizeof(ev));
+	rc = tse_task_register_comp_cb(task, daos_event_comp_cb, &ev,
+				       sizeof(ev));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
@@ -1264,7 +1264,7 @@ daos_client_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_schedule(task, false);
+	rc = tse_task_schedule(task, false);
 	if (rc != 0)
 		return rc;
 
@@ -1279,10 +1279,10 @@ err_task:
 
 int
 dc_task_create(daos_opc_t opc, void *arg, int arg_size,
-	       struct daos_task **taskp, daos_event_t **evp)
+	       tse_task_t **taskp, daos_event_t **evp)
 {
 	daos_event_t *ev = *evp;
-	struct daos_task *task = NULL;
+	tse_task_t *task = NULL;
 	int rc;
 
 	if (ev == NULL) {
@@ -1297,8 +1297,8 @@ dc_task_create(daos_opc_t opc, void *arg, int arg_size,
 		return rc;
 
 	/** register a comp cb on the task to complete the event */
-	rc = daos_task_register_comp_cb(task, daos_event_comp_cb,
-					&ev, sizeof(ev));
+	rc = tse_task_register_comp_cb(task, daos_event_comp_cb,
+				       &ev, sizeof(ev));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
@@ -1306,7 +1306,7 @@ dc_task_create(daos_opc_t opc, void *arg, int arg_size,
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_schedule(task, true);
+	rc = tse_task_schedule(task, true);
 	if (rc != 0)
 		return rc;
 

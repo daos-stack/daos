@@ -44,7 +44,7 @@ struct tier_fetch_arg {
 	crt_rpc_t	*rpc;
 	struct dc_pool	*pool;
 	daos_handle_t	 hdl;
-	struct daos_task *subtask;
+	tse_task_t *subtask;
 	int		 *prc;
 };
 
@@ -53,7 +53,7 @@ struct tier_fetch_co_cr_arg {
 };
 
 static int
-tier_fetch_cb(struct daos_task *task, void *data)
+tier_fetch_cb(tse_task_t *task, void *data)
 {
 	struct tier_fetch_arg	*arg = (struct tier_fetch_arg *)data;
 	struct tier_fetch_out	*tfo;
@@ -86,7 +86,7 @@ out:
 }
 
 static int
-tier_fetch_cont_create_cb(struct daos_task *task, void *data)
+tier_fetch_cont_create_cb(tse_task_t *task, void *data)
 {
 	struct tier_fetch_co_cr_arg *arg = (struct tier_fetch_co_cr_arg *)data;
 	int			     rc = task->dt_result;
@@ -98,16 +98,16 @@ tier_fetch_cont_create_cb(struct daos_task *task, void *data)
 int
 dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		   daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
-		   struct daos_task *task)
+		   tse_task_t *task)
 {
 	struct tier_fetch_in	*in;
-	struct daos_sched	*sched;
+	tse_sched_t		*sched;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
 	struct tier_fetch_arg	arg;
 	int			rc = 0;
 	daos_tier_info_t	*from;
-	struct daos_task	*cont_open_task;
+	tse_task_t		*cont_open_task;
 	struct tier_fetch_co_cr_arg co_args;
 	int			*prc;
 	struct daos_task_args   *dta;
@@ -125,21 +125,21 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		D_GOTO(out, -DER_NOMEM);
 	}
 
-	sched = daos_task2sched(task);
+	sched = tse_task2sched(task);
 	co_args.prc = prc;
 	*prc = 1;
-	rc = daos_task_init(dc_cont_create, NULL, 0, sched, &cont_open_task);
+	rc = tse_task_init(dc_cont_create, NULL, 0, sched, &cont_open_task);
 	if (rc != 0)
 		return rc;
 
-	rc = daos_task_register_comp_cb(cont_open_task,
-					tier_fetch_cont_create_cb,
-					&co_args, sizeof(co_args));
+	rc = tse_task_register_comp_cb(cont_open_task,
+				       tier_fetch_cont_create_cb,
+				       &co_args, sizeof(co_args));
 	if (rc != 0) {
-		D_ERROR("daos_task_register_comp_cb returned %d\n", rc);
+		D_ERROR("tse_task_register_comp_cb returned %d\n", rc);
 		return rc;
 	}
-	dta = daos_task_buf_get(cont_open_task, sizeof(*dta));
+	dta = tse_task_buf_get(cont_open_task, sizeof(*dta));
 	dta->opc = DAOS_OPC_CONT_CREATE;
 	dta->priv = NULL;
 
@@ -147,7 +147,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	uuid_copy((unsigned char *)dta->op_args.cont_create.uuid, cont_id);
 
 	/* Create the local recipient container */
-	rc = daos_task_schedule(cont_open_task, true);
+	rc = tse_task_schedule(cont_open_task, true);
 	if (rc) {
 		D_ERROR(" create local container: %d\n", rc);
 		D_GOTO(out, rc);
@@ -183,7 +183,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 
 	arg.subtask = cont_open_task;
 	arg.prc  = prc;
-	rc = daos_task_register_comp_cb(task, tier_fetch_cb, &arg, sizeof(arg));
+	rc = tse_task_register_comp_cb(task, tier_fetch_cb, &arg, sizeof(arg));
 	if (rc != 0)
 		D_GOTO(out_req_put, rc);
 
@@ -195,7 +195,7 @@ out_req_put:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 out_task:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 out:
 	return rc;
 }

@@ -29,7 +29,7 @@
 #define DD_SUBSYS	DD_FAC(client)
 
 #include <daos/common.h>
-#include <daos/scheduler.h>
+#include <daos/tse.h>
 #include <daos/addons.h>
 #include <daos_api.h>
 #include <daos_addons.h>
@@ -43,7 +43,7 @@ struct io_params {
 };
 
 static int
-free_io_params_cb(struct daos_task *task, void *data)
+free_io_params_cb(tse_task_t *task, void *data)
 {
 	struct io_params *params = *((struct io_params **)data);
 
@@ -52,7 +52,7 @@ free_io_params_cb(struct daos_task *task, void *data)
 }
 
 static int
-set_size_cb(struct daos_task *task, void *data)
+set_size_cb(tse_task_t *task, void *data)
 {
 	daos_size_t *buf_size = *((daos_size_t **)data);
 	daos_obj_fetch_t *args;
@@ -68,11 +68,11 @@ set_size_cb(struct daos_task *task, void *data)
 }
 
 int
-dac_kv_put(struct daos_task *task)
+dac_kv_put(tse_task_t *task)
 {
 	daos_kv_put_t		*args;
 	daos_obj_update_t	update_args;
-	struct daos_task	*update_task;
+	tse_task_t		*update_task;
 	struct io_params	*params;
 	int			rc;
 
@@ -111,25 +111,25 @@ dac_kv_put(struct daos_task *task)
 	update_args.iods	= &params->iod;
 	update_args.sgls	= &params->sgl;
 
-	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, daos_task2sched(task),
+	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
 			      &update_args, 0, NULL, &update_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_register_comp_cb(task, free_io_params_cb, &params,
-					sizeof(params));
+	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
+				       sizeof(params));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_register_deps(task, 1, &update_task);
+	rc = tse_task_register_deps(task, 1, &update_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_schedule(update_task, false);
+	rc = tse_task_schedule(update_task, false);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	daos_sched_progress(daos_task2sched(task));
+	tse_sched_progress(tse_task2sched(task));
 
 	return 0;
 
@@ -138,16 +138,16 @@ err_task:
 		D_FREE_PTR(params);
 	if (update_task)
 		D_FREE_PTR(update_task);
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
 int
-dac_kv_get(struct daos_task *task)
+dac_kv_get(tse_task_t *task)
 {
 	daos_kv_get_t		*args;
 	daos_obj_fetch_t	fetch_args;
-	struct daos_task	*fetch_task;
+	tse_task_t		*fetch_task;
 	struct io_params	*params;
 	void			*buf;
 	daos_size_t		*buf_size;
@@ -199,32 +199,32 @@ dac_kv_get(struct daos_task *task)
 	fetch_args.nr		= 1;
 	fetch_args.iods		= &params->iod;
 
-	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, daos_task2sched(task),
+	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),
 			      &fetch_args, 0, NULL, &fetch_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
 	if (*buf_size == DAOS_REC_ANY) {
-		rc = daos_task_register_comp_cb(fetch_task, set_size_cb,
-						&buf_size, sizeof(buf_size));
+		rc = tse_task_register_comp_cb(fetch_task, set_size_cb,
+					       &buf_size, sizeof(buf_size));
 		if (rc != 0)
 			D_GOTO(err_task, rc);
 	}
 
-	rc = daos_task_register_comp_cb(task, free_io_params_cb, &params,
-					sizeof(params));
+	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
+				       sizeof(params));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_register_deps(task, 1, &fetch_task);
+	rc = tse_task_register_deps(task, 1, &fetch_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_schedule(fetch_task, false);
+	rc = tse_task_schedule(fetch_task, false);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	daos_sched_progress(daos_task2sched(task));
+	tse_sched_progress(tse_task2sched(task));
 
 	return 0;
 
@@ -233,24 +233,24 @@ err_task:
 		D_FREE_PTR(params);
 	if (fetch_task)
 		D_FREE_PTR(fetch_task);
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
 int
-dac_kv_remove(struct daos_task *task)
+dac_kv_remove(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
 
 static int
 dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
-	     daos_dkey_io_t *io_array, daos_opc_t opc, struct daos_task *task)
+	     daos_dkey_io_t *io_array, daos_opc_t opc, tse_task_t *task)
 {
 	daos_opc_t	d_opc;
 	int		i;
 	int		rc = 0;
-	struct daos_task **io_tasks;
+	tse_task_t	**io_tasks;
 
 	d_opc = (opc == DAOS_OPC_OBJ_FETCH_MULTI ? DAOS_OPC_OBJ_FETCH :
 		 DAOS_OPC_OBJ_UPDATE);
@@ -270,20 +270,20 @@ dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
 		args.sgls	= io_array[i].ioa_sgls;
 		args.maps	= io_array[i].ioa_maps;
 
-		rc = daos_task_create(d_opc, daos_task2sched(task),
+		rc = daos_task_create(d_opc, tse_task2sched(task),
 				      &args, 0, NULL, &io_tasks[i]);
 		if (rc != 0)
 			D_GOTO(err_task, rc);
 	}
 
-	rc = daos_task_register_deps(task, num_dkeys, io_tasks);
+	rc = tse_task_register_deps(task, num_dkeys, io_tasks);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
 	for (i = 0; i < num_dkeys; i++)
-		daos_task_schedule(io_tasks[i], false);
+		tse_task_schedule(io_tasks[i], false);
 
-	daos_sched_progress(daos_task2sched(task));
+	tse_sched_progress(tse_task2sched(task));
 
 out_task:
 	if (io_tasks != NULL)
@@ -295,13 +295,13 @@ err_task:
 		if (io_tasks[i])
 			D_FREE_PTR(io_tasks[i]);
 	}
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 
 	goto out_task;
 }
 
 int
-dac_obj_fetch_multi(struct daos_task *task)
+dac_obj_fetch_multi(tse_task_t *task)
 {
 	daos_obj_multi_io_t *args;
 
@@ -313,7 +313,7 @@ dac_obj_fetch_multi(struct daos_task *task)
 }
 
 int
-dac_obj_update_multi(struct daos_task *task)
+dac_obj_update_multi(tse_task_t *task)
 {
 	daos_obj_multi_io_t *args;
 

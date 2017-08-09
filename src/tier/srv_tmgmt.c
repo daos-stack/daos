@@ -128,7 +128,7 @@ out_nofree:
 }
 
 static int
-tier_upstream_cb(struct daos_task *task, void *data)
+tier_upstream_cb(tse_task_t *task, void *data)
 {
 	struct upstream_arg		*arg = (struct upstream_arg *) data;
 	int				rc = 0;
@@ -142,7 +142,7 @@ tier_upstream_cb(struct daos_task *task, void *data)
 
 static int
 tier_upstream(uuid_t warm_id, char *warm_grp, uuid_t cold_id,
-		 char *cold_grp, struct daos_task *upstream_task)
+		 char *cold_grp, tse_task_t *upstream_task)
 {
 	int				rc;
 	crt_endpoint_t			cold_tgt;
@@ -204,8 +204,8 @@ tier_upstream(uuid_t warm_id, char *warm_grp, uuid_t cold_id,
 	cb_arg->rpc = rpc_req;
 
 	/*Register CB*/
-	rc = daos_task_register_comp_cb(upstream_task, tier_upstream_cb, cb_arg,
-					sizeof(struct upstream_arg));
+	rc = tse_task_register_comp_cb(upstream_task, tier_upstream_cb, cb_arg,
+				       sizeof(struct upstream_arg));
 	if (rc) {
 		D_ERROR("Callback registration failed: %d", rc);
 		D_GOTO(out, rc);
@@ -242,9 +242,9 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 	int				rc = 0;
 	daos_handle_t			cross_conn_eqh;
 	bool				ev_flag;
-	struct daos_task		*downstream_task;
-	struct daos_task		*upstream_task;
-	struct daos_task		*this_task;
+	tse_task_t			*downstream_task;
+	tse_task_t			*upstream_task;
+	tse_task_t			*this_task;
 	struct daos_task_args		*dta;
 
 
@@ -322,7 +322,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	dta = daos_task_buf_get(downstream_task, sizeof(*dta));
+	dta = tse_task_buf_get(downstream_task, sizeof(*dta));
 	dta->opc = DAOS_OPC_POOL_CONNECT;
 	uuid_copy((unsigned char *)dta->op_args.pool_connect.uuid, colder_id);
 	dta->op_args.pool_connect.grp = colder_grp;
@@ -365,7 +365,7 @@ ds_tier_cross_conn_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	dta = daos_task_buf_get(this_task, sizeof(*dta));
+	dta = tse_task_buf_get(this_task, sizeof(*dta));
 	dta->opc = DAOS_OPC_POOL_CONNECT;
 	uuid_copy((unsigned char *)dta->op_args.pool_connect.uuid,
 		  self_pool_id);
@@ -462,7 +462,7 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 	daos_handle_t			upstream_eqh;
 	bool				ev_flag;
 	struct dc_pool			*pool;
-	struct daos_task		*upstream_task;
+	tse_task_t			*upstream_task;
 	struct daos_task_args		*dta;
 
 	uuid_copy(warmer_id, in->ui_warm_id);
@@ -509,7 +509,7 @@ ds_tier_upstream_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	dta = daos_task_buf_get(upstream_task, sizeof(*dta));
+	dta = tse_task_buf_get(upstream_task, sizeof(*dta));
 	dta->opc = DAOS_OPC_POOL_CONNECT;
 	uuid_copy((unsigned char *)dta->op_args.pool_connect.uuid,
 		  in->ui_warm_id);

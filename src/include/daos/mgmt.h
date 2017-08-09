@@ -28,17 +28,17 @@
 #define __DC_MGMT_H__
 
 #include <daos_types.h>
-#include <daos/scheduler.h>
+#include <daos/tse.h>
 
 int dc_mgmt_init(void);
 
 void dc_mgmt_fini(void);
 
-int dc_mgmt_svc_rip(struct daos_task *task);
-int dc_pool_create(struct daos_task *task);
-int dc_pool_destroy(struct daos_task *task);
-int dc_pool_evict(struct daos_task *task);
-int dc_pool_extend(struct daos_task *task);
+int dc_mgmt_svc_rip(tse_task_t *task);
+int dc_pool_create(tse_task_t *task);
+int dc_pool_destroy(tse_task_t *task);
+int dc_pool_evict(tse_task_t *task);
+int dc_pool_extend(tse_task_t *task);
 
 /**
  * object layout information.

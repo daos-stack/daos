@@ -34,7 +34,7 @@ daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 		  daos_event_t *ev)
 {
 	daos_svc_rip_t		args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, SVC_RIP);
 
@@ -53,7 +53,7 @@ daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
 		 daos_event_t *ev)
 {
 	daos_pool_create_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, POOL_CREATE);
 
@@ -76,7 +76,7 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 		  daos_event_t *ev)
 {
 	daos_pool_destroy_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, POOL_DESTROY);
 
@@ -93,7 +93,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
 		daos_event_t *ev)
 {
 	daos_pool_evict_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, POOL_EVICT);
 
@@ -111,7 +111,7 @@ daos_pool_tgt_add(const uuid_t uuid, const char *grp,
 		  daos_event_t *ev)
 {
 	daos_pool_update_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	uuid_copy((void *)args.uuid, uuid);
 	args.grp = grp;
@@ -128,7 +128,7 @@ daos_pool_exclude_out(const uuid_t uuid, const char *grp,
 		      daos_event_t *ev)
 {
 	daos_pool_update_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	uuid_copy((void *)args.uuid, uuid);
 	args.grp = grp;
@@ -146,7 +146,7 @@ daos_pool_exclude(const uuid_t uuid, const char *grp,
 		  daos_event_t *ev)
 {
 	daos_pool_update_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, POOL_EXCLUDE);
 

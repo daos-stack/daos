@@ -32,9 +32,9 @@
 #include "task_internal.h"
 
 int
-daos_task_create(daos_opc_t opc, struct daos_sched *sched, void *op_args,
-		 unsigned int num_deps, struct daos_task *dep_tasks[],
-		 struct daos_task **taskp)
+daos_task_create(daos_opc_t opc, tse_sched_t *sched, void *op_args,
+		 unsigned int num_deps, tse_task_t *dep_tasks[],
+		 tse_task_t **taskp)
 {
 	struct daos_task_args args;
 	int rc;
@@ -50,14 +50,14 @@ daos_task_create(daos_opc_t opc, struct daos_sched *sched, void *op_args,
 	D_ASSERT(sizeof(struct daos_task_args) >=
 		 (dc_funcs[opc].arg_size + sizeof(daos_opc_t)));
 
-	rc = daos_task_init(dc_funcs[opc].task_func, &args,
-			    sizeof(struct daos_task_args), sched, taskp);
+	rc = tse_task_init(dc_funcs[opc].task_func, &args,
+			   sizeof(struct daos_task_args), sched, taskp);
 
 	if (rc != 0)
 		return rc;
 
 	if (num_deps && *taskp) {
-		rc = daos_task_register_deps(*taskp, num_deps, dep_tasks);
+		rc = tse_task_register_deps(*taskp, num_deps, dep_tasks);
 		if (rc != 0)
 			return rc;
 	}
@@ -66,11 +66,11 @@ daos_task_create(daos_opc_t opc, struct daos_sched *sched, void *op_args,
 }
 
 void *
-daos_task_get_args(daos_opc_t opc, struct daos_task *task)
+daos_task_get_args(daos_opc_t opc, tse_task_t *task)
 {
 	struct daos_task_args *task_arg;
 
-	task_arg = daos_task_buf_get(task, sizeof(*task_arg));
+	task_arg = tse_task_buf_get(task, sizeof(*task_arg));
 
 	if (task_arg->opc != opc) {
 		D_DEBUG(DB_ANY, "OPC does not match task's OPC\n");
@@ -81,26 +81,26 @@ daos_task_get_args(daos_opc_t opc, struct daos_task *task)
 }
 
 void *
-daos_task_get_priv(struct daos_task *task)
+daos_task_get_priv(tse_task_t *task)
 {
 	struct daos_task_args *task_arg;
 
-	task_arg = daos_task_buf_get(task, sizeof(*task_arg));
+	task_arg = tse_task_buf_get(task, sizeof(*task_arg));
 	return task_arg->priv;
 }
 
 void
-daos_task_set_priv(struct daos_task *task, void *priv)
+daos_task_set_priv(tse_task_t *task, void *priv)
 {
 	struct daos_task_args *task_arg;
 
-	task_arg = daos_task_buf_get(task, sizeof(*task_arg));
+	task_arg = tse_task_buf_get(task, sizeof(*task_arg));
 	task_arg->priv = priv;
 }
 
 struct daos_progress_args_t {
-	struct daos_sched	*sched;
-	bool			*is_empty;
+	tse_sched_t	*sched;
+	bool		*is_empty;
 };
 
 static int
@@ -108,23 +108,23 @@ sched_progress_cb(void *data)
 {
 	struct daos_progress_args_t *args = (struct daos_progress_args_t *)data;
 
-	if (daos_sched_check_complete(args->sched)) {
+	if (tse_sched_check_complete(args->sched)) {
 		*args->is_empty = true;
 		return 1;
 	}
 
-	daos_sched_progress(args->sched);
+	tse_sched_progress(args->sched);
 	return 0;
 }
 
 int
-daos_progress(struct daos_sched *sched, int64_t timeout, bool *is_empty)
+daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty)
 {
 	struct daos_progress_args_t args;
 	int rc;
 
 	*is_empty = false;
-	daos_sched_progress(sched);
+	tse_sched_progress(sched);
 
 	args.sched = sched;
 	args.is_empty = is_empty;

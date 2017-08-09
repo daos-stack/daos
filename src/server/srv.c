@@ -182,7 +182,7 @@ dss_progress_cb(void *arg)
 	ABT_bool	 state;
 	int		 rc;
 
-	daos_sched_progress(&dss_get_module_info()->dmi_sched);
+	tse_sched_progress(&dss_get_module_info()->dmi_sched);
 
 	rc = ABT_future_test(*shutdown, &state);
 	if (rc != ABT_SUCCESS)
@@ -239,7 +239,7 @@ dss_srv_handler(void *arg)
 	}
 
 	/* Prepare the scheduler */
-	rc = daos_sched_init(&dmi->dmi_sched, NULL, dmi->dmi_ctx);
+	rc = tse_sched_init(&dmi->dmi_sched, NULL, dmi->dmi_ctx);
 	if (rc != 0) {
 		D_ERROR("failed to init the seduler\n");
 		D_GOTO(destroy, rc);
@@ -265,7 +265,7 @@ dss_srv_handler(void *arg)
 	if (rc != 0)
 		D_ERROR("failed to progress network context: %d\n", rc);
 
-	daos_sched_fini(&dmi->dmi_sched);
+	tse_sched_fini(&dmi->dmi_sched);
 destroy:
 	crt_context_destroy(dmi->dmi_ctx, true);
 
@@ -900,7 +900,7 @@ struct async_result {
 };
 
 static int
-dss_task_comp_cb(struct daos_task *task, void *arg)
+dss_task_comp_cb(tse_task_t *task, void *arg)
 {
 	struct async_result *cb_arg = arg;
 
@@ -916,7 +916,7 @@ dss_task_comp_cb(struct daos_task *task, void *arg)
 int
 dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 {
-	struct daos_task	*task = NULL;
+	tse_task_t		*task = NULL;
 	struct async_result	cb_arg;
 	ABT_future		future;
 	int			rc;
@@ -935,15 +935,15 @@ dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 		D_GOTO(free_future, rc = -DER_NOMEM);
 
 	cb_arg.result = &ret;
-	rc = daos_task_register_comp_cb(task, dss_task_comp_cb, &cb_arg,
-					sizeof(cb_arg));
+	rc = tse_task_register_comp_cb(task, dss_task_comp_cb, &cb_arg,
+				       sizeof(cb_arg));
 	if (rc != 0) {
 		D_FREE_PTR(task);
 		D_GOTO(free_future, rc = -DER_NOMEM);
 	}
 
 	/* task will be freed inside scheduler */
-	rc = daos_task_schedule(task, true);
+	rc = tse_task_schedule(task, true);
 	if (rc != 0)
 		D_GOTO(free_future, rc = -DER_NOMEM);
 

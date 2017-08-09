@@ -23,24 +23,23 @@
 #define DD_SUBSYS	DD_FAC(client)
 
 #include <daos/rpc.h>
-#include <daos/scheduler.h>
 #include <daos/event.h>
 
 static void
 daos_rpc_cb(const struct crt_cb_info *cb_info)
 {
-	struct daos_task	*task = cb_info->cci_arg;
-	int			rc = cb_info->cci_rc;
+	tse_task_t	*task = cb_info->cci_arg;
+	int		rc = cb_info->cci_rc;
 
 	if (cb_info->cci_rc == -DER_TIMEDOUT)
 		/** TODO */
 		;
 
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 }
 
 int
-daos_rpc_send(crt_rpc_t *rpc, struct daos_task *task)
+daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task)
 {
 	int rc;
 

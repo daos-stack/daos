@@ -34,6 +34,7 @@
 #include <crt_errno.h>
 
 #include <daos/common.h>
+#include <daos/tse.h>
 
 /* Opcode registered in crt will be
  * client/server | mod_id | rpc_version | op_code
@@ -219,8 +220,7 @@ daos2crt_sg(daos_sg_list_t *sgl)
 	return (crt_sg_list_t *)sgl;
 }
 
-struct daos_task;
-int daos_rpc_send(crt_rpc_t *rpc, struct daos_task *task);
+int daos_rpc_send(crt_rpc_t *rpc, tse_task_t *task);
 
 #define DAOS_DEFAULT_GROUP_ID "daos_server"
 

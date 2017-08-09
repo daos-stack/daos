@@ -31,7 +31,7 @@
 #include "rpc.h"
 
 static int
-rip_cp(struct daos_task *task, void *data)
+rip_cp(tse_task_t *task, void *data)
 {
 	crt_rpc_t		*rpc = *((crt_rpc_t **)data);
 	int                      rc = task->dt_result;
@@ -45,7 +45,7 @@ rip_cp(struct daos_task *task, void *data)
 }
 
 int
-dc_mgmt_svc_rip(struct daos_task *task)
+dc_mgmt_svc_rip(tse_task_t *task)
 {
 	daos_svc_rip_t		*args;
 	crt_endpoint_t		 svr_ep;
@@ -78,7 +78,7 @@ dc_mgmt_svc_rip(struct daos_task *task)
 	/** fill in request buffer */
 	rip_in->rip_flags = args->force;
 
-	rc = daos_task_register_comp_cb(task, rip_cp, &rpc, sizeof(rpc));
+	rc = tse_task_register_comp_cb(task, rip_cp, &rpc, sizeof(rpc));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -119,7 +119,7 @@ dc_mgmt_fini()
 	daos_rpc_unregister(mgmt_rpcs);
 }
 
-int dc2_mgmt_svc_rip(struct daos_task *task)
+int dc2_mgmt_svc_rip(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }

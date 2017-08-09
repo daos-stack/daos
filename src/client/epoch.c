@@ -32,7 +32,7 @@ daos_epoch_query(daos_handle_t coh, daos_epoch_state_t *state,
 		 daos_event_t *ev)
 {
 	daos_epoch_query_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, EPOCH_QUERY);
 
@@ -56,7 +56,7 @@ daos_epoch_discard(daos_handle_t coh, daos_epoch_t epoch,
 		   daos_epoch_state_t *state, daos_event_t *ev)
 {
 	daos_epoch_discard_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, EPOCH_DISCARD);
 
@@ -73,7 +73,7 @@ daos_epoch_hold(daos_handle_t coh, daos_epoch_t *epoch,
 		daos_epoch_state_t *state, daos_event_t *ev)
 {
 	daos_epoch_hold_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, EPOCH_HOLD);
 
@@ -90,7 +90,7 @@ daos_epoch_slip(daos_handle_t coh, daos_epoch_t epoch,
 		daos_epoch_state_t *state, daos_event_t *ev)
 {
 	daos_epoch_slip_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, EPOCH_SLIP);
 
@@ -107,7 +107,7 @@ daos_epoch_commit(daos_handle_t coh, daos_epoch_t epoch,
 		  daos_epoch_state_t *state, daos_event_t *ev)
 {
 	daos_epoch_commit_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, EPOCH_COMMIT);
 

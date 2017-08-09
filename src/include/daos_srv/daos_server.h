@@ -126,7 +126,7 @@ struct dss_module_info {
 	crt_context_t		dmi_ctx;
 	struct dss_xstream	*dmi_xstream;
 	int			dmi_tid;
-	struct daos_sched	dmi_sched;
+	tse_sched_t		dmi_sched;
 };
 
 extern struct dss_module_key	daos_srv_modkey;

@@ -34,7 +34,7 @@ extern "C" {
 #include <daos_types.h>
 #include <daos_addons.h>
 #include <daos_errno.h>
-#include <daos/scheduler.h>
+#include <daos/tse.h>
 
 /** DAOS operation codes for task creation */
 typedef enum {
@@ -499,9 +499,9 @@ typedef struct {
  *			negative errno if it fails.
  */
 int
-daos_task_create(daos_opc_t opc, struct daos_sched *sched, void *args,
-		 unsigned int num_deps, struct daos_task *dep_tasks[],
-		 struct daos_task **taskp);
+daos_task_create(daos_opc_t opc, tse_sched_t *sched, void *args,
+		 unsigned int num_deps, tse_task_t *dep_tasks[],
+		 tse_task_t **taskp);
 
 /**
  * Return a pointer to the DAOS task argument structure. This is called to set
@@ -516,7 +516,7 @@ daos_task_create(daos_opc_t opc, struct daos_sched *sched, void *args,
  *			FAIL: NULL, likely because the opc did not match
  */
 void *
-daos_task_get_args(daos_opc_t opc, struct daos_task *task);
+daos_task_get_args(daos_opc_t opc, tse_task_t *task);
 
 /**
  * Return a pointer to the DAOS task private state. If no private state has
@@ -527,7 +527,7 @@ daos_task_get_args(daos_opc_t opc, struct daos_task *task);
  * \return		Pointer to the private state
  */
 void *
-daos_task_get_priv(struct daos_task *task);
+daos_task_get_priv(tse_task_t *task);
 
 /**
  * Set a pointer to the DAOS task private state.
@@ -536,7 +536,7 @@ daos_task_get_priv(struct daos_task *task);
  * \param priv	[IN]		Pointer to the private state
  */
 void
-daos_task_set_priv(struct daos_task *task, void *priv);
+daos_task_set_priv(tse_task_t *task, void *priv);
 
 /**
  * Make progress on the RPC context associated with the scheduler and schedule
@@ -552,7 +552,7 @@ daos_task_set_priv(struct daos_task *task, void *priv);
  * \return		0 if Success, errno if failed.
  */
 int
-daos_progress(struct daos_sched *sched, int64_t timeout, bool *is_empty);
+daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty);
 
 #if defined(__cplusplus)
 }

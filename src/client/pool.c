@@ -33,7 +33,7 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	daos_pool_connect_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, POOL_CONNECT);
 
@@ -52,7 +52,7 @@ int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev)
 {
 	daos_pool_disconnect_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, POOL_DISCONNECT);
 
@@ -80,7 +80,7 @@ daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
 		daos_pool_info_t *info, daos_event_t *ev)
 {
 	daos_pool_query_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, POOL_QUERY);
 
@@ -104,7 +104,7 @@ int
 daos_pool_svc_stop(daos_handle_t poh, daos_event_t *ev)
 {
 	daos_pool_svc_stop_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, POOL_SVC_STOP);
 

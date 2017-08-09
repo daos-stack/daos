@@ -280,7 +280,7 @@ out_unlock:
 static int
 pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 			      int rc_crt, struct pool_op_out *out,
-			      struct daos_task *task)
+			      tse_task_t *task)
 {
 	int rc;
 
@@ -291,7 +291,7 @@ pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 	if (rc == RSVC_CLIENT_RECHOOSE ||
 	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->po_rc))) {
 		task->dt_result = 0;
-		rc = daos_task_reinit(task);
+		rc = tse_task_reinit(task);
 		if (rc != 0)
 			return rc;
 		return RSVC_CLIENT_RECHOOSE;
@@ -307,7 +307,7 @@ struct pool_connect_arg {
 };
 
 static int
-pool_connect_cp(struct daos_task *task, void *data)
+pool_connect_cp(tse_task_t *task, void *data)
 {
 	struct pool_connect_arg *arg = (struct pool_connect_arg *)data;
 	struct dc_pool		*pool = daos_task_get_priv(task);
@@ -457,7 +457,7 @@ out:
 }
 
 int
-dc_pool_connect(struct daos_task *task)
+dc_pool_connect(tse_task_t *task)
 {
 	daos_pool_connect_t	*args;
 	struct dc_pool		*pool;
@@ -531,8 +531,8 @@ dc_pool_connect(struct daos_task *task)
 	con_args.rpc = rpc;
 	con_args.hdlp = args->poh;
 
-	rc = daos_task_register_comp_cb(task, pool_connect_cp, &con_args,
-					sizeof(con_args));
+	rc = tse_task_register_comp_cb(task, pool_connect_cp, &con_args,
+				       sizeof(con_args));
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
 
@@ -551,7 +551,7 @@ out_req:
 out_pool:
 	dc_pool_put(pool);
 out_task:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
@@ -562,7 +562,7 @@ struct pool_disconnect_arg {
 };
 
 static int
-pool_disconnect_cp(struct daos_task *task, void *data)
+pool_disconnect_cp(tse_task_t *task, void *data)
 {
 	struct pool_disconnect_arg	*arg =
 		(struct pool_disconnect_arg *)data;
@@ -606,7 +606,7 @@ out:
 }
 
 int
-dc_pool_disconnect(struct daos_task *task)
+dc_pool_disconnect(tse_task_t *task)
 {
 	daos_pool_disconnect_t		*args;
 	struct dc_pool			*pool;
@@ -670,8 +670,8 @@ dc_pool_disconnect(struct daos_task *task)
 	crt_req_addref(rpc);
 	disc_args.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, pool_disconnect_cp, &disc_args,
-					sizeof(disc_args));
+	rc = tse_task_register_comp_cb(task, pool_disconnect_cp, &disc_args,
+				       sizeof(disc_args));
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -688,7 +688,7 @@ out_rpc:
 out_pool:
 	dc_pool_put(pool);
 out_task:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 
 }
@@ -966,7 +966,7 @@ struct pool_update_state {
 };
 
 static int
-pool_tgt_update_cp(struct daos_task *task, void *data)
+pool_tgt_update_cp(tse_task_t *task, void *data)
 {
 	struct pool_update_state	*state = daos_task_get_priv(task);
 	crt_rpc_t			*rpc = *((crt_rpc_t **)data);
@@ -981,7 +981,7 @@ pool_tgt_update_cp(struct daos_task *task, void *data)
 	    (rc == RSVC_CLIENT_PROCEED &&
 	     daos_rpc_retryable_rc(out->pto_op.po_rc))) {
 		task->dt_result = 0;
-		rc = daos_task_reinit(task);
+		rc = tse_task_reinit(task);
 		if (rc != 0)
 			D_GOTO(out, rc);
 		free_state = false;
@@ -1017,7 +1017,7 @@ out:
 }
 
 static int
-dc_pool_update_internal(struct daos_task *task, daos_pool_update_t *args,
+dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 			int opc)
 {
 	struct pool_update_state	*state = daos_task_get_priv(task);
@@ -1065,8 +1065,8 @@ dc_pool_update_internal(struct daos_task *task, daos_pool_update_t *args,
 
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, pool_tgt_update_cp, &rpc,
-					sizeof(rpc));
+	rc = tse_task_register_comp_cb(task, pool_tgt_update_cp, &rpc,
+				       sizeof(rpc));
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -1087,12 +1087,12 @@ out_group:
 out_state:
 	D_FREE_PTR(state);
 out_task:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
 int
-dc_pool_exclude(struct daos_task *task)
+dc_pool_exclude(tse_task_t *task)
 {
 	daos_pool_update_t *args;
 
@@ -1103,7 +1103,7 @@ dc_pool_exclude(struct daos_task *task)
 }
 
 int
-dc_pool_add(struct daos_task *task)
+dc_pool_add(tse_task_t *task)
 {
 	daos_pool_update_t *args;
 
@@ -1114,7 +1114,7 @@ dc_pool_add(struct daos_task *task)
 }
 
 int
-dc_pool_exclude_out(struct daos_task *task)
+dc_pool_exclude_out(tse_task_t *task)
 {
 	daos_pool_update_t *args;
 
@@ -1133,7 +1133,7 @@ struct pool_query_arg {
 };
 
 static int
-pool_query_cb(struct daos_task *task, void *data)
+pool_query_cb(tse_task_t *task, void *data)
 {
 	struct pool_query_arg	       *arg = (struct pool_query_arg *)data;
 	struct pool_query_in	       *in = crt_req_get(arg->rpc);
@@ -1191,7 +1191,7 @@ out:
  * threads/operations.
  */
 int
-dc_pool_query(struct daos_task *task)
+dc_pool_query(tse_task_t *task)
 {
 	daos_pool_query_t	       *args;
 	struct dc_pool		       *pool;
@@ -1243,8 +1243,8 @@ dc_pool_query(struct daos_task *task)
 	query_args.dqa_map_buf = map_buf;
 	query_args.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, pool_query_cb, &query_args,
-					sizeof(query_args));
+	rc = tse_task_register_comp_cb(task, pool_query_cb, &query_args,
+				       sizeof(query_args));
 	if (rc != 0)
 		D_GOTO(out_bulk, rc);
 
@@ -1263,7 +1263,7 @@ out_rpc:
 out_pool:
 	dc_pool_put(pool);
 out_task:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
@@ -1273,7 +1273,7 @@ struct pool_evict_state {
 };
 
 static int
-pool_evict_cp(struct daos_task *task, void *data)
+pool_evict_cp(tse_task_t *task, void *data)
 {
 	struct pool_evict_state	*state = daos_task_get_priv(task);
 	crt_rpc_t		*rpc = *((crt_rpc_t **)data);
@@ -1288,7 +1288,7 @@ pool_evict_cp(struct daos_task *task, void *data)
 	    (rc == RSVC_CLIENT_PROCEED &&
 	     daos_rpc_retryable_rc(out->pvo_op.po_rc))) {
 		task->dt_result = 0;
-		rc = daos_task_reinit(task);
+		rc = tse_task_reinit(task);
 		if (rc != 0)
 			D_GOTO(out, rc);
 		free_state = false;
@@ -1319,7 +1319,7 @@ out:
 }
 
 int
-dc_pool_evict(struct daos_task *task)
+dc_pool_evict(tse_task_t *task)
 {
 	struct pool_evict_state	*state;
 	crt_endpoint_t		 ep;
@@ -1369,7 +1369,7 @@ dc_pool_evict(struct daos_task *task)
 
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, pool_evict_cp, &rpc, sizeof(rpc));
+	rc = tse_task_register_comp_cb(task, pool_evict_cp, &rpc, sizeof(rpc));
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -1389,7 +1389,7 @@ out_group:
 out_state:
 	D_FREE_PTR(state);
 out_task:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
@@ -1416,13 +1416,13 @@ dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver)
 }
 
 int
-dc_pool_target_query(struct daos_task *task)
+dc_pool_target_query(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
 
 int
-dc_pool_extend(struct daos_task *task)
+dc_pool_extend(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
@@ -1433,7 +1433,7 @@ struct pool_svc_stop_arg {
 };
 
 static int
-pool_svc_stop_cb(struct daos_task *task, void *data)
+pool_svc_stop_cb(tse_task_t *task, void *data)
 {
 	struct pool_svc_stop_arg       *arg = (struct pool_svc_stop_arg *)data;
 	struct pool_svc_stop_out       *out = crt_reply_get(arg->rpc);
@@ -1463,7 +1463,7 @@ out:
 }
 
 int
-dc_pool_svc_stop(struct daos_task *task)
+dc_pool_svc_stop(tse_task_t *task)
 {
 	daos_pool_svc_stop_t	       *args;
 	struct dc_pool		       *pool;
@@ -1502,8 +1502,8 @@ dc_pool_svc_stop(struct daos_task *task)
 	crt_req_addref(rpc);
 	stop_args.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, pool_svc_stop_cb, &stop_args,
-					sizeof(stop_args));
+	rc = tse_task_register_comp_cb(task, pool_svc_stop_cb, &stop_args,
+				       sizeof(stop_args));
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -1519,6 +1519,6 @@ out_rpc:
 out_pool:
 	dc_pool_put(pool);
 out_task:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }

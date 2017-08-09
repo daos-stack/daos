@@ -29,7 +29,7 @@
 
 #include <daos_types.h>
 #include <daos/pool_map.h>
-#include <daos/scheduler.h>
+#include <daos/tse.h>
 
 int dc_cont_init(void);
 void dc_cont_fini(void);
@@ -48,23 +48,23 @@ int dc_cont_local_open(uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 		       daos_handle_t *coh);
 int dc_cont_local_close(daos_handle_t ph, daos_handle_t coh);
 
-int dc_cont_create(struct daos_task *task);
-int dc_cont_open(struct daos_task *task);
-int dc_cont_close(struct daos_task *task);
-int dc_cont_destroy(struct daos_task *task);
-int dc_cont_query(struct daos_task *task);
-int dc_cont_attr_list(struct daos_task *task);
-int dc_cont_attr_get(struct daos_task *task);
-int dc_cont_attr_set(struct daos_task *task);
-int dc_epoch_flush(struct daos_task *task);
-int dc_epoch_discard(struct daos_task *task);
-int dc_epoch_query(struct daos_task *task);
-int dc_epoch_hold(struct daos_task *task);
-int dc_epoch_slip(struct daos_task *task);
-int dc_epoch_commit(struct daos_task *task);
-int dc_epoch_wait(struct daos_task *task);
-int dc_snap_list(struct daos_task *task);
-int dc_snap_create(struct daos_task *task);
-int dc_snap_destroy(struct daos_task *task);
+int dc_cont_create(tse_task_t *task);
+int dc_cont_open(tse_task_t *task);
+int dc_cont_close(tse_task_t *task);
+int dc_cont_destroy(tse_task_t *task);
+int dc_cont_query(tse_task_t *task);
+int dc_cont_attr_list(tse_task_t *task);
+int dc_cont_attr_get(tse_task_t *task);
+int dc_cont_attr_set(tse_task_t *task);
+int dc_epoch_flush(tse_task_t *task);
+int dc_epoch_discard(tse_task_t *task);
+int dc_epoch_query(tse_task_t *task);
+int dc_epoch_hold(tse_task_t *task);
+int dc_epoch_slip(tse_task_t *task);
+int dc_epoch_commit(tse_task_t *task);
+int dc_epoch_wait(tse_task_t *task);
+int dc_snap_list(tse_task_t *task);
+int dc_snap_create(tse_task_t *task);
+int dc_snap_destroy(tse_task_t *task);
 
 #endif /* __DAOS_CONTAINER_H__ */

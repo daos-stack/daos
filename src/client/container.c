@@ -43,7 +43,7 @@ int
 daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_event_t *ev)
 {
 	daos_cont_create_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, CONT_CREATE);
 
@@ -59,7 +59,7 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
 {
 	daos_cont_open_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, CONT_OPEN);
 
@@ -77,7 +77,7 @@ int
 daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 {
 	daos_cont_close_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	args.coh	= coh;
 
@@ -92,7 +92,7 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 		  daos_event_t *ev)
 {
 	daos_cont_destroy_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, CONT_DESTROY);
 
@@ -109,7 +109,7 @@ daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 		daos_event_t *ev)
 {
 	daos_cont_query_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	DAOS_API_ARG_ASSERT(args, CONT_QUERY);
 

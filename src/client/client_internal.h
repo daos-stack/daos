@@ -80,7 +80,7 @@ struct daos_event_private {
 	crt_context_t		evx_ctx;
 	struct daos_event_callback evx_callback;
 
-	struct daos_sched	*evx_sched;
+	tse_sched_t		*evx_sched;
 };
 
 static inline struct daos_event_private *
@@ -109,7 +109,7 @@ struct daos_eq_private {
 	crt_context_t		eqx_ctx;
 
 	/* Scheduler associated with this EQ */
-	struct daos_sched	eqx_sched;
+	tse_sched_t		eqx_sched;
 };
 
 static inline struct daos_eq_private *

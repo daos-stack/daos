@@ -23,7 +23,6 @@
 #define DD_SUBSYS	DD_FAC(client)
 
 #include <daos/common.h>
-#include <daos/scheduler.h>
 #include <daos/tier.h>
 #include <daos/pool.h>
 #include "client_internal.h"
@@ -39,11 +38,11 @@ struct xconn_arg {
 };
 
 static int
-tier_task_prep(void *arg, int arg_size, struct daos_task **taskp,
+tier_task_prep(void *arg, int arg_size, tse_task_t **taskp,
 	       daos_event_t **evp)
 {
-	daos_event_t		*ev = *evp;
-	struct daos_task	*task = NULL;
+	daos_event_t	*ev = *evp;
+	tse_task_t	*task = NULL;
 	int rc;
 
 	if (ev == NULL) {
@@ -52,7 +51,7 @@ tier_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 			return rc;
 	}
 
-	rc = daos_task_init(NULL, arg, arg_size, daos_ev2sched(ev), &task);
+	rc = tse_task_init(NULL, arg, arg_size, daos_ev2sched(ev), &task);
 	if (rc != 0)
 		D_GOTO(err_task, rc = -DER_NOMEM);
 
@@ -60,7 +59,7 @@ tier_task_prep(void *arg, int arg_size, struct daos_task **taskp,
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_schedule(task, false);
+	rc = tse_task_schedule(task, false);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
@@ -76,7 +75,7 @@ err_task:
 
 
 /*Task Callbacks for cascading and dependent RPCs*/
-static int cross_conn_cb(struct daos_task *task, void *data)
+static int cross_conn_cb(tse_task_t *task, void *data)
 {
 	struct xconn_arg *cb_arg = (struct xconn_arg *)data;
 	int		      rc = task->dt_result;
@@ -87,11 +86,11 @@ static int cross_conn_cb(struct daos_task *task, void *data)
 
 
 static int
-local_tier_conn_cb(struct daos_task *task, void *data)
+local_tier_conn_cb(tse_task_t *task, void *data)
 {
 
-	struct daos_sched	*sched;
-	struct daos_task	*cross_conn_task;
+	tse_sched_t		*sched;
+	tse_task_t		*cross_conn_task;
 	struct xconn_arg	*cb_arg = (struct xconn_arg *)data;
 	int			rc = task->dt_result;
 
@@ -103,20 +102,20 @@ local_tier_conn_cb(struct daos_task *task, void *data)
 	}
 
 	/*Grab Scheduler of the task*/
-	sched = daos_task2sched(task);
+	sched = tse_task2sched(task);
 
-	rc = daos_task_init(NULL, NULL, 0, sched, &cross_conn_task);
+	rc = tse_task_init(NULL, NULL, 0, sched, &cross_conn_task);
 	if (rc != 0)
 		return -DER_NOMEM;
 
-	rc = daos_task_register_comp_cb(cross_conn_task, cross_conn_cb,
-					cb_arg, sizeof(struct xconn_arg));
+	rc = tse_task_register_comp_cb(cross_conn_task, cross_conn_cb,
+				       cb_arg, sizeof(struct xconn_arg));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion callback: %d\n", rc);
 		return rc;
 	}
 
-	rc = daos_task_schedule(cross_conn_task, false);
+	rc = tse_task_schedule(cross_conn_task, false);
 	if (rc != 0)
 		return rc;
 
@@ -135,8 +134,8 @@ daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		     daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
 		     daos_event_t *ev)
 {
-	struct daos_task	*task;
-	int			rc;
+	tse_task_t	*task;
+	int		rc;
 
 	rc = daos_client_task_prep(NULL, 0, &task, &ev);
 	if (rc != 0)
@@ -153,7 +152,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 		    daos_event_t *ev)
 {
 	int			rc = 0;
-	struct daos_task	*local_conn_task;
+	tse_task_t		*local_conn_task;
 	struct xconn_arg	*cb_arg;
 	daos_tier_info_t	*pt;
 	struct daos_task_args	*dta;
@@ -181,8 +180,8 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 		return rc;
 	}
 
-	rc = daos_task_register_comp_cb(local_conn_task, local_tier_conn_cb,
-					cb_arg, sizeof(struct xconn_arg));
+	rc = tse_task_register_comp_cb(local_conn_task, local_tier_conn_cb,
+				       cb_arg, sizeof(struct xconn_arg));
 
 	if (rc) {
 		D_ERROR("Error registering comp cb: %d\n", rc);
@@ -197,7 +196,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 		D_WARN("No client context, connectivity may be limited\n");
 
 
-	dta = daos_task_buf_get(local_conn_task, sizeof(*dta));
+	dta = tse_task_buf_get(local_conn_task, sizeof(*dta));
 	dta->opc = DAOS_OPC_POOL_CONNECT;
 	uuid_copy((unsigned char *)dta->op_args.pool_connect.uuid, uuid);
 	dta->op_args.pool_connect.grp = grp;
@@ -225,7 +224,7 @@ daos_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 {
 
 	int rc;
-	struct daos_task	*trc_task;
+	tse_task_t *trc_task;
 
 	rc = daos_client_task_prep(NULL, 0, &trc_task, &ev);
 
@@ -261,8 +260,8 @@ daos_tier_setup_client_ctx(const uuid_t colder_id, const char *colder_grp,
 int
 daos_tier_ping(uint32_t ping_val, daos_event_t *ev)
 {
-	struct daos_task	*task;
-	int			rc;
+	tse_task_t	*task;
+	int		rc;
 
 	rc = daos_client_task_prep(NULL, 0, &task, &ev);
 	if (rc != 0)

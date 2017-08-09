@@ -76,13 +76,13 @@ enumerate_dkey(daos_epoch_t epoch, uint32_t *number, daos_key_desc_t *kds,
 	       struct ioreq *req);
 
 void
-insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
-       void **val, daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req);
+insert(const char *dkey, int nr, const char **akey, uint64_t *idx, void **val,
+	daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req);
 
 void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
-       daos_size_t *read_size, void **val, daos_size_t *size,
-       daos_epoch_t *epoch, struct ioreq *req);
+	daos_size_t *read_size, void **val, daos_size_t *size,
+	daos_epoch_t *epoch, struct ioreq *req);
 
 int
 obj_setup(void **state);

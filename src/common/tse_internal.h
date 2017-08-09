@@ -23,7 +23,7 @@
 /*
  * This file is part of common DAOS library.
  *
- * common/scheduler_internal.h
+ * common/tse_internal.h
  *
  * DAOS client will use scheduler/task to manage the asynchronous tasks.
  * Tasks will be attached to one scheduler, when scheduler is executed,
@@ -33,12 +33,12 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 
-struct daos_task_private {
+struct tse_task_private {
 	/* refcount of the task */
 	int			dtp_refcnt;
 
 	/* function for the task */
-	daos_task_func_t	dtp_func;
+	tse_task_func_t	dtp_func;
 	void			*dtp_func_arg;
 
 	/* links to scheduler */
@@ -56,7 +56,7 @@ struct daos_task_private {
 	/* daos complete task callback list */
 	daos_list_t		dtp_ret_list;
 
-	/* daos_task internal buffer */
+	/* tse_task internal buffer */
 	struct {
 		/*
 		 * MSC - We should change that by making the arguments an
@@ -68,17 +68,17 @@ struct daos_task_private {
 	uint32_t		dtp_complete:1,
 				dtp_running:1;
 	int			dtp_dep_cnt;
-	struct daos_sched_private	*dtp_sched;
+	struct tse_sched_private	*dtp_sched;
 };
 
-struct daos_task_cb {
+struct tse_task_cb {
 	daos_list_t		dtc_list;
-	daos_task_cb_t		dtc_cb;
+	tse_task_cb_t		dtc_cb;
 	daos_size_t		dtc_arg_size;
 	char			dtc_arg[0];
 };
 
-struct daos_sched_private {
+struct tse_sched_private {
 	/* lock to protect schedule status and sub task list */
 	pthread_mutex_t dsp_lock;
 
@@ -109,33 +109,33 @@ struct daos_sched_private {
 			dsp_completing:1;
 };
 
-struct daos_sched_comp {
+struct tse_sched_comp {
 	daos_list_t		dsc_list;
-	daos_sched_comp_cb_t	dsc_comp_cb;
+	tse_sched_comp_cb_t	dsc_comp_cb;
 	void			*dsc_arg;
 };
 
 
-static inline struct daos_task_private *
-daos_task2priv(struct daos_task *task)
+static inline struct tse_task_private *
+tse_task2priv(tse_task_t *task)
 {
-	return (struct daos_task_private *)&task->dt_private;
+	return (struct tse_task_private *)&task->dt_private;
 }
 
-static inline struct daos_task *
-daos_priv2task(struct daos_task_private *priv)
+static inline tse_task_t *
+tse_priv2task(struct tse_task_private *priv)
 {
-	return container_of(priv, struct daos_task, dt_private);
+	return container_of(priv, tse_task_t, dt_private);
 }
 
-static inline struct daos_sched_private *
-daos_sched2priv(struct daos_sched *sched)
+static inline struct tse_sched_private *
+tse_sched2priv(tse_sched_t *sched)
 {
-	return (struct daos_sched_private *)&sched->ds_private;
+	return (struct tse_sched_private *)&sched->ds_private;
 }
 
-static inline struct daos_sched *
-daos_priv2sched(struct daos_sched_private *priv)
+static inline tse_sched_t *
+tse_priv2sched(struct tse_sched_private *priv)
 {
-	return container_of(priv, struct daos_sched, ds_private);
+	return container_of(priv, tse_sched_t, ds_private);
 }

@@ -30,7 +30,7 @@
 
 #include <daos/common.h>
 #include <daos/event.h>
-#include <daos/scheduler.h>
+#include <daos/tse.h>
 #include <daos/placement.h>
 #include <daos_types.h>
 
@@ -135,16 +135,16 @@ int dc_obj_shard_close(daos_handle_t oh);
 int dc_obj_shard_update(daos_handle_t oh, daos_epoch_t epoch,
 			daos_key_t *dkey, unsigned int nr,
 			daos_iod_t *iods, daos_sg_list_t *sgls,
-			unsigned int map_ver, struct daos_task *task);
+			unsigned int map_ver, tse_task_t *task);
 int dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		       daos_key_t *dkey, unsigned int nr,
 		       daos_iod_t *iods, daos_sg_list_t *sgls,
 		       daos_iom_t *maps, unsigned int map_ver,
-		       struct daos_task *task);
+		       tse_task_t *task);
 int dc_obj_shard_list_key(daos_handle_t oh, uint32_t op, daos_epoch_t epoch,
 			  daos_key_t *key, uint32_t *nr, daos_key_desc_t *kds,
 			  daos_sg_list_t *sgl, daos_hash_out_t *anchor,
-			  unsigned int map_ver, struct daos_task *task);
+			  unsigned int map_ver, tse_task_t *task);
 int dc_obj_shard_list_rec(daos_handle_t oh, uint32_t op,
 		      daos_epoch_t epoch, daos_key_t *dkey,
 		      daos_key_t *akey, daos_iod_type_t type,
@@ -152,7 +152,7 @@ int dc_obj_shard_list_rec(daos_handle_t oh, uint32_t op,
 		      daos_recx_t *recxs, daos_epoch_range_t *eprs,
 		      uuid_t *cookies, uint32_t *versions,
 		      daos_hash_out_t *anchor, unsigned int map_ver,
-		      bool incr_order, struct daos_task *task);
+		      bool incr_order, tse_task_t *task);
 struct dc_obj_shard*
 obj_shard_hdl2ptr(daos_handle_t hdl);
 /* srv_obj.c */

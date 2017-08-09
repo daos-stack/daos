@@ -28,18 +28,18 @@
 #define  __DAOS_ADDONS_H__
 
 /* task functions for array operations */
-int dac_array_create(struct daos_task *task);
-int dac_array_open(struct daos_task *task);
-int dac_array_close(struct daos_task *task);
-int dac_array_read(struct daos_task *task);
-int dac_array_write(struct daos_task *task);
-int dac_array_get_size(struct daos_task *task);
-int dac_array_set_size(struct daos_task *task);
+int dac_array_create(tse_task_t *task);
+int dac_array_open(tse_task_t *task);
+int dac_array_close(tse_task_t *task);
+int dac_array_read(tse_task_t *task);
+int dac_array_write(tse_task_t *task);
+int dac_array_get_size(tse_task_t *task);
+int dac_array_set_size(tse_task_t *task);
 
 /* task function for HL operations */
-int dac_kv_get(struct daos_task *task);
-int dac_kv_put(struct daos_task *task);
-int dac_kv_remove(struct daos_task *task);
-int dac_obj_fetch_multi(struct daos_task *task);
-int dac_obj_update_multi(struct daos_task *task);
+int dac_kv_get(tse_task_t *task);
+int dac_kv_put(tse_task_t *task);
+int dac_kv_remove(tse_task_t *task);
+int dac_obj_fetch_multi(tse_task_t *task);
+int dac_obj_update_multi(tse_task_t *task);
 #endif /* __DAOS_ADDONS_H__ */

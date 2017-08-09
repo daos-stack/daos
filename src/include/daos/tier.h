@@ -27,15 +27,15 @@
 #define __DC_TIER_H__
 
 #include <daos_types.h>
-#include <daos/scheduler.h>
+#include <daos/tse.h>
 
 int  dc_tier_init(void);
 void dc_tier_fini(void);
-int dc_tier_ping(uint32_t ping_val, struct daos_task *task);
+int dc_tier_ping(uint32_t ping_val, tse_task_t *task);
 int
 dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 		   daos_epoch_t fetch_ep, daos_oid_list_t *obj_list,
-		   struct daos_task *task);
+		   tse_task_t *task);
 /**
  * Inter-tier connect, warm-to-cold
  * /param warm_id	uuid of the warm pool
@@ -47,9 +47,9 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
  * /return		integer error code
  */
 int dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
-		    struct daos_task *task);
+		    tse_task_t *task);
 
 int dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
-			  char *tgt_grp, struct daos_task *task);
+			  char *tgt_grp, tse_task_t *task);
 
 #endif /* __DC_TIER_H__ */

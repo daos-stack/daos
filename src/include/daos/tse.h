@@ -22,30 +22,30 @@
  */
 
 /**
- * DAOs task/scheduler structure API, which are used to track the asynchronous
- * operations on client side, RPC etc. See src/obj/cli_obj.c as an example.
+ * Task Execution Engine: Generic scheduler for creating tasks and dependencies
+ * between them.
  */
 
-#ifndef __DAOS_SCHEDULE_H__
-#define __DAOS_SCHEDULE_H__
+#ifndef __TSE_SCHEDULE_H__
+#define __TSE_SCHEDULE_H__
 
 #include <daos/list.h>
 
 /**
- * daos_task is used to track single asynchronous operation.
+ * tse_task is used to track single asynchronous operation.
  **/
-struct daos_task {
+typedef struct {
 	int			dt_result;
 	/* daos schedule internal */
 	struct {
 		uint64_t	dt_space[60];
 	}			dt_private;
-};
+} tse_task_t;
 
 /**
  * Track all of the tasks under a scheduler.
  **/
-struct daos_sched {
+typedef struct {
 	int		ds_result;
 
 	/* user data associated with the scheduler (completion cb data, etc.) */
@@ -58,25 +58,25 @@ struct daos_sched {
 	struct {
 		uint64_t	ds_space[48];
 	}			ds_private;
-};
+} tse_sched_t;
 
-typedef int (*daos_sched_comp_cb_t)(void *args, int rc);
-typedef int (*daos_task_func_t)(struct daos_task *);
+typedef int (*tse_sched_comp_cb_t)(void *args, int rc);
+typedef int (*tse_task_func_t)(tse_task_t *);
 
 /** MSC - deprecate both function defs */
-typedef int (*daos_task_comp_cb_t)(struct daos_task *, void *arg);
-typedef int (*daos_task_result_cb_t)(struct daos_task *, void *arg);
+typedef int (*tse_task_comp_cb_t)(tse_task_t *, void *arg);
+typedef int (*tse_task_result_cb_t)(tse_task_t *, void *arg);
 /** CB type for prepare, completion, and result processing */
-typedef int (*daos_task_cb_t)(struct daos_task *, void *arg);
+typedef int (*tse_task_cb_t)(tse_task_t *, void *arg);
 
 void *
-daos_task2arg(struct daos_task *task);
+tse_task2arg(tse_task_t *task);
 
 void *
-daos_task2sp(struct daos_task *task);
+tse_task2sp(tse_task_t *task);
 
-struct daos_sched *
-daos_task2sched(struct daos_task *task);
+tse_sched_t *
+tse_task2sched(tse_task_t *task);
 
 /**
  *  Initialize the scheduler with an optional completion callback and pointer to
@@ -94,7 +94,7 @@ daos_task2sched(struct daos_task *task);
  * \return			negative errno if initialization fails.
  */
 int
-daos_sched_init(struct daos_sched *sched, daos_sched_comp_cb_t comp_cb,
+tse_sched_init(tse_sched_t *sched, tse_sched_comp_cb_t comp_cb,
 		void *udata);
 
 /**
@@ -103,7 +103,7 @@ daos_sched_init(struct daos_sched *sched, daos_sched_comp_cb_t comp_cb,
  * \param sched [input]		the scheduler to be finished.
  */
 void
-daos_sched_fini(struct daos_sched *sched);
+tse_sched_fini(tse_sched_t *sched);
 
 /**
  * Wait for all tasks in the scheduler to complete and finalize it.
@@ -115,7 +115,7 @@ daos_sched_fini(struct daos_sched *sched);
  *			cancel all tasks in scheduler if true.
  */
 void
-daos_sched_complete(struct daos_sched *sched, int ret, bool cancel);
+tse_sched_complete(tse_sched_t *sched, int ret, bool cancel);
 
 /**
  * register complete callback for scheduler.
@@ -129,21 +129,21 @@ daos_sched_complete(struct daos_sched *sched, int ret, bool cancel);
  * \return			errno if registeration fails.
  */
 int
-daos_sched_register_comp_cb(struct daos_sched *sched,
-			    daos_sched_comp_cb_t comp_cb, void *arg);
+tse_sched_register_comp_cb(tse_sched_t *sched,
+			   tse_sched_comp_cb_t comp_cb, void *arg);
 
 /**
  * Make progress on scheduler. Runs tasks that are ready to be executed after
  * the tasks they depend on were completed. Note that task completion using
- * daos_task_complete() must be done by the engine user to push progress on
- * the engine. In DAOS daos_task_complete is called by the completion CB of the
+ * tse_task_complete() must be done by the engine user to push progress on
+ * the engine. In DAOS tse_task_complete is called by the completion CB of the
  * RPC request that is sent to the server.
  *
  * \param sched	[IN]	Scheduler to make progress on.
  *
  */
 void
-daos_sched_progress(struct daos_sched *sched);
+tse_sched_progress(tse_sched_t *sched);
 
 /**
  * Check completion on all tasks in the scheduler.
@@ -153,10 +153,10 @@ daos_sched_progress(struct daos_sched *sched);
  * \return		true if scheduler is empty, false otherwise.
  */
 bool
-daos_sched_check_complete(struct daos_sched *sched);
+tse_sched_check_complete(tse_sched_t *sched);
 
 /**
- * Initialize the daos_task.
+ * Initialize the tse_task.
  *
  * The task will be added to the scheduler task list, and
  * being scheduled later, if dependent task is provided, then
@@ -174,7 +174,7 @@ daos_sched_check_complete(struct daos_sched *sched);
  *				list of the scheduler.
  * \param sched [input]		daos scheduler where the daos
  *                              task will be attached to.
- * \param taskp [output]	pointer to daos_task to be allocated and
+ * \param taskp [output]	pointer to tse_task to be allocated and
  *				initialized. The task is freed internally when
  *				complete is called.
  *
@@ -182,8 +182,8 @@ daos_sched_check_complete(struct daos_sched *sched);
  * \return			negative errno if it fails.
  */
 int
-daos_task_init(daos_task_func_t task_func, void *arg, int arg_size,
-	       struct daos_sched *sched, struct daos_task **taskp);
+tse_task_init(tse_task_func_t task_func, void *arg, int arg_size,
+	      tse_sched_t *sched, tse_task_t **taskp);
 
 /**
  * Add task to scheduler it was initialized with. If task body function should
@@ -196,7 +196,7 @@ daos_task_init(daos_task_func_t task_func, void *arg, int arg_size,
  *
  * \return			0 if success negative errno if fail.
  */
-int daos_task_schedule(struct daos_task *task, bool ready);
+int tse_task_schedule(tse_task_t *task, bool ready);
 
 /**
  * register complete callback for the task.
@@ -211,8 +211,8 @@ int daos_task_schedule(struct daos_task *task, bool ready);
  * \return		negative errno if it fails.
  */
 int
-daos_task_register_comp_cb(struct daos_task *task, daos_task_cb_t comp_cb,
-			   void *arg, daos_size_t arg_size);
+tse_task_register_comp_cb(tse_task_t *task, tse_task_cb_t comp_cb,
+			  void *arg, size_t arg_size);
 
 /**
  * Mark task as completed.
@@ -221,10 +221,10 @@ daos_task_register_comp_cb(struct daos_task *task, daos_task_cb_t comp_cb,
  * \param ret [input]	ret result of the task.
  **/
 void
-daos_task_complete(struct daos_task *task, int ret);
+tse_task_complete(tse_task_t *task, int ret);
 
 /**
- * MSC - deprecate in favor of daos_task_register_deps
+ * MSC - deprecate in favor of tse_task_register_deps
  * Add dependent task
  *
  * If one task depends on other tasks, only if all of its dependent
@@ -237,7 +237,7 @@ daos_task_complete(struct daos_task *task, int ret);
  * return		errno if adding dependent fails.
  **/
 int
-daos_task_add_dependent(struct daos_task *task, struct daos_task *dep);
+tse_task_add_dependent(tse_task_t *task, tse_task_t *dep);
 
 /**
  * MSC - I think we can move this as an internal function for just DAOS.
@@ -253,8 +253,8 @@ daos_task_add_dependent(struct daos_task *task, struct daos_task *dep);
  * \param arg [in]	argument of the callback.
  **/
 void
-daos_task_result_process(struct daos_task *task, daos_task_result_cb_t callback,
-			 void *arg);
+tse_task_result_process(tse_task_t *task, tse_task_result_cb_t callback,
+			void *arg);
 
 /**
  * MSC - I think this can be deprecated. But not sure yet.
@@ -268,7 +268,7 @@ daos_task_result_process(struct daos_task *task, daos_task_result_cb_t callback,
  * \return	pointer to the buffer.
  **/
 void *
-daos_task_buf_get(struct daos_task *task, int buf_size);
+tse_task_buf_get(tse_task_t *task, int buf_size);
 
 /**
  * Register dependency tasks that will be required to be completed before the
@@ -284,8 +284,8 @@ daos_task_buf_get(struct daos_task *task, int buf_size);
  *			negative errno if it fails.
  */
 int
-daos_task_register_deps(struct daos_task *task, int num_deps,
-			struct daos_task *dep_tasks[]);
+tse_task_register_deps(tse_task_t *task, int num_deps,
+		       tse_task_t *dep_tasks[]);
 
 /**
  * Register prepare and completion callbacks that will be executed right before
@@ -308,10 +308,10 @@ daos_task_register_deps(struct daos_task *task, int num_deps,
  *			negative errno if it fails.
  */
 int
-daos_task_register_cbs(struct daos_task *task, daos_task_cb_t prep_cb,
-		       void *prep_data, daos_size_t prep_data_size,
-		       daos_task_cb_t comp_cb, void *comp_data,
-		       daos_size_t comp_data_size);
+tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb,
+		      void *prep_data, size_t prep_data_size,
+		      tse_task_cb_t comp_cb, void *comp_data,
+		      size_t comp_data_size);
 
 /**
  * Reinitialize a task and move it into the scheduler's initialize list. The
@@ -326,6 +326,6 @@ daos_task_register_cbs(struct daos_task *task, daos_task_cb_t prep_cb,
  *			negative errno if it fails.
  */
 int
-daos_task_reinit(struct daos_task *task);
+tse_task_reinit(tse_task_t *task);
 
 #endif

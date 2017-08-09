@@ -216,7 +216,7 @@ struct obj_rw_args {
 };
 
 static int
-dc_rw_cb(struct daos_task *task, void *arg)
+dc_rw_cb(tse_task_t *task, void *arg)
 {
 	struct obj_rw_args     *rw_args = (struct obj_rw_args *)arg;
 	struct obj_rw_in       *orw;
@@ -397,7 +397,7 @@ sgls_buf_len(daos_sg_list_t *sgls, int nr)
 
 static int
 obj_shard_rw_bulk_prep(crt_rpc_t *rpc, unsigned int nr, daos_sg_list_t *sgls,
-		       struct daos_task *task)
+		       tse_task_t *task)
 {
 	struct obj_rw_in	*orw;
 	crt_bulk_t		*bulks;
@@ -455,7 +455,7 @@ obj_shard_ptr2pool(struct dc_obj_shard *shard)
 static int
 obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	     daos_key_t *dkey, unsigned int nr, daos_iod_t *iods,
-	     daos_sg_list_t *sgls, unsigned int map_ver, struct daos_task *task)
+	     daos_sg_list_t *sgls, unsigned int map_ver, tse_task_t *task)
 {
 	struct dc_obj_shard    *dobj;
 	struct dc_pool	       *pool;
@@ -566,8 +566,8 @@ obj_shard_rw(daos_handle_t oh, enum obj_rpc_opc opc, daos_epoch_t epoch,
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_CRT_ERROR))
 		D_GOTO(out_args, rc = -DER_CRT_HG);
 
-	rc = daos_task_register_comp_cb(task, dc_rw_cb, &rw_args,
-					sizeof(rw_args));
+	rc = tse_task_register_comp_cb(task, dc_rw_cb, &rw_args,
+				       sizeof(rw_args));
 	if (rc != 0)
 		D_GOTO(out_args, rc);
 
@@ -588,7 +588,7 @@ out_req:
 out_pool:
 	dc_pool_put(pool);
 out_task:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
@@ -596,7 +596,7 @@ int
 dc_obj_shard_update(daos_handle_t oh, daos_epoch_t epoch,
 		    daos_key_t *dkey, unsigned int nr,
 		    daos_iod_t *iods, daos_sg_list_t *sgls,
-		    unsigned int map_ver, struct daos_task *task)
+		    unsigned int map_ver, tse_task_t *task)
 {
 	return obj_shard_rw(oh, DAOS_OBJ_RPC_UPDATE, epoch, dkey, nr, iods,
 			    sgls, map_ver, task);
@@ -607,7 +607,7 @@ dc_obj_shard_fetch(daos_handle_t oh, daos_epoch_t epoch,
 		   daos_key_t *dkey, unsigned int nr,
 		   daos_iod_t *iods, daos_sg_list_t *sgls,
 		   daos_iom_t *maps, unsigned int map_ver,
-		   struct daos_task *task)
+		   tse_task_t *task)
 {
 	return obj_shard_rw(oh, DAOS_OBJ_RPC_FETCH, epoch, dkey, nr, iods,
 			    sgls, map_ver, task);
@@ -629,7 +629,7 @@ struct obj_enum_args {
 };
 
 static int
-dc_enumerate_cb(struct daos_task *task, void *arg)
+dc_enumerate_cb(tse_task_t *task, void *arg)
 {
 	struct obj_enum_args	*enum_args = (struct obj_enum_args *)arg;
 	struct obj_key_enum_in	*oei;
@@ -724,7 +724,7 @@ dc_obj_shard_list_internal(daos_handle_t oh, enum obj_rpc_opc opc,
 			   daos_recx_t *recxs, daos_epoch_range_t *eprs,
 			   uuid_t *cookies, uint32_t *versions,
 			   daos_hash_out_t *anchor, unsigned int map_ver,
-			   struct daos_task *task)
+			   tse_task_t *task)
 {
 	crt_endpoint_t		tgt_ep;
 	struct dc_pool	       *pool;
@@ -809,8 +809,8 @@ dc_obj_shard_list_internal(daos_handle_t oh, enum obj_rpc_opc opc,
 	enum_args.eaa_versions = versions;
 	enum_args.eaa_recxs = recxs;
 
-	rc = daos_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
-					sizeof(enum_args));
+	rc = tse_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
+				       sizeof(enum_args));
 	if (rc != 0)
 		D_GOTO(out_eaa, rc);
 
@@ -833,7 +833,7 @@ out_pool:
 out_put:
 	obj_shard_decref(dobj);
 out_task:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
@@ -845,7 +845,7 @@ dc_obj_shard_list_rec(daos_handle_t oh, enum obj_rpc_opc opc,
 		      daos_recx_t *recxs, daos_epoch_range_t *eprs,
 		      uuid_t *cookies, uint32_t *versions,
 		      daos_hash_out_t *anchor, unsigned int map_ver,
-		      bool incr_order, struct daos_task *task)
+		      bool incr_order, tse_task_t *task)
 {
 	/* did not handle incr_order yet */
 	return dc_obj_shard_list_internal(oh, opc, epoch, dkey, akey,
@@ -859,7 +859,7 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 		      daos_epoch_t epoch, daos_key_t *key, uint32_t *nr,
 		      daos_key_desc_t *kds, daos_sg_list_t *sgl,
 		      daos_hash_out_t *anchor, unsigned int map_ver,
-		      struct daos_task *task)
+		      tse_task_t *task)
 {
 	return dc_obj_shard_list_internal(oh, opc, epoch, key, NULL,
 					  DAOS_IOD_NONE, NULL, nr, kds, sgl,

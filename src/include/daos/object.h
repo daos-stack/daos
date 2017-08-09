@@ -25,7 +25,7 @@
 
 #include <daos_types.h>
 #include <daos_api.h>
-#include <daos/scheduler.h>
+#include <daos/tse.h>
 #include <daos/common.h>
 
 int dc_obj_init(void);
@@ -74,20 +74,20 @@ int
 dc_obj_layout_get(daos_handle_t oh, struct pl_obj_layout **layout,
 		  unsigned int *grp_nr, unsigned int *grp_size);
 
-int dc_obj_class_register(struct daos_task *task);
-int dc_obj_class_query(struct daos_task *task);
-int dc_obj_class_list(struct daos_task *task);
-int dc_obj_declare(struct daos_task *task);
-int dc_obj_open(struct daos_task *task);
-int dc_obj_close(struct daos_task *task);
-int dc_obj_punch(struct daos_task *task);
-int dc_obj_query(struct daos_task *task);
-int dc_obj_fetch(struct daos_task *task);
-int dc_obj_update(struct daos_task *task);
-int dc_obj_list_dkey(struct daos_task *task);
-int dc_obj_list_akey(struct daos_task *task);
-int dc_obj_list_rec(struct daos_task *task);
-int dc_obj_single_shard_list_dkey(struct daos_task *task);
+int dc_obj_class_register(tse_task_t *task);
+int dc_obj_class_query(tse_task_t *task);
+int dc_obj_class_list(tse_task_t *task);
+int dc_obj_declare(tse_task_t *task);
+int dc_obj_open(tse_task_t *task);
+int dc_obj_close(tse_task_t *task);
+int dc_obj_punch(tse_task_t *task);
+int dc_obj_query(tse_task_t *task);
+int dc_obj_fetch(tse_task_t *task);
+int dc_obj_update(tse_task_t *task);
+int dc_obj_list_dkey(tse_task_t *task);
+int dc_obj_list_akey(tse_task_t *task);
+int dc_obj_list_rec(tse_task_t *task);
+int dc_obj_single_shard_list_dkey(tse_task_t *task);
 
 #define ENUM_ANCHOR_SHARD_OFF		28
 #define ENUM_ANCHOR_SHARD_LENGTH	4

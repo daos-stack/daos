@@ -34,7 +34,7 @@
 #include <daos/hash.h>
 #include <daos/pool_map.h>
 #include <daos/rsvc.h>
-#include <daos/scheduler.h>
+#include <daos/tse.h>
 
 int dc_pool_init(void);
 void dc_pool_fini(void);
@@ -66,15 +66,15 @@ void dc_pool_put(struct dc_pool *pool);
 
 int dc_pool_local2global(daos_handle_t poh, daos_iov_t *glob);
 int dc_pool_global2local(daos_iov_t glob, daos_handle_t *poh);
-int dc_pool_connect(struct daos_task *task);
-int dc_pool_disconnect(struct daos_task *task);
-int dc_pool_query(struct daos_task *task);
-int dc_pool_target_query(struct daos_task *task);
-int dc_pool_exclude(struct daos_task *task);
-int dc_pool_exclude_out(struct daos_task *task);
-int dc_pool_add(struct daos_task *task);
-int dc_pool_evict(struct daos_task *task);
-int dc_pool_svc_stop(struct daos_task *task);
+int dc_pool_connect(tse_task_t *task);
+int dc_pool_disconnect(tse_task_t *task);
+int dc_pool_query(tse_task_t *task);
+int dc_pool_target_query(tse_task_t *task);
+int dc_pool_exclude(tse_task_t *task);
+int dc_pool_exclude_out(tse_task_t *task);
+int dc_pool_add(tse_task_t *task);
+int dc_pool_evict(tse_task_t *task);
+int dc_pool_svc_stop(tse_task_t *task);
 
 int
 dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);

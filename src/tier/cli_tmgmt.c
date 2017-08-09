@@ -39,7 +39,7 @@ struct tier_conn_arg {
 
 /*Completion callback for Cross-Connection*/
 static int
-dc_tier_conn_cb(struct daos_task *task, void *data)
+dc_tier_conn_cb(tse_task_t *task, void *data)
 {
 	struct tier_conn_arg		*tc_arg = (struct tier_conn_arg *)data;
 	struct tier_cross_conn_out	*cco_out = crt_reply_get(tc_arg->rpc);
@@ -68,7 +68,7 @@ out:
 
 /*Completion callback for cold tier registry*/
 static int
-dc_tier_register_cold_cb(struct daos_task *task, void *data)
+dc_tier_register_cold_cb(tse_task_t *task, void *data)
 {
 	struct tier_reg_cold_arg	*trc_arg =
 					(struct tier_reg_cold_arg *)data;
@@ -98,7 +98,7 @@ out:
 
 int
 dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
-		struct daos_task *task)
+		tse_task_t *task)
 {
 	int				rc;
 	crt_endpoint_t			warm_tgt_ep = {0};
@@ -116,7 +116,7 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 	warm_tgt_ep.ep_tag = 1;
 
 	rc = tier_req_create(daos_task2ctx(task), &warm_tgt_ep, TIER_CROSS_CONN,
-			    &rpc_req);
+			     &rpc_req);
 
 	if (rc != 0) {
 		D_ERROR("crt_req_create(TIER_CROSS_CONN) failed, rc: %d.\n",
@@ -146,8 +146,8 @@ dc_tier_connect(const uuid_t warm_id, const char *warm_grp,
 	tc_arg->rpc = rpc_req;
 
 	/*Register CB*/
-	rc = daos_task_register_comp_cb(task, dc_tier_conn_cb, tc_arg,
-					sizeof(struct tier_conn_arg));
+	rc = tse_task_register_comp_cb(task, dc_tier_conn_cb, tc_arg,
+				       sizeof(struct tier_conn_arg));
 	if (rc) {
 		D_ERROR("Failed to register task callback.\n");
 		D_GOTO(out_decref, rc);
@@ -169,7 +169,7 @@ out_final:
 
 int
 dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
-		      char *tgt_grp_id, struct daos_task *task){
+		      char *tgt_grp_id, tse_task_t *task){
 
 	int				rc;
 	crt_endpoint_t			tgt;
@@ -184,7 +184,7 @@ dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	D_DEBUG(DF_TIERS, "tgt.ep_grp = %p\n", tgt.ep_grp);
 
 	rc = tier_req_create(daos_task2ctx(task), &tgt, TIER_REGISTER_COLD,
-			    &rpc_req);
+			     &rpc_req);
 
 	D_DEBUG(DF_TIERS, "entering...\n");
 	if (rc != 0)
@@ -207,8 +207,8 @@ dc_tier_register_cold(const uuid_t colder_id, const char *colder_grp,
 	trc_arg->rpc = rpc_req;
 
 	/*Register CB*/
-	rc = daos_task_register_comp_cb(task, dc_tier_register_cold_cb, trc_arg,
-					sizeof(struct tier_reg_cold_arg));
+	rc = tse_task_register_comp_cb(task, dc_tier_register_cold_cb, trc_arg,
+				       sizeof(struct tier_reg_cold_arg));
 	if (rc)
 		D_GOTO(out, rc);
 

@@ -37,8 +37,8 @@ int
 daos_kv_put(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 	    daos_size_t buf_size, const void *buf, daos_event_t *ev)
 {
-	daos_kv_put_t		args;
-	struct daos_task	*task;
+	daos_kv_put_t	args;
+	tse_task_t	*task;
 
 	args.oh		= oh;
 	args.epoch	= epoch;
@@ -54,8 +54,8 @@ int
 daos_kv_get(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 	    daos_size_t *buf_size, void *buf, daos_event_t *ev)
 {
-	daos_kv_get_t		args;
-	struct daos_task	*task;
+	daos_kv_get_t	args;
+	tse_task_t	*task;
 
 	args.oh		= oh;
 	args.epoch	= epoch;
@@ -81,7 +81,7 @@ daos_obj_fetch_multi(daos_handle_t oh, daos_epoch_t epoch,
 		     daos_event_t *ev)
 {
 	daos_obj_multi_io_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	if (num_dkeys == 0)
 		return 0;
@@ -102,7 +102,7 @@ daos_obj_update_multi(daos_handle_t oh, daos_epoch_t epoch,
 		      daos_event_t *ev)
 {
 	daos_obj_multi_io_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	if (num_dkeys == 0)
 		return 0;

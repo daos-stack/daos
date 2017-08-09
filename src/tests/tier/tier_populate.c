@@ -15,7 +15,7 @@ FILE	    *fp;
 
 
 daos_obj_id_t
-test_oid_gen(uint16_t oclass, unsigned seed)
+test_oid_gen(uint16_t oclass, unsigned int seed)
 {
 	daos_obj_id_t oid = dts_oid_gen(oclass, seed);
 
@@ -196,8 +196,8 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
 }
 
 void
-insert(const char *dkey, int nr, const char **akey, uint64_t *idx,
-       void **val, daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req)
+insert(const char *dkey, int nr, const char **akey, uint64_t *idx, void **val,
+	daos_size_t *size, daos_epoch_t *epoch, struct ioreq *req)
 {
 	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 
@@ -252,8 +252,8 @@ lookup_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 
 void
 lookup(const char *dkey, int nr, const char **akey, uint64_t *idx,
-       daos_size_t *read_size, void **val, daos_size_t *size,
-       daos_epoch_t *epoch, struct ioreq *req)
+	daos_size_t *read_size, void **val, daos_size_t *size,
+	daos_epoch_t *epoch, struct ioreq *req)
 {
 	assert_in_range(nr, 1, IOREQ_SG_IOD_NR);
 

@@ -34,7 +34,7 @@ struct tier_ping_arg {
 };
 
 static int
-tier_ping_cb(struct daos_task *task, void *data)
+tier_ping_cb(tse_task_t *task, void *data)
 {
 	struct tier_ping_arg	*arg = (struct tier_ping_arg *)data;
 	crt_rpc_t		*rpc = arg->rpc;
@@ -55,7 +55,7 @@ tier_ping_cb(struct daos_task *task, void *data)
 }
 
 int
-dc_tier_ping(uint32_t ping_val, struct daos_task *task)
+dc_tier_ping(uint32_t ping_val, tse_task_t *task)
 {
 
 	D_DEBUG(DF_MISC, "Entering daos_tier_ping()\n");
@@ -88,7 +88,7 @@ dc_tier_ping(uint32_t ping_val, struct daos_task *task)
 
 	arg.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, tier_ping_cb, &arg, sizeof(arg));
+	rc = tse_task_register_comp_cb(task, tier_ping_cb, &arg, sizeof(arg));
 	if (rc != 0)
 		D_GOTO(out_req_put, rc);
 
@@ -103,6 +103,6 @@ out_req_put:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
 out_task:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }

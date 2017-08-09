@@ -89,7 +89,7 @@ struct daos_task_args {
 };
 
 struct daos_task_api {
-	daos_task_func_t	task_func;
+	tse_task_func_t		task_func;
 	daos_size_t		arg_size;
 };
 

@@ -50,7 +50,7 @@ enum daos_ev_flags {
 	DAOS_EVF_NEED_LAUNCH	= (1 << 1),
 };
 
-struct daos_task;
+struct tse_task_t;
 
 typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
 
@@ -67,7 +67,7 @@ int
 daos_eq_lib_init();
 
 crt_context_t *
-daos_task2ctx(struct daos_task *task);
+daos_task2ctx(tse_task_t *task);
 
 /**
  * Initialize a new event for \a eqh
@@ -113,7 +113,7 @@ daos_event_launch(struct daos_event *ev);
 crt_context_t
 daos_ev2ctx(struct daos_event *ev);
 
-struct daos_sched *
+tse_sched_t *
 daos_ev2sched(struct daos_event *ev);
 
 /**
@@ -135,12 +135,12 @@ daos_event_register_comp_cb(struct daos_event *ev,
 			    daos_event_comp_cb_t cb, void *arg);
 
 int
-daos_client_task_prep(void *arg, int arg_size, struct daos_task **taskp,
+daos_client_task_prep(void *arg, int arg_size, tse_task_t **taskp,
 		      daos_event_t **evp);
 
 int
 dc_task_create(daos_opc_t opc, void *arg, int arg_size,
-	       struct daos_task **taskp, daos_event_t **evp);
+	       tse_task_t **taskp, daos_event_t **evp);
 
 /**
  * Wait for completion of the private event

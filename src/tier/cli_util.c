@@ -23,7 +23,7 @@
 #define DD_SUBSYS	DD_FAC(client)
 
 #include <daos/common.h>
-#include <daos/scheduler.h>
+#include <daos/tse.h>
 #include <daos/tier.h>
 #include <daos/rpc.h>
 #include "cli_internal.h"

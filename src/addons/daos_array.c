@@ -38,8 +38,8 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		  daos_size_t cell_size, daos_size_t block_size,
 		  daos_handle_t *oh, daos_event_t *ev)
 {
-	daos_array_create_t		args;
-	struct daos_task		*task;
+	daos_array_create_t	args;
+	tse_task_t		*task;
 
 	args.coh	= coh;
 	args.oid	= oid;
@@ -57,8 +57,8 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		unsigned int mode, daos_size_t *cell_size,
 		daos_size_t *block_size, daos_handle_t *oh, daos_event_t *ev)
 {
-	daos_array_open_t		args;
-	struct daos_task		*task;
+	daos_array_open_t	args;
+	tse_task_t		*task;
 
 	*cell_size = 0;
 	*block_size = 0;
@@ -78,8 +78,8 @@ daos_array_open(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 int
 daos_array_close(daos_handle_t oh, daos_event_t *ev)
 {
-	daos_array_close_t		args;
-	struct daos_task                *task;
+	daos_array_close_t	args;
+	tse_task_t		*task;
 
 	args.oh         = oh;
 
@@ -92,8 +92,8 @@ daos_array_read(daos_handle_t oh, daos_epoch_t epoch,
 		daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
 		daos_csum_buf_t *csums, daos_event_t *ev)
 {
-	daos_array_io_t		args;
-	struct daos_task	*task;
+	daos_array_io_t	args;
+	tse_task_t	*task;
 
 	args.oh		= oh;
 	args.epoch	= epoch;
@@ -110,8 +110,8 @@ daos_array_write(daos_handle_t oh, daos_epoch_t epoch,
 		 daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
 		 daos_csum_buf_t *csums, daos_event_t *ev)
 {
-	daos_array_io_t		args;
-	struct daos_task	*task;
+	daos_array_io_t	args;
+	tse_task_t	*task;
 
 	args.oh		= oh;
 	args.epoch	= epoch;
@@ -128,7 +128,7 @@ daos_array_get_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t *size,
 		    daos_event_t *ev)
 {
 	daos_array_get_size_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	args.oh		= oh;
 	args.epoch	= epoch;
@@ -144,7 +144,7 @@ daos_array_set_size(daos_handle_t oh, daos_epoch_t epoch, daos_size_t size,
 		    daos_event_t *ev)
 {
 	daos_array_set_size_t	args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 
 	args.oh		= oh;
 	args.epoch	= epoch;

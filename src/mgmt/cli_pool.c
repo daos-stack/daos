@@ -35,7 +35,7 @@ struct pool_create_arg {
 };
 
 static int
-pool_create_cp(struct daos_task *task, void *data)
+pool_create_cp(tse_task_t *task, void *data)
 {
 	struct pool_create_arg		*arg = (struct pool_create_arg *)data;
 	daos_rank_list_t		*svc = arg->svc;
@@ -67,7 +67,7 @@ out:
 }
 
 int
-dc_pool_create(struct daos_task *task)
+dc_pool_create(tse_task_t *task)
 {
 	daos_pool_create_t		*args;
 	crt_endpoint_t			svr_ep;
@@ -120,8 +120,8 @@ dc_pool_create(struct daos_task *task)
 	create_args.rpc = rpc_req;
 	create_args.svc = args->svc;
 
-	rc = daos_task_register_comp_cb(task, pool_create_cp, &create_args,
-					sizeof(create_args));
+	rc = tse_task_register_comp_cb(task, pool_create_cp, &create_args,
+				       sizeof(create_args));
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
@@ -136,12 +136,12 @@ out_put_req:
 out_grp:
 	daos_group_detach(svr_ep.ep_grp);
 out:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
 static int
-pool_destroy_cp(struct daos_task *task, void *data)
+pool_destroy_cp(tse_task_t *task, void *data)
 {
 	crt_rpc_t			*rpc = *((crt_rpc_t **)data);
 	struct mgmt_pool_destroy_out	*pd_out;
@@ -166,7 +166,7 @@ out:
 }
 
 int
-dc_pool_destroy(struct daos_task *task)
+dc_pool_destroy(tse_task_t *task)
 {
 	daos_pool_destroy_t		*args;
 	crt_endpoint_t			 svr_ep;
@@ -207,8 +207,8 @@ dc_pool_destroy(struct daos_task *task)
 	pd_in->pd_force = (args->force == 0) ? false : true;
 
 	crt_req_addref(rpc_req);
-	rc = daos_task_register_comp_cb(task, pool_destroy_cp, &rpc_req,
-					sizeof(rpc_req));
+	rc = tse_task_register_comp_cb(task, pool_destroy_cp, &rpc_req,
+				       sizeof(rpc_req));
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
@@ -225,6 +225,6 @@ out_put_req:
 out_group:
 	daos_group_detach(svr_ep.ep_grp);
 out:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }

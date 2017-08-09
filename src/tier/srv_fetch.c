@@ -116,7 +116,7 @@ struct tier_fetch_ctx {
 	daos_handle_t	     dfc_oh;
 	daos_handle_t	     dfc_coh;
 	daos_handle_t	     dfc_ioh;
-	struct daos_sched   *dfc_sched;
+	tse_sched_t	*dfc_sched;
 	/* list heads for collecting what to fetch */
 	daos_list_t          dfc_head;
 	daos_list_t          dfc_iods;
@@ -141,7 +141,7 @@ static int tier_rec_cb(void *ctx, vos_iter_entry_t *ie);
  * container handle
  */
 static int
-tf_cont_cb(struct daos_task *task, void *data)
+tf_cont_cb(tse_task_t *task, void *data)
 {
 	daos_handle_t **pc  = data;
 	daos_handle_t *pcoh = *pc;
@@ -164,12 +164,12 @@ tf_cont_close(daos_handle_t coh, uuid_t cid, daos_epoch_t epoch)
 {
 	daos_cont_close_t	args2;
 	daos_epoch_commit_t	args1;
-	struct daos_task	*task1;
-	struct daos_task	*task2;
+	tse_task_t		*task1;
+	tse_task_t		*task2;
 	int			rc;
 	bool			empty;
 	daos_epoch_state_t	state;
-	struct daos_sched	*sched;
+	tse_sched_t		*sched;
 
 	D_ENTER;
 	args1.coh	= coh;
@@ -194,14 +194,14 @@ tf_cont_close(daos_handle_t coh, uuid_t cid, daos_epoch_t epoch)
 		D_ERROR("daos_task_create returned %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = daos_task_schedule(task2, false);
+	rc = tse_task_schedule(task2, false);
 	if (rc) {
-		D_ERROR("daos_task_schedule returned %d\n", rc);
+		D_ERROR("tse_task_schedule returned %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = daos_task_schedule(task1, false);
+	rc = tse_task_schedule(task1, false);
 	if (rc) {
-		D_ERROR("daos_task_schedule returned %d\n", rc);
+		D_ERROR("tse_task_schedule returned %d\n", rc);
 		D_GOTO(out, rc);
 	}
 	/* make sure this completes before we return */
@@ -217,14 +217,14 @@ tf_cont_open(daos_handle_t *pcoh, uuid_t cid, daos_epoch_t *epoch)
 {
 	daos_cont_open_t	 args1;
 	daos_epoch_hold_t	 args2;
-	struct daos_task	*task1;
-	struct daos_task	*task2;
+	tse_task_t		*task1;
+	tse_task_t		*task2;
 	daos_cont_open_t	*dta1;
 	daos_epoch_hold_t	*dta2;
 	int			 rc;
 	bool			 empty;
 	daos_epoch_state_t	 epstate;
-	struct daos_sched	*sched;
+	tse_sched_t		*sched;
 
 	args1.poh	= warmer_poh;
 	args1.flags	= DAOS_COO_RW;
@@ -250,27 +250,27 @@ tf_cont_open(daos_handle_t *pcoh, uuid_t cid, daos_epoch_t *epoch)
 		D_ERROR("daos_task_create returned %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = daos_task_register_comp_cb(task2, tf_cont_cb,
-					&pcoh, sizeof(daos_handle_t **));
+	rc = tse_task_register_comp_cb(task2, tf_cont_cb,
+				       &pcoh, sizeof(daos_handle_t **));
 	if (rc) {
-		D_ERROR("daos_task_register_comp_cb returned %d\n", rc);
+		D_ERROR("tse_task_register_comp_cb returned %d\n", rc);
 		D_GOTO(out, rc);
 	}
 	dta1 = daos_task_get_args(DAOS_OPC_CONT_OPEN, task1);
 	dta2 = daos_task_get_args(DAOS_OPC_EPOCH_HOLD, task2);
 	dta1->coh = &dta2->coh;
 
-	rc = daos_task_schedule(task2, false);
+	rc = tse_task_schedule(task2, false);
 	if (rc) {
-		D_ERROR("daos_task_schedule returned %d\n", rc);
+		D_ERROR("tse_task_schedule returned %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	rc = daos_task_schedule(task1, false);
+	rc = tse_task_schedule(task1, false);
 	if (rc) {
-		D_ERROR("daos_task_schedule returned %d\n", rc);
+		D_ERROR("tse_task_schedule returned %d\n", rc);
 		D_GOTO(out, rc);
 	}
-	daos_sched_progress(sched);
+	tse_sched_progress(sched);
 	empty = false;
 	while (!empty) {
 		rc = daos_progress(sched, DAOS_EQ_NOWAIT, &empty);
@@ -442,7 +442,7 @@ static int
 tier_proc_obj(void *ctx, vos_iter_entry_t *ie)
 {
 	struct tier_fetch_ctx	*fctx = (struct tier_fetch_ctx *)ctx;
-	struct daos_task	*task;
+	tse_task_t		*task;
 	int			rc;
 	daos_obj_close_t	args;
 
@@ -454,8 +454,8 @@ tier_proc_obj(void *ctx, vos_iter_entry_t *ie)
 	rc = daos_task_create(DAOS_OPC_OBJ_CLOSE,  fctx->dfc_sched,
 			      &args, 0, NULL, &task);
 	if (rc == 0) {
-		daos_task_schedule(task, true);
-		daos_sched_progress(fctx->dfc_sched);
+		tse_task_schedule(task, true);
+		tse_sched_progress(fctx->dfc_sched);
 	}
 	return rc;
 
@@ -466,7 +466,7 @@ static int
 tf_obj_open(struct tier_fetch_ctx *fctx)
 {
 	daos_obj_open_t		args;
-	struct daos_task	*task;
+	tse_task_t		*task;
 	int			rc;
 	bool			empty;
 
@@ -484,7 +484,7 @@ tf_obj_open(struct tier_fetch_ctx *fctx)
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, fctx->dfc_sched, &args,
 			      0, NULL, &task);
 	if (rc == 0) {
-		daos_task_schedule(task, true);
+		tse_task_schedule(task, true);
 		daos_progress(fctx->dfc_sched,
 			      DAOS_EQ_WAIT, &empty);
 	}
@@ -501,7 +501,7 @@ struct tf_ou_cb_args {
 
 /* object update callback - releases VOS ZC resources */
 static int
-tf_obj_update_cb(struct daos_task *task, void *data)
+tf_obj_update_cb(tse_task_t *task, void *data)
 {
 	struct tf_ou_cb_args *cba = (struct tf_ou_cb_args *)data;
 	int rc;
@@ -530,7 +530,7 @@ static int
 tf_obj_update(struct tier_fetch_ctx *fctx, struct tier_key_iod *tki)
 {
 	daos_obj_update_t	args;
-	struct daos_task       *task;
+	tse_task_t	       *task;
 	int			rc;
 	struct tf_ou_cb_args	cba;
 	bool			empty;
@@ -556,13 +556,13 @@ tf_obj_update(struct tier_fetch_ctx *fctx, struct tier_key_iod *tki)
 	cba.iods  = args.iods;
 	cba.tki   = tki;
 
-	rc = daos_task_register_comp_cb(task, tf_obj_update_cb,
-					&cba, sizeof(struct tf_ou_cb_args));
+	rc = tse_task_register_comp_cb(task, tf_obj_update_cb,
+				       &cba, sizeof(struct tf_ou_cb_args));
 	if (rc) {
 		D_ERROR("das_task_register_comp_cb returned %d\n", rc);
 		D_GOTO(out, rc);
 	} else {
-		daos_task_schedule(task, true);
+		tse_task_schedule(task, true);
 		daos_progress(fctx->dfc_sched,
 			      DAOS_EQ_WAIT, &empty);
 	}

@@ -29,7 +29,7 @@
 #define DD_SUBSYS	DD_FAC(client)
 
 #include <daos/common.h>
-#include <daos/scheduler.h>
+#include <daos/tse.h>
 #include <daos/addons.h>
 #include <daos_api.h>
 #include <daos_addons.h>
@@ -68,7 +68,7 @@ struct io_params {
 	daos_iod_t		iod;
 	daos_sg_list_t		sgl;
 	bool			user_sgl_used;
-	struct daos_task	*task;
+	tse_task_t		*task;
 	struct io_params	*next;
 };
 
@@ -120,7 +120,7 @@ array_hdl2ptr(daos_handle_t oh)
 
 
 static int
-free_io_params_cb(struct daos_task *task, void *data)
+free_io_params_cb(tse_task_t *task, void *data)
 {
 	struct io_params *io_list = *((struct io_params **)data);
 	int rc = task->dt_result;
@@ -153,7 +153,7 @@ free_io_params_cb(struct daos_task *task, void *data)
 }
 
 static int
-create_handle_cb(struct daos_task *task, void *data)
+create_handle_cb(tse_task_t *task, void *data)
 {
 	daos_array_create_t *args = *((daos_array_create_t **)data);
 	struct dac_array	*array;
@@ -182,17 +182,17 @@ create_handle_cb(struct daos_task *task, void *data)
 err_obj:
 	{
 		daos_obj_close_t close_args;
-		struct daos_task *close_task;
+		tse_task_t *close_task;
 
 		close_args.oh = *args->oh;
-		daos_task_create(DAOS_OPC_OBJ_CLOSE, daos_task2sched(task),
+		daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
 				 &close_args, 0, NULL, &close_task);
 		return rc;
 	}
 }
 
 static int
-free_handle_cb(struct daos_task *task, void *data)
+free_handle_cb(tse_task_t *task, void *data)
 {
 	daos_handle_t		*oh = (daos_handle_t *)data;
 	struct dac_array	*array;
@@ -214,7 +214,7 @@ free_handle_cb(struct daos_task *task, void *data)
 }
 
 static int
-write_md_cb(struct daos_task *task, void *data)
+write_md_cb(tse_task_t *task, void *data)
 {
 	daos_array_create_t *args = *((daos_array_create_t **)data);
 	daos_obj_update_t *update_args;
@@ -267,8 +267,8 @@ write_md_cb(struct daos_task *task, void *data)
 	update_args->iods = &params->iod;
 	update_args->sgls = &params->sgl;
 
-	rc = daos_task_register_comp_cb(task, free_io_params_cb, &params,
-					sizeof(params));
+	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
+				       sizeof(params));
 	if (rc != 0)
 		return rc;
 
@@ -276,10 +276,10 @@ write_md_cb(struct daos_task *task, void *data)
 }
 
 int
-dac_array_create(struct daos_task *task)
+dac_array_create(tse_task_t *task)
 {
 	daos_array_create_t	*args;
-	struct daos_task	*open_task, *update_task;
+	tse_task_t		*open_task, *update_task;
 	daos_obj_open_t		open_args;
 	int			rc;
 
@@ -292,17 +292,17 @@ dac_array_create(struct daos_task *task)
 	open_args.epoch = args->epoch;
 	open_args.mode = DAOS_OO_RW;
 	open_args.oh = args->oh;
-	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, daos_task2sched(task),
+	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task),
 			      &open_args, 0, NULL, &open_task);
 	if (rc != 0) {
 		D_ERROR("Failed to create object_open task\n");
 		return rc;
 	}
 
-	daos_task_schedule(open_task, false);
+	tse_task_schedule(open_task, false);
 
 	/** Create task to write object metadata */
-	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, daos_task2sched(task),
+	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
 			      NULL, 1, &open_task, &update_task);
 	if (rc != 0) {
 		D_ERROR("Failed to create object_update task\n");
@@ -310,42 +310,42 @@ dac_array_create(struct daos_task *task)
 	}
 
 	/** add a prepare CB to set the args for the metadata write */
-	rc = daos_task_register_cbs(update_task, write_md_cb, &args,
-				    sizeof(args), NULL, NULL, 0);
+	rc = tse_task_register_cbs(update_task, write_md_cb, &args,
+				   sizeof(args), NULL, NULL, 0);
 	if (rc != 0) {
 		D_ERROR("Failed to register prep CB\n");
 		D_GOTO(err_put2, rc);
 	}
 
 	/** The upper task completes when the update task completes */
-	rc = daos_task_register_deps(task, 1, &update_task);
+	rc = tse_task_register_deps(task, 1, &update_task);
 	if (rc != 0) {
 		D_ERROR("Failed to register dependency\n");
 		D_GOTO(err_put2, rc);
 	}
 
 	/** CB to generate the array OH */
-	rc = daos_task_register_cbs(task, NULL, NULL, 0, create_handle_cb,
+	rc = tse_task_register_cbs(task, NULL, NULL, 0, create_handle_cb,
 				    &args, sizeof(args));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion cb\n");
 		D_GOTO(err_put2, rc);
 	}
 
-	daos_task_schedule(update_task, false);
-	daos_sched_progress(daos_task2sched(task));
+	tse_task_schedule(update_task, false);
+	tse_sched_progress(tse_task2sched(task));
 
 	return rc;
 
 err_put2:
 	D_FREE_PTR(update_task);
 err_put1:
-	daos_task_complete(open_task, rc);
+	tse_task_complete(open_task, rc);
 	return rc;
 }
 
 static int
-open_handle_cb(struct daos_task *task, void *data)
+open_handle_cb(tse_task_t *task, void *data)
 {
 	daos_array_open_t *args = *((daos_array_open_t **)data);
 	struct dac_array	*array;
@@ -378,17 +378,17 @@ open_handle_cb(struct daos_task *task, void *data)
 err_obj:
 	{
 		daos_obj_close_t close_args;
-		struct daos_task *close_task;
+		tse_task_t *close_task;
 
 		close_args.oh = *args->oh;
-		daos_task_create(DAOS_OPC_OBJ_CLOSE, daos_task2sched(task),
+		daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
 				 &close_args, 0, NULL, &close_task);
 		return rc;
 	}
 }
 
 static int
-fetch_md_cb(struct daos_task *task, void *data)
+fetch_md_cb(tse_task_t *task, void *data)
 {
 	daos_array_open_t *args = *((daos_array_open_t **)data);
 	daos_obj_fetch_t *fetch_args;
@@ -439,8 +439,8 @@ fetch_md_cb(struct daos_task *task, void *data)
 	fetch_args->iods = &params->iod;
 	fetch_args->sgls = &params->sgl;
 
-	rc = daos_task_register_comp_cb(task, free_io_params_cb, &params,
-					sizeof(params));
+	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
+				       sizeof(params));
 	if (rc != 0)
 		return rc;
 
@@ -448,10 +448,10 @@ fetch_md_cb(struct daos_task *task, void *data)
 }
 
 int
-dac_array_open(struct daos_task *task)
+dac_array_open(tse_task_t *task)
 {
 	daos_array_open_t	*args;
-	struct daos_task	*open_task, *fetch_task;
+	tse_task_t		*open_task, *fetch_task;
 	daos_obj_open_t		open_args;
 	int			rc;
 
@@ -464,17 +464,17 @@ dac_array_open(struct daos_task *task)
 	open_args.epoch = args->epoch;
 	open_args.mode = args->mode;
 	open_args.oh = args->oh;
-	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, daos_task2sched(task),
+	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task),
 			      &open_args, 0, NULL, &open_task);
 	if (rc != 0) {
 		D_ERROR("Failed to open object_open task\n");
 		return rc;
 	}
 
-	daos_task_schedule(open_task, false);
+	tse_task_schedule(open_task, false);
 
 	/** Create task to fetch object metadata */
-	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, daos_task2sched(task),
+	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),
 			      NULL, 1, &open_task, &fetch_task);
 	if (rc != 0) {
 		D_ERROR("Failed to open object_fetch task\n");
@@ -482,7 +482,7 @@ dac_array_open(struct daos_task *task)
 	}
 
 	/** add a prepare CB to set the args for the metadata fetch */
-	rc = daos_task_register_cbs(fetch_task, fetch_md_cb, &args,
+	rc = tse_task_register_cbs(fetch_task, fetch_md_cb, &args,
 				    sizeof(args), NULL, NULL, 0);
 	if (rc != 0) {
 		D_ERROR("Failed to register prep CB\n");
@@ -490,39 +490,39 @@ dac_array_open(struct daos_task *task)
 	}
 
 	/** The upper task completes when the fetch task completes */
-	rc = daos_task_register_deps(task, 1, &fetch_task);
+	rc = tse_task_register_deps(task, 1, &fetch_task);
 	if (rc != 0) {
 		D_ERROR("Failed to register dependency\n");
 		D_GOTO(err_put2, rc);
 	}
 
 	/** Add a completion CB on the upper task to generate the array OH */
-	rc = daos_task_register_cbs(task, NULL, NULL, 0, open_handle_cb,
+	rc = tse_task_register_cbs(task, NULL, NULL, 0, open_handle_cb,
 				    &args, sizeof(args));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion cb\n");
 		D_GOTO(err_put2, rc);
 	}
 
-	daos_task_schedule(fetch_task, false);
+	tse_task_schedule(fetch_task, false);
 
-	daos_sched_progress(daos_task2sched(task));
+	tse_sched_progress(tse_task2sched(task));
 
 	return rc;
 
 err_put2:
 	D_FREE_PTR(fetch_task);
 err_put1:
-	daos_task_complete(open_task, rc);
+	tse_task_complete(open_task, rc);
 	return rc;
 }
 
 int
-dac_array_close(struct daos_task *task)
+dac_array_close(tse_task_t *task)
 {
 	daos_array_close_t	*args;
 	struct dac_array	*array;
-	struct daos_task	*close_task;
+	tse_task_t		*close_task;
 	daos_obj_close_t	close_args;
 	int			rc;
 
@@ -535,7 +535,7 @@ dac_array_close(struct daos_task *task)
 
 	/** Create task to close object */
 	close_args.oh = array->daos_oh;
-	rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, daos_task2sched(task),
+	rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
 			      &close_args, 0, NULL, &close_task);
 	if (rc != 0) {
 		D_ERROR("Failed to create object_close task\n");
@@ -543,22 +543,22 @@ dac_array_close(struct daos_task *task)
 	}
 
 	/** The upper task completes when the close task completes */
-	rc = daos_task_register_deps(task, 1, &close_task);
+	rc = tse_task_register_deps(task, 1, &close_task);
 	if (rc != 0) {
 		D_ERROR("Failed to register dependency\n");
 		D_GOTO(err, rc);
 	}
 
 	/** Add a completion CB on the upper task to free the array */
-	rc = daos_task_register_cbs(task, NULL, NULL, 0, free_handle_cb,
+	rc = tse_task_register_cbs(task, NULL, NULL, 0, free_handle_cb,
 				    &args->oh, sizeof(args->oh));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion cb\n");
 		D_GOTO(err, rc);
 	}
 
-	daos_task_schedule(close_task, false);
-	daos_sched_progress(daos_task2sched(task));
+	tse_task_schedule(close_task, false);
+	tse_sched_progress(tse_task2sched(task));
 	array_decref(array);
 
 	return rc;
@@ -715,7 +715,7 @@ create_sgl(daos_sg_list_t *user_sgl, daos_size_t cell_size,
 static int
 dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 	     daos_array_ranges_t *ranges, daos_sg_list_t *user_sgl,
-	     daos_opc_t op_type, struct daos_task *task)
+	     daos_opc_t op_type, tse_task_t *task)
 {
 	struct dac_array *array = NULL;
 	daos_handle_t	oh;
@@ -773,7 +773,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 		char		*dkey_str;
 		daos_key_t	*dkey;
 		daos_size_t	dkey_records;
-		struct daos_task *io_task;
+		tse_task_t	*io_task;
 		struct io_params *params = NULL;
 		daos_size_t	i;
 
@@ -982,7 +982,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			io_arg.maps = NULL;
 
 			rc = daos_task_create(DAOS_OPC_OBJ_FETCH,
-					      daos_task2sched(task), &io_arg, 0,
+					      tse_task2sched(task), &io_arg, 0,
 					      NULL, &io_task);
 			if (rc != 0) {
 				D_ERROR("KV Fetch of dkey %s failed (%d)\n",
@@ -1000,7 +1000,7 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			io_arg.sgls = sgl;
 
 			rc = daos_task_create(DAOS_OPC_OBJ_UPDATE,
-					      daos_task2sched(task), &io_arg, 0,
+					      tse_task2sched(task), &io_arg, 0,
 					      NULL, &io_task);
 			if (rc != 0) {
 				D_ERROR("KV Update of dkey %s failed (%d)\n",
@@ -1011,30 +1011,30 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 			D_ASSERTF(0, "Invalid array operation.\n");
 		}
 
-		daos_task_register_deps(task, 1, &io_task);
+		tse_task_register_deps(task, 1, &io_task);
 
-		rc = daos_task_schedule(io_task, false);
+		rc = tse_task_schedule(io_task, false);
 		if (rc != 0)
 			return rc;
 	} /* end while */
 
 	if (head)
-		daos_task_register_comp_cb(task, free_io_params_cb, &head,
-					   sizeof(head));
+		tse_task_register_comp_cb(task, free_io_params_cb, &head,
+					  sizeof(head));
 
 	array_decref(array);
-	daos_sched_progress(daos_task2sched(task));
+	tse_sched_progress(tse_task2sched(task));
 	return 0;
 
 err_task:
 	if (array)
 		array_decref(array);
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
 int
-dac_array_read(struct daos_task *task)
+dac_array_read(tse_task_t *task)
 {
 	daos_array_io_t *args;
 
@@ -1046,7 +1046,7 @@ dac_array_read(struct daos_task *task)
 }
 
 int
-dac_array_write(struct daos_task *task)
+dac_array_write(tse_task_t *task)
 {
 	daos_array_io_t *args;
 
@@ -1073,11 +1073,11 @@ struct get_size_props {
 	uint32_t	hi;
 	uint32_t	lo;
 	daos_size_t	*size;
-	struct daos_task *ptask;
+	tse_task_t	*ptask;
 };
 
 static int
-get_array_size_cb(struct daos_task *task, void *data)
+get_array_size_cb(tse_task_t *task, void *data)
 {
 	struct get_size_props *props = *((struct get_size_props **)data);
 	struct dac_array *array = props->array;
@@ -1121,13 +1121,13 @@ get_array_size_cb(struct daos_task *task, void *data)
 		args->sgl->sg_nr.num = 1;
 		daos_iov_set(&args->sgl->sg_iovs[0], props->buf, ENUM_DESC_BUF);
 
-		rc = daos_task_reinit(task);
+		rc = tse_task_reinit(task);
 		if (rc != 0) {
 			D_ERROR("FAILED to continue enumrating task\n");
 			D_GOTO(out, rc);
 		}
 
-		daos_task_register_cbs(task, NULL, NULL, 0, get_array_size_cb,
+		tse_task_register_cbs(task, NULL, NULL, 0, get_array_size_cb,
 				       &props, sizeof(props));
 
 		return rc;
@@ -1185,14 +1185,14 @@ out:
 }
 
 int
-dac_array_get_size(struct daos_task *task)
+dac_array_get_size(tse_task_t *task)
 {
 	daos_array_get_size_t	*args;
 	daos_handle_t		oh;
 	struct dac_array	*array;
 	daos_obj_list_dkey_t	enum_args;
 	struct get_size_props	*get_size_props;
-	struct daos_task	*enum_task;
+	tse_task_t		*enum_task;
 	int			rc;
 
 	args = daos_task_get_args(DAOS_OPC_ARRAY_GET_SIZE, task);
@@ -1228,29 +1228,29 @@ dac_array_get_size(struct daos_task *task)
 	enum_args.sgl = &get_size_props->sgl;
 	enum_args.anchor = &get_size_props->anchor;
 
-	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, daos_task2sched(task),
+	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task),
 			      &enum_args, 0, NULL, &enum_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_register_cbs(enum_task, NULL, NULL, 0, get_array_size_cb,
+	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0, get_array_size_cb,
 				    &get_size_props, sizeof(get_size_props));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion cb\n");
 		D_GOTO(err_task, rc);
 	}
 
-	rc = daos_task_register_deps(task, 1, &enum_task);
+	rc = tse_task_register_deps(task, 1, &enum_task);
 	if (rc != 0) {
 		D_ERROR("Failed to register dependency\n");
 		D_GOTO(err_task, rc);
 	}
 
-	rc = daos_task_schedule(enum_task, false);
+	rc = tse_task_schedule(enum_task, false);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	daos_sched_progress(daos_task2sched(task));
+	tse_sched_progress(tse_task2sched(task));
 
 	return 0;
 
@@ -1260,7 +1260,7 @@ err_task:
 	if (enum_task)
 		D_FREE_PTR(enum_task);
 	array_decref(array);
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 } /* end daos_array_get_size */
 
@@ -1280,11 +1280,11 @@ struct set_size_props {
 	daos_size_t	cell_size;
 	daos_size_t	num_records;
 	daos_off_t	record_i;
-	struct daos_task *ptask;
+	tse_task_t	*ptask;
 };
 
 static int
-free_props_cb(struct daos_task *task, void *data)
+free_props_cb(tse_task_t *task, void *data)
 {
 	struct set_size_props *props = *((struct set_size_props **)data);
 
@@ -1295,12 +1295,12 @@ free_props_cb(struct daos_task *task, void *data)
 }
 
 static int
-adjust_array_size_cb(struct daos_task *task, void *data)
+adjust_array_size_cb(tse_task_t *task, void *data)
 {
 	struct set_size_props *props = *((struct set_size_props **)data);
 	daos_obj_list_dkey_t *args;
 	char		*ptr;
-	struct daos_task *io_task = NULL;
+	tse_task_t	*io_task = NULL;
 	struct io_params *params = NULL;
 	uint32_t	j;
 	int		rc = task->dt_result;
@@ -1342,13 +1342,13 @@ adjust_array_size_cb(struct daos_task *task, void *data)
 		args->sgl->sg_nr.num = 1;
 		daos_iov_set(&args->sgl->sg_iovs[0], props->buf, ENUM_DESC_BUF);
 
-		rc = daos_task_reinit(task);
+		rc = tse_task_reinit(task);
 		if (rc != 0) {
 			D_ERROR("FAILED to continue enumrating task\n");
 			return rc;
 		}
 
-		daos_task_register_cbs(task, NULL, NULL, 0,
+		tse_task_register_cbs(task, NULL, NULL, 0,
 				       adjust_array_size_cb, &props,
 				       sizeof(props));
 
@@ -1415,7 +1415,7 @@ adjust_array_size_cb(struct daos_task *task, void *data)
 		io_arg.sgls = sgl;
 
 		rc = daos_task_create(DAOS_OPC_OBJ_UPDATE,
-				      daos_task2sched(task), &io_arg, 0, NULL,
+				      tse_task2sched(task), &io_arg, 0, NULL,
 				      &io_task);
 		if (rc != 0) {
 			D_ERROR("KV Update of dkey %s failed (%d)\n",
@@ -1423,16 +1423,16 @@ adjust_array_size_cb(struct daos_task *task, void *data)
 			D_GOTO(err_out, rc);
 		}
 
-		rc = daos_task_register_comp_cb(io_task, free_io_params_cb,
-						&params, sizeof(params));
+		rc = tse_task_register_comp_cb(io_task, free_io_params_cb,
+					       &params, sizeof(params));
 		if (rc != 0)
 			D_GOTO(err_out, rc);
 
-		rc = daos_task_register_deps(props->ptask, 1, &io_task);
+		rc = tse_task_register_deps(props->ptask, 1, &io_task);
 		if (rc != 0)
 			D_GOTO(err_out, rc);
 
-		rc = daos_task_schedule(io_task, false);
+		rc = tse_task_schedule(io_task, false);
 		if (rc != 0)
 			D_GOTO(err_out, rc);
 	}
@@ -1451,7 +1451,7 @@ err_out:
 }
 
 int
-dac_array_set_size(struct daos_task *task)
+dac_array_set_size(tse_task_t *task)
 {
 	daos_array_set_size_t	*args;
 	daos_handle_t		oh;
@@ -1461,7 +1461,7 @@ dac_array_set_size(struct daos_task *task)
 	daos_off_t		record_i;
 	daos_obj_list_dkey_t	enum_args;
 	struct set_size_props	*set_size_props;
-	struct daos_task	*enum_task;
+	tse_task_t		*enum_task;
 	int			rc, ret;
 
 	args = daos_task_get_args(DAOS_OPC_ARRAY_SET_SIZE, task);
@@ -1513,31 +1513,31 @@ dac_array_set_size(struct daos_task *task)
 	enum_args.sgl = &set_size_props->sgl;
 	enum_args.anchor = &set_size_props->anchor;
 
-	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, daos_task2sched(task),
+	rc = daos_task_create(DAOS_OPC_OBJ_LIST_DKEY, tse_task2sched(task),
 			      &enum_args, 0, NULL, &enum_task);
 	if (rc != 0)
 		return rc;
 
-	rc = daos_task_register_cbs(enum_task, NULL, NULL, 0,
+	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0,
 				    adjust_array_size_cb, &set_size_props,
 				    sizeof(set_size_props));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_register_deps(task, 1, &enum_task);
+	rc = tse_task_register_deps(task, 1, &enum_task);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_register_comp_cb(task, free_props_cb, &set_size_props,
-					sizeof(set_size_props));
+	rc = tse_task_register_comp_cb(task, free_props_cb, &set_size_props,
+				       sizeof(set_size_props));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	rc = daos_task_schedule(enum_task, false);
+	rc = tse_task_schedule(enum_task, false);
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 
-	daos_sched_progress(daos_task2sched(task));
+	tse_sched_progress(tse_task2sched(task));
 
 	array_decref(array);
 	return 0;
@@ -1548,6 +1548,6 @@ err_task:
 	if (enum_task)
 		D_FREE_PTR(enum_task);
 	array_decref(array);
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 } /* end daos_array_set_size */

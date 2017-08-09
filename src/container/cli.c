@@ -64,7 +64,7 @@ dc_cont_fini(void)
 static int
 cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 			      int rc_crt, struct cont_op_out *out,
-			      struct daos_task *task)
+			      tse_task_t *task)
 {
 	int rc;
 
@@ -75,7 +75,7 @@ cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 	if (rc == RSVC_CLIENT_RECHOOSE ||
 	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->co_rc))) {
 		task->dt_result = 0;
-		rc = daos_task_reinit(task);
+		rc = tse_task_reinit(task);
 		if (rc != 0)
 			return rc;
 		return RSVC_CLIENT_RECHOOSE;
@@ -89,7 +89,7 @@ struct cont_args {
 };
 
 static int
-cont_create_complete(struct daos_task *task, void *data)
+cont_create_complete(tse_task_t *task, void *data)
 {
 	struct cont_args       *arg = (struct cont_args *)data;
 	struct dc_pool	       *pool = arg->pool;
@@ -123,7 +123,7 @@ out:
 }
 
 int
-dc_cont_create(struct daos_task *task)
+dc_cont_create(tse_task_t *task)
 {
 	daos_cont_create_t     *args;
 	struct cont_create_in  *in;
@@ -167,8 +167,8 @@ dc_cont_create(struct daos_task *task)
 	arg.rpc = rpc;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_create_complete, &arg,
-					sizeof(arg));
+	rc = tse_task_register_comp_cb(task, cont_create_complete, &arg,
+				       sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -180,12 +180,12 @@ err_rpc:
 err_pool:
 	dc_pool_put(pool);
 err_task:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
 static int
-cont_destroy_complete(struct daos_task *task, void *data)
+cont_destroy_complete(tse_task_t *task, void *data)
 {
 	struct cont_args	*arg = (struct cont_args *)data;
 	struct dc_pool		*pool = arg->pool;
@@ -219,7 +219,7 @@ out:
 }
 
 int
-dc_cont_destroy(struct daos_task *task)
+dc_cont_destroy(tse_task_t *task)
 {
 	daos_cont_destroy_t	*args;
 	struct cont_destroy_in	*in;
@@ -267,8 +267,8 @@ dc_cont_destroy(struct daos_task *task)
 	arg.rpc = rpc;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_destroy_complete, &arg,
-					sizeof(arg));
+	rc = tse_task_register_comp_cb(task, cont_destroy_complete, &arg,
+				       sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -280,7 +280,7 @@ err_rpc:
 err_pool:
 	dc_pool_put(pool);
 err:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	return rc;
 }
 
@@ -328,7 +328,7 @@ struct cont_open_args {
 };
 
 static int
-cont_open_complete(struct daos_task *task, void *data)
+cont_open_complete(tse_task_t *task, void *data)
 {
 	struct cont_open_args	*arg = (struct cont_open_args *)data;
 	struct cont_open_out	*out = crt_reply_get(arg->rpc);
@@ -471,7 +471,7 @@ out:
 }
 
 int
-dc_cont_open(struct daos_task *task)
+dc_cont_open(tse_task_t *task)
 {
 	daos_cont_open_t	*args;
 	struct cont_open_in	*in;
@@ -533,8 +533,8 @@ dc_cont_open(struct daos_task *task)
 
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_open_complete, &arg,
-					sizeof(arg));
+	rc = tse_task_register_comp_cb(task, cont_open_complete, &arg,
+				       sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -549,7 +549,7 @@ err_cont:
 err_pool:
 	dc_pool_put(pool);
 err:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "failed to open container: %d\n", rc);
 	return rc;
 }
@@ -562,7 +562,7 @@ struct cont_close_args {
 };
 
 static int
-cont_close_complete(struct daos_task *task, void *data)
+cont_close_complete(tse_task_t *task, void *data)
 {
 	struct cont_close_args	*arg = (struct cont_close_args *)data;
 	struct cont_close_out	*out = crt_reply_get(arg->rpc);
@@ -614,7 +614,7 @@ out:
 }
 
 int
-dc_cont_close(struct daos_task *task)
+dc_cont_close(tse_task_t *task)
 {
 	daos_cont_close_t      *args;
 	daos_handle_t		coh;
@@ -664,7 +664,7 @@ dc_cont_close(struct daos_task *task)
 			DP_UUID(cont->dc_cont_hdl));
 		dc_pool_put(pool);
 		dc_cont_put(cont);
-		daos_task_complete(task, 0);
+		tse_task_complete(task, 0);
 		return 0;
 	}
 
@@ -689,8 +689,8 @@ dc_cont_close(struct daos_task *task)
 	arg.hdl = coh;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_close_complete, &arg,
-					sizeof(arg));
+	rc = tse_task_register_comp_cb(task, cont_close_complete, &arg,
+				       sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -705,7 +705,7 @@ err_pool:
 err_cont:
 	dc_cont_put(cont);
 err:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "failed to close container handle "DF_X64": %d\n",
 		coh.cookie, rc);
 	return rc;
@@ -720,7 +720,7 @@ struct cont_query_args {
 };
 
 static int
-cont_query_complete(struct daos_task *task, void *data)
+cont_query_complete(tse_task_t *task, void *data)
 {
 	struct cont_query_args	*arg = (struct cont_query_args *)data;
 	struct cont_query_out	*out = crt_reply_get(arg->rpc);
@@ -770,7 +770,7 @@ out:
 }
 
 int
-dc_cont_query(struct daos_task *task)
+dc_cont_query(tse_task_t *task)
 {
 	daos_cont_query_t	*args;
 	struct cont_query_in	*in;
@@ -820,8 +820,8 @@ dc_cont_query(struct daos_task *task)
 	arg.hdl	     = args->coh;
 	crt_req_addref(rpc);
 
-	rc = daos_task_register_comp_cb(task, cont_query_complete, &arg,
-					sizeof(arg));
+	rc = tse_task_register_comp_cb(task, cont_query_complete, &arg,
+				       sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -834,7 +834,7 @@ err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
 err:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "Failed to open container: %d\n", rc);
 	return rc;
 }
@@ -1051,37 +1051,37 @@ out:
 }
 
 int
-dc_cont_attr_get(struct daos_task *task)
+dc_cont_attr_get(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
 
 int
-dc_cont_attr_list(struct daos_task *task)
+dc_cont_attr_list(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
 
 int
-dc_cont_attr_set(struct daos_task *task)
+dc_cont_attr_set(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
 
 int
-dc_snap_create(struct daos_task *task)
+dc_snap_create(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
 
 int
-dc_snap_list(struct daos_task *task)
+dc_snap_list(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
 
 int
-dc_snap_destroy(struct daos_task *task)
+dc_snap_destroy(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
@@ -1095,7 +1095,7 @@ struct epoch_op_arg {
 };
 
 static int
-epoch_op_complete(struct daos_task *task, void *data)
+epoch_op_complete(tse_task_t *task, void *data)
 {
 	struct epoch_op_arg	       *arg = (struct epoch_op_arg *)data;
 	crt_rpc_t		       *rpc = arg->rpc;
@@ -1138,7 +1138,7 @@ out:
 
 static int
 epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
-	 daos_epoch_state_t *state, struct daos_task *task)
+	 daos_epoch_state_t *state, tse_task_t *task)
 {
 	struct cont_epoch_op_in	       *in;
 	struct dc_pool		       *pool;
@@ -1201,8 +1201,8 @@ epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 	crt_req_addref(rpc);
 	arg.rpc = rpc;
 
-	rc = daos_task_register_comp_cb(task, epoch_op_complete, &arg,
-					sizeof(arg));
+	rc = tse_task_register_comp_cb(task, epoch_op_complete, &arg,
+				       sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -1216,14 +1216,14 @@ err_pool:
 	dc_pool_put(pool);
 	dc_cont_put(cont);
 err:
-	daos_task_complete(task, rc);
+	tse_task_complete(task, rc);
 	D_DEBUG(DF_DSMC, "epoch op %u("DF_U64") failed: %d\n", opc,
 		epoch == NULL ? 0 : *epoch, rc);
 	return rc;
 }
 
 int
-dc_epoch_query(struct daos_task *task)
+dc_epoch_query(tse_task_t *task)
 {
 	daos_epoch_query_t *args;
 
@@ -1234,7 +1234,7 @@ dc_epoch_query(struct daos_task *task)
 }
 
 int
-dc_epoch_hold(struct daos_task *task)
+dc_epoch_hold(tse_task_t *task)
 {
 	daos_epoch_hold_t *args;
 
@@ -1246,7 +1246,7 @@ dc_epoch_hold(struct daos_task *task)
 }
 
 int
-dc_epoch_slip(struct daos_task *task)
+dc_epoch_slip(tse_task_t *task)
 {
 	daos_epoch_slip_t *args;
 
@@ -1258,7 +1258,7 @@ dc_epoch_slip(struct daos_task *task)
 }
 
 int
-dc_epoch_discard(struct daos_task *task)
+dc_epoch_discard(tse_task_t *task)
 {
 	daos_epoch_discard_t *args;
 
@@ -1270,7 +1270,7 @@ dc_epoch_discard(struct daos_task *task)
 }
 
 int
-dc_epoch_commit(struct daos_task *task)
+dc_epoch_commit(tse_task_t *task)
 {
 	daos_epoch_commit_t *args;
 
@@ -1282,13 +1282,13 @@ dc_epoch_commit(struct daos_task *task)
 }
 
 int
-dc_epoch_flush(struct daos_task *task)
+dc_epoch_flush(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
 
 int
-dc_epoch_wait(struct daos_task *task)
+dc_epoch_wait(tse_task_t *task)
 {
 	return -DER_NOSYS;
 }
