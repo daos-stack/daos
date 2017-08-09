@@ -35,6 +35,10 @@ struct pl_map_ops;
 
 /** common header of all placement map */
 struct pl_map {
+	/** correpsonding pool uuid */
+	uuid_t			 pl_uuid;
+	/** link chain on hash */
+	daos_list_t		 pl_link;
 	/** protect refcount */
 	pthread_spinlock_t	 pl_lock;
 	/** refcount */
@@ -45,10 +49,6 @@ struct pl_map {
 	uint32_t		 pl_ver;
 	/** placement map operations */
 	struct pl_map_ops       *pl_ops;
-	/**
-	 * TODO: add members
-	 * daos_list_t          ph_link;
-	 */
 };
 
 /**

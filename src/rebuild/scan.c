@@ -470,7 +470,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 	while (1) {
 		struct pool_map *poolmap;
 
-		map = pl_map_find(DAOS_HDL_INVAL, oid.id_pub);
+		map = pl_map_find(rebuild_gst.rg_pool_uuid, oid.id_pub);
 		if (map == NULL) {
 			D_ERROR(DF_UOID"Cannot find valid placement map\n",
 				DP_UOID(oid));
@@ -487,7 +487,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 		}
 		pl_map_decref(map);
 
-		daos_placement_update(poolmap);
+		pl_map_update(rebuild_gst.rg_pool_uuid, poolmap);
 		rebuild_pool_map_put(poolmap);
 	}
 
@@ -559,7 +559,7 @@ rebuild_scan_leader(void *data)
 	/* refresh placement for the server stack */
 	ABT_mutex_lock(rebuild_gst.rg_lock);
 	map = rebuild_pool_map_get();
-	rc = daos_placement_update(map);
+	rc = pl_map_update(rebuild_gst.rg_pool_uuid, map);
 	if (rc != 0) {
 		ABT_mutex_unlock(rebuild_gst.rg_lock);
 		D_GOTO(out_map, rc = -DER_NOMEM);

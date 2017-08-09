@@ -120,7 +120,7 @@ main(int argc, char **argv)
 	rc = plt_obj_place(oid);
 	D_ASSERT(rc == 0);
 
-	pl_map_destroy(pl_map);
+	pl_map_decref(pl_map);
 
 	pool_map_decref(po_map);
 	pool_buf_free(buf);

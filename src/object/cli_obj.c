@@ -212,12 +212,18 @@ static int
 obj_layout_create(struct dc_object *obj)
 {
 	struct pl_obj_layout	*layout;
+	struct dc_pool		*pool;
 	struct pl_map		*map;
 	int			 i;
 	int			 nr;
 	int			 rc;
 
-	map = pl_map_find(obj->cob_coh, obj->cob_md.omd_id);
+	pool = dc_hdl2pool(dc_cont_hdl2pool_hdl(obj->cob_coh));
+	D_ASSERT(pool != NULL);
+
+	map = pl_map_find(pool->dp_pool, obj->cob_md.omd_id);
+	dc_pool_put(pool);
+
 	if (map == NULL) {
 		D_DEBUG(DB_PL, "Cannot find valid placement map\n");
 		D_GOTO(out, rc = -DER_INVAL);

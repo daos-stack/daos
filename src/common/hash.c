@@ -1146,12 +1146,6 @@ daos_uhash_link_insert(struct dhash_table *uhtab, struct daos_uuid *key,
 	return rc;
 }
 
-bool
-daos_uhash_link_last_ref(struct daos_ulink *ulink)
-{
-	return ulink->ul_link.rl_ref == 1;
-}
-
 void
 daos_uhash_link_delete(struct dhash_table *uhtab, struct daos_ulink *ulink)
 {

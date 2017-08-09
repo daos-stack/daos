@@ -168,29 +168,24 @@ static int
 pool_map_update(struct dc_pool *pool, struct pool_map *map,
 		unsigned int map_version)
 {
-	struct pool_map *tmp_map;
 	int rc;
 
 	D_ASSERT(map != NULL);
 	if (pool->dp_map == NULL) {
-		pool->dp_ver = map_version;
-		rc = daos_placement_init(map);
-		if (rc == 0) {
-			D_DEBUG(DF_DSMC, DF_UUID": init pool map: %u\n",
-				DP_UUID(pool->dp_pool),
-				pool_map_get_version(map));
-			pool_map_addref(map);
-			pool->dp_map = map;
-		}
-		return rc;
+		rc = pl_map_update(pool->dp_pool, map);
+		if (rc != 0)
+			D_GOTO(out, rc);
+
+		D_DEBUG(DF_DSMC, DF_UUID": init pool map: %u\n",
+			DP_UUID(pool->dp_pool), pool_map_get_version(map));
+		D_GOTO(out_update, rc = 0);
 	}
 
-	/* XXX let's force refresh even for the same version... */
 	if (map_version < pool_map_get_version(pool->dp_map)) {
 		D_DEBUG(DF_DSMC, DF_UUID": got older pool map: %u -> %u %p\n",
 			DP_UUID(pool->dp_pool),
 			pool_map_get_version(pool->dp_map), map_version, pool);
-		return 0;
+		D_GOTO(out, rc = 0);
 	}
 
 	D_DEBUG(DF_DSMC, DF_UUID": updating pool map: %u -> %u\n",
@@ -198,19 +193,20 @@ pool_map_update(struct dc_pool *pool, struct pool_map *map,
 		pool->dp_map == NULL ?
 		0 : pool_map_get_version(pool->dp_map), map_version);
 
-	rc = daos_placement_update(map);
+	rc = pl_map_update(pool->dp_pool, map);
 	if (rc != 0) {
 		D_ERROR("Failed to refresh placement map: %d\n", rc);
-		return rc;
+		D_GOTO(out, rc);
 	}
 
-	tmp_map = pool->dp_map;
+	pool_map_decref(pool->dp_map);
+	D_EXIT;
+out_update:
 	pool_map_addref(map);
 	pool->dp_map = map;
 	pool->dp_ver = map_version;
-	pool_map_decref(tmp_map);
-
-	return 0;
+out:
+	return rc;
 }
 
 /*
@@ -375,10 +371,7 @@ dc_pool_local_close(daos_handle_t ph)
 	if (pool == NULL)
 		return 0;
 
-	pthread_rwlock_rdlock(&pool->dp_map_lock);
-	daos_placement_fini(pool->dp_map);
-	pthread_rwlock_unlock(&pool->dp_map_lock);
-
+	pl_map_evict(pool->dp_pool);
 	dc_pool_put(pool);
 	return 0;
 }
@@ -592,9 +585,7 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 		" master\n", DP_UUID(pool->dp_pool), arg->hdl.cookie,
 		DP_UUID(pool->dp_pool_hdl));
 
-	pthread_rwlock_rdlock(&pool->dp_map_lock);
-	daos_placement_fini(pool->dp_map);
-	pthread_rwlock_unlock(&pool->dp_map_lock);
+	pl_map_evict(pool->dp_pool);
 
 	dc_pool_put(pool);
 	arg->hdl.cookie = 0;
@@ -640,10 +631,7 @@ dc_pool_disconnect(tse_task_t *task)
 			DF_UUID" slave\n", DP_UUID(pool->dp_pool),
 			args->poh.cookie, DP_UUID(pool->dp_pool_hdl));
 
-		pthread_rwlock_rdlock(&pool->dp_map_lock);
-		daos_placement_fini(pool->dp_map);
-		pthread_rwlock_unlock(&pool->dp_map_lock);
-
+		pl_map_evict(pool->dp_pool);
 		dc_pool_put(pool);
 		args->poh.cookie = 0;
 		D_GOTO(out_pool, rc);
@@ -906,7 +894,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 		D_GOTO(out, rc);
 	}
 
-	rc = daos_placement_init(pool->dp_map);
+	rc = pl_map_update(pool->dp_pool, pool->dp_map);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

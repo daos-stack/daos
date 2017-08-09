@@ -26,6 +26,7 @@
  * src/placement/pl_map.c
  */
 #define DD_SUBSYS	DD_FAC(placement)
+#include <daos/hash.h>
 #include "pl_map.h"
 
 extern struct pl_map_ops	ring_map_ops;
@@ -83,7 +84,7 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 		return rc;
 
 	pthread_spin_init(&map->pl_lock, PTHREAD_PROCESS_PRIVATE);
-	map->pl_ref  = 1;
+	map->pl_ref  = 1; /* for the caller */
 	map->pl_type = mia->ia_type;
 	map->pl_ops  = dict->pd_ops;
 
@@ -253,64 +254,12 @@ pl_obj_shard2grp_index(struct daos_obj_shard_md *shard_md,
 	}
 }
 
-void
-pl_map_addref(struct pl_map *map)
-{
-	pthread_spin_lock(&map->pl_lock);
-	map->pl_ref++;
-	pthread_spin_unlock(&map->pl_lock);
-}
-
-void
-pl_map_decref(struct pl_map *map)
-{
-	bool	zombie;
-
-	pthread_spin_lock(&map->pl_lock);
-
-	D_ASSERT(map->pl_ref > 0);
-	map->pl_ref--;
-	zombie = map->pl_ref == 0;
-
-	pthread_spin_unlock(&map->pl_lock);
-
-	if (zombie)
-		pl_map_destroy(map);
-}
-
-uint32_t
-pl_map_version(struct pl_map *map)
-{
-	return map->pl_ver;
-}
-
-/**
- * XXX this should be per-pool.
- */
-struct daos_placement_data {
-	struct pl_map		*pd_pl_map;
-	unsigned int		 pd_ref;
-	pthread_rwlock_t	 pd_lock;
+/** serialize operations on pl_htable */
+pthread_rwlock_t	pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
+/** hash table for placement maps */
+struct dhash_table	pl_htable = {
+	.ht_ops			  = NULL,
 };
-
-static struct daos_placement_data placement_data = {
-	.pd_pl_map	= NULL,
-	.pd_ref		= 0,
-	.pd_lock	= PTHREAD_RWLOCK_INITIALIZER,
-};
-
-struct pl_map *
-pl_map_find(daos_handle_t coh, daos_obj_id_t oid)
-{
-	struct pl_map *map;
-
-	pthread_rwlock_rdlock(&placement_data.pd_lock);
-	map = placement_data.pd_pl_map; /* take the only one */
-	pl_map_addref(map);
-	pthread_rwlock_unlock(&placement_data.pd_lock);
-
-	return map;
-}
 
 #define DSR_RING_DOMAIN		PO_COMP_TP_RACK
 
@@ -334,78 +283,184 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 	}
 }
 
-/**
- * Initialize placement maps for a pool.
- * XXX: placement maps should be attached on each pool.
- */
-int
-daos_placement_init(struct pool_map *po_map)
+struct pl_map *
+pl_link2map(daos_list_t *link)
 {
-	struct pl_map_init_attr	mia;
-	int			rc = 0;
-
-	pthread_rwlock_wrlock(&placement_data.pd_lock);
-	if (placement_data.pd_pl_map != NULL) {
-		D_DEBUG(DB_PL, "Placement map has been referenced %d\n",
-			placement_data.pd_ref);
-		placement_data.pd_ref++;
-		goto out;
-	}
-
-	D_ASSERT(placement_data.pd_ref == 0);
-
-	pl_map_attr_init(po_map, PL_TYPE_RING, &mia);
-
-	rc = pl_map_create(po_map, &mia, &placement_data.pd_pl_map);
-	if (rc != 0)
-		goto out;
-
-	placement_data.pd_ref = 1;
- out:
-	pthread_rwlock_unlock(&placement_data.pd_lock);
-	return rc;
+	return container_of(link, struct pl_map, pl_link);
 }
 
-/** Finalize placement maps for a pool */
+static unsigned int
+pl_hop_key_hash(struct dhash_table *htab, const void *key,
+		unsigned int ksize)
+{
+	D_ASSERT(ksize == sizeof(uuid_t));
+	return daos_hash_string_u32((const char *)key, ksize);
+}
+
+static bool
+pl_hop_key_cmp(struct dhash_table *htab, daos_list_t *link,
+	       const void *key, unsigned int ksize)
+{
+	struct pl_map *map = pl_link2map(link);
+
+	D_ASSERT(ksize == sizeof(uuid_t));
+	return !uuid_compare(map->pl_uuid, key);
+}
+
+static void
+pl_hop_rec_addref(struct dhash_table *htab, daos_list_t *link)
+{
+	struct pl_map *map = pl_link2map(link);
+
+	pthread_spin_lock(&map->pl_lock);
+	map->pl_ref++;
+	pthread_spin_unlock(&map->pl_lock);
+}
+
+static bool
+pl_hop_rec_decref(struct dhash_table *htab, daos_list_t *link)
+{
+	struct pl_map	*map = pl_link2map(link);
+	bool		 zombie;
+
+	D_ASSERT(map->pl_ref > 0);
+
+	pthread_spin_lock(&map->pl_lock);
+	map->pl_ref--;
+	zombie = (map->pl_ref == 0);
+	pthread_spin_unlock(&map->pl_lock);
+
+	return zombie;
+}
+
 void
-daos_placement_fini(struct pool_map *po_map)
+pl_hop_rec_free(struct dhash_table *htab, daos_list_t *link)
 {
-	pthread_rwlock_wrlock(&placement_data.pd_lock);
+	struct pl_map *map = pl_link2map(link);
 
-	placement_data.pd_ref--;
-	if (placement_data.pd_ref == 0) {
-		pl_map_decref(placement_data.pd_pl_map);
-		placement_data.pd_pl_map = NULL;
-	}
-	pthread_rwlock_unlock(&placement_data.pd_lock);
+	D_ASSERT(map->pl_ref == 0);
+	pl_map_destroy(map);
 }
 
+static dhash_table_ops_t pl_hash_ops = {
+	.hop_key_hash		= pl_hop_key_hash,
+	.hop_key_cmp		= pl_hop_key_cmp,
+	.hop_rec_addref		= pl_hop_rec_addref,
+	.hop_rec_decref		= pl_hop_rec_decref,
+	.hop_rec_free		= pl_hop_rec_free,
+};
+
+#define PL_HTABLE_BITS		7
 /**
- * Generate a new placement map for the new pool map @new_map, and release
- * the placement map for the old version @old_map.
+ * Generate a new placement map from the pool map @pool_map, and replace the
+ * original placement map for the same pool.
+ *
+ * \param	uuid [IN]	uuid of \a pool_map
+ * \param	pool_map [IN]	pool_map
  */
 int
-daos_placement_update(struct pool_map *new_map)
+pl_map_update(uuid_t uuid, struct pool_map *pool_map)
 {
+	daos_list_t		*link;
 	struct pl_map		*map;
 	struct pl_map_init_attr	 mia;
 	int			 rc;
 
-	pthread_rwlock_wrlock(&placement_data.pd_lock);
-	if (placement_data.pd_pl_map != NULL &&
-	    placement_data.pd_pl_map->pl_ver >= pool_map_get_version(new_map))
-		D_GOTO(out, rc = 0);
+	pthread_rwlock_wrlock(&pl_rwlock);
+	if (!pl_htable.ht_ops) {
+		/* NB: this hash table is created on demand, it will never
+		 * be destroyed.
+		 */
+		rc = dhash_table_create_inplace(DHASH_FT_NOLOCK,
+						PL_HTABLE_BITS, NULL,
+						&pl_hash_ops, &pl_htable);
+		if (rc)
+			D_GOTO(out, rc);
 
-	pl_map_attr_init(new_map, PL_TYPE_RING, &mia);
+		link = NULL;
+	} else {
+		/* already created */
+		link = dhash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
+	}
 
-	rc = pl_map_create(new_map, &mia, &map);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	if (!link) {
+		pl_map_attr_init(pool_map, PL_TYPE_RING, &mia);
+		rc = pl_map_create(pool_map, &mia, &map);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	} else {
+		struct pl_map	*tmp;
 
-	if (placement_data.pd_pl_map != NULL)
-		pl_map_decref(placement_data.pd_pl_map);
-	placement_data.pd_pl_map = map;
+		tmp = container_of(link, struct pl_map, pl_link);
+		if (tmp->pl_ver >= pool_map_get_version(pool_map)) {
+			dhash_rec_decref(&pl_htable, link);
+			D_GOTO(out, rc = 0);
+		}
+
+		pl_map_attr_init(pool_map, PL_TYPE_RING, &mia);
+		rc = pl_map_create(pool_map, &mia, &map);
+		if (rc != 0) {
+			dhash_rec_decref(&pl_htable, link);
+			D_GOTO(out, rc);
+		}
+
+		/* evict the old placement map for this pool */
+		dhash_rec_delete_at(&pl_htable, link);
+		dhash_rec_decref(&pl_htable, link);
+	}
+
+	/* insert the new placement map into hash table */
+	uuid_copy(map->pl_uuid, uuid);
+	rc = dhash_rec_insert(&pl_htable, uuid, sizeof(uuid_t),
+			      &map->pl_link, true);
+	D_ASSERT(rc == 0);
+	pl_map_decref(map); /* hash table has held the refcount */
+	D_EXIT;
  out:
-	pthread_rwlock_unlock(&placement_data.pd_lock);
+	pthread_rwlock_unlock(&pl_rwlock);
 	return rc;
+}
+
+/**
+ * Evit the placement map of the pool identified by \a uuid from the placement
+ * map cache.
+ */
+void
+pl_map_evict(uuid_t uuid)
+{
+	pthread_rwlock_wrlock(&pl_rwlock);
+	dhash_rec_delete(&pl_htable, uuid, sizeof(uuid_t));
+	pthread_rwlock_unlock(&pl_rwlock);
+}
+
+/**
+ * Find the placement map of the pool identified by \a uuid.
+ */
+struct pl_map *
+pl_map_find(uuid_t uuid, daos_obj_id_t oid)
+{
+	daos_list_t	*link;
+
+	pthread_rwlock_rdlock(&pl_rwlock);
+	link = dhash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
+	pthread_rwlock_unlock(&pl_rwlock);
+
+	return link ? pl_link2map(link) : NULL;
+}
+void
+pl_map_addref(struct pl_map *map)
+{
+	dhash_rec_addref(&pl_htable, &map->pl_link);
+}
+
+void
+pl_map_decref(struct pl_map *map)
+{
+	dhash_rec_decref(&pl_htable, &map->pl_link);
+}
+
+uint32_t
+pl_map_version(struct pl_map *map)
+{
+	return map->pl_ver;
 }

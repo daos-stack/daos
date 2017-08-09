@@ -85,7 +85,10 @@ int  pl_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 		   struct pl_map **mapp);
 void pl_map_destroy(struct pl_map *map);
 void pl_map_print(struct pl_map *map);
-struct pl_map *pl_map_find(daos_handle_t coh, daos_obj_id_t oid);
+
+struct pl_map *pl_map_find(uuid_t uuid, daos_obj_id_t oid);
+int  pl_map_update(uuid_t uuid, struct pool_map *new_map);
+void pl_map_evict(uuid_t uuid);
 void pl_map_addref(struct pl_map *map);
 void pl_map_decref(struct pl_map *map);
 uint32_t pl_map_version(struct pl_map *map);
@@ -110,9 +113,5 @@ int pl_obj_find_reint(struct pl_map *map,
 		      struct daos_obj_shard_md *shard_md,
 		      struct pl_target_grp *tgp_recov,
 		      uint32_t *tgt_reint);
-
-int  daos_placement_init(struct pool_map *po_map);
-void daos_placement_fini(struct pool_map *po_map);
-int  daos_placement_update(struct pool_map *new_map);
 
 #endif /* __DAOS_PLACEMENT_H__ */
