@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -322,8 +322,8 @@ REQS.define('cart',
                       "MERCURY_PREBUILT=$MERCURY_PREFIX "
                       "PMIX_PREBUILT=$PMIX_PREFIX "
                       "PREFIX=$CART_PREFIX install"],
-            headers=["crt_api.h"],
-            libs=["crt", "crt_util"],
+            headers=["cart/api.h", "pouch/list.h"],
+            libs=["cart", "pouch"],
             requires=['mpi4py', 'mercury', 'argobots', 'crypto'])
 
 URL = 'https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-1.3.1.tar.gz'
