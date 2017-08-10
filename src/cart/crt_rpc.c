@@ -1229,6 +1229,8 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		C_GOTO(out, rc);
 	}
 
+	C_DEBUG("rpc_priv %p submitted.\n", rpc_priv);
+
 	rc = crt_context_req_track(req);
 	if (rc == CRT_REQ_TRACK_IN_INFLIGHQ) {
 		/* tracked in crt_ep_inflight::epi_req_q */

@@ -902,7 +902,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 
 	rpc_priv->crp_opc_info = opc_info;
 
-	C_DEBUG("rpc_priv %p (opc: 0x%x), allocated.\n",
+	C_DEBUG("rpc_priv %p (opc: 0x%x),"
+		"allocated per RPC request received.\n",
 		rpc_priv, rpc_priv->crp_opc_info->coi_opc);
 
 	crt_rpc_priv_init(rpc_priv, crt_ctx, opc, true /* srv_flag */);
@@ -1183,6 +1184,8 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			rpc_priv->crp_pub.cr_opc);
 		C_FREE_PTR(cb_info);
 		rc = -CER_HG;
+	} else {
+		C_DEBUG("rpc_priv %p sent.\n", rpc_priv);
 	}
 
 out:
