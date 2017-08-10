@@ -2,7 +2,8 @@
 
 Import('denv')
 
-denv.Program('btree', 'btree.c', LIBS=['daos_common', 'pouch', 'cart'])
+denv.Program('btree', 'btree.c', LIBS=['daos_common', 'pouch', 'cart',
+                                       'pmemobj'])
 denv.Program('other', 'other.c', LIBS=['daos_common', 'pouch', 'cart'])
 denv.Program('lru', 'lru.c', LIBS=['daos_common', 'pouch', 'cart'])
 denv.Program('sched', 'sched.c', LIBS=['daos_common', 'pouch', 'cart'])

@@ -22,9 +22,11 @@ fi
 KEYS=${KEYS:-"3,6,5,7,2,1,4"}
 RECORDS=${RECORDS:-"7:loaded,3:that,5:dice,2:knows,4:the,6:are,1:Everybody"}
 
-echo "B+tree functional test..."
-DAOS_DEBUG=$DDEBUG			\
-$BTR	-C ${IPL}o:$ORDER		\
+if [[ $1 != "perf" ]]; then
+
+    echo "B+tree functional test..."
+    DAOS_DEBUG=$DDEBUG			\
+    $BTR	-C ${IPL}o:$ORDER		\
 	-c				\
 	-o				\
 	-u $RECORDS			\
@@ -32,23 +34,30 @@ $BTR	-C ${IPL}o:$ORDER		\
 	-q				\
 	-f $KEYS			\
 	-d $KEYS			\
-    -u $RECORDS         \
-    -f $KEYS            \
-    -r $KEYS            \
+	-u $RECORDS         \
+	-f $KEYS            \
+	-r $KEYS            \
 	-q				\
 	-u $RECORDS			\
 	-q				\
 	-i $IDIR:3			\
 	-D
 
-echo "B+tree batch operations test..."
-$BTR	-C ${IPL}o:$ORDER		\
+    echo "B+tree batch operations test..."
+    $BTR	-C ${IPL}o:$ORDER		\
 	-c				\
 	-o				\
 	-b $BAT_NUM			\
 	-D
-
-echo "B+tree performance test..."
-$BTR	-C ${IPL}o:$ORDER		\
+else
+    echo "B+tree performance test..."
+    $BTR	-C ${IPL}o:$ORDER		\
 	-p $BAT_NUM			\
 	-D
+
+    echo "B+tree performance test using pmemobj"
+    $BTR    -m                      \
+	-C ${IPL}o:$ORDER   \
+	-p $BAT_NUM             \
+	-D
+fi

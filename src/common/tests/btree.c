@@ -52,14 +52,12 @@ struct ik_rec {
 };
 
 #define IK_TREE_CLASS	100
+#define POOL_NAME "/mnt/daos/btree-test"
+#define POOL_SIZE ((1024 * 1024  * 1024ULL))
 
-static struct umem_attr	ik_uma = {
-	/* XXX pmem */
-	.uma_id		= UMEM_CLASS_VMEM,
-};
+struct umem_attr ik_uma;
 
 /** customized functions for btree */
-
 static int
 ik_hkey_size(struct btr_instance *tins)
 {
@@ -751,7 +749,8 @@ ik_btr_perf(unsigned int key_nr)
 		return -1;
 	}
 
-	D_PRINT("Btree performanc test, order=%u, keys=%u\n", ik_order, key_nr);
+	D_PRINT("Btree performance test, order=%u, keys=%u\n",
+		ik_order, key_nr);
 
 	arr = malloc(key_nr * sizeof(*arr));
 	D_ASSERT(arr != NULL);
@@ -840,7 +839,8 @@ main(int argc, char **argv)
 	D_ASSERT(rc == 0);
 
 	optind = 0;
-	while ((rc = getopt_long(argc, argv, "C:Docqu:d:r:f:i:b:p:",
+	ik_uma.uma_id = UMEM_CLASS_VMEM;
+	while ((rc = getopt_long(argc, argv, "mC:Docqu:d:r:f:i:b:p:",
 				 btr_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'C':
@@ -880,11 +880,21 @@ main(int argc, char **argv)
 		case 'p':
 			rc = ik_btr_perf(atoi(optarg));
 			break;
+		case 'm':
+			ik_uma.uma_id = UMEM_CLASS_PMEM;
+			ik_uma.uma_u.pmem_pool = pmemobj_create(POOL_NAME,
+						"btree-perf-test", POOL_SIZE,
+						0666);
+			break;
 		default:
 			D_PRINT("Unsupported command %c\n", rc);
 			break;
 		}
 	}
 	daos_debug_fini();
+	if (ik_uma.uma_id == UMEM_CLASS_PMEM) {
+		pmemobj_close(ik_uma.uma_u.pmem_pool);
+		remove(POOL_NAME);
+	}
 	return 0;
 }
