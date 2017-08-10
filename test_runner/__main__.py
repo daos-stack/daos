@@ -170,7 +170,7 @@ def main():
     # setup default evnironment variables and path
     info.env_setup()
     # in some cases the description file can override this key
-    testMode = config.get('test_mode', "unitTest")
+    testMode = config.get('test_mode', "TestRunner")
     if testMode and 'client' in config:
         rc = clientmain(info)
     else:

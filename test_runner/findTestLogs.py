@@ -11,6 +11,7 @@ import logging
 #pylint: disable=import-error
 import PostRunner
 
+
 class LoggedTestCase(PostRunner.PostRunner):
     """walk the testRun directory and find testcase directories"""
     logger = logging.getLogger("findTestLogs")
@@ -60,6 +61,6 @@ if __name__ == "__main__":
     if os.path.exists(startdir):
         findLog.top_logdir(startdir, dumplogs)
     elif os.path.exists(startcheck):
-        findLog.check_log_mode(startcheck)
+        PostRunner.check_log_mode(startcheck)
     else:
         print("Directory not found: %s" % startdir)

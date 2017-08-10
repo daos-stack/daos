@@ -39,6 +39,7 @@ except ImportError:
 
 #pylint: disable=consider-using-enumerate
 #pylint: disable=anomalous-backslash-in-string
+#pylint: disable=too-many-public-methods
 
 
 class TestInfoRunner(PreRunner.PreRunner):
@@ -125,6 +126,19 @@ class TestInfoRunner(PreRunner.PreRunner):
     def nodeName(self):
         """ return the node name """
         return self.nodename
+
+    def has_section(self, keyname=None, typename=""):
+        """ post testcase run cleanup """
+        if keyname in self.test_info:
+            if typename == 'list' and isinstance(self.test_info[keyname],
+                                                 list):
+                return True
+            elif typename == 'dict' and isinstance(self.test_info[keyname],
+                                                   dict):
+                return True
+            elif typename == 'none' and self.test_info[keyname] is None:
+                return True
+        return False
 
     def cleanup_test_info(self):
         """ post testcase run cleanup """

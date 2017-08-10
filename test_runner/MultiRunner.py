@@ -95,7 +95,7 @@ class MultiRunner(PostRunner.PostRunner):
             rtnstr = "FAIL"
         module_name = str(self.test_info.get_test_info('use_daemon', 'name'))
         logDir = os.path.join(self.logdir, module_name)
-        self.check_log_mode(logDir)
+        PostRunner.check_log_mode(logDir)
         rtn_info = {'duration' : 0, 'return_code' : rc,
                     'status' : rtnstr, 'name' : module_name,
                     'error' : ""}
@@ -117,17 +117,17 @@ class MultiRunner(PostRunner.PostRunner):
         self.rename_output_directory()
         self.logger.info("TestRunner: tearDown end\n\n")
 
-    def execute_strategy(self):
+    def execute_strategy(self, module_name, execStrategy='execStrategy'):
         """ execute test strategy """
 
         info = {}
         setConfigKeys = {}
         configKeys = {}
         rtn = 0
-        info['name'] = self.test_info.get_test_info('module', 'name')
+        info['name'] = module_name
         toexit = self.test_directives.get('exitLoopOnError', "yes")
         start_time = time.time()
-        for item in self.test_info.get_test_info('execStrategy'):
+        for item in self.test_info.get_test_info(execStrategy):
             configKeys.clear()
             setConfigKeys = item.get('setConfigKeys', {})
             self.logger.debug("set_configKeys: %s", str(setConfigKeys))
@@ -231,8 +231,14 @@ class MultiRunner(PostRunner.PostRunner):
                 self.daemon = self.import_daemon(self.logdir)
                 rtn = self.daemon.launch_process()
             if not rtn:
-                rtn_info = self.execute_strategy()
+                rtn_info = self.execute_strategy(module_name)
                 rtn |= int(rtn_info['return_code'])
+                if self.test_info.has_section('cleanupStrategy', 'list'):
+                    new_name = "{!s}_cleanup".format(module_name)
+                    this_info = self.execute_strategy(new_name,
+                                                      'cleanupStrategy')
+                    rtn |= int(this_info['return_code'])
+                    results.update_subtest_results(this_info)
             else:
                 rtn_info = {'duration' : 0, 'return_code' : rtn,
                             'status' : "FAIL", 'name' : module_name,

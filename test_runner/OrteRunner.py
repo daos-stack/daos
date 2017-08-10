@@ -45,6 +45,8 @@ import subprocess
 import shlex
 import time
 import getpass
+#pylint: disable=import-error
+from PostRunner import check_log_mode
 
 #pylint: disable=broad-except
 
@@ -140,6 +142,7 @@ class OrteRunner():
 
         try:
             procrtn = proc.wait(waittime)
+            check_log_mode(self.log_dir_orte)
         except subprocess.TimeoutExpired as e:
             self.logger.info("Test: process timeout: %s\n", e)
             procrtn = self.stop_process("process timeout", proc)
@@ -179,4 +182,5 @@ class OrteRunner():
 
         self.logger.info("%s: %s - return code: %d\n", \
           self.testsuite, msg, procrtn)
+        check_log_mode(self.log_dir_orte)
         return procrtn

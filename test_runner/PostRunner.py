@@ -52,9 +52,23 @@ import os
 import stat
 import re
 
+
+
+def check_log_mode(topdir):
+    """set the directory and file permissions"""
+    mode = stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
+    if os.path.exists(topdir):
+        dirlist = os.listdir(topdir)
+        for newdir in dirlist:
+            dname = os.path.join(topdir, newdir)
+            os.chmod(dname, mode)
+            if os.path.isfile(dname):
+                continue
+            else:
+                check_log_mode(dname)
+
+
 #pylint: disable=too-many-locals
-
-
 class PostRunner():
     """post test runner"""
     last_testlogdir = ""
@@ -62,19 +76,6 @@ class PostRunner():
     # save base directory
     results_base_dir = ""
     test_info = None
-
-    def check_log_mode(self, topdir):
-        """set the directory and file permissions"""
-        mode = stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
-        if os.path.exists(topdir):
-            dirlist = os.listdir(topdir)
-            for newdir in dirlist:
-                dname = os.path.join(topdir, newdir)
-                os.chmod(dname, mode)
-                if os.path.isfile(dname):
-                    continue
-                else:
-                    self.check_log_mode(dname)
 
     def dump_log_files(self, testClassName, testMethodName):
         """dump the ERROR tag from stdout file

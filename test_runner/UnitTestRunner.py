@@ -139,7 +139,7 @@ class UnitTestRunner(PostRunner.PostRunner,
             elif use_valgrind == "callgrind":
                 self.callgrind_annotate()
 
-            self.check_log_mode(self.last_testlogdir)
+            PostRunner.check_log_mode(self.last_testlogdir)
             self.logger.info(
                 "***********************************************************")
             self.resetenv(testrun)
