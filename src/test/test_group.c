@@ -138,6 +138,12 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		rpc_req_output = crt_reply_get(rpc_req);
 		if (rpc_req_output == NULL)
 			return;
+		if (cb_info->cci_rc != 0) {
+			C_ERROR("rpc (opc: 0x%x) failed, rc: %d.\n",
+				rpc_req->cr_opc, cb_info->cci_rc);
+			C_FREE(rpc_req_input->name, 256);
+			break;
+		}
 		printf("%s checkin result - ret: %d, room_no: %d.\n",
 		       rpc_req_input->name, rpc_req_output->ret,
 		       rpc_req_output->room_no);
@@ -178,7 +184,7 @@ static void *progress_thread(void *arg)
 		}
 		if (g_shutdown == 1 && g_complete == 1)
 			break;
-	} while (1);
+	} while (!dead);
 
 	printf("progress_thread: rc: %d, echo_srv.do_shutdown: %d.\n",
 	       rc, g_shutdown);
@@ -262,7 +268,8 @@ test_group_init(char *local_group_name, char *target_group_name,
 }
 
 void
-run_test_group(char *local_group_name, char *target_group_name, int is_service)
+run_test_group(char *local_group_name, char *target_group_name, int is_service,
+		int infinite_loop)
 {
 	crt_group_t			*target_group = NULL;
 	crt_rpc_t			*rpc_req = NULL;
@@ -318,6 +325,36 @@ run_test_group(char *local_group_name, char *target_group_name, int is_service)
 		/* send an rpc, print out reply */
 		rc = crt_req_send(rpc_req, client_cb_common, &complete);
 		C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+	}
+
+	while (infinite_loop) {
+		server_ep.ep_grp = srv_grp;
+		server_ep.ep_rank = 1;
+		server_ep.ep_tag = 0;
+		rc = crt_req_create(crt_ctx[0], &server_ep,
+				    ECHO_OPC_CHECKIN, &rpc_req);
+		C_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
+			  " rc: %d rpc_req: %p\n", rc, rpc_req);
+
+		rpc_req_input = crt_req_get(rpc_req);
+		C_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
+			  " rpc_req_input: %p\n", rpc_req_input);
+		C_ALLOC(buffer, 256);
+		C_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
+		snprintf(buffer,  256, "Guest %d", myrank);
+		rpc_req_input->name = buffer;
+		rpc_req_input->age = 21;
+		rpc_req_input->days = 7;
+		C_DEBUG("client(rank %d) sending checkin rpc with tag "
+			"%d, name: %s, age: %d, days: %d.\n",
+			myrank, server_ep.ep_tag, rpc_req_input->name,
+			rpc_req_input->age, rpc_req_input->days);
+		complete = 0;
+		/* send an rpc, print out reply */
+		rc = crt_req_send(rpc_req, client_cb_common, &complete);
+		C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+		fprintf(stderr, "sent check in-RPC.\n");
+		sleep(1);
 	}
 }
 
@@ -383,6 +420,7 @@ int main(int argc, char **argv)
 	int				 rc = 0;
 	int				 option_index = 0;
 	int				 is_service = 0;
+	int				 infinite_loop = 0;
 	struct option			 long_options[] = {
 		{"name", required_argument, 0, 'n'},
 		{"attach_to", required_argument, 0, 'a'},
@@ -390,6 +428,7 @@ int main(int argc, char **argv)
 		{"hold", no_argument, &hold, 1},
 		{"is_service", no_argument, &is_service, 1},
 		{"ctx_num", required_argument, 0, 'c'},
+		{"loop", no_argument, &infinite_loop, 1},
 		{0, 0, 0, 0}
 	};
 
@@ -442,7 +481,8 @@ int main(int argc, char **argv)
 	rc = 0;
 
 	test_group_init(local_group_name, target_group_name, is_service);
-	run_test_group(local_group_name, target_group_name, is_service);
+	run_test_group(local_group_name, target_group_name, is_service,
+			infinite_loop);
 	if (hold)
 		sleep(hold_time);
 	test_group_fini(is_service);

@@ -58,6 +58,7 @@
 extern struct crt_binheap_ops crt_timeout_bh_ops;
 void crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
 extern struct crt_corpc_ops crt_rank_evict_co_ops;
+extern void crt_hdlr_memb_sample(crt_rpc_t *rpc_req);
 
 enum crt_rpc_flags_internal {
 	/* flag of collective RPC (bcast) */
@@ -230,6 +231,7 @@ enum {
 	CRT_OPC_BARRIER_EXIT			= CRT_OPC_INTERNAL_BASE + 0x401,
 
 	CRT_OPC_RANK_EVICT			= CRT_OPC_INTERNAL_BASE + 0x500,
+	CRT_OPC_MEMB_SAMPLE			= CRT_OPC_INTERNAL_BASE + 0x501,
 };
 
 /* CRT internal RPC definitions */

@@ -351,9 +351,8 @@ crt_rank_list_del(crt_rank_list_t *rank_list, crt_rank_t rank)
 	new_num = rank_list->rl_nr.num - 1;
 	src = &rank_list->rl_ranks[idx + 1];
 	dest = &rank_list->rl_ranks[idx];
+	C_ASSERT(idx <= new_num);
 	num_bytes = (new_num - idx) * sizeof(crt_rank_t);
-	if (num_bytes == 0)
-		C_GOTO(out, rc);
 	memmove(dest, src, num_bytes);
 	rank_list = crt_rank_list_realloc(rank_list, new_num);
 	if (rank_list == NULL) {

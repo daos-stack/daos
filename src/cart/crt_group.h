@@ -74,11 +74,6 @@ struct crt_grp_priv {
 	 * number within the primary group.
 	 */
 	crt_rank_list_t		*gp_membs;
-	/*
-	 * the version number of membership list gp_membs, also the version
-	 * number of the failed rank list gp_pri_srv->ps_failed_ranks
-	 */
-	uint32_t		 gp_membs_ver;
 	/* failed ranks */
 	crt_rank_list_t		*gp_failed_ranks;
 	/* the priv pointer user passed in for crt_group_create */
@@ -318,6 +313,10 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 
 bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);
+bool crt_grp_is_local(crt_group_t *grp);
 struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);
+int crt_grp_lc_uri_insert_all(crt_group_t *grp, crt_rank_t rank,
+			      const char *uri);
+bool crt_rank_evicted(crt_group_t *grp, crt_rank_t rank);
 
 #endif /* __CRT_GROUP_H__ */

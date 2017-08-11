@@ -210,7 +210,7 @@ out:
 }
 
 /*
- * Fill in the base URI of rank in the lookup cache of crt_ctx.
+ * Fill in the base URI of rank in the lookup cache of the crt_ctx.
  */
 int
 crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
@@ -284,6 +284,31 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 unlock:
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 out:
+	return rc;
+}
+
+/**
+ * Fill in the base URI of rank in the lookup cache of all crt_ctx. grp can be
+ * NULL
+ */
+int
+crt_grp_lc_uri_insert_all(crt_group_t *grp, crt_rank_t rank, const char *uri)
+{
+	struct crt_grp_priv	*grp_priv;
+	int			 i;
+	int			 rc = 0;
+
+	grp_priv = crt_grp_pub2priv(grp);
+
+	for (i = 0; i < crt_gdata.cg_ctx_num; i++) {
+		rc = crt_grp_lc_uri_insert(grp_priv, i, rank, uri);
+		if (rc != 0) {
+			C_ERROR("crt_grp_lc_uri_insert(%p, %d, %d, %s) failed."
+				" rc: %d\n", grp_priv, i, rank, uri, rc);
+			return rc;
+		}
+	}
+
 	return rc;
 }
 
@@ -1387,7 +1412,6 @@ crt_grp_ras_init(struct crt_grp_priv *grp_priv)
 
 	C_ASSERT(grp_priv->gp_service);
 	C_ASSERT(grp_priv->gp_primary);
-	C_ASSERT(grp_priv->gp_local);
 	/* create a dummy list to simplify list management */
 	grp_priv->gp_failed_ranks = crt_rank_list_alloc(0);
 	if (grp_priv->gp_failed_ranks == NULL) {
@@ -1501,7 +1525,6 @@ crt_grp_ras_fini(struct crt_grp_priv *grp_priv)
 {
 	C_ASSERT(grp_priv->gp_service);
 	C_ASSERT(grp_priv->gp_primary);
-	C_ASSERT(grp_priv->gp_local);
 	crt_rank_list_free(grp_priv->gp_failed_ranks);
 }
 static int
@@ -1843,6 +1866,11 @@ crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 			C_GOTO(out, rc);
 		}
 	}
+	rc = crt_grp_ras_init(grp_priv);
+	if (rc != 0) {
+		C_ERROR("crt_grp_ras_init() failed, rc %d.\n", rc);
+		C_GOTO(out, rc);
+	}
 
 	*attached_grp = &grp_priv->gp_pub;
 
@@ -1916,6 +1944,8 @@ crt_grp_detach(crt_group_t *attached_grp)
 	C_ASSERT(grp_gdata != NULL);
 	grp_priv = container_of(attached_grp, struct crt_grp_priv, gp_pub);
 	C_ASSERT(grp_priv->gp_local == 0 && grp_priv->gp_service == 1);
+
+	crt_grp_ras_fini(grp_priv);
 
 	pthread_rwlock_rdlock(&crt_gdata.cg_rwlock);
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
@@ -2353,6 +2383,36 @@ out:
 	return rc;
 }
 
+/* query if a rank is evicted from a group. grp must be a primary group */
+bool
+crt_rank_evicted(crt_group_t *grp, crt_rank_t rank)
+{
+	struct crt_grp_priv	*grp_priv = NULL;
+	bool			 ret = false;
+
+	C_ASSERT(crt_initialized());
+	grp_priv = crt_grp_pub2priv(grp);
+	C_ASSERT(grp_priv != NULL);
+
+	if (grp_priv->gp_primary == 0) {
+		C_ERROR("grp must be a primary group.\n");
+		C_GOTO(out, ret);
+	}
+
+	if (rank >= grp_priv->gp_size) {
+		C_ERROR("Rank out of range. Attempted rank: %d, "
+			"valid range [0, %d).\n", rank, grp_priv->gp_size);
+		C_GOTO(out, ret);
+	}
+
+	pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
+	ret = crt_rank_in_rank_list(grp_priv->gp_failed_ranks, rank, true);
+	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
+
+out:
+	return ret;
+}
+
 int
 crt_rank_evict(crt_group_t *grp, crt_rank_t rank)
 {
@@ -2387,7 +2447,7 @@ crt_rank_evict(crt_group_t *grp, crt_rank_t rank)
 	if (crt_rank_in_rank_list(grp_priv->gp_failed_ranks, rank, true)) {
 		C_DEBUG("Rank %d already evicted.\n", rank);
 		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-		C_GOTO(out, rc);
+		C_GOTO(out, rc = -CER_EVICTED);
 	}
 	rc = crt_rank_list_append(grp_priv->gp_failed_ranks, rank);
 	if (rc != 0) {
@@ -2399,8 +2459,11 @@ crt_rank_evict(crt_group_t *grp, crt_rank_t rank)
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 
 	rc = crt_grp_lc_mark_evicted(grp_priv, rank);
-	if (rc != 0)
+	if (rc != 0) {
 		C_ERROR("crt_grp_lc_mark_evicted() failed, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+	C_DEBUG("evicted group %s rank %d.\n", grp_priv->gp_pub.cg_grpid, rank);
 
 out:
 	return rc;
@@ -2430,4 +2493,16 @@ crt_grp_failed_ranks_dup(crt_group_t *grp, crt_rank_list_t **failed_ranks)
 
 out:
 	return rc;
+}
+
+bool
+crt_grp_is_local(crt_group_t *grp)
+{
+	struct crt_grp_priv	*grp_priv;
+
+	C_ASSERT(crt_initialized());
+	grp_priv = crt_grp_pub2priv(grp);
+	C_ASSERT(grp_priv != NULL);
+
+	return grp_priv->gp_local == 1;
 }

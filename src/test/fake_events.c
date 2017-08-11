@@ -51,6 +51,7 @@
 
 static pthread_t	fake_event_tid;
 static int		fake_event_thread_done;
+bool dead;
 
 
 static void *
@@ -91,7 +92,8 @@ fake_event_thread(void *args)
 				fprintf(stderr, "event code: %d rank: %d\n",
 						event_code, rank);
 				if (event_code == 0)
-					crt_lm_fake_event_notify_fn(rank);
+					crt_lm_fake_event_notify_fn(rank,
+								    &dead);
 			} while (rc != EOF);
 		fclose(fifo_pipe);
 	}

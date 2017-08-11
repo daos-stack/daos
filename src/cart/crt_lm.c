@@ -40,15 +40,28 @@
  */
 #define C_LOGFAC	CD_FAC(lm)
 
+#include <semaphore.h>
+
 #include <crt_internal.h>
 
 struct crt_lm_evict_in {
 	crt_rank_t		clei_rank;
+	uint32_t		clei_ver;
 };
 
 struct crt_lm_evict_out {
 	int cleo_succeeded;
 	int cleo_rc;
+};
+
+struct crt_lm_memb_sample_in {
+	uint32_t		msi_ver;
+};
+
+struct crt_lm_memb_sample_out {
+	crt_iov_t		mso_delta;
+	uint32_t		mso_ver;
+	int			mso_rc;
 };
 
 /* global data for liveness map management of the primary service group */
@@ -65,6 +78,7 @@ struct lm_grp_srv_t {
 	uint32_t		 lgs_ras:1,
 	/* flag for RAS bcast in progress */
 				 lgs_bcast_in_prog:1;
+	uint32_t		 lgs_lm_ver;
 	uint32_t		 lgs_bcast_idx;
 	crt_rank_list_t		*lgs_bcast_list;
 	/* ranks subscribed to RAS events*/
@@ -72,7 +86,33 @@ struct lm_grp_srv_t {
 	pthread_rwlock_t	 lgs_rwlock;
 };
 
+struct lm_psr_cand {
+	crt_rank_t	pc_rank;
+	bool		pc_pending_sample;
+};
+
+/* data for remote groups */
+struct lm_grp_priv_t {
+	crt_list_t		 lgp_link;
+	crt_group_t		*lgp_grp;
+	uint32_t		 lgp_mvs;
+	uint32_t		 lgp_lm_ver;
+	/* PSR rank in attached group */
+	crt_rank_t		 lgp_psr_rank;
+	/* PSR phy addr address in attached group */
+	crt_phy_addr_t		 lgp_psr_phy_addr;
+	/* PSR candidates for PSR failures */
+	uint32_t		 lgp_num_psr;
+	struct lm_psr_cand	*lgp_psr_cand;
+	/* the target rank of each sample RPC is in this hash table */
+	pthread_rwlock_t	 lgp_rwlock;
+	sem_t			 lgp_sem;
+};
+
 struct crt_lm_gdata_t {
+	/* data for remote service groups */
+	crt_list_t		clg_grp_remotes;
+	/* data for the local service group */
 	struct lm_grp_srv_t	clg_lm_grp_srv;
 	volatile unsigned int	clg_refcount;
 	volatile unsigned int	clg_inited;
@@ -225,6 +265,7 @@ lm_bcast_eviction_event(crt_context_t crt_ctx, struct lm_grp_srv_t *lm_grp_srv,
 	}
 	evict_in = crt_req_get(evict_corpc);
 	evict_in->clei_rank = crt_rank;
+	evict_in->clei_ver = lm_grp_srv->lgs_lm_ver;
 	num = excluded_ranks->rl_nr.num;
 	rc = crt_req_send(evict_corpc, evict_corpc_cb,
 			  (void *) (uintptr_t) num);
@@ -237,11 +278,11 @@ out:
 }
 
 /*
- * This function is called on all RAS subscribers. This routine appends the pmix
- * rank of the failed process to the tail of the list of failed processes. This
- * routine also modifies the liveness map to indicate the current liveness of
- * the pmix rank. This function is idempotent, i.e. when called multiple times
- * with the same pmix rank, only the first call takes effect.
+ * This function is called on all RAS subscribers. This function appends the
+ * cart rank of the failed process to the tail of the list of failed processes.
+ * This routine also modifies the liveness map to indicate the current liveness
+ * of the pmix rank. This function is idempotent, i.e. when called multiple
+ * times with the same pmix rank, only the first call takes effect.
  */
 static void
 lm_ras_event_hdlr_internal(crt_rank_t crt_rank)
@@ -268,11 +309,8 @@ lm_ras_event_hdlr_internal(crt_rank_t crt_rank)
 		C_GOTO(out, rc);
 	}
 
-	/*
-	 * TODO: handle possible race condition when the RAS bcast msg arrives
-	 * before the local RAS event notification
-	 */
 	pthread_rwlock_wrlock(&lm_grp_srv->lgs_rwlock);
+	lm_grp_srv->lgs_lm_ver++;
 	rc = crt_rank_list_append(lm_grp_srv->lgs_bcast_list, crt_rank);
 	if (rc != 0) {
 		pthread_rwlock_unlock(&lm_grp_srv->lgs_rwlock);
@@ -353,9 +391,10 @@ out:
 
 /* this function is called by the fake event utility thread */
 void
-crt_lm_fake_event_notify_fn(crt_rank_t crt_rank)
+crt_lm_fake_event_notify_fn(crt_rank_t crt_rank, bool *dead)
 {
-	int				 rc = 0;
+	crt_rank_t			grp_self;
+	int				rc = 0;
 
 	if (!crt_initialized()) {
 		C_ERROR("CRT not initialized.\n");
@@ -366,6 +405,13 @@ crt_lm_fake_event_notify_fn(crt_rank_t crt_rank)
 		C_GOTO(out, rc);
 	}
 
+	rc = crt_group_rank(NULL, &grp_self);
+	if (rc != 0) {
+		C_ERROR("crt_group_rank() failed, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+	if (dead != NULL && crt_rank == grp_self)
+		*dead = true;
 	if (crt_lm_gdata.clg_lm_grp_srv.lgs_ras == 0)
 		C_GOTO(out, rc);
 	lm_ras_event_hdlr_internal(crt_rank);
@@ -380,14 +426,15 @@ crt_hdlr_rank_evict(crt_rpc_t *rpc_req)
 	struct crt_lm_evict_in		*in_data;
 	struct crt_lm_evict_out		*out_data;
 	crt_rank_t			 crt_rank;
+	uint32_t			 remote_version;
 	struct lm_grp_srv_t		*lm_grp_srv;
 	crt_rank_t			 grp_self;
-	uint32_t			 tmp_idx;
 	int				 rc = 0;
 
 	in_data = crt_req_get(rpc_req);
 	out_data = crt_reply_get(rpc_req);
 	crt_rank = in_data->clei_rank;
+	remote_version = in_data->clei_ver;
 
 	C_ASSERT(crt_initialized());
 	C_ASSERT(crt_is_service());
@@ -400,17 +447,10 @@ crt_hdlr_rank_evict(crt_rpc_t *rpc_req)
 	}
 	C_DEBUG("ras rank %d requests to evict rank %d",
 		rpc_req->cr_ep.ep_rank, crt_rank);
-	/*
-	 * TODO: handle possible race condition when the RAS bcast msg arrives
-	 * before the local RAS event notification
-	 */
 	if (lm_grp_srv->lgs_ras) {
 		pthread_rwlock_wrlock(&lm_grp_srv->lgs_rwlock);
-		tmp_idx = lm_grp_srv->lgs_bcast_idx;
-		if (crt_rank == lm_grp_srv->lgs_bcast_list->rl_ranks[tmp_idx])
-			lm_grp_srv->lgs_bcast_idx++;
-		else
-			C_ERROR("eviction requests received out of order.\n");
+		if (remote_version > lm_grp_srv->lgs_bcast_idx)
+			lm_grp_srv->lgs_bcast_idx = remote_version;
 		pthread_rwlock_unlock(&lm_grp_srv->lgs_rwlock);
 		C_GOTO(out, rc);
 	}
@@ -419,6 +459,9 @@ crt_hdlr_rank_evict(crt_rpc_t *rpc_req)
 		C_ERROR("crt_rank_evict() failed, rc: %d\n", rc);
 		C_GOTO(out, rc);
 	}
+	pthread_rwlock_wrlock(&lm_grp_srv->lgs_rwlock);
+	lm_grp_srv->lgs_lm_ver++;
+	pthread_rwlock_unlock(&lm_grp_srv->lgs_rwlock);
 
 out:
 	out_data->cleo_rc = rc;
@@ -477,6 +520,7 @@ crt_lm_grp_init(crt_group_t *grp)
 	num_ras_ranks = grp_size - mvs + 1;
 	C_DEBUG("grp_size %d, mvs %d, num_ras_ranks %d\n",
 		grp_size, mvs, num_ras_ranks);
+	lm_grp_srv->lgs_lm_ver = 0;
 	/* create a dummy list to simplify list management */
 	lm_grp_srv->lgs_bcast_idx = 0;
 	lm_grp_srv->lgs_ras_ranks = crt_rank_list_alloc(num_ras_ranks);
@@ -591,12 +635,538 @@ struct crt_corpc_ops crt_rank_evict_co_ops = {
 	.co_aggregate = crt_rank_evict_corpc_aggregate,
 };
 
+static struct lm_grp_priv_t *
+lm_grp_priv_find(crt_group_t *grp)
+{
+	struct lm_grp_priv_t	*lm_grp_priv;
+
+	crt_list_for_each_entry(lm_grp_priv, &crt_lm_gdata.clg_grp_remotes,
+				lgp_link) {
+		if (lm_grp_priv->lgp_grp == grp)
+			return lm_grp_priv;
+	}
+
+	return NULL;
+}
+
+struct sample_item {
+	crt_list_t	ri_link;
+	crt_rank_t	ri_rank;
+};
+
+/* unmark the pending sample flag in the PSR candidate list */
+static void
+lm_sample_flag_unmark(struct lm_grp_priv_t *lm_grp_priv, crt_rank_t rank)
+{
+	struct lm_psr_cand	*psr_cand;
+	int			 i;
+
+	C_ASSERT(lm_grp_priv != NULL);
+	psr_cand = lm_grp_priv->lgp_psr_cand;
+	pthread_rwlock_wrlock(&lm_grp_priv->lgp_rwlock);
+	for (i = 0; i < lm_grp_priv->lgp_num_psr; i++) {
+		if (psr_cand[i].pc_rank != rank)
+			continue;
+		C_ASSERT(psr_cand[i].pc_pending_sample == true);
+		psr_cand[i].pc_pending_sample = false;
+		break;
+	}
+	pthread_rwlock_unlock(&lm_grp_priv->lgp_rwlock);
+}
+
+static int
+lm_update_active_psr(struct lm_grp_priv_t *lm_grp_priv)
+{
+	struct lm_psr_cand	*psr_cand;
+	int			 i;
+	bool			 evicted;
+	int			 rc = -CER_MISC;
+
+	C_ASSERT(lm_grp_priv != NULL);
+	psr_cand = lm_grp_priv->lgp_psr_cand;
+	pthread_rwlock_wrlock(&lm_grp_priv->lgp_rwlock);
+	for (i = 0; i < lm_grp_priv->lgp_num_psr; i++) {
+		evicted = crt_rank_evicted(lm_grp_priv->lgp_grp,
+					   psr_cand[i].pc_rank);
+		if (evicted)
+			continue;
+		lm_grp_priv->lgp_psr_rank = psr_cand[i].pc_rank;
+		C_GOTO(out, rc = 0);
+	}
+
+out:
+	pthread_rwlock_unlock(&lm_grp_priv->lgp_rwlock);
+
+	return rc;
+}
+
+/**
+ * the callback for the sample RPC. Executed by the origin of the sample RPC
+ * after the RPC reply is received.
+ */
+static void
+lm_sample_rpc_cb(const struct crt_cb_info *cb_info)
+{
+	crt_rpc_t				*rpc_req;
+	struct crt_lm_memb_sample_out		*out_data;
+	crt_group_t				*tgt_grp;
+	crt_rank_t				*delta;
+	uint32_t				 num_delta;
+	int					 i;
+	uint32_t				 curr_ver;
+	struct lm_grp_priv_t			*lm_grp_priv;
+	int					 rc = 0;
+
+	rpc_req = cb_info->cci_rpc;
+	if (cb_info->cci_rc != 0) {
+		C_ERROR("rpc failed. opc: 0x%x, cci_rc: %d.\n",
+			rpc_req->cr_opc, cb_info->cci_rc);
+		C_GOTO(out, rc);
+	}
+	lm_grp_priv = cb_info->cci_arg;
+	C_ASSERT(lm_grp_priv != NULL);
+	tgt_grp = lm_grp_priv->lgp_grp;
+	out_data = crt_reply_get(rpc_req);
+	if (out_data->mso_rc != 0) {
+		C_ERROR("sample RPC failed. rc %d\n", out_data->mso_rc);
+		C_GOTO(out, rc);
+	}
+
+	/* compare the local version with the remote version */
+	pthread_rwlock_rdlock(&lm_grp_priv->lgp_rwlock);
+	curr_ver = lm_grp_priv->lgp_lm_ver;
+	pthread_rwlock_unlock(&lm_grp_priv->lgp_rwlock);
+	C_DEBUG("group name: %s, local version: %d, remote version %d.\n",
+		tgt_grp->cg_grpid, curr_ver, out_data->mso_ver);
+	if (out_data->mso_ver == curr_ver) {
+		C_DEBUG("Local version up to date.\n");
+		C_GOTO(out, rc);
+	}
+
+	/* remote version is newer, apply the delta locally */
+	C_ASSERT(out_data->mso_ver > curr_ver);
+	num_delta = out_data->mso_delta.iov_len/sizeof(crt_rank_t);
+	if (num_delta == 0) {
+		C_ERROR("buffer empty.\n");
+		C_GOTO(out, rc);
+	}
+	C_ASSERT(num_delta == out_data->mso_ver - curr_ver);
+	delta = out_data->mso_delta.iov_buf;
+	for (i = 0; i < num_delta; i++) {
+		rc = crt_rank_evict(tgt_grp, delta[i]);
+		if (rc != 0) {
+			C_ERROR("crt_rank_evict() failed, rc: %d\n", rc);
+			C_GOTO(out, rc);
+		}
+		pthread_rwlock_wrlock(&lm_grp_priv->lgp_rwlock);
+		lm_grp_priv->lgp_lm_ver++;
+		pthread_rwlock_unlock(&lm_grp_priv->lgp_rwlock);
+		if (rc != 0) {
+			C_ERROR("crt_rank_list_del() failed, rc: %d.\n", rc);
+			C_GOTO(out, rc);
+		}
+	}
+
+	lm_sample_flag_unmark(lm_grp_priv, rpc_req->cr_ep.ep_rank);
+	rc = lm_update_active_psr(lm_grp_priv);
+	if (rc != 0)
+		C_ERROR("lm_update_active_psr() failed. rc: %d\n", rc);
+
+out:
+	return;
+}
+
+/**
+ * To be called by a client process. This function sends the local version
+ * number to the PSR, gets back the remote version number and the delta between
+ * the local membership list and the remote membershp list. If the remote
+ * version is higher than the local version, apply the delta locally.
+ */
+static int
+lm_sample_rpc(crt_context_t ctx, struct lm_grp_priv_t *lm_grp_priv,
+		crt_rank_t tgt_rank)
+{
+	struct crt_lm_memb_sample_in		*in_data;
+	crt_endpoint_t				 tgt_ep;
+	crt_rank_t				 grp_self;
+	crt_rpc_t				*rpc_req;
+	crt_group_t				*tgt_grp;
+	uint32_t				 curr_ver;
+	int					 rc = 0;
+
+	C_ASSERT(lm_grp_priv != NULL);
+
+	tgt_grp = lm_grp_priv->lgp_grp;
+	pthread_rwlock_rdlock(&lm_grp_priv->lgp_rwlock);
+	curr_ver = lm_grp_priv->lgp_lm_ver;
+	pthread_rwlock_unlock(&lm_grp_priv->lgp_rwlock);
+	rc = crt_group_rank(NULL, &grp_self);
+	if (rc != 0) {
+		C_ERROR("crt_group_rank() failed, rc: %d\n", rc);
+		C_GOTO(out, rc);
+	}
+	tgt_ep.ep_grp = tgt_grp;
+	tgt_ep.ep_rank = tgt_rank;
+	tgt_ep.ep_tag = 0;
+	rc = crt_req_create(ctx, &tgt_ep, CRT_OPC_MEMB_SAMPLE, &rpc_req);
+	if (rc != 0) {
+		C_ERROR("crt_req_create() failed, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+	in_data = crt_req_get(rpc_req);
+	in_data->msi_ver = curr_ver;
+	rc = crt_req_send(rpc_req, lm_sample_rpc_cb, lm_grp_priv);
+	if (rc != 0) {
+		C_ERROR("crt_req_send() failed, rc: %d\n", rc);
+		C_GOTO(out, rc);
+	}
+	C_DEBUG("sample RPC sent to rank %d in group %s.\n",
+		tgt_rank, tgt_grp->cg_grpid);
+
+out:
+	return rc;
+}
+
+static void
+lm_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
+{
+	crt_phy_addr_t			 psr_phy_addr = NULL;
+	struct lm_grp_priv_t		*lm_grp_priv = NULL;
+	struct crt_uri_lookup_out	*ul_out;
+	struct crt_uri_lookup_in	*ul_in;
+	int				 rc;
+
+	lm_grp_priv = (struct lm_grp_priv_t *)cb_info->cci_arg;
+	C_ASSERT(lm_grp_priv != NULL);
+	ul_in = crt_req_get(cb_info->cci_rpc);
+	ul_out = crt_reply_get(cb_info->cci_rpc);
+	psr_phy_addr = ul_out->ul_uri;
+	rc = cb_info->cci_rc;
+	if (rc != 0) {
+		C_ERROR("RPC error, rc: %d.\n", rc);
+		C_GOTO(out, rc);
+	}
+	/* insert the uri into the address cache */
+	rc = crt_grp_lc_uri_insert_all(lm_grp_priv->lgp_grp, ul_in->ul_rank,
+				       psr_phy_addr);
+	if (rc != 0) {
+		C_ERROR("crt_grp_lc_uri_insert failed, grp: %p, "
+			"rank: %d, URI: %s, rc %d\n",
+			lm_grp_priv->lgp_grp, ul_in->ul_rank, psr_phy_addr, rc);
+		C_GOTO(out, rc);
+	}
+out:
+	if (psr_phy_addr != NULL)
+		free(psr_phy_addr);
+	sem_post(&lm_grp_priv->lgp_sem);
+}
+
+/**
+ * ask the active PSR for URIs of PSR candidates
+ */
+static int
+lm_uri_lookup_psr(struct lm_grp_priv_t *lm_grp_priv, crt_rank_t rank)
+{
+	crt_rpc_t			*ul_req;
+	crt_endpoint_t			 psr_ep = {0};
+	struct crt_uri_lookup_in	*ul_in;
+	crt_context_t			 crt_ctx;
+	int				 rc = 0;
+
+	C_ASSERT(lm_grp_priv != NULL);
+
+	crt_ctx = crt_context_lookup(0);
+	psr_ep.ep_grp = lm_grp_priv->lgp_grp;
+	psr_ep.ep_rank = lm_grp_priv->lgp_psr_rank;
+	rc = crt_req_create(crt_ctx, &psr_ep, CRT_OPC_URI_LOOKUP, &ul_req);
+	if (rc != 0) {
+		C_ERROR("crt_req_create URI_LOOKUP failed, rc: %d opc: 0x%x.\n",
+			rc, CRT_OPC_URI_LOOKUP);
+		C_GOTO(out, rc);
+	}
+
+	ul_in = crt_req_get(ul_req);
+	ul_in->ul_grp_id = lm_grp_priv->lgp_grp->cg_grpid;
+	ul_in->ul_rank = rank;
+	rc = crt_req_send(ul_req, lm_uri_lookup_psr_cb, lm_grp_priv);
+	if (rc != 0) {
+		C_ERROR("URI_LOOKUP (to group %s rank %d through PSR %d) "
+			"request send failed, rc: %d.\n",
+			ul_in->ul_grp_id, ul_in->ul_rank, psr_ep.ep_rank, rc);
+	}
+
+out:
+	return rc;
+}
+
+/*
+ * create, initialize a bookkeeping struct for the remote group _grp_, then
+ * append this struct to a global list
+ */
+static struct lm_grp_priv_t *
+lm_grp_priv_init(crt_group_t *grp)
+{
+	int			 i;
+	uint32_t		 grp_size;
+	uint32_t		 grp_self;
+	crt_phy_addr_t		 psr_phy_addr = NULL;
+	int			 num_psr;
+	struct lm_grp_priv_t	*lm_grp_priv = NULL;
+	struct lm_psr_cand	*psr_cand;
+	int			 rc = 0;
+
+	rc = crt_group_rank(NULL, &grp_self);
+	if (rc != 0) {
+		C_ERROR("crt_group_rank() failed, rc: %d\n", rc);
+		return NULL;
+	}
+	rc = crt_group_size(NULL, &grp_size);
+	if (rc != 0) {
+		C_ERROR("crt_group_size() failed, rc: %d\n", rc);
+		return NULL;
+	}
+	C_ALLOC_PTR(lm_grp_priv);
+	if (lm_grp_priv == NULL) {
+		C_ERROR("C_ALLOC_PTR() failed.\n");
+		return NULL;
+	}
+
+	lm_grp_priv->lgp_grp = grp;
+	sem_init(&lm_grp_priv->lgp_sem, 0, 0);
+
+	/*
+	 * Compute the default MVS. Based on empirical evidence the MVS obtained
+	 * through the following formula works reasonably well.
+	 */
+	lm_grp_priv->lgp_mvs =
+		max((grp_size/2) + 1, min(grp_size - 5, grp_size*0.95));
+	lm_grp_priv->lgp_lm_ver = 0;
+	/**************
+	* fields used only by remote groups
+	***************/
+	lm_grp_priv->lgp_psr_rank = grp_self % grp_size;
+
+	/* populate the PSR candidate list and insert their addresses into the
+	 * address cache
+	 */
+	num_psr = grp_size - lm_grp_priv->lgp_mvs + 1;
+	lm_grp_priv->lgp_num_psr = num_psr;
+	C_ALLOC(psr_cand, sizeof(struct lm_psr_cand)*num_psr);
+	if (psr_cand == NULL) {
+		C_ERROR("C_ALLOC() failed.\n");
+		C_GOTO(error_out, rc);
+	}
+	srand(time(NULL));
+	for (i = 0; i < num_psr; i++)
+		psr_cand[i].pc_rank = rand()%grp_size;
+	psr_cand[0].pc_rank = lm_grp_priv->lgp_psr_rank;
+	C_DEBUG("num_psr %d all PSRs: ", num_psr);
+	for (i = 0; i < num_psr; i++)
+		C_DEBUG("%d ", psr_cand[i].pc_rank);
+
+	for (i = 1; i < num_psr; i++)
+		lm_uri_lookup_psr(lm_grp_priv, psr_cand[i].pc_rank);
+	for (i = 1; i < num_psr; i++)
+		sem_wait(&lm_grp_priv->lgp_sem);
+	lm_grp_priv->lgp_psr_cand = psr_cand;
+
+	pthread_rwlock_init(&lm_grp_priv->lgp_rwlock, NULL);
+
+	return lm_grp_priv;
+
+error_out:
+	if (lm_grp_priv != NULL)
+		C_FREE_PTR(lm_grp_priv);
+	if (psr_cand != NULL)
+		C_FREE(psr_cand, sizeof(struct lm_psr_cand)*num_psr);
+	if (psr_phy_addr != NULL)
+		free(psr_phy_addr);
+	return NULL;
+}
+
+static void
+lm_grp_priv_destroy(struct lm_grp_priv_t *lm_grp_priv)
+{
+
+	C_ASSERT(lm_grp_priv != NULL);
+
+	C_FREE(lm_grp_priv->lgp_psr_cand,
+	       sizeof(struct lm_psr_cand)*lm_grp_priv->lgp_num_psr);
+	pthread_rwlock_destroy(&lm_grp_priv->lgp_rwlock);
+	C_FREE_PTR(lm_grp_priv);
+}
+
+/**
+ * determine if should send sample RPC. if true, *tgt_psr will contain the
+ * target of the sample RPC
+ * The decision logic is:
+ *	if no more live PSRs, return false
+ *	else if every live PSR has a pending sample RPC, return false
+ *	else if timed out target has a pending sample, return true
+ *	else if no live PSR has a pending sample RPC, return true
+ *	else return false
+ *
+ */
+static bool
+should_sample(struct lm_grp_priv_t *lm_grp_priv, crt_rank_t tgt_rank,
+		crt_rank_t *tgt_psr)
+{
+	int			 i;
+	int			 pending_count = 0;
+	int			 live_count;
+	struct lm_psr_cand	*psr_cand;
+	int			 picked_index = -1;
+	bool			 found = false;
+	bool			 evicted;
+	bool			 ret = false;
+
+
+	C_ASSERT(lm_grp_priv != NULL);
+	C_ASSERT(tgt_psr != NULL);
+	psr_cand = lm_grp_priv->lgp_psr_cand;
+	live_count = lm_grp_priv->lgp_num_psr;
+	pthread_rwlock_wrlock(&lm_grp_priv->lgp_rwlock);
+	for (i = 0; i < lm_grp_priv->lgp_num_psr; i++) {
+		evicted = crt_rank_evicted(lm_grp_priv->lgp_grp,
+					   psr_cand[i].pc_rank);
+		if (evicted) {
+			live_count--;
+			continue;
+		}
+		if (!psr_cand[i].pc_pending_sample) {
+			if (picked_index == -1) {
+				*tgt_psr = psr_cand[i].pc_rank;
+				picked_index = i;
+			}
+			continue;
+		}
+		pending_count++;
+		if (psr_cand[i].pc_rank == tgt_rank)
+			found = true;
+	}
+	if (!found && pending_count < live_count) {
+		ret = true;
+		psr_cand[picked_index].pc_pending_sample = true;
+		C_DEBUG("psr rank %d is selected.\n",
+			psr_cand[picked_index].pc_rank);
+	}
+
+	pthread_rwlock_unlock(&lm_grp_priv->lgp_rwlock);
+
+	return ret;
+}
+
+/**
+ * To be called whenever an RPC encounters a timeout.
+ */
+static void
+lm_membs_sample(crt_context_t ctx, crt_rpc_t *rpc, void *args)
+{
+	crt_group_t			*tgt_grp;
+	crt_rank_t			 tgt_rank;
+	crt_rank_t			 tgt_psr = 0;
+	struct lm_grp_priv_t		*lm_grp_priv;
+	struct lm_grp_priv_t		*lm_grp_priv_new;
+	int				 rc = 0;
+
+	C_ASSERT(rpc != NULL);
+	tgt_grp = rpc->cr_ep.ep_grp;
+	tgt_rank = rpc->cr_ep.ep_rank;
+
+	/* retrieve the sample hash table. if the lm_grp_priv for the remote
+	 * group doesn't exist yet, create one.
+	 */
+	pthread_rwlock_rdlock(&crt_lm_gdata.clg_rwlock);
+	lm_grp_priv = lm_grp_priv_find(tgt_grp);
+	pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
+	if (lm_grp_priv == NULL) {
+		lm_grp_priv_new = lm_grp_priv_init(tgt_grp);
+		if (lm_grp_priv_new == NULL) {
+			C_ERROR("lm_grp_priv_init() failed.\n");
+			return;
+		}
+		pthread_rwlock_wrlock(&crt_lm_gdata.clg_rwlock);
+		lm_grp_priv = lm_grp_priv_find(tgt_grp);
+		if (lm_grp_priv == NULL) {
+			crt_list_add_tail(&lm_grp_priv_new->lgp_link,
+					  &crt_lm_gdata.clg_grp_remotes);
+			lm_grp_priv = lm_grp_priv_new;
+		} else {
+			lm_grp_priv_destroy(lm_grp_priv_new);
+		}
+		pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
+	}
+
+	if (!should_sample(lm_grp_priv, tgt_rank, &tgt_psr))
+		return;
+	/* start a sample RPC */
+	rc = lm_sample_rpc(ctx, lm_grp_priv, tgt_psr);
+	if (rc != 0)
+		C_ERROR("lm_sample() failed.\n");
+}
+
+/**
+ * To be called by a service process. This is the RPC handler for requests sent
+ * by crt_sample_rpc(). It compares the version number from the client
+ * and its own version number. If the client version number is out of date,
+ * include the membership list delta in the reply to the client.
+ */
+void
+crt_hdlr_memb_sample(crt_rpc_t *rpc_req)
+{
+	struct crt_lm_memb_sample_in		*in_data;
+	struct crt_lm_memb_sample_out		*out_data;
+	crt_rank_t				*delta;
+	crt_rank_list_t				*failed_ranks = NULL;
+	uint32_t				 num_delta;
+	uint32_t				 curr_ver;
+	struct lm_grp_srv_t			*lm_grp_srv;
+	int					 rc = 0;
+
+	C_ASSERT(crt_lm_gdata.clg_inited != 0);
+	lm_grp_srv = &crt_lm_gdata.clg_lm_grp_srv;
+	pthread_rwlock_rdlock(&lm_grp_srv->lgs_rwlock);
+	curr_ver = lm_grp_srv->lgs_lm_ver;
+	pthread_rwlock_unlock(&lm_grp_srv->lgs_rwlock);
+
+	in_data = crt_req_get(rpc_req);
+	out_data = crt_reply_get(rpc_req);
+	C_DEBUG("client version: %d, server version: %d\n",
+		in_data->msi_ver, curr_ver);
+	C_ASSERT(in_data->msi_ver <= curr_ver);
+	out_data->mso_ver = curr_ver;
+	if (in_data->msi_ver == curr_ver) {
+		C_DEBUG("client membership list is up-to-date.\n");
+		crt_reply_send(rpc_req);
+		C_GOTO(out, rc);
+	}
+	rc = crt_grp_failed_ranks_dup(NULL, &failed_ranks);
+	if (rc != 0) {
+		C_ERROR("crt_grp_failed_ranks_dup() failed. rc %d\n", rc);
+		out_data->mso_rc = rc;
+		crt_reply_send(rpc_req);
+		C_GOTO(out, rc);
+	}
+	num_delta = failed_ranks->rl_nr.num - in_data->msi_ver;
+	delta = &failed_ranks->rl_ranks[in_data->msi_ver];
+	crt_iov_set(&out_data->mso_delta, delta,
+			sizeof(crt_rank_t) * (num_delta));
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		C_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
+			rc, rpc_req->cr_opc);
+out:
+	if (failed_ranks)
+		crt_rank_list_free(failed_ranks);
+}
+
 /*
  * initialize the global lm data
  */
 static void
 lm_gdata_init(void)
 {
+	CRT_INIT_LIST_HEAD(&crt_lm_gdata.clg_grp_remotes);
 	crt_lm_gdata.clg_refcount = 0;
 	crt_lm_gdata.clg_inited = 1;
 	pthread_rwlock_init(&crt_lm_gdata.clg_rwlock, NULL);
@@ -606,8 +1176,15 @@ lm_gdata_init(void)
 static void
 lm_gdata_destroy(void)
 {
-	int	rc;
+	struct lm_grp_priv_t	*lm_grp_priv;
+	struct lm_grp_priv_t	*tmp_link;
+	int			 rc;
 
+	crt_list_for_each_entry_safe(lm_grp_priv, tmp_link,
+				      &crt_lm_gdata.clg_grp_remotes, lgp_link) {
+		crt_list_del(&lm_grp_priv->lgp_link);
+		lm_grp_priv_destroy(lm_grp_priv);
+	}
 	rc = pthread_rwlock_destroy(&crt_lm_gdata.clg_rwlock);
 	if (rc != 0) {
 		C_ERROR("failed to destroy clg_rwlock, rc: %d.\n", rc);
@@ -631,7 +1208,7 @@ crt_lm_init(void)
 
 	if (!crt_initialized()) {
 		C_ERROR("CRT not initialized.\n");
-		C_GOTO(out, rc = -CER_UNINIT);
+		return;
 	}
 	/* this is the only place we need a grp_priv pointer, since we need to
 	 * retrieve the public struct pointer of the local primary group at
@@ -645,25 +1222,24 @@ crt_lm_init(void)
 	C_ASSERT(crt_lm_gdata.clg_inited == 1);
 	pthread_rwlock_wrlock(&crt_lm_gdata.clg_rwlock);
 	crt_lm_gdata.clg_refcount++;
-	if (crt_lm_gdata.clg_refcount == 1 && crt_is_service()) {
+	if (crt_lm_gdata.clg_refcount > 1) {
+		pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
+		return;
+	}
+	/* from here up to the unlock is only executed once per process */
+	crt_register_timeout_cb(lm_membs_sample, NULL);
+	if (crt_is_service()) {
 		rc = crt_lm_grp_init(grp);
 		if (rc != 0) {
 			C_ERROR("crt_lm_grp_init() failed, rc %d.\n", rc);
 			pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
-			C_GOTO(out, rc);
+			return;
 		}
+		/* servers register callbacks to manage the liveness map */
+		crt_register_progress_cb(lm_prog_cb, grp);
 	}
 	pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
 
-	if (!crt_is_service()) {
-		C_WARN("Called by a non-service rank.\n");
-		return;
-	}
-
-	/* register callbacks to manage the liveness map here */
-	crt_register_progress_cb(lm_prog_cb, grp);
-
-out:
 	return;
 }
 
@@ -692,4 +1268,70 @@ crt_lm_finalize(void)
 
 out:
 	return;
+}
+
+int
+crt_lm_group_psr(crt_group_t *tgt_grp, crt_rank_list_t **psr_cand)
+{
+	struct lm_grp_priv_t		*lm_grp_priv;
+	struct lm_grp_priv_t		*lm_grp_priv_new;
+	bool				 evicted;
+	int				 i;
+	int				 rc = 0;
+
+	if (tgt_grp == NULL) {
+		C_ERROR("tgt_grp can't be NULL.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+	if (psr_cand == NULL) {
+		C_ERROR("psr_cand can't be NULL.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+	if (crt_grp_is_local(tgt_grp)) {
+		C_ERROR("tgt_grp can't be a local group.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+
+	pthread_rwlock_rdlock(&crt_lm_gdata.clg_rwlock);
+	lm_grp_priv = lm_grp_priv_find(tgt_grp);
+	pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
+	if (lm_grp_priv == NULL) {
+		lm_grp_priv_new = lm_grp_priv_init(tgt_grp);
+		if (lm_grp_priv_new == NULL) {
+			C_ERROR("lm_grp_priv_init() failed.\n");
+			C_GOTO(out, rc = -CER_NOMEM);
+		}
+		pthread_rwlock_wrlock(&crt_lm_gdata.clg_rwlock);
+		lm_grp_priv = lm_grp_priv_find(tgt_grp);
+		if (lm_grp_priv == NULL) {
+			crt_list_add_tail(&lm_grp_priv_new->lgp_link,
+					  &crt_lm_gdata.clg_grp_remotes);
+			lm_grp_priv = lm_grp_priv_new;
+		} else {
+			lm_grp_priv_destroy(lm_grp_priv_new);
+		}
+		pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
+	}
+
+	*psr_cand = crt_rank_list_alloc(0);
+	pthread_rwlock_rdlock(&lm_grp_priv->lgp_rwlock);
+	for (i = 0; i < lm_grp_priv->lgp_num_psr; i++) {
+		evicted = crt_rank_evicted(lm_grp_priv->lgp_grp,
+				lm_grp_priv->lgp_psr_cand[i].pc_rank);
+		if (evicted)
+			continue;
+		rc = crt_rank_list_append(*psr_cand,
+				lm_grp_priv->lgp_psr_cand[i].pc_rank);
+		if (rc != 0) {
+			C_ERROR("crt_rank_list_append() failed, rc: %d\n", rc);
+			C_GOTO(out, rc);
+		}
+	}
+	pthread_rwlock_unlock(&lm_grp_priv->lgp_rwlock);
+	if (rc != 0)
+		C_ERROR("crt_rank_list_dup() failed, group: %s, rc: %d\n",
+			tgt_grp->cg_grpid, rc);
+
+out:
+	return rc;
 }

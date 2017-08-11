@@ -283,6 +283,7 @@ static struct crt_corpc_ops crt_barrier_corpc_ops = {
 /* for broadcasting RAS notifications on rank failures */
 struct crt_msg_field *crt_lm_evict_in_fields[] = {
 	&CMF_RANK,		/* failed rank */
+	&CMF_UINT32,		/* version number */
 };
 
 struct crt_msg_field *crt_lm_evict_out_fields[] = {
@@ -294,6 +295,23 @@ static struct crt_req_format CQF_CRT_LM_EVICT =
 	DEFINE_CRT_REQ_FMT("CRT_LM_EVICT",
 			   crt_lm_evict_in_fields,
 			   crt_lm_evict_out_fields);
+
+struct crt_msg_field *crt_lm_memb_sample_in_fields[] = {
+	&CMF_UINT32,		/* client version NO. */
+};
+
+struct crt_msg_field *crt_lm_memb_sample_out_fields[] = {
+	&CMF_IOVEC,	/* delta between the client's membership list and the
+			 * service rank's membership list
+			 */
+	&CMF_UINT32,	/* server membership list version number */
+	&CMF_INT,	/* return value */
+};
+
+static struct crt_req_format CQF_CRT_LM_MEMB_SAMPLE =
+	DEFINE_CRT_REQ_FMT("CRT_LM_MEMB_SAMPLE",
+			   crt_lm_memb_sample_in_fields,
+			   crt_lm_memb_sample_out_fields);
 
 struct crt_internal_rpc crt_internal_rpcs[] = {
 	{
@@ -456,6 +474,14 @@ struct crt_internal_rpc crt_internal_rpcs[] = {
 		.ir_req_fmt	= &CQF_CRT_LM_EVICT,
 		.ir_hdlr	= crt_hdlr_rank_evict,
 		.ir_co_ops	= &crt_rank_evict_co_ops,
+	}, {
+		.ir_name	= "CRT_MEMB_SAMPLE",
+		.ir_opc		= CRT_OPC_MEMB_SAMPLE,
+		.ir_ver		= 1,
+		.ir_flags	= 0,
+		.ir_req_fmt	= &CQF_CRT_LM_MEMB_SAMPLE,
+		.ir_hdlr	= crt_hdlr_memb_sample,
+		.ir_co_ops	= NULL,
 	}, {
 		.ir_opc		= 0
 	}
