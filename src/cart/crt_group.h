@@ -316,9 +316,8 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 	return rc;
 }
 
-inline bool
+bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);
-inline bool crt_grp_is_local(crt_group_t *grp);
 struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);
 
 #endif /* __CRT_GROUP_H__ */

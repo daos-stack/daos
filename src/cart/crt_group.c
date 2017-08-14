@@ -2431,15 +2431,3 @@ crt_grp_failed_ranks_dup(crt_group_t *grp, crt_rank_list_t **failed_ranks)
 out:
 	return rc;
 }
-
-inline bool
-crt_grp_is_local(crt_group_t *grp)
-{
-	struct crt_grp_priv	*grp_priv;
-
-	C_ASSERT(crt_initialized());
-	grp_priv = crt_grp_pub2priv(grp);
-	C_ASSERT(grp_priv != NULL);
-
-	return grp_priv->gp_local == 1;
-}
