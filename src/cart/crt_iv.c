@@ -318,7 +318,6 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 		} else {
 			struct iv_fetch_out *output;
 
-
 			iv_ops->ivo_on_put(iv_info->ifc_ivns_internal,
 					iv_value, iv_info->ifc_user_priv);
 
@@ -882,11 +881,11 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	iv_ops = crt_iv_ops_get(iv_info->ifc_ivns_internal,
 				input->ifi_class_id);
 
-	if (rc == 0)
-		iv_ops->ivo_on_refresh(iv_info->ifc_ivns_internal,
+	/* In case of a failure, call on_refresh with NULL iv_value */
+	iv_ops->ivo_on_refresh(iv_info->ifc_ivns_internal,
 				&input->ifi_key,
 				0, /* TODO: iv_ver */
-				&iv_info->ifc_iv_value,
+				rc == 0 ? &iv_info->ifc_iv_value : NULL,
 				false,
 				iv_info->ifc_user_priv);
 

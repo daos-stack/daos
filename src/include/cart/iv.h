@@ -156,7 +156,8 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  * Incast variable on_refresh callback which will be called when the
  * synchronization/notification propagated to the node (flowing down from root
  * to leaf), or when serving invalidate request. It also will be called when the
- * fetch request's reply flows down.
+ * fetch request's reply flows down; if fetch request is not successful this
+ * callback will be invoked with NULL for iv_value.
  *
  * \param ivns [IN]		the local handle of the IV namespace
  * \param iv_key [IN]		key of the IV
