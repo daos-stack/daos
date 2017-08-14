@@ -59,6 +59,11 @@
 #define CRT_HG_RPCID		(0xDA036868)
 #define CRT_HG_ONEWAY_RPCID	(0xDA036869)
 
+/** MAX number of HG handles in pool */
+#define CRT_HG_POOL_MAX_NUM	(512)
+/** number of prepost HG handles when enable pool */
+#define CRT_HG_POOL_PREPOST_NUM	(16)
+
 struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
@@ -75,14 +80,33 @@ enum {
 	CRT_NA_OFI_PSM2		= CRT_NA_OFI_OFFSET + 3,
 };
 
+struct crt_hg_hdl {
+	/* link to crt_hg_pool::chp_hg_list */
+	crt_list_t		chh_link;
+	/* HG handle */
+	hg_handle_t		chh_hdl;
+};
+
+struct crt_hg_pool {
+	pthread_spinlock_t	chp_lock;
+	/* number of HG handles in pool */
+	int32_t			chp_num;
+	/* maximum number of HG handles in pool */
+	int32_t			chp_max_num;
+	/* HG handle list */
+	crt_list_t		chp_list;
+	bool			chp_enabled;
+};
+
 /** HG context */
 struct crt_hg_context {
-	bool			chc_shared_na; /* flag for shared na_class */
+	bool			 chc_shared_na; /* flag for shared na_class */
 	na_class_t		*chc_nacla; /* NA class */
 	hg_class_t		*chc_hgcla; /* HG class */
 	hg_context_t		*chc_hgctx; /* HG context */
 	hg_class_t		*chc_bulkcla; /* bulk class */
 	hg_context_t		*chc_bulkctx; /* bulk context */
+	struct crt_hg_pool	 chc_hg_pool; /* HG handle pool */
 };
 
 /** HG level global data */

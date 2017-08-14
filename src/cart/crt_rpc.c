@@ -1464,6 +1464,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 		crt_common_hdr_init(&rpc_priv->crp_reply_hdr, opc);
 	}
 	rpc_priv->crp_state = RPC_STATE_INITED;
+	rpc_priv->crp_hdl_reuse = NULL;
 	rpc_priv->crp_srv = srv_flag;
 	rpc_priv->crp_forward = forward;
 	/* initialize as 1, so user can cal crt_req_decref to destroy new req */

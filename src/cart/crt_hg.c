@@ -43,6 +43,196 @@
 #include <crt_internal.h>
 #include <abt.h>
 
+/**
+ * Enable the HG handle pool, can change/tune the max_num and prepost_num.
+ * This allows the pool be enabled/re-enabled and be tunable at runtime
+ * automatically based on workload or manually by cart_ctl.
+ */
+static inline int
+crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
+		   int32_t prepost_num)
+{
+	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
+	struct crt_hg_hdl	*hdl;
+	bool			 prepost;
+	hg_return_t		 hg_ret = HG_SUCCESS;
+	int			 rc = 0;
+
+	if (hg_ctx == NULL || max_num <= 0 || prepost_num < 0 ||
+	    prepost_num > max_num) {
+		C_ERROR("Invalid parameter of crt_hg_pool_enable, hg_ctx %p, "
+			"max_bum %d, prepost_num %d.\n", hg_ctx, max_num,
+			prepost_num);
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+
+	pthread_spin_lock(&hg_pool->chp_lock);
+	hg_pool->chp_max_num = max_num;
+	hg_pool->chp_enabled = true;
+	prepost = hg_pool->chp_num < prepost_num;
+	pthread_spin_unlock(&hg_pool->chp_lock);
+
+	while (prepost) {
+		C_ALLOC_PTR(hdl);
+		if (hdl == NULL) {
+			rc = -CER_NOMEM;
+			break;
+		}
+		CRT_INIT_LIST_HEAD(&hdl->chh_link);
+
+		hg_ret = HG_Create(hg_ctx->chc_hgctx, NULL,
+				   CRT_HG_RPCID, &hdl->chh_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			C_FREE_PTR(hdl);
+			C_ERROR("HG_Create failed, hg_ret: %d.\n", hg_ret);
+			rc = -CER_HG;
+			break;
+		}
+
+		pthread_spin_lock(&hg_pool->chp_lock);
+		crt_list_add_tail(&hdl->chh_link, &hg_pool->chp_list);
+		hg_pool->chp_num++;
+		C_DEBUG("hg_pool %p, add, chp_num %d.\n",
+			hg_pool, hg_pool->chp_num);
+		if (hg_pool->chp_num >= prepost_num)
+			prepost = false;
+		pthread_spin_unlock(&hg_pool->chp_lock);
+	}
+
+out:
+	return rc;
+}
+
+static inline void
+crt_hg_pool_disable(struct crt_hg_context *hg_ctx)
+{
+	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
+	struct crt_hg_hdl	*hdl, *next;
+	crt_list_t		 destroy_list;
+	hg_return_t		 hg_ret = HG_SUCCESS;
+
+	CRT_INIT_LIST_HEAD(&destroy_list);
+
+	pthread_spin_lock(&hg_pool->chp_lock);
+	hg_pool->chp_num = 0;
+	hg_pool->chp_max_num = 0;
+	hg_pool->chp_enabled = false;
+	crt_list_splice_init(&hg_pool->chp_list, &destroy_list);
+	C_DEBUG("hg_pool %p disabled and become empty (chp_num 0).\n", hg_pool);
+	pthread_spin_unlock(&hg_pool->chp_lock);
+
+	crt_list_for_each_entry_safe(hdl, next, &destroy_list, chh_link) {
+		C_ASSERT(hdl->chh_hdl != HG_HANDLE_NULL);
+		hg_ret = HG_Destroy(hdl->chh_hdl);
+		if (hg_ret != HG_SUCCESS)
+			C_ERROR("HG_Destroy failed, hg_hdl %p, hg_ret: %d.\n",
+				hdl->chh_hdl, hg_ret);
+		else
+			C_DEBUG("hg_hdl %p destroyed.\n", hdl->chh_hdl);
+		crt_list_del_init(&hdl->chh_link);
+		C_FREE_PTR(hdl);
+	}
+}
+
+static inline int
+crt_hg_pool_init(struct crt_hg_context *hg_ctx)
+{
+	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
+	int			 rc = 0;
+
+	pthread_spin_init(&hg_pool->chp_lock, PTHREAD_PROCESS_PRIVATE);
+	hg_pool->chp_num = 0;
+	hg_pool->chp_max_num = 0;
+	hg_pool->chp_enabled = false;
+	CRT_INIT_LIST_HEAD(&hg_pool->chp_list);
+
+	rc = crt_hg_pool_enable(hg_ctx, CRT_HG_POOL_MAX_NUM,
+				CRT_HG_POOL_PREPOST_NUM);
+	if (rc != 0)
+		C_ERROR("crt_hg_pool_enable, hg_ctx %p, failed rc:%d.\n",
+			hg_ctx, rc);
+
+	return rc;
+}
+
+static inline void
+crt_hg_pool_fini(struct crt_hg_context *hg_ctx)
+{
+	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
+
+	crt_hg_pool_disable(hg_ctx);
+	pthread_spin_destroy(&hg_pool->chp_lock);
+}
+
+static inline struct crt_hg_hdl *
+crt_hg_pool_get(struct crt_hg_context *hg_ctx)
+{
+	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
+	struct crt_hg_hdl	*hdl = NULL, *next;
+
+	pthread_spin_lock(&hg_pool->chp_lock);
+	if (!hg_pool->chp_enabled || crt_list_empty(&hg_pool->chp_list)) {
+		C_DEBUG("hg_pool %p is not enabled or empty, cannot get.\n",
+			hg_pool);
+		C_GOTO(unlock, hdl);
+	}
+	crt_list_for_each_entry_safe(hdl, next, &hg_pool->chp_list, chh_link) {
+		C_ASSERT(hdl->chh_hdl != HG_HANDLE_NULL);
+		crt_list_del_init(&hdl->chh_link);
+		hg_pool->chp_num--;
+		C_ASSERT(hg_pool->chp_num >= 0);
+		C_DEBUG("hg_pool %p, remove, chp_num %d.\n",
+			hg_pool, hg_pool->chp_num);
+		break;
+	}
+
+unlock:
+	pthread_spin_unlock(&hg_pool->chp_lock);
+	return hdl;
+}
+
+static inline int
+crt_hg_pool_put(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
+{
+	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
+	struct crt_hg_hdl	*hdl = NULL;
+	int			 rc = 0;
+
+	C_ASSERT(rpc_priv->crp_hg_hdl != HG_HANDLE_NULL);
+
+	if (rpc_priv->crp_hdl_reuse == NULL) {
+		C_ALLOC_PTR(hdl);
+		if (hdl != NULL) {
+			CRT_INIT_LIST_HEAD(&hdl->chh_link);
+			hdl->chh_hdl = rpc_priv->crp_hg_hdl;
+		} else {
+			C_ERROR("cannot allocate crt_hg_hdl.\n");
+			C_GOTO(out, rc = -CER_NOMEM);
+		}
+	} else {
+		hdl = rpc_priv->crp_hdl_reuse;
+		rpc_priv->crp_hdl_reuse = NULL;
+	}
+
+	pthread_spin_lock(&hg_pool->chp_lock);
+	if (hg_pool->chp_enabled && hg_pool->chp_num < hg_pool->chp_max_num) {
+		crt_list_add_tail(&hdl->chh_link, &hg_pool->chp_list);
+		hg_pool->chp_num++;
+		C_DEBUG("hg_pool %p, add, chp_num %d.\n",
+			hg_pool, hg_pool->chp_num);
+	} else {
+		C_FREE_PTR(hdl);
+		C_DEBUG("hg_pool %p, chp_num %d, max_num %d, enabled %d, "
+			"cannot put.\n", hg_pool, hg_pool->chp_num,
+			hg_pool->chp_max_num, hg_pool->chp_enabled);
+		rc = -CER_OVERFLOW;
+	}
+	pthread_spin_unlock(&hg_pool->chp_lock);
+
+out:
+	return rc;
+}
+
 static hg_return_t
 crt_hg_addr_lookup_cb(const struct hg_cb_info *hg_cbinfo)
 {
@@ -565,6 +755,11 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	C_ASSERT(hg_ctx->chc_bulkcla != NULL);
 	C_ASSERT(hg_ctx->chc_bulkctx != NULL);
 
+	rc = crt_hg_pool_init(hg_ctx);
+	if (rc != 0)
+		C_ERROR("context idx %d hg_ctx %p, crt_hg_pool_init failed, "
+			"rc: %d.\n", idx, hg_ctx, rc);
+
 out:
 	if (info_string_free)
 		C_FREE(info_string, CRT_ADDR_STR_MAX_LEN);
@@ -582,6 +777,8 @@ crt_hg_ctx_fini(struct crt_hg_context *hg_ctx)
 	C_ASSERT(hg_ctx != NULL);
 	hg_context = hg_ctx->chc_hgctx;
 	C_ASSERT(hg_context != NULL);
+
+	crt_hg_pool_fini(hg_ctx);
 
 	hg_ret = HG_Context_destroy(hg_context);
 	if (hg_ret == HG_SUCCESS) {
@@ -777,14 +974,33 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 	C_ASSERT(rpc_priv != NULL);
 	C_ASSERT(rpc_priv->crp_opc_info != NULL);
 
-	rpcid = rpc_priv->crp_opc_info->coi_no_reply ? CRT_HG_ONEWAY_RPCID :
-						       CRT_HG_RPCID;
-	hg_ret = HG_Create(hg_ctx->chc_hgctx, rpc_priv->crp_hg_addr, rpcid,
-			   &rpc_priv->crp_hg_hdl);
-	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("HG_Create failed, hg_ret: %d, opc: 0x%x.\n",
-			hg_ret, rpc_priv->crp_pub.cr_opc);
-		rc = -CER_HG;
+	if (!rpc_priv->crp_opc_info->coi_no_reply) {
+		rpcid = CRT_HG_RPCID;
+		rpc_priv->crp_hdl_reuse = crt_hg_pool_get(hg_ctx);
+	} else {
+		rpcid = CRT_HG_ONEWAY_RPCID;
+	}
+
+	if (rpc_priv->crp_hdl_reuse == NULL) {
+		hg_ret = HG_Create(hg_ctx->chc_hgctx, rpc_priv->crp_hg_addr,
+				   rpcid, &rpc_priv->crp_hg_hdl);
+		if (hg_ret != HG_SUCCESS) {
+			C_ERROR("HG_Create failed, hg_ret: %d, rpc_priv %p, "
+				"opc: 0x%x.\n",
+				hg_ret, rpc_priv, rpc_priv->crp_pub.cr_opc);
+			rc = -CER_HG;
+		}
+	} else {
+		rpc_priv->crp_hg_hdl = rpc_priv->crp_hdl_reuse->chh_hdl;
+		hg_ret = HG_Reset(rpc_priv->crp_hg_hdl, rpc_priv->crp_hg_addr,
+				  0 /* reuse original rpcid */);
+		if (hg_ret != HG_SUCCESS) {
+			rpc_priv->crp_hg_hdl = NULL;
+			C_ERROR("HG_Reset failed, hg_ret: %d, rpc_priv %p, "
+				"opc: 0x%x.\n",
+				hg_ret, rpc_priv, rpc_priv->crp_pub.cr_opc);
+			rc = -CER_HG;
+		}
 	}
 
 	return rc;
@@ -818,6 +1034,22 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 
 	if (!rpc_priv->crp_coll && rpc_priv->crp_hg_hdl != NULL &&
 	    (!CRT_HG_LOWLEVEL_UNPACK || (rpc_priv->crp_input_got == 0))) {
+		if (!rpc_priv->crp_srv &&
+		    !rpc_priv->crp_opc_info->coi_no_reply) {
+			struct crt_context	*ctx;
+			struct crt_hg_context	*hg_ctx;
+
+			ctx = (struct crt_context *)rpc_priv->crp_pub.cr_ctx;
+			hg_ctx = &ctx->cc_hg_ctx;
+			rc = crt_hg_pool_put(hg_ctx, rpc_priv);
+			if (rc == 0) {
+				C_DEBUG("rpc_priv %p, hg_hdl %p put to pool.\n",
+					rpc_priv, rpc_priv->crp_hg_hdl);
+				C_GOTO(mem_free, rc);
+			} else {
+				rc = 0;
+			}
+		}
 		/* HACK alert:  Do we need to provide a low-level interface
 		 * for HG_Free_input since we do low level packing.   Without
 		 * calling HG_Get_input, we don't take a reference on the
@@ -831,6 +1063,7 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 		}
 	}
 
+mem_free:
 	crt_rpc_priv_free(rpc_priv);
 
 	return rc;
