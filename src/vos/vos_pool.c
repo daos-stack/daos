@@ -41,6 +41,11 @@
 #include <string.h>
 
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
+/**
+ * Memory class is PMEM by default, user can set it to VMEM (volatile memory)
+ * for testing.
+ */
+umem_class_id_t	vos_mem_class	 = UMEM_CLASS_PMEM;
 
 static struct vos_pool *
 pool_hlink2ptr(struct daos_ulink *hlink)
@@ -189,7 +194,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t size)
 		memset(pool_df, 0, sizeof(*pool_df));
 
 		memset(&uma, 0, sizeof(uma));
-		uma.uma_id = UMEM_CLASS_PMEM;
+		uma.uma_id = vos_mem_class;
 		uma.uma_u.pmem_pool = ph;
 
 		rc = vos_cont_tab_create(&uma, &pool_df->pd_ctab_df);
@@ -292,7 +297,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	}
 
 	uma = &pool->vp_uma;
-	uma->uma_id = UMEM_CLASS_PMEM;
+	uma->uma_id = vos_mem_class;
 	uma->uma_u.pmem_pool = vos_pmemobj_open(path,
 				   POBJ_LAYOUT_NAME(vos_pool_layout));
 	if (uma->uma_u.pmem_pool == NULL) {

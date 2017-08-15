@@ -34,8 +34,8 @@
 /** hash seed for murmur hash */
 #define VOS_BTR_MUR_SEED	0xC0FFEE
 
-#define VOS_BTR_ORDER		15
-#define VOS_EVT_ORDER		15
+#define VOS_BTR_ORDER		23
+#define VOS_EVT_ORDER		23
 
 /**
  * VOS Btree attributes, for tree registration and tree creation.

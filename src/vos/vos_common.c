@@ -196,8 +196,9 @@ struct dss_module vos_srv_module =  {
 int
 vos_init(void)
 {
-	int		rc = 0;
-	static int	is_init = 0;
+	char		*env;
+	int		 rc = 0;
+	static int	 is_init = 0;
 
 	if (is_init) {
 		D_ERROR("Already initialized a VOS instance\n");
@@ -218,8 +219,14 @@ vos_init(void)
 		D_GOTO(exit, rc);
 
 	rc = vos_mod_init();
-	if (!rc)
-		is_init = 1;
+	if (rc)
+		D_GOTO(exit, rc);
+
+	env = getenv("VOS_MEM_CLASS");
+	if (env && strcasecmp(env, "vmem") == 0)
+		vos_mem_class = UMEM_CLASS_VMEM;
+
+	is_init = 1;
 exit:
 	pthread_mutex_unlock(&mutex);
 	if (rc && vsa_imems_inst)
