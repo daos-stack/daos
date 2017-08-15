@@ -265,11 +265,12 @@ REQS.define('cppr',
             commands=["scons "
                       "OMPI_PREBUILT=$OMPI_PREFIX "
                       "CART_PREBUILT=$CART_PREFIX "
+                      "FUSE_PREBUILT=$FUSE_PREFIX "
                       "IOF_PREBUILT=$IOF_PREFIX "
                       "PREFIX=$CPPR_PREFIX install"],
             headers=["cppr.h"],
             libs=["cppr"],
-            requires=['iof'])
+            requires=['iof', 'cart', 'ompi', 'fuse'])
 
 RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/daos/iof",
                              True)
@@ -278,9 +279,10 @@ REQS.define('iof',
             commands=["scons "
                       "OMPI_PREBUILT=$OMPI_PREFIX "
                       "CART_PREBUILT=$CART_PREFIX "
+                      "FUSE_PREBUILT=$FUSE_PREFIX "
                       "PREFIX=$IOF_PREFIX install"],
             headers=['cnss_plugin.h'],
-            requires=['cart', 'fuse'])
+            requires=['cart', 'fuse', 'ompi'])
 
 RETRIEVER = GitRepoRetriever("https://review.whamcloud.com/daos/daos_m",
                              True)
@@ -291,7 +293,7 @@ REQS.define('daos',
                       "CART_PREBUILT=$CART_PREFIX "
                       "PREFIX=$DAOS_PREFIX install"],
             headers=['daos.h'],
-            requires=['cart'])
+            requires=['cart', 'ompi'])
 
 REQS.define('fuse',
             retriever=GitRepoRetriever('https://github.com/libfuse/libfuse'),
@@ -324,7 +326,8 @@ REQS.define('cart',
                       "PREFIX=$CART_PREFIX install"],
             headers=["cart/api.h", "pouch/list.h"],
             libs=["cart", "pouch"],
-            requires=['mpi4py', 'mercury', 'argobots', 'crypto'])
+            requires=['mpi4py', 'mercury', 'argobots', 'crypto', 'ompi',
+                      'pmix'])
 
 URL = 'https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-1.3.1.tar.gz'
 WEB_RETRIEVER = WebRetriever(URL)
