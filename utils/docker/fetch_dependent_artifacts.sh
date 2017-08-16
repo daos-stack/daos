@@ -133,6 +133,10 @@ fi
 function fetch_job_artifacts {
   artifact=${1}
 
+  if [ ! -d "${artifact}" ]; then
+    return 0
+  fi
+
   # Copy over any RPMs
   if [ -d ${DEPEND_RPMS} ];then
     rpm_files=`find ${artifact} -name "*.rpm" -print`
@@ -274,6 +278,7 @@ for test_name in ${DEPEND_COMPS}; do
      wanted_commit="latest"
   fi
 
+  artifact_no=""
   if [ ! -d "${WORK_TARGET}/${test_name}" ]; then
     # Look first for $test_name-$job_suffix
     test_job_name="${test_name}-${job_suffix}"
