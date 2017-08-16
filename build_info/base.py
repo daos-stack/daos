@@ -54,7 +54,7 @@ class BuildInfo(object):
     def save(self, filename):
         """Create a file to store path information for a build"""
         with open(filename, "w") as build_info:
-            json.dump(self.info, build_info, skipkeys=True)
+            json.dump(self.info, build_info, skipkeys=True, indent=2)
 
     def gen_script(self, script_name):
         """Generate a shell script to set PATH, LD_LIBRARY_PATH,

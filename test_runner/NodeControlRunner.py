@@ -28,6 +28,7 @@ defined by node type or name. This class uses NodeRunner to execute the request.
 """
 
 
+import os
 import logging
 import time
 from datetime import datetime
@@ -37,7 +38,7 @@ import NodeRunner
 #pylint: enable=import-error
 
 
-class NodeControlRunner(OrteRunner.OrteRunner):
+class NodeControlRunner():
     """Simple node interface"""
     node_list = []
 
@@ -52,6 +53,18 @@ class NodeControlRunner(OrteRunner.OrteRunner):
         for node in host_list:
             node_info = NodeRunner.NodeRunner(self.test_info, node)
             self.node_list.append(node_info)
+
+    def start_cmd_list(self, log_path, testsuite, prefix):
+        """add the log directory to the prefix
+           Note: entries, after the first, start with a space"""
+        log_dir_orte = os.path.abspath(log_path)
+        try:
+            os.makedirs(log_dir_orte)
+        except OSError:
+            pass
+        return (OrteRunner.OrteRunner(self.test_info, log_dir_orte,
+                                      testsuite, prefix))
+
 
     def execute_list(self, cmdstr, log_path, run_node_list, waittime):
         """ execute command on node list """

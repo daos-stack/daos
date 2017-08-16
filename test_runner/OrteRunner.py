@@ -45,6 +45,7 @@ import subprocess
 import shlex
 import time
 import getpass
+import logging
 #pylint: disable=import-error
 from PostRunner import check_log_mode
 
@@ -52,32 +53,53 @@ from PostRunner import check_log_mode
 
 class OrteRunner():
     """setup for using ompi from test runner"""
-    test_info = None
-    logger = None
+    proc = None
     log_dir_orte = ""
     testsuite = ""
 
-    @staticmethod
-    def add_cmd(cmd_list, cmd, parameters="", nextCmd=False):
+    def __init__(self, test_info, log_path, testsuite, prefix):
+        """add the log directory to the prefix
+           Note: entries, after the first, start with a space"""
+        self.test_info = test_info
+        self.testsuite = testsuite
+        self.log_dir_orte = log_path
+        self.logger = logging.getLogger("TestRunnerLogger")
+        self.cmd_list = []
+        self.cmd_list.append("{!s}orterun".format(prefix))
+        if self.test_info.get_defaultENV('TR_USE_URI', ""):
+            self.cmd_list.append(" --hnp file:{!s}".format(
+                self.test_info.get_defaultENV('TR_USE_URI')))
+        self.cmd_list.append(" --output-filename {!s}".
+                             format(self.log_dir_orte))
+        if getpass.getuser() == "root":
+            self.cmd_list.append(" --allow-run-as-root")
+
+    def dump_cmd(self, msg):
+        """log the cmd_list"""
+        self.logger.info("%s: %s", msg, str(self.cmd_list))
+
+    def next_cmd(self):
+        """add the : to start a new command string
+           Note: added entries start with a space"""
+        self.cmd_list.append(" :")
+
+    def add_cmd(self, cmd, parameters=""):
         """add the ommand and parameters to the list
            Note: added entries start with a space"""
-        if nextCmd:
-            cmd_list.append(" :")
-        cmd_list.append(" {!s}".format(cmd))
+        self.cmd_list.append(" {!s}".format(cmd))
         if parameters:
-            cmd_list.append(" {!s}".format(parameters))
+            self.cmd_list.append(" {!s}".format(parameters))
 
-    @staticmethod
-    def add_env_vars(cmd_list, env_vars):
+    def add_env_vars(self, env_vars):
         """add the environment variables to the command list
            Note: entries start with a space"""
         for (key, value) in env_vars.items():
             if value:
-                cmd_list.append(" -x {!s}={!s}".format(key, value))
+                self.cmd_list.append(" -x {!s}={!s}".format(key, value))
             else:
-                cmd_list.append(" -x {!s}".format(key))
+                self.cmd_list.append(" -x {!s}".format(key))
 
-    def add_nodes(self, cmd_list, nodes, procs=1):
+    def add_nodes(self, nodes, procs=1):
         """add the node prefix to the command list
            Note: entries start with a space"""
         if nodes[0].isupper():
@@ -85,30 +107,11 @@ class OrteRunner():
         else:
             node_list = nodes
 
-        cmd_list.append(" -H {!s} -N {!s}".format(node_list, procs))
+        self.cmd_list.append(" -H {!s} -N {!s}".format(node_list, procs))
 
-    def start_cmd_list(self, log_path, testsuite, prefix):
-        """add the log directory to the prefix
-           Note: entries, after the first, start with a space"""
-        self.testsuite = testsuite
-        self.log_dir_orte = os.path.abspath(log_path)
-        try:
-            os.makedirs(self.log_dir_orte)
-        except OSError:
-            pass
-        cmd_list = []
-        cmd_list.append("{!s}orterun".format(prefix))
-        if self.test_info.get_defaultENV('TR_USE_URI', ""):
-            cmd_list.append(" --hnp file:{!s}".format(
-                self.test_info.get_defaultENV('TR_USE_URI')))
-        cmd_list.append(" --output-filename {!s}".format(self.log_dir_orte))
-        if getpass.getuser() == "root":
-            cmd_list.append(" --allow-run-as-root")
-        return cmd_list
-
-    def start_process(self, cmd_list):
+    def start_process(self):
         """Launch process set """
-        cmdstr = ''.join(cmd_list)
+        cmdstr = ''.join(self.cmd_list)
         self.logger.info("OrteRunner: start: %s", cmdstr)
         cmdarg = shlex.split(cmdstr)
         fileout = os.path.join(self.log_dir_orte,
@@ -122,44 +125,43 @@ class OrteRunner():
             outfile.flush()
             errfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
                 ("=" * 40), cmdstr, ("=" * 40)))
-            proc = subprocess.Popen(cmdarg, stdout=outfile, stderr=errfile)
-        return proc
+            self.proc = subprocess.Popen(cmdarg, stdout=outfile, stderr=errfile)
 
-    def check_process(self, proc):
+    def check_process(self):
         """Check if a process is still running"""
-        proc.poll()
-        procrtn = proc.returncode
+        self.proc.poll()
+        procrtn = self.proc.returncode
         if procrtn is None:
             return True
         self.logger.info("Process has exited")
         return False
 
-    def wait_process(self, proc, waittime=180):
+    def wait_process(self, waittime=180):
         """wait for processes to terminate
         Wait for the process to exit, and return the return code.
         """
-        self.logger.info("Test: waiting for process :%s", proc.pid)
+        self.logger.info("Test: waiting for process :%s", self.proc.pid)
 
         try:
-            procrtn = proc.wait(waittime)
+            procrtn = self.proc.wait(waittime)
             check_log_mode(self.log_dir_orte)
         except subprocess.TimeoutExpired as e:
             self.logger.info("Test: process timeout: %s\n", e)
-            procrtn = self.stop_process("process timeout", proc)
+            procrtn = self.stop_process("process timeout")
 
         self.logger.info("Test: return code: %s\n", procrtn)
         return procrtn
 
 
-    def stop_process(self, msg, proc):
+    def stop_process(self, msg):
         """ wait for process to terminate """
         self.logger.info("%s: %s - stopping processes :%s", \
-          self.testsuite, msg, proc.pid)
+          self.testsuite, msg, self.proc.pid)
         i = 60
         procrtn = None
         while i:
-            proc.poll()
-            procrtn = proc.returncode
+            self.proc.poll()
+            procrtn = self.proc.returncode
             if procrtn is not None:
                 break
             else:
@@ -168,17 +170,17 @@ class OrteRunner():
 
         if procrtn is None:
             self.logger.info("%s: Again stopping processes :%s", \
-              self.testsuite, proc.pid)
+              self.testsuite, self.proc.pid)
             procrtn = -1
             try:
-                proc.terminate()
-                proc.wait(2)
+                self.proc.terminate()
+                self.proc.wait(2)
             except ProcessLookupError:
                 pass
             except Exception:
                 self.logger.info("%s: killing processes :%s", \
-                  self.testsuite, proc.pid)
-                proc.kill()
+                  self.testsuite, self.proc.pid)
+                self.proc.kill()
 
         self.logger.info("%s: %s - return code: %d\n", \
           self.testsuite, msg, procrtn)
