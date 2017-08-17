@@ -40,20 +40,22 @@ class PreRunner():
         module = self.test_info['module']
         host_list = self.info.get_config('host_list')
         hostkey_list = module.get('setKeyFromHost')
-        host_config = module.get('hostConfig')
+        host_config = self.info.get_config(keyname='hostConfig',
+                                           default=module.get('hostConfig'))
+        print("host list: {!s}".format(str(host_list)))
         if not host_config or host_config['type'] == 'oneToOne':
             for k in range(0, len(hostkey_list)):
                 self.test_info['defaultENV'][hostkey_list[k]] = host_list[k]
                 self.test_info['passToConfig'][hostkey_list[k]] = host_list[k]
         elif host_config['type'] == 'buildList':
             numHostKeys = len(hostkey_list)
-            print("host config:" + str(host_config))
+            print("host config: {!s}".format(str(host_config)))
             items = ","
             end = host_config['numServers']
             if str(end) == "all":
                 server_list = items.join(host_list)
             else:
-                server_list = items.join(host_list[0:end])
+                server_list = items.join(host_list[0:int(end)])
             self.test_info['defaultENV'][hostkey_list[0]] = server_list
             self.test_info['passToConfig'][hostkey_list[0]] = server_list
             if numHostKeys > 1:
@@ -62,7 +64,7 @@ class PreRunner():
                     client_list = items.join(host_list)
                 else:
                     end = start + host_config['numClients']
-                    client_list = items.join(host_list[start:end])
+                    client_list = items.join(host_list[int(start):int(end)])
                 self.test_info['defaultENV'][hostkey_list[1]] = client_list
                 self.test_info['passToConfig'][hostkey_list[1]] = client_list
 
