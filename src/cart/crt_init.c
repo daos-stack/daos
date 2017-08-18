@@ -182,9 +182,6 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 		if ((flags & CRT_FLAG_BIT_SINGLETON) != 0)
 			crt_gdata.cg_singleton = true;
 
-		if (crt_plugin_gdata.cpg_inited == 0)
-			crt_plugin_init();
-
 		addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
 		if (addr_env == NULL) {
 			C_DEBUG("ENV %s not found.\n", CRT_PHY_ADDR_ENV);
@@ -245,6 +242,10 @@ do_init:
 			crt_gdata.cg_addr = NULL;
 			C_GOTO(unlock, rc);
 		}
+
+		if (crt_plugin_gdata.cpg_inited == 0)
+			crt_plugin_init();
+
 
 		crt_self_test_init();
 

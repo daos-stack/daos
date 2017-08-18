@@ -672,13 +672,16 @@ crt_plugin_pmix_errhdlr_reg_cb(pmix_status_t status, size_t errhdlr_ref,
 {
 	C_DEBUG("crt_plugin_pmix_errhdlr_reg_cb() called with status %d, "
 		" ref=%zu.\n", status, errhdlr_ref);
+	if (status != 0)
+		C_ERROR("crt_plugin_pmix_errhdlr_reg_cb() called with "
+			"status %d\n", status);
 	crt_plugin_gdata.cpg_pmix_errhdlr_ref = errhdlr_ref;
 }
 
 void
 crt_plugin_pmix_init(void)
 {
-	if (!crt_is_service())
+	if (!crt_is_service() || crt_is_singleton())
 		return;
 	PMIx_Register_event_handler(NULL, 0, NULL, 0,
 				    crt_plugin_event_handler_core,
@@ -695,7 +698,7 @@ crt_plugin_pmix_errhdlr_dereg_cb(pmix_status_t status, void *cbdata)
 void
 crt_plugin_pmix_fini(void)
 {
-	if (!crt_is_service())
+	if (!crt_is_service() || crt_is_singleton())
 		return;
 	PMIx_Deregister_event_handler(crt_plugin_gdata.cpg_pmix_errhdlr_ref,
 				      crt_plugin_pmix_errhdlr_dereg_cb, NULL);
