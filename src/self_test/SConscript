@@ -57,7 +57,7 @@ def scons():
     tenv.AppendUnique(FLAGS='-pthread')
 
     self_test = tenv.Program(SELF_TEST)
-    tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), self_test)
+    tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)
 
 if __name__ == "SCons.Script":
     scons()

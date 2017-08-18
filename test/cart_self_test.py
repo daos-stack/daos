@@ -51,7 +51,7 @@ class SelfTest(commontestsuite.CommonTestSuite):
     def setUp(self):
         """setup the test"""
         self.get_test_info()
-        log_mask = os.getenv("CRT_LOG_MASK", "INFO")
+        log_mask = os.getenv("CRT_LOG_MASK", "WARN")
         crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
         ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
         baseport = self.generate_port_numbers(ofi_interface)
@@ -76,6 +76,12 @@ class SelfTest(commontestsuite.CommonTestSuite):
             self.skipTest('requires DVM to run.')
 
         testmsg = self.shortDescription()
+
+        self_test_dir = os.getenv("CRT_PREFIX_BIN", None)
+        if self_test_dir:
+            self_test_binary = os.path.join(self_test_dir, 'self_test')
+        else:
+            self_test_binary = 'self_test'
 
         servers = self.get_server_list()
         if not servers:
@@ -114,16 +120,19 @@ class SelfTest(commontestsuite.CommonTestSuite):
         rpcs_in_flight = 16
         repetitions = 100
 
-        client_args = "tests/self_test --group-name target --endpoint 0:0 " + \
-            "--message-sizes %s --max-inflight-rpcs %d --repetitions %d" % \
-            (message_sizes, rpcs_in_flight, repetitions)
+        client_args = [self_test_binary]
+        client_args.extend(['--group-name', 'target',
+                            '--endpoint', '0:0',
+                            '--message-sizes', message_sizes,
+                            '--max-inflight-rpcs', str(rpcs_in_flight),
+                            '--repetitions', str(repetitions)])
 
         # Launch, and wait for the self-test itself.  This is where the actual
         # code gets run.  Launch and keep the return code, but do not check it
         # until after the target has been stopped.
         procrtn = self.launch_test(testmsg, '1', self.pass_env, \
                                    cli=''.join([' -H ', client.pop(0)]), \
-                                   cli_arg=client_args)
+                                   cli_arg=' '.join(client_args))
 
         # Stop the server.  This will normally run forever because of the hold
         # option, so allow stop_process() to kill it but do not check the

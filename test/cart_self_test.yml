@@ -2,7 +2,7 @@ description: "self test"
 
 defaultENV:
     OMPI_MCA_rmaps_base_oversubscribe: "1"
-    CRT_LOG_MASK: "DEBUG,MEM=ERR"
+    CRT_LOG_MASK: "WARN"
     TR_REDIRECT_OUTPUT: "no"
     CRT_PHY_ADDR_STR: "ofi+sockets"
     OFI_INTERFACE: "eth0"
@@ -14,6 +14,7 @@ module:
     setKeyFromInfo:
         - [CRT_PREFIX, PREFIX, ""]
         - [CRT_OMPI_PREFIX, OMPI_PREFIX, ""]
+        - [CRT_PREFIX_BIN, PREFIX, "/bin"]
         - [CRT_OMPI_BIN, OMPI_PREFIX, "/bin/"]
 
 directives:
