@@ -4,7 +4,7 @@ Import('denv', 'PREREQS')
 
 denv.Append(CPPPATH = ['#/src/dsm', '#/src/server'])
 
-libraries = ['daos_common', 'crt_util', 'crt', 'daos']
+libraries = ['daos_common', 'pouch', 'cart', 'daos']
 libraries += ['uuid', 'mpi']
 libraries += ['cmocka']
 

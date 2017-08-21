@@ -26,7 +26,7 @@
 
 #include <stdio.h>
 #include <assert.h>
-#include <crt_util/clog.h>
+#include <pouch/clog.h>
 
 /** priority level */
 #define DP_INFO			CLOG_INFO

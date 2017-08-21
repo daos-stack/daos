@@ -4,9 +4,9 @@ Import('env', 'PREREQS')
 
 denv = env.Clone()
 
-libraries = ['daos_common', 'crt_util', 'crt', 'vos_srv', 'daos', 'daos_tier']
+libraries = ['daos_common', 'pouch', 'cart', 'vos_srv', 'daos', 'daos_tier']
 libraries += ['dl', 'uuid', 'pthread', 'abt']
-libraries += ['hwloc', 'crt']
+libraries += ['hwloc']
 
 if PREREQS is not None:
 	PREREQS.require(denv, 'hwloc', 'cart', 'argobots')

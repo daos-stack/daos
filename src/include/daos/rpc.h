@@ -29,9 +29,9 @@
 #ifndef __DRPC_API_H__
 #define __DRPC_API_H__
 
-#include <crt_api.h>
-#include <crt_types.h>
-#include <crt_errno.h>
+#include <cart/api.h>
+#include <cart/types.h>
+#include <cart/errno.h>
 
 #include <daos/common.h>
 #include <daos/tse.h>

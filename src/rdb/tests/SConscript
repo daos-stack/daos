@@ -6,5 +6,5 @@ env.Install('$PREFIX/lib/daos_srv', librdbt)
 
 # rdbt client
 rdbt = env.Program('rdbt', ['rdbt.c', 'rpc.c'],
-		   LIBS=['crt', 'crt_util', 'daos_common', 'uuid'])
+		   LIBS=['cart', 'pouch', 'daos_common', 'uuid'])
 env.Install('$PREFIX/bin', rdbt)

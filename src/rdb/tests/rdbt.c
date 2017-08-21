@@ -24,7 +24,7 @@
 #define DD_SUBSYS DD_FAC(rdb)
 
 #include <getopt.h>
-#include <crt_api.h>
+#include <cart/api.h>
 #include <daos/debug.h>
 #include <daos/rpc.h>
 #include "rpc.h"

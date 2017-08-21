@@ -41,7 +41,7 @@
 #include <byteswap.h>
 
 #include <daos_types.h>
-#include <crt_util/common.h>
+#include <pouch/common.h>
 #include <daos/debug.h>
 
 /**

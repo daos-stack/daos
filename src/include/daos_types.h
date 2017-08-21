@@ -39,7 +39,7 @@ extern "C" {
 /** uuid_t */
 #include <uuid/uuid.h>
 /** for crt_rank_t & crt_rank_list_t */
-#include <crt_types.h>
+#include <cart/types.h>
 
 #include <daos_errno.h>
 
