@@ -329,7 +329,7 @@ REQS.define('cart',
             requires=['mpi4py', 'mercury', 'argobots', 'crypto', 'ompi',
                       'pmix'])
 
-URL = 'https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-1.3.1.tar.gz'
+URL = 'https://bitbucket.org/mpi4py/mpi4py/downloads/mpi4py-2.0.0.tar.gz'
 WEB_RETRIEVER = WebRetriever(URL)
 REQS.define('mpi4py',
             retriever=WEB_RETRIEVER,
