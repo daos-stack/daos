@@ -48,7 +48,15 @@ fi
 
 : ${DOCKER_OPTIONS=""}
 
-docker run --rm -u $USER -v ${PWD}:/work \
+# Matrix must be a unique id, but has a restricted character set.
+# We want it to be informative for debug.
+matrix="${distro%.*}_$$"
+
+echo "${job_real_name}_${BUILD_NUMBER}_${matrix}" > \
+  ${WORKSPACE}/docker_container_name.txt
+
+docker run --rm --name "${job_real_name}_${BUILD_NUMBER}_${matrix}" \
+           -u $USER -v ${PWD}:/work \
            -v ${WORK_TARGET}:${DIST_MOUNT} \
            --privileged --device /dev/fuse:/dev/fuse:rwm \
            -a stderr -a stdout ${DOCKER_OPTIONS} -i coral/${DOCKER_IMAGE} \
