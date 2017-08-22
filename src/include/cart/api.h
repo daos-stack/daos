@@ -785,7 +785,8 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg);
  *
  * \param grp [IN]		CRT group handle, NULL mean the primary/global
  *				group
- * \param rank[OUT]		result rank number
+ * \param rank[OUT]		result rank number. In singleton mode always get
+ *				rank 0 for local group.
  *
  * \return			zero on success, negative value if error
  */
@@ -797,7 +798,9 @@ crt_group_rank(crt_group_t *grp, crt_rank_t *rank);
  *
  * \param grp [IN]		CRT group handle, NULL mean the local
  *				primary/global group
- * \param size[OUT]		size (total number of ranks) of the group
+ * \param size[OUT]		size (total number of ranks) of the group.
+ *				In singleton mode always get size 1 for local
+ *				group.
  *
  * \return			zero on success, negative value if error
  */

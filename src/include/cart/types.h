@@ -392,13 +392,18 @@ typedef int (*crt_progress_cond_cb_t)(void *args);
 
 /**
  * some bit flags for crt_init:
- * CRT_FLAG_BIT_SERVER		false means pure client, true will enable the
- *				server which listens for incoming request.
- * CRT_FLAG_BIT_SINGLETON	false means it will use PMIx to wireup,
- *				true means it's single-process and won't use
- *				PMIx to wireup even when launched by orterun. If
- *				this bit is set in a multi-process server,
- *				behaviour is undefined.
+ * CRT_FLAG_BIT_SERVER -
+ *	false means pure client, true will enable the server which listens for
+ *	incoming request.
+ * CRT_FLAG_BIT_SINGLETON -
+ *	false means it will use PMIx to wireup, true means it's independent
+ *	process and won't use PMIx to wireup even when launched by orterun.
+ *	If this bit is set for a multi-ranks client program, it means each rank
+ *	is independent with each other, crt_group_rank() will get rank 0 and
+ *	crt_group_size() will get size 1 for each rank.
+ *	If this bit is set for a multi-ranks server, then undefined result is
+ *	expected (as server group rank and size cannot be queried from PMIx, but
+ *	they are needed for RPC communication).
  */
 enum crt_init_flag_bits {
 	CRT_FLAG_BIT_SERVER	= 1U << 0,
