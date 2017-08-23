@@ -115,7 +115,6 @@ crt_plugin_init(void)
 	pthread_rwlock_init(&crt_plugin_gdata.cpg_prog_rwlock, NULL);
 	pthread_rwlock_init(&crt_plugin_gdata.cpg_timeout_rwlock, NULL);
 	pthread_rwlock_init(&crt_plugin_gdata.cpg_event_rwlock, NULL);
-	crt_plugin_pmix_init();
 	crt_plugin_gdata.cpg_inited = 1;
 }
 
@@ -319,9 +318,6 @@ crt_plugin_fini(void)
 		event_cb_priv =
 			container_of(curr_node, struct crt_event_cb_priv,
 				     cecp_link);
-		C_FREE(event_cb_priv->cecp_codes,
-		       event_cb_priv->cecp_ncodes
-		       *sizeof(*event_cb_priv->cecp_codes));
 		C_FREE_PTR(event_cb_priv);
 	}
 	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_prog_rwlock);

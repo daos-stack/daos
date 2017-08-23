@@ -482,8 +482,6 @@ lm_event_hdlr(crt_rank_t crt_rank, void *args)
 static int
 crt_lm_grp_init(crt_group_t *grp)
 {
-	int			 codes[1] = {0};
-	int			 ncodes = 1;
 	int			 i;
 	crt_rank_t		 tmp_rank;
 	uint32_t		 grp_size;
@@ -545,7 +543,7 @@ crt_lm_grp_init(crt_group_t *grp)
 		if (grp_self != tmp_rank)
 			continue;
 		lm_grp_srv->lgs_ras = 1;
-		crt_register_event_cb(codes, ncodes, lm_event_hdlr, NULL);
+		crt_register_event_cb(lm_event_hdlr, NULL);
 	}
 	pthread_rwlock_init(&lm_grp_srv->lgs_rwlock, NULL);
 	/* every ras rank prints out its list of subscribed ranks */

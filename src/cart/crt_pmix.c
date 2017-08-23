@@ -564,8 +564,7 @@ out:
 }
 
 int
-crt_register_event_cb(crt_status_t codes[], size_t ncodes,
-		      crt_event_cb event_handler, void *args)
+crt_register_event_cb(crt_event_cb event_handler, void *args)
 {
 	/* store the event codes, the user event handler function ponter,
 	 * and the user-provided void args to a list of global sturctures.
@@ -574,28 +573,18 @@ crt_register_event_cb(crt_status_t codes[], size_t ncodes,
 	int				 rc = 0;
 
 
+	crt_plugin_pmix_init();
+
 	C_ALLOC_PTR(event_cb_priv);
 	if (event_cb_priv == NULL)
 		C_GOTO(out, rc = -CER_NOMEM);
-	C_ALLOC(event_cb_priv->cecp_codes,
-		ncodes*sizeof(*event_cb_priv->cecp_codes));
-	if (event_cb_priv->cecp_codes == NULL)
-		C_GOTO(err, rc = -CER_NOMEM);
-	memcpy(event_cb_priv->cecp_codes, codes, ncodes*sizeof(*codes));
-	event_cb_priv->cecp_ncodes = ncodes;
 	event_cb_priv->cecp_func = event_handler;
 	event_cb_priv->cecp_args = args;
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
 	crt_list_add_tail(&event_cb_priv->cecp_link,
 			  &crt_plugin_gdata.cpg_event_cbs);
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
-	C_GOTO(out, rc);
 
-err:
-	if (event_cb_priv->cecp_codes != NULL)
-		C_FREE(event_cb_priv->cecp_codes,
-		       ncodes*sizeof(event_cb_priv->cecp_codes));
-	C_FREE_PTR(event_cb_priv);
 out:
 	return rc;
 
@@ -621,7 +610,6 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	crt_rank_t			 crt_rank;
 	struct crt_event_cb_priv	*event_cb_priv;
 	void				*args;
-	int				 i;
 
 	grp_gdata = crt_gdata.cg_grp;
 	C_ASSERT(grp_gdata != NULL);
@@ -639,6 +627,12 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 		C_DEBUG("PMIx event not relevant to my namespace.\n");
 		return;
 	}
+
+	if (status != PMIX_ERR_PROC_ABORTED) {
+		C_DEBUG("PMIx event is not PMIX_ERR_PROC_ABORTED.\n");
+		return;
+	}
+
 	if (source->rank >= pmix_gdata->pg_univ_size) {
 		C_ERROR("pmix rank %d out of range [0, %d].\n",
 			source->rank, pmix_gdata->pg_univ_size - 1);
@@ -652,13 +646,9 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	crt_list_for_each_entry(event_cb_priv,
 				&crt_plugin_gdata.cpg_event_cbs, cecp_link) {
 		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
-		for (i = 0; i < event_cb_priv->cecp_ncodes; i++) {
-			if (event_cb_priv->cecp_codes[i] != status)
-				continue;
-			cb_func = event_cb_priv->cecp_func;
-			args = event_cb_priv->cecp_args;
-			cb_func(crt_rank, args);
-		}
+		cb_func = event_cb_priv->cecp_func;
+		args = event_cb_priv->cecp_args;
+		cb_func(crt_rank, args);
 		pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_event_rwlock);
 	}
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
@@ -683,9 +673,18 @@ crt_plugin_pmix_init(void)
 {
 	if (!crt_is_service() || crt_is_singleton())
 		return;
+
+	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
+	if (crt_plugin_gdata.cpg_pmix_errhdlr_inited == 1) {
+		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
+		return;
+	}
+
 	PMIx_Register_event_handler(NULL, 0, NULL, 0,
 				    crt_plugin_event_handler_core,
 				    crt_plugin_pmix_errhdlr_reg_cb, NULL);
+	crt_plugin_gdata.cpg_pmix_errhdlr_inited = 1;
+	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
 }
 
 static void
@@ -700,6 +699,10 @@ crt_plugin_pmix_fini(void)
 {
 	if (!crt_is_service() || crt_is_singleton())
 		return;
+
+	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
 	PMIx_Deregister_event_handler(crt_plugin_gdata.cpg_pmix_errhdlr_ref,
 				      crt_plugin_pmix_errhdlr_dereg_cb, NULL);
+	crt_plugin_gdata.cpg_pmix_errhdlr_inited = 0;
+	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
 }

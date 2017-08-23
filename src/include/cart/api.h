@@ -1043,36 +1043,18 @@ typedef void
 (*crt_event_cb) (crt_rank_t rank, void *args);
 
 /**
- * This function registers an event handler for a number of events specified by
- * codes and ncodes. When the external RAS notifies the current process with any
- * event code in -codes-, event_handler() will be executed.
+ * This function registers an event handler for process failures. If the calling
+ * process has not yet registered a PMIx event handler for the
+ * PMIX_ERR_PROC_ABORTED event, this function will do so.  When the external RAS
+ * notifies the current process with a process failure event, event_handler()
+ * will be executed. Invocation of event_handler() does not mean the rank has
+ * been evicted.
  *
- * Example:
- * event_handler_01(crt_rank_t rank, void *args)
- * {
- *	fprintf("Received event code %d\n", rank);
- * }
- *
- * int main()
- * {
- *	int codes[] = {0, 1};
- *	int ncodes = 2;
- *
- *	crt_register_event_handler(codes, ncodes, event_handler_01);
- *	crt_init();
- * }
- *
- * The example above registers two event codes 0 and 1 to external RAS. When the
- * external RAS notifies the current process with an event code 0 or 1,
- * event_handler_01() be executed.
- *
- * \param codes [IN]		event codes to monitor
- * \param ncodes [IN]		number of codes to monitor
  * \param event_handler [IN]	event handler to register
+ * \param args [IN]		args to event_handler
  */
 int
-crt_register_event_cb(int codes[], size_t ncodes,
-		      crt_event_cb event_handler, void *args);
+crt_register_event_cb(crt_event_cb event_handler, void *args);
 
 typedef void
 (*crt_progress_cb) (crt_context_t ctx, void *args);

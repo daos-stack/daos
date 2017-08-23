@@ -107,8 +107,6 @@ struct crt_timeout_cb_priv {
 
 struct crt_event_cb_priv {
 	crt_list_t		 cecp_link;
-	int			*cecp_codes;
-	int			 cecp_ncodes;
 	crt_event_cb		 cecp_func;
 	void			*cecp_args;
 };
@@ -121,7 +119,9 @@ struct crt_plugin_gdata {
 	crt_list_t		cpg_timeout_cbs;
 	/* list of event notification callbacks */
 	crt_list_t		cpg_event_cbs;
-	uint32_t		cpg_inited:1; /* all initialized */
+	uint32_t		cpg_inited:1, /* all initialized */
+				/* pmix handler registered*/
+				cpg_pmix_errhdlr_inited:1;
 	pthread_rwlock_t	cpg_prog_rwlock;
 	pthread_rwlock_t	cpg_timeout_rwlock;
 	pthread_rwlock_t	cpg_event_rwlock;
