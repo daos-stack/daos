@@ -1211,7 +1211,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		C_GOTO(exit, rc = -CER_NOMEM);
 	}
 
-	rc = iv_ops->ivo_on_get(ivns_internal, iv_key, 0, CRT_IV_PERM_WRITE,
+	rc = iv_ops->ivo_on_get(ivns_internal, iv_key, 0, CRT_IV_PERM_READ,
 				iv_value, &user_priv);
 	if (rc != 0) {
 		C_ERROR("ivo_on_get() failed; rc = %d\n", rc);
@@ -1221,6 +1221,8 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = iv_ops->ivo_on_fetch(ivns_internal, iv_key, 0,
 				0x0, iv_value, user_priv);
 	if (rc == 0) {
+		iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
+				iv_value, false, user_priv);
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 				iv_value, rc, cb_arg);
 		iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
@@ -1228,11 +1230,23 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		return rc;
 	} else if (rc != -CER_IVCB_FORWARD) {
 		/* We got error, call the callback and exit */
+		iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
+				NULL, false, user_priv);
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 				NULL, rc, cb_arg);
 		iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
 		C_FREE_PTR(iv_value);
 		return rc;
+	}
+
+	/* Return read-only copy and request 'write' version of iv_value */
+	iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
+
+	rc = iv_ops->ivo_on_get(ivns_internal, iv_key, 0, CRT_IV_PERM_WRITE,
+				iv_value, &user_priv);
+	if (rc != 0) {
+		C_ERROR("ivo_on_get() failed; rc = %d\n", rc);
+		C_GOTO(exit, rc);
 	}
 
 	/* If we reached here, means we got CER_IVCB_FORWARD */

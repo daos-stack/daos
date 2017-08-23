@@ -235,11 +235,19 @@ test_group_init(char *local_group_name, char *target_group_name,
 				echo_shutdown_handler);
 		C_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
 			  rc);
+		rc = crt_rpc_set_feats(ECHO_OPC_SHUTDOWN,
+				       CRT_RPC_FEAT_NO_REPLY);
+		C_ASSERTF(rc == 0, "crt_rpc_set_feats() failed. rc: %d\n",
+			  rc);
 	} else {
 		rc = crt_rpc_register(ECHO_OPC_CHECKIN, &CQF_ECHO_PING_CHECK);
 		C_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
 		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, NULL);
 		C_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
+		rc = crt_rpc_set_feats(ECHO_OPC_SHUTDOWN,
+				       CRT_RPC_FEAT_NO_REPLY);
+		C_ASSERTF(rc == 0, "crt_rpc_set_feats() failed. rc: %d\n",
+			  rc);
 	}
 
 	for (i = 0; i < ctx_num; i++) {
@@ -336,6 +344,7 @@ test_group_fini(int is_service)
 			rc = crt_req_send(rpc_req, client_cb_common, &complete);
 			C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
 				  rc);
+			sleep(1); /* wait for abouve RPC's completion */
 		}
 	}
 	if (should_attach) {
@@ -350,7 +359,7 @@ test_group_fini(int is_service)
 		if (rc != 0)
 			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
 		C_DEBUG("joined progress thread.\n");
-		rc = crt_context_destroy(crt_ctx[ii], 0);
+		rc = crt_context_destroy(crt_ctx[ii], 1);
 		C_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n",
 			  rc);
 		C_DEBUG("destroyed crt_ctx.\n");
