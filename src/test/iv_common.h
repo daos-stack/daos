@@ -39,7 +39,7 @@
  * This is a common file for IV client and IV server
  */
 #include <unistd.h>
-#include <pouch/common.h>
+#include <gurt/common.h>
 #include <cart/api.h>
 #include <cart/iv.h>
 
@@ -48,13 +48,13 @@
 
 /* Describes internal structure of a key */
 struct iv_key_struct {
-	crt_rank_t	rank;
+	d_rank_t		rank;
 	uint32_t	key_id;
 };
 
 /* RPC_TEST_FETCH_IV RPC */
 struct rpc_test_fetch_iv_in {
-	crt_iov_t iov_key;
+	d_iov_t iov_key;
 };
 
 struct rpc_test_fetch_iv_out {
@@ -71,7 +71,7 @@ struct crt_msg_field *arg_test_fetch_iv_out[] = {
 
 /* RCP_TEST_INVALIDATE_IV RPC */
 struct rpc_test_invalidate_iv_in {
-	crt_iov_t iov_key;
+	d_iov_t iov_key;
 };
 
 struct rpc_test_invalidate_iv_out {
@@ -88,9 +88,9 @@ struct crt_msg_field *arg_test_invalidate_iv_out[] = {
 
 /* RPC_TEST_UPDATE_IV RPC */
 struct rpc_test_update_iv_in {
-	crt_iov_t	iov_key;
-	crt_iov_t	iov_sync;
-	char		*str_value;
+	d_iov_t	 iov_key;
+	d_iov_t	 iov_sync;
+	char	*str_value;
 };
 
 struct rpc_test_update_iv_out {
@@ -109,7 +109,7 @@ struct crt_msg_field *arg_test_update_iv_out[] = {
 
 /* RPC_SET_IVNS */
 struct rpc_set_ivns_in {
-	crt_iov_t global_ivns_iov;
+	d_iov_t global_ivns_iov;
 };
 
 struct rpc_set_ivns_out {

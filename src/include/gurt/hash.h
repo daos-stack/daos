@@ -36,12 +36,12 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __CRT_HASH_H__
-#define __CRT_HASH_H__
+#ifndef __GURT_HASH_H__
+#define __GURT_HASH_H__
 
-#include <pouch/list.h>
+#include <gurt/list.h>
 
-#define DHASH_DEBUG	0
+#define D_HASH_DEBUG	0
 
 struct chash_table;
 
@@ -57,7 +57,7 @@ typedef struct {
 	 * \return	true	The key of the record equals to @key.
 	 *		false	Not match
 	 */
-	bool	 (*hop_key_cmp)(struct chash_table *htable, crt_list_t *rlink,
+	bool	 (*hop_key_cmp)(struct chash_table *htable, d_list_t *rlink,
 				const void *key, unsigned int ksize);
 	/**
 	 * Optional, generate a key for the record @rlink.
@@ -69,7 +69,7 @@ typedef struct {
 	 * \param args	[IN]	Input arguments for the key generating.
 	 */
 	void	 (*hop_key_init)(struct chash_table *htable,
-				 crt_list_t *rlink, void *args);
+				 d_list_t *rlink, void *args);
 	/**
 	 * Optional, return the key of record @rlink to @key_pp, and size of
 	 * the key as the returned value.
@@ -79,7 +79,7 @@ typedef struct {
 	 *
 	 * \return		size of the key.
 	 */
-	int	 (*hop_key_get)(struct chash_table *htable, crt_list_t *rlink,
+	int	 (*hop_key_get)(struct chash_table *htable, d_list_t *rlink,
 				void **key_pp);
 	/**
 	 * Optional, hash @key to a 32-bit value.
@@ -94,8 +94,7 @@ typedef struct {
 	 *
 	 * \param rlink	[IN]	The record being referenced.
 	 */
-	void	 (*hop_rec_addref)(struct chash_table *htable,
-				    crt_list_t *rlink);
+	void	 (*hop_rec_addref)(struct chash_table *htable, d_list_t *rlink);
 	/**
 	 * Optional, release refcount on the record @rlink
 	 *
@@ -114,16 +113,14 @@ typedef struct {
 	 *			can be freed. If this function can return
 	 *			true, then hop_rec_free() should be defined.
 	 */
-	bool	 (*hop_rec_decref)(struct chash_table *htable,
-				    crt_list_t *rlink);
+	bool	 (*hop_rec_decref)(struct chash_table *htable, d_list_t *rlink);
 	/**
 	 * Optional, free the record @rlink
 	 * It is called if hop_decref() returns zero.
 	 *
 	 * \param rlink	[IN]	The record being freed.
 	 */
-	void	 (*hop_rec_free)(struct chash_table *htable,
-				  crt_list_t *rlink);
+	void	 (*hop_rec_free)(struct chash_table *htable, d_list_t *rlink);
 } chash_table_ops_t;
 
 enum chash_feats {
@@ -135,7 +132,7 @@ enum chash_feats {
 	 * The hash table has no lock, it means the hash table is protected
 	 * by external lock, or only accessed by a single thread.
 	 */
-	DHASH_FT_NOLOCK		= (1 << 0),
+	D_HASH_FT_NOLOCK		= (1 << 0),
 	/**
 	 * It is a read-mostly hash table, so it is protected by RW lock.
 	 *
@@ -143,13 +140,13 @@ enum chash_feats {
 	 * then he should guarantee refcount changes are atomic or protected
 	 * within hop_addref/decref, because RW lock can't protect refcount.
 	 */
-	DHASH_FT_RWLOCK		= (1 << 1),
+	D_HASH_FT_RWLOCK		= (1 << 1),
 };
 
 /** a hash bucket */
 struct chash_bucket {
-	crt_list_t		hb_head;
-#if DHASH_DEBUG
+	d_list_t		hb_head;
+#if D_HASH_DEBUG
 	unsigned int		hb_dep;
 #endif
 };
@@ -164,7 +161,7 @@ struct chash_table {
 	unsigned int		 ht_bits;
 	/** feature bits */
 	unsigned int		 ht_feats;
-#if DHASH_DEBUG
+#if D_HASH_DEBUG
 	/** maximum search depth ever */
 	unsigned int		 ht_dep_max;
 	/** maximum number of hash records */
@@ -187,105 +184,99 @@ int  chash_table_create(uint32_t feats, unsigned int bits,
 int  chash_table_create_inplace(uint32_t feats, unsigned int bits,
 				void *priv, chash_table_ops_t *hops,
 				struct chash_table *htable);
-typedef int (*chash_traverse_cb_t)(crt_list_t *rlink, void *args);
+typedef int (*chash_traverse_cb_t)(d_list_t *rlink, void *args);
 int chash_table_traverse(struct chash_table *htable, chash_traverse_cb_t cb,
 			 void *args);
 int  chash_table_destroy(struct chash_table *htable, bool force);
 int  chash_table_destroy_inplace(struct chash_table *htable, bool force);
 void chash_table_debug(struct chash_table *htable);
 
-crt_list_t *chash_rec_find(struct chash_table *htable, const void *key,
-			    unsigned int ksize);
+d_list_t *chash_rec_find(struct chash_table *htable, const void *key,
+			unsigned int ksize);
 int  chash_rec_insert(struct chash_table *htable, const void *key,
-		     unsigned int ksize, crt_list_t *rlink,
+		     unsigned int ksize, d_list_t *rlink,
 		     bool exclusive);
-int  chash_rec_insert_anonym(struct chash_table *htable, crt_list_t *rlink,
+int  chash_rec_insert_anonym(struct chash_table *htable, d_list_t *rlink,
 			      void *args);
 bool chash_rec_delete(struct chash_table *htable, const void *key,
 		      unsigned int ksize);
-bool chash_rec_delete_at(struct chash_table *htable, crt_list_t *rlink);
-void chash_rec_addref(struct chash_table *htable, crt_list_t *rlink);
-void chash_rec_decref(struct chash_table *htable, crt_list_t *rlink);
-bool chash_rec_unlinked(crt_list_t *rlink);
+bool chash_rec_delete_at(struct chash_table *htable, d_list_t *rlink);
+void chash_rec_addref(struct chash_table *htable, d_list_t *rlink);
+void chash_rec_decref(struct chash_table *htable, d_list_t *rlink);
+bool chash_rec_unlinked(d_list_t *rlink);
 
-#define CRT_HHASH_BITS		16
-#define CRT_HTYPE_BITS		3
-#define CRT_HTYPE_MASK		((1ULL << CRT_HTYPE_BITS) - 1)
+#define D_HHASH_BITS		16
+#define D_HTYPE_BITS		3
+#define D_HTYPE_MASK		((1ULL << D_HTYPE_BITS) - 1)
 
 enum {
-	CRT_HTYPE_EQ		= 0, /* event queue */
-	CRT_HTYPE_POOL		= 1,
-	CRT_HTYPE_CO		= 2, /* container */
-	CRT_HTYPE_OBJ		= 3, /* object */
+	D_HTYPE_EQ		= 0, /* event queue */
+	D_HTYPE_POOL		= 1,
+	D_HTYPE_CO		= 2, /* container */
+	D_HTYPE_OBJ		= 3, /* object */
 	/* More to be added */
 };
 
-struct crt_hlink;
-struct crt_ulink;
-struct crt_hlink_ops {
+struct d_hlink;
+struct d_ulink;
+struct d_hlink_ops {
 	/** free callback */
-	void	(*hop_free)(struct crt_hlink *rlink);
+	void	(*hop_free)(struct d_hlink *rlink);
 };
 
-struct crt_ulink_ops {
+struct d_ulink_ops {
 	/** free callback */
-	void	(*uop_free)(struct crt_ulink *ulink);
+	void	(*uop_free)(struct d_ulink *ulink);
 };
 
-struct crt_rlink {
-	crt_list_t		rl_link;
+struct d_rlink {
+	d_list_t			rl_link;
 	unsigned int		rl_ref;
 	unsigned int		rl_initialized:1;
 };
 
-struct crt_hlink {
-	struct crt_rlink	hl_link;
-	uint64_t		hl_key;
-	struct crt_hlink_ops	*hl_ops;
+struct d_hlink {
+	struct d_rlink		 hl_link;
+	uint64_t		 hl_key;
+	struct d_hlink_ops	*hl_ops;
 };
 
-struct crt_ulink {
-	struct crt_rlink	ul_link;
-	struct crt_uuid		ul_uuid;
-	struct crt_ulink_ops	*ul_ops;
+struct d_ulink {
+	struct d_rlink		 ul_link;
+	struct d_uuid		 ul_uuid;
+	struct d_ulink_ops	*ul_ops;
 };
 
-struct crt_hhash;
+struct d_hhash;
 
-int  crt_hhash_create(unsigned int bits, struct crt_hhash **hhash);
-void crt_hhash_destroy(struct crt_hhash *hh);
-void crt_hhash_hlink_init(struct crt_hlink *hlink,
-			   struct crt_hlink_ops *ops);
-void crt_hhash_link_insert(struct crt_hhash *hhash,
-			    struct crt_hlink *hlink, int type);
-struct crt_hlink *crt_hhash_link_lookup(struct crt_hhash *hhash,
-					  uint64_t key);
-void crt_hhash_link_getref(struct crt_hhash *hhash, struct crt_hlink *hlink);
-void crt_hhash_link_putref(struct crt_hhash *hhash, struct crt_hlink *hlink);
-bool crt_hhash_link_delete(struct crt_hhash *hhash, struct crt_hlink *hlink);
-bool crt_hhash_link_empty(struct crt_hlink *hlink);
-void crt_hhash_link_key(struct crt_hlink *hlink, uint64_t *key);
-int  crt_hhash_key_type(uint64_t key);
+int  d_hhash_create(unsigned int bits, struct d_hhash **hhash);
+void d_hhash_destroy(struct d_hhash *hh);
+void d_hhash_hlink_init(struct d_hlink *hlink, struct d_hlink_ops *ops);
+void d_hhash_link_insert(struct d_hhash *hhash, struct d_hlink *hlink,
+		         int type);
+struct d_hlink *d_hhash_link_lookup(struct d_hhash *hhash, uint64_t key);
+void d_hhash_link_getref(struct d_hhash *hhash, struct d_hlink *hlink);
+void d_hhash_link_putref(struct d_hhash *hhash, struct d_hlink *hlink);
+bool d_hhash_link_delete(struct d_hhash *hhash, struct d_hlink *hlink);
+bool d_hhash_link_empty(struct d_hlink *hlink);
+void d_hhash_link_key(struct d_hlink *hlink, uint64_t *key);
+int  d_hhash_key_type(uint64_t key);
 
-int crt_uhash_create(int feats, unsigned int bits, struct chash_table **uhtab);
-void crt_uhash_destroy(struct chash_table *uhtab);
-void crt_uhash_ulink_init(struct crt_ulink *ulink,
-			   struct crt_ulink_ops *rl_ops);
-bool crt_uhash_link_empty(struct crt_ulink *ulink);
-bool crt_uhash_link_last_ref(struct crt_ulink *ulink);
-void crt_uhash_link_addref(struct chash_table *uhtab,
-			    struct crt_ulink *hlink);
-void crt_uhash_link_putref(struct chash_table *uhtab,
-			    struct crt_ulink *hlink);
-void crt_uhash_link_delete(struct chash_table *uhtab,
-			    struct crt_ulink *hlink);
-int  crt_uhash_link_insert(struct chash_table *uhtab, struct crt_uuid *key,
-			    struct crt_ulink *hlink);
-struct crt_ulink *crt_uhash_link_lookup(struct chash_table *uhtab,
-					  struct crt_uuid *key);
+int d_uhash_create(int feats, unsigned int bits, struct chash_table **uhtab);
+void d_uhash_destroy(struct chash_table *uhtab);
+void d_uhash_ulink_init(struct d_ulink *ulink, struct d_ulink_ops *rl_ops);
+bool d_uhash_link_empty(struct d_ulink *ulink);
+bool d_uhash_link_last_ref(struct d_ulink *ulink);
+void d_uhash_link_addref(struct chash_table *uhtab, struct d_ulink *hlink);
+void d_uhash_link_putref(struct chash_table *uhtab, struct d_ulink *hlink);
+void d_uhash_link_delete(struct chash_table *uhtab, struct d_ulink *hlink);
+int  duhash_link_insert(struct chash_table *uhtab, struct d_uuid *key,
+			struct d_ulink *hlink);
+struct d_ulink *duhash_link_lookup(struct chash_table *uhtab,
+				   struct d_uuid *key);
 
 #if defined(__cplusplus)
 }
 #endif
 
-#endif /*__CRT_HASH_H__*/
+#endif /*__GURT_HASH_H__*/

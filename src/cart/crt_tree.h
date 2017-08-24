@@ -48,17 +48,17 @@
  * rank number.
  */
 int crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-			   crt_rank_list_t *exclude_ranks, int tree_topo,
-			   crt_rank_t grp_root, crt_rank_t grp_self,
+			   d_rank_list_t *exclude_ranks, int tree_topo,
+			   d_rank_t grp_root, d_rank_t grp_self,
 			   uint32_t *nchildren);
 int crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-			  crt_rank_list_t *exclude_ranks, int tree_topo,
-			  crt_rank_t grp_root, crt_rank_t grp_self,
-			  crt_rank_list_t **children_rank_list);
+			  d_rank_list_t *exclude_ranks, int tree_topo,
+			  d_rank_t grp_root, d_rank_t grp_self,
+			  d_rank_list_t **children_rank_list);
 int crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-			crt_rank_list_t *exclude_ranks, int tree_topo,
-			crt_rank_t grp_root, crt_rank_t grp_self,
-			crt_rank_t *parent_rank);
+			d_rank_list_t *exclude_ranks, int tree_topo,
+			d_rank_t grp_root, d_rank_t grp_self,
+			d_rank_t *parent_rank);
 
 /*
  * all specific tree type's calculations are based on group rank number.
@@ -127,7 +127,7 @@ crt_tree_topo_valid(int tree_topo)
 					   tree_ratio <= CRT_TREE_MAX_RATIO))) {
 		valid = true;
 	} else {
-		C_ERROR("invalid parameter, tree_type %d, tree_ratio %d.\n",
+		D_ERROR("invalid parameter, tree_type %d, tree_ratio %d.\n",
 			tree_type, tree_ratio);
 		valid = false;
 	}
@@ -138,9 +138,9 @@ crt_tree_topo_valid(int tree_topo)
 static inline uint32_t
 crt_treerank_2_grprank(uint32_t grp_size, uint32_t grp_root, uint32_t tree_rank)
 {
-	C_ASSERT(grp_size > 0);
-	C_ASSERT(grp_root < grp_size);
-	C_ASSERT(tree_rank < grp_size);
+	D_ASSERT(grp_size > 0);
+	D_ASSERT(grp_root < grp_size);
+	D_ASSERT(tree_rank < grp_size);
 
 	return (tree_rank + grp_root) % grp_size;
 }
@@ -148,9 +148,9 @@ crt_treerank_2_grprank(uint32_t grp_size, uint32_t grp_root, uint32_t tree_rank)
 static inline uint32_t
 crt_grprank_2_teerank(uint32_t grp_size, uint32_t grp_root, uint32_t grp_rank)
 {
-	C_ASSERT(grp_size > 0);
-	C_ASSERT(grp_root < grp_size);
-	C_ASSERT(grp_rank < grp_size);
+	D_ASSERT(grp_size > 0);
+	D_ASSERT(grp_root < grp_size);
+	D_ASSERT(grp_rank < grp_size);
 
 	return (grp_rank + grp_size - grp_root) % grp_size;
 }

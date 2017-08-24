@@ -4,6 +4,12 @@
 
 CaRT is an open-source RPC transport layer for Big Data and Exascale HPC. It supports both traditional P2P RPC delivering and collective RPC which invokes the RPC at a group of target servers with a scalable tree-based message propagating.
 
+# Gurt Useful Routines and Types (GURT)
+
+GURT is a open-source library of helper functions and data types. The library makes it easy to manipulate lists, hash tables, heaps and logging.
+
+All Gurt Useful Routines and Types are prefixed with 'd', the 4th letter in the alphabet because gurt useful words have 4 letters.
+
 ## License
 
 CaRT is open source software distributed under a BSD license.

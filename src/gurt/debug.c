@@ -36,144 +36,143 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * This file is part of cart, it implements the debug subsystem based on clog.
+ * This file is part of gurt, it implements the debug subsystem based on clog.
  */
 
 #include <stdlib.h>
 #include <stdio.h>
 
-#include <cart/errno.h>
-#include <pouch/common.h>
+#include <gurt/common.h>
 
 #define CRT_LOG_FILE_ENV	"CRT_LOG_FILE"
 #define CRT_LOG_MASK_ENV	"CRT_LOG_MASK"
 
-static pthread_mutex_t crt_log_lock = PTHREAD_MUTEX_INITIALIZER;
-static int crt_log_refcount;
+static pthread_mutex_t d_log_lock = PTHREAD_MUTEX_INITIALIZER;
+static int d_log_refcount;
 
-int crt_misc_logfac;
-int crt_mem_logfac;
-int crt_rpc_logfac;
-int crt_bulk_logfac;
-int crt_corpc_logfac;
-int crt_grp_logfac;
-int crt_lm_logfac;
-int crt_hg_logfac;
-int crt_pmix_logfac;
-int crt_self_test_logfac;
+int d_misc_logfac;
+int d_mem_logfac;
+int d_rpc_logfac;
+int d_bulk_logfac;
+int d_corpc_logfac;
+int d_grp_logfac;
+int d_lm_logfac;
+int d_hg_logfac;
+int d_pmix_logfac;
+int d_self_test_logfac;
 
 static void
-crt_log_sync_mask_helper(bool acquire_lock)
+d_log_sync_mask_helper(bool acquire_lock)
 {
 	static int	log_mask_init;
 	static char	*log_mask;
 
 	if (acquire_lock)
-		pthread_mutex_lock(&crt_log_lock);
+		pthread_mutex_lock(&d_log_lock);
 	if (!log_mask_init)
 		log_mask = getenv(CRT_LOG_MASK_ENV);
 
 	if (log_mask != NULL)
-		crt_log_setmasks(log_mask, -1);
+		d_log_setmasks(log_mask, -1);
 
 	if (acquire_lock)
-		pthread_mutex_unlock(&crt_log_lock);
+		pthread_mutex_unlock(&d_log_lock);
 }
 
-void crt_log_sync_mask(void)
+void d_log_sync_mask(void)
 {
-	crt_log_sync_mask_helper(true);
+	d_log_sync_mask_helper(true);
 }
 
-#define CRT_ADD_LOG_FAC(name, aname, lname)				       \
+#define D_ADD_LOG_FAC(name, aname, lname)				       \
 	do {								       \
-		crt_##name##_logfac = crt_add_log_facility(aname, lname);      \
-		if (crt_##name##_logfac < 0) {				       \
-			C_PRINT_ERR("crt_add_log_facility failed, "	       \
-				    "crt_##name##__logfac: %d.\n",	       \
-				    crt_##name##_logfac);		       \
-			return -CER_UNINIT;				       \
+		d_##name##_logfac = d_add_log_facility(aname, lname);      \
+		if (d_##name##_logfac < 0) {				       \
+			D_PRINT_ERR("d_add_log_facility failed, "	       \
+				    "d_##name##__logfac: %d.\n",	       \
+				    d_##name##_logfac);		       \
+			return -DER_UNINIT;				       \
 		}							       \
 	} while (0)
 
 /**
  * Setup the clog facility names and mask.
  *
- * \param masks [IN]	 masks in crt_log_setmasks() format, or NULL.
+ * \param masks [IN]	 masks in d_log_setmasks() format, or NULL.
  */
 
 static inline int
 setup_clog_facnamemask(void)
 {
 	/* add crt internally used the log facilities */
-	CRT_ADD_LOG_FAC(misc, "MISC", "misc");
-	CRT_ADD_LOG_FAC(mem, "MEM", "memory");
-	CRT_ADD_LOG_FAC(rpc, "RPC", "rpc");
-	CRT_ADD_LOG_FAC(bulk, "BULK", "bulk");
-	CRT_ADD_LOG_FAC(corpc, "CORPC", "corpc");
-	CRT_ADD_LOG_FAC(grp, "GRP", "group");
-	CRT_ADD_LOG_FAC(lm, "LM", "livenessmap");
-	CRT_ADD_LOG_FAC(hg, "HG", "mercury");
-	CRT_ADD_LOG_FAC(pmix, "PMIX", "pmix");
-	CRT_ADD_LOG_FAC(self_test, "ST", "self_test");
+	D_ADD_LOG_FAC(misc, "MISC", "misc");
+	D_ADD_LOG_FAC(mem, "MEM", "memory");
+	D_ADD_LOG_FAC(rpc, "RPC", "rpc");
+	D_ADD_LOG_FAC(bulk, "BULK", "bulk");
+	D_ADD_LOG_FAC(corpc, "CORPC", "corpc");
+	D_ADD_LOG_FAC(grp, "GRP", "group");
+	D_ADD_LOG_FAC(lm, "LM", "livenessmap");
+	D_ADD_LOG_FAC(hg, "HG", "mercury");
+	D_ADD_LOG_FAC(pmix, "PMIX", "pmix");
+	D_ADD_LOG_FAC(self_test, "ST", "self_test");
 
 	/* Lock is already held */
-	crt_log_sync_mask_helper(false);
+	d_log_sync_mask_helper(false);
 
 	return 0;
 }
 
 int
-crt_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
+d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 		 uint64_t def_mask, uint64_t err_mask)
 {
 	int	 rc = 0;
 
-	pthread_mutex_lock(&crt_log_lock);
-	crt_log_refcount++;
-	if (crt_log_refcount > 1) /* Already initialized */
-		C_GOTO(out, rc);
+	pthread_mutex_lock(&d_log_lock);
+	d_log_refcount++;
+	if (d_log_refcount > 1) /* Already initialized */
+		D_GOTO(out, rc);
 
-	rc = crt_log_open(log_tag, 0, def_mask, err_mask, log_file, flavor);
+	rc = d_log_open(log_tag, 0, def_mask, err_mask, log_file, flavor);
 	if (rc != 0) {
-		C_PRINT_ERR("crt_log_open failed: %d\n", rc);
-		C_GOTO(out, rc = -CER_UNINIT);
+		D_PRINT_ERR("d_log_open failed: %d\n", rc);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
 	rc = setup_clog_facnamemask();
 	if (rc != 0)
-		C_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 out:
 	if (rc != 0) {
-		C_PRINT_ERR("crt_debug_init failed, rc: %d.\n", rc);
-		crt_log_refcount--;
+		D_PRINT_ERR("ddebug_init failed, rc: %d.\n", rc);
+		d_log_refcount--;
 	}
-	pthread_mutex_unlock(&crt_log_lock);
+	pthread_mutex_unlock(&d_log_lock);
 	return rc;
 }
 
 int
-crt_log_init(void)
+d_log_init(void)
 {
 	char	*log_file;
-	int flags = CLOG_FLV_LOGPID | CLOG_FLV_FAC | CLOG_FLV_TAG;
+	int flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
 
 	log_file = getenv(CRT_LOG_FILE_ENV);
 	if (log_file == NULL || strlen(log_file) == 0) {
-		flags |= CLOG_FLV_STDOUT;
+		flags |= DLOG_FLV_STDOUT;
 		log_file = NULL;
 	}
 
-	return crt_log_init_adv("CaRT", log_file, flags, CLOG_WARN, CLOG_EMERG);
+	return d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG);
 }
 
-void crt_log_fini(void)
+void d_log_fini(void)
 {
-	C_ASSERT(crt_log_refcount > 0);
+	D_ASSERT(d_log_refcount > 0);
 
-	pthread_mutex_lock(&crt_log_lock);
-	crt_log_refcount--;
-	if (crt_log_refcount == 0)
-		crt_log_close();
-	pthread_mutex_unlock(&crt_log_lock);
+	pthread_mutex_lock(&d_log_lock);
+	d_log_refcount--;
+	if (d_log_refcount == 0)
+		d_log_close();
+	pthread_mutex_unlock(&d_log_lock);
 }

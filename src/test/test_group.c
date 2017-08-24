@@ -45,7 +45,7 @@
 #include <getopt.h>
 #include <semaphore.h>
 
-#include <pouch/common.h>
+#include <gurt/common.h>
 #include <cart/api.h>
 #include <cart/lm.h>
 #include "crt_fake_events.h"
@@ -64,7 +64,7 @@ static unsigned int		 ctx_num = 1;
 static int			 thread_id[TEST_CTX_MAX_NUM]; /* logical tid */
 static pthread_t		 tid[TEST_CTX_MAX_NUM];
 static crt_context_t		 crt_ctx[TEST_CTX_MAX_NUM];
-static crt_rank_t		 myrank;
+static d_rank_t			 myrank;
 static int			 should_attach;
 static uint32_t			 target_group_size;
 static crt_group_t		*srv_grp;
@@ -78,7 +78,7 @@ struct crt_msg_field *echo_ping_checkin[] = {
 struct crt_echo_checkin_req {
 	int		age;
 	int		days;
-	crt_string_t	name;
+	d_string_t	name;
 };
 struct crt_msg_field *echo_ping_checkout[] = {
 	&CMF_INT,
@@ -99,11 +99,11 @@ test_sem_timedwait(sem_t *sem, int sec, int line_number)
 	int				rc;
 
 	rc = clock_gettime(CLOCK_REALTIME, &deadline);
-	C_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
+	D_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
 		  line_number, rc);
 	deadline.tv_sec += sec;
 	rc = sem_timedwait(sem, &deadline);
-	C_ASSERTF(rc == 0, "sem_timedwait() failed at line %d rc: %d\n",
+	D_ASSERTF(rc == 0, "sem_timedwait() failed at line %d rc: %d\n",
 		  line_number, rc);
 }
 
@@ -116,7 +116,7 @@ echo_checkin_handler(crt_rpc_t *rpc_req)
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
-	C_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
+	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
 	printf("tier1 echo_server recv'd checkin, opc: 0x%x.\n",
 		rpc_req->cr_opc);
@@ -124,13 +124,13 @@ echo_checkin_handler(crt_rpc_t *rpc_req)
 		e_req->age, e_req->name, e_req->days);
 
 	e_reply = crt_reply_get(rpc_req);
-	C_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
+	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
 		  e_reply);
 	e_reply->ret = 0;
 	e_reply->room_no = g_roomno++;
 
 	rc = crt_reply_send(rpc_req);
-	C_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
 	printf("tier1 echo_srver sent checkin reply, ret: %d, room_no: %d.\n",
 	       e_reply->ret, e_reply->room_no);
@@ -157,15 +157,15 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		if (rpc_req_output == NULL)
 			return;
 		if (cb_info->cci_rc != 0) {
-			C_ERROR("rpc (opc: 0x%x) failed, rc: %d.\n",
+			D_ERROR("rpc (opc: 0x%x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);
-			C_FREE(rpc_req_input->name, 256);
+			D_FREE(rpc_req_input->name, 256);
 			break;
 		}
 		printf("%s checkin result - ret: %d, room_no: %d.\n",
 		       rpc_req_input->name, rpc_req_output->ret,
 		       rpc_req_output->room_no);
-		C_FREE(rpc_req_input->name, 256);
+		D_FREE(rpc_req_input->name, 256);
 		sem_post(&g_token_to_proceed);
 		break;
 	case ECHO_OPC_SHUTDOWN:
@@ -199,7 +199,7 @@ static void *progress_thread(void *arg)
 	do {
 		rc = crt_progress(ctx, 0, NULL, NULL);
 		if (rc != 0 && rc != -CER_TIMEDOUT) {
-			C_ERROR("crt_progress failed rc: %d.\n", rc);
+			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
 		if (g_shutdown == 1 && g_complete == 1)
@@ -218,8 +218,8 @@ void echo_shutdown_handler(crt_rpc_t *rpc_req)
 	printf("tier1 echo_srver received shutdown request, opc: 0x%x.\n",
 	       rpc_req->cr_opc);
 
-	C_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
-	C_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
+	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
+	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
 	crt_reply_send(rpc_req);
 	printf("tier1 echo_srver done issuing shutdown responses.\n");
@@ -240,18 +240,18 @@ test_group_init(char *local_group_name, char *target_group_name,
 		local_group_name, target_group_name);
 
 	rc = sem_init(&g_token_to_proceed, 0, 0);
-	C_ASSERTF(rc == 0, "sem_init() failed.\n");
+	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 
 	flag = is_service ? CRT_FLAG_BIT_SERVER : 0;
 	rc = crt_init(local_group_name, flag);
-	C_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
 	crt_lm_init();
 	rc = crt_group_rank(NULL, &myrank);
-	C_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 	if (is_service) {
 		crt_fake_event_init(myrank);
-		C_ASSERTF(rc == 0, "crt_fake_event_init() failed. rc: %d\n",
+		D_ASSERTF(rc == 0, "crt_fake_event_init() failed. rc: %d\n",
 			  rc);
 	}
 
@@ -259,34 +259,34 @@ test_group_init(char *local_group_name, char *target_group_name,
 	if (is_service) {
 		rc = crt_rpc_srv_register(ECHO_OPC_CHECKIN,
 				&CQF_ECHO_PING_CHECK, echo_checkin_handler);
-		C_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
+		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
 			  rc);
 		rc = crt_rpc_srv_register(ECHO_OPC_SHUTDOWN, NULL,
 				echo_shutdown_handler);
-		C_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
+		D_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
 			  rc);
 		rc = crt_rpc_set_feats(ECHO_OPC_SHUTDOWN,
 				       CRT_RPC_FEAT_NO_REPLY);
-		C_ASSERTF(rc == 0, "crt_rpc_set_feats() failed. rc: %d\n",
+		D_ASSERTF(rc == 0, "crt_rpc_set_feats() failed. rc: %d\n",
 			  rc);
 	} else {
 		rc = crt_rpc_register(ECHO_OPC_CHECKIN, &CQF_ECHO_PING_CHECK);
-		C_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
 		rc = crt_rpc_register(ECHO_OPC_SHUTDOWN, NULL);
-		C_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_rpc_register() failed. rc: %d\n", rc);
 		rc = crt_rpc_set_feats(ECHO_OPC_SHUTDOWN,
 				       CRT_RPC_FEAT_NO_REPLY);
-		C_ASSERTF(rc == 0, "crt_rpc_set_feats() failed. rc: %d\n",
+		D_ASSERTF(rc == 0, "crt_rpc_set_feats() failed. rc: %d\n",
 			  rc);
 	}
 
 	for (i = 0; i < ctx_num; i++) {
 		thread_id[i] = i;
 		rc = crt_context_create(NULL, &crt_ctx[i]);
-		C_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 		rc = pthread_create(&tid[i], NULL, progress_thread,
 				    &thread_id[i]);
-		C_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
 	}
 	g_complete = 1;
 }
@@ -308,14 +308,14 @@ run_test_group(char *local_group_name, char *target_group_name, int is_service,
 
 	if (is_service) {
 		rc = crt_init(local_group_name, 0);
-		C_ASSERTF(rc == 0, "crt_init() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_init() failed. rc: %d\n", rc);
 	}
 	rc = crt_group_attach(target_group_name, &srv_grp);
-	C_ASSERTF(rc == 0, "crt_group_attach failed, rc: %d\n", rc);
-	C_ASSERTF(srv_grp != NULL, "NULL attached srv_grp\n");
+	D_ASSERTF(rc == 0, "crt_group_attach failed, rc: %d\n", rc);
+	D_ASSERTF(srv_grp != NULL, "NULL attached srv_grp\n");
 	g_complete = 0;
 	target_group = crt_group_lookup(target_group_name);
-	C_ASSERTF(target_group != NULL, "crt_group_lookup() failed. "
+	D_ASSERTF(target_group != NULL, "crt_group_lookup() failed. "
 		  "target_group = %p\n", target_group);
 	crt_group_size(target_group, &target_group_size);
 	fprintf(stderr, "size of %s is %d\n", target_group_name,
@@ -325,25 +325,25 @@ run_test_group(char *local_group_name, char *target_group_name, int is_service,
 		server_ep.ep_rank = ii;
 		rc = crt_req_create(crt_ctx[0], &server_ep, ECHO_OPC_CHECKIN,
 				    &rpc_req);
-		C_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
+		D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
 			  " rc: %d rpc_req: %p\n", rc, rpc_req);
 
 		rpc_req_input = crt_req_get(rpc_req);
-		C_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
+		D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
 			  " rpc_req_input: %p\n", rpc_req_input);
-		C_ALLOC(buffer, 256);
-		C_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
+		D_ALLOC(buffer, 256);
+		D_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
 		snprintf(buffer,  256, "Guest %d", myrank);
 		rpc_req_input->name = buffer;
 		rpc_req_input->age = 21;
 		rpc_req_input->days = 7;
-		C_DEBUG("client(rank %d) sending checkin rpc with tag "
+		D_DEBUG("client(rank %d) sending checkin rpc with tag "
 			"%d, name: %s, age: %d, days: %d.\n",
 			myrank, server_ep.ep_tag, rpc_req_input->name,
 			rpc_req_input->age, rpc_req_input->days);
 		/* send an rpc, print out reply */
 		rc = crt_req_send(rpc_req, client_cb_common, NULL);
-		C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 	}
 	for (ii = 0; ii < target_group_size; ii++)
 		test_sem_timedwait(&g_token_to_proceed, 61, __LINE__);
@@ -354,25 +354,25 @@ run_test_group(char *local_group_name, char *target_group_name, int is_service,
 		server_ep.ep_tag = 0;
 		rc = crt_req_create(crt_ctx[0], &server_ep,
 				    ECHO_OPC_CHECKIN, &rpc_req);
-		C_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
+		D_ASSERTF(rc == 0 && rpc_req != NULL, "crt_req_create() failed,"
 			  " rc: %d rpc_req: %p\n", rc, rpc_req);
 
 		rpc_req_input = crt_req_get(rpc_req);
-		C_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
+		D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed."
 			  " rpc_req_input: %p\n", rpc_req_input);
-		C_ALLOC(buffer, 256);
-		C_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
+		D_ALLOC(buffer, 256);
+		D_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
 		snprintf(buffer,  256, "Guest %d", myrank);
 		rpc_req_input->name = buffer;
 		rpc_req_input->age = 21;
 		rpc_req_input->days = 7;
-		C_DEBUG("client(rank %d) sending checkin rpc with tag "
+		D_DEBUG("client(rank %d) sending checkin rpc with tag "
 			"%d, name: %s, age: %d, days: %d.\n",
 			myrank, server_ep.ep_tag, rpc_req_input->name,
 			rpc_req_input->age, rpc_req_input->days);
 		/* send an rpc, print out reply */
 		rc = crt_req_send(rpc_req, client_cb_common, NULL);
-		C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 		fprintf(stderr, "sent check in-RPC.\n");
 
 		test_sem_timedwait(&g_token_to_proceed, 61, __LINE__);
@@ -394,11 +394,11 @@ test_group_fini(int is_service)
 			server_ep.ep_rank = ii;
 			rc = crt_req_create(crt_ctx[0], &server_ep,
 					    ECHO_OPC_SHUTDOWN, &rpc_req);
-			C_ASSERTF(rc == 0 && rpc_req != NULL,
+			D_ASSERTF(rc == 0 && rpc_req != NULL,
 				  "crt_req_create() failed. "
 				  "rc: %d, rpc_req: %p\n", rc, rpc_req);
 			rc = crt_req_send(rpc_req, client_cb_common, NULL);
-			C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
+			D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
 				  rc);
 
 			test_sem_timedwait(&g_token_to_proceed, 61, __LINE__);
@@ -406,7 +406,7 @@ test_group_fini(int is_service)
 	}
 	if (should_attach) {
 		rc = crt_group_detach(srv_grp);
-		C_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
 	}
 	if (!is_service)
 		g_shutdown = 1;
@@ -415,26 +415,26 @@ test_group_fini(int is_service)
 		rc = pthread_join(tid[ii], NULL);
 		if (rc != 0)
 			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
-		C_DEBUG("joined progress thread.\n");
+		D_DEBUG("joined progress thread.\n");
 		rc = crt_context_destroy(crt_ctx[ii], 1);
-		C_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n",
+		D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n",
 			  rc);
-		C_DEBUG("destroyed crt_ctx.\n");
+		D_DEBUG("destroyed crt_ctx.\n");
 	}
 
 	if (is_service)
 		crt_fake_event_fini(myrank);
 	rc = sem_destroy(&g_token_to_proceed);
-	C_ASSERTF(rc == 0, "sem_destroy() failed.\n");
+	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
 	crt_lm_finalize();
 	/* corresponding to the crt_init() in run_test_group() */
 	if (should_attach && is_service) {
 		rc = crt_finalize();
-		C_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 	}
 	rc = crt_finalize();
-	C_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
-	C_DEBUG("exiting.\n");
+	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
+	D_DEBUG("exiting.\n");
 
 }
 

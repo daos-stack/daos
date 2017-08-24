@@ -39,7 +39,7 @@
  * This file is part of CaRT. It gives out the kary tree topo related
  * function implementation.
  */
-#define C_LOGFAC	CD_FAC(grp)
+#define D_LOGFAC	DD_FAC(grp)
 
 #include "crt_internal.h"
 
@@ -50,7 +50,7 @@ kary_get_children(uint32_t *children, uint32_t self, uint32_t size,
 	uint32_t	rank, nchildren = 0;
 	uint32_t	i;
 
-	C_ASSERT(self < size);
+	D_ASSERT(self < size);
 
 	for (i = 0; i < ratio; i++) {
 		rank = self * ratio + i + 1;
@@ -71,10 +71,10 @@ crt_kary_get_children_cnt(uint32_t grp_size, uint32_t tree_ratio,
 {
 	uint32_t	tree_self;
 
-	C_ASSERT(grp_size > 0);
-	C_ASSERT(grp_root < grp_size && grp_self < grp_size);
-	C_ASSERT(nchildren != NULL);
-	C_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
+	D_ASSERT(grp_size > 0);
+	D_ASSERT(grp_root < grp_size && grp_self < grp_size);
+	D_ASSERT(nchildren != NULL);
+	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
 		 tree_ratio <= CRT_TREE_MAX_RATIO);
 
 	tree_self = crt_grprank_2_teerank(grp_size, grp_root, grp_self);
@@ -92,10 +92,10 @@ crt_kary_get_children(uint32_t grp_size, uint32_t tree_ratio,
 	uint32_t	tree_self;
 	uint32_t	i;
 
-	C_ASSERT(grp_size > 0);
-	C_ASSERT(grp_root < grp_size && grp_self < grp_size);
-	C_ASSERT(children != NULL);
-	C_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
+	D_ASSERT(grp_size > 0);
+	D_ASSERT(grp_root < grp_size && grp_self < grp_size);
+	D_ASSERT(children != NULL);
+	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
 		 tree_ratio <= CRT_TREE_MAX_RATIO);
 
 	tree_self = crt_grprank_2_teerank(grp_size, grp_root, grp_self);
@@ -116,17 +116,17 @@ crt_kary_get_parent(uint32_t grp_size, uint32_t tree_ratio, uint32_t grp_root,
 {
 	uint32_t	tree_self, tree_parent;
 
-	C_ASSERT(grp_size > 0);
-	C_ASSERT(grp_root < grp_size && grp_self < grp_size);
-	C_ASSERT(parent != NULL);
-	C_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
+	D_ASSERT(grp_size > 0);
+	D_ASSERT(grp_root < grp_size && grp_self < grp_size);
+	D_ASSERT(parent != NULL);
+	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
 		 tree_ratio <= CRT_TREE_MAX_RATIO);
 
 	if (grp_self == grp_root)
 		return -CER_INVAL;
 
 	tree_self = crt_grprank_2_teerank(grp_size, grp_root, grp_self);
-	C_ASSERT(tree_self != 0);
+	D_ASSERT(tree_self != 0);
 
 	tree_parent = (tree_self - 1) / tree_ratio;
 

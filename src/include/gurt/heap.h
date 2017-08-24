@@ -36,17 +36,14 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* CaRT (Collective and RPC Transport) heap (bin heap) APIs. */
+/* GURT heap (bin heap) APIs. */
 
-#ifndef __CRT_HEAP_H__
-#define __CRT_HEAP_H__
+#ifndef __GURT_HEAP_H__
+#define __GURT_HEAP_H__
 
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
-
-#include <cart/types.h>
-#include <cart/errno.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -64,10 +61,10 @@ extern "C" {
  * lowest priority which will always be at the root of the tree (as this is an
  * implementation of a min-heap) to be removed by users for consumption.
  *
- * Users of the heap should embed a crt_binheap_node_t object instance on every
+ * Users of the heap should embed a d_binheap_node_t object instance on every
  * object of the set that they wish the binary heap instance to handle, and
- * required to provide a crt_binheap_ops::hop_compare() implementation which
- * is used by the heap as the binary predicate during its internal sorting.
+ * required to provide a d_binheap_ops::hop_compare() implementation which
+ * is used by the heap as the binary predicate d_uring its internal sorting.
  *
  * The implementation provides an optional internal lock supporting, user can
  * select to use its own external lock mechanism as well.
@@ -77,24 +74,24 @@ extern "C" {
  * Binary heap node.
  *
  * Objects of this type are embedded into objects of the ordered set that is to
- * be maintained by a struct crt_binheap instance.
+ * be maintained by a struct d_binheap instance.
  */
 
-struct crt_binheap_node {
+struct d_binheap_node {
 	/** Index into the binary tree */
 	uint32_t	chn_idx;
 };
 
-#define CBH_SHIFT	(9)
-#define CBH_SIZE	(1U << CBH_SHIFT)	/* #ptrs per level */
-#define CBH_MASK	(CBH_SIZE - 1)
-#define CBH_NOB		(CBH_SIZE * sizeof(struct crt_binheap_node *))
-#define CBH_POISON	(0xdeadbeef)
+#define DBH_SHIFT	(9)
+#define DBH_SIZE	(1U << DBH_SHIFT)	/* #ptrs per level */
+#define DBH_MASK	(DBH_SIZE - 1)
+#define DBH_NOB		(DBH_SIZE * sizeof(struct d_binheap_node *))
+#define DBH_POISON	(0xdeadbeef)
 
 /**
  * Binary heap feature bits.
  */
-enum cbh_feats {
+enum d_bh_feats {
 	/**
 	 * By default, the binheap is protected by pthread_mutex.
 	 */
@@ -103,20 +100,20 @@ enum cbh_feats {
 	 * The bin heap has no lock, it means the bin heap is protected
 	 * by external lock, or only accessed by a single thread.
 	 */
-	CBH_FT_NOLOCK		= (1 << 0),
+	DBH_FT_NOLOCK		= (1 << 0),
 
 	/**
 	 * It is a read-mostly bin heap, so it is protected by RW lock.
 	 */
-	CBH_FT_RWLOCK		= (1 << 1),
+	DBH_FT_RWLOCK		= (1 << 1),
 };
 
-struct crt_binheap;
+struct d_binheap;
 
 /**
  * Binary heap operations.
  */
-struct crt_binheap_ops {
+struct d_binheap_ops {
 	/**
 	 * Called right before inserting a node into the binary heap.
 	 *
@@ -127,7 +124,7 @@ struct crt_binheap_ops {
 	 *
 	 * \return		zero on success, negative value if error
 	 */
-	int (*hop_enter)(struct crt_binheap *h, struct crt_binheap_node *e);
+	int (*hop_enter)(struct d_binheap *h, struct d_binheap_node *e);
 
 	/**
 	 * Called right after removing a node from the binary heap.
@@ -139,10 +136,10 @@ struct crt_binheap_ops {
 	 *
 	 * \return		zero on success, negative value if error
 	 */
-	int (*hop_exit)(struct crt_binheap *h, struct crt_binheap_node *e);
+	int (*hop_exit)(struct d_binheap *h, struct d_binheap_node *e);
 
 	/**
-	 * A binary predicate which is called during internal heap sorting, and
+	 * A binary predicate which is called d_uring internal heap sorting, and
 	 * used in order to determine the relevant ordering of two heap nodes.
 	 *
 	 * Implementing this operation is mandatory.
@@ -153,38 +150,37 @@ struct crt_binheap_ops {
 	 * \return		true if node a < node b,
 	 *			false if node a > node b.
 	 *
-	 * \see crt_binheap_bubble() and crt_biheap_sink()
+	 * \see d_binheap_bubble() and d_biheap_sink()
 	 */
-	bool (*hop_compare)(struct crt_binheap_node *a,
-			    struct crt_binheap_node *b);
+	bool (*hop_compare)(struct d_binheap_node *a, struct d_binheap_node *b);
 };
 
 /**
  * Binary heap.
  */
-struct crt_binheap {
+struct d_binheap {
 	/** different type of locks based on cbt_feats */
 	union {
-		pthread_mutex_t		    cbh_mutex;
-		pthread_rwlock_t	    cbh_rwlock;
+		pthread_mutex_t		    d_bh_mutex;
+		pthread_rwlock_t	    d_bh_rwlock;
 	};
 	/** feature bits */
-	uint32_t			    cbh_feats;
+	uint32_t			    d_bh_feats;
 
 	/** Triple indirect */
-	struct crt_binheap_node		****cbh_nodes3;
+	struct d_binheap_node		****d_bh_nodes3;
 	/** double indirect */
-	struct crt_binheap_node		 ***cbh_nodes2;
+	struct d_binheap_node		 ***d_bh_nodes2;
 	/** single indirect */
-	struct crt_binheap_node		  **cbh_nodes1;
+	struct d_binheap_node		  **d_bh_nodes1;
 	/** operations table */
-	struct crt_binheap_ops		   *cbh_ops;
+	struct d_binheap_ops		   *d_bh_ops;
 	/** private data */
-	void				   *cbh_priv;
+	void				   *d_bh_priv;
 	/** # elements referenced */
-	uint32_t			    cbh_nodes_cnt;
+	uint32_t			    d_bh_nodes_cnt;
 	/** high water mark */
-	uint32_t			    cbh_hwm;
+	uint32_t			    d_bh_hwm;
 };
 
 /**
@@ -198,8 +194,8 @@ struct crt_binheap {
  *
  * \return		zero on success, negative value if error
  */
-int crt_binheap_create(uint32_t feats, uint32_t count, void *priv,
-		       struct crt_binheap_ops *ops, struct crt_binheap **h);
+int d_binheap_create(uint32_t feats, uint32_t count, void *priv,
+		    struct d_binheap_ops *ops, struct d_binheap **h);
 
 /**
  * Creates and initializes a binary heap instance inplace.
@@ -212,9 +208,8 @@ int crt_binheap_create(uint32_t feats, uint32_t count, void *priv,
  *
  * \return		zero on success, negative value if error
  */
-int crt_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
-			       struct crt_binheap_ops *ops,
-			       struct crt_binheap *h);
+int d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
+			    struct d_binheap_ops *ops, struct d_binheap *h);
 
 /**
  * Releases all resources associated with a binary heap instance.
@@ -224,7 +219,7 @@ int crt_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
  *
  * \param h [IN]	The binary heap object
  */
-void crt_binheap_destroy(struct crt_binheap *h);
+void d_binheap_destroy(struct d_binheap *h);
 
 /**
  * Releases all resources associated with a binary heap instance inplace.
@@ -234,7 +229,7 @@ void crt_binheap_destroy(struct crt_binheap *h);
  *
  * \param h [IN]	The binary heap object
  */
-void crt_binheap_destroy_inplace(struct crt_binheap *h);
+void d_binheap_destroy_inplace(struct d_binheap *h);
 
 /**
  * Obtains a pointer to a heap node, given its index into the binary tree.
@@ -245,7 +240,7 @@ void crt_binheap_destroy_inplace(struct crt_binheap *h);
  * \return		valid-pointer of the requested heap node,
  *			NULL if index is out of bounds
  */
-struct crt_binheap_node *crt_binheap_find(struct crt_binheap *h, uint32_t idx);
+struct d_binheap_node *d_binheap_find(struct d_binheap *h, uint32_t idx);
 
 /**
  * Sort-inserts a node into the binary heap.
@@ -256,7 +251,7 @@ struct crt_binheap_node *crt_binheap_find(struct crt_binheap *h, uint32_t idx);
  * \return		0 if the node inserted successfully
  *			negative value if error
  */
-int crt_binheap_insert(struct crt_binheap *h, struct crt_binheap_node *e);
+int d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e);
 
 /**
  * Removes a node from the binary heap.
@@ -264,7 +259,7 @@ int crt_binheap_insert(struct crt_binheap *h, struct crt_binheap_node *e);
  * \param h [IN]	The heap
  * \param e [IN]	The node
  */
-void crt_binheap_remove(struct crt_binheap *h, struct crt_binheap_node *e);
+void d_binheap_remove(struct d_binheap *h, struct d_binheap_node *e);
 
 /**
  * Removes the root node from the binary heap.
@@ -274,7 +269,7 @@ void crt_binheap_remove(struct crt_binheap *h, struct crt_binheap_node *e);
  * \return		valid pointer of the removed root node,
  *			or NULL when empty.
  */
-struct crt_binheap_node *crt_binheap_remove_root(struct crt_binheap *h);
+struct d_binheap_node *d_binheap_remove_root(struct d_binheap *h);
 
 /**
  * Queries the size (number of nodes) of the binary heap.
@@ -282,17 +277,17 @@ struct crt_binheap_node *crt_binheap_remove_root(struct crt_binheap *h);
  * \param h [IN]	The heap
  *
  * \return		positive value of the size,
- *			or -CER_INVAL for NULL heap.
+ *			or -DER_INVAL for NULL heap.
  */
 static inline int
-crt_binheap_size(struct crt_binheap *h)
+d_binheap_size(struct d_binheap *h)
 {
 	if (h == NULL) {
-		C_ERROR("invalid NULL heap.\n");
-		return -CER_INVAL;
+		D_ERROR("invalid NULL heap.\n");
+		return -DER_INVAL;
 	}
 
-	return h->cbh_nodes_cnt;
+	return h->d_bh_nodes_cnt;
 }
 
 /**
@@ -304,12 +299,12 @@ crt_binheap_size(struct crt_binheap *h)
  *			false when non-empty.
  */
 static inline bool
-crt_binheap_is_empty(struct crt_binheap *h)
+d_binheap_is_empty(struct d_binheap *h)
 {
 	if (h == NULL)
 		return true;
 
-	return h->cbh_nodes_cnt == 0;
+	return h->d_bh_nodes_cnt == 0;
 }
 
 /**
@@ -319,14 +314,14 @@ crt_binheap_is_empty(struct crt_binheap *h)
  *
  * \return		valid pointer of the root node, or NULL in error case.
  */
-static inline struct crt_binheap_node *
-crt_binheap_root(struct crt_binheap *h)
+static inline struct d_binheap_node *
+d_binheap_root(struct d_binheap *h)
 {
-	return crt_binheap_find(h, 0);
+	return d_binheap_find(h, 0);
 }
 
 #if defined(__cplusplus)
 }
 #endif
 
-#endif /* __CRT_HEAP_H__ */
+#endif /* __GURT_HEAP_H__ */

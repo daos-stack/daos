@@ -54,7 +54,7 @@ def scons():
     tenv = env.Clone()
     tenv.AppendUnique(RPATH="$PREFIX/lib")
 
-    libraries = ['pouch', 'cart', 'pthread']
+    libraries = ['gurt', 'cart', 'pthread']
     tenv.AppendUnique(LIBS=libraries)
 
     prereqs.require(tenv, 'crypto', 'pmix', 'mercury')

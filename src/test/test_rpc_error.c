@@ -47,7 +47,7 @@
 #include <getopt.h>
 #include <semaphore.h>
 
-#include <pouch/common.h>
+#include <gurt/common.h>
 #include <cart/api.h>
 
 #define RPC_ERR_OPC_NOREPLY		(0xA1)
@@ -148,7 +148,7 @@ static void *progress_thread(void *arg)
 	do {
 		rc = crt_progress(crt_ctx, 1, NULL, NULL);
 		if (rc != 0 && rc != -CER_TIMEDOUT) {
-			C_ERROR("crt_progress failed rc: %d.\n", rc);
+			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
 
@@ -169,7 +169,7 @@ rpc_err_noreply_hdlr(crt_rpc_t *rpc_req)
 	struct rpc_err_noreply_in_t		*rpc_req_input;
 
 	rpc_req_input = crt_req_get(rpc_req);
-	C_ASSERTF(rpc_req_input != NULL,
+	D_ASSERTF(rpc_req_input != NULL,
 		  "crt_req_get() failed, rpc_req_input %p\n", rpc_req_input);
 	fprintf(stderr, "rpc error server recieved request, opc: 0x%x.\n",
 		rpc_req->cr_opc);
@@ -183,11 +183,11 @@ rpc_err_shutdown_hdlr(crt_rpc_t *rpc_req)
 
 	fprintf(stderr, "rpc err server received shutdown request, "
 		"opc: 0x%x.\n", rpc_req->cr_opc);
-	C_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
-	C_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
+	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
+	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
 	rc = crt_reply_send(rpc_req);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 	printf("rpc err server sent shutdown response.\n");
 	rpc_err.re_shutdown = 1;
 	fprintf(stderr, "rpc err server set shutdown flag.\n");
@@ -199,33 +199,33 @@ rpc_err_init(void)
 	int		rc = 0;
 	uint32_t	flag;
 
-	C_DEBUG("local group: %s, target group: %s\n",
+	D_DEBUG("local group: %s, target group: %s\n",
 		rpc_err.re_local_group_name,
 		rpc_err.re_target_group_name);
 
 	flag = rpc_err.re_is_service ? CRT_FLAG_BIT_SERVER : 0;
 	rc = crt_init(rpc_err.re_local_group_name, flag);
-	C_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
 	rc = crt_group_rank(NULL, &rpc_err.re_my_rank);
-	C_ASSERTF(rc == 0, "crt_group_rank() failed, rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_group_rank() failed, rc: %d\n", rc);
 
 	rc = crt_context_create(NULL, &rpc_err.re_crt_ctx);
-	C_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 
 	rc = crt_rpc_srv_register(RPC_ERR_OPC_NOREPLY, &CQF_RPC_ERR_NOREPLY,
 				  rpc_err_noreply_hdlr);
-	C_ASSERTF(rc == 0, "crt_rpc_serv_register() failed, rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_rpc_serv_register() failed, rc: %d\n", rc);
 	rc = crt_rpc_srv_register(RPC_ERR_OPC_SHUTDOWN, NULL,
 				  rpc_err_shutdown_hdlr);
-	C_ASSERTF(rc == 0, "crt_rpc_serv_register() failed, rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_rpc_serv_register() failed, rc: %d\n", rc);
 
 	rc = sem_init(&rpc_err.re_all_done, 0, 0);
-	C_ASSERTF(rc == 0, "Could not initialize semaphore\n");
+	D_ASSERTF(rc == 0, "Could not initialize semaphore\n");
 
 	rc = pthread_create(&rpc_err.re_tid, NULL, progress_thread,
 			    rpc_err.re_crt_ctx);
-	C_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
 }
 
 void
@@ -234,12 +234,12 @@ rpc_err_fini()
 	int		rc;
 
 	rc = pthread_join(rpc_err.re_tid, NULL);
-	C_ASSERTF(rc == 0, "pthread_join() failed, rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "pthread_join() failed, rc: %d\n", rc);
 
 	rc = crt_context_destroy(rpc_err.re_crt_ctx, 0);
-	C_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_context_destroy() failed. rc: %d\n", rc);
 	rc = crt_finalize();
-	C_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
+	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 }
 
 static void
@@ -255,11 +255,11 @@ client_cb(const struct crt_cb_info *cb_info)
 	case RPC_ERR_OPC_NOREPLY:
 		fprintf(stderr, "RPC failed, return code: %d.\n",
 			cb_info->cci_rc);
-		C_ASSERT(cb_info->cci_rc == -CER_NOREPLY);
+		D_ASSERT(cb_info->cci_rc == -CER_NOREPLY);
 		rpc_req_input = crt_req_get(rpc_req);
-		C_ASSERT(rpc_req_input != NULL);
+		D_ASSERT(rpc_req_input != NULL);
 		rpc_req_output = crt_reply_get(rpc_req);
-		C_ASSERT(rpc_req_output != NULL);
+		D_ASSERT(rpc_req_output != NULL);
 		fprintf(stderr, "%s, bounced back magic number: %d, %s\n",
 			rpc_err.re_local_group_name,
 			rpc_req_output->magic,
@@ -271,7 +271,7 @@ client_cb(const struct crt_cb_info *cb_info)
 		sem_post(&rpc_err.re_all_done);
 		break;
 	default:
-		C_ASSERTF(false, "The default case should never occur.\n");
+		D_ASSERTF(false, "The default case should never occur.\n");
 		break;
 	}
 }
@@ -292,24 +292,24 @@ rpc_err_rpc_issue()
 		rc = crt_req_create(rpc_err.re_crt_ctx, &server_ep,
 				    RPC_ERR_OPC_NOREPLY,
 				    &rpc_req);
-		C_ASSERTF(rc == 0 && rpc_req != NULL,
+		D_ASSERTF(rc == 0 && rpc_req != NULL,
 			  "crt_req_create() failed, rc: %d rpc_req: %p\n",
 			  rc, rpc_req);
 
 		rpc_req_input = crt_req_get(rpc_req);
-		C_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed. "
+		D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed. "
 			  "rpc_req_input: %p\n", rpc_req_input);
 		rpc_req_input->magic = rand()%100;
-		C_DEBUG("client rank %d sending magic number %d to "
+		D_DEBUG("client rank %d sending magic number %d to "
 			"rank %d, tag %d.\n",
 			rpc_err.re_my_rank, rpc_req_input->magic,
 			server_ep.ep_rank, server_ep.ep_tag);
 
 		rc = crt_req_send(rpc_req, client_cb, NULL);
-		C_ASSERTF(rc == 0, "crt_req_send() failed, rc %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_req_send() failed, rc %d\n", rc);
 	}
 	for (i = 0; i < rpc_err.re_target_group_size; i++) {
-		C_DEBUG("Waiting on reply N.O. %d\n", i);
+		D_DEBUG("Waiting on reply N.O. %d\n", i);
 		sem_wait(&rpc_err.re_all_done);
 	}
 }
@@ -329,11 +329,11 @@ shutdown_cmd_issue()
 		rc = crt_req_create(rpc_err.re_crt_ctx, &server_ep,
 				    RPC_ERR_OPC_SHUTDOWN,
 				    &rpc_req);
-		C_ASSERTF(rc == 0 && rpc_req != NULL,
+		D_ASSERTF(rc == 0 && rpc_req != NULL,
 			  "crt_req_create() failed, rc: %d rpc_req: %p\n",
 			  rc, rpc_req);
 		rc = crt_req_send(rpc_req, client_cb, NULL);
-		C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 	}
 
 	for (i = 0; i < rpc_err.re_target_group_size; i++)
@@ -349,13 +349,13 @@ rpc_err_test_run(void)
 	if (rpc_err.re_is_client) {
 		rc = crt_group_attach(rpc_err.re_target_group_name,
 				      &rpc_err.re_target_group);
-		C_ASSERTF(rc == 0, "crt_group_attach() failed, rc: %d\n", rc);
-		C_ASSERTF(rpc_err.re_target_group != NULL,
+		D_ASSERTF(rc == 0, "crt_group_attach() failed, rc: %d\n", rc);
+		D_ASSERTF(rpc_err.re_target_group != NULL,
 			  "attached group is NULL.\n");
 		rc = crt_group_size(rpc_err.re_target_group,
 			       &rpc_err.re_target_group_size);
-		C_ASSERTF(rc == 0, "crt_group_size() failed. rc: %d\n", rc);
-		C_DEBUG("sizeof %s is %d\n", rpc_err.re_target_group_name,
+		D_ASSERTF(rc == 0, "crt_group_size() failed. rc: %d\n", rc);
+		D_DEBUG("sizeof %s is %d\n", rpc_err.re_target_group_name,
 			rpc_err.re_target_group_size);
 	}
 
@@ -370,7 +370,7 @@ rpc_err_test_run(void)
 			shutdown_cmd_issue();
 
 		rc = crt_group_detach(rpc_err.re_target_group);
-		C_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_group_detach failed, rc: %d\n", rc);
 	}
 }
 

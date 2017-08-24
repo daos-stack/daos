@@ -41,7 +41,7 @@
 #ifndef __CRT_MERCURY_H__
 #define __CRT_MERCURY_H__
 
-#include <pouch/list.h>
+#include <gurt/list.h>
 
 #include <mercury.h>
 #include <mercury_types.h>
@@ -79,7 +79,7 @@ enum {
 
 struct crt_hg_hdl {
 	/* link to crt_hg_pool::chp_hg_list */
-	crt_list_t		chh_link;
+	d_list_t			chh_link;
 	/* HG handle */
 	hg_handle_t		chh_hdl;
 };
@@ -91,7 +91,7 @@ struct crt_hg_pool {
 	/* maximum number of HG handles in pool */
 	int32_t			chp_max_num;
 	/* HG handle list */
-	crt_list_t		chp_list;
+	d_list_t			chp_list;
 	bool			chp_enabled;
 };
 
@@ -162,12 +162,12 @@ crt_hg_reg(hg_class_t *hg_class, hg_id_t rpcid, crt_proc_cb_t in_proc_cb,
 	hg_return_t hg_ret;
 	int         rc = 0;
 
-	C_ASSERT(hg_class != NULL);
+	D_ASSERT(hg_class != NULL);
 
 	hg_ret = HG_Register(hg_class, rpcid, (hg_proc_cb_t)in_proc_cb,
 			     (hg_proc_cb_t)out_proc_cb, rpc_cb);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("HG_Register(rpcid: 0x%x) failed, hg_ret: %d.\n",
+		D_ERROR("HG_Register(rpcid: 0x%x) failed, hg_ret: %d.\n",
 			rpcid, hg_ret);
 		rc = -CER_HG;
 	}
@@ -182,7 +182,7 @@ crt_hg_bulk_free(crt_bulk_t bulk_hdl)
 
 	hg_ret = HG_Bulk_free(bulk_hdl);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
+		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
 		rc = -CER_HG;
 	}
 
@@ -190,11 +190,11 @@ crt_hg_bulk_free(crt_bulk_t bulk_hdl)
 }
 
 static inline int
-crt_hg_bulk_get_len(crt_bulk_t bulk_hdl, crt_size_t *bulk_len)
+crt_hg_bulk_get_len(crt_bulk_t bulk_hdl, d_size_t *bulk_len)
 {
 	hg_size_t	hg_size;
 
-	C_ASSERT(bulk_len != NULL);
+	D_ASSERT(bulk_len != NULL);
 	hg_size = HG_Bulk_get_size(bulk_hdl);
 	*bulk_len = hg_size;
 
@@ -206,16 +206,16 @@ crt_hg_bulk_get_sgnum(crt_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
 {
 	hg_uint32_t	hg_sgnum;
 
-	C_ASSERT(bulk_sgnum != NULL);
+	D_ASSERT(bulk_sgnum != NULL);
 	hg_sgnum = HG_Bulk_get_segment_count(bulk_hdl);
 	*bulk_sgnum = hg_sgnum;
 
 	return 0;
 }
 
-int crt_hg_bulk_create(struct crt_hg_context *hg_ctx, crt_sg_list_t *sgl,
+int crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		       crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
-int crt_hg_bulk_access(crt_bulk_t bulk_hdl, crt_sg_list_t *sgl);
+int crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl);
 int crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc,
 			 crt_bulk_cb_t complete_cb,
 			 void *arg, crt_bulk_opid_t *opid);

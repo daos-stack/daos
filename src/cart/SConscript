@@ -45,7 +45,7 @@ def scons():
 
     denv = env.Clone()
 
-    libraries = ['pouch']
+    libraries = ['gurt']
 
     denv.AppendUnique(CPPPATH=['#/src/cart'])
     denv.AppendUnique(LIBS=libraries)

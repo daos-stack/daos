@@ -54,18 +54,18 @@ static void data_init(void)
 	uint32_t	credits;
 	int		rc = 0;
 
-	C_DEBUG("initializing crt_gdata...\n");
+	D_DEBUG("initializing crt_gdata...\n");
 
 	/*
 	 * avoid size mis-matching between client/server side
 	 * /see crt_proc_uuid_t().
 	 */
-	C_CASSERT(sizeof(uuid_t) == 16);
+	D_CASSERT(sizeof(uuid_t) == 16);
 
-	CRT_INIT_LIST_HEAD(&crt_gdata.cg_ctx_list);
+	D_INIT_LIST_HEAD(&crt_gdata.cg_ctx_list);
 
 	rc = pthread_rwlock_init(&crt_gdata.cg_rwlock, NULL);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	crt_gdata.cg_ctx_num = 0;
 	crt_gdata.cg_refcount = 0;
@@ -75,29 +75,29 @@ static void data_init(void)
 	crt_gdata.cg_multi_na = false;
 
 	timeout = 0;
-	crt_getenv_int("CRT_TIMEOUT", &timeout);
+	d_getenv_int("CRT_TIMEOUT", &timeout);
 	if (timeout == 0 || timeout > 3600)
 		crt_gdata.cg_timeout = CRT_DEFAULT_TIMEOUT_S;
 	else
 		crt_gdata.cg_timeout = timeout;
-	C_DEBUG("set the global timeout value as %d second.\n",
+	D_DEBUG("set the global timeout value as %d second.\n",
 		crt_gdata.cg_timeout);
 
 	credits = CRT_DEFAULT_CREDITS_PER_EP_CTX;
-	crt_getenv_int("CRT_CREDIT_EP_CTX", &credits);
+	d_getenv_int("CRT_CREDIT_EP_CTX", &credits);
 	if (credits == 0) {
-		C_DEBUG("CRT_CREDIT_EP_CTX set as 0, flow control disabled.\n");
+		D_DEBUG("CRT_CREDIT_EP_CTX set as 0, flow control disabled.\n");
 	} else if (credits > CRT_MAX_CREDITS_PER_EP_CTX) {
-		C_DEBUG("ENV CRT_CREDIT_EP_CTX's value %d exceed max allowed "
+		D_DEBUG("ENV CRT_CREDIT_EP_CTX's value %d exceed max allowed "
 			"value, use %d for flow control.\n",
 			credits, CRT_MAX_CREDITS_PER_EP_CTX);
 		credits = CRT_MAX_CREDITS_PER_EP_CTX;
 	} else {
-		C_DEBUG("CRT_CREDIT_EP_CTX set as %d for flow control.\n",
+		D_DEBUG("CRT_CREDIT_EP_CTX set as %d for flow control.\n",
 			credits);
 	}
 	crt_gdata.cg_credit_ep_ctx = credits;
-	C_ASSERT(crt_gdata.cg_credit_ep_ctx >= 0 &&
+	D_ASSERT(crt_gdata.cg_credit_ep_ctx >= 0 &&
 		 crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
 
 	gdata_init_flag = 1;
@@ -106,12 +106,12 @@ static void data_init(void)
 void
 crt_plugin_init(void)
 {
-	C_ASSERT(crt_plugin_gdata.cpg_inited == 0);
+	D_ASSERT(crt_plugin_gdata.cpg_inited == 0);
 
 	/** init the lists */
-	CRT_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_prog_cbs);
-	CRT_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_timeout_cbs);
-	CRT_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_event_cbs);
+	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_prog_cbs);
+	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_timeout_cbs);
+	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_event_cbs);
 	pthread_rwlock_init(&crt_plugin_gdata.cpg_prog_rwlock, NULL);
 	pthread_rwlock_init(&crt_plugin_gdata.cpg_timeout_rwlock, NULL);
 	pthread_rwlock_init(&crt_plugin_gdata.cpg_event_rwlock, NULL);
@@ -129,30 +129,30 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 
 	server = flags & CRT_FLAG_BIT_SERVER;
 
-	/* crt_log_init is reference counted */
-	rc = crt_log_init();
+	/* d_log_init is reference counted */
+	rc = d_log_init();
 	if (rc != 0) {
-		C_PRINT_ERR("crt_log_init failed, rc: %d.\n", rc);
+		D_PRINT_ERR("d_log_init failed, rc: %d.\n", rc);
 		return rc;
 	}
 
 	if (grpid != NULL) {
 		if (crt_validate_grpid(grpid) != 0) {
-			C_ERROR("grpid contains invalid characters "
+			D_ERROR("grpid contains invalid characters "
 				"or is too long\n");
-			C_GOTO(out, rc = -CER_INVAL);
+			D_GOTO(out, rc = -CER_INVAL);
 		}
 		if (!server) {
 			if (strcmp(grpid, CRT_DEFAULT_SRV_GRPID) == 0) {
-				C_ERROR("invalid client grpid (same as "
+				D_ERROR("invalid client grpid (same as "
 					"CRT_DEFAULT_SRV_GRPID).\n");
-				C_GOTO(out, rc = -CER_INVAL);
+				D_GOTO(out, rc = -CER_INVAL);
 			}
 		} else {
 			if (strcmp(grpid, CRT_DEFAULT_CLI_GRPID) == 0) {
-				C_ERROR("invalid server grpid (same as "
+				D_ERROR("invalid server grpid (same as "
 					"CRT_DEFAULT_CLI_GRPID).\n");
-				C_GOTO(out, rc = -CER_INVAL);
+				D_GOTO(out, rc = -CER_INVAL);
 			}
 		}
 	}
@@ -160,12 +160,12 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 	if (gdata_init_flag == 0) {
 		rc = pthread_once(&gdata_init_once, data_init);
 		if (rc != 0) {
-			C_ERROR("crt_init failed, rc(%d) - %s.\n",
+			D_ERROR("crt_init failed, rc(%d) - %s.\n",
 				rc, strerror(rc));
-			C_GOTO(out, rc = -rc);
+			D_GOTO(out, rc = -rc);
 		}
 	}
-	C_ASSERT(gdata_init_flag == 1);
+	D_ASSERT(gdata_init_flag == 1);
 
 	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
 	if (crt_gdata.cg_inited == 0) {
@@ -183,10 +183,10 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 
 		addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
 		if (addr_env == NULL) {
-			C_DEBUG("ENV %s not found.\n", CRT_PHY_ADDR_ENV);
+			D_DEBUG("ENV %s not found.\n", CRT_PHY_ADDR_ENV);
 			goto do_init;
 		} else{
-			C_DEBUG("EVN %s: %s.\n",
+			D_DEBUG("EVN %s: %s.\n",
 				CRT_PHY_ADDR_ENV, addr_env);
 		}
 
@@ -202,15 +202,15 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 			} else if (strncmp(addr_env, "ofi+gni", 7) == 0) {
 				crt_gdata.cg_na_plugin = CRT_NA_OFI_GNI;
 			} else {
-				C_ERROR("invalid CRT_PHY_ADDR_STR %s.\n",
+				D_ERROR("invalid CRT_PHY_ADDR_STR %s.\n",
 					addr_env);
-				C_GOTO(out, rc = -CER_INVAL);
+				D_GOTO(out, rc = -CER_INVAL);
 			}
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
-				C_ERROR("crt_na_ofi_config_init failed, "
+				D_ERROR("crt_na_ofi_config_init failed, "
 					"rc: %d.\n", rc);
-				C_GOTO(out, rc);
+				D_GOTO(out, rc);
 			}
 		}
 
@@ -226,20 +226,20 @@ do_init:
 
 		rc = crt_hg_init(&addr, server);
 		if (rc != 0) {
-			C_ERROR("crt_hg_init failed rc: %d.\n", rc);
-			C_GOTO(unlock, rc);
+			D_ERROR("crt_hg_init failed rc: %d.\n", rc);
+			D_GOTO(unlock, rc);
 		}
-		C_ASSERT(addr != NULL);
+		D_ASSERT(addr != NULL);
 		crt_gdata.cg_addr = addr;
 		crt_gdata.cg_addr_len = strlen(addr);
 
 		rc = crt_grp_init(grpid);
 		if (rc != 0) {
-			C_ERROR("crt_grp_init failed, rc: %d.\n", rc);
+			D_ERROR("crt_grp_init failed, rc: %d.\n", rc);
 			crt_hg_fini();
 			free(crt_gdata.cg_addr);
 			crt_gdata.cg_addr = NULL;
-			C_GOTO(unlock, rc);
+			D_GOTO(unlock, rc);
 		}
 
 		if (crt_plugin_gdata.cpg_inited == 0)
@@ -250,21 +250,21 @@ do_init:
 
 		rc = crt_opc_map_create(CRT_OPC_MAP_BITS);
 		if (rc != 0) {
-			C_ERROR("crt_opc_map_create failed rc: %d.\n", rc);
+			D_ERROR("crt_opc_map_create failed rc: %d.\n", rc);
 			crt_hg_fini();
 			crt_grp_fini();
 			free(crt_gdata.cg_addr);
 			crt_gdata.cg_addr = NULL;
-			C_GOTO(unlock, rc);
+			D_GOTO(unlock, rc);
 		}
-		C_ASSERT(crt_gdata.cg_opc_map != NULL);
+		D_ASSERT(crt_gdata.cg_opc_map != NULL);
 
 		crt_gdata.cg_inited = 1;
 	} else {
 		if (crt_gdata.cg_server == false && server == true) {
-			C_ERROR("CRT initialized as client, cannot set as "
+			D_ERROR("CRT initialized as client, cannot set as "
 				"server again.\n");
-			C_GOTO(unlock, rc = -CER_INVAL);
+			D_GOTO(unlock, rc = -CER_INVAL);
 		}
 	}
 
@@ -274,8 +274,8 @@ unlock:
 	pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
 out:
 	if (rc != 0) {
-		C_ERROR("crt_init failed, rc: %d.\n", rc);
-		crt_log_fini();
+		D_ERROR("crt_init failed, rc: %d.\n", rc);
+		d_log_fini();
 	}
 	return rc;
 }
@@ -289,36 +289,36 @@ crt_initialized()
 void
 crt_plugin_fini(void)
 {
-	crt_list_t			*curr_node;
-	crt_list_t			*tmp_node;
+	d_list_t				*curr_node;
+	d_list_t				*tmp_node;
 	struct crt_prog_cb_priv		*prog_cb_priv;
 	struct crt_timeout_cb_priv	*timeout_cb_priv;
 	struct crt_event_cb_priv	*event_cb_priv;
 
-	C_ASSERT(crt_plugin_gdata.cpg_inited == 1);
+	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
 
-	crt_list_for_each_safe(curr_node, tmp_node,
-			       &crt_plugin_gdata.cpg_prog_cbs) {
-		crt_list_del(curr_node);
+	dlist_for_each_safe(curr_node, tmp_node,
+			    &crt_plugin_gdata.cpg_prog_cbs) {
+		d_list_del(curr_node);
 		prog_cb_priv = container_of(curr_node, struct crt_prog_cb_priv,
 					    cpcp_link);
-		C_FREE_PTR(prog_cb_priv);
+		D_FREE_PTR(prog_cb_priv);
 	}
-	crt_list_for_each_safe(curr_node, tmp_node,
-			       &crt_plugin_gdata.cpg_timeout_cbs) {
-		crt_list_del(curr_node);
+	dlist_for_each_safe(curr_node, tmp_node,
+			    &crt_plugin_gdata.cpg_timeout_cbs) {
+		d_list_del(curr_node);
 		timeout_cb_priv =
 			container_of(curr_node, struct crt_timeout_cb_priv,
 				     ctcp_link);
-		C_FREE_PTR(timeout_cb_priv);
+		D_FREE_PTR(timeout_cb_priv);
 	}
-	crt_list_for_each_safe(curr_node, tmp_node,
-			       &crt_plugin_gdata.cpg_event_cbs) {
-		crt_list_del(curr_node);
+	dlist_for_each_safe(curr_node, tmp_node,
+			    &crt_plugin_gdata.cpg_event_cbs) {
+		d_list_del(curr_node);
 		event_cb_priv =
 			container_of(curr_node, struct crt_event_cb_priv,
 				     cecp_link);
-		C_FREE_PTR(event_cb_priv);
+		D_FREE_PTR(event_cb_priv);
 	}
 	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_prog_rwlock);
 	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_timeout_rwlock);
@@ -334,39 +334,39 @@ crt_finalize(void)
 	pthread_rwlock_wrlock(&crt_gdata.cg_rwlock);
 
 	if (!crt_initialized()) {
-		C_ERROR("cannot finalize before initializing.\n");
+		D_ERROR("cannot finalize before initializing.\n");
 		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
-		C_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -CER_UNINIT);
 	}
 	if (crt_gdata.cg_ctx_num > 0) {
-		C_ASSERT(!crt_context_empty(CRT_LOCKED));
-		C_ERROR("cannot finalize, current ctx_num(%d).\n",
+		D_ASSERT(!crt_context_empty(CRT_LOCKED));
+		D_ERROR("cannot finalize, current ctx_num(%d).\n",
 			crt_gdata.cg_ctx_num);
 		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
-		C_GOTO(out, rc = -CER_NO_PERM);
+		D_GOTO(out, rc = -CER_NO_PERM);
 	} else {
-		C_ASSERT(crt_context_empty(CRT_LOCKED));
+		D_ASSERT(crt_context_empty(CRT_LOCKED));
 	}
 
 	crt_gdata.cg_refcount--;
 	if (crt_gdata.cg_refcount == 0) {
 		rc = crt_grp_fini();
 		if (rc != 0) {
-			C_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
+			D_ERROR("crt_grp_fini failed, rc: %d.\n", rc);
 			crt_gdata.cg_refcount++;
 			pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
-			C_GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
 		rc = crt_hg_fini();
 		if (rc != 0) {
-			C_ERROR("crt_hg_fini failed rc: %d.\n", rc);
+			D_ERROR("crt_hg_fini failed rc: %d.\n", rc);
 			crt_gdata.cg_refcount++;
 			pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
-			C_GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
-		C_ASSERT(crt_gdata.cg_addr != NULL);
+		D_ASSERT(crt_gdata.cg_addr != NULL);
 		free(crt_gdata.cg_addr);
 		crt_gdata.cg_addr = NULL;
 		crt_gdata.cg_server = false;
@@ -377,8 +377,8 @@ crt_finalize(void)
 
 		rc = pthread_rwlock_destroy(&crt_gdata.cg_rwlock);
 		if (rc != 0) {
-			C_ERROR("failed to destroy cg_rwlock, rc: %d.\n", rc);
-			C_GOTO(out, rc = -rc);
+			D_ERROR("failed to destroy cg_rwlock, rc: %d.\n", rc);
+			D_GOTO(out, rc = -rc);
 		}
 
 		/* allow the same program to re-initialize */
@@ -397,10 +397,10 @@ crt_finalize(void)
 
 out:
 	if (rc != 0)
-		C_ERROR("crt_finalize failed, rc: %d.\n", rc);
+		D_ERROR("crt_finalize failed, rc: %d.\n", rc);
 
-	/* crt_log_fini is reference counted */
-	crt_log_fini();
+	/* d_log_fini is reference counted */
+	d_log_fini();
 
 	return rc;
 }
@@ -438,9 +438,9 @@ crt_get_port(int *port)
 
 	socketfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (socketfd == -1) {
-		C_ERROR("cannot create socket, errno: %d(%s).\n",
+		D_ERROR("cannot create socket, errno: %d(%s).\n",
 			errno, strerror(errno));
-		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
+		D_GOTO(out, rc = -CER_ADDRSTR_GEN);
 	}
 	tmp_socket.sin_family = AF_INET;
 	tmp_socket.sin_addr.s_addr = INADDR_ANY;
@@ -449,29 +449,29 @@ crt_get_port(int *port)
 	rc = bind(socketfd, (const struct sockaddr *)&tmp_socket,
 		  sizeof(tmp_socket));
 	if (rc != 0) {
-		C_ERROR("cannot bind socket, errno: %d(%s).\n",
+		D_ERROR("cannot bind socket, errno: %d(%s).\n",
 			errno, strerror(errno));
 		close(socketfd);
-		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
+		D_GOTO(out, rc = -CER_ADDRSTR_GEN);
 	}
 
 	rc = getsockname(socketfd, (struct sockaddr *)&tmp_socket, &slen);
 	if (rc != 0) {
-		C_ERROR("cannot create getsockname, errno: %d(%s).\n",
+		D_ERROR("cannot create getsockname, errno: %d(%s).\n",
 			errno, strerror(errno));
 		close(socketfd);
-		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
+		D_GOTO(out, rc = -CER_ADDRSTR_GEN);
 	}
 	rc = close(socketfd);
 	if (rc != 0) {
-		C_ERROR("cannot close socket, errno: %d(%s).\n",
+		D_ERROR("cannot close socket, errno: %d(%s).\n",
 			errno, strerror(errno));
-		C_GOTO(out, rc = -CER_ADDRSTR_GEN);
+		D_GOTO(out, rc = -CER_ADDRSTR_GEN);
 	}
 
-	C_ASSERT(port != NULL);
+	D_ASSERT(port != NULL);
 	*port = ntohs(tmp_socket.sin_port);
-	C_DEBUG("get a port: %d.\n", *port);
+	D_DEBUG("get a port: %d.\n", *port);
 
 out:
 	return rc;
@@ -492,20 +492,20 @@ int crt_na_ofi_config_init(void)
 	if (interface != NULL && strlen(interface) > 0) {
 		crt_na_ofi_conf.noc_interface = strdup(interface);
 		if (crt_na_ofi_conf.noc_interface == NULL) {
-			C_ERROR("cannot allocate memory for noc_interface.");
-			C_GOTO(out, rc = -CER_NOMEM);
+			D_ERROR("cannot allocate memory for noc_interface.");
+			D_GOTO(out, rc = -CER_NOMEM);
 		}
 	} else {
 		crt_na_ofi_conf.noc_interface = NULL;
-		C_ERROR("ENV OFI_INTERFACE not set.");
-		C_GOTO(out, rc = -CER_INVAL);
+		D_ERROR("ENV OFI_INTERFACE not set.");
+		D_GOTO(out, rc = -CER_INVAL);
 	}
 
 	rc = getifaddrs(&if_addrs);
 	if (rc != 0) {
-		C_ERROR("cannot getifaddrs, errno: %d(%s).\n",
+		D_ERROR("cannot getifaddrs, errno: %d(%s).\n",
 			     errno, strerror(errno));
-		C_GOTO(out, rc = -CER_PROTO);
+		D_GOTO(out, rc = -CER_PROTO);
 	}
 
 	for (ifa = if_addrs; ifa != NULL; ifa = ifa->ifa_next) {
@@ -522,13 +522,13 @@ int crt_na_ofi_config_init(void)
 					   crt_na_ofi_conf.noc_ip_str,
 					   INET_ADDRSTRLEN);
 			if (ip_str == NULL) {
-				C_ERROR("inet_ntop failed, errno: %d(%s).\n",
+				D_ERROR("inet_ntop failed, errno: %d(%s).\n",
 					errno, strerror(errno));
 				freeifaddrs(if_addrs);
-				C_GOTO(out, rc = -CER_PROTO);
+				D_GOTO(out, rc = -CER_PROTO);
 			}
 			/*
-			 * C_DEBUG("Get interface %s IPv4 Address %s\n",
+			 * D_DEBUG("Get interface %s IPv4 Address %s\n",
 			 * ifa->ifa_name, na_ofi_conf.noc_ip_str);
 			 */
 			break;
@@ -539,30 +539,30 @@ int crt_na_ofi_config_init(void)
 			 * &((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr;
 			 * inet_ntop(AF_INET6, tmp_ptr, na_ofi_conf.noc_ip_str,
 			 *           INET6_ADDRSTRLEN);
-			 * C_DEBUG("Get %s IPv6 Address %s\n",
+			 * D_DEBUG("Get %s IPv6 Address %s\n",
 			 *         ifa->ifa_name, na_ofi_conf.noc_ip_str);
 			 */
 		}
 	}
 	freeifaddrs(if_addrs);
 	if (ip_str == NULL) {
-		C_ERROR("no IP addr found.\n");
-		C_GOTO(out, rc = -CER_PROTO);
+		D_ERROR("no IP addr found.\n");
+		D_GOTO(out, rc = -CER_PROTO);
 	}
 
 	rc = crt_get_port(&port);
 	if (rc != 0) {
-		C_ERROR("crt_get_port failed, rc: %d.\n", rc);
-		C_GOTO(out, rc);
+		D_ERROR("crt_get_port failed, rc: %d.\n", rc);
+		D_GOTO(out, rc);
 	}
 
 	port_str = getenv("OFI_PORT");
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
-			C_DEBUG("ignore invalid OFI_PORT %s.", port_str);
+			D_DEBUG("ignore invalid OFI_PORT %s.", port_str);
 		} else {
 			port = atoi(port_str);
-			C_DEBUG("OFI_PORT %d, use it as service port.\n", port);
+			D_DEBUG("OFI_PORT %d, use it as service port.\n", port);
 		}
 	}
 	crt_na_ofi_conf.noc_port = port;

@@ -46,18 +46,18 @@
 
 struct crt_barrier {
 	crt_rpc_t		*b_enter_rpc;   /* enter rpc */
-	crt_barrier_cb_t	b_complete_cb;  /* user callback */
+	crt_barrier_cb_t	 b_complete_cb;  /* user callback */
 	void			*b_arg;         /* user callback arg */
-	bool			b_active;       /* Local rank in barrier */
-	bool			b_pending_exit; /* Master ready to exit */
+	bool			 b_active;       /* Local rank in barrier */
+	bool			 b_pending_exit; /* Master ready to exit */
 };
 
 struct crt_barrier_info {
-	crt_rank_list_t		*bi_exclude_self;    /* rank list for self */
+	d_rank_list_t		*bi_exclude_self;    /* rank list for self */
 	struct crt_grp_priv	*bi_primary_grp;     /* primary group */
 	pthread_mutex_t		 bi_lock;            /* lock for barriers */
 	struct crt_barrier	 bi_barriers[CRT_MAX_BARRIER_INFLIGHT];
-	crt_rank_t		 bi_master_pri_rank; /* lowest live rank */
+	d_rank_t		 bi_master_pri_rank; /* lowest live rank */
 	int			 bi_master_idx;      /* index of master */
 	int			 bi_num_created;     /* creation count */
 	int			 bi_num_exited;      /* completion count */

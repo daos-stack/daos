@@ -39,8 +39,8 @@
 import os
 
 HEADERS = ['api.h', 'iv.h', 'types.h', 'errno.h', 'lm.h']
-HEADERS_POUCH = ['clog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
-                 'heap.h', 'path.h']
+HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
+                'heap.h', 'path.h']
 
 def scons():
     """Scons function"""
@@ -51,12 +51,12 @@ def scons():
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
                     os.path.join('include', 'cart', header))
-    for header in HEADERS_POUCH:
-        env.Install(os.path.join('$PREFIX', 'include', 'pouch'),
-                    os.path.join('include', 'pouch', header))
+    for header in HEADERS_GURT:
+        env.Install(os.path.join('$PREFIX', 'include', 'gurt'),
+                    os.path.join('include', 'gurt', header))
 
     # Generate the common libraries used by everyone
-    SConscript('pouch/SConscript', exports=["env", "prereqs"])
+    SConscript('gurt/SConscript', exports=["env", "prereqs"])
     SConscript('cart/SConscript', exports=["env", "prereqs"])
 
     # Builders
@@ -68,7 +68,7 @@ def scons():
     # Build the unit tests
     SConscript('utest/SConscript', exports=["env", "prereqs"])
 
-    Default('pouch', 'cart', 'test', 'self_test')
+    Default('gurt', 'cart', 'test', 'self_test')
 
 if __name__ == "SCons.Script":
     scons()

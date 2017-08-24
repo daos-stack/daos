@@ -35,9 +35,9 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-"""Build libpouch"""
+"""Build libgurt"""
 
-SRC = ['debug.c', 'clog.c', 'hash.c', 'misc.c', 'path.c', 'heap.c']
+SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'path.c', 'heap.c']
 
 def scons():
     """Scons function"""
@@ -50,13 +50,13 @@ def scons():
 
     prereqs.require(denv, 'uuid')
 
-    pouch_targets = denv.SharedObject(SRC)
-    common = denv.SharedLibrary('libpouch', pouch_targets)
+    gurt_targets = denv.SharedObject(SRC)
+    common = denv.SharedLibrary('libgurt', gurt_targets)
     denv.Install('$PREFIX/lib/', common)
 
-    denv.Append(CPPPATH=['#/src/pouch'])
+    denv.Append(CPPPATH=['#/src/gurt'])
 
-    Export('pouch_targets')
+    Export('gurt_targets')
 
 if __name__ == "SCons.Script":
     scons()

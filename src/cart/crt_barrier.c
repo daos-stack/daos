@@ -38,7 +38,7 @@
 /**
  * This file is part of CaRT. It implements the barrier APIs.
  */
-#define C_LOGFAC	CD_FAC(grp)
+#define D_LOGFAC	DD_FAC(grp)
 
 #include "crt_internal.h"
 
@@ -68,7 +68,7 @@ crt_barrier_info_init(struct crt_grp_priv *grp_priv)
 		/* We can only get here if crt has been initialized so this
 		 * should not fail
 		 */
-		C_ASSERTF(grp != NULL,
+		D_ASSERTF(grp != NULL,
 			  "crt_barrier: Primary group lookup failed");
 		info->bi_primary_grp = container_of(grp, struct crt_grp_priv,
 						    gp_pub);
@@ -77,8 +77,8 @@ crt_barrier_info_init(struct crt_grp_priv *grp_priv)
 	/* Eventually, this will be handled by a flag passed to the corpc
 	 * routine but until then, create a list to exclude self from broadcast
 	 */
-	info->bi_exclude_self = crt_rank_list_alloc(1);
-	C_ASSERTF(info->bi_exclude_self != NULL,
+	info->bi_exclude_self = d_rank_list_alloc(1);
+	D_ASSERTF(info->bi_exclude_self != NULL,
 		  "No memory to allocate barrier");
 
 	info->bi_exclude_self->rl_ranks[0] = info->bi_primary_grp->gp_self;
@@ -89,7 +89,7 @@ void
 crt_barrier_info_destroy(struct crt_grp_priv *grp_priv)
 {
 	pthread_mutex_destroy(&grp_priv->gp_barrier_info.bi_lock);
-	crt_rank_list_free(grp_priv->gp_barrier_info.bi_exclude_self);
+	d_rank_list_free(grp_priv->gp_barrier_info.bi_exclude_self);
 }
 
 /* Update the master rank.  Returns true if the master has changed since
@@ -100,7 +100,7 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 {
 	struct crt_barrier_info		*info;
 	struct crt_grp_priv		*primary_grp;
-	crt_rank_t			 rank;
+	d_rank_t				 rank;
 	bool				 new_master = false;
 	int				 i;
 
@@ -111,25 +111,25 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 	pthread_mutex_lock(&info->bi_lock);
 
 	pthread_rwlock_rdlock(&primary_grp->gp_rwlock);
-	if (crt_rank_in_rank_list(grp_priv->gp_failed_ranks,
-				  info->bi_master_pri_rank, true)) {
+	if (d_rank_in_rank_list(grp_priv->gp_failed_ranks,
+			       info->bi_master_pri_rank, true)) {
 		rank = -1;
 		/* Master has failed */
 		new_master = true;
 		for (i = info->bi_master_idx + 1;
 		     i < grp_priv->gp_membs->rl_nr.num; i++) {
 			rank = grp_priv->gp_membs->rl_ranks[i];
-			if (!crt_rank_in_rank_list(grp_priv->gp_failed_ranks,
-						   rank, true))
+			if (!d_rank_in_rank_list(grp_priv->gp_failed_ranks,
+						rank, true))
 				break;
 		}
 
 		/* This should be impossible since the current rank, at least,
 		 * is still alive and can be the master.
 		 */
-		C_ASSERTF(i != grp_priv->gp_membs->rl_nr.num,
+		D_ASSERTF(i != grp_priv->gp_membs->rl_nr.num,
 			  "No more ranks for barrier");
-		C_ASSERTF(rank != -1, "No more ranks for barrier");
+		D_ASSERTF(rank != -1, "No more ranks for barrier");
 		info->bi_master_pri_rank = rank;
 		info->bi_master_idx = i;
 	}
@@ -154,7 +154,7 @@ crt_hdlr_barrier_enter(crt_rpc_t *rpc_req)
 	int				rc = 0;
 
 	in = crt_req_get(rpc_req);
-	C_ASSERT(in != NULL);
+	D_ASSERT(in != NULL);
 
 	if (rpc_req->cr_ep.ep_grp == NULL)
 		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
@@ -163,19 +163,19 @@ crt_hdlr_barrier_enter(crt_rpc_t *rpc_req)
 					struct crt_grp_priv, gp_pub);
 
 	if (grp_priv == NULL) {
-		C_ERROR("crt_hdlr_barrier_enter failed, no group\n");
-		C_GOTO(send_reply, rc = -CER_NONEXIST);
+		D_ERROR("crt_hdlr_barrier_enter failed, no group\n");
+		D_GOTO(send_reply, rc = -CER_NONEXIST);
 	}
 
 	barrier_info = &grp_priv->gp_barrier_info;
 
 	pthread_mutex_lock(&barrier_info->bi_lock);
 
-	C_DEBUG("barrier enter msg received for %d\n", in->b_num);
+	D_DEBUG("barrier enter msg received for %d\n", in->b_num);
 
 	if (barrier_info->bi_num_exited >= in->b_num) {
 		/* It's a duplicate.   Send the reply again */
-		C_GOTO(send_reply, rc = 0);
+		D_GOTO(send_reply, rc = 0);
 	}
 
 	ab = &barrier_info->bi_barriers[in->b_num % CRT_MAX_BARRIER_INFLIGHT];
@@ -196,7 +196,7 @@ send_reply:
 
 	pthread_mutex_unlock(&barrier_info->bi_lock);
 	out = crt_reply_get(rpc_req);
-	C_ASSERT(out != NULL);
+	D_ASSERT(out != NULL);
 
 	out->b_rc = rc;
 
@@ -204,7 +204,7 @@ send_reply:
 
 	/* If the reply is lost, timeout will try again */
 	if (rc != 0)
-		C_ERROR("Could not send reply for barrier broadcast,rc = %d\n",
+		D_ERROR("Could not send reply for barrier broadcast,rc = %d\n",
 			rc);
 }
 
@@ -225,7 +225,7 @@ crt_hdlr_barrier_exit(crt_rpc_t *rpc_req)
 
 	in = crt_req_get(rpc_req);
 	out = crt_reply_get(rpc_req);
-	C_ASSERT(in != NULL && out != NULL);
+	D_ASSERT(in != NULL && out != NULL);
 
 	if (rpc_req->cr_ep.ep_grp == NULL)
 		grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
@@ -234,22 +234,22 @@ crt_hdlr_barrier_exit(crt_rpc_t *rpc_req)
 					struct crt_grp_priv, gp_pub);
 
 	if (grp_priv == NULL) {
-		C_ERROR("crt_barrier_enter failed, no group\n");
-		C_GOTO(send_reply, rc = -CER_NONEXIST);
+		D_ERROR("crt_barrier_enter failed, no group\n");
+		D_GOTO(send_reply, rc = -CER_NONEXIST);
 	}
 
 	barrier_info = &grp_priv->gp_barrier_info;
-	C_DEBUG("barrier exit msg received for %d\n", in->b_num);
+	D_DEBUG("barrier exit msg received for %d\n", in->b_num);
 
 	pthread_mutex_lock(&barrier_info->bi_lock);
 
 	if (barrier_info->bi_num_exited >= in->b_num) {
 		/* Duplicate message.  Send reply again */
-		C_DEBUG("barrier exit msg %d is duplcate\n", in->b_num);
-		C_GOTO(send_reply, rc = 0);
+		D_DEBUG("barrier exit msg %d is duplcate\n", in->b_num);
+		D_GOTO(send_reply, rc = 0);
 	}
 
-	C_ASSERTF(in->b_num == (barrier_info->bi_num_exited + 1),
+	D_ASSERTF(in->b_num == (barrier_info->bi_num_exited + 1),
 		  "Barrier exit out of order\n");
 
 	barrier_info->bi_num_exited = in->b_num;
@@ -274,7 +274,7 @@ send_reply:
 
 	/* If the reply is lost, timeout will try again */
 	if (rc != 0)
-		C_ERROR("Could not send reply for barrier broadcast,rc = %d\n",
+		D_ERROR("Could not send reply for barrier broadcast,rc = %d\n",
 			rc);
 }
 
@@ -284,10 +284,10 @@ crt_hdlr_barrier_aggregate(crt_rpc_t *source, crt_rpc_t *result,
 {
 	int	*reply_source, *reply_result;
 
-	C_ASSERT(source != NULL && result != NULL);
+	D_ASSERT(source != NULL && result != NULL);
 	reply_source = crt_reply_get(source);
 	reply_result = crt_reply_get(result);
-	C_ASSERT(reply_source != NULL && reply_result != NULL);
+	D_ASSERT(reply_source != NULL && reply_result != NULL);
 	if (*reply_result == 0)
 		*reply_result = *reply_source;
 
@@ -322,8 +322,8 @@ send_barrier_msg(struct crt_grp_priv *grp_priv, int b_num,
 	 * crt_barrier_create so assertion is fine.
 	 */
 	crt_ctx = crt_context_lookup(0);
-	C_ASSERT(crt_ctx != CRT_CONTEXT_NULL);
-	C_DEBUG("Sending barrier message for %d\n", b_num);
+	D_ASSERT(crt_ctx != CRT_CONTEXT_NULL);
+	D_DEBUG("Sending barrier message for %d\n", b_num);
 
 	/* TODO: Eventually, there will be a flag to exclude self from
 	 * from the broadcast.  Until then, the rank list including
@@ -338,27 +338,27 @@ send_barrier_msg(struct crt_grp_priv *grp_priv, int b_num,
 	 * and let the user deal with it
 	 */
 	if (rc != 0) {
-		C_ERROR("Failed to create barrier opc %d rpc, rc = %d",
+		D_ERROR("Failed to create barrier opc %d rpc, rc = %d",
 			opcode, rc);
-		C_GOTO(handle_error, rc);
+		D_GOTO(handle_error, rc);
 	}
-	C_DEBUG("Created req for %d\n", b_num);
+	D_DEBUG("Created req for %d\n", b_num);
 	in = crt_req_get(rpc_req);
 
 	in->b_num = b_num;
 
 	rc = crt_req_send(rpc_req, complete_cb, NULL);
 
-	C_DEBUG("Sent req for %d\n", b_num);
+	D_DEBUG("Sent req for %d\n", b_num);
 	if (rc != 0) {
-		C_ERROR("Failed to send barrier opc %d rpc, rc = %d",
+		D_ERROR("Failed to send barrier opc %d rpc, rc = %d",
 			opcode, rc);
-		C_GOTO(handle_error, rc);
+		D_GOTO(handle_error, rc);
 	}
 	return;
 handle_error:
 	barrier_info = &grp_priv->gp_barrier_info;
-	C_ERROR("Critical failure in barrier master, rc = %d\n", rc);
+	D_ERROR("Critical failure in barrier master, rc = %d\n", rc);
 	/* Assume all errors in this function are unrecoverable */
 	pthread_mutex_lock(&barrier_info->bi_lock);
 	ab = &barrier_info->bi_barriers[b_num % CRT_MAX_BARRIER_INFLIGHT];
@@ -397,7 +397,7 @@ barrier_exit_cb(const struct crt_cb_info *cb_info)
 	else
 		grp_priv = container_of(rpc_req->cr_ep.ep_grp,
 					struct crt_grp_priv, gp_pub);
-	C_ASSERT(grp_priv != NULL);
+	D_ASSERT(grp_priv != NULL);
 
 	if (cb_info->cci_rc != 0 || out->b_rc != 0) {
 		/* Resend the exit message */
@@ -405,13 +405,13 @@ barrier_exit_cb(const struct crt_cb_info *cb_info)
 				 CRT_OPC_BARRIER_EXIT);
 		return;
 	}
-	C_DEBUG("Exit phase complete for %d\n", in->b_num);
+	D_DEBUG("Exit phase complete for %d\n", in->b_num);
 
 	barrier_info = &grp_priv->gp_barrier_info;
 	ab = &barrier_info->bi_barriers[in->b_num % CRT_MAX_BARRIER_INFLIGHT];
 
 	pthread_mutex_lock(&barrier_info->bi_lock);
-	C_ASSERTF(barrier_info->bi_num_exited == (in->b_num - 1),
+	D_ASSERTF(barrier_info->bi_num_exited == (in->b_num - 1),
 		  "Barrier exit out of order");
 
 	if (barrier_info->bi_num_exited < in->b_num) {
@@ -468,7 +468,7 @@ barrier_enter_cb(const struct crt_cb_info *cb_info)
 		grp_priv = container_of(rpc_req->cr_ep.ep_grp,
 					struct crt_grp_priv, gp_pub);
 
-	C_ASSERT(grp_priv != NULL);
+	D_ASSERT(grp_priv != NULL);
 
 	if (cb_info->cci_rc != 0 || out->b_rc != 0) {
 		/* Resend the enter message */
@@ -477,7 +477,7 @@ barrier_enter_cb(const struct crt_cb_info *cb_info)
 		return;
 	}
 
-	C_DEBUG("Enter phase complete for %d\n", in->b_num);
+	D_DEBUG("Enter phase complete for %d\n", in->b_num);
 
 	barrier_info = &grp_priv->gp_barrier_info;
 	ab = &barrier_info->bi_barriers[in->b_num % CRT_MAX_BARRIER_INFLIGHT];
@@ -511,23 +511,23 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg)
 	int				enter_num;
 
 	if (!crt_initialized()) {
-		C_ERROR("CRT not initialized.\n");
+		D_ERROR("CRT not initialized.\n");
 		return -CER_UNINIT;
 	}
 
 	if (!crt_is_service()) {
-		C_ERROR("Barrier not supported in client group\n");
+		D_ERROR("Barrier not supported in client group\n");
 		return -CER_NO_PERM;
 	}
 
 	crt_ctx = crt_context_lookup(0);
 	if (crt_ctx == CRT_CONTEXT_NULL) {
-		C_ERROR("No context available for barrier\n");
+		D_ERROR("No context available for barrier\n");
 		return -CER_UNINIT;
 	}
 
 	if (complete_cb == NULL) {
-		C_ERROR("Invalid argument(s)\n");
+		D_ERROR("Invalid argument(s)\n");
 		return -CER_INVAL;
 	}
 
@@ -538,19 +538,19 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg)
 		grp = crt_group_lookup(NULL);
 
 	if (grp == NULL) {
-		C_ERROR("Could not find primary group\n");
+		D_ERROR("Could not find primary group\n");
 		return -CER_UNINIT;
 	}
 
 	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 
 	if (grp_priv->gp_primary != 1) {
-		C_ERROR("Barrier not supported on secondary groups.\n");
+		D_ERROR("Barrier not supported on secondary groups.\n");
 		return -CER_OOG;
 	}
 
 	if (grp_priv->gp_local == 0) {
-		C_ERROR("Barrier not supported on remote group.\n");
+		D_ERROR("Barrier not supported on remote group.\n");
 		return -CER_OOG;
 	}
 
@@ -603,7 +603,7 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg)
 		send_barrier_msg(grp_priv, enter_num, barrier_enter_cb,
 				 CRT_OPC_BARRIER_ENTER);
 
-	C_DEBUG("barrier %d started\n", enter_num);
+	D_DEBUG("barrier %d started\n", enter_num);
 
 	return 0;
 }
@@ -640,13 +640,13 @@ crt_barrier_handle_eviction(struct crt_grp_priv *grp_priv)
 	pthread_mutex_unlock(&barrier_info->bi_lock);
 
 	/* First send the exit message remote ranks may have missed */
-	C_DEBUG("New master sending exit for %d\n", saved_exited);
+	D_DEBUG("New master sending exit for %d\n", saved_exited);
 	send_barrier_msg(grp_priv, saved_exited,  barrier_exit_cb,
 			 CRT_OPC_BARRIER_EXIT);
 	/* Now send any enter messages that remote nodes may have missed */
 	saved_exited++;
 	for (; saved_exited <= saved_created; ++saved_exited) {
-		C_DEBUG("New master sending enter for %d\n", saved_exited);
+		D_DEBUG("New master sending enter for %d\n", saved_exited);
 		send_barrier_msg(grp_priv, saved_exited,  barrier_enter_cb,
 				 CRT_OPC_BARRIER_ENTER);
 	}

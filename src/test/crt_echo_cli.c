@@ -52,7 +52,7 @@ static int client_wait(int num_retries, unsigned int wait_len_ms,
 		rc = crt_progress(gecho.crt_ctx, wait_len_ms * 1000, NULL,
 				  NULL);
 		if (rc != 0 && rc != -CER_TIMEDOUT) {
-			C_ERROR("crt_progress failed rc: %d.\n", rc);
+			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
 		sched_yield();
@@ -101,12 +101,12 @@ static void run_client(void)
 	crt_group_t			*grp_tier2 = NULL;
 	crt_endpoint_t			svr_ep = {0};
 	crt_rpc_t			*rpc_req = NULL;
-	crt_sg_list_t			sgl, sgl_query;
-	crt_iov_t			*iovs = NULL, iovs_query[2];
+	d_sg_list_t			sgl, sgl_query;
+	d_iov_t				*iovs = NULL, iovs_query[2];
 	crt_bulk_t			bulk_hdl;
 	struct bulk_test_cli_cbinfo	*bulk_req_cbinfo;
 	char				*pchar;
-	crt_rank_t			myrank;
+	d_rank_t				myrank;
 	uint32_t			grp_size_cli = 0;
 	uint32_t			grp_size_srv = 0;
 	struct crt_echo_checkin_req	*e_req;
@@ -114,29 +114,29 @@ static void run_client(void)
 	int				rc = 0, i;
 
 	rc = crt_group_rank(NULL, &myrank);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 	pri_local_grp = crt_group_lookup(NULL);
-	C_ASSERT(pri_local_grp != NULL);
+	D_ASSERT(pri_local_grp != NULL);
 	pri_srv_grp = crt_group_lookup("non-existent-grp");
-	C_ASSERT(pri_srv_grp == NULL);
+	D_ASSERT(pri_srv_grp == NULL);
 
 	/* try until success to avoid intermittent failures under valgrind. */
 	do {
 		sleep(1);
 		rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &grp_tier1);
 	} while (rc != 0);
-	C_ASSERT(grp_tier1 != NULL);
+	D_ASSERT(grp_tier1 != NULL);
 	pri_srv_grp = crt_group_lookup(CRT_DEFAULT_SRV_GRPID);
-	C_ASSERT(pri_srv_grp != NULL);
+	D_ASSERT(pri_srv_grp != NULL);
 
 	rc = crt_group_rank(pri_srv_grp, &myrank);
-	C_ASSERT(rc == -CER_OOG);
+	D_ASSERT(rc == -CER_OOG);
 	rc = crt_group_rank(pri_local_grp, &myrank);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 	rc = crt_group_size(pri_local_grp, &grp_size_cli);
-	C_ASSERT(rc == 0 && grp_size_cli > 0);
+	D_ASSERT(rc == 0 && grp_size_cli > 0);
 	rc = crt_group_size(pri_srv_grp, &grp_size_srv);
-	C_ASSERT(rc == 0 && grp_size_srv > 0);
+	D_ASSERT(rc == 0 && grp_size_srv > 0);
 
 	printf("I'm rank %d in group %s(size %d), srv_group %s with size %d.\n",
 	       myrank, pri_local_grp->cg_grpid, grp_size_cli,
@@ -150,7 +150,7 @@ static void run_client(void)
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_NOOP, &rpc_req);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 	gecho.complete = 0;
 	rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
 	assert(rc == 0);
@@ -171,20 +171,20 @@ static void run_client(void)
 		svr_ep.ep_rank = 0;
 		svr_ep.ep_tag = i;
 
-		rc = crt_gettime(&t1);
+		rc = d_gettime(&t1);
 		assert(rc == 0);
 		rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_CHECKIN,
 				    &rpc_req);
 		assert(rc == 0 && rpc_req != NULL);
-		rc = crt_gettime(&t2);
+		rc = d_gettime(&t2);
 		assert(rc == 0);
-		time_us = crt_time2us(crt_timediff(t1, t2));
+		time_us = d_time2us(d_timediff(t1, t2));
 		printf("time for crt_req_create: %.3e uS.\n", time_us);
 
 		e_req = crt_req_get(rpc_req);
 		assert(e_req != NULL);
 
-		C_ALLOC(pchar, 256);
+		D_ALLOC(pchar, 256);
 		assert(pchar != NULL);
 		snprintf(pchar, 256, "Guest_%d_%d@client-side",
 			 myrank, svr_ep.ep_tag);
@@ -192,14 +192,13 @@ static void run_client(void)
 		raw_buf = "testing_only ---- data_in_raw_package";
 		e_req->name = pchar;
 		e_req->age = 32 + svr_ep.ep_tag;
-		crt_iov_set(&e_req->raw_package, raw_buf,
-			    strlen(raw_buf) + 1);
+		d_iov_set(&e_req->raw_package, raw_buf, strlen(raw_buf) + 1);
 		e_req->days = myrank;
 
-		C_DEBUG("client(rank %d) sending checkin rpc with tag %d, "
-		       "name: %s, age: %d, days: %d.\n",
-		       myrank, svr_ep.ep_tag, e_req->name, e_req->age,
-		       e_req->days);
+		D_DEBUG("client(rank %d) sending checkin rpc with tag %d, "
+			"name: %s, age: %d, days: %d.\n",
+			myrank, svr_ep.ep_tag, e_req->name, e_req->age,
+			e_req->days);
 
 		gecho.complete = 0;
 		rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
@@ -207,7 +206,7 @@ static void run_client(void)
 		/* wait two minutes (in case of manually starting up clients) */
 		rc = client_wait(120, 1000, &gecho.complete);
 		assert(rc == 0);
-		C_FREE(pchar, 256);
+		D_FREE(pchar, 256);
 
 		printf("client(rank %d, tag %d) checkin request sent.\n",
 		       myrank, svr_ep.ep_tag);
@@ -225,7 +224,7 @@ static void run_client(void)
 			    &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 
-	iovs = (crt_iov_t *)malloc(2 * sizeof(crt_iov_t));
+	iovs = (d_iov_t *)malloc(2 * sizeof(d_iov_t));
 	iovs[0].iov_buf_len = 4097;
 	iovs[0].iov_len = 4097;
 	iovs[0].iov_buf = malloc(iovs[0].iov_buf_len);
@@ -244,7 +243,7 @@ static void run_client(void)
 	/* calculate md5 checksum */
 	MD5_CTX md5_ctx;
 	unsigned char md5[16];
-	crt_string_t md5_str = (crt_string_t)malloc(33);
+	d_string_t md5_str = (d_string_t)malloc(33);
 
 	memset(md5_str, 0, 33);
 
@@ -271,10 +270,10 @@ static void run_client(void)
 	rc = crt_bulk_access(bulk_hdl, &sgl_query);
 	assert(rc == 0);
 	assert(sgl_query.sg_nr.num_out == 2);
-	rc = memcmp(iovs, iovs_query, 2 * sizeof(crt_iov_t));
+	rc = memcmp(iovs, iovs_query, 2 * sizeof(d_iov_t));
 	assert(rc == 0);
 
-	C_ALLOC(pchar, 256);
+	D_ALLOC(pchar, 256);
 	assert(pchar != NULL);
 	snprintf(pchar, 256, "simple bulk testing from client(rank %d)...\n",
 		 myrank);
@@ -305,7 +304,7 @@ static void run_client(void)
 	free(iovs[0].iov_buf);
 	free(iovs[1].iov_buf);
 	free(iovs);
-	C_FREE(pchar, 256);
+	D_FREE(pchar, 256);
 
 	/* ============= test-4 ============ */
 	/* attach to 2nd tier and send checkin RPC */
@@ -326,7 +325,7 @@ static void run_client(void)
 		e_req = crt_req_get(rpc_req);
 		assert(e_req != NULL);
 
-		C_ALLOC(pchar, 256);
+		D_ALLOC(pchar, 256);
 		assert(pchar != NULL);
 		snprintf(pchar, 256, "Guest_%d_%d@client-side",
 			 myrank, svr_ep.ep_tag);
@@ -335,7 +334,7 @@ static void run_client(void)
 		e_req->age = 32 + svr_ep.ep_tag;
 		e_req->days = myrank;
 
-		C_DEBUG("client(rank %d) sending checkin rpc to tier2 with "
+		D_DEBUG("client(rank %d) sending checkin rpc to tier2 with "
 			"tag %d, name: %s, age: %d, days: %d.\n",
 			myrank, svr_ep.ep_tag, e_req->name, e_req->age,
 			e_req->days);
@@ -346,7 +345,7 @@ static void run_client(void)
 		/* wait two minutes (in case of manually starting up clients) */
 		rc = client_wait(120, 1000, &gecho.complete);
 		assert(rc == 0);
-		C_FREE(pchar, 256);
+		D_FREE(pchar, 256);
 
 		printf("client(rank %d, tag %d) checkin req sent to tier2.\n",
 		       myrank, svr_ep.ep_tag);
@@ -391,7 +390,7 @@ send_shutdown:
 
 out:
 	rc = crt_group_detach(grp_tier1);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	printf("client(rank %d) shuting down...\n", myrank);
 }

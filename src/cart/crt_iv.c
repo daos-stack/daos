@@ -40,7 +40,7 @@
  */
 /* TODO list for stage2:
  * - iv_ver is not passed to most calls
- * - root_node flag is not passed during fetch/update
+ * - root_node flag is not passed d_uring fetch/update
  * - update aggregation
  * - sync/refresh called on all nodes; might want to exclude update path
  * - CRT_IV_CLASS features (crt_iv_class::ivc_feats) not implemented
@@ -48,12 +48,12 @@
  * - Support of endian-agnostic ivns_internal
  * - Optimize group lookup by using internal group id
  **/
-#define C_LOGFAC	CD_FAC(corpc)
+#define D_LOGFAC	DD_FAC(corpc)
 
 #include "crt_internal.h"
 #include "cart/iv.h"
 
-static CRT_LIST_HEAD(ns_list);
+static D_LIST_HEAD(ns_list);
 static uint32_t ns_id;
 
 /* Lock for manimuplation of ns_list and ns_id */
@@ -62,15 +62,15 @@ static pthread_mutex_t ns_list_lock = PTHREAD_MUTEX_INITIALIZER;
 /* Data structure for internal iv fetch rpc input */
 struct iv_fetch_in {
 	/* Namespace ID */
-	crt_iov_t	ifi_nsid;
+	d_iov_t		ifi_nsid;
 	/* IV Key */
-	crt_iov_t	ifi_key;
+	d_iov_t		ifi_key;
 	/* Bulk handle for iv value */
 	crt_bulk_t	ifi_value_bulk;
 	/* Class id */
 	uint32_t	ifi_class_id;
 	/* Root node for current fetch operation */
-	crt_rank_t	ifi_root_node;
+	d_rank_t		ifi_root_node;
 };
 
 /* Data structure for internal iv fetch rpc output*/
@@ -82,7 +82,7 @@ struct iv_fetch_out {
 /* Structure for uniquely identifying iv namespace */
 struct crt_ivns_id {
 	/* Rank of the namespace */
-	crt_rank_t	ii_rank;
+	d_rank_t		ii_rank;
 	/* Unique ID within the rank */
 	uint32_t	ii_nsid;
 };
@@ -103,25 +103,25 @@ struct crt_global_ns {
 /* Structure for iv fetch callback info */
 struct iv_fetch_cb_info {
 	/* Fetch completion callback function and its argument */
-	crt_iv_comp_cb_t		ifc_comp_cb;
+	crt_iv_comp_cb_t		 ifc_comp_cb;
 	void				*ifc_comp_cb_arg;
 
 	/* Local bulk handle for iv value */
-	crt_bulk_t			ifc_bulk_hdl;
+	crt_bulk_t			 ifc_bulk_hdl;
 
 	/* Optional child's rpc and childs bulk handle, if child exists */
 	crt_rpc_t			*ifc_child_rpc;
-	crt_bulk_t			ifc_child_bulk;
+	crt_bulk_t			 ifc_child_bulk;
 
-	crt_iv_key_t			ifc_iv_key;
+	crt_iv_key_t			 ifc_iv_key;
 	/* IV value */
-	crt_sg_list_t			ifc_iv_value;
+	d_sg_list_t			 ifc_iv_value;
 
 	/* IV namespace */
 	struct crt_ivns_internal	*ifc_ivns_internal;
 
 	/* Class ID for ivns_internal */
-	uint32_t			ifc_class_id;
+	uint32_t			 ifc_class_id;
 
 	/* User private data */
 	void				*ifc_user_priv;
@@ -132,17 +132,17 @@ struct pending_fetch {
 	struct iv_fetch_cb_info		*pf_cb_info;
 
 	/* Link to ivf_key_in_progress::kip_pending_fetch_list */
-	crt_list_t			pf_link;
+	d_list_t				 pf_link;
 };
 
 /* Struture for list of all pending fetches for given key */
 struct ivf_key_in_progress {
 	crt_iv_key_t	kip_key;
-	crt_list_t	kip_pending_fetch_list;
+	d_list_t		kip_pending_fetch_list;
 	pthread_mutex_t	kip_lock;
 
 	/* Link to crt_ivns_internal::cii_keys_in_progress_list */
-	crt_list_t	kip_link;
+	d_list_t		kip_link;
 
 	/* Payload for kip_key->iov_buf */
 	uintptr_t	payload[0];
@@ -153,33 +153,33 @@ struct crt_ivns_internal {
 	/* IV Classes registered with this iv namespace */
 	struct crt_iv_class	*cii_iv_classes;
 	/* Context associated with IV namesapce */
-	crt_context_t		cii_ctx;
+	crt_context_t		 cii_ctx;
 
 	/* Group to which this namesapce belongs*/
 	crt_group_t		*cii_grp;
 
 	/* Global namespace identifier */
-	struct crt_global_ns	cii_gns;
+	struct crt_global_ns	 cii_gns;
 
 	/* Cached info to avoid cart queries */
-	crt_rank_t		cii_local_rank;
-	uint32_t		cii_group_size;
+	d_rank_t			 cii_local_rank;
+	uint32_t		 cii_group_size;
 
 	/* Link list of all keys in progress */
-	crt_list_t		cii_keys_in_progress_list;
+	d_list_t			 cii_keys_in_progress_list;
 
 	/* Lock for modification of pending list */
-	pthread_mutex_t		cii_lock;
+	pthread_mutex_t		 cii_lock;
 
 	/* Link to ns_list */
-	crt_list_t		cii_link;
+	d_list_t			 cii_link;
 };
 
 static int
 crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
-			uint32_t class_id, crt_iov_t *iv_key,
-			crt_sg_list_t *iv_value, crt_bulk_t dest_bulk,
-			crt_rpc_t *rpc, void *user_priv);
+		      uint32_t class_id, d_iov_t *iv_key,
+		      d_sg_list_t *iv_value, crt_bulk_t dest_bulk,
+		      crt_rpc_t *rpc, void *user_priv);
 
 static struct crt_iv_ops *
 crt_iv_ops_get(struct crt_ivns_internal *ivns_internal, uint32_t class_id);
@@ -188,10 +188,10 @@ static bool
 crt_iv_keys_match(crt_iv_key_t *key1, crt_iv_key_t *key2)
 {
 	/* Those below are critical, unrecoverable errors */
-	C_ASSERT(key1 != NULL);
-	C_ASSERT(key2 != NULL);
-	C_ASSERT(key1->iov_buf != NULL);
-	C_ASSERT(key2->iov_buf != NULL);
+	D_ASSERT(key1 != NULL);
+	D_ASSERT(key2 != NULL);
+	D_ASSERT(key1->iov_buf != NULL);
+	D_ASSERT(key2->iov_buf != NULL);
 
 	if (key1->iov_len != key2->iov_len)
 		return false;
@@ -209,8 +209,8 @@ crt_ivf_key_in_progress_find(struct crt_ivns_internal *ivns,
 {
 	struct ivf_key_in_progress *entry;
 
-	crt_list_for_each_entry(entry, &ivns->cii_keys_in_progress_list,
-				kip_link) {
+	d_list_for_each_entry(entry, &ivns->cii_keys_in_progress_list,
+			     kip_link) {
 		/* Use keys_match callback if client provided one */
 		if (ops->ivo_keys_match) {
 			if (ops->ivo_keys_match(ivns, &entry->kip_key, key))
@@ -232,10 +232,10 @@ crt_ivf_key_in_progress_set(struct crt_ivns_internal *ivns,
 	struct ivf_key_in_progress	*entry;
 	int				rc = 0;
 
-	C_ALLOC(entry, offsetof(struct ivf_key_in_progress,
+	D_ALLOC(entry, offsetof(struct ivf_key_in_progress,
 				payload[0]) + key->iov_buf_len);
 	if (!entry) {
-		C_ERROR("Failed to allocate entry");
+		D_ERROR("Failed to allocate entry");
 		return -CER_NOMEM;
 	}
 
@@ -246,10 +246,10 @@ crt_ivf_key_in_progress_set(struct crt_ivns_internal *ivns,
 	entry->kip_key.iov_len = key->iov_len;
 
 	memcpy(entry->kip_key.iov_buf, key->iov_buf, key->iov_buf_len);
-	CRT_INIT_LIST_HEAD(&entry->kip_pending_fetch_list);
+	D_INIT_LIST_HEAD(&entry->kip_pending_fetch_list);
 
 	/* TODO: Change to hash table */
-	crt_list_add_tail(&entry->kip_link, &ivns->cii_keys_in_progress_list);
+	d_list_add_tail(&entry->kip_link, &ivns->cii_keys_in_progress_list);
 
 	return rc;
 }
@@ -263,8 +263,8 @@ crt_ivf_key_in_progress_unset(struct ivf_key_in_progress *entry,
 		return 0;
 
 	pthread_mutex_destroy(&entry->kip_lock);
-	crt_list_del(&entry->kip_link);
-	C_FREE(entry, offsetof(struct ivf_key_in_progress,
+	d_list_del(&entry->kip_link);
+	D_FREE(entry, offsetof(struct ivf_key_in_progress,
 		payload[0]) + key->iov_buf_len);
 
 	return 0;
@@ -277,16 +277,16 @@ crt_ivf_pending_request_add(struct ivf_key_in_progress *entry,
 {
 	struct pending_fetch	*pending_fetch;
 
-	C_ALLOC_PTR(pending_fetch);
+	D_ALLOC_PTR(pending_fetch);
 	if (pending_fetch == NULL) {
-		C_ERROR("Failed to allocate pending fetch");
+		D_ERROR("Failed to allocate pending fetch");
 		return -CER_NOMEM;
 	}
 
 	pending_fetch->pf_cb_info = iv_info;
 
-	crt_list_add_tail(&pending_fetch->pf_link,
-			&entry->kip_pending_fetch_list);
+	d_list_add_tail(&pending_fetch->pf_link,
+		       &entry->kip_pending_fetch_list);
 	return 0;
 }
 
@@ -295,10 +295,10 @@ crt_ivf_pending_request_add(struct ivf_key_in_progress *entry,
  */
 static int
 crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
-		crt_sg_list_t *iv_value, int output_rc)
+		 d_sg_list_t *iv_value, int output_rc)
 {
 	crt_rpc_t		*rpc;
-	int			rc = 0;
+	int			 rc = 0;
 	struct crt_iv_ops	*iv_ops;
 
 	rpc = iv_info->ifc_child_rpc;
@@ -325,12 +325,12 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 			output->ifo_rc = output_rc;
 
 			rc = crt_reply_send(rpc);
-			C_ASSERT(rc == 0);
+			D_ASSERT(rc == 0);
 		}
 
 		/* addref done in crt_hdlr_iv_fetch */
 		rc = crt_req_decref(rpc);
-		C_ASSERT(rc == 0);
+		D_ASSERT(rc == 0);
 	} else {
 		iv_info->ifc_comp_cb(iv_info->ifc_ivns_internal,
 					iv_info->ifc_class_id,
@@ -355,12 +355,12 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 	struct crt_iv_ops		*iv_ops;
 	struct pending_fetch		*pending_fetch, *next;
 	struct iv_fetch_cb_info		*iv_info;
-	int				rc = 0;
-	bool				put_needed = false;
-	crt_sg_list_t			tmp_iv_value;
+	int				 rc = 0;
+	bool				 put_needed = false;
+	d_sg_list_t			 tmp_iv_value;
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
-	C_ASSERT(iv_ops != NULL);
+	D_ASSERT(iv_ops != NULL);
 
 	pthread_mutex_lock(&ivns_internal->cii_lock);
 	entry = crt_ivf_key_in_progress_find(ivns_internal, iv_ops, key);
@@ -368,18 +368,18 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 
 	/* Key is not in progress - safe to exit */
 	if (!entry)
-		C_GOTO(exit, rc);
+		D_GOTO(exit, rc);
 
 	pthread_mutex_lock(&entry->kip_lock);
 
 	/* If there is nothing pending - exit */
-	if (crt_list_empty(&entry->kip_pending_fetch_list))
-		C_GOTO(cleanup, rc);
+	if (d_list_empty(&entry->kip_pending_fetch_list))
+		D_GOTO(cleanup, rc);
 
 	memset(&tmp_iv_value, 0, sizeof(tmp_iv_value));
 	/* Go through list of all pending fetches and finalize each one */
-	crt_list_for_each_entry_safe(pending_fetch, next,
-				&entry->kip_pending_fetch_list, pf_link) {
+	d_list_for_each_entry_safe(pending_fetch, next,
+				  &entry->kip_pending_fetch_list, pf_link) {
 		iv_info = pending_fetch->pf_cb_info;
 
 		/* Pending remote fetch case */
@@ -414,7 +414,7 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 			} else {
 				struct iv_fetch_out *output;
 
-				C_ERROR("Failed to process pending request\n");
+				D_ERROR("Failed to process pending request\n");
 
 				output = crt_reply_get(iv_info->ifc_child_rpc);
 
@@ -462,9 +462,9 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 					   iv_info->ifc_user_priv);
 		}
 
-		crt_list_del(&pending_fetch->pf_link);
-		C_FREE_PTR(pending_fetch->pf_cb_info);
-		C_FREE_PTR(pending_fetch);
+		d_list_del(&pending_fetch->pf_link);
+		D_FREE_PTR(pending_fetch->pf_cb_info);
+		D_FREE_PTR(pending_fetch);
 	}
 
 cleanup:
@@ -481,7 +481,7 @@ crt_ivns_internal_lookup(struct crt_ivns_id *ivns_id)
 	struct crt_ivns_internal *entry;
 
 	pthread_mutex_lock(&ns_list_lock);
-	crt_list_for_each_entry(entry, &ns_list, cii_link) {
+	d_list_for_each_entry(entry, &ns_list, cii_link) {
 		if (entry->cii_gns.gn_ivns_id.ii_rank == ivns_id->ii_rank &&
 			entry->cii_gns.gn_ivns_id.ii_nsid == ivns_id->ii_nsid) {
 
@@ -520,27 +520,27 @@ crt_ivns_internal_create(crt_context_t crt_ctx, crt_group_t *grp,
 	int				size;
 	int				rc = 0;
 
-	C_ALLOC_PTR(ivns_internal);
+	D_ALLOC_PTR(ivns_internal);
 	if (ivns_internal == NULL) {
-		C_ERROR("Failed to allocate memory for ivns_internal\n");
-		C_GOTO(exit, ivns_internal);
+		D_ERROR("Failed to allocate memory for ivns_internal\n");
+		D_GOTO(exit, ivns_internal);
 	}
 
 	size = sizeof(struct crt_iv_class) * num_class;
-	C_ALLOC(ivns_internal->cii_iv_classes, size);
+	D_ALLOC(ivns_internal->cii_iv_classes, size);
 	if (ivns_internal->cii_iv_classes == NULL) {
-		C_ERROR("Failed to allocate storage for iv_classes\n");
-		C_FREE_PTR(ivns_internal);
-		C_GOTO(exit, ivns_internal = NULL);
+		D_ERROR("Failed to allocate storage for iv_classes\n");
+		D_FREE_PTR(ivns_internal);
+		D_GOTO(exit, ivns_internal = NULL);
 	}
 
-	CRT_INIT_LIST_HEAD(&ivns_internal->cii_keys_in_progress_list);
+	D_INIT_LIST_HEAD(&ivns_internal->cii_keys_in_progress_list);
 
 	rc = crt_group_rank(grp, &ivns_internal->cii_local_rank);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	rc = crt_group_size(grp, &ivns_internal->cii_group_size);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	pthread_mutex_init(&ivns_internal->cii_lock, 0);
 
@@ -575,7 +575,7 @@ crt_ivns_internal_create(crt_context_t crt_ctx, crt_group_t *grp,
 		ivns_internal->cii_gns.gn_grp_id = grp->cg_grpid;
 
 	pthread_mutex_lock(&ns_list_lock);
-	crt_list_add_tail(&ivns_internal->cii_link, &ns_list);
+	d_list_add_tail(&ivns_internal->cii_link, &ns_list);
 	pthread_mutex_unlock(&ns_list_lock);
 
 exit:
@@ -585,22 +585,22 @@ exit:
 int
 crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
 			struct crt_iv_class *iv_classes, uint32_t num_class,
-			crt_iv_namespace_t *ivns, crt_iov_t *g_ivns)
+			crt_iv_namespace_t *ivns, d_iov_t *g_ivns)
 {
 	struct crt_ivns_internal	*ivns_internal = NULL;
 	int				rc = 0;
 
 	if (ivns == NULL || g_ivns == NULL) {
-		C_ERROR("invalid parameter of NULL for ivns/g_ivns\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("invalid parameter of NULL for ivns/g_ivns\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	ivns_internal = crt_ivns_internal_create(crt_ctx, grp,
 						iv_classes, num_class,
 						tree_topo, NULL);
 	if (ivns_internal == NULL) {
-		C_ERROR("Failed to create internal ivns\n");
-		C_GOTO(exit, rc = -CER_NOMEM);
+		D_ERROR("Failed to create internal ivns\n");
+		D_GOTO(exit, rc = -CER_NOMEM);
 	}
 
 	*ivns = (crt_iv_namespace_t)ivns_internal;
@@ -612,13 +612,13 @@ crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
 
 exit:
 	if (rc != 0 && ivns_internal)
-		C_FREE_PTR(ivns_internal);
+		D_FREE_PTR(ivns_internal);
 
 	return rc;
 }
 
 int
-crt_iv_namespace_attach(crt_context_t crt_ctx, crt_iov_t *g_ivns,
+crt_iv_namespace_attach(crt_context_t crt_ctx, d_iov_t *g_ivns,
 			struct crt_iv_class *iv_classes, uint32_t num_class,
 			crt_iv_namespace_t *ivns)
 {
@@ -628,18 +628,18 @@ crt_iv_namespace_attach(crt_context_t crt_ctx, crt_iov_t *g_ivns,
 	int				rc = 0;
 
 	if (g_ivns == NULL) {
-		C_ERROR("global ivns is NULL\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("global ivns is NULL\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	if (iv_classes == NULL) {
-		C_ERROR("iv_classes is NULL\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("iv_classes is NULL\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	if (ivns == NULL) {
-		C_ERROR("ivns is NULL\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("ivns is NULL\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	/* TODO: Need to unflatten the structure */
@@ -652,8 +652,8 @@ crt_iv_namespace_attach(crt_context_t crt_ctx, crt_iov_t *g_ivns,
 					ivns_global->gn_tree_topo,
 					&ivns_global->gn_ivns_id);
 	if (ivns_internal == NULL) {
-		C_ERROR("Failed to create new ivns internal\n");
-		C_GOTO(exit, rc = -CER_NOMEM);
+		D_ERROR("Failed to create new ivns internal\n");
+		D_GOTO(exit, rc = -CER_NOMEM);
 	}
 
 	*ivns = (crt_iv_namespace_t)ivns_internal;
@@ -670,20 +670,20 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns)
 
 	ivns_internal = crt_ivns_internal_get(ivns);
 	if (ivns_internal == NULL) {
-		C_ERROR("Invalid ivns passed\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("Invalid ivns passed\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	pthread_mutex_lock(&ns_list_lock);
-	crt_list_del(&ivns_internal->cii_link);
+	d_list_del(&ivns_internal->cii_link);
 	pthread_mutex_unlock(&ns_list_lock);
 
 	/* TODO: stage2 - wait for all pending requests to be finished*/
 	/* TODO: Need refcount on ivns_internal to know when to free it */
 	pthread_mutex_destroy(&ivns_internal->cii_lock);
 
-	C_FREE_PTR(ivns_internal->cii_iv_classes);
-	C_FREE_PTR(ivns_internal);
+	D_FREE_PTR(ivns_internal->cii_iv_classes);
+	D_FREE_PTR(ivns_internal);
 
 exit:
 	return rc;
@@ -694,12 +694,12 @@ static struct crt_iv_ops *
 crt_iv_ops_get(struct crt_ivns_internal *ivns_internal, uint32_t class_id)
 {
 	if (ivns_internal == NULL) {
-		C_ERROR("ivns_internal was NULL\n");
+		D_ERROR("ivns_internal was NULL\n");
 		return NULL;
 	}
 
 	if (class_id >= ivns_internal->cii_gns.gn_num_class) {
-		C_ERROR("class_id=%d exceeds num_class=%d\n", class_id,
+		D_ERROR("class_id=%d exceeds num_class=%d\n", class_id,
 			ivns_internal->cii_gns.gn_num_class);
 		return NULL;
 	}
@@ -713,13 +713,13 @@ struct crt_ivf_transfer_cb_info {
 	struct crt_ivns_internal	*tci_ivns_internal;
 
 	/* Class ID for which operation was done */
-	uint32_t			tci_class_id;
+	uint32_t			 tci_class_id;
 
 	/* IV Key for which fetch was performed */
-	crt_iov_t			tci_iv_key;
+	d_iov_t				 tci_iv_key;
 
 	/* IV value for which fetch was performed */
-	crt_sg_list_t			tci_iv_value;
+	d_sg_list_t			 tci_iv_value;
 
 	/* User private data */
 	void				*tci_user_priv;
@@ -736,7 +736,7 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	int				rc = 0;
 
 	/* Something is really bad if info is NULL */
-	C_ASSERT(info != NULL);
+	D_ASSERT(info != NULL);
 
 	cb_info = (struct crt_ivf_transfer_cb_info *)info->bci_arg;
 	rpc = info->bci_bulk_desc->bd_rpc;
@@ -746,28 +746,28 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 
 	iv_ops = crt_iv_ops_get(cb_info->tci_ivns_internal,
 				cb_info->tci_class_id);
-	C_ASSERT(iv_ops != NULL);
+	D_ASSERT(iv_ops != NULL);
 
 	rc = iv_ops->ivo_on_put(cb_info->tci_ivns_internal,
 			&cb_info->tci_iv_value,
 			cb_info->tci_user_priv);
 	if (rc != 0)
-		C_ERROR("ivo_on_put() failed; rc = %d\n", rc);
+		D_ERROR("ivo_on_put() failed; rc = %d\n", rc);
 
 	/* Keep freeing things even if something fails */
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		C_ERROR("crt_reply_send() failed; rc = %d\n", rc);
+		D_ERROR("crt_reply_send() failed; rc = %d\n", rc);
 
 	rc = crt_bulk_free(info->bci_bulk_desc->bd_local_hdl);
 	if (rc != 0)
-		C_ERROR("crt_bulk_free() failed; rc = %d\n", rc);
+		D_ERROR("crt_bulk_free() failed; rc = %d\n", rc);
 
 	rc = crt_req_decref(rpc);
 	if (rc != 0)
-		C_ERROR("crt_req_decref() failed; rc = %d\n", rc);
+		D_ERROR("crt_req_decref() failed; rc = %d\n", rc);
 
-	C_FREE_PTR(cb_info);
+	D_FREE_PTR(cb_info);
 
 	return rc;
 }
@@ -775,9 +775,9 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 /* Helper function to issue bulk transfer */
 static int
 crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
-			uint32_t class_id, crt_iov_t *iv_key,
-			crt_sg_list_t *iv_value, crt_bulk_t dest_bulk,
-			crt_rpc_t *rpc, void *user_priv)
+		      uint32_t class_id, d_iov_t *iv_key,
+		      d_sg_list_t *iv_value, crt_bulk_t dest_bulk,
+		      crt_rpc_t *rpc, void *user_priv)
 {
 	struct crt_ivf_transfer_cb_info	*cb_info = NULL;
 	struct crt_bulk_desc		bulk_desc;
@@ -790,15 +790,15 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 
 	output = crt_reply_get(rpc);
 	if (output == NULL) {
-		C_ERROR("output was NULL\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("output was NULL\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	rc = crt_bulk_create(rpc->cr_ctx, iv_value, CRT_BULK_RW,
 			&bulk_hdl);
 	if (rc != 0) {
-		C_ERROR("crt_bulk_create() failed with rc=%d\n", rc);
-		C_GOTO(exit, rc);
+		D_ERROR("crt_bulk_create() failed with rc=%d\n", rc);
+		D_GOTO(exit, rc);
 	}
 
 	/* Calculate total size of all iovs in sg list */
@@ -808,7 +808,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 
 	/* crt_req_decref done in crt_ivf_bulk_transfer_done_cb */
 	rc = crt_req_addref(rpc);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	memset(&bulk_desc, 0x0, sizeof(struct crt_bulk_desc));
 
@@ -820,11 +820,11 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 	bulk_desc.bd_local_off = 0;
 	bulk_desc.bd_len = size;
 
-	C_ALLOC_PTR(cb_info);
+	D_ALLOC_PTR(cb_info);
 
 	if (cb_info == NULL) {
-		C_ERROR("Failed to allocate memory for cb_info\n");
-		C_GOTO(cleanup, rc = -CER_NOMEM);
+		D_ERROR("Failed to allocate memory for cb_info\n");
+		D_GOTO(cleanup, rc = -CER_NOMEM);
 	}
 
 	cb_info->tci_ivns_internal = ivns_internal;
@@ -838,18 +838,18 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 
 cleanup:
 	if (rc != 0) {
-		C_ERROR("Bulk transfer failed; rc=%d\n", rc);
+		D_ERROR("Bulk transfer failed; rc=%d\n", rc);
 
 		output->ifo_rc = rc;
 		rc = crt_reply_send(rpc);
-		C_ASSERT(rc == 0);
+		D_ASSERT(rc == 0);
 
 		rc = crt_req_decref(rpc);
-		C_ASSERT(rc == 0);
+		D_ASSERT(rc == 0);
 
 		crt_bulk_free(bulk_hdl);
 		if (cb_info)
-			C_FREE_PTR(cb_info);
+			D_FREE_PTR(cb_info);
 	}
 
 exit:
@@ -872,7 +872,7 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	rpc = cb_info->cci_rpc;
 	output = crt_reply_get(rpc);
 	input = crt_req_get(rpc);
-	C_ASSERT(output != NULL);
+	D_ASSERT(output != NULL);
 
 	if (cb_info->cci_rc == 0x0)
 		rc = output->ifo_rc;
@@ -904,14 +904,14 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 				rc);
 
 
-	C_FREE_PTR(iv_info);
+	D_FREE_PTR(iv_info);
 }
 
 /* Helper function to issue internal iv_fetch RPC */
 static int
-crt_ivf_rpc_issue(crt_rank_t dest_node, crt_iv_key_t *iv_key,
-		crt_sg_list_t *iv_value, crt_rank_t root_node,
-		struct iv_fetch_cb_info *cb_info)
+crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
+		  d_sg_list_t *iv_value, d_rank_t root_node,
+		  struct iv_fetch_cb_info *cb_info)
 {
 	struct crt_ivns_internal	*ivns_internal;
 	struct iv_fetch_in		*input;
@@ -925,7 +925,7 @@ crt_ivf_rpc_issue(crt_rank_t dest_node, crt_iv_key_t *iv_key,
 	ivns_internal = cb_info->ifc_ivns_internal;
 
 	iv_ops = crt_iv_ops_get(ivns_internal, cb_info->ifc_class_id);
-	C_ASSERT(iv_ops != NULL);
+	D_ASSERT(iv_ops != NULL);
 
 	/* If there is already forwarded request in progress, do not
 	* submit another one, instead add it to pending list
@@ -944,15 +944,15 @@ crt_ivf_rpc_issue(crt_rank_t dest_node, crt_iv_key_t *iv_key,
 	pthread_mutex_unlock(&ivns_internal->cii_lock);
 
 	if (rc != 0) {
-		C_ERROR("crt_ivf_key_in_progress_set() failed; rc = %d\n", rc);
+		D_ERROR("crt_ivf_key_in_progress_set() failed; rc = %d\n", rc);
 		return rc;
 	}
 
 	rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value, CRT_BULK_RW,
 				&local_bulk);
 	if (rc != 0) {
-		C_ERROR("crt_bulk_create() failed; rc = %d\n", rc);
-		C_GOTO(exit, rc);
+		D_ERROR("crt_bulk_create() failed; rc = %d\n", rc);
+		D_GOTO(exit, rc);
 	}
 
 	ep.ep_grp = ivns_internal->cii_grp;
@@ -961,36 +961,36 @@ crt_ivf_rpc_issue(crt_rank_t dest_node, crt_iv_key_t *iv_key,
 	rc = crt_req_create(ivns_internal->cii_ctx, &ep, CRT_OPC_IV_FETCH,
 			    &rpc);
 	if (rc != 0) {
-		C_ERROR("crt_req_create() failed; rc = %d\n", rc);
-		C_GOTO(exit, rc);
+		D_ERROR("crt_req_create() failed; rc = %d\n", rc);
+		D_GOTO(exit, rc);
 	}
 
 	input = crt_req_get(rpc);
-	C_ASSERT(input != NULL);
+	D_ASSERT(input != NULL);
 
 	input->ifi_value_bulk = local_bulk;
 
 	cb_info->ifc_bulk_hdl = local_bulk;
 
-	crt_iov_set(&input->ifi_key, iv_key->iov_buf, iv_key->iov_buf_len);
+	d_iov_set(&input->ifi_key, iv_key->iov_buf, iv_key->iov_buf_len);
 	input->ifi_class_id = cb_info->ifc_class_id;
 	input->ifi_root_node = root_node;
 
-	crt_iov_set(&input->ifi_nsid, &ivns_internal->cii_gns.gn_ivns_id,
-		sizeof(struct crt_ivns_id));
+	d_iov_set(&input->ifi_nsid, &ivns_internal->cii_gns.gn_ivns_id,
+		 sizeof(struct crt_ivns_id));
 
 	rc = crt_req_send(rpc, handle_ivfetch_response, cb_info);
 
 exit:
 	if (rc != 0) {
-		C_ERROR("Failed to send rpc to remote node = %d\n", dest_node);
+		D_ERROR("Failed to send rpc to remote node = %d\n", dest_node);
 		pthread_mutex_lock(&ivns_internal->cii_lock);
 
 		/* Only unset if there are no pending fetches for this key */
 		entry = crt_ivf_key_in_progress_find(ivns_internal,
 						iv_ops, iv_key);
 
-		if (entry && crt_list_empty(&entry->kip_pending_fetch_list))
+		if (entry && d_list_empty(&entry->kip_pending_fetch_list))
 			crt_ivf_key_in_progress_unset(entry, iv_key);
 
 		pthread_mutex_unlock(&ivns_internal->cii_lock);
@@ -1002,41 +1002,41 @@ exit:
 }
 
 /* Return next parent of the 'cur_node' */
-static crt_rank_t
+static d_rank_t
 crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
-		crt_rank_t cur_node, crt_rank_t root_node)
+			d_rank_t cur_node, d_rank_t root_node)
 {
 	struct crt_grp_priv	*grp_priv;
-	crt_rank_t		parent_rank;
+	d_rank_t			 parent_rank;
 	crt_group_t		*group;
-	int			rc;
+	int			 rc;
 
 	if (cur_node == root_node)
 		return root_node;
 
 	/* group and grp_priv should never be NULL by the time we get here */
 	group = crt_group_lookup(ivns_internal->cii_gns.gn_grp_id);
-	C_ASSERT(group != NULL);
+	D_ASSERT(group != NULL);
 
 	grp_priv = container_of(group, struct crt_grp_priv, gp_pub);
-	C_ASSERT(grp_priv != NULL);
+	D_ASSERT(grp_priv != NULL);
 
 	rc = crt_tree_get_parent(grp_priv, 0, NULL,
 			ivns_internal->cii_gns.gn_tree_topo, root_node,
 			cur_node, &parent_rank);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 	return parent_rank;
 }
 
 /* Return next parent for the current rank and root_node */
-static crt_rank_t
+static d_rank_t
 crt_iv_parent_get(struct crt_ivns_internal *ivns_internal,
-		crt_rank_t root_node)
+		  d_rank_t root_node)
 {
 	return crt_iv_ranks_parent_get(ivns_internal,
-				ivns_internal->cii_local_rank,
-				root_node);
+				       ivns_internal->cii_local_rank,
+				       root_node);
 }
 
 /* Internal handler for CRT_OPC_IV_FETCH RPC call*/
@@ -1048,7 +1048,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	struct crt_ivns_id		*ivns_id;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;
-	crt_sg_list_t			iv_value;
+	d_sg_list_t			iv_value;
 	int				rc = 0;
 	bool				put_needed = false;
 	void				*user_priv = NULL;
@@ -1060,14 +1060,14 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 
 	ivns_internal = crt_ivns_internal_lookup(ivns_id);
 	if (ivns_internal == NULL) {
-		C_ERROR("Failed to lookup ivns internal!\n");
-		C_GOTO(send_error, rc = -CER_INVAL);
+		D_ERROR("Failed to lookup ivns internal!\n");
+		D_GOTO(send_error, rc = -CER_INVAL);
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ifi_class_id);
 	if (iv_ops == NULL) {
-		C_ERROR("Returned iv_ops were NULL\n");
-		C_GOTO(send_error, rc = -CER_INVAL);
+		D_ERROR("Returned iv_ops were NULL\n");
+		D_GOTO(send_error, rc = -CER_INVAL);
 	}
 
 	memset(&iv_value, 0, sizeof(iv_value));
@@ -1075,8 +1075,8 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 				0, CRT_IV_PERM_READ, &iv_value, &user_priv);
 
 	if (rc != 0) {
-		C_ERROR("ivo_on_get failed; rc=%d\n", rc);
-		C_GOTO(send_error, rc);
+		D_ERROR("ivo_on_get failed; rc=%d\n", rc);
+		D_GOTO(send_error, rc);
 	}
 
 	put_needed = true;
@@ -1090,22 +1090,22 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 					&iv_value, input->ifi_value_bulk,
 					rpc_req, user_priv);
 		if (rc != 0) {
-			C_ERROR("bulk transfer failed; rc = %d\n", rc);
-			C_GOTO(send_error, rc);
+			D_ERROR("bulk transfer failed; rc = %d\n", rc);
+			D_GOTO(send_error, rc);
 		}
 	} else if (rc == -CER_IVCB_FORWARD) {
-		crt_rank_t next_node;
+		d_rank_t next_node;
 		struct iv_fetch_cb_info *cb_info;
 
 		if (ivns_internal->cii_local_rank == input->ifi_root_node) {
-			C_ERROR("Forward requested for root node\n");
-			C_GOTO(send_error, rc = -CER_INVAL);
+			D_ERROR("Forward requested for root node\n");
+			D_GOTO(send_error, rc = -CER_INVAL);
 		}
 
 		rc = iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 		if (rc != 0) {
-			C_ERROR("ivo_on_put() returend rc = %d\n", rc);
-			C_GOTO(send_error, rc);
+			D_ERROR("ivo_on_put() returend rc = %d\n", rc);
+			D_GOTO(send_error, rc);
 		}
 
 		put_needed = false;
@@ -1116,18 +1116,18 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 					0, CRT_IV_PERM_WRITE, &iv_value,
 					&user_priv);
 		if (rc != 0) {
-			C_ERROR("ivo_on_get() returned rc = %d\n", rc);
-			C_GOTO(send_error, rc);
+			D_ERROR("ivo_on_get() returned rc = %d\n", rc);
+			D_GOTO(send_error, rc);
 		}
 
 		put_needed = true;
 
 		next_node = crt_iv_parent_get(ivns_internal,
 					input->ifi_root_node);
-		C_ALLOC_PTR(cb_info);
+		D_ALLOC_PTR(cb_info);
 		if (cb_info == NULL) {
-			C_ERROR("Failed to allocate memory for cb_info\n");
-			C_GOTO(send_error, rc = -CER_NOMEM);
+			D_ERROR("Failed to allocate memory for cb_info\n");
+			D_GOTO(send_error, rc = -CER_NOMEM);
 		}
 
 		cb_info->ifc_child_rpc = rpc_req;
@@ -1135,7 +1135,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 
 		/* crt_req_decref done in crt_ivf_finalize */
 		rc = crt_req_addref(rpc_req);
-		C_ASSERT(rc == 0);
+		D_ASSERT(rc == 0);
 
 		cb_info->ifc_iv_value = iv_value;
 		cb_info->ifc_iv_key = input->ifi_key;
@@ -1149,14 +1149,14 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 					input->ifi_root_node,
 					cb_info);
 		if (rc != 0) {
-			C_ERROR("Failed to issue fetch rpc; rc = %d\n", rc);
-			C_FREE_PTR(cb_info);
+			D_ERROR("Failed to issue fetch rpc; rc = %d\n", rc);
+			D_FREE_PTR(cb_info);
 			crt_req_decref(rpc_req);
-			C_GOTO(send_error, rc);
+			D_GOTO(send_error, rc);
 		}
 	} else {
-		C_ERROR("ERROR happened with rc = %d\n", rc);
-		C_GOTO(send_error, rc);
+		D_ERROR("ERROR happened with rc = %d\n", rc);
+		D_GOTO(send_error, rc);
 	}
 
 	return;
@@ -1166,7 +1166,7 @@ send_error:
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 	output->ifo_rc = rc;
 	rc = crt_reply_send(rpc_req);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 }
 
 int
@@ -1178,48 +1178,48 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;
 	struct iv_fetch_cb_info		*cb_info;
-	crt_rank_t			root_rank;
-	crt_rank_t			next_node = 1;
-	int				rc;
-	crt_sg_list_t			*iv_value = NULL;
+	d_rank_t				 root_rank;
+	d_rank_t				 next_node = 1;
+	int				 rc;
+	d_sg_list_t			*iv_value = NULL;
 	void				*user_priv = NULL;
 
 	if (iv_key == NULL) {
-		C_ERROR("iv_key is NULL\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("iv_key is NULL\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	ivns_internal = crt_ivns_internal_get(ivns);
 
 	if (ivns_internal == NULL) {
-		C_ERROR("Invalid ivns\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("Invalid ivns\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	if (iv_ops == NULL) {
-		C_ERROR("Failed to get iv_ops for class_id = %d\n", class_id);
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("Failed to get iv_ops for class_id = %d\n", class_id);
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	rc = iv_ops->ivo_on_hash(ivns_internal, iv_key, &root_rank);
 
 	if (rc != 0) {
-		C_ERROR("Failed to get hash\n");
-		C_GOTO(exit, rc);
+		D_ERROR("Failed to get hash\n");
+		D_GOTO(exit, rc);
 	}
 
-	C_ALLOC_PTR(iv_value);
+	D_ALLOC_PTR(iv_value);
 	if (iv_value == NULL) {
-		C_ERROR("Failed to allocate memory\n");
-		C_GOTO(exit, rc = -CER_NOMEM);
+		D_ERROR("Failed to allocate memory\n");
+		D_GOTO(exit, rc = -CER_NOMEM);
 	}
 
 	rc = iv_ops->ivo_on_get(ivns_internal, iv_key, 0, CRT_IV_PERM_READ,
 				iv_value, &user_priv);
 	if (rc != 0) {
-		C_ERROR("ivo_on_get() failed; rc = %d\n", rc);
-		C_GOTO(exit, rc);
+		D_ERROR("ivo_on_get() failed; rc = %d\n", rc);
+		D_GOTO(exit, rc);
 	}
 
 	rc = iv_ops->ivo_on_fetch(ivns_internal, iv_key, 0,
@@ -1230,7 +1230,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 			      iv_value, rc, cb_arg);
 		iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
-		C_FREE_PTR(iv_value);
+		D_FREE_PTR(iv_value);
 		return rc;
 	} else if (rc != -CER_IVCB_FORWARD) {
 		/* We got error, call the callback and exit */
@@ -1239,7 +1239,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 			      NULL, rc, cb_arg);
 		iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
-		C_FREE_PTR(iv_value);
+		D_FREE_PTR(iv_value);
 		return rc;
 	}
 
@@ -1249,8 +1249,8 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = iv_ops->ivo_on_get(ivns_internal, iv_key, 0, CRT_IV_PERM_WRITE,
 				iv_value, &user_priv);
 	if (rc != 0) {
-		C_ERROR("ivo_on_get() failed; rc = %d\n", rc);
-		C_GOTO(exit, rc);
+		D_ERROR("ivo_on_get() failed; rc = %d\n", rc);
+		D_GOTO(exit, rc);
 	}
 
 	/* If we reached here, means we got CER_IVCB_FORWARD */
@@ -1265,14 +1265,14 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		break;
 
 	default:
-		C_ERROR("Unknown shortcut=%d specified\n", shortcut);
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("Unknown shortcut=%d specified\n", shortcut);
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
-	C_ALLOC_PTR(cb_info);
+	D_ALLOC_PTR(cb_info);
 	if (cb_info == NULL) {
-		C_ERROR("Failed to allocate callback info\n");
-		C_GOTO(exit, rc = -CER_NOMEM);
+		D_ERROR("Failed to allocate callback info\n");
+		D_GOTO(exit, rc = -CER_NOMEM);
 	}
 
 	cb_info->ifc_user_priv = user_priv;
@@ -1292,12 +1292,12 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 				cb_info);
 exit:
 	if (rc != 0) {
-		C_ERROR("Failed to issue IV fetch; rc = %d\n", rc);
-		C_FREE_PTR(cb_info);
+		D_ERROR("Failed to issue IV fetch; rc = %d\n", rc);
+		D_FREE_PTR(cb_info);
 	}
 
 	if (iv_value)
-		C_FREE_PTR(iv_value);
+		D_FREE_PTR(iv_value);
 
 	return rc;
 }
@@ -1307,22 +1307,22 @@ exit:
  **************************************************************/
 struct iv_update_in {
 	/* IV namespace ID */
-	crt_iov_t	ivu_nsid;
+	d_iov_t		ivu_nsid;
 
 	/* IOV for key */
-	crt_iov_t	ivu_key;
+	d_iov_t		ivu_key;
 
 	/* IOV for sync */
-	crt_iov_t	ivu_sync_type;
+	d_iov_t		ivu_sync_type;
 
 	/* Bulk handle for iv value */
 	crt_bulk_t	ivu_iv_value_bulk;
 
 	/* Root node for IV UPDATE */
-	crt_rank_t	ivu_root_node;
+	d_rank_t		ivu_root_node;
 
 	/* Original node that issued crt_iv_update call */
-	crt_rank_t	ivu_caller_node;
+	d_rank_t		ivu_caller_node;
 
 	/* Class ID */
 	uint32_t	ivu_class_id;
@@ -1337,13 +1337,13 @@ struct iv_update_out {
 
 struct iv_sync_in {
 	/* IV Namespace ID */
-	crt_iov_t	ivs_nsid;
+	d_iov_t		ivs_nsid;
 
 	/* IOV for key */
-	crt_iov_t	ivs_key;
+	d_iov_t		ivs_key;
 
 	/* IOV for sync type */
-	crt_iov_t	ivs_sync_type;
+	d_iov_t		ivs_sync_type;
 
 	/* IV Class ID */
 	uint32_t	ivs_class_id;
@@ -1364,38 +1364,38 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 	struct crt_iv_ops		*iv_ops;
 	struct crt_ivns_id		*ivns_id;
 	crt_iv_sync_t			*sync_type;
-	crt_sg_list_t			iv_value;
-	bool				need_put = false;
+	d_sg_list_t			 iv_value;
+	bool				 need_put = false;
 	void				*user_priv = NULL;
 
 	/* This is an internal call. All errors are fatal */
 	input = crt_req_get(rpc_req);
-	C_ASSERT(input != NULL);
+	D_ASSERT(input != NULL);
 
 	output = crt_reply_get(rpc_req);
-	C_ASSERT(output != NULL);
+	D_ASSERT(output != NULL);
 
 	ivns_id = (struct crt_ivns_id *)input->ivs_nsid.iov_buf;
 	sync_type = (crt_iv_sync_t *)input->ivs_sync_type.iov_buf;
 
 	ivns_internal = crt_ivns_internal_lookup(ivns_id);
-	C_ASSERT(ivns_internal != NULL);
+	D_ASSERT(ivns_internal != NULL);
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ivs_class_id);
-	C_ASSERT(iv_ops != NULL);
+	D_ASSERT(iv_ops != NULL);
 
 	/* If bulk is not set, we issue invalidate call */
 	if (rpc_req->cr_co_bulk_hdl == CRT_BULK_NULL) {
 		rc = iv_ops->ivo_on_refresh(ivns_internal,
 					&input->ivs_key, 0, NULL, true, NULL);
-		C_GOTO(exit, rc);
+		D_GOTO(exit, rc);
 	}
 
 	/* If bulk is set, issue sync call based on ivs_event */
 	switch (sync_type->ivs_event) {
 	case CRT_IV_SYNC_EVENT_UPDATE:
 	{
-		crt_sg_list_t tmp_iv;
+		d_sg_list_t tmp_iv;
 
 		memset(&iv_value, 0, sizeof(iv_value));
 		rc = iv_ops->ivo_on_get(ivns_internal, &input->ivs_key,
@@ -1403,29 +1403,29 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 
 		tmp_iv = iv_value;
 		if (rc != 0) {
-			C_ERROR("ivo_on_get() failed; rc=%d\n", rc);
-			C_GOTO(exit, rc);
+			D_ERROR("ivo_on_get() failed; rc=%d\n", rc);
+			D_GOTO(exit, rc);
 		}
 
 		need_put = true;
 
 		rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
 		if (rc != 0) {
-			C_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
-			C_GOTO(exit, rc);
+			D_ERROR("crt_bulk_access() failed; rc=%d\n", rc);
+			D_GOTO(exit, rc);
 		}
 
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
 					0, &tmp_iv, false, user_priv);
 		if (rc != 0) {
-			C_ERROR("ivo_on_refresh() failed; rc=%d\n", rc);
-			C_GOTO(exit, rc);
+			D_ERROR("ivo_on_refresh() failed; rc=%d\n", rc);
+			D_GOTO(exit, rc);
 		}
 
 		rc = iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 		if (rc != 0) {
-			C_ERROR("ivo_on_put() failed; rc=%d\n", rc);
-			C_GOTO(exit, rc);
+			D_ERROR("ivo_on_put() failed; rc=%d\n", rc);
+			D_GOTO(exit, rc);
 		}
 		need_put = false;
 
@@ -1436,15 +1436,15 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
 						0, 0, false, user_priv);
 		if (rc != 0) {
-			C_ERROR("ivo_on_refresh() failed; rc=%d\n", rc);
-			C_GOTO(exit, rc);
+			D_ERROR("ivo_on_refresh() failed; rc=%d\n", rc);
+			D_GOTO(exit, rc);
 		}
 
 		break;
 
 	default:
-		C_ERROR("Unknown event type 0x%x", sync_type->ivs_event);
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("Unknown event type 0x%x", sync_type->ivs_event);
+		D_GOTO(exit, rc = -CER_INVAL);
 		break;
 	}
 
@@ -1488,7 +1488,7 @@ struct iv_sync_cb_info {
 
 	/* IV key/value; used for issuing completion callback */
 	crt_iv_key_t			isc_iv_key;
-	crt_sg_list_t			isc_iv_value;
+	d_sg_list_t			isc_iv_value;
 
 	/* Flag indicating whether to perform callback */
 	bool				isc_do_callback;
@@ -1519,11 +1519,11 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 					iv_sync->isc_update_rc,
 					iv_sync->isc_cb_arg);
 
-		C_FREE(iv_sync->isc_iv_key.iov_buf,
+		D_FREE(iv_sync->isc_iv_key.iov_buf,
 			iv_sync->isc_iv_key.iov_buf_len);
 
 	}
-	C_FREE_PTR(iv_sync);
+	D_FREE_PTR(iv_sync);
 }
 
 /* Helper function to issue update sync
@@ -1532,11 +1532,11 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
  **/
 static int
 crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
-		crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-		crt_sg_list_t *iv_value, crt_iv_sync_t sync_type,
-		crt_rank_t src_node, crt_rank_t dst_node,
-		crt_iv_comp_cb_t update_comp_cb, void *cb_arg, void *user_priv,
-		int update_rc)
+		     crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
+		     d_sg_list_t *iv_value, crt_iv_sync_t sync_type,
+		     d_rank_t src_node, d_rank_t dst_node,
+		     crt_iv_comp_cb_t update_comp_cb, void *cb_arg,
+		     void *user_priv, int update_rc)
 {
 	crt_rpc_t		*corpc_req;
 	struct iv_sync_in	*input;
@@ -1545,15 +1545,15 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	struct iv_sync_cb_info	*iv_sync_cb = NULL;
 	struct crt_iv_ops	*iv_ops;
 	crt_bulk_t		local_bulk = CRT_BULK_NULL;
-	crt_rank_list_t		excluded_list;
-	crt_rank_t		excluded_ranks[1]; /* Excluding self */
+	d_rank_list_t		excluded_list;
+	d_rank_t			excluded_ranks[1]; /* Excluding self */
 
 	/* TODO: An optional feature for future get all ranks between
 	* source node and destination in order to exclude them from
 	* being synchronized (as they already got updated)
 	**/
 #if 0
-	crt_rank_t		cur_rank;
+	d_rank_t			cur_rank;
 
 	cur_rank = src_node;
 	while (1) {
@@ -1569,7 +1569,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 	switch (sync_type.ivs_mode) {
 	case CRT_IV_SYNC_NONE:
-		C_GOTO(exit, rc = 0);
+		D_GOTO(exit, rc = 0);
 
 	case CRT_IV_SYNC_EAGER:
 		sync = true;
@@ -1580,8 +1580,8 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		break;
 
 	default:
-		C_ERROR("Unknown ivs_mode %d\n", sync_type.ivs_mode);
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("Unknown ivs_mode %d\n", sync_type.ivs_mode);
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	/* Exclude self from corpc */
@@ -1598,16 +1598,16 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 					NULL, iv_value ? false : true,
 					user_priv);
 	else {
-		C_ERROR("Unknown ivs_event %d\n", sync_type.ivs_event);
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("Unknown ivs_event %d\n", sync_type.ivs_event);
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	if (iv_value != NULL) {
 		rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value,
 				CRT_BULK_RO, &local_bulk);
 		if (rc != 0) {
-			C_ERROR("ctt_bulk_create() failed; rc=%d\n", rc);
-			C_GOTO(exit, rc);
+			D_ERROR("ctt_bulk_create() failed; rc=%d\n", rc);
+			D_GOTO(exit, rc);
 		}
 	} else {
 		local_bulk = CRT_BULK_NULL;
@@ -1621,23 +1621,23 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 				ivns_internal->cii_gns.gn_tree_topo,
 				&corpc_req);
 	if (rc != 0) {
-		C_ERROR("crt_corpc_req_create() failed; rc=%d\n", rc);
-		C_GOTO(exit, rc);
+		D_ERROR("crt_corpc_req_create() failed; rc=%d\n", rc);
+		D_GOTO(exit, rc);
 	}
 
 	input = crt_req_get(corpc_req);
-	C_ASSERT(input != NULL);
+	D_ASSERT(input != NULL);
 
-	crt_iov_set(&input->ivs_nsid, &ivns_internal->cii_gns.gn_ivns_id,
-			sizeof(struct crt_ivns_id));
-	crt_iov_set(&input->ivs_key, iv_key->iov_buf, iv_key->iov_buf_len);
-	crt_iov_set(&input->ivs_sync_type, &sync_type, sizeof(crt_iv_sync_t));
+	d_iov_set(&input->ivs_nsid, &ivns_internal->cii_gns.gn_ivns_id,
+		 sizeof(struct crt_ivns_id));
+	d_iov_set(&input->ivs_key, iv_key->iov_buf, iv_key->iov_buf_len);
+	d_iov_set(&input->ivs_sync_type, &sync_type, sizeof(crt_iv_sync_t));
 	input->ivs_class_id = class_id;
 
-	C_ALLOC_PTR(iv_sync_cb);
+	D_ALLOC_PTR(iv_sync_cb);
 	if (iv_sync_cb == NULL) {
-		C_ERROR("Failed to allocate iv_sync_cb");
-		C_GOTO(exit, rc = -CER_NOMEM);
+		D_ERROR("Failed to allocate iv_sync_cb");
+		D_GOTO(exit, rc = -CER_NOMEM);
 	}
 
 	iv_sync_cb->isc_bulk_hdl = local_bulk;
@@ -1652,10 +1652,10 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		iv_sync_cb->isc_class_id = class_id;
 
 		/* Copy iv_key over as it will get destroyed after this call */
-		C_ALLOC(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf_len);
+		D_ALLOC(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf_len);
 		if (iv_sync_cb->isc_iv_key.iov_buf == NULL) {
-			C_ERROR("Failed to allocate isc_iv_key::iov_buf");
-			C_GOTO(exit, rc = -CER_NOMEM);
+			D_ERROR("Failed to allocate isc_iv_key::iov_buf");
+			D_GOTO(exit, rc = -CER_NOMEM);
 		}
 
 		memcpy(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf,
@@ -1672,7 +1672,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	}
 
 	rc = crt_req_send(corpc_req, handle_ivsync_response, iv_sync_cb);
-	C_ASSERT(rc == 0);
+	D_ASSERT(rc == 0);
 
 exit:
 	if (sync == false)
@@ -1684,10 +1684,10 @@ exit:
 			crt_bulk_free(local_bulk);
 
 		if (iv_sync_cb) {
-			C_FREE_PTR(iv_sync_cb);
+			D_FREE_PTR(iv_sync_cb);
 
 			if (iv_sync_cb->isc_iv_key.iov_buf)
-				C_FREE(iv_sync_cb->isc_iv_key.iov_buf,
+				D_FREE(iv_sync_cb->isc_iv_key.iov_buf,
 					iv_sync_cb->isc_iv_key.iov_buf_len);
 		}
 	}
@@ -1709,10 +1709,10 @@ struct update_cb_info {
 
 	/* Local bulk handle and associated iv value */
 	crt_bulk_t			uci_bulk_hdl;
-	crt_sg_list_t			uci_iv_value;
+	d_sg_list_t			uci_iv_value;
 
 	/* Caller of the crt_iv_update() API */
-	crt_rank_t			uci_caller_rank;
+	d_rank_t				uci_caller_rank;
 
 	/* Sync type associated with this update */
 	crt_iv_sync_t			uci_sync_type;
@@ -1745,14 +1745,14 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL) {
 			iv_ops = crt_iv_ops_get(iv_info->uci_ivns_internal,
 						iv_info->uci_class_id);
-			C_ASSERT(iv_ops != NULL);
+			D_ASSERT(iv_ops != NULL);
 
 			rc = iv_ops->ivo_on_put(iv_info->uci_ivns_internal,
 						&iv_info->uci_iv_value,
 						iv_info->uci_user_priv);
 
 			if (rc != 0) {
-				C_ERROR("ivo_on_put() failed; rc=%d\n", rc);
+				D_ERROR("ivo_on_put() failed; rc=%d\n", rc);
 				child_output->rc = rc;
 			} else {
 				child_output->rc = output->rc;
@@ -1763,12 +1763,12 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 
 		/* Fatal if reply send fails */
 		rc = crt_reply_send(iv_info->uci_child_rpc);
-		C_ASSERT(rc == 0);
+		D_ASSERT(rc == 0);
 
 		rc = crt_req_decref(iv_info->uci_child_rpc);
-		C_ASSERT(rc == 0);
+		D_ASSERT(rc == 0);
 	} else {
-		crt_sg_list_t *tmp_iv_value;
+		d_sg_list_t *tmp_iv_value;
 		void *priv;
 
 		if (iv_info->uci_bulk_hdl == NULL)
@@ -1778,7 +1778,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 
 		iv_ops = crt_iv_ops_get(iv_info->uci_ivns_internal,
 					iv_info->uci_class_id);
-		C_ASSERT(iv_ops != NULL);
+		D_ASSERT(iv_ops != NULL);
 
 		/* Since ivsysnc_rpc_issue will do local node refresh,
 		 * let's get the write access here.
@@ -1786,7 +1786,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		rc = iv_ops->ivo_on_get(iv_info->uci_ivns_internal,
 					&input->ivu_key, 0, CRT_IV_PERM_WRITE,
 					NULL, &priv);
-		C_ASSERT(rc == 0);
+		D_ASSERT(rc == 0);
 
 		crt_ivsync_rpc_issue(iv_info->uci_ivns_internal,
 					iv_info->uci_class_id,
@@ -1808,14 +1808,14 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
 		crt_bulk_free(iv_info->uci_bulk_hdl);
 
-	C_FREE_PTR(iv_info);
+	D_FREE_PTR(iv_info);
 }
 
 /* Helper function to issue IV UPDATE RPC*/
 static int
-crt_ivu_rpc_issue(crt_rank_t dest_rank, crt_iv_key_t *iv_key,
-		crt_sg_list_t *iv_value, crt_iv_sync_t *sync_type,
-		crt_rank_t root_rank, struct update_cb_info *cb_info)
+crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
+		  d_sg_list_t *iv_value, crt_iv_sync_t *sync_type,
+		  d_rank_t root_rank, struct update_cb_info *cb_info)
 {
 	struct crt_ivns_internal	*ivns_internal;
 	struct iv_update_in		*input;
@@ -1832,8 +1832,8 @@ crt_ivu_rpc_issue(crt_rank_t dest_rank, crt_iv_key_t *iv_key,
 	rc = crt_req_create(ivns_internal->cii_ctx, &ep, CRT_OPC_IV_UPDATE,
 			    &rpc);
 	if (rc != 0) {
-		C_ERROR("crt_req_create() failed; rc=%d\n", rc);
-		C_GOTO(exit, rc);
+		D_ERROR("crt_req_create() failed; rc=%d\n", rc);
+		D_GOTO(exit, rc);
 	}
 
 	input = crt_req_get(rpc);
@@ -1844,8 +1844,8 @@ crt_ivu_rpc_issue(crt_rank_t dest_rank, crt_iv_key_t *iv_key,
 				CRT_BULK_RW, &local_bulk);
 
 		if (rc != 0) {
-			C_ERROR("crt_bulk_create() failed; rc=%d\n", rc);
-			C_GOTO(exit, rc);
+			D_ERROR("crt_bulk_create() failed; rc=%d\n", rc);
+			D_GOTO(exit, rc);
 		}
 	} else {
 		local_bulk = CRT_BULK_NULL;
@@ -1854,7 +1854,7 @@ crt_ivu_rpc_issue(crt_rank_t dest_rank, crt_iv_key_t *iv_key,
 	input->ivu_iv_value_bulk = local_bulk;
 	cb_info->uci_bulk_hdl = local_bulk;
 
-	crt_iov_set(&input->ivu_key, iv_key->iov_buf, iv_key->iov_buf_len);
+	d_iov_set(&input->ivu_key, iv_key->iov_buf, iv_key->iov_buf_len);
 	input->ivu_class_id = cb_info->uci_class_id;
 	input->ivu_root_node = root_rank;
 	input->ivu_caller_node = cb_info->uci_caller_rank;
@@ -1864,16 +1864,16 @@ crt_ivu_rpc_issue(crt_rank_t dest_rank, crt_iv_key_t *iv_key,
 		cb_info->uci_iv_value = *iv_value;
 
 
-	crt_iov_set(&input->ivu_nsid, &ivns_internal->cii_gns.gn_ivns_id,
-			sizeof(struct crt_ivns_id));
+	d_iov_set(&input->ivu_nsid, &ivns_internal->cii_gns.gn_ivns_id,
+		 sizeof(struct crt_ivns_id));
 
-	crt_iov_set(&input->ivu_sync_type, sync_type, sizeof(crt_iv_sync_t));
+	d_iov_set(&input->ivu_sync_type, sync_type, sizeof(crt_iv_sync_t));
 
 	cb_info->uci_sync_type = *sync_type;
 
 	rc = crt_req_send(rpc, handle_ivupdate_response, cb_info);
 	if (rc != 0)
-		C_ERROR("crt_req_send() failed; rc=%d\n", rc);
+		D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 
 
 exit:
@@ -1892,7 +1892,7 @@ struct bulk_update_cb_info {
 	/* Local bulk handle to free */
 	crt_bulk_t		buc_bulk_hdl;
 	/* IV value */
-	crt_sg_list_t		buc_iv_value;
+	d_sg_list_t		buc_iv_value;
 	/* Users private data */
 	void			*buc_user_priv;
 };
@@ -1908,7 +1908,7 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 	struct iv_update_out		*output;
 	struct update_cb_info		*update_cb_info = NULL;
 	int				rc = 0;
-	crt_rank_t			next_rank;
+	d_rank_t				next_rank;
 	int				update_rc;
 	crt_iv_sync_t			*sync_type;
 
@@ -1920,18 +1920,18 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 
 	/* ivns_internal and iv_ops better not be NULL at this point */
 	ivns_internal = crt_ivns_internal_lookup(ivns_id);
-	C_ASSERT(ivns_internal != NULL);
+	D_ASSERT(ivns_internal != NULL);
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ivu_class_id);
-	C_ASSERT(iv_ops != NULL);
+	D_ASSERT(iv_ops != NULL);
 
 	output = crt_reply_get(info->bci_bulk_desc->bd_rpc);
-	C_ASSERT(output != NULL);
+	D_ASSERT(output != NULL);
 
 	if (info->bci_rc != 0) {
-		C_ERROR("bulk update transfer failed; rc = %d",
+		D_ERROR("bulk update transfer failed; rc = %d",
 			info->bci_rc);
-		C_GOTO(send_error, rc = info->bci_rc);
+		D_GOTO(send_error, rc = info->bci_rc);
 	}
 
 	update_rc = iv_ops->ivo_on_update(ivns_internal,
@@ -1942,10 +1942,10 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 		next_rank = crt_iv_parent_get(ivns_internal,
 					input->ivu_root_node);
 
-		C_ALLOC_PTR(update_cb_info);
+		D_ALLOC_PTR(update_cb_info);
 		if (update_cb_info == NULL) {
-			C_ERROR("failed to allocate update_cb_info");
-			C_GOTO(send_error, rc = -CER_NOMEM);
+			D_ERROR("failed to allocate update_cb_info");
+			D_GOTO(send_error, rc = -CER_NOMEM);
 		}
 
 		sync_type = (crt_iv_sync_t *)input->ivu_sync_type.iov_buf;
@@ -1971,17 +1971,17 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 		crt_req_decref(info->bci_bulk_desc->bd_rpc);
 
 	} else {
-		C_GOTO(send_error, rc = update_rc);
+		D_GOTO(send_error, rc = update_rc);
 	}
 
 	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
-	C_FREE_PTR(cb_info);
+	D_FREE_PTR(cb_info);
 
 	return rc;
 
 send_error:
 	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
-	C_FREE_PTR(cb_info);
+	D_FREE_PTR(cb_info);
 
 	output->rc = rc;
 
@@ -2000,12 +2000,12 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	struct crt_ivns_id		*ivns_id;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;
-	crt_sg_list_t			iv_value;
+	d_sg_list_t			iv_value;
 	struct crt_bulk_desc		bulk_desc;
 	crt_bulk_t			local_bulk_handle;
 	struct bulk_update_cb_info	*cb_info;
 	crt_iv_sync_t			*sync_type;
-	crt_rank_t			next_rank;
+	d_rank_t				next_rank;
 	struct update_cb_info		*update_cb_info;
 	int				size;
 	void				*user_priv;
@@ -2015,22 +2015,22 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	input = crt_req_get(rpc_req);
 	output = crt_reply_get(rpc_req);
 
-	C_ASSERT(input != NULL);
-	C_ASSERT(output != NULL);
+	D_ASSERT(input != NULL);
+	D_ASSERT(output != NULL);
 
 	ivns_id = (struct crt_ivns_id *)input->ivu_nsid.iov_buf;
 	ivns_internal = crt_ivns_internal_lookup(ivns_id);
 
 	if (ivns_internal == NULL) {
-		C_ERROR("Invalid internal ivns\n");
-		C_GOTO(send_error, rc = -CER_INVAL);
+		D_ERROR("Invalid internal ivns\n");
+		D_GOTO(send_error, rc = -CER_INVAL);
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ivu_class_id);
 
 	if (iv_ops == NULL) {
-		C_ERROR("Invalid class id passed\n");
-		C_GOTO(send_error, rc = -CER_INVAL);
+		D_ERROR("Invalid class id passed\n");
+		D_GOTO(send_error, rc = -CER_INVAL);
 	}
 
 	if (input->ivu_iv_value_bulk == CRT_BULK_NULL) {
@@ -2042,10 +2042,10 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 			next_rank = crt_iv_parent_get(ivns_internal,
 						input->ivu_root_node);
 
-			C_ALLOC_PTR(update_cb_info);
+			D_ALLOC_PTR(update_cb_info);
 			if (update_cb_info == NULL) {
-				C_ERROR("failed to allocate update_cb_info");
-				C_GOTO(send_error, rc = -CER_NOMEM);
+				D_ERROR("failed to allocate update_cb_info");
+				D_GOTO(send_error, rc = -CER_NOMEM);
 			}
 
 			sync_type = (crt_iv_sync_t *)
@@ -2068,18 +2068,18 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 			output->rc = rc;
 			rc = crt_reply_send(rpc_req);
 		} else {
-			C_GOTO(send_error, rc);
+			D_GOTO(send_error, rc);
 		}
 
-		C_GOTO(exit, rc = 0);
+		D_GOTO(exit, rc = 0);
 	}
 
 	memset(&iv_value, 0, sizeof(iv_value));
 	rc = iv_ops->ivo_on_get(ivns_internal, &input->ivu_key, 0,
 				CRT_IV_PERM_WRITE, &iv_value, &user_priv);
 	if (rc != 0) {
-		C_ERROR("ivo_on_get() failed; rc=%d\n", rc);
-		C_GOTO(send_error, rc);
+		D_ERROR("ivo_on_get() failed; rc=%d\n", rc);
+		D_GOTO(send_error, rc);
 	}
 
 	size = 0;
@@ -2089,8 +2089,8 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	rc = crt_bulk_create(rpc_req->cr_ctx, &iv_value, CRT_BULK_RW,
 			&local_bulk_handle);
 	if (rc != 0) {
-		C_ERROR("crt_bulk_create() failed; rc=%d\n", rc);
-		C_GOTO(send_error, rc);
+		D_ERROR("crt_bulk_create() failed; rc=%d\n", rc);
+		D_GOTO(send_error, rc);
 	}
 
 	bulk_desc.bd_rpc = rpc_req;
@@ -2101,12 +2101,12 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	bulk_desc.bd_local_off = 0;
 	bulk_desc.bd_len = size;
 
-	C_ALLOC_PTR(cb_info);
+	D_ALLOC_PTR(cb_info);
 	if (cb_info == NULL) {
-		C_ERROR("Failed to allocate memory\n");
+		D_ERROR("Failed to allocate memory\n");
 		rc = -CER_NOMEM;
 		crt_bulk_free(local_bulk_handle);
-		C_GOTO(send_error, rc = -CER_NOMEM);
+		D_GOTO(send_error, rc = -CER_NOMEM);
 	}
 
 	cb_info->buc_input = input;
@@ -2119,10 +2119,10 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	rc = crt_bulk_transfer(&bulk_desc, bulk_update_transfer_done,
 				cb_info, 0);
 	if (rc != 0) {
-		C_ERROR("crt_bulk_transfer() failed; rc=%d\n", rc);
+		D_ERROR("crt_bulk_transfer() failed; rc=%d\n", rc);
 		crt_bulk_free(local_bulk_handle);
 		crt_req_decref(rpc_req);
-		C_GOTO(send_error, rc);
+		D_GOTO(send_error, rc);
 	}
 
 exit:
@@ -2136,35 +2136,35 @@ send_error:
 
 static int
 crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
-	      crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-	      crt_sg_list_t *iv_value, crt_iv_shortcut_t shortcut,
-	      crt_iv_sync_t sync_type, crt_iv_comp_cb_t update_comp_cb,
-	      void *cb_arg)
+		       crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
+		       d_sg_list_t *iv_value, crt_iv_shortcut_t shortcut,
+		       crt_iv_sync_t sync_type, crt_iv_comp_cb_t update_comp_cb,
+		       void *cb_arg)
 {
 	struct crt_iv_ops		*iv_ops;
 	struct crt_ivns_internal	*ivns_internal;
-	crt_rank_t			root_rank;
-	crt_rank_t			next_node;
+	d_rank_t				 root_rank;
+	d_rank_t				 next_node;
 	struct update_cb_info		*cb_info;
 	void				*priv;
-	int				rc = 0;
+	int				 rc = 0;
 
 	ivns_internal = crt_ivns_internal_get(ivns);
 	if (ivns_internal == NULL) {
-		C_ERROR("Invalid ivns specified\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("Invalid ivns specified\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	if (iv_ops == NULL) {
-		C_ERROR("Invalid class_id specified\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("Invalid class_id specified\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 
 	rc = iv_ops->ivo_on_hash(ivns, iv_key, &root_rank);
 	if (rc != 0) {
-		C_ERROR("ivo_on_hash() failed; rc=%d\n", rc);
-		C_GOTO(exit, rc);
+		D_ERROR("ivo_on_hash() failed; rc=%d\n", rc);
+		D_GOTO(exit, rc);
 	}
 
 	rc = iv_ops->ivo_on_get(ivns, iv_key,
@@ -2190,15 +2190,15 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		else if (shortcut == CRT_IV_SHORTCUT_NONE)
 			next_node = crt_iv_parent_get(ivns_internal, root_rank);
 		else {
-			C_ERROR("Unknown shortcut argument %d\n", shortcut);
-			C_GOTO(put, rc = -CER_INVAL);
+			D_ERROR("Unknown shortcut argument %d\n", shortcut);
+			D_GOTO(put, rc = -CER_INVAL);
 		}
 
-		C_ALLOC_PTR(cb_info);
+		D_ALLOC_PTR(cb_info);
 
 		if (cb_info == NULL) {
-			C_ERROR("Failed to allocate cb_info\n");
-			C_GOTO(put, rc = -CER_NOMEM);
+			D_ERROR("Failed to allocate cb_info\n");
+			D_GOTO(put, rc = -CER_NOMEM);
 		}
 
 		cb_info->uci_comp_cb = update_comp_cb;
@@ -2213,16 +2213,16 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 					&sync_type, root_rank, cb_info);
 
 		if (rc != 0) {
-			C_ERROR("crt_ivu_rpc_issue() failed; rc=%d\n", rc);
-			C_FREE_PTR(cb_info);
-			C_GOTO(put, rc);
+			D_ERROR("crt_ivu_rpc_issue() failed; rc=%d\n", rc);
+			D_FREE_PTR(cb_info);
+			D_GOTO(put, rc);
 		}
 	} else {
-		C_ERROR("ivo_on_update failed with rc = %d\n", rc);
+		D_ERROR("ivo_on_update failed with rc = %d\n", rc);
 
 		update_comp_cb(ivns, class_id, iv_key, NULL,
 			       iv_value, rc, cb_arg);
-		C_GOTO(put, rc);
+		D_GOTO(put, rc);
 	}
 
 put:
@@ -2234,7 +2234,7 @@ exit:
 int
 crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
 	      crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-	      crt_sg_list_t *iv_value, crt_iv_shortcut_t shortcut,
+	      d_sg_list_t *iv_value, crt_iv_shortcut_t shortcut,
 	      crt_iv_sync_t sync_type, crt_iv_comp_cb_t update_comp_cb,
 	      void *cb_arg)
 {
@@ -2247,12 +2247,12 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
 	* All other checks are performed inside of crt_iv_update_interna.
 	*/
 	if (iv_value == NULL) {
-		C_ERROR("iv_value is NULL\n");
+		D_ERROR("iv_value is NULL\n");
 
 		rc = -CER_INVAL;
 		update_comp_cb(ivns, class_id, iv_key, NULL, iv_value,
-			       rc, cb_arg);
-		C_GOTO(exit, rc);
+			rc, cb_arg);
+		D_GOTO(exit, rc);
 	}
 
 	rc = crt_iv_update_internal(ivns, class_id, iv_key, iv_ver, iv_value,
@@ -2280,35 +2280,35 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 	struct crt_iv_ops		*iv_ops;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_grp_priv		*grp_priv;
-	crt_rank_t			 root_rank;
-	crt_rank_t			 self_rank;
+	d_rank_t				 root_rank;
+	d_rank_t				 self_rank;
 	int				 rc = 0;
 
 	if (iv_key == NULL || nchildren == NULL) {
-		C_ERROR("invalid parameter (NULL key or nchildren).\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("invalid parameter (NULL key or nchildren).\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 	ivns_internal = crt_ivns_internal_get(ivns);
 	if (ivns_internal == NULL) {
-		C_ERROR("Invalid ivns specified\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("Invalid ivns specified\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 	rc = crt_group_rank(ivns_internal->cii_grp, &self_rank);
 	if (rc != 0) {
-		C_ERROR("crt_group_rank(grp %s) failed, rc=%d.\n",
+		D_ERROR("crt_group_rank(grp %s) failed, rc=%d.\n",
 			ivns_internal->cii_grp->cg_grpid, rc);
-		C_GOTO(exit, rc);
+		D_GOTO(exit, rc);
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	if (iv_ops == NULL) {
-		C_ERROR("Invalid class_id specified\n");
-		C_GOTO(exit, rc = -CER_INVAL);
+		D_ERROR("Invalid class_id specified\n");
+		D_GOTO(exit, rc = -CER_INVAL);
 	}
 	rc = iv_ops->ivo_on_hash(ivns, iv_key, &root_rank);
 	if (rc != 0) {
-		C_ERROR("ivo_on_hash() failed; rc=%d\n", rc);
-		C_GOTO(exit, rc);
+		D_ERROR("ivo_on_hash() failed; rc=%d\n", rc);
+		D_GOTO(exit, rc);
 	}
 
 	grp_priv = crt_grp_pub2priv(ivns_internal->cii_grp);
@@ -2316,7 +2316,7 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 		ivns_internal->cii_gns.gn_tree_topo, root_rank, self_rank,
 		nchildren);
 	if (rc != 0)
-		C_ERROR("crt_tree_get_nchildren(grp %s, root %d self %d), "
+		D_ERROR("crt_tree_get_nchildren(grp %s, root %d self %d), "
 			"failed, rc=%d.\n", ivns_internal->cii_grp->cg_grpid,
 			root_rank, self_rank, rc);
 

@@ -39,67 +39,67 @@
  * This file is part of CaRT. It gives out the generic tree topo related
  * function implementation.
  */
-#define C_LOGFAC	CD_FAC(grp)
+#define D_LOGFAC	DD_FAC(grp)
 
 #include "crt_internal.h"
 
 static int
 crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-			       crt_rank_list_t *exclude_ranks, crt_rank_t root,
-			       crt_rank_t self, crt_rank_t *grp_size,
-			       uint32_t *grp_root, crt_rank_t *grp_self,
-			       crt_rank_list_t **result_grp_rank_list,
+			       d_rank_list_t *exclude_ranks, d_rank_t root,
+			       d_rank_t self, d_rank_t *grp_size,
+			       uint32_t *grp_root, d_rank_t *grp_self,
+			       d_rank_list_t **result_grp_rank_list,
 			       bool *allocated)
 {
-	crt_rank_list_t		*grp_rank_list = NULL;
+	d_rank_list_t		*grp_rank_list = NULL;
 	int			 rc = 0;
 
 	if (exclude_ranks == NULL || exclude_ranks->rl_nr.num == 0) {
 		grp_rank_list = grp_priv->gp_membs;
 		*grp_size = grp_priv->gp_size;
-		C_ASSERT(*grp_size == grp_rank_list->rl_nr.num);
+		D_ASSERT(*grp_size == grp_rank_list->rl_nr.num);
 		*grp_root = root;
 		*grp_self = self;
 		*allocated = false;
 	} else {
 		/* grp_priv->gp_membs/exclude_ranks already sorted and unique */
-		rc = crt_rank_list_dup(&grp_rank_list, grp_priv->gp_membs,
-				       true /* input */);
+		rc = d_rank_list_dup(&grp_rank_list, grp_priv->gp_membs,
+				    true /* input */);
 		if (rc != 0) {
-			C_ERROR("crt_rank_list_dup failed, rc: %d.\n", rc);
-			C_GOTO(out, rc);
+			D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
+			D_GOTO(out, rc);
 		}
-		C_ASSERT(grp_rank_list != NULL);
-		crt_rank_list_filter(exclude_ranks, grp_rank_list,
-				     true /* input */, true /* exclude */);
+		D_ASSERT(grp_rank_list != NULL);
+		d_rank_list_filter(exclude_ranks, grp_rank_list,
+				  true /* input */, true /* exclude */);
 
 		if (grp_rank_list->rl_nr.num == 0) {
-			C_DEBUG("crt_rank_list_filter(group %s) get empty.\n",
+			D_DEBUG("d_rank_list_filter(group %s) get empty.\n",
 				grp_priv->gp_pub.cg_grpid);
-			crt_rank_list_free(grp_rank_list);
+			d_rank_list_free(grp_rank_list);
 			grp_rank_list = NULL;
-			C_GOTO(out, rc = 0);
+			D_GOTO(out, rc = 0);
 		}
 
 		*allocated = true;
 		*grp_size = grp_rank_list->rl_nr.num;
-		rc = crt_idx_in_rank_list(grp_rank_list,
-					  grp_priv->gp_membs->rl_ranks[root],
-					  grp_root, true /* input */);
+		rc = d_idx_in_rank_list(grp_rank_list,
+				       grp_priv->gp_membs->rl_ranks[root],
+				       grp_root, true /* input */);
 		if (rc != 0) {
-			C_ERROR("crt_idx_in_rank_list (group %s, rank %d), "
+			D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
 				"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
 				root, rc);
-			C_GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
-		rc = crt_idx_in_rank_list(grp_rank_list,
-					  grp_priv->gp_membs->rl_ranks[self],
-					  grp_self, true /* input */);
+		rc = d_idx_in_rank_list(grp_rank_list,
+				       grp_priv->gp_membs->rl_ranks[self],
+				       grp_self, true /* input */);
 		if (rc != 0) {
-			C_ERROR("crt_idx_in_rank_list (group %s, rank %d), "
+			D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
 				"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
 				self, rc);
-			C_GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 	}
 out:
@@ -110,14 +110,14 @@ out:
 
 #define CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self)	       \
 	do {								       \
-		C_ASSERT(grp_priv != NULL && grp_priv->gp_membs != NULL);      \
-		C_ASSERT(root < grp_priv->gp_size && self < grp_priv->gp_size);\
-		C_ASSERT(crt_tree_topo_valid(tree_topo));		       \
+		D_ASSERT(grp_priv != NULL && grp_priv->gp_membs != NULL);      \
+		D_ASSERT(root < grp_priv->gp_size && self < grp_priv->gp_size);\
+		D_ASSERT(crt_tree_topo_valid(tree_topo));		       \
 		tree_type = crt_tree_type(tree_topo);			       \
 		tree_ratio = crt_tree_ratio(tree_topo);			       \
-		C_ASSERT(tree_type >= CRT_TREE_MIN &&			       \
+		D_ASSERT(tree_type >= CRT_TREE_MIN &&			       \
 			 tree_type <= CRT_TREE_MAX);			       \
-		C_ASSERT(tree_type == CRT_TREE_FLAT ||			       \
+		D_ASSERT(tree_type == CRT_TREE_FLAT ||			       \
 			 (tree_ratio >= CRT_TREE_MIN_RATIO &&		       \
 			  tree_ratio <= CRT_TREE_MAX_RATIO));		       \
 	} while (0)
@@ -130,11 +130,11 @@ out:
  */
 int
 crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-		       crt_rank_list_t *exclude_ranks, int tree_topo,
-		       crt_rank_t root, crt_rank_t self, uint32_t *nchildren)
+		       d_rank_list_t *exclude_ranks, int tree_topo,
+		       d_rank_t root, d_rank_t self, uint32_t *nchildren)
 {
-	crt_rank_list_t		*grp_rank_list = NULL;
-	crt_rank_t		 grp_root, grp_self;
+	d_rank_list_t		*grp_rank_list = NULL;
+	d_rank_t			 grp_root, grp_self;
 	bool			 allocated = false;
 	uint32_t		 tree_type, tree_ratio;
 	uint32_t		 grp_size;
@@ -143,8 +143,8 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (nchildren == NULL) {
-		C_ERROR("invalid parameter of NULL nchildren.\n");
-		C_GOTO(out, rc = -CER_INVAL);
+		D_ERROR("invalid parameter of NULL nchildren.\n");
+		D_GOTO(out, rc = -CER_INVAL);
 	}
 
 	/*
@@ -156,28 +156,28 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 					    &grp_self, &grp_rank_list,
 					    &allocated);
 	if (rc != 0) {
-		C_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
+		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
 			"self %d) failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
 			root, self, rc);
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 	if (grp_rank_list == NULL) {
-		C_ERROR("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
+		D_ERROR("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
 			grp_priv->gp_pub.cg_grpid);
-		C_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -CER_INVAL);
 	}
 
 	tops = crt_tops[tree_type];
 	rc = tops->to_get_children_cnt(grp_size, tree_ratio, grp_root, grp_self,
 				       nchildren);
 	if (rc != 0)
-		C_ERROR("to_get_children_cnt (group %s, root %d, self %d) "
+		D_ERROR("to_get_children_cnt (group %s, root %d, self %d) "
 			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
 			root, self, rc);
 
 out:
 	if (allocated)
-		crt_rank_list_free(grp_rank_list);
+		d_rank_list_free(grp_rank_list);
 	return rc;
 }
 
@@ -189,13 +189,13 @@ out:
  */
 int
 crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-		      crt_rank_list_t *exclude_ranks, int tree_topo,
-		      crt_rank_t root, crt_rank_t self,
-		      crt_rank_list_t **children_rank_list)
+		      d_rank_list_t *exclude_ranks, int tree_topo,
+		      d_rank_t root, d_rank_t self,
+		      d_rank_list_t **children_rank_list)
 {
-	crt_rank_list_t		*grp_rank_list = NULL;
-	crt_rank_list_t		*result_rank_list = NULL;
-	crt_rank_t		 grp_root, grp_self;
+	d_rank_list_t		*grp_rank_list = NULL;
+	d_rank_list_t		*result_rank_list = NULL;
+	d_rank_t			 grp_root, grp_self;
 	bool			 allocated = false;
 	uint32_t		 tree_type, tree_ratio;
 	uint32_t		 grp_size, nchildren;
@@ -205,8 +205,8 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (children_rank_list == NULL) {
-		C_ERROR("invalid parameter of NULL children_rank_list.\n");
-		C_GOTO(out, rc = -CER_INVAL);
+		D_ERROR("invalid parameter of NULL children_rank_list.\n");
+		D_GOTO(out, rc = -CER_INVAL);
 	}
 
 	/*
@@ -218,48 +218,48 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 					    &grp_self, &grp_rank_list,
 					    &allocated);
 	if (rc != 0) {
-		C_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
+		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
 			"self %d) failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
 			root, self, rc);
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 	if (grp_rank_list == NULL) {
-		C_DEBUG("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
+		D_DEBUG("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
 			grp_priv->gp_pub.cg_grpid);
 		*children_rank_list = NULL;
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	tops = crt_tops[tree_type];
 	rc = tops->to_get_children_cnt(grp_size, tree_ratio, grp_root, grp_self,
 				       &nchildren);
 	if (rc != 0) {
-		C_ERROR("to_get_children_cnt (group %s, root %d, self %d) "
+		D_ERROR("to_get_children_cnt (group %s, root %d, self %d) "
 			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
 			root, self, rc);
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 	if (nchildren == 0) {
 		*children_rank_list = NULL;
-		C_GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 	}
-	result_rank_list = crt_rank_list_alloc(nchildren);
+	result_rank_list = d_rank_list_alloc(nchildren);
 	if (result_rank_list == NULL)
-		C_GOTO(out, rc = -CER_NOMEM);
-	C_ALLOC(tree_children, nchildren * sizeof(uint32_t));
+		D_GOTO(out, rc = -CER_NOMEM);
+	D_ALLOC(tree_children, nchildren * sizeof(uint32_t));
 	if (tree_children == NULL) {
-		crt_rank_list_free(result_rank_list);
-		C_GOTO(out, rc = -CER_NOMEM);
+		d_rank_list_free(result_rank_list);
+		D_GOTO(out, rc = -CER_NOMEM);
 	}
 	rc = tops->to_get_children(grp_size, tree_ratio, grp_root, grp_self,
 				   tree_children);
 	if (rc != 0) {
-		C_ERROR("to_get_children (group %s, root %d, self %d) "
+		D_ERROR("to_get_children (group %s, root %d, self %d) "
 			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
 			root, self, rc);
-		crt_rank_list_free(result_rank_list);
-		C_FREE(tree_children, nchildren * sizeof(uint32_t));
-		C_GOTO(out, rc);
+		d_rank_list_free(result_rank_list);
+		D_FREE(tree_children, nchildren * sizeof(uint32_t));
+		D_GOTO(out, rc);
 	}
 
 	for (i = 0; i < nchildren; i++)
@@ -270,17 +270,17 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 out:
 	if (allocated)
-		crt_rank_list_free(grp_rank_list);
+		d_rank_list_free(grp_rank_list);
 	return rc;
 }
 
 int
 crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
-		    crt_rank_list_t *exclude_ranks, int tree_topo,
-		    crt_rank_t root, crt_rank_t self, crt_rank_t *parent_rank)
+		    d_rank_list_t *exclude_ranks, int tree_topo,
+		    d_rank_t root, d_rank_t self, d_rank_t *parent_rank)
 {
-	crt_rank_list_t		*grp_rank_list = NULL;
-	crt_rank_t		 grp_root, grp_self;
+	d_rank_list_t		*grp_rank_list = NULL;
+	d_rank_t			 grp_root, grp_self;
 	bool			 allocated = false;
 	uint32_t		 tree_type, tree_ratio;
 	uint32_t		 grp_size, tree_parent;
@@ -289,8 +289,8 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (parent_rank == NULL) {
-		C_ERROR("invalid parameter of NULL parent_rank.\n");
-		C_GOTO(out, rc = -CER_INVAL);
+		D_ERROR("invalid parameter of NULL parent_rank.\n");
+		D_GOTO(out, rc = -CER_INVAL);
 	}
 
 	/*
@@ -302,22 +302,22 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 					    &grp_self, &grp_rank_list,
 					    &allocated);
 	if (rc != 0) {
-		C_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
+		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
 			"self %d) failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
 			root, self, rc);
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 	if (grp_rank_list == NULL) {
-		C_DEBUG("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
+		D_DEBUG("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
 			grp_priv->gp_pub.cg_grpid);
-		C_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -CER_INVAL);
 	}
 
 	tops = crt_tops[tree_type];
 	rc = tops->to_get_parent(grp_size, tree_ratio, grp_root, grp_self,
 				 &tree_parent);
 	if (rc != 0) {
-		C_ERROR("to_get_parent (group %s, root %d, self %d) failed, "
+		D_ERROR("to_get_parent (group %s, root %d, self %d) failed, "
 			"rc: %d.\n", grp_priv->gp_pub.cg_grpid, root, self, rc);
 	}
 
@@ -325,7 +325,7 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 out:
 	if (allocated)
-		crt_rank_list_free(grp_rank_list);
+		d_rank_list_free(grp_rank_list);
 	return rc;
 }
 

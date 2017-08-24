@@ -60,7 +60,7 @@ static void *progress_handler(void *arg)
 	do {
 		rc = crt_progress(gecho.crt_ctx, 1, NULL, NULL);
 		if (rc != 0 && rc != -CER_TIMEDOUT) {
-			C_ERROR("crt_progress failed rc: %d.\n", rc);
+			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
 
@@ -69,7 +69,7 @@ static void *progress_handler(void *arg)
 				rc = crt_progress(gecho.extra_ctx[i], 1, NULL,
 						  NULL);
 				if (rc != 0 && rc != -CER_TIMEDOUT) {
-					C_ERROR("crt_progress failed rc: %d.\n",
+					D_ERROR("crt_progress failed rc: %d.\n",
 					       rc);
 					break;
 				}
@@ -112,12 +112,12 @@ echo_srv_corpc_example(crt_rpc_t *rpc_req)
 {
 	struct crt_echo_corpc_example_req *req;
 	struct crt_echo_corpc_example_reply *reply;
-	crt_rank_t my_rank;
+	d_rank_t my_rank;
 	int rc = 0;
 
 	req = crt_req_get(rpc_req);
 	reply = crt_reply_get(rpc_req);
-	C_ASSERT(req != NULL && reply != NULL);
+	D_ASSERT(req != NULL && reply != NULL);
 
 	crt_group_rank(NULL, &my_rank);
 	reply->co_result = my_rank;
@@ -131,9 +131,9 @@ echo_srv_corpc_example(crt_rpc_t *rpc_req)
 int corpc_example_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 {
 	struct crt_echo_corpc_example_reply *reply_source, *reply_result;
-	crt_rank_t my_rank;
+	d_rank_t my_rank;
 
-	C_ASSERT(source != NULL && result != NULL);
+	D_ASSERT(source != NULL && result != NULL);
 	reply_source = crt_reply_get(source);
 	reply_result = crt_reply_get(result);
 	reply_result->co_result += reply_source->co_result;
@@ -154,24 +154,24 @@ int bulk_test_cb(const struct crt_bulk_cb_info *cb_info)
 {
 	crt_rpc_t			*rpc_req;
 	struct crt_bulk_desc		*bulk_desc;
-	crt_bulk_t			local_bulk_hdl;
-	crt_iov_t			*iovs;
+	crt_bulk_t			 local_bulk_hdl;
+	d_iov_t				*iovs;
 	struct crt_echo_bulk_out_reply	*e_reply;
 	struct crt_echo_bulk_in_req	*e_req;
-	int				rc = 0;
+	int				 rc = 0;
 
 	rc = cb_info->bci_rc;
 	bulk_desc = cb_info->bci_bulk_desc;
 	/* printf("in bulk_test_cb, dci_rc: %d.\n", rc); */
 	rpc_req = bulk_desc->bd_rpc;
-	iovs = (crt_iov_t *)cb_info->bci_arg;
+	iovs = (d_iov_t *)cb_info->bci_arg;
 	assert(rpc_req != NULL && iovs != NULL);
 
 	local_bulk_hdl = bulk_desc->bd_local_hdl;
 	assert(local_bulk_hdl != NULL);
 
 	e_reply = crt_reply_get(rpc_req);
-	C_ASSERT(e_reply != NULL);
+	D_ASSERT(e_reply != NULL);
 	if (rc != 0) {
 		printf("bulk transferring failed, dci_rc: %d.\n", rc);
 		e_reply->ret = rc;
@@ -181,7 +181,7 @@ int bulk_test_cb(const struct crt_bulk_cb_info *cb_info)
 	/* calculate md5 checksum to verify data */
 	MD5_CTX md5_ctx;
 	unsigned char md5[16];
-	crt_string_t md5_str = (crt_string_t)malloc(33);
+	d_string_t md5_str = (d_string_t)malloc(33);
 
 	memset(md5_str, 0, 33);
 
@@ -194,7 +194,7 @@ int bulk_test_cb(const struct crt_bulk_cb_info *cb_info)
 	echo_md5_to_string(md5, md5_str);
 
 	e_req = crt_req_get(rpc_req);
-	C_ASSERT(e_req != NULL);
+	D_ASSERT(e_req != NULL);
 	rc = strcmp(md5_str, e_req->bulk_md5_ptr);
 	if (rc == 0) {
 		printf("data verification success, md5: %s.\n", md5_str);
@@ -236,17 +236,17 @@ out:
 void
 echo_srv_bulk_test(crt_rpc_t *rpc_req)
 {
-	crt_bulk_t			local_bulk_hdl;
-	crt_sg_list_t			sgl;
-	crt_iov_t			*iovs = NULL;
-	crt_size_t			bulk_len;
-	unsigned int			bulk_sgnum;
-	struct crt_bulk_desc		bulk_desc;
+	crt_bulk_t			 local_bulk_hdl;
+	d_sg_list_t			 sgl;
+	d_iov_t				*iovs = NULL;
+	d_size_t				 bulk_len;
+	unsigned int			 bulk_sgnum;
+	struct crt_bulk_desc		 bulk_desc;
 	struct crt_echo_bulk_in_req	*e_req;
-	int				rc = 0;
+	int				 rc = 0;
 
 	e_req = crt_req_get(rpc_req);
-	C_ASSERT(e_req != NULL);
+	D_ASSERT(e_req != NULL);
 	rc = crt_bulk_get_len(e_req->remote_bulk_hdl, &bulk_len);
 	assert(rc == 0);
 	rc = crt_bulk_get_sgnum(e_req->remote_bulk_hdl, &bulk_sgnum);
@@ -255,7 +255,7 @@ echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	       "bulk_len: %ld, bulk_sgnum: %d.\n",
 	       rpc_req->cr_opc, e_req->bulk_intro_msg, bulk_len, bulk_sgnum);
 
-	iovs = (crt_iov_t *)malloc(sizeof(crt_iov_t));
+	iovs = (d_iov_t *)malloc(sizeof(d_iov_t));
 	iovs[0].iov_buf = malloc(bulk_len);
 	iovs[0].iov_buf_len = bulk_len;
 	memset(iovs[0].iov_buf, 0, iovs[0].iov_buf_len);
@@ -280,7 +280,7 @@ echo_srv_bulk_test(crt_rpc_t *rpc_req)
 
 	/* user needs to register the complete_cb inside which can do:
 	 * 1) resource reclaim includes freeing the:
-	 *    a) the buffers for bulk, maybe also the crt_iov_t (iovs)
+	 *    a) the buffers for bulk, maybe also the d_iov_t (iovs)
 	 *    b) local bulk handle
 	 *    c) cbinfo if needed,
 	 * 2) reply to original RPC request (if the bulk is derived from a RPC)

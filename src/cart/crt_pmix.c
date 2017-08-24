@@ -38,7 +38,7 @@
 /**
  * This file is part of CaRT. It implements the interface with PMIx.
  */
-#define C_LOGFAC	CD_FAC(pmix)
+#define D_LOGFAC	DD_FAC(pmix)
 
 #include "crt_internal.h"
 
@@ -54,24 +54,24 @@ crt_pmix_init(void)
 	int			 rc = 0;
 
 	grp_gdata = crt_gdata.cg_grp;
-	C_ASSERT(grp_gdata != NULL);
-	C_ASSERT(grp_gdata->gg_pmix_inited == 0);
-	C_ASSERT(grp_gdata->gg_pmix == NULL);
+	D_ASSERT(grp_gdata != NULL);
+	D_ASSERT(grp_gdata->gg_pmix_inited == 0);
+	D_ASSERT(grp_gdata->gg_pmix == NULL);
 
-	C_ALLOC_PTR(pmix_gdata);
+	D_ALLOC_PTR(pmix_gdata);
 	if (pmix_gdata == NULL)
-		C_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -CER_NOMEM);
 
 	if (crt_is_singleton()) {
 		pmix_gdata->pg_univ_size = 1;
 		pmix_gdata->pg_num_apps = 1;
-		C_GOTO(bypass_pmix, rc);
+		D_GOTO(bypass_pmix, rc);
 	}
 
 	rc = PMIx_Init(&pmix_gdata->pg_proc, NULL, 0);
 	if (rc != PMIX_SUCCESS) {
-		C_ERROR("PMIx_Init failed, rc: %d.\n", rc);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_ERROR("PMIx_Init failed, rc: %d.\n", rc);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 
 	/* get universe size */
@@ -84,18 +84,18 @@ crt_pmix_init(void)
 	if (rc != PMIX_SUCCESS) {
 		PMIX_INFO_FREE(info, 1);
 		PMIX_PROC_DESTRUCT(&proc);
-		C_ERROR("PMIx ns %s rank %d, PMIx_Get universe size failed, "
+		D_ERROR("PMIx ns %s rank %d, PMIx_Get universe size failed, "
 			"rc: %d.\n", pmix_gdata->pg_proc.nspace,
 			pmix_gdata->pg_proc.rank, rc);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 	if (val->type != PMIX_UINT32) {
 		PMIX_INFO_FREE(info, 1);
 		PMIX_PROC_DESTRUCT(&proc);
-		C_ERROR("PMIx ns %s rank %d, PMIx_Get universe size returned "
+		D_ERROR("PMIx ns %s rank %d, PMIx_Get universe size returned "
 			"wrong type: %d.\n", pmix_gdata->pg_proc.nspace,
 			pmix_gdata->pg_proc.rank, val->type);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 	pmix_gdata->pg_univ_size = val->data.uint32;
 	PMIX_VALUE_RELEASE(val);
@@ -105,16 +105,16 @@ crt_pmix_init(void)
 	PMIX_INFO_FREE(info, 1);
 	PMIX_PROC_DESTRUCT(&proc);
 	if (rc != PMIX_SUCCESS) {
-		C_ERROR("PMIx ns %s rank %d: PMIx_Get num_apps failed, "
+		D_ERROR("PMIx ns %s rank %d: PMIx_Get num_apps failed, "
 			"rc: %d.\n", pmix_gdata->pg_proc.nspace,
 			pmix_gdata->pg_proc.rank, rc);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 	if (val->type != PMIX_UINT32) {
-		C_ERROR("PMIx ns %s rank %d, PMIx_Get num_apps returned wrong "
+		D_ERROR("PMIx ns %s rank %d, PMIx_Get num_apps returned wrong "
 			"type: %d.\n", pmix_gdata->pg_proc.nspace,
 			pmix_gdata->pg_proc.rank, val->type);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 	pmix_gdata->pg_num_apps = val->data.uint32;
 	PMIX_VALUE_RELEASE(val);
@@ -125,9 +125,9 @@ bypass_pmix:
 
 out:
 	if (rc != 0) {
-		C_ERROR("crt_pmix_init failed, rc: %d.\n", rc);
+		D_ERROR("crt_pmix_init failed, rc: %d.\n", rc);
 		if (pmix_gdata != NULL)
-			C_FREE_PTR(pmix_gdata);
+			D_FREE_PTR(pmix_gdata);
 	}
 	return rc;
 }
@@ -140,9 +140,9 @@ crt_pmix_fini(void)
 	int			 rc = 0;
 
 	grp_gdata = crt_gdata.cg_grp;
-	C_ASSERT(grp_gdata != NULL);
-	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
-	C_ASSERT(grp_gdata->gg_pmix != NULL);
+	D_ASSERT(grp_gdata != NULL);
+	D_ASSERT(grp_gdata->gg_pmix_inited == 1);
+	D_ASSERT(grp_gdata->gg_pmix != NULL);
 
 	pmix_gdata = grp_gdata->gg_pmix;
 
@@ -151,14 +151,14 @@ crt_pmix_fini(void)
 
 	rc = PMIx_Finalize(NULL, 0);
 	if (rc != PMIX_SUCCESS) {
-		C_ERROR("PMIx ns %s rank %d, PMIx_Finalize failed, rc: %d.\n",
+		D_ERROR("PMIx ns %s rank %d, PMIx_Finalize failed, rc: %d.\n",
 			pmix_gdata->pg_proc.nspace, pmix_gdata->pg_proc.rank,
 			rc);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 
 bypass:
-	C_FREE_PTR(pmix_gdata);
+	D_FREE_PTR(pmix_gdata);
 	grp_gdata->gg_pmix_inited = 0;
 	grp_gdata->gg_pmix = NULL;
 
@@ -184,17 +184,17 @@ crt_pmix_fence(void)
 	proc.rank = PMIX_RANK_WILDCARD;
 	PMIX_INFO_CREATE(info, 1);
 	if (info == NULL) {
-		C_ERROR("PMIX_INFO_CREATE failed.\n");
-		C_GOTO(out, rc = -CER_PMIX);
+		D_ERROR("PMIX_INFO_CREATE failed.\n");
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 	flag = true;
 	PMIX_INFO_LOAD(info, PMIX_COLLECT_DATA, &flag, PMIX_BOOL);
 
 	rc = PMIx_Fence(&proc, 1, info, 1);
 	if (rc != PMIX_SUCCESS) {
-		C_ERROR("PMIx ns %s rank %d, PMIx_Fence failed, rc: %d.\n",
+		D_ERROR("PMIx ns %s rank %d, PMIx_Fence failed, rc: %d.\n",
 			      myproc->nspace, myproc->rank, rc);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 
 out:
@@ -222,14 +222,14 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	struct crt_rank_map	 *rank_map;
 	int			 i, rc = 0;
 
-	C_ASSERT(grp_priv != NULL);
-	C_ASSERT(crt_gdata.cg_grp != NULL);
+	D_ASSERT(grp_priv != NULL);
+	D_ASSERT(crt_gdata.cg_grp != NULL);
 	pmix_gdata = crt_gdata.cg_grp->gg_pmix;
 	myproc = &pmix_gdata->pg_proc;
 	unpublish_key[0] = NULL;
 	unpublish_key[1] = NULL;
 	rank_map = grp_priv->gp_rank_map;
-	C_ASSERT(rank_map != NULL);
+	D_ASSERT(rank_map != NULL);
 
 	/* get incorrect result (grp_priv->gp_self = -1), so disable it */
 	if (/* pmix_gdata->pg_num_apps == 1 */ 0) {
@@ -242,9 +242,9 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 		if (rc != PMIX_SUCCESS) {
 			PMIX_INFO_FREE(info, 1);
 			PMIX_PROC_DESTRUCT(&proc);
-			C_ERROR("PMIx ns %s rank %d, PMIx_Get failed,rc: %d.\n",
+			D_ERROR("PMIx ns %s rank %d, PMIx_Get failed,rc: %d.\n",
 				myproc->nspace, myproc->rank, rc);
-			C_GOTO(out, rc = -CER_PMIX);
+			D_GOTO(out, rc = -CER_PMIX);
 		}
 		grp_priv->gp_size = val->data.uint32;
 		PMIX_VALUE_RELEASE(val);
@@ -253,20 +253,20 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 		PMIX_INFO_FREE(info, 1);
 		PMIX_PROC_DESTRUCT(&proc);
 		if (rc != PMIX_SUCCESS) {
-			C_ERROR("PMIx ns %s rank %d, PMIx_Get failed,rc: %d.\n",
+			D_ERROR("PMIx ns %s rank %d, PMIx_Get failed,rc: %d.\n",
 				myproc->nspace, myproc->rank, rc);
-			C_GOTO(out, rc = -CER_PMIX);
+			D_GOTO(out, rc = -CER_PMIX);
 		}
 		grp_priv->gp_self = val->data.uint32;
 		PMIX_VALUE_RELEASE(val);
 
-		C_ASSERT(grp_priv->gp_size == pmix_gdata->pg_univ_size);
+		D_ASSERT(grp_priv->gp_size == pmix_gdata->pg_univ_size);
 		for (i = 0; i < grp_priv->gp_size; i++) {
 			rank_map[i].rm_rank = i;
 			rank_map[i].rm_status = CRT_RANK_ALIVE;
 		}
 
-		C_GOTO(out, rc = 0);
+		D_GOTO(out, rc = 0);
 	}
 
 	/*
@@ -279,7 +279,7 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	unpublish_key[0] = strndup(info[0].key, PMIX_MAX_KEYLEN);
 	if (!unpublish_key[0]) {
 		PMIX_INFO_FREE(info, nkeys);
-		C_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -CER_NOMEM);
 	}
 	info[0].value.type = PMIX_STRING;
 	info[0].value.data.string = strndup(grp_priv->gp_pub.cg_grpid,
@@ -287,7 +287,7 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	if (info[0].value.data.string == NULL) {
 		PMIX_INFO_FREE(info, 1);
 		free(unpublish_key[0]);
-		C_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -CER_NOMEM);
 	}
 
 	/*
@@ -299,21 +299,21 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	*/
 	rc = PMIx_Publish(info, nkeys);
 	if (rc != PMIX_SUCCESS) {
-		C_ERROR("PMIx ns %s rank %d, PMIx_Publish failed,rc: %d.\n",
+		D_ERROR("PMIx ns %s rank %d, PMIx_Publish failed,rc: %d.\n",
 			myproc->nspace, myproc->rank, rc);
 		PMIX_INFO_FREE(info, nkeys);
 		free(unpublish_key[0]);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 	PMIX_INFO_FREE(info, nkeys);
 
 	/* call fence to ensure the data is received */
 	rc = crt_pmix_fence();
 	if (rc != 0) {
-		C_ERROR("PMIx ns %s rank %d, crt_pmix_fence failed,rc: %d.\n",
+		D_ERROR("PMIx ns %s rank %d, crt_pmix_fence failed,rc: %d.\n",
 			myproc->nspace, myproc->rank, rc);
 		free(unpublish_key[0]);
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/* loop over universe size, parse address string and set size */
@@ -325,12 +325,12 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 
 		rc = PMIx_Lookup(pdata, 1, NULL, 0);
 		if (rc != PMIX_SUCCESS) {
-			C_ERROR("PMIx ns %s rank %d, PMIx_Lookup %s failed, "
+			D_ERROR("PMIx ns %s rank %d, PMIx_Lookup %s failed, "
 				"rc: %d.\n", myproc->nspace, myproc->rank,
 				pdata[0].key, rc);
 			PMIX_PDATA_FREE(pdata, 1);
 			free(unpublish_key[0]);
-			C_GOTO(out, rc = -CER_PMIX);
+			D_GOTO(out, rc = -CER_PMIX);
 		}
 
 		if (i == myproc->rank)
@@ -351,27 +351,27 @@ crt_pmix_assign_rank(struct crt_grp_priv *grp_priv)
 	/* call fence before unpublish */
 	rc = crt_pmix_fence();
 	if (rc != 0) {
-		C_ERROR("PMIx ns %s rank %d, crt_pmix_fence failed,rc: %d.\n",
+		D_ERROR("PMIx ns %s rank %d, crt_pmix_fence failed,rc: %d.\n",
 			myproc->nspace, myproc->rank, rc);
 		free(unpublish_key[0]);
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = PMIx_Unpublish(unpublish_key, NULL, 0);
 	if (rc != PMIX_SUCCESS) {
-		C_ERROR("PMIx ns %s rank %d, PMIx_Unpublish failed, rc: %d.\n",
+		D_ERROR("PMIx ns %s rank %d, PMIx_Unpublish failed, rc: %d.\n",
 			myproc->nspace, myproc->rank, rc);
 		free(unpublish_key[0]);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 	free(unpublish_key[0]);
 
 out:
 	if (rc == 0)
-		C_DEBUG("crt_pmix_assign_rank get size %d, self %d.\n",
+		D_DEBUG("crt_pmix_assign_rank get size %d, self %d.\n",
 			grp_priv->gp_size, grp_priv->gp_self);
 	else if (myproc != NULL)
-		C_ERROR("PMIx ns %s rank %d, crt_pmix_assign_rank failed, "
+		D_ERROR("PMIx ns %s rank %d, crt_pmix_assign_rank failed, "
 			"rc: %d.\n", myproc->nspace, myproc->rank, rc);
 	return rc;
 }
@@ -395,25 +395,25 @@ crt_pmix_publish_self(struct crt_grp_priv *grp_priv)
 	int			nkeys = 1;
 	int			rc;
 
-	C_ASSERT(grp_priv != NULL);
+	D_ASSERT(grp_priv != NULL);
 
-	C_ASSERT(crt_gdata.cg_grp != NULL);
+	D_ASSERT(crt_gdata.cg_grp != NULL);
 	pmix_gdata = crt_gdata.cg_grp->gg_pmix;
 	myproc = &pmix_gdata->pg_proc;
 
 	if (!grp_priv->gp_local) {
-		C_ERROR("cannot publish self on non-local group.\n");
-		C_GOTO(out, rc = -CER_NO_PERM);
+		D_ERROR("cannot publish self on non-local group.\n");
+		D_GOTO(out, rc = -CER_NO_PERM);
 	}
 	if (!grp_priv->gp_service) {
-		C_DEBUG("ignore publish self on non-service group.\n");
-		C_GOTO(out, rc = 0);
+		D_DEBUG("ignore publish self on non-service group.\n");
+		D_GOTO(out, rc = 0);
 	}
 
 	PMIX_INFO_CREATE(info, nkeys);
 	if (!info) {
-		C_ERROR("PMIX_INFO_CREATE failed.\n");
-		C_GOTO(out, rc = -CER_NOMEM);
+		D_ERROR("PMIX_INFO_CREATE failed.\n");
+		D_GOTO(out, rc = -CER_NOMEM);
 	}
 	/*
 	persistence = PMIX_PERSIST_PROC;
@@ -428,14 +428,14 @@ crt_pmix_publish_self(struct crt_grp_priv *grp_priv)
 					    CRT_ADDR_STR_MAX_LEN);
 	if (info[0].value.data.string == NULL) {
 		PMIX_INFO_FREE(info, nkeys);
-		C_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -CER_NOMEM);
 	}
 	rc = PMIx_Publish(info, nkeys);
 	if (rc != PMIX_SUCCESS) {
 		PMIX_INFO_FREE(info, nkeys);
-		C_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -CER_NOMEM);
 	}
-	/* C_DEBUG("PMIx_Publish %s, rc: %d.\n", info[0].key, rc); */
+	/* D_DEBUG("PMIx_Publish %s, rc: %d.\n", info[0].key, rc); */
 	PMIX_INFO_FREE(info, nkeys);
 
 	if (grp_priv->gp_self == 0) {
@@ -456,47 +456,47 @@ crt_pmix_publish_self(struct crt_grp_priv *grp_priv)
 		rc = PMIx_Publish(info, nkeys);
 		if (rc != PMIX_SUCCESS) {
 			PMIX_INFO_FREE(info, nkeys);
-			C_GOTO(out, rc = -CER_NOMEM);
+			D_GOTO(out, rc = -CER_NOMEM);
 		}
 		PMIX_INFO_FREE(info, nkeys);
 	}
 
 out:
 	if (rc != 0 && myproc != NULL)
-		C_ERROR("PMIx ns %s rank %d, crt_pmix_publish_self failed, "
+		D_ERROR("PMIx ns %s rank %d, crt_pmix_publish_self failed, "
 			"rc: %d.\n", myproc->nspace, myproc->rank, rc);
 	return 0;
 }
 
 /** lookup the URI of a rank in the primary service group through PMIX */
 int
-crt_pmix_uri_lookup(crt_group_id_t srv_grpid, crt_rank_t rank, char **uri)
+crt_pmix_uri_lookup(crt_group_id_t srv_grpid, d_rank_t rank, char **uri)
 {
 	pmix_pdata_t	*pdata = NULL;
 	size_t		 len;
 	int		 rc = 0;
 
 	if (srv_grpid == NULL || uri == NULL)
-		C_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -CER_INVAL);
 	len = strlen(srv_grpid);
 	if (len == 0 || len > CRT_GROUP_ID_MAX_LEN)
-		C_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -CER_INVAL);
 
 	PMIX_PDATA_CREATE(pdata, 1);
 	snprintf(pdata[0].key, PMIX_MAX_NSLEN + 5, "cart-%s-%d-uri",
 		 srv_grpid, rank);
 	rc = PMIx_Lookup(&pdata[0], 1, NULL, 0);
 	if (rc != PMIX_SUCCESS || pdata[0].value.type != PMIX_STRING) {
-		C_ERROR("PMIx_Lookup %s failed, rc %d, value type: %d.\n",
+		D_ERROR("PMIx_Lookup %s failed, rc %d, value type: %d.\n",
 			pdata[0].key, rc, pdata[0].value.type);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 	*uri = strndup(pdata[0].value.data.string, CRT_ADDR_STR_MAX_LEN);
 	if (!*uri)
-		C_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -CER_NOMEM);
 
 	if (strlen(*uri) > CRT_ADDR_STR_MAX_LEN) {
-		C_ERROR("got bad uri %s (len %zu).\n", *uri, strlen(*uri));
+		D_ERROR("got bad uri %s (len %zu).\n", *uri, strlen(*uri));
 		free(*uri);
 		rc = -CER_INVAL;
 	}
@@ -505,7 +505,7 @@ out:
 	if (pdata != NULL)
 		PMIX_PDATA_FREE(pdata, 1);
 	if (rc != 0)
-		C_ERROR("crt_pmix_uri_lookup failed, rc: %d.\n", rc);
+		D_ERROR("crt_pmix_uri_lookup failed, rc: %d.\n", rc);
 	return rc;
 }
 
@@ -515,10 +515,10 @@ crt_pmix_attach(struct crt_grp_priv *grp_priv)
 {
 	struct crt_grp_gdata	*grp_gdata;
 	pmix_pdata_t		*pdata = NULL;
-	crt_rank_t		 myrank;
+	d_rank_t			 myrank;
 	int			 rc = 0;
 
-	C_ASSERT(grp_priv != NULL);
+	D_ASSERT(grp_priv != NULL);
 
 	PMIX_PDATA_CREATE(pdata, 1);
 	snprintf(pdata[0].key, PMIX_MAX_KEYLEN + 1, "cart-%s-size",
@@ -527,17 +527,17 @@ crt_pmix_attach(struct crt_grp_priv *grp_priv)
 	if (rc == PMIX_SUCCESS && pdata[0].value.type == PMIX_UINT32) {
 		grp_priv->gp_size = pdata[0].value.data.uint32;
 	} else {
-		C_ERROR("PMIx_Lookup group %s failed, rc: %d, value.type %d.\n",
+		D_ERROR("PMIx_Lookup group %s failed, rc: %d, value.type %d.\n",
 			grp_priv->gp_pub.cg_grpid, rc, pdata[0].value.type);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 	if (grp_priv->gp_size == 0) {
-		C_ERROR("group %s got zero size.\n", grp_priv->gp_pub.cg_grpid);
-		C_GOTO(out, rc = -CER_PMIX);
+		D_ERROR("group %s got zero size.\n", grp_priv->gp_pub.cg_grpid);
+		D_GOTO(out, rc = -CER_PMIX);
 	}
 
 	grp_gdata = crt_gdata.cg_grp;
-	C_ASSERT(grp_gdata != NULL);
+	D_ASSERT(grp_gdata != NULL);
 	myrank = crt_is_service() ? grp_gdata->gg_srv_pri_grp->gp_self :
 				    grp_gdata->gg_cli_pri_grp->gp_self;
 	/*
@@ -550,7 +550,7 @@ crt_pmix_attach(struct crt_grp_priv *grp_priv)
 				 grp_priv->gp_psr_rank,
 				 &grp_priv->gp_psr_phy_addr);
 	if (rc != 0)
-		C_ERROR("crt_pmix_uri_lookup(grpid: %s, rank %d) failed, "
+		D_ERROR("crt_pmix_uri_lookup(grpid: %s, rank %d) failed, "
 			"rc: %d.\n", grp_priv->gp_pub.cg_grpid,
 			grp_priv->gp_psr_rank, rc);
 
@@ -558,7 +558,7 @@ out:
 	if (pdata != NULL)
 		PMIX_PDATA_FREE(pdata, 1);
 	if (rc != 0)
-		C_ERROR("crt_pmix_attach group %s failed, rc: %d.\n",
+		D_ERROR("crt_pmix_attach group %s failed, rc: %d.\n",
 			grp_priv->gp_pub.cg_grpid, rc);
 	return rc;
 }
@@ -575,14 +575,14 @@ crt_register_event_cb(crt_event_cb event_handler, void *args)
 
 	crt_plugin_pmix_init();
 
-	C_ALLOC_PTR(event_cb_priv);
+	D_ALLOC_PTR(event_cb_priv);
 	if (event_cb_priv == NULL)
-		C_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -CER_NOMEM);
 	event_cb_priv->cecp_func = event_handler;
 	event_cb_priv->cecp_args = args;
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
-	crt_list_add_tail(&event_cb_priv->cecp_link,
-			  &crt_plugin_gdata.cpg_event_cbs);
+	d_list_add_tail(&event_cb_priv->cecp_link,
+		       &crt_plugin_gdata.cpg_event_cbs);
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
 
 out:
@@ -607,16 +607,16 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	struct crt_pmix_gdata		*pmix_gdata;
 	struct crt_grp_priv		*grp_priv;
 	crt_event_cb			 cb_func;
-	crt_rank_t			 crt_rank;
+	d_rank_t				 crt_rank;
 	struct crt_event_cb_priv	*event_cb_priv;
 	void				*args;
 
 	grp_gdata = crt_gdata.cg_grp;
-	C_ASSERT(grp_gdata != NULL);
-	C_ASSERT(grp_gdata->gg_pmix_inited == 1);
-	C_ASSERT(grp_gdata->gg_pmix != NULL);
-	C_ASSERT(grp_gdata->gg_inited == 1);
-	C_ASSERT(grp_gdata->gg_srv_pri_grp != NULL);
+	D_ASSERT(grp_gdata != NULL);
+	D_ASSERT(grp_gdata->gg_pmix_inited == 1);
+	D_ASSERT(grp_gdata->gg_pmix != NULL);
+	D_ASSERT(grp_gdata->gg_inited == 1);
+	D_ASSERT(grp_gdata->gg_srv_pri_grp != NULL);
 
 	pmix_gdata = grp_gdata->gg_pmix;
 	grp_priv = grp_gdata->gg_srv_pri_grp;
@@ -624,27 +624,27 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	/* filter source->namespace */
 	if (strncmp(source->nspace, pmix_gdata->pg_proc.nspace,
 		    PMIX_MAX_NSLEN)) {
-		C_DEBUG("PMIx event not relevant to my namespace.\n");
+		D_DEBUG("PMIx event not relevant to my namespace.\n");
 		return;
 	}
 
 	if (status != PMIX_ERR_PROC_ABORTED) {
-		C_DEBUG("PMIx event is not PMIX_ERR_PROC_ABORTED.\n");
+		D_DEBUG("PMIx event is not PMIX_ERR_PROC_ABORTED.\n");
 		return;
 	}
 
 	if (source->rank >= pmix_gdata->pg_univ_size) {
-		C_ERROR("pmix rank %d out of range [0, %d].\n",
+		D_ERROR("pmix rank %d out of range [0, %d].\n",
 			source->rank, pmix_gdata->pg_univ_size - 1);
 		return;
 	}
 	/* convert source->rank from pmix rank to cart rank */
 	crt_rank = grp_priv->gp_rank_map[source->rank].rm_rank;
-	C_DEBUG("received pmix notification about rank %d.\n", crt_rank);
+	D_DEBUG("received pmix notification about rank %d.\n", crt_rank);
 	/* walk the global list to execute the user callbacks */
 	pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_event_rwlock);
-	crt_list_for_each_entry(event_cb_priv,
-				&crt_plugin_gdata.cpg_event_cbs, cecp_link) {
+	d_list_for_each_entry(event_cb_priv,
+			     &crt_plugin_gdata.cpg_event_cbs, cecp_link) {
 		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
 		cb_func = event_cb_priv->cecp_func;
 		args = event_cb_priv->cecp_args;
@@ -660,10 +660,10 @@ static void
 crt_plugin_pmix_errhdlr_reg_cb(pmix_status_t status, size_t errhdlr_ref,
 			       void *cbdata)
 {
-	C_DEBUG("crt_plugin_pmix_errhdlr_reg_cb() called with status %d, "
+	D_DEBUG("crt_plugin_pmix_errhdlr_reg_cb() called with status %d, "
 		" ref=%zu.\n", status, errhdlr_ref);
 	if (status != 0)
-		C_ERROR("crt_plugin_pmix_errhdlr_reg_cb() called with "
+		D_ERROR("crt_plugin_pmix_errhdlr_reg_cb() called with "
 			"status %d\n", status);
 	crt_plugin_gdata.cpg_pmix_errhdlr_ref = errhdlr_ref;
 }
@@ -690,7 +690,7 @@ crt_plugin_pmix_init(void)
 static void
 crt_plugin_pmix_errhdlr_dereg_cb(pmix_status_t status, void *cbdata)
 {
-	C_DEBUG("crt_plugin_pmix_errhdlr_dereg_cb() called with status %d",
+	D_DEBUG("crt_plugin_pmix_errhdlr_dereg_cb() called with status %d",
 		status);
 }
 

@@ -92,13 +92,13 @@ typedef enum {
 } crt_iv_shortcut_t;
 
 /* key is the unique ID for IV within namespace */
-typedef crt_iov_t	crt_iv_key_t;
+typedef d_iov_t	crt_iv_key_t;
 
 /**
  * Operation flags passed to callbacks
  *
  * Currently only supports CRT_IV_FLAG_PENDING_FETCH flag. This flag will be
- * set during on_fetch() callback whenever such is called as part of the
+ * set d_uring on_fetch() callback whenever such is called as part of the
  * aggregation logic. Based on this flag, client has ability to perform
  * desired optimizations, such as potentially reusing iv_value buffers
  * previously allocated/reserved.
@@ -129,7 +129,7 @@ typedef enum {
  */
 typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
 				    crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-				    uint32_t flags, crt_sg_list_t *iv_value,
+				    uint32_t flags, d_sg_list_t *iv_value,
 				    void *priv);
 
 /**
@@ -151,7 +151,7 @@ typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
  */
 typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
 				     crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
-				     uint32_t flags, crt_sg_list_t *iv_value,
+				     uint32_t flags, d_sg_list_t *iv_value,
 				     void *priv);
 
 /**
@@ -176,11 +176,11 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  */
 typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
 				      crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
-				      crt_sg_list_t *iv_value, bool invalidate,
+				      d_sg_list_t *iv_value, bool invalidate,
 				      void *priv);
 
 /**
- * The hash function to hash one IV's key to a crt_rank_t result which is to be
+ * The hash function to hash one IV's key to a d_rank_t result which is to be
  * the root node of that IV.
  *
  * The root of IV is the node that finally serve the IV fetch/update request if
@@ -194,7 +194,7 @@ typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
  * \return			zero on success, negative value if error
  */
 typedef int (*crt_iv_on_hash_cb_t)(crt_iv_namespace_t ivns,
-				   crt_iv_key_t *iv_key, crt_rank_t *root);
+				   crt_iv_key_t *iv_key, d_rank_t *root);
 
 
 /**
@@ -237,10 +237,10 @@ typedef enum {
  * \return			zero on success, negative value if error
  */
 typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
-				crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
-				crt_iv_perm_t permission,
-				crt_sg_list_t *iv_value,
-				void **priv);
+				  crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
+				  crt_iv_perm_t permission,
+				  d_sg_list_t *iv_value,
+				  void **priv);
 
 /**
  * Put value function to return buffers retrieved for the specified iv_key
@@ -254,7 +254,7 @@ typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
  * \return			zero on success, negative value if error
  */
 typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
-				  crt_sg_list_t *iv_value,
+				  d_sg_list_t *iv_value,
 				  void *priv);
 
 /**
@@ -262,7 +262,7 @@ typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
  * true or false. This is an optional callback that clients can implement
  * if they do not want default 'memcmp' comparison for keys.
  *
- * Key comparison is used during fetch aggregation logic. Two requests
+ * Key comparison is used d_uring fetch aggregation logic. Two requests
  * going for the same key will be aggregated if keys match.
  *
  *
@@ -340,7 +340,7 @@ struct crt_iv_class {
 int
 crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
 			struct crt_iv_class *iv_classes, uint32_t num_class,
-			crt_iv_namespace_t *ivns, crt_iov_t *g_ivns);
+			crt_iv_namespace_t *ivns, d_iov_t *g_ivns);
 
 /**
  * Attach to a global IV namespace to get a local handle of the IV namespace.
@@ -364,7 +364,7 @@ crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
  * \return			zero on success, negative value if error
  */
 int
-crt_iv_namespace_attach(crt_context_t crt_ctx, crt_iov_t *g_ivns,
+crt_iv_namespace_attach(crt_context_t crt_ctx, d_iov_t *g_ivns,
 			struct crt_iv_class *iv_classes, uint32_t num_class,
 			crt_iv_namespace_t *ivns);
 
@@ -396,7 +396,7 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns);
  */
 typedef int (*crt_iv_comp_cb_t)(crt_iv_namespace_t ivns, uint32_t class_id,
 				crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-				crt_sg_list_t *iv_value,
+				d_sg_list_t *iv_value,
 				int rc, void *cb_args);
 
 /**
@@ -505,7 +505,7 @@ typedef struct {
 int
 crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
 	      crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
-	      crt_sg_list_t *iv_value, crt_iv_shortcut_t shortcut,
+	      d_sg_list_t *iv_value, crt_iv_shortcut_t shortcut,
 	      crt_iv_sync_t sync_type, crt_iv_comp_cb_t update_comp_cb,
 	      void *cb_arg);
 

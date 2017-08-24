@@ -39,7 +39,7 @@
  */
 #include <stdlib.h>
 
-void crt_lm_fake_event_notify_fn(crt_rank_t pmix_rank, bool *dead);
+void crt_lm_fake_event_notify_fn(d_rank_t pmix_rank, bool *dead);
 
 /**
  * Start simulating RAS events. Each service process creates a named pipe

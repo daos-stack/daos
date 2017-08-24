@@ -46,7 +46,7 @@
 extern "C" {
 #endif
 
-#include <pouch/common.h>
+#include <gurt/common.h>
 
 /**
  * Enable the fault tolerance module. This function should be called by every
@@ -76,7 +76,7 @@ crt_lm_finalize(void);
  * \return			0 on success, negative value on error.
  */
 int
-crt_lm_group_psr(crt_group_t *tgt_grp, crt_rank_list_t **psr_cand);
+crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand);
 
 #if defined(__cplusplus)
 }

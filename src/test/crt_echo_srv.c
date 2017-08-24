@@ -48,11 +48,11 @@ echo_sem_timedwait(sem_t *sem, int sec, int line_number)
 	int				rc;
 
 	rc = clock_gettime(CLOCK_REALTIME, &deadline);
-	C_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
+	D_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
 		  line_number, rc);
 	deadline.tv_sec += sec;
 	rc = sem_timedwait(sem, &deadline);
-	C_ASSERTF(rc == 0, "sem_timedwait() failed at line %d rc: %d\n",
+	D_ASSERTF(rc == 0, "sem_timedwait() failed at line %d rc: %d\n",
 		  line_number, rc);
 }
 
@@ -61,7 +61,7 @@ static int run_echo_srver(void)
 	crt_endpoint_t			 svr_ep = {0};
 	crt_rpc_t			*rpc_req = NULL;
 	char				*pchar;
-	crt_rank_t			 myrank;
+	d_rank_t				 myrank;
 	uint32_t			 mysize;
 	int				 rc;
 	struct crt_echo_checkin_req	*e_req;
@@ -90,7 +90,7 @@ static int run_echo_srver(void)
 	rc = crt_req_create(gecho.crt_ctx, &svr_ep, ECHO_OPC_CHECKIN, &rpc_req);
 	assert(rc == 0 && rpc_req != NULL);
 
-	C_ALLOC(pchar, 256);
+	D_ALLOC(pchar, 256);
 	assert(pchar != NULL);
 	snprintf(pchar, 256, "Guest_%d@server-side", myrank);
 
@@ -99,7 +99,7 @@ static int run_echo_srver(void)
 	e_req->age = 32;
 	e_req->days = myrank;
 
-	C_DEBUG("server(rank %d) sending checkin request, name: %s, age: %d, "
+	D_DEBUG("server(rank %d) sending checkin request, name: %s, age: %d, "
 	       "days: %d.\n", myrank, e_req->name, e_req->age, e_req->days);
 
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
@@ -107,15 +107,15 @@ static int run_echo_srver(void)
 	/* wait for completion */
 	echo_sem_timedwait(&gecho.token_to_proceed, 61, __LINE__);
 
-	C_FREE(pchar, 256);
+	D_FREE(pchar, 256);
 
 	/* ==================================== */
 	/* test group API and bcast RPC */
 	crt_group_id_t		grp_id = "example_grpid";
-	crt_rank_t		grp_ranks[6] = {5, 7, 4, 1, 2, 6};
-	crt_rank_list_t	grp_membs;
-	crt_rank_t		excluded_ranks[4] = {1, 4, 2, 9};
-	crt_rank_list_t	excluded_membs;
+	d_rank_t		grp_ranks[6] = {5, 7, 4, 1, 2, 6};
+	d_rank_list_t	grp_membs;
+	d_rank_t		excluded_ranks[4] = {1, 4, 2, 9};
+	d_rank_list_t	excluded_membs;
 
 	grp_membs.rl_nr.num = 6;
 	grp_membs.rl_ranks = grp_ranks;
@@ -137,13 +137,13 @@ static int run_echo_srver(void)
 					  NULL, NULL, 0,
 					  crt_tree_topo(CRT_TREE_KNOMIAL, 4),
 					  &corpc_req);
-		C_ASSERT(rc == 0 && corpc_req != NULL);
+		D_ASSERT(rc == 0 && corpc_req != NULL);
 		corpc_in = crt_req_get(corpc_req);
-		C_ASSERT(corpc_in != NULL);
+		D_ASSERT(corpc_in != NULL);
 		corpc_in->co_msg = "testing corpc example from rank 4";
 
 		rc = crt_req_send(corpc_req, client_cb_common, NULL);
-		C_ASSERT(rc == 0);
+		D_ASSERT(rc == 0);
 		/* make sure corpc has been handled */
 		echo_sem_timedwait(&gecho.token_to_proceed, 61, __LINE__);
 
@@ -174,21 +174,21 @@ echo_srv_checkin(crt_rpc_t *rpc_req)
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
-	C_ASSERT(e_req != NULL);
+	D_ASSERT(e_req != NULL);
 
 	printf("tier1 echo_srver recv'd checkin, opc: 0x%x.\n",
 		rpc_req->cr_opc);
 	printf("tier1 checkin input - age: %d, name: %s, days: %d.\n",
 		e_req->age, e_req->name, e_req->days);
 	if (e_req->raw_package.iov_len != 0) {
-		C_ASSERT(e_req->raw_package.iov_buf != NULL);
+		D_ASSERT(e_req->raw_package.iov_buf != NULL);
 		raw_buf = e_req->raw_package.iov_buf;
 		printf("tier1 checkin, extra message in the raw_package: %s.\n",
 		       raw_buf);
 	}
 
 	e_reply = crt_reply_get(rpc_req);
-	C_ASSERT(e_reply != NULL);
+	D_ASSERT(e_reply != NULL);
 	e_reply->ret = 0;
 	e_reply->room_no = g_roomno++;
 

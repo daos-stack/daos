@@ -40,7 +40,7 @@
  * TODOs:
  * - Randomize size of keys and values
  * - Add RPC to shutdown server & cleanup on shutdown
- * - Return shared buffer instead of a copy during fetch
+ * - Return shared buffer instead of a copy d_uring fetch
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -51,14 +51,14 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-#include <pouch/list.h>
+#include <gurt/list.h>
 
 #define _SERVER
 #include "iv_common.h"
 
 static char hostname[100];
 
-static crt_rank_t my_rank;
+static d_rank_t my_rank;
 static uint32_t group_size;
 
 static int verbose_mode;
@@ -91,7 +91,7 @@ do {									\
 
 struct iv_value_struct {
 	/* IV value embeds root rank for verification purposes */
-	crt_rank_t	root_rank;
+	d_rank_t	root_rank;
 
 	/* Actual data string */
 	char		str_data[MAX_DATA_SIZE];
@@ -164,14 +164,14 @@ init_work_contexts(void)
 static uint32_t test_user_priv = 0xDEAD1337;
 
 /* TODO: Change to hash table instead of list */
-static CRT_LIST_HEAD(kv_pair_head);
+static D_LIST_HEAD(kv_pair_head);
 
 /* Key-value pair */
 struct kv_pair_entry {
 	crt_iv_key_t	key;
-	crt_sg_list_t	value;
+	d_sg_list_t	value;
 	bool		valid;
-	crt_list_t	link;
+	d_list_t		link;
 };
 
 static crt_iv_key_t *
@@ -198,7 +198,7 @@ alloc_key(int root, int key_id)
 }
 
 static void
-verify_key_value_pair(crt_iv_key_t *key, crt_sg_list_t *value)
+verify_key_value_pair(crt_iv_key_t *key, d_sg_list_t *value)
 {
 	struct iv_key_struct	*key_struct;
 	struct iv_value_struct	*value_struct;
@@ -224,8 +224,8 @@ init_iv_storage(void)
 	struct iv_key_struct	*key_struct;
 	struct iv_value_struct	*value_struct;
 	crt_iv_key_t		*key;
-	crt_sg_list_t		*value;
-	int			size;
+	d_sg_list_t		*value;
+	int			 size;
 
 	/* First NUM_LOCAL_IVS are owned by the current rank */
 	for (i = 0; i < NUM_LOCAL_IVS; i++) {
@@ -250,7 +250,7 @@ init_iv_storage(void)
 
 		/* Fill in the value */
 		value->sg_nr.num = 1;
-		value->sg_iovs = malloc(sizeof(crt_iov_t));
+		value->sg_iovs = malloc(sizeof(d_iov_t));
 		assert(value->sg_iovs != NULL);
 
 		size = sizeof(struct iv_value_struct);
@@ -270,10 +270,10 @@ init_iv_storage(void)
 		sprintf(value_struct->str_data,
 			"Default value for key %d:%d", my_rank, i);
 
-		crt_list_add_tail(&entry->link, &kv_pair_head);
+		d_list_add_tail(&entry->link, &kv_pair_head);
 	}
 
-	crt_list_for_each_entry(entry, &kv_pair_head, link) {
+	d_list_for_each_entry(entry, &kv_pair_head, link) {
 		key = &entry->key;
 		value = &entry->value;
 
@@ -302,7 +302,7 @@ keys_equal(crt_iv_key_t *key1, crt_iv_key_t *key2)
 }
 
 static int
-copy_iv_value(crt_sg_list_t *dst, crt_sg_list_t *src)
+copy_iv_value(d_sg_list_t *dst, d_sg_list_t *src)
 {
 	int i;
 
@@ -344,7 +344,7 @@ verify_key(crt_iv_key_t *iv_key)
 }
 
 static void
-verify_value(crt_sg_list_t *iv_value)
+verify_value(d_sg_list_t *iv_value)
 {
 	int size;
 
@@ -359,7 +359,7 @@ verify_value(crt_sg_list_t *iv_value)
 }
 
 static int
-add_new_kv_pair(crt_iv_key_t *iv_key, crt_sg_list_t *iv_value,
+add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 		bool is_valid_entry)
 {
 	struct kv_pair_entry	*entry;
@@ -383,7 +383,7 @@ add_new_kv_pair(crt_iv_key_t *iv_key, crt_sg_list_t *iv_value,
 
 	/* Allocate space for iv value */
 	entry->value.sg_nr.num = 1;
-	entry->value.sg_iovs = malloc(sizeof(crt_iov_t));
+	entry->value.sg_iovs = malloc(sizeof(d_iov_t));
 	assert(entry->value.sg_iovs != NULL);
 
 	size = sizeof(struct iv_value_struct);
@@ -403,13 +403,13 @@ add_new_kv_pair(crt_iv_key_t *iv_key, crt_sg_list_t *iv_value,
 		iv_value->sg_iovs = entry->value.sg_iovs;
 	}
 
-	crt_list_add_tail(&entry->link, &kv_pair_head);
+	d_list_add_tail(&entry->link, &kv_pair_head);
 
 	return 0;
 }
 
 static void
-print_key_value(char *hdr, crt_iv_key_t *iv_key, crt_sg_list_t *iv_value)
+print_key_value(char *hdr, crt_iv_key_t *iv_key, d_sg_list_t *iv_value)
 {
 	struct iv_key_struct *key_struct;
 	struct iv_value_struct *value_struct;
@@ -459,7 +459,7 @@ dump_all_keys(char *msg)
 	DBG_PRINT("Dumping keys from %s\n", msg);
 
 	LOCK_KEYS();
-	crt_list_for_each_entry(entry, &kv_pair_head, link) {
+	d_list_for_each_entry(entry, &kv_pair_head, link) {
 		print_key_value("Entry = ", &entry->key, &entry->value);
 	}
 	UNLOCK_KEYS();
@@ -469,8 +469,8 @@ dump_all_keys(char *msg)
 
 static int
 iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	crt_iv_ver_t *iv_ver, uint32_t flags, crt_sg_list_t *iv_value,
-	void *user_priv)
+	    crt_iv_ver_t *iv_ver, uint32_t flags, d_sg_list_t *iv_value,
+	    void *user_priv)
 {
 	struct kv_pair_entry	*entry;
 	struct iv_key_struct	*key_struct;
@@ -493,14 +493,14 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		 * Just to catch the error earlier than fetch completion
 		 * callback for testing.
 		 */
-		C_ASSERTF(rc == 0, "crt_iv_get_nchildren failed, rc=%d.\n", rc);
+		D_ASSERTF(rc == 0, "crt_iv_get_nchildren failed, rc=%d.\n", rc);
 
 	key_struct = (struct iv_key_struct *)iv_key->iov_buf;
 
 	dump_all_keys("ON_FETCH");
 
 	LOCK_KEYS();
-	crt_list_for_each_entry(entry, &kv_pair_head, link) {
+	d_list_for_each_entry(entry, &kv_pair_head, link) {
 
 		if (keys_equal(iv_key, &entry->key) == true) {
 
@@ -543,7 +543,7 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 static int
 iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	crt_iv_ver_t iv_ver, uint32_t flags, crt_sg_list_t *iv_value,
+	     crt_iv_ver_t iv_ver, uint32_t flags, d_sg_list_t *iv_value,
 	void *user_priv)
 {
 	struct kv_pair_entry *entry;
@@ -567,7 +567,7 @@ iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		rc = -CER_IVCB_FORWARD;
 
 	LOCK_KEYS();
-	crt_list_for_each_entry(entry, &kv_pair_head, link) {
+	d_list_for_each_entry(entry, &kv_pair_head, link) {
 		if (keys_equal(iv_key, &entry->key) == true) {
 			copy_iv_value(&entry->value, iv_value);
 			UNLOCK_KEYS();
@@ -586,8 +586,8 @@ iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 static int
 iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	crt_iv_ver_t iv_ver, crt_sg_list_t *iv_value, bool invalidate,
-	void *user_priv)
+	      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value, bool invalidate,
+	      void *user_priv)
 {
 	struct kv_pair_entry	*entry = NULL;
 	bool			valid;
@@ -611,7 +611,7 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 
 	LOCK_KEYS();
-	crt_list_for_each_entry(entry, &kv_pair_head, link) {
+	d_list_for_each_entry(entry, &kv_pair_head, link) {
 
 		if (keys_equal(iv_key, &entry->key) == true) {
 
@@ -641,7 +641,7 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 }
 
 static int
-iv_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, crt_rank_t *root)
+iv_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 {
 	struct iv_key_struct *key_struct;
 
@@ -659,8 +659,8 @@ iv_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, crt_rank_t *root)
 
 static int
 iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-		crt_iv_ver_t iv_ver, crt_iv_perm_t permission,
-		crt_sg_list_t *iv_value, void **user_priv)
+	  crt_iv_ver_t iv_ver, crt_iv_perm_t permission,
+	  d_sg_list_t *iv_value, void **user_priv)
 {
 	int size;
 
@@ -671,7 +671,7 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	size = sizeof(struct iv_value_struct);
 
-	iv_value->sg_iovs = malloc(sizeof(crt_iov_t));
+	iv_value->sg_iovs = malloc(sizeof(d_iov_t));
 	assert(iv_value->sg_iovs != NULL);
 
 	iv_value->sg_iovs[0].iov_buf = malloc(size);
@@ -687,8 +687,7 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 }
 
 static int
-iv_on_put(crt_iv_namespace_t ivns,
-	  crt_sg_list_t *iv_value, void *user_priv)
+iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 {
 	DBG_ENTRY();
 
@@ -718,14 +717,14 @@ static void
 init_iv(void)
 {
 	struct crt_iv_class	iv_class;
-	crt_iov_t		g_ivns;
+	d_iov_t			g_ivns;
 	crt_endpoint_t		server_ep = {0};
 	struct rpc_set_ivns_in	*input;
 	struct rpc_set_ivns_out	*output;
-	int			rc;
-	int			rank;
+	int			 rc;
+	int			 rank;
 	crt_rpc_t		*rpc;
-	int			tree_topo;
+	int			 tree_topo;
 
 	tree_topo = crt_tree_topo(CRT_TREE_KNOMIAL, 2);
 
@@ -800,8 +799,8 @@ struct fetch_done_cb_info {
 
 static int
 fetch_done(crt_iv_namespace_t ivns, uint32_t class_id,
-	crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver, crt_sg_list_t *iv_value,
-	int fetch_rc, void *cb_args)
+	   crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver, d_sg_list_t *iv_value,
+	   int fetch_rc, void *cb_args)
 {
 	struct iv_key_struct		*key_struct;
 	struct iv_value_struct		*value_struct;
@@ -870,12 +869,12 @@ struct update_done_cb_info {
 
 static int
 update_done(crt_iv_namespace_t ivns, uint32_t class_id,
-	crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver, crt_sg_list_t *iv_value,
-	int update_rc, void *cb_args)
+	    crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver, d_sg_list_t *iv_value,
+	    int update_rc, void *cb_args)
 {
 	struct update_done_cb_info	*cb_info;
 	struct rpc_test_update_iv_out	*output;
-	int				rc;
+	int				 rc;
 
 	DBG_ENTRY();
 	dump_all_keys("ON_UPDATE_DONE");
@@ -907,7 +906,7 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	crt_iv_key_t			*key;
 	struct iv_key_struct		*key_struct;
 	int				rc;
-	crt_sg_list_t			iv_value;
+	d_sg_list_t			iv_value;
 	struct iv_value_struct		*value_struct;
 	struct update_done_cb_info	*update_cb_info;
 	crt_iv_sync_t			*sync;
@@ -923,7 +922,7 @@ iv_test_update_iv(crt_rpc_t *rpc)
 		key_struct->rank, key_struct->key_id, input->str_value);
 
 	iv_value.sg_nr.num = 1;
-	iv_value.sg_iovs = malloc(sizeof(crt_iov_t));
+	iv_value.sg_iovs = malloc(sizeof(d_iov_t));
 	assert(iv_value.sg_iovs != NULL);
 
 	iv_value.sg_iovs[0].iov_buf = malloc(sizeof(struct iv_value_struct));
@@ -994,8 +993,8 @@ struct invalidate_cb_info {
 
 static int
 invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
-	crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver, crt_sg_list_t *iv_value,
-	int invalidate_rc, void *cb_args)
+		crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
+		d_sg_list_t *iv_value, int invalidate_rc, void *cb_args)
 {
 	struct invalidate_cb_info		*cb_info;
 	struct rpc_test_invalidate_iv_out	*output;

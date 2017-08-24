@@ -35,8 +35,8 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __CRT_LIST_H__
-#define __CRT_LIST_H__
+#ifndef __GURT_LIST_H__
+#define __GURT_LIST_H__
 /*
  * Simple doubly linked list implementation.
  *
@@ -49,18 +49,18 @@
 
 #define prefetch(a) ((void)a)
 
-struct crt_list_head {
-	struct crt_list_head *next, *prev;
+struct d_list_head {
+	struct d_list_head *next, *prev;
 };
 
-typedef struct crt_list_head crt_list_t;
+typedef struct d_list_head d_list_t;
 
-#define CRT_LIST_HEAD_INIT(name) { &(name), &(name) }
+#define D_LIST_HEAD_INIT(name) { &(name), &(name) }
 
-#define CRT_LIST_HEAD(name) \
-	crt_list_t name = CRT_LIST_HEAD_INIT(name)
+#define D_LIST_HEAD(name) \
+	d_list_t name = D_LIST_HEAD_INIT(name)
 
-#define CRT_INIT_LIST_HEAD(ptr) do { \
+#define D_INIT_LIST_HEAD(ptr) do { \
 	(ptr)->next = (ptr); (ptr)->prev = (ptr); \
 } while (0)
 
@@ -75,7 +75,7 @@ extern "C" {
  * the prev/next entries already!
  */
 static inline void
-__crt_list_add(crt_list_t *newe, crt_list_t *prev, crt_list_t *next)
+__gurt_list_add(d_list_t *newe, d_list_t *prev, d_list_t *next)
 {
 	next->prev = newe;
 	newe->next = next;
@@ -92,9 +92,9 @@ __crt_list_add(crt_list_t *newe, crt_list_t *prev, crt_list_t *next)
  * This is good for implementing stacks.
  */
 static inline void
-crt_list_add(crt_list_t *newe, crt_list_t *head)
+d_list_add(d_list_t *newe, d_list_t *head)
 {
-	__crt_list_add(newe, head, head->next);
+	__gurt_list_add(newe, head, head->next);
 }
 
 /**
@@ -106,9 +106,9 @@ crt_list_add(crt_list_t *newe, crt_list_t *head)
  * This is useful for implementing queues.
  */
 static inline void
-crt_list_add_tail(crt_list_t *newe, crt_list_t *head)
+d_list_add_tail(d_list_t *newe, d_list_t *head)
 {
-	__crt_list_add(newe, head->prev, head);
+	__gurt_list_add(newe, head->prev, head);
 }
 
 /*
@@ -119,7 +119,7 @@ crt_list_add_tail(crt_list_t *newe, crt_list_t *head)
  * the prev/next entries already!
  */
 static inline void
-__crt_list_del(crt_list_t *prev, crt_list_t *next)
+__gurt_list_del(d_list_t *prev, d_list_t *next)
 {
 	next->prev = prev;
 	prev->next = next;
@@ -132,9 +132,9 @@ __crt_list_del(crt_list_t *prev, crt_list_t *next)
  * undefined state.
  */
 static inline void
-crt_list_del(crt_list_t *entry)
+d_list_del(d_list_t *entry)
 {
-	__crt_list_del(entry->prev, entry->next);
+	__gurt_list_del(entry->prev, entry->next);
 }
 
 /**
@@ -142,10 +142,10 @@ crt_list_del(crt_list_t *entry)
  * \param entry the entry to remove.
  */
 static inline void
-crt_list_del_init(crt_list_t *entry)
+d_list_del_init(d_list_t *entry)
 {
-	__crt_list_del(entry->prev, entry->next);
-	CRT_INIT_LIST_HEAD(entry);
+	__gurt_list_del(entry->prev, entry->next);
+	D_INIT_LIST_HEAD(entry);
 }
 
 /**
@@ -155,10 +155,10 @@ crt_list_del_init(crt_list_t *entry)
  * \param head the list to move it to
  */
 static inline void
-crt_list_move(crt_list_t *list, crt_list_t *head)
+d_list_move(d_list_t *list, d_list_t *head)
 {
-	__crt_list_del(list->prev, list->next);
-	crt_list_add(list, head);
+	__gurt_list_del(list->prev, list->next);
+	d_list_add(list, head);
 }
 
 /**
@@ -168,10 +168,10 @@ crt_list_move(crt_list_t *list, crt_list_t *head)
  * \param head the list to move it to
  */
 static inline void
-crt_list_move_tail(crt_list_t *list, crt_list_t *head)
+d_list_move_tail(d_list_t *list, d_list_t *head)
 {
-	__crt_list_del(list->prev, list->next);
-	crt_list_add_tail(list, head);
+	__gurt_list_del(list->prev, list->next);
+	d_list_add_tail(list, head);
 }
 
 /**
@@ -179,7 +179,7 @@ crt_list_move_tail(crt_list_t *list, crt_list_t *head)
  * \param head the list to test.
  */
 static inline int
-crt_list_empty(crt_list_t *head)
+d_list_empty(d_list_t *head)
 {
 	return head->next == head;
 }
@@ -191,24 +191,25 @@ crt_list_empty(crt_list_t *head)
  * Tests whether a list is empty _and_ checks that no other CPU might be
  * in the process of modifying either member (next or prev)
  *
- * NOTE: using crt_list_empty_careful() without synchronization
+ * NOTE: using d_list_empty_careful() without synchronization
  * can only be safe if the only activity that can happen
- * to the list entry is crt_list_del_init(). Eg. it cannot be used
+ * to the list entry is d_list_del_init(). Eg. it cannot be used
  * if another CPU could re-list_add() it.
  */
 static inline int
-crt_list_empty_careful(const crt_list_t *head)
+d_list_empty_careful(const d_list_t *head)
 {
-	crt_list_t *next = head->next;
+	d_list_t *next = head->next;
+
 	return (next == head) && (next == head->prev);
 }
 
 static inline void
-__crt_list_splice(crt_list_t *list, crt_list_t *head)
+__gurt_list_splice(d_list_t *list, d_list_t *head)
 {
-	crt_list_t *first = list->next;
-	crt_list_t *last = list->prev;
-	crt_list_t *at = head->next;
+	d_list_t *first = list->next;
+	d_list_t *last = list->prev;
+	d_list_t *at = head->next;
 
 	first->prev = head;
 	head->next = first;
@@ -226,10 +227,10 @@ __crt_list_splice(crt_list_t *list, crt_list_t *head)
  * undefined state on return.
  */
 static inline void
-crt_list_splice(crt_list_t *list, crt_list_t *head)
+d_list_splice(d_list_t *list, d_list_t *head)
 {
-	if (!crt_list_empty(list))
-		__crt_list_splice(list, head);
+	if (!d_list_empty(list))
+		__gurt_list_splice(list, head);
 }
 
 /**
@@ -241,11 +242,11 @@ crt_list_splice(crt_list_t *list, crt_list_t *head)
  * on return.
  */
 static inline void
-crt_list_splice_init(crt_list_t *list, crt_list_t *head)
+d_list_splice_init(d_list_t *list, d_list_t *head)
 {
-	if (!crt_list_empty(list)) {
-		__crt_list_splice(list, head);
-		CRT_INIT_LIST_HEAD(list);
+	if (!d_list_empty(list)) {
+		__gurt_list_splice(list, head);
+		D_INIT_LIST_HEAD(list);
 	}
 }
 
@@ -255,7 +256,7 @@ crt_list_splice_init(crt_list_t *list, crt_list_t *head)
  * \param type	 the type of the struct this is embedded in.
  * \param member the member name of the list within the struct.
  */
-#define crt_list_entry(ptr, type, member) \
+#define d_list_entry(ptr, type, member) \
 	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
 /**
@@ -266,7 +267,7 @@ crt_list_splice_init(crt_list_t *list, crt_list_t *head)
  * Behaviour is undefined if \a pos is removed from the list in the body of the
  * loop.
  */
-#define crt_list_for_each(pos, head) \
+#define dlist_for_each(pos, head) \
 	for (pos = (head)->next, prefetch(pos->next); pos != (head); \
 		pos = pos->next, prefetch(pos->next))
 
@@ -279,7 +280,7 @@ crt_list_splice_init(crt_list_t *list, crt_list_t *head)
  * This is safe to use if \a pos could be removed from the list in the body of
  * the loop.
  */
-#define crt_list_for_each_safe(pos, n, head) \
+#define dlist_for_each_safe(pos, n, head) \
 	for (pos = (head)->next, n = pos->next; pos != (head); \
 		pos = n, n = pos->next)
 
@@ -289,10 +290,10 @@ crt_list_splice_init(crt_list_t *list, crt_list_t *head)
  * \param head   the list head
  * \param member the name of the list_struct within the struct
  */
-#define crt_list_for_each_entry_continue(pos, head, member)                 \
-	for (pos = crt_list_entry(pos->member.next, __typeof__(*pos), member);\
+#define d_list_for_each_entry_continue(pos, head, member)                 \
+	for (pos = d_list_entry(pos->member.next, __typeof__(*pos), member);\
 	     prefetch(pos->member.next), &pos->member != (head);             \
-	     pos = crt_list_entry(pos->member.next, __typeof__(*pos), member))
+	     pos = d_list_entry(pos->member.next, __typeof__(*pos), member))
 
 /**
  * \defgroup hlist Hash List
@@ -302,13 +303,13 @@ crt_list_splice_init(crt_list_t *list, crt_list_t *head)
  * @{
  */
 
-typedef struct crt_hlist_node {
-	struct crt_hlist_node *next, **pprev;
-} crt_hlist_node_t;
+typedef struct d_hlist_node {
+	struct d_hlist_node *next, **pprev;
+} d_hlist_node_t;
 
-typedef struct crt_hlist_head {
-	crt_hlist_node_t *first;
-} crt_hlist_head_t;
+typedef struct d_hlist_head {
+	d_hlist_node_t *first;
+} d_hlist_head_t;
 
 /* @} */
 
@@ -326,52 +327,53 @@ typedef struct crt_hlist_head {
  * @{
  */
 
-#define CRT_HLIST_HEAD_INIT { NULL_P }
-#define CRT_HLIST_HEAD(name) crt_hlist_head_t name = { NULL_P }
-#define CRT_INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL_P)
-#define CRT_INIT_HLIST_NODE(ptr) ((ptr)->next = NULL_P, (ptr)->pprev = NULL_P)
+#define D_HLIST_HEAD_INIT { NULL_P }
+#define D_HLIST_HEAD(name) d_hlist_head_t name = { NULL_P }
+#define D_INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL_P)
+#define D_INIT_HLIST_NODE(ptr) ((ptr)->next = NULL_P, (ptr)->pprev = NULL_P)
 
 static inline int
-crt_hlist_unhashed(const crt_hlist_node_t *h)
+d_hlist_unhashed(const d_hlist_node_t *h)
 {
 	return !h->pprev;
 }
 
 static inline int
-crt_hlist_empty(const crt_hlist_head_t *h)
+d_hlist_empty(const d_hlist_head_t *h)
 {
 	return !h->first;
 }
 
 static inline void
-__crt_hlist_del(crt_hlist_node_t *n)
+__gurt_hlist_del(d_hlist_node_t *n)
 {
-	crt_hlist_node_t *next = n->next;
-	crt_hlist_node_t **pprev = n->pprev;
+	d_hlist_node_t *next = n->next;
+	d_hlist_node_t **pprev = n->pprev;
 	*pprev = next;
 	if (next)
 		next->pprev = pprev;
 }
 
 static inline void
-crt_hlist_del(crt_hlist_node_t *n)
+d_hlist_del(d_hlist_node_t *n)
 {
-	__crt_hlist_del(n);
+	__gurt_hlist_del(n);
 }
 
 static inline void
-crt_hlist_del_init(crt_hlist_node_t *n)
+d_hlist_del_init(d_hlist_node_t *n)
 {
 	if (n->pprev)  {
-		__crt_hlist_del(n);
-		CRT_INIT_HLIST_NODE(n);
+		__gurt_hlist_del(n);
+		D_INIT_HLIST_NODE(n);
 	}
 }
 
 static inline void
-crt_hlist_add_head(crt_hlist_node_t *n, crt_hlist_head_t *h)
+d_hlist_add_head(d_hlist_node_t *n, d_hlist_head_t *h)
 {
-	crt_hlist_node_t *first = h->first;
+	d_hlist_node_t *first = h->first;
+
 	n->next = first;
 	if (first)
 		first->pprev = &n->next;
@@ -381,7 +383,7 @@ crt_hlist_add_head(crt_hlist_node_t *n, crt_hlist_head_t *h)
 
 /* next must be != NULL */
 static inline void
-crt_hlist_add_before(crt_hlist_node_t *n, crt_hlist_node_t *next)
+d_hlist_add_before(d_hlist_node_t *n, d_hlist_node_t *next)
 {
 	n->pprev = next->pprev;
 	n->next = next;
@@ -391,7 +393,7 @@ crt_hlist_add_before(crt_hlist_node_t *n, crt_hlist_node_t *next)
 
 /* prev must be != NULL */
 static inline void
-crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *prev)
+d_hlist_add_after(d_hlist_node_t *n, d_hlist_node_t *prev)
 {
 	n->pprev = &prev->next;
 	n->next = prev->next;
@@ -401,13 +403,13 @@ crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *prev)
 		n->next->pprev  = &n->next;
 }
 
-#define crt_hlist_entry(ptr, type, member) container_of(ptr, type, member)
+#define d_hlist_entry(ptr, type, member) container_of(ptr, type, member)
 
-#define crt_hlist_for_each(pos, head) \
+#define dhlist_for_each(pos, head) \
 	for (pos = (head)->first; pos && (prefetch(pos->next), 1); \
 	     pos = pos->next)
 
-#define crt_hlist_for_each_safe(pos, n, head) \
+#define dhlist_for_each_safe(pos, n, head) \
 	for (pos = (head)->first; pos && (n = pos->next, 1); \
 	     pos = n)
 
@@ -418,10 +420,10 @@ crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *prev)
  * \param head	 the head for your list.
  * \param member the name of the hlist_node within the struct.
  */
-#define crt_hlist_for_each_entry(tpos, pos, head, member)                   \
+#define dhlist_for_each_entry(tpos, pos, head, member)                   \
 	for (pos = (head)->first;                                           \
 	     pos && ({ prefetch(pos->next); 1; }) &&                        \
-		({ tpos = crt_hlist_entry(pos, __typeof__(*tpos), member);  \
+		({ tpos = d_hlist_entry(pos, __typeof__(*tpos), member);  \
 		   1; });                                                   \
 	     pos = pos->next)
 
@@ -431,10 +433,10 @@ crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *prev)
  * \param pos	 the &struct hlist_node to use as a loop counter.
  * \param member the name of the hlist_node within the struct.
  */
-#define crt_hlist_for_each_entry_continue(tpos, pos, member)                \
+#define dhlist_for_each_entry_continue(tpos, pos, member)                \
 	for (pos = (pos)->next;                                             \
 	     pos && ({ prefetch(pos->next); 1; }) &&                        \
-		({ tpos = crt_hlist_entry(pos, __typeof__(*tpos), member);  \
+		({ tpos = d_hlist_entry(pos, __typeof__(*tpos), member);  \
 		   1; });                                                   \
 	     pos = pos->next)
 
@@ -444,9 +446,9 @@ crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *prev)
  * \param pos	 the &struct hlist_node to use as a loop counter.
  * \param member the name of the hlist_node within the struct.
  */
-#define crt_hlist_for_each_entry_from(tpos, pos, member)		    \
+#define dhlist_for_each_entry_from(tpos, pos, member)		    \
 	for (; pos && ({ prefetch(pos->next); 1; }) &&                      \
-		({ tpos = crt_hlist_entry(pos, __typeof__(*tpos), member);  \
+		({ tpos = d_hlist_entry(pos, __typeof__(*tpos), member);  \
 		   1; });                                                   \
 	     pos = pos->next)
 
@@ -458,66 +460,66 @@ crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *prev)
  * \param head	 the head for your list.
  * \param member the name of the hlist_node within the struct.
  */
-#define crt_hlist_for_each_entry_safe(tpos, pos, n, head, member)           \
+#define dhlist_for_each_entry_safe(tpos, pos, n, head, member)           \
 	for (pos = (head)->first;                                            \
 	     pos && ({ n = pos->next; 1; }) &&                               \
-		({ tpos = crt_hlist_entry(pos, __typeof__(*tpos), member);  \
+		({ tpos = d_hlist_entry(pos, __typeof__(*tpos), member);  \
 		   1; });                                                    \
 	     pos = n)
 
 /* @} */
 
-#ifndef crt_list_for_each_prev
+#ifndef d_list_for_each_prev
 /**
  * Iterate over a list in reverse order
  * \param pos	the &struct list_head to use as a loop counter.
  * \param head	the head for your list.
  */
-#define crt_list_for_each_prev(pos, head) \
+#define d_list_for_each_prev(pos, head) \
 	for (pos = (head)->prev, prefetch(pos->prev); pos != (head);     \
 		pos = pos->prev, prefetch(pos->prev))
 
-#endif /* crt_list_for_each_prev */
+#endif /* d_list_for_each_prev */
 
-#ifndef crt_list_for_each_entry
+#ifndef d_list_for_each_entry
 /**
  * Iterate over a list of given type
  * \param pos        the type * to use as a loop counter.
  * \param head       the head for your list.
  * \param member     the name of the list_struct within the struct.
  */
-#define crt_list_for_each_entry(pos, head, member)                          \
-	for (pos = crt_list_entry((head)->next, __typeof__(*pos), member),  \
+#define d_list_for_each_entry(pos, head, member)                          \
+	for (pos = d_list_entry((head)->next, __typeof__(*pos), member),  \
 		     prefetch(pos->member.next);                             \
 	     &pos->member != (head);                                         \
-	     pos = crt_list_entry(pos->member.next, __typeof__(*pos), member),\
+	     pos = d_list_entry(pos->member.next, __typeof__(*pos), member),\
 	     prefetch(pos->member.next))
-#endif /* crt_list_for_each_entry */
+#endif /* d_list_for_each_entry */
 
-#ifndef crt_list_for_each_entry_rcu
-#define crt_list_for_each_entry_rcu(pos, head, member) \
+#ifndef d_list_for_each_entry_rcu
+#define d_list_for_each_entry_rcu(pos, head, member) \
 	list_for_each_entry(pos, head, member)
 #endif
 
-#ifndef crt_list_for_each_entry_rcu
-#define crt_list_for_each_entry_rcu(pos, head, member) \
+#ifndef d_list_for_each_entry_rcu
+#define d_list_for_each_entry_rcu(pos, head, member) \
 	list_for_each_entry(pos, head, member)
 #endif
 
-#ifndef crt_list_for_each_entry_reverse
+#ifndef d_list_for_each_entry_reverse
 /**
  * Iterate backwards over a list of given type.
  * \param pos        the type * to use as a loop counter.
  * \param head       the head for your list.
  * \param member     the name of the list_struct within the struct.
  */
-#define crt_list_for_each_entry_reverse(pos, head, member)                  \
-	for (pos = crt_list_entry((head)->prev, __typeof__(*pos), member);  \
+#define d_list_for_each_entry_reverse(pos, head, member)                  \
+	for (pos = d_list_entry((head)->prev, __typeof__(*pos), member);  \
 	     prefetch(pos->member.prev), &pos->member != (head);             \
-	     pos = crt_list_entry(pos->member.prev, __typeof__(*pos), member))
-#endif /* crt_list_for_each_entry_reverse */
+	     pos = d_list_entry(pos->member.prev, __typeof__(*pos), member))
+#endif /* d_list_for_each_entry_reverse */
 
-#ifndef crt_list_for_each_entry_safe
+#ifndef d_list_for_each_entry_safe
 /**
  * Iterate over a list of given type safe against removal of list entry
  * \param pos        the type * to use as a loop counter.
@@ -525,17 +527,17 @@ crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *prev)
  * \param head       the head for your list.
  * \param member     the name of the list_struct within the struct.
  */
-#define crt_list_for_each_entry_safe(pos, n, head, member)                   \
-	for (pos = crt_list_entry((head)->next, __typeof__(*pos), member),   \
-		n = crt_list_entry(pos->member.next, __typeof__(*pos),       \
+#define d_list_for_each_entry_safe(pos, n, head, member)                   \
+	for (pos = d_list_entry((head)->next, __typeof__(*pos), member),   \
+		n = d_list_entry(pos->member.next, __typeof__(*pos),       \
 				    member);                                  \
 	     &pos->member != (head);                                          \
-	     pos = n, n = crt_list_entry(n->member.next, __typeof__(*n),     \
+	     pos = n, n = d_list_entry(n->member.next, __typeof__(*n),     \
 					  member))
 
-#endif /* crt_list_for_each_entry_safe */
+#endif /* d_list_for_each_entry_safe */
 
-#ifndef crt_list_for_each_entry_safe_from
+#ifndef d_list_for_each_entry_safe_from
 /**
  * Iterate over a list continuing from an existing point
  * \param pos        the type * to use as a loop cursor.
@@ -546,50 +548,50 @@ crt_hlist_add_after(crt_hlist_node_t *n, crt_hlist_node_t *prev)
  * Iterate over list of given type from current point, safe against
  * removal of list entry.
  */
-#define crt_list_for_each_entry_safe_from(pos, n, head, member)             \
-	for (n = crt_list_entry(pos->member.next, __typeof__(*pos), member);\
+#define d_list_for_each_entry_safe_from(pos, n, head, member)             \
+	for (n = d_list_entry(pos->member.next, __typeof__(*pos), member);\
 	     &pos->member != (head);                                         \
-	     pos = n, n = crt_list_entry(n->member.next, __typeof__(*n),    \
+	     pos = n, n = d_list_entry(n->member.next, __typeof__(*n),    \
 					  member))
-#endif /* crt_list_for_each_entry_safe_from */
+#endif /* d_list_for_each_entry_safe_from */
 
-#define crt_list_for_each_entry_typed(pos, head, type, member)		\
-	for (pos = crt_list_entry((head)->next, type, member),		\
+#define d_list_for_each_entry_typed(pos, head, type, member)		\
+	for (pos = d_list_entry((head)->next, type, member),		\
 	     prefetch(pos->member.next);				\
 	     &pos->member != (head);                                    \
-	     pos = crt_list_entry(pos->member.next, type, member),	\
+	     pos = d_list_entry(pos->member.next, type, member),	\
 	     prefetch(pos->member.next))
 
-#define crt_list_for_each_entry_reverse_typed(pos, head, type, member)	\
-	for (pos = crt_list_entry((head)->prev, type, member);		\
+#define d_list_for_each_entry_reverse_typed(pos, head, type, member)	\
+	for (pos = d_list_entry((head)->prev, type, member);		\
 	     prefetch(pos->member.prev), &pos->member != (head);	\
-	     pos = crt_list_entry(pos->member.prev, type, member))
+	     pos = d_list_entry(pos->member.prev, type, member))
 
-#define crt_list_for_each_entry_safe_typed(pos, n, head, type, member)	\
-	for (pos = crt_list_entry((head)->next, type, member),		\
-	     n = crt_list_entry(pos->member.next, type, member);	\
+#define d_list_for_each_entry_safe_typed(pos, n, head, type, member)	\
+	for (pos = d_list_entry((head)->next, type, member),		\
+	     n = d_list_entry(pos->member.next, type, member);	\
 	     &pos->member != (head);                                    \
-	     pos = n, n = crt_list_entry(n->member.next, type, member))
+	     pos = n, n = d_list_entry(n->member.next, type, member))
 
-#define crt_list_for_each_entry_safe_from_typed(pos, n, head, type, member)  \
-	for (n = crt_list_entry(pos->member.next, type, member);             \
+#define d_list_for_each_entry_safe_from_typed(pos, n, head, type, member)  \
+	for (n = d_list_entry(pos->member.next, type, member);             \
 	     &pos->member != (head);                                          \
-	     pos = n, n = crt_list_entry(n->member.next, type, member))
+	     pos = n, n = d_list_entry(n->member.next, type, member))
 
-#define crt_hlist_for_each_entry_typed(tpos, pos, head, type, member)   \
+#define dhlist_for_each_entry_typed(tpos, pos, head, type, member)   \
 	for (pos = (head)->first;                                        \
 	     pos && (prefetch(pos->next), 1) &&                          \
-		(tpos = crt_hlist_entry(pos, type, member), 1);         \
+		(tpos = d_hlist_entry(pos, type, member), 1);         \
 	     pos = pos->next)
 
-#define crt_hlist_for_each_entry_safe_typed(tpos, pos, n, head, type, member) \
+#define dhlist_for_each_entry_safe_typed(tpos, pos, n, head, type, member) \
 	for (pos = (head)->first;                                              \
 	     pos && (n = pos->next, 1) &&                                      \
-		(tpos = crt_hlist_entry(pos, type, member), 1);               \
+		(tpos = d_hlist_entry(pos, type, member), 1);               \
 	     pos = n)
 
 #if defined(__cplusplus)
 }
 #endif
 
-#endif /* __CRT_LIST_H__ */
+#endif /* __GURT_LIST_H__ */

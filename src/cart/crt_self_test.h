@@ -90,10 +90,10 @@
  *        CRT_OPC_SELF_TEST_BOTH_EMPTY
  *    session_id only                          (int32_t)
  *        CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV
- *    session_id, iov                          (int32_t, crt_iov_t)
+ *    session_id, iov                          (int32_t, d_iov_t)
  *        CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY
  *        CRT_OPC_SELF_TEST_BOTH_IOV
- *    session_id, iov, bulk handle             (int32_t, crt_iov_t, crt_bulk_t)
+ *    session_id, iov, bulk handle             (int32_t, d_iov_t, crt_bulk_t)
  *        CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK
  *    session_id, bulk handle                  (int32_t, crt_bulk_t)
  *        CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV
@@ -105,7 +105,7 @@
  *        CRT_OPC_SELF_TEST_SEND_IOV_REPLY_EMPTY
  *        CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK
  *        CRT_OPC_SELF_TEST_BOTH_BULK
- *    iov                                      (crt_iov_t)
+ *    iov                                      (d_iov_t)
  *        CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV
  *        CRT_OPC_SELF_TEST_BOTH_IOV
  *        CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV
@@ -116,7 +116,7 @@
  *
  * Primary role of sessions:
  * - Memory pre-allocated by open and cleaned up by close (no allocations
- *   during the actual test).
+ *   d_uring the actual test).
  * - In the future, the amount of information passed to self-test can grow
  *   without changing the size of the test RPCs (which instead only require a
  *   session id to convey all that same information)
@@ -201,14 +201,14 @@ enum crt_st_status {
  */
 
 struct crt_st_send_id_iov {
-	int64_t session_id;
-	crt_iov_t buf;
+	int64_t	session_id;
+	d_iov_t	buf;
 };
 
 struct crt_st_send_id_iov_bulk {
-	int64_t session_id;
-	crt_iov_t buf;
-	crt_bulk_t bulk_hdl;
+	int64_t		session_id;
+	d_iov_t		buf;
+	crt_bulk_t	bulk_hdl;
 };
 
 struct crt_st_send_id_bulk {
@@ -222,7 +222,7 @@ struct crt_st_start_params {
 	 * Array of rank (uint32_t) and tag (uint32_t) pairs
 	 * num_endpts = endpts.len / 8
 	 */
-	crt_iov_t endpts;
+	d_iov_t endpts;
 	uint32_t rep_count;
 	uint32_t max_inflight;
 	uint32_t send_size;
@@ -254,10 +254,10 @@ static inline crt_opcode_t
 crt_st_compute_opcode(enum crt_st_msg_type send_type,
 		      enum crt_st_msg_type reply_type)
 {
-	C_ASSERT(send_type >= 0 && send_type < 4);
-	C_ASSERT(reply_type >= 0 && reply_type < 4);
-	C_ASSERT(send_type != CRT_SELF_TEST_MSG_TYPE_BULK_PUT);
-	C_ASSERT(reply_type != CRT_SELF_TEST_MSG_TYPE_BULK_GET);
+	D_ASSERT(send_type >= 0 && send_type < 4);
+	D_ASSERT(reply_type >= 0 && reply_type < 4);
+	D_ASSERT(send_type != CRT_SELF_TEST_MSG_TYPE_BULK_PUT);
+	D_ASSERT(reply_type != CRT_SELF_TEST_MSG_TYPE_BULK_GET);
 
 	crt_opcode_t opcodes[4][4] = { { CRT_OPC_SELF_TEST_BOTH_EMPTY,
 					 CRT_OPC_SELF_TEST_SEND_EMPTY_REPLY_IOV,
@@ -284,7 +284,7 @@ static inline void *crt_st_get_aligned_ptr(void *base, int16_t buf_alignment)
 	if (buf_alignment == CRT_ST_BUF_ALIGN_DEFAULT)
 		return base;
 
-	C_ASSERT(buf_alignment >= CRT_ST_BUF_ALIGN_MIN &&
+	D_ASSERT(buf_alignment >= CRT_ST_BUF_ALIGN_MIN &&
 		 buf_alignment <= CRT_ST_BUF_ALIGN_MAX);
 
 	offset = (buf_alignment - (((size_t)base) & CRT_ST_BUF_ALIGN_MAX)) %
@@ -293,8 +293,8 @@ static inline void *crt_st_get_aligned_ptr(void *base, int16_t buf_alignment)
 	returnptr = ((char *)base) + offset;
 
 	/* Catch math bugs */
-	C_ASSERT((char *)returnptr <= (((char *)base) + CRT_ST_BUF_ALIGN_MAX));
-	C_ASSERT((((size_t)returnptr) & CRT_ST_BUF_ALIGN_MAX) == buf_alignment);
+	D_ASSERT((char *)returnptr <= (((char *)base) + CRT_ST_BUF_ALIGN_MAX));
+	D_ASSERT((((size_t)returnptr) & CRT_ST_BUF_ALIGN_MAX) == buf_alignment);
 
 	return returnptr;
 }

@@ -36,53 +36,53 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __CRT_DEBUG_H__
-#define __CRT_DEBUG_H__
+#ifndef __GURT_DEBUG_H__
+#define __GURT_DEBUG_H__
 
-#include <pouch/clog.h>
+#include <gurt/dlog.h>
 
-extern int crt_misc_logfac;
-extern int crt_mem_logfac;
-extern int crt_rpc_logfac;
-extern int crt_bulk_logfac;
-extern int crt_corpc_logfac;
-extern int crt_grp_logfac;
-extern int crt_lm_logfac;
-extern int crt_hg_logfac;
-extern int crt_pmix_logfac;
-extern int crt_self_test_logfac;
+extern int d_misc_logfac;
+extern int d_mem_logfac;
+extern int d_rpc_logfac;
+extern int d_bulk_logfac;
+extern int d_corpc_logfac;
+extern int d_grp_logfac;
+extern int d_lm_logfac;
+extern int d_hg_logfac;
+extern int d_pmix_logfac;
+extern int d_self_test_logfac;
 
-#define CD_FAC(name)	(crt_##name##_logfac)
+#define DD_FAC(name)	(d_##name##_logfac)
 
-#ifndef C_LOGFAC
-#define C_LOGFAC	CD_FAC(misc)
+#ifndef D_LOGFAC
+#define D_LOGFAC	DD_FAC(misc)
 #endif
 
-#define CRT_CRIT	(C_LOGFAC | CLOG_CRIT)
-#define CRT_ERR		(C_LOGFAC | CLOG_ERR)
-#define CRT_WARN	(C_LOGFAC | CLOG_WARN)
-#define CRT_INFO	(C_LOGFAC | CLOG_INFO)
-#define CRT_DBG		(C_LOGFAC | CLOG_DBG)
+#define DCRIT		(D_LOGFAC | DLOG_CRIT)
+#define DERR		(D_LOGFAC | DLOG_ERR)
+#define DWARN		(D_LOGFAC | DLOG_WARN)
+#define DINFO		(D_LOGFAC | DLOG_INFO)
+#define DDBG		(D_LOGFAC | DLOG_DBG)
 
 /*
  * Add a new log facility.
  *
  * \param aname [IN]	abbr. name for the facility, for example DSR.
- * \param lname [IN]	long name for the facility, for example CRT_SR.
+ * \param lname [IN]	long name for the facility, for example DSR.
  *
  * \return		new positive facility number on success, -1 on error.
  */
 static inline int
-crt_add_log_facility(char *aname, char *lname)
+d_add_log_facility(char *aname, char *lname)
 {
-	return crt_log_allocfacility(aname, lname);
+	return d_log_allocfacility(aname, lname);
 }
 
 /*
- * C_PRINT_ERR must be used for any error logging before clog is enabled or
+ * D_PRINT_ERR must be used for any error logging before clog is enabled or
  * after it is disabled
  */
-#define C_PRINT_ERR(fmt, ...)                                          \
+#define D_PRINT_ERR(fmt, ...)                                          \
 	do {                                                           \
 		fprintf(stderr, "%s:%d:%d:%s() " fmt, __FILE__,        \
 			getpid(), __LINE__, __func__, ## __VA_ARGS__); \
@@ -91,39 +91,39 @@ crt_add_log_facility(char *aname, char *lname)
 
 
 /*
- * C_DEBUG/C_ERROR etc can-only be used when clog enabled. User can define other
+ * D_DEBUG/D_ERROR etc can-only be used when clog enabled. User can define other
  * similar macros using different subsystem and log-level, for example:
- * #define DSR_DEBUG(...) crt_log(DSR_DEBUG, ...)
+ * #define DSR_DEBUG(...) d_log(DSR_DEBUG, ...)
  */
-#define C_DEBUG(fmt, ...)						\
-	crt_log(CRT_DBG, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__, \
-		##__VA_ARGS__)
+#define D_DEBUG(fmt, ...)						\
+	d_log(DDBG, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__, \
+	     ##__VA_ARGS__)
 
-#define C_WARN(fmt, ...)						\
-	crt_log(CRT_WARN, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,\
-		##__VA_ARGS__)
+#define D_WARN(fmt, ...)						\
+	d_log(DWARN, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,\
+	     ##__VA_ARGS__)
 
-#define C_ERROR(fmt, ...)						\
-	crt_log(CRT_ERR, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__, \
-		##__VA_ARGS__)
+#define D_ERROR(fmt, ...)						\
+	d_log(DERR, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__, \
+	     ##__VA_ARGS__)
 
-#define C_FATAL(fmt, ...)						\
-	crt_log(CRT_CRIT, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,\
-		##__VA_ARGS__)
+#define D_FATAL(fmt, ...)						\
+	d_log(DCRIT, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,\
+	     ##__VA_ARGS__)
 
-#define C_ASSERT(e)	assert(e)
+#define D_ASSERT(e)	assert(e)
 
-#define C_ASSERTF(cond, fmt, ...)					\
+#define D_ASSERTF(cond, fmt, ...)					\
 do {									\
 	if (!(cond))							\
-		C_FATAL(fmt, ## __VA_ARGS__);				\
+		D_FATAL(fmt, ## __VA_ARGS__);				\
 	assert(cond);							\
 } while (0)
 
-#define C_CASSERT(cond)							\
+#define D_CASSERT(cond)							\
 	do {switch (1) {case (cond): case 0: break; } } while (0)
 
 #define CF_U64		"%" PRIu64
 #define CF_X64		"%" PRIx64
 
-#endif /* __CRT_DEBUG_H__ */
+#endif /* __GURT_DEBUG_H__ */

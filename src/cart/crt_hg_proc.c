@@ -39,7 +39,7 @@
  * This file is part of CaRT. It implements the main input/output
  * parameter serialization/de-serialization routines (proc functions).
  */
-#define C_LOGFAC	CD_FAC(hg)
+#define D_LOGFAC	DD_FAC(hg)
 
 #include "crt_internal.h"
 
@@ -52,12 +52,12 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 	int		rc = 0;
 
 	if (proc == NULL) {
-		C_ERROR("Proc is not initilalized.\n");
-		C_GOTO(out, rc = -CER_INVAL);
+		D_ERROR("Proc is not initilalized.\n");
+		D_GOTO(out, rc = -CER_INVAL);
 	}
 	if (proc_op == NULL) {
-		C_ERROR("invalid parameter - NULL proc_op.\n");
-		C_GOTO(out, rc = -CER_INVAL);
+		D_ERROR("invalid parameter - NULL proc_op.\n");
+		D_GOTO(out, rc = -CER_INVAL);
 	}
 
 	hg_proc_op = hg_proc_get_op(proc);
@@ -72,7 +72,7 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 		*proc_op = CRT_PROC_FREE;
 		break;
 	default:
-		C_ERROR("bad hg_proc_op: %d.\n", hg_proc_op);
+		D_ERROR("bad hg_proc_op: %d.\n", hg_proc_op);
 		rc = -CER_INVAL;
 	}
 
@@ -81,7 +81,7 @@ out:
 }
 
 int
-crt_proc_memcpy(crt_proc_t proc, void *data, crt_size_t data_size)
+crt_proc_memcpy(crt_proc_t proc, void *data, d_size_t data_size)
 {
 	hg_return_t	hg_ret;
 
@@ -183,7 +183,7 @@ crt_proc_bool(crt_proc_t proc, bool *data)
 }
 
 int
-crt_proc_raw(crt_proc_t proc, void *buf, crt_size_t buf_size)
+crt_proc_raw(crt_proc_t proc, void *buf, d_size_t buf_size)
 {
 	hg_return_t	hg_ret;
 
@@ -203,7 +203,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_bulk_t *bulk_hdl)
 }
 
 int
-crt_proc_crt_string_t(crt_proc_t proc, crt_string_t *data)
+crt_proc_crt_string_t(crt_proc_t proc, d_string_t *data)
 {
 	hg_return_t	hg_ret;
 
@@ -213,7 +213,7 @@ crt_proc_crt_string_t(crt_proc_t proc, crt_string_t *data)
 }
 
 int
-crt_proc_crt_const_string_t(crt_proc_t proc, crt_const_string_t *data)
+crt_proc_crt_const_string_t(crt_proc_t proc, d_const_string_t *data)
 {
 	hg_return_t	hg_ret;
 
@@ -229,16 +229,16 @@ crt_proc_uuid_t(crt_proc_t proc, uuid_t *data)
 }
 
 int
-crt_proc_crt_rank_list_t(crt_proc_t proc, crt_rank_list_t **data)
+crt_proc_crt_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 {
-	crt_rank_list_t	*rank_list;
-	hg_proc_op_t		proc_op;
-	uint32_t		rank_num;
-	int			i, rc = 0;
+	d_rank_list_t		*rank_list;
+	hg_proc_op_t		 proc_op;
+	uint32_t		 rank_num;
+	int			 i, rc = 0;
 
 	if (proc == NULL || data == NULL) {
-		C_ERROR("Invalid parameter, proc: %p, data: %p.\n", proc, data);
-		C_GOTO(out, rc = -CER_INVAL);
+		D_ERROR("Invalid parameter, proc: %p, data: %p.\n", proc, data);
+		D_GOTO(out, rc = -CER_INVAL);
 	}
 
 	proc_op = hg_proc_get_op(proc);
@@ -249,70 +249,70 @@ crt_proc_crt_rank_list_t(crt_proc_t proc, crt_rank_list_t **data)
 			rank_num = 0;
 			rc = crt_proc_uint32_t(proc, &rank_num);
 			if (rc != 0)
-				C_ERROR("crt_proc_uint32_t failed, rc: %d.\n",
+				D_ERROR("crt_proc_uint32_t failed, rc: %d.\n",
 					rc);
-			C_GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 
 		rank_num = rank_list->rl_nr.num;
 		rc = crt_proc_uint32_t(proc, &rank_num);
 		if (rc != 0) {
-			C_ERROR("crt_proc_uint32_t failed, rc: %d.\n",
+			D_ERROR("crt_proc_uint32_t failed, rc: %d.\n",
 				rc);
-			C_GOTO(out, rc = -CER_HG);
+			D_GOTO(out, rc = -CER_HG);
 		}
 		for (i = 0; i < rank_num; i++) {
 			rc = crt_proc_crt_rank_t(proc,
 						  &rank_list->rl_ranks[i]);
 			if (rc != 0) {
-				C_ERROR("crt_proc_crt_rank_t failed,rc: %d.\n",
+				D_ERROR("crt_proc_crt_rank_t failed,rc: %d.\n",
 					rc);
-				C_GOTO(out, rc = -CER_HG);
+				D_GOTO(out, rc = -CER_HG);
 			}
 		}
 		break;
 	case HG_DECODE:
 		rc = crt_proc_uint32_t(proc, &rank_num);
 		if (rc != 0) {
-			C_ERROR("crt_proc_uint32_t failed, rc: %d.\n",
+			D_ERROR("crt_proc_uint32_t failed, rc: %d.\n",
 				rc);
-			C_GOTO(out, rc = -CER_HG);
+			D_GOTO(out, rc = -CER_HG);
 		}
 		if (rank_num == 0) {
 			*data = NULL;
-			C_GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
-		C_ALLOC_PTR(rank_list);
+		D_ALLOC_PTR(rank_list);
 		if (rank_list == NULL) {
-			C_ERROR("Cannot allocate memory for rank list.\n");
-			C_GOTO(out, rc = -CER_NOMEM);
+			D_ERROR("Cannot allocate memory for rank list.\n");
+			D_GOTO(out, rc = -CER_NOMEM);
 		}
 		rank_list->rl_nr.num = rank_num;
-		C_ALLOC(rank_list->rl_ranks, rank_num * sizeof(crt_rank_t));
+		D_ALLOC(rank_list->rl_ranks, rank_num * sizeof(d_rank_t));
 		if (rank_list->rl_ranks == NULL) {
-			C_ERROR("Cannot allocate memory for rl_ranks.\n");
-			C_FREE_PTR(rank_list);
-			C_GOTO(out, rc = -CER_NOMEM);
+			D_ERROR("Cannot allocate memory for rl_ranks.\n");
+			D_FREE_PTR(rank_list);
+			D_GOTO(out, rc = -CER_NOMEM);
 		}
 		for (i = 0; i < rank_num; i++) {
 			rc = crt_proc_crt_rank_t(proc,
 						  &rank_list->rl_ranks[i]);
 			if (rc != 0) {
-				C_ERROR("crt_proc_daso_rank_t failed,rc: %d.\n",
+				D_ERROR("crt_proc_daso_rank_t failed,rc: %d.\n",
 					rc);
-				C_GOTO(out, rc = -CER_HG);
+				D_GOTO(out, rc = -CER_HG);
 			}
 		}
 		*data = rank_list;
 		break;
 	case HG_FREE:
 		rank_list = *data;
-		crt_rank_list_free(rank_list);
+		d_rank_list_free(rank_list);
 		*data = NULL;
 		break;
 	default:
-		C_ERROR("Bad proc op: %d.\n", proc_op);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("Bad proc op: %d.\n", proc_op);
+		D_GOTO(out, rc = -CER_HG);
 	}
 
 out:
@@ -320,13 +320,13 @@ out:
 }
 
 int
-crt_proc_crt_iov_t(crt_proc_t proc, crt_iov_t *div)
+crt_proc_crt_iov_t(crt_proc_t proc, d_iov_t *div)
 {
 	crt_proc_op_t	proc_op;
 	int		rc;
 
 	if (div == NULL) {
-		C_ERROR("invalid parameter, NULL div.\n");
+		D_ERROR("invalid parameter, NULL div.\n");
 		return -CER_INVAL;
 	}
 
@@ -336,7 +336,7 @@ crt_proc_crt_iov_t(crt_proc_t proc, crt_iov_t *div)
 
 	if (proc_op == CRT_PROC_FREE) {
 		if (div->iov_buf_len > 0)
-			C_FREE(div->iov_buf, div->iov_buf_len);
+			D_FREE(div->iov_buf, div->iov_buf_len);
 		return 0;
 	}
 
@@ -349,13 +349,13 @@ crt_proc_crt_iov_t(crt_proc_t proc, crt_iov_t *div)
 		return -CER_HG;
 
 	if (div->iov_buf_len < div->iov_len) {
-		C_ERROR("invalid iov buf len "CF_U64" < iov len "CF_U64"\n",
+		D_ERROR("invalid iov buf len "CF_U64" < iov len "CF_U64"\n",
 			div->iov_buf_len, div->iov_len);
 		return -CER_HG;
 	}
 	if (proc_op == CRT_PROC_DECODE) {
 		if (div->iov_buf_len > 0) {
-			C_ALLOC(div->iov_buf, div->iov_buf_len);
+			D_ALLOC(div->iov_buf, div->iov_buf_len);
 			if (div->iov_buf == NULL)
 				return -CER_NOMEM;
 		} else {
@@ -366,7 +366,7 @@ crt_proc_crt_iov_t(crt_proc_t proc, crt_iov_t *div)
 	rc = crt_proc_memcpy(proc, div->iov_buf, div->iov_len);
 	if (rc != 0) {
 		if (proc_op == CRT_PROC_DECODE)
-			C_FREE(div->iov_buf, div->iov_buf_len);
+			D_FREE(div->iov_buf, div->iov_buf_len);
 		return -CER_HG;
 	}
 
@@ -394,7 +394,7 @@ struct crt_msg_field CMF_UINT64 =
 			crt_proc_uint64_t);
 
 struct crt_msg_field CMF_CRT_SIZE =
-	DEFINE_CRT_MSG("crt_crt_size", 0, sizeof(crt_size_t),
+	DEFINE_CRT_MSG("crt_crt_size", 0, sizeof(d_size_t),
 			crt_proc_crt_size_t);
 
 struct crt_msg_field CMF_BULK =
@@ -407,19 +407,19 @@ struct crt_msg_field CMF_BOOL =
 
 struct crt_msg_field CMF_STRING =
 	DEFINE_CRT_MSG("crt_string", 0,
-		       sizeof(crt_string_t), crt_proc_crt_string_t);
+		       sizeof(d_string_t), crt_proc_crt_string_t);
 
 struct crt_msg_field CMF_PHY_ADDR =
 	DEFINE_CRT_MSG("crt_phy_addr", 0,
 		       sizeof(crt_phy_addr_t), crt_proc_crt_phy_addr_t);
 
 struct crt_msg_field CMF_RANK =
-	DEFINE_CRT_MSG("crt_rank", 0, sizeof(crt_rank_t),
+	DEFINE_CRT_MSG("crt_rank", 0, sizeof(d_rank_t),
 		       crt_proc_uint32_t);
 
 struct crt_msg_field CMF_RANK_LIST =
 	DEFINE_CRT_MSG("crt_rank_list", 0,
-		       sizeof(crt_rank_list_t *), crt_proc_crt_rank_list_t);
+		       sizeof(d_rank_list_t *), crt_proc_crt_rank_list_t);
 
 struct crt_msg_field CMF_BULK_ARRAY =
 	DEFINE_CRT_MSG("crt_bulks", CMF_ARRAY_FLAG,
@@ -427,7 +427,7 @@ struct crt_msg_field CMF_BULK_ARRAY =
 			crt_proc_crt_bulk_t);
 
 struct crt_msg_field CMF_IOVEC =
-	DEFINE_CRT_MSG("crt_iov", 0, sizeof(crt_iov_t), crt_proc_crt_iov_t);
+	DEFINE_CRT_MSG("crt_iov", 0, sizeof(d_iov_t), crt_proc_crt_iov_t);
 
 struct crt_msg_field *crt_single_out_fields[] = {
 	&CMF_INT,	/* status */
@@ -441,47 +441,47 @@ crt_proc_corpc_hdr(crt_proc_t proc, struct crt_corpc_hdr *hdr)
 	int           rc = 0;
 
 	if (proc == CRT_PROC_NULL || hdr == NULL)
-		C_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -CER_INVAL);
 
 	hg_proc = proc;
 	hg_ret = hg_proc_hg_uint64_t(hg_proc, &hdr->coh_int_grpid);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 	rc = crt_proc_crt_bulk_t(hg_proc, &hdr->coh_bulk_hdl);
 	if (rc != 0) {
-		C_ERROR("crt proc error, rc: %d.\n", rc);
-		C_GOTO(out, rc);
+		D_ERROR("crt proc error, rc: %d.\n", rc);
+		D_GOTO(out, rc);
 	}
 	rc = crt_proc_crt_rank_list_t(hg_proc, &hdr->coh_excluded_ranks);
 	if (rc != 0) {
-		C_ERROR("crt proc error, rc: %d.\n", rc);
-		C_GOTO(out, rc);
+		D_ERROR("crt proc error, rc: %d.\n", rc);
+		D_GOTO(out, rc);
 	}
 	rc = crt_proc_crt_rank_list_t(hg_proc, &hdr->coh_inline_ranks);
 	if (rc != 0) {
-		C_ERROR("crt proc error, rc: %d.\n", rc);
-		C_GOTO(out, rc);
+		D_ERROR("crt proc error, rc: %d.\n", rc);
+		D_GOTO(out, rc);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_grp_ver);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_tree_topo);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_root);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->coh_padding);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		rc = -CER_HG;
 	}
 
@@ -497,51 +497,51 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 	int           rc = 0;
 
 	/*
-	 * C_DEBUG("in crt_proc_common_hdr, opc: 0x%x.\n", hdr->cch_opc);
+	 * D_DEBUG("in crt_proc_common_hdr, opc: 0x%x.\n", hdr->cch_opc);
 	 */
 
 	if (proc == CRT_PROC_NULL || hdr == NULL)
-		C_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -CER_INVAL);
 
 	hg_proc = proc;
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_magic);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_version);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_opc);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_cksum);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_flags);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_rank);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_grp_id);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 	hg_ret = hg_proc_hg_uint32_t(hg_proc, &hdr->cch_rc);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
+		D_ERROR("hg proc error, hg_ret: %d.\n", hg_ret);
 		rc = -CER_HG;
 	}
 
@@ -575,8 +575,8 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	/* Get input buffer */
 	hg_ret = HG_Core_get_input(handle, &in_buf, &in_buf_size);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("Could not get input buffer, hg_ret: %d.", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("Could not get input buffer, hg_ret: %d.", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 
 	/* Create a new decoding proc */
@@ -586,22 +586,22 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	hg_ret = hg_proc_create_set(hg_class, in_buf, in_buf_size, HG_DECODE,
 				    HG_CHECKSUM_DEFAULT, &hg_proc);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("Could not create proc, hg_ret: %d.", hg_ret);
-		C_GOTO(out, rc = -CER_HG);
+		D_ERROR("Could not create proc, hg_ret: %d.", hg_ret);
+		D_GOTO(out, rc = -CER_HG);
 	}
 
 	/* Decode header */
 	rc = crt_proc_common_hdr(hg_proc, &rpc_priv->crp_req_hdr);
 	if (rc != 0) {
-		C_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
-		C_GOTO(out, rc);
+		D_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
+		D_GOTO(out, rc);
 	}
 	rpc_priv->crp_flags = rpc_priv->crp_req_hdr.cch_flags;
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		rc = crt_proc_corpc_hdr(hg_proc, &rpc_priv->crp_coreq_hdr);
 		if (rc != 0) {
-			C_ERROR("crt_proc_corpc_hdr failed rc: %d.\n", rc);
-			C_GOTO(out, rc);
+			D_ERROR("crt_proc_corpc_hdr failed rc: %d.\n", rc);
+			D_GOTO(out, rc);
 		}
 	}
 
@@ -688,8 +688,8 @@ crt_proc_internal(struct crf_field *crf,
 			}
 
 			if (proc_op == HG_DECODE) {
-				C_ASSERT(array->da_count > 0);
-				C_ALLOC(array->da_arrays, array->da_count *
+				D_ASSERT(array->da_count > 0);
+				D_ALLOC(array->da_arrays, array->da_count *
 						crf->crf_msg[i]->cmf_size);
 				if (array->da_arrays == NULL) {
 					rc = -CER_NOMEM;
@@ -700,9 +700,9 @@ crt_proc_internal(struct crf_field *crf,
 			for (j = 0; j < array->da_count; j++) {
 				rc = crf->crf_msg[i]->cmf_proc(proc, array_ptr);
 				if (rc != 0) {
-					C_ERROR("cmf_proc failed, i %d, "
+					D_ERROR("cmf_proc failed, i %d, "
 						"rc %d.\n", i, rc);
-					C_GOTO(out, rc);
+					D_GOTO(out, rc);
 				}
 
 				array_ptr = (char *)array_ptr +
@@ -710,7 +710,7 @@ crt_proc_internal(struct crf_field *crf,
 			}
 
 			if (proc_op == HG_FREE) {
-				C_FREE(array->da_arrays, array->da_count *
+				D_FREE(array->da_arrays, array->da_count *
 						crf->crf_msg[i]->cmf_size);
 			}
 			ptr = (char *)ptr + sizeof(struct crt_array);
@@ -733,7 +733,7 @@ crt_proc_input(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 {
 	struct crt_req_format *crf = rpc_priv->crp_opc_info->coi_crf;
 
-	C_ASSERT(crf != NULL);
+	D_ASSERT(crf != NULL);
 	return crt_proc_internal(&crf->crf_fields[CRT_IN],
 				 proc, rpc_priv->crp_pub.cr_input);
 }
@@ -743,7 +743,7 @@ crt_proc_output(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 {
 	struct crt_req_format *crf = rpc_priv->crp_opc_info->coi_crf;
 
-	C_ASSERT(crf != NULL);
+	D_ASSERT(crf != NULL);
 	return crt_proc_internal(&crf->crf_fields[CRT_OUT],
 				 proc, rpc_priv->crp_pub.cr_output);
 }
@@ -755,22 +755,22 @@ crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 
 	hg_return_t	hg_ret;
 
-	C_ASSERT(rpc_priv != NULL && proc != HG_PROC_NULL);
+	D_ASSERT(rpc_priv != NULL && proc != HG_PROC_NULL);
 
 	/* Decode input parameters */
 	rc = crt_proc_input(rpc_priv, proc);
 	if (rc != 0) {
-		C_ERROR("crt_hg_unpack_body failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_hg_unpack_body failed, rc: %d, opc: 0x%x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	/* Flush proc */
 	hg_ret = hg_proc_flush(proc);
 	if (hg_ret != HG_SUCCESS) {
-		C_ERROR("Error in proc flush, hg_ret: %d, opc: 0x%x.",
+		D_ERROR("Error in proc flush, hg_ret: %d, opc: 0x%x.",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 out:
 	crt_hg_unpack_cleanup(proc);
@@ -786,25 +786,25 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 	int			 rc = 0;
 
 	if (proc == CRT_PROC_NULL)
-		C_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -CER_INVAL);
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
 		return -CER_HG;
 
-	C_ASSERT(data != NULL);
+	D_ASSERT(data != NULL);
 	rpc_priv = container_of(data, struct crt_rpc_priv, crp_pub.cr_input);
-	C_ASSERT(rpc_priv != NULL);
+	D_ASSERT(rpc_priv != NULL);
 
-	/* C_DEBUG("in crt_proc_in_common, data: %p\n", *data); */
+	/* D_DEBUG("in crt_proc_in_common, data: %p\n", *data); */
 
 	if (proc_op != CRT_PROC_FREE) {
 		if (proc_op == CRT_PROC_ENCODE)
 			rpc_priv->crp_req_hdr.cch_flags = rpc_priv->crp_flags;
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_req_hdr);
 		if (rc != 0) {
-			C_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
-			C_GOTO(out, rc);
+			D_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
+			D_GOTO(out, rc);
 		}
 		if (proc_op == CRT_PROC_DECODE)
 			rpc_priv->crp_flags = rpc_priv->crp_req_hdr.cch_flags;
@@ -813,24 +813,24 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		rc = crt_proc_corpc_hdr(proc, &rpc_priv->crp_coreq_hdr);
 		if (rc != 0) {
-			C_ERROR("crt_proc_corpc_hdr failed rc: %d.\n", rc);
-			C_GOTO(out, rc);
+			D_ERROR("crt_proc_corpc_hdr failed rc: %d.\n", rc);
+			D_GOTO(out, rc);
 		}
 	}
 
 	if (*data == NULL) {
 		/*
-		C_DEBUG("crt_proc_in_common, opc: 0x%x, NULL input.\n",
+		D_DEBUG("crt_proc_in_common, opc: 0x%x, NULL input.\n",
 			rpc_priv->crp_req_hdr.cch_opc);
 		*/
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = crt_proc_input(rpc_priv, proc);
 	if (rc != 0) {
-		C_ERROR("unpack input fails for opc: %s\n",
+		D_ERROR("unpack input fails for opc: %s\n",
 			rpc_priv->crp_opc_info->coi_crf->crf_name);
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 out:
 	return rc;
@@ -845,39 +845,39 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 	int			 rc = 0;
 
 	if (proc == CRT_PROC_NULL)
-		C_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -CER_INVAL);
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
 		return -CER_HG;
 
-	C_ASSERT(data != NULL);
+	D_ASSERT(data != NULL);
 	rpc_priv = container_of(data, struct crt_rpc_priv, crp_pub.cr_output);
-	C_ASSERT(rpc_priv != NULL);
+	D_ASSERT(rpc_priv != NULL);
 
-	/* C_DEBUG("in crt_proc_out_common, data: %p\n", *data); */
+	/* D_DEBUG("in crt_proc_out_common, data: %p\n", *data); */
 
 	if (proc_op != CRT_PROC_FREE) {
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_reply_hdr);
 		if (rc != 0) {
-			C_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
-			C_GOTO(out, rc);
+			D_ERROR("crt_proc_common_hdr failed rc: %d.\n", rc);
+			D_GOTO(out, rc);
 		}
 		if (rpc_priv->crp_reply_hdr.cch_rc != 0) {
-			C_ERROR("RPC failed to execute on target. rpc_priv %p,"
+			D_ERROR("RPC failed to execute on target. rpc_priv %p,"
 				"opc: 0x%x, error code: %d.\n",
 				rpc_priv, rpc_priv->crp_pub.cr_opc,
 				rpc_priv->crp_reply_hdr.cch_rc);
-			C_GOTO(out, rc);
+			D_GOTO(out, rc);
 		}
 	}
 
 	if (*data == NULL) {
 		/*
-		C_DEBUG("crt_proc_out_common, opc: 0x%x, NULL output.\n",
+		D_DEBUG("crt_proc_out_common, opc: 0x%x, NULL output.\n",
 			rpc_priv->crp_req_hdr.cch_opc);
 		*/
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	rc = crt_proc_output(rpc_priv, proc);

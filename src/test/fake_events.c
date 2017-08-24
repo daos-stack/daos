@@ -46,7 +46,9 @@
 #include <stdio.h>
 #include <poll.h>
 
-#include <pouch/common.h>
+#include <cart/types.h>
+#include <cart/errno.h>
+#include <gurt/common.h>
 #include "crt_fake_events.h"
 
 static pthread_t	fake_event_tid;
@@ -59,7 +61,7 @@ fake_event_thread(void *args)
 {
 	char		*pipe_name;
 	int		 event_code;
-	crt_rank_t	 rank;
+	d_rank_t		 rank;
 	FILE		*fifo_pipe = NULL;
 	int		 fd;
 	struct pollfd	 pollfds[1];
@@ -70,7 +72,7 @@ fake_event_thread(void *args)
 	while (fake_event_thread_done == 0) {
 		fd = open(pipe_name, O_RDONLY | O_NONBLOCK);
 		if (fd == -1) {
-			C_ERROR("open() on fle %s failed. error: %s\n",
+			D_ERROR("open() on fle %s failed. error: %s\n",
 				pipe_name, strerror(errno));
 			break;
 		}
@@ -85,10 +87,10 @@ fake_event_thread(void *args)
 					    &rank);
 				if (rc == EOF) {
 					/* reached EOF */
-					C_DEBUG("fscanf reached end of file\n");
+					D_DEBUG("fscanf reached end of file\n");
 					break;
 				}
-				C_DEBUG("fscanf return code %d\n", rc);
+				D_DEBUG("fscanf return code %d\n", rc);
 				fprintf(stderr, "event code: %d rank: %d\n",
 						event_code, rank);
 				if (event_code == 0)
@@ -113,16 +115,16 @@ crt_fake_event_init(int rank)
 	length = snprintf(NULL, 0, "/tmp/fake_event_pipe_%02d", 0);
 	pipe_name = malloc(length + 1);
 	if (pipe_name == NULL) {
-		C_ERROR("malloc failed, rc: %d\n", rc);
-		C_GOTO(out, rc = -CER_NOMEM);
+		D_ERROR("malloc failed, rc: %d\n", rc);
+		D_GOTO(out, rc = -CER_NOMEM);
 	}
 	snprintf(pipe_name, length + 1, "/tmp/fake_event_pipe_%02d", 0);
 	mkfifo(pipe_name, 0666);
-	C_DEBUG("Rank: %d, named pipe created: %s\n", rank, pipe_name);
+	D_DEBUG("Rank: %d, named pipe created: %s\n", rank, pipe_name);
 	rc = pthread_create(&fake_event_tid, NULL, fake_event_thread, (void *)
 			pipe_name);
 	if (rc != 0)
-		C_ERROR("fake_event_thread creation failed, return code: %d\n",
+		D_ERROR("fake_event_thread creation failed, return code: %d\n",
 			rc);
 
 out:
@@ -140,16 +142,16 @@ crt_fake_event_fini(int rank)
 	fake_event_thread_done = 1;
 	rc = pthread_join(fake_event_tid, &status);
 	if (rc != 0) {
-		C_ERROR("Couldn't join fake_event_thread, return code: %d\n",
+		D_ERROR("Couldn't join fake_event_thread, return code: %d\n",
 			rc);
-		C_GOTO(out, rc);
+		D_GOTO(out, rc);
 	}
 
 	length = snprintf(NULL, 0, "/tmp/fake_event_pipe_%02d", 0);
 	pipe_name = malloc(length + 1);
 	if (pipe_name == NULL) {
-		C_ERROR("malloc failed, rc: %d\n", rc);
-		C_GOTO(out, rc = -CER_NOMEM);
+		D_ERROR("malloc failed, rc: %d\n", rc);
+		D_GOTO(out, rc = -CER_NOMEM);
 	}
 	snprintf(pipe_name, length + 1, "/tmp/fake_event_pipe_%02d", rank);
 	remove(pipe_name);

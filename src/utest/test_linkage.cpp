@@ -45,10 +45,10 @@
 #include <stdlib.h>
 #include <pmix.h>
 #include <cart/api.h>
-#include <pouch/clog.h>
-#include <pouch/hash.h>
-#include <pouch/common.h>
-#include <pouch/list.h>
+#include <gurt/dlog.h>
+#include <gurt/hash.h>
+#include <gurt/common.h>
+#include <gurt/list.h>
 #include "utest_cmocka.h"
 
 using namespace std;
@@ -98,14 +98,14 @@ test_log_linkage(void **state)
 
 	(void)state;
 
-	fac = crt_log_allocfacility("log_link_test",
-				    "Test linkage of crt log API");
+	fac = d_log_allocfacility("log_link_test",
+				 "Test linkage of crt log API");
 	assert_int_not_equal(fac, -1);
 }
 
 static bool
-key_cmp(struct chash_table *htable, crt_list_t *rlink,
-			       const void *key, unsigned int ksize)
+key_cmp(struct chash_table *htable, d_list_t *rlink,
+	const void *key, unsigned int ksize)
 {
 	return true;
 }
@@ -135,7 +135,7 @@ static void
 test_common_linkage(void **state)
 {
 	(void)state;
-	crt_hash_mix64(0);
+	d_hash_mix64(0);
 
 	/* Just make sure we can call it.  This is primarily
 	 * a compiler test but the routines should be callable

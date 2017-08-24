@@ -44,57 +44,9 @@
 #define __CRT_TYPES_H__
 
 #include <stdint.h>
+#include <gurt/common.h>
+#include <gurt/list.h>
 
-typedef uint64_t	crt_size_t;
-typedef uint64_t	crt_off_t;
-
-/** iovec for memory buffer */
-typedef struct {
-	/** buffer address */
-	void	       *iov_buf;
-	/** buffer length */
-	crt_size_t	iov_buf_len;
-	/** data length */
-	crt_size_t	iov_len;
-} crt_iov_t;
-
-static inline void
-crt_iov_set(crt_iov_t *iov, void *buf, crt_size_t size)
-{
-	iov->iov_buf = buf;
-	iov->iov_len = iov->iov_buf_len = size;
-}
-
-/**
- * hide the dark secret that uuid_t is an array not a structure.
- */
-struct crt_uuid {
-	uuid_t		uuid;
-};
-
-/**
- * Server Identification & Addressing
- *
- * A server is identified by a group and a rank. A name (i.e. a string) is
- * associated with a group.
- */
-typedef uint32_t	crt_rank_t;
-
-typedef struct {
-	/** input number */
-	uint32_t	num;
-	/** output/returned number */
-	uint32_t	num_out;
-} crt_nr_t;
-
-typedef struct {
-	/** number of ranks */
-	crt_nr_t	 rl_nr;
-	crt_rank_t	*rl_ranks;
-} crt_rank_list_t;
-
-typedef char		*crt_string_t;
-typedef const char	*crt_const_string_t;
 typedef int		 crt_status_t;
 /*
  * CRT uses a string as the group ID
@@ -102,7 +54,7 @@ typedef int		 crt_status_t;
  * Additionally, this string cannot contain quotation characters ("'`),
  *   backslashes (\), or semicolons (;)
  */
-typedef crt_string_t	crt_group_id_t;
+typedef d_string_t	crt_group_id_t;
 
 /* max length of the group ID string including the trailing '\0' */
 #define CRT_GROUP_ID_MAX_LEN	(64)
@@ -121,22 +73,16 @@ typedef struct {
 	/* group handle, NULL means the primary group */
 	crt_group_t	 *ep_grp;
 	/* rank number within the group */
-	crt_rank_t	 ep_rank;
+	d_rank_t	 ep_rank;
 	/* tag, now used as the context ID of the target rank */
 	uint32_t	 ep_tag;
 } crt_endpoint_t;
-
-/** Scatter/gather list for memory buffers */
-typedef struct {
-	crt_nr_t	 sg_nr;
-	crt_iov_t	*sg_iovs;
-} crt_sg_list_t;
 
 /* CaRT context handle */
 typedef void *crt_context_t;
 
 /* Physical address string, e.g., "bmi+tcp://localhost:3344". */
-typedef crt_string_t crt_phy_addr_t;
+typedef d_string_t crt_phy_addr_t;
 #define CRT_PHY_ADDR_ENV	"CRT_PHY_ADDR_STR"
 
 /*
@@ -198,8 +144,8 @@ typedef struct crt_rpc {
 	enum crt_rpc_flags	cr_flags;
 	crt_rpc_input_t		cr_input; /* input parameter struct */
 	crt_rpc_output_t	cr_output; /* output parameter struct */
-	crt_size_t		cr_input_size; /* size of input struct */
-	crt_size_t		cr_output_size; /* size of output struct */
+	d_size_t		cr_input_size; /* size of input struct */
+	d_size_t		cr_output_size; /* size of output struct */
 	/* optional bulk handle for collective RPC */
 	crt_bulk_t		cr_co_bulk_hdl;
 } crt_rpc_t;
@@ -238,7 +184,7 @@ struct crt_req_format {
 };
 
 struct crt_array {
-	crt_size_t	 da_count;
+	d_size_t		 da_count;
 	void		*da_arrays;
 };
 
@@ -311,12 +257,12 @@ typedef enum {
 /* bulk transferring descriptor */
 struct crt_bulk_desc {
 	crt_rpc_t	*bd_rpc; /* original RPC request */
-	crt_bulk_op_t	bd_bulk_op; /* CRT_BULK_PUT or CRT_BULK_GET */
-	crt_bulk_t	bd_remote_hdl; /* remote bulk handle */
-	crt_off_t	bd_remote_off; /* offset within remote bulk buffer */
-	crt_bulk_t	bd_local_hdl; /* local bulk handle */
-	crt_off_t	bd_local_off; /* offset within local bulk buffer */
-	crt_size_t	bd_len; /* length of the bulk transferring */
+	crt_bulk_op_t	 bd_bulk_op; /* CRT_BULK_PUT or CRT_BULK_GET */
+	crt_bulk_t	 bd_remote_hdl; /* remote bulk handle */
+	doff_t		 bd_remote_off; /* offset within remote bulk buffer */
+	crt_bulk_t	 bd_local_hdl; /* local bulk handle */
+	doff_t		 bd_local_off; /* offset within local bulk buffer */
+	d_size_t		 bd_len; /* length of the bulk transferring */
 };
 
 struct crt_cb_info {

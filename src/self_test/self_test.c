@@ -35,7 +35,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#define C_LOGFAC	CD_FAC(self_test)
+#define D_LOGFAC	DD_FAC(self_test)
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -95,13 +95,13 @@ static void *progress_fn(void *arg)
 	crt_context_t	*crt_ctx = NULL;
 
 	crt_ctx = (crt_context_t *)arg;
-	C_ASSERT(crt_ctx != NULL);
-	C_ASSERT(*crt_ctx != NULL);
+	D_ASSERT(crt_ctx != NULL);
+	D_ASSERT(*crt_ctx != NULL);
 
 	while (!g_shutdown_flag) {
 		ret = crt_progress(*crt_ctx, 1, NULL, NULL);
 		if (ret != 0 && ret != -CER_TIMEDOUT) {
-			C_ERROR("crt_progress failed; ret = %d\n", ret);
+			D_ERROR("crt_progress failed; ret = %d\n", ret);
 			break;
 		}
 	};
@@ -113,7 +113,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 			  crt_group_t **srv_grp, pthread_t *tid,
 			  char *attach_info_path, bool listen)
 {
-	crt_rank_t	myrank;
+	d_rank_t	myrank;
 	uint32_t	init_flags = 0;
 	int		ret;
 
@@ -123,33 +123,33 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		init_flags |= CRT_FLAG_BIT_SERVER;
 	ret = crt_init(CRT_SELF_TEST_GROUP_NAME, init_flags);
 	if (ret != 0) {
-		C_ERROR("crt_init failed; ret = %d\n", ret);
+		D_ERROR("crt_init failed; ret = %d\n", ret);
 		return ret;
 	}
 
 	if (attach_info_path) {
 		ret = crt_group_config_path_set(attach_info_path);
-		C_ASSERTF(ret == 0,
+		D_ASSERTF(ret == 0,
 			  "crt_group_config_path_set failed, rc = %d\n", ret);
 	}
 
 	ret = crt_context_create(NULL, crt_ctx);
 	if (ret != 0) {
-		C_ERROR("crt_context_create failed; ret = %d\n", ret);
+		D_ERROR("crt_context_create failed; ret = %d\n", ret);
 		return ret;
 	}
 
 	ret = crt_group_attach(dest_name, srv_grp);
 	if (ret != 0) {
-		C_ERROR("crt_group_attach failed; ret = %d\n", ret);
+		D_ERROR("crt_group_attach failed; ret = %d\n", ret);
 		return ret;
 	}
-	C_ASSERTF(*srv_grp != NULL,
+	D_ASSERTF(*srv_grp != NULL,
 		  "crt_group_attach succeeded but returned group is NULL\n");
 
 	ret = crt_group_rank(NULL, &myrank);
 	if (ret != 0) {
-		C_ERROR("crt_group_rank failed; ret = %d\n", ret);
+		D_ERROR("crt_group_rank failed; ret = %d\n", ret);
 		return ret;
 	}
 
@@ -157,7 +157,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 	ret = pthread_create(tid, NULL, progress_fn, crt_ctx);
 	if (ret != 0) {
-		C_ERROR("failed to create progress thread: %s\n",
+		D_ERROR("failed to create progress thread: %s\n",
 			strerror(errno));
 		return -CER_MISC;
 	}
@@ -216,7 +216,7 @@ start_test_cb(const struct crt_cb_info *cb_info)
 
 	/* Get the status from the payload */
 	reply_status = (int32_t *)crt_reply_get(cb_info->cci_rpc);
-	C_ASSERT(reply_status != NULL);
+	D_ASSERT(reply_status != NULL);
 
 	/* Return whatever result we got to the main thread */
 	*return_status = *reply_status;
@@ -241,7 +241,7 @@ status_req_cb(const struct crt_cb_info *cb_info)
 	/* Get the status from the payload */
 	reply_status = (struct crt_st_status_req_reply *)
 		       crt_reply_get(cb_info->cci_rpc);
-	C_ASSERT(reply_status != NULL);
+	D_ASSERT(reply_status != NULL);
 
 	/*
 	 * Return whatever result we got to the main thread
@@ -312,10 +312,10 @@ static void print_results(struct st_latency *latencies,
 	double		 bandwidth;
 
 	/* Check for bugs */
-	C_ASSERT(latencies != NULL);
-	C_ASSERT(test_params != NULL);
-	C_ASSERT(test_params->rep_count != 0);
-	C_ASSERT(test_duration_ns > 0);
+	D_ASSERT(latencies != NULL);
+	D_ASSERT(test_params != NULL);
+	D_ASSERT(test_params->rep_count != 0);
+	D_ASSERT(test_duration_ns > 0);
 
 	/* Compute the throughput in RPCs/sec */
 	throughput = test_params->rep_count /
@@ -446,13 +446,13 @@ static void print_results(struct st_latency *latencies,
 				break;
 		}
 		last_idx = local_rep - 1;
-		C_ASSERT(start_idx + num_failed <= last_idx);
+		D_ASSERT(start_idx + num_failed <= last_idx);
 
 		/* Compute median index */
 		median_idx = start_idx + num_failed +
 			(last_idx - start_idx - num_failed) / 2;
-		C_ASSERT(median_idx <= last_idx);
-		C_ASSERT(median_idx >= start_idx + num_failed);
+		D_ASSERT(median_idx <= last_idx);
+		D_ASSERT(median_idx >= start_idx + num_failed);
 
 		printf("\t\t%u:%u - ", rank, tag);
 
@@ -498,7 +498,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 		ret = crt_req_create(crt_ctx, endpt, CRT_OPC_SELF_TEST_START,
 				     &new_rpc);
 		if (ret != 0) {
-			C_ERROR("Creating start RPC failed to endpoint"
+			D_ERROR("Creating start RPC failed to endpoint"
 				" %u:%u; ret = %d\n", endpt->ep_rank,
 				endpt->ep_tag, ret);
 			ms_endpts[m_idx].test_failed = 1;
@@ -508,7 +508,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 
 		start_args = (struct crt_st_start_params *)
 			crt_req_get(new_rpc);
-		C_ASSERTF(start_args != NULL,
+		D_ASSERTF(start_args != NULL,
 			  "crt_req_get returned NULL\n");
 		memcpy(start_args, test_params, sizeof(*test_params));
 		start_args->srv_grp = test_params->srv_grp;
@@ -519,7 +519,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 		ret = crt_req_send(new_rpc, start_test_cb,
 				   &ms_endpts[m_idx].reply.status);
 		if (ret != 0) {
-			C_ERROR("Failed to send start RPC to endpoint %u:%u; "
+			D_ERROR("Failed to send start RPC to endpoint %u:%u; "
 				"ret = %d\n", endpt->ep_rank, endpt->ep_tag,
 				ret);
 			ms_endpts[m_idx].test_failed = 1;
@@ -551,7 +551,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 	failed_count = 0;
 	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
 		if (ms_endpts[m_idx].reply.status != 0) {
-			C_ERROR("Failed to launch self-test 1:many session on"
+			D_ERROR("Failed to launch self-test 1:many session on"
 				" %u:%u; ret = %d\n",
 				ms_endpts[m_idx].endpt.ep_rank,
 				ms_endpts[m_idx].endpt.ep_tag,
@@ -572,7 +572,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 
 	/* Check to make sure that at least one 1:many session was started */
 	if (failed_count >= num_ms_endpts) {
-		C_ERROR("Failed to launch any 1:many test sessions\n");
+		D_ERROR("Failed to launch any 1:many test sessions\n");
 		return ms_endpts[0].reply.status;
 	}
 
@@ -598,7 +598,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 					     CRT_OPC_SELF_TEST_STATUS_REQ,
 					     &new_rpc);
 			if (ret != 0) {
-				C_ERROR("Creating status request RPC to"
+				D_ERROR("Creating status request RPC to"
 					" endpoint %u:%u; ret = %d\n",
 					ms_endpts[m_idx].endpt.ep_rank,
 					ms_endpts[m_idx].endpt.ep_tag,
@@ -619,7 +619,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 			ret = crt_req_send(new_rpc, status_req_cb,
 					   &ms_endpts[m_idx].reply);
 			if (ret != 0) {
-				C_ERROR("Failed to send status RPC to endpoint"
+				D_ERROR("Failed to send status RPC to endpoint"
 					" %u:%u; ret = %d\n",
 					ms_endpts[m_idx].endpt.ep_rank,
 					ms_endpts[m_idx].endpt.ep_tag, ret);
@@ -657,7 +657,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 
 			switch (ms_endpts[m_idx].reply.status) {
 			case CRT_ST_STATUS_TEST_IN_PROGRESS:
-				C_DEBUG("Test still processing on %u:%u -"
+				D_DEBUG("Test still processing on %u:%u -"
 					" # RPCs remaining: %u\n",
 					ms_endpts[m_idx].endpt.ep_rank,
 					ms_endpts[m_idx].endpt.ep_tag,
@@ -667,7 +667,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 				ms_endpts[m_idx].test_completed = 1;
 				break;
 			default:
-				C_ERROR("Detected test failure on %u:%u -"
+				D_ERROR("Detected test failure on %u:%u -"
 					" ret = %d\n",
 					ms_endpts[m_idx].endpt.ep_rank,
 					ms_endpts[m_idx].endpt.ep_tag,
@@ -743,16 +743,16 @@ static int run_self_test(struct st_size_params all_params[],
 	uint32_t		  num_ms_endpts;
 
 	struct st_latency	**latencies = NULL;
-	crt_iov_t		 *latencies_iov = NULL;
-	crt_sg_list_t		 *latencies_sg_list = NULL;
+	d_iov_t		 *latencies_iov = NULL;
+	d_sg_list_t		 *latencies_sg_list = NULL;
 	crt_bulk_t		 *latencies_bulk_hdl = CRT_BULK_NULL;
 	bool			  listen = false;
 
 	crt_endpoint_t		  self_endpt;
 
 	/* Sanity checks that would indicate bugs */
-	C_ASSERT(endpts != NULL && num_endpts > 0);
-	C_ASSERT((ms_endpts_in == NULL && num_ms_endpts_in == 0) ||
+	D_ASSERT(endpts != NULL && num_endpts > 0);
+	D_ASSERT((ms_endpts_in == NULL && num_ms_endpts_in == 0) ||
 		 (ms_endpts_in != NULL && num_ms_endpts_in > 0));
 
 	/* will send TEST_START RPC to self, so listen for incoming requests */
@@ -762,21 +762,21 @@ static int run_self_test(struct st_size_params all_params[],
 	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid,
 			     attach_info_path, listen /* run as server */);
 	if (ret != 0) {
-		C_ERROR("self_test_init failed; ret = %d\n", ret);
-		C_GOTO(cleanup_nothread, ret);
+		D_ERROR("self_test_init failed; ret = %d\n", ret);
+		D_GOTO(cleanup_nothread, ret);
 	}
 
 	/* Get the group/rank/tag for this application (self_endpt) */
 	ret = crt_group_rank(NULL, &self_endpt.ep_rank);
 	if (ret != 0) {
-		C_ERROR("crt_group_rank failed; ret = %d\n", ret);
-		C_GOTO(cleanup, ret);
+		D_ERROR("crt_group_rank failed; ret = %d\n", ret);
+		D_GOTO(cleanup, ret);
 	}
 	self_endpt.ep_grp = crt_group_lookup(CRT_SELF_TEST_GROUP_NAME);
 	if (self_endpt.ep_grp == NULL) {
-		C_ERROR("crt_group_lookup failed for group %s\n",
+		D_ERROR("crt_group_lookup failed for group %s\n",
 			CRT_SELF_TEST_GROUP_NAME);
-		C_GOTO(cleanup, ret = -CER_NONEXIST);
+		D_GOTO(cleanup, ret = -CER_NONEXIST);
 	}
 	self_endpt.ep_tag = 0;
 
@@ -790,10 +790,10 @@ static int run_self_test(struct st_size_params all_params[],
 		 * set it to self_endpt
 		 */
 		num_ms_endpts = 1;
-		C_ALLOC_PTR(ms_endpts);
+		D_ALLOC_PTR(ms_endpts);
 		if (ms_endpts == NULL) {
-			C_ERROR("Allocating ms_endpts failed\n");
-			C_GOTO(cleanup, ret = -CER_NOMEM);
+			D_ERROR("Allocating ms_endpts failed\n");
+			D_GOTO(cleanup, ret = -CER_NOMEM);
 		}
 		ms_endpts[0].endpt.ep_rank = self_endpt.ep_rank;
 		ms_endpts[0].endpt.ep_tag = self_endpt.ep_tag;
@@ -804,10 +804,10 @@ static int run_self_test(struct st_size_params all_params[],
 		 * space to hold all of them, but only unique master endpoints
 		 * to the new list
 		 */
-		C_ALLOC(ms_endpts, num_ms_endpts_in * sizeof(*ms_endpts));
+		D_ALLOC(ms_endpts, num_ms_endpts_in * sizeof(*ms_endpts));
 		if (ms_endpts == NULL) {
-			C_ERROR("Allocating ms_endpts failed\n");
-			C_GOTO(cleanup, ret = -CER_NOMEM);
+			D_ERROR("Allocating ms_endpts failed\n");
+			D_GOTO(cleanup, ret = -CER_NOMEM);
 		}
 
 		/*
@@ -855,38 +855,38 @@ static int run_self_test(struct st_size_params all_params[],
 		 */
 		if (num_ms_endpts != num_ms_endpts_in) {
 			struct st_master_endpt *realloc_ptr =
-				C_REALLOC(ms_endpts, num_ms_endpts *
+				D_REALLOC(ms_endpts, num_ms_endpts *
 						       sizeof(*ms_endpts));
 			if (realloc_ptr == NULL) {
-				C_ERROR("Failed to shrink ms_endpts array\n");
-				C_GOTO(cleanup, ret = -CER_NOMEM);
+				D_ERROR("Failed to shrink ms_endpts array\n");
+				D_GOTO(cleanup, ret = -CER_NOMEM);
 			}
 			ms_endpts = realloc_ptr;
 		}
 	}
 
 	/* Allocate latency lists for each 1:many session */
-	C_ALLOC(latencies, num_ms_endpts * sizeof(*latencies));
+	D_ALLOC(latencies, num_ms_endpts * sizeof(*latencies));
 	if (latencies == NULL) {
-		C_ERROR("Failed to allocate latency pointers\n");
-		C_GOTO(cleanup, ret = -CER_NOMEM);
+		D_ERROR("Failed to allocate latency pointers\n");
+		D_GOTO(cleanup, ret = -CER_NOMEM);
 	}
-	C_ALLOC(latencies_iov, num_ms_endpts * sizeof(*latencies_iov));
+	D_ALLOC(latencies_iov, num_ms_endpts * sizeof(*latencies_iov));
 	if (latencies_iov == NULL) {
-		C_ERROR("Failed to allocate latency pointers\n");
-		C_GOTO(cleanup, ret = -CER_NOMEM);
+		D_ERROR("Failed to allocate latency pointers\n");
+		D_GOTO(cleanup, ret = -CER_NOMEM);
 	}
-	C_ALLOC(latencies_sg_list,
+	D_ALLOC(latencies_sg_list,
 		num_ms_endpts * sizeof(*latencies_sg_list));
 	if (latencies_sg_list == NULL) {
-		C_ERROR("Failed to allocate latency pointers\n");
-		C_GOTO(cleanup, ret = -CER_NOMEM);
+		D_ERROR("Failed to allocate latency pointers\n");
+		D_GOTO(cleanup, ret = -CER_NOMEM);
 	}
-	C_ALLOC(latencies_bulk_hdl,
+	D_ALLOC(latencies_bulk_hdl,
 		num_ms_endpts * sizeof(*latencies_bulk_hdl));
 	if (latencies_bulk_hdl == NULL) {
-		C_ERROR("Failed to allocate latency pointers\n");
-		C_GOTO(cleanup, ret = -CER_NOMEM);
+		D_ERROR("Failed to allocate latency pointers\n");
+		D_GOTO(cleanup, ret = -CER_NOMEM);
 	}
 
 	/*
@@ -895,12 +895,12 @@ static int run_self_test(struct st_size_params all_params[],
 	 * to transfer latency results back into that buffer
 	 */
 	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
-		C_ALLOC(latencies[m_idx], rep_count * sizeof(**latencies));
+		D_ALLOC(latencies[m_idx], rep_count * sizeof(**latencies));
 		if (latencies[m_idx] == NULL) {
-			C_ERROR("Failed to allocate latency data storage\n");
-			C_GOTO(cleanup, ret = -CER_NOMEM);
+			D_ERROR("Failed to allocate latency data storage\n");
+			D_GOTO(cleanup, ret = -CER_NOMEM);
 		}
-		crt_iov_set(&latencies_iov[m_idx], latencies[m_idx],
+		d_iov_set(&latencies_iov[m_idx], latencies[m_idx],
 			    rep_count * sizeof(**latencies));
 		latencies_sg_list[m_idx].sg_iovs =
 			&latencies_iov[m_idx];
@@ -910,18 +910,18 @@ static int run_self_test(struct st_size_params all_params[],
 				      CRT_BULK_RW,
 				      &latencies_bulk_hdl[m_idx]);
 		if (ret != 0) {
-			C_ERROR("Failed to allocate latencies bulk handle;"
+			D_ERROR("Failed to allocate latencies bulk handle;"
 				" ret = %d\n", ret);
-			C_GOTO(cleanup, ret);
+			D_GOTO(cleanup, ret);
 		}
-		C_ASSERT(latencies_bulk_hdl != CRT_BULK_NULL);
+		D_ASSERT(latencies_bulk_hdl != CRT_BULK_NULL);
 	}
 
 	for (size_idx = 0; size_idx < num_msg_sizes; size_idx++) {
 		struct crt_st_start_params	 test_params = { 0 };
 
 		/* Set test parameters to send to the test node */
-		crt_iov_set(&test_params.endpts, endpts,
+		d_iov_set(&test_params.endpts, endpts,
 			    num_endpts * sizeof(*endpts));
 		test_params.rep_count = rep_count;
 		test_params.max_inflight = max_inflight;
@@ -936,14 +936,14 @@ static int run_self_test(struct st_size_params all_params[],
 				    &test_params, latencies, latencies_bulk_hdl,
 				    output_megabits);
 		if (ret != 0) {
-			C_ERROR("Testing message size (%d-%s %d-%s) failed;"
+			D_ERROR("Testing message size (%d-%s %d-%s) failed;"
 				" ret = %d\n",
 				test_params.send_size,
 				crt_st_msg_type_str[test_params.send_type],
 				test_params.reply_size,
 				crt_st_msg_type_str[test_params.reply_type],
 				ret);
-			C_GOTO(cleanup, ret);
+			D_GOTO(cleanup, ret);
 		}
 	}
 
@@ -953,33 +953,33 @@ cleanup:
 
 	ret = pthread_join(tid, NULL);
 	if (ret)
-		C_ERROR("Could not join progress thread");
+		D_ERROR("Could not join progress thread");
 
 cleanup_nothread:
 	if (latencies_bulk_hdl != NULL) {
 		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
 			if (latencies_bulk_hdl[m_idx] != CRT_BULK_NULL)
 				crt_bulk_free(latencies_bulk_hdl[m_idx]);
-		C_FREE(latencies_bulk_hdl,
+		D_FREE(latencies_bulk_hdl,
 		       num_ms_endpts * sizeof(*latencies_bulk_hdl));
 	}
 	if (latencies_sg_list != NULL)
-		C_FREE(latencies_sg_list,
+		D_FREE(latencies_sg_list,
 		       num_ms_endpts * sizeof(*latencies_sg_list));
 	if (latencies_iov != NULL)
-		C_FREE(latencies_iov, num_ms_endpts * sizeof(*latencies_iov));
+		D_FREE(latencies_iov, num_ms_endpts * sizeof(*latencies_iov));
 	if (latencies != NULL) {
 		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
 			if (latencies[m_idx] != NULL)
-				C_FREE(latencies[m_idx],
+				D_FREE(latencies[m_idx],
 				       rep_count * sizeof(*latencies));
-		C_FREE(latencies, num_ms_endpts * sizeof(*latencies));
+		D_FREE(latencies, num_ms_endpts * sizeof(*latencies));
 	}
 
 	if (srv_grp != NULL) {
 		cleanup_ret = crt_group_detach(srv_grp);
 		if (cleanup_ret != 0)
-			C_ERROR("crt_group_detach failed; ret = %d\n",
+			D_ERROR("crt_group_detach failed; ret = %d\n",
 				cleanup_ret);
 		/* Make sure first error is returned, if applicable */
 		ret = ((ret == 0) ? cleanup_ret : ret);
@@ -987,13 +987,13 @@ cleanup_nothread:
 
 	cleanup_ret = crt_context_destroy(crt_ctx, 0);
 	if (cleanup_ret != 0)
-		C_ERROR("crt_context_destroy failed; ret = %d\n", cleanup_ret);
+		D_ERROR("crt_context_destroy failed; ret = %d\n", cleanup_ret);
 	/* Make sure first error is returned, if applicable */
 	ret = ((ret == 0) ? cleanup_ret : ret);
 
 	cleanup_ret = crt_finalize();
 	if (cleanup_ret != 0)
-		C_ERROR("crt_finalize failed; ret = %d\n", cleanup_ret);
+		D_ERROR("crt_finalize failed; ret = %d\n", cleanup_ret);
 	/* Make sure first error is returned, if applicable */
 	ret = ((ret == 0) ? cleanup_ret : ret);
 	return ret;
@@ -1264,7 +1264,7 @@ static void st_parse_range_str(char *const str, char *const validated_str,
 		 * It should not be possible to provide input that gets larger
 		 * after sanition
 		 */
-		C_ASSERT(num_written <= num_avail);
+		D_ASSERT(num_written <= num_avail);
 
 		validated_cur_ptr += num_written;
 
@@ -1336,13 +1336,13 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 	 * can be re-parsed (without error checking) to add elements to the
 	 * array.
 	 */
-	C_ALLOC(rank_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
+	D_ALLOC(rank_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
 	if (rank_valid_str == NULL)
-		C_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -CER_NOMEM);
 
-	C_ALLOC(tag_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
+	D_ALLOC(tag_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
 	if (tag_valid_str == NULL)
-		C_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -CER_NOMEM);
 
 	st_parse_range_str(token_ptrs[ST_ENDPT_RANK_IDX], rank_valid_str,
 			   &num_ranks);
@@ -1355,12 +1355,12 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 	     > (uint64_t)SELF_TEST_MAX_NUM_ENDPOINTS) ||
 	    (((uint64_t)*num_endpts + (uint64_t)num_ranks * (uint64_t)num_tags)
 	     > (uint64_t)SELF_TEST_MAX_NUM_ENDPOINTS)) {
-		C_ERROR("Too many endpoints - current=%u, "
+		D_ERROR("Too many endpoints - current=%u, "
 			"additional requested=%lu, max=%u\n",
 			*num_endpts,
 			(uint64_t)num_ranks * (uint64_t)num_tags,
 			SELF_TEST_MAX_NUM_ENDPOINTS);
-		C_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -CER_INVAL);
 	}
 
 	printf("Adding endpoints:\n");
@@ -1369,10 +1369,10 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 
 	/* Reallocate/expand the endpoints array */
 	*num_endpts += num_ranks * num_tags;
-	realloced_mem = C_REALLOC(*endpts,
+	realloced_mem = D_REALLOC(*endpts,
 				  sizeof(struct st_endpoint) * (*num_endpts));
 	if (realloced_mem == NULL)
-		C_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -CER_NOMEM);
 	*endpts = (struct st_endpoint *)realloced_mem;
 
 	/* Populate the newly expanded values in the endpoints array */
@@ -1391,7 +1391,7 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 		int		num_scanned;
 
 		num_scanned = sscanf(pch, "%u-%u", &rank, &rank_max);
-		C_ASSERT(num_scanned == 1 || num_scanned == 2);
+		D_ASSERT(num_scanned == 1 || num_scanned == 2);
 		if (num_scanned == 1)
 			rank_max = rank;
 
@@ -1409,7 +1409,7 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 			while (*pch_tag != '\0') {
 				num_scanned = sscanf(pch_tag, "%u-%u", &tag,
 						     &tag_max);
-				C_ASSERT(num_scanned == 1 || num_scanned == 2);
+				D_ASSERT(num_scanned == 1 || num_scanned == 2);
 				if (num_scanned == 1)
 					tag_max = tag;
 
@@ -1444,15 +1444,15 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 	}
 
 	/* Make sure all the allocated space got filled with real endpoints */
-	C_ASSERT(next_endpoint == *endpts + *num_endpts);
+	D_ASSERT(next_endpoint == *endpts + *num_endpts);
 
 	ret = 0;
 
 cleanup:
 	if (rank_valid_str != NULL)
-		C_FREE(rank_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
+		D_FREE(rank_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
 	if (tag_valid_str != NULL)
-		C_FREE(tag_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
+		D_FREE(tag_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
 
 	return ret;
 
@@ -1636,7 +1636,7 @@ int main(int argc, char *argv[])
 		CRT_ST_BUF_ALIGN_DEFAULT;
 	char				*attach_info_path = NULL;
 
-	ret = crt_log_init();
+	ret = d_log_init();
 	if (ret != 0) {
 		fprintf(stderr, "crt_log_init() failed. rc: %d\n", ret);
 		return ret;
@@ -1720,7 +1720,7 @@ int main(int argc, char *argv[])
 			print_usage(argv[0], default_msg_sizes_str,
 				    default_rep_count,
 				    default_max_inflight);
-			C_GOTO(cleanup, ret = -CER_INVAL);
+			D_GOTO(cleanup, ret = -CER_INVAL);
 		}
 	}
 
@@ -1754,15 +1754,15 @@ int main(int argc, char *argv[])
 	}
 
 	/* Allocate a large enough buffer to hold the message sizes list */
-	C_ALLOC(all_params, (num_tokens + 1) * sizeof(all_params[0]));
+	D_ALLOC(all_params, (num_tokens + 1) * sizeof(all_params[0]));
 	if (all_params == NULL)
-		C_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -CER_NOMEM);
 
 	/* Iterate over the user's message sizes and parse / validate them */
 	num_msg_sizes = 0;
 	pch = strtok(msg_sizes_str, tuple_tokens);
 	while (pch != NULL) {
-		C_ASSERTF(num_msg_sizes <= num_tokens, "Token counting err\n");
+		D_ASSERTF(num_msg_sizes <= num_tokens, "Token counting err\n");
 
 		ret = parse_message_sizes_string(pch,
 						 &all_params[num_msg_sizes]);
@@ -1779,7 +1779,7 @@ int main(int argc, char *argv[])
 
 	if (num_msg_sizes <= 0) {
 		printf("No valid message sizes given\n");
-		C_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -CER_INVAL);
 	}
 
 	/* Shrink the buffer if some of the user's tokens weren't kept */
@@ -1787,37 +1787,37 @@ int main(int argc, char *argv[])
 		void *realloced_mem;
 
 		/* This should always succeed since the buffer is shrinking.. */
-		realloced_mem = C_REALLOC(all_params,
+		realloced_mem = D_REALLOC(all_params,
 					  num_msg_sizes
 					  * sizeof(all_params[0]));
 		if (realloced_mem == NULL)
-			C_GOTO(cleanup, ret = -CER_NOMEM);
+			D_GOTO(cleanup, ret = -CER_NOMEM);
 		all_params = (struct st_size_params *)realloced_mem;
 	}
 
 	/******************** Validate arguments ********************/
 	if (dest_name == NULL || crt_validate_grpid(dest_name) != 0) {
 		printf("--group-name argument not specified or is invalid\n");
-		C_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -CER_INVAL);
 	}
 	if (ms_endpts == NULL)
 		printf("Warning: No --master-endpoint specified; using this"
 		       " command line application as the master endpoint\n");
 	if (endpts == NULL || num_endpts == 0) {
 		printf("No endpoints specified\n");
-		C_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -CER_INVAL);
 	}
 	if ((rep_count <= 0) || (rep_count > SELF_TEST_MAX_REPETITIONS)) {
 		printf("Invalid --repetitions-per-size argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
 		       SELF_TEST_MAX_REPETITIONS, rep_count);
-		C_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -CER_INVAL);
 	}
 	if ((max_inflight <= 0) || (max_inflight > SELF_TEST_MAX_INFLIGHT)) {
 		printf("Invalid --max-inflight-rpcs argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
 		       SELF_TEST_MAX_INFLIGHT, max_inflight);
-		C_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -CER_INVAL);
 	}
 
 	/*
@@ -1857,9 +1857,9 @@ int main(int argc, char *argv[])
 	/********************* Clean up *********************/
 cleanup:
 	if (all_params != NULL)
-		C_FREE(all_params,
+		D_FREE(all_params,
 		       num_msg_sizes * sizeof(all_params[0]));
-	crt_log_fini();
+	d_log_fini();
 
 	return ret;
 }

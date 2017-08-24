@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,83 +36,55 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * This is a simple example of crt_echo rpc server based on crt APIs.
+ * GURT Error numbers
  */
 
-#include "crt_echo_srv.h"
+#if !defined(__GURT_ERRNO_H__) || defined(DERRNO_GEN_ERRSTR)
+#define __GURT_ERRNO_H__
 
-static int run_echo_srver_tier2(void)
-{
-	int			rc;
+#ifndef DERRNO_GEN_ERRSTR
+#define DERRNO_BEGIN_ENUM typedef enum {
+#define DERRNO_DECL(name, value) name = value,
+#define DERRNO_END_ENUM } d_errno_t;
+#else
+#define DERRNO_BEGIN_ENUM const char *d_errstr(d_errno_t d_errno) {   \
+	switch (d_errno) {
+#define DERRNO_DECL(name, value) case name: return #name;
+#define DERRNO_END_ENUM default: return "Unknown d_errno_t"; } }
+#endif
 
-	echo_srv.do_shutdown = 0;
+DERRNO_BEGIN_ENUM
+	DERRNO_DECL(DER_ERR_BASE,		1000)
+	/** no permission */
+	DERRNO_DECL(DER_NO_PERM,		(DER_ERR_BASE + 1))
+	/** invalid parameters */
+	DERRNO_DECL(DER_INVAL,			(DER_ERR_BASE + 3))
+	/** entity already exists */
+	DERRNO_DECL(DER_EXIST,			(DER_ERR_BASE + 4))
+	/** nonexistent entity */
+	DERRNO_DECL(DER_NONEXIST,		(DER_ERR_BASE + 5))
+	/** no space on storage target */
+	DERRNO_DECL(DER_NOSPACE,		(DER_ERR_BASE + 7))
+	/** NO memory */
+	DERRNO_DECL(DER_NOMEM,			(DER_ERR_BASE + 9))
+	/** Busy */
+	DERRNO_DECL(DER_BUSY,			(DER_ERR_BASE + 12))
+	/** not initialized */
+	DERRNO_DECL(DER_UNINIT,			(DER_ERR_BASE + 15))
+	/** operation canceled */
+	DERRNO_DECL(DER_CANCELED,		(DER_ERR_BASE + 18))
+	/** GURT miscellaneous error */
+	DERRNO_DECL(DER_MISC,			(DER_ERR_BASE + 25))
+	/** Bad path name */
+	DERRNO_DECL(DER_BADPATH,		(DER_ERR_BASE + 26))
+	/** Not a directory */
+	DERRNO_DECL(DER_NOTDIR,			(DER_ERR_BASE + 27))
+DERRNO_END_ENUM
 
-	/* create progress thread */
-	rc = pthread_create(&echo_srv.progress_thread, NULL, progress_handler,
-			    NULL);
-	if (rc != 0) {
-		printf("progress thread creating failed, rc: %d.\n", rc);
-		goto out;
-	}
+#undef DERRNO_BEGIN_ENUM
+#undef DERRNO_DECL
+#undef DERRNO_END_ENUM
 
-	/* ==================================== */
-	printf("main thread wait progress thread ...\n");
-	/* wait progress thread */
-	rc = pthread_join(echo_srv.progress_thread, NULL);
-	if (rc != 0)
-		printf("pthread_join failed rc: %d.\n", rc);
+const char *d_errstr(d_errno_t d_errno);
 
-out:
-	printf("echo_srver shuting down ...\n");
-	return rc;
-}
-
-void
-echo_srv_shutdown(crt_rpc_t *rpc_req)
-{
-	printf("tier2 echo_srver received shutdown request, opc: 0x%x.\n",
-	       rpc_req->cr_opc);
-
-	assert(rpc_req->cr_input == NULL);
-	assert(rpc_req->cr_output == NULL);
-
-	echo_srv.do_shutdown = 1;
-	printf("tier2 echo_srver set shutdown flag.\n");
-}
-
-int g_roomno = 2082;
-void echo_srv_checkin(crt_rpc_t *rpc_req)
-{
-	struct crt_echo_checkin_req *e_req;
-	struct crt_echo_checkin_reply *e_reply;
-
-	/* CaRT internally already allocated the input/output buffer */
-	e_req = crt_req_get(rpc_req);
-	D_ASSERT(e_req != NULL);
-
-	printf("tier2 echo_srver recv'd checkin, opc: 0x%x.\n",
-		rpc_req->cr_opc);
-	printf("tier2 checkin input - age: %d, name: %s, days: %d.\n",
-		e_req->age, e_req->name, e_req->days);
-
-	e_reply = crt_reply_get(rpc_req);
-	D_ASSERT(e_reply != NULL);
-	e_reply->ret = 0;
-	e_reply->room_no = g_roomno++;
-
-	crt_reply_send(rpc_req);
-
-	printf("tier2 echo_srver sent checkin reply, ret: %d, room_no: %d.\n",
-	       e_reply->ret, e_reply->room_no);
-}
-
-int main(int argc, char *argv[])
-{
-	echo_init(1, true);
-
-	run_echo_srver_tier2();
-
-	echo_fini();
-
-	return 0;
-}
+#endif /*  __GURT_ERRNO_H__ */

@@ -63,51 +63,51 @@
  * OR DOCUMENTATION.
  */
 
-/* clog.h  define API for message logging system */
+/* dlog.h  define API for message logging system */
 
-#ifndef _CLOG_H_
-#define _CLOG_H_
+#ifndef _DLOG_H_
+#define _DLOG_H_
 #include <stdarg.h>
 
 /* clog open flavor */
-#define CLOG_FLV_LOGPID	(1 << 0)	/* include pid in log tag */
-#define CLOG_FLV_FQDN	(1 << 1)	/* log fully quallified domain name */
-#define CLOG_FLV_FAC	(1 << 2)	/* log facility name */
-#define CLOG_FLV_YEAR	(1 << 3)	/* log year */
-#define CLOG_FLV_TAG	(1 << 4)	/* log tag */
-#define CLOG_FLV_STDOUT	(1 << 5)	/* always log to stdout */
-#define CLOG_FLV_STDERR	(1 << 6)	/* always log to stderr */
+#define DLOG_FLV_LOGPID	(1 << 0)	/* include pid in log tag */
+#define DLOG_FLV_FQDN	(1 << 1)	/* log fully quallified domain name */
+#define DLOG_FLV_FAC	(1 << 2)	/* log facility name */
+#define DLOG_FLV_YEAR	(1 << 3)	/* log year */
+#define DLOG_FLV_TAG	(1 << 4)	/* log tag */
+#define DLOG_FLV_STDOUT	(1 << 5)	/* always log to stdout */
+#define DLOG_FLV_STDERR	(1 << 6)	/* always log to stderr */
 
 /* per-message log flag values */
-#define CLOG_STDERR     0x20000000	/* always log to stderr */
-#define CLOG_STDOUT     0x10000000	/* always log to stdout */
+#define DLOG_STDERR     0x20000000	/* always log to stderr */
+#define DLOG_STDOUT     0x10000000	/* always log to stdout */
 
-#define CLOG_PRIMASK    0x07ffff00	/* priority mask */
-#define CLOG_EMERG      0x07000000	/* emergency */
-#define CLOG_ALERT      0x06000000	/* alert */
-#define CLOG_CRIT       0x05000000	/* critical */
-#define CLOG_ERR        0x04000000	/* error */
-#define CLOG_WARN       0x03000000	/* warning */
-#define CLOG_NOTE       0x02000000	/* notice */
-#define CLOG_INFO       0x01000000	/* info */
+#define DLOG_PRIMASK    0x07ffff00	/* priority mask */
+#define DLOG_EMERG      0x07000000	/* emergency */
+#define DLOG_ALERT      0x06000000	/* alert */
+#define DLOG_CRIT       0x05000000	/* critical */
+#define DLOG_ERR        0x04000000	/* error */
+#define DLOG_WARN       0x03000000	/* warning */
+#define DLOG_NOTE       0x02000000	/* notice */
+#define DLOG_INFO       0x01000000	/* info */
 
-#define CLOG_PRISHIFT   24		/* to get non-debug level */
-#define CLOG_DPRISHIFT  8		/* to get debug level */
-#define CLOG_DBG        0x00ffff00	/* all debug streams */
-#define CLOG_FACMASK    0x000000ff	/* facility mask */
+#define DLOG_PRISHIFT   24		/* to get non-debug level */
+#define DLOG_DPRISHIFT  8		/* to get debug level */
+#define DLOG_DBG        0x00ffff00	/* all debug streams */
+#define DLOG_FACMASK    0x000000ff	/* facility mask */
 
-/* clog_fac: facility name and mask info */
-struct clog_fac {
+/* dlog_fac: facility name and mask info */
+struct dlog_fac {
 	int fac_mask;  /* log level for this facility */
 	char *fac_aname;  /* abbreviated name of this facility */
 	char *fac_lname;  /* optional long name of this facility */
 };
 
 /* clog global state */
-struct crt_log_xstate {
+struct d_log_xstate {
 	char			*tag; /* tag string */
 	/* note that tag is NULL if clog is not open/inited */
-	struct clog_fac		*clog_facs; /* array of facility */
+	struct dlog_fac		*dlog_facs; /* array of facility */
 	int			 fac_cnt; /* # of facilities */
 	char			*nodename; /* pointer to our utsname */
 };
@@ -116,25 +116,25 @@ struct crt_log_xstate {
 extern "C" {
 #endif
 
-extern struct crt_log_xstate crt_log_xst;
+extern struct d_log_xstate d_log_xst;
 
 /**
- * crt_log_check: clog a message using stdarg list without checking filtering
+ * d_log_check: clog a message using stdarg list without checking filtering
  *
  * \param flags [IN]		facility+level+misc flags
- * @return flags to pass to crt_vlog, 0 indicates no log
+ * @return flags to pass to d_vlog, 0 indicates no log
  */
-static inline int crt_log_check(int flags)
+static inline int d_log_check(int flags)
 {
-	int fac = flags & CLOG_FACMASK;
-	int lvl = flags & CLOG_PRIMASK;
+	int fac = flags & DLOG_FACMASK;
+	int lvl = flags & DLOG_PRIMASK;
 	int msk;
 
-	if (!crt_log_xst.tag) /* Log isn't open */
+	if (!d_log_xst.tag) /* Log isn't open */
 		return 0;
 
 	/* Use default facility if it is malformed */
-	if (fac >= crt_log_xst.fac_cnt)
+	if (fac >= d_log_xst.fac_cnt)
 		fac = 0;
 
 	/*
@@ -143,15 +143,15 @@ static inline int crt_log_check(int flags)
 	 * directly compare levels.  if debug messages are not masked,
 	 * then we allow all non-debug messages and for debug messages we
 	 * check to make sure the proper bit is on.  [apps that don't use
-	 * the debug bits just log with CLOG_DBG which has them all set]
+	 * the debug bits just log with DLOG_DBG which has them all set]
 	 */
-	msk = crt_log_xst.clog_facs[fac].fac_mask;
-	if (lvl >= CLOG_INFO) {
+	msk = d_log_xst.dlog_facs[fac].fac_mask;
+	if (lvl >= DLOG_INFO) {
 		if (lvl < msk)
 			return 0; /* Skip it */
 	} else { /* debug clog message */
 		/*
-		 * note: if (msk >= CLOG_INFO), then all the mask's debug bits
+		 * note: if (msk >= DLOG_INFO), then all the mask's debug bits
 		 * are zero (meaning debugging messages are masked out).  thus,
 		 * for messages with the debug level we only have to do a bit
 		 * test.
@@ -164,45 +164,45 @@ static inline int crt_log_check(int flags)
 }
 
 /**
- * crt_vlog: log a message using stdarg list without checking flags
+ * d_vlog: log a message using stdarg list without checking flags
  *
- * A log line cannot be larger than CLOG_TBSZ (4096), if it is larger it will be
+ * A log line cannot be larger than DLOG_TBSZ (4096), if it is larger it will be
  * (silently) truncated].
  *
- * \param flags [IN]		flags returned from crt_log_check
+ * \param flags [IN]		flags returned from d_log_check
  * \param fmt [IN]		printf-style format string
  * @param ap [IN]		stdarg list
  */
-void crt_vlog(int flags, const char *fmt, va_list ap);
+void d_vlog(int flags, const char *fmt, va_list ap);
 
 /**
- * crt_log: clog a message if type specified by flags is enabled
+ * d_log: clog a message if type specified by flags is enabled
  *
- * A log line cannot be larger than CLOG_TBSZ (4096), if it is larger it will be
+ * A log line cannot be larger than DLOG_TBSZ (4096), if it is larger it will be
  * (silently) truncated].
  *
  * \param flags [IN]		facility+level+misc flags
  * \param fmt [IN]		printf-style format string
  * @param ap [IN]		stdarg list
  */
-static inline void crt_log(int flags, const char *fmt, ...)
+static inline void d_log(int flags, const char *fmt, ...)
 	__attribute__ ((__format__(__printf__, 2, 3)));
-static inline void crt_log(int flags, const char *fmt, ...)
+static inline void d_log(int flags, const char *fmt, ...)
 {
 	va_list ap;
 
-	flags = crt_log_check(flags);
+	flags = d_log_check(flags);
 
 	if (flags == 0)
 		return;
 
 	va_start(ap, fmt);
-	crt_vlog(flags, fmt, ap);
+	d_vlog(flags, fmt, ap);
 	va_end(ap);
 }
 
 /**
- * crt_log_allocfacility: allocate a new facility with the given name
+ * d_log_allocfacility: allocate a new facility with the given name
  *
  * \param aname [IN]		the abbr. name for the facility
  *				can be null for no name
@@ -212,85 +212,85 @@ static inline void crt_log(int flags, const char *fmt, ...)
  * \return			new facility number on success
  *				-1 on error - malloc problem.
  */
-int crt_log_allocfacility(const char *aname, const char *lname);
+int d_log_allocfacility(const char *aname, const char *lname);
 
 /**
  * Ensure default cart log is initialized.  This routine calls
- * crt_log_open the first time based on CRT_LOG_MASK and CRT_LOG_FILE
- * environment variables.   It keeps a reference count so crt_log_fini
- * must be called by all callers to release the call crt_log_close()
+ * d_log_open the first time based on CRT_LOG_MASK and CRT_LOG_FILE
+ * environment variables.   It keeps a reference count so d_log_fini
+ * must be called by all callers to release the call d_log_close()
  *
  * Without this mechanism, it is difficult to use the cart logging
  * mechanism from another library because clog doesn't allow multiple
  * log files.   It's better for things in the same process to share
  * anyway.
  */
-int crt_log_init(void);
+int d_log_init(void);
 
 /**
  * Advanced version of clog initialing function. User can specify log tag,
  * output log file, the default log mask and the mask for output errors.
  */
-int crt_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
+int d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 		     uint64_t def_mask, uint64_t err_mask);
 
 /**
- * Remove a reference on the default cart log.  Calls crt_log_close
+ * Remove a reference on the default cart log.  Calls d_log_close
  * if the reference count is 0.
  */
-void crt_log_fini(void);
+void d_log_fini(void);
 
 /**
- * crt_log_close: close off an clog and release any allocated resources.
+ * d_log_close: close off an clog and release any allocated resources.
  */
-void crt_log_close(void);
+void d_log_close(void);
 
 /** Reapplies the masks set in CRT_LOG_MASK.   Can be called after adding new
  *  log facilities to ensure that the mask is set appropriately for the
  *  previously unknown facilities.
  */
-void crt_log_sync_mask(void);
+void d_log_sync_mask(void);
 
 /**
- * crt_log_open: open a clog.
+ * d_log_open: open a clog.
  *
  * \param tag [IN]		string we tag each line with
  * \param maxfac_hint [IN]	hint as to largest user fac value will be used
  * \param default_mask [IN]	the default mask to use for each facility
  * \param stderr_mask [IN]	messages with a mask above this go to stderr.
  *				if pass in 0, then output goes to stderr only if
- *				CLOG_STDERR is used (either in crt_log_open or
- *				in crt_log).
+ *				DLOG_STDERR is used (either in d_log_open or
+ *				in d_log).
  * \param logfile [IN]		log file name, or null if no log file
  * \param flags [IN]		STDERR, LOGPID
  *
  * \return			0 on success, -1 on error.
  */
-int crt_log_open(char *tag, int maxfac_hint, int default_mask,
+int d_log_open(char *tag, int maxfac_hint, int default_mask,
 	      int stderr_mask, char *logfile, int flags);
 
 /**
- * crt_log_setlogmask: set the logmask for a given facility.
+ * d_log_setlogmask: set the logmask for a given facility.
  *
  * \param facility [IN]		Facility number
  * \param mask [IN]		The new mask for the facility
  */
-int crt_log_setlogmask(int facility, int mask);
+int d_log_setlogmask(int facility, int mask);
 
 /**
- * crt_log_setmasks: set clog masks for a set of facilities to a given level.
+ * d_log_setmasks: set clog masks for a set of facilities to a given level.
  * the input string should look like: PREFIX1=LEVEL1,PREFIX2=LEVEL2,...
- * where the "PREFIX" is the facility name defined with crt_log_namefacility().
+ * where the "PREFIX" is the facility name defined with d_log_namefacility().
  *
  * \param mstr [IN]		settings to use (doesn't have to be null term'd
  *				if mstr >= 0)
  * \param mlen [IN]		length of mstr (if < 0, assume null terminated,
  *				use strlen)
  */
-int crt_log_setmasks(char *mstr, int mlen);
+int d_log_setmasks(char *mstr, int mlen);
 
 /**
- * crt_log_getmasks: get current mask level as a string (not null terminated).
+ * d_log_getmasks: get current mask level as a string (not null terminated).
  * if the buffer is null, we probe for length rather than fill.
  *
  * \param buf [OUT]		the buffer to put the results in
@@ -301,12 +301,12 @@ int crt_log_setmasks(char *mstr, int mlen);
  *
  * \return bytes returned (may be trunced and non-null terminated if == len)
  */
-int crt_log_getmasks(char *buf, int discard, int len, int unterm);
+int d_log_getmasks(char *buf, int discard, int len, int unterm);
 
-int crt_log_str2pri(const char *pstr);
+int d_log_str2pri(const char *pstr);
 
 #if defined(__cplusplus)
 }
 #endif
 
-#endif /* _CLOG_H_ */
+#endif /* _DLOG_H_ */

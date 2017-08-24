@@ -35,7 +35,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#define C_LOGFAC	CD_FAC(self_test)
+#define D_LOGFAC	DD_FAC(self_test)
 
 #include <pthread.h>
 #include "crt_internal.h"
@@ -46,7 +46,7 @@
 #define ST_SET_NUM_INFLIGHT(newval)					\
 	do {								\
 		pthread_spin_lock(&g_data->ctr_lock);			\
-		C_ASSERT(g_data->num_inflight == 0);			\
+		D_ASSERT(g_data->num_inflight == 0);			\
 		g_data->num_inflight = (newval);			\
 		pthread_spin_unlock(&g_data->ctr_lock);			\
 	} while (0)
@@ -54,7 +54,7 @@
 #define ST_DEC_NUM_INFLIGHT()						\
 	do {								\
 		pthread_spin_lock(&g_data->ctr_lock);			\
-		C_ASSERT(g_data->num_inflight > 0);			\
+		D_ASSERT(g_data->num_inflight > 0);			\
 		g_data->num_inflight--;					\
 		pthread_spin_unlock(&g_data->ctr_lock);			\
 	} while (0)
@@ -101,8 +101,8 @@ struct st_g_data {
 	struct st_latency		 *rep_latencies;
 
 	/* Bulk descriptor used to transfer the above latencies */
-	crt_iov_t			  rep_latencies_iov;
-	crt_sg_list_t			  rep_latencies_sg_list;
+	d_iov_t				  rep_latencies_iov;
+	d_sg_list_t			  rep_latencies_sg_list;
 	crt_bulk_t			  rep_latencies_bulk_hdl;
 
 	/* List of endpoints to test against */
@@ -156,8 +156,8 @@ struct st_cb_args {
 	struct st_test_endpt	*endpt;
 
 	crt_bulk_t		 bulk_hdl;
-	crt_sg_list_t		 sg_list;
-	crt_iov_t		 sg_iov;
+	d_sg_list_t		 sg_list;
+	d_iov_t			 sg_iov;
 
 	/* Length of the buf array */
 	size_t			 buf_len;
@@ -193,7 +193,7 @@ void crt_self_test_client_init(void)
 	int ret;
 
 	ret = pthread_mutex_init(&g_data_lock, NULL);
-	C_ASSERT(ret == 0);
+	D_ASSERT(ret == 0);
 }
 
 static void
@@ -202,11 +202,11 @@ close_session_cb(const struct crt_cb_info *cb_info)
 	struct st_test_endpt	*endpt =
 		(struct st_test_endpt *)cb_info->cci_arg;
 
-	C_ASSERT(endpt != NULL);
-	C_ASSERT(g_data != NULL);
+	D_ASSERT(endpt != NULL);
+	D_ASSERT(g_data != NULL);
 
 	if (cb_info->cci_rc != 0)
-		C_WARN("Close session failed for endpoint=%u:%u\n",
+		D_WARN("Close session failed for endpoint=%u:%u\n",
 		       endpt->rank, endpt->tag);
 
 	/* Decrement the number of inflight RPCs now that this one is done */
@@ -223,10 +223,10 @@ static void close_sessions(void)
 	int		ret;
 
 	/* Serious bug if we get here with no g_data or some outstanding RPCs */
-	C_ASSERT(g_data != NULL);
-	C_ASSERT(g_data->num_inflight == 0);
-	C_ASSERT(g_data->num_endpts > 0);
-	C_ASSERT(g_data->endpts != NULL);
+	D_ASSERT(g_data != NULL);
+	D_ASSERT(g_data->num_inflight == 0);
+	D_ASSERT(g_data->num_endpts > 0);
+	D_ASSERT(g_data->endpts != NULL);
 
 	/* Planning to send RPCs equal to the number of endpoints */
 	ST_SET_NUM_INFLIGHT(g_data->num_endpts);
@@ -257,7 +257,7 @@ static void close_sessions(void)
 				     CRT_OPC_SELF_TEST_CLOSE_SESSION,
 				     &new_rpc);
 		if (ret != 0) {
-			C_WARN("Failed to close session %ld on endpoint=%u:%u;"
+			D_WARN("Failed to close session %ld on endpoint=%u:%u;"
 			       " crt_req_created failed with ret = %d\n",
 			       g_data->endpts[i].session_id,
 			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
@@ -270,11 +270,11 @@ static void close_sessions(void)
 
 			continue;
 		}
-		C_ASSERTF(new_rpc != NULL,
+		D_ASSERTF(new_rpc != NULL,
 			  "crt_req_create succeeded but RPC is NULL\n");
 
 		args = (int64_t *)crt_req_get(new_rpc);
-		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
+		D_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
 
 		*args = g_data->endpts[i].session_id;
 
@@ -282,7 +282,7 @@ static void close_sessions(void)
 		ret = crt_req_send(new_rpc, close_session_cb,
 				   &g_data->endpts[i]);
 		if (ret != 0) {
-			C_WARN("crt_req_send failed for endpoint=%u:%u;"
+			D_WARN("crt_req_send failed for endpoint=%u:%u;"
 			       " ret = %d\n",
 			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
 
@@ -309,7 +309,7 @@ static void close_sessions(void)
  * If sending fails for any reason, the endpoint is marked as evicted and the
  * function attempts to send to the next endpoint in the list until none remain.
  * This function will only return a non-zero value if there are no remaining
- * endpoints that it is possible to send a message to, or if crt_gettime()
+ * endpoints that it is possible to send a message to, or if d_gettime()
  * fails.
  *
  * skip_inc_complete is a flag that, when set to anything but zero, skips
@@ -328,10 +328,10 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 	uint32_t		 local_rep;
 	int			 ret;
 
-	C_ASSERT(cb_args != NULL);
-	C_ASSERT(g_data != NULL);
-	C_ASSERT(g_data->num_endpts > 0);
-	C_ASSERT(g_data->endpts != NULL);
+	D_ASSERT(cb_args != NULL);
+	D_ASSERT(g_data != NULL);
+	D_ASSERT(g_data->num_endpts > 0);
+	D_ASSERT(g_data->endpts != NULL);
 
 	/******************** LOCK: ctr_lock ********************/
 	pthread_spin_lock(&g_data->ctr_lock);
@@ -350,7 +350,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 
 	/* Only send another message if one is left to send */
 	if (local_rep >= g_data->rep_count)
-		C_GOTO(abort, ret = 0);
+		D_GOTO(abort, ret = 0);
 
 	/*
 	 * Loop until either:
@@ -358,7 +358,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 	 * - A new RPC message is sent successfully
 	 * - All endpoints are marked as evicted and it is impossible to send
 	 *   another message
-	 * - crt_gettime() fails (which shouldn't happen)
+	 * - d_gettime() fails (which shouldn't happen)
 	 *
 	 * In each of these cases the relevant code will return without needing
 	 * to break the loop
@@ -371,10 +371,10 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 		failed_endpts = 0;
 		do {
 			if (failed_endpts >= g_data->num_endpts) {
-				C_ERROR("No non-evicted endpoints remaining\n");
+				D_ERROR("No non-evicted endpoints remaining\n");
 				pthread_spin_unlock(&g_data->ctr_lock);
 				/************** UNLOCK: ctr_lock **************/
-				C_GOTO(abort, ret = -CER_UNREACH);
+				D_GOTO(abort, ret = -CER_UNREACH);
 			}
 			failed_endpts++;
 
@@ -414,14 +414,14 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 		ret = crt_req_create(g_data->crt_ctx, &local_endpt,
 				     opcode, &new_rpc);
 		if (ret != 0) {
-			C_WARN("crt_req_create failed for endpoint=%u:%u;"
+			D_WARN("crt_req_create failed for endpoint=%u:%u;"
 			       " ret = %d\n",
 			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
 
 			goto try_again;
 		}
 
-		C_ASSERTF(new_rpc != NULL,
+		D_ASSERTF(new_rpc != NULL,
 			  "crt_req_create succeeded but RPC is NULL\n");
 
 		/* No arguments to assemble for BOTH_EMPTY RPCs */
@@ -430,7 +430,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 
 		/* Get the arguments handle */
 		args = crt_req_get(new_rpc);
-		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
+		D_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
 
 		/* Session ID is always the first field */
 		*((int64_t *)args) = endpt_ptr->session_id;
@@ -442,12 +442,12 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 				struct crt_st_send_id_iov *typed_args =
 					(struct crt_st_send_id_iov *)args;
 
-				C_ASSERT(cb_args->buf_len >=
+				D_ASSERT(cb_args->buf_len >=
 					 g_data->send_size);
-				crt_iov_set(&typed_args->buf,
-					    crt_st_get_aligned_ptr(cb_args->buf,
-						    g_data->buf_alignment),
-					    g_data->send_size);
+				d_iov_set(&typed_args->buf,
+					 crt_st_get_aligned_ptr(cb_args->buf,
+						g_data->buf_alignment),
+					 g_data->send_size);
 			}
 			break;
 		case CRT_OPC_SELF_TEST_SEND_IOV_REPLY_BULK:
@@ -455,14 +455,14 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 				struct crt_st_send_id_iov_bulk *typed_args =
 					(struct crt_st_send_id_iov_bulk *)args;
 
-				C_ASSERT(cb_args->buf_len >=
+				D_ASSERT(cb_args->buf_len >=
 					 g_data->send_size);
-				crt_iov_set(&typed_args->buf,
-					    crt_st_get_aligned_ptr(cb_args->buf,
-						    g_data->buf_alignment),
-					    g_data->send_size);
+				d_iov_set(&typed_args->buf,
+					 crt_st_get_aligned_ptr(cb_args->buf,
+						g_data->buf_alignment),
+					 g_data->send_size);
 				typed_args->bulk_hdl = cb_args->bulk_hdl;
-				C_ASSERT(typed_args->bulk_hdl != CRT_BULK_NULL);
+				D_ASSERT(typed_args->bulk_hdl != CRT_BULK_NULL);
 			}
 			break;
 		case CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV:
@@ -472,7 +472,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 					(struct crt_st_send_id_bulk *)args;
 
 				typed_args->bulk_hdl = cb_args->bulk_hdl;
-				C_ASSERT(typed_args->bulk_hdl != CRT_BULK_NULL);
+				D_ASSERT(typed_args->bulk_hdl != CRT_BULK_NULL);
 			}
 			break;
 		}
@@ -482,22 +482,22 @@ send_rpc:
 		/* Give the callback a pointer to this endpoint entry */
 		cb_args->endpt = endpt_ptr;
 
-		ret = crt_gettime(&cb_args->sent_time);
+		ret = d_gettime(&cb_args->sent_time);
 		if (ret != 0) {
-			C_ERROR("crt_gettime failed; ret = %d\n", ret);
+			D_ERROR("d_gettime failed; ret = %d\n", ret);
 
 			/* Free the RPC request that was created but not sent */
 			ret = crt_req_decref(new_rpc);
 			if (ret != 0)
-				C_ERROR("crt_req_decref failed; ret=%d\n", ret);
+				D_ERROR("crt_req_decref failed; ret=%d\n", ret);
 
-			C_GOTO(abort, ret = -CER_UNKNOWN);
+			D_GOTO(abort, ret = -CER_UNKNOWN);
 		}
 
 		/* Send the RPC */
 		ret = crt_req_send(new_rpc, test_rpc_cb, cb_args);
 		if (ret != 0) {
-			C_WARN("crt_req_send failed for endpoint=%u:%u;"
+			D_WARN("crt_req_send failed for endpoint=%u:%u;"
 			       " ret = %d\n",
 			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
 
@@ -513,7 +513,7 @@ try_again:
 		 * Something must be wrong with this endpoint
 		 * Mark it as evicted and try a different one instead
 		 */
-		C_WARN("Marking endpoint endpoint=%u:%u as evicted\n",
+		D_WARN("Marking endpoint endpoint=%u:%u as evicted\n",
 		       local_endpt.ep_rank, local_endpt.ep_tag);
 
 		/*
@@ -540,9 +540,9 @@ abort:
 
 	if (g_data->num_inflight == 0) {
 		/* Record the time right when we finished this size */
-		ret = crt_gettime(&g_data->time_stop);
+		ret = d_gettime(&g_data->time_stop);
 		if (ret != 0)
-			C_ERROR("crt_gettime failed; ret = %d\n", ret);
+			D_ERROR("d_gettime failed; ret = %d\n", ret);
 
 		close_sessions();
 	}
@@ -565,20 +565,20 @@ test_rpc_cb(const struct crt_cb_info *cb_info)
 					   cb_info->cci_arg;
 	struct timespec		 now;
 
-	C_ASSERT(cb_args != NULL);
-	C_ASSERT(g_data != NULL);
+	D_ASSERT(cb_args != NULL);
+	D_ASSERT(g_data != NULL);
 
 	/* Record latency of this RPC */
-	crt_gettime(&now);
+	d_gettime(&now);
 	g_data->rep_latencies[cb_args->rep_idx].val =
-		crt_timediff_ns(&cb_args->sent_time, &now);
+		d_timediff_ns(&cb_args->sent_time, &now);
 
 	/* Record return code */
 	g_data->rep_latencies[cb_args->rep_idx].cci_rc = cb_info->cci_rc;
 
-	/* If this endpoint was evicted during the RPC, mark it as so */
+	/* If this endpoint was evicted d_uring the RPC, mark it as so */
 	if (cb_info->cci_rc == -CER_OOG) {
-		C_WARN("Test RPC failed with -CER_OOG for endpoint=%u:%u;"
+		D_WARN("Test RPC failed with -CER_OOG for endpoint=%u:%u;"
 		       " marking it as evicted\n",
 		       cb_args->endpt->rank, cb_args->endpt->tag);
 		/*
@@ -601,14 +601,14 @@ static void launch_test_rpcs(void)
 	int		ret;
 
 	/* Serious bug if we get here with no g_data or some outstanding RPCs */
-	C_ASSERT(g_data != NULL);
-	C_ASSERT(g_data->num_inflight == 0);
-	C_ASSERT(g_data->max_inflight > 0);
+	D_ASSERT(g_data != NULL);
+	D_ASSERT(g_data->num_inflight == 0);
+	D_ASSERT(g_data->max_inflight > 0);
 
 	/* Record the time right when we start processing this size */
-	ret = crt_gettime(&g_data->time_start);
+	ret = d_gettime(&g_data->time_start);
 	if (ret != 0) {
-		C_ERROR("crt_gettime failed; ret = %d\n", ret);
+		D_ERROR("d_gettime failed; ret = %d\n", ret);
 		/* No point in continuing if time is broken */
 		close_sessions();
 	}
@@ -629,23 +629,23 @@ open_session_cb(const struct crt_cb_info *cb_info)
 		(struct st_test_endpt *)cb_info->cci_arg;
 	int64_t			*session_id;
 
-	C_ASSERT(endpt != NULL);
-	C_ASSERT(g_data != NULL);
+	D_ASSERT(endpt != NULL);
+	D_ASSERT(g_data != NULL);
 
 	/* Get the session ID from the response message */
 	session_id = (int64_t *)crt_reply_get(cb_info->cci_rpc);
-	C_ASSERT(session_id != NULL);
+	D_ASSERT(session_id != NULL);
 
 	/* If this endpoint returned any kind of error, mark it is evicted */
 	if (cb_info->cci_rc != 0) {
-		C_WARN("Got cci_rc = %d while opening session with endpoint"
+		D_WARN("Got cci_rc = %d while opening session with endpoint"
 		       " %u:%u - removing it from the list of endpoints\n",
 		       cb_info->cci_rc, endpt->rank, endpt->tag);
 		/* Nodes with evicted=1 are skipped for the rest of the test */
 		endpt->evicted = 1;
 		endpt->session_id = -1;
 	} else if (*session_id < 0) {
-		C_WARN("Got invalid session id = %ld from endpoint %u:%u -\n"
+		D_WARN("Got invalid session id = %ld from endpoint %u:%u -\n"
 		       " removing it from the list of endpoints\n",
 		       *session_id, endpt->rank, endpt->tag);
 		endpt->evicted = 1;
@@ -669,10 +669,10 @@ static void open_sessions(void)
 	int		ret;
 
 	/* Serious bug if we get here with no g_data or some outstanding RPCs */
-	C_ASSERT(g_data != NULL);
-	C_ASSERT(g_data->num_inflight == 0);
-	C_ASSERT(g_data->num_endpts > 0);
-	C_ASSERT(g_data->endpts != NULL);
+	D_ASSERT(g_data != NULL);
+	D_ASSERT(g_data->num_inflight == 0);
+	D_ASSERT(g_data->num_endpts > 0);
+	D_ASSERT(g_data->endpts != NULL);
 
 	/* Sessions are not required for (EMPTY EMPTY) */
 	if (g_data->send_type == CRT_SELF_TEST_MSG_TYPE_EMPTY &&
@@ -704,7 +704,7 @@ static void open_sessions(void)
 				     CRT_OPC_SELF_TEST_OPEN_SESSION,
 				     &new_rpc);
 		if (ret != 0) {
-			C_WARN("crt_req_create failed for endpoint=%u:%u;"
+			D_WARN("crt_req_create failed for endpoint=%u:%u;"
 			       " ret = %d\n",
 			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
 
@@ -714,11 +714,11 @@ static void open_sessions(void)
 			/* Sending failed - decrement the inflight counter */
 			ST_DEC_NUM_INFLIGHT();
 		}
-		C_ASSERTF(new_rpc != NULL,
+		D_ASSERTF(new_rpc != NULL,
 			  "crt_req_create succeeded but RPC is NULL\n");
 
 		args = (struct crt_st_session_params *)crt_req_get(new_rpc);
-		C_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
+		D_ASSERTF(args != NULL, "crt_req_get returned NULL\n");
 
 		/* Copy test parameters */
 		args->send_size = g_data->send_size;
@@ -742,7 +742,7 @@ static void open_sessions(void)
 		ret = crt_req_send(new_rpc, open_session_cb,
 				   &g_data->endpts[i]);
 		if (ret != 0) {
-			C_WARN("crt_req_send failed for endpoint=%u:%u;"
+			D_WARN("crt_req_send failed for endpoint=%u:%u;"
 			       " ret = %d\n",
 			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
 
@@ -786,18 +786,18 @@ static void free_g_data(void)
 					cb_args->bulk_hdl = NULL;
 				}
 				if (cb_args->buf != NULL)
-					C_FREE(cb_args->buf,
+					D_FREE(cb_args->buf,
 					       cb_args->buf_len);
 
 				/*
 				 * Free and zero the actual pointer, not
 				 * the local copy
 				 */
-				C_FREE_PTR(g_data->cb_args_ptrs[alloc_idx]);
+				D_FREE_PTR(g_data->cb_args_ptrs[alloc_idx]);
 			}
 		}
 
-		C_FREE(g_data->cb_args_ptrs, g_data->max_inflight *
+		D_FREE(g_data->cb_args_ptrs, g_data->max_inflight *
 					     sizeof(g_data->cb_args_ptrs[0]));
 	}
 	if (g_data->rep_latencies_bulk_hdl != CRT_BULK_NULL) {
@@ -805,13 +805,13 @@ static void free_g_data(void)
 		g_data->rep_latencies_bulk_hdl = CRT_BULK_NULL;
 	}
 	if (g_data->rep_latencies != NULL)
-		C_FREE(g_data->rep_latencies,
+		D_FREE(g_data->rep_latencies,
 		       g_data->rep_count * sizeof(g_data->rep_latencies[0]));
 	if (g_data->endpts == NULL)
-		C_FREE(g_data->endpts,
+		D_FREE(g_data->endpts,
 		       g_data->num_endpts * sizeof(struct st_test_endpt));
 	if (g_data != NULL)
-		C_FREE_PTR(g_data);
+		D_FREE_PTR(g_data);
 }
 
 void
@@ -828,10 +828,10 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 
 	/* Get pointers to the arguments and response buffers */
 	args = (struct crt_st_start_params *)crt_req_get(rpc_req);
-	C_ASSERT(args != NULL);
+	D_ASSERT(args != NULL);
 
 	reply_status = (int32_t *)crt_reply_get(rpc_req);
-	C_ASSERT(reply_status != NULL);
+	D_ASSERT(reply_status != NULL);
 
 	/******************** LOCK: g_data_lock ********************/
 	pthread_mutex_lock(&g_data_lock);
@@ -839,29 +839,29 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	/* Validate the input */
 	if (((args->endpts.iov_buf_len & 0x7) != 0) ||
 	    (args->endpts.iov_buf_len == 0)) {
-		C_ERROR("Invalid IOV length - must be a multiple of 8 bytes\n");
-		C_GOTO(send_reply, ret = -CER_INVAL);
+		D_ERROR("Invalid IOV length - must be a multiple of 8 bytes\n");
+		D_GOTO(send_reply, ret = -CER_INVAL);
 	}
 	if (args->send_type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT ||
 	    args->reply_type == CRT_SELF_TEST_MSG_TYPE_BULK_GET) {
-		C_ERROR("Invalid self-test bulk type;"
+		D_ERROR("Invalid self-test bulk type;"
 			" only send/get reply/put are supported\n");
-		C_GOTO(send_reply, ret = -CER_INVAL);
+		D_GOTO(send_reply, ret = -CER_INVAL);
 	}
 	if (args->max_inflight == 0) {
-		C_ERROR("Max inflight must be greater than zero\n");
-		C_GOTO(send_reply, ret = -CER_INVAL);
+		D_ERROR("Max inflight must be greater than zero\n");
+		D_GOTO(send_reply, ret = -CER_INVAL);
 	}
 	if (args->rep_count == 0) {
-		C_ERROR("Rep count must be greater than zero\n");
-		C_GOTO(send_reply, ret = -CER_INVAL);
+		D_ERROR("Rep count must be greater than zero\n");
+		D_GOTO(send_reply, ret = -CER_INVAL);
 	}
 	if ((args->buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
 	     args->buf_alignment > CRT_ST_BUF_ALIGN_MAX) &&
 	     args->buf_alignment != CRT_ST_BUF_ALIGN_DEFAULT) {
-		C_ERROR("Buf alignment must be in the range [%d:%d]\n",
+		D_ERROR("Buf alignment must be in the range [%d:%d]\n",
 			CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MAX);
-		C_GOTO(send_reply, ret = -CER_INVAL);
+		D_GOTO(send_reply, ret = -CER_INVAL);
 	}
 
 	/*
@@ -872,16 +872,16 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	 *   collected, free those results and start a new session.
 	 */
 	if (g_data != NULL && g_data->test_complete == 0) {
-		C_ERROR("Failed to start a new test run - one still exists\n");
-		C_GOTO(send_reply, ret = -CER_BUSY);
+		D_ERROR("Failed to start a new test run - one still exists\n");
+		D_GOTO(send_reply, ret = -CER_BUSY);
 	} else {
 		free_g_data();
 	}
 
-	C_ALLOC_PTR(g_data);
+	D_ALLOC_PTR(g_data);
 	if (g_data == NULL) {
-		C_ERROR("Failed to allocate global test data structure\n");
-		C_GOTO(fail_cleanup, ret = -CER_NOMEM);
+		D_ERROR("Failed to allocate global test data structure\n");
+		D_GOTO(fail_cleanup, ret = -CER_NOMEM);
 	}
 
 	/* Initialize the global callback data */
@@ -898,11 +898,11 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	pthread_spin_init(&g_data->ctr_lock, PTHREAD_PROCESS_PRIVATE);
 
 	/* Allocate a buffer for the list of endpoints */
-	C_ALLOC(g_data->endpts, g_data->num_endpts *
+	D_ALLOC(g_data->endpts, g_data->num_endpts *
 				sizeof(struct st_test_endpt));
 	if (g_data->endpts == NULL) {
-		C_ERROR("Failed to allocate endpoint descriptor storage\n");
-		C_GOTO(fail_cleanup, ret = -CER_NOMEM);
+		D_ERROR("Failed to allocate endpoint descriptor storage\n");
+		D_GOTO(fail_cleanup, ret = -CER_NOMEM);
 	}
 
 	/* Copy the endpoint data from the caller */
@@ -914,39 +914,39 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	}
 
 	/* Allocate a buffer for latency measurements */
-	C_ALLOC(g_data->rep_latencies,
+	D_ALLOC(g_data->rep_latencies,
 		g_data->rep_count * sizeof(g_data->rep_latencies[0]));
 	if (g_data->rep_latencies == NULL) {
-		C_ERROR("Failed to allocate latency data storage\n");
-		C_GOTO(fail_cleanup, ret = -CER_NOMEM);
+		D_ERROR("Failed to allocate latency data storage\n");
+		D_GOTO(fail_cleanup, ret = -CER_NOMEM);
 	}
 
 	/*
 	 * Set up a bulk descriptor to use later to send the latencies back
 	 * to the self-test requestor
 	 */
-	crt_iov_set(&g_data->rep_latencies_iov, g_data->rep_latencies,
-		    g_data->rep_count * sizeof(g_data->rep_latencies[0]));
+	d_iov_set(&g_data->rep_latencies_iov, g_data->rep_latencies,
+		 g_data->rep_count * sizeof(g_data->rep_latencies[0]));
 	g_data->rep_latencies_sg_list.sg_iovs = &g_data->rep_latencies_iov;
 	g_data->rep_latencies_sg_list.sg_nr.num = 1;
 	ret = crt_bulk_create(g_data->crt_ctx, &g_data->rep_latencies_sg_list,
 			      CRT_BULK_RO, &g_data->rep_latencies_bulk_hdl);
 	if (ret != 0) {
-		C_ERROR("Failed to allocate latencies bulk handle; ret = %d\n",
+		D_ERROR("Failed to allocate latencies bulk handle; ret = %d\n",
 			ret);
-		C_GOTO(fail_cleanup, ret);
+		D_GOTO(fail_cleanup, ret);
 	}
-	C_ASSERT(g_data->rep_latencies_bulk_hdl != CRT_BULK_NULL);
+	D_ASSERT(g_data->rep_latencies_bulk_hdl != CRT_BULK_NULL);
 
 	/*
 	 * Allocate an array of pointers to keep track of private
 	 * per-inflight-rpc buffers
 	 */
-	C_ALLOC(g_data->cb_args_ptrs, g_data->max_inflight *
+	D_ALLOC(g_data->cb_args_ptrs, g_data->max_inflight *
 				      sizeof(g_data->cb_args_ptrs[0]));
 	if (g_data->cb_args_ptrs == NULL) {
-		C_ERROR("Failed to callback data pointers\n");
-		C_GOTO(fail_cleanup, ret = -CER_NOMEM);
+		D_ERROR("Failed to callback data pointers\n");
+		D_GOTO(fail_cleanup, ret = -CER_NOMEM);
 	}
 
 	/*
@@ -975,10 +975,10 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	for (alloc_idx = 0; alloc_idx < g_data->max_inflight; alloc_idx++) {
 		struct st_cb_args *cb_args;
 
-		C_ALLOC_PTR(g_data->cb_args_ptrs[alloc_idx]);
+		D_ALLOC_PTR(g_data->cb_args_ptrs[alloc_idx]);
 		if (g_data->cb_args_ptrs[alloc_idx] == NULL) {
-			C_ERROR("RPC private data allocation failed\n");
-			C_GOTO(fail_cleanup, ret = -CER_NOMEM);
+			D_ERROR("RPC private data allocation failed\n");
+			D_GOTO(fail_cleanup, ret = -CER_NOMEM);
 		}
 
 		/*
@@ -992,17 +992,17 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		 * there is one from the previous size
 		 */
 		if (cb_args->buf != NULL)
-			C_FREE(cb_args->buf, cb_args->buf_len);
+			D_FREE(cb_args->buf, cb_args->buf_len);
 
 		/* No buffer needed if there is no payload */
 		if (test_buf_len == 0)
 			continue;
 
 		/* Allocate a new data buffer for this inflight RPC */
-		C_ALLOC(cb_args->buf, alloc_buf_len);
+		D_ALLOC(cb_args->buf, alloc_buf_len);
 		if (cb_args->buf == NULL) {
-			C_ERROR("RPC data buf allocation failed\n");
-			C_GOTO(fail_cleanup, ret = -CER_NOMEM);
+			D_ERROR("RPC data buf allocation failed\n");
+			D_GOTO(fail_cleanup, ret = -CER_NOMEM);
 		}
 
 		/* Fill the buffer with an arbitrary data pattern */
@@ -1020,10 +1020,10 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		 */
 		cb_args->sg_list.sg_iovs = &cb_args->sg_iov;
 		cb_args->sg_list.sg_nr.num = 1;
-		crt_iov_set(&cb_args->sg_iov,
-			    crt_st_get_aligned_ptr(cb_args->buf,
-						   g_data->buf_alignment),
-			    test_buf_len);
+		d_iov_set(&cb_args->sg_iov,
+			 crt_st_get_aligned_ptr(cb_args->buf,
+						g_data->buf_alignment),
+			 test_buf_len);
 
 		/* Create bulk handle if required */
 		if (ISBULK(g_data->send_type) || ISBULK(g_data->reply_type)) {
@@ -1035,11 +1035,11 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 					      &cb_args->sg_list,
 					      perms, &cb_args->bulk_hdl);
 			if (ret != 0) {
-				C_ERROR("crt_bulk_create failed; ret = %d\n",
+				D_ERROR("crt_bulk_create failed; ret = %d\n",
 					ret);
-				C_GOTO(fail_cleanup, ret);
+				D_GOTO(fail_cleanup, ret);
 			}
-			C_ASSERT(cb_args->bulk_hdl != CRT_BULK_NULL);
+			D_ASSERT(cb_args->bulk_hdl != CRT_BULK_NULL);
 		}
 	}
 
@@ -1054,7 +1054,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	 * If we got this far, a test session is in progress - indicate to the
 	 * caller that launching the test was successful
 	 */
-	C_GOTO(send_reply, ret = 0);
+	D_GOTO(send_reply, ret = 0);
 
 fail_cleanup:
 	free_g_data();
@@ -1064,7 +1064,7 @@ send_reply:
 
 	ret = crt_reply_send(rpc_req);
 	if (ret != 0)
-		C_ERROR("crt_reply_send failed; ret = %d\n", ret);
+		D_ERROR("crt_reply_send failed; ret = %d\n", ret);
 
 	pthread_mutex_unlock(&g_data_lock);
 	/******************* UNLOCK: g_data_lock *******************/
@@ -1078,26 +1078,26 @@ static int status_req_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	int				 ret;
 
 	res->num_remaining = 0;
-	res->test_duration_ns = crt_timediff_ns(&g_data->time_start,
-						&g_data->time_stop);
+	res->test_duration_ns =
+		d_timediff_ns(&g_data->time_start, &g_data->time_stop);
 	gethostname(hostname, 1024);
 	fprintf(stderr, "host %s finished self_test duration %f S.\n",
 		hostname, (long long int)res->test_duration_ns/1e9);
 	res->status = CRT_ST_STATUS_TEST_COMPLETE;
 
 	if (cb_info->bci_rc != 0) {
-		C_ERROR("BULK_PUT of latency results failed; bci_rc=%d\n",
+		D_ERROR("BULK_PUT of latency results failed; bci_rc=%d\n",
 			cb_info->bci_rc);
 		res->status = cb_info->bci_rc;
 	}
 
 	ret = crt_reply_send(cb_info->bci_bulk_desc->bd_rpc);
 	if (ret != 0)
-		C_ERROR("crt_reply_send failed; ret = %d\n", ret);
+		D_ERROR("crt_reply_send failed; ret = %d\n", ret);
 
 	ret = crt_req_decref(cb_info->bci_bulk_desc->bd_rpc);
 	if (ret != 0)
-		C_ERROR("crt_req_decref failed; ret=%d\n", ret);
+		D_ERROR("crt_req_decref failed; ret=%d\n", ret);
 
 	pthread_mutex_unlock(&g_data_lock);
 	/******************* UNLOCK: g_data_lock *******************/
@@ -1120,14 +1120,14 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 	 * It is decremented after the reply is sent
 	 */
 	ret = crt_req_addref(rpc_req);
-	C_ASSERT(ret == 0);
+	D_ASSERT(ret == 0);
 
 	bulk_hdl_in = (crt_bulk_t *)crt_req_get(rpc_req);
-	C_ASSERT(bulk_hdl_in != NULL);
-	C_ASSERT(*bulk_hdl_in != CRT_BULK_NULL);
+	D_ASSERT(bulk_hdl_in != NULL);
+	D_ASSERT(*bulk_hdl_in != CRT_BULK_NULL);
 
 	res = (struct crt_st_status_req_reply *)crt_reply_get(rpc_req);
-	C_ASSERT(res != NULL);
+	D_ASSERT(res != NULL);
 
 	/* Default response values if no test data is available */
 	res->test_duration_ns = -1;
@@ -1143,7 +1143,7 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 	 * working on the test
 	 */
 	if (g_data != NULL && g_data->test_complete == 1) {
-		crt_size_t		bulk_in_len;
+		d_size_t			bulk_in_len;
 		struct crt_bulk_desc	bulk_desc;
 
 		/*
@@ -1157,20 +1157,20 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 
 		ret = crt_bulk_get_len(*bulk_hdl_in, &bulk_in_len);
 		if (ret != 0) {
-			C_ERROR("Failed to get bulk handle length; ret = %d\n",
+			D_ERROR("Failed to get bulk handle length; ret = %d\n",
 				ret);
 			res->status = ret;
-			C_GOTO(send_rpc, res->status = ret);
+			D_GOTO(send_rpc, res->status = ret);
 		}
 
 		/* Validate the bulk handle length from the caller */
 		if (bulk_in_len != (g_data->rep_count *
 				    sizeof(g_data->rep_latencies[0]))) {
-			C_ERROR("Bulk handle length mismatch (%zu != %zu)\n",
+			D_ERROR("Bulk handle length mismatch (%zu != %zu)\n",
 				bulk_in_len,
 				(g_data->rep_count *
 				 sizeof(g_data->rep_latencies[0])));
-			C_GOTO(send_rpc, res->status = ret);
+			D_GOTO(send_rpc, res->status = ret);
 		}
 
 		bulk_desc.bd_rpc = rpc_req;
@@ -1184,9 +1184,9 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 		ret = crt_bulk_transfer(&bulk_desc, status_req_bulk_put_cb,
 					res, NULL);
 		if (ret != 0) {
-			C_ERROR("bulk transfer of latencies failed; ret = %d\n",
+			D_ERROR("bulk transfer of latencies failed; ret = %d\n",
 				ret);
-			C_GOTO(send_rpc, res->status = ret);
+			D_GOTO(send_rpc, res->status = ret);
 		}
 
 		return;
@@ -1204,11 +1204,11 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 send_rpc:
 	ret = crt_reply_send(rpc_req);
 	if (ret != 0)
-		C_ERROR("crt_reply_send failed; ret = %d\n", ret);
+		D_ERROR("crt_reply_send failed; ret = %d\n", ret);
 
 	ret = crt_req_decref(rpc_req);
 	if (ret != 0) {
-		C_ERROR("crt_req_decref failed; ret=%d\n", ret);
+		D_ERROR("crt_req_decref failed; ret=%d\n", ret);
 		res->status = ret;
 	}
 

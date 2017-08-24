@@ -64,7 +64,7 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 
-#include <pouch/common.h>
+#include <gurt/common.h>
 #include <cart/api.h>
 
 #include "crt_hg.h"

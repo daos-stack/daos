@@ -59,7 +59,7 @@ enum crt_rank_status {
 
 /* the index of crt_rank_map[] is the PMIx global rank */
 struct crt_rank_map {
-	crt_rank_t		rm_rank; /* rank in primary group */
+	d_rank_t			rm_rank; /* rank in primary group */
 	enum crt_rank_status	rm_status; /* health status */
 };
 
@@ -67,15 +67,15 @@ struct crt_rank_map {
 #define CRT_LOOKUP_CACHE_BITS	(4)
 
 struct crt_grp_priv {
-	crt_list_t		 gp_link; /* link to crt_grp_list */
+	d_list_t			 gp_link; /* link to crt_grp_list */
 	crt_group_t		 gp_pub; /* public grp handle */
 	/*
 	 * member ranks, should be unique and sorted, each member is the rank
 	 * number within the primary group.
 	 */
-	crt_rank_list_t		*gp_membs;
+	d_rank_list_t		*gp_membs;
 	/* failed ranks */
-	crt_rank_list_t		*gp_failed_ranks;
+	d_rank_list_t		*gp_failed_ranks;
 	/* the priv pointer user passed in for crt_group_create */
 	void			*gp_priv;
 	/* CaRT context only for sending sub-grp create/destroy RPCs */
@@ -98,9 +98,9 @@ struct crt_grp_priv {
 	 * the gp_membs->rl_ranks[gp_self] is its rank number in primary group.
 	 * For primary group, gp_self == gp_membs->rl_ranks[gp_self].
 	 */
-	crt_rank_t		 gp_self;
+	d_rank_t			 gp_self;
 	/* PSR rank in attached group */
-	crt_rank_t		 gp_psr_rank;
+	d_rank_t			 gp_psr_rank;
 	/* PSR phy addr address in attached group */
 	crt_phy_addr_t		 gp_psr_phy_addr;
 	/* address lookup cache, only valid for primary group */
@@ -130,7 +130,7 @@ struct crt_grp_priv {
 	 * gp_status is CRT_GRP_CREATING or CRT_GRP_DESTROYING.
 	 */
 	struct crt_rpc_priv	*gp_parent_rpc; /* parent RPC, NULL on root */
-	crt_list_t		 gp_child_rpcs; /* child RPCs list */
+	d_list_t			 gp_child_rpcs; /* child RPCs list */
 	uint32_t		 gp_child_num;
 	uint32_t		 gp_child_ack_num;
 	int			 gp_rc; /* temporary recoded return code */
@@ -139,17 +139,17 @@ struct crt_grp_priv {
 	crt_grp_destroy_cb_t	 gp_destroy_cb; /* grp destroy completion cb */
 	void			*gp_destroy_cb_arg;
 
-	pthread_rwlock_t	gp_rwlock; /* protect all fields above */
+	pthread_rwlock_t	 gp_rwlock; /* protect all fields above */
 };
 
 /* lookup cache item for one target */
 struct crt_lookup_item {
 	/* link to crt_grp_priv::gp_lookup_cache[ctx_idx] */
-	crt_list_t		 li_link;
+	d_list_t			 li_link;
 	/* point back to grp_priv */
 	struct crt_grp_priv	*li_grp_priv;
 	/* rank of the target */
-	crt_rank_t		 li_rank;
+	d_rank_t			 li_rank;
 	/* base phy addr published through PMIx */
 	crt_phy_addr_t		 li_base_phy_addr;
 	/* connected HG addr */
@@ -172,13 +172,13 @@ struct crt_grp_gdata {
 	struct crt_grp_priv	*gg_srv_pri_grp;
 
 	/* client side group list attached by, only meaningful for server */
-	crt_list_t		 gg_cli_grps_attached;
+	d_list_t			 gg_cli_grps_attached;
 	/* server side group list attached to */
-	crt_list_t		 gg_srv_grps_attached;
+	d_list_t			 gg_srv_grps_attached;
 
 	/* TODO: move crt_grp_list here */
 	/* sub-grp list, only meaningful for server */
-	crt_list_t		 gg_sub_grps;
+	d_list_t			 gg_sub_grps;
 	/* some flags */
 	uint32_t		 gg_inited:1, /* all initialized */
 				 gg_pmix_inited:1; /* PMIx initialized */
@@ -193,19 +193,19 @@ int crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
 int crt_grp_detach(crt_group_t *attached_grp);
 char *crt_get_tag_uri(const char *base_uri, int tag);
 int crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
-		      crt_rank_t rank, uint32_t tag, crt_phy_addr_t *base_addr,
+		      d_rank_t rank, uint32_t tag, crt_phy_addr_t *base_addr,
 		      hg_addr_t *hg_addr);
 int crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
-			  crt_rank_t rank, const char *uri);
+			  d_rank_t rank, const char *uri);
 int crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
 			   struct crt_context *ctx_idx,
-			   crt_rank_t rank, int tag, hg_addr_t *hg_addr);
+			   d_rank_t rank, int tag, hg_addr_t *hg_addr);
 int crt_grp_ctx_invalid(struct crt_context *ctx, bool locked);
 struct crt_grp_priv *crt_grp_lookup_int_grpid(uint64_t int_grpid);
 int crt_validate_grpid(const crt_group_id_t grpid);
 int crt_grp_init(crt_group_id_t grpid);
 int crt_grp_fini(void);
-int crt_grp_failed_ranks_dup(crt_group_t *grp, crt_rank_list_t **failed_ranks);
+int crt_grp_failed_ranks_dup(crt_group_t *grp, d_rank_list_t **failed_ranks);
 
 int crt_grp_config_load(struct crt_grp_priv *grp_priv);
 
@@ -214,8 +214,8 @@ int crt_grp_config_load(struct crt_grp_priv *grp_priv);
 static inline bool
 crt_ep_identical(crt_endpoint_t *ep1, crt_endpoint_t *ep2)
 {
-	C_ASSERT(ep1 != NULL);
-	C_ASSERT(ep2 != NULL);
+	D_ASSERT(ep1 != NULL);
+	D_ASSERT(ep2 != NULL);
 	/* TODO: check group */
 	if (ep1->ep_rank == ep2->ep_rank)
 		return true;
@@ -226,8 +226,8 @@ crt_ep_identical(crt_endpoint_t *ep1, crt_endpoint_t *ep2)
 static inline void
 crt_ep_copy(crt_endpoint_t *dst_ep, crt_endpoint_t *src_ep)
 {
-	C_ASSERT(dst_ep != NULL);
-	C_ASSERT(src_ep != NULL);
+	D_ASSERT(dst_ep != NULL);
+	D_ASSERT(src_ep != NULL);
 	/* TODO: copy grp id */
 	dst_ep->ep_rank = src_ep->ep_rank;
 	dst_ep->ep_tag = src_ep->ep_tag;
@@ -235,7 +235,7 @@ crt_ep_copy(crt_endpoint_t *dst_ep, crt_endpoint_t *src_ep)
 
 void crt_li_destroy(struct crt_lookup_item *li);
 
-struct crt_lookup_item *crt_li_link2ptr(crt_list_t *rlink);
+struct crt_lookup_item *crt_li_link2ptr(d_list_t *rlink);
 
 static inline uint64_t
 crt_get_subgrp_id()
@@ -243,18 +243,18 @@ crt_get_subgrp_id()
 	struct crt_grp_priv	*grp_priv;
 	uint64_t		 subgrp_id;
 
-	C_ASSERT(crt_initialized());
-	C_ASSERT(crt_is_service());
+	D_ASSERT(crt_initialized());
+	D_ASSERT(crt_is_service());
 	grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
-	C_ASSERT(grp_priv != NULL);
-	C_ASSERT(grp_priv->gp_primary && grp_priv->gp_local);
+	D_ASSERT(grp_priv != NULL);
+	D_ASSERT(grp_priv->gp_primary && grp_priv->gp_local);
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
 	subgrp_id = grp_priv->gp_int_grpid + grp_priv->gp_subgrp_idx;
 	grp_priv->gp_subgrp_idx++;
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 
-	C_DEBUG("crt_get_subgrp_id get subgrp_id: "CF_X64".\n", subgrp_id);
+	D_DEBUG("crt_get_subgrp_id get subgrp_id: "CF_X64".\n", subgrp_id);
 
 	return subgrp_id;
 }
@@ -264,14 +264,14 @@ crt_grp_priv_addref(struct crt_grp_priv *grp_priv)
 {
 	uint32_t	refcount;
 
-	C_ASSERT(grp_priv != NULL);
-	C_ASSERT(grp_priv->gp_primary == 1);
+	D_ASSERT(grp_priv != NULL);
+	D_ASSERT(grp_priv->gp_primary == 1);
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
 	refcount = ++grp_priv->gp_refcount;
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 
-	C_DEBUG("service group (%s), refcount increased to %d.\n",
+	D_DEBUG("service group (%s), refcount increased to %d.\n",
 		grp_priv->gp_pub.cg_grpid, refcount);
 }
 
@@ -286,9 +286,9 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 	int			 rc;
 
 	grp_gdata = crt_gdata.cg_grp;
-	C_ASSERT(grp_gdata != NULL);
-	C_ASSERT(grp_priv != NULL);
-	C_ASSERT(grp_priv->gp_primary == 1);
+	D_ASSERT(grp_gdata != NULL);
+	D_ASSERT(grp_priv != NULL);
+	D_ASSERT(grp_priv->gp_primary == 1);
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
 	if (grp_priv->gp_refcount == 0) {
@@ -302,10 +302,10 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 
 	if (rc >= 0)
-		C_DEBUG("service group (%s), refcount decreased to %d.\n",
+		D_DEBUG("service group (%s), refcount decreased to %d.\n",
 			grp_priv->gp_pub.cg_grpid, rc);
 	else
-		C_ERROR("service group (%s), refcount already dropped to 0.\n",
+		D_ERROR("service group (%s), refcount already dropped to 0.\n",
 			grp_priv->gp_pub.cg_grpid);
 
 	return rc;
@@ -315,8 +315,8 @@ bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2);
 bool crt_grp_is_local(crt_group_t *grp);
 struct crt_grp_priv *crt_grp_pub2priv(crt_group_t *grp);
-int crt_grp_lc_uri_insert_all(crt_group_t *grp, crt_rank_t rank,
+int crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank,
 			      const char *uri);
-bool crt_rank_evicted(crt_group_t *grp, crt_rank_t rank);
+bool crt_rank_evicted(crt_group_t *grp, d_rank_t rank);
 
 #endif /* __CRT_GROUP_H__ */

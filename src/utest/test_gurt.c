@@ -35,17 +35,17 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * This file tests macros in src/libpouch/queue.h
+ * This file tests macros in GURT
  */
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include "utest_cmocka.h"
-#include "pouch/common.h"
-#include "pouch/path.h"
-#include "pouch/list.h"
-#include "pouch/heap.h"
-#include "pouch/clog.h"
+#include "gurt/common.h"
+#include "gurt/path.h"
+#include "gurt/list.h"
+#include "gurt/heap.h"
+#include "gurt/dlog.h"
 
 static char *__cwd;
 static char *__root;
@@ -59,62 +59,62 @@ test_time(void **state)
 
 	t1.tv_sec = 1;
 	t1.tv_nsec = 1;
-	crt_timeinc(&t1, NSEC_PER_SEC + 1);
+	d_timeinc(&t1, NSEC_PER_SEC + 1);
 
 	assert_int_equal(t1.tv_sec, 2);
 	assert_int_equal(t1.tv_nsec, 2);
 
 	t2.tv_sec = 0;
 	t2.tv_nsec = 0;
-	assert_int_equal(crt_timediff_ns(&t2, &t1),
+	assert_int_equal(d_timediff_ns(&t2, &t1),
 			 (NSEC_PER_SEC * 2) + 2);
 
 	t2.tv_sec = 2;
 	t2.tv_nsec = 2 + NSEC_PER_USEC;
-	assert(crt_time2us(crt_timediff(t1, t2)) == 1.0);
-	assert(crt_time2us(crt_timediff(t2, t1)) == -1.0);
+	assert(d_time2us(d_timediff(t1, t2)) == 1.0);
+	assert(d_time2us(d_timediff(t2, t1)) == -1.0);
 
 	t2.tv_nsec = 2 + NSEC_PER_MSEC;
-	assert(crt_time2ms(crt_timediff(t1, t2)) == 1.0);
-	assert(crt_time2ms(crt_timediff(t2, t1)) == -1.0);
+	assert(d_time2ms(d_timediff(t1, t2)) == 1.0);
+	assert(d_time2ms(d_timediff(t2, t1)) == -1.0);
 
 	t2.tv_sec = 3;
 	t2.tv_nsec = 2;
-	assert(crt_time2s(crt_timediff(t1, t2)) == 1.0);
-	assert(crt_time2s(crt_timediff(t2, t1)) == -1.0);
+	assert(d_time2s(d_timediff(t1, t2)) == 1.0);
+	assert(d_time2s(d_timediff(t2, t1)) == -1.0);
 
 	t2.tv_sec = 2;
 	t2.tv_nsec = 2;
-	assert_int_equal(crt_timediff_ns(&t2, &t1), 0);
+	assert_int_equal(d_timediff_ns(&t2, &t1), 0);
 
 	t2.tv_sec = 3;
 	t2.tv_nsec = 2;
-	assert_int_equal(crt_timediff_ns(&t2, &t1), -NSEC_PER_SEC);
+	assert_int_equal(d_timediff_ns(&t2, &t1), -NSEC_PER_SEC);
 
 	t2.tv_sec = 2;
 	t2.tv_nsec = 3;
-	assert_int_equal(crt_timediff_ns(&t2, &t1), -1);
+	assert_int_equal(d_timediff_ns(&t2, &t1), -1);
 
 	t2.tv_nsec = 1;
-	assert_int_equal(crt_timediff_ns(&t2, &t1),
+	assert_int_equal(d_timediff_ns(&t2, &t1),
 			 1);
 
-	crt_timeinc(&t1, 100000);
+	d_timeinc(&t1, 100000);
 
 	assert_int_equal(t1.tv_sec, 2);
 	assert_int_equal(t1.tv_nsec, 100002);
 
-	crt_gettime(&t1);
-	crt_timeinc(&t1, NSEC_PER_SEC / 10);
+	d_gettime(&t1);
+	d_timeinc(&t1, NSEC_PER_SEC / 10);
 
-	timeleft = crt_timeleft_ns(&t1);
+	timeleft = d_timeleft_ns(&t1);
 	/* This check shouldn't take 1 second */
 	assert_in_range(timeleft, 0, NSEC_PER_SEC);
 
 	/* Sleep for 1 second.  Time should expire */
 	sleep(1);
 
-	timeleft = crt_timeleft_ns(&t1);
+	timeleft = d_timeleft_ns(&t1);
 	assert_int_equal(timeleft, 0);
 }
 
@@ -130,7 +130,7 @@ static void __test_norm_in_place(const char *origin,
 
 	strcpy(path, origin);
 
-	ret = crt_normalize_in_place(path);
+	ret = d_normalize_in_place(path);
 	if (ret != 0)
 		free(path);
 
@@ -196,23 +196,23 @@ void test_prepend_cwd(void **state)
 	int		ret;
 
 	/* Should return an error */
-	ret = crt_prepend_cwd(NULL, &checked);
+	ret = d_prepend_cwd(NULL, &checked);
 
-	assert_int_equal(ret, -CER_INVAL);
+	assert_int_equal(ret, -DER_INVAL);
 	assert_null(checked);
 
 	/* This should be unchanged.   It's already
 	 * a valid prefix path
 	 */
 	value = "////foo bar//fub";
-	ret = crt_prepend_cwd(value, &checked);
+	ret = d_prepend_cwd(value, &checked);
 	assert_int_equal(ret, 0);
 	assert_null(checked);
 
 	/* The current directory prepended.
 	 */
 	value = "bar/fub";
-	ret = crt_prepend_cwd(value, &checked);
+	ret = d_prepend_cwd(value, &checked);
 	assert_int_equal(ret, 0);
 	assert_non_null(checked);
 	expected = create_string("%s/%s", __cwd, value);
@@ -229,24 +229,24 @@ void test_check_directory(void **state)
 	char	*new_path;
 	char	*path2;
 
-	ret = crt_check_directory(__root, NULL, false);
+	ret = d_check_directory(__root, NULL, false);
 	assert_int_equal(ret, 0);
 
-	ret = crt_check_directory("/bar/foo", NULL, false);
-	assert_int_equal(ret, -CER_BADPATH);
+	ret = d_check_directory("/bar/foo", NULL, false);
+	assert_int_equal(ret, -DER_BADPATH);
 
 	path = create_string("%s/SConstruct", __cwd);
 	assert_non_null(path);
-	ret = crt_check_directory(path, NULL, false);
-	assert_int_equal(ret, -CER_NOTDIR);
+	ret = d_check_directory(path, NULL, false);
+	assert_int_equal(ret, -DER_NOTDIR);
 
-	ret = crt_check_directory(path, NULL, true);
-	assert_int_equal(ret, -CER_NOTDIR);
+	ret = d_check_directory(path, NULL, true);
+	assert_int_equal(ret, -DER_NOTDIR);
 	free(path);
 
 	path = create_string("%s/utest/dir1/dir2", __cwd);
 	assert_non_null(path);
-	ret = crt_check_directory(path, NULL, true);
+	ret = d_check_directory(path, NULL, true);
 	assert_int_equal(ret, 0);
 	free(path);
 
@@ -255,7 +255,7 @@ void test_check_directory(void **state)
 	path2 = create_string("%s/foobar", __root);
 	assert_non_null(path2);
 	rmdir(path);
-	ret = crt_check_directory(path, &new_path, true);
+	ret = d_check_directory(path, &new_path, true);
 	assert_int_equal(ret, 0);
 	assert_int_equal(rmdir(path), 0);
 	assert_string_equal(path2, new_path);
@@ -275,11 +275,11 @@ void test_create_subdirs(void **state)
 	const char	*dirs[NUM_DIRS] = {"fub", "bob", "long/path/name",
 		"long/path", "long"};
 
-	ret = crt_create_subdirs("/usr/lib64/libc.so", "", &path);
-	assert_int_equal(ret, -CER_NOTDIR);
+	ret = d_create_subdirs("/usr/lib64/libc.so", "", &path);
+	assert_int_equal(ret, -DER_NOTDIR);
 	assert_null(path);
 
-	ret = crt_create_subdirs(__root, "", &path);
+	ret = d_create_subdirs(__root, "", &path);
 	assert_int_equal(ret, 0);
 	assert_string_equal(path, __root);
 	free(path);
@@ -303,7 +303,7 @@ void test_create_subdirs(void **state)
 	*(pos - 4) = '/';
 
 	*pos = 0;
-	ret = crt_create_subdirs(__root, "foo/bar", &path);
+	ret = d_create_subdirs(__root, "foo/bar", &path);
 	assert_int_equal(ret, 0);
 	assert_non_null(path);
 	assert_string_equal(path, dir);
@@ -312,7 +312,7 @@ void test_create_subdirs(void **state)
 	/* Create the directories */
 	for (i = 0; i < NUM_DIRS; i++) {
 		*pos = 0;
-		ret = crt_create_subdirs(dir, dirs[i], &path);
+		ret = d_create_subdirs(dir, dirs[i], &path);
 		assert_int_equal(ret, 0);
 		*pos = '/';
 		strcpy(pos+1, dirs[i]);
@@ -323,7 +323,7 @@ void test_create_subdirs(void **state)
 	/* Do it one more time */
 	for (i = 0; i < NUM_DIRS; i++) {
 		*pos = 0;
-		ret = crt_create_subdirs(dir, dirs[i], &path);
+		ret = d_create_subdirs(dir, dirs[i], &path);
 		assert_int_equal(ret, 0);
 		*pos = '/';
 		strcpy(pos+1, dirs[i]);
@@ -342,15 +342,15 @@ void test_create_subdirs(void **state)
 	strcpy(pos, "/bob");
 	open(dir, O_CREAT|O_WRONLY, 0600);
 	*pos = 0;
-	ret = crt_create_subdirs(dir, "bob", &path);
+	ret = d_create_subdirs(dir, "bob", &path);
 	*pos = '/';
-	assert_int_equal(ret, -CER_NOTDIR);
+	assert_int_equal(ret, -DER_NOTDIR);
 	assert_null(path);
 	unlink(dir);
 
 	/* Test a directory that user can't write */
-	ret = crt_create_subdirs("/usr/lib", "cppr_test_path", &path);
-	assert_int_equal(ret, -CER_NO_PERM);
+	ret = d_create_subdirs("/usr/lib", "cppr_test_path", &path);
+	assert_int_equal(ret, -DER_NO_PERM);
 	assert_null(path);
 
 	/* Remove bar and foo */
@@ -375,7 +375,7 @@ init_tests(void **state)
 		return -1;
 	}
 
-	__cwd = crt_getcwd();
+	__cwd = d_getcwd();
 
 	if (__cwd == NULL)
 		return -1;
@@ -393,23 +393,23 @@ fini_tests(void **state)
 	return 0;
 }
 
-struct crt_list_test_entry {
+struct d_list_test_entry {
 	int num;
-	crt_list_t link;
+	d_list_t link;
 };
 
-static CRT_LIST_HEAD(head1);
+static D_LIST_HEAD(head1);
 
 #define NUM_ENTRIES 20
 
 static void
-assert_list_node_status(void **state, crt_list_t *head, int value, bool in_list)
+assert_list_node_status(void **state, d_list_t *head, int value, bool in_list)
 {
-	crt_list_t			*pos;
-	struct crt_list_test_entry	*entry;
+	d_list_t			*pos;
+	struct d_list_test_entry	*entry;
 
-	crt_list_for_each(pos, head) {
-		entry = crt_list_entry(pos, struct crt_list_test_entry, link);
+	dlist_for_each(pos, head) {
+		entry = d_list_entry(pos, struct d_list_test_entry, link);
 		if (entry->num == value) {
 			if (in_list)
 				return;
@@ -422,12 +422,12 @@ assert_list_node_status(void **state, crt_list_t *head, int value, bool in_list)
 }
 
 static void
-assert_list_node_count(void **state, crt_list_t *head, int count)
+assert_list_node_count(void **state, d_list_t *head, int count)
 {
-	crt_list_t	*pos;
+	d_list_t	*pos;
 	int		i = 0;
 
-	crt_list_for_each(pos, head) {
+	dlist_for_each(pos, head) {
 		i++;
 	}
 
@@ -435,134 +435,134 @@ assert_list_node_count(void **state, crt_list_t *head, int count)
 }
 
 static void
-test_crt_list(void **state)
+test_gurt_list(void **state)
 {
-	crt_list_t			*pos;
-	crt_list_t			*temp;
-	crt_list_t			head2;
-	crt_list_t			head3;
-	struct crt_list_test_entry	*entry;
-	struct crt_list_test_entry	*tentry;
-	struct crt_list_test_entry	entry2;
-	struct crt_list_test_entry	entry3;
+	d_list_t			*pos;
+	d_list_t			*temp;
+	d_list_t			head2;
+	d_list_t			head3;
+	struct d_list_test_entry	*entry;
+	struct d_list_test_entry	*tentry;
+	struct d_list_test_entry	entry2;
+	struct d_list_test_entry	entry3;
 	int		i;
 
-	CRT_INIT_LIST_HEAD(&head2);
-	CRT_INIT_LIST_HEAD(&head3);
+	D_INIT_LIST_HEAD(&head2);
+	D_INIT_LIST_HEAD(&head3);
 
 	entry2.num = 2000;
 	entry3.num = 3000;
-	crt_list_add(&entry3.link, &head3);
-	assert(!crt_list_empty(&head3));
-	crt_list_splice(&head2, &head3);
-	assert(!crt_list_empty(&head3));
-	CRT_INIT_LIST_HEAD(&head2);
-	crt_list_splice(&head3, &head2);
-	assert(!crt_list_empty(&head2));
-	crt_list_del(&entry3.link);
-	assert(crt_list_empty(&head2));
-	CRT_INIT_LIST_HEAD(&head2);
-	CRT_INIT_LIST_HEAD(&head3);
-	crt_list_add(&entry3.link, &head3);
-	crt_list_add(&entry2.link, &head2);
-	crt_list_splice(&head3, &head2);
+	d_list_add(&entry3.link, &head3);
+	assert(!d_list_empty(&head3));
+	d_list_splice(&head2, &head3);
+	assert(!d_list_empty(&head3));
+	D_INIT_LIST_HEAD(&head2);
+	d_list_splice(&head3, &head2);
+	assert(!d_list_empty(&head2));
+	d_list_del(&entry3.link);
+	assert(d_list_empty(&head2));
+	D_INIT_LIST_HEAD(&head2);
+	D_INIT_LIST_HEAD(&head3);
+	d_list_add(&entry3.link, &head3);
+	d_list_add(&entry2.link, &head2);
+	d_list_splice(&head3, &head2);
 	assert_list_node_count(state, &head2, 2);
-	CRT_INIT_LIST_HEAD(&head3);
-	crt_list_move(&entry2.link, &head3);
+	D_INIT_LIST_HEAD(&head3);
+	d_list_move(&entry2.link, &head3);
 	assert_list_node_status(state, &head3, entry2.num, true);
 	assert_list_node_status(state, &head2, entry3.num, true);
-	crt_list_move_tail(&entry2.link, &head2);
+	d_list_move_tail(&entry2.link, &head2);
 	assert_list_node_status(state, &head2, entry2.num, true);
 	assert_list_node_status(state, &head3, entry2.num, false);
 
-	CRT_INIT_LIST_HEAD(&head2);
+	D_INIT_LIST_HEAD(&head2);
 
 	for (i = NUM_ENTRIES * 2 - 1; i >= NUM_ENTRIES; i--) {
-		C_ALLOC(entry, sizeof(struct crt_list_test_entry));
+		D_ALLOC(entry, sizeof(struct d_list_test_entry));
 		assert_non_null(entry);
 		entry->num = i;
-		crt_list_add(&entry->link, &head2);
+		d_list_add(&entry->link, &head2);
 		assert_list_node_status(state, &head2, i, true);
 
-		crt_list_del_init(&entry->link);
-		assert(crt_list_empty(&entry->link));
+		d_list_del_init(&entry->link);
+		assert(d_list_empty(&entry->link));
 		assert_list_node_status(state, &head2, i, false);
 
-		crt_list_add(&entry->link, &head2);
+		d_list_add(&entry->link, &head2);
 		assert_list_node_status(state, &head2, i, true);
 	}
 
 	for (i = 0; i < NUM_ENTRIES; i++) {
-		C_ALLOC(entry, sizeof(struct crt_list_test_entry));
+		D_ALLOC(entry, sizeof(struct d_list_test_entry));
 		assert_non_null(entry);
 		entry->num = i;
-		crt_list_add_tail(&entry->link, &head1);
+		d_list_add_tail(&entry->link, &head1);
 		assert_list_node_status(state, &head1, i, true);
 
-		crt_list_del(&entry->link);
+		d_list_del(&entry->link);
 		assert_list_node_status(state, &head1, i, false);
 
-		crt_list_add_tail(&entry->link, &head1);
+		d_list_add_tail(&entry->link, &head1);
 		assert_list_node_status(state, &head1, i, true);
 	}
 
-	crt_list_splice_init(&head1, &head2);
+	d_list_splice_init(&head1, &head2);
 
-	assert(crt_list_empty(&head1));
+	assert(d_list_empty(&head1));
 	assert_list_node_count(state, &head2, NUM_ENTRIES * 2);
 
 	i = 0;
-	crt_list_for_each_entry(entry, &head2, link) {
+	d_list_for_each_entry(entry, &head2, link) {
 		assert_int_equal(i, entry->num);
 		i++;
 	}
 
 	i = NUM_ENTRIES * 2 - 1;
-	crt_list_for_each_entry_reverse(entry, &head2, link) {
+	d_list_for_each_entry_reverse(entry, &head2, link) {
 		assert_int_equal(i, entry->num);
 		i--;
 	}
 
 	i = 0;
-	crt_list_for_each_safe(pos, temp, &head2) {
-		entry = crt_list_entry(pos, struct crt_list_test_entry, link);
+	dlist_for_each_safe(pos, temp, &head2) {
+		entry = d_list_entry(pos, struct d_list_test_entry, link);
 		assert_int_equal(i, entry->num);
 		i++;
 		if (i == NUM_ENTRIES)
 			break;
-		crt_list_del(pos);
-		C_FREE(entry, sizeof(*entry));
+		d_list_del(pos);
+		D_FREE(entry, sizeof(*entry));
 	}
 
-	crt_list_for_each_entry_continue(entry, &head2, link) {
+	d_list_for_each_entry_continue(entry, &head2, link) {
 		assert_int_equal(i, entry->num);
 		i++;
 	}
 
-	crt_list_for_each_entry_safe(entry, tentry, &head2, link) {
-		crt_list_del(&entry->link);
-		C_FREE(entry, sizeof(*entry));
+	d_list_for_each_entry_safe(entry, tentry, &head2, link) {
+		d_list_del(&entry->link);
+		D_FREE(entry, sizeof(*entry));
 	}
 
-	assert(crt_list_empty(&head2));
+	assert(d_list_empty(&head2));
 }
 
-struct crt_hlist_test_entry {
+struct dhlist_test_entry {
 	int num;
-	crt_hlist_node_t link;
+	d_hlist_node_t link;
 };
 
-static CRT_HLIST_HEAD(hhead1);
+static D_HLIST_HEAD(hhead1);
 
 static void
-assert_hlist_node_status(void **state, crt_hlist_head_t *head,
+assert_hlist_node_status(void **state, d_hlist_head_t *head,
 			 int value, bool in_list)
 {
-	crt_hlist_node_t		*pos;
-	struct crt_hlist_test_entry	*entry;
+	d_hlist_node_t		*pos;
+	struct dhlist_test_entry	*entry;
 
-	crt_hlist_for_each(pos, head) {
-		entry = crt_hlist_entry(pos, struct crt_hlist_test_entry, link);
+	dhlist_for_each(pos, head) {
+		entry = d_hlist_entry(pos, struct dhlist_test_entry, link);
 		if (entry->num == value) {
 			if (in_list)
 				return;
@@ -575,12 +575,12 @@ assert_hlist_node_status(void **state, crt_hlist_head_t *head,
 }
 
 static void
-assert_hlist_node_count(void **state, crt_hlist_head_t *head, int count)
+assert_hlist_node_count(void **state, d_hlist_head_t *head, int count)
 {
-	crt_hlist_node_t	*pos;
+	d_hlist_node_t	*pos;
 	int			i = 0;
 
-	crt_hlist_for_each(pos, head) {
+	dhlist_for_each(pos, head) {
 		i++;
 	}
 
@@ -588,23 +588,23 @@ assert_hlist_node_count(void **state, crt_hlist_head_t *head, int count)
 }
 
 static void
-test_crt_hlist(void **state)
+test_gurt_hlist(void **state)
 {
-	crt_hlist_node_t		*pos;
-	crt_hlist_node_t		*temp;
-	crt_hlist_head_t		head2;
-	struct crt_hlist_test_entry	*entry;
-	struct crt_hlist_test_entry	entry2;
-	struct crt_hlist_test_entry	entry3;
+	d_hlist_node_t		*pos;
+	d_hlist_node_t		*temp;
+	d_hlist_head_t		head2;
+	struct dhlist_test_entry	*entry;
+	struct dhlist_test_entry	entry2;
+	struct dhlist_test_entry	entry3;
 	int		i;
 
-	CRT_INIT_HLIST_NODE(&entry2.link);
-	CRT_INIT_HLIST_NODE(&entry3.link);
+	D_INIT_HLIST_NODE(&entry2.link);
+	D_INIT_HLIST_NODE(&entry3.link);
 	entry2.num = 2000;
 	entry3.num = 3000;
-	crt_hlist_add_head(&entry3.link, &hhead1);
-	crt_hlist_add_before(&entry2.link, &entry3.link);
-	assert(!crt_hlist_empty(&hhead1));
+	d_hlist_add_head(&entry3.link, &hhead1);
+	d_hlist_add_before(&entry2.link, &entry3.link);
+	assert(!d_hlist_empty(&hhead1));
 	assert_hlist_node_status(state, &hhead1, entry2.num, true);
 	assert_hlist_node_status(state, &hhead1, entry3.num, true);
 	assert_hlist_node_count(state, &hhead1, 2);
@@ -612,10 +612,10 @@ test_crt_hlist(void **state)
 	assert_non_null(entry3.link.pprev);
 	assert_int_equal(entry2.link.next, &entry3.link);
 	assert_int_equal(entry3.link.pprev, &entry2.link);
-	crt_hlist_del_init(&entry2.link);
+	d_hlist_del_init(&entry2.link);
 	assert_hlist_node_status(state, &hhead1, entry2.num, false);
 	assert_hlist_node_count(state, &hhead1, 1);
-	crt_hlist_add_after(&entry2.link, &entry3.link);
+	d_hlist_add_after(&entry2.link, &entry3.link);
 	assert_hlist_node_count(state, &hhead1, 2);
 	assert_non_null(entry2.link.pprev);
 	assert_non_null(entry3.link.next);
@@ -625,66 +625,66 @@ test_crt_hlist(void **state)
 	assert_hlist_node_status(state, &hhead1, entry3.num, true);
 	assert_hlist_node_count(state, &hhead1, 2);
 
-	CRT_INIT_HLIST_HEAD(&head2);
+	D_INIT_HLIST_HEAD(&head2);
 
 	for (i = NUM_ENTRIES - 1; i >= 0; i--) {
-		C_ALLOC(entry, sizeof(struct crt_hlist_test_entry));
+		D_ALLOC(entry, sizeof(struct dhlist_test_entry));
 		assert_non_null(entry);
 		entry->num = i;
-		crt_hlist_add_head(&entry->link, &head2);
+		d_hlist_add_head(&entry->link, &head2);
 		assert_hlist_node_status(state, &head2, i, true);
 
-		crt_hlist_del_init(&entry->link);
+		d_hlist_del_init(&entry->link);
 		assert_hlist_node_status(state, &head2, i, false);
 
-		crt_hlist_add_head(&entry->link, &head2);
+		d_hlist_add_head(&entry->link, &head2);
 		assert_hlist_node_status(state, &head2, i, true);
 	}
 
 	assert_hlist_node_count(state, &head2, NUM_ENTRIES);
 
 	i = 0;
-	crt_hlist_for_each_entry(entry, pos, &head2, link) {
+	dhlist_for_each_entry(entry, pos, &head2, link) {
 		assert_int_equal(i, entry->num);
 		i++;
 	}
 
 	i = 0;
-	crt_hlist_for_each_safe(pos, temp, &head2) {
-		entry = crt_hlist_entry(pos, struct crt_hlist_test_entry, link);
+	dhlist_for_each_safe(pos, temp, &head2) {
+		entry = d_hlist_entry(pos, struct dhlist_test_entry, link);
 		assert_int_equal(i, entry->num);
 		i++;
 		if (i == NUM_ENTRIES / 2)
 			break;
-		crt_hlist_del(pos);
-		C_FREE(entry, sizeof(*entry));
+		d_hlist_del(pos);
+		D_FREE(entry, sizeof(*entry));
 	}
 
-	crt_hlist_for_each_entry_continue(entry, pos, link) {
+	dhlist_for_each_entry_continue(entry, pos, link) {
 		assert_int_equal(i, entry->num);
 		i++;
 	}
 
-	crt_hlist_for_each_entry_safe(entry, pos, temp, &head2, link) {
-		crt_hlist_del(&entry->link);
-		C_FREE(entry, sizeof(*entry));
+	dhlist_for_each_entry_safe(entry, pos, temp, &head2, link) {
+		d_hlist_del(&entry->link);
+		D_FREE(entry, sizeof(*entry));
 	}
 
-	assert(crt_hlist_empty(&head2));
+	assert(d_hlist_empty(&head2));
 }
 
 struct test_minheap_node {
-	struct crt_binheap_node		cbh_node;
+	struct d_binheap_node		dbh_node;
 	int				key;
 };
 
 static bool
-heap_node_cmp(struct crt_binheap_node *a, struct crt_binheap_node *b)
+heap_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
 {
 	struct test_minheap_node	*nodea, *nodeb;
 
-	nodea = container_of(a, struct test_minheap_node, cbh_node);
-	nodeb = container_of(b, struct test_minheap_node, cbh_node);
+	nodea = container_of(a, struct test_minheap_node, dbh_node);
+	nodeb = container_of(b, struct test_minheap_node, dbh_node);
 
 	return nodea->key < nodeb->key;
 }
@@ -692,12 +692,12 @@ heap_node_cmp(struct crt_binheap_node *a, struct crt_binheap_node *b)
 static void
 test_binheap(void **state)
 {
-	struct crt_binheap		*h = NULL;
+	struct d_binheap		*h = NULL;
 	struct test_minheap_node	 n1, n2, n3;
-	struct crt_binheap_node		*n_tmp;
+	struct d_binheap_node		*n_tmp;
 	uint32_t			 size;
 	int				 rc;
-	struct crt_binheap_ops		 ops = {
+	struct d_binheap_ops		 ops = {
 		.hop_enter	= NULL,
 		.hop_exit	= NULL,
 		.hop_compare	= heap_node_cmp,
@@ -705,7 +705,7 @@ test_binheap(void **state)
 
 	(void)state;
 
-	rc = crt_binheap_create(0, 0, NULL, &ops, &h);
+	rc = d_binheap_create(0, 0, NULL, &ops, &h);
 	assert_int_equal(rc, 0);
 	assert_non_null(h);
 
@@ -713,43 +713,43 @@ test_binheap(void **state)
 	n2.key = 2;
 	n3.key = 3;
 
-	rc = crt_binheap_insert(h, &n1.cbh_node);
+	rc = d_binheap_insert(h, &n1.dbh_node);
 	assert_int_equal(rc, 0);
-	rc = crt_binheap_insert(h, &n2.cbh_node);
+	rc = d_binheap_insert(h, &n2.dbh_node);
 	assert_int_equal(rc, 0);
-	rc = crt_binheap_insert(h, &n3.cbh_node);
+	rc = d_binheap_insert(h, &n3.dbh_node);
 	assert_int_equal(rc, 0);
 
-	n_tmp = crt_binheap_root(h);
-	assert_true(n_tmp == &n1.cbh_node);
+	n_tmp = d_binheap_root(h);
+	assert_true(n_tmp == &n1.dbh_node);
 
-	crt_binheap_remove(h, &n1.cbh_node);
-	n_tmp = crt_binheap_root(h);
-	assert_true(n_tmp == &n2.cbh_node);
+	d_binheap_remove(h, &n1.dbh_node);
+	n_tmp = d_binheap_root(h);
+	assert_true(n_tmp == &n2.dbh_node);
 
-	n_tmp = crt_binheap_find(h, 0);
-	assert_true(n_tmp == &n2.cbh_node);
-	n_tmp = crt_binheap_find(h, 1);
-	assert_true(n_tmp == &n3.cbh_node);
-	n_tmp = crt_binheap_find(h, 2);
+	n_tmp = d_binheap_find(h, 0);
+	assert_true(n_tmp == &n2.dbh_node);
+	n_tmp = d_binheap_find(h, 1);
+	assert_true(n_tmp == &n3.dbh_node);
+	n_tmp = d_binheap_find(h, 2);
 	assert_true(n_tmp == NULL);
 
-	size = crt_binheap_size(h);
+	size = d_binheap_size(h);
 	assert_true(size == 2);
 
-	n_tmp = crt_binheap_remove_root(h);
-	assert_true(n_tmp == &n2.cbh_node);
-	size = crt_binheap_size(h);
+	n_tmp = d_binheap_remove_root(h);
+	assert_true(n_tmp == &n2.dbh_node);
+	size = d_binheap_size(h);
 	assert_true(size == 1);
 
-	crt_binheap_destroy(h);
+	d_binheap_destroy(h);
 }
 
 #define LOG_DEBUG(fac, ...) \
-	crt_log(fac | CLOG_DBG, __VA_ARGS__)
+	d_log(fac | DLOG_DBG, __VA_ARGS__)
 
 #define LOG_INFO(fac, ...) \
-	crt_log(fac | CLOG_INFO, __VA_ARGS__)
+	d_log(fac | DLOG_INFO, __VA_ARGS__)
 
 static void
 test_log(void **state)
@@ -765,18 +765,18 @@ test_log(void **state)
 
 	setenv("CRT_LOG_MASK", "CLOG=DEBUG,T1=DEBUG", 1);
 	memset(retbuf, 0x00, sizeof(retbuf));
-	rc = crt_log_init();
+	rc = d_log_init();
 	assert_int_equal(rc, 0);
 
-	logfac1 = crt_log_allocfacility("T1", "TEST1");
+	logfac1 = d_log_allocfacility("T1", "TEST1");
 	assert_int_not_equal(logfac1, 0);
 
-	logfac2 = crt_log_allocfacility("T2", "TEST2");
+	logfac2 = d_log_allocfacility("T2", "TEST2");
 	assert_int_not_equal(logfac2, 0);
 
 	LOG_DEBUG(logfac1, "log1 debug should not print\n");
 	/* Sync the cart mask */
-	crt_log_sync_mask();
+	d_log_sync_mask();
 
 	LOG_DEBUG(logfac1, "log1 debug should print\n");
 	LOG_DEBUG(logfac2, "log2 debug should not print\n");
@@ -787,16 +787,16 @@ test_log(void **state)
 		logmask = allocated_mask = strdup("ERR,T1=DEBUG,CLOG=DEBUG");
 	assert_non_null(logmask);
 
-	rc = crt_log_setmasks(logmask, -1);
+	rc = d_log_setmasks(logmask, -1);
 	LOG_DEBUG(logfac1, "rc after 1st setmaks is %x\n", rc);
-	rc = crt_log_setmasks(logmask, -1);
+	rc = d_log_setmasks(logmask, -1);
 	LOG_DEBUG(logfac1, "rc after 2nd setmasks is %x\n", rc);
 	if (allocated_mask != NULL) {
 		free(allocated_mask);
 		allocated_mask = NULL;
 	}
 
-	crt_log_getmasks(retbuf, 0, 1024, 0);
+	d_log_getmasks(retbuf, 0, 1024, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
 
@@ -808,12 +808,12 @@ test_log(void **state)
 	logmask = allocated_mask = strdup("T1=D10");
 	assert_non_null(logmask);
 
-	rc = crt_log_setmasks(logmask, -1);
+	rc = d_log_setmasks(logmask, -1);
 	/* should be all f's from earlier */
-	assert_int_equal(rc & CLOG_PRIMASK, (0xFFFF00));
+	assert_int_equal(rc & DLOG_PRIMASK, (0xFFFF00));
 
-	rc = crt_log_setmasks(logmask, -1);
-	assert_int_equal(rc & CLOG_PRIMASK, (1 << (CLOG_DPRISHIFT + 10)));
+	rc = d_log_setmasks(logmask, -1);
+	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 10)));
 	if (allocated_mask != NULL) {
 		free(allocated_mask);
 		allocated_mask = NULL;
@@ -821,65 +821,65 @@ test_log(void **state)
 
 	/* todo add new test here for the new levels */
 	setenv("CRT_LOG_MASK", "T1=D0", 1);
-	crt_log_sync_mask();
+	d_log_sync_mask();
 	logmask = allocated_mask = strdup("T1=D0");
 	assert_non_null(logmask);
 
-	rc = crt_log_setmasks(logmask, -1);
-	assert_int_equal(rc & CLOG_PRIMASK, (1 << (CLOG_DPRISHIFT + 0)));
+	rc = d_log_setmasks(logmask, -1);
+	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 0)));
 	if (allocated_mask != NULL) {
 		free(allocated_mask);
 		allocated_mask = NULL;
 	}
 
-	rc = crt_log_getmasks(retbuf, 0, 200, 0);
+	rc = d_log_getmasks(retbuf, 0, 200, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
 
 
 	setenv("CRT_LOG_MASK", "T1=D4", 1);
-	crt_log_sync_mask();
+	d_log_sync_mask();
 
-	rc = crt_log_getmasks(retbuf, 0, 200, 0);
+	rc = d_log_getmasks(retbuf, 0, 200, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
 	logmask = allocated_mask = strdup("T1=D4");
 	assert_non_null(logmask);
 
-	rc = crt_log_setmasks(logmask, -1);
-	assert_int_equal(rc & CLOG_PRIMASK, (1 << (CLOG_DPRISHIFT + 4)));
+	rc = d_log_setmasks(logmask, -1);
+	assert_int_equal(rc & DLOG_PRIMASK, (1 << (DLOG_DPRISHIFT + 4)));
 	if (allocated_mask != NULL) {
 		free(allocated_mask);
 		allocated_mask = NULL;
 	}
 
 	setenv("CRT_LOG_MASK", "T1=D0xACF", 1);
-	crt_log_sync_mask();
+	d_log_sync_mask();
 
-	rc = crt_log_getmasks(retbuf, 0, 200, 0);
+	rc = d_log_getmasks(retbuf, 0, 200, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
 
 	setenv("CRT_LOG_MASK", "T1=D0xACFFF", 1);
-	crt_log_sync_mask();
+	d_log_sync_mask();
 
-	rc = crt_log_getmasks(retbuf, 0, 200, 0);
+	rc = d_log_getmasks(retbuf, 0, 200, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
 
 	setenv("CRT_LOG_MASK", "T1=DEBUG", 1);
-	crt_log_sync_mask();
+	d_log_sync_mask();
 
-	rc = crt_log_getmasks(retbuf, 0, 200, 0);
+	rc = d_log_getmasks(retbuf, 0, 200, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
 
-	rc = crt_log_str2pri(preset);
-	assert_int_equal(rc, 0xF << CLOG_DPRISHIFT);
+	rc = d_log_str2pri(preset);
+	assert_int_equal(rc, 0xF << DLOG_DPRISHIFT);
 
-	rc = crt_log_str2pri(preset1);
-	assert_int_equal(rc, 0xACF << CLOG_DPRISHIFT);
-	crt_log_fini();
+	rc = d_log_str2pri(preset1);
+	assert_int_equal(rc, 0xACF << DLOG_DPRISHIFT);
+	d_log_fini();
 }
 
 int
@@ -891,8 +891,8 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_check_directory),
 		cmocka_unit_test(test_prepend_cwd),
 		cmocka_unit_test(test_normalize_in_place),
-		cmocka_unit_test(test_crt_list),
-		cmocka_unit_test(test_crt_hlist),
+		cmocka_unit_test(test_gurt_list),
+		cmocka_unit_test(test_gurt_hlist),
 		cmocka_unit_test(test_binheap),
 		cmocka_unit_test(test_log),
 	};

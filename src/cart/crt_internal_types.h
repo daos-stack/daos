@@ -48,9 +48,9 @@
 
 #include <pthread.h>
 
-#include <pouch/list.h>
-#include <pouch/hash.h>
-#include <pouch/heap.h>
+#include <gurt/list.h>
+#include <gurt/hash.h>
+#include <gurt/heap.h>
 
 struct crt_hg_gdata;
 struct crt_grp_gdata;
@@ -72,7 +72,7 @@ struct crt_gdata {
 	uint32_t		cg_credit_ep_ctx;
 
 	/* CaRT contexts list */
-	crt_list_t		cg_ctx_list;
+	d_list_t			cg_ctx_list;
 	/* actual number of items in CaRT contexts list */
 	int			cg_ctx_num;
 	/* the global opcode map */
@@ -94,19 +94,19 @@ struct crt_gdata {
 extern struct crt_gdata		crt_gdata;
 
 struct crt_prog_cb_priv {
-	crt_list_t		 cpcp_link;
+	d_list_t			 cpcp_link;
 	crt_progress_cb		 cpcp_func;
 	void			*cpcp_args;
 };
 
 struct crt_timeout_cb_priv {
-	crt_list_t		 ctcp_link;
+	d_list_t		 ctcp_link;
 	crt_timeout_cb		 ctcp_func;
 	void			*ctcp_args;
 };
 
 struct crt_event_cb_priv {
-	crt_list_t		 cecp_link;
+	d_list_t		 cecp_link;
 	crt_event_cb		 cecp_func;
 	void			*cecp_args;
 };
@@ -114,11 +114,11 @@ struct crt_event_cb_priv {
 /* structure of global fault tolerance data */
 struct crt_plugin_gdata {
 	/* list of progress callbacks */
-	crt_list_t		cpg_prog_cbs;
+	d_list_t			cpg_prog_cbs;
 	/* list of rpc timeout callbacks */
-	crt_list_t		cpg_timeout_cbs;
+	d_list_t			cpg_timeout_cbs;
 	/* list of event notification callbacks */
-	crt_list_t		cpg_event_cbs;
+	d_list_t			cpg_event_cbs;
 	uint32_t		cpg_inited:1, /* all initialized */
 				/* pmix handler registered*/
 				cpg_pmix_errhdlr_inited:1;
@@ -142,14 +142,14 @@ extern struct crt_plugin_gdata		crt_plugin_gdata;
 
 /* crt_context */
 struct crt_context {
-	crt_list_t		 cc_link; /* link to gdata.cg_ctx_list */
+	d_list_t		 cc_link; /* link to gdata.cg_ctx_list */
 	int			 cc_idx; /* context index */
 	struct crt_hg_context	 cc_hg_ctx; /* HG context */
 	void			*cc_pool; /* pool for ES on server stack */
 	/* in-flight endpoint tracking hash table */
 	struct chash_table	 cc_epi_table;
 	/* binheap for inflight RPC timeout tracking */
-	struct crt_binheap	 cc_bh_timeout;
+	struct d_binheap		 cc_bh_timeout;
 	/* mutex to protect cc_epi_table and timeout binheap */
 	pthread_mutex_t		 cc_mutex;
 };
@@ -157,25 +157,25 @@ struct crt_context {
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */
 struct crt_ep_inflight {
 	/* link to crt_context::cc_epi_table */
-	crt_list_t		epi_link;
+	d_list_t			 epi_link;
 	/* endpoint address */
-	crt_endpoint_t		epi_ep;
+	crt_endpoint_t		 epi_ep;
 	struct crt_context	*epi_ctx;
 
 	/* in-flight RPC req queue */
-	crt_list_t		epi_req_q;
+	d_list_t			 epi_req_q;
 	/* (ei_req_num - ei_reply_num) is the number of inflight req */
-	int64_t			epi_req_num; /* total number of req send */
-	int64_t			epi_reply_num; /* total number of reply recv */
+	int64_t			 epi_req_num; /* total number of req send */
+	int64_t			 epi_reply_num; /* total number of reply recv */
 	/* RPC req wait queue */
-	crt_list_t		epi_req_waitq;
-	int64_t			epi_req_wait_num;
+	d_list_t			 epi_req_waitq;
+	int64_t			 epi_req_wait_num;
 
-	unsigned int		epi_ref;
-	unsigned int		epi_initialized:1;
+	unsigned int		 epi_ref;
+	unsigned int		 epi_initialized:1;
 
 	/* mutex to protect ei_req_q and some counters */
-	pthread_mutex_t		epi_mutex;
+	pthread_mutex_t		 epi_mutex;
 };
 
 #define CRT_UNLOCK			(0)
@@ -186,40 +186,40 @@ struct crt_ep_inflight {
 
 /* opcode map (hash list) */
 struct crt_opc_map {
-	pthread_rwlock_t	com_rwlock;
-	unsigned int		com_lock_init:1;
-	unsigned int		com_pid;
-	unsigned int		com_bits;
-	crt_list_t		*com_hash;
+	pthread_rwlock_t	 com_rwlock;
+	unsigned int		 com_lock_init:1;
+	unsigned int		 com_pid;
+	unsigned int		 com_bits;
+	d_list_t			*com_hash;
 };
 
 struct crt_opc_info {
-	crt_list_t		coi_link;
-	crt_opcode_t		coi_opc;
-	unsigned int		coi_proc_init:1,
-				coi_rpccb_init:1,
-				coi_coops_init:1,
-				coi_no_reply:1; /* flag of one-way RPC */
+	d_list_t			 coi_link;
+	crt_opcode_t		 coi_opc;
+	unsigned int		 coi_proc_init:1,
+				 coi_rpccb_init:1,
+				 coi_coops_init:1,
+				 coi_no_reply:1; /* flag of one-way RPC */
 
-	crt_rpc_cb_t		coi_rpc_cb;
+	crt_rpc_cb_t		 coi_rpc_cb;
 	struct crt_corpc_ops	*coi_co_ops;
-	crt_size_t		coi_input_size;
-	crt_size_t		coi_output_size;
+	d_size_t			 coi_input_size;
+	d_size_t			 coi_output_size;
 
 	/* Sizes/offset used when buffers are part of the same allocation
 	 * as the rpc descriptor.
 	 */
-	crt_size_t		coi_rpc_size;
-	crt_off_t		coi_input_offset;
-	crt_off_t		coi_output_offset;
+	d_size_t			 coi_rpc_size;
+	doff_t			 coi_input_offset;
+	doff_t			 coi_output_offset;
 	struct crt_req_format	*coi_crf;
 };
 
 struct na_ofi_config {
-	int32_t		noc_port;
+	int32_t		 noc_port;
 	char		*noc_interface;
 	/* IP addr str for the noc_interface */
-	char		noc_ip_str[INET_ADDRSTRLEN];
+	char		 noc_ip_str[INET_ADDRSTRLEN];
 };
 
 int crt_na_ofi_config_init(void);

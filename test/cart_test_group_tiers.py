@@ -106,11 +106,11 @@ class TestGroup(commontestsuite.CommonTestSuite):
         srv1 = ''.join([' -H ', servers.pop(0)])
         srv1_args = 'tests/test_group' + \
             ' --name service_group_01 --attach_to service_group_02 ' + \
-            '--is_service --holdtime 8'
+            '--is_service --holdtime 10'
 
         proc_srv_02 = self.launch_bg(testmsg, '1', self.pass_env, \
                                      srv2, srv2_args)
-        time.sleep(3)
+        time.sleep(8)
         proc_srv_01 = self.launch_bg(testmsg, '1', self.pass_env, \
                                      srv1, srv1_args)
 
@@ -118,6 +118,7 @@ class TestGroup(commontestsuite.CommonTestSuite):
             ' --name client_group --attach_to service_group_01 ' + \
             ' --holdtime 6'
 
+        time.sleep(4)
         cli_rtn = self.launch_test(testmsg, '1', self.pass_env, \
                                    cli=''.join([' -H ', client.pop(0)]), \
                                    cli_arg=cli_args)

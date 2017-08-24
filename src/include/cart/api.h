@@ -403,7 +403,7 @@ crt_rpc_set_feats(crt_opcode_t opc, uint64_t feats);
  * \return                      zero on success, negative value if error
  */
 int
-crt_bulk_create(crt_context_t crt_ctx, crt_sg_list_t *sgl,
+crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		crt_bulk_perm_t bulk_perm, crt_bulk_t *bulk_hdl);
 
 /**
@@ -422,7 +422,7 @@ crt_bulk_create(crt_context_t crt_ctx, crt_sg_list_t *sgl,
  * \return                      zero on success, negative value if error
  */
 int
-crt_bulk_access(crt_bulk_t bulk_hdl, crt_sg_list_t *sgl);
+crt_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl);
 
 /**
  * Free a bulk handle
@@ -461,7 +461,7 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
  * \return                      zero on success, negative value if error
  */
 int
-crt_bulk_get_len(crt_bulk_t bulk_hdl, crt_size_t *bulk_len);
+crt_bulk_get_len(crt_bulk_t bulk_hdl, d_size_t *bulk_len);
 
 /**
  * Get the number of segments of data abstracted by bulk handle.
@@ -591,7 +591,7 @@ typedef int (*crt_grp_destroy_cb_t)(void *args, int status);
  * \return			zero on success, negative value if error
  */
 int
-crt_group_create(crt_group_id_t grp_id, crt_rank_list_t *member_ranks,
+crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 		 bool populate_now, crt_grp_create_cb_t grp_create_cb,
 		 void *priv);
 
@@ -723,7 +723,7 @@ crt_group_detach(crt_group_t *attached_grp);
  */
 int
 crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
-		     crt_rank_list_t *excluded_ranks, crt_opcode_t opc,
+		     d_rank_list_t *excluded_ranks, crt_opcode_t opc,
 		     crt_bulk_t co_bulk_hdl, void *priv,  uint32_t flags,
 		     int tree_topo, crt_rpc_t **req);
 
@@ -791,7 +791,7 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg);
  * \return			zero on success, negative value if error
  */
 int
-crt_group_rank(crt_group_t *grp, crt_rank_t *rank);
+crt_group_rank(crt_group_t *grp, d_rank_t *rank);
 
 /**
  * Query number of group members.
@@ -842,7 +842,7 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op);
  * \return                      zero on success, negative value if error
  */
 int
-crt_proc_memcpy(crt_proc_t proc, void *data, crt_size_t data_size);
+crt_proc_memcpy(crt_proc_t proc, void *data, d_size_t data_size);
 
 /**
  * Generic processing routine.
@@ -953,7 +953,7 @@ crt_proc_bool(crt_proc_t proc, bool *data);
  * \return                      zero on success, negative value if error
  */
 int
-crt_proc_raw(crt_proc_t proc, void *buf, crt_size_t buf_size);
+crt_proc_raw(crt_proc_t proc, void *buf, d_size_t buf_size);
 
 /**
  * Generic processing routine.
@@ -975,7 +975,7 @@ crt_proc_crt_bulk_t(crt_proc_t proc, crt_bulk_t *bulk_hdl);
  * \return                      zero on success, negative value if error
  */
 int
-crt_proc_crt_string_t(crt_proc_t proc, crt_string_t *data);
+crt_proc_crt_string_t(crt_proc_t proc, d_string_t *data);
 
 /**
  * Generic processing routine.
@@ -986,7 +986,7 @@ crt_proc_crt_string_t(crt_proc_t proc, crt_string_t *data);
  * \return                      zero on success, negative value if error
  */
 int
-crt_proc_crt_const_string_t(crt_proc_t proc, crt_const_string_t *data);
+crt_proc_crt_const_string_t(crt_proc_t proc, d_const_string_t *data);
 
 /**
  * Generic processing routine.
@@ -1008,14 +1008,14 @@ crt_proc_uuid_t(crt_proc_t proc, uuid_t *data);
  * \return                      zero on success, negative value if error
  *
  * Notes:
- * 1) here pass in the 2nd level pointer of crt_rank_list_t, to make it
+ * 1) here pass in the 2nd level pointer of d_rank_list_t, to make it
  *    possible to set it to NULL when decoding.
  * 2) if the rank_list is non-NULL, caller should firstly duplicate it and pass
  *    the duplicated rank list's 2nd level pointer as parameter, because this
  *    function will internally free the memory when freeing the input or output.
  */
 int
-crt_proc_crt_rank_list_t(crt_proc_t proc, crt_rank_list_t **data);
+crt_proc_crt_rank_list_t(crt_proc_t proc, d_rank_list_t **data);
 
 /**
  * Generic processing routine.
@@ -1026,7 +1026,7 @@ crt_proc_crt_rank_list_t(crt_proc_t proc, crt_rank_list_t **data);
  * \return                      zero on success, negative value if error
  */
 int
-crt_proc_crt_iov_t(crt_proc_t proc, crt_iov_t *data);
+crt_proc_crt_iov_t(crt_proc_t proc, d_iov_t *data);
 
 /**
  * Local operation. Evict rank from the local membership list of grp.
@@ -1037,10 +1037,10 @@ crt_proc_crt_iov_t(crt_proc_t proc, crt_iov_t *data);
  * \return			Zero on success, negative on error
  */
 int
-crt_rank_evict(crt_group_t *grp, crt_rank_t rank);
+crt_rank_evict(crt_group_t *grp, d_rank_t rank);
 
 typedef void
-(*crt_event_cb) (crt_rank_t rank, void *args);
+(*crt_event_cb) (d_rank_t rank, void *args);
 
 /**
  * This function registers an event handler for process failures. If the calling

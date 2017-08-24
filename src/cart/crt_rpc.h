@@ -43,7 +43,7 @@
 #ifndef __CRT_RPC_H__
 #define __CRT_RPC_H__
 
-#include <pouch/heap.h>
+#include <gurt/heap.h>
 
 #define CRT_RPC_MAGIC			(0xAB0C01EC)
 #define CRT_RPC_VERSION			(0x00000001)
@@ -55,7 +55,7 @@
 /* uri lookup RPC timeout 500mS */
 #define CRT_URI_LOOKUP_TIMEOUT		(1000 * 500)
 
-extern struct crt_binheap_ops crt_timeout_bh_ops;
+extern struct d_binheap_ops crt_timeout_bh_ops;
 void crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
 extern struct crt_corpc_ops crt_rank_evict_co_ops;
 extern void crt_hdlr_memb_sample(crt_rpc_t *rpc_req);
@@ -77,9 +77,9 @@ struct crt_corpc_hdr {
 	/* collective bulk handle */
 	crt_bulk_t		 coh_bulk_hdl;
 	/* optional excluded ranks */
-	crt_rank_list_t		*coh_excluded_ranks;
+	d_rank_list_t		*coh_excluded_ranks;
 	/* optional inline ranks, for example piggyback the group members */
-	crt_rank_list_t		*coh_inline_ranks;
+	d_rank_list_t		*coh_inline_ranks;
 	/* group membership version */
 	uint32_t		 coh_grp_ver;
 	uint32_t		 coh_tree_topo;
@@ -97,7 +97,7 @@ struct crt_common_hdr {
 	/* RPC request flag, see enum crt_rpc_flags/crt_rpc_flags_internal */
 	uint32_t	cch_flags;
 	/* gid and rank identify the rpc request sender */
-	crt_rank_t	cch_rank;
+	d_rank_t	cch_rank;
 	/* TODO: maybe used as a tier ID or something else, ignore for now */
 	uint32_t	cch_grp_id;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
@@ -119,14 +119,14 @@ typedef enum {
 /* corpc info to track the tree topo and child RPCs info */
 struct crt_corpc_info {
 	struct crt_grp_priv	*co_grp_priv;
-	crt_rank_list_t		*co_excluded_ranks;
+	d_rank_list_t		*co_excluded_ranks;
 	uint32_t		 co_grp_ver;
 	uint32_t		 co_tree_topo;
-	crt_rank_t		 co_root;
+	d_rank_t			 co_root;
 	/* the priv passed in crt_corpc_req_create */
 	void			*co_priv;
 	/* child RPCs list */
-	crt_list_t		 co_child_rpcs;
+	d_list_t		 co_child_rpcs;
 	/*
 	 * replied child RPC list, when a child RPC being replied and parent
 	 * RPC has not been locally handled, we can not aggregate the reply
@@ -134,7 +134,7 @@ struct crt_corpc_info {
 	 * RPC being replied and parent RPC not finished, the child RPC is
 	 * queued at co_replied_rpcs.
 	 */
-	crt_list_t		 co_replied_rpcs;
+	d_list_t			 co_replied_rpcs;
 	uint32_t		 co_child_num;
 	uint32_t		 co_child_ack_num;
 	uint32_t		 co_child_failed_num;
@@ -150,13 +150,13 @@ struct crt_corpc_info {
 
 struct crt_rpc_priv {
 	/* link to crt_ep_inflight::epi_req_q/::epi_req_waitq */
-	crt_list_t		crp_epi_link;
+	d_list_t			crp_epi_link;
 	/* tmp_link used in crt_context_req_untrack */
-	crt_list_t		crp_tmp_link;
+	d_list_t			crp_tmp_link;
 	/* link to parent RPC crp_opc_info->co_child_rpcs/co_replied_rpcs */
-	crt_list_t		crp_parent_link;
+	d_list_t			crp_parent_link;
 	/* binheap node for timeout management, in crt_context::cc_bh_timeout */
-	struct crt_binheap_node	crp_timeout_bp_node;
+	struct d_binheap_node	crp_timeout_bp_node;
 	/* the timeout in seconds set by user */
 	uint32_t		crp_timeout_sec;
 	/* time stamp to be timeout, the key of timeout binheap */
@@ -240,16 +240,16 @@ struct crt_grp_create_in {
 	crt_group_id_t		 gc_grp_id;
 	/* internal subgrp id */
 	uint64_t		 gc_int_grpid;
-	crt_rank_list_t		*gc_membs;
+	d_rank_list_t		*gc_membs;
 	/* the rank initiated the group create */
-	crt_rank_t		 gc_initiate_rank;
+	d_rank_t			 gc_initiate_rank;
 };
 
 struct crt_grp_create_out {
 	/* failed rank list, can be used to aggregate the reply from child */
-	crt_rank_list_t		*gc_failed_ranks;
+	d_rank_list_t		*gc_failed_ranks;
 	/* the rank sent out the reply */
-	crt_rank_t		 gc_rank;
+	d_rank_t			 gc_rank;
 	/* return code, if failed the gc_rank should be in gc_failed_ranks */
 	int			 gc_rc;
 };
@@ -257,26 +257,26 @@ struct crt_grp_create_out {
 struct crt_grp_destroy_in {
 	crt_group_id_t		gd_grp_id;
 	/* the rank initiated the group destroy */
-	crt_rank_t		gd_initiate_rank;
+	d_rank_t			gd_initiate_rank;
 };
 
 struct crt_grp_destroy_out {
 	/* failed rank list, can be used to aggregate the reply from child */
-	crt_rank_list_t		*gd_failed_ranks;
+	d_rank_list_t		*gd_failed_ranks;
 	/* the rank sent out the reply */
-	crt_rank_t		 gd_rank;
+	d_rank_t			 gd_rank;
 	/* return code, if failed the gc_rank should be in gc_failed_ranks */
 	int			 gd_rc;
 };
 
 struct crt_uri_lookup_in {
-	crt_group_id_t		 ul_grp_id;
-	crt_rank_t		 ul_rank;
+	crt_group_id_t		ul_grp_id;
+	d_rank_t			ul_rank;
 };
 
 struct crt_uri_lookup_out {
-	crt_phy_addr_t		 ul_uri;
-	int			 ul_rc;
+	crt_phy_addr_t		ul_uri;
+	int			ul_rc;
 };
 
 struct crt_barrier_in {
@@ -308,12 +308,12 @@ struct crt_internal_rpc {
 static inline void
 crt_common_hdr_init(struct crt_common_hdr *hdr, crt_opcode_t opc)
 {
-	C_ASSERT(hdr != NULL);
+	D_ASSERT(hdr != NULL);
 	hdr->cch_opc = opc;
 	hdr->cch_magic = CRT_RPC_MAGIC;
 	hdr->cch_version = CRT_RPC_VERSION;
 	hdr->cch_grp_id = 0;
-	C_ASSERT(crt_group_rank(0, &hdr->cch_rank) == 0);
+	D_ASSERT(crt_group_rank(0, &hdr->cch_rank) == 0);
 }
 
 /* crt_rpc.c */

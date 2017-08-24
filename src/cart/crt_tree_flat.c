@@ -39,7 +39,7 @@
  * This file is part of CaRT. It gives out the flat tree topo related
  * function implementation.
  */
-#define C_LOGFAC	CD_FAC(grp)
+#define D_LOGFAC	DD_FAC(grp)
 
 #include "crt_internal.h"
 
@@ -48,9 +48,9 @@ crt_flat_get_children_cnt(uint32_t grp_size, uint32_t branch_ratio,
 			  uint32_t grp_root, uint32_t grp_self,
 			  uint32_t *nchildren)
 {
-	C_ASSERT(grp_size > 0);
-	C_ASSERT(grp_root < grp_size && grp_self < grp_size);
-	C_ASSERT(nchildren != NULL);
+	D_ASSERT(grp_size > 0);
+	D_ASSERT(grp_root < grp_size && grp_self < grp_size);
+	D_ASSERT(nchildren != NULL);
 
 	if (grp_self == grp_root)
 		*nchildren = grp_size - 1;
@@ -66,9 +66,9 @@ crt_flat_get_children(uint32_t grp_size, uint32_t branch_ratio,
 {
 	int	i, j;
 
-	C_ASSERT(grp_size > 0);
-	C_ASSERT(grp_root < grp_size && grp_self < grp_size);
-	C_ASSERT(children != NULL);
+	D_ASSERT(grp_size > 0);
+	D_ASSERT(grp_root < grp_size && grp_self < grp_size);
+	D_ASSERT(children != NULL);
 
 	if (grp_self != grp_root)
 		return -CER_INVAL;
@@ -85,9 +85,9 @@ int
 crt_flat_get_parent(uint32_t grp_size, uint32_t branch_ratio, uint32_t grp_root,
 		    uint32_t grp_self, uint32_t *parent)
 {
-	C_ASSERT(grp_size > 0);
-	C_ASSERT(grp_root < grp_size && grp_self < grp_size);
-	C_ASSERT(parent != NULL);
+	D_ASSERT(grp_size > 0);
+	D_ASSERT(grp_root < grp_size && grp_self < grp_size);
+	D_ASSERT(parent != NULL);
 
 	if (grp_self == grp_root)
 		return -CER_INVAL;

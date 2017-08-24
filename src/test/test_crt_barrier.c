@@ -39,7 +39,7 @@
  */
 #include <pthread.h>
 #include <cart/api.h>
-#include <pouch/common.h>
+#include <gurt/common.h>
 
 #define NUM_BARRIERS 20
 
@@ -47,8 +47,8 @@ static int g_barrier_count;
 static int g_shutdown;
 
 struct proc_info {
-	crt_rank_t	rank;
-	crt_rank_t	grp_rank;
+	d_rank_t		rank;
+	d_rank_t		grp_rank;
 	int		barrier_num;
 	int		complete;
 };
@@ -63,7 +63,7 @@ void *progress_thread(void *arg)
 	do {
 		rc = crt_progress(crt_ctx, 1, NULL, NULL);
 		if (rc != 0 && rc != -CER_TIMEDOUT) {
-			C_ERROR("crt_progress failed rc: %d.\n", rc);
+			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
 
@@ -75,12 +75,12 @@ void *progress_thread(void *arg)
 	do {
 		rc = crt_progress(crt_ctx, 2000000, NULL, NULL);
 		if (rc != 0 && rc != -CER_TIMEDOUT) {
-			C_ERROR("crt_progress failed rc: %d.\n", rc);
+			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
 
 		if (rc == -CER_TIMEDOUT) {
-			C_DEBUG("Timed out draining queue\n");
+			D_DEBUG("Timed out draining queue\n");
 			break;
 		}
 	} while (1);
@@ -93,7 +93,7 @@ int grp_create_cb(crt_group_t *grp, void *priv, int status)
 {
 	int	*done = (int *)priv;
 
-	C_ASSERTF(status == 0, "Failed to create group, status = %d\n", status);
+	D_ASSERTF(status == 0, "Failed to create group, status = %d\n", status);
 
 	*done = 1;
 
@@ -104,7 +104,7 @@ int grp_destroy_cb(void *priv, int status)
 {
 	int	*done = (int *)priv;
 
-	C_ASSERTF(status == 0,
+	D_ASSERTF(status == 0,
 		  "Failed to destroy group, status = %d\n", status);
 
 	*done = 1;
@@ -119,9 +119,9 @@ barrier_complete_cb(struct crt_barrier_cb_info *cb_info)
 
 	info = (struct proc_info *)cb_info->bci_arg;
 
-	C_ASSERTF(cb_info->bci_rc == 0, "Barrier failed %d\n", cb_info->bci_rc);
+	D_ASSERTF(cb_info->bci_rc == 0, "Barrier failed %d\n", cb_info->bci_rc);
 
-	C_ASSERTF(info->barrier_num == g_barrier_count,
+	D_ASSERTF(info->barrier_num == g_barrier_count,
 		  "Out of order barrier completion, %d != %d\n",
 		  info->barrier_num, g_barrier_count);
 	g_barrier_count++;
@@ -136,26 +136,26 @@ int main(int argc, char **argv)
 	struct proc_info	*info;
 	crt_context_t		crt_ctx;
 	int			rc = 0;
-	crt_rank_t		my_rank;
+	d_rank_t			my_rank;
 	int			i;
 	pthread_t		tid;
 
 	printf("Calling crt_init()\n");
 	rc = crt_init("crt_barrier_group", CRT_FLAG_BIT_SERVER);
-	C_ASSERTF(rc == 0, "Failed in crt_init, rc = %d\n", rc);
+	D_ASSERTF(rc == 0, "Failed in crt_init, rc = %d\n", rc);
 
 	printf("Calling crt_context_create()\n");
 	rc = crt_context_create(NULL, &crt_ctx);
-	C_ASSERTF(rc == 0, "Failed in crt_context_create, rc = %d\n", rc);
+	D_ASSERTF(rc == 0, "Failed in crt_context_create, rc = %d\n", rc);
 
 	printf("Starting progress thread\n");
 	rc = pthread_create(&tid, NULL, progress_thread, crt_ctx);
-	C_ASSERTF(rc == 0, "Failed to start progress thread, rc = %d\n",
+	D_ASSERTF(rc == 0, "Failed to start progress thread, rc = %d\n",
 		  rc);
 
 	info = (struct proc_info *)malloc(sizeof(struct proc_info) *
 					  NUM_BARRIERS);
-	C_ASSERTF(info != NULL,
+	D_ASSERTF(info != NULL,
 		  "Could not allocate space for test");
 	crt_group_rank(NULL, &my_rank);
 	for (i = 0; i < NUM_BARRIERS; i++) {
@@ -169,14 +169,14 @@ int main(int argc, char **argv)
 				break;
 			sched_yield();
 		}
-		C_ASSERTF(rc == 0, "crt_barrier_create rank=%d, barrier = %d,"
+		D_ASSERTF(rc == 0, "crt_barrier_create rank=%d, barrier = %d,"
 			  " rc = %d\n", my_rank, i, rc);
 	}
 	for (i = 0; i < NUM_BARRIERS; i++)
 		while (info[i].complete == 0)
 			sched_yield();
 
-	C_ASSERTF(g_barrier_count == NUM_BARRIERS,
+	D_ASSERTF(g_barrier_count == NUM_BARRIERS,
 		  "Not all barriers completed\n");
 
 	g_barrier_count = 0;
@@ -185,7 +185,7 @@ int main(int argc, char **argv)
 	pthread_join(tid, NULL);
 	crt_context_destroy(crt_ctx, 0);
 	rc = crt_finalize();
-	C_ASSERTF(rc == 0, "Failed in crt_finalize, rc = %d\n", rc);
+	D_ASSERTF(rc == 0, "Failed in crt_finalize, rc = %d\n", rc);
 
 	free(info);
 

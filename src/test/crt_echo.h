@@ -42,7 +42,7 @@
 #ifndef __CRT_ECHO_H__
 #define __CRT_ECHO_H__
 
-#include <pouch/common.h>
+#include <gurt/common.h>
 #include <cart/api.h>
 
 #include <unistd.h>
@@ -99,8 +99,8 @@ struct crt_msg_field *echo_ping_checkin[] = {
 struct crt_echo_checkin_req {
 	int		age;
 	int		days;
-	crt_iov_t	raw_package;
-	crt_string_t	name;
+	d_iov_t		raw_package;
+	d_string_t	name;
 };
 
 struct crt_msg_field *echo_ping_checkout[] = {
@@ -116,7 +116,7 @@ struct crt_msg_field *echo_corpc_example_in[] = {
 	&CMF_STRING,
 };
 struct crt_echo_corpc_example_req {
-	crt_string_t	co_msg;
+	d_string_t	co_msg;
 };
 
 struct crt_msg_field *echo_corpc_example_out[] = {
@@ -132,8 +132,8 @@ struct crt_msg_field *echo_bulk_test_in[] = {
 	&CMF_BULK,
 };
 struct crt_echo_bulk_in_req {
-	crt_string_t bulk_intro_msg;
-	crt_string_t bulk_md5_ptr;
+	d_string_t bulk_intro_msg;
+	d_string_t bulk_md5_ptr;
 	crt_bulk_t remote_bulk_hdl;
 };
 
@@ -205,7 +205,7 @@ echo_init(int server, bool tier2)
 	int		rc = 0, i;
 
 	rc = sem_init(&gecho.token_to_proceed, 0, 0);
-	C_ASSERTF(rc == 0, "sem_init() failed.\n");
+	D_ASSERTF(rc == 0, "sem_init() failed.\n");
 	flags = (server != 0) ? CRT_FLAG_BIT_SERVER : 0;
 	if (server == 0 && gecho.singleton_test)
 		flags |= CRT_FLAG_BIT_SINGLETON;
@@ -309,14 +309,14 @@ echo_fini(void)
 	}
 
 	rc = sem_destroy(&gecho.token_to_proceed);
-	C_ASSERTF(rc == 0, "sem_destroy() failed.\n");
+	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
 	rc = crt_finalize();
 	assert(rc == 0);
 }
 
 /* convert to string just to facilitate the pack/unpack */
 static inline void
-echo_md5_to_string(unsigned char *md5, crt_string_t md5_str)
+echo_md5_to_string(unsigned char *md5, d_string_t md5_str)
 {
 	char tmp[3] = {'\0'};
 	int i;

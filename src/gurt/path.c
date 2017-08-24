@@ -37,7 +37,6 @@
  *
  * This file defines path manipulation and creation functions
  *
- * src/libpouch/path.c
  */
 #include <stdio.h>
 #include <stdint.h>
@@ -51,6 +50,7 @@
 #ifdef __APPLE__
 # include <sys/syslimits.h>
 # include <sys/param.h>
+
 static inline char *
 get_exe_path(void)
 {
@@ -78,7 +78,7 @@ get_exe_path(void)
 	return realpath("/proc/self/exe", NULL);
 }
 #endif
-#include "pouch/path.h"
+#include "gurt/path.h"
 
 static pthread_once_t init_exe_once = PTHREAD_ONCE_INIT;
 
@@ -101,7 +101,7 @@ init_exe(void)
 }
 
 const char *
-crt_get_exe_path()
+d_get_exe_path()
 {
 	pthread_once(&init_exe_once, init_exe);
 
@@ -109,7 +109,7 @@ crt_get_exe_path()
 }
 
 const char *
-crt_get_exe_name()
+d_get_exe_name()
 {
 	pthread_once(&init_exe_once, init_exe);
 
@@ -126,12 +126,12 @@ create_all_dirs(const char *pathname)
 	bool		do_exit = 0;
 
 	if (pathname == NULL || *pathname != '/')
-		return -CER_BADPATH;
+		return -DER_BADPATH;
 
 	orig = strdup(pathname);
 
 	if (orig == NULL)
-		return -CER_NOMEM;
+		return -DER_NOMEM;
 
 	cur = orig;
 	if (*cur == '\0') {
@@ -169,7 +169,7 @@ create_all_dirs(const char *pathname)
 					 * to create it.
 					 */
 					free(orig);
-					return -CER_NO_PERM;
+					return -DER_NO_PERM;
 				}
 
 				if (!S_ISDIR(file_stat.st_mode)) {
@@ -177,7 +177,7 @@ create_all_dirs(const char *pathname)
 					 * exists.
 					 */
 					free(orig);
-					return -CER_NOTDIR;
+					return -DER_NOTDIR;
 				}
 				/* Case 3: Directory already exists */
 			}
@@ -198,14 +198,14 @@ create_all_dirs(const char *pathname)
 }
 
 int
-crt_check_directory(const char *path, char **newpath, bool try_create)
+d_check_directory(const char *path, char **newpath, bool try_create)
 {
 	char		*temp = NULL;
 	const char	*pathptr = path;
 	struct stat	stat_info;
 
 	if (path == NULL)
-		return -CER_INVAL;
+		return -DER_INVAL;
 
 	if (try_create)
 		create_all_dirs(path);
@@ -218,9 +218,9 @@ crt_check_directory(const char *path, char **newpath, bool try_create)
 		if (temp == NULL) {
 			switch (errno) {
 			case EACCES:
-				return -CER_NO_PERM;
+				return -DER_NO_PERM;
 			default:
-				return -CER_BADPATH;
+				return -DER_BADPATH;
 			}
 		}
 
@@ -229,12 +229,12 @@ crt_check_directory(const char *path, char **newpath, bool try_create)
 
 	if (stat(pathptr, &stat_info) != 0) {
 		free(temp);
-		return -CER_BADPATH;
+		return -DER_BADPATH;
 	}
 
 	if (!S_ISDIR(stat_info.st_mode)) {
 		free(temp);
-		return -CER_NOTDIR;
+		return -DER_NOTDIR;
 	}
 
 	if (newpath != NULL)
@@ -244,21 +244,21 @@ crt_check_directory(const char *path, char **newpath, bool try_create)
 }
 
 int
-crt_create_subdirs(const char *prefix, const char *subdir, char **full_path)
+d_create_subdirs(const char *prefix, const char *subdir, char **full_path)
 {
 	char		*temp;
 	struct stat	buf;
 	int		ret;
 
 	if (full_path == NULL)
-		return -CER_INVAL;
+		return -DER_INVAL;
 
 	*full_path = NULL;
 
 	if (subdir == NULL)
-		return -CER_INVAL;
+		return -DER_INVAL;
 
-	ret = crt_check_directory(prefix, NULL, false);
+	ret = d_check_directory(prefix, NULL, false);
 	if (ret != 0)
 		return ret;
 
@@ -270,13 +270,13 @@ crt_create_subdirs(const char *prefix, const char *subdir, char **full_path)
 	ret = asprintf(&temp, "%s/%s", prefix, subdir);
 
 	if (ret == -1)
-		return -CER_NOMEM;
+		return -DER_NOMEM;
 
 	/* If the whole path already exists, there is nothing more to do */
 	if (stat(temp, &buf) == 0) {
 		if (!S_ISDIR(buf.st_mode)) {
 			free(temp);
-			return -CER_NOTDIR;
+			return -DER_NOTDIR;
 		}
 		*full_path = temp;
 		return 0;
@@ -298,18 +298,18 @@ crt_create_subdirs(const char *prefix, const char *subdir, char **full_path)
 }
 
 int
-crt_prepend_cwd(const char *path, char **prepended)
+d_prepend_cwd(const char *path, char **prepended)
 {
 	char	*temp;
 	int	rc;
 
 	if (prepended == NULL)
-		return -CER_INVAL;
+		return -DER_INVAL;
 
 	*prepended = NULL;
 
 	if (path == NULL)
-		return -CER_INVAL;
+		return -DER_INVAL;
 
 	if (*path == '/')
 		return 0;
@@ -319,10 +319,10 @@ crt_prepend_cwd(const char *path, char **prepended)
 	 * result is a valid path.  This will be validated
 	 * later.
 	 */
-	temp = crt_getcwd();
+	temp = d_getcwd();
 
 	if (temp == NULL)
-		return -CER_NOMEM;
+		return -DER_NOMEM;
 
 	rc = asprintf(prepended, "%s/%s", temp, path);
 
@@ -330,14 +330,14 @@ crt_prepend_cwd(const char *path, char **prepended)
 
 	if (rc == -1) {
 		*prepended = NULL;
-		return -CER_NOMEM;
+		return -DER_NOMEM;
 	}
 
 	return 0;
 }
 
 char *
-crt_getcwd(void)
+d_getcwd(void)
 {
 	char	buf[PATH_MAX + 1];
 	char	*tmp;
@@ -351,14 +351,14 @@ crt_getcwd(void)
 }
 
 int
-crt_normalize_in_place(char *path)
+d_normalize_in_place(char *path)
 {
 	char	*dest;
 	char	*src;
 	char	last;
 
 	if (path == NULL)
-		return -CER_INVAL;
+		return -DER_INVAL;
 
 	dest = src = path;
 	last = '\0';

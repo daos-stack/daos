@@ -61,7 +61,7 @@ int crt_pmix_fini(void);
 int crt_pmix_fence(void);
 int crt_pmix_assign_rank(struct crt_grp_priv *grp_priv);
 int crt_pmix_publish_self(struct crt_grp_priv *grp_priv);
-int crt_pmix_uri_lookup(crt_group_id_t srv_grpid, crt_rank_t rank, char **uri);
+int crt_pmix_uri_lookup(crt_group_id_t srv_grpid, d_rank_t rank, char **uri);
 int crt_pmix_attach(struct crt_grp_priv *grp_priv);
 void crt_pmix_reg_event_hdlr(struct crt_grp_priv *grp_priv);
 void crt_pmix_dereg_event_hdlr(struct crt_grp_priv *grp_priv);

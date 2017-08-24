@@ -37,17 +37,17 @@
 """Unit tests"""
 import os
 
-TEST_SRC = ['test_linkage.cpp', 'test_pouch.c']
+TEST_SRC = ['test_linkage.cpp', 'test_gurt.c']
 WRAPPERS = {'test_linkage.cpp':['PMIx_Init', 'PMIx_Get',
                                 'PMIx_Publish', 'PMIx_Lookup',
                                 'PMIx_Fence', 'PMIx_Unpublish',
                                 'PMIx_Register_event_handler']}
-LIBPATH = [Dir('../cart'), Dir('../pouch')]
+LIBPATH = [Dir('../cart'), Dir('../gurt')]
 
 def scons():
     """Scons function"""
 
-    Import('prereqs env crt_targets pouch_targets')
+    Import('prereqs env crt_targets gurt_targets')
 
     # Run config in a new environment so the environment isn't polluted
     # causing tests to be rebuilt when utest target is used
@@ -88,7 +88,7 @@ def scons():
                                     source=testobj + \
                                     wrap_obj + \
                                     crt_targets + \
-                                    pouch_targets,
+                                    gurt_targets,
                                     LINKFLAGS=flags)
         tests.append(testprog)
 
