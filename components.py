@@ -121,7 +121,7 @@ REQS.define('mercury_old',
 
 RETRIEVER = \
     GitRepoRetriever('https://github.com/mercury-hpc/mercury.git',
-                     True, branch='topic_ofi')
+                     True)
 
 REQS.define('mercury',
             retriever=RETRIEVER,
