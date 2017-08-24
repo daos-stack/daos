@@ -43,12 +43,10 @@ class to execute a command using orte
 import os
 import subprocess
 import shlex
-import time
 import getpass
 import logging
 #pylint: disable=import-error
 from PostRunner import check_log_mode
-
 #pylint: disable=broad-except
 
 class OrteRunner():
@@ -157,26 +155,20 @@ class OrteRunner():
         """ wait for process to terminate """
         self.logger.info("%s: %s - stopping processes :%s", \
           self.testsuite, msg, self.proc.pid)
-        i = 60
-        procrtn = None
-        while i:
-            self.proc.poll()
-            procrtn = self.proc.returncode
-            if procrtn is not None:
-                break
-            else:
-                time.sleep(1)
-                i = i - 1
+        self.proc.poll()
+        procrtn = self.proc.returncode
 
         if procrtn is None:
-            self.logger.info("%s: Again stopping processes :%s", \
+            self.logger.info("%s: stopping processes :%s", \
               self.testsuite, self.proc.pid)
             procrtn = -1
             try:
                 self.proc.terminate()
                 self.proc.wait(2)
+                procrtn = self.proc.returncode
             except ProcessLookupError:
-                pass
+                self.proc.poll()
+                procrtn = self.proc.returncode
             except Exception:
                 self.logger.info("%s: killing processes :%s", \
                   self.testsuite, self.proc.pid)

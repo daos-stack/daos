@@ -28,6 +28,7 @@ import os
 import subprocess
 import shlex
 import time
+from socket import gethostname
 
 
 class DvmRunner():
@@ -40,11 +41,11 @@ class DvmRunner():
 
     def __init__(self, info=None):
         self.info = info
+        self.hostlist = "localhost"
 
     def launch_process(self):
         """Launch otred processes """
         print("TestRunner: start orte-dvm process\n")
-        hosts = ","
         log_path = self.info.get_config('log_base_path')
         if not os.path.exists(log_path):
             os.makedirs(log_path)
@@ -55,9 +56,11 @@ class DvmRunner():
         self.logfilerr = os.path.join(log_path, "orte-dvm.err")
         ompi_path = self.info.get_info('OMPI_PREFIX')
         dvm = os.path.join(ompi_path, "bin", "orte-dvm")
-        hostlist = hosts.join(self.info.get_config('host_list'))
+        self.hostlist = ",".join(self.info.get_config('host_list'))
+        if not self.hostlist:
+            self.hostlist = gethostname().split('.')[0]
         cmdstr = "%s --prefix %s --report-uri %s --host %s" % \
-                 (dvm, ompi_path, self.report, hostlist)
+                 (dvm, ompi_path, self.report, self.hostlist)
         cmdarg = shlex.split(cmdstr)
         with open(self.logfileout, mode='w') as outfile, \
             open(self.logfilerr, mode='w') as errfile:
@@ -76,7 +79,6 @@ class DvmRunner():
               self.ortedvm.pid)
         if self.ortedvm.poll() is None:
             return 0
-
         print("TestRunner: orte-dvm failed to start")
         print("TestRunner: orte-dvm rc: %d\n" % self.ortedvm.returncode)
         with open(self.logfilerr, mode='r') as fd:
@@ -91,12 +93,10 @@ class DvmRunner():
         """stop orted processes """
         print("TestRunner: stopping orte-dvm process\n")
         if self.ortedvm.poll() is None:
-            hosts = ","
             ompi_path = self.info.get_info('OMPI_PREFIX')
             orterun = os.path.join(ompi_path, "bin", "orterun")
-            hostlist = hosts.join(self.info.get_config('host_list'))
             cmdstr = "%s --terminate --prefix %s --hnp file:%s --host %s" % \
-                     (orterun, ompi_path, self.report, hostlist)
+                     (orterun, ompi_path, self.report, self.hostlist)
             cmdarg = shlex.split(cmdstr)
             try:
                 subprocess.call(cmdarg, timeout=10)

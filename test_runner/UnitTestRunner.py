@@ -99,8 +99,13 @@ class UnitTestRunner(PostRunner.PostRunner,
                             )
             self.setenv(testrun)
             self.settestlog(testrun['id'])
-            suite = \
-                unittest.TestLoader().loadTestsFromName(test_module['name'])
+            TestLoader = unittest.TestLoader()
+            if 'testMethodPrefix' in testrun:
+                TestLoader.testMethodPrefix = testrun.get('testMethodPrefix',
+                                                          "test")
+                self.logger.info("testMethodPrefix %s",
+                                 TestLoader.testMethodPrefix)
+            suite = TestLoader.loadTestsFromName(test_module['name'])
             results = unittest.TestResult()
             suite.run(results)
 

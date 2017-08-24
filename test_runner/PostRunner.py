@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -170,7 +170,7 @@ class PostRunner():
     @staticmethod
     def log_type(item):
         """copy in subtest results and find log files"""
-        logtype = "."
+        logtype = "log"
         if len(item) < 2:
             return logtype
         extension = item[1]
