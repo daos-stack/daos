@@ -312,6 +312,7 @@ class CommonTestSuite(unittest.TestCase):
                            "memcheck-cart.supp")
             prefix = " valgrind --xml=yes" + \
                 " --xml-file=" + log_path + "/valgrind.%q{PMIX_ID}.xml" + \
+                " --fair-sched=try " + \
                 " --partial-loads-ok=yes" + \
                 " --leak-check=yes --gen-suppressions=all" + \
                 " --suppressions=" + suppressfile + " --show-reachable=yes"
