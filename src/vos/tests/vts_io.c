@@ -627,7 +627,7 @@ hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
 	int i = 0, rc = 0;
 
 	for (i = start; i < end; i++) {
-		rc = vos_obj_hold(occ, *coh, *oid, &objs[i]);
+		rc = vos_obj_hold(occ, *coh, *oid, true, &objs[i]);
 		assert_int_equal(rc, 0);
 	}
 

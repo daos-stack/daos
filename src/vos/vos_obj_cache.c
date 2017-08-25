@@ -60,7 +60,6 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	      struct daos_llink **llink_p)
 {
 	struct vos_object	*obj;
-	struct vos_obj_df	*obj_df;
 	struct obj_lru_key	*lkey;
 	struct vos_container	*cont;
 	int			 rc;
@@ -74,15 +73,6 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
 		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_obj_id));
 
-	/**
-	 * Call back called by LRU cache as the reference
-	 * was not found in DRAM cache
-	 * Looking it up in PMEM Object Index
-	 */
-	rc = vos_oi_find_alloc(cont, lkey->olk_obj_id, &obj_df);
-	if (rc)
-		D_GOTO(failed, rc);
-
 	D_ALLOC_PTR(obj);
 	if (!obj)
 		D_GOTO(failed, rc = -DER_NOMEM);
@@ -90,12 +80,12 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	 * Saving a copy of oid to avoid looking up in vos_obj_df, which
 	 * is a direct pointer to pmem data structure
 	 */
-	obj->obj_df	= obj_df;
 	obj->obj_id	= lkey->olk_obj_id;
 	obj->obj_cont	= cont;
 	vos_cont_addref(cont);
 
 	*llink_p = &obj->obj_llink;
+	rc = 0;
 failed:
 	return rc;
 }
@@ -206,9 +196,10 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj)
 	daos_lru_ref_release(occ, &obj->obj_llink);
 }
 
+
 int
 vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
-	     daos_unit_oid_t oid, struct vos_object **obj_p)
+	     daos_unit_oid_t oid, bool read_only, struct vos_object **obj_p)
 {
 
 	struct vos_object	*obj = NULL;
@@ -233,6 +224,26 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 		D_GOTO(failed, rc);
 
 	obj = container_of(lret, struct vos_object, obj_llink);
+	if (obj->obj_df)
+		D_GOTO(found, rc = 0);
+
+	if (read_only) {
+		rc = vos_oi_find(cont, oid, &obj->obj_df);
+		if (rc == -DER_NONEXIST) {
+			obj->obj_df = NULL;
+			rc = 0;
+		}
+	} else {
+		rc = vos_oi_find_alloc(cont, oid, &obj->obj_df);
+		D_ASSERT(rc || obj->obj_df);
+	}
+
+	if (rc) {
+		vos_obj_release(occ, obj);
+		D_GOTO(failed, rc);
+	}
+	D_EXIT;
+found:
 	*obj_p = obj;
 failed:
 	return	rc;
@@ -259,7 +270,8 @@ vos_obj_revalidate(struct daos_lru_cache *occ, struct vos_object **obj_p)
 	if (!vos_obj_evicted(obj))
 		return 0;
 
-	rc = vos_obj_hold(occ, vos_cont2hdl(obj->obj_cont), obj->obj_id, obj_p);
+	rc = vos_obj_hold(occ, vos_cont2hdl(obj->obj_cont), obj->obj_id,
+			  !obj->obj_df, obj_p);
 	if (rc == 0) {
 		D_ASSERT(*obj_p != obj);
 		vos_obj_release(occ, obj);

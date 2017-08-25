@@ -712,14 +712,14 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
 		DP_UOID(oid), iod_nr, epoch);
 
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, &obj);
+	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, true, &obj);
 	if (rc != 0)
 		return rc;
 
-	if (vos_obj_is_new(obj)) {
+	if (vos_obj_is_empty(obj)) {
 		int	i;
 
-		D_DEBUG(DB_IO, "New object, nothing to fetch\n");
+		D_DEBUG(DB_IO, "Empty object, nothing to fetch\n");
 		for (i = 0; i < iod_nr; i++) {
 			iods[i].iod_size = 0;
 			if (sgls != NULL)
@@ -947,7 +947,7 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Update "DF_UOID", desc_nr %d, cookie "DF_UUID" epoch "
 		DF_U64"\n", DP_UOID(oid), iod_nr, DP_UUID(cookie), epoch);
 
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, &obj);
+	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, false, &obj);
 	if (rc != 0)
 		return rc;
 
@@ -995,8 +995,8 @@ vos_zcc2ioh(struct vos_zc_context *zcc)
  * to return to caller which can proceed the zero-copy I/O.
  */
 static int
-vos_zcc_create(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
-	       unsigned int iod_nr, daos_iod_t *iods,
+vos_zcc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
+	       daos_epoch_t epoch, unsigned int iod_nr, daos_iod_t *iods,
 	       struct vos_zc_context **zcc_pp)
 {
 	struct vos_zc_context *zcc;
@@ -1006,7 +1006,8 @@ vos_zcc_create(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (zcc == NULL)
 		return -DER_NOMEM;
 
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, &zcc->zc_obj);
+	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, read_only,
+			  &zcc->zc_obj);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
@@ -1143,15 +1144,22 @@ vos_obj_zc_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid,
 		       daos_handle_t *ioh)
 {
 	struct vos_zc_context *zcc;
+	int		       i;
 	int		       rc;
 
-	rc = vos_zcc_create(coh, oid, epoch, iod_nr, iods, &zcc);
+	rc = vos_zcc_create(coh, oid, true, epoch, iod_nr, iods, &zcc);
 	if (rc != 0)
 		return rc;
 
-	rc = dkey_zc_fetch_begin(zcc->zc_obj, epoch, dkey, iod_nr, iods, zcc);
-	if (rc != 0)
-		goto failed;
+	if (vos_obj_is_empty(zcc->zc_obj)) { /* nothing to fetch */
+		for (i = 0; i < iod_nr; i++)
+			iods[i].iod_size = 0;
+	} else {
+		rc = dkey_zc_fetch_begin(zcc->zc_obj, epoch, dkey, iod_nr,
+					 iods, zcc);
+		if (rc != 0)
+			D_GOTO(failed, rc);
+	}
 
 	D_DEBUG(DB_IO, "Prepared zcbufs for fetching %d iods\n", iod_nr);
 	*ioh = vos_zcc2ioh(zcc);
@@ -1300,7 +1308,7 @@ vos_obj_zc_update_begin(daos_handle_t coh, daos_unit_oid_t oid,
 	PMEMobjpool		*pop;
 	int			 rc;
 
-	rc = vos_zcc_create(coh, oid, epoch, iod_nr, iods, &zcc);
+	rc = vos_zcc_create(coh, oid, false, epoch, iod_nr, iods, &zcc);
 	if (rc != 0)
 		return rc;
 
@@ -1925,12 +1933,12 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	oiter->it_epr = param->ip_epr;
 	rc = vos_obj_hold(vos_obj_cache_current(), param->ip_hdl,
-			  param->ip_oid, &oiter->it_obj);
+			  param->ip_oid, true, &oiter->it_obj);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 
-	if (vos_obj_is_new(oiter->it_obj)) {
-		D_DEBUG(DB_IO, "New object, nothing to iterate\n");
+	if (vos_obj_is_empty(oiter->it_obj)) {
+		D_DEBUG(DB_IO, "Empty object, nothing to iterate\n");
 		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 

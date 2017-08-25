@@ -555,9 +555,9 @@ vos_irec2data(struct vos_irec_df *irec)
 }
 
 static inline bool
-vos_obj_is_new(struct vos_object *obj)
+vos_obj_is_empty(struct vos_object *obj)
 {
-	return obj->obj_df->vo_tree.tr_class == 0;
+	return !obj->obj_df || obj->obj_df->vo_tree.tr_class == 0;
 }
 
 static inline bool

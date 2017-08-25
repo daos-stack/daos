@@ -196,6 +196,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		int			 ret = 0;
 		daos_size_t		 offset = 0;
 		unsigned int		 idx = 0;
+		bool			 did_something = false;
 
 		if (remote_bulks[i] == NULL) {
 			ABT_future_set(future, &ret);
@@ -217,6 +218,9 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 		 * which is usually gotten from punched/empty records (see
 		 * vos_recx_fetch()), and skip these empty iov during bulk
 		 * transfer to avoid touching the input buffer.
+		 *
+		 * XXX: initial value of future can't match with bulk transfers
+		 * if there are holes.
 		 */
 		while (idx < sgl->sg_nr.num_out) {
 			daos_sg_list_t	sgl_sent;
@@ -237,6 +241,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			if (idx == sgl->sg_nr.num_out)
 				break;
 
+			did_something = true;
 			start = idx;
 			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
 			/* Find the end of the non-empty record */
@@ -259,7 +264,7 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 				 * Sigh, future can not be abort now, let's
 				 * continue until of all of future compartments
 				 * have been set.
-				 **/
+				 */
 				ABT_future_set(future, &ret);
 				if (rc == 0)
 					rc = ret;
@@ -288,6 +293,8 @@ ds_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op,
 			}
 			offset += length;
 		}
+		if (!did_something)
+			ABT_future_set(future, &ret);
 	}
 
 	ABT_future_wait(future);

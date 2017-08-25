@@ -57,11 +57,13 @@ struct vos_container;
  * \param occ	[IN]	Object cache, it could be a percpu data structure.
  * \param coh	[IN]	Container open handle.
  * \param oid	[IN]	VOS object ID.
+ * \param read_only [IN]
+ *			Read-only operation: fetch, enumerate etc.
  * \param obj_p [OUT]	Returned object cache reference.
  */
 int
 vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
-		 daos_unit_oid_t oid, struct vos_object **obj_p);
+	     daos_unit_oid_t oid, bool read_only, struct vos_object **obj_p);
 
 /**
  * Release the object cache reference.

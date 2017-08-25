@@ -643,7 +643,8 @@ vos_obj_tree_init(struct vos_object *obj)
 	if (!daos_handle_is_inval(obj->obj_toh))
 		return 0;
 
-	if (vos_obj_is_new(obj)) {
+	D_ASSERT(obj->obj_df);
+	if (obj->obj_df->vo_tree.tr_class == 0) {
 		D_DEBUG(DB_DF, "Create btree for object\n");
 		rc = dbtree_create_inplace(ta->ta_class, ta->ta_feats,
 					   ta->ta_order, vos_obj2uma(obj),
@@ -665,6 +666,7 @@ vos_obj_tree_fini(struct vos_object *obj)
 
 	/* NB: tree is created inplace, so don't need to destroy */
 	if (!daos_handle_is_inval(obj->obj_toh)) {
+		D_ASSERT(obj->obj_df);
 		rc = dbtree_close(obj->obj_toh);
 		obj->obj_toh = DAOS_HDL_INVAL;
 	}
