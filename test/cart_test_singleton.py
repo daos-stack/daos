@@ -123,8 +123,6 @@ class TestSingleton(commontestsuite.CommonTestSuite):
             self.fail("Server launch failed, return code %s" \
                        % proc_srv.returncode)
 
-        time.sleep(10)
-
         # Verify the server is still running.
         if not self.check_process(proc_srv):
             procrtn = self.stop_process(testmsg, proc_srv)

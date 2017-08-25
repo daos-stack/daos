@@ -265,11 +265,13 @@ client_cb(const struct crt_cb_info *cb_info)
 			rpc_req_output->magic,
 			rpc_req_output->magic == rpc_req_input->magic ?
 			"MATCH" : "MISMATCH");
+		sem_post(&rpc_err.re_all_done);
 		break;
 	case RPC_ERR_OPC_SHUTDOWN:
 		sem_post(&rpc_err.re_all_done);
 		break;
 	default:
+		C_ASSERTF(false, "The default case should never occur.\n");
 		break;
 	}
 }
@@ -305,6 +307,10 @@ rpc_err_rpc_issue()
 
 		rc = crt_req_send(rpc_req, client_cb, NULL);
 		C_ASSERTF(rc == 0, "crt_req_send() failed, rc %d\n", rc);
+	}
+	for (i = 0; i < rpc_err.re_target_group_size; i++) {
+		C_DEBUG("Waiting on reply N.O. %d\n", i);
+		sem_wait(&rpc_err.re_all_done);
 	}
 }
 

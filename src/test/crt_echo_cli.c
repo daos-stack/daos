@@ -120,8 +120,12 @@ static void run_client(void)
 	pri_srv_grp = crt_group_lookup("non-existent-grp");
 	C_ASSERT(pri_srv_grp == NULL);
 
-	rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &grp_tier1);
-	C_ASSERT(rc == 0 && grp_tier1 != NULL);
+	/* try until success to avoid intermittent failures under valgrind. */
+	do {
+		sleep(1);
+		rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID, &grp_tier1);
+	} while (rc != 0);
+	C_ASSERT(grp_tier1 != NULL);
 	pri_srv_grp = crt_group_lookup(CRT_DEFAULT_SRV_GRPID);
 	C_ASSERT(pri_srv_grp != NULL);
 
