@@ -43,6 +43,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <getopt.h>
+#include <semaphore.h>
 
 #include <pouch/common.h>
 #include <cart/api.h>
@@ -56,6 +57,7 @@
 static int g_shutdown;
 /* for client process: received shutdown confirmation from server */
 static int g_complete;
+static sem_t g_token_to_proceed;
 
 #define TEST_CTX_MAX_NUM	 (72)
 static unsigned int		 ctx_num = 1;
@@ -89,6 +91,21 @@ struct crt_echo_checkin_reply {
 struct crt_req_format CQF_ECHO_PING_CHECK =
 	DEFINE_CRT_REQ_FMT("ECHO_PING_CHECK", echo_ping_checkin,
 			   echo_ping_checkout);
+
+inline void
+test_sem_timedwait(sem_t *sem, int sec, int line_number)
+{
+	struct timespec			deadline;
+	int				rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &deadline);
+	C_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
+		  line_number, rc);
+	deadline.tv_sec += sec;
+	rc = sem_timedwait(sem, &deadline);
+	C_ASSERTF(rc == 0, "sem_timedwait() failed at line %d rc: %d\n",
+		  line_number, rc);
+}
 
 void
 echo_checkin_handler(crt_rpc_t *rpc_req)
@@ -128,7 +145,8 @@ client_cb_common(const struct crt_cb_info *cb_info)
 
 	rpc_req = cb_info->cci_rpc;
 
-	*(int *) cb_info->cci_arg = 1;
+	if (cb_info->cci_arg != NULL)
+		*(int *) cb_info->cci_arg = 1;
 
 	switch (cb_info->cci_rpc->cr_opc) {
 	case ECHO_OPC_CHECKIN:
@@ -148,9 +166,11 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		       rpc_req_input->name, rpc_req_output->ret,
 		       rpc_req_output->room_no);
 		C_FREE(rpc_req_input->name, 256);
+		sem_post(&g_token_to_proceed);
 		break;
 	case ECHO_OPC_SHUTDOWN:
 		g_complete = 1;
+		sem_post(&g_token_to_proceed);
 		break;
 	default:
 		break;
@@ -218,6 +238,10 @@ test_group_init(char *local_group_name, char *target_group_name,
 
 	fprintf(stderr, "local group: %s remote group: %s\n",
 		local_group_name, target_group_name);
+
+	rc = sem_init(&g_token_to_proceed, 0, 0);
+	C_ASSERTF(rc == 0, "sem_init() failed.\n");
+
 	flag = is_service ? CRT_FLAG_BIT_SERVER : 0;
 	rc = crt_init(local_group_name, flag);
 	C_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
@@ -277,7 +301,6 @@ run_test_group(char *local_group_name, char *target_group_name, int is_service,
 	crt_endpoint_t			 server_ep = {0};
 	char				 *buffer;
 	int				 ii;
-	int				 complete;
 	int				 rc = 0;
 
 	if (!should_attach)
@@ -285,10 +308,7 @@ run_test_group(char *local_group_name, char *target_group_name, int is_service,
 
 	if (is_service) {
 		rc = crt_init(local_group_name, 0);
-		C_ASSERTF(rc == 0, "crt_rpc_srv_register() failed. rc: %d\n",
-			  rc);
-	} else {
-		sleep(2);
+		C_ASSERTF(rc == 0, "crt_init() failed. rc: %d\n", rc);
 	}
 	rc = crt_group_attach(target_group_name, &srv_grp);
 	C_ASSERTF(rc == 0, "crt_group_attach failed, rc: %d\n", rc);
@@ -321,11 +341,12 @@ run_test_group(char *local_group_name, char *target_group_name, int is_service,
 			"%d, name: %s, age: %d, days: %d.\n",
 			myrank, server_ep.ep_tag, rpc_req_input->name,
 			rpc_req_input->age, rpc_req_input->days);
-		complete = 0;
 		/* send an rpc, print out reply */
-		rc = crt_req_send(rpc_req, client_cb_common, &complete);
+		rc = crt_req_send(rpc_req, client_cb_common, NULL);
 		C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 	}
+	for (ii = 0; ii < target_group_size; ii++)
+		test_sem_timedwait(&g_token_to_proceed, 61, __LINE__);
 
 	while (infinite_loop) {
 		server_ep.ep_grp = srv_grp;
@@ -349,12 +370,12 @@ run_test_group(char *local_group_name, char *target_group_name, int is_service,
 			"%d, name: %s, age: %d, days: %d.\n",
 			myrank, server_ep.ep_tag, rpc_req_input->name,
 			rpc_req_input->age, rpc_req_input->days);
-		complete = 0;
 		/* send an rpc, print out reply */
-		rc = crt_req_send(rpc_req, client_cb_common, &complete);
+		rc = crt_req_send(rpc_req, client_cb_common, NULL);
 		C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 		fprintf(stderr, "sent check in-RPC.\n");
-		sleep(1);
+
+		test_sem_timedwait(&g_token_to_proceed, 61, __LINE__);
 	}
 }
 
@@ -364,7 +385,6 @@ test_group_fini(int is_service)
 	int				 ii;
 	crt_endpoint_t			 server_ep = {0};
 	crt_rpc_t			*rpc_req = NULL;
-	int				 complete;
 	int				 rc = 0;
 
 	if (should_attach && myrank == 0) {
@@ -377,11 +397,11 @@ test_group_fini(int is_service)
 			C_ASSERTF(rc == 0 && rpc_req != NULL,
 				  "crt_req_create() failed. "
 				  "rc: %d, rpc_req: %p\n", rc, rpc_req);
-			complete = 0;
-			rc = crt_req_send(rpc_req, client_cb_common, &complete);
+			rc = crt_req_send(rpc_req, client_cb_common, NULL);
 			C_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n",
 				  rc);
-			sleep(1); /* wait for abouve RPC's completion */
+
+			test_sem_timedwait(&g_token_to_proceed, 61, __LINE__);
 		}
 	}
 	if (should_attach) {
@@ -404,7 +424,14 @@ test_group_fini(int is_service)
 
 	if (is_service)
 		crt_fake_event_fini(myrank);
+	rc = sem_destroy(&g_token_to_proceed);
+	C_ASSERTF(rc == 0, "sem_destroy() failed.\n");
 	crt_lm_finalize();
+	/* corresponding to the crt_init() in run_test_group() */
+	if (should_attach && is_service) {
+		rc = crt_finalize();
+		C_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
+	}
 	rc = crt_finalize();
 	C_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 	C_DEBUG("exiting.\n");

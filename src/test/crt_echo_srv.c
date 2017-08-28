@@ -41,15 +41,30 @@
 
 #include "crt_echo_srv.h"
 
+inline void
+echo_sem_timedwait(sem_t *sem, int sec, int line_number)
+{
+	struct timespec			deadline;
+	int				rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &deadline);
+	C_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
+		  line_number, rc);
+	deadline.tv_sec += sec;
+	rc = sem_timedwait(sem, &deadline);
+	C_ASSERTF(rc == 0, "sem_timedwait() failed at line %d rc: %d\n",
+		  line_number, rc);
+}
+
 static int run_echo_srver(void)
 {
-	crt_endpoint_t		svr_ep = {0};
-	crt_rpc_t		*rpc_req = NULL;
-	char			*pchar;
-	crt_rank_t		myrank;
-	uint32_t		mysize;
-	int			rc, loop = 0;
-	struct crt_echo_checkin_req *e_req;
+	crt_endpoint_t			 svr_ep = {0};
+	crt_rpc_t			*rpc_req = NULL;
+	char				*pchar;
+	crt_rank_t			 myrank;
+	uint32_t			 mysize;
+	int				 rc;
+	struct crt_echo_checkin_req	*e_req;
 
 	rc = crt_group_rank(NULL, &myrank);
 	assert(rc == 0);
@@ -87,22 +102,11 @@ static int run_echo_srver(void)
 	C_DEBUG("server(rank %d) sending checkin request, name: %s, age: %d, "
 	       "days: %d.\n", myrank, e_req->name, e_req->age, e_req->days);
 
-	gecho.complete = 0;
-	rc = crt_req_send(rpc_req, client_cb_common, &gecho.complete);
+	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	assert(rc == 0);
-	/* wait completion */
-	while (1) {
-		if (gecho.complete) {
-			printf("server(rank %d) checkin request sent.\n",
-			       myrank);
-			break;
-		}
-		usleep(10*1000);
-		if (++loop > 1000) {
-			printf("wait failed.\n");
-			break;
-		}
-	}
+	/* wait for completion */
+	echo_sem_timedwait(&gecho.token_to_proceed, 61, __LINE__);
+
 	C_FREE(pchar, 256);
 
 	/* ==================================== */
@@ -125,7 +129,8 @@ static int run_echo_srver(void)
 		rc = crt_group_create(grp_id, &grp_membs, 0, grp_create_cb,
 				      &myrank);
 		printf("crt_group_create rc: %d, priv %p.\n", rc, &myrank);
-		sleep(1); /* just to ensure grp populated */
+		/* make sure grp is populated */
+		echo_sem_timedwait(&gecho.token_to_proceed, 61, __LINE__);
 
 		rc = crt_corpc_req_create(gecho.crt_ctx, example_grp_hdl,
 					  &excluded_membs, ECHO_CORPC_EXAMPLE,
@@ -137,12 +142,10 @@ static int run_echo_srver(void)
 		C_ASSERT(corpc_in != NULL);
 		corpc_in->co_msg = "testing corpc example from rank 4";
 
-		gecho.complete = 0;
-		rc = crt_req_send(corpc_req, client_cb_common,
-				  &gecho.complete);
+		rc = crt_req_send(corpc_req, client_cb_common, NULL);
 		C_ASSERT(rc == 0);
-		sleep(1); /* just to ensure corpc handled */
-		C_ASSERT(gecho.complete == 1);
+		/* make sure corpc has been handled */
+		echo_sem_timedwait(&gecho.token_to_proceed, 61, __LINE__);
 
 		rc = crt_group_destroy(example_grp_hdl, grp_destroy_cb,
 				       &myrank);

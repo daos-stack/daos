@@ -50,6 +50,7 @@
 #include <assert.h>
 #include <string.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <openssl/md5.h>
 
 #define ECHO_OPC_NOOP       (0xA0)
@@ -69,6 +70,7 @@ struct gecho {
 	bool		server;
 	bool		multi_tier_test;
 	bool		singleton_test;
+	sem_t		token_to_proceed;
 };
 
 extern struct gecho gecho;
@@ -202,6 +204,8 @@ echo_init(int server, bool tier2)
 	uint32_t	flags;
 	int		rc = 0, i;
 
+	rc = sem_init(&gecho.token_to_proceed, 0, 0);
+	C_ASSERTF(rc == 0, "sem_init() failed.\n");
 	flags = (server != 0) ? CRT_FLAG_BIT_SERVER : 0;
 	if (server == 0 && gecho.singleton_test)
 		flags |= CRT_FLAG_BIT_SINGLETON;
@@ -304,6 +308,8 @@ echo_fini(void)
 		free(gecho.extra_ctx);
 	}
 
+	rc = sem_destroy(&gecho.token_to_proceed);
+	C_ASSERTF(rc == 0, "sem_destroy() failed.\n");
 	rc = crt_finalize();
 	assert(rc == 0);
 }
@@ -336,7 +342,8 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	/* set complete flag */
 	printf("in client_cb_common, opc: 0x%x, cci_rc: %d.\n",
 	       rpc_req->cr_opc, cb_info->cci_rc);
-	*(int *) cb_info->cci_arg = 1;
+	if (cb_info->cci_arg != NULL)
+		*(int *) cb_info->cci_arg = 1;
 	assert(cb_info->cci_rc != -CER_TIMEDOUT);
 
 	switch (cb_info->cci_rpc->cr_opc) {
@@ -351,11 +358,13 @@ client_cb_common(const struct crt_cb_info *cb_info)
 
 		printf("%s checkin result - ret: %d, room_no: %d.\n",
 		       e_req->name, e_reply->ret, e_reply->room_no);
+		sem_post(&gecho.token_to_proceed);
 		break;
 	case ECHO_CORPC_EXAMPLE:
 		corpc_reply = crt_reply_get(rpc_req);
 		printf("ECHO_CORPC_EXAMPLE finished, co_result: %d.\n",
 		       corpc_reply->co_result);
+		sem_post(&gecho.token_to_proceed);
 		break;
 	default:
 		break;

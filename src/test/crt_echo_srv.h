@@ -97,6 +97,7 @@ int grp_create_cb(crt_group_t *grp, void *priv, int status)
 	printf("in grp_create_cb, grp %p, priv %p, status %d.\n",
 		grp, priv, status);
 	example_grp_hdl = grp;
+	sem_post(&gecho.token_to_proceed);
 	return 0;
 }
 

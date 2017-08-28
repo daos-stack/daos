@@ -211,7 +211,6 @@ class TestSingleton(commontestsuite.CommonTestSuite):
 
         srv_args = []
         srv_args.extend(['tests/crt_echo_srv',
-                         '-p', self.tempdir,
                          '-m',
                          ':',
                          self.pass_env,
@@ -237,7 +236,7 @@ class TestSingleton(commontestsuite.CommonTestSuite):
         self.logger.info("Server running")
 
         # Launch the client without orterun
-        cli_args = 'tests/crt_echo_cli' + ' -p ' + self.tempdir + ' -m'
+        cli_args = 'tests/crt_echo_cli' + ' -m'
         cli_rtn = self.launch_test(testmsg, '1', self.pass_env, \
                                    cli=client, cli_arg=cli_args)
 
