@@ -65,6 +65,7 @@ class SelfTest(commontestsuite.CommonTestSuite):
         os.environ.pop("CRT_PHY_ADDR_STR", "")
         os.environ.pop("OFI_INTERFACE", "")
         os.environ.pop("CRT_LOG_MASK", "")
+        self.free_port()
         self.logger.info("tearDown end\n")
 
     def test_self_test(self):

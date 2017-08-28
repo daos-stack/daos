@@ -98,6 +98,7 @@ class TestSingleton(commontestsuite.CommonTestSuite):
         self.logger.info("tearDown begin")
         self.logger.info("tearDown removing temp directory")
         shutil.rmtree(self.tempdir)
+        self.free_port()
         self.logger.info("tearDown end\n")
 
     def test_singleton_attach(self):

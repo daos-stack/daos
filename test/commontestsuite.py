@@ -83,6 +83,7 @@ class CommonTestSuite(unittest.TestCase):
     testprocess = ""
     testsuite = ""
     testTitle = ""
+    reservedSocket = None
 
     def get_test_info(self):
         """Retrieve the information from test id"""
@@ -94,6 +95,8 @@ class CommonTestSuite(unittest.TestCase):
         """
         Function to generate port numbers
         """
+        assert self.reservedSocket is None
+
         username = getpass.getuser()
 
         md5hash = hashlib.md5()
@@ -110,13 +113,15 @@ class CommonTestSuite(unittest.TestCase):
         md5hash.update(str(self.testTitle).encode('utf-8'))
 
         avail_socket = None
+        s = None
 
         # Get a unique value and "reserve" 34 ports within the job's range
         # There are at least 29 such ranges in 1009 ports.  Use 29 because
         # it's a prime number.
         # This only tests the availability of the 1st port in the range but
         # it is assumed that if the first port is free the others likely
-        # are as well.
+        # are as well.  The socket is kept reserved for the duration of
+        # the test.
         start_range = int(md5hash.hexdigest(), 16) % 29
         for i in range(29):
             port_offset = ((start_range + i) % 29) * 34
@@ -124,21 +129,29 @@ class CommonTestSuite(unittest.TestCase):
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 s.bind(("127.0.0.1", port_number))
-                s.close()
-                avail_socket = port_number
+                avail_socket = port_number + 1
                 break
             except socket.error as e:
+                s.close()
+                s = None
                 if e.errno == 98:
                     self.logger.info("Port %d is already in use", port_number)
                 else:
                     # something else raised the socket.error exception
                     self.logger.info(e)
-            s.close()
 
         self.logger.info("Setting OFI ports to %s: %s", port_name, avail_socket)
 
+        self.reservedSocket = s
+
         assert avail_socket != None
         return avail_socket
+
+    def free_port(self):
+        """Free the reserved port"""
+        if self.reservedSocket != None:
+            self.reservedSocket.close()
+            self.reservedSocket = None
 
     def launch_test(self, testdesc, NPROC, env, **kwargs):
         """Method creates the Client or Client and Server arguments
@@ -297,6 +310,7 @@ class CommonTestSuite(unittest.TestCase):
 
         self.logger.info("%s: %s - return code: %d\n", \
           self.testsuite, msg, procrtn)
+
         return procrtn
 
     @staticmethod

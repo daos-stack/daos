@@ -79,6 +79,7 @@ class TestBarrier(commontestsuite.CommonTestSuite):
         os.environ.pop("OFI_INTERFACE", "")
         os.environ.pop("CRT_LOG_MASK", "")
         os.environ.pop("CRT_TEST_SERVER", "")
+        self.free_port()
         self.logger.info("tearDown end\n")
 
     def test_barrier_test(self):
