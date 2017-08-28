@@ -98,21 +98,29 @@ class CommonTestSuite(unittest.TestCase):
 
         md5hash = hashlib.md5()
         md5hash.update(str(username).encode('utf-8'))
+        md5hash.update(str(os.getenv("JOB_NAME", "noname")).encode('utf-8'))
+        md5hash.update(str(port_name).encode('utf-8'))
+
+        #First, pick a range of 1009 ports "unique" to job, user, and port_name
+        #We use 1009 and 53 which are prime numbers.  There are slightly more
+        #than 53 1009 port ranges between 12000 and 65535
+        hash_value = int(md5hash.hexdigest(), 16) % 53
+        base_port = 12000 + (1009 * hash_value)
+
         md5hash.update(str(self.testTitle).encode('utf-8'))
-        if port_name == "eth0":
-            base_port = 12000
-        else:
-            base_port = 22000
 
         avail_socket = None
 
-        # Get a unique value and "reserve" 40 ports
+        # Get a unique value and "reserve" 34 ports within the job's range
+        # There are at least 29 such ranges in 1009 ports.  Use 29 because
+        # it's a prime number.
         # This only tests the availability of the 1st port in the range but
         # it is assumed that if the first port is free the others likely
         # are as well.
-        for i in range(10):
-            hash_value = (int(md5hash.hexdigest(), 16) % 300) * (40 + i)
-            port_number = base_port + hash_value
+        start_range = int(md5hash.hexdigest(), 16) % 29
+        for i in range(29):
+            port_offset = ((start_range + i) % 29) * 34
+            port_number = base_port + port_offset
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 s.bind(("127.0.0.1", port_number))
@@ -121,7 +129,7 @@ class CommonTestSuite(unittest.TestCase):
                 break
             except socket.error as e:
                 if e.errno == 98:
-                    self.logger.info("Port is already in use")
+                    self.logger.info("Port %d is already in use", port_number)
                 else:
                     # something else raised the socket.error exception
                     self.logger.info(e)

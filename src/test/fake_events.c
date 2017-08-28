@@ -72,7 +72,7 @@ fake_event_thread(void *args)
 		if (fd == -1) {
 			C_ERROR("open() on fle %s failed. error: %s\n",
 				pipe_name, strerror(errno));
-			return NULL;
+			break;
 		}
 		fifo_pipe = fdopen(fd, "r");
 		pollfds[0].fd = fd;
