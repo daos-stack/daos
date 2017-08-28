@@ -1557,76 +1557,127 @@ static daos_sort_ops_t fseq_sort_ops = {
 	.so_cmp_key	= fseq_sort_op_cmp_key,
 };
 
-/* Get targets by status and fseq */
-static int
-pool_map_tgt_get_internal(struct pool_map *map, unsigned int ver,
-			  uint32_t status, struct pool_target **tgt_pp,
-			  unsigned int *tgt_cnt)
-{
-	struct pool_target	*tgts;
-	struct pool_target	*tgts_find;
-	unsigned int		idx = 0;
-	int			cnt = 0;
-	int			i;
+struct find_tgts_param {
+	uint32_t	ftp_max_fseq;
+	uint32_t	ftp_min_fseq;
+	uint8_t		ftp_status;
+	unsigned long	ftp_chk_max_fseq:1,
+			ftp_chk_min_fseq:1,
+			ftp_chk_status:1;
+};
 
-	cnt = pool_map_find_target(map, PO_COMP_ID_ALL, &tgts);
-	for (i = 0; i < cnt; i++) {
-		if ((tgts[i].ta_comp.co_status & status) &&
-		    (tgts[i].ta_comp.co_fseq <= ver))
-			(*tgt_cnt)++;
+static bool
+matched_criteria(struct find_tgts_param *param,
+		 struct pool_target *tgt)
+{
+	if (param->ftp_chk_status &&
+	    !(param->ftp_status & tgt->ta_comp.co_status))
+		return false;
+
+	if (param->ftp_chk_max_fseq &&
+	    param->ftp_max_fseq < tgt->ta_comp.co_fseq)
+		return false;
+
+	if (param->ftp_chk_min_fseq &&
+	    param->ftp_min_fseq > tgt->ta_comp.co_fseq)
+		return false;
+
+	return true;
+}
+
+/**
+ * Find array of targets which match the query criteria. Caller is
+ * responsible for freeing the target array.
+ *
+ * \param map     [IN]	The pool map to search
+ * \param param   [IN]	Criteria to be checked
+ * \param sorter  [IN]	Sorter for the output targets array
+ * \param tgt_pp  [OUT]	The output target array
+ * \param tgt_cnt [OUT]	The size of target array
+ *
+ * \return	0 on success, negative values on errors.
+ */
+static int
+pool_map_find_tgts(struct pool_map *map, struct find_tgts_param *param,
+		   daos_sort_ops_t *sorter, struct pool_target **tgt_pp,
+		   unsigned int *tgt_cnt)
+{
+	struct pool_target *targets;
+	int i, total_cnt, idx = 0;
+
+	*tgt_pp = NULL;
+	*tgt_cnt = 0;
+
+	if (pool_map_empty(map)) {
+		D_ERROR("Uninitialized pool map\n");
+		return 0;
+	}
+
+	/* pool map won't be changed between the two scans */
+	total_cnt = pool_map_target_nr(map);
+	targets = pool_map_targets(map);
+rescan:
+	for (i = 0; i < total_cnt; i++) {
+		if (matched_criteria(param, &targets[i])) {
+			if (*tgt_pp == NULL)
+				(*tgt_cnt)++;
+			else
+				(*(tgt_pp))[idx++] = targets[i];
+		}
 	}
 
 	if (*tgt_cnt == 0)
 		return 0;
 
-	D_ALLOC(tgts_find, *tgt_cnt * sizeof(struct pool_target));
-	if (tgts_find == NULL)
-		return -DER_NOMEM;
-
-	for (i = 0; i < cnt; i++) {
-		if ((tgts[i].ta_comp.co_status & status) &&
-		    (tgts[i].ta_comp.co_fseq <= ver)) {
-			tgts_find[idx] = tgts[i];
-			idx++;
-		}
+	if (*tgt_pp == NULL) {
+		D_ALLOC(*tgt_pp, *tgt_cnt * sizeof(*targets));
+		if (*tgt_pp == NULL)
+			return -DER_NOMEM;
+		goto rescan;
+	} else if (sorter != NULL) {
+		daos_array_sort(*tgt_pp, *tgt_cnt, false, sorter);
 	}
 
-	*tgt_pp = tgts_find;
 	return 0;
 }
 
+/**
+ * Find all targets in DOWN state. Raft leader can use it drive target
+ * rebuild one by one.
+ */
+int
+pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+			unsigned int *tgt_cnt)
+{
+	struct find_tgts_param param;
+
+	memset(&param, 0, sizeof(param));
+	param.ftp_chk_status = 1;
+	param.ftp_status = PO_COMP_ST_DOWN;
+
+	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
+				  tgt_cnt);
+}
+
+/**
+ * Find all targets in DOWN or DOWN_OUT state, it would be used for spare
+ * target calculation.
+ */
 int
 pool_map_failed_tgts_get(struct pool_map *map, unsigned int ver,
-			 struct pool_target **tgt_pp, unsigned int *tgt_cnt)
+			 struct pool_target **tgt_pp,
+			 unsigned int *tgt_cnt)
 {
-	int rc;
-	int i;
+	struct find_tgts_param param;
 
-	*tgt_cnt = 0;
-	rc = pool_map_tgt_get_internal(map, ver,
-				       PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-				       tgt_pp, tgt_cnt);
-	if (rc || *tgt_cnt == 0) {
-		D_DEBUG(DB_TRACE, "Get failed target rc %d cnt %d\n", rc,
-			*tgt_cnt);
-		return rc;
-	}
+	memset(&param, 0, sizeof(param));
+	param.ftp_chk_status = 1;
+	param.ftp_status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT;
+	param.ftp_chk_max_fseq = 1;
+	param.ftp_max_fseq = ver;
 
-	/* Sort the array by fseq */
-	rc = daos_array_sort(*tgt_pp, *tgt_cnt, true, &fseq_sort_ops);
-	if (rc != 0) {
-		D_FREE(*tgt_pp, *tgt_cnt * sizeof(struct pool_target));
-		*tgt_pp = NULL;
-		return rc;
-	}
-
-	for (i = 0; i < *tgt_cnt; i++)
-		D_DEBUG(DB_PL, "i %d f_seq %d rank %d status %d\n",
-			i, (*tgt_pp)[i].ta_comp.co_fseq,
-			(*tgt_pp)[i].ta_comp.co_rank,
-			(*tgt_pp)[i].ta_comp.co_status);
-
-	return rc;
+	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
+				  tgt_cnt);
 }
 
 static void

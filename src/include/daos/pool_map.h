@@ -163,7 +163,8 @@ struct pool_target *pool_map_find_target_by_rank(struct pool_map *map,
 						 uint32_t rank);
 int pool_map_find_domain(struct pool_map *map, pool_comp_type_t type,
 			 uint32_t id, struct pool_domain **domain_pp);
-
+int pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+			    unsigned int *tgt_cnt);
 int pool_map_failed_tgts_get(struct pool_map *map, unsigned int ver,
 			     struct pool_target **tgt_pp,
 			     unsigned int *tgt_cnt);
