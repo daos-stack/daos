@@ -10,3 +10,4 @@ test_list:
   - "scripts/cart_self_test.yml"
   - "scripts/cart_test_barrier.yml"
   - "scripts/cart_test_singleton.yml"
+  - "scripts/cart_rpc_test.yml"

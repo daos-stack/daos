@@ -47,6 +47,7 @@ TEST_GROUP_SRC = 'test_group.c'
 COMMON_SRC = 'fake_events.c'
 IV_TESTS = ['iv_client.c', 'iv_server.c']
 TEST_RPC_ERR_SRC = 'test_rpc_error.c'
+CRT_RPC_TESTS = ['rpc_test_cli.c', 'rpc_test_srv.c', 'rpc_test_srv2.c']
 
 def scons():
     """scons function"""
@@ -66,6 +67,10 @@ def scons():
         tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
 
     for test in IV_TESTS:
+        target = tenv.Program(test)
+        tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
+
+    for test in CRT_RPC_TESTS:
         target = tenv.Program(test)
         tenv.Install(os.path.join("$PREFIX", 'TESTING', 'tests'), target)
 
