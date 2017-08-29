@@ -188,17 +188,32 @@ rdb_raft_cb_persist_vote(raft_server_t *raft, void *arg, int vote)
 }
 
 static int
-rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, int term)
+rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, int term, int vote)
 {
 	struct rdb     *db = arg;
 	daos_iov_t	value;
-	int		rc;
+	volatile int	rc;
 
-	daos_iov_set(&value, &term, sizeof(term));
-	rc = dbtree_update(db->d_attr, &rdb_attr_term, &value);
-	if (rc != 0)
-		D_ERROR(DF_DB": failed to persist term %d: %d\n", DP_DB(db),
-			term, rc);
+	TX_BEGIN(db->d_pmem) {
+		/* Update rdb_attr_term. */
+		daos_iov_set(&value, &term, sizeof(term));
+		rc = dbtree_update(db->d_attr, &rdb_attr_term, &value);
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to update term %d: %d\n",
+				DP_DB(db), term, rc);
+			pmemobj_tx_abort(rc);
+		}
+		/* Update rdb_attr_vote. */
+		daos_iov_set(&value, &vote, sizeof(vote));
+		rc = dbtree_update(db->d_attr, &rdb_attr_vote, &value);
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to update vote for new term %d: "
+				"%d\n", DP_DB(db), term, rc);
+			pmemobj_tx_abort(rc);
+		}
+	} TX_ONABORT {
+		rc = umem_tx_errno(rc);
+	} TX_END
 	return rc;
 }
 
