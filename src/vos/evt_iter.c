@@ -76,7 +76,7 @@ evt_iter_finish(daos_handle_t ih)
 {
 	struct evt_iterator	*iter;
 	struct evt_context	*tcx;
-	int			 rc;
+	int			 rc = 0;
 
 	tcx = evt_hdl2tcx(ih);
 	if (tcx == NULL)
@@ -88,7 +88,7 @@ evt_iter_finish(daos_handle_t ih)
 	evt_tcx_decref(tcx); /* -1 for prepare */
 	D_EXIT;
  out:
-	 return rc;
+	return rc;
 }
 
 int

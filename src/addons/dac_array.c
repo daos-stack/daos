@@ -1191,7 +1191,7 @@ dac_array_get_size(tse_task_t *task)
 	daos_handle_t		oh;
 	struct dac_array	*array;
 	daos_obj_list_dkey_t	enum_args;
-	struct get_size_props	*get_size_props;
+	struct get_size_props	*get_size_props = NULL;
 	tse_task_t		*enum_task;
 	int			rc;
 
@@ -1460,7 +1460,7 @@ dac_array_set_size(tse_task_t *task)
 	daos_size_t		num_records;
 	daos_off_t		record_i;
 	daos_obj_list_dkey_t	enum_args;
-	struct set_size_props	*set_size_props;
+	struct set_size_props	*set_size_props = NULL;
 	tse_task_t		*enum_task;
 	int			rc, ret;
 

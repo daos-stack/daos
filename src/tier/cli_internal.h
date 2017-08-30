@@ -25,7 +25,7 @@
  */
 
 
-#ifndef __DCT_ITERNAL_H__
+#ifndef __DCT_INTERNAL_H__
 #define __DCT_INTERNAL_H__
 #include <daos_tier.h>
 

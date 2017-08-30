@@ -572,6 +572,7 @@ evt_node_is_full(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid)
 	return nd->tn_nr == tcx->tc_order;
 }
 
+#if 0
 static inline void
 evt_node_set(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	     unsigned int bits)
@@ -580,6 +581,7 @@ evt_node_set(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 
 	nd->tn_flags |= bits;
 }
+#endif
 
 static inline void
 evt_node_unset(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
@@ -766,6 +768,7 @@ evt_node_destroy(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid,
 	evt_node_free(tcx, nd_mmid);
 }
 
+#if 0
 static inline int
 evt_node_tx_add(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid)
 {
@@ -777,6 +780,7 @@ evt_node_tx_add(struct evt_context *tcx, TMMID(struct evt_node) nd_mmid)
 			       evt_node_size(tcx, nd->tn_flags));
 	return rc;
 }
+#endif
 
 /** Return the MBR of a node */
 static struct evt_rect *

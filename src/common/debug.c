@@ -229,7 +229,7 @@ static struct daos_debug_priority debug_prio_dict[] = {
 	},
 	{
 		.dd_name	= "crit",
-		.dd_name	= "critical",
+		.dd_lname	= "critical",
 		.dd_prio	= DP_CRIT,
 	},
 	{

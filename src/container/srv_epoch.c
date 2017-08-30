@@ -144,7 +144,7 @@ ec_find_lowest(struct rdb_tx *tx, struct cont *cont, enum ec_type type,
 	int		rc;
 
 	daos_iov_set(&key, epoch, sizeof(*epoch));
-	rc = rdb_tx_fetch(tx, kvs, BTR_PROBE_FIRST, NULL /* key_in */, &key,
+	rc = rdb_tx_fetch(tx, kvs, RDB_PROBE_FIRST, NULL /* key_in */, &key,
 			  NULL /* value */);
 	if (rc == -DER_NONEXIST)
 		D_DEBUG(DF_DSMS, DF_CONT": %s KVS empty: %d\n",

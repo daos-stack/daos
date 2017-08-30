@@ -248,6 +248,7 @@ pc_inprog_destroy(struct pc_inprogress *pc_inprog)
 	D_FREE_PTR(pc_inprog);
 }
 
+#if 0
 /*
  * Compare the two pool_create input parameters.
  * Return true if all parameters are same, false otherwise.
@@ -273,6 +274,7 @@ pc_input_identical(struct mgmt_pool_create_in *pc_in1,
 
 	return true;
 }
+#endif
 
 static void
 pc_tgt_destroy_cb(const struct crt_cb_info *cb_info)

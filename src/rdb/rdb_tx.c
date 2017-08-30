@@ -729,7 +729,7 @@ rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs, enum rdb_probe_opc opc,
 	rc = rdb_tx_query_pre(tx, kvs, &tree);
 	if (rc != 0)
 		return rc;
-	rc = dbtree_fetch(tree->de_hdl, opc, (daos_iov_t *)key_in, key_out,
+	rc = dbtree_fetch(tree->de_hdl, (dbtree_probe_opc_t)opc, (daos_iov_t *)key_in, key_out,
 			  value);
 	rdb_tx_query_post(tx, tree);
 	return rc;

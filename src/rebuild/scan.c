@@ -249,7 +249,7 @@ rebuild_tgt_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	struct rebuild_root *root;
 	struct rebuild_scan_arg *arg = data;
 	unsigned int tgt_id;
-	unsigned int rc;
+	int rc;
 
 	tgt_id = *((unsigned int *)key_iov->iov_buf);
 	root = val_iov->iov_buf;

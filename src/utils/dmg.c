@@ -424,8 +424,7 @@ kill_hdlr(int argc, char *argv[])
 		}
 	}
 
-
-	if (rank < 0) {
+	if (rank == (daos_rank_t)-1) {
 		fprintf(stderr, "valid target rank required\n");
 		return 2;
 	}

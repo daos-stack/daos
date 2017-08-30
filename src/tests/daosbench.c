@@ -1241,7 +1241,7 @@ kv_dkey_enumerate(struct test *test)
 			for (i = 0; i < number; i++) {
 				char key[DKEY_SIZE];
 
-				snprintf(key, kds[i].kd_key_len + 1, ptr);
+				snprintf(key, kds[i].kd_key_len + 1, "%s", ptr);
 				DBENCH_INFO("i %d key %s len %d", i, key,
 						    (int)kds[i].kd_key_len);
 					if (atoi(key) >= key_start &&

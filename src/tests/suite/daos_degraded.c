@@ -217,7 +217,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 			continue;
 
 		for (ptr = buf, i = 0; i < number; i++) {
-			snprintf(dkey_enum, kds[i].kd_key_len + 1, ptr);
+			snprintf(dkey_enum, kds[i].kd_key_len + 1, "%s", ptr);
 			D_DEBUG(DF_MISC, "i %d key %s len %d\n", i, dkey_enum,
 				(int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;

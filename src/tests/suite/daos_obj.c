@@ -694,7 +694,7 @@ enumerate_simple(void **state)
 
 		key_nr += number;
 		for (ptr = buf, i = 0; i < number; i++) {
-			snprintf(key, kds[i].kd_key_len + 1, ptr);
+			snprintf(key, kds[i].kd_key_len + 1, "%s", ptr);
 			print_message("i %d key %s len %d\n", i, key,
 				      (int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
@@ -721,7 +721,7 @@ enumerate_simple(void **state)
 
 		key_nr += number;
 		for (ptr = buf, i = 0; i < number; i++) {
-			snprintf(key, kds[i].kd_key_len + 1, ptr);
+			snprintf(key, kds[i].kd_key_len + 1, "%s", ptr);
 			print_message("i %d key %s len %d\n", i, key,
 				     (int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;

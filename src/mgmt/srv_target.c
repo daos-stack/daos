@@ -185,7 +185,7 @@ path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx,
 	if (fname != NULL || idx != NULL)
 		off += sprintf(*fpath + off, "/");
 	if (fname)
-		off += sprintf(*fpath + off, fname);
+		off += sprintf(*fpath + off, "%s", fname);
 	if (idx)
 		sprintf(*fpath + off, "%d", *idx);
 
