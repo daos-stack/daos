@@ -343,7 +343,7 @@ class CommonTestSuite(unittest.TestCase):
                      log_path + "/callgrind.%q{PMIX_ID}.out"
 
         if os.getenv('TR_USE_URI', ""):
-            dvmfile = " --hnp file:%s " % os.getenv('TR_USE_URI')
+            dvmfile = " --ompi-server file:%s " % os.getenv('TR_USE_URI')
         else:
             dvmfile = " "
         if getpass.getuser() == "root":

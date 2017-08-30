@@ -83,7 +83,7 @@ class TestSingleton(commontestsuite.CommonTestSuite):
     def setUp(self):
         """ setup for test """
         self.get_test_info()
-        self.tempdir = tempfile.mkdtemp()
+        self.tempdir = tempfile.mkdtemp(dir=os.getenv("CRT_TESTLOG"))
         self.log_mask = os.getenv("CRT_LOG_MASK", "INFO")
         self.crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
         self.ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
