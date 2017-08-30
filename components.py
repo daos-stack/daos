@@ -203,7 +203,8 @@ REQS.define('pmix',
             headers=['pmix.h'],
             requires=['hwloc', 'event'])
 
-RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi')
+RETRIEVER = GitRepoRetriever('https://github.com/open-mpi/ompi',
+                             True, branch='v3.0.x')
 REQS.define('ompi',
             retriever=RETRIEVER,
             commands=['patch -N -p1 < $PATCH_PREFIX/ompi_version.patch; '
