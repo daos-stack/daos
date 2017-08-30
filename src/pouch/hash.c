@@ -783,7 +783,11 @@ chash_table_destroy_inplace(struct chash_table *htable, bool force)
 int
 chash_table_destroy(struct chash_table *htable, bool force)
 {
-	chash_table_destroy_inplace(htable, force);
+	int rc = chash_table_destroy_inplace(htable, force);
+
+	if (rc != 0)
+		return rc;
+
 	C_FREE_PTR(htable);
 	return 0;
 }
@@ -959,7 +963,7 @@ crt_hhash_create(unsigned int bits, struct crt_hhash **htable_pp)
 	return 0;
  failed:
 	C_FREE_PTR(hhtab);
-	return -CER_NOMEM;
+	return rc;
 }
 
 void

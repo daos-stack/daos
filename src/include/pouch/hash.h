@@ -99,7 +99,7 @@ typedef struct {
 	/**
 	 * Optional, release refcount on the record @rlink
 	 *
-	 * If this function is provided, it is called while deleting an record
+	 * If this function is provided, it is called while deleting a record
 	 * from the hash table.
 	 *
 	 * If hop_free() is also provided, this function can return true when

@@ -169,7 +169,7 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 		rc = chash_table_create(DHASH_FT_NOLOCK, CRT_LOOKUP_CACHE_BITS,
 					NULL, &lookup_table_ops, &htables[i]);
 		if (rc != 0) {
-			C_ERROR("chash_table_create_inplace failed, rc: %d.\n",
+			C_ERROR("chash_table_create failed, rc: %d.\n",
 				rc);
 			C_GOTO(out, rc);
 		}
