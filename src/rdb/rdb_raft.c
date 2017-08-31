@@ -23,10 +23,12 @@
 /**
  * rdb: Raft Integration
  *
- * Each replica employs two daemon ULTs:
+ * Each replica employs four daemon ULTs:
  *
  *   ~ rdb_timerd(): Call raft_periodic() periodically.
  *   ~ rdb_applyd(): Apply committed entries.
+ *   ~ rdb_recvd(): Process RPC replies received.
+ *   ~ rdb_callbackd(): Invoke user dc_step_{up,down} callbacks.
  *
  * rdb maintains its own last applied index persistently, instead of using
  * raft's volatile version.
@@ -447,23 +449,11 @@ rdb_callbackd(void *arg)
 	D_DEBUG(DB_ANY, DF_DB": callbackd stopping\n", DP_DB(db));
 }
 
-/* raft state variables that rdb watches for changes */
-struct rdb_raft_state {
-	bool		drs_leader;
-	uint64_t	drs_term;
-	uint64_t	drs_committed;
-};
-
-static void rdb_raft_save_state(struct rdb *db, struct rdb_raft_state *state);
-static void rdb_raft_check_state(struct rdb *db,
-				 const struct rdb_raft_state *state);
-
 static void
 rdb_raft_step_up(struct rdb *db, uint64_t term)
 {
 	msg_entry_t		mentry;
 	msg_entry_response_t	mresponse;
-	struct rdb_raft_state	state;
 	int			rc;
 
 	D_WARN(DF_DB": became leader of term "DF_U64"\n", DP_DB(db), term);
@@ -473,16 +463,9 @@ rdb_raft_step_up(struct rdb *db, uint64_t term)
 	mentry.type = RAFT_LOGTYPE_NORMAL;
 	mentry.data.buf = NULL;
 	mentry.data.len = 0;
-	rdb_raft_save_state(db, &state);
 	rc = raft_recv_entry(db->d_raft, &mentry, &mresponse);
 	/* TODO: Handle errors. */
 	D_ASSERTF(rc == 0, "%d\n", rc);
-	/*
-	 * Since raft_recv_entry() doesn't change the leader state, and this
-	 * replica is already a leader, this rdb_raft_check_state() call won't
-	 * trigger a recursive rdb_raft_step_up() call.
-	 */
-	rdb_raft_check_state(db, &state);
 	db->d_debut = mresponse.idx;
 	rdb_raft_queue_event(db, RDB_RAFT_STEP_UP, term);
 }
@@ -495,6 +478,13 @@ rdb_raft_step_down(struct rdb *db, uint64_t term)
 	db->d_debut = 0;
 	rdb_raft_queue_event(db, RDB_RAFT_STEP_DOWN, term);
 }
+
+/* Raft state variables that rdb watches for changes */
+struct rdb_raft_state {
+	bool		drs_leader;
+	uint64_t	drs_term;
+	uint64_t	drs_committed;
+};
 
 /* Save the variables into "state". */
 static void
@@ -513,8 +503,8 @@ static void
 rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state)
 {
 	bool		leader = raft_is_leader(db->d_raft);
-	uint64_t	term =  raft_get_current_term(db->d_raft);
-	uint64_t	committed = raft_get_commit_idx(db->d_raft);
+	uint64_t	term = raft_get_current_term(db->d_raft);
+	uint64_t	committed;
 
 	/* Check the leader state. */
 	D_ASSERTF(term >= state->drs_term, DF_U64" >= "DF_U64"\n", term,
@@ -524,7 +514,12 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state)
 	else if (state->drs_leader && !leader)
 		rdb_raft_step_down(db, state->drs_term);
 
-	/* Check the commit state. */
+	/*
+	 * Check the commit state. We query the commit index here instead of at
+	 * the beginning of this function, as the rdb_raft_step_up() call above
+	 * may have increased it.
+	 */
+	committed = raft_get_commit_idx(db->d_raft);
 	D_ASSERTF(committed >= state->drs_committed, DF_U64" >= "DF_U64"\n",
 		  committed, state->drs_committed);
 	if (committed != state->drs_committed) {
