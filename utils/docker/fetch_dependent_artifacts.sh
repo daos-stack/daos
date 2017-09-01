@@ -174,10 +174,16 @@ function fetch_job_artifacts {
             if [ -n "${test_hash}" ] && [ "${test_hash}" != "latest" ]; then
               art_hash=`cat ${DEPEND_INFO}/${git_file}`
               if [ "${art_hash}" != "${test_hash}" ]; then
-                printf "###\n%s commit should be '%s' was '%s'\n###\n" \
-                  ${dest_name} ${test_hash} ${art_hash}
-                printf "${dest_name} ${test_hash} not found\n" >> \
-                  commit_not_found
+                # mpi4py is using the ompi commit hash for wanted commit
+                # Which will not match any saved mpi4py commit hash.
+                # mpi4py is obtained by the web-retriever, which does not
+                # use a commit hash.
+                if [ "${dest_name}" != "mpi4py" ]; then
+                  printf "###\n%s commit should be '%s' was '%s'\n###\n" \
+                    ${dest_name} ${test_hash} ${art_hash}
+                  printf "${dest_name} ${test_hash} not found\n" >> \
+                    commit_not_found
+                fi
               fi
             fi
           fi
@@ -282,21 +288,21 @@ for test_name in ${DEPEND_COMPS}; do
 
   artifact_no=""
   if [ ! -d "${WORK_TARGET}/${test_name}" ]; then
-    # Look first for $test_name-$job_suffix
-    test_job_name="${test_name}-${job_suffix}"
-    artifact_base="${CORAL_ARTIFACTS}/${test_job_name}"
-    artifact_test_base="${artifact_base}/${test_distro}"
-    artifact_test=${artifact_test_base}/${wanted_commit}
-    if [ ! -d ${artifact_test} ]; then
-      # Then look for the build under master
-      test_job_name="${test_name}-master"
+    # Look first for $test_name-$job_suffix, then -release, -master
+    for x_suffix in ${job_suffix} release master; do
+      test_job_name="${test_name}-${x_suffix}"
       artifact_base="${CORAL_ARTIFACTS}/${test_job_name}"
       artifact_test_base="${artifact_base}/${test_distro}"
       artifact_test=${artifact_test_base}/${wanted_commit}
-      if [ ! -d ${artifact_test} ]; then
-        printf "${test_name} ${wanted_commit} not found\n" >> commit_not_found
-        artifact_test="${artifact_test_base}/latest"
+      if [ -d ${artifact_test} ]; then
+        break
       fi
+    done
+    if [ ! -d ${artifact_test} ]; then
+      if [ "${test_name}" != "mpi4py" ]; then
+        printf "${test_name} ${wanted_commit} not found\n" >> commit_not_found
+      fi
+      artifact_test="${artifact_test_base}/latest"
     fi
     artifact_dir=`readlink -f ${artifact_test}`
     artifact_no="${artifact_dir##*/}"

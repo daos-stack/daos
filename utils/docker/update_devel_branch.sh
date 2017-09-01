@@ -102,10 +102,9 @@ fi
 my_path="`dirname \"${0}\"`"
 my_path_back1="`dirname \"${my_path}\"`"
 my_path_back2="`dirname \"${my_path_back1}\"`"
+my_path_abs="`readlink -f \"${my_path_back2}\"`"
 
 : ${SCONS_LOCAL:="${my_path_back2}"}
-
-
 
 # For the component repos, there should be a <name>-<name>_<suffix> Jenkins job
 # that has as artifacts the git commits wanted by the build.config file.
@@ -118,7 +117,8 @@ repo_base='ssh://review.whamcloud.com:29418'
 component_script="${PWD}/component_info.sh"
 
 pushd ${SCONS_LOCAL}
-  scons -f ${my_path}/SConstruct_info --output-script=${component_script}
+  scons -f ${my_path_abs}/utils/docker/SConstruct_info \
+    --output-script=${component_script}
 popd
 
 . ${component_script}
@@ -130,12 +130,16 @@ popd
 cart_depend_jobs=""
 cart_d_depend_jobs=""
 for rq in ${cart_requires_full}; do
+  cart_depend_jobs="${cart_depend_jobs} ${rq}-release"
+  cart_depend_jobs="${cart_depend_jobs} ${rq}-master"
   cart_depend_jobs="${cart_depend_jobs} ${rq}-cart_${bsx}"
   cart_d_depend_jobs="${cart_d_depend_jobs} ${rq}-daos_${bsx}"
 done
 
 iof_depend_jobs=""
 for rq in ${iof_requires}; do
+  iof_depend_jobs="${iof_depend_jobs} ${rq}-release"
+  iof_depend_jobs="${iof_depend_jobs} ${rq}-master"
   iof_depend_jobs="${iof_depend_jobs} ${rq}-iof_${bsx}"
 done
 iof_depend_jobs="${iof_depend_jobs} cart-cart_${bsx} ${cart_depend_jobs}"
@@ -148,6 +152,8 @@ cppr_depend_jobs="${cppr_depend_jobs} iof-iof_${bsx} ${iof_depend_jobs}"
 
 daos_depend_jobs=""
 for rq in ${daos_requires}; do
+  daos_depend_jobs="${daos_depend_jobs} ${rq}-release"
+  daos_depend_jobs="${daos_depend_jobs} ${rq}-master"
   daos_depend_jobs="${daos_depend_jobs} ${rq}-daos_${bsx}"
 done
 daos_depend_jobs="${daos_depend_jobs} cart-cart_${bsx} ${cart_d_depend_jobs}"
@@ -221,7 +227,8 @@ pushd ${TARGET}
   git clean -df
 popd
 
-. ${my_path}/fetch_dependent_artifacts.sh
+. ${my_path_abs}/utils/docker/fetch_dependent_artifacts.sh
+
 
 print_err() { printf "%s\n" "$*" 1>&2; }
 
@@ -280,6 +287,7 @@ for i in "${!std_repo_name[@]}"; do
               git push -u origin ${branch_name}
             else
               echo "would git push -u origin ${branch_name} to ${repo}"
+              git branch -d ${branch_name} || true
             fi
           fi
         else
@@ -288,6 +296,7 @@ for i in "${!std_repo_name[@]}"; do
             git push -u origin ${branch_name}
           else
             echo "would git push -u origin ${branch_name}"
+            git branch -d ${branch_name} || true
           fi
         fi
         set -e
