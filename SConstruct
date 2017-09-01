@@ -116,7 +116,7 @@ def scons():
 
     # Compiler options
     env.Append(CCFLAGS=['-g3', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
-    env.Append(CCFLAGS=['-O2'])
+    env.Append(CCFLAGS=['-O2', '-pthread'])
 
     # generate targets in specific build dir to avoid polluting the source code
     arch_dir = 'build/%s' % platform
