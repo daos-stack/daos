@@ -37,6 +37,8 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Build libpouch"""
 
+SRC = ['debug.c', 'clog.c', 'hash.c', 'misc.c', 'path.c', 'heap.c']
+
 def scons():
     """Scons function"""
 
@@ -44,13 +46,11 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-
     denv = env.Clone()
 
     prereqs.require(denv, 'uuid')
 
-    src = ['debug.c', 'clog.c', 'hash.c', 'misc.c', 'path.c', 'heap.c']
-    pouch_targets = denv.SharedObject(src)
+    pouch_targets = denv.SharedObject(SRC)
     common = denv.SharedLibrary('libpouch', pouch_targets)
     denv.Install('$PREFIX/lib/', common)
 

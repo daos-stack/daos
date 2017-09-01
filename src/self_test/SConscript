@@ -46,7 +46,6 @@ def scons():
     Import('env', 'prereqs')
 
     tenv = env.Clone()
-    tenv.Append(CPPPATH=['#/src/self_test'])
     tenv.AppendUnique(CPPPATH=['#/src/cart'])
 
     libraries = ['pthread', 'm', 'cart', 'pouch']

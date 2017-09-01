@@ -47,7 +47,7 @@ def scons():
 
     libraries = ['pouch']
 
-    denv.Append(CPPPATH=['#/src/cart'])
+    denv.AppendUnique(CPPPATH=['#/src/cart'])
     denv.AppendUnique(LIBS=libraries)
     prereqs.require(denv, 'mercury', 'pmix', 'argobots')
     denv.AppendUnique(RPATH=['$PREFIX/lib'])

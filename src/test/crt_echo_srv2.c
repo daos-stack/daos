@@ -39,7 +39,7 @@
  * This is a simple example of crt_echo rpc server based on crt APIs.
  */
 
-#include <crt_echo_srv.h>
+#include "crt_echo_srv.h"
 
 static int run_echo_srver_tier2(void)
 {

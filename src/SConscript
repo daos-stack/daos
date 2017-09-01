@@ -47,8 +47,7 @@ def scons():
 
     Import('env prereqs')
 
-    # Generic CaRT includes
-    env.Append(CPPPATH=['$PREFIX/include'])
+    env.Append(CPPPATH=['#src/include'])
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
                     os.path.join('include', 'cart', header))
