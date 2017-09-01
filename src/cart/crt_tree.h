@@ -43,8 +43,6 @@
 #ifndef __CRT_TREE_H__
 #define __CRT_TREE_H__
 
-#include <crt_group.h>
-
 /*
  * Query specific tree topo's number of children, child rank number, or parent
  * rank number.

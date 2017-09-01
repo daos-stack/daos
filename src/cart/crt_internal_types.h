@@ -52,8 +52,6 @@
 #include <pouch/hash.h>
 #include <pouch/heap.h>
 
-#include <crt_hg.h>
-
 struct crt_hg_gdata;
 struct crt_grp_gdata;
 

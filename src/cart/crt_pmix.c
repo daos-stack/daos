@@ -40,7 +40,7 @@
  */
 #define C_LOGFAC	CD_FAC(pmix)
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 int
 crt_pmix_init(void)

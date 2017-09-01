@@ -50,8 +50,8 @@
  **/
 #define C_LOGFAC	CD_FAC(corpc)
 
-#include <crt_internal.h>
-#include <cart/iv.h>
+#include "crt_internal.h"
+#include "cart/iv.h"
 
 static CRT_LIST_HEAD(ns_list);
 static uint32_t ns_id;

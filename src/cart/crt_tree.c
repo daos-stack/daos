@@ -41,7 +41,7 @@
  */
 #define C_LOGFAC	CD_FAC(grp)
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 static int
 crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,

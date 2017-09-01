@@ -41,7 +41,7 @@
  */
 #define C_LOGFAC	CD_FAC(grp)
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 static uint32_t
 kary_get_children(uint32_t *children, uint32_t self, uint32_t size,

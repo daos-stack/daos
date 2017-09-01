@@ -42,7 +42,7 @@
 
 #include <semaphore.h>
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 struct crt_lm_evict_in {
 	crt_rank_t		clei_rank;

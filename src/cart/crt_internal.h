@@ -67,14 +67,14 @@
 #include <pouch/common.h>
 #include <cart/api.h>
 
-#include <crt_internal_types.h>
-#include <crt_internal_fns.h>
-#include <crt_rpc.h>
-#include <crt_group.h>
-#include <crt_tree.h>
-#include <crt_self_test.h>
+#include "crt_hg.h"
+#include "crt_internal_types.h"
+#include "crt_internal_fns.h"
+#include "crt_rpc.h"
+#include "crt_group.h"
+#include "crt_tree.h"
+#include "crt_self_test.h"
 
-#include <crt_hg.h>
-#include <crt_pmix.h>
+#include "crt_pmix.h"
 
 #endif /* __CRT_INTERNAL_H__ */

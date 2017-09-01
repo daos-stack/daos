@@ -39,8 +39,7 @@
 #ifndef __CRT_SELF_TEST_H__
 #define __CRT_SELF_TEST_H__
 
-#include <cart/api.h>
-#include <crt_internal.h>
+
 
 /*
  * List of supported self-test strategies:

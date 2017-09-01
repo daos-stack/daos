@@ -41,7 +41,7 @@
  */
 #define C_LOGFAC	CD_FAC(grp)
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 int
 crt_flat_get_children_cnt(uint32_t grp_size, uint32_t branch_ratio,

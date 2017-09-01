@@ -40,7 +40,7 @@
  */
 #define C_LOGFAC	CD_FAC(grp)
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 void
 crt_barrier_info_init(struct crt_grp_priv *grp_priv)

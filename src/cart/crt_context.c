@@ -41,7 +41,7 @@
 #define C_LOGFAC	CD_FAC(rpc)
 
 #include <abt.h>
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 static void crt_epi_destroy(struct crt_ep_inflight *epi);
 

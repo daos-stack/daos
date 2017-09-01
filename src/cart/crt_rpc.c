@@ -39,7 +39,7 @@
  */
 #define C_LOGFAC	CD_FAC(rpc)
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 #include <abt.h>
 

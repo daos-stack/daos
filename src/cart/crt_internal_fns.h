@@ -43,8 +43,6 @@
 #ifndef __CRT_INTERNAL_FNS_H__
 #define __CRT_INTERNAL_FNS_H__
 
-#include <crt_internal_types.h>
-
 /** crt_init.c */
 bool crt_initialized(void);
 

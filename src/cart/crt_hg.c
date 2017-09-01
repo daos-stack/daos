@@ -40,7 +40,7 @@
  */
 #define C_LOGFAC	CD_FAC(hg)
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 #include <abt.h>
 
 /**

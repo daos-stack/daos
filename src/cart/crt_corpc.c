@@ -39,7 +39,7 @@
  */
 #define C_LOGFAC	CD_FAC(corpc)
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 static inline int
 crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,

@@ -40,7 +40,7 @@
  * APIs/handling.
  */
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 struct crt_gdata crt_gdata;
 static pthread_once_t gdata_init_once = PTHREAD_ONCE_INIT;

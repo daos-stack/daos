@@ -40,7 +40,7 @@
  */
 #define C_LOGFAC	CD_FAC(grp)
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 #include <sys/stat.h>
 
 /* global CRT group list */

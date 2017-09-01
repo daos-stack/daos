@@ -40,7 +40,7 @@
  */
 #define C_LOGFAC	CD_FAC(bulk)
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 /** Check the validation of the crt_sg_list_t parameter */
 static inline bool

@@ -44,7 +44,7 @@
 #include <string.h>
 #include <math.h>
 
-#include <crt_internal.h>
+#include "crt_internal.h"
 
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")
