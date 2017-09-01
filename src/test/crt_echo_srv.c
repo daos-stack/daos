@@ -41,7 +41,7 @@
 
 #include "crt_echo_srv.h"
 
-inline void
+static inline void
 echo_sem_timedwait(sem_t *sem, int sec, int line_number)
 {
 	struct timespec			deadline;

@@ -92,7 +92,7 @@ struct crt_req_format CQF_ECHO_PING_CHECK =
 	DEFINE_CRT_REQ_FMT("ECHO_PING_CHECK", echo_ping_checkin,
 			   echo_ping_checkout);
 
-inline void
+static inline void
 test_sem_timedwait(sem_t *sem, int sec, int line_number)
 {
 	struct timespec			deadline;
