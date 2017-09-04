@@ -108,6 +108,79 @@ out:
 	return rc;
 }
 
+#define CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self)	       \
+	do {								       \
+		C_ASSERT(grp_priv != NULL && grp_priv->gp_membs != NULL);      \
+		C_ASSERT(root < grp_priv->gp_size && self < grp_priv->gp_size);\
+		C_ASSERT(crt_tree_topo_valid(tree_topo));		       \
+		tree_type = crt_tree_type(tree_topo);			       \
+		tree_ratio = crt_tree_ratio(tree_topo);			       \
+		C_ASSERT(tree_type >= CRT_TREE_MIN &&			       \
+			 tree_type <= CRT_TREE_MAX);			       \
+		C_ASSERT(tree_type == CRT_TREE_FLAT ||			       \
+			 (tree_ratio >= CRT_TREE_MIN_RATIO &&		       \
+			  tree_ratio <= CRT_TREE_MAX_RATIO));		       \
+	} while (0)
+
+/*
+ * query number of children.
+ *
+ * rank number of grp_priv->gp_membs and exclude_ranks are primary rank.
+ * grp_root and grp_self are logical rank number within the group.
+ */
+int
+crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
+		       crt_rank_list_t *exclude_ranks, int tree_topo,
+		       crt_rank_t root, crt_rank_t self, uint32_t *nchildren)
+{
+	crt_rank_list_t		*grp_rank_list = NULL;
+	crt_rank_t		 grp_root, grp_self;
+	bool			 allocated = false;
+	uint32_t		 tree_type, tree_ratio;
+	uint32_t		 grp_size;
+	struct crt_topo_ops	*tops;
+	int			 rc = 0;
+
+	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
+	if (nchildren == NULL) {
+		C_ERROR("invalid parameter of NULL nchildren.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+
+	/*
+	 * grp_rank_list is the target group (filtered out the excluded ranks)
+	 * for building the tree, rank number in it is for primary group.
+	 */
+	rc = crt_get_filtered_grp_rank_list(grp_priv, grp_ver, exclude_ranks,
+					    root, self, &grp_size, &grp_root,
+					    &grp_self, &grp_rank_list,
+					    &allocated);
+	if (rc != 0) {
+		C_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
+			"self %d) failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
+			root, self, rc);
+		C_GOTO(out, rc);
+	}
+	if (grp_rank_list == NULL) {
+		C_ERROR("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
+			grp_priv->gp_pub.cg_grpid);
+		C_GOTO(out, rc = -CER_INVAL);
+	}
+
+	tops = crt_tops[tree_type];
+	rc = tops->to_get_children_cnt(grp_size, tree_ratio, grp_root, grp_self,
+				       nchildren);
+	if (rc != 0)
+		C_ERROR("to_get_children_cnt (group %s, root %d, self %d) "
+			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
+			root, self, rc);
+
+out:
+	if (allocated)
+		crt_rank_list_free(grp_rank_list);
+	return rc;
+}
+
 /*
  * query children rank list (rank number in primary group).
  *
@@ -130,15 +203,11 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	struct crt_topo_ops	*tops;
 	int			 i, rc = 0;
 
-	C_ASSERT(grp_priv != NULL && grp_priv->gp_membs != NULL);
-	C_ASSERT(root < grp_priv->gp_size && self < grp_priv->gp_size);
-	C_ASSERT(crt_tree_topo_valid(tree_topo));
-	tree_type = crt_tree_type(tree_topo);
-	tree_ratio = crt_tree_ratio(tree_topo);
-	C_ASSERT(tree_type >= CRT_TREE_MIN && tree_type <= CRT_TREE_MAX);
-	C_ASSERT(tree_type == CRT_TREE_FLAT ||
-		 (tree_ratio >= CRT_TREE_MIN_RATIO &&
-		  tree_ratio <= CRT_TREE_MAX_RATIO));
+	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
+	if (children_rank_list == NULL) {
+		C_ERROR("invalid parameter of NULL children_rank_list.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
 
 	/*
 	 * grp_rank_list is the target group (filtered out the excluded ranks)
@@ -218,16 +287,11 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	struct crt_topo_ops	*tops;
 	int			 rc = 0;
 
-	C_ASSERT(grp_priv != NULL && grp_priv->gp_membs != NULL);
-	C_ASSERT(root < grp_priv->gp_size && self < grp_priv->gp_size);
-	C_ASSERT(crt_tree_topo_valid(tree_topo));
-	C_ASSERT(parent_rank != NULL);
-	tree_type = crt_tree_type(tree_topo);
-	tree_ratio = crt_tree_ratio(tree_topo);
-	C_ASSERT(tree_type >= CRT_TREE_MIN && tree_type <= CRT_TREE_MAX);
-	C_ASSERT(tree_type == CRT_TREE_FLAT ||
-		 (tree_ratio >= CRT_TREE_MIN_RATIO &&
-		  tree_ratio <= CRT_TREE_MAX_RATIO));
+	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
+	if (parent_rank == NULL) {
+		C_ERROR("invalid parameter of NULL parent_rank.\n");
+		C_GOTO(out, rc = -CER_INVAL);
+	}
 
 	/*
 	 * grp_rank_list is the target group (filtered out the excluded ranks)

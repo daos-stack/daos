@@ -2243,3 +2243,54 @@ crt_iv_invalidate(crt_iv_namespace_t ivns, uint32_t class_id,
 	return crt_iv_update_internal(ivns, class_id, iv_key, iv_ver, NULL,
 			shortcut, sync_type, invali_comp_cb, cb_arg);
 }
+
+int
+crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
+		    crt_iv_key_t *iv_key, uint32_t *nchildren)
+{
+	struct crt_iv_ops		*iv_ops;
+	struct crt_ivns_internal	*ivns_internal;
+	struct crt_grp_priv		*grp_priv;
+	crt_rank_t			 root_rank;
+	crt_rank_t			 self_rank;
+	int				 rc = 0;
+
+	if (iv_key == NULL || nchildren == NULL) {
+		C_ERROR("invalid parameter (NULL key or nchildren).\n");
+		C_GOTO(exit, rc = -CER_INVAL);
+	}
+	ivns_internal = crt_ivns_internal_get(ivns);
+	if (ivns_internal == NULL) {
+		C_ERROR("Invalid ivns specified\n");
+		C_GOTO(exit, rc = -CER_INVAL);
+	}
+	rc = crt_group_rank(ivns_internal->cii_grp, &self_rank);
+	if (rc != 0) {
+		C_ERROR("crt_group_rank(grp %s) failed, rc=%d.\n",
+			ivns_internal->cii_grp->cg_grpid, rc);
+		C_GOTO(exit, rc);
+	}
+
+	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
+	if (iv_ops == NULL) {
+		C_ERROR("Invalid class_id specified\n");
+		C_GOTO(exit, rc = -CER_INVAL);
+	}
+	rc = iv_ops->ivo_on_hash(ivns, iv_key, &root_rank);
+	if (rc != 0) {
+		C_ERROR("ivo_on_hash() failed; rc=%d\n", rc);
+		C_GOTO(exit, rc);
+	}
+
+	grp_priv = crt_grp_pub2priv(ivns_internal->cii_grp);
+	rc = crt_tree_get_nchildren(grp_priv, 0, NULL,
+		ivns_internal->cii_gns.gn_tree_topo, root_rank, self_rank,
+		nchildren);
+	if (rc != 0)
+		C_ERROR("crt_tree_get_nchildren(grp %s, root %d self %d), "
+			"failed, rc=%d.\n", ivns_internal->cii_grp->cg_grpid,
+			root_rank, self_rank, rc);
+
+exit:
+	return rc;
+}

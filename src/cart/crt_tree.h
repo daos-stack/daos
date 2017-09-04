@@ -49,6 +49,10 @@
  * Query specific tree topo's number of children, child rank number, or parent
  * rank number.
  */
+int crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
+			   crt_rank_list_t *exclude_ranks, int tree_topo,
+			   crt_rank_t grp_root, crt_rank_t grp_self,
+			   uint32_t *nchildren);
 int crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 			  crt_rank_list_t *exclude_ranks, int tree_topo,
 			  crt_rank_t grp_root, crt_rank_t grp_self,

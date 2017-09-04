@@ -472,8 +472,10 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	crt_iv_ver_t *iv_ver, uint32_t flags, crt_sg_list_t *iv_value,
 	void *user_priv)
 {
-	struct kv_pair_entry *entry;
-	struct iv_key_struct *key_struct;
+	struct kv_pair_entry	*entry;
+	struct iv_key_struct	*key_struct;
+	uint32_t		 nchildren = -1;
+	int			 rc;
 
 	DBG_ENTRY();
 
@@ -481,6 +483,17 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	verify_key(iv_key);
 	assert(iv_value != NULL);
+
+	/* just to test API usage */
+	rc = crt_iv_get_nchildren(ivns, 0, iv_key, &nchildren);
+	if (rc == 0)
+		DBG_PRINT("in IV tree, nchildren: %d.\n", nchildren);
+	else
+		/*
+		 * Just to catch the error earlier than fetch completion
+		 * callback for testing.
+		 */
+		C_ASSERTF(rc == 0, "crt_iv_get_nchildren failed, rc=%d.\n", rc);
 
 	key_struct = (struct iv_key_struct *)iv_key->iov_buf;
 

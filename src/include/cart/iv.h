@@ -371,7 +371,6 @@ crt_iv_namespace_attach(crt_context_t crt_ctx, crt_iov_t *g_ivns,
 int
 crt_iv_namespace_destroy(crt_iv_namespace_t ivns);
 
-
 /* IV fetch/update/invalidate completion callback
  *
  * \param ivns [IN]		the local handle of the IV namespace
@@ -528,6 +527,22 @@ crt_iv_invalidate(crt_iv_namespace_t ivns, uint32_t class_id,
 		crt_iv_shortcut_t shortcut, crt_iv_sync_t sync_type,
 		crt_iv_comp_cb_t invali_comp_cb,
 		  void *cb_arg);
+
+/**
+ * Query the topo info for the number of immediate children of the caller in IV
+ * tree.
+ *
+ * \param ivns [IN]		the local handle of the IV namespace
+ * \param class_id [IN]		IV class ID the IV belong to
+ * \param iv_key [IN]		key of the IV
+ * \param nchildren [OUT]	number of children
+ *
+ * \return			zero on success, negative value if error
+ */
+int
+crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
+		     crt_iv_key_t *iv_key, uint32_t *nchildren);
+
 
 #if defined(__cplusplus)
 }
