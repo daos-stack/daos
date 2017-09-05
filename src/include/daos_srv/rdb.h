@@ -113,19 +113,27 @@ struct rdb;
 /** Database callbacks */
 struct rdb_cbs {
 	/**
-	 * Called after this replica becomes the leader of \a term. If an error
-	 * is returned, rdb steps down, without calling dc_step_down. (Not
-	 * implemented yet.) A replicated service over rdb may want to take the
-	 * chance to start itself on this replica.
+	 * If not NULL, called after this replica becomes the leader of \a
+	 * term. A replicated service over rdb may want to take the chance to
+	 * start itself on this replica. If an error is returned, rdb steps
+	 * down, but without calling dc_step_down.
 	 */
 	int (*dc_step_up)(struct rdb *db, uint64_t term, void *arg);
 
 	/**
-	 * Called after this replica steps down as the leader of \a term. A
-	 * replicated service over rdb may want to take the chance to stop
-	 * itself on this replica.
+	 * If not NULL, called after this replica steps down as the leader of
+	 * \a term. A replicated service over rdb may want to take the chance
+	 * to stop itself on this replica.
 	 */
 	void (*dc_step_down)(struct rdb *db, uint64_t term, void *arg);
+
+	/**
+	 * Called to suggest that this replica shall be stopped due to an
+	 * error. A replicated service over rdb shall schedule a rdb_stop()
+	 * call made from a non-rdb context (i.e., not in this or any other rdb
+	 * callbacks and not inside any rdb TXs) to avoid deadlocks.
+	 */
+	void (*dc_stop)(struct rdb *db, int err, void *arg);
 };
 
 /** Database methods */

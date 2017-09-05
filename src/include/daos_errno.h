@@ -116,6 +116,8 @@ typedef enum {
 	DER_STALE		= (DER_ERR_BASE + 7),
 	/** Not service leader */
 	DER_NOTLEADER		= (DER_ERR_BASE + 8),
+	/** Service should shut down */
+	DER_SHUTDOWN		= (DER_ERR_BASE + 9),
 	/** Target create error */
 	DER_TGT_CREATE		= (DER_ERR_BASE + 100),
 	/** Epoch is read-only */

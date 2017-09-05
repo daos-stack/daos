@@ -325,9 +325,20 @@ rdbt_step_down(struct rdb *db, uint64_t term, void *arg)
 	D_WARN("rank %u is no longer leader of term "DF_U64"\n", rank, term);
 }
 
+static void
+rdbt_stop(struct rdb *db, int err, void *arg)
+{
+	crt_rank_t rank;
+
+	crt_group_rank(NULL, &rank);
+	D_WARN("rank %u should stop\n", rank);
+	D_ASSERT(0);
+}
+
 static struct rdb_cbs rdbt_rdb_cbs = {
 	.dc_step_up	= rdbt_step_up,
-	.dc_step_down	= rdbt_step_down
+	.dc_step_down	= rdbt_step_down,
+	.dc_stop	= rdbt_stop
 };
 
 static void

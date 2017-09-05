@@ -239,6 +239,8 @@ rdb_start(const char *path, struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 	uint8_t			nreplicas;
 	int			rc;
 
+	D_ASSERT(cbs->dc_stop != NULL);
+
 	D_ALLOC_PTR(db);
 	if (db == NULL) {
 		D_ERROR("failed to allocate db object\n");

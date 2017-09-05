@@ -649,10 +649,9 @@ pool_svc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		svc->ps_state = POOL_SVC_UP_EMPTY;
 		D_GOTO(out_mutex, rc = 0);
 	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to step up as leader "DF_U64"\n",
-			DP_UUID(svc->ps_uuid), term);
-		/* TODO: Ask rdb to step down. */
-		D_GOTO(out_mutex, rc = 0);
+		D_ERROR(DF_UUID": failed to step up as leader "DF_U64": %d\n",
+			DP_UUID(svc->ps_uuid), term, rc);
+		D_GOTO(out_mutex, rc);
 	}
 
 	svc->ps_state = POOL_SVC_UP;
@@ -684,9 +683,42 @@ out_mutex:
 	ABT_mutex_unlock(svc->ps_mutex);
 }
 
+static void
+pool_svc_stopper(void *arg)
+{
+	uuid_t *uuid = arg;
+
+	ds_pool_svc_stop(*uuid);
+	D_FREE(uuid, sizeof(uuid_t));
+}
+
+static void
+pool_svc_stop_cb(struct rdb *db, int err, void *arg)
+{
+	struct pool_svc	       *svc = arg;
+	uuid_t		       *uuid;
+	int			rc;
+
+	D_ALLOC(uuid, sizeof(uuid_t));
+	if (uuid == NULL) {
+		D_ERROR(DF_UUID": failed to allocate UUID buffer\n",
+			DP_UUID(svc->ps_uuid));
+		return;
+	}
+	uuid_copy(*uuid, svc->ps_uuid);
+
+	rc = dss_ult_create(pool_svc_stopper, uuid, -1, NULL);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create pool service stopper: %d\n",
+			DP_UUID(svc->ps_uuid), rc);
+		D_FREE(uuid, sizeof(uuid_t));
+	}
+}
+
 static struct rdb_cbs pool_svc_rdb_cbs = {
 	.dc_step_up	= pool_svc_step_up_cb,
-	.dc_step_down	= pool_svc_step_down_cb
+	.dc_step_down	= pool_svc_step_down_cb,
+	.dc_stop	= pool_svc_stop_cb
 };
 
 char *

@@ -32,6 +32,10 @@
  *
  * rdb maintains its own last applied index persistently, instead of using
  * raft's volatile version.
+ *
+ * rdb's raft callbacks may return rdb errors (e.g., -DER_IO, -DER_NOSPACE,
+ * etc.), rdb's and raft's error domains are disjoint (see the compile-time
+ * assertion in rdb_raft_rc()).
  */
 
 #define DD_SUBSYS DD_FAC(rdb)
@@ -44,6 +48,23 @@
 #include <daos_srv/daos_server.h>
 #include "rdb_internal.h"
 #include "rdb_layout.h"
+
+/* Translate a raft error into an rdb error. */
+static inline int
+rdb_raft_rc(int raft_rc)
+{
+	/* See the file comment. */
+	D_CASSERT(-DER_ERR_FIRST < RAFT_ERR_LAST);
+	if (raft_rc >= 0 || raft_rc < RAFT_ERR_LAST)
+		return raft_rc;
+	switch (raft_rc) {
+	case RAFT_ERR_NOT_LEADER:		return -DER_NOTLEADER;
+	case RAFT_ERR_ONE_VOTING_CHANGE_ONLY:	return -DER_BUSY;
+	case RAFT_ERR_SHUTDOWN:			return -DER_SHUTDOWN;
+	case RAFT_ERR_NOMEM:			return -DER_NOMEM;
+	default:				return -DER_UNKNOWN;
+	}
+}
 
 static int
 rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
@@ -64,7 +85,7 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to create RV RPC to node %d: %d\n",
 			DP_DB(db), raft_node_get_id(node), rc);
-		return -1;
+		return rc;
 	}
 	in = crt_req_get(rpc);
 	uuid_copy(in->rvi_op.ri_uuid, db->d_uuid);
@@ -75,9 +96,8 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 		D_ERROR(DF_DB": failed to send RV RPC to node %d: %d\n",
 			DP_DB(db), raft_node_get_id(node), rc);
 		crt_req_decref(rpc);
-		return -1;
 	}
-	return 0;
+	return rc;
 }
 
 static void
@@ -148,21 +168,21 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to create AE RPC to node %d: %d\n",
 			DP_DB(db), raft_node_get_id(node), rc);
-		D_GOTO(err, rc = -1);
+		D_GOTO(err, rc);
 	}
 	in = crt_req_get(rpc);
 	uuid_copy(in->aei_op.ri_uuid, db->d_uuid);
 	rc = rdb_raft_clone_ae(msg, &in->aei_msg);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to allocate entry array\n", DP_DB(db));
-		D_GOTO(err_rpc, rc = -1);
+		D_GOTO(err_rpc, rc);
 	}
 
 	rc = rdb_send_raft_rpc(rpc, db, node);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to send AE RPC to node %d: %d\n",
 			DP_DB(db), raft_node_get_id(node), rc);
-		D_GOTO(err_in, rc = -1);
+		D_GOTO(err_in, rc);
 	}
 	return 0;
 
@@ -256,7 +276,7 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	D_ALLOC(buf, buf_size);
 	if (buf == NULL) {
 		D_ERROR(DF_DB": failed to allocate entry buffer\n", DP_DB(db));
-		return -1;
+		return -DER_NOMEM;
 	}
 	buf->dre_term = entry->term;
 	buf->dre_id = entry->id;
@@ -272,7 +292,7 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entry,
 		D_ERROR(DF_DB": failed to persist entry buffer: %d\n",
 			DP_DB(db), rc);
 		D_FREE(buf, buf_size);
-		return -1;
+		return rc;
 	}
 
 	/*
@@ -298,7 +318,7 @@ rdb_raft_cb_log_delete(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	rc = dbtree_delete(db->d_log, &key, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to delete entry: %d\n", DP_DB(db), rc);
-		return -1;
+		return rc;
 	}
 
 	/* Free the buffer allocated by rdb_raft_cb_log_offer(). */
@@ -398,20 +418,44 @@ rdb_raft_dequeue_event(struct rdb *db, struct rdb_raft_event *event)
 static void
 rdb_raft_process_event(struct rdb *db, struct rdb_raft_event *event)
 {
+	int rc;
+
 	switch (event->dre_type) {
 	case RDB_RAFT_STEP_UP:
-		if (db->d_cbs != NULL && db->d_cbs->dc_step_up != NULL) {
-			int rc;
+		if (db->d_cbs == NULL || db->d_cbs->dc_step_up == NULL)
+			break;
+		rc = db->d_cbs->dc_step_up(db, event->dre_term, db->d_arg);
+		if (rc == 0)
+			break;
+		/* An error occurred. Step down if we are still that leader. */
+		if (raft_is_leader(db->d_raft) &&
+		    raft_get_current_term(db->d_raft) ==
+		    event->dre_term) {
+			D_DEBUG(DB_MD, DF_DB": stepping down from term "DF_U64
+				"\n", DP_DB(db), event->dre_term);
+			/* No need to generate a DOWN event. */
+			raft_become_follower(db->d_raft);
+		}
+		/*
+		 * If there are pending events, then the next one must be the
+		 * matching DOWN. (See the assertions in
+		 * rdb_raft_queue_event().) Discard it to reduce just a little
+		 * burden on the service code.
+		 */
+		if (db->d_nevents > 0) {
+			struct rdb_raft_event next;
 
-			rc = db->d_cbs->dc_step_up(db, event->dre_term,
-						   db->d_arg);
-			/* TODO: Step down. */
-			D_ASSERTF(rc == 0, "%d\n", rc);
+			rdb_raft_dequeue_event(db, &next);
+			D_ASSERTF(next.dre_type == RDB_RAFT_STEP_DOWN &&
+				  next.dre_term == event->dre_term,
+				  "%d "DF_U64" "DF_U64"\n", next.dre_type,
+				  next.dre_term, event->dre_term);
 		}
 		break;
 	case RDB_RAFT_STEP_DOWN:
-		if (db->d_cbs != NULL && db->d_cbs->dc_step_down != NULL)
-			db->d_cbs->dc_step_down(db, event->dre_term, db->d_arg);
+		if (db->d_cbs == NULL || db->d_cbs->dc_step_down == NULL)
+			break;
+		db->d_cbs->dc_step_down(db, event->dre_term, db->d_arg);
 		break;
 	default:
 		D_ASSERTF(0, "unknown event type: %d\n", event->dre_type);
@@ -449,7 +493,7 @@ rdb_callbackd(void *arg)
 	D_DEBUG(DB_ANY, DF_DB": callbackd stopping\n", DP_DB(db));
 }
 
-static void
+static int
 rdb_raft_step_up(struct rdb *db, uint64_t term)
 {
 	msg_entry_t		mentry;
@@ -464,10 +508,15 @@ rdb_raft_step_up(struct rdb *db, uint64_t term)
 	mentry.data.buf = NULL;
 	mentry.data.len = 0;
 	rc = raft_recv_entry(db->d_raft, &mentry, &mresponse);
-	/* TODO: Handle errors. */
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to append debut entry for term "DF_U64
+			": %d\n", DP_DB(db), term, rc);
+		D_ASSERT(rc != RAFT_ERR_NOT_LEADER);
+		return rdb_raft_rc(rc);
+	}
 	db->d_debut = mresponse.idx;
 	rdb_raft_queue_event(db, RDB_RAFT_STEP_UP, term);
+	return 0;
 }
 
 static void
@@ -497,22 +546,28 @@ rdb_raft_save_state(struct rdb *db, struct rdb_raft_state *state)
 
 /*
  * Check the current state against "state", which shall be a previously-saved
- * state, and handle any changes.
+ * state, and handle any changes and errors.
  */
-static void
-rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state)
+static int
+rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
+		     int raft_rc)
 {
 	bool		leader = raft_is_leader(db->d_raft);
 	uint64_t	term = raft_get_current_term(db->d_raft);
 	uint64_t	committed;
+	int		step_up_rc = 0;
+	int		rc;
 
 	/* Check the leader state. */
 	D_ASSERTF(term >= state->drs_term, DF_U64" >= "DF_U64"\n", term,
 		  state->drs_term);
-	if (!state->drs_leader && leader)
-		rdb_raft_step_up(db, term);
-	else if (state->drs_leader && !leader)
+	if (!state->drs_leader && leader) {
+		/* In this case, raft currently always returns zero. */
+		D_ASSERTF(raft_rc == 0, "%d\n", raft_rc);
+		step_up_rc = rdb_raft_step_up(db, term);
+	} else if (state->drs_leader && !leader) {
 		rdb_raft_step_down(db, state->drs_term);
+	}
 
 	/*
 	 * Check the commit state. We query the commit index here instead of at
@@ -527,6 +582,32 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state)
 		D_DEBUG(DB_ANY, DF_DB": committed to entry "DF_U64"\n",
 			DP_DB(db), committed);
 	}
+
+	/* Check raft_rc and step_up_rc. */
+	if (raft_rc == 0) {
+		rc = step_up_rc;
+	} else {
+		D_ASSERTF(step_up_rc == 0, "%d\n", step_up_rc);
+		rc = rdb_raft_rc(raft_rc);
+	}
+	switch (rc) {
+	case -DER_NOMEM:
+		if (leader) {
+			raft_become_follower(db->d_raft);
+			/* If stepping up fails, don't step down. */
+			if (step_up_rc != 0)
+				break;
+			rdb_raft_step_down(db, state->drs_term);
+		}
+		break;
+	case -DER_SHUTDOWN:
+	case -DER_NOSPACE:
+	case -DER_IO:
+		db->d_cbs->dc_stop(db, rc, db->d_arg);
+		break;
+	}
+
+	return rc;
 }
 
 /* Result buffer for an entry */
@@ -618,11 +699,11 @@ rdb_raft_append_apply(struct rdb *db, void *entry, size_t size, void *result)
 
 	rdb_raft_save_state(db, &state);
 	rc = raft_recv_entry(db->d_raft, &mentry, &mresponse);
-	rdb_raft_check_state(db, &state);
-	if (rc == RAFT_ERR_NOT_LEADER)
-		return -DER_NOTLEADER;
-	else if (rc != 0)
-		return -DER_IO;
+	rc = rdb_raft_check_state(db, &state, rc);
+	if (rc != 0 && rc != -DER_NOTLEADER) {
+		D_ERROR(DF_DB": failed to append entry: %d\n", DP_DB(db), rc);
+		return rc;
+	}
 
 	if (result != NULL) {
 		/*
@@ -754,8 +835,10 @@ rdb_timerd(void *arg)
 
 		rdb_raft_save_state(db, &state);
 		rc = raft_periodic(db->d_raft, d_prev * 1000 /* ms */);
-		D_ASSERTF(rc == 0, "%d\n", rc);
-		rdb_raft_check_state(db, &state);
+		rc = rdb_raft_check_state(db, &state, rc);
+		if (rc != 0)
+			D_ERROR(DF_DB": raft_periodic() failed: %d\n",
+				DP_DB(db), rc);
 
 		t_prev = t;
 		/* Wait for d in [d_min, d_max] before the next beat. */
@@ -807,8 +890,10 @@ rdb_raft_log_load_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val,
 
 	rc = raft_append_entry(raft, &entry);
 	if (rc != 0) {
+		D_ERROR("failed to load entry "DF_U64": %d\n",
+			*(uint64_t *)key->iov_buf, rc);
 		D_FREE(entry.data.buf, buf_size);
-		return -DER_NOMEM;
+		return rdb_raft_rc(rc);
 	}
 
 	return 0;
@@ -907,16 +992,20 @@ rdb_raft_start(struct rdb *db)
 	 */
 	daos_iov_set(&value, &term, sizeof(term));
 	rc = dbtree_lookup(db->d_attr, &rdb_attr_term, &value);
-	if (rc == 0)
-		raft_set_current_term(db->d_raft, term);
-	else if (rc != -DER_NONEXIST)
+	if (rc == 0) {
+		rc = raft_set_current_term(db->d_raft, term);
+		D_ASSERTF(rc == 0, "%d\n", rc);
+	} else if (rc != -DER_NONEXIST) {
 		D_GOTO(err_raft, rc);
+	}
 	daos_iov_set(&value, &vote, sizeof(vote));
 	rc = dbtree_lookup(db->d_attr, &rdb_attr_vote, &value);
-	if (rc == 0)
-		raft_vote_for_nodeid(db->d_raft, vote);
-	else if (rc != -DER_NONEXIST)
+	if (rc == 0) {
+		rc = raft_vote_for_nodeid(db->d_raft, vote);
+		D_ASSERTF(rc == 0, "%d\n", rc);
+	} else if (rc != -DER_NONEXIST) {
 		D_GOTO(err_raft, rc);
+	}
 	rc = rdb_open_tree(db->d_attr, &rdb_attr_log, &db->d_log);
 	if (rc != 0) {
 		D_ERROR("failed to open db log tree: %d\n", rc);
@@ -1165,10 +1254,16 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	if (node == NULL)
 		D_GOTO(out_db, rc = -DER_UNKNOWN);
 	rdb_raft_save_state(db, &state);
-	raft_recv_requestvote(db->d_raft, node, &in->rvi_msg, &out->rvo_msg);
-	rdb_raft_check_state(db, &state);
+	rc = raft_recv_requestvote(db->d_raft, node, &in->rvi_msg,
+				   &out->rvo_msg);
+	rc = rdb_raft_check_state(db, &state, rc);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to process REQUESTVOTE from rank %u: "
+			"%d\n", DP_DB(db), rpc->cr_ep.ep_rank, rc);
+		/* raft_recv_requestvote() always generates a valid reply. */
+		rc = 0;
+	}
 
-	rc = 0;
 out_db:
 	rdb_put(db);
 out:
@@ -1202,10 +1297,16 @@ rdb_appendentries_handler(crt_rpc_t *rpc)
 	if (node == NULL)
 		D_GOTO(out_db, rc = -DER_UNKNOWN);
 	rdb_raft_save_state(db, &state);
-	raft_recv_appendentries(db->d_raft, node, &in->aei_msg, &out->aeo_msg);
-	rdb_raft_check_state(db, &state);
+	rc = raft_recv_appendentries(db->d_raft, node, &in->aei_msg,
+				     &out->aeo_msg);
+	rc = rdb_raft_check_state(db, &state, rc);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to process APPENDENTRIES from rank %u: "
+			"%d\n", DP_DB(db), rpc->cr_ep.ep_rank, rc);
+		/* raft_recv_appendentries() always generates a valid reply. */
+		rc = 0;
+	}
 
-	rc = 0;
 out_db:
 	rdb_put(db);
 out:
@@ -1249,10 +1350,10 @@ rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc)
 	default:
 		D_ASSERTF(0, DF_DB": unexpected opc: %u\n", DP_DB(db), opc);
 	}
-	if (rc != 0)
+	rc = rdb_raft_check_state(db, &state, rc);
+	if (rc != 0 && rc != -DER_NOTLEADER)
 		D_ERROR(DF_DB": failed to process opc %u response: %d\n",
 			DP_DB(db), opc, rc);
-	rdb_raft_check_state(db, &state);
 }
 
 /* Free any additional memory we allocated for the request. */
