@@ -239,7 +239,6 @@ ioreq_init_basic(struct a_ioreq *ioreq)
 	ioreq->erange.epr_hi = DAOS_EPOCH_MAX;
 
 	ioreq->iod.iod_nr = 1;
-	ioreq->iod.iod_type  = DAOS_IOD_SINGLE;
 	ioreq->iod.iod_recxs = &ioreq->rex;
 	ioreq->iod.iod_csums = &ioreq->csum;
 	ioreq->iod.iod_eprs = &ioreq->erange;
@@ -281,6 +280,12 @@ static void
 ioreq_init(struct a_ioreq *ioreq, struct test *test, int counter)
 {
 	ioreq_init_basic(ioreq);
+
+	if (!strcmp(test->t_type->tt_name, "kv-idx-update"))
+		ioreq->iod.iod_type = DAOS_IOD_ARRAY;
+	else
+		ioreq->iod.iod_type = DAOS_IOD_SINGLE;
+
 	ioreq_init_dkey(ioreq, dkbuf + test->t_dkey_size * counter,
 			test->t_dkey_size);
 	ioreq_init_akey(ioreq, akbuf + test->t_akey_size * counter,
@@ -1289,7 +1294,7 @@ kv_multi_idx_update_run(struct test *test)
 	MPI_Barrier(MPI_COMM_WORLD);
 	DBENCH_PRINT("%s: Inserting %d indexes....",
 		      test->t_type->tt_name,
-		      comm_world_size * test->t_nkeys);
+		      comm_world_size * test->t_nindexes);
 
 	chrono_record("begin");
 	kv_update_async(test, 2, 0, value, true);
