@@ -105,7 +105,8 @@ class NodeRunner:
             self.proc.terminate()
             self.state = "terminate"
 
-    def execute_cmd(self, cmd, args, log_path, wait=True, timeout=15):
+    def execute_cmd(self, cmd, args, log_path, wait=True, timeout=15,
+                    environ=None):
         """
         Run specified cmd+args on self.node
         """
@@ -123,7 +124,9 @@ class NodeRunner:
         print("command: {!s}".format(cmdstr))
         if wait:
             dummy_stdin, stdout, stderr = client.exec_command(cmdstr,
-                                                              timeout=timeout)
+                                                              timeout=timeout,
+                                                              environment=
+                                                              environ)
             retval = RetVal(stdout, stderr, True, -1)
             print("return code: {!s}".
                   format(stdout.channel.recv_exit_status()))
@@ -135,7 +138,9 @@ class NodeRunner:
                 outfile.write(retval.data)
             retval.running = False
         else:
-            dummy_stdin, stdout, stderr = client.exec_command(cmdstr)
+            dummy_stdin, stdout, stderr = client.exec_command(cmdstr,
+                                                              environment=
+                                                              environ)
             retval = RetVal(stdout, stderr, True, -1)
         return retval
 

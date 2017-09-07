@@ -141,13 +141,14 @@ class NodeControlRunner():
         del self.node_list[:]
 
     #pylint: disable=too-many-arguments
-    def paramiko_execute_remote_cmd(self, node, cmd, args, wait, timeout):
+    def paramiko_execute_remote_cmd(self, node, cmd, args, wait, timeout,
+                                    environ=None):
         """
         Pass through to NodeRunner:execute_cmd()
         """
         run_node = self.find_node(node)
         return run_node.execute_cmd(cmd, args, self.log_dir_base,
-                                    wait=wait, timeout=timeout)
+                                    wait=wait, timeout=timeout, environ=environ)
     #pylint: enable=too-many-arguments
 
     def paramiko_wait_for_exit(self, node, retval, timeout):
