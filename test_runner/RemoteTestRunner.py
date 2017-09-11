@@ -37,9 +37,8 @@ process.
 #pylint: disable=too-many-arguments
 
 import os
-import shlex
-import subprocess
 import logging
+import paramiko
 import json
 from yaml import load
 try:
@@ -63,10 +62,14 @@ class RemoteTestRunner():
         self.test_config = {}
         self.test_name = ""
         self.state = "init"
-        self.proc = None
+        self.stdout = None
+        self.stderr = None
         self.procrtn = 0
         self.logfileout = ""
         self.logfileerr = ""
+        self.username = os.getlogin()
+        self.client = paramiko.SSHClient()
+        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     def match_type(self, node_type="all"):
         """ match the node requested node type to this nodes type """
@@ -77,10 +80,24 @@ class RemoteTestRunner():
             return False
         return True
 
-    def launch_test(self):
+    def connect(self):
+        """ connect to remote system """
+        connect_args = {}
+        connect_args['hostname'] = self.node
+        connect_args['username'] = self.username
+        if self.test_directives.get('useKeyFile'):
+            connect_args['key_filename'] = \
+                self.test_directives.get('useKeyFile')
+        connect_args['allow_agent'] = False
+        connect_args['look_for_keys'] = True
+        connect_args['timeout'] = 15
+        self.client.connect(**connect_args)
+
+    def launch_test(self, timeout=180):
         """ Launch remote test runner """
         test_name = self.test_name
         self.logger.info("TestRunner: start %s on %s", test_name, self.node)
+        self.connect()
         self.logger.debug("conf: " + str(self.test_config))
         configfile = test_name + "_config"
         log_path = self.test_config['log_base_path']
@@ -90,51 +107,60 @@ class RemoteTestRunner():
         with open(test_config, "w") as config_info:
             json.dump(self.test_config, config_info, skipkeys=True, indent=4)
 
-        test_yml = os.path.join(self.scripts_dir, "%s.yml" % test_name)
-        node = self.node
-        self.logfileout = os.path.join(log_path, ("%s.runout" % test_name))
-        self.logfileerr = os.path.join(log_path, ("%s.runerr" % test_name))
+        test_yml = os.path.join(self.scripts_dir, "{!s}.yml".format(test_name))
+        self.logfileout = os.path.join(log_path,
+                                       ("{!s}.runout".format(test_name)))
+        self.logfileerr = os.path.join(log_path,
+                                       ("{!s}.runerr".format(test_name)))
         python_vers = self.test_directives.get('usePython', "python3.4")
-        cmdstr = "ssh %s \'%s %s/test_runner config=%s %s\'" % \
-            (node, python_vers, self.dir_path, test_config, test_yml)
+        cmdstr = "{!s} {!s}/test_runner config={!s} {!s}".format(
+            python_vers, self.dir_path, test_config, test_yml)
         self.logger.debug("cmd: %s", cmdstr)
-        cmdarg = shlex.split(cmdstr)
-        with open(self.logfileout, mode='w') as outfile, \
-            open(self.logfileerr, mode='w') as errfile:
+        with open(self.logfileout, mode='w') as outfile:
             outfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
                 ("=" * 40), cmdstr, ("=" * 40)))
             outfile.flush()
-            rtn = subprocess.Popen(cmdarg,
-                                   stdout=outfile,
-                                   stderr=errfile)
-
-        self.proc = rtn
+        dummy_stdin, self.stdout, self.stderr = \
+            self.client.exec_command(cmdstr, timeout=timeout)
+        dummy_stdin.close()
         self.state = "running"
         self.procrtn = None
+
+    def dump_data(self):
+        """ dump the output to a file """
+        with open(self.logfileout, mode='a') as outfile:
+            for line in self.stdout.readlines():
+                outfile.write(line)
+        with open(self.logfileerr, mode='a') as errfile:
+            errfile.write("Command complete within timeout.")
+            for line in self.stderr.readlines():
+                errfile.write(line)
+        self.client.close()
 
     def process_state(self):
         """ poll remote processes for state """
         if self.state == "running":
-            if self.proc.poll() is not None:
+            if self.stdout.channel.exit_status_ready():
                 self.state = "done"
-                self.procrtn = self.proc.returncode
+                self.procrtn = self.stdout.channel.recv_exit_status()
+                self.dump_data()
         return self.state
 
     def process_rtn(self):
-        """ remote process exeit code """
+        """ remote process exit code """
         return self.procrtn
 
     def process_terminate(self):
         """ terminate remote processes """
-        if self.proc.poll() is None:
-            self.proc.terminate()
+        if not self.stdout.channel.exit_status_ready():
+            # process terminate()
+            self.client.close()
             self.state = "terminate"
-            #try:
-            #    self.proc.wait(timeout=1)
-            #except subprocess.TimeoutExpired:
-            #    print("RemoteTestRunner: termination may have failed")
+            self.procrtn = -1
+            with open(self.logfileerr, mode='a') as errfile:
+                errfile.write("Command did not complete within timeout.")
 
-        return self.proc.returncode
+        return self.procrtn
 
     def match_testName(self):
         """ match the name of the log to the testcase """
@@ -161,7 +187,7 @@ class RemoteTestRunner():
     def dump_files(self):
         """ dump the log files """
         with open(self.logfileout, mode='r') as fd:
-            print("STDOUT: %s" % fd.rad())
+            print("STDOUT: %s" % fd.read())
         with open(self.logfileerr, mode='r') as fd:
             print("STDERR:\n %s" % fd.read())
 
@@ -179,7 +205,7 @@ class RemoteTestRunner():
         self.test_name = name
         self.test_config.clear()
 
-        copyList = self.test_directives.get('copyHostList', "yes")
+        copyList = self.test_directives.get('copyHostList', "no")
         if copyList == "yes":
             self.test_config['host_list'] = self.info.get_config('host_list')
         build_path = self.info.get_config('build_path')
@@ -197,6 +223,9 @@ class RemoteTestRunner():
 
         # add testing directives
         self.test_config['setDirectiveFromConfig'] = {}
+        if 'useKeyFile' in self.test_directives:
+            self.test_config['setDirectiveFromConfig']['useKeyFile'] = \
+                self.test_directives.get('useKeyFile')
         if directives:
             self.test_config['setDirectiveFromConfig'].update(directives)
         self.test_config['setDirectiveFromConfig']['renameTestRun'] = "no"
