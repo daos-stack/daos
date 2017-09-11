@@ -311,6 +311,29 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       unsigned int iod_nr, daos_iod_t *iods, daos_sg_list_t *sgls);
 
 /**
+ * Punch an object, or punch a dkey, or punch an array of akeys under a akey.
+ *
+ * \param coh	[IN]	Container open handle
+ * \param oid	[IN]	object ID, the full object will be punched if \a dkey
+ *			and \a akeys are not provided.
+ * \param epoch	[IN]	Epoch for the punch.
+ * \param cookie [IN]	Cookie ID to tag this punch to identify during
+ *			discard. This tag is used to group all updates
+ *			that might in future be discarded together.
+ * \param pm_ver [IN]   Pool map version for this update, which will be
+ *			used during rebuild.
+ * \param dkey	[IN]	Optional, the dkey will be punched if \a akeys is not
+ *			provided.
+ * \param akey_nr [IN]	Number of akeys in \a akeys.
+ * \param akeys [IN]	Array of akeys to be punched.
+
+ */
+int
+vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	      uuid_t cookie, uint32_t pm_ver, daos_key_t *dkey,
+	      unsigned int akey_nr, daos_key_t *akeys);
+
+/**
  * Zero-Copy I/O APIs
  */
 /**

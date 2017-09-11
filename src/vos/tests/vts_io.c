@@ -177,7 +177,7 @@ int
 setup_io(void **state)
 {
 	srand(10);
-	test_args_init(&test_args, VPOOL_1G);
+	test_args_init(&test_args, VPOOL_SIZE);
 
 	*state = &test_args;
 	return 0;
@@ -627,7 +627,7 @@ hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
 	int i = 0, rc = 0;
 
 	for (i = start; i < end; i++) {
-		rc = vos_obj_hold(occ, *coh, *oid, true, &objs[i]);
+		rc = vos_obj_hold(occ, *coh, *oid, 1, true, &objs[i]);
 		assert_int_equal(rc, 0);
 	}
 
@@ -648,10 +648,10 @@ io_oi_test(void **state)
 	cont = vos_hdl2cont(arg->ctx.tc_co_hdl);
 	assert_ptr_not_equal(cont, NULL);
 
-	rc = vos_oi_find_alloc(cont, oid, &obj[0]);
+	rc = vos_oi_find_alloc(cont, oid, 1, &obj[0]);
 	assert_int_equal(rc, 0);
 
-	rc = vos_oi_find_alloc(cont, oid, &obj[1]);
+	rc = vos_oi_find_alloc(cont, oid, 1, &obj[1]);
 	assert_int_equal(rc, 0);
 }
 
@@ -841,7 +841,7 @@ io_obj_range_iter_test(struct io_test_args *args, vos_it_epc_expr_t expr)
 	int			akeys, recs;
 	daos_epoch_range_t	epr;
 
-	test_args_reset(args, VPOOL_1G);
+	test_args_reset(args, VPOOL_SIZE);
 
 	args->ta_flags = 0;
 	epr.epr_lo = gen_rand_epoch();
@@ -897,7 +897,7 @@ io_obj_recx_range_iteration(struct io_test_args *args, vos_it_epc_expr_t expr)
 	daos_epoch_t		epoch;
 	int			total_in_range = 0;
 
-	test_args_reset(args, VPOOL_1G);
+	test_args_reset(args, VPOOL_SIZE);
 
 	args->ta_flags = 0;
 	epoch = gen_rand_epoch();
@@ -1118,6 +1118,8 @@ io_oid_iter_test(struct io_test_args *arg)
 
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl	= arg->ctx.tc_co_hdl;
+	param.ip_epr.epr_lo = vts_epoch_gen + 10;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &ih);
 	if (rc != 0) {
@@ -1494,7 +1496,7 @@ io_pool_overflow_test(void **state)
 	int			 rc;
 	daos_epoch_t		 epoch;
 
-	test_args_reset(args, VPOOL_1G);
+	test_args_reset(args, VPOOL_SIZE);
 
 	epoch = gen_rand_epoch();
 	for (i = 0; i < VTS_IO_KEYS; i++) {
@@ -1509,7 +1511,7 @@ io_pool_overflow_test(void **state)
 static int
 io_pool_overflow_teardown(void **state)
 {
-	test_args_reset((struct io_test_args *)*state, VPOOL_1G);
+	test_args_reset((struct io_test_args *)*state, VPOOL_SIZE);
 	return 0;
 }
 
@@ -1529,7 +1531,7 @@ oid_iter_test_setup(void **state)
 	for (i = 0; i < VTS_IO_OIDS; i++) {
 		oids[i] = gen_oid();
 
-		rc = vos_oi_find_alloc(cont, oids[i], &obj_df);
+		rc = vos_oi_find_alloc(cont, oids[i], 1, &obj_df);
 		assert_int_equal(rc, 0);
 	}
 	return 0;

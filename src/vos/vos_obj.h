@@ -57,13 +57,14 @@ struct vos_container;
  * \param occ	[IN]	Object cache, it could be a percpu data structure.
  * \param coh	[IN]	Container open handle.
  * \param oid	[IN]	VOS object ID.
- * \param read_only [IN]
- *			Read-only operation: fetch, enumerate etc.
+ * \param no_create [IN]
+ *			Do not allocate object if it's not there yet.
  * \param obj_p [OUT]	Returned object cache reference.
  */
 int
 vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
-	     daos_unit_oid_t oid, bool read_only, struct vos_object **obj_p);
+	     daos_unit_oid_t oid, daos_epoch_t epoch,
+	     bool no_create, struct vos_object **obj_p);
 
 /**
  * Release the object cache reference.
@@ -77,7 +78,7 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj);
  * Varify if the object reference is still valid, and refresh it if it's
  * invalide (evicted)
  */
-int vos_obj_revalidate(struct daos_lru_cache *occ,
+int vos_obj_revalidate(struct daos_lru_cache *occ, daos_epoch_t epoch,
 		       struct vos_object **obj_p);
 
 /** Evict an object reference from the cache */
@@ -148,7 +149,7 @@ vos_oi_update_metadata(daos_handle_t coh, daos_unit_oid_t oid);
  */
 int
 vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
-		  struct vos_obj_df **obj);
+		  daos_epoch_t epoch, struct vos_obj_df **obj);
 
 /**
  * Find an enty in the obj_index by @oid
@@ -164,6 +165,12 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
  */
 int
 vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
-	    struct vos_obj_df **obj);
+	    daos_epoch_t epoch, struct vos_obj_df **obj);
+
+/**
+ */
+int
+vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
+	     daos_epoch_t epoch, struct vos_obj_df *obj);
 
 #endif

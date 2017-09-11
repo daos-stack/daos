@@ -919,7 +919,6 @@ cont_epoch_aggregate_one(void *vin)
 	struct ds_pool_child			*pool_child;
 	daos_handle_t				iter_hdl;
 	daos_handle_t				vos_chdl;
-	daos_epoch_range_t			range;
 	char					*purge_credits;
 	char					*opstr;
 	int					aggregated;
@@ -954,11 +953,10 @@ cont_epoch_aggregate_one(void *vin)
 		D_GOTO(pool_child, rc);
 	}
 
-
 	memset(&param, 0, sizeof(param));
-	param.ip_hdl	= vos_chdl;
-	range.epr_lo	= in->tai_start_epoch;
-	range.epr_hi	= in->tai_end_epoch;
+	param.ip_hdl	    = vos_chdl;
+	param.ip_epr.epr_lo = in->tai_start_epoch;
+	param.ip_epr.epr_hi = in->tai_end_epoch;
 
 	opstr = "preparing vos obj iterator ";
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_hdl);
@@ -975,7 +973,7 @@ cont_epoch_aggregate_one(void *vin)
 		D_DEBUG(DF_DSMS, DF_CONT": No objects to iterate\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid));
 		/* empty container then set the highest epoch and exit */
-		set_container_purged_epoch(vos_chdl, in, &range);
+		set_container_purged_epoch(vos_chdl, in, &param.ip_epr);
 		D_GOTO(out, rc = 0);
 	}
 
@@ -997,7 +995,7 @@ cont_epoch_aggregate_one(void *vin)
 			D_DEBUG(DF_DSMS, DF_CONT": Finish obj iteration\n",
 				DP_CONT(in->tai_pool_uuid,
 					in->tai_cont_uuid));
-			set_container_purged_epoch(vos_chdl, in, &range);
+			set_container_purged_epoch(vos_chdl, in, &param.ip_epr);
 			rc = 0;
 			break;
 		}
@@ -1016,15 +1014,17 @@ cont_epoch_aggregate_one(void *vin)
 			unsigned int	l_credits = credits;
 
 			finish = false;
-			rc = vos_epoch_aggregate(vos_chdl, ent.ie_oid, &range,
-						 &l_credits, &anchor, &finish);
+			rc = vos_epoch_aggregate(vos_chdl, ent.ie_oid,
+						 &param.ip_epr, &l_credits,
+						 &anchor, &finish);
 			if (rc != 0)
 				D_GOTO(out, rc);
 
 			if (finish) {
 				D_DEBUG(DB_EPC,
 					"Finished "DF_U64"->"DF_U64")\n",
-					range.epr_lo, range.epr_hi);
+					param.ip_epr.epr_lo,
+					param.ip_epr.epr_hi);
 				break;
 			}
 			ABT_thread_yield();
@@ -1109,6 +1109,8 @@ ds_cont_obj_iter(daos_handle_t ph, uuid_t co_uuid,
 
 	memset(&param, 0, sizeof(param));
 	param.ip_hdl = coh;
+	param.ip_epr.epr_lo = 0;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 
 	rc = vos_iter_prepare(VOS_ITER_OBJ, &param, &iter_h);
 	if (rc != 0) {

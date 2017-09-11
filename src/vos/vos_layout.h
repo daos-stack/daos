@@ -183,6 +183,10 @@ struct vos_irec_df {
  */
 struct vos_obj_df {
 	daos_unit_oid_t			vo_id;
+	/** the first updated epoch of this object */
+	daos_epoch_t			vo_epc_lo;
+	/** the punched epoch of this object */
+	daos_epoch_t			vo_epc_hi;
 	/** VOS object btree root */
 	struct btr_root			vo_tree;
 };

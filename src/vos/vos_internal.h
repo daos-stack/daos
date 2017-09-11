@@ -657,6 +657,17 @@ enum vos_iter_state {
 	VOS_ITS_END,
 };
 
+/**
+ * operation code for VOS iterator.
+ */
+enum vos_iter_opc {
+	IT_OPC_NOOP,
+	IT_OPC_FIRST,
+	IT_OPC_LAST,
+	IT_OPC_PROBE,
+	IT_OPC_NEXT,
+};
+
 struct vos_iter_ops;
 
 /** the common part of vos iterators */

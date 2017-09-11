@@ -199,7 +199,8 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj)
 
 int
 vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
-	     daos_unit_oid_t oid, bool read_only, struct vos_object **obj_p)
+	     daos_unit_oid_t oid, daos_epoch_t epoch,
+	     bool no_create, struct vos_object **obj_p)
 {
 
 	struct vos_object	*obj = NULL;
@@ -219,22 +220,39 @@ vos_obj_hold(struct daos_lru_cache *occ, daos_handle_t coh,
 	uuid_copy(lkey.olk_co_uuid, cont->vc_id);
 	lkey.olk_obj_id = oid;
 
-	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), cont, &lret);
-	if (rc)
-		D_GOTO(failed, rc);
+	while (1) {
+		rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), cont, &lret);
+		if (rc)
+			D_GOTO(failed, rc);
 
-	obj = container_of(lret, struct vos_object, obj_llink);
-	if (obj->obj_df)
-		D_GOTO(found, rc = 0);
+		obj = container_of(lret, struct vos_object, obj_llink);
+		if (!obj->obj_df) /* empty object */
+			break;
 
-	if (read_only) {
-		rc = vos_oi_find(cont, oid, &obj->obj_df);
+		if (obj->obj_df->vo_epc_lo <= epoch &&
+		    obj->obj_df->vo_epc_hi >= epoch)
+			D_GOTO(found, rc = 0);
+
+		D_DEBUG(DB_IO, "Evict obj ["DF_U64":"DF_U64" -> "DF_U64"]\n",
+			obj->obj_df->vo_epc_lo, obj->obj_df->vo_epc_hi, epoch);
+
+		/* NB: we don't expect user wants to access many versions
+		 * of the same object at the same time, so just evict the
+		 * unmatched version from the cache, then populate the cache
+		 * with the demanded versoin.
+		 */
+		vos_obj_evict(obj);
+		vos_obj_release(occ, obj);
+	}
+
+	if (no_create) {
+		rc = vos_oi_find(cont, oid, epoch, &obj->obj_df);
 		if (rc == -DER_NONEXIST) {
 			obj->obj_df = NULL;
 			rc = 0;
 		}
 	} else {
-		rc = vos_oi_find_alloc(cont, oid, &obj->obj_df);
+		rc = vos_oi_find_alloc(cont, oid, epoch, &obj->obj_df);
 		D_ASSERT(rc || obj->obj_df);
 	}
 
@@ -262,7 +280,8 @@ vos_obj_evicted(struct vos_object *obj)
 }
 
 int
-vos_obj_revalidate(struct daos_lru_cache *occ, struct vos_object **obj_p)
+vos_obj_revalidate(struct daos_lru_cache *occ, daos_epoch_t epoch,
+		   struct vos_object **obj_p)
 {
 	struct vos_object *obj = *obj_p;
 	int		   rc;
@@ -271,7 +290,7 @@ vos_obj_revalidate(struct daos_lru_cache *occ, struct vos_object **obj_p)
 		return 0;
 
 	rc = vos_obj_hold(occ, vos_cont2hdl(obj->obj_cont), obj->obj_id,
-			  !obj->obj_df, obj_p);
+			  epoch, !obj->obj_df, obj_p);
 	if (rc == 0) {
 		D_ASSERT(*obj_p != obj);
 		vos_obj_release(occ, obj);

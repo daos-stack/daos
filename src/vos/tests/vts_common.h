@@ -36,10 +36,14 @@
 #include <daos/tests_lib.h>
 #include <daos_srv/vos.h>
 
-#define VPOOL_16M 16777216ULL
-#define VPOOL_1G  1073741824ULL
-#define VPOOL_10G 10737418240ULL
-#define VPOOL_NAME "/mnt/daos/vpool"
+#define VPOOL_16M	(16ULL << 20)
+#define VPOOL_1G	(1ULL << 30)
+#define VPOOL_2G	(2ULL << 30)
+#define VPOOL_10G	(10ULL << 30)
+
+#define VPOOL_SIZE	VPOOL_2G
+
+#define VPOOL_NAME	"/mnt/daos/vpool"
 #define	VP_OPS 10
 
 extern int gc;

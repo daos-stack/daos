@@ -712,7 +712,7 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_U64"\n",
 		DP_UOID(oid), iod_nr, epoch);
 
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, true, &obj);
+	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, true, &obj);
 	if (rc != 0)
 		return rc;
 
@@ -947,7 +947,8 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Update "DF_UOID", desc_nr %d, cookie "DF_UUID" epoch "
 		DF_U64"\n", DP_UOID(oid), iod_nr, DP_UUID(cookie), epoch);
 
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, false, &obj);
+	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, false,
+			  &obj);
 	if (rc != 0)
 		return rc;
 
@@ -960,6 +961,60 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		D_DEBUG(DB_IO, "Failed to update object: %d\n", rc);
 	} TX_END
 
+	vos_obj_release(vos_obj_cache_current(), obj);
+	return rc;
+}
+
+/**
+ * Punch an object, or punch a dkey, or punch an array of akeys.
+ */
+int
+vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
+	      uuid_t cookie, uint32_t pm_ver, daos_key_t *dkey,
+	      unsigned int akey_nr, daos_key_t *akeys)
+{
+	struct vos_object *obj;
+	PMEMobjpool	  *pop;
+	int		   rc;
+
+	/* XXX: only support object punch now, remove this code block when
+	 * we can support them.
+	 */
+	if (dkey != NULL || akeys != NULL) {
+		D_ERROR("Cannot support\n");
+		return -DER_NOSYS;
+	}
+
+	D_DEBUG(DB_IO, "Punch "DF_UOID", cookie "DF_UUID" epoch "
+		DF_U64"\n", DP_UOID(oid), DP_UUID(cookie), epoch);
+
+	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, true,
+			  &obj);
+	if (rc != 0)
+		return rc;
+
+	if (vos_obj_is_empty(obj)) /* nothing to do */
+		D_GOTO(out, rc = 0);
+
+	pop = vos_obj2pop(obj);
+	TX_BEGIN(pop) {
+		struct vos_container	*cont;
+
+		cont = vos_hdl2cont(coh);
+		rc = vos_oi_punch(cont, oid, epoch, obj->obj_df);
+		if (rc == 0) {
+			/* evict it from catch, because future fetch should
+			 * only see empty object (without obj_df)
+			 */
+			vos_obj_evict(obj);
+		}
+
+	} TX_ONABORT {
+		rc = umem_tx_errno(rc);
+		D_DEBUG(DB_IO, "Failed to punch object: %d\n", rc);
+	} TX_END
+	D_EXIT;
+ out:
 	vos_obj_release(vos_obj_cache_current(), obj);
 	return rc;
 }
@@ -1006,7 +1061,7 @@ vos_zcc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	if (zcc == NULL)
 		return -DER_NOMEM;
 
-	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, read_only,
+	rc = vos_obj_hold(vos_obj_cache_current(), coh, oid, epoch, read_only,
 			  &zcc->zc_obj);
 	if (rc != 0)
 		D_GOTO(failed, rc);
@@ -1351,7 +1406,8 @@ vos_obj_zc_update_end(daos_handle_t ioh, uuid_t cookie, uint32_t pm_ver,
 		D_GOTO(out, err);
 
 	D_ASSERT(zcc->zc_obj != NULL);
-	err = vos_obj_revalidate(vos_obj_cache_current(), &zcc->zc_obj);
+	err = vos_obj_revalidate(vos_obj_cache_current(), zcc->zc_epoch,
+				 &zcc->zc_obj);
 	if (err != 0)
 		D_GOTO(out, err);
 
@@ -1932,8 +1988,12 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		return -DER_NOMEM;
 
 	oiter->it_epr = param->ip_epr;
+	/* XXX the condition epoch ranges could cover multiple versions of
+	 * the object/key if it's punched more than once.
+	 */
 	rc = vos_obj_hold(vos_obj_cache_current(), param->ip_hdl,
-			  param->ip_oid, true, &oiter->it_obj);
+			  param->ip_oid, param->ip_epr.epr_hi, true,
+			  &oiter->it_obj);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 

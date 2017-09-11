@@ -35,8 +35,10 @@
 # define dts_add_history(s)	do {} while (0)
 #endif /* HAVE_LIB_READLINE */
 
+#include <getopt.h>
+
 /** Read a command line from stdin. */
-char *dts_readline(char *prompt);
+char *dts_readline(const char *prompt);
 
 /** release a line buffer returned by dts_readline */
 void  dts_freeline(char *line);
@@ -67,5 +69,15 @@ dts_time_now(void)
 	gettimeofday(&tv, NULL);
 	return (tv.tv_sec + tv.tv_usec / 1000000.0);
 }
+
+/**
+ * Readline a command line from stdin, parse and execute it.
+ *
+ * \param [IN]	opts		valid operations
+ * \param [IN]	prompt		prompt string
+ * \param [IN]	cmd_func	command functions
+ */
+int dts_cmd_parser(struct option *opts, const char *prompt,
+		   int (*cmd_func)(char opc, char *args));
 
 #endif /* __DAOS_TESTS_LIB_H__ */

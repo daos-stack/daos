@@ -223,7 +223,7 @@ io_create_object(struct vos_container *cont)
 	struct vos_obj_df	*obj;
 
 	oid = dts_unit_oid_gen(0, 0);
-	rc = vos_oi_find_alloc(cont, oid, &obj);
+	rc = vos_oi_find_alloc(cont, oid, 1, &obj);
 	return rc;
 }
 
@@ -303,7 +303,7 @@ io_simple_one_key_discard(void **state)
 static int
 io_simple_discard_teardown(void **state)
 {
-	test_args_reset((struct io_test_args *) *state, VPOOL_1G);
+	test_args_reset((struct io_test_args *) *state, VPOOL_SIZE);
 	return 0;
 }
 
@@ -569,7 +569,8 @@ io_multi_dkey_discard(struct io_test_args *arg, int flags)
 	/** Check if the object does not exist? */
 	struct vos_obj_df	*obj_res = NULL;
 
-	rc = vos_oi_find(vos_hdl2cont(arg->ctx.tc_co_hdl), last_oid, &obj_res);
+	rc = vos_oi_find(vos_hdl2cont(arg->ctx.tc_co_hdl), last_oid, 1,
+			 &obj_res);
 	assert_int_equal(rc, -DER_NONEXIST);
 	assert_ptr_equal(obj_res, NULL);
 
@@ -616,7 +617,7 @@ io_multikey_discard_teardown(void **state)
 		free(req);
 	}
 
-	test_args_reset((struct io_test_args *) *state, VPOOL_1G);
+	test_args_reset((struct io_test_args *) *state, VPOOL_SIZE);
 	return 0;
 }
 

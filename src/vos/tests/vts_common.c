@@ -122,14 +122,16 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid,
 			     psize);
 	if (rc) {
-		print_error("vpool create failed with error : %d", rc);
+		print_error("vpool create %s failed with error : %d\n",
+			    tcx->tc_po_name, rc);
 		goto failed;
 	}
 	tcx->tc_step = TCX_PO_CREATE;
 
 	rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, &tcx->tc_po_hdl);
 	if (rc) {
-		print_error("vos pool open error: %d\n", rc);
+		print_error("vos pool open %s error: %d\n",
+			    tcx->tc_po_name, rc);
 		goto failed;
 	}
 	tcx->tc_step = TCX_PO_OPEN;

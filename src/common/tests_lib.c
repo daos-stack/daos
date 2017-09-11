@@ -111,7 +111,7 @@ dts_freeline(char *line)
  * Read a command line from stdin, save trouble if we don't have libreadline
  */
 char *
-dts_readline(char *prompt)
+dts_readline(const char *prompt)
 {
 #if HAVE_LIB_READLINE
 	return readline(prompt);
@@ -159,6 +159,66 @@ dts_readline(char *prompt)
 	dts_freeline(line);
 	return NULL;
 #endif
+}
+
+int
+dts_cmd_parser(struct option *opts, const char *prompt,
+	       int (*cmd_func)(char opc, char *args))
+{
+	char	*line = NULL;
+	int	 rc;
+
+	for (rc = 0; rc == 0;) {
+		char	*args;
+		char	*cmd;
+		char	 opc;
+		int	 i;
+
+		if (line)
+			dts_freeline(line);
+
+		line = dts_readline(prompt);
+		if (!line)
+			break;
+
+		if (strlen(line) == 0)
+			continue; /* empty line */
+
+		cmd = daos_str_trimwhite(line);
+		dts_add_history(cmd);
+
+		for (i = 0, opc = 0;; i++) {
+			struct option *opt;
+
+			opt = &opts[i];
+			if (opt->name == NULL) {
+				D_PRINT("Unknown command %s\n", cmd);
+				return -1;
+			}
+
+			if (strncasecmp(opt->name, cmd, strlen(opt->name)))
+				continue;
+
+			/* matched a command */
+			opc = (char)opt->val;
+			if (opt->has_arg) {
+				args = line + strlen(opt->name);
+				args = daos_str_trimwhite(args);
+			} else {
+				args = NULL;
+			}
+			break;
+		}
+
+		rc = cmd_func(opc, args);
+		if (rc != 0)
+			break;
+	}
+
+	if (line)
+		dts_freeline(line);
+
+	return rc;
 }
 
 static void

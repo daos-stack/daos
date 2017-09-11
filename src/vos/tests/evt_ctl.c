@@ -471,70 +471,9 @@ ts_cmd_run(char opc, char *args)
 		break;
 	default:
 		D_PRINT("Unsupported command %c\n", opc);
-		rc = -1;
+		rc = 0;
 		break;
 	}
-	return rc;
-}
-
-#define TS_PROMPT	"$ > "
-
-static int
-tc_cmd_parser(void)
-{
-	char	*line = NULL;
-	int	 rc;
-
-	for (rc = 0; rc == 0;) {
-		char	*args;
-		char	*cmd;
-		char	 opc;
-		int	 i;
-
-		if (line)
-			dts_freeline(line);
-
-		line = dts_readline(TS_PROMPT);
-		if (!line)
-			break;
-
-		if (strlen(line) == 0)
-			continue; /* empty line */
-
-		cmd = daos_str_trimwhite(line);
-		dts_add_history(cmd);
-
-		for (i = 0, opc = 0;; i++) {
-			struct option *opt;
-
-			opt = &ts_ops[i];
-			if (opt->name == NULL) {
-				D_PRINT("Unknown command %s\n", cmd);
-				return -1;
-			}
-
-			if (strncasecmp(opt->name, cmd, strlen(opt->name)))
-				continue;
-
-			/* matched a command */
-			opc = (char)opt->val;
-			if (opt->has_arg) {
-				args = line + strlen(opt->name);
-				args = daos_str_trimwhite(args);
-			} else {
-				args = NULL;
-			}
-			break;
-		}
-
-		rc = ts_cmd_run(opc, args);
-		if (rc != 0)
-			break;
-	}
-
-	if (line)
-		dts_freeline(line);
-
 	return rc;
 }
 
@@ -553,7 +492,7 @@ main(int argc, char **argv)
 		return rc;
 
 	if (argc == 1) {
-		rc = tc_cmd_parser();
+		rc = dts_cmd_parser(ts_ops, "$ > ", ts_cmd_run);
 		goto out;
 	}
 

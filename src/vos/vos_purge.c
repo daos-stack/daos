@@ -103,8 +103,15 @@ purge_ctx_init(struct purge_context *pcx, vos_iter_entry_t *ent)
 		break;
 
 	case VOS_ITER_OBJ:
+		/* TODO:
+		 * - aggregation: discard all punched objects between the epoch
+		 *   range condition, aggregate the last version within the
+		 *   range.
+		 * - discard: discard new versions and the punch operations.
+		 */
 		rc = vos_obj_hold(vos_obj_cache_current(), param->ip_hdl,
-				  ent->ie_oid, true, &pcx->pc_obj);
+				  ent->ie_oid, param->ip_epr.epr_hi, true,
+				  &pcx->pc_obj);
 		if (rc != 0)
 			break;
 		param->ip_oid = ent->ie_oid;
