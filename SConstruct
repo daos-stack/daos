@@ -1,4 +1,3 @@
-#!python
 # Copyright (C) 2016-2017 Intel Corporation
 # All rights reserved.
 #
@@ -37,8 +36,8 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Build CaRT components"""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(Dir('#').abspath, "scons_local"))
 try:
@@ -46,6 +45,13 @@ try:
 except ImportError:
     raise ImportError \
           ("\'prereq_tools\' module not found; run \'git submodule update\'")
+
+# Desired compiler flags that will be used if the compiler supports them.
+DESIRED_FLAGS = ['-Wno-gnu-designator',
+                 '-Wno-missing-braces',
+                 '-Wno-gnu-zero-variadic-macro-arguments',
+                 '-Wno-tautological-constant-out-of-range-compare']
+
 
 def save_build_info(env, prereqs, platform):
     """Save the build information"""
@@ -82,28 +88,92 @@ priority = 10
 
     env.InstallAs('$PREFIX/etc/cci.ini', 'cci.ini')
 
+def check_flag(context, flag):
+    """Helper function to allow checking for compiler flags"""
+
+    cc_name = context.env.get('CC')
+    context.Message("Checking %s %s " % (cc_name, flag))
+    context.env.Replace(CFLAGS=['-Werror', flag])
+    ret = context.TryCompile("""
+int main() {
+    return 0;
+}
+""", ".c")
+    context.Result(ret)
+    return ret
+
+def check_flag_cc(context, flag):
+    """Helper function to allow checking for compiler flags"""
+
+    cc_name = context.env.get('CXX')
+    context.Message("Checking %s %s " % (cc_name, flag))
+    context.env.Replace(CCFLAGS=['-Werror', flag])
+    ret = context.TryCompile("""
+int main() {
+    return 0;
+}
+""", ".cpp")
+    context.Result(ret)
+    return ret
+
+def run_checks(env, check_flags):
+    """Run all configure time checks"""
+
+    cenv = env.Clone()
+    cenv.Append(CFLAGS='-Werror')
+    config = Configure(cenv, custom_tests={'CheckFlag' : check_flag,
+                                           'CheckFlagCC' : check_flag_cc})
+
+
+    # Check for configure flags.
+    # Some configure flags are always enabled (-g etc) however check in the
+    # compiler supports other ones before using them.  Additional flags
+    # might have been specified by the user in ~/.scons_localrc so check
+    # those as well as DESIRED_FLAGS, and do it in such a way as user
+    # flags come last so they can be used to disable locally defined flags.
+
+    # Any flag that doesn't start with -W gets passed through unmodified.
+    # pylint: disable=no-member
+
+    checked = []
+    for flag in check_flags:
+        if flag in checked:
+            continue
+        if not flag.startswith('-W'):
+            env.Append(CCFLAGS=[flag])
+        elif config.CheckFlagCC(flag):
+            env.Append(CCFLAGS=[flag])
+        elif config.CheckFlag(flag):
+            env.Append(CFLAGS=[flag])
+        checked.append(flag)
+    config.Finish()
+
+    # pylint: enable=no-member
+
+    print 'c Compiler options: %s %s %s' % (env.get('CC'),
+                                            ' '.join(env.get('CFLAGS')),
+                                            ' '.join(env.get('CCFLAGS')))
+    print 'c++ Compiler options: %s %s' % (env.get('CXX'),
+                                           ' '.join(env.get('CCFLAGS')))
+
+
 def scons():
     """Scons function"""
-
     platform = os.uname()[0]
+    opts_file = os.path.join(Dir('#').abspath, 'cart-%s.conf' % platform)
+
+    commits_file = os.path.join(Dir('#').abspath, 'build.config')
+    if not os.path.exists(commits_file):
+        commits_file = None
+
     env = DefaultEnvironment()
 
-    opts_file = os.path.join(Dir('#').abspath, 'cart-%s.conf' % platform)
     opts = Variables(opts_file)
-
-    if os.path.exists('daos_m.conf') and not os.path.exists(opts_file):
-        print 'Renaming legacy conf file'
-        os.rename('daos_m.conf', opts_file)
-
-    config_file = os.path.join(Dir('#').abspath, 'build.config')
-    if not os.path.exists(config_file):
-        config_file = None
-
     prereqs = PreReqComponent(env, opts,
-                              config_file=config_file, arch=platform)
-    prereqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'],
-                   package='libuuid-devel')
-    prereqs.preload(os.path.join(Dir('#').abspath, 'scons_local',
+                              config_file=commits_file, arch=platform)
+
+    prereqs.preload(os.path.join(Dir('#').abspath,
+                                 'scons_local',
                                  'components.py'),
                     prebuild=['ompi', 'mercury', 'argobots', 'uuid', 'crypto',
                               'pmix'])
@@ -114,10 +184,18 @@ def scons():
         # generate .so on OSX instead of .dylib
         env.Append(SHLIBSUFFIX='.so')
 
+    # Pull out the defined CFLAGS to use them later on for checking.
+    check_flags = list(DESIRED_FLAGS)
+    check_flags.extend(env.get('CFLAGS'))
+    env.Replace(CFLAGS='')
+
     # Compiler options
     env.Append(CCFLAGS=['-g3', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
     env.Append(CCFLAGS=['-O2', '-pthread'])
     env.Append(CFLAGS=['-std=gnu99'])
+
+    if not env.GetOption('clean'):
+        run_checks(env, check_flags)
 
     # generate targets in specific build dir to avoid polluting the source code
     arch_dir = 'build/%s' % platform

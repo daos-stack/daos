@@ -41,7 +41,7 @@ if [ ! -d "scons_local" ];then
 fi
 
 flist="-s SConstruct -s src/SConscript -s src/cart/SConscript"
-flist+=" -s src/pouch/SConscript -s src/utest/SConscript"
+flist+=" -s src/gurt/SConscript -s src/utest/SConscript"
 flist+=" -s src/test/SConscript -s test/SConscript"
 flist+=" -s src/utest/SConscript"
 
