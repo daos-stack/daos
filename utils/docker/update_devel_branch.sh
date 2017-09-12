@@ -142,13 +142,13 @@ for rq in ${iof_requires}; do
   iof_depend_jobs="${iof_depend_jobs} ${rq}-master"
   iof_depend_jobs="${iof_depend_jobs} ${rq}-iof_${bsx}"
 done
-iof_depend_jobs="${iof_depend_jobs} cart-cart_${bsx} ${cart_depend_jobs}"
+iof_depend_jobs="cart-cart_${bsx} ${iof_depend_jobs} ${cart_depend_jobs}"
 
 cppr_depend_jobs=""
 for rq in ${cppr_requires}; do
   cppr_depend_jobs="${cppr_depend_jobs} ${rq}-cppr_${bsx}"
 done
-cppr_depend_jobs="${cppr_depend_jobs} iof-iof_${bsx} ${iof_depend_jobs}"
+cppr_depend_jobs="iof-iof_${bsx} ${cppr_depend_jobs} ${iof_depend_jobs}"
 
 daos_depend_jobs=""
 for rq in ${daos_requires}; do
@@ -156,7 +156,7 @@ for rq in ${daos_requires}; do
   daos_depend_jobs="${daos_depend_jobs} ${rq}-master"
   daos_depend_jobs="${daos_depend_jobs} ${rq}-daos_${bsx}"
 done
-daos_depend_jobs="${daos_depend_jobs} cart-cart_${bsx} ${cart_d_depend_jobs}"
+daos_depend_jobs="cart-cart_${bsx} ${daos_depend_jobs} ${cart_d_depend_jobs}"
 
 wanted_depend_jobs_name="${TARGET}_depend_jobs"
 
@@ -210,7 +210,7 @@ case ${TARGET} in
     declare nvml_branch=daos_${bsx}
     ;;
   *)
-    wanted_rqs_name="${TARGET}_requires"
+    wanted_rqs_name="${TARGET}_requires_full"
     for depend in ${!wanted_rqs_name}; do
       declare ${depend}_branch=${TARGET}_${bsx}
     done
