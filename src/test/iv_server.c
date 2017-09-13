@@ -1117,7 +1117,7 @@ int main(int argc, char **argv)
 	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
 	assert(rc == 0);
 
-	rc = crt_group_config_save(NULL);
+	rc = crt_group_config_save(NULL, true);
 	assert(rc == 0);
 
 	rc = RPC_REGISTER(RPC_TEST_FETCH_IV);

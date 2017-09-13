@@ -671,19 +671,21 @@ int
 crt_group_config_path_set(const char *path);
 
 /*
- * Dump the attach info for the specified group to a file.   If not
- * the primary service group, it must be an attached group.
+ * Dump the attach info for the specified group to a file. If not the local
+ * primary service group, it must be an attached service group.
+ * This must be invoked before any singleton can attach to the specified group.
  *
- * This must be invoked before any singleton can attach to the specified
- * group.
- *
- * \param grp [IN]		Primary service group attach info to save
- *                              NULL indicates local primary group
+ * \param grp [IN]		Primary service group attach info to save,
+ *				NULL indicates local primary group.
+ * \param forall [IN]		True to save all service ranks' uri addresses,
+ *				false to only save the calling rank's uri for
+ *				server, or the internal PSR of attached remote
+ *				service group for client.
  *
  * \return			zero on success, negative value if error
  */
 int
-crt_group_config_save(crt_group_t *grp);
+crt_group_config_save(crt_group_t *grp, bool forall);
 
 /*
  * Detach a primary service group which was attached previously.

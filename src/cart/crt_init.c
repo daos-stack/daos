@@ -124,6 +124,7 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 	crt_phy_addr_t	addr = NULL, addr_env;
 	struct timeval	now;
 	unsigned int	seed;
+	const char	*path;
 	bool		server;
 	int		rc = 0;
 
@@ -180,6 +181,17 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 
 		if ((flags & CRT_FLAG_BIT_SINGLETON) != 0)
 			crt_gdata.cg_singleton = true;
+
+		path = getenv("CRT_ATTACH_INFO_PATH");
+		if (path != NULL && strlen(path) > 0) {
+			rc = crt_group_config_path_set(path);
+			if (rc != 0)
+				D_ERROR("Got %s from ENV CRT_ATTACH_INFO_PATH, "
+					"but crt_group_config_path_set failed "
+					"rc: %d, ignore the ENV.\n", path, rc);
+			else
+				D_DEBUG("set group_config_path as %s.\n", path);
+		}
 
 		addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
 		if (addr_env == NULL) {

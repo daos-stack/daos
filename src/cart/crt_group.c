@@ -2168,54 +2168,46 @@ crt_group_config_path_set(const char *path)
  * The format of the file is:
  * line 1: the process set name
  * line 2: process set size
- * line 3: <psr_rank> <psr_uri>
+ * line 3: "all" or "self"
+ *	   "all" means dump all ranks' uri
+ *	   "self" means only dump this rank's uri
+ * line 4 ~ N: <rank> <uri>
  *
  * An example file named service_set.attach_info:
  * ========================
  * service_set
  * 5
+ * self
  * 4 tcp://192.168.0.1:1234
  * ========================
- *
- * The psr rank is gp_self if generating config for local set.
- * Otherwise it is the psr_rank of the remote set.
  */
 int
-crt_group_config_save(crt_group_t *grp)
+crt_group_config_save(crt_group_t *grp, bool forall)
 {
 	struct crt_grp_priv	*grp_priv;
 	FILE			*fp = NULL;
 	char			*filename = NULL;
 	crt_group_id_t		 grpid;
 	int			 rc = 0;
-	struct crt_grp_gdata	*grp_gdata;
-	d_rank_t			 psr_rank;
-	crt_phy_addr_t		 psr_addr;
-
+	d_rank_t		 rank;
+	crt_phy_addr_t		 addr;
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
 		D_GOTO(out, rc = -CER_UNINIT);
 	}
 
-	grp_gdata = crt_gdata.cg_grp;
-
-	if (grp == NULL) {
-		/* to lookup local primary group handle */
-		grp_priv = crt_is_service() ? grp_gdata->gg_srv_pri_grp :
-					      grp_gdata->gg_cli_pri_grp;
-		psr_rank = grp_priv->gp_self;
-		psr_addr = crt_gdata.cg_addr;
-	} else {
-		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
-		psr_rank = grp_priv->gp_psr_rank;
-		psr_addr = grp_priv->gp_psr_phy_addr;
-	}
-
-	D_ASSERT(grp_priv != NULL);
-	if (grp_priv->gp_service == 0) {
-		D_DEBUG("ignored for client.\n");
+	grp_priv = crt_grp_pub2priv(grp);
+	if (!grp_priv->gp_service || !grp_priv->gp_primary) {
+		D_ERROR("can-only save config info for primary service grp.\n");
 		D_GOTO(out, rc = -CER_INVAL);
+	}
+	if (grp_priv->gp_local) {
+		rank = grp_priv->gp_self;
+		addr = crt_gdata.cg_addr;
+	} else {
+		rank = grp_priv->gp_psr_rank;
+		addr = grp_priv->gp_psr_phy_addr;
 	}
 
 	grpid = grp_priv->gp_pub.cg_grpid;
@@ -2241,14 +2233,47 @@ crt_group_config_save(crt_group_t *grp)
 			filename, strerror(errno));
 		D_GOTO(out, rc = crt_errno2cer(errno));
 	}
-
-	rc = fprintf(fp, "%d %s\n", psr_rank, psr_addr);
+	if (forall)
+		rc = fprintf(fp, "all\n");
+	else
+		rc = fprintf(fp, "self\n");
 	if (rc < 0) {
 		D_ERROR("write to file %s failed (%s).\n",
 			filename, strerror(errno));
 		D_GOTO(out, rc = crt_errno2cer(errno));
 	}
 
+	if (!forall || grp_priv->gp_size == 1) {
+		rc = fprintf(fp, "%d %s\n", rank, addr);
+		if (rc < 0) {
+			D_ERROR("write to file %s failed (%s).\n",
+				filename, strerror(errno));
+			D_GOTO(out, rc = crt_errno2cer(errno));
+		}
+		D_GOTO(done, rc);
+	}
+
+	for (rank = 0; rank < grp_priv->gp_size; rank++) {
+		char *uri;
+
+		uri = NULL;
+		rc = crt_pmix_uri_lookup(grpid, rank, &uri);
+		if (rc != 0) {
+			D_ERROR("crt_pmix_uri_lookup(grp %s, rank %d), failed "
+				"rc: %d.\n", grpid, rank, rc);
+			D_GOTO(out, rc);
+		}
+		D_ASSERT(uri != NULL);
+		rc = fprintf(fp, "%d %s\n", rank, uri);
+		free(uri);
+		if (rc < 0) {
+			D_ERROR("write to file %s failed (%s).\n",
+				filename, strerror(errno));
+			D_GOTO(out, rc = crt_errno2cer(errno));
+		}
+	}
+
+done:
 	if (fclose(fp) != 0) {
 		D_ERROR("file %s closing failed (%s).\n",
 			filename, strerror(errno));
@@ -2268,13 +2293,24 @@ out:
 int
 crt_grp_config_load(struct crt_grp_priv *grp_priv)
 {
-	char		*filename;
+	char		*filename = NULL;
 	FILE		*fp = NULL;
-	crt_group_id_t	grpid, grpname = NULL;
+	crt_group_id_t	grpid = NULL, grpname = NULL;
+	char		all_or_self[8] = {'\0'};
+	char		fmt[64] = {'\0'};
 	crt_phy_addr_t	addr_str = NULL;
+	d_rank_t	rank, psr_rank, idx;
+	bool		forall;
 	int		rc = 0;
 
-	D_ASSERT(grp_priv != NULL);
+	if (!crt_initialized()) {
+		D_ERROR("CRT not initialized.\n");
+		D_GOTO(out, rc = -CER_UNINIT);
+	}
+	if (grp_priv == NULL) {
+		D_ERROR("Invalid NULL grp_priv pointer.\n");
+		D_GOTO(out, rc = -CER_INVAL);
+	}
 
 	grpid = grp_priv->gp_pub.cg_grpid;
 	filename = crt_grp_attach_info_filename(grp_priv);
@@ -2291,7 +2327,8 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 	D_ALLOC(grpname, CRT_GROUP_ID_MAX_LEN);
 	if (grpname == NULL)
 		D_GOTO(out, rc = -CER_NOMEM);
-	rc = fscanf(fp, "%*s%s", grpname);
+	snprintf(fmt, 64, "%%*s%%%ds", CRT_GROUP_ID_MAX_LEN);
+	rc = fscanf(fp, fmt, grpname);
 	if (rc == EOF) {
 		D_ERROR("read from file %s failed (%s).\n",
 			filename, strerror(errno));
@@ -2310,19 +2347,46 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 		D_GOTO(out, rc = crt_errno2cer(errno));
 	}
 
-	D_ALLOC(addr_str, CRT_ADDR_STR_MAX_LEN);
-	if (addr_str == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
-
-	/* The generating process chooses the PSR for us */
-	rc = fscanf(fp, "%d %s", &grp_priv->gp_psr_rank, (char *)addr_str);
+	rc = fscanf(fp, "%4s", all_or_self);
 	if (rc == EOF) {
 		D_ERROR("read from file %s failed (%s).\n",
 			filename, strerror(errno));
 		D_GOTO(out, rc = crt_errno2cer(errno));
 	}
+	if (strncmp(all_or_self, "all", 3) == 0) {
+		forall = true;
+	} else if (strncmp(all_or_self, "self", 4) == 0) {
+		forall = false;
+	} else {
+		D_ERROR("got bad all_or_self: %s, illegal file format.\n",
+			all_or_self);
+		D_GOTO(out, rc = -CER_INVAL);
+	}
 
-	grp_priv->gp_psr_phy_addr = addr_str;
+	D_ALLOC(addr_str, CRT_ADDR_STR_MAX_LEN);
+	if (addr_str == NULL)
+		D_GOTO(out, rc = -CER_NOMEM);
+
+	crt_group_rank(NULL, &rank);
+	psr_rank = rank % grp_priv->gp_size;
+
+	memset(fmt, 0, 64);
+	snprintf(fmt, 64, "%%d %%%ds", CRT_ADDR_STR_MAX_LEN);
+	for (idx = 0; idx < grp_priv->gp_size; idx++) {
+		rc = fscanf(fp, fmt, &grp_priv->gp_psr_rank, (char *)addr_str);
+		if (rc == EOF) {
+			D_ERROR("read from file %s failed (%s).\n",
+				filename, strerror(errno));
+			D_GOTO(out, rc = crt_errno2cer(errno));
+		}
+		grp_priv->gp_psr_phy_addr = addr_str;
+		if (!forall || grp_priv->gp_psr_rank == psr_rank) {
+			D_DEBUG("grp %s selected psr_rank %d, uri %s.\n",
+				grpid, grp_priv->gp_psr_rank,
+				grp_priv->gp_psr_phy_addr);
+			break;
+		}
+	}
 	rc = 0;
 out:
 	if (fp)

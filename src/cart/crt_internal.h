@@ -60,6 +60,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <uuid/uuid.h>
+#include <dirent.h>
 /* #include <netinet/in.h> */
 #include <arpa/inet.h>
 #include <ifaddrs.h>

@@ -221,9 +221,6 @@ void echo_shutdown_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
-	crt_reply_send(rpc_req);
-	printf("tier1 echo_srver done issuing shutdown responses.\n");
-
 	g_shutdown = 1;
 	printf("tier1 echo_srver set shutdown flag.\n");
 }

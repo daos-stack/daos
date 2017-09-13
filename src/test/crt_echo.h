@@ -219,14 +219,14 @@ echo_init(int server, bool tier2)
 
 	if (server != 0 && tier2 == false && gecho.singleton_test) {
 		printf("Saving singleton attach info\n");
-		rc = crt_group_config_save(NULL);
+		rc = crt_group_config_save(NULL, false);
 		assert(rc == 0);
 
 		if (gecho.multi_tier_test) {
 			/* Test saving attach info for another group */
 			rc = crt_group_attach(ECHO_2ND_TIER_GRPID, &tier2_grp);
 			assert(rc == 0 && tier2_grp != NULL);
-			rc = crt_group_config_save(tier2_grp);
+			rc = crt_group_config_save(tier2_grp, false);
 			assert(rc == 0);
 			rc = crt_group_detach(tier2_grp);
 			assert(rc == 0);
