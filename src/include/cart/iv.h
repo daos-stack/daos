@@ -142,6 +142,7 @@ typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
  * \param flags [IN]		OR-ed combination of 0 or more crt_iv_flag_t
  *				flags
  * \param iv_value [IN]		IV value to be update
+ * \param priv [IN]		private user data
  *
  * \return			zero on success handled locally,
  *				-CER_IVCB_FORWARD when cannot handle locally and
@@ -150,7 +151,8 @@ typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
  */
 typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
 				     crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
-				     uint32_t flags, crt_sg_list_t *iv_value);
+				     uint32_t flags, crt_sg_list_t *iv_value,
+				     void *priv);
 
 /**
  * Incast variable on_refresh callback which will be called when the
@@ -209,11 +211,18 @@ typedef enum {
  * Callback implementation is expected to provide buffers inside of iv_value
  * parameter with sufficient space to store value for the specified iv_key.
  *
- * When called with CRT_IV_PERM_READ permission, returned iv_value
+ * If iv_value == NULL, then it means the caller does not need the buffer,
+ * but in this callback, it should still check if it can access the IV
+ * value by permission flag(@permission), and setup the cache entry if
+ * necessary.
+ *
+ * When called with CRT_IV_PERM_READ permission, it will fetch the IV value,
+ * i.e. the following callback will be iv_on_fetch(), and also returned iv_value
  * will only be used for reading data out of it.
  *
- * When called with CRT_IV_PERM_WRITE permission, returned iv_value
- * will be used by framework for storage of intermediate values.
+ * When called with CRT_IV_PERM_WRITE permission, it will update the IV value,
+ * i.e. the following callback will be iv_on_update() etc, and also returned
+ * iv_value will be used by framework for storage of intermediate values.
  *
  * Callback implementation should consider iv_value being 'in use' until
  * a corresponding crt_iv_on_put_cb_t callback is called.
@@ -245,8 +254,8 @@ typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
  * \return			zero on success, negative value if error
  */
 typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
-				crt_sg_list_t *iv_value,
-				void *priv);
+				  crt_sg_list_t *iv_value,
+				  void *priv);
 
 /**
  * Compares two passed iv keys 'key1' and 'key2' and returns either

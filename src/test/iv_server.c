@@ -543,7 +543,8 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 static int
 iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
-	crt_iv_ver_t iv_ver, uint32_t flags, crt_sg_list_t *iv_value)
+	crt_iv_ver_t iv_ver, uint32_t flags, crt_sg_list_t *iv_value,
+	void *user_priv)
 {
 	struct kv_pair_entry *entry;
 	struct iv_key_struct *key_struct;
@@ -551,6 +552,7 @@ iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	DBG_ENTRY();
 
+	assert(user_priv == &test_user_priv);
 	verify_key(iv_key);
 	verify_value(iv_value);
 
@@ -593,6 +595,7 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	int			rc;
 
 	DBG_ENTRY();
+	assert(user_priv == &test_user_priv);
 	valid = invalidate ? false : true;
 
 	verify_key(iv_key);
@@ -684,8 +687,8 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 }
 
 static int
-iv_on_put(crt_iv_namespace_t ivns, crt_sg_list_t *iv_value,
-	void *user_priv)
+iv_on_put(crt_iv_namespace_t ivns,
+	  crt_sg_list_t *iv_value, void *user_priv)
 {
 	DBG_ENTRY();
 
