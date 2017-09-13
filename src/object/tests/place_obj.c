@@ -107,7 +107,6 @@ main(int argc, char **argv)
 	pool_map_print(po_map);
 
 	mia.ia_type	    = PL_TYPE_RING;
-	mia.ia_ver	    = 1;
 	mia.ia_ring.ring_nr = 1;
 	mia.ia_ring.domain  = PO_COMP_TP_RACK;
 

@@ -44,7 +44,6 @@ typedef enum {
 
 struct pl_map_init_attr {
 	pl_map_type_t		ia_type;
-	uint32_t		ia_ver;
 	union {
 		struct pl_ring_init_attr {
 			pool_comp_type_t	domain;

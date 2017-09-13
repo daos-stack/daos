@@ -38,8 +38,6 @@ struct pl_ring {
 struct pl_ring_map {
 	/** common body */
 	struct pl_map		 rmp_map;
-	/** reference to cluster map */
-	struct pool_map		*rmp_poolmap;
 	/** number of rings, consistent hash ring size */
 	unsigned int		 rmp_ring_nr;
 	/** fault domain */
@@ -267,7 +265,7 @@ ring_buf_create(struct pl_ring_map *rimap, struct ring_buf **buf_pp)
 	int		    k;
 	int		    rc;
 
-	rc = pool_map_find_domain(rimap->rmp_poolmap, rimap->rmp_domain,
+	rc = pool_map_find_domain(rimap->rmp_map.pl_poolmap, rimap->rmp_domain,
 				  PO_COMP_ID_ALL, &doms);
 	if (rc <= 0)
 		return rc == 0 ? -DER_INVAL : rc;
@@ -277,7 +275,7 @@ ring_buf_create(struct pl_ring_map *rimap, struct ring_buf **buf_pp)
 	if (buf == NULL)
 		return -DER_NOMEM;
 
-	ver = rimap->rmp_map.pl_ver;
+	ver = pl_map_version(&rimap->rmp_map);
 	/** count domains that match the version */
 	for (i = 0; i < dom_nr; i++) {
 		if (doms[i].do_comp.co_ver <= ver)
@@ -499,7 +497,7 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 	if (ring->ri_targets == NULL)
 		return -DER_NOMEM;
 
-	first = pool_map_targets(rimap->rmp_poolmap);
+	first = pool_map_targets(rimap->rmp_map.pl_poolmap);
 
 	for (plt = &ring->ri_targets[0], i = 0;
 	     plt < &ring->ri_targets[rimap->rmp_target_nr]; i++) {
@@ -539,7 +537,7 @@ ring_print(struct pl_ring_map *rimap, int index)
 	int		    j;
 
 	D_PRINT("ring[%d]\n", index);
-	targets = pool_map_targets(rimap->rmp_poolmap);
+	targets = pool_map_targets(rimap->rmp_map.pl_poolmap);
 
 	for (i = j = period = 0; i < rimap->rmp_target_nr; i++) {
 		int pos = ring->ri_targets[i].pt_pos;
@@ -558,20 +556,11 @@ ring_print(struct pl_ring_map *rimap, int index)
 static int
 ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 {
-	struct pool_map *poolmap = rimap->rmp_poolmap;
 	struct ring_buf	*buf;
 	int		 i;
 	int		 rc;
 
-	D_ASSERT(rimap->rmp_poolmap != NULL);
-	if (mia->ia_ver > pool_map_get_version(poolmap))
-		return -DER_INVAL;
-
-	if (mia->ia_ver == 0)
-		rimap->rmp_map.pl_ver = pool_map_get_version(poolmap);
-	else
-		rimap->rmp_map.pl_ver = mia->ia_ver;
-
+	D_ASSERT(rimap->rmp_map.pl_poolmap != NULL);
 	rimap->rmp_domain  = mia->ia_ring.domain;
 	rimap->rmp_ring_nr = mia->ia_ring.ring_nr;
 
@@ -688,7 +677,7 @@ ring_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 		return -DER_NOMEM;
 
 	pool_map_addref(poolmap);
-	rimap->rmp_poolmap = poolmap;
+	rimap->rmp_map.pl_poolmap = poolmap;
 
 	rc = ring_map_build(rimap, mia);
 	if (rc != 0)
@@ -733,8 +722,8 @@ ring_map_destroy(struct pl_map *map)
 		D_FREE(rimap->rmp_rings,
 		       rimap->rmp_ring_nr * sizeof(*rimap->rmp_rings));
 	}
-	if (rimap->rmp_poolmap)
-		pool_map_decref(rimap->rmp_poolmap);
+	if (rimap->rmp_map.pl_poolmap)
+		pool_map_decref(rimap->rmp_map.pl_poolmap);
 
 	D_FREE_PTR(rimap);
 }
@@ -749,7 +738,7 @@ ring_map_print(struct pl_map *map)
 	int		    i;
 
 	D_PRINT("ring map: ver %d, nrims %d, hash 0-"DF_X64"\n",
-		rimap->rmp_map.pl_ver, rimap->rmp_ring_nr,
+		pl_map_version(&rimap->rmp_map), rimap->rmp_ring_nr,
 		(1UL << rimap->rmp_target_hbits));
 
 	for (i = 0; i < rimap->rmp_ring_nr; i++)
@@ -1028,7 +1017,7 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	ring_remap_dump(remap_list, md, "before remap:");
 
 	plts = ring_oid2ring(rimap, md->omd_id)->ri_targets;
-	tgts = pool_map_targets(rimap->rmp_poolmap);
+	tgts = pool_map_targets(rimap->rmp_map.pl_poolmap);
 	current = remap_list->next;
 	spare_idx = rop->rop_begin;
 
@@ -1150,13 +1139,14 @@ ring_map_dump(struct pl_map *map, bool dump_rings)
 		return;
 
 	D_DEBUG(DB_PL, "ring map: ver %d, nrims %d, domain_nr %d, "
-		"tgt_nr %d\n", rimap->rmp_map.pl_ver, rimap->rmp_ring_nr,
-		rimap->rmp_domain_nr, rimap->rmp_target_nr);
+		"tgt_nr %d\n", pl_map_version(&rimap->rmp_map),
+		rimap->rmp_ring_nr, rimap->rmp_domain_nr,
+		rimap->rmp_target_nr);
 
 	if (!dump_rings)
 		return;
 
-	targets = pool_map_targets(rimap->rmp_poolmap);
+	targets = pool_map_targets(rimap->rmp_map.pl_poolmap);
 
 	for (index = 0; index < rimap->rmp_ring_nr; index++) {
 		ring = &rimap->rmp_rings[index];
@@ -1189,13 +1179,13 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 	unsigned int		 plts_nr, grp_dist, grp_start;
 	unsigned int		 pos, i, j, k, rc;
 
-	layout->ol_ver = map->pl_ver;
+	layout->ol_ver = pl_map_version(map);
 
 	plts = ring_oid2ring(rimap, md->omd_id)->ri_targets;
 	plts_nr = rimap->rmp_target_nr;
 	grp_dist = rop->rop_grp_size * rop->rop_dist;
 	grp_start = rop->rop_begin;
-	tgts = pool_map_targets(rimap->rmp_poolmap);
+	tgts = pool_map_targets(rimap->rmp_map.pl_poolmap);
 
 	ring_map_dump(map, true);
 
@@ -1293,9 +1283,9 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 	int			   rc;
 
 	/* Caller should guarantee the pl_map is uptodate */
-	if (map->pl_ver < rebuild_ver) {
+	if (pl_map_version(map) < rebuild_ver) {
 		D_ERROR("pl_map version(%u) < rebuild version(%u)\n",
-			map->pl_ver, rebuild_ver);
+			pl_map_version(map), rebuild_ver);
 		return -DER_INVAL;
 	}
 

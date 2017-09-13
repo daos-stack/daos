@@ -275,7 +275,6 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		 struct pl_map_init_attr *mia)
 {
 	memset(mia, 0, sizeof(*mia));
-	mia->ia_ver = pool_map_get_version(po_map);
 
 	switch (type) {
 	default:
@@ -399,7 +398,7 @@ pl_map_update(uuid_t uuid, struct pool_map *pool_map)
 		struct pl_map	*tmp;
 
 		tmp = container_of(link, struct pl_map, pl_link);
-		if (tmp->pl_ver >= pool_map_get_version(pool_map)) {
+		if (pl_map_version(tmp) >= pool_map_get_version(pool_map)) {
 			dhash_rec_decref(&pl_htable, link);
 			D_GOTO(out, rc = 0);
 		}
@@ -469,5 +468,5 @@ pl_map_decref(struct pl_map *map)
 uint32_t
 pl_map_version(struct pl_map *map)
 {
-	return map->pl_ver;
+	return map->pl_poolmap ? pool_map_get_version(map->pl_poolmap) : 0;
 }

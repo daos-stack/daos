@@ -45,8 +45,8 @@ struct pl_map {
 	int			 pl_ref;
 	/** type of placement map */
 	pl_map_type_t		 pl_type;
-	/** pool map version this map is created for */
-	uint32_t		 pl_ver;
+	/** reference to pool map */
+	struct pool_map		*pl_poolmap;
 	/** placement map operations */
 	struct pl_map_ops       *pl_ops;
 };
