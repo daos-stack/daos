@@ -64,7 +64,7 @@ extern "C" {
  * Users of the heap should embed a d_binheap_node_t object instance on every
  * object of the set that they wish the binary heap instance to handle, and
  * required to provide a d_binheap_ops::hop_compare() implementation which
- * is used by the heap as the binary predicate d_uring its internal sorting.
+ * is used by the heap as the binary predicate during its internal sorting.
  *
  * The implementation provides an optional internal lock supporting, user can
  * select to use its own external lock mechanism as well.
@@ -139,7 +139,7 @@ struct d_binheap_ops {
 	int (*hop_exit)(struct d_binheap *h, struct d_binheap_node *e);
 
 	/**
-	 * A binary predicate which is called d_uring internal heap sorting, and
+	 * A binary predicate which is called during internal heap sorting, and
 	 * used in order to determine the relevant ordering of two heap nodes.
 	 *
 	 * Implementing this operation is mandatory.

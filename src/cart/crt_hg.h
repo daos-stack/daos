@@ -79,7 +79,7 @@ enum {
 
 struct crt_hg_hdl {
 	/* link to crt_hg_pool::chp_hg_list */
-	d_list_t			chh_link;
+	d_list_t		chh_link;
 	/* HG handle */
 	hg_handle_t		chh_hdl;
 };
@@ -91,7 +91,7 @@ struct crt_hg_pool {
 	/* maximum number of HG handles in pool */
 	int32_t			chp_max_num;
 	/* HG handle list */
-	d_list_t			chp_list;
+	d_list_t		chp_list;
 	bool			chp_enabled;
 };
 

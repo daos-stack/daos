@@ -442,8 +442,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 				struct crt_st_send_id_iov *typed_args =
 					(struct crt_st_send_id_iov *)args;
 
-				D_ASSERT(cb_args->buf_len >=
-					 g_data->send_size);
+				D_ASSERT(cb_args->buf_len >= g_data->send_size);
 				d_iov_set(&typed_args->buf,
 					 crt_st_get_aligned_ptr(cb_args->buf,
 						g_data->buf_alignment),
@@ -455,8 +454,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 				struct crt_st_send_id_iov_bulk *typed_args =
 					(struct crt_st_send_id_iov_bulk *)args;
 
-				D_ASSERT(cb_args->buf_len >=
-					 g_data->send_size);
+				D_ASSERT(cb_args->buf_len >= g_data->send_size);
 				d_iov_set(&typed_args->buf,
 					 crt_st_get_aligned_ptr(cb_args->buf,
 						g_data->buf_alignment),
@@ -576,7 +574,7 @@ test_rpc_cb(const struct crt_cb_info *cb_info)
 	/* Record return code */
 	g_data->rep_latencies[cb_args->rep_idx].cci_rc = cb_info->cci_rc;
 
-	/* If this endpoint was evicted d_uring the RPC, mark it as so */
+	/* If this endpoint was evicted during the RPC, mark it as so */
 	if (cb_info->cci_rc == -CER_OOG) {
 		D_WARN("Test RPC failed with -CER_OOG for endpoint=%u:%u;"
 		       " marking it as evicted\n",

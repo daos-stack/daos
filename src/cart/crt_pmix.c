@@ -193,7 +193,7 @@ crt_pmix_fence(void)
 	rc = PMIx_Fence(&proc, 1, info, 1);
 	if (rc != PMIX_SUCCESS) {
 		D_ERROR("PMIx ns %s rank %d, PMIx_Fence failed, rc: %d.\n",
-			      myproc->nspace, myproc->rank, rc);
+			myproc->nspace, myproc->rank, rc);
 		D_GOTO(out, rc = -CER_PMIX);
 	}
 
@@ -515,7 +515,7 @@ crt_pmix_attach(struct crt_grp_priv *grp_priv)
 {
 	struct crt_grp_gdata	*grp_gdata;
 	pmix_pdata_t		*pdata = NULL;
-	d_rank_t			 myrank;
+	d_rank_t		 myrank;
 	int			 rc = 0;
 
 	D_ASSERT(grp_priv != NULL);
@@ -582,7 +582,7 @@ crt_register_event_cb(crt_event_cb event_handler, void *args)
 	event_cb_priv->cecp_args = args;
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
 	d_list_add_tail(&event_cb_priv->cecp_link,
-		       &crt_plugin_gdata.cpg_event_cbs);
+			&crt_plugin_gdata.cpg_event_cbs);
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
 
 out:
@@ -607,7 +607,7 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	struct crt_pmix_gdata		*pmix_gdata;
 	struct crt_grp_priv		*grp_priv;
 	crt_event_cb			 cb_func;
-	d_rank_t				 crt_rank;
+	d_rank_t			 crt_rank;
 	struct crt_event_cb_priv	*event_cb_priv;
 	void				*args;
 
@@ -644,7 +644,7 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	/* walk the global list to execute the user callbacks */
 	pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_event_rwlock);
 	d_list_for_each_entry(event_cb_priv,
-			     &crt_plugin_gdata.cpg_event_cbs, cecp_link) {
+			      &crt_plugin_gdata.cpg_event_cbs, cecp_link) {
 		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
 		cb_func = event_cb_priv->cecp_func;
 		args = event_cb_priv->cecp_args;

@@ -408,7 +408,7 @@ assert_list_node_status(void **state, d_list_t *head, int value, bool in_list)
 	d_list_t			*pos;
 	struct d_list_test_entry	*entry;
 
-	dlist_for_each(pos, head) {
+	d_list_for_each(pos, head) {
 		entry = d_list_entry(pos, struct d_list_test_entry, link);
 		if (entry->num == value) {
 			if (in_list)
@@ -427,7 +427,7 @@ assert_list_node_count(void **state, d_list_t *head, int count)
 	d_list_t	*pos;
 	int		i = 0;
 
-	dlist_for_each(pos, head) {
+	d_list_for_each(pos, head) {
 		i++;
 	}
 
@@ -524,7 +524,7 @@ test_gurt_list(void **state)
 	}
 
 	i = 0;
-	dlist_for_each_safe(pos, temp, &head2) {
+	d_list_for_each_safe(pos, temp, &head2) {
 		entry = d_list_entry(pos, struct d_list_test_entry, link);
 		assert_int_equal(i, entry->num);
 		i++;

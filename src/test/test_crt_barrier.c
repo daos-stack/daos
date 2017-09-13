@@ -47,8 +47,8 @@ static int g_barrier_count;
 static int g_shutdown;
 
 struct proc_info {
-	d_rank_t		rank;
-	d_rank_t		grp_rank;
+	d_rank_t	rank;
+	d_rank_t	grp_rank;
 	int		barrier_num;
 	int		complete;
 };
@@ -136,7 +136,7 @@ int main(int argc, char **argv)
 	struct proc_info	*info;
 	crt_context_t		crt_ctx;
 	int			rc = 0;
-	d_rank_t			my_rank;
+	d_rank_t		my_rank;
 	int			i;
 	pthread_t		tid;
 

@@ -62,15 +62,15 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 
 	co_info->co_grp_priv = grp_priv;
 	rc = d_rank_list_dup_sort_uniq(&co_info->co_excluded_ranks,
-				      excluded_ranks, true /* input */);
+				       excluded_ranks, true /* input */);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
 		D_FREE_PTR(co_info);
 		D_GOTO(out, rc);
 	}
 	d_rank_list_filter(co_info->co_grp_priv->gp_membs,
-			  co_info->co_excluded_ranks, true /* input */,
-			  false /* exclude */);
+			   co_info->co_excluded_ranks, true /* input */,
+			   false /* exclude */);
 	co_info->co_grp_ver = grp_ver;
 	co_info->co_tree_topo = tree_topo;
 	co_info->co_root = grp_root;
@@ -247,7 +247,7 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	crt_bulk_t		 parent_bulk_hdl, local_bulk_hdl;
 	d_sg_list_t		 bulk_sgl;
 	d_iov_t			 bulk_iov;
-	d_size_t			 bulk_len;
+	d_size_t		 bulk_len;
 	struct crt_bulk_desc	 bulk_desc;
 	int			 rc = 0;
 
@@ -335,7 +335,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	d_rank_list_t		*tobe_excluded_ranks;
 	bool			 root_excluded = false;
 	crt_rpc_t		*rpc_pub;
-	d_rank_t			 grp_root, pri_root;
+	d_rank_t		 grp_root, pri_root;
 	int			 rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
@@ -393,12 +393,12 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		tmp_rank_list.rl_ranks = &tmp_rank;
 
 		rc =  d_rank_list_dup(&tobe_excluded_ranks, excluded_ranks,
-				     true /* input */);
+				      true /* input */);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
 		d_rank_list_filter(&tmp_rank_list, tobe_excluded_ranks,
-				  true /* input */, true /* exclude */);
+				   true /* input */, true /* exclude */);
 		root_excluded = true;
 	}
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, tobe_excluded_ranks,
@@ -472,7 +472,7 @@ corpc_add_child_rpc(struct crt_rpc_priv *parent_rpc_priv,
 
 	pthread_spin_lock(&parent_rpc_priv->crp_lock);
 	d_list_add_tail(&child_rpc_priv->crp_parent_link,
-		       &co_info->co_child_rpcs);
+			&co_info->co_child_rpcs);
 	pthread_spin_unlock(&parent_rpc_priv->crp_lock);
 }
 
@@ -551,7 +551,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 	crt_rpc_t		*child_req;
 	struct crt_opc_info	*opc_info;
 	struct crt_corpc_ops	*co_ops;
-	d_rank_t			 myrank;
+	d_rank_t		 myrank;
 	bool			 req_done = false;
 	bool			 am_root = false;
 	uint32_t		 wait_num, done_num;
@@ -604,8 +604,8 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 		co_info->co_local_done = 1;
 		/* aggregate previously replied RPCs */
 		d_list_for_each_entry_safe(tmp_rpc_priv, next,
-					  &co_info->co_replied_rpcs,
-					  crp_parent_link) {
+					   &co_info->co_replied_rpcs,
+					   crp_parent_link) {
 			D_ASSERT(tmp_rpc_priv != parent_rpc_priv);
 			D_ASSERT(co_ops->co_aggregate != NULL);
 			rc = co_ops->co_aggregate(&tmp_rpc_priv->crp_pub,
@@ -662,7 +662,7 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 	} else {
 		D_ASSERT(wait_num > co_info->co_child_ack_num);
 		d_list_move_tail(&child_rpc_priv->crp_parent_link,
-				&co_info->co_replied_rpcs);
+				 &co_info->co_replied_rpcs);
 		D_DEBUG("parent rpc %p, child rpc %p move to replided rpcs.\n",
 			parent_rpc_priv, child_rpc_priv);
 	}
@@ -719,7 +719,7 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 {
 	struct crt_corpc_info	*co_info;
 	d_rank_list_t		*children_rank_list = NULL;
-	d_rank_t			 grp_rank;
+	d_rank_t		 grp_rank;
 	struct crt_rpc_priv	*rpc_priv, *child_rpc_priv;
 	bool			 child_req_sent = false;
 	bool			 get_children_failed = false, am_root;

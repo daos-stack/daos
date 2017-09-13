@@ -106,7 +106,7 @@ static void run_client(void)
 	crt_bulk_t			bulk_hdl;
 	struct bulk_test_cli_cbinfo	*bulk_req_cbinfo;
 	char				*pchar;
-	d_rank_t				myrank;
+	d_rank_t			myrank;
 	uint32_t			grp_size_cli = 0;
 	uint32_t			grp_size_srv = 0;
 	struct crt_echo_checkin_req	*e_req;

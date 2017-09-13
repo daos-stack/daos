@@ -95,7 +95,7 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 	for (i = 0; i < (1 << map->com_bits); i++) {
 		while (!d_list_empty(&map->com_hash[i])) {
 			info = d_list_entry(map->com_hash[i].next,
-					   struct crt_opc_info, coi_link);
+					    struct crt_opc_info, coi_link);
 			d_list_del_init(&info->coi_link);
 			/*
 			D_DEBUG("deleted opc: 0x%x from map(hash %d).\n",
@@ -300,8 +300,8 @@ int
 crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *crf,
 		     crt_rpc_cb_t rpc_handler, struct crt_corpc_ops *co_ops)
 {
-	d_size_t			 input_size = 0;
-	d_size_t			 output_size = 0;
+	d_size_t		 input_size = 0;
+	d_size_t		 output_size = 0;
 	struct crt_msg_field	*cmf;
 	int			 rc = 0;
 	int			 i;

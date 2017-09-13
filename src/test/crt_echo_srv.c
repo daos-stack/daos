@@ -61,7 +61,7 @@ static int run_echo_srver(void)
 	crt_endpoint_t			 svr_ep = {0};
 	crt_rpc_t			*rpc_req = NULL;
 	char				*pchar;
-	d_rank_t				 myrank;
+	d_rank_t			 myrank;
 	uint32_t			 mysize;
 	int				 rc;
 	struct crt_echo_checkin_req	*e_req;

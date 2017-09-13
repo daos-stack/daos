@@ -184,7 +184,7 @@ struct crt_req_format {
 };
 
 struct crt_array {
-	d_size_t		 da_count;
+	d_size_t	 da_count;
 	void		*da_arrays;
 };
 
@@ -262,7 +262,7 @@ struct crt_bulk_desc {
 	doff_t		 bd_remote_off; /* offset within remote bulk buffer */
 	crt_bulk_t	 bd_local_hdl; /* local bulk handle */
 	doff_t		 bd_local_off; /* offset within local bulk buffer */
-	d_size_t		 bd_len; /* length of the bulk transferring */
+	d_size_t	 bd_len; /* length of the bulk transferring */
 };
 
 struct crt_cb_info {

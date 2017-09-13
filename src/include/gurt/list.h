@@ -267,7 +267,7 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
  * Behaviour is undefined if \a pos is removed from the list in the body of the
  * loop.
  */
-#define dlist_for_each(pos, head) \
+#define d_list_for_each(pos, head) \
 	for (pos = (head)->next, prefetch(pos->next); pos != (head); \
 		pos = pos->next, prefetch(pos->next))
 
@@ -280,7 +280,7 @@ d_list_splice_init(d_list_t *list, d_list_t *head)
  * This is safe to use if \a pos could be removed from the list in the body of
  * the loop.
  */
-#define dlist_for_each_safe(pos, n, head) \
+#define d_list_for_each_safe(pos, n, head) \
 	for (pos = (head)->next, n = pos->next; pos != (head); \
 		pos = n, n = pos->next)
 

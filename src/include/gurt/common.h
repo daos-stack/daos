@@ -235,9 +235,9 @@ d_power2_nbits(unsigned int val)
 
 int d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src, bool input);
 int d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src,
-			     bool input);
+			      bool input);
 void d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
-		       bool input, bool exclude);
+			bool input, bool exclude);
 d_rank_list_t *d_rank_list_alloc(uint32_t size);
 d_rank_list_t *d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size);
 void d_rank_list_free(d_rank_list_t *rank_list);
@@ -246,10 +246,10 @@ void d_rank_list_sort(d_rank_list_t *rank_list);
 bool d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx);
 int d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank);
 bool d_rank_list_identical(d_rank_list_t *rank_list1,
-			  d_rank_list_t *rank_list2, bool input);
+			   d_rank_list_t *rank_list2, bool input);
 bool d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, bool input);
 int d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank,
-		      uint32_t *idx, bool input);
+			uint32_t *idx, bool input);
 int d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank);
 int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
 int d_sgl_init(d_sg_list_t *sgl, unsigned int nr);

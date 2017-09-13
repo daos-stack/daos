@@ -40,7 +40,7 @@
  * TODOs:
  * - Randomize size of keys and values
  * - Add RPC to shutdown server & cleanup on shutdown
- * - Return shared buffer instead of a copy d_uring fetch
+ * - Return shared buffer instead of a copy during fetch
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -171,7 +171,7 @@ struct kv_pair_entry {
 	crt_iv_key_t	key;
 	d_sg_list_t	value;
 	bool		valid;
-	d_list_t		link;
+	d_list_t	link;
 };
 
 static crt_iv_key_t *

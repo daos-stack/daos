@@ -98,7 +98,7 @@ typedef d_iov_t	crt_iv_key_t;
  * Operation flags passed to callbacks
  *
  * Currently only supports CRT_IV_FLAG_PENDING_FETCH flag. This flag will be
- * set d_uring on_fetch() callback whenever such is called as part of the
+ * set during on_fetch() callback whenever such is called as part of the
  * aggregation logic. Based on this flag, client has ability to perform
  * desired optimizations, such as potentially reusing iv_value buffers
  * previously allocated/reserved.
@@ -262,7 +262,7 @@ typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
  * true or false. This is an optional callback that clients can implement
  * if they do not want default 'memcmp' comparison for keys.
  *
- * Key comparison is used d_uring fetch aggregation logic. Two requests
+ * Key comparison is used during fetch aggregation logic. Two requests
  * going for the same key will be aggregated if keys match.
  *
  *

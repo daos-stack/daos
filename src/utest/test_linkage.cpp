@@ -99,18 +99,18 @@ test_log_linkage(void **state)
 	(void)state;
 
 	fac = d_log_allocfacility("log_link_test",
-				 "Test linkage of crt log API");
+				  "Test linkage of crt log API");
 	assert_int_not_equal(fac, -1);
 }
 
 static bool
-key_cmp(struct chash_table *htable, d_list_t *rlink,
+key_cmp(struct d_chash_table *htable, d_list_t *rlink,
 	const void *key, unsigned int ksize)
 {
 	return true;
 }
 
-static chash_table_ops_t hash_ops = {
+static d_chash_table_ops_t hash_ops = {
 	hop_key_cmp : key_cmp,
 };
 
@@ -118,16 +118,16 @@ static void
 test_hash_linkage(void **state)
 {
 	int			rc;
-	struct chash_table	*table;
+	struct d_chash_table	*table;
 
 	(void)state;
 
-	rc = chash_table_create(0, 1, NULL, &hash_ops, &table);
+	rc = d_chash_table_create(0, 1, NULL, &hash_ops, &table);
 
 	assert_int_equal(rc, 0);
 	assert_non_null(table);
 
-	rc = chash_table_destroy(table, true);
+	rc = d_chash_table_destroy(table, true);
 	assert_int_equal(rc, 0);
 }
 

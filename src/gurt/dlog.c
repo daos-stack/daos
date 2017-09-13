@@ -258,7 +258,7 @@ static void clog_bput(char **bpp, int *skippy, int *residp, int *totcp,
 
 /**
  * dlog_cleanout: release previously allocated resources (e.g. from a
- * close or d_uring a failed open).  this function assumes the clogmux
+ * close or during a failed open).  this function assumes the clogmux
  * has been allocated (caller must ensure that this is true or we'll
  * die when attempting a clog_lock()).  we will dispose of clogmux.
  * (XXX: might want to switch over to a PTHREAD_MUTEX_INITIALIZER for

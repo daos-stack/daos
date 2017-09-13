@@ -187,7 +187,7 @@ d_binheap_grow(struct d_binheap *h)
 
 int
 d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
-			   struct d_binheap_ops *ops, struct d_binheap *h)
+			 struct d_binheap_ops *ops, struct d_binheap *h)
 {
 	int	rc;
 
@@ -222,7 +222,7 @@ d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
 
 int
 d_binheap_create(uint32_t feats, uint32_t count, void *priv,
-		   struct d_binheap_ops *ops, struct d_binheap **h)
+		 struct d_binheap_ops *ops, struct d_binheap **h)
 {
 	struct d_binheap	*bh_created;
 	int			 rc;

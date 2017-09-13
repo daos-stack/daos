@@ -100,7 +100,7 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 {
 	struct crt_barrier_info		*info;
 	struct crt_grp_priv		*primary_grp;
-	d_rank_t				 rank;
+	d_rank_t			 rank;
 	bool				 new_master = false;
 	int				 i;
 
@@ -112,7 +112,7 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 
 	pthread_rwlock_rdlock(&primary_grp->gp_rwlock);
 	if (d_rank_in_rank_list(grp_priv->gp_failed_ranks,
-			       info->bi_master_pri_rank, true)) {
+				info->bi_master_pri_rank, true)) {
 		rank = -1;
 		/* Master has failed */
 		new_master = true;
@@ -120,7 +120,7 @@ crt_barrier_update_master(struct crt_grp_priv *grp_priv)
 		     i < grp_priv->gp_membs->rl_nr.num; i++) {
 			rank = grp_priv->gp_membs->rl_ranks[i];
 			if (!d_rank_in_rank_list(grp_priv->gp_failed_ranks,
-						rank, true))
+						 rank, true))
 				break;
 		}
 

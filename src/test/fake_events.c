@@ -61,7 +61,7 @@ fake_event_thread(void *args)
 {
 	char		*pipe_name;
 	int		 event_code;
-	d_rank_t		 rank;
+	d_rank_t	 rank;
 	FILE		*fifo_pipe = NULL;
 	int		 fd;
 	struct pollfd	 pollfds[1];
@@ -92,7 +92,7 @@ fake_event_thread(void *args)
 				}
 				D_DEBUG("fscanf return code %d\n", rc);
 				fprintf(stderr, "event code: %d rank: %d\n",
-						event_code, rank);
+					event_code, rank);
 				if (event_code == 0)
 					crt_lm_fake_event_notify_fn(rank,
 								    &dead);
@@ -122,7 +122,7 @@ crt_fake_event_init(int rank)
 	mkfifo(pipe_name, 0666);
 	D_DEBUG("Rank: %d, named pipe created: %s\n", rank, pipe_name);
 	rc = pthread_create(&fake_event_tid, NULL, fake_event_thread, (void *)
-			pipe_name);
+			    pipe_name);
 	if (rc != 0)
 		D_ERROR("fake_event_thread creation failed, return code: %d\n",
 			rc);

@@ -45,7 +45,7 @@
 #include "crt_internal.h"
 
 struct crt_lm_evict_in {
-	d_rank_t			clei_rank;
+	d_rank_t		clei_rank;
 	uint32_t		clei_ver;
 };
 
@@ -87,18 +87,18 @@ struct lm_grp_srv_t {
 };
 
 struct lm_psr_cand {
-	d_rank_t		pc_rank;
+	d_rank_t	pc_rank;
 	bool		pc_pending_sample;
 };
 
 /* data for remote groups */
 struct lm_grp_priv_t {
-	d_list_t			 lgp_link;
+	d_list_t		 lgp_link;
 	crt_group_t		*lgp_grp;
 	uint32_t		 lgp_mvs;
 	uint32_t		 lgp_lm_ver;
 	/* PSR rank in attached group */
-	d_rank_t			 lgp_psr_rank;
+	d_rank_t		 lgp_psr_rank;
 	/* PSR phy addr address in attached group */
 	crt_phy_addr_t		 lgp_psr_phy_addr;
 	/* PSR candidates for PSR failures */
@@ -111,7 +111,7 @@ struct lm_grp_priv_t {
 
 struct crt_lm_gdata_t {
 	/* data for remote service groups */
-	d_list_t			clg_grp_remotes;
+	d_list_t		clg_grp_remotes;
 	/* data for the local service group */
 	struct lm_grp_srv_t	clg_lm_grp_srv;
 	volatile unsigned int	clg_refcount;
@@ -159,7 +159,7 @@ evict_corpc_cb(const struct crt_cb_info *cb_info)
 	uint32_t			 tmp_idx;
 	struct crt_lm_evict_in		*evict_in;
 	struct crt_lm_evict_out		*reply_result;
-	d_rank_t				 grp_self;
+	d_rank_t			 grp_self;
 	uint32_t			 grp_size;
 	struct lm_grp_srv_t		*lm_grp_srv;
 	crt_context_t			 crt_ctx;
@@ -200,7 +200,7 @@ evict_corpc_cb(const struct crt_cb_info *cb_info)
 	/* advance the index for the last successful bcast */
 	lm_grp_srv->lgs_bcast_idx++;
 	D_ASSERT(lm_grp_srv->lgs_bcast_idx <=
-			lm_grp_srv->lgs_bcast_list->rl_nr.num);
+		 lm_grp_srv->lgs_bcast_list->rl_nr.num);
 	if (lm_grp_srv->lgs_bcast_idx ==
 	    lm_grp_srv->lgs_bcast_list->rl_nr.num) {
 		lm_grp_srv->lgs_bcast_in_prog = 0;
@@ -233,7 +233,7 @@ lm_bcast_eviction_event(crt_context_t crt_ctx, struct lm_grp_srv_t *lm_grp_srv,
 	struct crt_lm_evict_in		*evict_in;
 	d_rank_list_t			*excluded_ranks = NULL;
 	uint32_t			 num;
-	d_rank_t				 grp_self;
+	d_rank_t			 grp_self;
 	int				 rc = 0;
 
 	rc = crt_group_rank(lm_grp_srv->lgs_grp, &grp_self);
@@ -287,7 +287,7 @@ out:
 static void
 lm_ras_event_hdlr_internal(d_rank_t crt_rank)
 {
-	d_rank_t				 grp_self;
+	d_rank_t			 grp_self;
 	struct lm_grp_srv_t		*lm_grp_srv;
 	int				 rc = 0;
 
@@ -344,7 +344,7 @@ lm_drain_evict_req_start(crt_context_t crt_ctx)
 	struct lm_grp_srv_t		*lm_grp_srv;
 	uint32_t			 tmp_idx;
 	uint32_t			 crt_rank;
-	d_rank_t				 grp_self;
+	d_rank_t			 grp_self;
 	int				 rc = 0;
 
 	D_ASSERT(crt_initialized());
@@ -393,7 +393,7 @@ out:
 void
 crt_lm_fake_event_notify_fn(d_rank_t crt_rank, bool *dead)
 {
-	d_rank_t			grp_self;
+	d_rank_t		grp_self;
 	int			rc = 0;
 
 	if (!crt_initialized()) {
@@ -425,10 +425,10 @@ crt_hdlr_rank_evict(crt_rpc_t *rpc_req)
 {
 	struct crt_lm_evict_in		*in_data;
 	struct crt_lm_evict_out		*out_data;
-	d_rank_t				 crt_rank;
+	d_rank_t			 crt_rank;
 	uint32_t			 remote_version;
 	struct lm_grp_srv_t		*lm_grp_srv;
-	d_rank_t				 grp_self;
+	d_rank_t			 grp_self;
 	int				 rc = 0;
 
 	in_data = crt_req_get(rpc_req);
@@ -483,9 +483,9 @@ static int
 crt_lm_grp_init(crt_group_t *grp)
 {
 	int			 i;
-	d_rank_t			 tmp_rank;
+	d_rank_t		 tmp_rank;
 	uint32_t		 grp_size;
-	d_rank_t			 grp_self;
+	d_rank_t		 grp_self;
 	uint32_t		 num_ras_ranks;
 	uint32_t		 mvs;
 	struct lm_grp_srv_t	*lm_grp_srv;
@@ -601,7 +601,7 @@ int crt_rank_evict_corpc_aggregate(crt_rpc_t *source,
 				   crt_rpc_t *result,
 				   void *priv)
 {
-	d_rank_t				 my_rank;
+	d_rank_t			 my_rank;
 	struct crt_lm_evict_out		*reply_source;
 	struct crt_lm_evict_out		*reply_result;
 	int				 rc = 0;
@@ -640,7 +640,7 @@ lm_grp_priv_find(crt_group_t *grp)
 	struct lm_grp_priv_t	*lm_grp_priv;
 
 	d_list_for_each_entry(lm_grp_priv, &crt_lm_gdata.clg_grp_remotes,
-			     lgp_link) {
+			      lgp_link) {
 		if (lm_grp_priv->lgp_grp == grp)
 			return lm_grp_priv;
 	}
@@ -709,7 +709,7 @@ lm_sample_rpc_cb(const struct crt_cb_info *cb_info)
 	crt_rpc_t				*rpc_req;
 	struct crt_lm_memb_sample_out		*out_data;
 	crt_group_t				*tgt_grp;
-	d_rank_t					*delta;
+	d_rank_t				*delta;
 	uint32_t				 num_delta;
 	int					 i;
 	uint32_t				 curr_ver;
@@ -787,7 +787,7 @@ lm_sample_rpc(crt_context_t ctx, struct lm_grp_priv_t *lm_grp_priv,
 {
 	struct crt_lm_memb_sample_in		*in_data;
 	crt_endpoint_t				 tgt_ep;
-	d_rank_t					 grp_self;
+	d_rank_t				 grp_self;
 	crt_rpc_t				*rpc_req;
 	crt_group_t				*tgt_grp;
 	uint32_t				 curr_ver;
@@ -1062,8 +1062,8 @@ static void
 lm_membs_sample(crt_context_t ctx, crt_rpc_t *rpc, void *args)
 {
 	crt_group_t			*tgt_grp;
-	d_rank_t				 tgt_rank;
-	d_rank_t				 tgt_psr = 0;
+	d_rank_t			 tgt_rank;
+	d_rank_t			 tgt_psr = 0;
 	struct lm_grp_priv_t		*lm_grp_priv;
 	struct lm_grp_priv_t		*lm_grp_priv_new;
 	int				 rc = 0;
@@ -1088,7 +1088,7 @@ lm_membs_sample(crt_context_t ctx, crt_rpc_t *rpc, void *args)
 		lm_grp_priv = lm_grp_priv_find(tgt_grp);
 		if (lm_grp_priv == NULL) {
 			d_list_add_tail(&lm_grp_priv_new->lgp_link,
-				       &crt_lm_gdata.clg_grp_remotes);
+					&crt_lm_gdata.clg_grp_remotes);
 			lm_grp_priv = lm_grp_priv_new;
 		} else {
 			lm_grp_priv_destroy(lm_grp_priv_new);
@@ -1115,7 +1115,7 @@ crt_hdlr_memb_sample(crt_rpc_t *rpc_req)
 {
 	struct crt_lm_memb_sample_in		*in_data;
 	struct crt_lm_memb_sample_out		*out_data;
-	d_rank_t					*delta;
+	d_rank_t				*delta;
 	d_rank_list_t				*failed_ranks = NULL;
 	uint32_t				 num_delta;
 	uint32_t				 curr_ver;
@@ -1319,7 +1319,7 @@ crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 		if (evicted)
 			continue;
 		rc = d_rank_list_append(*psr_cand,
-				       lm_grp_priv->lgp_psr_cand[i].pc_rank);
+					lm_grp_priv->lgp_psr_cand[i].pc_rank);
 		if (rc != 0) {
 			D_ERROR("d_rank_list_append() failed, rc: %d\n", rc);
 			D_GOTO(out, rc);

@@ -59,7 +59,7 @@ enum crt_rank_status {
 
 /* the index of crt_rank_map[] is the PMIx global rank */
 struct crt_rank_map {
-	d_rank_t			rm_rank; /* rank in primary group */
+	d_rank_t		rm_rank; /* rank in primary group */
 	enum crt_rank_status	rm_status; /* health status */
 };
 
@@ -67,7 +67,7 @@ struct crt_rank_map {
 #define CRT_LOOKUP_CACHE_BITS	(4)
 
 struct crt_grp_priv {
-	d_list_t			 gp_link; /* link to crt_grp_list */
+	d_list_t		 gp_link; /* link to crt_grp_list */
 	crt_group_t		 gp_pub; /* public grp handle */
 	/*
 	 * member ranks, should be unique and sorted, each member is the rank
@@ -98,13 +98,13 @@ struct crt_grp_priv {
 	 * the gp_membs->rl_ranks[gp_self] is its rank number in primary group.
 	 * For primary group, gp_self == gp_membs->rl_ranks[gp_self].
 	 */
-	d_rank_t			 gp_self;
+	d_rank_t		 gp_self;
 	/* PSR rank in attached group */
-	d_rank_t			 gp_psr_rank;
+	d_rank_t		 gp_psr_rank;
 	/* PSR phy addr address in attached group */
 	crt_phy_addr_t		 gp_psr_phy_addr;
 	/* address lookup cache, only valid for primary group */
-	struct chash_table     **gp_lookup_cache;
+	struct d_chash_table   **gp_lookup_cache;
 	enum crt_grp_status	 gp_status; /* group status */
 	/* set of variables only valid in primary service groups */
 	uint32_t		 gp_primary:1, /* flag of primary group */
@@ -130,7 +130,7 @@ struct crt_grp_priv {
 	 * gp_status is CRT_GRP_CREATING or CRT_GRP_DESTROYING.
 	 */
 	struct crt_rpc_priv	*gp_parent_rpc; /* parent RPC, NULL on root */
-	d_list_t			 gp_child_rpcs; /* child RPCs list */
+	d_list_t		 gp_child_rpcs; /* child RPCs list */
 	uint32_t		 gp_child_num;
 	uint32_t		 gp_child_ack_num;
 	int			 gp_rc; /* temporary recoded return code */
@@ -145,11 +145,11 @@ struct crt_grp_priv {
 /* lookup cache item for one target */
 struct crt_lookup_item {
 	/* link to crt_grp_priv::gp_lookup_cache[ctx_idx] */
-	d_list_t			 li_link;
+	d_list_t		 li_link;
 	/* point back to grp_priv */
 	struct crt_grp_priv	*li_grp_priv;
 	/* rank of the target */
-	d_rank_t			 li_rank;
+	d_rank_t		 li_rank;
 	/* base phy addr published through PMIx */
 	crt_phy_addr_t		 li_base_phy_addr;
 	/* connected HG addr */
@@ -172,13 +172,13 @@ struct crt_grp_gdata {
 	struct crt_grp_priv	*gg_srv_pri_grp;
 
 	/* client side group list attached by, only meaningful for server */
-	d_list_t			 gg_cli_grps_attached;
+	d_list_t		 gg_cli_grps_attached;
 	/* server side group list attached to */
-	d_list_t			 gg_srv_grps_attached;
+	d_list_t		 gg_srv_grps_attached;
 
 	/* TODO: move crt_grp_list here */
 	/* sub-grp list, only meaningful for server */
-	d_list_t			 gg_sub_grps;
+	d_list_t		 gg_sub_grps;
 	/* some flags */
 	uint32_t		 gg_inited:1, /* all initialized */
 				 gg_pmix_inited:1; /* PMIx initialized */

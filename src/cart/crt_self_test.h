@@ -116,7 +116,7 @@
  *
  * Primary role of sessions:
  * - Memory pre-allocated by open and cleaned up by close (no allocations
- *   d_uring the actual test).
+ *   during the actual test).
  * - In the future, the amount of information passed to self-test can grow
  *   without changing the size of the test RPCs (which instead only require a
  *   session id to convey all that same information)
@@ -201,8 +201,8 @@ enum crt_st_status {
  */
 
 struct crt_st_send_id_iov {
-	int64_t	session_id;
-	d_iov_t	buf;
+	int64_t		session_id;
+	d_iov_t		buf;
 };
 
 struct crt_st_send_id_iov_bulk {

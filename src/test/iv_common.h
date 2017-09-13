@@ -48,7 +48,7 @@
 
 /* Describes internal structure of a key */
 struct iv_key_struct {
-	d_rank_t		rank;
+	d_rank_t	rank;
 	uint32_t	key_id;
 };
 

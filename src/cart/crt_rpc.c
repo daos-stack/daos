@@ -499,7 +499,7 @@ crt_internal_rpc_register(void)
 	for (rpc = crt_internal_rpcs; rpc->ir_opc != 0; rpc++) {
 		D_ASSERT(rpc->ir_hdlr != NULL);
 		rc = crt_rpc_reg_internal(rpc->ir_opc, rpc->ir_req_fmt,
-					   rpc->ir_hdlr, rpc->ir_co_ops);
+					  rpc->ir_hdlr, rpc->ir_co_ops);
 		if (rc) {
 			D_ERROR("opcode 0x%x registration failed, rc: %d.\n",
 				rpc->ir_opc, rc);
@@ -738,7 +738,7 @@ static int
 crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *priv)
 {
 	struct crt_rpc_priv		*rpc_priv;
-	d_rank_t				 rank;
+	d_rank_t			 rank;
 	struct crt_grp_priv		*grp_priv;
 	struct crt_context		*crt_ctx;
 	int				 ctx_idx;
@@ -808,7 +808,7 @@ crt_req_get_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 static void
 crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 {
-	d_rank_t				 rank;
+	d_rank_t			 rank;
 	crt_endpoint_t			*tgt_ep;
 	struct crt_rpc_priv		*rpc_priv;
 	struct crt_grp_priv		*grp_priv;
@@ -1006,7 +1006,7 @@ crt_req_is_self(struct crt_rpc_priv *rpc_priv)
 static int
 crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 {
-	d_rank_t			 rank;
+	d_rank_t		 rank;
 	crt_endpoint_t		*tgt_ep;
 	struct crt_grp_priv	*grp_priv;
 	crt_group_id_t		 grp_id;

@@ -64,14 +64,14 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	} else {
 		/* grp_priv->gp_membs/exclude_ranks already sorted and unique */
 		rc = d_rank_list_dup(&grp_rank_list, grp_priv->gp_membs,
-				    true /* input */);
+				     true /* input */);
 		if (rc != 0) {
 			D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
 			D_GOTO(out, rc);
 		}
 		D_ASSERT(grp_rank_list != NULL);
 		d_rank_list_filter(exclude_ranks, grp_rank_list,
-				  true /* input */, true /* exclude */);
+				   true /* input */, true /* exclude */);
 
 		if (grp_rank_list->rl_nr.num == 0) {
 			D_DEBUG("d_rank_list_filter(group %s) get empty.\n",
@@ -84,7 +84,7 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		*allocated = true;
 		*grp_size = grp_rank_list->rl_nr.num;
 		rc = d_idx_in_rank_list(grp_rank_list,
-				       grp_priv->gp_membs->rl_ranks[root],
+					grp_priv->gp_membs->rl_ranks[root],
 				       grp_root, true /* input */);
 		if (rc != 0) {
 			D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
@@ -134,7 +134,7 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		       d_rank_t root, d_rank_t self, uint32_t *nchildren)
 {
 	d_rank_list_t		*grp_rank_list = NULL;
-	d_rank_t			 grp_root, grp_self;
+	d_rank_t		 grp_root, grp_self;
 	bool			 allocated = false;
 	uint32_t		 tree_type, tree_ratio;
 	uint32_t		 grp_size;
@@ -195,7 +195,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 {
 	d_rank_list_t		*grp_rank_list = NULL;
 	d_rank_list_t		*result_rank_list = NULL;
-	d_rank_t			 grp_root, grp_self;
+	d_rank_t		 grp_root, grp_self;
 	bool			 allocated = false;
 	uint32_t		 tree_type, tree_ratio;
 	uint32_t		 grp_size, nchildren;
@@ -280,7 +280,7 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		    d_rank_t root, d_rank_t self, d_rank_t *parent_rank)
 {
 	d_rank_list_t		*grp_rank_list = NULL;
-	d_rank_t			 grp_root, grp_self;
+	d_rank_t		 grp_root, grp_self;
 	bool			 allocated = false;
 	uint32_t		 tree_type, tree_ratio;
 	uint32_t		 grp_size, tree_parent;

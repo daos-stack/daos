@@ -108,7 +108,7 @@ crt_hg_pool_disable(struct crt_hg_context *hg_ctx)
 {
 	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
 	struct crt_hg_hdl	*hdl, *next;
-	d_list_t			 destroy_list;
+	d_list_t		 destroy_list;
 	hg_return_t		 hg_ret = HG_SUCCESS;
 
 	D_INIT_LIST_HEAD(&destroy_list);
@@ -1455,7 +1455,7 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 {
 	unsigned int	  bulk_sgnum;
 	unsigned int	  actual_sgnum;
-	d_size_t		  bulk_len;
+	d_size_t	  bulk_len;
 	void		**buf_ptrs = NULL;
 	void		 *buf_ptrs_stack[CRT_HG_IOVN_STACK];
 	hg_size_t	 *buf_sizes = NULL;

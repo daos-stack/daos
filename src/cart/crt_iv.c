@@ -40,7 +40,7 @@
  */
 /* TODO list for stage2:
  * - iv_ver is not passed to most calls
- * - root_node flag is not passed d_uring fetch/update
+ * - root_node flag is not passed during fetch/update
  * - update aggregation
  * - sync/refresh called on all nodes; might want to exclude update path
  * - CRT_IV_CLASS features (crt_iv_class::ivc_feats) not implemented
@@ -70,7 +70,7 @@ struct iv_fetch_in {
 	/* Class id */
 	uint32_t	ifi_class_id;
 	/* Root node for current fetch operation */
-	d_rank_t		ifi_root_node;
+	d_rank_t	ifi_root_node;
 };
 
 /* Data structure for internal iv fetch rpc output*/
@@ -82,7 +82,7 @@ struct iv_fetch_out {
 /* Structure for uniquely identifying iv namespace */
 struct crt_ivns_id {
 	/* Rank of the namespace */
-	d_rank_t		ii_rank;
+	d_rank_t	ii_rank;
 	/* Unique ID within the rank */
 	uint32_t	ii_nsid;
 };
@@ -132,17 +132,17 @@ struct pending_fetch {
 	struct iv_fetch_cb_info		*pf_cb_info;
 
 	/* Link to ivf_key_in_progress::kip_pending_fetch_list */
-	d_list_t				 pf_link;
+	d_list_t			 pf_link;
 };
 
 /* Struture for list of all pending fetches for given key */
 struct ivf_key_in_progress {
 	crt_iv_key_t	kip_key;
-	d_list_t		kip_pending_fetch_list;
+	d_list_t	kip_pending_fetch_list;
 	pthread_mutex_t	kip_lock;
 
 	/* Link to crt_ivns_internal::cii_keys_in_progress_list */
-	d_list_t		kip_link;
+	d_list_t	kip_link;
 
 	/* Payload for kip_key->iov_buf */
 	uintptr_t	payload[0];
@@ -162,17 +162,17 @@ struct crt_ivns_internal {
 	struct crt_global_ns	 cii_gns;
 
 	/* Cached info to avoid cart queries */
-	d_rank_t			 cii_local_rank;
+	d_rank_t		 cii_local_rank;
 	uint32_t		 cii_group_size;
 
 	/* Link list of all keys in progress */
-	d_list_t			 cii_keys_in_progress_list;
+	d_list_t		 cii_keys_in_progress_list;
 
 	/* Lock for modification of pending list */
 	pthread_mutex_t		 cii_lock;
 
 	/* Link to ns_list */
-	d_list_t			 cii_link;
+	d_list_t		 cii_link;
 };
 
 static int
@@ -210,7 +210,7 @@ crt_ivf_key_in_progress_find(struct crt_ivns_internal *ivns,
 	struct ivf_key_in_progress *entry;
 
 	d_list_for_each_entry(entry, &ivns->cii_keys_in_progress_list,
-			     kip_link) {
+			      kip_link) {
 		/* Use keys_match callback if client provided one */
 		if (ops->ivo_keys_match) {
 			if (ops->ivo_keys_match(ivns, &entry->kip_key, key))
@@ -286,7 +286,7 @@ crt_ivf_pending_request_add(struct ivf_key_in_progress *entry,
 	pending_fetch->pf_cb_info = iv_info;
 
 	d_list_add_tail(&pending_fetch->pf_link,
-		       &entry->kip_pending_fetch_list);
+			&entry->kip_pending_fetch_list);
 	return 0;
 }
 
@@ -1007,7 +1007,7 @@ crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
 			d_rank_t cur_node, d_rank_t root_node)
 {
 	struct crt_grp_priv	*grp_priv;
-	d_rank_t			 parent_rank;
+	d_rank_t		 parent_rank;
 	crt_group_t		*group;
 	int			 rc;
 
@@ -1178,8 +1178,8 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;
 	struct iv_fetch_cb_info		*cb_info;
-	d_rank_t				 root_rank;
-	d_rank_t				 next_node = 1;
+	d_rank_t			 root_rank;
+	d_rank_t			 next_node = 1;
 	int				 rc;
 	d_sg_list_t			*iv_value = NULL;
 	void				*user_priv = NULL;
@@ -1319,10 +1319,10 @@ struct iv_update_in {
 	crt_bulk_t	ivu_iv_value_bulk;
 
 	/* Root node for IV UPDATE */
-	d_rank_t		ivu_root_node;
+	d_rank_t	ivu_root_node;
 
 	/* Original node that issued crt_iv_update call */
-	d_rank_t		ivu_caller_node;
+	d_rank_t	ivu_caller_node;
 
 	/* Class ID */
 	uint32_t	ivu_class_id;
@@ -1434,7 +1434,7 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 
 	case CRT_IV_SYNC_EVENT_NOTIFY:
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
-						0, 0, false, user_priv);
+					    0, 0, false, user_priv);
 		if (rc != 0) {
 			D_ERROR("ivo_on_refresh() failed; rc=%d\n", rc);
 			D_GOTO(exit, rc);
@@ -1546,14 +1546,14 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	struct crt_iv_ops	*iv_ops;
 	crt_bulk_t		local_bulk = CRT_BULK_NULL;
 	d_rank_list_t		excluded_list;
-	d_rank_t			excluded_ranks[1]; /* Excluding self */
+	d_rank_t		excluded_ranks[1]; /* Excluding self */
 
 	/* TODO: An optional feature for future get all ranks between
 	* source node and destination in order to exclude them from
 	* being synchronized (as they already got updated)
 	**/
 #if 0
-	d_rank_t			cur_rank;
+	d_rank_t		cur_rank;
 
 	cur_rank = src_node;
 	while (1) {
@@ -1629,7 +1629,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	D_ASSERT(input != NULL);
 
 	d_iov_set(&input->ivs_nsid, &ivns_internal->cii_gns.gn_ivns_id,
-		 sizeof(struct crt_ivns_id));
+		  sizeof(struct crt_ivns_id));
 	d_iov_set(&input->ivs_key, iv_key->iov_buf, iv_key->iov_buf_len);
 	d_iov_set(&input->ivs_sync_type, &sync_type, sizeof(crt_iv_sync_t));
 	input->ivs_class_id = class_id;
@@ -1712,7 +1712,7 @@ struct update_cb_info {
 	d_sg_list_t			uci_iv_value;
 
 	/* Caller of the crt_iv_update() API */
-	d_rank_t				uci_caller_rank;
+	d_rank_t			uci_caller_rank;
 
 	/* Sync type associated with this update */
 	crt_iv_sync_t			uci_sync_type;
@@ -1908,7 +1908,7 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 	struct iv_update_out		*output;
 	struct update_cb_info		*update_cb_info = NULL;
 	int				rc = 0;
-	d_rank_t				next_rank;
+	d_rank_t			next_rank;
 	int				update_rc;
 	crt_iv_sync_t			*sync_type;
 
@@ -2005,7 +2005,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	crt_bulk_t			local_bulk_handle;
 	struct bulk_update_cb_info	*cb_info;
 	crt_iv_sync_t			*sync_type;
-	d_rank_t				next_rank;
+	d_rank_t			next_rank;
 	struct update_cb_info		*update_cb_info;
 	int				size;
 	void				*user_priv;
@@ -2143,8 +2143,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 {
 	struct crt_iv_ops		*iv_ops;
 	struct crt_ivns_internal	*ivns_internal;
-	d_rank_t				 root_rank;
-	d_rank_t				 next_node;
+	d_rank_t			 root_rank;
+	d_rank_t			 next_node;
 	struct update_cb_info		*cb_info;
 	void				*priv;
 	int				 rc = 0;
@@ -2280,8 +2280,8 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 	struct crt_iv_ops		*iv_ops;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_grp_priv		*grp_priv;
-	d_rank_t				 root_rank;
-	d_rank_t				 self_rank;
+	d_rank_t			 root_rank;
+	d_rank_t			 self_rank;
 	int				 rc = 0;
 
 	if (iv_key == NULL || nchildren == NULL) {

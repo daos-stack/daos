@@ -47,7 +47,7 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src, bool input)
 {
 	d_rank_list_t		*rank_list;
 	uint32_t		 rank_num;
-	d_size_t			 size;
+	d_size_t		 size;
 	int			 rc = 0;
 
 	if (dst == NULL) {
@@ -157,7 +157,7 @@ void
 d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 		  bool input, bool exclude)
 {
-	d_rank_t		rank;
+	d_rank_t	rank;
 	uint32_t	rank_num, filter_num;
 	int		i, j;
 
@@ -387,7 +387,7 @@ out:
  */
 bool
 d_rank_list_identical(d_rank_list_t *rank_list1,
-		     d_rank_list_t *rank_list2, bool input)
+		      d_rank_list_t *rank_list2, bool input)
 {
 	int i;
 
@@ -440,7 +440,7 @@ d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, bool input)
  */
 int
 d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank,
-		  uint32_t *idx, bool input)
+		   uint32_t *idx, bool input)
 {
 	uint32_t	rank_num;
 	bool		found = false;
