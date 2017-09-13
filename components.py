@@ -325,8 +325,8 @@ REQS.define('cart',
                       "MERCURY_PREBUILT=$MERCURY_PREFIX "
                       "PMIX_PREBUILT=$PMIX_PREFIX "
                       "PREFIX=$CART_PREFIX install"],
-            headers=["cart/api.h", "pouch/list.h"],
-            libs=["cart", "pouch"],
+            headers=["cart/api.h", "gurt/list.h"],
+            libs=["cart", "gurt"],
             requires=['mpi4py', 'mercury', 'argobots', 'crypto', 'ompi',
                       'pmix'])
 
