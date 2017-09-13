@@ -40,6 +40,7 @@
 #include <pthread.h>
 #include <cart/api.h>
 #include <gurt/common.h>
+#include "common.h"
 
 #define NUM_BARRIERS 20
 
@@ -71,22 +72,7 @@ void *progress_thread(void *arg)
 			break;
 	} while (1);
 
-	/* Drain the queue */
-	do {
-		rc = crt_progress(crt_ctx, 2000000, NULL, NULL);
-		if (rc != 0 && rc != -CER_TIMEDOUT) {
-			D_ERROR("crt_progress failed rc: %d.\n", rc);
-			break;
-		}
-
-		if (rc == -CER_TIMEDOUT) {
-			D_DEBUG("Timed out draining queue\n");
-			break;
-		}
-	} while (1);
-
-
-	pthread_exit(NULL);
+	pthread_exit(drain_queue(crt_ctx) ? crt_ctx : NULL);
 }
 
 int grp_create_cb(crt_group_t *grp, void *priv, int status)
@@ -134,6 +120,7 @@ barrier_complete_cb(struct crt_barrier_cb_info *cb_info)
 int main(int argc, char **argv)
 {
 	struct proc_info	*info;
+	void			*check_ret;
 	crt_context_t		crt_ctx;
 	int			rc = 0;
 	d_rank_t		my_rank;
@@ -182,7 +169,8 @@ int main(int argc, char **argv)
 	g_barrier_count = 0;
 
 	g_shutdown = 1;
-	pthread_join(tid, NULL);
+	pthread_join(tid, &check_ret);
+	D_ASSERTF(check_ret == NULL, "Progress thread failed\n");
 	crt_context_destroy(crt_ctx, 0);
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "Failed in crt_finalize, rc = %d\n", rc);
