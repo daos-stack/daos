@@ -711,10 +711,10 @@ int
 daos_obj_close(daos_handle_t oh, daos_event_t *ev);
 
 /**
- * Punch all records in an object.
+ * Punch an entire object with all keys associated with it.
  *
  * \param oh	[IN]	Object open handle.
- * \param epoch	[IN]	Epoch to punch records.
+ * \param epoch	[IN]	Epoch to punch the object in.
  * \param ev	[IN]	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -728,6 +728,51 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev);
  */
 int
 daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev);
+
+/**
+ * Punch dkeys (with all akeys) from an object.
+ *
+ * \param oh	[IN]	Object open handle.
+ * \param epoch	[IN]	Epoch to punch records.
+ * \param nr	[IN]	number of dkeys to punch.
+ * \param dkeys	[IN]	Array of dkeys to punch.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_EP_RO	Permission denied
+ *			-DER_NOEXIST	Nonexistent object ID
+ */
+int
+daos_obj_punch_dkeys(daos_handle_t oh, daos_epoch_t epoch, unsigned int nr,
+		     daos_key_t *dkeys, daos_event_t *ev);
+
+/**
+ * Punch akeys (with all records) from an object.
+ *
+ * \param oh	[IN]	Object open handle.
+ * \param epoch	[IN]	Epoch to punch records.
+ * \param dkey	[IN]	dkey to punch akeys from.
+ * \param nr	[IN]	number of akeys to punch.
+ * \param akeys	[IN]	Array of akeys to punch.
+ * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_EP_RO	Permission denied
+ *			-DER_NOEXIST	Nonexistent object ID
+ */
+int
+daos_obj_punch_akeys(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		     unsigned int nr, daos_key_t *akeys, daos_event_t *ev);
 
 /**
  * Query attributes of an object.

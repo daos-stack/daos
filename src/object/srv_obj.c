@@ -977,3 +977,76 @@ out:
 
 	ds_eu_complete(rpc, rc, task_arg.u.iter_arg.map_version);
 }
+
+static void
+ds_obj_punch_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
+		      uint32_t map_version, uuid_t cookie)
+{
+	int rc;
+
+	if (!daos_handle_is_inval(ioh)) {
+		struct obj_punch_in *opi;
+
+		opi = crt_req_get(rpc);
+		D_ASSERT(opi != NULL);
+
+		rc = 0;
+	}
+
+	obj_reply_set_status(rpc, status);
+	obj_reply_map_version_set(rpc, map_version);
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("send reply failed: %d\n", rc);
+}
+
+void
+ds_obj_punch_handler(crt_rpc_t *rpc)
+{
+	struct obj_punch_in	*opi;
+	struct ds_cont_hdl	*cont_hdl = NULL;
+	struct ds_cont		*cont = NULL;
+	daos_handle_t		ioh = DAOS_HDL_INVAL;
+	uint32_t		map_version = 0;
+	int			rc;
+
+	opi = crt_req_get(rpc);
+	D_ASSERT(opi != NULL);
+
+	rc = ds_check_container(opi->opi_co_hdl, opi->opi_co_uuid,
+				&cont_hdl, &cont);
+	if (rc)
+		D_GOTO(out, rc);
+
+	if (!(cont_hdl->sch_capas & DAOS_COO_RW))
+		D_GOTO(out, rc = -DER_NO_PERM);
+
+	D_ASSERT(cont_hdl->sch_pool != NULL);
+	map_version = cont_hdl->sch_pool->spc_map_version;
+
+	if (opi->opi_map_ver < map_version) {
+		/** Di's warning for stale(DAOS-308). */
+		D_WARN("stale version req %d map_version %d\n",
+		       opi->opi_map_ver, map_version);
+	}
+
+	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH) {
+		/** VOS punch obj */
+	}
+	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_DKEYS) {
+		/** VOS punch dkeys */
+	}
+	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_AKEYS) {
+		/** VOS punch akeys */
+	}
+
+out:
+	ds_obj_punch_complete(rpc, ioh, rc, map_version,
+			      cont_hdl ? cont_hdl->sch_uuid : NULL);
+	if (cont_hdl) {
+		if (!cont_hdl->sch_cont)
+			ds_cont_put(cont); /* -1 for rebuild container */
+		ds_cont_hdl_put(cont_hdl);
+	}
+}

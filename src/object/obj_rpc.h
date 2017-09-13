@@ -46,11 +46,14 @@
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
 enum obj_rpc_opc {
-	DAOS_OBJ_RPC_UPDATE	= 1,
-	DAOS_OBJ_RPC_FETCH	= 2,
-	DAOS_OBJ_DKEY_RPC_ENUMERATE = 3,
-	DAOS_OBJ_AKEY_RPC_ENUMERATE = 4,
-	DAOS_OBJ_RECX_RPC_ENUMERATE = 5,
+	DAOS_OBJ_RPC_UPDATE		= 1,
+	DAOS_OBJ_RPC_FETCH		= 2,
+	DAOS_OBJ_DKEY_RPC_ENUMERATE	= 3,
+	DAOS_OBJ_AKEY_RPC_ENUMERATE	= 4,
+	DAOS_OBJ_RECX_RPC_ENUMERATE	= 5,
+	DAOS_OBJ_RPC_PUNCH		= 6,
+	DAOS_OBJ_RPC_PUNCH_DKEYS	= 7,
+	DAOS_OBJ_RPC_PUNCH_AKEYS	= 8,
 };
 
 struct obj_rw_in {
@@ -103,6 +106,24 @@ struct obj_key_enum_out {
 	struct crt_array	oeo_cookies;
 	struct crt_array	oeo_vers;
 	daos_sg_list_t		oeo_sgl;
+};
+
+struct obj_punch_in {
+	uuid_t			opi_co_hdl;
+	uuid_t			opi_co_uuid;
+	uint64_t		opi_epoch;
+	uint32_t		opi_map_ver;
+	uint32_t		opi_nr_dkeys;
+	struct crt_array	opi_dkeys;
+	uint32_t		opi_nr_akeys;
+	uint32_t		oei_pad;
+	struct crt_array	opi_akeys;
+};
+
+/* reply for update/fetch */
+struct obj_punch_out {
+	int32_t			opo_ret;
+	uint32_t		opo_map_version;
 };
 
 extern struct daos_rpc daos_obj_rpcs[];

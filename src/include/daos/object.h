@@ -81,6 +81,8 @@ int dc_obj_declare(tse_task_t *task);
 int dc_obj_open(tse_task_t *task);
 int dc_obj_close(tse_task_t *task);
 int dc_obj_punch(tse_task_t *task);
+int dc_obj_punch_dkeys(tse_task_t *task);
+int dc_obj_punch_akeys(tse_task_t *task);
 int dc_obj_query(tse_task_t *task);
 int dc_obj_fetch(tse_task_t *task);
 int dc_obj_update(tse_task_t *task);

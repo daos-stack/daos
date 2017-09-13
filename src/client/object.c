@@ -140,9 +140,6 @@ daos_obj_close(daos_handle_t oh, daos_event_t *ev)
 int
 daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
-	return -DER_NOSYS;
-#if 0
 	daos_obj_punch_t	args;
 	tse_task_t		*task;
 
@@ -153,7 +150,45 @@ daos_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
 
 	dc_task_create(DAOS_OPC_OBJ_PUNCH, &args, sizeof(args), &task, &ev);
 	return daos_client_result_wait(ev);
-#endif
+}
+
+int
+daos_obj_punch_dkeys(daos_handle_t oh, daos_epoch_t epoch, unsigned int nr,
+		     daos_key_t *dkeys, daos_event_t *ev)
+{
+	daos_obj_punch_dkeys_t	args;
+	tse_task_t		*task;
+
+	args.oh		= oh;
+	args.epoch	= epoch;
+	args.nr		= nr;
+	args.dkeys	= dkeys;
+
+	DAOS_API_ARG_ASSERT(args, OBJ_PUNCH_DKEYS);
+
+	dc_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS, &args, sizeof(args), &task,
+		       &ev);
+	return daos_client_result_wait(ev);
+}
+
+int
+daos_obj_punch_akeys(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
+		     unsigned int nr, daos_key_t *akeys, daos_event_t *ev)
+{
+	daos_obj_punch_akeys_t	args;
+	tse_task_t		*task;
+
+	args.oh		= oh;
+	args.epoch	= epoch;
+	args.dkey	= dkey;
+	args.nr		= nr;
+	args.akeys	= akeys;
+
+	DAOS_API_ARG_ASSERT(args, OBJ_PUNCH_AKEYS);
+
+	dc_task_create(DAOS_OPC_OBJ_PUNCH_AKEYS, &args, sizeof(args), &task,
+		       &ev);
+	return daos_client_result_wait(ev);
 }
 
 int

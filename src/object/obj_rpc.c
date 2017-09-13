@@ -79,6 +79,23 @@ static struct crt_msg_field *obj_key_enum_out_fields[] = {
 	&DMF_SGL,		/* SGL buffer */
 };
 
+static struct crt_msg_field *obj_punch_in_fields[] = {
+	&CMF_UUID,	/* container handle uuid */
+	&CMF_UUID,	/* container uuid */
+	&CMF_UINT64,	/* epoch */
+	&CMF_UINT32,	/* map_version */
+	&CMF_UINT32,	/* count of dkeys */
+	&DMF_KEY_ARRAY,	/* dkey array */
+	&CMF_UINT32,	/* count of akeys */
+	&CMF_UINT32,	/* pad  */
+	&DMF_KEY_ARRAY,	/* akey array */
+};
+
+static struct crt_msg_field *obj_punch_out_fields[] = {
+	&CMF_INT,	/* status */
+	&CMF_UINT32,	/* map version */
+};
+
 static struct crt_req_format DQF_OBJ_UPDATE =
 	DEFINE_CRT_REQ_FMT("DAOS_OBJ_UPDATE",
 			   obj_rw_in_fields,
@@ -103,6 +120,21 @@ struct crt_req_format DQF_REC_ENUMERATE =
 	DEFINE_CRT_REQ_FMT("DSR_REC_ENUMERATE",
 			   obj_key_enum_in_fields,
 			   obj_key_enum_out_fields);
+
+static struct crt_req_format DQF_OBJ_PUNCH =
+	DEFINE_CRT_REQ_FMT("DAOS_OBJ_PUNCH",
+			   obj_punch_in_fields,
+			   obj_punch_out_fields);
+
+static struct crt_req_format DQF_OBJ_PUNCH_DKEYS =
+	DEFINE_CRT_REQ_FMT("DAOS_OBJ_PUNCH_DKEYS",
+			   obj_punch_in_fields,
+			   obj_punch_out_fields);
+
+static struct crt_req_format DQF_OBJ_PUNCH_AKEYS =
+	DEFINE_CRT_REQ_FMT("DAOS_OBJ_PUNCH_AKEYS",
+			   obj_punch_in_fields,
+			   obj_punch_out_fields);
 
 struct daos_rpc daos_obj_rpcs[] = {
 	{
@@ -135,6 +167,24 @@ struct daos_rpc daos_obj_rpcs[] = {
 		.dr_ver         = 1,
 		.dr_flags       = 0,
 		.dr_req_fmt     = &DQF_REC_ENUMERATE,
+	}, {
+		.dr_name	= "DAOS_OBJ_PUNCH",
+		.dr_opc		= DAOS_OBJ_RPC_PUNCH,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_OBJ_PUNCH,
+	}, {
+		.dr_name	= "DAOS_OBJ_PUNCH_DKEYS",
+		.dr_opc		= DAOS_OBJ_RPC_PUNCH_DKEYS,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_OBJ_PUNCH_DKEYS,
+	}, {
+		.dr_name	= "DAOS_OBJ_PUNCH_AKEYS",
+		.dr_opc		= DAOS_OBJ_RPC_PUNCH_AKEYS,
+		.dr_ver		= 1,
+		.dr_flags	= 0,
+		.dr_req_fmt	= &DQF_OBJ_PUNCH_AKEYS,
 	}, {
 		.dr_opc		= 0
 	}
@@ -169,6 +219,11 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		((struct obj_key_enum_out *)reply)->oeo_ret = status;
 		break;
+	case DAOS_OBJ_RPC_PUNCH:
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+		((struct obj_punch_out *)reply)->opo_ret = status;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -187,6 +242,10 @@ obj_reply_get_status(crt_rpc_t *rpc)
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		return ((struct obj_key_enum_out *)reply)->oeo_ret;
+	case DAOS_OBJ_RPC_PUNCH:
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+		return ((struct obj_punch_out *)reply)->opo_ret;
 	default:
 		D_ASSERT(0);
 	}
@@ -209,6 +268,11 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 		((struct obj_key_enum_out *)reply)->oeo_map_version =
 								map_version;
 		break;
+	case DAOS_OBJ_RPC_PUNCH:
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+		((struct obj_punch_out *)reply)->opo_map_version = map_version;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -227,6 +291,10 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 	case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		return ((struct obj_key_enum_out *)reply)->oeo_map_version;
+	case DAOS_OBJ_RPC_PUNCH:
+	case DAOS_OBJ_RPC_PUNCH_DKEYS:
+	case DAOS_OBJ_RPC_PUNCH_AKEYS:
+		return ((struct obj_punch_out *)reply)->opo_map_version;
 	default:
 		D_ASSERT(0);
 	}

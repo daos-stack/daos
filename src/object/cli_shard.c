@@ -55,7 +55,7 @@ obj_shard_alloc(daos_rank_t rank, daos_unit_oid_t id, uint32_t part_nr)
 	return shard;
 }
 
-static void
+void
 obj_shard_decref(struct dc_obj_shard *shard)
 {
 	D_ASSERT(shard->do_ref > 0);
@@ -866,4 +866,3 @@ dc_obj_shard_list_key(daos_handle_t oh, enum obj_rpc_opc opc,
 					  NULL, NULL, NULL, NULL, anchor,
 					  map_ver, task);
 }
-
