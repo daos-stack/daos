@@ -357,7 +357,6 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 	struct iv_fetch_cb_info		*iv_info;
 	int				 rc = 0;
 	bool				 put_needed = false;
-	d_sg_list_t			 tmp_iv_value;
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	D_ASSERT(iv_ops != NULL);
@@ -376,10 +375,11 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 	if (d_list_empty(&entry->kip_pending_fetch_list))
 		D_GOTO(cleanup, rc);
 
-	memset(&tmp_iv_value, 0, sizeof(tmp_iv_value));
 	/* Go through list of all pending fetches and finalize each one */
 	d_list_for_each_entry_safe(pending_fetch, next,
 				  &entry->kip_pending_fetch_list, pf_link) {
+		d_sg_list_t tmp_iv_value = {0};
+
 		iv_info = pending_fetch->pf_cb_info;
 
 		/* Pending remote fetch case */
@@ -1048,7 +1048,7 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	struct crt_ivns_id		*ivns_id;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;
-	d_sg_list_t			iv_value;
+	d_sg_list_t			iv_value = {0};
 	int				rc = 0;
 	bool				put_needed = false;
 	void				*user_priv = NULL;
@@ -1070,7 +1070,6 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		D_GOTO(send_error, rc = -CER_INVAL);
 	}
 
-	memset(&iv_value, 0, sizeof(iv_value));
 	rc = iv_ops->ivo_on_get(ivns_internal, &input->ifi_key,
 				0, CRT_IV_PERM_READ, &iv_value, &user_priv);
 
@@ -1364,7 +1363,7 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 	struct crt_iv_ops		*iv_ops;
 	struct crt_ivns_id		*ivns_id;
 	crt_iv_sync_t			*sync_type;
-	d_sg_list_t			 iv_value;
+	d_sg_list_t			iv_value = {0};
 	bool				 need_put = false;
 	void				*user_priv = NULL;
 
@@ -1397,7 +1396,6 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 	{
 		d_sg_list_t tmp_iv;
 
-		memset(&iv_value, 0, sizeof(iv_value));
 		rc = iv_ops->ivo_on_get(ivns_internal, &input->ivs_key,
 				0, CRT_IV_PERM_WRITE, &iv_value, &user_priv);
 
@@ -2000,7 +1998,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	struct crt_ivns_id		*ivns_id;
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_iv_ops		*iv_ops;
-	d_sg_list_t			iv_value;
+	d_sg_list_t			iv_value = {0};
 	struct crt_bulk_desc		bulk_desc;
 	crt_bulk_t			local_bulk_handle;
 	struct bulk_update_cb_info	*cb_info;
@@ -2074,7 +2072,6 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 		D_GOTO(exit, rc = 0);
 	}
 
-	memset(&iv_value, 0, sizeof(iv_value));
 	rc = iv_ops->ivo_on_get(ivns_internal, &input->ivu_key, 0,
 				CRT_IV_PERM_WRITE, &iv_value, &user_priv);
 	if (rc != 0) {
