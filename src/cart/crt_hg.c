@@ -384,7 +384,7 @@ done:
 }
 
 static int
-na_class_get_addr(na_class_t *na_class, char *addr_str, d_size_t *str_size)
+na_class_get_addr(na_class_t *na_class, char *addr_str, na_size_t *str_size)
 {
 	na_addr_t	self_addr;
 	na_return_t	na_ret;
@@ -577,7 +577,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 
 	if (*addr == NULL) {
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
-		d_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
+		na_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
 
 		rc = na_class_get_addr(na_class, addr_str, &str_size);
 		if (rc != 0) {
@@ -674,7 +674,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		hg_ctx->chc_shared_na = true;
 	} else {
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
-		d_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
+		na_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
 
 		rc = crt_get_info_string(&info_string, &info_string_free);
 		if (rc != 0)
@@ -1444,7 +1444,7 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 {
 	unsigned int	  bulk_sgnum;
 	unsigned int	  actual_sgnum;
-	d_size_t	  bulk_len;
+	size_t		  bulk_len;
 	void		**buf_ptrs = NULL;
 	void		 *buf_ptrs_stack[CRT_HG_IOVN_STACK];
 	hg_size_t	 *buf_sizes = NULL;

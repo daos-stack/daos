@@ -144,8 +144,8 @@ typedef struct crt_rpc {
 	enum crt_rpc_flags	cr_flags;
 	crt_rpc_input_t		cr_input; /* input parameter struct */
 	crt_rpc_output_t	cr_output; /* output parameter struct */
-	d_size_t		cr_input_size; /* size of input struct */
-	d_size_t		cr_output_size; /* size of output struct */
+	size_t			cr_input_size; /* size of input struct */
+	size_t			cr_output_size; /* size of output struct */
 	/* optional bulk handle for collective RPC */
 	crt_bulk_t		cr_co_bulk_hdl;
 } crt_rpc_t;
@@ -184,7 +184,7 @@ struct crt_req_format {
 };
 
 struct crt_array {
-	d_size_t	 da_count;
+	size_t		 da_count;
 	void		*da_arrays;
 };
 
@@ -222,7 +222,6 @@ extern struct crt_msg_field CMF_UUID;
 extern struct crt_msg_field CMF_GRP_ID;
 extern struct crt_msg_field CMF_INT;
 extern struct crt_msg_field CMF_UINT32;
-extern struct crt_msg_field CMF_CRT_SIZE;
 extern struct crt_msg_field CMF_UINT64;
 extern struct crt_msg_field CMF_BULK;
 extern struct crt_msg_field CMF_BOOL;
@@ -259,10 +258,10 @@ struct crt_bulk_desc {
 	crt_rpc_t	*bd_rpc; /* original RPC request */
 	crt_bulk_op_t	 bd_bulk_op; /* CRT_BULK_PUT or CRT_BULK_GET */
 	crt_bulk_t	 bd_remote_hdl; /* remote bulk handle */
-	doff_t		 bd_remote_off; /* offset within remote bulk buffer */
+	off_t		 bd_remote_off; /* offset within remote bulk buffer */
 	crt_bulk_t	 bd_local_hdl; /* local bulk handle */
-	doff_t		 bd_local_off; /* offset within local bulk buffer */
-	d_size_t	 bd_len; /* length of the bulk transferring */
+	off_t		 bd_local_off; /* offset within local bulk buffer */
+	size_t		 bd_len; /* length of the bulk transferring */
 };
 
 struct crt_cb_info {

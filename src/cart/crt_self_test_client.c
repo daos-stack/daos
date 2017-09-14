@@ -1119,7 +1119,7 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 	 * working on the test
 	 */
 	if (g_data != NULL && g_data->test_complete == 1) {
-		d_size_t			bulk_in_len;
+		size_t			bulk_in_len;
 		struct crt_bulk_desc	bulk_desc;
 
 		/*

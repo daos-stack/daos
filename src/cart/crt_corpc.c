@@ -247,7 +247,7 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	crt_bulk_t		 parent_bulk_hdl, local_bulk_hdl;
 	d_sg_list_t		 bulk_sgl;
 	d_iov_t			 bulk_iov;
-	d_size_t		 bulk_len;
+	size_t			 bulk_len;
 	struct crt_bulk_desc	 bulk_desc;
 	int			 rc = 0;
 

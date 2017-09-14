@@ -478,7 +478,7 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
  * \return                      zero on success, negative value if error
  */
 int
-crt_bulk_get_len(crt_bulk_t bulk_hdl, d_size_t *bulk_len);
+crt_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len);
 
 /**
  * Get the number of segments of data abstracted by bulk handle.
@@ -864,7 +864,7 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op);
  * \return                      zero on success, negative value if error
  */
 int
-crt_proc_memcpy(crt_proc_t proc, void *data, d_size_t data_size);
+crt_proc_memcpy(crt_proc_t proc, void *data, size_t data_size);
 
 /**
  * Generic processing routine.
@@ -975,7 +975,7 @@ crt_proc_bool(crt_proc_t proc, bool *data);
  * \return                      zero on success, negative value if error
  */
 int
-crt_proc_raw(crt_proc_t proc, void *buf, d_size_t buf_size);
+crt_proc_raw(crt_proc_t proc, void *buf, size_t buf_size);
 
 /**
  * Generic processing routine.
@@ -1139,10 +1139,7 @@ crt_lm_attach(crt_group_t *tgt_grp, crt_lm_attach_cb_t completion_cb,
 	      void *arg);
 
 #define crt_proc__Bool			crt_proc_bool
-#define crt_proc_crt_size_t		crt_proc_uint64_t
-#define crt_proc_crt_off_t		crt_proc_uint64_t
 #define crt_proc_crt_rank_t		crt_proc_uint32_t
-#define crt_proc_crt_opcode_t		crt_proc_uint32_t
 #define crt_proc_int			crt_proc_int32_t
 #define crt_proc_crt_group_id_t		crt_proc_crt_string_t
 #define crt_proc_crt_phy_addr_t		crt_proc_crt_string_t

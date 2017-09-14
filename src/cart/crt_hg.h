@@ -190,7 +190,7 @@ crt_hg_bulk_free(crt_bulk_t bulk_hdl)
 }
 
 static inline int
-crt_hg_bulk_get_len(crt_bulk_t bulk_hdl, d_size_t *bulk_len)
+crt_hg_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len)
 {
 	hg_size_t	hg_size;
 

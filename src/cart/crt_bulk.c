@@ -178,7 +178,7 @@ out:
 }
 
 int
-crt_bulk_get_len(crt_bulk_t bulk_hdl, d_size_t *bulk_len)
+crt_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len)
 {
 	int	rc = 0;
 

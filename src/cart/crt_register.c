@@ -201,8 +201,8 @@ crt_opc_disable_reply(crt_opcode_t opc, bool disable)
 
 static int
 crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
-	    struct crt_req_format *crf, d_size_t input_size,
-	    d_size_t output_size, crt_rpc_cb_t rpc_cb,
+	    struct crt_req_format *crf, size_t input_size,
+	    size_t output_size, crt_rpc_cb_t rpc_cb,
 	    struct crt_corpc_ops *co_ops, int locked)
 {
 	struct crt_opc_info *info = NULL, *new_info;
@@ -300,8 +300,8 @@ int
 crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *crf,
 		     crt_rpc_cb_t rpc_handler, struct crt_corpc_ops *co_ops)
 {
-	d_size_t		 input_size = 0;
-	d_size_t		 output_size = 0;
+	size_t			 input_size = 0;
+	size_t			 output_size = 0;
 	struct crt_msg_field	*cmf;
 	int			 rc = 0;
 	int			 i;

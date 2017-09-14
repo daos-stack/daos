@@ -95,17 +95,14 @@ struct d_uuid {
 	uuid_t		uuid;
 };
 
-typedef uint64_t	d_size_t;
-typedef uint64_t	doff_t;
-
 /** iovec for memory buffer */
 typedef struct {
 	/** buffer address */
-	void	       *iov_buf;
+	void		*iov_buf;
 	/** buffer length */
-	d_size_t	iov_buf_len;
+	size_t		iov_buf_len;
 	/** data length */
-	d_size_t	iov_len;
+	size_t		iov_len;
 } d_iov_t;
 
 /** Server identification */
@@ -134,7 +131,7 @@ typedef struct {
 } d_sg_list_t;
 
 static inline void
-d_iov_set(d_iov_t *iov, void *buf, d_size_t size)
+d_iov_set(d_iov_t *iov, void *buf, size_t size)
 {
 	iov->iov_buf = buf;
 	iov->iov_len = iov->iov_buf_len = size;

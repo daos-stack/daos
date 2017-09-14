@@ -239,7 +239,7 @@ echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	crt_bulk_t			 local_bulk_hdl;
 	d_sg_list_t			 sgl;
 	d_iov_t				*iovs = NULL;
-	d_size_t			 bulk_len;
+	size_t				 bulk_len;
 	unsigned int			 bulk_sgnum;
 	struct crt_bulk_desc		 bulk_desc;
 	struct crt_echo_bulk_in_req	*e_req;

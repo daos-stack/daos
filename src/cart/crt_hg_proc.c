@@ -81,7 +81,7 @@ out:
 }
 
 int
-crt_proc_memcpy(crt_proc_t proc, void *data, d_size_t data_size)
+crt_proc_memcpy(crt_proc_t proc, void *data, size_t data_size)
 {
 	hg_return_t	hg_ret;
 
@@ -183,7 +183,7 @@ crt_proc_bool(crt_proc_t proc, bool *data)
 }
 
 int
-crt_proc_raw(crt_proc_t proc, void *buf, d_size_t buf_size)
+crt_proc_raw(crt_proc_t proc, void *buf, size_t buf_size)
 {
 	hg_return_t	hg_ret;
 
@@ -392,11 +392,7 @@ struct crt_msg_field CMF_UINT32 =
 
 struct crt_msg_field CMF_UINT64 =
 	DEFINE_CRT_MSG("crt_uint64", 0, sizeof(uint64_t),
-			crt_proc_uint64_t);
-
-struct crt_msg_field CMF_CRT_SIZE =
-	DEFINE_CRT_MSG("crt_crt_size", 0, sizeof(d_size_t),
-			crt_proc_crt_size_t);
+		       crt_proc_uint64_t);
 
 struct crt_msg_field CMF_BULK =
 	DEFINE_CRT_MSG("crt_bulk", 0, sizeof(crt_bulk_t),
