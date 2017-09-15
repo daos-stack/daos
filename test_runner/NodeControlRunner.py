@@ -41,7 +41,6 @@ import OrteRunner
 
 class NodeControlRunner():
     """Simple node interface"""
-    node_list = []
 
     def __init__(self, log_base, test_info):
         self.test_info = test_info
@@ -49,8 +48,8 @@ class NodeControlRunner():
         self.log_dir_base = log_base
         self.logger = logging.getLogger("TestRunnerLogger")
         self.now = "_{}".format(datetime.now().isoformat().replace(':', '.'))
-        host_list = self.info.get_config('host_list')
         host_list = self.test_info.get_subList('hostlist').split(',')
+        self.node_list = []
         for node in host_list:
             node_info = NodeRunner.NodeRunner(self.test_info, node)
             self.node_list.append(node_info)
@@ -67,8 +66,8 @@ class NodeControlRunner():
         return CmdRunner.CmdRunner(log_dir, log_name)
 
     def start_cmd_list(self, log_path, testsuite, prefix):
-        """add the log directory to the prefix
-           Note: entries, after the first, start with a space"""
+        """ create an orte Test Runner object
+            create the log directory """
         log_dir_orte = os.path.abspath(log_path)
         try:
             os.makedirs(log_dir_orte)
@@ -77,14 +76,67 @@ class NodeControlRunner():
         return (OrteRunner.OrteRunner(self.test_info, log_dir_orte,
                                       testsuite, prefix))
 
-    def execute_list(self, cmdstr, log_path, run_node_list, waittime):
+    def start_remote_cmd(self, nodeName, log_dir=""):
+        """ Pass through to NodeRunner:connect """
+        if not log_dir:
+            log_dir = self.log_dir_base
+        node = self.find_node(nodeName)
+        return node.connect(log_dir)
+
+    def close_remote_cmd(self, nodeCmd):
+        """ Pass through to NodeRunner:close """
+        node = self.find_node(nodeCmd.node)
+        node.close_connection(nodeCmd)
+
+    def find_node(self, testnode):
+        """ find node object """
+        for node in self.node_list:
+            if node.node == testnode:
+                return node
+        return None
+
+    def close_list(self, run_node_list):
+        """ execute command on node list """
+        self.logger.info("Close node connections")
+        for nodeCmd in run_node_list:
+            node = self.find_node(nodeCmd.node)
+            node.close_connection(nodeCmd)
+
+    def nodes_dump(self):
+        """ dump node objects """
+        for node in self.node_list:
+            node.dump_info()
+            del node
+        del self.node_list[:]
+
+    def create_remote_list(self, log_path, nodes="all", msg=""):
+        """ create node list """
+        run_node_list = []
+        self.logger.info("%s", ("*" * 40))
+        if msg:
+            self.logger.info("%s", msg)
+        if nodes == "all":
+            for node in self.node_list:
+                run_node_list.append(node.connect(log_path))
+        else:
+            if nodes[0].isupper():
+                node_list = self.test_info.get_defaultENV(nodes).split(",")
+            else:
+                node_list = nodes.split(",")
+            for node in node_list:
+                run_node_list.append(self.start_remote_cmd(node, log_path))
+
+        return run_node_list
+
+    #pylint: disable=too-many-arguments
+    def execute_list(self, cmdstr, run_node_list, waittime=180, environ=None):
         """ execute command on node list """
 
         rtn = 0
         for node in run_node_list:
             self.logger.debug("%s  run commnad on : %s %s",
                               ("*" * 10), str(node.node), ("*" * 10))
-            node.run_cmd(cmdstr, log_path)
+            node.execute_cmd(cmdstr, "", False, 10, environ)
         loop_count = waittime
         running_count = len(run_node_list)
         self.logger.debug("******* started running count %d", running_count)
@@ -112,59 +164,28 @@ class NodeControlRunner():
         self.logger.info("%s", ("*" * 40))
         return rtn
 
-    def find_node(self, testnode):
-        """ find node object """
-        for node in self.node_list:
-            if node.node == testnode:
-                return node
-        return None
-
-    #pylint: disable=too-many-arguments
-    def execute_cmd(self, cmdstr, log_path, nodes="all", msg="", waittime=1800):
+    def execute_remote_cmd(self, cmdstr, log_path, nodes="all", msg="",
+                           waittime=1800, environ=None):
         """ create node list and execute command """
-
-        rtn = 0
-        run_node_list = []
-
-        self.logger.info("%s", ("*" * 40))
-        if msg:
-            self.logger.info("%s", msg)
-        if nodes == "all":
-            run_node_list = self.node_list
-        else:
-            if nodes[0].isupper():
-                node_list = self.test_info.get_defaultENV(nodes).split(",")
-            else:
-                node_list = nodes.split(",")
-            for node in node_list:
-                run_node_list.append(self.find_node(node))
-
-        rtn = self.execute_list(cmdstr, log_path, run_node_list, waittime)
+        run_node_list = self.create_remote_list(log_path, nodes, msg)
+        rtn = self.execute_list(cmdstr, run_node_list, waittime, environ)
+        self.close_list(run_node_list)
         return rtn
 
-    #pylint: enable=too-many-arguments
-
-    def nodes_dump(self):
-        """ dump node objects """
-        for node in self.node_list:
-            node.dump_info()
-            del node
-        del self.node_list[:]
-
-    #pylint: disable=too-many-arguments
-    def paramiko_execute_remote_cmd(self, node, cmd, args, wait, timeout,
-                                    environ=None):
+    def paramiko_execute_remote_cmd(self, nodeName, cmd, args, wait=True,
+                                    timeout=15, environ=None):
         """
         Pass through to NodeRunner:execute_cmd()
         """
-        run_node = self.find_node(node)
-        return run_node.execute_cmd(cmd, args, self.log_dir_base,
-                                    wait=wait, timeout=timeout, environ=environ)
+        nodeCmd = self.start_remote_cmd(nodeName)
+        return nodeCmd.execute_cmd(cmd, args, wait, timeout, environ)
     #pylint: enable=too-many-arguments
 
-    def paramiko_wait_for_exit(self, node, retval, timeout):
+    #pylint: disable=unused-argument
+    def paramiko_wait_for_exit(self, node, nodeCmd, timeout):
         """
         Pass through to NodeRunner:wait_for_exit()
         """
-        run_node = self.find_node(node)
-        return run_node.wait_for_exit(retval, timeout)
+        retval = nodeCmd.wait_for_exit(timeout=15)
+        self.close_remote_cmd(nodeCmd)
+        return retval
