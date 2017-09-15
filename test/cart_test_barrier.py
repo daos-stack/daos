@@ -54,7 +54,6 @@ set TR_USE_VALGRIND in cart_test_barrier.yml to callgrind
 """
 
 import os
-import time
 import commontestsuite
 from socket import gethostname
 
@@ -94,27 +93,11 @@ class TestBarrier(commontestsuite.CommonTestSuite):
         else:
             hosts = ''.join([' -H ', gethostname().split('.')[0]])
 
-        # Launch a test_crt_barrier in the background.
-        # This will remain running for the duration.
-        proc_srv = self.launch_bg(testmsg, '1', self.pass_env, \
-                                  hosts, 'tests/test_crt_barrier')
+        (cmd, prefix) = self.add_prefix_logdir()
+        cmdstr = "{!s} {!s} -N 1 {!s} {!s} {!s}".format(
+            cmd, hosts, self.pass_env, prefix, 'tests/test_crt_barrier')
 
-        if proc_srv is None:
-            self.fail("Server launch failed, return code %s" \
-                       % proc_srv.returncode)
-
-        time.sleep(2)
-
-        # Verify the server is still running.
-        if not self.check_process(proc_srv):
-            procrtn = self.stop_process(testmsg, proc_srv)
-            self.fail("Server did not launch, return code %s" \
-                       % procrtn)
-        self.logger.info("Server running")
-
-        # Stop the server.  This will normally run forever because of the hold
-        # option, so allow stop_process() to kill it.
-        srv_rtn = self.stop_process(testmsg, proc_srv)
+        srv_rtn = self.execute_cmd(testmsg, cmdstr)
 
         if srv_rtn:
             self.fail("Barrier test Failed, return code %d" % srv_rtn)
