@@ -57,7 +57,8 @@ class OrteRunner():
 
     def __init__(self, test_info, log_path, testsuite, prefix):
         """add the log directory to the prefix
-           Note: entries, after the first, start with a space"""
+           Note: entries, after the first, start with a space
+           step 1"""
         self.test_info = test_info
         self.testsuite = testsuite
         self.log_dir_orte = log_path
@@ -78,19 +79,22 @@ class OrteRunner():
 
     def next_cmd(self):
         """add the : to start a new command string
-           Note: added entries start with a space"""
+           Note: added entries start with a space
+           step 5 optional next step 2 """
         self.cmd_list.append(" :")
 
     def add_cmd(self, cmd, parameters=""):
         """add the ommand and parameters to the list
-           Note: added entries start with a space"""
+           Note: added entries start with a space
+           step 4"""
         self.cmd_list.append(" {!s}".format(cmd))
         if parameters:
             self.cmd_list.append(" {!s}".format(parameters))
 
     def add_env_vars(self, env_vars):
         """add the environment variables to the command list
-           Note: entries start with a space"""
+           Note: entries start with a space
+           step 3"""
         for (key, value) in env_vars.items():
             if value:
                 self.cmd_list.append(" -x {!s}={!s}".format(key, value))
@@ -99,7 +103,8 @@ class OrteRunner():
 
     def add_nodes(self, nodes, procs=1):
         """add the node prefix to the command list
-           Note: entries start with a space"""
+           Note: entries start with a space
+           step 2"""
         if nodes[0].isupper():
             node_list = self.test_info.get_defaultENV(nodes)
         else:
@@ -107,8 +112,16 @@ class OrteRunner():
 
         self.cmd_list.append(" -H {!s} -N {!s}".format(node_list, procs))
 
+    def add_param(self, param_str):
+        """add orte options to command string
+           Note: added entries start with a space
+           step 1a optional next step 2
+           this step can be called multiple time before step 2 """
+        self.cmd_list.append(" {!s}".format(param_str))
+
     def start_process(self):
-        """Launch process set """
+        """Launch process set
+           last step """
         cmdstr = ''.join(self.cmd_list)
         self.logger.info("OrteRunner: start: %s", cmdstr)
         cmdarg = shlex.split(cmdstr)

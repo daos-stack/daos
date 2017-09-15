@@ -33,8 +33,9 @@ import logging
 import time
 from datetime import datetime
 #pylint: disable=import-error
-import OrteRunner
 import NodeRunner
+import CmdRunner
+import OrteRunner
 #pylint: enable=import-error
 
 
@@ -54,6 +55,17 @@ class NodeControlRunner():
             node_info = NodeRunner.NodeRunner(self.test_info, node)
             self.node_list.append(node_info)
 
+    @staticmethod
+    def start_local_cmd(log_path, log_name="localcmd"):
+        """ create an local command Test Runner object
+            create the log directory """
+        log_dir = os.path.abspath(log_path)
+        try:
+            os.makedirs(log_dir)
+        except OSError:
+            pass
+        return CmdRunner.CmdRunner(log_dir, log_name)
+
     def start_cmd_list(self, log_path, testsuite, prefix):
         """add the log directory to the prefix
            Note: entries, after the first, start with a space"""
@@ -64,7 +76,6 @@ class NodeControlRunner():
             pass
         return (OrteRunner.OrteRunner(self.test_info, log_dir_orte,
                                       testsuite, prefix))
-
 
     def execute_list(self, cmdstr, log_path, run_node_list, waittime):
         """ execute command on node list """

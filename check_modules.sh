@@ -43,6 +43,7 @@
                   -P3 "test_runner/ControlTestRunner.py" \
                   -P3 "test_runner/NodeControlRunner.py" \
                   -P3 "test_runner/OrteRunner.py" \
+                  -P3 "test_runner/CmdRunner.py" \
                   -P3 "test_runner/NodeRunner.py" \
                   -P3 "test_runner/findTestLogs.py"\
                   -s "utils/docker/SConstruct_info"
