@@ -42,11 +42,13 @@ static bool detected_ranks;
 static d_rank_t ranks_to_kill[MAX_KILLS];
 
 static bool
-rebuild_runable(test_arg_t *arg, unsigned int required_tgts)
+rebuild_runable(test_arg_t *arg, unsigned int required_tgts,
+		bool kill_master)
 {
 	daos_pool_info_t info;
 	int		 i;
 	int		 rc;
+	int		 start = 0;
 	bool		 runable = true;
 
 	if (arg->myrank == 0) {
@@ -62,12 +64,16 @@ rebuild_runable(test_arg_t *arg, unsigned int required_tgts)
 			runable = false;
 		}
 
+		/* XXX let's assume master rank is 1 for now */
+		if (kill_master) {
+			ranks_to_kill[0] = 1;
+			start = 1;
+		}
 		if (!detected_ranks) {
 			detected_ranks = true;
-			for (i = 0; i < MAX_KILLS; i++) {
+			for (i = start; i < MAX_KILLS; i++)
 				ranks_to_kill[i] = info.pi_ntargets -
-						   info.pi_ndisabled - i - 1;
-			}
+					   info.pi_ndisabled - i - 1;
 		}
 	}
 
@@ -238,7 +244,7 @@ rebuild_dkeys(void **state)
 	struct ioreq		req;
 	int			i;
 
-	if (!rebuild_runable(arg, 3))
+	if (!rebuild_runable(arg, 3, false))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -267,7 +273,7 @@ rebuild_akeys(void **state)
 	struct ioreq		req;
 	int			i;
 
-	if (!rebuild_runable(arg, 3))
+	if (!rebuild_runable(arg, 3, false))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -297,7 +303,7 @@ rebuild_indexes(void **state)
 	int			i;
 	int			j;
 
-	if (!rebuild_runable(arg, 3))
+	if (!rebuild_runable(arg, 3, false))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -330,7 +336,7 @@ rebuild_multiple(void **state)
 	int			j;
 	int			k;
 
-	if (!rebuild_runable(arg, 3))
+	if (!rebuild_runable(arg, 3, false))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -366,7 +372,7 @@ rebuild_large_rec(void **state)
 	int			i;
 	char			buffer[5000];
 
-	if (!rebuild_runable(arg, 3))
+	if (!rebuild_runable(arg, 3, false))
 		skip();
 
 	oid = dts_oid_gen(OBJ_CLS, arg->myrank);
@@ -396,7 +402,7 @@ rebuild_objects(void **state)
 	int			i;
 	int			j;
 
-	if (!rebuild_runable(arg, 3))
+	if (!rebuild_runable(arg, 3, false))
 		skip();
 
 	print_message("create %d objects\n", OBJ_NR);
@@ -429,7 +435,7 @@ rebuild_two_failures(void **state)
 	int			i;
 	int			j;
 
-	if (!rebuild_runable(arg, 4))
+	if (!rebuild_runable(arg, 4, false))
 		skip();
 
 	for (i = 0; i < OBJ_NR; i++) {

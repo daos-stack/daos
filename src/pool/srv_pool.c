@@ -546,10 +546,11 @@ static int
 pool_svc_step_up(struct pool_svc *svc)
 {
 	struct rdb_tx			tx;
-	struct pool_map		       *map;
+	struct ds_pool		       *pool;
+	d_rank_list_t		       *replicas = NULL;
+	struct pool_map		       *map = NULL;
 	uint32_t			map_version;
 	struct ds_pool_create_arg	arg;
-	struct ds_pool		       *pool;
 	d_rank_t			rank;
 	int				rc;
 
@@ -561,24 +562,33 @@ pool_svc_step_up(struct pool_svc *svc)
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
 		return rc;
+
 	ABT_rwlock_rdlock(svc->ps_lock);
 	rc = read_map(&tx, &svc->ps_root, &map);
+	if (rc == 0) {
+		rc = rdb_get_ranks(svc->ps_db, &replicas);
+		if (rc)
+			D__ERROR(DF_UUID": get ranks failed: %d\n",
+				 DP_UUID(svc->ps_uuid), rc);
+	} else {
+		D__ERROR(DF_UUID": read map failed: %d\n",
+			 DP_UUID(svc->ps_uuid), rc);
+	}
 	ABT_rwlock_unlock(svc->ps_lock);
+
 	rdb_tx_end(&tx);
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST)
 			D__DEBUG(DF_DSMS, DF_UUID": new db\n",
 				DP_UUID(svc->ps_uuid));
-		return rc;
+		D__GOTO(failed, rc);
 	}
 	map_version = pool_map_get_version(map);
 
 	/* Create the pool group. */
 	rc = pool_svc_create_group(svc, map);
-	if (rc != 0) {
-		pool_map_decref(map);
-		return rc;
-	}
+	if (rc != 0)
+		D__GOTO(failed, rc);
 
 	/* Create or revalidate svc->ps_pool with map and map_version. */
 	D__ASSERT(svc->ps_pool == NULL);
@@ -589,8 +599,7 @@ pool_svc_step_up(struct pool_svc *svc)
 	if (rc != 0) {
 		D__ERROR(DF_UUID": failed to get ds_pool: %d\n",
 			DP_UUID(svc->ps_uuid), rc);
-		pool_map_decref(map);
-		return rc;
+		D__GOTO(failed, rc);
 	}
 	pool = svc->ps_pool;
 	ABT_rwlock_wrlock(pool->sp_lock);
@@ -612,23 +621,32 @@ pool_svc_step_up(struct pool_svc *svc)
 			pool->sp_map = map;
 			map = tmp;
 		}
-		if (map != NULL)
-			pool_map_decref(map);
+	} else {
+		map = NULL; /* taken over by pool */
 	}
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	ds_cont_svc_step_up(svc->ps_cont_svc);
 
 	/*
-	 * TODO: Call rebuild. Step down svc->ps_cont_svc and put svc->ps_pool
+	 * TODO: Step down svc->ps_cont_svc and put svc->ps_pool
 	 * on errors.
 	 */
+	rc = ds_rebuild_regenerate_task(pool, replicas);
+	if (rc)
+		D__GOTO(failed, rc);
 
 	rc = crt_group_rank(NULL, &rank);
 	D__ASSERTF(rc == 0, "%d\n", rc);
+
 	D__PRINT(DF_UUID": rank %u became pool service leader "DF_U64"\n",
 		DP_UUID(svc->ps_uuid), rank, svc->ps_term);
-	return 0;
+failed:
+	if (map != NULL)
+		pool_map_decref(map);
+	if (replicas)
+		daos_rank_list_free(replicas);
+	return rc;
 }
 
 static void
@@ -649,11 +667,7 @@ pool_svc_step_down(struct pool_svc *svc)
 	 * implemented.
 	 */
 
-	/*
-	 * TODO: Call rebuild. If necessary, may release svc->ps_mutex
-	 * temporarily.
-	 */
-
+	ds_rebuild_stop();
 	/* Wait for all leader references to be released. */
 	for (;;) {
 		if (svc->ps_leader_ref == 0)

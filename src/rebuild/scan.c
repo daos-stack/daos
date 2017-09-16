@@ -654,9 +654,12 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D__ASSERT(rsi != NULL);
 
+	if (rsi->rsi_pool_map_ver <= rebuild_gst.rg_rebuild_ver)
+		D_GOTO(out, rc = 0);
+
 	D__DEBUG(DB_TRACE, "%d scan rebuild for "DF_UUID" ver %d\n",
-		dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
-		rsi->rsi_pool_map_ver);
+		 dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
+		 rsi->rsi_pool_map_ver);
 
 	rc = rebuild_tgt_prepare(rsi->rsi_pool_uuid, rsi->rsi_svc_list,
 				 rsi->rsi_pool_map_ver);

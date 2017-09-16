@@ -220,6 +220,12 @@ rebuild_iv_ns_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	if (pool->sp_iv_ns != NULL) {
+		/* Destroy the previous IV ns */
+		ds_iv_ns_destroy(pool->sp_iv_ns);
+		pool->sp_iv_ns = NULL;
+	}
+
 	rc = ds_iv_ns_attach(rpc->cr_ctx, in->rin_ns_id,
 			     in->rin_master_rank, &in->rin_iov,
 			     &pool->sp_iv_ns);

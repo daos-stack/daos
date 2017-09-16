@@ -32,8 +32,8 @@
 
 #include <abt.h>
 #include <daos/rpc.h>
-#include <daos_srv/rebuild.h>
 #include <daos_srv/pool.h>
+#include <daos_srv/rebuild.h>
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/daos_server.h>

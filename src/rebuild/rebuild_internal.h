@@ -62,10 +62,9 @@ struct rebuild_globals {
 
 	/** the current version being rebuilt, only used by leader */
 	uint32_t		rg_rebuild_ver;
-	/** the last version being rebuilt, only used by leader */
-	uint32_t		rg_last_ver;
 	daos_list_t		rg_task_list;
 	ABT_mutex		rg_lock;
+	ABT_cond		rg_stop_cond;
 	uuid_t			rg_pool_uuid;
 	struct daos_rebuild_status rg_status;
 	struct btr_root		rg_local_root;
@@ -77,6 +76,7 @@ struct rebuild_globals {
 	uint64_t		rg_rec_count;
 	uint32_t		rg_done;
 	d_rank_t		rg_rank;
+	d_rank_t		rg_leader_rank;
 	unsigned int		rg_puller_running:1,
 				rg_abort:1,
 				rg_finishing:1,
