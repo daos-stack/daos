@@ -156,7 +156,7 @@ ds_pool_create(const uuid_t pool_uuid, const char *path, uuid_t target_uuid)
 	rc = asprintf(&fpath, "%s/%s", path, DSM_META_FILE);
 	if (rc < 0)
 		return -DER_NOMEM;
-	fd = open(fpath, O_WRONLY | O_CREAT | O_EXCL);
+	fd = open(fpath, O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
 	if (rc < 0) {
 		D_ERROR(DF_UUID": failed to create pool target file %s: %d\n",
 			DP_UUID(pool_uuid), fpath, errno);
