@@ -68,10 +68,13 @@ _VALID_PLATFORMS = frozenset((
     ('linux', '386'),
     ('linux', 'amd64'),
     ('linux', 'arm'),
+    ('linux', 'arm64'),
     ('nacl', '386'),
     ('windows', '386'),
 ))
-_ARCHS = {'amd64': '6', '386': '8', 'arm': '5'}
+# It appears the numbering is based on the last index where the ARCH appears
+# Adding arm64
+_ARCHS = {'amd64': '6', '386': '8', 'arm': '4', 'arm64' : '7'}
 
 def _get_platform_info(env, goos, goarch):
     """Get information about go"""
