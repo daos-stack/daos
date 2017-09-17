@@ -1,10 +1,9 @@
 """Build common libraries"""
 import daos_build
-import platform
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'platform_arm')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -15,11 +14,7 @@ def scons():
     prereqs.require(env, 'pmdk', 'argobots', 'cart', 'readline',
                     pmdk_libs=['pmemobj', 'pmem'])
 
-    # TODO Need to make this generic. This probably will be
-    # necessary in future.
-    processor = platform.machine()
-    arm_list = ["ARMv7", "armeabi", "aarch64", "arm64"]
-    if processor.lower() in arm_list:
+    if platform_arm:
         prereqs.require(env, 'mercury', mercury_lib=['mchecksum'])
     else:
         prereqs.require(env, 'isal')

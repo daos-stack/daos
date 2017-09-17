@@ -1,6 +1,7 @@
 """Build DAOS"""
 import sys
 import os
+import platform
 from SCons.Script import BUILD_TARGETS
 sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
 
@@ -10,6 +11,14 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-tautological-constant-out-of-range-compare']
 
 DAOS_VERSION = "0.0.2"
+
+def is_platform_arm():
+    """Detect if platform is ARM"""
+    processor = platform.machine()
+    arm_list = ["arm", "aarch64", "arm64"]
+    if processor.lower() in arm_list:
+        return True
+    return False
 
 def scons():
     """Execute build"""
@@ -46,8 +55,8 @@ def scons():
     env.Append(CPPDEFINES={'DAOS_HAS_PMDK' : '1'})
 
     env.Alias('install', '$PREFIX')
-
-    Export('DAOS_VERSION', 'env', 'prereqs')
+    platform_arm = is_platform_arm()
+    Export('DAOS_VERSION', 'env', 'prereqs', 'platform_arm')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
