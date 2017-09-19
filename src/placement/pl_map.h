@@ -74,9 +74,9 @@ struct pl_map_ops {
 	int	(*o_obj_find_rebuild)(struct pl_map *map,
 				      struct daos_obj_md *md,
 				      struct daos_obj_shard_md *shard_md,
-				      struct pl_target_grp *tgp_failed,
-				      uint32_t *tgt_rebuild,
-				      uint32_t *shard_rebuild);
+				      uint32_t rebuild_ver,
+				      uint32_t *tgt_rank,
+				      uint32_t *shard_id);
 	int	(*o_obj_find_reint)(struct pl_map *map,
 				    struct daos_obj_md *md,
 				    struct daos_obj_shard_md *shard_md,

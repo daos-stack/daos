@@ -132,26 +132,33 @@ pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
 }
 
 /**
- * Check if the provided object shard needs to be rebuilt due to failure of
- * @tgp_failed.
+ * Check if the provided object has any shard needs to be rebuilt for the
+ * given rebuild version @rebuild_ver.
  *
- * \return	1	Rebuild the object on the returned target @tgt_rebuild.
- *		0	No rebuild.
+ * \param  map [IN]		pl_map this check is performed on
+ * \param  md  [IN]		object metadata
+ * \param  shard_md [IN]	shard metadata (optional)
+ * \param  rebuild_ver [IN]	current rebuild version
+ * \param  tgt_rank [OUT]	spare target rank
+ * \param  shard_id [OUT]	shard id to be reuilt
+
+ * \return	1	Rebuild the @shard_id on the target @tgt_rank.
+ *		0	No shard needs be rebuilt.
  *		-ve	error code.
  */
 int
 pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
-		    struct pl_target_grp *tgp_failed, uint32_t *tgt_rebuild,
-		    uint32_t *shard_rebuild)
+		    uint32_t rebuild_ver, uint32_t *tgt_rank,
+		    uint32_t *shard_id)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
 	if (!map->pl_ops->o_obj_find_rebuild)
 		return -DER_NOSYS;
 
-	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, tgp_failed,
-					       tgt_rebuild, shard_rebuild);
+	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, rebuild_ver,
+					       tgt_rank, shard_id);
 }
 
 /**

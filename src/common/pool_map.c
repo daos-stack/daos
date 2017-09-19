@@ -1659,27 +1659,6 @@ pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 				  tgt_cnt);
 }
 
-/**
- * Find all targets in DOWN or DOWN_OUT state, it would be used for spare
- * target calculation.
- */
-int
-pool_map_failed_tgts_get(struct pool_map *map, unsigned int ver,
-			 struct pool_target **tgt_pp,
-			 unsigned int *tgt_cnt)
-{
-	struct find_tgts_param param;
-
-	memset(&param, 0, sizeof(param));
-	param.ftp_chk_status = 1;
-	param.ftp_status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT;
-	param.ftp_chk_max_fseq = 1;
-	param.ftp_max_fseq = ver;
-
-	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
-				  tgt_cnt);
-}
-
 static void
 pool_indent_print(int dep)
 {

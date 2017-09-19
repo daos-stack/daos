@@ -491,7 +491,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 		rebuild_pool_map_put(poolmap);
 	}
 
-	rc = pl_obj_find_rebuild(map, &md, NULL, arg->tgp_failed,
+	rc = pl_obj_find_rebuild(map, &md, NULL, arg->tgp_failed->tg_ver,
 				 &tgt_rebuild, &shard_rebuild);
 	if (rc <= 0) /* No need rebuild */
 		D_GOTO(out, rc);
