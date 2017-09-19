@@ -40,12 +40,14 @@ set -e
 set -x
 
 # A list of tests to run as a single instance on Jenkins
-JENKINS_TEST_LIST=(scripts/cart_echo_test.yml scripts/cart_test_group.yml \
-                   scripts/cart_test_barrier.yml \
-                   scripts/cart_threaded_test.yml \
-                   scripts/cart_test_rpc_error.yml \
-                   scripts/cart_test_singleton.yml \
-                   scripts/cart_rpc_test.yml)
+JENKINS_TEST_LIST=(scripts/cart_echo_test.yml           \
+                   scripts/cart_test_group.yml          \
+                   scripts/cart_test_barrier.yml        \
+                   scripts/cart_threaded_test.yml       \
+                   scripts/cart_test_rpc_error.yml      \
+                   scripts/cart_test_singleton.yml      \
+                   scripts/cart_rpc_test.yml            \
+                   scripts/cart_test_pmix.yml)
 
 # Check for symbol names in the library.
 if [ -d "utils" ]; then

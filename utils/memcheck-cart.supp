@@ -43,10 +43,6 @@
    fun:malloc
    fun:pmix_class_initialize
    fun:PMIx_Deregister_event_handler
-   fun:crt_grp_ras_fini
-   fun:crt_primary_grp_fini
-   fun:crt_grp_fini
-   fun:crt_finalize
 }
 {
    FI leak 0
