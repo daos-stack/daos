@@ -128,6 +128,7 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 	unsigned int	seed;
 	const char	*path;
 	bool		server;
+	int		plugin_idx;
 	int		rc = 0;
 
 	server = flags & CRT_FLAG_BIT_SERVER;
@@ -205,22 +206,16 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 				CRT_PHY_ADDR_ENV, addr_env);
 		}
 
-		if (strncmp(addr_env, "cci+verbs", 9) == 0) {
-			crt_gdata.cg_na_plugin = CRT_NA_CCI_VERBS;
-		} else if (strncmp(addr_env, "ofi+", 4) == 0) {
-			if (strncmp(addr_env, "ofi+sockets", 11) == 0) {
-				crt_gdata.cg_na_plugin = CRT_NA_OFI_SOCKETS;
-			} else if (strncmp(addr_env, "ofi+verbs", 9) == 0) {
-				crt_gdata.cg_na_plugin = CRT_NA_OFI_VERBS;
-			} else if (strncmp(addr_env, "ofi+psm2", 8) == 0) {
-				crt_gdata.cg_na_plugin = CRT_NA_OFI_PSM2;
-			} else if (strncmp(addr_env, "ofi+gni", 7) == 0) {
-				crt_gdata.cg_na_plugin = CRT_NA_OFI_GNI;
-			} else {
-				D_ERROR("invalid CRT_PHY_ADDR_STR %s.\n",
-					addr_env);
-				D_GOTO(out, rc = -DER_INVAL);
+		for (plugin_idx = 0; na_dict[plugin_idx].nad_str != NULL;
+		     plugin_idx++) {
+			if (!strncmp(addr_env, na_dict[plugin_idx].nad_str,
+				     strlen(na_dict[plugin_idx].nad_str))) {
+				crt_gdata.cg_na_plugin =
+					na_dict[plugin_idx].nad_type;
+				break;
 			}
+		}
+		if (crt_na_type_is_ofi(crt_gdata.cg_na_plugin)) {
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
 				D_ERROR("crt_na_ofi_config_init failed, "

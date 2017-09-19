@@ -1645,20 +1645,25 @@ crt_get_tag_uri(const char *base_uri, int tag)
 		D_GOTO(out, 0);
 	strncpy(tag_uri, base_uri, CRT_ADDR_STR_MAX_LEN);
 
-	if (tag != 0) {
+	if (tag == 0)
+		D_GOTO(out, 0);
+
+	if (crt_gdata.cg_na_plugin == CRT_NA_SM)
+		pchar = strrchr(tag_uri, '/');
+	else
 		pchar = strrchr(tag_uri, ':');
-		if (pchar == NULL) {
-			D_ERROR("bad format of base_addr %s.\n", tag_uri);
-			D_FREE(tag_uri);
-			D_GOTO(out, 0);
-		}
-		pchar++;
-		port = atoi(pchar);
-		port += tag;
-		snprintf(pchar, 16, "%d", port);
-		D_DEBUG("base uri(%s), tag(%d) uri(%s).\n",
-			base_uri, tag, tag_uri);
+
+	if (pchar == NULL) {
+		D_ERROR("bad format of base_addr %s.\n", tag_uri);
+		D_FREE(tag_uri);
+		tag_uri = NULL;
+		D_GOTO(out, 0);
 	}
+	pchar++;
+	port = atoi(pchar);
+	port += tag;
+	snprintf(pchar, 16, "%d", port);
+	D_DEBUG("base uri(%s), tag(%d) uri(%s).\n", base_uri, tag, tag_uri);
 
 out:
 	return tag_uri;

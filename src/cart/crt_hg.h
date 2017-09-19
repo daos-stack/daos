@@ -66,16 +66,31 @@ struct crt_common_hdr;
 struct crt_corpc_hdr;
 
 /** type of NA plugin */
-#define CRT_NA_CCI_OFFSET (0)
-#define CRT_NA_OFI_OFFSET (1U << 16)
-enum {
-	CRT_NA_CCI_TCP		= CRT_NA_CCI_OFFSET,
-	CRT_NA_CCI_VERBS	= CRT_NA_CCI_OFFSET + 1,
-	CRT_NA_OFI_SOCKETS	= CRT_NA_OFI_OFFSET,
-	CRT_NA_OFI_VERBS	= CRT_NA_OFI_OFFSET + 1,
-	CRT_NA_OFI_GNI		= CRT_NA_OFI_OFFSET + 2,
-	CRT_NA_OFI_PSM2		= CRT_NA_OFI_OFFSET + 3,
+enum crt_na_type {
+	CRT_NA_CCI_TCP		= 0,
+	CRT_NA_CCI_VERBS	= 1,
+	CRT_NA_SM		= 2,
+	CRT_NA_OFI_SOCKETS	= 3,
+	CRT_NA_OFI_VERBS	= 4,
+	CRT_NA_OFI_GNI		= 5,
+	CRT_NA_OFI_PSM2		= 6
 };
+
+static inline bool
+crt_na_type_is_ofi(int na_type)
+{
+	return (na_type >= CRT_NA_OFI_SOCKETS) &&
+	       (na_type <= CRT_NA_OFI_PSM2);
+}
+
+struct crt_na_dict {
+	char	*nad_str;
+	int	nad_type;
+	/* a flag of explicitly bind with IP:port to create NA class */
+	bool	nad_port_bind;
+};
+
+extern struct crt_na_dict na_dict[];
 
 struct crt_hg_hdl {
 	/* link to crt_hg_pool::chp_hg_list */

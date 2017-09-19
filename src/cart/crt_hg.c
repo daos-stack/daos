@@ -43,6 +43,44 @@
 #include "crt_internal.h"
 #include <abt.h>
 
+/*
+ * na_dict table should be in the same order of enum crt_na_type, the last one
+ * is terminator with NULL nad_str.
+ */
+struct crt_na_dict na_dict[] = {
+	{
+		.nad_type	= CRT_NA_CCI_TCP,
+		.nad_str	= "cci+tcp",
+		.nad_port_bind	= false,
+	}, {
+		.nad_type	= CRT_NA_CCI_VERBS,
+		.nad_str	= "cci+verbs",
+		.nad_port_bind	= false,
+	}, {
+		.nad_type	= CRT_NA_SM,
+		.nad_str	= "sm",
+		.nad_port_bind	= false,
+	}, {
+		.nad_type	= CRT_NA_OFI_SOCKETS,
+		.nad_str	= "ofi+sockets",
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_OFI_VERBS,
+		.nad_str	= "ofi+verbs",
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_OFI_GNI,
+		.nad_str	= "ofi+gni",
+		.nad_port_bind	= true,
+	}, {
+		.nad_type	= CRT_NA_OFI_PSM2,
+		.nad_str	= "ofi+psm2",
+		.nad_port_bind	= true,
+	}, {
+		.nad_str	= NULL,
+	}
+};
+
 /**
  * Enable the HG handle pool, can change/tune the max_num and prepost_num.
  * This allows the pool be enabled/re-enabled and be tunable at runtime
@@ -447,48 +485,27 @@ out:
 }
 
 static int
-crt_get_info_string(char **string, bool *info_string_free)
+crt_get_info_string(char **string)
 {
 	int	 port;
+	int	 plugin;
 	char	*plugin_str;
-	int	 rc = 0;
+	int	 rc;
 
-	switch (crt_gdata.cg_na_plugin) {
-	case CRT_NA_CCI_TCP:
-		*string = "cci+tcp://";
-		*info_string_free = false;
-		return 0;
-	case CRT_NA_CCI_VERBS:
-		*string = "cci+verbs://";
-		*info_string_free = false;
-		return 0;
-	case CRT_NA_OFI_SOCKETS:
-		plugin_str = "ofi+sockets";
-		break;
-	case CRT_NA_OFI_VERBS:
-		plugin_str = "ofi+verbs";
-		break;
-	case CRT_NA_OFI_GNI:
-		plugin_str = "ofi+gni";
-		break;
-	case CRT_NA_OFI_PSM2:
-		plugin_str = "ofi+psm2";
-		break;
-	default:
-		D_ERROR("bad cg_na_plugin %d.\n", crt_gdata.cg_na_plugin);
-		return  -DER_INVAL;
-	};
+	plugin = crt_gdata.cg_na_plugin;
+	D_ASSERT(plugin == na_dict[plugin].nad_type);
+	plugin_str = na_dict[plugin].nad_str;
 
-
-	port = crt_na_ofi_conf.noc_port;
-	crt_na_ofi_conf.noc_port++;
-	rc = asprintf(string, "%s://%s:%d",
-		      plugin_str, crt_na_ofi_conf.noc_ip_str, port);
-
+	if (!na_dict[plugin].nad_port_bind) {
+		rc = asprintf(string, "%s://", plugin_str);
+	} else {
+		port = crt_na_ofi_conf.noc_port;
+		crt_na_ofi_conf.noc_port++;
+		rc = asprintf(string, "%s://%s:%d",
+			      plugin_str, crt_na_ofi_conf.noc_ip_str, port);
+	}
 	if (rc < 0)
 		return -DER_NOMEM;
-
-	*info_string_free = true;
 
 	return 0;
 }
@@ -515,7 +532,6 @@ int
 crt_hg_init(crt_phy_addr_t *addr, bool server)
 {
 	char			*info_string = NULL;
-	bool			 info_string_free = false;
 	struct crt_hg_gdata	*hg_gdata;
 	na_class_t		*na_class = NULL;
 	hg_class_t		*hg_class = NULL;
@@ -536,7 +552,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		info_string = *addr;
 		D_ASSERT(strncmp(info_string, "bmi+tcp", 7) == 0);
 	} else {
-		rc = crt_get_info_string(&info_string, &info_string_free);
+		rc = crt_get_info_string(&info_string);
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
@@ -599,7 +615,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	D_DEBUG("in crt_hg_init, listen address: %s.\n", *addr);
 
 out:
-	if (info_string_free)
+	if (info_string)
 		D_FREE(info_string);
 	return rc;
 }
@@ -646,7 +662,6 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 	hg_class_t		*hg_class = NULL;
 	hg_context_t		*hg_context = NULL;
 	char			*info_string = NULL;
-	bool			 info_string_free = false;
 	hg_return_t		 hg_ret;
 	int			 rc = 0;
 
@@ -676,7 +691,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 		na_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
 
-		rc = crt_get_info_string(&info_string, &info_string_free);
+		rc = crt_get_info_string(&info_string);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
@@ -692,7 +707,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 			NA_Finalize(na_class);
 			D_GOTO(out, rc = -DER_HG);
 		}
-		D_DEBUG("New context(idx:%d), listen address: cci+%s.\n",
+		D_DEBUG("New context(idx:%d), listen address: %s.\n",
 			idx, addr_str);
 
 		hg_class = HG_Init_na(na_class);
@@ -750,7 +765,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 			"rc: %d.\n", idx, hg_ctx, rc);
 
 out:
-	if (info_string_free)
+	if (info_string)
 		D_FREE(info_string);
 	return rc;
 }
