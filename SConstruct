@@ -47,7 +47,7 @@ if have_scons_local:
                                      'scons_local',
                              'components.py'))
         OPTS.Save(OPTS_FILE, env)
-        # Define this now, and then the individual compenents can import this
+        # Define this now, and then the individual components can import this
         # through PREREQS when they need it.
         env.Append(CPPDEFINES={'DAOS_HAS_NVML' : '1'})
 else:
