@@ -231,7 +231,7 @@ while [ -n "$*" ]; do
     -c|--build-config)
       shift
       BUILD_CONFIG=$(realpath $1)
-      CUSTOM_BUILD_CONFIG=--build-config $(realpath $1)
+      CUSTOM_BUILD_CONFIG="--build-config $(realpath $1)"
       shift
       ;;
     *)
