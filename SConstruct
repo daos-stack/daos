@@ -2,6 +2,10 @@
 
 import sys
 import os
+from SCons.Script import BUILD_TARGETS
+
+BUILD_TARGETS.append('fixtest')
+
 
 have_scons_local=False
 if os.path.exists('scons_local'):
@@ -85,5 +89,17 @@ if have_scons_local:
     env.InstallAs("$PREFIX/TESTING/.build_vars.sh", ".build_vars.sh")
     env.InstallAs("$PREFIX/TESTING/.build_vars.json", ".build_vars.json")
 
+# install the test_runner code from scons_local
+SConscript('build/scons_local/test_runner/SConscript', exports=['env', 'PREREQS'])
+
+# install the build verification tests
+SConscript('utils/bvtest/scripts/SConscript', exports=['env', 'PREREQS'])
+
+env.Command("fixtest", "./utils/bvtest/OrteRunner.py",
+            [
+                    Copy("$PREFIX/TESTING/test_runner/", "./utils/bvtest/OrteRunner.py", False)
+            ])
+
 Default('build')
 Depends('install', 'build')
+Depends('fixtest', 'install')
