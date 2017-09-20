@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2017 Intel Corporation
+/* Copyright (C) 2017 Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,47 +35,36 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/**
- * This file is part of CaRT. It it the common header file which be included by
- * all other .c files of CaRT.
- */
+#include <crt_internal.h>
 
-#ifndef __CRT_INTERNAL_H__
-#define __CRT_INTERNAL_H__
+#define DECLARE_FAC(name) int DD_FAC(name)
 
-#include <ctype.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <stddef.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <uuid/uuid.h>
-#include <dirent.h>
-#include <arpa/inet.h>
-#include <ifaddrs.h>
+DECLARE_FAC(rpc);
+DECLARE_FAC(bulk);
+DECLARE_FAC(corpc);
+DECLARE_FAC(grp);
+DECLARE_FAC(lm);
+DECLARE_FAC(hg);
+DECLARE_FAC(pmix);
+DECLARE_FAC(self_test);
 
-#include "crt_debug.h"
-#include <cart/api.h>
-#include <gurt/common.h>
+#define D_INIT_LOG_FAC(name, aname, lname)				\
+	d_init_log_facility(&d_##name##_logfac, aname, lname)
 
-#include "crt_hg.h"
-#include "crt_internal_types.h"
-#include "crt_internal_fns.h"
-#include "crt_rpc.h"
-#include "crt_group.h"
-#include "crt_tree.h"
-#include "crt_self_test.h"
+int
+crt_setup_log_fac(void)
+{
+	/* add crt internally used the log facilities */
+	D_INIT_LOG_FAC(rpc, "RPC", "rpc");
+	D_INIT_LOG_FAC(bulk, "BULK", "bulk");
+	D_INIT_LOG_FAC(corpc, "CORPC", "corpc");
+	D_INIT_LOG_FAC(grp, "GRP", "group");
+	D_INIT_LOG_FAC(lm, "LM", "livenessmap");
+	D_INIT_LOG_FAC(hg, "HG", "mercury");
+	D_INIT_LOG_FAC(pmix, "PMIX", "pmix");
+	D_INIT_LOG_FAC(self_test, "ST", "self_test");
 
-#include "crt_pmix.h"
-#include "crt_lm.h"
+	d_log_sync_mask();
 
-#endif /* __CRT_INTERNAL_H__ */
+	return 0;
+}

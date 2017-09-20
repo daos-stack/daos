@@ -94,9 +94,9 @@ def scons():
     # Run tests in a new environment so a rebuilt of the tests isn't triggered
     # by changes to the environment
     run_env = test_env.Clone()
-    run_env.Append(ENV={'CRT_LOG_FILE':os.path.join(Dir('.').abspath,
-                                                    "utest.log"),
-                        'CRT_LOG_MASK':'DEBUG'})
+    run_env.Append(ENV={'D_LOG_FILE':os.path.join(Dir('.').abspath,
+                                                  "utest.log"),
+                        'D_LOG_MASK':'DEBUG'})
 
     run_tests = run_env.RunTests(tests)
 

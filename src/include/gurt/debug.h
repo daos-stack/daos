@@ -41,18 +41,10 @@
 
 #include <gurt/dlog.h>
 
-extern int d_misc_logfac;
-extern int d_mem_logfac;
-extern int d_rpc_logfac;
-extern int d_bulk_logfac;
-extern int d_corpc_logfac;
-extern int d_grp_logfac;
-extern int d_lm_logfac;
-extern int d_hg_logfac;
-extern int d_pmix_logfac;
-extern int d_self_test_logfac;
-
 #define DD_FAC(name)	(d_##name##_logfac)
+
+extern int DD_FAC(misc);
+extern int DD_FAC(mem);
 
 #ifndef D_LOGFAC
 #define D_LOGFAC	DD_FAC(misc)
@@ -64,6 +56,13 @@ extern int d_self_test_logfac;
 #define DINFO		(D_LOGFAC | DLOG_INFO)
 #define DDBG		(D_LOGFAC | DLOG_DBG)
 
+#define D_LOG_FILE_ENV	"D_LOG_FILE"
+#define D_LOG_MASK_ENV	"D_LOG_MASK"
+
+/* deprecated. these two are provided for the transition period. */
+#define CRT_LOG_FILE_ENV	"CRT_LOG_FILE"
+#define CRT_LOG_MASK_ENV	"CRT_LOG_MASK"
+
 /*
  * Add a new log facility.
  *
@@ -73,20 +72,34 @@ extern int d_self_test_logfac;
  * \return		new positive facility number on success, -1 on error.
  */
 static inline int
-d_add_log_facility(char *aname, char *lname)
+d_add_log_facility(const char *aname, const char *lname)
 {
 	return d_log_allocfacility(aname, lname);
+}
+
+static inline int
+d_init_log_facility(int *fac, const char *aname, const char *lname)
+{
+	assert(fac != NULL);
+
+	*fac = d_add_log_facility(aname, lname);
+	if (*fac < 0) {
+		d_log(DERR, "d_add_log_facility failed, *fac: %d\n", *fac);
+		return -DER_UNINIT;
+	}
+
+	return DER_SUCCESS;
 }
 
 /*
  * D_PRINT_ERR must be used for any error logging before clog is enabled or
  * after it is disabled
  */
-#define D_PRINT_ERR(fmt, ...)                                          \
-	do {                                                           \
-		fprintf(stderr, "%s:%d:%d:%s() " fmt, __FILE__,        \
-			getpid(), __LINE__, __func__, ## __VA_ARGS__); \
-		fflush(stderr);                                        \
+#define D_PRINT_ERR(fmt, ...)						\
+	do {								\
+		fprintf(stderr, "%s:%d:%d:%s() " fmt, __FILE__,		\
+			getpid(), __LINE__, __func__, ## __VA_ARGS__);	\
+		fflush(stderr);						\
 	} while (0)
 
 
@@ -96,19 +109,19 @@ d_add_log_facility(char *aname, char *lname)
  * #define DSR_DEBUG(...) d_log(DSR_DEBUG, ...)
  */
 #define D_DEBUG(fmt, ...)						\
-	d_log(DDBG, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__, \
+	d_log(DDBG, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
 	     ##__VA_ARGS__)
 
 #define D_WARN(fmt, ...)						\
-	d_log(DWARN, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,\
+	d_log(DWARN, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
 	     ##__VA_ARGS__)
 
 #define D_ERROR(fmt, ...)						\
-	d_log(DERR, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__, \
+	d_log(DERR, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
 	     ##__VA_ARGS__)
 
 #define D_FATAL(fmt, ...)						\
-	d_log(DCRIT, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,\
+	d_log(DCRIT, "%s:%d %s() " fmt, __FILE__, __LINE__, __func__,	\
 	     ##__VA_ARGS__)
 
 #define D_ASSERT(e)	assert(e)

@@ -814,7 +814,7 @@ test_log(void **state)
 	const char *preset1 = "D0xACF";
 	char retbuf[1024];
 
-	setenv("CRT_LOG_MASK", "CLOG=DEBUG,T1=DEBUG", 1);
+	setenv("D_LOG_MASK", "CLOG=DEBUG,T1=DEBUG", 1);
 	memset(retbuf, 0x00, sizeof(retbuf));
 	rc = d_log_init();
 	assert_int_equal(rc, 0);
@@ -871,7 +871,7 @@ test_log(void **state)
 	}
 
 	/* todo add new test here for the new levels */
-	setenv("CRT_LOG_MASK", "T1=D0", 1);
+	setenv("D_LOG_MASK", "T1=D0", 1);
 	d_log_sync_mask();
 	logmask = allocated_mask = strdup("T1=D0");
 	assert_non_null(logmask);
@@ -888,7 +888,7 @@ test_log(void **state)
 	memset(retbuf, 0x00, sizeof(retbuf));
 
 
-	setenv("CRT_LOG_MASK", "T1=D4", 1);
+	setenv("D_LOG_MASK", "T1=D4", 1);
 	d_log_sync_mask();
 
 	rc = d_log_getmasks(retbuf, 0, 200, 0);
@@ -904,21 +904,21 @@ test_log(void **state)
 		allocated_mask = NULL;
 	}
 
-	setenv("CRT_LOG_MASK", "T1=D0xACF", 1);
+	setenv("D_LOG_MASK", "T1=D0xACF", 1);
 	d_log_sync_mask();
 
 	rc = d_log_getmasks(retbuf, 0, 200, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
 
-	setenv("CRT_LOG_MASK", "T1=D0xACFFF", 1);
+	setenv("D_LOG_MASK", "T1=D0xACFFF", 1);
 	d_log_sync_mask();
 
 	rc = d_log_getmasks(retbuf, 0, 200, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
 	memset(retbuf, 0x00, sizeof(retbuf));
 
-	setenv("CRT_LOG_MASK", "T1=DEBUG", 1);
+	setenv("D_LOG_MASK", "T1=DEBUG", 1);
 	d_log_sync_mask();
 
 	rc = d_log_getmasks(retbuf, 0, 200, 0);

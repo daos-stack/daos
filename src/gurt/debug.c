@@ -44,22 +44,11 @@
 
 #include <gurt/common.h>
 
-#define CRT_LOG_FILE_ENV	"CRT_LOG_FILE"
-#define CRT_LOG_MASK_ENV	"CRT_LOG_MASK"
-
 static pthread_mutex_t d_log_lock = PTHREAD_MUTEX_INITIALIZER;
 static int d_log_refcount;
 
 int d_misc_logfac;
 int d_mem_logfac;
-int d_rpc_logfac;
-int d_bulk_logfac;
-int d_corpc_logfac;
-int d_grp_logfac;
-int d_lm_logfac;
-int d_hg_logfac;
-int d_pmix_logfac;
-int d_self_test_logfac;
 
 static void
 d_log_sync_mask_helper(bool acquire_lock)
@@ -69,8 +58,15 @@ d_log_sync_mask_helper(bool acquire_lock)
 
 	if (acquire_lock)
 		pthread_mutex_lock(&d_log_lock);
-	if (!log_mask_init)
-		log_mask = getenv(CRT_LOG_MASK_ENV);
+	if (!log_mask_init) {
+		log_mask = getenv(D_LOG_MASK_ENV);
+		if (log_mask == NULL) {
+			log_mask = getenv(CRT_LOG_MASK_ENV);
+			fprintf(stderr, CRT_LOG_MASK_ENV
+					" deprecated. Please use "
+					D_LOG_MASK_ENV "\n");
+		}
+	}
 
 	if (log_mask != NULL)
 		d_log_setmasks(log_mask, -1);
@@ -79,21 +75,26 @@ d_log_sync_mask_helper(bool acquire_lock)
 		pthread_mutex_unlock(&d_log_lock);
 }
 
-void d_log_sync_mask(void)
+void
+d_log_sync_mask(void)
 {
 	d_log_sync_mask_helper(true);
 }
 
-#define D_ADD_LOG_FAC(name, aname, lname)				       \
-	do {								       \
-		d_##name##_logfac = d_add_log_facility(aname, lname);      \
-		if (d_##name##_logfac < 0) {				       \
-			D_PRINT_ERR("d_add_log_facility failed, "	       \
-				    "d_##name##__logfac: %d.\n",	       \
-				    d_##name##_logfac);		       \
-			return -DER_UNINIT;				       \
-		}							       \
+/* this macro contains a return statement */
+#define D_ADD_LOG_FAC(name, aname, lname)				\
+	do {								\
+		d_##name##_logfac = d_add_log_facility(aname, lname);	\
+		if (d_##name##_logfac < 0) {				\
+			d_log(DERR, "d_add_log_facility failed, "	\
+				    "d_##name##__logfac: %d.\n",	\
+				    d_##name##_logfac);			\
+			return -DER_UNINIT;				\
+		}							\
 	} while (0)
+
+#define D_INIT_LOG_FAC(name, aname, lname)				\
+	d_init_log_facility(&d_##name##_logfac, aname, lname)
 
 /**
  * Setup the clog facility names and mask.
@@ -105,16 +106,8 @@ static inline int
 setup_clog_facnamemask(void)
 {
 	/* add crt internally used the log facilities */
-	D_ADD_LOG_FAC(misc, "MISC", "misc");
-	D_ADD_LOG_FAC(mem, "MEM", "memory");
-	D_ADD_LOG_FAC(rpc, "RPC", "rpc");
-	D_ADD_LOG_FAC(bulk, "BULK", "bulk");
-	D_ADD_LOG_FAC(corpc, "CORPC", "corpc");
-	D_ADD_LOG_FAC(grp, "GRP", "group");
-	D_ADD_LOG_FAC(lm, "LM", "livenessmap");
-	D_ADD_LOG_FAC(hg, "HG", "mercury");
-	D_ADD_LOG_FAC(pmix, "PMIX", "pmix");
-	D_ADD_LOG_FAC(self_test, "ST", "self_test");
+	D_INIT_LOG_FAC(misc, "MISC", "misc");
+	D_INIT_LOG_FAC(mem, "MEM", "memory");
 
 	/* Lock is already held */
 	d_log_sync_mask_helper(false);
@@ -157,7 +150,12 @@ d_log_init(void)
 	char	*log_file;
 	int flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
 
-	log_file = getenv(CRT_LOG_FILE_ENV);
+	log_file = getenv(D_LOG_FILE_ENV);
+	if (log_file == NULL) {
+		log_file = getenv(CRT_LOG_FILE_ENV);
+		fprintf(stderr, CRT_LOG_FILE_ENV " deprecated. Please use "
+				D_LOG_FILE_ENV "\n");
+	}
 	if (log_file == NULL || strlen(log_file) == 0) {
 		flags |= DLOG_FLV_STDOUT;
 		log_file = NULL;

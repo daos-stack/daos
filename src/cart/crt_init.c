@@ -137,6 +137,7 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 		return rc;
 	}
 
+	crt_setup_log_fac();
 	if (grpid != NULL) {
 		if (crt_validate_grpid(grpid) != 0) {
 			D_ERROR("grpid contains invalid characters "

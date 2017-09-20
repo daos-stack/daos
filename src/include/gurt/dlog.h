@@ -216,7 +216,7 @@ int d_log_allocfacility(const char *aname, const char *lname);
 
 /**
  * Ensure default cart log is initialized.  This routine calls
- * d_log_open the first time based on CRT_LOG_MASK and CRT_LOG_FILE
+ * d_log_open the first time based on D_LOG_MASK and D_LOG_FILE
  * environment variables.   It keeps a reference count so d_log_fini
  * must be called by all callers to release the call d_log_close()
  *
@@ -245,7 +245,7 @@ void d_log_fini(void);
  */
 void d_log_close(void);
 
-/** Reapplies the masks set in CRT_LOG_MASK.   Can be called after adding new
+/** Reapplies the masks set in D_LOG_MASK.   Can be called after adding new
  *  log facilities to ensure that the mask is set appropriately for the
  *  previously unknown facilities.
  */

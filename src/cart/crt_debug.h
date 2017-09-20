@@ -35,47 +35,21 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/**
- * This file is part of CaRT. It it the common header file which be included by
- * all other .c files of CaRT.
- */
 
-#ifndef __CRT_INTERNAL_H__
-#define __CRT_INTERNAL_H__
+#ifndef __CRT_DEBUG_H__
+#define __CRT_DEBUG_H__
 
-#include <ctype.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <assert.h>
-#include <time.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <stddef.h>
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <uuid/uuid.h>
-#include <dirent.h>
-#include <arpa/inet.h>
-#include <ifaddrs.h>
+#define DD_FAC(name)	(d_##name##_logfac)
 
-#include "crt_debug.h"
-#include <cart/api.h>
-#include <gurt/common.h>
+extern int DD_FAC(rpc);
+extern int DD_FAC(bulk);
+extern int DD_FAC(corpc);
+extern int DD_FAC(grp);
+extern int DD_FAC(lm);
+extern int DD_FAC(hg);
+extern int DD_FAC(pmix);
+extern int DD_FAC(self_test);
 
-#include "crt_hg.h"
-#include "crt_internal_types.h"
-#include "crt_internal_fns.h"
-#include "crt_rpc.h"
-#include "crt_group.h"
-#include "crt_tree.h"
-#include "crt_self_test.h"
+int crt_setup_log_fac(void);
 
-#include "crt_pmix.h"
-#include "crt_lm.h"
-
-#endif /* __CRT_INTERNAL_H__ */
+#endif /* __CRT_DEBUG_H__ */
