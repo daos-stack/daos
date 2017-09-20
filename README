@@ -27,6 +27,10 @@ Option                             Description
                                    changed since the last build.
                                    use 'all' to update all components.
 
+--require-optional                 Tells the prerequisite builder
+                                   to fail the build if calls to
+                                   check_component will return False.
+
 PREFIX=<path>                      The installation path of the user's
                                    components.   This should be used
                                    by ENV.Install as the location to

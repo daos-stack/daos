@@ -42,6 +42,17 @@ if REQS.get_env('PLATFORM') == 'darwin':
 else:
     REQS.define('rt', libs=['rt'])
 
+REQS.define('cunit', libs=['cunit'], headers=['CUnit/Basic.h'],
+            package='CUnit-devel')
+
+REQS.define('python34_devel', headers=['python3.4m/Python.h'],
+            package='python34-devel')
+
+REQS.define('python27_devel', headers=['python2.7/Python.h'],
+            package='python-devel')
+
+REQS.define('libelf', headers=['libelf.h'], package='elfutils-libelf-devel')
+
 REQS.define('tbbmalloc', libs=['tbbmalloc_proxy'], package='tbb-devel')
 
 REQS.define('jemalloc', libs=['jemalloc'], package='jemalloc-devel')

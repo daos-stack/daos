@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -530,6 +530,7 @@ class PreReqComponent(object):
         self.__setup_unit_test_builders()
         self.__env.AddMethod(mocked_tests.build_mock_unit_tests,
                              'BuildMockingUnitTests')
+        self.__require_optional = GetOption('require_optional')
         self.__update = GetOption('update_prereq')
         self.download_deps = False
         self.build_deps = False
@@ -630,6 +631,12 @@ class PreReqComponent(object):
                   metavar='COMPONENT',
                   help='Force an update of a prerequisite COMPONENT.  Use '
                        '\'all\' to update all components')
+
+        AddOption('--require-optional',
+                  dest='require_optional',
+                  action='store_true',
+                  default=False,
+                  help='Fail the build if check_component fails')
 
         # There is another case here which isn't handled, we want Jenkins
         # builds to download tar packages but not git source code.  For now
@@ -842,6 +849,17 @@ class PreReqComponent(object):
                 changes = True
 
         return changes
+
+    def check_component(self, *comps, **kw):
+        """Returns True if a component is available"""
+        env = self.__env.Clone()
+        try:
+            self.require(env, *comps, **kw)
+        except Exception as error:
+            if self.__require_optional:
+                raise error
+            return False
+        return True
 
     def get_env(self, var):
         """Get a variable from the construction environment"""

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -47,6 +47,14 @@ OPENPA_PREBUILT=${CORAL_ARTIFACTS}/mercury-update-scratch/latest/openpa"
   python test/validate_build_info.py
   scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force
   python test/validate_build_info.py
+  set +e
+  scons -C test -f SConstruct $prebuilt2 --build-deps=yes --config=force \
+        --require-optional
+  if [ $? -eq 0 ]; then
+      echo "Test for --require-optional failed"
+      exit 1
+  fi
+  set -e
 fi
 
 check_cmd()

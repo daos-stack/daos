@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,11 +28,15 @@ def run_test(env, *tests):
     for test in tests:
         my_tests.append(test)
         cloned_env.Append(CPPDEFINES=[test.upper()])
+        if not PREREQS.check_component(test):
+            print "Check for component failed"
+            raise Exception("Component %s not found" % test)
     PREREQS.require(cloned_env, *tests)
     target_name = "_".join(my_tests)
     prog = cloned_env.Program(target=target_name,
                               source=Glob('test.c'),
                               OBJPREFIX=target_name)
+
     return prog
 
 PROGS = []

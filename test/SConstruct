@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -85,6 +85,14 @@ PREREQS.define('openpa2',
                commands=['$LIBTOOLIZE', './autogen.sh',
                          './configure --prefix=$OPENPA2_PREFIX', 'make',
                          'make install'], libs=['opa'])
+PREREQS.define("nonexist", libs=["nonexist"], headers=["nonexist.h"],
+               package="nonexist-devel")
+PREREQS.define("nonexist2", libs=["nonexist2"], headers=["stdio.h"],
+               package="nonexist2-devel")
+if PREREQS.check_component("nonexist") and not GetOption('clean'):
+    raise Exception("check_component shouldn't pass for nonexist")
+if not GetOption('clean') and PREREQS.check_component("nonexist2"):
+    raise Exception("check_component shouldn't pass for nonexist")
 
 VariantDir('build', '.', duplicate=0)
 SConscript('build/sl_test/SConscript', exports=['ENV', 'PREREQS'])
