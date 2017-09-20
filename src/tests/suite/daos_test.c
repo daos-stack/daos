@@ -233,7 +233,7 @@ pool_destroy_safe(test_arg_t *arg)
 			return rc;
 		}
 
-		if (rstat->rs_version != 0) {
+		if (rstat->rs_done == 0) {
 			print_message("waiting for rebuild\n");
 			sleep(1);
 			continue;

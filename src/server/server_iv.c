@@ -562,6 +562,8 @@ ds_iv_ns_attach(crt_context_t ctx, unsigned int ns_id,
 		D_GOTO(out, rc);
 	}
 
+	D__DEBUG(DB_TRACE, "create iv_ns %d master rank %d myrank %d ns %p\n",
+		 ns_id, master_rank, myrank, ns);
 	*p_iv_ns = ns;
 out:
 	return rc;

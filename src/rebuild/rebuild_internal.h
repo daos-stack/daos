@@ -72,7 +72,11 @@ struct rebuild_globals {
 	daos_handle_t		rg_local_root_hdl;
 	uuid_t			rg_pool_hdl_uuid;
 	uuid_t			rg_cont_hdl_uuid;
-	d_rank_list_t	*rg_svc_list;
+	d_rank_list_t		*rg_svc_list;
+	uint64_t		rg_obj_count;
+	uint64_t		rg_rec_count;
+	uint32_t		rg_done;
+	d_rank_t		rg_rank;
 	unsigned int		rg_puller_running:1,
 				rg_abort:1,
 				rg_finishing:1,
@@ -96,6 +100,26 @@ struct rebuild_root {
 	unsigned int	count;
 };
 
+struct rebuild_tgt_query_info {
+	int scanning;
+	int status;
+	int rec_count;
+	int obj_count;
+	bool rebuilding;
+	ABT_mutex lock;
+};
+
+struct rebuild_iv {
+	uuid_t		riv_poh_uuid;
+	uuid_t		riv_coh_uuid;
+	uint64_t	riv_obj_count;
+	uint64_t	riv_rec_count;
+	unsigned int	riv_rank;
+	unsigned int	riv_done;
+	int		riv_status;
+};
+
+extern struct ds_iv_entry_ops rebuild_iv_ops;
 extern struct dss_module_key rebuild_module_key;
 static inline struct rebuild_tls *
 rebuild_tls_get()
@@ -106,13 +130,29 @@ rebuild_tls_get()
 struct pool_map *rebuild_pool_map_get(void);
 void rebuild_pool_map_put(struct pool_map *map);
 
-void ds_rebuild_obj_handler(crt_rpc_t *rpc);
-void ds_rebuild_tgt_prepare_handler(crt_rpc_t *rpc);
-void ds_rebuild_tgt_scan_handler(crt_rpc_t *rpc);
+void rebuild_obj_handler(crt_rpc_t *rpc);
+void rebuild_tgt_prepare_handler(crt_rpc_t *rpc);
+void rebuild_tgt_scan_handler(crt_rpc_t *rpc);
+
+void rebuild_iv_ns_handler(crt_rpc_t *rpc);
+int rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv);
+int rebuild_iv_update(void *ns, struct rebuild_iv *rebuild_iv,
+		      unsigned int shortcut, unsigned int sync_mode);
+int rebuild_iv_ns_create(struct ds_pool *pool, d_rank_list_t *exclude_tgts,
+			 unsigned int master_rank);
+
+void
+rebuild_tgt_status_check(void *arg);
 
 int
-ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
-			   daos_unit_oid_t oid, unsigned int shard);
+rebuild_tgt_prepare(uuid_t pool_uuid, d_rank_list_t *svc_list,
+		       unsigned int pmap_ver);
+int
+rebuild_tgt_query(struct rebuild_tgt_query_info *status);
+
+int
+rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
+			daos_unit_oid_t oid, unsigned int shard);
 int ds_obj_open(daos_handle_t coh, daos_obj_id_t oid,
 		daos_epoch_t epoch, unsigned int mode,
 		daos_handle_t *oh);

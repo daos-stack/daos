@@ -41,32 +41,23 @@
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
 enum pool_operation {
-	REBUILD_PREPARE		= 1,
+	REBUILD_IV_NS_CREATE	= 1,
 	REBUILD_OBJECTS_SCAN	= 2,
 	REBUILD_OBJECTS		= 3,
-	REBUILD_TGT_QUERY	= 4,
-	REBUILD_TGT_FINI	= 5,
-};
-
-struct rebuild_fini_tgt_in {
-	uuid_t		rfti_pool_uuid;
-	uint32_t	rfti_pool_map_ver;
-	uint32_t	rfti_pad_32;
 };
 
 struct rebuild_scan_in {
 	uuid_t		rsi_pool_uuid;
-	d_rank_list_t *rsi_tgts_failed;
+	d_rank_list_t	*rsi_tgts_failed;
+	d_rank_list_t	*rsi_svc_list;
 	uint32_t	rsi_pool_map_ver;
 };
 
-struct rebuild_prepare_in {
-	uuid_t		rpi_pool_uuid;
-	uuid_t		rpi_rebuild_pool_hdl_uuid;
-	uuid_t		rpi_rebuild_cont_hdl_uuid;
-	d_rank_list_t *rpi_tgts_failed;
-	d_rank_list_t *rpi_svc_list;
-	uint32_t	rpi_pool_map_ver;
+struct rebuild_iv_ns_in {
+	daos_iov_t	rin_iov;
+	uuid_t		rin_pool_uuid;
+	uint32_t	rin_ns_id;
+	uint32_t	rin_master_rank;
 };
 
 struct rebuild_out {
@@ -81,18 +72,6 @@ struct rebuild_objs_in {
 	struct crt_array        roi_uuids;
 	struct crt_array	roi_shards;
 };
-
-struct rebuild_tgt_query_in {
-	uuid_t		 rtqi_uuid;
-};
-
-struct rebuild_tgt_query_out {
-	int		rtqo_status;
-	uint32_t	rtqo_rebuilding;
-	uint32_t	rtqo_rec_count;
-	uint32_t	rtqo_obj_count;
-};
-
 
 int rebuild_req_create(crt_context_t dtp_ctx, crt_endpoint_t *tgt_ep,
 		       crt_opcode_t opc, crt_rpc_t **req);

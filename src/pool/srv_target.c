@@ -292,6 +292,9 @@ pool_free_ref(struct daos_llink *llink)
 #endif
 	}
 
+	if (pool->sp_iv_ns != NULL)
+		ds_iv_ns_destroy(pool->sp_iv_ns);
+
 	rc = dss_task_collective(pool_child_delete_one, pool->sp_uuid);
 	D__ASSERTF(rc == 0, "%d\n", rc);
 
@@ -611,8 +614,6 @@ ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc)
 			continue;
 		}
 
-		if (hdl->sph_pool != NULL)
-			ds_iv_ns_destroy(hdl->sph_pool->sp_iv_ns);
 		pool_hdl_delete(hdl);
 		ds_pool_hdl_put(hdl);
 	}

@@ -30,17 +30,16 @@
 #include <daos/rpc.h>
 #include "rpc.h"
 
-static struct crt_msg_field *rebuild_prep_in_fields[] = {
-	&CMF_UUID,	/* pool uuid */
-	&CMF_UUID,	/* rebuild pool hdl uuid */
-	&CMF_UUID,	/* rebuild cont hdl uuid */
-	&CMF_RANK_LIST,	/* failed targets */
-	&CMF_RANK_LIST,	/* service list */
-	&CMF_UINT32,	/* pool map version */
+static struct crt_msg_field *rebuild_iv_ns_in_fields[] = {
+	&CMF_IOVEC,	/* iv ns context */
+	&CMF_UUID,	/* rebuild pool uuid */
+	&CMF_UINT32,	/* iv ns class id */
+	&CMF_UINT32,	/* iv master rank */
 };
 
 static struct crt_msg_field *rebuild_scan_in_fields[] = {
 	&CMF_UUID,	/* pool uuid */
+	&CMF_RANK_LIST,	/* target failed list */
 	&CMF_RANK_LIST,	/* service list */
 	&CMF_UINT32,	/* pool map version */
 };
@@ -58,26 +57,8 @@ static struct crt_msg_field *rebuild_objs_in_fields[] = {
 	&DMF_UINT32_ARRAY, /* obj shards to be rebuilt */
 };
 
-static struct crt_msg_field *rebuild_tgt_query_in_fields[] = {
-	&CMF_UUID,
-};
-
-static struct crt_msg_field *rebuild_tgt_query_out_fields[] = {
-	&CMF_INT,
-	&CMF_UINT32,
-	&CMF_UINT32,
-	&CMF_UINT32,
-};
-
-static struct crt_msg_field *rebuild_fini_tgt_in_fields[] = {
-	&CMF_UUID,	/* pool uuid */
-	&CMF_UINT32,	/* pool map version */
-	&CMF_UINT32,	/* 32-bit padding */
-};
-
-
-struct crt_req_format DQF_REBUILD_PREPARE =
-	DEFINE_CRT_REQ_FMT("REBUILD_PREPARE", rebuild_prep_in_fields,
+struct crt_req_format DQF_REBUILD_IV_NS_CREATE =
+	DEFINE_CRT_REQ_FMT("REBUILD_IV_NS_CREATE", rebuild_iv_ns_in_fields,
 			   rebuild_out_fields);
 
 struct crt_req_format DQF_REBUILD_OBJECTS_SCAN =
@@ -86,14 +67,6 @@ struct crt_req_format DQF_REBUILD_OBJECTS_SCAN =
 
 struct crt_req_format DQF_REBUILD_OBJECTS =
 	DEFINE_CRT_REQ_FMT("REBUILD_OBJS", rebuild_objs_in_fields,
-			   rebuild_out_fields);
-
-struct crt_req_format DQF_REBUILD_TGT_QUERY =
-	DEFINE_CRT_REQ_FMT("REBUILD_TGT_QUERY", rebuild_tgt_query_in_fields,
-			   rebuild_tgt_query_out_fields);
-
-struct crt_req_format DQF_REBUILD_TGT_FINI =
-	DEFINE_CRT_REQ_FMT("REBUILD_TGT_FINI", rebuild_fini_tgt_in_fields,
 			   rebuild_out_fields);
 
 int
@@ -109,11 +82,11 @@ rebuild_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 struct daos_rpc rebuild_rpcs[] = {
 	{
-		.dr_name	= "REBUILD_PREPARE",
-		.dr_opc		= REBUILD_PREPARE,
+		.dr_name	= "REBUILD_IV_NS_CREATE",
+		.dr_opc		= REBUILD_IV_NS_CREATE,
 		.dr_ver		= 1,
 		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_REBUILD_PREPARE,
+		.dr_req_fmt	= &DQF_REBUILD_IV_NS_CREATE,
 	}, {
 		.dr_name	= "REBUILD_OBJECTS_SCAN",
 		.dr_opc		= REBUILD_OBJECTS_SCAN,
@@ -126,18 +99,6 @@ struct daos_rpc rebuild_rpcs[] = {
 		.dr_ver		= 1,
 		.dr_flags	= 0,
 		.dr_req_fmt	= &DQF_REBUILD_OBJECTS,
-	}, {
-		.dr_name	= "REBUILD_QUERY",
-		.dr_opc		= REBUILD_TGT_QUERY,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_REBUILD_TGT_QUERY,
-	}, {
-		.dr_name	= "REBUILD_TGT_FINI",
-		.dr_opc		= REBUILD_TGT_FINI,
-		.dr_ver		= 1,
-		.dr_flags	= 0,
-		.dr_req_fmt	= &DQF_REBUILD_TGT_FINI,
 	}, {
 		.dr_opc		= 0
 	}

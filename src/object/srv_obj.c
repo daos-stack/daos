@@ -436,17 +436,21 @@ ds_check_container(uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	int			 rc;
 
 	cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
-	if (cont_hdl == NULL)
+	if (cont_hdl == NULL) {
+		D__DEBUG(DB_TRACE, "can not find "DF_UUID" hdl\n",
+			 DP_UUID(cont_hdl_uuid));
 		D__GOTO(failed, rc = -DER_NO_HDL);
+	}
 
 	if (cont_hdl->sch_cont != NULL) { /* a regular container */
 		*contp = cont_hdl->sch_cont;
 		D__GOTO(out, rc = 0);
 	}
 
-	if (!is_rebuild_container(cont_hdl_uuid)) {
+	if (!is_rebuild_container(cont_hdl->sch_pool->spc_uuid,
+				  cont_hdl_uuid)) {
 		D__ERROR("Empty container "DF_UUID" (ref=%d) handle?\n",
-			DP_UUID(cont_uuid), cont_hdl->sch_ref);
+			 DP_UUID(cont_uuid), cont_hdl->sch_ref);
 		ds_cont_hdl_put(cont_hdl);
 		D__GOTO(failed, rc = -DER_NO_HDL);
 	}

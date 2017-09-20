@@ -1617,6 +1617,9 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D__GOTO(out, rc);
 
+	/* sp_iv_ns will be destroyed when pool is destroyed,
+	 * see pool_free_ref()
+	 */
 	D_ASSERT(svc->ps_pool != NULL);
 	rc = ds_iv_ns_create(rpc->cr_ctx, &iv_ns_id, &iv_iov,
 			     &svc->ps_pool->sp_iv_ns);
@@ -1625,7 +1628,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
-		D__GOTO(out_iv, rc);
+		D__GOTO(out_svc, rc);
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
@@ -1734,9 +1737,6 @@ out_map_version:
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
-out_iv:
-	if (rc != 0)
-		ds_iv_ns_destroy(svc->ps_pool->sp_iv_ns);
 out_svc:
 	ds_pool_set_hint(svc->ps_db, &out->pco_op.po_hint);
 	pool_svc_put_leader(svc);
@@ -1766,7 +1766,6 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	uuid_copy(in->tdi_uuid, svc->ps_uuid);
 	in->tdi_hdls.da_arrays = pool_hdls;
 	in->tdi_hdls.da_count = n_pool_hdls;
-	in->tdi_iv_ns_id = ds_iv_ns_id_get(svc->ps_pool->sp_iv_ns);
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		D__GOTO(out_rpc, rc);
@@ -1916,8 +1915,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D__GOTO(out, rc);
 
-	rc = ds_rebuild_query(in->pqi_op.pi_uuid, false, NULL,
-			      &out->pqo_rebuild_st);
+	rc = ds_rebuild_query(in->pqi_op.pi_uuid, &out->pqo_rebuild_st);
 	if (rc != 0)
 		D__GOTO(out_svc, rc);
 

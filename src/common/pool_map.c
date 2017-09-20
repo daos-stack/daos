@@ -1592,7 +1592,9 @@ matched_criteria(struct find_tgts_param *param,
  * \param map     [IN]	The pool map to search
  * \param param   [IN]	Criteria to be checked
  * \param sorter  [IN]	Sorter for the output targets array
- * \param tgt_pp  [OUT]	The output target array
+ * \param tgt_pp  [OUT]	The output target array, if tgt_pp == NULL, it only
+ *                      needs to get the tgt count, otherwise it will
+ *                      allocate the tgts arrary.
  * \param tgt_cnt [OUT]	The size of target array
  *
  * \return	0 on success, negative values on errors.
@@ -1605,7 +1607,8 @@ pool_map_find_tgts(struct pool_map *map, struct find_tgts_param *param,
 	struct pool_target *targets;
 	int i, total_cnt, idx = 0;
 
-	*tgt_pp = NULL;
+	if (tgt_pp != NULL)
+		*tgt_pp = NULL;
 	*tgt_cnt = 0;
 
 	if (pool_map_empty(map)) {
@@ -1619,14 +1622,14 @@ pool_map_find_tgts(struct pool_map *map, struct find_tgts_param *param,
 rescan:
 	for (i = 0; i < total_cnt; i++) {
 		if (matched_criteria(param, &targets[i])) {
-			if (*tgt_pp == NULL)
+			if (tgt_pp == NULL || *tgt_pp == NULL)
 				(*tgt_cnt)++;
 			else
 				(*(tgt_pp))[idx++] = targets[i];
 		}
 	}
 
-	if (*tgt_cnt == 0)
+	if (*tgt_cnt == 0 || tgt_pp == NULL)
 		return 0;
 
 	if (*tgt_pp == NULL) {
@@ -1654,6 +1657,23 @@ pool_map_find_down_tgts(struct pool_map *map, struct pool_target **tgt_pp,
 	memset(&param, 0, sizeof(param));
 	param.ftp_chk_status = 1;
 	param.ftp_status = PO_COMP_ST_DOWN;
+
+	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
+				  tgt_cnt);
+}
+
+/**
+ * Find all targets in DOWN|DOWNOUT state.
+ */
+int
+pool_map_find_failed_tgts(struct pool_map *map, struct pool_target **tgt_pp,
+			unsigned int *tgt_cnt)
+{
+	struct find_tgts_param param;
+
+	memset(&param, 0, sizeof(param));
+	param.ftp_chk_status = 1;
+	param.ftp_status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT;
 
 	return pool_map_find_tgts(map, &param, &fseq_sort_ops, tgt_pp,
 				  tgt_cnt);

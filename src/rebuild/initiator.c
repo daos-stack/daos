@@ -545,8 +545,11 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	daos_size_t		dkey_buf_size = 1024;
 	int			rc;
 
-	if (tls->rebuild_status)
+	if (tls->rebuild_status) {
+		D__DEBUG(DB_TRACE, "rebuild status %d\n",
+			 tls->rebuild_status);
 		return 1;
+	}
 
 	D__ALLOC(dkey_iov.iov_buf, dkey_buf_size);
 	if (dkey_iov.iov_buf == NULL)
@@ -618,13 +621,16 @@ rebuild_obj_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	unsigned int		*shard = val_iov->iov_buf;
 	int			rc;
 
-	D__DEBUG(DB_TRACE, "obj rebuild "DF_UUID"/%"PRIx64" start\n",
-		DP_UUID(arg->cont_uuid), ih.cookie);
+	D__DEBUG(DB_TRACE, "obj rebuild "DF_UUID"/"DF_UOID" %"PRIx64" start\n",
+		 DP_UUID(arg->cont_uuid), DP_UOID(*oid), ih.cookie);
 	D__ASSERT(arg->obj_cb != NULL);
 
 	rc = arg->obj_cb(*oid, *shard, arg);
-	if (rc)
+	if (rc) {
+		D__DEBUG(DB_TRACE, "obj "DF_UOID" cb callback rc %d\n",
+			 DP_UOID(*oid), rc);
 		return rc;
+	}
 
 	D__DEBUG(DB_TRACE, "obj rebuild "DF_UUID"/%"PRIx64" end\n",
 		DP_UUID(arg->cont_uuid), ih.cookie);
@@ -742,8 +748,9 @@ rebuild_puller(void *arg)
 	rebuild_gst.rg_puller_running = 0;
 }
 
+
 static int
-ds_rebuild_obj_hdl_get(uuid_t pool_uuid, daos_handle_t *hdl)
+rebuild_obj_hdl_get(uuid_t pool_uuid, daos_handle_t *hdl)
 {
 	struct umem_attr	uma;
 	int rc;
@@ -769,7 +776,7 @@ ds_rebuild_obj_hdl_get(uuid_t pool_uuid, daos_handle_t *hdl)
 
 /* Got the object list from scanner and rebuild the objects */
 void
-ds_rebuild_obj_handler(crt_rpc_t *rpc)
+rebuild_obj_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_objs_in	*rebuild_in;
 	struct rebuild_out	*rebuild_out;
@@ -799,15 +806,15 @@ ds_rebuild_obj_handler(crt_rpc_t *rpc)
 	}
 
 	/* Initialize the local rebuild tree */
-	rc = ds_rebuild_obj_hdl_get(rebuild_in->roi_pool_uuid,
-				    &btr_hdl);
+	rc = rebuild_obj_hdl_get(rebuild_in->roi_pool_uuid,
+				 &btr_hdl);
 	if (rc)
 		D__GOTO(out, rc);
 
 	/* Insert these oids/conts into the local rebuild tree */
 	for (i = 0; i < oids_count; i++) {
-		rc = ds_rebuild_cont_obj_insert(btr_hdl, co_uuids[i],
-						oids[i], shards[i]);
+		rc = rebuild_cont_obj_insert(btr_hdl, co_uuids[i],
+					     oids[i], shards[i]);
 		if (rc == 1)
 			D__DEBUG(DB_TRACE, "insert local "DF_UOID" "DF_UUID
 				" %u hdl %"PRIx64"\n", DP_UOID(oids[i]),

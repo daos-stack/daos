@@ -164,7 +164,6 @@ struct pool_tgt_connect_out {
 struct pool_tgt_disconnect_in {
 	uuid_t			tdi_uuid;	/* pool UUID */
 	struct crt_array	tdi_hdls;
-	uint32_t		tdi_iv_ns_id;
 };
 
 struct pool_tgt_disconnect_out {

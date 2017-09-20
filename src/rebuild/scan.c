@@ -136,8 +136,8 @@ rebuild_cont_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 }
 
 static int
-ds_rebuild_objects_send(struct rebuild_root *root,
-			unsigned int tgt_id, struct rebuild_scan_arg *scan_arg)
+rebuild_objects_send(struct rebuild_root *root, unsigned int tgt_id,
+		     struct rebuild_scan_arg *scan_arg)
 {
 	struct rebuild_objs_in *rebuild_in;
 	struct rebuild_send_arg *arg = NULL;
@@ -258,7 +258,7 @@ rebuild_tgt_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 	 * under each target should less than LIMIT. And also
 	 * only 1 thread accessing the tree, so no need lock.
 	 **/
-	rc = ds_rebuild_objects_send(root, tgt_id, arg);
+	rc = rebuild_objects_send(root, tgt_id, arg);
 	if (rc < 0)
 		return rc;
 
@@ -285,9 +285,9 @@ rebuild_tgt_iter_cb(daos_handle_t ih, daos_iov_t *key_iov,
 
 /* Create rebuild tree root */
 static int
-ds_rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
-		       void *key, daos_size_t key_size,
-		       struct rebuild_root **rootp)
+rebuild_tree_create(daos_handle_t toh, unsigned int tree_class,
+		    void *key, daos_size_t key_size,
+		    struct rebuild_root **rootp)
 {
 	daos_iov_t key_iov;
 	daos_iov_t val_iov;
@@ -336,24 +336,24 @@ out:
 
 /* Create target rebuild tree */
 static int
-ds_rebuild_tgt_tree_create(daos_handle_t toh, unsigned int tgt_id,
+rebuild_tgt_tree_create(daos_handle_t toh, unsigned int tgt_id,
 			   struct rebuild_root **rootp)
 {
-	return ds_rebuild_tree_create(toh, DBTREE_CLASS_UV,
-				      &tgt_id, sizeof(tgt_id), rootp);
+	return rebuild_tree_create(toh, DBTREE_CLASS_UV, &tgt_id,
+				   sizeof(tgt_id), rootp);
 }
 
 static int
-ds_rebuild_uuid_tree_create(daos_handle_t toh, uuid_t uuid,
+rebuild_uuid_tree_create(daos_handle_t toh, uuid_t uuid,
 			    struct rebuild_root **rootp)
 {
-	return ds_rebuild_tree_create(toh, DBTREE_CLASS_NV,
-				      uuid, sizeof(uuid_t), rootp);
+	return rebuild_tree_create(toh, DBTREE_CLASS_NV, uuid,
+				   sizeof(uuid_t), rootp);
 }
 
 int
-ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
-			   daos_unit_oid_t oid, unsigned int shard)
+rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
+			daos_unit_oid_t oid, unsigned int shard)
 {
 	struct rebuild_root *cont_root;
 	daos_iov_t	key_iov;
@@ -367,8 +367,8 @@ ds_rebuild_cont_obj_insert(daos_handle_t toh, uuid_t co_uuid,
 		if (rc != -DER_NONEXIST)
 			D__GOTO(out, rc);
 
-		rc = ds_rebuild_uuid_tree_create(toh, co_uuid,
-						 &cont_root);
+		rc = rebuild_uuid_tree_create(toh, co_uuid,
+					      &cont_root);
 		if (rc)
 			D__GOTO(out, rc);
 	} else {
@@ -404,9 +404,9 @@ out:
  * target id.
  **/
 static int
-ds_rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
-			 unsigned int shard, uuid_t pool_uuid, uuid_t co_uuid,
-			 daos_unit_oid_t oid)
+rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
+		      unsigned int shard, uuid_t pool_uuid, uuid_t co_uuid,
+		      daos_unit_oid_t oid)
 {
 	daos_iov_t key_iov;
 	daos_iov_t val_iov;
@@ -421,7 +421,7 @@ ds_rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 	rc = dbtree_lookup(toh, &key_iov, &val_iov);
 	if (rc < 0) {
 		/* Try to find the target rebuild tree */
-		rc = ds_rebuild_tgt_tree_create(toh, tgt_id, &tgt_root);
+		rc = rebuild_tgt_tree_create(toh, tgt_id, &tgt_root);
 		if (rc) {
 			ABT_mutex_unlock(arg->scan_lock);
 			D__GOTO(out, rc);
@@ -430,8 +430,8 @@ ds_rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 		tgt_root = val_iov.iov_buf;
 	}
 
-	rc = ds_rebuild_cont_obj_insert(tgt_root->root_hdl, co_uuid,
-					oid, shard);
+	rc = rebuild_cont_obj_insert(tgt_root->root_hdl, co_uuid,
+				     oid, shard);
 	ABT_mutex_unlock(arg->scan_lock);
 	if (rc <= 0)
 		D__GOTO(out, rc);
@@ -439,7 +439,7 @@ ds_rebuild_object_insert(struct rebuild_scan_arg *arg, unsigned int tgt_id,
 	if (rc == 1) {
 		/* Check if we need send the object list */
 		if (++tgt_root->count >= REBUILD_SEND_LIMIT) {
-			rc = ds_rebuild_objects_send(tgt_root, tgt_id, arg);
+			rc = rebuild_objects_send(tgt_root, tgt_id, arg);
 			if (rc < 0)
 				D__GOTO(out, rc);
 		}
@@ -500,8 +500,8 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 		" on %d for shard %d\n", DP_UOID(oid), DP_UUID(co_uuid),
 		DP_UUID(rebuild_gst.rg_pool_uuid), tgt_rebuild, shard_rebuild);
 
-	rc = ds_rebuild_object_insert(arg, tgt_rebuild, shard_rebuild,
-				      rebuild_gst.rg_pool_uuid, co_uuid, oid);
+	rc = rebuild_object_insert(arg, tgt_rebuild, shard_rebuild,
+				   rebuild_gst.rg_pool_uuid, co_uuid, oid);
 	if (rc)
 		D__GOTO(out, rc);
 out:
@@ -643,7 +643,7 @@ out_map:
 
 /* Scan the local target and generate rebuild object list */
 void
-ds_rebuild_tgt_scan_handler(crt_rpc_t *rpc)
+rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 {
 	struct rebuild_scan_in		*rsi;
 	struct rebuild_out		*ro;
@@ -658,13 +658,18 @@ ds_rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_tid, DP_UUID(rsi->rsi_pool_uuid),
 		rsi->rsi_pool_map_ver);
 
-	D__ASSERT(uuid_compare(rebuild_gst.rg_pool_uuid,
-			      rsi->rsi_pool_uuid) == 0);
+	rc = rebuild_tgt_prepare(rsi->rsi_pool_uuid, rsi->rsi_svc_list,
+				 rsi->rsi_pool_map_ver);
+	if (rc)
+		D__GOTO(out, rc);
 
 	rc = ds_pool_tgt_map_update(rebuild_gst.rg_pool);
 	if (rc)
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 
+	rc = dss_ult_create(rebuild_tgt_status_check, NULL, -1, NULL);
+	if (rc)
+		D__GOTO(out, rc);
 	/* step-1: parameters for scanner */
 	D__ALLOC_PTR(scan_arg);
 	if (scan_arg == NULL)
@@ -709,6 +714,8 @@ out_arg:
 out:
 	ro = crt_reply_get(rpc);
 	ro->ro_status = rc;
+	if (rc)
+		rebuild_gst.rg_abort = 1;
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
