@@ -47,7 +47,7 @@
 #include <poll.h>
 
 #include <cart/types.h>
-#include <cart/errno.h>
+#include <gurt/errno.h>
 #include <gurt/common.h>
 #include "crt_fake_events.h"
 
@@ -116,7 +116,7 @@ crt_fake_event_init(int rank)
 	pipe_name = malloc(length + 1);
 	if (pipe_name == NULL) {
 		D_ERROR("malloc failed, rc: %d\n", rc);
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	snprintf(pipe_name, length + 1, "/tmp/fake_event_pipe_%02d", 0);
 	mkfifo(pipe_name, 0666);
@@ -151,7 +151,7 @@ crt_fake_event_fini(int rank)
 	pipe_name = malloc(length + 1);
 	if (pipe_name == NULL) {
 		D_ERROR("malloc failed, rc: %d\n", rc);
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	snprintf(pipe_name, length + 1, "/tmp/fake_event_pipe_%02d", rank);
 	remove(pipe_name);

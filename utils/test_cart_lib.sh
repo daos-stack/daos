@@ -51,18 +51,18 @@ RC=0
 echo Checking for symbol names.
 if [ "$os" = "Darwin" ]
 then
-    nm -g ${SL_PREFIX}/lib/libcrt.so |
+    nm -g ${SL_PREFIX}/lib/cart/libcart.so |
         grep -v " U " |  grep -v " _crt"
 else
-    echo "checking libcrt.so"
-    nm -g ${SL_PREFIX}/lib/libcrt.so |
+    echo "checking libcart.so"
+    nm -g ${SL_PREFIX}/lib/cart/libcart.so |
         grep -v " U " |  grep -v " w " |  grep -v " crt_" | grep -v "D CMF_" |
         grep -v " D _edata" | grep -v " T _fini" | grep -v " T _init" |
         grep -v " B __bss_start" | grep -v " B _end";
     if [ $? -ne 1 ]; then RC=1; fi
-    echo "checking libcrt_util.so"
-    nm -g ${SL_PREFIX}/lib/libcrt_util.so |
-        grep -v " U " |  grep -v " w " |  grep -v " crt_" |
+    echo "checking libgurt.so"
+    nm -g ${SL_PREFIX}/lib/gurt/libgurt.so |
+        grep -v " U " |  grep -v " w " |  grep -v " d_" |
         grep -v " D _edata" | grep -v " T _fini" | grep -v " T _init" |
         grep -v " B __bss_start" | grep -v " B _end" |
         grep -v " T chash_";

@@ -51,13 +51,13 @@ crt_opc_map_create(unsigned int bits)
 
 	D_ALLOC_PTR(map);
 	if (map == NULL)
-		return -CER_NOMEM;
+		return -DER_NOMEM;
 
 	map->com_pid = getpid();
 	map->com_bits = bits;
 	D_ALLOC(map->com_hash, sizeof(map->com_hash[0]) * (1 << bits));
 	if (map->com_hash == NULL) {
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	for (i = 0; i < (1 << bits); i++)
 		D_INIT_LIST_HEAD(&map->com_hash[i]);
@@ -192,7 +192,7 @@ crt_opc_disable_reply(crt_opcode_t opc, bool disable)
 		else
 			D_DEBUG("opc 0x%x, reply enabled.\n", opc);
 	} else {
-		rc = -CER_UNREG;
+		rc = -DER_UNREG;
 	}
 
 	pthread_rwlock_unlock(&map->com_rwlock);
@@ -257,7 +257,7 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
 
 	D_ALLOC_PTR(new_info);
 	if (new_info == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	crt_opc_info_init(new_info);
 	new_info->coi_opc = opc;
@@ -332,7 +332,7 @@ crt_rpc_reg_internal(crt_opcode_t opc, struct crt_req_format *crf,
 	    output_size > CRT_MAX_OUTPUT_SIZE) {
 		D_ERROR("input_size "CF_U64" or output_size "CF_U64" "
 			"too large.\n", input_size, output_size);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 reg_opc:
@@ -350,11 +350,11 @@ crt_rpc_register(crt_opcode_t opc, struct crt_req_format *crf)
 {
 	if (!crt_initialized()) {
 		D_ERROR("CART library not-initialed.\n");
-		return -CER_UNINIT;
+		return -DER_UNINIT;
 	}
 	if (crt_opcode_reserved(opc)) {
 		D_ERROR("opc 0x%x reserved.\n", opc);
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 	return crt_rpc_reg_internal(opc, crf, NULL, NULL);
 }
@@ -365,15 +365,15 @@ crt_rpc_srv_register(crt_opcode_t opc, struct crt_req_format *crf,
 {
 	if (!crt_initialized()) {
 		D_ERROR("CART library not-initialed.\n");
-		return -CER_UNINIT;
+		return -DER_UNINIT;
 	}
 	if (crt_opcode_reserved(opc)) {
 		D_ERROR("opc 0x%x reserved.\n", opc);
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 	if (rpc_handler == NULL) {
 		D_ERROR("invalid parameter NULL rpc_handler.\n");
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 
 	return crt_rpc_reg_internal(opc, crf, rpc_handler, NULL);
@@ -385,11 +385,11 @@ crt_corpc_register(crt_opcode_t opc, struct crt_req_format *crf,
 {
 	if (!crt_initialized()) {
 		D_ERROR("CART library not-initialed.\n");
-		return -CER_UNINIT;
+		return -DER_UNINIT;
 	}
 	if (crt_opcode_reserved(opc)) {
 		D_ERROR("opc 0x%x reserved.\n", opc);
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 	if (co_ops == NULL)
 		D_WARN("NULL co_ops to be registered for corpc 0x%x.\n", opc);
@@ -404,11 +404,11 @@ crt_rpc_set_feats(crt_opcode_t opc, uint64_t feats)
 
 	if (!crt_initialized()) {
 		D_ERROR("CART library not-initialed.\n");
-		return -CER_UNINIT;
+		return -DER_UNINIT;
 	}
 	if (crt_opcode_reserved(opc)) {
 		D_ERROR("opc 0x%x reserved.\n", opc);
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 
 	disable_reply =  feats & CRT_RPC_FEAT_NO_REPLY;

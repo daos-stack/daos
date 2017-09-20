@@ -180,12 +180,12 @@ crt_context_create(void *arg, crt_context_t *crt_ctx)
 
 	if (crt_ctx == NULL) {
 		D_ERROR("invalid parameter of NULL crt_ctx.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = crt_context_init(ctx);
 	if (rc != 0) {
@@ -222,9 +222,9 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 {
 	D_ASSERT(rpc_priv != NULL);
 
-	if (rc == -CER_CANCELED)
+	if (rc == -DER_CANCELED)
 		rpc_priv->crp_state = RPC_STATE_CANCELED;
-	else if (rc == -CER_TIMEDOUT)
+	else if (rc == -DER_TIMEDOUT)
 		rpc_priv->crp_state = RPC_STATE_TIMEOUT;
 	else
 		rpc_priv->crp_state = RPC_STATE_COMPLETED;
@@ -278,7 +278,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *args)
 			epi->epi_ep.ep_rank, epi->epi_req_wait_num,
 			epi->epi_req_num, epi->epi_reply_num,
 			epi->epi_req_num - epi->epi_reply_num);
-		D_GOTO(out, rc = -CER_BUSY);
+		D_GOTO(out, rc = -DER_BUSY);
 	}
 
 	/* abort RPCs in waitq */
@@ -297,7 +297,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *args)
 		D_ASSERT(rpc_priv->crp_state == RPC_STATE_QUEUED);
 		d_list_del_init(&rpc_priv->crp_epi_link);
 		epi->epi_req_wait_num--;
-		crt_rpc_complete(rpc_priv, -CER_CANCELED);
+		crt_rpc_complete(rpc_priv, -DER_CANCELED);
 		/* corresponds to ref taken when adding to waitq */
 		crt_req_decref(&rpc_priv->crp_pub);
 	}
@@ -337,11 +337,11 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	if (crt_ctx == CRT_CONTEXT_NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx).\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
 	ctx = (struct crt_context *)crt_ctx;
@@ -535,14 +535,14 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		 * crt_req_uri_lookup_psr_cb() be called inside there will
 		 * complete this rpc_priv.
 		 */
-		/* crt_rpc_complete(rpc_priv, -CER_PROTO); */
+		/* crt_rpc_complete(rpc_priv, -DER_PROTO); */
 		break;
 	case RPC_STATE_ADDR_LOOKUP:
 		D_ERROR("rpc opc: 0x%x timedout due to ADDR_LOOKUP to group %s,"
 			" rank %d, tgt_uri %s timedout.\n",
 			rpc_priv->crp_pub.cr_opc, grp_priv->gp_pub.cg_grpid,
 			tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
-		crt_rpc_complete(rpc_priv, -CER_UNREACH);
+		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		break;
 	default:
 		/* At this point, RPC should always be completed by Mercury */
@@ -614,7 +614,7 @@ crt_get_timeout(struct crt_rpc_priv *rpc_priv)
  * Track the rpc request per context
  * return CRT_REQ_TRACK_IN_INFLIGHQ - tacked in crt_ep_inflight::epi_req_q
  *        CRT_REQ_TRACK_IN_WAITQ    - queued in crt_ep_inflight::epi_req_waitq
- *        negative value            - other error case such as -CER_NOMEM
+ *        negative value            - other error case such as -DER_NOMEM
  */
 int
 crt_context_req_track(crt_rpc_t *req)
@@ -645,7 +645,7 @@ crt_context_req_track(crt_rpc_t *req)
 		D_ALLOC_PTR(epi);
 		if (epi == NULL) {
 			pthread_mutex_unlock(&crt_ctx->cc_mutex);
-			D_GOTO(out, rc = -CER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 		}
 
 		/* init the epi fields */
@@ -851,7 +851,7 @@ crt_context_idx(crt_context_t crt_ctx, int *ctx_idx)
 	if (crt_ctx == CRT_CONTEXT_NULL || ctx_idx == NULL) {
 		D_ERROR("invalid parameter, crt_ctx: %p, ctx_idx: %p.\n",
 			crt_ctx, ctx_idx);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	ctx = (struct crt_context *)crt_ctx;
@@ -866,7 +866,7 @@ crt_context_num(int *ctx_num)
 {
 	if (ctx_num == NULL) {
 		D_ERROR("invalid parameter of NULL ctx_num.\n");
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 
 	*ctx_num = crt_gdata.cg_ctx_num;
@@ -930,7 +930,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	/** validate input parameters */
 	if (crt_ctx == CRT_CONTEXT_NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx).\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	/**
@@ -964,7 +964,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 			crt_exec_progress_cb(crt_ctx);
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, timeout);
-		if (rc && rc != -CER_TIMEDOUT) {
+		if (rc && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
 			D_GOTO(out, rc);
 		}
@@ -974,7 +974,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 
 			/**
 			 * Don't clobber rc which might be set to
-			 * -CER_TIMEDOUT
+			 * -DER_TIMEDOUT
 			 */
 			ret = cond_cb(arg);
 			/** be careful with return code */
@@ -1013,7 +1013,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 			crt_exec_progress_cb(ctx);
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
-		if (rc && rc != -CER_TIMEDOUT) {
+		if (rc && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_hg_progress failed with %d\n", rc);
 			D_GOTO(out, rc = 0);
 		}
@@ -1029,7 +1029,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 		if (timeout > 0) {
 			now = d_timeus_secdiff(0);
 			if (now >= end) {
-				rc = -CER_TIMEDOUT;
+				rc = -DER_TIMEDOUT;
 				break;
 			}
 			if (end - now > 1000 * 1000)
@@ -1056,7 +1056,7 @@ crt_register_progress_cb(crt_progress_cb cb, void *args)
 
 	D_ALLOC_PTR(crt_prog_cb_priv);
 	if (crt_prog_cb_priv == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	crt_prog_cb_priv->cpcp_func = cb;
 	crt_prog_cb_priv->cpcp_args = args;
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_prog_rwlock);
@@ -1082,7 +1082,7 @@ crt_register_timeout_cb(crt_timeout_cb cb, void *args)
 
 	D_ALLOC_PTR(timeout_cb_priv);
 	if (timeout_cb_priv == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	timeout_cb_priv->ctcp_func = cb;
 	timeout_cb_priv->ctcp_args = args;
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_timeout_rwlock);

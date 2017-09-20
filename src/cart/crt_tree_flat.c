@@ -71,7 +71,7 @@ crt_flat_get_children(uint32_t grp_size, uint32_t branch_ratio,
 	D_ASSERT(children != NULL);
 
 	if (grp_self != grp_root)
-		return -CER_INVAL;
+		return -DER_INVAL;
 
 	for (i = 0, j = 0; i < grp_size; i++) {
 		if (grp_root != i)
@@ -90,7 +90,7 @@ crt_flat_get_parent(uint32_t grp_size, uint32_t branch_ratio, uint32_t grp_root,
 	D_ASSERT(parent != NULL);
 
 	if (grp_self == grp_root)
-		return -CER_INVAL;
+		return -DER_INVAL;
 
 	*parent = grp_root;
 	return 0;

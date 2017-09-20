@@ -44,7 +44,6 @@
 #define __CRT_INTERNAL_H__
 
 #include <ctype.h>
-#include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>

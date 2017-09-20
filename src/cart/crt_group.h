@@ -292,7 +292,7 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
 	if (grp_priv->gp_refcount == 0) {
-		rc = -CER_ALREADY;
+		rc = -DER_ALREADY;
 	} else {
 		grp_priv->gp_refcount--;
 		rc = grp_priv->gp_refcount;

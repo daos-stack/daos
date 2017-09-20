@@ -59,7 +59,7 @@ static void *progress_handler(void *arg)
 	/* progress loop */
 	do {
 		rc = crt_progress(gecho.crt_ctx, 1, NULL, NULL);
-		if (rc != 0 && rc != -CER_TIMEDOUT) {
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
@@ -68,7 +68,7 @@ static void *progress_handler(void *arg)
 			for (i = 0; i < ECHO_EXTRA_CONTEXT_NUM; i++) {
 				rc = crt_progress(gecho.extra_ctx[i], 1, NULL,
 						  NULL);
-				if (rc != 0 && rc != -CER_TIMEDOUT) {
+				if (rc != 0 && rc != -DER_TIMEDOUT) {
 					D_ERROR("crt_progress failed rc: %d.\n",
 					       rc);
 					break;

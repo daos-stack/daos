@@ -158,12 +158,12 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 	D_ASSERT(grp_priv != NULL);
 	if (grp_priv->gp_primary == 0) {
 		D_ERROR("need not create lookup cache for sub-group.\n");
-		D_GOTO(out, rc = -CER_NO_PERM);
+		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
 	D_ALLOC(htables, CRT_SRV_CONTEXT_NUM * sizeof(struct d_chash_table *));
 	if (htables == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		rc = d_chash_table_create(D_HASH_FT_NOLOCK,
@@ -229,14 +229,14 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 		/* target rank not in cache */
 		D_ALLOC_PTR(li);
 		if (li == NULL)
-			D_GOTO(out, rc = -CER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 		D_INIT_LIST_HEAD(&li->li_link);
 		li->li_grp_priv = grp_priv;
 		li->li_rank = rank;
 		li->li_base_phy_addr = strndup(uri, CRT_ADDR_STR_MAX_LEN);
 		if (li->li_base_phy_addr == NULL) {
 			D_ERROR("strndup() failed.\n");
-			D_GOTO(out, rc = -CER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		li->li_initialized = 1;
 		li->li_evicted = 0;
@@ -268,7 +268,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *grp_priv, int ctx_idx,
 		li->li_base_phy_addr = strndup(uri, CRT_ADDR_STR_MAX_LEN);
 		if (li->li_base_phy_addr == NULL) {
 			D_ERROR("strndup() failed.\n");
-			rc = -CER_NOMEM;
+			rc = -DER_NOMEM;
 		}
 		D_DEBUG("Filling in URI in lookup table. "
 			" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
@@ -447,7 +447,7 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *grp_priv,
 
 	pthread_mutex_lock(&li->li_mutex);
 	if (li->li_evicted == 1)
-		rc = -CER_EVICTED;
+		rc = -DER_EVICTED;
 	if (li->li_tag_addr[tag] == NULL) {
 		li->li_tag_addr[tag] = *hg_addr;
 	} else {
@@ -512,7 +512,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 					   rlink);
 			D_ERROR("tag %d on rank %d already evicted.\n", tag,
 				rank);
-			D_GOTO(out, rc = -CER_OOG);
+			D_GOTO(out, rc = -DER_OOG);
 		}
 		pthread_mutex_unlock(&li->li_mutex);
 		if (base_addr != NULL)
@@ -530,7 +530,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 	/* target rank not in cache */
 	D_ALLOC_PTR(li);
 	if (li == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	D_INIT_LIST_HEAD(&li->li_link);
 	li->li_grp_priv = grp_priv;
 	li->li_rank = rank;
@@ -562,14 +562,14 @@ crt_errno2cer(int err)
 	switch (err) {
 	case 0:		return 0;
 	case EPERM:
-	case EACCES:	return -CER_NO_PERM;
-	case ENOMEM:	return -CER_NOMEM;
+	case EACCES:	return -DER_NO_PERM;
+	case ENOMEM:	return -DER_NOMEM;
 	case EDQUOT:
-	case ENOSPC:	return -CER_NOSPACE;
-	case EEXIST:	return -CER_EXIST;
-	case ENOENT:	return -CER_NONEXIST;
-	case ECANCELED:	return -CER_CANCELED;
-	default:	return -CER_MISC;
+	case ENOSPC:	return -DER_NOSPACE;
+	case EEXIST:	return -DER_EXIST;
+	case ENOENT:	return -DER_NONEXIST;
+	case ECANCELED:	return -DER_CANCELED;
+	default:	return -DER_MISC;
 	}
 	return 0;
 }
@@ -657,7 +657,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 
 	D_ALLOC_PTR(grp_priv);
 	if (grp_priv == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_INIT_LIST_HEAD(&grp_priv->gp_link);
 	grp_priv->gp_primary = primary_grp;
@@ -665,7 +665,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 	if (grp_priv->gp_pub.cg_grpid == NULL) {
 		D_ERROR("strdup grp_id (%s) failed.\n", grp_id);
 		D_FREE_PTR(grp_priv);
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = d_rank_list_dup_sort_uniq(&grp_priv->gp_membs, membs,
 					 true /* input */);
@@ -715,7 +715,7 @@ crt_grp_lookup_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 	if (grp_priv != NULL) {
 		pthread_rwlock_unlock(&crt_grp_list_rwlock);
 		*grp_result = grp_priv;
-		D_GOTO(out, rc = -CER_EXIST);
+		D_GOTO(out, rc = -DER_EXIST);
 	}
 
 	rc = crt_grp_priv_create(&grp_priv, grp_id, false /* primary group */,
@@ -774,7 +774,7 @@ gc_add_child_rpc(struct crt_grp_priv *grp_priv, crt_rpc_t *gc_rpc)
 
 	D_ALLOC_PTR(gc_req_item);
 	if (gc_req_item == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_INIT_LIST_HEAD(&gc_req_item->gc_link);
 	gc_req_item->gc_rpc = gc_rpc;
@@ -844,7 +844,7 @@ crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 		grp_priv->gp_status = CRT_GRP_NORMAL;
 		grp_priv->gp_ctx = rpc_req->cr_ctx;
 		grp_priv->gp_int_grpid = gc_in->gc_int_grpid;
-	} else if (rc == -CER_EXIST) {
+	} else if (rc == -DER_EXIST) {
 		D_ASSERT(grp_priv != NULL);
 		if (pri_rank == gc_in->gc_initiate_rank &&
 		    grp_priv->gp_status == CRT_GRP_CREATING) {
@@ -872,7 +872,7 @@ crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 	if (rc != 0) {
 		D_ERROR("d_idx_in_rank_list(rank %d, group %s) failed, "
 			"rc: %d.\n", pri_rank, gc_in->gc_grp_id, rc);
-		D_GOTO(out, rc = -CER_OOG);
+		D_GOTO(out, rc = -DER_OOG);
 	}
 
 	crt_barrier_update_master(grp_priv);
@@ -952,7 +952,7 @@ out:
  *
  * \param grpid [IN]		unique group ID.
  *
- * \return			zero if grpid is valid, -CER_INVAL otherwise
+ * \return			zero if grpid is valid, -DER_INVAL otherwise
  */
 int
 crt_validate_grpid(const crt_group_id_t grpid) {
@@ -960,14 +960,14 @@ crt_validate_grpid(const crt_group_id_t grpid) {
 	size_t len = strnlen(grpid, CRT_GROUP_ID_MAX_LEN + 1);
 
 	if (len == 0 || len > CRT_GROUP_ID_MAX_LEN)
-		return -CER_INVAL;
+		return -DER_INVAL;
 
 	while (*ptr != '\0') {
 		if (*ptr < ' ' || *ptr > '~' || /* non-printable characters */
 		    *ptr == ';' || *ptr == '"' || *ptr == '`' ||
 		    *ptr == 39 || /* single quote */
 		    *ptr == 92) /* backslash */
-			return -CER_INVAL;
+			return -DER_INVAL;
 		ptr++;
 	}
 	return 0;
@@ -989,20 +989,20 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	if (!crt_is_service()) {
 		D_ERROR("Cannot create subgroup on pure client side.\n");
-		D_GOTO(out, rc = -CER_NO_PERM);
+		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 	if (crt_validate_grpid(grp_id) != 0) {
 		D_ERROR("grp_id contains invalid characters or is too long\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (member_ranks == NULL || grp_create_cb == NULL) {
 		D_ERROR("invalid arg, member_ranks %p, grp_create_cb %p.\n",
 			member_ranks, grp_create_cb);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	crt_group_rank(NULL, &myrank);
 	crt_group_size(NULL, &grp_size);
@@ -1011,7 +1011,7 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 			D_ERROR("invalid arg, member_ranks[%d]: %d exceed "
 				"primary group size %d.\n",
 				i, member_ranks->rl_ranks[i], grp_size);
-			D_GOTO(out, rc = -CER_INVAL);
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 		if (member_ranks->rl_ranks[i] == myrank) {
 			in_grp = true;
@@ -1020,12 +1020,12 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 	if (in_grp == false) {
 		D_ERROR("myrank %d not in member_ranks, cannot create group.\n",
 			myrank);
-		D_GOTO(out, rc = -CER_OOG);
+		D_GOTO(out, rc = -DER_OOG);
 	}
 	crt_ctx = crt_context_lookup(0);
 	if (crt_ctx == CRT_CONTEXT_NULL) {
 		D_ERROR("crt_context_lookup failed.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
 	rc = crt_grp_lookup_create(grp_id, member_ranks, grp_create_cb, priv,
@@ -1166,7 +1166,7 @@ crt_hdlr_grp_destroy(crt_rpc_t *rpc_req)
 	if (grp_priv == NULL) {
 		D_DEBUG("group non-exist.\n");
 		pthread_rwlock_unlock(&crt_grp_list_rwlock);
-		D_GOTO(out, rc = -CER_NONEXIST);
+		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 	pthread_rwlock_unlock(&crt_grp_list_rwlock);
 
@@ -1250,20 +1250,20 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	if (!crt_is_service()) {
 		D_ERROR("Cannot destroy subgroup on pure client side.\n");
-		D_GOTO(out, rc = -CER_NO_PERM);
+		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 	if (grp == NULL) {
 		D_ERROR("invalid parameter of NULL grp.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 	if (grp_priv->gp_primary) {
 		D_DEBUG("cannot destroy primary group.\n");
-		D_GOTO(out, rc = -CER_NO_PERM);
+		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
 	pthread_rwlock_rdlock(&crt_grp_list_rwlock);
@@ -1271,7 +1271,7 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 		D_ERROR("group status: 0x%x, cannot be destroyed.\n",
 			grp_priv->gp_status);
 		pthread_rwlock_unlock(&crt_grp_list_rwlock);
-		D_GOTO(out, rc = -CER_BUSY);
+		D_GOTO(out, rc = -DER_BUSY);
 	}
 	D_ASSERT(grp_priv->gp_rc == 0);
 	member_ranks = grp_priv->gp_membs;
@@ -1341,12 +1341,12 @@ crt_group_rank(crt_group_t *grp, d_rank_t *rank)
 
 	if (rank == NULL) {
 		D_ERROR("invalid parameter of NULL rank pointer.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
@@ -1359,7 +1359,7 @@ crt_group_rank(crt_group_t *grp, d_rank_t *rank)
 		if (grp_priv->gp_primary && !grp_priv->gp_local) {
 			D_DEBUG("not belong to attached remote group (%s).\n",
 				grp->cg_grpid);
-			D_GOTO(out, rc = -CER_OOG);
+			D_GOTO(out, rc = -DER_OOG);
 		}
 		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 		*rank = grp_priv->gp_self;
@@ -1378,12 +1378,12 @@ crt_group_size(crt_group_t *grp, uint32_t *size)
 
 	if (size == NULL) {
 		D_ERROR("invalid parameter of NULL size pointer.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
@@ -1434,7 +1434,7 @@ crt_grp_ras_init(struct crt_grp_priv *grp_priv)
 	grp_priv->gp_failed_ranks = d_rank_list_alloc(0);
 	if (grp_priv->gp_failed_ranks == NULL) {
 		D_ERROR("d_rank_list_alloc failed.\n");
-		rc = -CER_NOMEM;
+		rc = -DER_NOMEM;
 	}
 
 	return rc;
@@ -1481,7 +1481,7 @@ crt_primary_grp_init(crt_group_id_t grpid)
 		D_ALLOC(grp_priv->gp_rank_map,
 			pmix_gdata->pg_univ_size * sizeof(struct crt_rank_map));
 		if (grp_priv->gp_rank_map == NULL)
-			D_GOTO(out, rc = -CER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 
 		rc = crt_pmix_assign_rank(grp_priv);
 		if (rc != 0)
@@ -1499,7 +1499,7 @@ crt_primary_grp_init(crt_group_id_t grpid)
 	grp_priv->gp_membs = d_rank_list_alloc(grp_priv->gp_size);
 	if (grp_priv->gp_membs == NULL) {
 		D_ERROR("d_rank_list_alloc failed.\n");
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (is_service) {
@@ -1599,14 +1599,14 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 
 	if (!crt_is_service()) {
 		D_ERROR("crt_hdlr_uri_lookup invalid on client.\n");
-		rc = -CER_PROTO;
+		rc = -DER_PROTO;
 	}
 	grp_priv = crt_gdata.cg_grp->gg_srv_pri_grp;
 	if (strncmp(ul_in->ul_grp_id, grp_priv->gp_pub.cg_grpid,
 		    CRT_GROUP_ID_MAX_LEN) != 0) {
 		D_ERROR("ul_grp_id %s mismatch with gg_srv_pri_grp %s.\n",
 			ul_in->ul_grp_id, grp_priv->gp_pub.cg_grpid);
-		rc = -CER_INVAL;
+		rc = -DER_INVAL;
 	}
 	if (rc != 0) {
 		ul_out->ul_uri = NULL;
@@ -1619,7 +1619,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 		D_WARN("Lookup of invalid rank %d in group %s (%d)\n",
 		       ul_in->ul_rank, grp_priv->gp_pub.cg_grpid,
 		       grp_priv->gp_size);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	rc = crt_grp_lc_lookup(grp_priv, crt_ctx->cc_idx,
 			       ul_in->ul_rank, 0, &ul_out->ul_uri, NULL);
@@ -1703,21 +1703,21 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 
 	if (srv_grpid == NULL) {
 		D_ERROR("invalid parameter, NULL srv_grpid.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (crt_validate_grpid(srv_grpid) != 0) {
 		D_ERROR("srv_grpid contains invalid characters "
 			"or is too long\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (attached_grp == NULL) {
 		D_ERROR("invalid parameter, NULL attached_grp.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (crt_gdata.cg_grp_inited == 0) {
 		D_ERROR("crt group not initialized.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
@@ -1735,7 +1735,7 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 				D_DEBUG("group %s is finalizing, try attach "
 					"again later.\n",
 					grp_priv->gp_pub.cg_grpid);
-				rc = -CER_AGAIN;
+				rc = -DER_AGAIN;
 			}
 			pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
 			D_GOTO(out, rc);
@@ -1753,7 +1753,7 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 				D_DEBUG("group %s is finalizing, try attach "
 					"again later.\n",
 					grp_priv->gp_pub.cg_grpid);
-				rc = -CER_AGAIN;
+				rc = -DER_AGAIN;
 			}
 			pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
 			D_GOTO(out, rc);
@@ -1792,7 +1792,7 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 			} else {
 				D_ERROR("group %s finalizing, canot attach.\n",
 					grp_priv->gp_pub.cg_grpid);
-				rc = -CER_NO_PERM;
+				rc = -DER_NO_PERM;
 			}
 			pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
 			D_GOTO(out, rc);
@@ -1811,7 +1811,7 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 				D_DEBUG("group %s is finalizing, try attach "
 					"again later.\n",
 					grp_priv->gp_pub.cg_grpid);
-				rc = -CER_AGAIN;
+				rc = -DER_AGAIN;
 			}
 			pthread_rwlock_unlock(&grp_gdata->gg_rwlock);
 			D_GOTO(out, rc);
@@ -1910,11 +1910,11 @@ crt_group_detach(crt_group_t *attached_grp)
 
 	if (attached_grp == NULL) {
 		D_ERROR("invalid parameter, NULL attached_grp.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (crt_gdata.cg_grp_inited == 0) {
 		D_ERROR("crt group not initialized.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
@@ -1923,7 +1923,7 @@ crt_group_detach(crt_group_t *attached_grp)
 	if (grp_priv->gp_local == 1 || grp_priv->gp_service == 0) {
 		D_ERROR("the group %s is a local group or non-service group, "
 			"cannot be detached.\n", attached_grp->cg_grpid);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_grp_priv_decref(grp_priv);
@@ -2010,7 +2010,7 @@ crt_grp_detach(crt_group_t *attached_grp)
 	} else {
 		D_ERROR("group %s not in attached list.\n",
 			attached_grp->cg_grpid);
-		rc = -CER_INVAL;
+		rc = -DER_INVAL;
 	}
 
 out:
@@ -2032,7 +2032,7 @@ crt_grp_init(crt_group_id_t grpid)
 
 	D_ALLOC_PTR(grp_gdata);
 	if (grp_gdata == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_INIT_LIST_HEAD(&grp_gdata->gg_cli_grps_attached);
 	D_INIT_LIST_HEAD(&grp_gdata->gg_srv_grps_attached);
@@ -2083,7 +2083,7 @@ crt_grp_fini(void)
 	if (!d_list_empty(&grp_gdata->gg_srv_grps_attached)) {
 		D_ERROR("gg_srv_grps_attached non-empty, need to detach the "
 			"attached groups first.\n");
-		D_GOTO(out, rc = -CER_BUSY);
+		D_GOTO(out, rc = -DER_BUSY);
 	}
 
 	rc = crt_primary_grp_fini();
@@ -2137,13 +2137,13 @@ crt_group_config_path_set(const char *path)
 
 	if (path == NULL) {
 		D_ERROR("path can't be NULL");
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 
 	if (strlen(path) >= CRT_MAX_ATTACH_PREFIX) {
 		D_ERROR("specified path must be fewer than %d characters",
 			CRT_MAX_ATTACH_PREFIX);
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 
 	rc = stat(path, &buf);
@@ -2154,7 +2154,7 @@ crt_group_config_path_set(const char *path)
 
 	if (!S_ISDIR(buf.st_mode)) {
 		D_ERROR("not a directory: %s", path);
-		return -CER_NOTDIR;
+		return -DER_NOTDIR;
 	}
 
 	strcpy(crt_attach_prefix, path);
@@ -2195,13 +2195,13 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
 	grp_priv = crt_grp_pub2priv(grp);
 	if (!grp_priv->gp_service || !grp_priv->gp_primary) {
 		D_ERROR("can-only save config info for primary service grp.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (grp_priv->gp_local) {
 		rank = grp_priv->gp_self;
@@ -2214,7 +2214,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	grpid = grp_priv->gp_pub.cg_grpid;
 	filename = crt_grp_attach_info_filename(grp_priv);
 	if (filename == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	fp = fopen(filename, "w");
 	if (fp == NULL) {
@@ -2306,17 +2306,17 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	if (grp_priv == NULL) {
 		D_ERROR("Invalid NULL grp_priv pointer.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	grpid = grp_priv->gp_pub.cg_grpid;
 	filename = crt_grp_attach_info_filename(grp_priv);
 	if (filename == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	fp = fopen(filename, "r");
 	if (fp == NULL) {
@@ -2327,7 +2327,7 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 
 	D_ALLOC(grpname, CRT_GROUP_ID_MAX_LEN);
 	if (grpname == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	snprintf(fmt, 64, "%%*s%%%ds", CRT_GROUP_ID_MAX_LEN);
 	rc = fscanf(fp, fmt, grpname);
 	if (rc == EOF) {
@@ -2338,7 +2338,7 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 	if (strncmp(grpname, grpid, CRT_GROUP_ID_MAX_LEN) != 0) {
 		D_ERROR("grpname %s in file mismatch with grpid %s.\n",
 			grpname, grpid);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = fscanf(fp, "%*s%d", &grp_priv->gp_size);
@@ -2361,12 +2361,12 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 	} else {
 		D_ERROR("got bad all_or_self: %s, illegal file format.\n",
 			all_or_self);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	D_ALLOC(addr_str, CRT_ADDR_STR_MAX_LEN);
 	if (addr_str == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	crt_group_rank(NULL, &rank);
 	psr_rank = rank % grp_priv->gp_size;
@@ -2428,7 +2428,7 @@ crt_grp_lc_mark_evicted(struct crt_grp_priv *grp_priv, d_rank_t rank)
 			pthread_rwlock_unlock(&grp_priv->gp_rwlock);
 			D_ALLOC_PTR(li);
 			if (li == NULL)
-				D_GOTO(out, rc = -CER_NOMEM);
+				D_GOTO(out, rc = -DER_NOMEM);
 			D_INIT_LIST_HEAD(&li->li_link);
 			li->li_grp_priv = grp_priv;
 			li->li_rank = rank;
@@ -2504,12 +2504,12 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	/* local non-service groups can't evict ranks */
 	if (grp == NULL && !crt_is_service()) {
 		D_ERROR("grp must be a service group.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	grp_priv = crt_grp_pub2priv(grp);
@@ -2517,20 +2517,20 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 
 	if (grp_priv->gp_primary == 0) {
 		D_ERROR("grp must be a primary group.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (rank >= grp_priv->gp_size) {
 		D_ERROR("Rank out of range. Attempted rank: %d, "
 			"valid range [0, %d).\n", rank, grp_priv->gp_size);
-		D_GOTO(out, rc = -CER_OOG);
+		D_GOTO(out, rc = -DER_OOG);
 	}
 
 	pthread_rwlock_wrlock(&grp_priv->gp_rwlock);
 	if (d_rank_in_rank_list(grp_priv->gp_failed_ranks, rank, true)) {
 		D_DEBUG("Rank %d already evicted.\n", rank);
 		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-		D_GOTO(out, rc = -CER_EVICTED);
+		D_GOTO(out, rc = -DER_EVICTED);
 	}
 	rc = d_rank_list_append(grp_priv->gp_failed_ranks, rank);
 	if (rc != 0) {
@@ -2565,7 +2565,7 @@ crt_grp_failed_ranks_dup(crt_group_t *grp, d_rank_list_t **failed_ranks)
 	D_ASSERT(grp_priv != NULL);
 	if (grp_priv->gp_primary == 0) {
 		D_ERROR("grp should be a primary group.\n");
-		D_GOTO(out, rc = -CER_NO_PERM);
+		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 	pthread_rwlock_rdlock(&grp_priv->gp_rwlock);
 	rc = d_rank_list_dup(failed_ranks, grp_priv->gp_failed_ranks, true);

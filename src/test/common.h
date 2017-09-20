@@ -52,12 +52,12 @@ static inline int drain_queue(crt_context_t ctx)
 	 */
 	do {
 		rc = crt_progress(ctx, 1000000, NULL, NULL);
-		if (rc != 0 && rc != -CER_TIMEDOUT) {
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			printf("crt_progress failed rc: %d.\n", rc);
 			return rc;
 		}
 
-		if (rc == -CER_TIMEDOUT)
+		if (rc == -DER_TIMEDOUT)
 			break;
 	} while (1);
 

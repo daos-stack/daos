@@ -63,7 +63,7 @@ void *progress_thread(void *arg)
 	/* progress loop */
 	do {
 		rc = crt_progress(crt_ctx, 1, NULL, NULL);
-		if (rc != 0 && rc != -CER_TIMEDOUT) {
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
@@ -152,7 +152,7 @@ int main(int argc, char **argv)
 		info[i].complete = 0;
 		for (;;) {
 			rc = crt_barrier(NULL, barrier_complete_cb, &info[i]);
-			if (rc != -CER_BUSY)
+			if (rc != -DER_BUSY)
 				break;
 			sched_yield();
 		}

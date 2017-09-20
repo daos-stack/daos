@@ -190,7 +190,7 @@ crt_knomial_get_parent(uint32_t grp_size, uint32_t tree_ratio,
 		 tree_ratio <= CRT_TREE_MAX_RATIO);
 
 	if (grp_self == grp_root)
-		return -CER_INVAL;
+		return -DER_INVAL;
 
 	tree_self = crt_grprank_2_teerank(grp_size, grp_root, grp_self);
 	D_ASSERT(tree_self != 0);

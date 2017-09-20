@@ -144,7 +144,7 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (nchildren == NULL) {
 		D_ERROR("invalid parameter of NULL nchildren.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	/*
@@ -164,7 +164,7 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	if (grp_rank_list == NULL) {
 		D_ERROR("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
 			grp_priv->gp_pub.cg_grpid);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	tops = crt_tops[tree_type];
@@ -206,7 +206,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (children_rank_list == NULL) {
 		D_ERROR("invalid parameter of NULL children_rank_list.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	/*
@@ -245,11 +245,11 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	}
 	result_rank_list = d_rank_list_alloc(nchildren);
 	if (result_rank_list == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	D_ALLOC(tree_children, nchildren * sizeof(uint32_t));
 	if (tree_children == NULL) {
 		d_rank_list_free(result_rank_list);
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	rc = tops->to_get_children(grp_size, tree_ratio, grp_root, grp_self,
 				   tree_children);
@@ -290,7 +290,7 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (parent_rank == NULL) {
 		D_ERROR("invalid parameter of NULL parent_rank.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	/*
@@ -310,7 +310,7 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	if (grp_rank_list == NULL) {
 		D_DEBUG("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
 			grp_priv->gp_pub.cg_grpid);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	tops = crt_tops[tree_type];

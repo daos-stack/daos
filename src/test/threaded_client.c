@@ -68,7 +68,7 @@ static void *progress(void *arg)
 
 	do {
 		rc = crt_progress(crt_ctx, 1, check_status, status);
-		if (rc == -CER_TIMEDOUT)
+		if (rc == -DER_TIMEDOUT)
 			sched_yield();
 		else if (rc != 0)
 			printf("crt_progress failed rc: %d", rc);
@@ -89,9 +89,9 @@ void complete_cb(const struct crt_cb_info *cb_info)
 	struct msg_info	*info = cb_info->cci_arg;
 	struct rpc_out	*output;
 
-	if (cb_info->cci_rc == -CER_TIMEDOUT) {
+	if (cb_info->cci_rc == -DER_TIMEDOUT) {
 		printf("timeout detected\n");
-		info->status = -CER_TIMEDOUT;
+		info->status = -DER_TIMEDOUT;
 		return;
 	}
 	if (cb_info->cci_rc != 0) {
@@ -104,7 +104,7 @@ void complete_cb(const struct crt_cb_info *cb_info)
 	if (output->msg != MSG_OUT_VALUE ||
 	    output->value != msg_values[info->msg_type]) {
 		printf("bad output 0x%x 0x%x\n", output->msg, output->value);
-		info->status = -CER_INVAL;
+		info->status = -DER_INVAL;
 		return;
 	}
 

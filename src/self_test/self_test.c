@@ -45,6 +45,7 @@
 #include <math.h>
 
 #include "crt_internal.h"
+#include "gurt/errno.h"
 
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")
@@ -100,7 +101,7 @@ static void *progress_fn(void *arg)
 
 	while (!g_shutdown_flag) {
 		ret = crt_progress(*crt_ctx, 1, NULL, NULL);
-		if (ret != 0 && ret != -CER_TIMEDOUT) {
+		if (ret != 0 && ret != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed; ret = %d\n", ret);
 			break;
 		}
@@ -159,7 +160,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	if (ret != 0) {
 		D_ERROR("failed to create progress thread: %s\n",
 			strerror(errno));
-		return -CER_MISC;
+		return -DER_MISC;
 	}
 
 	return 0;
@@ -284,7 +285,7 @@ static void print_fail_counts(struct st_latency *latencies,
 		    latencies[local_rep].cci_rc) {
 			printf("%s%u: -%s (%d)\n", prefix,
 			       local_rep - last_err_idx,
-			       crt_errstr(-latencies[last_err_idx].cci_rc),
+			       d_errstr(-latencies[last_err_idx].cci_rc),
 			       latencies[last_err_idx].cci_rc);
 			last_err_idx = local_rep;
 		}
@@ -776,7 +777,7 @@ static int run_self_test(struct st_size_params all_params[],
 	if (self_endpt.ep_grp == NULL) {
 		D_ERROR("crt_group_lookup failed for group %s\n",
 			CRT_SELF_TEST_GROUP_NAME);
-		D_GOTO(cleanup, ret = -CER_NONEXIST);
+		D_GOTO(cleanup, ret = -DER_NONEXIST);
 	}
 	self_endpt.ep_tag = 0;
 
@@ -793,7 +794,7 @@ static int run_self_test(struct st_size_params all_params[],
 		D_ALLOC_PTR(ms_endpts);
 		if (ms_endpts == NULL) {
 			D_ERROR("Allocating ms_endpts failed\n");
-			D_GOTO(cleanup, ret = -CER_NOMEM);
+			D_GOTO(cleanup, ret = -DER_NOMEM);
 		}
 		ms_endpts[0].endpt.ep_rank = self_endpt.ep_rank;
 		ms_endpts[0].endpt.ep_tag = self_endpt.ep_tag;
@@ -807,7 +808,7 @@ static int run_self_test(struct st_size_params all_params[],
 		D_ALLOC(ms_endpts, num_ms_endpts_in * sizeof(*ms_endpts));
 		if (ms_endpts == NULL) {
 			D_ERROR("Allocating ms_endpts failed\n");
-			D_GOTO(cleanup, ret = -CER_NOMEM);
+			D_GOTO(cleanup, ret = -DER_NOMEM);
 		}
 
 		/*
@@ -859,7 +860,7 @@ static int run_self_test(struct st_size_params all_params[],
 						       sizeof(*ms_endpts));
 			if (realloc_ptr == NULL) {
 				D_ERROR("Failed to shrink ms_endpts array\n");
-				D_GOTO(cleanup, ret = -CER_NOMEM);
+				D_GOTO(cleanup, ret = -DER_NOMEM);
 			}
 			ms_endpts = realloc_ptr;
 		}
@@ -869,24 +870,24 @@ static int run_self_test(struct st_size_params all_params[],
 	D_ALLOC(latencies, num_ms_endpts * sizeof(*latencies));
 	if (latencies == NULL) {
 		D_ERROR("Failed to allocate latency pointers\n");
-		D_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -DER_NOMEM);
 	}
 	D_ALLOC(latencies_iov, num_ms_endpts * sizeof(*latencies_iov));
 	if (latencies_iov == NULL) {
 		D_ERROR("Failed to allocate latency pointers\n");
-		D_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -DER_NOMEM);
 	}
 	D_ALLOC(latencies_sg_list,
 		num_ms_endpts * sizeof(*latencies_sg_list));
 	if (latencies_sg_list == NULL) {
 		D_ERROR("Failed to allocate latency pointers\n");
-		D_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -DER_NOMEM);
 	}
 	D_ALLOC(latencies_bulk_hdl,
 		num_ms_endpts * sizeof(*latencies_bulk_hdl));
 	if (latencies_bulk_hdl == NULL) {
 		D_ERROR("Failed to allocate latency pointers\n");
-		D_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -DER_NOMEM);
 	}
 
 	/*
@@ -898,7 +899,7 @@ static int run_self_test(struct st_size_params all_params[],
 		D_ALLOC(latencies[m_idx], rep_count * sizeof(**latencies));
 		if (latencies[m_idx] == NULL) {
 			D_ERROR("Failed to allocate latency data storage\n");
-			D_GOTO(cleanup, ret = -CER_NOMEM);
+			D_GOTO(cleanup, ret = -DER_NOMEM);
 		}
 		d_iov_set(&latencies_iov[m_idx], latencies[m_idx],
 			    rep_count * sizeof(**latencies));
@@ -1182,14 +1183,14 @@ static int st_validate_range_str(const char *str)
 	while (*str != '\0') {
 		if ((*str < '0' || *str > '9')
 		    && (*str != '-') && (*str != ',')) {
-			return -CER_INVAL;
+			return -DER_INVAL;
 		}
 
 		str++;
 
 		/* Make sure the range string isn't ridiculously large */
 		if (str - start > SELF_TEST_MAX_LIST_STR_LEN)
-			return -CER_INVAL;
+			return -DER_INVAL;
 	}
 	return 0;
 }
@@ -1311,16 +1312,16 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 	    || *token_ptrs[ST_ENDPT_RANK_IDX] == '\0'
 	    || *token_ptrs[ST_ENDPT_TAG_IDX] == '\0') {
 		printf("endpoint must contain non-empty rank:tag\n");
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 	/* Both group and tag can only contain [0-9\-,] */
 	if (st_validate_range_str(token_ptrs[ST_ENDPT_RANK_IDX]) != 0) {
 		printf("endpoint rank contains invalid characters\n");
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 	if (st_validate_range_str(token_ptrs[ST_ENDPT_TAG_IDX]) != 0) {
 		printf("endpoint tag contains invalid characters\n");
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 
 	/*
@@ -1338,11 +1339,11 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 	 */
 	D_ALLOC(rank_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
 	if (rank_valid_str == NULL)
-		D_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -DER_NOMEM);
 
 	D_ALLOC(tag_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
 	if (tag_valid_str == NULL)
-		D_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -DER_NOMEM);
 
 	st_parse_range_str(token_ptrs[ST_ENDPT_RANK_IDX], rank_valid_str,
 			   &num_ranks);
@@ -1360,7 +1361,7 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 			*num_endpts,
 			(uint64_t)num_ranks * (uint64_t)num_tags,
 			SELF_TEST_MAX_NUM_ENDPOINTS);
-		D_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
 
 	printf("Adding endpoints:\n");
@@ -1372,7 +1373,7 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 	realloced_mem = D_REALLOC(*endpts,
 				  sizeof(struct st_endpoint) * (*num_endpts));
 	if (realloced_mem == NULL)
-		D_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -DER_NOMEM);
 	*endpts = (struct st_endpoint *)realloced_mem;
 
 	/* Populate the newly expanded values in the endpoints array */
@@ -1720,7 +1721,7 @@ int main(int argc, char *argv[])
 			print_usage(argv[0], default_msg_sizes_str,
 				    default_rep_count,
 				    default_max_inflight);
-			D_GOTO(cleanup, ret = -CER_INVAL);
+			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 	}
 
@@ -1756,7 +1757,7 @@ int main(int argc, char *argv[])
 	/* Allocate a large enough buffer to hold the message sizes list */
 	D_ALLOC(all_params, (num_tokens + 1) * sizeof(all_params[0]));
 	if (all_params == NULL)
-		D_GOTO(cleanup, ret = -CER_NOMEM);
+		D_GOTO(cleanup, ret = -DER_NOMEM);
 
 	/* Iterate over the user's message sizes and parse / validate them */
 	num_msg_sizes = 0;
@@ -1779,7 +1780,7 @@ int main(int argc, char *argv[])
 
 	if (num_msg_sizes <= 0) {
 		printf("No valid message sizes given\n");
-		D_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
 
 	/* Shrink the buffer if some of the user's tokens weren't kept */
@@ -1791,33 +1792,33 @@ int main(int argc, char *argv[])
 					  num_msg_sizes
 					  * sizeof(all_params[0]));
 		if (realloced_mem == NULL)
-			D_GOTO(cleanup, ret = -CER_NOMEM);
+			D_GOTO(cleanup, ret = -DER_NOMEM);
 		all_params = (struct st_size_params *)realloced_mem;
 	}
 
 	/******************** Validate arguments ********************/
 	if (dest_name == NULL || crt_validate_grpid(dest_name) != 0) {
 		printf("--group-name argument not specified or is invalid\n");
-		D_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
 	if (ms_endpts == NULL)
 		printf("Warning: No --master-endpoint specified; using this"
 		       " command line application as the master endpoint\n");
 	if (endpts == NULL || num_endpts == 0) {
 		printf("No endpoints specified\n");
-		D_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
 	if ((rep_count <= 0) || (rep_count > SELF_TEST_MAX_REPETITIONS)) {
 		printf("Invalid --repetitions-per-size argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
 		       SELF_TEST_MAX_REPETITIONS, rep_count);
-		D_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
 	if ((max_inflight <= 0) || (max_inflight > SELF_TEST_MAX_INFLIGHT)) {
 		printf("Invalid --max-inflight-rpcs argument\n"
 		       "  Expected value in range (0:%d], got %d\n",
 		       SELF_TEST_MAX_INFLIGHT, max_inflight);
-		D_GOTO(cleanup, ret = -CER_INVAL);
+		D_GOTO(cleanup, ret = -DER_INVAL);
 	}
 
 	/*

@@ -49,7 +49,7 @@
 #include <uuid/uuid.h>
 
 #include <cart/types.h>
-#include <cart/errno.h>
+#include <gurt/errno.h>
 #include <cart/iv.h>
 
 #if defined(__cplusplus)
@@ -313,7 +313,7 @@ crt_reply_get(crt_rpc_t *rpc)
  * \return                      zero on success, negative value if error
  *                              If the RPC has been sent out by crt_req_send,
  *                              the completion callback will be called with
- *                              CER_CANCELED set to crt_cb_info::dci_rc for a
+ *                              DER_CANCELED set to crt_cb_info::dci_rc for a
  *                              successful aborting.
  */
 int
@@ -352,7 +352,7 @@ crt_rpc_register(crt_opcode_t opc, struct crt_req_format *drf);
  *				request.
  * \param rpc_handler [IN]	pointer to RPC handler which will be triggered
  *				when RPC request opcode associated with rpc_name
- *				is received. Will return -CER_INVAL if pass in
+ *				is received. Will return -DER_INVAL if pass in
  *				NULL rpc_handler.
  *
  * \return			zero on success, negative value if error
@@ -377,7 +377,7 @@ crt_rpc_srv_register(crt_opcode_t opc, struct crt_req_format *drf,
  *
  * Notes for one-way RPC:
  * 1) Need not reply for one-way RPC, calling crt_reply_send() will fail with
- *    -CER_PROTO.
+ *    -DER_PROTO.
  * 2) For one-way RPC, user needs to disable the reply on both origin and target
  *    side, or undefined result is expected.
  * 3) Corpc musted be replied, disabling the reply of corpc will lead to
@@ -413,7 +413,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
  * \param bulk_hdl [IN]         bulk handle
  * \param sgl[IN/OUT]           pointer to buffer segment list
  *                              Caller should provide a valid sgl pointer, if
- *                              sgl->sg_nr.num is too small, -CER_TRUNC will be
+ *                              sgl->sg_nr.num is too small, -DER_TRUNC will be
  *                              returned and the needed number of iovs be set at
  *                              sgl->sg_nr.num_out.
  *                              On success, sgl->sg_nr.num_out will be set as
@@ -482,7 +482,7 @@ crt_bulk_get_sgnum(crt_bulk_t bulk_hdl, unsigned int *bulk_sgnum);
  *
  * \return                      zero on success, negative value if error
  *                              If abort succeed, the bulk transfer's completion
- *                              callback will be called with CER_CANCELED set to
+ *                              callback will be called with DER_CANCELED set to
  *                              crt_bulk_cb_info::bci_rc.
  */
 int
@@ -523,7 +523,7 @@ static inline int
 crt_tree_topo(enum crt_tree_type tree_type, uint32_t branch_ratio)
 {
 	if (tree_type < CRT_TREE_MIN || tree_type > CRT_TREE_MAX)
-		return -CER_INVAL;
+		return -DER_INVAL;
 
 	return (tree_type << CRT_TREE_TYPE_SHIFT) |
 	       (branch_ratio & ((1U << CRT_TREE_TYPE_SHIFT) - 1));
@@ -577,7 +577,7 @@ typedef int (*crt_grp_destroy_cb_t)(void *args, int status);
  * \param grp_id [IN]		unique group ID.
  * \param member_ranks [IN]	rank list of members for the group.
  *				Can-only create the group on the node which is
- *				one member of the group, otherwise -CER_OOG will
+ *				one member of the group, otherwise -DER_OOG will
  *				be returned.
  * \param populate_now [IN]	True if the group should be populated now;
  *				otherwise, group population will be later
@@ -769,7 +769,7 @@ crt_corpc_register(crt_opcode_t opc, struct crt_req_format *drf,
  * \param cb_arg [IN]		Optional argument passed to completion callback
  *
  * \return			zero on success
- *                              -CER_BUSY if a barrier slot isn't available
+ *                              -DER_BUSY if a barrier slot isn't available
  *                              suggesting that prior barriers need to complete
  *                              before trying again.
  *                              Other negative error codes are possible if

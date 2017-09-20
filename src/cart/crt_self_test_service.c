@@ -205,14 +205,14 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 	if (new_entry == NULL) {
 		D_ERROR("self-test memory allocation failed for new session -"
 			" alloc_buf_len=%zu\n", alloc_buf_len);
-		return -CER_NOMEM;
+		return -DER_NOMEM;
 	}
 
 	D_ALLOC(new_entry->buf, alloc_buf_len);
 	if (new_entry == NULL) {
 		D_ERROR("self-test memory allocation failed for new session -"
 			" alloc_buf_len=%zu\n", alloc_buf_len);
-		return -CER_NOMEM;
+		return -DER_NOMEM;
 	}
 
 	/* Fill the buffer with an arbitrary data pattern */

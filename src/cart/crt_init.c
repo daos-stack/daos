@@ -141,19 +141,19 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 		if (crt_validate_grpid(grpid) != 0) {
 			D_ERROR("grpid contains invalid characters "
 				"or is too long\n");
-			D_GOTO(out, rc = -CER_INVAL);
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 		if (!server) {
 			if (strcmp(grpid, CRT_DEFAULT_SRV_GRPID) == 0) {
 				D_ERROR("invalid client grpid (same as "
 					"CRT_DEFAULT_SRV_GRPID).\n");
-				D_GOTO(out, rc = -CER_INVAL);
+				D_GOTO(out, rc = -DER_INVAL);
 			}
 		} else {
 			if (strcmp(grpid, CRT_DEFAULT_CLI_GRPID) == 0) {
 				D_ERROR("invalid server grpid (same as "
 					"CRT_DEFAULT_CLI_GRPID).\n");
-				D_GOTO(out, rc = -CER_INVAL);
+				D_GOTO(out, rc = -DER_INVAL);
 			}
 		}
 	}
@@ -216,7 +216,7 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 			} else {
 				D_ERROR("invalid CRT_PHY_ADDR_STR %s.\n",
 					addr_env);
-				D_GOTO(out, rc = -CER_INVAL);
+				D_GOTO(out, rc = -DER_INVAL);
 			}
 			rc = crt_na_ofi_config_init();
 			if (rc != 0) {
@@ -276,7 +276,7 @@ do_init:
 		if (crt_gdata.cg_server == false && server == true) {
 			D_ERROR("CRT initialized as client, cannot set as "
 				"server again.\n");
-			D_GOTO(unlock, rc = -CER_INVAL);
+			D_GOTO(unlock, rc = -DER_INVAL);
 		}
 	}
 
@@ -348,14 +348,14 @@ crt_finalize(void)
 	if (!crt_initialized()) {
 		D_ERROR("cannot finalize before initializing.\n");
 		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	if (crt_gdata.cg_ctx_num > 0) {
 		D_ASSERT(!crt_context_empty(CRT_LOCKED));
 		D_ERROR("cannot finalize, current ctx_num(%d).\n",
 			crt_gdata.cg_ctx_num);
 		pthread_rwlock_unlock(&crt_gdata.cg_rwlock);
-		D_GOTO(out, rc = -CER_NO_PERM);
+		D_GOTO(out, rc = -DER_NO_PERM);
 	} else {
 		D_ASSERT(crt_context_empty(CRT_LOCKED));
 	}
@@ -452,7 +452,7 @@ crt_get_port(int *port)
 	if (socketfd == -1) {
 		D_ERROR("cannot create socket, errno: %d(%s).\n",
 			errno, strerror(errno));
-		D_GOTO(out, rc = -CER_ADDRSTR_GEN);
+		D_GOTO(out, rc = -DER_ADDRSTR_GEN);
 	}
 	tmp_socket.sin_family = AF_INET;
 	tmp_socket.sin_addr.s_addr = INADDR_ANY;
@@ -464,7 +464,7 @@ crt_get_port(int *port)
 		D_ERROR("cannot bind socket, errno: %d(%s).\n",
 			errno, strerror(errno));
 		close(socketfd);
-		D_GOTO(out, rc = -CER_ADDRSTR_GEN);
+		D_GOTO(out, rc = -DER_ADDRSTR_GEN);
 	}
 
 	rc = getsockname(socketfd, (struct sockaddr *)&tmp_socket, &slen);
@@ -472,13 +472,13 @@ crt_get_port(int *port)
 		D_ERROR("cannot create getsockname, errno: %d(%s).\n",
 			errno, strerror(errno));
 		close(socketfd);
-		D_GOTO(out, rc = -CER_ADDRSTR_GEN);
+		D_GOTO(out, rc = -DER_ADDRSTR_GEN);
 	}
 	rc = close(socketfd);
 	if (rc != 0) {
 		D_ERROR("cannot close socket, errno: %d(%s).\n",
 			errno, strerror(errno));
-		D_GOTO(out, rc = -CER_ADDRSTR_GEN);
+		D_GOTO(out, rc = -DER_ADDRSTR_GEN);
 	}
 
 	D_ASSERT(port != NULL);
@@ -505,19 +505,19 @@ int crt_na_ofi_config_init(void)
 		crt_na_ofi_conf.noc_interface = strdup(interface);
 		if (crt_na_ofi_conf.noc_interface == NULL) {
 			D_ERROR("cannot allocate memory for noc_interface.");
-			D_GOTO(out, rc = -CER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 		}
 	} else {
 		crt_na_ofi_conf.noc_interface = NULL;
 		D_ERROR("ENV OFI_INTERFACE not set.");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = getifaddrs(&if_addrs);
 	if (rc != 0) {
 		D_ERROR("cannot getifaddrs, errno: %d(%s).\n",
 			     errno, strerror(errno));
-		D_GOTO(out, rc = -CER_PROTO);
+		D_GOTO(out, rc = -DER_PROTO);
 	}
 
 	for (ifa = if_addrs; ifa != NULL; ifa = ifa->ifa_next) {
@@ -537,7 +537,7 @@ int crt_na_ofi_config_init(void)
 				D_ERROR("inet_ntop failed, errno: %d(%s).\n",
 					errno, strerror(errno));
 				freeifaddrs(if_addrs);
-				D_GOTO(out, rc = -CER_PROTO);
+				D_GOTO(out, rc = -DER_PROTO);
 			}
 			/*
 			 * D_DEBUG("Get interface %s IPv4 Address %s\n",
@@ -559,7 +559,7 @@ int crt_na_ofi_config_init(void)
 	freeifaddrs(if_addrs);
 	if (ip_str == NULL) {
 		D_ERROR("no IP addr found.\n");
-		D_GOTO(out, rc = -CER_PROTO);
+		D_GOTO(out, rc = -DER_PROTO);
 	}
 
 	rc = crt_get_port(&port);

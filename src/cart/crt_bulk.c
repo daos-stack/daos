@@ -128,7 +128,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 		D_ERROR("invalid parameter for crt_bulk_create, crt_ctx: %p, "
 			"crt_sgl_valid: %d, bulk_perm: %d, bulk_hdl: %p.\n",
 			crt_ctx, crt_sgl_valid(sgl), bulk_perm, bulk_hdl);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	ctx = (struct crt_context *)crt_ctx;
@@ -166,7 +166,7 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 
 	if (!crt_bulk_desc_valid(bulk_desc)) {
 		D_ERROR("invalid parameter of bulk_desc.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid);
@@ -184,7 +184,7 @@ crt_bulk_get_len(crt_bulk_t bulk_hdl, d_size_t *bulk_len)
 
 	if (bulk_hdl == CRT_BULK_NULL || bulk_len == NULL) {
 		D_ERROR("invalid parameter, NULL bulk_hdl or bulk_len.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_hg_bulk_get_len(bulk_hdl, bulk_len);
@@ -202,7 +202,7 @@ crt_bulk_get_sgnum(crt_bulk_t bulk_hdl, unsigned int *bulk_sgnum)
 
 	if (bulk_hdl == CRT_BULK_NULL || bulk_sgnum == NULL) {
 		D_ERROR("invalid parameter, NULL bulk_hdl or bulk_sgnum.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_hg_bulk_get_sgnum(bulk_hdl, bulk_sgnum);
@@ -220,11 +220,11 @@ crt_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 
 	if (bulk_hdl == CRT_BULK_NULL) {
 		D_ERROR("invalid parameter, NULL bulk_hdl.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (sgl == NULL) {
 		D_ERROR("invalid parameter, NULL sgl pointer.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_hg_bulk_access(bulk_hdl, sgl);

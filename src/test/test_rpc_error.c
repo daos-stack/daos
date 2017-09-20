@@ -147,7 +147,7 @@ static void *progress_thread(void *arg)
 	crt_ctx = (crt_context_t) arg;
 	do {
 		rc = crt_progress(crt_ctx, 1, NULL, NULL);
-		if (rc != 0 && rc != -CER_TIMEDOUT) {
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
@@ -255,7 +255,7 @@ client_cb(const struct crt_cb_info *cb_info)
 	case RPC_ERR_OPC_NOREPLY:
 		fprintf(stderr, "RPC failed, return code: %d.\n",
 			cb_info->cci_rc);
-		D_ASSERT(cb_info->cci_rc == -CER_NOREPLY);
+		D_ASSERT(cb_info->cci_rc == -DER_NOREPLY);
 		rpc_req_input = crt_req_get(rpc_req);
 		D_ASSERT(rpc_req_input != NULL);
 		rpc_req_output = crt_reply_get(rpc_req);

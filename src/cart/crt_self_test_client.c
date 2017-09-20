@@ -374,7 +374,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 				D_ERROR("No non-evicted endpoints remaining\n");
 				pthread_spin_unlock(&g_data->ctr_lock);
 				/************** UNLOCK: ctr_lock **************/
-				D_GOTO(abort, ret = -CER_UNREACH);
+				D_GOTO(abort, ret = -DER_UNREACH);
 			}
 			failed_endpts++;
 
@@ -489,7 +489,7 @@ send_rpc:
 			if (ret != 0)
 				D_ERROR("crt_req_decref failed; ret=%d\n", ret);
 
-			D_GOTO(abort, ret = -CER_UNKNOWN);
+			D_GOTO(abort, ret = -DER_UNKNOWN);
 		}
 
 		/* Send the RPC */
@@ -575,8 +575,8 @@ test_rpc_cb(const struct crt_cb_info *cb_info)
 	g_data->rep_latencies[cb_args->rep_idx].cci_rc = cb_info->cci_rc;
 
 	/* If this endpoint was evicted during the RPC, mark it as so */
-	if (cb_info->cci_rc == -CER_OOG) {
-		D_WARN("Test RPC failed with -CER_OOG for endpoint=%u:%u;"
+	if (cb_info->cci_rc == -DER_OOG) {
+		D_WARN("Test RPC failed with -DER_OOG for endpoint=%u:%u;"
 		       " marking it as evicted\n",
 		       cb_args->endpt->rank, cb_args->endpt->tag);
 		/*
@@ -838,28 +838,28 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	if (((args->endpts.iov_buf_len & 0x7) != 0) ||
 	    (args->endpts.iov_buf_len == 0)) {
 		D_ERROR("Invalid IOV length - must be a multiple of 8 bytes\n");
-		D_GOTO(send_reply, ret = -CER_INVAL);
+		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 	if (args->send_type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT ||
 	    args->reply_type == CRT_SELF_TEST_MSG_TYPE_BULK_GET) {
 		D_ERROR("Invalid self-test bulk type;"
 			" only send/get reply/put are supported\n");
-		D_GOTO(send_reply, ret = -CER_INVAL);
+		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 	if (args->max_inflight == 0) {
 		D_ERROR("Max inflight must be greater than zero\n");
-		D_GOTO(send_reply, ret = -CER_INVAL);
+		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 	if (args->rep_count == 0) {
 		D_ERROR("Rep count must be greater than zero\n");
-		D_GOTO(send_reply, ret = -CER_INVAL);
+		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 	if ((args->buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
 	     args->buf_alignment > CRT_ST_BUF_ALIGN_MAX) &&
 	     args->buf_alignment != CRT_ST_BUF_ALIGN_DEFAULT) {
 		D_ERROR("Buf alignment must be in the range [%d:%d]\n",
 			CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MAX);
-		D_GOTO(send_reply, ret = -CER_INVAL);
+		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 
 	/*
@@ -871,7 +871,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	 */
 	if (g_data != NULL && g_data->test_complete == 0) {
 		D_ERROR("Failed to start a new test run - one still exists\n");
-		D_GOTO(send_reply, ret = -CER_BUSY);
+		D_GOTO(send_reply, ret = -DER_BUSY);
 	} else {
 		free_g_data();
 	}
@@ -879,7 +879,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	D_ALLOC_PTR(g_data);
 	if (g_data == NULL) {
 		D_ERROR("Failed to allocate global test data structure\n");
-		D_GOTO(fail_cleanup, ret = -CER_NOMEM);
+		D_GOTO(fail_cleanup, ret = -DER_NOMEM);
 	}
 
 	/* Initialize the global callback data */
@@ -900,7 +900,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 				sizeof(struct st_test_endpt));
 	if (g_data->endpts == NULL) {
 		D_ERROR("Failed to allocate endpoint descriptor storage\n");
-		D_GOTO(fail_cleanup, ret = -CER_NOMEM);
+		D_GOTO(fail_cleanup, ret = -DER_NOMEM);
 	}
 
 	/* Copy the endpoint data from the caller */
@@ -916,7 +916,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		g_data->rep_count * sizeof(g_data->rep_latencies[0]));
 	if (g_data->rep_latencies == NULL) {
 		D_ERROR("Failed to allocate latency data storage\n");
-		D_GOTO(fail_cleanup, ret = -CER_NOMEM);
+		D_GOTO(fail_cleanup, ret = -DER_NOMEM);
 	}
 
 	/*
@@ -944,7 +944,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 				      sizeof(g_data->cb_args_ptrs[0]));
 	if (g_data->cb_args_ptrs == NULL) {
 		D_ERROR("Failed to callback data pointers\n");
-		D_GOTO(fail_cleanup, ret = -CER_NOMEM);
+		D_GOTO(fail_cleanup, ret = -DER_NOMEM);
 	}
 
 	/*
@@ -976,7 +976,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		D_ALLOC_PTR(g_data->cb_args_ptrs[alloc_idx]);
 		if (g_data->cb_args_ptrs[alloc_idx] == NULL) {
 			D_ERROR("RPC private data allocation failed\n");
-			D_GOTO(fail_cleanup, ret = -CER_NOMEM);
+			D_GOTO(fail_cleanup, ret = -DER_NOMEM);
 		}
 
 		/*
@@ -1000,7 +1000,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		D_ALLOC(cb_args->buf, alloc_buf_len);
 		if (cb_args->buf == NULL) {
 			D_ERROR("RPC data buf allocation failed\n");
-			D_GOTO(fail_cleanup, ret = -CER_NOMEM);
+			D_GOTO(fail_cleanup, ret = -DER_NOMEM);
 		}
 
 		/* Fill the buffer with an arbitrary data pattern */

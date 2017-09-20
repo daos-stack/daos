@@ -66,7 +66,7 @@ static void *progress(void *arg)
 
 	do {
 		rc = crt_progress(crt_ctx, 1000*1000, check_status, status);
-		if (rc == -CER_TIMEDOUT)
+		if (rc == -DER_TIMEDOUT)
 			sched_yield();
 		else if (rc != 0)
 			printf("crt_progress failed rc: %d", rc);

@@ -169,7 +169,7 @@ crt_hg_reg(hg_class_t *hg_class, hg_id_t rpcid, crt_proc_cb_t in_proc_cb,
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Register(rpcid: 0x%x) failed, hg_ret: %d.\n",
 			rpcid, hg_ret);
-		rc = -CER_HG;
+		rc = -DER_HG;
 	}
 	return rc;
 }
@@ -183,7 +183,7 @@ crt_hg_bulk_free(crt_bulk_t bulk_hdl)
 	hg_ret = HG_Bulk_free(bulk_hdl);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
-		rc = -CER_HG;
+		rc = -DER_HG;
 	}
 
 	return rc;

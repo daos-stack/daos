@@ -524,7 +524,7 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 			DBG_PRINT("Found key, but wasnt valid, forwarding\n");
 			UNLOCK_KEYS();
 			DBG_EXIT();
-			return -CER_IVCB_FORWARD;
+			return -DER_IVCB_FORWARD;
 		}
 	}
 	UNLOCK_KEYS();
@@ -538,7 +538,7 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	}
 
 	DBG_EXIT();
-	return -CER_IVCB_FORWARD;
+	return -DER_IVCB_FORWARD;
 }
 
 static int
@@ -564,7 +564,7 @@ iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	if (key_struct->rank == my_rank)
 		rc = 0;
 	else
-		rc = -CER_IVCB_FORWARD;
+		rc = -DER_IVCB_FORWARD;
 
 	LOCK_KEYS();
 	d_list_for_each_entry(entry, &kv_pair_head, link) {
@@ -607,7 +607,7 @@ iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	if (key_struct->rank == my_rank)
 		rc = 0;
 	else
-		rc = -CER_IVCB_FORWARD;
+		rc = -DER_IVCB_FORWARD;
 
 
 	LOCK_KEYS();

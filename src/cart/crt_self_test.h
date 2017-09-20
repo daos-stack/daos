@@ -182,10 +182,10 @@ struct crt_st_session_params {
 
 enum crt_st_status {
 	/* No test session / data was found */
-	CRT_ST_STATUS_INVAL = -CER_INVAL,
+	CRT_ST_STATUS_INVAL = -DER_INVAL,
 
 	/* Test found and still busy processing */
-	CRT_ST_STATUS_TEST_IN_PROGRESS = -CER_BUSY,
+	CRT_ST_STATUS_TEST_IN_PROGRESS = -DER_BUSY,
 
 	/* Test complete and returned data is valid */
 	CRT_ST_STATUS_TEST_COMPLETE = 0,

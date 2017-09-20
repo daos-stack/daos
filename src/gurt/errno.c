@@ -36,10 +36,10 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 /**
- * This file is part of CaRT.
+ * This file is part of GURT.
  */
-#include <cart/errno.h>
+#include <gurt/errno.h>
 
-#define CRT_ERRNO_GEN_ERRSTR
+#define D_ERRNO_GEN_ERRSTR
 
-#include <cart/errno.h>
+#include <gurt/errno.h>

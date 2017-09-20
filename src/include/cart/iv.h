@@ -47,7 +47,7 @@
 #include <uuid/uuid.h>
 
 #include <cart/types.h>
-#include <cart/errno.h>
+#include <gurt/errno.h>
 
 #if defined(__cplusplus)
 extern "C" {
@@ -123,7 +123,7 @@ typedef enum {
  * \param priv [IN]		private user data
  *
  * \return			zero on success handled locally,
- *				-CER_IVCB_FORWARD when cannot handle locally and
+ *				-DER_IVCB_FORWARD when cannot handle locally and
  *				need to forward to next hop,
  *				other negative value if error
  */
@@ -145,7 +145,7 @@ typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
  * \param priv [IN]		private user data
  *
  * \return			zero on success handled locally,
- *				-CER_IVCB_FORWARD when cannot handle locally and
+ *				-DER_IVCB_FORWARD when cannot handle locally and
  *				need to forward to next hop,
  *				other negative value if error
  */
@@ -170,7 +170,7 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  * \param priv [IN]		private user data
  *
  * \return			zero on success handled locally,
- *				-CER_IVCB_FORWARD when cannot handle locally and
+ *				-DER_IVCB_FORWARD when cannot handle locally and
  *				need to forward to next hop,
  *				other negative value if error
  */

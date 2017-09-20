@@ -344,7 +344,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	       rpc_req->cr_opc, cb_info->cci_rc);
 	if (cb_info->cci_arg != NULL)
 		*(int *) cb_info->cci_arg = 1;
-	assert(cb_info->cci_rc != -CER_TIMEDOUT);
+	assert(cb_info->cci_rc != -DER_TIMEDOUT);
 
 	switch (cb_info->cci_rpc->cr_opc) {
 	case ECHO_OPC_CHECKIN:

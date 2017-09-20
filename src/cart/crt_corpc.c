@@ -58,7 +58,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 
 	D_ALLOC_PTR(co_info);
 	if (co_info == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	co_info->co_grp_priv = grp_priv;
 	rc = d_rank_list_dup_sort_uniq(&co_info->co_excluded_ranks,
@@ -127,7 +127,7 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 		if (grp_priv == NULL) {
 			D_ERROR("crt_grp_lookup_int_grpid "CF_X64" failed.\n",
 				co_hdr->coh_int_grpid);
-			D_GOTO(out, rc = -CER_INVAL);
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
 
@@ -202,9 +202,9 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 	sgl.sg_nr.num = 0;
 	sgl.sg_iovs = NULL;
 	rc = crt_bulk_access(bulk_hdl, &sgl);
-	if (rc != -CER_TRUNC) {
+	if (rc != -DER_TRUNC) {
 		if (rc == 0)
-			rc = -CER_PROTO;
+			rc = -DER_PROTO;
 		D_ERROR("crt_bulk_access failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
 	}
@@ -212,11 +212,11 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 	seg_num = sgl.sg_nr.num_out;
 	if (seg_num == 0) {
 		D_ERROR("bad zero seg_num.\n");
-		D_GOTO(out, rc = CER_PROTO);
+		D_GOTO(out, rc = DER_PROTO);
 	}
 	D_ALLOC(iovs, sizeof(d_iov_t) * seg_num);
 	if (iovs == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	sgl.sg_nr.num = seg_num;
 	sgl.sg_iovs = iovs;
@@ -255,11 +255,11 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	if (!crt_is_service()) {
 		D_ERROR("corpc invalid on client-side.\n");
-		D_GOTO(out, rc = -CER_NO_PERM);
+		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 	if (!crt_initialized()) {
 		D_ERROR("CaRT not initialized yet.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
 	/* handle possible chained bulk first and then initiate the corpc */
@@ -275,7 +275,7 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 
 		bulk_iov.iov_buf = calloc(1, bulk_len);
 		if (bulk_iov.iov_buf == NULL)
-			D_GOTO(out, rc = -CER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 		bulk_iov.iov_buf_len = bulk_len;
 		bulk_sgl.sg_nr.num = 1;
 		bulk_sgl.sg_iovs = &bulk_iov;
@@ -340,19 +340,19 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (!crt_is_service()) {
 		D_ERROR("corpc invalid on client-side.\n");
-		D_GOTO(out, rc = -CER_NO_PERM);
+		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 	if (!crt_initialized()) {
 		D_ERROR("CaRT not initialized yet.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	if (!crt_tree_topo_valid(tree_topo)) {
 		D_ERROR("invalid parameter of tree_topo: 0x%x.\n", tree_topo);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
@@ -362,7 +362,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 		grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 		if (grp_priv->gp_primary && !grp_priv->gp_local) {
 			D_ERROR("cannot create corpc for attached group.\n");
-			D_GOTO(out, rc = -CER_INVAL);
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
 

@@ -522,7 +522,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
 	if (opc_info == NULL) {
 		D_ERROR("opc: 0x%x, lookup failed.\n", opc);
-		D_GOTO(out, rc = -CER_UNREG);
+		D_GOTO(out, rc = -DER_UNREG);
 	}
 	D_ASSERT(opc_info->coi_input_size <= CRT_MAX_INPUT_SIZE &&
 		 opc_info->coi_output_size <= CRT_MAX_OUTPUT_SIZE);
@@ -532,7 +532,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 	else
 		D_ALLOC(rpc_priv, opc_info->coi_rpc_size);
 	if (rpc_priv == NULL)
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	rpc_priv->crp_opc_info = opc_info;
 	rpc_priv->crp_forward = forward;
@@ -608,11 +608,11 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
-		D_GOTO(out, rc = -CER_UNINIT);
+		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
@@ -620,7 +620,7 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 		grp_priv = grp_gdata->gg_srv_pri_grp;
 		if (grp_priv == NULL) {
 			D_ERROR("service group not attached yet.\n");
-			D_GOTO(out, rc = -CER_NOTATTACH);
+			D_GOTO(out, rc = -DER_NOTATTACH);
 		}
 	} else {
 		grp_priv = container_of(tgt_ep->ep_grp, struct crt_grp_priv,
@@ -630,13 +630,13 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 				"%d, gp_service: %d, gp_local: %d.\n",
 				tgt_ep->ep_grp, grp_priv->gp_primary,
 				grp_priv->gp_service, grp_priv->gp_local);
-			D_GOTO(out, rc = -CER_INVAL);
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
 	if (tgt_ep->ep_rank >= grp_priv->gp_size) {
 		D_ERROR("invalid parameter, rank %d, group_size: %d.\n",
 			tgt_ep->ep_rank, grp_priv->gp_size);
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_req_create_internal(crt_ctx, tgt_ep, opc, false /* forward */,
@@ -660,7 +660,7 @@ crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec)
 
 	if (req == NULL || timeout_sec == 0) {
 		D_ERROR("invalid parameter (NULL req or zero timeout_sec).\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
@@ -678,7 +678,7 @@ crt_req_addref(crt_rpc_t *req)
 
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
@@ -700,7 +700,7 @@ crt_req_decref(crt_rpc_t *req)
 
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
@@ -720,7 +720,7 @@ crt_req_decref(crt_rpc_t *req)
 			 * handler forgot to call crt_reply_send(). We send a
 			 * CART level error message to notify the client
 			 */
-			crt_hg_reply_error_send(rpc_priv, -CER_NOREPLY);
+			crt_hg_reply_error_send(rpc_priv, -DER_NOREPLY);
 		}
 
 		rc = crt_hg_req_destroy(rpc_priv);
@@ -796,7 +796,7 @@ crt_req_get_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 	if (rpc_priv->crp_tgt_uri == NULL) {
 		D_ERROR("crt_get_tag_uri failed, opc: 0x%x.\n",
 			rpc_priv->crp_pub.cr_opc);
-		rc = -CER_NOMEM;
+		rc = -DER_NOMEM;
 	} else {
 		rpc_priv->crp_uri_free = 1;
 		rc = 0;
@@ -1043,7 +1043,7 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 		uri = strndup(crt_gdata.cg_addr, CRT_ADDR_STR_MAX_LEN);
 		if (uri == NULL) {
 			D_ERROR("strndup failed.\n");
-			D_GOTO(out, rc = -CER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 		}
 	} else {
 		/* this is a local group, lookup through PMIx */
@@ -1205,7 +1205,7 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 	default:
 		D_ERROR("bad rpc state: 0x%x, opc: 0x%x.\n",
 			rpc_priv->crp_state, req->cr_opc);
-		rc = -CER_PROTO;
+		rc = -DER_PROTO;
 		break;
 	}
 
@@ -1228,18 +1228,18 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 
 			cbinfo.cci_rpc = NULL;
 			cbinfo.cci_arg = arg;
-			cbinfo.cci_rc  = -CER_INVAL;
+			cbinfo.cci_rc  = -DER_INVAL;
 			complete_cb(&cbinfo);
 
 			return 0;
 		} else {
-			return -CER_INVAL;
+			return -DER_INVAL;
 		}
 	}
 
 	if (req->cr_ctx == NULL) {
 		D_ERROR("invalid parameter (NULL req->cr_ctx).\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
@@ -1296,7 +1296,7 @@ crt_reply_send(crt_rpc_t *req)
 
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
@@ -1329,7 +1329,7 @@ crt_req_abort(crt_rpc_t *req)
 
 	if (req == NULL) {
 		D_ERROR("invalid parameter (NULL req).\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
@@ -1390,7 +1390,7 @@ crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout)
 		uint64_t interval = 1000; /* microseconds */
 
 		rc = crt_progress(rpc->cr_ctx, interval, NULL, NULL);
-		if (rc != 0 && rc != -CER_TIMEDOUT) {
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
@@ -1402,7 +1402,7 @@ crt_req_send_sync(crt_rpc_t *rpc, uint64_t timeout)
 
 		now = d_timeus_secdiff(0);
 		if (now >= end) {
-			rc = -CER_TIMEDOUT;
+			rc = -DER_TIMEDOUT;
 			break;
 		}
 	}

@@ -524,13 +524,13 @@ crt_lm_grp_init(crt_group_t *grp)
 	lm_grp_srv->lgs_ras_ranks = d_rank_list_alloc(num_ras_ranks);
 	if (lm_grp_srv->lgs_ras_ranks == NULL) {
 		D_ERROR("d_rank_list_alloc failed.\n");
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	lm_grp_srv->lgs_bcast_list = d_rank_list_alloc(0);
 	if (lm_grp_srv->lgs_bcast_list == NULL) {
 		D_ERROR("d_rank_list_alloc failed.\n");
 		d_rank_list_free(lm_grp_srv->lgs_ras_ranks);
-		D_GOTO(out, rc = -CER_NOMEM);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	for (i = 0; i < num_ras_ranks; i++) {
 		/* select ras ranks as evenly distributed as possible */
@@ -614,12 +614,12 @@ int crt_rank_evict_corpc_aggregate(crt_rpc_t *source,
 	reply_source = crt_reply_get(source);
 	if (reply_source == NULL) {
 		D_ERROR("crt_reply_get() failed.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	reply_result = crt_reply_get(result);
 	if (reply_result == NULL) {
 		D_ERROR("crt_reply_get() failed.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	D_DEBUG("reply_source->cleo_succeeded %d, reply_result->cleo_succeeded "
 		"%d\n", reply_source->cleo_succeeded,
@@ -679,7 +679,7 @@ lm_update_active_psr(struct lm_grp_priv_t *lm_grp_priv)
 	struct lm_psr_cand	*psr_cand;
 	int			 i;
 	bool			 evicted;
-	int			 rc = -CER_MISC;
+	int			 rc = -DER_MISC;
 
 	D_ASSERT(lm_grp_priv != NULL);
 	psr_cand = lm_grp_priv->lgp_psr_cand;
@@ -1279,15 +1279,15 @@ crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 
 	if (tgt_grp == NULL) {
 		D_ERROR("tgt_grp can't be NULL.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (psr_cand == NULL) {
 		D_ERROR("psr_cand can't be NULL.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (crt_grp_is_local(tgt_grp)) {
 		D_ERROR("tgt_grp can't be a local group.\n");
-		D_GOTO(out, rc = -CER_INVAL);
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	pthread_rwlock_rdlock(&crt_lm_gdata.clg_rwlock);
@@ -1297,7 +1297,7 @@ crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 		lm_grp_priv_new = lm_grp_priv_init(tgt_grp);
 		if (lm_grp_priv_new == NULL) {
 			D_ERROR("lm_grp_priv_init() failed.\n");
-			D_GOTO(out, rc = -CER_NOMEM);
+			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		pthread_rwlock_wrlock(&crt_lm_gdata.clg_rwlock);
 		lm_grp_priv = lm_grp_priv_find(tgt_grp);

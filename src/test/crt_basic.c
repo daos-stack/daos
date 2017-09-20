@@ -40,7 +40,7 @@
  */
 #include <cart/api.h>
 #include <cart/iv.h>
-#include <cart/errno.h>
+#include <gurt/errno.h>
 #include <cart/types.h>
 
 int main(void)

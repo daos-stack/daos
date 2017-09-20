@@ -51,7 +51,7 @@ static int client_wait(int num_retries, unsigned int wait_len_ms,
 	for (retry = 0; retry < num_retries; retry++) {
 		rc = crt_progress(gecho.crt_ctx, wait_len_ms * 1000, NULL,
 				  NULL);
-		if (rc != 0 && rc != -CER_TIMEDOUT) {
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
 			break;
 		}
@@ -130,7 +130,7 @@ static void run_client(void)
 	D_ASSERT(pri_srv_grp != NULL);
 
 	rc = crt_group_rank(pri_srv_grp, &myrank);
-	D_ASSERT(rc == -CER_OOG);
+	D_ASSERT(rc == -DER_OOG);
 	rc = crt_group_rank(pri_local_grp, &myrank);
 	D_ASSERT(rc == 0);
 	rc = crt_group_size(pri_local_grp, &grp_size_cli);
@@ -264,7 +264,7 @@ static void run_client(void)
 	sgl_query.sg_iovs = iovs_query;
 	sgl_query.sg_nr.num = 1;
 	rc = crt_bulk_access(bulk_hdl, &sgl_query);
-	assert(rc == -CER_TRUNC && sgl_query.sg_nr.num_out == 2);
+	assert(rc == -DER_TRUNC && sgl_query.sg_nr.num_out == 2);
 
 	sgl_query.sg_nr.num = 2;
 	rc = crt_bulk_access(bulk_hdl, &sgl_query);

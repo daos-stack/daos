@@ -164,7 +164,7 @@ crt_hdlr_barrier_enter(crt_rpc_t *rpc_req)
 
 	if (grp_priv == NULL) {
 		D_ERROR("crt_hdlr_barrier_enter failed, no group\n");
-		D_GOTO(send_reply, rc = -CER_NONEXIST);
+		D_GOTO(send_reply, rc = -DER_NONEXIST);
 	}
 
 	barrier_info = &grp_priv->gp_barrier_info;
@@ -235,7 +235,7 @@ crt_hdlr_barrier_exit(crt_rpc_t *rpc_req)
 
 	if (grp_priv == NULL) {
 		D_ERROR("crt_barrier_enter failed, no group\n");
-		D_GOTO(send_reply, rc = -CER_NONEXIST);
+		D_GOTO(send_reply, rc = -DER_NONEXIST);
 	}
 
 	barrier_info = &grp_priv->gp_barrier_info;
@@ -512,23 +512,23 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg)
 
 	if (!crt_initialized()) {
 		D_ERROR("CRT not initialized.\n");
-		return -CER_UNINIT;
+		return -DER_UNINIT;
 	}
 
 	if (!crt_is_service()) {
 		D_ERROR("Barrier not supported in client group\n");
-		return -CER_NO_PERM;
+		return -DER_NO_PERM;
 	}
 
 	crt_ctx = crt_context_lookup(0);
 	if (crt_ctx == CRT_CONTEXT_NULL) {
 		D_ERROR("No context available for barrier\n");
-		return -CER_UNINIT;
+		return -DER_UNINIT;
 	}
 
 	if (complete_cb == NULL) {
 		D_ERROR("Invalid argument(s)\n");
-		return -CER_INVAL;
+		return -DER_INVAL;
 	}
 
 	/* There may be a better way to get the primary group handle but this
@@ -539,19 +539,19 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg)
 
 	if (grp == NULL) {
 		D_ERROR("Could not find primary group\n");
-		return -CER_UNINIT;
+		return -DER_UNINIT;
 	}
 
 	grp_priv = container_of(grp, struct crt_grp_priv, gp_pub);
 
 	if (grp_priv->gp_primary != 1) {
 		D_ERROR("Barrier not supported on secondary groups.\n");
-		return -CER_OOG;
+		return -DER_OOG;
 	}
 
 	if (grp_priv->gp_local == 0) {
 		D_ERROR("Barrier not supported on remote group.\n");
-		return -CER_OOG;
+		return -DER_OOG;
 	}
 
 	if (grp_priv->gp_size == 1) {
@@ -572,7 +572,7 @@ crt_barrier(crt_group_t *grp, crt_barrier_cb_t complete_cb, void *cb_arg)
 
 	if (ab->b_active) {
 		pthread_mutex_unlock(&barrier_info->bi_lock);
-		return -CER_BUSY;
+		return -DER_BUSY;
 	}
 
 	ab->b_active = true;
