@@ -40,6 +40,42 @@
  */
 #include <gurt/errno.h>
 
-#define D_ERRNO_GEN_ERRSTR
+#define D_DEFINE_GURT_ERRSTR(name, value) #name,
 
-#include <gurt/errno.h>
+/* Compile time assertion.  Used to ensure ranges are contiguous */
+#define D_STATIC_ASSERT(cond, msg)					\
+	typedef char static_assertion_##msg[(cond) ? 1 : -1]
+
+#define D_DEFINE_COMP_ERRSTR(name, base)				\
+	static const char * const g_##name##_errstr[] = {		\
+		D_FOREACH_##name##_ERR(D_DEFINE_GURT_ERRSTR)		\
+	};								\
+	D_STATIC_ASSERT((sizeof(g_##name##_errstr) /			\
+			 sizeof(g_##name##_errstr[0])) ==		\
+	      ((DER_ERR_##name##_LIMIT - DER_ERR_##name##_BASE - 1)),	\
+		      name##_err_non_contiguous);
+
+D_FOREACH_ERR_RANGE(D_DEFINE_COMP_ERRSTR)
+
+#define D_CHECK_RANGE(name, base)				\
+	do {							\
+		int first = DER_ERR_##name##_BASE + 1;		\
+		if (rc <= DER_ERR_##name##_BASE ||		\
+		    rc >= DER_ERR_##name##_LIMIT)		\
+			break;					\
+		return g_##name##_errstr[rc - first];		\
+	} while (0);
+
+#define D_ABS(value) ((value) > 0 ? (value) : (-value))
+
+const char *d_errstr(int rc)
+{
+	if (rc == 0)
+		return "DER_SUCCESS";
+
+	rc = D_ABS(rc);
+
+	D_FOREACH_ERR_RANGE(D_CHECK_RANGE)
+
+	return "DER_UNKNOWN";
+}

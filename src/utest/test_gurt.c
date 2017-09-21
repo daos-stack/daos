@@ -188,6 +188,52 @@ create_string(const char *format, ...)
 	return str;
 }
 
+#define D_CHECK_STRLIMITS(name, base)				\
+	do {							\
+		value = d_errstr(-DER_ERR_##name##_BASE);	\
+		assert_string_equal(value, "DER_UNKNOWN");	\
+		value = d_errstr(-DER_ERR_##name##_LIMIT);	\
+		assert_string_equal(value, "DER_UNKNOWN");	\
+		value = d_errstr(DER_ERR_##name##_BASE);	\
+		assert_string_equal(value, "DER_UNKNOWN");	\
+		value = d_errstr(DER_ERR_##name##_LIMIT);	\
+		assert_string_equal(value, "DER_UNKNOWN");	\
+	} while (0);
+
+#define D_CHECK_ERR_IN_RANGE(name, value)			\
+	do {							\
+		const char	*str = d_errstr(name);		\
+		assert_string_not_equal(str, "DER_UNKNOWN");	\
+	} while (0);
+
+#define D_CHECK_IN_RANGE(name, base)		\
+	D_FOREACH_##name##_ERR(D_CHECK_ERR_IN_RANGE)
+
+void test_d_errstr(void **state)
+{
+	const char	*value;
+
+	D_FOREACH_ERR_RANGE(D_CHECK_STRLIMITS)
+	D_FOREACH_ERR_RANGE(D_CHECK_IN_RANGE)
+	value = d_errstr(-DER_INVAL);
+	assert_string_equal(value, "DER_INVAL");
+	value = d_errstr(DER_INVAL);
+	assert_string_equal(value, "DER_INVAL");
+	value = d_errstr(5000000);
+	assert_string_equal(value, "DER_UNKNOWN");
+	value = d_errstr(3);
+	assert_string_equal(value, "DER_UNKNOWN");
+	value = d_errstr(-3);
+	assert_string_equal(value, "DER_UNKNOWN");
+	value = d_errstr(0);
+	assert_string_equal(value, "DER_SUCCESS");
+	value = d_errstr(DER_SUCCESS);
+	assert_string_equal(value, "DER_SUCCESS");
+	value = d_errstr(-DER_IVCB_FORWARD);
+	assert_string_equal(value, "DER_IVCB_FORWARD");
+}
+
+
 void test_prepend_cwd(void **state)
 {
 	const char	*value;
@@ -199,6 +245,7 @@ void test_prepend_cwd(void **state)
 	ret = d_prepend_cwd(NULL, &checked);
 
 	assert_int_equal(ret, -DER_INVAL);
+
 	assert_null(checked);
 
 	/* This should be unchanged.   It's already
@@ -889,6 +936,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_time),
 		cmocka_unit_test(test_create_subdirs),
 		cmocka_unit_test(test_check_directory),
+		cmocka_unit_test(test_d_errstr),
 		cmocka_unit_test(test_prepend_cwd),
 		cmocka_unit_test(test_normalize_in_place),
 		cmocka_unit_test(test_gurt_list),
