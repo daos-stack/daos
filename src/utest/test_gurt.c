@@ -231,6 +231,10 @@ void test_d_errstr(void **state)
 	assert_string_equal(value, "DER_SUCCESS");
 	value = d_errstr(-DER_IVCB_FORWARD);
 	assert_string_equal(value, "DER_IVCB_FORWARD");
+	value = d_errstr(-DER_FREE_MEM);
+	assert_string_equal(value, "DER_FREE_MEM");
+	value = d_errstr(-DER_STALE);
+	assert_string_equal(value, "DER_STALE");
 }
 
 
