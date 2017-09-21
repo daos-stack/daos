@@ -183,6 +183,12 @@ cont_svc_put(struct cont_svc *svc)
 	ds_pool_put_cont_svc(svc->cs_in_pool_svc);
 }
 
+static uint64_t
+cont_svc_term(struct cont_svc *svc)
+{
+	return ds_pool_cont_svc_term(svc->cs_in_pool_svc);
+}
+
 int
 ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 		     crt_opcode_t opcode, crt_rpc_t **rpc)
@@ -729,7 +735,7 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 	for (i = 0; i < nrecs; i++) {
 		struct rdb_tx tx;
 
-		rc = rdb_tx_begin(svc->cs_db, &tx);
+		rc = rdb_tx_begin(svc->cs_db, cont_svc_term(svc), &tx);
 		if (rc != 0)
 			break;
 		rc = cont_close_one_hdl(&tx, svc, ctx, recs[i].tcr_hdl);
@@ -989,7 +995,7 @@ ds_cont_close_by_pool_hdls(const uuid_t pool_uuid, uuid_t *pool_hdls,
 	if (!ds_pool_is_cont_svc_up(svc->cs_in_pool_svc))
 		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
-	rc = rdb_tx_begin(svc->cs_db, &tx);
+	rc = rdb_tx_begin(svc->cs_db, cont_svc_term(svc), &tx);
 	if (rc != 0)
 		D__GOTO(out_svc, rc);
 
@@ -1097,7 +1103,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	struct cont	       *cont = NULL;
 	int			rc;
 
-	rc = rdb_tx_begin(svc->cs_db, &tx);
+	rc = rdb_tx_begin(svc->cs_db, cont_svc_term(svc), &tx);
 	if (rc != 0)
 		D__GOTO(out, rc);
 

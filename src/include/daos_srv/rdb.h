@@ -207,8 +207,11 @@ struct rdb_tx {
 	size_t		dt_entry_len;	/* data length */
 };
 
+/** Nil term */
+#define RDB_NIL_TERM UINT64_MAX
+
 /** TX methods */
-int rdb_tx_begin(struct rdb *db, struct rdb_tx *tx);
+int rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx);
 int rdb_tx_commit(struct rdb_tx *tx);
 void rdb_tx_end(struct rdb_tx *tx);
 

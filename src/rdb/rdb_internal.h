@@ -123,7 +123,7 @@ void rdb_raft_stop(struct rdb *db);
 int rdb_raft_verify_leadership(struct rdb *db);
 int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,
 			  void *result);
-int rdb_raft_wait_applied(struct rdb *db, uint64_t index);
+int rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term);
 void rdb_requestvote_handler(crt_rpc_t *rpc);
 void rdb_appendentries_handler(crt_rpc_t *rpc);
 void rdb_raft_process_reply(struct rdb *db, raft_node_t *node, crt_rpc_t *rpc);

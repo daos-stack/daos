@@ -542,7 +542,7 @@ pool_svc_step_up(struct pool_svc *svc)
 		DP_UUID(svc->ps_uuid), svc->ps_term);
 
 	/* Read the pool map into map and map_version. */
-	rc = rdb_tx_begin(svc->ps_db, &tx);
+	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
 		return rc;
 	ABT_rwlock_rdlock(svc->ps_lock);
@@ -998,6 +998,18 @@ ds_pool_put_cont_svc(struct cont_svc **svcp)
 	pool_svc_put(pool_svc);
 }
 
+/**
+ * Return the container service term.
+ */
+uint64_t
+ds_pool_cont_svc_term(struct cont_svc **svcp)
+{
+	struct pool_svc *pool_svc;
+
+	pool_svc = container_of(svcp, struct pool_svc, ps_cont_svc);
+	return pool_svc->ps_term;
+}
+
 int
 ds_pool_svc_start(const uuid_t uuid)
 {
@@ -1167,7 +1179,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		D__GOTO(out, rc = -DER_CANCELED);
 	}
 
-	rc = rdb_tx_begin(svc->ps_db, &tx);
+	rc = rdb_tx_begin(svc->ps_db, RDB_NIL_TERM, &tx);
 	if (rc != 0)
 		D__GOTO(out_mutex, rc);
 	ABT_rwlock_wrlock(svc->ps_lock);
@@ -1439,7 +1451,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (!pool_svc_up(svc))
 		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
-	rc = rdb_tx_begin(svc->ps_db, &tx);
+	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
 		D__GOTO(out_svc, rc);
 
@@ -1674,7 +1686,7 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	if (!pool_svc_up(svc))
 		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
-	rc = rdb_tx_begin(svc->ps_db, &tx);
+	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
 		D__GOTO(out_svc, rc);
 
@@ -1736,7 +1748,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D__GOTO(out_svc, rc);
 
-	rc = rdb_tx_begin(svc->ps_db, &tx);
+	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
 		D__GOTO(out_svc, rc);
 
@@ -1864,7 +1876,7 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 	if (!pool_svc_up(svc))
 		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
-	rc = rdb_tx_begin(svc->ps_db, &tx);
+	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
 		D__GOTO(out_svc, rc);
 	ABT_rwlock_wrlock(svc->ps_lock);
@@ -2132,7 +2144,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	if (!pool_svc_up(svc))
 		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
-	rc = rdb_tx_begin(svc->ps_db, &tx);
+	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
 		D__GOTO(out_svc, rc);
 
@@ -2210,7 +2222,7 @@ ds_pool_pmap_broadcast(const uuid_t uuid, d_rank_list_t *tgts_exclude)
 	if (!pool_svc_up(svc))
 		D__GOTO(out, rc = -DER_NOTLEADER);
 
-	rc = rdb_tx_begin(svc->ps_db, &tx);
+	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
 		D__GOTO(out, rc);
 	ABT_rwlock_rdlock(svc->ps_lock);

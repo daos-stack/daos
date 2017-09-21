@@ -51,23 +51,32 @@ rdb_tx_leader_check(struct rdb_tx *tx)
 /**
  * Initialize and begin \a tx. May Argobots-block.
  *
+ * If \a term differs from the current term, -DER_NOTLEADER is returned. (An
+ * RDB_NIL_TERM \a term is substituted with the current term.) A caller shall
+ * tag any DB caches with the term that the caches are valid in, and begin all
+ * TXs in that term, so that each TX gets consistent results from cache and DB
+ * queries.
+ *
  * \param[in]	db	database
+ * \param[in]	term	if not RDB_NIL_TERM, term to begin in
  * \param[out]	tx	transaction
  *
  * \retval -DER_NOTLEADER	this replica not current leader
  */
 int
-rdb_tx_begin(struct rdb *db, struct rdb_tx *tx)
+rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx)
 {
 	struct rdb_tx	t = {};
 	int		rc;
 
+	if (term == RDB_NIL_TERM)
+		term = raft_get_current_term(db->d_raft);
 	/*
 	 * Wait until the first entry of this term to be applied, so that
 	 * queries are possible. Not actually required for update-only
 	 * transactions.
 	 */
-	rc = rdb_raft_wait_applied(db, db->d_debut);
+	rc = rdb_raft_wait_applied(db, db->d_debut, term);
 	if (rc != 0)
 		return rc;
 	/*
@@ -79,7 +88,7 @@ rdb_tx_begin(struct rdb *db, struct rdb_tx *tx)
 		return rc;
 	rdb_get(db);
 	t.dt_db = db;
-	t.dt_term = raft_get_current_term(db->d_raft);
+	t.dt_term = term;
 	*tx = t;
 	return 0;
 }

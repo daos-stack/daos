@@ -213,7 +213,7 @@ rdbt_test_tx(bool update)
 	int			rc;
 
 	D__WARN("commit empty tx\n");
-	rc = rdb_tx_begin(rdb_db, &tx);
+	rc = rdb_tx_begin(rdb_db, RDB_NIL_TERM, &tx);
 	if (rc == -DER_NOTLEADER) {
 		uint64_t	term;
 		d_rank_t	rank;
@@ -230,7 +230,7 @@ rdbt_test_tx(bool update)
 
 	if (update) {
 		D__WARN("create KVSs and regular keys\n");
-		MUST(rdb_tx_begin(rdb_db, &tx));
+		MUST(rdb_tx_begin(rdb_db, RDB_NIL_TERM, &tx));
 		/* Create the root KVS. */
 		MUST(rdb_path_init(&path));
 		MUST(rdb_path_push(&path, &rdb_path_root_key));
@@ -257,7 +257,7 @@ rdbt_test_tx(bool update)
 	}
 
 	D__WARN("query regular keys\n");
-	MUST(rdb_tx_begin(rdb_db, &tx));
+	MUST(rdb_tx_begin(rdb_db, RDB_NIL_TERM, &tx));
 	MUST(rdb_path_init(&path));
 	/* Look up keys[0]. */
 	MUST(rdb_path_push(&path, &rdb_path_root_key));
@@ -282,7 +282,7 @@ rdbt_test_tx(bool update)
 
 	if (!update) {
 		D__WARN("destroy KVSs\n");
-		MUST(rdb_tx_begin(rdb_db, &tx));
+		MUST(rdb_tx_begin(rdb_db, RDB_NIL_TERM, &tx));
 		MUST(rdb_path_init(&path));
 		MUST(rdb_path_push(&path, &rdb_path_root_key));
 		daos_iov_set(&key, "kvs1", strlen("kvs1") + 1);

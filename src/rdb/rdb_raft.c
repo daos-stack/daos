@@ -594,6 +594,7 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 	case -DER_NOMEM:
 		if (leader) {
 			raft_become_follower(db->d_raft);
+			leader = false;
 			/* If stepping up fails, don't step down. */
 			if (step_up_rc != 0)
 				break;
@@ -606,6 +607,10 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 		db->d_cbs->dc_stop(db, rc, db->d_arg);
 		break;
 	}
+
+	/* Wake up waiters who care about term and leadership changes. */
+	if (state->drs_term != term || state->drs_leader != leader)
+		ABT_cond_broadcast(db->d_applied_cv);
 
 	return rc;
 }
@@ -715,7 +720,7 @@ rdb_raft_append_apply(struct rdb *db, void *entry, size_t size, void *result)
 			return rc;
 	}
 
-	rc = rdb_raft_wait_applied(db, mresponse.idx);
+	rc = rdb_raft_wait_applied(db, mresponse.idx, mresponse.term);
 
 	if (result != NULL)
 		rdb_raft_unregister_result(db, mresponse.idx);
@@ -1190,9 +1195,9 @@ rdb_raft_stop(struct rdb *db)
 	dhash_table_destroy_inplace(&db->d_results, true /* force */);
 }
 
-/* Wait for index to be applied. */
+/* Wait for index to be applied in term. For leaders only. */
 int
-rdb_raft_wait_applied(struct rdb *db, uint64_t index)
+rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term)
 {
 	int rc = 0;
 
@@ -1204,7 +1209,8 @@ rdb_raft_wait_applied(struct rdb *db, uint64_t index)
 			rc = -DER_CANCELED;
 			break;
 		}
-		if (!raft_is_leader(db->d_raft)) {
+		if (term != raft_get_current_term(db->d_raft) ||
+		    !raft_is_leader(db->d_raft)) {
 			rc = -DER_NOTLEADER;
 			break;
 		}
