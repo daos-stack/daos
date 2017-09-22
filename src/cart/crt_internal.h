@@ -76,5 +76,6 @@
 #include "crt_self_test.h"
 
 #include "crt_pmix.h"
+#include "crt_lm.h"
 
 #endif /* __CRT_INTERNAL_H__ */

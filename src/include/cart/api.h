@@ -1073,6 +1073,19 @@ typedef void
 int
 crt_register_timeout_cb(crt_timeout_cb cb, void *args);
 
+/**
+ * Retrieve the PSR candidate list for \a tgt_grp.
+ * \param tgt_grp [IN]		The remote group
+ * \param psr_cand [OUT]	The PSR candidate list for \a tgt_grp. The first
+ *				entry of psr_cand is the current PSR. The rest
+ *				of the list are backup PSRs. User should call
+ *				crt_rank_list_free() to free the memory after
+ *				using it.
+ * \return			0 on success, negative value on error.
+ */
+int
+crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand);
+
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_crt_size_t		crt_proc_uint64_t
 #define crt_proc_crt_off_t		crt_proc_uint64_t

@@ -257,7 +257,6 @@ do_init:
 		if (crt_plugin_gdata.cpg_inited == 0)
 			crt_plugin_init();
 
-
 		crt_self_test_init();
 
 		rc = crt_opc_map_create(CRT_OPC_MAP_BITS);
@@ -272,6 +271,7 @@ do_init:
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
 
 		crt_gdata.cg_inited = 1;
+		crt_lm_init();
 	} else {
 		if (crt_gdata.cg_server == false && server == true) {
 			D_ERROR("CRT initialized as client, cannot set as "
@@ -359,6 +359,8 @@ crt_finalize(void)
 	} else {
 		D_ASSERT(crt_context_empty(CRT_LOCKED));
 	}
+
+	crt_lm_finalize();
 
 	crt_gdata.cg_refcount--;
 	if (crt_gdata.cg_refcount == 0) {

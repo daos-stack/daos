@@ -48,6 +48,8 @@ extern "C" {
 
 #include <gurt/common.h>
 
+struct lm_grp_priv_t;
+
 /**
  * Enable the fault tolerance module. This function should be called by every
  * rank in the same group, and should be called after crt_init(). This function
@@ -66,17 +68,16 @@ void
 crt_lm_finalize(void);
 
 /**
- * Retrieve the PSR candidate list for \a tgt_grp.
- * \param tgt_grp [IN]		The remote group
- * \param psr_cand [OUT]	The PSR candidate list for \a tgt_grp. The first
- *				entry of psr_cand is the current PSR. The rest
- *				of the list are backup PSRs. User should call
- *				crt_rank_list_free() to free the memory after
- *				using it.
- * \return			0 on success, negative value on error.
+ * Initialize a lm_grp_priv struct for the remote group tgt_grp then append the
+ * struct to a global list.
+ * \param tgt_grp [IN]		the remote group
+ * \param lm_grp_priv [OUT]	the newly created lm_grp_pirv struct
+ *
+ * \return			DER_SUCCESS on success, negative value on
+ *				failure.
  */
 int
-crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand);
+crt_lm_attach(crt_group_t *tgt_grp, struct lm_grp_priv_t **lm_grp_priv);
 
 #if defined(__cplusplus)
 }

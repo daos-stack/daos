@@ -47,7 +47,6 @@
 
 #include <gurt/common.h>
 #include <cart/api.h>
-#include <cart/lm.h>
 #include "crt_fake_events.h"
 
 #define ECHO_OPC_CHECKIN    (0xA1)
@@ -243,7 +242,6 @@ test_group_init(char *local_group_name, char *target_group_name,
 	rc = crt_init(local_group_name, flag);
 	D_ASSERTF(rc == 0, "crt_init() failed, rc: %d\n", rc);
 
-	crt_lm_init();
 	rc = crt_group_rank(NULL, &myrank);
 	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 	if (is_service) {
@@ -423,7 +421,6 @@ test_group_fini(int is_service)
 		crt_fake_event_fini(myrank);
 	rc = sem_destroy(&g_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
-	crt_lm_finalize();
 	/* corresponding to the crt_init() in run_test_group() */
 	if (should_attach && is_service) {
 		rc = crt_finalize();

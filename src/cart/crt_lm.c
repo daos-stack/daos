@@ -906,20 +906,20 @@ static struct lm_grp_priv_t *
 lm_grp_priv_init(crt_group_t *grp)
 {
 	int			 i;
-	uint32_t		 grp_size;
-	uint32_t		 grp_self;
+	uint32_t		 remote_grp_size;
+	uint32_t		 local_rank;
 	crt_phy_addr_t		 psr_phy_addr = NULL;
 	int			 num_psr;
 	struct lm_grp_priv_t	*lm_grp_priv = NULL;
 	struct lm_psr_cand	*psr_cand;
 	int			 rc = 0;
 
-	rc = crt_group_rank(NULL, &grp_self);
+	rc = crt_group_rank(NULL, &local_rank);
 	if (rc != 0) {
 		D_ERROR("crt_group_rank() failed, rc: %d\n", rc);
 		return NULL;
 	}
-	rc = crt_group_size(NULL, &grp_size);
+	rc = crt_group_size(grp, &remote_grp_size);
 	if (rc != 0) {
 		D_ERROR("crt_group_size() failed, rc: %d\n", rc);
 		return NULL;
@@ -938,17 +938,18 @@ lm_grp_priv_init(crt_group_t *grp)
 	 * through the following formula works reasonably well.
 	 */
 	lm_grp_priv->lgp_mvs =
-		max((grp_size/2) + 1, min(grp_size - 5, grp_size*0.95));
+		max((remote_grp_size/2) + 1,
+		    min(remote_grp_size - 5, remote_grp_size*0.95));
 	lm_grp_priv->lgp_lm_ver = 0;
 	/**************
 	* fields used only by remote groups
 	***************/
-	lm_grp_priv->lgp_psr_rank = grp_self % grp_size;
+	lm_grp_priv->lgp_psr_rank = local_rank % remote_grp_size;
 
 	/* populate the PSR candidate list and insert their addresses into the
 	 * address cache
 	 */
-	num_psr = grp_size - lm_grp_priv->lgp_mvs + 1;
+	num_psr = remote_grp_size - lm_grp_priv->lgp_mvs + 1;
 	lm_grp_priv->lgp_num_psr = num_psr;
 	D_ALLOC(psr_cand, sizeof(struct lm_psr_cand)*num_psr);
 	if (psr_cand == NULL) {
@@ -957,7 +958,7 @@ lm_grp_priv_init(crt_group_t *grp)
 	}
 	srand(time(NULL));
 	for (i = 0; i < num_psr; i++)
-		psr_cand[i].pc_rank = rand()%grp_size;
+		psr_cand[i].pc_rank = rand()%remote_grp_size;
 	psr_cand[0].pc_rank = lm_grp_priv->lgp_psr_rank;
 	D_DEBUG("num_psr %d all PSRs: ", num_psr);
 	for (i = 0; i < num_psr; i++)
@@ -1065,7 +1066,6 @@ lm_membs_sample(crt_context_t ctx, crt_rpc_t *rpc, void *args)
 	d_rank_t			 tgt_rank;
 	d_rank_t			 tgt_psr = 0;
 	struct lm_grp_priv_t		*lm_grp_priv;
-	struct lm_grp_priv_t		*lm_grp_priv_new;
 	int				 rc = 0;
 
 	D_ASSERT(rpc != NULL);
@@ -1078,23 +1078,7 @@ lm_membs_sample(crt_context_t ctx, crt_rpc_t *rpc, void *args)
 	pthread_rwlock_rdlock(&crt_lm_gdata.clg_rwlock);
 	lm_grp_priv = lm_grp_priv_find(tgt_grp);
 	pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
-	if (lm_grp_priv == NULL) {
-		lm_grp_priv_new = lm_grp_priv_init(tgt_grp);
-		if (lm_grp_priv_new == NULL) {
-			D_ERROR("lm_grp_priv_init() failed.\n");
-			return;
-		}
-		pthread_rwlock_wrlock(&crt_lm_gdata.clg_rwlock);
-		lm_grp_priv = lm_grp_priv_find(tgt_grp);
-		if (lm_grp_priv == NULL) {
-			d_list_add_tail(&lm_grp_priv_new->lgp_link,
-					&crt_lm_gdata.clg_grp_remotes);
-			lm_grp_priv = lm_grp_priv_new;
-		} else {
-			lm_grp_priv_destroy(lm_grp_priv_new);
-		}
-		pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
-	}
+	D_ASSERT(lm_grp_priv != NULL);
 
 	if (!should_sample(lm_grp_priv, tgt_rank, &tgt_psr))
 		return;
@@ -1269,10 +1253,44 @@ out:
 }
 
 int
+crt_lm_attach(crt_group_t *tgt_grp, struct lm_grp_priv_t **lm_grp_priv)
+{
+	struct lm_grp_priv_t	*lm_grp_priv_new;
+	int			 rc = DER_SUCCESS;
+
+	if (lm_grp_priv == NULL) {
+		D_ERROR("lm_grp_priv can't be NULL.\n");
+		return -DER_INVAL;
+	}
+	pthread_rwlock_rdlock(&crt_lm_gdata.clg_rwlock);
+	*lm_grp_priv = lm_grp_priv_find(tgt_grp);
+	pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
+	if (*lm_grp_priv == NULL) {
+		lm_grp_priv_new = lm_grp_priv_init(tgt_grp);
+		if (lm_grp_priv_new == NULL) {
+			D_ERROR("lm_grp_priv_init() failed.\n");
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		pthread_rwlock_wrlock(&crt_lm_gdata.clg_rwlock);
+		*lm_grp_priv = lm_grp_priv_find(tgt_grp);
+		if (*lm_grp_priv == NULL) {
+			d_list_add_tail(&lm_grp_priv_new->lgp_link,
+				       &crt_lm_gdata.clg_grp_remotes);
+			*lm_grp_priv = lm_grp_priv_new;
+		} else {
+			lm_grp_priv_destroy(lm_grp_priv_new);
+		}
+		pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
+	}
+
+out:
+	return rc;
+}
+
+int
 crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 {
 	struct lm_grp_priv_t		*lm_grp_priv;
-	struct lm_grp_priv_t		*lm_grp_priv_new;
 	bool				 evicted;
 	int				 i;
 	int				 rc = 0;
@@ -1293,23 +1311,7 @@ crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand)
 	pthread_rwlock_rdlock(&crt_lm_gdata.clg_rwlock);
 	lm_grp_priv = lm_grp_priv_find(tgt_grp);
 	pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
-	if (lm_grp_priv == NULL) {
-		lm_grp_priv_new = lm_grp_priv_init(tgt_grp);
-		if (lm_grp_priv_new == NULL) {
-			D_ERROR("lm_grp_priv_init() failed.\n");
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-		pthread_rwlock_wrlock(&crt_lm_gdata.clg_rwlock);
-		lm_grp_priv = lm_grp_priv_find(tgt_grp);
-		if (lm_grp_priv == NULL) {
-			d_list_add_tail(&lm_grp_priv_new->lgp_link,
-				       &crt_lm_gdata.clg_grp_remotes);
-			lm_grp_priv = lm_grp_priv_new;
-		} else {
-			lm_grp_priv_destroy(lm_grp_priv_new);
-		}
-		pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
-	}
+	D_ASSERT(lm_grp_priv != NULL);
 
 	*psr_cand = d_rank_list_alloc(0);
 	pthread_rwlock_rdlock(&lm_grp_priv->lgp_rwlock);

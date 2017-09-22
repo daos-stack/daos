@@ -38,7 +38,7 @@
 """Build cart src"""
 import os
 
-HEADERS = ['api.h', 'iv.h', 'types.h', 'lm.h']
+HEADERS = ['api.h', 'iv.h', 'types.h']
 HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'heap.h', 'path.h', 'errno.h']
 
