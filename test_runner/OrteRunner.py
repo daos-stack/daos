@@ -64,7 +64,7 @@ class OrteRunner():
         self.log_dir_orte = log_path
         self.logger = logging.getLogger("TestRunnerLogger")
         self.cmd_list = []
-        self.cmd_list.append("{!s}orterun".format(prefix))
+        self.cmd_list.append(os.path.join(prefix, "orterun"))
         if self.test_info.get_defaultENV('TR_USE_URI', ""):
             self.cmd_list.append(" --hnp file:{!s}".format(
                 self.test_info.get_defaultENV('TR_USE_URI')))
