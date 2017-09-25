@@ -216,9 +216,9 @@ class MultiRunner(PostRunner.PostRunner):
             file_hdlr = logging.FileHandler(os.path.join(self.logdir, log_name))
             self.logger.addHandler(file_hdlr)
             file_hdlr.setLevel(logging.DEBUG)
+            self.test_info.add_default_env()
             self.test_directives = self.test_info.get_test_info('directives',
                                                                 None, {})
-            self.test_info.add_default_env()
             self.logger.info("***************** " + \
                              module_name + \
                              " *********************************"

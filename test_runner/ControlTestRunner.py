@@ -125,12 +125,16 @@ class ControlTestRunner():
                             break
         return self.execute_config(run_node_list, waittime)
 
-    def nodes_config(self, name, node_type, configKeys):
+    def nodes_config(self, name, node_type, setConfigKeys):
         """ setup the node config file """
 
+        configKeys = {}
+        if self.test_info.get_directives('addTestSetName'):
+            configKeys['addTestSetName'] = \
+                self.test_info.get_test_info('testSetName')
         addKeys = self.test_info.get_passToConfig()
         if addKeys:
-            configKeys.update(addKeys)
+            setConfigKeys.update(addKeys)
         value = self.log_dir_base + "/" + str(name)
         for node in self.node_list:
             logdir = value + "/" + name + "_" + node.node
@@ -143,7 +147,8 @@ class ControlTestRunner():
 
             self.logger.debug("setup node " + str(node.node) + " " + \
                               str(logdir))
-            node.setup_config(name, logdir, node_type, configKeys)
+            node.setup_config(name, logdir, node_type, configKeys=configKeys,
+                              setFromConfig=setConfigKeys)
 
     def nodes_strategy(self, test_directives):
         """ create node objects """

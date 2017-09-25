@@ -93,6 +93,9 @@ def testmain(info=None, start=1, testMode=None):
         for k in range(start, len(sys.argv)):
             test_list.append(sys.argv[k])
     print("Test list: " + str(test_list))
+    # add the multi instance module name to the Maloo test set name
+    if len(test_list) > 1:
+        info.set_config('setDirectiveFromConfig', 'addTestSetName', "yes")
     # load and start daemon if required
     use_daemon = info.get_config("use_daemon", "")
     if use_daemon:

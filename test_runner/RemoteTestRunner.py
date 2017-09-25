@@ -195,7 +195,7 @@ class RemoteTestRunner():
         """ print info about node """
         self.logger.info("node: %s  type: %s", self.node, self.node_type)
 
-    def setup_config(self, name, logdir, node_type='all',
+    def setup_config(self, name, logdir, node_type='all', configKeys=None,
                      setFromConfig=None, directives=None):
         """ setup base config """
         if node_type != self.node_type and node_type != 'all' and \
@@ -217,6 +217,8 @@ class RemoteTestRunner():
         self.test_config['node_type'] = self.node_type
         self.test_config['hostlist'] = \
             ",".join(self.info.get_config(keyname='host_list'))
+        if configKeys:
+            self.test_config.update(configKeys)
         if setFromConfig:
             self.test_config['setKeyFromConfig'] = {}
             self.test_config['setKeyFromConfig'].update(setFromConfig)

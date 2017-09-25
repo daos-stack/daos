@@ -72,11 +72,11 @@ class SubTestResults():
                         str(self.results_list[loop]['SubTests']))
         return self.results_list[loop]['SubTests']
 
-    def update_subtest_results(self, update_reselts):
+    def update_subtest_results(self, update_results):
         """add results to base subtest list"""
-        self.logger.log(0, "subtest results update subtest reselts: %s",
-                        str(update_reselts))
-        self.results_list[self.index]['SubTests'].append(update_reselts)
+        self.logger.log(0, "subtest results %s update subtest results: %s",
+                        self.index, str(update_results))
+        self.results_list[self.index]['SubTests'].append(update_results)
 
     def update_testset_results(self, status="FAIL"):
         """add results to base subtest list """

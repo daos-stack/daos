@@ -61,18 +61,18 @@ class TestInfoRunner(PreRunner.PreRunner):
         rtn = 0
         if not os.path.exists(test_module_name):
             self.logger.error("Description file not found: %s", \
-                             test_module_name)
+                              test_module_name)
             rtn = 1
         with open(test_module_name, 'r') as fd:
             self.test_info = load(fd, Loader=Loader)
 
         if 'description' not in self.test_info:
             self.logger.error(" No description defined in file: %s", \
-                             test_module_name)
+                              test_module_name)
             rtn = 1
         if 'module' not in self.test_info:
             self.logger.error(" No module section defined in file: %s", \
-                             test_module_name)
+                              test_module_name)
             rtn = 1
         if 'execStrategy' not in self.test_info:
             self.logger.error(" No execStrategy section defined in file: %s",
@@ -115,11 +115,18 @@ class TestInfoRunner(PreRunner.PreRunner):
             self.test_info['testName'] = moduleName
 
         # create test set name for results file
-        if self.info.get_config('node'):
-            self.test_info['testSetName'] = "{!s}_{!s}".format(
-                self.test_info['testName'], self.nodename)
+        if topLevel:
+            self.test_info['testSetName'] = moduleName
         else:
-            self.test_info['testSetName'] = self.test_info['testName']
+            setName = ""
+            if self.info.get_config(keyname='addTestSetName'):
+                setName = "{!s}_".format(
+                    self.info.get_config(keyname='addTestSetName'))
+
+            setName = "{!s}{!s}".format(setName, self.test_info['testName'])
+            if self.info.get_config('node'):
+                setName = "{!s}_{!s}".format(setName, self.nodename)
+            self.test_info['testSetName'] = setName
         return rtn
     #pylint: enable=too-many-branches
 
