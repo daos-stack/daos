@@ -45,12 +45,11 @@
 #include "srv_internal.h"
 #include "srv_layout.h"
 
-struct cont_svc;
-
 /* Pool service state in pool_svc::ps_term */
 enum pool_svc_state {
 	POOL_SVC_UP_EMPTY,	/* up but DB newly-created and empty */
 	POOL_SVC_UP,		/* up and ready to serve */
+	POOL_SVC_DRAINING,	/* stepping down */
 	POOL_SVC_DOWN		/* down */
 };
 
@@ -68,6 +67,9 @@ struct pool_svc {
 	bool			ps_stop;
 	uint64_t		ps_term;
 	enum pool_svc_state	ps_state;
+	ABT_cond		ps_state_cv;
+	int			ps_leader_ref;	/* to leader members below */
+	ABT_cond		ps_leader_ref_cv;
 	struct ds_pool	       *ps_pool;
 };
 
@@ -618,6 +620,28 @@ pool_svc_step_down(struct pool_svc *svc)
 	D__DEBUG(DB_MD, DF_UUID": stepping down from "DF_U64"\n",
 		DP_UUID(svc->ps_uuid), svc->ps_term);
 
+	/* Stop accepting new leader references. */
+	svc->ps_state = POOL_SVC_DRAINING;
+
+	/*
+	 * TODO: Abort all in-flight RPCs we sent, after aborting bcasts is
+	 * implemented.
+	 */
+
+	/*
+	 * TODO: Call rebuild. If necessary, may release svc->ps_mutex
+	 * temporarily.
+	 */
+
+	/* Wait for all leader references to be released. */
+	for (;;) {
+		if (svc->ps_leader_ref == 0)
+			break;
+		D__DEBUG(DB_MD, DF_UUID": waiting for %d references\n",
+			DP_UUID(svc->ps_uuid), svc->ps_leader_ref);
+		ABT_cond_wait(svc->ps_leader_ref_cv, svc->ps_mutex);
+	}
+
 	ds_cont_svc_step_down(svc->ps_cont_svc);
 	D__ASSERT(svc->ps_pool != NULL);
 	ds_pool_put(svc->ps_pool);
@@ -666,11 +690,6 @@ pool_svc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 	struct pool_svc *svc = arg;
 
 	ABT_mutex_lock(svc->ps_mutex);
-	if (svc->ps_stop) {
-		D__DEBUG(DB_MD, DF_UUID": skip term "DF_U64" due to stopping\n",
-			DP_UUID(svc->ps_uuid), term);
-		D__GOTO(out_mutex, 0);
-	}
 	D__ASSERTF(svc->ps_term == term, DF_U64" == "DF_U64"\n", svc->ps_term,
 		  term);
 	D__ASSERT(svc->ps_state != POOL_SVC_DOWN);
@@ -679,7 +698,7 @@ pool_svc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 		pool_svc_step_down(svc);
 
 	svc->ps_state = POOL_SVC_DOWN;
-out_mutex:
+	ABT_cond_broadcast(svc->ps_state_cv);
 	ABT_mutex_unlock(svc->ps_mutex);
 }
 
@@ -763,9 +782,21 @@ pool_svc_init(struct pool_svc *svc, const uuid_t uuid)
 		D__GOTO(err_lock, rc = dss_abterr2der(rc));
 	}
 
+	rc = ABT_cond_create(&svc->ps_state_cv);
+	if (rc != ABT_SUCCESS) {
+		D__ERROR("failed to create ps_state_cv: %d\n", rc);
+		D__GOTO(err_mutex, rc = dss_abterr2der(rc));
+	}
+
+	rc = ABT_cond_create(&svc->ps_leader_ref_cv);
+	if (rc != ABT_SUCCESS) {
+		D__ERROR("failed to create ps_leader_ref_cv: %d\n", rc);
+		D__GOTO(err_state_cv, rc = dss_abterr2der(rc));
+	}
+
 	rc = rdb_path_init(&svc->ps_root);
 	if (rc != 0)
-		D__GOTO(err_mutex, rc);
+		D__GOTO(err_leader_ref_cv, rc);
 	rc = rdb_path_push(&svc->ps_root, &rdb_path_root_key);
 	if (rc != 0)
 		D__GOTO(err_root, rc);
@@ -797,6 +828,10 @@ err_handles:
 	rdb_path_fini(&svc->ps_handles);
 err_root:
 	rdb_path_fini(&svc->ps_root);
+err_leader_ref_cv:
+	ABT_cond_free(&svc->ps_leader_ref_cv);
+err_state_cv:
+	ABT_cond_free(&svc->ps_state_cv);
 err_mutex:
 	ABT_mutex_free(&svc->ps_mutex);
 err_lock:
@@ -812,6 +847,8 @@ pool_svc_fini(struct pool_svc *svc)
 	rdb_stop(svc->ps_db);
 	rdb_path_fini(&svc->ps_handles);
 	rdb_path_fini(&svc->ps_root);
+	ABT_cond_free(&svc->ps_leader_ref_cv);
+	ABT_cond_free(&svc->ps_state_cv);
 	ABT_mutex_free(&svc->ps_mutex);
 	ABT_rwlock_free(&svc->ps_lock);
 }
@@ -938,6 +975,14 @@ out_lock:
 	return 0;
 }
 
+static void
+pool_svc_put(struct pool_svc *svc)
+{
+	ABT_mutex_lock(pool_svc_hash_lock);
+	dhash_rec_decref(&pool_svc_hash, &svc->ps_entry);
+	ABT_mutex_unlock(pool_svc_hash_lock);
+}
+
 /*
  * Is svc up (i.e., ready to accept RPCs)? If not, the caller may always report
  * -DER_NOTLEADER, even if svc->ps_db is in leader state, in which case the
@@ -949,12 +994,45 @@ pool_svc_up(struct pool_svc *svc)
 	return svc->ps_state == POOL_SVC_UP;
 }
 
-static void
-pool_svc_put(struct pool_svc *svc)
+/*
+ * As a convenient helper for general pool service RPCs, look up the pool
+ * service for uuid, check that it is up, and take a reference to the leader
+ * members (e.g., the cached pool map). svcp is filled only if zero is
+ * returned. If the pool service is not up, hint is filled.
+ */
+static int
+pool_svc_lookup_leader(const uuid_t uuid, struct pool_svc **svcp,
+		     struct rsvc_hint *hint)
 {
-	ABT_mutex_lock(pool_svc_hash_lock);
-	dhash_rec_decref(&pool_svc_hash, &svc->ps_entry);
-	ABT_mutex_unlock(pool_svc_hash_lock);
+	struct pool_svc	       *svc;
+	int			rc;
+
+	rc = pool_svc_lookup(uuid, &svc);
+	if (rc != 0)
+		return rc;
+	if (!pool_svc_up(svc)) {
+		if (hint != NULL)
+			ds_pool_set_hint(svc->ps_db, hint);
+		pool_svc_put(svc);
+		return -DER_NOTLEADER;
+	}
+	svc->ps_leader_ref++;
+	*svcp = svc;
+	return 0;
+}
+
+/*
+ * As a convenient helper for general pool service RPCs, put svc obtained from
+ * a pool_svc_lookup_leader() call.
+ */
+static void
+pool_svc_put_leader(struct pool_svc *svc)
+{
+	D__ASSERTF(svc->ps_leader_ref > 0, "%d\n", svc->ps_leader_ref);
+	svc->ps_leader_ref--;
+	if (svc->ps_leader_ref == 0)
+		ABT_cond_broadcast(svc->ps_leader_ref_cv);
+	pool_svc_put(svc);
 }
 
 /**
@@ -962,12 +1040,13 @@ pool_svc_put(struct pool_svc *svc)
  * ps_cont_svc via a pointer... :(
  */
 int
-ds_pool_lookup_cont_svc(const uuid_t pool_uuid, struct cont_svc ***svcpp)
+ds_pool_cont_svc_lookup_leader(const uuid_t pool_uuid, struct cont_svc ***svcpp,
+			       struct rsvc_hint *hint)
 {
 	struct pool_svc	       *pool_svc;
 	int			rc;
 
-	rc = pool_svc_lookup(pool_uuid, &pool_svc);
+	rc = pool_svc_lookup_leader(pool_uuid, &pool_svc, hint);
 	if (rc != 0)
 		return rc;
 	*svcpp = &pool_svc->ps_cont_svc;
@@ -975,27 +1054,15 @@ ds_pool_lookup_cont_svc(const uuid_t pool_uuid, struct cont_svc ***svcpp)
 }
 
 /**
- * Is the container service up?
- */
-bool
-ds_pool_is_cont_svc_up(struct cont_svc **svcp)
-{
-	struct pool_svc *pool_svc;
-
-	pool_svc = container_of(svcp, struct pool_svc, ps_cont_svc);
-	return pool_svc_up(pool_svc);
-}
-
-/**
  * Put container service *\a svcp.
  */
 void
-ds_pool_put_cont_svc(struct cont_svc **svcp)
+ds_pool_cont_svc_put_leader(struct cont_svc **svcp)
 {
 	struct pool_svc *pool_svc;
 
 	pool_svc = container_of(svcp, struct pool_svc, ps_cont_svc);
-	pool_svc_put(pool_svc);
+	pool_svc_put_leader(pool_svc);
 }
 
 /**
@@ -1057,32 +1124,43 @@ err_lock:
 void
 ds_pool_svc_stop(const uuid_t uuid)
 {
-	daos_list_t	       *entry;
 	struct pool_svc	       *svc;
+	int			rc;
 
-	ABT_mutex_lock(pool_svc_hash_lock);
-	entry = dhash_rec_find(&pool_svc_hash, uuid, sizeof(uuid_t));
-	ABT_mutex_unlock(pool_svc_hash_lock);
-	if (entry == NULL)
+	rc = pool_svc_lookup(uuid, &svc);
+	if (rc != 0)
 		return;
-	svc = pool_svc_obj(entry);
 
-	/*
-	 * TODO: If the svc object still has references, and the service is
-	 * immediately restarted, then there will be two svc objects for the
-	 * same service. Mark it as stopping and delete when stopped?
-	 */
-	D__DEBUG(DF_DSMS, DF_UUID": stopping pool service\n", DP_UUID(uuid));
 	ABT_mutex_lock(svc->ps_mutex);
+
+	if (svc->ps_stop) {
+		D__DEBUG(DF_DSMS, DF_UUID": already stopping\n", DP_UUID(uuid));
+		ABT_mutex_unlock(svc->ps_mutex);
+		return;
+	}
+	D__DEBUG(DF_DSMS, DF_UUID": stopping pool service\n", DP_UUID(uuid));
 	svc->ps_stop = true;
-	if (svc->ps_state == POOL_SVC_UP)
-		pool_svc_step_down(svc);
-	svc->ps_state = POOL_SVC_DOWN;
+
+	if (svc->ps_state == POOL_SVC_UP ||
+	    svc->ps_state == POOL_SVC_UP_EMPTY)
+		/*
+		 * The service has stepped up. If it is still the leader of
+		 * svc->ps_term, the following rdb_resign() call will trigger
+		 * the matching pool_svc_step_down_cb() callback in
+		 * svc->ps_term; otherwise, the callback must already be
+		 * pending. Either way, the service shall eventually enter the
+		 * POOL_SVC_DOWN state.
+		 */
+		rdb_resign(svc->ps_db, svc->ps_term);
+	while (svc->ps_state != POOL_SVC_DOWN)
+		ABT_cond_wait(svc->ps_state_cv, svc->ps_mutex);
+
 	ABT_mutex_unlock(svc->ps_mutex);
 
 	ABT_mutex_lock(pool_svc_hash_lock);
 	dhash_rec_delete(&pool_svc_hash, uuid, sizeof(uuid_t));
 	ABT_mutex_unlock(pool_svc_hash_lock);
+
 	pool_svc_put(svc);
 }
 
@@ -1094,15 +1172,21 @@ bcast_create(crt_context_t ctx, struct pool_svc *svc, crt_opcode_t opcode,
 				    rpc, NULL, NULL);
 }
 
-static void
-set_rsvc_hint(struct rdb *db, struct pool_op_out *out)
+/**
+ * Retrieve the latest leader hint from \a db and fill it into \a hint.
+ *
+ * \param[in]	db	database
+ * \param[out]	hint	rsvc hint
+ */
+void
+ds_pool_set_hint(struct rdb *db, struct rsvc_hint *hint)
 {
 	int rc;
 
-	rc = rdb_get_leader(db, &out->po_hint.sh_term, &out->po_hint.sh_rank);
+	rc = rdb_get_leader(db, &hint->sh_term, &hint->sh_rank);
 	if (rc != 0)
 		return;
-	out->po_hint.sh_flags |= RSVC_HINT_VALID;
+	hint->sh_flags |= RSVC_HINT_VALID;
 }
 
 struct pool_attr {
@@ -1249,7 +1333,7 @@ out_tx:
 out_mutex:
 	ABT_mutex_unlock(svc->ps_mutex);
 out_svc:
-	set_rsvc_hint(svc->ps_db, &out->pro_op);
+	ds_pool_set_hint(svc->ps_db, &out->pro_op.po_hint);
 	pool_svc_put(svc);
 out:
 	out->pro_op.po_rc = rc;
@@ -1445,11 +1529,10 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
 
-	rc = pool_svc_lookup(in->pci_op.pi_uuid, &svc);
+	rc = pool_svc_lookup_leader(in->pci_op.pi_uuid, &svc,
+				    &out->pco_op.po_hint);
 	if (rc != 0)
 		D__GOTO(out, rc);
-	if (!pool_svc_up(svc))
-		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
@@ -1563,8 +1646,8 @@ out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
-	set_rsvc_hint(svc->ps_db, &out->pco_op);
-	pool_svc_put(svc);
+	ds_pool_set_hint(svc->ps_db, &out->pco_op.po_hint);
+	pool_svc_put_leader(svc);
 out:
 	out->pco_op.po_rc = rc;
 	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
@@ -1680,11 +1763,10 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc)
 	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(pdi->pdi_op.pi_uuid), rpc, DP_UUID(pdi->pdi_op.pi_hdl));
 
-	rc = pool_svc_lookup(pdi->pdi_op.pi_uuid, &svc);
+	rc = pool_svc_lookup_leader(pdi->pdi_op.pi_uuid, &svc,
+				    &pdo->pdo_op.po_hint);
 	if (rc != 0)
 		D__GOTO(out, rc);
-	if (!pool_svc_up(svc))
-		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
@@ -1712,8 +1794,8 @@ out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
-	set_rsvc_hint(svc->ps_db, &pdo->pdo_op);
-	pool_svc_put(svc);
+	ds_pool_set_hint(svc->ps_db, &pdo->pdo_op.po_hint);
+	pool_svc_put_leader(svc);
 out:
 	pdo->pdo_op.po_rc = rc;
 	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
@@ -1737,11 +1819,10 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pqi_op.pi_uuid), rpc, DP_UUID(in->pqi_op.pi_hdl));
 
-	rc = pool_svc_lookup(in->pqi_op.pi_uuid, &svc);
+	rc = pool_svc_lookup_leader(in->pqi_op.pi_uuid, &svc,
+				    &out->pqo_op.po_hint);
 	if (rc != 0)
 		D__GOTO(out, rc);
-	if (!pool_svc_up(svc))
-		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
 	rc = ds_rebuild_query(in->pqi_op.pi_uuid, false, NULL,
 			      &out->pqo_rebuild_st);
@@ -1786,8 +1867,8 @@ out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
-	set_rsvc_hint(svc->ps_db, &out->pqo_op);
-	pool_svc_put(svc);
+	ds_pool_set_hint(svc->ps_db, &out->pqo_op.po_hint);
+	pool_svc_put_leader(svc);
 out:
 	out->pqo_op.po_rc = rc;
 	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
@@ -1870,11 +1951,10 @@ ds_pool_update_internal(uuid_t pool_uuid, d_rank_list_t *tgts,
 	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
 
-	rc = pool_svc_lookup(pool_uuid, &svc);
+	rc = pool_svc_lookup_leader(pool_uuid, &svc,
+				    pto_op == NULL ? NULL : &pto_op->po_hint);
 	if (rc != 0)
-		return rc;
-	if (!pool_svc_up(svc))
-		D__GOTO(out_svc, rc = -DER_NOTLEADER);
+		D__GOTO(out, rc);
 
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
@@ -1959,8 +2039,9 @@ out_map_version:
 	rdb_tx_end(&tx);
 out_svc:
 	if (pto_op != NULL)
-		set_rsvc_hint(svc->ps_db, pto_op);
-	pool_svc_put(svc);
+		ds_pool_set_hint(svc->ps_db, &pto_op->po_hint);
+	pool_svc_put_leader(svc);
+out:
 	return rc;
 }
 
@@ -2138,11 +2219,10 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 	D__DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->pvi_op.pi_uuid), rpc);
 
-	rc = pool_svc_lookup(in->pvi_op.pi_uuid, &svc);
+	rc = pool_svc_lookup_leader(in->pvi_op.pi_uuid, &svc,
+				    &out->pvo_op.po_hint);
 	if (rc != 0)
 		D__GOTO(out, rc);
-	if (!pool_svc_up(svc))
-		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
@@ -2166,8 +2246,8 @@ out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 out_svc:
-	set_rsvc_hint(svc->ps_db, &out->pvo_op);
-	pool_svc_put(svc);
+	ds_pool_set_hint(svc->ps_db, &out->pvo_op.po_hint);
+	pool_svc_put_leader(svc);
 out:
 	out->pvo_op.po_rc = rc;
 	D__DEBUG(DF_DSMS, DF_UUID": replying rpc %p: %d\n",
@@ -2195,7 +2275,7 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 	ds_pool_svc_stop(svc->ps_uuid);
 
 out_svc:
-	set_rsvc_hint(svc->ps_db, &out->pso_op);
+	ds_pool_set_hint(svc->ps_db, &out->pso_op.po_hint);
 	pool_svc_put(svc);
 out:
 	out->pso_op.po_rc = rc;
@@ -2216,15 +2296,13 @@ ds_pool_pmap_broadcast(const uuid_t uuid, d_rank_list_t *tgts_exclude)
 	uint32_t		map_version;
 	int			rc;
 
-	rc = pool_svc_lookup(uuid, &svc);
+	rc = pool_svc_lookup_leader(uuid, &svc, NULL /* hint */);
 	if (rc != 0)
-		return rc;
-	if (!pool_svc_up(svc))
-		D__GOTO(out, rc = -DER_NOTLEADER);
+		D__GOTO(out, rc);
 
 	rc = rdb_tx_begin(svc->ps_db, svc->ps_term, &tx);
 	if (rc != 0)
-		D__GOTO(out, rc);
+		D__GOTO(out_svc, rc);
 	ABT_rwlock_rdlock(svc->ps_lock);
 
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
@@ -2244,7 +2322,8 @@ ds_pool_pmap_broadcast(const uuid_t uuid, d_rank_list_t *tgts_exclude)
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
+out_svc:
+	pool_svc_put_leader(svc);
 out:
-	pool_svc_put(svc);
 	return rc;
 }

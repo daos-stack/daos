@@ -120,6 +120,7 @@ struct rdb_raft_node {
 int rdb_raft_init(daos_handle_t rdb_attr);
 int rdb_raft_start(struct rdb *db);
 void rdb_raft_stop(struct rdb *db);
+void rdb_raft_resign(struct rdb *db, uint64_t term);
 int rdb_raft_verify_leadership(struct rdb *db);
 int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,
 			  void *result);

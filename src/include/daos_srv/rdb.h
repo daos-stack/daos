@@ -143,6 +143,7 @@ int rdb_destroy(const char *path);
 int rdb_start(const char *path, struct rdb_cbs *cbs, void *arg,
 	      struct rdb **dbp);
 void rdb_stop(struct rdb *db);
+void rdb_resign(struct rdb *db, uint64_t term);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);

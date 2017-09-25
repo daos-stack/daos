@@ -36,42 +36,87 @@ mdr_stop_pool_svc(void **argv)
 	uuid_t			uuid;
 	daos_handle_t		poh;
 	daos_pool_info_t	info;
+	bool			skip = false;
 	int			rc;
 
-	print_message("creating pool\n");
-	rc = daos_pool_create(0731, geteuid(), getegid(), arg->group, NULL,
-			      "pmem", 128*1024*1024, &arg->svc, uuid, NULL);
+	/* Create the pool. */
+	if (arg->myrank == 0) {
+		print_message("creating pool\n");
+		rc = daos_pool_create(0731, geteuid(), getegid(), arg->group,
+				      NULL, "pmem", 128*1024*1024, &arg->svc,
+				      uuid, NULL);
+	}
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	assert_int_equal(rc, 0);
-	arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
+	if (arg->myrank == 0)
+		arg->svc.rl_nr.num = arg->svc.rl_nr.num_out;
+	MPI_Bcast(uuid, 16, MPI_CHAR, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&arg->svc.rl_nr.num, sizeof(arg->svc.rl_nr.num), MPI_CHAR, 0,
+		  MPI_COMM_WORLD);
+	MPI_Bcast(arg->ranks, sizeof(arg->ranks[0]) * arg->svc.rl_nr.num,
+		  MPI_CHAR, 0, MPI_COMM_WORLD);
 
+	/* Check the number of pool service replicas. */
 	if (arg->svc.rl_nr.num < 3) {
-		print_message(">= 3 pool service replicas needed; skipping\n");
+		if (arg->myrank == 0)
+			print_message(">= 3 pool service replicas needed\n");
+		skip = true;
 		goto destroy;
 	}
 
-	print_message("connecting to pool\n");
-	rc = daos_pool_connect(uuid, arg->group, &arg->svc,
-			       DAOS_PC_RW, &poh, &info, NULL /* ev */);
+	/* Connect to the pool. */
+	if (arg->myrank == 0) {
+		print_message("connecting to pool\n");
+		rc = daos_pool_connect(uuid, arg->group, &arg->svc, DAOS_PC_RW,
+				       &poh, NULL /* info */, NULL /* ev */);
+	}
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	assert_int_equal(rc, 0);
+	handle_share(&poh, HANDLE_POOL, arg->myrank, DAOS_HDL_INVAL, 0);
 
-	print_message("stopping pool service leader\n");
-	rc = daos_pool_svc_stop(poh, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	if (arg->myrank == 0) {
+		/* Let other ranks get started. */
+		sleep(1);
 
-	/* Verify the connection is still usable. */
-	print_message("querying pool info\n");
-	memset(&info, 'D', sizeof(info));
-	rc = daos_pool_query(poh, NULL /* tgts */, &info, NULL /* ev */);
-	assert_int_equal(rc, 0);
+		print_message("stopping pool service leader\n");
+		rc = daos_pool_svc_stop(poh, NULL /* ev */);
+		assert_int_equal(rc, 0);
+
+		/* Verify the connection is still usable. */
+		print_message("querying pool info\n");
+		memset(&info, 'D', sizeof(info));
+		rc = daos_pool_query(poh, NULL /* tgts */, &info,
+				     NULL /* ev */);
+		assert_int_equal(rc, 0);
+	} else {
+		int n = 10000 / arg->rank_size;
+		int i;
+
+		/* Generate some concurrent requests. */
+		print_message("repeating %d queries: begin\n", n);
+		for (i = 0; i < n; i++) {
+			memset(&info, 'D', sizeof(info));
+			rc = daos_pool_query(poh, NULL /* tgts */, &info,
+					     NULL /* ev */);
+			assert_int_equal(rc, 0);
+		}
+		print_message("repeating %d queries: end\n", n);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	print_message("disconnecting from pool\n");
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
 	assert_int_equal(rc, 0);
 
 destroy:
-	print_message("destroying pool\n");
-	rc = daos_pool_destroy(uuid, arg->group, 1, NULL);
-	assert_int_equal(rc, 0);
+	if (arg->myrank == 0) {
+		print_message("destroying pool\n");
+		rc = daos_pool_destroy(uuid, arg->group, 1, NULL);
+		assert_int_equal(rc, 0);
+	}
+	if (skip)
+		skip();
 }
 
 static void

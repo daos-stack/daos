@@ -158,29 +158,27 @@ ds_cont_svc_step_down(struct cont_svc *svc)
 }
 
 static int
-cont_svc_lookup(const uuid_t pool_uuid, uint64_t id, struct cont_svc **svcp)
+cont_svc_lookup_leader(const uuid_t pool_uuid, uint64_t id,
+		       struct cont_svc **svcp, struct rsvc_hint *hint)
 {
 	struct cont_svc	      **p;
 	int			rc;
 
 	D__ASSERTF(id == 0, DF_U64"\n", id);
-	rc = ds_pool_lookup_cont_svc(pool_uuid, &p);
+	rc = ds_pool_cont_svc_lookup_leader(pool_uuid, &p, hint);
 	if (rc != 0)
 		return rc;
-	D__ASSERT(p != NULL); /* p == &pool_svc->ps_cont_svc */
-	if (*p == NULL) {
-		D__ERROR(DF_UUID"["DF_U64"]: container service uninitialized\n",
-			DP_UUID(pool_uuid), id);
-		return -DER_NONEXIST;
-	}
+	/* p == &pool_svc->ps_cont_svc */
+	D__ASSERT(p != NULL);
+	D__ASSERT(*p != NULL);
 	*svcp = *p;
 	return 0;
 }
 
 static void
-cont_svc_put(struct cont_svc *svc)
+cont_svc_put_leader(struct cont_svc *svc)
 {
-	ds_pool_put_cont_svc(svc->cs_in_pool_svc);
+	ds_pool_cont_svc_put_leader(svc->cs_in_pool_svc);
 }
 
 static uint64_t
@@ -989,11 +987,10 @@ ds_cont_close_by_pool_hdls(const uuid_t pool_uuid, uuid_t *pool_hdls,
 		DP_UUID(pool_hdls[0]));
 
 	/* TODO: Do the following for all local container services. */
-	rc = cont_svc_lookup(pool_uuid, 0 /* id */, &svc);
+	rc = cont_svc_lookup_leader(pool_uuid, 0 /* id */, &svc,
+				    NULL /* hint */);
 	if (rc != 0)
 		return rc;
-	if (!ds_pool_is_cont_svc_up(svc->cs_in_pool_svc))
-		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
 	rc = rdb_tx_begin(svc->cs_db, cont_svc_term(svc), &tx);
 	if (rc != 0)
@@ -1014,7 +1011,7 @@ out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
 out_svc:
-	cont_svc_put(svc);
+	cont_svc_put_leader(svc);
 	return rc;
 }
 
@@ -1140,17 +1137,6 @@ out:
 	return rc;
 }
 
-static void
-set_rsvc_hint(struct rdb *db, struct cont_op_out *out)
-{
-	int rc;
-
-	rc = rdb_get_leader(db, &out->co_hint.sh_term, &out->co_hint.sh_rank);
-	if (rc != 0)
-		return;
-	out->co_hint.sh_flags |= RSVC_HINT_VALID;
-}
-
 /* Look up the pool handle and the matching container service. */
 void
 ds_cont_op_handler(crt_rpc_t *rpc)
@@ -1175,17 +1161,15 @@ ds_cont_op_handler(crt_rpc_t *rpc)
 	 * running of this storage node? (Currently, there is only one, with ID
 	 * 0, colocated with the pool service.)
 	 */
-	rc = cont_svc_lookup(pool_hdl->sph_pool->sp_uuid, 0 /* id */, &svc);
+	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0 /* id */,
+				    &svc, &out->co_hint);
 	if (rc != 0)
 		D__GOTO(out_pool_hdl, rc);
-	if (!ds_pool_is_cont_svc_up(svc->cs_in_pool_svc))
-		D__GOTO(out_svc, rc = -DER_NOTLEADER);
 
 	rc = cont_op_with_svc(pool_hdl, svc, rpc);
 
-out_svc:
-	set_rsvc_hint(svc->cs_db, out);
-	cont_svc_put(svc);
+	ds_pool_set_hint(svc->cs_db, &out->co_hint);
+	cont_svc_put_leader(svc);
 out_pool_hdl:
 	D__DEBUG(DF_DSMS, DF_CONT": replying rpc %p: hdl="DF_UUID
 		" opc=%u rc=%d\n",

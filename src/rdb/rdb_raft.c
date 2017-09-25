@@ -1195,6 +1195,22 @@ rdb_raft_stop(struct rdb *db)
 	dhash_table_destroy_inplace(&db->d_results, true /* force */);
 }
 
+/* Resign the leadership in term. */
+void
+rdb_raft_resign(struct rdb *db, uint64_t term)
+{
+	struct rdb_raft_state	state;
+	int			rc;
+
+	if (term != raft_get_current_term(db->d_raft) ||
+	    !raft_is_leader(db->d_raft))
+		return;
+	rdb_raft_save_state(db, &state);
+	raft_become_follower(db->d_raft);
+	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
+	D_ASSERTF(rc == 0, "%d\n", rc);
+}
+
 /* Wait for index to be applied in term. For leaders only. */
 int
 rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term)

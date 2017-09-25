@@ -374,6 +374,21 @@ rdb_stop(struct rdb *db)
 }
 
 /**
+ * Resign the leadership in \a term. If \a term is not current or this replica
+ * is not in leader state, this function does nothing. Otherwise, all TXs in \a
+ * term will eventually abort, and the dc_step_down callback will eventually be
+ * called with \a term.
+ *
+ * \param[in]	db	database
+ * \param[in]	term	term of leadership to resign
+ */
+void
+rdb_resign(struct rdb *db, uint64_t term)
+{
+	rdb_raft_resign(db, term);
+}
+
+/**
  * Is this replica in the leader state? True does not guarantee a _current_
  * leadership.
  *

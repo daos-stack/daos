@@ -142,9 +142,14 @@ int ds_pool_svc_start(const uuid_t uuid);
 void ds_pool_svc_stop(const uuid_t uuid);
 
 struct cont_svc;
-int ds_pool_lookup_cont_svc(const uuid_t pool_uuid, struct cont_svc ***svcpp);
-bool ds_pool_is_cont_svc_up(struct cont_svc **svcp);
-void ds_pool_put_cont_svc(struct cont_svc **svcp);
+struct rsvc_hint;
+int ds_pool_cont_svc_lookup_leader(const uuid_t pool_uuid,
+				   struct cont_svc ***svcpp,
+				   struct rsvc_hint *hint);
+void ds_pool_cont_svc_put_leader(struct cont_svc **svcp);
 uint64_t ds_pool_cont_svc_term(struct cont_svc **svcp);
+
+struct rdb;
+void ds_pool_set_hint(struct rdb *db, struct rsvc_hint *hint);
 
 #endif /* __DAOS_SRV_POOL_H__ */
