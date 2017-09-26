@@ -111,6 +111,18 @@ struct crt_event_cb_priv {
 	void			*cecp_args;
 };
 
+/* TODO: remove the three structs above, use the following one for all */
+struct crt_plugin_cb_priv {
+	d_list_t			 cp_link;
+	union {
+		crt_progress_cb		 cp_prog_cb;
+		crt_timeout_cb		 cp_timeout_cb;
+		crt_event_cb		 cp_event_cb;
+		crt_eviction_cb		 cp_eviction_cb;
+	};
+	void				*cp_args;
+};
+
 /* structure of global fault tolerance data */
 struct crt_plugin_gdata {
 	/* list of progress callbacks */
@@ -119,12 +131,15 @@ struct crt_plugin_gdata {
 	d_list_t		cpg_timeout_cbs;
 	/* list of event notification callbacks */
 	d_list_t		cpg_event_cbs;
+	/* list of rank eviction callbacks */
+	d_list_t		cpg_eviction_cbs;
 	uint32_t		cpg_inited:1, /* all initialized */
 				/* pmix handler registered*/
 				cpg_pmix_errhdlr_inited:1;
 	pthread_rwlock_t	cpg_prog_rwlock;
 	pthread_rwlock_t	cpg_timeout_rwlock;
 	pthread_rwlock_t	cpg_event_rwlock;
+	pthread_rwlock_t	cpg_eviction_rwlock;
 	size_t			cpg_pmix_errhdlr_ref;
 };
 

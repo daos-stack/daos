@@ -2510,6 +2510,19 @@ out:
 	return ret;
 }
 
+static void
+crt_exec_eviction_cb(crt_group_t *grp, d_rank_t rank)
+{
+	struct crt_plugin_cb_priv	*cb_priv;
+
+	/* locking is not necessary since new callbacks are only appended to the
+	 * end of the list and there's no function to take items off the list
+	 */
+	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_eviction_cbs,
+			      cp_link)
+		cb_priv->cp_eviction_cb(grp, rank, cb_priv->cp_args);
+}
+
 int
 crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 {
@@ -2561,6 +2574,26 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 		D_GOTO(out, rc);
 	}
 	D_DEBUG("evicted group %s rank %d.\n", grp_priv->gp_pub.cg_grpid, rank);
+
+	crt_exec_eviction_cb(&grp_priv->gp_pub, rank);
+out:
+	return rc;
+}
+
+int
+crt_register_eviction_cb(crt_eviction_cb cb, void *args)
+{
+	struct crt_plugin_cb_priv	*cb_priv;
+	int				 rc = 0;
+
+	D_ALLOC_PTR(cb_priv);
+	if (cb_priv == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	cb_priv->cp_eviction_cb = cb;
+	cb_priv->cp_args = args;
+	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_eviction_rwlock);
+	d_list_add_tail(&cb_priv->cp_link, &crt_plugin_gdata.cpg_eviction_cbs);
+	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_eviction_rwlock);
 
 out:
 	return rc;

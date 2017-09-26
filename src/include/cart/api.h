@@ -1093,6 +1093,16 @@ typedef void
 int
 crt_register_timeout_cb(crt_timeout_cb cb, void *args);
 
+typedef void
+(*crt_eviction_cb) (crt_group_t *grp, d_rank_t rank, void *args);
+
+/**
+ * Register a callback function which will be upon the completion of
+ * crt_rank_evict().
+ */
+int
+crt_register_eviction_cb(crt_eviction_cb cb, void *args);
+
 /**
  * Retrieve the PSR candidate list for \a tgt_grp.
  * \param tgt_grp [IN]		The remote group

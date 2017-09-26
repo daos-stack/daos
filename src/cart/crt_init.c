@@ -112,9 +112,11 @@ crt_plugin_init(void)
 	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_prog_cbs);
 	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_timeout_cbs);
 	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_event_cbs);
+	D_INIT_LIST_HEAD(&crt_plugin_gdata.cpg_eviction_cbs);
 	pthread_rwlock_init(&crt_plugin_gdata.cpg_prog_rwlock, NULL);
 	pthread_rwlock_init(&crt_plugin_gdata.cpg_timeout_rwlock, NULL);
 	pthread_rwlock_init(&crt_plugin_gdata.cpg_event_rwlock, NULL);
+	pthread_rwlock_init(&crt_plugin_gdata.cpg_eviction_rwlock, NULL);
 	crt_plugin_gdata.cpg_inited = 1;
 }
 
@@ -307,6 +309,8 @@ crt_plugin_fini(void)
 	struct crt_prog_cb_priv		*prog_cb_priv;
 	struct crt_timeout_cb_priv	*timeout_cb_priv;
 	struct crt_event_cb_priv	*event_cb_priv;
+	struct crt_plugin_cb_priv	*cb_priv;
+	struct crt_plugin_cb_priv	*cb_priv_tmp;
 
 	D_ASSERT(crt_plugin_gdata.cpg_inited == 1);
 
@@ -333,9 +337,17 @@ crt_plugin_fini(void)
 				     cecp_link);
 		D_FREE_PTR(event_cb_priv);
 	}
+	d_list_for_each_entry_safe(cb_priv, cb_priv_tmp,
+				   &crt_plugin_gdata.cpg_eviction_cbs,
+				   cp_link) {
+		d_list_del(&cb_priv->cp_link);
+		D_FREE_PTR(cb_priv);
+	}
+
 	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_prog_rwlock);
 	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_timeout_rwlock);
 	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_event_rwlock);
+	pthread_rwlock_destroy(&crt_plugin_gdata.cpg_eviction_rwlock);
 	crt_plugin_pmix_fini();
 }
 
