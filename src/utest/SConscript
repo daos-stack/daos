@@ -49,26 +49,23 @@ def scons():
 
     Import('prereqs env crt_targets gurt_targets')
 
-    # Run config in a new environment so the environment isn't polluted
-    # causing tests to be rebuilt when utest target is used
-    config_env = env.Clone()
-    config_env.Append(CPPPATH=['.'])
-    prereqs.require(config_env, "pmix", "mercury", "argobots")
-    config = Configure(config_env)
-    if not config.CheckHeader('utest_cmocka.h') or \
-       not config.CheckLib('cmocka'):
-        print "\n*****************************************************"
-        print "cmocka packages must be installed to enable unit tests"
-        print "*****************************************************\n"
+    #Use full path to wrap_cmocka.h for configure test.  Since standalone
+    #cmocka header can't be included without including other headers,
+    #this test can't be generalized
+    wrap_cmocka = os.path.join(Dir('.').srcnode().abspath, 'wrap_cmocka.h')
+    prereqs.define('cmocka', headers=[wrap_cmocka], libs=['cmocka'],
+                   package='libcmocka-devel')
+    if not prereqs.check_component('cmocka'):
+        print "\n**************************************************************"
+        print "libcmocka-devel package must be installed to enable unit tests"
+        print "**************************************************************\n"
         # Just returning is the desired behavior here.  The utest target
         # has yet to be defined so the build will just fail.
-        config.Finish()
         return
-    config.Finish()
 
     test_env = env.Clone()
-    prereqs.require(test_env, "pmix", "mercury", "argobots")
-    test_env.AppendUnique(LIBS=['pthread', 'uuid', 'cmocka'])
+    prereqs.require(test_env, "pmix", "mercury", "argobots", "uuid", "cmocka")
+    test_env.AppendUnique(LIBS=['pthread'])
     test_env.AppendUnique(CPPPATH=['../include'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
     test_env.AppendUnique(LIBPATH=LIBPATH)
