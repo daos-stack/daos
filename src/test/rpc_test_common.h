@@ -41,11 +41,10 @@
  */
 
 #ifndef __RPC_TEST_COMMON_H__
-#define __RPC_TEST_COMMON__H__
+#define __RPC_TEST_COMMON_H__
 
 #include <semaphore.h>
 #include <cart/api.h>
-#include <cart/lm.h>
 #include <cart/types.h>
 #include <gurt/common.h>
 

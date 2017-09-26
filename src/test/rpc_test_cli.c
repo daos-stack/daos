@@ -62,8 +62,8 @@ crt_client_cb(const struct crt_cb_info *cb_info)
 				crt_reply_get(cb_info->cci_rpc);
 
 	dbg("---%s--->", __func__);
-	dbg("opc:%x\tcci_rc: %d\t-CER_TIMEDOUT:=%i\n",
-	cb_info->cci_rpc->cr_opc, cb_info->cci_rc, -CER_TIMEDOUT);
+	dbg("opc:%x\tcci_rc: %d\t-DER_TIMEDOUT:=%i\n",
+	cb_info->cci_rpc->cr_opc, cb_info->cci_rc, -DER_TIMEDOUT);
 
 	dbg("server has responded\n");
 
@@ -88,8 +88,8 @@ crt_client_cb(const struct crt_cb_info *cb_info)
 	case CRT_RPC_TEST_ERR:
 		dbg("CRT_RPC_TEST_ERR");
 		D_ASSERT(rpc_cli_input != NULL);
-		dbg("RPC return code:%d\t-CER_NOREPLY:=%i",
-		cb_info->cci_rc, -CER_NOREPLY);
+		dbg("RPC return code:%d\t-DER_NOREPLY:=%i",
+		cb_info->cci_rc, -DER_NOREPLY);
 
 		dbg(
 			"cmd:=0x%X\tstatus:=0x%X\traw_pkg:=%s\n",
@@ -97,7 +97,7 @@ crt_client_cb(const struct crt_cb_info *cb_info)
 			rpc_cli_input->from_srv,
 			(char *)rpc_cli_input->raw_pkg.iov_buf);
 		printf("\nRPC Error test %s with rc:=%d\n\n",
-			((cb_info->cci_rc == -CER_NOREPLY) ?
+			((cb_info->cci_rc == -DER_NOREPLY) ?
 			("Passed") : ("Failed")), cb_info->cci_rc);
 		break;
 	case CRT_RPC_TEST_NO_IO:
@@ -109,7 +109,7 @@ crt_client_cb(const struct crt_cb_info *cb_info)
 	case CRT_RPC_TEST_TIMEOUT:
 		dbg("CRT_RPC_TEST_TIMEOUT");
 		printf("\nRPC timeout test %s with rc:=%d\n\n",
-			((cb_info->cci_rc == -CER_TIMEDOUT) ?
+			((cb_info->cci_rc == -DER_TIMEDOUT) ?
 			("Passed") : ("Failed")), cb_info->cci_rc);
 		break;
 	case CRT_RPC_MULTITIER_TEST_IO:
@@ -151,7 +151,7 @@ static void
 
 	while (rpc_cli.shutdown == 0) {
 		rc = crt_progress(*p_ctx, 1000, NULL, NULL);
-		if (rc != 0 && rc != -CER_TIMEDOUT) {
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed %d", rc);
 			break;
 		 }

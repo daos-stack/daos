@@ -231,7 +231,7 @@ static void
 
 	while (rpc_srv.shutdown == 0) {
 		rc = crt_progress(*p_ctx, 1000, NULL, NULL);
-		if (rc != 0 && rc != -CER_TIMEDOUT) {
+		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed %d", rc);
 			break;
 		 }
@@ -275,8 +275,8 @@ srv_common_client_cb(const struct crt_cb_info *cb_info)
 
 	dbg("---%s--->", __func__);
 
-	dbg("opc:%x\tcci_rc:%d\t-CER_TIMEDOUT:=%i.\n",
-	cb_info->cci_rpc->cr_opc, cb_info->cci_rc, -CER_TIMEDOUT);
+	dbg("opc:%x\tcci_rc:%d\t-DER_TIMEDOUT:=%i.\n",
+	cb_info->cci_rpc->cr_opc, cb_info->cci_rc, -DER_TIMEDOUT);
 
 	dbg("server has responded\n");
 
@@ -287,7 +287,7 @@ srv_common_client_cb(const struct crt_cb_info *cb_info)
 		dbg("group operation  finished,: %d.\n",
 		       grp_io_out->from_srv);
 		printf("\nsrv:group IO test %s with rc:=%d\n\n",
-		((cb_info->cci_rc == -CER_TIMEDOUT) ? "Passed" : "failed"),
+		((cb_info->cci_rc == -DER_TIMEDOUT) ? "Passed" : "failed"),
 		cb_info->cci_rc);
 		break;
 	case CRT_RPC_MULTITIER_TEST_IO:
