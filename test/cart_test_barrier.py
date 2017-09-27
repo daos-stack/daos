@@ -66,10 +66,9 @@ class TestBarrier(commontestsuite.CommonTestSuite):
         log_mask = os.getenv("CRT_LOG_MASK", "INFO")
         crt_phy_addr = os.getenv("CRT_PHY_ADDR_STR", "ofi+sockets")
         ofi_interface = os.getenv("OFI_INTERFACE", "eth0")
-        baseport = self.generate_port_numbers(ofi_interface)
         self.pass_env = ' -x CRT_LOG_MASK={!s} -x CRT_PHY_ADDR_STR={!s}' \
-                        ' -x OFI_INTERFACE={!s} -x OFI_PORT={!s}'.format(
-                            log_mask, crt_phy_addr, ofi_interface, baseport)
+                        ' -x OFI_INTERFACE={!s} '.format(
+                            log_mask, crt_phy_addr, ofi_interface)
 
     def tearDown(self):
         """tear down the test"""
@@ -94,7 +93,7 @@ class TestBarrier(commontestsuite.CommonTestSuite):
             hosts = ''.join([' -H ', gethostname().split('.')[0]])
 
         (cmd, prefix) = self.add_prefix_logdir()
-        cmdstr = "{!s} {!s} -N 1 {!s} {!s} {!s}".format(
+        cmdstr = "{!s} {!s} -N 8 {!s} {!s} {!s}".format(
             cmd, hosts, self.pass_env, prefix, 'tests/test_crt_barrier')
 
         srv_rtn = self.execute_cmd(testmsg, cmdstr)

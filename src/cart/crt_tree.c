@@ -266,6 +266,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		result_rank_list->rl_ranks[i] =
 			grp_rank_list->rl_ranks[tree_children[i]];
 
+	D_FREE(tree_children, nchildren * sizeof(uint32_t));
 	*children_rank_list = result_rank_list;
 
 out:

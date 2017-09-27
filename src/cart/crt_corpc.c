@@ -683,6 +683,7 @@ bypass_aggregate:
 	am_root = (myrank == co_info->co_root);
 	if (am_root) {
 		crt_rpc_complete(parent_rpc_priv, co_info->co_rc);
+		crt_req_decref(&parent_rpc_priv->crp_pub); /* destroy */
 	} else {
 		if (co_info->co_rc != 0)
 			crt_corpc_fail_parent_rpc(parent_rpc_priv,
@@ -729,8 +730,6 @@ crt_corpc_req_hdlr(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	co_info = rpc_priv->crp_corpc_info;
 	D_ASSERT(co_info != NULL);
-	children_rank_list = co_info->co_grp_priv->gp_membs;
-	D_ASSERT(children_rank_list != NULL);
 
 	grp_rank = co_info->co_grp_priv->gp_self;
 	am_root = (grp_rank == co_info->co_root);
@@ -831,5 +830,8 @@ forward_failed:
 	}
 
 out:
+	if (children_rank_list != NULL)
+		d_rank_list_free(children_rank_list);
+
 	return rc;
 }
