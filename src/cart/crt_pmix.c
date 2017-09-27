@@ -629,7 +629,8 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	}
 
 	if (status != PMIX_ERR_PROC_ABORTED) {
-		D_DEBUG("PMIx event is not PMIX_ERR_PROC_ABORTED.\n");
+		D_DEBUG("PMIx event is %d not PMIX_ERR_PROC_ABORTED.\n",
+			status);
 		return;
 	}
 
