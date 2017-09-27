@@ -48,4 +48,6 @@ int ds_mgmt_tgt_init(void);
 void ds_mgmt_tgt_fini(void);
 void ds_mgmt_hdlr_tgt_create(crt_rpc_t *rpc_req);
 void ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *rpc_req);
+int ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+				  void *priv);
 #endif /* __SRV_MGMT_INTERNAL_H__ */

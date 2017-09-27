@@ -324,6 +324,68 @@ out:
 	return rc;
 }
 
+int
+ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+			      void *priv)
+{
+	struct mgmt_tgt_create_out	*tc_out;
+	struct mgmt_tgt_create_out	*ret_out;
+	uuid_t				*tc_uuids;
+	daos_rank_t			*tc_ranks;
+	unsigned int			tc_uuids_nr;
+	uuid_t				*ret_uuids;
+	daos_rank_t			*ret_ranks;
+	unsigned int			ret_uuids_nr;
+	uuid_t				*new_uuids;
+	daos_rank_t			*new_ranks;
+	unsigned int			new_uuids_nr;
+	int				i;
+
+	tc_out = crt_reply_get(source);
+	tc_uuids_nr = tc_out->tc_tgt_uuids.da_count;
+	tc_uuids = tc_out->tc_tgt_uuids.da_arrays;
+	tc_ranks = tc_out->tc_ranks.da_arrays;
+
+	ret_out = crt_reply_get(result);
+	ret_uuids_nr = ret_out->tc_tgt_uuids.da_count;
+	ret_uuids = ret_out->tc_tgt_uuids.da_arrays;
+	ret_ranks = ret_out->tc_ranks.da_arrays;
+	if (tc_uuids_nr == 0)
+		return 0;
+
+	new_uuids_nr = ret_uuids_nr + tc_uuids_nr;
+
+	/* Append tc_uuids to ret_uuids */
+	D_ALLOC(new_uuids, sizeof(*new_uuids) * new_uuids_nr);
+	if (new_uuids == NULL)
+		return -DER_NOMEM;
+
+	D_ALLOC(new_ranks, sizeof(*new_ranks) * new_uuids_nr);
+	if (new_ranks == NULL) {
+		D_FREE(new_uuids, sizeof(*new_uuids) * new_uuids_nr);
+		return -DER_NOMEM;
+	}
+
+	for (i = 0; i < ret_uuids_nr + tc_uuids_nr; i++) {
+		if (i < ret_uuids_nr) {
+			uuid_copy(new_uuids[i], ret_uuids[i]);
+			new_ranks[i] = ret_ranks[i];
+		} else {
+			uuid_copy(new_uuids[i], tc_uuids[i - ret_uuids_nr]);
+			new_ranks[i] = tc_ranks[i - ret_uuids_nr];
+		}
+	}
+
+	D_FREE(ret_uuids, sizeof(*ret_uuids) * ret_uuids_nr);
+	D_FREE(ret_ranks, sizeof(*ret_uuids) * ret_uuids_nr);
+
+	ret_out->tc_tgt_uuids.da_arrays = new_uuids;
+	ret_out->tc_tgt_uuids.da_count = new_uuids_nr;
+	ret_out->tc_ranks.da_arrays = new_ranks;
+	ret_out->tc_ranks.da_count = new_uuids_nr;
+	return 0;
+}
+
 /**
  * RPC handler for target creation
  */
@@ -332,6 +394,9 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 {
 	struct mgmt_tgt_create_in	*tc_in;
 	struct mgmt_tgt_create_out	*tc_out;
+	uuid_t				tgt_uuid;
+	daos_rank_t			*rank;
+	uuid_t				*tmp_tgt_uuid;
 	char				*path = NULL;
 	int				 rc = 0;
 
@@ -351,7 +416,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	if (rc >= 0) {
 		/** target already exists, let's reuse it for idempotence */
 		/** TODO: fetch tgt uuid from existing DSM pool */
-		uuid_generate(tc_out->tc_tgt_uuid);
+		uuid_generate(tgt_uuid);
 
 		/**
 		 * flush again in case the previous one in tgt_create()
@@ -360,12 +425,35 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		rc = dir_fsync(path);
 	} else if (errno == ENOENT) {
 		/** target doesn't exist, create one */
-		rc = tgt_create(tc_in->tc_pool_uuid, tc_out->tc_tgt_uuid,
+		rc = tgt_create(tc_in->tc_pool_uuid, tgt_uuid,
 				tc_in->tc_tgt_size, path);
 	} else {
 		rc = daos_errno2der(errno);
 	}
 
+	if (rc)
+		D_GOTO(free, rc);
+
+	D_ALLOC_PTR(tmp_tgt_uuid);
+	if (tmp_tgt_uuid == NULL)
+		D_GOTO(free, rc = -DER_NOMEM);
+
+	uuid_copy(*tmp_tgt_uuid, tgt_uuid);
+	tc_out->tc_tgt_uuids.da_arrays = tmp_tgt_uuid;
+	tc_out->tc_tgt_uuids.da_count = 1;
+
+	D_ALLOC_PTR(rank);
+	if (rank == NULL) {
+		D_FREE_PTR(tmp_tgt_uuid);
+		D_GOTO(free, rc = -DER_NOMEM);
+	}
+
+	rc = crt_group_rank(NULL, rank);
+	D_ASSERT(rc == 0);
+	tc_out->tc_ranks.da_arrays = rank;
+	tc_out->tc_ranks.da_count = 1;
+
+free:
 	free(path);
 out:
 	tc_out->tc_rc = rc;

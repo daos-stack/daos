@@ -62,8 +62,9 @@ struct crt_msg_field *mgmt_tgt_create_in_fields[] = {
 };
 
 struct crt_msg_field *mgmt_tgt_create_out_fields[] = {
+	&DMF_UUID_ARRAY,	/* tc_tgt_uuid */
+	&DMF_UINT32_ARRAY,	/* tc_ranks */
 	&CMF_INT,		/* tc_rc */
-	&CMF_UUID,		/* tc_tgt_uuid */
 };
 
 struct crt_msg_field *mgmt_tgt_destroy_in_fields[] = {

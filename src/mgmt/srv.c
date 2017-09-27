@@ -45,6 +45,9 @@ static struct daos_rpc_handler ds_mgmt_handlers[] = {
 	}, {
 		.dr_opc		= MGMT_TGT_CREATE,
 		.dr_hdlr	= ds_mgmt_hdlr_tgt_create,
+		.dr_corpc_ops	= {
+			.co_aggregate = ds_mgmt_tgt_create_aggregator,
+		}
 	}, {
 		.dr_opc		= MGMT_TGT_DESTROY,
 		.dr_hdlr	= ds_mgmt_hdlr_tgt_destroy,

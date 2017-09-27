@@ -70,7 +70,8 @@ if env['PLATFORM'] == 'darwin':
 	env['SHLIBSUFFIX'] = '.so'
 
 # Compiler options
-env.Append(CCFLAGS = ['-g', '-Wall', '-Werror', '-fpic', '-D_GNU_SOURCE'])
+env.Append(CCFLAGS = ['-g', '-Wall', '-Werror', '-Wno-missing-braces',
+		      '-fpic', '-D_GNU_SOURCE'])
 env.Append(CCFLAGS = ['-O2', '-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
 
 # generate targets in specific build dir to avoid polluting the source code

@@ -83,8 +83,9 @@ struct mgmt_tgt_create_in {
 };
 
 struct mgmt_tgt_create_out {
+	struct crt_array	tc_tgt_uuids;
+	struct crt_array	tc_ranks;
 	int			tc_rc;
-	uuid_t			tc_tgt_uuid;
 };
 
 struct mgmt_tgt_destroy_in {
