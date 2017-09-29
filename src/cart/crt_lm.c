@@ -1017,7 +1017,6 @@ should_sample(struct lm_grp_priv_t *lm_grp_priv, d_rank_t tgt_rank,
 	int			 live_count;
 	struct lm_psr_cand	*psr_cand;
 	int			 picked_index = -1;
-	bool			 found = false;
 	bool			 evicted;
 	bool			 ret = false;
 
@@ -1034,6 +1033,7 @@ should_sample(struct lm_grp_priv_t *lm_grp_priv, d_rank_t tgt_rank,
 			live_count--;
 			continue;
 		}
+		/* pick the first free PSR as sample target */
 		if (!psr_cand[i].pc_pending_sample) {
 			if (picked_index == -1) {
 				*tgt_psr = psr_cand[i].pc_rank;
@@ -1042,10 +1042,8 @@ should_sample(struct lm_grp_priv_t *lm_grp_priv, d_rank_t tgt_rank,
 			continue;
 		}
 		pending_count++;
-		if (psr_cand[i].pc_rank == tgt_rank)
-			found = true;
 	}
-	if (!found && pending_count < live_count) {
+	if (pending_count < live_count) {
 		ret = true;
 		psr_cand[picked_index].pc_pending_sample = true;
 		D_DEBUG("psr rank %d is selected.\n",
@@ -1073,9 +1071,13 @@ lm_membs_sample(crt_context_t ctx, crt_rpc_t *rpc, void *args)
 	tgt_grp = rpc->cr_ep.ep_grp;
 	tgt_rank = rpc->cr_ep.ep_rank;
 
-	/* retrieve the sample hash table. if the lm_grp_priv for the remote
-	 * group doesn't exist yet, create one.
-	 */
+	/* return if the rpc target is the local primary service group */
+	if (tgt_grp == crt_lm_gdata.clg_lm_grp_srv.lgs_grp && crt_is_service())
+		return;
+	/* In a service process NULL means the local group */
+	if (tgt_grp == NULL && crt_is_service())
+		return;
+	/* retrieve the sample hash table.  */
 	pthread_rwlock_rdlock(&crt_lm_gdata.clg_rwlock);
 	lm_grp_priv = lm_grp_priv_find(tgt_grp);
 	pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);

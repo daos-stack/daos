@@ -199,7 +199,6 @@ static void *progress_thread(void *arg)
 		rc = crt_progress(ctx, 0, NULL, NULL);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
 			D_ERROR("crt_progress failed rc: %d.\n", rc);
-			break;
 		}
 		if (g_shutdown == 1 && g_complete == 1)
 			break;

@@ -138,6 +138,18 @@ main()
 	PMIx_Register_event_handler(NULL, 0, NULL, 0,
 				    my_evhdlr,
 				    my_evhdlr_reg_cb, NULL);
+
+	/* call fence  to synchronize */
+	PMIX_PROC_CONSTRUCT(&proc);
+	strncpy(proc.nspace, myproc.nspace, PMIX_MAX_NSLEN);
+	proc.rank = PMIX_RANK_WILDCARD;
+	rc = PMIx_Fence(&proc, 1, NULL, 0);
+	if (rc != PMIX_SUCCESS) {
+		fprintf(stderr, "rank %s:%d: PMIx_Fence failed: %d\n",
+			myproc.nspace, myproc.rank, rc);
+		goto out;
+	}
+
 	if (myproc.rank == 1)
 		raise(SIGKILL);
 
