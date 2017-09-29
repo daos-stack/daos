@@ -143,6 +143,11 @@ enum d_chash_feats {
 	 * within hop_addref/decref, because RW lock can't protect refcount.
 	 */
 	D_HASH_FT_RWLOCK		= (1 << 1),
+	/**
+	 * Hash table does not take refcount of record, and a record will be
+	 * deleted from the hash table when user releases the last refcount.
+	 */
+	D_HASH_FT_EPHEMERAL		= (1 << 2),
 };
 
 /** a hash bucket */
@@ -195,6 +200,9 @@ void d_chash_table_debug(struct d_chash_table *htable);
 
 d_list_t *d_chash_rec_find(struct d_chash_table *htable, const void *key,
 			   unsigned int ksize);
+d_list_t *d_chash_rec_find_insert(struct d_chash_table *htable,
+				  const void *key, unsigned int ksize,
+				  d_list_t *rlink);
 int  d_chash_rec_insert(struct d_chash_table *htable, const void *key,
 			unsigned int ksize, d_list_t *rlink,
 			bool exclusive);

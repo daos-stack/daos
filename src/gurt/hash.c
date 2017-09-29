@@ -390,6 +390,36 @@ ch_rec_free(struct d_chash_table *htable, d_list_t *rlink)
 }
 
 /**
+ * Insert the record into the hash table and take refcount on it if
+ * "ephemeral" is not set.
+ */
+static void
+ch_rec_insert_addref(struct d_chash_table *htable, int bucket_idx,
+		     d_list_t *rlink)
+{
+	if (!(htable->ht_feats & D_HASH_FT_EPHEMERAL))
+		ch_rec_addref(htable, rlink);
+
+	ch_rec_insert(htable, bucket_idx, rlink);
+}
+
+/**
+ * Delete the record from the hash table, it also releases refcount of it if
+ * "ephemeral" is not set.
+ */
+static bool
+ch_rec_del_decref(struct d_chash_table *htable, d_list_t *rlink)
+{
+	bool zombie = false;
+
+	ch_rec_delete(htable, rlink);
+	if (!(htable->ht_feats & D_HASH_FT_EPHEMERAL))
+		zombie = ch_rec_decref(htable, rlink);
+
+	return zombie;
+}
+
+/**
  * lookup @key in the hash table, the found chain rlink is returned on
  * success.
  *
@@ -439,20 +469,54 @@ d_chash_rec_insert(struct d_chash_table *htable, const void *key,
 	int	rc = 0;
 
 	D_ASSERT(key != NULL && ksize != 0);
-
 	idx = ch_key_hash(htable, key, ksize);
+
 	ch_lock(htable, false);
+	if (exclusive) {
+		d_list_t *tmp;
 
-	if (exclusive && ch_rec_find(htable, idx, key, ksize))
-		D_GOTO(out, rc = -DER_EXIST);
-
-	ch_rec_addref(htable, rlink);
-	ch_rec_insert(htable, idx, rlink);
- out:
+		tmp = ch_rec_find(htable, idx, key, ksize);
+		if (tmp)
+			D_GOTO(out, rc = -DER_EXIST);
+	}
+	ch_rec_insert_addref(htable, idx, rlink);
+out:
 	ch_unlock(htable, false);
-	return 0;
+	return rc;
 }
 
+/**
+ * Lookup @key in the hash table, if there is a matched record, it should be
+ * returned, otherwise @rlink will be inserted into the hash table. In the
+ * later case, the returned link chain is the input @rlink.
+ *
+ * \param htable	[IN]	Pointer to the hash table
+ * \param key		[IN]	The key to be inserted
+ * \param ksize		[IN]	Size of the key
+ * \param rlink		[IN]	The link chain of the record being inserted
+ */
+d_list_t *
+d_chash_rec_find_insert(struct d_chash_table *htable, const void *key,
+			unsigned int ksize, d_list_t *rlink)
+{
+	d_list_t *tmp;
+	int	  idx;
+
+	D_ASSERT(key != NULL && ksize != 0);
+	idx = ch_key_hash(htable, key, ksize);
+
+	ch_lock(htable, false);
+	tmp = ch_rec_find(htable, idx, key, ksize);
+	if (tmp) {
+		ch_rec_addref(htable, tmp);
+		rlink = tmp;
+		D_GOTO(out, 0);
+	}
+	ch_rec_insert_addref(htable, idx, rlink);
+out:
+	ch_unlock(htable, false);
+	return rlink;
+}
 /**
  * Insert an anonymous record (w/o key) into the hash table.
  * This function calls hop_key_init() to generate a key for the new rlink
@@ -480,9 +544,7 @@ d_chash_rec_insert_anonym(struct d_chash_table *htable, d_list_t *rlink,
 
 	ksize = ch_key_get(htable, rlink, &key);
 	idx = ch_key_hash(htable, key, ksize);
-
-	ch_rec_addref(htable, rlink);
-	ch_rec_insert(htable, idx, rlink);
+	ch_rec_insert_addref(htable, idx, rlink);
 
 	ch_unlock(htable, false);
 	return 0;
@@ -514,8 +576,7 @@ d_chash_rec_delete(struct d_chash_table *htable, const void *key,
 
 	rlink = ch_rec_find(htable, idx, key, ksize);
 	if (rlink != NULL) {
-		ch_rec_delete(htable, rlink);
-		zombie = ch_rec_decref(htable, rlink);
+		zombie = ch_rec_del_decref(htable, rlink);
 		deleted = true;
 	}
 
@@ -547,8 +608,7 @@ d_chash_rec_delete_at(struct d_chash_table *htable, d_list_t *rlink)
 	ch_lock(htable, false);
 
 	if (!d_list_empty(rlink)) {
-		ch_rec_delete(htable, rlink);
-		zombie = ch_rec_decref(htable, rlink);
+		zombie = ch_rec_del_decref(htable, rlink);
 		deleted = true;
 	}
 	ch_unlock(htable, false);
@@ -583,14 +643,18 @@ d_chash_rec_addref(struct d_chash_table *htable, d_list_t *rlink)
 void
 d_chash_rec_decref(struct d_chash_table *htable, d_list_t *rlink)
 {
+	bool ephemeral = (htable->ht_feats & D_HASH_FT_EPHEMERAL);
 	bool zombie;
 
-	ch_lock(htable, true);
-
+	ch_lock(htable, !ephemeral);
 	zombie = ch_rec_decref(htable, rlink);
+
+	if (zombie && ephemeral && !d_list_empty(rlink))
+		ch_rec_delete(htable, rlink);
+
 	D_ASSERT(!zombie || d_list_empty(rlink));
 
-	ch_unlock(htable, true);
+	ch_unlock(htable, !ephemeral);
 	if (zombie)
 		ch_rec_free(htable, rlink);
 }
