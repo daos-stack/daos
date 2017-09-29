@@ -839,11 +839,8 @@ lm_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	D_ASSERT(lm_grp_priv != NULL);
 	ul_in = crt_req_get(cb_info->cci_rpc);
 	ul_out = crt_reply_get(cb_info->cci_rpc);
-	psr_phy_addr = strndup(ul_out->ul_uri, CRT_ADDR_STR_MAX_LEN);
-	if (psr_phy_addr == NULL) {
-		D_ERROR("strndup failed.\n");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
+	psr_phy_addr = ul_out->ul_uri;
+	ul_out->ul_uri = NULL;
 	rc = cb_info->cci_rc;
 	if (rc != 0) {
 		D_ERROR("RPC error, rc: %d.\n", rc);
