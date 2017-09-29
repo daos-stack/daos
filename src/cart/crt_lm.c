@@ -876,6 +876,10 @@ lm_uri_lookup_psr(struct lm_grp_priv_t *lm_grp_priv, d_rank_t rank)
 	D_ASSERT(lm_grp_priv != NULL);
 
 	crt_ctx = crt_context_lookup(0);
+	if (crt_ctx == NULL) {
+		D_ERROR("crt_context 0 doesn't exist.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 	psr_ep.ep_grp = lm_grp_priv->lgp_grp;
 	psr_ep.ep_rank = lm_grp_priv->lgp_psr_rank;
 	rc = crt_req_create(crt_ctx, &psr_ep, CRT_OPC_URI_LOOKUP, &ul_req);
@@ -893,9 +897,14 @@ lm_uri_lookup_psr(struct lm_grp_priv_t *lm_grp_priv, d_rank_t rank)
 		D_ERROR("URI_LOOKUP (to group %s rank %d through PSR %d) "
 			"request send failed, rc: %d.\n",
 			ul_in->ul_grp_id, ul_in->ul_rank, psr_ep.ep_rank, rc);
+		D_GOTO(out, rc);
 	}
 
+	return rc;
+
 out:
+	sem_post(&lm_grp_priv->lgp_sem);
+
 	return rc;
 }
 
@@ -957,16 +966,24 @@ lm_grp_priv_init(crt_group_t *grp)
 		D_ERROR("D_ALLOC() failed.\n");
 		D_GOTO(error_out, rc);
 	}
-	srand(time(NULL));
-	for (i = 0; i < num_psr; i++)
-		psr_cand[i].pc_rank = rand()%remote_grp_size;
+	D_DEBUG("num_psr %d, list of PSRs: ", num_psr);
 	psr_cand[0].pc_rank = lm_grp_priv->lgp_psr_rank;
-	D_DEBUG("num_psr %d all PSRs: ", num_psr);
-	for (i = 0; i < num_psr; i++)
+	D_DEBUG("%d ", psr_cand[0].pc_rank);
+	srand(time(NULL));
+	for (i = 1; i < num_psr; i++) {
+		/* same formula for picking ranks subscribed to RAS, with a
+		 * shift
+		 */
+		psr_cand[i].pc_rank = ((i*remote_grp_size + num_psr - 1) /
+				       num_psr + local_rank) %
+				      remote_grp_size;
 		D_DEBUG("%d ", psr_cand[i].pc_rank);
 
-	for (i = 1; i < num_psr; i++)
-		lm_uri_lookup_psr(lm_grp_priv, psr_cand[i].pc_rank);
+		rc = lm_uri_lookup_psr(lm_grp_priv, psr_cand[i].pc_rank);
+		if (rc != 0)
+			D_ERROR("lm_uri_lookup_psr failed, rc: %d\n", rc);
+	}
+
 	for (i = 1; i < num_psr; i++)
 		sem_wait(&lm_grp_priv->lgp_sem);
 	lm_grp_priv->lgp_psr_cand = psr_cand;

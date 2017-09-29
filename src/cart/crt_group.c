@@ -1699,6 +1699,7 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	struct crt_grp_priv	*grp_priv;
 	crt_group_t		*grp_at = NULL;
 	bool			 is_service;
+	crt_context_t		 crt_ctx;
 	int			 rc = 0;
 
 	if (srv_grpid == NULL) {
@@ -1721,6 +1722,12 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	}
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
+
+	crt_ctx = crt_context_lookup(0);
+	if (crt_ctx == NULL) {
+		D_ERROR("crt_context 0 doesn't exist.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
 
 	is_service = crt_is_service();
 	pthread_rwlock_rdlock(&grp_gdata->gg_rwlock);

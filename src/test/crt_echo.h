@@ -217,6 +217,9 @@ echo_init(int server, bool tier2)
 
 	assert(rc == 0);
 
+	rc = crt_context_create(NULL, &gecho.crt_ctx);
+	assert(rc == 0);
+
 	if (server != 0 && tier2 == false && gecho.singleton_test) {
 		printf("Saving singleton attach info\n");
 		rc = crt_group_config_save(NULL, false);
@@ -234,9 +237,6 @@ echo_init(int server, bool tier2)
 	}
 
 	gecho.server = (server != 0);
-
-	rc = crt_context_create(NULL, &gecho.crt_ctx);
-	assert(rc == 0);
 
 	if (server && ECHO_EXTRA_CONTEXT_NUM > 0) {
 		gecho.extra_ctx = calloc(ECHO_EXTRA_CONTEXT_NUM,

@@ -150,8 +150,10 @@ main()
 		goto out;
 	}
 
-	if (myproc.rank == 1)
+	if (myproc.rank == 1) {
+		sleep(5);
 		raise(SIGKILL);
+	}
 
 	test_sem_timedwait(&shut_down, 60, __LINE__);
 

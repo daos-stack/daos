@@ -669,6 +669,9 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
  * \param attached_grp [OUT]	Returned attached group handle pointer.
  *
  * \return			zero on success, negative value if error
+ *
+ * Note: Make sure cart context 0 exists when calling this function. cart
+ * context 0 is created by the first call to crt_context_create().
  */
 int
 crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp);
