@@ -999,7 +999,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout,
 	} else  {
 		now = d_timeus_secdiff(0);
 		end = now + timeout;
-		/** similiarly, probe more frequently if timeout is large */
+		/** similarly, probe more frequently if timeout is large */
 		if (timeout > 1000 * 1000)
 			hg_timeout = 1000 * 1000;
 		else

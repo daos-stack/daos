@@ -345,7 +345,7 @@ static void print_results(struct st_latency *latencies,
 			 * with -1 so it will sort before any passing
 			 * RPCs. This segments the latencies into two
 			 * sections - from [0:num_failed] will be -1,
-			 * and from [num_failed:] will be succesful RPC
+			 * and from [num_failed:] will be successful RPC
 			 * latencies
 			 */
 			latencies[local_rep].val = -1;
@@ -1333,7 +1333,7 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 	 *   number of elements in that range is added to the counter
 	 *
 	 * After both ranks and tags have been validated, the endpoint array can
-	 * be resized to accomodate the new entries and the validated string
+	 * be resized to accommodate the new entries and the validated string
 	 * can be re-parsed (without error checking) to add elements to the
 	 * array.
 	 */

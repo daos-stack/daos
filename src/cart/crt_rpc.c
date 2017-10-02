@@ -1415,7 +1415,7 @@ crt_cb_common(const struct crt_cb_info *cb_info)
  * \param[IN] rpc	point to CRT request.
  * \param[IN] timeout	timeout (Micro-seconds) to wait, if
  *                      timeout <= 0, it will wait infinitely.
- * \return		0 if rpc return successfuly.
+ * \return		0 if rpc return successfully.
  * \return		negative errno if sending fails or timeout.
  */
 int

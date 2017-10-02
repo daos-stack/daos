@@ -521,7 +521,7 @@ cli_rpc_init(void)
 
 	rpc_cli.target_group[rpc_cli.target_grp_size] = NULL;
 
-	/* try until success to avoid failures untill server isn't ready . */
+	/* try until success to avoid failures until server isn't ready . */
 	do {
 		sleep(1);
 		rc = crt_group_attach(CRT_DEFAULT_SRV_GRPID,
@@ -537,7 +537,7 @@ cli_rpc_init(void)
 	rpc_cli.target_grp_size += 1;
 	rpc_cli.target_group[rpc_cli.target_grp_size] = NULL;
 
-	/* try until success to avoid failures untill server isn't ready . */
+	/* try until success to avoid failures until server isn't ready . */
 	do {
 		sleep(1);
 		rc = crt_group_attach(CRT_RPC_MULTITIER_GRPID,

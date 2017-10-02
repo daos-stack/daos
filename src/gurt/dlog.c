@@ -166,7 +166,7 @@ static const char *clog_pristr(int pri)
 }
 
 /**
- * clog_setnfac: set the number of facilites allocated (including default
+ * clog_setnfac: set the number of facilities allocated (including default
  * to a given value).   clog must be open for this to do anything.
  * we set the default name for facility 0 here.
  * caller must hold clog_lock.
@@ -323,7 +323,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	unsigned int hlen_pt1, hlen, mlen, tlen;
 	/*
 	 * since we ignore any potential errors in CLOG let's always re-set
-	 * errno to its orginal value
+	 * errno to its original value
 	 */
 	int save_errno = errno;
 

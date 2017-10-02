@@ -366,7 +366,7 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 	int			size;
 	int			i;
 
-	/* If we are here it means we dont have this key cached yet */
+	/* If we are here it means we don't have this key cached yet */
 	entry = malloc(sizeof(struct kv_pair_entry));
 	assert(entry != NULL);
 
@@ -521,7 +521,7 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				return -1;
 			}
 
-			DBG_PRINT("Found key, but wasnt valid, forwarding\n");
+			DBG_PRINT("Found key, but wasn't valid, forwarding\n");
 			UNLOCK_KEYS();
 			DBG_EXIT();
 			return -DER_IVCB_FORWARD;

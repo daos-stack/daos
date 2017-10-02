@@ -566,7 +566,7 @@ srv_rpc_init(void)
 		rpc_srv.my_rank, rpc_srv.grp_size, getpid());
 
 
-	/* try until success to avoid failures untill server isn't ready . */
+	/* try until success to avoid failures until server isn't ready . */
 	do {
 		sleep(1);
 		rc = crt_group_attach(CRT_RPC_MULTITIER_GRPID,

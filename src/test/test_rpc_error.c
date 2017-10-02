@@ -171,7 +171,7 @@ rpc_err_noreply_hdlr(crt_rpc_t *rpc_req)
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERTF(rpc_req_input != NULL,
 		  "crt_req_get() failed, rpc_req_input %p\n", rpc_req_input);
-	fprintf(stderr, "rpc error server recieved request, opc: 0x%x.\n",
+	fprintf(stderr, "rpc error server received request, opc: 0x%x.\n",
 		rpc_req->cr_opc);
 	fprintf(stderr, "received magic number %d\n", rpc_req_input->magic);
 }

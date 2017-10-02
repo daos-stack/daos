@@ -1481,7 +1481,7 @@ struct iv_sync_cb_info {
 	/* Internal IV namespace */
 	struct crt_ivns_internal	*isc_ivns_internal;
 
-	/* Class id assocaited with namespace */
+	/* Class id associated with namespace */
 	uint32_t			isc_class_id;
 
 	/* IV key/value; used for issuing completion callback */
@@ -1641,7 +1641,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	iv_sync_cb->isc_bulk_hdl = local_bulk;
 	iv_sync_cb->isc_do_callback = sync;
 
-	/* If sync is set, perform callabck from sync reponse handler */
+	/* If sync is set, perform callabck from sync response handler */
 	if (sync) {
 		iv_sync_cb->isc_update_comp_cb = update_comp_cb;
 		iv_sync_cb->isc_cb_arg = cb_arg;
