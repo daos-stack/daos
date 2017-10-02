@@ -450,27 +450,21 @@ out:
 }
 
 static int
-crt_get_info_string(char **string)
+crt_get_info_string(char **string, bool *info_string_free)
 {
 	int	 port;
 	char	*plugin_str;
-	char	*info_string;
-
-	D_ALLOC(info_string, CRT_ADDR_STR_MAX_LEN);
-	if (info_string == NULL) {
-		D_ERROR("cannot allocate memory for info string.\n");
-		return -DER_NOMEM;
-	}
+	int	 rc = 0;
 
 	switch (crt_gdata.cg_na_plugin) {
 	case CRT_NA_CCI_TCP:
-		snprintf(info_string, CRT_ADDR_STR_MAX_LEN, "%s",
-			 "cci+tcp://");
-		break;
+		*string = "cci+tcp://";
+		*info_string_free = false;
+		return 0;
 	case CRT_NA_CCI_VERBS:
-		snprintf(info_string, CRT_ADDR_STR_MAX_LEN, "%s",
-			 "cci+verbs://");
-		break;
+		*string = "cci+verbs://";
+		*info_string_free = false;
+		return 0;
 	case CRT_NA_OFI_SOCKETS:
 		plugin_str = "ofi+sockets";
 		break;
@@ -485,18 +479,20 @@ crt_get_info_string(char **string)
 		break;
 	default:
 		D_ERROR("bad cg_na_plugin %d.\n", crt_gdata.cg_na_plugin);
-		D_FREE(info_string, CRT_ADDR_STR_MAX_LEN);
 		return  -DER_INVAL;
 	};
 
-	if (crt_gdata.cg_na_plugin >= CRT_NA_OFI_OFFSET) {
-		port = crt_na_ofi_conf.noc_port;
-		crt_na_ofi_conf.noc_port++;
-		snprintf(info_string, CRT_ADDR_STR_MAX_LEN, "%s://%s:%d",
-			 plugin_str, crt_na_ofi_conf.noc_ip_str, port);
-	}
 
-	*string = info_string;
+	port = crt_na_ofi_conf.noc_port;
+	crt_na_ofi_conf.noc_port++;
+	rc = asprintf(string, "%s://%s:%d",
+		      plugin_str, crt_na_ofi_conf.noc_ip_str, port);
+
+	if (rc < 0)
+		return -DER_NOMEM;
+
+	*info_string_free = true;
+
 	return 0;
 }
 
@@ -543,10 +539,8 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		info_string = *addr;
 		D_ASSERT(strncmp(info_string, "bmi+tcp", 7) == 0);
 	} else {
-		rc = crt_get_info_string(&info_string);
-		if (rc == 0)
-			info_string_free = true;
-		else
+		rc = crt_get_info_string(&info_string, &info_string_free);
+		if (rc != 0)
 			D_GOTO(out, rc);
 	}
 
@@ -609,7 +603,7 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 
 out:
 	if (info_string_free)
-		D_FREE(info_string, CRT_ADDR_STR_MAX_LEN);
+		D_FREE(info_string, 0);
 	return rc;
 }
 
@@ -685,10 +679,8 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 		char		addr_str[CRT_ADDR_STR_MAX_LEN] = {'\0'};
 		d_size_t	str_size = CRT_ADDR_STR_MAX_LEN;
 
-		rc = crt_get_info_string(&info_string);
-		if (rc == 0)
-			info_string_free = true;
-		else
+		rc = crt_get_info_string(&info_string, &info_string_free);
+		if (rc != 0)
 			D_GOTO(out, rc);
 
 		na_class = NA_Initialize(info_string, crt_is_service());
@@ -762,7 +754,7 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int idx)
 
 out:
 	if (info_string_free)
-		D_FREE(info_string, CRT_ADDR_STR_MAX_LEN);
+		D_FREE(info_string, 0);
 	return rc;
 }
 
