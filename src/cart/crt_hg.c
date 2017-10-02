@@ -1402,7 +1402,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		buf_sizes = buf_sizes_stack;
 	} else {
 		allocate = 1;
-		D_ALLOC(buf_sizes, sgl->sg_nr.num * sizeof(hg_size_t));
+		D_ALLOC_ARRAY(buf_sizes, sgl->sg_nr.num);
 		if (buf_sizes == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -1415,7 +1415,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 		if (allocate == 0) {
 			buf_ptrs = buf_ptrs_stack;
 		} else {
-			D_ALLOC(buf_ptrs, sgl->sg_nr.num * sizeof(void *));
+			D_ALLOC_ARRAY(buf_ptrs, sgl->sg_nr.num);
 			if (buf_ptrs == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
@@ -1482,11 +1482,11 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 		buf_ptrs = buf_ptrs_stack;
 	} else {
 		allocate = 1;
-		D_ALLOC(buf_sizes, bulk_sgnum * sizeof(hg_size_t));
+		D_ALLOC_ARRAY(buf_sizes, bulk_sgnum);
 		if (buf_sizes == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		D_ALLOC(buf_ptrs, bulk_sgnum * sizeof(void *));
+		D_ALLOC_ARRAY(buf_ptrs, bulk_sgnum);
 		if (buf_sizes == NULL) {
 			D_FREE(buf_sizes, bulk_sgnum * sizeof(hg_size_t));
 			D_GOTO(out, rc = -DER_NOMEM);

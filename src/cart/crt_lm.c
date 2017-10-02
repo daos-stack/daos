@@ -918,7 +918,6 @@ lm_grp_priv_init(crt_group_t *grp)
 	int			 i;
 	uint32_t		 remote_grp_size;
 	uint32_t		 local_rank;
-	crt_phy_addr_t		 psr_phy_addr = NULL;
 	int			 num_psr;
 	struct lm_grp_priv_t	*lm_grp_priv = NULL;
 	struct lm_psr_cand	*psr_cand;
@@ -961,10 +960,10 @@ lm_grp_priv_init(crt_group_t *grp)
 	 */
 	num_psr = remote_grp_size - lm_grp_priv->lgp_mvs + 1;
 	lm_grp_priv->lgp_num_psr = num_psr;
-	D_ALLOC(psr_cand, sizeof(struct lm_psr_cand)*num_psr);
+	D_ALLOC_ARRAY(psr_cand, num_psr);
 	if (psr_cand == NULL) {
-		D_ERROR("D_ALLOC() failed.\n");
-		D_GOTO(error_out, rc);
+		D_ERROR("Allocation of candiate array failed.\n");
+		D_GOTO(error_out, rc = -DER_NOMEM);
 	}
 	D_DEBUG("num_psr %d, list of PSRs: ", num_psr);
 	psr_cand[0].pc_rank = lm_grp_priv->lgp_psr_rank;
@@ -997,8 +996,6 @@ error_out:
 		D_FREE_PTR(lm_grp_priv);
 	if (psr_cand != NULL)
 		D_FREE(psr_cand, sizeof(struct lm_psr_cand)*num_psr);
-	if (psr_phy_addr != NULL)
-		free(psr_phy_addr);
 	return NULL;
 }
 

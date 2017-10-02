@@ -144,18 +144,28 @@ d_iov_set(d_iov_t *iov, void *buf, d_size_t size)
 
 #define MEM_DBG		(d_mem_logfac | DLOG_DBG)
 
-#define D_ALLOC(ptr, size)						       \
-	do {								       \
-		(ptr) = (__typeof__(ptr))calloc(1, (size));		       \
-		if ((ptr) != NULL) {					       \
-			d_log(MEM_DBG, "%s:%d, alloc #ptr : %d at %p.\n",    \
-				__FILE__, __LINE__, (int)(size), ptr);	       \
-			break;						       \
-		}							       \
-		D_ERROR("%s:%d, out of memory(tried to alloc '" #ptr "' = %d)",\
-			__FILE__, __LINE__, (int)(size));		       \
+#define D_ALLOC_CORE(ptr, size, count)					\
+	do {								\
+		(ptr) = (__typeof__(ptr))calloc(count, (size));		\
+		if ((ptr) != NULL) {					\
+			if (count == 1)					\
+				d_log(MEM_DBG, "%s:%d, alloc '" #ptr	\
+					"': %i at %p.\n",		\
+					__FILE__, __LINE__,		\
+					(int)(size), ptr);		\
+			else						\
+				d_log(MEM_DBG, "%s:%d, alloc '" #ptr	\
+					"': %i * '" #count " ': %i at %p.\n", \
+					__FILE__, __LINE__,		\
+					(int)(size), (count), ptr);	\
+			break;						\
+		}							\
+		D_ERROR("%s:%d, out of memory (tried to alloc '" #ptr	\
+			"': %i)",					\
+			__FILE__, __LINE__, (int)(size) * (count));	\
 	} while (0)
 
+/* TODO: Correct use of #ptr in this function */
 static inline void *
 d_realloc(void *ptrptr, size_t size)
 {
@@ -179,16 +189,18 @@ d_realloc(void *ptrptr, size_t size)
 
 # define D_FREE(ptr, size)						\
 	do {								\
-		d_log(MEM_DBG, "%s:%d, free #ptr : %d at %p.\n",	\
+		d_log(MEM_DBG, "%s:%d, free '" #ptr "': %d at %p.\n",	\
 			__FILE__, __LINE__, (int)(size), (ptr));	\
 		free(ptr);						\
 		(ptr) = NULL;						\
 	} while (0)
 
-#define D_ALLOC_PTR(ptr)        D_ALLOC((ptr), sizeof *(ptr))
-#define D_FREE_PTR(ptr)         D_FREE((ptr), sizeof *(ptr))
+#define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
+#define D_ALLOC_PTR(ptr)	D_ALLOC(ptr, sizeof(*ptr))
+#define D_ALLOC_ARRAY(ptr, count) D_ALLOC_CORE(ptr, sizeof(*ptr), count)
+#define D_FREE_PTR(ptr)		D_FREE(ptr, sizeof(*ptr))
 
-#define D_GOTO(label, rc)       do { ((void)(rc)); goto label; } while (0)
+#define D_GOTO(label, rc)	do { ((void)(rc)); goto label; } while (0)
 
 #define DGOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
 #define DGOLDEN_RATIO_PRIME_32	0x9e370001UL

@@ -288,7 +288,7 @@ crt_proc_crt_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		rank_list->rl_nr.num = rank_num;
-		D_ALLOC(rank_list->rl_ranks, rank_num * sizeof(d_rank_t));
+		D_ALLOC_ARRAY(rank_list->rl_ranks, rank_num);
 		if (rank_list->rl_ranks == NULL) {
 			D_ERROR("Cannot allocate memory for rl_ranks.\n");
 			D_FREE_PTR(rank_list);

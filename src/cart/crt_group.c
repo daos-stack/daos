@@ -161,7 +161,7 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
-	D_ALLOC(htables, CRT_SRV_CONTEXT_NUM * sizeof(struct d_chash_table *));
+	D_ALLOC_ARRAY(htables, CRT_SRV_CONTEXT_NUM);
 	if (htables == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -1478,8 +1478,7 @@ crt_primary_grp_init(crt_group_id_t grpid)
 		grp_priv->gp_self = 0;
 	} else {
 		/* init the rank map */
-		D_ALLOC(grp_priv->gp_rank_map,
-			pmix_gdata->pg_univ_size * sizeof(struct crt_rank_map));
+		D_ALLOC_ARRAY(grp_priv->gp_rank_map, pmix_gdata->pg_univ_size);
 		if (grp_priv->gp_rank_map == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 

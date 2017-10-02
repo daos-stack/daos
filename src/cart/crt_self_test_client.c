@@ -896,8 +896,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	pthread_spin_init(&g_data->ctr_lock, PTHREAD_PROCESS_PRIVATE);
 
 	/* Allocate a buffer for the list of endpoints */
-	D_ALLOC(g_data->endpts, g_data->num_endpts *
-				sizeof(struct st_test_endpt));
+	D_ALLOC_ARRAY(g_data->endpts, g_data->num_endpts);
 	if (g_data->endpts == NULL) {
 		D_ERROR("Failed to allocate endpoint descriptor storage\n");
 		D_GOTO(fail_cleanup, ret = -DER_NOMEM);
@@ -912,8 +911,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	}
 
 	/* Allocate a buffer for latency measurements */
-	D_ALLOC(g_data->rep_latencies,
-		g_data->rep_count * sizeof(g_data->rep_latencies[0]));
+	D_ALLOC_ARRAY(g_data->rep_latencies, g_data->rep_count);
 	if (g_data->rep_latencies == NULL) {
 		D_ERROR("Failed to allocate latency data storage\n");
 		D_GOTO(fail_cleanup, ret = -DER_NOMEM);
@@ -940,8 +938,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	 * Allocate an array of pointers to keep track of private
 	 * per-inflight-rpc buffers
 	 */
-	D_ALLOC(g_data->cb_args_ptrs, g_data->max_inflight *
-				      sizeof(g_data->cb_args_ptrs[0]));
+	D_ALLOC_ARRAY(g_data->cb_args_ptrs, g_data->max_inflight);
 	if (g_data->cb_args_ptrs == NULL) {
 		D_ERROR("Failed to callback data pointers\n");
 		D_GOTO(fail_cleanup, ret = -DER_NOMEM);

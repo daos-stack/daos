@@ -214,7 +214,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_ERROR("bad zero seg_num.\n");
 		D_GOTO(out, rc = DER_PROTO);
 	}
-	D_ALLOC(iovs, sizeof(d_iov_t) * seg_num);
+	D_ALLOC_ARRAY(iovs, seg_num);
 	if (iovs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

@@ -738,7 +738,7 @@ d_chash_table_create_inplace(uint32_t feats, unsigned int bits, void *priv,
 	htable->ht_ops	 = hops;
 	htable->ht_priv	 = priv;
 
-	D_ALLOC(buckets, sizeof(*buckets) * nr);
+	D_ALLOC_ARRAY(buckets, nr);
 	if (buckets == NULL)
 		return -DER_NOMEM;
 

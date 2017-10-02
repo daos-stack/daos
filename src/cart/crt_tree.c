@@ -246,7 +246,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	result_rank_list = d_rank_list_alloc(nchildren);
 	if (result_rank_list == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	D_ALLOC(tree_children, nchildren * sizeof(uint32_t));
+	D_ALLOC_ARRAY(tree_children, nchildren);
 	if (tree_children == NULL) {
 		d_rank_list_free(result_rank_list);
 		D_GOTO(out, rc = -DER_NOMEM);

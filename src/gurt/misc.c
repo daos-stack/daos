@@ -47,7 +47,6 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src, bool input)
 {
 	d_rank_list_t		*rank_list;
 	uint32_t		 rank_num;
-	d_size_t		 size;
 	int			 rc = 0;
 
 	if (dst == NULL) {
@@ -78,15 +77,15 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src, bool input)
 		D_GOTO(out, rc);
 	}
 
-	size = rank_num * sizeof(d_rank_t);
-	D_ALLOC(rank_list->rl_ranks, size);
+	D_ALLOC_ARRAY(rank_list->rl_ranks, rank_num);
 	if (rank_list->rl_ranks == NULL) {
 		D_ERROR("Cannot allocate memory for rl_ranks.\n");
 		D_FREE_PTR(rank_list);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	memcpy(rank_list->rl_ranks, src->rl_ranks, size);
+	memcpy(rank_list->rl_ranks, src->rl_ranks,
+	       rank_num * sizeof(*rank_list->rl_ranks));
 	*dst = rank_list;
 out:
 	return rc;
@@ -212,7 +211,7 @@ d_rank_list_alloc(uint32_t size)
 		return rank_list;
 	}
 
-	D_ALLOC(rank_list->rl_ranks, size * sizeof(d_rank_t));
+	D_ALLOC_ARRAY(rank_list->rl_ranks, size);
 	if (rank_list->rl_ranks == NULL) {
 		D_FREE_PTR(rank_list);
 		return NULL;
@@ -514,7 +513,7 @@ d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 	memset(sgl, 0, sizeof(*sgl));
 
 	sgl->sg_nr.num = sgl->sg_nr.num_out = nr;
-	D_ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
+	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
 }

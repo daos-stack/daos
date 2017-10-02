@@ -517,7 +517,6 @@ crt_ivns_internal_create(crt_context_t crt_ctx, crt_group_t *grp,
 	struct crt_ivns_internal	*ivns_internal;
 	struct crt_ivns_id		*internal_ivns_id;
 	uint32_t			next_ns_id;
-	int				size;
 	int				rc = 0;
 
 	D_ALLOC_PTR(ivns_internal);
@@ -526,8 +525,7 @@ crt_ivns_internal_create(crt_context_t crt_ctx, crt_group_t *grp,
 		D_GOTO(exit, ivns_internal);
 	}
 
-	size = sizeof(struct crt_iv_class) * num_class;
-	D_ALLOC(ivns_internal->cii_iv_classes, size);
+	D_ALLOC_ARRAY(ivns_internal->cii_iv_classes, num_class);
 	if (ivns_internal->cii_iv_classes == NULL) {
 		D_ERROR("Failed to allocate storage for iv_classes\n");
 		D_FREE_PTR(ivns_internal);
@@ -561,7 +559,8 @@ crt_ivns_internal_create(crt_context_t crt_ctx, crt_group_t *grp,
 		internal_ivns_id->ii_nsid = ivns_id->ii_nsid;
 	}
 
-	memcpy(ivns_internal->cii_iv_classes, iv_classes, size);
+	memcpy(ivns_internal->cii_iv_classes, iv_classes,
+	       sizeof(*iv_classes) * num_class);
 
 	ivns_internal->cii_gns.gn_num_class = num_class;
 	ivns_internal->cii_gns.gn_tree_topo = tree_topo;

@@ -55,7 +55,7 @@ crt_opc_map_create(unsigned int bits)
 
 	map->com_pid = getpid();
 	map->com_bits = bits;
-	D_ALLOC(map->com_hash, sizeof(map->com_hash[0]) * (1 << bits));
+	D_ALLOC_ARRAY(map->com_hash, (1 << bits));
 	if (map->com_hash == NULL) {
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
