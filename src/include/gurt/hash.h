@@ -214,6 +214,8 @@ bool d_chash_rec_delete_at(struct d_chash_table *htable, d_list_t *rlink);
 void d_chash_rec_addref(struct d_chash_table *htable, d_list_t *rlink);
 void d_chash_rec_decref(struct d_chash_table *htable, d_list_t *rlink);
 bool d_chash_rec_unlinked(d_list_t *rlink);
+d_list_t *d_chash_rec_first(struct d_chash_table *ht);
+
 
 #define D_HHASH_BITS		16
 #define D_HTYPE_BITS		3

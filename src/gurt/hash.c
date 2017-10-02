@@ -671,6 +671,44 @@ d_chash_rec_unlinked(d_list_t *rlink)
 	return d_list_empty(rlink);
 }
 
+/* Find an entry in the hash table.
+ *
+ * As d_chash_table_traverse() does not support removal from the callback
+ * function save a pointer in *arg and return 1 to terminate the traverse.
+ * This way we can iterate over the entries in the hash table and delete every
+ * one.
+ */
+static int
+d_chash_find_single(d_list_t *rlink, void *arg)
+{
+	d_list_t **p = arg;
+
+	*p = rlink;
+	return 1;
+}
+
+/* Return the first entry in a hash table.  Do this by traversing the table, and
+ * returning the first rlink value provided to the callback.
+ * Returns rlink on success, or NULL on error or if the hash table is empty.
+ *
+ * Note this does not take a reference on the returned entry and has no ordering
+ * semantics.  It's main use is for draining a hash table before calling
+ * destroy()
+ */
+d_list_t *
+d_chash_rec_first(struct d_chash_table *ht)
+{
+	d_list_t *rlink = NULL;
+	int rc;
+
+	rc = d_chash_table_traverse(ht, d_chash_find_single, &rlink);
+	if (rc != 0)
+		return NULL;
+
+	return rlink;
+}
+
+
 /**
  * Initialise an inplace hash table.
  *
