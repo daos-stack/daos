@@ -35,12 +35,12 @@
 #include <daos_addons.h>
 #include <daos_task.h>
 
-/*#define ARRAY_DEBUG */
+/* #define ARRAY_DEBUG */
 
 /** Num blocks to store in each dkey before creating the next group */
-#define D_ARRAY_DKEY_NUM_BLOCKS		3
+#define D_ARRAY_DKEY_NUM_BLOCKS		1
 /** Number of dkeys in a group */
-#define D_ARRAY_DKEY_NUM		4
+#define D_ARRAY_DKEY_NUM		1
 
 #define ARRAY_MD_KEY "daos_array_metadata"
 #define CELL_SIZE "daos_array_cell_size"
@@ -605,6 +605,11 @@ io_extent_same(daos_array_ranges_t *ranges, daos_sg_list_t *sgl,
 	return (ranges_len * cell_size == sgl_len);
 }
 
+/**
+ * Compute the dkey given the array index for this range. Also compute: - the
+ * number of records that the dkey can hold starting at the index where we start
+ * writing. - the record index relative to the dkey.
+ */
 static int
 compute_dkey(struct dac_array *array, daos_off_t array_idx,
 	     daos_size_t *num_records, daos_off_t *record_i, char **dkey_str)
@@ -810,12 +815,6 @@ dac_array_io(daos_handle_t array_oh, daos_epoch_t epoch,
 
 		num_ios++;
 
-		/**
-		 * Compute the dkey given the array index for this range. Also
-		 * compute: - the number of records that the dkey can hold
-		 * starting at the index where we start writing. - the record
-		 * index relative to the dkey.
-		 */
 		rc = compute_dkey(array, array_idx, &num_records, &record_i,
 				  &params->dkey_str);
 		if (rc != 0) {
@@ -1076,6 +1075,53 @@ struct get_size_props {
 	tse_task_t	*ptask;
 };
 
+struct list_recxs_params {
+	daos_key_t		dkey;
+	char			*dkey_str;
+	daos_key_t		akey;
+	char			*akey_str;
+	daos_recx_t		recx;
+	uint32_t		nr;
+	daos_size_t		cell_size;
+	daos_size_t		block_size;
+	daos_hash_out_t		anchor;
+	daos_size_t		*size;
+	tse_task_t		*task;
+};
+
+static int
+list_recxs_cb(tse_task_t *task, void *data)
+{
+	struct list_recxs_params *params = *((struct list_recxs_params **)data);
+	uint32_t hi, lo;
+	int ret;
+	int rc = task->dt_result;
+
+#ifdef ARRAY_DEBUG
+	printf("cell size %d recx idx = %d NR = %d\n",
+	       (int)params->cell_size, (int)params->recx.rx_idx,
+	       (int)params->recx.rx_nr);
+#endif
+
+	ret = sscanf(params->dkey_str, "%u_%u", &hi, &lo);
+	D_ASSERT(ret == 2);
+
+	*params->size = hi * params->block_size + params->recx.rx_idx +
+		params->recx.rx_nr;
+
+	if (params->dkey_str) {
+		free(params->dkey_str);
+		params->dkey_str = NULL;
+	}
+	if (params->akey_str) {
+		free(params->akey_str);
+		params->akey_str = NULL;
+	}
+	D_FREE_PTR(params);
+
+	return rc;
+}
+
 static int
 get_array_size_cb(tse_task_t *task, void *data)
 {
@@ -1084,8 +1130,6 @@ get_array_size_cb(tse_task_t *task, void *data)
 	daos_obj_list_dkey_t *args;
 	char		*ptr;
 	uint32_t	i;
-	daos_off_t	max_offset;
-	daos_size_t	max_iter;
 	int		rc = task->dt_result;
 
 	args = daos_task_get_args(DAOS_OPC_OBJ_LIST_DKEY, task);
@@ -1136,47 +1180,70 @@ get_array_size_cb(tse_task_t *task, void *data)
 #ifdef ARRAY_DEBUG
 	printf("Hi = %u, Lo = %u\n", props->hi, props->lo);
 #endif
+	char key[ENUM_KEY_BUF];
 
-	/*
-	 * Go through all the dkeys in the current group (maxhi_x) and get the
-	 * highest index to determine which dkey in the group has the highest
-	 * bit.
-	 */
-	max_iter = 0;
-	max_offset = 0;
+	sprintf(key, "%u_%u", props->hi, props->lo);
 
-	daos_size_t	grp_size;
-	daos_size_t	grp_chunk;
+	/** retrieve the highest index from the highest key */
+	props->nr = ENUM_DESC_NR;
 
-	grp_size = array->block_size * array->num_blocks * array->num_dkeys;
-	grp_chunk = array->block_size * array->num_dkeys;
+	tse_task_t *io_task = NULL;
+	struct list_recxs_params *params = NULL;
+	daos_key_t *dkey, *akey;
+	daos_obj_list_recx_t list_args;
 
-	for (i = 0 ; i <= props->lo; i++) {
-		daos_off_t	offset, index_hi = 0;
-		daos_size_t	iter;
-		char		key[ENUM_KEY_BUF];
-
-		sprintf(key, "%u_%u", props->hi, i);
-		/** retrieve the highest index */
-		/** MSC - need new functionality from DAOS to retrieve that. */
-
-		/** Compute the iteration where the highest record is stored */
-		iter = index_hi / array->block_size;
-
-		offset = iter * grp_chunk +
-			(index_hi - iter * array->block_size);
-
-		if (iter == max_iter || max_iter == 0) {
-			/** D_ASSERT(offset > max_offset); */
-			max_offset = offset;
-			max_iter = iter;
-		} else {
-			if (i < props->lo)
-				break;
-		}
+	D_ALLOC_PTR(params);
+	if (params == NULL) {
+		D_ERROR("Failed memory allocation\n");
+		return -DER_NOMEM;
 	}
 
-	*props->size = props->hi * grp_size + max_offset;
+	akey = &params->akey;
+	dkey = &params->dkey;
+
+	io_task = params->task;
+	params->akey_str = strdup("akey_not_used");
+	params->dkey_str = strdup(key);
+	daos_iov_set(dkey, (void *)params->dkey_str, strlen(params->dkey_str));
+	daos_iov_set(akey, (void *)params->akey_str, strlen(params->akey_str));
+	params->nr = 1;
+	params->block_size = array->block_size;
+	params->size = props->size;
+
+	list_args.oh = args->oh;
+	list_args.epoch = args->epoch;
+	list_args.dkey = dkey;
+	list_args.akey = akey;
+	list_args.type = DAOS_IOD_ARRAY;
+	list_args.size = &params->cell_size;
+	list_args.nr = &params->nr;
+	list_args.recxs = &params->recx;
+	list_args.eprs = NULL;
+	list_args.cookies = NULL;
+	list_args.incr_order = false;
+	memset(&params->anchor, 0, sizeof(params->anchor));
+	list_args.anchor = &params->anchor;
+	list_args.versions = NULL;
+
+	rc = daos_task_create(DAOS_OPC_OBJ_LIST_RECX, tse_task2sched(task),
+			      &list_args, 0, NULL, &io_task);
+	if (rc != 0) {
+		D_ERROR("punch recs failed (%d)\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = tse_task_register_comp_cb(io_task, list_recxs_cb, &params,
+				       sizeof(params));
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = tse_task_register_deps(props->ptask, 1, &io_task);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = tse_task_schedule(io_task, false);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 out:
 	array_decref(array);
@@ -1201,6 +1268,9 @@ dac_array_get_size(tse_task_t *task)
 	array = array_hdl2ptr(args->oh);
 	if (array == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
+
+	D_ASSERT(array->num_dkeys == 1);
+	D_ASSERT(array->num_blocks == 1);
 
 	oh = array->daos_oh;
 
@@ -1279,6 +1349,7 @@ struct set_size_props {
 	daos_size_t	size;
 	daos_size_t	cell_size;
 	daos_size_t	num_records;
+	daos_size_t	block_size;
 	daos_off_t	record_i;
 	tse_task_t	*ptask;
 };
@@ -1307,6 +1378,9 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 
 	args = daos_task_get_args(DAOS_OPC_OBJ_LIST_DKEY, task);
 
+	if (props->size == 0)
+		props->shrinking = true;
+
 	for (ptr = props->buf, j = 0; j < props->nr; j++) {
 		uint32_t hi, lo;
 		int ret;
@@ -1325,15 +1399,134 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		ret = sscanf(props->key, "%u_%u", &hi, &lo);
 		D_ASSERT(ret == 2);
 
-		if (hi >= props->hi) {
-			/** MSC - Punch this entire dkey */
-			if (lo > props->lo)
-				props->shrinking = true;
-			/** MSC - Punch records in dkey at higher index */
-			else if (lo == props->lo)
-				props->shrinking = true;
-		}
+		if (props->size == 0 || hi > props->hi ||
+		    (hi == props->hi && lo > props->lo)) {
+			daos_obj_punch_dkeys_t p_args;
+			daos_key_t *dkey;
 
+			/*
+			 * Punch the entire dkey since it's in a higher dkey
+			 * group than the intended size.
+			 */
+			props->shrinking = true;
+
+			D_ALLOC_PTR(params);
+			if (params == NULL) {
+				D_ERROR("Failed memory allocation\n");
+				return -DER_NOMEM;
+			}
+
+			io_task = params->task;
+			params->dkey_str = strdup(props->key);
+			dkey = &params->dkey;
+			daos_iov_set(dkey, (void *)params->dkey_str,
+				     strlen(params->dkey_str));
+
+			/** Punch this entire dkey */
+			p_args.oh = args->oh;
+			p_args.epoch = args->epoch;
+			p_args.nr = 1;
+			p_args.dkeys = dkey;
+
+			rc = daos_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS,
+					      tse_task2sched(task), &p_args, 0,
+					      NULL, &io_task);
+			if (rc != 0) {
+				D_ERROR("Punch dkey %s failed (%d)\n",
+					params->dkey_str, rc);
+				D_GOTO(err_out, rc);
+			}
+
+			rc = tse_task_register_comp_cb(io_task,
+						       free_io_params_cb,
+						       &params,
+						       sizeof(params));
+			if (rc != 0)
+				D_GOTO(err_out, rc);
+
+			rc = tse_task_register_deps(props->ptask, 1,
+						    &io_task);
+			if (rc != 0)
+				D_GOTO(err_out, rc);
+		} else if (hi == props->hi && lo == props->lo &&
+			   props->record_i) {
+			/* punch all records above record_i */
+			daos_obj_update_t io_arg;
+			daos_iod_t	*iod;
+			daos_sg_list_t	*sgl;
+			daos_key_t	*dkey;
+			daos_csum_buf_t	null_csum;
+
+			props->shrinking = true;
+
+			daos_csum_set(&null_csum, NULL, 0);
+
+			D_ALLOC_PTR(params);
+			if (params == NULL) {
+				D_ERROR("Failed memory allocation\n");
+				return -DER_NOMEM;
+			}
+
+			iod = &params->iod;
+			sgl = NULL;
+			dkey = &params->dkey;
+
+			io_task = params->task;
+			params->akey_str = strdup("akey_not_used");
+			params->next = NULL;
+			params->user_sgl_used = false;
+
+			params->dkey_str = strdup(props->key);
+			dkey = &params->dkey;
+			daos_iov_set(dkey, (void *)params->dkey_str,
+				     strlen(params->dkey_str));
+
+			/* set descriptor for KV object */
+			daos_iov_set(&iod->iod_name, (void *)params->akey_str,
+				     strlen(params->akey_str));
+			iod->iod_kcsum = null_csum;
+			iod->iod_nr = 1;
+			iod->iod_csums = NULL;
+			iod->iod_eprs = NULL;
+			iod->iod_size = 0; /* 0 to punch */
+			iod->iod_type = DAOS_IOD_ARRAY;
+			iod->iod_recxs = malloc(sizeof(daos_recx_t));
+			iod->iod_recxs[0].rx_idx = props->record_i;
+			iod->iod_recxs[0].rx_nr = props->num_records;
+
+			io_arg.oh = args->oh;
+			io_arg.epoch = args->epoch;
+			io_arg.dkey = dkey;
+			io_arg.nr = 1;
+			io_arg.iods = iod;
+			io_arg.sgls = sgl;
+
+			rc = daos_task_create(DAOS_OPC_OBJ_UPDATE,
+					      tse_task2sched(task),
+					      &io_arg, 0, NULL,
+					      &io_task);
+			if (rc != 0) {
+				D_ERROR("punch recs failed (%d)\n", rc);
+				D_GOTO(err_out, rc);
+			}
+
+			rc = tse_task_register_comp_cb(io_task,
+						       free_io_params_cb,
+						       &params,
+						       sizeof(params));
+			if (rc != 0)
+				D_GOTO(err_out, rc);
+
+			rc = tse_task_register_deps(props->ptask, 1,
+						    &io_task);
+			if (rc != 0)
+				D_GOTO(err_out, rc);
+
+			rc = tse_task_schedule(io_task, false);
+			if (rc != 0)
+				D_GOTO(err_out, rc);
+		}
+		continue;
 	}
 
 	if (!daos_hash_is_eof(args->anchor)) {
@@ -1363,6 +1556,10 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		daos_key_t	*dkey;
 		daos_csum_buf_t	null_csum;
 
+#ifdef ARRAY_DEBUG
+		printf("Extending array key %u_%u, rec = %d\n",
+		       props->hi, props->lo, (int)props->record_i);
+#endif
 		daos_csum_set(&null_csum, NULL, 0);
 
 		D_ALLOC_PTR(params);
@@ -1471,14 +1668,26 @@ dac_array_set_size(tse_task_t *task)
 	if (array == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
+	D_ASSERT(array->num_dkeys == 1);
+	D_ASSERT(array->num_blocks == 1);
+
 	oh = array->daos_oh;
 
-	rc = compute_dkey(array, args->size, &num_records, &record_i,
-			  &dkey_str);
-	if (rc != 0) {
-		D_ERROR("Failed to compute dkey\n");
-		D_GOTO(err_task, rc);
+	/** get key information for the last record */
+	if (args->size == 0) {
+		dkey_str = strdup("0_0");
+		num_records = array->block_size;
+		record_i = 0;
+	} else {
+		rc = compute_dkey(array, args->size-1, &num_records, &record_i,
+				  &dkey_str);
+		if (rc != 0) {
+			D_ERROR("Failed to compute dkey\n");
+			D_GOTO(err_task, rc);
+		}
 	}
+
+	D_ASSERT(record_i + num_records == array->block_size);
 
 	D_ALLOC_PTR(set_size_props);
 	if (set_size_props == NULL) {
@@ -1494,6 +1703,7 @@ dac_array_set_size(tse_task_t *task)
 	set_size_props->cell_size = array->cell_size;
 	set_size_props->num_records = num_records;
 	set_size_props->record_i = record_i;
+	set_size_props->block_size = array->block_size;
 	set_size_props->shrinking = false;
 	set_size_props->nr = ENUM_DESC_NR;
 	set_size_props->size = args->size;
@@ -1519,8 +1729,8 @@ dac_array_set_size(tse_task_t *task)
 		return rc;
 
 	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0,
-				    adjust_array_size_cb, &set_size_props,
-				    sizeof(set_size_props));
+				   adjust_array_size_cb, &set_size_props,
+				   sizeof(set_size_props));
 	if (rc != 0)
 		D_GOTO(err_task, rc);
 

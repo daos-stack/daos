@@ -80,7 +80,7 @@ typedef struct {
  */
 int
 daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
-		  daos_size_t elem_size, daos_size_t block_size,
+		  daos_size_t cell_size, daos_size_t block_size,
 		  daos_handle_t *oh, daos_event_t *ev);
 
 /**

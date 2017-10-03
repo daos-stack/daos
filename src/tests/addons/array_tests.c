@@ -66,6 +66,11 @@ simple_array_mgmt(void **state)
 	rc = daos_array_get_size(oh, 0, &size, NULL);
 	assert_int_equal(rc, 0);
 
+	if (size != 265) {
+		fprintf(stderr, "Size = %zu, expected: 265\n", size);
+		assert_int_equal(size, 265);
+	}
+
 	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -82,9 +87,14 @@ simple_array_mgmt(void **state)
 	rc = daos_array_get_size(oh, 0, &size, NULL);
 	assert_int_equal(rc, 0);
 
+	if (size != 693) {
+		fprintf(stderr, "Size = %zu, expected: 693\n", size);
+		assert_int_equal(size, 693);
+	}
+
 	rc = daos_array_close(oh, NULL);
 	assert_int_equal(rc, 0);
-
+	MPI_Barrier(MPI_COMM_WORLD);
 } /* End simple_array_mgmt */
 
 static void
@@ -183,9 +193,19 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 
 	{
 		daos_size_t array_size;
+		daos_size_t expected_size;
+
+		expected_size = (arg->myrank + 1) *
+			(NUM_ELEMS * sizeof(int) / cell_size);
 
 		rc = daos_array_get_size(oh, 0, &array_size, NULL);
 		assert_int_equal(rc, 0);
+
+		if (array_size != expected_size) {
+			fprintf(stderr, "(%d) Size = %zu, expected: %zu\n",
+				arg->myrank, array_size, expected_size);
+			assert_int_equal(array_size, expected_size);
+		}
 	}
 
 	rc = daos_array_close(oh, NULL);
@@ -195,6 +215,7 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_fini(&ev);
 		assert_int_equal(rc, 0);
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 } /* End contig_mem_contig_arr_io_helper */
 
 static void
@@ -306,9 +327,19 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	{
 		daos_size_t array_size;
+		daos_size_t expected_size;
 
+		expected_size = (NUM_ELEMS - 1) * arg->rank_size * 4 +
+			arg->myrank * 4 + (NUM_ELEMS - 1) * block_size +
+			sizeof(int) / cell_size;
 		rc = daos_array_get_size(oh, 0, &array_size, NULL);
 		assert_int_equal(rc, 0);
+
+		if (array_size != expected_size) {
+			fprintf(stderr, "(%d) Size = %zu, expected: %zu\n",
+				arg->myrank, array_size, expected_size);
+			assert_int_equal(array_size, expected_size);
+		}
 	}
 
 	rc = daos_array_close(oh, NULL);
@@ -318,6 +349,7 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_fini(&ev);
 		assert_int_equal(rc, 0);
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 } /* End contig_mem_str_arr_io_helper */
 
 static void
@@ -443,9 +475,19 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	{
 		daos_size_t array_size;
+		daos_size_t expected_size;
 
+		expected_size = (NUM_ELEMS - 1) * arg->rank_size * 4 +
+			arg->myrank * 4 + (NUM_ELEMS - 1) * block_size +
+			sizeof(int) / cell_size;
 		rc = daos_array_get_size(oh, 0, &array_size, NULL);
 		assert_int_equal(rc, 0);
+
+		if (array_size != expected_size) {
+			fprintf(stderr, "(%d) Size = %zu, expected: %zu\n",
+				arg->myrank, array_size, expected_size);
+			assert_int_equal(array_size, expected_size);
+		}
 	}
 
 	rc = daos_array_close(oh, NULL);
@@ -455,6 +497,7 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 		rc = daos_event_fini(&ev);
 		assert_int_equal(rc, 0);
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 } /* End str_mem_str_arr_io */
 
 static void
@@ -583,6 +626,7 @@ read_empty_records(void **state)
 		rc = daos_event_fini(&ev);
 		assert_int_equal(rc, 0);
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 } /* End read_empty_records */
 
 static const struct CMUnitTest array_io_tests[] = {
