@@ -702,7 +702,7 @@ d_chash_rec_first(struct d_chash_table *ht)
 	int rc;
 
 	rc = d_chash_table_traverse(ht, d_chash_find_single, &rlink);
-	if (rc != 0)
+	if (rc < 0)
 		return NULL;
 
 	return rlink;
