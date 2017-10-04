@@ -1248,6 +1248,9 @@ class _Component(object):
         # uses a component, that build needs the RPATH of the dependencies.
         for path in self.lib_path:
             env.AppendUnique(RPATH=[os.path.join(self.component_prefix, path)])
+        # Ensure RUNPATH is used rather than RPATH.  RPATH is deprecated
+        # and this allows LD_LIBRARY_PATH to override RPATH
+        env.AppendUnique(LINKFLAGS=["-Wl,--enable-new-dtags"])
 
         for define in self.defines:
             env.AppendUnique(CPPDEFINES=[define])
