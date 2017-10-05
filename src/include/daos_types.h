@@ -437,6 +437,7 @@ enum {
 	DAOS_OC_R4S_RW,		/* temporary class for testing */
 	DAOS_OC_R4_RW,		/* temporary class for testing */
 	DAOS_OC_REPL_MAX_RW,
+	DAOS_OC_ECHO_RW,	/* Echo class */
 };
 
 /** Object class attributes */

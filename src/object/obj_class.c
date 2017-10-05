@@ -155,6 +155,17 @@ static struct daos_obj_class daos_obj_classes[] = {
 				.r_num		= DAOS_OBJ_REPL_MAX,
 			},
 		},
+	}, {
+		.oc_name	= "echo_rw",
+		.oc_id		= DAOS_OC_ECHO_RW,
+		{
+			.ca_schema		= DAOS_OS_SINGLE,
+			.ca_resil		= DAOS_RES_REPL,
+			.ca_grp_nr		= 1,
+			.u.repl			= {
+				.r_num		= 1,
+			},
+		},
 	},
 	{
 		.oc_name	= NULL,

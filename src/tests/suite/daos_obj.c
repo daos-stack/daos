@@ -554,8 +554,10 @@ io_simple_internal(void **state, daos_obj_id_t oid)
 
 	/** Verify data consistency */
 	print_message("size = %lu\n", req.iod[0].iod_size);
-	assert_int_equal(req.iod[0].iod_size, strlen(rec));
-	assert_memory_equal(buf, rec, strlen(rec));
+	if (daos_obj_id2class(oid) != DAOS_OC_ECHO_RW) {
+		assert_int_equal(req.iod[0].iod_size, strlen(rec));
+		assert_memory_equal(buf, rec, strlen(rec));
+	}
 	free(buf);
 	ioreq_fini(&req);
 }
@@ -1423,6 +1425,16 @@ write_record_multiple_times(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+echo_fetch_update(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+
+	oid = dts_oid_gen(DAOS_OC_ECHO_RW, arg->myrank);
+	io_simple_internal(state, oid);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, NULL},
@@ -1471,6 +1483,8 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO24: Read from large unwritten records", read_large_empty_records,
 	  async_disable, NULL},
 	{ "IO25: written records repeatly", write_record_multiple_times,
+	  async_disable, NULL},
+	{ "IO26: echo fetch/update", echo_fetch_update,
 	  async_disable, NULL},
 };
 
