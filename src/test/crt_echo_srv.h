@@ -128,7 +128,7 @@ echo_srv_corpc_example(crt_rpc_t *rpc_req)
 	       my_rank, req->co_msg, reply->co_result, rc);
 }
 
-int corpc_example_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+int corpc_example_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *arg)
 {
 	struct crt_echo_corpc_example_reply *reply_source, *reply_result;
 	d_rank_t my_rank;

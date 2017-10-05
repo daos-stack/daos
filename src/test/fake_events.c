@@ -57,7 +57,7 @@ bool dead;
 
 
 static void *
-fake_event_thread(void *args)
+fake_event_thread(void *arg)
 {
 	char		*pipe_name;
 	int		 event_code;
@@ -67,7 +67,7 @@ fake_event_thread(void *args)
 	struct pollfd	 pollfds[1];
 	int		 rc;
 
-	pipe_name = (char *) args;
+	pipe_name = (char *) arg;
 
 	while (fake_event_thread_done == 0) {
 		fd = open(pipe_name, O_RDONLY | O_NONBLOCK);

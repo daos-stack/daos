@@ -473,7 +473,7 @@ out:
 }
 
 static void
-lm_event_hdlr(d_rank_t crt_rank, void *args)
+lm_event_hdlr(d_rank_t crt_rank, void *arg)
 {
 	lm_ras_event_hdlr_internal(crt_rank);
 }
@@ -570,7 +570,7 @@ crt_lm_grp_fini(struct lm_grp_srv_t *lm_grp_srv)
 }
 
 static void
-lm_prog_cb(crt_context_t crt_ctx, void *args)
+lm_prog_cb(crt_context_t crt_ctx, void *arg)
 {
 	struct lm_grp_srv_t		*lm_grp_srv;
 	int				 ctx_idx;
@@ -599,7 +599,7 @@ out:
 
 int crt_rank_evict_corpc_aggregate(crt_rpc_t *source,
 				   crt_rpc_t *result,
-				   void *priv)
+				   void *arg)
 {
 	d_rank_t			 my_rank;
 	struct crt_lm_evict_out		*reply_source;
@@ -1072,7 +1072,7 @@ should_sample(struct lm_grp_priv_t *lm_grp_priv, d_rank_t tgt_rank,
  * To be called whenever an RPC encounters a timeout.
  */
 static void
-lm_membs_sample(crt_context_t ctx, crt_rpc_t *rpc, void *args)
+lm_membs_sample(crt_context_t ctx, crt_rpc_t *rpc, void *arg)
 {
 	crt_group_t			*tgt_grp;
 	d_rank_t			 tgt_rank;

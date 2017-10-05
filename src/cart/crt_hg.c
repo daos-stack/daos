@@ -243,7 +243,7 @@ crt_hg_addr_lookup_cb(const struct hg_cb_info *hg_cbinfo)
 	cb_args = (struct crt_hg_addr_lookup_cb_args *)hg_cbinfo->arg;
 	comp_cb = cb_args->al_cb;
 
-	rc = comp_cb(hg_cbinfo->info.lookup.addr, cb_args->al_priv);
+	rc = comp_cb(hg_cbinfo->info.lookup.addr, cb_args->al_arg);
 	if (rc != 0)
 		rc = HG_OTHER_ERROR;
 
@@ -258,7 +258,7 @@ crt_hg_addr_lookup_cb(const struct hg_cb_info *hg_cbinfo)
  */
 int
 crt_hg_addr_lookup(struct crt_hg_context *hg_ctx, const char *name,
-		   crt_hg_addr_lookup_cb_t complete_cb, void *priv)
+		   crt_hg_addr_lookup_cb_t complete_cb, void *arg)
 {
 	struct crt_hg_addr_lookup_cb_args	*cb_args;
 	int					 rc = 0;
@@ -269,7 +269,7 @@ crt_hg_addr_lookup(struct crt_hg_context *hg_ctx, const char *name,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	cb_args->al_cb = complete_cb;
-	cb_args->al_priv = priv;
+	cb_args->al_arg = arg;
 	rc = HG_Addr_lookup(hg_ctx->chc_hgctx, crt_hg_addr_lookup_cb,
 			    cb_args, name, HG_OP_ID_IGNORE);
 	if (rc != 0) {

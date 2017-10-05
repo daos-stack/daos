@@ -1454,7 +1454,7 @@ exit:
 
 /* Results aggregate function for sync CORPC */
 int
-crt_iv_sync_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+crt_iv_sync_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *arg)
 {
 	struct iv_sync_out *output_source;
 	struct iv_sync_out *output_result;

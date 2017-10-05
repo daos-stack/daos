@@ -312,7 +312,7 @@ crt_grp_lc_uri_insert_all(crt_group_t *grp, d_rank_t rank, const char *uri)
 }
 
 static int
-crt_grp_lc_addr_invalid(d_list_t *rlink, void *args)
+crt_grp_lc_addr_invalid(d_list_t *rlink, void *arg)
 {
 	struct crt_lookup_item	*li;
 	struct crt_context	*ctx;
@@ -320,9 +320,9 @@ crt_grp_lc_addr_invalid(d_list_t *rlink, void *args)
 	int			 rc = 0;
 
 	D_ASSERT(rlink != NULL);
-	D_ASSERT(args != NULL);
+	D_ASSERT(arg != NULL);
 	li = crt_li_link2ptr(rlink);
-	ctx = (struct crt_context *)args;
+	ctx = (struct crt_context *)arg;
 
 	pthread_mutex_lock(&li->li_mutex);
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
@@ -645,7 +645,7 @@ static inline int
 crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 		    crt_group_id_t grp_id, bool primary_grp,
 		    d_rank_list_t *membs, crt_grp_create_cb_t grp_create_cb,
-		    void *priv)
+		    void *arg)
 {
 	struct crt_grp_priv *grp_priv;
 	int	rc = 0;
@@ -677,7 +677,7 @@ crt_grp_priv_create(struct crt_grp_priv **grp_priv_created,
 
 	grp_priv->gp_status = CRT_GRP_CREATING;
 	D_INIT_LIST_HEAD(&grp_priv->gp_child_rpcs);
-	grp_priv->gp_priv = priv;
+	grp_priv->gp_priv = arg;
 
 	if (!primary_grp) {
 		D_ASSERT(grp_priv->gp_membs != NULL);
@@ -700,7 +700,7 @@ out:
 
 static inline int
 crt_grp_lookup_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
-		      crt_grp_create_cb_t grp_create_cb, void *priv,
+		      crt_grp_create_cb_t grp_create_cb, void *arg,
 		      struct crt_grp_priv **grp_result)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
@@ -718,7 +718,7 @@ crt_grp_lookup_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 	}
 
 	rc = crt_grp_priv_create(&grp_priv, grp_id, false /* primary group */,
-				 member_ranks, grp_create_cb, priv);
+				 member_ranks, grp_create_cb, arg);
 	if (rc != 0) {
 		D_ERROR("crt_grp_priv_create failed, rc: %d.\n", rc);
 		pthread_rwlock_unlock(&crt_grp_list_rwlock);
@@ -836,7 +836,7 @@ crt_hdlr_grp_create(crt_rpc_t *rpc_req)
 	 * unique after returns succeed. (d_rank_list_dup_sort_uniq).
 	 */
 	rc = crt_grp_lookup_create(gc_in->gc_grp_id, gc_in->gc_membs,
-				   NULL /* grp_create_cb */, NULL /* priv */,
+				   NULL /* grp_create_cb */, NULL /* arg */,
 				   &grp_priv);
 	if (rc == 0) {
 		D_ASSERT(grp_priv != NULL);
@@ -975,7 +975,7 @@ crt_validate_grpid(const crt_group_id_t grpid) {
 int
 crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 		 bool populate_now, crt_grp_create_cb_t grp_create_cb,
-		 void *priv)
+		 void *arg)
 {
 	crt_context_t		 crt_ctx;
 	struct crt_grp_priv	*grp_priv = NULL;
@@ -1027,7 +1027,7 @@ crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
-	rc = crt_grp_lookup_create(grp_id, member_ranks, grp_create_cb, priv,
+	rc = crt_grp_lookup_create(grp_id, member_ranks, grp_create_cb, arg,
 				   &grp_priv);
 	if (rc != 0) {
 		D_ERROR("crt_grp_lookup_create failed, rc: %d.\n", rc);
@@ -1085,7 +1085,7 @@ out:
 		D_ERROR("crt_group_create failed, rc: %d.\n", rc);
 
 		if (grp_create_cb != NULL)
-			grp_create_cb(NULL, priv, rc);
+			grp_create_cb(NULL, arg, rc);
 
 		crt_grp_priv_destroy(grp_priv);
 	}
@@ -1238,7 +1238,7 @@ out:
 
 int
 crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
-		  void *args)
+		  void *arg)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
 	d_rank_list_t		*member_ranks;
@@ -1279,7 +1279,7 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 	grp_priv->gp_child_num = member_ranks->rl_nr.num;
 	grp_priv->gp_child_ack_num = 0;
 	grp_priv->gp_destroy_cb = grp_destroy_cb;
-	grp_priv->gp_destroy_cb_arg = args;
+	grp_priv->gp_destroy_cb_arg = arg;
 	pthread_rwlock_unlock(&crt_grp_list_rwlock);
 
 	crt_ctx = grp_priv->gp_ctx;
@@ -1326,7 +1326,7 @@ out:
 		D_ERROR("crt_group_destroy failed, rc: %d.\n", rc);
 
 		if (grp_destroy_cb != NULL)
-			grp_destroy_cb(args, rc);
+			grp_destroy_cb(arg, rc);
 	}
 	return rc;
 }
@@ -1462,7 +1462,7 @@ crt_primary_grp_init(crt_group_id_t grpid)
 		pri_grpid = (grpid != NULL) ? grpid : CRT_DEFAULT_CLI_GRPID;
 	rc = crt_grp_priv_create(&grp_priv, pri_grpid, true /* primary group */,
 				 NULL /* member_ranks */,
-				 NULL /* grp_create_cb */, NULL /* priv */);
+				 NULL /* grp_create_cb */, NULL /* arg */);
 	if (rc != 0) {
 		D_ERROR("crt_grp_priv_create failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
@@ -1846,7 +1846,7 @@ crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 
 	rc = crt_grp_priv_create(&grp_priv, srv_grpid, true /* primary group */,
 				 NULL /* member_ranks */,
-				 NULL /* grp_create_cb */, NULL /* priv */);
+				 NULL /* grp_create_cb */, NULL /* arg */);
 	if (rc != 0) {
 		D_ERROR("crt_grp_priv_create failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);
@@ -2577,7 +2577,7 @@ out:
 }
 
 int
-crt_register_eviction_cb(crt_eviction_cb cb, void *args)
+crt_register_eviction_cb(crt_eviction_cb cb, void *arg)
 {
 	struct crt_plugin_cb_priv	*cb_priv;
 	int				 rc = 0;
@@ -2586,7 +2586,7 @@ crt_register_eviction_cb(crt_eviction_cb cb, void *args)
 	if (cb_priv == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	cb_priv->cp_eviction_cb = cb;
-	cb_priv->cp_args = args;
+	cb_priv->cp_args = arg;
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_eviction_rwlock);
 	d_list_add_tail(&cb_priv->cp_link, &crt_plugin_gdata.cpg_eviction_cbs);
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_eviction_rwlock);

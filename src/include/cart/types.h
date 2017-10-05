@@ -334,7 +334,7 @@ typedef int (*crt_bulk_cb_t)(const struct crt_bulk_cb_info *cb_info);
  *				>0 means stopping progress and return success
  *				<0 means failure
  */
-typedef int (*crt_progress_cond_cb_t)(void *args);
+typedef int (*crt_progress_cond_cb_t)(void *arg);
 
 /**
  * some bit flags for crt_init:

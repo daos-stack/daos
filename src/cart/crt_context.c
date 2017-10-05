@@ -250,7 +250,7 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 
 /* abort the RPCs in inflight queue and waitq in the epi. */
 static int
-crt_ctx_epi_abort(d_list_t *rlink, void *args)
+crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 {
 	struct crt_ep_inflight	*epi;
 	struct crt_context	*ctx;
@@ -260,7 +260,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *args)
 	int			 rc = 0;
 
 	D_ASSERT(rlink != NULL);
-	D_ASSERT(args != NULL);
+	D_ASSERT(arg != NULL);
 	epi = epi_link2ptr(rlink);
 	ctx = epi->epi_ctx;
 	D_ASSERT(ctx != NULL);
@@ -270,7 +270,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *args)
 	    d_list_empty(&epi->epi_req_q))
 		D_GOTO(out, rc = 0);
 
-	force = *(int *)args;
+	force = *(int *)arg;
 	if (force == 0) {
 		D_ERROR("cannot abort endpoint (idx %d, rank %d, req_wait_num "
 			CF_U64", req_num "CF_U64", reply_num "CF_U64", "
@@ -1048,9 +1048,9 @@ out:
  * 2) call crt_register_progress_cb(user_cb);
  */
 int
-crt_register_progress_cb(crt_progress_cb cb, void *args)
+crt_register_progress_cb(crt_progress_cb cb, void *arg)
 {
-	/* save the function pointer and args to a global list */
+	/* save the function pointer and arg to a global list */
 	struct crt_prog_cb_priv		*crt_prog_cb_priv = NULL;
 	int				 rc = 0;
 
@@ -1058,7 +1058,7 @@ crt_register_progress_cb(crt_progress_cb cb, void *args)
 	if (crt_prog_cb_priv == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	crt_prog_cb_priv->cpcp_func = cb;
-	crt_prog_cb_priv->cpcp_args = args;
+	crt_prog_cb_priv->cpcp_args = arg;
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_prog_rwlock);
 	d_list_add_tail(&crt_prog_cb_priv->cpcp_link,
 			&crt_plugin_gdata.cpg_prog_cbs);
@@ -1074,7 +1074,7 @@ out:
  * 2) call crt_register_timeout_cb_core(user_cb);
  */
 int
-crt_register_timeout_cb(crt_timeout_cb cb, void *args)
+crt_register_timeout_cb(crt_timeout_cb cb, void *arg)
 {
 	/* TODO: save the function pointer somewhere for retreival later on */
 	struct crt_timeout_cb_priv	*timeout_cb_priv = NULL;
@@ -1084,7 +1084,7 @@ crt_register_timeout_cb(crt_timeout_cb cb, void *args)
 	if (timeout_cb_priv == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	timeout_cb_priv->ctcp_func = cb;
-	timeout_cb_priv->ctcp_args = args;
+	timeout_cb_priv->ctcp_args = arg;
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_timeout_rwlock);
 	d_list_add_tail(&timeout_cb_priv->ctcp_link,
 			&crt_plugin_gdata.cpg_timeout_cbs);

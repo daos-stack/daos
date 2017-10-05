@@ -293,10 +293,10 @@ ch_key_hash(struct d_chash_table *htable, const void *key, unsigned int ksize)
 }
 
 static void
-ch_key_init(struct d_chash_table *htable, d_list_t *rlink, void *args)
+ch_key_init(struct d_chash_table *htable, d_list_t *rlink, void *arg)
 {
 	D_ASSERT(htable->ht_ops->hop_key_init);
-	htable->ht_ops->hop_key_init(htable, rlink, args);
+	htable->ht_ops->hop_key_init(htable, rlink, arg);
 }
 
 static bool
@@ -524,11 +524,11 @@ out:
  *
  * \param htable	[IN]	Pointer to the hash table
  * \param rlink		[IN]	The link chain of the hash record
- * \param args		[IN]	Arguments for key generating
+ * \param arg		[IN]	Arguments for key generating
  */
 int
 d_chash_rec_insert_anonym(struct d_chash_table *htable, d_list_t *rlink,
-			  void *args)
+			  void *arg)
 {
 	void	*key;
 	int	 idx;
@@ -540,7 +540,7 @@ d_chash_rec_insert_anonym(struct d_chash_table *htable, d_list_t *rlink,
 
 	ch_lock(htable, false);
 	/* has no key, hash table should have provided key generator */
-	ch_key_init(htable, rlink, args);
+	ch_key_init(htable, rlink, arg);
 
 	ksize = ch_key_get(htable, rlink, &key);
 	idx = ch_key_hash(htable, key, ksize);
@@ -794,13 +794,13 @@ d_chash_table_create(uint32_t feats, unsigned int bits, void *priv,
  * \param cb		[IN]	Traverse callback, will be called on every item
  *				in the hash table.
  *				\see d_chash_traverse_cb_t.
- * \param args		[IN]	Arguments for the callback.
+ * \param arg		[IN]	Arguments for the callback.
  *
  * \return			zero on success, negative value if error.
  */
 int
 d_chash_table_traverse(struct d_chash_table *htable, d_chash_traverse_cb_t cb,
-		       void *args)
+		       void *arg)
 {
 	struct d_chash_bucket	*buckets = htable->ht_buckets;
 	d_list_t		*rlink;
@@ -824,7 +824,7 @@ d_chash_table_traverse(struct d_chash_table *htable, d_chash_traverse_cb_t cb,
 	nr = 1U << htable->ht_bits;
 	for (i = 0; i < nr; i++) {
 		d_list_for_each(rlink, &buckets[i].hb_head) {
-			rc = cb(rlink, args);
+			rc = cb(rlink, arg);
 			if (rc != 0)
 				D_GOTO(unlock, rc);
 		}
@@ -968,11 +968,11 @@ hh_link2ptr(d_list_t *link)
 }
 
 static void
-hh_op_key_init(struct d_chash_table *hhtab, d_list_t *rlink, void *args)
+hh_op_key_init(struct d_chash_table *hhtab, d_list_t *rlink, void *arg)
 {
 	struct d_hhash *dht;
 	struct d_hlink *hlink = hh_link2ptr(rlink);
-	int		   type = *(int *)args;
+	int		   type = *(int *)arg;
 
 	dht = container_of(hhtab, struct d_hhash, ch_htable);
 	hlink->hl_key = ((dht->ch_cookie++) << D_HTYPE_BITS) | type;

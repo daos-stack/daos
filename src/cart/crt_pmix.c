@@ -564,10 +564,10 @@ out:
 }
 
 int
-crt_register_event_cb(crt_event_cb event_handler, void *args)
+crt_register_event_cb(crt_event_cb event_handler, void *arg)
 {
 	/* store the event codes, the user event handler function ponter,
-	 * and the user-provided void args to a list of global sturctures.
+	 * and the user-provided void arg to a list of global sturctures.
 	 */
 	struct crt_event_cb_priv	*event_cb_priv = NULL;
 	int				 rc = 0;
@@ -579,7 +579,7 @@ crt_register_event_cb(crt_event_cb event_handler, void *args)
 	if (event_cb_priv == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 	event_cb_priv->cecp_func = event_handler;
-	event_cb_priv->cecp_args = args;
+	event_cb_priv->cecp_args = arg;
 	pthread_rwlock_wrlock(&crt_plugin_gdata.cpg_event_rwlock);
 	d_list_add_tail(&event_cb_priv->cecp_link,
 			&crt_plugin_gdata.cpg_event_cbs);
@@ -609,7 +609,7 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 	crt_event_cb			 cb_func;
 	d_rank_t			 crt_rank;
 	struct crt_event_cb_priv	*event_cb_priv;
-	void				*args;
+	void				*arg;
 
 	grp_gdata = crt_gdata.cg_grp;
 	D_ASSERT(grp_gdata != NULL);
@@ -648,8 +648,8 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 			      &crt_plugin_gdata.cpg_event_cbs, cecp_link) {
 		pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);
 		cb_func = event_cb_priv->cecp_func;
-		args = event_cb_priv->cecp_args;
-		cb_func(crt_rank, args);
+		arg = event_cb_priv->cecp_args;
+		cb_func(crt_rank, arg);
 		pthread_rwlock_rdlock(&crt_plugin_gdata.cpg_event_rwlock);
 	}
 	pthread_rwlock_unlock(&crt_plugin_gdata.cpg_event_rwlock);

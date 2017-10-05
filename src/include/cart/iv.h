@@ -130,7 +130,7 @@ typedef enum {
 typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
 				    crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
 				    uint32_t flags, d_sg_list_t *iv_value,
-				    void *priv);
+				    void *arg);
 
 /**
  * Incast variable on_update callback which will be called when the updating
@@ -152,7 +152,7 @@ typedef int (*crt_iv_on_fetch_cb_t)(crt_iv_namespace_t ivns,
 typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
 				     crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
 				     uint32_t flags, d_sg_list_t *iv_value,
-				     void *priv);
+				     void *arg);
 
 /**
  * Incast variable on_refresh callback which will be called when the
@@ -177,7 +177,7 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
 typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
 				      crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
 				      d_sg_list_t *iv_value, bool invalidate,
-				      void *priv);
+				      void *arg);
 
 /**
  * The hash function to hash one IV's key to a d_rank_t result which is to be
@@ -240,7 +240,7 @@ typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
 				  crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
 				  crt_iv_perm_t permission,
 				  d_sg_list_t *iv_value,
-				  void **priv);
+				  void **arg);
 
 /**
  * Put value function to return buffers retrieved for the specified iv_key
@@ -255,7 +255,7 @@ typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
  */
 typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
 				  d_sg_list_t *iv_value,
-				  void *priv);
+				  void *arg);
 
 /**
  * Compares two passed iv keys 'key1' and 'key2' and returns either

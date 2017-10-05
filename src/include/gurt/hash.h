@@ -66,10 +66,10 @@ typedef struct {
 	 * hash table.
 	 *
 	 * \param rlink	[IN]	The link chain of the record to generate key.
-	 * \param args	[IN]	Input arguments for the key generating.
+	 * \param arg	[IN]	Input arguments for the key generating.
 	 */
 	void	 (*hop_key_init)(struct d_chash_table *htable,
-				 d_list_t *rlink, void *args);
+				 d_list_t *rlink, void *arg);
 	/**
 	 * Optional, return the key of record @rlink to @key_pp, and size of
 	 * the key as the returned value.
@@ -191,9 +191,9 @@ int  d_chash_table_create(uint32_t feats, unsigned int bits,
 int  d_chash_table_create_inplace(uint32_t feats, unsigned int bits,
 				  void *priv, d_chash_table_ops_t *hops,
 				  struct d_chash_table *htable);
-typedef int (*d_chash_traverse_cb_t)(d_list_t *rlink, void *args);
+typedef int (*d_chash_traverse_cb_t)(d_list_t *rlink, void *arg);
 int d_chash_table_traverse(struct d_chash_table *htable,
-			   d_chash_traverse_cb_t cb, void *args);
+			   d_chash_traverse_cb_t cb, void *arg);
 int  d_chash_table_destroy(struct d_chash_table *htable, bool force);
 int  d_chash_table_destroy_inplace(struct d_chash_table *htable, bool force);
 void d_chash_table_debug(struct d_chash_table *htable);
@@ -207,7 +207,7 @@ int  d_chash_rec_insert(struct d_chash_table *htable, const void *key,
 			unsigned int ksize, d_list_t *rlink,
 			bool exclusive);
 int  d_chash_rec_insert_anonym(struct d_chash_table *htable, d_list_t *rlink,
-			       void *args);
+			       void *arg);
 bool d_chash_rec_delete(struct d_chash_table *htable, const void *key,
 			unsigned int ksize);
 bool d_chash_rec_delete_at(struct d_chash_table *htable, d_list_t *rlink);

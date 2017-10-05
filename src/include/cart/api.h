@@ -559,7 +559,7 @@ struct crt_corpc_ops {
 	 *
 	 * \return			zero on success, negative value if error
 	 */
-	int (*co_aggregate)(crt_rpc_t *source, crt_rpc_t *result, void *priv);
+	int (*co_aggregate)(crt_rpc_t *source, crt_rpc_t *result, void *arg);
 };
 
 /*
@@ -578,14 +578,14 @@ typedef int (*crt_grp_create_cb_t)(crt_group_t *grp, void *priv, int status);
 /*
  * Group destroy completion callback
  *
- * \param args [IN]		arguments pointer passed in for
+ * \param arg [IN]		arguments pointer passed in for
  *				crt_group_destroy.
  * \param status [IN]		status code that indicates whether the group
  *				has been destroyed successfully or not.
  *				zero for success, negative value otherwise.
  *
  */
-typedef int (*crt_grp_destroy_cb_t)(void *args, int status);
+typedef int (*crt_grp_destroy_cb_t)(void *arg, int status);
 
 /*
  * Create CRT sub-group (a subset of the primary group). Can only be called on
@@ -610,7 +610,7 @@ typedef int (*crt_grp_destroy_cb_t)(void *args, int status);
 int
 crt_group_create(crt_group_id_t grp_id, d_rank_list_t *member_ranks,
 		 bool populate_now, crt_grp_create_cb_t grp_create_cb,
-		 void *priv);
+		 void *arg);
 
 /*
  * Lookup the group handle of one group ID (sub-group or primary group).
@@ -645,13 +645,13 @@ crt_group_lookup(crt_group_id_t grp_id);
  *
  * \param grp [IN]		group handle to be destroyed.
  * \param grp_destroy_cb [IN]	optional completion callback.
- * \param args [IN]		optional args for \a grp_destroy_cb.
+ * \param arg [IN]		optional arg for \a grp_destroy_cb.
  *
  * \return			zero on success, negative value if error
  */
 int
 crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
-		  void *args);
+		  void *arg);
 
 /*
  * Attach to a primary service group.
@@ -1062,7 +1062,7 @@ int
 crt_rank_evict(crt_group_t *grp, d_rank_t rank);
 
 typedef void
-(*crt_event_cb) (d_rank_t rank, void *args);
+(*crt_event_cb) (d_rank_t rank, void *arg);
 
 /**
  * This function registers an event handler for process failures. If the calling
@@ -1073,35 +1073,35 @@ typedef void
  * been evicted.
  *
  * \param event_handler [IN]	event handler to register
- * \param args [IN]		args to event_handler
+ * \param arg [IN]		arg to event_handler
  */
 int
-crt_register_event_cb(crt_event_cb event_handler, void *args);
+crt_register_event_cb(crt_event_cb event_handler, void *arg);
 
 typedef void
-(*crt_progress_cb) (crt_context_t ctx, void *args);
+(*crt_progress_cb) (crt_context_t ctx, void *arg);
 
 /**
  * Register a callback function which will be called inside crt_progress()
  */
 int
-crt_register_progress_cb(crt_progress_cb cb, void *args);
+crt_register_progress_cb(crt_progress_cb cb, void *arg);
 
 typedef void
-(*crt_timeout_cb) (crt_context_t ctx, crt_rpc_t *rpc, void *args);
+(*crt_timeout_cb) (crt_context_t ctx, crt_rpc_t *rpc, void *arg);
 
 int
-crt_register_timeout_cb(crt_timeout_cb cb, void *args);
+crt_register_timeout_cb(crt_timeout_cb cb, void *arg);
 
 typedef void
-(*crt_eviction_cb) (crt_group_t *grp, d_rank_t rank, void *args);
+(*crt_eviction_cb) (crt_group_t *grp, d_rank_t rank, void *arg);
 
 /**
  * Register a callback function which will be upon the completion of
  * crt_rank_evict().
  */
 int
-crt_register_eviction_cb(crt_eviction_cb cb, void *args);
+crt_register_eviction_cb(crt_eviction_cb cb, void *arg);
 
 /**
  * Retrieve the PSR candidate list for \a tgt_grp.

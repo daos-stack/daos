@@ -279,8 +279,7 @@ send_reply:
 }
 
 int
-crt_hdlr_barrier_aggregate(crt_rpc_t *source, crt_rpc_t *result,
-			       void *priv)
+crt_hdlr_barrier_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *arg)
 {
 	int	*reply_source, *reply_result;
 

@@ -779,7 +779,7 @@ out:
 }
 
 static int
-crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *priv)
+crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 {
 	struct crt_rpc_priv		*rpc_priv;
 	d_rank_t			 rank;
@@ -789,7 +789,7 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *priv)
 	int				 tag;
 	int				 rc = 0;
 
-	rpc_priv = (struct crt_rpc_priv *)priv;
+	rpc_priv = (struct crt_rpc_priv *)arg;
 	D_ASSERT(rpc_priv != NULL);
 	rank = rpc_priv->crp_pub.cr_ep.ep_rank;
 	tag = rpc_priv->crp_pub.cr_ep.ep_tag;

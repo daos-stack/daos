@@ -113,11 +113,11 @@ struct crt_hg_gdata {
 };
 
 /* addr lookup completion callback */
-typedef int (*crt_hg_addr_lookup_cb_t)(hg_addr_t addr, void *priv);
+typedef int (*crt_hg_addr_lookup_cb_t)(hg_addr_t addr, void *arg);
 
 struct crt_hg_addr_lookup_cb_args {
 	crt_hg_addr_lookup_cb_t	 al_cb;
-	void			*al_priv;
+	void			*al_arg;
 };
 
 /* crt_hg.c */
@@ -134,7 +134,7 @@ void crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code);
 int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
 int crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout);
 int crt_hg_addr_lookup(struct crt_hg_context *hg_ctx, const char *name,
-		       crt_hg_addr_lookup_cb_t complete_cb, void *priv);
+		       crt_hg_addr_lookup_cb_t complete_cb, void *arg);
 int crt_hg_addr_free(struct crt_hg_context *hg_ctx, hg_addr_t addr);
 
 int crt_rpc_handler_common(hg_handle_t hg_hdl);

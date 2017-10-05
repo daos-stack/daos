@@ -130,7 +130,7 @@ srv_corpc_io(crt_rpc_t *rpc_req)
 }
 
 int
-srv_grp_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *priv)
+srv_grp_aggregate(crt_rpc_t *source, crt_rpc_t *result, void *arg)
 {
 	struct crt_rpc_grp_io_out	*grp_io_src_reply;
 	struct crt_rpc_grp_io_out	*grp_io_result;

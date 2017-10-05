@@ -361,6 +361,6 @@ void crt_hdlr_iv_fetch(crt_rpc_t *rpc_req);
 void crt_hdlr_iv_update(crt_rpc_t *rpc_req);
 void crt_hdlr_iv_sync(crt_rpc_t *rpc_req);
 int crt_iv_sync_corpc_aggregate(crt_rpc_t *source, crt_rpc_t *result,
-				void *priv);
+				void *arg);
 
 #endif /* __CRT_RPC_H__ */
