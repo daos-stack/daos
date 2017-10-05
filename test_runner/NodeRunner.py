@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2016 Intel Corporation
+# Copyright (c) 2016-2017 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -96,7 +96,7 @@ class NodeCmdRunner:
     def dump_data(self, retval):
         """ dump the output to a file """
         with open(self.cmdfileout, mode='a') as outfile:
-            retval.data = str(self.stdout.read().decode('ascii'))
+            retval.data = str(self.stdout.read().decode('utf8'))
             # keepends=True newlines
             for line in retval.data.splitlines(True):
                 outfile.write(line)
