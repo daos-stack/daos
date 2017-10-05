@@ -187,10 +187,10 @@ d_realloc(void *ptrptr, size_t size)
 #define D_REALLOC(ptr, size)						\
 	(__typeof__(ptr)) d_realloc((ptr), (size))
 
-# define D_FREE(ptr, size)						\
+# define D_FREE(ptr)						\
 	do {								\
-		d_log(MEM_DBG, "%s:%d, free '" #ptr "': %d at %p.\n",	\
-			__FILE__, __LINE__, (int)(size), (ptr));	\
+		d_log(MEM_DBG, "%s:%d, free '" #ptr "' at %p.\n",	\
+			__FILE__, __LINE__, (ptr));	\
 		free(ptr);						\
 		(ptr) = NULL;						\
 	} while (0)
@@ -198,7 +198,7 @@ d_realloc(void *ptrptr, size_t size)
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
 #define D_ALLOC_PTR(ptr)	D_ALLOC(ptr, sizeof(*ptr))
 #define D_ALLOC_ARRAY(ptr, count) D_ALLOC_CORE(ptr, sizeof(*ptr), count)
-#define D_FREE_PTR(ptr)		D_FREE(ptr, sizeof(*ptr))
+#define D_FREE_PTR(ptr)		D_FREE(ptr)
 
 #define D_GOTO(label, rc)	do { ((void)(rc)); goto label; } while (0)
 

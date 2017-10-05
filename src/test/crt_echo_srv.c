@@ -107,7 +107,7 @@ static int run_echo_srver(void)
 	/* wait for completion */
 	echo_sem_timedwait(&gecho.token_to_proceed, 61, __LINE__);
 
-	D_FREE(pchar, 256);
+	D_FREE(pchar);
 
 	/* ==================================== */
 	/* test group API and bcast RPC */

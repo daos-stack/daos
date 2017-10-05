@@ -104,7 +104,7 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 			D_FREE_PTR(info);
 		}
 	}
-	D_FREE(map->com_hash, sizeof(map->com_hash[0]) * map->com_bits);
+	D_FREE(map->com_hash);
 
 skip:
 	if (map->com_lock_init && map->com_pid == getpid())

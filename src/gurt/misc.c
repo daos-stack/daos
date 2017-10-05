@@ -254,8 +254,7 @@ d_rank_list_free(d_rank_list_t *rank_list)
 	if (rank_list == NULL)
 		return;
 	if (rank_list->rl_ranks != NULL)
-		D_FREE(rank_list->rl_ranks,
-		       rank_list->rl_nr.num * sizeof(d_rank_t));
+		D_FREE(rank_list->rl_ranks);
 	D_FREE_PTR(rank_list);
 }
 
@@ -498,7 +497,7 @@ d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len)
 		idx += sprintf(&tmp_str[idx], "%d ", rank_list->rl_ranks[i]);
 	tmp_str[width - 1] = '\0';
 	D_DEBUG("%s, %d ranks: %s\n", name, rank_list->rl_nr.num, tmp_str);
-	D_FREE(tmp_str, width);
+	D_FREE(tmp_str);
 
 out:
 	return rc;
@@ -531,13 +530,11 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 		return;
 
 	for (i = 0; free_iovs && i < sgl->sg_nr.num; i++) {
-		if (sgl->sg_iovs[i].iov_buf != NULL) {
-			D_FREE(sgl->sg_iovs[i].iov_buf,
-			       sgl->sg_iovs[i].iov_buf_len);
-		}
+		if (sgl->sg_iovs[i].iov_buf != NULL)
+			D_FREE(sgl->sg_iovs[i].iov_buf);
 	}
 
-	D_FREE(sgl->sg_iovs, sgl->sg_nr.num * sizeof(*sgl->sg_iovs));
+	D_FREE(sgl->sg_iovs);
 	memset(sgl, 0, sizeof(*sgl));
 }
 

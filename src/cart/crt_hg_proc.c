@@ -336,7 +336,9 @@ crt_proc_crt_iov_t(crt_proc_t proc, d_iov_t *div)
 
 	if (proc_op == CRT_PROC_FREE) {
 		if (div->iov_buf_len > 0)
-			D_FREE(div->iov_buf, div->iov_buf_len);
+			D_FREE(div->iov_buf);
+		div->iov_buf_len = 0;
+		div->iov_len = 0;
 		return 0;
 	}
 
@@ -365,8 +367,11 @@ crt_proc_crt_iov_t(crt_proc_t proc, d_iov_t *div)
 
 	rc = crt_proc_memcpy(proc, div->iov_buf, div->iov_len);
 	if (rc != 0) {
-		if (proc_op == CRT_PROC_DECODE)
-			D_FREE(div->iov_buf, div->iov_buf_len);
+		if (proc_op == CRT_PROC_DECODE) {
+			D_FREE(div->iov_buf);
+			div->iov_buf_len = 0;
+			div->iov_len = 0;
+		}
 		return -DER_HG;
 	}
 
@@ -709,10 +714,9 @@ crt_proc_internal(struct crf_field *crf,
 					    crf->crf_msg[i]->cmf_size;
 			}
 
-			if (proc_op == HG_FREE) {
-				D_FREE(array->da_arrays, array->da_count *
-						crf->crf_msg[i]->cmf_size);
-			}
+			if (proc_op == HG_FREE)
+				D_FREE(array->da_arrays);
+
 			ptr = (char *)ptr + sizeof(struct crt_array);
 		} else {
 			rc = crf->crf_msg[i]->cmf_proc(proc, ptr);

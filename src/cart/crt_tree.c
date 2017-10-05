@@ -258,7 +258,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
 			root, self, rc);
 		d_rank_list_free(result_rank_list);
-		D_FREE(tree_children, nchildren * sizeof(uint32_t));
+		D_FREE(tree_children);
 		D_GOTO(out, rc);
 	}
 
@@ -266,7 +266,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		result_rank_list->rl_ranks[i] =
 			grp_rank_list->rl_ranks[tree_children[i]];
 
-	D_FREE(tree_children, nchildren * sizeof(uint32_t));
+	D_FREE(tree_children);
 	*children_rank_list = result_rank_list;
 
 out:

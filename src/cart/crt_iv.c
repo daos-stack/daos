@@ -264,8 +264,7 @@ crt_ivf_key_in_progress_unset(struct ivf_key_in_progress *entry,
 
 	pthread_mutex_destroy(&entry->kip_lock);
 	d_list_del(&entry->kip_link);
-	D_FREE(entry, offsetof(struct ivf_key_in_progress,
-		payload[0]) + key->iov_buf_len);
+	D_FREE(entry);
 
 	return 0;
 }
@@ -1516,8 +1515,7 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 					iv_sync->isc_update_rc,
 					iv_sync->isc_cb_arg);
 
-		D_FREE(iv_sync->isc_iv_key.iov_buf,
-			iv_sync->isc_iv_key.iov_buf_len);
+		D_FREE(iv_sync->isc_iv_key.iov_buf);
 
 	}
 	D_FREE_PTR(iv_sync);
@@ -1681,11 +1679,10 @@ exit:
 			crt_bulk_free(local_bulk);
 
 		if (iv_sync_cb) {
-			D_FREE_PTR(iv_sync_cb);
-
 			if (iv_sync_cb->isc_iv_key.iov_buf)
-				D_FREE(iv_sync_cb->isc_iv_key.iov_buf,
-					iv_sync_cb->isc_iv_key.iov_buf_len);
+				D_FREE(iv_sync_cb->isc_iv_key.iov_buf);
+
+			D_FREE_PTR(iv_sync_cb);
 		}
 	}
 

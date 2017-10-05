@@ -206,7 +206,7 @@ static void run_client(void)
 		/* wait two minutes (in case of manually starting up clients) */
 		rc = client_wait(120, 1000, &gecho.complete);
 		assert(rc == 0);
-		D_FREE(pchar, 256);
+		D_FREE(pchar);
 
 		printf("client(rank %d, tag %d) checkin request sent.\n",
 		       myrank, svr_ep.ep_tag);
@@ -304,7 +304,7 @@ static void run_client(void)
 	free(iovs[0].iov_buf);
 	free(iovs[1].iov_buf);
 	free(iovs);
-	D_FREE(pchar, 256);
+	D_FREE(pchar);
 
 	/* ============= test-4 ============ */
 	/* attach to 2nd tier and send checkin RPC */
@@ -345,7 +345,7 @@ static void run_client(void)
 		/* wait two minutes (in case of manually starting up clients) */
 		rc = client_wait(120, 1000, &gecho.complete);
 		assert(rc == 0);
-		D_FREE(pchar, 256);
+		D_FREE(pchar);
 
 		printf("client(rank %d, tag %d) checkin req sent to tier2.\n",
 		       myrank, svr_ep.ep_tag);

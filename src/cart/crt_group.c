@@ -202,8 +202,7 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 			D_GOTO(out, rc);
 		}
 	}
-	D_FREE(grp_priv->gp_lookup_cache,
-	       CRT_SRV_CONTEXT_NUM * sizeof(struct d_chash_table *));
+	D_FREE(grp_priv->gp_lookup_cache);
 
 out:
 	return rc;
@@ -1561,11 +1560,8 @@ crt_primary_grp_fini(void)
 	/* destroy the rank map */
 	grp_priv = crt_is_service() ? grp_gdata->gg_srv_pri_grp :
 				      grp_gdata->gg_cli_pri_grp;
-	if (grp_priv->gp_rank_map != NULL) {
-		D_FREE(grp_priv->gp_rank_map,
-		       pmix_gdata->pg_univ_size * sizeof(struct crt_rank_map));
-		grp_priv->gp_rank_map = NULL;
-	}
+	if (grp_priv->gp_rank_map != NULL)
+		D_FREE(grp_priv->gp_rank_map);
 
 	if (crt_is_service()) {
 		crt_grp_ras_fini(grp_priv);
@@ -2409,10 +2405,10 @@ out:
 	if (filename != NULL)
 		free(filename);
 	if (grpname != NULL)
-		D_FREE(grpname, CRT_GROUP_ID_MAX_LEN);
+		D_FREE(grpname);
 	if (rc != 0) {
 		if (addr_str != NULL)
-			D_FREE(addr_str, CRT_ADDR_STR_MAX_LEN);
+			D_FREE(addr_str);
 		D_ERROR("crt_grp_config_load (grpid %s) failed, rc: %d.\n",
 			grpid, rc);
 	}

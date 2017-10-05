@@ -148,7 +148,7 @@ static void free_session(struct st_session **session)
 		(*session)->buf_list = free_entry->next;
 
 		if (free_entry->buf != NULL)
-			D_FREE(free_entry->buf, free_entry->buf_len);
+			D_FREE(free_entry->buf);
 		if (free_entry->bulk_hdl != CRT_BULK_NULL)
 			crt_bulk_free(free_entry->bulk_hdl);
 		D_FREE_PTR(free_entry);

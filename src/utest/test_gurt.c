@@ -582,7 +582,7 @@ test_gurt_list(void **state)
 		if (i == NUM_ENTRIES)
 			break;
 		d_list_del(pos);
-		D_FREE(entry, sizeof(*entry));
+		D_FREE(entry);
 	}
 
 	d_list_for_each_entry_continue(entry, &head2, link) {
@@ -592,7 +592,7 @@ test_gurt_list(void **state)
 
 	d_list_for_each_entry_safe(entry, tentry, &head2, link) {
 		d_list_del(&entry->link);
-		D_FREE(entry, sizeof(*entry));
+		D_FREE(entry);
 	}
 
 	assert(d_list_empty(&head2));
@@ -708,7 +708,7 @@ test_gurt_hlist(void **state)
 		if (i == NUM_ENTRIES / 2)
 			break;
 		d_hlist_del(pos);
-		D_FREE(entry, sizeof(*entry));
+		D_FREE(entry);
 	}
 
 	dhlist_for_each_entry_continue(entry, pos, link) {
@@ -718,7 +718,7 @@ test_gurt_hlist(void **state)
 
 	dhlist_for_each_entry_safe(entry, pos, temp, &head2, link) {
 		d_hlist_del(&entry->link);
-		D_FREE(entry, sizeof(*entry));
+		D_FREE(entry);
 	}
 
 	assert(d_hlist_empty(&head2));

@@ -784,8 +784,7 @@ static void free_g_data(void)
 					cb_args->bulk_hdl = NULL;
 				}
 				if (cb_args->buf != NULL)
-					D_FREE(cb_args->buf,
-					       cb_args->buf_len);
+					D_FREE(cb_args->buf);
 
 				/*
 				 * Free and zero the actual pointer, not
@@ -795,19 +794,16 @@ static void free_g_data(void)
 			}
 		}
 
-		D_FREE(g_data->cb_args_ptrs, g_data->max_inflight *
-					     sizeof(g_data->cb_args_ptrs[0]));
+		D_FREE(g_data->cb_args_ptrs);
 	}
 	if (g_data->rep_latencies_bulk_hdl != CRT_BULK_NULL) {
 		crt_bulk_free(g_data->rep_latencies_bulk_hdl);
 		g_data->rep_latencies_bulk_hdl = CRT_BULK_NULL;
 	}
 	if (g_data->rep_latencies != NULL)
-		D_FREE(g_data->rep_latencies,
-		       g_data->rep_count * sizeof(g_data->rep_latencies[0]));
+		D_FREE(g_data->rep_latencies);
 	if (g_data->endpts == NULL)
-		D_FREE(g_data->endpts,
-		       g_data->num_endpts * sizeof(struct st_test_endpt));
+		D_FREE(g_data->endpts);
 	if (g_data != NULL)
 		D_FREE_PTR(g_data);
 }
@@ -987,7 +983,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		 * there is one from the previous size
 		 */
 		if (cb_args->buf != NULL)
-			D_FREE(cb_args->buf, cb_args->buf_len);
+			D_FREE(cb_args->buf);
 
 		/* No buffer needed if there is no payload */
 		if (test_buf_len == 0)

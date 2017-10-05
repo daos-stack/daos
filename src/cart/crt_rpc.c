@@ -557,14 +557,11 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	}
 
 	if (rpc_priv->crp_uri_free != 0 && rpc_priv->crp_tgt_uri != NULL)
-		D_FREE(rpc_priv->crp_tgt_uri, CRT_ADDR_STR_MAX_LEN);
+		D_FREE(rpc_priv->crp_tgt_uri);
 
 	pthread_spin_destroy(&rpc_priv->crp_lock);
 
-	if (rpc_priv->crp_forward)
-		D_FREE(rpc_priv, rpc_priv->crp_opc_info->coi_input_offset);
-	else
-		D_FREE(rpc_priv, rpc_priv->crp_opc_info->coi_rpc_size);
+	D_FREE(rpc_priv);
 }
 
 int

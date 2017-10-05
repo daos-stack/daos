@@ -805,7 +805,7 @@ static int run_self_test(struct st_size_params all_params[],
 		 * space to hold all of them, but only unique master endpoints
 		 * to the new list
 		 */
-		D_ALLOC(ms_endpts, num_ms_endpts_in * sizeof(*ms_endpts));
+		D_ALLOC_ARRAY(ms_endpts, num_ms_endpts_in);
 		if (ms_endpts == NULL) {
 			D_ERROR("Allocating ms_endpts failed\n");
 			D_GOTO(cleanup, ret = -DER_NOMEM);
@@ -867,24 +867,22 @@ static int run_self_test(struct st_size_params all_params[],
 	}
 
 	/* Allocate latency lists for each 1:many session */
-	D_ALLOC(latencies, num_ms_endpts * sizeof(*latencies));
+	D_ALLOC_ARRAY(latencies, num_ms_endpts);
 	if (latencies == NULL) {
 		D_ERROR("Failed to allocate latency pointers\n");
 		D_GOTO(cleanup, ret = -DER_NOMEM);
 	}
-	D_ALLOC(latencies_iov, num_ms_endpts * sizeof(*latencies_iov));
+	D_ALLOC_ARRAY(latencies_iov, num_ms_endpts);
 	if (latencies_iov == NULL) {
 		D_ERROR("Failed to allocate latency pointers\n");
 		D_GOTO(cleanup, ret = -DER_NOMEM);
 	}
-	D_ALLOC(latencies_sg_list,
-		num_ms_endpts * sizeof(*latencies_sg_list));
+	D_ALLOC_ARRAY(latencies_sg_list, num_ms_endpts);
 	if (latencies_sg_list == NULL) {
 		D_ERROR("Failed to allocate latency pointers\n");
 		D_GOTO(cleanup, ret = -DER_NOMEM);
 	}
-	D_ALLOC(latencies_bulk_hdl,
-		num_ms_endpts * sizeof(*latencies_bulk_hdl));
+	D_ALLOC_ARRAY(latencies_bulk_hdl, num_ms_endpts);
 	if (latencies_bulk_hdl == NULL) {
 		D_ERROR("Failed to allocate latency pointers\n");
 		D_GOTO(cleanup, ret = -DER_NOMEM);
@@ -896,7 +894,7 @@ static int run_self_test(struct st_size_params all_params[],
 	 * to transfer latency results back into that buffer
 	 */
 	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
-		D_ALLOC(latencies[m_idx], rep_count * sizeof(**latencies));
+		D_ALLOC_ARRAY(latencies[m_idx], rep_count);
 		if (latencies[m_idx] == NULL) {
 			D_ERROR("Failed to allocate latency data storage\n");
 			D_GOTO(cleanup, ret = -DER_NOMEM);
@@ -961,20 +959,17 @@ cleanup_nothread:
 		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
 			if (latencies_bulk_hdl[m_idx] != CRT_BULK_NULL)
 				crt_bulk_free(latencies_bulk_hdl[m_idx]);
-		D_FREE(latencies_bulk_hdl,
-		       num_ms_endpts * sizeof(*latencies_bulk_hdl));
+		D_FREE(latencies_bulk_hdl);
 	}
 	if (latencies_sg_list != NULL)
-		D_FREE(latencies_sg_list,
-		       num_ms_endpts * sizeof(*latencies_sg_list));
+		D_FREE(latencies_sg_list);
 	if (latencies_iov != NULL)
-		D_FREE(latencies_iov, num_ms_endpts * sizeof(*latencies_iov));
+		D_FREE(latencies_iov);
 	if (latencies != NULL) {
 		for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
 			if (latencies[m_idx] != NULL)
-				D_FREE(latencies[m_idx],
-				       rep_count * sizeof(*latencies));
-		D_FREE(latencies, num_ms_endpts * sizeof(*latencies));
+				D_FREE(latencies[m_idx]);
+		D_FREE(latencies);
 	}
 
 	if (srv_grp != NULL) {
@@ -1451,9 +1446,9 @@ int parse_endpoint_string(char *const optarg, struct st_endpoint **const endpts,
 
 cleanup:
 	if (rank_valid_str != NULL)
-		D_FREE(rank_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
+		D_FREE(rank_valid_str);
 	if (tag_valid_str != NULL)
-		D_FREE(tag_valid_str, SELF_TEST_MAX_LIST_STR_LEN);
+		D_FREE(tag_valid_str);
 
 	return ret;
 
@@ -1755,7 +1750,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* Allocate a large enough buffer to hold the message sizes list */
-	D_ALLOC(all_params, (num_tokens + 1) * sizeof(all_params[0]));
+	D_ALLOC_ARRAY(all_params, num_tokens + 1);
 	if (all_params == NULL)
 		D_GOTO(cleanup, ret = -DER_NOMEM);
 
@@ -1858,8 +1853,7 @@ int main(int argc, char *argv[])
 	/********************* Clean up *********************/
 cleanup:
 	if (all_params != NULL)
-		D_FREE(all_params,
-		       num_msg_sizes * sizeof(all_params[0]));
+		D_FREE(all_params);
 	d_log_fini();
 
 	return ret;

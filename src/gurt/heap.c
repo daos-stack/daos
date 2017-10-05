@@ -131,7 +131,7 @@ d_binheap_grow(struct d_binheap *h)
 			/* first use of double indirect */
 			D_ALLOC(h->d_bh_nodes2, DBH_NOB);
 			if (h->d_bh_nodes2 == NULL) {
-				D_FREE(frag2, DBH_NOB);
+				D_FREE(frag2);
 				return -DER_NOMEM;
 			}
 		}
@@ -155,7 +155,7 @@ d_binheap_grow(struct d_binheap *h)
 		/* first use of this 2nd level index */
 		D_ALLOC(frag1, DBH_NOB);
 		if (frag1 == NULL) {
-			D_FREE(frag2, DBH_NOB);
+			D_FREE(frag2);
 			return -DER_NOMEM;
 		}
 	}
@@ -164,8 +164,8 @@ d_binheap_grow(struct d_binheap *h)
 		/* first use of triple indirect */
 		D_ALLOC(h->d_bh_nodes3, DBH_NOB);
 		if (h->d_bh_nodes3 == NULL) {
-			D_FREE(frag2, DBH_NOB);
-			D_FREE(frag1, DBH_NOB);
+			D_FREE(frag2);
+			D_FREE(frag1);
 			return -DER_NOMEM;
 		}
 	}
@@ -265,31 +265,31 @@ d_binheap_destroy_inplace(struct d_binheap *h)
 	n = h->d_bh_hwm;
 
 	if (n > 0) {
-		D_FREE(h->d_bh_nodes1, DBH_NOB);
+		D_FREE(h->d_bh_nodes1);
 		n -= DBH_SIZE;
 	}
 
 	if (n > 0) {
 		for (idx0 = 0; idx0 < DBH_SIZE && n > 0; idx0++) {
-			D_FREE(h->d_bh_nodes2[idx0], DBH_NOB);
+			D_FREE(h->d_bh_nodes2[idx0]);
 			n -= DBH_SIZE;
 		}
 
-		D_FREE(h->d_bh_nodes2, DBH_NOB);
+		D_FREE(h->d_bh_nodes2);
 	}
 
 	if (n > 0) {
 		for (idx0 = 0; idx0 < DBH_SIZE && n > 0; idx0++) {
 
 			for (idx1 = 0; idx1 < DBH_SIZE && n > 0; idx1++) {
-				D_FREE(h->d_bh_nodes3[idx0][idx1], DBH_NOB);
+				D_FREE(h->d_bh_nodes3[idx0][idx1]);
 				n -= DBH_SIZE;
 			}
 
-			D_FREE(h->d_bh_nodes3[idx0], DBH_NOB);
+			D_FREE(h->d_bh_nodes3[idx0]);
 		}
 
-		D_FREE(h->d_bh_nodes3, DBH_NOB);
+		D_FREE(h->d_bh_nodes3);
 	}
 
 	dbh_lock_fini(h);

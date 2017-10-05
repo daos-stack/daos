@@ -867,7 +867,7 @@ d_chash_table_destroy_inplace(struct d_chash_table *htable, bool force)
 			d_chash_rec_delete_at(htable, buckets[i].hb_head.next);
 		}
 	}
-	D_FREE(buckets, sizeof(*buckets) * nr);
+	D_FREE(buckets);
 	ch_lock_fini(htable);
  out:
 	memset(htable, 0, sizeof(*htable));

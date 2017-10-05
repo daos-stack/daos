@@ -235,7 +235,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 
 out:
 	if (iovs != NULL)
-		D_FREE(iovs, sizeof(d_iov_t) * seg_num);
+		D_FREE(iovs);
 	return rc;
 }
 

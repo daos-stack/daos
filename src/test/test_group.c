@@ -158,13 +158,13 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		if (cb_info->cci_rc != 0) {
 			D_ERROR("rpc (opc: 0x%x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);
-			D_FREE(rpc_req_input->name, 256);
+			D_FREE(rpc_req_input->name);
 			break;
 		}
 		printf("%s checkin result - ret: %d, room_no: %d.\n",
 		       rpc_req_input->name, rpc_req_output->ret,
 		       rpc_req_output->room_no);
-		D_FREE(rpc_req_input->name, 256);
+		D_FREE(rpc_req_input->name);
 		sem_post(&g_token_to_proceed);
 		break;
 	case ECHO_OPC_SHUTDOWN:

@@ -995,7 +995,7 @@ error_out:
 	if (lm_grp_priv != NULL)
 		D_FREE_PTR(lm_grp_priv);
 	if (psr_cand != NULL)
-		D_FREE(psr_cand, sizeof(struct lm_psr_cand)*num_psr);
+		D_FREE(psr_cand);
 	return NULL;
 }
 
@@ -1005,8 +1005,7 @@ lm_grp_priv_destroy(struct lm_grp_priv_t *lm_grp_priv)
 
 	D_ASSERT(lm_grp_priv != NULL);
 
-	D_FREE(lm_grp_priv->lgp_psr_cand,
-	       sizeof(struct lm_psr_cand)*lm_grp_priv->lgp_num_psr);
+	D_FREE(lm_grp_priv->lgp_psr_cand);
 	pthread_rwlock_destroy(&lm_grp_priv->lgp_rwlock);
 	D_FREE_PTR(lm_grp_priv);
 }
