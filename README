@@ -86,6 +86,16 @@ SRC_PREFIX=<path>[:<path>...]      If set, the directories will be
                                    doesn't exist, the build will
                                    fail with an error.
 
+USE_INSTALLED=<c1>[,<c2>[,...]]    When --build-deps is set, the
+                                   default behavior is to build
+                                   prerequisites.   Sometimes, we
+                                   want to use an already installed
+                                   version instead.  This allows
+                                   one to specify a comma separated
+                                   list of already installed
+                                   components.  For all components,
+                                   use 'all'.  Default is 'none'
+
 UNIT TESTING OVERVIEW
 Overview of unit testing capabilities added by prereq_tools
 When using prereq_tools, 3 new builders get added to your default environment.

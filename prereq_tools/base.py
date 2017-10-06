@@ -583,6 +583,9 @@ class PreReqComponent(object):
         self.__prebuilt_path = {}
         self.__src_path = {}
 
+        self.__opts.Add('USE_INSTALLED',
+                        'Comma separated list of preinstalled dependencies',
+                        'none')
         self.add_opts(PathVariable('PREFIX', 'Installation path', install_dir,
                                    PathVariable.PathIsDirCreate),
                       ('PREBUILT_PREFIX',
@@ -611,6 +614,8 @@ class PreReqComponent(object):
         if config_file is not None:
             self.configs = ConfigParser.ConfigParser()
             self.configs.read(config_file)
+
+        self.installed = env.subst("$USE_INSTALLED").split(",")
 
 # pylint: enable=too-many-branches
 
@@ -1300,6 +1305,10 @@ class _Component(object):
     def _has_changes(self):
         """check for changes"""
         has_changes = self.prereqs.build_deps
+        if "all" in self.prereqs.installed:
+            has_changes = False
+        if self.name in self.prereqs.installed:
+            has_changes = False
 
         if self.src_exists():
             self.get()
