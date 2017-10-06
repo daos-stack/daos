@@ -250,9 +250,8 @@ d_rank_list_free(d_rank_list_t *rank_list)
 {
 	if (rank_list == NULL)
 		return;
-	if (rank_list->rl_ranks != NULL)
-		D_FREE(rank_list->rl_ranks);
-	D_FREE_PTR(rank_list);
+	D_FREE(rank_list->rl_ranks);
+	D_FREE(rank_list);
 }
 
 void
@@ -524,10 +523,8 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 	if (sgl->sg_iovs == NULL)
 		return;
 
-	for (i = 0; free_iovs && i < sgl->sg_nr.num; i++) {
-		if (sgl->sg_iovs[i].iov_buf != NULL)
-			D_FREE(sgl->sg_iovs[i].iov_buf);
-	}
+	for (i = 0; free_iovs && i < sgl->sg_nr.num; i++)
+		D_FREE(sgl->sg_iovs[i].iov_buf);
 
 	D_FREE(sgl->sg_iovs);
 	memset(sgl, 0, sizeof(*sgl));

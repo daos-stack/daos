@@ -1560,8 +1560,7 @@ crt_primary_grp_fini(void)
 	/* destroy the rank map */
 	grp_priv = crt_is_service() ? grp_gdata->gg_srv_pri_grp :
 				      grp_gdata->gg_cli_pri_grp;
-	if (grp_priv->gp_rank_map != NULL)
-		D_FREE(grp_priv->gp_rank_map);
+	D_FREE(grp_priv->gp_rank_map);
 
 	if (crt_is_service()) {
 		crt_grp_ras_fini(grp_priv);
@@ -2062,8 +2061,7 @@ crt_grp_init(crt_group_id_t grpid)
 out:
 	if (rc != 0) {
 		D_ERROR("crt_grp_init failed, rc: %d.\n", rc);
-		if (grp_gdata != NULL)
-			D_FREE_PTR(grp_gdata);
+		D_FREE(grp_gdata);
 		crt_gdata.cg_grp = NULL;
 	}
 	return rc;
@@ -2396,11 +2394,9 @@ out:
 		fclose(fp);
 	if (filename != NULL)
 		free(filename);
-	if (grpname != NULL)
-		D_FREE(grpname);
+	D_FREE(grpname);
 	if (rc != 0) {
-		if (addr_str != NULL)
-			D_FREE(addr_str);
+		D_FREE(addr_str);
 		D_ERROR("crt_grp_config_load (grpid %s) failed, rc: %d.\n",
 			grpid, rc);
 	}

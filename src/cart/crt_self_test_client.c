@@ -780,8 +780,7 @@ static void free_g_data(void)
 					crt_bulk_free(cb_args->bulk_hdl);
 					cb_args->bulk_hdl = NULL;
 				}
-				if (cb_args->buf != NULL)
-					D_FREE(cb_args->buf);
+				D_FREE(cb_args->buf);
 
 				/*
 				 * Free and zero the actual pointer, not
@@ -797,12 +796,9 @@ static void free_g_data(void)
 		crt_bulk_free(g_data->rep_latencies_bulk_hdl);
 		g_data->rep_latencies_bulk_hdl = CRT_BULK_NULL;
 	}
-	if (g_data->rep_latencies != NULL)
-		D_FREE(g_data->rep_latencies);
-	if (g_data->endpts == NULL)
-		D_FREE(g_data->endpts);
-	if (g_data != NULL)
-		D_FREE_PTR(g_data);
+	D_FREE(g_data->rep_latencies);
+	D_FREE(g_data->endpts);
+	D_FREE(g_data);
 }
 
 void
@@ -969,8 +965,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		 * Free the buffer attached to this RPC instance if
 		 * there is one from the previous size
 		 */
-		if (cb_args->buf != NULL)
-			D_FREE(cb_args->buf);
+		D_FREE(cb_args->buf);
 
 		/* No buffer needed if there is no payload */
 		if (test_buf_len == 0)

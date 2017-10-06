@@ -556,7 +556,7 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 		D_FREE_PTR(rpc_priv->crp_corpc_info);
 	}
 
-	if (rpc_priv->crp_uri_free != 0 && rpc_priv->crp_tgt_uri != NULL)
+	if (rpc_priv->crp_uri_free != 0)
 		D_FREE(rpc_priv->crp_tgt_uri);
 
 	pthread_spin_destroy(&rpc_priv->crp_lock);

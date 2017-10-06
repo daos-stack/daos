@@ -639,8 +639,8 @@ crt_iv_namespace_create(crt_context_t crt_ctx, crt_group_t *grp, int tree_topo,
 	g_ivns->iov_len = sizeof(struct crt_global_ns);
 
 exit:
-	if (rc != 0 && ivns_internal)
-		D_FREE_PTR(ivns_internal);
+	if (rc != 0)
+		D_FREE(ivns_internal);
 
 	return rc;
 }
@@ -874,8 +874,7 @@ cleanup:
 		D_ASSERT(rc == 0);
 
 		crt_bulk_free(bulk_hdl);
-		if (cb_info)
-			D_FREE_PTR(cb_info);
+		D_FREE(cb_info);
 	}
 
 exit:
@@ -1344,8 +1343,7 @@ exit:
 		D_FREE_PTR(cb_info);
 	}
 
-	if (iv_value)
-		D_FREE_PTR(iv_value);
+	D_FREE(iv_value);
 
 	return rc;
 }
@@ -1723,10 +1721,9 @@ exit:
 			crt_bulk_free(local_bulk);
 
 		if (iv_sync_cb) {
-			if (iv_sync_cb->isc_iv_key.iov_buf)
-				D_FREE(iv_sync_cb->isc_iv_key.iov_buf);
+			D_FREE(iv_sync_cb->isc_iv_key.iov_buf);
 
-			D_FREE_PTR(iv_sync_cb);
+			D_FREE(iv_sync_cb);
 		}
 	}
 

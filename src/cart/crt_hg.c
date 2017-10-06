@@ -1385,7 +1385,8 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 	hg_uint8_t	flags;
 	hg_bulk_t	hg_bulk_hdl;
 	hg_return_t	hg_ret = HG_SUCCESS;
-	int		rc = 0, i, allocate;
+	int		rc = 0, i;
+	bool		allocate = false;
 
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkcla != NULL);
 	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
@@ -1395,10 +1396,9 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 					     HG_BULK_READ_ONLY;
 
 	if (sgl->sg_nr.num <= CRT_HG_IOVN_STACK) {
-		allocate = 0;
 		buf_sizes = buf_sizes_stack;
 	} else {
-		allocate = 1;
+		allocate = true;
 		D_ALLOC_ARRAY(buf_sizes, sgl->sg_nr.num);
 		if (buf_sizes == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -1409,13 +1409,14 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 	if (sgl->sg_iovs == NULL) {
 		buf_ptrs = NULL;
 	} else {
-		if (allocate == 0) {
-			buf_ptrs = buf_ptrs_stack;
-		} else {
+		if (allocate) {
 			D_ALLOC_ARRAY(buf_ptrs, sgl->sg_nr.num);
 			if (buf_ptrs == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+		} else {
+			buf_ptrs = buf_ptrs_stack;
 		}
+
 		for (i = 0; i < sgl->sg_nr.num; i++)
 			buf_ptrs[i] = sgl->sg_iovs[i].iov_buf;
 	}
@@ -1431,10 +1432,10 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 
 out:
 	/* HG_Bulk_create copied the parameters, can free here */
-	if (allocate == 1 && buf_ptrs != NULL)
+	if (allocate) {
 		D_FREE(buf_ptrs);
-	if (allocate == 1 && buf_sizes != NULL)
 		D_FREE(buf_sizes);
+	}
 
 	return rc;
 }

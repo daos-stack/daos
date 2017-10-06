@@ -1043,10 +1043,8 @@ lm_grp_priv_init(crt_group_t *grp, crt_lm_attach_cb_t completion_cb, void *arg)
 	return lm_grp_priv;
 
 error_out:
-	if (lm_grp_priv != NULL)
-		D_FREE_PTR(lm_grp_priv);
-	if (psr_cand != NULL)
-		D_FREE(psr_cand);
+	D_FREE(lm_grp_priv);
+	D_FREE(psr_cand);
 	return NULL;
 }
 static void
