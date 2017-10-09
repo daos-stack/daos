@@ -248,6 +248,10 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 	}
 }
 
+/* Flag bits definition for crt_ctx_epi_abort */
+#define CRT_EPI_ABORT_FORCE	(0x1)
+#define CRT_EPI_ABORT_WAIT	(0x2)
+
 /* abort the RPCs in inflight queue and waitq in the epi. */
 static int
 crt_ctx_epi_abort(d_list_t *rlink, void *arg)
@@ -256,7 +260,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	struct crt_context	*ctx;
 	struct crt_rpc_priv	*rpc_priv, *rpc_next;
 	bool			 msg_logged;
-	int			 force;
+	int			 flags, force, wait;
 	int			 rc = 0;
 
 	D_ASSERT(rlink != NULL);
@@ -270,7 +274,9 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	    d_list_empty(&epi->epi_req_q))
 		D_GOTO(out, rc = 0);
 
-	force = *(int *)arg;
+	flags = *(int *)arg;
+	force = flags & CRT_EPI_ABORT_FORCE;
+	wait = flags & CRT_EPI_ABORT_WAIT;
 	if (force == 0) {
 		D_ERROR("cannot abort endpoint (idx %d, rank %d, req_wait_num "
 			CF_U64", req_num "CF_U64", reply_num "CF_U64", "
@@ -325,6 +331,13 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		}
 	}
 
+	if (wait) {
+		/* make sure all above aborting finished */
+		while (!d_list_empty(&epi->epi_req_waitq) ||
+		       !d_list_empty(&epi->epi_req_q))
+			crt_progress(ctx, 1, NULL, NULL);
+	}
+
 out:
 	return rc;
 }
@@ -333,6 +346,7 @@ int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
 	struct crt_context	*ctx;
+	int			flags;
 	int			rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL) {
@@ -351,10 +365,11 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_GOTO(out, rc);
 	}
 
+	flags = (force != 0) ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
 	pthread_mutex_lock(&ctx->cc_mutex);
 
 	rc = d_chash_table_traverse(&ctx->cc_epi_table, crt_ctx_epi_abort,
-				    &force);
+				    &flags);
 	if (rc != 0) {
 		D_DEBUG("destroy context (idx %d, force %d), "
 			"d_chash_table_traverse failed rc: %d.\n",
@@ -398,7 +413,7 @@ crt_ep_abort(crt_endpoint_t *ep)
 {
 	struct crt_context	*ctx = NULL;
 	d_list_t		*rlink;
-	int			 force;
+	int			 flags;
 	int			 rc = 0;
 
 	pthread_rwlock_rdlock(&crt_gdata.cg_rwlock);
@@ -410,8 +425,8 @@ crt_ep_abort(crt_endpoint_t *ep)
 					 (void *)&ep->ep_rank,
 					 sizeof(ep->ep_rank));
 		if (rlink != NULL) {
-			force = true;
-			rc = crt_ctx_epi_abort(rlink, &force);
+			flags = CRT_EPI_ABORT_FORCE;
+			rc = crt_ctx_epi_abort(rlink, &flags);
 			d_chash_rec_decref(&ctx->cc_epi_table, rlink);
 		}
 		pthread_mutex_unlock(&ctx->cc_mutex);
