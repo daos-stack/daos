@@ -271,10 +271,17 @@ crt_ivf_key_in_progress_unset(struct ivf_key_in_progress *entry,
 
 /* Add key to the list of pending requests */
 static int
-crt_ivf_pending_request_add(struct ivf_key_in_progress *entry,
+crt_ivf_pending_request_add(
+			struct crt_ivns_internal *ivns_internal,
+			struct crt_iv_ops *iv_ops,
+			struct ivf_key_in_progress *entry,
 			struct iv_fetch_cb_info *iv_info)
 {
 	struct pending_fetch	*pending_fetch;
+
+	/* ivo_on_get() was done by the caller of crt_ivf_rpc_issue */
+	iv_ops->ivo_on_put(ivns_internal, &iv_info->ifc_iv_value,
+				iv_info->ifc_user_priv);
 
 	D_ALLOC_PTR(pending_fetch);
 	if (pending_fetch == NULL) {
@@ -354,6 +361,7 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 	struct crt_iv_ops		*iv_ops;
 	struct pending_fetch		*pending_fetch, *next;
 	struct iv_fetch_cb_info		*iv_info;
+	struct iv_fetch_out		*output;
 	int				 rc = 0;
 	bool				 put_needed = false;
 
@@ -381,14 +389,32 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 
 		iv_info = pending_fetch->pf_cb_info;
 
+
 		/* Pending remote fetch case */
 		if (iv_info->ifc_child_rpc) {
-			rc = iv_ops->ivo_on_put(ivns_internal,
-					&iv_info->ifc_iv_value,
-					iv_info->ifc_user_priv);
 
-			if (rc == 0)
-				rc = iv_ops->ivo_on_get(ivns_internal,
+			/* For failed fetches respond to the child with error */
+			if (rc_value != 0) {
+				output = crt_reply_get(iv_info->ifc_child_rpc);
+
+				output->ifo_rc = rc_value;
+
+				/* Failing to send response isn't fatal */
+				rc = crt_reply_send(iv_info->ifc_child_rpc);
+				if (rc != 0)
+					D_ERROR("crt_reply_send() rc=%d\n",
+						rc);
+
+				/* addref done in crt_hdlr_iv_fetch */
+				crt_req_decref(iv_info->ifc_child_rpc);
+
+				d_list_del(&pending_fetch->pf_link);
+				D_FREE(pending_fetch->pf_cb_info);
+				D_FREE(pending_fetch);
+				continue;
+			}
+
+			rc = iv_ops->ivo_on_get(ivns_internal,
 					&iv_info->ifc_iv_key, 0,
 					CRT_IV_PERM_READ,
 					&tmp_iv_value, &iv_info->ifc_user_priv);
@@ -411,8 +437,6 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 					iv_info->ifc_user_priv);
 
 			} else {
-				struct iv_fetch_out *output;
-
 				D_ERROR("Failed to process pending request\n");
 
 				output = crt_reply_get(iv_info->ifc_child_rpc);
@@ -431,6 +455,18 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 			crt_req_decref(iv_info->ifc_child_rpc);
 
 		} else {
+			if (rc_value != 0) {
+				iv_info->ifc_comp_cb(ivns_internal, class_id,
+					&iv_info->ifc_iv_key, NULL,
+					&tmp_iv_value, rc_value,
+					iv_info->ifc_comp_cb_arg);
+
+				d_list_del(&pending_fetch->pf_link);
+				D_FREE(pending_fetch->pf_cb_info);
+				D_FREE(pending_fetch);
+				continue;
+			}
+
 			/* Pending local fetch case */
 			rc = iv_ops->ivo_on_get(ivns_internal,
 					&iv_info->ifc_iv_key,
@@ -457,13 +493,14 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 					&tmp_iv_value, rc_value,
 					iv_info->ifc_comp_cb_arg);
 
-			iv_ops->ivo_on_put(ivns_internal, &tmp_iv_value,
+			if (put_needed)
+				iv_ops->ivo_on_put(ivns_internal, &tmp_iv_value,
 					   iv_info->ifc_user_priv);
 		}
 
 		d_list_del(&pending_fetch->pf_link);
-		D_FREE_PTR(pending_fetch->pf_cb_info);
-		D_FREE_PTR(pending_fetch);
+		D_FREE(pending_fetch->pf_cb_info);
+		D_FREE(pending_fetch);
 	}
 
 cleanup:
@@ -878,22 +915,41 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 				&input->ifi_key,
 				0, /* TODO: iv_ver */
 				rc == 0 ? &iv_info->ifc_iv_value : NULL,
-				false,
-				iv_info->ifc_user_priv);
+				false, rc, iv_info->ifc_user_priv);
 
 	if (iv_info->ifc_bulk_hdl != 0x0)
 		crt_bulk_free(iv_info->ifc_bulk_hdl);
+
+
+	/* Finalization of fetch and processing of pending fetches must happen
+	* after ivo_on_refresh() is invoked which would cause value associated
+	* with the input->ifi_key to be updated
+	*
+	* Any unsuccessful fetch needs to process all pending requests before
+	* finalizing, as the original caller might resubmit a failed fetch
+	* for fault handling upon finalization. Not processing pending
+	* fetches prior to finalization will cause new fetches done as
+	* part of the fault handling to be added to the pending list.
+	*
+	* Any successful fetch should process all pending requests after
+	* finalization as finalization can end up marking iv value as 'usable'
+	* in some implementations of the framework callbacks
+	**/
+	if (rc != 0)
+		crt_ivf_pending_reqs_process(iv_info->ifc_ivns_internal,
+				iv_info->ifc_class_id,
+				&input->ifi_key,
+				rc);
 
 	/* Finalize fetch operation */
 	crt_ivf_finalize(iv_info, &input->ifi_key, &iv_info->ifc_iv_value,
 			rc);
 
-	/* This needs to happen after on_refresh */
-	crt_ivf_pending_reqs_process(iv_info->ifc_ivns_internal,
+	if (rc == 0)
+		crt_ivf_pending_reqs_process(iv_info->ifc_ivns_internal,
 				iv_info->ifc_class_id,
 				&input->ifi_key,
 				rc);
-
 
 	D_FREE_PTR(iv_info);
 }
@@ -926,7 +982,11 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	pthread_mutex_unlock(&ivns_internal->cii_lock);
 
 	if (entry) {
-		rc = crt_ivf_pending_request_add(entry, cb_info);
+		rc = crt_ivf_pending_request_add(ivns_internal, iv_ops,
+						entry, cb_info);
+		if (rc != 0)
+			D_ERROR("crt_ivf_pending_request_add() failed rc=%d\n",
+				rc);
 		return rc;
 	}
 
@@ -1000,6 +1060,7 @@ crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
 	struct crt_grp_priv	*grp_priv;
 	d_rank_t		 parent_rank;
 	crt_group_t		*group;
+	d_rank_list_t		*failed_ranks = NULL;
 	int			 rc;
 
 	if (cur_node == root_node)
@@ -1012,10 +1073,22 @@ crt_iv_ranks_parent_get(struct crt_ivns_internal *ivns_internal,
 	grp_priv = container_of(group, struct crt_grp_priv, gp_pub);
 	D_ASSERT(grp_priv != NULL);
 
-	rc = crt_tree_get_parent(grp_priv, 0, NULL,
+	rc = crt_grp_failed_ranks_dup(group, &failed_ranks);
+
+	if (rc != 0) {
+		D_ERROR("crt_grp_failed_ranks_dup() failed; rc=%d\n", rc);
+		failed_ranks = NULL;
+	}
+
+	rc = crt_tree_get_parent(grp_priv, 0, failed_ranks,
 			ivns_internal->cii_gns.gn_tree_topo, root_node,
 			cur_node, &parent_rank);
 	D_ASSERT(rc == 0);
+
+	d_rank_list_free(failed_ranks);
+
+	D_DEBUG("parent lookup: current=%d, root=%d, parent=%d\n",
+		cur_node, root_node, parent_rank);
 
 	return parent_rank;
 }
@@ -1213,10 +1286,10 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 
 	rc = iv_ops->ivo_on_fetch(ivns_internal, iv_key, 0,
-				  0x0, iv_value, user_priv);
+				  0, iv_value, user_priv);
 	if (rc == 0) {
 		iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
-				iv_value, false, user_priv);
+				iv_value, false, 0x0, user_priv);
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 			      iv_value, rc, cb_arg);
 		iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
@@ -1225,7 +1298,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	} else if (rc != -DER_IVCB_FORWARD) {
 		/* We got error, call the callback and exit */
 		iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
-				NULL, false, user_priv);
+				NULL, false, rc, user_priv);
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 			      NULL, rc, cb_arg);
 		iv_ops->ivo_on_put(ivns_internal, iv_value, user_priv);
@@ -1376,8 +1449,8 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 
 	/* If bulk is not set, we issue invalidate call */
 	if (rpc_req->cr_co_bulk_hdl == CRT_BULK_NULL) {
-		rc = iv_ops->ivo_on_refresh(ivns_internal,
-					&input->ivs_key, 0, NULL, true, NULL);
+		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
+					0, NULL, true, 0x0, NULL);
 		D_GOTO(exit, rc);
 	}
 
@@ -1405,7 +1478,7 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 		}
 
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
-					0, &tmp_iv, false, user_priv);
+					0, &tmp_iv, false, 0, user_priv);
 		if (rc != 0) {
 			D_ERROR("ivo_on_refresh() failed; rc=%d\n", rc);
 			D_GOTO(exit, rc);
@@ -1423,7 +1496,7 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 
 	case CRT_IV_SYNC_EVENT_NOTIFY:
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
-					    0, 0, false, user_priv);
+					    0, 0, false, 0, user_priv);
 		if (rc != 0) {
 			D_ERROR("ivo_on_refresh() failed; rc=%d\n", rc);
 			D_GOTO(exit, rc);
@@ -1507,9 +1580,8 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 					iv_sync->isc_cb_arg);
 
 		D_FREE(iv_sync->isc_iv_key.iov_buf);
-
 	}
-	D_FREE_PTR(iv_sync);
+	D_FREE(iv_sync);
 }
 
 /* Helper function to issue update sync
@@ -1578,11 +1650,11 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	if (sync_type.ivs_event == CRT_IV_SYNC_EVENT_UPDATE)
 		rc = iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
 					iv_value, iv_value ? false : true,
-					user_priv);
+					0, user_priv);
 	else if (sync_type.ivs_event == CRT_IV_SYNC_EVENT_NOTIFY)
 		rc = iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
 					NULL, iv_value ? false : true,
-					user_priv);
+					0, user_priv);
 	else {
 		D_ERROR("Unknown ivs_event %d\n", sync_type.ivs_event);
 		D_GOTO(exit, rc = -DER_INVAL);
@@ -1629,7 +1701,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	iv_sync_cb->isc_bulk_hdl = local_bulk;
 	iv_sync_cb->isc_do_callback = sync;
 
-	/* If sync is set, perform callabck from sync response handler */
+	/* If sync is set, perform callback from sync response handler */
 	if (sync) {
 		iv_sync_cb->isc_update_comp_cb = update_comp_cb;
 		iv_sync_cb->isc_cb_arg = cb_arg;
@@ -2016,7 +2088,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	if (input->ivu_iv_value_bulk == CRT_BULK_NULL) {
 
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivu_key,
-					0, NULL, true, NULL);
+					0, NULL, true, 0, NULL);
 
 		if (rc == -DER_IVCB_FORWARD) {
 			next_rank = crt_iv_parent_get(ivns_internal,
@@ -2149,13 +2221,13 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = iv_ops->ivo_on_get(ivns, iv_key,
 				0, CRT_IV_PERM_WRITE, NULL, &priv);
 
-	if (iv_value != NULL) {
+	if (iv_value != NULL)
 		rc = iv_ops->ivo_on_update(ivns, iv_key, 0,
 			(root_rank == ivns_internal->cii_local_rank),
 			iv_value, priv);
-	} else {
-		rc = iv_ops->ivo_on_refresh(ivns, iv_key, 0, NULL, true, priv);
-	}
+	else
+		rc = iv_ops->ivo_on_refresh(ivns, iv_key, 0, NULL,
+					true, 0, priv);
 
 	if (rc == 0) {
 		/* issue sync. will call completion callback */

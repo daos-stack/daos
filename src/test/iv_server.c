@@ -587,7 +587,7 @@ iv_on_update(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 static int
 iv_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value, bool invalidate,
-	      void *user_priv)
+	      int refresh_rc, void *user_priv)
 {
 	struct kv_pair_entry	*entry = NULL;
 	bool			valid;

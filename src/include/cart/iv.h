@@ -167,6 +167,7 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  * \param iv_value [IN]		IV value to be refresh
  * \param invalidate [IN]       true for invalidate the IV in which case the
  *				iv_ver and iv_value can be ignored.
+ * \param rc [IN]		Status of the operation.
  * \param priv [IN]		private user data
  *
  * \return			zero on success handled locally,
@@ -177,7 +178,7 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
 typedef int (*crt_iv_on_refresh_cb_t)(crt_iv_namespace_t ivns,
 				      crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
 				      d_sg_list_t *iv_value, bool invalidate,
-				      void *arg);
+				      int rc, void *arg);
 
 /**
  * The hash function to hash one IV's key to a d_rank_t result which is to be
