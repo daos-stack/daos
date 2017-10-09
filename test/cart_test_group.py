@@ -59,7 +59,6 @@ set TR_USE_VALGRIND in cart_test_group.yml to callgrind
 """
 
 import os
-import time
 import commontestsuite
 
 class TestGroup(commontestsuite.CommonTestSuite):
@@ -99,11 +98,10 @@ class TestGroup(commontestsuite.CommonTestSuite):
         procrtn = self.launch_test(testmsg, '1', self.pass_env, \
                                    cli_arg='tests/test_group' + \
                                              ' --name client_group' + \
-                                             ' --attach_to service_group' + \
-                                             ' --holdtime 10', \
+                                             ' --attach_to service_group',
                                    srv_arg='tests/test_group' + \
                                              ' --name service_group' + \
-                                             ' --is_service --holdtime 5 ')
+                                             ' --is_service')
         if procrtn:
             self.fail("Failed, return code %d" % procrtn)
 
@@ -124,7 +122,7 @@ class TestGroup(commontestsuite.CommonTestSuite):
             self.fail("Failed, server list is empty.")
 
         srv_args = 'tests/test_group' + \
-            ' --name service_group --is_service --holdtime 10'
+            ' --name service_group --is_service'
         server = ''.join([' -H ', servers.pop(0)])
         # Launch a test_group instance to act as a target  in the background.
         # This will remain running for the duration.
@@ -134,8 +132,6 @@ class TestGroup(commontestsuite.CommonTestSuite):
         if proc_srv is None:
             self.fail("Server launch failed, return code %s" \
                        % proc_srv.returncode)
-
-        time.sleep(5)
 
         # Verify the server is still running.
         if not self.check_process(proc_srv):
@@ -151,11 +147,9 @@ class TestGroup(commontestsuite.CommonTestSuite):
                                    cli=''.join([' -H ', clients.pop(0)]), \
                                    cli_arg='tests/test_group' + \
                                              ' --name client_group' + \
-                                             ' --attach_to service_group' + \
-                                             ' --holdtime 5')
+                                             ' --attach_to service_group')
 
-        # Stop the server.  This will normally run forever because of the hold
-        # option, so allow stop_process() to kill it.
+        # Stop the server.
         srv_rtn = self.stop_process(testmsg, proc_srv)
 
         if cli_rtn or srv_rtn:

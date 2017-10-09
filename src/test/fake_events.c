@@ -106,7 +106,7 @@ fake_event_thread(void *arg)
 }
 
 int
-crt_fake_event_init(int rank)
+crt_fake_event_init(d_rank_t rank)
 {
 	char		*pipe_name;
 	int		 length;

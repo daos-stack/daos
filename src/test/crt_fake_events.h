@@ -55,7 +55,7 @@ void crt_lm_fake_event_notify_fn(d_rank_t pmix_rank, bool *dead);
  * \return			0 on success, negative value on error
  */
 int
-crt_fake_event_init(int rank);
+crt_fake_event_init(d_rank_t rank);
 
 /**
  * Stop simulating RAS events.

@@ -347,8 +347,11 @@ rpc_err_test_run(void)
 	int		rc;
 
 	if (rpc_err.re_is_client) {
-		rc = crt_group_attach(rpc_err.re_target_group_name,
-				      &rpc_err.re_target_group);
+		/* try until success */
+		do {
+			rc = crt_group_attach(rpc_err.re_target_group_name,
+					      &rpc_err.re_target_group);
+		} while (rc != 0);
 		D_ASSERTF(rc == 0, "crt_group_attach() failed, rc: %d\n", rc);
 		D_ASSERTF(rpc_err.re_target_group != NULL,
 			  "attached group is NULL.\n");

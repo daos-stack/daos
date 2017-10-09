@@ -158,8 +158,7 @@ class TestRpc(commontestsuite.CommonTestSuite):
                                    cli=''.join([' -H ', clients.pop(0)]), \
                                    cli_arg=self.cli_args)
 
-        # Stop the server.  This will normally run forever because of the hold
-        # option, so allow stop_process() to kill it.
+        # Stop the server.
         srv_rtn = self.stop_process(testmsg, proc_srv)
         srv_rtn2 = self.stop_process(testmsg, proc_srv2)
 

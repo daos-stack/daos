@@ -151,8 +151,7 @@ class TestRpcError(commontestsuite.CommonTestSuite):
                                              ' --name client_group' + \
                                              ' --attach_to service_group')
 
-        # Stop the server.  This will normally run forever because of the hold
-        # option, so allow stop_process() to kill it.
+        # Stop the server.
         srv_rtn = self.stop_process(testmsg, proc_srv)
 
         if cli_rtn or srv_rtn:
