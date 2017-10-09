@@ -425,7 +425,7 @@ crt_hg_reg_rpcid(hg_class_t *hg_class)
 			(crt_proc_cb_t)crt_proc_out_common,
 			(crt_hg_rpc_cb_t)crt_rpc_handler_common);
 	if (rc != 0) {
-		D_ERROR("crt_hg_reg(rpcid: 0x%x), failed rc: %d.\n",
+		D_ERROR("crt_hg_reg(rpcid: %#x), failed rc: %d.\n",
 			CRT_HG_RPCID, rc);
 		D_GOTO(out, rc = -DER_HG);
 	}
@@ -435,14 +435,14 @@ crt_hg_reg_rpcid(hg_class_t *hg_class)
 			(crt_proc_cb_t)crt_proc_out_common,
 			(crt_hg_rpc_cb_t)crt_rpc_handler_common);
 	if (rc != 0) {
-		D_ERROR("crt_hg_reg(rpcid: 0x%x), failed rc: %d.\n",
+		D_ERROR("crt_hg_reg(rpcid: %#x), failed rc: %d.\n",
 			CRT_HG_ONEWAY_RPCID, rc);
 		D_GOTO(out, rc = -DER_HG);
 	}
 	rc = HG_Registered_disable_response(hg_class, CRT_HG_ONEWAY_RPCID,
 					    HG_TRUE);
 	if (rc != 0)
-		D_ERROR("HG_Registered_disable_response(rpcid: 0x%x), "
+		D_ERROR("HG_Registered_disable_response(rpcid: %#x), "
 			"failed rc: %d.\n", CRT_HG_ONEWAY_RPCID, rc);
 
 out:
@@ -866,7 +866,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
 	if (opc_info == NULL) {
-		D_ERROR("opc: 0x%x, lookup failed.\n", opc);
+		D_ERROR("opc: %#x, lookup failed.\n", opc);
 		/*
 		 * The RPC is not registered on the server, we don't know how to
 		 * process the RPC request, so we send a CART
@@ -894,7 +894,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 
 	rpc_priv->crp_opc_info = opc_info;
 
-	D_DEBUG("rpc_priv %p (opc: 0x%x),"
+	D_DEBUG("rpc_priv %p (opc: %#x),"
 		" allocated per RPC request received.\n",
 		rpc_priv, rpc_priv->crp_opc_info->coi_opc);
 
@@ -914,7 +914,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 			rpc_pub->cr_ep.ep_grp = NULL;
 			/* TODO lookup by rpc_priv->crp_req_hdr.cch_grp_id */
 		} else {
-			D_ERROR("_unpack_body failed, rc: %d, opc: 0x%x.\n",
+			D_ERROR("_unpack_body failed, rc: %d, opc: %#x.\n",
 				rc, rpc_pub->cr_opc);
 			crt_hg_reply_error_send(rpc_priv, -DER_MISC);
 			D_GOTO(decref, hg_ret = HG_SUCCESS);
@@ -924,7 +924,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 
 	if (opc_info->coi_rpc_cb == NULL) {
-		D_ERROR("NULL crp_hg_hdl, opc: 0x%x.\n", opc);
+		D_ERROR("NULL crp_hg_hdl, opc: %#x.\n", opc);
 		crt_hg_reply_error_send(rpc_priv, -DER_UNREG);
 		D_GOTO(decref, hg_ret = HG_SUCCESS);
 	}
@@ -970,7 +970,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 				   rpcid, &rpc_priv->crp_hg_hdl);
 		if (hg_ret != HG_SUCCESS) {
 			D_ERROR("HG_Create failed, hg_ret: %d, rpc_priv %p, "
-				"opc: 0x%x.\n",
+				"opc: %#x.\n",
 				hg_ret, rpc_priv, rpc_priv->crp_pub.cr_opc);
 			rc = -DER_HG;
 		}
@@ -981,7 +981,7 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		if (hg_ret != HG_SUCCESS) {
 			rpc_priv->crp_hg_hdl = NULL;
 			D_ERROR("HG_Reset failed, hg_ret: %d, rpc_priv %p, "
-				"opc: 0x%x.\n",
+				"opc: %#x.\n",
 				hg_ret, rpc_priv, rpc_priv->crp_pub.cr_opc);
 			rc = -DER_HG;
 		}
@@ -1002,7 +1002,7 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 					&rpc_priv->crp_pub.cr_output);
 		if (hg_ret != HG_SUCCESS)
 			D_ERROR("HG_Free_output failed, hg_ret: %d, "
-				"opc: 0x%x.\n", hg_ret,
+				"opc: %#x.\n", hg_ret,
 				rpc_priv->crp_pub.cr_opc);
 	}
 	if (rpc_priv->crp_input_got != 0) {
@@ -1010,7 +1010,7 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 				       &rpc_priv->crp_pub.cr_input);
 		if (hg_ret != HG_SUCCESS)
 			D_ERROR("HG_Free_input failed, hg_ret: %d, "
-				"opc: 0x%x.\n", hg_ret,
+				"opc: %#x.\n", hg_ret,
 				rpc_priv->crp_pub.cr_opc);
 	}
 
@@ -1042,7 +1042,7 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 		 */
 		hg_ret = HG_Destroy(rpc_priv->crp_hg_hdl);
 		if (hg_ret != HG_SUCCESS) {
-			D_ERROR("HG_Destroy failed, hg_ret: %d, opc: 0x%x.\n",
+			D_ERROR("HG_Destroy failed, hg_ret: %d, opc: %#x.\n",
 				hg_ret, rpc_priv->crp_pub.cr_opc);
 		}
 	}
@@ -1087,10 +1087,10 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		break;
 	case HG_CANCELED:
 		if (crt_req_timedout(rpc_pub)) {
-			D_DEBUG("request timedout, opc: 0x%x.\n", opc);
+			D_DEBUG("request timedout, opc: %#x.\n", opc);
 			rc = -DER_TIMEDOUT;
 		} else {
-			D_DEBUG("request canceled, opc: 0x%x.\n", opc);
+			D_DEBUG("request canceled, opc: %#x.\n", opc);
 			rc = -DER_CANCELED;
 		}
 		state = RPC_STATE_CANCELED;
@@ -1121,7 +1121,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 				rc = rpc_priv->crp_reply_hdr.cch_rc;
 			} else {
 				D_ERROR("HG_Get_output failed, hg_ret: %d, opc:"
-					" 0x%x.\n", hg_ret, opc);
+					" %#x.\n", hg_ret, opc);
 				rc = -DER_HG;
 			}
 		}
@@ -1143,7 +1143,7 @@ out:
 	/* corresponding to the refcount taken in crt_rpc_priv_init(). */
 	rc = crt_req_decref(rpc_pub);
 	if (rc != 0)
-		D_ERROR("crt_req_decref failed, rc: %d, opc: 0x%x.\n", rc, opc);
+		D_ERROR("crt_req_decref failed, rc: %d, opc: %#x.\n", rc, opc);
 
 	return hg_ret;
 }
@@ -1172,7 +1172,7 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 			    hg_in_struct);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Forward failed, hg_ret: %d, prc_priv: %p, "
-			"opc: 0x%x.\n", hg_ret, rpc_priv,
+			"opc: %#x.\n", hg_ret, rpc_priv,
 			rpc_priv->crp_pub.cr_opc);
 		D_FREE_PTR(cb_info);
 		rc = -DER_HG;
@@ -1196,7 +1196,7 @@ crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv)
 
 	hg_ret = HG_Cancel(rpc_priv->crp_hg_hdl);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("crt_hg_req_cancel failed, hg_ret: %d, opc: 0x%x.\n",
+		D_ERROR("crt_hg_req_cancel failed, hg_ret: %d, opc: %#x.\n",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
 		rc = -DER_HG;
 	}
@@ -1225,12 +1225,12 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 	 * see CART-146 for details
 	 */
 	if (hg_ret != HG_SUCCESS)
-		D_WARN("hg_cbinfo->ret: %d, opc: 0x%x.\n", hg_ret, opc);
+		D_WARN("hg_cbinfo->ret: %d, opc: %#x.\n", hg_ret, opc);
 
 	/* corresponding to the crt_req_addref in crt_hg_reply_send */
 	rc = crt_req_decref(&rpc_priv->crp_pub);
 	if (rc != 0)
-		D_ERROR("crt_req_decref failed, rc: %d, opc: 0x%x.\n", rc, opc);
+		D_ERROR("crt_req_decref failed, rc: %d, opc: %#x.\n", rc, opc);
 
 	D_FREE_PTR(req_cbinfo);
 	return hg_ret;
@@ -1263,7 +1263,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb, cb_info,
 			    hg_out_struct);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Respond failed, hg_ret: %d, opc: 0x%x.\n",
+		D_ERROR("HG_Respond failed, hg_ret: %d, opc: %#x.\n",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
 		D_FREE_PTR(cb_info);
 		/* should success as addref above */
@@ -1291,11 +1291,11 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, NULL, NULL, hg_out_struct);
 	if (hg_ret != HG_SUCCESS)
 		D_ERROR("Failed to send CART error code back. "
-			"HG_Respond failed, hg_ret: %d, opc: 0x%x.\n",
+			"HG_Respond failed, hg_ret: %d, opc: %#x.\n",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
 	else
 		D_DEBUG("Sent CART level error message back to client. "
-			"rpc_priv %p, opc: 0x%x, error_code: %d.\n",
+			"rpc_priv %p, opc: %#x, error_code: %d.\n",
 			rpc_priv, rpc_priv->crp_pub.cr_opc, error_code);
 }
 

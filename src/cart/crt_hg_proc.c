@@ -502,7 +502,7 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 	int           rc = 0;
 
 	/*
-	 * D_DEBUG("in crt_proc_common_hdr, opc: 0x%x.\n", hdr->cch_opc);
+	 * D_DEBUG("in crt_proc_common_hdr, opc: %#x.\n", hdr->cch_opc);
 	 */
 
 	if (proc == CRT_PROC_NULL || hdr == NULL)
@@ -764,7 +764,7 @@ crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 	/* Decode input parameters */
 	rc = crt_proc_input(rpc_priv, proc);
 	if (rc != 0) {
-		D_ERROR("crt_hg_unpack_body failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_hg_unpack_body failed, rc: %d, opc: %#x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
@@ -772,7 +772,7 @@ crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 	/* Flush proc */
 	hg_ret = hg_proc_flush(proc);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("Error in proc flush, hg_ret: %d, opc: 0x%x.",
+		D_ERROR("Error in proc flush, hg_ret: %d, opc: %#x.",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
@@ -824,7 +824,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 
 	if (*data == NULL) {
 		/*
-		D_DEBUG("crt_proc_in_common, opc: 0x%x, NULL input.\n",
+		D_DEBUG("crt_proc_in_common, opc: %#x, NULL input.\n",
 			rpc_priv->crp_req_hdr.cch_opc);
 		*/
 		D_GOTO(out, rc);
@@ -869,7 +869,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 		}
 		if (rpc_priv->crp_reply_hdr.cch_rc != 0) {
 			D_ERROR("RPC failed to execute on target. rpc_priv %p,"
-				"opc: 0x%x, error code: %d.\n",
+				"opc: %#x, error code: %d.\n",
 				rpc_priv, rpc_priv->crp_pub.cr_opc,
 				rpc_priv->crp_reply_hdr.cch_rc);
 			D_GOTO(out, rc);
@@ -878,7 +878,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 
 	if (*data == NULL) {
 		/*
-		D_DEBUG("crt_proc_out_common, opc: 0x%x, NULL output.\n",
+		D_DEBUG("crt_proc_out_common, opc: %#x, NULL output.\n",
 			rpc_priv->crp_req_hdr.cch_opc);
 		*/
 		D_GOTO(out, rc);

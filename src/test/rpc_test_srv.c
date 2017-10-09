@@ -167,7 +167,7 @@ srv_common_cb(crt_rpc_t *rpc_req)
 
 	dbg("client has connected to server[%u]\n", rpc_srv.my_rank);
 
-	dbg("rpc_req->cr_opc:0x%x\n", rpc_req->cr_opc);
+	dbg("rpc_req->cr_opc:%#x\n", rpc_req->cr_opc);
 
 	switch (rpc_req->cr_opc) {
 	case CRT_RPC_TEST_IO:

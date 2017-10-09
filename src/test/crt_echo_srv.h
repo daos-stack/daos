@@ -251,7 +251,7 @@ echo_srv_bulk_test(crt_rpc_t *rpc_req)
 	assert(rc == 0);
 	rc = crt_bulk_get_sgnum(e_req->remote_bulk_hdl, &bulk_sgnum);
 
-	printf("echo_srver recv'd bulk_test, opc: 0x%x, intro_msg: %s, "
+	printf("echo_srver recv'd bulk_test, opc: %#x, intro_msg: %s, "
 	       "bulk_len: %ld, bulk_sgnum: %d.\n",
 	       rpc_req->cr_opc, e_req->bulk_intro_msg, bulk_len, bulk_sgnum);
 

@@ -176,10 +176,10 @@ echo_srv_checkin(crt_rpc_t *rpc_req)
 	e_req = crt_req_get(rpc_req);
 	D_ASSERT(e_req != NULL);
 
-	printf("tier1 echo_srver recv'd checkin, opc: 0x%x.\n",
-		rpc_req->cr_opc);
+	printf("tier1 echo_srver recv'd checkin, opc: %#x.\n",
+	       rpc_req->cr_opc);
 	printf("tier1 checkin input - age: %d, name: %s, days: %d.\n",
-		e_req->age, e_req->name, e_req->days);
+	       e_req->age, e_req->name, e_req->days);
 	if (e_req->raw_package.iov_len != 0) {
 		D_ASSERT(e_req->raw_package.iov_buf != NULL);
 		raw_buf = e_req->raw_package.iov_buf;
@@ -201,7 +201,7 @@ echo_srv_checkin(crt_rpc_t *rpc_req)
 void
 echo_srv_shutdown(crt_rpc_t *rpc_req)
 {
-	printf("tier1 echo_srver received shutdown request, opc: 0x%x.\n",
+	printf("tier1 echo_srver received shutdown request, opc: %#x.\n",
 	       rpc_req->cr_opc);
 
 	assert(rpc_req->cr_input == NULL);

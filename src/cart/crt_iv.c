@@ -1432,7 +1432,7 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 		break;
 
 	default:
-		D_ERROR("Unknown event type 0x%x", sync_type->ivs_event);
+		D_ERROR("Unknown event type %#x", sync_type->ivs_event);
 		D_GOTO(exit, rc = -DER_INVAL);
 		break;
 	}

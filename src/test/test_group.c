@@ -117,10 +117,10 @@ echo_checkin_handler(crt_rpc_t *rpc_req)
 	e_req = crt_req_get(rpc_req);
 	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
-	printf("tier1 echo_server recv'd checkin, opc: 0x%x.\n",
-		rpc_req->cr_opc);
+	printf("tier1 echo_server recv'd checkin, opc: %#x.\n",
+	       rpc_req->cr_opc);
 	printf("tier1 checkin input - age: %d, name: %s, days: %d.\n",
-		e_req->age, e_req->name, e_req->days);
+	       e_req->age, e_req->name, e_req->days);
 
 	e_reply = crt_reply_get(rpc_req);
 	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
@@ -156,7 +156,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		if (rpc_req_output == NULL)
 			return;
 		if (cb_info->cci_rc != 0) {
-			D_ERROR("rpc (opc: 0x%x) failed, rc: %d.\n",
+			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);
 			D_FREE(rpc_req_input->name);
 			break;
@@ -213,7 +213,7 @@ static void *progress_thread(void *arg)
 
 void echo_shutdown_handler(crt_rpc_t *rpc_req)
 {
-	printf("tier1 echo_srver received shutdown request, opc: 0x%x.\n",
+	printf("tier1 echo_srver received shutdown request, opc: %#x.\n",
 	       rpc_req->cr_opc);
 
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");

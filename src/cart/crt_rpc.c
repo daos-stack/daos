@@ -501,7 +501,7 @@ crt_internal_rpc_register(void)
 		rc = crt_rpc_reg_internal(rpc->ir_opc, rpc->ir_req_fmt,
 					  rpc->ir_hdlr, rpc->ir_co_ops);
 		if (rc) {
-			D_ERROR("opcode 0x%x registration failed, rc: %d.\n",
+			D_ERROR("opcode %#x registration failed, rc: %d.\n",
 				rpc->ir_opc, rc);
 			break;
 		}
@@ -521,7 +521,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
 	if (opc_info == NULL) {
-		D_ERROR("opc: 0x%x, lookup failed.\n", opc);
+		D_ERROR("opc: %#x, lookup failed.\n", opc);
 		D_GOTO(out, rc = -DER_UNREG);
 	}
 	D_ASSERT(opc_info->coi_input_size <= CRT_MAX_INPUT_SIZE &&
@@ -538,7 +538,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 	rpc_priv->crp_forward = forward;
 	*priv_allocated = rpc_priv;
 
-	D_DEBUG("rpc_priv %p (opc: 0x%x), allocated.\n",
+	D_DEBUG("rpc_priv %p (opc: %#x), allocated.\n",
 		rpc_priv, rpc_priv->crp_opc_info->coi_opc);
 
 out:
@@ -576,7 +576,7 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 	rc = crt_rpc_priv_alloc(opc, &rpc_priv, forward);
 	if (rc != 0) {
-		D_ERROR("crt_rpc_priv_alloc, rc: %d, opc: 0x%x.\n", rc, opc);
+		D_ERROR("crt_rpc_priv_alloc, rc: %d, opc: %#x.\n", rc, opc);
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(rpc_priv != NULL);
@@ -653,7 +653,7 @@ crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	rc = crt_req_create_internal(crt_ctx, tgt_ep, opc, false /* forward */,
 				     req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create_internal failed, opc: 0x%x, rc: %d.\n",
+		D_ERROR("crt_req_create_internal failed, opc: %#x, rc: %d.\n",
 			opc, rc);
 		D_GOTO(out, rc);
 	}
@@ -728,7 +728,7 @@ crt_req_addref(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 	pthread_spin_lock(&rpc_priv->crp_lock);
 	rpc_priv->crp_refcount++;
-	D_DEBUG("rpc_priv %p (opc: 0x%x), addref to %d.\n",
+	D_DEBUG("rpc_priv %p (opc: %#x), addref to %d.\n",
 		rpc_priv, req->cr_opc, rpc_priv->crp_refcount);
 	pthread_spin_unlock(&rpc_priv->crp_lock);
 
@@ -752,13 +752,13 @@ crt_req_decref(crt_rpc_t *req)
 	rpc_priv->crp_refcount--;
 	if (rpc_priv->crp_refcount == 0)
 		destroy = 1;
-	D_DEBUG("rpc_priv %p (opc: 0x%x), decref to %d.\n",
+	D_DEBUG("rpc_priv %p (opc: %#x), decref to %d.\n",
 		rpc_priv, req->cr_opc, rpc_priv->crp_refcount);
 	pthread_spin_unlock(&rpc_priv->crp_lock);
 
 	if (destroy == 1) {
 		if (rpc_priv->crp_reply_pending == 1) {
-			D_WARN("no reply sent for rpc_priv %p (opc: 0x%x).\n",
+			D_WARN("no reply sent for rpc_priv %p (opc: %#x).\n",
 			       rpc_priv, req->cr_opc);
 			/* We have executed the user RPC handler, but the user
 			 * handler forgot to call crt_reply_send(). We send a
@@ -770,7 +770,7 @@ crt_req_decref(crt_rpc_t *req)
 		rc = crt_hg_req_destroy(rpc_priv);
 		if (rc != 0)
 			D_ERROR("crt_hg_req_destroy failed, rc: %d, "
-				"rpc_priv %p(opc: 0x%x).\n",
+				"rpc_priv %p(opc: %#x).\n",
 				rc, rpc_priv, req->cr_opc);
 	}
 
@@ -813,7 +813,7 @@ crt_req_hg_addr_lookup_cb(hg_addr_t hg_addr, void *arg)
 	rc = crt_req_send_internal(rpc_priv);
 	if (rc != 0) {
 		D_ERROR("crt_req_send_internal() failed, rc %d, rpc_priv: %p, "
-			"opc: 0x%x.\n", rc, rpc_priv, rpc_priv->crp_pub.cr_opc);
+			"opc: %#x.\n", rc, rpc_priv, rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
 out:
@@ -838,7 +838,7 @@ crt_req_get_tgt_uri(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t base_uri)
 	rpc_priv->crp_tgt_uri  =
 		crt_get_tag_uri(base_uri, rpc_priv->crp_pub.cr_ep.ep_tag);
 	if (rpc_priv->crp_tgt_uri == NULL) {
-		D_ERROR("crt_get_tag_uri failed, opc: 0x%x.\n",
+		D_ERROR("crt_get_tag_uri failed, opc: %#x.\n",
 			rpc_priv->crp_pub.cr_opc);
 		rc = -DER_NOMEM;
 	} else {
@@ -866,7 +866,7 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	D_ASSERT(rpc_priv->crp_ul_req = cb_info->cci_rpc);
 
 	if (cb_info->cci_rc != 0) {
-		D_ERROR("rpc_priv %p(opc: 0x%x), failed cci_rc: %d.\n",
+		D_ERROR("rpc_priv %p(opc: %#x), failed cci_rc: %d.\n",
 			container_of(cb_info->cci_rpc, struct crt_rpc_priv,
 				     crp_pub),
 			cb_info->cci_rpc->cr_opc, cb_info->cci_rc);
@@ -895,14 +895,14 @@ crt_req_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 
 	rc = crt_req_get_tgt_uri(rpc_priv, uri);
 	if (rc != 0) {
-		D_ERROR("crt_req_get_tgt_uri failed, opc: 0x%x.\n",
+		D_ERROR("crt_req_get_tgt_uri failed, opc: %#x.\n",
 			rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
 
 	rc = crt_req_send_internal(rpc_priv);
 	if (rc != 0) {
-		D_ERROR("crt_req_send_internal() failed, rc %d, opc: 0x%x\n",
+		D_ERROR("crt_req_send_internal() failed, rc %d, opc: %#x\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
@@ -949,7 +949,7 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 	rc = crt_req_create(rpc_priv->crp_pub.cr_ctx, &psr_ep,
 			    CRT_OPC_URI_LOOKUP, &ul_req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create URI_LOOKUP failed, rc: %d opc: 0x%x.\n",
+		D_ERROR("crt_req_create URI_LOOKUP failed, rc: %d opc: %#x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
@@ -966,7 +966,7 @@ crt_req_uri_lookup_psr(struct crt_rpc_priv *rpc_priv, crt_cb_t complete_cb,
 	rc = crt_req_send(ul_req, complete_cb, arg);
 	if (rc != 0) {
 		D_ERROR("URI_LOOKUP (to group %s rank %d through PSR %d) "
-			"request send failed, rc: %d opc: 0x%x.\n",
+			"request send failed, rc: %d opc: %#x.\n",
 			ul_in->ul_grp_id, ul_in->ul_rank, psr_ep.ep_rank,
 			rc, rpc_priv->crp_pub.cr_opc);
 		crt_req_decref(ul_req); /* rollback addref above */
@@ -1000,7 +1000,7 @@ crt_req_ep_lc_lookup(struct crt_rpc_priv *rpc_priv, crt_phy_addr_t *base_addr)
 			       tgt_ep->ep_rank, tgt_ep->ep_tag, base_addr,
 			       &rpc_priv->crp_hg_addr);
 	if (rc != 0) {
-		D_ERROR("crt_grp_lc_lookup failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_grp_lc_lookup failed, rc: %d, opc: %#x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
@@ -1106,13 +1106,13 @@ crt_req_uri_lookup(struct crt_rpc_priv *rpc_priv)
 
 	rc = crt_req_get_tgt_uri(rpc_priv, uri);
 	if (rc != 0) {
-		D_ERROR("crt_req_get_tgt_uri failed, opc: 0x%x.\n",
+		D_ERROR("crt_req_get_tgt_uri failed, opc: %#x.\n",
 			rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
 	rc = crt_req_send_internal(rpc_priv);
 	if (rc != 0) {
-		D_ERROR("crt_req_send_internal() failed, rc %d, opc: 0x%x\n",
+		D_ERROR("crt_req_send_internal() failed, rc %d, opc: %#x\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 		D_GOTO(out, rc);
 	}
@@ -1138,7 +1138,7 @@ crt_req_hg_addr_lookup(struct crt_rpc_priv *rpc_priv)
 	rc = crt_hg_addr_lookup(&crt_ctx->cc_hg_ctx, rpc_priv->crp_tgt_uri,
 				crt_req_hg_addr_lookup_cb, rpc_priv);
 	if (rc != 0) {
-		D_ERROR("crt_addr_lookup() failed, rc %d, opc: 0x%x..\n",
+		D_ERROR("crt_addr_lookup() failed, rc %d, opc: %#x..\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 		/* rollback above addref */
 		crt_req_decref(&rpc_priv->crp_pub);
@@ -1160,7 +1160,7 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	ctx = (struct crt_context *)req->cr_ctx;
 	rc = crt_hg_req_create(&ctx->cc_hg_ctx, rpc_priv);
 	if (rc != 0) {
-		D_ERROR("crt_hg_req_create failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_hg_req_create failed, rc: %d, opc: %#x.\n",
 			rc, req->cr_opc);
 		D_GOTO(out, rc);
 	}
@@ -1171,12 +1171,12 @@ crt_req_send_immediately(struct crt_rpc_priv *rpc_priv)
 	rc = crt_hg_req_send(rpc_priv);
 	if (rc != 0)
 		D_ERROR("crt_hg_req_send failed, rc: %d, rpc_priv: %p,"
-			"opc: 0x%x.\n", rc, rpc_priv, req->cr_opc);
+			"opc: %#x.\n", rc, rpc_priv, req->cr_opc);
 
 out:
 	if (rc != 0)
 		D_ERROR("crt_req_send_immediately failed, rc: %d, rpc_priv: %p,"
-			" opc: 0x%x.\n", rc, rpc_priv, req->cr_opc);
+			" opc: %#x.\n", rc, rpc_priv, req->cr_opc);
 	return rc;
 }
 
@@ -1197,7 +1197,7 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 		rc = crt_req_ep_lc_lookup(rpc_priv, &base_addr);
 		if (rc != 0) {
 			D_ERROR("crt_grp_ep_lc_lookup() failed, rc %d, "
-				"opc: 0x%x.\n", rc, req->cr_opc);
+				"opc: %#x.\n", rc, req->cr_opc);
 			D_GOTO(out, rc);
 		}
 		if (rpc_priv->crp_hg_addr != NULL) {
@@ -1208,28 +1208,28 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			rc = crt_req_get_tgt_uri(rpc_priv, base_addr);
 			if (rc != 0) {
 				D_ERROR("crt_req_get_tgt_uri failed, "
-					"opc: 0x%x.\n", req->cr_opc);
+					"opc: %#x.\n", req->cr_opc);
 				D_GOTO(out, rc);
 			}
 			rpc_priv->crp_state = RPC_STATE_ADDR_LOOKUP;
 			rc = crt_req_hg_addr_lookup(rpc_priv);
 			if (rc != 0)
 				D_ERROR("crt_req_hg_addr_lookup() failed, "
-					"rc %d, opc: 0x%x.\n", rc, req->cr_opc);
+					"rc %d, opc: %#x.\n", rc, req->cr_opc);
 		} else {
 			/* base_addr == NULL, send uri lookup req */
 			rpc_priv->crp_state = RPC_STATE_URI_LOOKUP;
 			rc = crt_req_uri_lookup(rpc_priv);
 			if (rc != 0)
 				D_ERROR("crt_req_uri_lookup() failed. rc %d, "
-					"opc: 0x%x.\n", rc, req->cr_opc);
+					"opc: %#x.\n", rc, req->cr_opc);
 		}
 		break;
 	case RPC_STATE_URI_LOOKUP:
 		rc = crt_req_ep_lc_lookup(rpc_priv, &base_addr);
 		if (rc != 0) {
 			D_ERROR("crt_grp_ep_lc_lookup() failed, rc %d, "
-				"opc: 0x%x\n", rc, req->cr_opc);
+				"opc: %#x\n", rc, req->cr_opc);
 			D_GOTO(out, rc);
 		}
 		if (rpc_priv->crp_hg_addr != NULL) {
@@ -1240,14 +1240,14 @@ crt_req_send_internal(struct crt_rpc_priv *rpc_priv)
 			rc = crt_req_hg_addr_lookup(rpc_priv);
 			if (rc != 0)
 				D_ERROR("crt_req_hg_addr_lookup() failed, "
-					"rc %d, opc: 0x%x.\n", rc, req->cr_opc);
+					"rc %d, opc: %#x.\n", rc, req->cr_opc);
 		}
 		break;
 	case RPC_STATE_ADDR_LOOKUP:
 		rc = crt_req_send_immediately(rpc_priv);
 		break;
 	default:
-		D_ERROR("bad rpc state: 0x%x, opc: 0x%x.\n",
+		D_ERROR("bad rpc state: %#x, opc: %#x.\n",
 			rpc_priv->crp_state, req->cr_opc);
 		rc = -DER_PROTO;
 		break;
@@ -1294,12 +1294,12 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		rc = crt_corpc_req_hdlr(req);
 		if (rc != 0)
 			D_ERROR("crt_corpc_req_hdlr failed, "
-				"rc: %d,opc: 0x%x.\n", rc, req->cr_opc);
+				"rc: %d,opc: %#x.\n", rc, req->cr_opc);
 		D_GOTO(out, rc);
 	} else {
 		if (!rpc_priv->crp_have_ep) {
 			D_WARN("target endpoint not set "
-				"rpc: %p, opc: 0x%x.\n", rpc_priv, req->cr_opc);
+				"rpc: %p, opc: %#x.\n", rpc_priv, req->cr_opc);
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
@@ -1312,7 +1312,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		rc = crt_req_send_internal(rpc_priv);
 		if (rc != 0) {
 			D_ERROR("crt_req_send_internal() failed, "
-				"rc %d, opc: 0x%x\n",
+				"rc %d, opc: %#x\n",
 				rc, rpc_priv->crp_pub.cr_opc);
 			crt_context_req_untrack(req);
 		}
@@ -1320,7 +1320,7 @@ crt_req_send(crt_rpc_t *req, crt_cb_t complete_cb, void *arg)
 		/* queued in crt_hg_context::dhc_req_q */
 		rc = 0;
 	} else {
-		D_ERROR("crt_req_track failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_req_track failed, rc: %d, opc: %#x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 	}
 
@@ -1362,7 +1362,7 @@ crt_reply_send(crt_rpc_t *req)
 	} else {
 		rc = crt_hg_reply_send(rpc_priv);
 		if (rc != 0)
-			D_ERROR("crt_hg_reply_send failed, rc: %d,opc: 0x%x.\n",
+			D_ERROR("crt_hg_reply_send failed, rc: %d,opc: %#x.\n",
 				rc, rpc_priv->crp_pub.cr_opc);
 	}
 
@@ -1385,14 +1385,14 @@ crt_req_abort(crt_rpc_t *req)
 	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
 
 	if (crt_req_aborted(req)) {
-		D_DEBUG("req (rpc_priv %p, opc: 0x%x) aborted, need not "
+		D_DEBUG("req (rpc_priv %p, opc: %#x) aborted, need not "
 			"abort again.\n", rpc_priv, req->cr_opc);
 		D_GOTO(out, rc);
 	}
 
 	rc = crt_hg_req_cancel(rpc_priv);
 	if (rc != 0) {
-		D_ERROR("crt_hg_req_cancel failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_hg_req_cancel failed, rc: %d, opc: %#x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 	}
 
@@ -1592,7 +1592,7 @@ timeout_bp_node_enter(struct d_binheap *h, struct d_binheap_node *e)
 
 	rpc_priv = container_of(e, struct crt_rpc_priv, crp_timeout_bp_node);
 
-	D_DEBUG("rpc_priv %p (opc 0x%x) entering the timeout binheap.\n",
+	D_DEBUG("rpc_priv %p (opc %#x) entering the timeout binheap.\n",
 		rpc_priv, rpc_priv->crp_pub.cr_opc);
 
 	return 0;
@@ -1608,7 +1608,7 @@ timeout_bp_node_exit(struct d_binheap *h, struct d_binheap_node *e)
 
 	rpc_priv = container_of(e, struct crt_rpc_priv, crp_timeout_bp_node);
 
-	D_DEBUG("rpc_priv %p (opc 0x%x) exiting the timeout binheap.\n",
+	D_DEBUG("rpc_priv %p (opc %#x) exiting the timeout binheap.\n",
 		rpc_priv, rpc_priv->crp_pub.cr_opc);
 
 	return 0;

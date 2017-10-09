@@ -880,7 +880,7 @@ out:
 	gc_out->gc_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
 			rc, rpc_req->cr_opc);
 	else if (gc_out->gc_rc == 0)
 		D_DEBUG("pri_rank %d created subgrp (%s), internal group id 0x"
@@ -1180,7 +1180,7 @@ out:
 	gd_out->gd_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
 			rc, rpc_req->cr_opc);
 }
 
@@ -1267,7 +1267,7 @@ crt_group_destroy(crt_group_t *grp, crt_grp_destroy_cb_t grp_destroy_cb,
 
 	pthread_rwlock_rdlock(&crt_grp_list_rwlock);
 	if (grp_priv->gp_status != CRT_GRP_NORMAL) {
-		D_ERROR("group status: 0x%x, cannot be destroyed.\n",
+		D_ERROR("group status: %#x, cannot be destroyed.\n",
 			grp_priv->gp_status);
 		pthread_rwlock_unlock(&crt_grp_list_rwlock);
 		D_GOTO(out, rc = -DER_BUSY);
@@ -1641,7 +1641,7 @@ out:
 	ul_out->ul_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
 			rc, rpc_req->cr_opc);
 	if (tmp_uri != NULL)
 		free(tmp_uri);

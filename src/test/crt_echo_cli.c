@@ -78,7 +78,7 @@ bulk_test_req_cb(const struct crt_cb_info *cb_info)
 	rpc_req = cb_info->cci_rpc;
 	bulk_test_cbinfo = cb_info->cci_arg;
 
-	printf("in bulk_test_req_cb, opc: 0x%x, cci_rc: %d.\n",
+	printf("in bulk_test_req_cb, opc: %#x, cci_rc: %d.\n",
 	       rpc_req->cr_opc, cb_info->cci_rc);
 
 	e_reply = crt_reply_get(rpc_req);

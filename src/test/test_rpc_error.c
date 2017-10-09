@@ -171,7 +171,7 @@ rpc_err_noreply_hdlr(crt_rpc_t *rpc_req)
 	rpc_req_input = crt_req_get(rpc_req);
 	D_ASSERTF(rpc_req_input != NULL,
 		  "crt_req_get() failed, rpc_req_input %p\n", rpc_req_input);
-	fprintf(stderr, "rpc error server received request, opc: 0x%x.\n",
+	fprintf(stderr, "rpc error server received request, opc: %#x.\n",
 		rpc_req->cr_opc);
 	fprintf(stderr, "received magic number %d\n", rpc_req_input->magic);
 }
@@ -182,7 +182,7 @@ rpc_err_shutdown_hdlr(crt_rpc_t *rpc_req)
 	int		rc = 0;
 
 	fprintf(stderr, "rpc err server received shutdown request, "
-		"opc: 0x%x.\n", rpc_req->cr_opc);
+		"opc: %#x.\n", rpc_req->cr_opc);
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 

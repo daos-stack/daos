@@ -468,7 +468,7 @@ out:
 	out_data->cleo_succeeded = 1;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
 			rc, rpc_req->cr_opc);
 }
 
@@ -718,7 +718,7 @@ lm_sample_rpc_cb(const struct crt_cb_info *cb_info)
 
 	rpc_req = cb_info->cci_rpc;
 	if (cb_info->cci_rc != 0) {
-		D_ERROR("rpc failed. opc: 0x%x, cci_rc: %d.\n",
+		D_ERROR("rpc failed. opc: %#x, cci_rc: %d.\n",
 			rpc_req->cr_opc, cb_info->cci_rc);
 		D_GOTO(out, rc);
 	}
@@ -884,7 +884,7 @@ lm_uri_lookup_psr(struct lm_grp_priv_t *lm_grp_priv, d_rank_t rank)
 	psr_ep.ep_rank = lm_grp_priv->lgp_psr_rank;
 	rc = crt_req_create(crt_ctx, &psr_ep, CRT_OPC_URI_LOOKUP, &ul_req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create URI_LOOKUP failed, rc: %d opc: 0x%x.\n",
+		D_ERROR("crt_req_create URI_LOOKUP failed, rc: %d opc: %#x.\n",
 			rc, CRT_OPC_URI_LOOKUP);
 		D_GOTO(out, rc);
 	}
@@ -1151,7 +1151,7 @@ crt_hdlr_memb_sample(crt_rpc_t *rpc_req)
 	d_iov_set(&out_data->mso_delta, delta, sizeof(d_rank_t) * (num_delta));
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
 			rc, rpc_req->cr_opc);
 out:
 	if (failed_ranks)

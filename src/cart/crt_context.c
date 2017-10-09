@@ -238,7 +238,7 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 		if (cbinfo.cci_rc == 0)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 		if (cbinfo.cci_rc != 0)
-			D_ERROR("rpc_priv %p (opc: 0x%x, to rank %d tag %d) "
+			D_ERROR("rpc_priv %p (opc: %#x, to rank %d tag %d) "
 				"failed, rc: %d.\n", rpc_priv,
 				rpc_priv->crp_pub.cr_opc,
 				rpc_priv->crp_pub.cr_ep.ep_rank,
@@ -319,7 +319,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 
 		rc = crt_req_abort(&rpc_priv->crp_pub);
 		if (rc != 0) {
-			D_ERROR("crt_req_abort(opc: 0x%x) failed, rc: %d.\n",
+			D_ERROR("crt_req_abort(opc: %#x) failed, rc: %d.\n",
 				rpc_priv->crp_pub.cr_opc, rc);
 			break;
 		}
@@ -447,7 +447,7 @@ crt_req_timeout_track(crt_rpc_t *req)
 	if (rc == 0) {
 		rpc_priv->crp_in_binheap = 1;
 	} else {
-		D_ERROR("rpc_priv %p (opc 0x%x), d_binheap_insert "
+		D_ERROR("rpc_priv %p (opc %#x), d_binheap_insert "
 			"failed, rc: %d.\n", rpc_priv,
 			rpc_priv->crp_pub.cr_opc, rc);
 		crt_req_decref(req);
@@ -524,7 +524,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		ul_req = rpc_priv->crp_ul_req;
 		D_ASSERT(ul_req != NULL);
 		ul_in = crt_req_get(ul_req);
-		D_ERROR("rpc opc: 0x%x timedout due to URI_LOOKUP to group %s, "
+		D_ERROR("rpc opc: %#x timedout due to URI_LOOKUP to group %s, "
 			"rank %d through PSR %d timedout.\n",
 			rpc_priv->crp_pub.cr_opc, ul_in->ul_grp_id,
 			ul_in->ul_rank, ul_req->cr_ep.ep_rank);
@@ -538,7 +538,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		/* crt_rpc_complete(rpc_priv, -DER_PROTO); */
 		break;
 	case RPC_STATE_ADDR_LOOKUP:
-		D_ERROR("rpc opc: 0x%x timedout due to ADDR_LOOKUP to group %s,"
+		D_ERROR("rpc opc: %#x timedout due to ADDR_LOOKUP to group %s,"
 			" rank %d, tgt_uri %s timedout.\n",
 			rpc_priv->crp_pub.cr_opc, grp_priv->gp_pub.cg_grpid,
 			tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
@@ -579,7 +579,7 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(&rpc_priv->crp_pub);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
-		D_ERROR("rpc_priv %p (status: %d) (opc 0x%x) timed out, "
+		D_ERROR("rpc_priv %p (status: %d) (opc %#x) timed out, "
 			"tgt rank %d, tag %d.\n",
 			rpc_priv, rpc_priv->crp_state,
 			rpc_priv->crp_pub.cr_opc,
@@ -814,7 +814,7 @@ crt_context_req_untrack(crt_rpc_t *req)
 			continue;
 
 		crt_req_addref(&rpc_priv->crp_pub);
-		D_ERROR("crt_req_send_internal failed, rc: %d, opc: 0x%x.\n",
+		D_ERROR("crt_req_send_internal failed, rc: %d, opc: %#x.\n",
 			rc, rpc_priv->crp_pub.cr_opc);
 		rpc_priv->crp_state = RPC_STATE_INITED;
 		crt_context_req_untrack(&rpc_priv->crp_pub);

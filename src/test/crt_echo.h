@@ -80,8 +80,8 @@ extern struct crt_corpc_ops echo_co_ops;
 static inline
 void echo_srv_noop(crt_rpc_t *rpc_req)
 {
-	printf("echo_srver recv'd NOOP RPC, opc: 0x%x.\n",
-		rpc_req->cr_opc);
+	printf("echo_srver recv'd NOOP RPC, opc: %#x.\n",
+	       rpc_req->cr_opc);
 	crt_reply_send(rpc_req);
 }
 
@@ -340,7 +340,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	rpc_req = cb_info->cci_rpc;
 
 	/* set complete flag */
-	printf("in client_cb_common, opc: 0x%x, cci_rc: %d.\n",
+	printf("in client_cb_common, opc: %#x, cci_rc: %d.\n",
 	       rpc_req->cr_opc, cb_info->cci_rc);
 	if (cb_info->cci_arg != NULL)
 		*(int *) cb_info->cci_arg = 1;

@@ -109,7 +109,7 @@ static void rpc_handler(crt_rpc_t *rpc)
 		printf("Received stop rpc\n");
 		signal_done();
 	} else if (i == MSG_COUNT) {
-		printf("Bad rpc message received 0x%x 0x%x\n", in->msg,
+		printf("Bad rpc message received %#x %#x\n", in->msg,
 		       in->payload);
 		signal_done();
 	}

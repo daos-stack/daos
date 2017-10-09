@@ -103,7 +103,7 @@ void complete_cb(const struct crt_cb_info *cb_info)
 	output = crt_reply_get(cb_info->cci_rpc);
 	if (output->msg != MSG_OUT_VALUE ||
 	    output->value != msg_values[info->msg_type]) {
-		printf("bad output 0x%x 0x%x\n", output->msg, output->value);
+		printf("bad output %#x %#x\n", output->msg, output->value);
 		info->status = -DER_INVAL;
 		return;
 	}

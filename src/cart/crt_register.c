@@ -98,7 +98,7 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 					    struct crt_opc_info, coi_link);
 			d_list_del_init(&info->coi_link);
 			/*
-			D_DEBUG("deleted opc: 0x%x from map(hash %d).\n",
+			D_DEBUG("deleted opc: %#x from map(hash %d).\n",
 				info->coi_opc, i);
 			*/
 			D_FREE_PTR(info);
@@ -188,9 +188,9 @@ crt_opc_disable_reply(crt_opcode_t opc, bool disable)
 	if (found) {
 		info->coi_no_reply = disable;
 		if (disable)
-			D_DEBUG("opc 0x%x, reply disabled.\n", opc);
+			D_DEBUG("opc %#x, reply disabled.\n", opc);
 		else
-			D_DEBUG("opc 0x%x, reply enabled.\n", opc);
+			D_DEBUG("opc %#x, reply enabled.\n", opc);
 	} else {
 		rc = -DER_UNREG;
 	}
@@ -217,16 +217,16 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
 	d_list_for_each_entry(info, &map->com_hash[hash], coi_link) {
 		if (info->coi_opc == opc) {
 			/*
-			D_DEBUG("re-reg, opc 0x%x.\n", opc);
+			D_DEBUG("re-reg, opc %#x.\n", opc);
 			*/
 			if (info->coi_input_size != input_size) {
-				D_DEBUG("opc 0x%x, update input_size "
+				D_DEBUG("opc %#x, update input_size "
 					"from "CF_U64" to "CF_U64".\n", opc,
 					info->coi_input_size, input_size);
 				info->coi_input_size = input_size;
 			}
 			if (info->coi_output_size != output_size) {
-				D_DEBUG("opc 0x%x, update output_size "
+				D_DEBUG("opc %#x, update output_size "
 					"from "CF_U64" to "CF_U64".\n", opc,
 					info->coi_output_size, output_size);
 				info->coi_output_size = output_size;
@@ -235,7 +235,7 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
 			if (rpc_cb != NULL) {
 				if (info->coi_rpc_cb != NULL)
 					D_DEBUG("re-reg rpc callback, "
-						"opc 0x%x.\n", opc);
+						"opc %#x.\n", opc);
 				else
 					info->coi_rpccb_init = 1;
 				info->coi_rpc_cb = rpc_cb;
@@ -243,7 +243,7 @@ crt_opc_reg(struct crt_opc_map *map, crt_opcode_t opc,
 			if (co_ops != NULL) {
 				if (info->coi_co_ops != NULL)
 					D_DEBUG("re-reg co_ops, "
-						"opc 0x%x.\n", opc);
+						"opc %#x.\n", opc);
 				else
 					info->coi_coops_init = 1;
 				info->coi_co_ops = co_ops;
@@ -339,7 +339,7 @@ reg_opc:
 	rc = crt_opc_reg(crt_gdata.cg_opc_map, opc, crf, input_size,
 			 output_size, rpc_handler, co_ops, CRT_UNLOCK);
 	if (rc != 0)
-		D_ERROR("rpc (opc: 0x%x) register failed, rc: %d.\n", opc, rc);
+		D_ERROR("rpc (opc: %#x) register failed, rc: %d.\n", opc, rc);
 
 out:
 	return rc;
@@ -353,7 +353,7 @@ crt_rpc_register(crt_opcode_t opc, struct crt_req_format *crf)
 		return -DER_UNINIT;
 	}
 	if (crt_opcode_reserved(opc)) {
-		D_ERROR("opc 0x%x reserved.\n", opc);
+		D_ERROR("opc %#x reserved.\n", opc);
 		return -DER_INVAL;
 	}
 	return crt_rpc_reg_internal(opc, crf, NULL, NULL);
@@ -368,7 +368,7 @@ crt_rpc_srv_register(crt_opcode_t opc, struct crt_req_format *crf,
 		return -DER_UNINIT;
 	}
 	if (crt_opcode_reserved(opc)) {
-		D_ERROR("opc 0x%x reserved.\n", opc);
+		D_ERROR("opc %#x reserved.\n", opc);
 		return -DER_INVAL;
 	}
 	if (rpc_handler == NULL) {
@@ -388,11 +388,11 @@ crt_corpc_register(crt_opcode_t opc, struct crt_req_format *crf,
 		return -DER_UNINIT;
 	}
 	if (crt_opcode_reserved(opc)) {
-		D_ERROR("opc 0x%x reserved.\n", opc);
+		D_ERROR("opc %#x reserved.\n", opc);
 		return -DER_INVAL;
 	}
 	if (co_ops == NULL)
-		D_WARN("NULL co_ops to be registered for corpc 0x%x.\n", opc);
+		D_WARN("NULL co_ops to be registered for corpc %#x.\n", opc);
 
 	return crt_rpc_reg_internal(opc, crf, rpc_handler, co_ops);
 }
@@ -407,7 +407,7 @@ crt_rpc_set_feats(crt_opcode_t opc, uint64_t feats)
 		return -DER_UNINIT;
 	}
 	if (crt_opcode_reserved(opc)) {
-		D_ERROR("opc 0x%x reserved.\n", opc);
+		D_ERROR("opc %#x reserved.\n", opc);
 		return -DER_INVAL;
 	}
 
