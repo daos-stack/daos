@@ -1838,7 +1838,6 @@ crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 {
 	struct crt_grp_priv	*grp_priv = NULL;
 	struct crt_context	*crt_ctx = NULL;
-	struct lm_grp_priv_t	*lm_grp_priv = NULL;
 	int			 rc = 0;
 
 	D_ASSERT(srv_grpid != NULL);
@@ -1886,12 +1885,6 @@ crt_grp_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 			D_ERROR("crt_grp_lc_uri_insert() failed, rc %d\n", rc);
 			D_GOTO(out, rc);
 		}
-	}
-	/* insert PSR candidates' base uri into hash table */
-	rc = crt_lm_attach(&grp_priv->gp_pub, &lm_grp_priv);
-	if (rc != DER_SUCCESS) {
-		D_ERROR("crt_lm_attach to %s failed, rc %d.\n", srv_grpid, rc);
-		D_GOTO(out, rc);
 	}
 
 	rc = crt_grp_ras_init(grp_priv);

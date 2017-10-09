@@ -67,18 +67,6 @@ crt_lm_init(void);
 void
 crt_lm_finalize(void);
 
-/**
- * Initialize a lm_grp_priv struct for the remote group tgt_grp then append the
- * struct to a global list.
- * \param tgt_grp [IN]		the remote group
- * \param lm_grp_priv [OUT]	the newly created lm_grp_pirv struct
- *
- * \return			DER_SUCCESS on success, negative value on
- *				failure.
- */
-int
-crt_lm_attach(crt_group_t *tgt_grp, struct lm_grp_priv_t **lm_grp_priv);
-
 #if defined(__cplusplus)
 }
 #endif

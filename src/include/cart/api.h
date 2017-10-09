@@ -1116,6 +1116,28 @@ crt_register_eviction_cb(crt_eviction_cb cb, void *arg);
 int
 crt_lm_group_psr(crt_group_t *tgt_grp, d_rank_list_t **psr_cand);
 
+/**
+ * Initialize a lm_grp_priv struct for the remote group tgt_grp then append the
+ * struct to a global list. This function sends RPCs to the default PSR to
+ * lookup the URIs of the backup PSRs. This function also enables the resample
+ * on timeout feature. This is a non-blocking function. completion_cb will be
+ * called when crt_lm_attach() finishes. User needs to call crt_progress() to
+ * make progress.
+ *
+ * \param tgt_grp [IN]		the remote group
+ * \param completion_cb [IN]	callback which will be called when
+ *				crt_lm_attach completes.
+ * \param arg [IN]		user data pointer which is availabe in
+ *				completion_cb. See the definition of
+ *				struct crt_lm_attach_cb_info.
+ *
+ * \return			DER_SUCCESS on success, negative value on
+ *				failure.
+ */
+int
+crt_lm_attach(crt_group_t *tgt_grp, crt_lm_attach_cb_t completion_cb,
+	      void *arg);
+
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_crt_size_t		crt_proc_uint64_t
 #define crt_proc_crt_off_t		crt_proc_uint64_t

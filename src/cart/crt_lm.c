@@ -826,6 +826,14 @@ out:
 	return rc;
 }
 
+struct lm_uri_lookup_psr_cb_info {
+	struct lm_grp_priv_t	*lul_lm_grp_priv;
+	int			 lul_count;
+	crt_lm_attach_cb_t	 lul_completion_cb;
+	void			*lul_arg;
+	pthread_rwlock_t	 lul_rwlock;
+};
+
 static void
 lm_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 {
@@ -833,9 +841,14 @@ lm_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 	struct lm_grp_priv_t		*lm_grp_priv = NULL;
 	struct crt_uri_lookup_out	*ul_out;
 	struct crt_uri_lookup_in	*ul_in;
+	struct lm_uri_lookup_psr_cb_info
+					*lookup_cb_info;
+	struct crt_lm_attach_cb_info	 tmp_cb_info;
+	bool				 all_done = false;
 	int				 rc;
 
-	lm_grp_priv = (struct lm_grp_priv_t *)cb_info->cci_arg;
+	lookup_cb_info = cb_info->cci_arg;
+	lm_grp_priv = lookup_cb_info->lul_lm_grp_priv;
 	D_ASSERT(lm_grp_priv != NULL);
 	ul_in = crt_req_get(cb_info->cci_rpc);
 	ul_out = crt_reply_get(cb_info->cci_rpc);
@@ -858,62 +871,107 @@ lm_uri_lookup_psr_cb(const struct crt_cb_info *cb_info)
 out:
 	if (psr_phy_addr != NULL)
 		free(psr_phy_addr);
-	sem_post(&lm_grp_priv->lgp_sem);
+
+	pthread_rwlock_wrlock(&lookup_cb_info->lul_rwlock);
+	lookup_cb_info->lul_count++;
+	if (lookup_cb_info->lul_count == lm_grp_priv->lgp_num_psr)
+		all_done = true;
+	pthread_rwlock_unlock(&lookup_cb_info->lul_rwlock);
+	if (!all_done)
+		return;
+
+	if (lookup_cb_info->lul_completion_cb != NULL) {
+		tmp_cb_info.lac_arg = lookup_cb_info->lul_arg;
+		tmp_cb_info.lac_rc = rc;
+		lookup_cb_info->lul_completion_cb(&tmp_cb_info);
+	}
+	pthread_rwlock_destroy(&lookup_cb_info->lul_rwlock);
+	D_FREE_PTR(lookup_cb_info);
 }
 
 /**
  * ask the active PSR for URIs of PSR candidates
  */
 static int
-lm_uri_lookup_psr(struct lm_grp_priv_t *lm_grp_priv, d_rank_t rank)
+lm_uri_lookup_psr(struct lm_grp_priv_t *lm_grp_priv,
+		  crt_lm_attach_cb_t completion_cb, void *arg)
 {
-	crt_rpc_t			*ul_req;
-	crt_endpoint_t			 psr_ep = {0};
-	struct crt_uri_lookup_in	*ul_in;
-	crt_context_t			 crt_ctx;
-	int				 rc = 0;
+	crt_rpc_t				*ul_req;
+	crt_endpoint_t				 psr_ep = {0};
+	struct crt_uri_lookup_in		*ul_in;
+	crt_context_t				 crt_ctx;
+	struct lm_uri_lookup_psr_cb_info	*cb_info;
+	struct crt_lm_attach_cb_info		 tmp_cb_info;
+	int					 i;
+	int					 rpc_count;
+	int					 rc = 0;
 
 	D_ASSERT(lm_grp_priv != NULL);
+
+	D_ALLOC_PTR(cb_info);
+	if (cb_info == NULL) {
+		D_ERROR("D_ALLOC_PTR failed.\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+	cb_info->lul_lm_grp_priv	= lm_grp_priv;
+	cb_info->lul_completion_cb	= completion_cb;
+	cb_info->lul_arg		= arg;
+	cb_info->lul_count		= 0;
+	pthread_rwlock_init(&cb_info->lul_rwlock, NULL);
 
 	crt_ctx = crt_context_lookup(0);
 	if (crt_ctx == NULL) {
 		D_ERROR("crt_context 0 doesn't exist.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	psr_ep.ep_grp = lm_grp_priv->lgp_grp;
-	psr_ep.ep_rank = lm_grp_priv->lgp_psr_rank;
-	rc = crt_req_create(crt_ctx, &psr_ep, CRT_OPC_URI_LOOKUP, &ul_req);
-	if (rc != 0) {
-		D_ERROR("crt_req_create URI_LOOKUP failed, rc: %d opc: %#x.\n",
-			rc, CRT_OPC_URI_LOOKUP);
-		D_GOTO(out, rc);
-	}
 
-	ul_in = crt_req_get(ul_req);
-	ul_in->ul_grp_id = lm_grp_priv->lgp_grp->cg_grpid;
-	ul_in->ul_rank = rank;
-	rc = crt_req_send(ul_req, lm_uri_lookup_psr_cb, lm_grp_priv);
-	if (rc != 0) {
-		D_ERROR("URI_LOOKUP (to group %s rank %d through PSR %d) "
-			"request send failed, rc: %d.\n",
-			ul_in->ul_grp_id, ul_in->ul_rank, psr_ep.ep_rank, rc);
-		D_GOTO(out, rc);
-	}
+	rpc_count = 0;
+	for (i = 1; i < lm_grp_priv->lgp_num_psr; i++) {
+		psr_ep.ep_grp = lm_grp_priv->lgp_grp;
+		psr_ep.ep_rank = lm_grp_priv->lgp_psr_rank;
+		rc = crt_req_create(crt_ctx, &psr_ep, CRT_OPC_URI_LOOKUP,
+				    &ul_req);
+		if (rc != 0) {
+			D_ERROR("crt_req_create URI_LOOKUP failed, "
+				"rc: %d opc: %#x.\n", rc, CRT_OPC_URI_LOOKUP);
+			D_GOTO(out, rc);
+		}
 
-	return rc;
+		ul_in = crt_req_get(ul_req);
+		ul_in->ul_grp_id = lm_grp_priv->lgp_grp->cg_grpid;
+		ul_in->ul_rank = lm_grp_priv->lgp_psr_cand[i].pc_rank;
+		rc = crt_req_send(ul_req, lm_uri_lookup_psr_cb, cb_info);
+		if (rc != 0) {
+			D_ERROR("URI_LOOKUP (to group %s rank %d "
+				"through PSR %d) "
+				"request send failed, rc: %d.\n",
+				ul_in->ul_grp_id, ul_in->ul_rank,
+				psr_ep.ep_rank, rc);
+			D_GOTO(out, rc);
+		}
+		rpc_count++;
+	}
+	if (rpc_count != 0)
+		D_GOTO(out, rc);
+
+	if (completion_cb != NULL) {
+		tmp_cb_info.lac_arg = arg;
+		tmp_cb_info.lac_rc = rc;
+		completion_cb(&tmp_cb_info);
+		rc = 0;
+	}
+	pthread_rwlock_destroy(&cb_info->lul_rwlock);
+	D_FREE(cb_info);
 
 out:
-	sem_post(&lm_grp_priv->lgp_sem);
-
 	return rc;
 }
-
 /*
  * create, initialize a bookkeeping struct for the remote group _grp_, then
  * append this struct to a global list
  */
 static struct lm_grp_priv_t *
-lm_grp_priv_init(crt_group_t *grp)
+lm_grp_priv_init(crt_group_t *grp, crt_lm_attach_cb_t completion_cb, void *arg)
 {
 	int			 i;
 	uint32_t		 remote_grp_size;
@@ -968,7 +1026,6 @@ lm_grp_priv_init(crt_group_t *grp)
 	D_DEBUG("num_psr %d, list of PSRs: ", num_psr);
 	psr_cand[0].pc_rank = lm_grp_priv->lgp_psr_rank;
 	D_DEBUG("%d ", psr_cand[0].pc_rank);
-	srand(time(NULL));
 	for (i = 1; i < num_psr; i++) {
 		/* same formula for picking ranks subscribed to RAS, with a
 		 * shift
@@ -978,16 +1035,14 @@ lm_grp_priv_init(crt_group_t *grp)
 				      remote_grp_size;
 		D_DEBUG("%d ", psr_cand[i].pc_rank);
 
-		rc = lm_uri_lookup_psr(lm_grp_priv, psr_cand[i].pc_rank);
-		if (rc != 0)
-			D_ERROR("lm_uri_lookup_psr failed, rc: %d\n", rc);
 	}
-
-	for (i = 1; i < num_psr; i++)
-		sem_wait(&lm_grp_priv->lgp_sem);
 	lm_grp_priv->lgp_psr_cand = psr_cand;
-
 	pthread_rwlock_init(&lm_grp_priv->lgp_rwlock, NULL);
+	rc = lm_uri_lookup_psr(lm_grp_priv, completion_cb, arg);
+	if (rc != 0) {
+		D_ERROR("lm_uri_lookup_psr failed, rc: %d\n", rc);
+		D_GOTO(error_out, rc);
+	}
 
 	return lm_grp_priv;
 
@@ -998,7 +1053,6 @@ error_out:
 		D_FREE(psr_cand);
 	return NULL;
 }
-
 static void
 lm_grp_priv_destroy(struct lm_grp_priv_t *lm_grp_priv)
 {
@@ -1225,7 +1279,6 @@ crt_lm_init(void)
 		return;
 	}
 	/* from here up to the unlock is only executed once per process */
-	crt_register_timeout_cb(lm_membs_sample, NULL);
 	if (crt_is_service()) {
 		rc = crt_lm_grp_init(grp);
 		if (rc != 0) {
@@ -1269,30 +1322,30 @@ out:
 }
 
 int
-crt_lm_attach(crt_group_t *tgt_grp, struct lm_grp_priv_t **lm_grp_priv)
+crt_lm_attach(crt_group_t *tgt_grp, crt_lm_attach_cb_t completion_cb,
+	      void *arg)
 {
 	struct lm_grp_priv_t	*lm_grp_priv_new;
+	struct lm_grp_priv_t	*lm_grp_priv;
 	int			 rc = DER_SUCCESS;
 
-	if (lm_grp_priv == NULL) {
-		D_ERROR("lm_grp_priv can't be NULL.\n");
-		return -DER_INVAL;
-	}
+
 	pthread_rwlock_rdlock(&crt_lm_gdata.clg_rwlock);
-	*lm_grp_priv = lm_grp_priv_find(tgt_grp);
+	lm_grp_priv = lm_grp_priv_find(tgt_grp);
 	pthread_rwlock_unlock(&crt_lm_gdata.clg_rwlock);
-	if (*lm_grp_priv == NULL) {
-		lm_grp_priv_new = lm_grp_priv_init(tgt_grp);
+	if (lm_grp_priv == NULL) {
+		lm_grp_priv_new =
+			lm_grp_priv_init(tgt_grp, completion_cb, arg);
 		if (lm_grp_priv_new == NULL) {
 			D_ERROR("lm_grp_priv_init() failed.\n");
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		pthread_rwlock_wrlock(&crt_lm_gdata.clg_rwlock);
-		*lm_grp_priv = lm_grp_priv_find(tgt_grp);
-		if (*lm_grp_priv == NULL) {
+		lm_grp_priv = lm_grp_priv_find(tgt_grp);
+		if (lm_grp_priv == NULL) {
 			d_list_add_tail(&lm_grp_priv_new->lgp_link,
 				       &crt_lm_gdata.clg_grp_remotes);
-			*lm_grp_priv = lm_grp_priv_new;
+			lm_grp_priv = lm_grp_priv_new;
 		} else {
 			lm_grp_priv_destroy(lm_grp_priv_new);
 		}
@@ -1300,6 +1353,17 @@ crt_lm_attach(crt_group_t *tgt_grp, struct lm_grp_priv_t **lm_grp_priv)
 	}
 
 out:
+	if (rc == DER_SUCCESS) {
+		crt_register_timeout_cb(lm_membs_sample, NULL);
+	} else {
+		struct crt_lm_attach_cb_info cb_info;
+
+		cb_info.lac_arg = arg;
+		cb_info.lac_rc = rc;
+		completion_cb(&cb_info);
+		D_ERROR("crt_lm_attach(%p) failed. rc: %d\n", tgt_grp, rc);
+	}
+
 	return rc;
 }
 
