@@ -284,7 +284,7 @@ for i in "${!std_repo_name[@]}"; do
             git branch -d ${branch_name} || true
             git branch -f ${branch_name} ${my_commit}
             if [ -n "${update}" ]; then
-              git push -u origin ${branch_name}
+              git push -f -u origin ${branch_name}
             else
               echo "would git push -u origin ${branch_name} to ${repo}"
               git branch -d ${branch_name} || true
@@ -293,7 +293,7 @@ for i in "${!std_repo_name[@]}"; do
         else
           git branch -f ${branch_name} ${my_commit}
           if [ -n "${update}" ]; then
-            git push -u origin ${branch_name}
+            git push -f -u origin ${branch_name}
           else
             echo "would git push -u origin ${branch_name}"
             git branch -d ${branch_name} || true
