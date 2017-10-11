@@ -915,7 +915,8 @@ lm_uri_lookup_psr(struct lm_grp_priv_t *lm_grp_priv,
 	cb_info->lul_lm_grp_priv	= lm_grp_priv;
 	cb_info->lul_completion_cb	= completion_cb;
 	cb_info->lul_arg		= arg;
-	cb_info->lul_count		= 0;
+	/* URI of default PSR is looked up through PMIx */
+	cb_info->lul_count		= 1;
 	pthread_rwlock_init(&cb_info->lul_rwlock, NULL);
 
 	crt_ctx = crt_context_lookup(0);
