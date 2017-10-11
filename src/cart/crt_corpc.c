@@ -212,7 +212,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 	seg_num = sgl.sg_nr.num_out;
 	if (seg_num == 0) {
 		D_ERROR("bad zero seg_num.\n");
-		D_GOTO(out, rc = DER_PROTO);
+		D_GOTO(out, rc = -DER_PROTO);
 	}
 	D_ALLOC_ARRAY(iovs, seg_num);
 	if (iovs == NULL)

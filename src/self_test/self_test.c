@@ -792,10 +792,8 @@ static int run_self_test(struct st_size_params all_params[],
 		 */
 		num_ms_endpts = 1;
 		D_ALLOC_PTR(ms_endpts);
-		if (ms_endpts == NULL) {
-			D_ERROR("Allocating ms_endpts failed\n");
+		if (ms_endpts == NULL)
 			D_GOTO(cleanup, ret = -DER_NOMEM);
-		}
 		ms_endpts[0].endpt.ep_rank = self_endpt.ep_rank;
 		ms_endpts[0].endpt.ep_tag = self_endpt.ep_tag;
 		ms_endpts[0].endpt.ep_grp = self_endpt.ep_grp;
@@ -806,10 +804,8 @@ static int run_self_test(struct st_size_params all_params[],
 		 * to the new list
 		 */
 		D_ALLOC_ARRAY(ms_endpts, num_ms_endpts_in);
-		if (ms_endpts == NULL) {
-			D_ERROR("Allocating ms_endpts failed\n");
+		if (ms_endpts == NULL)
 			D_GOTO(cleanup, ret = -DER_NOMEM);
-		}
 
 		/*
 		 * Sort the supplied endpoints to make it faster to identify
@@ -868,25 +864,17 @@ static int run_self_test(struct st_size_params all_params[],
 
 	/* Allocate latency lists for each 1:many session */
 	D_ALLOC_ARRAY(latencies, num_ms_endpts);
-	if (latencies == NULL) {
-		D_ERROR("Failed to allocate latency pointers\n");
+	if (latencies == NULL)
 		D_GOTO(cleanup, ret = -DER_NOMEM);
-	}
 	D_ALLOC_ARRAY(latencies_iov, num_ms_endpts);
-	if (latencies_iov == NULL) {
-		D_ERROR("Failed to allocate latency pointers\n");
+	if (latencies_iov == NULL)
 		D_GOTO(cleanup, ret = -DER_NOMEM);
-	}
 	D_ALLOC_ARRAY(latencies_sg_list, num_ms_endpts);
-	if (latencies_sg_list == NULL) {
-		D_ERROR("Failed to allocate latency pointers\n");
+	if (latencies_sg_list == NULL)
 		D_GOTO(cleanup, ret = -DER_NOMEM);
-	}
 	D_ALLOC_ARRAY(latencies_bulk_hdl, num_ms_endpts);
-	if (latencies_bulk_hdl == NULL) {
-		D_ERROR("Failed to allocate latency pointers\n");
+	if (latencies_bulk_hdl == NULL)
 		D_GOTO(cleanup, ret = -DER_NOMEM);
-	}
 
 	/*
 	 * For each 1:many session, allocate an array for latency results.
@@ -895,10 +883,8 @@ static int run_self_test(struct st_size_params all_params[],
 	 */
 	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++) {
 		D_ALLOC_ARRAY(latencies[m_idx], rep_count);
-		if (latencies[m_idx] == NULL) {
-			D_ERROR("Failed to allocate latency data storage\n");
+		if (latencies[m_idx] == NULL)
 			D_GOTO(cleanup, ret = -DER_NOMEM);
-		}
 		d_iov_set(&latencies_iov[m_idx], latencies[m_idx],
 			    rep_count * sizeof(**latencies));
 		latencies_sg_list[m_idx].sg_iovs =

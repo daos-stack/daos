@@ -234,10 +234,8 @@ crt_ivf_key_in_progress_set(struct crt_ivns_internal *ivns,
 
 	D_ALLOC(entry, offsetof(struct ivf_key_in_progress,
 				payload[0]) + key->iov_buf_len);
-	if (!entry) {
-		D_ERROR("Failed to allocate entry");
+	if (entry == NULL)
 		return -DER_NOMEM;
-	}
 
 	pthread_mutex_init(&entry->kip_lock, 0);
 
@@ -284,10 +282,8 @@ crt_ivf_pending_request_add(
 				iv_info->ifc_user_priv);
 
 	D_ALLOC_PTR(pending_fetch);
-	if (pending_fetch == NULL) {
-		D_ERROR("Failed to allocate pending fetch");
+	if (pending_fetch == NULL)
 		return -DER_NOMEM;
-	}
 
 	pending_fetch->pf_cb_info = iv_info;
 
@@ -556,16 +552,13 @@ crt_ivns_internal_create(crt_context_t crt_ctx, crt_group_t *grp,
 	int				rc = 0;
 
 	D_ALLOC_PTR(ivns_internal);
-	if (ivns_internal == NULL) {
-		D_ERROR("Failed to allocate memory for ivns_internal\n");
-		D_GOTO(exit, ivns_internal);
-	}
+	if (ivns_internal == NULL)
+		D_GOTO(exit, 0);
 
 	D_ALLOC_ARRAY(ivns_internal->cii_iv_classes, num_class);
 	if (ivns_internal->cii_iv_classes == NULL) {
-		D_ERROR("Failed to allocate storage for iv_classes\n");
-		D_FREE_PTR(ivns_internal);
-		D_GOTO(exit, ivns_internal = NULL);
+		D_FREE(ivns_internal);
+		D_GOTO(exit, 0);
 	}
 
 	D_INIT_LIST_HEAD(&ivns_internal->cii_keys_in_progress_list);
@@ -857,10 +850,8 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 
 	D_ALLOC_PTR(cb_info);
 
-	if (cb_info == NULL) {
-		D_ERROR("Failed to allocate memory for cb_info\n");
+	if (cb_info == NULL)
 		D_GOTO(cleanup, rc = -DER_NOMEM);
-	}
 
 	cb_info->tci_ivns_internal = ivns_internal;
 	cb_info->tci_class_id = class_id;
@@ -1188,10 +1179,8 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 		next_node = crt_iv_parent_get(ivns_internal,
 					input->ifi_root_node);
 		D_ALLOC_PTR(cb_info);
-		if (cb_info == NULL) {
-			D_ERROR("Failed to allocate memory for cb_info\n");
+		if (cb_info == NULL)
 			D_GOTO(send_error, rc = -DER_NOMEM);
-		}
 
 		cb_info->ifc_child_rpc = rpc_req;
 		cb_info->ifc_child_bulk = input->ifi_value_bulk,
@@ -1273,10 +1262,8 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 
 	D_ALLOC_PTR(iv_value);
-	if (iv_value == NULL) {
-		D_ERROR("Failed to allocate memory\n");
+	if (iv_value == NULL)
 		D_GOTO(exit, rc = -DER_NOMEM);
-	}
 
 	rc = iv_ops->ivo_on_get(ivns_internal, iv_key, 0, CRT_IV_PERM_READ,
 				iv_value, &user_priv);
@@ -1333,10 +1320,8 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 
 	D_ALLOC_PTR(cb_info);
-	if (cb_info == NULL) {
-		D_ERROR("Failed to allocate callback info\n");
+	if (cb_info == NULL)
 		D_GOTO(exit, rc = -DER_NOMEM);
-	}
 
 	cb_info->ifc_user_priv = user_priv;
 	cb_info->ifc_child_rpc = NULL;
@@ -1693,10 +1678,8 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	input->ivs_class_id = class_id;
 
 	D_ALLOC_PTR(iv_sync_cb);
-	if (iv_sync_cb == NULL) {
-		D_ERROR("Failed to allocate iv_sync_cb");
+	if (iv_sync_cb == NULL)
 		D_GOTO(exit, rc = -DER_NOMEM);
-	}
 
 	iv_sync_cb->isc_bulk_hdl = local_bulk;
 	iv_sync_cb->isc_do_callback = sync;
@@ -1711,10 +1694,8 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 		/* Copy iv_key over as it will get destroyed after this call */
 		D_ALLOC(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf_len);
-		if (iv_sync_cb->isc_iv_key.iov_buf == NULL) {
-			D_ERROR("Failed to allocate isc_iv_key::iov_buf");
+		if (iv_sync_cb->isc_iv_key.iov_buf == NULL)
 			D_GOTO(exit, rc = -DER_NOMEM);
-		}
 
 		memcpy(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf,
 			iv_key->iov_buf_len);
@@ -1995,12 +1976,10 @@ bulk_update_transfer_done(const struct crt_bulk_cb_info *info)
 					input->ivu_root_node);
 
 		D_ALLOC_PTR(update_cb_info);
-		if (update_cb_info == NULL) {
-			D_ERROR("failed to allocate update_cb_info");
+		if (update_cb_info == NULL)
 			D_GOTO(send_error, rc = -DER_NOMEM);
-		}
 
-		sync_type = (crt_iv_sync_t *)input->ivu_sync_type.iov_buf;
+		sync_type = input->ivu_sync_type.iov_buf;
 
 		update_cb_info->uci_child_rpc = info->bci_bulk_desc->bd_rpc;
 		update_cb_info->uci_ivns_internal = ivns_internal;
@@ -2095,10 +2074,8 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 						input->ivu_root_node);
 
 			D_ALLOC_PTR(update_cb_info);
-			if (update_cb_info == NULL) {
-				D_ERROR("failed to allocate update_cb_info");
+			if (update_cb_info == NULL)
 				D_GOTO(send_error, rc = -DER_NOMEM);
-			}
 
 			sync_type = (crt_iv_sync_t *)
 					input->ivu_sync_type.iov_buf;
@@ -2154,8 +2131,6 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 
 	D_ALLOC_PTR(cb_info);
 	if (cb_info == NULL) {
-		D_ERROR("Failed to allocate memory\n");
-		rc = -DER_NOMEM;
 		crt_bulk_free(local_bulk_handle);
 		D_GOTO(send_error, rc = -DER_NOMEM);
 	}
@@ -2246,11 +2221,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		}
 
 		D_ALLOC_PTR(cb_info);
-
-		if (cb_info == NULL) {
-			D_ERROR("Failed to allocate cb_info\n");
+		if (cb_info == NULL)
 			D_GOTO(put, rc = -DER_NOMEM);
-		}
 
 		cb_info->uci_comp_cb = update_comp_cb;
 		cb_info->uci_cb_arg = cb_arg;

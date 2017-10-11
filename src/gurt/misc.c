@@ -60,10 +60,8 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src, bool input)
 	}
 
 	D_ALLOC_PTR(rank_list);
-	if (rank_list == NULL) {
-		D_ERROR("Cannot allocate memory for rank list.\n");
+	if (rank_list == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 	if (input == true) {
 		rank_num = src->rl_nr.num;
 		rank_list->rl_nr.num = rank_num;
@@ -79,7 +77,6 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src, bool input)
 
 	D_ALLOC_ARRAY(rank_list->rl_ranks, rank_num);
 	if (rank_list->rl_ranks == NULL) {
-		D_ERROR("Cannot allocate memory for rl_ranks.\n");
 		D_FREE_PTR(rank_list);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
@@ -489,10 +486,8 @@ d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len)
 		width += snprintf(NULL, 0, "%d ", rank_list->rl_ranks[i]);
 	width++;
 	D_ALLOC(tmp_str, width);
-	if (tmp_str == NULL) {
-		D_ERROR("memory allocation failed.\n");
+	if (tmp_str == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 	for (i = 0; i < rank_list->rl_nr.num; i++)
 		idx += sprintf(&tmp_str[idx], "%d ", rank_list->rl_ranks[i]);
 	tmp_str[width - 1] = '\0';

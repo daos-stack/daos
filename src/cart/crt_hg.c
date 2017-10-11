@@ -202,13 +202,10 @@ crt_hg_pool_put(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 
 	if (rpc_priv->crp_hdl_reuse == NULL) {
 		D_ALLOC_PTR(hdl);
-		if (hdl != NULL) {
-			D_INIT_LIST_HEAD(&hdl->chh_link);
-			hdl->chh_hdl = rpc_priv->crp_hg_hdl;
-		} else {
-			D_ERROR("cannot allocate crt_hg_hdl.\n");
+		if (hdl == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		}
+		D_INIT_LIST_HEAD(&hdl->chh_link);
+		hdl->chh_hdl = rpc_priv->crp_hg_hdl;
 	} else {
 		hdl = rpc_priv->crp_hdl_reuse;
 		rpc_priv->crp_hdl_reuse = NULL;

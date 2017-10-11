@@ -909,10 +909,9 @@ lm_uri_lookup_psr(struct lm_grp_priv_t *lm_grp_priv,
 	D_ASSERT(lm_grp_priv != NULL);
 
 	D_ALLOC_PTR(cb_info);
-	if (cb_info == NULL) {
-		D_ERROR("D_ALLOC_PTR failed.\n");
+	if (cb_info == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
+
 	cb_info->lul_lm_grp_priv	= lm_grp_priv;
 	cb_info->lul_completion_cb	= completion_cb;
 	cb_info->lul_arg		= arg;
@@ -992,10 +991,8 @@ lm_grp_priv_init(crt_group_t *grp, crt_lm_attach_cb_t completion_cb, void *arg)
 		return NULL;
 	}
 	D_ALLOC_PTR(lm_grp_priv);
-	if (lm_grp_priv == NULL) {
-		D_ERROR("D_ALLOC_PTR() failed.\n");
+	if (lm_grp_priv == NULL)
 		return NULL;
-	}
 
 	lm_grp_priv->lgp_grp = grp;
 	sem_init(&lm_grp_priv->lgp_sem, 0, 0);
@@ -1019,10 +1016,9 @@ lm_grp_priv_init(crt_group_t *grp, crt_lm_attach_cb_t completion_cb, void *arg)
 	num_psr = remote_grp_size - lm_grp_priv->lgp_mvs + 1;
 	lm_grp_priv->lgp_num_psr = num_psr;
 	D_ALLOC_ARRAY(psr_cand, num_psr);
-	if (psr_cand == NULL) {
-		D_ERROR("Allocation of candiate array failed.\n");
+	if (psr_cand == NULL)
 		D_GOTO(error_out, rc = -DER_NOMEM);
-	}
+
 	D_DEBUG("num_psr %d, list of PSRs: ", num_psr);
 	psr_cand[0].pc_rank = lm_grp_priv->lgp_psr_rank;
 	D_DEBUG("%d ", psr_cand[0].pc_rank);

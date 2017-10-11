@@ -870,10 +870,8 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	}
 
 	D_ALLOC_PTR(g_data);
-	if (g_data == NULL) {
-		D_ERROR("Failed to allocate global test data structure\n");
+	if (g_data == NULL)
 		D_GOTO(fail_cleanup, ret = -DER_NOMEM);
-	}
 
 	/* Initialize the global callback data */
 	g_data->crt_ctx = rpc_req->cr_ctx;
@@ -890,10 +888,8 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 
 	/* Allocate a buffer for the list of endpoints */
 	D_ALLOC_ARRAY(g_data->endpts, g_data->num_endpts);
-	if (g_data->endpts == NULL) {
-		D_ERROR("Failed to allocate endpoint descriptor storage\n");
+	if (g_data->endpts == NULL)
 		D_GOTO(fail_cleanup, ret = -DER_NOMEM);
-	}
 
 	/* Copy the endpoint data from the caller */
 	for (endpt_idx = 0; endpt_idx < g_data->num_endpts; endpt_idx++) {
@@ -905,10 +901,8 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 
 	/* Allocate a buffer for latency measurements */
 	D_ALLOC_ARRAY(g_data->rep_latencies, g_data->rep_count);
-	if (g_data->rep_latencies == NULL) {
-		D_ERROR("Failed to allocate latency data storage\n");
+	if (g_data->rep_latencies == NULL)
 		D_GOTO(fail_cleanup, ret = -DER_NOMEM);
-	}
 
 	/*
 	 * Set up a bulk descriptor to use later to send the latencies back
@@ -932,10 +926,8 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	 * per-inflight-rpc buffers
 	 */
 	D_ALLOC_ARRAY(g_data->cb_args_ptrs, g_data->max_inflight);
-	if (g_data->cb_args_ptrs == NULL) {
-		D_ERROR("Failed to callback data pointers\n");
+	if (g_data->cb_args_ptrs == NULL)
 		D_GOTO(fail_cleanup, ret = -DER_NOMEM);
-	}
 
 	/*
 	 * Compute the amount of space needed for this test run
@@ -964,10 +956,8 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		struct st_cb_args *cb_args;
 
 		D_ALLOC_PTR(g_data->cb_args_ptrs[alloc_idx]);
-		if (g_data->cb_args_ptrs[alloc_idx] == NULL) {
-			D_ERROR("RPC private data allocation failed\n");
+		if (g_data->cb_args_ptrs[alloc_idx] == NULL)
 			D_GOTO(fail_cleanup, ret = -DER_NOMEM);
-		}
 
 		/*
 		 * Now that this pointer can't change, get a shorter
@@ -988,10 +978,8 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 
 		/* Allocate a new data buffer for this inflight RPC */
 		D_ALLOC(cb_args->buf, alloc_buf_len);
-		if (cb_args->buf == NULL) {
-			D_ERROR("RPC data buf allocation failed\n");
+		if (cb_args->buf == NULL)
 			D_GOTO(fail_cleanup, ret = -DER_NOMEM);
-		}
 
 		/* Fill the buffer with an arbitrary data pattern */
 		memset(cb_args->buf, 0xC5, alloc_buf_len);

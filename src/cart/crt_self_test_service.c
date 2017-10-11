@@ -202,16 +202,12 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 	D_ASSERT(alloc_buf_len > 0);
 
 	D_ALLOC_PTR(new_entry);
-	if (new_entry == NULL) {
-		D_ERROR("self-test memory allocation failed for new session -"
-			" alloc_buf_len=%zu\n", alloc_buf_len);
+	if (new_entry == NULL)
 		return -DER_NOMEM;
-	}
 
 	D_ALLOC(new_entry->buf, alloc_buf_len);
-	if (new_entry == NULL) {
-		D_ERROR("self-test memory allocation failed for new session -"
-			" alloc_buf_len=%zu\n", alloc_buf_len);
+	if (new_entry->buf == NULL) {
+		D_FREE(new_entry);
 		return -DER_NOMEM;
 	}
 
@@ -299,10 +295,8 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 
 	/* Allocate a structure for the new session */
 	D_ALLOC_PTR(new_session);
-	if (new_session == NULL) {
-		D_ERROR("Failed to allocate new session\n");
+	if (new_session == NULL)
 		D_GOTO(send_rpc, *reply_session_id = -1);
-	}
 
 	/* Initialize the new session */
 	ret = pthread_spin_init(&new_session->buf_list_lock,

@@ -283,20 +283,16 @@ crt_proc_crt_rank_list_t(crt_proc_t proc, d_rank_list_t **data)
 			D_GOTO(out, rc);
 		}
 		D_ALLOC_PTR(rank_list);
-		if (rank_list == NULL) {
-			D_ERROR("Cannot allocate memory for rank list.\n");
+		if (rank_list == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		}
 		rank_list->rl_nr.num = rank_num;
 		D_ALLOC_ARRAY(rank_list->rl_ranks, rank_num);
 		if (rank_list->rl_ranks == NULL) {
-			D_ERROR("Cannot allocate memory for rl_ranks.\n");
-			D_FREE_PTR(rank_list);
+			D_FREE(rank_list);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		for (i = 0; i < rank_num; i++) {
-			rc = crt_proc_crt_rank_t(proc,
-						  &rank_list->rl_ranks[i]);
+			rc = crt_proc_crt_rank_t(proc, &rank_list->rl_ranks[i]);
 			if (rc != 0) {
 				D_ERROR("crt_proc_daso_rank_t failed,rc: %d.\n",
 					rc);

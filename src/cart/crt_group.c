@@ -1671,8 +1671,7 @@ crt_get_tag_uri(const char *base_uri, int tag)
 		pchar = strrchr(tag_uri, ':');
 		if (pchar == NULL) {
 			D_ERROR("bad format of base_addr %s.\n", tag_uri);
-			free(tag_uri);
-			tag_uri = NULL;
+			D_FREE(tag_uri);
 			D_GOTO(out, 0);
 		}
 		pchar++;
