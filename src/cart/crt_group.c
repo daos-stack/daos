@@ -2111,6 +2111,44 @@ crt_grp_attach_info_filename(struct crt_grp_priv *grp_priv)
 	return filename;
 }
 
+static inline FILE *
+open_tmp_attach_info_file(char **filename)
+{
+	char		 template[] = "attach-info-XXXXXX";
+	int		 tmp_fd;
+	FILE		*tmp_file;
+	int		 rc;
+
+	if (filename == NULL) {
+		D_ERROR("filename can't be NULL.\n");
+		return NULL;
+	}
+
+	rc = asprintf(filename, "%s/%s", crt_attach_prefix, template);
+	if (rc == -1) {
+		D_ERROR("asprintf %s failed (%s).\n",
+			template, strerror(errno));
+		return NULL;
+	}
+	D_ASSERT(*filename != NULL);
+
+	tmp_fd = mkstemp(*filename);
+	if (tmp_fd == -1) {
+		D_ERROR("mktemp() failed on %s, error: %s.\n",
+			*filename, strerror(errno));
+		return NULL;
+	}
+
+	tmp_file = fdopen(tmp_fd, "w");
+	if (tmp_file == NULL) {
+		D_ERROR("fdopen() failed on %s, error: %s\n",
+			*filename, strerror(errno));
+		close(tmp_fd);
+	}
+
+	return tmp_file;
+}
+
 int
 crt_group_config_path_set(const char *path)
 {
@@ -2169,6 +2207,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	struct crt_grp_priv	*grp_priv;
 	FILE			*fp = NULL;
 	char			*filename = NULL;
+	char			*tmp_name = NULL;
 	crt_group_id_t		 grpid;
 	d_rank_t		 rank;
 	crt_phy_addr_t		 addr;
@@ -2198,22 +2237,22 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	if (filename == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	fp = fopen(filename, "w");
+	fp = open_tmp_attach_info_file(&tmp_name);
 	if (fp == NULL) {
-		D_ERROR("cannot create file %s(%s).\n",
-			filename, strerror(errno));
+		D_ERROR("cannot create temp file.\n");
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
+	D_ASSERT(tmp_name != NULL);
 	rc = fprintf(fp, "%s %s\n", "name", grpid);
 	if (rc < 0) {
 		D_ERROR("write to file %s failed (%s).\n",
-			filename, strerror(errno));
+			tmp_name, strerror(errno));
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	rc = fprintf(fp, "%s %d\n", "size", grp_priv->gp_size);
 	if (rc < 0) {
 		D_ERROR("write to file %s failed (%s).\n",
-			filename, strerror(errno));
+			tmp_name, strerror(errno));
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	if (forall)
@@ -2222,7 +2261,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 		rc = fprintf(fp, "self\n");
 	if (rc < 0) {
 		D_ERROR("write to file %s failed (%s).\n",
-			filename, strerror(errno));
+			tmp_name, strerror(errno));
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 
@@ -2230,7 +2269,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 		rc = fprintf(fp, "%d %s\n", rank, addr);
 		if (rc < 0) {
 			D_ERROR("write to file %s failed (%s).\n",
-				filename, strerror(errno));
+				tmp_name, strerror(errno));
 			D_GOTO(out, rc = d_errno2der(errno));
 		}
 		D_GOTO(done, rc);
@@ -2251,7 +2290,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 		free(uri);
 		if (rc < 0) {
 			D_ERROR("write to file %s failed (%s).\n",
-				filename, strerror(errno));
+				tmp_name, strerror(errno));
 			D_GOTO(out, rc = d_errno2der(errno));
 		}
 	}
@@ -2259,15 +2298,25 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 done:
 	if (fclose(fp) != 0) {
 		D_ERROR("file %s closing failed (%s).\n",
-			filename, strerror(errno));
+			tmp_name, strerror(errno));
 		fp = NULL;
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	fp = NULL;
-	rc = 0;
+
+	rc = rename(tmp_name, filename);
+	if (rc != 0) {
+		D_ERROR("Failed to rename %s to %s (%s).\n",
+			tmp_name, filename, strerror(errno));
+		rc = d_errno2der(errno);
+	}
 out:
-	if (filename != NULL)
-		free(filename);
+	free(filename);
+	if (tmp_name != NULL) {
+		if (rc != 0)
+			unlink(tmp_name);
+		free(tmp_name);
+	}
 	if (fp != NULL)
 		fclose(fp);
 	return rc;
