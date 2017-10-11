@@ -555,24 +555,6 @@ out:
 	return rc;
 }
 
-static inline int
-crt_errno2cer(int err)
-{
-	switch (err) {
-	case 0:		return 0;
-	case EPERM:
-	case EACCES:	return -DER_NO_PERM;
-	case ENOMEM:	return -DER_NOMEM;
-	case EDQUOT:
-	case ENOSPC:	return -DER_NOSPACE;
-	case EEXIST:	return -DER_EXIST;
-	case ENOENT:	return -DER_NONEXIST;
-	case ECANCELED:	return -DER_CANCELED;
-	default:	return -DER_MISC;
-	}
-	return 0;
-}
-
 inline bool
 crt_grp_id_identical(crt_group_id_t grp_id_1, crt_group_id_t grp_id_2)
 {
@@ -2149,7 +2131,7 @@ crt_group_config_path_set(const char *path)
 	rc = stat(path, &buf);
 	if (rc != 0) {
 		D_ERROR("bad path specified: %s", path);
-		return crt_errno2cer(errno);
+		return d_errno2der(errno);
 	}
 
 	if (!S_ISDIR(buf.st_mode)) {
@@ -2220,19 +2202,19 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	if (fp == NULL) {
 		D_ERROR("cannot create file %s(%s).\n",
 			filename, strerror(errno));
-		D_GOTO(out, rc = crt_errno2cer(errno));
+		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	rc = fprintf(fp, "%s %s\n", "name", grpid);
 	if (rc < 0) {
 		D_ERROR("write to file %s failed (%s).\n",
 			filename, strerror(errno));
-		D_GOTO(out, rc = crt_errno2cer(errno));
+		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	rc = fprintf(fp, "%s %d\n", "size", grp_priv->gp_size);
 	if (rc < 0) {
 		D_ERROR("write to file %s failed (%s).\n",
 			filename, strerror(errno));
-		D_GOTO(out, rc = crt_errno2cer(errno));
+		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	if (forall)
 		rc = fprintf(fp, "all\n");
@@ -2241,7 +2223,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	if (rc < 0) {
 		D_ERROR("write to file %s failed (%s).\n",
 			filename, strerror(errno));
-		D_GOTO(out, rc = crt_errno2cer(errno));
+		D_GOTO(out, rc = d_errno2der(errno));
 	}
 
 	if (!forall || grp_priv->gp_size == 1) {
@@ -2249,7 +2231,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 		if (rc < 0) {
 			D_ERROR("write to file %s failed (%s).\n",
 				filename, strerror(errno));
-			D_GOTO(out, rc = crt_errno2cer(errno));
+			D_GOTO(out, rc = d_errno2der(errno));
 		}
 		D_GOTO(done, rc);
 	}
@@ -2270,7 +2252,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 		if (rc < 0) {
 			D_ERROR("write to file %s failed (%s).\n",
 				filename, strerror(errno));
-			D_GOTO(out, rc = crt_errno2cer(errno));
+			D_GOTO(out, rc = d_errno2der(errno));
 		}
 	}
 
@@ -2279,7 +2261,7 @@ done:
 		D_ERROR("file %s closing failed (%s).\n",
 			filename, strerror(errno));
 		fp = NULL;
-		D_GOTO(out, rc = crt_errno2cer(errno));
+		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	fp = NULL;
 	rc = 0;
@@ -2322,7 +2304,7 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 	if (fp == NULL) {
 		D_ERROR("open file %s failed (%s).\n",
 			filename, strerror(errno));
-		D_GOTO(out, rc = crt_errno2cer(errno));
+		D_GOTO(out, rc = d_errno2der(errno));
 	}
 
 	D_ALLOC(grpname, CRT_GROUP_ID_MAX_LEN);
@@ -2333,7 +2315,7 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 	if (rc == EOF) {
 		D_ERROR("read from file %s failed (%s).\n",
 			filename, strerror(errno));
-		D_GOTO(out, rc = crt_errno2cer(errno));
+		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	if (strncmp(grpname, grpid, CRT_GROUP_ID_MAX_LEN) != 0) {
 		D_ERROR("grpname %s in file mismatch with grpid %s.\n",
@@ -2345,14 +2327,14 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 	if (rc == EOF) {
 		D_ERROR("read from file %s failed (%s).\n",
 			filename, strerror(errno));
-		D_GOTO(out, rc = crt_errno2cer(errno));
+		D_GOTO(out, rc = d_errno2der(errno));
 	}
 
 	rc = fscanf(fp, "%4s", all_or_self);
 	if (rc == EOF) {
 		D_ERROR("read from file %s failed (%s).\n",
 			filename, strerror(errno));
-		D_GOTO(out, rc = crt_errno2cer(errno));
+		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	if (strncmp(all_or_self, "all", 3) == 0) {
 		forall = true;
@@ -2378,7 +2360,7 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 		if (rc == EOF) {
 			D_ERROR("read from file %s failed (%s).\n",
 				filename, strerror(errno));
-			D_GOTO(out, rc = crt_errno2cer(errno));
+			D_GOTO(out, rc = d_errno2der(errno));
 		}
 		grp_priv->gp_psr_phy_addr = addr_str;
 		if (!forall || grp_priv->gp_psr_rank == psr_rank) {
