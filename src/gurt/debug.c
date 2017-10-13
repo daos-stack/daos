@@ -53,23 +53,27 @@ int d_mem_logfac;
 static void
 d_log_sync_mask_helper(bool acquire_lock)
 {
-	static int	log_mask_init;
+	static int	 log_mask_init;
 	static char	*log_mask;
 
 	if (acquire_lock)
 		pthread_mutex_lock(&d_log_lock);
-	if (!log_mask_init) {
-		log_mask = getenv(D_LOG_MASK_ENV);
-		if (log_mask == NULL) {
-			log_mask = getenv(CRT_LOG_MASK_ENV);
-			fprintf(stderr, CRT_LOG_MASK_ENV
-					" deprecated. Please use "
-					D_LOG_MASK_ENV "\n");
-		}
-	}
+	if (log_mask_init)
+		goto out;
+	log_mask = getenv(D_LOG_MASK_ENV);
+	if (log_mask != NULL)
+		goto out;
+	log_mask = getenv(CRT_LOG_MASK_ENV);
+	if (log_mask != NULL)
+		fprintf(stderr, CRT_LOG_MASK_ENV " deprecated. Please use "
+			D_LOG_MASK_ENV "\n");
 
+out:
 	if (log_mask != NULL)
 		d_log_setmasks(log_mask, -1);
+	else
+		fprintf(stderr, D_LOG_MASK_ENV
+			" not set, using default mask.\n");
 
 	if (acquire_lock)
 		pthread_mutex_unlock(&d_log_lock);
@@ -151,14 +155,20 @@ d_log_init(void)
 	int flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
 
 	log_file = getenv(D_LOG_FILE_ENV);
-	if (log_file == NULL) {
-		log_file = getenv(CRT_LOG_FILE_ENV);
+	if (log_file != NULL)
+		goto out;
+
+	log_file = getenv(CRT_LOG_FILE_ENV);
+	if (log_file != NULL)
 		fprintf(stderr, CRT_LOG_FILE_ENV " deprecated. Please use "
-				D_LOG_FILE_ENV "\n");
-	}
+			D_LOG_FILE_ENV "\n");
+
+out:
 	if (log_file == NULL || strlen(log_file) == 0) {
 		flags |= DLOG_FLV_STDOUT;
 		log_file = NULL;
+		fprintf(stderr, D_LOG_FILE_ENV
+			" not set, printing log to stdout.\n");
 	}
 
 	return d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG);
