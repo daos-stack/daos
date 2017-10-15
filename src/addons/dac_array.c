@@ -1359,7 +1359,7 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		D__ASSERT(ret == 1);
 
 		if (props->size == 0 || dkey_num > props->dkey_num) {
-			daos_obj_punch_dkeys_t p_args;
+			daos_obj_punch_key_t p_args;
 			daos_key_t *dkey;
 
 			/*
@@ -1381,10 +1381,10 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 				     strlen(params->dkey_str));
 
 			/** Punch this entire dkey */
+			memset(&p_args, 0, sizeof(p_args));
 			p_args.oh = args->oh;
 			p_args.epoch = args->epoch;
-			p_args.nr = 1;
-			p_args.dkeys = dkey;
+			p_args.dkey = dkey;
 
 			rc = daos_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS,
 					      tse_task2sched(task), &p_args, 0,

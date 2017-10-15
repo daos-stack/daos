@@ -178,8 +178,32 @@ int dc_obj_shard_list_rec(daos_handle_t oh, uint32_t op,
 		      daos_hash_out_t *anchor, unsigned int map_ver,
 		      bool incr_order, tse_task_t *task);
 
-struct dc_obj_shard*
-obj_shard_hdl2ptr(daos_handle_t hdl);
+static inline bool
+obj_retry_error(int err)
+{
+	return err == -DER_TIMEDOUT || err == -DER_STALE ||
+	       daos_crt_network_error(err);
+}
+
+/**
+ * Task Arguments for key punch
+ */
+struct tsa_key_punch {
+	uint32_t		 pa_opc;
+	uint32_t		 pa_mapv;
+	uuid_t			 pa_coh_uuid;
+	uuid_t			 pa_cont_uuid;
+	struct dc_obj_shard	*pa_shard;
+	daos_obj_punch_key_t	*pa_api_args;
+	struct dc_object	*pa_obj;
+	crt_rpc_t		*pa_rpc;
+};
+
+int dc_shard_key_punch(tse_task_t *task, struct tsa_key_punch *args);
+
+struct dc_obj_shard *obj_shard_hdl2ptr(daos_handle_t hdl);
+void obj_shard_decref(struct dc_obj_shard *shard);
+
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
 void ds_obj_enum_handler(crt_rpc_t *rpc);

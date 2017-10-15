@@ -25,8 +25,7 @@
 /**
  * Test suite helper functions.
  */
-#include <daos_types.h>
-#include <daos_api.h>
+#include <daos.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 
@@ -192,8 +191,8 @@ dts_cmd_parser(struct option *opts, const char *prompt,
 
 			opt = &opts[i];
 			if (opt->name == NULL) {
-				D__PRINT("Unknown command %s\n", cmd);
-				return -1;
+				opc = -1;
+				break;
 			}
 
 			if (strncasecmp(opt->name, cmd, strlen(opt->name)))
@@ -208,6 +207,11 @@ dts_cmd_parser(struct option *opts, const char *prompt,
 				args = NULL;
 			}
 			break;
+		}
+
+		if (opc == -1) {
+			D__PRINT("Unknown command string %s\n", cmd);
+			continue;
 		}
 
 		rc = cmd_func(opc, args);

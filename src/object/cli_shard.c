@@ -311,7 +311,7 @@ out:
 	crt_req_decref(rw_args->rpc);
 	dc_pool_put((struct dc_pool *)rw_args->hdlp);
 
-	if (ret == 0 || daos_obj_retry_error(rc))
+	if (ret == 0 || obj_retry_error(rc))
 		ret = rc;
 	return ret;
 }
@@ -610,6 +610,72 @@ out_task:
 }
 
 int
+dc_shard_key_punch(tse_task_t *task, struct tsa_key_punch *args)
+{
+	daos_obj_punch_key_t	*api_args = args->pa_api_args;
+	struct dc_pool		*pool;
+	struct dc_obj_shard	*shard;
+	struct obj_punch_in	*opi;
+	crt_rpc_t		*req;
+	daos_unit_oid_t		 oid;
+	crt_endpoint_t		 tgt_ep;
+	int			 rc;
+
+	shard = args->pa_shard;
+	pool = obj_shard_ptr2pool(shard);
+	if (pool == NULL) {
+		obj_shard_decref(shard);
+		D__GOTO(out, rc = -DER_NO_HDL);
+	}
+
+	oid = shard->do_id;
+	tgt_ep.ep_grp	= pool->dp_group;
+	tgt_ep.ep_rank	= shard->do_rank;
+	tgt_ep.ep_tag	= obj_shard_dkey2tag(shard, api_args->dkey);
+
+	obj_shard_decref(shard);
+	dc_pool_put(pool);
+
+	D__DEBUG(DB_IO, "opc=%d, rank=%d tag=%d.\n",
+		 args->pa_opc, tgt_ep.ep_rank, tgt_ep.ep_tag);
+
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, args->pa_opc, &req);
+	if (rc != 0)
+		D__GOTO(out, rc);
+
+	crt_req_addref(req);
+	args->pa_rpc = req;
+
+	opi = crt_req_get(req);
+	D_ASSERT(opi != NULL);
+
+	opi->opi_map_ver	 = args->pa_mapv;
+	opi->opi_epoch		 = api_args->epoch;
+	opi->opi_oid		 = oid;
+	opi->opi_dkeys.da_count  = 1;
+	opi->opi_dkeys.da_arrays = api_args->dkey;
+	opi->opi_akeys.da_count	 = api_args->akey_nr;
+	opi->opi_akeys.da_arrays = api_args->akeys;
+
+	uuid_copy(opi->opi_co_hdl, args->pa_coh_uuid);
+	uuid_copy(opi->opi_co_uuid, args->pa_cont_uuid);
+
+	rc = daos_rpc_send(req, task);
+	if (rc != 0) {
+		D__ERROR("punch rpc failed rc %d\n", rc);
+		D__GOTO(out_req, rc);
+	}
+	D_EXIT;
+	return rc;
+
+out_req:
+	crt_req_decref(req);
+out:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+int
 dc_obj_shard_update(daos_handle_t oh, daos_epoch_t epoch,
 		    daos_key_t *dkey, unsigned int nr,
 		    daos_iod_t *iods, daos_sg_list_t *sgls,
@@ -727,7 +793,7 @@ out:
 	crt_req_decref(enum_args->rpc);
 	dc_pool_put((struct dc_pool *)enum_args->hdlp);
 
-	if (ret == 0 || daos_obj_retry_error(rc))
+	if (ret == 0 || obj_retry_error(rc))
 		ret = rc;
 	return ret;
 }

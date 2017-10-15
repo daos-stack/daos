@@ -565,7 +565,7 @@ rebuild_obj_iterate_keys(daos_unit_oid_t oid, unsigned int shard, void *data)
 	D__DEBUG(DB_TRACE, "start rebuild obj "DF_UOID" for shard %u\n",
 		DP_UOID(oid), shard);
 	memset(&hash_out, 0, sizeof(hash_out));
-	enum_anchor_set_shard(&hash_out, shard);
+	dc_obj_shard2anchor(&hash_out, shard);
 
 	tls->rebuild_obj_count++;
 	while (!daos_hash_is_eof(&hash_out)) {

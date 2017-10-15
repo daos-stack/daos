@@ -67,8 +67,7 @@ struct daos_task_args {
 		daos_obj_open_t		obj_open;
 		daos_obj_close_t	obj_close;
 		daos_obj_punch_t	obj_punch;
-		daos_obj_punch_dkeys_t	obj_punch_dkeys;
-		daos_obj_punch_akeys_t	obj_punch_akeys;
+		daos_obj_punch_key_t	obj_punch_key;
 		daos_obj_query_t	obj_query;
 		daos_obj_fetch_t	obj_fetch;
 		daos_obj_update_t	obj_update;
@@ -87,7 +86,8 @@ struct daos_task_args {
 		daos_obj_multi_io_t	obj_fetch_multi;
 		daos_obj_multi_io_t	obj_update_multi;
 	} op_args;
-	void *priv;
+	daos_event_t	*ta_ev;
+	void		*priv;
 };
 
 struct daos_task_api {

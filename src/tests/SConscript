@@ -14,9 +14,13 @@ denv.Program('simple_array', 'simple_array.c', LIBS=libs)
 daosbench = denv.Program('daosbench', 'daosbench.c', LIBS=libs)
 denv.Install('$PREFIX/bin/', daosbench)
 
-daos_perf = denv.Program('daos_perf', 'daos_perf.c',
+daos_perf = denv.Program('daos_perf', ['daos_perf.c', 'dts_common.c'],
                          LIBS=libs + ['vos', 'daos_tests'])
 denv.Install('$PREFIX/bin/', daos_perf)
+
+daos_ctl = denv.Program('daos_ctl', ['daos_ctl.c', 'dts_common.c'],
+                         LIBS=libs + ['vos', 'daos_tests'])
+denv.Install('$PREFIX/bin/', daos_ctl)
 
 # tests
 SConscript('suite/SConscript', exports = ['denv'])

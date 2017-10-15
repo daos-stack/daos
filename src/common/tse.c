@@ -138,7 +138,20 @@ tse_task_decref_locked(struct tse_task_private *dtp)
 	return dtp->dtp_refcnt == 0;
 }
 
-static void
+void
+tse_task_addref(tse_task_t *task)
+{
+	struct tse_task_private  *dtp = tse_task2priv(task);
+	struct tse_sched_private *dsp = dtp->dtp_sched;
+
+	D__ASSERT(dsp != NULL);
+
+	pthread_mutex_lock(&dsp->dsp_lock);
+	tse_task_addref_locked(dtp);
+	pthread_mutex_unlock(&dsp->dsp_lock);
+}
+
+void
 tse_task_decref(tse_task_t *task)
 {
 	struct tse_task_private  *dtp = tse_task2priv(task);
@@ -821,24 +834,21 @@ tse_task_init(tse_task_func_t task_func, void *arg, int arg_size,
 		return -DER_NOMEM;
 
 	dtp = tse_task2priv(task);
-
 	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
-	memset(task, 0, sizeof(*task));
 
 	DAOS_INIT_LIST_HEAD(&dtp->dtp_list);
 	DAOS_INIT_LIST_HEAD(&dtp->dtp_dep_list);
 	DAOS_INIT_LIST_HEAD(&dtp->dtp_comp_cb_list);
 	DAOS_INIT_LIST_HEAD(&dtp->dtp_prep_cb_list);
 	DAOS_INIT_LIST_HEAD(&dtp->dtp_ret_list);
-	dtp->dtp_refcnt = 1;
 
-	dtp->dtp_func = task_func;
-	if (arg != NULL) {
-		dtp->dtp_func_arg = tse_task_buf_get(task, arg_size);
-		D__ASSERT(dtp->dtp_func_arg != NULL);
+	dtp->dtp_refcnt   = 1;
+	dtp->dtp_func	  = task_func;
+	dtp->dtp_sched	  = dsp;
+	dtp->dtp_func_arg = (void *)&dtp->dtp_buf;
+
+	if (arg_size != 0 && arg != NULL)
 		memcpy(dtp->dtp_func_arg, arg, arg_size);
-	}
-	dtp->dtp_sched = dsp;
 
 	*taskp = task;
 	return rc;

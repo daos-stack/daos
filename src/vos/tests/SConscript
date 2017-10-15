@@ -9,10 +9,7 @@ denv.Append(CPPPATH = ['#/src/vos/tests/'])
 vos_test_src=['vos_tests.c', 'vts_io.c', 'vts_pool.c', 'vts_container.c',
               denv.Object("vts_common.c"), 'vts_purge.c']
 vos_tests = denv.Program('vos_tests', vos_test_src, LIBS = libraries)
-vos_ctl = denv.Program('vos_ctl', ['vos_ctl.c', 'vts_common.c'],
-                       LIBS = libraries)
 evt_ctl = denv.Program('evt_ctl', 'evt_ctl.c', LIBS = libraries)
 
 denv.Install('$PREFIX/bin/', vos_tests)
-denv.Install('$PREFIX/bin/', vos_ctl)
 denv.Install('$PREFIX/bin/', evt_ctl)

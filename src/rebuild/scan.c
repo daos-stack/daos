@@ -466,7 +466,7 @@ placement_check(uuid_t co_uuid, daos_unit_oid_t oid, void *data)
 	if (rebuild_gst.rg_abort)
 		return 1;
 
-	obj_fetch_md(oid.id_pub, &md, NULL);
+	dc_obj_fetch_md(oid.id_pub, &md);
 	while (1) {
 		struct pool_map *poolmap;
 

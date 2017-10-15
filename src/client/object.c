@@ -156,39 +156,52 @@ int
 daos_obj_punch_dkeys(daos_handle_t oh, daos_epoch_t epoch, unsigned int nr,
 		     daos_key_t *dkeys, daos_event_t *ev)
 {
-	daos_obj_punch_dkeys_t	args;
+	daos_obj_punch_key_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	args.oh		= oh;
-	args.epoch	= epoch;
-	args.nr		= nr;
-	args.dkeys	= dkeys;
+	if (nr != 1) {
+		/* TODO: create multiple tasks for punch of multiple dkeys */
+		D__ERROR("Can't punch multiple dkeys for now\n");
+		return -DER_INVAL;
+	}
 
-	DAOS_API_ARG_ASSERT(args, OBJ_PUNCH_DKEYS);
+	DAOS_API_ARG_ASSERT(daos_obj_punch_key_t, OBJ_PUNCH_DKEYS);
+	rc = dc_task_new(DAOS_OPC_OBJ_PUNCH_DKEYS, ev, &task);
+	if (rc)
+		return rc;
 
-	dc_task_create(DAOS_OPC_OBJ_PUNCH_DKEYS, &args, sizeof(args), &task,
-		       &ev);
-	return daos_client_result_wait(ev);
+	args = daos_task_get_args(DAOS_OPC_OBJ_PUNCH_DKEYS, task);
+	args->oh	= oh;
+	args->epoch	= epoch;
+	args->dkey	= &dkeys[0];
+	args->akeys	= NULL;
+	args->akey_nr	= 0;
+
+	return dc_task_schedule(task);
 }
 
 int
 daos_obj_punch_akeys(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		     unsigned int nr, daos_key_t *akeys, daos_event_t *ev)
 {
-	daos_obj_punch_akeys_t	args;
+	daos_obj_punch_key_t	*args;
 	tse_task_t		*task;
+	int			 rc;
 
-	args.oh		= oh;
-	args.epoch	= epoch;
-	args.dkey	= dkey;
-	args.nr		= nr;
-	args.akeys	= akeys;
+	DAOS_API_ARG_ASSERT(daos_obj_punch_key_t, OBJ_PUNCH_AKEYS);
+	rc = dc_task_new(DAOS_OPC_OBJ_PUNCH_AKEYS, ev, &task);
+	if (rc)
+		return rc;
 
-	DAOS_API_ARG_ASSERT(args, OBJ_PUNCH_AKEYS);
+	args = daos_task_get_args(DAOS_OPC_OBJ_PUNCH_AKEYS, task);
+	args->oh	= oh;
+	args->epoch	= epoch;
+	args->dkey	= dkey;
+	args->akeys	= akeys;
+	args->akey_nr	= nr;
 
-	dc_task_create(DAOS_OPC_OBJ_PUNCH_AKEYS, &args, sizeof(args), &task,
-		       &ev);
-	return daos_client_result_wait(ev);
+	return dc_task_schedule(task);
 }
 
 int

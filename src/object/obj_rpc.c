@@ -82,12 +82,11 @@ static struct crt_msg_field *obj_key_enum_out_fields[] = {
 static struct crt_msg_field *obj_punch_in_fields[] = {
 	&CMF_UUID,	/* container handle uuid */
 	&CMF_UUID,	/* container uuid */
+	&DMF_OID,	/* object ID */
 	&CMF_UINT64,	/* epoch */
 	&CMF_UINT32,	/* map_version */
-	&CMF_UINT32,	/* count of dkeys */
-	&DMF_KEY_ARRAY,	/* dkey array */
-	&CMF_UINT32,	/* count of akeys */
 	&CMF_UINT32,	/* pad  */
+	&DMF_KEY_ARRAY,	/* dkey array */
 	&DMF_KEY_ARRAY,	/* akey array */
 };
 

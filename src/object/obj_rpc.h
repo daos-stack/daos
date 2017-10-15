@@ -111,12 +111,11 @@ struct obj_key_enum_out {
 struct obj_punch_in {
 	uuid_t			opi_co_hdl;
 	uuid_t			opi_co_uuid;
+	daos_unit_oid_t		opi_oid;
 	uint64_t		opi_epoch;
 	uint32_t		opi_map_ver;
-	uint32_t		opi_nr_dkeys;
+	uint32_t		opi_pad32_1;
 	struct crt_array	opi_dkeys;
-	uint32_t		opi_nr_akeys;
-	uint32_t		oei_pad;
 	struct crt_array	opi_akeys;
 };
 

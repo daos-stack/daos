@@ -28,9 +28,6 @@
 #include <daos/tse.h>
 #include <daos/common.h>
 
-int dc_obj_init(void);
-void dc_obj_fini(void);
-
 /** object metadata stored in the global OI table of container */
 struct daos_obj_md {
 	daos_obj_id_t		omd_id;
@@ -50,29 +47,15 @@ struct daos_obj_shard_md {
 	uint32_t		smd_padding;
 };
 
+struct pl_obj_layout;
+
 struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
 
-daos_handle_t
-dc_obj_hdl2cont_hdl(daos_handle_t obj_oh);
-
-int
-obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md,
-	     daos_event_t *ev);
-
-static inline bool
-daos_obj_retry_error(int err)
-{
-	return err == -DER_TIMEDOUT || err == -DER_STALE ||
-	       daos_crt_network_error(err);
-}
-
-struct pl_obj_layout;
-int
-dc_obj_layout_get(daos_handle_t oh, struct pl_obj_layout **layout,
-		  unsigned int *grp_nr, unsigned int *grp_size);
+int dc_obj_init(void);
+void dc_obj_fini(void);
 
 int dc_obj_class_register(tse_task_t *task);
 int dc_obj_class_query(tse_task_t *task);
@@ -90,12 +73,16 @@ int dc_obj_list_dkey(tse_task_t *task);
 int dc_obj_list_akey(tse_task_t *task);
 int dc_obj_list_rec(tse_task_t *task);
 int dc_obj_single_shard_list_dkey(tse_task_t *task);
+int dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md);
+int dc_obj_layout_get(daos_handle_t oh, struct pl_obj_layout **layout,
+		      unsigned int *grp_nr, unsigned int *grp_size);
 
 #define ENUM_ANCHOR_SHARD_OFF		28
 #define ENUM_ANCHOR_SHARD_LENGTH	4
 
+/** Decode shard number from enumeration anchor */
 static inline uint32_t
-enum_anchor_get_shard(daos_hash_out_t *anchor)
+dc_obj_anchor2shard(daos_hash_out_t *anchor)
 {
 	uint32_t tag;
 
@@ -105,8 +92,9 @@ enum_anchor_get_shard(daos_hash_out_t *anchor)
 	return tag;
 }
 
+/** Encode shard into enumeration anchor. */
 static inline void
-enum_anchor_set_shard(daos_hash_out_t *anchor, uint32_t shard)
+dc_obj_shard2anchor(daos_hash_out_t *anchor, uint32_t shard)
 {
 	memcpy(&anchor->body[ENUM_ANCHOR_SHARD_OFF], &shard,
 	       ENUM_ANCHOR_SHARD_LENGTH);

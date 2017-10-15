@@ -1119,19 +1119,9 @@ out:
 }
 
 static void
-ds_obj_punch_complete(crt_rpc_t *rpc, daos_handle_t ioh, int status,
-		      uint32_t map_version, uuid_t cookie)
+obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 {
 	int rc;
-
-	if (!daos_handle_is_inval(ioh)) {
-		struct obj_punch_in *opi;
-
-		opi = crt_req_get(rpc);
-		D__ASSERT(opi != NULL);
-
-		rc = 0;
-	}
 
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
@@ -1147,9 +1137,9 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	struct obj_punch_in	*opi;
 	struct ds_cont_hdl	*cont_hdl = NULL;
 	struct ds_cont		*cont = NULL;
-	daos_handle_t		ioh = DAOS_HDL_INVAL;
-	uint32_t		map_version = 0;
-	int			rc;
+	uint32_t		 map_version = 0;
+	int			 i;
+	int			 rc;
 
 	opi = crt_req_get(rpc);
 	D__ASSERT(opi != NULL);
@@ -1171,19 +1161,32 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		       opi->opi_map_ver, map_version);
 	}
 
-	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH) {
-		/** VOS punch obj */
-	}
-	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_DKEYS) {
-		/** VOS punch dkeys */
-	}
-	if (opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_AKEYS) {
-		/** VOS punch akeys */
-	}
+	for (i = 0; i < opi->opi_dkeys.da_count; i++) {
+		daos_key_t *dkey;
 
+		dkey = &((daos_key_t *)opi->opi_dkeys.da_arrays)[i];
+
+		switch (opc_get(rpc->cr_opc)) {
+		default:
+			D__PRINT("Not supported\n");
+			D__GOTO(out, rc = -DER_NOSYS);
+
+		case DAOS_OBJ_RPC_PUNCH_DKEYS:
+		case DAOS_OBJ_RPC_PUNCH_AKEYS:
+			rc = vos_obj_punch(cont->sc_hdl,
+					   opi->opi_oid,
+					   opi->opi_epoch,
+					   cont_hdl->sch_uuid,
+					   opi->opi_map_ver, dkey,
+					   opi->opi_akeys.da_count,
+					   opi->opi_akeys.da_arrays);
+			if (rc)
+				D__GOTO(out, rc);
+			break;
+		}
+	}
 out:
-	ds_obj_punch_complete(rpc, ioh, rc, map_version,
-			      cont_hdl ? cont_hdl->sch_uuid : NULL);
+	obj_punch_complete(rpc, rc, map_version);
 	if (cont_hdl) {
 		if (!cont_hdl->sch_cont)
 			ds_cont_put(cont); /* -1 for rebuild container */

@@ -328,4 +328,9 @@ tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb,
 int
 tse_task_reinit(tse_task_t *task);
 
+void
+tse_task_addref(tse_task_t *task);
+
+void
+tse_task_decref(tse_task_t *task);
 #endif

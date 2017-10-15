@@ -134,6 +134,7 @@ int
 daos_event_register_comp_cb(struct daos_event *ev,
 			    daos_event_comp_cb_t cb, void *arg);
 
+/* TODO: these task functions should be moved to a different header */
 int
 daos_client_task_prep(void *arg, int arg_size, tse_task_t **taskp,
 		      daos_event_t **evp);
@@ -142,8 +143,16 @@ int
 dc_task_create(daos_opc_t opc, void *arg, int arg_size,
 	       tse_task_t **taskp, daos_event_t **evp);
 
+int
+dc_task_new(daos_opc_t opc, daos_event_t *ev, tse_task_t **taskp);
+
+int
+dc_task_schedule(tse_task_t *task);
+
 /**
  * Wait for completion of the private event
+ * This function is deprecated, use dc_task_new() and dc_task_schedule()
+ * instead of it.
  */
 int
 daos_event_priv_wait();

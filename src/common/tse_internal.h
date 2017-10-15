@@ -38,7 +38,7 @@ struct tse_task_private {
 	int			dtp_refcnt;
 
 	/* function for the task */
-	tse_task_func_t	dtp_func;
+	tse_task_func_t		dtp_func;
 	void			*dtp_func_arg;
 
 	/* links to scheduler */
