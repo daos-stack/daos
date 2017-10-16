@@ -849,8 +849,7 @@ ds_iter_single_vos(void *data)
 		param.ip_epr.epr_hi = oei->oei_epoch;
 		param.ip_epc_expr = VOS_IT_EPC_RE;
 	} else {
-		/* XXX epoch is ignored by key enumeration for the time being */
-		param.ip_epr.epr_lo = oei->oei_epoch;
+		param.ip_epr.epr_lo = param.ip_epr.epr_hi = oei->oei_epoch;
 		if (type == VOS_ITER_AKEY) {
 			if (oei->oei_dkey.iov_len == 0)
 				D_GOTO(out_cont_hdl, rc = -DER_PROTO);
