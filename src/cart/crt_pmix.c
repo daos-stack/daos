@@ -639,6 +639,13 @@ crt_plugin_event_handler_core(size_t evhdlr_registration_id,
 			source->rank, pmix_gdata->pg_univ_size - 1);
 		return;
 	}
+
+	if (grp_priv->gp_rank_map[source->rank].rm_status == CRT_RANK_NOENT) {
+		D_DEBUG("PMIx event not relevant to cart group: %s.\n",
+			grp_priv->gp_pub.cg_grpid);
+		return;
+	}
+
 	/* convert source->rank from pmix rank to cart rank */
 	crt_rank = grp_priv->gp_rank_map[source->rank].rm_rank;
 	D_DEBUG("received pmix notification about rank %d.\n", crt_rank);

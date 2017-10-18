@@ -2578,7 +2578,7 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 	if (rc != 0) {
 		D_ERROR("d_rank_list_append() failed, rc: %d\n", rc);
 		pthread_rwlock_unlock(&grp_priv->gp_rwlock);
-		D_GOTO(out, rc);
+		D_GOTO(out_cb, rc);
 	}
 	D_ASSERT(grp_priv->gp_failed_ranks->rl_nr.num < grp_priv->gp_size);
 	pthread_rwlock_unlock(&grp_priv->gp_rwlock);
@@ -2586,10 +2586,11 @@ crt_rank_evict(crt_group_t *grp, d_rank_t rank)
 	rc = crt_grp_lc_mark_evicted(grp_priv, rank);
 	if (rc != 0) {
 		D_ERROR("crt_grp_lc_mark_evicted() failed, rc: %d.\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out_cb, rc);
 	}
 	D_DEBUG("evicted group %s rank %d.\n", grp_priv->gp_pub.cg_grpid, rank);
 
+out_cb:
 	crt_exec_eviction_cb(&grp_priv->gp_pub, rank);
 out:
 	return rc;

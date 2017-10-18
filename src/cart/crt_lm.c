@@ -304,6 +304,8 @@ lm_ras_event_hdlr_internal(d_rank_t crt_rank)
 		grp_self, crt_rank);
 
 	rc = crt_rank_evict(lm_grp_srv->lgs_grp, crt_rank);
+	if (rc == -DER_EVICTED)
+		D_GOTO(out, rc);
 	if (rc != 0) {
 		D_ERROR("crt_rank_evict() failed, rc: %d\n", rc);
 		D_GOTO(out, rc);
