@@ -130,6 +130,8 @@ class PostRunner():
                         for line in file:
                             if 'ERR' in line:
                                 self.logger.info(line)
+                            if 'WARN' in line:
+                                self.logger.info(line)
                 elif filesize > 0:
                     with open(dumpstd, 'r') as file:
                         self.logger.info(file.read())

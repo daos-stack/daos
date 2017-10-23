@@ -128,6 +128,9 @@ class UnitTestRunner(PostRunner.PostRunner,
                 for error_item in results.errors:
                     self.logger.info(error_item[0])
                     self.logger.info(error_item[1])
+                    test_object_dict = error_item[0].__dict__
+                    self.dump_log_files(error_item[0].__class__.__name__,
+                                        test_object_dict['_testMethodName'])
                 self.logger.info("\nNumber test failures: %d",
                                  len(results.failures))
                 for results_item in results.failures:
