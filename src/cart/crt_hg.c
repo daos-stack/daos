@@ -1050,31 +1050,21 @@ mem_free:
 	return rc;
 }
 
-struct crt_hg_send_cbinfo {
-	struct crt_rpc_priv	*rsc_rpc_priv;
-	crt_cb_t		rsc_cb;
-	void			*rsc_arg;
-};
-
 /* the common completion callback for sending RPC request */
 static hg_return_t
 crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 {
-	struct crt_hg_send_cbinfo	*req_cbinfo;
-	struct crt_cb_info		crt_cbinfo;
-	crt_rpc_t			*rpc_pub;
-	struct crt_rpc_priv		*rpc_priv;
-	crt_opcode_t			opc;
-	hg_return_t			hg_ret = HG_SUCCESS;
-	crt_rpc_state_t			state;
-	int				rc = 0;
+	struct crt_cb_info	crt_cbinfo;
+	crt_rpc_t		*rpc_pub;
+	struct crt_rpc_priv	*rpc_priv = hg_cbinfo->arg;
+	crt_opcode_t		opc;
+	hg_return_t		hg_ret = HG_SUCCESS;
+	crt_rpc_state_t		state;
+	int			rc = 0;
 
-	req_cbinfo = (struct crt_hg_send_cbinfo *)hg_cbinfo->arg;
-	D_ASSERT(req_cbinfo != NULL);
+	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(hg_cbinfo->type == HG_CB_FORWARD);
 
-	rpc_priv = req_cbinfo->rsc_rpc_priv;
-	D_ASSERT(rpc_priv != NULL);
 	rpc_pub = &rpc_priv->crp_pub;
 	opc = rpc_pub->cr_opc;
 
@@ -1102,7 +1092,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 		break;
 	}
 
-	if (req_cbinfo->rsc_cb == NULL) {
+	if (rpc_priv->crp_complete_cb == NULL) {
 		rpc_priv->crp_state = state;
 		D_GOTO(out, hg_ret);
 	}
@@ -1125,17 +1115,15 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	}
 
 	crt_cbinfo.cci_rpc = rpc_pub;
-	crt_cbinfo.cci_arg = req_cbinfo->rsc_arg;
+	crt_cbinfo.cci_arg = rpc_priv->crp_arg;
 	crt_cbinfo.cci_rc = rc;
 
-	D_ASSERT(req_cbinfo->rsc_cb != NULL);
-	req_cbinfo->rsc_cb(&crt_cbinfo);
+	rpc_priv->crp_complete_cb(&crt_cbinfo);
 
 	rpc_priv->crp_state = state;
 
 out:
 	crt_context_req_untrack(rpc_pub);
-	D_FREE_PTR(req_cbinfo);
 
 	/* corresponding to the refcount taken in crt_rpc_priv_init(). */
 	rc = crt_req_decref(rpc_pub);
@@ -1148,36 +1136,22 @@ out:
 int
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_hg_send_cbinfo	*cb_info;
-	hg_return_t			 hg_ret = HG_SUCCESS;
-	void				*hg_in_struct;
-	int				 rc = 0;
+	hg_return_t	 hg_ret;
+	int		 rc = 0;
 
 	D_ASSERT(rpc_priv != NULL);
 
-	D_ALLOC_PTR(cb_info);
-	if (cb_info == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	hg_in_struct = &rpc_priv->crp_pub.cr_input;
-
-	cb_info->rsc_rpc_priv = rpc_priv;
-	cb_info->rsc_cb = rpc_priv->crp_complete_cb;
-	cb_info->rsc_arg = rpc_priv->crp_arg;
-
-	hg_ret = HG_Forward(rpc_priv->crp_hg_hdl, crt_hg_req_send_cb, cb_info,
-			    hg_in_struct);
+	hg_ret = HG_Forward(rpc_priv->crp_hg_hdl, crt_hg_req_send_cb, rpc_priv,
+			    &rpc_priv->crp_pub.cr_input);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Forward failed, hg_ret: %d, prc_priv: %p, "
 			"opc: %#x.\n", hg_ret, rpc_priv,
 			rpc_priv->crp_pub.cr_opc);
-		D_FREE_PTR(cb_info);
 		rc = -DER_HG;
 	} else {
 		D_DEBUG("rpc_priv %p sent.\n", rpc_priv);
 	}
 
-out:
 	return rc;
 }
 
@@ -1232,13 +1206,10 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 int
 crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t			hg_ret = HG_SUCCESS;
-	void				*hg_out_struct;
-	int				rc = 0;
+	hg_return_t	hg_ret;
+	int		rc = 0;
 
 	D_ASSERT(rpc_priv != NULL);
-
-	hg_out_struct = &rpc_priv->crp_pub.cr_output;
 
 	rc = crt_req_addref(&rpc_priv->crp_pub);
 	if (rc != 0) {
@@ -1247,7 +1218,7 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 		D_GOTO(out, rc);
 	}
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
-			    rpc_priv, hg_out_struct);
+			    rpc_priv, &rpc_priv->crp_pub.cr_output);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Respond failed, hg_ret: %d, opc: %#x.\n",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
