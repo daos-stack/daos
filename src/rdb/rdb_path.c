@@ -24,7 +24,7 @@
  * rdb: Paths
  */
 
-#define DD_SUBSYS DD_FAC(rdb)
+#define DDSUBSYS DDFAC(rdb)
 
 #include <daos_srv/rdb.h>
 
@@ -36,9 +36,9 @@ daos_iov_t rdb_path_root_key;
 static inline void
 rdb_path_assert(const rdb_path_t *path)
 {
-	D_ASSERT(path->iov_buf != NULL && path->iov_buf_len > 0 &&
+	D__ASSERT(path->iov_buf != NULL && path->iov_buf_len > 0 &&
 		 path->iov_buf_len <= rdb_iov_max);
-	D_ASSERT(path->iov_len <= path->iov_buf_len);
+	D__ASSERT(path->iov_len <= path->iov_buf_len);
 }
 
 /**
@@ -55,7 +55,7 @@ rdb_path_init(rdb_path_t *path)
 	daos_iov_t p = {};
 
 	p.iov_buf_len = 128;
-	D_ALLOC(p.iov_buf, p.iov_buf_len);
+	D__ALLOC(p.iov_buf, p.iov_buf_len);
 	if (p.iov_buf == NULL)
 		return -DER_NOMEM;
 	*path = p;
@@ -72,7 +72,7 @@ void
 rdb_path_fini(rdb_path_t *path)
 {
 	rdb_path_assert(path);
-	D_FREE(path->iov_buf, path->iov_buf_len);
+	D__FREE(path->iov_buf, path->iov_buf_len);
 }
 
 /**
@@ -89,7 +89,7 @@ rdb_path_clone(const rdb_path_t *path, rdb_path_t *new_path)
 	void *buf;
 
 	rdb_path_assert(path);
-	D_ALLOC(buf, path->iov_buf_len);
+	D__ALLOC(buf, path->iov_buf_len);
 	if (buf == NULL)
 		return -DER_NOMEM;
 	memcpy(buf, path->iov_buf, path->iov_len);
@@ -116,7 +116,7 @@ rdb_path_push(rdb_path_t *path, const daos_iov_t *key)
 	size_t	n;
 
 	rdb_path_assert(path);
-	D_ASSERT(key->iov_len <= key->iov_buf_len);
+	D__ASSERT(key->iov_len <= key->iov_buf_len);
 	len = rdb_encode_iov(key, NULL /* buf */);
 	if (path->iov_len + len > path->iov_buf_len) {
 		size_t	buf_len = path->iov_buf_len;
@@ -128,16 +128,16 @@ rdb_path_push(rdb_path_t *path, const daos_iov_t *key)
 				return -DER_OVERFLOW;
 			buf_len = min(buf_len * 2, rdb_iov_max);
 		} while (buf_len < path->iov_len + len);
-		D_ALLOC(buf, buf_len);
+		D__ALLOC(buf, buf_len);
 		if (buf == NULL)
 			return -DER_NOMEM;
 		memcpy(buf, path->iov_buf, path->iov_len);
-		D_FREE(path->iov_buf, path->iov_buf_len);
+		D__FREE(path->iov_buf, path->iov_buf_len);
 		path->iov_buf = buf;
 		path->iov_buf_len = buf_len;
 	}
 	n = rdb_encode_iov(key, path->iov_buf + path->iov_len);
-	D_ASSERTF(n == len, "%zu == %zu\n", n, len);
+	D__ASSERTF(n == len, "%zu == %zu\n", n, len);
 	path->iov_len += n;
 	return 0;
 }
@@ -161,7 +161,7 @@ rdb_path_pop(rdb_path_t *path)
 		return -DER_NONEXIST;
 	n = rdb_decode_iov_backward(path->iov_buf + path->iov_len,
 				    path->iov_len, &key);
-	D_ASSERTF(n > 0, "%zd\n", n);
+	D__ASSERTF(n > 0, "%zd\n", n);
 	path->iov_len -= n;
 	return 0;
 }

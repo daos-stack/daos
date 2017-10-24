@@ -1,4 +1,4 @@
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <getopt.h>
 #include "daos_test.h"
@@ -8,12 +8,12 @@ char USAGE[] = "ds_cross_conn_test <warm_tier_group> <cold_tier_group>";
 /*Globals used in test*/
 /*IDs and daos (not MPI) rank info*/
 uuid_t warm_uuid;
-daos_rank_t warm_ranks[8];
-daos_rank_list_t warm_svc;
+d_rank_t warm_ranks[8];
+d_rank_list_t warm_svc;
 
 uuid_t cold_uuid;
-daos_rank_t cold_ranks[8];
-daos_rank_list_t cold_svc;
+d_rank_t cold_ranks[8];
+d_rank_list_t cold_svc;
 
 int warm_id_len;
 int cold_id_len;
@@ -33,7 +33,7 @@ int size;
 
 /*Small helpder func*/
 static int
-pool_create(const char *grp_id, uuid_t pool_id, daos_rank_list_t *svc)
+pool_create(const char *grp_id, uuid_t pool_id, d_rank_list_t *svc)
 {
 	int rc = 0;
 

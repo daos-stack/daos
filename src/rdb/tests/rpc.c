@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#define DD_SUBSYS DD_FAC(rdb)
+#define DDSUBSYS DDFAC(rdb)
 
 #include <daos/rpc.h>
 #include "rpc.h"

@@ -58,7 +58,7 @@ struct rdb {
 	struct daos_lru_cache  *d_trees;	/* rdb_tree cache */
 	PMEMobjpool	       *d_pmem;
 	daos_handle_t		d_attr;		/* rdb attribute tree */
-	daos_rank_list_t       *d_replicas;
+	d_rank_list_t       *d_replicas;
 
 	raft_server_t	       *d_raft;
 	daos_handle_t		d_log;		/* rdb log tree */
@@ -82,14 +82,14 @@ struct rdb {
 
 /* Current rank */
 #define DF_RANK "%u"
-static inline crt_rank_t
+static inline d_rank_t
 DP_RANK(void)
 {
-	crt_rank_t	rank;
+	d_rank_t	rank;
 	int		rc;
 
 	rc = crt_group_rank(NULL, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D__ASSERTF(rc == 0, "%d\n", rc);
 	return rank;
 }
 
@@ -114,7 +114,7 @@ int rdb_stop_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv);
 
 /* Per-raft_node_t data */
 struct rdb_raft_node {
-	crt_rank_t	dn_rank;
+	d_rank_t	dn_rank;
 };
 
 int rdb_raft_init(daos_handle_t rdb_attr);
@@ -183,7 +183,7 @@ struct rdb_start_in {
 	uint32_t		dai_flags;	/* rdb_start_flag */
 	uint32_t		dai_padding;
 	uint64_t		dai_size;
-	daos_rank_list_t       *dai_ranks;
+	d_rank_list_t       *dai_ranks;
 };
 
 struct rdb_start_out {

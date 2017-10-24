@@ -112,9 +112,9 @@ static inline void *
 dss_module_key_get(struct dss_thread_local_storage *dtls,
 		   struct dss_module_key *key)
 {
-	D_ASSERT(key->dmk_index >= 0);
-	D_ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
-	D_ASSERT(dss_module_keys[key->dmk_index] == key);
+	D__ASSERT(key->dmk_index >= 0);
+	D__ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
+	D__ASSERT(dss_module_keys[key->dmk_index] == key);
 
 	return dtls->dtls_values[key->dmk_index];
 }
@@ -280,7 +280,7 @@ dss_abterr2der(int abt_errno)
 }
 
 int dss_rpc_send(crt_rpc_t *rpc);
-int dss_group_create(crt_group_id_t id, crt_rank_list_t *ranks,
+int dss_group_create(crt_group_id_t id, d_rank_list_t *ranks,
 		     crt_group_t **group);
 int dss_group_destroy(crt_group_t *group);
 

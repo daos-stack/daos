@@ -5,4 +5,4 @@ Import('common_tgts')
 
 test_tgt = denv.SharedObject('place_obj.c')
 denv.Program('pl_map', test_tgt + common_tgts,
-	     LIBS = ['daos_common', 'pouch', 'cart', 'placement'])
+	     LIBS = ['daos_common', 'gurt', 'cart', 'placement'])

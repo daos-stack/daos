@@ -86,8 +86,8 @@ struct tier_fetch_out {
 struct tier_upstream_in {
 	uuid_t		ui_warm_id;
 	uuid_t		ui_cold_id;
-	crt_string_t	ui_warm_grp;
-	crt_string_t	ui_cold_grp;
+	d_string_t	ui_warm_grp;
+	d_string_t	ui_cold_grp;
 };
 
 struct tier_upstream_out {
@@ -96,7 +96,7 @@ struct tier_upstream_out {
 
 struct tier_cross_conn_in {
 	uuid_t		cci_warm_id;
-	crt_string_t	cci_warm_grp;
+	d_string_t	cci_warm_grp;
 };
 
 struct tier_cross_conn_out {
@@ -105,8 +105,8 @@ struct tier_cross_conn_out {
 
 struct tier_register_cold_in {
 	uuid_t		rci_colder_id;
-	crt_string_t	rci_colder_grp;
-	crt_string_t	rci_tgt_grp;
+	d_string_t	rci_colder_grp;
+	d_string_t	rci_tgt_grp;
 };
 
 struct tier_register_cold_out {

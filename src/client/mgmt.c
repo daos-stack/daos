@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DD_SUBSYS	DD_FAC(client)
+#define DDSUBSYS	DDFAC(client)
 
 #include <daos_mgmt.h>
 
@@ -30,7 +30,7 @@
 #include "task_internal.h"
 
 int
-daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
+daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
 		  daos_event_t *ev)
 {
 	daos_svc_rip_t		args;
@@ -48,8 +48,8 @@ daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
 
 int
 daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
-		 const char *grp, const daos_rank_list_t *tgts, const char *dev,
-		 daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
+		 const char *grp, const d_rank_list_t *tgts, const char *dev,
+		 daos_size_t size, d_rank_list_t *svc, uuid_t uuid,
 		 daos_event_t *ev)
 {
 	daos_pool_create_t	args;
@@ -89,7 +89,7 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
 }
 
 int
-daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
+daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 		daos_event_t *ev)
 {
 	daos_pool_evict_t	args;
@@ -98,7 +98,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
 	DAOS_API_ARG_ASSERT(args, POOL_EVICT);
 
 	args.grp = grp;
-	args.svc = (daos_rank_list_t *)svc;
+	args.svc = (d_rank_list_t *)svc;
 	uuid_copy((unsigned char *)args.uuid, uuid);
 
 	dc_task_create(DAOS_OPC_POOL_EVICT, &args, sizeof(args), &task, &ev);
@@ -107,7 +107,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
 
 int
 daos_pool_tgt_add(const uuid_t uuid, const char *grp,
-		  const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		  const d_rank_list_t *svc, d_rank_list_t *tgts,
 		  daos_event_t *ev)
 {
 	daos_pool_update_t	args;
@@ -115,7 +115,7 @@ daos_pool_tgt_add(const uuid_t uuid, const char *grp,
 
 	uuid_copy((void *)args.uuid, uuid);
 	args.grp = grp;
-	args.svc = (daos_rank_list_t *)svc;
+	args.svc = (d_rank_list_t *)svc;
 	args.tgts = tgts;
 
 	dc_task_create(DAOS_OPC_POOL_ADD, &args, sizeof(args), &task, &ev);
@@ -124,7 +124,7 @@ daos_pool_tgt_add(const uuid_t uuid, const char *grp,
 
 int
 daos_pool_exclude_out(const uuid_t uuid, const char *grp,
-		      const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		      const d_rank_list_t *svc, d_rank_list_t *tgts,
 		      daos_event_t *ev)
 {
 	daos_pool_update_t	args;
@@ -132,7 +132,7 @@ daos_pool_exclude_out(const uuid_t uuid, const char *grp,
 
 	uuid_copy((void *)args.uuid, uuid);
 	args.grp = grp;
-	args.svc = (daos_rank_list_t *)svc;
+	args.svc = (d_rank_list_t *)svc;
 	args.tgts = tgts;
 
 	dc_task_create(DAOS_OPC_POOL_EXCLUDE_OUT, &args, sizeof(args), &task,
@@ -142,7 +142,7 @@ daos_pool_exclude_out(const uuid_t uuid, const char *grp,
 
 int
 daos_pool_exclude(const uuid_t uuid, const char *grp,
-		  const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		  const d_rank_list_t *svc, d_rank_list_t *tgts,
 		  daos_event_t *ev)
 {
 	daos_pool_update_t	args;
@@ -152,7 +152,7 @@ daos_pool_exclude(const uuid_t uuid, const char *grp,
 
 	uuid_copy((void *)args.uuid, uuid);
 	args.grp = grp;
-	args.svc = (daos_rank_list_t *)svc;
+	args.svc = (d_rank_list_t *)svc;
 	args.tgts = tgts;
 
 	dc_task_create(DAOS_OPC_POOL_EXCLUDE, &args, sizeof(args), &task, &ev);
@@ -160,8 +160,8 @@ daos_pool_exclude(const uuid_t uuid, const char *grp,
 }
 
 int
-daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
-		 daos_rank_list_t *failed, daos_event_t *ev)
+daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
+		 d_rank_list_t *failed, daos_event_t *ev)
 {
 	return -DER_NOSYS;
 }

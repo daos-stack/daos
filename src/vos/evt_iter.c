@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DD_SUBSYS	DD_FAC(vos)
+#define DDSUBSYS	DDFAC(vos)
 
 #include "evt_priv.h"
 
@@ -37,12 +37,12 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+		D__GOTO(out, rc = -DER_NO_HDL);
 
 	if (options & EVT_ITER_EMBEDDED) {
 		if (tcx->tc_ref != 1) {
-			D_ERROR("Cannot share embedded iterator\n");
-			D_GOTO(out, rc = -DER_BUSY);
+			D__ERROR("Cannot share embedded iterator\n");
+			D__GOTO(out, rc = -DER_BUSY);
 		}
 
 		iter = &tcx->tc_iter;
@@ -54,7 +54,7 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 		/* create a private context for this iterator */
 		rc = evt_tcx_clone(tcx, &tcx);
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D__GOTO(out, rc);
 
 		iter = &tcx->tc_iter;
 		*ih = evt_tcx2hdl(tcx); /* +1 for caller */
@@ -80,7 +80,7 @@ evt_iter_finish(daos_handle_t ih)
 
 	tcx = evt_hdl2tcx(ih);
 	if (tcx == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+		D__GOTO(out, rc = -DER_NO_HDL);
 
 	iter = &tcx->tc_iter;
 	iter->it_state = EVT_ITER_NONE;
@@ -104,16 +104,16 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 
 	tcx = evt_hdl2tcx(ih);
 	if (tcx == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+		D__GOTO(out, rc = -DER_NO_HDL);
 
 	iter = &tcx->tc_iter;
 	if (iter->it_state < EVT_ITER_INIT)
-		D_GOTO(out, rc = -DER_NO_HDL);
+		D__GOTO(out, rc = -DER_NO_HDL);
 
 	memset(&rtmp, 0, sizeof(rtmp));
 	switch (opc) {
 	default:
-		D_GOTO(out, rc = -DER_NOSYS);
+		D__GOTO(out, rc = -DER_NOSYS);
 
 	case EVT_ITER_FIRST:
 		fopc = EVT_FIND_FIRST;
@@ -126,7 +126,7 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 
 	case EVT_ITER_FIND:
 		if (!rect && !anchor)
-			D_GOTO(out, rc = -DER_INVAL);
+			D__GOTO(out, rc = -DER_INVAL);
 
 		/* Requires the exactly same extent, we require user to
 		 * start over if anything changed (clipped, aggregated).
@@ -143,11 +143,11 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 	evt_ent_list_init(&entl);
 	rc = evt_find_ent_list(tcx, fopc, &rtmp, &entl);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 
 	if (evt_ent_list_empty(&entl)) {
 		if (opc == EVT_ITER_FIND) /* cannot find the same extent */
-			D_GOTO(out, rc = -DER_AGAIN);
+			D__GOTO(out, rc = -DER_AGAIN);
 
 		/* nothing in the tree */
 		iter->it_state = EVT_ITER_FINI;
@@ -164,11 +164,11 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc, struct evt_rect *rect,
 static int
 evt_iter_is_ready(struct evt_iterator *iter)
 {
-	D_DEBUG(DB_TRACE, "iterator state is %d\n", iter->it_state);
+	D__DEBUG(DB_TRACE, "iterator state is %d\n", iter->it_state);
 
 	switch (iter->it_state) {
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	case EVT_ITER_NONE:
 	case EVT_ITER_INIT:
 		return -DER_NO_PERM;
@@ -189,17 +189,17 @@ evt_iter_move(daos_handle_t ih, bool forward)
 
 	tcx = evt_hdl2tcx(ih);
 	if (tcx == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+		D__GOTO(out, rc = -DER_NO_HDL);
 
 	iter = &tcx->tc_iter;
 	rc = evt_iter_is_ready(iter);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 
 	found = evt_move_trace(tcx, forward);
 	if (!found) {
 		iter->it_state = EVT_ITER_FINI;
-		D_GOTO(out, rc = -DER_NONEXIST);
+		D__GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	iter->it_state = EVT_ITER_READY;
@@ -235,17 +235,17 @@ evt_iter_fetch(daos_handle_t ih, struct evt_entry *entry,
 
 	tcx = evt_hdl2tcx(ih);
 	if (tcx == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+		D__GOTO(out, rc = -DER_NO_HDL);
 
 	iter = &tcx->tc_iter;
 	rc = evt_iter_is_ready(iter);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 
 	trace = &tcx->tc_trace[tcx->tc_depth - 1];
 	rect  = evt_node_rect_at(tcx, trace->tr_node, trace->tr_at);
 	pref  = evt_node_pref_at(tcx, trace->tr_node, trace->tr_at);
-	D_ASSERT(pref->pr_offset == 0); /* no clip so far */
+	D__ASSERT(pref->pr_offset == 0); /* no clip so far */
 
 	if (entry)
 		evt_fill_entry(tcx, trace->tr_node, trace->tr_at, NULL, entry);

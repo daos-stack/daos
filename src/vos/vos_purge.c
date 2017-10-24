@@ -26,7 +26,7 @@
  * vos/vos_purge.c
  * Implementation for aggregation and discard
  */
-#define DD_SUBSYS	DD_FAC(vos)
+#define DDSUBSYS	DDFAC(vos)
 
 #include <daos/btree.h>
 #include <daos_srv/vos.h>
@@ -97,7 +97,7 @@ purge_ctx_init(struct purge_context *pcx, vos_iter_entry_t *ent)
 	switch (pcx->pc_type) {
 	default:
 	case VOS_ITER_SINGLE:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	case VOS_ITER_NONE:
 		pcx->pc_type = VOS_ITER_OBJ;
 		break;
@@ -133,7 +133,7 @@ purge_ctx_init(struct purge_context *pcx, vos_iter_entry_t *ent)
 		break;
 
 	}
-	D_DEBUG(DB_EPC, "Initialized %s iterator context: %d.\n",
+	D__DEBUG(DB_EPC, "Initialized %s iterator context: %d.\n",
 		pcx_name(pcx), rc);
 	return rc;
 }
@@ -141,18 +141,18 @@ purge_ctx_init(struct purge_context *pcx, vos_iter_entry_t *ent)
 static void
 purge_ctx_fini(struct purge_context *pcx, int rc)
 {
-	D_DEBUG(DB_EPC, "Finalize %s iterator context: %d.\n",
+	D__DEBUG(DB_EPC, "Finalize %s iterator context: %d.\n",
 		pcx_name(pcx), rc);
 
 	switch (pcx->pc_type) {
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	case VOS_ITER_OBJ:
 		pcx->pc_type = VOS_ITER_NONE;
 		return;
 
 	case VOS_ITER_DKEY:
-		D_ASSERT(pcx->pc_obj != NULL);
+		D__ASSERT(pcx->pc_obj != NULL);
 
 		/* Evict the object because we might have destroyed the
 		 * cached I/O context, or even released the object.
@@ -243,7 +243,7 @@ purge_ctx_anchor_is_set(struct purge_context *pcx,
 {
 	switch (pcx->pc_type) {
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	case VOS_ITER_OBJ:
 		return OBJ_ANCHOR & vp_anchor->pa_mask;
 	case VOS_ITER_DKEY:
@@ -269,7 +269,7 @@ purge_ctx_anchor_ctl(struct purge_context *pcx, vos_purge_anchor_t *vp_anchor,
 
 	switch (pcx->pc_type) {
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	case VOS_ITER_OBJ:
 		purge_anchor	= &vp_anchor->pa_obj;
 		bits		= OBJ_ANCHOR;
@@ -308,7 +308,7 @@ purge_ctx_test_complete(struct purge_context *pcx, bool *finish,
 {
 	switch (pcx->pc_type) {
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	case VOS_ITER_OBJ:
 		/*
 		 * Currently nothing
@@ -340,7 +340,7 @@ purge_ctx_reset_complete(struct purge_context *pcx,
 {
 	switch (pcx->pc_type) {
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	case VOS_ITER_SINGLE:
 		break;
 	case VOS_ITER_AKEY:
@@ -358,7 +358,7 @@ purge_ctx_set_complete(struct purge_context *pcx, bool *finish,
 {
 	switch (pcx->pc_type) {
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	case VOS_ITER_OBJ:
 		/*
 		 * Currently nothing
@@ -368,17 +368,17 @@ purge_ctx_set_complete(struct purge_context *pcx, bool *finish,
 		break;
 	case VOS_ITER_DKEY:
 		vp_anchor->pa_mask |= DKEY_SCAN_COMPLETE;
-		D_DEBUG(DB_EPC, "Setting DKEY scan completion\n");
-		D_ASSERT(finish != NULL);
+		D__DEBUG(DB_EPC, "Setting DKEY scan completion\n");
+		D__ASSERT(finish != NULL);
 		*finish = true;
 		break;
 	case VOS_ITER_AKEY:
 		vp_anchor->pa_mask |= AKEY_SCAN_COMPLETE;
-		D_DEBUG(DB_EPC, "Setting AKEY scan completion\n");
+		D__DEBUG(DB_EPC, "Setting AKEY scan completion\n");
 		break;
 	case VOS_ITER_SINGLE:
 		vp_anchor->pa_mask |= RECX_SCAN_COMPLETE;
-		D_DEBUG(DB_EPC, "Setting RECX scan completion\n");
+		D__DEBUG(DB_EPC, "Setting RECX scan completion\n");
 		break;
 	}
 }
@@ -441,7 +441,7 @@ recx_max_iter_probe(int opc, vos_iter_entry_t *ent, vos_iter_entry_t *ent_max,
 	}
 
 	if (rc != 0) {
-		D_ERROR("%s max-iterator failed to %s: %d\n",
+		D__ERROR("%s max-iterator failed to %s: %d\n",
 			vos_iter_type2name(VOS_ITER_SINGLE), opstr, rc);
 	}
 	return rc;
@@ -467,7 +467,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 	bool			val_tree = (pcx->pc_type == VOS_ITER_SINGLE);
 
 
-	D_DEBUG(DB_EPC, "Enter %s iterator with credits: %u\n", pcx_name(pcx),
+	D__DEBUG(DB_EPC, "Enter %s iterator with credits: %u\n", pcx_name(pcx),
 		*credits_ret);
 
 	/* No credits left to enter this level */
@@ -480,7 +480,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 
 	if (purge_ctx_anchor_is_set(pcx, vp_anchor)) {
 
-		D_DEBUG(DB_EPC, "Probing from existing %s iterator\n",
+		D__DEBUG(DB_EPC, "Probing from existing %s iterator\n",
 			pcx_name(pcx));
 		opc = ITR_REUSE_ANCHOR;
 		purge_ctx_anchor_ctl(pcx, vp_anchor, &anchor, ANCHOR_COPY);
@@ -490,12 +490,12 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 
 	rc = vos_iter_prepare(pcx->pc_type, &pcx->pc_param, &ih);
 	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_EPC, "Exit from empty :%s\n", pcx_name(pcx));
+		D__DEBUG(DB_EPC, "Exit from empty :%s\n", pcx_name(pcx));
 		return 0;
 	}
 
 	if (rc != 0) {
-		D_ERROR("Failed to create %s iterator: %d\n",
+		D__ERROR("Failed to create %s iterator: %d\n",
 			pcx_name(pcx), rc);
 		return rc;
 	}
@@ -504,12 +504,12 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		/** prepare the max iterator */
 		rc = vos_iter_prepare(pcx->pc_type, &pcx->pc_param, &ih_max);
 		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DB_EPC, "Exit from empty %s.\n", pcx_name(pcx));
+			D__DEBUG(DB_EPC, "Exit from empty %s.\n", pcx_name(pcx));
 			return 0;
 		}
 
 		if (rc != 0) {
-			D_ERROR("Failed to create %s max_iterator: %d\n",
+			D__ERROR("Failed to create %s max_iterator: %d\n",
 				pcx_name(pcx), rc);
 			return rc;
 		}
@@ -561,7 +561,7 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		}
 
 		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DB_EPC, "Finish %s iteration\n", pcx_name(pcx));
+			D__DEBUG(DB_EPC, "Finish %s iteration\n", pcx_name(pcx));
 			purge_ctx_anchor_ctl(pcx, vp_anchor, NULL,
 					     ANCHOR_UNSET);
 			purge_ctx_set_complete(pcx, finish, vp_anchor);
@@ -570,9 +570,9 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		}
 
 		if (rc != 0) {
-			D_ERROR("%s iterator failed to %s: %d\n",
+			D__ERROR("%s iterator failed to %s: %d\n",
 				pcx_name(pcx), opstr, rc);
-			D_GOTO(out, rc);
+			D__GOTO(out, rc);
 		}
 
 		if (val_tree) {
@@ -581,13 +581,13 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 						 pcx->pc_param.ip_epc_expr,
 						 &ih_max);
 			if (rc != 0)
-				D_GOTO(out, rc);
+				D__GOTO(out, rc);
 		}
 
 		if (!credits) {
 			purge_ctx_anchor_ctl(pcx, vp_anchor, &anchor,
 					     ANCHOR_SET);
-			D_GOTO(out, rc);
+			D__GOTO(out, rc);
 		}
 
 		/* Probing REUSED_ANCHOR should not be counted for credits */
@@ -604,9 +604,9 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		} else {
 			rc = purge_ctx_init(pcx, &ent);
 			if (rc != 0) {
-				D_DEBUG(DB_EPC, "%s context enter failed :%d\n",
+				D__DEBUG(DB_EPC, "%s context enter failed :%d\n",
 					pcx_name(pcx), rc);
-				D_GOTO(out, rc);
+				D__GOTO(out, rc);
 			}
 
 			/* Enter the next level of tree until recx */
@@ -614,12 +614,12 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 					     NULL);
 			purge_ctx_fini(pcx, rc);
 			if (rc != 0)
-				D_GOTO(out, rc);
+				D__GOTO(out, rc);
 
 			if (!credits) { /* credits used up by subtree return */
 				purge_ctx_anchor_ctl(pcx, vp_anchor, &anchor,
 						     ANCHOR_SET);
-				D_GOTO(out, rc);
+				D__GOTO(out, rc);
 			}
 		}
 
@@ -646,17 +646,17 @@ epoch_aggregate(struct purge_context *pcx, int *empty_ret,
 		TX_BEGIN(pcx->pc_pop) {
 			rc = vos_iter_delete(*del_hdl, NULL);
 			if (rc != 0) {
-				D_DEBUG(DB_EPC, "Failed to delete %s: %d\n",
+				D__DEBUG(DB_EPC, "Failed to delete %s: %d\n",
 					pcx_name(pcx), rc);
 				pmemobj_tx_abort(rc);
 			}
 		} TX_ONABORT {
 			rc = umem_tx_errno(rc);
-			D_ERROR("failed to delete: %d\n", rc);
+			D__ERROR("failed to delete: %d\n", rc);
 		} TX_END
 
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D__GOTO(out, rc);
 
 		/* Number of keys aggregated in this tree ctx */
 		aggregated++;
@@ -672,7 +672,7 @@ out:
 		vos_iter_finish(ih_max);
 
 	*credits_ret = credits;
-	D_DEBUG(DB_EPC,
+	D__DEBUG(DB_EPC,
 		"aggregated %d, found: %d %s(s) rem credits: %u\n",
 		aggregated, found, pcx_name(pcx), *credits_ret);
 
@@ -694,16 +694,16 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 	int		opc;
 	int		rc;
 
-	D_DEBUG(DB_EPC, "Enter %s iterator\n", pcx_name(pcx));
+	D__DEBUG(DB_EPC, "Enter %s iterator\n", pcx_name(pcx));
 
 	rc = vos_iter_prepare(pcx->pc_type, &pcx->pc_param, &ih);
 	if (rc == -DER_NONEXIST) { /* btree is uninitialized */
-		D_DEBUG(DB_EPC, "Exit from empty %s.\n", pcx_name(pcx));
+		D__DEBUG(DB_EPC, "Exit from empty %s.\n", pcx_name(pcx));
 		return 0;
 	}
 
 	if (rc != 0) {
-		D_ERROR("Failed to create %s iterator: %d\n",
+		D__ERROR("Failed to create %s iterator: %d\n",
 			pcx_name(pcx), rc);
 		return rc;
 	}
@@ -733,15 +733,15 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 		}
 
 		if (rc == -DER_NONEXIST) { /* no more entry, done */
-			D_DEBUG(DB_EPC, "Finish %s iteration\n", pcx_name(pcx));
+			D__DEBUG(DB_EPC, "Finish %s iteration\n", pcx_name(pcx));
 			rc = 0;
 			break;
 		}
 
 		if (rc != 0) {
-			D_ERROR("%s iterator failed to %s: %d\n",
+			D__ERROR("%s iterator failed to %s: %d\n",
 				pcx_name(pcx), opstr, rc);
-			D_GOTO(out, rc);
+			D__GOTO(out, rc);
 		}
 
 		found++;
@@ -752,9 +752,9 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 			/* prepare the context for the subtree */
 			rc = purge_ctx_init(pcx, &ent);
 			if (rc != 0) {
-				D_DEBUG(DB_EPC, "%s context enter failed: %d\n",
+				D__DEBUG(DB_EPC, "%s context enter failed: %d\n",
 					pcx_name(pcx), rc);
-				D_GOTO(out, rc);
+				D__GOTO(out, rc);
 			}
 
 			/* enter the subtree */
@@ -762,7 +762,7 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 			/* exit from the context of subtree */
 			purge_ctx_fini(pcx, rc);
 			if (rc != 0)
-				D_GOTO(out, rc);
+				D__GOTO(out, rc);
 		}
 
 		if (!empty) { /* subtree or record is not empty */
@@ -773,24 +773,24 @@ epoch_discard(struct purge_context *pcx, int *empty_ret)
 		TX_BEGIN(pcx->pc_pop) {
 			rc = vos_iter_delete(ih, NULL);
 			if (rc != 0) {
-				D_DEBUG(DB_EPC,
+				D__DEBUG(DB_EPC,
 					"Failed to delete empty %s: %d\n",
 					pcx_name(pcx), rc);
 				pmemobj_tx_abort(rc);
 			}
 		} TX_ONABORT {
 			rc = umem_tx_errno(rc);
-			D_ERROR("failed to delete:%d\n", rc);
+			D__ERROR("failed to delete:%d\n", rc);
 		} TX_END
 
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D__GOTO(out, rc);
 
 		discarded++;
 		/* need to probe again after the delete */
 		opc = ITR_PROBE_ANCHOR;
 	}
-	D_DEBUG(DB_EPC, "Discard %d of %d %s(s)\n",
+	D__DEBUG(DB_EPC, "Discard %d of %d %s(s)\n",
 		discarded, found, pcx_name(pcx));
 
 	if (rc == 0 && empty_ret != NULL) {
@@ -811,7 +811,7 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie)
 	daos_epoch_t		max_epoch;
 	int			rc;
 
-	D_DEBUG(DB_EPC, "Epoch discard for "DF_UUID" ["DF_U64", "DF_U64"]\n",
+	D__DEBUG(DB_EPC, "Epoch discard for "DF_UUID" ["DF_U64", "DF_U64"]\n",
 		DP_UUID(cookie), epr->epr_lo, epr->epr_hi);
 
 	rc = vos_cookie_find_update(cont->vc_pool->vp_cookie_th, cookie,
@@ -819,12 +819,12 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie)
 	if (rc)
 		return rc == -DER_NONEXIST ? 0 : rc;
 
-	D_DEBUG(DB_EPC, "Max epoch of "DF_UUID" is "DF_U64"\n",
+	D__DEBUG(DB_EPC, "Max epoch of "DF_UUID" is "DF_U64"\n",
 		DP_UUID(cookie), max_epoch);
 
 	/** If this is the max epoch skip discard */
 	if (max_epoch < epr->epr_lo) {
-		D_DEBUG(DB_EPC, "Max Epoch < epr_lo.. skip discard\n");
+		D__DEBUG(DB_EPC, "Max Epoch < epr_lo.. skip discard\n");
 		return 0;
 	}
 
@@ -836,7 +836,7 @@ vos_epoch_discard(daos_handle_t coh, daos_epoch_range_t *epr, uuid_t cookie)
 	purge_set_iter_expr(&pcx, epr);
 
 	rc = purge_ctx_init(&pcx, NULL);
-	D_ASSERT(rc == 0);
+	D__ASSERT(rc == 0);
 
 	rc = epoch_discard(&pcx, NULL);
 	purge_ctx_fini(&pcx, rc);
@@ -856,27 +856,27 @@ vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
 	if (daos_unit_oid_is_null(oid)) {
 		vos_cont_set_purged_epoch(coh, epr->epr_hi);
 		*finished = true;
-		D_DEBUG(DB_EPC, "Setting the epoch in container\n");
+		D__DEBUG(DB_EPC, "Setting the epoch in container\n");
 		return 0;
 	}
 
-	D_DEBUG(DB_EPC, "Epoch aggregate for:"DF_OID" ["DF_U64"->"DF_U64"]\n",
+	D__DEBUG(DB_EPC, "Epoch aggregate for:"DF_OID" ["DF_U64"->"DF_U64"]\n",
 		DP_OID(oid.id_pub), epr->epr_lo, epr->epr_hi);
 
 	if (epr->epr_hi < epr->epr_lo) {
-		D_ERROR("range::epr_lo cannot be lesser than range::epr_hi\n");
+		D__ERROR("range::epr_lo cannot be lesser than range::epr_hi\n");
 		return -DER_INVAL;
 	}
 
 	if (!purge_anchor_is_valid(anchor)) {
-		D_ERROR("Invalid anchor provided\n");
+		D__ERROR("Invalid anchor provided\n");
 		return -DER_INVAL;
 	}
 
 	*finished = false;
 	if (purge_oid_is_aggregated(anchor, oid)) {
 		*finished = true;
-		D_DEBUG(DB_EPC,
+		D__DEBUG(DB_EPC,
 			"Aggregation completion detected from anchor\n");
 		return 0;
 	}
@@ -888,7 +888,7 @@ vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
 	/** Check if this range is already aggregated */
 	if (vc_info.pci_purged_epoch >= epr->epr_hi) {
 		*finished = true;
-		D_DEBUG(DB_EPC,
+		D__DEBUG(DB_EPC,
 			"Aggregation completion detected from purge_epoch\n");
 		return 0;
 	}
@@ -901,7 +901,7 @@ vos_epoch_aggregate(daos_handle_t coh, daos_unit_oid_t oid,
 
 	oid_entry.ie_oid	= oid;
 	rc = purge_ctx_init(&pcx, &oid_entry);
-	D_ASSERT(rc == 0);
+	D__ASSERT(rc == 0);
 
 	rc = epoch_aggregate(&pcx, NULL, credits, anchor, finished);
 	purge_ctx_fini(&pcx, rc);

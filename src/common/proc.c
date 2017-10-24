@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DD_SUBSYS	DD_FAC(common)
+#define DDSUBSYS	DDFAC(common)
 
 #include <daos_types.h>
 #include <daos/common.h>
@@ -41,15 +41,15 @@ daos_proc_objid(crt_proc_t proc, daos_obj_id_t *doi)
 
 	rc = crt_proc_uint64_t(proc, &doi->lo);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &doi->mid);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &doi->hi);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	return 0;
 }
@@ -69,35 +69,35 @@ daos_proc_iovec(crt_proc_t proc, daos_iov_t *div)
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &div->iov_len);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &div->iov_buf_len);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	if (div->iov_buf_len < div->iov_len) {
-		D_ERROR("invalid iov buf len "DF_U64" < iov len "DF_U64"\n",
+		D__ERROR("invalid iov buf len "DF_U64" < iov len "DF_U64"\n",
 				div->iov_buf_len, div->iov_len);
-		return -DER_CRT_HG;
+		return -DER_HG;
 	}
 	if (proc_op == CRT_PROC_DECODE && div->iov_buf_len > 0) {
-		D_ALLOC(div->iov_buf, div->iov_buf_len);
+		D__ALLOC(div->iov_buf, div->iov_buf_len);
 		if (div->iov_buf == NULL)
 			return -DER_NOMEM;
 	} else if (proc_op == CRT_PROC_FREE && div->iov_buf_len > 0) {
-		D_FREE(div->iov_buf, div->iov_buf_len);
+		D__FREE(div->iov_buf, div->iov_buf_len);
 	}
 
 	if (div->iov_len > 0) {
 		rc = crt_proc_memcpy(proc, div->iov_buf, div->iov_len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D_FREE(div->iov_buf, div->iov_buf_len);
-			return -DER_CRT_HG;
+				D__FREE(div->iov_buf, div->iov_buf_len);
+			return -DER_HG;
 		}
 	}
 
@@ -122,11 +122,11 @@ daos_proc_unit_oid(crt_proc_t proc, daos_unit_oid_t *doi)
 
 	rc = crt_proc_uint32_t(proc, &doi->id_shard);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint32_t(proc, &doi->id_pad_32);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	return 0;
 }
@@ -147,40 +147,40 @@ daos_proc_csum_buf(crt_proc_t proc, daos_csum_buf_t *csum)
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint32_t(proc, &csum->cs_type);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint16_t(proc, &csum->cs_len);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint16_t(proc, &csum->cs_buf_len);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	if (csum->cs_buf_len < csum->cs_len) {
-		D_ERROR("invalid csum buf len %hu < csum len %hu\n",
+		D__ERROR("invalid csum buf len %hu < csum len %hu\n",
 			csum->cs_buf_len, csum->cs_len);
-		return -DER_CRT_HG;
+		return -DER_HG;
 	}
 
 	if (proc_op == CRT_PROC_DECODE && csum->cs_buf_len > 0) {
-		D_ALLOC(csum->cs_csum, csum->cs_buf_len);
+		D__ALLOC(csum->cs_csum, csum->cs_buf_len);
 		if (csum->cs_csum == NULL)
 			return -DER_NOMEM;
 	} else if (proc_op == CRT_PROC_FREE && csum->cs_buf_len > 0) {
-		D_FREE(csum->cs_csum, csum->cs_buf_len);
+		D__FREE(csum->cs_csum, csum->cs_buf_len);
 	}
 
 	if (csum->cs_len > 0) {
 		rc = crt_proc_memcpy(proc, csum->cs_csum, csum->cs_len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D_FREE(csum->cs_csum, csum->cs_buf_len);
-			return -DER_CRT_HG;
+				D__FREE(csum->cs_csum, csum->cs_buf_len);
+			return -DER_HG;
 		}
 	}
 
@@ -201,11 +201,11 @@ daos_proc_recx(crt_proc_t proc, daos_recx_t *recx)
 
 	rc = crt_proc_uint64_t(proc, &recx->rx_idx);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &recx->rx_nr);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	return 0;
 }
@@ -223,11 +223,11 @@ daos_proc_epoch_range(crt_proc_t proc, daos_epoch_range_t *erange)
 
 	rc = crt_proc_uint64_t(proc, &erange->epr_lo);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &erange->epr_hi);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	return 0;
 }
@@ -256,7 +256,7 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 	uint32_t	existing_flags = 0;
 
 	if (proc == NULL ||  dvi == NULL) {
-		D_ERROR("Invalid parameter, proc: %p, data: %p.\n",
+		D__ERROR("Invalid parameter, proc: %p, data: %p.\n",
 			proc, dvi);
 		return -DER_INVAL;
 	}
@@ -271,24 +271,24 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 
 	rc = crt_proc_memcpy(proc, &dvi->iod_type, sizeof(daos_iod_type_t));
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &dvi->iod_size);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint32_t(proc, &dvi->iod_nr);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	if (dvi->iod_nr == 0) {
-		D_ERROR("invalid I/O descriptor, iod_nr = 0\n");
-		return -DER_CRT_HG;
+		D__ERROR("invalid I/O descriptor, iod_nr = 0\n");
+		return -DER_HG;
 	}
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	if (proc_op == CRT_PROC_ENCODE) {
 		if (dvi->iod_type == DAOS_IOD_ARRAY && dvi->iod_recxs != NULL)
@@ -301,28 +301,28 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 
 	rc = crt_proc_uint32_t(proc, &existing_flags);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	if (proc_op == CRT_PROC_DECODE) {
 		if (existing_flags & IOD_REC_EXIST) {
-			D_ALLOC(dvi->iod_recxs,
+			D__ALLOC(dvi->iod_recxs,
 				dvi->iod_nr * sizeof(*dvi->iod_recxs));
 			if (dvi->iod_recxs == NULL)
-				D_GOTO(free, rc = -DER_NOMEM);
+				D__GOTO(free, rc = -DER_NOMEM);
 		}
 
 		if (existing_flags & IOD_CSUM_EXIST) {
-			D_ALLOC(dvi->iod_csums,
+			D__ALLOC(dvi->iod_csums,
 				dvi->iod_nr * sizeof(*dvi->iod_csums));
 			if (dvi->iod_csums == NULL)
-				D_GOTO(free, rc = -DER_NOMEM);
+				D__GOTO(free, rc = -DER_NOMEM);
 		}
 
 		if (existing_flags & IOD_EPRS_EXIST) {
-			D_ALLOC(dvi->iod_eprs,
+			D__ALLOC(dvi->iod_eprs,
 				dvi->iod_nr * sizeof(*dvi->iod_eprs));
 			if (dvi->iod_eprs == NULL)
-				D_GOTO(free, rc = -DER_NOMEM);
+				D__GOTO(free, rc = -DER_NOMEM);
 		}
 	}
 
@@ -331,7 +331,7 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 			rc = daos_proc_recx(proc, &dvi->iod_recxs[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
-					D_GOTO(free, rc);
+					D__GOTO(free, rc);
 				return rc;
 			}
 		}
@@ -342,7 +342,7 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 			rc = daos_proc_csum_buf(proc, &dvi->iod_csums[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
-					D_GOTO(free, rc);
+					D__GOTO(free, rc);
 				return rc;
 			}
 		}
@@ -353,7 +353,7 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 			rc = daos_proc_epoch_range(proc, &dvi->iod_eprs[i]);
 			if (rc != 0) {
 				if (proc_op == CRT_PROC_DECODE)
-					D_GOTO(free, rc);
+					D__GOTO(free, rc);
 				return rc;
 			}
 		}
@@ -362,13 +362,13 @@ daos_proc_iod(crt_proc_t proc, daos_iod_t *dvi)
 	if (proc_op == CRT_PROC_FREE) {
 free:
 		if (dvi->iod_recxs != NULL)
-			D_FREE(dvi->iod_recxs,
+			D__FREE(dvi->iod_recxs,
 			       dvi->iod_nr * sizeof(*dvi->iod_recxs));
 		if (dvi->iod_csums != NULL)
-			D_FREE(dvi->iod_csums,
+			D__FREE(dvi->iod_csums,
 			       dvi->iod_nr * sizeof(*dvi->iod_csums));
 		if (dvi->iod_eprs != NULL)
-			D_FREE(dvi->iod_eprs,
+			D__FREE(dvi->iod_eprs,
 			       dvi->iod_nr * sizeof(*dvi->iod_eprs));
 	}
 
@@ -382,27 +382,27 @@ daos_proc_epoch_state(crt_proc_t proc, daos_epoch_state_t *es)
 
 	rc = crt_proc_uint64_t(proc, &es->es_hce);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &es->es_lre);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &es->es_lhe);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &es->es_ghce);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &es->es_glre);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &es->es_ghpce);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	return 0;
 }
@@ -414,7 +414,7 @@ daos_proc_hash_out(crt_proc_t proc, daos_hash_out_t *hash)
 
 	rc = crt_proc_raw(proc, hash->body, sizeof(hash->body));
 
-	return (rc == 0) ? 0 : -DER_CRT_HG;
+	return (rc == 0) ? 0 : -DER_HG;
 }
 
 int
@@ -424,19 +424,19 @@ daos_proc_key_desc(crt_proc_t proc, daos_key_desc_t *key)
 
 	rc = crt_proc_uint64_t(proc, &key->kd_key_len);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint32_t(proc, &key->kd_val_types);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint32_t(proc, &key->kd_csum_type);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint16_t(proc, &key->kd_csum_len);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	return 0;
 }
@@ -466,14 +466,14 @@ daos_proc_sg_list(crt_proc_t proc, daos_sg_list_t *sgl)
 
 	rc = daos_proc_nr(proc, &sgl->sg_nr);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	if (proc_op == CRT_PROC_DECODE && sgl->sg_nr.num > 0) {
-		D_ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
+		D__ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
 		if (sgl->sg_iovs == NULL)
 			return -DER_NOMEM;
 	}
@@ -482,15 +482,15 @@ daos_proc_sg_list(crt_proc_t proc, daos_sg_list_t *sgl)
 		rc = daos_proc_iovec(proc, &sgl->sg_iovs[i]);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D_FREE(sgl->sg_iovs,
+				D__FREE(sgl->sg_iovs,
 				       sizeof(sgl->sg_iovs[0]) *
 				       sgl->sg_nr.num);
-			return -DER_CRT_HG;
+			return -DER_HG;
 		}
 	}
 
 	if (proc_op == CRT_PROC_FREE && sgl->sg_iovs != NULL)
-		D_FREE(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
+		D__FREE(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
 
 	return rc;
 }
@@ -504,14 +504,14 @@ daos_proc_sg_desc_list(crt_proc_t proc, daos_sg_list_t *sgl)
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = daos_proc_nr(proc, &sgl->sg_nr);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	if (proc_op == CRT_PROC_DECODE && sgl->sg_nr.num > 0) {
-		D_ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
+		D__ALLOC(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
 		if (sgl->sg_iovs == NULL)
 			return -DER_NOMEM;
 	}
@@ -522,15 +522,15 @@ daos_proc_sg_desc_list(crt_proc_t proc, daos_sg_list_t *sgl)
 		div = &sgl->sg_iovs[i];
 		rc = crt_proc_uint64_t(proc, &div->iov_len);
 		if (rc != 0)
-			return -DER_CRT_HG;
+			return -DER_HG;
 
 		rc = crt_proc_uint64_t(proc, &div->iov_buf_len);
 		if (rc != 0)
-			return -DER_CRT_HG;
+			return -DER_HG;
 	}
 
 	if (proc_op == CRT_PROC_FREE && sgl->sg_iovs != NULL)
-		D_FREE(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
+		D__FREE(sgl->sg_iovs, sizeof(sgl->sg_iovs[0]) * sgl->sg_nr.num);
 
 	return rc;
 }
@@ -542,15 +542,15 @@ daos_proc_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
 
 	rc = crt_proc_uint32_t(proc, &hint->sh_flags);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint32_t(proc, &hint->sh_rank);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &hint->sh_term);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	return 0;
 }

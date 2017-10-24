@@ -23,7 +23,7 @@
 /**
  * ds_tier: Tier Server utility functions
  */
-#define DD_SUBSYS	DD_FAC(tier)
+#define DDSUBSYS	DDFAC(tier)
 
 #include <daos_srv/daos_server.h>
 #include <daos/rpc.h>
@@ -41,7 +41,7 @@ ds_tier_bcast_create(crt_context_t ctx, const uuid_t pool_id,
 	struct ds_pool *pool = ds_pool_lookup(pool_id);
 
 	if (pool == NULL) {
-		D_ERROR("pool "DF_UUID" not found\n", DP_UUID(pool_id));
+		D__ERROR("pool "DF_UUID" not found\n", DP_UUID(pool_id));
 		rc = -DER_INVAL;
 	} else
 		rc = ds_pool_bcast_create(ctx, pool, DAOS_TIER_MODULE, opcode,

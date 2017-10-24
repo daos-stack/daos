@@ -24,7 +24,7 @@
  * tier_ping
  * Implements the ping function of srv_internal.h.
  **/
-#define DD_SUBSYS	DD_FAC(tier)
+#define DDSUBSYS	DDFAC(tier)
 
 #include <daos_srv/daos_ct_srv.h>
 #include <daos/rpc.h>
@@ -36,13 +36,13 @@ ds_tier_ping_handler(crt_rpc_t *rpc)
 	struct tier_ping_in *in = crt_req_get(rpc);
 	struct tier_ping_out *out = crt_reply_get(rpc);
 
-	D_DEBUG(DF_TIERS, "receive, ping %d.\n", rpc->cr_opc);
+	D__DEBUG(DF_TIERS, "receive, ping %d.\n", rpc->cr_opc);
 
 	out->ping_out = in->ping_in + 1;
 
 	crt_reply_send(rpc);
 
-	D_DEBUG(DF_TIERS, "ping ret val, 1 higher than input: %d\n",
+	D__DEBUG(DF_TIERS, "ping ret val, 1 higher than input: %d\n",
 		out->ping_out);
 }
 

@@ -25,7 +25,7 @@
  *
  * This file includes functions to call client daos API on the server side.
  */
-#define DD_SUBSYS	DD_FAC(rebuild)
+#define DDSUBSYS	DDFAC(rebuild)
 
 #include <daos_types.h>
 #include <daos_errno.h>

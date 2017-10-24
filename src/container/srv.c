@@ -26,7 +26,7 @@
  * This is part of daos_server. It exports the container RPC handlers and
  * Container Server API.
  */
-#define DD_SUBSYS	DD_FAC(container)
+#define DDSUBSYS	DDFAC(container)
 
 #include <daos_srv/daos_server.h>
 #include <daos/rpc.h>
@@ -125,24 +125,24 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 	struct dsm_tls *tls;
 	int		rc;
 
-	D_ALLOC_PTR(tls);
+	D__ALLOC_PTR(tls);
 	if (tls == NULL)
 		return NULL;
 
 	rc = ds_cont_cache_create(&tls->dt_cont_cache);
 	if (rc != 0) {
-		D_ERROR("failed to create thread-local container cache: %d\n",
+		D__ERROR("failed to create thread-local container cache: %d\n",
 			rc);
-		D_FREE_PTR(tls);
+		D__FREE_PTR(tls);
 		return NULL;
 	}
 
 	rc = ds_cont_hdl_hash_create(&tls->dt_cont_hdl_hash);
 	if (rc != 0) {
-		D_ERROR("failed to create thread-local container handle cache: "
+		D__ERROR("failed to create thread-local container handle cache: "
 			"%d\n", rc);
 		ds_cont_cache_destroy(tls->dt_cont_cache);
-		D_FREE_PTR(tls);
+		D__FREE_PTR(tls);
 		return NULL;
 	}
 
@@ -157,7 +157,7 @@ dsm_tls_fini(const struct dss_thread_local_storage *dtls,
 
 	ds_cont_hdl_hash_destroy(&tls->dt_cont_hdl_hash);
 	ds_cont_cache_destroy(tls->dt_cont_cache);
-	D_FREE_PTR(tls);
+	D__FREE_PTR(tls);
 }
 
 struct dss_module_key cont_module_key = {

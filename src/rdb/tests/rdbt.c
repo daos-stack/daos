@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#define DD_SUBSYS DD_FAC(rdb)
+#define DDSUBSYS DDFAC(rdb)
 
 #include <getopt.h>
 #include <cart/api.h>
@@ -30,7 +30,7 @@
 #include "rpc.h"
 
 const char	       *default_group;
-const crt_rank_t	default_rank;
+const d_rank_t	default_rank;
 const uint32_t		default_nreplicas = 1;
 
 crt_context_t context;
@@ -74,7 +74,7 @@ rpc_cb(const struct crt_cb_info *cb_info)
 }
 
 static crt_rpc_t *
-create_rpc(crt_opcode_t opc, crt_group_t *group, crt_rank_t rank)
+create_rpc(crt_opcode_t opc, crt_group_t *group, d_rank_t rank)
 {
 	crt_opcode_t	opcode = DAOS_RPC_OPCODE(opc, DAOS_RDBT_MODULE, 1);
 	crt_endpoint_t	ep;
@@ -85,7 +85,7 @@ create_rpc(crt_opcode_t opc, crt_group_t *group, crt_rank_t rank)
 	ep.ep_rank = rank;
 	ep.ep_tag = 0;
 	rc = crt_req_create(context, &ep, opcode, &rpc);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D__ASSERTF(rc == 0, "%d\n", rc);
 	return rpc;
 }
 
@@ -98,7 +98,7 @@ invoke_rpc(crt_rpc_t *rpc)
 
 	crt_req_addref(rpc);
 	rc = crt_req_send(rpc, rpc_cb, &rpc_rc);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D__ASSERTF(rc == 0, "%d\n", rc);
 	/* Sloppy... */
 	while (rpc_rc == rpc_rc_uninitialized)
 		crt_progress(context, 0, NULL, NULL);
@@ -112,7 +112,7 @@ destroy_rpc(crt_rpc_t *rpc)
 }
 
 static int
-rdbt_init(crt_group_t *group, crt_rank_t rank, uuid_t uuid, uint32_t nreplicas)
+rdbt_init(crt_group_t *group, d_rank_t rank, uuid_t uuid, uint32_t nreplicas)
 {
 	crt_rpc_t	       *rpc;
 	struct rdbt_init_in    *in;
@@ -124,7 +124,7 @@ rdbt_init(crt_group_t *group, crt_rank_t rank, uuid_t uuid, uint32_t nreplicas)
 	uuid_copy(in->tii_uuid, uuid);
 	in->tii_nreplicas = nreplicas;
 	rc = invoke_rpc(rpc);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D__ASSERTF(rc == 0, "%d\n", rc);
 	out = crt_reply_get(rpc);
 	rc = out->tio_rc;
 	destroy_rpc(rpc);
@@ -132,7 +132,7 @@ rdbt_init(crt_group_t *group, crt_rank_t rank, uuid_t uuid, uint32_t nreplicas)
 }
 
 static int
-rdbt_fini(crt_group_t *group, crt_rank_t rank)
+rdbt_fini(crt_group_t *group, d_rank_t rank)
 {
 	crt_rpc_t	       *rpc;
 	struct rdbt_fini_out   *out;
@@ -140,7 +140,7 @@ rdbt_fini(crt_group_t *group, crt_rank_t rank)
 
 	rpc = create_rpc(RDBT_FINI, group, rank);
 	rc = invoke_rpc(rpc);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D__ASSERTF(rc == 0, "%d\n", rc);
 	out = crt_reply_get(rpc);
 	rc = out->tfo_rc;
 	destroy_rpc(rpc);
@@ -148,7 +148,7 @@ rdbt_fini(crt_group_t *group, crt_rank_t rank)
 }
 
 static int
-rdbt_test(crt_group_t *group, crt_rank_t rank, int update)
+rdbt_test(crt_group_t *group, d_rank_t rank, int update)
 {
 	crt_rpc_t	       *rpc;
 	struct rdbt_test_in    *in;
@@ -159,7 +159,7 @@ rdbt_test(crt_group_t *group, crt_rank_t rank, int update)
 	in = crt_req_get(rpc);
 	in->tti_update = update;
 	rc = invoke_rpc(rpc);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D__ASSERTF(rc == 0, "%d\n", rc);
 	out = crt_reply_get(rpc);
 	rc = out->tto_rc;
 	destroy_rpc(rpc);
@@ -177,7 +177,7 @@ init_hdlr(int argc, char *argv[])
 		{NULL,		0,			NULL,	0}
 	};
 	const char     *group_id = default_group;
-	crt_rank_t	rank = default_rank;
+	d_rank_t	rank = default_rank;
 	uint32_t	nreplicas = default_nreplicas;
 	uuid_t		uuid;
 	crt_group_t    *group;
@@ -222,7 +222,7 @@ fini_hdlr(int argc, char *argv[])
 		{NULL,		0,			NULL,	0}
 	};
 	const char     *group_id = default_group;
-	crt_rank_t	rank = default_rank;
+	d_rank_t	rank = default_rank;
 	crt_group_t    *group;
 	int		rc;
 
@@ -256,7 +256,7 @@ test_hdlr(int argc, char *argv[])
 		{NULL,		0,			NULL,	0}
 	};
 	const char     *group_id = default_group;
-	crt_rank_t	rank = default_rank;
+	d_rank_t	rank = default_rank;
 	int		update = 0;
 	crt_group_t    *group;
 	int		rc;
@@ -305,11 +305,11 @@ main(int argc, char *argv[])
 	}
 
 	rc = crt_init(NULL, 0 /* client-only */);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D__ASSERTF(rc == 0, "%d\n", rc);
 	rc = crt_context_create(NULL /* arg */, &context);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D__ASSERTF(rc == 0, "%d\n", rc);
 	rc = daos_rpc_register(rdbt_rpcs, NULL, DAOS_RDBT_MODULE);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D__ASSERTF(rc == 0, "%d\n", rc);
 
 	rc = hdlr(argc, argv);
 

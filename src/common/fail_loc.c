@@ -25,7 +25,7 @@
  *
  * common/fail_loc.c to inject failure scenario
  */
-#define DD_SUBSYS	DD_FAC(common)
+#define DDSUBSYS	DDFAC(common)
 
 #include <daos/common.h>
 
@@ -51,7 +51,7 @@ daos_fail_check(uint64_t id)
 	    (id & DAOS_FAIL_MASK_LOC))
 		return 0;
 
-	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64" value="DF_U64", id ="DF_X64
+	D__DEBUG(DB_ANY, "*** fail_loc="DF_X64" value="DF_U64", id ="DF_X64
 		"***\n", daos_fail_loc, daos_fail_value, id);
 
 	if (daos_fail_loc & DAOS_FAIL_ONCE) {

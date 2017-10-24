@@ -26,7 +26,7 @@
  * src/addons/dac_hl.c
  */
 
-#define DD_SUBSYS	DD_FAC(client)
+#define DDSUBSYS	DDFAC(client)
 
 #include <daos/common.h>
 #include <daos/tse.h>
@@ -47,7 +47,7 @@ free_io_params_cb(tse_task_t *task, void *data)
 {
 	struct io_params *params = *((struct io_params **)data);
 
-	D_FREE_PTR(params);
+	D__FREE_PTR(params);
 	return 0;
 }
 
@@ -57,10 +57,10 @@ set_size_cb(tse_task_t *task, void *data)
 	daos_size_t *buf_size = *((daos_size_t **)data);
 	daos_obj_fetch_t *args;
 
-	D_ASSERT(buf_size != NULL);
+	D__ASSERT(buf_size != NULL);
 
 	args = daos_task_get_args(DAOS_OPC_OBJ_FETCH, task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match fetch OPC\n");
+	D__ASSERTF(args != NULL, "Task Argument OPC does not match fetch OPC\n");
 
 	*buf_size = args->iods[0].iod_size;
 
@@ -77,11 +77,11 @@ dac_kv_put(tse_task_t *task)
 	int			rc;
 
 	args = daos_task_get_args(DAOS_OPC_KV_PUT, task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	D_ALLOC_PTR(params);
+	D__ALLOC_PTR(params);
 	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+		D__ERROR("Failed memory allocation\n");
 		return -DER_NOMEM;
 	}
 
@@ -114,20 +114,20 @@ dac_kv_put(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, tse_task2sched(task),
 			      &update_args, 0, NULL, &update_task);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D__GOTO(err_task, rc);
 
 	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
 				       sizeof(params));
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D__GOTO(err_task, rc);
 
 	rc = tse_task_register_deps(task, 1, &update_task);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D__GOTO(err_task, rc);
 
 	rc = tse_task_schedule(update_task, false);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D__GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
 
@@ -135,9 +135,9 @@ dac_kv_put(tse_task_t *task)
 
 err_task:
 	if (params)
-		D_FREE_PTR(params);
+		D__FREE_PTR(params);
 	if (update_task)
-		D_FREE_PTR(update_task);
+		D__FREE_PTR(update_task);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -154,19 +154,19 @@ dac_kv_get(tse_task_t *task)
 	int			rc;
 
 	args = daos_task_get_args(DAOS_OPC_KV_GET, task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	buf = args->buf;
 	buf_size = args->buf_size;
 
 	if (buf_size == NULL) {
-		D_ERROR("Buffer size pointer is NULL\n");
+		D__ERROR("Buffer size pointer is NULL\n");
 		return -DER_INVAL;
 	}
 
-	D_ALLOC_PTR(params);
+	D__ALLOC_PTR(params);
 	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+		D__ERROR("Failed memory allocation\n");
 		return -DER_NOMEM;
 	}
 
@@ -202,27 +202,27 @@ dac_kv_get(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, tse_task2sched(task),
 			      &fetch_args, 0, NULL, &fetch_task);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D__GOTO(err_task, rc);
 
 	if (*buf_size == DAOS_REC_ANY) {
 		rc = tse_task_register_comp_cb(fetch_task, set_size_cb,
 					       &buf_size, sizeof(buf_size));
 		if (rc != 0)
-			D_GOTO(err_task, rc);
+			D__GOTO(err_task, rc);
 	}
 
 	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params,
 				       sizeof(params));
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D__GOTO(err_task, rc);
 
 	rc = tse_task_register_deps(task, 1, &fetch_task);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D__GOTO(err_task, rc);
 
 	rc = tse_task_schedule(fetch_task, false);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D__GOTO(err_task, rc);
 
 	tse_sched_progress(tse_task2sched(task));
 
@@ -230,9 +230,9 @@ dac_kv_get(tse_task_t *task)
 
 err_task:
 	if (params)
-		D_FREE_PTR(params);
+		D__FREE_PTR(params);
 	if (fetch_task)
-		D_FREE_PTR(fetch_task);
+		D__FREE_PTR(fetch_task);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -255,9 +255,9 @@ dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
 	d_opc = (opc == DAOS_OPC_OBJ_FETCH_MULTI ? DAOS_OPC_OBJ_FETCH :
 		 DAOS_OPC_OBJ_UPDATE);
 
-	D_ALLOC(io_tasks, sizeof(*io_tasks) * num_dkeys);
+	D__ALLOC(io_tasks, sizeof(*io_tasks) * num_dkeys);
 	if (io_tasks == NULL)
-		D_GOTO(err_task, rc = -DER_NOMEM);
+		D__GOTO(err_task, rc = -DER_NOMEM);
 
 	for (i = 0; i < num_dkeys; i++) {
 		daos_obj_fetch_t args;
@@ -273,12 +273,12 @@ dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
 		rc = daos_task_create(d_opc, tse_task2sched(task),
 				      &args, 0, NULL, &io_tasks[i]);
 		if (rc != 0)
-			D_GOTO(err_task, rc);
+			D__GOTO(err_task, rc);
 	}
 
 	rc = tse_task_register_deps(task, num_dkeys, io_tasks);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D__GOTO(err_task, rc);
 
 	for (i = 0; i < num_dkeys; i++)
 		tse_task_schedule(io_tasks[i], false);
@@ -287,13 +287,13 @@ dac_multi_io(daos_handle_t oh, daos_epoch_t epoch, unsigned int num_dkeys,
 
 out_task:
 	if (io_tasks != NULL)
-		D_FREE(io_tasks, sizeof(*io_tasks) * num_dkeys);
+		D__FREE(io_tasks, sizeof(*io_tasks) * num_dkeys);
 	return rc;
 
 err_task:
 	for (i = 0; i < num_dkeys; i++) {
 		if (io_tasks[i])
-			D_FREE_PTR(io_tasks[i]);
+			D__FREE_PTR(io_tasks[i]);
 	}
 	tse_task_complete(task, rc);
 
@@ -306,7 +306,7 @@ dac_obj_fetch_multi(tse_task_t *task)
 	daos_obj_multi_io_t *args;
 
 	args = daos_task_get_args(DAOS_OPC_OBJ_FETCH_MULTI, task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return dac_multi_io(args->oh, args->epoch, args->num_dkeys,
 			    args->io_array, DAOS_OPC_OBJ_FETCH_MULTI, task);
@@ -318,7 +318,7 @@ dac_obj_update_multi(tse_task_t *task)
 	daos_obj_multi_io_t *args;
 
 	args = daos_task_get_args(DAOS_OPC_OBJ_UPDATE_MULTI, task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	return dac_multi_io(args->oh, args->epoch, args->num_dkeys,
 			    args->io_array, DAOS_OPC_OBJ_UPDATE_MULTI, task);

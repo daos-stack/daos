@@ -25,7 +25,7 @@
  * src/vos/tests/vos_tests.c
  * Launcher for all tests
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <unistd.h>
 #include <stdlib.h>

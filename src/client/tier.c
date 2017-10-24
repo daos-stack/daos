@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DD_SUBSYS	DD_FAC(client)
+#define DDSUBSYS	DDFAC(client)
 
 #include <daos/common.h>
 #include <daos/tier.h>
@@ -53,15 +53,15 @@ tier_task_prep(void *arg, int arg_size, tse_task_t **taskp,
 
 	rc = tse_task_init(NULL, arg, arg_size, daos_ev2sched(ev), &task);
 	if (rc != 0)
-		D_GOTO(err_task, rc = -DER_NOMEM);
+		D__GOTO(err_task, rc = -DER_NOMEM);
 
 	rc = daos_event_launch(ev);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D__GOTO(err_task, rc);
 
 	rc = tse_task_schedule(task, false);
 	if (rc != 0)
-		D_GOTO(err_task, rc);
+		D__GOTO(err_task, rc);
 
 	*taskp = task;
 	*evp = ev;
@@ -69,7 +69,7 @@ tier_task_prep(void *arg, int arg_size, tse_task_t **taskp,
 	return rc;
 
 err_task:
-	D_FREE_PTR(task);
+	D__FREE_PTR(task);
 	return rc;
 }
 
@@ -97,7 +97,7 @@ local_tier_conn_cb(tse_task_t *task, void *data)
 
 	/*Check for task error*/
 	if (rc) {
-		D_ERROR("Tier Conn task returned error:%d\n", rc);
+		D__ERROR("Tier Conn task returned error:%d\n", rc);
 		return rc;
 	}
 
@@ -111,7 +111,7 @@ local_tier_conn_cb(tse_task_t *task, void *data)
 	rc = tse_task_register_comp_cb(cross_conn_task, cross_conn_cb,
 				       cb_arg, sizeof(struct xconn_arg));
 	if (rc != 0) {
-		D_ERROR("Failed to register completion callback: %d\n", rc);
+		D__ERROR("Failed to register completion callback: %d\n", rc);
 		return rc;
 	}
 
@@ -121,7 +121,7 @@ local_tier_conn_cb(tse_task_t *task, void *data)
 
 	rc = dc_tier_connect(cb_arg->uuid, cb_arg->grp, cross_conn_task);
 	if (rc != 0) {
-		D_ERROR("Error from dc_tier_connect: %d\n", rc);
+		D__ERROR("Error from dc_tier_connect: %d\n", rc);
 		return rc;
 	}
 
@@ -147,7 +147,7 @@ daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 }
 
 int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
-		    const daos_rank_list_t *svc, unsigned int flags,
+		    const d_rank_list_t *svc, unsigned int flags,
 		    daos_handle_t *poh, daos_pool_info_t *info,
 		    daos_event_t *ev)
 {
@@ -161,7 +161,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	/*Note CB arg (on task complete) is freed implicitly by scheduler
 	* See daos_task_complete_callback in scheduler.c
 	*/
-	D_ALLOC_PTR(cb_arg);
+	D__ALLOC_PTR(cb_arg);
 	if (cb_arg == NULL)
 		return -DER_NOMEM;
 
@@ -176,7 +176,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	/*Client prep, plus a manual callback register to  add our CB arg*/
 	rc = tier_task_prep(NULL, 0, &local_conn_task, &ev);
 	if (rc) {
-		D_ERROR("Error in client task prep: %d\n", rc);
+		D__ERROR("Error in client task prep: %d\n", rc);
 		return rc;
 	}
 
@@ -184,7 +184,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 				       cb_arg, sizeof(struct xconn_arg));
 
 	if (rc) {
-		D_ERROR("Error registering comp cb: %d\n", rc);
+		D__ERROR("Error registering comp cb: %d\n", rc);
 		return rc;
 	}
 
@@ -193,7 +193,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 	 */
 	pt = tier_lookup(grp);
 	if (pt == NULL)
-		D_WARN("No client context, connectivity may be limited\n");
+		D__WARN("No client context, connectivity may be limited\n");
 
 
 	dta = tse_task_buf_get(local_conn_task, sizeof(*dta));
@@ -207,7 +207,7 @@ int daos_tier_pool_connect(const uuid_t uuid, const char *grp,
 
 	rc = dc_pool_connect(local_conn_task);
 	if (rc) {
-		D_ERROR("Error from dc_pool_connect: %d\n", rc);
+		D__ERROR("Error from dc_pool_connect: %d\n", rc);
 		return rc;
 	}
 

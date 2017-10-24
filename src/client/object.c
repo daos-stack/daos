@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DD_SUBSYS	DD_FAC(client)
+#define DDSUBSYS	DDFAC(client)
 
 #include <daos/object.h>
 #include "client_internal.h"
@@ -30,7 +30,7 @@ int
 daos_obj_class_register(daos_handle_t coh, daos_oclass_id_t cid,
 			daos_oclass_attr_t *cattr, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D__ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 #if 0
 	daos_obj_class_register_t	arg;
@@ -50,7 +50,7 @@ int
 daos_obj_class_query(daos_handle_t coh, daos_oclass_id_t cid,
 		     daos_oclass_attr_t *cattr, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D__ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 #if 0
 	daos_obj_class_query_t	arg;
@@ -69,7 +69,7 @@ int
 daos_obj_class_list(daos_handle_t coh, daos_oclass_list_t *clist,
 		    daos_hash_out_t *anchor, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D__ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 #if 0
 	daos_obj_class_list_t	arg;
@@ -88,7 +88,7 @@ int
 daos_obj_declare(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch,
 		 daos_obj_attr_t *oa, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D__ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 #if 0
 	daos_obj_declare_t	arg;
@@ -193,9 +193,9 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 
 int
 daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
-	       daos_rank_list_t *ranks, daos_event_t *ev)
+	       d_rank_list_t *ranks, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D__ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 

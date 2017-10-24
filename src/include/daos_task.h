@@ -120,7 +120,7 @@ typedef enum {
 
 typedef struct {
 	const char		*grp;
-	daos_rank_t		rank;
+	d_rank_t		rank;
 	bool			force;
 } daos_svc_rip_t;
 
@@ -129,10 +129,10 @@ typedef struct {
 	unsigned int		uid;
 	unsigned int		gid;
 	const char		*grp;
-	const daos_rank_list_t	*tgts;
+	const d_rank_list_t	*tgts;
 	const char		*dev;
 	daos_size_t		size;
-	daos_rank_list_t	*svc;
+	d_rank_list_t	*svc;
 	unsigned char		*uuid;
 } daos_pool_create_t;
 
@@ -145,20 +145,20 @@ typedef struct {
 typedef struct {
 	const uuid_t		uuid;
 	const char		*grp;
-	daos_rank_list_t	*tgts;
-	daos_rank_list_t	*failed;
+	d_rank_list_t	*tgts;
+	d_rank_list_t	*failed;
 } daos_pool_extend_t;
 
 typedef struct {
 	const uuid_t		uuid;
 	const char		*grp;
-	daos_rank_list_t	*svc;
+	d_rank_list_t	*svc;
 } daos_pool_evict_t;
 
 typedef struct {
 	const uuid_t		uuid;
 	const char		*grp;
-	const daos_rank_list_t	*svc;
+	const d_rank_list_t	*svc;
 	unsigned int		flags;
 	daos_handle_t		*poh;
 	daos_pool_info_t	*info;
@@ -171,20 +171,20 @@ typedef struct {
 typedef struct {
 	const uuid_t		uuid;
 	const char		*grp;
-	daos_rank_list_t	*svc;
-	daos_rank_list_t	*tgts;
+	d_rank_list_t	*svc;
+	d_rank_list_t	*tgts;
 } daos_pool_update_t;
 
 typedef struct {
 	daos_handle_t		poh;
-	daos_rank_list_t	*tgts;
+	d_rank_list_t	*tgts;
 	daos_pool_info_t	*info;
 } daos_pool_query_t;
 
 typedef struct {
 	daos_handle_t		poh;
-	daos_rank_list_t	*tgts;
-	daos_rank_list_t	*failed;
+	d_rank_list_t	*tgts;
+	d_rank_list_t	*failed;
 	daos_target_info_t	*info_list;
 } daos_pool_target_query_t;
 
@@ -360,7 +360,7 @@ typedef struct {
 	daos_handle_t		oh;
 	daos_epoch_t		epoch;
 	daos_obj_attr_t		*oa;
-	daos_rank_list_t	*ranks;
+	d_rank_list_t	*ranks;
 } daos_obj_query_t;
 
 typedef struct {

@@ -27,7 +27,7 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venaktesan@intel.com>
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -104,7 +104,7 @@ co_ops_run(void **state)
 				assert_int_equal(ret, 0);
 		}
 	}
-	D_PRINT("Finished all create and discards\n");
+	D__PRINT("Finished all create and discards\n");
 }
 
 static int
@@ -283,7 +283,7 @@ co_uuid_iter_test(struct vc_test_args *arg)
 		}
 
 		if (!uuid_is_null(ent.ie_couuid)) {
-			D_DEBUG(DB_TRACE,
+			D__DEBUG(DB_TRACE,
 				"COUUID:"DF_UUID"\n", DP_UUID(ent.ie_couuid));
 			nr++;
 		}
@@ -359,7 +359,7 @@ cookie_uhash_free(struct daos_ulink *uhlink)
 	struct cookie_entry	*entry;
 
 	entry = container_of(uhlink, struct cookie_entry, ulink);
-	D_FREE_PTR(entry);
+	D__FREE_PTR(entry);
 }
 
 struct daos_ulink_ops	cookie_uh_ops = {
@@ -382,10 +382,10 @@ cookie_table_test(void **state)
 	struct dhash_table		*uhtab = NULL;
 	struct daos_ulink		*l_ulink = NULL;
 
-	D_ALLOC_PTR(itab);
-	D_ALLOC(cookie_array, VCT_COOKIES * sizeof(struct daos_uuid));
-	D_ALLOC(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
-	D_ALLOC(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
+	D__ALLOC_PTR(itab);
+	D__ALLOC(cookie_array, VCT_COOKIES * sizeof(struct daos_uuid));
+	D__ALLOC(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
+	D__ALLOC(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
 
 	ret = daos_uhash_create(0, 8, &uhtab);
 	if (ret != 0)
@@ -422,7 +422,7 @@ cookie_table_test(void **state)
 			ret = daos_uhash_link_insert(uhtab, &cookie_array[j],
 						     &cookie_entries[k].ulink);
 			if (ret != 0)
-				D_ERROR("Inserting handle to UUID hash\n");
+				D__ERROR("Inserting handle to UUID hash\n");
 			l_entry = &cookie_entries[k];
 			k++;
 		}
@@ -432,9 +432,9 @@ cookie_table_test(void **state)
 		if (ret != 0)
 			print_error("find and update error\n");
 
-		D_DEBUG(DB_TRACE, "Cookie: "DF_UUID" Epoch :%"PRIu64"\t",
+		D__DEBUG(DB_TRACE, "Cookie: "DF_UUID" Epoch :%"PRIu64"\t",
 			DP_UUID(cookie_array[j].uuid), epochs[i]);
-		D_DEBUG(DB_TRACE, "Returned max_epoch: %"PRIu64"\n",
+		D__DEBUG(DB_TRACE, "Returned max_epoch: %"PRIu64"\n",
 			epoch_ret);
 		assert_true(epoch_ret == l_entry->max_epoch);
 
@@ -443,11 +443,11 @@ cookie_table_test(void **state)
 	daos_uhash_destroy(uhtab);
 	ret = vos_cookie_tab_destroy(cookie_hdl);
 	if (ret != 0)
-		D_ERROR("Cookie itab destroy error\n");
-	D_FREE_PTR(itab);
-	D_FREE(cookie_array, VCT_COOKIES * sizeof(struct daos_uuid));
-	D_FREE(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
-	D_FREE(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
+		D__ERROR("Cookie itab destroy error\n");
+	D__FREE_PTR(itab);
+	D__FREE(cookie_array, VCT_COOKIES * sizeof(struct daos_uuid));
+	D__FREE(cookie_entries, VCT_COOKIES * sizeof(struct cookie_entry));
+	D__FREE(epochs, VCT_EPOCHS * sizeof(daos_epoch_t));
 }
 
 static int

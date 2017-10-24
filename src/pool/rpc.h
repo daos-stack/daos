@@ -76,7 +76,7 @@ struct pool_create_in {
 	uint32_t		pri_mode;
 	uint32_t		pri_ntgts;
 	struct crt_array	pri_tgt_uuids;	/* [pri_ntgts] */
-	daos_rank_list_t       *pri_tgt_ranks;	/* [pri_ntgts] */
+	d_rank_list_t       *pri_tgt_ranks;	/* [pri_ntgts] */
 	uint32_t		pri_ndomains;
 	uint32_t		pri_padding;
 	struct crt_array	pri_domains;	/* [pri_ndomains] */
@@ -122,12 +122,12 @@ struct pool_query_out {
 
 struct pool_tgt_update_in {
 	struct pool_op_in	pti_op;		/* .pi_hdl unused */
-	daos_rank_list_t       *pti_targets;
+	d_rank_list_t       *pti_targets;
 };
 
 struct pool_tgt_update_out {
 	struct pool_op_out	pto_op;
-	daos_rank_list_t       *pto_targets;	/* that are not found in pool */
+	d_rank_list_t       *pto_targets;	/* that are not found in pool */
 };
 
 struct pool_evict_in {

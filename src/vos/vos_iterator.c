@@ -25,7 +25,7 @@
  *
  * vos/iterator.c
  */
-#define DD_SUBSYS	DD_FAC(vos)
+#define DDSUBSYS	DDFAC(vos)
 
 #include <daos/btree.h>
 #include <daos_srv/vos.h>
@@ -111,13 +111,13 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	}
 
 	if (dict->id_ops == NULL) {
-		D_ERROR("Can't find iterator type %d\n", type);
+		D__ERROR("Can't find iterator type %d\n", type);
 		return -DER_NOSYS;
 	}
 
 	rc = dict->id_ops->iop_prepare(type, param, &iter);
 	if (rc != 0) {
-		D_ERROR("Failed to prepare %s iterator: %d\n",
+		D__ERROR("Failed to prepare %s iterator: %d\n",
 			dict->id_name, rc);
 		return rc;
 	}
@@ -135,7 +135,7 @@ vos_iter_finish(daos_handle_t ih)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 
-	D_ASSERT(iter->it_ops != NULL);
+	D__ASSERT(iter->it_ops != NULL);
 	return iter->it_ops->iop_finish(iter);
 }
 
@@ -145,7 +145,7 @@ vos_iter_probe(daos_handle_t ih, daos_hash_out_t *anchor)
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	int		     rc;
 
-	D_ASSERT(iter->it_ops != NULL);
+	D__ASSERT(iter->it_ops != NULL);
 	rc = iter->it_ops->iop_probe(iter, anchor);
 	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
@@ -164,16 +164,16 @@ vos_iter_next(daos_handle_t ih)
 	int		     rc;
 
 	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialise cursor\n");
+		D__ERROR("Please call vos_iter_probe to initialise cursor\n");
 		return -DER_NO_PERM;
 	}
 
 	if (iter->it_state == VOS_ITS_END) {
-		D_DEBUG(DB_TRACE, "The end of iteration\n");
+		D__DEBUG(DB_TRACE, "The end of iteration\n");
 		return -DER_NONEXIST;
 	}
 
-	D_ASSERT(iter->it_ops != NULL);
+	D__ASSERT(iter->it_ops != NULL);
 	rc = iter->it_ops->iop_next(iter);
 	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
@@ -192,16 +192,16 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 
 	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialise cursor\n");
+		D__ERROR("Please call vos_iter_probe to initialise cursor\n");
 		return -DER_NO_PERM;
 	}
 
 	if (iter->it_state == VOS_ITS_END) {
-		D_DEBUG(DB_TRACE, "The end of iteration\n");
+		D__DEBUG(DB_TRACE, "The end of iteration\n");
 		return -DER_NONEXIST;
 	}
 
-	D_ASSERT(iter->it_ops != NULL);
+	D__ASSERT(iter->it_ops != NULL);
 	return iter->it_ops->iop_fetch(iter, it_entry, anchor);
 }
 
@@ -211,16 +211,16 @@ vos_iter_delete(daos_handle_t ih, void *args)
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 
 	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialize the cursor");
+		D__ERROR("Please call vos_iter_probe to initialize the cursor");
 		return -DER_NO_PERM;
 	}
 
 	if (iter->it_state == VOS_ITS_END) {
-		D_DEBUG(DB_TRACE, "The end of iteration\n");
+		D__DEBUG(DB_TRACE, "The end of iteration\n");
 		return -DER_NONEXIST;
 	}
 
-	D_ASSERT(iter->it_ops != NULL);
+	D__ASSERT(iter->it_ops != NULL);
 
 	if (iter->it_ops->iop_delete == NULL)
 		return -DER_NOSYS;
@@ -233,7 +233,7 @@ vos_iter_empty(daos_handle_t ih)
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 
-	D_ASSERT(iter->it_ops != NULL);
+	D__ASSERT(iter->it_ops != NULL);
 	if (iter->it_ops->iop_empty == NULL)
 		return -DER_NOSYS;
 

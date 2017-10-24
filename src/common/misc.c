@@ -24,7 +24,7 @@
  * This file is part of daos. It implements some miscellaneous functions which
  * not belong to other parts.
  */
-#define DD_SUBSYS	DD_FAC(common)
+#define DDSUBSYS	DDFAC(common)
 
 #include <daos/common.h>
 
@@ -37,7 +37,7 @@ daos_sgl_init(daos_sg_list_t *sgl, unsigned int nr)
 	memset(sgl, 0, sizeof(*sgl));
 
 	sgl->sg_nr.num = nr;
-	D_ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
+	D__ALLOC(sgl->sg_iovs, nr * sizeof(*sgl->sg_iovs));
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
 }
@@ -56,12 +56,12 @@ daos_sgl_fini(daos_sg_list_t *sgl, bool free_iovs)
 
 	for (i = 0; free_iovs && i < sgl->sg_nr.num; i++) {
 		if (sgl->sg_iovs[i].iov_buf != NULL) {
-			D_FREE(sgl->sg_iovs[i].iov_buf,
+			D__FREE(sgl->sg_iovs[i].iov_buf,
 			       sgl->sg_iovs[i].iov_buf_len);
 		}
 	}
 
-	D_FREE(sgl->sg_iovs, sgl->sg_nr.num * sizeof(*sgl->sg_iovs));
+	D__FREE(sgl->sg_iovs, sgl->sg_nr.num * sizeof(*sgl->sg_iovs));
 	memset(sgl, 0, sizeof(*sgl));
 }
 
@@ -144,7 +144,7 @@ daos_str_trimwhite(char *str)
 int
 daos_iov_copy(daos_iov_t *dst, daos_iov_t *src)
 {
-	D_ALLOC(dst->iov_buf, src->iov_buf_len);
+	D__ALLOC(dst->iov_buf, src->iov_buf_len);
 	if (dst->iov_buf == NULL)
 		return -DER_NOMEM;
 	dst->iov_buf_len = src->iov_buf_len;
@@ -158,43 +158,43 @@ daos_iov_free(daos_iov_t *iov)
 {
 	if (iov->iov_buf == NULL)
 		return;
-	D_ASSERT(iov->iov_buf_len > 0);
+	D__ASSERT(iov->iov_buf_len > 0);
 
-	D_FREE(iov->iov_buf, iov->iov_buf_len);
+	D__FREE(iov->iov_buf, iov->iov_buf_len);
 	iov->iov_buf = NULL;
 	iov->iov_buf_len = 0;
 	iov->iov_len = 0;
 }
 
-daos_rank_list_t *
+d_rank_list_t *
 daos_rank_list_parse(const char *str, const char *sep)
 {
-	daos_rank_t	       *buf;
+	d_rank_t	       *buf;
 	int			cap = 8;
-	daos_rank_list_t       *ranks;
+	d_rank_list_t       *ranks;
 	char		       *s;
 	char		       *p;
 	int			n = 0;
 
-	D_ALLOC(buf, sizeof(*buf) * cap);
+	D__ALLOC(buf, sizeof(*buf) * cap);
 	if (buf == NULL)
-		D_GOTO(out, ranks = NULL);
+		D__GOTO(out, ranks = NULL);
 	s = strdup(str);
 	if (s == NULL)
-		D_GOTO(out_buf, ranks = NULL);
+		D__GOTO(out_buf, ranks = NULL);
 
 	while ((s = strtok_r(s, sep, &p)) != NULL) {
 		if (n == cap) {
-			daos_rank_t    *buf_new;
+			d_rank_t    *buf_new;
 			int		cap_new;
 
 			/* Double the buffer. */
 			cap_new = cap * 2;
-			D_ALLOC(buf_new, sizeof(*buf_new) * cap_new);
+			D__ALLOC(buf_new, sizeof(*buf_new) * cap_new);
 			if (buf_new == NULL)
-				D_GOTO(out_s, ranks = NULL);
+				D__GOTO(out_s, ranks = NULL);
 			memcpy(buf_new, buf, sizeof(*buf_new) * n);
-			D_FREE(buf, sizeof(*buf) * cap);
+			D__FREE(buf, sizeof(*buf) * cap);
 			buf = buf_new;
 			cap = cap_new;
 		}
@@ -205,13 +205,13 @@ daos_rank_list_parse(const char *str, const char *sep)
 
 	ranks = daos_rank_list_alloc(n);
 	if (ranks == NULL)
-		D_GOTO(out_s, ranks = NULL);
+		D__GOTO(out_s, ranks = NULL);
 	memcpy(ranks->rl_ranks, buf, sizeof(*buf) * n);
 
 out_s:
 	free(s);
 out_buf:
-	D_FREE(buf, sizeof(*buf) * cap);
+	D__FREE(buf, sizeof(*buf) * cap);
 out:
 	return ranks;
 }

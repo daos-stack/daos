@@ -98,12 +98,12 @@ int
 ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     enum daos_module_id module, crt_opcode_t opcode,
 		     crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
-		     daos_rank_list_t *excluded_list);
+		     d_rank_list_t *excluded_list);
 int
-ds_pool_pmap_broadcast(const uuid_t uuid, daos_rank_list_t *tgts_exclude);
+ds_pool_pmap_broadcast(const uuid_t uuid, d_rank_list_t *tgts_exclude);
 
-int ds_pool_tgt_exclude_out(uuid_t pool_uuid, daos_rank_list_t *tgts,
-			    daos_rank_list_t *tgts_out);
+int ds_pool_tgt_exclude_out(uuid_t pool_uuid, d_rank_list_t *tgts,
+			    d_rank_list_t *tgts_out);
 
 /*
  * TODO: Make the following internal functions of ds_pool after merging in
@@ -116,8 +116,8 @@ int ds_pool_create(const uuid_t pool_uuid, const char *path,
 int ds_pool_svc_create(const uuid_t pool_uuid, unsigned int uid,
 		       unsigned int gid, unsigned int mode, int ntargets,
 		       uuid_t target_uuids[], const char *group,
-		       const daos_rank_list_t *target_addrs, int ndomains,
-		       const int *domains, daos_rank_list_t *svc_addrs);
+		       const d_rank_list_t *target_addrs, int ndomains,
+		       const int *domains, d_rank_list_t *svc_addrs);
 int ds_pool_svc_destroy(const uuid_t pool_uuid);
 
 /*

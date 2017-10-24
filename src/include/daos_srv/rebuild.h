@@ -36,9 +36,9 @@ bool is_rebuild_container(uuid_t cont_hdl_uuid);
 bool is_rebuild_pool(uuid_t pool_hdl_uuid);
 
 int ds_rebuild_schedule(const uuid_t uuid, uint32_t map_ver,
-			daos_rank_list_t *tgts_failed,
-			daos_rank_list_t *svc_list);
+			d_rank_list_t *tgts_failed,
+			d_rank_list_t *svc_list);
 int ds_rebuild_query(uuid_t pool_uuid, bool do_bcast,
-		     daos_rank_list_t *failed_tgts,
+		     d_rank_list_t *failed_tgts,
 		     struct daos_rebuild_status *status);
 #endif

@@ -26,7 +26,7 @@
  * src/addons/daos_obj.c
  */
 
-#define DD_SUBSYS	DD_FAC(client)
+#define DDSUBSYS	DDFAC(client)
 
 #include <daos/common.h>
 #include <daos/event.h>
@@ -71,7 +71,7 @@ int
 daos_kv_remove(daos_handle_t oh, daos_epoch_t epoch, const char *key,
 	       daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D__ERROR("Unsupported API\n");
 	return -DER_NOSYS;
 }
 

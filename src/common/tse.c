@@ -30,7 +30,7 @@
  * it will walk through the task list of the scheduler and pick up those
  * ready tasks to executed.
  */
-#define DD_SUBSYS	DD_FAC(client)
+#define DDSUBSYS	DDFAC(client)
 
 #include <stdint.h>
 #include <pthread.h>
@@ -104,7 +104,7 @@ tse_task_buf_get(tse_task_t *task, int size)
 
 	/** Let's assume dtp_buf is always enough at the moment */
 	/** MSC - should malloc if size requested is bigger */
-	D_ASSERTF(tse_task_buf_size(size) < sizeof(dtp->dtp_buf),
+	D__ASSERTF(tse_task_buf_size(size) < sizeof(dtp->dtp_buf),
 		  "req size %u all size %lu\n",
 		  tse_task_buf_size(size), sizeof(dtp->dtp_buf));
 	ptr = (void *)&dtp->dtp_buf;
@@ -133,7 +133,7 @@ tse_task_addref_locked(struct tse_task_private *dtp)
 static bool
 tse_task_decref_locked(struct tse_task_private *dtp)
 {
-	D_ASSERT(dtp->dtp_refcnt > 0);
+	D__ASSERT(dtp->dtp_refcnt > 0);
 	dtp->dtp_refcnt--;
 	return dtp->dtp_refcnt == 0;
 }
@@ -145,7 +145,7 @@ tse_task_decref(tse_task_t *task)
 	struct tse_sched_private *dsp = dtp->dtp_sched;
 	bool			   zombie;
 
-	D_ASSERT(dsp != NULL);
+	D__ASSERT(dsp != NULL);
 	pthread_mutex_lock(&dsp->dsp_lock);
 	zombie = tse_task_decref_locked(dtp);
 	pthread_mutex_unlock(&dsp->dsp_lock);
@@ -159,17 +159,17 @@ tse_task_decref(tse_task_t *task)
 					 struct tse_task_link, tl_link);
 		daos_list_del(&result->tl_link);
 		tse_task_decref(result->tl_task);
-		D_FREE_PTR(result);
+		D__FREE_PTR(result);
 	}
 
-	D_ASSERT(daos_list_empty(&dtp->dtp_dep_list));
+	D__ASSERT(daos_list_empty(&dtp->dtp_dep_list));
 
 	/*
 	 * MSC - since we require user to allocate task, maybe we should have
 	 * user also free it. This now requires task to be on the heap all the
 	 * time.
 	 */
-	D_FREE_PTR(task);
+	D__FREE_PTR(task);
 }
 
 void
@@ -177,10 +177,10 @@ tse_sched_fini(tse_sched_t *sched)
 {
 	struct tse_sched_private *dsp = tse_sched2priv(sched);
 
-	D_ASSERT(dsp->dsp_inflight == 0);
-	D_ASSERT(daos_list_empty(&dsp->dsp_init_list));
-	D_ASSERT(daos_list_empty(&dsp->dsp_running_list));
-	D_ASSERT(daos_list_empty(&dsp->dsp_complete_list));
+	D__ASSERT(dsp->dsp_inflight == 0);
+	D__ASSERT(daos_list_empty(&dsp->dsp_init_list));
+	D__ASSERT(daos_list_empty(&dsp->dsp_running_list));
+	D__ASSERT(daos_list_empty(&dsp->dsp_complete_list));
 	pthread_mutex_destroy(&dsp->dsp_lock);
 }
 
@@ -197,7 +197,7 @@ tse_sched_decref(struct tse_sched_private *dsp)
 
 	pthread_mutex_lock(&dsp->dsp_lock);
 
-	D_ASSERT(dsp->dsp_refcount > 0);
+	D__ASSERT(dsp->dsp_refcount > 0);
 	dsp->dsp_refcount--;
 	finalize = dsp->dsp_refcount == 0;
 
@@ -214,7 +214,7 @@ tse_sched_register_comp_cb(tse_sched_t *sched,
 	struct tse_sched_private	*dsp = tse_sched2priv(sched);
 	struct tse_sched_comp		*dsc;
 
-	D_ALLOC_PTR(dsc);
+	D__ALLOC_PTR(dsc);
 	if (dsc == NULL)
 		return -DER_NOMEM;
 
@@ -243,7 +243,7 @@ tse_sched_complete_cb(tse_sched_t *sched)
 		rc = dsc->dsc_comp_cb(dsc->dsc_arg, sched->ds_result);
 		if (sched->ds_result == 0)
 			sched->ds_result = rc;
-		D_FREE_PTR(dsc);
+		D__FREE_PTR(dsc);
 	}
 	return 0;
 }
@@ -256,7 +256,7 @@ tse_task_complete_locked(struct tse_task_private *dtp,
 	if (dtp->dtp_complete)
 		return;
 
-	D_ASSERT(dtp->dtp_running);
+	D__ASSERT(dtp->dtp_running);
 	dtp->dtp_running = 0;
 	dtp->dtp_complete = 1;
 	daos_list_move_tail(&dtp->dtp_list, &dsp->dsp_complete_list);
@@ -270,11 +270,11 @@ register_cb(tse_task_t *task, bool is_comp, bool top, tse_task_cb_t cb,
 	struct tse_task_cb *dtc;
 
 	if (dtp->dtp_complete) {
-		D_ERROR("Can't add a callback for a completed task\n");
+		D__ERROR("Can't add a callback for a completed task\n");
 		return -DER_NO_PERM;
 	}
 
-	D_ALLOC(dtc, sizeof(*dtc) + arg_size);
+	D__ALLOC(dtc, sizeof(*dtc) + arg_size);
 	if (dtc == NULL)
 		return -DER_NOMEM;
 
@@ -282,7 +282,7 @@ register_cb(tse_task_t *task, bool is_comp, bool top, tse_task_cb_t cb,
 	dtc->dtc_cb = cb;
 	memcpy(dtc->dtc_arg, arg, arg_size);
 
-	D_ASSERT(dtp->dtp_sched != NULL);
+	D__ASSERT(dtp->dtp_sched != NULL);
 
 	pthread_mutex_lock(&dtp->dtp_sched->dsp_lock);
 	if (is_comp) {
@@ -293,7 +293,7 @@ register_cb(tse_task_t *task, bool is_comp, bool top, tse_task_cb_t cb,
 					   &dtp->dtp_comp_cb_list);
 	} else {
 		/** MSC - don't see a need for more than 1 prep cb */
-		D_ASSERT(top == false);
+		D__ASSERT(top == false);
 		daos_list_add_tail(&dtc->dtc_list, &dtp->dtp_prep_cb_list);
 	}
 	pthread_mutex_unlock(&dtp->dtp_sched->dsp_lock);
@@ -348,7 +348,7 @@ tse_task_prep_callback(tse_task_t *task)
 				task->dt_result = rc;
 		}
 
-		D_FREE(dtc, offsetof(struct tse_task_cb,
+		D__FREE(dtc, offsetof(struct tse_task_cb,
 				     dtc_arg[dtc->dtc_arg_size]));
 
 		/** Task was re-initialized; break */
@@ -383,7 +383,7 @@ tse_task_complete_callback(tse_task_t *task)
 		if (task->dt_result == 0)
 			task->dt_result = ret;
 
-		D_FREE(dtc, offsetof(struct tse_task_cb,
+		D__FREE(dtc, offsetof(struct tse_task_cb,
 				     dtc_arg[dtc->dtc_arg_size]));
 
 		/** Task was re-initialized; break */
@@ -458,7 +458,7 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 				tse_task_decref(task);
 				continue;
 			}
-			D_ASSERT(dtp->dtp_func != NULL);
+			D__ASSERT(dtp->dtp_func != NULL);
 			if (!dtp->dtp_complete)
 				dtp->dtp_func(task);
 		}
@@ -482,7 +482,7 @@ tse_task_post_process(tse_task_t *task)
 	struct tse_sched_private *dsp = dtp->dtp_sched;
 	int rc = 0;
 
-	D_ASSERT(dtp->dtp_complete == 1);
+	D__ASSERT(dtp->dtp_complete == 1);
 
 	/* set scheduler result */
 	if (tse_priv2sched(dsp)->ds_result == 0)
@@ -500,9 +500,9 @@ tse_task_post_process(tse_task_t *task)
 		dtp_tmp = tse_task2priv(tlink->tl_task);
 
 		/* see if the dependent task is ready to be scheduled */
-		D_ASSERT(dtp_tmp->dtp_dep_cnt > 0);
+		D__ASSERT(dtp_tmp->dtp_dep_cnt > 0);
 		dtp_tmp->dtp_dep_cnt--;
-		D_DEBUG(DB_TRACE, "daos task %p dep_cnt %d\n", dtp_tmp,
+		D__DEBUG(DB_TRACE, "daos task %p dep_cnt %d\n", dtp_tmp,
 			dtp_tmp->dtp_dep_cnt);
 		if (dtp_tmp->dtp_dep_cnt == 0 && !dsp->dsp_cancelling &&
 		    dtp_tmp->dtp_running) {
@@ -526,7 +526,7 @@ tse_task_post_process(tse_task_t *task)
 			/** task reinserted itself in scheduler */
 			if (!done) {
 				tse_task_decref_locked(dtp_tmp);
-				D_FREE_PTR(tlink);
+				D__FREE_PTR(tlink);
 				continue;
 			}
 
@@ -546,14 +546,14 @@ tse_task_post_process(tse_task_t *task)
 			daos_list_add_tail(&tlink->tl_link,
 					   &dtp_tmp->dtp_ret_list);
 		} else {
-			D_FREE_PTR(tlink);
+			D__FREE_PTR(tlink);
 		}
 
 		/* -1 for tlink */
 		tse_task_decref_locked(dtp_tmp);
 	}
 
-	D_ASSERT(dsp->dsp_inflight > 0);
+	D__ASSERT(dsp->dsp_inflight > 0);
 	dsp->dsp_inflight--;
 	pthread_mutex_unlock(&dsp->dsp_lock);
 
@@ -762,12 +762,12 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	struct tse_task_link	  *tlink;
 
 	if (dtp->dtp_sched != dep_dtp->dtp_sched) {
-		D_ERROR("Two tasks should belong to the same scheduler.\n");
+		D__ERROR("Two tasks should belong to the same scheduler.\n");
 		return -DER_NO_PERM;
 	}
 
 	if (dtp->dtp_complete) {
-		D_ERROR("Can't add a depedency for a completed task (%p)\n",
+		D__ERROR("Can't add a depedency for a completed task (%p)\n",
 			task);
 		return -DER_NO_PERM;
 	}
@@ -776,11 +776,11 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	if (dep_dtp->dtp_complete)
 		return 0;
 
-	D_ALLOC_PTR(tlink);
+	D__ALLOC_PTR(tlink);
 	if (tlink == NULL)
 		return -DER_NOMEM;
 
-	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep_dtp, dtp);
+	D__DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep_dtp, dtp);
 
 	pthread_mutex_lock(&dtp->dtp_sched->dsp_lock);
 
@@ -816,7 +816,7 @@ tse_task_init(tse_task_func_t task_func, void *arg, int arg_size,
 	struct tse_sched_private *dsp = tse_sched2priv(sched);
 	int rc = 0;
 
-	D_ALLOC_PTR(task);
+	D__ALLOC_PTR(task);
 	if (task == NULL)
 		return -DER_NOMEM;
 
@@ -835,7 +835,7 @@ tse_task_init(tse_task_func_t task_func, void *arg, int arg_size,
 	dtp->dtp_func = task_func;
 	if (arg != NULL) {
 		dtp->dtp_func_arg = tse_task_buf_get(task, arg_size);
-		D_ASSERT(dtp->dtp_func_arg != NULL);
+		D__ASSERT(dtp->dtp_func_arg != NULL);
 		memcpy(dtp->dtp_func_arg, arg, arg_size);
 	}
 	dtp->dtp_sched = dsp;
@@ -899,23 +899,23 @@ tse_task_reinit(tse_task_t *task)
 	pthread_mutex_lock(&dsp->dsp_lock);
 
 	if (dsp->dsp_cancelling) {
-		D_ERROR("Scheduler is cancelling, can't re-insert task\n");
-		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+		D__ERROR("Scheduler is cancelling, can't re-insert task\n");
+		D__GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (dtp->dtp_complete) {
-		D_ERROR("Can't re-init a task that has completed already.\n");
-		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+		D__ERROR("Can't re-init a task that has completed already.\n");
+		D__GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (!dtp->dtp_running) {
-		D_ERROR("Can't re-init a task that is not running.\n");
-		D_GOTO(err_unlock, rc = -DER_NO_PERM);
+		D__ERROR("Can't re-init a task that is not running.\n");
+		D__GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (dtp->dtp_func == NULL) {
-		D_ERROR("Task body function can't be NULL.\n");
-		D_GOTO(err_unlock, rc = -DER_INVAL);
+		D__ERROR("Task body function can't be NULL.\n");
+		D__GOTO(err_unlock, rc = -DER_INVAL);
 	}
 
 	/** Mark the task back at init state */

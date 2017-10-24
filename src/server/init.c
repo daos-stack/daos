@@ -24,7 +24,7 @@
  * This file is part of the DAOS server. It implements the startup/shutdown
  * routines for the daos_server.
  */
-#define DD_SUBSYS	DD_FAC(server)
+#define DDSUBSYS	DDFAC(server)
 
 #include <signal.h>
 #include <abt.h>
@@ -74,35 +74,35 @@ register_dbtree_classes(void)
 	rc = dbtree_class_register(DBTREE_CLASS_KV, 0 /* feats */,
 				   &dbtree_kv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_KV: %d\n", rc);
+		D__ERROR("failed to register DBTREE_CLASS_KV: %d\n", rc);
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_IV, 0 /* feats */,
 				   &dbtree_iv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_IV: %d\n", rc);
+		D__ERROR("failed to register DBTREE_CLASS_IV: %d\n", rc);
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_NV, 0 /* feats */,
 				   &dbtree_nv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_NV: %d\n", rc);
+		D__ERROR("failed to register DBTREE_CLASS_NV: %d\n", rc);
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_UV, 0 /* feats */,
 				   &dbtree_uv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_UV: %d\n", rc);
+		D__ERROR("failed to register DBTREE_CLASS_UV: %d\n", rc);
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_EC, 0 /* feats */,
 				   &dbtree_ec_ops);
 	if (rc != 0)
-		D_ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
+		D__ERROR("failed to register DBTREE_CLASS_EC: %d\n", rc);
 
 	return rc;
 }
@@ -138,7 +138,7 @@ modules_load(uint64_t *facs)
 		mod_facs = 0;
 		rc = dss_module_load(mod, &mod_facs);
 		if (rc != 0) {
-			D_ERROR("Failed to load module %s: %d\n",
+			D__ERROR("Failed to load module %s: %d\n",
 				mod, rc);
 			break;
 		}
@@ -157,7 +157,7 @@ static int
 server_init()
 {
 	int		rc;
-	crt_rank_t	rank = -1;
+	d_rank_t	rank = -1;
 	uint32_t	size = -1;
 
 	rc = daos_debug_init(NULL);
@@ -166,7 +166,7 @@ server_init()
 
 	rc = register_dbtree_classes();
 	if (rc != 0)
-		D_GOTO(exit_debug_init, rc);
+		D__GOTO(exit_debug_init, rc);
 
 	/** initialize server topology data */
 	hwloc_topology_init(&dss_topo);
@@ -175,40 +175,40 @@ server_init()
 	/* initialize the modular interface */
 	rc = dss_module_init();
 	if (rc)
-		D_GOTO(exit_debug_init, rc);
+		D__GOTO(exit_debug_init, rc);
 
-	D_INFO("Module interface successfully initialized\n");
+	D__INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
 	rc = crt_init(server_group_id, CRT_FLAG_BIT_SERVER);
 	if (rc)
-		D_GOTO(exit_mod_init, rc);
-	D_INFO("Network successfully initialized\n");
+		D__GOTO(exit_mod_init, rc);
+	D__INFO("Network successfully initialized\n");
 
 	/* load modules */
 	rc = modules_load(&dss_mod_facs);
 	if (rc)
-		D_GOTO(exit_mod_loaded, rc);
-	D_INFO("Module %s successfully loaded\n", modules);
+		D__GOTO(exit_mod_loaded, rc);
+	D__INFO("Module %s successfully loaded\n", modules);
 
 	/* start up service */
 	rc = dss_srv_init(nr_threads);
 	if (rc)
-		D_GOTO(exit_mod_loaded, rc);
-	D_INFO("Service is now running\n");
+		D__GOTO(exit_mod_loaded, rc);
+	D__INFO("Service is now running\n");
 
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		rc = daos_init();
 		if (rc) {
-			D_ERROR("daos_init (client) failed, rc: %d.\n", rc);
-			D_GOTO(exit_srv_init, rc);
+			D__ERROR("daos_init (client) failed, rc: %d.\n", rc);
+			D__GOTO(exit_srv_init, rc);
 		}
-		D_INFO("Client stack enabled\n");
+		D__INFO("Client stack enabled\n");
 	}
 
 	crt_group_rank(NULL, &rank);
 	crt_group_size(NULL, &size);
-	D_PRINT("DAOS server (v%s) started on rank %u (out of %u) with %u "
+	D__PRINT("DAOS server (v%s) started on rank %u (out of %u) with %u "
 		"xstream(s)\n", DAOS_VERSION, rank, size, dss_nxstreams);
 
 	return 0;
@@ -227,7 +227,7 @@ exit_debug_init:
 static void
 server_fini(bool force)
 {
-	D_INFO("Service is shutting down\n");
+	D__INFO("Service is shutting down\n");
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI)
 		daos_fini();
 	dss_srv_fini(force);
@@ -321,7 +321,7 @@ main(int argc, char **argv)
 
 	rc = ABT_init(argc, argv);
 	if (rc != 0) {
-		D_ERROR("failed to init ABT: %d\n", rc);
+		D__ERROR("failed to init ABT: %d\n", rc);
 		exit(EXIT_FAILURE);
 	}
 	/** server initialization */
@@ -337,7 +337,7 @@ main(int argc, char **argv)
 	sigaddset(&set, SIGUSR2);
 	rc = sigwait(&set, &sig);
 	if (rc)
-		D_ERROR("failed to wait for signals: %d\n", rc);
+		D__ERROR("failed to wait for signals: %d\n", rc);
 
 	/** shutdown */
 	server_fini(true);

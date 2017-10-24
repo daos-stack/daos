@@ -60,7 +60,7 @@ struct dc_object {
 /* client object shard */
 struct dc_obj_shard {
 	/** rank of the target this object belongs to */
-	daos_rank_t		do_rank;
+	d_rank_t		do_rank;
 	/** refcount */
 	unsigned int		do_ref;
 	/** number of partitions on the remote target */

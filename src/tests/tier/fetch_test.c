@@ -1,4 +1,4 @@
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <getopt.h>
 #include "daos_test.h"
@@ -16,7 +16,7 @@ char TIER_2_ID[] = "TIER_2_ID";
 
 /*Small helpder func*/
 static int
-pool_create(const char *grp_id, uuid_t pool_id, daos_rank_list_t *svc)
+pool_create(const char *grp_id, uuid_t pool_id, d_rank_list_t *svc)
 {
 	int rc = 0;
 
@@ -82,7 +82,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		req->iod[i].iod_type = iod_type;
 
 	}
-	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
+	D__DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
 	/** open the object */
 	rc = daos_obj_open(coh, oid, 0, 0, &req->oh,
@@ -184,7 +184,7 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
 		iod[i].iod_eprs[0].epr_lo = *epoch;
 		iod[i].iod_nr = 1;
 
-		D_DEBUG(DF_TIERS,
+		D__DEBUG(DF_TIERS,
 			"%d: typ:%d sz:%lu idx:"DF_U64" nr:"DF_U64"\n",
 			i, iod[i].iod_type, iod[i].iod_size,
 			iod[i].iod_recxs[0].rx_idx,
@@ -271,8 +271,8 @@ main(int argc, char **argv)
 
 	/*IDs and daos (not MPI) rank info*/
 	uuid_t warm_uuid;
-	daos_rank_t warm_ranks[1];
-	daos_rank_list_t warm_svc;
+	d_rank_t warm_ranks[1];
+	d_rank_list_t warm_svc;
 
 	uuid_t cold_uuid;
 
@@ -354,7 +354,7 @@ main(int argc, char **argv)
 	rc = daos_eq_create(&arg.eq);
 	if (rc) {
 		print_message("EQ Create Failed");
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 	}
 
 	rc = daos_event_init(&ev, arg.eq, NULL);
@@ -394,7 +394,7 @@ main(int argc, char **argv)
 
 	print_message("Polling for event completion\n");
 	daos_eq_poll(arg.eq, 1, DAOS_EQ_WAIT, 1, &evp);
-	D_INFO("event says done!\n");
+	D__INFO("event says done!\n");
 
 	rc = evp->ev_error;
 
@@ -411,7 +411,7 @@ main(int argc, char **argv)
 	rc = daos_tier_fetch_cont(warm_poh, tinfo.cont_uuid, ep, NULL, &ev);
 	daos_eq_poll(arg.eq, 1, DAOS_EQ_WAIT, 1, &evp);
 
-	D_INFO("event says done!\n");
+	D__INFO("event says done!\n");
 
 	rc = evp->ev_error;
 

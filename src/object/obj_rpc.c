@@ -23,7 +23,7 @@
 /**
  * DSR: RPC Protocol Serialization Functions
  */
-#define DD_SUBSYS	DD_FAC(object)
+#define DDSUBSYS	DDFAC(object)
 
 #include <daos/event.h>
 #include <daos/rpc.h>
@@ -225,7 +225,7 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 		((struct obj_punch_out *)reply)->opo_ret = status;
 		break;
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	}
 }
 
@@ -247,7 +247,7 @@ obj_reply_get_status(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_ret;
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	}
 	return 0;
 }
@@ -274,7 +274,7 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 		((struct obj_punch_out *)reply)->opo_map_version = map_version;
 		break;
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	}
 }
 
@@ -296,7 +296,7 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 	case DAOS_OBJ_RPC_PUNCH_AKEYS:
 		return ((struct obj_punch_out *)reply)->opo_map_version;
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	}
 	return 0;
 }

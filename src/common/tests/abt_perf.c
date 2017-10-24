@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <abt.h>
 #include <daos/common.h>

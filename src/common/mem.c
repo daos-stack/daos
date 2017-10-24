@@ -27,7 +27,7 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
-#define DD_SUBSYS	DD_FAC(common)
+#define DDSUBSYS	DDFAC(common)
 
 #include <daos/common.h>
 #include <daos/mem.h>
@@ -106,7 +106,7 @@ umem_tx_errno(int err)
 	}
 
 	if (err == 0) {
-		D_ERROR("Transaction aborted for unknown reason\n");
+		D__ERROR("Transaction aborted for unknown reason\n");
 		return -DER_UNKNOWN;
 	}
 
@@ -114,7 +114,7 @@ umem_tx_errno(int err)
 		if (err < -DER_ERR_FIRST)
 			return err; /* aborted by DAOS */
 
-		D_ERROR("nvml returned negative errno %d\n", err);
+		D__ERROR("nvml returned negative errno %d\n", err);
 		err = -err;
 	}
 	return daos_errno2der(err);
@@ -211,11 +211,11 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 		}
 	}
 	if (!found) {
-		D_DEBUG(DB_MEM, "Cannot find memory class %d\n", uma->uma_id);
+		D__DEBUG(DB_MEM, "Cannot find memory class %d\n", uma->uma_id);
 		return -DER_ENOENT;
 	}
 
-	D_DEBUG(DB_MEM, "Instantiate memory class %s\n", umc->umc_name);
+	D__DEBUG(DB_MEM, "Instantiate memory class %s\n", umc->umc_name);
 
 	memset(umm, 0, sizeof(*umm));
 	umm->umm_id	= umc->umc_id;

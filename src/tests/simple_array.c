@@ -39,7 +39,7 @@
  * bumping the epoch number. The transaction manager is responsible for
  * flushing and committing the epoch once all tasks have reported completion.
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -63,8 +63,8 @@ daos_handle_t	eq;
 
 /** Pool information */
 uuid_t			 pool_uuid;	/* only used on rank 0 */
-daos_rank_t		 svc[13];	/* only used on rank 0 */
-daos_rank_list_t	 svcl;		/* only used on rank 0 */
+d_rank_t		 svc[13];	/* only used on rank 0 */
+d_rank_list_t	 svcl;		/* only used on rank 0 */
 daos_handle_t		 poh;		/* shared pool handle */
 
 /** Container information */

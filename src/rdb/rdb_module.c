@@ -24,7 +24,7 @@
  * rdb: Server Module Interface
  */
 
-#define DD_SUBSYS DD_FAC(rdb)
+#define DDSUBSYS DDFAC(rdb)
 
 #include <daos_srv/rdb.h>
 

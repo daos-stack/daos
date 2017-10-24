@@ -160,7 +160,7 @@ tier_rangein(daos_epoch_range_t *r, daos_epoch_t t)
 
 	if ((t < r->epr_lo) || (r->epr_hi < t)) {
 		rc = 0;
-		D_DEBUG(DF_TIERS, "%lu not in range %lu:%lu\n",
+		D__DEBUG(DF_TIERS, "%lu not in range %lu:%lu\n",
 			t, r->epr_lo, r->epr_hi);
 	}
 	return rc;

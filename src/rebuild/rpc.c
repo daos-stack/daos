@@ -25,7 +25,7 @@
  *
  * This file contains the RPC format for rebuild.
  */
-#define DD_SUBSYS       DD_FAC(rebuild)
+#define DDSUBSYS       DDFAC(rebuild)
 
 #include <daos/rpc.h>
 #include "rpc.h"

@@ -173,7 +173,7 @@ pool_map_targets(struct pool_map *map)
 	int		    rc;
 
 	rc = pool_map_find_target(map, PO_COMP_ID_ALL, &targets);
-	D_ASSERT(rc >= 0);
+	D__ASSERT(rc >= 0);
 	return rc == 0 ? NULL : targets;
 }
 

@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <stdio.h>
 #include <fcntl.h>
@@ -96,7 +96,7 @@ ctl_list(void)
 	rc = vos_iter_prepare(type, &param, &ih);
 	if (rc) {
 		opstr = "prepare";
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 	}
 
 	n = 0;
@@ -106,8 +106,8 @@ ctl_list(void)
 		vos_iter_entry_t        ent;
 
 		if (rc == -DER_NONEXIST) {
-			D_PRINT("Completed, n=%d\n", n);
-			D_GOTO(out, rc = 0);
+			D__PRINT("Completed, n=%d\n", n);
+			D__GOTO(out, rc = 0);
 		}
 
 		if (rc == 0) {
@@ -116,16 +116,16 @@ ctl_list(void)
 		}
 
 		if (rc)
-			D_GOTO(out, rc);
+			D__GOTO(out, rc);
 
 		n++;
 		switch (type) {
 		case VOS_ITER_OBJ:
-			D_PRINT("\t"DF_UOID"\n", DP_UOID(ent.ie_oid));
+			D__PRINT("\t"DF_UOID"\n", DP_UOID(ent.ie_oid));
 			break;
 		default:
-			D_PRINT("Unsupported\n");
-			D_GOTO(out, rc = -1);
+			D__PRINT("Unsupported\n");
+			D__GOTO(out, rc = -1);
 		}
 
 		rc = vos_iter_next(ih);
@@ -133,7 +133,7 @@ ctl_list(void)
 	}
 out:
 	if (rc)
-		D_PRINT("list(%s) failed, rc=%d\n", opstr, rc);
+		D__PRINT("list(%s) failed, rc=%d\n", opstr, rc);
 	return rc;
 }
 
@@ -162,7 +162,7 @@ ctl_cmd_run(char opc, char *args)
 
 	while (str && !isspace(*str) && *str != '\0') {
 		if (str[1] != CTL_SEP_VAL)
-			D_GOTO(failed, rc = -1);
+			D__GOTO(failed, rc = -1);
 
 		switch (str[0]) {
 		case 'e':
@@ -225,7 +225,7 @@ ctl_cmd_run(char opc, char *args)
 	switch (opc) {
 	case 'u':
 		if (ctl_abits != CTL_ARG_ALL)
-			D_GOTO(failed, rc = -1);
+			D__GOTO(failed, rc = -1);
 
 		rc = vos_obj_update(ctl_tcx.tc_co_hdl, ctl_oid, ctl_epoch,
 				    ctl_cookie, 0xcafe, &ctl_dkey_iov, 1,
@@ -233,16 +233,16 @@ ctl_cmd_run(char opc, char *args)
 		break;
 	case 'f':
 		if (ctl_abits != (CTL_ARG_ALL & ~CTL_ARG_VAL))
-			D_GOTO(failed, rc = -1);
+			D__GOTO(failed, rc = -1);
 
 		rc = vos_obj_fetch(ctl_tcx.tc_co_hdl, ctl_oid, ctl_epoch,
 				   &ctl_dkey_iov, 1, &ctl_iod, &ctl_sgl);
 		if (rc == 0)
-			D_PRINT("%s\n", strlen(vbuf) ? vbuf : "<NULL>");
+			D__PRINT("%s\n", strlen(vbuf) ? vbuf : "<NULL>");
 		break;
 	case 'p':
 		if (!(ctl_abits & CTL_ARG_EPOCH) || !(ctl_abits & CTL_ARG_OID))
-			D_GOTO(failed, rc = -1);
+			D__GOTO(failed, rc = -1);
 
 		rc = vos_obj_punch(ctl_tcx.tc_co_hdl, ctl_oid, ctl_epoch,
 				   ctl_cookie, 0, NULL, 0, NULL);
@@ -254,21 +254,21 @@ ctl_cmd_run(char opc, char *args)
 		rc = ctl_list();
 		break;
 	default:
-		D_PRINT("Unsupported command %c\n", opc);
+		D__PRINT("Unsupported command %c\n", opc);
 		rc = -1;
 		break;
 	}
 	if (rc)
-		D_GOTO(failed, rc = -2);
+		D__GOTO(failed, rc = -2);
 
 	return rc;
 failed:
 	if (rc == -1) {
-		D_PRINT("Invalid command or parameter string: %c, %s\n",
+		D__PRINT("Invalid command or parameter string: %c, %s\n",
 			opc, args);
 		rc = 0;
 	} else {
-		D_PRINT("Operation failed, rc=%d\n", rc);
+		D__PRINT("Operation failed, rc=%d\n", rc);
 	}
 	return rc;
 }
@@ -293,17 +293,17 @@ main(int argc, char **argv)
 	rc = vos_init();
 	if (rc) {
 		fprintf(stderr, "Failed to initialize VOS\n");
-		D_GOTO(out_debug, rc);
+		D__GOTO(out_debug, rc);
 	}
 
 	rc = vts_ctx_init(&ctl_tcx, (64UL << 20)); /* 64MB */
 	if (rc)
-		D_GOTO(out_init, rc);
+		D__GOTO(out_init, rc);
 
 	uuid_generate(ctl_cookie);
 	rc = dts_cmd_parser(ctl_ops, "$ > ", ctl_cmd_run);
 	if (rc)
-		D_GOTO(out_ctx, rc);
+		D__GOTO(out_ctx, rc);
 
 	D_EXIT;
  out_init:

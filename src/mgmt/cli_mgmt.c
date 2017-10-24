@@ -24,7 +24,7 @@
  * DAOS management client library. It exports the mgmt API defined in
  * daos_mgmt.h
  */
-#define DD_SUBSYS	DD_FAC(mgmt)
+#define DDSUBSYS	DDFAC(mgmt)
 
 #include <daos/mgmt.h>
 #include <daos/event.h>
@@ -37,7 +37,7 @@ rip_cp(tse_task_t *task, void *data)
 	int                      rc = task->dt_result;
 
 	if (rc)
-		D_ERROR("RPC error while killing rank: %d\n", rc);
+		D__ERROR("RPC error while killing rank: %d\n", rc);
 
 	daos_group_detach(rpc->cr_ep.ep_grp);
 	crt_req_decref(rpc);
@@ -55,7 +55,7 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	int			 rc;
 
 	args = daos_task_get_args(DAOS_OPC_SVC_RIP, task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
 	if (rc != 0)
@@ -66,24 +66,24 @@ dc_mgmt_svc_rip(tse_task_t *task)
 	opc = DAOS_RPC_OPCODE(MGMT_SVC_RIP, DAOS_MGMT_MODULE, 1);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
+		D__ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: %d.\n",
 			rc);
-		D_GOTO(err_grp, rc);
+		D__GOTO(err_grp, rc);
 	}
 
-	D_ASSERT(rpc != NULL);
+	D__ASSERT(rpc != NULL);
 	rip_in = crt_req_get(rpc);
-	D_ASSERT(rip_in != NULL);
+	D__ASSERT(rip_in != NULL);
 
 	/** fill in request buffer */
 	rip_in->rip_flags = args->force;
 
 	rc = tse_task_register_comp_cb(task, rip_cp, &rpc, sizeof(rpc));
 	if (rc != 0)
-		D_GOTO(err_rpc, rc);
+		D__GOTO(err_rpc, rc);
 
 	crt_req_addref(rpc); /** for rip_cp */
-	D_DEBUG(DB_MGMT, "killing rank %u\n", args->rank);
+	D__DEBUG(DB_MGMT, "killing rank %u\n", args->rank);
 
 	/** send the request */
 	return daos_rpc_send(rpc, task);
@@ -105,7 +105,7 @@ dc_mgmt_init()
 
 	rc = daos_rpc_register(mgmt_rpcs, NULL, DAOS_MGMT_MODULE);
 	if (rc != 0)
-		D_ERROR("failed to register rpcs: %d\n", rc);
+		D__ERROR("failed to register rpcs: %d\n", rc);
 
 	return rc;
 }

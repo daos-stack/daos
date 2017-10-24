@@ -26,7 +26,7 @@
  * dctc is the DCT part of client module/library. It exports part of the DCT
  * API defined in daos_tier.h.
  */
-#define DD_SUBSYS	DD_FAC(tier)
+#define DDSUBSYS	DDFAC(tier)
 
 #include <daos/common.h>
 #include <daos_types.h>
@@ -60,26 +60,26 @@ tier_fetch_cb(tse_task_t *task, void *data)
 	int			 rc = task->dt_result;
 
 	if (rc) {
-		D_ERROR("RPC error while fetching: %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("RPC error while fetching: %d\n", rc);
+		D__GOTO(out, rc);
 	}
 
 	tfo = crt_reply_get(arg->rpc);
 	rc = tfo->tfo_ret;
 	if (rc) {
-		D_ERROR("failed to fetch: %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("failed to fetch: %d\n", rc);
+		D__GOTO(out, rc);
 	}
 
 	arg->hdl.cookie = 0;
 
 	if (*arg->prc < 0) {
-		D_ERROR("Failed to create warm tier container: %d\n",
+		D__ERROR("Failed to create warm tier container: %d\n",
 			*arg->prc);
-		D_GOTO(out, *arg->prc);
+		D__GOTO(out, *arg->prc);
 	}
 
-	D_FREE(arg->prc, sizeof(*arg->prc));
+	D__FREE(arg->prc, sizeof(*arg->prc));
 out:
 	crt_req_decref(arg->rpc);
 	return rc;
@@ -112,17 +112,17 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	int			*prc;
 	struct daos_task_args   *dta;
 
-	D_DEBUG(DF_MISC, "Entering tier_fetch_cont()\n");
+	D__DEBUG(DF_MISC, "Entering tier_fetch_cont()\n");
 
 	from = g_tierctx.dtc_colder;
 	if (from == NULL) {
-		D_ERROR(" have no colder tier\n");
-		D_GOTO(out, -DER_NONEXIST);
+		D__ERROR(" have no colder tier\n");
+		D__GOTO(out, -DER_NONEXIST);
 	}
-	D_ALLOC_PTR(prc);
+	D__ALLOC_PTR(prc);
 	if (prc == NULL) {
-		D_ERROR(" could not allocate rc ptr\n");
-		D_GOTO(out, -DER_NOMEM);
+		D__ERROR(" could not allocate rc ptr\n");
+		D__GOTO(out, -DER_NOMEM);
 	}
 
 	sched = tse_task2sched(task);
@@ -136,7 +136,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 				       tier_fetch_cont_create_cb,
 				       &co_args, sizeof(co_args));
 	if (rc != 0) {
-		D_ERROR("tse_task_register_comp_cb returned %d\n", rc);
+		D__ERROR("tse_task_register_comp_cb returned %d\n", rc);
 		return rc;
 	}
 	dta = tse_task_buf_get(cont_open_task, sizeof(*dta));
@@ -149,8 +149,8 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	/* Create the local recipient container */
 	rc = tse_task_schedule(cont_open_task, true);
 	if (rc) {
-		D_ERROR(" create local container: %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR(" create local container: %d\n", rc);
+		D__GOTO(out, rc);
 	}
 
 	while (*prc == 1) {
@@ -166,7 +166,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	/* Create RPC and allocate memory for the various field-eybops */
 	rc = tier_req_create(daos_task2ctx(task), &ep, TIER_FETCH, &rpc);
 	if (rc != 0)
-		D_GOTO(out_task, rc);
+		D__GOTO(out_task, rc);
 
 	/* Grab the input struct of the RPC */
 	in = crt_req_get(rpc);
@@ -185,7 +185,7 @@ dc_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
 	arg.prc  = prc;
 	rc = tse_task_register_comp_cb(task, tier_fetch_cb, &arg, sizeof(arg));
 	if (rc != 0)
-		D_GOTO(out_req_put, rc);
+		D__GOTO(out_req_put, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);

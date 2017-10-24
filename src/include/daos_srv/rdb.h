@@ -138,14 +138,14 @@ struct rdb_cbs {
 
 /** Database methods */
 int rdb_create(const char *path, const uuid_t uuid, size_t size,
-	       const daos_rank_list_t *ranks);
+	       const d_rank_list_t *ranks);
 int rdb_destroy(const char *path);
 int rdb_start(const char *path, struct rdb_cbs *cbs, void *arg,
 	      struct rdb **dbp);
 void rdb_stop(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
-int rdb_get_leader(struct rdb *db, uint64_t *term, crt_rank_t *rank);
-int rdb_get_ranks(struct rdb *db, daos_rank_list_t **ranksp);
+int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
+int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
 
 /**
  * Path (opaque)
@@ -247,8 +247,8 @@ int rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward,
 
 /** Distributed helper methods */
 int rdb_dist_start(const uuid_t uuid, const uuid_t pool_uuid,
-		   const daos_rank_list_t *ranks, bool create, size_t size);
+		   const d_rank_list_t *ranks, bool create, size_t size);
 int rdb_dist_stop(const uuid_t uuid, const uuid_t pool_uuid,
-		  const daos_rank_list_t *ranks, bool destroy);
+		  const d_rank_list_t *ranks, bool destroy);
 
 #endif /* DAOS_SRV_RDB_H */

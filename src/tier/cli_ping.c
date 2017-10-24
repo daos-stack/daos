@@ -23,7 +23,7 @@
 /*
  * dctc_ping: Client portion of ping test
  */
-#define DD_SUBSYS	DD_FAC(tier)
+#define DDSUBSYS	DDFAC(tier)
 
 #include <daos_types.h>
 #include <daos_tier.h>
@@ -41,14 +41,14 @@ tier_ping_cb(tse_task_t *task, void *data)
 	struct tier_ping_out	*out;
 	int                     rc = task->dt_result;
 
-	D_DEBUG(DF_MISC, "Entering tier_ping_cb\n");
+	D__DEBUG(DF_MISC, "Entering tier_ping_cb\n");
 
 	/* extract the RPC reply */
 	out = crt_reply_get(rpc);
 
-	D_DEBUG(DF_MISC, "DCT Ping Return Val %d\n", out->ping_out);
+	D__DEBUG(DF_MISC, "DCT Ping Return Val %d\n", out->ping_out);
 
-	D_DEBUG(DF_MISC, "Leaving tier_ping_cb()");
+	D__DEBUG(DF_MISC, "Leaving tier_ping_cb()");
 
 	crt_req_decref(rpc);
 	return rc;
@@ -58,7 +58,7 @@ int
 dc_tier_ping(uint32_t ping_val, tse_task_t *task)
 {
 
-	D_DEBUG(DF_MISC, "Entering daos_tier_ping()\n");
+	D__DEBUG(DF_MISC, "Entering daos_tier_ping()\n");
 
 	struct tier_ping_in	*in;
 	crt_endpoint_t		ep;
@@ -66,7 +66,7 @@ dc_tier_ping(uint32_t ping_val, tse_task_t *task)
 	struct tier_ping_arg    arg;
 	int			rc;
 
-	D_DEBUG(DF_MISC, "Ping Val to Issue: %d\n", ping_val);
+	D__DEBUG(DF_MISC, "Ping Val to Issue: %d\n", ping_val);
 
 	/* Harded coded enpoint stuff */
 	ep.ep_grp = NULL;
@@ -76,7 +76,7 @@ dc_tier_ping(uint32_t ping_val, tse_task_t *task)
 	/* Create RPC and allocate memory for the various field-eybops */
 	rc = tier_req_create(daos_task2ctx(task), &ep, TIER_PING, &rpc);
 	if (rc != 0)
-		D_GOTO(out_task, rc);
+		D__GOTO(out_task, rc);
 
 	/* Grab the input struct of the RPC */
 	in = crt_req_get(rpc);
@@ -90,12 +90,12 @@ dc_tier_ping(uint32_t ping_val, tse_task_t *task)
 
 	rc = tse_task_register_comp_cb(task, tier_ping_cb, &arg, sizeof(arg));
 	if (rc != 0)
-		D_GOTO(out_req_put, rc);
+		D__GOTO(out_req_put, rc);
 
 	/** send the request */
 	rc = daos_rpc_send(rpc, task);
 
-	D_DEBUG(DF_MISC, "leaving daos_tier_ping()\n");
+	D__DEBUG(DF_MISC, "leaving daos_tier_ping()\n");
 
 	return rc;
 

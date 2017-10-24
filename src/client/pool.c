@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DD_SUBSYS	DD_FAC(client)
+#define DDSUBSYS	DDFAC(client)
 
 #include <daos/pool.h>
 #include <daos/pool_map.h>
@@ -29,7 +29,7 @@
 
 int
 daos_pool_connect(const uuid_t uuid, const char *grp,
-		  const daos_rank_list_t *svc, unsigned int flags,
+		  const d_rank_list_t *svc, unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	daos_pool_connect_t	args;
@@ -76,7 +76,7 @@ daos_pool_global2local(daos_iov_t glob, daos_handle_t *poh)
 }
 
 int
-daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
+daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts,
 		daos_pool_info_t *info, daos_event_t *ev)
 {
 	daos_pool_query_t	args;
@@ -93,8 +93,8 @@ daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
 }
 
 int
-daos_pool_target_query(daos_handle_t poh, daos_rank_list_t *tgts,
-		       daos_rank_list_t *failed, daos_target_info_t *info_list,
+daos_pool_target_query(daos_handle_t poh, d_rank_list_t *tgts,
+		       d_rank_list_t *failed, daos_target_info_t *info_list,
 		       daos_event_t *ev)
 {
 	return -DER_NOSYS;

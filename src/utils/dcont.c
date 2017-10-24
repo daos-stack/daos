@@ -23,7 +23,7 @@
 /**
  * dcont(8): DAOS Container Management Utility
  */
-#define DD_SUBSYS	DD_FAC(utils)
+#define DDSUBSYS	DDFAC(utils)
 
 #include <getopt.h>
 #include <stdio.h>
@@ -73,7 +73,7 @@ cont_op_hdlr(int argc, char *argv[])
 	daos_handle_t		pool;
 	daos_handle_t		coh;
 	const char		*svc_str = NULL;
-	daos_rank_list_t	*svc;
+	d_rank_list_t	*svc;
 	daos_cont_info_t	cont_info;
 	daos_epoch_t		commit_epoch = 0;
 	daos_epoch_state_t	state;

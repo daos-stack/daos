@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DD_SUBSYS	DD_FAC(object)
+#define DDSUBSYS	DDFAC(object)
 
 #include "obj_internal.h"
 #include <daos_api.h>
@@ -188,12 +188,12 @@ daos_oclass_attr_find(daos_obj_id_t oid)
 	}
 
 	if (ocid == DAOS_OC_UNKNOWN) {
-		D_DEBUG(DB_PL, "Unknown object class %d for "DF_OID"\n",
+		D__DEBUG(DB_PL, "Unknown object class %d for "DF_OID"\n",
 			ocid, DP_OID(oid));
 		return NULL;
 	}
 
-	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
+	D__DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
 		oc->oc_name, DP_OID(oid));
 	return &oc->oc_attr;
 }

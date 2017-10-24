@@ -23,7 +23,7 @@
 /*
  * This is an MPI-based DAOS benchmarking tool.
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <time.h>
 #include <limits.h>
@@ -77,7 +77,7 @@ uuid_t				cont_uuid;
 daos_cont_info_t		cont_info;
 daos_obj_id_t			oid;
 daos_epoch_t			ghce;
-daos_rank_list_t	       *svcl;
+d_rank_list_t	       *svcl;
 void				*buffers;
 void				*dkbuf;
 void				*akbuf;
@@ -312,8 +312,8 @@ static void
 kill_daos_server(const char *grp)
 {
 	daos_pool_info_t		info;
-	daos_rank_t			rank;
-	daos_rank_list_t		targets;
+	d_rank_t			rank;
+	d_rank_list_t		targets;
 	int				rc;
 
 	rc = daos_pool_query(poh, NULL, &info, NULL);

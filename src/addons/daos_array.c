@@ -26,7 +26,7 @@
  * src/addons/daos_array.c
  */
 
-#define DD_SUBSYS	DD_FAC(client)
+#define DDSUBSYS	DDFAC(client)
 
 #include <daos/common.h>
 #include <daos/event.h>

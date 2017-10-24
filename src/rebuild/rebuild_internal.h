@@ -72,7 +72,7 @@ struct rebuild_globals {
 	daos_handle_t		rg_local_root_hdl;
 	uuid_t			rg_pool_hdl_uuid;
 	uuid_t			rg_cont_hdl_uuid;
-	daos_rank_list_t	*rg_svc_list;
+	d_rank_list_t	*rg_svc_list;
 	unsigned int		rg_puller_running:1,
 				rg_abort:1,
 				rg_finishing:1,

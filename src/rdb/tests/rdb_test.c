@@ -21,7 +21,7 @@
  * portions thereof marked with this legend must also reproduce the markings.
  */
 
-#define DD_SUBSYS DD_FAC(rdb)
+#define DDSUBSYS DDFAC(rdb)
 
 #include <daos_srv/daos_server.h>	/* for dss_module */
 #include <daos_srv/rdb.h>
@@ -35,23 +35,23 @@ static struct rdb      *rdb_db;
 do {									\
 	int _rc = call;							\
 									\
-	D_ASSERTF(_rc == 0, "%d\n", _rc);				\
+	D__ASSERTF(_rc == 0, "%d\n", _rc);				\
 } while (0)
 
 static void
 iovok(const daos_iov_t *iov)
 {
-	D_ASSERT((iov->iov_buf == NULL && iov->iov_buf_len == 0) ||
+	D__ASSERT((iov->iov_buf == NULL && iov->iov_buf_len == 0) ||
 		 (iov->iov_buf != NULL && iov->iov_buf_len > 0));
-	D_ASSERT(iov->iov_len <= iov->iov_buf_len);
+	D__ASSERT(iov->iov_len <= iov->iov_buf_len);
 }
 
 static void
 ioveq(const daos_iov_t *iov1, const daos_iov_t *iov2)
 {
-	D_ASSERTF(iov1->iov_len == iov2->iov_len, DF_U64" == "DF_U64"\n",
+	D__ASSERTF(iov1->iov_len == iov2->iov_len, DF_U64" == "DF_U64"\n",
 		  iov1->iov_len, iov2->iov_len);
-	D_ASSERT(memcmp(iov1->iov_buf, iov2->iov_buf, iov1->iov_len) == 0);
+	D__ASSERT(memcmp(iov1->iov_buf, iov2->iov_buf, iov1->iov_len) == 0);
 }
 
 static void
@@ -66,29 +66,29 @@ rdbt_test_util(void)
 	size_t		len2;
 	ssize_t		n;
 
-	D_WARN("encode/decode empty iov\n");
+	D__WARN("encode/decode empty iov\n");
 	v1 = empty;
 	len1 = rdb_encode_iov(&v1, NULL);
-	D_ASSERTF(len1 == sizeof(uint32_t) * 2, "%zu\n", len1);
+	D__ASSERTF(len1 == sizeof(uint32_t) * 2, "%zu\n", len1);
 	len2 = rdb_encode_iov(&v1, buf2);
-	D_ASSERTF(len2 == len1, "%zu == %zu\n", len2, len1);
+	D__ASSERTF(len2 == len1, "%zu == %zu\n", len2, len1);
 	v2 = empty;
 	n = rdb_decode_iov(buf2, len2, &v2);
-	D_ASSERTF(n == len2, "%zd == %zu\n", n, len2);
+	D__ASSERTF(n == len2, "%zd == %zu\n", n, len2);
 	iovok(&v2);
 	ioveq(&v1, &v2);
 
-	D_WARN("encode/decode non-empty iov\n");
+	D__WARN("encode/decode non-empty iov\n");
 	daos_iov_set(&v1, buf1, strlen(buf1) + 1);
 	len1 = rdb_encode_iov(&v1, NULL);
-	D_ASSERTF(len1 == sizeof(uint32_t) * 2 + strlen(buf1) + 1, "%zu\n",
+	D__ASSERTF(len1 == sizeof(uint32_t) * 2 + strlen(buf1) + 1, "%zu\n",
 		  len1);
-	D_ASSERT(len1 <= sizeof(buf2));
+	D__ASSERT(len1 <= sizeof(buf2));
 	len2 = rdb_encode_iov(&v1, buf2);
-	D_ASSERTF(len2 == len1, "%zu == %zu\n", len2, len1);
+	D__ASSERTF(len2 == len1, "%zu == %zu\n", len2, len1);
 	v2 = empty;
 	n = rdb_decode_iov(buf2, len2, &v2);
-	D_ASSERTF(n == len2, "%zd == %zu\n", n, len2);
+	D__ASSERTF(n == len2, "%zd == %zu\n", n, len2);
 	iovok(&v2);
 	ioveq(&v1, &v2);
 }
@@ -127,41 +127,41 @@ rdbt_test_path(void)
 	int				i;
 	int				rc;
 
-	D_WARN("RDB_STRING_KEY\n");
-	D_ASSERTF(rdbt_key_foo.iov_len == strlen("foo") + 1, DF_U64"\n",
+	D__WARN("RDB_STRING_KEY\n");
+	D__ASSERTF(rdbt_key_foo.iov_len == strlen("foo") + 1, DF_U64"\n",
 		  rdbt_key_foo.iov_len);
-	D_ASSERTF(rdbt_key_foo.iov_buf_len == rdbt_key_foo.iov_len, DF_U64"\n",
+	D__ASSERTF(rdbt_key_foo.iov_buf_len == rdbt_key_foo.iov_len, DF_U64"\n",
 		  rdbt_key_foo.iov_buf_len);
 
-	D_WARN("init rdb path\n");
+	D__WARN("init rdb path\n");
 	MUST(rdb_path_init(&path));
 	iovok(&path);
 
-	D_WARN("pop empty rdb path\n");
+	D__WARN("pop empty rdb path\n");
 	rc = rdb_path_pop(&path);
-	D_ASSERTF(rc == -DER_NONEXIST, "%d\n", rc);
+	D__ASSERTF(rc == -DER_NONEXIST, "%d\n", rc);
 
-	D_WARN("iterate empty rdb path\n");
+	D__WARN("iterate empty rdb path\n");
 	MUST(rdb_path_iterate(&path, rdbt_test_path_cb, &arg));
-	D_ASSERTF(arg.n == 0, "%d\n", arg.n);
+	D__ASSERTF(arg.n == 0, "%d\n", arg.n);
 
-	D_WARN("push to rdb path\n");
+	D__WARN("push to rdb path\n");
 	for (i = 0; i < ARRAY_SIZE(keys); i++) {
 		MUST(rdb_path_push(&path, &keys[i]));
 		iovok(&path);
 	}
 
-	D_WARN("pop rdb path\n");
+	D__WARN("pop rdb path\n");
 	MUST(rdb_path_pop(&path));
 
-	D_WARN("iterate non-empty rdb path\n");
+	D__WARN("iterate non-empty rdb path\n");
 	arg.n = 0;
 	arg.keys = keys;
 	arg.nkeys = ARRAY_SIZE(keys) - 1; /* popped one already */
 	MUST(rdb_path_iterate(&path, rdbt_test_path_cb, &arg));
-	D_ASSERTF(arg.n == arg.nkeys, "%d\n", arg.n);
+	D__ASSERTF(arg.n == arg.nkeys, "%d\n", arg.n);
 
-	D_WARN("fini rdb path\n");
+	D__WARN("fini rdb path\n");
 	rdb_path_fini(&path);
 }
 
@@ -174,7 +174,7 @@ rdbt_path(uuid_t uuid)
 
 	uuid_unparse_lower(uuid, uuid_string);
 	rc = asprintf(&path, "%s/rdbt-%s", storage_path, uuid_string);
-	D_ASSERT(rc > 0 && path != NULL);
+	D__ASSERT(rc > 0 && path != NULL);
 	return path;
 }
 
@@ -189,9 +189,9 @@ iterate_cb(daos_handle_t ih, daos_iov_t *key, daos_iov_t *val, void *varg)
 {
 	struct iterate_cb_arg *arg = varg;
 
-	D_ASSERTF(key->iov_len == sizeof(arg->keys[arg->i]), "%zu\n",
+	D__ASSERTF(key->iov_len == sizeof(arg->keys[arg->i]), "%zu\n",
 		  key->iov_len);
-	D_ASSERT(memcmp(key->iov_buf, &arg->keys[arg->i],
+	D__ASSERT(memcmp(key->iov_buf, &arg->keys[arg->i],
 			sizeof(arg->keys[arg->i])) == 0);
 	(arg->i)++;
 	return 0;
@@ -212,24 +212,24 @@ rdbt_test_tx(bool update)
 	int			i;
 	int			rc;
 
-	D_WARN("commit empty tx\n");
+	D__WARN("commit empty tx\n");
 	rc = rdb_tx_begin(rdb_db, &tx);
 	if (rc == -DER_NOTLEADER) {
 		uint64_t	term;
-		crt_rank_t	rank;
+		d_rank_t	rank;
 
 		rc = rdb_get_leader(rdb_db, &term, &rank);
 		if (rc == 0)
-			D_WARN("not leader; try rank %u\n", rank);
+			D__WARN("not leader; try rank %u\n", rank);
 		else
-			D_WARN("not leader\n");
+			D__WARN("not leader\n");
 		return;
 	}
 	MUST(rdb_tx_commit(&tx));
 	rdb_tx_end(&tx);
 
 	if (update) {
-		D_WARN("create KVSs and regular keys\n");
+		D__WARN("create KVSs and regular keys\n");
 		MUST(rdb_tx_begin(rdb_db, &tx));
 		/* Create the root KVS. */
 		MUST(rdb_path_init(&path));
@@ -256,7 +256,7 @@ rdbt_test_tx(bool update)
 		rdb_tx_end(&tx);
 	}
 
-	D_WARN("query regular keys\n");
+	D__WARN("query regular keys\n");
 	MUST(rdb_tx_begin(rdb_db, &tx));
 	MUST(rdb_path_init(&path));
 	/* Look up keys[0]. */
@@ -266,9 +266,9 @@ rdbt_test_tx(bool update)
 	daos_iov_set(&key, &keys[0], sizeof(keys[0]));
 	daos_iov_set(&value, buf, sizeof(buf));
 	MUST(rdb_tx_lookup(&tx, &path, &key, &value));
-	D_ASSERTF(value.iov_len == strlen(value_written) + 1, DF_U64" == %zu\n",
+	D__ASSERTF(value.iov_len == strlen(value_written) + 1, DF_U64" == %zu\n",
 		  value.iov_len, strlen(value_written) + 1);
-	D_ASSERT(memcmp(value.iov_buf, value_written,
+	D__ASSERT(memcmp(value.iov_buf, value_written,
 			strlen(value_written) + 1) == 0);
 	/* Iterate "kvs1". */
 	arg.keys = keys;
@@ -281,7 +281,7 @@ rdbt_test_tx(bool update)
 	rdb_tx_end(&tx);
 
 	if (!update) {
-		D_WARN("destroy KVSs\n");
+		D__WARN("destroy KVSs\n");
 		MUST(rdb_tx_begin(rdb_db, &tx));
 		MUST(rdb_path_init(&path));
 		MUST(rdb_path_push(&path, &rdb_path_root_key));
@@ -309,30 +309,30 @@ rdbt_module_fini(void)
 static int
 rdbt_step_up(struct rdb *db, uint64_t term, void *arg)
 {
-	crt_rank_t rank;
+	d_rank_t rank;
 
 	crt_group_rank(NULL, &rank);
-	D_WARN("rank %u became leader of term "DF_U64"\n", rank, term);
+	D__WARN("rank %u became leader of term "DF_U64"\n", rank, term);
 	return 0;
 }
 
 static void
 rdbt_step_down(struct rdb *db, uint64_t term, void *arg)
 {
-	crt_rank_t rank;
+	d_rank_t rank;
 
 	crt_group_rank(NULL, &rank);
-	D_WARN("rank %u is no longer leader of term "DF_U64"\n", rank, term);
+	D__WARN("rank %u is no longer leader of term "DF_U64"\n", rank, term);
 }
 
 static void
 rdbt_stop(struct rdb *db, int err, void *arg)
 {
-	crt_rank_t rank;
+	d_rank_t rank;
 
 	crt_group_rank(NULL, &rank);
-	D_WARN("rank %u should stop\n", rank);
-	D_ASSERT(0);
+	D__WARN("rank %u should stop\n", rank);
+	D__ASSERT(0);
 }
 
 static struct rdb_cbs rdbt_rdb_cbs = {
@@ -345,9 +345,9 @@ static void
 rdbt_init_handler(crt_rpc_t *rpc)
 {
 	struct rdbt_init_in    *in = crt_req_get(rpc);
-	crt_rank_t		rank;
+	d_rank_t		rank;
 	uint32_t		group_size;
-	daos_rank_list_t	ranks;
+	d_rank_list_t	ranks;
 	int			i;
 	int			rc;
 
@@ -359,15 +359,15 @@ rdbt_init_handler(crt_rpc_t *rpc)
 	if (ranks.rl_nr.num > group_size)
 		ranks.rl_nr.num = group_size;
 	ranks.rl_nr.num_out = ranks.rl_nr.num;
-	D_ALLOC(ranks.rl_ranks, sizeof(*ranks.rl_ranks) * ranks.rl_nr.num);
+	D__ALLOC(ranks.rl_ranks, sizeof(*ranks.rl_ranks) * ranks.rl_nr.num);
 	if (ranks.rl_ranks == NULL) {
-		D_ERROR("failed to allocate ranks array\n");
-		D_GOTO(out, rc = -DER_NOMEM);
+		D__ERROR("failed to allocate ranks array\n");
+		D__GOTO(out, rc = -DER_NOMEM);
 	}
 	for (i = 0; i < ranks.rl_nr.num; i++)
 		ranks.rl_ranks[i] = i;
 
-	D_WARN("initializing rank %u: nreplicas=%u\n", rank, in->tii_nreplicas);
+	D__WARN("initializing rank %u: nreplicas=%u\n", rank, in->tii_nreplicas);
 	rdb_file_path = rdbt_path(in->tii_uuid);
 	MUST(rdb_create(rdb_file_path, in->tii_uuid, 1 << 25, &ranks));
 	MUST(rdb_start(rdb_file_path, &rdbt_rdb_cbs, NULL /* arg */, &rdb_db));
@@ -378,13 +378,13 @@ out:
 static void
 rdbt_fini_handler(crt_rpc_t *rpc)
 {
-	crt_rank_t rank;
+	d_rank_t rank;
 
 	crt_group_rank(NULL /* grp */, &rank);
-	D_WARN("finalizing rank %u\n", rank);
+	D__WARN("finalizing rank %u\n", rank);
 	rdb_stop(rdb_db);
 	MUST(rdb_destroy(rdb_file_path));
-	D_FREE(rdb_file_path, strlen(rdb_file_path) + 1);
+	D__FREE(rdb_file_path, strlen(rdb_file_path) + 1);
 	crt_reply_send(rpc);
 }
 
@@ -392,12 +392,12 @@ static void
 rdbt_test_handler(crt_rpc_t *rpc)
 {
 	struct rdbt_test_in    *in = crt_req_get(rpc);
-	crt_rank_t		rank;
+	d_rank_t		rank;
 	int			rc;
 
 	rc = crt_group_rank(NULL /* grp */, &rank);
-	D_ASSERTF(rc == 0, "%d\n", rc);
-	D_WARN("testing rank %u: update=%d\n", rank, in->tti_update);
+	D__ASSERTF(rc == 0, "%d\n", rc);
+	D__WARN("testing rank %u: update=%d\n", rank, in->tti_update);
 	rdbt_test_util();
 	rdbt_test_path();
 	rdbt_test_tx(in->tti_update);

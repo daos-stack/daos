@@ -26,7 +26,7 @@
  * tests/suite/pool.c
  */
 
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include "daos_test.h"
 
@@ -188,8 +188,8 @@ pool_exclude(void **state)
 	daos_event_t	 ev;
 	daos_event_t	*evp;
 	daos_pool_info_t info;
-	daos_rank_list_t ranks;
-	daos_rank_t	 rank;
+	d_rank_list_t ranks;
+	d_rank_t	 rank;
 	int		 rc;
 
 	if (arg->myrank != 0)

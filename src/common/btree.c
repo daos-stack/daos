@@ -27,7 +27,7 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
-#define DD_SUBSYS	DD_FAC(tree)
+#define DDSUBSYS	DDFAC(tree)
 
 #include <daos_errno.h>
 #include <daos/btree.h>
@@ -199,10 +199,10 @@ btr_context_addref(struct btr_context *tcx)
 static void
 btr_context_decref(struct btr_context *tcx)
 {
-	D_ASSERT(tcx->tc_ref > 0);
+	D__ASSERT(tcx->tc_ref > 0);
 	tcx->tc_ref--;
 	if (tcx->tc_ref == 0)
-		D_FREE_PTR(tcx);
+		D__FREE_PTR(tcx);
 }
 
 static void
@@ -233,7 +233,7 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	unsigned int		 depth;
 	int			 rc;
 
-	D_ALLOC_PTR(tcx);
+	D__ALLOC_PTR(tcx);
 	if (tcx == NULL)
 		return -DER_NOMEM;
 
@@ -241,8 +241,8 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	rc = btr_class_init(root_mmid, root, tree_class, tree_feats, uma,
 			    &tcx->tc_tins);
 	if (rc != 0) {
-		D_ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
-		D_GOTO(failed, rc);
+		D__ERROR("Failed to setup mem class %d: %d\n", uma->uma_id, rc);
+		D__GOTO(failed, rc);
 	}
 
 	root = tcx->tc_tins.ti_root;
@@ -251,14 +251,14 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 		tcx->tc_feats	= tree_feats;
 		tcx->tc_order	= tree_order;
 		depth		= 0;
-		D_DEBUG(DB_TRACE, "Create context for a new tree\n");
+		D__DEBUG(DB_TRACE, "Create context for a new tree\n");
 
 	} else {
 		tcx->tc_class	= root->tr_class;
 		tcx->tc_feats	= root->tr_feats;
 		tcx->tc_order	= root->tr_order;
 		depth		= root->tr_depth;
-		D_DEBUG(DB_TRACE, "Load tree context from "TMMID_PF"\n",
+		D__DEBUG(DB_TRACE, "Load tree context from "TMMID_PF"\n",
 			TMMID_P(root_mmid));
 	}
 
@@ -267,7 +267,7 @@ btr_context_create(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 	return 0;
 
  failed:
-	D_DEBUG(DB_TRACE, "Failed to create tree context: %d\n", rc);
+	D__DEBUG(DB_TRACE, "Failed to create tree context: %d\n", rc);
 	btr_context_decref(tcx);
 	return rc;
 }
@@ -292,12 +292,12 @@ static void
 btr_trace_set(struct btr_context *tcx, int level,
 	      TMMID(struct btr_node) nd_mmid, int at)
 {
-	D_ASSERT(at >= 0 && at < tcx->tc_order);
-	D_ASSERT(tcx->tc_depth > 0);
-	D_ASSERT(level >= 0 && level < tcx->tc_depth);
-	D_ASSERT(&tcx->tc_trace[level] < &tcx->tc_traces[BTR_TRACE_MAX]);
+	D__ASSERT(at >= 0 && at < tcx->tc_order);
+	D__ASSERT(tcx->tc_depth > 0);
+	D__ASSERT(level >= 0 && level < tcx->tc_depth);
+	D__ASSERT(&tcx->tc_trace[level] < &tcx->tc_traces[BTR_TRACE_MAX]);
 
-	D_DEBUG(DB_TRACE, "trace[%d] "TMMID_PF"/%d\n",
+	D__DEBUG(DB_TRACE, "trace[%d] "TMMID_PF"/%d\n",
 		level, TMMID_P(nd_mmid), at);
 
 	tcx->tc_trace[level].tr_node = nd_mmid;
@@ -310,11 +310,11 @@ btr_trace2rec(struct btr_context *tcx, int level)
 {
 	struct btr_trace *trace;
 
-	D_ASSERT(tcx->tc_depth > 0);
-	D_ASSERT(tcx->tc_depth > level);
+	D__ASSERT(tcx->tc_depth > 0);
+	D__ASSERT(tcx->tc_depth > level);
 
 	trace = &tcx->tc_trace[level];
-	D_ASSERT(!TMMID_IS_NULL(trace->tr_node));
+	D__ASSERT(!TMMID_IS_NULL(trace->tr_node));
 
 	return btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
 }
@@ -325,7 +325,7 @@ do {									\
 	TMMID(struct btr_node) __mmid = (trace)->tr_node;		\
 	int __level = (int)((trace) - (tcx)->tc_trace);			\
 									\
-	D_DEBUG(DB_TRACE,						\
+	D__DEBUG(DB_TRACE,						\
 		"node="TMMID_PF" (l=%d k=%d at=%d): " format,		\
 		TMMID_P(__mmid), __level,				\
 		btr_mmid2ptr((tcx), __mmid)->tn_keyn,			\
@@ -347,7 +347,7 @@ btr_hkey_size(struct btr_context *tcx)
 {
 	int size = btr_ops(tcx)->to_hkey_size(&tcx->tc_tins);
 
-	D_ASSERT(size <= DAOS_HKEY_MAX);
+	D__ASSERT(size <= DAOS_HKEY_MAX);
 	return size;
 }
 
@@ -430,7 +430,7 @@ static char *
 btr_rec_string(struct btr_context *tcx, struct btr_record *rec,
 	       bool leaf, char *buf, int buf_len)
 {
-	D_ASSERT(buf_len > 1);
+	D__ASSERT(buf_len > 1);
 
 	if (btr_ops(tcx)->to_rec_string == NULL) {
 		buf[0] = '?';
@@ -501,7 +501,7 @@ btr_node_alloc(struct btr_context *tcx, TMMID(struct btr_node) *nd_mmid_p)
 			return -DER_NOMEM;
 	}
 
-	D_DEBUG(DB_TRACE, "Allocate new node "TMMID_PF"\n", TMMID_P(nd_mmid));
+	D__DEBUG(DB_TRACE, "Allocate new node "TMMID_PF"\n", TMMID_P(nd_mmid));
 	nd = btr_mmid2ptr(tcx, nd_mmid);
 	nd->tn_child = BTR_NODE_NULL;
 
@@ -551,7 +551,7 @@ btr_node_child_at(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid,
 	struct btr_node	  *nd = btr_mmid2ptr(tcx, nd_mmid);
 	struct btr_record *rec;
 
-	D_ASSERT(!(nd->tn_flags & BTR_NODE_LEAF));
+	D__ASSERT(!(nd->tn_flags & BTR_NODE_LEAF));
 	/* NB: non-leaf node has +1 children than number of keys */
 	if (at == 0)
 		return nd->tn_child;
@@ -565,7 +565,7 @@ btr_node_is_full(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid)
 {
 	struct btr_node *nd = btr_mmid2ptr(tcx, nd_mmid);
 
-	D_ASSERT(nd->tn_keyn < tcx->tc_order);
+	D__ASSERT(nd->tn_keyn < tcx->tc_order);
 	return nd->tn_keyn == tcx->tc_order - 1;
 }
 
@@ -634,13 +634,13 @@ btr_root_free(struct btr_context *tcx)
 		if (root == NULL)
 			return;
 
-		D_DEBUG(DB_TRACE, "Destroy inplace created tree root\n");
+		D__DEBUG(DB_TRACE, "Destroy inplace created tree root\n");
 		if (btr_has_tx(tcx))
 			btr_root_tx_add(tcx);
 
 		memset(root, 0, sizeof(*root));
 	} else {
-		D_DEBUG(DB_TRACE, "Destroy tree root\n");
+		D__DEBUG(DB_TRACE, "Destroy tree root\n");
 		if (btr_ops(tcx)->to_root_free)
 			btr_ops(tcx)->to_root_free(tins);
 		else
@@ -686,7 +686,7 @@ btr_root_alloc(struct btr_context *tcx)
 		if (rc != 0)
 			return rc;
 
-		D_ASSERT(!TMMID_IS_NULL(tins->ti_root_mmid));
+		D__ASSERT(!TMMID_IS_NULL(tins->ti_root_mmid));
 	} else {
 		tins->ti_root_mmid = umem_znew_typed(btr_umm(tcx),
 						     struct btr_root);
@@ -730,12 +730,12 @@ btr_root_start(struct btr_context *tcx, struct btr_record *rec)
 
 	root = tcx->tc_tins.ti_root;
 
-	D_ASSERT(TMMID_IS_NULL(root->tr_node));
-	D_ASSERT(root->tr_depth == 0);
+	D__ASSERT(TMMID_IS_NULL(root->tr_node));
+	D__ASSERT(root->tr_depth == 0);
 
 	rc = btr_node_alloc(tcx, &nd_mmid);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Failed to allocate new root\n");
+		D__DEBUG(DB_TRACE, "Failed to allocate new root\n");
 		return rc;
 	}
 
@@ -777,18 +777,18 @@ btr_root_grow(struct btr_context *tcx, TMMID(struct btr_node) mmid_left,
 	int			 rc;
 
 	root = tcx->tc_tins.ti_root;
-	D_ASSERT(root->tr_depth != 0);
+	D__ASSERT(root->tr_depth != 0);
 
-	D_DEBUG(DB_TRACE, "Grow the tree depth to %d\n", root->tr_depth + 1);
+	D__DEBUG(DB_TRACE, "Grow the tree depth to %d\n", root->tr_depth + 1);
 
 	rc = btr_node_alloc(tcx, &nd_mmid);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Failed to allocate new root\n");
+		D__DEBUG(DB_TRACE, "Failed to allocate new root\n");
 		return rc;
 	}
 
 	/* the left child is the old root */
-	D_ASSERT(btr_node_is_root(tcx, mmid_left));
+	D__ASSERT(btr_node_is_root(tcx, mmid_left));
 	btr_node_unset(tcx, mmid_left, BTR_NODE_ROOT);
 
 	btr_node_set(tcx, nd_mmid, BTR_NODE_ROOT);
@@ -824,7 +824,7 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 	char		   sbuf[BTR_PRINT_BUF];
 
 	/* NB: assume trace->tr_node has been added to TX */
-	D_ASSERT(!btr_node_is_full(tcx, trace->tr_node));
+	D__ASSERT(!btr_node_is_full(tcx, trace->tr_node));
 
 	leaf = btr_node_is_leaf(tcx, trace->tr_node);
 	btr_trace_debug(tcx, trace, "insert %s now\n",
@@ -890,7 +890,7 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	TMMID(struct btr_node)	 mmid_left;
 	TMMID(struct btr_node)	 mmid_right;
 
-	D_ASSERT(trace >= tcx->tc_trace);
+	D__ASSERT(trace >= tcx->tc_trace);
 	level = trace - tcx->tc_trace;
 	mmid_left = trace->tr_node;
 
@@ -914,7 +914,7 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	nd_left->tn_keyn  = split_at;
 
 	if (leaf) {
-		D_DEBUG(DB_TRACE, "Splitting leaf node\n");
+		D__DEBUG(DB_TRACE, "Splitting leaf node\n");
 
 		btr_rec_copy(tcx, rec_dst, rec_src, nd_right->tn_keyn);
 		btr_node_insert_rec_only(tcx, trace, rec);
@@ -929,21 +929,21 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	right = btr_node_is_equal(tcx, trace->tr_node, mmid_right);
 	if (trace->tr_at == 0 && right) {
 		/* the new record is the first one on the right node */
-		D_DEBUG(DB_TRACE, "Bubble up the new key\n");
+		D__DEBUG(DB_TRACE, "Bubble up the new key\n");
 		nd_right->tn_child = umem_id_u2t(rec->rec_mmid,
 						 struct btr_node);
 		btr_rec_copy(tcx, rec_dst, rec_src, nd_right->tn_keyn);
 		goto bubble_up;
 	}
 
-	D_DEBUG(DB_TRACE, "Bubble up the 1st key of the right node\n");
+	D__DEBUG(DB_TRACE, "Bubble up the 1st key of the right node\n");
 
 	nd_right->tn_child = umem_id_u2t(rec_src->rec_mmid, struct btr_node);
 	/* btr_split_at should ensure the right node has more than one record,
 	 * because the first record of the right node will bubble up.
 	 * (@src_rec[0] is this record at this point)
 	 */
-	D_ASSERT(nd_right->tn_keyn > 1 || right);
+	D__ASSERT(nd_right->tn_keyn > 1 || right);
 	nd_right->tn_keyn--;
 	/* insertion point has to be shifted if the new record is going to
 	 * be inserted to the right node.
@@ -965,7 +965,7 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	btr_hkey_copy(tcx, &rec->rec_hkey[0], &hkey_buf[0]);
 
  bubble_up:
-	D_DEBUG(DB_TRACE, "left keyn %d, right keyn %d\n",
+	D__DEBUG(DB_TRACE, "left keyn %d, right keyn %d\n",
 		nd_left->tn_keyn, nd_right->tn_keyn);
 
 	rec->rec_mmid = umem_id_t2u(mmid_right);
@@ -1030,7 +1030,7 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 	btr_context_set_depth(tcx, tcx->tc_tins.ti_root->tr_depth);
 
 	if (btr_root_empty(tcx)) { /* empty tree */
-		D_DEBUG(DB_TRACE, "Empty tree\n");
+		D__DEBUG(DB_TRACE, "Empty tree\n");
 		return PROBE_RC_NONE;
 	}
 
@@ -1039,8 +1039,8 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 			btr_hkey_gen(tcx, key, hkey);
 
 		} else {
-			D_ASSERT(anchor != NULL);
-			D_ASSERT(opc != BTR_PROBE_UPDATE);
+			D__ASSERT(anchor != NULL);
+			D__ASSERT(opc != BTR_PROBE_UPDATE);
 
 			btr_hkey_copy(tcx, hkey, &anchor->body[0]);
 		}
@@ -1055,7 +1055,7 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 			start	= 0;
 			end	= btr_mmid2ptr(tcx, nd_mmid)->tn_keyn - 1;
 
-			D_DEBUG(DB_TRACE,
+			D__DEBUG(DB_TRACE,
 				"Probe level %d, node "TMMID_PF" keyn %d\n",
 				level, TMMID_P(nd_mmid), end + 1);
 		}
@@ -1066,7 +1066,7 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 			rec = btr_node_rec_at(tcx, nd_mmid, at);
 			cmp = btr_hkey_cmp(tcx, rec, hkey);
 
-			D_DEBUG(DB_TRACE, "compared record at %d, cmp %d\n",
+			D__DEBUG(DB_TRACE, "compared record at %d, cmp %d\n",
 				at, cmp);
 
 		} else if (opc == BTR_PROBE_FIRST) {
@@ -1074,7 +1074,7 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 			cmp = 1;
 
 		} else {
-			D_ASSERT(opc ==  BTR_PROBE_LAST);
+			D__ASSERT(opc ==  BTR_PROBE_LAST);
 			at = start = end;
 			cmp = -1;
 		}
@@ -1104,14 +1104,14 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 		level++;
 	}
 	/* leaf node */
-	D_ASSERT(level == tcx->tc_depth - 1);
-	D_ASSERT(!TMMID_IS_NULL(nd_mmid));
+	D__ASSERT(level == tcx->tc_depth - 1);
+	D__ASSERT(!TMMID_IS_NULL(nd_mmid));
 
 	if (cmp == 0 && key != NULL) {
 		rec = btr_node_rec_at(tcx, nd_mmid, at);
 		cmp = btr_key_cmp(tcx, rec, key);
 		if (cmp != 0)
-			D_ERROR("Hash collision is not well handled\n");
+			D__ERROR("Hash collision is not well handled\n");
 	}
 
 	if (opc == BTR_PROBE_UPDATE)
@@ -1122,7 +1122,7 @@ btr_probe(struct btr_context *tcx, int opc, daos_iov_t *key,
 
 	switch (opc) {
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	case BTR_PROBE_FIRST:
 	case BTR_PROBE_LAST:
 		return PROBE_RC_OK;
@@ -1172,8 +1172,8 @@ btr_probe_next(struct btr_context *tcx)
 
 		if (btr_node_is_root(tcx, nd_mmid) &&
 		    trace->tr_at == nd->tn_keyn - leaf) {
-			D_ASSERT(trace == tcx->tc_trace);
-			D_DEBUG(DB_TRACE, "End\n");
+			D__ASSERT(trace == tcx->tc_trace);
+			D__DEBUG(DB_TRACE, "End\n");
 			return false; /* done */
 		}
 
@@ -1220,8 +1220,8 @@ btr_probe_prev(struct btr_context *tcx)
 		nd = btr_mmid2ptr(tcx, nd_mmid);
 
 		if (btr_node_is_root(tcx, nd_mmid) && trace->tr_at == 0) {
-			D_ASSERT(trace == tcx->tc_trace);
-			D_DEBUG(DB_TRACE, "End\n");
+			D__ASSERT(trace == tcx->tc_trace);
+			D__DEBUG(DB_TRACE, "End\n");
 			return false; /* done */
 		}
 
@@ -1248,7 +1248,7 @@ btr_probe_prev(struct btr_context *tcx)
 
 		nd = btr_mmid2ptr(tcx, trace->tr_node);
 
-		D_ASSERT(nd->tn_keyn != 0);
+		D__ASSERT(nd->tn_keyn != 0);
 		trace->tr_at = nd->tn_keyn - leaf;
 	}
 
@@ -1295,7 +1295,7 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, daos_iov_t *key,
 
 	rc = btr_probe(tcx, opc, key, NULL);
 	if (rc == PROBE_RC_NONE) {
-		D_DEBUG(DB_TRACE, "Cannot find key\n");
+		D__DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
 	}
 
@@ -1335,7 +1335,7 @@ btr_update_only(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 
 	rec = btr_trace2rec(tcx, tcx->tc_depth - 1);
 
-	D_DEBUG(DB_TRACE, "Update record %s\n",
+	D__DEBUG(DB_TRACE, "Update record %s\n",
 		btr_rec_string(tcx, rec, true, sbuf, BTR_PRINT_BUF));
 
 	rc = btr_rec_update(tcx, rec, key, val);
@@ -1345,13 +1345,13 @@ btr_update_only(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 		if (btr_has_tx(tcx))
 			btr_node_tx_add(tcx, trace->tr_node);
 
-		D_DEBUG(DB_TRACE, "Replace the original record\n");
+		D__DEBUG(DB_TRACE, "Replace the original record\n");
 		btr_rec_free(tcx, rec, NULL);
 		rc = btr_rec_alloc(tcx, key, val, rec);
 	}
 
 	if (rc != 0) { /* failed */
-		D_DEBUG(DB_TRACE, "Failed to update record: %d\n", rc);
+		D__DEBUG(DB_TRACE, "Failed to update record: %d\n", rc);
 		return rc;
 	}
 	return 0;
@@ -1374,7 +1374,7 @@ btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 
 	rc = btr_rec_alloc(tcx, key, val, rec);
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Failed to create new record: %d\n", rc);
+		D__DEBUG(DB_TRACE, "Failed to create new record: %d\n", rc);
 		return rc;
 	}
 
@@ -1392,18 +1392,18 @@ btr_insert(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 
 		rc = btr_node_insert_rec(tcx, trace, rec);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE,
+			D__DEBUG(DB_TRACE,
 				"Failed to insert record to leaf: %d\n", rc);
 			goto failed;
 		}
 
 	} else {
 		/* empty tree */
-		D_DEBUG(DB_TRACE, "Add record %s to an empty tree\n", rec_str);
+		D__DEBUG(DB_TRACE, "Add record %s to an empty tree\n", rec_str);
 
 		rc = btr_root_start(tcx, rec);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "Failed to start the tree: %d\n", rc);
+			D__DEBUG(DB_TRACE, "Failed to start the tree: %d\n", rc);
 			goto failed;
 		}
 	}
@@ -1422,7 +1422,7 @@ btr_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 	if (rc == PROBE_RC_EQ) {
 		rc = btr_update_only(tcx, key, val);
 	} else {
-		D_ASSERT(rc == PROBE_RC_NONE);
+		D__ASSERT(rc == PROBE_RC_NONE);
 		rc = btr_insert(tcx, key, val);
 	}
 	return rc;
@@ -1441,15 +1441,15 @@ btr_tx_update(struct btr_context *tcx, daos_iov_t *key, daos_iov_t *val)
 			umem_tx_abort(btr_umm(tcx), rc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "dbtree_update tx aborted: %d\n", rc);
+		D__DEBUG(DB_TRACE, "dbtree_update tx aborted: %d\n", rc);
 
 	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_update tx exited\n");
+		D__DEBUG(DB_TRACE, "dbtree_update tx exited\n");
 	} TX_END
 
 	return rc;
 #else
-	D_ASSERT(0);
+	D__ASSERT(0);
 	return -DER_NO_PERM;
 #endif
 }
@@ -1498,7 +1498,7 @@ btr_node_del_leaf_only(struct btr_context *tcx, struct btr_trace *trace,
 	struct btr_node   *nd;
 
 	nd = btr_mmid2ptr(tcx, trace->tr_node);
-	D_ASSERT(nd->tn_keyn > 0 && nd->tn_keyn > trace->tr_at);
+	D__ASSERT(nd->tn_keyn > 0 && nd->tn_keyn > trace->tr_at);
 
 	rec = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
 	btr_rec_free(tcx, rec, args);
@@ -1556,10 +1556,10 @@ btr_node_del_leaf_rebal(struct btr_context *tcx,
 
 	cur_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
 	sib_nd = btr_mmid2ptr(tcx, sib_mmid);
-	D_ASSERT(sib_nd->tn_keyn > 1);
+	D__ASSERT(sib_nd->tn_keyn > 1);
 
 	btr_node_del_leaf_only(tcx, cur_tr, sib_on_right, args);
-	D_DEBUG(DB_TRACE, "Grab records from the %s sibling, cur:sib=%d:%d\n",
+	D__DEBUG(DB_TRACE, "Grab records from the %s sibling, cur:sib=%d:%d\n",
 		sib_on_right ? "right" : "left", cur_nd->tn_keyn,
 		sib_nd->tn_keyn);
 
@@ -1629,7 +1629,7 @@ btr_node_del_leaf_merge(struct btr_context *tcx,
 		src_nd = btr_mmid2ptr(tcx, sib_mmid);
 		dst_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
 
-		D_DEBUG(DB_TRACE,
+		D__DEBUG(DB_TRACE,
 			"Merge the right sibling to current node, "
 			"cur:sib=%d:%d\n", dst_nd->tn_keyn, src_nd->tn_keyn);
 
@@ -1644,7 +1644,7 @@ btr_node_del_leaf_merge(struct btr_context *tcx,
 		src_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
 		dst_nd = btr_mmid2ptr(tcx, sib_mmid);
 
-		D_DEBUG(DB_TRACE,
+		D__DEBUG(DB_TRACE,
 			"Merge the current node to left sibling, "
 			"cur:sib=%d:%d\n", src_nd->tn_keyn, dst_nd->tn_keyn);
 
@@ -1661,7 +1661,7 @@ btr_node_del_leaf_merge(struct btr_context *tcx,
 		btr_rec_copy(tcx, dst_rec, src_rec, src_nd->tn_keyn);
 
 		dst_nd->tn_keyn += src_nd->tn_keyn;
-		D_ASSERT(dst_nd->tn_keyn < tcx->tc_order);
+		D__ASSERT(dst_nd->tn_keyn < tcx->tc_order);
 		src_nd->tn_keyn = 0;
 	}
 
@@ -1731,7 +1731,7 @@ btr_node_del_child_only(struct btr_context *tcx, struct btr_trace *trace,
 	TMMID(struct btr_node)	 mmid;
 
 	nd = btr_mmid2ptr(tcx, trace->tr_node);
-	D_ASSERT(nd->tn_keyn > 0 && nd->tn_keyn >= trace->tr_at);
+	D__ASSERT(nd->tn_keyn > 0 && nd->tn_keyn >= trace->tr_at);
 
 	/* free the child node being deleted */
 	mmid = btr_node_child_at(tcx, trace->tr_node, trace->tr_at);
@@ -1799,10 +1799,10 @@ btr_node_del_child_rebal(struct btr_context *tcx,
 
 	cur_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
 	sib_nd = btr_mmid2ptr(tcx, sib_mmid);
-	D_ASSERT(sib_nd->tn_keyn > 1);
+	D__ASSERT(sib_nd->tn_keyn > 1);
 
 	btr_node_del_child_only(tcx, cur_tr, sib_on_right);
-	D_DEBUG(DB_TRACE, "Grab children from the %s sibling, cur:sib=%d:%d\n",
+	D__DEBUG(DB_TRACE, "Grab children from the %s sibling, cur:sib=%d:%d\n",
 		sib_on_right ? "right" : "left", cur_nd->tn_keyn,
 		sib_nd->tn_keyn);
 
@@ -1869,7 +1869,7 @@ btr_node_del_child_merge(struct btr_context *tcx,
 		src_nd = btr_mmid2ptr(tcx, sib_mmid);
 		dst_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
 
-		D_DEBUG(DB_TRACE,
+		D__DEBUG(DB_TRACE,
 			"Merge the right sibling to current node, "
 			"cur:sib=%d:%d\n", dst_nd->tn_keyn, src_nd->tn_keyn);
 
@@ -1885,7 +1885,7 @@ btr_node_del_child_merge(struct btr_context *tcx,
 		src_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
 		dst_nd = btr_mmid2ptr(tcx, sib_mmid);
 
-		D_DEBUG(DB_TRACE,
+		D__DEBUG(DB_TRACE,
 			"Merge the current node to left sibling, "
 			"cur:sib=%d:%d\n", src_nd->tn_keyn, dst_nd->tn_keyn);
 
@@ -1908,7 +1908,7 @@ btr_node_del_child_merge(struct btr_context *tcx,
 	 * child pointer from src_nd::tn_child.
 	 */
 	dst_nd->tn_keyn += src_nd->tn_keyn + 1;
-	D_ASSERT(dst_nd->tn_keyn < tcx->tc_order);
+	D__ASSERT(dst_nd->tn_keyn < tcx->tc_order);
 	src_nd->tn_keyn = 0;
 
 	/* point at the node that needs be removed from the parent */
@@ -1985,20 +1985,20 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 
 	cur_nd = btr_mmid2ptr(tcx, cur_tr->tr_node);
 	par_nd = btr_mmid2ptr(tcx, par_tr->tr_node);
-	D_ASSERT(par_nd->tn_keyn > 0);
+	D__ASSERT(par_nd->tn_keyn > 0);
 
-	D_DEBUG(DB_TRACE, "Delete %s from the %s node, key_nr = %d\n",
+	D__DEBUG(DB_TRACE, "Delete %s from the %s node, key_nr = %d\n",
 		is_leaf ? "record" : "child", is_leaf ? "leaf" : "non-leaf",
 		cur_nd->tn_keyn);
 
 	if (cur_nd->tn_keyn > 1) {
 		/* OK to delete record without doing any extra work */
-		D_DEBUG(DB_TRACE, "Straightaway deleteion, no rebalance.\n");
+		D__DEBUG(DB_TRACE, "Straightaway deleteion, no rebalance.\n");
 		sib_mmid	= BTR_NODE_NULL;
 		sib_on_right	= false; /* whatever... */
 
 	} else { /* needs to rebalance or merge nodes */
-		D_DEBUG(DB_TRACE, "Parent trace at=%d, key_nr=%d\n",
+		D__DEBUG(DB_TRACE, "Parent trace at=%d, key_nr=%d\n",
 			par_tr->tr_at, par_nd->tn_keyn);
 
 		if (par_tr->tr_at == 0) {
@@ -2015,7 +2015,7 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 			sib_mmid = btr_node_child_at(tcx, par_tr->tr_node,
 						     par_tr->tr_at + 1);
 			sib_nd = btr_mmid2ptr(tcx, sib_mmid);
-			D_ASSERT(sib_nd->tn_keyn > 0);
+			D__ASSERT(sib_nd->tn_keyn > 0);
 
 			if (sib_nd->tn_keyn > 1) {
 				/* sufficient records on the right sibling */
@@ -2029,7 +2029,7 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 				sib_on_right = false;
 			}
 		}
-		D_DEBUG(DB_TRACE, "Delete and rebalance with the %s sibling.\n",
+		D__DEBUG(DB_TRACE, "Delete and rebalance with the %s sibling.\n",
 			sib_on_right ? "right" : "left");
 	}
 
@@ -2074,11 +2074,11 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 	root = tcx->tc_tins.ti_root;
 	node = btr_mmid2ptr(tcx, trace->tr_node);
 
-	D_DEBUG(DB_TRACE, "Delete record/child from tree root, depth=%d\n",
+	D__DEBUG(DB_TRACE, "Delete record/child from tree root, depth=%d\n",
 		root->tr_depth);
 
 	if (btr_node_is_leaf(tcx, trace->tr_node)) {
-		D_DEBUG(DB_TRACE, "Delete leaf from the root, key_nr=%d.\n",
+		D__DEBUG(DB_TRACE, "Delete leaf from the root, key_nr=%d.\n",
 			node->tn_keyn);
 
 		/* the root is also a leaf node */
@@ -2100,12 +2100,12 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			root->tr_node	= BTR_NODE_NULL;
 
 			btr_context_set_depth(tcx, 0);
-			D_DEBUG(DB_TRACE, "Tree is empty now.\n");
+			D__DEBUG(DB_TRACE, "Tree is empty now.\n");
 		}
 
 	} else {
 		/* non-leaf node */
-		D_DEBUG(DB_TRACE, "Delete child from the root, key_nr=%d.\n",
+		D__DEBUG(DB_TRACE, "Delete child from the root, key_nr=%d.\n",
 			node->tn_keyn);
 
 		if (btr_has_tx(tcx))
@@ -2127,7 +2127,7 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			btr_node_set(tcx, node->tn_child, BTR_NODE_ROOT);
 			btr_node_free(tcx, trace->tr_node);
 
-			D_DEBUG(DB_TRACE, "Shrink tree depth to %d\n",
+			D__DEBUG(DB_TRACE, "Shrink tree depth to %d\n",
 				tcx->tc_depth);
 		}
 	}
@@ -2152,7 +2152,7 @@ btr_delete(struct btr_context *tcx, void *args)
 		if (!bubble_up)
 			break;
 	}
-	D_DEBUG(DB_TRACE, "Deletion done\n");
+	D__DEBUG(DB_TRACE, "Deletion done\n");
 	return 0; /* no error so far */
 }
 
@@ -2169,15 +2169,15 @@ btr_tx_delete(struct btr_context *tcx, void *args)
 			umem_tx_abort(btr_umm(tcx), rc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "dbtree_delete tx aborted: %d\n", rc);
+		D__DEBUG(DB_TRACE, "dbtree_delete tx aborted: %d\n", rc);
 
 	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_delete tx exited\n");
+		D__DEBUG(DB_TRACE, "dbtree_delete tx exited\n");
 	} TX_END
 
 	return rc;
 #else
-	D_ASSERT(0);
+	D__ASSERT(0);
 	return -DER_NO_PERM;
 #endif
 }
@@ -2204,7 +2204,7 @@ dbtree_delete(daos_handle_t toh, daos_iov_t *key,
 
 	rc = btr_probe(tcx, BTR_PROBE_EQ, key, NULL);
 	if (rc != PROBE_RC_EQ) {
-		D_DEBUG(DB_TRACE, "Cannot find key\n");
+		D__DEBUG(DB_TRACE, "Cannot find key\n");
 		return -DER_NONEXIST;
 	}
 
@@ -2226,7 +2226,7 @@ btr_node_stat(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid,
 	int		 rc;
 	int		 i;
 
-	D_DEBUG(DB_TRACE, "Stat tree %s "TMMID_PF", keyn %d\n",
+	D__DEBUG(DB_TRACE, "Stat tree %s "TMMID_PF", keyn %d\n",
 		leaf ? "leaf" : "node", TMMID_P(nd_mmid), nd->tn_keyn);
 
 	if (!leaf) {
@@ -2334,7 +2334,7 @@ btr_tree_alloc(struct btr_context *tcx)
 	int	rc;
 
 	rc = btr_root_alloc(tcx);
-	D_DEBUG(DB_TRACE, "Allocate tree root: %d\n", rc);
+	D__DEBUG(DB_TRACE, "Allocate tree root: %d\n", rc);
 
 	return rc;
 }
@@ -2352,15 +2352,15 @@ btr_tx_tree_alloc(struct btr_context *tcx)
 			umem_tx_abort(btr_umm(tcx), rc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "Failed to create tree root: %d\n", rc);
+		D__DEBUG(DB_TRACE, "Failed to create tree root: %d\n", rc);
 
 	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_create tx exited\n");
+		D__DEBUG(DB_TRACE, "dbtree_create tx exited\n");
 	} TX_END
 
 	return rc;
 #else
-	D_ASSERT(0);
+	D__ASSERT(0);
 	return -DER_NO_PERM;
 #endif
 }
@@ -2384,7 +2384,7 @@ dbtree_create(unsigned int tree_class, uint64_t tree_feats,
 	int		    rc;
 
 	if (tree_order < BTR_ORDER_MIN || tree_order > BTR_ORDER_MAX) {
-		D_DEBUG(DB_TRACE, "Order (%d) should be between %d and %d\n",
+		D__DEBUG(DB_TRACE, "Order (%d) should be between %d and %d\n",
 			tree_order, BTR_ORDER_MIN, BTR_ORDER_MAX);
 		return -DER_INVAL;
 	}
@@ -2432,15 +2432,15 @@ btr_tx_tree_init(struct btr_context *tcx, struct btr_root *root)
 			umem_tx_abort(btr_umm(tcx), rc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "Failed to init tree root: %d\n", rc);
+		D__DEBUG(DB_TRACE, "Failed to init tree root: %d\n", rc);
 
 	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_create_inplace tx exited\n");
+		D__DEBUG(DB_TRACE, "dbtree_create_inplace tx exited\n");
 	} TX_END
 
 	return rc;
 #else
-	D_ASSERT(0);
+	D__ASSERT(0);
 	return -DER_NO_PERM;
 #endif
 }
@@ -2454,13 +2454,13 @@ dbtree_create_inplace(unsigned int tree_class, uint64_t tree_feats,
 	int		    rc;
 
 	if (tree_order < BTR_ORDER_MIN || tree_order > BTR_ORDER_MAX) {
-		D_DEBUG(DB_TRACE, "Order (%d) should be between %d and %d\n",
+		D__DEBUG(DB_TRACE, "Order (%d) should be between %d and %d\n",
 			tree_order, BTR_ORDER_MIN, BTR_ORDER_MAX);
 		return -DER_INVAL;
 	}
 
 	if (root->tr_class != 0) {
-		D_DEBUG(DB_TRACE,
+		D__DEBUG(DB_TRACE,
 			"Tree existed, c=%d, o=%d, d=%d, f="DF_U64"\n",
 			root->tr_class, root->tr_order, root->tr_depth,
 			root->tr_feats);
@@ -2524,7 +2524,7 @@ dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 	int		    rc;
 
 	if (root->tr_class == 0) {
-		D_DEBUG(DB_TRACE, "Tree class is zero\n");
+		D__DEBUG(DB_TRACE, "Tree class is zero\n");
 		return -DER_INVAL;
 	}
 
@@ -2567,7 +2567,7 @@ btr_node_destroy(struct btr_context *tcx, TMMID(struct btr_node) nd_mmid,
 	 * change it so nothing to undo on transaction failure, I may destroy
 	 * it later by calling TX_FREE which is transactional safe.
 	 */
-	D_DEBUG(DB_TRACE, "Destroy tree %s "TMMID_PF", keyn %d\n",
+	D__DEBUG(DB_TRACE, "Destroy tree %s "TMMID_PF", keyn %d\n",
 		leaf ? "leaf" : "node", TMMID_P(nd_mmid), nd->tn_keyn);
 
 	if (leaf) {
@@ -2595,7 +2595,7 @@ btr_tree_destroy(struct btr_context *tcx)
 {
 	struct btr_root *root;
 
-	D_DEBUG(DB_TRACE, "Destroy "TMMID_PF", order %d\n",
+	D__DEBUG(DB_TRACE, "Destroy "TMMID_PF", order %d\n",
 		TMMID_P(tcx->tc_tins.ti_root_mmid), tcx->tc_order);
 
 	root = tcx->tc_tins.ti_root;
@@ -2621,15 +2621,15 @@ btr_tx_tree_destroy(struct btr_context *tcx)
 			umem_tx_abort(btr_umm(tcx), rc);
 	} TX_ONABORT {
 		rc = umem_tx_errno(rc);
-		D_DEBUG(DB_TRACE, "Failed to destroy the tree: %d\n", rc);
+		D__DEBUG(DB_TRACE, "Failed to destroy the tree: %d\n", rc);
 
 	} TX_FINALLY {
-		D_DEBUG(DB_TRACE, "dbtree_destroy tx exited\n");
+		D__DEBUG(DB_TRACE, "dbtree_destroy tx exited\n");
 	} TX_END
 
 	return rc;
 #else
-	D_ASSERT(0);
+	D__ASSERT(0);
 	return -DER_NO_PERM;
 #endif
 }
@@ -2699,13 +2699,13 @@ dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
 	if (options & BTR_ITER_EMBEDDED) {
 		/* use the iterator embedded in btr_context */
 		if (tcx->tc_ref != 1) { /* don't screw up others */
-			D_DEBUG(DB_TRACE,
+			D__DEBUG(DB_TRACE,
 				"The embedded iterator is in using\n");
 			return -DER_BUSY;
 		}
 
 		itr = &tcx->tc_itr;
-		D_ASSERT(itr->it_state == BTR_ITR_NONE);
+		D__ASSERT(itr->it_state == BTR_ITR_NONE);
 
 		btr_context_addref(tcx);
 		*ih = toh;
@@ -2767,7 +2767,7 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 	struct btr_context  *tcx;
 	int		     rc;
 
-	D_DEBUG(DB_TRACE, "probe(%d) key or anchor\n", opc);
+	D__DEBUG(DB_TRACE, "probe(%d) key or anchor\n", opc);
 
 	if (!btr_probe_is_public(opc))
 		return -DER_INVAL;
@@ -2793,11 +2793,11 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc,
 static int
 btr_iter_is_ready(struct btr_iterator *iter)
 {
-	D_DEBUG(DB_TRACE, "iterator state is %d\n", iter->it_state);
+	D__DEBUG(DB_TRACE, "iterator state is %d\n", iter->it_state);
 
 	switch (iter->it_state) {
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	case BTR_ITR_NONE:
 	case BTR_ITR_INIT:
 		return -DER_NO_PERM;
@@ -2868,7 +2868,7 @@ dbtree_iter_fetch(daos_handle_t ih, daos_iov_t *key,
 	struct btr_record   *rec;
 	int		     rc;
 
-	D_DEBUG(DB_TRACE, "Current iterator\n");
+	D__DEBUG(DB_TRACE, "Current iterator\n");
 
 	tcx = btr_hdl2tcx(ih);
 	if (tcx == NULL)
@@ -2906,7 +2906,7 @@ dbtree_iter_delete(daos_handle_t ih, void *args)
 	struct btr_context  *tcx;
 	int		     rc;
 
-	D_DEBUG(DB_TRACE, "Current iterator\n");
+	D__DEBUG(DB_TRACE, "Current iterator\n");
 
 	tcx = btr_hdl2tcx(ih);
 	if (tcx == NULL)
@@ -2967,17 +2967,17 @@ dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 
 	rc = dbtree_iter_prepare(toh, 0 /* options */, &ih);
 	if (rc != 0) {
-		D_ERROR("failed to prepare tree iterator: %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("failed to prepare tree iterator: %d\n", rc);
+		D__GOTO(out, rc);
 	}
 
 	rc = dbtree_iter_probe(ih, backward ? BTR_PROBE_LAST : BTR_PROBE_FIRST,
 			       NULL /* key */, NULL /* anchor */);
 	if (rc == -DER_NONEXIST) {
-		D_GOTO(out_iter, rc = 0);
+		D__GOTO(out_iter, rc = 0);
 	} else if (rc != 0) {
-		D_ERROR("failed to initialize iterator: %d\n", rc);
-		D_GOTO(out_iter, rc);
+		D__ERROR("failed to initialize iterator: %d\n", rc);
+		D__GOTO(out_iter, rc);
 	}
 
 	for (;;) {
@@ -2989,7 +2989,7 @@ dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 
 		rc = dbtree_iter_fetch(ih, &key, &val, NULL /* anchor */);
 		if (rc != 0) {
-			D_ERROR("failed to fetch iterator: %d\n", rc);
+			D__ERROR("failed to fetch iterator: %d\n", rc);
 			break;
 		}
 
@@ -3014,7 +3014,7 @@ dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 			rc = 0;
 			break;
 		} else if (rc != 0) {
-			D_ERROR("failed to move iterator: %d\n", rc);
+			D__ERROR("failed to move iterator: %d\n", rc);
 			break;
 		}
 	}
@@ -3022,7 +3022,7 @@ dbtree_iterate(daos_handle_t toh, bool backward, dbtree_iterate_cb_t cb,
 out_iter:
 	dbtree_iter_finish(ih);
 out:
-	D_DEBUG(DB_TRACE, "iterated %d records: %d\n", niterated, rc);
+	D__DEBUG(DB_TRACE, "iterated %d records: %d\n", niterated, rc);
 	return rc;
 }
 
@@ -3060,18 +3060,18 @@ btr_class_init(TMMID(struct btr_root) root_mmid, struct btr_root *root,
 
 	/* XXX should be multi-thread safe */
 	if (tree_class >= BTR_TYPE_MAX) {
-		D_DEBUG(DB_TRACE, "Invalid class id: %d\n", tree_class);
+		D__DEBUG(DB_TRACE, "Invalid class id: %d\n", tree_class);
 		return -DER_INVAL;
 	}
 
 	tc = &btr_class_registered[tree_class];
 	if (tc->tc_ops == NULL) {
-		D_DEBUG(DB_TRACE, "Unregistered class id %d\n", tree_class);
+		D__DEBUG(DB_TRACE, "Unregistered class id %d\n", tree_class);
 		return -DER_NONEXIST;
 	}
 
 	if ((tree_feats & tc->tc_feats) != tree_feats) {
-		D_ERROR("Unsupported features "DF_U64"/"DF_U64"\n",
+		D__ERROR("Unsupported features "DF_U64"/"DF_U64"\n",
 			tree_feats, tc->tc_feats);
 		return -DER_PROTO;
 	}
@@ -3099,12 +3099,12 @@ dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 		return -DER_EXIST;
 
 	/* These are mandatory functions */
-	D_ASSERT(ops != NULL);
-	D_ASSERT(ops->to_hkey_gen != NULL);
-	D_ASSERT(ops->to_hkey_size != NULL);
-	D_ASSERT(ops->to_rec_fetch != NULL);
-	D_ASSERT(ops->to_rec_alloc != NULL);
-	D_ASSERT(ops->to_rec_free != NULL);
+	D__ASSERT(ops != NULL);
+	D__ASSERT(ops->to_hkey_gen != NULL);
+	D__ASSERT(ops->to_hkey_size != NULL);
+	D__ASSERT(ops->to_rec_fetch != NULL);
+	D__ASSERT(ops->to_rec_alloc != NULL);
+	D__ASSERT(ops->to_rec_free != NULL);
 
 	btr_class_registered[tree_class].tc_ops = ops;
 	btr_class_registered[tree_class].tc_feats = tree_feats;

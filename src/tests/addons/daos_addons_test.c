@@ -26,7 +26,7 @@
  * src/tests/addons/
  */
 
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <daos_test.h>
 #include "daos_addons_test.h"
@@ -324,7 +324,7 @@ teardown(void **state)
 		}
 	}
 
-	D_FREE_PTR(arg);
+	D__FREE_PTR(arg);
 	return 0;
 }
 

@@ -27,7 +27,7 @@
  * - start/stop execution streams
  * - bind execution streams to core/NUMA node
  */
-#define DD_SUBSYS       DD_FAC(server)
+#define DDSUBSYS       DDFAC(server)
 
 #include <abt.h>
 #include <daos_errno.h>
@@ -76,7 +76,7 @@ dss_sched_init(ABT_sched sched, ABT_sched_config config)
 	struct sched_data	*p_data;
 	int			 ret;
 
-	D_ALLOC_PTR(p_data);
+	D__ALLOC_PTR(p_data);
 	if (p_data == NULL)
 		return ABT_ERR_MEM;
 
@@ -104,7 +104,7 @@ dss_sched_run(ABT_sched sched)
 	/* Only one pool for now */
 	ret = ABT_sched_get_pools(sched, 1, 0, &pool);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("ABT_sched_get_pools");
+		D__ERROR("ABT_sched_get_pools");
 		return;
 	}
 	while (1) {
@@ -118,7 +118,7 @@ dss_sched_run(ABT_sched sched)
 
 			ret = ABT_sched_has_to_stop(sched, &stop);
 			if (ret != ABT_SUCCESS) {
-				D_ERROR("ABT_sched_has_to_stop fails %d\n",
+				D__ERROR("ABT_sched_has_to_stop fails %d\n",
 					ret);
 				break;
 			}
@@ -136,7 +136,7 @@ dss_sched_free(ABT_sched sched)
 	struct sched_data *p_data;
 
 	ABT_sched_get_data(sched, (void **)&p_data);
-	D_FREE_PTR(p_data);
+	D__FREE_PTR(p_data);
 
 	return ABT_SUCCESS;
 }
@@ -210,46 +210,46 @@ dss_srv_handler(void *arg)
 	/** set affinity */
 	rc = hwloc_set_cpubind(dss_topo, dx->dx_cpuset, HWLOC_CPUBIND_THREAD);
 	if (rc) {
-		D_ERROR("failed to set affinity: %d\n", errno);
+		D__ERROR("failed to set affinity: %d\n", errno);
 		return;
 	}
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(DAOS_SERVER_TAG);
 	if (dtc == NULL) {
-		D_ERROR("failed to initialize TLS\n");
+		D__ERROR("failed to initialize TLS\n");
 		return;
 	}
 
 	dmi = dss_get_module_info();
-	D_ASSERT(dmi != NULL);
+	D__ASSERT(dmi != NULL);
 
 	/* create private transport context */
 	rc = crt_context_create(&dx->dx_pool, &dmi->dmi_ctx);
 	if (rc != 0) {
-		D_ERROR("failed to create crt ctxt: %d\n", rc);
+		D__ERROR("failed to create crt ctxt: %d\n", rc);
 		return;
 	}
 
 	/** Get xtream index from cart */
 	rc = crt_context_idx(dmi->dmi_ctx, &dmi->dmi_tid);
 	if (rc != 0) {
-		D_ERROR("failed to get xtream index: rc %d\n", rc);
+		D__ERROR("failed to get xtream index: rc %d\n", rc);
 		return;
 	}
 
 	/* Prepare the scheduler */
 	rc = tse_sched_init(&dmi->dmi_sched, NULL, dmi->dmi_ctx);
 	if (rc != 0) {
-		D_ERROR("failed to init the seduler\n");
-		D_GOTO(destroy, rc);
+		D__ERROR("failed to init the seduler\n");
+		D__GOTO(destroy, rc);
 	}
 
 	dx->dx_idx = dmi->dmi_tid;
 	dmi->dmi_xstream = dx;
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creater */
-	D_ASSERT(!xstream_data.xd_ult_signal);
+	D__ASSERT(!xstream_data.xd_ult_signal);
 	xstream_data.xd_ult_signal = true;
 	ABT_cond_signal(xstream_data.xd_ult_init);
 
@@ -263,7 +263,7 @@ dss_srv_handler(void *arg)
 	/* main service loop processing incoming request */
 	rc = crt_progress(dmi->dmi_ctx, -1, dss_progress_cb, &dx->dx_shutdown);
 	if (rc != 0)
-		D_ERROR("failed to progress network context: %d\n", rc);
+		D__ERROR("failed to progress network context: %d\n", rc);
 
 	tse_sched_fini(&dmi->dmi_sched);
 destroy:
@@ -277,22 +277,22 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 	struct dss_xstream	*dx;
 	int			 rc = 0;
 
-	D_ALLOC_PTR(dx);
+	D__ALLOC_PTR(dx);
 	if (dx == NULL) {
-		D_ERROR("Can not allocate execution stream.\n");
+		D__ERROR("Can not allocate execution stream.\n");
 		return NULL;
 	}
 
 	rc = ABT_future_create(1, NULL, &dx->dx_shutdown);
 	if (rc != 0) {
-		D_ERROR("failed to allocate future\n");
-		D_GOTO(err_free, rc = dss_abterr2der(rc));
+		D__ERROR("failed to allocate future\n");
+		D__GOTO(err_free, rc = dss_abterr2der(rc));
 	}
 
 	dx->dx_cpuset = hwloc_bitmap_dup(cpus);
 	if (dx->dx_cpuset == NULL) {
-		D_ERROR("failed to allocate cpuset\n");
-		D_GOTO(err_future, rc = -DER_NOMEM);
+		D__ERROR("failed to allocate cpuset\n");
+		D__GOTO(err_future, rc = -DER_NOMEM);
 	}
 
 	dx->dx_xstream	= ABT_XSTREAM_NULL;
@@ -306,7 +306,7 @@ dss_xstream_alloc(hwloc_cpuset_t cpus)
 err_future:
 	ABT_future_free(&dx->dx_shutdown);
 err_free:
-	D_FREE_PTR(dx);
+	D__FREE_PTR(dx);
 	return NULL;
 }
 
@@ -314,7 +314,7 @@ static inline void
 dss_xstream_free(struct dss_xstream *dx)
 {
 	hwloc_bitmap_free(dx->dx_cpuset);
-	D_FREE_PTR(dx);
+	D__FREE_PTR(dx);
 }
 
 /**
@@ -341,20 +341,20 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 	rc = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPSC,
 				   ABT_TRUE, &dx->dx_pool);
 	if (rc != ABT_SUCCESS)
-		D_GOTO(out_dxstream, rc = dss_abterr2der(rc));
+		D__GOTO(out_dxstream, rc = dss_abterr2der(rc));
 
 	rc = dss_sched_create(&dx->dx_pool, 1, &dx->dx_sched);
 	if (rc != 0) {
-		D_ERROR("create scheduler fails: %d\n", rc);
-		D_GOTO(out_pool, rc);
+		D__ERROR("create scheduler fails: %d\n", rc);
+		D__GOTO(out_pool, rc);
 	}
 
 	/** start execution stream, rank must be non-null */
 	rc = ABT_xstream_create_with_rank(dx->dx_sched, idx,
 					  &dx->dx_xstream);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("create xstream fails %d\n", rc);
-		D_GOTO(out_sched, rc = dss_abterr2der(rc));
+		D__ERROR("create xstream fails %d\n", rc);
+		D__GOTO(out_sched, rc = dss_abterr2der(rc));
 	}
 
 	/** start progress ULT */
@@ -362,8 +362,8 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int idx)
 			       dx, ABT_THREAD_ATTR_NULL,
 			       &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("create xstream failed: %d\n", rc);
-		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
+		D__ERROR("create xstream failed: %d\n", rc);
+		D__GOTO(out_xstream, rc = dss_abterr2der(rc));
 	}
 
 	ABT_mutex_lock(xstream_data.xd_mutex);
@@ -398,7 +398,7 @@ dss_xstreams_fini(bool force)
 	struct dss_xstream	*tmp;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, "Stopping execution streams\n");
+	D__DEBUG(DB_TRACE, "Stopping execution streams\n");
 
 	/** Stop & free progress xstreams */
 	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list)
@@ -425,9 +425,9 @@ dss_xstreams_fini(bool force)
 	/* release local storage */
 	rc = pthread_key_delete(dss_tls_key);
 	if (rc)
-		D_ERROR("failed to delete dtc: %d\n", rc);
+		D__ERROR("failed to delete dtc: %d\n", rc);
 
-	D_DEBUG(DB_TRACE, "Execution streams stopped\n");
+	D__DEBUG(DB_TRACE, "Execution streams stopped\n");
 }
 
 static void
@@ -465,28 +465,28 @@ dss_xstreams_init(int nr)
 	/* initialize xstream-local storage */
 	rc = pthread_key_create(&dss_tls_key, dss_tls_fini);
 	if (rc) {
-		D_ERROR("failed to create dtc: %d\n", rc);
+		D__ERROR("failed to create dtc: %d\n", rc);
 		return -DER_NOMEM;
 	}
 
 	/* start the execution streams */
-	D_DEBUG(DB_TRACE, "%d cores detected, starting %d execution streams\n",
+	D__DEBUG(DB_TRACE, "%d cores detected, starting %d execution streams\n",
 		ncores, dss_nxstreams);
 	for (i = 1; i <= dss_nxstreams; i++) {
 		hwloc_obj_t	obj;
 
 		obj = hwloc_get_obj_by_depth(dss_topo, depth, i % ncores);
 		if (obj == NULL) {
-			D_ERROR("Null core returned by hwloc\n");
-			D_GOTO(failed, rc = -DER_INVAL);
+			D__ERROR("Null core returned by hwloc\n");
+			D__GOTO(failed, rc = -DER_INVAL);
 		}
 
 		/** ABT rank 0 is reserved for the primary xstream */
 		rc = dss_start_one_xstream(obj->allowed_cpuset, i);
 		if (rc)
-			D_GOTO(failed, rc);
+			D__GOTO(failed, rc);
 	}
-	D_DEBUG(DB_TRACE, "%d execution streams successfully started\n",
+	D__DEBUG(DB_TRACE, "%d execution streams successfully started\n",
 		dss_nxstreams);
 failed:
 	dss_xstreams_open_barrier();
@@ -506,7 +506,7 @@ dss_srv_tls_init(const struct dss_thread_local_storage *dtls,
 {
 	struct dss_module_info *info;
 
-	D_ALLOC_PTR(info);
+	D__ALLOC_PTR(info);
 
 	return info;
 }
@@ -517,7 +517,7 @@ dss_srv_tls_fini(const struct dss_thread_local_storage *dtls,
 {
 	struct dss_module_info *info = (struct dss_module_info *)data;
 
-	D_FREE_PTR(info);
+	D__FREE_PTR(info);
 }
 
 struct dss_module_key daos_srv_modkey = {
@@ -655,7 +655,7 @@ dss_ult_create_execute(int (*func)(void *), void *arg, int stream_id)
 	rc = dss_ult_create(dss_ult_create_execute_cb, &future_arg, stream_id,
 			    NULL);
 	if (rc)
-		D_GOTO(free, rc);
+		D__GOTO(free, rc);
 
 	ABT_future_wait(future);
 free:
@@ -682,7 +682,7 @@ collective_func(void *varg)
 
 	rc = ABT_future_set(f_arg->dfa_future, (void *)a_args);
 	if (rc != ABT_SUCCESS)
-		D_ERROR("future set failure %d\n", rc);
+		D__ERROR("future set failure %d\n", rc);
 }
 
 /* Reduce the return codes into the first element. */
@@ -722,18 +722,18 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	int				tid;
 
 	if (ops == NULL || args == NULL || ops->co_func == NULL) {
-		D_DEBUG(DB_MD, "mandatory args mising dss_collective_reduce");
+		D__DEBUG(DB_MD, "mandatory args mising dss_collective_reduce");
 		return -DER_INVAL;
 	}
 
 	if (ops->co_reduce_arg_alloc != NULL &&
 	    ops->co_reduce_arg_free == NULL) {
-		D_DEBUG(DB_MD, "Free callback missing for reduce args\n");
+		D__DEBUG(DB_MD, "Free callback missing for reduce args\n");
 		return -DER_INVAL;
 	}
 
 	stream_args   = &args->ca_stream_args;
-	D_ALLOC(stream_args->csa_streams,
+	D__ALLOC(stream_args->csa_streams,
 		(dss_nxstreams) * sizeof(struct dss_stream_arg_type));
 
 	/*
@@ -764,7 +764,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		}
 
 	rc = ABT_future_set(future, (void *)&aggregator);
-	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+	D__ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 
 	tid = 0;
 	daos_list_for_each_entry(dx, &xstream_data.xd_list, dx_list) {
@@ -783,7 +783,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 			aggregator.at_args.st_rc = dss_abterr2der(rc);
 			rc = ABT_future_set(future,
 					    (void *)&aggregator);
-			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+			D__ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
 		tid++;
 	}
@@ -795,7 +795,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		for (tid = 0; tid < dss_nxstreams; tid++)
 			ops->co_reduce_arg_free(&stream_args->csa_streams[tid]);
 
-	D_FREE(args->ca_stream_args.csa_streams,
+	D__FREE(args->ca_stream_args.csa_streams,
 	       (dss_nxstreams) * sizeof(struct dss_stream_arg_type));
 
 	return aggregator.at_args.st_rc;
@@ -932,20 +932,20 @@ dss_sync_task(daos_opc_t opc, void *arg, unsigned int arg_size)
 	rc = daos_task_create(opc, &dss_get_module_info()->dmi_sched,
 			      arg, 0, NULL, &task);
 	if (rc != 0)
-		D_GOTO(free_future, rc = -DER_NOMEM);
+		D__GOTO(free_future, rc = -DER_NOMEM);
 
 	cb_arg.result = &ret;
 	rc = tse_task_register_comp_cb(task, dss_task_comp_cb, &cb_arg,
 				       sizeof(cb_arg));
 	if (rc != 0) {
-		D_FREE_PTR(task);
-		D_GOTO(free_future, rc = -DER_NOMEM);
+		D__FREE_PTR(task);
+		D__GOTO(free_future, rc = -DER_NOMEM);
 	}
 
 	/* task will be freed inside scheduler */
 	rc = tse_task_schedule(task, true);
 	if (rc != 0)
-		D_GOTO(free_future, rc = -DER_NOMEM);
+		D__GOTO(free_future, rc = -DER_NOMEM);
 
 	ABT_future_wait(future);
 
@@ -983,7 +983,7 @@ dss_srv_fini(bool force)
 {
 	switch (xstream_data.xd_init_step) {
 	default:
-		D_ASSERT(0);
+		D__ASSERT(0);
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);
 		/* fall through */
@@ -1000,7 +1000,7 @@ dss_srv_fini(bool force)
 		ABT_mutex_free(&xstream_data.xd_mutex);
 		/* fall through */
 	case XD_INIT_NONE:
-		D_DEBUG(DB_TRACE, "Finalized everything\n");
+		D__DEBUG(DB_TRACE, "Finalized everything\n");
 	}
 	return 0;
 }
@@ -1017,21 +1017,21 @@ dss_srv_init(int nr)
 	rc = ABT_mutex_create(&xstream_data.xd_mutex);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_GOTO(failed, rc);
+		D__GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_MUTEX;
 
 	rc = ABT_cond_create(&xstream_data.xd_ult_init);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_GOTO(failed, rc);
+		D__GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_INIT;
 
 	rc = ABT_cond_create(&xstream_data.xd_ult_barrier);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_GOTO(failed, rc);
+		D__GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_ULT_BARRIER;
 
@@ -1045,7 +1045,7 @@ dss_srv_init(int nr)
 		xstream_data.xd_init_step = XD_INIT_XSTREAMS;
 
 	if (rc != 0)
-		D_GOTO(failed, rc);
+		D__GOTO(failed, rc);
 
 	return 0;
 failed:

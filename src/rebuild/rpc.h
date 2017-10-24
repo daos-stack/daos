@@ -56,7 +56,7 @@ struct rebuild_fini_tgt_in {
 
 struct rebuild_scan_in {
 	uuid_t		rsi_pool_uuid;
-	daos_rank_list_t *rsi_tgts_failed;
+	d_rank_list_t *rsi_tgts_failed;
 	uint32_t	rsi_pool_map_ver;
 };
 
@@ -64,8 +64,8 @@ struct rebuild_prepare_in {
 	uuid_t		rpi_pool_uuid;
 	uuid_t		rpi_rebuild_pool_hdl_uuid;
 	uuid_t		rpi_rebuild_cont_hdl_uuid;
-	daos_rank_list_t *rpi_tgts_failed;
-	daos_rank_list_t *rpi_svc_list;
+	d_rank_list_t *rpi_tgts_failed;
+	d_rank_list_t *rpi_svc_list;
 	uint32_t	rpi_pool_map_ver;
 };
 

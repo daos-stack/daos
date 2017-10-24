@@ -23,7 +23,7 @@
 /**
  * dc_cont, ds_cont: RPC Protocol Serialization Functions
  */
-#define DD_SUBSYS	DD_FAC(container)
+#define DDSUBSYS	DDFAC(container)
 
 #include <daos/rpc.h>
 #include "rpc.h"
@@ -35,11 +35,11 @@ proc_cont_tgt_close_rec(crt_proc_t proc, struct cont_tgt_close_rec *rec)
 
 	rc = crt_proc_uuid_t(proc, &rec->tcr_hdl);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	rc = crt_proc_uint64_t(proc, &rec->tcr_hce);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 
 	return 0;
 }

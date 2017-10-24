@@ -43,7 +43,7 @@ main(int argc, char **argv)
 
 	rc = daos_init();
 	if (rc != 0) {
-		D_ERROR("daos init fails: rc = %d\n", rc);
+		D__ERROR("daos init fails: rc = %d\n", rc);
 		return rc;
 	}
 

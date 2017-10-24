@@ -26,7 +26,7 @@
  * dctc is the DCT client module/library. It exports the DCT API defined in
  * daos_ct.h.
  */
-#define DD_SUBSYS	DD_FAC(tier)
+#define DDSUBSYS	DDFAC(tier)
 
 #include <daos/tier.h>
 #include <daos_tier.h>
@@ -63,7 +63,7 @@ dc_tier_obj_punch(daos_handle_t oh, daos_epoch_t epoch, daos_event_t *ev)
 
 int
 dc_tier_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
-	       daos_rank_list_t *ranks, daos_event_t *ev)
+	       d_rank_list_t *ranks, daos_event_t *ev)
 {
 	return 0;
 }

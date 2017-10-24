@@ -87,7 +87,7 @@ typedef struct {
 	/* UUID of the pool */
 	uuid_t			ti_pool_id;
 	/* Group leader for pool */
-	daos_rank_t		ti_leader;
+	d_rank_t		ti_leader;
 	/* Group name for pool */
 	crt_group_id_t		ti_group_id;
 	crt_group_t		*ti_group;
@@ -167,7 +167,7 @@ daos_tier_fetch_cont(daos_handle_t poh, const uuid_t cont_id,
  **/
 int
 daos_tier_pool_connect(const uuid_t uuid, const char *grp,
-		       const daos_rank_list_t *svc, unsigned int flags,
+		       const d_rank_list_t *svc, unsigned int flags,
 		       daos_handle_t *poh, daos_pool_info_t *info,
 		       daos_event_t *ev);
 

@@ -23,7 +23,7 @@
 /*
  * Target Methods
  */
-#define DD_SUBSYS	DD_FAC(mgmt)
+#define DDSUBSYS	DDFAC(mgmt)
 
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -49,13 +49,13 @@ dir_fsync(const char *path)
 
 	fd = open(path, O_RDONLY|O_DIRECTORY);
 	if (fd < 0) {
-		D_ERROR("failed to open %s for sync: %d\n", path, errno);
+		D__ERROR("failed to open %s for sync: %d\n", path, errno);
 		return daos_errno2der(errno);
 	}
 
 	rc = fsync(fd);
 	if (rc < 0) {
-		D_ERROR("failed to fync %s: %d\n", path, errno);
+		D__ERROR("failed to fync %s: %d\n", path, errno);
 		rc = daos_errno2der(errno);
 	}
 
@@ -78,7 +78,7 @@ destroy_cb(const char *path, const struct stat *sb, int flag,
 	else
 		rc = unlink(path);
 	if (rc)
-		D_ERROR("failed to remove %s\n", path);
+		D__ERROR("failed to remove %s\n", path);
 	return rc;
 }
 
@@ -103,27 +103,27 @@ ds_mgmt_tgt_init(void)
 	/** create the path string */
 	rc = asprintf(&newborns_path, "%s/NEWBORNS", storage_path);
 	if (rc < 0)
-		D_GOTO(err, rc = -DER_NOMEM);
+		D__GOTO(err, rc = -DER_NOMEM);
 	rc = asprintf(&zombies_path, "%s/ZOMBIES", storage_path);
 	if (rc < 0)
-		D_GOTO(err_newborns, rc = -DER_NOMEM);
+		D__GOTO(err_newborns, rc = -DER_NOMEM);
 
 	stored_mode = umask(0);
 	mode = S_IRWXU | S_IRWXG | S_IRWXO;
 	/** create NEWBORNS directory if it does not exist already */
 	rc = mkdir(newborns_path, mode);
 	if (rc < 0 && errno != EEXIST) {
-		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
+		D__ERROR("failed to create NEWBORNS dir: %d\n", errno);
 		umask(stored_mode);
-		D_GOTO(err_zombies, rc = daos_errno2der(errno));
+		D__GOTO(err_zombies, rc = daos_errno2der(errno));
 	}
 
 	/** create ZOMBIES directory if it does not exist already */
 	rc = mkdir(zombies_path, mode);
 	if (rc < 0 && errno != EEXIST) {
-		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
+		D__ERROR("failed to create ZOMBIES dir: %d\n", errno);
 		umask(stored_mode);
-		D_GOTO(err_zombies, rc = daos_errno2der(errno));
+		D__GOTO(err_zombies, rc = daos_errno2der(errno));
 	}
 	umask(stored_mode);
 
@@ -131,13 +131,13 @@ ds_mgmt_tgt_init(void)
 	rc = subtree_destroy(newborns_path);
 	if (rc)
 		/** only log error, will try again next time */
-		D_ERROR("failed to cleanup NEWBORNS dir: %d, will try again\n",
+		D__ERROR("failed to cleanup NEWBORNS dir: %d, will try again\n",
 			rc);
 
 	rc = subtree_destroy(zombies_path);
 	if (rc)
 		/** only log error, will try again next time */
-		D_ERROR("failed to cleanup ZOMBIES dir: %d, will try again\n",
+		D__ERROR("failed to cleanup ZOMBIES dir: %d, will try again\n",
 			rc);
 	return 0;
 
@@ -174,7 +174,7 @@ path_gen(const uuid_t pool_uuid, const char *dir, const char *fname, int *idx,
 	if (idx)
 		size += snprintf(NULL, 0, "%d", *idx);
 
-	D_ALLOC(*fpath, size);
+	D__ALLOC(*fpath, size);
 	if (*fpath == NULL)
 		return -DER_NOMEM;
 
@@ -225,12 +225,12 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		if (rc)
 			break;
 
-		D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n",
+		D__DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n",
 			DP_UUID(uuid), path);
 
 		fd = open(path, O_CREAT|O_RDWR, 0600);
 		if (fd < 0) {
-			D_ERROR(DF_UUID": failed to create vos file %s: %d\n",
+			D__ERROR(DF_UUID": failed to create vos file %s: %d\n",
 				DP_UUID(uuid), path, rc);
 			rc = daos_errno2der(errno);
 			break;
@@ -238,7 +238,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 
 		rc = posix_fallocate(fd, 0, size);
 		if (rc) {
-			D_ERROR(DF_UUID": failed to allocate vos file %s with "
+			D__ERROR(DF_UUID": failed to allocate vos file %s with "
 				"size: "DF_U64", rc: %d.\n",
 				DP_UUID(uuid), path, size, rc);
 			rc = daos_errno2der(rc);
@@ -248,7 +248,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		/* A zero size accommodates the existing file */
 		rc = vos_pool_create(path, (unsigned char *)uuid, 0 /* size */);
 		if (rc) {
-			D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
+			D__ERROR(DF_UUID": failed to init vos pool %s: %d\n",
 				DP_UUID(uuid), path, rc);
 			break;
 		}
@@ -257,7 +257,7 @@ tgt_vos_create(uuid_t uuid, daos_size_t tgt_size)
 		(void)close(fd);
 		fd = -1;
 		if (rc) {
-			D_ERROR(DF_UUID": failed to sync vos pool %s: %d\n",
+			D__ERROR(DF_UUID": failed to sync vos pool %s: %d\n",
 				DP_UUID(uuid), path, rc);
 			rc = daos_errno2der(errno);
 			break;
@@ -287,33 +287,33 @@ tgt_create(uuid_t pool_uuid, uuid_t tgt_uuid, daos_size_t size, char *path)
 
 	rc = mkdir(newborn, 0700);
 	if (rc < 0 && errno != EEXIST) {
-		D_ERROR("failed to created pool directory: %d\n", rc);
-		D_GOTO(out, rc = daos_errno2der(errno));
+		D__ERROR("failed to created pool directory: %d\n", rc);
+		D__GOTO(out, rc = daos_errno2der(errno));
 	}
 
 	/** create VOS files */
 	rc = tgt_vos_create(pool_uuid, size);
 	if (rc)
-		D_GOTO(out_tree, rc);
+		D__GOTO(out_tree, rc);
 
 	/** initialize DAOS-M target and fetch uuid */
 	rc = ds_pool_create(pool_uuid, newborn, tgt_uuid);
 	if (rc) {
-		D_ERROR("ds_pool_create failed, rc: %d.\n", rc);
-		D_GOTO(out_tree, rc);
+		D__ERROR("ds_pool_create failed, rc: %d.\n", rc);
+		D__GOTO(out_tree, rc);
 	}
 
 	/** ready for prime time, move away from NEWBORNS dir */
 	rc = rename(newborn, path);
 	if (rc < 0) {
-		D_ERROR("failed to rename pool directory: %d\n", rc);
-		D_GOTO(out_tree, rc = daos_errno2der(errno));
+		D__ERROR("failed to rename pool directory: %d\n", rc);
+		D__GOTO(out_tree, rc = daos_errno2der(errno));
 	}
 
 	/** make sure the rename is persistent */
 	rc = dir_fsync(path);
 
-	D_GOTO(out, rc);
+	D__GOTO(out, rc);
 
 out_tree:
 	/** cleanup will be re-executed on several occasions */
@@ -331,13 +331,13 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	struct mgmt_tgt_create_out	*tc_out;
 	struct mgmt_tgt_create_out	*ret_out;
 	uuid_t				*tc_uuids;
-	daos_rank_t			*tc_ranks;
+	d_rank_t			*tc_ranks;
 	unsigned int			tc_uuids_nr;
 	uuid_t				*ret_uuids;
-	daos_rank_t			*ret_ranks;
+	d_rank_t			*ret_ranks;
 	unsigned int			ret_uuids_nr;
 	uuid_t				*new_uuids;
-	daos_rank_t			*new_ranks;
+	d_rank_t			*new_ranks;
 	unsigned int			new_uuids_nr;
 	int				i;
 
@@ -356,13 +356,13 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 	new_uuids_nr = ret_uuids_nr + tc_uuids_nr;
 
 	/* Append tc_uuids to ret_uuids */
-	D_ALLOC(new_uuids, sizeof(*new_uuids) * new_uuids_nr);
+	D__ALLOC(new_uuids, sizeof(*new_uuids) * new_uuids_nr);
 	if (new_uuids == NULL)
 		return -DER_NOMEM;
 
-	D_ALLOC(new_ranks, sizeof(*new_ranks) * new_uuids_nr);
+	D__ALLOC(new_ranks, sizeof(*new_ranks) * new_uuids_nr);
 	if (new_ranks == NULL) {
-		D_FREE(new_uuids, sizeof(*new_uuids) * new_uuids_nr);
+		D__FREE(new_uuids, sizeof(*new_uuids) * new_uuids_nr);
 		return -DER_NOMEM;
 	}
 
@@ -376,8 +376,8 @@ ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 		}
 	}
 
-	D_FREE(ret_uuids, sizeof(*ret_uuids) * ret_uuids_nr);
-	D_FREE(ret_ranks, sizeof(*ret_uuids) * ret_uuids_nr);
+	D__FREE(ret_uuids, sizeof(*ret_uuids) * ret_uuids_nr);
+	D__FREE(ret_ranks, sizeof(*ret_uuids) * ret_uuids_nr);
 
 	ret_out->tc_tgt_uuids.da_arrays = new_uuids;
 	ret_out->tc_tgt_uuids.da_count = new_uuids_nr;
@@ -395,7 +395,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	struct mgmt_tgt_create_in	*tc_in;
 	struct mgmt_tgt_create_out	*tc_out;
 	uuid_t				tgt_uuid;
-	daos_rank_t			*rank;
+	d_rank_t			*rank;
 	uuid_t				*tmp_tgt_uuid;
 	char				*path = NULL;
 	int				 rc = 0;
@@ -404,12 +404,12 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tc_in = crt_req_get(tc_req);
 	/** reply buffer */
 	tc_out = crt_reply_get(tc_req);
-	D_ASSERT(tc_in != NULL && tc_out != NULL);
+	D__ASSERT(tc_in != NULL && tc_out != NULL);
 
 	/** generate path to the target directory */
 	rc = ds_mgmt_tgt_file(tc_in->tc_pool_uuid, NULL, NULL, &path);
 	if (rc)
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 
 	/** check whether the target already exists */
 	rc = access(path, F_OK);
@@ -432,24 +432,24 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	}
 
 	if (rc)
-		D_GOTO(free, rc);
+		D__GOTO(free, rc);
 
-	D_ALLOC_PTR(tmp_tgt_uuid);
+	D__ALLOC_PTR(tmp_tgt_uuid);
 	if (tmp_tgt_uuid == NULL)
-		D_GOTO(free, rc = -DER_NOMEM);
+		D__GOTO(free, rc = -DER_NOMEM);
 
 	uuid_copy(*tmp_tgt_uuid, tgt_uuid);
 	tc_out->tc_tgt_uuids.da_arrays = tmp_tgt_uuid;
 	tc_out->tc_tgt_uuids.da_count = 1;
 
-	D_ALLOC_PTR(rank);
+	D__ALLOC_PTR(rank);
 	if (rank == NULL) {
-		D_FREE_PTR(tmp_tgt_uuid);
-		D_GOTO(free, rc = -DER_NOMEM);
+		D__FREE_PTR(tmp_tgt_uuid);
+		D__GOTO(free, rc = -DER_NOMEM);
 	}
 
 	rc = crt_group_rank(NULL, rank);
-	D_ASSERT(rc == 0);
+	D__ASSERT(rc == 0);
 	tc_out->tc_ranks.da_arrays = rank;
 	tc_out->tc_ranks.da_count = 1;
 
@@ -476,12 +476,12 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 
 	rc = rename(path, zombie);
 	if (rc < 0)
-		D_GOTO(out, rc = daos_errno2der(errno));
+		D__GOTO(out, rc = daos_errno2der(errno));
 
 	/** make sure the rename is persistent */
 	rc = dir_fsync(zombie);
 	if (rc < 0)
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 
 	/**
 	 * once successfully moved to the ZOMBIES directory, the target will
@@ -510,12 +510,12 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	td_in = crt_req_get(td_req);
 	/** reply buffer */
 	td_out = crt_reply_get(td_req);
-	D_ASSERT(td_in != NULL && td_out != NULL);
+	D__ASSERT(td_in != NULL && td_out != NULL);
 
 	/** generate path to the target directory */
 	rc = ds_mgmt_tgt_file(td_in->td_pool_uuid, NULL, NULL, &path);
 	if (rc)
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 
 	/** check whether the target exists */
 	rc = access(path, F_OK);
@@ -533,7 +533,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		rc = path_gen(td_in->td_pool_uuid, zombies_path, NULL, NULL,
 			      &zombie);
 		if (rc)
-			D_GOTO(out, rc);
+			D__GOTO(out, rc);
 		rc = dir_fsync(path);
 		if (rc == -DER_NONEXIST)
 			rc = 0;

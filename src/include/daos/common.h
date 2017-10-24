@@ -41,7 +41,8 @@
 #include <byteswap.h>
 
 #include <daos_types.h>
-#include <pouch/common.h>
+#include <cart/api.h>
+#include <gurt/common.h>
 #include <daos/debug.h>
 
 /**
@@ -83,26 +84,26 @@ char *DP_UUID(const void *uuid);
 #define DD_ALLOC_POISON			0x3d
 
 /* memory allocating macros */
-#define D_ALLOC(ptr, size)						\
+#define D__ALLOC(ptr, size)						\
 do {									\
 	(ptr) = (__typeof__(ptr))calloc(1, (size + DD_ALLOC_PADDING));	\
 	if ((ptr) == NULL) {						\
-		D_ERROR("out of memory (alloc '" #ptr "' = %d)",	\
+		D__ERROR("out of memory (alloc '" #ptr "' = %d)",	\
 			(int)(size));					\
 	}								\
-	D_DEBUG(DB_MEM, "alloc #ptr : %d at %p.\n", (int)(size), ptr);	\
+	D__DEBUG(DB_MEM, "alloc #ptr : %d at %p.\n", (int)(size), ptr);	\
 	if (DD_ALLOC_PADDING != 0) {					\
 		void *__ptr = (void *)(ptr) + size;			\
 		*(unsigned int *)__ptr = DD_ALLOC_MAGIC;		\
 	}								\
 } while (0)
 
-# define D_FREE(ptr, size)						\
+# define D__FREE(ptr, size)						\
 do {									\
-	D_DEBUG(DB_MEM, "free #ptr : %d at %p.\n", (int)(size), ptr);	\
+	D__DEBUG(DB_MEM, "free #ptr : %d at %p.\n", (int)(size), ptr);	\
 	if (DD_ALLOC_PADDING != 0) {					\
 		void *__ptr = (void *)(ptr) + size;			\
-		D_ASSERT(*(unsigned int *)__ptr == DD_ALLOC_MAGIC);	\
+		D__ASSERT(*(unsigned int *)__ptr == DD_ALLOC_MAGIC);	\
 		if (size <= 2048) {					\
 			memset((void *)(ptr), DD_ALLOC_POISON,		\
 				size + DD_ALLOC_PADDING);		\
@@ -112,8 +113,8 @@ do {									\
 	(ptr) = NULL;							\
 } while (0)
 
-#define D_ALLOC_PTR(ptr)        D_ALLOC(ptr, sizeof *(ptr))
-#define D_FREE_PTR(ptr)         D_FREE(ptr, sizeof *(ptr))
+#define D__ALLOC_PTR(ptr)        D__ALLOC(ptr, sizeof *(ptr))
+#define D__FREE_PTR(ptr)         D__FREE(ptr, sizeof *(ptr))
 
 #define DAOS_GOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
 #define DAOS_GOLDEN_RATIO_PRIME_32	0x9e370001UL
@@ -275,23 +276,23 @@ daos_errno2der(int err)
 static inline bool
 daos_crt_network_error(int err)
 {
-	return err == -DER_CRT_HG || err == -DER_CRT_ADDRSTR_GEN ||
-	       err == -DER_CRT_PMIX || err == -DER_CRT_UNREG ||
+	return err == -DER_HG || err == -DER_ADDRSTR_GEN ||
+	       err == -DER_PMIX || err == -DER_UNREG ||
 	       err == -DER_UNREACH || err == -DER_CANCELED;
 }
 
-#define daos_rank_list_dup		crt_rank_list_dup
-#define daos_rank_list_dup_sort_uniq	crt_rank_list_dup_sort_uniq
-#define daos_rank_list_alloc		crt_rank_list_alloc
-#define daos_rank_list_free		crt_rank_list_free
-#define daos_rank_list_copy		crt_rank_list_copy
-#define daos_rank_list_sort		crt_rank_list_sort
-#define daos_rank_list_find		crt_rank_list_find
-#define daos_rank_list_identical	crt_rank_list_identical
-#define daos_rank_in_rank_list		crt_rank_in_rank_list
-#define daos_rank_list_append		crt_rank_list_append
+#define daos_rank_list_dup		d_rank_list_dup
+#define daos_rank_list_dup_sort_uniq	d_rank_list_dup_sort_uniq
+#define daos_rank_list_alloc		d_rank_list_alloc
+#define daos_rank_list_free		d_rank_list_free
+#define daos_rank_list_copy		d_rank_list_copy
+#define daos_rank_list_sort		d_rank_list_sort
+#define daos_rank_list_find		d_rank_list_find
+#define daos_rank_list_identical	d_rank_list_identical
+#define daos_rank_in_rank_list		d_rank_in_rank_list
+#define daos_rank_list_append		d_rank_list_append
 
-daos_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
+d_rank_list_t *daos_rank_list_parse(const char *str, const char *sep);
 
 void
 daos_fail_loc_set(uint64_t id);

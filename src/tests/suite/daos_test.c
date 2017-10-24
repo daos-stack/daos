@@ -26,7 +26,7 @@
  * tests/suite/daos_test
  */
 
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 #include <getopt.h>
 #include "daos_test.h"
 
@@ -326,7 +326,7 @@ test_teardown(void **state)
 		}
 	}
 
-	D_FREE_PTR(arg);
+	D__FREE_PTR(arg);
 	return 0;
 }
 
@@ -432,7 +432,7 @@ run_specified_tests(const char *tests, int rank, int size)
 			nr_failed += run_daos_rebuild_test(rank, size);
 			break;
 		default:
-			D_ASSERT(0);
+			D__ASSERT(0);
 		}
 
 		tests++;

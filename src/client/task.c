@@ -26,7 +26,7 @@
  * client/task.c
  */
 
-#define DD_SUBSYS	DD_FAC(client)
+#define DDSUBSYS	DDFAC(client)
 
 #include <daos/common.h>
 #include "task_internal.h"
@@ -47,7 +47,7 @@ daos_task_create(daos_opc_t opc, tse_sched_t *sched, void *op_args,
 	if (op_args)
 		memcpy(&args.op_args, op_args, dc_funcs[opc].arg_size);
 
-	D_ASSERT(sizeof(struct daos_task_args) >=
+	D__ASSERT(sizeof(struct daos_task_args) >=
 		 (dc_funcs[opc].arg_size + sizeof(daos_opc_t)));
 
 	rc = tse_task_init(dc_funcs[opc].task_func, &args,
@@ -73,7 +73,7 @@ daos_task_get_args(daos_opc_t opc, tse_task_t *task)
 	task_arg = tse_task_buf_get(task, sizeof(*task_arg));
 
 	if (task_arg->opc != opc) {
-		D_DEBUG(DB_ANY, "OPC does not match task's OPC\n");
+		D__DEBUG(DB_ANY, "OPC does not match task's OPC\n");
 		return NULL;
 	}
 
@@ -132,7 +132,7 @@ daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty)
 	rc = crt_progress((crt_context_t *)sched->ds_udata, timeout,
 			  sched_progress_cb, &args);
 	if (rc != 0 && rc != -DER_TIMEDOUT)
-		D_ERROR("crt progress failed with %d\n", rc);
+		D__ERROR("crt progress failed with %d\n", rc);
 
 	return rc;
 }

@@ -27,7 +27,7 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <vts_io.h>
 
@@ -51,7 +51,7 @@ io_update(struct io_test_args *arg, daos_epoch_t update_epoch,
 	int			rc  = 0;
 	struct io_req		*ioreq;
 
-	D_ALLOC_PTR(ioreq);
+	D__ALLOC_PTR(ioreq);
 	uuid_copy(ioreq->cookie.uuid, cookie->uuid);
 	memset(&ioreq->iod, 0, sizeof(ioreq->iod));
 	memset(&ioreq->rex, 0, sizeof(ioreq->rex));
@@ -96,7 +96,7 @@ io_update(struct io_test_args *arg, daos_epoch_t update_epoch,
 	rc = io_test_obj_update(arg, update_epoch, &ioreq->dkey, &ioreq->iod,
 				&ioreq->sgl, &ioreq->cookie, verbose);
 	if (rc)
-		D_GOTO(exit, rc);
+		D__GOTO(exit, rc);
 
 	inc_cntr_manual(arg->ta_flags, cntrs);
 	if (verbose) {
@@ -139,7 +139,7 @@ io_fetch_empty_buf(struct io_test_args *arg, daos_epoch_t fetch_epoch,
 	rc = io_test_obj_fetch(arg, fetch_epoch, &req->dkey, &req->iod,
 			       &req->sgl, false);
 	if (rc)
-		D_GOTO(exit, rc);
+		D__GOTO(exit, rc);
 
 	assert_true(strlen(req->fetch_buf) == 0);
 	if (strlen(req->fetch_buf) == 0)
@@ -169,7 +169,7 @@ io_fetch(struct io_test_args *arg, daos_epoch_t fetch_epoch,
 	rc = io_test_obj_fetch(arg, fetch_epoch, &req->dkey, &req->iod,
 			       &req->sgl, false);
 	if (rc)
-		D_GOTO(exit, rc);
+		D__GOTO(exit, rc);
 	if (req->iod.iod_size == 0)
 		return -DER_NONEXIST;
 
@@ -297,7 +297,7 @@ io_simple_one_key_discard(void **state)
 	assert_int_equal(rc, 0);
 
 	for (i = 0; i < 4; i++)
-		D_FREE_PTR(req[i]);
+		D__FREE_PTR(req[i]);
 }
 
 static int
@@ -344,8 +344,8 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey,
 	assert_true(num/2 >= 0);
 	mid = num/2;
 
-	D_ALLOC(reqs,  (num * sizeof(struct io_req *)));
-	D_ALLOC(punch, (num * sizeof(bool)));
+	D__ALLOC(reqs,  (num * sizeof(struct io_req *)));
+	D__ALLOC(punch, (num * sizeof(bool)));
 
 	for (i = 0; i < num; i++) {
 		struct daos_uuid l_cookie;
@@ -366,14 +366,14 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey,
 			       akey, &cntrs, &reqs[i], idx[i],
 			       UPDATE_VERBOSE);
 		if (rc != 0)
-			D_GOTO(exit, rc);
+			D__GOTO(exit, rc);
 	}
 	/** Reset flags here */
 	arg->ta_flags = 0;
 	range.epr_lo = range.epr_hi = epoch[mid];
 	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie[mid].uuid);
 	if (rc != 0)
-		D_GOTO(exit, rc);
+		D__GOTO(exit, rc);
 
 	/* Fetch should return the value buf from req 0 */
 	rc = io_fetch(arg, epoch[mid], reqs[mid - 1], false);
@@ -381,7 +381,7 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey,
 		assert_int_equal(rc, -DER_NONEXIST);
 
 	if (rc != 0 && (punch[mid - 1] && rc != -DER_NONEXIST))
-		D_GOTO(exit, rc);
+		D__GOTO(exit, rc);
 
 	if (flags != NULL)
 		arg->ta_flags = flags[mid];
@@ -390,20 +390,20 @@ io_near_epoch_tests(struct io_test_args *arg, char *dkey,
 		       akey, &cntrs, &reqs[mid], idx[mid],
 		       UPDATE_VERBOSE);
 	if (rc != 0)
-		D_GOTO(exit, rc);
+		D__GOTO(exit, rc);
 
 	rc = io_fetch(arg, epoch[mid], reqs[mid], FETCH_VERBOSE);
 	if (punch[mid])
 		assert_int_equal(rc, -DER_NONEXIST);
 
 	if (rc != 0 && (punch[mid] && rc != -DER_NONEXIST))
-		D_GOTO(exit, rc);
+		D__GOTO(exit, rc);
 	/** Success if reaches here */
 	rc = 0;
 
 exit:
-	D_FREE(reqs, (num * sizeof(struct io_req *)));
-	D_FREE(punch, (num * sizeof(bool)));
+	D__FREE(reqs, (num * sizeof(struct io_req *)));
+	D__FREE(punch, (num * sizeof(bool)));
 
 	return rc;
 }
@@ -663,7 +663,7 @@ io_epoch_range_discard_test(void **state)
 	range.epr_lo = epochs[TF_DISCARD_KEYS - 10];
 	range.epr_hi = epochs[TF_DISCARD_KEYS - 5];
 
-	D_PRINT("Discard from "DF_U64" to "DF_U64" out of %d epochs\n",
+	D__PRINT("Discard from "DF_U64" to "DF_U64" out of %d epochs\n",
 		range.epr_lo, range.epr_hi, TF_DISCARD_KEYS);
 	rc = vos_epoch_discard(arg->ctx.tc_co_hdl, &range, cookie.uuid);
 	assert_int_equal(rc, 0);
@@ -681,7 +681,7 @@ io_epoch_range_discard_test(void **state)
 	}
 	/** Cleanup */
 	for (i = 0; i < TF_DISCARD_KEYS; i++)
-		D_FREE_PTR(req[i]);
+		D__FREE_PTR(req[i]);
 }
 
 static void

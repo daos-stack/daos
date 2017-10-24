@@ -299,9 +299,9 @@ typedef struct daos_hlist_head {
  * "NULL" might not be defined at this point
  */
 #ifdef NULL
-#define NULL_P NULL
+#define NULL__P NULL
 #else
-#define NULL_P ((void *)0)
+#define NULL__P ((void *)0)
 #endif
 
 /**
@@ -309,10 +309,11 @@ typedef struct daos_hlist_head {
  * @{
  */
 
-#define DAOS_HLIST_HEAD_INIT { NULL_P }
-#define DAOS_HLIST_HEAD(name) daos_hlist_head_t name = { NULL_P }
-#define DAOS_INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL_P)
-#define DAOS_INIT_HLIST_NODE(ptr) ((ptr)->next = NULL_P, (ptr)->pprev = NULL_P)
+#define DAOS_HLIST_HEAD_INIT { NULL__P }
+#define DAOS_HLIST_HEAD(name) daos_hlist_head_t name = { NULL__P }
+#define DAOS_INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL__P)
+#define DAOS_INIT_HLIST_NODE(ptr) \
+	((ptr)->next = NULL__P, (ptr)->pprev = NULL__P)
 
 static inline int
 daos_hlist_unhashed(const daos_hlist_node_t *h)

@@ -29,7 +29,7 @@
  * Replication tests need external interaction, to
  * kill servers and update pool map.
 */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 #include "daos_iotest.h"
 
 int		g_dkeys	  = 1000;
@@ -45,11 +45,11 @@ enum {
 
 void
 daos_kill_server(const uuid_t pool_uuid, const char *grp,
-		 const daos_rank_list_t *svc, daos_handle_t poh,
-		 daos_rank_t rank)
+		 const d_rank_list_t *svc, daos_handle_t poh,
+		 d_rank_t rank)
 {
 	daos_pool_info_t	info;
-	daos_rank_list_t	targets;
+	d_rank_list_t	targets;
 	int			rc;
 
 	rc = daos_pool_query(poh, NULL, &info, NULL);
@@ -134,13 +134,13 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (i = 0; i < g_dkeys; i++) {
-		D_ALLOC(dkey[i], strlen(dkey_fmt) + g_dkeys_strlen + 1);
+		D__ALLOC(dkey[i], strlen(dkey_fmt) + g_dkeys_strlen + 1);
 		assert_non_null(dkey[i]);
 		sprintf(dkey[i], dkey_fmt, i);
-		D_ALLOC(rec[i], strlen(val_fmt) + g_dkeys_strlen + 1);
+		D__ALLOC(rec[i], strlen(val_fmt) + g_dkeys_strlen + 1);
 		assert_non_null(rec[i]);
 		offset[i] = i * 20;
-		D_ALLOC(val[i], 64);
+		D__ALLOC(val[i], 64);
 		assert_non_null(val[i]);
 		val_size[i] = 64;
 	}
@@ -149,7 +149,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	for (i = 0; i < g_dkeys; i++) {
 		sprintf(rec[i], val_fmt, i);
 		rec_size[i] = strlen(rec[i]);
-		D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
+		D__DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
 			dkey[i], (int)rec_size[i], rec[i]);
 		insert_single(dkey[i], akey, offset[i], rec[i],
 			      rec_size[i], epoch, &req);
@@ -174,7 +174,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 		print_message("insertion done\nNow looking up %d keys ...\n",
 			      g_dkeys * size);
 
-	D_ALLOC(rec_verify, strlen(val_fmt) + g_dkeys_strlen + 1);
+	D__ALLOC(rec_verify, strlen(val_fmt) + g_dkeys_strlen + 1);
 
 	for (i = 0; i < g_dkeys; i++) {
 		sprintf(rec_verify, val_fmt, i);
@@ -205,8 +205,8 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 			      g_dkeys * size);
 
 	memset(&hash_out, 0, sizeof(hash_out));
-	D_ALLOC(buf, 512);
-	D_ALLOC(dkey_enum, strlen(dkey_fmt) + g_dkeys_strlen + 1);
+	D__ALLOC(buf, 512);
+	D__ALLOC(dkey_enum, strlen(dkey_fmt) + g_dkeys_strlen + 1);
 
 	/** enumerate records */
 	for (number = 5, key_nr = 0; !daos_hash_is_eof(&hash_out);
@@ -218,7 +218,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 
 		for (ptr = buf, i = 0; i < number; i++) {
 			snprintf(dkey_enum, kds[i].kd_key_len + 1, "%s", ptr);
-			D_DEBUG(DF_MISC, "i %d key %s len %d\n", i, dkey_enum,
+			D__DEBUG(DF_MISC, "i %d key %s len %d\n", i, dkey_enum,
 				(int)kds[i].kd_key_len);
 			ptr += kds[i].kd_key_len;
 		}
@@ -250,12 +250,12 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	ioreq_fini(&req);
 
 	for (i = 0; i < g_dkeys; i++) {
-		D_FREE(val[i], 64);
-		D_FREE(dkey[i], strlen(dkey_fmt) + g_dkeys_strlen + 1);
-		D_FREE(rec[i], strlen(val_fmt) + g_dkeys_strlen + 1);
+		D__FREE(val[i], 64);
+		D__FREE(dkey[i], strlen(dkey_fmt) + g_dkeys_strlen + 1);
+		D__FREE(rec[i], strlen(val_fmt) + g_dkeys_strlen + 1);
 	}
-	D_FREE(buf, 512);
-	D_FREE(dkey_enum,  strlen(dkey_fmt) + g_dkeys_strlen + 1);
+	D__FREE(buf, 512);
+	D__FREE(dkey_enum,  strlen(dkey_fmt) + g_dkeys_strlen + 1);
 }
 
 static void

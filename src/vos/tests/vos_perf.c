@@ -11,7 +11,7 @@
 #include <fcntl.h>
 #include <getopt.h>
 
-#define DD_SUBSYS       DD_FAC(tests)
+#define DDSUBSYS       DDFAC(tests)
 
 #include <daos/common.h>
 #include <daos/tests_lib.h>
@@ -60,8 +60,8 @@ ts_vos_update(daos_key_t *dkey, daos_iod_t *iod, daos_sg_list_t *sgl_src,
 		if (rc)
 			return rc;
 
-		D_ASSERT(sgl_src->sg_nr.num == 1);
-		D_ASSERT(sgl_dst->sg_nr.num_out == 1);
+		D__ASSERT(sgl_src->sg_nr.num == 1);
+		D__ASSERT(sgl_dst->sg_nr.num_out == 1);
 
 		memcpy(sgl_dst->sg_iovs[0].iov_buf,
 		       sgl_src->sg_iovs[0].iov_buf,
@@ -92,7 +92,7 @@ ts_key_insert(void)
 	int			 rc = 0;
 
 	indices = dts_rand_iarr_alloc(ts_recx_p_akey, 0);
-	D_ASSERT(indices != NULL);
+	D__ASSERT(indices != NULL);
 
 	dts_key_gen(dkey_buf, TS_KEY_LEN, "Jon");
 	daos_iov_set(&dkey, dkey_buf, strlen(dkey_buf));
@@ -134,7 +134,7 @@ ts_key_insert(void)
 			rc = ts_vos_update(&dkey, &iod, &sgl, epoch);
 			if (rc != 0) {
 				fprintf(stderr, "Update failed: %d\n", rc);
-				D_GOTO(failed, rc);
+				D__GOTO(failed, rc);
 			}
 		}
 	}
@@ -177,21 +177,21 @@ ts_prepare(void)
 		return -1;
 	}
 
-	D_PRINT("pool file=%s, size=%lu\n", ts_pmem_file, ts_pool_size);
+	D__PRINT("pool file=%s, size=%lu\n", ts_pmem_file, ts_pool_size);
 	rc = posix_fallocate(fd, 0, ts_pool_size);
-	D_ASSERTF(!rc, "rc=%d\n", rc);
+	D__ASSERTF(!rc, "rc=%d\n", rc);
 
 	rc = vos_pool_create(ts_pmem_file, ts_pool, 0);
-	D_ASSERTF(!rc, "rc=%d\n", rc);
+	D__ASSERTF(!rc, "rc=%d\n", rc);
 
 	rc = vos_pool_open(ts_pmem_file, ts_pool, &ts_poh);
-	D_ASSERTF(!rc, "rc=%d\n", rc);
+	D__ASSERTF(!rc, "rc=%d\n", rc);
 
 	rc = vos_cont_create(ts_poh, ts_cont);
-	D_ASSERTF(!rc, "rc=%d\n", rc);
+	D__ASSERTF(!rc, "rc=%d\n", rc);
 
 	rc = vos_cont_open(ts_poh, ts_cont, &ts_coh);
-	D_ASSERT(!rc);
+	D__ASSERT(!rc);
 
 	return 0;
 }
@@ -291,7 +291,7 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	D_PRINT("rec_type=%s, zero_copy=%s, obj_per_cont=%u, dkey_per_obj=%u, "
+	D__PRINT("rec_type=%s, zero_copy=%s, obj_per_cont=%u, dkey_per_obj=%u, "
 		"akey_per_dkey=%u, recx_per_akey=%u\n",
 		ts_single ? "single" : "array", ts_zero_copy ? "yes" : "no",
 		ts_obj_p_cont, ts_dkey_p_obj, ts_akey_p_dkey, ts_recx_p_akey);
@@ -313,7 +313,7 @@ main(int argc, char **argv)
 		total = ts_obj_p_cont * ts_dkey_p_obj *
 			ts_akey_p_dkey * ts_recx_p_akey;
 
-		D_PRINT("duration = %12.8f sec, iops = %10.2f/sec, "
+		D__PRINT("duration = %12.8f sec, iops = %10.2f/sec, "
 			"latency =%12.6f us\n",
 			now - then, total / (now - then),
 			((now - then) * 1000 * 1000) / total);

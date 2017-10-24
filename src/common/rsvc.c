@@ -27,7 +27,7 @@
  * mainly about client state and client leader searching.
  */
 
-#define DD_SUBSYS	DD_FAC(common)
+#define DDSUBSYS	DDFAC(common)
 
 #include <daos/rsvc.h>
 
@@ -45,7 +45,7 @@
  * \param[in]	ranks	ranks of (potential) service replicas
  */
 int
-rsvc_client_init(struct rsvc_client *client, const daos_rank_list_t *ranks)
+rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
 {
 	int rc;
 
@@ -85,7 +85,7 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 {
 	int chosen;
 
-	D_DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
+	D__DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
 	if (client->sc_leader_known && client->sc_leader_aliveness > 0) {
 		chosen = client->sc_leader_index;
 	} else {
@@ -94,7 +94,7 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 		client->sc_next++;
 		client->sc_next %= client->sc_ranks->rl_nr.num;
 	}
-	D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr.num, "%d\n",
+	D__ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr.num, "%d\n",
 		  chosen);
 	ep->ep_rank = client->sc_ranks->rl_ranks[chosen];
 	ep->ep_tag = 0;
@@ -132,10 +132,10 @@ rsvc_client_process_hint(struct rsvc_client *client,
 {
 	bool found;
 
-	D_ASSERT(hint->sh_flags & RSVC_HINT_VALID);
+	D__ASSERT(hint->sh_flags & RSVC_HINT_VALID);
 
 	if (from_leader && hint->sh_rank != ep->ep_rank) {
-		D_ERROR("empty or invalid hint from leader rank %u: hint.term="
+		D__ERROR("empty or invalid hint from leader rank %u: hint.term="
 			DF_U64" hint.rank=%u\n", ep->ep_rank, hint->sh_term,
 			hint->sh_rank);
 		return;
@@ -143,7 +143,7 @@ rsvc_client_process_hint(struct rsvc_client *client,
 
 	if (client->sc_leader_known) {
 		if (hint->sh_term < client->sc_leader_term) {
-			D_DEBUG(DB_MD, "stale hint from rank %u: hint.term="
+			D__DEBUG(DB_MD, "stale hint from rank %u: hint.term="
 				DF_U64" hint.rank=%u\n", ep->ep_rank,
 				hint->sh_term, hint->sh_rank);
 			return;
@@ -158,13 +158,13 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	if (!found) {
 		int rc;
 
-		D_DEBUG(DB_MD, "unknown replica from rank %u: hint.term="DF_U64
+		D__DEBUG(DB_MD, "unknown replica from rank %u: hint.term="DF_U64
 			" hint.rank=%u\n", ep->ep_rank, hint->sh_term,
 			hint->sh_rank);
 		/* Append the unknown rank to tolerate user mistakes. */
 		rc = daos_rank_list_append(client->sc_ranks, hint->sh_rank);
 		if (rc != 0) {
-			D_DEBUG(DB_MD, "failed to append new rank: %d\n", rc);
+			D__DEBUG(DB_MD, "failed to append new rank: %d\n", rc);
 			return;
 		}
 		client->sc_leader_index = client->sc_ranks->rl_nr.num - 1;
@@ -178,7 +178,7 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	 * used instead.)
 	 */
 	client->sc_leader_aliveness = from_leader ? 2 : 1;
-	D_DEBUG(DB_MD, "new hint from rank %u: hint.term="DF_U64
+	D__DEBUG(DB_MD, "new hint from rank %u: hint.term="DF_U64
 		" hint.rank=%u\n", ep->ep_rank, hint->sh_term, hint->sh_rank);
 }
 
@@ -200,24 +200,24 @@ int
 rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 			 int rc_crt, int rc_svc, const struct rsvc_hint *hint)
 {
-	D_DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
+	D__DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
 	/*
 	 * Enumerate all cases of <rc_crt, rc_svc, hint>. Keep them at the same
 	 * indentation level, please.
 	 */
 	if (rc_crt != 0) {
-		D_DEBUG(DB_MD, "no reply from rank %u: rc_crt=%d\n",
+		D__DEBUG(DB_MD, "no reply from rank %u: rc_crt=%d\n",
 			ep->ep_rank, rc_crt);
 		rsvc_client_process_error(client, rc_crt, ep);
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (rc_svc == -DER_NOTLEADER &&
 		   (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID))) {
-		D_DEBUG(DB_MD, "non-leader reply without hint from rank %u\n",
+		D__DEBUG(DB_MD, "non-leader reply without hint from rank %u\n",
 			ep->ep_rank);
 		rsvc_client_process_error(client, rc_svc, ep);
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (rc_svc == -DER_NOTLEADER) {
-		D_DEBUG(DB_MD, "non-leader reply with hint from rank %u: "
+		D__DEBUG(DB_MD, "non-leader reply with hint from rank %u: "
 			"hint.term="DF_U64" hint.rank=%u\n", ep->ep_rank,
 			hint->sh_term, hint->sh_rank);
 		rsvc_client_process_error(client, rc_svc, ep);
@@ -226,11 +226,11 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID)) {
 		/* This may happen if the service wasn't found. */
-		D_DEBUG(DB_MD, "\"leader\" reply without hint from rank %u: "
+		D__DEBUG(DB_MD, "\"leader\" reply without hint from rank %u: "
 			"rc_svc=%d\n", ep->ep_rank, rc_svc);
 		return RSVC_CLIENT_PROCEED;
 	} else {
-		D_DEBUG(DB_MD, "leader reply with hint from rank %u: hint.term="
+		D__DEBUG(DB_MD, "leader reply with hint from rank %u: hint.term="
 			DF_U64" hint.rank=%u rc_svc=%d\n", ep->ep_rank,
 			hint->sh_term, hint->sh_rank, rc_svc);
 		rsvc_client_process_hint(client, hint, true /* from_leader */,
@@ -249,7 +249,7 @@ struct rsvc_client_buf {
 	uint64_t	scb_leader_term;
 	uint32_t	scb_leader_index;
 	uint32_t	scb_next;
-	daos_rank_t	scb_ranks[0];
+	d_rank_t	scb_ranks[0];
 };
 
 size_t
@@ -290,7 +290,7 @@ rsvc_client_buf_swap_ranks(struct rsvc_client_buf *buf)
 {
 	int i;
 
-	D_ASSERT(buf->scb_magic == rsvc_client_buf_magic);
+	D__ASSERT(buf->scb_magic == rsvc_client_buf_magic);
 	for (i = 0; i < buf->scb_nranks; i++)
 		D_SWAP32S(&buf->scb_ranks[i]);
 }
@@ -303,7 +303,7 @@ rsvc_client_decode(void *buf, size_t len, struct rsvc_client *client)
 
 	/* OK to access the struct? */
 	if (len < sizeof(*p)) {
-		D_ERROR("truncated buffer: %zu < %zu\n", len, sizeof(*p));
+		D__ERROR("truncated buffer: %zu < %zu\n", len, sizeof(*p));
 		return -DER_IO;
 	}
 	/* Magic matches? */
@@ -311,7 +311,7 @@ rsvc_client_decode(void *buf, size_t len, struct rsvc_client *client)
 		if (p->scb_magic == D_SWAP32(rsvc_client_buf_magic)) {
 			swap = true;
 		} else {
-			D_ERROR("bad buffer magic: %x\n", p->scb_magic);
+			D__ERROR("bad buffer magic: %x\n", p->scb_magic);
 			return -DER_IO;
 		}
 	}
@@ -320,11 +320,11 @@ rsvc_client_decode(void *buf, size_t len, struct rsvc_client *client)
 		rsvc_client_buf_swap(p);
 	/* OK to access the ranks? */
 	if (p->scb_nranks == 0) {
-		D_ERROR("zero nranks\n");
+		D__ERROR("zero nranks\n");
 		return -DER_IO;
 	}
 	if (len < sizeof(*p) + sizeof(*p->scb_ranks) * p->scb_nranks) {
-		D_ERROR("truncated buffer: %zu < %zu\n", len,
+		D__ERROR("truncated buffer: %zu < %zu\n", len,
 			sizeof(*p) + sizeof(*p->scb_ranks) * p->scb_nranks);
 		return -DER_IO;
 	}

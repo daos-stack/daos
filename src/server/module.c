@@ -25,7 +25,7 @@
  * to load server-side code on demand. DAOS modules are effectively dynamic
  * libraries loaded on-the-fly in the DAOS server via dlopen(3).
  */
-#define DD_SUBSYS       DD_FAC(server)
+#define DDSUBSYS       DDFAC(server)
 
 #include <dlfcn.h>
 
@@ -78,7 +78,7 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	int			 rc;
 
 	if (strlen(modname) > DSS_MODNAME_MAX_LEN) {
-		D_ERROR("modname %s is too long > %d\n",
+		D__ERROR("modname %s is too long > %d\n",
 			modname, DSS_MODNAME_MAX_LEN);
 		return -DER_INVAL;
 	}
@@ -87,14 +87,14 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	sprintf(name, "lib%s.so", modname);
 	handle = dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
 	if (handle == NULL) {
-		D_ERROR("cannot load %s: %s\n", name, dlerror());
+		D__ERROR("cannot load %s: %s\n", name, dlerror());
 		return -DER_INVAL;
 	}
 
 	/* allocate data structure to track this module instance */
-	D_ALLOC_PTR(lmod);
+	D__ALLOC_PTR(lmod);
 	if (!lmod)
-		D_GOTO(err_hdl, rc = -DER_NOMEM);
+		D__GOTO(err_hdl, rc = -DER_NOMEM);
 
 	lmod->lm_hdl = handle;
 
@@ -108,23 +108,23 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	/* check for errors */
 	err = dlerror();
 	if (err != NULL) {
-		D_ERROR("failed to load %s: %s\n", modname, err);
-		D_GOTO(err_lmod, rc = -DER_INVAL);
+		D__ERROR("failed to load %s: %s\n", modname, err);
+		D__GOTO(err_lmod, rc = -DER_INVAL);
 	}
 	lmod->lm_dss_mod = smod;
 
 	/* check module name is consistent */
 	if (strcmp(smod->sm_name, modname) != 0) {
-		D_ERROR("inconsistent module name %s != %s\n", modname,
+		D__ERROR("inconsistent module name %s != %s\n", modname,
 			smod->sm_name);
-		D_GOTO(err_hdl, rc = -DER_INVAL);
+		D__GOTO(err_hdl, rc = -DER_INVAL);
 	}
 
 	/* initialize the module */
 	rc = smod->sm_init();
 	if (rc) {
-		D_ERROR("failed to init %s: %d\n", modname, rc);
-		D_GOTO(err_hdl, rc = -DER_INVAL);
+		D__ERROR("failed to init %s: %d\n", modname, rc);
+		D__GOTO(err_hdl, rc = -DER_INVAL);
 	}
 
 	if (smod->sm_key != NULL)
@@ -133,18 +133,18 @@ dss_module_load(const char *modname, uint64_t *mod_facs)
 	rc = daos_rpc_register(smod->sm_cl_rpcs, smod->sm_handlers,
 			       smod->sm_mod_id);
 	if (rc) {
-		D_ERROR("failed to register client RPC for %s: %d\n",
+		D__ERROR("failed to register client RPC for %s: %d\n",
 			modname, rc);
-		D_GOTO(err_mod_init, rc);
+		D__GOTO(err_mod_init, rc);
 	}
 
 	/* register server RPC handlers */
 	rc = daos_rpc_register(smod->sm_srv_rpcs, smod->sm_handlers,
 			       smod->sm_mod_id);
 	if (rc) {
-		D_ERROR("failed to register srv RPC for %s: %d\n",
+		D__ERROR("failed to register srv RPC for %s: %d\n",
 			modname, rc);
-		D_GOTO(err_cl_rpc, rc);
+		D__GOTO(err_cl_rpc, rc);
 	}
 
 	if (mod_facs != NULL)
@@ -162,7 +162,7 @@ err_mod_init:
 	dss_unregister_key(smod->sm_key);
 	smod->sm_fini();
 err_lmod:
-	D_FREE_PTR(lmod);
+	D__FREE_PTR(lmod);
 err_hdl:
 	dlclose(handle);
 	return rc;
@@ -177,14 +177,14 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	/* unregister client RPC handlers */
 	rc = daos_rpc_unregister(smod->sm_cl_rpcs);
 	if (rc) {
-		D_ERROR("failed to unregister client RPC %d\n", rc);
+		D__ERROR("failed to unregister client RPC %d\n", rc);
 		return rc;
 	}
 
 	/* unregister server RPC handlers */
 	rc = daos_rpc_unregister(smod->sm_srv_rpcs);
 	if (rc) {
-		D_ERROR("failed to unregister srv RPC: %d\n", rc);
+		D__ERROR("failed to unregister srv RPC: %d\n", rc);
 		return rc;
 	}
 
@@ -193,7 +193,7 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	/* finalize the module */
 	rc = smod->sm_fini();
 	if (rc) {
-		D_ERROR("module finalization failed for: %d\n", rc);
+		D__ERROR("module finalization failed for: %d\n", rc);
 		return rc;
 
 	}
@@ -223,7 +223,7 @@ dss_module_unload(const char *modname)
 	dss_module_unload_internal(lmod);
 
 	/* free memory used to track this module instance */
-	D_FREE_PTR(lmod);
+	D__FREE_PTR(lmod);
 
 	return 0;
 }
@@ -258,6 +258,6 @@ dss_module_unload_all(void)
 	daos_list_for_each_entry_safe(mod, tmp, &destroy_list, lm_lk) {
 		daos_list_del_init(&mod->lm_lk);
 		dss_module_unload_internal(mod);
-		D_FREE_PTR(mod);
+		D__FREE_PTR(mod);
 	}
 }

@@ -26,7 +26,7 @@
  * This is part of daos_server. It exports the pool RPC handlers and implements
  * Pool Server API.
  */
-#define DD_SUBSYS	DD_FAC(pool)
+#define DDSUBSYS	DDFAC(pool)
 
 #include <daos_srv/pool.h>
 
@@ -42,15 +42,15 @@ init(void)
 
 	rc = ds_pool_svc_hash_init();
 	if (rc != 0)
-		D_GOTO(err, rc);
+		D__GOTO(err, rc);
 
 	rc = ds_pool_cache_init();
 	if (rc != 0)
-		D_GOTO(err_pool_svc, rc);
+		D__GOTO(err_pool_svc, rc);
 
 	rc = ds_pool_hdl_hash_init();
 	if (rc != 0)
-		D_GOTO(err_pool_cache, rc);
+		D__GOTO(err_pool_cache, rc);
 
 	return 0;
 
@@ -129,7 +129,7 @@ pool_tls_init(const struct dss_thread_local_storage *dtls,
 {
 	struct pool_tls *tls;
 
-	D_ALLOC_PTR(tls);
+	D__ALLOC_PTR(tls);
 	if (tls == NULL)
 		return NULL;
 
@@ -144,8 +144,8 @@ pool_tls_fini(const struct dss_thread_local_storage *dtls,
 	struct pool_tls *tls = data;
 
 	ds_pool_child_purge(tls);
-	D_ASSERT(daos_list_empty(&tls->dt_pool_list));
-	D_FREE_PTR(tls);
+	D__ASSERT(daos_list_empty(&tls->dt_pool_list));
+	D__FREE_PTR(tls);
 }
 
 struct dss_module_key pool_module_key = {

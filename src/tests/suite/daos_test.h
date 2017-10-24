@@ -42,10 +42,10 @@
 
 typedef struct {
 	bool			multi_rank;
-	daos_rank_t		ranks[13];
+	d_rank_t		ranks[13];
 	int			myrank;
 	int			rank_size;
-	daos_rank_list_t	svc;
+	d_rank_list_t	svc;
 	const char	       *group;
 	uuid_t			pool_uuid;
 	uuid_t			co_uuid;
@@ -140,8 +140,8 @@ int run_daos_rebuild_test(int rank, int size);
 
 void
 daos_kill_server(const uuid_t pool_uuid, const char *grp,
-		 const daos_rank_list_t *svc, daos_handle_t poh,
-		 daos_rank_t rank);
+		 const d_rank_list_t *svc, daos_handle_t poh,
+		 d_rank_t rank);
 
 static inline void
 daos_test_print(int rank, char *message)

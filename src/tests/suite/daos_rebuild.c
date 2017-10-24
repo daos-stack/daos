@@ -28,7 +28,7 @@
  *
  *
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 #include "daos_iotest.h"
 #include <daos/pool.h>
 
@@ -39,7 +39,7 @@
 #define MAX_KILLS	2
 
 static bool detected_ranks;
-static daos_rank_t ranks_to_kill[MAX_KILLS];
+static d_rank_t ranks_to_kill[MAX_KILLS];
 
 static bool
 rebuild_runable(test_arg_t *arg, unsigned int required_tgts)
@@ -77,9 +77,9 @@ rebuild_runable(test_arg_t *arg, unsigned int required_tgts)
 }
 
 static void
-rebuild_test_exclude_tgt(test_arg_t *arg, daos_rank_t rank, bool kill)
+rebuild_test_exclude_tgt(test_arg_t *arg, d_rank_t rank, bool kill)
 {
-	daos_rank_list_t	ranks;
+	d_rank_list_t	ranks;
 	int			rc;
 
 	if (arg->myrank == 0) {
@@ -103,9 +103,9 @@ rebuild_test_exclude_tgt(test_arg_t *arg, daos_rank_t rank, bool kill)
 }
 
 static void
-rebuild_test_add_tgt(test_arg_t *arg, daos_rank_t rank)
+rebuild_test_add_tgt(test_arg_t *arg, d_rank_t rank)
 {
-	daos_rank_list_t	ranks;
+	d_rank_list_t	ranks;
 	int			rc;
 
 	/** exclude the target from the pool */
@@ -121,7 +121,7 @@ rebuild_test_add_tgt(test_arg_t *arg, daos_rank_t rank)
 }
 
 static int
-rebuild_wait(test_arg_t *arg, daos_rank_t failed_rank, bool concurrent_io)
+rebuild_wait(test_arg_t *arg, d_rank_t failed_rank, bool concurrent_io)
 {
 	struct ioreq		req;
 	daos_obj_id_t		oid;
@@ -203,7 +203,7 @@ rebuild_wait(test_arg_t *arg, daos_rank_t failed_rank, bool concurrent_io)
 }
 
 static void
-rebuild_targets(test_arg_t *arg, daos_rank_t *failed_ranks, int rank_nr,
+rebuild_targets(test_arg_t *arg, d_rank_t *failed_ranks, int rank_nr,
 		bool kill, bool concurrent_io)
 {
 	int	i;
@@ -224,7 +224,7 @@ rebuild_targets(test_arg_t *arg, daos_rank_t *failed_ranks, int rank_nr,
 }
 
 static void
-rebuild_single_target(test_arg_t *arg, daos_rank_t failed_rank,
+rebuild_single_target(test_arg_t *arg, d_rank_t failed_rank,
 		      bool concurrent_io)
 {
 	rebuild_targets(arg, &failed_rank, 1, false, concurrent_io);

@@ -24,7 +24,7 @@
  * tier_fetch
  * Implements cross-tier fetching of objects and sub-objects (or will soon).
  **/
-#define DD_SUBSYS	DD_FAC(tier)
+#define DDSUBSYS	DDFAC(tier)
 
 #include <daos_types.h>
 #include <daos_api.h>
@@ -148,9 +148,9 @@ tf_cont_cb(tse_task_t *task, void *data)
 	daos_epoch_hold_t *args = daos_task_get_args(DAOS_OPC_EPOCH_HOLD, task);
 	int rc = 0;
 
-	D_DEBUG(DF_TIERS, "got "DF_X64"\n", args->coh.cookie);
+	D__DEBUG(DF_TIERS, "got "DF_X64"\n", args->coh.cookie);
 	if (args == NULL) {
-		D_ERROR("daos_task_get_args failed\n");
+		D__ERROR("daos_task_get_args failed\n");
 		rc = -DER_INVAL;
 	} else
 		*pcoh = args->coh;
@@ -179,30 +179,30 @@ tf_cont_close(daos_handle_t coh, uuid_t cid, daos_epoch_t epoch)
 
 	sched = &(dss_get_module_info()->dmi_sched);
 
-	D_DEBUG(DF_TIERS, "epoch:"DF_U64"\n", epoch);
+	D__DEBUG(DF_TIERS, "epoch:"DF_U64"\n", epoch);
 
 	rc = daos_task_create(DAOS_OPC_EPOCH_COMMIT, sched, &args1, 0, NULL,
 			      &task1);
 	if (rc) {
-		D_ERROR("daos_task_create returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("daos_task_create returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 
 	rc = daos_task_create(DAOS_OPC_CONT_CLOSE, sched, &args2, 1, &task1,
 			      &task2);
 	if (rc) {
-		D_ERROR("daos_task_create returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("daos_task_create returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 	rc = tse_task_schedule(task2, false);
 	if (rc) {
-		D_ERROR("tse_task_schedule returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("tse_task_schedule returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 	rc = tse_task_schedule(task1, false);
 	if (rc) {
-		D_ERROR("tse_task_schedule returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("tse_task_schedule returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 	/* make sure this completes before we return */
 	daos_progress(sched, DAOS_EQ_WAIT, &empty);
@@ -241,20 +241,20 @@ tf_cont_open(daos_handle_t *pcoh, uuid_t cid, daos_epoch_t *epoch)
 	rc = daos_task_create(DAOS_OPC_CONT_OPEN, sched, &args1, 0, NULL,
 			      &task1);
 	if (rc) {
-		D_ERROR("daos_task_create returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("daos_task_create returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 	rc = daos_task_create(DAOS_OPC_EPOCH_HOLD, sched, &args2, 1, &task1,
 			      &task2);
 	if (rc) {
-		D_ERROR("daos_task_create returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("daos_task_create returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 	rc = tse_task_register_comp_cb(task2, tf_cont_cb,
 				       &pcoh, sizeof(daos_handle_t **));
 	if (rc) {
-		D_ERROR("tse_task_register_comp_cb returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("tse_task_register_comp_cb returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 	dta1 = daos_task_get_args(DAOS_OPC_CONT_OPEN, task1);
 	dta2 = daos_task_get_args(DAOS_OPC_EPOCH_HOLD, task2);
@@ -262,13 +262,13 @@ tf_cont_open(daos_handle_t *pcoh, uuid_t cid, daos_epoch_t *epoch)
 
 	rc = tse_task_schedule(task2, false);
 	if (rc) {
-		D_ERROR("tse_task_schedule returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("tse_task_schedule returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 	rc = tse_task_schedule(task1, false);
 	if (rc) {
-		D_ERROR("tse_task_schedule returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("tse_task_schedule returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 	tse_sched_progress(sched);
 	empty = false;
@@ -297,18 +297,18 @@ tier_hdlr_fetch_one(void *vin)
 
 	child = ds_pool_child_lookup(in->tfi->bfi_pool);
 	if (child == NULL) {
-		D_DEBUG(DF_TIERS, "ds_pool_child_lookup returned NULL\n");
+		D__DEBUG(DF_TIERS, "ds_pool_child_lookup returned NULL\n");
 		return -DER_NONEXIST;
 	}
 	rc = vos_cont_open(child->spc_hdl, in->tfi->bfi_co_id, &coh);
 	if (rc != 0) {
-		D_DEBUG(DF_TIERS, "vos_cont_open returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__DEBUG(DF_TIERS, "vos_cont_open returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 	rc = tier_fetche(in->tfi->bfi_pool, coh, in->tfi->bfi_ep,
 			 in->tfi->bfi_co_id, in->coh);
 	if (rc != 0)
-		D_DEBUG(DF_TIERS, "tier_fetche returned %d\n", rc);
+		D__DEBUG(DF_TIERS, "tier_fetche returned %d\n", rc);
 out:
 	ds_pool_child_put(child);
 	return rc;
@@ -332,7 +332,7 @@ ds_tier_fetch_bcast_handler(crt_rpc_t *rpc)
 	out->tfo_ret = dss_task_collective(tier_hdlr_fetch_one, &cof);
 	rc = crt_reply_send(rpc);
 	if (rc < 0)
-		D_ERROR("crt_reply_send returned %d\n", rc);
+		D__ERROR("crt_reply_send returned %d\n", rc);
 }
 
 /* Primary fetch handler - runs on single node */
@@ -349,19 +349,19 @@ ds_tier_fetch_handler(crt_rpc_t *rpc)
 	crt_rpc_t	      *brpc;
 	daos_iov_t	       gh;
 
-	D_DEBUG(DF_TIERS, "\tpool:"DF_UUIDF"\n", DP_UUID(in->tfi_pool));
-	D_DEBUG(DF_TIERS, "\tcont_id:"DF_UUIDF"\n", DP_UUID(in->tfi_co_id));
-	D_DEBUG(DF_TIERS, "\tepoch:"DF_U64"\n", in->tfi_ep);
+	D__DEBUG(DF_TIERS, "\tpool:"DF_UUIDF"\n", DP_UUID(in->tfi_pool));
+	D__DEBUG(DF_TIERS, "\tcont_id:"DF_UUIDF"\n", DP_UUID(in->tfi_co_id));
+	D__DEBUG(DF_TIERS, "\tepoch:"DF_U64"\n", in->tfi_ep);
 
 	rc = tf_cont_open(&coh, in->tfi_co_id, &in->tfi_ep);
 	if (rc) {
-		D_ERROR("tf_cont_open returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("tf_cont_open returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 
 	gh.iov_buf = NULL;
 	daos_cont_local2global(coh, &gh);
-	D_ALLOC(gh.iov_buf, gh.iov_buf_len);
+	D__ALLOC(gh.iov_buf, gh.iov_buf_len);
 	gh.iov_len = gh.iov_buf_len;
 
 	daos_cont_local2global(coh, &gh);
@@ -369,8 +369,8 @@ ds_tier_fetch_handler(crt_rpc_t *rpc)
 	rc = ds_tier_bcast_create(rpc->cr_ctx, in->tfi_pool,
 				  TIER_BCAST_FETCH, &brpc);
 	if (rc) {
-		D_ERROR("ds_tier_bcast_create returned %d\n", rc);
-		D_GOTO(out_free, rc);
+		D__ERROR("ds_tier_bcast_create returned %d\n", rc);
+		D__GOTO(out_free, rc);
 	}
 	inb = crt_req_get(brpc);
 	uuid_copy(inb->bfi_pool, in->tfi_pool);
@@ -380,18 +380,18 @@ ds_tier_fetch_handler(crt_rpc_t *rpc)
 
 	rc = dss_rpc_send(brpc);
 	if (rc)
-		D_GOTO(out_free, rc);
+		D__GOTO(out_free, rc);
 	outb = crt_reply_get(brpc);
 	rc = outb->tfo_ret;
 	if (rc != 0)
-		D_GOTO(out_free, rc);
+		D__GOTO(out_free, rc);
 
 	rc = tf_cont_close(coh, in->tfi_co_id, in->tfi_ep);
 	if (rc)
-		D_ERROR("tf_cont_close returned %d\n", rc);
+		D__ERROR("tf_cont_close returned %d\n", rc);
 
 out_free:
-	D_FREE(gh.iov_buf, gh.iov_buf_len);
+	D__FREE(gh.iov_buf, gh.iov_buf_len);
 out:
 	out->tfo_ret = rc;
 	rc = crt_reply_send(rpc);
@@ -446,7 +446,7 @@ tier_proc_obj(void *ctx, vos_iter_entry_t *ie)
 	int			rc;
 	daos_obj_close_t	args;
 
-	D_DEBUG(DF_TIERS, "closing object:"DF_UOID" on dest tier\n",
+	D__DEBUG(DF_TIERS, "closing object:"DF_UOID" on dest tier\n",
 		DP_UOID(fctx->dfc_oid));
 	args.oh	= fctx->dfc_oh;
 	DAOS_API_ARG_ASSERT(args, OBJ_CLOSE);
@@ -470,7 +470,7 @@ tf_obj_open(struct tier_fetch_ctx *fctx)
 	int			rc;
 	bool			empty;
 
-	D_DEBUG(DF_TIERS, "opening object:"DF_UOID" on dest tier\n",
+	D__DEBUG(DF_TIERS, "opening object:"DF_UOID" on dest tier\n",
 		DP_UOID(fctx->dfc_oid));
 	args.coh	= fctx->dfc_coh;
 	args.oid	= fctx->dfc_oid.id_pub;
@@ -507,21 +507,21 @@ tf_obj_update_cb(tse_task_t *task, void *data)
 	int rc;
 	int j;
 
-	D_DEBUG(DF_TIERS, "object update complete\n");
+	D__DEBUG(DF_TIERS, "object update complete\n");
 	rc = vos_obj_zc_fetch_end(cba->ioh, cba->dkey, cba->nrecs,
 				  cba->iods, 0);
 	if (rc)
-		D_ERROR("vox_obj_zc_fetch_end returned %d\n", rc);
+		D__ERROR("vox_obj_zc_fetch_end returned %d\n", rc);
 
 	for (j = 0; j < cba->nrecs; j++) {
 		daos_iod_t *piod = &cba->iods[j];
 		int nr = piod->iod_nr;
 
-		D_FREE(piod->iod_recxs, sizeof(daos_recx_t) * nr);
-		D_FREE(piod->iod_csums, sizeof(daos_csum_buf_t) * nr);
-		D_FREE(piod->iod_eprs, sizeof(daos_epoch_range_t) * nr);
+		D__FREE(piod->iod_recxs, sizeof(daos_recx_t) * nr);
+		D__FREE(piod->iod_csums, sizeof(daos_csum_buf_t) * nr);
+		D__FREE(piod->iod_eprs, sizeof(daos_epoch_range_t) * nr);
 	}
-	D_FREE(cba->tki, tier_key_iod_size(cba->nrecs));
+	D__FREE(cba->tki, tier_key_iod_size(cba->nrecs));
 	return rc;
 }
 
@@ -535,7 +535,7 @@ tf_obj_update(struct tier_fetch_ctx *fctx, struct tier_key_iod *tki)
 	struct tf_ou_cb_args	cba;
 	bool			empty;
 
-	D_DEBUG(DF_TIERS, "updating object on dest tier\n");
+	D__DEBUG(DF_TIERS, "updating object on dest tier\n");
 	args.oh		= fctx->dfc_oh;
 	args.epoch	= fctx->dfc_ev;
 	args.dkey	= &tki->dki_dkey;
@@ -548,7 +548,7 @@ tf_obj_update(struct tier_fetch_ctx *fctx, struct tier_key_iod *tki)
 	rc = daos_task_create(DAOS_OPC_OBJ_UPDATE, fctx->dfc_sched, &args, 0,
 			      NULL, &task);
 	if (rc)
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 
 	cba.ioh   = fctx->dfc_ioh;
 	cba.dkey  = &fctx->dfc_dkey;
@@ -559,8 +559,8 @@ tf_obj_update(struct tier_fetch_ctx *fctx, struct tier_key_iod *tki)
 	rc = tse_task_register_comp_cb(task, tf_obj_update_cb,
 				       &cba, sizeof(struct tf_ou_cb_args));
 	if (rc) {
-		D_ERROR("das_task_register_comp_cb returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("das_task_register_comp_cb returned %d\n", rc);
+		D__GOTO(out, rc);
 	} else {
 		tse_task_schedule(task, true);
 		daos_progress(fctx->dfc_sched,
@@ -587,11 +587,11 @@ tier_latch_oid(void *ctx, vos_iter_entry_t *ie)
 	struct tier_fetch_ctx *fctx = (struct tier_fetch_ctx *)ctx;
 	int rc;
 
-	D_DEBUG(DF_TIERS, " "DF_UOID"\n", DP_UOID(ie->ie_oid));
+	D__DEBUG(DF_TIERS, " "DF_UOID"\n", DP_UOID(ie->ie_oid));
 	fctx->dfc_oid = ie->ie_oid;
 	rc = tf_obj_open(fctx);
 	if (rc)
-		D_ERROR("tf_obj_open returned %d\n", rc);
+		D__ERROR("tf_obj_open returned %d\n", rc);
 
 	return 0;
 }
@@ -622,9 +622,9 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 	daos_epoch_t			 epoch = DAOS_EPOCH_MAX;
 
 
-	D_ALLOC(ptmp, tier_key_iod_size(nrecs));
+	D__ALLOC(ptmp, tier_key_iod_size(nrecs));
 	if (ptmp == NULL)
-		D_GOTO(out, (rc = -DER_NOMEM));
+		D__GOTO(out, (rc = -DER_NOMEM));
 
 	ptmp->dki_iods = (daos_iod_t *)&ptmp[1];
 	ptmp->dki_sgs  = (daos_sg_list_t *)&ptmp->dki_iods[nrecs];
@@ -639,21 +639,21 @@ tier_proc_dkey(void *ctx, vos_iter_entry_t *ie)
 				 &src->dvi_viod);
 		(ptmp->dki_nr)++;
 		daos_list_del(iter);
-		D_FREE(src, tier_vec_iod_size(src->dvi_viod.iod_nr));
+		D__FREE(src, tier_vec_iod_size(src->dvi_viod.iod_nr));
 	}
 	rc = vos_obj_zc_fetch_begin(fctx->dfc_co, fctx->dfc_oid, epoch,
 				    &fctx->dfc_dkey, nrecs,
 				    ptmp->dki_iods, &fctx->dfc_ioh);
 	if (rc != 0) {
-		D_ERROR("vos_obj_zc_fetch returned %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("vos_obj_zc_fetch returned %d\n", rc);
+		D__GOTO(out, rc);
 	}
 	for (j = 0; j < nrecs; j++) {
 		daos_sg_list_t *psg;
 
 		rc = vos_obj_zc_sgl_at(fctx->dfc_ioh, j, &psg);
 		if (rc != 0) {
-			D_ERROR("vos_obj_zc_sgl_at returned %d\n", rc);
+			D__ERROR("vos_obj_zc_sgl_at returned %d\n", rc);
 			break;
 		}
 		ptmp->dki_sgs[j].sg_nr.num_out   = psg->sg_nr.num_out;
@@ -694,44 +694,44 @@ tier_proc_akey(void *ctx, vos_iter_entry_t *ie)
 	char			 kbuf[80];
 
 	nrecs = fctx->dfc_ne;
-	D_DEBUG(DF_TIERS, "(%d) %s\n", nrecs, tier_pr_key(ie->ie_key, kbuf));
+	D__DEBUG(DF_TIERS, "(%d) %s\n", nrecs, tier_pr_key(ie->ie_key, kbuf));
 
 
 	if (nrecs  == 0) {
-		D_DEBUG(DF_TIERS, "akey had no extents\n");
-		D_GOTO(out, 0);
+		D__DEBUG(DF_TIERS, "akey had no extents\n");
+		D__GOTO(out, 0);
 	}
 
 	/* allocate the list wrapper */
-	D_ALLOC_PTR(vio);
+	D__ALLOC_PTR(vio);
 	if (vio == NULL)
-		D_GOTO(out, -DER_NOMEM);
+		D__GOTO(out, -DER_NOMEM);
 
 	vio->dvi_viod.iod_size = 0;
 
-	D_ALLOC(ptmp, sizeof(daos_recx_t) * nrecs);
+	D__ALLOC(ptmp, sizeof(daos_recx_t) * nrecs);
 	if (ptmp == NULL) {
-		D_FREE_PTR(vio);
-		D_GOTO(out, -DER_NOMEM);
+		D__FREE_PTR(vio);
+		D__GOTO(out, -DER_NOMEM);
 	}
 
 	vio->dvi_viod.iod_recxs = (daos_recx_t *)ptmp;
 
-	D_ALLOC(ptmp, sizeof(daos_csum_buf_t) * nrecs);
+	D__ALLOC(ptmp, sizeof(daos_csum_buf_t) * nrecs);
 	if (ptmp == NULL) {
-		D_FREE(vio->dvi_viod.iod_recxs, sizeof(daos_recx_t) * nrecs);
-		D_FREE_PTR(vio);
-		D_GOTO(out, -DER_NOMEM);
+		D__FREE(vio->dvi_viod.iod_recxs, sizeof(daos_recx_t) * nrecs);
+		D__FREE_PTR(vio);
+		D__GOTO(out, -DER_NOMEM);
 	}
 
 	vio->dvi_viod.iod_csums = (daos_csum_buf_t *)ptmp;
-	D_ALLOC(ptmp, sizeof(daos_epoch_range_t) * nrecs);
+	D__ALLOC(ptmp, sizeof(daos_epoch_range_t) * nrecs);
 	if (ptmp == NULL) {
-		D_FREE_PTR(vio);
-		D_FREE(vio->dvi_viod.iod_recxs, sizeof(daos_recx_t) * nrecs);
-		D_FREE(vio->dvi_viod.iod_csums,
+		D__FREE_PTR(vio);
+		D__FREE(vio->dvi_viod.iod_recxs, sizeof(daos_recx_t) * nrecs);
+		D__FREE(vio->dvi_viod.iod_csums,
 		       sizeof(daos_csum_buf_t) * nrecs);
-		D_GOTO(out, -DER_NOMEM);
+		D__GOTO(out, -DER_NOMEM);
 	}
 
 	vio->dvi_viod.iod_eprs = (daos_epoch_range_t *)ptmp;
@@ -754,7 +754,7 @@ tier_proc_akey(void *ctx, vos_iter_entry_t *ie)
 				p->iod_size = dei->del_recs[j].der_rsize;
 				p->iod_type = dei->del_recs[j].der_type;
 			} else if (p->iod_size != dei->del_recs[j].der_rsize) {
-				D_ERROR("mutilple sizes %lu  %lu\n",
+				D__ERROR("mutilple sizes %lu  %lu\n",
 					p->iod_size,
 					dei->del_recs[j].der_rsize);
 			}
@@ -768,7 +768,7 @@ tier_proc_akey(void *ctx, vos_iter_entry_t *ie)
 
 		}
 		daos_list_del(iter);
-		D_FREE_PTR(dei);
+		D__FREE_PTR(dei);
 	}
 	fctx->dfc_na++;
 
@@ -785,18 +785,18 @@ tier_rec_cb(void *ctx, vos_iter_entry_t *ie)
 	int		       rc = 0;
 
 	if (daos_list_empty(&fctx->dfc_head)) {
-		D_ALLOC_PTR(el);
+		D__ALLOC_PTR(el);
 		if (el == NULL)
-			D_GOTO(out, -DER_NOMEM);
+			D__GOTO(out, -DER_NOMEM);
 		DAOS_INIT_LIST_HEAD(&el->del_lh);
 		el->del_nrecs = 0;
 		daos_list_add_tail(&el->del_lh, &fctx->dfc_head);
 	}
 	el = daos_list_entry(fctx->dfc_head.prev, struct tier_ext_list, del_lh);
 	if (el->del_nrecs == NUM_BUNDLED_EXTS) {
-		D_ALLOC_PTR(el);
+		D__ALLOC_PTR(el);
 		if (el == NULL)
-			D_GOTO(out, -DER_NOMEM);
+			D__GOTO(out, -DER_NOMEM);
 		DAOS_INIT_LIST_HEAD(&el->del_lh);
 		el->del_nrecs = 0;
 		daos_list_add_tail(&el->del_lh, &fctx->dfc_head);

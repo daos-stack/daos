@@ -23,7 +23,7 @@
 /**
  * dmg(8): DAOS Management Utility
  */
-#define DD_SUBSYS	DD_FAC(utils)
+#define DDSUBSYS	DDFAC(utils)
 
 #include <getopt.h>
 #include <stdio.h>
@@ -110,8 +110,8 @@ create_hdlr(int argc, char *argv[])
 	unsigned int		gid = getegid();
 	daos_size_t		size = tobytes(default_size);
 	const char	       *group = default_group;
-	daos_rank_t		ranks[max_svc_nreplicas];
-	daos_rank_list_t	svc = {};
+	d_rank_t		ranks[max_svc_nreplicas];
+	d_rank_list_t	svc = {};
 	uuid_t			pool_uuid;
 	int			i;
 	int			rc;
@@ -255,10 +255,10 @@ pool_op_hdlr(int argc, char *argv[])
 	};
 	const char	       *group = default_group;
 	uuid_t			pool_uuid;
-	daos_rank_t		target = -1;
+	d_rank_t		target = -1;
 	daos_handle_t		pool;
 	const char	       *svc_str = NULL;
-	daos_rank_list_t       *svc;
+	d_rank_list_t       *svc;
 	enum pool_op		op = pool_op_parse(argv[1]);
 	int			rc;
 
@@ -336,7 +336,7 @@ pool_op_hdlr(int argc, char *argv[])
 			return rc;
 		}
 	} else if (op == POOL_EXCLUDE) {
-		daos_rank_list_t targets;
+		d_rank_list_t targets;
 
 		memset(&targets, 0, sizeof(targets));
 		targets.rl_nr.num = 1;
@@ -359,7 +359,7 @@ pool_op_hdlr(int argc, char *argv[])
 			fprintf(stderr, "pool query failed: %d\n", rc);
 			return rc;
 		}
-		D_PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u\n",
+		D__PRINT("Pool "DF_UUIDF", ntarget=%u, disabled=%u\n",
 			DP_UUID(pinfo.pi_uuid), pinfo.pi_ntargets,
 			pinfo.pi_ndisabled);
 
@@ -373,10 +373,10 @@ pool_op_hdlr(int argc, char *argv[])
 			else
 				sstr = "busy";
 
-			D_PRINT("Rebuild %s, "DF_U64" objs, "DF_U64" recs\n",
+			D__PRINT("Rebuild %s, "DF_U64" objs, "DF_U64" recs\n",
 				sstr, rstat->rs_obj_nr, rstat->rs_rec_nr);
 		} else {
-			D_PRINT("Rebuild failed, rc=%d, status=%d\n",
+			D__PRINT("Rebuild failed, rc=%d, status=%d\n",
 				rc, rstat->rs_errno);
 		}
 	}
@@ -405,7 +405,7 @@ kill_hdlr(int argc, char *argv[])
 	};
 	const char	       *group = default_group;
 	bool			force = false;
-	daos_rank_t		rank = -1;
+	d_rank_t		rank = -1;
 	int			rc;
 
 	while ((rc = getopt_long(argc, argv, "", options, NULL)) != -1) {
@@ -424,7 +424,7 @@ kill_hdlr(int argc, char *argv[])
 		}
 	}
 
-	if (rank == (daos_rank_t)-1) {
+	if (rank == (d_rank_t)-1) {
 		fprintf(stderr, "valid target rank required\n");
 		return 2;
 	}
@@ -483,7 +483,7 @@ obj_op_hdlr(int argc, char *argv[])
 	daos_handle_t		coh;
 	const char	       *svc_str = NULL;
 	const char	       *oid_str = NULL;
-	daos_rank_list_t       *svc;
+	d_rank_list_t       *svc;
 	daos_obj_id_t		oid;
 	struct daos_obj_layout *layout;
 	int			i;
@@ -561,13 +561,13 @@ obj_op_hdlr(int argc, char *argv[])
 	rc = daos_cont_open(poh, cont_uuid, DAOS_COO_RO, &coh, NULL, NULL);
 	if (rc) {
 		fprintf(stderr, "daos_cont_open failed, rc: %d\n", rc);
-		D_GOTO(disconnect, rc);
+		D__GOTO(disconnect, rc);
 	}
 
 	rc = daos_obj_layout_get(coh, oid, &layout);
 	if (rc) {
 		fprintf(stderr, "daos_cont_open failed, rc: %d\n", rc);
-		D_GOTO(close, rc);
+		D__GOTO(close, rc);
 	}
 
 	/* Print the object layout */

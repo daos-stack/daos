@@ -27,7 +27,7 @@
  *
  * Author: Liang Zhen <liang.zhen@intel.com>
  */
-#define DD_SUBSYS	DD_FAC(common)
+#define DDSUBSYS	DDFAC(common)
 
 #include <daos/common.h>
 
@@ -90,8 +90,8 @@ daos_array_find(void *array, unsigned int len, uint64_t key,
 	int	cur = 0;
 	int	rc = 0;
 
-	D_ASSERT(len > 0);
-	D_ASSERT(ops->so_cmp_key != NULL);
+	D__ASSERT(len > 0);
+	D__ASSERT(ops->so_cmp_key != NULL);
 
 	for (start = 0, end = len - 1; start <= end; ) {
 		cur = (start + end) / 2;

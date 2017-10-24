@@ -25,7 +25,7 @@
  *
  * common/debug.c
  *
- * NB: Do NOT use D_DEBUG in this file.
+ * NB: Do NOT use D__DEBUG in this file.
  */
 #include <limits.h>
 #include <daos/common.h>
@@ -195,10 +195,10 @@ static struct daos_debug_fac debug_fac_dict[] = {
 
 /**
  * Priority level for debug message.
- * It is only used by D_INFO, D_NOTE, D_WARN, D_ERROR, D_CRIT and D_FATAL.
+ * It is only used by D__INFO, D__NOTE, D__WARN, D__ERROR, D__CRIT and D__FATAL.
  * - All priority debug messages are always stored in the debug log.
  * - User can decide the priority level to output to stderr by setting
- *   env variable DD_STDERR, the default level is D_CRIT.
+ *   env variable DD_STDERR, the default level is D__CRIT.
  */
 struct daos_debug_priority {
 	char		*dd_name;
@@ -425,7 +425,7 @@ debug_fac_register(struct daos_debug_fac *dfac)
 {
 	int	rc;
 
-	rc = crt_log_allocfacility(dfac->df_name, dfac->df_name);
+	rc = d_log_allocfacility(dfac->df_name, dfac->df_name);
 	if (rc < 0)
 		return rc;
 
@@ -436,7 +436,7 @@ debug_fac_register(struct daos_debug_fac *dfac)
 static void
 debug_fini_locked(void)
 {
-	crt_log_fini();
+	d_log_fini();
 }
 
 void
@@ -476,8 +476,8 @@ daos_debug_init(char *logfile)
 	debug_fac_load_env();
 	debug_tunables_load_env();
 
-	rc = crt_log_init_adv("DAOS", debug_data.dd_logfile, CLOG_FLV_LOGPID,
-			      DP_INFO, debug_data.dd_prio_err);
+	rc = d_log_init_adv("DAOS", debug_data.dd_logfile, DLOG_FLV_LOGPID,
+			    DP_INFO, debug_data.dd_prio_err);
 	if (rc != 0) {
 		fprintf(stderr, "Failed to initialize debug log: %d\n", rc);
 		goto failed_unlock;
@@ -502,7 +502,7 @@ daos_debug_init(char *logfile)
 		mask = debug_data.dd_mask != 0 ?
 		       debug_data.dd_mask : debug_fac_dict[i].df_mask;
 
-		crt_log_setlogmask(*debug_fac_dict[i].df_idp, mask);
+		d_log_setlogmask(*debug_fac_dict[i].df_idp, mask);
 	}
 	debug_data.dd_ref = 1;
 	pthread_mutex_unlock(&debug_data.dd_lock);

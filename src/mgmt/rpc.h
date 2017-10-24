@@ -51,9 +51,9 @@ struct mgmt_svc_rip_in {
 
 struct mgmt_pool_create_in {
 	uuid_t			 pc_pool_uuid;
-	crt_string_t		 pc_grp;
-	crt_string_t		 pc_tgt_dev;
-	daos_rank_list_t	*pc_tgts;
+	d_string_t		 pc_grp;
+	d_string_t		 pc_tgt_dev;
+	d_rank_list_t	*pc_tgts;
 	daos_size_t		 pc_tgt_size;
 	uint32_t		 pc_svc_nr;
 	uint32_t		 pc_mode;
@@ -62,13 +62,13 @@ struct mgmt_pool_create_in {
 };
 
 struct mgmt_pool_create_out {
-	daos_rank_list_t	*pc_svc;
+	d_rank_list_t	*pc_svc;
 	int			 pc_rc;
 };
 
 struct mgmt_pool_destroy_in {
 	uuid_t			pd_pool_uuid;
-	crt_string_t		pd_grp;
+	d_string_t		pd_grp;
 	int			pd_force;
 };
 
@@ -78,7 +78,7 @@ struct mgmt_pool_destroy_out {
 
 struct mgmt_tgt_create_in {
 	uuid_t			tc_pool_uuid;
-	crt_string_t		tc_tgt_dev;
+	d_string_t		tc_tgt_dev;
 	daos_size_t		tc_tgt_size;
 };
 

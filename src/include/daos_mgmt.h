@@ -69,8 +69,8 @@ extern "C" {
  */
 int
 daos_pool_create(unsigned int mode, unsigned int uid, unsigned int gid,
-		 const char *grp, const daos_rank_list_t *tgts, const char *dev,
-		 daos_size_t size, daos_rank_list_t *svc, uuid_t uuid,
+		 const char *grp, const d_rank_list_t *tgts, const char *dev,
+		 daos_size_t size, d_rank_list_t *svc, uuid_t uuid,
 		 daos_event_t *ev);
 
 /**
@@ -102,7 +102,7 @@ daos_pool_destroy(const uuid_t uuid, const char *grp, int force,
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
-daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
+daos_mgmt_svc_rip(const char *grp, d_rank_t rank, bool force,
 		  daos_event_t *ev);
 
 /**
@@ -124,7 +124,7 @@ daos_mgmt_svc_rip(const char *grp, daos_rank_t rank, bool force,
  */
 int
 daos_pool_exclude(const uuid_t uuid, const char *grp,
-		  const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		  const d_rank_list_t *svc, d_rank_list_t *tgts,
 		  daos_event_t *ev);
 
 /**
@@ -152,8 +152,8 @@ daos_pool_exclude(const uuid_t uuid, const char *grp,
  *			-DER_NONEXIST	Storage target is nonexistent
  */
 int
-daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
-		 daos_rank_list_t *failed, daos_event_t *ev);
+daos_pool_extend(const uuid_t uuid, const char *grp, d_rank_list_t *tgts,
+		 d_rank_list_t *failed, daos_event_t *ev);
 
 /**
  * Evict all connections to a pool.
@@ -171,7 +171,7 @@ daos_pool_extend(const uuid_t uuid, const char *grp, daos_rank_list_t *tgts,
  *			-DER_NONEXIST	Pool is nonexistent
  */
 int
-daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
+daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
 		daos_event_t *ev);
 
 /**
@@ -193,7 +193,7 @@ daos_pool_evict(const uuid_t uuid, const char *grp, const daos_rank_list_t *svc,
  */
 int
 daos_pool_tgt_add(const uuid_t uuid, const char *grp,
-		  const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		  const d_rank_list_t *svc, d_rank_list_t *tgts,
 		  daos_event_t *ev);
 
 /**
@@ -218,7 +218,7 @@ daos_pool_tgt_add(const uuid_t uuid, const char *grp,
  */
 int
 daos_pool_exclude_out(const uuid_t uuid, const char *grp,
-		      const daos_rank_list_t *svc, daos_rank_list_t *tgts,
+		      const d_rank_list_t *svc, d_rank_list_t *tgts,
 		      daos_event_t *ev);
 
 /**

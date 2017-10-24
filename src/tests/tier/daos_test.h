@@ -42,10 +42,10 @@
 
 typedef struct {
 	bool			multi_rank;
-	daos_rank_t		ranks[8];
+	d_rank_t		ranks[8];
 	int			myrank;
 	int			rank_size;
-	daos_rank_list_t	svc;
+	d_rank_list_t	svc;
 	const char	       *group;
 	uuid_t			pool_uuid;
 	uuid_t			co_uuid;

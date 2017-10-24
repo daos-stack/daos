@@ -34,13 +34,13 @@ enum rsvc_hint_flag {
 /** Leadership information (opaque) */
 struct rsvc_hint {
 	uint32_t	sh_flags;	/* enum rsvc_hint_flag */
-	daos_rank_t	sh_rank;	/* leader rank (must match sh_term) */
+	d_rank_t	sh_rank;	/* leader rank (must match sh_term) */
 	uint64_t	sh_term;	/* leader term (must match sh_rank) */
 };
 
 /** Replicated service client (opaque) */
 struct rsvc_client {
-	daos_rank_list_t       *sc_ranks;		/* of rsvc replicas */
+	d_rank_list_t       *sc_ranks;		/* of rsvc replicas */
 	bool			sc_leader_known;	/* cache nonempty */
 	unsigned int		sc_leader_aliveness;	/* 0 means dead */
 	uint64_t		sc_leader_term;
@@ -54,7 +54,7 @@ enum rsvc_client_complete_rpc_rc {
 	RSVC_CLIENT_RECHOOSE		/**< rechoose and send a new RPC */
 };
 
-int rsvc_client_init(struct rsvc_client *client, const daos_rank_list_t *ranks);
+int rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks);
 void rsvc_client_fini(struct rsvc_client *client);
 void rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep);
 int rsvc_client_complete_rpc(struct rsvc_client *client,

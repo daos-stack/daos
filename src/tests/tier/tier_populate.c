@@ -1,4 +1,4 @@
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <getopt.h>
 #include "daos_test.h"
@@ -79,7 +79,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		req->iod[i].iod_type = iod_type;
 
 	}
-	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
+	D__DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
 	/** open the object */
 	rc = daos_obj_open(coh, oid, 0, 0, &req->oh,
@@ -119,7 +119,7 @@ insert_internal(daos_key_t *dkey, int nr, daos_sg_list_t *sgls,
 	int rc;
 
 	/** execute update operation */
-	D_DEBUG(DF_MISC, "OBJ_UPDATE - %d records\n", nr);
+	D__DEBUG(DF_MISC, "OBJ_UPDATE - %d records\n", nr);
 	rc = daos_obj_update(req->oh, epoch, dkey, nr, iods, sgls,
 			     req->arg->async ? &req->ev : NULL);
 	if (!req->arg->async) {
@@ -187,7 +187,7 @@ ioreq_iod_simple_set(struct ioreq *req, daos_size_t *size,
 		iod[i].iod_eprs[0].epr_lo = *epoch;
 		iod[i].iod_nr = 1;
 
-		D_DEBUG(DF_TIERS,
+		D__DEBUG(DF_TIERS,
 			"%d: typ:%d sz:%lu idx:"DF_U64" nr:"DF_U64"\n",
 			i, iod[i].iod_type, iod[i].iod_size,
 			iod[i].iod_recxs[0].rx_idx,
@@ -640,7 +640,7 @@ basic_byte_array(void **state)
 
 	/** open object */
 	oid = test_oid_gen(DAOS_OC_REPL_MAX_RW, arg->myrank);
-	D_DEBUG(DF_MISC, "BASIC_BYTE_ARRAY open oid="DF_OID"\n", DP_OID(oid));
+	D__DEBUG(DF_MISC, "BASIC_BYTE_ARRAY open oid="DF_OID"\n", DP_OID(oid));
 	rc = daos_obj_open(arg->coh, oid, 0, 0, &oh, NULL);
 	assert_int_equal(rc, 0);
 
@@ -669,7 +669,7 @@ basic_byte_array(void **state)
 	/** update record */
 	print_message("writing %d bytes with one recx per byte\n",
 		      STACK_BUF_LEN);
-	D_DEBUG(DF_MISC, "BYTE_ARRAY_UPDATE - %d recxs\n", STACK_BUF_LEN);
+	D__DEBUG(DF_MISC, "BYTE_ARRAY_UPDATE - %d recxs\n", STACK_BUF_LEN);
 	rc = daos_obj_update(oh, epoch, &dkey, 1, &iod, &sgl, NULL);
 	assert_int_equal(rc, 0);
 
@@ -821,7 +821,7 @@ next_epoch(daos_handle_t coh, daos_epoch_t *epoch)
 	daos_epoch_t n = *epoch;
 	int rc;
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - EP COMMIT **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - EP COMMIT **********\n");
 	rc = daos_epoch_commit(coh, n, &estate, NULL);
 	if (rc != 0) {
 		print_message("daos_epoch_commit returned %d\n", rc);
@@ -897,7 +897,7 @@ main(int argc, char **argv)
 		print_message("daos_init() failed with %d\n", rc);
 		return -1;
 	}
-	D_DEBUG(DF_MISC, "************* DS POPULATE - STARTING **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - STARTING **********\n");
 	rc = arg_setup(&arg, SETUP_CONT_CONNECT, false);
 	if (rc)
 		goto cont_cl;
@@ -919,7 +919,7 @@ main(int argc, char **argv)
 
 	g_epoch = 0;
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - EP HOLD **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - EP HOLD **********\n");
 	epoch = g_epoch;
 	rc = daos_epoch_hold(arg.coh, &epoch, &estate, NULL);
 	if (rc != 0) {
@@ -938,68 +938,68 @@ main(int argc, char **argv)
 
 	print_message("io_simple #1\n");
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - T1/9 **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - T1/9 **********\n");
 	io_simple((void **)&argp);
 
 	io_named((void **)&argp);
 
 	next_epoch(arg.coh, &epoch);
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - T2/9 **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - T2/9 **********\n");
 	print_message("io_simple #2\n");
 	arg.async = true;
 	io_simple((void **)&argp);
 
 	next_epoch(arg.coh, &epoch);
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - T3/9 **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - T3/9 **********\n");
 	print_message("io_var_rec_size #1\n");
 	arg.async = false;
 	io_var_rec_size((void **)&argp);
 
 	next_epoch(arg.coh, &epoch);
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - T4/9 **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - T4/9 **********\n");
 	print_message("io_var_rec_size #2\n");
 	arg.async = true;
 	io_var_rec_size((void **)&argp);
 
 	next_epoch(arg.coh, &epoch);
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - T5/9 **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - T5/9 **********\n");
 	print_message("io_var_dkey_size\n");
 	io_var_dkey_size((void **)&argp);
 
 	next_epoch(arg.coh, &epoch);
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - T6/9 **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - T6/9 **********\n");
 	print_message("io_var_akey_size\n");
 	arg.async = false;
 	io_var_akey_size((void **)&argp);
 
 	next_epoch(arg.coh, &epoch);
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - T7/9 **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - T7/9 **********\n");
 	print_message("io_var_idx_offset\n");
 	arg.async = true;
 	io_var_idx_offset((void **)&argp);
 
 	next_epoch(arg.coh, &epoch);
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - T8/9 **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - T8/9 **********\n");
 	arg.async = false;
 	io_complex((void **)&argp);
 
 	next_epoch(arg.coh, &epoch);
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - T9/9 **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - T9/9 **********\n");
 	print_message("basic_byte_array\n");
 	basic_byte_array((void **)&argp);
 
 	print_message("flushing epoch\n");
 	rc = daos_epoch_flush(arg.coh, epoch, NULL, NULL);
 	print_message("committing epoch "DF_U64"\n", epoch);
-	D_DEBUG(DF_MISC, "************* DS POPULATE - EP COMMIT **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - EP COMMIT **********\n");
 	rc = daos_epoch_commit(arg.coh, epoch, &estate, NULL);
 	if (rc != 0)
 		print_message("daos_epoch_commit returned %d\n", rc);
@@ -1008,12 +1008,12 @@ main(int argc, char **argv)
 	print_message("\nCOLD TIER POPULATED, disconnecting from pool\n\n");
 
 cont_cl:
-	D_DEBUG(DF_MISC, "************* DS POPULATE - CT CLOSE **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - CT CLOSE **********\n");
 	rc = daos_cont_close(arg.coh, NULL);
 	if (rc)
 		print_message("Container close failed: %d\n", rc);
 
-	D_DEBUG(DF_MISC, "************* DS POPULATE - POOL DISC **********\n");
+	D__DEBUG(DF_MISC, "************* DS POPULATE - POOL DISC **********\n");
 	rc = daos_pool_disconnect(arg.poh, NULL);
 	if (rc)
 		print_message("Pool disconnect failed: %d\n", rc);

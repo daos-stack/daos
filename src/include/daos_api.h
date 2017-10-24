@@ -69,7 +69,7 @@ daos_fini(void);
  */
 int
 daos_pool_connect(const uuid_t uuid, const char *grp,
-		  const daos_rank_list_t *svc, unsigned int flags,
+		  const d_rank_list_t *svc, unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
 
 /**
@@ -189,7 +189,7 @@ daos_cont_global2local(daos_handle_t poh, daos_iov_t glob, daos_handle_t *coh);
  *			-DER_NO_HDL	Invalid pool handle
  */
 int
-daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
+daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts,
 		daos_pool_info_t *info, daos_event_t *ev);
 
 /**
@@ -214,8 +214,8 @@ daos_pool_query(daos_handle_t poh, daos_rank_list_t *tgts,
  *			-DER_NONEXIST	No pool on specified targets
  */
 int
-daos_pool_target_query(daos_handle_t poh, daos_rank_list_t *tgts,
-		       daos_rank_list_t *failed, daos_target_info_t *info_list,
+daos_pool_target_query(daos_handle_t poh, d_rank_list_t *tgts,
+		       d_rank_list_t *failed, daos_target_info_t *info_list,
 		       daos_event_t *ev);
 
 /**
@@ -794,7 +794,7 @@ daos_obj_punch_akeys(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
  */
 int
 daos_obj_query(daos_handle_t oh, daos_epoch_t epoch, daos_obj_attr_t *oa,
-	       daos_rank_list_t *ranks, daos_event_t *ev);
+	       d_rank_list_t *ranks, daos_event_t *ev);
 
 /**
  * Object I/O API

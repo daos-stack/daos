@@ -24,7 +24,7 @@
  * rdb: RPCs
  */
 
-#define DD_SUBSYS DD_FAC(rdb)
+#define DDSUBSYS DDFAC(rdb)
 
 #include <daos_srv/rdb.h>
 
@@ -60,22 +60,22 @@ rdb_proc_msg_entry_t(crt_proc_t proc, void *data)
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 	rc = crt_proc_uint32_t(proc, &e->term);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 	rc = crt_proc_uint32_t(proc, &e->id);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &e->type);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 	rc = crt_proc_uint32_t(proc, &e->data.len);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 	if (proc_op == CRT_PROC_DECODE) {
 		if (e->data.len > 0) {
-			D_ALLOC(e->data.buf, e->data.len);
+			D__ALLOC(e->data.buf, e->data.len);
 			if (e->data.buf == NULL)
 				return -DER_NOMEM;
 		} else {
@@ -86,12 +86,12 @@ rdb_proc_msg_entry_t(crt_proc_t proc, void *data)
 		rc = crt_proc_memcpy(proc, e->data.buf, e->data.len);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D_FREE(e->data.buf, e->data.len);
-			return -DER_CRT_HG;
+				D__FREE(e->data.buf, e->data.len);
+			return -DER_HG;
 		}
 	}
 	if (proc_op == CRT_PROC_FREE && e->data.buf != NULL)
-		D_FREE(e->data.buf, e->data.len);
+		D__FREE(e->data.buf, e->data.len);
 	return 0;
 }
 
@@ -105,25 +105,25 @@ rdb_proc_msg_appendentries_t(crt_proc_t proc, void *data)
 
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &ae->term);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &ae->prev_log_idx);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &ae->prev_log_term);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &ae->leader_commit);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 	rc = crt_proc_int32_t(proc, &ae->n_entries);
 	if (rc != 0)
-		return -DER_CRT_HG;
+		return -DER_HG;
 	if (proc_op == CRT_PROC_DECODE) {
 		if (ae->n_entries > 0) {
-			D_ALLOC(ae->entries,
+			D__ALLOC(ae->entries,
 				sizeof(*ae->entries) * ae->n_entries);
 			if (ae->entries == NULL)
 				return -DER_NOMEM;
@@ -135,13 +135,13 @@ rdb_proc_msg_appendentries_t(crt_proc_t proc, void *data)
 		rc = rdb_proc_msg_entry_t(proc, &ae->entries[i]);
 		if (rc != 0) {
 			if (proc_op == CRT_PROC_DECODE)
-				D_FREE(ae->entries,
+				D__FREE(ae->entries,
 				       sizeof(*ae->entries) * ae->n_entries);
-			return -DER_CRT_HG;
+			return -DER_HG;
 		}
 	}
 	if (proc_op == CRT_PROC_FREE && ae->entries != NULL)
-		D_FREE(ae->entries, sizeof(*ae->entries) * ae->n_entries);
+		D__FREE(ae->entries, sizeof(*ae->entries) * ae->n_entries);
 	return 0;
 }
 
@@ -268,7 +268,7 @@ rdb_alloc_raft_rpc(struct rdb *db, crt_rpc_t *rpc, raft_node_t *node)
 {
 	struct rdb_raft_rpc *rrpc;
 
-	D_ALLOC_PTR(rrpc);
+	D__ALLOC_PTR(rrpc);
 	if (rrpc == NULL)
 		return NULL;
 	DAOS_INIT_LIST_HEAD(&rrpc->drc_entry);
@@ -285,8 +285,8 @@ rdb_free_raft_rpc(struct rdb_raft_rpc *rrpc)
 {
 	rdb_put(rrpc->drc_db);
 	crt_req_decref(rrpc->drc_rpc);
-	D_ASSERT(daos_list_empty(&rrpc->drc_entry));
-	D_FREE_PTR(rrpc);
+	D__ASSERT(daos_list_empty(&rrpc->drc_entry));
+	D__FREE_PTR(rrpc);
 }
 
 /* Daemon ULT for processing RPC replies */
@@ -295,7 +295,7 @@ rdb_recvd(void *arg)
 {
 	struct rdb *db = arg;
 
-	D_DEBUG(DB_ANY, DF_DB": recvd starting\n", DP_DB(db));
+	D__DEBUG(DB_ANY, DF_DB": recvd starting\n", DP_DB(db));
 	for (;;) {
 		struct rdb_raft_rpc    *rrpc = NULL;
 		bool			stop;
@@ -316,7 +316,7 @@ rdb_recvd(void *arg)
 		}
 		ABT_mutex_unlock(db->d_mutex);
 		if (rrpc == NULL) {
-			D_ASSERT(stop);
+			D__ASSERT(stop);
 			/* The queue is empty and we are asked to stop. */
 			break;
 		}
@@ -332,7 +332,7 @@ rdb_recvd(void *arg)
 		rdb_free_raft_rpc(rrpc);
 		ABT_thread_yield();
 	}
-	D_DEBUG(DB_ANY, DF_DB": recvd stopping\n", DP_DB(db));
+	D__DEBUG(DB_ANY, DF_DB": recvd stopping\n", DP_DB(db));
 }
 
 static void
@@ -343,12 +343,12 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 	crt_opcode_t		opc = opc_get(cb_info->cci_rpc->cr_opc);
 	int			rc = cb_info->cci_rc;
 
-	D_DEBUG(DB_MD, DF_DB": opc=%u rank=%u rtt=%f\n", DP_DB(db), opc,
+	D__DEBUG(DB_MD, DF_DB": opc=%u rank=%u rtt=%f\n", DP_DB(db), opc,
 		rrpc->drc_rpc->cr_ep.ep_rank, ABT_get_wtime() - rrpc->drc_sent);
 	ABT_mutex_lock(db->d_mutex);
 	if (rc != 0 || db->d_stop) {
 		if (rc != -DER_CANCELED)
-			D_ERROR(DF_DB": RPC %x to rank %u failed: %d\n",
+			D__ERROR(DF_DB": RPC %x to rank %u failed: %d\n",
 				DP_DB(rrpc->drc_db), opc,
 				rrpc->drc_rpc->cr_ep.ep_rank, rc);
 		/*
@@ -394,12 +394,12 @@ rdb_send_raft_rpc(crt_rpc_t *rpc, struct rdb *db, raft_node_t *node)
 		timeout = timeout_min;
 #if 0
 	rc = crt_req_set_timeout(rpc, timeout);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D__ASSERTF(rc == 0, "%d\n", rc);
 #endif
 	rrpc->drc_sent = ABT_get_wtime();
 
 	rc = crt_req_send(rpc, rdb_raft_rpc_cb, rrpc);
-	D_ASSERTF(rc == 0, "%d\n", rc);
+	D__ASSERTF(rc == 0, "%d\n", rc);
 	return 0;
 }
 
@@ -415,7 +415,7 @@ rdb_abort_raft_rpcs(struct rdb *db)
 		daos_list_del_init(&rrpc->drc_entry);
 		rc = crt_req_abort(rrpc->drc_rpc);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to abort %x to rank %u: %d\n",
+			D__ERROR(DF_DB": failed to abort %x to rank %u: %d\n",
 				DP_DB(rrpc->drc_db), rrpc->drc_rpc->cr_opc,
 				rrpc->drc_rpc->cr_ep.ep_rank, rc);
 			return rc;

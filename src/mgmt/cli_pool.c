@@ -23,35 +23,35 @@
 /*
  * Pool create/destroy methods
  */
-#define DD_SUBSYS	DD_FAC(mgmt)
+#define DDSUBSYS	DDFAC(mgmt)
 
 #include <daos/mgmt.h>
 #include <daos/event.h>
 #include "rpc.h"
 
 struct pool_create_arg {
-	crt_rpc_t               *rpc;
-	daos_rank_list_t	*svc;
+	crt_rpc_t	*rpc;
+	d_rank_list_t	*svc;
 };
 
 static int
 pool_create_cp(tse_task_t *task, void *data)
 {
 	struct pool_create_arg		*arg = (struct pool_create_arg *)data;
-	daos_rank_list_t		*svc = arg->svc;
+	d_rank_list_t			*svc = arg->svc;
 	struct mgmt_pool_create_out	*pc_out;
 	int				 rc = task->dt_result;
 
 	if (rc) {
-		D_ERROR("RPC error while disconnecting from pool: %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("RPC error while creating pool: %d\n", rc);
+		D__GOTO(out, rc);
 	}
 
 	pc_out = crt_reply_get(arg->rpc);
 	rc = pc_out->pc_rc;
 	if (rc) {
-		D_ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("MGMT_POOL_CREATE replied failed, rc: %d\n", rc);
+		D__GOTO(out, rc);
 	}
 
 	/**
@@ -78,41 +78,41 @@ dc_pool_create(tse_task_t *task)
 	int				rc = 0;
 
 	args = daos_task_get_args(DAOS_OPC_POOL_CREATE, task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	if (args->dev == NULL || strlen(args->dev) == 0) {
-		D_ERROR("Invalid parameter of dev (NULL or empty string).\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		D__ERROR("Invalid parameter of dev (NULL or empty string).\n");
+		D__GOTO(out, rc = -DER_INVAL);
 	}
 
 	uuid_generate(args->uuid);
 
 	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_CREATE, DAOS_MGMT_MODULE, 1);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_POOL_CREATE) failed, rc: %d.\n",
+		D__ERROR("crt_req_create(MGMT_POOL_CREATE) failed, rc: %d.\n",
 			rc);
-		D_GOTO(out_grp, rc);
+		D__GOTO(out_grp, rc);
 	}
 
-	D_ASSERT(rpc_req != NULL);
+	D__ASSERT(rpc_req != NULL);
 	pc_in = crt_req_get(rpc_req);
-	D_ASSERT(pc_in != NULL);
+	D__ASSERT(pc_in != NULL);
 
 	/** fill in request buffer */
 	uuid_copy(pc_in->pc_pool_uuid, args->uuid);
 	pc_in->pc_mode = args->mode;
 	pc_in->pc_uid = args->uid;
 	pc_in->pc_gid = args->gid;
-	pc_in->pc_grp = (crt_string_t)args->grp;
-	pc_in->pc_tgt_dev = (crt_string_t)args->dev;
-	pc_in->pc_tgts = (daos_rank_list_t *)args->tgts;
+	pc_in->pc_grp = (d_string_t)args->grp;
+	pc_in->pc_tgt_dev = (d_string_t)args->dev;
+	pc_in->pc_tgts = (d_rank_list_t *)args->tgts;
 	pc_in->pc_tgt_size = args->size;
 	pc_in->pc_svc_nr = args->svc->rl_nr.num;
 
@@ -123,9 +123,9 @@ dc_pool_create(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, pool_create_cp, &create_args,
 				       sizeof(create_args));
 	if (rc != 0)
-		D_GOTO(out_put_req, rc);
+		D__GOTO(out_put_req, rc);
 
-	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(args->uuid));
+	D__DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(args->uuid));
 
 	/** send the request */
 	return daos_rpc_send(rpc_req, task);
@@ -148,15 +148,15 @@ pool_destroy_cp(tse_task_t *task, void *data)
 	int				 rc = task->dt_result;
 
 	if (rc) {
-		D_ERROR("RPC error while destroying pool: %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("RPC error while destroying pool: %d\n", rc);
+		D__GOTO(out, rc);
 	}
 
 	pd_out = crt_reply_get(rpc);
 	rc = pd_out->pd_rc;
 	if (rc) {
-		D_ERROR("MGMT_POOL_DESTROY replied failed, rc: %d\n", rc);
-		D_GOTO(out, rc);
+		D__ERROR("MGMT_POOL_DESTROY replied failed, rc: %d\n", rc);
+		D__GOTO(out, rc);
 	}
 
 out:
@@ -176,43 +176,43 @@ dc_pool_destroy(tse_task_t *task)
 	int				 rc = 0;
 
 	args = daos_task_get_args(DAOS_OPC_POOL_DESTROY, task);
-	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	D__ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	if (uuid_is_null(args->uuid)) {
-		D_ERROR("Invalid parameter of uuid (NULL).\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		D__ERROR("Invalid parameter of uuid (NULL).\n");
+		D__GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = daos_group_attach(args->grp, &svr_ep.ep_grp);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		D__GOTO(out, rc);
 
 	svr_ep.ep_rank = 0;
 	svr_ep.ep_tag = 0;
 	opc = DAOS_RPC_OPCODE(MGMT_POOL_DESTROY, DAOS_MGMT_MODULE, 1);
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_POOL_DESTROY) failed, rc: %d.\n",
+		D__ERROR("crt_req_create(MGMT_POOL_DESTROY) failed, rc: %d.\n",
 			rc);
-		D_GOTO(out_group, rc);
+		D__GOTO(out_group, rc);
 	}
 
-	D_ASSERT(rpc_req != NULL);
+	D__ASSERT(rpc_req != NULL);
 	pd_in = crt_req_get(rpc_req);
-	D_ASSERT(pd_in != NULL);
+	D__ASSERT(pd_in != NULL);
 
 	/** fill in request buffer */
 	uuid_copy(pd_in->pd_pool_uuid, args->uuid);
-	pd_in->pd_grp = (crt_string_t)args->grp;
+	pd_in->pd_grp = (d_string_t)args->grp;
 	pd_in->pd_force = (args->force == 0) ? false : true;
 
 	crt_req_addref(rpc_req);
 	rc = tse_task_register_comp_cb(task, pool_destroy_cp, &rpc_req,
 				       sizeof(rpc_req));
 	if (rc != 0)
-		D_GOTO(out_put_req, rc);
+		D__GOTO(out_put_req, rc);
 
-	D_DEBUG(DB_MGMT, DF_UUID": destroying pool\n", DP_UUID(args->uuid));
+	D__DEBUG(DB_MGMT, DF_UUID": destroying pool\n", DP_UUID(args->uuid));
 
 	/** send the request */
 	return daos_rpc_send(rpc_req, task);

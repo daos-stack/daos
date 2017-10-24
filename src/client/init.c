@@ -23,7 +23,7 @@
 /**
  * DAOS Client initialization/shutdown routines
  */
-#define DD_SUBSYS	DD_FAC(client)
+#define DDSUBSYS	DDFAC(client)
 
 #include <daos/common.h>
 #include <daos/event.h>
@@ -111,46 +111,46 @@ daos_init(void)
 
 	pthread_mutex_lock(&module_lock);
 	if (module_initialized)
-		D_GOTO(unlock, rc = -DER_ALREADY);
+		D__GOTO(unlock, rc = -DER_ALREADY);
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
-		D_GOTO(unlock, rc);
+		D__GOTO(unlock, rc);
 
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
-		D_ERROR("failed to initialize eq_lib: %d\n", rc);
-		D_GOTO(out_debug, rc);
+		D__ERROR("failed to initialize eq_lib: %d\n", rc);
+		D__GOTO(out_debug, rc);
 	}
 
 	/** set up management interface */
 	rc = dc_mgmt_init();
 	if (rc != 0)
-		D_GOTO(out_eq, rc);
+		D__GOTO(out_eq, rc);
 
 	/** set up pool */
 	rc = dc_pool_init();
 	if (rc != 0)
-		D_GOTO(out_mgmt, rc);
+		D__GOTO(out_mgmt, rc);
 
 	/** set up container */
 	rc = dc_cont_init();
 	if (rc != 0)
-		D_GOTO(out_pool, rc);
+		D__GOTO(out_pool, rc);
 
 	/** set up object */
 	rc = dc_obj_init();
 	if (rc != 0)
-		D_GOTO(out_co, rc);
+		D__GOTO(out_co, rc);
 
 	/** set up tiering */
 	rc = dc_tier_init();
 	if (rc != 0)
-		D_GOTO(out_obj, rc);
+		D__GOTO(out_obj, rc);
 
 	module_initialized = true;
-	D_GOTO(unlock, rc = 0);
+	D__GOTO(unlock, rc = 0);
 out_obj:
 	dc_obj_fini();
 out_co:
@@ -178,13 +178,13 @@ daos_fini(void)
 
 	pthread_mutex_lock(&module_lock);
 	if (!module_initialized)
-		D_GOTO(unlock, rc = -DER_UNINIT);
+		D__GOTO(unlock, rc = -DER_UNINIT);
 
 	dc_tier_fini();
 	rc = daos_eq_lib_fini();
 	if (rc != 0) {
-		D_ERROR("failed to finalize eq: %d\n", rc);
-		D_GOTO(unlock, rc);
+		D__ERROR("failed to finalize eq: %d\n", rc);
+		D__GOTO(unlock, rc);
 	}
 
 	dc_obj_fini();

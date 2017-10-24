@@ -24,7 +24,7 @@
  * ds_pool: Pool Server Storage Layout Definitions
  */
 
-#define DD_SUBSYS	DD_FAC(pool)
+#define DDSUBSYS	DDFAC(pool)
 
 #include <daos_srv/rdb.h>
 #include "srv_layout.h"

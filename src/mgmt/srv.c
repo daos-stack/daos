@@ -30,7 +30,7 @@
  * The management server is a first-class server module (like object/pool
  * server-side library) and can be unloaded/reloaded.
  */
-#define DD_SUBSYS	DD_FAC(mgmt)
+#define DDSUBSYS	DDFAC(mgmt)
 
 #include "srv_internal.h"
 #include <signal.h>
@@ -65,7 +65,7 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	struct mgmt_svc_rip_in	*murderer;
 	int			 sig;
 	bool			 force;
-	crt_rank_t		 rank = -1;
+	d_rank_t		 rank = -1;
 
 	murderer = crt_req_get(rpc);
 	if (murderer == NULL)
@@ -89,7 +89,7 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	else
 		sig = SIGTERM;
 	crt_group_rank(NULL, &rank);
-	D_PRINT("Service rank %d is being killed by signal %d... farewell\n",
+	D__PRINT("Service rank %d is being killed by signal %d... farewell\n",
 		rank, sig);
 	kill(getpid(), sig);
 }
@@ -103,7 +103,7 @@ ds_mgmt_init()
 	if (rc)
 		return rc;
 
-	D_DEBUG(DB_MGMT, "successfull init call\n");
+	D__DEBUG(DB_MGMT, "successfull init call\n");
 	return 0;
 }
 
@@ -111,7 +111,7 @@ static int
 ds_mgmt_fini()
 {
 	ds_mgmt_tgt_fini();
-	D_DEBUG(DB_MGMT, "successfull fini call\n");
+	D__DEBUG(DB_MGMT, "successfull fini call\n");
 	return 0;
 }
 

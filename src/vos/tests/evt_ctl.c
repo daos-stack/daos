@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <stdio.h>
 #include <fcntl.h>
@@ -68,7 +68,7 @@ ts_open_create(bool create, char *args)
 	int	rc;
 
 	if (!daos_handle_is_inval(ts_toh)) {
-		D_PRINT("Tree has been opened\n");
+		D__PRINT("Tree has been opened\n");
 		return -1;
 	}
 
@@ -76,33 +76,33 @@ ts_open_create(bool create, char *args)
 		if (args[0] == 'i') { /* inplace create/open */
 			inplace = true;
 			if (args[1] != EVT_SEP) {
-				D_PRINT("wrong parameter format %s\n", args);
+				D__PRINT("wrong parameter format %s\n", args);
 				return -1;
 			}
 			args += 2;
 		}
 
 		if (args[0] != 'o' || args[1] != EVT_SEP_VAL) {
-			D_PRINT("incorrect format for tree order: %s\n", args);
+			D__PRINT("incorrect format for tree order: %s\n", args);
 			return -1;
 		}
 
 		ts_order = atoi(&args[2]);
 		if (ts_order < EVT_ORDER_MIN || ts_order > EVT_ORDER_MAX) {
-			D_PRINT("Invalid tree order %d\n", ts_order);
+			D__PRINT("Invalid tree order %d\n", ts_order);
 			return -1;
 		}
 
 	} else if (!create) {
 		inplace = (ts_root.tr_feats != 0);
 		if (TMMID_IS_NULL(ts_root_mmid) && !inplace) {
-			D_PRINT("Please create tree first\n");
+			D__PRINT("Please create tree first\n");
 			return -1;
 		}
 	}
 
 	if (create) {
-		D_PRINT("Create evtree with order %d%s\n",
+		D__PRINT("Create evtree with order %d%s\n",
 			ts_order, inplace ? " inplace" : "");
 		if (inplace) {
 			rc = evt_create_inplace(EVT_FEAT_DEFAULT, ts_order,
@@ -112,7 +112,7 @@ ts_open_create(bool create, char *args)
 					&ts_root_mmid, &ts_toh);
 		}
 	} else {
-		D_PRINT("Open evtree %s\n", inplace ? " inplace" : "");
+		D__PRINT("Open evtree %s\n", inplace ? " inplace" : "");
 		if (inplace)
 			rc = evt_open_inplace(&ts_root, &ts_uma, &ts_toh);
 		else
@@ -120,7 +120,7 @@ ts_open_create(bool create, char *args)
 	}
 
 	if (rc != 0) {
-		D_PRINT("Tree %s failed: %d\n", create ? "create" : "open", rc);
+		D__PRINT("Tree %s failed: %d\n", create ? "create" : "open", rc);
 		return -1;
 	}
 	return 0;
@@ -132,21 +132,21 @@ ts_close_destroy(bool destroy)
 	int rc;
 
 	if (daos_handle_is_inval(ts_toh)) {
-		D_PRINT("Invalid tree open handle\n");
+		D__PRINT("Invalid tree open handle\n");
 		return -1;
 	}
 
 	if (destroy) {
-		D_PRINT("Destroy evtree\n");
+		D__PRINT("Destroy evtree\n");
 		rc = evt_destroy(ts_toh);
 	} else {
-		D_PRINT("Close evtree\n");
+		D__PRINT("Close evtree\n");
 		rc = evt_close(ts_toh);
 	}
 
 	ts_toh = DAOS_HDL_INVAL;
 	if (rc != 0) {
-		D_PRINT("Tree %s failed: %d\n",
+		D__PRINT("Tree %s failed: %d\n",
 			destroy ? "destroy" : "close", rc);
 		return -1;
 	}
@@ -161,7 +161,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p)
 	rect->rc_off_lo = atoi(str);
 	tmp = strchr(str, EVT_SEP_EXT);
 	if (tmp == NULL) {
-		D_PRINT("Invalid input string %s\n", str);
+		D__PRINT("Invalid input string %s\n", str);
 		return -1;
 	}
 
@@ -169,7 +169,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p)
 	rect->rc_off_hi = atoi(str);
 	tmp = strchr(str, EVT_SEP_EPC);
 	if (tmp == NULL) {
-		D_PRINT("Invalid input string %s\n", str);
+		D__PRINT("Invalid input string %s\n", str);
 		return -1;
 	}
 
@@ -195,7 +195,7 @@ ts_parse_rect(char *str, struct evt_rect *rect, char **val_p)
 
 	str = tmp + 1;
 	if (strlen(str) != evt_rect_width(rect)) {
-		D_PRINT("Length of string cannot match extent size %d/%d\n",
+		D__PRINT("Length of string cannot match extent size %d/%d\n",
 			(int)strlen(str), (int)evt_rect_width(rect));
 		return -1;
 	}
@@ -219,7 +219,7 @@ ts_add_rect(char *args)
 	if (rc != 0)
 		return -1;
 
-	D_PRINT("Insert "DF_RECT": val=%s\n", DP_RECT(&rect),
+	D__PRINT("Insert "DF_RECT": val=%s\n", DP_RECT(&rect),
 		val ? val : "<NULL>");
 
 	daos_iov_set(&iov, val, rect.rc_off_hi - rect.rc_off_lo + 1);
@@ -228,7 +228,7 @@ ts_add_rect(char *args)
 
 	rc = evt_insert_sgl(ts_toh, ts_uuid, 0, &rect, val ? 1 : 0, &sgl);
 	if (rc != 0)
-		D_FATAL("Add rect failed %d\n", rc);
+		D__FATAL("Add rect failed %d\n", rc);
 
 	return rc;
 }
@@ -248,15 +248,15 @@ ts_find_rect(char *args)
 	if (rc != 0)
 		return -1;
 
-	D_PRINT("Search rectangle "DF_RECT"\n", DP_RECT(&rect));
+	D__PRINT("Search rectangle "DF_RECT"\n", DP_RECT(&rect));
 
 	evt_ent_list_init(&enlist);
 	rc = evt_find(ts_toh, &rect, &enlist);
 	if (rc != 0)
-		D_FATAL("Add rect failed %d\n", rc);
+		D__FATAL("Add rect failed %d\n", rc);
 
 	evt_ent_list_for_each(ent, &enlist) {
-		D_PRINT("Find rect "DF_RECT", val=%s\n",
+		D__PRINT("Find rect "DF_RECT", val=%s\n",
 			DP_RECT(&ent->en_rect),
 			ent->en_addr ? (char *)ent->en_addr : "<NULL>");
 	}
@@ -274,17 +274,17 @@ ts_list_rect(void)
 
 	rc = evt_iter_prepare(ts_toh, 0, &ih);
 	if (rc != 0) {
-		D_PRINT("Failed to prepare iterator: %d\n", rc);
+		D__PRINT("Failed to prepare iterator: %d\n", rc);
 		return -1;
 	}
 
 	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
 	if (rc == -DER_NONEXIST)
-		D_GOTO(out, rc = 0);
+		D__GOTO(out, rc = 0);
 
 	if (rc != 0) {
-		D_PRINT("Failed to probe: %d\n", rc);
-		D_GOTO(out, rc);
+		D__PRINT("Failed to probe: %d\n", rc);
+		D__GOTO(out, rc);
 	}
 
 	for (i = 0;; i++) {
@@ -293,7 +293,7 @@ ts_list_rect(void)
 
 		rc = evt_iter_fetch(ih, &ent, &anchor);
 		if (rc == 0) {
-			D_PRINT("%d) "DF_RECT", val=%s\n",
+			D__PRINT("%d) "DF_RECT", val=%s\n",
 				i, DP_RECT(&ent.en_rect),
 				ent.en_addr ? (char *)ent.en_addr : "<NULL>");
 
@@ -306,12 +306,12 @@ ts_list_rect(void)
 		}
 
 		if (rc == -DER_NONEXIST) {
-			D_PRINT("Found %d entries\n", i);
-			D_GOTO(out, rc = 0);
+			D__PRINT("Found %d entries\n", i);
+			D__GOTO(out, rc = 0);
 		}
 
 		if (rc != 0)
-			D_GOTO(out, rc);
+			D__GOTO(out, rc);
 
 		rc = evt_iter_next(ih);
 	}
@@ -344,40 +344,40 @@ ts_many_add(char *args)
 	 */
 	if (args[0] == 's') {
 		if (args[1] != EVT_SEP_VAL) {
-			D_PRINT("Invalid parameter %s\n", args);
+			D__PRINT("Invalid parameter %s\n", args);
 			return -1;
 		}
 		offset = strtol(&args[2], &tmp, 0);
 		if (*tmp != EVT_SEP) {
-			D_PRINT("Invalid parameter %s\n", args);
+			D__PRINT("Invalid parameter %s\n", args);
 			return -1;
 		}
 		args = tmp + 1;
 	}
 
 	if (args[0] != 'e' || args[1] != EVT_SEP_VAL) {
-		D_PRINT("Invalid parameter %s\n", args);
+		D__PRINT("Invalid parameter %s\n", args);
 		return -1;
 	}
 
 	size = strtol(&args[2], &tmp, 0);
 	if (size <= 0) {
-		D_PRINT("Invalid extent size %d\n", size);
+		D__PRINT("Invalid extent size %d\n", size);
 		return -1;
 	}
 	if (*tmp != EVT_SEP) {
-		D_PRINT("Invalid parameter %s\n", args);
+		D__PRINT("Invalid parameter %s\n", args);
 		return -1;
 	}
 	args = tmp + 1;
 
 	if (args[0] != 'n' || args[1] != EVT_SEP_VAL) {
-		D_PRINT("Invalid parameter %s\n", args);
+		D__PRINT("Invalid parameter %s\n", args);
 		return -1;
 	}
 	nr = strtol(&args[2], &tmp, 0);
 	if (nr <= 0) {
-		D_PRINT("Invalid extent number %d\n", nr);
+		D__PRINT("Invalid extent number %d\n", nr);
 		return -1;
 	}
 
@@ -402,7 +402,7 @@ ts_many_add(char *args)
 
 		rc = evt_insert_sgl(ts_toh, ts_uuid, 0, &rect, 1, &sgl);
 		if (rc != 0) {
-			D_FATAL("Add rect %d failed %d\n", i, rc);
+			D__FATAL("Add rect %d failed %d\n", i, rc);
 			break;
 		}
 	}
@@ -470,7 +470,7 @@ ts_cmd_run(char opc, char *args)
 		rc = ts_tree_debug(args);
 		break;
 	default:
-		D_PRINT("Unsupported command %c\n", opc);
+		D__PRINT("Unsupported command %c\n", opc);
 		rc = 0;
 		break;
 	}

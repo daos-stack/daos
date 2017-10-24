@@ -30,7 +30,7 @@
  *   - TX query methods: Call directly into dbtree.
  */
 
-#define DD_SUBSYS DD_FAC(rdb)
+#define DDSUBSYS DDFAC(rdb)
 
 #include <daos_srv/rdb.h>
 
@@ -122,7 +122,7 @@ rdb_tx_end(struct rdb_tx *tx)
 {
 	rdb_put(tx->dt_db);
 	if (tx->dt_entry != NULL)
-		D_FREE(tx->dt_entry, tx->dt_entry_cap);
+		D__FREE(tx->dt_entry, tx->dt_entry_cap);
 }
 
 /* Update operation codes */
@@ -198,10 +198,10 @@ rdb_tx_op_encode(struct rdb_tx_op *op, void *buf)
 			*(struct rdb_kvs_attr *)p = *(op->dto_attr);
 		p += sizeof(struct rdb_kvs_attr);
 	} else {
-		D_ASSERT(op->dto_value.iov_buf == NULL);
-		D_ASSERT(op->dto_value.iov_buf_len == 0);
-		D_ASSERT(op->dto_value.iov_len == 0);
-		D_ASSERT(op->dto_attr == NULL);
+		D__ASSERT(op->dto_value.iov_buf == NULL);
+		D__ASSERT(op->dto_value.iov_buf_len == 0);
+		D__ASSERT(op->dto_value.iov_len == 0);
+		D__ASSERT(op->dto_attr == NULL);
 	}
 	return p - buf;
 }
@@ -216,7 +216,7 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 
 	/* opc */
 	if (p + sizeof(uint8_t) > buf + len) {
-		D_ERROR("truncated opc: %zu < %zu\n", len, sizeof(uint8_t));
+		D__ERROR("truncated opc: %zu < %zu\n", len, sizeof(uint8_t));
 		return -DER_IO;
 	}
 	o.dto_opc = *(const uint8_t *)p;
@@ -224,14 +224,14 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 	/* kvs */
 	n = rdb_decode_iov(p, buf + len - p, &o.dto_kvs);
 	if (n < 0) {
-		D_ERROR("failed to decode kvs\n");
+		D__ERROR("failed to decode kvs\n");
 		return n;
 	}
 	p += n;
 	/* key */
 	n = rdb_decode_iov(p, buf + len - p, &o.dto_key);
 	if (n < 0) {
-		D_ERROR("failed to decode key\n");
+		D__ERROR("failed to decode key\n");
 		return n;
 	}
 	p += n;
@@ -239,7 +239,7 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 		/* value */
 		n = rdb_decode_iov(p, buf + len - p, &o.dto_value);
 		if (n < 0) {
-			D_ERROR("failed to decode value\n");
+			D__ERROR("failed to decode value\n");
 			return n;
 		}
 		p += n;
@@ -247,7 +247,7 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 		   o.dto_opc == RDB_TX_CREATE) {
 		/* attr */
 		if (p + sizeof(struct rdb_kvs_attr) > buf + len) {
-			D_ERROR("truncated attr: %zu < %zu\n", buf + len - p,
+			D__ERROR("truncated attr: %zu < %zu\n", buf + len - p,
 				sizeof(struct rdb_kvs_attr));
 			return -DER_IO;
 		}
@@ -265,7 +265,7 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 	size_t	len;
 	int	rc;
 
-	D_ASSERTF((tx->dt_entry == NULL && tx->dt_entry_cap == 0 &&
+	D__ASSERTF((tx->dt_entry == NULL && tx->dt_entry_cap == 0 &&
 		   tx->dt_entry_len == 0) ||
 		  (tx->dt_entry != NULL && tx->dt_entry_cap > 0 &&
 		   tx->dt_entry_len <= tx->dt_entry_cap),
@@ -294,13 +294,13 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 			else
 				new_size *= 2;
 		} while (len > new_size - tx->dt_entry_len);
-		D_ALLOC(new_buf, new_size);
+		D__ALLOC(new_buf, new_size);
 		if (new_buf == NULL)
 			return -DER_NOMEM;
 		if (tx->dt_entry_len > 0)
 			memcpy(new_buf, tx->dt_entry, tx->dt_entry_len);
 		if (tx->dt_entry != NULL)
-			D_FREE(tx->dt_entry, tx->dt_entry_cap);
+			D__FREE(tx->dt_entry, tx->dt_entry_cap);
 		tx->dt_entry = new_buf;
 		tx->dt_entry_cap = new_size;
 	}
@@ -459,7 +459,7 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, daos_list_t *destroyed)
 	rdb_path_t		victim_path;
 	volatile int		rc;
 
-	D_DEBUG(DB_ANY, DF_DB": "DF_TX_OP"\n", DP_DB(db), DP_TX_OP(op));
+	D__DEBUG(DB_ANY, DF_DB": "DF_TX_OP"\n", DP_DB(db), DP_TX_OP(op));
 
 	if (op->dto_opc != RDB_TX_CREATE_ROOT &&
 	    op->dto_opc != RDB_TX_DESTROY_ROOT) {
@@ -523,7 +523,7 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, daos_list_t *destroyed)
 			rc = dbtree_delete(tree->de_hdl, &op->dto_key, NULL);
 			break;
 		default:
-			D_ERROR(DF_DB": unknown update operation %u\n",
+			D__ERROR(DF_DB": unknown update operation %u\n",
 				DP_DB(db), op->dto_opc);
 			rc = -DER_IO;
 		}
@@ -542,7 +542,7 @@ rdb_tx_apply_op(struct rdb *db, struct rdb_tx_op *op, daos_list_t *destroyed)
 			 */
 			rc_tmp = rdb_tree_lookup(db, &victim_path, &victim);
 			if (rc_tmp == 0) {
-				D_DEBUG(DB_ANY, DF_DB": add to destroyed %p\n",
+				D__DEBUG(DB_ANY, DF_DB": add to destroyed %p\n",
 					DP_DB(db), victim);
 				daos_list_add_tail(&victim->de_list, destroyed);
 			}
@@ -580,7 +580,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 	daos_iov_t	value;
 	volatile int	rc;
 
-	D_DEBUG(DB_ANY, DF_DB": applying entry "DF_U64": buf=%p len="DF_U64
+	D__DEBUG(DB_ANY, DF_DB": applying entry "DF_U64": buf=%p len="DF_U64
 		"\n", DP_DB(db), index, buf, len);
 
 	daos_iov_set(&value, &index, sizeof(index));
@@ -595,7 +595,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 			n = rdb_tx_op_decode(p, buf + len - p, &op);
 			if (n < 0) {
 				/* Perhaps due to storage corruptions. */
-				D_ERROR(DF_DB": invalid entry format: buf=%p "
+				D__ERROR(DF_DB": invalid entry format: buf=%p "
 					"len="DF_U64" p=%p\n", DP_DB(db), buf,
 					len, p);
 				pmemobj_tx_abort(n);
@@ -603,7 +603,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 			rc = rdb_tx_apply_op(db, &op, destroyed);
 			if (rc != 0) {
 				if (!rdb_tx_deterministic_error(rc))
-					D_ERROR(DF_DB": failed to apply entry "
+					D__ERROR(DF_DB": failed to apply entry "
 						DF_U64" op %u <%td, %zd>: %d\n",
 						DP_DB(db), index, op.dto_opc,
 						p - buf, n, rc);
@@ -627,7 +627,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		daos_list_for_each_entry_safe(tree, tmp, destroyed, de_list) {
 			daos_list_del_init(&tree->de_list);
 			if (rc == 0) {
-				D_DEBUG(DB_ANY, DF_DB": evicting %p\n",
+				D__DEBUG(DB_ANY, DF_DB": evicting %p\n",
 					DP_DB(db), tree);
 				rdb_tree_evict(db, tree);
 			}

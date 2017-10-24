@@ -24,7 +24,7 @@
  * Epoch Tests
  */
 
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include "daos_test.h"
 #include "daos_iotest.h"
@@ -58,9 +58,9 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
 		print_message("Inserting %d keys...\n",
 			      gs_dkeys);
 
-	D_ALLOC(rec, strlen(val_fmt) + g_dkeys_strlen + 1);
+	D__ALLOC(rec, strlen(val_fmt) + g_dkeys_strlen + 1);
 	assert_non_null(rec);
-	D_ALLOC(val, 64);
+	D__ALLOC(val, 64);
 	assert_non_null(val);
 	val_size = 64;
 	epoch = start_epoch;
@@ -70,14 +70,14 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
 			memset(rec, 0, (strlen(val_fmt) + g_dkeys_strlen + 1));
 			sprintf(rec, val_fmt, epoch + i);
 			rec_size = strlen(rec);
-			D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
+			D__DEBUG(DF_MISC, "  d-key[%d] '%s' val '%.*s'\n", i,
 				dkey, (int)rec_size, rec);
 			insert_single(dkey, akey, 1100, rec, rec_size,
 				      (epoch + i), &req);
 		}
 	}
 
-	D_ALLOC(rec_verify, strlen(val_fmt) + g_dkeys_strlen + 1);
+	D__ALLOC(rec_verify, strlen(val_fmt) + g_dkeys_strlen + 1);
 	for (i = 0; i < gs_dkeys; i++) {
 		memset(rec_verify, 0, (strlen(val_fmt) + g_dkeys_strlen + 1));
 		memset(val, 0, 64);
@@ -93,9 +93,9 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh,
 		assert_memory_equal(val, rec_verify, req.iod[0].iod_size);
 	}
 
-	D_FREE(val, 64);
-	D_FREE(rec_verify, (strlen(val_fmt) + g_dkeys_strlen + 1));
-	D_FREE(rec, strlen(val_fmt) + g_dkeys_strlen + 1);
+	D__FREE(val, 64);
+	D__FREE(rec_verify, (strlen(val_fmt) + g_dkeys_strlen + 1));
+	D__FREE(rec, strlen(val_fmt) + g_dkeys_strlen + 1);
 }
 
 static void

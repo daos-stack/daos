@@ -26,7 +26,7 @@
  *
  * Author: Vishwanath Venkatesan <vishwanath.venkatesan@intel.com>
  */
-#define DD_SUBSYS	DD_FAC(vos)
+#define DDSUBSYS	DDFAC(vos)
 
 #include <daos/common.h>
 #include <daos/rpc.h>
@@ -85,21 +85,21 @@ vos_imem_strts_create(struct vos_imem_strts *imem_inst)
 	rc = vos_obj_cache_create(LRU_CACHE_BITS,
 				  &imem_inst->vis_ocache);
 	if (rc) {
-		D_ERROR("Error in createing object cache\n");
+		D__ERROR("Error in createing object cache\n");
 		return rc;
 	}
 
 	rc = daos_uhash_create(0 /* no locking */, VOS_POOL_HHASH_BITS,
 			       &imem_inst->vis_pool_hhash);
 	if (rc) {
-		D_ERROR("Error in creating POOL ref hash: %d\n", rc);
+		D__ERROR("Error in creating POOL ref hash: %d\n", rc);
 		goto failed;
 	}
 
 	rc = daos_uhash_create(0 /* no locking */, VOS_CONT_HHASH_BITS,
 			       &imem_inst->vis_cont_hhash);
 	if (rc) {
-		D_ERROR("Error in creating CONT ref hash: %d\n", rc);
+		D__ERROR("Error in creating CONT ref hash: %d\n", rc);
 		goto failed;
 	}
 
@@ -115,12 +115,12 @@ vos_tls_init(const struct dss_thread_local_storage *dtls,
 {
 	struct vos_tls *tls;
 
-	D_ALLOC_PTR(tls);
+	D__ALLOC_PTR(tls);
 	if (tls == NULL)
 		return NULL;
 
 	if (vos_imem_strts_create(&tls->vtl_imems_inst)) {
-		D_FREE_PTR(tls);
+		D__FREE_PTR(tls);
 		return NULL;
 	}
 
@@ -134,7 +134,7 @@ vos_tls_fini(const struct dss_thread_local_storage *dtls,
 	struct vos_tls *tls = data;
 
 	vos_imem_strts_destroy(&tls->vtl_imems_inst);
-	D_FREE_PTR(tls);
+	D__FREE_PTR(tls);
 }
 
 struct dss_module_key vos_module_key = {
@@ -151,7 +151,7 @@ vos_mod_init(void)
 
 	rc = vos_cont_tab_register();
 	if (rc) {
-		D_ERROR("VOS CI btree initialization error\n");
+		D__ERROR("VOS CI btree initialization error\n");
 		return rc;
 	}
 
@@ -161,19 +161,19 @@ vos_mod_init(void)
 	 */
 	rc = vos_obj_tab_register();
 	if (rc) {
-		D_ERROR("VOS OI btree initialization error\n");
+		D__ERROR("VOS OI btree initialization error\n");
 		return rc;
 	}
 
 	rc = vos_cookie_tab_register();
 	if (rc) {
-		D_ERROR("VOS cookie btree initialization error\n");
+		D__ERROR("VOS cookie btree initialization error\n");
 		return rc;
 	}
 
 	rc = vos_obj_tree_register();
 	if (rc)
-		D_ERROR("Failed to register vos trees\n");
+		D__ERROR("Failed to register vos trees\n");
 
 	return rc;
 }
@@ -201,26 +201,26 @@ vos_init(void)
 	static int	 is_init = 0;
 
 	if (is_init) {
-		D_ERROR("Already initialized a VOS instance\n");
+		D__ERROR("Already initialized a VOS instance\n");
 		return rc;
 	}
 
 	pthread_mutex_lock(&mutex);
 
 	if (is_init && vsa_imems_inst)
-		D_GOTO(exit, rc);
+		D__GOTO(exit, rc);
 
-	D_ALLOC_PTR(vsa_imems_inst);
+	D__ALLOC_PTR(vsa_imems_inst);
 	if (vsa_imems_inst == NULL)
-		D_GOTO(exit, rc);
+		D__GOTO(exit, rc);
 
 	rc = vos_imem_strts_create(vsa_imems_inst);
 	if (rc)
-		D_GOTO(exit, rc);
+		D__GOTO(exit, rc);
 
 	rc = vos_mod_init();
 	if (rc)
-		D_GOTO(exit, rc);
+		D__GOTO(exit, rc);
 
 	env = getenv("VOS_MEM_CLASS");
 	if (env && strcasecmp(env, "vmem") == 0)
@@ -230,7 +230,7 @@ vos_init(void)
 exit:
 	pthread_mutex_unlock(&mutex);
 	if (rc && vsa_imems_inst)
-		D_FREE_PTR(vsa_imems_inst);
+		D__FREE_PTR(vsa_imems_inst);
 	return rc;
 }
 
@@ -240,7 +240,7 @@ vos_fini(void)
 	pthread_mutex_lock(&mutex);
 	if (vsa_imems_inst) {
 		vos_imem_strts_destroy(vsa_imems_inst);
-		D_FREE_PTR(vsa_imems_inst);
+		D__FREE_PTR(vsa_imems_inst);
 	}
 	pthread_mutex_unlock(&mutex);
 }

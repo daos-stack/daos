@@ -2,7 +2,7 @@
 
 Import('env', 'PREREQS')
 
-libs = ['daos', 'pouch', 'cart', 'daos_common', 'daos_tier', 'uuid']
+libs = ['daos', 'gurt', 'cart', 'daos_common', 'daos_tier', 'uuid']
 
 denv = env.Clone()
 

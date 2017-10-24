@@ -25,7 +25,7 @@
  *
  * tests/suite/daos_obj.c
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 #include "daos_iotest.h"
 
 static int dts_obj_class = DAOS_OC_R2S_RW;
@@ -86,7 +86,7 @@ ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 		req->iod[i].iod_type = iod_type;
 
 	}
-	D_DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
+	D__DEBUG(DF_MISC, "open oid="DF_OID"\n", DP_OID(oid));
 
 	/** open the object */
 	rc = daos_obj_open(coh, oid, 0, 0, &req->oh,

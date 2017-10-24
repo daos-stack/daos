@@ -38,7 +38,7 @@ extern "C" {
 
 /** uuid_t */
 #include <uuid/uuid.h>
-/** for crt_rank_t & crt_rank_list_t */
+/** for d_rank_t & d_rank_list_t */
 #include <cart/types.h>
 
 #include <daos_errno.h>
@@ -79,10 +79,6 @@ typedef struct {
 	daos_nr_t	 sg_nr;
 	daos_iov_t	*sg_iovs;
 } daos_sg_list_t;
-
-/** For short-term compatibility, should eventually be removed */
-#define daos_rank_t		crt_rank_t
-#define daos_rank_list_t	crt_rank_list_t
 
 /** size of SHA-256 */
 #define DAOS_HKEY_MAX	32
@@ -498,7 +494,7 @@ typedef struct {
  */
 typedef struct {
 	/** Optional, affinity target for the object */
-	daos_rank_t		 oa_rank;
+	d_rank_t		 oa_rank;
 	/** Optional, class attributes of object with private class */
 	daos_oclass_attr_t	*oa_oa;
 } daos_obj_attr_t;

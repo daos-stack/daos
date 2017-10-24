@@ -25,7 +25,7 @@
  *
  * src/common/tests/other.c
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 #include <getopt.h>
 #include <daos/common.h>
@@ -79,17 +79,17 @@ comb_sort_test(int num)
 
 	for (i = 0; i < num; i++) {
 		arr[i] = rand() % (4 * num);
-		D_PRINT("%d ", arr[i]);
+		D__PRINT("%d ", arr[i]);
 	}
-	D_PRINT("\n");
+	D__PRINT("\n");
 
 	daos_array_sort(arr, num, false, &sort_ops);
 
-	D_PRINT("Sorted:\n");
+	D__PRINT("Sorted:\n");
 	for (i = 0; i < num; i++)
-		D_PRINT("%d ", arr[i]);
+		D__PRINT("%d ", arr[i]);
 
-	D_PRINT("\n");
+	D__PRINT("\n");
 	free(arr);
 	return 0;
 }

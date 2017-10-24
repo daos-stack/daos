@@ -20,7 +20,7 @@
  * Any reproduction of computer software, computer software documentation, or
  * portions thereof marked with this legend must also reproduce the markings.
  */
-#define DD_SUBSYS	DD_FAC(tests)
+#define DDSUBSYS	DDFAC(tests)
 
 /**
  * Test suite helper functions.
@@ -103,7 +103,7 @@ dts_freeline(char *line)
 #if HAVE_LIB_READLINE
 	free(line);
 #else
-	D_FREE(line, DTS_LINE_SIZE);
+	D__FREE(line, DTS_LINE_SIZE);
 #endif
 }
 
@@ -120,7 +120,7 @@ dts_readline(const char *prompt)
 	char	*cur;
 	bool	 eof;
 
-	D_ALLOC(line, DTS_LINE_SIZE);
+	D__ALLOC(line, DTS_LINE_SIZE);
 	if (!line)
 		return NULL;
 
@@ -192,7 +192,7 @@ dts_cmd_parser(struct option *opts, const char *prompt,
 
 			opt = &opts[i];
 			if (opt->name == NULL) {
-				D_PRINT("Unknown command %s\n", cmd);
+				D__PRINT("Unknown command %s\n", cmd);
 				return -1;
 			}
 
