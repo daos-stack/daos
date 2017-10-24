@@ -66,7 +66,6 @@ class RemoteTestRunner():
         self.stderr = None
         self.procrtn = 0
         self.logfileout = ""
-        self.logfileerr = ""
         self.username = os.getlogin()
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -110,16 +109,16 @@ class RemoteTestRunner():
         test_yml = os.path.join(self.scripts_dir, "{!s}.yml".format(test_name))
         self.logfileout = os.path.join(log_path,
                                        ("{!s}.runout".format(test_name)))
-        self.logfileerr = os.path.join(log_path,
-                                       ("{!s}.runerr".format(test_name)))
         python_vers = self.test_directives.get('usePython', "python3.4")
-        cmdstr = "{!s} {!s}/test_runner config={!s} {!s}".format(
+        cmdstr = "{!s} {!s}/test_runner config={!s} {!s} 2>&1".format(
             python_vers, self.dir_path, test_config, test_yml)
         self.logger.debug("cmd: %s", cmdstr)
         with open(self.logfileout, mode='w') as outfile:
             outfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
                 ("=" * 40), cmdstr, ("=" * 40)))
             outfile.flush()
+        # because the stderr was sent to stdout in the cmdstr, stderr should
+        # always be empty and can be ignored.
         dummy_stdin, self.stdout, self.stderr = \
             self.client.exec_command(cmdstr, timeout=timeout)
         dummy_stdin.close()
@@ -129,12 +128,9 @@ class RemoteTestRunner():
     def dump_data(self):
         """ dump the output to a file """
         with open(self.logfileout, mode='a') as outfile:
+            outfile.write("Command complete within timeout.")
             for line in self.stdout.readlines():
                 outfile.write(line)
-        with open(self.logfileerr, mode='a') as errfile:
-            errfile.write("Command complete within timeout.")
-            for line in self.stderr.readlines():
-                errfile.write(line)
         self.client.close()
 
     def process_state(self):
@@ -157,8 +153,8 @@ class RemoteTestRunner():
             self.client.close()
             self.state = "terminate"
             self.procrtn = -1
-            with open(self.logfileerr, mode='a') as errfile:
-                errfile.write("Command did not complete within timeout.")
+            with open(self.logfileout, mode='a') as outfile:
+                outfile.write("Command did not complete within timeout.")
 
         return self.procrtn
 
@@ -172,7 +168,7 @@ class RemoteTestRunner():
             subtest_results_data = load(fd, Loader=Loader)
         test_set_name = str(subtest_results_data[0]['name'])
 
-        for logfile in [self.logfileout, self.logfileerr]:
+        for logfile in [self.logfileout]:
             (path, name) = os.path.split(logfile)
             namePlus = name.split('.')
             log_type = "console_{!s}".format(namePlus[1])
@@ -185,11 +181,9 @@ class RemoteTestRunner():
 
 
     def dump_files(self):
-        """ dump the log files """
+        """ dump the log file """
         with open(self.logfileout, mode='r') as fd:
-            print("STDOUT: %s" % fd.read())
-        with open(self.logfileerr, mode='r') as fd:
-            print("STDERR:\n %s" % fd.read())
+            print("STDOUT/STDERR: %s" % fd.read())
 
     def dump_info(self):
         """ print info about node """

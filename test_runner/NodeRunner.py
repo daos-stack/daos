@@ -57,12 +57,10 @@ class NodeCmdRunner:
         self.stderr = None
         self.procrtn = 0
         self.cmdfileout = os.path.join(log_path, ("cmd_%s.out" % node))
-        self.cmdfileerr = os.path.join(log_path, ("cmd_%s.err" % node))
 
     def client_close(self):
         """ close the coennction and fds """
         self.stdout.close()
-        self.stderr.close()
         self.client.close()
 
     def execute_cmd(self, cmd, args, wait=True, timeout=15, environ=None):
@@ -73,18 +71,16 @@ class NodeCmdRunner:
                          cmd, self.node)
         if self.stdout is not None:
             self.stdout.close()
-        if self.stderr is not None:
-            self.stderr.close()
         self.procrtn = 0
-        cmdstr = "{!s} {!s}".format(cmd, args)
-        with open(self.cmdfileout, mode='a') as outfile, \
-            open(self.cmdfileerr, mode='a') as errfile:
+        cmdstr = "{!s} {!s} 2>&1".format(cmd, args)
+        with open(self.cmdfileout, mode='a') as outfile:
+
             outfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
                 ("=" * 40), cmdstr, ("=" * 40)))
-            errfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
-                ("=" * 40), cmdstr, ("=" * 40)))
 
-        dummy_stdin, self.stdout, self.stderr = \
+        # note that in the command string stderr is redirected to stdout
+        # and therefore stderr is always empty and can be ignored
+        dummy_stdin, self.stdout, self.stderr =\
             self.client.exec_command(cmdstr, timeout=timeout,
                                      environment=environ)
         dummy_stdin.close()
@@ -101,13 +97,10 @@ class NodeCmdRunner:
             for line in retval.data.splitlines(True):
                 outfile.write(line)
             outfile.write(str("\n"))
-        with open(self.cmdfileerr, mode='a') as errfile:
             if not retval.retcode:
-                errfile.write("Command complete within timeout.\n")
+                outfile.write("Command complete within timeout.\n")
             else:
-                errfile.write("Command did not complete within timeout.")
-            for line in self.stderr.readlines():
-                errfile.write(line)
+                outfile.write("Command did not complete within timeout.")
 
     def process_state(self):
         """ poll remote processes for state """
@@ -132,8 +125,8 @@ class NodeCmdRunner:
             self.client.close()
             self.state = "terminate"
             self.procrtn = -1
-            with open(self.cmdfileerr, mode='a') as errfile:
-                errfile.write("Command did not complete within timeout.\n")
+            with open(self.cmdfileout, mode='a') as outfile:
+                outfile.write("Command did not complete within timeout.\n")
         return self.procrtn
 
     def wait_for_exit(self, timeout=15):

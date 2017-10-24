@@ -31,7 +31,6 @@ import logging
 class CmdRunner:
     """Simple command controller """
     outfile = ""
-    errorfile = ""
 
     def __init__(self, log_path, log_name):
         self.log_path = log_path
@@ -40,7 +39,6 @@ class CmdRunner:
         self.proc = None
         self.procrtn = 0
         self.outfile = os.path.join(log_path, ("{!s}.out".format(log_name)))
-        self.errorfile = os.path.join(log_path, ("{!s}.err".format(log_name)))
 
     def execute_cmd(self, cmd, args, cwd=None, environ=None):
         """
@@ -49,15 +47,12 @@ class CmdRunner:
         self.logger.info("TestNodeRunner: start command %s", cmd)
         cmdstr = "{!s} {!s}".format(cmd, args)
         cmdarg = shlex.split(cmdstr)
-        with open(self.outfile, mode='a') as outfile, \
-            open(self.errorfile, mode='a') as errfile:
+        with open(self.outfile, mode='a') as outfile:
             outfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
-                ("=" * 40), cmdstr, ("=" * 40)))
-            errfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
                 ("=" * 40), cmdstr, ("=" * 40)))
             rtn = subprocess.Popen(cmdarg,
                                    stdout=outfile,
-                                   stderr=errfile,
+                                   stderr=subprocess.STDOUT,
                                    cwd=cwd,
                                    env=environ)
 

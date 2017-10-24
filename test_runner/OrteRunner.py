@@ -127,16 +127,13 @@ class OrteRunner():
         cmdarg = shlex.split(cmdstr)
         fileout = os.path.join(self.log_dir_orte,
                                "{!s}.out".format(self.testsuite))
-        fileerr = os.path.join(self.log_dir_orte,
-                               "{!s}.err".format(self.testsuite))
-        with open(fileout, mode='a') as outfile, \
-            open(fileerr, mode='a') as errfile:
+        with open(fileout, mode='a') as outfile:
+
             outfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
                 ("=" * 40), cmdstr, ("=" * 40)))
             outfile.flush()
-            errfile.write("{!s}\n  Command: {!s} \n{!s}\n".format(
-                ("=" * 40), cmdstr, ("=" * 40)))
-            self.proc = subprocess.Popen(cmdarg, stdout=outfile, stderr=errfile)
+            self.proc = subprocess.Popen(cmdarg, stdout=outfile,
+                                         stderr=subprocess.STDOUT)
 
     def check_process(self):
         """Check if a process is still running"""

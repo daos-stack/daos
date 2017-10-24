@@ -37,7 +37,6 @@ class DvmRunner():
     ortedvm = None
     report = ""
     logfileout = ""
-    logfilerr = ""
 
     def __init__(self, info=None):
         self.info = info
@@ -53,7 +52,6 @@ class DvmRunner():
         self.report = os.path.join(log_path, "orted-uri")
         self.info.set_config('setKeyFromConfig', 'TR_USE_URI', self.report)
         self.logfileout = os.path.join(log_path, "orte-dvm.out")
-        self.logfilerr = os.path.join(log_path, "orte-dvm.err")
         ompi_path = self.info.get_info('OMPI_PREFIX')
         dvm = os.path.join(ompi_path, "bin", "orte-dvm")
         self.hostlist = ",".join(self.info.get_config('host_list'))
@@ -62,8 +60,7 @@ class DvmRunner():
         cmdstr = "%s --prefix %s --report-uri %s --host %s" % \
                  (dvm, ompi_path, self.report, self.hostlist)
         cmdarg = shlex.split(cmdstr)
-        with open(self.logfileout, mode='w') as outfile, \
-            open(self.logfilerr, mode='w') as errfile:
+        with open(self.logfileout, mode='w') as outfile:
             outfile.write("=======================================\n " + \
                           " Command: " + str(cmdstr) + \
                           "\n======================================\n")
@@ -71,7 +68,7 @@ class DvmRunner():
             self.ortedvm = subprocess.Popen(cmdarg,
                                             stdin=subprocess.DEVNULL,
                                             stdout=outfile,
-                                            stderr=errfile)
+                                            stderr=subprocess.STDOUT)
         # wait for DVM to start
         print("TestRunner: orte-dvm process wait")
         time.sleep(10)
@@ -81,8 +78,6 @@ class DvmRunner():
             return 0
         print("TestRunner: orte-dvm failed to start")
         print("TestRunner: orte-dvm rc: %d\n" % self.ortedvm.returncode)
-        with open(self.logfilerr, mode='r') as fd:
-            print("TestRunner: orte-dvm STDERR:\n %s" % fd.read())
         try:
             os.remove(self.report)
         except OSError as e:
@@ -109,7 +104,5 @@ class DvmRunner():
         if self.ortedvm.returncode:
             print("TestRunner: orte-dvm rc: %d\n" % self.ortedvm.returncode)
         with open(self.logfileout, mode='r') as fd:
-            print("TestRunner: orte-dvm STDOUT:\n %s" % fd.read())
-        with open(self.logfilerr, mode='r') as fd:
-            print("TestRunner: orte-dvm STDERR:\n %s" % fd.read())
+            print("TestRunner: orte-dvm STDOUT/STDERR:\n %s" % fd.read())
         os.remove(self.report)
