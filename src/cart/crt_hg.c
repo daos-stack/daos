@@ -1206,16 +1206,13 @@ out:
 static hg_return_t
 crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 {
-	struct crt_hg_send_cbinfo	*req_cbinfo;
-	struct crt_rpc_priv		*rpc_priv;
-	hg_return_t			hg_ret = HG_SUCCESS;
-	crt_opcode_t			opc;
-	int				rc = 0;
+	struct crt_rpc_priv	*rpc_priv = hg_cbinfo->arg;
+	hg_return_t		hg_ret;
+	crt_opcode_t		opc;
+	int			rc;
 
-	req_cbinfo = (struct crt_hg_send_cbinfo *)hg_cbinfo->arg;
-	D_ASSERT(req_cbinfo != NULL && req_cbinfo->rsc_rpc_priv != NULL);
+	D_ASSERT(rpc_priv != NULL);
 
-	rpc_priv = req_cbinfo->rsc_rpc_priv;
 	opc = rpc_priv->crp_pub.cr_opc;
 	hg_ret = hg_cbinfo->ret;
 	/* Check for the return code here but it's not automatically an error,
@@ -1229,27 +1226,19 @@ crt_hg_reply_send_cb(const struct hg_cb_info *hg_cbinfo)
 	if (rc != 0)
 		D_ERROR("crt_req_decref failed, rc: %d, opc: %#x.\n", rc, opc);
 
-	D_FREE_PTR(req_cbinfo);
 	return hg_ret;
 }
 
 int
 crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_hg_send_cbinfo	*cb_info;
 	hg_return_t			hg_ret = HG_SUCCESS;
 	void				*hg_out_struct;
 	int				rc = 0;
 
 	D_ASSERT(rpc_priv != NULL);
 
-	D_ALLOC_PTR(cb_info);
-	if (cb_info == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
 	hg_out_struct = &rpc_priv->crp_pub.cr_output;
-
-	cb_info->rsc_rpc_priv = rpc_priv;
 
 	rc = crt_req_addref(&rpc_priv->crp_pub);
 	if (rc != 0) {
@@ -1257,12 +1246,11 @@ crt_hg_reply_send(struct crt_rpc_priv *rpc_priv)
 			rpc_priv, rc);
 		D_GOTO(out, rc);
 	}
-	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb, cb_info,
-			    hg_out_struct);
+	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, crt_hg_reply_send_cb,
+			    rpc_priv, hg_out_struct);
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Respond failed, hg_ret: %d, opc: %#x.\n",
 			hg_ret, rpc_priv->crp_pub.cr_opc);
-		D_FREE_PTR(cb_info);
 		/* should success as addref above */
 		rc = crt_req_decref(&rpc_priv->crp_pub);
 		D_ASSERT(rc == 0);
