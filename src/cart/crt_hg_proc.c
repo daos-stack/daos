@@ -856,7 +856,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 			D_GOTO(out, rc);
 		}
 		if (rpc_priv->crp_reply_hdr.cch_rc != 0) {
-			D_ERROR("RPC failed to execute on target. rpc_priv %p,"
+			D_ERROR("RPC failed to execute on target. rpc_priv %p, "
 				"opc: %#x, error code: %d.\n",
 				rpc_priv, rpc_priv->crp_pub.cr_opc,
 				rpc_priv->crp_reply_hdr.cch_rc);

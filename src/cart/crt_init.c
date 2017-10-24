@@ -371,6 +371,7 @@ cleanup:
 		crt_grp_fini();
 	if (crt_gdata.cg_opc_map != NULL)
 		crt_opc_map_destroy(crt_gdata.cg_opc_map);
+	crt_na_ofi_config_fini();
 
 unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -691,6 +692,9 @@ int crt_na_ofi_config_init(void)
 	crt_na_ofi_conf.noc_port = port;
 
 out:
+	if (rc != -DER_SUCCESS) {
+		D_FREE(crt_na_ofi_conf.noc_interface);
+	}
 	return rc;
 }
 

@@ -1698,8 +1698,10 @@ out:
 			grp_priv->gp_self);
 	} else {
 		D_ERROR("crt_primary_grp_init failed, rc: %d.\n", rc);
-		if (grp_priv != NULL)
+		if (grp_priv != NULL) {
+			D_FREE(grp_priv->gp_rank_map);
 			crt_grp_priv_decref(grp_priv);
+		}
 	}
 
 	return rc;

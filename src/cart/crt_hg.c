@@ -554,7 +554,7 @@ int
 crt_hg_init(crt_phy_addr_t *addr, bool server)
 {
 	char			*info_string = NULL;
-	struct crt_hg_gdata	*hg_gdata;
+	struct crt_hg_gdata	*hg_gdata = NULL;
 	na_class_t		*na_class = NULL;
 	hg_class_t		*hg_class = NULL;
 	struct hg_init_info	 init_info;
@@ -614,10 +614,8 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 	hg_gdata->chg_nacla = na_class;
 	hg_gdata->chg_hgcla = hg_class;
 
-	crt_gdata.cg_hg = hg_gdata;
-
 	/* register the shared RPCID */
-	rc = crt_hg_reg_rpcid(crt_gdata.cg_hg->chg_hgcla);
+	rc = crt_hg_reg_rpcid(hg_gdata->chg_hgcla);
 	if (rc != 0) {
 		D_ERROR("crt_hg_reg_rpcid failed, rc: %d.\n", rc);
 		HG_Finalize(hg_class);
@@ -641,15 +639,20 @@ crt_hg_init(crt_phy_addr_t *addr, bool server)
 		if (*addr == NULL) {
 			HG_Finalize(hg_class);
 			NA_Finalize(na_class);
-			D_GOTO(out, rc = -DER_HG);
+			D_GOTO(out, rc = -DER_NOMEM);
 		}
 	}
 
 	D_DEBUG(DB_NET, "in crt_hg_init, listen address: %s.\n", *addr);
+	crt_gdata.cg_hg = hg_gdata;
 
 out:
 	if (info_string)
 		D_FREE(info_string);
+
+	if (rc != DER_SUCCESS) {
+		D_FREE(hg_gdata);
+	}
 	return rc;
 }
 
@@ -661,12 +664,6 @@ crt_hg_fini()
 	hg_class_t	*hg_class;
 	hg_return_t	hg_ret = HG_SUCCESS;
 	na_return_t	na_ret = NA_SUCCESS;
-	int		rc = 0;
-
-	if (!crt_initialized()) {
-		D_ERROR("CaRT not initialized.\n");
-		D_GOTO(out, rc = -DER_NO_PERM);
-	}
 
 	na_class = crt_gdata.cg_hg->chg_nacla;
 	hg_class = crt_gdata.cg_hg->chg_hgcla;
@@ -681,10 +678,8 @@ crt_hg_fini()
 	if (na_ret != NA_SUCCESS)
 		D_WARN("Could not finalize NA class, na_ret: %d.\n", na_ret);
 
-	D_FREE_PTR(crt_gdata.cg_hg);
-
-out:
-	return rc;
+	D_FREE(crt_gdata.cg_hg);
+	return 0;
 }
 
 int
@@ -889,7 +884,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	hg_return_t		 hg_ret = HG_SUCCESS;
 	bool			 is_coll_req = false;
 	int			 rc = 0;
-	struct crt_rpc_priv	 rpc_tmp = { {0} };
+	struct crt_rpc_priv	 rpc_tmp = {0};
 
 	hg_info = HG_Get_info(hg_hdl);
 	if (hg_info == NULL) {
@@ -923,6 +918,11 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 	D_ASSERT(proc != NULL);
 	opc = rpc_tmp.crp_req_hdr.cch_opc;
+
+	/* Set the opcode in the temp RPC so that it can be correctly logged on
+	 * failure
+	 */
+	rpc_tmp.crp_pub.cr_opc = opc;
 
 	opc_info = crt_opc_lookup(crt_gdata.cg_opc_map, opc, CRT_UNLOCK);
 	if (opc_info == NULL)
